@@ -23,12 +23,12 @@ struct StateDumpRegistryTests {
         ])
     }
 
-    @Test func skipsReleasedOwners() {
+    @Test func skipsReleasedOwners() throws {
         let registry = StateDumpRegistry()
         let kept = Screen()
         var released: Screen? = Screen()
         registry.register("kept", owner: kept) { "count=\($0.count)" }
-        registry.register("released", owner: released!) { "count=\($0.count)" }
+        registry.register("released", owner: try #require(released)) { "count=\($0.count)" }
         released = nil
 
         #expect(registry.dumpAll().map(\.name) == ["kept"])

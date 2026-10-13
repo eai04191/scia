@@ -12,7 +12,7 @@ final class TimelineViewController: UIViewController {
         frame: .zero,
         collectionViewLayout: UICollectionViewCompositionalLayout.list(using: .init(appearance: .plain))
     )
-    private var dataSource: UICollectionViewDiffableDataSource<Section, Status.ID>!
+    private lazy var dataSource = makeDataSource()
     private var statuses: [Status.ID: Status] = [:]
 
     override func viewDidLoad() {
@@ -24,7 +24,6 @@ final class TimelineViewController: UIViewController {
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(collectionView)
-        configureDataSource()
         AppDependencies.stateDumps.register("timeline", owner: self) { $0.stateDump() }
     }
 
@@ -81,7 +80,7 @@ final class TimelineViewController: UIViewController {
         dataSource.itemIdentifier(for: indexPath)
     }
 
-    private func configureDataSource() {
+    private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, Status.ID> {
         let registration = UICollectionView.CellRegistration<UICollectionViewListCell, Status.ID> { [weak self] cell, _, id in
             guard let status = self?.statuses[id] else { return }
             var content = cell.defaultContentConfiguration()
@@ -89,12 +88,13 @@ final class TimelineViewController: UIViewController {
             content.secondaryText = status.content
             cell.contentConfiguration = content
         }
-        dataSource = UICollectionViewDiffableDataSource(collectionView: collectionView) { collectionView, indexPath, id in
+        let dataSource = UICollectionViewDiffableDataSource<Section, Status.ID>(collectionView: collectionView) { collectionView, indexPath, id in
             collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: id)
         }
         var snapshot = NSDiffableDataSourceSnapshot<Section, Status.ID>()
         snapshot.appendSections([.main])
         dataSource.apply(snapshot, animatingDifferences: false)
+        return dataSource
     }
 }
 
