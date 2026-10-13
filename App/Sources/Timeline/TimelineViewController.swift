@@ -5,7 +5,7 @@ import UIKit
 final class TimelineViewController: UIViewController {
     private enum Section { case main }
 
-    private lazy var collectionView = UICollectionView(
+    private(set) lazy var collectionView = UICollectionView(
         frame: .zero,
         collectionViewLayout: UICollectionViewCompositionalLayout.list(using: .init(appearance: .plain))
     )
@@ -19,6 +19,39 @@ final class TimelineViewController: UIViewController {
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(collectionView)
         configureDataSource()
+    }
+
+    /// 表示中の投稿を、新しい順に並んだ`newStatuses`で置き換える。
+    func setStatuses(_ newStatuses: [Status]) {
+        statuses = Dictionary(newStatuses.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+        var snapshot = NSDiffableDataSourceSnapshot<Section, Status.ID>()
+        snapshot.appendSections([.main])
+        snapshot.appendItems(newStatuses.map(\.id))
+        dataSource.apply(snapshot, animatingDifferences: false)
+    }
+
+    /// 新しい順に並んだ`newStatuses`を先頭に挿入する。読んでいる位置の投稿が画面上で動かないように、挿入後にcontentOffsetを補正する。
+    func prependStatuses(_ newStatuses: [Status]) {
+        for status in newStatuses {
+            statuses[status.id] = status
+        }
+        var snapshot = dataSource.snapshot()
+        let ids = newStatuses.map(\.id)
+        if let first = snapshot.itemIdentifiers.first {
+            snapshot.insertItems(ids, beforeItem: first)
+        } else {
+            snapshot.appendItems(ids)
+        }
+
+        let anchor = currentAnchor()
+        dataSource.apply(snapshot, animatingDifferences: false)
+        if let anchor {
+            restore(anchor)
+        }
+    }
+
+    func itemIdentifier(at indexPath: IndexPath) -> Status.ID? {
+        dataSource.itemIdentifier(for: indexPath)
     }
 
     private func configureDataSource() {
@@ -35,5 +68,46 @@ final class TimelineViewController: UIViewController {
         var snapshot = NSDiffableDataSourceSnapshot<Section, Status.ID>()
         snapshot.appendSections([.main])
         dataSource.apply(snapshot, animatingDifferences: false)
+    }
+}
+
+// MARK: - スクロール位置の保持
+
+extension TimelineViewController {
+    /// 更新の前後で画面上の位置を揃える基準の投稿と、そのセル上端の、表示領域上端からの距離。
+    struct ScrollAnchor {
+        let id: Status.ID
+        let distanceFromVisibleTop: CGFloat
+    }
+
+    /// 表示領域の上端にかかっている、最も上の投稿を基準にする。
+    func currentAnchor() -> ScrollAnchor? {
+        collectionView.layoutIfNeeded()
+        let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
+        let topmost = collectionView.indexPathsForVisibleItems
+            .compactMap { indexPath -> (Status.ID, CGRect)? in
+                guard let id = dataSource.itemIdentifier(for: indexPath),
+                      let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
+                else { return nil }
+                return (id, frame)
+            }
+            .filter { $0.1.maxY > visibleTop }
+            .min { $0.1.minY < $1.1.minY }
+        guard let (id, frame) = topmost else { return nil }
+        return ScrollAnchor(id: id, distanceFromVisibleTop: frame.minY - visibleTop)
+    }
+
+    /// contentOffsetを動かすと、新たに表示されたセルが推定サイズから実サイズへ変わり、基準の位置がまたずれる。
+    /// そのため、基準の位置が変わらなくなるまで補正を繰り返す。
+    private func restore(_ anchor: ScrollAnchor) {
+        for _ in 0..<8 {
+            collectionView.layoutIfNeeded()
+            guard let indexPath = dataSource.indexPath(for: anchor.id),
+                  let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
+            else { return }
+            let target = frame.minY - anchor.distanceFromVisibleTop - collectionView.adjustedContentInset.top
+            if abs(collectionView.contentOffset.y - target) < 0.01 { return }
+            collectionView.contentOffset.y = target
+        }
     }
 }

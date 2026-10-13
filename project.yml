@@ -40,6 +40,18 @@ targets:
             UIWindowSceneSessionRoleApplication:
               - UISceneConfigurationName: Default Configuration
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+  SciaTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - AppTests
+    dependencies:
+      - target: Scia
+      - package: SciaCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.mizle.scia.tests
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   Scia:
     build:
@@ -48,3 +60,4 @@ schemes:
     test:
       targets:
         - package: SciaCore/SciaCoreTests
+        - SciaTests

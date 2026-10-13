@@ -8,4 +8,13 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public let content: String
     public let spoilerText: String
     public let url: URL?
+
+    public init(id: String, createdAt: Date, account: Account, content: String, spoilerText: String, url: URL?) {
+        self.id = id
+        self.createdAt = createdAt
+        self.account = account
+        self.content = content
+        self.spoilerText = spoilerText
+        self.url = url
+    }
 }
