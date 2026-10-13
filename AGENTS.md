@@ -48,4 +48,8 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 
 ## Git
 
+- commit messageはConventional Commitsで書く。将来git-cliffでリリースノートを自動生成し、`feat:`、`fix:`、`perf:`だけを使う人向けの変更として載せる前提で種別を選ぶ
+- `feat:`は使う人に見える機能の追加、`fix:`は使う人が遭遇する不具合の修正、`perf:`は使う人が体感する性能の改善に使う
+- 開発のための変更（チューニングパネル、違和感レポート、検証ハーネス、ビルドやlintの設定など）を`feat`・`fix`・`perf`で書くときは、`feat(dev):`、`fix(dev):`のようにdev scopeを付けてリリースノートから外す
+- 使う人向けの変更と開発のための変更は別のcommitに分ける
 - pushはユーザーが行う。agentはcommitまでで止め、pushやpush承認の依頼はしない
