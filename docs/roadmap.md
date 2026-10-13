@@ -10,7 +10,7 @@
 
 ## M1: ログインとホームタイムライン
 
-- [ ] OAuthログイン（`ASWebAuthenticationSession`）とトークンのKeychain保存
+- [x] OAuthログイン（`ASWebAuthenticationSession`）とトークンのKeychain保存
 - [ ] ホームタイムラインの取得と表示（RESTのみ、下方向への追加読み込み）
 - [ ] 投稿本文のHTMLをリッチテキストに変換（リンク、メンション、ハッシュタグ、カスタム絵文字）
 
