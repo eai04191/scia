@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 public struct Status: Codable, Hashable, Sendable, Identifiable {
     public let id: String

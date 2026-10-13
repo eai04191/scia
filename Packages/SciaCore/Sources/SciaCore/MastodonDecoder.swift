@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// Mastodon APIのJSON（snake_case、小数秒つきISO 8601日時）を読むためのデコーダー。
 public enum MastodonDecoder {
