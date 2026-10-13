@@ -286,7 +286,7 @@ final class HomeTimelineController {
     /// 既読位置はタイムラインを読む助けで、読めなくてもタイムラインは表示できるため、トークンの失効以外の失敗では位置なしで進める。
     private func loadMarker() async throws -> String? {
         do {
-            return try await client.homeMarker()
+            return try await client.marker(for: .home)
         } catch let error as MastodonAPIError where error.isUnauthorized {
             throw error
         } catch {
@@ -298,7 +298,7 @@ final class HomeTimelineController {
     private func syncReadPosition() {
         run { controller in
             do {
-                guard let markerID = try await controller.client.homeMarker(), !controller.isStopped else { return }
+                guard let markerID = try await controller.client.marker(for: .home), !controller.isStopped else { return }
                 controller.store.applySavedMarker(markerID)
                 controller.updateUnreadCount()
                 controller.logger.info("home marker synced id=\(markerID, privacy: .public)")
@@ -324,7 +324,7 @@ final class HomeTimelineController {
         Task { [weak self] in
             while let self, !self.isStopped, let id = self.store.readIDToSave {
                 do {
-                    try await client.saveHomeMarker(lastReadID: id)
+                    try await client.saveMarker(for: .home, lastReadID: id)
                     self.store.markSaved(id)
                     self.logger.info("home marker saved id=\(id, privacy: .public)")
                 } catch {

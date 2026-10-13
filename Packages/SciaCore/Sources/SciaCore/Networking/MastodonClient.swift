@@ -17,17 +17,17 @@ public struct MastodonClient: Sendable {
         return TimelinePage(statuses: statuses, isRegenerating: response.statusCode == 206)
     }
 
-    /// ホームタイムラインの既読位置。まだ保存されていなければnil。
+    /// 既読位置。まだ保存されていなければnil。
     /// https://docs.joinmastodon.org/methods/markers/#get
-    public func homeMarker() async throws -> String? {
-        let (markers, _) = try await get([String: Marker].self, path: "api/v1/markers", query: [URLQueryItem(name: "timeline[]", value: "home")])
-        return markers["home"]?.lastReadId
+    public func marker(for timeline: MarkerTimeline) async throws -> String? {
+        let (markers, _) = try await get([String: Marker].self, path: "api/v1/markers", query: [URLQueryItem(name: "timeline[]", value: timeline.rawValue)])
+        return markers[timeline.rawValue]?.lastReadId
     }
 
-    /// ホームタイムラインの既読位置を保存する。他の端末と同時に保存して競合すると409が返る。
+    /// 既読位置を保存する。他の端末と同時に保存して競合すると409が返る。
     /// https://docs.joinmastodon.org/methods/markers/#create
-    public func saveHomeMarker(lastReadID: String) async throws {
-        _ = try await post([String: Marker].self, path: "api/v1/markers", form: [URLQueryItem(name: "home[last_read_id]", value: lastReadID)])
+    public func saveMarker(for timeline: MarkerTimeline, lastReadID: String) async throws {
+        _ = try await post([String: Marker].self, path: "api/v1/markers", form: [URLQueryItem(name: "\(timeline.rawValue)[last_read_id]", value: lastReadID)])
     }
 
     /// ストリーミングAPIの接続先。REST APIと別のホストのことがある。
@@ -71,6 +71,12 @@ public struct MastodonClient: Sendable {
         }
         return (try MastodonDecoder.make().decode(type, from: data), response)
     }
+}
+
+/// 既読位置を保存できるタイムライン。
+public enum MarkerTimeline: String, Sendable {
+    case home
+    case notifications
 }
 
 /// https://docs.joinmastodon.org/entities/Marker/

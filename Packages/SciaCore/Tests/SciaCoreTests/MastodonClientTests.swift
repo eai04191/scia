@@ -85,7 +85,7 @@ struct MastodonClientTests {
     @Test func homeMarkerReadsLastReadID() async throws {
         let transport = StubTransport([.json(#"{"home":{"last_read_id":"113000000000000002","version":3,"updated_at":"2026-10-13T03:21:45.123Z"}}"#, statusCode: 200)])
 
-        #expect(try await makeClient(transport).homeMarker() == "113000000000000002")
+        #expect(try await makeClient(transport).marker(for: .home) == "113000000000000002")
         let url = try #require(await transport.requests.first?.url)
         #expect(url.path() == "/api/v1/markers")
         #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems == [URLQueryItem(name: "timeline[]", value: "home")])
@@ -94,13 +94,13 @@ struct MastodonClientTests {
     @Test func homeMarkerIsNilWhenNeverSaved() async throws {
         let transport = StubTransport([.json("{}", statusCode: 200)])
 
-        #expect(try await makeClient(transport).homeMarker() == nil)
+        #expect(try await makeClient(transport).marker(for: .home) == nil)
     }
 
     @Test func saveHomeMarkerPostsForm() async throws {
         let transport = StubTransport([.json(#"{"home":{"last_read_id":"113000000000000003","version":4,"updated_at":"2026-10-13T03:21:45.123Z"}}"#, statusCode: 200)])
 
-        try await makeClient(transport).saveHomeMarker(lastReadID: "113000000000000003")
+        try await makeClient(transport).saveMarker(for: .home, lastReadID: "113000000000000003")
 
         let request = try #require(await transport.requests.first)
         #expect(request.httpMethod == "POST")
@@ -115,7 +115,7 @@ struct MastodonClientTests {
         let transport = StubTransport([.json(#"{"error":"Conflict during update, please try again"}"#, statusCode: 409)])
 
         let error = await #expect(throws: MastodonAPIError.self) {
-            try await makeClient(transport).saveHomeMarker(lastReadID: "1")
+            try await makeClient(transport).saveMarker(for: .home, lastReadID: "1")
         }
         #expect(error?.statusCode == 409)
     }
