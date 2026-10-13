@@ -38,13 +38,21 @@ final class TimelineHarness {
 
     /// 投稿のセル上端の、ウィンドウ座標でのY位置。セルが表示されていなければnil。
     func windowMinY(of id: Status.ID) -> CGFloat? {
+        guard let cell = visibleCell(of: id) else { return nil }
+        return cell.convert(cell.bounds, to: window).minY
+    }
+
+    /// 表示中のセルに設定されている本文。セルが表示されていなければnil。
+    func secondaryText(of id: Status.ID) -> String? {
+        (visibleCell(of: id)?.contentConfiguration as? UIListContentConfiguration)?.secondaryText
+    }
+
+    private func visibleCell(of id: Status.ID) -> UICollectionViewCell? {
         collectionView.layoutIfNeeded()
-        let cell = collectionView.visibleCells.first { cell in
+        return collectionView.visibleCells.first { cell in
             guard let indexPath = collectionView.indexPath(for: cell) else { return false }
             return viewController.itemIdentifier(at: indexPath) == id
         }
-        guard let cell else { return nil }
-        return cell.convert(cell.bounds, to: window).minY
     }
 }
 

@@ -30,10 +30,14 @@ final class TimelineViewController: UIViewController {
 
     /// 表示中の投稿を、新しい順に並んだ`newStatuses`で置き換える。
     func setStatuses(_ newStatuses: [Status]) {
+        let previous = statuses
         statuses = Dictionary(newStatuses.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
         var snapshot = NSDiffableDataSourceSnapshot<Section, Status.ID>()
         snapshot.appendSections([.main])
         snapshot.appendItems(newStatuses.map(\.id))
+        // 差分はIDで取られるため、同じIDのまま内容が変わった投稿は明示的にセルを再構成する。
+        let changedIDs = newStatuses.filter { status in previous[status.id].map { $0 != status } ?? false }.map(\.id)
+        snapshot.reconfigureItems(Array(Set(changedIDs)))
         dataSource.apply(snapshot, animatingDifferences: false)
         logger.info("setStatuses count=\(newStatuses.count, privacy: .public)")
     }
