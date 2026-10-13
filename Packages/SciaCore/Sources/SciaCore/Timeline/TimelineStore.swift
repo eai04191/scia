@@ -16,6 +16,8 @@ public final class TimelineStore {
     public private(set) var pending: [Status] = []
     /// 見た中で最も新しい投稿のID。これより新しい投稿を未読として数える。
     public private(set) var lastReadID: String?
+    /// サーバーのmarkerに保存されている既読位置。
+    public private(set) var savedReadID: String?
     /// 読み込み中のギャップのID。
     public private(set) var loadingGapIDs: Set<String> = []
 
@@ -44,15 +46,35 @@ public final class TimelineStore {
     }
 
     /// 最新のページで置き換える。読み込み中なら何もせずnilを返す。
-    public func loadInitial() async throws -> [Status]? {
+    ///
+    /// `markerID`（サーバーに保存された既読位置）を渡すと、そこを既読位置にする。最新のページより古ければ、
+    /// 既読位置のすぐ後に続く投稿と、既読位置から古い投稿も読み、最新のページとの間が埋まらなければギャップを置く。
+    /// 既読位置から続きを読めるようにするため。
+    public func loadInitial(around markerID: String? = nil) async throws -> [Status]? {
         guard !isLoading else { return nil }
         isLoading = true
         defer { isLoading = false }
 
-        let page = try await fetch(TimelineQuery(limit: pageSize))
-        rebuild(statuses: page.statuses.filter { !isDeleted($0) }, gaps: [])
-        isRegenerating = page.isRegenerating
-        reachedEnd = page.statuses.isEmpty && !page.isRegenerating
+        let latest = try await fetch(TimelineQuery(limit: pageSize))
+        var loaded = latest.statuses
+        var loadedGaps: [TimelineGap] = []
+        if let markerID, !latest.isRegenerating, let oldestLatest = Self.oldest(of: latest.statuses), StatusID.isNewer(oldestLatest.id, than: markerID) {
+            let afterMarker = try await fetch(TimelineQuery(minID: markerID, limit: pageSize))
+            let fromMarker = try await fetch(TimelineQuery(maxID: Self.oldest(of: afterMarker.statuses)?.id ?? oldestLatest.id, limit: pageSize))
+            loaded += afterMarker.statuses + fromMarker.statuses
+            if afterMarker.statuses.count >= pageSize,
+               let newestAfterMarker = Self.newest(of: afterMarker.statuses),
+               StatusID.isNewer(oldestLatest.id, than: newestAfterMarker.id) {
+                loadedGaps.append(TimelineGap(newerID: oldestLatest.id, olderID: newestAfterMarker.id))
+            }
+        }
+        let unique = Dictionary(loaded.filter { !isDeleted($0) }.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        rebuild(statuses: Array(unique.values), gaps: loadedGaps)
+        isRegenerating = latest.isRegenerating
+        reachedEnd = latest.statuses.isEmpty && !latest.isRegenerating
+        if let markerID {
+            applySavedMarker(markerID)
+        }
         return statuses
     }
 
@@ -227,6 +249,25 @@ public final class TimelineStore {
         guard let newest = ids.max(by: { StatusID.isNewer($1, than: $0) }) else { return }
         if let lastReadID, !StatusID.isNewer(newest, than: lastReadID) { return }
         lastReadID = newest
+    }
+
+    /// サーバーに保存された既読位置を取り込む。他の端末で読み進めていれば、未読がその分減る。
+    public func applySavedMarker(_ id: String) {
+        markRead([id])
+        markSaved(id)
+    }
+
+    /// サーバーへ保存すべき既読位置。保存済みより進んでいなければnil。
+    public var readIDToSave: String? {
+        guard let lastReadID else { return nil }
+        if let savedReadID, !StatusID.isNewer(lastReadID, than: savedReadID) { return nil }
+        return lastReadID
+    }
+
+    /// 既読位置をサーバーに保存した。保存済みの位置は新しい方へだけ進む。
+    public func markSaved(_ id: String) {
+        if let savedReadID, !StatusID.isNewer(id, than: savedReadID) { return }
+        savedReadID = id
     }
 
     /// 既読の位置より新しい、読み込み済みの投稿の数。既読の位置が決まっていなければ0。

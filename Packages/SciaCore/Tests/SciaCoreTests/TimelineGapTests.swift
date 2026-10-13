@@ -231,6 +231,70 @@ struct TimelineGapTests {
         #expect(ids(store) == [11, 10, 9, 8])
     }
 
+    // MARK: - 既読位置から読み始める
+
+    @Test func markerInLatestPageNeedsNoExtraRequests() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = makeStore(server)
+
+        _ = try await store.loadInitial(around: "9")
+
+        #expect(ids(store) == [10, 9, 8])
+        #expect(server.queries.count == 1)
+        #expect(store.lastReadID == "9")
+        #expect(store.unreadCount == 1)
+        #expect(store.readIDToSave == nil, "サーバーにある位置をもう一度保存しようとしています")
+    }
+
+    @Test func markerOlderThanLatestPageLoadsAroundItWithGap() async throws {
+        let server = FakeHomeServer(ids: 1...20)
+        let store = makeStore(server)
+
+        _ = try await store.loadInitial(around: "5")
+
+        #expect(store.entries.map(\.debugLabel) == ["20", "19", "18", "gap(18...8)", "8", "7", "6", "5", "4", "3"])
+        #expect(server.queries == [
+            TimelineQuery(limit: Self.pageSize),
+            TimelineQuery(minID: "5", limit: Self.pageSize),
+            TimelineQuery(maxID: "6", limit: Self.pageSize),
+        ])
+        #expect(store.unreadCount == 6)
+        #expect(store.hasUnloadedUnread)
+
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromOlder)
+        }
+        #expect(ids(store) == Array((3...20).reversed()))
+        #expect(!store.hasUnloadedUnread)
+    }
+
+    @Test func markerJustBelowLatestPageLeavesNoGap() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = makeStore(server)
+
+        _ = try await store.loadInitial(around: "5")
+
+        #expect(store.entries.map(\.debugLabel) == ["10", "9", "8", "7", "6", "5", "4", "3"])
+    }
+
+    @Test func readPositionIsSavedOnlyWhenItAdvances() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = makeStore(server)
+        _ = try await store.loadInitial(around: "8")
+
+        store.markRead(["9"])
+        #expect(store.readIDToSave == "9")
+        store.markSaved("9")
+        #expect(store.readIDToSave == nil)
+
+        // 他の端末で先へ読み進めていたら、その位置まで既読にする。
+        store.applySavedMarker("10")
+        #expect(store.lastReadID == "10")
+        #expect(store.readIDToSave == nil)
+        store.applySavedMarker("7")
+        #expect(store.lastReadID == "10")
+    }
+
     /// 切断と補完、ギャップの読み込み、古いページの読み込みを、決まった乱数で混ぜても、サーバーと同じ並びになる。
     @Test(arguments: 0..<20)
     func randomizedSessionsMatchServer(seed: UInt64) async throws {

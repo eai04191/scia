@@ -17,6 +17,19 @@ public struct MastodonClient: Sendable {
         return TimelinePage(statuses: statuses, isRegenerating: response.statusCode == 206)
     }
 
+    /// ホームタイムラインの既読位置。まだ保存されていなければnil。
+    /// https://docs.joinmastodon.org/methods/markers/#get
+    public func homeMarker() async throws -> String? {
+        let (markers, _) = try await get([String: Marker].self, path: "api/v1/markers", query: [URLQueryItem(name: "timeline[]", value: "home")])
+        return markers["home"]?.lastReadId
+    }
+
+    /// ホームタイムラインの既読位置を保存する。他の端末と同時に保存して競合すると409が返る。
+    /// https://docs.joinmastodon.org/methods/markers/#create
+    public func saveHomeMarker(lastReadID: String) async throws {
+        _ = try await post([String: Marker].self, path: "api/v1/markers", form: [URLQueryItem(name: "home[last_read_id]", value: lastReadID)])
+    }
+
     /// ストリーミングAPIの接続先。REST APIと別のホストのことがある。
     /// https://docs.joinmastodon.org/methods/instance/#v2
     public func streamingURL() async throws -> URL {
@@ -34,7 +47,23 @@ public struct MastodonClient: Sendable {
 
     private func get<T: Decodable>(_ type: T.Type, path: String, query: [URLQueryItem]) async throws -> (T, HTTPURLResponse) {
         let url = credential.instance.appending(path: path)
-        var request = URLRequest(url: query.isEmpty ? url : url.appending(queryItems: query))
+        return try await send(URLRequest(url: query.isEmpty ? url : url.appending(queryItems: query)), decoding: type)
+    }
+
+    private func post<T: Decodable>(_ type: T.Type, path: String, form: [URLQueryItem]) async throws -> (T, HTTPURLResponse) {
+        var request = URLRequest(url: credential.instance.appending(path: path))
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        var components = URLComponents()
+        components.queryItems = form
+        // URLComponentsは`+`をエンコードしないが、form-urlencodedでは`+`が空白として読まれるため、エンコードしておく。
+        let body = (components.percentEncodedQuery ?? "").replacingOccurrences(of: "+", with: "%2B")
+        request.httpBody = Data(body.utf8)
+        return try await send(request, decoding: type)
+    }
+
+    private func send<T: Decodable>(_ request: URLRequest, decoding type: T.Type) async throws -> (T, HTTPURLResponse) {
+        var request = request
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await transport.send(request)
         guard (200..<300).contains(response.statusCode) else {
@@ -42,6 +71,11 @@ public struct MastodonClient: Sendable {
         }
         return (try MastodonDecoder.make().decode(type, from: data), response)
     }
+}
+
+/// https://docs.joinmastodon.org/entities/Marker/
+struct Marker: Decodable {
+    let lastReadId: String
 }
 
 /// タイムラインのどの範囲を読むか。
