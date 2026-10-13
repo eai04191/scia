@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// ログイン済みアカウントとしてMastodon APIを呼ぶ。
 public struct MastodonClient: Sendable {
@@ -21,8 +21,24 @@ public struct MastodonClient: Sendable {
         return TimelinePage(statuses: statuses, isRegenerating: response.statusCode == 206)
     }
 
+    /// ストリーミングAPIの接続先。REST APIと別のホストのことがある。
+    /// https://docs.joinmastodon.org/methods/instance/#v2
+    public func streamingURL() async throws -> URL {
+        struct Instance: Decodable {
+            struct Configuration: Decodable {
+                struct URLs: Decodable {
+                    let streaming: URL
+                }
+                let urls: URLs
+            }
+            let configuration: Configuration
+        }
+        return try await get(Instance.self, path: "api/v2/instance", query: []).0.configuration.urls.streaming
+    }
+
     private func get<T: Decodable>(_ type: T.Type, path: String, query: [URLQueryItem]) async throws -> (T, HTTPURLResponse) {
-        var request = URLRequest(url: credential.instance.appending(path: path).appending(queryItems: query))
+        let url = credential.instance.appending(path: path)
+        var request = URLRequest(url: query.isEmpty ? url : url.appending(queryItems: query))
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await transport.send(request)
         guard (200..<300).contains(response.statusCode) else {
