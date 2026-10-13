@@ -124,6 +124,26 @@ struct ScrollAnchorTests {
         #expect(abs(after - before) <= tolerance, "ギャップの上の投稿が\(after - before)pt動きました")
     }
 
+    /// 既読位置から読み始めるとき、その投稿が上端に来て、それより新しい投稿を見たとは報告しない。
+    /// 下に1画面分の投稿がない位置は上端まで動かせないため対象にしない。既読位置より古いページも読むので、そうなるのはタイムラインの終端だけ。
+    @Test(arguments: [0, 20, 45])
+    func placingAtTopShowsItemAtVisibleTopWithoutReportingNewer(index: Int) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var reported: [[Status.ID]] = []
+        harness.viewController.onVisibleStatusesChange = { reported.append($0) }
+        let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
+        let marker = statuses[index]
+
+        harness.viewController.setEntries(statuses.map(TimelineEntry.status), placingAtTop: .status(marker.id))
+
+        let newer = Set(statuses[..<index].map(\.id))
+        #expect(reported.allSatisfy { newer.isDisjoint(with: $0) }, "既読位置より新しい投稿を見たと報告しました")
+        let visibleTop = harness.collectionView.adjustedContentInset.top
+        let markerY = try #require(harness.windowMinY(of: .status(marker.id)))
+        #expect(abs(markerY - visibleTop) <= tolerance, "既読位置の投稿が上端にありません: \(markerY)")
+    }
+
     /// 新着ボタンで最上部へ戻ると、上のセルの高さが見積もりから実寸へ変わっても、最上部まで届く。
     @Test func scrollingToNewestReachesTop() async throws {
         let harness = try TimelineHarness()

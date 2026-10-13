@@ -26,6 +26,9 @@ final class HomeTimelineController {
     private var hasLoadedInitial = false
     /// バックグラウンドでは接続しない。最初の読み込みの途中でバックグラウンドへ入っても、読み込み後につながないようにする。
     private var isInForeground = true
+    private var isSavingReadPosition = false
+    /// バックグラウンドで既読位置の保存を終えるまで、アプリを止めないよう頼んでいる。
+    private var readPositionBackgroundTask = UIBackgroundTaskIdentifier.invalid
     /// 新着を挿入する時機が来たが、指でスクロール中なので止まるのを待っている。
     private var isWaitingForScrollToSettle = false
 
@@ -63,18 +66,20 @@ final class HomeTimelineController {
         tasks.removeAll()
     }
 
-    /// バックグラウンドに入るときに呼ぶ。バックグラウンドでは接続が止められるため自分から切る。
+    /// バックグラウンドに入るときに呼ぶ。バックグラウンドでは接続が止められるため自分から切り、既読位置を保存する。
     func enterBackground() {
         isInForeground = false
         stopStreaming()
+        saveReadPosition(inBackground: true)
     }
 
-    /// バックグラウンドから戻ったときに呼ぶ。つなぎ直して切れていた間の投稿を補う。
+    /// バックグラウンドから戻ったときに呼ぶ。つなぎ直して切れていた間の投稿を補い、他の端末で読み進めた位置を取り込む。
     /// 最初の読み込みが済んでいなければ、済んだ時点でつなぐので何もしない。
     func enterForeground() {
         isInForeground = true
         guard hasLoadedInitial else { return }
         startStreaming()
+        syncReadPosition()
     }
 
     private func stopStreaming() {
@@ -103,8 +108,12 @@ final class HomeTimelineController {
     private func loadInitial() async {
         logger.info("home loadInitial start")
         do {
-            guard let statuses = try await store.loadInitial(), !isStopped else { return }
-            viewController.setEntries(store.entries)
+            let markerID = try await loadMarker()
+            guard let statuses = try await store.loadInitial(around: markerID), !isStopped else { return }
+            // 前回読んだところから続きを読めるよう、既読位置の投稿を最上部に置く。新しい投稿はその上にある。
+            let topID = markerID.flatMap { id in store.statuses.contains { $0.id == id } ? TimelineEntry.ID.status(id) : nil }
+            viewController.setEntries(store.entries, placingAtTop: topID)
+            updateUnreadCount()
             hasLoadedInitial = true
             viewController.setContentState(statuses.isEmpty && store.isRegenerating ? .regenerating : .loaded)
             viewController.setFooterState(store.reachedEnd ? .reachedEnd : .idle)
@@ -242,9 +251,72 @@ final class HomeTimelineController {
     }
 
     private func scrollDidSettle() {
+        saveReadPosition(inBackground: false)
         guard isWaitingForScrollToSettle else { return }
         isWaitingForScrollToSettle = false
         insertPending()
+    }
+
+    // MARK: - 既読位置
+
+    /// 既読位置はタイムラインを読む助けで、読めなくてもタイムラインは表示できるため、トークンの失効以外の失敗では位置なしで進める。
+    private func loadMarker() async throws -> String? {
+        do {
+            return try await client.homeMarker()
+        } catch let error as MastodonAPIError where error.isUnauthorized {
+            throw error
+        } catch {
+            logger.error("home marker load failed: \(error.localizedDescription, privacy: .public)")
+            return nil
+        }
+    }
+
+    private func syncReadPosition() {
+        run { controller in
+            do {
+                guard let markerID = try await controller.client.homeMarker(), !controller.isStopped else { return }
+                controller.store.applySavedMarker(markerID)
+                controller.updateUnreadCount()
+                controller.logger.info("home marker synced id=\(markerID, privacy: .public)")
+            } catch {
+                controller.handle(error, during: "marker sync") { _ in }
+            }
+        }
+    }
+
+    /// 既読位置が保存済みより進んでいれば保存する。保存している間に読み進めた分も、続けて保存する。
+    /// 競合などで失敗したら、次にスクロールが止まったときに保存し直す。
+    private func saveReadPosition(inBackground: Bool) {
+        guard !isStopped, store.readIDToSave != nil || isSavingReadPosition else { return }
+        if inBackground, readPositionBackgroundTask == .invalid {
+            // バックグラウンドに入るときは、保存し終えるまでアプリを止めないよう頼んでおく。保存中の分も含める。
+            readPositionBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "save home marker") { [weak self] in
+                self?.endReadPositionBackgroundTask()
+            }
+        }
+        guard !isSavingReadPosition else { return }
+        isSavingReadPosition = true
+        let client = client
+        Task { [weak self] in
+            while let self, !self.isStopped, let id = self.store.readIDToSave {
+                do {
+                    try await client.saveHomeMarker(lastReadID: id)
+                    self.store.markSaved(id)
+                    self.logger.info("home marker saved id=\(id, privacy: .public)")
+                } catch {
+                    self.handle(error, during: "marker save") { _ in }
+                    break
+                }
+            }
+            self?.isSavingReadPosition = false
+            self?.endReadPositionBackgroundTask()
+        }
+    }
+
+    private func endReadPositionBackgroundTask() {
+        guard readPositionBackgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(readPositionBackgroundTask)
+        readPositionBackgroundTask = .invalid
     }
 
     private func insertPending() {

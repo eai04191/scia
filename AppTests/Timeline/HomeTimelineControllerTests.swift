@@ -93,6 +93,18 @@ struct HomeTimelineControllerTests {
         #expect(controller.viewController.displayedStatusIDs == (arriving + existing).map(\.id))
     }
 
+    @Test func savedMarkerSetsUnreadCount() async throws {
+        let statuses = StatusFactory.make(count: 5, startingAt: 100)
+        let transport = try HomeTransport(home: statuses, markerID: statuses[3].id)
+        let controller = try makeController(transport: transport)
+        defer { controller.stop() }
+
+        controller.start()
+        try await waitUntil { controller.viewController.contentState == .loaded }
+
+        #expect(controller.viewController.unreadCount == 3)
+    }
+
     @Test func emptyHomeReconnectsWhenReturningToForeground() async throws {
         let connector = MessageQueueConnector()
         let controller = try makeController(transport: try HomeTransport(home: []), connector: connector)
@@ -198,8 +210,10 @@ private actor ResponseGate {
 /// ホームタイムラインには決まった投稿を、インスタンス情報にはストリーミングの接続先を返すHTTPTransport。
 private struct HomeTransport: HTTPTransport {
     let homeBody: Data
+    let markerBody: Data
 
-    init(home: [Status]) throws {
+    init(home: [Status], markerID: String? = nil) throws {
+        markerBody = Data((markerID.map { #"{"home":{"last_read_id":"\#($0)","version":1,"updated_at":"2026-10-13T03:21:45.123Z"}}"# } ?? "{}").utf8)
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
         encoder.dateEncodingStrategy = .iso8601
@@ -212,6 +226,8 @@ private struct HomeTransport: HTTPTransport {
         switch url.path() {
         case "/api/v1/timelines/home":
             body = homeBody
+        case "/api/v1/markers":
+            body = markerBody
         case "/api/v2/instance":
             body = Data(#"{"configuration":{"urls":{"streaming":"wss://example.social"}}}"#.utf8)
         default:

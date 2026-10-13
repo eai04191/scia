@@ -125,9 +125,10 @@ final class TimelineViewController: UIViewController {
     ///
     /// 読んでいる位置の要素が画面上で動かないようにする。基準は表示領域の上端にかかっている要素で、`anchorID`を渡せばその要素にする。
     /// ただし最上部にいて追従が有効なら、最上部に留まって新着を見せる。
-    func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil) {
+    /// `topID`を渡すと、その要素を表示領域の上端に置く。既読位置から読み始めるときに使う。
+    func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil) {
         let previous = entries
-        let followsTop = anchorID == nil && isAtTop && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
+        let followsTop = anchorID == nil && topID == nil && isAtTop && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
         entries = Dictionary(newEntries.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
         var snapshot = NSDiffableDataSourceSnapshot<Section, ItemID>()
         snapshot.appendSections([.main])
@@ -135,7 +136,13 @@ final class TimelineViewController: UIViewController {
         // 差分はIDで取られるため、同じIDのまま内容が変わった要素は明示的にセルを再構成する。
         let changedIDs = newEntries.filter { entry in previous[entry.id].map { $0 != entry } ?? false }.map(\.id)
         snapshot.reconfigureItems(Array(Set(changedIDs)))
-        if followsTop {
+        if let topID {
+            isRestoringAnchor = true
+            dataSource.apply(snapshot, animatingDifferences: false)
+            scrollToTop(of: topID)
+            isRestoringAnchor = false
+            logger.info("setEntries count=\(newEntries.count, privacy: .public) top=\(Self.label(topID), privacy: .public)")
+        } else if followsTop {
             dataSource.apply(snapshot, animatingDifferences: false)
             collectionView.contentOffset.y = -collectionView.adjustedContentInset.top
             logger.info("setEntries count=\(newEntries.count, privacy: .public) followsTop=true")
@@ -410,6 +417,11 @@ extension TimelineViewController: UICollectionViewDelegate {
         isScrollingToTop = false
     }
 
+    /// ステータスバーのタップで最上部へ動かしたとき。
+    func scrollViewDidScrollToTop(_ scrollView: UIScrollView) {
+        onScrollSettle?()
+    }
+
     /// ギャップは、画面の上半分にあれば下から遡ってきたとみなして古い側から、下半分にあれば新しい側から読む。
     /// どちらも、いま読んでいる側に続く投稿から埋まる。
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
@@ -452,6 +464,16 @@ extension TimelineViewController {
             .min { $0.1.minY < $1.1.minY }
         guard let (id, frame) = topmost else { return nil }
         return ScrollAnchor(id: id, distanceFromVisibleTop: frame.minY - visibleTop)
+    }
+
+    /// 要素のセル上端を表示領域の上端に合わせる。下に十分な要素がなければ、末尾までスクロールしたところで止める。
+    private func scrollToTop(of id: ItemID) {
+        restore(ScrollAnchor(id: id, distanceFromVisibleTop: 0))
+        let inset = collectionView.adjustedContentInset
+        let maxOffset = max(collectionView.contentSize.height + inset.bottom - collectionView.bounds.height, -inset.top)
+        if collectionView.contentOffset.y > maxOffset {
+            collectionView.contentOffset.y = maxOffset
+        }
     }
 
     /// 表示領域の外にあっても、指定した要素を基準にする。
