@@ -1,0 +1,13 @@
+# スタイルはagentが書くため検査しない。コンパイラが拾わない実行時クラッシュの原因だけを禁止する
+only_rules:
+  - force_unwrapping
+  - force_try
+  - implicitly_unwrapped_optional
+
+included:
+  - App
+  - AppTests
+  - Packages/SciaCore/Sources
+  - Packages/SciaCore/Tests
+
+strict: true

@@ -3,11 +3,15 @@ SCHEME := Scia
 DERIVED_DATA := DerivedData
 SIM_DESTINATION ?= generic/platform=iOS Simulator
 
-.PHONY: generate test-core build test check clean
+.PHONY: generate lint test-core build test check clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
 	xcodegen generate
+
+## 実行時クラッシュにつながる書き方（強制アンラップ、try!、IUO）を検出する。swiftlintはbrew install swiftlintで入れる
+lint:
+	swiftlint lint --quiet
 
 ## SciaCoreのユニットテストをmacOS上で実行する（シミュレーター不要）
 test-core:
@@ -23,7 +27,7 @@ test: generate
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(SIM_DESTINATION)' -derivedDataPath $(DERIVED_DATA) -collect-test-diagnostics never test
 
 ## 変更を報告する前に通すべき検証
-check: test-core build
+check: lint test-core build
 
 clean:
 	rm -rf $(DERIVED_DATA) $(PROJECT) Packages/SciaCore/.build

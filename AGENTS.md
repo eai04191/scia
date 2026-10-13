@@ -11,6 +11,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 ## コマンド
 
 - `make generate`: Xcodeプロジェクトを生成する
+- `make lint`: SwiftLintで強制アンラップ、`try!`、IUOを検出する（`brew install swiftlint`が必要）
 - `make test-core`: SciaCoreのテスト（macOS上、シミュレーター不要）
 - `make build`: シミュレーター向けにビルドする
 - `make test SIM_DESTINATION='platform=iOS Simulator,name=<端末名>'`: シミュレーターでテストする
