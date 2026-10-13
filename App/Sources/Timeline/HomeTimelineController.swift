@@ -10,7 +10,7 @@ final class HomeTimelineController {
     private static let pageSize = 40
 
     let viewController = TimelineViewController()
-    private let pager: TimelinePager
+    private let store: TimelineStore
     /// トークンが無効だったとき、どのコントローラーからの通知かを添えて呼ぶ。
     private let onUnauthorized: (HomeTimelineController, String) -> Void
     private let logger = SciaLog.logger(category: "timeline")
@@ -18,7 +18,7 @@ final class HomeTimelineController {
     private var isStopped = false
 
     init(client: MastodonClient, onUnauthorized: @escaping (HomeTimelineController, String) -> Void) {
-        pager = TimelinePager { maxID in
+        store = TimelineStore { maxID in
             try await client.homeTimeline(maxID: maxID, limit: Self.pageSize)
         }
         self.onUnauthorized = onUnauthorized
@@ -48,7 +48,7 @@ final class HomeTimelineController {
     }
 
     private func retry() {
-        if pager.statuses.isEmpty {
+        if store.statuses.isEmpty {
             start()
         } else {
             loadOlder()
@@ -58,26 +58,26 @@ final class HomeTimelineController {
     private func loadInitial() async {
         logger.info("home loadInitial start")
         do {
-            guard let statuses = try await pager.loadInitial(), !isStopped else { return }
+            guard let statuses = try await store.loadInitial(), !isStopped else { return }
             viewController.setStatuses(statuses)
-            viewController.setContentState(statuses.isEmpty && pager.isRegenerating ? .regenerating : .loaded)
-            viewController.setFooterState(pager.reachedEnd ? .reachedEnd : .idle)
-            logger.info("home loadInitial done count=\(statuses.count, privacy: .public) regenerating=\(self.pager.isRegenerating, privacy: .public)")
+            viewController.setContentState(statuses.isEmpty && store.isRegenerating ? .regenerating : .loaded)
+            viewController.setFooterState(store.reachedEnd ? .reachedEnd : .idle)
+            logger.info("home loadInitial done count=\(statuses.count, privacy: .public) regenerating=\(self.store.isRegenerating, privacy: .public)")
         } catch {
             handle(error) { viewController.setContentState(.failed($0)) }
         }
     }
 
     private func loadOlder() {
-        guard !isStopped, !pager.isLoading, !pager.reachedEnd, !pager.statuses.isEmpty else { return }
+        guard !isStopped, !store.isLoading, !store.reachedEnd, !store.statuses.isEmpty else { return }
         viewController.setFooterState(.loading)
         run { controller in
             controller.logger.info("home loadOlder start")
             do {
-                guard let added = try await controller.pager.loadOlder(), !controller.isStopped else { return }
+                guard let added = try await controller.store.loadOlder(), !controller.isStopped else { return }
                 controller.viewController.appendStatuses(added)
-                controller.viewController.setFooterState(controller.pager.reachedEnd ? .reachedEnd : .idle)
-                controller.logger.info("home loadOlder done added=\(added.count, privacy: .public) reachedEnd=\(controller.pager.reachedEnd, privacy: .public)")
+                controller.viewController.setFooterState(controller.store.reachedEnd ? .reachedEnd : .idle)
+                controller.logger.info("home loadOlder done added=\(added.count, privacy: .public) reachedEnd=\(controller.store.reachedEnd, privacy: .public)")
             } catch {
                 controller.handle(error) { controller.viewController.setFooterState(.failed($0)) }
             }

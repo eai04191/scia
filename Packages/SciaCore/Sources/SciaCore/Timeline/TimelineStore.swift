@@ -1,6 +1,6 @@
 /// タイムラインを新しい順に読み込み、下方向へ古い投稿を足していく。
 @MainActor
-public final class TimelinePager {
+public final class TimelineStore {
     public typealias Fetch = @Sendable (_ maxID: String?) async throws -> TimelinePage
 
     /// 新しい順。

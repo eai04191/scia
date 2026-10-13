@@ -4,7 +4,7 @@ import Testing
 @testable import SciaCore
 
 @MainActor
-struct TimelinePagerTests {
+struct TimelineStoreTests {
     /// 呼ばれたmax_idを記録し、登録した順にページを返す。
     private final class PageQueue: Sendable {
         private let state: Mutex<(pages: [Result<TimelinePage, any Error>], maxIDs: [String?])>
@@ -47,82 +47,82 @@ struct TimelinePagerTests {
         .success(TimelinePage(statuses: try statuses(ids), isRegenerating: regenerating))
     }
 
-    private func makePager(_ queue: PageQueue) -> TimelinePager {
-        TimelinePager { maxID in try queue.next(maxID: maxID) }
+    private func makeStore(_ queue: PageQueue) -> TimelineStore {
+        TimelineStore { maxID in try queue.next(maxID: maxID) }
     }
 
     @Test func loadsInitialThenOlderPagesUsingOldestID() async throws {
         let queue = PageQueue([try page([30, 29, 28]), try page([27, 26])])
-        let pager = makePager(queue)
+        let store = makeStore(queue)
 
-        #expect(try await pager.loadInitial()?.map(\.id) == ["30", "29", "28"])
-        #expect(try await pager.loadOlder()?.map(\.id) == ["27", "26"])
+        #expect(try await store.loadInitial()?.map(\.id) == ["30", "29", "28"])
+        #expect(try await store.loadOlder()?.map(\.id) == ["27", "26"])
 
-        #expect(pager.statuses.map(\.id) == ["30", "29", "28", "27", "26"])
+        #expect(store.statuses.map(\.id) == ["30", "29", "28", "27", "26"])
         #expect(queue.maxIDs == [nil, "28"])
     }
 
     @Test func dropsDuplicatesFromOlderPage() async throws {
         let queue = PageQueue([try page([30, 29]), try page([29, 28])])
-        let pager = makePager(queue)
+        let store = makeStore(queue)
 
-        _ = try await pager.loadInitial()
-        #expect(try await pager.loadOlder()?.map(\.id) == ["28"])
-        #expect(pager.statuses.map(\.id) == ["30", "29", "28"])
+        _ = try await store.loadInitial()
+        #expect(try await store.loadOlder()?.map(\.id) == ["28"])
+        #expect(store.statuses.map(\.id) == ["30", "29", "28"])
     }
 
     @Test func emptyOlderPageReachesEndAndStopsLoading() async throws {
         let queue = PageQueue([try page([30]), try page([])])
-        let pager = makePager(queue)
+        let store = makeStore(queue)
 
-        _ = try await pager.loadInitial()
-        #expect(try await pager.loadOlder() == [])
-        #expect(pager.reachedEnd)
-        #expect(try await pager.loadOlder() == nil)
+        _ = try await store.loadInitial()
+        #expect(try await store.loadOlder() == [])
+        #expect(store.reachedEnd)
+        #expect(try await store.loadOlder() == nil)
         #expect(queue.maxIDs == [nil, "30"])
     }
 
     @Test func regeneratingEmptyPageIsNotEnd() async throws {
         let queue = PageQueue([try page([], regenerating: true)])
-        let pager = makePager(queue)
+        let store = makeStore(queue)
 
-        #expect(try await pager.loadInitial() == [])
-        #expect(!pager.reachedEnd)
-        #expect(pager.isRegenerating)
+        #expect(try await store.loadInitial() == [])
+        #expect(!store.reachedEnd)
+        #expect(store.isRegenerating)
     }
 
     @Test func loadOlderBeforeInitialDoesNothing() async throws {
         let queue = PageQueue([])
-        let pager = makePager(queue)
+        let store = makeStore(queue)
 
-        #expect(try await pager.loadOlder() == nil)
+        #expect(try await store.loadOlder() == nil)
         #expect(queue.maxIDs.isEmpty)
     }
 
     @Test func failureKeepsStatusesAndAllowsRetry() async throws {
         let queue = PageQueue([try page([30]), .failure(Failure()), try page([29])])
-        let pager = makePager(queue)
+        let store = makeStore(queue)
 
-        _ = try await pager.loadInitial()
-        await #expect(throws: Failure.self) { _ = try await pager.loadOlder() }
-        #expect(!pager.isLoading)
-        #expect(pager.statuses.map(\.id) == ["30"])
+        _ = try await store.loadInitial()
+        await #expect(throws: Failure.self) { _ = try await store.loadOlder() }
+        #expect(!store.isLoading)
+        #expect(store.statuses.map(\.id) == ["30"])
 
-        #expect(try await pager.loadOlder()?.map(\.id) == ["29"])
+        #expect(try await store.loadOlder()?.map(\.id) == ["29"])
         #expect(queue.maxIDs == [nil, "30", "30"])
     }
 
     @Test func concurrentLoadIsSkipped() async throws {
         let gate = AsyncGate()
-        let pager = TimelinePager { _ in
+        let store = TimelineStore { _ in
             await gate.wait()
             return TimelinePage(statuses: [], isRegenerating: false)
         }
 
-        let first = Task { try await pager.loadInitial() }
+        let first = Task { try await store.loadInitial() }
         await gate.waitUntilWaiting()
-        #expect(pager.isLoading)
-        #expect(try await pager.loadInitial() == nil)
+        #expect(store.isLoading)
+        #expect(try await store.loadInitial() == nil)
 
         await gate.open()
         #expect(try await first.value == [])
