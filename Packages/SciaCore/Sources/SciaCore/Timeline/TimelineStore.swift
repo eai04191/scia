@@ -246,10 +246,26 @@ public final class TimelineStore {
 
     /// 画面に表示された投稿を既読にする。既読の位置は新しい方へだけ進む。
     public func markRead(_ ids: some Sequence<String>) {
-        guard let newest = ids.max(by: { StatusID.isNewer($1, than: $0) }) else { return }
-        if let lastReadID, !StatusID.isNewer(newest, than: lastReadID) { return }
-        lastReadID = newest
+        let ids = Array(ids)
+        lastReadID = Self.advanced(lastReadID, to: ids)
+        #if DEBUG
+        lastSavableReadID = Self.advanced(lastSavableReadID, to: ids.filter { !debugLocalOnlyIDs.contains($0) })
+        #endif
     }
+
+    private static func advanced(_ current: String?, to ids: [String]) -> String? {
+        guard let newest = ids.max(by: { StatusID.isNewer($1, than: $0) }) else { return current }
+        if let current, !StatusID.isNewer(newest, than: current) { return current }
+        return newest
+    }
+
+    #if DEBUG
+    /// サーバーにない検証用の投稿のID。見れば手元では既読になるが、サーバーに保存する既読位置には使わない。
+    /// 保存すると、本物の投稿がそれを追い越すまで、前回の既読位置から読み始められなくなるため。
+    public var debugLocalOnlyIDs: Set<String> = []
+    /// サーバーに保存できる投稿のうち、見た中で最も新しいもののID。
+    private var lastSavableReadID: String?
+    #endif
 
     /// サーバーに保存された既読位置を取り込む。他の端末で読み進めていれば、未読がその分減る。
     public func applySavedMarker(_ id: String) {
@@ -259,9 +275,14 @@ public final class TimelineStore {
 
     /// サーバーへ保存すべき既読位置。保存済みより進んでいなければnil。
     public var readIDToSave: String? {
-        guard let lastReadID else { return nil }
-        if let savedReadID, !StatusID.isNewer(lastReadID, than: savedReadID) { return nil }
-        return lastReadID
+        #if DEBUG
+        let candidate = lastSavableReadID
+        #else
+        let candidate = lastReadID
+        #endif
+        guard let candidate else { return nil }
+        if let savedReadID, !StatusID.isNewer(candidate, than: savedReadID) { return nil }
+        return candidate
     }
 
     /// 既読位置をサーバーに保存した。保存済みの位置は新しい方へだけ進む。
@@ -281,6 +302,16 @@ public final class TimelineStore {
         guard let lastReadID else { return false }
         return gaps.contains { !StatusID.isNewer(lastReadID, than: $0.olderID) }
     }
+
+    #if DEBUG
+    /// 新しい方から`count`件の投稿と、その間のギャップを忘れる。切断している間に投稿を取りこぼした状態を、実データで再現する検証用。
+    public func debugForgetNewest(_ count: Int) {
+        let remaining = Array(statuses.dropFirst(count))
+        let newestKept = remaining.first?.id
+        // 新しい側の端の投稿を忘れたギャップは、補完で読み直す範囲に含まれるので消す。
+        rebuild(statuses: remaining, gaps: gaps.filter { gap in newestKept.map { !StatusID.isNewer(gap.newerID, than: $0) } ?? false })
+    }
+    #endif
 
     // MARK: - 並べ替え
 

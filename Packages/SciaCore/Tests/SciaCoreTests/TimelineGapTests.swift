@@ -231,6 +231,39 @@ struct TimelineGapTests {
         #expect(ids(store) == [11, 10, 9, 8])
     }
 
+    #if DEBUG
+    /// 検証用のダミーは見れば手元で既読になるが、サーバーへは見た中で最も新しい本物の投稿を保存する。
+    @Test func localOnlyStatusesAreNotSavedAsReadPosition() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        store.debugLocalOnlyIDs = ["100"]
+        _ = store.receive(.update(server.status(100)))
+        _ = store.flushPending()
+
+        store.markRead(["100", "10", "9"])
+
+        #expect(store.lastReadID == "100")
+        #expect(store.unreadCount == 0)
+        #expect(store.readIDToSave == "10")
+    }
+
+    /// 検証用に最新の投稿を忘れると、次の補完で取り戻し、1ページを超えた分はギャップになる。
+    @Test func forgettingNewestIsRecoveredByFill() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        server.post(11...20)
+        _ = try await store.fillFromLatest()
+
+        store.debugForgetNewest(3)
+        #expect(store.entries.map(\.debugLabel) == ["10", "9", "8"], "忘れた範囲のギャップが残っています")
+
+        _ = try await store.fillFromLatest()
+        #expect(store.entries.map(\.debugLabel) == ["20", "19", "18", "gap(18...10)", "10", "9", "8"])
+    }
+    #endif
+
     // MARK: - 既読位置から読み始める
 
     @Test func markerInLatestPageNeedsNoExtraRequests() async throws {

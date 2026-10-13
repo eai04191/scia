@@ -50,6 +50,9 @@ final class HomeTimelineController {
         viewController.onVisibleStatusesChange = { [weak self] ids in self?.markRead(ids) }
         viewController.onScrollSettle = { [weak self] in self?.scrollDidSettle() }
         viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction) }
+        #if DEBUG
+        viewController.debugActions = makeDebugActions()
+        #endif
     }
 
     func start() {
@@ -352,3 +355,81 @@ final class HomeTimelineController {
         }
     }
 }
+
+#if DEBUG
+// MARK: - 検証用
+
+extension HomeTimelineController {
+    /// 投稿しなくても、新着の挿入やギャップの表示をシミュレーターで確かめるための操作。
+    fileprivate func makeDebugActions() -> [UIAction] {
+        [
+            UIAction(title: "ダミーの新着を流す", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
+                self?.streamDummyArrivals(count: 10)
+            },
+            UIAction(title: "直近の投稿を取りこぼして再接続", image: UIImage(systemName: "bolt.horizontal")) { [weak self] _ in
+                self?.simulateMissedWhileDisconnected()
+            },
+        ]
+    }
+
+    /// ストリーミングで届いたのと同じ経路で、ダミーの新着を少しずつ流す。
+    ///
+    /// ダミーはサーバーにない投稿なので、見れば手元では既読になるが、サーバーに保存する既読位置には使わない。
+    /// IDはMastodonと同じく時刻から作るため、後から届く本物の投稿はダミーより新しく並び、補完もダミー以降を読む。
+    private func streamDummyArrivals(count: Int) {
+        let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
+        run { controller in
+            for number in 1...count {
+                guard !controller.isStopped else { return }
+                let dummy = Self.dummyStatus(number: number, avatar: avatar)
+                controller.store.debugLocalOnlyIDs.insert(dummy.id)
+                controller.receive(.update(dummy))
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+        }
+    }
+
+    /// 1ページに収まらない数の最新の投稿を忘れてからつなぎ直し、実データで補完とギャップを起こす。
+    /// 補完の基準が残るよう、先に古いページを読み足し、少なくとも1件は残す。読み足しは接続を止める前に行い、失敗しても接続は止めない。
+    private func simulateMissedWhileDisconnected() {
+        let targetCount = Self.pageSize + 10
+        run { controller in
+            do {
+                while controller.store.statuses.count <= targetCount, !controller.store.reachedEnd {
+                    // 再生成中は空のページが返り続けるため、増えなければやめる。
+                    guard let added = try await controller.store.loadOlder(), !added.isEmpty else { break }
+                }
+            } catch {
+                controller.handle(error, during: "debug loadOlder") { _ in }
+                return
+            }
+            let forgetCount = min(targetCount, controller.store.statuses.count - 1)
+            guard !controller.isStopped, forgetCount > 0 else { return }
+            controller.logger.info("debug forget newest count=\(forgetCount, privacy: .public)")
+            controller.stopStreaming()
+            controller.store.debugForgetNewest(forgetCount)
+            controller.showEntries()
+            controller.startStreaming()
+        }
+    }
+
+    private static let dummyBodies = [
+        "短いダミーの新着",
+        "二行くらいになるダミーの新着です。挿入されたときに、読んでいる位置が動かないかを確かめるために、少し長めにしています。",
+        "<p>段落が分かれたダミーの新着。</p><p>" + String(repeating: "ストリーミングで新着が流れてきても、読んでいる位置が動かないことを確かめる。", count: 4) + "</p>",
+    ]
+
+    private static func dummyStatus(number: Int, avatar: URL) -> Status {
+        // Mastodonの投稿IDと同じく、ミリ秒の時刻を16ビット左へずらし、下位に連番を入れる。
+        let milliseconds = UInt64(Date.now.timeIntervalSince1970 * 1000)
+        return Status(
+            id: String(milliseconds << 16 | UInt64(number & 0xFFFF)),
+            createdAt: .now,
+            account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー #\(number)", avatar: avatar),
+            content: dummyBodies[number % dummyBodies.count],
+            spoilerText: "",
+            url: nil
+        )
+    }
+}
+#endif

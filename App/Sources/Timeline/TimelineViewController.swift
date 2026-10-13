@@ -36,6 +36,10 @@ final class TimelineViewController: UIViewController {
     var onScrollSettle: (() -> Void)?
     /// ギャップがタップされたときに、どちらの端から読むかを添えて呼ぶ。
     var onGapSelect: ((String, TimelineStore.GapDirection) -> Void)?
+    #if DEBUG
+    /// デバッグメニューに出す、このタイムライン用の検証の操作。表示より前に設定する。
+    var debugActions: [UIAction] = []
+    #endif
 
     /// 末尾から何件手前で古い投稿の読み込みを始めるか。
     private let prefetchThreshold = 10
@@ -70,7 +74,7 @@ final class TimelineViewController: UIViewController {
         super.viewDidLoad()
         title = "Home"
         #if DEBUG
-        navigationItem.rightBarButtonItem = makeDebugMenuButton()
+        navigationItem.rightBarButtonItem = makeDebugMenuButton(screenActions: debugActions)
         #endif
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]

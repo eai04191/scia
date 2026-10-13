@@ -4,8 +4,9 @@ import UIKit
 
 extension UIViewController {
     /// Debugビルドだけで出す、開発用の機能をまとめたメニューボタン。
-    func makeDebugMenuButton() -> UIBarButtonItem {
-        let menu = UIMenu(children: [
+    /// - Parameter screenActions: 画面ごとの検証用の操作。共通の項目の前に区切って並べる。
+    func makeDebugMenuButton(screenActions: [UIAction] = []) -> UIBarButtonItem {
+        let common: [UIMenuElement] = [
             UIAction(title: "チューニング", image: UIImage(systemName: "slider.horizontal.3")) { [weak self] _ in
                 self?.presentTuningPanel()
             },
@@ -19,7 +20,8 @@ extension UIViewController {
                 guard let sceneDelegate = self?.view.window?.windowScene?.delegate as? SceneDelegate else { return }
                 sceneDelegate.logOut(message: nil)
             },
-        ])
+        ]
+        let menu = UIMenu(children: [UIMenu(options: .displayInline, children: screenActions)] + common)
         let item = UIBarButtonItem(image: UIImage(systemName: "ladybug"), menu: menu)
         item.accessibilityLabel = "デバッグメニュー"
         return item
