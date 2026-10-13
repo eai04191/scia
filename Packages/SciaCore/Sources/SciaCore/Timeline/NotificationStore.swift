@@ -164,6 +164,23 @@ public final class NotificationStore {
         return merge(arrivals)
     }
 
+    /// 通知の対象の投稿を`transform`で変える。お気に入りなどの操作の結果を反映する。表示に関わる変化があればtrueを返す。
+    @discardableResult
+    public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) -> Bool {
+        pending = pending.map { Self.updating(id, in: $0, transform) }
+        let replaced = notifications.map { Self.updating(id, in: $0, transform) }
+        guard replaced != notifications else { return false }
+        notifications = replaced
+        return true
+    }
+
+    private static func updating(_ id: Status.ID, in notification: MastodonNotification, _ transform: (Status) -> Status) -> MastodonNotification {
+        guard let status = notification.status else { return notification }
+        let replaced = TimelineStore.updating(id, in: status, transform)
+        guard replaced != status else { return notification }
+        return MastodonNotification(id: notification.id, type: notification.type, createdAt: notification.createdAt, account: notification.account, status: replaced)
+    }
+
     // MARK: - 未読
 
     /// 画面に表示された通知を既読にする。既読の位置は新しい方へだけ進む。

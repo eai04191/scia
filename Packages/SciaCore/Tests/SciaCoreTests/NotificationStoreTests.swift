@@ -195,6 +195,21 @@ struct NotificationStoreTests {
         #expect(queue.queries.last == TimelineQuery(limit: Self.pageSize))
     }
 
+    @Test func updatesTargetStatusOfNotifications() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
+        let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
+        let target = Status(id: "100", createdAt: .now, account: account, content: "", spoilerText: "", url: nil)
+        let favourite = MastodonNotification(id: "30", type: .favourite, createdAt: .now, account: account, status: target)
+        let follow = try notifications([29])[0]
+        let queue = PageQueue([.success([favourite, follow])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        #expect(store.updateStatus("100") { $0.settingFavourited(true) })
+        #expect(store.notifications.first?.status?.favourited == true)
+        #expect(!store.updateStatus("999") { $0.settingFavourited(true) })
+    }
+
     @Test func countsUnreadNewerThanMarker() async throws {
         let queue = PageQueue([try page([30, 29, 28])])
         let store = makeStore(queue)

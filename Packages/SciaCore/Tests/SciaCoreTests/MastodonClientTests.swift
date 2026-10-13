@@ -116,6 +116,77 @@ struct MastodonClientTests {
         #expect(requests.last?.httpBody.map { String(decoding: $0, as: UTF8.self) } == "notifications%5Blast_read_id%5D=34975864")
     }
 
+    private static let interactedStatus = #"{"id":"113000000000000001","created_at":"2026-10-13T03:21:45.123Z","spoiler_text":"","url":null,"content":"<p>Hello</p>","visibility":"unlisted","in_reply_to_id":null,"favourited":true,"reblogged":false,"favourites_count":2,"reblogs_count":1,"replies_count":0,"account":{"id":"1","username":"alice","acct":"alice","display_name":"Alice","avatar":"https://example.social/avatars/alice.png","emojis":[]},"mentions":[],"tags":[],"emojis":[]}"#
+
+    @Test func favouritePostsAndDecodesInteractionState() async throws {
+        let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
+
+        let status = try await makeClient(transport).favourite("113000000000000001")
+
+        let request = try #require(await transport.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path() == "/api/v1/statuses/113000000000000001/favourite")
+        #expect(status.favourited)
+        #expect(status.favouritesCount == 2)
+        #expect(status.reblogsCount == 1)
+        #expect(status.visibility == .unlisted)
+    }
+
+    /// ブーストのAPIはブーストそのものを返すため、中の元の投稿を返す。
+    @Test func reblogReturnsOriginalStatus() async throws {
+        let boost = #"{"id":"113000000000000099","created_at":"2026-10-13T03:22:00.000Z","spoiler_text":"","url":null,"content":"","account":{"id":"1","username":"alice","acct":"alice","display_name":"Alice","avatar":"https://example.social/avatars/alice.png","emojis":[]},"mentions":[],"tags":[],"emojis":[],"reblog":"# + Self.interactedStatus + "}"
+        let transport = StubTransport([.json(boost, statusCode: 200)])
+
+        let status = try await makeClient(transport).reblog("113000000000000001")
+
+        #expect(await transport.requests.first?.url?.path() == "/api/v1/statuses/113000000000000001/reblog")
+        #expect(status.id == "113000000000000001")
+    }
+
+    @Test func postStatusSendsFormWithIdempotencyKey() async throws {
+        let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
+        let draft = StatusDraft(text: "@bob こんにちは + テスト", spoilerText: "注意", visibility: .private, inReplyToID: "113000000000000000", idempotencyKey: "key-1")
+
+        _ = try await makeClient(transport).postStatus(draft)
+
+        let request = try #require(await transport.requests.first)
+        #expect(request.url?.path() == "/api/v1/statuses")
+        #expect(request.value(forHTTPHeaderField: "Idempotency-Key") == "key-1")
+        var components = URLComponents()
+        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
+        #expect(components.queryItems == [
+            URLQueryItem(name: "status", value: "@bob こんにちは + テスト"),
+            URLQueryItem(name: "visibility", value: "private"),
+            URLQueryItem(name: "spoiler_text", value: "注意"),
+            URLQueryItem(name: "in_reply_to_id", value: "113000000000000000"),
+        ])
+    }
+
+    @Test func defaultVisibilityReadsPreferences() async throws {
+        let transport = StubTransport([.json(#"{"posting:default:visibility":"unlisted","posting:default:sensitive":false,"posting:default:language":null}"#, statusCode: 200)])
+
+        #expect(try await makeClient(transport).defaultVisibility() == .unlisted)
+        #expect(await transport.requests.first?.url?.path() == "/api/v1/preferences")
+    }
+
+    @Test func instanceConfigurationReadsStatusLimits() async throws {
+        let transport = StubTransport([try .fixture("instance_v2")])
+
+        let configuration = try await makeClient(transport).instanceConfiguration()
+
+        #expect(configuration.maxCharacters == 500)
+        #expect(configuration.charactersReservedPerURL == 23)
+        #expect(configuration.streamingURL.absoluteString == "wss://streaming.example.social")
+    }
+
+    @Test func instanceConfigurationFallsBackWithoutStatusLimits() async throws {
+        let transport = StubTransport([.json(#"{"configuration":{"urls":{"streaming":"wss://example.social"}}}"#, statusCode: 200)])
+
+        let configuration = try await makeClient(transport).instanceConfiguration()
+
+        #expect(configuration.maxCharacters == 500)
+    }
+
     @Test func homeMarkerReadsLastReadID() async throws {
         let transport = StubTransport([.json(#"{"home":{"last_read_id":"113000000000000002","version":3,"updated_at":"2026-10-13T03:21:45.123Z"}}"#, statusCode: 200)])
 

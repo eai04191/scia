@@ -37,18 +37,91 @@ public struct MastodonClient: Sendable {
     }
 
     /// ストリーミングAPIの接続先。REST APIと別のホストのことがある。
-    /// https://docs.joinmastodon.org/methods/instance/#v2
     public func streamingURL() async throws -> URL {
+        try await instanceConfiguration().streamingURL
+    }
+
+    /// https://docs.joinmastodon.org/methods/instance/#v2
+    public func instanceConfiguration() async throws -> InstanceConfiguration {
         struct Instance: Decodable {
             struct Configuration: Decodable {
                 struct URLs: Decodable {
                     let streaming: URL
                 }
+                struct Statuses: Decodable {
+                    let maxCharacters: Int?
+                    let charactersReservedPerUrl: Int?
+                }
                 let urls: URLs
+                let statuses: Statuses?
             }
             let configuration: Configuration
         }
-        return try await get(Instance.self, path: "api/v2/instance", query: []).0.configuration.urls.streaming
+        let configuration = try await get(Instance.self, path: "api/v2/instance", query: []).0.configuration
+        // 投稿の設定を返さないサーバーには、Mastodonの既定値を使う。
+        return InstanceConfiguration(
+            streamingURL: configuration.urls.streaming,
+            maxCharacters: configuration.statuses?.maxCharacters ?? 500,
+            charactersReservedPerURL: configuration.statuses?.charactersReservedPerUrl ?? 23
+        )
+    }
+
+    /// 新しく投稿するときの公開範囲の既定値。ユーザーがアカウントの設定で決めたもの。
+    /// https://docs.joinmastodon.org/methods/preferences/#get
+    public func defaultVisibility() async throws -> Status.Visibility {
+        struct Preferences: Decodable {
+            let visibility: Status.Visibility?
+
+            private enum CodingKeys: String, CodingKey {
+                case visibility = "posting:default:visibility"
+            }
+        }
+        // キーにコロンを含むため、スネークケースからの変換を通さずに読む。
+        let (data, _) = try await send(URLRequest(url: credential.instance.appending(path: "api/v1/preferences")))
+        return try JSONDecoder().decode(Preferences.self, from: data).visibility ?? .public
+    }
+
+    // MARK: - 投稿への操作
+
+    /// お気に入りに登録し、登録後の投稿を返す。
+    /// https://docs.joinmastodon.org/methods/statuses/#favourite
+    public func favourite(_ statusID: String) async throws -> Status {
+        try await post(Status.self, path: "api/v1/statuses/\(statusID)/favourite", form: []).0
+    }
+
+    /// https://docs.joinmastodon.org/methods/statuses/#unfavourite
+    public func unfavourite(_ statusID: String) async throws -> Status {
+        try await post(Status.self, path: "api/v1/statuses/\(statusID)/unfavourite", form: []).0
+    }
+
+    /// ブーストし、ブーストした元の投稿を返す。APIはブーストそのものを返すため、中の元の投稿を取り出す。
+    /// https://docs.joinmastodon.org/methods/statuses/#boost
+    public func reblog(_ statusID: String) async throws -> Status {
+        let boost = try await post(Status.self, path: "api/v1/statuses/\(statusID)/reblog", form: []).0
+        return boost.reblog ?? boost
+    }
+
+    /// ブーストを取り消し、元の投稿を返す。
+    /// https://docs.joinmastodon.org/methods/statuses/#unreblog
+    public func unreblog(_ statusID: String) async throws -> Status {
+        let status = try await post(Status.self, path: "api/v1/statuses/\(statusID)/unreblog", form: []).0
+        return status.reblog ?? status
+    }
+
+    /// 投稿する。同じ下書きを送り直しても二重に投稿されないよう、下書きごとの`Idempotency-Key`を付ける。
+    /// https://docs.joinmastodon.org/methods/statuses/#create
+    public func postStatus(_ draft: StatusDraft) async throws -> Status {
+        var form = [
+            URLQueryItem(name: "status", value: draft.text),
+            URLQueryItem(name: "visibility", value: draft.visibility.rawValue),
+        ]
+        if !draft.spoilerText.isEmpty {
+            form.append(URLQueryItem(name: "spoiler_text", value: draft.spoilerText))
+        }
+        if let inReplyToID = draft.inReplyToID {
+            form.append(URLQueryItem(name: "in_reply_to_id", value: inReplyToID))
+        }
+        return try await post(Status.self, path: "api/v1/statuses", form: form, headers: ["Idempotency-Key": draft.idempotencyKey]).0
     }
 
     private func get<T: Decodable>(_ type: T.Type, path: String, query: [URLQueryItem]) async throws -> (T, HTTPURLResponse) {
@@ -56,9 +129,12 @@ public struct MastodonClient: Sendable {
         return try await send(URLRequest(url: query.isEmpty ? url : url.appending(queryItems: query)), decoding: type)
     }
 
-    private func post<T: Decodable>(_ type: T.Type, path: String, form: [URLQueryItem]) async throws -> (T, HTTPURLResponse) {
+    private func post<T: Decodable>(_ type: T.Type, path: String, form: [URLQueryItem], headers: [String: String] = [:]) async throws -> (T, HTTPURLResponse) {
         var request = URLRequest(url: credential.instance.appending(path: path))
         request.httpMethod = "POST"
+        for (field, value) in headers {
+            request.setValue(value, forHTTPHeaderField: field)
+        }
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         var components = URLComponents()
         components.queryItems = form
@@ -69,13 +145,33 @@ public struct MastodonClient: Sendable {
     }
 
     private func send<T: Decodable>(_ request: URLRequest, decoding type: T.Type) async throws -> (T, HTTPURLResponse) {
+        let (data, response) = try await send(request)
+        return (try MastodonDecoder.make().decode(type, from: data), response)
+    }
+
+    private func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         var request = request
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await transport.send(request)
         guard (200..<300).contains(response.statusCode) else {
             throw MastodonAPIError.from(statusCode: response.statusCode, body: data)
         }
-        return (try MastodonDecoder.make().decode(type, from: data), response)
+        return (data, response)
+    }
+}
+
+/// インスタンスの設定のうち、Sciaが使うもの。
+public struct InstanceConfiguration: Sendable, Equatable {
+    public let streamingURL: URL
+    /// 投稿の本文と注意書きを合わせた文字数の上限。
+    public let maxCharacters: Int
+    /// 本文中のURLを何文字と数えるか。
+    public let charactersReservedPerURL: Int
+
+    public init(streamingURL: URL, maxCharacters: Int, charactersReservedPerURL: Int) {
+        self.streamingURL = streamingURL
+        self.maxCharacters = maxCharacters
+        self.charactersReservedPerURL = charactersReservedPerURL
     }
 }
 

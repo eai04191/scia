@@ -1,0 +1,143 @@
+import Foundation
+import Synchronization
+import Testing
+@testable import SciaCore
+
+@MainActor
+struct StatusInteractionsTests {
+    private struct Failure: Error {}
+
+    private func status(id: String = "10", favourited: Bool = false, favourites: Int = 0, reblogged: Bool = false) throws -> Status {
+        Status(
+            id: id,
+            createdAt: Date(timeIntervalSince1970: 0),
+            account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: try #require(URL(string: "https://example.social/a.png"))),
+            content: "<p>\(id)</p>",
+            spoilerText: "",
+            url: nil,
+            favourited: favourited,
+            reblogged: reblogged,
+            favouritesCount: favourites
+        )
+    }
+
+    /// 1件の投稿を持ち、変換を当てた結果を記録する。
+    private final class Shown {
+        var status: Status
+        var history: [Status] = []
+
+        init(_ status: Status) {
+            self.status = status
+        }
+
+        func update(_ id: Status.ID, _ transform: (Status) -> Status) {
+            guard id == status.id else { return }
+            status = transform(status)
+            history.append(status)
+        }
+    }
+
+    private func operations(favourite: @escaping @Sendable (Status.ID) async throws -> Status) -> StatusInteractions.Operations {
+        StatusInteractions.Operations(
+            favourite: favourite,
+            unfavourite: { _ in throw Failure() },
+            reblog: { _ in throw Failure() },
+            unreblog: { _ in throw Failure() }
+        )
+    }
+
+    @Test func showsFavouriteBeforeServerRespondsThenAppliesResult() async throws {
+        let shown = Shown(try status(favourites: 3))
+        let fromServer = try status(favourited: true, favourites: 5)
+        let interactions = StatusInteractions(operations: operations { _ in fromServer }) { shown.update($0, $1) }
+
+        #expect(try await interactions.toggle(.favourite, on: shown.status))
+
+        #expect(shown.history.map(\.favourited) == [true, true])
+        #expect(shown.history.map(\.favouritesCount) == [4, 5])
+        #expect(interactions.inFlight.isEmpty)
+    }
+
+    @Test func revertsWhenServerFails() async throws {
+        let shown = Shown(try status(favourites: 3))
+        let interactions = StatusInteractions(operations: operations { _ in throw Failure() }) { shown.update($0, $1) }
+
+        await #expect(throws: Failure.self) { try await interactions.toggle(.favourite, on: shown.status) }
+
+        #expect(shown.history.map(\.favourited) == [true, false])
+        #expect(shown.status.favouritesCount == 3)
+    }
+
+    @Test func ignoresSameActionWhileWaiting() async throws {
+        let shown = Shown(try status())
+        let gate = FetchGate()
+        let fromServer = try status(favourited: true, favourites: 1)
+        let calls = Mutex(0)
+        let interactions = StatusInteractions(operations: operations { _ in
+            calls.withLock { $0 += 1 }
+            await gate.wait()
+            return fromServer
+        }) { shown.update($0, $1) }
+        let original = shown.status
+
+        let first = Task { try await interactions.toggle(.favourite, on: original) }
+        await gate.waitUntilWaiting()
+        #expect(try await !interactions.toggle(.favourite, on: shown.status))
+        await gate.open()
+
+        #expect(try await first.value)
+        #expect(calls.withLock { $0 } == 1)
+        #expect(shown.status.favourited)
+    }
+
+    /// 応答は対象の操作の状態だけを反映する。待っている間に届いた編集や、並行して成功した別の操作を古い内容で戻さない。
+    @Test func resultOnlyUpdatesStateOfItsAction() async throws {
+        let shown = Shown(try status())
+        let gate = FetchGate()
+        // サーバーが返すのは、編集とブーストより前の内容。
+        let staleFromServer = try status(favourited: true, favourites: 1)
+        let interactions = StatusInteractions(operations: StatusInteractions.Operations(
+            favourite: { _ in
+                await gate.wait()
+                return staleFromServer
+            },
+            unfavourite: { _ in throw Failure() },
+            reblog: { _ in staleFromServer.settingFavourited(false).settingReblogged(true) },
+            unreblog: { _ in throw Failure() }
+        )) { shown.update($0, $1) }
+
+        let favourite = Task { try await interactions.toggle(.favourite, on: shown.status) }
+        await gate.waitUntilWaiting()
+        _ = try await interactions.toggle(.reblog, on: shown.status)
+        shown.update("10") { _ in
+            Status(id: "10", createdAt: .now, account: staleFromServer.account, content: "<p>編集後</p>", spoilerText: "", url: nil, favourited: true, reblogged: true, favouritesCount: 1, reblogsCount: 1)
+        }
+        await gate.open()
+        _ = try await favourite.value
+
+        #expect(shown.status.favourited)
+        #expect(shown.status.reblogged)
+        #expect(shown.status.content == "<p>編集後</p>")
+    }
+
+    @Test func unboostsWhenAlreadyBoostedAndTargetsOriginalOfBoost() async throws {
+        let original = try status(reblogged: true)
+        let boost = Status(id: "20", createdAt: .now, account: original.account, content: "", spoilerText: "", url: nil, reblog: original)
+        let shown = Shown(original)
+        let requested = Mutex<[String]>([])
+        let interactions = StatusInteractions(operations: StatusInteractions.Operations(
+            favourite: { _ in throw Failure() },
+            unfavourite: { _ in throw Failure() },
+            reblog: { _ in throw Failure() },
+            unreblog: { id in
+                requested.withLock { $0.append(id) }
+                return original.settingReblogged(false)
+            }
+        )) { shown.update($0, $1) }
+
+        _ = try await interactions.toggle(.reblog, on: boost)
+
+        #expect(requested.withLock { $0 } == ["10"])
+        #expect(!shown.status.reblogged)
+    }
+}

@@ -231,14 +231,7 @@ public final class TimelineStore {
             pending.append(status)
             return pending.count == 1 ? .pendingStarted : .none
         case .statusUpdate(let edited):
-            pending = pending.map { Self.replacing(edited, in: $0) }
-            let replaced = entries.map { entry -> TimelineEntry in
-                guard case .status(let status) = entry else { return entry }
-                return .status(Self.replacing(edited, in: status))
-            }
-            guard replaced != entries else { return .none }
-            entries = replaced
-            return .entriesChanged
+            return replace(edited) ? .entriesChanged : .none
         case .delete(let id):
             deletedIDs.insert(id)
             // 元の投稿が消えると、それをブーストした投稿も表示できなくなる。
@@ -253,6 +246,26 @@ public final class TimelineStore {
         case .notification, .filtersChanged, .unhandled:
             return .none
         }
+    }
+
+    /// 同じIDの投稿と、それをブーストした投稿の中身を差し替える。編集や、お気に入りなどの操作の結果を反映する。
+    /// 表示に関わる変化があればtrueを返す。
+    @discardableResult
+    public func replace(_ updated: Status) -> Bool {
+        updateStatus(updated.id) { _ in updated }
+    }
+
+    /// 同じIDの投稿と、それをブーストした投稿の中身を`transform`で変える。表示に関わる変化があればtrueを返す。
+    @discardableResult
+    public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) -> Bool {
+        pending = pending.map { Self.updating(id, in: $0, transform) }
+        let replaced = entries.map { entry -> TimelineEntry in
+            guard case .status(let status) = entry else { return entry }
+            return .status(Self.updating(id, in: status, transform))
+        }
+        guard replaced != entries else { return false }
+        entries = replaced
+        return true
     }
 
     /// 保留していた投稿をIDの順に合流させ、新たに加わった投稿を新しい順に返す。
@@ -389,9 +402,9 @@ public final class TimelineStore {
         statuses.min { StatusID.isNewer($1.id, than: $0.id) }
     }
 
-    private static func replacing(_ edited: Status, in status: Status) -> Status {
-        if status.id == edited.id { return edited }
-        if status.reblog?.id == edited.id { return status.replacingReblog(with: edited) }
+    static func updating(_ id: Status.ID, in status: Status, _ transform: (Status) -> Status) -> Status {
+        if status.id == id { return transform(status) }
+        if let reblog = status.reblog, reblog.id == id { return status.replacingReblog(with: transform(reblog)) }
         return status
     }
 }
