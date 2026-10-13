@@ -80,17 +80,30 @@ struct DiscomfortReportStoreTests {
 }
 
 struct RecentLogReaderTests {
-    @Test func readsOwnSubsystemLogsWithinRange() async throws {
+    /// iOSシミュレーターでは、ログを書いてからOSLogStoreで読めるまでに1秒以上かかることがある。
+    /// マーカーまで読めるのを待つことで、確保した瞬間の直前のログまで含める。
+    @Test func readsLogsUpToMarker() async throws {
         let subsystem = "net.mizle.scia.tests.\(UUID().uuidString)"
         // ログに記録される時刻はDate()より数ミリ秒早くなることがあるため、開始時刻に余裕を持たせる。
         let start = Date().addingTimeInterval(-1)
-        Logger(subsystem: subsystem, category: "timeline").notice("prepend \(3, privacy: .public)")
+        let logger = Logger(subsystem: subsystem, category: "timeline")
+        logger.notice("prepend \(3, privacy: .public)")
         Logger(subsystem: "net.mizle.scia.tests.other", category: "timeline").notice("other subsystem")
+        let marker = RecentLogReader.writeMarker(subsystem: subsystem)
+        logger.notice("after marker")
 
-        let lines = try await RecentLogReader.read(subsystem: subsystem, from: start, to: Date())
+        let lines = try await RecentLogReader.read(subsystem: subsystem, from: start, untilMarker: marker)
 
-        #expect(lines.map(\.message) == ["prepend 3"])
+        #expect(lines.map(\.message) == ["prepend 3", marker])
         #expect(lines.first?.category == "timeline")
         #expect(lines.first?.level == "notice")
+    }
+
+    @Test func failsWhenMarkerNeverAppears() async {
+        let subsystem = "net.mizle.scia.tests.\(UUID().uuidString)"
+
+        await #expect(throws: RecentLogReader.ReadError.markerNotFound) {
+            _ = try await RecentLogReader.read(subsystem: subsystem, from: Date(), untilMarker: "never", timeout: .milliseconds(300))
+        }
     }
 }

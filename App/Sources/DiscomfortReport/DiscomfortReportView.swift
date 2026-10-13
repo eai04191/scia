@@ -9,18 +9,21 @@ final class DiscomfortReportDraft {
     static let logWindow: TimeInterval = 10 * 60
 
     let capturedAt: Date
+    /// 確保した時点で書いたログの目印。ここまでのログを集める。
+    let logMarker: String
     let stateDumps: [StateDump]
     var memo = ""
     private(set) var logs: Result<[LogLine], any Error>?
 
-    init(capturedAt: Date, stateDumps: [StateDump]) {
+    init(capturedAt: Date, logMarker: String, stateDumps: [StateDump]) {
         self.capturedAt = capturedAt
+        self.logMarker = logMarker
         self.stateDumps = stateDumps
     }
 
     func loadLogs() async {
         do {
-            logs = .success(try await RecentLogReader.read(from: capturedAt.addingTimeInterval(-Self.logWindow), to: capturedAt))
+            logs = .success(try await RecentLogReader.read(from: capturedAt.addingTimeInterval(-Self.logWindow), untilMarker: logMarker))
         } catch {
             logs = .failure(error)
         }

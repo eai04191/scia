@@ -12,7 +12,11 @@ enum DiscomfortReportPresenter {
         }
         guard !(top is DiscomfortReportHostingController) else { return }
 
-        let draft = DiscomfortReportDraft(capturedAt: Date(), stateDumps: AppDependencies.stateDumps.dumpAll())
+        let draft = DiscomfortReportDraft(
+            capturedAt: Date(),
+            logMarker: RecentLogReader.writeMarker(),
+            stateDumps: AppDependencies.stateDumps.dumpAll()
+        )
         let controller = DiscomfortReportHostingController(draft: draft)
         top.present(controller, animated: true)
     }
