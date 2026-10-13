@@ -31,8 +31,8 @@ final class HomeTimelineController {
     private var isSavingReadPosition = false
     /// バックグラウンドで既読位置の保存を終えるまで、アプリを止めないよう頼んでいる。
     private var readPositionBackgroundTask = UIBackgroundTaskIdentifier.invalid
-    /// 新着を挿入する時機が来たが、指でスクロール中なので止まるのを待っている。
-    private var isWaitingForScrollToSettle = false
+    /// 新着を挿入する時機が来たが、スクロールや長押しのメニューなどの操作中なので、終わるのを待っている。
+    private var isWaitingForInteractionToSettle = false
 
     init(
         client: MastodonClient,
@@ -50,7 +50,7 @@ final class HomeTimelineController {
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder() }
         viewController.onRetry = { [weak self] in self?.retry() }
         viewController.onVisibleStatusesChange = { [weak self] ids in self?.markRead(ids) }
-        viewController.onScrollSettle = { [weak self] in self?.scrollDidSettle() }
+        viewController.onInteractionSettle = { [weak self] in self?.interactionDidSettle() }
         viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction, isAutomatic: false) }
         viewController.onGapApproach = { [weak self] id, direction in self?.loadGap(id, from: direction, isAutomatic: true) }
         #if DEBUG
@@ -265,19 +265,19 @@ final class HomeTimelineController {
         run { controller in
             try? await Task.sleep(for: .seconds(interval))
             guard !Task.isCancelled else { return }
-            if controller.viewController.isUserScrolling {
-                // 指の動きと関係なく画面が動かないよう、スクロールが止まってから挿入する。
-                controller.isWaitingForScrollToSettle = true
+            if controller.viewController.isUserInteracting {
+                // 指の動きと関係なく画面が動かないよう、スクロールや長押しのメニューなどの操作が終わってから挿入する。
+                controller.isWaitingForInteractionToSettle = true
             } else {
                 controller.insertPending()
             }
         }
     }
 
-    private func scrollDidSettle() {
+    private func interactionDidSettle() {
         saveReadPosition(inBackground: false)
-        guard isWaitingForScrollToSettle else { return }
-        isWaitingForScrollToSettle = false
+        guard isWaitingForInteractionToSettle else { return }
+        isWaitingForInteractionToSettle = false
         insertPending()
     }
 
@@ -341,6 +341,12 @@ final class HomeTimelineController {
         guard readPositionBackgroundTask != .invalid else { return }
         UIApplication.shared.endBackgroundTask(readPositionBackgroundTask)
         readPositionBackgroundTask = .invalid
+    }
+
+    /// 投稿とそれをブーストした投稿の中身を変え、表示に関わる変化があれば描き直す。お気に入りなどの操作の結果を反映する。
+    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
+        guard !isStopped, store.updateStatus(id, transform) else { return }
+        showEntries()
     }
 
     private func insertPending() {

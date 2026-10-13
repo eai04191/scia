@@ -1,0 +1,49 @@
+import SciaCore
+import Testing
+import UIKit
+@testable import Scia
+
+/// 長押しのメニューを出している間は、一覧の並びを変えず、閉じてから反映することを確かめる。
+/// メニューの元になった行が動くと、メニューと表示がずれるため。
+@MainActor
+@Suite(.serialized)
+struct RowHoldTests {
+    @Test func entriesAreAppliedAfterMenuHides() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let existing = StatusFactory.make(count: 30, startingAt: 1_000)
+        harness.setStatuses(existing)
+        harness.scroll(toFraction: 0)
+        let touched = try #require(harness.windowMinY(of: .status(existing[0].id)))
+        var settled = 0
+        harness.viewController.onInteractionSettle = { settled += 1 }
+
+        harness.viewController.menuWillShow()
+        let arrivals = StatusFactory.make(count: 3, startingAt: 1_003)
+        harness.setStatuses(arrivals + existing)
+
+        #expect(harness.viewController.displayedStatusIDs == existing.map(\.id))
+        #expect(harness.windowMinY(of: .status(existing[0].id)) == touched)
+        #expect(harness.viewController.isUserInteracting)
+
+        harness.viewController.menuDidHide()
+
+        #expect(harness.viewController.displayedStatusIDs == (arrivals + existing).map(\.id))
+        #expect(!harness.viewController.isUserInteracting)
+        #expect(settled == 1)
+    }
+
+    @Test func hidingMenuTwiceAppliesOnce() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.setStatuses(StatusFactory.make(count: 30, startingAt: 1_000))
+        var settled = 0
+        harness.viewController.onInteractionSettle = { settled += 1 }
+
+        harness.viewController.menuWillShow()
+        harness.viewController.menuDidHide()
+        harness.viewController.menuDidHide()
+
+        #expect(settled == 1)
+    }
+}

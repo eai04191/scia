@@ -28,7 +28,7 @@ final class NotificationsController {
     private var isInForeground = true
     private var isSavingReadPosition = false
     private var readPositionBackgroundTask = UIBackgroundTaskIdentifier.invalid
-    private var isWaitingForScrollToSettle = false
+    private var isWaitingForInteractionToSettle = false
 
     init(
         client: MastodonClient,
@@ -46,7 +46,7 @@ final class NotificationsController {
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder() }
         viewController.onRetry = { [weak self] in self?.retry() }
         viewController.onVisibleNotificationsChange = { [weak self] ids in self?.markRead(ids) }
-        viewController.onScrollSettle = { [weak self] in self?.scrollDidSettle() }
+        viewController.onInteractionSettle = { [weak self] in self?.interactionDidSettle() }
     }
 
     func start() {
@@ -206,19 +206,25 @@ final class NotificationsController {
         run { controller in
             try? await Task.sleep(for: .seconds(interval))
             guard !Task.isCancelled else { return }
-            if controller.viewController.isUserScrolling {
-                controller.isWaitingForScrollToSettle = true
+            if controller.viewController.isUserInteracting {
+                controller.isWaitingForInteractionToSettle = true
             } else {
                 controller.insertPending()
             }
         }
     }
 
-    private func scrollDidSettle() {
+    private func interactionDidSettle() {
         saveReadPosition(inBackground: false)
-        guard isWaitingForScrollToSettle else { return }
-        isWaitingForScrollToSettle = false
+        guard isWaitingForInteractionToSettle else { return }
+        isWaitingForInteractionToSettle = false
         insertPending()
+    }
+
+    /// 通知の対象の投稿の中身を変え、表示に関わる変化があれば描き直す。お気に入りなどの操作の結果を反映する。
+    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
+        guard !isStopped, store.updateStatus(id, transform) else { return }
+        showEntries()
     }
 
     private func insertPending() {
@@ -293,7 +299,7 @@ final class NotificationsController {
     private func markRead(_ ids: [MastodonNotification.ID]) {
         store.markRead(ids)
         updateUnreadCount()
-        if !viewController.isUserScrolling {
+        if !viewController.isUserInteracting {
             saveReadPosition(inBackground: false)
         }
     }

@@ -48,8 +48,14 @@ final class TimelineViewController: UIViewController {
     var onVisibleStatusesChange: (([Status.ID]) -> Void)?
     /// 画面に表示されている通知が変わったときに、表示中の通知のIDを渡して呼ぶ。
     var onVisibleNotificationsChange: (([MastodonNotification.ID]) -> Void)?
-    /// 指によるスクロールが止まったときに呼ぶ。
-    var onScrollSettle: (() -> Void)?
+    /// 投稿への操作が選ばれたときに呼ぶ。ブーストなら、ブーストした投稿を渡す。
+    var onStatusAction: ((StatusAction, Status) -> Void)?
+    /// 投稿ボタンが押されたときに呼ぶ。設定されていれば、ナビゲーションバーに投稿ボタンを出す。表示より前に設定する。
+    var onCompose: (() -> Void)?
+    /// ログイン中のアカウントのID。ブーストできる投稿かの判定に使う。
+    var myAccountID: String?
+    /// 指によるスクロールが止まったとき、または長押しのメニューが閉じたときに呼ぶ。
+    var onInteractionSettle: (() -> Void)?
     /// ギャップがタップされたときに、どちらの端から読むかを添えて呼ぶ。
     var onGapSelect: ((String, TimelineStore.GapDirection) -> Void)?
     /// 読み込み中でないギャップが表示領域に近づいたときに、どちらの端から読むかを添えて呼ぶ。スクロールするたびに呼ぶことがある。
@@ -66,6 +72,11 @@ final class TimelineViewController: UIViewController {
     private lazy var dataSource = makeDataSource()
     private var entries: [ItemID: TimelineEntry] = [:]
     private var loadingGapIDs: Set<String> = []
+    private var isShowingMenu = false
+    /// メニューを出している間に届いた並びの更新。閉じたときに反映する。
+    private var heldEntries: HeldEntries?
+    /// メニューを出している間に求められた描き直し。
+    private var heldReconfigureIDs: Set<ItemID> = []
     /// 表示中のギャップのID。スクロールのたびに全要素を調べないよう、別に持つ。
     private var gapIDs: [String] = []
     /// 指で最後に動かした向き。ギャップをどちらの端から読むかに使う。
@@ -106,9 +117,16 @@ final class TimelineViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = texts.title
+        var barItems: [UIBarButtonItem] = []
+        if onCompose != nil {
+            let compose = UIBarButtonItem(image: UIImage(systemName: "square.and.pencil"), primaryAction: UIAction { [weak self] _ in self?.onCompose?() })
+            compose.accessibilityLabel = "投稿"
+            barItems.append(compose)
+        }
         #if DEBUG
-        navigationItem.rightBarButtonItem = makeDebugMenuButton(screenActions: debugActions)
+        barItems.append(makeDebugMenuButton(screenActions: debugActions))
         #endif
+        navigationItem.rightBarButtonItems = barItems
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         collectionView.delegate = self
@@ -166,6 +184,10 @@ final class TimelineViewController: UIViewController {
     /// 内容が変わってセルの高さが変わっても、読んでいる位置が動かないように描き直す。
     func reconfigure(_ ids: Set<ItemID>) {
         guard !ids.isEmpty else { return }
+        guard !isShowingMenu else {
+            heldReconfigureIDs.formUnion(ids)
+            return
+        }
         var snapshot = dataSource.snapshot()
         snapshot.reconfigureItems(Array(ids))
         applyPreservingAnchor(snapshot)
@@ -177,6 +199,11 @@ final class TimelineViewController: UIViewController {
     /// ただし最上部にいて追従が有効なら、最上部に留まって新着を見せる。
     /// `topID`を渡すと、その要素を表示領域の上端に置く。既読位置から読み始めるときに使う。
     func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil) {
+        guard !isShowingMenu else {
+            // 後の呼び出しの並びが新しい。基準は、メニューが閉じたときに最後に指定されたものを使う。
+            heldEntries = HeldEntries(entries: newEntries, anchorID: anchorID ?? heldEntries?.anchorID, topID: topID ?? heldEntries?.topID)
+            return
+        }
         let previous = entries
         let followsTop = anchorID == nil && topID == nil && isAtTop && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
         entries = Dictionary(newEntries.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
@@ -226,6 +253,37 @@ final class TimelineViewController: UIViewController {
     /// 指でスクロールしている、または指を離した後の慣性で動いている。
     var isUserScrolling: Bool {
         collectionView.isTracking || collectionView.isDragging || collectionView.isDecelerating
+    }
+
+    /// スクロールしている、または長押しのメニューを出している。新着を挿入するのは、これが終わってからにする。
+    var isUserInteracting: Bool {
+        isUserScrolling || isShowingMenu
+    }
+
+    private struct HeldEntries {
+        let entries: [TimelineEntry]
+        let anchorID: ItemID?
+        let topID: ItemID?
+    }
+
+    /// 長押しのメニューを出した。メニューの元になった行が動かないよう、閉じるまで一覧の並びの更新と描き直しを溜めておく。
+    func menuWillShow() {
+        isShowingMenu = true
+    }
+
+    /// メニューが閉じた。溜めていた更新を反映する。
+    func menuDidHide() {
+        guard isShowingMenu else { return }
+        isShowingMenu = false
+        if let held = heldEntries {
+            heldEntries = nil
+            setEntries(held.entries, keeping: held.anchorID, placingAtTop: held.topID)
+        }
+        let existing = Set(dataSource.snapshot().itemIdentifiers)
+        let reconfigureIDs = heldReconfigureIDs.intersection(existing)
+        heldReconfigureIDs.removeAll()
+        reconfigure(reconfigureIDs)
+        onInteractionSettle?()
     }
 
     /// 既読より新しい投稿の数。0なら新着ボタンを隠す。
@@ -325,6 +383,10 @@ final class TimelineViewController: UIViewController {
         dataSource.itemIdentifier(for: indexPath)
     }
 
+    func entry(for id: ItemID) -> TimelineEntry? {
+        entries[id]
+    }
+
     private func makeNewArrivalsButton() -> UIButton {
         var configuration = UIButton.Configuration.borderedProminent()
         configuration.cornerStyle = .capsule
@@ -397,6 +459,7 @@ final class TimelineViewController: UIViewController {
     private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, ItemID> {
         let registration = UICollectionView.CellRegistration<UICollectionViewListCell, ItemID> { [weak self] cell, _, id in
             guard let self, let entry = self.entries[id] else { return }
+            cell.accessories = Self.interactionAccessories(for: self.status(for: id))
             switch entry {
             case .status(let status):
                 cell.contentConfiguration = self.contentConfiguration(for: status, base: cell.defaultContentConfiguration())
@@ -492,12 +555,12 @@ extension TimelineViewController: UICollectionViewDelegate {
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
-            onScrollSettle?()
+            onInteractionSettle?()
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
-        onScrollSettle?()
+        onInteractionSettle?()
     }
 
     /// 新着ボタンで最上部へ動かしたとき。
@@ -507,7 +570,7 @@ extension TimelineViewController: UICollectionViewDelegate {
             return
         }
         isScrollingToTop = false
-        onScrollSettle?()
+        onInteractionSettle?()
     }
 
     /// 最上部へ動かしている途中で指が触れたら、それ以上は動かし直さない。
@@ -524,11 +587,30 @@ extension TimelineViewController: UICollectionViewDelegate {
 
     /// ステータスバーのタップで最上部へ動かしたとき。
     func scrollViewDidScrollToTop(_ scrollView: UIScrollView) {
-        onScrollSettle?()
+        onInteractionSettle?()
     }
 
     /// ギャップは、画面の上半分にあれば下から遡ってきたとみなして古い側から、下半分にあれば新しい側から読む。
     /// どちらも、いま読んでいる側に続く投稿から埋まる。
+    /// 長押しで投稿への操作のメニューを出す。
+    func collectionView(_ collectionView: UICollectionView, willDisplayContextMenu configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
+        menuWillShow()
+    }
+
+    /// メニューが閉じるアニメーションの間も行を動かさない。
+    func collectionView(_ collectionView: UICollectionView, willEndContextMenuInteraction configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
+        guard let animator else {
+            menuDidHide()
+            return
+        }
+        animator.addCompletion { [weak self] in self?.menuDidHide() }
+    }
+
+    func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
+        guard indexPaths.count == 1, let indexPath = indexPaths.first, let id = dataSource.itemIdentifier(for: indexPath), let status = status(for: id) else { return nil }
+        return UIContextMenuConfiguration(actionProvider: { [weak self] _ in self?.statusMenu(for: status) })
+    }
+
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         guard case .gap(let gapID) = dataSource.itemIdentifier(for: indexPath) else { return }
         collectionView.deselectItem(at: indexPath, animated: true)
