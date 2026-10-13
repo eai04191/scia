@@ -1,0 +1,46 @@
+name: Scia
+options:
+  bundleIdPrefix: net.mizle
+  deploymentTarget:
+    iOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+packages:
+  SciaCore:
+    path: Packages/SciaCore
+targets:
+  Scia:
+    type: application
+    platform: iOS
+    sources:
+      - App/Sources
+    dependencies:
+      - package: SciaCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.mizle.scia
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Scia
+        CODE_SIGN_STYLE: Automatic
+    info:
+      path: App/Info.plist
+      properties:
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default Configuration
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+schemes:
+  Scia:
+    build:
+      targets:
+        Scia: all
+    test:
+      targets:
+        - package: SciaCore/SciaCoreTests

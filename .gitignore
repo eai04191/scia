@@ -1,0 +1,8 @@
+.DS_Store
+# XcodeGenで生成するためコミットしない
+*.xcodeproj
+App/Info.plist
+xcuserdata/
+DerivedData/
+.build/
+.swiftpm/

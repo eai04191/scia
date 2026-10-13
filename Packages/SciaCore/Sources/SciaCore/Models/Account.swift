@@ -1,0 +1,9 @@
+import Foundation
+
+public struct Account: Codable, Hashable, Sendable, Identifiable {
+    public let id: String
+    public let username: String
+    public let acct: String
+    public let displayName: String
+    public let avatar: URL
+}
