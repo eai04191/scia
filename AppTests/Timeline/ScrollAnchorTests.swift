@@ -17,12 +17,12 @@ struct ScrollAnchorTests {
         harness.tuning.setValue(false, for: TuningCatalog.followsNewArrivalsAtTop)
 
         let existing = StatusFactory.make(count: 60, startingAt: 1_000)
-        harness.viewController.setStatuses(existing)
+        harness.setStatuses(existing)
         harness.scroll(toFraction: scrollFraction)
         let anchor = try #require(harness.viewController.currentAnchor())
         let before = try #require(harness.windowMinY(of: anchor.id))
 
-        harness.viewController.setStatuses(StatusFactory.make(count: insertCount, startingAt: 1_000 + insertCount) + existing)
+        harness.setStatuses(StatusFactory.make(count: insertCount, startingAt: 1_000 + insertCount) + existing)
 
         let after = try #require(harness.windowMinY(of: anchor.id), "挿入後に基準の投稿が画面外へ出ました")
         #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
@@ -34,12 +34,12 @@ struct ScrollAnchorTests {
         defer { harness.tearDown() }
 
         let existing = StatusFactory.make(count: 60, startingAt: 1_000)
-        harness.viewController.setStatuses(existing)
+        harness.setStatuses(existing)
         harness.scroll(toFraction: scrollFraction)
         let anchor = try #require(harness.viewController.currentAnchor())
         let before = try #require(harness.windowMinY(of: anchor.id))
 
-        harness.viewController.setStatuses(existing + StatusFactory.make(count: 40, startingAt: 940))
+        harness.setStatuses(existing + StatusFactory.make(count: 40, startingAt: 940))
 
         let after = try #require(harness.windowMinY(of: anchor.id), "追加後に基準の投稿が画面外へ出ました")
         #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
@@ -51,15 +51,15 @@ struct ScrollAnchorTests {
         defer { harness.tearDown() }
 
         let existing = StatusFactory.make(count: 60, startingAt: 1_000)
-        harness.viewController.setStatuses(existing)
+        harness.setStatuses(existing)
         harness.scroll(toFraction: 0)
         let inserted = StatusFactory.make(count: insertCount, startingAt: 1_000 + insertCount)
 
-        harness.viewController.setStatuses(inserted + existing)
+        harness.setStatuses(inserted + existing)
 
         #expect(harness.viewController.isAtTop)
         let newest = try #require(inserted.first)
-        #expect(harness.viewController.currentAnchor()?.id == newest.id)
+        #expect(harness.viewController.currentAnchor()?.id == .status(newest.id))
     }
 
     @Test func visibleStatusesAreReportedAfterInsertion() throws {
@@ -70,20 +70,65 @@ struct ScrollAnchorTests {
         harness.viewController.onVisibleStatusesChange = { reported = $0 }
 
         let existing = StatusFactory.make(count: 60, startingAt: 1_000)
-        harness.viewController.setStatuses(existing)
+        harness.setStatuses(existing)
         harness.scroll(toFraction: 0)
         let visibleBefore = reported
-        harness.viewController.setStatuses(StatusFactory.make(count: 5, startingAt: 1_005) + existing)
+        harness.setStatuses(StatusFactory.make(count: 5, startingAt: 1_005) + existing)
 
         #expect(!visibleBefore.isEmpty)
         #expect(Set(reported) == Set(visibleBefore), "位置を保った挿入で、見えている投稿が変わりました")
+    }
+
+    /// 切れていた間の投稿、ギャップ、切れる前の投稿の順に並べる。
+    private func entriesWithGap(loadedInGap: [Status] = [], remainingGap: Bool = true) -> (entries: [TimelineEntry], gap: TimelineGap, above: Status, below: Status) {
+        let newer = StatusFactory.make(count: 20, startingAt: 2_000)
+        let older = StatusFactory.make(count: 60, startingAt: 1_000)
+        // StatusFactoryのIDは数字の文字列なので、両端の投稿のIDでギャップを作れる。
+        let gap = TimelineGap(newerID: newer[newer.count - 1].id, olderID: older[0].id)
+        let gapEntries: [TimelineEntry] = remainingGap ? [.gap(gap)] : []
+        let entries = newer.map(TimelineEntry.status) + gapEntries + loadedInGap.map(TimelineEntry.status) + older.map(TimelineEntry.status)
+        return (entries, gap, newer[newer.count - 1], older[0])
+    }
+
+    /// 下から遡ってギャップを古い側から読むと、ギャップのすぐ下の投稿が画面上で動かない。
+    @Test(arguments: [3, 40])
+    func loadingGapFromOlderKeepsStatusBelowGap(loadedCount: Int) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let (entries, gap, _, below) = entriesWithGap()
+        harness.viewController.setEntries(entries)
+        try harness.scroll(to: .gap(gap.id), at: .top)
+        let before = try #require(harness.windowMinY(of: .status(below.id)))
+
+        let loaded = StatusFactory.make(count: loadedCount, startingAt: 1_500)
+        harness.viewController.setEntries(entriesWithGap(loadedInGap: loaded).entries, keeping: .status(below.id))
+
+        let after = try #require(harness.windowMinY(of: .status(below.id)), "読み込み後にギャップの下の投稿が画面外へ出ました")
+        #expect(abs(after - before) <= tolerance, "ギャップの下の投稿が\(after - before)pt動きました")
+    }
+
+    /// 上から読み進めてギャップを新しい側から読むと、ギャップのすぐ上の投稿が画面上で動かない。
+    @Test(arguments: [3, 40])
+    func loadingGapFromNewerKeepsStatusAboveGap(loadedCount: Int) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let (entries, gap, above, _) = entriesWithGap()
+        harness.viewController.setEntries(entries)
+        try harness.scroll(to: .gap(gap.id), at: .bottom)
+        let before = try #require(harness.windowMinY(of: .status(above.id)))
+
+        let loaded = StatusFactory.make(count: loadedCount, startingAt: 1_500)
+        harness.viewController.setEntries(entriesWithGap(loadedInGap: loaded, remainingGap: false).entries, keeping: .status(above.id))
+
+        let after = try #require(harness.windowMinY(of: .status(above.id)), "読み込み後にギャップの上の投稿が画面外へ出ました")
+        #expect(abs(after - before) <= tolerance, "ギャップの上の投稿が\(after - before)pt動きました")
     }
 
     /// 新着ボタンで最上部へ戻ると、上のセルの高さが見積もりから実寸へ変わっても、最上部まで届く。
     @Test func scrollingToNewestReachesTop() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
-        harness.viewController.setStatuses(StatusFactory.make(count: 200, startingAt: 1_000))
+        harness.setStatuses(StatusFactory.make(count: 200, startingAt: 1_000))
         harness.scroll(toFraction: 1)
 
         harness.viewController.scrollToNewest()
@@ -107,7 +152,7 @@ struct ScrollAnchorTests {
                 url: nil
             )
         }
-        harness.viewController.setStatuses(statuses)
+        harness.setStatuses(statuses)
         harness.scroll(toFraction: 0.4)
         let anchor = try #require(harness.viewController.currentAnchor())
         let before = try #require(harness.windowMinY(of: anchor.id))

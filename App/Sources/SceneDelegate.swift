@@ -34,8 +34,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         logger.info("scene didBecomeActive")
     }
 
+    func sceneWillEnterForeground(_ scene: UIScene) {
+        logger.info("scene willEnterForeground")
+        homeTimeline?.enterForeground()
+    }
+
     func sceneDidEnterBackground(_ scene: UIScene) {
         logger.info("scene didEnterBackground")
+        homeTimeline?.enterBackground()
     }
 
     func showTimeline(for credential: Credential) {

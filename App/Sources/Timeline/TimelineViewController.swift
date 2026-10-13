@@ -5,6 +5,7 @@ import UIKit
 /// タイムライン表示。スクロール位置の制御を細かく行うため、UICollectionViewとdiffable data sourceで組む。
 final class TimelineViewController: UIViewController {
     private enum Section { case main }
+    typealias ItemID = TimelineEntry.ID
 
     private let logger = SciaLog.logger(category: "timeline")
 
@@ -33,13 +34,16 @@ final class TimelineViewController: UIViewController {
     var onVisibleStatusesChange: (([Status.ID]) -> Void)?
     /// 指によるスクロールが止まったときに呼ぶ。
     var onScrollSettle: (() -> Void)?
+    /// ギャップがタップされたときに、どちらの端から読むかを添えて呼ぶ。
+    var onGapSelect: ((String, TimelineStore.GapDirection) -> Void)?
 
     /// 末尾から何件手前で古い投稿の読み込みを始めるか。
     private let prefetchThreshold = 10
 
     private(set) lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: makeLayout())
     private lazy var dataSource = makeDataSource()
-    private var statuses: [Status.ID: Status] = [:]
+    private var entries: [ItemID: TimelineEntry] = [:]
+    private var loadingGapIDs: Set<String> = []
     private(set) var contentState = ContentState.loaded
     private(set) var footerState = FooterState.idle
     private(set) var unreadCount = 0
@@ -98,7 +102,7 @@ final class TimelineViewController: UIViewController {
     /// 絵文字の画像が届いたら、その絵文字を使う投稿だけを描き直す。
     private func emojiImagesDidLoad(_ urls: Set<URL>) {
         let ids = dataSource.snapshot().itemIdentifiers.filter { id in
-            guard let status = statuses[id] else { return false }
+            guard let status = entries[id]?.status else { return false }
             return !Self.emojiURLs(of: status).isDisjoint(with: urls)
         }
         reconfigure(Set(ids))
@@ -110,35 +114,45 @@ final class TimelineViewController: UIViewController {
     }
 
     /// 内容が変わってセルの高さが変わっても、読んでいる位置が動かないように描き直す。
-    func reconfigure(_ ids: Set<Status.ID>) {
+    func reconfigure(_ ids: Set<ItemID>) {
         guard !ids.isEmpty else { return }
         var snapshot = dataSource.snapshot()
         snapshot.reconfigureItems(Array(ids))
         applyPreservingAnchor(snapshot)
     }
 
-    /// 表示中の投稿を、新しい順に並んだ`newStatuses`で置き換える。
-    /// 読んでいる位置の投稿が画面上で動かないようにする。ただし最上部にいて追従が有効なら、最上部に留まって新着を見せる。
-    func setStatuses(_ newStatuses: [Status]) {
-        let previous = statuses
-        let followsTop = isAtTop && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
-        statuses = Dictionary(newStatuses.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
-        var snapshot = NSDiffableDataSourceSnapshot<Section, Status.ID>()
+    /// 表示中の要素を、新しい順に並んだ`newEntries`で置き換える。
+    ///
+    /// 読んでいる位置の要素が画面上で動かないようにする。基準は表示領域の上端にかかっている要素で、`anchorID`を渡せばその要素にする。
+    /// ただし最上部にいて追従が有効なら、最上部に留まって新着を見せる。
+    func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil) {
+        let previous = entries
+        let followsTop = anchorID == nil && isAtTop && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
+        entries = Dictionary(newEntries.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+        var snapshot = NSDiffableDataSourceSnapshot<Section, ItemID>()
         snapshot.appendSections([.main])
-        snapshot.appendItems(newStatuses.map(\.id))
-        // 差分はIDで取られるため、同じIDのまま内容が変わった投稿は明示的にセルを再構成する。
-        let changedIDs = newStatuses.filter { status in previous[status.id].map { $0 != status } ?? false }.map(\.id)
+        snapshot.appendItems(newEntries.map(\.id))
+        // 差分はIDで取られるため、同じIDのまま内容が変わった要素は明示的にセルを再構成する。
+        let changedIDs = newEntries.filter { entry in previous[entry.id].map { $0 != entry } ?? false }.map(\.id)
         snapshot.reconfigureItems(Array(Set(changedIDs)))
         if followsTop {
             dataSource.apply(snapshot, animatingDifferences: false)
             collectionView.contentOffset.y = -collectionView.adjustedContentInset.top
-            logger.info("setStatuses count=\(newStatuses.count, privacy: .public) followsTop=true")
+            logger.info("setEntries count=\(newEntries.count, privacy: .public) followsTop=true")
         } else {
-            let anchor = applyPreservingAnchor(snapshot)
-            logger.info("setStatuses count=\(newStatuses.count, privacy: .public) anchor=\(anchor?.id ?? "nil", privacy: .public)")
+            let anchor = applyPreservingAnchor(snapshot, keeping: anchorID)
+            logger.info("setEntries count=\(newEntries.count, privacy: .public) anchor=\(anchor.map { Self.label($0.id) } ?? "nil", privacy: .public)")
         }
         setNeedsUpdateContentUnavailableConfiguration()
         reportVisibleStatuses()
+    }
+
+    /// 読み込み中のギャップを、読み込み中の表示にする。
+    func setLoadingGaps(_ ids: Set<String>) {
+        let changed = ids.symmetricDifference(loadingGapIDs).map(ItemID.gap)
+        loadingGapIDs = ids
+        let existing = Set(dataSource.snapshot().itemIdentifiers)
+        reconfigure(Set(changed).intersection(existing))
     }
 
     /// 最上部にいる。新着を挿入したときに追従するかの判定に使う。
@@ -152,10 +166,11 @@ final class TimelineViewController: UIViewController {
     }
 
     /// 既読より新しい投稿の数。0なら新着ボタンを隠す。
-    func setUnreadCount(_ count: Int) {
+    /// - Parameter isLowerBound: 未読の区間に読み込んでいない投稿があり、実際はもっと多い。
+    func setUnreadCount(_ count: Int, isLowerBound: Bool = false) {
         unreadCount = count
         newArrivalsButton.isHidden = count == 0
-        newArrivalsButton.configuration?.title = "\(count)件の新着"
+        newArrivalsButton.configuration?.title = isLowerBound ? "\(count)件以上の新着" : "\(count)件の新着"
     }
 
     func setContentState(_ state: ContentState) {
@@ -204,7 +219,7 @@ final class TimelineViewController: UIViewController {
 
     /// 違和感レポートに含める、スクロール位置と表示中の投稿の状態。
     func stateDump() -> String {
-        let visibleIDs = collectionView.indexPathsForVisibleItems.sorted().compactMap { dataSource.itemIdentifier(for: $0) }
+        let visibleIDs = collectionView.indexPathsForVisibleItems.sorted().compactMap { dataSource.itemIdentifier(for: $0) }.map(Self.label)
         let anchor = currentAnchor()
         return """
         items: \(dataSource.snapshot().numberOfItems)
@@ -212,20 +227,36 @@ final class TimelineViewController: UIViewController {
         contentSize.height: \(collectionView.contentSize.height)
         adjustedContentInset.top: \(collectionView.adjustedContentInset.top)
         visibleItems: \(visibleIDs.joined(separator: ", "))
-        anchor: \(anchor.map { "\($0.id) distanceFromVisibleTop=\($0.distanceFromVisibleTop)" } ?? "nil")
+        anchor: \(anchor.map { "\(Self.label($0.id)) distanceFromVisibleTop=\($0.distanceFromVisibleTop)" } ?? "nil")
         contentState: \(contentState)
         footerState: \(footerState)
         isAtTop: \(isAtTop)
         unreadCount: \(unreadCount)
+        loadingGaps: \(loadingGapIDs.sorted().joined(separator: ", "))
         """
     }
 
-    /// 表示している投稿のID。上から順。
+    /// ログと状態ダンプで要素を示す表記。投稿はID、ギャップは`gap-`で始まるID。
+    private static func label(_ id: ItemID) -> String {
+        switch id {
+        case .status(let id): id
+        case .gap(let id): id
+        }
+    }
+
+    /// 表示している投稿のID。上から順。ギャップは含めない。
     var displayedStatusIDs: [Status.ID] {
+        dataSource.snapshot().itemIdentifiers.compactMap { id in
+            if case .status(let statusID) = id { statusID } else { nil }
+        }
+    }
+
+    /// 表示している要素のID。上から順。
+    var displayedItemIDs: [ItemID] {
         dataSource.snapshot().itemIdentifiers
     }
 
-    func itemIdentifier(at indexPath: IndexPath) -> Status.ID? {
+    func itemIdentifier(at indexPath: IndexPath) -> ItemID? {
         dataSource.itemIdentifier(for: indexPath)
     }
 
@@ -257,8 +288,10 @@ final class TimelineViewController: UIViewController {
         let ids = collectionView.indexPathsForVisibleItems.compactMap { indexPath -> Status.ID? in
             guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return nil }
             let visibleHeight = frame.intersection(visibleRect).height
-            guard visibleHeight >= min(frame.height, visibleRect.height) / 2 else { return nil }
-            return dataSource.itemIdentifier(for: indexPath)
+            guard visibleHeight >= min(frame.height, visibleRect.height) / 2,
+                  case .status(let id) = dataSource.itemIdentifier(for: indexPath)
+            else { return nil }
+            return id
         }
         onVisibleStatusesChange(ids)
     }
@@ -269,10 +302,15 @@ final class TimelineViewController: UIViewController {
         return UICollectionViewCompositionalLayout.list(using: configuration)
     }
 
-    private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, Status.ID> {
-        let registration = UICollectionView.CellRegistration<UICollectionViewListCell, Status.ID> { [weak self] cell, _, id in
-            guard let self, let status = self.statuses[id] else { return }
-            cell.contentConfiguration = self.contentConfiguration(for: status, base: cell.defaultContentConfiguration())
+    private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, ItemID> {
+        let registration = UICollectionView.CellRegistration<UICollectionViewListCell, ItemID> { [weak self] cell, _, id in
+            guard let self, let entry = self.entries[id] else { return }
+            switch entry {
+            case .status(let status):
+                cell.contentConfiguration = self.contentConfiguration(for: status, base: cell.defaultContentConfiguration())
+            case .gap(let gap):
+                cell.contentConfiguration = self.gapContentConfiguration(isLoading: self.loadingGapIDs.contains(gap.id), base: cell.defaultContentConfiguration())
+            }
         }
         let footerRegistration = UICollectionView.SupplementaryRegistration<TimelineFooterView>(
             elementKind: UICollectionView.elementKindSectionFooter
@@ -280,13 +318,13 @@ final class TimelineViewController: UIViewController {
             footer.onRetry = { self?.onRetry?() }
             self?.configure(footer)
         }
-        let dataSource = UICollectionViewDiffableDataSource<Section, Status.ID>(collectionView: collectionView) { collectionView, indexPath, id in
+        let dataSource = UICollectionViewDiffableDataSource<Section, ItemID>(collectionView: collectionView) { collectionView, indexPath, id in
             collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: id)
         }
         dataSource.supplementaryViewProvider = { collectionView, _, indexPath in
             collectionView.dequeueConfiguredReusableSupplementary(using: footerRegistration, for: indexPath)
         }
-        var snapshot = NSDiffableDataSourceSnapshot<Section, Status.ID>()
+        var snapshot = NSDiffableDataSourceSnapshot<Section, ItemID>()
         snapshot.appendSections([.main])
         dataSource.apply(snapshot, animatingDifferences: false)
         return dataSource
@@ -294,6 +332,14 @@ final class TimelineViewController: UIViewController {
 
     private func configure(_ footer: TimelineFooterView) {
         footer.apply(footerState)
+    }
+
+    func gapContentConfiguration(isLoading: Bool, base: UIListContentConfiguration) -> UIListContentConfiguration {
+        var content = base
+        content.text = isLoading ? "読み込み中…" : "読み込んでいない投稿を読み込む"
+        content.textProperties.alignment = .center
+        content.textProperties.color = isLoading ? .secondaryLabel : .tintColor
+        return content
     }
 
     func contentConfiguration(for status: Status, base: UIListContentConfiguration) -> UIListContentConfiguration {
@@ -364,6 +410,16 @@ extension TimelineViewController: UICollectionViewDelegate {
         isScrollingToTop = false
     }
 
+    /// ギャップは、画面の上半分にあれば下から遡ってきたとみなして古い側から、下半分にあれば新しい側から読む。
+    /// どちらも、いま読んでいる側に続く投稿から埋まる。
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        guard case .gap(let gapID) = dataSource.itemIdentifier(for: indexPath) else { return }
+        collectionView.deselectItem(at: indexPath, animated: true)
+        guard !loadingGapIDs.contains(gapID), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return }
+        let visibleRect = collectionView.bounds.inset(by: collectionView.adjustedContentInset)
+        onGapSelect?(gapID, frame.midY < visibleRect.midY ? .fromOlder : .fromNewer)
+    }
+
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         let count = dataSource.snapshot().numberOfItems
         if indexPath.item >= count - prefetchThreshold {
@@ -377,7 +433,7 @@ extension TimelineViewController: UICollectionViewDelegate {
 extension TimelineViewController {
     /// 更新の前後で画面上の位置を揃える基準の投稿と、そのセル上端の、表示領域上端からの距離。
     struct ScrollAnchor {
-        let id: Status.ID
+        let id: ItemID
         let distanceFromVisibleTop: CGFloat
     }
 
@@ -386,7 +442,7 @@ extension TimelineViewController {
         collectionView.layoutIfNeeded()
         let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
         let topmost = collectionView.indexPathsForVisibleItems
-            .compactMap { indexPath -> (Status.ID, CGRect)? in
+            .compactMap { indexPath -> (ItemID, CGRect)? in
                 guard let id = dataSource.itemIdentifier(for: indexPath),
                       let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
                 else { return nil }
@@ -398,12 +454,23 @@ extension TimelineViewController {
         return ScrollAnchor(id: id, distanceFromVisibleTop: frame.minY - visibleTop)
     }
 
-    /// スナップショットを当て、更新前に表示領域の上端にあった投稿を同じ位置に戻す。戻した基準を返す。
+    /// 表示領域の外にあっても、指定した要素を基準にする。
+    func anchor(of id: ItemID) -> ScrollAnchor? {
+        collectionView.layoutIfNeeded()
+        guard let indexPath = dataSource.indexPath(for: id),
+              let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
+        else { return nil }
+        let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
+        return ScrollAnchor(id: id, distanceFromVisibleTop: frame.minY - visibleTop)
+    }
+
+    /// スナップショットを当て、更新前の基準の要素を同じ位置に戻す。戻した基準を返す。
+    /// `anchorID`がなければ、表示領域の上端にあった要素を基準にする。
     @discardableResult
-    private func applyPreservingAnchor(_ snapshot: NSDiffableDataSourceSnapshot<Section, Status.ID>) -> ScrollAnchor? {
+    private func applyPreservingAnchor(_ snapshot: NSDiffableDataSourceSnapshot<Section, ItemID>, keeping anchorID: ItemID? = nil) -> ScrollAnchor? {
         isRestoringAnchor = true
         defer { isRestoringAnchor = false }
-        let anchor = currentAnchor()
+        let anchor = anchorID.flatMap(anchor(of:)) ?? currentAnchor()
         dataSource.apply(snapshot, animatingDifferences: false)
         if let anchor {
             restore(anchor)

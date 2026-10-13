@@ -93,6 +93,49 @@ struct HomeTimelineControllerTests {
         #expect(controller.viewController.displayedStatusIDs == (arriving + existing).map(\.id))
     }
 
+    @Test func emptyHomeReconnectsWhenReturningToForeground() async throws {
+        let connector = MessageQueueConnector()
+        let controller = try makeController(transport: try HomeTransport(home: []), connector: connector)
+        defer { controller.stop() }
+
+        controller.start()
+        try await waitUntil { connector.connectionCount == 1 }
+        controller.enterBackground()
+        controller.enterForeground()
+
+        try await waitUntil { connector.connectionCount == 2 }
+    }
+
+    @Test func backgroundDuringInitialLoadDefersConnection() async throws {
+        let gate = ResponseGate()
+        let home = try HomeTransport(home: StatusFactory.make(count: 3, startingAt: 100))
+        let transport = ScriptedTransport { request in
+            if request.url?.path() == "/api/v1/timelines/home" {
+                await gate.wait()
+            }
+            do {
+                let (body, response) = try await home.send(request)
+                return (response.statusCode, body)
+            } catch {
+                return (500, Data())
+            }
+        }
+        let connector = MessageQueueConnector()
+        let controller = try makeController(transport: transport, connector: connector)
+        defer { controller.stop() }
+
+        controller.start()
+        await gate.waitUntilWaiting()
+        controller.enterBackground()
+        await gate.open()
+        try await waitUntil { controller.viewController.contentState == .loaded }
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(connector.connectionCount == 0, "バックグラウンドのまま接続しました")
+
+        controller.enterForeground()
+        try await waitUntil { connector.connectionCount == 1 }
+    }
+
     private func waitUntil(_ condition: () -> Bool) async throws {
         for _ in 0..<100 where !condition() {
             try await Task.sleep(for: .milliseconds(20))
@@ -185,6 +228,7 @@ final class MessageQueueConnector: WebSocketConnector {
     private let state = Mutex<(connections: Int, messages: [String], waiter: CheckedContinuation<String, any Error>?)>((0, [], nil))
 
     var isConnected: Bool { state.withLock { $0.connections > 0 } }
+    var connectionCount: Int { state.withLock { $0.connections } }
 
     func connect(_ request: URLRequest) -> any WebSocketConnection {
         state.withLock { $0.connections += 1 }

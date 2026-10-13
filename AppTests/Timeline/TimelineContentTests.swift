@@ -25,11 +25,11 @@ struct TimelineContentTests {
 
         #expect(content.secondaryAttributedText?.string == "一行目\u{2028}二行目\n#scia")
     }
-    @Test func setStatusesReflectsChangedContentOfSameID() throws {
+    @Test func setEntriesReflectsChangedContentOfSameID() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         let original = StatusFactory.make(count: 5, startingAt: 100)
-        harness.viewController.setStatuses(original)
+        harness.setStatuses(original)
 
         let edited = original.map { status in
             Status(
@@ -41,7 +41,7 @@ struct TimelineContentTests {
                 url: status.url
             )
         }
-        harness.viewController.setStatuses(edited)
+        harness.setStatuses(edited)
 
         let firstID = try #require(edited.first?.id)
         #expect(harness.secondaryText(of: firstID) == "編集後: \(firstID)")

@@ -30,6 +30,18 @@ final class TimelineHarness {
 
     var collectionView: UICollectionView { viewController.collectionView }
 
+    func setStatuses(_ statuses: [Status]) {
+        viewController.setEntries(statuses.map(TimelineEntry.status))
+    }
+
+    /// 要素が表示領域の`position`に来るまでスクロールし、セルを確定させる。
+    func scroll(to id: TimelineViewController.ItemID, at position: UICollectionView.ScrollPosition) throws {
+        let index = try #require(viewController.displayedItemIDs.firstIndex(of: id), "\(id)が表示されていません")
+        collectionView.layoutIfNeeded()
+        collectionView.scrollToItem(at: IndexPath(item: index, section: 0), at: position, animated: false)
+        collectionView.layoutIfNeeded()
+    }
+
     /// 表示領域の`fraction`（0が先頭、1が末尾）の位置までスクロールし、セルを確定させる。
     func scroll(toFraction fraction: CGFloat) {
         collectionView.layoutIfNeeded()
@@ -40,17 +52,17 @@ final class TimelineHarness {
     }
 
     /// 投稿のセル上端の、ウィンドウ座標でのY位置。セルが表示されていなければnil。
-    func windowMinY(of id: Status.ID) -> CGFloat? {
+    func windowMinY(of id: TimelineViewController.ItemID) -> CGFloat? {
         guard let cell = visibleCell(of: id) else { return nil }
         return cell.convert(cell.bounds, to: window).minY
     }
 
     /// 表示中のセルに設定されている本文。セルが表示されていなければnil。
     func secondaryText(of id: Status.ID) -> String? {
-        (visibleCell(of: id)?.contentConfiguration as? UIListContentConfiguration)?.secondaryAttributedText?.string
+        (visibleCell(of: .status(id))?.contentConfiguration as? UIListContentConfiguration)?.secondaryAttributedText?.string
     }
 
-    private func visibleCell(of id: Status.ID) -> UICollectionViewCell? {
+    private func visibleCell(of id: TimelineViewController.ItemID) -> UICollectionViewCell? {
         collectionView.layoutIfNeeded()
         return collectionView.visibleCells.first { cell in
             guard let indexPath = collectionView.indexPath(for: cell) else { return false }
