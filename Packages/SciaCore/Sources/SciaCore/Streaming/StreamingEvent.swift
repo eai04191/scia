@@ -9,9 +9,11 @@ public enum StreamingEvent: Sendable, Equatable {
     case statusUpdate(Status)
     /// 投稿が削除された。
     case delete(statusID: String)
+    /// 通知が届いた。
+    case notification(MastodonNotification)
     /// キーワードフィルターが変わった。
     case filtersChanged
-    /// まだ扱っていない種類のイベント（通知、お知らせなど）。
+    /// まだ扱っていない種類のイベント（お知らせなど）。
     case unhandled(name: String)
 }
 
@@ -52,6 +54,8 @@ public enum StreamingMessageDecoder {
             return .statusUpdate(try decoder.decode(Status.self, from: Data(try payload(of: envelope).utf8)))
         case "delete":
             return .delete(statusID: try payload(of: envelope))
+        case "notification":
+            return .notification(try decoder.decode(MastodonNotification.self, from: Data(try payload(of: envelope).utf8)))
         case "filters_changed":
             return .filtersChanged
         default:

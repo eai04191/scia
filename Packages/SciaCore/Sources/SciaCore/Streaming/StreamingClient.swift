@@ -8,6 +8,8 @@ public struct StreamingClient: Sendable {
     public enum Stream: String, Sendable {
         /// ホームタイムラインと通知。
         case user
+        /// 通知だけ。
+        case userNotification = "user:notification"
     }
 
     public let credential: Credential

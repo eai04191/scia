@@ -1,6 +1,6 @@
 import UIKit
 
-/// タイムライン末尾の、古い投稿の読み込み状態を出すフッター。
+/// タイムライン末尾の、古い投稿や通知の読み込み状態を出すフッター。
 final class TimelineFooterView: UICollectionReusableView {
     var onRetry: (() -> Void)?
 
@@ -40,7 +40,7 @@ final class TimelineFooterView: UICollectionReusableView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func apply(_ state: TimelineViewController.FooterState) {
+    func apply(_ state: TimelineViewController.FooterState, reachedEndText: String) {
         switch state {
         case .idle:
             indicator.stopAnimating()
@@ -56,7 +56,7 @@ final class TimelineFooterView: UICollectionReusableView {
             retryButton.isHidden = false
         case .reachedEnd:
             indicator.stopAnimating()
-            label.text = "これより前の投稿はありません"
+            label.text = reachedEndText
             retryButton.isHidden = true
         }
         label.isHidden = label.text == nil

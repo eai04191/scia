@@ -3,16 +3,20 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
     case status(Status)
     /// まだ読み込んでいない投稿がある区間。
     case gap(TimelineGap)
+    /// 通知の一覧に並ぶ通知。
+    case notification(MastodonNotification)
 
     public enum ID: Hashable, Sendable {
         case status(Status.ID)
         case gap(String)
+        case notification(MastodonNotification.ID)
     }
 
     public var id: ID {
         switch self {
         case .status(let status): .status(status.id)
         case .gap(let gap): .gap(gap.id)
+        case .notification(let notification): .notification(notification.id)
         }
     }
 

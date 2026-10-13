@@ -476,6 +476,7 @@ extension TimelineEntry {
         switch self {
         case .status(let status): status.id
         case .gap(let gap): "gap(\(gap.newerID)...\(gap.olderID))"
+        case .notification(let notification): "notification(\(notification.id))"
         }
     }
 }

@@ -17,6 +17,12 @@ public struct MastodonClient: Sendable {
         return TimelinePage(statuses: statuses, isRegenerating: response.statusCode == 206)
     }
 
+    /// 通知を新しい順に返す。1回に読める件数の上限は80件。
+    /// https://docs.joinmastodon.org/methods/notifications/#get
+    public func notifications(_ query: TimelineQuery) async throws -> [MastodonNotification] {
+        try await get([MastodonNotification].self, path: "api/v1/notifications", query: query.queryItems).0
+    }
+
     /// 既読位置。まだ保存されていなければnil。
     /// https://docs.joinmastodon.org/methods/markers/#get
     public func marker(for timeline: MarkerTimeline) async throws -> String? {

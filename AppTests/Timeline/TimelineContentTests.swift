@@ -25,6 +25,39 @@ struct TimelineContentTests {
 
         #expect(content.secondaryAttributedText?.string == "一行目\u{2028}二行目\n#scia")
     }
+    @Test func favouriteNotificationShowsActorAndTargetStatus() throws {
+        let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let actor = Account(id: "2", username: "bob", acct: "bob@remote.example", displayName: "Bob", avatar: status.account.avatar)
+        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: .now, account: actor, status: status)
+
+        let content = makeViewController().contentConfiguration(for: notification, base: .cell())
+
+        #expect(content.attributedText?.string == "Bobがお気に入りに登録しました")
+        #expect(content.secondaryAttributedText?.string == makeViewController().body(of: status, base: .cell()).string)
+        #expect(content.image != nil)
+    }
+
+    @Test func followNotificationShowsAccountAddress() throws {
+        let avatar = try #require(StatusFactory.make(count: 1, startingAt: 100).first?.account.avatar)
+        let actor = Account(id: "2", username: "bob", acct: "bob@remote.example", displayName: "", avatar: avatar)
+        let notification = MastodonNotification(id: "1", type: .follow, createdAt: .now, account: actor)
+
+        let content = makeViewController().contentConfiguration(for: notification, base: .cell())
+
+        #expect(content.attributedText?.string == "bobにフォローされました")
+        #expect(content.secondaryAttributedText?.string == "@bob@remote.example")
+    }
+
+    @Test func unknownNotificationTypeStillShowsActor() throws {
+        let avatar = try #require(StatusFactory.make(count: 1, startingAt: 100).first?.account.avatar)
+        let actor = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: avatar)
+        let notification = MastodonNotification(id: "1", type: .other("admin.sign_up"), createdAt: .now, account: actor)
+
+        let content = makeViewController().contentConfiguration(for: notification, base: .cell())
+
+        #expect(content.attributedText?.string == "Bobからの通知（admin.sign_up）")
+    }
+
     @Test func setEntriesReflectsChangedContentOfSameID() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

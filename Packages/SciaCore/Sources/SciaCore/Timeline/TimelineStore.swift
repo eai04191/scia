@@ -250,7 +250,7 @@ public final class TimelineStore {
             guard remaining.count != entries.count else { return .none }
             entries = remaining
             return .entriesChanged
-        case .filtersChanged, .unhandled:
+        case .notification, .filtersChanged, .unhandled:
             return .none
         }
     }

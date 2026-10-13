@@ -40,10 +40,25 @@ struct StreamingMessageDecoderTests {
         #expect(try StreamingMessageDecoder.decode(#"{"stream":["user"],"event":"filters_changed"}"#) == .filtersChanged)
     }
 
-    @Test func keepsNameOfUnhandledEvent() throws {
-        let event = try StreamingMessageDecoder.decode(#"{"stream":["user"],"event":"notification","payload":"{}"}"#)
+    @Test func decodesNotificationWithStringifiedPayload() throws {
+        let payload = #"{"id":"34975865","type":"reblog","created_at":"2026-10-13T03:26:00.000Z","account":{"id":"2","username":"bob","acct":"bob","display_name":"Bob","avatar":"https://example.social/avatars/bob.png","emojis":[]},"status":{"id":"113000000000000001","created_at":"2026-10-13T03:21:45.123Z","spoiler_text":"","url":null,"content":"<p>Hello</p>","account":{"id":"1","username":"alice","acct":"alice","display_name":"Alice","avatar":"https://example.social/avatars/alice.png","emojis":[]},"mentions":[],"tags":[],"emojis":[]}}"#
+        let envelope = try JSONSerialization.data(withJSONObject: ["stream": ["user:notification"], "event": "notification", "payload": payload])
 
-        #expect(event == .unhandled(name: "notification"))
+        let event = try StreamingMessageDecoder.decode(String(decoding: envelope, as: UTF8.self))
+
+        guard case .notification(let notification) = event else {
+            Issue.record("notificationになりませんでした: \(event)")
+            return
+        }
+        #expect(notification.id == "34975865")
+        #expect(notification.type == .reblog)
+        #expect(notification.status?.id == "113000000000000001")
+    }
+
+    @Test func keepsNameOfUnhandledEvent() throws {
+        let event = try StreamingMessageDecoder.decode(#"{"stream":["user"],"event":"announcement","payload":"{}"}"#)
+
+        #expect(event == .unhandled(name: "announcement"))
     }
 
     @Test func throwsServerError() {

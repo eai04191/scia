@@ -82,6 +82,40 @@ struct MastodonClientTests {
         #expect(error?.message == "The access token is invalid")
     }
 
+    @Test func notificationsDecodeKnownAndUnknownTypes() async throws {
+        let transport = StubTransport([try .fixture("notifications")])
+
+        let notifications = try await makeClient(transport).notifications(TimelineQuery(maxID: "34975870", limit: 40))
+
+        #expect(notifications.map(\.id) == ["34975864", "34975863", "34975862", "34975861"])
+        #expect(notifications.map(\.type) == [.other("admin.sign_up"), .mention, .follow, .favourite])
+        #expect(notifications[0].account.displayNameOrUsername == "dave")
+        #expect(notifications[1].status?.mentions.map(\.acct) == ["alice"])
+        #expect(notifications[2].status == nil)
+        #expect(notifications[2].account.emojis.map(\.shortcode) == ["blobcat"])
+        #expect(notifications[3].status?.id == "113000000000000001")
+        let url = try #require(await transport.requests.first?.url)
+        #expect(url.path() == "/api/v1/notifications")
+        let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        #expect(query.contains(URLQueryItem(name: "max_id", value: "34975870")))
+        #expect(query.contains(URLQueryItem(name: "limit", value: "40")))
+    }
+
+    @Test func notificationsMarkerUsesNotificationsTimeline() async throws {
+        let transport = StubTransport([
+            .json(#"{"notifications":{"last_read_id":"34975862","version":1,"updated_at":"2026-10-13T03:21:45.123Z"}}"#, statusCode: 200),
+            .json(#"{"notifications":{"last_read_id":"34975864","version":2,"updated_at":"2026-10-13T03:21:45.123Z"}}"#, statusCode: 200),
+        ])
+        let client = try makeClient(transport)
+
+        #expect(try await client.marker(for: .notifications) == "34975862")
+        try await client.saveMarker(for: .notifications, lastReadID: "34975864")
+
+        let requests = await transport.requests
+        #expect(requests.first?.url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems } == [URLQueryItem(name: "timeline[]", value: "notifications")])
+        #expect(requests.last?.httpBody.map { String(decoding: $0, as: UTF8.self) } == "notifications%5Blast_read_id%5D=34975864")
+    }
+
     @Test func homeMarkerReadsLastReadID() async throws {
         let transport = StubTransport([.json(#"{"home":{"last_read_id":"113000000000000002","version":3,"updated_at":"2026-10-13T03:21:45.123Z"}}"#, statusCode: 200)])
 

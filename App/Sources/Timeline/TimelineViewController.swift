@@ -9,6 +9,20 @@ final class TimelineViewController: UIViewController {
 
     private let logger = SciaLog.logger(category: "timeline")
 
+    /// 一覧ごとに変わる文言。
+    struct Texts {
+        /// 違和感レポートの状態ダンプに使う名前。
+        let dumpName: String
+        let title: String
+        /// 1件もないとき。
+        let empty: String
+        /// これより古いものがないとき。
+        let reachedEnd: String
+
+        static let home = Texts(dumpName: "timeline", title: "ホーム", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません")
+        static let notifications = Texts(dumpName: "notifications", title: "通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません")
+    }
+
     /// 一覧全体の状態。投稿がないときの表示に使う。
     enum ContentState: Equatable {
         case loading
@@ -32,6 +46,8 @@ final class TimelineViewController: UIViewController {
     var onRetry: (() -> Void)?
     /// 画面に表示されている投稿が変わったときに、表示中の投稿のIDを渡して呼ぶ。
     var onVisibleStatusesChange: (([Status.ID]) -> Void)?
+    /// 画面に表示されている通知が変わったときに、表示中の通知のIDを渡して呼ぶ。
+    var onVisibleNotificationsChange: (([MastodonNotification.ID]) -> Void)?
     /// 指によるスクロールが止まったときに呼ぶ。
     var onScrollSettle: (() -> Void)?
     /// ギャップがタップされたときに、どちらの端から読むかを添えて呼ぶ。
@@ -71,10 +87,12 @@ final class TimelineViewController: UIViewController {
     /// 新着ボタンで最上部へ動かしている。
     private var isScrollingToTop = false
     private lazy var newArrivalsButton = makeNewArrivalsButton()
+    private let texts: Texts
     private let tuning: TuningStore
-    private let emojiImages: EmojiImageStore
+    let emojiImages: EmojiImageStore
 
-    init(tuning: TuningStore = AppDependencies.tuning, emojiImages: EmojiImageStore = AppDependencies.emojiImages) {
+    init(texts: Texts = .home, tuning: TuningStore = AppDependencies.tuning, emojiImages: EmojiImageStore = AppDependencies.emojiImages) {
+        self.texts = texts
         self.tuning = tuning
         self.emojiImages = emojiImages
         super.init(nibName: nil, bundle: nil)
@@ -87,7 +105,7 @@ final class TimelineViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = "Home"
+        title = texts.title
         #if DEBUG
         navigationItem.rightBarButtonItem = makeDebugMenuButton(screenActions: debugActions)
         #endif
@@ -100,9 +118,15 @@ final class TimelineViewController: UIViewController {
             newArrivalsButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
             newArrivalsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
         ])
-        AppDependencies.stateDumps.register("timeline", owner: self) { $0.stateDump() }
+        AppDependencies.stateDumps.register(texts.dumpName, owner: self) { $0.stateDump() }
         emojiImages.addListener(owner: self) { [weak self] urls in self?.emojiImagesDidLoad(urls) }
         observeTuning()
+    }
+
+    /// 他のタブにいる間に表示が変わっても既読にしないため、画面に出たときに改めて報告する。
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        reportVisibleItems()
     }
 
     /// チューニングの値が変わったら、表示中の投稿を描き直す。
@@ -121,8 +145,11 @@ final class TimelineViewController: UIViewController {
     /// 絵文字の画像が届いたら、その絵文字を使う投稿だけを描き直す。
     private func emojiImagesDidLoad(_ urls: Set<URL>) {
         let ids = dataSource.snapshot().itemIdentifiers.filter { id in
-            guard let status = entries[id]?.status else { return false }
-            return !Self.emojiURLs(of: status).isDisjoint(with: urls)
+            switch entries[id] {
+            case .status(let status): !Self.emojiURLs(of: status).isDisjoint(with: urls)
+            case .notification(let notification): !Self.emojiURLs(of: notification).isDisjoint(with: urls)
+            case .gap, nil: false
+            }
         }
         reconfigure(Set(ids))
     }
@@ -130,6 +157,10 @@ final class TimelineViewController: UIViewController {
     private static func emojiURLs(of status: Status) -> Set<URL> {
         let shown = status.displayed
         return Set((shown.emojis + shown.account.emojis + status.account.emojis).map(\.staticUrl))
+    }
+
+    private static func emojiURLs(of notification: MastodonNotification) -> Set<URL> {
+        Set(notification.account.emojis.map(\.staticUrl)).union(notification.status.map(emojiURLs(of:)) ?? [])
     }
 
     /// 内容が変わってセルの高さが変わっても、読んでいる位置が動かないように描き直す。
@@ -175,7 +206,7 @@ final class TimelineViewController: UIViewController {
             logger.info("setEntries count=\(newEntries.count, privacy: .public) anchor=\(anchor.map { Self.label($0.id) } ?? "nil", privacy: .public)")
         }
         setNeedsUpdateContentUnavailableConfiguration()
-        reportVisibleStatuses()
+        reportVisibleItems()
         reportApproachingGaps()
     }
 
@@ -226,7 +257,7 @@ final class TimelineViewController: UIViewController {
         case .loading:
             contentUnavailableConfiguration = UIContentUnavailableConfiguration.loading()
         case .loaded:
-            contentUnavailableConfiguration = emptyConfiguration(text: "投稿がありません", secondaryText: nil, buttonTitle: "再読み込み")
+            contentUnavailableConfiguration = emptyConfiguration(text: texts.empty, secondaryText: nil, buttonTitle: "再読み込み")
         case .regenerating:
             contentUnavailableConfiguration = emptyConfiguration(
                 text: "ホームを準備しています",
@@ -274,6 +305,7 @@ final class TimelineViewController: UIViewController {
         switch id {
         case .status(let id): id
         case .gap(let id): id
+        case .notification(let id): "notification-\(id)"
         }
     }
 
@@ -337,19 +369,23 @@ final class TimelineViewController: UIViewController {
         }
     }
 
-    /// 表示領域に半分以上入っている投稿を、表示中として報告する。ナビゲーションバーの下に隠れている部分は数えない。
-    private func reportVisibleStatuses() {
-        guard !isRestoringAnchor, let onVisibleStatusesChange else { return }
+    /// 表示領域に半分以上入っている投稿と通知を、表示中として報告する。ナビゲーションバーの下に隠れている部分は数えない。
+    /// 他のタブにいる間など、画面に出ていなければ報告しない。
+    private func reportVisibleItems() {
+        guard !isRestoringAnchor, viewIfLoaded?.window != nil else { return }
         let visibleRect = collectionView.bounds.inset(by: collectionView.adjustedContentInset)
-        let ids = collectionView.indexPathsForVisibleItems.compactMap { indexPath -> Status.ID? in
+        let ids = collectionView.indexPathsForVisibleItems.compactMap { indexPath -> ItemID? in
             guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return nil }
             let visibleHeight = frame.intersection(visibleRect).height
-            guard visibleHeight >= min(frame.height, visibleRect.height) / 2,
-                  case .status(let id) = dataSource.itemIdentifier(for: indexPath)
-            else { return nil }
-            return id
+            guard visibleHeight >= min(frame.height, visibleRect.height) / 2 else { return nil }
+            return dataSource.itemIdentifier(for: indexPath)
         }
-        onVisibleStatusesChange(ids)
+        onVisibleStatusesChange?(ids.compactMap { id in
+            if case .status(let statusID) = id { statusID } else { nil }
+        })
+        onVisibleNotificationsChange?(ids.compactMap { id in
+            if case .notification(let notificationID) = id { notificationID } else { nil }
+        })
     }
 
     private func makeLayout() -> UICollectionViewLayout {
@@ -366,6 +402,8 @@ final class TimelineViewController: UIViewController {
                 cell.contentConfiguration = self.contentConfiguration(for: status, base: cell.defaultContentConfiguration())
             case .gap(let gap):
                 cell.contentConfiguration = self.gapContentConfiguration(isLoading: self.loadingGapIDs.contains(gap.id), base: cell.defaultContentConfiguration())
+            case .notification(let notification):
+                cell.contentConfiguration = self.contentConfiguration(for: notification, base: cell.defaultContentConfiguration())
             }
         }
         let footerRegistration = UICollectionView.SupplementaryRegistration<TimelineFooterView>(
@@ -387,7 +425,7 @@ final class TimelineViewController: UIViewController {
     }
 
     private func configure(_ footer: TimelineFooterView) {
-        footer.apply(footerState)
+        footer.apply(footerState, reachedEndText: texts.reachedEnd)
     }
 
     func gapContentConfiguration(isLoading: Bool, base: UIListContentConfiguration) -> UIListContentConfiguration {
@@ -415,24 +453,27 @@ final class TimelineViewController: UIViewController {
         names.append(nameRenderer.render(.plain(shown.account.displayNameOrUsername, emojis: shown.account.emojis)))
         content.attributedText = names
 
+        content.secondaryAttributedText = body(of: shown, base: base)
+        return content
+    }
+
+    /// 投稿の本文。注意書きつきの投稿は、本文を開く操作がまだないため注意書きだけを出す。
+    func body(of status: Status, base: UIListContentConfiguration) -> NSAttributedString {
         let bodyRenderer = RichTextRenderer(
             font: base.secondaryTextProperties.font,
             textColor: base.secondaryTextProperties.color,
             paragraphSpacing: tuning.value(of: TuningCatalog.paragraphSpacing),
             emojiImages: emojiImages
         )
-        // 注意書きつきの投稿は、本文を開く操作がまだないため注意書きだけを出す。
-        if shown.spoilerText.isEmpty {
-            content.secondaryAttributedText = bodyRenderer.render(.status(shown))
-        } else {
-            let spoiler = NSMutableAttributedString(string: "注意書き: ", attributes: [
-                .font: base.secondaryTextProperties.font,
-                .foregroundColor: base.secondaryTextProperties.color,
-            ])
-            spoiler.append(bodyRenderer.render(.plain(shown.spoilerText, emojis: shown.emojis)))
-            content.secondaryAttributedText = spoiler
+        guard !status.spoilerText.isEmpty else {
+            return bodyRenderer.render(.status(status))
         }
-        return content
+        let spoiler = NSMutableAttributedString(string: "注意書き: ", attributes: [
+            .font: base.secondaryTextProperties.font,
+            .foregroundColor: base.secondaryTextProperties.color,
+        ])
+        spoiler.append(bodyRenderer.render(.plain(status.spoilerText, emojis: status.emojis)))
+        return spoiler
     }
 }
 
@@ -445,7 +486,7 @@ extension TimelineViewController: UICollectionViewDelegate {
                 lastScrollDirection = velocity > 0 ? .towardNewer : .towardOlder
             }
         }
-        reportVisibleStatuses()
+        reportVisibleItems()
         reportApproachingGaps()
     }
 
