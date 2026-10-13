@@ -1,5 +1,6 @@
 import os
 import SciaCore
+import SwiftUI
 import UIKit
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
@@ -14,9 +15,18 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let windowScene = scene as? UIWindowScene else { return }
         logger.info("scene willConnect")
         let window = ShakeDetectingWindow(windowScene: windowScene)
-        window.rootViewController = UINavigationController(rootViewController: TimelineViewController())
-        window.makeKeyAndVisible()
         self.window = window
+        do {
+            if let credential = try AppDependencies.credentials.load() {
+                showTimeline(for: credential)
+            } else {
+                showLogin(errorMessage: nil)
+            }
+        } catch {
+            logger.error("credential load failed: \(error.localizedDescription, privacy: .public)")
+            showLogin(errorMessage: error.localizedDescription)
+        }
+        window.makeKeyAndVisible()
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
@@ -25,5 +35,22 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneDidEnterBackground(_ scene: UIScene) {
         logger.info("scene didEnterBackground")
+    }
+
+    func showTimeline(for credential: Credential) {
+        window?.rootViewController = UINavigationController(rootViewController: TimelineViewController())
+    }
+
+    func showLogin(errorMessage: String?) {
+        let model = LoginModel { [weak self] credential in
+            self?.showTimeline(for: credential)
+        }
+        let view = LoginView(model: model) { [weak self] in
+            self?.window.map { WebAuthenticator(anchor: $0) }
+        }
+        window?.rootViewController = UIHostingController(rootView: view)
+        if let errorMessage {
+            model.showError(errorMessage)
+        }
     }
 }

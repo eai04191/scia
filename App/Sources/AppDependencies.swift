@@ -19,4 +19,21 @@ enum AppDependencies {
     static let discomfortReports = DiscomfortReportStore(
         directory: URL.documentsDirectory.appending(path: "DiscomfortReports")
     )
+
+    static let credentials = KeychainCredentialStore(service: "net.mizle.scia.credential")
+
+    static let oauth = OAuthClient(
+        configuration: OAuthClient.Configuration(clientName: "Scia", redirectURI: oauthRedirectURI, scopes: "read write"),
+        transport: URLSessionTransport()
+    )
+
+    /// バンドルIDをスキームにして、他のアプリのURLスキームと衝突しないようにする。
+    static let oauthCallbackScheme = "net.mizle.scia"
+
+    private static let oauthRedirectURI: URL = {
+        guard let url = URL(string: "\(oauthCallbackScheme)://oauth") else {
+            preconditionFailure("OAuthのリダイレクトURIを組み立てられません")
+        }
+        return url
+    }()
 }
