@@ -44,6 +44,22 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     /// 画面に出す投稿。ブーストなら元の投稿、そうでなければ自身。
     public var displayed: Status { reblog ?? self }
 
+    /// ブーストした元の投稿を差し替えたもの。元の投稿が編集されたときに使う。
+    public func replacingReblog(with reblog: Status) -> Status {
+        Status(
+            id: id,
+            createdAt: createdAt,
+            account: account,
+            content: content,
+            spoilerText: spoilerText,
+            url: url,
+            mentions: mentions,
+            tags: tags,
+            emojis: emojis,
+            reblog: reblog
+        )
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, account, content, spoilerText, url, mentions, tags, emojis
         case reblogBox = "reblog"

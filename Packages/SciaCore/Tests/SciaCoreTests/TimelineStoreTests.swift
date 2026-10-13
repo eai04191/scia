@@ -127,6 +127,125 @@ struct TimelineStoreTests {
         await gate.open()
         #expect(try await first.value == [])
     }
+
+    // MARK: - ストリーミング
+
+    private func loadedStore(_ ids: [Int], reachedEnd: Bool = false) async throws -> TimelineStore {
+        let pages = reachedEnd ? [try page(ids), try page([])] : [try page(ids)]
+        let store = makeStore(PageQueue(pages))
+        _ = try await store.loadInitial()
+        if reachedEnd {
+            _ = try await store.loadOlder()
+        }
+        return store
+    }
+
+    private func status(_ id: Int, content: String? = nil, reblog: Status? = nil) throws -> Status {
+        let base = try #require(try statuses([id]).first)
+        return Status(
+            id: base.id,
+            createdAt: base.createdAt,
+            account: base.account,
+            content: content ?? base.content,
+            spoilerText: "",
+            url: nil,
+            reblog: reblog
+        )
+    }
+
+    @Test func updatesArePendingUntilFlushed() async throws {
+        let store = try await loadedStore([30, 29])
+
+        #expect(store.receive(.update(try status(31))) == .pendingStarted)
+        #expect(store.receive(.update(try status(32))) == .none)
+        #expect(store.statuses.map(\.id) == ["30", "29"])
+
+        #expect(store.flushPending().map(\.id) == ["32", "31"])
+        #expect(store.statuses.map(\.id) == ["32", "31", "30", "29"])
+        #expect(store.pending.isEmpty)
+        #expect(store.receive(.update(try status(33))) == .pendingStarted)
+    }
+
+    @Test func flushMergesByIDOrderAndDropsDuplicates() async throws {
+        let store = try await loadedStore([30, 28])
+
+        _ = store.receive(.update(try status(31)))
+        _ = store.receive(.update(try status(29)))
+        _ = store.receive(.update(try status(31)))
+        _ = store.receive(.update(try status(30)))
+
+        #expect(store.flushPending().map(\.id) == ["31", "29"])
+        #expect(store.statuses.map(\.id) == ["31", "30", "29", "28"])
+    }
+
+    @Test func comparesIDsByLengthBeforeText() async throws {
+        let store = try await loadedStore([99])
+
+        _ = store.receive(.update(try status(100)))
+
+        #expect(store.flushPending().map(\.id) == ["100"])
+        #expect(store.statuses.map(\.id) == ["100", "99"])
+    }
+
+    @Test func dropsPendingOlderThanLoadedTailUnlessEndReached() async throws {
+        let store = try await loadedStore([30, 29])
+        _ = store.receive(.update(try status(10)))
+        #expect(store.flushPending().isEmpty)
+        #expect(store.statuses.map(\.id) == ["30", "29"])
+
+        let ended = try await loadedStore([30, 29], reachedEnd: true)
+        _ = ended.receive(.update(try status(10)))
+        #expect(ended.flushPending().map(\.id) == ["10"])
+    }
+
+    @Test func deleteRemovesStatusAndBoostsOfIt() async throws {
+        let original = try status(10)
+        let store = makeStore(PageQueue([.success(TimelinePage(
+            statuses: [try status(30, reblog: original), try status(29)],
+            isRegenerating: false
+        ))]))
+        _ = try await store.loadInitial()
+        _ = store.receive(.update(try status(31, reblog: original)))
+
+        #expect(store.receive(.delete(statusID: "10")) == .statusesChanged)
+        #expect(store.statuses.map(\.id) == ["29"])
+        #expect(store.pending.isEmpty)
+        #expect(store.receive(.delete(statusID: "999")) == .none)
+    }
+
+    @Test func statusUpdateReplacesStatusAndBoostedOriginal() async throws {
+        let original = try status(10)
+        let store = makeStore(PageQueue([.success(TimelinePage(
+            statuses: [try status(30, reblog: original), try status(10)],
+            isRegenerating: false
+        ))]))
+        _ = try await store.loadInitial()
+
+        #expect(store.receive(.statusUpdate(try status(10, content: "編集後"))) == .statusesChanged)
+
+        #expect(store.statuses.map(\.displayed.content) == ["編集後", "編集後"])
+        #expect(store.statuses.first?.id == "30")
+        #expect(store.receive(.statusUpdate(try status(999))) == .none)
+    }
+
+    @Test func unreadCountsStatusesNewerThanLastRead() async throws {
+        let store = try await loadedStore([30, 29, 28])
+        #expect(store.unreadCount == 0)
+
+        store.markRead(["29", "28"])
+        #expect(store.lastReadID == "29")
+        #expect(store.unreadCount == 1)
+
+        _ = store.receive(.update(try status(31)))
+        _ = store.flushPending()
+        #expect(store.unreadCount == 2)
+
+        store.markRead(["28"])
+        #expect(store.lastReadID == "29")
+
+        store.markRead(["31"])
+        #expect(store.unreadCount == 0)
+    }
 }
 
 /// 読み込みを途中で止めておくための門。
