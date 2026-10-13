@@ -11,12 +11,8 @@ public struct MastodonClient: Sendable {
     }
 
     /// https://docs.joinmastodon.org/methods/timelines/#home
-    public func homeTimeline(maxID: String?, limit: Int) async throws -> TimelinePage {
-        var query = [URLQueryItem(name: "limit", value: String(limit))]
-        if let maxID {
-            query.append(URLQueryItem(name: "max_id", value: maxID))
-        }
-        let (statuses, response) = try await get([Status].self, path: "api/v1/timelines/home", query: query)
+    public func homeTimeline(_ query: TimelineQuery) async throws -> TimelinePage {
+        let (statuses, response) = try await get([Status].self, path: "api/v1/timelines/home", query: query.queryItems)
         // ホームの再生成中は206が返り、中身が空でも終端とは限らない。
         return TimelinePage(statuses: statuses, isRegenerating: response.statusCode == 206)
     }
@@ -45,6 +41,31 @@ public struct MastodonClient: Sendable {
             throw MastodonAPIError.from(statusCode: response.statusCode, body: data)
         }
         return (try MastodonDecoder.make().decode(type, from: data), response)
+    }
+}
+
+/// タイムラインのどの範囲を読むか。
+/// https://docs.joinmastodon.org/api/guidelines/#pagination
+public struct TimelineQuery: Sendable, Equatable {
+    /// これより古い投稿を返す。
+    public var maxID: String?
+    /// これより新しい投稿のうち、最も新しい側から返す。
+    public var sinceID: String?
+    /// これより新しい投稿のうち、すぐ後に続く側から返す。
+    public var minID: String?
+    public var limit: Int
+
+    public init(maxID: String? = nil, sinceID: String? = nil, minID: String? = nil, limit: Int) {
+        self.maxID = maxID
+        self.sinceID = sinceID
+        self.minID = minID
+        self.limit = limit
+    }
+
+    var queryItems: [URLQueryItem] {
+        [("max_id", maxID), ("since_id", sinceID), ("min_id", minID), ("limit", String(limit))].compactMap { name, value in
+            value.map { URLQueryItem(name: name, value: $0) }
+        }
     }
 }
 

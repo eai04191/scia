@@ -148,6 +148,8 @@ final class StubWebSocketConnector: WebSocketConnector {
             }
         }
 
+        func ping() async throws {}
+
         func close() {}
     }
 }

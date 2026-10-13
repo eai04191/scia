@@ -29,8 +29,8 @@ final class HomeTimelineController {
         tuning: TuningStore = AppDependencies.tuning,
         onUnauthorized: @escaping (HomeTimelineController, String) -> Void
     ) {
-        store = TimelineStore { maxID in
-            try await client.homeTimeline(maxID: maxID, limit: Self.pageSize)
+        store = TimelineStore(pageSize: Self.pageSize) { query in
+            try await client.homeTimeline(query)
         }
         self.client = client
         self.streaming = streaming
@@ -134,7 +134,7 @@ final class HomeTimelineController {
             break
         case .pendingStarted:
             scheduleInsertion()
-        case .statusesChanged:
+        case .entriesChanged:
             viewController.setStatuses(store.statuses)
             viewController.setUnreadCount(store.unreadCount)
         }

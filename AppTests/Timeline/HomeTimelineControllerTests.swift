@@ -233,6 +233,8 @@ final class MessageQueueConnector: WebSocketConnector {
             try await owner.receive()
         }
 
+        func ping() async throws {}
+
         func close() {
             owner.close()
         }

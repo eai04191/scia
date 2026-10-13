@@ -5,17 +5,17 @@ import Testing
 
 @MainActor
 struct TimelineStoreTests {
-    /// 呼ばれたmax_idを記録し、登録した順にページを返す。
+    /// 呼ばれた範囲を記録し、登録した順にページを返す。
     private final class PageQueue: Sendable {
-        private let state: Mutex<(pages: [Result<TimelinePage, any Error>], maxIDs: [String?])>
+        private let state: Mutex<(pages: [Result<TimelinePage, any Error>], queries: [TimelineQuery])>
 
         init(_ pages: [Result<TimelinePage, any Error>]) {
             state = Mutex((pages, []))
         }
 
-        func next(maxID: String?) throws -> TimelinePage {
+        func next(_ query: TimelineQuery) throws -> TimelinePage {
             try state.withLock { state in
-                state.maxIDs.append(maxID)
+                state.queries.append(query)
                 guard !state.pages.isEmpty else {
                     Issue.record("想定より多く読み込まれました")
                     return TimelinePage(statuses: [], isRegenerating: false)
@@ -24,7 +24,8 @@ struct TimelineStoreTests {
             }
         }
 
-        var maxIDs: [String?] { state.withLock { $0.maxIDs } }
+        var queries: [TimelineQuery] { state.withLock { $0.queries } }
+        var maxIDs: [String?] { queries.map(\.maxID) }
     }
 
     private struct Failure: Error {}
@@ -47,8 +48,11 @@ struct TimelineStoreTests {
         .success(TimelinePage(statuses: try statuses(ids), isRegenerating: regenerating))
     }
 
+    /// テストで扱いやすいよう、1ページを3件にする。
+    private static let pageSize = 3
+
     private func makeStore(_ queue: PageQueue) -> TimelineStore {
-        TimelineStore { maxID in try queue.next(maxID: maxID) }
+        TimelineStore(pageSize: Self.pageSize) { query in try queue.next(query) }
     }
 
     @Test func loadsInitialThenOlderPagesUsingOldestID() async throws {
@@ -114,7 +118,7 @@ struct TimelineStoreTests {
 
     @Test func concurrentLoadIsSkipped() async throws {
         let gate = AsyncGate()
-        let store = TimelineStore { _ in
+        let store = TimelineStore(pageSize: Self.pageSize) { _ in
             await gate.wait()
             return TimelinePage(statuses: [], isRegenerating: false)
         }
@@ -207,7 +211,7 @@ struct TimelineStoreTests {
         _ = try await store.loadInitial()
         _ = store.receive(.update(try status(31, reblog: original)))
 
-        #expect(store.receive(.delete(statusID: "10")) == .statusesChanged)
+        #expect(store.receive(.delete(statusID: "10")) == .entriesChanged)
         #expect(store.statuses.map(\.id) == ["29"])
         #expect(store.pending.isEmpty)
         #expect(store.receive(.delete(statusID: "999")) == .none)
@@ -221,7 +225,7 @@ struct TimelineStoreTests {
         ))]))
         _ = try await store.loadInitial()
 
-        #expect(store.receive(.statusUpdate(try status(10, content: "編集後"))) == .statusesChanged)
+        #expect(store.receive(.statusUpdate(try status(10, content: "編集後"))) == .entriesChanged)
 
         #expect(store.statuses.map(\.displayed.content) == ["編集後", "編集後"])
         #expect(store.statuses.first?.id == "30")

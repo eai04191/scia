@@ -52,6 +52,11 @@ public struct StreamingConnection: Sendable {
         }
     }
 
+    /// 応答が返るまで待つ。接続が生きているかを確かめるのに使う。
+    public func ping() async throws {
+        try await connection.ping()
+    }
+
     public func close() {
         connection.close()
     }

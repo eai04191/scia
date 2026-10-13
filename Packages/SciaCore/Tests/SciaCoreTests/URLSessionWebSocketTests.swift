@@ -18,7 +18,29 @@ struct URLSessionWebSocketTests {
 
         #expect(try await connection.receive() == "first")
         #expect(try await connection.receive() == "second")
+        try await connection.ping()
         #expect(server.receivedAuthorization == "Bearer token")
+    }
+
+    @Test func pingIsAnsweredBeforeAnyReceive() async throws {
+        let server = try await LocalWebSocketServer(messages: [])
+        defer { server.stop() }
+
+        let connection = URLSessionWebSocketConnector().connect(URLRequest(url: server.url))
+        defer { connection.close() }
+
+        try await connection.ping()
+    }
+
+    @Test func rejectedHandshakeIsReportedAsAPIErrorFromPing() async throws {
+        let server = try await LocalWebSocketServer(rejectingWith: 401)
+        defer { server.stop() }
+
+        let connection = URLSessionWebSocketConnector().connect(URLRequest(url: server.url))
+        defer { connection.close() }
+
+        let error = await #expect(throws: MastodonAPIError.self) { try await connection.ping() }
+        #expect(error?.isUnauthorized == true)
     }
 
     @Test func rejectedHandshakeIsReportedAsAPIError() async throws {
@@ -45,6 +67,8 @@ private final class LocalWebSocketServer: Sendable {
         let queue = DispatchQueue(label: "LocalWebSocketServer")
         let authorization = ReceivedHeader()
         let options = NWProtocolWebSocket.Options()
+        // Mastodonのストリーミングサーバーと同じく、pingに応答する。
+        options.autoReplyPing = true
         options.setClientRequestHandler(queue) { _, headers in
             authorization.value.withLock { $0 = headers.first { $0.name.lowercased() == "authorization" }?.value }
             return NWProtocolWebSocket.Response(status: .accept, subprotocol: nil)
