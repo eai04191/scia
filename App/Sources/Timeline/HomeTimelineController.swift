@@ -410,10 +410,10 @@ extension HomeTimelineController {
         }
     }
 
-    /// 1ページに収まらない数の最新の投稿を忘れてからつなぎ直し、実データで補完とギャップを起こす。
+    /// 補完で続けて読む上限より多い数の最新の投稿を忘れてからつなぎ直し、実データで補完とギャップを起こす。
     /// 補完の基準が残るよう、先に古いページを読み足し、少なくとも1件は残す。読み足しは接続を止める前に行い、失敗しても接続は止めない。
     private func simulateMissedWhileDisconnected() {
-        let targetCount = Self.pageSize + 10
+        let targetCount = Self.pageSize * Int(tuning.value(of: TuningCatalog.fillPageLimit)) + 10
         run { controller in
             do {
                 while controller.store.statuses.count <= targetCount, !controller.store.reachedEnd {
