@@ -15,6 +15,9 @@ final class TimelineViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         title = "Home"
+        #if DEBUG
+        navigationItem.rightBarButtonItem = makeDebugMenuButton()
+        #endif
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(collectionView)
