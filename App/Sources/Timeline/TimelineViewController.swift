@@ -38,11 +38,11 @@ final class TimelineViewController: UIViewController {
     private var statuses: [Status.ID: Status] = [:]
     private(set) var contentState = ContentState.loaded
     private(set) var footerState = FooterState.idle
+    private let tuning: TuningStore
     private let emojiImages: EmojiImageStore
-    /// 本文の段落と段落のあいだの余白。
-    private let paragraphSpacing: CGFloat = 6
 
-    init(emojiImages: EmojiImageStore = AppDependencies.emojiImages) {
+    init(tuning: TuningStore = AppDependencies.tuning, emojiImages: EmojiImageStore = AppDependencies.emojiImages) {
+        self.tuning = tuning
         self.emojiImages = emojiImages
         super.init(nibName: nil, bundle: nil)
     }
@@ -64,6 +64,20 @@ final class TimelineViewController: UIViewController {
         view.addSubview(collectionView)
         AppDependencies.stateDumps.register("timeline", owner: self) { $0.stateDump() }
         emojiImages.addListener(owner: self) { [weak self] urls in self?.emojiImagesDidLoad(urls) }
+        observeTuning()
+    }
+
+    /// チューニングの値が変わったら、表示中の投稿を描き直す。
+    private func observeTuning() {
+        withObservationTracking {
+            _ = tuning.value(of: TuningCatalog.paragraphSpacing)
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                self.reconfigure(Set(self.dataSource.snapshot().itemIdentifiers))
+                self.observeTuning()
+            }
+        }
     }
 
     /// 絵文字の画像が届いたら、その絵文字を使う投稿だけを描き直す。
@@ -248,7 +262,7 @@ final class TimelineViewController: UIViewController {
         let bodyRenderer = RichTextRenderer(
             font: base.secondaryTextProperties.font,
             textColor: base.secondaryTextProperties.color,
-            paragraphSpacing: paragraphSpacing,
+            paragraphSpacing: tuning.value(of: TuningCatalog.paragraphSpacing),
             emojiImages: emojiImages
         )
         // 注意書きつきの投稿は、本文を開く操作がまだないため注意書きだけを出す。

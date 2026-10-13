@@ -46,5 +46,16 @@ public struct ToggleTuning: Sendable, Identifiable {
 
 /// アプリで使うチューニング項目の一覧。値を足すときは、ここに定義を追加してTuningStoreから読む。
 public enum TuningCatalog {
-    public static let items: [TuningItem] = []
+    /// 投稿本文の段落と段落のあいだの余白。
+    public static let paragraphSpacing = NumberTuning(
+        id: "timeline.paragraphSpacing",
+        title: "本文の段落間隔（pt）",
+        range: 0...24,
+        step: 1,
+        defaultValue: 6
+    )
+
+    public static let items: [TuningItem] = [
+        .number(paragraphSpacing),
+    ]
 }

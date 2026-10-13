@@ -6,10 +6,13 @@ import UIKit
 /// TimelineViewControllerを実際のウィンドウに載せ、セルの画面上の位置を測るためのハーネス。
 @MainActor
 final class TimelineHarness {
-    let viewController = TimelineViewController(emojiImages: .offline)
+    let viewController: TimelineViewController
+    /// アプリの設定に触れないよう、保存しないチューニングを使う。
+    let tuning = TuningStore(defaults: nil)
     private let window: UIWindow
 
     init(size: CGSize = CGSize(width: 393, height: 852)) throws {
+        viewController = TimelineViewController(tuning: tuning, emojiImages: .offline)
         let scene = try #require(
             UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
             "テストのホストアプリにウィンドウシーンがありません"

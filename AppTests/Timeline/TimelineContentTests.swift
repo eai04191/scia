@@ -7,7 +7,7 @@ import UIKit
 @Suite(.serialized)
 struct TimelineContentTests {
     private func makeViewController() -> TimelineViewController {
-        TimelineViewController(emojiImages: .offline)
+        TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline)
     }
 
     @Test func bodyIsRenderedFromHTML() throws {
