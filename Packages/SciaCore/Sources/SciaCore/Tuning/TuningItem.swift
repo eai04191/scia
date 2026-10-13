@@ -82,10 +82,20 @@ public enum TuningCatalog {
         defaultValue: 5
     )
 
+    /// ギャップが表示領域からこの距離（画面の高さの何倍か）まで近づいたら、タップを待たずに読み始める。
+    public static let gapAutoLoadDistance = NumberTuning(
+        id: "timeline.gapAutoLoadDistance",
+        title: "ギャップを自動で読む距離（画面数）",
+        range: 0...3,
+        step: 0.5,
+        defaultValue: 1
+    )
+
     public static let items: [TuningItem] = [
         .number(paragraphSpacing),
         .number(insertionInterval),
         .toggle(followsNewArrivalsAtTop),
         .number(fillPageLimit),
+        .number(gapAutoLoadDistance),
     ]
 }

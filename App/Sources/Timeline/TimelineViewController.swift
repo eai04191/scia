@@ -36,6 +36,8 @@ final class TimelineViewController: UIViewController {
     var onScrollSettle: (() -> Void)?
     /// ギャップがタップされたときに、どちらの端から読むかを添えて呼ぶ。
     var onGapSelect: ((String, TimelineStore.GapDirection) -> Void)?
+    /// 読み込み中でないギャップが表示領域に近づいたときに、どちらの端から読むかを添えて呼ぶ。スクロールするたびに呼ぶことがある。
+    var onGapApproach: ((String, TimelineStore.GapDirection) -> Void)?
     #if DEBUG
     /// デバッグメニューに出す、このタイムライン用の検証の操作。表示より前に設定する。
     var debugActions: [UIAction] = []
@@ -48,6 +50,19 @@ final class TimelineViewController: UIViewController {
     private lazy var dataSource = makeDataSource()
     private var entries: [ItemID: TimelineEntry] = [:]
     private var loadingGapIDs: Set<String> = []
+    /// 表示中のギャップのID。スクロールのたびに全要素を調べないよう、別に持つ。
+    private var gapIDs: [String] = []
+    /// 指で最後に動かした向き。ギャップをどちらの端から読むかに使う。
+    ///
+    /// スクロール位置の増減からは取らない。上へ戻ると、見積もりから実寸へ変わったセルの分をUICollectionViewが位置で補正し、
+    /// 位置が逆向きにも動くため。
+    private var lastScrollDirection: ScrollDirection?
+
+    private enum ScrollDirection {
+        /// 上へ戻っている。新しい投稿の方へ向かっている。
+        case towardNewer
+        case towardOlder
+    }
     private(set) var contentState = ContentState.loaded
     private(set) var footerState = FooterState.idle
     private(set) var unreadCount = 0
@@ -134,6 +149,9 @@ final class TimelineViewController: UIViewController {
         let previous = entries
         let followsTop = anchorID == nil && topID == nil && isAtTop && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
         entries = Dictionary(newEntries.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+        gapIDs = newEntries.compactMap { entry in
+            if case .gap(let gap) = entry { gap.id } else { nil }
+        }
         var snapshot = NSDiffableDataSourceSnapshot<Section, ItemID>()
         snapshot.appendSections([.main])
         snapshot.appendItems(newEntries.map(\.id))
@@ -147,8 +165,10 @@ final class TimelineViewController: UIViewController {
             isRestoringAnchor = false
             logger.info("setEntries count=\(newEntries.count, privacy: .public) top=\(Self.label(topID), privacy: .public)")
         } else if followsTop {
+            isRestoringAnchor = true
             dataSource.apply(snapshot, animatingDifferences: false)
             collectionView.contentOffset.y = -collectionView.adjustedContentInset.top
+            isRestoringAnchor = false
             logger.info("setEntries count=\(newEntries.count, privacy: .public) followsTop=true")
         } else {
             let anchor = applyPreservingAnchor(snapshot, keeping: anchorID)
@@ -156,6 +176,7 @@ final class TimelineViewController: UIViewController {
         }
         setNeedsUpdateContentUnavailableConfiguration()
         reportVisibleStatuses()
+        reportApproachingGaps()
     }
 
     /// 読み込み中のギャップを、読み込み中の表示にする。
@@ -239,6 +260,7 @@ final class TimelineViewController: UIViewController {
         adjustedContentInset.top: \(collectionView.adjustedContentInset.top)
         visibleItems: \(visibleIDs.joined(separator: ", "))
         anchor: \(anchor.map { "\(Self.label($0.id)) distanceFromVisibleTop=\($0.distanceFromVisibleTop)" } ?? "nil")
+        lastScrollDirection: \(lastScrollDirection.map { "\($0)" } ?? "nil")
         contentState: \(contentState)
         footerState: \(footerState)
         isAtTop: \(isAtTop)
@@ -290,6 +312,29 @@ final class TimelineViewController: UIViewController {
     func scrollToNewest() {
         isScrollingToTop = true
         collectionView.setContentOffset(CGPoint(x: 0, y: -collectionView.adjustedContentInset.top), animated: true)
+    }
+
+    /// 表示領域から一定の距離に入ったギャップを報告する。指で動かしている間と慣性で動いている間は、上へ戻っているなら
+    /// 下の投稿に続く古い側から、下へ読み進めているなら上の投稿に続く新しい側から読ませる。止まっているときは、画面上の位置で決める。
+    /// 止まった後の再接続などでできたギャップに、前の操作の向きを当てると、読んでいる投稿の反対側を基準にしてしまうため。
+    private func reportApproachingGaps() {
+        guard let onGapApproach, !isRestoringAnchor, !isScrollingToTop, !gapIDs.isEmpty else { return }
+        let visibleRect = collectionView.bounds.inset(by: collectionView.adjustedContentInset)
+        let distance = tuning.value(of: TuningCatalog.gapAutoLoadDistance) * visibleRect.height
+        let zone = visibleRect.insetBy(dx: 0, dy: -distance)
+        for gapID in gapIDs where !loadingGapIDs.contains(gapID) {
+            guard let indexPath = dataSource.indexPath(for: .gap(gapID)),
+                  let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame,
+                  frame.intersects(zone)
+            else { continue }
+            let isScrolling = collectionView.isTracking || collectionView.isDecelerating
+            let direction: TimelineStore.GapDirection = switch isScrolling ? lastScrollDirection : nil {
+            case .towardNewer: .fromOlder
+            case .towardOlder: .fromNewer
+            case nil: frame.midY < visibleRect.midY ? .fromOlder : .fromNewer
+            }
+            onGapApproach(gapID, direction)
+        }
     }
 
     /// 表示領域に半分以上入っている投稿を、表示中として報告する。ナビゲーションバーの下に隠れている部分は数えない。
@@ -393,7 +438,15 @@ final class TimelineViewController: UIViewController {
 
 extension TimelineViewController: UICollectionViewDelegate {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if scrollView.isTracking {
+            // 指が下へ動いていれば、内容は上の新しい投稿の方へ動く。
+            let velocity = scrollView.panGestureRecognizer.velocity(in: scrollView).y
+            if velocity != 0 {
+                lastScrollDirection = velocity > 0 ? .towardNewer : .towardOlder
+            }
+        }
         reportVisibleStatuses()
+        reportApproachingGaps()
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
@@ -419,6 +472,13 @@ extension TimelineViewController: UICollectionViewDelegate {
     /// 最上部へ動かしている途中で指が触れたら、それ以上は動かし直さない。
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
         isScrollingToTop = false
+    }
+
+    /// 指を離したときの勢いで向きを決め直す。慣性で動く間はこの向きのまま。
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        if velocity.y != 0 {
+            lastScrollDirection = velocity.y < 0 ? .towardNewer : .towardOlder
+        }
     }
 
     /// ステータスバーのタップで最上部へ動かしたとき。

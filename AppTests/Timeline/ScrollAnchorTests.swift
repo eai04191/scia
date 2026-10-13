@@ -124,6 +124,44 @@ struct ScrollAnchorTests {
         #expect(abs(after - before) <= tolerance, "ギャップの上の投稿が\(after - before)pt動きました")
     }
 
+    /// 指で動かしていないときは、画面上の位置で向きを決める。上の方で近づいたギャップは、下の投稿に続く古い側から読ませる。
+    /// 指で動かしたときの向きはパンの速度から取るため、ここでは確かめられず、シミュレーターで確かめる。
+    @Test func gapApproachingInUpperHalfLoadsFromOlder() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var approached: [(String, TimelineStore.GapDirection)] = []
+        harness.viewController.onGapApproach = { approached.append(($0, $1)) }
+        let (entries, gap, _, _) = entriesWithGap()
+        harness.viewController.setEntries(entries)
+        harness.scroll(toFraction: 1)
+        approached.removeAll()
+        #expect(approached.isEmpty)
+
+        try harness.scroll(to: .gap(gap.id), at: .top)
+
+        #expect(approached.last?.0 == gap.id)
+        #expect(approached.last?.1 == .fromOlder)
+    }
+
+    /// 下の方で近づいたギャップは、上の投稿に続く新しい側から読ませる。遠いうちは知らせない。
+    @Test func gapApproachingInLowerHalfLoadsFromNewer() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.tuning.setValue(0, for: TuningCatalog.gapAutoLoadDistance)
+        var approached: [(String, TimelineStore.GapDirection)] = []
+        harness.viewController.onGapApproach = { approached.append(($0, $1)) }
+        let newer = StatusFactory.make(count: 40, startingAt: 2_000)
+        let older = StatusFactory.make(count: 60, startingAt: 1_000)
+        let gap = TimelineGap(newerID: newer[newer.count - 1].id, olderID: older[0].id)
+        harness.viewController.setEntries(newer.map(TimelineEntry.status) + [.gap(gap)] + older.map(TimelineEntry.status))
+        #expect(approached.isEmpty, "まだ遠いギャップを知らせました")
+
+        try harness.scroll(to: .gap(gap.id), at: .bottom)
+
+        #expect(approached.last?.0 == gap.id)
+        #expect(approached.last?.1 == .fromNewer)
+    }
+
     /// 既読位置から読み始めるとき、その投稿が上端に来て、それより新しい投稿を見たとは報告しない。
     /// 下に1画面分の投稿がない位置は上端まで動かせないため対象にしない。既読位置より古いページも読むので、そうなるのはタイムラインの終端だけ。
     @Test(arguments: [0, 20, 45])

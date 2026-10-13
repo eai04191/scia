@@ -26,6 +26,8 @@ final class HomeTimelineController {
     private var hasLoadedInitial = false
     /// バックグラウンドでは接続しない。最初の読み込みの途中でバックグラウンドへ入っても、読み込み後につながないようにする。
     private var isInForeground = true
+    /// 近づいたときの自動の読み込みに失敗した、または進まなかったギャップ。読み直し続けないよう、タップされるまで自動では読まない。
+    private var autoLoadFailedGapIDs: Set<String> = []
     private var isSavingReadPosition = false
     /// バックグラウンドで既読位置の保存を終えるまで、アプリを止めないよう頼んでいる。
     private var readPositionBackgroundTask = UIBackgroundTaskIdentifier.invalid
@@ -49,7 +51,8 @@ final class HomeTimelineController {
         viewController.onRetry = { [weak self] in self?.retry() }
         viewController.onVisibleStatusesChange = { [weak self] ids in self?.markRead(ids) }
         viewController.onScrollSettle = { [weak self] in self?.scrollDidSettle() }
-        viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction) }
+        viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction, isAutomatic: false) }
+        viewController.onGapApproach = { [weak self] id, direction in self?.loadGap(id, from: direction, isAutomatic: true) }
         #if DEBUG
         viewController.debugActions = makeDebugActions()
         #endif
@@ -193,7 +196,8 @@ final class HomeTimelineController {
         run { controller in
             do {
                 let before = controller.store.entries
-                guard let added = try await controller.store.fillFromLatest(), !controller.isStopped else { return }
+                let maxPages = Int(controller.tuning.value(of: TuningCatalog.fillPageLimit))
+                guard let added = try await controller.store.fillFromLatest(maxPages: maxPages), !controller.isStopped else { return }
                 controller.logger.info("home fill done added=\(added.count, privacy: .public) gaps=\(controller.store.gaps.count, privacy: .public)")
                 // 待っている間に同じ投稿がストリーミングで挿入されていても、ギャップだけが増えていることがある。
                 guard controller.store.entries != before else { return }
@@ -206,20 +210,37 @@ final class HomeTimelineController {
     }
 
     /// ギャップを1ページ分読む。読んでいる側に続く要素を基準にして、その位置を保つ。
-    private func loadGap(_ id: String, from direction: TimelineStore.GapDirection) {
-        guard !isStopped, let index = store.entries.firstIndex(where: { $0.id == .gap(id) }) else { return }
+    /// - Parameter isAutomatic: 近づいたことによる読み込み。失敗したギャップは、タップされるまで自動では読まない。
+    private func loadGap(_ id: String, from direction: TimelineStore.GapDirection, isAutomatic: Bool) {
+        if isAutomatic {
+            guard !autoLoadFailedGapIDs.contains(id) else { return }
+        } else {
+            autoLoadFailedGapIDs.remove(id)
+        }
+        guard !isStopped, !store.loadingGapIDs.contains(id), let index = store.entries.firstIndex(where: { $0.id == .gap(id) }) else { return }
         let neighborIndex = direction == .fromOlder ? store.entries.index(after: index) : store.entries.index(before: index)
         let anchorID = store.entries.indices.contains(neighborIndex) ? store.entries[neighborIndex].id : nil
         viewController.setLoadingGaps(store.loadingGapIDs.union([id]))
+        let gapBefore = store.gaps.first { $0.id == id }
         run { controller in
-            controller.logger.info("home loadGap start id=\(id, privacy: .public) direction=\(String(describing: direction), privacy: .public)")
+            controller.logger.info("home loadGap start id=\(id, privacy: .public) direction=\(String(describing: direction), privacy: .public) automatic=\(isAutomatic, privacy: .public)")
             do {
-                guard let added = try await controller.store.loadGap(id, from: direction), !controller.isStopped else { return }
+                let added = try await controller.store.loadGap(id, from: direction)
+                guard !controller.isStopped else { return }
+                // 再生成中の空の結果などでギャップが縮まなければ、描き直しの後にすぐ同じギャップを読み直してしまうため、
+                // 失敗と同じくタップされるまで自動では読まない。
+                if isAutomatic, added?.isEmpty == true, controller.store.gaps.contains(where: { $0 == gapBefore }) {
+                    controller.autoLoadFailedGapIDs.insert(id)
+                }
                 controller.viewController.setLoadingGaps(controller.store.loadingGapIDs)
+                guard let added else { return }
                 controller.viewController.setEntries(controller.store.entries, keeping: anchorID)
                 controller.updateUnreadCount()
                 controller.logger.info("home loadGap done added=\(added.count, privacy: .public)")
             } catch {
+                if isAutomatic {
+                    controller.autoLoadFailedGapIDs.insert(id)
+                }
                 controller.viewController.setLoadingGaps(controller.store.loadingGapIDs)
                 controller.handle(error, during: "loadGap") { _ in }
             }
