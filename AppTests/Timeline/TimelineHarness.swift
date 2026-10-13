@@ -6,7 +6,7 @@ import UIKit
 /// TimelineViewControllerを実際のウィンドウに載せ、セルの画面上の位置を測るためのハーネス。
 @MainActor
 final class TimelineHarness {
-    let viewController = TimelineViewController()
+    let viewController = TimelineViewController(emojiImages: .offline)
     private let window: UIWindow
 
     init(size: CGSize = CGSize(width: 393, height: 852)) throws {
@@ -44,7 +44,7 @@ final class TimelineHarness {
 
     /// 表示中のセルに設定されている本文。セルが表示されていなければnil。
     func secondaryText(of id: Status.ID) -> String? {
-        (visibleCell(of: id)?.contentConfiguration as? UIListContentConfiguration)?.secondaryText
+        (visibleCell(of: id)?.contentConfiguration as? UIListContentConfiguration)?.secondaryAttributedText?.string
     }
 
     private func visibleCell(of id: Status.ID) -> UICollectionViewCell? {
@@ -82,5 +82,12 @@ enum StatusFactory {
                 url: nil
             )
         }
+    }
+}
+
+extension EmojiImageStore {
+    /// 画像を読みに行かず、すべて失敗として扱う。
+    static var offline: EmojiImageStore {
+        EmojiImageStore { _ in throw URLError(.notConnectedToInternet) }
     }
 }

@@ -38,6 +38,19 @@ final class TimelineViewController: UIViewController {
     private var statuses: [Status.ID: Status] = [:]
     private(set) var contentState = ContentState.loaded
     private(set) var footerState = FooterState.idle
+    private let emojiImages: EmojiImageStore
+    /// 本文の段落と段落のあいだの余白。
+    private let paragraphSpacing: CGFloat = 6
+
+    init(emojiImages: EmojiImageStore = AppDependencies.emojiImages) {
+        self.emojiImages = emojiImages
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -50,6 +63,29 @@ final class TimelineViewController: UIViewController {
         collectionView.delegate = self
         view.addSubview(collectionView)
         AppDependencies.stateDumps.register("timeline", owner: self) { $0.stateDump() }
+        emojiImages.addListener(owner: self) { [weak self] urls in self?.emojiImagesDidLoad(urls) }
+    }
+
+    /// 絵文字の画像が届いたら、その絵文字を使う投稿だけを描き直す。
+    private func emojiImagesDidLoad(_ urls: Set<URL>) {
+        let ids = dataSource.snapshot().itemIdentifiers.filter { id in
+            guard let status = statuses[id] else { return false }
+            return !Self.emojiURLs(of: status).isDisjoint(with: urls)
+        }
+        reconfigure(Set(ids))
+    }
+
+    private static func emojiURLs(of status: Status) -> Set<URL> {
+        let shown = status.displayed
+        return Set((shown.emojis + shown.account.emojis + status.account.emojis).map(\.staticUrl))
+    }
+
+    /// 内容が変わってセルの高さが変わっても、読んでいる位置が動かないように描き直す。
+    func reconfigure(_ ids: Set<Status.ID>) {
+        guard !ids.isEmpty else { return }
+        var snapshot = dataSource.snapshot()
+        snapshot.reconfigureItems(Array(ids))
+        applyPreservingAnchor(snapshot)
     }
 
     /// 表示中の投稿を、新しい順に並んだ`newStatuses`で置き換える。
@@ -80,11 +116,7 @@ final class TimelineViewController: UIViewController {
             snapshot.appendItems(ids)
         }
 
-        let anchor = currentAnchor()
-        dataSource.apply(snapshot, animatingDifferences: false)
-        if let anchor {
-            restore(anchor)
-        }
+        let anchor = applyPreservingAnchor(snapshot)
         logger.info("prependStatuses count=\(newStatuses.count, privacy: .public) anchor=\(anchor?.id ?? "nil", privacy: .public)")
     }
 
@@ -171,8 +203,8 @@ final class TimelineViewController: UIViewController {
 
     private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, Status.ID> {
         let registration = UICollectionView.CellRegistration<UICollectionViewListCell, Status.ID> { [weak self] cell, _, id in
-            guard let status = self?.statuses[id] else { return }
-            cell.contentConfiguration = Self.contentConfiguration(for: status, base: cell.defaultContentConfiguration())
+            guard let self, let status = self.statuses[id] else { return }
+            cell.contentConfiguration = self.contentConfiguration(for: status, base: cell.defaultContentConfiguration())
         }
         let footerRegistration = UICollectionView.SupplementaryRegistration<TimelineFooterView>(
             elementKind: UICollectionView.elementKindSectionFooter
@@ -196,19 +228,40 @@ final class TimelineViewController: UIViewController {
         footer.apply(footerState)
     }
 
-    /// 本文はまだHTMLのまま出す。リッチテキストへの変換はロードマップM1の次の項目で行う。
-    static func contentConfiguration(for status: Status, base: UIListContentConfiguration) -> UIListContentConfiguration {
+    func contentConfiguration(for status: Status, base: UIListContentConfiguration) -> UIListContentConfiguration {
         var content = base
         let shown = status.displayed
-        let author = shown.account.displayName.isEmpty ? shown.account.username : shown.account.displayName
+        let nameRenderer = RichTextRenderer(font: base.textProperties.font, textColor: base.textProperties.color, emojiImages: emojiImages)
+        let names = NSMutableAttributedString()
         if status.reblog != nil {
-            let booster = status.account.displayName.isEmpty ? status.account.username : status.account.displayName
-            content.text = "\(booster)がブースト\n\(author)"
-        } else {
-            content.text = author
+            var boosterRenderer = nameRenderer
+            boosterRenderer.textColor = .secondaryLabel
+            names.append(boosterRenderer.render(.plain(status.account.displayNameOrUsername, emojis: status.account.emojis)))
+            names.append(NSAttributedString(
+                string: "がブースト\n",
+                attributes: [.font: base.textProperties.font, .foregroundColor: UIColor.secondaryLabel]
+            ))
         }
+        names.append(nameRenderer.render(.plain(shown.account.displayNameOrUsername, emojis: shown.account.emojis)))
+        content.attributedText = names
+
+        let bodyRenderer = RichTextRenderer(
+            font: base.secondaryTextProperties.font,
+            textColor: base.secondaryTextProperties.color,
+            paragraphSpacing: paragraphSpacing,
+            emojiImages: emojiImages
+        )
         // 注意書きつきの投稿は、本文を開く操作がまだないため注意書きだけを出す。
-        content.secondaryText = shown.spoilerText.isEmpty ? shown.content : "注意書き: \(shown.spoilerText)"
+        if shown.spoilerText.isEmpty {
+            content.secondaryAttributedText = bodyRenderer.render(.status(shown))
+        } else {
+            let spoiler = NSMutableAttributedString(string: "注意書き: ", attributes: [
+                .font: base.secondaryTextProperties.font,
+                .foregroundColor: base.secondaryTextProperties.color,
+            ])
+            spoiler.append(bodyRenderer.render(.plain(shown.spoilerText, emojis: shown.emojis)))
+            content.secondaryAttributedText = spoiler
+        }
         return content
     }
 }
@@ -246,6 +299,17 @@ extension TimelineViewController {
             .min { $0.1.minY < $1.1.minY }
         guard let (id, frame) = topmost else { return nil }
         return ScrollAnchor(id: id, distanceFromVisibleTop: frame.minY - visibleTop)
+    }
+
+    /// スナップショットを当て、更新前に表示領域の上端にあった投稿を同じ位置に戻す。戻した基準を返す。
+    @discardableResult
+    private func applyPreservingAnchor(_ snapshot: NSDiffableDataSourceSnapshot<Section, Status.ID>) -> ScrollAnchor? {
+        let anchor = currentAnchor()
+        dataSource.apply(snapshot, animatingDifferences: false)
+        if let anchor {
+            restore(anchor)
+        }
+        return anchor
     }
 
     /// contentOffsetを動かすと、新たに表示されたセルが推定サイズから実サイズへ変わり、基準の位置がまたずれる。

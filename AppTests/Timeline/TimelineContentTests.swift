@@ -6,6 +6,25 @@ import UIKit
 @MainActor
 @Suite(.serialized)
 struct TimelineContentTests {
+    private func makeViewController() -> TimelineViewController {
+        TimelineViewController(emojiImages: .offline)
+    }
+
+    @Test func bodyIsRenderedFromHTML() throws {
+        let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let status = Status(
+            id: base.id,
+            createdAt: base.createdAt,
+            account: base.account,
+            content: #"<p>一行目<br />二行目</p><p><a href="https://example.social/tags/scia" class="mention hashtag" rel="tag">#<span>scia</span></a></p>"#,
+            spoilerText: "",
+            url: nil
+        )
+
+        let content = makeViewController().contentConfiguration(for: status, base: .cell())
+
+        #expect(content.secondaryAttributedText?.string == "一行目\u{2028}二行目\n#scia")
+    }
     @Test func setStatusesReflectsChangedContentOfSameID() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -47,10 +66,10 @@ struct TimelineContentTests {
             reblog: original
         )
 
-        let content = TimelineViewController.contentConfiguration(for: boost, base: .cell())
+        let content = makeViewController().contentConfiguration(for: boost, base: .cell())
 
-        #expect(content.text == "bobがブースト\n\(original.account.displayName)")
-        #expect(content.secondaryText == original.content)
+        #expect(content.attributedText?.string == "bobがブースト\n\(original.account.displayName)")
+        #expect(content.secondaryAttributedText?.string == original.content)
     }
 
     @Test func spoilerHidesContent() throws {
@@ -64,8 +83,8 @@ struct TimelineContentTests {
             url: nil
         )
 
-        let content = TimelineViewController.contentConfiguration(for: status, base: .cell())
+        let content = makeViewController().contentConfiguration(for: status, base: .cell())
 
-        #expect(content.secondaryText == "注意書き: ネタバレ")
+        #expect(content.secondaryAttributedText?.string == "注意書き: ネタバレ")
     }
 }
