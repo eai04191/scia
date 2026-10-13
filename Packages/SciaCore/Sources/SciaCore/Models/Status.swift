@@ -8,6 +8,10 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public let content: String
     public let spoilerText: String
     public let url: URL?
+    public let mentions: [Mention]
+    public let tags: [Tag]
+    /// 本文と注意書きで使われるカスタム絵文字。
+    public let emojis: [CustomEmoji]
     /// ブーストの場合、ブーストされた元の投稿。構造体は自分自身を直接持てないため、参照型の箱に入れる。
     private let reblogBox: StatusBox?
 
@@ -18,6 +22,9 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         content: String,
         spoilerText: String,
         url: URL?,
+        mentions: [Mention] = [],
+        tags: [Tag] = [],
+        emojis: [CustomEmoji] = [],
         reblog: Status? = nil
     ) {
         self.id = id
@@ -26,6 +33,9 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         self.content = content
         self.spoilerText = spoilerText
         self.url = url
+        self.mentions = mentions
+        self.tags = tags
+        self.emojis = emojis
         reblogBox = reblog.map(StatusBox.init)
     }
 
@@ -35,7 +45,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public var displayed: Status { reblog ?? self }
 
     private enum CodingKeys: String, CodingKey {
-        case id, createdAt, account, content, spoilerText, url
+        case id, createdAt, account, content, spoilerText, url, mentions, tags, emojis
         case reblogBox = "reblog"
     }
 }

@@ -27,7 +27,12 @@ struct MastodonClientTests {
         let boost = try #require(page.statuses.first)
         #expect(boost.account.username == "bob")
         #expect(boost.reblog?.id == "113000000000000001")
-        #expect(boost.displayed.content == "<p>ブーストされた投稿</p>")
+        let original = try #require(boost.reblog)
+        #expect(original.mentions.map(\.acct) == ["bob@remote.example"])
+        #expect(original.tags.map(\.name) == ["scia"])
+        #expect(original.emojis.map(\.shortcode) == ["blobcat"])
+        #expect(original.account.emojis.map(\.staticUrl.lastPathComponent) == ["blobcat.png"])
+        #expect(RichText.status(original).plainText == "@bob ブーストされた投稿 :blobcat: #scia")
         #expect(page.statuses[1].reblog == nil)
         #expect(page.statuses[1].displayed.id == "113000000000000002")
     }

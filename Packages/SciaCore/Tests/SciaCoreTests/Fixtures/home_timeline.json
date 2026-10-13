@@ -13,7 +13,8 @@
       "username": "bob",
       "acct": "bob@remote.example",
       "display_name": "Bob",
-      "avatar": "https://example.social/avatars/bob.png"
+      "avatar": "https://example.social/avatars/bob.png",
+      "emojis": []
     },
     "reblog": {
       "id": "113000000000000001",
@@ -23,16 +24,49 @@
       "spoiler_text": "",
       "visibility": "public",
       "url": "https://example.social/@alice/113000000000000001",
-      "content": "<p>ブーストされた投稿</p>",
+      "content": "<p><span class=\"h-card\" translate=\"no\"><a href=\"https://remote.example/@bob\" class=\"u-url mention\">@<span>bob</span></a></span> ブーストされた投稿 :blobcat: <a href=\"https://example.social/tags/scia\" class=\"mention hashtag\" rel=\"tag\">#<span>scia</span></a></p>",
       "account": {
         "id": "1",
         "username": "alice",
         "acct": "alice",
         "display_name": "Alice :blobcat:",
-        "avatar": "https://example.social/avatars/alice.png"
+        "avatar": "https://example.social/avatars/alice.png",
+        "emojis": [
+          {
+            "shortcode": "blobcat",
+            "url": "https://example.social/emoji/blobcat.gif",
+            "static_url": "https://example.social/emoji/blobcat.png",
+            "visible_in_picker": true
+          }
+        ]
       },
-      "reblog": null
-    }
+      "reblog": null,
+      "mentions": [
+        {
+          "id": "2",
+          "username": "bob",
+          "url": "https://remote.example/@bob",
+          "acct": "bob@remote.example"
+        }
+      ],
+      "tags": [
+        {
+          "name": "scia",
+          "url": "https://example.social/tags/scia"
+        }
+      ],
+      "emojis": [
+        {
+          "shortcode": "blobcat",
+          "url": "https://example.social/emoji/blobcat.gif",
+          "static_url": "https://example.social/emoji/blobcat.png",
+          "visible_in_picker": true
+        }
+      ]
+    },
+    "mentions": [],
+    "tags": [],
+    "emojis": []
   },
   {
     "id": "113000000000000002",
@@ -48,8 +82,12 @@
       "username": "carol",
       "acct": "carol",
       "display_name": "",
-      "avatar": "https://example.social/avatars/carol.png"
+      "avatar": "https://example.social/avatars/carol.png",
+      "emojis": []
     },
-    "reblog": null
+    "reblog": null,
+    "mentions": [],
+    "tags": [],
+    "emojis": []
   }
 ]

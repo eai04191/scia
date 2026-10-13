@@ -12,6 +12,10 @@
     "username": "alice",
     "acct": "alice",
     "display_name": "Alice :blobcat:",
-    "avatar": "https://example.social/avatars/alice.png"
-  }
+    "avatar": "https://example.social/avatars/alice.png",
+    "emojis": []
+  },
+  "mentions": [],
+  "tags": [],
+  "emojis": []
 }
