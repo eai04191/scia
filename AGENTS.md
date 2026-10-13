@@ -31,7 +31,8 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - スクロール位置: 新着の挿入、ギャップの読み込み、再接続の前後で、基準セルの画面上の位置が変わらないことをテストで確認する
 - 描画性能: スクロール時のhitchは`xcrun xctrace record --template 'Animation Hitches'`や`XCTOSSignpostMetric.scrollDecelerationMetric`で測る。シミュレーターの値は参考値で、最終確認は実機で行う
 - 見た目: 実データに近いfixtureを使い、スクリーンショットで確認する
-- 好みで決まる値（アニメーションの時間、余白、新着をまとめて挿入する間隔など）は、ハードコードで決め打ちせず、デバッグ用のチューニングパネルから調整できるようにしてユーザーに選んでもらう
+- 好みで決まる値（アニメーションの時間、余白、新着をまとめて挿入する間隔など）は、ハードコードで決め打ちせず、`TuningCatalog`に項目を足してデバッグ用のチューニングパネルから調整できるようにし、ユーザーに選んでもらう
+- ユーザーがシェイクで残した違和感レポートは、アプリのDocuments/DiscomfortReportsにJSONで保存される。シミュレーターでは`xcrun simctl get_app_container booted net.mizle.scia data`で場所を調べられる。状態を追いたい画面は`AppDependencies.stateDumps`に状態ダンプを登録し、調査に必要なイベントはinfo以上のレベルで`SciaLog`に出す（debugレベルはレポートに残らない）
 
 ## テスト
 

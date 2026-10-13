@@ -40,6 +40,9 @@ targets:
             UIWindowSceneSessionRoleApplication:
               - UISceneConfigurationName: Default Configuration
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+        # 違和感レポートをファイルアプリから取り出せるようにする
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
   SciaTests:
     type: bundle.unit-test
     platform: iOS
