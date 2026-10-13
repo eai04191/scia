@@ -14,15 +14,10 @@ extension UIViewController {
                 guard let window = self?.view.window else { return }
                 DiscomfortReportPresenter.present(in: window)
             },
-            // ログインの確認をやり直すためのもの。サーバー側のトークンは失効させず、端末の認証情報だけを消す。
+            // ログインの確認をやり直すためのもの。
             UIAction(title: "ログアウト", image: UIImage(systemName: "rectangle.portrait.and.arrow.right"), attributes: .destructive) { [weak self] _ in
                 guard let sceneDelegate = self?.view.window?.windowScene?.delegate as? SceneDelegate else { return }
-                do {
-                    try AppDependencies.credentials.delete()
-                    sceneDelegate.showLogin(errorMessage: nil)
-                } catch {
-                    sceneDelegate.showLogin(errorMessage: error.localizedDescription)
-                }
+                sceneDelegate.logOut(message: nil)
             },
         ])
         let item = UIBarButtonItem(image: UIImage(systemName: "ladybug"), menu: menu)

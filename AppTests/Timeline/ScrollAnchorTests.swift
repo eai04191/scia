@@ -25,4 +25,20 @@ struct ScrollAnchorTests {
         let after = try #require(harness.windowMinY(of: anchor.id), "挿入後に基準の投稿が画面外へ出ました")
         #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
     }
+
+    @Test(arguments: [0.0, 0.4, 1.0])
+    func appendKeepsAnchorPosition(scrollFraction: CGFloat) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+
+        harness.viewController.setStatuses(StatusFactory.make(count: 60, startingAt: 1_000))
+        harness.scroll(toFraction: scrollFraction)
+        let anchor = try #require(harness.viewController.currentAnchor())
+        let before = try #require(harness.windowMinY(of: anchor.id))
+
+        harness.viewController.appendStatuses(StatusFactory.make(count: 40, startingAt: 940))
+
+        let after = try #require(harness.windowMinY(of: anchor.id), "追加後に基準の投稿が画面外へ出ました")
+        #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
+    }
 }

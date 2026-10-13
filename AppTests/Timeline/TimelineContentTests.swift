@@ -27,4 +27,45 @@ struct TimelineContentTests {
         let firstID = try #require(edited.first?.id)
         #expect(harness.secondaryText(of: firstID) == "編集後: \(firstID)")
     }
+
+    @Test func reblogShowsOriginalAuthorAndContent() throws {
+        let original = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let booster = Account(
+            id: "2",
+            username: "bob",
+            acct: "bob",
+            displayName: "",
+            avatar: original.account.avatar
+        )
+        let boost = Status(
+            id: "200",
+            createdAt: original.createdAt,
+            account: booster,
+            content: "",
+            spoilerText: "",
+            url: nil,
+            reblog: original
+        )
+
+        let content = TimelineViewController.contentConfiguration(for: boost, base: .cell())
+
+        #expect(content.text == "bobがブースト\n\(original.account.displayName)")
+        #expect(content.secondaryText == original.content)
+    }
+
+    @Test func spoilerHidesContent() throws {
+        let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let status = Status(
+            id: base.id,
+            createdAt: base.createdAt,
+            account: base.account,
+            content: "<p>本文</p>",
+            spoilerText: "ネタバレ",
+            url: nil
+        )
+
+        let content = TimelineViewController.contentConfiguration(for: status, base: .cell())
+
+        #expect(content.secondaryText == "注意書き: ネタバレ")
+    }
 }

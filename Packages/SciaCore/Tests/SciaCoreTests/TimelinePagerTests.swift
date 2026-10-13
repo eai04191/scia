@@ -88,6 +88,7 @@ struct TimelinePagerTests {
 
         #expect(try await pager.loadInitial() == [])
         #expect(!pager.reachedEnd)
+        #expect(pager.isRegenerating)
     }
 
     @Test func loadOlderBeforeInitialDoesNothing() async throws {

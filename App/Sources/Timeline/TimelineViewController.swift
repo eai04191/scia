@@ -8,12 +8,36 @@ final class TimelineViewController: UIViewController {
 
     private let logger = SciaLog.logger(category: "timeline")
 
-    private(set) lazy var collectionView = UICollectionView(
-        frame: .zero,
-        collectionViewLayout: UICollectionViewCompositionalLayout.list(using: .init(appearance: .plain))
-    )
+    /// 一覧全体の状態。投稿がないときの表示に使う。
+    enum ContentState: Equatable {
+        case loading
+        case loaded
+        /// サーバーがホームを再生成中で、まだ投稿が返ってこない。
+        case regenerating
+        case failed(String)
+    }
+
+    /// 末尾の読み込みの状態。フッターに出す。
+    enum FooterState: Equatable {
+        case idle
+        case loading
+        case failed(String)
+        case reachedEnd
+    }
+
+    /// 末尾が近づいたときに呼ぶ。古い投稿の読み込みを始める。
+    var onApproachingEnd: (() -> Void)?
+    /// 失敗表示の再試行ボタンで呼ぶ。
+    var onRetry: (() -> Void)?
+
+    /// 末尾から何件手前で古い投稿の読み込みを始めるか。
+    private let prefetchThreshold = 10
+
+    private(set) lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: makeLayout())
     private lazy var dataSource = makeDataSource()
     private var statuses: [Status.ID: Status] = [:]
+    private(set) var contentState = ContentState.loaded
+    private(set) var footerState = FooterState.idle
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -23,6 +47,7 @@ final class TimelineViewController: UIViewController {
         #endif
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        collectionView.delegate = self
         view.addSubview(collectionView)
         AppDependencies.stateDumps.register("timeline", owner: self) { $0.stateDump() }
     }
@@ -38,6 +63,7 @@ final class TimelineViewController: UIViewController {
         let changedIDs = newStatuses.filter { status in previous[status.id].map { $0 != status } ?? false }.map(\.id)
         snapshot.reconfigureItems(Array(Set(changedIDs)))
         dataSource.apply(snapshot, animatingDifferences: false)
+        setNeedsUpdateContentUnavailableConfiguration()
         logger.info("setStatuses count=\(newStatuses.count, privacy: .public)")
     }
 
@@ -62,6 +88,61 @@ final class TimelineViewController: UIViewController {
         logger.info("prependStatuses count=\(newStatuses.count, privacy: .public) anchor=\(anchor?.id ?? "nil", privacy: .public)")
     }
 
+    /// 古い順の末尾に`olderStatuses`（新しい順）を足す。表示中の位置は変わらない。
+    func appendStatuses(_ olderStatuses: [Status]) {
+        for status in olderStatuses {
+            statuses[status.id] = status
+        }
+        var snapshot = dataSource.snapshot()
+        snapshot.appendItems(olderStatuses.map(\.id))
+        dataSource.apply(snapshot, animatingDifferences: false)
+        logger.info("appendStatuses count=\(olderStatuses.count, privacy: .public)")
+    }
+
+    func setContentState(_ state: ContentState) {
+        contentState = state
+        setNeedsUpdateContentUnavailableConfiguration()
+    }
+
+    func setFooterState(_ state: FooterState) {
+        footerState = state
+        if let footer = collectionView.visibleSupplementaryViews(ofKind: UICollectionView.elementKindSectionFooter).first as? TimelineFooterView {
+            configure(footer)
+        }
+    }
+
+    override func updateContentUnavailableConfiguration(using state: UIContentUnavailableConfigurationState) {
+        guard dataSource.snapshot().numberOfItems == 0 else {
+            contentUnavailableConfiguration = nil
+            return
+        }
+        switch contentState {
+        case .loading:
+            contentUnavailableConfiguration = UIContentUnavailableConfiguration.loading()
+        case .loaded:
+            contentUnavailableConfiguration = emptyConfiguration(text: "投稿がありません", secondaryText: nil, buttonTitle: "再読み込み")
+        case .regenerating:
+            contentUnavailableConfiguration = emptyConfiguration(
+                text: "ホームを準備しています",
+                secondaryText: "しばらく使っていなかったため、サーバーがホームを作り直しています。少し待ってから読み込み直してください。",
+                buttonTitle: "再読み込み"
+            )
+        case .failed(let message):
+            contentUnavailableConfiguration = emptyConfiguration(text: "読み込めませんでした", secondaryText: message, buttonTitle: "再試行")
+        }
+    }
+
+    /// 投稿がない状態から読み込み直せるよう、どの表示にも再試行ボタンを置く。
+    private func emptyConfiguration(text: String, secondaryText: String?, buttonTitle: String) -> UIContentUnavailableConfiguration {
+        var configuration = UIContentUnavailableConfiguration.empty()
+        configuration.text = text
+        configuration.secondaryText = secondaryText
+        configuration.button = .borderedTinted()
+        configuration.button.title = buttonTitle
+        configuration.buttonProperties.primaryAction = UIAction { [weak self] _ in self?.onRetry?() }
+        return configuration
+    }
+
     /// 違和感レポートに含める、スクロール位置と表示中の投稿の状態。
     func stateDump() -> String {
         let visibleIDs = collectionView.indexPathsForVisibleItems.sorted().compactMap { dataSource.itemIdentifier(for: $0) }
@@ -73,6 +154,8 @@ final class TimelineViewController: UIViewController {
         adjustedContentInset.top: \(collectionView.adjustedContentInset.top)
         visibleItems: \(visibleIDs.joined(separator: ", "))
         anchor: \(anchor.map { "\($0.id) distanceFromVisibleTop=\($0.distanceFromVisibleTop)" } ?? "nil")
+        contentState: \(contentState)
+        footerState: \(footerState)
         """
     }
 
@@ -80,21 +163,62 @@ final class TimelineViewController: UIViewController {
         dataSource.itemIdentifier(for: indexPath)
     }
 
+    private func makeLayout() -> UICollectionViewLayout {
+        var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
+        configuration.footerMode = .supplementary
+        return UICollectionViewCompositionalLayout.list(using: configuration)
+    }
+
     private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, Status.ID> {
         let registration = UICollectionView.CellRegistration<UICollectionViewListCell, Status.ID> { [weak self] cell, _, id in
             guard let status = self?.statuses[id] else { return }
-            var content = cell.defaultContentConfiguration()
-            content.text = status.account.displayName
-            content.secondaryText = status.content
-            cell.contentConfiguration = content
+            cell.contentConfiguration = Self.contentConfiguration(for: status, base: cell.defaultContentConfiguration())
+        }
+        let footerRegistration = UICollectionView.SupplementaryRegistration<TimelineFooterView>(
+            elementKind: UICollectionView.elementKindSectionFooter
+        ) { [weak self] footer, _, _ in
+            footer.onRetry = { self?.onRetry?() }
+            self?.configure(footer)
         }
         let dataSource = UICollectionViewDiffableDataSource<Section, Status.ID>(collectionView: collectionView) { collectionView, indexPath, id in
             collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: id)
+        }
+        dataSource.supplementaryViewProvider = { collectionView, _, indexPath in
+            collectionView.dequeueConfiguredReusableSupplementary(using: footerRegistration, for: indexPath)
         }
         var snapshot = NSDiffableDataSourceSnapshot<Section, Status.ID>()
         snapshot.appendSections([.main])
         dataSource.apply(snapshot, animatingDifferences: false)
         return dataSource
+    }
+
+    private func configure(_ footer: TimelineFooterView) {
+        footer.apply(footerState)
+    }
+
+    /// 本文はまだHTMLのまま出す。リッチテキストへの変換はロードマップM1の次の項目で行う。
+    static func contentConfiguration(for status: Status, base: UIListContentConfiguration) -> UIListContentConfiguration {
+        var content = base
+        let shown = status.displayed
+        let author = shown.account.displayName.isEmpty ? shown.account.username : shown.account.displayName
+        if status.reblog != nil {
+            let booster = status.account.displayName.isEmpty ? status.account.username : status.account.displayName
+            content.text = "\(booster)がブースト\n\(author)"
+        } else {
+            content.text = author
+        }
+        // 注意書きつきの投稿は、本文を開く操作がまだないため注意書きだけを出す。
+        content.secondaryText = shown.spoilerText.isEmpty ? shown.content : "注意書き: \(shown.spoilerText)"
+        return content
+    }
+}
+
+extension TimelineViewController: UICollectionViewDelegate {
+    func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        let count = dataSource.snapshot().numberOfItems
+        if indexPath.item >= count - prefetchThreshold {
+            onApproachingEnd?()
+        }
     }
 }
 

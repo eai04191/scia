@@ -5,6 +5,7 @@ import UIKit
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
+    private var homeTimeline: HomeTimelineController?
     private let logger = SciaLog.logger(category: "lifecycle")
 
     func scene(
@@ -38,7 +39,29 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func showTimeline(for credential: Credential) {
-        window?.rootViewController = UINavigationController(rootViewController: TimelineViewController())
+        homeTimeline?.stop()
+        let controller = HomeTimelineController(
+            client: MastodonClient(credential: credential, transport: URLSessionTransport())
+        ) { [weak self] controller, message in
+            // ログインし直した後に古い画面の401が届いても、新しい認証情報を消さない。
+            guard let self, controller === self.homeTimeline else { return }
+            self.logOut(message: message)
+        }
+        homeTimeline = controller
+        window?.rootViewController = UINavigationController(rootViewController: controller.viewController)
+        controller.start()
+    }
+
+    /// 端末の認証情報を消してログイン画面に戻る。サーバー側のトークンは失効させない。
+    func logOut(message: String?) {
+        homeTimeline?.stop()
+        homeTimeline = nil
+        do {
+            try AppDependencies.credentials.delete()
+            showLogin(errorMessage: message)
+        } catch {
+            showLogin(errorMessage: error.localizedDescription)
+        }
     }
 
     func showLogin(errorMessage: String?) {

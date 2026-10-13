@@ -8,6 +8,8 @@ public final class TimelinePager {
     /// これより古い投稿はない。
     public private(set) var reachedEnd = false
     public private(set) var isLoading = false
+    /// 直近の読み込みで、サーバーがホームを再生成中だった。結果が揃っていないため、時間をおいて読み直す。
+    public private(set) var isRegenerating = false
 
     private let fetch: Fetch
 
@@ -23,6 +25,7 @@ public final class TimelinePager {
 
         let page = try await fetch(nil)
         statuses = page.statuses
+        isRegenerating = page.isRegenerating
         reachedEnd = page.statuses.isEmpty && !page.isRegenerating
         return statuses
     }
@@ -35,6 +38,7 @@ public final class TimelinePager {
         defer { isLoading = false }
 
         let page = try await fetch(oldest.id)
+        isRegenerating = page.isRegenerating
         let known = Set(statuses.map(\.id))
         let added = page.statuses.filter { !known.contains($0.id) }
         statuses.append(contentsOf: added)
