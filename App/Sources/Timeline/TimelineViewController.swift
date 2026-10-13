@@ -29,6 +29,10 @@ final class TimelineViewController: UIViewController {
     var onApproachingEnd: (() -> Void)?
     /// 失敗表示の再試行ボタンで呼ぶ。
     var onRetry: (() -> Void)?
+    /// 画面に表示されている投稿が変わったときに、表示中の投稿のIDを渡して呼ぶ。
+    var onVisibleStatusesChange: (([Status.ID]) -> Void)?
+    /// 指によるスクロールが止まったときに呼ぶ。
+    var onScrollSettle: (() -> Void)?
 
     /// 末尾から何件手前で古い投稿の読み込みを始めるか。
     private let prefetchThreshold = 10
@@ -38,6 +42,12 @@ final class TimelineViewController: UIViewController {
     private var statuses: [Status.ID: Status] = [:]
     private(set) var contentState = ContentState.loaded
     private(set) var footerState = FooterState.idle
+    private(set) var unreadCount = 0
+    /// スクロール位置を補正している間は、途中の表示を既読として報告しない。
+    private var isRestoringAnchor = false
+    /// 新着ボタンで最上部へ動かしている。
+    private var isScrollingToTop = false
+    private lazy var newArrivalsButton = makeNewArrivalsButton()
     private let tuning: TuningStore
     private let emojiImages: EmojiImageStore
 
@@ -62,6 +72,11 @@ final class TimelineViewController: UIViewController {
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         collectionView.delegate = self
         view.addSubview(collectionView)
+        view.addSubview(newArrivalsButton)
+        NSLayoutConstraint.activate([
+            newArrivalsButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            newArrivalsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+        ])
         AppDependencies.stateDumps.register("timeline", owner: self) { $0.stateDump() }
         emojiImages.addListener(owner: self) { [weak self] urls in self?.emojiImagesDidLoad(urls) }
         observeTuning()
@@ -103,8 +118,10 @@ final class TimelineViewController: UIViewController {
     }
 
     /// 表示中の投稿を、新しい順に並んだ`newStatuses`で置き換える。
+    /// 読んでいる位置の投稿が画面上で動かないようにする。ただし最上部にいて追従が有効なら、最上部に留まって新着を見せる。
     func setStatuses(_ newStatuses: [Status]) {
         let previous = statuses
+        let followsTop = isAtTop && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
         statuses = Dictionary(newStatuses.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
         var snapshot = NSDiffableDataSourceSnapshot<Section, Status.ID>()
         snapshot.appendSections([.main])
@@ -112,37 +129,33 @@ final class TimelineViewController: UIViewController {
         // 差分はIDで取られるため、同じIDのまま内容が変わった投稿は明示的にセルを再構成する。
         let changedIDs = newStatuses.filter { status in previous[status.id].map { $0 != status } ?? false }.map(\.id)
         snapshot.reconfigureItems(Array(Set(changedIDs)))
-        dataSource.apply(snapshot, animatingDifferences: false)
-        setNeedsUpdateContentUnavailableConfiguration()
-        logger.info("setStatuses count=\(newStatuses.count, privacy: .public)")
-    }
-
-    /// 新しい順に並んだ`newStatuses`を先頭に挿入する。読んでいる位置の投稿が画面上で動かないように、挿入後にcontentOffsetを補正する。
-    func prependStatuses(_ newStatuses: [Status]) {
-        for status in newStatuses {
-            statuses[status.id] = status
-        }
-        var snapshot = dataSource.snapshot()
-        let ids = newStatuses.map(\.id)
-        if let first = snapshot.itemIdentifiers.first {
-            snapshot.insertItems(ids, beforeItem: first)
+        if followsTop {
+            dataSource.apply(snapshot, animatingDifferences: false)
+            collectionView.contentOffset.y = -collectionView.adjustedContentInset.top
+            logger.info("setStatuses count=\(newStatuses.count, privacy: .public) followsTop=true")
         } else {
-            snapshot.appendItems(ids)
+            let anchor = applyPreservingAnchor(snapshot)
+            logger.info("setStatuses count=\(newStatuses.count, privacy: .public) anchor=\(anchor?.id ?? "nil", privacy: .public)")
         }
-
-        let anchor = applyPreservingAnchor(snapshot)
-        logger.info("prependStatuses count=\(newStatuses.count, privacy: .public) anchor=\(anchor?.id ?? "nil", privacy: .public)")
+        setNeedsUpdateContentUnavailableConfiguration()
+        reportVisibleStatuses()
     }
 
-    /// 古い順の末尾に`olderStatuses`（新しい順）を足す。表示中の位置は変わらない。
-    func appendStatuses(_ olderStatuses: [Status]) {
-        for status in olderStatuses {
-            statuses[status.id] = status
-        }
-        var snapshot = dataSource.snapshot()
-        snapshot.appendItems(olderStatuses.map(\.id))
-        dataSource.apply(snapshot, animatingDifferences: false)
-        logger.info("appendStatuses count=\(olderStatuses.count, privacy: .public)")
+    /// 最上部にいる。新着を挿入したときに追従するかの判定に使う。
+    var isAtTop: Bool {
+        collectionView.contentOffset.y <= -collectionView.adjustedContentInset.top + 0.5
+    }
+
+    /// 指でスクロールしている、または指を離した後の慣性で動いている。
+    var isUserScrolling: Bool {
+        collectionView.isTracking || collectionView.isDragging || collectionView.isDecelerating
+    }
+
+    /// 既読より新しい投稿の数。0なら新着ボタンを隠す。
+    func setUnreadCount(_ count: Int) {
+        unreadCount = count
+        newArrivalsButton.isHidden = count == 0
+        newArrivalsButton.configuration?.title = "\(count)件の新着"
     }
 
     func setContentState(_ state: ContentState) {
@@ -202,11 +215,52 @@ final class TimelineViewController: UIViewController {
         anchor: \(anchor.map { "\($0.id) distanceFromVisibleTop=\($0.distanceFromVisibleTop)" } ?? "nil")
         contentState: \(contentState)
         footerState: \(footerState)
+        isAtTop: \(isAtTop)
+        unreadCount: \(unreadCount)
         """
+    }
+
+    /// 表示している投稿のID。上から順。
+    var displayedStatusIDs: [Status.ID] {
+        dataSource.snapshot().itemIdentifiers
     }
 
     func itemIdentifier(at indexPath: IndexPath) -> Status.ID? {
         dataSource.itemIdentifier(for: indexPath)
+    }
+
+    private func makeNewArrivalsButton() -> UIButton {
+        var configuration = UIButton.Configuration.borderedProminent()
+        configuration.cornerStyle = .capsule
+        configuration.image = UIImage(systemName: "arrow.up")
+        configuration.imagePadding = 6
+        configuration.buttonSize = .small
+        let button = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in
+            self?.scrollToNewest()
+        })
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.isHidden = true
+        return button
+    }
+
+    /// 最上部へ動かす。上のセルは表示されたときに見積もりから実寸へ変わり、そのぶん位置が補正されて最上部に届かないことがあるため、
+    /// 届くまで動かし直す。
+    func scrollToNewest() {
+        isScrollingToTop = true
+        collectionView.setContentOffset(CGPoint(x: 0, y: -collectionView.adjustedContentInset.top), animated: true)
+    }
+
+    /// 表示領域に半分以上入っている投稿を、表示中として報告する。ナビゲーションバーの下に隠れている部分は数えない。
+    private func reportVisibleStatuses() {
+        guard !isRestoringAnchor, let onVisibleStatusesChange else { return }
+        let visibleRect = collectionView.bounds.inset(by: collectionView.adjustedContentInset)
+        let ids = collectionView.indexPathsForVisibleItems.compactMap { indexPath -> Status.ID? in
+            guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return nil }
+            let visibleHeight = frame.intersection(visibleRect).height
+            guard visibleHeight >= min(frame.height, visibleRect.height) / 2 else { return nil }
+            return dataSource.itemIdentifier(for: indexPath)
+        }
+        onVisibleStatusesChange(ids)
     }
 
     private func makeLayout() -> UICollectionViewLayout {
@@ -281,6 +335,35 @@ final class TimelineViewController: UIViewController {
 }
 
 extension TimelineViewController: UICollectionViewDelegate {
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        reportVisibleStatuses()
+    }
+
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate {
+            onScrollSettle?()
+        }
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        onScrollSettle?()
+    }
+
+    /// 新着ボタンで最上部へ動かしたとき。
+    func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
+        if isScrollingToTop, !isAtTop {
+            scrollToNewest()
+            return
+        }
+        isScrollingToTop = false
+        onScrollSettle?()
+    }
+
+    /// 最上部へ動かしている途中で指が触れたら、それ以上は動かし直さない。
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        isScrollingToTop = false
+    }
+
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
         let count = dataSource.snapshot().numberOfItems
         if indexPath.item >= count - prefetchThreshold {
@@ -318,6 +401,8 @@ extension TimelineViewController {
     /// スナップショットを当て、更新前に表示領域の上端にあった投稿を同じ位置に戻す。戻した基準を返す。
     @discardableResult
     private func applyPreservingAnchor(_ snapshot: NSDiffableDataSourceSnapshot<Section, Status.ID>) -> ScrollAnchor? {
+        isRestoringAnchor = true
+        defer { isRestoringAnchor = false }
         let anchor = currentAnchor()
         dataSource.apply(snapshot, animatingDifferences: false)
         if let anchor {

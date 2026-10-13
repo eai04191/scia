@@ -14,13 +14,15 @@ struct ScrollAnchorTests {
     func prependKeepsAnchorPosition(insertCount: Int, scrollFraction: CGFloat) throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
+        harness.tuning.setValue(false, for: TuningCatalog.followsNewArrivalsAtTop)
 
-        harness.viewController.setStatuses(StatusFactory.make(count: 60, startingAt: 1_000))
+        let existing = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.viewController.setStatuses(existing)
         harness.scroll(toFraction: scrollFraction)
         let anchor = try #require(harness.viewController.currentAnchor())
         let before = try #require(harness.windowMinY(of: anchor.id))
 
-        harness.viewController.prependStatuses(StatusFactory.make(count: insertCount, startingAt: 1_000 + insertCount))
+        harness.viewController.setStatuses(StatusFactory.make(count: insertCount, startingAt: 1_000 + insertCount) + existing)
 
         let after = try #require(harness.windowMinY(of: anchor.id), "挿入後に基準の投稿が画面外へ出ました")
         #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
@@ -31,15 +33,65 @@ struct ScrollAnchorTests {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
 
-        harness.viewController.setStatuses(StatusFactory.make(count: 60, startingAt: 1_000))
+        let existing = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.viewController.setStatuses(existing)
         harness.scroll(toFraction: scrollFraction)
         let anchor = try #require(harness.viewController.currentAnchor())
         let before = try #require(harness.windowMinY(of: anchor.id))
 
-        harness.viewController.appendStatuses(StatusFactory.make(count: 40, startingAt: 940))
+        harness.viewController.setStatuses(existing + StatusFactory.make(count: 40, startingAt: 940))
 
         let after = try #require(harness.windowMinY(of: anchor.id), "追加後に基準の投稿が画面外へ出ました")
         #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
+    }
+
+    @Test(arguments: [1, 20])
+    func prependAtTopFollowsNewArrivals(insertCount: Int) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+
+        let existing = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.viewController.setStatuses(existing)
+        harness.scroll(toFraction: 0)
+        let inserted = StatusFactory.make(count: insertCount, startingAt: 1_000 + insertCount)
+
+        harness.viewController.setStatuses(inserted + existing)
+
+        #expect(harness.viewController.isAtTop)
+        let newest = try #require(inserted.first)
+        #expect(harness.viewController.currentAnchor()?.id == newest.id)
+    }
+
+    @Test func visibleStatusesAreReportedAfterInsertion() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.tuning.setValue(false, for: TuningCatalog.followsNewArrivalsAtTop)
+        var reported: [Status.ID] = []
+        harness.viewController.onVisibleStatusesChange = { reported = $0 }
+
+        let existing = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.viewController.setStatuses(existing)
+        harness.scroll(toFraction: 0)
+        let visibleBefore = reported
+        harness.viewController.setStatuses(StatusFactory.make(count: 5, startingAt: 1_005) + existing)
+
+        #expect(!visibleBefore.isEmpty)
+        #expect(Set(reported) == Set(visibleBefore), "位置を保った挿入で、見えている投稿が変わりました")
+    }
+
+    /// 新着ボタンで最上部へ戻ると、上のセルの高さが見積もりから実寸へ変わっても、最上部まで届く。
+    @Test func scrollingToNewestReachesTop() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.viewController.setStatuses(StatusFactory.make(count: 200, startingAt: 1_000))
+        harness.scroll(toFraction: 1)
+
+        harness.viewController.scrollToNewest()
+        for _ in 0..<200 where !harness.viewController.isAtTop {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+
+        #expect(harness.viewController.isAtTop, "最上部に届きませんでした: contentOffset.y=\(harness.collectionView.contentOffset.y)")
     }
 
     @Test func changingParagraphSpacingKeepsAnchorPosition() async throws {

@@ -55,7 +55,26 @@ public enum TuningCatalog {
         defaultValue: 6
     )
 
+    /// ストリーミングで届いた新着を、まとめてタイムラインに挿入する間隔。最初の新着が届いてからこの時間待つ。
+    public static let insertionInterval = NumberTuning(
+        id: "streaming.insertionInterval",
+        title: "新着をまとめて挿入する間隔（秒）",
+        range: 0...10,
+        step: 0.5,
+        defaultValue: 1
+    )
+
+    /// 最上部にいるとき、新着を挿入しても最上部に留まり、新着が流れて見えるようにする。
+    /// オフなら最上部でも読んでいる位置を保ち、新着件数を出す。
+    public static let followsNewArrivalsAtTop = ToggleTuning(
+        id: "streaming.followsNewArrivalsAtTop",
+        title: "最上部では新着に追従する",
+        defaultValue: true
+    )
+
     public static let items: [TuningItem] = [
         .number(paragraphSpacing),
+        .number(insertionInterval),
+        .toggle(followsNewArrivalsAtTop),
     ]
 }

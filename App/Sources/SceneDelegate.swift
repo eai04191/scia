@@ -41,7 +41,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func showTimeline(for credential: Credential) {
         homeTimeline?.stop()
         let controller = HomeTimelineController(
-            client: MastodonClient(credential: credential, transport: URLSessionTransport())
+            client: MastodonClient(credential: credential, transport: URLSessionTransport()),
+            streaming: StreamingClient(credential: credential, connector: URLSessionWebSocketConnector())
         ) { [weak self] controller, message in
             // ログインし直した後に古い画面の401が届いても、新しい認証情報を消さない。
             guard let self, controller === self.homeTimeline else { return }
