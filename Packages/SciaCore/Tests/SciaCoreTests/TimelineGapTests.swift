@@ -42,6 +42,45 @@ struct TimelineGapTests {
         #expect(store.gaps.isEmpty)
     }
 
+    @Test func fillReadsUpToPageLimitUntilConnected() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        server.post(11...17)
+
+        _ = try await store.fillFromLatest(maxPages: 3)
+
+        #expect(store.gaps.isEmpty)
+        #expect(ids(store) == Array((8...17).reversed()))
+    }
+
+    @Test func fillLeavesGapBeyondPageLimit() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        server.post(11...30)
+
+        _ = try await store.fillFromLatest(maxPages: 2)
+
+        #expect(store.entries.map(\.debugLabel) == ["30", "29", "28", "27", "26", "25", "gap(25...10)", "10", "9", "8"])
+    }
+
+    @Test func failureOnLaterFillPageKeepsGap() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID != nil, query.sinceID != nil {
+                throw URLError(.networkConnectionLost)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(11...20)
+
+        #expect(try await store.fillFromLatest(maxPages: 3)?.map(\.id) == ["20", "19", "18"])
+
+        #expect(store.entries.map(\.debugLabel) == ["20", "19", "18", "gap(18...10)", "10", "9", "8"])
+    }
+
     @Test(arguments: [TimelineStore.GapDirection.fromNewer, .fromOlder])
     func loadingGapRepeatedlyClosesItWithoutDuplicatesOrOmissions(direction: TimelineStore.GapDirection) async throws {
         let server = FakeHomeServer(ids: 1...10)

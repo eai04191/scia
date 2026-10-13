@@ -1,3 +1,6 @@
+import Foundation
+import os
+
 /// タイムラインの投稿を新しい順に持つ。RESTで読んだページと、ストリーミングで届いたイベントを合わせる。
 ///
 /// 投稿はIDの順に並べる。RESTのページングがIDを境に読むため、表示の順もIDに揃えておくと、境目で読み飛ばしや重複が起きない。
@@ -30,6 +33,7 @@ public final class TimelineStore {
     private var deletedIDs: Set<String> = []
     private let pageSize: Int
     private let fetch: Fetch
+    private let logger = SciaLog.logger(category: "timeline")
 
     public init(pageSize: Int, fetch: @escaping Fetch) {
         self.pageSize = pageSize
@@ -104,7 +108,10 @@ public final class TimelineStore {
     ///
     /// 補完の最中に呼ばれたら、そのときの基準を覚えてnilを返し、今の補完が終わった後に続けて読む。
     /// 同じ基準で並行して読むと、同じギャップが2つできるため。
-    public func fillFromLatest() async throws -> [Status]? {
+    ///
+    /// 1ページに収まらなければ、手元の投稿とつながるまで`maxPages`ページまで続けて読み、ギャップを残さないようにする。
+    /// 2ページ目以降の読み込みに失敗したら、そこで止めて残りをギャップとして残す。1ページ目の結果はもう反映しているため。
+    public func fillFromLatest(maxPages: Int = 1) async throws -> [Status]? {
         guard !isFilling else {
             if let newest = statuses.first?.id {
                 refillSinceID = refillSinceID.map { Self.older($0, newest) } ?? newest
@@ -133,7 +140,9 @@ public final class TimelineStore {
             }
             added += merge(page.statuses)
             if page.statuses.count >= pageSize, let oldestFetched = Self.oldest(of: page.statuses) {
-                rebuild(statuses: statuses, gaps: gaps + [TimelineGap(newerID: oldestFetched.id, olderID: sinceID)])
+                let gap = TimelineGap(newerID: oldestFetched.id, olderID: sinceID)
+                rebuild(statuses: statuses, gaps: gaps + [gap])
+                added += await fillGap(gap.id, pages: maxPages - 1)
             }
             next = refillSinceID
             refillSinceID = nil
@@ -181,6 +190,22 @@ public final class TimelineStore {
             }
         }
         rebuild(statuses: statuses, gaps: remaining)
+        return added
+    }
+
+    /// ギャップを新しい側から最大`pages`ページ読み、加わった投稿を返す。失敗したらそこで止め、ギャップを残す。
+    private func fillGap(_ id: String, pages: Int) async -> [Status] {
+        var added: [Status] = []
+        for _ in 0..<max(pages, 0) {
+            guard gaps.contains(where: { $0.id == id }) else { break }
+            do {
+                guard let page = try await loadGap(id, from: .fromNewer) else { break }
+                added += page
+            } catch {
+                logger.error("fill gap failed: \(error.localizedDescription, privacy: .public)")
+                break
+            }
+        }
         return added
     }
 

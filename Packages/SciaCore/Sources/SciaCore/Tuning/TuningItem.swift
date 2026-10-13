@@ -72,9 +72,20 @@ public enum TuningCatalog {
         defaultValue: true
     )
 
+    /// つなぎ直したとき、切れていた間の投稿を手元とつながるまで続けて読むページ数の上限。1ページは40件。
+    /// 超えた分はギャップとして残り、近づいたときに読む。
+    public static let fillPageLimit = NumberTuning(
+        id: "streaming.fillPageLimit",
+        title: "再接続で続けて読むページ数",
+        range: 1...10,
+        step: 1,
+        defaultValue: 5
+    )
+
     public static let items: [TuningItem] = [
         .number(paragraphSpacing),
         .number(insertionInterval),
         .toggle(followsNewArrivalsAtTop),
+        .number(fillPageLimit),
     ]
 }
