@@ -5,8 +5,7 @@ import UIKit
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
-    private var homeTimeline: HomeTimelineController?
-    private var notifications: NotificationsController?
+    private var session: SessionController?
     private let logger = SciaLog.logger(category: "lifecycle")
 
     func scene(
@@ -37,56 +36,30 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneWillEnterForeground(_ scene: UIScene) {
         logger.info("scene willEnterForeground")
-        homeTimeline?.enterForeground()
-        notifications?.enterForeground()
+        session?.enterForeground()
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
         logger.info("scene didEnterBackground")
-        homeTimeline?.enterBackground()
-        notifications?.enterBackground()
+        session?.enterBackground()
     }
 
     func showTimeline(for credential: Credential) {
-        stopTimelines()
-        let client = MastodonClient(credential: credential, transport: URLSessionTransport())
-        let streaming = StreamingClient(credential: credential, connector: URLSessionWebSocketConnector())
-        let home = HomeTimelineController(client: client, streaming: streaming) { [weak self] controller, message in
+        session?.stop()
+        let session = SessionController(credential: credential) { [weak self] session, message in
             // ログインし直した後に古い画面の401が届いても、新しい認証情報を消さない。
-            guard let self, controller === self.homeTimeline else { return }
+            guard let self, session === self.session else { return }
             self.logOut(message: message)
         }
-        let notifications = NotificationsController(client: client, streaming: streaming) { [weak self] controller, message in
-            guard let self, controller === self.notifications else { return }
-            self.logOut(message: message)
-        }
-        homeTimeline = home
-        self.notifications = notifications
-
-        let homeNavigation = UINavigationController(rootViewController: home.viewController)
-        let notificationsNavigation = UINavigationController(rootViewController: notifications.viewController)
-        let notificationsTab = UITab(title: "通知", image: UIImage(systemName: "bell"), identifier: "notifications") { _ in notificationsNavigation }
-        notifications.onUnreadCountChange = { count, isLowerBound in
-            notificationsTab.badgeValue = count == 0 ? nil : isLowerBound ? "\(count)+" : "\(count)"
-        }
-        window?.rootViewController = UITabBarController(tabs: [
-            UITab(title: "ホーム", image: UIImage(systemName: "house"), identifier: "home") { _ in homeNavigation },
-            notificationsTab,
-        ])
-        home.start()
-        notifications.start()
-    }
-
-    private func stopTimelines() {
-        homeTimeline?.stop()
-        homeTimeline = nil
-        notifications?.stop()
-        notifications = nil
+        self.session = session
+        window?.rootViewController = session.rootViewController
+        session.start()
     }
 
     /// 端末の認証情報を消してログイン画面に戻る。サーバー側のトークンは失効させない。
     func logOut(message: String?) {
-        stopTimelines()
+        session?.stop()
+        session = nil
         do {
             try AppDependencies.credentials.delete()
             showLogin(errorMessage: message)
