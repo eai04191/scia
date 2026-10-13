@@ -21,11 +21,13 @@ targets:
     platform: iOS
     sources:
       - App/Sources
+      - App/Resources
     dependencies:
       - package: SciaCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.mizle.scia
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
