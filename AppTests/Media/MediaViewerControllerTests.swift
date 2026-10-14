@@ -121,7 +121,7 @@ struct MediaViewerControllerTests {
             meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900)),
             blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
         )
-        tile.apply(attachment, hiddenCount: 0, isCovered: false)
+        tile.apply(attachment, hiddenCount: 0, isCovered: false, policy: .offline)
         MediaViewerController.present(
             attachments: [attachment],
             startIndex: 0,
@@ -179,7 +179,7 @@ struct MediaViewerControllerTests {
             meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900)),
             blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
         )
-        tile.apply(attachment, hiddenCount: 0, isCovered: false)
+        tile.apply(attachment, hiddenCount: 0, isCovered: false, policy: .offline)
         MediaViewerController.present(
             attachments: [attachment],
             startIndex: 0,
@@ -272,7 +272,7 @@ struct MediaViewerControllerTests {
             meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 900, height: 1_600)),
             blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
         )
-        tile.apply(attachment, hiddenCount: 0, isCovered: false)
+        tile.apply(attachment, hiddenCount: 0, isCovered: false, policy: .offline)
         MediaViewerController.present(
             attachments: [attachment],
             startIndex: 0,

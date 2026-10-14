@@ -148,7 +148,9 @@ struct TimelineMediaTests {
             try await Task.sleep(for: .milliseconds(20))
         }
 
-        #expect(log.fetched == [try #require(attachment.previewUrl)])
+        // プレビュー画像と元の画像のどちらを読むかは、枠の大きさや回線で変わる。選び方はMediaThumbnailSelectionTestsで確かめる。
+        #expect(log.fetched.count == 1)
+        #expect(log.fetched.allSatisfy { [attachment.previewUrl, attachment.url].contains($0) })
     }
 
     /// blurhashの下地は、添付ファイルの縦横比で、長い辺を32ピクセルにする。ビューアで画像の枠を決めるのに使うため。

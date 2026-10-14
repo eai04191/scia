@@ -10,7 +10,7 @@ struct MediaTileViewTests {
     @Test func decorationCopyIncludesPlaySymbol() {
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: 0, y: 0, width: 160, height: 90)
-        tile.apply(MediaAttachment(id: "1", type: .video, url: nil, previewUrl: nil), hiddenCount: 0, isCovered: false)
+        tile.apply(MediaAttachment(id: "1", type: .video, url: nil, previewUrl: nil), hiddenCount: 0, isCovered: false, policy: .offline)
         tile.layoutIfNeeded()
 
         let copy = tile.makeDecorationCopy()
@@ -23,7 +23,7 @@ struct MediaTileViewTests {
     @Test func decorationCopyOfImageHasNoSymbol() {
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: 0, y: 0, width: 160, height: 90)
-        tile.apply(MediaAttachment(id: "1", type: .image, url: nil, previewUrl: nil), hiddenCount: 0, isCovered: false)
+        tile.apply(MediaAttachment(id: "1", type: .image, url: nil, previewUrl: nil), hiddenCount: 0, isCovered: false, policy: .offline)
         tile.layoutIfNeeded()
 
         let copy = tile.makeDecorationCopy()
@@ -35,7 +35,7 @@ struct MediaTileViewTests {
     @Test func decorationCopyOfMovingMediaIncludesThumbnail() {
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: 0, y: 0, width: 160, height: 90)
-        tile.apply(movingAttachment(type: .gifv), hiddenCount: 0, isCovered: false)
+        tile.apply(movingAttachment(type: .gifv), hiddenCount: 0, isCovered: false, policy: .offline)
         tile.layoutIfNeeded()
         let thumbnail = tile.thumbnailImage
 
@@ -49,7 +49,7 @@ struct MediaTileViewTests {
     @Test func decorationCopyOfImageHasNoThumbnail() {
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: 0, y: 0, width: 160, height: 90)
-        tile.apply(movingAttachment(type: .image), hiddenCount: 0, isCovered: false)
+        tile.apply(movingAttachment(type: .image), hiddenCount: 0, isCovered: false, policy: .offline)
         tile.layoutIfNeeded()
         let thumbnail = tile.thumbnailImage
 
