@@ -1,10 +1,13 @@
 import AVKit
+import os
 import SciaCore
 import UIKit
 
 /// 投稿の添付ファイルを全画面で見る。左右のスワイプで切り替え、画像はピンチとダブルタップで拡大する。
 ///
-/// 開くときと閉じるときの動きは、一覧のサムネイルを起点にするUIKit標準のズームの遷移に任せる。下へのスワイプで閉じる操作もこの遷移が持つ。
+/// 開くときと閉じるときの動きは、一覧のサムネイルを起点にするUIKit標準のズームの遷移に任せる。
+/// 下へのスワイプで閉じる操作は、標準のものが指を大きく動かさないと閉じず、画像の形で感度も変わるため、自前のパンで持つ。
+/// 指に合わせて画像を動かして縮め、閉じると決めたら、その位置からズームの遷移でサムネイルへ縮める。
 /// 画像を隠さないよう閉じるボタンは置かず、VoiceOverのエスケープとキーボードのEscでも閉じられるようにする。
 final class MediaViewerController: UIViewController {
     private let attachments: [MediaAttachment]
@@ -17,14 +20,27 @@ final class MediaViewerController: UIViewController {
     private let counterLabel = UILabel()
     private let captionView = CaptionView()
     private var isChromeHidden = false
+    private let dragToDismiss: DragToDismiss
+    private lazy var dismissPan = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPan(_:)))
+    /// 閉じる操作を始めたときに押していた位置。`view`の座標。画像をこの点を中心に縮め、指の下に同じ場所が来るようにする。
+    private var dismissPanAnchor: CGPoint = .zero
+    /// 閉じ終わったときに呼ぶ。
+    var onDismiss: (() -> Void)?
+    /// 黒い下地。ズームの遷移はビューアの画面全体を縮めるため、下地を画面に含めるとサムネイルへ縮んで見える。
+    /// 画面の外、表示の入れ物に敷き、開閉ではその場で濃くしたり薄くしたりする。
+    private let backdrop = UIView()
 
-    init(attachments: [MediaAttachment], startIndex: Int, store: MediaImageStore) {
+    init(attachments: [MediaAttachment], startIndex: Int, store: MediaImageStore, dragToDismiss: DragToDismiss) {
         precondition(attachments.indices.contains(startIndex), "開く添付ファイルの位置が範囲外です")
         self.attachments = attachments
         self.store = store
+        self.dragToDismiss = dragToDismiss
         currentIndex = startIndex
         super.init(nibName: nil, bundle: nil)
-        modalPresentationStyle = .fullScreen
+        // 閉じる操作の間に背景を薄くして一覧を透かすため、開いている間も一覧を残す。
+        modalPresentationStyle = .overFullScreen
+        // 全画面でない表示では、状態バーの表示を自分で決めると宣言しないと、画像だけにしたときに隠せない。
+        modalPresentationCapturesStatusBarAppearance = true
     }
 
     @available(*, unavailable)
@@ -51,9 +67,50 @@ final class MediaViewerController: UIViewController {
     /// キーボードのEscを受けるため、表示されたら最初の応答者になる。
     override var canBecomeFirstResponder: Bool { true }
 
+    /// 画面が入れ物に入ってから呼ばれるため、ここで画面のすぐ下に下地を敷く。
+    override func viewIsAppearing(_ animated: Bool) {
+        super.viewIsAppearing(animated)
+        guard isBeingPresented, let container = view.superview else { return }
+        backdrop.frame = container.bounds
+        backdrop.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        container.insertSubview(backdrop, belowSubview: view)
+        fadeBackdrop(to: 1)
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         becomeFirstResponder()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isBeingDismissed {
+            fadeBackdrop(to: 0)
+        }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isBeingDismissed {
+            backdrop.removeFromSuperview()
+            onDismiss?()
+        }
+    }
+
+    /// 開閉の遷移に合わせて下地の濃さを変える。取り消されたら元に戻す。
+    private func fadeBackdrop(to alpha: CGFloat) {
+        guard let coordinator = transitionCoordinator else {
+            backdrop.alpha = alpha
+            return
+        }
+        let original = backdrop.alpha
+        coordinator.animate(alongsideTransition: { _ in
+            self.backdrop.alpha = alpha
+        }, completion: { context in
+            if context.isCancelled {
+                self.backdrop.alpha = original
+            }
+        })
     }
 
     override var keyCommands: [UIKeyCommand]? {
@@ -72,8 +129,11 @@ final class MediaViewerController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = .black
+        backdrop.backgroundColor = .black
+        backdrop.alpha = 0
         overrideUserInterfaceStyle = .dark
+        // 下に一覧を残しているため、VoiceOverがそちらを読まないようにする。
+        view.accessibilityViewIsModal = true
         addChild(pageController)
         pageController.view.frame = view.bounds
         pageController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -84,6 +144,10 @@ final class MediaViewerController: UIViewController {
         pageController.setViewControllers([page(at: currentIndex)], direction: .forward, animated: false)
         setUpChrome()
         updateChrome()
+        dismissPan.delegate = self
+        // ピンチの2本指を閉じる操作と取り違えないようにする。
+        dismissPan.maximumNumberOfTouches = 1
+        view.addGestureRecognizer(dismissPan)
     }
 
     private func setUpChrome() {
@@ -114,6 +178,8 @@ final class MediaViewerController: UIViewController {
         ])
     }
 
+    private var chromeViews: [UIView] { [menuButton, counterLabel, captionView] }
+
     private func updateChrome() {
         counterLabel.text = "\(currentIndex + 1) / \(attachments.count)"
         let description = currentAttachment.description ?? ""
@@ -125,7 +191,8 @@ final class MediaViewerController: UIViewController {
     fileprivate func toggleChrome() {
         isChromeHidden.toggle()
         UIView.animate(withDuration: 0.2) {
-            for view in [self.menuButton, self.counterLabel] {
+            // 説明は表示を`isHidden`で切り替えるが、閉じる操作を取り消すと透明のまま残るため、不透明度も戻す。
+            for view in self.chromeViews {
                 view.alpha = self.isChromeHidden ? 0 : 1
             }
             self.updateChrome()
@@ -177,6 +244,70 @@ final class MediaViewerController: UIViewController {
     }
 }
 
+extension MediaViewerController: UIGestureRecognizerDelegate {
+    /// 拡大していない画像を、下へ向けて動かし始めたときだけ閉じる操作にする。横は左右の切り替えに、上は何もしないまま残す。
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === dismissPan else { return true }
+        let velocity = dismissPan.velocity(in: view)
+        return allowsInteractiveDismiss && velocity.y > 0 && velocity.y > abs(velocity.x)
+    }
+
+    @objc fileprivate func handleDismissPan(_ recognizer: UIPanGestureRecognizer) {
+        guard let page = pages[currentIndex] else { return }
+        let height = view.bounds.height
+        let translation = recognizer.translation(in: view)
+        switch recognizer.state {
+        case .began:
+            dismissPanAnchor = recognizer.location(in: view)
+            pageController.view.isUserInteractionEnabled = false
+        case .changed:
+            page.view.transform = dragTransform(for: page, translation: translation)
+            let backgroundAlpha = dragToDismiss.backgroundAlpha(translation: translation.y, height: height)
+            backdrop.alpha = backgroundAlpha
+            // ボタンと説明は、背景が半分透けたところで消えきるようにする。
+            for chrome in chromeViews {
+                chrome.alpha = isChromeHidden ? 0 : max(backgroundAlpha * 2 - 1, 0)
+            }
+        case .ended:
+            pageController.view.isUserInteractionEnabled = true
+            let velocity = recognizer.velocity(in: view).y
+            if dragToDismiss.shouldDismiss(translation: translation.y, velocity: velocity, height: height) {
+                SciaLog.logger(category: "media").info("dismiss by drag translation=\(translation.y, privacy: .public) velocity=\(velocity, privacy: .public)")
+                dismiss(animated: true)
+            } else {
+                restoreFromDrag(page: page)
+            }
+        case .cancelled, .failed:
+            pageController.view.isUserInteractionEnabled = true
+            restoreFromDrag(page: page)
+        default:
+            break
+        }
+    }
+
+    /// 押した位置を中心に縮め、指の動きに合わせて動かす。
+    private func dragTransform(for page: MediaPageController, translation: CGPoint) -> CGAffineTransform {
+        let scale = dragToDismiss.scale(translation: translation.y, height: view.bounds.height)
+        // 変形の影響を受けない、元の位置での中心。
+        let center = page.view.superview?.convert(page.view.center, to: view) ?? view.center
+        let offset = CGPoint(
+            x: translation.x + (1 - scale) * (dismissPanAnchor.x - center.x),
+            y: translation.y + (1 - scale) * (dismissPanAnchor.y - center.y)
+        )
+        return CGAffineTransform(translationX: offset.x, y: offset.y).scaledBy(x: scale, y: scale)
+    }
+
+    private func restoreFromDrag(page: MediaPageController) {
+        UIView.animate(springDuration: dragToDismiss.restoreDuration, bounce: 0) {
+            page.view.transform = .identity
+            backdrop.alpha = 1
+            for chrome in chromeViews {
+                chrome.alpha = isChromeHidden ? 0 : 1
+            }
+        }
+    }
+}
+
 extension MediaViewerController: UIPageViewControllerDataSource, UIPageViewControllerDelegate {
     func pageViewController(_ pageViewController: UIPageViewController, viewControllerBefore viewController: UIViewController) -> UIViewController? {
         guard let index = (viewController as? MediaPageController)?.index, index > 0 else { return nil }
@@ -203,12 +334,16 @@ extension MediaViewerController {
         attachments: [MediaAttachment],
         startIndex: Int,
         store: MediaImageStore,
+        dragToDismiss: DragToDismiss,
         from presenter: UIViewController,
-        sourceView: @escaping @MainActor (MediaAttachment.ID) -> UIView?
+        sourceView: @escaping @MainActor (MediaAttachment.ID) -> UIView?,
+        onDismiss: @escaping @MainActor () -> Void
     ) {
-        let viewer = MediaViewerController(attachments: attachments, startIndex: startIndex, store: store)
+        let viewer = MediaViewerController(attachments: attachments, startIndex: startIndex, store: store, dragToDismiss: dragToDismiss)
+        viewer.onDismiss = onDismiss
         let options = UIViewController.Transition.ZoomOptions()
-        options.interactiveDismissShouldBegin = { [weak viewer] _ in viewer?.allowsInteractiveDismiss ?? true }
+        // 下へのスワイプで閉じる操作は自前のパンで持つため、標準のものは使わない。
+        options.interactiveDismissShouldBegin = { _ in false }
         options.alignmentRectProvider = { [weak viewer] context in
             guard let viewer else { return .null }
             return viewer.contentFrame(in: context.zoomedViewController.view)
@@ -332,7 +467,8 @@ final class PlayerPageController: MediaPageController {
         addChild(playerController)
         playerController.view.frame = view.bounds
         playerController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        playerController.view.backgroundColor = .black
+        // 閉じる操作で動かしたときに画面大の黒い枠が動かないよう、黒はビューアの背景に任せる。
+        playerController.view.backgroundColor = .clear
         view.addSubview(playerController.view)
         playerController.didMove(toParent: self)
         guard let url = attachment.url ?? attachment.remoteUrl else { return }

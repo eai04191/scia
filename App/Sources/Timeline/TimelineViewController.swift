@@ -456,9 +456,9 @@ final class TimelineViewController: UIViewController {
     }
 
     /// 表示領域に半分以上入っている投稿と通知を、表示中として報告する。ナビゲーションバーの下に隠れている部分は数えない。
-    /// 他のタブにいる間など、画面に出ていなければ報告しない。
-    private func reportVisibleItems() {
-        guard !isRestoringAnchor, viewIfLoaded?.window != nil else { return }
+    /// 他のタブにいる間や、添付ファイルのビューアで覆っている間など、画面に出ていなければ報告しない。
+    func reportVisibleItems() {
+        guard !isRestoringAnchor, viewIfLoaded?.window != nil, !isCoveredByMediaViewer else { return }
         let visibleRect = collectionView.bounds.inset(by: collectionView.adjustedContentInset)
         let ids = collectionView.indexPathsForVisibleItems.compactMap { indexPath -> ItemID? in
             guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return nil }

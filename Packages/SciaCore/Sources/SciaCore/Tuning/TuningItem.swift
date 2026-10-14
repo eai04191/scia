@@ -108,6 +108,63 @@ public enum TuningCatalog {
         defaultValue: 0.75
     )
 
+    /// ビューアを下へのスワイプで閉じる距離。画面の高さに対する割合。
+    public static let mediaDismissDistance = NumberTuning(
+        id: "media.dismissDistance",
+        title: "ビューアを閉じる距離（画面の高さの割合）",
+        range: 0.05...0.5,
+        step: 0.01,
+        defaultValue: 0.12
+    )
+
+    /// ビューアを下へのスワイプで閉じる速さ。毎秒何画面ぶんか。これより速く払えば、短い距離でも閉じる。
+    public static let mediaDismissVelocity = NumberTuning(
+        id: "media.dismissVelocity",
+        title: "ビューアを閉じる払う速さ（画面数／秒）",
+        range: 0.2...3,
+        step: 0.1,
+        defaultValue: 0.8
+    )
+
+    /// ビューアを下へスワイプしている間、画面の高さぶん動かしたときの画像の倍率。
+    public static let mediaDismissSmallestScale = NumberTuning(
+        id: "media.dismissSmallestScale",
+        title: "閉じる操作中に縮める倍率",
+        range: 0.3...1,
+        step: 0.05,
+        defaultValue: 0.6
+    )
+
+    /// ビューアを下へスワイプしている間、背景が透けきるまでに動かす距離。画面の高さに対する割合。
+    public static let mediaDismissFadeDistance = NumberTuning(
+        id: "media.dismissFadeDistance",
+        title: "閉じる操作中に背景が透けきる距離（画面の高さの割合）",
+        range: 0.1...1,
+        step: 0.05,
+        defaultValue: 0.5
+    )
+
+    /// ビューアを閉じずに離したとき、画像を元の位置へ戻す時間。
+    public static let mediaDismissRestoreDuration = NumberTuning(
+        id: "media.dismissRestoreDuration",
+        title: "閉じずに離したとき戻す時間（秒）",
+        range: 0.1...1,
+        step: 0.05,
+        defaultValue: 0.35
+    )
+
+    /// ビューアの閉じる操作の判定。
+    @MainActor
+    public static func dragToDismiss(in store: TuningStore) -> DragToDismiss {
+        DragToDismiss(
+            distanceThreshold: store.value(of: mediaDismissDistance),
+            velocityThreshold: store.value(of: mediaDismissVelocity),
+            smallestScale: store.value(of: mediaDismissSmallestScale),
+            fadeDistance: store.value(of: mediaDismissFadeDistance),
+            restoreDuration: store.value(of: mediaDismissRestoreDuration)
+        )
+    }
+
     public static let items: [TuningItem] = [
         .number(paragraphSpacing),
         .number(insertionInterval),
@@ -116,5 +173,10 @@ public enum TuningCatalog {
         .number(fillPageLimit),
         .number(gapAutoLoadDistance),
         .number(mediaTallestAspectRatio),
+        .number(mediaDismissDistance),
+        .number(mediaDismissVelocity),
+        .number(mediaDismissSmallestScale),
+        .number(mediaDismissFadeDistance),
+        .number(mediaDismissRestoreDuration),
     ]
 }

@@ -40,13 +40,29 @@ extension TimelineViewController {
         reconfigure(Set(ids))
     }
 
+    /// 添付ファイルのビューアで覆っている。ビューアは閉じる操作の間に一覧を透かすため、開いている間も一覧を画面に残す。
+    /// 閉じ終わりに報告し直せるよう、閉じている途中のビューアは数えない。
+    var isCoveredByMediaViewer: Bool {
+        guard let viewer = presentedViewController as? MediaViewerController else { return false }
+        return !viewer.isBeingDismissed
+    }
+
     /// 閉じるときは、タップした行のサムネイルへ戻す。同じ投稿とそのブーストが並んでいると、同じ添付ファイルのサムネイルが複数あるため。
     /// 開いている間にその行が再利用されたら、表示中の別の行から探す。
     private func openMedia(_ attachments: [MediaAttachment], at index: Int, from grid: MediaGridView) {
         SciaLog.logger(category: "media").info("open viewer count=\(attachments.count, privacy: .public) index=\(index, privacy: .public)")
-        MediaViewerController.present(attachments: attachments, startIndex: index, store: mediaImages, from: self) { [weak self, weak grid] attachmentID in
-            grid?.tile(for: attachmentID) ?? self?.visibleMediaTile(for: attachmentID)
-        }
+        MediaViewerController.present(
+            attachments: attachments,
+            startIndex: index,
+            store: mediaImages,
+            dragToDismiss: TuningCatalog.dragToDismiss(in: tuning),
+            from: self,
+            sourceView: { [weak self, weak grid] attachmentID in
+                grid?.tile(for: attachmentID) ?? self?.visibleMediaTile(for: attachmentID)
+            },
+            // 一覧は残したままなので表示し直しの通知が来ない。開いている間に届いた新着を、閉じたところで報告する。
+            onDismiss: { [weak self] in self?.reportVisibleItems() }
+        )
     }
 
     /// 添付ファイルのサムネイルを、表示中のセルから探す。開いている間にセルが再利用されても、閉じるときに今の位置を探せるようにする。
