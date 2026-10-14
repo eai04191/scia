@@ -26,6 +26,8 @@ final class MediaViewerController: UIViewController {
     /// 写真に保存したことを、メニューボタンの下で知らせる。
     private let statusChip = StatusChip()
     private let photoSaver: PhotoLibrarySaver
+    /// 画像から読み取った文字を、システムの翻訳シートで訳す。
+    private let translation = SystemTranslation()
     private var isChromeHidden = false
     private let dragToDismiss: DragToDismiss
     private lazy var dismissPan = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPan(_:)))
@@ -206,6 +208,7 @@ final class MediaViewerController: UIViewController {
         view.addSubview(morph)
         setUpChrome()
         updateChrome()
+        translation.install(in: self)
         dismissPan.delegate = self
         // ピンチの2本指を閉じる操作と取り違えないようにする。
         dismissPan.maximumNumberOfTouches = 1
@@ -338,7 +341,8 @@ final class MediaViewerController: UIViewController {
         (pages[currentIndex] as? ImagePageController)?.shareItem?.file
     }
 
-    /// メニューの項目。共有や保存は、するものが届くまで選べなくする。保存は画像だけ、代替テキストは付いているときだけ出す。
+    /// メニューの項目。共有や保存は、するものが届くまで選べなくする。保存は画像だけ、翻訳は画像から文字を読み取れたときだけ、
+    /// 代替テキストは付いているときだけ出す。
     func menuElements() -> [UIMenuElement] {
         var elements: [UIMenuElement] = [
             UIAction(
@@ -356,6 +360,11 @@ final class MediaViewerController: UIViewController {
                 attributes: currentOriginalFile == nil ? .disabled : []
             ) { [weak self] _ in
                 self?.saveToPhotos()
+            })
+        }
+        if let text = (pages[currentIndex] as? ImagePageController)?.recognizedText, !text.isEmpty {
+            elements.append(UIAction(title: "画像の文字を翻訳", image: UIImage(systemName: "translate")) { [weak self] _ in
+                self?.translation.present(text)
             })
         }
         if let description = currentAttachment.description, !description.isEmpty {
@@ -1016,8 +1025,11 @@ final class ImagePageController: MediaPageController {
 
     override var allowsInteractiveDismiss: Bool { !zoomView.isZoomedIn }
 
-    /// 文字やリンクを解析し終えている。
-    var hasImageAnalysis: Bool { liveText.analysis != nil }
+    /// 画像から読み取った文字の全文。解析し終えるまでと、文字のない画像ではnil。
+    var recognizedText: String? {
+        guard let transcript = liveText.analysis?.transcript, !transcript.isEmpty else { return nil }
+        return transcript
+    }
 
     /// 画像だけにしたときは、Live Textのボタンも隠す。
     override func setChromeHidden(_ hidden: Bool, animated: Bool) {

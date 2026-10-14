@@ -176,6 +176,28 @@ struct MediaViewerControllerTests {
         #expect(altText.isTranslationPresented)
     }
 
+    /// 画像から文字を読み取れたら、メニューからその全文を翻訳できる。文字のない画像では出さない。
+    @Test func menuOffersTranslationOfRecognizedText() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let textImage = UIGraphicsImageRenderer(size: CGSize(width: 800, height: 400), format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 800, height: 400))
+            ("Hello World" as NSString).draw(at: CGPoint(x: 40, y: 140), withAttributes: [.font: UIFont.boldSystemFont(ofSize: 96), .foregroundColor: UIColor.black])
+        }
+        let viewer = presentLoadingViewer(on: harness, data: try #require(textImage.pngData()))
+        try await waitUntil { menuAction("画像の文字を翻訳", in: viewer) != nil }
+        viewer.dismiss(animated: false)
+
+        let plain = presentLoadingViewer(on: harness, data: try pngData())
+        defer { plain.dismiss(animated: false) }
+        try await waitUntil { menuAction("写真に保存", in: plain)?.attributes.isEmpty == true }
+        try await Task.sleep(for: .seconds(1))
+        #expect(menuAction("画像の文字を翻訳", in: plain) == nil)
+    }
+
     /// 画像の文字のない場所を長押しすると、メニューボタンと同じメニューを出す。出すものがなければ出さない。
     @Test func longPressOnImageWithoutTextOffersMenu() throws {
         let page = ImagePageController(attachment: image("1", url: nil), store: .offline, preview: nil)
