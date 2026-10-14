@@ -32,6 +32,8 @@ final class AltTextViewController: UIViewController {
         textView.frame = view.bounds
         textView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(textView)
+        // ナビゲーションバーがどのスクロールビューに合わせるかを明示する。翻訳シートを出すための見えないSwiftUIのビューを一番奥に置いたら、
+        // バーが本文を見つけられず、本文の先頭がバーの下に潜った。今は本文の上に置いているが、置き場所で壊れないよう明示したままにする。
         setContentScrollView(textView, for: .top)
         translation.install(in: self)
         navigationItem.leftBarButtonItem = UIBarButtonItem(title: "翻訳", image: UIImage(systemName: "translate"), primaryAction: UIAction { [weak self] _ in

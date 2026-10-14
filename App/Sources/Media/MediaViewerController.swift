@@ -1173,7 +1173,8 @@ final class ImagePageController: MediaPageController {
     private var analysisTask: Task<Void, Never>?
     /// 元の画像の解析を終えた。文字が見つからなかったときや、解析に失敗したときも含む。対応していない端末では変わらない。
     private(set) var hasFinishedAnalysis = false
-    /// Live Textのボタンの、システムが決めた既定の余白。説明に重なる分はこれに足す。
+    /// Live Textのボタンの、システムが決めた既定の余白。`supplementaryInterfaceContentInsets`を上書きすると既定の余白が消えるため、説明に重なる分はこれに足す。
+    /// 余白は画面上のポイントで指定する。画像を拡大していても、拡大率で割り戻さない。
     private lazy var baseLiveTextInsets = liveText.supplementaryInterfaceContentInsets
     /// 元のファイルをキャッシュに置き終えていれば、そのURL。共有や保存はこのURLでキャッシュから写しを取る。
     private(set) var originalURL: URL?
