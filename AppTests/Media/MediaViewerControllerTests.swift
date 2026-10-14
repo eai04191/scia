@@ -30,6 +30,19 @@ struct MediaViewerControllerTests {
         }
     }
 
+    /// 開いている間は、違和感レポートに表示中の画像の倍率と出どころが残る。画像が極端に小さく出る不具合の調べに使う。
+    @Test func stateDumpIncludesZoomOfCurrentImage() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let viewer = makeViewer(attachments: [image("1", url: URL(string: "https://x.example/1.png"))])
+        harness.viewController.present(viewer, animated: false)
+        defer { viewer.dismiss(animated: false) }
+
+        let dump = try #require(AppDependencies.stateDumps.dumpAll().first { $0.name == "mediaViewer" }?.text)
+        #expect(dump.contains("imageSource: none"))
+        #expect(dump.contains("zoomScale:"))
+    }
+
     /// VoiceOverの2本指のZで閉じる。
     @Test func accessibilityEscapeDismisses() async throws {
         let harness = try TimelineHarness()

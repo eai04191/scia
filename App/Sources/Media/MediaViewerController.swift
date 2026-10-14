@@ -181,6 +181,21 @@ final class MediaViewerController: UIViewController {
         // ピンチの2本指を閉じる操作と取り違えないようにする。
         dismissPan.maximumNumberOfTouches = 1
         view.addGestureRecognizer(dismissPan)
+        AppDependencies.stateDumps.register("mediaViewer", owner: self) { $0.stateDump() }
+    }
+
+    func stateDump() -> String {
+        let page = pages[currentIndex]
+        return """
+        motion: \(motion.label)
+        index: \(currentIndex) / \(attachments.count) type=\(currentAttachment.type)
+        aspectRatio: \(currentAttachment.aspectRatio.map { "\($0)" } ?? "nil")
+        view.bounds: \(view.bounds.size)
+        morph: hidden=\(morph.isHidden) frame=\(morph.frame) image=\(morph.image.map { "\($0.size)" } ?? "nil")
+        contentFrame: \(contentFrame(in: view))
+        page: \(page.map { "\($0.view.bounds.size)" } ?? "nil")
+        \(page?.stateDump() ?? "")
+        """
     }
 
     private func setUpChrome() {
@@ -348,6 +363,16 @@ extension MediaViewerController {
         /// 閉じずに離したあと、ビューアの画像の枠へ戻している。
         case settling(UIViewPropertyAnimator)
         case closing
+
+        var label: String {
+            switch self {
+            case .idle: "idle"
+            case .opening: "opening"
+            case .dragging: "dragging"
+            case .settling: "settling"
+            case .closing: "closing"
+            }
+        }
     }
 
     /// 開いている度合い。0で下地とボタンが透明、1で不透明。
@@ -665,6 +690,9 @@ class MediaPageController: UIViewController {
 
     /// 画像を描くページ。開閉の写しを、このページの画像の更新に合わせて差し替える。
     var drawsImage: Bool { false }
+
+    /// 違和感レポートに残す、ページの状態。
+    func stateDump() -> String { "" }
 }
 
 /// 画像のページ。一覧のサムネイルをすぐに出し、元の大きさの画像が届いたら差し替える。
@@ -675,6 +703,8 @@ final class ImagePageController: MediaPageController {
     private let failureLabel = UILabel()
     private var loadTask: Task<Void, Never>?
     private(set) var fullImage: UIImage?
+    /// 出している画像の出どころ。違和感レポートに残す。
+    private var imageSource = "none"
 
     init(attachment: MediaAttachment, store: MediaImageStore) {
         self.store = store
@@ -694,6 +724,13 @@ final class ImagePageController: MediaPageController {
     override var transitionImage: UIImage? { zoomView.image }
 
     override var drawsImage: Bool { true }
+
+    override func stateDump() -> String {
+        """
+        imageSource: \(imageSource)
+        \(zoomView.stateDump())
+        """
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -716,7 +753,9 @@ final class ImagePageController: MediaPageController {
         }
         // 一覧のサムネイルが手元にあればそれを、なければblurhashのぼかしを、元の画像が届くまでの下地にする。
         let preview = attachment.previewUrl.flatMap { store.cachedImage(for: $0, maxPixelSize: MediaImageStore.thumbnailPixelSize) }
-        zoomView.image = preview ?? attachment.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment.aspectRatio) }
+        let placeholder = preview == nil ? attachment.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment.aspectRatio) } : nil
+        imageSource = preview != nil ? "thumbnail" : placeholder != nil ? "blurhash" : "none"
+        zoomView.image = preview ?? placeholder
         onImageChange?()
         load(hasPreview: preview != nil)
     }
@@ -736,6 +775,7 @@ final class ImagePageController: MediaPageController {
             self.spinner.stopAnimating()
             if let image {
                 self.fullImage = image
+                self.imageSource = "full"
                 self.zoomView.image = image
                 self.onImageChange?()
             } else {

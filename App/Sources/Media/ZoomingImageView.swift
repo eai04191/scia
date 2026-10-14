@@ -99,6 +99,21 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         centerImage()
     }
 
+    /// 違和感レポートに残す、倍率と大きさの状態。
+    func stateDump() -> String {
+        """
+        bounds: \(bounds.size)
+        fittedBoundsSize: \(fittedBoundsSize)
+        imageSize: \(imageView.image.map { "\($0.size) scale=\($0.scale)" } ?? "nil")
+        zoomScale: \(zoomScale) min=\(minimumZoomScale) max=\(maximumZoomScale)
+        contentSize: \(contentSize)
+        contentInset: \(contentInset)
+        contentOffset: \(contentOffset)
+        imageView.frame: \(imageView.frame)
+        imageView.bounds: \(imageView.bounds)
+        """
+    }
+
     /// 画面の中央に見えている点の、画像の中での位置。左上が0、右下が1。
     private func normalizedVisibleCenter() -> CGPoint? {
         let frame = imageView.frame
