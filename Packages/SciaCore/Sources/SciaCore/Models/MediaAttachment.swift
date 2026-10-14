@@ -14,6 +14,8 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
     /// 代替テキスト。
     public let description: String?
     public let meta: Meta?
+    /// ぼかした下地を描くための文字列。読み込む前や、閲覧注意で覆っている間に使う。
+    public let blurhash: String?
 
     public init(
         id: String,
@@ -22,7 +24,8 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
         previewUrl: URL?,
         remoteUrl: URL? = nil,
         description: String? = nil,
-        meta: Meta? = nil
+        meta: Meta? = nil,
+        blurhash: String? = nil
     ) {
         self.id = id
         self.type = type
@@ -31,6 +34,7 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
         self.remoteUrl = remoteUrl
         self.description = description
         self.meta = meta
+        self.blurhash = blurhash
     }
 
     /// 幅を高さで割った値。大きさの分からない添付ファイル（音声など）ではnil。

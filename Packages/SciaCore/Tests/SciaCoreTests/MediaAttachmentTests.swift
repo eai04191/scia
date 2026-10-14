@@ -17,6 +17,9 @@ struct MediaAttachmentTests {
         let image = status.mediaAttachments[0]
         #expect(image.description == "代替テキスト")
         #expect(image.aspectRatio == 640.0 / 480.0)
+        #expect(image.blurhash == "UFBWY:8_0Jxv4mx]t8t64.%M-:IUWGWAt6M}")
+        // 音声などではnull。
+        #expect(status.mediaAttachments[2].blurhash == nil)
         #expect(status.mediaAttachments[1].aspectRatio == 1280.0 / 720.0)
         // 音声は大きさを持たない。
         #expect(status.mediaAttachments[2].aspectRatio == nil)
