@@ -1346,8 +1346,8 @@ extension ImagePageController {
 /// 動画、GIF、音声のページ。GIFはループして音を出さず、操作の部品も出さない。
 final class PlayerPageController: MediaPageController {
     private let playerController = AVPlayerViewController()
-    private var looper: AVPlayerLooper?
-    private var currentItemObservation: NSKeyValueObservation?
+    /// GIFを最後まで再生したら先頭へ戻す、通知の受け口。
+    private var loopObserver: (any NSObjectProtocol)?
     /// 動画の画素を表示の向きにする回し方。端末を縦にして撮った動画は、横向きの画素に回転情報を付けて保存されている。
     private var frameOrientation = UIImage.Orientation.up
 
@@ -1373,16 +1373,24 @@ final class PlayerPageController: MediaPageController {
         addLongPressMenu(to: playerController.view)
         guard let url = attachment.url ?? attachment.remoteUrl else { return }
         let item = AVPlayerItem(url: url)
+        // 再生しているコマを取り出せるようにする。AVPlayerLayerの絵は描き写せないため、映像の出口を別に付ける。
+        item.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]))
+        let player = AVPlayer(playerItem: item)
+        playerController.player = player
         if attachment.type == .gifv {
-            let player = AVQueuePlayer()
+            // `AVPlayerLooper`は使わず、同じ項目を最後で先頭へ戻してくり返す。
+            // `AVPlayerLooper`は周ごとに再生する項目を替えるが、実機（iPhone 16 Pro、iOS 27.0.1）の`AVPlayerViewController`では、
+            // 再生は周を重ねて進むのに、画面の絵が1周目の終わりで止まった。シミュレーターでは起きない。
             player.isMuted = true
-            looper = AVPlayerLooper(player: player, templateItem: item)
-            playerController.player = player
+            player.actionAtItemEnd = .none
+            loopObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main) { [weak player] _ in
+                MainActor.assumeIsolated {
+                    player?.seek(to: .zero)
+                }
+            }
             playerController.showsPlaybackControls = false
             let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
             playerController.view.addGestureRecognizer(tap)
-        } else {
-            playerController.player = AVPlayer(playerItem: item)
         }
         Task { [weak self] in
             guard let track = try? await item.asset.loadTracks(withMediaType: .video).first,
@@ -1390,11 +1398,11 @@ final class PlayerPageController: MediaPageController {
             else { return }
             self?.frameOrientation = Self.orientation(of: transform)
         }
-        // GIFをくり返す`AVPlayerLooper`は、テンプレートの複製を再生するたびに作り直すため、再生する項目が替わるたびに出口を付け直す。
-        currentItemObservation = playerController.player?.observe(\.currentItem, options: [.initial]) { [weak self] _, _ in
-            Task { @MainActor [weak self] in
-                self?.attachFrameOutputs()
-            }
+    }
+
+    isolated deinit {
+        if let loopObserver {
+            NotificationCenter.default.removeObserver(loopObserver)
         }
     }
 
@@ -1419,16 +1427,6 @@ final class PlayerPageController: MediaPageController {
         case 2: return .down
         case 3: return .left
         default: return .up
-        }
-    }
-
-    /// 再生しているコマを取り出せるようにする。AVPlayerLayerの絵は描き写せないため、映像の出口を別に付ける。
-    /// 再生を待っている項目にも付け、くり返しで次の項目に替わった直後から取り出せるようにする。
-    private func attachFrameOutputs() {
-        guard let player = playerController.player else { return }
-        let items = (player as? AVQueuePlayer)?.items() ?? player.currentItem.map { [$0] } ?? []
-        for item in items where !item.outputs.contains(where: { $0 is AVPlayerItemVideoOutput }) {
-            item.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]))
         }
     }
 
