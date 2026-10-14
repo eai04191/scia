@@ -63,4 +63,17 @@ struct ZoomingImageViewTests {
 
         #expect(abs((view.imageFrame?.width ?? 0) - 400) < 0.5)
     }
+
+    /// 小さいプレースホルダーを出したあとで大きな画像へ差し替えても、画面に収める。
+    /// プレースホルダーの最小倍率が1を超えていると、倍率を1に戻す操作が切り上げられ、画像が1/10ほどに縮んで出ていた。
+    @Test func fitsToBoundsWhenReplacingPlaceholderWithLargeImage() {
+        let view = ZoomingImageView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        view.image = image(width: 32, height: 32)
+        view.layoutIfNeeded()
+
+        view.image = image(width: 1_600, height: 1_200)
+        view.layoutIfNeeded()
+
+        #expect(abs((view.imageFrame?.width ?? 0) - 400) < 0.5)
+    }
 }

@@ -76,6 +76,9 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         let previousScale = zoomScale
         let previousImageWidth = imageView.frame.width
         let previousCenter = normalizedVisibleCenter()
+        // 倍率の範囲が前の画像のままだと、1への切り替えが範囲へ切り上げられ、拡大した状態の`imageView`に大きさを設定してしまう。
+        minimumZoomScale = 1
+        maximumZoomScale = 1
         zoomScale = 1
         imageView.frame = CGRect(origin: .zero, size: size)
         contentSize = size
