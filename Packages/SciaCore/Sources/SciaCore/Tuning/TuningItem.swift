@@ -180,12 +180,32 @@ public enum TuningCatalog {
         defaultValue: 0.1
     )
 
-    /// ビューアを閉じるとき、戻る画像のうちバーにかかる部分を、バーの奥にも描く。
-    /// オフなら、バーにかかる部分を着地へ近づくにつれて切り落とすだけにする。着地の瞬間に、バー越しのサムネイルが急に現れる。
+    /// ビューアを開閉するとき、画像のうちバーにかかる部分を、バーの奥にも描く。
+    /// オフなら、開くときは写しをバーの手前にだけ描き、閉じるときはバーにかかる部分を着地へ近づくにつれて切り落とすだけにする。
+    /// 開き始めにバーの下のサムネイルがバーの手前へ急に出て、閉じる着地の瞬間にバー越しのサムネイルが急に現れる。
     public static let mediaCloseDrawsUnderBars = ToggleTuning(
         id: "media.closeDrawsUnderBars",
-        title: "ビューアを閉じるとき、バーにかかる部分をバーの奥に描く",
+        title: "ビューアを開閉するとき、バーにかかる部分をバーの奥に描く",
         defaultValue: true
+    )
+
+    /// バーの奥にも描くとき、一覧の中の写しから最前面の写しへ受け渡し終える、開く動きの進み具合。0なら開き始めから最前面の写しにする。
+    public static let mediaOpenHandoffEnd = NumberTuning(
+        id: "media.openHandoffEnd",
+        title: "開くとき、一覧の中の写しから受け渡し終える進み具合",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
+    /// バーの奥にも描くとき、バーと重なる部分を一覧の中の写しからバーより手前の写しへ入れ替え始める、開く動きの進み具合。
+    /// 小さいほど早くバーの手前の見え方になり、大きいほど画像がバーの奥に長く残る。
+    public static let mediaOpenBarOverlapFadeStart = NumberTuning(
+        id: "media.openBarOverlapFadeStart",
+        title: "開くとき、バーと重なる部分を手前へ入れ替え始める進み具合",
+        range: 0...0.95,
+        step: 0.05,
+        defaultValue: 0.7
     )
 
     /// バーの奥にも描くとき、最前面の写しを薄くして一覧の中の写しへ受け渡し始める、閉じる動きの進み具合。1なら着地の瞬間に切り替える。
@@ -238,6 +258,8 @@ public enum TuningCatalog {
         .number(mediaCloseDuration),
         .number(mediaTransitionBounce),
         .toggle(mediaCloseDrawsUnderBars),
+        .number(mediaOpenHandoffEnd),
+        .number(mediaOpenBarOverlapFadeStart),
         .number(mediaCloseHandoffStart),
         .number(mediaCloseBarOverlapFadeEnd),
     ]
