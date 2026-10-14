@@ -9,7 +9,7 @@ import UIKit
 struct MediaViewerControllerTests {
     private let drag = DragToDismiss(distanceThreshold: 0.12, velocityThreshold: 0.8, smallestScale: 0.6, fadeDistance: 0.5, restoreDuration: 0.35)
 
-    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, bounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5)
+    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, bounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, savedChipAtBottom: false)
 
     private func makeViewer(attachments: [MediaAttachment]) -> MediaViewerController {
         MediaViewerController(attachments: attachments, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil })
@@ -406,7 +406,7 @@ struct MediaViewerControllerTests {
             startIndex: 0,
             store: store,
             dragToDismiss: drag,
-            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, bounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5),
+            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, bounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, savedChipAtBottom: false),
             from: harness.viewController,
             sourceTile: { _ in tile },
             onDismiss: {}

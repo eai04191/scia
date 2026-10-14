@@ -75,6 +75,8 @@ final class MediaViewerController: UIViewController {
         let barOverlapFadeEnd: Double
         /// 写真に保存したことを知らせる表示を出しておく時間。
         let savedChipDuration: TimeInterval
+        /// 写真に保存したことを知らせる表示を、メニューボタンの下ではなく、画面下の説明のすぐ上に出す。
+        let savedChipAtBottom: Bool
     }
 
     /// - Parameter sourceTile: 添付ファイルのサムネイルを返す。開閉のたびに呼ぶため、閉じるまでに一覧の行が再利用されても今の位置を返せる。
@@ -251,8 +253,10 @@ final class MediaViewerController: UIViewController {
             captionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             captionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             captionView.contentBottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -8),
-            statusChip.topAnchor.constraint(equalTo: menuButton.bottomAnchor, constant: 12),
             statusChip.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
+            timing.savedChipAtBottom
+                ? statusChip.bottomAnchor.constraint(equalTo: captionView.topAnchor, constant: -12)
+                : statusChip.topAnchor.constraint(equalTo: menuButton.bottomAnchor, constant: 12),
         ])
     }
 

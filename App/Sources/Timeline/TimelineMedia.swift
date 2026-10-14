@@ -72,7 +72,8 @@ extension TimelineViewController {
                 openBarOverlapFadeStart: tuning.value(of: TuningCatalog.mediaOpenBarOverlapFadeStart),
                 handoffStart: tuning.value(of: TuningCatalog.mediaCloseHandoffStart),
                 barOverlapFadeEnd: tuning.value(of: TuningCatalog.mediaCloseBarOverlapFadeEnd),
-                savedChipDuration: tuning.value(of: TuningCatalog.mediaSavedChipDuration)
+                savedChipDuration: tuning.value(of: TuningCatalog.mediaSavedChipDuration),
+                savedChipAtBottom: tuning.value(of: TuningCatalog.mediaSavedChipAtBottom)
             ),
             from: self,
             sourceTile: { [weak self, weak grid] attachmentID in
