@@ -17,6 +17,7 @@ final class SessionController {
     private let tabBarDelegate: TabReselectionDelegate
     /// 開いているプロフィール画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
     private let profiles: ProfileRegistry
+    private var cachedMyAccount: Account?
     /// 投稿画面で使う、インスタンスの上限とユーザーの既定の公開範囲。一度読めたら使い回す。
     private var composeDefaults: (configuration: InstanceConfiguration?, visibility: Status.Visibility?)?
     private let logger = SciaLog.logger(category: "session")
@@ -98,12 +99,18 @@ final class SessionController {
         controller.start()
     }
 
-    /// 自分のアカウントは手元にCredentialしかないため、読んでから開く。
+    /// ログイン中のアカウント。手元にはCredentialしかないため、一度読んだら使い回す。
+    func myAccount() async throws -> Account {
+        if let cachedMyAccount { return cachedMyAccount }
+        let account = try await client.account(client.credential.accountID)
+        cachedMyAccount = account
+        return account
+    }
+
     private func openMyProfile(from source: UIViewController) {
-        let client = client
         Task {
             do {
-                let account = try await client.account(client.credential.accountID)
+                let account = try await myAccount()
                 openProfile(account, from: source)
             } catch {
                 logger.error("my profile load failed: \(error.localizedDescription, privacy: .public)")

@@ -121,7 +121,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             self?.presentAddAccount()
         }
         let settings = UIAction(title: "設定", image: UIImage(systemName: "gearshape")) { [weak self] _ in
-            self?.window?.rootViewController?.presentSettings()
+            guard let session = self?.session else { return }
+            self?.window?.rootViewController?.presentSettings { try await session.myAccount() }
         }
         let logOut = UIAction(title: "ログアウト", image: UIImage(systemName: "rectangle.portrait.and.arrow.right"), attributes: .destructive) { [weak self] _ in
             self?.confirmLogOut()

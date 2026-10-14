@@ -5,11 +5,45 @@ import UIKit
 /// 使う人が選ぶ設定の画面。
 struct SettingsView: View {
     @Bindable var settings: AppSettings
+    /// 見本の投稿に使う、ログイン中のアカウントを読む。
+    let loadPreviewAccount: () async throws -> Account
     @Environment(\.dismiss) private var dismiss
+    @State private var previewAccount: Account?
+    @State private var previewError: String?
+    @State private var previewDate = Date.now.addingTimeInterval(-180)
 
     var body: some View {
         NavigationStack {
             Form {
+                Section {
+                    if let previewAccount {
+                        PostPreview(
+                            account: previewAccount,
+                            createdAt: previewDate,
+                            nameStyle: settings.statusNameStyle,
+                            timeStyle: settings.statusTimeStyle,
+                            avatarShape: settings.avatarShape,
+                            animatesAvatars: settings.animatesAvatars,
+                            builder: PostContentBuilder(
+                                tuning: AppDependencies.tuning,
+                                settings: settings,
+                                emojiImages: AppDependencies.emojiImages,
+                                mediaImages: AppDependencies.mediaImages,
+                                avatarImages: AppDependencies.avatarImages
+                            )
+                        )
+                        // 余白は投稿のセルと同じものを、見本の中で取る。
+                        .listRowInsets(EdgeInsets())
+                    } else if let previewError {
+                        Text("見本の投稿を読み込めませんでした。\(previewError)")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                    }
+                } header: {
+                    Text("プレビュー")
+                }
                 Section {
                     Picker("名前の表記", selection: $settings.statusNameStyle) {
                         Text("名前、@acct").tag(StatusNameStyle.nameAndAcct)
@@ -46,6 +80,13 @@ struct SettingsView: View {
                     Text("代替テキストが「undefined」や「Screenshot」だけのメディアを、代替テキストのないメディアとして扱います。空白だけの代替テキストは、この設定にかかわらず無視します。")
                 }
             }
+            .task {
+                do {
+                    previewAccount = try await loadPreviewAccount()
+                } catch {
+                    previewError = error.localizedDescription
+                }
+            }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -58,7 +99,8 @@ struct SettingsView: View {
 }
 
 extension UIViewController {
-    func presentSettings() {
-        present(UIHostingController(rootView: SettingsView(settings: AppDependencies.settings)), animated: true)
+    /// - Parameter loadPreviewAccount: 見本の投稿に使う、ログイン中のアカウントを読む。
+    func presentSettings(loadPreviewAccount: @escaping () async throws -> Account) {
+        present(UIHostingController(rootView: SettingsView(settings: AppDependencies.settings, loadPreviewAccount: loadPreviewAccount)), animated: true)
     }
 }
