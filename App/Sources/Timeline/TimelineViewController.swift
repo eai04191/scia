@@ -157,6 +157,7 @@ final class TimelineViewController: UIViewController {
         ])
         AppDependencies.stateDumps.register(texts.dumpName, owner: self) { $0.stateDump() }
         emojiImages.addListener(owner: self) { [weak self] urls in self?.emojiImagesDidLoad(urls) }
+        avatarImages.addListener(owner: self) { [weak self] key in self?.avatarImageDidLoad(key) }
         observeTuning()
     }
 
@@ -225,6 +226,15 @@ final class TimelineViewController: UIViewController {
             case .notification(let notification): !Self.emojiURLs(of: notification).isDisjoint(with: urls)
             case .gap, nil: false
             }
+        }
+        reconfigure(Set(ids))
+    }
+
+    /// 通知のアイコンは文字に差し込んでいるため、届いたらその人からの通知を描き直す。投稿のアイコンはビューが自分で受け取る。
+    private func avatarImageDidLoad(_ key: AvatarImageStore.Key) {
+        let ids = dataSource.snapshot().itemIdentifiers.filter { id in
+            guard case .notification(let notification) = entries[id] else { return false }
+            return avatarContent(of: notification.account).url == key.url
         }
         reconfigure(Set(ids))
     }
@@ -623,7 +633,7 @@ final class TimelineViewController: UIViewController {
         return configuration
     }
 
-    private func avatarContent(of account: Account) -> AvatarView.Content {
+    func avatarContent(of account: Account) -> AvatarView.Content {
         AvatarView.Content(
             url: settings.animatesAvatars ? account.avatar : account.avatarStatic,
             shape: settings.avatarShape,

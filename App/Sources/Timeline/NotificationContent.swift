@@ -15,6 +15,7 @@ extension TimelineViewController {
         let phraseAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
         let header = NSMutableAttributedString(string: appearance.phrase.before, attributes: phraseAttributes)
         if appearance.phrase.includesName {
+            header.append(avatarAttachment(of: notification.account, font: font))
             header.append(nameRenderer.render(.plain(notification.account.displayNameOrUsername, emojis: notification.account.emojis)))
         }
         header.append(NSAttributedString(string: appearance.phrase.after, attributes: phraseAttributes))
@@ -29,6 +30,42 @@ extension TimelineViewController {
             ])
         }
         return content
+    }
+}
+
+extension TimelineViewController {
+    /// 通知を送った人の名前の前に置く、文字と同じ高さのアイコン。届くまでは同じ大きさの灰色で場所を取っておく。
+    private func avatarAttachment(of account: Account, font: UIFont) -> NSAttributedString {
+        let side = font.lineHeight
+        let content = avatarContent(of: account)
+        let key = AvatarImageStore.Key(url: content.url, maxPixelSize: Int((side * traitCollection.displayScale).rounded(.up)), animates: false)
+        let attachment = NSTextAttachment()
+        attachment.image = Self.shapedAvatar(avatarImages.requestImage(for: key), side: side, shape: content.shape)
+        attachment.bounds = CGRect(x: 0, y: font.descender, width: side, height: side)
+        let string = NSMutableAttributedString(attachment: attachment)
+        // アイコンと名前のあいだを空ける。
+        string.append(NSAttributedString(string: " ", attributes: [.font: font]))
+        return string
+    }
+
+    private static func shapedAvatar(_ image: UIImage?, side: CGFloat, shape: AvatarShape) -> UIImage {
+        let rect = CGRect(x: 0, y: 0, width: side, height: side)
+        return UIGraphicsImageRenderer(size: rect.size).image { _ in
+            let radius = switch shape {
+            case .circle: side / 2
+            case .roundedSquare: side * 0.2
+            }
+            UIBezierPath(roundedRect: rect, cornerRadius: radius).addClip()
+            if let image, image.size.width > 0, image.size.height > 0 {
+                // 正方形でない画像は、短い辺に合わせて中央を切り抜く。
+                let scale = side / min(image.size.width, image.size.height)
+                let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+                image.draw(in: CGRect(x: (side - size.width) / 2, y: (side - size.height) / 2, width: size.width, height: size.height))
+            } else {
+                UIColor.secondarySystemFill.setFill()
+                UIRectFill(rect)
+            }
+        }
     }
 }
 

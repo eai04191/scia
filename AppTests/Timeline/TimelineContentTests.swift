@@ -32,7 +32,7 @@ struct TimelineContentTests {
 
         let content = makeViewController().contentConfiguration(for: notification, base: .cell())
 
-        #expect(content.attributedText?.string == "Bobがお気に入りに登録しました")
+        #expect(content.attributedText?.string == "\u{FFFC} Bobがお気に入りに登録しました")
         #expect(content.secondaryAttributedText?.string == makeViewController().body(of: status, base: .cell()).string)
         #expect(content.image != nil)
     }
@@ -44,7 +44,7 @@ struct TimelineContentTests {
 
         let content = makeViewController().contentConfiguration(for: notification, base: .cell())
 
-        #expect(content.attributedText?.string == "bobにフォローされました")
+        #expect(content.attributedText?.string == "\u{FFFC} bobにフォローされました")
         #expect(content.secondaryAttributedText?.string == "@bob@remote.example")
     }
 
@@ -55,7 +55,7 @@ struct TimelineContentTests {
 
         let content = makeViewController().contentConfiguration(for: notification, base: .cell())
 
-        #expect(content.attributedText?.string == "Bobからの通知（admin.sign_up）")
+        #expect(content.attributedText?.string == "\u{FFFC} Bobからの通知（admin.sign_up）")
     }
 
     @Test func setEntriesReflectsChangedContentOfSameID() throws {

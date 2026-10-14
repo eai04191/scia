@@ -19,6 +19,7 @@ final class AvatarImageStore {
     private let fetch: Fetch
     private let cache = NSCache<NSString, UIImage>()
     private var inFlight: [Key: Task<UIImage, any Error>] = [:]
+    private var listeners: [Listener] = []
     private let logger = SciaLog.logger(category: "avatar")
 
     init(fetch: @escaping Fetch) {
@@ -36,8 +37,28 @@ final class AvatarImageStore {
         var cacheKey: NSString { "\(maxPixelSize) \(animates) \(url.absoluteString)" as NSString }
     }
 
+    private struct Listener {
+        weak var owner: AnyObject?
+        let onLoad: @MainActor (Key) -> Void
+    }
+
     func cachedImage(for key: Key) -> UIImage? {
         cache.object(forKey: key.cacheKey)
+    }
+
+    /// 読み込み済みなら画像を返す。まだなら読み込みを始めてnilを返し、届いたら`addListener(owner:onLoad:)`で知らせる。
+    /// 文字に差し込むアイコンのように、届いたときに描き直す側が画像を受け取れない場合に使う。
+    func requestImage(for key: Key) -> UIImage? {
+        if let image = cachedImage(for: key) {
+            return image
+        }
+        Task { _ = try? await image(for: key) }
+        return nil
+    }
+
+    /// 画像が届いたときに呼ぶ処理を登録する。`owner`が解放されると呼ばれなくなる。
+    func addListener(owner: AnyObject, onLoad: @escaping @MainActor (Key) -> Void) {
+        listeners.append(Listener(owner: owner, onLoad: onLoad))
     }
 
     /// 画像を読み込む。同じ画像を読み込んでいる途中なら、その結果を待つ。
@@ -62,6 +83,10 @@ final class AvatarImageStore {
         do {
             let image = try await task.value
             cache.setObject(image, forKey: key.cacheKey, cost: Self.cost(of: image))
+            listeners.removeAll { $0.owner == nil }
+            for listener in listeners {
+                listener.onLoad(key)
+            }
             return image
         } catch {
             logger.error("avatar load failed url=\(key.url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
