@@ -4,12 +4,12 @@ import UIKit
 
 /// タブバーの上に常に出しておく投稿欄。タイムラインを見たまま短い投稿や返信を書けるようにする。
 ///
-/// タブバーのアクセサリーはキーボードを出しても画面の下端に残り、キーボードに隠れる。
-/// そのため、アクセサリーは下書きを見せてタップを受けるだけにし、書くときはキーボードの上に付いて動くバーに切り替える。
+/// 書いていないときは、一覧の閲覧を邪魔しないよう、タブバーのすぐ上に細いカプセルで下書きの1行だけを見せる。
+/// 書くときは同じバーが広がり、キーボードの上へ上がる。タブバーのアクセサリー（`bottomAccessory`）は高さをシステムが決めていて細くできず、
+/// キーボードにも隠れるため使わない。
 @MainActor
 final class InlineComposeController: NSObject {
     let model: ComposeModel
-    private(set) lazy var accessory = UITabAccessory(contentView: makeAccessoryContent())
     /// 編集を始めるときに呼ぶ。既定の公開範囲などをまだ読めていなければ読む。
     var onBeginEditing: () -> Void = {}
     /// 全画面の投稿画面に広げる。
@@ -18,30 +18,51 @@ final class InlineComposeController: NSObject {
     var onShowReplyTarget: (Status) -> Void = { _ in }
     /// 投稿できたあとに呼ぶ。
     var onPosted: () -> Void = {}
-    /// 画面の下端から、キーボードと編集用のバーが覆っている高さが変わったときに呼ぶ。書いていないときは0。
+    /// 画面の下端から、投稿欄（書いているときはキーボードも）が覆っている高さが変わったときに呼ぶ。
     var onObscuredHeightChange: (CGFloat) -> Void = { _ in }
 
     private weak var host: UIViewController?
-    private let accessoryLabel = UILabel()
-    private let bar = UIVisualEffectView(effect: InlineComposeController.interactiveGlass())
-    private lazy var replyButton = UIButton(configuration: .plain(), primaryAction: UIAction { [weak self] _ in
+    private let tuning: TuningStore
+    /// 書いていないときに見せる、下書きの1行。押すと書き始める。
+    private let restRow = UIControl()
+    private let restLabel = UILabel()
+    /// 書き始めて行を隠すと、スタックビューが高さ0の制約を付ける。それと競合しないよう、必須より1つ下げる。
+    private lazy var restRowHeight: NSLayoutConstraint = {
+        let constraint = restRow.heightAnchor.constraint(equalToConstant: 0)
+        constraint.priority = .required - 1
+        return constraint
+    }()
+    private let bar = ComposeBarView(effect: InlineComposeController.interactiveGlass())
+    /// 背景の付いた札にする。背景のない文字だけのボタンは、ガラスの上で単色に描かれることがあり、色合いの青が消えた。
+    private lazy var replyButton = UIButton(configuration: .tinted(), primaryAction: UIAction { [weak self] _ in
         guard let target = self?.model.replyTo else { return }
         self?.onShowReplyTarget(target)
     })
     private lazy var replyRow = makeReplyRow()
     private let textView = ComposeTextView()
     private let placeholderLabel = UILabel()
-    private lazy var textHeightLimit = textView.heightAnchor.constraint(equalToConstant: maxTextHeight)
+    /// 書き終えて入力欄を隠すと、スタックビューが高さ0の制約を付ける。それと競合しないよう、必須より1つ下げる。
+    private lazy var textHeightLimit: NSLayoutConstraint = {
+        let constraint = textView.heightAnchor.constraint(equalToConstant: maxTextHeight)
+        constraint.priority = .required - 1
+        return constraint
+    }()
     private let visibilityButton = UIButton(configuration: .plain())
     private let remainingLabel = UILabel()
     private lazy var sendButton = UIButton(configuration: .filled(), primaryAction: UIAction { [weak self] _ in self?.submit() })
     private var isPresentingError = false
-    /// 編集用のバーとキーボードの間の余白。
+    /// 入力バーと、その下のタブバーやキーボードとの間の余白。
     private let barSpacing: CGFloat = 8
-    /// 画面の下端からキーボードの上端までの高さ。キーボードが出ていなければ0。
-    private var keyboardHeight: CGFloat = 0
     private var obscuredHeight: CGFloat = 0
-    private var keyboardObserver: (any NSObjectProtocol)?
+    /// 書いていないときの、中身の上下の余白。
+    private let restInset: CGFloat = 4
+    /// 書いている。バーを広げて、入力欄とボタンを出している。
+    private var isEditing = false
+    /// 中身の上下の余白。書いていないときは細くするため詰める。
+    private lazy var stackTop = stack.topAnchor.constraint(equalTo: dragArea.contentLayoutGuide.topAnchor)
+    private lazy var stackBottom = stack.bottomAnchor.constraint(equalTo: dragArea.contentLayoutGuide.bottomAnchor)
+    private let stack = UIStackView()
+    private let tools = UIStackView()
     /// 入力バーの中身を載せるスクロールビュー。バーを下へ引くと、キーボードが指に付いて下がる。
     private let dragArea = KeyboardDragArea()
 
@@ -57,8 +78,9 @@ final class InlineComposeController: NSObject {
         UIFont.preferredFont(forTextStyle: .body).lineHeight * 5 + textView.textContainerInset.top + textView.textContainerInset.bottom
     }
 
-    init(model: ComposeModel) {
+    init(model: ComposeModel, tuning: TuningStore = AppDependencies.tuning) {
         self.model = model
+        self.tuning = tuning
         super.init()
         model.onPosted = { [weak self] in
             self?.textView.resignFirstResponder()
@@ -66,48 +88,44 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// キーボードの上に付いて動く編集用のバーを、`host`の画面に置く。
-    func install(in host: UIViewController) {
+    /// 投稿欄を`host`の画面に置く。書いていないときはタブバーのすぐ上に、書いているときはキーボードのすぐ上に来る。
+    ///
+    /// 下端は「タブバーの上」と「キーボードの上」のうち高い方に揃える。キーボードを指で引き下ろしている間も、
+    /// キーボードに付いて下がり、タブバーの上で止まる。
+    func install(in host: UITabBarController) {
         self.host = host
         configureBar()
         host.view.addSubview(bar)
+        let restingBottom = bar.bottomAnchor.constraint(equalTo: host.contentLayoutGuide.bottomAnchor, constant: -barSpacing)
+        restingBottom.priority = .defaultHigh
         NSLayoutConstraint.activate([
-            bar.leadingAnchor.constraint(equalTo: host.view.safeAreaLayoutGuide.leadingAnchor, constant: 12),
-            bar.trailingAnchor.constraint(equalTo: host.view.safeAreaLayoutGuide.trailingAnchor, constant: -12),
-            bar.bottomAnchor.constraint(equalTo: host.view.keyboardLayoutGuide.topAnchor, constant: -barSpacing),
+            bar.leadingAnchor.constraint(equalTo: host.view.safeAreaLayoutGuide.leadingAnchor, constant: 20),
+            bar.trailingAnchor.constraint(equalTo: host.view.safeAreaLayoutGuide.trailingAnchor, constant: -20),
+            bar.bottomAnchor.constraint(lessThanOrEqualTo: host.contentLayoutGuide.bottomAnchor, constant: -barSpacing),
+            bar.bottomAnchor.constraint(lessThanOrEqualTo: host.view.keyboardLayoutGuide.topAnchor, constant: -barSpacing),
+            restingBottom,
         ])
-        keyboardObserver = NotificationCenter.default.addObserver(forName: UIResponder.keyboardWillChangeFrameNotification, object: nil, queue: .main) { [weak self] notification in
-            let frame = (notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue)?.cgRectValue
-            let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double ?? 0
-            let curve = notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int ?? 0
-            MainActor.assumeIsolated {
-                self?.keyboardWillChange(to: frame, duration: duration, curve: curve)
-            }
-        }
+        bar.onFrameChange = { [weak self] in self?.reportObscuredHeight() }
+        applyEditingLayout()
         observeModel()
+        observeTuning()
     }
 
-    isolated deinit {
-        if let keyboardObserver {
-            NotificationCenter.default.removeObserver(keyboardObserver)
-        }
-    }
-
-    /// 編集用のバーを出して、キーボードを出す。
+    /// バーを広げて、キーボードを出す。
     func beginEditing() {
         onBeginEditing()
-        bar.isHidden = false
-        host?.view.bringSubviewToFront(bar)
-        // 隠している間に下書きが変わっていても、出す前に高さを合わせる。
+        setEditing(true)
+        // 書いていない間に下書きが変わっていても、出す前に高さを合わせる。
         bar.layoutIfNeeded()
         textDidChange()
-        UIView.animate(withDuration: 0.2) { self.bar.alpha = 1 }
         textView.becomeFirstResponder()
     }
 
     /// 返信先を付けて書き始める。
     func reply(to status: Status) {
         model.setReplyTarget(status)
+        // モデルの変更が画面に届くのは少しあとなので、札の行を出す前に、札の文字をここで入れておく。
+        update()
         beginEditing()
     }
 
@@ -121,32 +139,52 @@ final class InlineComposeController: NSObject {
         Task { await model.submit() }
     }
 
-    /// キーボードと同じ動きで、覆う高さを知らせる。タイムラインの下側の余白がキーボードと揃って動く。
-    private func keyboardWillChange(to frame: CGRect?, duration: Double, curve: Int) {
-        guard let host, let frame, let screen = host.view.window?.screen else { return }
-        let keyboardTop = host.view.convert(frame, from: screen.coordinateSpace).minY
-        keyboardHeight = max(0, host.view.bounds.maxY - keyboardTop)
-        UIView.animate(withDuration: duration, delay: 0, options: UIView.AnimationOptions(rawValue: UInt(curve) << 16)) {
-            self.reportObscuredHeight()
-        }
-    }
-
-    /// 書いている間は、キーボードに編集用のバーを足した高さを覆っている。入力が伸びたときや返信先の札が出たときも測り直す。
+    /// バーの上端から画面の下端までを覆っている。書いていればキーボードも含む。バーが動くたびに測り直す。
     private func reportObscuredHeight() {
-        let height = keyboardHeight > 0 && textView.isFirstResponder ? keyboardHeight + barSpacing + bar.bounds.height : 0
+        guard let host else { return }
+        let height = max(0, host.view.bounds.maxY - bar.frame.minY + barSpacing)
         guard height != obscuredHeight else { return }
         obscuredHeight = height
         onObscuredHeightChange(height)
     }
 
-    private func endEditing() {
-        UIView.animate(withDuration: 0.2) {
-            self.bar.alpha = 0
-        } completion: { _ in
-            // 閉じるアニメーションの途中でまた書き始めていたら、隠さない。
-            if !self.textView.isFirstResponder {
-                self.bar.isHidden = true
-            }
+    /// 書き始めと書き終わりで、バーの中身を入れ替える。高さの変化はキーボードの動きと並べて動かす。
+    private func setEditing(_ editing: Bool) {
+        guard isEditing != editing else { return }
+        isEditing = editing
+        UIView.animate(withDuration: tuning.value(of: TuningCatalog.composeMorphDuration), delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            self.applyEditingLayout()
+            self.host?.view.layoutIfNeeded()
+        }
+    }
+
+    private func applyEditingLayout() {
+        setRowHidden(restRow, isEditing)
+        restRow.alpha = isEditing ? 0 : 1
+        for view in [textView, tools] {
+            setRowHidden(view, !isEditing)
+            view.alpha = isEditing ? 1 : 0
+        }
+        let showsReply = isEditing && model.replyTo != nil
+        setRowHidden(replyRow, !showsReply)
+        replyRow.alpha = showsReply ? 1 : 0
+        stackTop.constant = isEditing ? 10 : restInset
+        stackBottom.constant = isEditing ? -10 : -restInset
+    }
+
+    /// スタックビューの行は、値が変わるときだけ隠したり出したりする。同じ値を、特にアニメーションの途中に代入し直すと、
+    /// スタックビューが行を隠したものとして高さ0で並べたまま、行は見えている状態になり、返信先の札が入力欄に重なって描かれた。
+    private func setRowHidden(_ view: UIView, _ hidden: Bool) {
+        guard view.isHidden != hidden else { return }
+        view.isHidden = hidden
+    }
+
+    /// 書いていないときのバーの高さを、チューニングの値に揃える。
+    private func observeTuning() {
+        withObservationTracking {
+            restRowHeight.constant = tuning.value(of: TuningCatalog.composeRestingHeight) - restInset * 2
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.observeTuning() }
         }
     }
 
@@ -169,8 +207,11 @@ final class InlineComposeController: NSObject {
         placeholderLabel.isHidden = !model.text.isEmpty
 
         let replyAcct = model.replyTo.map { "@\($0.displayed.account.acct)" }
-        replyRow.isHidden = replyAcct == nil
-        replyButton.configuration?.title = replyAcct.map { "\($0)への返信" + (model.showsSpoiler ? "（注意書き付き）" : "") }
+        // 札を消すときは、薄くなる間も文字が残るよう、前の文字のままにする。
+        if let replyAcct {
+            setReplyTitle("\(replyAcct)への返信" + (model.showsSpoiler ? "（注意書き付き）" : ""))
+        }
+        setReplyRowShown(isEditing && replyAcct != nil)
 
         let option = VisibilityOption(model.visibility)
         visibilityButton.configuration?.image = UIImage(systemName: option.symbolName)
@@ -189,14 +230,43 @@ final class InlineComposeController: NSObject {
         sendButton.configuration?.showsActivityIndicator = model.isPosting
         textView.isEditable = !model.isPosting
 
-        accessoryLabel.attributedText = accessoryText(replyAcct: replyAcct)
+        restLabel.attributedText = restText(replyAcct: replyAcct)
         presentErrorIfNeeded()
-        bar.layoutIfNeeded()
-        reportObscuredHeight()
     }
 
-    /// アクセサリーに出す下書きの1行。返信なら宛先を札にまとめ、自分で書いた部分だけを続ける。何も書いていなければ書き出しを促す。
-    private func accessoryText(replyAcct: String?) -> NSAttributedString {
+    /// 書いている間に札を出したり消したりするときは、パッと切り替えず、札を薄くしながら行を縮める（広げる）。
+    /// パッと切り替えると、バーの高さが一瞬で変わり、上端とタイムラインの下の余白が飛んで見える。
+    /// 書いていないときは、バーの形を変える動きの中で行を出し入れするので、ここでは動かさない。
+    private func setReplyRowShown(_ shown: Bool) {
+        guard replyRow.isHidden == shown else { return }
+        guard isEditing, bar.window != nil else {
+            setRowHidden(replyRow, !shown)
+            replyRow.alpha = shown ? 1 : 0
+            return
+        }
+        if shown {
+            replyRow.alpha = 0
+        }
+        UIView.animate(withDuration: tuning.value(of: TuningCatalog.composeMorphDuration), delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            self.setRowHidden(self.replyRow, !shown)
+            self.replyRow.alpha = shown ? 1 : 0
+            self.host?.view.layoutIfNeeded()
+        }
+    }
+
+    /// 札の文字を入れ、札の大きさを測り直させる。
+    /// 札は文字のないアイコンだけの大きさで並べられたあと、文字を入れても大きさが変わらず、文字がカプセルの外に切れて見えなくなったことがある
+    /// （投稿に返信したあと、同じ投稿のブーストを返信に選び直したとき、実機で起きた）。
+    private func setReplyTitle(_ title: String?) {
+        if replyButton.configuration?.title != title {
+            replyButton.configuration?.title = title
+        }
+        replyButton.invalidateIntrinsicContentSize()
+        replyRow.setNeedsLayout()
+    }
+
+    /// 書いていないときに出す下書きの1行。返信なら宛先を札にまとめ、自分で書いた部分だけを続ける。何も書いていなければ書き出しを促す。
+    private func restText(replyAcct: String?) -> NSAttributedString {
         let font = UIFont.preferredFont(forTextStyle: .body)
         let result = NSMutableAttributedString()
         if let replyAcct {
@@ -240,21 +310,20 @@ final class InlineComposeController: NSObject {
 
     // MARK: - 部品
 
-    private func makeAccessoryContent() -> UIView {
-        let content = UIControl()
-        accessoryLabel.lineBreakMode = .byTruncatingTail
-        accessoryLabel.translatesAutoresizingMaskIntoConstraints = false
-        content.addSubview(accessoryLabel)
+    private func configureRestRow() {
+        restLabel.lineBreakMode = .byTruncatingTail
+        restLabel.translatesAutoresizingMaskIntoConstraints = false
+        restRow.addSubview(restLabel)
         NSLayoutConstraint.activate([
-            accessoryLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 20),
-            accessoryLabel.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -20),
-            accessoryLabel.centerYAnchor.constraint(equalTo: content.centerYAnchor),
+            restLabel.leadingAnchor.constraint(equalTo: restRow.leadingAnchor),
+            restLabel.trailingAnchor.constraint(equalTo: restRow.trailingAnchor),
+            restLabel.centerYAnchor.constraint(equalTo: restRow.centerYAnchor),
+            restRowHeight,
         ])
-        content.addAction(UIAction { [weak self] _ in self?.beginEditing() }, for: .touchUpInside)
-        content.isAccessibilityElement = true
-        content.accessibilityLabel = "投稿欄"
-        content.accessibilityTraits = .button
-        return content
+        restRow.addAction(UIAction { [weak self] _ in self?.beginEditing() }, for: .touchUpInside)
+        restRow.isAccessibilityElement = true
+        restRow.accessibilityLabel = "投稿欄"
+        restRow.accessibilityTraits = .button
     }
 
     private func makeReplyRow() -> UIView {
@@ -267,7 +336,8 @@ final class InlineComposeController: NSObject {
             attributes.font = .preferredFont(forTextStyle: .footnote)
             return attributes
         }
-        replyButton.configuration?.contentInsets = .zero
+        replyButton.configuration?.cornerStyle = .capsule
+        replyButton.configuration?.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 10)
         replyButton.contentHorizontalAlignment = .leading
         replyButton.accessibilityHint = "タイムラインの返信先の投稿を表示します"
         replyButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -278,16 +348,21 @@ final class InlineComposeController: NSObject {
         let clear = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.model.setReplyTarget(nil) })
         clear.accessibilityLabel = "返信をやめる"
         clear.setContentHuggingPriority(.required, for: .horizontal)
-        let row = UIStackView(arrangedSubviews: [replyButton, clear])
+        // 札は宛先の長さに合わせ、余った幅は札と×の間に空ける。
+        replyButton.setContentHuggingPriority(.required, for: .horizontal)
+        let spacer = UIView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let row = UIStackView(arrangedSubviews: [replyButton, spacer, clear])
+        row.alignment = .center
         row.spacing = 6
         return row
     }
 
     private func configureBar() {
         bar.translatesAutoresizingMaskIntoConstraints = false
-        bar.cornerConfiguration = .corners(radius: .fixed(24))
-        bar.isHidden = true
-        bar.alpha = 0
+        // 書いていないときは細いカプセル、書いているときは角の丸い板にする。
+        bar.cornerConfiguration = .capsule(maximumRadius: 24)
+        configureRestRow()
         // キーボードを指に付いて動かせるのは、引いて閉じる設定のスクロールビューを引いたときだけなので、バーの中身をスクロールビューに載せる。
         // 中身は動かさず、指の動きだけをキーボードに伝える。
         dragArea.translatesAutoresizingMaskIntoConstraints = false
@@ -335,10 +410,14 @@ final class InlineComposeController: NSObject {
 
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let tools = UIStackView(arrangedSubviews: [visibilityButton, expandButton, spacer, remainingLabel, sendButton])
+        for view in [visibilityButton, expandButton, spacer, remainingLabel, sendButton] {
+            tools.addArrangedSubview(view)
+        }
         tools.alignment = .center
         tools.spacing = 4
-        let stack = UIStackView(arrangedSubviews: [replyRow, textView, tools])
+        for view in [restRow, replyRow, textView, tools] {
+            stack.addArrangedSubview(view)
+        }
         stack.axis = .vertical
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
@@ -353,8 +432,8 @@ final class InlineComposeController: NSObject {
             dragArea.bottomAnchor.constraint(equalTo: bar.contentView.bottomAnchor),
             stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
             stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10),
-            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 10),
-            stack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10),
+            stackTop,
+            stackBottom,
             // 中身の大きさをバーの大きさに揃え、バーの高さは中身から決める。
             content.widthAnchor.constraint(equalTo: frame.widthAnchor),
             content.heightAnchor.constraint(equalTo: frame.heightAnchor),
@@ -375,7 +454,7 @@ extension InlineComposeController: UITextViewDelegate {
     }
 
     func textViewDidEndEditing(_ textView: UITextView) {
-        endEditing()
+        setEditing(false)
     }
 }
 
@@ -399,3 +478,17 @@ private final class KeyboardDragArea: UIScrollView {
         true
     }
 }
+
+/// 投稿欄のバー。キーボードに付いて動いたときや高さが変わったときに知らせ、覆っている高さを測り直せるようにする。
+private final class ComposeBarView: UIVisualEffectView {
+    var onFrameChange: () -> Void = {}
+
+    override var center: CGPoint {
+        didSet { onFrameChange() }
+    }
+
+    override var bounds: CGRect {
+        didSet { onFrameChange() }
+    }
+}
+

@@ -67,7 +67,6 @@ final class SessionController {
         composer = InlineComposeController(model: ComposeModel(myAccountID: credential.accountID) { draft in
             _ = try await client.postStatus(draft)
         })
-        tabBarController.bottomAccessory = composer.accessory
         rootViewController = tabBarController
         forward = { [weak self] message in
             guard let self else { return }

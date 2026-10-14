@@ -297,6 +297,24 @@ public enum TuningCatalog {
         defaultValue: false
     )
 
+    /// 書いていないときの投稿欄の高さ（pt）。細いほど一覧の閲覧を邪魔しない。
+    public static let composeRestingHeight = NumberTuning(
+        id: "compose.restingHeight",
+        title: "書いていないときの投稿欄の高さ（pt）",
+        range: 32...56,
+        step: 1,
+        defaultValue: 40
+    )
+
+    /// 投稿欄が、細いカプセルと書くときの形の間で形を変える時間（秒）。位置の動きはキーボードに合わせて別に動く。
+    public static let composeMorphDuration = NumberTuning(
+        id: "compose.morphDuration",
+        title: "投稿欄が形を変える時間（秒）",
+        range: 0.05...1.5,
+        step: 0.05,
+        defaultValue: 0.35
+    )
+
     /// ビューアの閉じる操作の判定。
     @MainActor
     public static func dragToDismiss(in store: TuningStore) -> DragToDismiss {
@@ -324,6 +342,10 @@ public enum TuningCatalog {
             .toggle(animatesInsertionAtTop),
             .number(fillPageLimit),
             .number(gapAutoLoadDistance),
+        ]),
+        TuningSection(id: "compose", title: "投稿欄", items: [
+            .number(composeRestingHeight),
+            .number(composeMorphDuration),
         ]),
         TuningSection(id: "media.dismiss", title: "ビューア：閉じる操作", items: [
             .number(mediaDismissDistance),
