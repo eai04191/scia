@@ -54,6 +54,8 @@ final class MediaViewerController: UIViewController {
         let drawsUnderBars: Bool
         /// バーの奥にも描くとき、最前面の写しを一覧の中の写しへ受け渡し始める進み具合。0から1。
         let handoffStart: Double
+        /// バーの奥にも描くとき、閉じ始めにバーと重なっていた部分を一覧の中の写しへ入れ替え終える進み具合。0から1。
+        let barOverlapFadeEnd: Double
     }
 
     /// - Parameter sourceTile: 添付ファイルのサムネイルを返す。開閉のたびに呼ぶため、閉じるまでに一覧の行が再利用されても今の位置を返せる。
@@ -614,6 +616,7 @@ extension MediaViewerController {
             window: window,
             spring: SpringCurve(duration: timing.closeDuration, bounce: timing.bounce),
             handoffStart: CGFloat(timing.handoffStart),
+            barOverlapFadeEnd: CGFloat(timing.barOverlapFadeEnd),
             // 戻り先が最初から見つからなければ、その場で薄くする。
             movesImage: moves,
             concealedTile: closingTile,

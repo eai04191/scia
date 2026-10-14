@@ -8,9 +8,12 @@ import UIKit
 /// 毎フレーム今のサムネイルを探し直し、始点とその位置のあいだをばねの進み具合で補う。
 /// 途中で行が再利用されたら、隠すサムネイルも探し直したものに替える。見つからなくなったら、最後の位置へ向かいながら薄くする。
 ///
-/// 最前面の写しは、着地へ近づくにつれて一覧のバーに隠れない範囲へ切り落とす。切り落とさないと、バーの手前を通って貫通して見える。
-/// 切り落とした先は、一覧の中に置いた同じ写し（`Underlay`）が埋める。一覧の中の写しにはバーの下のぼかしがかかるため、
+/// 最前面の写しは、一覧のバーに隠れない範囲にだけ見せる。バーの位置に見せると、バーの手前を通って貫通して見える。
+/// バーの位置は、一覧の中に置いた同じ写し（`Underlay`）が埋める。一覧の中の写しにはバーの下のぼかしがかかるため、
 /// 着地してサムネイルを見せても、バーにかかる部分の見え方が切り替わらない。
+/// 閉じ始めにバーと重なっていた部分（縦長の画像や、下へ払ってタブバーにかかった画像）は、それまでバーより手前に描いていたため、
+/// 急に奥へ移すと切り替わって見える。そこだけは閉じ始めの早いうちに薄くして、一覧の中の写しへ入れ替える。
+/// 一覧の中の写しがないときは、見せる範囲を画面全体から一覧のバーに隠れない範囲へ、着地へ近づくにつれて絞る。
 /// バーの下のぼかしはバーの下端より少し下までなだらかにかかり、新着ボタンのように一覧に重なる部品もあるため、
 /// 着地の手前からは最前面の写しを薄くして、一覧の中の写しへ受け渡す。
 @MainActor
@@ -37,6 +40,7 @@ final class MediaClosingFlight: NSObject {
     private let spring: SpringCurve
     private let movesImage: Bool
     private let handoffStart: CGFloat
+    private let barOverlapFadeEnd: CGFloat
     /// 戻り先を見失ってから薄くしている度合い。1で不透明。
     private var visibility: CGFloat = 1
     private let findTile: @MainActor () -> MediaTileView?
@@ -48,8 +52,11 @@ final class MediaClosingFlight: NSObject {
     private var lastTarget: (frame: CGRect, radius: CGFloat)?
     /// 戻り先の一覧の、バーに隠れない範囲（ウィンドウ座標）。見つかるまでは画面全体。
     private var lastVisibleRect: CGRect
-    private let clipMask = CALayer()
-    /// 最前面の写しを見せている範囲（ウィンドウ座標）。
+    /// 最前面の写しのマスク。一覧のバーに隠れない範囲と、閉じ始めの写しの枠を重ねる。
+    private let morphMask = CALayer()
+    private let visibleMask = CALayer()
+    private let startOverlapMask = CALayer()
+    /// 最前面の写しを不透明に見せている範囲（ウィンドウ座標）。
     private var clipRect: CGRect
     /// 一覧の中の写しのマスク。最前面の写しを見せている範囲の外は不透明、内は受け渡しが始まるまで透明にする。
     private let underlayMask = CALayer()
@@ -63,12 +70,14 @@ final class MediaClosingFlight: NSObject {
     /// - Parameters:
     ///   - concealedTile: 戻り先として隠しているサムネイル。戻り終えたら見せる。
     ///   - handoffStart: 一覧の中の写しへ受け渡し始める進み具合。一覧の中の写しがなければ使わない。
+    ///   - barOverlapFadeEnd: 閉じ始めにバーと重なっていた部分を、一覧の中の写しへ入れ替え終える進み具合。一覧の中の写しがなければ使わない。
     ///   - movesImage: falseなら写しを動かさず、その場で薄くする。
     init(
         parts: Parts,
         window: UIWindow,
         spring: SpringCurve,
         handoffStart: CGFloat,
+        barOverlapFadeEnd: CGFloat,
         movesImage: Bool,
         concealedTile: MediaTileView?,
         findTile: @escaping @MainActor () -> MediaTileView?
@@ -77,6 +86,7 @@ final class MediaClosingFlight: NSObject {
         self.window = window
         self.spring = spring
         self.handoffStart = min(max(handoffStart, 0), 1)
+        self.barOverlapFadeEnd = min(max(barOverlapFadeEnd, 0.01), 1)
         self.movesImage = movesImage
         self.concealedTile = concealedTile
         self.findTile = findTile
@@ -86,8 +96,11 @@ final class MediaClosingFlight: NSObject {
         startFadingAlphas = parts.fadingViews.map(\.alpha)
         lastVisibleRect = window.bounds
         clipRect = window.bounds
-        clipMask.backgroundColor = UIColor.black.cgColor
-        parts.morph.layer.mask = clipMask
+        visibleMask.backgroundColor = UIColor.black.cgColor
+        startOverlapMask.backgroundColor = UIColor.black.cgColor
+        morphMask.addSublayer(visibleMask)
+        morphMask.addSublayer(startOverlapMask)
+        parts.morph.layer.mask = morphMask
         underlayOutsideMask.fillColor = UIColor.black.cgColor
         underlayOutsideMask.fillRule = .evenOdd
         underlayInsideMask.backgroundColor = UIColor.black.cgColor
@@ -149,15 +162,24 @@ final class MediaClosingFlight: NSObject {
         }
     }
 
-    /// 写しが着地へ近づくにつれ、見える範囲を画面全体から一覧の見える範囲へ絞る。
-    /// 一覧の外の最前面で動かしているため、絞らないと、バーに重なる部分が手前を通って貫通して見える。
+    /// 最前面の写しを見せる範囲を決める。一覧の外の最前面で動かしているため、バーの位置に見せると手前を通って貫通して見える。
     private func updateClip(progress: CGFloat) {
-        let rect = Self.interpolate(window.bounds, lastVisibleRect, progress)
-        clipRect = rect
-        let local = rect.offsetBy(dx: -parts.morph.frame.minX, dy: -parts.morph.frame.minY)
+        let startOverlapOpacity: CGFloat
+        if parts.underlay != nil {
+            // バーの位置は一覧の中の写しが埋めるため、見せるのは一覧のバーに隠れない範囲と、閉じ始めにすでに描いていた枠だけにする。
+            clipRect = lastVisibleRect
+            let t = min(progress / barOverlapFadeEnd, 1)
+            startOverlapOpacity = 1 - t * t * (3 - 2 * t)
+        } else {
+            clipRect = Self.interpolate(window.bounds, lastVisibleRect, progress)
+            startOverlapOpacity = 0
+        }
+        let origin = parts.morph.frame.origin
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        clipMask.frame = local
+        visibleMask.frame = clipRect.offsetBy(dx: -origin.x, dy: -origin.y)
+        startOverlapMask.frame = startFrame.intersection(window.bounds).offsetBy(dx: -origin.x, dy: -origin.y)
+        startOverlapMask.opacity = Float(startOverlapOpacity)
         CATransaction.commit()
     }
 
@@ -172,7 +194,8 @@ final class MediaClosingFlight: NSObject {
     /// バーの奥の写しを、最前面の写しと同じ位置と見た目にそろえる。
     /// 写しは行からはみ出すため、行をほかの行より手前に描く。`zPosition`を上げるとバーの下のぼかしより手前に出てしまうため、
     /// 同じ`zPosition`の行どうしの並び順で手前に出す。一覧は行を足すときに並び順を変えるため、毎フレーム出し直す。
-    /// 最前面の写しを見せている範囲では、受け渡しが始まるまで透明にし、半透明の画像で2枚の写しが重なって濃く見えないようにする。
+    /// 最前面の写しを不透明に見せている範囲では、受け渡しが始まるまで透明にし、半透明の画像で2枚の写しが重なって濃く見えないようにする。
+    /// 閉じ始めにバーと重なっていた部分では不透明のままにする。そこでは最前面の写しを薄くして入れ替えるため、半透明の画像はその間だけ濃く見える。
     /// 受け渡しの間は2枚を重ねる。不透明な画像は、下の写しを不透明にしないと重ねた結果が薄くなる（上を1-h、下をhの濃さにすると1-h+h²）。
     /// そのため下の写しは受け渡しの始めにすばやく不透明にし、不透明な画像が薄く見えるのを数%に抑える。
     /// 代わりに半透明の画像では、受け渡しの間（既定で閉じる時間の最後の3割）だけ半透明の部分が濃く見える。添付の多くは不透明な写真なので、こちらを受け入れる。

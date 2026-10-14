@@ -61,7 +61,8 @@ extension TimelineViewController {
                 closeDuration: tuning.value(of: TuningCatalog.mediaCloseDuration),
                 bounce: tuning.value(of: TuningCatalog.mediaTransitionBounce),
                 drawsUnderBars: tuning.value(of: TuningCatalog.mediaCloseDrawsUnderBars),
-                handoffStart: tuning.value(of: TuningCatalog.mediaCloseHandoffStart)
+                handoffStart: tuning.value(of: TuningCatalog.mediaCloseHandoffStart),
+                barOverlapFadeEnd: tuning.value(of: TuningCatalog.mediaCloseBarOverlapFadeEnd)
             ),
             from: self,
             sourceTile: { [weak self, weak grid] attachmentID in

@@ -198,6 +198,17 @@ public enum TuningCatalog {
         defaultValue: 0.7
     )
 
+    /// バーの奥にも描くとき、閉じ始めにバーと重なっていた部分（縦長の画像や、下へ払ってタブバーにかかった画像）を、
+    /// バーより手前の写しから一覧の中の写しへ入れ替え終える、閉じる動きの進み具合。
+    /// 小さいほど早くバーの奥の見え方になり、大きいほど閉じ始めの画像の端がバーの位置で長く手前に残る。
+    public static let mediaCloseBarOverlapFadeEnd = NumberTuning(
+        id: "media.closeBarOverlapFadeEnd",
+        title: "閉じるとき、バーと重なっていた部分を奥へ入れ替え終える進み具合",
+        range: 0.05...1,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
     /// ビューアの閉じる操作の判定。
     @MainActor
     public static func dragToDismiss(in store: TuningStore) -> DragToDismiss {
@@ -228,5 +239,6 @@ public enum TuningCatalog {
         .number(mediaTransitionBounce),
         .toggle(mediaCloseDrawsUnderBars),
         .number(mediaCloseHandoffStart),
+        .number(mediaCloseBarOverlapFadeEnd),
     ]
 }
