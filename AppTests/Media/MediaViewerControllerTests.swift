@@ -148,6 +148,22 @@ struct MediaViewerControllerTests {
         alert.dismiss(animated: false)
     }
 
+    /// 画面下の説明は1行で見せ、全文はそこからシートで読む。VoiceOverでは払えないため、実行しても開く。
+    @Test func captionOpensAltTextSheet() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let viewer = presentLoadingViewer(on: harness, data: try pngData(), description: "夕焼けの海辺")
+        defer { viewer.dismiss(animated: false) }
+
+        #expect(viewer.captionView.accessibilityLabel == "夕焼けの海辺")
+        #expect(viewer.captionView.accessibilityActivate())
+
+        try await waitUntil { viewer.presentedViewController is UINavigationController }
+        let sheet = try #require(viewer.presentedViewController as? UINavigationController)
+        #expect((sheet.viewControllers.first as? AltTextViewController)?.text == "夕焼けの海辺")
+        sheet.dismiss(animated: false)
+    }
+
     /// 保存を待つ間に代替テキストのシートを開いても、保存の失敗はそのシートの上にアラートで知らせる。
     @Test func saveFailureIsShownAboveSheetOpenedWhileSaving() async throws {
         let harness = try TimelineHarness()

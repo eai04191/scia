@@ -21,7 +21,7 @@ final class MediaViewerController: UIViewController {
     /// 添付ファイルへの操作をまとめたメニューを出す。
     private let menuButton = UIButton(configuration: .glass())
     private let counterLabel = UILabel()
-    private let captionView = CaptionView()
+    let captionView = CaptionView()
     /// 写真に保存したことを、メニューボタンの下で知らせる。
     private let statusChip = StatusChip()
     private let photoSaver: PhotoLibrarySaver
@@ -232,6 +232,7 @@ final class MediaViewerController: UIViewController {
             completion(self?.menuElements() ?? [])
         }])
         menuButton.showsMenuAsPrimaryAction = true
+        captionView.onOpen = { [weak self] in self?.showAltText() }
         counterLabel.font = .preferredFont(forTextStyle: .subheadline)
         counterLabel.textColor = .white
         counterLabel.isHidden = attachments.count == 1
@@ -879,7 +880,6 @@ extension MediaViewerController: UIPageViewControllerDataSource, UIPageViewContr
     func pageViewController(_ pageViewController: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
         guard completed, let page = pageViewController.viewControllers?.first as? MediaPageController else { return }
         currentIndex = page.index
-        captionView.scrollToTop()
         updateChrome()
     }
 }
@@ -1159,19 +1159,19 @@ final class UnsupportedPageController: MediaPageController {
 }
 
 /// 画面の下に出す代替テキスト。長ければスクロールして読む。
-private final class CaptionView: UIView {
-    private let scrollView = UIScrollView()
+/// 添付ファイルの説明を、画像を覆わないよう1行で見せる。全文は、上へ払うかVoiceOverで実行して、シートで読む。
+final class CaptionView: UIView {
     private let label = UILabel()
     private let contentGuide = UILayoutGuide()
+    /// 全文を読む操作をした。
+    var onOpen: (() -> Void)?
 
     var text: String {
         get { label.text ?? "" }
-        set { label.text = newValue }
-    }
-
-    /// 別の添付ファイルの説明に変わったときに、前の説明を読んでいた位置を引き継がないようにする。
-    func scrollToTop() {
-        scrollView.contentOffset = .zero
+        set {
+            label.text = newValue
+            accessibilityLabel = newValue
+        }
     }
 
     /// 文字の下端。安全領域に合わせるために使う。
@@ -1180,34 +1180,38 @@ private final class CaptionView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = UIColor.black.withAlphaComponent(0.6)
-        label.numberOfLines = 0
+        label.numberOfLines = 1
+        label.lineBreakMode = .byTruncatingTail
         label.font = .preferredFont(forTextStyle: .subheadline)
         label.adjustsFontForContentSizeCategory = true
         label.textColor = .white
         addLayoutGuide(contentGuide)
-        scrollView.translatesAutoresizingMaskIntoConstraints = false
         label.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(scrollView)
-        scrollView.addSubview(label)
-        // 長い説明でも画像を覆いすぎないよう、高さに上限を置く。
-        let fitsContent = scrollView.heightAnchor.constraint(equalTo: label.heightAnchor)
-        fitsContent.priority = .defaultHigh
+        addSubview(label)
         NSLayoutConstraint.activate([
-            scrollView.topAnchor.constraint(equalTo: topAnchor, constant: 12),
-            scrollView.leadingAnchor.constraint(equalTo: layoutMarginsGuide.leadingAnchor),
-            scrollView.trailingAnchor.constraint(equalTo: layoutMarginsGuide.trailingAnchor),
-            scrollView.bottomAnchor.constraint(equalTo: contentGuide.bottomAnchor),
-            contentGuide.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 12),
+            label.leadingAnchor.constraint(equalTo: layoutMarginsGuide.leadingAnchor),
+            label.trailingAnchor.constraint(equalTo: layoutMarginsGuide.trailingAnchor),
+            contentGuide.topAnchor.constraint(equalTo: label.topAnchor),
+            contentGuide.bottomAnchor.constraint(equalTo: label.bottomAnchor),
             contentGuide.leadingAnchor.constraint(equalTo: leadingAnchor),
             contentGuide.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scrollView.heightAnchor.constraint(lessThanOrEqualToConstant: 120),
-            fitsContent,
-            label.topAnchor.constraint(equalTo: scrollView.contentLayoutGuide.topAnchor),
-            label.bottomAnchor.constraint(equalTo: scrollView.contentLayoutGuide.bottomAnchor),
-            label.leadingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.leadingAnchor),
-            label.trailingAnchor.constraint(equalTo: scrollView.contentLayoutGuide.trailingAnchor),
-            label.widthAnchor.constraint(equalTo: scrollView.frameLayoutGuide.widthAnchor),
         ])
+        let swipe = UISwipeGestureRecognizer(target: self, action: #selector(swipedUp))
+        swipe.direction = .up
+        addGestureRecognizer(swipe)
+        isAccessibilityElement = true
+        accessibilityTraits = .button
+        accessibilityHint = "全文を表示します。"
+    }
+
+    @objc private func swipedUp() {
+        onOpen?()
+    }
+
+    override func accessibilityActivate() -> Bool {
+        onOpen?()
+        return true
     }
 
     @available(*, unavailable)
