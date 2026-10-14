@@ -185,4 +185,52 @@ struct MediaViewerControllerTests {
         try await waitUntil { viewer.morphImage?.size == arriving.size }
         #expect(viewer.isMoving, "写しを差し替える前に開き終わりました")
     }
+
+    /// ビューアは一覧を残したまま上に重ねるため、開いている間も閉じたあとも、一覧の読んでいる位置を動かさない。
+    @Test func timelineKeepsPositionWhileViewerOpensAndCloses() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        harness.scroll(toFraction: 0.5)
+        let offset = harness.collectionView.contentOffset
+        let anchor = try #require(harness.viewController.displayedItemIDs.first { harness.windowMinY(of: $0) != nil })
+        let anchorY = try #require(harness.windowMinY(of: anchor))
+        let tile = MediaTileView(store: .offline)
+        tile.frame = CGRect(x: 20, y: 300, width: 160, height: 90)
+        harness.viewController.view.addSubview(tile)
+        let attachment = MediaAttachment(
+            id: "1",
+            type: .image,
+            url: nil,
+            previewUrl: nil,
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 900, height: 1_600)),
+            blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+        )
+        tile.apply(attachment, hiddenCount: 0, isCovered: false)
+        MediaViewerController.present(
+            attachments: [attachment],
+            startIndex: 0,
+            store: .offline,
+            dragToDismiss: drag,
+            timing: timing,
+            from: harness.viewController,
+            sourceTile: { _ in tile },
+            onDismiss: { harness.viewController.reportVisibleItems() }
+        )
+        let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
+        try await waitUntil { viewer.isContentHiddenForTransition }
+        try await waitUntil { !viewer.isMoving }
+        harness.viewController.view.window?.layoutIfNeeded()
+
+        #expect(harness.collectionView.contentOffset == offset, "開いている間に一覧が動きました")
+        #expect(harness.windowMinY(of: anchor) == anchorY)
+
+        viewer.close()
+        try await waitUntil { harness.viewController.presentedViewController == nil && !tile.isConcealedForViewer }
+        harness.viewController.view.window?.layoutIfNeeded()
+
+        #expect(harness.collectionView.contentOffset == offset, "閉じたあとに一覧が動きました")
+        #expect(harness.windowMinY(of: anchor) == anchorY)
+    }
 }
