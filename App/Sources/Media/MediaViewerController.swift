@@ -382,9 +382,9 @@ final class MediaViewerController: UIViewController {
 
     /// 共有シートに渡すもの。見出しのプレビューに、`index`の添付ファイルの描いている画像（動画は再生しているコマ）か一覧のサムネイルを添える。
     /// 落としている間にページを替えられるため、表示中のページではなく、共有を選んだときのページから取る。
-    private func shareItem(for file: URL, at index: Int) -> Any {
+    private func shareSheetItem(for file: URL, at index: Int) -> Any {
         guard let preview = pages[index]?.transitionImage ?? sourceTile(attachments[index].id)?.loadedThumbnail else { return file }
-        return MediaShareItem(file: file, preview: preview)
+        return MediaShareSheetItem(file: file, preview: preview)
     }
 
     /// 表示中のページが画像なら、そのページ。
@@ -493,7 +493,7 @@ final class MediaViewerController: UIViewController {
             let index = currentIndex
             withDownloadedFile(of: url) { [weak self] file in
                 guard let self else { return }
-                self.presentShareSheet(self.shareItem(for: file, at: index))
+                self.presentShareSheet(self.shareSheetItem(for: file, at: index))
             }
         } else if let url = currentUnsupportedURL {
             presentShareSheet(url)

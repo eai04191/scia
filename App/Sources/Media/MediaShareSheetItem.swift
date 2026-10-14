@@ -1,13 +1,13 @@
 import LinkPresentation
 import UIKit
 
-/// 共有シートに渡す、添付ファイルの画像。
+/// 共有シートに渡す、添付ファイルの元のファイル。写真への保存では使わず、`PhotoLibrarySaver`にファイルを直接渡す。
 ///
-/// 保存やコピーで縮めて展開した画像を渡さないよう、元のファイルをそのまま渡す。
-/// ファイルだけを渡すと共有シートの見出しのプレビューが仮のアイコンになるため、画像をプレビューとして添える。
-final class MediaShareItem: NSObject, UIActivityItemSource {
-    /// 元のファイル。拡張子は中身の形式に合わせてある。
-    let file: URL
+/// 画像の保存やコピーで縮めて展開した画像を渡さないよう、元のファイルをそのまま渡す。
+/// ファイルだけを渡すと共有シートの見出しのプレビューが仮のアイコンになるため、描いている画像（動画は再生しているコマ）をプレビューとして添える。
+final class MediaShareSheetItem: NSObject, UIActivityItemSource {
+    /// 元のファイルの写し。拡張子は中身の形式に合わせてある。
+    private let file: URL
     private let preview: UIImage
 
     init(file: URL, preview: UIImage) {
