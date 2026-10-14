@@ -99,6 +99,15 @@ public enum TuningCatalog {
         defaultValue: 1
     )
 
+    /// 添付ファイルが1つの投稿で、縦長の画像をどこまで縦長のまま出すか（幅÷高さ）。これより縦長なものは上下を切り落とす。
+    public static let mediaTallestAspectRatio = NumberTuning(
+        id: "timeline.mediaTallestAspectRatio",
+        title: "1枚の画像の最も縦長な比率（幅÷高さ）",
+        range: 0.5...1.5,
+        step: 0.05,
+        defaultValue: 0.75
+    )
+
     public static let items: [TuningItem] = [
         .number(paragraphSpacing),
         .number(insertionInterval),
@@ -106,5 +115,6 @@ public enum TuningCatalog {
         .toggle(animatesInsertionAtTop),
         .number(fillPageLimit),
         .number(gapAutoLoadDistance),
+        .number(mediaTallestAspectRatio),
     ]
 }
