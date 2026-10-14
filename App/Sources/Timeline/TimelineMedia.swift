@@ -56,8 +56,13 @@ extension TimelineViewController {
             startIndex: index,
             store: mediaImages,
             dragToDismiss: TuningCatalog.dragToDismiss(in: tuning),
+            timing: MediaViewerController.Timing(
+                openDuration: tuning.value(of: TuningCatalog.mediaOpenDuration),
+                closeDuration: tuning.value(of: TuningCatalog.mediaCloseDuration),
+                bounce: tuning.value(of: TuningCatalog.mediaTransitionBounce)
+            ),
             from: self,
-            sourceView: { [weak self, weak grid] attachmentID in
+            sourceTile: { [weak self, weak grid] attachmentID in
                 grid?.tile(for: attachmentID) ?? self?.visibleMediaTile(for: attachmentID)
             },
             // 一覧は残したままなので表示し直しの通知が来ない。開いている間に届いた新着を、閉じたところで報告する。
@@ -66,7 +71,7 @@ extension TimelineViewController {
     }
 
     /// 添付ファイルのサムネイルを、表示中のセルから探す。開いている間にセルが再利用されても、閉じるときに今の位置を探せるようにする。
-    private func visibleMediaTile(for attachmentID: MediaAttachment.ID) -> UIView? {
+    private func visibleMediaTile(for attachmentID: MediaAttachment.ID) -> MediaTileView? {
         for cell in collectionView.visibleCells {
             if let tile = (cell.contentView as? StatusContentView)?.mediaGrid?.tile(for: attachmentID) {
                 return tile

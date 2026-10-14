@@ -153,6 +153,33 @@ public enum TuningCatalog {
         defaultValue: 0.35
     )
 
+    /// ビューアを開くとき、サムネイルから広げてビューアで表示し終えるまでの時間。
+    public static let mediaOpenDuration = NumberTuning(
+        id: "media.openDuration",
+        title: "ビューアを開く時間（秒）",
+        range: 0.1...1,
+        step: 0.05,
+        defaultValue: 0.4
+    )
+
+    /// ビューアを閉じるとき、サムネイルへ縮めて戻すまでの時間。
+    public static let mediaCloseDuration = NumberTuning(
+        id: "media.closeDuration",
+        title: "ビューアを閉じる時間（秒）",
+        range: 0.1...1,
+        step: 0.05,
+        defaultValue: 0.4
+    )
+
+    /// ビューアを開閉するときの弾み。0で行き過ぎずに止まる。
+    public static let mediaTransitionBounce = NumberTuning(
+        id: "media.transitionBounce",
+        title: "ビューアの開閉の弾み",
+        range: 0...0.4,
+        step: 0.05,
+        defaultValue: 0.1
+    )
+
     /// ビューアの閉じる操作の判定。
     @MainActor
     public static func dragToDismiss(in store: TuningStore) -> DragToDismiss {
@@ -178,5 +205,8 @@ public enum TuningCatalog {
         .number(mediaDismissSmallestScale),
         .number(mediaDismissFadeDistance),
         .number(mediaDismissRestoreDuration),
+        .number(mediaOpenDuration),
+        .number(mediaCloseDuration),
+        .number(mediaTransitionBounce),
     ]
 }

@@ -5,9 +5,11 @@ import UIKit
 
 /// 投稿の添付ファイルを全画面で見る。左右のスワイプで切り替え、画像はピンチとダブルタップで拡大する。
 ///
-/// 開くときと閉じるときの動きは、一覧のサムネイルを起点にするUIKit標準のズームの遷移に任せる。
-/// 下へのスワイプで閉じる操作は、標準のものが指を大きく動かさないと閉じず、画像の形で感度も変わるため、自前のパンで持つ。
-/// 指に合わせて画像を動かして縮め、閉じると決めたら、その位置からズームの遷移でサムネイルへ縮める。
+/// 開くとき、閉じるとき、下へのスワイプで閉じる操作の間は、画像の写しを一覧のサムネイルとのあいだで動かす。
+///
+/// UIKitの遷移（標準のズームや、遷移を自前で描く仕組み）は使わない。標準のズームは画面全体に角丸と影を付けて変形するため画面の形の枠が見え、
+/// 遷移を自前で描く仕組みは動いている間の操作を受け付けないため、開く途中で下へ払っても閉じられない。
+/// ビューアはアニメーションなしで出し入れし、動きはビューアの中で描く。開く途中で指が触れたら、動きをその場で止めて指に追従させる。
 /// 画像を隠さないよう閉じるボタンは置かず、VoiceOverのエスケープとキーボードのEscでも閉じられるようにする。
 final class MediaViewerController: UIViewController {
     private let attachments: [MediaAttachment]
@@ -26,19 +28,52 @@ final class MediaViewerController: UIViewController {
     private var dismissPanAnchor: CGPoint = .zero
     /// 閉じ終わったときに呼ぶ。
     var onDismiss: (() -> Void)?
-    /// 黒い下地。ズームの遷移はビューアの画面全体を縮めるため、下地を画面に含めるとサムネイルへ縮んで見える。
-    /// 画面の外、表示の入れ物に敷き、開閉ではその場で濃くしたり薄くしたりする。
+    /// 黒い下地。画像だけを動かし、下地はその場で濃くしたり薄くしたりする。
     private let backdrop = UIView()
+    /// 開閉とドラッグで動かす画像の写し。縦横比を保って枠を埋めるように切り抜くため、枠の形をサムネイルとビューアの画像のあいだで変えるだけで、
+    /// サムネイルと同じ切り抜き方へ移る。
+    private let morph = UIImageView()
+    /// 写しに載せる、サムネイルの印（ALT、GIF、残りの枚数）の写し。サムネイルに近いほど濃くし、ビューアの画像の大きさでは見せない。
+    private var morphDecoration: UIView?
+    /// 写しの画像を、ページが描いている画像に合わせ続けるか。元の画像が届いたら、動いている途中でも差し替える。
+    private var morphFollowsPage = false
+    private var motion = Motion.idle
+    private let timing: Timing
+    private let sourceTile: @MainActor (MediaAttachment.ID) -> MediaTileView?
+    /// 写しを動かしている間、隠している一覧のサムネイル。画像がそこへ戻っていく途中で消えて見えないよう、動かし始めから隠す。
+    private var hiddenTile: MediaTileView?
 
-    init(attachments: [MediaAttachment], startIndex: Int, store: MediaImageStore, dragToDismiss: DragToDismiss) {
+    struct Timing {
+        /// サムネイルから広げて、ビューアで表示し終えるまでの時間。
+        let openDuration: TimeInterval
+        /// サムネイルへ縮めて戻すまでの時間。
+        let closeDuration: TimeInterval
+        /// 0で弾まずに止まり、大きいほど行き過ぎてから戻る。
+        let bounce: CGFloat
+    }
+
+    /// - Parameter sourceTile: 添付ファイルのサムネイルを返す。開閉のたびに呼ぶため、閉じるまでに一覧の行が再利用されても今の位置を返せる。
+    ///   見つからなければnilを返し、画像を動かさずに薄くして開閉する。
+    init(
+        attachments: [MediaAttachment],
+        startIndex: Int,
+        store: MediaImageStore,
+        dragToDismiss: DragToDismiss,
+        timing: Timing,
+        sourceTile: @escaping @MainActor (MediaAttachment.ID) -> MediaTileView?
+    ) {
         precondition(attachments.indices.contains(startIndex), "開く添付ファイルの位置が範囲外です")
         self.attachments = attachments
         self.store = store
         self.dragToDismiss = dragToDismiss
+        self.timing = timing
+        self.sourceTile = sourceTile
         currentIndex = startIndex
         super.init(nibName: nil, bundle: nil)
         // 閉じる操作の間に背景を薄くして一覧を透かすため、開いている間も一覧を残す。
         modalPresentationStyle = .overFullScreen
+        // 開閉はビューアの中で描き、出し入れはアニメーションなしで行う。ほかの経路でアニメーションつきで閉じられたときは、下から滑らせずに薄くする。
+        modalTransitionStyle = .crossDissolve
         // 全画面でない表示では、状態バーの表示を自分で決めると宣言しないと、画像だけにしたときに隠せない。
         modalPresentationCapturesStatusBarAppearance = true
     }
@@ -61,20 +96,24 @@ final class MediaViewerController: UIViewController {
         return page.view.convert(page.contentFrame, to: view)
     }
 
+    /// 写しを動かしているか。開き終わり、閉じる操作もしていなければfalse。
+    var isMoving: Bool {
+        if case .idle = motion { return false }
+        return true
+    }
+
     override var prefersStatusBarHidden: Bool { isChromeHidden }
     override var prefersHomeIndicatorAutoHidden: Bool { isChromeHidden }
 
     /// キーボードのEscを受けるため、表示されたら最初の応答者になる。
     override var canBecomeFirstResponder: Bool { true }
 
-    /// 画面が入れ物に入ってから呼ばれるため、ここで画面のすぐ下に下地を敷く。
+    /// 画面に入った最初のフレームから、サムネイルの位置に写しを置いて開き始める。
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
-        guard isBeingPresented, let container = view.superview else { return }
-        backdrop.frame = container.bounds
-        backdrop.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        container.insertSubview(backdrop, belowSubview: view)
-        fadeBackdrop(to: 1)
+        if isBeingPresented {
+            beginOpening()
+        }
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -82,35 +121,22 @@ final class MediaViewerController: UIViewController {
         becomeFirstResponder()
     }
 
-    override func viewWillDisappear(_ animated: Bool) {
-        super.viewWillDisappear(animated)
-        if isBeingDismissed {
-            fadeBackdrop(to: 0)
-        }
-    }
-
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed {
-            backdrop.removeFromSuperview()
+            showHiddenTile()
             onDismiss?()
         }
     }
 
-    /// 開閉の遷移に合わせて下地の濃さを変える。取り消されたら元に戻す。
-    private func fadeBackdrop(to alpha: CGFloat) {
-        guard let coordinator = transitionCoordinator else {
-            backdrop.alpha = alpha
-            return
-        }
-        let original = backdrop.alpha
-        coordinator.animate(alongsideTransition: { _ in
-            self.backdrop.alpha = alpha
-        }, completion: { context in
-            if context.isCancelled {
-                self.backdrop.alpha = original
-            }
-        })
+    /// 画像の写しが見えているか。見えている間はページの画像を隠す。
+    var isContentHiddenForTransition: Bool {
+        !morph.isHidden
+    }
+
+    /// 写しに描いている画像。
+    var morphImage: UIImage? {
+        morph.image
     }
 
     override var keyCommands: [UIKeyCommand]? {
@@ -123,14 +149,17 @@ final class MediaViewerController: UIViewController {
         return true
     }
 
-    @objc private func close() {
-        dismiss(animated: true)
+    /// 写しをサムネイルへ縮めてから閉じる。
+    @objc func close() {
+        beginClosing()
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         backdrop.backgroundColor = .black
-        backdrop.alpha = 0
+        backdrop.frame = view.bounds
+        backdrop.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(backdrop)
         overrideUserInterfaceStyle = .dark
         // 下に一覧を残しているため、VoiceOverがそちらを読まないようにする。
         view.accessibilityViewIsModal = true
@@ -142,6 +171,10 @@ final class MediaViewerController: UIViewController {
         pageController.dataSource = self
         pageController.delegate = self
         pageController.setViewControllers([page(at: currentIndex)], direction: .forward, animated: false)
+        morph.contentMode = .scaleAspectFill
+        morph.clipsToBounds = true
+        morph.isHidden = true
+        view.addSubview(morph)
         setUpChrome()
         updateChrome()
         dismissPan.delegate = self
@@ -211,6 +244,10 @@ final class MediaViewerController: UIViewController {
         }
         page.index = index
         page.onSingleTap = { [weak self] in self?.toggleChrome() }
+        page.onImageChange = { [weak self, weak page] in
+            guard let self, let page, self.morphFollowsPage, page.index == self.currentIndex, let image = page.transitionImage else { return }
+            self.morph.image = image
+        }
         pages[index] = page
         return page
     }
@@ -246,23 +283,25 @@ final class MediaViewerController: UIViewController {
 
 extension MediaViewerController: UIGestureRecognizerDelegate {
     /// 拡大していない画像を、下へ向けて動かし始めたときだけ閉じる操作にする。横は左右の切り替えに、上は何もしないまま残す。
+    /// 開いている途中や、閉じずに戻している途中でも受け付け、その場からつかみ直せるようにする。
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard gestureRecognizer === dismissPan else { return true }
+        if case .closing = motion { return false }
         let velocity = dismissPan.velocity(in: view)
         return allowsInteractiveDismiss && velocity.y > 0 && velocity.y > abs(velocity.x)
     }
 
     @objc fileprivate func handleDismissPan(_ recognizer: UIPanGestureRecognizer) {
-        guard let page = pages[currentIndex] else { return }
         let height = view.bounds.height
         let translation = recognizer.translation(in: view)
         switch recognizer.state {
         case .began:
-            dismissPanAnchor = recognizer.location(in: view)
-            pageController.view.isUserInteractionEnabled = false
+            beginDragging(at: recognizer.location(in: view))
         case .changed:
-            page.view.transform = dragTransform(for: page, translation: translation)
-            let backgroundAlpha = dragToDismiss.backgroundAlpha(translation: translation.y, height: height)
+            guard case .dragging(let start, let visibility) = motion else { return }
+            let scale = dragToDismiss.scale(translation: translation.y, height: height)
+            morph.frame = Self.scaled(start, by: scale, around: dismissPanAnchor).offsetBy(dx: translation.x, dy: translation.y)
+            let backgroundAlpha = visibility * dragToDismiss.backgroundAlpha(translation: translation.y, height: height)
             backdrop.alpha = backgroundAlpha
             // ボタンと説明は、背景が半分透けたところで消えきるようにする。
             for chrome in chromeViews {
@@ -273,38 +312,277 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
             let velocity = recognizer.velocity(in: view).y
             if dragToDismiss.shouldDismiss(translation: translation.y, velocity: velocity, height: height) {
                 SciaLog.logger(category: "media").info("dismiss by drag translation=\(translation.y, privacy: .public) velocity=\(velocity, privacy: .public)")
-                dismiss(animated: true)
+                beginClosing()
             } else {
-                restoreFromDrag(page: page)
+                settle()
             }
         case .cancelled, .failed:
             pageController.view.isUserInteractionEnabled = true
-            restoreFromDrag(page: page)
+            settle()
         default:
             break
         }
     }
 
-    /// 押した位置を中心に縮め、指の動きに合わせて動かす。
-    private func dragTransform(for page: MediaPageController, translation: CGPoint) -> CGAffineTransform {
-        let scale = dragToDismiss.scale(translation: translation.y, height: view.bounds.height)
-        // 変形の影響を受けない、元の位置での中心。
-        let center = page.view.superview?.convert(page.view.center, to: view) ?? view.center
-        let offset = CGPoint(
-            x: translation.x + (1 - scale) * (dismissPanAnchor.x - center.x),
-            y: translation.y + (1 - scale) * (dismissPanAnchor.y - center.y)
+    /// `rect`を`anchor`を中心に`scale`倍する。押した位置の下に、画像の同じ場所が来るようにするため。
+    private static func scaled(_ rect: CGRect, by scale: CGFloat, around anchor: CGPoint) -> CGRect {
+        CGRect(
+            x: anchor.x + (rect.minX - anchor.x) * scale,
+            y: anchor.y + (rect.minY - anchor.y) * scale,
+            width: rect.width * scale,
+            height: rect.height * scale
         )
-        return CGAffineTransform(translationX: offset.x, y: offset.y).scaledBy(x: scale, y: scale)
+    }
+}
+
+// MARK: - 写しの動き
+
+extension MediaViewerController {
+    /// 写しの動き。開く、指に追従する、元へ戻す、閉じるの順に移る。開く途中と戻す途中は、指が触れたら止めて追従に移る。
+    fileprivate enum Motion {
+        /// 写しを隠し、ページの画像を見せている。
+        case idle
+        case opening(UIViewPropertyAnimator)
+        /// 指に追従している。`start`はつかんだときの写しの枠、`visibility`はそのときの開いている度合い。
+        case dragging(start: CGRect, visibility: CGFloat)
+        /// 閉じずに離したあと、ビューアの画像の枠へ戻している。
+        case settling(UIViewPropertyAnimator)
+        case closing
     }
 
-    private func restoreFromDrag(page: MediaPageController) {
-        UIView.animate(springDuration: dragToDismiss.restoreDuration, bounce: 0) {
-            page.view.transform = .identity
-            backdrop.alpha = 1
-            for chrome in chromeViews {
-                chrome.alpha = isChromeHidden ? 0 : 1
-            }
+    /// 開いている度合い。0で下地とボタンが透明、1で不透明。
+    private func setVisibility(_ visibility: CGFloat) {
+        backdrop.alpha = visibility
+        for chrome in chromeViews {
+            chrome.alpha = isChromeHidden ? 0 : visibility
         }
+    }
+
+    private var currentTile: MediaTileView? {
+        sourceTile(currentAttachment.id)
+    }
+
+    private func tileFrame(of tile: MediaTileView) -> CGRect {
+        tile.convert(tile.bounds, to: view)
+    }
+
+    /// 写しを見せ、ページの画像と一覧のサムネイルを隠す。写しの画像は、ページが描いている画像か、まだ描いていなければサムネイルの画像。
+    /// どちらもなければ（アプリで表示できないファイルなど）、ページを描き写した画像を使う。
+    /// 画像を描くページなら、最初に画像がなくても、届いた時点で写しを差し替える。
+    /// - Parameter decorationAlpha: サムネイルの印の濃さ。サムネイルの位置から始めるなら1、ビューアの画像の位置から始めるなら0。
+    private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: MediaTileView?, decorationAlpha: CGFloat) {
+        let page = pages[currentIndex]
+        morph.image = page?.transitionImage ?? tile?.thumbnailImage ?? page.map(Self.snapshot)
+        attachDecoration(from: tile, alpha: decorationAlpha)
+        morphFollowsPage = page?.drawsImage ?? false
+        morph.frame = frame
+        morph.layer.cornerRadius = cornerRadius
+        morph.layer.cornerCurve = tile?.layer.cornerCurve ?? .continuous
+        morph.alpha = 1
+        morph.isHidden = false
+        setPageHidden(true)
+        hide(tile)
+    }
+
+    /// サムネイルの印の写しを、写しに載せ直す。サムネイルを隠す前に描き写す必要がある。
+    /// 写しの大きさが変わっても角からの位置を保つよう、写しいっぱいに広げて自動で位置を合わせる。
+    private func attachDecoration(from tile: MediaTileView?, alpha: CGFloat) {
+        morphDecoration?.removeFromSuperview()
+        morphDecoration = tile.map { tile in
+            let decoration = tile.makeDecorationCopy()
+            decoration.frame = morph.bounds
+            decoration.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            decoration.alpha = alpha
+            morph.addSubview(decoration)
+            return decoration
+        }
+    }
+
+    private func hideMorph() {
+        morph.isHidden = true
+        morphFollowsPage = false
+        setPageHidden(false)
+    }
+
+    /// ページを見えなくする。透明にすると触れても反応しなくなるため、空のマスクで隠し、写しを動かしている間も左右の切り替えやタップを受け付ける。
+    private func setPageHidden(_ hidden: Bool) {
+        pageController.view.layer.mask = hidden ? CALayer() : nil
+    }
+
+    /// 開いている途中や戻している途中なら、動きを終えて開ききった状態にする。左右の切り替えなど、ほかの操作を優先するため。
+    fileprivate func completeMotionImmediately() {
+        switch motion {
+        case .opening(let animator), .settling(let animator):
+            animator.stopAnimation(true)
+            setVisibility(1)
+            finishOpen()
+        case .idle, .dragging, .closing:
+            break
+        }
+    }
+
+    /// ページが描いている枠を画像にする。
+    private static func snapshot(of page: MediaPageController) -> UIImage {
+        let frame = page.contentFrame
+        return UIGraphicsImageRenderer(bounds: frame).image { _ in
+            page.view.drawHierarchy(in: page.view.bounds, afterScreenUpdates: false)
+        }
+    }
+
+    /// 隠すサムネイルを入れ替える。左右の切り替えで、隠していたものと別の添付ファイルに移っていることがあるため。
+    private func hide(_ tile: MediaTileView?) {
+        guard tile !== hiddenTile else { return }
+        showHiddenTile()
+        tile?.isConcealedForViewer = true
+        hiddenTile = tile
+    }
+
+    private func showHiddenTile() {
+        hiddenTile?.isConcealedForViewer = false
+        hiddenTile = nil
+    }
+
+    /// 視差効果を減らす設定では、画像を動かさずに薄くして開閉する。
+    private var movesImage: Bool {
+        !UIAccessibility.isReduceMotionEnabled
+    }
+
+    private func makeAnimator(duration: TimeInterval, bounce: CGFloat) -> UIViewPropertyAnimator {
+        UIViewPropertyAnimator(duration: duration, timingParameters: UISpringTimingParameters(duration: duration, bounce: bounce))
+    }
+
+    private func beginOpening() {
+        view.layoutIfNeeded()
+        let animator = makeAnimator(duration: timing.openDuration, bounce: timing.bounce)
+        if movesImage, let tile = currentTile {
+            showMorph(frame: tileFrame(of: tile), cornerRadius: tile.layer.cornerRadius, tile: tile, decorationAlpha: 1)
+            let target = contentFrame(in: view)
+            animator.addAnimations {
+                self.morph.frame = target
+                self.morph.layer.cornerRadius = 0
+                self.morphDecoration?.alpha = 0
+            }
+        } else {
+            pageController.view.alpha = 0
+            animator.addAnimations { self.pageController.view.alpha = 1 }
+        }
+        setVisibility(0)
+        animator.addAnimations { self.setVisibility(1) }
+        animator.addCompletion { [weak self] position in
+            guard position == .end else { return }
+            self?.finishOpen()
+        }
+        motion = .opening(animator)
+        animator.startAnimation()
+    }
+
+    /// 開ききったら、写しを隠してページの画像に戻す。隠していたサムネイルも、黒い下地で覆われているので戻す。
+    private func finishOpen() {
+        hideMorph()
+        showHiddenTile()
+        motion = .idle
+    }
+
+    /// 開いている途中や戻している途中なら、その場で止めてつかむ。開ききっていれば、ビューアの画像の位置に写しを出してつかむ。
+    private func beginDragging(at location: CGPoint) {
+        switch motion {
+        case .opening(let animator), .settling(let animator):
+            // 止めた時点の見た目のまま残す。
+            animator.stopAnimation(true)
+            if morph.isHidden {
+                // 薄くして開いていた途中なら、ここから写しを出す。
+                showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: currentTile, decorationAlpha: 0)
+            } else {
+                hide(currentTile)
+            }
+        case .idle:
+            showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: currentTile, decorationAlpha: 0)
+        case .dragging, .closing:
+            return
+        }
+        dismissPanAnchor = location
+        pageController.view.isUserInteractionEnabled = false
+        motion = .dragging(start: morph.frame, visibility: backdrop.alpha)
+    }
+
+    /// 閉じずに離したら、写しをビューアの画像の枠へ戻し、開ききった状態にする。
+    private func settle() {
+        guard case .dragging = motion else { return }
+        let animator = makeAnimator(duration: dragToDismiss.restoreDuration, bounce: 0)
+        let target = contentFrame(in: view)
+        animator.addAnimations {
+            self.morph.frame = target
+            self.morph.layer.cornerRadius = 0
+            self.morphDecoration?.alpha = 0
+            self.setVisibility(1)
+        }
+        animator.addCompletion { [weak self] position in
+            guard position == .end else { return }
+            // 下地で覆い直してから、サムネイルを戻す。途中で戻すと、薄い下地越しにサムネイルが現れる。
+            self?.finishOpen()
+        }
+        motion = .settling(animator)
+        animator.startAnimation()
+    }
+
+    /// 閉じると決めたら、すぐにビューアを閉じ、写しと下地とボタンの写しを、操作を素通しする最前面の層へ移してサムネイルへ縮める。
+    /// ビューアを残したまま動かすと、残った画面が触れたものを吸い、閉じた直後に別の画像を叩いても開けない。
+    /// サムネイルが見つからなければ、その場で薄くする。
+    private func beginClosing() {
+        switch motion {
+        case .closing:
+            return
+        case .opening(let animator), .settling(let animator):
+            animator.stopAnimation(true)
+        case .idle, .dragging:
+            break
+        }
+        motion = .closing
+        let tile = currentTile
+        if morph.isHidden {
+            showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: tile, decorationAlpha: 0)
+        } else {
+            if tile !== hiddenTile {
+                // 左右の切り替えで戻り先が変わっていたら、印をその戻り先のものに載せ直す。
+                attachDecoration(from: tile, alpha: morphDecoration?.alpha ?? 0)
+            }
+            hide(tile)
+        }
+        guard let window = view.window else {
+            dismiss(animated: false)
+            return
+        }
+        let overlay = UIView(frame: window.bounds)
+        overlay.isUserInteractionEnabled = false
+        backdrop.frame = overlay.bounds
+        overlay.addSubview(backdrop)
+        let chromeSnapshots = chromeViews.compactMap { chrome -> UIView? in
+            guard !chrome.isHidden, chrome.alpha > 0, let snapshot = chrome.snapshotView(afterScreenUpdates: false) else { return nil }
+            snapshot.frame = chrome.convert(chrome.bounds, to: window)
+            snapshot.alpha = chrome.alpha
+            overlay.addSubview(snapshot)
+            return snapshot
+        }
+        morph.frame = view.convert(morph.frame, to: window)
+        overlay.addSubview(morph)
+        window.addSubview(overlay)
+        // サムネイルは写しが戻り終えてから見せるため、ビューアを閉じたときには戻さない。
+        let closingTile = hiddenTile
+        hiddenTile = nil
+        dismiss(animated: false)
+
+        let attachmentID = currentAttachment.id
+        let sourceTile = sourceTile
+        let flight = MediaClosingFlight(
+            parts: MediaClosingFlight.Parts(overlay: overlay, morph: morph, decoration: morphDecoration, fadingViews: [backdrop] + chromeSnapshots),
+            window: window,
+            spring: SpringCurve(duration: timing.closeDuration, bounce: timing.bounce),
+            // 戻り先が最初から見つからなければ、その場で薄くする。
+            movesImage: movesImage && tile != nil,
+            concealedTile: closingTile,
+            findTile: { sourceTile(attachmentID) }
+        )
+        flight.start()
     }
 }
 
@@ -319,6 +597,11 @@ extension MediaViewerController: UIPageViewControllerDataSource, UIPageViewContr
         return page(at: index + 1)
     }
 
+    /// 開いている途中に左右へ切り替え始めたら、開く動きを終えて切り替えを優先する。
+    func pageViewController(_ pageViewController: UIPageViewController, willTransitionTo pendingViewControllers: [UIViewController]) {
+        completeMotionImmediately()
+    }
+
     func pageViewController(_ pageViewController: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
         guard completed, let page = pageViewController.viewControllers?.first as? MediaPageController else { return }
         currentIndex = page.index
@@ -328,31 +611,29 @@ extension MediaViewerController: UIPageViewControllerDataSource, UIPageViewContr
 }
 
 extension MediaViewerController {
-    /// 一覧のサムネイルからビューアを開く。`sourceView`は、表示中の添付ファイルのサムネイルを返す。
-    /// 閉じる前に一覧のセルが再利用されるなどして見つからなければnilを返し、UIKitに標準の閉じ方を任せる。
+    /// 一覧のサムネイルからビューアを開く。`sourceTile`は、添付ファイルのサムネイルを返す。
+    /// 閉じる前に一覧のセルが再利用されるなどして見つからなければnilを返し、画像を動かさずに薄くして閉じる。
     static func present(
         attachments: [MediaAttachment],
         startIndex: Int,
         store: MediaImageStore,
         dragToDismiss: DragToDismiss,
+        timing: Timing,
         from presenter: UIViewController,
-        sourceView: @escaping @MainActor (MediaAttachment.ID) -> UIView?,
+        sourceTile: @escaping @MainActor (MediaAttachment.ID) -> MediaTileView?,
         onDismiss: @escaping @MainActor () -> Void
     ) {
-        let viewer = MediaViewerController(attachments: attachments, startIndex: startIndex, store: store, dragToDismiss: dragToDismiss)
+        let viewer = MediaViewerController(
+            attachments: attachments,
+            startIndex: startIndex,
+            store: store,
+            dragToDismiss: dragToDismiss,
+            timing: timing,
+            sourceTile: sourceTile
+        )
         viewer.onDismiss = onDismiss
-        let options = UIViewController.Transition.ZoomOptions()
-        // 下へのスワイプで閉じる操作は自前のパンで持つため、標準のものは使わない。
-        options.interactiveDismissShouldBegin = { _ in false }
-        options.alignmentRectProvider = { [weak viewer] context in
-            guard let viewer else { return .null }
-            return viewer.contentFrame(in: context.zoomedViewController.view)
-        }
-        viewer.preferredTransition = .zoom(options: options) { [weak viewer] _ in
-            guard let viewer else { return nil }
-            return sourceView(viewer.currentAttachment.id)
-        }
-        presenter.present(viewer, animated: true)
+        // 開く動きはビューアの中で描く。
+        presenter.present(viewer, animated: false)
     }
 }
 
@@ -361,6 +642,8 @@ class MediaPageController: UIViewController {
     let attachment: MediaAttachment
     var index = 0
     var onSingleTap: (() -> Void)?
+    /// 描いている画像が変わった。開閉の写しを、元の画像が届いた時点で差し替えるために使う。
+    var onImageChange: (() -> Void)?
 
     init(attachment: MediaAttachment) {
         self.attachment = attachment
@@ -376,6 +659,12 @@ class MediaPageController: UIViewController {
 
     /// 添付ファイルを描いている枠。`view`の座標。
     var contentFrame: CGRect { view.bounds }
+
+    /// 開閉で動かす、描いている画像。
+    var transitionImage: UIImage? { nil }
+
+    /// 画像を描くページ。開閉の写しを、このページの画像の更新に合わせて差し替える。
+    var drawsImage: Bool { false }
 }
 
 /// 画像のページ。一覧のサムネイルをすぐに出し、元の大きさの画像が届いたら差し替える。
@@ -402,6 +691,10 @@ final class ImagePageController: MediaPageController {
         zoomView.imageFrame.map { zoomView.convert($0, to: view) } ?? view.bounds
     }
 
+    override var transitionImage: UIImage? { zoomView.image }
+
+    override var drawsImage: Bool { true }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         zoomView.frame = view.bounds
@@ -424,6 +717,7 @@ final class ImagePageController: MediaPageController {
         // 一覧のサムネイルが手元にあればそれを、なければblurhashのぼかしを、元の画像が届くまでの下地にする。
         let preview = attachment.previewUrl.flatMap { store.cachedImage(for: $0, maxPixelSize: MediaImageStore.thumbnailPixelSize) }
         zoomView.image = preview ?? attachment.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment.aspectRatio) }
+        onImageChange?()
         load(hasPreview: preview != nil)
     }
 
@@ -443,6 +737,7 @@ final class ImagePageController: MediaPageController {
             if let image {
                 self.fullImage = image
                 self.zoomView.image = image
+                self.onImageChange?()
             } else {
                 // サムネイルを出せていれば、そのまま見せる。
                 self.failureLabel.isHidden = hasPreview
@@ -456,10 +751,14 @@ final class PlayerPageController: MediaPageController {
     private let playerController = AVPlayerViewController()
     private var looper: AVPlayerLooper?
 
+    /// 動画の表示の準備が整うまでは、添付ファイルの縦横比で画面に収めた枠を返す。開く遷移はその準備より先に始まるため。
     override var contentFrame: CGRect {
         let videoBounds = playerController.videoBounds
-        guard !videoBounds.isEmpty else { return view.bounds }
-        return playerController.view.convert(videoBounds, to: view)
+        if !videoBounds.isEmpty {
+            return playerController.view.convert(videoBounds, to: view)
+        }
+        guard let aspectRatio = attachment.aspectRatio, aspectRatio > 0 else { return view.bounds }
+        return AVMakeRect(aspectRatio: CGSize(width: aspectRatio, height: 1), insideRect: view.bounds)
     }
 
     override func viewDidLoad() {

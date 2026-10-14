@@ -81,7 +81,7 @@ final class MediaGridView: UIView {
     }
 
     /// 添付ファイルのサムネイル。ビューアを開くときと閉じるときに、拡大と縮小の起点にする。表示していなければnil。
-    func tile(for attachmentID: MediaAttachment.ID) -> UIView? {
+    func tile(for attachmentID: MediaAttachment.ID) -> MediaTileView? {
         guard let content, !content.isCovered, let index = content.attachments.firstIndex(where: { $0.id == attachmentID }),
               index < tiles.count, !tiles[index].isHidden, window != nil
         else { return nil }
@@ -173,6 +173,48 @@ final class MediaTileView: UIButton {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    /// 描いているサムネイル。ビューアの開閉で、まだ画像を描いていないページの代わりに動かす。
+    var thumbnailImage: UIImage? { thumbnailView.image }
+
+    /// 画像の上に重ねている印（ALT、GIF、残りの枚数）の写し。ビューアが動かす画像の写しに載せて、サムネイルとのあいだを一緒に動かす。
+    /// 写しの大きさが変わっても、サムネイルと同じ角からの位置を保つ。ラベルは画像にし、全体を覆う残りの枚数は文字が伸び縮みしないよう作り直す。
+    func makeDecorationCopy() -> UIView {
+        let container = UIView(frame: bounds)
+        container.isUserInteractionEnabled = false
+        let corners: [(UIView, UIView.AutoresizingMask)] = [
+            (altBadge, [.flexibleRightMargin, .flexibleTopMargin]),
+            (gifBadge, [.flexibleLeftMargin, .flexibleTopMargin]),
+        ]
+        for (badge, mask) in corners where !badge.isHidden {
+            let format = UIGraphicsImageRendererFormat()
+            format.scale = traitCollection.displayScale
+            let image = UIGraphicsImageRenderer(bounds: badge.bounds, format: format).image { context in
+                badge.layer.render(in: context.cgContext)
+            }
+            let copy = UIImageView(image: image)
+            copy.frame = badge.frame
+            copy.autoresizingMask = mask
+            container.addSubview(copy)
+        }
+        if !moreLabel.isHidden {
+            let copy = UILabel(frame: bounds)
+            copy.text = moreLabel.text
+            copy.font = moreLabel.font
+            copy.textColor = moreLabel.textColor
+            copy.textAlignment = moreLabel.textAlignment
+            copy.backgroundColor = moreLabel.backgroundColor
+            copy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            container.addSubview(copy)
+        }
+        return container
+    }
+
+    /// ビューアがこのサムネイルとのあいだで画像を動かしている間、見えなくする。
+    /// 透明にすると触れても反応しなくなり、閉じる途中に叩き直しても開けないため、空のマスクで隠す。
+    var isConcealedForViewer = false {
+        didSet { layer.mask = isConcealedForViewer ? CALayer() : nil }
     }
 
     override var isHighlighted: Bool {

@@ -9,6 +9,12 @@ import UIKit
 struct MediaViewerControllerTests {
     private let drag = DragToDismiss(distanceThreshold: 0.12, velocityThreshold: 0.8, smallestScale: 0.6, fadeDistance: 0.5, restoreDuration: 0.35)
 
+    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, bounce: 0)
+
+    private func makeViewer(attachments: [MediaAttachment]) -> MediaViewerController {
+        MediaViewerController(attachments: attachments, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil })
+    }
+
     private func image(_ id: String, url: URL?) -> MediaAttachment {
         MediaAttachment(id: id, type: .image, url: url, previewUrl: nil)
     }
@@ -28,7 +34,7 @@ struct MediaViewerControllerTests {
     @Test func accessibilityEscapeDismisses() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
-        let viewer = MediaViewerController(attachments: [image("1", url: URL(string: "https://x.example/1.png"))], startIndex: 0, store: .offline, dragToDismiss: drag)
+        let viewer = makeViewer(attachments: [image("1", url: URL(string: "https://x.example/1.png"))])
         harness.viewController.present(viewer, animated: false)
         #expect(harness.viewController.presentedViewController === viewer)
 
@@ -39,7 +45,7 @@ struct MediaViewerControllerTests {
 
     /// キーボードのEscで閉じられる。
     @Test func escapeKeyCommandIsOffered() {
-        let viewer = MediaViewerController(attachments: [image("1", url: nil)], startIndex: 0, store: .offline, dragToDismiss: drag)
+        let viewer = makeViewer(attachments: [image("1", url: nil)])
 
         #expect(viewer.canBecomeFirstResponder)
         #expect(viewer.keyCommands?.contains { $0.input == UIKeyCommand.inputEscape } == true)
@@ -47,8 +53,8 @@ struct MediaViewerControllerTests {
 
     /// メニューから共有できる。共有するものがなければ選べない。
     @Test func menuOffersShareOnlyWhenThereIsSomethingToShare() throws {
-        let shareable = MediaViewerController(attachments: [image("1", url: URL(string: "https://x.example/1.png"))], startIndex: 0, store: .offline, dragToDismiss: drag)
-        let processing = MediaViewerController(attachments: [image("2", url: nil)], startIndex: 0, store: .offline, dragToDismiss: drag)
+        let shareable = makeViewer(attachments: [image("1", url: URL(string: "https://x.example/1.png"))])
+        let processing = makeViewer(attachments: [image("2", url: nil)])
 
         let share = try #require(shareable.menuElements().first as? UIAction)
         #expect(share.title == "共有")
@@ -70,8 +76,9 @@ struct MediaViewerControllerTests {
             startIndex: 0,
             store: .offline,
             dragToDismiss: drag,
+            timing: timing,
             from: harness.viewController,
-            sourceView: { _ in nil },
+            sourceTile: { _ in nil },
             onDismiss: { harness.viewController.reportVisibleItems() }
         )
         let presented = try #require(harness.viewController.presentedViewController as? MediaViewerController)
@@ -80,8 +87,102 @@ struct MediaViewerControllerTests {
         harness.viewController.reportVisibleItems()
         #expect(reported.isEmpty, "ビューアで覆っている間に報告しました: \(reported.prefix(3))")
 
-        presented.dismiss(animated: true)
+        presented.close()
         try await waitUntil { harness.viewController.presentedViewController == nil }
         #expect(reported.contains(statuses[0].id), "閉じたあとに報告しませんでした")
+    }
+
+    /// 開閉の間はサムネイルとビューアの画像を隠して写しを動かし、開ききったら両方とも元どおり見せる。閉じる動きの間も一覧を操作でき、戻り終えたらサムネイルを見せる。
+    @Test func transitionRestoresThumbnailAndContentAfterOpeningAndClosing() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let tile = MediaTileView(store: .offline)
+        tile.frame = CGRect(x: 20, y: 200, width: 160, height: 90)
+        harness.viewController.view.addSubview(tile)
+        // 通信せずにビューアとサムネイルの両方へ画像を出すため、blurhashのぼかしを使う。
+        let attachment = MediaAttachment(
+            id: "1",
+            type: .image,
+            url: nil,
+            previewUrl: nil,
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900)),
+            blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+        )
+        tile.apply(attachment, hiddenCount: 0, isCovered: false)
+        MediaViewerController.present(
+            attachments: [attachment],
+            startIndex: 0,
+            store: .offline,
+            dragToDismiss: drag,
+            timing: timing,
+            from: harness.viewController,
+            sourceTile: { _ in tile },
+            onDismiss: {}
+        )
+        let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
+        // 開く動きは画面に入るときに始まるため、写しが出るのを待つ。写しを出さなければ時間切れで失敗する。
+        try await waitUntil { viewer.isContentHiddenForTransition }
+        #expect(tile.isConcealedForViewer, "開いている間にサムネイルを隠していません")
+        try await waitUntil { !viewer.isMoving }
+
+        #expect(!tile.isConcealedForViewer)
+        #expect(!viewer.isContentHiddenForTransition)
+
+        viewer.close()
+
+        // 閉じると決めた時点でビューアを閉じ、サムネイルへ戻る動きの途中でも一覧を操作できるようにする。
+        // ビューアを残したまま動かすと、閉じた直後に別の画像を叩いても届かない。
+        // ビューアを外すのは次の描画の機会になるため、それを待つ。写しが戻り終えるより先に外れていなければ失敗する。
+        try await waitUntil { harness.viewController.presentedViewController == nil }
+        let window = try #require(tile.window)
+        let tapPoint = tile.convert(CGPoint(x: tile.bounds.midX, y: tile.bounds.midY), to: window)
+        let hit = window.hitTest(tapPoint, with: nil)
+        #expect(hit === tile || hit?.isDescendant(of: tile) == true, "閉じる動きの間、サムネイルを叩いても届きません: \(String(describing: hit))")
+        #expect(tile.isConcealedForViewer, "戻り終える前にサムネイルを見せています")
+
+        try await waitUntil { !tile.isConcealedForViewer }
+        #expect(viewer.view.superview == nil)
+    }
+
+    /// 手元にプレビューもぼかしもない画像でも、開く途中に元の画像が届いたら、写しをその画像に差し替える。
+    @Test func morphFollowsImageThatArrivesWhileOpening() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let arriving = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 36), format: format).image { context in
+            UIColor.systemGreen.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 64, height: 36))
+        }
+        let data = try #require(arriving.pngData())
+        let store = MediaImageStore { _ in
+            try await Task.sleep(for: .milliseconds(150))
+            return data
+        }
+        let tile = MediaTileView(store: .offline)
+        tile.frame = CGRect(x: 20, y: 200, width: 160, height: 90)
+        harness.viewController.view.addSubview(tile)
+        let attachment = MediaAttachment(
+            id: "1",
+            type: .image,
+            url: URL(string: "https://files.example.social/original/1.png"),
+            previewUrl: nil,
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 64, height: 36))
+        )
+        MediaViewerController.present(
+            attachments: [attachment],
+            startIndex: 0,
+            store: store,
+            dragToDismiss: drag,
+            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, bounce: 0),
+            from: harness.viewController,
+            sourceTile: { _ in tile },
+            onDismiss: {}
+        )
+        let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
+        try await waitUntil { viewer.isContentHiddenForTransition }
+
+        try await waitUntil { viewer.morphImage?.size == arriving.size }
+        #expect(viewer.isMoving, "写しを差し替える前に開き終わりました")
     }
 }
