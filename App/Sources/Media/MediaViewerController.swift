@@ -1142,6 +1142,10 @@ extension ImagePageController {
     private static let analyzer = ImageAnalyzer()
 
     /// 元の画像の文字とQRコードなどを解析し、Live Textで選べるようにする。対応していない端末では何もしない。
+    /// 解析には、表示用に最大4096pxへ縮めた画像を渡す。極端に縦長の画像では文字が潰れて読めないが、元のファイルを渡しても良くならない。
+    /// シミュレーターで幅1000pxの画像に32ptの文字を並べて測ると、高さ5000pxまではどちらでも全行読め、6000pxを超えるとどちらでもほぼ読めず、
+    /// 5500pxでは元のファイルのほうが悪かった。高さ16000px以上の元のファイルは「Max supported dimension is 8192」のエラーになった（2026-10-14）。
+    /// 縦に区切って解析すれば読める見込みだが、Live Textは1枚の画像に解析の結果を1つしか持てず、区切った結果を文字の選択に使えないため、そこまではしない。
     private func analyze(_ image: UIImage) {
         guard ImageAnalyzer.isSupported else {
             SciaLog.logger(category: "media").info("live text unsupported on this device")
