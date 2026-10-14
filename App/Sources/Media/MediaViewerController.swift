@@ -5,14 +5,15 @@ import UIKit
 /// 投稿の添付ファイルを全画面で見る。左右のスワイプで切り替え、画像はピンチとダブルタップで拡大する。
 ///
 /// 開くときと閉じるときの動きは、一覧のサムネイルを起点にするUIKit標準のズームの遷移に任せる。下へのスワイプで閉じる操作もこの遷移が持つ。
+/// 画像を隠さないよう閉じるボタンは置かず、VoiceOverのエスケープとキーボードのEscでも閉じられるようにする。
 final class MediaViewerController: UIViewController {
     private let attachments: [MediaAttachment]
     private let store: MediaImageStore
     private let pageController = UIPageViewController(transitionStyle: .scroll, navigationOrientation: .horizontal, options: [.interPageSpacing: 16])
     private var pages: [Int: MediaPageController] = [:]
     private(set) var currentIndex: Int
-    private let closeButton = UIButton(configuration: .glass())
-    private let shareButton = UIButton(configuration: .glass())
+    /// 添付ファイルへの操作をまとめたメニューを出す。
+    private let menuButton = UIButton(configuration: .glass())
     private let counterLabel = UILabel()
     private let captionView = CaptionView()
     private var isChromeHidden = false
@@ -47,6 +48,28 @@ final class MediaViewerController: UIViewController {
     override var prefersStatusBarHidden: Bool { isChromeHidden }
     override var prefersHomeIndicatorAutoHidden: Bool { isChromeHidden }
 
+    /// キーボードのEscを受けるため、表示されたら最初の応答者になる。
+    override var canBecomeFirstResponder: Bool { true }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        becomeFirstResponder()
+    }
+
+    override var keyCommands: [UIKeyCommand]? {
+        [UIKeyCommand(title: "閉じる", action: #selector(close), input: UIKeyCommand.inputEscape)]
+    }
+
+    /// VoiceOverの2本指のZで閉じる。
+    override func accessibilityPerformEscape() -> Bool {
+        close()
+        return true
+    }
+
+    @objc private func close() {
+        dismiss(animated: true)
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
@@ -64,26 +87,25 @@ final class MediaViewerController: UIViewController {
     }
 
     private func setUpChrome() {
-        closeButton.configuration?.image = UIImage(systemName: "xmark")
-        closeButton.accessibilityLabel = "閉じる"
-        closeButton.addAction(UIAction { [weak self] _ in self?.dismiss(animated: true) }, for: .primaryActionTriggered)
-        shareButton.configuration?.image = UIImage(systemName: "square.and.arrow.up")
-        shareButton.accessibilityLabel = "共有"
-        shareButton.addAction(UIAction { [weak self] _ in self?.share() }, for: .primaryActionTriggered)
+        menuButton.configuration?.image = UIImage(systemName: "ellipsis")
+        menuButton.accessibilityLabel = "その他の操作"
+        // 開くたびに、表示中の添付ファイルに合わせて項目を作り直す。
+        menuButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
+            completion(self?.menuElements() ?? [])
+        }])
+        menuButton.showsMenuAsPrimaryAction = true
         counterLabel.font = .preferredFont(forTextStyle: .subheadline)
         counterLabel.textColor = .white
         counterLabel.isHidden = attachments.count == 1
-        for view in [closeButton, shareButton, counterLabel, captionView] {
+        for view in [menuButton, counterLabel, captionView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             self.view.addSubview(view)
         }
         let guide = view.safeAreaLayoutGuide
         NSLayoutConstraint.activate([
-            closeButton.topAnchor.constraint(equalTo: guide.topAnchor, constant: 8),
-            closeButton.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 16),
-            shareButton.topAnchor.constraint(equalTo: closeButton.topAnchor),
-            shareButton.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
-            counterLabel.centerYAnchor.constraint(equalTo: closeButton.centerYAnchor),
+            menuButton.topAnchor.constraint(equalTo: guide.topAnchor, constant: 8),
+            menuButton.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
+            counterLabel.centerYAnchor.constraint(equalTo: menuButton.centerYAnchor),
             counterLabel.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
             captionView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             captionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -97,14 +119,13 @@ final class MediaViewerController: UIViewController {
         let description = currentAttachment.description ?? ""
         captionView.text = description
         captionView.isHidden = isChromeHidden || description.isEmpty
-        shareButton.isEnabled = shareItem() != nil
     }
 
     /// 画像を1回タップしたら、ボタンと説明を隠して画像だけにする。もう1回で戻す。
     fileprivate func toggleChrome() {
         isChromeHidden.toggle()
         UIView.animate(withDuration: 0.2) {
-            for view in [self.closeButton, self.shareButton, self.counterLabel] {
+            for view in [self.menuButton, self.counterLabel] {
                 view.alpha = self.isChromeHidden ? 0 : 1
             }
             self.updateChrome()
@@ -134,10 +155,24 @@ final class MediaViewerController: UIViewController {
         return currentAttachment.url ?? currentAttachment.remoteUrl
     }
 
+    /// メニューの項目。共有できるものがなければ、共有を選べなくする。
+    func menuElements() -> [UIMenuElement] {
+        let share = UIAction(
+            title: "共有",
+            image: UIImage(systemName: "square.and.arrow.up"),
+            attributes: shareItem() == nil ? .disabled : []
+        ) { [weak self] _ in
+            self?.share()
+        }
+        return [share]
+    }
+
     private func share() {
         guard let item = shareItem() else { return }
         let activity = UIActivityViewController(activityItems: [item], applicationActivities: nil)
-        activity.popoverPresentationController?.sourceItem = shareButton
+        // 添付ファイルの画像を連絡先の写真にすることはまずないため、出さない。
+        activity.excludedActivityTypes = [.assignToContact]
+        activity.popoverPresentationController?.sourceItem = menuButton
         present(activity, animated: true)
     }
 }
