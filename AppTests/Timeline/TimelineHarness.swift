@@ -12,7 +12,7 @@ final class TimelineHarness {
     private let window: UIWindow
 
     init(size: CGSize = CGSize(width: 393, height: 852)) throws {
-        viewController = TimelineViewController(tuning: tuning, emojiImages: .offline)
+        viewController = TimelineViewController(tuning: tuning, emojiImages: .offline, mediaImages: .offline)
         let scene = try #require(
             UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
             "テストのホストアプリにウィンドウシーンがありません"
@@ -59,7 +59,7 @@ final class TimelineHarness {
 
     /// 表示中のセルに設定されている本文。セルが表示されていなければnil。
     func secondaryText(of id: Status.ID) -> String? {
-        (visibleCell(of: .status(id))?.contentConfiguration as? UIListContentConfiguration)?.secondaryAttributedText?.string
+        (visibleCell(of: .status(id))?.contentConfiguration as? StatusContentConfiguration)?.list.secondaryAttributedText?.string
     }
 
     func visibleCell(of id: TimelineViewController.ItemID) -> UICollectionViewCell? {
@@ -104,5 +104,12 @@ extension EmojiImageStore {
     /// 画像を読みに行かず、すべて失敗として扱う。
     static var offline: EmojiImageStore {
         EmojiImageStore { _ in throw URLError(.notConnectedToInternet) }
+    }
+}
+
+extension MediaImageStore {
+    /// 画像を読みに行かず、すべて失敗として扱う。
+    static var offline: MediaImageStore {
+        MediaImageStore { _ in throw URLError(.notConnectedToInternet) }
     }
 }

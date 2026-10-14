@@ -19,6 +19,10 @@ enum AppDependencies {
         try await URLSession.shared.data(from: url).0
     }
 
+    static let mediaImages = MediaImageStore { url in
+        try await URLSession.shared.data(from: url).0
+    }
+
     /// ファイルアプリと`xcrun simctl get_app_container`から取り出せるよう、Documents配下に置く。
     static let discomfortReports = DiscomfortReportStore(
         directory: URL.documentsDirectory.appending(path: "DiscomfortReports")

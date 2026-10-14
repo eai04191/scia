@@ -99,13 +99,22 @@ final class TimelineViewController: UIViewController {
     private var isScrollingToTop = false
     private lazy var newArrivalsButton = makeNewArrivalsButton()
     private let texts: Texts
-    private let tuning: TuningStore
+    let tuning: TuningStore
     let emojiImages: EmojiImageStore
+    let mediaImages: MediaImageStore
+    /// 閲覧注意の覆いを外した投稿のID。ブーストなら元の投稿のID。
+    var revealedMediaStatusIDs: Set<Status.ID> = []
 
-    init(texts: Texts = .home, tuning: TuningStore = AppDependencies.tuning, emojiImages: EmojiImageStore = AppDependencies.emojiImages) {
+    init(
+        texts: Texts = .home,
+        tuning: TuningStore = AppDependencies.tuning,
+        emojiImages: EmojiImageStore = AppDependencies.emojiImages,
+        mediaImages: MediaImageStore = AppDependencies.mediaImages
+    ) {
         self.texts = texts
         self.tuning = tuning
         self.emojiImages = emojiImages
+        self.mediaImages = mediaImages
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -151,6 +160,7 @@ final class TimelineViewController: UIViewController {
     private func observeTuning() {
         withObservationTracking {
             _ = tuning.value(of: TuningCatalog.paragraphSpacing)
+            _ = tuning.value(of: TuningCatalog.mediaTallestAspectRatio)
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
@@ -476,11 +486,13 @@ final class TimelineViewController: UIViewController {
             cell.accessories = Self.interactionAccessories(for: self.status(for: id))
             switch entry {
             case .status(let status):
-                cell.contentConfiguration = self.contentConfiguration(for: status, base: cell.defaultContentConfiguration())
+                let list = self.contentConfiguration(for: status, base: cell.defaultContentConfiguration())
+                cell.contentConfiguration = self.statusContentConfiguration(list: list, status: status)
             case .gap(let gap):
                 cell.contentConfiguration = self.gapContentConfiguration(isLoading: self.loadingGapIDs.contains(gap.id), base: cell.defaultContentConfiguration())
             case .notification(let notification):
-                cell.contentConfiguration = self.contentConfiguration(for: notification, base: cell.defaultContentConfiguration())
+                let list = self.contentConfiguration(for: notification, base: cell.defaultContentConfiguration())
+                cell.contentConfiguration = self.statusContentConfiguration(list: list, notification: notification)
             }
         }
         let footerRegistration = UICollectionView.SupplementaryRegistration<TimelineFooterView>(
