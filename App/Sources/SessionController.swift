@@ -86,6 +86,11 @@ final class SessionController {
         home.viewController.onCompose = { [weak self] in self?.expandCompose() }
         composer.onBeginEditing = { [weak self] in self?.applyComposeDefaults() }
         composer.onExpand = { [weak self] in self?.expandCompose() }
+        composer.onShowReplyTarget = { [weak tabBarController] status in
+            // 今見えている一覧（ホーム、通知、開いているプロフィール）に返信先があれば、そこへ戻る。なければ動かさない。
+            let navigation = tabBarController?.selectedTab?.viewController as? UINavigationController
+            (navigation?.topViewController as? TimelineViewController)?.scrollToStatus(status.id, displayedID: status.displayed.id)
+        }
         composer.onObscuredHeightChange = { [weak self] height in
             guard let self else { return }
             composerObscuredHeight = height

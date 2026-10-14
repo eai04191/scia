@@ -100,7 +100,13 @@ final class ComposeModel {
     /// 送信を待つ間は変えない。送っている下書きと食い違い、成功して空に戻すときに新しい返信先まで消してしまうため。
     /// 同じ投稿を選び直したときも変えない。失敗した投稿を同じIdempotency-Keyで送り直せるようにするため。
     func setReplyTarget(_ status: Status?) {
-        guard !isPosting, status?.displayed.id != replyTo?.displayed.id else { return }
+        guard !isPosting else { return }
+        // 同じ投稿を元の投稿とブーストのように別の場所から選び直したときは、下書きを保ったまま、札が指す先だけを選んだ方にする。
+        if let status, status.displayed.id == replyTo?.displayed.id {
+            replyTo = status
+            return
+        }
+        guard status != nil || replyTo != nil else { return }
         let typed = typedText
         let keepsSpoiler = showsSpoiler && spoilerText != initialDraft.spoilerText
         initialDraft = status.map { StatusDraft.reply(to: $0, myAccountID: myAccountID) } ?? StatusDraft()

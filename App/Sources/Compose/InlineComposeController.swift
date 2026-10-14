@@ -14,6 +14,8 @@ final class InlineComposeController: NSObject {
     var onBeginEditing: () -> Void = {}
     /// 全画面の投稿画面に広げる。
     var onExpand: () -> Void = {}
+    /// 返信先の札を押したときに呼ぶ。返信先の投稿を見せる。
+    var onShowReplyTarget: (Status) -> Void = { _ in }
     /// 投稿できたあとに呼ぶ。
     var onPosted: () -> Void = {}
     /// 画面の下端から、キーボードと編集用のバーが覆っている高さが変わったときに呼ぶ。書いていないときは0。
@@ -22,7 +24,10 @@ final class InlineComposeController: NSObject {
     private weak var host: UIViewController?
     private let accessoryLabel = UILabel()
     private let bar = UIVisualEffectView(effect: UIGlassEffect())
-    private let replyLabel = UILabel()
+    private lazy var replyButton = UIButton(configuration: .plain(), primaryAction: UIAction { [weak self] _ in
+        guard let target = self?.model.replyTo else { return }
+        self?.onShowReplyTarget(target)
+    })
     private lazy var replyRow = makeReplyRow()
     private let textView = ComposeTextView()
     private let placeholderLabel = UILabel()
@@ -156,7 +161,7 @@ final class InlineComposeController: NSObject {
 
         let replyAcct = model.replyTo.map { "@\($0.displayed.account.acct)" }
         replyRow.isHidden = replyAcct == nil
-        replyLabel.text = replyAcct.map { "\($0)への返信" + (model.showsSpoiler ? "（注意書き付き）" : "") }
+        replyButton.configuration?.title = replyAcct.map { "\($0)への返信" + (model.showsSpoiler ? "（注意書き付き）" : "") }
 
         let option = VisibilityOption(model.visibility)
         visibilityButton.configuration?.image = UIImage(systemName: option.symbolName)
@@ -244,10 +249,19 @@ final class InlineComposeController: NSObject {
     }
 
     private func makeReplyRow() -> UIView {
-        replyLabel.font = .preferredFont(forTextStyle: .footnote)
-        replyLabel.textColor = .secondaryLabel
-        replyLabel.lineBreakMode = .byTruncatingTail
-        replyLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        replyButton.configuration?.image = UIImage(systemName: "arrowshape.turn.up.left.fill")
+        replyButton.configuration?.imagePadding = 4
+        replyButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .footnote, scale: .small)
+        replyButton.configuration?.titleLineBreakMode = .byTruncatingTail
+        replyButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes
+            attributes.font = .preferredFont(forTextStyle: .footnote)
+            return attributes
+        }
+        replyButton.configuration?.contentInsets = .zero
+        replyButton.contentHorizontalAlignment = .leading
+        replyButton.accessibilityHint = "タイムラインの返信先の投稿を表示します"
+        replyButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         var configuration = UIButton.Configuration.plain()
         configuration.image = UIImage(systemName: "xmark.circle.fill")
         configuration.baseForegroundColor = .secondaryLabel
@@ -255,7 +269,7 @@ final class InlineComposeController: NSObject {
         let clear = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.model.setReplyTarget(nil) })
         clear.accessibilityLabel = "返信をやめる"
         clear.setContentHuggingPriority(.required, for: .horizontal)
-        let row = UIStackView(arrangedSubviews: [replyLabel, clear])
+        let row = UIStackView(arrangedSubviews: [replyButton, clear])
         row.spacing = 6
         return row
     }

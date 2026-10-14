@@ -161,6 +161,88 @@ struct ScrollAnchorTests {
         #expect(reported.count < uncovered.count, "覆われた投稿も表示中として報告しました")
     }
 
+    /// 返信先の札から、一覧にある返信先の投稿を、入力欄のすぐ上に出す。
+    @Test func scrollingToStatusShowsItAboveCoveredBottom() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        harness.scroll(toFraction: 0)
+        harness.viewController.setObscuredBottomHeight(400)
+        let target = statuses[30]
+
+        #expect(harness.viewController.scrollToStatus(target.id, animated: false))
+
+        let cell = try #require(harness.visibleCell(of: .status(target.id)), "返信先の投稿が表示されていません")
+        let frame = cell.convert(cell.bounds, to: harness.collectionView)
+        let visibleBottom = harness.collectionView.bounds.maxY - harness.collectionView.adjustedContentInset.bottom
+        #expect(abs(frame.maxY - visibleBottom) <= 1, "返信先の投稿の下端が、覆われていない領域の下端から\(frame.maxY - visibleBottom)pt離れています")
+    }
+
+    /// 最上部へ動かしている途中で返信先の札を押したら、返信先で止まり、最上部へ動かし直さない。
+    @Test func scrollingToStatusCancelsScrollingToNewest() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        harness.scroll(toFraction: 0.4)
+        let target = statuses[30]
+
+        harness.viewController.scrollToNewest()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(harness.viewController.scrollToStatus(target.id))
+        try await Task.sleep(for: .milliseconds(1_500))
+
+        #expect(!harness.viewController.isAtTop, "返信先へ動いたあとで最上部へ戻りました")
+        #expect(harness.visibleCell(of: .status(target.id)) != nil, "返信先の投稿が表示されていません")
+    }
+
+    /// 同じ投稿が、元の投稿とブーストの2か所に並んでいても、返信を選んだ方へ移る。
+    @Test(arguments: [false, true])
+    func scrollingToStatusPrefersChosenItemOverSameStatusElsewhere(choosesBoost: Bool) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 60, startingAt: 1_000)
+        let original = statuses[40]
+        let boost = Status(id: "000000000000005000", createdAt: original.createdAt, account: original.account, content: "", spoilerText: "", url: nil, reblog: original)
+        statuses.insert(boost, at: 10)
+        harness.setStatuses(statuses)
+        harness.scroll(toFraction: 0)
+        harness.viewController.setObscuredBottomHeight(400)
+        let chosen = choosesBoost ? boost : original
+
+        #expect(harness.viewController.scrollToStatus(chosen.id, animated: false))
+
+        let cell = try #require(harness.visibleCell(of: .status(chosen.id)), "選んだ方の投稿が表示されていません")
+        let frame = cell.convert(cell.bounds, to: harness.collectionView)
+        let visibleBottom = harness.collectionView.bounds.maxY - harness.collectionView.adjustedContentInset.bottom
+        #expect(abs(frame.maxY - visibleBottom) <= 1, "選んだ方ではない投稿へ移りました")
+    }
+
+    /// ブーストから返信を選んでも、そのブーストが一覧になければ、元の投稿へ移る。
+    @Test func scrollingToStatusFallsBackToDisplayedStatus() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        harness.scroll(toFraction: 0)
+        let original = statuses[30]
+
+        #expect(harness.viewController.scrollToStatus("000000000000005000", displayedID: original.id, animated: false))
+        #expect(harness.visibleCell(of: .status(original.id)) != nil, "元の投稿が表示されていません")
+    }
+
+    @Test func scrollingToMissingStatusDoesNothing() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.setStatuses(StatusFactory.make(count: 60, startingAt: 1_000))
+        harness.scroll(toFraction: 0)
+        let offset = harness.collectionView.contentOffset
+
+        #expect(!harness.viewController.scrollToStatus("1", animated: false))
+        #expect(harness.collectionView.contentOffset == offset)
+    }
+
     /// 切れていた間の投稿、ギャップ、切れる前の投稿の順に並べる。
     private func entriesWithGap(loadedInGap: [Status] = [], remainingGap: Bool = true) -> (entries: [TimelineEntry], gap: TimelineGap, above: Status, below: Status) {
         let newer = StatusFactory.make(count: 20, startingAt: 2_000)

@@ -507,6 +507,35 @@ final class TimelineViewController: UIViewController {
         return button
     }
 
+    /// 投稿が一覧にあれば、覆われていない表示領域の下端に来るまでスクロールする。返信先の札から、書いている入力欄のすぐ上に返信先を出すために使う。
+    /// 同じ投稿が元の投稿とブースト、通知などで何か所にも並ぶことがあるため、まず返信を選んだ要素そのもの（ブーストならブーストのID）を探し、
+    /// なければ中身が同じ投稿（`displayedID`、ブーストなら元の投稿のID）を探す。一覧になければ動かさずにfalseを返す。
+    @discardableResult
+    func scrollToStatus(_ statusID: Status.ID, displayedID: Status.ID? = nil, animated: Bool = true) -> Bool {
+        let displayedID = displayedID ?? statusID
+        let ids = displayedItemIDs
+        let chosen = ids.first { id in
+            switch entries[id] {
+            // 固定投稿は、同じ投稿が下の一覧にも並ぶことがあり、IDでは見分けられない。上にある固定投稿の方へ移る。
+            case .status(let status), .pinned(let status): status.id == statusID
+            case .notification(let notification): notification.status?.id == statusID
+            case .gap, nil: false
+            }
+        }
+        let found = chosen ?? ids.first { id in
+            switch entries[id] {
+            case .status(let status), .pinned(let status): status.displayed.id == displayedID
+            case .notification(let notification): notification.status?.displayed.id == displayedID
+            case .gap, nil: false
+            }
+        }
+        guard let found, let indexPath = dataSource.indexPath(for: found) else { return false }
+        // 最上部へ動かしている途中なら、それをやめる。続けると、返信先へ動き終えたときに最上部へ動かし直してしまう。
+        isScrollingToTop = false
+        collectionView.scrollToItem(at: indexPath, at: .bottom, animated: animated)
+        return true
+    }
+
     /// 画面の下端から、投稿欄のキーボードと入力バーが覆っている高さ。
     private var obscuredBottomHeight: CGFloat = 0
 
