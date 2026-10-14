@@ -183,8 +183,8 @@ final class MediaTileView: UIButton {
         backgroundColor?.resolvedColor(with: traitCollection)
     }
 
-    /// 画像の上に重ねている印（ALT、GIF、残りの枚数）の写し。ビューアが動かす画像の写しに載せて、サムネイルとのあいだを一緒に動かす。
-    /// 写しの大きさが変わっても、サムネイルと同じ角からの位置を保つ。ラベルは画像にし、全体を覆う残りの枚数は文字が伸び縮みしないよう作り直す。
+    /// 画像の上に重ねている印（ALT、GIF、動画の再生マーク、残りの枚数）の写し。ビューアが動かす画像の写しに載せて、サムネイルとのあいだを一緒に動かす。
+    /// 写しの大きさが変わっても、サムネイルと同じ角からの位置を保つ。ラベルは画像にし、全体を覆う残りの枚数と中央の再生マークは、伸び縮みしないよう作り直す。
     func makeDecorationCopy() -> UIView {
         let container = UIView(frame: bounds)
         container.isUserInteractionEnabled = false
@@ -201,6 +201,19 @@ final class MediaTileView: UIButton {
             let copy = UIImageView(image: image)
             copy.frame = badge.frame
             copy.autoresizingMask = mask
+            container.addSubview(copy)
+        }
+        if let symbol = symbolView.image {
+            let copy = UIImageView(image: symbol)
+            copy.frame = bounds
+            copy.contentMode = symbolView.contentMode
+            copy.preferredSymbolConfiguration = symbolView.preferredSymbolConfiguration
+            copy.tintColor = symbolView.tintColor
+            copy.layer.shadowColor = symbolView.layer.shadowColor
+            copy.layer.shadowRadius = symbolView.layer.shadowRadius
+            copy.layer.shadowOffset = symbolView.layer.shadowOffset
+            copy.layer.shadowOpacity = symbolView.layer.shadowOpacity
+            copy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             container.addSubview(copy)
         }
         if !moreLabel.isHidden {
