@@ -62,6 +62,41 @@ struct ScrollAnchorTests {
         #expect(harness.viewController.currentAnchor()?.id == .status(newest.id))
     }
 
+    /// 最上部で新着に追従するとき、アニメーションで挿入しても、終わった時点で最上部に新着が並んでいる。
+    @Test(arguments: [true, false])
+    func prependAtTopWithAnimationEndsAtTop(animates: Bool) async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.tuning.setValue(animates, for: TuningCatalog.animatesInsertionAtTop)
+        let existing = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(existing)
+        harness.scroll(toFraction: 0)
+        let inserted = StatusFactory.make(count: 3, startingAt: 1_003)
+
+        harness.setStatuses(inserted + existing)
+        try await Task.sleep(for: .milliseconds(600))
+
+        #expect(harness.viewController.isAtTop, "最上部から外れました: contentOffset.y=\(harness.collectionView.contentOffset.y)")
+        #expect(harness.viewController.currentAnchor()?.id == .status(inserted[0].id))
+    }
+
+    /// 最上部より下で読んでいるときは、アニメーションの設定によらず、読んでいる位置を保つ。
+    @Test func prependBelowTopKeepsAnchorEvenWhenAnimationIsOn() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.tuning.setValue(true, for: TuningCatalog.animatesInsertionAtTop)
+        let existing = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(existing)
+        harness.scroll(toFraction: 0.4)
+        let anchor = try #require(harness.viewController.currentAnchor())
+        let before = try #require(harness.windowMinY(of: anchor.id))
+
+        harness.setStatuses(StatusFactory.make(count: 3, startingAt: 1_003) + existing)
+
+        let after = try #require(harness.windowMinY(of: anchor.id))
+        #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
+    }
+
     @Test func visibleStatusesAreReportedAfterInsertion() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

@@ -72,6 +72,14 @@ public enum TuningCatalog {
         defaultValue: true
     )
 
+    /// 最上部で新着に追従しているとき、新着をUIKit標準のアニメーションで挿入する。オフなら一度に差し替える。
+    /// 最上部より下で読んでいるときは、読んでいる位置を保つため、この値によらずアニメーションしない。
+    public static let animatesInsertionAtTop = ToggleTuning(
+        id: "streaming.animatesInsertionAtTop",
+        title: "最上部では新着をアニメーションで挿入する",
+        defaultValue: true
+    )
+
     /// つなぎ直したとき、切れていた間の投稿を手元とつながるまで続けて読むページ数の上限。1ページは40件。
     /// 超えた分はギャップとして残り、近づいたときに読む。
     public static let fillPageLimit = NumberTuning(
@@ -95,6 +103,7 @@ public enum TuningCatalog {
         .number(paragraphSpacing),
         .number(insertionInterval),
         .toggle(followsNewArrivalsAtTop),
+        .toggle(animatesInsertionAtTop),
         .number(fillPageLimit),
         .number(gapAutoLoadDistance),
     ]

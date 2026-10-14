@@ -223,11 +223,17 @@ final class TimelineViewController: UIViewController {
             isRestoringAnchor = false
             logger.info("setEntries count=\(newEntries.count, privacy: .public) top=\(Self.label(topID), privacy: .public)")
         } else if followsTop {
+            // 最初に並べるときは、行が浮かび上がって見えないよう、アニメーションしない。
+            let animates = !previous.isEmpty && tuning.value(of: TuningCatalog.animatesInsertionAtTop)
             isRestoringAnchor = true
-            dataSource.apply(snapshot, animatingDifferences: false)
+            dataSource.apply(snapshot, animatingDifferences: animates) { [weak self] in
+                // 動いている間に、見積もりから実寸へ変わったセルの分だけ位置が補正され、最上部から外れることがあるため、戻す。
+                guard animates, let self, !self.isUserScrolling, !self.isAtTop else { return }
+                self.collectionView.setContentOffset(CGPoint(x: 0, y: -self.collectionView.adjustedContentInset.top), animated: true)
+            }
             collectionView.contentOffset.y = -collectionView.adjustedContentInset.top
             isRestoringAnchor = false
-            logger.info("setEntries count=\(newEntries.count, privacy: .public) followsTop=true")
+            logger.info("setEntries count=\(newEntries.count, privacy: .public) followsTop=true animated=\(animates, privacy: .public)")
         } else {
             let anchor = applyPreservingAnchor(snapshot, keeping: anchorID)
             logger.info("setEntries count=\(newEntries.count, privacy: .public) anchor=\(anchor.map { Self.label($0.id) } ?? "nil", privacy: .public)")
