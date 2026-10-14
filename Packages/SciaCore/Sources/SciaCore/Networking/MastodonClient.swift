@@ -141,6 +141,22 @@ public struct MastodonClient: Sendable {
         try await get([Status].self, path: "api/v1/accounts/\(id)/statuses", query: filter.queryItems + query.queryItems).0
     }
 
+    /// `user@domain`の形のacctからアカウントを探す。自分のサーバーが知らないアカウントも、相手のサーバーに問い合わせて探す。
+    /// 見つからなければnil。
+    /// https://docs.joinmastodon.org/methods/search/#v2
+    public func resolveAccount(_ acct: String) async throws -> Account? {
+        struct Results: Decodable {
+            let accounts: [Account]
+        }
+        let query = [
+            URLQueryItem(name: "q", value: acct),
+            URLQueryItem(name: "type", value: "accounts"),
+            URLQueryItem(name: "resolve", value: "true"),
+            URLQueryItem(name: "limit", value: "1"),
+        ]
+        return try await get(Results.self, path: "api/v2/search", query: query).0.accounts.first
+    }
+
     /// 鍵のかかったアカウントには、フォローのリクエストを送る。
     /// https://docs.joinmastodon.org/methods/accounts/#follow
     public func follow(_ id: String) async throws -> Relationship {

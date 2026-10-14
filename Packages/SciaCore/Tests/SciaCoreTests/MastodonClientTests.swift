@@ -270,4 +270,21 @@ struct MastodonClientTests {
         #expect(requests.map(\.httpMethod) == ["POST", "POST"])
         #expect(requests.map { $0.url?.path() } == ["/api/v1/accounts/2/follow", "/api/v1/accounts/2/unfollow"])
     }
+
+    @Test func resolveAccountSearchesRemoteAccounts() async throws {
+        let account = try String(contentsOf: #require(Bundle.module.url(forResource: "account", withExtension: "json", subdirectory: "Fixtures")), encoding: .utf8)
+        let transport = StubTransport([.json(#"{"accounts":["# + account + #"],"statuses":[],"hashtags":[]}"#, statusCode: 200)])
+
+        let resolved = try await makeClient(transport).resolveAccount("bob@remote.example")
+
+        let url = try #require(await transport.requests.first?.url)
+        #expect(url.path() == "/api/v2/search")
+        #expect(Set(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []) == [
+            URLQueryItem(name: "q", value: "bob@remote.example"),
+            URLQueryItem(name: "type", value: "accounts"),
+            URLQueryItem(name: "resolve", value: "true"),
+            URLQueryItem(name: "limit", value: "1"),
+        ])
+        #expect(resolved?.acct == "bob@remote.example")
+    }
 }

@@ -206,6 +206,32 @@ final class SessionController {
         notifications.stop()
     }
 
+    /// 他のアプリから開かれたURLの画面を出す。
+    func open(_ url: AppURL) {
+        switch url {
+        case .profile(let acct):
+            openProfile(acct: acct)
+        }
+    }
+
+    /// acctでアカウントを探して、ホームのタブにプロフィールを開く。ホームを選んでいなければホームに切り替える。
+    private func openProfile(acct: String) {
+        let client = client
+        Task {
+            do {
+                guard let account = try await client.resolveAccount(acct) else {
+                    logger.error("profile not found acct=\(acct, privacy: .public)")
+                    handle(ProfileNotFound(acct: acct), title: "プロフィールを開けませんでした")
+                    return
+                }
+                (rootViewController as? UITabBarController)?.selectedIndex = 0
+                openProfile(account, from: home.viewController)
+            } catch {
+                handle(error, title: "プロフィールを開けませんでした")
+            }
+        }
+    }
+
     #if DEBUG
     func handle(_ url: DebugURL) {
         switch url {
@@ -224,6 +250,12 @@ final class SessionController {
         home.enterBackground()
         notifications.enterBackground()
     }
+}
+
+private struct ProfileNotFound: LocalizedError {
+    let acct: String
+
+    var errorDescription: String? { "@\(acct)が見つかりませんでした。" }
 }
 
 /// 開いているプロフィール画面を弱く持つ。

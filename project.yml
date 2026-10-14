@@ -51,6 +51,11 @@ targets:
         # agentが`xcrun simctl openurl`でデバッグメニューの操作を呼ぶためのスキーム（App/Sources/Debug/DebugURL.swift）。
         # Info.plistは構成ごとに分けていないためReleaseにも登録されるが、受け取る処理が#if DEBUGの中にあるので、Releaseでは開いても何もしない。
         CFBundleURLTypes:
+          # 他のアプリやショートカットから画面を開くスキーム（App/Sources/Navigation/AppURL.swift）。
+          # OAuthの戻り先のnet.mizle.sciaはASWebAuthenticationSessionが受け取るため、取り合わないよう別にする。
+          - CFBundleURLName: net.mizle.scia
+            CFBundleURLSchemes:
+              - scia
           - CFBundleURLName: net.mizle.scia.debug
             CFBundleURLSchemes:
               - scia-debug

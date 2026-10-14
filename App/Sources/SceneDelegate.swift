@@ -29,13 +29,38 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             showLogin(errorMessage: error.localizedDescription)
         }
         window.makeKeyAndVisible()
+        // 閉じていたアプリをURLで開いたとき。プロフィールは最初の読み込みを待たずに開ける。
+        for context in connectionOptions.urlContexts {
+            guard let url = AppURL(context.url), let session = self.session else { continue }
+            session.open(url)
+        }
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        open(URLContexts)
+    }
+
+    /// 他のアプリから開かれたURLを処理する。ログインしていなければ何もしない。
+    private func open(_ URLContexts: Set<UIOpenURLContext>) {
+        for context in URLContexts {
+            guard let url = AppURL(context.url) else { continue }
+            guard let session else {
+                logger.error("url ignored without session: \(context.url.absoluteString, privacy: .public)")
+                continue
+            }
+            logger.info("open url: \(context.url.absoluteString, privacy: .public)")
+            session.open(url)
+        }
+        #if DEBUG
+        openDebug(URLContexts)
+        #endif
     }
 
     #if DEBUG
     /// 起動済みのアプリに届いたデバッグ用のURLを処理する。
     /// 起動時のURL（`connectionOptions.urlContexts`）は扱わない。最初の読み込みの前にダミーを流すと、読み込んだ投稿との並びを確かめられないため。
-    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
-        for context in URLContexts {
+    private func openDebug(_ URLContexts: Set<UIOpenURLContext>) {
+        for context in URLContexts where AppURL(context.url) == nil {
             guard let url = DebugURL(context.url) else {
                 logger.error("unknown debug url: \(context.url.absoluteString, privacy: .public)")
                 continue
