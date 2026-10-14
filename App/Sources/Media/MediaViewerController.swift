@@ -35,6 +35,8 @@ final class MediaViewerController: UIViewController {
     private let morph = UIImageView()
     /// 写しに載せる、サムネイルの印（ALT、GIF、残りの枚数）の写し。サムネイルに近いほど濃くし、ビューアの画像の大きさでは見せない。
     private var morphDecoration: UIView?
+    /// 写しに敷く、サムネイルの背景の色。印と同じ濃さで出し入れし、透明な部分のある画像でサムネイルとの見え方をそろえる。
+    private var morphPlaceholderColor: UIColor?
     /// 写しの画像を、ページが描いている画像に合わせ続けるか。元の画像が届いたら、動いている途中でも差し替える。
     private var morphFollowsPage = false
     private var motion = Motion.idle
@@ -419,14 +421,25 @@ extension MediaViewerController {
     /// 写しの大きさが変わっても角からの位置を保つよう、写しいっぱいに広げて自動で位置を合わせる。
     private func attachDecoration(from tile: MediaTileView?, alpha: CGFloat) {
         morphDecoration?.removeFromSuperview()
+        morphPlaceholderColor = tile?.placeholderColor
         morphDecoration = tile.map { tile in
             let decoration = tile.makeDecorationCopy()
             decoration.frame = morph.bounds
             decoration.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-            decoration.alpha = alpha
             morph.addSubview(decoration)
             return decoration
         }
+        setDecorationAlpha(alpha)
+    }
+
+    /// サムネイルの印と背景の濃さ。サムネイルの大きさで1、ビューアの画像の大きさで0。
+    private func setDecorationAlpha(_ alpha: CGFloat) {
+        morphDecoration?.alpha = alpha
+        morph.backgroundColor = Self.placeholderColor(morphPlaceholderColor, alpha: alpha)
+    }
+
+    static func placeholderColor(_ color: UIColor?, alpha: CGFloat) -> UIColor? {
+        color.map { $0.withAlphaComponent($0.cgColor.alpha * alpha) }
     }
 
     private func hideMorph() {
@@ -491,7 +504,7 @@ extension MediaViewerController {
             animator.addAnimations {
                 self.morph.frame = target
                 self.morph.layer.cornerRadius = 0
-                self.morphDecoration?.alpha = 0
+                self.setDecorationAlpha(0)
             }
         } else {
             pageController.view.alpha = 0
@@ -544,7 +557,7 @@ extension MediaViewerController {
         animator.addAnimations {
             self.morph.frame = target
             self.morph.layer.cornerRadius = 0
-            self.morphDecoration?.alpha = 0
+            self.setDecorationAlpha(0)
             self.setVisibility(1)
         }
         animator.addCompletion { [weak self] position in
@@ -610,6 +623,7 @@ extension MediaViewerController {
                 overlay: overlay,
                 morph: morph,
                 decoration: morphDecoration,
+                placeholderColor: morphPlaceholderColor,
                 backdrop: backdrop,
                 fadingViews: [backdrop] + chromeSnapshots,
                 underlay: moves && timing.drawsUnderBars ? makeUnderlay(decoratedLike: tile) : nil

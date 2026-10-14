@@ -178,6 +178,11 @@ final class MediaTileView: UIButton {
     /// 描いているサムネイル。ビューアの開閉で、まだ画像を描いていないページの代わりに動かす。
     var thumbnailImage: UIImage? { thumbnailView.image }
 
+    /// 画像の奥に敷いている背景の色。透明な部分のある画像では、この色が透けて見える。
+    var placeholderColor: UIColor? {
+        backgroundColor?.resolvedColor(with: traitCollection)
+    }
+
     /// 画像の上に重ねている印（ALT、GIF、残りの枚数）の写し。ビューアが動かす画像の写しに載せて、サムネイルとのあいだを一緒に動かす。
     /// 写しの大きさが変わっても、サムネイルと同じ角からの位置を保つ。ラベルは画像にし、全体を覆う残りの枚数は文字が伸び縮みしないよう作り直す。
     func makeDecorationCopy() -> UIView {

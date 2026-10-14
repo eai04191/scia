@@ -28,6 +28,8 @@ final class MediaClosingFlight: NSObject {
         let morph: UIImageView
         /// 写しに載せた、サムネイルの印の写し。
         let decoration: UIView?
+        /// 写しに敷く、サムネイルの背景の色。印と同じ濃さで出し入れする。
+        let placeholderColor: UIColor?
         /// 一覧を暗くする下地。`fadingViews`にも含め、閉じながら薄くする。
         let backdrop: UIView
         let fadingViews: [UIView]
@@ -167,7 +169,9 @@ final class MediaClosingFlight: NSObject {
         if movesImage, let target = lastTarget {
             parts.morph.frame = Self.interpolate(startFrame, target.frame, progress)
             parts.morph.layer.cornerRadius = startRadius + (target.radius - startRadius) * clamped
-            parts.decoration?.alpha = startDecorationAlpha + (1 - startDecorationAlpha) * clamped
+            let decorationAlpha = startDecorationAlpha + (1 - startDecorationAlpha) * clamped
+            parts.decoration?.alpha = decorationAlpha
+            parts.morph.backgroundColor = MediaViewerController.placeholderColor(parts.placeholderColor, alpha: decorationAlpha)
             if tile == nil {
                 // 戻り先が画面から外れたら、最後の位置へ向かいながら薄くする。
                 visibility = min(visibility, 1 - clamped)
@@ -241,6 +245,7 @@ final class MediaClosingFlight: NSObject {
         image.layer.cornerRadius = morph.layer.cornerRadius
         image.alpha = visibility
         underlay.decoration?.alpha = parts.decoration?.alpha ?? 0
+        image.backgroundColor = morph.backgroundColor
         let bounds = image.bounds
         let inside = image.convert(clipRect, from: window).intersection(bounds)
         let outside = UIBezierPath(rect: bounds)
@@ -261,6 +266,9 @@ final class MediaClosingFlight: NSObject {
     /// 最前面の写しから入れ替えた部分（バーと重なっていた部分や、着地手前の受け渡し）だけが暗く見え、境目ができる。
     /// 写しはビューアの画像として下地より手前にあるものなので、どちらの写しを見せていても暗くしない。
     /// 画像の透明な部分は、開いている間も下地の上に描いていたため、そこには下地を残す。
+    /// 透明な部分には写しの背景の色（サムネイルの背景）も敷いている。最前面の写しでは背景の色が下地の手前に、一覧の中の写しでは奥にあるため、
+    /// 残す下地を背景の色の濃さの分だけ薄くし、下地による暗さを2枚の写しでそろえる。背景の色そのものの明るさには
+    /// 下地の濃さと背景の色の濃さの積ほどの差が残るが、背景の色は薄く、下地は閉じながら薄くなるため、受け入れる。
     private func updateBackdropHole() {
         guard parts.underlay != nil else { return }
         let backdrop = parts.backdrop
@@ -281,6 +289,7 @@ final class MediaClosingFlight: NSObject {
         backdropHoleFill.frame = hole
         backdropHoleFill.cornerRadius = radius
         backdropHoleFill.cornerCurve = morph.layer.cornerCurve
+        backdropHoleFill.opacity = Float(1 - (morph.backgroundColor?.cgColor.alpha ?? 0))
         CATransaction.commit()
     }
 
