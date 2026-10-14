@@ -9,7 +9,7 @@ import UIKit
 struct MediaViewerControllerTests {
     private let drag = DragToDismiss(distanceThreshold: 0.12, velocityThreshold: 0.8, smallestScale: 0.6, fadeDistance: 0.5, restoreDuration: 0.35)
 
-    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, bounce: 0)
+    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, bounce: 0, drawsUnderBars: true, handoffStart: 0.7)
 
     private func makeViewer(attachments: [MediaAttachment]) -> MediaViewerController {
         MediaViewerController(attachments: attachments, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil })
@@ -187,7 +187,7 @@ struct MediaViewerControllerTests {
             startIndex: 0,
             store: store,
             dragToDismiss: drag,
-            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, bounce: 0),
+            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, bounce: 0, drawsUnderBars: true, handoffStart: 0.7),
             from: harness.viewController,
             sourceTile: { _ in tile },
             onDismiss: {}

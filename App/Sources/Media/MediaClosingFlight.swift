@@ -7,21 +7,38 @@ import UIKit
 /// 戻る途中に一覧をスクロールされるとサムネイルが動くため、UIKitのアニメーションで行き先を決めると、古い位置へ戻ってから消えて見える。
 /// 毎フレーム今のサムネイルを探し直し、始点とその位置のあいだをばねの進み具合で補う。
 /// 途中で行が再利用されたら、隠すサムネイルも探し直したものに替える。見つからなくなったら、最後の位置へ向かいながら薄くする。
+///
+/// 最前面の写しは、着地へ近づくにつれて一覧のバーに隠れない範囲へ切り落とす。切り落とさないと、バーの手前を通って貫通して見える。
+/// 切り落とした先は、一覧の中に置いた同じ写し（`Underlay`）が埋める。一覧の中の写しにはバーの下のぼかしがかかるため、
+/// 着地してサムネイルを見せても、バーにかかる部分の見え方が切り替わらない。
+/// バーの下のぼかしはバーの下端より少し下までなだらかにかかり、新着ボタンのように一覧に重なる部品もあるため、
+/// 着地の手前からは最前面の写しを薄くして、一覧の中の写しへ受け渡す。
 @MainActor
 final class MediaClosingFlight: NSObject {
     struct Parts {
         /// 写しや下地を載せる、操作を素通しする層。終わったら外す。
         let overlay: UIView
-        let morph: UIView
+        let morph: UIImageView
         /// 写しに載せた、サムネイルの印の写し。
         let decoration: UIView?
         let fadingViews: [UIView]
+        /// バーの奥に描く写し。nilなら、バーにかかる部分を切り落とすだけにする。
+        let underlay: Underlay?
+    }
+
+    /// 一覧の中に置き、最前面の写しと同じ位置と見た目で動かす写し。
+    struct Underlay {
+        let image: UIImageView
+        let decoration: UIView?
     }
 
     private let parts: Parts
     private let window: UIWindow
     private let spring: SpringCurve
     private let movesImage: Bool
+    private let handoffStart: CGFloat
+    /// 戻り先を見失ってから薄くしている度合い。1で不透明。
+    private var visibility: CGFloat = 1
     private let findTile: @MainActor () -> MediaTileView?
     private let startFrame: CGRect
     private let startRadius: CGFloat
@@ -32,16 +49,26 @@ final class MediaClosingFlight: NSObject {
     /// 戻り先の一覧の、バーに隠れない範囲（ウィンドウ座標）。見つかるまでは画面全体。
     private var lastVisibleRect: CGRect
     private let clipMask = CALayer()
+    /// 最前面の写しを見せている範囲（ウィンドウ座標）。
+    private var clipRect: CGRect
+    /// 一覧の中の写しのマスク。最前面の写しを見せている範囲の外は不透明、内は受け渡しが始まるまで透明にする。
+    private let underlayMask = CALayer()
+    private let underlayOutsideMask = CAShapeLayer()
+    private let underlayInsideMask = CALayer()
+    /// バーの奥の写しを載せる、戻り先のサムネイルを含む一覧の行。
+    private weak var underlayHost: UIView?
     private var startTime: CFTimeInterval = 0
     private var displayLink: CADisplayLink?
 
     /// - Parameters:
     ///   - concealedTile: 戻り先として隠しているサムネイル。戻り終えたら見せる。
+    ///   - handoffStart: 一覧の中の写しへ受け渡し始める進み具合。一覧の中の写しがなければ使わない。
     ///   - movesImage: falseなら写しを動かさず、その場で薄くする。
     init(
         parts: Parts,
         window: UIWindow,
         spring: SpringCurve,
+        handoffStart: CGFloat,
         movesImage: Bool,
         concealedTile: MediaTileView?,
         findTile: @escaping @MainActor () -> MediaTileView?
@@ -49,6 +76,7 @@ final class MediaClosingFlight: NSObject {
         self.parts = parts
         self.window = window
         self.spring = spring
+        self.handoffStart = min(max(handoffStart, 0), 1)
         self.movesImage = movesImage
         self.concealedTile = concealedTile
         self.findTile = findTile
@@ -57,8 +85,15 @@ final class MediaClosingFlight: NSObject {
         startDecorationAlpha = parts.decoration?.alpha ?? 0
         startFadingAlphas = parts.fadingViews.map(\.alpha)
         lastVisibleRect = window.bounds
+        clipRect = window.bounds
         clipMask.backgroundColor = UIColor.black.cgColor
         parts.morph.layer.mask = clipMask
+        underlayOutsideMask.fillColor = UIColor.black.cgColor
+        underlayOutsideMask.fillRule = .evenOdd
+        underlayInsideMask.backgroundColor = UIColor.black.cgColor
+        underlayMask.addSublayer(underlayOutsideMask)
+        underlayMask.addSublayer(underlayInsideMask)
+        parts.underlay?.image.layer.mask = underlayMask
     }
 
     func start() {
@@ -89,7 +124,10 @@ final class MediaClosingFlight: NSObject {
         }
         if let tile {
             lastTarget = (tile.convert(tile.bounds, to: window), tile.layer.cornerRadius)
-            lastVisibleRect = Self.visibleRect(of: tile, in: window)
+            if let (scrollView, row) = Self.enclosingRow(of: tile) {
+                underlayHost = row
+                lastVisibleRect = scrollView.convert(scrollView.bounds.inset(by: scrollView.adjustedContentInset), to: window)
+            }
         }
         if movesImage, let target = lastTarget {
             parts.morph.frame = Self.interpolate(startFrame, target.frame, progress)
@@ -97,12 +135,15 @@ final class MediaClosingFlight: NSObject {
             parts.decoration?.alpha = startDecorationAlpha + (1 - startDecorationAlpha) * clamped
             if tile == nil {
                 // 戻り先が画面から外れたら、最後の位置へ向かいながら薄くする。
-                parts.morph.alpha = min(parts.morph.alpha, 1 - clamped)
+                visibility = min(visibility, 1 - clamped)
             }
         } else {
-            parts.morph.alpha = 1 - clamped
+            visibility = 1 - clamped
         }
+        let handoff = handoff(progress: clamped)
+        parts.morph.alpha = visibility * (1 - handoff)
         updateClip(progress: clamped)
+        updateUnderlay(handoff: handoff)
         for (view, startAlpha) in zip(parts.fadingViews, startFadingAlphas) {
             view.alpha = startAlpha * (1 - clamped)
         }
@@ -112,6 +153,7 @@ final class MediaClosingFlight: NSObject {
     /// 一覧の外の最前面で動かしているため、絞らないと、バーに重なる部分が手前を通って貫通して見える。
     private func updateClip(progress: CGFloat) {
         let rect = Self.interpolate(window.bounds, lastVisibleRect, progress)
+        clipRect = rect
         let local = rect.offsetBy(dx: -parts.morph.frame.minX, dy: -parts.morph.frame.minY)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
@@ -119,22 +161,78 @@ final class MediaClosingFlight: NSObject {
         CATransaction.commit()
     }
 
-    private static func visibleRect(of tile: UIView, in window: UIWindow) -> CGRect {
-        var ancestor = tile.superview
-        while let view = ancestor, !(view is UIScrollView) {
-            ancestor = view.superview
+    /// 最前面の写しを一覧の中の写しへ受け渡した度合い。0で最前面の写しだけ、1で一覧の中の写しだけが見える。
+    private func handoff(progress: CGFloat) -> CGFloat {
+        guard parts.underlay != nil, underlayHost != nil else { return 0 }
+        guard handoffStart < 1 else { return progress >= 1 ? 1 : 0 }
+        let t = min(max((progress - handoffStart) / (1 - handoffStart), 0), 1)
+        return t * t * (3 - 2 * t)
+    }
+
+    /// バーの奥の写しを、最前面の写しと同じ位置と見た目にそろえる。
+    /// 写しは行からはみ出すため、行をほかの行より手前に描く。`zPosition`を上げるとバーの下のぼかしより手前に出てしまうため、
+    /// 同じ`zPosition`の行どうしの並び順で手前に出す。一覧は行を足すときに並び順を変えるため、毎フレーム出し直す。
+    /// 最前面の写しを見せている範囲では、受け渡しが始まるまで透明にし、半透明の画像で2枚の写しが重なって濃く見えないようにする。
+    /// 受け渡しの間は2枚を重ねる。不透明な画像は、下の写しを不透明にしないと重ねた結果が薄くなる（上を1-h、下をhの濃さにすると1-h+h²）。
+    /// そのため下の写しは受け渡しの始めにすばやく不透明にし、不透明な画像が薄く見えるのを数%に抑える。
+    /// 代わりに半透明の画像では、受け渡しの間（既定で閉じる時間の最後の3割）だけ半透明の部分が濃く見える。添付の多くは不透明な写真なので、こちらを受け入れる。
+    private func updateUnderlay(handoff: CGFloat) {
+        guard let underlay = parts.underlay, let host = underlayHost else { return }
+        if let list = host.superview, list.subviews.last !== host {
+            list.bringSubviewToFront(host)
         }
-        guard let scrollView = ancestor as? UIScrollView else { return window.bounds }
-        let inner = scrollView.bounds.inset(by: scrollView.adjustedContentInset)
-        return scrollView.convert(inner, to: window)
+        let image = underlay.image
+        if image.superview !== host {
+            host.addSubview(image)
+        } else if host.subviews.last !== image {
+            host.bringSubviewToFront(image)
+        }
+        let morph = parts.morph
+        if image.image !== morph.image {
+            image.image = morph.image
+        }
+        image.frame = host.convert(morph.frame, from: window)
+        image.layer.cornerRadius = morph.layer.cornerRadius
+        image.alpha = visibility
+        underlay.decoration?.alpha = parts.decoration?.alpha ?? 0
+        let bounds = image.bounds
+        let inside = image.convert(clipRect, from: window).intersection(bounds)
+        let outside = UIBezierPath(rect: bounds)
+        if !inside.isNull {
+            outside.append(UIBezierPath(rect: inside))
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        underlayMask.frame = bounds
+        underlayOutsideMask.frame = bounds
+        underlayOutsideMask.path = outside.cgPath
+        underlayInsideMask.frame = inside.isNull ? .zero : inside
+        underlayInsideMask.opacity = Float(min(handoff / Self.underlayFadeInPortion, 1))
+        CATransaction.commit()
     }
 
     private func finish() {
         displayLink?.invalidate()
         displayLink = nil
         parts.overlay.removeFromSuperview()
+        parts.underlay?.image.removeFromSuperview()
         concealedTile?.isConcealedForViewer = false
         concealedTile = nil
+    }
+
+    /// 受け渡しの度合いのうち、最前面の写しを見せている範囲で一覧の中の写しを不透明にし終えるまでの割合。
+    private static let underlayFadeInPortion: CGFloat = 0.15
+
+    /// サムネイルを含む一覧と、その一覧の直下にある行。
+    private static func enclosingRow(of view: UIView) -> (UIScrollView, UIView)? {
+        var row = view
+        while let parent = row.superview {
+            if let scrollView = parent as? UIScrollView {
+                return (scrollView, row)
+            }
+            row = parent
+        }
+        return nil
     }
 
     private static func interpolate(_ from: CGRect, _ to: CGRect, _ progress: CGFloat) -> CGRect {

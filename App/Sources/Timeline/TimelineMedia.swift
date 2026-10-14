@@ -59,7 +59,9 @@ extension TimelineViewController {
             timing: MediaViewerController.Timing(
                 openDuration: tuning.value(of: TuningCatalog.mediaOpenDuration),
                 closeDuration: tuning.value(of: TuningCatalog.mediaCloseDuration),
-                bounce: tuning.value(of: TuningCatalog.mediaTransitionBounce)
+                bounce: tuning.value(of: TuningCatalog.mediaTransitionBounce),
+                drawsUnderBars: tuning.value(of: TuningCatalog.mediaCloseDrawsUnderBars),
+                handoffStart: tuning.value(of: TuningCatalog.mediaCloseHandoffStart)
             ),
             from: self,
             sourceTile: { [weak self, weak grid] attachmentID in

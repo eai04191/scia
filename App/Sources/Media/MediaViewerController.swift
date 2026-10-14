@@ -50,6 +50,10 @@ final class MediaViewerController: UIViewController {
         let closeDuration: TimeInterval
         /// 0で弾まずに止まり、大きいほど行き過ぎてから戻る。
         let bounce: CGFloat
+        /// 閉じるとき、戻る画像のうちバーにかかる部分を、一覧の中に置いた写しでバーの奥に描く。
+        let drawsUnderBars: Bool
+        /// バーの奥にも描くとき、最前面の写しを一覧の中の写しへ受け渡し始める進み具合。0から1。
+        let handoffStart: Double
     }
 
     /// - Parameter sourceTile: 添付ファイルのサムネイルを返す。開閉のたびに呼ぶため、閉じるまでに一覧の行が再利用されても今の位置を返せる。
@@ -598,16 +602,40 @@ extension MediaViewerController {
 
         let attachmentID = currentAttachment.id
         let sourceTile = sourceTile
+        let moves = movesImage && tile != nil
         let flight = MediaClosingFlight(
-            parts: MediaClosingFlight.Parts(overlay: overlay, morph: morph, decoration: morphDecoration, fadingViews: [backdrop] + chromeSnapshots),
+            parts: MediaClosingFlight.Parts(
+                overlay: overlay,
+                morph: morph,
+                decoration: morphDecoration,
+                fadingViews: [backdrop] + chromeSnapshots,
+                underlay: moves && timing.drawsUnderBars ? makeUnderlay(decoratedLike: tile) : nil
+            ),
             window: window,
             spring: SpringCurve(duration: timing.closeDuration, bounce: timing.bounce),
+            handoffStart: CGFloat(timing.handoffStart),
             // 戻り先が最初から見つからなければ、その場で薄くする。
-            movesImage: movesImage && tile != nil,
+            movesImage: moves,
             concealedTile: closingTile,
             findTile: { sourceTile(attachmentID) }
         )
         flight.start()
+    }
+
+    /// バーの奥に描く写し。写しと同じ画像と切り抜き方で、サムネイルの印も載せる。
+    private func makeUnderlay(decoratedLike tile: MediaTileView?) -> MediaClosingFlight.Underlay {
+        let image = UIImageView(image: morph.image)
+        image.contentMode = morph.contentMode
+        image.clipsToBounds = true
+        image.layer.cornerCurve = morph.layer.cornerCurve
+        image.isUserInteractionEnabled = false
+        let decoration = tile?.makeDecorationCopy()
+        if let decoration {
+            decoration.frame = image.bounds
+            decoration.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            image.addSubview(decoration)
+        }
+        return MediaClosingFlight.Underlay(image: image, decoration: decoration)
     }
 }
 

@@ -180,6 +180,24 @@ public enum TuningCatalog {
         defaultValue: 0.1
     )
 
+    /// ビューアを閉じるとき、戻る画像のうちバーにかかる部分を、バーの奥にも描く。
+    /// オフなら、バーにかかる部分を着地へ近づくにつれて切り落とすだけにする。着地の瞬間に、バー越しのサムネイルが急に現れる。
+    public static let mediaCloseDrawsUnderBars = ToggleTuning(
+        id: "media.closeDrawsUnderBars",
+        title: "ビューアを閉じるとき、バーにかかる部分をバーの奥に描く",
+        defaultValue: true
+    )
+
+    /// バーの奥にも描くとき、最前面の写しを薄くして一覧の中の写しへ受け渡し始める、閉じる動きの進み具合。1なら着地の瞬間に切り替える。
+    /// 一覧の中の写しには、バーの下のぼかしや一覧に重なるボタンが正しくかかる。受け渡しが遅いほど、着地でそれらが急に現れる。
+    public static let mediaCloseHandoffStart = NumberTuning(
+        id: "media.closeHandoffStart",
+        title: "閉じるとき、一覧の中の写しへ受け渡し始める進み具合",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.7
+    )
+
     /// ビューアの閉じる操作の判定。
     @MainActor
     public static func dragToDismiss(in store: TuningStore) -> DragToDismiss {
@@ -208,5 +226,7 @@ public enum TuningCatalog {
         .number(mediaOpenDuration),
         .number(mediaCloseDuration),
         .number(mediaTransitionBounce),
+        .toggle(mediaCloseDrawsUnderBars),
+        .number(mediaCloseHandoffStart),
     ]
 }
