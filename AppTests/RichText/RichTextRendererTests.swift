@@ -32,9 +32,11 @@ struct RichTextRendererTests {
         let rendered = renderer(.offline).render(text)
         let linkRange = (rendered.string as NSString).range(of: "example.com/a")
 
-        #expect(rendered.attribute(.link, at: linkRange.location, effectiveRange: nil) as? URL == url)
+        #expect(rendered.attribute(.linkDestination, at: linkRange.location, effectiveRange: nil) as? URL == url)
         #expect(rendered.attribute(.foregroundColor, at: linkRange.location, effectiveRange: nil) as? UIColor == .tintColor)
-        #expect(rendered.attribute(.link, at: 0, effectiveRange: nil) == nil)
+        #expect(rendered.attribute(.linkDestination, at: 0, effectiveRange: nil) == nil)
+        // `.link`を付けると、再利用したUILabelが前の内容の色のまま次の本文を描くことがあるため使わない。
+        #expect(rendered.attribute(.link, at: linkRange.location, effectiveRange: nil) == nil)
     }
 
     @Test func appliesParagraphSpacingAndKeepsLineBreakInsideParagraph() throws {
