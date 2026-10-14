@@ -402,6 +402,9 @@ extension HomeTimelineController {
             UIAction(title: "透過画像1枚のダミー投稿を流す", image: UIImage(systemName: "circle.dashed")) { [weak self] _ in
                 self?.streamDummyMediaStatus(content: "ビューアの確認用に透明な部分のある画像を1枚添付", attachments: DummyMedia.singleTransparentAttachment)
             },
+            UIAction(title: "動画とGIFのダミー投稿を流す", image: UIImage(systemName: "play.rectangle")) { [weak self] _ in
+                self?.streamDummyVideoStatus()
+            },
             UIAction(title: "直近の投稿を取りこぼして再接続", image: UIImage(systemName: "bolt.horizontal")) { [weak self] _ in
                 self?.simulateMissedWhileDisconnected()
             },
@@ -443,6 +446,18 @@ extension HomeTimelineController {
         run { controller in
             controller.store.debugLocalOnlyIDs.insert(dummy.id)
             controller.receive(.update(dummy))
+        }
+    }
+
+    /// 動画とGIFを1本ずつ付けたダミー投稿を流す。動画は初回だけ端末で書き出すため、少し遅れて流れる。
+    private func streamDummyVideoStatus() {
+        Task {
+            do {
+                let attachments = try await DummyMedia.videoAttachments()
+                streamDummyMediaStatus(content: "ビューアの確認用に動画とGIFを1本ずつ添付", attachments: attachments)
+            } catch {
+                SciaLog.logger(category: "media").error("dummy video failed: \(error.localizedDescription, privacy: .public)")
+            }
         }
     }
 

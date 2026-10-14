@@ -40,7 +40,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 動きの録画: `xcrun simctl spawn 'iPhone 16 Pro' defaults write net.mizle.scia tuning.<項目のid> -float <値>`でチューニングの値（閉じる時間など）を一時的に伸ばし、`xcrun simctl io 'iPhone 16 Pro' recordVideo --force <ファイル>`をバックグラウンドで起動して録画し（`pkill -INT -f recordVideo`で止める）、ffmpegの`fps=30,crop=...,tile=...`でコマを並べて見る。見たい部分（バーの付近など）を切り出して連続したコマで比べると、1コマだけの切り替わりにも気づける。確認が終わったら`defaults delete`で必ず戻す
 - シミュレーターのドラッグは慣性が残り、直後のスクリーンショットと位置がずれる。`touch_path`の最後の数点を小刻みにして指を止めてから離し、スクリーンショットを2回撮って止まったことを確かめてから座標を決める
 - タップが効かないなど、どのビューが触れたものを受けているか分からないときは、lldbで実行中のアプリにつなぎ（`lldb -p <pid> --batch -s <コマンドのファイル>`）、`expr -l swift -O -- `でウィンドウの`hitTest`やビュー階層（`recursiveDescription`）を調べる
-- ビューアの確認には、デバッグメニューの画像付きのダミー投稿（形の違う4枚、縦長1枚）を使う。通信せずに一覧の一番上に出せる（起動し直すと消える）
+- ビューアの確認には、デバッグメニューのダミー投稿（形の違う4枚、縦長1枚、透過画像1枚、動画とGIF）を使う。通信せずに一覧の一番上に出せる（起動し直すと消える）。動画とGIFは初回だけ端末で書き出すため、少し遅れて流れる
 - 描画性能: スクロール時のhitchは`xcrun xctrace record --template 'Animation Hitches'`や`XCTOSSignpostMetric.scrollDecelerationMetric`で測る。シミュレーターの値は参考値で、最終確認は実機で行う
 - 見た目: 実データに近いfixtureを使い、スクリーンショットで確認する
 - 好みで決まる値（アニメーションの時間、余白、新着をまとめて挿入する間隔など）は、ハードコードで決め打ちせず、`TuningCatalog`に項目を足してデバッグ用のチューニングパネルから調整できるようにし、ユーザーに選んでもらう
