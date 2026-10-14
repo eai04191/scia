@@ -11,8 +11,8 @@ final class TimelineHarness {
     let tuning = TuningStore(defaults: nil)
     private let window: UIWindow
 
-    init(size: CGSize = CGSize(width: 393, height: 852)) throws {
-        viewController = TimelineViewController(tuning: tuning, emojiImages: .offline, mediaImages: .offline)
+    init(size: CGSize = CGSize(width: 393, height: 852), mediaImages: MediaImageStore = .offline) throws {
+        viewController = TimelineViewController(tuning: tuning, emojiImages: .offline, mediaImages: mediaImages)
         let scene = try #require(
             UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
             "テストのホストアプリにウィンドウシーンがありません"

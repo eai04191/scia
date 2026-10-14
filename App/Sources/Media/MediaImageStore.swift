@@ -70,6 +70,45 @@ final class MediaImageStore {
         }
     }
 
+    /// blurhashを、`aspectRatio`（幅÷高さ）の小さな画像に展開する。表示するときに拡大してぼかしとして見せるため、
+    /// 長い辺を32ピクセルにする。文字列が仕様どおりでなければnil。
+    func placeholder(for blurhash: String, aspectRatio: Double?) -> UIImage? {
+        let longSide = 32
+        let ratio = aspectRatio ?? 1
+        let width = ratio >= 1 ? longSide : max(Int((Double(longSide) * ratio).rounded()), 1)
+        let height = ratio >= 1 ? max(Int((Double(longSide) / ratio).rounded()), 1) : longSide
+        let key = "blurhash \(width)x\(height) \(blurhash)" as NSString
+        if let image = cache.object(forKey: key) {
+            return image
+        }
+        guard let image = BlurHash(blurhash).flatMap({ Self.makeImage(rgba: $0.rgba(width: width, height: height), width: width, height: height) }) else {
+            logger.error("blurhash decode failed hash=\(blurhash, privacy: .public)")
+            return nil
+        }
+        cache.setObject(image, forKey: key, cost: Self.cost(of: image))
+        return image
+    }
+
+    private static func makeImage(rgba: [UInt8], width: Int, height: Int) -> UIImage? {
+        guard let provider = CGDataProvider(data: Data(rgba) as CFData),
+              let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let image = CGImage(
+                  width: width,
+                  height: height,
+                  bitsPerComponent: 8,
+                  bitsPerPixel: 32,
+                  bytesPerRow: width * 4,
+                  space: colorSpace,
+                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+                  provider: provider,
+                  decode: nil,
+                  shouldInterpolate: true,
+                  intent: .defaultIntent
+              )
+        else { return nil }
+        return UIImage(cgImage: image)
+    }
+
     struct DecodeError: Error {}
 
     /// `maxPixelSize`まで縮め、描画できる状態まで展開する。重い処理のため、メインスレッドの外で行う。

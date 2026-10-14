@@ -251,18 +251,19 @@ final class ImagePageController: MediaPageController {
                 subview.centerYAnchor.constraint(equalTo: view.centerYAnchor),
             ])
         }
-        if let preview = attachment.previewUrl.flatMap({ store.cachedImage(for: $0, maxPixelSize: MediaImageStore.thumbnailPixelSize) }) {
-            zoomView.image = preview
-        }
-        load()
+        // 一覧のサムネイルが手元にあればそれを、なければblurhashのぼかしを、元の画像が届くまでの下地にする。
+        let preview = attachment.previewUrl.flatMap { store.cachedImage(for: $0, maxPixelSize: MediaImageStore.thumbnailPixelSize) }
+        zoomView.image = preview ?? attachment.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment.aspectRatio) }
+        load(hasPreview: preview != nil)
     }
 
-    private func load() {
+    /// - Parameter hasPreview: 中身の分かるサムネイルを出せている。blurhashのぼかしだけなら、読み込み中と失敗を知らせる。
+    private func load(hasPreview: Bool) {
         guard let url = attachment.url ?? attachment.remoteUrl ?? attachment.previewUrl else {
-            failureLabel.isHidden = zoomView.image != nil
+            failureLabel.isHidden = hasPreview
             return
         }
-        if zoomView.image == nil {
+        if !hasPreview {
             spinner.startAnimating()
         }
         loadTask = Task { [weak self, store] in
@@ -274,7 +275,7 @@ final class ImagePageController: MediaPageController {
                 self.zoomView.image = image
             } else {
                 // サムネイルを出せていれば、そのまま見せる。
-                self.failureLabel.isHidden = self.zoomView.image != nil
+                self.failureLabel.isHidden = hasPreview
             }
         }
     }

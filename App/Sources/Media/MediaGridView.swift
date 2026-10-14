@@ -67,12 +67,12 @@ final class MediaGridView: UIView {
         for (index, tile) in tiles.enumerated() {
             guard index < layout.frames.count else {
                 tile.isHidden = true
-                tile.apply(nil, hiddenCount: 0)
+                tile.apply(nil, hiddenCount: 0, isCovered: false)
                 continue
             }
             tile.isHidden = false
             let isLast = index == layout.frames.count - 1
-            tile.apply(content.attachments[index], hiddenCount: isLast ? layout.hiddenCount : 0)
+            tile.apply(content.attachments[index], hiddenCount: isLast ? layout.hiddenCount : 0, isCovered: content.isCovered)
         }
         cover.isHidden = !content.isCovered
         // 覆っている間は、中のサムネイルを読み上げない。
@@ -99,7 +99,8 @@ final class MediaGridView: UIView {
     }
 
     private func makeCover() -> UIView {
-        let effect = UIVisualEffectView(effect: UIBlurEffect(style: .systemThickMaterial))
+        // 下のサムネイルは、覆っている間は画像を読まずにblurhashで描くため、色が透けて見える薄い素材にする。
+        let effect = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
         effect.layer.cornerRadius = Self.cornerRadius
         effect.layer.cornerCurve = .continuous
         effect.clipsToBounds = true
@@ -131,7 +132,16 @@ final class MediaTileView: UIButton {
     private let gifBadge = MediaTileView.makeBadge("GIF")
     private let moreLabel = UILabel()
     private var loadTask: Task<Void, Never>?
-    private var imageURL: URL?
+    /// いま描いている画像の出どころ。同じなら描き直さない。
+    private var source: Source?
+
+    private struct Source: Equatable {
+        /// 読み込む画像。閲覧注意で覆っている間はnilにし、通信しない。
+        let url: URL?
+        let blurhash: String?
+        /// blurhashを展開する縦横比。同じblurhashでも、比が違えば描き直す。
+        let aspectRatio: Double?
+    }
 
     init(store: MediaImageStore) {
         self.store = store
@@ -169,28 +179,18 @@ final class MediaTileView: UIButton {
         didSet { alpha = isHighlighted ? 0.7 : 1 }
     }
 
-    func apply(_ attachment: MediaAttachment?, hiddenCount: Int) {
-        let url = attachment.flatMap(Self.thumbnailURL(of:))
-        if url != imageURL {
-            imageURL = url
-            loadTask?.cancel()
-            loadTask = nil
-            thumbnailView.image = url.flatMap { store.cachedImage(for: $0, maxPixelSize: MediaImageStore.thumbnailPixelSize) }
-            if let url, thumbnailView.image == nil {
-                loadTask = Task { [weak self, store] in
-                    guard let image = try? await store.image(for: url, maxPixelSize: MediaImageStore.thumbnailPixelSize),
-                          let self, !Task.isCancelled, self.imageURL == url
-                    else { return }
-                    UIView.transition(with: self.thumbnailView, duration: 0.15, options: .transitionCrossDissolve) {
-                        self.thumbnailView.image = image
-                    }
-                }
-            }
+    /// 閲覧注意で覆っている間は画像を読まず、blurhashのぼかしだけを描く。覆いを外さない投稿で通信しないようにする。
+    /// 覆っていなければ、読み込むまでblurhashを下地にし、届いたら差し替える。
+    func apply(_ attachment: MediaAttachment?, hiddenCount: Int, isCovered: Bool) {
+        let source = attachment.map { Source(url: isCovered ? nil : Self.thumbnailURL(of: $0), blurhash: $0.blurhash, aspectRatio: $0.aspectRatio) }
+        if source != self.source {
+            self.source = source
+            showImage(of: attachment, from: source)
         }
         guard let attachment else { return }
         symbolView.image = Self.symbolName(of: attachment.type).flatMap { UIImage(systemName: $0) }
         // 画像の上に重ねるときは白く、画像のない枠の上では本文に近い色にする。
-        let isOverImage = url != nil
+        let isOverImage = source?.url != nil || thumbnailView.image != nil
         symbolView.tintColor = isOverImage ? .white : .secondaryLabel
         symbolView.layer.shadowOpacity = isOverImage ? 0.4 : 0
         gifBadge.isHidden = attachment.type != .gifv
@@ -203,6 +203,31 @@ final class MediaTileView: UIButton {
             .joined(separator: "、")
         accessibilityValue = hiddenCount > 0 ? "ほか\(hiddenCount)件" : nil
         setNeedsLayout()
+    }
+
+    private func showImage(of attachment: MediaAttachment?, from source: Source?) {
+        loadTask?.cancel()
+        loadTask = nil
+        let placeholder = attachment.flatMap { attachment in
+            attachment.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment.aspectRatio) }
+        }
+        guard let url = source?.url else {
+            thumbnailView.image = placeholder
+            return
+        }
+        if let cached = store.cachedImage(for: url, maxPixelSize: MediaImageStore.thumbnailPixelSize) {
+            thumbnailView.image = cached
+            return
+        }
+        thumbnailView.image = placeholder
+        loadTask = Task { [weak self, store] in
+            guard let image = try? await store.image(for: url, maxPixelSize: MediaImageStore.thumbnailPixelSize),
+                  let self, !Task.isCancelled, self.source?.url == url
+            else { return }
+            UIView.transition(with: self.thumbnailView, duration: 0.15, options: .transitionCrossDissolve) {
+                self.thumbnailView.image = image
+            }
+        }
     }
 
     override func layoutSubviews() {

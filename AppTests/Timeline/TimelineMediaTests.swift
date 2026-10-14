@@ -1,4 +1,5 @@
 import SciaCore
+import Synchronization
 import Testing
 import UIKit
 @testable import Scia
@@ -14,8 +15,23 @@ struct TimelineMediaTests {
             url: URL(string: "https://files.example.social/original/\(id).png"),
             previewUrl: URL(string: "https://files.example.social/small/\(id).png"),
             description: description,
-            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: width, height: height))
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: width, height: height)),
+            blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
         )
+    }
+
+    /// 読みに行ったURLを記録し、すべて失敗として扱う。
+    private final class FetchLog: Sendable {
+        private let urls = Mutex<[URL]>([])
+
+        var fetched: [URL] { urls.withLock { $0 } }
+
+        @MainActor func makeStore() -> MediaImageStore {
+            MediaImageStore { [self] url in
+                urls.withLock { $0.append(url) }
+                throw URLError(.notConnectedToInternet)
+            }
+        }
     }
 
     private func withMedia(_ base: Status, _ attachments: [MediaAttachment], sensitive: Bool = false, spoilerText: String = "") -> Status {
@@ -108,5 +124,43 @@ struct TimelineMediaTests {
             let configuration = vc.statusContentConfiguration(list: .cell(), notification: notification)
             #expect((configuration.media != nil) == shows, "\(kind)")
         }
+    }
+
+    /// 閲覧注意で覆っている間は画像を読みに行かず、覆いを外したら読む。覆いを外さない投稿で通信しないため。
+    @Test func coveredMediaIsNotFetchedUntilRevealed() async throws {
+        let log = FetchLog()
+        let harness = try TimelineHarness(mediaImages: log.makeStore())
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 3, startingAt: 1_000)
+        let attachment = image("1", width: 400, height: 300)
+        let sensitive = withMedia(statuses[0], [attachment], sensitive: true)
+        harness.setStatuses([sensitive] + statuses.dropFirst())
+        _ = harness.visibleCell(of: .status(sensitive.id))
+        try await Task.sleep(for: .milliseconds(200))
+
+        #expect(log.fetched.isEmpty)
+
+        harness.viewController.revealedMediaStatusIDs.insert(sensitive.id)
+        harness.viewController.reconfigure([.status(sensitive.id)])
+        _ = harness.visibleCell(of: .status(sensitive.id))
+        let deadline = ContinuousClock.now + .seconds(2)
+        while log.fetched.isEmpty, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+
+        #expect(log.fetched == [try #require(attachment.previewUrl)])
+    }
+
+    /// blurhashの下地は、添付ファイルの縦横比で、長い辺を32ピクセルにする。ビューアで画像の枠を決めるのに使うため。
+    @Test func placeholderKeepsAspectRatio() throws {
+        let store = MediaImageStore.offline
+        let wide = try #require(store.placeholder(for: "LEHV6nWB2yk8pyo0adR*.7kCMdnj", aspectRatio: 2))
+        let tall = try #require(store.placeholder(for: "LEHV6nWB2yk8pyo0adR*.7kCMdnj", aspectRatio: 0.5))
+
+        #expect(wide.cgImage?.width == 32)
+        #expect(wide.cgImage?.height == 16)
+        #expect(tall.cgImage?.width == 16)
+        #expect(tall.cgImage?.height == 32)
+        #expect(store.placeholder(for: "壊れた文字列", aspectRatio: 1) == nil)
     }
 }
