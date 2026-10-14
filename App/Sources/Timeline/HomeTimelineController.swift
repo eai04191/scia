@@ -394,7 +394,10 @@ extension HomeTimelineController {
                 self?.streamDummyArrivals(count: 10)
             },
             UIAction(title: "画像付きのダミー投稿を流す", image: UIImage(systemName: "photo.badge.plus")) { [weak self] _ in
-                self?.streamDummyMediaStatus()
+                self?.streamDummyMediaStatus(content: "ビューアの確認用に4枚の画像を添付", attachments: DummyMedia.attachments)
+            },
+            UIAction(title: "縦長1枚のダミー投稿を流す", image: UIImage(systemName: "rectangle.portrait")) { [weak self] _ in
+                self?.streamDummyMediaStatus(content: "ビューアの確認用に縦長の画像を1枚添付", attachments: DummyMedia.singleTallAttachment)
             },
             UIAction(title: "直近の投稿を取りこぼして再接続", image: UIImage(systemName: "bolt.horizontal")) { [weak self] _ in
                 self?.simulateMissedWhileDisconnected()
@@ -419,19 +422,20 @@ extension HomeTimelineController {
         }
     }
 
-    /// ビューアを確かめるための、形の違う画像を4枚付けたダミーの投稿を、新着と同じ経路で1件流す。
+    /// ビューアを確かめるための、画像付きのダミーの投稿を、新着と同じ経路で1件流す。
     /// 画像は端末で描くため、通信せず、実際の投稿を探さずに確かめられる。
-    private func streamDummyMediaStatus() {
+    /// - Parameter attachments: 投稿のIDを受け取り、添付ファイルを返す。
+    private func streamDummyMediaStatus(content: String, attachments: (String) -> [MediaAttachment]) {
         let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
         let base = Self.dummyStatus(number: 1, avatar: avatar)
         let dummy = Status(
             id: base.id,
             createdAt: base.createdAt,
             account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー（画像）", avatar: avatar),
-            content: "ビューアの確認用に4枚の画像を添付",
+            content: content,
             spoilerText: "",
             url: nil,
-            mediaAttachments: DummyMedia.attachments(idPrefix: base.id)
+            mediaAttachments: attachments(base.id)
         )
         run { controller in
             controller.store.debugLocalOnlyIDs.insert(dummy.id)

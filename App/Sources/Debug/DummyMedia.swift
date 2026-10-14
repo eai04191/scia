@@ -20,8 +20,18 @@ enum DummyMedia {
         Spec(size: CGSize(width: 600, height: 2_000), color: .systemPurple, label: "4 細長", description: nil),
     ]
 
+    /// 形の違う4枚。
     /// - Parameter idPrefix: 添付ファイルのIDの頭に付ける。投稿ごとに変え、ビューアが別の投稿のサムネイルへ戻らないようにする。
     static func attachments(idPrefix: String) -> [MediaAttachment] {
+        attachments(specs, idPrefix: idPrefix)
+    }
+
+    /// 縦長の1枚。1枚だけの投稿はサムネイルが一覧の幅いっぱいに大きく出るため、バーの下へ戻る開閉を確かめやすい。
+    static func singleTallAttachment(idPrefix: String) -> [MediaAttachment] {
+        attachments([specs[0]], idPrefix: idPrefix)
+    }
+
+    private static func attachments(_ specs: [Spec], idPrefix: String) -> [MediaAttachment] {
         specs.enumerated().compactMap { index, spec in
             guard let url = dataURL(for: spec) else { return nil }
             let size = MediaAttachment.Size(width: Int(spec.size.width), height: Int(spec.size.height))
