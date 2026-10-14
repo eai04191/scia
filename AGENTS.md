@@ -14,14 +14,16 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make lint`: SwiftLintで強制アンラップ、`try!`、IUOを検出する（`brew install swiftlint`が必要）
 - `make test-core`: SciaCoreのテスト（macOS上、シミュレーター不要）
 - `make build`: シミュレーター向けにビルドする
-- `make test SIM_DESTINATION='platform=iOS Simulator,name=iPhone 16 Pro'`: シミュレーターでテストする
+- `make test SIM_DESTINATION='platform=iOS Simulator,name=<使う端末>'`: シミュレーターでテストする
 - `make check`: 変更を報告する前に必ず通す
 
 ## シミュレーター
 
-- 動作確認とテストには`iPhone 16 Pro`のシミュレーターを使う。ログイン情報は端末のKeychainに残るため、端末を揃えればスレッドやworktreeをまたいでもログインし直さずに済む
+- 動作確認とテストには、`Scia 1`、`Scia 2`、`Scia 3`のどれかのシミュレーターを使う。どれもログイン済みの端末の複製で、ログイン情報が端末のKeychainに残っているため、ログインし直さずに済む。複数のスレッドが並行して同じ端末を取り合わないよう、端末を分けている
+- どの端末を使うかの指示がなければ、ユーザーに聞く。勝手に選ばない
+- シミュレーターのツールでは、決まった端末を毎回`device`で指定する。省略すると、他のスレッドが使っている端末を操作してしまうことがある
 - 端末のリセット（`xcrun simctl erase`）や別の端末での起動をすると、ユーザーにログインし直してもらう必要がある
-- シミュレーターのツールで文字を入力すると、ハードウェアキーボードがつながった扱いになり、ソフトウェアキーボードが出なくなる。キーボードが出た状態を確かめるときは、`xcrun simctl shutdown 'iPhone 16 Pro' && xcrun simctl boot 'iPhone 16 Pro'`で再起動し、文字を入力せずタップだけで入力欄にフォーカスする。再起動ではKeychainが残るため、ログインし直さずに済む
+- シミュレーターのツールで文字を入力すると、ハードウェアキーボードがつながった扱いになり、ソフトウェアキーボードが出なくなる。キーボードが出た状態を確かめるときは、`xcrun simctl shutdown '<使う端末>' && xcrun simctl boot '<使う端末>'`で再起動し、文字を入力せずタップだけで入力欄にフォーカスする。再起動ではKeychainが残るため、ログインし直さずに済む
 
 ## 設計原則
 
@@ -37,14 +39,14 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 
 - スクロール位置: 新着の挿入、ギャップの読み込み、再接続に加え、一覧の上に画面を重ねて開閉する操作（添付ファイルのビューアなど）の前後でも、基準セルの画面上の位置が変わらないことをテストで確認する
 - 動き: アニメーションの途中でも操作を止めない。確認では、チューニングで時間を一時的に伸ばしたうえで、動いている途中に次の操作（開く途中に払う、閉じた直後に別の画像を叩く、閉じる途中にスクロールするなど）を送る。1操作ずつ送る確認では間合いの問題に気づけない
-- 動きの録画: `xcrun simctl spawn 'iPhone 16 Pro' defaults write net.mizle.scia tuning.<項目のid> -float <値>`でチューニングの値（閉じる時間など）を一時的に伸ばし、`xcrun simctl io 'iPhone 16 Pro' recordVideo --force <ファイル>`をバックグラウンドで起動して録画し（`pkill -INT -f recordVideo`で止める）、ffmpegの`fps=30,crop=...,tile=...`でコマを並べて見る。見たい部分（バーの付近など）を切り出して連続したコマで比べると、1コマだけの切り替わりにも気づける。確認が終わったら`defaults delete`で必ず戻す
+- 動きの録画: `xcrun simctl spawn '<使う端末>' defaults write net.mizle.scia tuning.<項目のid> -float <値>`でチューニングの値（閉じる時間など）を一時的に伸ばし、`xcrun simctl io '<使う端末>' recordVideo --force <ファイル>`をバックグラウンドで起動して録画し（`pkill -INT -f recordVideo`で止める）、ffmpegの`fps=30,crop=...,tile=...`でコマを並べて見る。見たい部分（バーの付近など）を切り出して連続したコマで比べると、1コマだけの切り替わりにも気づける。確認が終わったら`defaults delete`で必ず戻す
 - シミュレーターのドラッグは慣性が残り、直後のスクリーンショットと位置がずれる。`touch_path`の最後の数点を小刻みにして指を止めてから離し、スクリーンショットを2回撮って止まったことを確かめてから座標を決める
 - タップが効かないなど、どのビューが触れたものを受けているか分からないときは、lldbで実行中のアプリにつなぎ（`lldb -p <pid> --batch -s <コマンドのファイル>`）、`expr -l swift -O -- `でウィンドウの`hitTest`やビュー階層（`recursiveDescription`）を調べる
 - ビューアの確認には、デバッグメニューのダミー投稿（形の違う4枚、縦長1枚、透過画像1枚、動画とGIF）を使う。通信せずに一覧の一番上に出せる（起動し直すと消える）。動画とGIFは初回だけ端末で書き出すため、少し遅れて流れる
 - 描画性能: スクロール時のhitchは`xcrun xctrace record --template 'Animation Hitches'`や`XCTOSSignpostMetric.scrollDecelerationMetric`で測る。シミュレーターの値は参考値で、最終確認は実機で行う
 - 見た目: 実データに近いfixtureを使い、スクリーンショットで確認する
 - 好みで決まる値（アニメーションの時間、余白、新着をまとめて挿入する間隔など）は、ハードコードで決め打ちせず、`TuningCatalog`に項目を足してデバッグ用のチューニングパネルから調整できるようにし、ユーザーに選んでもらう
-- ユーザーがシェイクで残した違和感レポートは、アプリのDocuments/DiscomfortReportsにJSONで保存される。シミュレーターでは`xcrun simctl get_app_container 'iPhone 16 Pro' net.mizle.scia data`で場所を調べられる。状態を追いたい画面は`AppDependencies.stateDumps`に状態ダンプを登録し、調査に必要なイベントはinfo以上のレベルで`SciaLog`に出す（debugレベルはレポートに残らない）
+- ユーザーがシェイクで残した違和感レポートは、アプリのDocuments/DiscomfortReportsにJSONで保存される。シミュレーターでは`xcrun simctl get_app_container '<使う端末>' net.mizle.scia data`で場所を調べられる。状態を追いたい画面は`AppDependencies.stateDumps`に状態ダンプを登録し、調査に必要なイベントはinfo以上のレベルで`SciaLog`に出す（debugレベルはレポートに残らない）
 
 ## テスト
 
