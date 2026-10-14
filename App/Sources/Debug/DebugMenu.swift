@@ -15,11 +15,6 @@ extension UIViewController {
                 guard let window = self?.view.window else { return }
                 DiscomfortReportPresenter.present(in: window)
             },
-            // ログインの確認をやり直すためのもの。
-            UIAction(title: "ログアウト", image: UIImage(systemName: "rectangle.portrait.and.arrow.right"), attributes: .destructive) { [weak self] _ in
-                guard let sceneDelegate = self?.view.window?.windowScene?.delegate as? SceneDelegate else { return }
-                sceneDelegate.logOut(message: nil)
-            },
         ]
         let menu = UIMenu(children: [UIMenu(options: .displayInline, children: screenActions)] + common)
         let item = UIBarButtonItem(image: UIImage(systemName: "ladybug"), menu: menu)

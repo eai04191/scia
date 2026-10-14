@@ -9,10 +9,11 @@ final class LoginModel {
     private(set) var isLoggingIn = false
     private(set) var errorMessage: String?
 
-    private let onLogin: @MainActor (Credential) -> Void
+    /// ログインできたときに呼ぶ。保存に失敗したら投げ、ログイン画面にエラーを出す。
+    private let onLogin: @MainActor (Credential) throws -> Void
     private let logger = SciaLog.logger(category: "login")
 
-    init(onLogin: @escaping @MainActor (Credential) -> Void) {
+    init(onLogin: @escaping @MainActor (Credential) throws -> Void) {
         self.onLogin = onLogin
     }
 
@@ -36,9 +37,8 @@ final class LoginModel {
             let credential = try await AppDependencies.oauth.login(instance: instance) { url in
                 try await authenticator.authenticate(url: url, callbackScheme: AppDependencies.oauthCallbackScheme)
             }
-            try AppDependencies.credentials.save(credential)
             logger.info("login succeeded instance=\(instance.absoluteString, privacy: .public)")
-            onLogin(credential)
+            try onLogin(credential)
         } catch is CancellationError {
             logger.info("login cancelled")
         } catch {
@@ -52,6 +52,8 @@ struct LoginView: View {
     @Bindable var model: LoginModel
     /// 認可画面を出すウィンドウ。SwiftUIの外から渡す。
     let makeAuthenticator: @MainActor () -> WebAuthenticator?
+    /// アカウントを追加するためにシートで出したときに、閉じるボタンで呼ぶ。nilなら閉じるボタンを出さない。
+    var onCancel: (@MainActor () -> Void)?
 
     var body: some View {
         NavigationStack {
@@ -85,7 +87,14 @@ struct LoginView: View {
                     .disabled(model.isLoggingIn || model.instanceInput.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            .navigationTitle("Scia")
+            .navigationTitle(onCancel == nil ? "Scia" : "アカウントを追加")
+            .toolbar {
+                if let onCancel {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("キャンセル", role: .cancel) { onCancel() }
+                    }
+                }
+            }
         }
     }
 

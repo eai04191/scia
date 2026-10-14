@@ -24,7 +24,10 @@ enum AppDependencies {
         directory: URL.documentsDirectory.appending(path: "DiscomfortReports")
     )
 
-    static let credentials = KeychainCredentialStore(service: "net.mizle.scia.credential")
+    /// ログインしたアカウントの一覧。シーンをまたいで同じものを使う。Keychainを読めなかったときは、その失敗を持つ。
+    static let accounts = Result {
+        try AccountRegistry(storage: KeychainCredentialStore(service: "net.mizle.scia.credential"), defaults: .standard)
+    }
 
     static let oauth = OAuthClient(
         configuration: OAuthClient.Configuration(clientName: "Scia", redirectURI: oauthRedirectURI, scopes: "read write"),

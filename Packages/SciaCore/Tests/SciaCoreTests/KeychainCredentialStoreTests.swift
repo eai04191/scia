@@ -6,34 +6,49 @@ import Testing
 @testable import SciaCore
 
 struct KeychainCredentialStoreTests {
-    private func makeCredential(token: String) throws -> Credential {
+    private func makeCredential(accountID: String = "14715", token: String) throws -> Credential {
         Credential(
             instance: try #require(URL(string: "https://example.social")),
             accessToken: token,
             clientID: "client-id",
             clientSecret: "client-secret",
-            accountID: "14715",
+            accountID: accountID,
             username: "alice"
         )
     }
 
-    @Test func savesLoadsOverwritesAndDeletes() throws {
+    @Test func savesEachAccountOverwritesAndDeletes() throws {
         let store = KeychainCredentialStore(service: "net.mizle.scia.tests.\(UUID().uuidString)")
-        defer { try? store.delete() }
+        defer { try? store.deleteAll() }
 
-        #expect(try store.load() == nil)
+        #expect(try store.loadAll().isEmpty)
 
-        let first = try makeCredential(token: "first")
-        try store.save(first)
-        #expect(try store.load() == first)
+        let alice = try makeCredential(token: "first")
+        let bob = try makeCredential(accountID: "2", token: "bob")
+        try store.save(alice)
+        try store.save(bob)
+        #expect(Set(try store.loadAll().map(\.accessToken)) == ["first", "bob"])
 
-        let second = try makeCredential(token: "second")
-        try store.save(second)
-        #expect(try store.load() == second)
+        try store.save(try makeCredential(token: "second"))
+        #expect(Set(try store.loadAll().map(\.accessToken)) == ["second", "bob"])
 
-        try store.delete()
-        #expect(try store.load() == nil)
-        try store.delete()
+        try store.delete(id: bob.id)
+        #expect(try store.loadAll().map(\.accessToken) == ["second"])
+        try store.delete(id: bob.id)
+    }
+
+    /// 1アカウントだけを保存していたころの項目は、読み出すときにアカウントごとの項目へ移す。ログインし直さずに済むようにするため。
+    @Test func migratesLegacySingleItem() throws {
+        let store = KeychainCredentialStore(service: "net.mizle.scia.tests.\(UUID().uuidString)")
+        defer { try? store.deleteAll() }
+        let legacy = try makeCredential(token: "legacy")
+        try store.saveLegacy(legacy)
+
+        #expect(try store.loadAll() == [legacy])
+        // 移した後は古い項目が残らず、2回目に読んでも重複しない。
+        #expect(try store.loadAll() == [legacy])
+        try store.delete(id: legacy.id)
+        #expect(try store.loadAll().isEmpty)
     }
 }
 #endif

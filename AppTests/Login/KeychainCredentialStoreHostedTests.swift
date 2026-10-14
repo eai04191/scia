@@ -6,7 +6,7 @@ import Testing
 struct KeychainCredentialStoreHostedTests {
     @Test func savesLoadsAndDeletesInApp() throws {
         let store = KeychainCredentialStore(service: "net.mizle.scia.tests.\(UUID().uuidString)")
-        defer { try? store.delete() }
+        defer { try? store.deleteAll() }
         let credential = Credential(
             instance: try #require(URL(string: "https://example.social")),
             accessToken: "token",
@@ -17,9 +17,9 @@ struct KeychainCredentialStoreHostedTests {
         )
 
         try store.save(credential)
-        #expect(try store.load() == credential)
+        #expect(try store.loadAll() == [credential])
 
-        try store.delete()
-        #expect(try store.load() == nil)
+        try store.delete(id: credential.id)
+        #expect(try store.loadAll().isEmpty)
     }
 }

@@ -7,6 +7,8 @@ import UIKit
 @MainActor
 final class SessionController {
     let rootViewController: UIViewController
+    /// このセッションで使っているアカウント。
+    let credential: Credential
     private let home: HomeTimelineController
     private let notifications: NotificationsController
     private let client: MastodonClient
@@ -16,8 +18,11 @@ final class SessionController {
     private var composeDefaults: (configuration: InstanceConfiguration?, visibility: Status.Visibility?)?
     private let logger = SciaLog.logger(category: "session")
 
-    /// - Parameter onUnauthorized: トークンが無効だったとき、どのセッションからの通知かを添えて呼ぶ。
-    init(credential: Credential, onUnauthorized: @escaping (SessionController, String) -> Void) {
+    /// - Parameters:
+    ///   - accountMenu: アカウントの切り替えなどのメニュー。開くたびに呼んで組み立て直す。
+    ///   - onUnauthorized: トークンが無効だったとき、どのセッションからの通知かを添えて呼ぶ。
+    init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, onUnauthorized: @escaping (SessionController, String) -> Void) {
+        self.credential = credential
         let client = MastodonClient(credential: credential, transport: URLSessionTransport())
         let streaming = StreamingClient(credential: credential, connector: URLSessionWebSocketConnector())
         var forward: (String) -> Void = { _ in }
@@ -48,10 +53,22 @@ final class SessionController {
             onUnauthorized(self, message)
         }
         for viewController in [home.viewController, notifications.viewController] {
+            viewController.navigationItem.leftBarButtonItem = Self.accountButton(for: credential, menu: accountMenu)
             viewController.myAccountID = credential.accountID
             viewController.onStatusAction = { [weak self] action, status in self?.perform(action, on: status) }
         }
         home.viewController.onCompose = { [weak self] in self?.presentCompose(replyingTo: nil) }
+    }
+
+    /// 使っているアカウントを示し、押すとアカウントのメニューを開く。
+    private static func accountButton(for credential: Credential, menu: @escaping @MainActor () -> UIMenu) -> UIBarButtonItem {
+        let deferred = UIDeferredMenuElement.uncached { completion in
+            completion(menu().children)
+        }
+        let item = UIBarButtonItem(image: UIImage(systemName: "person.crop.circle"), menu: UIMenu(children: [deferred]))
+        item.accessibilityLabel = "アカウント"
+        item.accessibilityValue = credential.handle
+        return item
     }
 
     // MARK: - 投稿への操作
