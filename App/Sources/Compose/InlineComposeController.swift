@@ -23,7 +23,7 @@ final class InlineComposeController: NSObject {
 
     private weak var host: UIViewController?
     private let accessoryLabel = UILabel()
-    private let bar = UIVisualEffectView(effect: UIGlassEffect())
+    private let bar = UIVisualEffectView(effect: InlineComposeController.interactiveGlass())
     private lazy var replyButton = UIButton(configuration: .plain(), primaryAction: UIAction { [weak self] _ in
         guard let target = self?.model.replyTo else { return }
         self?.onShowReplyTarget(target)
@@ -44,6 +44,13 @@ final class InlineComposeController: NSObject {
     private var keyboardObserver: (any NSObjectProtocol)?
     /// 入力バーの中身を載せるスクロールビュー。バーを下へ引くと、キーボードが指に付いて下がる。
     private let dragArea = KeyboardDragArea()
+
+    /// 触れるとわずかに膨らんで明るくなるガラス。押せるものだと指に伝える。
+    private static func interactiveGlass() -> UIGlassEffect {
+        let glass = UIGlassEffect()
+        glass.isInteractive = true
+        return glass
+    }
 
     /// 入力欄がこれより高くなったら、伸ばさずに中でスクロールする。
     private var maxTextHeight: CGFloat {
