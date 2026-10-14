@@ -18,9 +18,10 @@ enum DummyMedia {
 
     /// 形の違う4枚。一覧の並べ方と、ビューアでの開閉や拡大を、縦長・横長・正方形・細長で比べられるようにする。
     /// 正方形には、ビューアの下の説明で1行に収まらない長い代替テキストを付ける。細長には、画面の下端まで届く画像と説明の重なりを確かめるため、代替テキストを付ける。
+    /// 横長には、説明にならない代替テキストを付ける。設定で無視していれば代替テキストのない画像に、無視しなければ付いた画像になる。
     private static let specs = [
         Spec(size: CGSize(width: 900, height: 1_600), color: .systemBlue, label: "1 縦長", description: "縦長の画像（9:16）"),
-        Spec(size: CGSize(width: 1_600, height: 900), color: .systemGreen, label: "2 横長", description: nil),
+        Spec(size: CGSize(width: 1_600, height: 900), color: .systemGreen, label: "2 横長", description: "Screenshot"),
         Spec(
             size: CGSize(width: 1_200, height: 1_200),
             color: .systemOrange,
@@ -112,10 +113,11 @@ enum DummyMedia {
     }
 
     /// 横長の動画1本と縦長のGIF1本。GIFはMastodonと同じく、音のない動画として渡す。
+    /// 動画には説明にならない代替テキストを付け、画像以外でも設定で無視されることを確かめられるようにする。
     /// GIFは、端末を縦にして撮った動画と同じく、横向きの画素に「90°回して表示する」回転情報を付けて書き出す。
     /// サムネイルは最初のコマ。書き出した動画は一時ディレクトリに残し、2回目からは書き出さない。
     static func videoAttachments() async throws -> (String) -> [MediaAttachment] {
-        let video = Spec(size: CGSize(width: 1_280, height: 720), color: .systemTeal, label: "6 動画", description: nil)
+        let video = Spec(size: CGSize(width: 1_280, height: 720), color: .systemTeal, label: "6 動画", description: "undefined")
         let gif = Spec(size: CGSize(width: 720, height: 1_280), color: .systemIndigo, label: "7 GIF", description: "縦長のGIF")
         let videoURL = try await movieURL(for: video, name: "dummy-video")
         let gifURL = try await movieURL(for: gif, name: "dummy-gif-rotated", rotated: true)
@@ -128,6 +130,7 @@ enum DummyMedia {
                     type: .video,
                     url: videoURL,
                     previewUrl: videoPreview,
+                    description: video.description,
                     meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: Int(video.size.width), height: Int(video.size.height)))
                 ),
                 MediaAttachment(
