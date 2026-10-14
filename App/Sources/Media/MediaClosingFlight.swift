@@ -24,6 +24,8 @@ final class MediaClosingFlight: NSObject {
         let morph: UIImageView
         /// 写しに載せた、サムネイルの印の写し。
         let decoration: UIView?
+        /// 一覧を暗くする下地。`fadingViews`にも含め、閉じながら薄くする。
+        let backdrop: UIView
         let fadingViews: [UIView]
         /// バーの奥に描く写し。nilなら、バーにかかる部分を切り落とすだけにする。
         let underlay: Underlay?
@@ -62,6 +64,13 @@ final class MediaClosingFlight: NSObject {
     private let underlayMask = CALayer()
     private let underlayOutsideMask = CAShapeLayer()
     private let underlayInsideMask = CALayer()
+    /// 下地のマスク。一覧の中の写しを描くとき、写しの枠に穴を開ける。
+    private let backdropMask = CALayer()
+    private let backdropOutsideMask = CAShapeLayer()
+    /// 穴の中で、画像の透明な部分にだけ下地を残す。画像の透明度を反転した画像を、写しと同じ切り抜き方で描く。
+    private let backdropHoleFill = CALayer()
+    /// `backdropHoleFill`に描いている、反転の元にした画像。
+    private weak var holeFillSource: UIImage?
     /// バーの奥の写しを載せる、戻り先のサムネイルを含む一覧の行。
     private weak var underlayHost: UIView?
     private var startTime: CFTimeInterval = 0
@@ -107,6 +116,15 @@ final class MediaClosingFlight: NSObject {
         underlayMask.addSublayer(underlayOutsideMask)
         underlayMask.addSublayer(underlayInsideMask)
         parts.underlay?.image.layer.mask = underlayMask
+        if parts.underlay != nil {
+            backdropOutsideMask.fillColor = UIColor.black.cgColor
+            backdropOutsideMask.fillRule = .evenOdd
+            backdropHoleFill.contentsGravity = .resizeAspectFill
+            backdropHoleFill.masksToBounds = true
+            backdropMask.addSublayer(backdropOutsideMask)
+            backdropMask.addSublayer(backdropHoleFill)
+            parts.backdrop.layer.mask = backdropMask
+        }
     }
 
     func start() {
@@ -157,6 +175,7 @@ final class MediaClosingFlight: NSObject {
         parts.morph.alpha = visibility * (1 - handoff)
         updateClip(progress: clamped)
         updateUnderlay(handoff: handoff)
+        updateBackdropHole()
         for (view, startAlpha) in zip(parts.fadingViews, startFadingAlphas) {
             view.alpha = startAlpha * (1 - clamped)
         }
@@ -232,6 +251,56 @@ final class MediaClosingFlight: NSObject {
         underlayInsideMask.frame = inside.isNull ? .zero : inside
         underlayInsideMask.opacity = Float(min(handoff / Self.underlayFadeInPortion, 1))
         CATransaction.commit()
+    }
+
+    /// 下地のうち写しのある部分に穴を開ける。一覧の中の写しは下地の奥にあるため、穴がないと、
+    /// 最前面の写しから入れ替えた部分（バーと重なっていた部分や、着地手前の受け渡し）だけが暗く見え、境目ができる。
+    /// 写しはビューアの画像として下地より手前にあるものなので、どちらの写しを見せていても暗くしない。
+    /// 画像の透明な部分は、開いている間も下地の上に描いていたため、そこには下地を残す。
+    private func updateBackdropHole() {
+        guard parts.underlay != nil else { return }
+        let backdrop = parts.backdrop
+        let morph = parts.morph
+        let hole = backdrop.convert(morph.frame, from: morph.superview)
+        let radius = morph.layer.cornerRadius
+        let path = UIBezierPath(rect: backdrop.bounds)
+        path.append(UIBezierPath(roundedRect: hole, cornerRadius: radius))
+        if morph.image !== holeFillSource {
+            holeFillSource = morph.image
+            backdropHoleFill.contents = morph.image.flatMap(Self.inverseAlphaImage)
+        }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        backdropMask.frame = backdrop.bounds
+        backdropOutsideMask.frame = backdrop.bounds
+        backdropOutsideMask.path = path.cgPath
+        backdropHoleFill.frame = hole
+        backdropHoleFill.cornerRadius = radius
+        backdropHoleFill.cornerCurve = morph.layer.cornerCurve
+        CATransaction.commit()
+    }
+
+    /// 透明度を反転した画像。不透明な部分が透明に、透明な部分が不透明になる。透明度を持たない画像ならnilで、穴を開けきる。
+    /// マスクに使うだけなので、長辺を512pxに縮めて作る。
+    static func inverseAlphaImage(of image: UIImage) -> CGImage? {
+        guard let alpha = image.cgImage?.alphaInfo else { return nil }
+        switch alpha {
+        case .none, .noneSkipFirst, .noneSkipLast:
+            return nil
+        default:
+            break
+        }
+        let longest = max(image.size.width, image.size.height)
+        guard longest > 0 else { return nil }
+        let scale = min(512 / longest, 1)
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            UIColor.black.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+            image.draw(in: CGRect(origin: .zero, size: size), blendMode: .destinationOut, alpha: 1)
+        }.cgImage
     }
 
     private func finish() {

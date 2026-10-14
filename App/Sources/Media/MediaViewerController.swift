@@ -610,6 +610,7 @@ extension MediaViewerController {
                 overlay: overlay,
                 morph: morph,
                 decoration: morphDecoration,
+                backdrop: backdrop,
                 fadingViews: [backdrop] + chromeSnapshots,
                 underlay: moves && timing.drawsUnderBars ? makeUnderlay(decoratedLike: tile) : nil
             ),
