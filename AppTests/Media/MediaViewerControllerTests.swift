@@ -164,6 +164,18 @@ struct MediaViewerControllerTests {
         sheet.dismiss(animated: false)
     }
 
+    /// 代替テキストのシートの左上から、全文をシステムの翻訳シートで訳せる。
+    @Test func altTextSheetOffersTranslation() throws {
+        let sheet = AltTextViewController.sheet(text: "A sunset over the sea")
+        let altText = try #require(sheet.viewControllers.first as? AltTextViewController)
+        altText.loadViewIfNeeded()
+
+        #expect(altText.navigationItem.leftBarButtonItem?.title == "翻訳")
+        #expect(!altText.isTranslationPresented)
+        altText.translate()
+        #expect(altText.isTranslationPresented)
+    }
+
     /// 保存を待つ間に代替テキストのシートを開いても、保存の失敗はそのシートの上にアラートで知らせる。
     @Test func saveFailureIsShownAboveSheetOpenedWhileSaving() async throws {
         let harness = try TimelineHarness()
