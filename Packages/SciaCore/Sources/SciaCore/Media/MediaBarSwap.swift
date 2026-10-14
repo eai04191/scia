@@ -30,6 +30,26 @@ public struct MediaBarSwap: Sendable, Equatable {
         return MediaBarSwap(handoff: handoff, overlapOpacity: startOverlapOpacity * (1 - fade))
     }
 
+    /// 開く動き。閉じる動きの逆で、サムネイルと同じバーの奥の見え方から始め、早めに最前面の写しへ受け渡し、
+    /// ビューアの画像の位置に近づいてからバーと重なる部分を手前へ入れ替える。
+    /// - Parameters:
+    ///   - progress: 開く動きの進み具合。0から1。
+    ///   - handoffEnd: 最前面の写しへ受け渡し終える進み具合。0なら開き始めから最前面の写しだけを見せる。
+    ///   - overlapFadeStart: バーと重なる部分を手前へ入れ替え始める進み具合。
+    public static func opening(progress: Double, handoffEnd: Double, overlapFadeStart: Double) -> MediaBarSwap {
+        let handoff = handoffEnd > 0 ? 1 - smoothstep(progress / handoffEnd) : 0
+        let overlapOpacity = overlapFadeStart < 1
+            ? smoothstep((progress - overlapFadeStart) / (1 - overlapFadeStart))
+            : (progress >= 1 ? 1 : 0)
+        return MediaBarSwap(handoff: handoff, overlapOpacity: overlapOpacity)
+    }
+
+    /// `fraction`の割合だけ、すべてバーの手前に見せる状態へ近づける。開く途中でつかんだとき、指で動かす写しを手前へ寄せるために使う。
+    public func converging(toFront fraction: Double) -> MediaBarSwap {
+        let t = min(max(fraction, 0), 1)
+        return MediaBarSwap(handoff: handoff * (1 - t), overlapOpacity: overlapOpacity + (1 - overlapOpacity) * t)
+    }
+
     /// 0から1へなめらかに移る。範囲外は端の値にする。
     private static func smoothstep(_ x: Double) -> Double {
         let t = min(max(x, 0), 1)

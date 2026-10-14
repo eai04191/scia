@@ -44,6 +44,12 @@ final class MediaViewerController: UIViewController {
     private let sourceTile: @MainActor (MediaAttachment.ID) -> MediaTileView?
     /// 写しを動かしている間、隠している一覧のサムネイル。画像がそこへ戻っていく途中で消えて見えないよう、動かし始めから隠す。
     private var hiddenTile: MediaTileView?
+    /// 開く途中と、開く途中でつかんでから写しを手前へ寄せ終えるまで、写しを一覧のバーの手前と奥に描き分ける。
+    private var barLayering: MediaBarLayering?
+    /// `barLayering`で、写しをバーの手前と奥のどちらに見せているか。
+    private var barSwap = MediaBarSwap.front
+    /// 開く途中でつかんだあと、写しをすべてバーの手前へ寄せる動き。
+    private var barConvergence: SpringDriver?
 
     struct Timing {
         /// サムネイルから広げて、ビューアで表示し終えるまでの時間。
@@ -52,8 +58,12 @@ final class MediaViewerController: UIViewController {
         let closeDuration: TimeInterval
         /// 0で弾まずに止まり、大きいほど行き過ぎてから戻る。
         let bounce: CGFloat
-        /// 閉じるとき、戻る画像のうちバーにかかる部分を、一覧の中に置いた写しでバーの奥に描く。
+        /// 開閉するとき、画像のうちバーにかかる部分を、一覧の中に置いた写しでバーの奥に描く。
         let drawsUnderBars: Bool
+        /// バーの奥にも描くとき、一覧の中の写しから最前面の写しへ受け渡し終える、開く動きの進み具合。0から1。
+        let openHandoffEnd: Double
+        /// バーの奥にも描くとき、バーと重なる部分を最前面の写しへ入れ替え始める、開く動きの進み具合。0から1。
+        let openBarOverlapFadeStart: Double
         /// バーの奥にも描くとき、最前面の写しを一覧の中の写しへ受け渡し始める進み具合。0から1。
         let handoffStart: Double
         /// バーの奥にも描くとき、閉じ始めにバーと重なっていた部分を一覧の中の写しへ入れ替え終える進み具合。0から1。
@@ -324,6 +334,7 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
             guard case .dragging(let start, let visibility) = motion else { return }
             let scale = dragToDismiss.scale(translation: translation.y, height: height)
             morph.frame = Self.scaled(start, by: scale, around: dismissPanAnchor).offsetBy(dx: translation.x, dy: translation.y)
+            applyBarLayering()
             let backgroundAlpha = visibility * dragToDismiss.backgroundAlpha(translation: translation.y, height: height)
             backdrop.alpha = backgroundAlpha
             // ボタンと説明は、背景が半分透けたところで消えきるようにする。
@@ -365,7 +376,7 @@ extension MediaViewerController {
     fileprivate enum Motion {
         /// 写しを隠し、ページの画像を見せている。
         case idle
-        case opening(UIViewPropertyAnimator)
+        case opening(SpringDriver)
         /// 指に追従している。`start`はつかんだときの写しの枠、`visibility`はそのときの開いている度合い。
         case dragging(start: CGRect, visibility: CGFloat)
         /// 閉じずに離したあと、ビューアの画像の枠へ戻している。
@@ -456,13 +467,15 @@ extension MediaViewerController {
     /// 開いている途中や戻している途中なら、動きを終えて開ききった状態にする。左右の切り替えなど、ほかの操作を優先するため。
     fileprivate func completeMotionImmediately() {
         switch motion {
-        case .opening(let animator), .settling(let animator):
+        case .opening(let driver):
+            driver.stop()
+        case .settling(let animator):
             animator.stopAnimation(true)
-            setVisibility(1)
-            finishOpen()
         case .idle, .dragging, .closing:
-            break
+            return
         }
+        setVisibility(1)
+        finishOpen()
     }
 
     /// ページが描いている枠を画像にする。
@@ -495,50 +508,124 @@ extension MediaViewerController {
         UIViewPropertyAnimator(duration: duration, timingParameters: UISpringTimingParameters(duration: duration, bounce: bounce))
     }
 
+    /// 写しをサムネイルの位置からビューアの画像の位置へ広げる。バーの奥と手前の描き分けを写しの位置と同じフレームで描くため、
+    /// UIKitのアニメーションではなく、ばねを毎フレーム進めて動かす。
     private func beginOpening() {
         view.layoutIfNeeded()
-        let animator = makeAnimator(duration: timing.openDuration, bounce: timing.bounce)
+        let update: @MainActor (CGFloat) -> Void
         if movesImage, let tile = currentTile {
-            showMorph(frame: tileFrame(of: tile), cornerRadius: tile.layer.cornerRadius, tile: tile, decorationAlpha: 1)
+            let start = tileFrame(of: tile)
+            let startRadius = tile.layer.cornerRadius
+            showMorph(frame: start, cornerRadius: startRadius, tile: tile, decorationAlpha: 1)
+            barLayering = makeBarLayering(tile: tile)
             let target = contentFrame(in: view)
-            animator.addAnimations {
-                self.morph.frame = target
-                self.morph.layer.cornerRadius = 0
-                self.setDecorationAlpha(0)
+            update = { [weak self] progress in
+                self?.updateOpening(progress: progress, from: start, radius: startRadius, to: target)
             }
         } else {
-            pageController.view.alpha = 0
-            animator.addAnimations { self.pageController.view.alpha = 1 }
+            update = { [weak self] progress in
+                let clamped = min(max(progress, 0), 1)
+                self?.pageController.view.alpha = clamped
+                self?.setVisibility(clamped)
+            }
         }
-        setVisibility(0)
-        animator.addAnimations { self.setVisibility(1) }
-        animator.addCompletion { [weak self] position in
-            guard position == .end else { return }
+        let driver = SpringDriver(spring: SpringCurve(duration: timing.openDuration, bounce: timing.bounce), update: update) { [weak self] in
             self?.finishOpen()
         }
-        motion = .opening(animator)
-        animator.startAnimation()
+        motion = .opening(driver)
+        driver.start()
     }
+
+    private func updateOpening(progress: CGFloat, from start: CGRect, radius startRadius: CGFloat, to target: CGRect) {
+        let clamped = min(max(progress, 0), 1)
+        morph.frame = CGRect(
+            x: start.minX + (target.minX - start.minX) * progress,
+            y: start.minY + (target.minY - start.minY) * progress,
+            width: start.width + (target.width - start.width) * progress,
+            height: start.height + (target.height - start.height) * progress
+        )
+        morph.layer.cornerRadius = startRadius * (1 - clamped)
+        setDecorationAlpha(1 - clamped)
+        setVisibility(clamped)
+        if barLayering != nil {
+            barSwap = MediaBarSwap.opening(progress: clamped, handoffEnd: timing.openHandoffEnd, overlapFadeStart: timing.openBarOverlapFadeStart)
+            applyBarLayering()
+        }
+    }
+
+    /// 写しをバーの手前と奥に描き分ける準備をする。バーの奥に描かない設定や、サムネイルを含む一覧の行が見つからなければnil。
+    private func makeBarLayering(tile: MediaTileView) -> MediaBarLayering? {
+        guard timing.drawsUnderBars, let window = view.window else { return nil }
+        let layering = MediaBarLayering(
+            morph: morph,
+            decoration: morphDecoration,
+            backdrop: backdrop,
+            underlay: makeUnderlay(decoratedLike: tile),
+            window: window
+        )
+        layering.track(tile)
+        guard layering.drawsUnderBars else {
+            layering.tearDown()
+            return nil
+        }
+        return layering
+    }
+
+    /// 写しの今の位置で、バーの手前と奥の描き分けを描き直す。描き分けていなければ何もしない。
+    private func applyBarLayering() {
+        guard let layering = barLayering, let window = view.window else { return }
+        morph.alpha = 1 - barSwap.handoff
+        layering.apply(clipRect: layering.visibleRect, overlapRect: window.bounds, swap: barSwap, visibility: 1)
+    }
+
+    /// 開く途中でつかんだら、指で動かす写しをすべてバーの手前へ短い時間で寄せる。閉じる操作の間は、写しをバーの手前に描くため。
+    private func convergeBarLayeringToFront() {
+        guard barLayering != nil else { return }
+        let from = barSwap
+        let driver = SpringDriver(spring: SpringCurve(duration: Self.barConvergenceDuration, bounce: 0)) { [weak self] progress in
+            self?.barSwap = from.converging(toFront: progress)
+            self?.applyBarLayering()
+        } completion: { [weak self] in
+            self?.endBarLayering()
+        }
+        barConvergence = driver
+        driver.start()
+    }
+
+    /// 描き分けをやめ、写しをすべてバーの手前に見せる。
+    private func endBarLayering() {
+        barConvergence?.stop()
+        barConvergence = nil
+        guard let layering = barLayering else { return }
+        layering.tearDown()
+        barLayering = nil
+        barSwap = .front
+        morph.alpha = 1
+    }
+
+    /// 開く途中でつかんだあと、写しをバーの手前へ寄せ終えるまでの時間。
+    private static let barConvergenceDuration: TimeInterval = 0.15
 
     /// 開ききったら、写しを隠してページの画像に戻す。隠していたサムネイルも、黒い下地で覆われているので戻す。
     private func finishOpen() {
+        endBarLayering()
         hideMorph()
         showHiddenTile()
+        pageController.view.alpha = 1
         motion = .idle
     }
 
     /// 開いている途中や戻している途中なら、その場で止めてつかむ。開ききっていれば、ビューアの画像の位置に写しを出してつかむ。
     private func beginDragging(at location: CGPoint) {
         switch motion {
-        case .opening(let animator), .settling(let animator):
+        case .opening(let driver):
             // 止めた時点の見た目のまま残す。
+            driver.stop()
+            grabMovingMorph()
+            convergeBarLayeringToFront()
+        case .settling(let animator):
             animator.stopAnimation(true)
-            if morph.isHidden {
-                // 薄くして開いていた途中なら、ここから写しを出す。
-                showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: currentTile, decorationAlpha: 0)
-            } else {
-                hide(currentTile)
-            }
+            grabMovingMorph()
         case .idle:
             showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: currentTile, decorationAlpha: 0)
         case .dragging, .closing:
@@ -549,9 +636,22 @@ extension MediaViewerController {
         motion = .dragging(start: morph.frame, visibility: backdrop.alpha)
     }
 
+    /// 開いている途中や戻している途中に止めた写しをつかむ。
+    private func grabMovingMorph() {
+        if morph.isHidden {
+            // 薄くして開いていた途中なら、ここから写しを出す。
+            showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: currentTile, decorationAlpha: 0)
+        } else {
+            hide(currentTile)
+        }
+    }
+
     /// 閉じずに離したら、写しをビューアの画像の枠へ戻し、開ききった状態にする。
     private func settle() {
         guard case .dragging = motion else { return }
+        // つかんでから写しを手前へ寄せ終える前に離していたら、残りを寄せずに手前に見せる。寄せる時間（0.15秒）より短い操作に限られるため受け入れる。
+        // 戻す動きはUIKitのアニメーションで描くため、描き分けのマスクを写しの位置に合わせ続けられない。
+        endBarLayering()
         let animator = makeAnimator(duration: dragToDismiss.restoreDuration, bounce: 0)
         let target = contentFrame(in: view)
         animator.addAnimations {
@@ -576,11 +676,18 @@ extension MediaViewerController {
         switch motion {
         case .closing:
             return
-        case .opening(let animator), .settling(let animator):
+        case .opening(let driver):
+            driver.stop()
+        case .settling(let animator):
             animator.stopAnimation(true)
         case .idle, .dragging:
             break
         }
+        // 開く途中から閉じるときは、バーと重なる部分をそのときの濃さから奥へ入れ替える。
+        // 一覧のバーに隠れない範囲での受け渡しは、閉じる動きでは手前から始めるため、開き始めのごく短い間に閉じると、新着ボタンなどに重なる部分が手前に切り替わる。
+        // Escやメニューから閉じたときに限られ、下へ払って閉じるときはつかんだ時点で手前へ寄せ始めているため受け入れる。
+        let startOverlapOpacity = barLayering == nil ? 1 : barSwap.overlapOpacity
+        endBarLayering()
         motion = .closing
         let tile = currentTile
         if morph.isHidden {
@@ -642,7 +749,7 @@ extension MediaViewerController {
             spring: SpringCurve(duration: timing.closeDuration, bounce: timing.bounce),
             handoffStart: CGFloat(timing.handoffStart),
             barOverlapFadeEnd: CGFloat(timing.barOverlapFadeEnd),
-            startOverlapOpacity: 1,
+            startOverlapOpacity: startOverlapOpacity,
             // 戻り先が最初から見つからなければ、その場で薄くする。
             movesImage: moves,
             concealedTile: closingTile,

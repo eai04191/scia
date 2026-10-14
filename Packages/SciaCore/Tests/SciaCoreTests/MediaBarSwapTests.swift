@@ -27,4 +27,36 @@ struct MediaBarSwapTests {
         #expect(MediaBarSwap.closing(progress: 0.99, handoffStart: 1, overlapFadeEnd: 0.3).handoff == 0)
         #expect(MediaBarSwap.closing(progress: 1, handoffStart: 1, overlapFadeEnd: 0.3).handoff == 1)
     }
+
+    /// 開き始めはサムネイルと同じくすべて一覧の中の写し、開ききるとすべて手前に見せる。
+    @Test func openingStartsBehindBarsAndEndsInFront() {
+        let start = MediaBarSwap.opening(progress: 0, handoffEnd: 0.3, overlapFadeStart: 0.7)
+        #expect(start == MediaBarSwap(handoff: 1, overlapOpacity: 0))
+        let end = MediaBarSwap.opening(progress: 1, handoffEnd: 0.3, overlapFadeStart: 0.7)
+        #expect(end == .front)
+    }
+
+    /// 受け渡しを終えてから、バーと重なる部分を手前へ入れ替える。
+    @Test func openingHandsOffBeforeSwappingOverlap() {
+        let middle = MediaBarSwap.opening(progress: 0.5, handoffEnd: 0.3, overlapFadeStart: 0.7)
+        #expect(middle == MediaBarSwap(handoff: 0, overlapOpacity: 0))
+    }
+
+    /// 弾んで1を超えても、手前に見せたままにする。
+    @Test func openingStaysInFrontWhileOvershooting() {
+        #expect(MediaBarSwap.opening(progress: 1.05, handoffEnd: 0.3, overlapFadeStart: 0.7) == .front)
+    }
+
+    /// 受け渡しを終える進み具合が0なら、開き始めから手前に見せる。
+    @Test func openingWithoutHandoff() {
+        #expect(MediaBarSwap.opening(progress: 0, handoffEnd: 0, overlapFadeStart: 0.7).handoff == 0)
+    }
+
+    /// つかんだあとは、そのときの状態からすべて手前へ寄せる。
+    @Test func convergingToFront() {
+        let swap = MediaBarSwap(handoff: 0.75, overlapOpacity: 0.25)
+        #expect(swap.converging(toFront: 0) == swap)
+        #expect(swap.converging(toFront: 0.5) == MediaBarSwap(handoff: 0.375, overlapOpacity: 0.625))
+        #expect(swap.converging(toFront: 1) == .front)
+    }
 }

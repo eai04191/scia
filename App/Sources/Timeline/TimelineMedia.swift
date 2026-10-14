@@ -61,6 +61,8 @@ extension TimelineViewController {
                 closeDuration: tuning.value(of: TuningCatalog.mediaCloseDuration),
                 bounce: tuning.value(of: TuningCatalog.mediaTransitionBounce),
                 drawsUnderBars: tuning.value(of: TuningCatalog.mediaCloseDrawsUnderBars),
+                openHandoffEnd: tuning.value(of: TuningCatalog.mediaOpenHandoffEnd),
+                openBarOverlapFadeStart: tuning.value(of: TuningCatalog.mediaOpenBarOverlapFadeStart),
                 handoffStart: tuning.value(of: TuningCatalog.mediaCloseHandoffStart),
                 barOverlapFadeEnd: tuning.value(of: TuningCatalog.mediaCloseBarOverlapFadeEnd)
             ),

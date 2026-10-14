@@ -9,7 +9,7 @@ import UIKit
 struct MediaViewerControllerTests {
     private let drag = DragToDismiss(distanceThreshold: 0.12, velocityThreshold: 0.8, smallestScale: 0.6, fadeDistance: 0.5, restoreDuration: 0.35)
 
-    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, bounce: 0, drawsUnderBars: true, handoffStart: 0.7, barOverlapFadeEnd: 0.3)
+    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, bounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3)
 
     private func makeViewer(attachments: [MediaAttachment]) -> MediaViewerController {
         MediaViewerController(attachments: attachments, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil })
@@ -157,6 +157,48 @@ struct MediaViewerControllerTests {
         #expect(viewer.view.superview == nil)
     }
 
+    /// 開く途中は、バーの下のサムネイルと同じ見え方から始めるため、サムネイルを含む一覧の行の中にも写しを置く。開ききったら外し、最前面の写しのマスクも外す。
+    @Test func openingDrawsUnderBarsUntilOpened() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        // 下端をバーに見立てた一覧。サムネイルの下半分がバーに隠れる。
+        let list = UIScrollView(frame: harness.viewController.view.bounds)
+        list.contentInsetAdjustmentBehavior = .never
+        list.contentInset.bottom = 100
+        harness.viewController.view.addSubview(list)
+        let row = UIView(frame: CGRect(x: 0, y: list.bounds.height - 145, width: list.bounds.width, height: 90))
+        list.addSubview(row)
+        let tile = MediaTileView(store: .offline)
+        tile.frame = CGRect(x: 20, y: 0, width: 160, height: 90)
+        row.addSubview(tile)
+        let attachment = MediaAttachment(
+            id: "1",
+            type: .image,
+            url: nil,
+            previewUrl: nil,
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900)),
+            blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+        )
+        tile.apply(attachment, hiddenCount: 0, isCovered: false)
+        MediaViewerController.present(
+            attachments: [attachment],
+            startIndex: 0,
+            store: .offline,
+            dragToDismiss: drag,
+            timing: timing,
+            from: harness.viewController,
+            sourceTile: { _ in tile },
+            onDismiss: {}
+        )
+        let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
+        try await waitUntil { viewer.isContentHiddenForTransition }
+        #expect(row.subviews.contains { $0 !== tile }, "開く途中に一覧の行の中へ写しを置いていません")
+
+        try await waitUntil { !viewer.isMoving }
+        #expect(row.subviews.allSatisfy { $0 === tile }, "開ききったあとも一覧の行の中に写しが残っています")
+        viewer.dismiss(animated: false)
+    }
+
     /// 手元にプレビューもぼかしもない画像でも、開く途中に元の画像が届いたら、写しをその画像に差し替える。
     @Test func morphFollowsImageThatArrivesWhileOpening() async throws {
         let harness = try TimelineHarness()
@@ -187,7 +229,7 @@ struct MediaViewerControllerTests {
             startIndex: 0,
             store: store,
             dragToDismiss: drag,
-            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, bounce: 0, drawsUnderBars: true, handoffStart: 0.7, barOverlapFadeEnd: 0.3),
+            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, bounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3),
             from: harness.viewController,
             sourceTile: { _ in tile },
             onDismiss: {}
