@@ -64,14 +64,38 @@ struct MediaViewerControllerTests {
         #expect(viewer.keyCommands?.contains { $0.input == UIKeyCommand.inputEscape } == true)
     }
 
-    /// メニューから共有できる。共有するものがなければ選べない。
-    @Test func menuOffersShareOnlyWhenThereIsSomethingToShare() throws {
-        let shareable = makeViewer(attachments: [image("1", url: URL(string: "https://x.example/1.png"))])
+    /// 画像は、元のファイルが届いてからメニューで共有できる。届く前にURLを共有しないよう、それまでは選べない。
+    @Test func imageCanBeSharedOnlyAfterOriginalArrives() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let data = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8), format: format).image { context in
+            UIColor.systemGreen.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
+        }.pngData())
+        let store = MediaImageStore(originalsDirectory: .temporaryDirectory.appending(path: "MediaViewerControllerTests-\(UUID().uuidString)")) { _ in
+            try await Task.sleep(for: .milliseconds(150))
+            return data
+        }
+        let viewer = MediaViewerController(attachments: [image("1", url: URL(string: "https://x.example/original/1"))], startIndex: 0, store: store, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil })
+        harness.viewController.present(viewer, animated: false)
+        defer { viewer.dismiss(animated: false) }
+
+        let share = try #require(viewer.menuElements().first as? UIAction)
+        #expect(share.title == "共有")
+        #expect(share.attributes.contains(.disabled))
+
+        try await waitUntil { (viewer.menuElements().first as? UIAction)?.attributes.contains(.disabled) == false }
+        let item = try #require(viewer.shareItem() as? MediaShareItem)
+        #expect(item.file.lastPathComponent == "1.png")
+        #expect(try Data(contentsOf: item.file) == data)
+    }
+
+    /// 処理中でURLのない添付ファイルは、共有するものがないため選べない。
+    @Test func menuDisablesShareWhenThereIsNothingToShare() throws {
         let processing = makeViewer(attachments: [image("2", url: nil)])
 
-        let share = try #require(shareable.menuElements().first as? UIAction)
-        #expect(share.title == "共有")
-        #expect(!share.attributes.contains(.disabled))
         let unavailable = try #require(processing.menuElements().first as? UIAction)
         #expect(unavailable.attributes.contains(.disabled))
     }

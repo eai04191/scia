@@ -3,6 +3,7 @@ import ImageIO
 import os
 import SciaCore
 import UIKit
+import UniformTypeIdentifiers
 
 /// 添付ファイルの画像を読み込み、メモリに持つ。
 ///
@@ -18,13 +19,25 @@ final class MediaImageStore {
     private let fetch: Fetch
     /// 同じURLでも縮める大きさごとに分けて持つ。サーバーによってはプレビューと元の画像が同じURLのため。
     private let cache = NSCache<NSString, UIImage>()
-    private var inFlight: [Key: Task<UIImage, any Error>] = [:]
+    private var inFlight: [Key: Task<Loaded, any Error>] = [:]
+    /// 元のファイルを置く場所。共有や保存で、縮めずに元の形式のまま渡すために残す。
+    private let originalsDirectory: URL
+    /// 読み込んだURLごとの、手元に残した元のファイル。
+    private var originals: [URL: URL] = [:]
     private let logger = SciaLog.logger(category: "media")
 
-    init(fetch: @escaping Fetch) {
+    /// - Parameter originalsDirectory: 元のファイルを置く場所。前回の起動で残したファイルを消すため、作るときに中身を空にする。
+    init(originalsDirectory: URL = .temporaryDirectory.appending(path: "MediaOriginals"), fetch: @escaping Fetch) {
         self.fetch = fetch
+        self.originalsDirectory = originalsDirectory
+        try? FileManager.default.removeItem(at: originalsDirectory)
         // 4096px四方の画像が4枚ほど入る大きさ。
         cache.totalCostLimit = 256 * 1_024 * 1_024
+    }
+
+    private struct Loaded: Sendable {
+        let image: UIImage
+        let original: URL?
     }
 
     private struct Key: Hashable {
@@ -38,30 +51,54 @@ final class MediaImageStore {
         cache.object(forKey: Key(url: url, maxPixelSize: maxPixelSize).cacheKey)
     }
 
+    /// 手元に残した元のファイル。`keepsOriginal`を付けて読み込み終えるまではnil。
+    func originalFile(for url: URL) -> URL? {
+        originals[url]
+    }
+
     /// 画像を読み込む。同じURLを読み込んでいる途中なら、その結果を待つ。
     /// 呼び出し側のタスクを取り消しても、読み込みは止めずにキャッシュへ入れる。同じ画像がすぐまた求められることが多いため。
-    func image(for url: URL, maxPixelSize: Int) async throws -> UIImage {
+    /// - Parameter keepsOriginal: 元のファイルを手元に残し、`originalFile(for:)`で返せるようにする。
+    ///   同じURLを残さずに読み込んでいる途中だった場合は、その結果を待つため残らない。元のファイルを求めるのはビューアだけで、
+    ///   ビューアは常に残すよう求めるため、この組み合わせは起きない。
+    func image(for url: URL, maxPixelSize: Int, keepsOriginal: Bool = false) async throws -> UIImage {
         let key = Key(url: url, maxPixelSize: maxPixelSize)
-        if let image = cache.object(forKey: key.cacheKey) {
+        if let image = cache.object(forKey: key.cacheKey), !keepsOriginal || originals[url] != nil {
             return image
         }
         if let task = inFlight[key] {
-            return try await task.value
+            // 待っている呼び出しのどれが先に再開するかは決まらないため、合流した側でも元のファイルを登録してから返す。
+            let loaded = try await task.value
+            if let original = loaded.original {
+                originals[url] = original
+            }
+            return loaded.image
         }
         let fetch = fetch
-        let task = Task<UIImage, any Error> {
+        let directory = keepsOriginal && originals[url] == nil ? originalsDirectory : nil
+        let task = Task<Loaded, any Error> {
             let data = try await fetch(url)
             guard let image = await Self.decode(data, maxPixelSize: maxPixelSize) else {
                 throw DecodeError()
             }
-            return image
+            // 書き出せなくても画像は見せる。共有だけが選べなくなる。
+            var original: URL?
+            if let directory {
+                original = try? await Self.writeOriginal(data, for: url, in: directory)
+            }
+            return Loaded(image: image, original: original)
         }
         inFlight[key] = task
         defer { inFlight[key] = nil }
         do {
-            let image = try await task.value
-            cache.setObject(image, forKey: key.cacheKey, cost: Self.cost(of: image))
-            return image
+            let loaded = try await task.value
+            cache.setObject(loaded.image, forKey: key.cacheKey, cost: Self.cost(of: loaded.image))
+            if let original = loaded.original {
+                originals[url] = original
+            } else if directory != nil {
+                logger.error("media original write failed url=\(url.absoluteString, privacy: .public)")
+            }
+            return loaded.image
         } catch {
             logger.error("media load failed url=\(url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
             throw error
@@ -121,6 +158,22 @@ final class MediaImageStore {
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
         return UIImage(cgImage: image)
+    }
+
+    /// 元のファイルを、中身の形式に合った拡張子で書き出す。URLの拡張子は付いていなかったり実際の形式と違ったりするため使わない。
+    /// 共有先でファイル名として見えるため、名前はURLのものを残し、別のURLとの衝突はフォルダを分けて避ける。
+    @concurrent
+    private static func writeOriginal(_ data: Data, for url: URL, in directory: URL) async throws -> URL {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let identifier = CGImageSourceGetType(source),
+              let type = UTType(identifier as String),
+              let pathExtension = type.preferredFilenameExtension
+        else { throw DecodeError() }
+        let folder = directory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let file = folder.appending(path: url.deletingPathExtension().lastPathComponent).appendingPathExtension(pathExtension)
+        try data.write(to: file)
+        return file
     }
 
     private static func cost(of image: UIImage) -> Int {

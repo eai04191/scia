@@ -286,9 +286,10 @@ final class MediaViewerController: UIViewController {
         return page
     }
 
-    private func shareItem() -> Any? {
-        if let image = (pages[currentIndex] as? ImagePageController)?.fullImage {
-            return image
+    /// 共有するもの。画像は元のファイルが届くまでnilにし、URLを共有しない。動画などはURLを共有する。
+    func shareItem() -> Any? {
+        if currentAttachment.type == .image {
+            return (pages[currentIndex] as? ImagePageController)?.shareItem
         }
         return currentAttachment.url ?? currentAttachment.remoteUrl
     }
@@ -867,7 +868,8 @@ final class ImagePageController: MediaPageController {
     private let spinner = UIActivityIndicatorView(style: .medium)
     private let failureLabel = UILabel()
     private var loadTask: Task<Void, Never>?
-    private(set) var fullImage: UIImage?
+    /// 元のファイルが届いていれば、共有シートに渡すもの。
+    private(set) var shareItem: MediaShareItem?
     /// 一覧で読み込んだサムネイル。
     private let preview: UIImage?
     /// 出している画像の出どころ。違和感レポートに残す。
@@ -938,11 +940,11 @@ final class ImagePageController: MediaPageController {
             spinner.startAnimating()
         }
         loadTask = Task { [weak self, store] in
-            let image = try? await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize)
+            let image = try? await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
             guard let self, !Task.isCancelled else { return }
             self.spinner.stopAnimating()
             if let image {
-                self.fullImage = image
+                self.shareItem = store.originalFile(for: url).map { MediaShareItem(file: $0, preview: image) }
                 self.imageSource = "full"
                 self.zoomView.image = image
                 self.onImageChange?()
