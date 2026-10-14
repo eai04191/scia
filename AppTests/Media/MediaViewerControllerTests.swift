@@ -176,6 +176,27 @@ struct MediaViewerControllerTests {
         #expect(altText.isTranslationPresented)
     }
 
+    /// 画像の文字のない場所を長押しすると、メニューボタンと同じメニューを出す。出すものがなければ出さない。
+    @Test func longPressOnImageWithoutTextOffersMenu() throws {
+        let page = ImagePageController(attachment: image("1", url: nil), store: .offline, preview: nil)
+        page.loadViewIfNeeded()
+        page.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        page.view.layoutIfNeeded()
+        let interaction = try #require(contextMenuInteraction(in: page.view))
+        let center = CGPoint(x: 195, y: 422)
+
+        #expect(page.contextMenuInteraction(interaction, configurationForMenuAtLocation: center) == nil)
+        page.menuElements = { [UIAction(title: "共有") { _ in }] }
+        #expect(page.contextMenuInteraction(interaction, configurationForMenuAtLocation: center) != nil)
+    }
+
+    private func contextMenuInteraction(in view: UIView) -> UIContextMenuInteraction? {
+        if let interaction = view.interactions.lazy.compactMap({ $0 as? UIContextMenuInteraction }).first {
+            return interaction
+        }
+        return view.subviews.lazy.compactMap { contextMenuInteraction(in: $0) }.first
+    }
+
     /// 保存を待つ間に代替テキストのシートを開いても、保存の失敗はそのシートの上にアラートで知らせる。
     @Test func saveFailureIsShownAboveSheetOpenedWhileSaving() async throws {
         let harness = try TimelineHarness()

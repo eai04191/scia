@@ -3,6 +3,7 @@ import CoreImage
 import os
 import SciaCore
 import UIKit
+import VisionKit
 
 /// 投稿の添付ファイルを全画面で見る。左右のスワイプで切り替え、画像はピンチとダブルタップで拡大する。
 ///
@@ -257,11 +258,29 @@ final class MediaViewerController: UIViewController {
 
     private var chromeViews: [UIView] { [menuButton, counterLabel, captionView] }
 
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateBottomCoveredHeight()
+    }
+
+    /// 画面の下で、説明に隠れている高さ。説明を出していなければ0。
+    private var captionCoveredHeight: CGFloat {
+        captionView.isHidden ? 0 : view.bounds.maxY - captionView.frame.minY
+    }
+
+    /// 説明に隠れている高さをページへ伝え、ページの中のボタンをそれより上に出させる。
+    private func updateBottomCoveredHeight() {
+        for page in pages.values {
+            page.bottomCoveredHeight = captionCoveredHeight
+        }
+    }
+
     private func updateChrome() {
         counterLabel.text = "\(currentIndex + 1) / \(attachments.count)"
         let description = currentAttachment.description ?? ""
         captionView.text = description
         captionView.isHidden = isChromeHidden || description.isEmpty
+        view.setNeedsLayout()
     }
 
     /// 画像を1回タップしたら、ボタンと説明を隠して画像だけにする。もう1回で戻す。
@@ -274,6 +293,9 @@ final class MediaViewerController: UIViewController {
             }
             self.updateChrome()
             self.setNeedsStatusBarAppearanceUpdate()
+        }
+        for page in pages.values {
+            page.setChromeHidden(isChromeHidden, animated: true)
         }
         setNeedsUpdateOfHomeIndicatorAutoHidden()
     }
@@ -288,6 +310,9 @@ final class MediaViewerController: UIViewController {
         }
         page.index = index
         page.onSingleTap = { [weak self] in self?.toggleChrome() }
+        page.menuElements = { [weak self] in self?.menuElements() ?? [] }
+        page.setChromeHidden(isChromeHidden, animated: false)
+        page.bottomCoveredHeight = captionCoveredHeight
         page.onImageChange = { [weak self, weak page] in
             guard let self, let page, self.morphFollowsPage, page.index == self.currentIndex, let image = page.transitionImage else { return }
             self.morph.image = image
@@ -918,6 +943,8 @@ class MediaPageController: UIViewController {
     var onSingleTap: (() -> Void)?
     /// 描いている画像が変わった。開閉の写しを、元の画像が届いた時点で差し替えるために使う。
     var onImageChange: (() -> Void)?
+    /// 長押しで出すメニューの項目。右上のメニューボタンと同じものを返す。
+    var menuElements: (() -> [UIMenuElement])?
 
     init(attachment: MediaAttachment) {
         self.attachment = attachment
@@ -942,6 +969,12 @@ class MediaPageController: UIViewController {
 
     /// 違和感レポートに残す、ページの状態。
     func stateDump() -> String { "" }
+
+    /// ボタンと説明を隠して画像だけにしたとき、ページの中に出しているボタンも合わせて隠す。
+    func setChromeHidden(_ hidden: Bool, animated: Bool) {}
+
+    /// 画面の下で、ビューアの説明に隠れている高さ。ページの中のボタンをこれより上に出す。
+    var bottomCoveredHeight: CGFloat = 0
 }
 
 /// 画像のページ。一覧のサムネイルをすぐに出し、元の大きさの画像が届いたら差し替える。
@@ -951,6 +984,13 @@ final class ImagePageController: MediaPageController {
     private let spinner = UIActivityIndicatorView(style: .medium)
     private let failureLabel = UILabel()
     private var loadTask: Task<Void, Never>?
+    /// 画像の中の文字を選んだり、リンクや電話番号を開いたりする（Live Text）。元の画像が届いてから解析する。
+    private let liveText = ImageAnalysisInteraction()
+    private var analysisTask: Task<Void, Never>?
+    /// Live Textのボタンの、システムが決めた既定の余白。説明に重なる分はこれに足す。
+    private lazy var baseLiveTextInsets = liveText.supplementaryInterfaceContentInsets
+    /// 長押しのメニューを指の位置に出すための、見えない小さな目印。
+    private let menuAnchor = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
     /// 元のファイルが届いていれば、共有シートに渡すもの。
     private(set) var shareItem: MediaShareItem?
     /// 一覧で読み込んだサムネイル。
@@ -967,9 +1007,39 @@ final class ImagePageController: MediaPageController {
 
     deinit {
         loadTask?.cancel()
+        analysisTask?.cancel()
     }
 
     override var allowsInteractiveDismiss: Bool { !zoomView.isZoomedIn }
+
+    /// 文字やリンクを解析し終えている。
+    var hasImageAnalysis: Bool { liveText.analysis != nil }
+
+    /// 画像だけにしたときは、Live Textのボタンも隠す。
+    override func setChromeHidden(_ hidden: Bool, animated: Bool) {
+        liveText.setSupplementaryInterfaceHidden(hidden, animated: animated)
+    }
+
+    override var bottomCoveredHeight: CGFloat {
+        didSet { updateLiveTextInsets() }
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        updateLiveTextInsets()
+    }
+
+    /// 画面の下端まで届く画像では、Live Textのボタンが画像の右下に出て説明に重なるため、重なる分だけ上へずらす。
+    /// ボタンは安全領域をもとから避けているため、説明のうち安全領域に入っている分は数えない。
+    private func updateLiveTextInsets() {
+        guard let imageView = liveText.view, imageView.bounds.height > 0 else { return }
+        let imageFrame = imageView.convert(imageView.bounds, to: view)
+        let overlap = max(imageFrame.maxY - (view.bounds.maxY - bottomCoveredHeight), 0)
+        let extra = max(min(overlap, bottomCoveredHeight - view.safeAreaInsets.bottom), 0)
+        var insets = baseLiveTextInsets
+        insets.bottom += extra
+        liveText.supplementaryInterfaceContentInsets = insets
+    }
 
     override var contentFrame: CGRect {
         zoomView.imageFrame.map { zoomView.convert($0, to: view) } ?? view.bounds
@@ -993,6 +1063,11 @@ final class ImagePageController: MediaPageController {
         zoomView.onSingleTap = { [weak self] in self?.onSingleTap?() }
         zoomView.imageAccessibilityLabel = attachment.description
         view.addSubview(zoomView)
+        liveText.preferredInteractionTypes = [.textSelection, .dataDetectors]
+        zoomView.addImageInteraction(liveText)
+        zoomView.addInteraction(UIContextMenuInteraction(delegate: self))
+        menuAnchor.isUserInteractionEnabled = false
+        view.addSubview(menuAnchor)
         spinner.color = .white
         failureLabel.text = "画像を読み込めませんでした"
         failureLabel.textColor = .secondaryLabel
@@ -1031,11 +1106,66 @@ final class ImagePageController: MediaPageController {
                 self.imageSource = "full"
                 self.zoomView.image = image
                 self.onImageChange?()
+                self.analyze(image)
             } else {
                 // サムネイルを出せていれば、そのまま見せる。
                 self.failureLabel.isHidden = hasPreview
             }
         }
+    }
+}
+
+extension ImagePageController {
+    private static let analyzer = ImageAnalyzer()
+
+    /// 元の画像の文字とQRコードなどを解析し、Live Textで選べるようにする。対応していない端末では何もしない。
+    private func analyze(_ image: UIImage) {
+        guard ImageAnalyzer.isSupported else {
+            SciaLog.logger(category: "media").info("live text unsupported on this device")
+            return
+        }
+        analysisTask?.cancel()
+        analysisTask = Task { [weak self] in
+            do {
+                let analysis = try await Self.analyzer.analyze(image, configuration: ImageAnalyzer.Configuration([.text, .machineReadableCode]))
+                guard let self, !Task.isCancelled else { return }
+                self.liveText.analysis = analysis
+            } catch {
+                SciaLog.logger(category: "media").error("live text analysis failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+}
+
+extension ImagePageController: UIContextMenuInteractionDelegate {
+    /// 長押しした位置に文字やリンクがあれば、メニューを出さずにLive Textの選択に任せる。なければメニューボタンと同じメニューを出す。
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
+        if let imageView = liveText.view, let source = interaction.view {
+            let point = source.convert(location, to: imageView)
+            if liveText.hasInteractiveItem(at: point) || liveText.hasText(at: point) {
+                return nil
+            }
+        }
+        guard let elements = menuElements?(), !elements.isEmpty else { return nil }
+        if let source = interaction.view {
+            menuAnchor.center = source.convert(location, to: view)
+        }
+        return UIContextMenuConfiguration(actionProvider: { _ in UIMenu(children: elements) })
+    }
+
+    /// 全画面の画像が持ち上がって見えないよう、指の位置の見えない目印をプレビューにして、メニューだけを指の位置に出す。
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+        anchorPreview()
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, dismissalPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+        anchorPreview()
+    }
+
+    private func anchorPreview() -> UITargetedPreview {
+        let parameters = UIPreviewParameters()
+        parameters.backgroundColor = .clear
+        return UITargetedPreview(view: menuAnchor, parameters: parameters)
     }
 }
 

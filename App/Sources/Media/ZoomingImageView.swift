@@ -19,6 +19,12 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         }
     }
 
+    /// 画像そのものに操作を付ける。Live Textのように、画像の中の位置で振る舞いを変え、拡大に合わせて動く必要がある操作に使う。
+    func addImageInteraction(_ interaction: any UIInteraction) {
+        imageView.isUserInteractionEnabled = true
+        imageView.addInteraction(interaction)
+    }
+
     var imageAccessibilityLabel: String? {
         get { imageView.accessibilityLabel }
         set { imageView.accessibilityLabel = newValue }
