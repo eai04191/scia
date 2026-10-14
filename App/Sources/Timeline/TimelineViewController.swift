@@ -477,7 +477,14 @@ final class TimelineViewController: UIViewController {
     private func makeLayout() -> UICollectionViewLayout {
         var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
         configuration.footerMode = .supplementary
-        return UICollectionViewCompositionalLayout.list(using: configuration)
+        return UICollectionViewCompositionalLayout { _, environment in
+            let section = NSCollectionLayoutSection.list(using: configuration, layoutEnvironment: environment)
+            // plainのリストはフッターを表示範囲の下端に貼り付ける。貼り付いたフッターは、中身がなくてもタブバーのすぐ上を覆ってタップを吸うため、一覧の末尾に置く。
+            for item in section.boundarySupplementaryItems {
+                item.pinToVisibleBounds = false
+            }
+            return section
+        }
     }
 
     private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, ItemID> {

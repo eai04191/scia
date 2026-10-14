@@ -120,4 +120,19 @@ struct TimelineContentTests {
 
         #expect(content.secondaryAttributedText?.string == "注意書き: ネタバレ")
     }
+
+    /// 末尾のフッターは一覧の最後に置き、表示範囲の下端に貼り付けない。
+    /// 貼り付くと、中身のない透明なフッターがタブバーのすぐ上を覆い、そこにある画像などをタップできなかった。
+    @Test func footerStaysAtEndOfListInsteadOfPinningToVisibleBounds() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.setStatuses(StatusFactory.make(count: 40, startingAt: 1_000))
+        harness.scroll(toFraction: 0.5)
+
+        let collectionView = harness.collectionView
+        let footers = collectionView.visibleSupplementaryViews(ofKind: UICollectionView.elementKindSectionFooter)
+        for footer in footers {
+            #expect(abs(footer.frame.maxY - collectionView.contentSize.height) < 0.5, "フッターが一覧の途中に出ています: \(footer.frame)")
+        }
+    }
 }
