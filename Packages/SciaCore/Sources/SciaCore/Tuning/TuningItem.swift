@@ -122,6 +122,16 @@ public enum TuningCatalog {
         defaultValue: 0.75
     )
 
+    /// 一覧のサムネイルで、サーバーが縮めたプレビュー画像を何倍まで引き伸ばして出してよいか。超えるなら元の画像を読む。
+    /// 大きくするほど通信量は減るが、ぼやける。
+    public static let mediaThumbnailUpscaleTolerance = NumberTuning(
+        id: "timeline.mediaThumbnailUpscaleTolerance",
+        title: "サムネイルのプレビュー画像を引き伸ばしてよい倍率",
+        range: 1...3,
+        step: 0.1,
+        defaultValue: 1
+    )
+
     /// ビューアを下へのスワイプで閉じる距離。画面の高さに対する割合。
     public static let mediaDismissDistance = NumberTuning(
         id: "media.dismissDistance",
@@ -259,6 +269,7 @@ public enum TuningCatalog {
         TuningSection(id: "timeline", title: "タイムラインの見た目", items: [
             .number(paragraphSpacing),
             .number(mediaTallestAspectRatio),
+            .number(mediaThumbnailUpscaleTolerance),
         ]),
         TuningSection(id: "streaming", title: "新着と読み込み", items: [
             .number(insertionInterval),

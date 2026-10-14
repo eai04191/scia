@@ -32,7 +32,7 @@ extension TimelineViewController {
             tallestAspectRatio: tuning.value(of: TuningCatalog.mediaTallestAspectRatio),
             thumbnailPolicy: MediaThumbnailPolicy(
                 allowsOriginal: MediaThumbnailSelection.allowsOriginal(on: network.conditions),
-                upscaleTolerance: 1
+                upscaleTolerance: tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
             )
         )
     }

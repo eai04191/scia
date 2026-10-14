@@ -165,6 +165,7 @@ final class TimelineViewController: UIViewController {
         withObservationTracking {
             _ = tuning.value(of: TuningCatalog.paragraphSpacing)
             _ = tuning.value(of: TuningCatalog.mediaTallestAspectRatio)
+            _ = tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
             _ = network.conditions
         } onChange: { [weak self] in
             Task { @MainActor in
