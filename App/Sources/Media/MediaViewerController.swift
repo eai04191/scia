@@ -1159,7 +1159,7 @@ final class UnsupportedPageController: MediaPageController {
 }
 
 /// 画面の下に出す代替テキスト。長ければスクロールして読む。
-/// 添付ファイルの説明を、画像を覆わないよう1行で見せる。全文は、上へ払うかVoiceOverで実行して、シートで読む。
+/// 添付ファイルの説明を、画像を覆わないよう1行で見せる。全文は、タップするか上へ払うかVoiceOverで実行して、シートで読む。
 final class CaptionView: UIView {
     private let label = UILabel()
     private let contentGuide = UILayoutGuide()
@@ -1197,15 +1197,16 @@ final class CaptionView: UIView {
             contentGuide.leadingAnchor.constraint(equalTo: leadingAnchor),
             contentGuide.trailingAnchor.constraint(equalTo: trailingAnchor),
         ])
-        let swipe = UISwipeGestureRecognizer(target: self, action: #selector(swipedUp))
+        let swipe = UISwipeGestureRecognizer(target: self, action: #selector(open))
         swipe.direction = .up
         addGestureRecognizer(swipe)
+        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(open)))
         isAccessibilityElement = true
         accessibilityTraits = .button
         accessibilityHint = "全文を表示します。"
     }
 
-    @objc private func swipedUp() {
+    @objc private func open() {
         onOpen?()
     }
 
