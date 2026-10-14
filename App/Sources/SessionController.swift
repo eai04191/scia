@@ -14,6 +14,7 @@ final class SessionController {
     private let client: MastodonClient
     private let interactions: StatusInteractions
     private let report: (String) -> Void
+    private let tabBarDelegate: TabReselectionDelegate
     /// 投稿画面で使う、インスタンスの上限とユーザーの既定の公開範囲。一度読めたら使い回す。
     private var composeDefaults: (configuration: InstanceConfiguration?, visibility: Status.Visibility?)?
     private let logger = SciaLog.logger(category: "session")
@@ -44,10 +45,15 @@ final class SessionController {
         notifications.onUnreadCountChange = { count, isLowerBound in
             notificationsTab.badgeValue = count == 0 ? nil : isLowerBound ? "\(count)+" : "\(count)"
         }
-        rootViewController = UITabBarController(tabs: [
+        let tabBarController = UITabBarController(tabs: [
             UITab(title: "ホーム", image: UIImage(systemName: "house"), identifier: "home") { _ in homeNavigation },
             notificationsTab,
         ])
+        tabBarDelegate = TabReselectionDelegate { navigation in
+            (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
+        }
+        tabBarController.delegate = tabBarDelegate
+        rootViewController = tabBarController
         forward = { [weak self] message in
             guard let self else { return }
             onUnauthorized(self, message)
@@ -162,6 +168,25 @@ final class SessionController {
     func enterBackground() {
         home.enterBackground()
         notifications.enterBackground()
+    }
+}
+
+/// 選んでいるタブをもう一度押したとき、奥の画面を開いていれば標準どおり最初の画面へ戻し、最初の画面にいれば最上部へ動かす。
+@MainActor
+private final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate {
+    private let scrollToTop: (UINavigationController) -> Void
+
+    init(scrollToTop: @escaping (UINavigationController) -> Void) {
+        self.scrollToTop = scrollToTop
+    }
+
+    func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool {
+        guard tab == tabBarController.selectedTab,
+              let navigation = tab.viewController as? UINavigationController,
+              navigation.viewControllers.count == 1
+        else { return true }
+        scrollToTop(navigation)
+        return false
     }
 }
 
