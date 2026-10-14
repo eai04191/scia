@@ -10,6 +10,8 @@ enum DummyMedia {
         let color: UIColor
         let label: String
         let description: String?
+        /// 背景を透明にし、色の部分を半透明の円にする。PNGで渡す。
+        var transparent = false
     }
 
     /// 形の違う4枚。一覧の並べ方と、ビューアでの開閉や拡大を、縦長・横長・正方形・細長で比べられるようにする。
@@ -24,6 +26,11 @@ enum DummyMedia {
     /// - Parameter idPrefix: 添付ファイルのIDの頭に付ける。投稿ごとに変え、ビューアが別の投稿のサムネイルへ戻らないようにする。
     static func attachments(idPrefix: String) -> [MediaAttachment] {
         attachments(specs, idPrefix: idPrefix)
+    }
+
+    /// 透明な部分と半透明な部分を持つ縦長の1枚。開閉で、透明な部分越しの見え方が途中で変わらないかを確かめる。
+    static func singleTransparentAttachment(idPrefix: String) -> [MediaAttachment] {
+        attachments([Spec(size: CGSize(width: 900, height: 1_600), color: .systemPink, label: "5 透過", description: "透明な部分のある画像", transparent: true)], idPrefix: idPrefix)
     }
 
     /// 縦長の1枚。1枚だけの投稿はサムネイルが一覧の幅いっぱいに大きく出るため、バーの下へ戻る開閉を確かめやすい。
@@ -50,9 +57,16 @@ enum DummyMedia {
     private static func dataURL(for spec: Spec) -> URL? {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
+        format.opaque = !spec.transparent
         let image = UIGraphicsImageRenderer(size: spec.size, format: format).image { context in
-            spec.color.setFill()
-            context.fill(CGRect(origin: .zero, size: spec.size))
+            if spec.transparent {
+                spec.color.withAlphaComponent(0.5).setFill()
+                let side = min(spec.size.width, spec.size.height)
+                context.cgContext.fillEllipse(in: CGRect(x: (spec.size.width - side) / 2, y: (spec.size.height - side) / 2, width: side, height: side))
+            } else {
+                spec.color.setFill()
+                context.fill(CGRect(origin: .zero, size: spec.size))
+            }
             let grid = UIBezierPath()
             for x in stride(from: 0, through: spec.size.width, by: 100) {
                 grid.move(to: CGPoint(x: x, y: 0))
@@ -71,6 +85,10 @@ enum DummyMedia {
             ])
             let textSize = text.size()
             text.draw(at: CGPoint(x: (spec.size.width - textSize.width) / 2, y: (spec.size.height - textSize.height) / 2))
+        }
+        if spec.transparent {
+            guard let data = image.pngData() else { return nil }
+            return URL(string: "data:image/png;base64,\(data.base64EncodedString())")
         }
         guard let data = image.jpegData(compressionQuality: 0.8) else { return nil }
         return URL(string: "data:image/jpeg;base64,\(data.base64EncodedString())")

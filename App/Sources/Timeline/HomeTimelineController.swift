@@ -399,6 +399,9 @@ extension HomeTimelineController {
             UIAction(title: "縦長1枚のダミー投稿を流す", image: UIImage(systemName: "rectangle.portrait")) { [weak self] _ in
                 self?.streamDummyMediaStatus(content: "ビューアの確認用に縦長の画像を1枚添付", attachments: DummyMedia.singleTallAttachment)
             },
+            UIAction(title: "透過画像1枚のダミー投稿を流す", image: UIImage(systemName: "circle.dashed")) { [weak self] _ in
+                self?.streamDummyMediaStatus(content: "ビューアの確認用に透明な部分のある画像を1枚添付", attachments: DummyMedia.singleTransparentAttachment)
+            },
             UIAction(title: "直近の投稿を取りこぼして再接続", image: UIImage(systemName: "bolt.horizontal")) { [weak self] _ in
                 self?.simulateMissedWhileDisconnected()
             },
