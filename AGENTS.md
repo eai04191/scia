@@ -35,6 +35,10 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - Mastodon APIの仕様は推測せず、公式ドキュメント（https://docs.joinmastodon.org/ ）で確認する。サーバー実装による差異（glitch-soc、Fedibird、GoToSocialなど）は、必要になった時点で個別に対応してテストに残す
 - Swift 6のstrict concurrencyを有効にしている。`@unchecked Sendable`や`nonisolated(unsafe)`で警告を消さず、設計で解決する
 
+## 文言
+
+- 使う人に見える文言では、対象が画像だけなら「画像」、動画・GIF・音声を含むなら「メディア」と書く。代替テキストや閲覧注意のように種類を問わず付くものを、「画像」と書かない
+
 ## 手触りに関わる変更の検証
 
 手触りは最終的にユーザーが実機で判定する。agentは、判定に入る前に測れるものを測っておく。
