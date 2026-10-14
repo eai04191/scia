@@ -13,6 +13,17 @@
     "acct": "alice",
     "display_name": "Alice",
     "avatar": "https://example.social/avatars/alice.png",
+    "avatar_static": "https://example.social/avatars/alice.png",
+    "header": "https://example.social/headers/original/missing.png",
+    "header_static": "https://example.social/headers/original/missing.png",
+    "locked": false,
+    "bot": false,
+    "note": "",
+    "url": "https://example.social/@alice",
+    "fields": [],
+    "followers_count": 0,
+    "following_count": 0,
+    "statuses_count": 0,
     "emojis": []
   },
   "media_attachments": [

@@ -29,6 +29,21 @@ struct StatusDecodingTests {
         #expect(status.settingReblogged(true).settingReblogged(false).settingReblogged(false).reblogsCount == 0)
     }
 
+    @Test func decodesAccountProfile() throws {
+        let url = try #require(Bundle.module.url(forResource: "account", withExtension: "json", subdirectory: "Fixtures"))
+        let account = try MastodonDecoder.make().decode(Account.self, from: Data(contentsOf: url))
+
+        #expect(account.avatarStatic.absoluteString == "https://example.social/cache/accounts/avatars/static/bob.png")
+        #expect(account.headerStatic.absoluteString == "https://example.social/cache/accounts/headers/static/bob.png")
+        #expect(account.url.absoluteString == "https://remote.example/@bob")
+        #expect(account.locked)
+        #expect(account.bot)
+        #expect(account.statusesCount == 56_789)
+        #expect(account.fields.map(\.name) == ["Website", "好きなもの"])
+        #expect(account.fields[0].verifiedAt == Date(timeIntervalSince1970: 1_735_787_045))
+        #expect(account.fields[1].verifiedAt == nil)
+    }
+
     @Test func decodesDateWithoutFractionalSeconds() throws {
         struct Wrapper: Decodable { let createdAt: Date }
         let json = Data(#"{"created_at":"2026-10-13T03:21:45Z"}"#.utf8)

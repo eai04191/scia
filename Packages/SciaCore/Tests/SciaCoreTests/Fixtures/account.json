@@ -1,0 +1,41 @@
+{
+  "id": "2",
+  "username": "bob",
+  "acct": "bob@remote.example",
+  "display_name": "Bob :blobcat:",
+  "locked": true,
+  "bot": true,
+  "discoverable": true,
+  "group": false,
+  "created_at": "2018-04-01T00:00:00.000Z",
+  "note": "<p>リモートのテスト用アカウント</p>",
+  "url": "https://remote.example/@bob",
+  "avatar": "https://example.social/cache/accounts/avatars/bob.gif",
+  "avatar_static": "https://example.social/cache/accounts/avatars/static/bob.png",
+  "header": "https://example.social/cache/accounts/headers/bob.png",
+  "header_static": "https://example.social/cache/accounts/headers/static/bob.png",
+  "followers_count": 1200,
+  "following_count": 340,
+  "statuses_count": 56789,
+  "last_status_at": "2026-10-14",
+  "emojis": [
+    {
+      "shortcode": "blobcat",
+      "url": "https://example.social/emoji/blobcat.png",
+      "static_url": "https://example.social/emoji/blobcat_static.png",
+      "visible_in_picker": true
+    }
+  ],
+  "fields": [
+    {
+      "name": "Website",
+      "value": "<a href=\"https://bob.example\" rel=\"nofollow noopener me\" target=\"_blank\"><span class=\"invisible\">https://</span><span class=\"\">bob.example</span><span class=\"invisible\"></span></a>",
+      "verified_at": "2025-01-02T03:04:05.000+00:00"
+    },
+    {
+      "name": "好きなもの",
+      "value": "ねこ",
+      "verified_at": null
+    }
+  ]
+}
