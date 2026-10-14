@@ -69,6 +69,24 @@ public enum TuningCatalog {
         defaultValue: 6
     )
 
+    /// 投稿の左に出すアイコンの一辺。
+    public static let avatarSize = NumberTuning(
+        id: "timeline.avatarSize",
+        title: "アイコンの大きさ（pt）",
+        range: 24...64,
+        step: 2,
+        defaultValue: 40
+    )
+
+    /// ブーストした人の行に出すアイコンの一辺。
+    public static let boosterAvatarSize = NumberTuning(
+        id: "timeline.boosterAvatarSize",
+        title: "ブーストした人のアイコンの大きさ（pt）",
+        range: 12...28,
+        step: 1,
+        defaultValue: 16
+    )
+
     /// ストリーミングで届いた新着を、まとめてタイムラインに挿入する間隔。最初の新着が届いてからこの時間待つ。
     public static let insertionInterval = NumberTuning(
         id: "streaming.insertionInterval",
@@ -285,6 +303,8 @@ public enum TuningCatalog {
     public static let sections: [TuningSection] = [
         TuningSection(id: "timeline", title: "タイムラインの見た目", items: [
             .number(paragraphSpacing),
+            .number(avatarSize),
+            .number(boosterAvatarSize),
             .number(mediaTallestAspectRatio),
             .number(mediaThumbnailUpscaleTolerance),
         ]),
