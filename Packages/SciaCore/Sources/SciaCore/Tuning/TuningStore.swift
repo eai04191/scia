@@ -5,14 +5,18 @@ public import Observation
 @MainActor
 @Observable
 public final class TuningStore {
+    public let sections: [TuningSection]
     public let items: [TuningItem]
     private var numbers: [String: Double] = [:]
     private var toggles: [String: Bool] = [:]
     @ObservationIgnored private let defaults: UserDefaults?
 
     /// - Parameter defaults: 変更した値の保存先。nilなら保存せず、起動のたびに既定値へ戻る。
-    public init(items: [TuningItem] = TuningCatalog.items, defaults: UserDefaults?) {
+    public init(sections: [TuningSection] = TuningCatalog.sections, defaults: UserDefaults?) {
+        let items = sections.flatMap(\.items)
         precondition(Set(items.map(\.id)).count == items.count, "チューニング項目のidが重複しています")
+        precondition(Set(sections.map(\.id)).count == sections.count, "チューニングのカテゴリのidが重複しています")
+        self.sections = sections
         self.items = items
         self.defaults = defaults
         for item in items {
@@ -49,13 +53,32 @@ public final class TuningStore {
         defaults?.set(value, forKey: Self.key(tuning.id))
     }
 
+    /// いずれかの項目が既定値から変わっているか。
+    public func isModified(_ section: TuningSection) -> Bool {
+        section.items.contains { item in
+            switch item {
+            case .number(let tuning): value(of: tuning) != tuning.defaultValue
+            case .toggle(let tuning): value(of: tuning) != tuning.defaultValue
+            }
+        }
+    }
+
+    /// カテゴリの項目を既定値へ戻す。
+    public func reset(_ section: TuningSection) {
+        reset(section.items)
+    }
+
     /// すべての項目を既定値へ戻す。
     public func resetAll() {
+        reset(items)
+    }
+
+    private func reset(_ items: [TuningItem]) {
         for item in items {
             defaults?.removeObject(forKey: Self.key(item.id))
+            numbers[item.id] = nil
+            toggles[item.id] = nil
         }
-        numbers.removeAll()
-        toggles.removeAll()
     }
 
     private static func key(_ id: String) -> String {

@@ -6,6 +6,8 @@ import SwiftUI
 struct TuningPanelView: View {
     let store: TuningStore
     @Environment(\.dismiss) private var dismiss
+    /// 開いているカテゴリのid。調整のたびにパネルを開き直すので、開き直しても前の状態で出す。
+    @AppStorage("tuningPanel.expandedSections") private var expandedSectionIDs = ""
 
     var body: some View {
         NavigationStack {
@@ -14,17 +16,32 @@ struct TuningPanelView: View {
                     ContentUnavailableView("調整できる項目はまだありません", systemImage: "slider.horizontal.3")
                 } else {
                     Form {
-                        ForEach(store.items) { item in
-                            row(for: item)
+                        ForEach(store.sections) { section in
+                            Section {
+                                DisclosureGroup(isExpanded: isExpanded(section)) {
+                                    ForEach(section.items) { item in
+                                        row(for: item)
+                                    }
+                                    Button("このカテゴリを既定値に戻す", role: .destructive) { store.reset(section) }
+                                        .disabled(!store.isModified(section))
+                                } label: {
+                                    LabeledContent(section.title) {
+                                        if store.isModified(section) {
+                                            Text("変更あり")
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
+                    .listSectionSpacing(.compact)
                 }
             }
             .navigationTitle("チューニング")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("既定値に戻す", role: .destructive) { store.resetAll() }
+                    Button("すべて戻す", role: .destructive) { store.resetAll() }
                         .disabled(store.items.isEmpty)
                 }
                 ToolbarItem(placement: .confirmationAction) {
@@ -32,6 +49,19 @@ struct TuningPanelView: View {
                 }
             }
         }
+    }
+
+    private func isExpanded(_ section: TuningSection) -> Binding<Bool> {
+        Binding(
+            get: { expandedSectionIDs.split(separator: ",").contains(Substring(section.id)) },
+            set: { isExpanded in
+                var ids = expandedSectionIDs.split(separator: ",").map(String.init).filter { $0 != section.id }
+                if isExpanded {
+                    ids.append(section.id)
+                }
+                expandedSectionIDs = ids.joined(separator: ",")
+            }
+        )
     }
 
     @ViewBuilder

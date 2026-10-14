@@ -11,6 +11,20 @@ public enum TuningItem: Sendable, Identifiable {
     }
 }
 
+/// チューニングパネルで項目をまとめて見せるカテゴリ。
+public struct TuningSection: Sendable, Identifiable {
+    /// パネルの開閉状態の保存に使うキー。カテゴリごとに一意にする。
+    public let id: String
+    public let title: String
+    public let items: [TuningItem]
+
+    public init(id: String, title: String, items: [TuningItem]) {
+        self.id = id
+        self.title = title
+        self.items = items
+    }
+}
+
 /// スライダーで調整する数値。
 public struct NumberTuning: Sendable, Identifiable {
     /// 保存に使うキー。項目ごとに一意にする。
@@ -241,26 +255,36 @@ public enum TuningCatalog {
         )
     }
 
-    public static let items: [TuningItem] = [
-        .number(paragraphSpacing),
-        .number(insertionInterval),
-        .toggle(followsNewArrivalsAtTop),
-        .toggle(animatesInsertionAtTop),
-        .number(fillPageLimit),
-        .number(gapAutoLoadDistance),
-        .number(mediaTallestAspectRatio),
-        .number(mediaDismissDistance),
-        .number(mediaDismissVelocity),
-        .number(mediaDismissSmallestScale),
-        .number(mediaDismissFadeDistance),
-        .number(mediaDismissRestoreDuration),
-        .number(mediaOpenDuration),
-        .number(mediaCloseDuration),
-        .number(mediaTransitionBounce),
-        .toggle(mediaCloseDrawsUnderBars),
-        .number(mediaOpenHandoffEnd),
-        .number(mediaOpenBarOverlapFadeStart),
-        .number(mediaCloseHandoffStart),
-        .number(mediaCloseBarOverlapFadeEnd),
+    public static let sections: [TuningSection] = [
+        TuningSection(id: "timeline", title: "タイムラインの見た目", items: [
+            .number(paragraphSpacing),
+            .number(mediaTallestAspectRatio),
+        ]),
+        TuningSection(id: "streaming", title: "新着と読み込み", items: [
+            .number(insertionInterval),
+            .toggle(followsNewArrivalsAtTop),
+            .toggle(animatesInsertionAtTop),
+            .number(fillPageLimit),
+            .number(gapAutoLoadDistance),
+        ]),
+        TuningSection(id: "media.dismiss", title: "ビューア：閉じる操作", items: [
+            .number(mediaDismissDistance),
+            .number(mediaDismissVelocity),
+            .number(mediaDismissSmallestScale),
+            .number(mediaDismissFadeDistance),
+            .number(mediaDismissRestoreDuration),
+        ]),
+        TuningSection(id: "media.transition", title: "ビューア：開閉の動き", items: [
+            .number(mediaOpenDuration),
+            .number(mediaCloseDuration),
+            .number(mediaTransitionBounce),
+        ]),
+        TuningSection(id: "media.bars", title: "ビューア：バーとの重なり", items: [
+            .toggle(mediaCloseDrawsUnderBars),
+            .number(mediaOpenHandoffEnd),
+            .number(mediaOpenBarOverlapFadeStart),
+            .number(mediaCloseHandoffStart),
+            .number(mediaCloseBarOverlapFadeEnd),
+        ]),
     ]
 }
