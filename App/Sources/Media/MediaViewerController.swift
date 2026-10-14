@@ -993,6 +993,45 @@ class MediaPageController: UIViewController {
 
     /// 画面の下で、ビューアの説明に隠れている高さ。ページの中のボタンをこれより上に出す。
     var bottomCoveredHeight: CGFloat = 0
+
+    /// 長押しのメニューを指の位置に出すための、見えない小さな目印。
+    private let menuAnchor = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+
+    /// `target`の長押しで、`menuElements`のメニューを指の位置に出す。
+    func addLongPressMenu(to target: UIView) {
+        target.addInteraction(UIContextMenuInteraction(delegate: self))
+        menuAnchor.isUserInteractionEnabled = false
+        view.addSubview(menuAnchor)
+    }
+
+    /// 長押しした位置でメニューを出すか。`location`は`source`の座標。ほかの操作に長押しを譲る場所ではfalseを返す。
+    func offersMenu(at location: CGPoint, in source: UIView) -> Bool { true }
+}
+
+extension MediaPageController: UIContextMenuInteractionDelegate {
+    /// メニューボタンと同じメニューを出す。出すものがなければ出さない。
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
+        guard let source = interaction.view, offersMenu(at: location, in: source),
+              let elements = menuElements?(), !elements.isEmpty
+        else { return nil }
+        menuAnchor.center = source.convert(location, to: view)
+        return UIContextMenuConfiguration(actionProvider: { _ in UIMenu(children: elements) })
+    }
+
+    /// 全画面の画像が持ち上がって見えないよう、指の位置の見えない目印をプレビューにして、メニューだけを指の位置に出す。
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+        anchorPreview()
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, dismissalPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+        anchorPreview()
+    }
+
+    private func anchorPreview() -> UITargetedPreview {
+        let parameters = UIPreviewParameters()
+        parameters.backgroundColor = .clear
+        return UITargetedPreview(view: menuAnchor, parameters: parameters)
+    }
 }
 
 /// 画像のページ。一覧のサムネイルをすぐに出し、元の大きさの画像が届いたら差し替える。
@@ -1009,8 +1048,6 @@ final class ImagePageController: MediaPageController {
     private(set) var hasFinishedAnalysis = false
     /// Live Textのボタンの、システムが決めた既定の余白。説明に重なる分はこれに足す。
     private lazy var baseLiveTextInsets = liveText.supplementaryInterfaceContentInsets
-    /// 長押しのメニューを指の位置に出すための、見えない小さな目印。
-    private let menuAnchor = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
     /// 元のファイルが届いていれば、共有シートに渡すもの。
     private(set) var shareItem: MediaShareItem?
     /// 一覧で読み込んだサムネイル。
@@ -1064,6 +1101,13 @@ final class ImagePageController: MediaPageController {
         liveText.supplementaryInterfaceContentInsets = insets
     }
 
+    /// 長押しした位置に文字やリンクがあれば、メニューを出さずにLive Textの選択に任せる。
+    override func offersMenu(at location: CGPoint, in source: UIView) -> Bool {
+        guard let imageView = liveText.view else { return true }
+        let point = source.convert(location, to: imageView)
+        return !liveText.hasInteractiveItem(at: point) && !liveText.hasText(at: point)
+    }
+
     override var contentFrame: CGRect {
         zoomView.imageFrame.map { zoomView.convert($0, to: view) } ?? view.bounds
     }
@@ -1088,9 +1132,7 @@ final class ImagePageController: MediaPageController {
         view.addSubview(zoomView)
         liveText.preferredInteractionTypes = [.textSelection, .dataDetectors]
         zoomView.addImageInteraction(liveText)
-        zoomView.addInteraction(UIContextMenuInteraction(delegate: self))
-        menuAnchor.isUserInteractionEnabled = false
-        view.addSubview(menuAnchor)
+        addLongPressMenu(to: zoomView)
         spinner.color = .white
         failureLabel.text = "画像を読み込めませんでした"
         failureLabel.textColor = .secondaryLabel
@@ -1164,38 +1206,6 @@ extension ImagePageController {
                 self.hasFinishedAnalysis = true
             }
         }
-    }
-}
-
-extension ImagePageController: UIContextMenuInteractionDelegate {
-    /// 長押しした位置に文字やリンクがあれば、メニューを出さずにLive Textの選択に任せる。なければメニューボタンと同じメニューを出す。
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
-        if let imageView = liveText.view, let source = interaction.view {
-            let point = source.convert(location, to: imageView)
-            if liveText.hasInteractiveItem(at: point) || liveText.hasText(at: point) {
-                return nil
-            }
-        }
-        guard let elements = menuElements?(), !elements.isEmpty else { return nil }
-        if let source = interaction.view {
-            menuAnchor.center = source.convert(location, to: view)
-        }
-        return UIContextMenuConfiguration(actionProvider: { _ in UIMenu(children: elements) })
-    }
-
-    /// 全画面の画像が持ち上がって見えないよう、指の位置の見えない目印をプレビューにして、メニューだけを指の位置に出す。
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
-        anchorPreview()
-    }
-
-    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, dismissalPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
-        anchorPreview()
-    }
-
-    private func anchorPreview() -> UITargetedPreview {
-        let parameters = UIPreviewParameters()
-        parameters.backgroundColor = .clear
-        return UITargetedPreview(view: menuAnchor, parameters: parameters)
     }
 }
 
