@@ -1,6 +1,7 @@
 import SciaCore
 import Testing
 import UIKit
+import VisionKit
 @testable import Scia
 
 /// 閉じるボタンを置かないため、ほかの閉じ方とメニューが使えることを確かめる。
@@ -177,7 +178,8 @@ struct MediaViewerControllerTests {
     }
 
     /// 画像から文字を読み取れたら、メニューからその全文を翻訳できる。文字のない画像では出さない。
-    @Test func menuOffersTranslationOfRecognizedText() async throws {
+    @Test(.enabled(if: ImageAnalyzer.isSupported, "Live Textに対応していない環境では解析しない"))
+    func menuOffersTranslationOfRecognizedText() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         let format = UIGraphicsImageRendererFormat()
@@ -193,8 +195,7 @@ struct MediaViewerControllerTests {
 
         let plain = presentLoadingViewer(on: harness, data: try pngData())
         defer { plain.dismiss(animated: false) }
-        try await waitUntil { menuAction("写真に保存", in: plain)?.attributes.isEmpty == true }
-        try await Task.sleep(for: .seconds(1))
+        try await waitUntil { plain.currentImagePage?.hasFinishedAnalysis == true }
         #expect(menuAction("画像の文字を翻訳", in: plain) == nil)
     }
 

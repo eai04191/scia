@@ -336,6 +336,11 @@ final class MediaViewerController: UIViewController {
         return currentAttachment.url ?? currentAttachment.remoteUrl
     }
 
+    /// 表示中のページが画像なら、そのページ。
+    var currentImagePage: ImagePageController? {
+        pages[currentIndex] as? ImagePageController
+    }
+
     /// 表示中の画像の元のファイル。届くまではnil。
     private var currentOriginalFile: URL? {
         (pages[currentIndex] as? ImagePageController)?.shareItem?.file
@@ -1000,6 +1005,8 @@ final class ImagePageController: MediaPageController {
     /// 画像の中の文字を選んだり、リンクや電話番号を開いたりする（Live Text）。元の画像が届いてから解析する。
     private let liveText = ImageAnalysisInteraction()
     private var analysisTask: Task<Void, Never>?
+    /// 元の画像の解析を終えた。文字が見つからなかったときや、解析に失敗したときも含む。対応していない端末では変わらない。
+    private(set) var hasFinishedAnalysis = false
     /// Live Textのボタンの、システムが決めた既定の余白。説明に重なる分はこれに足す。
     private lazy var baseLiveTextInsets = liveText.supplementaryInterfaceContentInsets
     /// 長押しのメニューを指の位置に出すための、見えない小さな目印。
@@ -1146,8 +1153,11 @@ extension ImagePageController {
                 let analysis = try await Self.analyzer.analyze(image, configuration: ImageAnalyzer.Configuration([.text, .machineReadableCode]))
                 guard let self, !Task.isCancelled else { return }
                 self.liveText.analysis = analysis
+                self.hasFinishedAnalysis = true
             } catch {
                 SciaLog.logger(category: "media").error("live text analysis failed: \(error.localizedDescription, privacy: .public)")
+                guard let self, !Task.isCancelled else { return }
+                self.hasFinishedAnalysis = true
             }
         }
     }
