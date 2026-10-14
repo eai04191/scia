@@ -388,23 +388,25 @@ final class HomeTimelineController {
 
 extension HomeTimelineController {
     /// 投稿しなくても、新着の挿入やギャップの表示をシミュレーターで確かめるための操作。
-    fileprivate func makeDebugActions() -> [UIAction] {
+    fileprivate func makeDebugActions() -> [UIMenuElement] {
         [
-            UIAction(title: "ダミーの新着を流す", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
-                self?.streamDummyArrivals(count: 10)
-            },
-            UIAction(title: "画像付きのダミー投稿を流す", image: UIImage(systemName: "photo.badge.plus")) { [weak self] _ in
-                self?.streamDummyMediaStatus(content: "ビューアの確認用に4枚の画像を添付", attachments: DummyMedia.attachments)
-            },
-            UIAction(title: "縦長1枚のダミー投稿を流す", image: UIImage(systemName: "rectangle.portrait")) { [weak self] _ in
-                self?.streamDummyMediaStatus(content: "ビューアの確認用に縦長の画像を1枚添付", attachments: DummyMedia.singleTallAttachment)
-            },
-            UIAction(title: "透過画像1枚のダミー投稿を流す", image: UIImage(systemName: "circle.dashed")) { [weak self] _ in
-                self?.streamDummyMediaStatus(content: "ビューアの確認用に透明な部分のある画像を1枚添付", attachments: DummyMedia.singleTransparentAttachment)
-            },
-            UIAction(title: "動画とGIFのダミー投稿を流す", image: UIImage(systemName: "play.rectangle")) { [weak self] _ in
-                self?.streamDummyVideoStatus()
-            },
+            UIMenu(title: "ダミー投稿を流す", image: UIImage(systemName: "square.stack"), children: [
+                UIAction(title: "新着10件", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
+                    self?.streamDummyArrivals(count: 10)
+                },
+                UIAction(title: "画像4枚", image: UIImage(systemName: "photo.badge.plus")) { [weak self] _ in
+                    self?.streamDummyMediaStatus(content: "ビューアの確認用に4枚の画像を添付", attachments: DummyMedia.attachments)
+                },
+                UIAction(title: "縦長の画像1枚", image: UIImage(systemName: "rectangle.portrait")) { [weak self] _ in
+                    self?.streamDummyMediaStatus(content: "ビューアの確認用に縦長の画像を1枚添付", attachments: DummyMedia.singleTallAttachment)
+                },
+                UIAction(title: "透過画像1枚", image: UIImage(systemName: "circle.dashed")) { [weak self] _ in
+                    self?.streamDummyMediaStatus(content: "ビューアの確認用に透明な部分のある画像を1枚添付", attachments: DummyMedia.singleTransparentAttachment)
+                },
+                UIAction(title: "動画とGIF", image: UIImage(systemName: "play.rectangle")) { [weak self] _ in
+                    self?.streamDummyVideoStatus()
+                },
+            ]),
             UIAction(title: "直近の投稿を取りこぼして再接続", image: UIImage(systemName: "bolt.horizontal")) { [weak self] _ in
                 self?.simulateMissedWhileDisconnected()
             },

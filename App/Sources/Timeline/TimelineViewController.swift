@@ -62,7 +62,7 @@ final class TimelineViewController: UIViewController {
     var onGapApproach: ((String, TimelineStore.GapDirection) -> Void)?
     #if DEBUG
     /// デバッグメニューに出す、このタイムライン用の検証の操作。表示より前に設定する。
-    var debugActions: [UIAction] = []
+    var debugActions: [UIMenuElement] = []
     #endif
 
     /// 末尾から何件手前で古い投稿の読み込みを始めるか。
