@@ -22,4 +22,16 @@ struct AppSettingsTests {
         AppSettings(defaults: defaults).usesOriginalThumbnailsOnExpensiveNetwork = false
         #expect(!AppSettings(defaults: defaults).usesOriginalThumbnailsOnExpensiveNetwork)
     }
+
+    /// 中身のない代替テキストにALTが付くと、説明があるという目印として当てにならないため、既定で除く。
+    @Test func ignoresUselessAltTextByDefault() throws {
+        let settings = AppSettings(defaults: try makeDefaults())
+        #expect(settings.ignoresUselessAltText)
+    }
+
+    @Test func persistsIgnoresUselessAltText() throws {
+        let defaults = try makeDefaults()
+        AppSettings(defaults: defaults).ignoresUselessAltText = false
+        #expect(!AppSettings(defaults: defaults).ignoresUselessAltText)
+    }
 }

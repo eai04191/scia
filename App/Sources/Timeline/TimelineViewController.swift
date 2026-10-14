@@ -171,6 +171,7 @@ final class TimelineViewController: UIViewController {
             _ = tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
             _ = network.conditions
             _ = settings.usesOriginalThumbnailsOnExpensiveNetwork
+            _ = settings.ignoresUselessAltText
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }

@@ -17,6 +17,13 @@ struct SettingsView: View {
                 } footer: {
                     Text("オフにすると、モバイル通信とインターネット共有では、サーバーが縮小した画像を一覧に表示します。低データモードでは、この設定にかかわらず縮小した画像を表示します。")
                 }
+                Section {
+                    Toggle("役に立たない代替テキストを無視する", isOn: $settings.ignoresUselessAltText)
+                } header: {
+                    Text("代替テキスト")
+                } footer: {
+                    Text("代替テキストが「undefined」や「Screenshot」だけのメディアを、代替テキストのないメディアとして扱います。空白だけの代替テキストは、この設定にかかわらず無視します。")
+                }
             }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)

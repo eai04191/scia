@@ -13,12 +13,19 @@ public final class AppSettings {
         didSet { defaults.set(usesOriginalThumbnailsOnExpensiveNetwork, forKey: Keys.usesOriginalThumbnailsOnExpensiveNetwork) }
     }
 
+    /// 「undefined」や「Screenshot」のような、説明にならない代替テキストを付いていないものとして扱う。
+    public var ignoresUselessAltText: Bool {
+        didSet { defaults.set(ignoresUselessAltText, forKey: Keys.ignoresUselessAltText) }
+    }
+
     private enum Keys {
         static let usesOriginalThumbnailsOnExpensiveNetwork = "settings.usesOriginalThumbnailsOnExpensiveNetwork"
+        static let ignoresUselessAltText = "settings.ignoresUselessAltText"
     }
 
     public init(defaults: UserDefaults) {
         self.defaults = defaults
         usesOriginalThumbnailsOnExpensiveNetwork = defaults.object(forKey: Keys.usesOriginalThumbnailsOnExpensiveNetwork) as? Bool ?? true
+        ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
     }
 }

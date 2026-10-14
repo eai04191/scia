@@ -9,7 +9,7 @@ extension TimelineViewController {
         guard let shown = status?.displayed, let media = mediaContent(for: shown) else { return configuration }
         configuration.media = media
         configuration.onSelectMedia = { [weak self] index, grid in
-            self?.openMedia(shown.mediaAttachments, at: index, from: grid)
+            self?.openMedia(media.attachments, at: index, from: grid)
         }
         configuration.onRevealMedia = { [weak self] in
             self?.revealMedia(of: shown.id)
@@ -23,11 +23,12 @@ extension TimelineViewController {
     }
 
     /// 閲覧注意の投稿と、注意書きのある投稿は、タップするまで添付ファイルを覆う。
+    /// 説明にならない代替テキストは、ALTの目印にもビューアにも読み上げにも出さないよう、ここで除いておく。
     func mediaContent(for status: Status) -> MediaGridView.Content? {
         guard !status.mediaAttachments.isEmpty else { return nil }
         let isSensitive = status.sensitive || !status.spoilerText.isEmpty
         return MediaGridView.Content(
-            attachments: status.mediaAttachments,
+            attachments: status.mediaAttachments.map { $0.filteringAltText(ignoresUseless: settings.ignoresUselessAltText) },
             isCovered: isSensitive && !revealedMediaStatusIDs.contains(status.id),
             tallestAspectRatio: tuning.value(of: TuningCatalog.mediaTallestAspectRatio),
             thumbnailPolicy: MediaThumbnailPolicy(
