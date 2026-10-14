@@ -48,4 +48,19 @@ struct ZoomingImageViewTests {
         #expect(!view.isZoomedIn)
         #expect(abs((view.imageFrame?.width ?? 0) - 400) < 0.5)
     }
+
+    /// 一時的に小さい枠になっている間に画像が届き、レイアウトの前に元の大きさへ戻っても、戻った大きさに収める。
+    /// 開く遷移の途中などで起き、小さい枠で決めた倍率のまま、画像が極端に小さく出ていた。
+    @Test func fitsToRestoredBoundsWhenImageArrivesWhileTemporarilySmall() {
+        let view = ZoomingImageView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        view.image = image(width: 400, height: 300)
+        view.layoutIfNeeded()
+
+        view.frame = CGRect(x: 0, y: 0, width: 40, height: 80)
+        view.image = image(width: 1_600, height: 1_200)
+        view.frame = CGRect(x: 0, y: 0, width: 400, height: 800)
+        view.layoutIfNeeded()
+
+        #expect(abs((view.imageFrame?.width ?? 0) - 400) < 0.5)
+    }
 }

@@ -56,12 +56,12 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         fatalError("init(coder:) has not been implemented")
     }
 
-    private var lastBoundsSize: CGSize = .zero
+    /// 倍率を決めたときの大きさ。画像の差し替えでも倍率を決め直すため、レイアウトの時点の大きさではなく、こちらと比べる。
+    private var fittedBoundsSize: CGSize = .zero
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        if bounds.size != lastBoundsSize {
-            lastBoundsSize = bounds.size
+        if bounds.size != fittedBoundsSize {
             updateZoomScales(resetting: true)
         }
         centerImage()
@@ -71,6 +71,7 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
     private func updateZoomScales(resetting: Bool) {
         guard let size = imageView.image?.size, size.width > 0, size.height > 0, bounds.width > 0, bounds.height > 0 else { return }
         let previousMinimum = minimumZoomScale
+        fittedBoundsSize = bounds.size
         let fit = min(bounds.width / size.width, bounds.height / size.height)
         let previousScale = zoomScale
         let previousImageWidth = imageView.frame.width
