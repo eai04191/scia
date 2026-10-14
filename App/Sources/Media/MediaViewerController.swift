@@ -1,4 +1,5 @@
 import AVKit
+import CoreImage
 import os
 import SciaCore
 import UIKit
@@ -954,6 +955,9 @@ final class ImagePageController: MediaPageController {
 final class PlayerPageController: MediaPageController {
     private let playerController = AVPlayerViewController()
     private var looper: AVPlayerLooper?
+    private var currentItemObservation: NSKeyValueObservation?
+    /// 動画の画素を表示の向きにする回し方。端末を縦にして撮った動画は、横向きの画素に回転情報を付けて保存されている。
+    private var frameOrientation = UIImage.Orientation.up
 
     /// 動画の表示の準備が整うまでは、添付ファイルの縦横比で画面に収めた枠を返す。開く遷移はその準備より先に始まるため。
     override var contentFrame: CGRect {
@@ -986,6 +990,52 @@ final class PlayerPageController: MediaPageController {
             playerController.view.addGestureRecognizer(tap)
         } else {
             playerController.player = AVPlayer(playerItem: item)
+        }
+        Task { [weak self] in
+            guard let track = try? await item.asset.loadTracks(withMediaType: .video).first,
+                  let transform = try? await track.load(.preferredTransform)
+            else { return }
+            self?.frameOrientation = Self.orientation(of: transform)
+        }
+        // GIFをくり返す`AVPlayerLooper`は、テンプレートの複製を再生するたびに作り直すため、再生する項目が替わるたびに出口を付け直す。
+        currentItemObservation = playerController.player?.observe(\.currentItem, options: [.initial]) { [weak self] _, _ in
+            Task { @MainActor [weak self] in
+                self?.attachFrameOutputs()
+            }
+        }
+    }
+
+    /// 再生しているコマ。つかんだり閉じたりしたときに、写しを最初のコマ（サムネイル）へ戻さず、その場の絵から動かすために使う。
+    /// まだコマを描いていなければnilで、サムネイルを使う。
+    override var transitionImage: UIImage? {
+        guard let item = playerController.player?.currentItem,
+              let output = item.outputs.lazy.compactMap({ $0 as? AVPlayerItemVideoOutput }).first,
+              let buffer = output.copyPixelBuffer(forItemTime: item.currentTime(), itemTimeForDisplay: nil)
+        else { return nil }
+        let image = CIImage(cvPixelBuffer: buffer)
+        guard let cgImage = CIContext().createCGImage(image, from: image.extent) else { return nil }
+        // 取り出した画素は回転情報を反映していないため、再生の表示と同じ向きにする。
+        return UIImage(cgImage: cgImage, scale: 1, orientation: frameOrientation)
+    }
+
+    /// 動画の回転情報を、画像の向きにする。回転情報は90°刻みなので、最も近い向きに丸める。
+    static func orientation(of transform: CGAffineTransform) -> UIImage.Orientation {
+        let quarterTurns = Int((atan2(transform.b, transform.a) / (.pi / 2)).rounded())
+        switch (quarterTurns % 4 + 4) % 4 {
+        case 1: return .right
+        case 2: return .down
+        case 3: return .left
+        default: return .up
+        }
+    }
+
+    /// 再生しているコマを取り出せるようにする。AVPlayerLayerの絵は描き写せないため、映像の出口を別に付ける。
+    /// 再生を待っている項目にも付け、くり返しで次の項目に替わった直後から取り出せるようにする。
+    private func attachFrameOutputs() {
+        guard let player = playerController.player else { return }
+        let items = (player as? AVQueuePlayer)?.items() ?? player.currentItem.map { [$0] } ?? []
+        for item in items where !item.outputs.contains(where: { $0 is AVPlayerItemVideoOutput }) {
+            item.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]))
         }
     }
 

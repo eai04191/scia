@@ -199,6 +199,16 @@ struct MediaViewerControllerTests {
         viewer.dismiss(animated: false)
     }
 
+    /// 動画の回転情報から、再生中のコマを表示と同じ向きにする回し方を決める。端末を縦にして撮った動画は右へ90°回す。
+    @Test func frameOrientationFollowsVideoRotation() {
+        #expect(PlayerPageController.orientation(of: .identity) == .up)
+        #expect(PlayerPageController.orientation(of: CGAffineTransform(rotationAngle: .pi / 2)) == .right)
+        #expect(PlayerPageController.orientation(of: CGAffineTransform(rotationAngle: .pi)) == .down)
+        #expect(PlayerPageController.orientation(of: CGAffineTransform(rotationAngle: -.pi / 2)) == .left)
+        // 回転のほかに平行移動を含んでいても、向きだけで決める。
+        #expect(PlayerPageController.orientation(of: CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 1_080, ty: 0)) == .right)
+    }
+
     /// 手元にプレビューもぼかしもない画像でも、開く途中に元の画像が届いたら、写しをその画像に差し替える。
     @Test func morphFollowsImageThatArrivesWhileOpening() async throws {
         let harness = try TimelineHarness()

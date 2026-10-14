@@ -134,6 +134,8 @@ final class MediaTileView: UIButton {
     private var loadTask: Task<Void, Never>?
     /// いま描いている画像の出どころ。同じなら描き直さない。
     private var source: Source?
+    /// 動画やGIFのように、ビューアではサムネイルと違うコマを描く添付ファイル。
+    private var showsMovingImage = false
 
     private struct Source: Equatable {
         /// 読み込む画像。閲覧注意で覆っている間はnilにし、通信しない。
@@ -184,10 +186,20 @@ final class MediaTileView: UIButton {
     }
 
     /// 画像の上に重ねている印（ALT、GIF、動画の再生マーク、残りの枚数）の写し。ビューアが動かす画像の写しに載せて、サムネイルとのあいだを一緒に動かす。
+    /// 動画とGIFではサムネイルの画像も含める。ビューアの写しは再生していたコマを描くため、印と一緒にサムネイルへ近づくほど濃くし、着地で絵が切り替わらないようにする。
+    /// 画像では含めない。写しとサムネイルが同じ絵で、重ねると透明な部分が濃く見えるため。
     /// 写しの大きさが変わっても、サムネイルと同じ角からの位置を保つ。ラベルは画像にし、全体を覆う残りの枚数と中央の再生マークは、伸び縮みしないよう作り直す。
     func makeDecorationCopy() -> UIView {
         let container = UIView(frame: bounds)
         container.isUserInteractionEnabled = false
+        if showsMovingImage, let thumbnail = thumbnailView.image {
+            let copy = UIImageView(image: thumbnail)
+            copy.frame = bounds
+            copy.contentMode = thumbnailView.contentMode
+            copy.clipsToBounds = true
+            copy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            container.addSubview(copy)
+        }
         let corners: [(UIView, UIView.AutoresizingMask)] = [
             (altBadge, [.flexibleRightMargin, .flexibleTopMargin]),
             (gifBadge, [.flexibleLeftMargin, .flexibleTopMargin]),
@@ -247,6 +259,7 @@ final class MediaTileView: UIButton {
             self.source = source
             showImage(of: attachment, from: source)
         }
+        showsMovingImage = attachment?.type == .video || attachment?.type == .gifv
         guard let attachment else { return }
         symbolView.image = Self.symbolName(of: attachment.type).flatMap { UIImage(systemName: $0) }
         // 画像の上に重ねるときは白く、画像のない枠の上では本文に近い色にする。
