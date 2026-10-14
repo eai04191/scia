@@ -17,10 +17,16 @@ enum DummyMedia {
     }
 
     /// 形の違う4枚。一覧の並べ方と、ビューアでの開閉や拡大を、縦長・横長・正方形・細長で比べられるようにする。
+    /// 正方形には、ビューアの下の説明で1行に収まらない長い代替テキストを付ける。
     private static let specs = [
         Spec(size: CGSize(width: 900, height: 1_600), color: .systemBlue, label: "1 縦長", description: "縦長の画像（9:16）"),
         Spec(size: CGSize(width: 1_600, height: 900), color: .systemGreen, label: "2 横長", description: nil),
-        Spec(size: CGSize(width: 1_200, height: 1_200), color: .systemOrange, label: "3 正方形", description: "正方形の画像"),
+        Spec(
+            size: CGSize(width: 1_200, height: 1_200),
+            color: .systemOrange,
+            label: "3 正方形",
+            description: "正方形の画像。オレンジの地に白い格子が引かれ、中央に「3 正方形」と大きく書かれている。代替テキストが長いときに、ビューアの下の説明が1行で切れ、上へ払うと全文をシートで読めることを確かめるための文。"
+        ),
         Spec(size: CGSize(width: 600, height: 2_000), color: .systemPurple, label: "4 細長", description: nil),
     ]
 
