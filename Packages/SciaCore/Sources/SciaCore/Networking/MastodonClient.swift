@@ -124,6 +124,35 @@ public struct MastodonClient: Sendable {
         return try await post(Status.self, path: "api/v1/statuses", form: form, headers: ["Idempotency-Key": draft.idempotencyKey]).0
     }
 
+    /// https://docs.joinmastodon.org/methods/accounts/#get
+    public func account(_ id: String) async throws -> Account {
+        try await get(Account.self, path: "api/v1/accounts/\(id)", query: []).0
+    }
+
+    /// 自分と相手の関係。相手が見つからなければnil。
+    /// https://docs.joinmastodon.org/methods/accounts/#relationships
+    public func relationship(with id: String) async throws -> Relationship? {
+        try await get([Relationship].self, path: "api/v1/accounts/relationships", query: [URLQueryItem(name: "id[]", value: id)]).0.first { $0.id == id }
+    }
+
+    /// アカウントの投稿を新しい順に返す。
+    /// https://docs.joinmastodon.org/methods/accounts/#statuses
+    public func accountStatuses(_ id: String, filter: AccountStatusFilter, query: TimelineQuery) async throws -> [Status] {
+        try await get([Status].self, path: "api/v1/accounts/\(id)/statuses", query: filter.queryItems + query.queryItems).0
+    }
+
+    /// 鍵のかかったアカウントには、フォローのリクエストを送る。
+    /// https://docs.joinmastodon.org/methods/accounts/#follow
+    public func follow(_ id: String) async throws -> Relationship {
+        try await post(Relationship.self, path: "api/v1/accounts/\(id)/follow", form: []).0
+    }
+
+    /// フォローを外す。承認を待っているリクエストも取り消す。
+    /// https://docs.joinmastodon.org/methods/accounts/#unfollow
+    public func unfollow(_ id: String) async throws -> Relationship {
+        try await post(Relationship.self, path: "api/v1/accounts/\(id)/unfollow", form: []).0
+    }
+
     private func get<T: Decodable>(_ type: T.Type, path: String, query: [URLQueryItem]) async throws -> (T, HTTPURLResponse) {
         let url = credential.instance.appending(path: path)
         return try await send(URLRequest(url: query.isEmpty ? url : url.appending(queryItems: query)), decoding: type)
@@ -184,6 +213,32 @@ public enum MarkerTimeline: String, Sendable {
 /// https://docs.joinmastodon.org/entities/Marker/
 struct Marker: Decodable {
     let lastReadId: String
+}
+
+/// アカウントの投稿の絞り込み。
+public struct AccountStatusFilter: Sendable, Equatable {
+    /// 他の人への返信を除く。本人への返信（自分のスレッドの続き）は、Mastodonでは除かれずに残る。
+    public var excludesReplies: Bool
+    public var excludesReblogs: Bool
+    public var onlyMedia: Bool
+    /// 固定された投稿だけを返す。
+    public var pinned: Bool
+
+    public init(excludesReplies: Bool = false, excludesReblogs: Bool = false, onlyMedia: Bool = false, pinned: Bool = false) {
+        self.excludesReplies = excludesReplies
+        self.excludesReblogs = excludesReblogs
+        self.onlyMedia = onlyMedia
+        self.pinned = pinned
+    }
+
+    var queryItems: [URLQueryItem] {
+        [
+            ("exclude_replies", excludesReplies),
+            ("exclude_reblogs", excludesReblogs),
+            ("only_media", onlyMedia),
+            ("pinned", pinned),
+        ].filter(\.1).map { URLQueryItem(name: $0.0, value: "true") }
+    }
 }
 
 /// タイムラインのどの範囲を読むか。

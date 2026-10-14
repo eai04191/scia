@@ -224,4 +224,50 @@ struct MastodonClientTests {
         }
         #expect(error?.statusCode == 409)
     }
+
+    @Test func accountStatusesSendsFilterAndPage() async throws {
+        let transport = StubTransport([try .fixture("home_timeline")])
+
+        let statuses = try await makeClient(transport).accountStatuses(
+            "2",
+            filter: AccountStatusFilter(excludesReplies: true, excludesReblogs: false, onlyMedia: true),
+            query: TimelineQuery(maxID: "100", limit: 20)
+        )
+
+        let url = try #require(await transport.requests.first?.url)
+        #expect(url.path() == "/api/v1/accounts/2/statuses")
+        let query = Set(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? [])
+        // 外す条件は送らない。
+        #expect(query == [
+            URLQueryItem(name: "exclude_replies", value: "true"),
+            URLQueryItem(name: "only_media", value: "true"),
+            URLQueryItem(name: "max_id", value: "100"),
+            URLQueryItem(name: "limit", value: "20"),
+        ])
+        #expect(!statuses.isEmpty)
+    }
+
+    @Test func relationshipPicksRequestedAccount() async throws {
+        let transport = StubTransport([try .fixture("relationships")])
+
+        let relationship = try await makeClient(transport).relationship(with: "2")
+
+        let url = try #require(await transport.requests.first?.url)
+        #expect(url.path() == "/api/v1/accounts/relationships")
+        #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems == [URLQueryItem(name: "id[]", value: "2")])
+        #expect(relationship == Relationship(id: "2", followedBy: true, requested: true))
+    }
+
+    @Test func followAndUnfollowPostToAccount() async throws {
+        let relationship = #"{"id":"2","following":true,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false}"#
+        let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
+        let client = try makeClient(transport)
+
+        #expect(try await client.follow("2").following)
+        _ = try await client.unfollow("2")
+
+        let requests = await transport.requests
+        #expect(requests.map(\.httpMethod) == ["POST", "POST"])
+        #expect(requests.map { $0.url?.path() } == ["/api/v1/accounts/2/follow", "/api/v1/accounts/2/unfollow"])
+    }
 }

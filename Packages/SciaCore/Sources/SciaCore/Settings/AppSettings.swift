@@ -36,6 +36,14 @@ public final class AppSettings {
         didSet { defaults.set(animatesAvatars, forKey: Keys.animatesAvatars) }
     }
 
+    /// プロフィール画面の「投稿」に、返信とブーストを混ぜるか。どのアカウントのプロフィールにも効かせる。
+    public var profilePostsFilter: ProfilePostsFilter {
+        didSet {
+            defaults.set(profilePostsFilter.showsReplies, forKey: Keys.profileShowsReplies)
+            defaults.set(profilePostsFilter.showsBoosts, forKey: Keys.profileShowsBoosts)
+        }
+    }
+
     private enum Keys {
         static let usesOriginalThumbnailsOnExpensiveNetwork = "settings.usesOriginalThumbnailsOnExpensiveNetwork"
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
@@ -43,6 +51,8 @@ public final class AppSettings {
         static let statusTimeStyle = "settings.statusTimeStyle"
         static let avatarShape = "settings.avatarShape"
         static let animatesAvatars = "settings.animatesAvatars"
+        static let profileShowsReplies = "settings.profileShowsReplies"
+        static let profileShowsBoosts = "settings.profileShowsBoosts"
     }
 
     public init(defaults: UserDefaults) {
@@ -53,5 +63,9 @@ public final class AppSettings {
         statusTimeStyle = defaults.string(forKey: Keys.statusTimeStyle).flatMap(StatusTimeStyle.init(rawValue:)) ?? .relative
         avatarShape = defaults.string(forKey: Keys.avatarShape).flatMap(AvatarShape.init(rawValue:)) ?? .roundedSquare
         animatesAvatars = defaults.object(forKey: Keys.animatesAvatars) as? Bool ?? false
+        profilePostsFilter = ProfilePostsFilter(
+            showsReplies: defaults.object(forKey: Keys.profileShowsReplies) as? Bool ?? ProfilePostsFilter.standard.showsReplies,
+            showsBoosts: defaults.object(forKey: Keys.profileShowsBoosts) as? Bool ?? ProfilePostsFilter.standard.showsBoosts
+        )
     }
 }

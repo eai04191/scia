@@ -58,4 +58,13 @@ struct AppSettingsTests {
         #expect(restored.avatarShape == .circle)
         #expect(restored.animatesAvatars)
     }
+
+    @Test func persistsProfilePostsFilter() throws {
+        let defaults = try makeDefaults()
+        #expect(AppSettings(defaults: defaults).profilePostsFilter == .standard)
+
+        AppSettings(defaults: defaults).profilePostsFilter = ProfilePostsFilter(showsReplies: true, showsBoosts: false)
+
+        #expect(AppSettings(defaults: defaults).profilePostsFilter == ProfilePostsFilter(showsReplies: true, showsBoosts: false))
+    }
 }
