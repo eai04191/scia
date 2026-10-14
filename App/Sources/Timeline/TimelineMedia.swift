@@ -29,7 +29,11 @@ extension TimelineViewController {
         return MediaGridView.Content(
             attachments: status.mediaAttachments,
             isCovered: isSensitive && !revealedMediaStatusIDs.contains(status.id),
-            tallestAspectRatio: tuning.value(of: TuningCatalog.mediaTallestAspectRatio)
+            tallestAspectRatio: tuning.value(of: TuningCatalog.mediaTallestAspectRatio),
+            thumbnailPolicy: MediaThumbnailPolicy(
+                allowsOriginal: MediaThumbnailSelection.allowsOriginal(on: network.conditions),
+                upscaleTolerance: 1
+            )
         )
     }
 

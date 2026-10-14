@@ -10,6 +10,7 @@ final class MediaGridView: UIView {
         /// 閲覧注意として覆っている。
         let isCovered: Bool
         let tallestAspectRatio: Double
+        let thumbnailPolicy: MediaThumbnailPolicy
 
         /// 全体の幅を高さで割った値。添付ファイルがなければnil。
         var aspectRatio: Double? {
@@ -67,12 +68,17 @@ final class MediaGridView: UIView {
         for (index, tile) in tiles.enumerated() {
             guard index < layout.frames.count else {
                 tile.isHidden = true
-                tile.apply(nil, hiddenCount: 0, isCovered: false)
+                tile.apply(nil, hiddenCount: 0, isCovered: false, policy: content.thumbnailPolicy)
                 continue
             }
             tile.isHidden = false
             let isLast = index == layout.frames.count - 1
-            tile.apply(content.attachments[index], hiddenCount: isLast ? layout.hiddenCount : 0, isCovered: content.isCovered)
+            tile.apply(
+                content.attachments[index],
+                hiddenCount: isLast ? layout.hiddenCount : 0,
+                isCovered: content.isCovered,
+                policy: content.thumbnailPolicy
+            )
         }
         cover.isHidden = !content.isCovered
         // 覆っている間は、中のサムネイルを読み上げない。
@@ -132,14 +138,18 @@ final class MediaTileView: UIButton {
     private let gifBadge = MediaTileView.makeBadge("GIF")
     private let moreLabel = UILabel()
     private var loadTask: Task<Void, Never>?
+    private var attachment: MediaAttachment?
+    private var isCovered = false
+    private var policy: MediaThumbnailPolicy?
     /// いま描いている画像の出どころ。同じなら描き直さない。
     private var source: Source?
     /// 動画やGIFのように、ビューアではサムネイルと違うコマを描く添付ファイル。
     private var showsMovingImage = false
 
     private struct Source: Equatable {
-        /// 読み込む画像。閲覧注意で覆っている間はnilにし、通信しない。
-        let url: URL?
+        let attachmentID: MediaAttachment.ID
+        /// 読み込む画像。閲覧注意で覆っている間と、枠の大きさが決まる前はnilにし、通信しない。
+        let request: MediaThumbnailRequest?
         let blurhash: String?
         /// blurhashを展開する縦横比。同じblurhashでも、比が違えば描き直す。
         let aspectRatio: Double?
@@ -170,6 +180,10 @@ final class MediaTileView: UIButton {
             view.isUserInteractionEnabled = false
             addSubview(view)
         }
+        // 読む画像の大きさは画面の倍率で決まるため、別の画面へ移ったら選び直す。
+        registerForTraitChanges([UITraitDisplayScale.self]) { (self: Self, _) in
+            self.setNeedsLayout()
+        }
     }
 
     @available(*, unavailable)
@@ -179,6 +193,9 @@ final class MediaTileView: UIButton {
 
     /// 描いているサムネイル。ビューアの開閉で、まだ画像を描いていないページの代わりに動かす。
     var thumbnailImage: UIImage? { thumbnailView.image }
+
+    /// 読み込んだサムネイル。blurhashのぼかしは含まない。ビューアで元の画像が届くまでの下地にする。
+    private(set) var loadedThumbnail: UIImage?
 
     /// 画像の奥に敷いている背景の色。透明な部分のある画像では、この色が透けて見える。
     var placeholderColor: UIColor? {
@@ -253,17 +270,17 @@ final class MediaTileView: UIButton {
 
     /// 閲覧注意で覆っている間は画像を読まず、blurhashのぼかしだけを描く。覆いを外さない投稿で通信しないようにする。
     /// 覆っていなければ、読み込むまでblurhashを下地にし、届いたら差し替える。
-    func apply(_ attachment: MediaAttachment?, hiddenCount: Int, isCovered: Bool) {
-        let source = attachment.map { Source(url: isCovered ? nil : Self.thumbnailURL(of: $0), blurhash: $0.blurhash, aspectRatio: $0.aspectRatio) }
-        if source != self.source {
-            self.source = source
-            showImage(of: attachment, from: source)
-        }
+    /// どの画像を読むかは枠の大きさで決まるため、大きさが決まる`layoutSubviews`で選ぶ。
+    func apply(_ attachment: MediaAttachment?, hiddenCount: Int, isCovered: Bool, policy: MediaThumbnailPolicy) {
+        self.attachment = attachment
+        self.isCovered = isCovered
+        self.policy = policy
         showsMovingImage = attachment?.type == .video || attachment?.type == .gifv
+        setNeedsLayout()
         guard let attachment else { return }
         symbolView.image = Self.symbolName(of: attachment.type).flatMap { UIImage(systemName: $0) }
         // 画像の上に重ねるときは白く、画像のない枠の上では本文に近い色にする。
-        let isOverImage = source?.url != nil || thumbnailView.image != nil
+        let isOverImage = (!isCovered && Self.hasThumbnail(attachment)) || attachment.blurhash != nil
         symbolView.tintColor = isOverImage ? .white : .secondaryLabel
         symbolView.layer.shadowOpacity = isOverImage ? 0.4 : 0
         gifBadge.isHidden = attachment.type != .gifv
@@ -275,28 +292,51 @@ final class MediaTileView: UIButton {
             .filter { !$0.isEmpty }
             .joined(separator: "、")
         accessibilityValue = hiddenCount > 0 ? "ほか\(hiddenCount)件" : nil
-        setNeedsLayout()
     }
 
-    private func showImage(of attachment: MediaAttachment?, from source: Source?) {
+    /// 枠の大きさと条件から読む画像を選び、変わっていれば読み直す。
+    private func updateSource() {
+        let source = attachment.map { attachment in
+            Source(
+                attachmentID: attachment.id,
+                request: thumbnailRequest(for: attachment),
+                blurhash: attachment.blurhash,
+                aspectRatio: attachment.aspectRatio
+            )
+        }
+        guard source != self.source else { return }
+        // 同じ添付ファイルを大きさや条件を変えて読み直すときは、届くまで今の画像を残し、ぼかしに戻さない。
+        let keepsCurrentImage = loadedThumbnail != nil && source?.request != nil && source?.attachmentID == self.source?.attachmentID
+        self.source = source
+        showImage(of: attachment, from: source, keepsCurrentImage: keepsCurrentImage)
+    }
+
+    private func thumbnailRequest(for attachment: MediaAttachment) -> MediaThumbnailRequest? {
+        let scale = traitCollection.displayScale
+        guard !isCovered, let policy, !bounds.isEmpty, scale > 0 else { return nil }
+        return MediaThumbnailSelection.request(for: attachment, tileSize: bounds.size, displayScale: scale, policy: policy)
+    }
+
+    private func showImage(of attachment: MediaAttachment?, from source: Source?, keepsCurrentImage: Bool) {
         loadTask?.cancel()
         loadTask = nil
-        let placeholder = attachment.flatMap { attachment in
-            attachment.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment.aspectRatio) }
+        if !keepsCurrentImage {
+            loadedThumbnail = nil
+            thumbnailView.image = attachment.flatMap { attachment in
+                attachment.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment.aspectRatio) }
+            }
         }
-        guard let url = source?.url else {
-            thumbnailView.image = placeholder
-            return
-        }
-        if let cached = store.cachedImage(for: url, maxPixelSize: MediaImageStore.thumbnailPixelSize) {
+        guard let request = source?.request else { return }
+        if let cached = store.cachedImage(for: request.url, maxPixelSize: request.maxPixelSize) {
+            loadedThumbnail = cached
             thumbnailView.image = cached
             return
         }
-        thumbnailView.image = placeholder
         loadTask = Task { [weak self, store] in
-            guard let image = try? await store.image(for: url, maxPixelSize: MediaImageStore.thumbnailPixelSize),
-                  let self, !Task.isCancelled, self.source?.url == url
+            guard let image = try? await store.image(for: request.url, maxPixelSize: request.maxPixelSize),
+                  let self, !Task.isCancelled, self.source?.request == request
             else { return }
+            self.loadedThumbnail = image
             UIView.transition(with: self.thumbnailView, duration: 0.15, options: .transitionCrossDissolve) {
                 self.thumbnailView.image = image
             }
@@ -305,6 +345,7 @@ final class MediaTileView: UIButton {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        updateSource()
         thumbnailView.frame = bounds
         symbolView.frame = bounds
         moreLabel.frame = bounds
@@ -315,12 +356,12 @@ final class MediaTileView: UIButton {
         gifBadge.frame = CGRect(x: bounds.maxX - inset - gifSize.width, y: bounds.maxY - inset - gifSize.height, width: gifSize.width, height: gifSize.height)
     }
 
-    /// 一覧に出す画像。音声と種類の分からないファイルは、プレビューのURLが画像とは限らないため読まない。
-    private static func thumbnailURL(of attachment: MediaAttachment) -> URL? {
+    /// 一覧に画像を出せるか。音声と種類の分からないファイルは、プレビューのURLが画像とは限らないため読まない。
+    private static func hasThumbnail(_ attachment: MediaAttachment) -> Bool {
         switch attachment.type {
-        case .image: attachment.previewUrl ?? attachment.url
-        case .video, .gifv: attachment.previewUrl
-        case .audio, .unknown: nil
+        case .image: attachment.previewUrl != nil || attachment.url != nil
+        case .video, .gifv: attachment.previewUrl != nil
+        case .audio, .unknown: false
         }
     }
 

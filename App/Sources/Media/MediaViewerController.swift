@@ -272,7 +272,7 @@ final class MediaViewerController: UIViewController {
         if let page = pages[index] { return page }
         let attachment = attachments[index]
         let page: MediaPageController = switch attachment.type {
-        case .image: ImagePageController(attachment: attachment, store: store)
+        case .image: ImagePageController(attachment: attachment, store: store, preview: sourceTile(attachment.id)?.loadedThumbnail)
         case .video, .gifv, .audio: PlayerPageController(attachment: attachment)
         case .unknown: UnsupportedPageController(attachment: attachment)
         }
@@ -868,11 +868,15 @@ final class ImagePageController: MediaPageController {
     private let failureLabel = UILabel()
     private var loadTask: Task<Void, Never>?
     private(set) var fullImage: UIImage?
+    /// 一覧で読み込んだサムネイル。
+    private let preview: UIImage?
     /// 出している画像の出どころ。違和感レポートに残す。
     private var imageSource = "none"
 
-    init(attachment: MediaAttachment, store: MediaImageStore) {
+    /// - Parameter preview: 一覧で読み込んだサムネイル。元の画像が届くまでの下地にする。
+    init(attachment: MediaAttachment, store: MediaImageStore, preview: UIImage?) {
         self.store = store
+        self.preview = preview
         super.init(attachment: attachment)
     }
 
@@ -917,7 +921,6 @@ final class ImagePageController: MediaPageController {
             ])
         }
         // 一覧のサムネイルが手元にあればそれを、なければblurhashのぼかしを、元の画像が届くまでの下地にする。
-        let preview = attachment.previewUrl.flatMap { store.cachedImage(for: $0, maxPixelSize: MediaImageStore.thumbnailPixelSize) }
         let placeholder = preview == nil ? attachment.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment.aspectRatio) } : nil
         imageSource = preview != nil ? "thumbnail" : placeholder != nil ? "blurhash" : "none"
         zoomView.image = preview ?? placeholder

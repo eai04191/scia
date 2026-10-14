@@ -12,8 +12,6 @@ import UIKit
 final class MediaImageStore {
     typealias Fetch = @Sendable (URL) async throws -> Data
 
-    /// 一覧のサムネイルを展開する最大の辺の長さ（ピクセル）。
-    static let thumbnailPixelSize = 1_024
     /// ビューアで拡大して見る画像を展開する最大の辺の長さ（ピクセル）。これより大きい画像は縮めて持つ。
     static let fullPixelSize = 4_096
 

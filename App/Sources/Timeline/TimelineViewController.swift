@@ -102,6 +102,7 @@ final class TimelineViewController: UIViewController {
     let tuning: TuningStore
     let emojiImages: EmojiImageStore
     let mediaImages: MediaImageStore
+    let network: NetworkConditionsMonitor
     /// 閲覧注意の覆いを外した投稿のID。ブーストなら元の投稿のID。
     var revealedMediaStatusIDs: Set<Status.ID> = []
 
@@ -109,12 +110,14 @@ final class TimelineViewController: UIViewController {
         texts: Texts = .home,
         tuning: TuningStore = AppDependencies.tuning,
         emojiImages: EmojiImageStore = AppDependencies.emojiImages,
-        mediaImages: MediaImageStore = AppDependencies.mediaImages
+        mediaImages: MediaImageStore = AppDependencies.mediaImages,
+        network: NetworkConditionsMonitor = AppDependencies.network
     ) {
         self.texts = texts
         self.tuning = tuning
         self.emojiImages = emojiImages
         self.mediaImages = mediaImages
+        self.network = network
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -156,11 +159,13 @@ final class TimelineViewController: UIViewController {
         reportVisibleItems()
     }
 
-    /// チューニングの値が変わったら、表示中の投稿を描き直す。
+    /// チューニングの値や回線の状態が変わったら、表示中の投稿を描き直す。
+    /// サムネイルは、低データモードを抜けたときなどに、表示中のものも読む画像を選び直す。
     private func observeTuning() {
         withObservationTracking {
             _ = tuning.value(of: TuningCatalog.paragraphSpacing)
             _ = tuning.value(of: TuningCatalog.mediaTallestAspectRatio)
+            _ = network.conditions
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
