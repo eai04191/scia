@@ -110,7 +110,15 @@ extension EmojiImageStore {
 extension MediaImageStore {
     /// 画像を読みに行かず、すべて失敗として扱う。
     static var offline: MediaImageStore {
-        MediaImageStore { _ in throw URLError(.notConnectedToInternet) }
+        MediaImageStore(files: .temporary()) { _ in throw URLError(.notConnectedToInternet) }
+    }
+}
+
+extension MediaFileCache {
+    /// テストごとに別の場所を使うキャッシュ。
+    static func temporary() -> MediaFileCache {
+        let root = URL.temporaryDirectory.appending(path: "MediaFileCache-\(UUID().uuidString)")
+        return MediaFileCache(directory: root.appending(path: "cache"), sharingDirectory: root.appending(path: "sharing"))
     }
 }
 

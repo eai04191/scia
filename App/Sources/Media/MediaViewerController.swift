@@ -364,30 +364,25 @@ final class MediaViewerController: UIViewController {
         return page
     }
 
-    /// 共有するもの。画像は元のファイルが届くまでnilにし、URLを共有しない。動画、GIF、音声は落としたファイルを共有し、
-    /// 落とす前はnil。アプリで開けない種類のファイルはURLを共有する。
-    func shareItem() -> Any? {
+    /// 共有や保存で渡すファイルのURL。画像は元のファイルを読み込み終えるまでnilにし、届く前に共有できないようにする。
+    /// 動画、GIF、音声は選んでから落とすため、URLがあれば返す。アプリで開けない種類のファイルと、URLのない添付ファイルではnil。
+    private var currentFileURL: URL? {
         switch currentAttachment.type {
-        case .image:
-            return (pages[currentIndex] as? ImagePageController)?.shareItem
-        case .video, .gifv, .audio:
-            return currentDownloadURL.flatMap { downloads.cachedFile(for: $0) }.map { shareItem(forDownloaded: $0, at: currentIndex) }
-        case .unknown:
-            return currentAttachment.url ?? currentAttachment.remoteUrl
-        }
-    }
-
-    /// 共有や保存のときに落とす、表示中の動画、GIF、音声のURL。画像などと、URLのない添付ファイルではnil。
-    private var currentDownloadURL: URL? {
-        switch currentAttachment.type {
+        case .image: (pages[currentIndex] as? ImagePageController)?.originalURL
         case .video, .gifv, .audio: currentAttachment.url ?? currentAttachment.remoteUrl
-        case .image, .unknown: nil
+        case .unknown: nil
         }
     }
 
-    /// 落としたファイルを共有シートに渡すもの。見出しのプレビューに、`index`の添付ファイルの再生しているコマか一覧のサムネイルを添える。
+    /// アプリで開けない種類のファイルで、ファイルの代わりに共有するURL。
+    private var currentUnsupportedURL: URL? {
+        guard case .unknown = currentAttachment.type else { return nil }
+        return currentAttachment.url ?? currentAttachment.remoteUrl
+    }
+
+    /// 共有シートに渡すもの。見出しのプレビューに、`index`の添付ファイルの描いている画像（動画は再生しているコマ）か一覧のサムネイルを添える。
     /// 落としている間にページを替えられるため、表示中のページではなく、共有を選んだときのページから取る。
-    private func shareItem(forDownloaded file: URL, at index: Int) -> Any {
+    private func shareItem(for file: URL, at index: Int) -> Any {
         guard let preview = pages[index]?.transitionImage ?? sourceTile(attachments[index].id)?.loadedThumbnail else { return file }
         return MediaShareItem(file: file, preview: preview)
     }
@@ -397,11 +392,6 @@ final class MediaViewerController: UIViewController {
         pages[currentIndex] as? ImagePageController
     }
 
-    /// 表示中の画像の元のファイル。届くまではnil。
-    private var currentOriginalFile: URL? {
-        (pages[currentIndex] as? ImagePageController)?.shareItem?.file
-    }
-
     /// メニューの項目。画像の共有や保存は、元のファイルが届くまで選べなくする。動画などは選んでから落とす。
     /// 保存は写真に入る画像、動画、GIFだけ、翻訳は画像から文字を読み取れたときだけ、代替テキストは付いているときだけ出す。
     func menuElements() -> [UIMenuElement] {
@@ -409,7 +399,7 @@ final class MediaViewerController: UIViewController {
             UIAction(
                 title: "共有",
                 image: UIImage(systemName: "square.and.arrow.up"),
-                attributes: shareItem() == nil && currentDownloadURL == nil ? .disabled : []
+                attributes: currentFileURL == nil && currentUnsupportedURL == nil ? .disabled : []
             ) { [weak self] _ in
                 self?.share()
             },
@@ -418,7 +408,7 @@ final class MediaViewerController: UIViewController {
             elements.append(UIAction(
                 title: "写真に保存",
                 image: UIImage(systemName: "square.and.arrow.down"),
-                attributes: currentOriginalFile == nil && currentDownloadURL == nil ? .disabled : []
+                attributes: currentFileURL == nil ? .disabled : []
             ) { [weak self] _ in
                 self?.saveToPhotos()
             })
@@ -442,14 +432,11 @@ final class MediaViewerController: UIViewController {
         present(AltTextViewController.sheet(text: description), animated: true)
     }
 
-    /// 表示中の添付ファイルを写真に保存し、済んだらメニューボタンの下で知らせる。動画とGIFは落としてから保存する。
+    /// 表示中の添付ファイルを写真に保存し、済んだらメニューボタンの下で知らせる。キャッシュになければ落としてから保存する。
     /// 失敗したときは理由をアラートで出す。
     func saveToPhotos() {
-        if let url = currentDownloadURL {
-            withDownloadedFile(of: url) { [weak self] file in self?.save(file) }
-        } else if let file = currentOriginalFile {
-            save(file)
-        }
+        guard let url = currentFileURL else { return }
+        withDownloadedFile(of: url) { [weak self] file in self?.save(file) }
     }
 
     private func save(_ file: URL) {
@@ -502,14 +489,14 @@ final class MediaViewerController: UIViewController {
     }
 
     private func share() {
-        if let url = currentDownloadURL {
+        if let url = currentFileURL {
             let index = currentIndex
             withDownloadedFile(of: url) { [weak self] file in
                 guard let self else { return }
-                self.presentShareSheet(self.shareItem(forDownloaded: file, at: index))
+                self.presentShareSheet(self.shareItem(for: file, at: index))
             }
-        } else if let item = shareItem() {
-            presentShareSheet(item)
+        } else if let url = currentUnsupportedURL {
+            presentShareSheet(url)
         }
     }
 
@@ -526,27 +513,20 @@ final class MediaViewerController: UIViewController {
         downloadButton.isHidden ? nil : downloadButton.configuration?.title
     }
 
-    /// `url`を落としてから`completion`を行う。落とし終えていればすぐ行う。落としている間は進み具合を出し、押せば取り消せるようにする。
-    /// 同じURLを落としている途中なら、落とし直さずに行うことだけを替える。別のURLなら、落とし終えているものでも、前のものを取り消す。
+    /// `url`のファイルの写しを用意してから`completion`に渡す。キャッシュになければ落とし、落としている間は進み具合を出して、押せば取り消せるようにする。
+    /// 同じURLを用意している途中なら、用意し直さずに行うことだけを替える。別のURLなら、前のものを取り消す。
     private func withDownloadedFile(of url: URL, then completion: @escaping @MainActor (URL) -> Void) {
-        if let download, download.url != url {
-            cancelDownload()
-        }
-        if let file = downloads.cachedFile(for: url) {
-            completion(file)
-            return
-        }
         if download?.url == url {
             download?.completion = completion
             return
         }
-        updateDownloadButton(fraction: 0)
-        downloadButton.isHidden = false
+        cancelDownload()
         let task = Task { [weak self, downloads] in
             do {
-                let file = try await downloads.file(for: url) { fraction in
+                let file = try await downloads.fileForSharing(for: url) { fraction in
                     guard let self, self.download?.url == url else { return }
                     self.updateDownloadButton(fraction: fraction)
+                    self.downloadButton.isHidden = false
                 }
                 guard let self, !Task.isCancelled else { return }
                 let completion = self.download?.completion
@@ -1186,6 +1166,8 @@ final class ImagePageController: MediaPageController {
     private let spinner = UIActivityIndicatorView(style: .medium)
     private let failureLabel = UILabel()
     private var loadTask: Task<Void, Never>?
+    /// 前に開いたときの元のファイルがキャッシュに残っているかを確かめる。
+    private var originalCheckTask: Task<Void, Never>?
     /// 画像の中の文字を選んだり、リンクや電話番号を開いたりする（Live Text）。元の画像が届いてから解析する。
     private let liveText = ImageAnalysisInteraction()
     private var analysisTask: Task<Void, Never>?
@@ -1193,8 +1175,8 @@ final class ImagePageController: MediaPageController {
     private(set) var hasFinishedAnalysis = false
     /// Live Textのボタンの、システムが決めた既定の余白。説明に重なる分はこれに足す。
     private lazy var baseLiveTextInsets = liveText.supplementaryInterfaceContentInsets
-    /// 元のファイルが届いていれば、共有シートに渡すもの。
-    private(set) var shareItem: MediaShareItem?
+    /// 元のファイルをキャッシュに置き終えていれば、そのURL。共有や保存はこのURLでキャッシュから写しを取る。
+    private(set) var originalURL: URL?
     /// 一覧で読み込んだサムネイル。
     private let preview: UIImage?
     /// 出している画像の出どころ。違和感レポートに残す。
@@ -1209,6 +1191,7 @@ final class ImagePageController: MediaPageController {
 
     deinit {
         loadTask?.cancel()
+        originalCheckTask?.cancel()
         analysisTask?.cancel()
     }
 
@@ -1307,12 +1290,17 @@ final class ImagePageController: MediaPageController {
         if !hasPreview {
             spinner.startAnimating()
         }
+        // 前に開いたときの元のファイルが残っていれば、表示のための読み込みを待たずに共有と保存を選べるようにする。
+        originalCheckTask = Task { [weak self, store] in
+            guard await store.hasOriginal(for: url), let self, !Task.isCancelled else { return }
+            self.originalURL = url
+        }
         loadTask = Task { [weak self, store] in
             let image = try? await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
             guard let self, !Task.isCancelled else { return }
             self.spinner.stopAnimating()
             if let image {
-                self.shareItem = store.originalFile(for: url).map { MediaShareItem(file: $0, preview: image) }
+                self.originalURL = await store.hasOriginal(for: url) ? url : nil
                 self.imageSource = "full"
                 self.zoomView.image = image
                 self.onImageChange?()

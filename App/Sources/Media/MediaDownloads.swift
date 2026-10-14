@@ -4,49 +4,54 @@ import SciaCore
 import Synchronization
 import UniformTypeIdentifiers
 
-/// 動画、GIF、音声の添付ファイルを、共有や保存のために端末へ落とす。
+/// 添付ファイルの元のファイルを、共有や保存に渡せるようにする。ディスクキャッシュになければ落として置く。
 ///
-/// 画像と違って再生はURLから直接行い、ファイルを手元に持たないため、共有や保存を求められたときに落とす。
-/// 落としたファイルは起動している間残し、同じ添付ファイルをまた共有するときに使う。
+/// 動画、GIF、音声は再生をURLから直接行い、ファイルを手元に持たないため、共有や保存を求められたときに落とす。
+/// 画像は表示のために読み込んだ元のファイルがキャッシュにあるが、整理で消えていたら同じように落とし直す。
 @MainActor
 final class MediaDownloads {
     /// `url`のファイルを`directory`の中へ落とし、置いた場所を返す。`onProgress`には0から1の進み具合を渡す。
     /// 呼び出し側のタスクを取り消したら、通信も止める。
     typealias Download = @Sendable (_ url: URL, _ directory: URL, _ onProgress: @escaping @Sendable (Double) -> Void) async throws -> URL
 
-    private let directory: URL
+    private let files: MediaFileCache
+    /// 落としている途中のファイルを置く場所。落とし終えたらキャッシュへ移す。
+    private let stagingDirectory: URL
     private let download: Download
-    /// 落とし終えたURLごとの、手元のファイル。
-    private var files: [URL: URL] = [:]
     private let logger = SciaLog.logger(category: "media")
 
-    /// - Parameter directory: 落としたファイルを置く場所。前回の起動で残したファイルを消すため、作るときに中身を空にする。
-    init(directory: URL = .temporaryDirectory.appending(path: "MediaDownloads"), download: @escaping Download = MediaDownloads.urlSession) {
-        self.directory = directory
+    /// - Parameter stagingDirectory: 落としている途中のファイルを置く場所。前回の起動で落とし損ねたものを消すため、作るときに中身を空にする。
+    init(
+        files: MediaFileCache,
+        stagingDirectory: URL = .temporaryDirectory.appending(path: "MediaDownloads"),
+        download: @escaping Download = MediaDownloads.urlSession
+    ) {
+        self.files = files
+        self.stagingDirectory = stagingDirectory
         self.download = download
-        try? FileManager.default.removeItem(at: directory)
+        try? FileManager.default.removeItem(at: stagingDirectory)
     }
 
-    /// 落とし終えていれば、手元のファイル。
-    func cachedFile(for url: URL) -> URL? {
-        files[url]
-    }
-
-    /// `url`のファイルを落とす。落とし終えていれば、落とさずにそのファイルを返す。
-    /// - Parameter onProgress: 進み具合を0から1で、メインアクターで受け取る。
-    func file(for url: URL, onProgress: @escaping @MainActor (Double) -> Void) async throws -> URL {
-        if let file = files[url] {
-            return file
+    /// `url`のファイルの、共有や保存に渡す写しを返す。キャッシュになければ落として置いてから写す。
+    /// - Parameter onProgress: 落とし始めたら0を、そのあと進み具合を0から1で、メインアクターで受け取る。キャッシュにあれば呼ばない。
+    func fileForSharing(for url: URL, onProgress: @escaping @MainActor (Double) -> Void) async throws -> URL {
+        if let copy = try await files.copyForSharing(for: url) {
+            return copy
         }
-        let folder = directory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try Task.checkCancellation()
+        onProgress(0)
+        let folder = stagingDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: folder) }
         do {
-            let file = try await download(url, folder) { fraction in
+            let downloaded = try await download(url, folder) { fraction in
                 Task { @MainActor in onProgress(fraction) }
             }
-            files[url] = file
-            return file
+            let name = await MediaImageStore.originalFileName(ofFileAt: downloaded, for: url) ?? downloaded.lastPathComponent
+            _ = try await files.store(movingFile: downloaded, named: name, for: url)
+            // 置いたものは最後に使ったものとして整理で残るため、ここで見つからないのは置いた直後に消された異常な場合だけ。
+            guard let copy = try await files.copyForSharing(for: url) else { throw CocoaError(.fileNoSuchFile) }
+            return copy
         } catch {
-            try? FileManager.default.removeItem(at: folder)
             if !Task.isCancelled {
                 logger.error("media download failed url=\(url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }

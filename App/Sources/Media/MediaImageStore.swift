@@ -20,24 +20,20 @@ final class MediaImageStore {
     /// 同じURLでも縮める大きさごとに分けて持つ。サーバーによってはプレビューと元の画像が同じURLのため。
     private let cache = NSCache<NSString, UIImage>()
     private var inFlight: [Key: Task<Loaded, any Error>] = [:]
-    /// 元のファイルを置く場所。共有や保存で、縮めずに元の形式のまま渡すために残す。
-    private let originalsDirectory: URL
-    /// 読み込んだURLごとの、手元に残した元のファイル。
-    private var originals: [URL: URL] = [:]
+    /// 元のファイルを置くディスクキャッシュ。共有や保存で、縮めずに元の形式のまま渡すために残す。
+    private let files: MediaFileCache
     private let logger = SciaLog.logger(category: "media")
 
-    /// - Parameter originalsDirectory: 元のファイルを置く場所。前回の起動で残したファイルを消すため、作るときに中身を空にする。
-    init(originalsDirectory: URL = .temporaryDirectory.appending(path: "MediaOriginals"), fetch: @escaping Fetch) {
+    init(files: MediaFileCache, fetch: @escaping Fetch) {
         self.fetch = fetch
-        self.originalsDirectory = originalsDirectory
-        try? FileManager.default.removeItem(at: originalsDirectory)
+        self.files = files
         // 4096px四方の画像が4枚ほど入る大きさ。
         cache.totalCostLimit = 256 * 1_024 * 1_024
     }
 
     private struct Loaded: Sendable {
         let image: UIImage
-        let original: URL?
+        let keptOriginal: Bool
     }
 
     private struct Key: Hashable {
@@ -51,51 +47,49 @@ final class MediaImageStore {
         cache.object(forKey: Key(url: url, maxPixelSize: maxPixelSize).cacheKey)
     }
 
-    /// 手元に残した元のファイル。`keepsOriginal`を付けて読み込み終えるまではnil。
-    func originalFile(for url: URL) -> URL? {
-        originals[url]
+    /// 元のファイルをキャッシュに置いてあるか。`keepsOriginal`を付けて読み込み終えるまでと、整理で消えたあとはfalse。
+    func hasOriginal(for url: URL) async -> Bool {
+        await files.contains(url)
     }
 
     /// 画像を読み込む。同じURLを読み込んでいる途中なら、その結果を待つ。
     /// 呼び出し側のタスクを取り消しても、読み込みは止めずにキャッシュへ入れる。同じ画像がすぐまた求められることが多いため。
-    /// - Parameter keepsOriginal: 元のファイルを手元に残し、`originalFile(for:)`で返せるようにする。
+    /// - Parameter keepsOriginal: 元のファイルをキャッシュに置き、`hasOriginal(for:)`で確かめられるようにする。
     ///   同じURLを残さずに読み込んでいる途中だった場合は、その結果を待つため残らない。元のファイルを求めるのはビューアだけで、
     ///   ビューアは常に残すよう求めるため、この組み合わせは起きない。
     func image(for url: URL, maxPixelSize: Int, keepsOriginal: Bool = false) async throws -> UIImage {
         let key = Key(url: url, maxPixelSize: maxPixelSize)
-        if let image = cache.object(forKey: key.cacheKey), !keepsOriginal || originals[url] != nil {
-            return image
+        if let image = cache.object(forKey: key.cacheKey) {
+            if !keepsOriginal {
+                return image
+            }
+            if await files.contains(url) {
+                return image
+            }
         }
         if let task = inFlight[key] {
-            // 待っている呼び出しのどれが先に再開するかは決まらないため、合流した側でも元のファイルを登録してから返す。
-            let loaded = try await task.value
-            if let original = loaded.original {
-                originals[url] = original
-            }
-            return loaded.image
+            return try await task.value.image
         }
         let fetch = fetch
-        let directory = keepsOriginal && originals[url] == nil ? originalsDirectory : nil
+        let files = keepsOriginal ? files : nil
         let task = Task<Loaded, any Error> {
             let data = try await fetch(url)
             guard let image = await Self.decode(data, maxPixelSize: maxPixelSize) else {
                 throw DecodeError()
             }
-            // 書き出せなくても画像は見せる。共有だけが選べなくなる。
-            var original: URL?
-            if let directory {
-                original = try? await Self.writeOriginal(data, for: url, in: directory)
+            // 置けなくても画像は見せる。共有と保存だけが選べなくなる。
+            var keptOriginal = false
+            if let files, let name = await Self.originalFileName(of: data, for: url) {
+                keptOriginal = (try? await files.store(data, named: name, for: url)) != nil
             }
-            return Loaded(image: image, original: original)
+            return Loaded(image: image, keptOriginal: keptOriginal)
         }
         inFlight[key] = task
         defer { inFlight[key] = nil }
         do {
             let loaded = try await task.value
             cache.setObject(loaded.image, forKey: key.cacheKey, cost: Self.cost(of: loaded.image))
-            if let original = loaded.original {
-                originals[url] = original
-            } else if directory != nil {
+            if keepsOriginal, !loaded.keptOriginal {
                 logger.error("media original write failed url=\(url.absoluteString, privacy: .public)")
             }
             return loaded.image
@@ -160,20 +154,25 @@ final class MediaImageStore {
         return UIImage(cgImage: image)
     }
 
-    /// 元のファイルを、中身の形式に合った拡張子で書き出す。URLの拡張子は付いていなかったり実際の形式と違ったりするため使わない。
-    /// 共有先でファイル名として見えるため、名前はURLのものを残し、別のURLとの衝突はフォルダを分けて避ける。
+    /// 元のファイルの名前。共有先でファイル名として見えるため、URLの名前を残し、拡張子は中身の形式に合わせる。
+    /// URLの拡張子は付いていなかったり実際の形式と違ったりするため使わない。画像でなければnil。
     @concurrent
-    private static func writeOriginal(_ data: Data, for url: URL, in directory: URL) async throws -> URL {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-              let identifier = CGImageSourceGetType(source),
+    private static func originalFileName(of data: Data, for url: URL) async -> String? {
+        CGImageSourceCreateWithData(data as CFData, nil).flatMap { originalFileName(of: $0, for: url) }
+    }
+
+    /// 落としたファイルが画像なら、`originalFileName(of:for:)`と同じく中身の形式に合わせた名前。整理で消えた元のファイルを落とし直したときに使う。
+    @concurrent
+    nonisolated static func originalFileName(ofFileAt file: URL, for url: URL) async -> String? {
+        CGImageSourceCreateWithURL(file as CFURL, nil).flatMap { originalFileName(of: $0, for: url) }
+    }
+
+    private nonisolated static func originalFileName(of source: CGImageSource, for url: URL) -> String? {
+        guard let identifier = CGImageSourceGetType(source),
               let type = UTType(identifier as String),
               let pathExtension = type.preferredFilenameExtension
-        else { throw DecodeError() }
-        let folder = directory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
-        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let file = folder.appending(path: url.deletingPathExtension().lastPathComponent).appendingPathExtension(pathExtension)
-        try data.write(to: file)
-        return file
+        else { return nil }
+        return URL(filePath: url.deletingPathExtension().lastPathComponent).appendingPathExtension(pathExtension).lastPathComponent
     }
 
     private static func cost(of image: UIImage) -> Int {

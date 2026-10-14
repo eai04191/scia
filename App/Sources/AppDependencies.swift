@@ -19,11 +19,14 @@ enum AppDependencies {
         try await URLSession.shared.data(from: url).0
     }
 
-    static let mediaImages = MediaImageStore { url in
+    /// 添付ファイルの元のファイルを置くディスクキャッシュ。画像の元のファイルと、共有や保存のために落とした動画などを置く。
+    static let mediaFiles = MediaFileCache()
+
+    static let mediaImages = MediaImageStore(files: mediaFiles) { url in
         try await URLSession.shared.data(from: url).0
     }
 
-    static let mediaDownloads = MediaDownloads()
+    static let mediaDownloads = MediaDownloads(files: mediaFiles)
 
     static let network = NetworkConditionsMonitor()
 

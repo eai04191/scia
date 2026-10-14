@@ -75,19 +75,22 @@ struct MediaViewerControllerTests {
         }.pngData())
     }
 
-    /// 元の画像が少し遅れて届くビューアを、一覧の上に開く。
+    /// 元の画像が少し遅れて届くビューアを、一覧の上に開く。共有や保存で元のファイルが整理で消えていたときは、`download`で落とし直す。
     private func presentLoadingViewer(
         on harness: TimelineHarness,
         data: Data,
         description: String? = nil,
-        photoSaver: PhotoLibrarySaver = PhotoLibrarySaver { _ in }
+        files: MediaFileCache = .temporary(),
+        photoSaver: PhotoLibrarySaver = PhotoLibrarySaver { _ in },
+        download: @escaping MediaDownloads.Download = { _, _, _ in throw URLError(.notConnectedToInternet) }
     ) -> MediaViewerController {
-        let store = MediaImageStore(originalsDirectory: .temporaryDirectory.appending(path: "MediaViewerControllerTests-\(UUID().uuidString)")) { _ in
+        let store = MediaImageStore(files: files) { _ in
             try await Task.sleep(for: .milliseconds(150))
             return data
         }
+        let downloads = makeDownloads(files: files, download: download)
         let attachment = MediaAttachment(id: "1", type: .image, url: URL(string: "https://x.example/original/1"), previewUrl: nil, description: description)
-        let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: store, dragToDismiss: drag, timing: timing, photoSaver: photoSaver, sourceTile: { _ in nil })
+        let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: store, dragToDismiss: drag, timing: timing, photoSaver: photoSaver, downloads: downloads, sourceTile: { _ in nil })
         harness.viewController.present(viewer, animated: false)
         return viewer
     }
@@ -110,18 +113,36 @@ struct MediaViewerControllerTests {
 
         try await waitUntil { menuAction("共有", in: viewer)?.attributes.contains(.disabled) == false }
         #expect(try #require(menuAction("写真に保存", in: viewer)).attributes.isEmpty)
-        let item = try #require(viewer.shareItem() as? MediaShareItem)
-        #expect(item.file.lastPathComponent == "1.png")
-        #expect(try Data(contentsOf: item.file) == data)
     }
 
-    /// 写真には元のファイルをそのまま渡し、済んだらメニューボタンの下で知らせる。
+    /// 前に開いて元のファイルがキャッシュに残っていれば、表示のための読み込みを待たずに共有と保存を選べる。
+    @Test func cachedOriginalEnablesSharingBeforeImageLoads() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let files = MediaFileCache.temporary()
+        let url = try #require(URL(string: "https://x.example/original/1"))
+        _ = try await files.store(try pngData(), named: "1.png", for: url)
+        let store = MediaImageStore(files: files) { _ in
+            try await Task.sleep(for: .seconds(10))
+            throw URLError(.timedOut)
+        }
+        let attachment = MediaAttachment(id: "1", type: .image, url: url, previewUrl: nil)
+        let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: store, dragToDismiss: drag, timing: timing, downloads: makeDownloads(files: files) { _, _, _ in throw URLError(.notConnectedToInternet) }, sourceTile: { _ in nil })
+        harness.viewController.present(viewer, animated: false)
+        defer { viewer.dismiss(animated: false) }
+
+        try await waitUntil { menuAction("共有", in: viewer)?.attributes.contains(.disabled) == false }
+        #expect(try #require(menuAction("写真に保存", in: viewer)).attributes.isEmpty)
+    }
+
+    /// 写真には元のファイルの写しを、形式と名前を変えずに渡し、済んだらメニューボタンの下で知らせる。
     @Test func savingToPhotosPassesOriginalFileAndShowsChip() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         let data = try pngData()
         let saved = SavedFiles()
-        let viewer = presentLoadingViewer(on: harness, data: data, photoSaver: PhotoLibrarySaver { saved.files.append($0) })
+        let files = MediaFileCache.temporary()
+        let viewer = presentLoadingViewer(on: harness, data: data, files: files, photoSaver: PhotoLibrarySaver { saved.files.append($0) })
         defer { viewer.dismiss(animated: false) }
         try await waitUntil { menuAction("写真に保存", in: viewer)?.attributes.isEmpty == true }
 
@@ -129,6 +150,33 @@ struct MediaViewerControllerTests {
 
         try await waitUntil { viewer.statusChipText != nil }
         #expect(viewer.statusChipText == "写真に保存しました")
+        let file = try #require(saved.files.first)
+        #expect(file.lastPathComponent == "1.png")
+        #expect(file.path.hasPrefix(files.sharingDirectory.path))
+        #expect(try Data(contentsOf: file) == data)
+    }
+
+    /// 開いている間に元のファイルが整理で消えていても、保存を選べば落とし直して保存する。選べるのに失敗しないようにするため。
+    @Test func savingRefetchesOriginalRemovedFromCache() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let data = try pngData()
+        let saved = SavedFiles()
+        let files = MediaFileCache.temporary()
+        let viewer = presentLoadingViewer(on: harness, data: data, files: files, photoSaver: PhotoLibrarySaver { saved.files.append($0) }) { url, folder, onProgress in
+            onProgress(0.5)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let file = folder.appending(path: "\(url.lastPathComponent).png")
+            try data.write(to: file)
+            return file
+        }
+        defer { viewer.dismiss(animated: false) }
+        try await waitUntil { menuAction("写真に保存", in: viewer)?.attributes.isEmpty == true }
+        try FileManager.default.removeItem(at: files.directory)
+
+        viewer.saveToPhotos()
+
+        try await waitUntil { viewer.statusChipText != nil }
         let file = try #require(saved.files.first)
         #expect(try Data(contentsOf: file) == data)
     }
@@ -259,6 +307,10 @@ struct MediaViewerControllerTests {
         sheet.dismiss(animated: false)
     }
 
+    private func makeDownloads(files: MediaFileCache = .temporary(), download: @escaping MediaDownloads.Download) -> MediaDownloads {
+        MediaDownloads(files: files, stagingDirectory: .temporaryDirectory.appending(path: "MediaViewerControllerTests-\(UUID().uuidString)"), download: download)
+    }
+
     /// 動画のビューアを、落とし方を差し替えて一覧の上に開く。
     private func presentVideoViewer(
         on harness: TimelineHarness,
@@ -266,7 +318,7 @@ struct MediaViewerControllerTests {
         photoSaver: PhotoLibrarySaver = PhotoLibrarySaver { _ in },
         download: @escaping MediaDownloads.Download
     ) -> MediaViewerController {
-        let downloads = MediaDownloads(directory: .temporaryDirectory.appending(path: "MediaViewerControllerTests-\(UUID().uuidString)"), download: download)
+        let downloads = makeDownloads(download: download)
         let attachment = MediaAttachment(id: "1", type: type, url: URL(string: "https://x.example/original/1.mp4"), previewUrl: nil)
         let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, photoSaver: photoSaver, downloads: downloads, sourceTile: { _ in nil })
         harness.viewController.present(viewer, animated: false)
@@ -298,7 +350,6 @@ struct MediaViewerControllerTests {
 
         viewer.saveToPhotos()
 
-        #expect(viewer.downloadProgressText == "ダウンロード中")
         try await waitUntil { viewer.downloadProgressText == "ダウンロード中 50%" }
         try await waitUntil { viewer.statusChipText != nil }
         #expect(viewer.statusChipText == "写真に保存しました")
@@ -326,7 +377,7 @@ struct MediaViewerControllerTests {
         defer { viewer.dismiss(animated: false) }
 
         viewer.saveToPhotos()
-        #expect(viewer.downloadProgressText != nil)
+        try await waitUntil { viewer.downloadProgressText != nil }
         viewer.cancelDownload()
 
         #expect(viewer.downloadProgressText == nil)
@@ -355,7 +406,7 @@ struct MediaViewerControllerTests {
         defer { harness.tearDown() }
         let saved = SavedFiles()
         let stopped = Mutex(false)
-        let downloads = MediaDownloads(directory: .temporaryDirectory.appending(path: "MediaViewerControllerTests-\(UUID().uuidString)")) { url, folder, _ in
+        let downloads = makeDownloads { url, folder, _ in
             if url.lastPathComponent == "slow.mp4" {
                 do {
                     try await Task.sleep(for: .seconds(10))
@@ -378,7 +429,7 @@ struct MediaViewerControllerTests {
 
         try showPage(0, in: viewer)
         viewer.saveToPhotos()
-        #expect(viewer.downloadProgressText != nil)
+        try await waitUntil { viewer.downloadProgressText != nil }
         try showPage(1, in: viewer)
         viewer.saveToPhotos()
 
@@ -580,7 +631,7 @@ struct MediaViewerControllerTests {
             context.fill(CGRect(x: 0, y: 0, width: 64, height: 36))
         }
         let data = try #require(arriving.pngData())
-        let store = MediaImageStore { _ in
+        let store = MediaImageStore(files: .temporary()) { _ in
             try await Task.sleep(for: .milliseconds(150))
             return data
         }
