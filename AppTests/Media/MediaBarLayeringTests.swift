@@ -2,9 +2,9 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 閉じる動きで下地に開ける穴の形を確かめる。
+/// 開閉の動きで下地に開ける穴の形を確かめる。
 @MainActor
-struct MediaClosingFlightTests {
+struct MediaBarLayeringTests {
     /// 左半分が不透明、右半分が透明な画像。
     private func halfTransparentImage() -> UIImage {
         let format = UIGraphicsImageRendererFormat()
@@ -37,12 +37,12 @@ struct MediaClosingFlightTests {
         format.scale = 1
         format.opaque = true
         let image = UIGraphicsImageRenderer(size: CGSize(width: 10, height: 10), format: format).image { _ in }
-        #expect(MediaClosingFlight.inverseAlphaImage(of: image) == nil)
+        #expect(MediaBarLayering.inverseAlphaImage(of: image) == nil)
     }
 
     /// 透明な部分は下地を残すため不透明に、不透明な部分は穴にするため透明にする。
     @Test func transparentPartsBecomeOpaque() throws {
-        let inverse = try #require(MediaClosingFlight.inverseAlphaImage(of: halfTransparentImage()))
+        let inverse = try #require(MediaBarLayering.inverseAlphaImage(of: halfTransparentImage()))
         #expect(try alpha(of: inverse, x: 10, y: 25) == 0)
         #expect(try alpha(of: inverse, x: 90, y: 25) == 255)
     }

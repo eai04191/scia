@@ -630,12 +630,19 @@ extension MediaViewerController {
                 placeholderColor: morphPlaceholderColor,
                 backdrop: backdrop,
                 fadingViews: [backdrop] + chromeSnapshots,
-                underlay: moves && timing.drawsUnderBars ? makeUnderlay(decoratedLike: tile) : nil
+                layering: MediaBarLayering(
+                    morph: morph,
+                    decoration: morphDecoration,
+                    backdrop: backdrop,
+                    underlay: moves && timing.drawsUnderBars ? makeUnderlay(decoratedLike: tile) : nil,
+                    window: window
+                )
             ),
             window: window,
             spring: SpringCurve(duration: timing.closeDuration, bounce: timing.bounce),
             handoffStart: CGFloat(timing.handoffStart),
             barOverlapFadeEnd: CGFloat(timing.barOverlapFadeEnd),
+            startOverlapOpacity: 1,
             // 戻り先が最初から見つからなければ、その場で薄くする。
             movesImage: moves,
             concealedTile: closingTile,
@@ -645,7 +652,7 @@ extension MediaViewerController {
     }
 
     /// バーの奥に描く写し。写しと同じ画像と切り抜き方で、サムネイルの印も載せる。
-    private func makeUnderlay(decoratedLike tile: MediaTileView?) -> MediaClosingFlight.Underlay {
+    private func makeUnderlay(decoratedLike tile: MediaTileView?) -> MediaBarLayering.Underlay {
         let image = UIImageView(image: morph.image)
         image.contentMode = morph.contentMode
         image.clipsToBounds = true
@@ -657,7 +664,7 @@ extension MediaViewerController {
             decoration.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             image.addSubview(decoration)
         }
-        return MediaClosingFlight.Underlay(image: image, decoration: decoration)
+        return MediaBarLayering.Underlay(image: image, decoration: decoration)
     }
 }
 
