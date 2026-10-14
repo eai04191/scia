@@ -31,6 +31,25 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.makeKeyAndVisible()
     }
 
+    #if DEBUG
+    /// 起動済みのアプリに届いたデバッグ用のURLを処理する。
+    /// 起動時のURL（`connectionOptions.urlContexts`）は扱わない。最初の読み込みの前にダミーを流すと、読み込んだ投稿との並びを確かめられないため。
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        for context in URLContexts {
+            guard let url = DebugURL(context.url) else {
+                logger.error("unknown debug url: \(context.url.absoluteString, privacy: .public)")
+                continue
+            }
+            guard let session else {
+                logger.error("debug url ignored without session: \(context.url.absoluteString, privacy: .public)")
+                continue
+            }
+            logger.info("debug url: \(context.url.absoluteString, privacy: .public)")
+            session.handle(url)
+        }
+    }
+    #endif
+
     func sceneDidBecomeActive(_ scene: UIScene) {
         logger.info("scene didBecomeActive")
     }

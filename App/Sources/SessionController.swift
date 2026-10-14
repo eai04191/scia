@@ -160,6 +160,15 @@ final class SessionController {
         notifications.stop()
     }
 
+    #if DEBUG
+    func handle(_ url: DebugURL) {
+        switch url {
+        case .dummy(let post):
+            home.streamDummy(post)
+        }
+    }
+    #endif
+
     func enterForeground() {
         home.enterForeground()
         notifications.enterForeground()

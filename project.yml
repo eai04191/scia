@@ -48,6 +48,12 @@ targets:
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
         # iPhoneでは、これがないとCADisplayLinkやCAAnimationで指定したフレームレートが60Hzに抑えられる
         CADisableMinimumFrameDurationOnPhone: true
+        # agentが`xcrun simctl openurl`でデバッグメニューの操作を呼ぶためのスキーム（App/Sources/Debug/DebugURL.swift）。
+        # Info.plistは構成ごとに分けていないためReleaseにも登録されるが、受け取る処理が#if DEBUGの中にあるので、Releaseでは開いても何もしない。
+        CFBundleURLTypes:
+          - CFBundleURLName: net.mizle.scia.debug
+            CFBundleURLSchemes:
+              - scia-debug
         # 違和感レポートをファイルアプリから取り出せるようにする
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
