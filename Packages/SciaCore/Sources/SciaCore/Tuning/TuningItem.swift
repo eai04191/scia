@@ -253,6 +253,15 @@ public enum TuningCatalog {
         defaultValue: 0.3
     )
 
+    /// ビューアのメニューから写真に保存したとき、保存したことを知らせる表示を出しておく時間。
+    public static let mediaSavedChipDuration = NumberTuning(
+        id: "media.savedChipDuration",
+        title: "保存を知らせる表示を出しておく時間（秒）",
+        range: 0.5...4,
+        step: 0.1,
+        defaultValue: 1.5
+    )
+
     /// ビューアの閉じる操作の判定。
     @MainActor
     public static func dragToDismiss(in store: TuningStore) -> DragToDismiss {
@@ -296,6 +305,9 @@ public enum TuningCatalog {
             .number(mediaOpenBarOverlapFadeStart),
             .number(mediaCloseHandoffStart),
             .number(mediaCloseBarOverlapFadeEnd),
+        ]),
+        TuningSection(id: "media.menu", title: "ビューア：メニュー", items: [
+            .number(mediaSavedChipDuration),
         ]),
     ]
 }
