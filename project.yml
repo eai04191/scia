@@ -46,6 +46,8 @@ targets:
             UIWindowSceneSessionRoleApplication:
               - UISceneConfigurationName: Default Configuration
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+        # iPhoneでは、これがないとCADisplayLinkやCAAnimationで指定したフレームレートが60Hzに抑えられる
+        CADisableMinimumFrameDurationOnPhone: true
         # 違和感レポートをファイルアプリから取り出せるようにする
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
