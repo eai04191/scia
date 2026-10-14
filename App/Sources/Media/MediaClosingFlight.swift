@@ -154,10 +154,12 @@ final class MediaClosingFlight: NSObject {
         let progress = CGFloat(spring.value(at: time))
         let clamped = min(max(progress, 0), 1)
         let tile = findTile()
-        if tile !== concealedTile {
+        // 写しを動かさないときは、写しがサムネイルへ戻らないため隠さない。隠すと、写しが消えてからサムネイルが急に現れる。
+        let tileToConceal = movesImage ? tile : nil
+        if tileToConceal !== concealedTile {
             concealedTile?.isConcealedForViewer = false
-            tile?.isConcealedForViewer = true
-            concealedTile = tile
+            tileToConceal?.isConcealedForViewer = true
+            concealedTile = tileToConceal
         }
         if let tile {
             lastTarget = (tile.convert(tile.bounds, to: window), tile.layer.cornerRadius)

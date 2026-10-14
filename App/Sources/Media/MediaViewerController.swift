@@ -610,14 +610,18 @@ extension MediaViewerController {
         morph.frame = view.convert(morph.frame, to: window)
         overlay.addSubview(morph)
         window.addSubview(overlay)
-        // サムネイルは写しが戻り終えてから見せるため、ビューアを閉じたときには戻さない。
+        let moves = movesImage && tile != nil
+        // 写しをサムネイルへ戻すときは、戻り終えてから見せるため、ビューアを閉じたときには戻さない。
+        // 写しを動かさないときは、閉じる前に見せる。閉じると画面が描き直されるため、閉じてから見せると、その間サムネイルが消えて見える。
+        if !moves {
+            showHiddenTile()
+        }
         let closingTile = hiddenTile
         hiddenTile = nil
         dismiss(animated: false)
 
         let attachmentID = currentAttachment.id
         let sourceTile = sourceTile
-        let moves = movesImage && tile != nil
         let flight = MediaClosingFlight(
             parts: MediaClosingFlight.Parts(
                 overlay: overlay,
