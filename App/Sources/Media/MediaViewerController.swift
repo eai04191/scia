@@ -26,6 +26,12 @@ final class MediaViewerController: UIViewController {
     /// 写真に保存したことを、メニューボタンの下で知らせる。
     private let statusChip = StatusChip()
     private let photoSaver: PhotoLibrarySaver
+    /// 動画、GIF、音声を、共有や保存のために落とす。
+    private let downloads: MediaDownloads
+    /// 落としている間、進み具合を出す。押すと取り消す。
+    private let downloadButton = UIButton(configuration: .glass())
+    /// 落としている途中のもの。
+    private var download: Download?
     /// 画像から読み取った文字を、システムの翻訳シートで訳す。
     private let translation = SystemTranslation()
     private var isChromeHidden = false
@@ -57,6 +63,13 @@ final class MediaViewerController: UIViewController {
     private var barSwap = MediaBarSwap.front
     /// 開く途中でつかんだあと、写しをすべてバーの手前へ寄せる動き。
     private var barConvergence: SpringDriver?
+
+    private struct Download {
+        let url: URL
+        let task: Task<Void, Never>
+        /// 落とし終えたら行うこと。落としている途中に別の操作を選んだら、後から選んだものにする。
+        var completion: @MainActor (URL) -> Void
+    }
 
     struct Timing {
         /// サムネイルから広げて、ビューアで表示し終えるまでの時間。
@@ -90,12 +103,14 @@ final class MediaViewerController: UIViewController {
         dragToDismiss: DragToDismiss,
         timing: Timing,
         photoSaver: PhotoLibrarySaver = .photoLibrary,
+        downloads: MediaDownloads = AppDependencies.mediaDownloads,
         sourceTile: @escaping @MainActor (MediaAttachment.ID) -> MediaTileView?
     ) {
         precondition(attachments.indices.contains(startIndex), "開く添付ファイルの位置が範囲外です")
         self.attachments = attachments
         self.store = store
         self.photoSaver = photoSaver
+        self.downloads = downloads
         self.dragToDismiss = dragToDismiss
         self.timing = timing
         self.sourceTile = sourceTile
@@ -155,6 +170,7 @@ final class MediaViewerController: UIViewController {
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed {
+            cancelDownload()
             showHiddenTile()
             onDismiss?()
         }
@@ -242,7 +258,8 @@ final class MediaViewerController: UIViewController {
         counterLabel.font = .preferredFont(forTextStyle: .subheadline)
         counterLabel.textColor = .white
         counterLabel.isHidden = attachments.count == 1
-        for view in [menuButton, counterLabel, captionView, statusChip] {
+        setUpDownloadButton()
+        for view in [menuButton, counterLabel, captionView, statusChip, downloadButton] {
             view.translatesAutoresizingMaskIntoConstraints = false
             self.view.addSubview(view)
         }
@@ -260,7 +277,26 @@ final class MediaViewerController: UIViewController {
             timing.savedChipAtBottom
                 ? statusChip.bottomAnchor.constraint(equalTo: captionView.topAnchor, constant: -12)
                 : statusChip.topAnchor.constraint(equalTo: menuButton.bottomAnchor, constant: 12),
+            // 落とし終えると同じ場所に保存したことを知らせるため、知らせる表示と同じ場所に出す。
+            downloadButton.centerXAnchor.constraint(equalTo: statusChip.centerXAnchor),
+            downloadButton.centerYAnchor.constraint(equalTo: statusChip.centerYAnchor),
         ])
+    }
+
+    private func setUpDownloadButton() {
+        downloadButton.isHidden = true
+        downloadButton.configuration?.image = UIImage(systemName: "xmark")
+        downloadButton.configuration?.imagePlacement = .trailing
+        downloadButton.configuration?.imagePadding = 8
+        downloadButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .footnote, scale: .small)
+        // 進み具合の数字が変わるたびに幅が揺れないよう、数字の幅をそろえる。
+        downloadButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes
+            attributes.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(for: .monospacedDigitSystemFont(ofSize: 15, weight: .regular))
+            return attributes
+        }
+        downloadButton.accessibilityLabel = "ダウンロードを取り消す"
+        downloadButton.addAction(UIAction { [weak self] _ in self?.cancelDownload() }, for: .primaryActionTriggered)
     }
 
     private var chromeViews: [UIView] { [menuButton, counterLabel, captionView] }
@@ -328,12 +364,32 @@ final class MediaViewerController: UIViewController {
         return page
     }
 
-    /// 共有するもの。画像は元のファイルが届くまでnilにし、URLを共有しない。動画などはURLを共有する。
+    /// 共有するもの。画像は元のファイルが届くまでnilにし、URLを共有しない。動画、GIF、音声は落としたファイルを共有し、
+    /// 落とす前はnil。アプリで開けない種類のファイルはURLを共有する。
     func shareItem() -> Any? {
-        if currentAttachment.type == .image {
+        switch currentAttachment.type {
+        case .image:
             return (pages[currentIndex] as? ImagePageController)?.shareItem
+        case .video, .gifv, .audio:
+            return currentDownloadURL.flatMap { downloads.cachedFile(for: $0) }.map { shareItem(forDownloaded: $0, at: currentIndex) }
+        case .unknown:
+            return currentAttachment.url ?? currentAttachment.remoteUrl
         }
-        return currentAttachment.url ?? currentAttachment.remoteUrl
+    }
+
+    /// 共有や保存のときに落とす、表示中の動画、GIF、音声のURL。画像などと、URLのない添付ファイルではnil。
+    private var currentDownloadURL: URL? {
+        switch currentAttachment.type {
+        case .video, .gifv, .audio: currentAttachment.url ?? currentAttachment.remoteUrl
+        case .image, .unknown: nil
+        }
+    }
+
+    /// 落としたファイルを共有シートに渡すもの。見出しのプレビューに、`index`の添付ファイルの再生しているコマか一覧のサムネイルを添える。
+    /// 落としている間にページを替えられるため、表示中のページではなく、共有を選んだときのページから取る。
+    private func shareItem(forDownloaded file: URL, at index: Int) -> Any {
+        guard let preview = pages[index]?.transitionImage ?? sourceTile(attachments[index].id)?.loadedThumbnail else { return file }
+        return MediaShareItem(file: file, preview: preview)
     }
 
     /// 表示中のページが画像なら、そのページ。
@@ -346,23 +402,23 @@ final class MediaViewerController: UIViewController {
         (pages[currentIndex] as? ImagePageController)?.shareItem?.file
     }
 
-    /// メニューの項目。共有や保存は、するものが届くまで選べなくする。保存は画像だけ、翻訳は画像から文字を読み取れたときだけ、
-    /// 代替テキストは付いているときだけ出す。
+    /// メニューの項目。画像の共有や保存は、元のファイルが届くまで選べなくする。動画などは選んでから落とす。
+    /// 保存は写真に入る画像、動画、GIFだけ、翻訳は画像から文字を読み取れたときだけ、代替テキストは付いているときだけ出す。
     func menuElements() -> [UIMenuElement] {
         var elements: [UIMenuElement] = [
             UIAction(
                 title: "共有",
                 image: UIImage(systemName: "square.and.arrow.up"),
-                attributes: shareItem() == nil ? .disabled : []
+                attributes: shareItem() == nil && currentDownloadURL == nil ? .disabled : []
             ) { [weak self] _ in
                 self?.share()
             },
         ]
-        if currentAttachment.type == .image {
+        if [.image, .video, .gifv].contains(currentAttachment.type) {
             elements.append(UIAction(
                 title: "写真に保存",
                 image: UIImage(systemName: "square.and.arrow.down"),
-                attributes: currentOriginalFile == nil ? .disabled : []
+                attributes: currentOriginalFile == nil && currentDownloadURL == nil ? .disabled : []
             ) { [weak self] _ in
                 self?.saveToPhotos()
             })
@@ -386,9 +442,17 @@ final class MediaViewerController: UIViewController {
         present(AltTextViewController.sheet(text: description), animated: true)
     }
 
-    /// 表示中の画像を写真に保存し、済んだらメニューボタンの下で知らせる。失敗したときは理由をアラートで出す。
+    /// 表示中の添付ファイルを写真に保存し、済んだらメニューボタンの下で知らせる。動画とGIFは落としてから保存する。
+    /// 失敗したときは理由をアラートで出す。
     func saveToPhotos() {
-        guard let file = currentOriginalFile else { return }
+        if let url = currentDownloadURL {
+            withDownloadedFile(of: url) { [weak self] file in self?.save(file) }
+        } else if let file = currentOriginalFile {
+            save(file)
+        }
+    }
+
+    private func save(_ file: URL) {
         Task { [weak self, photoSaver] in
             do {
                 try await photoSaver.save(file)
@@ -425,21 +489,101 @@ final class MediaViewerController: UIViewController {
             alert = UIAlertController(title: "写真に保存できませんでした", message: error.localizedDescription, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .cancel))
         }
-        // 保存を待つ間に代替テキストや共有のシートを開いていることがある。ビューアから出すと拒否されるため、いちばん手前の画面から出す。
+        presentOnTop(alert)
+    }
+
+    /// 保存やダウンロードを待つ間に、代替テキストや共有のシートを開いていることがある。ビューアから出すと拒否されるため、いちばん手前の画面から出す。
+    private func presentOnTop(_ viewController: UIViewController) {
         var presenter: UIViewController = self
         while let presented = presenter.presentedViewController, !presented.isBeingDismissed {
             presenter = presented
         }
-        presenter.present(alert, animated: true)
+        presenter.present(viewController, animated: true)
     }
 
     private func share() {
-        guard let item = shareItem() else { return }
+        if let url = currentDownloadURL {
+            let index = currentIndex
+            withDownloadedFile(of: url) { [weak self] file in
+                guard let self else { return }
+                self.presentShareSheet(self.shareItem(forDownloaded: file, at: index))
+            }
+        } else if let item = shareItem() {
+            presentShareSheet(item)
+        }
+    }
+
+    private func presentShareSheet(_ item: Any) {
         let activity = UIActivityViewController(activityItems: [item], applicationActivities: nil)
         // 添付ファイルの画像を連絡先の写真にすることはまずないため、出さない。
         activity.excludedActivityTypes = [.assignToContact]
         activity.popoverPresentationController?.sourceItem = menuButton
-        present(activity, animated: true)
+        presentOnTop(activity)
+    }
+
+    /// 落としている途中の進み具合の文言。落としていなければnil。
+    var downloadProgressText: String? {
+        downloadButton.isHidden ? nil : downloadButton.configuration?.title
+    }
+
+    /// `url`を落としてから`completion`を行う。落とし終えていればすぐ行う。落としている間は進み具合を出し、押せば取り消せるようにする。
+    /// 同じURLを落としている途中なら、落とし直さずに行うことだけを替える。別のURLなら、落とし終えているものでも、前のものを取り消す。
+    private func withDownloadedFile(of url: URL, then completion: @escaping @MainActor (URL) -> Void) {
+        if let download, download.url != url {
+            cancelDownload()
+        }
+        if let file = downloads.cachedFile(for: url) {
+            completion(file)
+            return
+        }
+        if download?.url == url {
+            download?.completion = completion
+            return
+        }
+        updateDownloadButton(fraction: 0)
+        downloadButton.isHidden = false
+        let task = Task { [weak self, downloads] in
+            do {
+                let file = try await downloads.file(for: url) { fraction in
+                    guard let self, self.download?.url == url else { return }
+                    self.updateDownloadButton(fraction: fraction)
+                }
+                guard let self, !Task.isCancelled else { return }
+                let completion = self.download?.completion
+                self.endDownload()
+                completion?(file)
+            } catch {
+                guard let self, !Task.isCancelled else { return }
+                self.endDownload()
+                self.presentDownloadFailure(error)
+            }
+        }
+        download = Download(url: url, task: task, completion: completion)
+    }
+
+    /// 落としている途中のものを取り消す。
+    func cancelDownload() {
+        download?.task.cancel()
+        endDownload()
+    }
+
+    private func endDownload() {
+        download = nil
+        downloadButton.isHidden = true
+    }
+
+    /// 全体の大きさが分かるまでは`fraction`が0のため、割合を出さない。
+    private func updateDownloadButton(fraction: Double) {
+        let percent = Int((fraction * 100).rounded(.down))
+        downloadButton.configuration?.title = percent > 0 ? "ダウンロード中 \(percent)%" : "ダウンロード中"
+        downloadButton.accessibilityValue = percent > 0 ? "\(percent)%" : nil
+    }
+
+    private func presentDownloadFailure(_ error: any Error) {
+        UINotificationFeedbackGenerator(view: view).notificationOccurred(.error)
+        let alert = UIAlertController(title: "ダウンロードできませんでした", message: error.localizedDescription, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .cancel))
+        presentOnTop(alert)
     }
 }
 
@@ -526,6 +670,7 @@ extension MediaViewerController {
     /// 開いている度合い。0で下地とボタンが透明、1で不透明。
     private func setVisibility(_ visibility: CGFloat) {
         backdrop.alpha = visibility
+        downloadButton.alpha = visibility
         for chrome in chromeViews {
             chrome.alpha = isChromeHidden ? 0 : visibility
         }

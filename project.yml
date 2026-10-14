@@ -35,7 +35,7 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_CFBundleDisplayName: Scia
         # ビューアの共有から画像を写真に保存するため
-        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: 添付ファイルの画像を写真に保存します。
+        INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: 添付ファイルのメディアを写真に保存します。
         CODE_SIGN_STYLE: Automatic
     info:
       path: App/Info.plist

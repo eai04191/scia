@@ -23,6 +23,8 @@ enum AppDependencies {
         try await URLSession.shared.data(from: url).0
     }
 
+    static let mediaDownloads = MediaDownloads()
+
     static let network = NetworkConditionsMonitor()
 
     static let settings = AppSettings(defaults: .standard)

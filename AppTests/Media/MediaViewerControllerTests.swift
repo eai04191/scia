@@ -1,4 +1,5 @@
 import SciaCore
+import Synchronization
 import Testing
 import UIKit
 import VisionKit
@@ -256,6 +257,161 @@ struct MediaViewerControllerTests {
         let sheet = try #require(viewer.presentedViewController as? UINavigationController)
         #expect((sheet.viewControllers.first as? AltTextViewController)?.text == "夕焼けの海辺")
         sheet.dismiss(animated: false)
+    }
+
+    /// 動画のビューアを、落とし方を差し替えて一覧の上に開く。
+    private func presentVideoViewer(
+        on harness: TimelineHarness,
+        type: MediaAttachment.Kind = .video,
+        photoSaver: PhotoLibrarySaver = PhotoLibrarySaver { _ in },
+        download: @escaping MediaDownloads.Download
+    ) -> MediaViewerController {
+        let downloads = MediaDownloads(directory: .temporaryDirectory.appending(path: "MediaViewerControllerTests-\(UUID().uuidString)"), download: download)
+        let attachment = MediaAttachment(id: "1", type: type, url: URL(string: "https://x.example/original/1.mp4"), previewUrl: nil)
+        let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, photoSaver: photoSaver, downloads: downloads, sourceTile: { _ in nil })
+        harness.viewController.present(viewer, animated: false)
+        return viewer
+    }
+
+    /// 少し時間をかけて落とし、途中で進み具合を半分まで伝える。
+    private static func slowDownload(_ data: Data, duration: Duration = .milliseconds(300)) -> MediaDownloads.Download {
+        { url, folder, onProgress in
+            onProgress(0.5)
+            try await Task.sleep(for: duration)
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let file = folder.appending(path: url.lastPathComponent)
+            try data.write(to: file)
+            return file
+        }
+    }
+
+    /// 動画は、保存を選んでから落とし、落としている間は進み具合を出す。落とし終えたら写真に渡して知らせる。
+    @Test func savingVideoDownloadsItFirstAndShowsProgress() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let data = Data("movie".utf8)
+        let saved = SavedFiles()
+        let viewer = presentVideoViewer(on: harness, photoSaver: PhotoLibrarySaver { saved.files.append($0) }, download: Self.slowDownload(data))
+        defer { viewer.dismiss(animated: false) }
+        #expect(viewer.menuElements().compactMap { ($0 as? UIAction)?.title } == ["共有", "写真に保存"])
+        #expect(try #require(menuAction("写真に保存", in: viewer)).attributes.isEmpty)
+
+        viewer.saveToPhotos()
+
+        #expect(viewer.downloadProgressText == "ダウンロード中")
+        try await waitUntil { viewer.downloadProgressText == "ダウンロード中 50%" }
+        try await waitUntil { viewer.statusChipText != nil }
+        #expect(viewer.statusChipText == "写真に保存しました")
+        #expect(viewer.downloadProgressText == nil)
+        let file = try #require(saved.files.first)
+        #expect(file.lastPathComponent == "1.mp4")
+        #expect(try Data(contentsOf: file) == data)
+    }
+
+    /// 落としている途中で取り消したら、通信を止め、保存しない。
+    @Test func cancelingDownloadStopsItWithoutSaving() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let saved = SavedFiles()
+        let stopped = Mutex(false)
+        let viewer = presentVideoViewer(on: harness, photoSaver: PhotoLibrarySaver { saved.files.append($0) }) { _, _, _ in
+            do {
+                try await Task.sleep(for: .seconds(10))
+            } catch {
+                stopped.withLock { $0 = true }
+                throw error
+            }
+            throw URLError(.timedOut)
+        }
+        defer { viewer.dismiss(animated: false) }
+
+        viewer.saveToPhotos()
+        #expect(viewer.downloadProgressText != nil)
+        viewer.cancelDownload()
+
+        #expect(viewer.downloadProgressText == nil)
+        try await waitUntil { stopped.withLock { $0 } }
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(saved.files.isEmpty)
+        #expect(viewer.presentedViewController == nil)
+    }
+
+    /// ページを`index`の添付ファイルへ切り替える。スワイプで切り替え終えたときと同じ知らせをビューアに送る。
+    private func showPage(_ index: Int, in viewer: MediaViewerController) throws {
+        let pageViewController = try #require(viewer.children.lazy.compactMap { $0 as? UIPageViewController }.first)
+        let current = try #require(pageViewController.viewControllers?.first)
+        let next = index > viewer.currentIndex
+            ? viewer.pageViewController(pageViewController, viewControllerAfter: current)
+            : viewer.pageViewController(pageViewController, viewControllerBefore: current)
+        pageViewController.setViewControllers([try #require(next)], direction: .forward, animated: false)
+        viewer.pageViewController(pageViewController, didFinishAnimating: true, previousViewControllers: [current], transitionCompleted: true)
+        #expect(viewer.currentIndex == index)
+    }
+
+    /// 動画を落としている途中に、落とし終えた別の動画へ移って保存したら、落としている途中のものは取り消す。
+    /// 残すと進み具合が出たままになり、落とし終えたときに前に選んだ保存まで行われる。
+    @Test func savingAnotherDownloadedVideoCancelsPendingDownload() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let saved = SavedFiles()
+        let stopped = Mutex(false)
+        let downloads = MediaDownloads(directory: .temporaryDirectory.appending(path: "MediaViewerControllerTests-\(UUID().uuidString)")) { url, folder, _ in
+            if url.lastPathComponent == "slow.mp4" {
+                do {
+                    try await Task.sleep(for: .seconds(10))
+                } catch {
+                    stopped.withLock { $0 = true }
+                    throw error
+                }
+            }
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let file = folder.appending(path: url.lastPathComponent)
+            try Data("movie".utf8).write(to: file)
+            return file
+        }
+        let attachments = ["slow", "fast"].map { MediaAttachment(id: $0, type: .video, url: URL(string: "https://x.example/original/\($0).mp4"), previewUrl: nil) }
+        let viewer = MediaViewerController(attachments: attachments, startIndex: 1, store: .offline, dragToDismiss: drag, timing: timing, photoSaver: PhotoLibrarySaver { saved.files.append($0) }, downloads: downloads, sourceTile: { _ in nil })
+        harness.viewController.present(viewer, animated: false)
+        defer { viewer.dismiss(animated: false) }
+        viewer.saveToPhotos()
+        try await waitUntil { saved.files.count == 1 }
+
+        try showPage(0, in: viewer)
+        viewer.saveToPhotos()
+        #expect(viewer.downloadProgressText != nil)
+        try showPage(1, in: viewer)
+        viewer.saveToPhotos()
+
+        #expect(viewer.downloadProgressText == nil)
+        try await waitUntil { stopped.withLock { $0 } }
+        try await waitUntil { saved.files.count == 2 }
+        #expect(saved.files.map(\.lastPathComponent) == ["fast.mp4", "fast.mp4"])
+    }
+
+    /// 落とせなかったら、理由をアラートで出す。
+    @Test func downloadFailureIsShown() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let viewer = presentVideoViewer(on: harness) { _, _, _ in throw URLError(.notConnectedToInternet) }
+        defer { viewer.dismiss(animated: false) }
+
+        viewer.saveToPhotos()
+
+        try await waitUntil { viewer.presentedViewController is UIAlertController }
+        #expect((viewer.presentedViewController as? UIAlertController)?.title == "ダウンロードできませんでした")
+        #expect(viewer.downloadProgressText == nil)
+        viewer.presentedViewController?.dismiss(animated: false)
+    }
+
+    /// 音声は写真に入らないため、共有だけを出す。
+    @Test func audioOffersOnlySharing() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let viewer = presentVideoViewer(on: harness, type: .audio, download: Self.slowDownload(Data()))
+        defer { viewer.dismiss(animated: false) }
+
+        #expect(viewer.menuElements().compactMap { ($0 as? UIAction)?.title } == ["共有"])
+        #expect(try #require(menuAction("共有", in: viewer)).attributes.isEmpty)
     }
 
     /// 処理中でURLのない添付ファイルは、共有するものがないため選べない。
