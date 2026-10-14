@@ -62,7 +62,7 @@ final class TimelineHarness {
         (visibleCell(of: .status(id))?.contentConfiguration as? UIListContentConfiguration)?.secondaryAttributedText?.string
     }
 
-    private func visibleCell(of id: TimelineViewController.ItemID) -> UICollectionViewCell? {
+    func visibleCell(of id: TimelineViewController.ItemID) -> UICollectionViewCell? {
         collectionView.layoutIfNeeded()
         return collectionView.visibleCells.first { cell in
             guard let indexPath = collectionView.indexPath(for: cell) else { return false }

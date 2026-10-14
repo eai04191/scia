@@ -431,6 +431,14 @@ final class TimelineViewController: UIViewController {
         }
     }
 
+    /// スクロールが止まったときに、レイアウトを確定させてから表示中の要素を報告し直す。
+    /// スクロールの通知の時点では表示中のセルの一覧が前のフレームのままで、遠くから一気に動くと、
+    /// 最後の通知に止まった位置の要素が入らないため。
+    private func reportVisibleItemsAfterLayout() {
+        collectionView.layoutIfNeeded()
+        reportVisibleItems()
+    }
+
     /// 表示領域に半分以上入っている投稿と通知を、表示中として報告する。ナビゲーションバーの下に隠れている部分は数えない。
     /// 他のタブにいる間など、画面に出ていなければ報告しない。
     private func reportVisibleItems() {
@@ -555,11 +563,13 @@ extension TimelineViewController: UICollectionViewDelegate {
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
+            reportVisibleItemsAfterLayout()
             onInteractionSettle?()
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        reportVisibleItemsAfterLayout()
         onInteractionSettle?()
     }
 
@@ -570,6 +580,7 @@ extension TimelineViewController: UICollectionViewDelegate {
             return
         }
         isScrollingToTop = false
+        reportVisibleItemsAfterLayout()
         onInteractionSettle?()
     }
 
@@ -587,12 +598,10 @@ extension TimelineViewController: UICollectionViewDelegate {
 
     /// ステータスバーのタップで最上部へ動かしたとき。
     func scrollViewDidScrollToTop(_ scrollView: UIScrollView) {
+        reportVisibleItemsAfterLayout()
         onInteractionSettle?()
     }
 
-    /// ギャップは、画面の上半分にあれば下から遡ってきたとみなして古い側から、下半分にあれば新しい側から読む。
-    /// どちらも、いま読んでいる側に続く投稿から埋まる。
-    /// 長押しで投稿への操作のメニューを出す。
     func collectionView(_ collectionView: UICollectionView, willDisplayContextMenu configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
         menuWillShow()
     }
@@ -606,11 +615,23 @@ extension TimelineViewController: UICollectionViewDelegate {
         animator.addCompletion { [weak self] in self?.menuDidHide() }
     }
 
+    /// 長押しで投稿への操作のメニューを出す。
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
         guard indexPaths.count == 1, let indexPath = indexPaths.first, let id = dataSource.itemIdentifier(for: indexPath), let status = status(for: id) else { return nil }
         return UIContextMenuConfiguration(actionProvider: { [weak self] _ in self?.statusMenu(for: status) })
     }
 
+    /// 選べるのはギャップだけにする。投稿にはまだ開く画面がなく、タップすると選んだ状態の背景が残ったままになるため。
+    func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        if case .gap = dataSource.itemIdentifier(for: indexPath) { true } else { false }
+    }
+
+    func collectionView(_ collectionView: UICollectionView, shouldHighlightItemAt indexPath: IndexPath) -> Bool {
+        self.collectionView(collectionView, shouldSelectItemAt: indexPath)
+    }
+
+    /// ギャップは、画面の上半分にあれば下から遡ってきたとみなして古い側から、下半分にあれば新しい側から読む。
+    /// どちらも、いま読んでいる側に続く投稿から埋まる。
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         guard case .gap(let gapID) = dataSource.itemIdentifier(for: indexPath) else { return }
         collectionView.deselectItem(at: indexPath, animated: true)
