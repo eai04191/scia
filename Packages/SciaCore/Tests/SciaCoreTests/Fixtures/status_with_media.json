@@ -1,0 +1,81 @@
+{
+  "id": "113000000000000010",
+  "created_at": "2026-10-13T03:21:45.123Z",
+  "in_reply_to_id": null,
+  "sensitive": true,
+  "spoiler_text": "",
+  "visibility": "public",
+  "url": "https://example.social/@alice/113000000000000010",
+  "content": "<p>写真</p>",
+  "account": {
+    "id": "1",
+    "username": "alice",
+    "acct": "alice",
+    "display_name": "Alice",
+    "avatar": "https://example.social/avatars/alice.png",
+    "emojis": []
+  },
+  "media_attachments": [
+    {
+      "id": "22345792",
+      "type": "image",
+      "url": "https://files.example.social/media_attachments/files/022/345/792/original/57859aede991da25.jpeg",
+      "preview_url": "https://files.example.social/media_attachments/files/022/345/792/small/57859aede991da25.jpeg",
+      "remote_url": null,
+      "meta": {
+        "original": {"width": 640, "height": 480, "size": "640x480", "aspect": 1.3333333333333333},
+        "small": {"width": 461, "height": 346, "size": "461x346", "aspect": 1.3323699421965318},
+        "focus": {"x": -0.27, "y": 0.51}
+      },
+      "description": "代替テキスト",
+      "blurhash": "UFBWY:8_0Jxv4mx]t8t64.%M-:IUWGWAt6M}"
+    },
+    {
+      "id": "22546306",
+      "type": "video",
+      "url": "https://files.example.social/media_attachments/files/022/546/306/original/dab9a597f68b9745.mp4",
+      "preview_url": "https://files.example.social/media_attachments/files/022/546/306/small/dab9a597f68b9745.png",
+      "remote_url": null,
+      "meta": {
+        "length": "0:01:28.65",
+        "duration": 88.65,
+        "fps": 24,
+        "size": "1280x720",
+        "width": 1280,
+        "height": 720,
+        "aspect": 1.7777777777777777,
+        "original": {"width": 1280, "height": 720, "frame_rate": "6159375/249269", "duration": 88.654, "bitrate": 862056},
+        "small": {"width": 400, "height": 225, "size": "400x225", "aspect": 1.7777777777777777}
+      },
+      "description": null,
+      "blurhash": "U58E0g8_0M.94T?bIr00?bD%NGoM?bD%oLt7"
+    },
+    {
+      "id": "21165404",
+      "type": "audio",
+      "url": "https://files.example.social/media_attachments/files/021/165/404/original/a31a4a46cd713cd2.mp3",
+      "preview_url": "https://files.example.social/media_attachments/files/021/165/404/small/a31a4a46cd713cd2.mp3",
+      "remote_url": null,
+      "meta": {
+        "length": "0:06:42.86",
+        "duration": 402.86,
+        "original": {"duration": 402.860408, "bitrate": 166290}
+      },
+      "description": null,
+      "blurhash": null
+    },
+    {
+      "id": "21165405",
+      "type": "unknown",
+      "url": null,
+      "preview_url": null,
+      "remote_url": "https://remote.example/files/document.pdf",
+      "meta": null,
+      "description": null,
+      "blurhash": null
+    }
+  ],
+  "mentions": [],
+  "tags": [],
+  "emojis": []
+}

@@ -47,7 +47,8 @@
         {"id": "1", "username": "alice", "url": "https://example.social/@alice", "acct": "alice"}
       ],
       "tags": [],
-      "emojis": []
+      "emojis": [],
+      "media_attachments": []
     }
   },
   {
@@ -98,7 +99,8 @@
       },
       "mentions": [],
       "tags": [],
-      "emojis": []
+      "emojis": [],
+      "media_attachments": []
     }
   }
 ]

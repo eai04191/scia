@@ -62,11 +62,13 @@
           "static_url": "https://example.social/emoji/blobcat.png",
           "visible_in_picker": true
         }
-      ]
+      ],
+      "media_attachments": []
     },
     "mentions": [],
     "tags": [],
-    "emojis": []
+    "emojis": [],
+    "media_attachments": []
   },
   {
     "id": "113000000000000002",
@@ -88,6 +90,7 @@
     "reblog": null,
     "mentions": [],
     "tags": [],
-    "emojis": []
+    "emojis": [],
+    "media_attachments": []
   }
 ]

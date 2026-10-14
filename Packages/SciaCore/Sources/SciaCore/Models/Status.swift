@@ -12,6 +12,9 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public let tags: [Tag]
     /// 本文と注意書きで使われるカスタム絵文字。
     public let emojis: [CustomEmoji]
+    public let mediaAttachments: [MediaAttachment]
+    /// 添付ファイルを閲覧注意として隠す。
+    public let sensitive: Bool
     public let visibility: Visibility
     /// 返信先の投稿のID。
     public let inReplyToId: String?
@@ -35,6 +38,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         mentions: [Mention] = [],
         tags: [Tag] = [],
         emojis: [CustomEmoji] = [],
+        mediaAttachments: [MediaAttachment] = [],
+        sensitive: Bool = false,
         visibility: Visibility = .public,
         inReplyToId: String? = nil,
         favourited: Bool = false,
@@ -53,6 +58,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         self.mentions = mentions
         self.tags = tags
         self.emojis = emojis
+        self.mediaAttachments = mediaAttachments
+        self.sensitive = sensitive
         self.visibility = visibility
         self.inReplyToId = inReplyToId
         self.favourited = favourited
@@ -75,6 +82,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         mentions = try container.decode([Mention].self, forKey: .mentions)
         tags = try container.decode([Tag].self, forKey: .tags)
         emojis = try container.decode([CustomEmoji].self, forKey: .emojis)
+        mediaAttachments = try container.decode([MediaAttachment].self, forKey: .mediaAttachments)
+        sensitive = try container.decode(Bool.self, forKey: .sensitive)
         visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
         inReplyToId = try container.decodeIfPresent(String.self, forKey: .inReplyToId)
         favourited = try container.decodeIfPresent(Bool.self, forKey: .favourited) ?? false
@@ -142,7 +151,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, createdAt, account, content, spoilerText, url, mentions, tags, emojis
+        case id, createdAt, account, content, spoilerText, url, mentions, tags, emojis, mediaAttachments, sensitive
         case visibility, inReplyToId, favourited, reblogged, favouritesCount, reblogsCount, repliesCount
         case reblogBox = "reblog"
     }
