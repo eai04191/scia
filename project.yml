@@ -4,6 +4,8 @@ options:
   deploymentTarget:
     iOS: "26.0"
   createIntermediateGroups: true
+  # アプリの文言は日本語で書いているため、UIKitなどが出すシステムの文言（共有シートの「コピー」など）も日本語にそろえる
+  developmentLanguage: ja
 settings:
   base:
     SWIFT_VERSION: "6.0"
