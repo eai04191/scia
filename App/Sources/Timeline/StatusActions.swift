@@ -12,9 +12,26 @@ extension TimelineViewController {
     /// 要素が指す投稿。通知なら対象の投稿。ギャップやフォローの通知などではnil。
     func status(for id: ItemID) -> Status? {
         switch entry(for: id) {
-        case .status(let status): status
+        case .status(let status), .pinned(let status): status
         case .notification(let notification): notification.status
         case .gap, nil: nil
+        }
+    }
+
+    /// 長押しのメニューから開けるプロフィール。投稿なら投稿した人とブーストした人、通知なら操作した人と対象の投稿を書いた人。
+    static func profileAccounts(of entry: TimelineEntry) -> [Account] {
+        let accounts: [Account] = switch entry {
+        case .status(let status), .pinned(let status): [status.displayed.account, status.account]
+        case .notification(let notification): [notification.account] + (notification.status.map { [$0.displayed.account] } ?? [])
+        case .gap: []
+        }
+        var seen: Set<Account.ID> = []
+        return accounts.filter { seen.insert($0.id).inserted }
+    }
+
+    func profileAction(for account: Account) -> UIAction {
+        UIAction(title: "@\(account.acct)のプロフィール", image: UIImage(systemName: "person.crop.circle")) { [weak self] _ in
+            self?.onOpenProfile?(account)
         }
     }
 

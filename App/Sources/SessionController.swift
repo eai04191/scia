@@ -15,6 +15,8 @@ final class SessionController {
     private let interactions: StatusInteractions
     private let report: (String) -> Void
     private let tabBarDelegate: TabReselectionDelegate
+    /// 開いているプロフィール画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
+    private let profiles: ProfileRegistry
     /// 投稿画面で使う、インスタンスの上限とユーザーの既定の公開範囲。一度読めたら使い回す。
     private var composeDefaults: (configuration: InstanceConfiguration?, visibility: Status.Visibility?)?
     private let logger = SciaLog.logger(category: "session")
@@ -32,10 +34,13 @@ final class SessionController {
         self.home = home
         self.notifications = notifications
         self.client = client
-        // 同じ投稿が両方のタブにあることがあるため、どちらにも反映する。
+        let profiles = ProfileRegistry()
+        self.profiles = profiles
+        // 同じ投稿が両方のタブと開いているプロフィールにあることがあるため、どれにも反映する。
         interactions = StatusInteractions(operations: .init(client: client)) { id, transform in
             home.updateStatus(id, transform)
             notifications.updateStatus(id, transform)
+            profiles.updateStatus(id, transform)
         }
         report = { message in forward(message) }
 
@@ -59,11 +64,52 @@ final class SessionController {
             onUnauthorized(self, message)
         }
         for viewController in [home.viewController, notifications.viewController] {
-            viewController.navigationItem.leftBarButtonItem = Self.accountButton(for: credential, menu: accountMenu)
-            viewController.myAccountID = credential.accountID
-            viewController.onStatusAction = { [weak self] action, status in self?.perform(action, on: status) }
+            viewController.navigationItem.leftBarButtonItem = Self.accountButton(for: credential) { [weak self, weak viewController] in
+                let myProfile = UIAction(title: "自分のプロフィール", image: UIImage(systemName: "person.crop.circle")) { _ in
+                    guard let viewController else { return }
+                    self?.openMyProfile(from: viewController)
+                }
+                return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile])] + accountMenu().children)
+            }
+            configure(viewController)
         }
         home.viewController.onCompose = { [weak self] in self?.presentCompose(replyingTo: nil) }
+    }
+
+    /// 一覧から投稿への操作とプロフィールを開けるようにする。プロフィール画面の一覧にも使う。
+    private func configure(_ viewController: TimelineViewController) {
+        viewController.myAccountID = credential.accountID
+        viewController.onStatusAction = { [weak self] action, status in self?.perform(action, on: status) }
+        viewController.onOpenProfile = { [weak self, weak viewController] account in
+            guard let viewController else { return }
+            self?.openProfile(account, from: viewController)
+        }
+    }
+
+    // MARK: - プロフィール
+
+    private func openProfile(_ account: Account, from source: UIViewController) {
+        let (controller, viewController) = ProfileController.make(account: account, client: client) { [weak self] error, title in
+            self?.handle(error, title: title)
+        }
+        configure(viewController)
+        profiles.add(controller)
+        source.navigationController?.pushViewController(viewController, animated: true)
+        controller.start()
+    }
+
+    /// 自分のアカウントは手元にCredentialしかないため、読んでから開く。
+    private func openMyProfile(from source: UIViewController) {
+        let client = client
+        Task {
+            do {
+                let account = try await client.account(client.credential.accountID)
+                openProfile(account, from: source)
+            } catch {
+                logger.error("my profile load failed: \(error.localizedDescription, privacy: .public)")
+                handle(error, title: "プロフィールを読み込めませんでした")
+            }
+        }
     }
 
     /// 使っているアカウントを示し、押すとアカウントのメニューを開く。
@@ -177,6 +223,28 @@ final class SessionController {
     func enterBackground() {
         home.enterBackground()
         notifications.enterBackground()
+    }
+}
+
+/// 開いているプロフィール画面を弱く持つ。
+@MainActor
+private final class ProfileRegistry {
+    private struct Entry {
+        weak var controller: ProfileController?
+    }
+
+    private var entries: [Entry] = []
+
+    func add(_ controller: ProfileController) {
+        entries.removeAll { $0.controller == nil }
+        entries.append(Entry(controller: controller))
+    }
+
+    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
+        entries.removeAll { $0.controller == nil }
+        for entry in entries {
+            entry.controller?.updateStatus(id, transform)
+        }
     }
 }
 

@@ -101,12 +101,37 @@ struct TimelineContentTests {
 
         let content = makeViewController().contentConfiguration(for: boost, base: .cell())
 
-        #expect(content.boost?.name.string == "bob")
-        #expect(content.boost?.avatar.url == booster.avatarStatic)
+        #expect(content.context?.text.string == "bob")
+        #expect(content.context?.avatar?.url == booster.avatarStatic)
         #expect(content.avatar.url == original.account.avatarStatic)
         #expect(content.nameParts.map(\.string) == [original.account.displayName, "@\(original.account.acct)"])
         #expect(content.createdAt == original.createdAt)
         #expect(content.body.string == original.content)
+    }
+
+    @Test func tappingAvatarOpensAuthorAndContextOpensBooster() throws {
+        let original = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let booster = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: original.account.avatar)
+        let boost = Status(id: "200", createdAt: original.createdAt, account: booster, content: "", spoilerText: "", url: nil, reblog: original)
+        let controller = makeViewController()
+        var opened: [Account.ID] = []
+        controller.onOpenProfile = { opened.append($0.id) }
+
+        let content = controller.contentConfiguration(for: boost, base: .cell())
+        content.onOpenAccount?()
+        content.onOpenContextAccount?()
+
+        #expect(opened == [original.account.id, booster.id])
+    }
+
+    @Test func pinnedStatusShowsPinnedRowWithoutAccount() throws {
+        let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+
+        let content = makeViewController().contentConfiguration(for: status, isPinned: true, base: .cell())
+
+        #expect(content.context?.text.string == "固定された投稿")
+        #expect(content.context?.avatar == nil)
+        #expect(content.onOpenContextAccount == nil)
     }
 
     @Test func spoilerHidesContent() throws {

@@ -5,11 +5,14 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
     case gap(TimelineGap)
     /// 通知の一覧に並ぶ通知。
     case notification(MastodonNotification)
+    /// プロフィールの一覧の上に置く、固定された投稿。同じ投稿が下の一覧にも並ぶため、IDを分ける。
+    case pinned(Status)
 
     public enum ID: Hashable, Sendable {
         case status(Status.ID)
         case gap(String)
         case notification(MastodonNotification.ID)
+        case pinned(Status.ID)
     }
 
     public var id: ID {
@@ -17,9 +20,11 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
         case .status(let status): .status(status.id)
         case .gap(let gap): .gap(gap.id)
         case .notification(let notification): .notification(notification.id)
+        case .pinned(let status): .pinned(status.id)
         }
     }
 
+    /// 一覧に並ぶ投稿。固定された投稿は含まない。読み込みの境目や既読位置の判定に使うため。
     public var status: Status? {
         if case .status(let status) = self { status } else { nil }
     }

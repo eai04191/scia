@@ -170,6 +170,19 @@ public final class ProfileStore {
         relationship = try await follows ? api.follow(account.id) : api.unfollow(account.id)
     }
 
+    /// 固定された投稿と今の一覧の、IDが一致する投稿を書き換える。一覧のブーストは、中の元の投稿のIDでも一致させる。
+    /// 固定できるのは本人の投稿だけで、ブーストは固定されないため、固定された投稿はIDだけで比べる。書き換えたものがあればtrue。
+    @discardableResult
+    public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) -> Bool {
+        var changed = timeline.updateStatus(id, transform)
+        pinned = pinned.map { status in
+            guard status.id == id else { return status }
+            changed = true
+            return transform(status)
+        }
+        return changed
+    }
+
     private func rebuildTimeline() -> TimelineStore {
         timeline = Self.makeTimeline(accountID: account.id, filter: Self.statusFilter(tab: tab, postsFilter: postsFilter), pageSize: pageSize, api: api)
         return timeline

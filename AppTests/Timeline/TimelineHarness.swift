@@ -11,8 +11,10 @@ final class TimelineHarness {
     let tuning = TuningStore(defaults: nil)
     private let window: UIWindow
 
-    init(size: CGSize = CGSize(width: 393, height: 852), mediaImages: MediaImageStore = .offline) throws {
+    /// - Parameter headerView: プロフィールのように、一覧の頭に置くビュー。
+    init(size: CGSize = CGSize(width: 393, height: 852), mediaImages: MediaImageStore = .offline, headerView: UIView? = nil) throws {
         viewController = TimelineViewController(tuning: tuning, emojiImages: .offline, mediaImages: mediaImages, avatarImages: .offline)
+        viewController.headerView = headerView
         let scene = try #require(
             UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
             "テストのホストアプリにウィンドウシーンがありません"

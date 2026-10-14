@@ -1,16 +1,21 @@
 import SciaCore
 import UIKit
 
-/// 投稿のセルの中身。左にアイコン、右に名前の行、本文、添付ファイルのサムネイルを並べる。ブーストなら、上にブーストした人の行を足す。
+/// 投稿のセルの中身。左にアイコン、右に名前の行、本文、添付ファイルのサムネイルを並べる。
+/// ブーストや固定された投稿なら、名前の上に、そのことを示す行を足す。
 ///
 /// 名前の行の右端に時刻を置くため、`UIListContentConfiguration`の文字の枠を使わずに組む。
 struct PostContentConfiguration: UIContentConfiguration {
-    struct Boost {
-        let avatar: AvatarView.Content
-        let name: NSAttributedString
+    /// 名前の上の行。左のアイコンの列の右端に記号を置き、本文の列に、あればアイコンと文字を並べる。
+    struct Context {
+        let symbolName: String
+        /// ブーストした人のアイコン。
+        let avatar: AvatarView.Content?
+        let text: NSAttributedString
+        let accessibilityText: String
     }
 
-    var boost: Boost?
+    var context: Context?
     var avatar: AvatarView.Content
     /// 名前の行に並べる文字。先頭を目立たせ、2つ目は控えめに描く。
     var nameParts: [NSAttributedString]
@@ -25,6 +30,10 @@ struct PostContentConfiguration: UIContentConfiguration {
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     var onRevealMedia: (() -> Void)?
+    /// アイコンか名前の行がタップされたときに呼ぶ。投稿した人のプロフィールを開く。
+    var onOpenAccount: (() -> Void)?
+    /// 名前の上の行がタップされたときに呼ぶ。ブーストした人のプロフィールを開く。
+    var onOpenContextAccount: (() -> Void)?
 
     /// 大きさと文字の見た目。
     struct Metrics {
@@ -54,13 +63,13 @@ final class PostContentView: UIView, UIContentView {
     private static let avatarSpacing: CGFloat = 10
     /// 本文とサムネイルのあいだの余白。
     private static let mediaSpacing: CGFloat = 8
-    /// ブーストした人の行と名前の行のあいだの余白。
-    private static let boostSpacing: CGFloat = 4
+    /// 名前の上の行と名前の行のあいだの余白。
+    private static let contextSpacing: CGFloat = 4
 
     private let avatarView: AvatarView
-    private let boostIcon = UIImageView(image: UIImage(systemName: "arrow.2.squarepath"))
-    private let boosterAvatarView: AvatarView
-    private let boostLabel = UILabel()
+    private let contextIcon = UIImageView()
+    private let contextAvatarView: AvatarView
+    private let contextLabel = UILabel()
     private let nameLabels = [UILabel(), UILabel()]
     private let timeLabel = UILabel()
     private let nameRow = UIStackView()
@@ -88,7 +97,7 @@ final class PostContentView: UIView, UIContentView {
     init(configuration: PostContentConfiguration) {
         current = configuration
         avatarView = AvatarView(store: configuration.avatarImages)
-        boosterAvatarView = AvatarView(store: configuration.avatarImages)
+        contextAvatarView = AvatarView(store: configuration.avatarImages)
         mediaView = MediaGridView(store: configuration.mediaImages)
         super.init(frame: .zero)
         addLayoutGuide(textGuide)
@@ -98,7 +107,23 @@ final class PostContentView: UIView, UIContentView {
             self.current.onSelectMedia?(index, self.mediaView)
         }
         mediaView.onReveal = { [weak self] in self?.current.onRevealMedia?() }
+        for view in [avatarView, nameRow] as [UIView] {
+            view.isUserInteractionEnabled = true
+            view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAccount)))
+        }
+        for view in [contextAvatarView, contextLabel] as [UIView] {
+            view.isUserInteractionEnabled = true
+            view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openContextAccount)))
+        }
         apply(configuration)
+    }
+
+    @objc private func openAccount() {
+        current.onOpenAccount?()
+    }
+
+    @objc private func openContextAccount() {
+        current.onOpenContextAccount?()
     }
 
     @available(*, unavailable)
@@ -107,10 +132,10 @@ final class PostContentView: UIView, UIContentView {
     }
 
     private func configureSubviews() {
-        boostIcon.tintColor = .secondaryLabel
-        boostIcon.contentMode = .scaleAspectFit
-        boostIcon.setContentHuggingPriority(.required, for: .horizontal)
-        boostLabel.lineBreakMode = .byTruncatingTail
+        contextIcon.tintColor = .secondaryLabel
+        contextIcon.contentMode = .scaleAspectFit
+        contextIcon.setContentHuggingPriority(.required, for: .horizontal)
+        contextLabel.lineBreakMode = .byTruncatingTail
 
         // 幅が足りなければ、2つ目（既定ではacct）から先に縮め、時刻は縮めない。
         for (index, label) in nameLabels.enumerated() {
@@ -136,7 +161,7 @@ final class PostContentView: UIView, UIContentView {
 
         bodyLabel.numberOfLines = 0
 
-        for view in [avatarView, boostIcon, boosterAvatarView, boostLabel, nameRow, bodyLabel, mediaView] as [UIView] {
+        for view in [avatarView, contextIcon, contextAvatarView, contextLabel, nameRow, bodyLabel, mediaView] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -147,13 +172,14 @@ final class PostContentView: UIView, UIContentView {
         let metrics = configuration.metrics
 
         avatarView.apply(configuration.avatar)
-        let boost = configuration.boost
-        boostIcon.isHidden = boost == nil
-        boosterAvatarView.isHidden = boost == nil
-        boostLabel.isHidden = boost == nil
-        boosterAvatarView.apply(boost?.avatar)
-        boostLabel.attributedText = boost?.name
-        boostIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(font: metrics.secondaryFont, scale: .small)
+        let context = configuration.context
+        contextIcon.isHidden = context == nil
+        contextAvatarView.isHidden = context?.avatar == nil
+        contextLabel.isHidden = context == nil
+        contextAvatarView.apply(context?.avatar)
+        contextLabel.attributedText = context?.text
+        contextIcon.image = context.flatMap { UIImage(systemName: $0.symbolName) }
+        contextIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(font: metrics.secondaryFont, scale: .small)
 
         for (index, label) in nameLabels.enumerated() {
             let text = configuration.nameParts.indices.contains(index) ? configuration.nameParts[index] : nil
@@ -205,20 +231,26 @@ final class PostContentView: UIView, UIContentView {
             // 本文が短くても、アイコンが下の余白に食い込まないようにする。
             bottomAnchor.constraint(greaterThanOrEqualTo: avatarView.bottomAnchor, constant: margins.bottom),
         ]
-        if configuration.boost != nil {
+        if let context = configuration.context {
             constraints += [
-                boostLabel.topAnchor.constraint(equalTo: topAnchor, constant: margins.top),
-                boosterAvatarView.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
-                boosterAvatarView.centerYAnchor.constraint(equalTo: boostLabel.centerYAnchor),
-                boosterAvatarView.widthAnchor.constraint(equalToConstant: metrics.boosterAvatarSize),
-                boosterAvatarView.heightAnchor.constraint(equalToConstant: metrics.boosterAvatarSize),
-                boostLabel.leadingAnchor.constraint(equalTo: boosterAvatarView.trailingAnchor, constant: 4),
-                boostLabel.trailingAnchor.constraint(lessThanOrEqualTo: textGuide.trailingAnchor),
-                // 🔁はアイコンの列の右端に揃え、ブーストした人のアイコンと名前は本文の列に揃える。
-                boostIcon.trailingAnchor.constraint(equalTo: avatarView.trailingAnchor),
-                boostIcon.centerYAnchor.constraint(equalTo: boostLabel.centerYAnchor),
-                nameRow.topAnchor.constraint(equalTo: boostLabel.bottomAnchor, constant: Self.boostSpacing),
+                contextLabel.topAnchor.constraint(equalTo: topAnchor, constant: margins.top),
+                contextLabel.trailingAnchor.constraint(lessThanOrEqualTo: textGuide.trailingAnchor),
+                // 記号はアイコンの列の右端に揃え、ブーストした人のアイコンと名前は本文の列に揃える。
+                contextIcon.trailingAnchor.constraint(equalTo: avatarView.trailingAnchor),
+                contextIcon.centerYAnchor.constraint(equalTo: contextLabel.centerYAnchor),
+                nameRow.topAnchor.constraint(equalTo: contextLabel.bottomAnchor, constant: Self.contextSpacing),
             ]
+            if context.avatar != nil {
+                constraints += [
+                    contextAvatarView.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
+                    contextAvatarView.centerYAnchor.constraint(equalTo: contextLabel.centerYAnchor),
+                    contextAvatarView.widthAnchor.constraint(equalToConstant: metrics.boosterAvatarSize),
+                    contextAvatarView.heightAnchor.constraint(equalToConstant: metrics.boosterAvatarSize),
+                    contextLabel.leadingAnchor.constraint(equalTo: contextAvatarView.trailingAnchor, constant: 4),
+                ]
+            } else {
+                constraints.append(contextLabel.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor))
+            }
         } else {
             constraints.append(nameRow.topAnchor.constraint(equalTo: topAnchor, constant: margins.top))
         }
@@ -247,11 +279,11 @@ final class PostContentView: UIView, UIContentView {
         NSLayoutConstraint.activate(constraints)
     }
 
-    /// 読み上げでは、ブーストした人、名前、時刻、本文の順に1つの要素として読む。サムネイルは別の要素のまま残す。
+    /// 読み上げでは、名前の上の行、名前、時刻、本文の順に1つの要素として読む。サムネイルは別の要素のまま残す。
     private func updateAccessibility(for configuration: PostContentConfiguration) {
         var parts: [String] = []
-        if let boost = configuration.boost {
-            parts.append("\(boost.name.string)がブースト")
+        if let context = configuration.context {
+            parts.append(context.accessibilityText)
         }
         parts += configuration.nameParts.map(\.string)
         parts.append(timeLabel.text ?? "")
@@ -265,7 +297,7 @@ final class PostContentView: UIView, UIContentView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let textFrame = [boostLabel, nameRow, bodyLabel].filter { !$0.isHidden }.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+        let textFrame = [contextLabel, nameRow, bodyLabel].filter { !$0.isHidden }.map(\.frame).reduce(CGRect.null) { $0.union($1) }
         textAccessibilityElement.accessibilityFrameInContainerSpace = textFrame.union(avatarView.frame)
     }
 }

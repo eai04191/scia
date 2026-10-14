@@ -21,6 +21,7 @@ final class TimelineViewController: UIViewController {
 
         static let home = Texts(dumpName: "timeline", title: "ホーム", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません")
         static let notifications = Texts(dumpName: "notifications", title: "通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません")
+        static let profile = Texts(dumpName: "profile", title: "", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません")
     }
 
     /// 一覧全体の状態。投稿がないときの表示に使う。
@@ -60,6 +61,13 @@ final class TimelineViewController: UIViewController {
     var onGapSelect: ((String, TimelineStore.GapDirection) -> Void)?
     /// 読み込み中でないギャップが表示領域に近づいたときに、どちらの端から読むかを添えて呼ぶ。スクロールするたびに呼ぶことがある。
     var onGapApproach: ((String, TimelineStore.GapDirection) -> Void)?
+    /// 投稿のアイコンや名前がタップされたとき、または長押しのメニューで選ばれたときに、そのアカウントを渡して呼ぶ。
+    var onOpenProfile: ((Account) -> Void)?
+    /// この画面が表示されている間、生かしておくもの。画面を組み立てたコントローラーを、ナビゲーションから外されるまで残すのに使う。
+    var lifetimeOwner: AnyObject?
+    /// 一覧の頭に置き、一緒にスクロールするビュー。プロフィールのヘッダーに使う。表示より前に設定する。
+    /// 置くと、投稿がないときの全面の表示は出さず、読み込みの状態はフッターだけで示す。ヘッダーを覆わないようにするため。
+    var headerView: UIView?
     #if DEBUG
     /// デバッグメニューに出す、このタイムライン用の検証の操作。表示より前に設定する。
     var debugActions: [UIMenuElement] = []
@@ -135,7 +143,9 @@ final class TimelineViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        title = texts.title
+        if !texts.title.isEmpty {
+            title = texts.title
+        }
         var barItems: [UIBarButtonItem] = []
         if onCompose != nil {
             let compose = UIBarButtonItem(image: UIImage(systemName: "square.and.pencil"), primaryAction: UIAction { [weak self] _ in self?.onCompose?() })
@@ -222,7 +232,7 @@ final class TimelineViewController: UIViewController {
     private func emojiImagesDidLoad(_ urls: Set<URL>) {
         let ids = dataSource.snapshot().itemIdentifiers.filter { id in
             switch entries[id] {
-            case .status(let status): !Self.emojiURLs(of: status).isDisjoint(with: urls)
+            case .status(let status), .pinned(let status): !Self.emojiURLs(of: status).isDisjoint(with: urls)
             case .notification(let notification): !Self.emojiURLs(of: notification).isDisjoint(with: urls)
             case .gap, nil: false
             }
@@ -265,10 +275,18 @@ final class TimelineViewController: UIViewController {
     /// 読んでいる位置の要素が画面上で動かないようにする。基準は表示領域の上端にかかっている要素で、`anchorID`を渡せばその要素にする。
     /// ただし最上部にいて追従が有効なら、最上部に留まって新着を見せる。
     /// `topID`を渡すと、その要素を表示領域の上端に置く。既読位置から読み始めるときに使う。
-    func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil) {
+    /// - Parameter keepsOffset: 一覧の中身を取り替える。要素を基準にせず、スクロール位置をそのまま保つ。
+    ///   プロフィールのタブの切り替えのように、ヘッダーを押した場所に残し、その下の中身だけを入れ替えたいときに使う。
+    ///   新しい一覧が短くていまの位置までスクロールできなければ、末尾までスクロールしたところで止める。
+    func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil, keepsOffset: Bool = false) {
         guard !isShowingMenu else {
             // 後の呼び出しの並びが新しい。基準は、メニューが閉じたときに最後に指定されたものを使う。
-            heldEntries = HeldEntries(entries: newEntries, anchorID: anchorID ?? heldEntries?.anchorID, topID: topID ?? heldEntries?.topID)
+            heldEntries = HeldEntries(
+                entries: newEntries,
+                anchorID: anchorID ?? heldEntries?.anchorID,
+                topID: topID ?? heldEntries?.topID,
+                keepsOffset: keepsOffset || (heldEntries?.keepsOffset ?? false)
+            )
             return
         }
         let previous = entries
@@ -289,6 +307,16 @@ final class TimelineViewController: UIViewController {
             scrollToTop(of: topID)
             isRestoringAnchor = false
             logger.info("setEntries count=\(newEntries.count, privacy: .public) top=\(Self.label(topID), privacy: .public)")
+        } else if keepsOffset {
+            isRestoringAnchor = true
+            let offset = collectionView.contentOffset.y
+            dataSource.apply(snapshot, animatingDifferences: false)
+            collectionView.layoutIfNeeded()
+            let inset = collectionView.adjustedContentInset
+            let maxOffset = max(collectionView.contentSize.height + inset.bottom - collectionView.bounds.height, -inset.top)
+            collectionView.contentOffset.y = min(offset, maxOffset)
+            isRestoringAnchor = false
+            logger.info("setEntries count=\(newEntries.count, privacy: .public) keepsOffset=true")
         } else if followsTop {
             // 最初に並べるときは、行が浮かび上がって見えないよう、アニメーションしない。
             let animates = !previous.isEmpty && tuning.value(of: TuningCatalog.animatesInsertionAtTop)
@@ -337,6 +365,7 @@ final class TimelineViewController: UIViewController {
         let entries: [TimelineEntry]
         let anchorID: ItemID?
         let topID: ItemID?
+        let keepsOffset: Bool
     }
 
     /// 長押しのメニューを出した。メニューの元になった行が動かないよう、閉じるまで一覧の並びの更新と描き直しを溜めておく。
@@ -350,7 +379,7 @@ final class TimelineViewController: UIViewController {
         isShowingMenu = false
         if let held = heldEntries {
             heldEntries = nil
-            setEntries(held.entries, keeping: held.anchorID, placingAtTop: held.topID)
+            setEntries(held.entries, keeping: held.anchorID, placingAtTop: held.topID, keepsOffset: held.keepsOffset)
         }
         let existing = Set(dataSource.snapshot().itemIdentifiers)
         let reconfigureIDs = heldReconfigureIDs.intersection(existing)
@@ -380,7 +409,7 @@ final class TimelineViewController: UIViewController {
     }
 
     override func updateContentUnavailableConfiguration(using state: UIContentUnavailableConfigurationState) {
-        guard dataSource.snapshot().numberOfItems == 0 else {
+        guard headerView == nil, dataSource.snapshot().numberOfItems == 0 else {
             contentUnavailableConfiguration = nil
             return
         }
@@ -437,6 +466,7 @@ final class TimelineViewController: UIViewController {
         case .status(let id): id
         case .gap(let id): id
         case .notification(let id): "notification-\(id)"
+        case .pinned(let id): "pinned-\(id)"
         }
     }
 
@@ -534,6 +564,9 @@ final class TimelineViewController: UIViewController {
     private func makeLayout() -> UICollectionViewLayout {
         var configuration = UICollectionLayoutListConfiguration(appearance: .plain)
         configuration.footerMode = .supplementary
+        configuration.headerMode = headerView == nil ? .none : .supplementary
+        // ヘッダー画像をナビゲーションバーのすぐ下から置く。
+        configuration.headerTopPadding = 0
         return UICollectionViewCompositionalLayout { _, environment in
             let section = NSCollectionLayoutSection.list(using: configuration, layoutEnvironment: environment)
             // plainのリストはフッターを表示範囲の下端に貼り付ける。貼り付いたフッターは、中身がなくてもタブバーのすぐ上を覆ってタップを吸うため、一覧の末尾に置く。
@@ -551,6 +584,8 @@ final class TimelineViewController: UIViewController {
             switch entry {
             case .status(let status):
                 cell.contentConfiguration = self.contentConfiguration(for: status, base: cell.defaultContentConfiguration())
+            case .pinned(let status):
+                cell.contentConfiguration = self.contentConfiguration(for: status, isPinned: true, base: cell.defaultContentConfiguration())
             case .gap(let gap):
                 cell.contentConfiguration = self.gapContentConfiguration(isLoading: self.loadingGapIDs.contains(gap.id), base: cell.defaultContentConfiguration())
             case .notification(let notification):
@@ -564,11 +599,19 @@ final class TimelineViewController: UIViewController {
             footer.onRetry = { self?.onRetry?() }
             self?.configure(footer)
         }
+        let headerRegistration = UICollectionView.SupplementaryRegistration<TimelineHeaderContainerView>(
+            elementKind: UICollectionView.elementKindSectionHeader
+        ) { [weak self] container, _, _ in
+            container.host(self?.headerView)
+        }
         let dataSource = UICollectionViewDiffableDataSource<Section, ItemID>(collectionView: collectionView) { collectionView, indexPath, id in
             collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: id)
         }
-        dataSource.supplementaryViewProvider = { collectionView, _, indexPath in
-            collectionView.dequeueConfiguredReusableSupplementary(using: footerRegistration, for: indexPath)
+        dataSource.supplementaryViewProvider = { collectionView, kind, indexPath in
+            if kind == UICollectionView.elementKindSectionHeader {
+                return collectionView.dequeueConfiguredReusableSupplementary(using: headerRegistration, for: indexPath)
+            }
+            return collectionView.dequeueConfiguredReusableSupplementary(using: footerRegistration, for: indexPath)
         }
         var snapshot = NSDiffableDataSourceSnapshot<Section, ItemID>()
         snapshot.appendSections([.main])
@@ -577,7 +620,9 @@ final class TimelineViewController: UIViewController {
     }
 
     private func configure(_ footer: TimelineFooterView) {
-        footer.apply(footerState, reachedEndText: texts.reachedEnd)
+        // ヘッダーのある一覧では、投稿がないことも全面の表示ではなくフッターで示す。
+        // データソースを作る途中でも呼ばれるため、データソースではなく表示中の要素から数える。
+        footer.apply(footerState, reachedEndText: entries.isEmpty ? texts.empty : texts.reachedEnd)
     }
 
     func gapContentConfiguration(isLoading: Bool, base: UIListContentConfiguration) -> UIListContentConfiguration {
@@ -588,7 +633,8 @@ final class TimelineViewController: UIViewController {
         return content
     }
 
-    func contentConfiguration(for status: Status, base: UIListContentConfiguration) -> PostContentConfiguration {
+    /// - Parameter isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。
+    func contentConfiguration(for status: Status, isPinned: Bool = false, base: UIListContentConfiguration) -> PostContentConfiguration {
         let shown = status.displayed
         let secondaryFont = base.secondaryTextProperties.font
         let metrics = PostContentConfiguration.Metrics(
@@ -607,11 +653,25 @@ final class TimelineViewController: UIViewController {
             case .acct: renderer.render(.plain("@\(shown.account.acct)", emojis: []))
             }
         }
-        var configuration = PostContentConfiguration(
-            boost: status.reblog == nil ? nil : PostContentConfiguration.Boost(
+        let context: PostContentConfiguration.Context? = if isPinned {
+            PostContentConfiguration.Context(
+                symbolName: "pin.fill",
+                avatar: nil,
+                text: secondaryRenderer.render(.plain("固定された投稿", emojis: [])),
+                accessibilityText: "固定された投稿"
+            )
+        } else if status.reblog != nil {
+            PostContentConfiguration.Context(
+                symbolName: "arrow.2.squarepath",
                 avatar: avatarContent(of: status.account),
-                name: secondaryRenderer.render(.plain(status.account.displayNameOrUsername, emojis: status.account.emojis))
-            ),
+                text: secondaryRenderer.render(.plain(status.account.displayNameOrUsername, emojis: status.account.emojis)),
+                accessibilityText: "\(status.account.displayNameOrUsername)がブースト"
+            )
+        } else {
+            nil
+        }
+        var configuration = PostContentConfiguration(
+            context: context,
             avatar: avatarContent(of: shown.account),
             nameParts: nameParts,
             createdAt: shown.createdAt,
@@ -621,6 +681,10 @@ final class TimelineViewController: UIViewController {
             mediaImages: mediaImages,
             avatarImages: avatarImages
         )
+        configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(shown.account) }
+        if status.reblog != nil, !isPinned {
+            configuration.onOpenContextAccount = { [weak self] in self?.onOpenProfile?(status.account) }
+        }
         if let media = mediaContent(for: shown) {
             configuration.media = media
             configuration.onSelectMedia = { [weak self] index, grid in
@@ -734,8 +798,15 @@ extension TimelineViewController: UICollectionViewDelegate {
 
     /// 長押しで投稿への操作のメニューを出す。
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
-        guard indexPaths.count == 1, let indexPath = indexPaths.first, let id = dataSource.itemIdentifier(for: indexPath), let status = status(for: id) else { return nil }
-        return UIContextMenuConfiguration(actionProvider: { [weak self] _ in self?.statusMenu(for: status) })
+        guard indexPaths.count == 1, let indexPath = indexPaths.first, let id = dataSource.itemIdentifier(for: indexPath), let entry = entry(for: id) else { return nil }
+        let status = status(for: id)
+        let accounts = Self.profileAccounts(of: entry)
+        guard status != nil || !accounts.isEmpty else { return nil }
+        return UIContextMenuConfiguration(actionProvider: { [weak self] _ in
+            guard let self else { return nil }
+            let profiles = UIMenu(options: .displayInline, children: accounts.map(self.profileAction(for:)))
+            return UIMenu(children: (status.map { self.statusMenu(for: $0).children } ?? []) + [profiles])
+        })
     }
 
     /// 選べるのはギャップだけにする。投稿にはまだ開く画面がなく、タップすると選んだ状態の背景が残ったままになるため。
@@ -789,6 +860,28 @@ extension TimelineViewController {
             .min { $0.1.minY < $1.1.minY }
         guard let (id, frame) = topmost else { return nil }
         return ScrollAnchor(id: id, distanceFromVisibleTop: frame.minY - visibleTop)
+    }
+
+    /// ヘッダーの中身が変わって高さが変わったときに呼ぶ。ヘッダーを読み終えて下の投稿を読んでいれば、その投稿の位置を変えない。
+    /// ヘッダーが見えていれば、ヘッダーが伸び縮みした分だけ下の投稿が動くのに任せる。
+    /// 画面を読み込む前は、最初の表示で測るため何もしない。
+    func headerDidChangeSize() {
+        guard headerView != nil, isViewLoaded, dataSource.snapshot().numberOfSections > 0 else { return }
+        isRestoringAnchor = true
+        defer { isRestoringAnchor = false }
+        collectionView.layoutIfNeeded()
+        let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
+        let headerFrame = collectionView.layoutAttributesForSupplementaryElement(
+            ofKind: UICollectionView.elementKindSectionHeader,
+            at: IndexPath(item: 0, section: 0)
+        )?.frame
+        let anchor = (headerFrame.map { $0.maxY <= visibleTop } ?? false) ? currentAnchor() : nil
+        collectionView.collectionViewLayout.invalidateLayout()
+        if let anchor {
+            restore(anchor)
+        } else {
+            collectionView.layoutIfNeeded()
+        }
     }
 
     /// 要素のセル上端を表示領域の上端に合わせる。下に十分な要素がなければ、末尾までスクロールしたところで止める。
