@@ -42,6 +42,8 @@ final class InlineComposeController: NSObject {
     private var keyboardHeight: CGFloat = 0
     private var obscuredHeight: CGFloat = 0
     private var keyboardObserver: (any NSObjectProtocol)?
+    /// 入力バーの中身を載せるスクロールビュー。バーを下へ引くと、キーボードが指に付いて下がる。
+    private let dragArea = KeyboardDragArea()
 
     /// 入力欄がこれより高くなったら、伸ばさずに中でスクロールする。
     private var maxTextHeight: CGFloat {
@@ -279,6 +281,15 @@ final class InlineComposeController: NSObject {
         bar.cornerConfiguration = .corners(radius: .fixed(24))
         bar.isHidden = true
         bar.alpha = 0
+        // キーボードを指に付いて動かせるのは、引いて閉じる設定のスクロールビューを引いたときだけなので、バーの中身をスクロールビューに載せる。
+        // 中身は動かさず、指の動きだけをキーボードに伝える。
+        dragArea.translatesAutoresizingMaskIntoConstraints = false
+        dragArea.keyboardDismissMode = .interactive
+        dragArea.alwaysBounceVertical = true
+        dragArea.showsVerticalScrollIndicator = false
+        dragArea.contentInsetAdjustmentBehavior = .never
+        dragArea.delaysContentTouches = false
+        dragArea.delegate = self
 
         textView.font = .preferredFont(forTextStyle: .body)
         textView.adjustsFontForContentSizeCategory = true
@@ -324,17 +335,33 @@ final class InlineComposeController: NSObject {
         stack.axis = .vertical
         stack.spacing = 4
         stack.translatesAutoresizingMaskIntoConstraints = false
-        bar.contentView.addSubview(stack)
+        bar.contentView.addSubview(dragArea)
+        dragArea.addSubview(stack)
+        let content = dragArea.contentLayoutGuide
+        let frame = dragArea.frameLayoutGuide
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: bar.contentView.leadingAnchor, constant: 16),
-            stack.trailingAnchor.constraint(equalTo: bar.contentView.trailingAnchor, constant: -10),
-            stack.topAnchor.constraint(equalTo: bar.contentView.topAnchor, constant: 10),
-            stack.bottomAnchor.constraint(equalTo: bar.contentView.bottomAnchor, constant: -10),
+            dragArea.leadingAnchor.constraint(equalTo: bar.contentView.leadingAnchor),
+            dragArea.trailingAnchor.constraint(equalTo: bar.contentView.trailingAnchor),
+            dragArea.topAnchor.constraint(equalTo: bar.contentView.topAnchor),
+            dragArea.bottomAnchor.constraint(equalTo: bar.contentView.bottomAnchor),
+            stack.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -10),
+            stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 10),
+            stack.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -10),
+            // 中身の大きさをバーの大きさに揃え、バーの高さは中身から決める。
+            content.widthAnchor.constraint(equalTo: frame.widthAnchor),
+            content.heightAnchor.constraint(equalTo: frame.heightAnchor),
         ])
     }
 }
 
 extension InlineComposeController: UITextViewDelegate {
+    /// 入力バーを引いても中身は動かさない。入力欄も同じ通知を受けるため、バーのスクロールビューだけを止める。
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard scrollView === dragArea, scrollView.contentOffset != .zero else { return }
+        scrollView.contentOffset = .zero
+    }
+
     func textViewDidChange(_ textView: UITextView) {
         model.text = textView.text
         textDidChange()
@@ -356,5 +383,12 @@ private final class ComposeTextView: UITextView {
 
     @objc private func submitFromKeyboard() {
         onSubmit()
+    }
+}
+
+/// 入力バーの中身を載せるスクロールビュー。ボタンや入力欄の上から引き始めても、キーボードを引けるようにする。
+private final class KeyboardDragArea: UIScrollView {
+    override func touchesShouldCancel(in view: UIView) -> Bool {
+        true
     }
 }
