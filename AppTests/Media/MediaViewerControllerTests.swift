@@ -9,7 +9,7 @@ import UIKit
 struct MediaViewerControllerTests {
     private let drag = DragToDismiss(distanceThreshold: 0.12, velocityThreshold: 0.8, smallestScale: 0.6, fadeDistance: 0.5, restoreDuration: 0.35)
 
-    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, bounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3)
+    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, bounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5)
 
     private func makeViewer(attachments: [MediaAttachment]) -> MediaViewerController {
         MediaViewerController(attachments: attachments, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil })
@@ -64,32 +64,126 @@ struct MediaViewerControllerTests {
         #expect(viewer.keyCommands?.contains { $0.input == UIKeyCommand.inputEscape } == true)
     }
 
-    /// 画像は、元のファイルが届いてからメニューで共有できる。届く前にURLを共有しないよう、それまでは選べない。
-    @Test func imageCanBeSharedOnlyAfterOriginalArrives() async throws {
-        let harness = try TimelineHarness()
-        defer { harness.tearDown() }
+    private func pngData() throws -> Data {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
-        let data = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8), format: format).image { context in
+        return try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8), format: format).image { context in
             UIColor.systemGreen.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
         }.pngData())
+    }
+
+    /// 元の画像が少し遅れて届くビューアを、一覧の上に開く。
+    private func presentLoadingViewer(
+        on harness: TimelineHarness,
+        data: Data,
+        description: String? = nil,
+        photoSaver: PhotoLibrarySaver = PhotoLibrarySaver { _ in }
+    ) -> MediaViewerController {
         let store = MediaImageStore(originalsDirectory: .temporaryDirectory.appending(path: "MediaViewerControllerTests-\(UUID().uuidString)")) { _ in
             try await Task.sleep(for: .milliseconds(150))
             return data
         }
-        let viewer = MediaViewerController(attachments: [image("1", url: URL(string: "https://x.example/original/1"))], startIndex: 0, store: store, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil })
+        let attachment = MediaAttachment(id: "1", type: .image, url: URL(string: "https://x.example/original/1"), previewUrl: nil, description: description)
+        let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: store, dragToDismiss: drag, timing: timing, photoSaver: photoSaver, sourceTile: { _ in nil })
         harness.viewController.present(viewer, animated: false)
+        return viewer
+    }
+
+    private func menuAction(_ title: String, in viewer: MediaViewerController) -> UIAction? {
+        viewer.menuElements().lazy.compactMap { $0 as? UIAction }.first { $0.title == title }
+    }
+
+    /// 画像は、元のファイルが届いてからメニューで共有と保存ができる。届く前にURLを共有しないよう、それまでは選べない。
+    @Test func imageCanBeSharedAndSavedOnlyAfterOriginalArrives() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let data = try pngData()
+        let viewer = presentLoadingViewer(on: harness, data: data)
         defer { viewer.dismiss(animated: false) }
 
-        let share = try #require(viewer.menuElements().first as? UIAction)
-        #expect(share.title == "共有")
-        #expect(share.attributes.contains(.disabled))
+        #expect(viewer.menuElements().compactMap { ($0 as? UIAction)?.title } == ["共有", "写真に保存"])
+        #expect(try #require(menuAction("共有", in: viewer)).attributes.contains(.disabled))
+        #expect(try #require(menuAction("写真に保存", in: viewer)).attributes.contains(.disabled))
 
-        try await waitUntil { (viewer.menuElements().first as? UIAction)?.attributes.contains(.disabled) == false }
+        try await waitUntil { menuAction("共有", in: viewer)?.attributes.contains(.disabled) == false }
+        #expect(try #require(menuAction("写真に保存", in: viewer)).attributes.isEmpty)
         let item = try #require(viewer.shareItem() as? MediaShareItem)
         #expect(item.file.lastPathComponent == "1.png")
         #expect(try Data(contentsOf: item.file) == data)
+    }
+
+    /// 写真には元のファイルをそのまま渡し、済んだらメニューボタンの下で知らせる。
+    @Test func savingToPhotosPassesOriginalFileAndShowsChip() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let data = try pngData()
+        let saved = SavedFiles()
+        let viewer = presentLoadingViewer(on: harness, data: data, photoSaver: PhotoLibrarySaver { saved.files.append($0) })
+        defer { viewer.dismiss(animated: false) }
+        try await waitUntil { menuAction("写真に保存", in: viewer)?.attributes.isEmpty == true }
+
+        viewer.saveToPhotos()
+
+        try await waitUntil { viewer.statusChipText != nil }
+        #expect(viewer.statusChipText == "写真に保存しました")
+        let file = try #require(saved.files.first)
+        #expect(try Data(contentsOf: file) == data)
+    }
+
+    /// 写真への追加が許可されていなければ、知らせる表示ではなくアラートで理由を出し、設定へ案内する。
+    @Test func savingWithoutPermissionOffersSettings() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let viewer = presentLoadingViewer(on: harness, data: try pngData(), photoSaver: PhotoLibrarySaver { _ in throw PhotoLibrarySaver.NotAuthorized() })
+        defer { viewer.dismiss(animated: false) }
+        try await waitUntil { menuAction("写真に保存", in: viewer)?.attributes.isEmpty == true }
+
+        viewer.saveToPhotos()
+
+        try await waitUntil { viewer.presentedViewController is UIAlertController }
+        let alert = try #require(viewer.presentedViewController as? UIAlertController)
+        #expect(alert.actions.map(\.title) == ["設定を開く", "キャンセル"])
+        #expect(viewer.statusChipText == nil)
+        alert.dismiss(animated: false)
+    }
+
+    /// 保存を待つ間に代替テキストのシートを開いても、保存の失敗はそのシートの上にアラートで知らせる。
+    @Test func saveFailureIsShownAboveSheetOpenedWhileSaving() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let viewer = presentLoadingViewer(on: harness, data: try pngData(), description: "夕焼けの海辺", photoSaver: PhotoLibrarySaver { _ in
+            try await Task.sleep(for: .milliseconds(500))
+            throw PhotoLibrarySaver.NotAuthorized()
+        })
+        defer { viewer.dismiss(animated: false) }
+        try await waitUntil { menuAction("写真に保存", in: viewer)?.attributes.isEmpty == true }
+
+        viewer.saveToPhotos()
+        viewer.showAltText()
+        try await waitUntil { viewer.presentedViewController is UINavigationController }
+
+        let sheet = try #require(viewer.presentedViewController)
+        try await waitUntil { sheet.presentedViewController is UIAlertController }
+    }
+
+    /// 代替テキストが付いていれば、メニューから全文をシートで出せる。
+    @Test func altTextIsOfferedOnlyWhenPresent() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let viewer = presentLoadingViewer(on: harness, data: try pngData(), description: "夕焼けの海辺")
+        defer { viewer.dismiss(animated: false) }
+        let plain = makeViewer(attachments: [image("2", url: URL(string: "https://x.example/2.png"))])
+
+        #expect(menuAction("代替テキスト", in: viewer) != nil)
+        #expect(menuAction("代替テキスト", in: plain) == nil)
+
+        viewer.showAltText()
+
+        try await waitUntil { viewer.presentedViewController is UINavigationController }
+        let sheet = try #require(viewer.presentedViewController as? UINavigationController)
+        #expect((sheet.viewControllers.first as? AltTextViewController)?.text == "夕焼けの海辺")
+        sheet.dismiss(animated: false)
     }
 
     /// 処理中でURLのない添付ファイルは、共有するものがないため選べない。
@@ -263,7 +357,7 @@ struct MediaViewerControllerTests {
             startIndex: 0,
             store: store,
             dragToDismiss: drag,
-            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, bounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3),
+            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, bounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5),
             from: harness.viewController,
             sourceTile: { _ in tile },
             onDismiss: {}
@@ -322,4 +416,10 @@ struct MediaViewerControllerTests {
         #expect(harness.collectionView.contentOffset == offset, "閉じたあとに一覧が動きました")
         #expect(harness.windowMinY(of: anchor) == anchorY)
     }
+}
+
+/// テストの写真の保存先が受け取ったファイル。
+@MainActor
+private final class SavedFiles {
+    var files: [URL] = []
 }

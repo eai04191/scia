@@ -22,6 +22,9 @@ final class MediaViewerController: UIViewController {
     private let menuButton = UIButton(configuration: .glass())
     private let counterLabel = UILabel()
     private let captionView = CaptionView()
+    /// 写真に保存したことを、メニューボタンの下で知らせる。
+    private let statusChip = StatusChip()
+    private let photoSaver: PhotoLibrarySaver
     private var isChromeHidden = false
     private let dragToDismiss: DragToDismiss
     private lazy var dismissPan = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPan(_:)))
@@ -69,6 +72,8 @@ final class MediaViewerController: UIViewController {
         let handoffStart: Double
         /// バーの奥にも描くとき、閉じ始めにバーと重なっていた部分を一覧の中の写しへ入れ替え終える進み具合。0から1。
         let barOverlapFadeEnd: Double
+        /// 写真に保存したことを知らせる表示を出しておく時間。
+        let savedChipDuration: TimeInterval
     }
 
     /// - Parameter sourceTile: 添付ファイルのサムネイルを返す。開閉のたびに呼ぶため、閉じるまでに一覧の行が再利用されても今の位置を返せる。
@@ -79,11 +84,13 @@ final class MediaViewerController: UIViewController {
         store: MediaImageStore,
         dragToDismiss: DragToDismiss,
         timing: Timing,
+        photoSaver: PhotoLibrarySaver = .photoLibrary,
         sourceTile: @escaping @MainActor (MediaAttachment.ID) -> MediaTileView?
     ) {
         precondition(attachments.indices.contains(startIndex), "開く添付ファイルの位置が範囲外です")
         self.attachments = attachments
         self.store = store
+        self.photoSaver = photoSaver
         self.dragToDismiss = dragToDismiss
         self.timing = timing
         self.sourceTile = sourceTile
@@ -228,7 +235,7 @@ final class MediaViewerController: UIViewController {
         counterLabel.font = .preferredFont(forTextStyle: .subheadline)
         counterLabel.textColor = .white
         counterLabel.isHidden = attachments.count == 1
-        for view in [menuButton, counterLabel, captionView] {
+        for view in [menuButton, counterLabel, captionView, statusChip] {
             view.translatesAutoresizingMaskIntoConstraints = false
             self.view.addSubview(view)
         }
@@ -242,6 +249,8 @@ final class MediaViewerController: UIViewController {
             captionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             captionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             captionView.contentBottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -8),
+            statusChip.topAnchor.constraint(equalTo: menuButton.bottomAnchor, constant: 12),
+            statusChip.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
         ])
     }
 
@@ -294,16 +303,90 @@ final class MediaViewerController: UIViewController {
         return currentAttachment.url ?? currentAttachment.remoteUrl
     }
 
-    /// メニューの項目。共有できるものがなければ、共有を選べなくする。
+    /// 表示中の画像の元のファイル。届くまではnil。
+    private var currentOriginalFile: URL? {
+        (pages[currentIndex] as? ImagePageController)?.shareItem?.file
+    }
+
+    /// メニューの項目。共有や保存は、するものが届くまで選べなくする。保存は画像だけ、代替テキストは付いているときだけ出す。
     func menuElements() -> [UIMenuElement] {
-        let share = UIAction(
-            title: "共有",
-            image: UIImage(systemName: "square.and.arrow.up"),
-            attributes: shareItem() == nil ? .disabled : []
-        ) { [weak self] _ in
-            self?.share()
+        var elements: [UIMenuElement] = [
+            UIAction(
+                title: "共有",
+                image: UIImage(systemName: "square.and.arrow.up"),
+                attributes: shareItem() == nil ? .disabled : []
+            ) { [weak self] _ in
+                self?.share()
+            },
+        ]
+        if currentAttachment.type == .image {
+            elements.append(UIAction(
+                title: "写真に保存",
+                image: UIImage(systemName: "square.and.arrow.down"),
+                attributes: currentOriginalFile == nil ? .disabled : []
+            ) { [weak self] _ in
+                self?.saveToPhotos()
+            })
         }
-        return [share]
+        if let description = currentAttachment.description, !description.isEmpty {
+            elements.append(UIAction(title: "代替テキスト", image: UIImage(systemName: "text.below.photo")) { [weak self] _ in
+                self?.showAltText()
+            })
+        }
+        return elements
+    }
+
+    /// 代替テキストの全文をシートで出す。
+    func showAltText() {
+        guard let description = currentAttachment.description, !description.isEmpty else { return }
+        present(AltTextViewController.sheet(text: description), animated: true)
+    }
+
+    /// 表示中の画像を写真に保存し、済んだらメニューボタンの下で知らせる。失敗したときは理由をアラートで出す。
+    func saveToPhotos() {
+        guard let file = currentOriginalFile else { return }
+        Task { [weak self, photoSaver] in
+            do {
+                try await photoSaver.save(file)
+                self?.didSaveToPhotos()
+            } catch {
+                SciaLog.logger(category: "media").error("save to photos failed: \(error.localizedDescription, privacy: .public)")
+                self?.presentSaveFailure(error)
+            }
+        }
+    }
+
+    /// 写真に保存したことを知らせている文言。知らせていなければnil。
+    var statusChipText: String? {
+        statusChip.shownText
+    }
+
+    private func didSaveToPhotos() {
+        UINotificationFeedbackGenerator(view: view).notificationOccurred(.success)
+        statusChip.show("写真に保存しました", systemImage: "checkmark.circle.fill", duration: timing.savedChipDuration)
+    }
+
+    private func presentSaveFailure(_ error: any Error) {
+        UINotificationFeedbackGenerator(view: view).notificationOccurred(.error)
+        let alert: UIAlertController
+        if error is PhotoLibrarySaver.NotAuthorized {
+            alert = UIAlertController(title: "写真に保存できません", message: "写真への追加が許可されていません。設定でSciaに写真の追加を許可してください。", preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "設定を開く", style: .default) { _ in
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            })
+            alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        } else {
+            alert = UIAlertController(title: "写真に保存できませんでした", message: error.localizedDescription, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .cancel))
+        }
+        // 保存を待つ間に代替テキストや共有のシートを開いていることがある。ビューアから出すと拒否されるため、いちばん手前の画面から出す。
+        var presenter: UIViewController = self
+        while let presented = presenter.presentedViewController, !presented.isBeingDismissed {
+            presenter = presented
+        }
+        presenter.present(alert, animated: true)
     }
 
     private func share() {
