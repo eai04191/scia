@@ -98,10 +98,12 @@ final class TimelineViewController: UIViewController {
     /// 新着ボタンで最上部へ動かしている。
     private var isScrollingToTop = false
     private lazy var newArrivalsButton = makeNewArrivalsButton()
+    private var timeRefreshTimer: Timer?
     private let texts: Texts
     let tuning: TuningStore
     let emojiImages: EmojiImageStore
     let mediaImages: MediaImageStore
+    let avatarImages: AvatarImageStore
     let network: NetworkConditionsMonitor
     let settings: AppSettings
     /// 閲覧注意の覆いを外した投稿のID。ブーストなら元の投稿のID。
@@ -112,6 +114,7 @@ final class TimelineViewController: UIViewController {
         tuning: TuningStore = AppDependencies.tuning,
         emojiImages: EmojiImageStore = AppDependencies.emojiImages,
         mediaImages: MediaImageStore = AppDependencies.mediaImages,
+        avatarImages: AvatarImageStore = AppDependencies.avatarImages,
         network: NetworkConditionsMonitor = AppDependencies.network,
         settings: AppSettings = AppDependencies.settings
     ) {
@@ -119,6 +122,7 @@ final class TimelineViewController: UIViewController {
         self.tuning = tuning
         self.emojiImages = emojiImages
         self.mediaImages = mediaImages
+        self.avatarImages = avatarImages
         self.network = network
         self.settings = settings
         super.init(nibName: nil, bundle: nil)
@@ -160,6 +164,32 @@ final class TimelineViewController: UIViewController {
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         reportVisibleItems()
+        startRefreshingTimes()
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        timeRefreshTimer?.invalidate()
+        timeRefreshTimer = nil
+    }
+
+    /// 相対表記の時刻を、表示中の行だけ1秒ごとに書き直す。行の高さは変わらないため、並びは描き直さない。
+    private func startRefreshingTimes() {
+        timeRefreshTimer?.invalidate()
+        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshVisibleTimes() }
+        }
+        timer.tolerance = 0.2
+        RunLoop.main.add(timer, forMode: .common)
+        timeRefreshTimer = timer
+    }
+
+    private func refreshVisibleTimes() {
+        guard settings.statusTimeStyle == .relative else { return }
+        let now = Date.now
+        for cell in collectionView.visibleCells {
+            (cell.contentView as? PostContentView)?.refreshTime(now: now)
+        }
     }
 
     /// チューニングの値、回線の状態、設定が変わったら、表示中の投稿を描き直す。
@@ -169,9 +199,15 @@ final class TimelineViewController: UIViewController {
             _ = tuning.value(of: TuningCatalog.paragraphSpacing)
             _ = tuning.value(of: TuningCatalog.mediaTallestAspectRatio)
             _ = tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
+            _ = tuning.value(of: TuningCatalog.avatarSize)
+            _ = tuning.value(of: TuningCatalog.boosterAvatarSize)
             _ = network.conditions
             _ = settings.usesOriginalThumbnailsOnExpensiveNetwork
             _ = settings.ignoresUselessAltText
+            _ = settings.statusNameStyle
+            _ = settings.statusTimeStyle
+            _ = settings.avatarShape
+            _ = settings.animatesAvatars
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
@@ -504,8 +540,7 @@ final class TimelineViewController: UIViewController {
             cell.accessories = Self.interactionAccessories(for: self.status(for: id))
             switch entry {
             case .status(let status):
-                let list = self.contentConfiguration(for: status, base: cell.defaultContentConfiguration())
-                cell.contentConfiguration = self.statusContentConfiguration(list: list, status: status)
+                cell.contentConfiguration = self.contentConfiguration(for: status, base: cell.defaultContentConfiguration())
             case .gap(let gap):
                 cell.contentConfiguration = self.gapContentConfiguration(isLoading: self.loadingGapIDs.contains(gap.id), base: cell.defaultContentConfiguration())
             case .notification(let notification):
@@ -543,25 +578,61 @@ final class TimelineViewController: UIViewController {
         return content
     }
 
-    func contentConfiguration(for status: Status, base: UIListContentConfiguration) -> UIListContentConfiguration {
-        var content = base
+    func contentConfiguration(for status: Status, base: UIListContentConfiguration) -> PostContentConfiguration {
         let shown = status.displayed
-        let nameRenderer = RichTextRenderer(font: base.textProperties.font, textColor: base.textProperties.color, emojiImages: emojiImages)
-        let names = NSMutableAttributedString()
-        if status.reblog != nil {
-            var boosterRenderer = nameRenderer
-            boosterRenderer.textColor = .secondaryLabel
-            names.append(boosterRenderer.render(.plain(status.account.displayNameOrUsername, emojis: status.account.emojis)))
-            names.append(NSAttributedString(
-                string: "がブースト\n",
-                attributes: [.font: base.textProperties.font, .foregroundColor: UIColor.secondaryLabel]
-            ))
+        let secondaryFont = base.secondaryTextProperties.font
+        let metrics = PostContentConfiguration.Metrics(
+            margins: base.directionalLayoutMargins,
+            avatarSize: tuning.value(of: TuningCatalog.avatarSize),
+            boosterAvatarSize: tuning.value(of: TuningCatalog.boosterAvatarSize),
+            nameFont: Self.boldFont(base.textProperties.font),
+            secondaryFont: secondaryFont
+        )
+        let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiImages: emojiImages)
+        let secondaryRenderer = RichTextRenderer(font: secondaryFont, textColor: .secondaryLabel, emojiImages: emojiImages)
+        let nameParts = settings.statusNameStyle.parts.enumerated().map { index, part in
+            let renderer = index == 0 ? primaryRenderer : secondaryRenderer
+            return switch part {
+            case .displayName: renderer.render(.plain(shown.account.displayNameOrUsername, emojis: shown.account.emojis))
+            case .acct: renderer.render(.plain("@\(shown.account.acct)", emojis: []))
+            }
         }
-        names.append(nameRenderer.render(.plain(shown.account.displayNameOrUsername, emojis: shown.account.emojis)))
-        content.attributedText = names
+        var configuration = PostContentConfiguration(
+            boost: status.reblog == nil ? nil : PostContentConfiguration.Boost(
+                avatar: avatarContent(of: status.account),
+                name: secondaryRenderer.render(.plain(status.account.displayNameOrUsername, emojis: status.account.emojis))
+            ),
+            avatar: avatarContent(of: shown.account),
+            nameParts: nameParts,
+            createdAt: shown.createdAt,
+            timeStyle: settings.statusTimeStyle,
+            body: body(of: shown, base: base),
+            metrics: metrics,
+            mediaImages: mediaImages,
+            avatarImages: avatarImages
+        )
+        if let media = mediaContent(for: shown) {
+            configuration.media = media
+            configuration.onSelectMedia = { [weak self] index, grid in
+                self?.openMedia(media.attachments, at: index, from: grid)
+            }
+            configuration.onRevealMedia = { [weak self] in
+                self?.revealMedia(of: shown.id)
+            }
+        }
+        return configuration
+    }
 
-        content.secondaryAttributedText = body(of: shown, base: base)
-        return content
+    private func avatarContent(of account: Account) -> AvatarView.Content {
+        AvatarView.Content(
+            url: settings.animatesAvatars ? account.avatar : account.avatarStatic,
+            shape: settings.avatarShape,
+            animates: settings.animatesAvatars
+        )
+    }
+
+    private static func boldFont(_ font: UIFont) -> UIFont {
+        font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
     }
 
     /// 投稿の本文。注意書きつきの投稿は、本文を開く操作がまだないため注意書きだけを出す。

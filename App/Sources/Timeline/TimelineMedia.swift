@@ -3,8 +3,8 @@ import SciaCore
 import UIKit
 
 extension TimelineViewController {
-    /// 本文の下に、`status`の添付ファイルを並べるセルの中身。`status`がnilなら本文だけにする。
-    func statusContentConfiguration(list: UIListContentConfiguration, status: Status?) -> StatusContentConfiguration {
+    /// 通知の本文の下に、`status`の添付ファイルを並べるセルの中身。`status`がnilなら本文だけにする。
+    private func statusContentConfiguration(list: UIListContentConfiguration, status: Status?) -> StatusContentConfiguration {
         var configuration = StatusContentConfiguration(list: list, mediaImages: mediaImages)
         guard let shown = status?.displayed, let media = mediaContent(for: shown) else { return configuration }
         configuration.media = media
@@ -42,7 +42,7 @@ extension TimelineViewController {
     }
 
     /// 覆いを外す。同じ投稿をブーストした行と通知の行もまとめて描き直す。覆いと中身は同じ大きさのため、行の高さは変わらない。
-    private func revealMedia(of statusID: Status.ID) {
+    func revealMedia(of statusID: Status.ID) {
         revealedMediaStatusIDs.insert(statusID)
         let ids = displayedItemIDs.filter { status(for: $0)?.displayed.id == statusID }
         reconfigure(Set(ids))
@@ -57,7 +57,7 @@ extension TimelineViewController {
 
     /// 閉じるときは、タップした行のサムネイルへ戻す。同じ投稿とそのブーストが並んでいると、同じ添付ファイルのサムネイルが複数あるため。
     /// 開いている間にその行が再利用されたら、表示中の別の行から探す。
-    private func openMedia(_ attachments: [MediaAttachment], at index: Int, from grid: MediaGridView) {
+    func openMedia(_ attachments: [MediaAttachment], at index: Int, from grid: MediaGridView) {
         SciaLog.logger(category: "media").info("open viewer count=\(attachments.count, privacy: .public) index=\(index, privacy: .public)")
         MediaViewerController.present(
             attachments: attachments,
@@ -88,7 +88,8 @@ extension TimelineViewController {
     /// 添付ファイルのサムネイルを、表示中のセルから探す。開いている間にセルが再利用されても、閉じるときに今の位置を探せるようにする。
     private func visibleMediaTile(for attachmentID: MediaAttachment.ID) -> MediaTileView? {
         for cell in collectionView.visibleCells {
-            if let tile = (cell.contentView as? StatusContentView)?.mediaGrid?.tile(for: attachmentID) {
+            let grid = (cell.contentView as? PostContentView)?.mediaGrid ?? (cell.contentView as? StatusContentView)?.mediaGrid
+            if let tile = grid?.tile(for: attachmentID) {
                 return tile
             }
         }

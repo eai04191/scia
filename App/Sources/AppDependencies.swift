@@ -19,6 +19,10 @@ enum AppDependencies {
         try await URLSession.shared.data(from: url).0
     }
 
+    static let avatarImages = AvatarImageStore { url in
+        try await URLSession.shared.data(from: url).0
+    }
+
     /// 添付ファイルの元のファイルを置くディスクキャッシュ。ビューアで開いた画像の元のファイルと、共有や保存のために落とした動画などを置く。
     static let mediaFiles = MediaFileCache()
 

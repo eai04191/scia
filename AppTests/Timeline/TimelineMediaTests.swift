@@ -48,7 +48,7 @@ struct TimelineMediaTests {
     }
 
     private func mediaGrid(in harness: TimelineHarness, of id: Status.ID) -> MediaGridView? {
-        (harness.visibleCell(of: .status(id))?.contentView as? StatusContentView)?.mediaGrid
+        (harness.visibleCell(of: .status(id))?.contentView as? PostContentView)?.mediaGrid
     }
 
     /// サムネイルの高さは添付ファイルの縦横比で決まり、画像が届く前から確定している。

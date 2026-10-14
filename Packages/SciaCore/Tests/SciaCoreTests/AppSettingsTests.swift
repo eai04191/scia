@@ -34,4 +34,28 @@ struct AppSettingsTests {
         AppSettings(defaults: defaults).ignoresUselessAltText = false
         #expect(!AppSettings(defaults: defaults).ignoresUselessAltText)
     }
+
+    @Test func statusDisplayDefaults() throws {
+        let settings = AppSettings(defaults: try makeDefaults())
+        #expect(settings.statusNameStyle == .nameAndAcct)
+        #expect(settings.statusTimeStyle == .relative)
+        #expect(settings.avatarShape == .roundedSquare)
+        // 一覧でたくさん動くと読みにくいため、既定では止める。
+        #expect(!settings.animatesAvatars)
+    }
+
+    @Test func persistsStatusDisplay() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.statusNameStyle = .acctOnly
+        settings.statusTimeStyle = .absolute
+        settings.avatarShape = .circle
+        settings.animatesAvatars = true
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.statusNameStyle == .acctOnly)
+        #expect(restored.statusTimeStyle == .absolute)
+        #expect(restored.avatarShape == .circle)
+        #expect(restored.animatesAvatars)
+    }
 }

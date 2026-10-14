@@ -7,7 +7,7 @@ import UIKit
 @Suite(.serialized)
 struct TimelineContentTests {
     private func makeViewController() -> TimelineViewController {
-        TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline)
+        TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
     }
 
     @Test func bodyIsRenderedFromHTML() throws {
@@ -23,7 +23,7 @@ struct TimelineContentTests {
 
         let content = makeViewController().contentConfiguration(for: status, base: .cell())
 
-        #expect(content.secondaryAttributedText?.string == "一行目\u{2028}二行目\n#scia")
+        #expect(content.body.string == "一行目\u{2028}二行目\n#scia")
     }
     @Test func favouriteNotificationShowsActorAndTargetStatus() throws {
         let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
@@ -101,8 +101,12 @@ struct TimelineContentTests {
 
         let content = makeViewController().contentConfiguration(for: boost, base: .cell())
 
-        #expect(content.attributedText?.string == "bobがブースト\n\(original.account.displayName)")
-        #expect(content.secondaryAttributedText?.string == original.content)
+        #expect(content.boost?.name.string == "bob")
+        #expect(content.boost?.avatar.url == booster.avatarStatic)
+        #expect(content.avatar.url == original.account.avatarStatic)
+        #expect(content.nameParts.map(\.string) == [original.account.displayName, "@\(original.account.acct)"])
+        #expect(content.createdAt == original.createdAt)
+        #expect(content.body.string == original.content)
     }
 
     @Test func spoilerHidesContent() throws {
@@ -118,7 +122,7 @@ struct TimelineContentTests {
 
         let content = makeViewController().contentConfiguration(for: status, base: .cell())
 
-        #expect(content.secondaryAttributedText?.string == "注意書き: ネタバレ")
+        #expect(content.body.string == "注意書き: ネタバレ")
     }
 
     /// 末尾のフッターは一覧の最後に置き、表示範囲の下端に貼り付けない。
