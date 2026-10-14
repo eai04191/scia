@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 import UIKit
 @testable import Scia
@@ -55,5 +56,49 @@ struct MediaImageStoreTests {
         _ = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
 
         #expect(await store.hasOriginal(for: url))
+    }
+
+    /// ビューアで開く画像は、元のファイルがキャッシュにあれば通信せずにそこから表示する。起動し直したあとや、メモリから追い出されたあとに開き直すときのため。
+    @Test func loadsOriginalFromCacheWithoutFetching() async throws {
+        let data = try pngData()
+        let files = MediaFileCache.temporary()
+        let url = try #require(URL(string: "https://files.example.social/original/abc.png"))
+        _ = try await files.store(data, named: "abc.png", for: url)
+        let store = MediaImageStore(files: files) { _ in throw URLError(.notConnectedToInternet) }
+
+        let image = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
+
+        #expect(image.size == CGSize(width: 8, height: 8))
+    }
+
+    /// キャッシュのファイルが壊れていて展開できなければ、通信で取り直し、正しいファイルで置き直す。
+    @Test func refetchesWhenCachedOriginalIsBroken() async throws {
+        let data = try pngData()
+        let files = MediaFileCache.temporary()
+        let url = try #require(URL(string: "https://files.example.social/original/abc.png"))
+        _ = try await files.store(Data("broken".utf8), named: "abc.png", for: url)
+        let store = MediaImageStore(files: files) { _ in data }
+
+        _ = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
+
+        let file = try #require(await files.file(for: url))
+        #expect(try Data(contentsOf: file) == data)
+    }
+
+    /// 一覧のサムネイルのように元のファイルを残さない読み込みは、キャッシュを見ずに通信する。キャッシュはビューアで開いた元の画像のためのもの。
+    @Test func thumbnailsDoNotReadCache() async throws {
+        let data = try pngData()
+        let files = MediaFileCache.temporary()
+        let url = try #require(URL(string: "https://files.example.social/original/abc.png"))
+        _ = try await files.store(data, named: "abc.png", for: url)
+        let fetched = Mutex(0)
+        let store = MediaImageStore(files: files) { _ in
+            fetched.withLock { $0 += 1 }
+            return data
+        }
+
+        _ = try await store.image(for: url, maxPixelSize: 400)
+
+        #expect(fetched.withLock { $0 } == 1)
     }
 }

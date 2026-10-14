@@ -3,7 +3,8 @@ import Foundation
 import os
 import SciaCore
 
-/// 添付ファイルの元のファイルを、合計の大きさに上限のあるディスクキャッシュに置く。共有や保存で、縮めずに元の形式のまま渡すために使う。
+/// 添付ファイルの元のファイルを、合計の大きさに上限のあるディスクキャッシュに置く。共有や保存で縮めずに元の形式のまま渡すためと、
+/// ビューアで開き直した画像を通信せずに表示するために使う。
 ///
 /// 画像ライブラリ（Nuke、Kingfisherなど）のディスクキャッシュと同じく、OSが空き容量に応じて消してよい`Caches`に置き、起動をまたいで残す。
 /// 合計が上限を超えたら、最後に使った日時の古いものから消す。最後に使った日時は、OSの更新を当てにせず、引くたびにファイルへ書き込む。
@@ -48,6 +49,11 @@ actor MediaFileCache {
         guard let file = Self.storedFile(in: folder(for: url)) else { return nil }
         Self.touch(file)
         return file
+    }
+
+    /// `url`のファイルが置いてあれば、その中身。引いたものは最後に使った日時を更新する。
+    func data(for url: URL) -> Data? {
+        file(for: url).flatMap { try? Data(contentsOf: $0) }
     }
 
     /// `url`のファイルが置いてあるか。最後に使った日時は更新しない。

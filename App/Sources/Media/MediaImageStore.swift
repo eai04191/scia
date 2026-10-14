@@ -20,7 +20,7 @@ final class MediaImageStore {
     /// 同じURLでも縮める大きさごとに分けて持つ。サーバーによってはプレビューと元の画像が同じURLのため。
     private let cache = NSCache<NSString, UIImage>()
     private var inFlight: [Key: Task<Loaded, any Error>] = [:]
-    /// 元のファイルを置くディスクキャッシュ。共有や保存で、縮めずに元の形式のまま渡すために残す。
+    /// 元のファイルを置くディスクキャッシュ。共有や保存で縮めずに元の形式のまま渡すために残し、ビューアで開き直すときは通信せずにここから読む。
     private let files: MediaFileCache
     private let logger = SciaLog.logger(category: "media")
 
@@ -73,6 +73,10 @@ final class MediaImageStore {
         let fetch = fetch
         let files = keepsOriginal ? files : nil
         let task = Task<Loaded, any Error> {
+            // ビューアで開く画像は、元のファイルがキャッシュにあれば通信せずに使う。壊れていて展開できなければ、通信で取り直して置き直す。
+            if let files, let cached = await files.data(for: url), let image = await Self.decode(cached, maxPixelSize: maxPixelSize) {
+                return Loaded(image: image, keptOriginal: true)
+            }
             let data = try await fetch(url)
             guard let image = await Self.decode(data, maxPixelSize: maxPixelSize) else {
                 throw DecodeError()
