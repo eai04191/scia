@@ -114,6 +114,53 @@ struct ScrollAnchorTests {
         #expect(Set(reported) == Set(visibleBefore), "位置を保った挿入で、見えている投稿が変わりました")
     }
 
+    /// 投稿欄のキーボードで下端を覆ったり外したりしても、読んでいる位置は動かない。
+    /// 一覧の末尾までスクロールしているときは、覆いを外すと末尾が下端に合わせて下がるため、ここでは確かめない。
+    @Test(arguments: [0.0, 0.4])
+    func coveringBottomKeepsAnchorPosition(scrollFraction: CGFloat) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.setStatuses(StatusFactory.make(count: 60, startingAt: 1_000))
+        harness.scroll(toFraction: scrollFraction)
+        let anchor = try #require(harness.viewController.currentAnchor())
+        let before = try #require(harness.windowMinY(of: anchor.id))
+
+        harness.viewController.setObscuredBottomHeight(400)
+        let covered = try #require(harness.windowMinY(of: anchor.id))
+        harness.viewController.setObscuredBottomHeight(0)
+        let uncovered = try #require(harness.windowMinY(of: anchor.id))
+
+        #expect(abs(covered - before) <= tolerance, "覆ったときに基準の投稿が\(covered - before)pt動きました")
+        #expect(abs(uncovered - before) <= tolerance, "外したときに基準の投稿が\(uncovered - before)pt動きました")
+    }
+
+    /// 画面を読み込む前に覆う高さを渡しても、画面は読み込まない。読み込むと、投稿ボタンなどを付ける設定より先に画面ができてしまう。
+    /// 渡した高さは、画面を読み込んだあとに反映する。
+    @Test func coveringBeforeViewLoadsDoesNotLoadView() throws {
+        let viewController = TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline)
+
+        viewController.setObscuredBottomHeight(400)
+
+        #expect(!viewController.isViewLoaded)
+    }
+
+    /// キーボードの裏に隠れた投稿は、表示中として報告しない。通知を見ていないのに既読にしないため。
+    @Test func coveredStatusesAreNotReportedAsVisible() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var reported: [Status.ID] = []
+        harness.viewController.onVisibleStatusesChange = { reported = $0 }
+        harness.setStatuses(StatusFactory.make(count: 60, startingAt: 1_000))
+        harness.scroll(toFraction: 0)
+        harness.viewController.reportVisibleItems()
+        let uncovered = reported
+
+        harness.viewController.setObscuredBottomHeight(500)
+
+        #expect(!reported.isEmpty)
+        #expect(reported.count < uncovered.count, "覆われた投稿も表示中として報告しました")
+    }
+
     /// 切れていた間の投稿、ギャップ、切れる前の投稿の順に並べる。
     private func entriesWithGap(loadedInGap: [Status] = [], remainingGap: Bool = true) -> (entries: [TimelineEntry], gap: TimelineGap, above: Status, below: Status) {
         let newer = StatusFactory.make(count: 20, startingAt: 2_000)

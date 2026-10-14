@@ -159,6 +159,8 @@ final class TimelineViewController: UIViewController {
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         collectionView.delegate = self
+        // タブバーの上の投稿欄で書いている間も、読み進めるだけならキーボードを閉じない。キーボードまで引き下ろしたら閉じる。
+        collectionView.keyboardDismissMode = .interactive
         view.addSubview(collectionView)
         view.addSubview(newArrivalsButton)
         NSLayoutConstraint.activate([
@@ -503,6 +505,33 @@ final class TimelineViewController: UIViewController {
         button.translatesAutoresizingMaskIntoConstraints = false
         button.isHidden = true
         return button
+    }
+
+    /// 画面の下端から、投稿欄のキーボードと入力バーが覆っている高さ。
+    private var obscuredBottomHeight: CGFloat = 0
+
+    /// 下端の覆われた部分を一覧の表示領域から外し、そこに隠れた要素を表示中として報告しないようにする。
+    /// 下側の余白を変えるだけなので、上端を基準にした読んでいる位置は動かない。ただし一覧の末尾までスクロールしていると、
+    /// 覆いを外したときに末尾が下端に合わせて下がる。末尾は古い投稿を読み込む途中で留まる場所ではなく、そこで書き始めることはまれなため、補正しない。
+    func setObscuredBottomHeight(_ height: CGFloat) {
+        obscuredBottomHeight = height
+        updateObscuredBottomInset()
+    }
+
+    /// タブバーや投稿欄のアクセサリーの分はsafe areaに入っているため、それを超えて覆っている分だけ足す。
+    /// 画面を読み込む前は値だけを覚え、読み込んだあとのsafe areaの変化で反映する。ここで読み込むと、画面を組み立てる前に置くボタンなどの設定より先に読み込まれてしまう。
+    private func updateObscuredBottomInset() {
+        guard isViewLoaded else { return }
+        let inset = max(0, obscuredBottomHeight - view.safeAreaInsets.bottom)
+        guard collectionView.contentInset.bottom != inset else { return }
+        collectionView.contentInset.bottom = inset
+        collectionView.verticalScrollIndicatorInsets.bottom = inset
+        reportVisibleItems()
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        updateObscuredBottomInset()
     }
 
     /// 最上部へ動かす。上のセルは表示されたときに見積もりから実寸へ変わり、そのぶん位置が補正されて最上部に届かないことがあるため、

@@ -1,9 +1,10 @@
 import SciaCore
 import SwiftUI
 
-/// 投稿と返信の画面。
+/// 投稿欄を広げた画面。タブバーの上の入力欄と同じ下書きを編集し、閉じても下書きは残す。
 struct ComposeView: View {
     @Bindable var model: ComposeModel
+    let onClose: () -> Void
     @FocusState private var focusedField: Field?
 
     private enum Field {
@@ -100,11 +101,7 @@ struct ComposeView: View {
     @ToolbarContentBuilder
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .cancellationAction) {
-            // iOS 26では確認ダイアログが呼び出し元を起点に出るため、ボタンに付ける。
-            Button("キャンセル", role: .cancel) { model.cancel() }
-                .confirmationDialog("下書きを破棄しますか？", isPresented: $model.isDiscardConfirmationPresented, titleVisibility: .visible) {
-                    Button("破棄", role: .destructive) { model.onFinish() }
-                }
+            Button("閉じる", role: .close) { onClose() }
         }
         ToolbarItem(placement: .confirmationAction) {
             if model.isPosting {
@@ -118,7 +115,7 @@ struct ComposeView: View {
 }
 
 /// 公開範囲の選択肢の見た目。
-private struct VisibilityOption {
+struct VisibilityOption {
     let visibility: Status.Visibility
     let title: String
     let symbolName: String

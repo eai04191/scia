@@ -18,6 +18,11 @@ final class SessionController {
     /// 開いているプロフィール画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
     private let profiles: ProfileRegistry
     private var cachedMyAccount: Account?
+    /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
+    private let composer: InlineComposeController
+    /// 投稿欄が覆っている高さを伝える一覧。ホームと通知に加え、開いているプロフィールの一覧も入る。閉じたものは自然に消える。
+    private let timelines = NSHashTable<TimelineViewController>.weakObjects()
+    private var composerObscuredHeight: CGFloat = 0
     /// 投稿画面で使う、インスタンスの上限とユーザーの既定の公開範囲。一度読めたら使い回す。
     private var composeDefaults: (configuration: InstanceConfiguration?, visibility: Status.Visibility?)?
     private let logger = SciaLog.logger(category: "session")
@@ -59,6 +64,10 @@ final class SessionController {
             (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
         }
         tabBarController.delegate = tabBarDelegate
+        composer = InlineComposeController(model: ComposeModel(myAccountID: credential.accountID) { draft in
+            _ = try await client.postStatus(draft)
+        })
+        tabBarController.bottomAccessory = composer.accessory
         rootViewController = tabBarController
         forward = { [weak self] message in
             guard let self else { return }
@@ -74,11 +83,28 @@ final class SessionController {
             }
             configure(viewController)
         }
-        home.viewController.onCompose = { [weak self] in self?.presentCompose(replyingTo: nil) }
+        home.viewController.onCompose = { [weak self] in self?.expandCompose() }
+        composer.onBeginEditing = { [weak self] in self?.applyComposeDefaults() }
+        composer.onExpand = { [weak self] in self?.expandCompose() }
+        composer.onObscuredHeightChange = { [weak self] height in
+            guard let self else { return }
+            composerObscuredHeight = height
+            for timeline in timelines.allObjects {
+                timeline.setObscuredBottomHeight(height)
+            }
+        }
+        composer.onPosted = { [weak self] in
+            guard let self, self.rootViewController.presentedViewController is ComposeHostingController else { return }
+            self.rootViewController.dismiss(animated: true)
+        }
+        // 投稿欄を置くとタブバーの画面を読み込むため、各一覧の設定（投稿ボタンを付けるonComposeなど）を終えてから置く。
+        composer.install(in: tabBarController)
     }
 
     /// 一覧から投稿への操作とプロフィールを開けるようにする。プロフィール画面の一覧にも使う。
     private func configure(_ viewController: TimelineViewController) {
+        timelines.add(viewController)
+        viewController.setObscuredBottomHeight(composerObscuredHeight)
         viewController.myAccountID = credential.accountID
         viewController.onStatusAction = { [weak self] action, status in self?.perform(action, on: status) }
         viewController.onOpenProfile = { [weak self, weak viewController] account in
@@ -135,7 +161,7 @@ final class SessionController {
     private func perform(_ action: StatusAction, on status: Status) {
         switch action {
         case .reply:
-            presentCompose(replyingTo: status)
+            composer.reply(to: status)
         case .favourite:
             toggle(.favourite, on: status, failureTitle: "お気に入りを変更できませんでした")
         case .reblog:
@@ -175,18 +201,18 @@ final class SessionController {
 
     // MARK: - 投稿
 
-    private func presentCompose(replyingTo status: Status?) {
-        let client = client
-        let model = ComposeModel(replyTo: status, myAccountID: client.credential.accountID) { draft in
-            _ = try await client.postStatus(draft)
-        }
-        let hosting = ComposeHostingController(model: model)
-        model.onFinish = { [weak hosting] in hosting?.dismiss(animated: true) }
-        rootViewController.present(hosting, animated: true)
+    /// 投稿欄の下書きのまま、全画面の投稿画面を出す。
+    private func expandCompose() {
+        applyComposeDefaults()
+        rootViewController.present(ComposeHostingController(model: composer.model), animated: true)
+    }
+
+    /// 既定の公開範囲などを読めたら、投稿欄に反映する。読めなかったら、次に書き始めたときに読み直す。
+    private func applyComposeDefaults() {
         Task { [weak self] in
             guard let self else { return }
             let defaults = await self.loadComposeDefaults()
-            model.apply(configuration: defaults.configuration, defaultVisibility: defaults.visibility)
+            self.composer.model.apply(configuration: defaults.configuration, defaultVisibility: defaults.visibility)
         }
     }
 
@@ -306,14 +332,16 @@ private final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate
     }
 }
 
-/// 投稿画面を出す。書きかけのときは下へのスワイプで閉じず、破棄してよいか確かめる。
+/// 投稿欄を広げた画面を出す。閉じても下書きは投稿欄に残るため、下へのスワイプでも閉じられる。投稿中だけは閉じない。
 @MainActor
 private final class ComposeHostingController: UIHostingController<ComposeView>, UIAdaptivePresentationControllerDelegate {
     private let model: ComposeModel
 
     init(model: ComposeModel) {
         self.model = model
-        super.init(rootView: ComposeView(model: model))
+        super.init(rootView: ComposeView(model: model) {})
+        // 閉じる操作は自分を参照するため、初期化を終えてから差し替える。
+        rootView = ComposeView(model: model) { [weak self] in self?.dismiss(animated: true) }
         presentationController?.delegate = self
     }
 
@@ -323,10 +351,6 @@ private final class ComposeHostingController: UIHostingController<ComposeView>, 
     }
 
     func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
-        !model.isDirty && !model.isPosting
-    }
-
-    func presentationControllerDidAttemptToDismiss(_ presentationController: UIPresentationController) {
-        model.cancel()
+        !model.isPosting
     }
 }
