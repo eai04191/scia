@@ -390,27 +390,32 @@ extension HomeTimelineController {
     /// 投稿しなくても、新着の挿入やギャップの表示をシミュレーターで確かめるための操作。
     fileprivate func makeDebugActions() -> [UIMenuElement] {
         [
-            UIMenu(title: "ダミー投稿を流す", image: UIImage(systemName: "square.stack"), children: [
-                UIAction(title: "新着10件", image: UIImage(systemName: "text.badge.plus")) { [weak self] _ in
-                    self?.streamDummyArrivals(count: 10)
-                },
-                UIAction(title: "画像4枚", image: UIImage(systemName: "photo.badge.plus")) { [weak self] _ in
-                    self?.streamDummyMediaStatus(content: "ビューアの確認用に4枚の画像を添付", attachments: DummyMedia.attachments)
-                },
-                UIAction(title: "縦長の画像1枚", image: UIImage(systemName: "rectangle.portrait")) { [weak self] _ in
-                    self?.streamDummyMediaStatus(content: "ビューアの確認用に縦長の画像を1枚添付", attachments: DummyMedia.singleTallAttachment)
-                },
-                UIAction(title: "透過画像1枚", image: UIImage(systemName: "circle.dashed")) { [weak self] _ in
-                    self?.streamDummyMediaStatus(content: "ビューアの確認用に透明な部分のある画像を1枚添付", attachments: DummyMedia.singleTransparentAttachment)
-                },
-                UIAction(title: "動画とGIF", image: UIImage(systemName: "play.rectangle")) { [weak self] _ in
-                    self?.streamDummyVideoStatus()
-                },
-            ]),
+            UIMenu(title: "ダミー投稿を流す", image: UIImage(systemName: "square.stack"), children: DebugDummyPost.allCases.map { post in
+                UIAction(title: post.title, image: UIImage(systemName: post.systemImage)) { [weak self] _ in
+                    self?.streamDummy(post)
+                }
+            }),
             UIAction(title: "直近の投稿を取りこぼして再接続", image: UIImage(systemName: "bolt.horizontal")) { [weak self] _ in
                 self?.simulateMissedWhileDisconnected()
             },
         ]
+    }
+
+    /// デバッグメニューや、URLで指定したダミー投稿を流す。
+    func streamDummy(_ post: DebugDummyPost) {
+        logger.info("debug stream dummy \(post.rawValue, privacy: .public)")
+        switch post {
+        case .arrivals:
+            streamDummyArrivals(count: 10)
+        case .images:
+            streamDummyMediaStatus(content: "ビューアの確認用に4枚の画像を添付", attachments: DummyMedia.attachments)
+        case .tall:
+            streamDummyMediaStatus(content: "ビューアの確認用に縦長の画像を1枚添付", attachments: DummyMedia.singleTallAttachment)
+        case .transparent:
+            streamDummyMediaStatus(content: "ビューアの確認用に透明な部分のある画像を1枚添付", attachments: DummyMedia.singleTransparentAttachment)
+        case .video:
+            streamDummyVideoStatus()
+        }
     }
 
     /// ストリーミングで届いたのと同じ経路で、ダミーの新着を少しずつ流す。
@@ -504,6 +509,35 @@ extension HomeTimelineController {
             spoilerText: "",
             url: nil
         )
+    }
+}
+
+/// ホームに流せるダミー投稿の種類。デバッグメニューの項目と、URL（`scia-debug://dummy/<rawValue>`）の名前を兼ねる。
+enum DebugDummyPost: String, CaseIterable {
+    case arrivals
+    case images
+    case tall
+    case transparent
+    case video
+
+    var title: String {
+        switch self {
+        case .arrivals: "新着10件"
+        case .images: "画像4枚"
+        case .tall: "縦長の画像1枚"
+        case .transparent: "透過画像1枚"
+        case .video: "動画とGIF"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .arrivals: "text.badge.plus"
+        case .images: "photo.badge.plus"
+        case .tall: "rectangle.portrait"
+        case .transparent: "circle.dashed"
+        case .video: "play.rectangle"
+        }
     }
 }
 #endif
