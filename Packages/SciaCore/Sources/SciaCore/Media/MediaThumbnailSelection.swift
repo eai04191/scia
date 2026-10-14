@@ -30,9 +30,12 @@ public struct MediaThumbnailPolicy: Equatable, Sendable {
 public struct NetworkConditions: Equatable, Sendable {
     /// 低データモード。
     public var isConstrained: Bool
+    /// モバイル通信や、インターネット共有のように通信量に限りのある回線。
+    public var isExpensive: Bool
 
-    public init(isConstrained: Bool) {
+    public init(isConstrained: Bool, isExpensive: Bool) {
         self.isConstrained = isConstrained
+        self.isExpensive = isExpensive
     }
 }
 
@@ -47,8 +50,10 @@ public enum MediaThumbnailSelection {
     /// 展開する大きさの上限。ビューアで展開する大きさと揃える。
     static let maxPixelSizeLimit = 4_096
 
-    public static func allowsOriginal(on network: NetworkConditions) -> Bool {
-        !network.isConstrained
+    /// 低データモードでは、設定によらず元の画像を読まない。
+    /// - Parameter usesOriginalOnExpensiveNetwork: モバイル通信などでも元の画像を読む設定。
+    public static func allowsOriginal(on network: NetworkConditions, usesOriginalOnExpensiveNetwork: Bool) -> Bool {
+        !network.isConstrained && (!network.isExpensive || usesOriginalOnExpensiveNetwork)
     }
 
     /// - Parameters:

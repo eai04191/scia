@@ -76,12 +76,16 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let add = UIAction(title: "アカウントを追加", image: UIImage(systemName: "person.badge.plus")) { [weak self] _ in
             self?.presentAddAccount()
         }
+        let settings = UIAction(title: "設定", image: UIImage(systemName: "gearshape")) { [weak self] _ in
+            self?.window?.rootViewController?.presentSettings()
+        }
         let logOut = UIAction(title: "ログアウト", image: UIImage(systemName: "rectangle.portrait.and.arrow.right"), attributes: .destructive) { [weak self] _ in
             self?.confirmLogOut()
         }
         return UIMenu(children: [
             UIMenu(options: .displayInline, children: switching),
             add,
+            UIMenu(options: .displayInline, children: [settings]),
             UIMenu(options: .displayInline, children: [logOut]),
         ])
     }

@@ -6,13 +6,13 @@ import SciaCore
 @MainActor
 @Observable
 final class NetworkConditionsMonitor {
-    private(set) var conditions = NetworkConditions(isConstrained: false)
+    private(set) var conditions = NetworkConditions(isConstrained: false, isExpensive: false)
     @ObservationIgnored private let monitor = NWPathMonitor()
 
     init() {
         monitor.pathUpdateHandler = { [weak self] path in
             MainActor.assumeIsolated {
-                let conditions = NetworkConditions(isConstrained: path.isConstrained)
+                let conditions = NetworkConditions(isConstrained: path.isConstrained, isExpensive: path.isExpensive)
                 if self?.conditions != conditions {
                     self?.conditions = conditions
                 }

@@ -31,7 +31,10 @@ extension TimelineViewController {
             isCovered: isSensitive && !revealedMediaStatusIDs.contains(status.id),
             tallestAspectRatio: tuning.value(of: TuningCatalog.mediaTallestAspectRatio),
             thumbnailPolicy: MediaThumbnailPolicy(
-                allowsOriginal: MediaThumbnailSelection.allowsOriginal(on: network.conditions),
+                allowsOriginal: MediaThumbnailSelection.allowsOriginal(
+                    on: network.conditions,
+                    usesOriginalOnExpensiveNetwork: settings.usesOriginalThumbnailsOnExpensiveNetwork
+                ),
                 upscaleTolerance: tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
             )
         )

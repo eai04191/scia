@@ -126,8 +126,22 @@ struct MediaThumbnailSelectionTests {
         #expect(request(attachment(), tile: CGSize(width: 10_000, height: 5_625))?.maxPixelSize == 4_096)
     }
 
-    @Test func originalIsNotAllowedInLowDataMode() {
-        #expect(MediaThumbnailSelection.allowsOriginal(on: NetworkConditions(isConstrained: false)))
-        #expect(!MediaThumbnailSelection.allowsOriginal(on: NetworkConditions(isConstrained: true)))
+    @Test func originalIsNotAllowedInLowDataModeRegardlessOfSetting() {
+        let lowData = NetworkConditions(isConstrained: true, isExpensive: false)
+        #expect(!MediaThumbnailSelection.allowsOriginal(on: lowData, usesOriginalOnExpensiveNetwork: true))
+        let lowDataOnCellular = NetworkConditions(isConstrained: true, isExpensive: true)
+        #expect(!MediaThumbnailSelection.allowsOriginal(on: lowDataOnCellular, usesOriginalOnExpensiveNetwork: true))
+    }
+
+    @Test func expensiveNetworkFollowsTheSetting() {
+        let cellular = NetworkConditions(isConstrained: false, isExpensive: true)
+        #expect(MediaThumbnailSelection.allowsOriginal(on: cellular, usesOriginalOnExpensiveNetwork: true))
+        #expect(!MediaThumbnailSelection.allowsOriginal(on: cellular, usesOriginalOnExpensiveNetwork: false))
+    }
+
+    /// Wi-Fiでは、モバイル通信の設定をオフにしていても元の画像を読む。
+    @Test func unmeteredNetworkIgnoresTheSetting() {
+        let wifi = NetworkConditions(isConstrained: false, isExpensive: false)
+        #expect(MediaThumbnailSelection.allowsOriginal(on: wifi, usesOriginalOnExpensiveNetwork: false))
     }
 }
