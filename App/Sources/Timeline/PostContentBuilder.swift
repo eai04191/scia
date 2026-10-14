@@ -1,0 +1,94 @@
+import SciaCore
+import UIKit
+
+/// 投稿のセルの中身を、今のチューニングと設定から組み立てる。一覧と、設定画面の見本の投稿で同じ見た目にするために分けている。
+@MainActor
+struct PostContentBuilder {
+    let tuning: TuningStore
+    let settings: AppSettings
+    let emojiImages: EmojiImageStore
+    let mediaImages: MediaImageStore
+    let avatarImages: AvatarImageStore
+
+    /// タップしたときの処理と添付ファイルは含めない。一覧では呼び出し側が足す。
+    /// - Parameter isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。
+    func configuration(for status: Status, isPinned: Bool = false, base: UIListContentConfiguration) -> PostContentConfiguration {
+        let shown = status.displayed
+        let secondaryFont = base.secondaryTextProperties.font
+        let metrics = PostContentConfiguration.Metrics(
+            margins: base.directionalLayoutMargins,
+            avatarSize: tuning.value(of: TuningCatalog.avatarSize),
+            boosterAvatarSize: tuning.value(of: TuningCatalog.boosterAvatarSize),
+            nameFont: Self.boldFont(base.textProperties.font),
+            secondaryFont: secondaryFont
+        )
+        let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiImages: emojiImages)
+        let secondaryRenderer = RichTextRenderer(font: secondaryFont, textColor: .secondaryLabel, emojiImages: emojiImages)
+        let nameParts = settings.statusNameStyle.parts.enumerated().map { index, part in
+            let renderer = index == 0 ? primaryRenderer : secondaryRenderer
+            return switch part {
+            case .displayName: renderer.render(.plain(shown.account.displayNameOrUsername, emojis: shown.account.emojis))
+            case .acct: renderer.render(.plain("@\(shown.account.acct)", emojis: []))
+            }
+        }
+        let context: PostContentConfiguration.Context? = if isPinned {
+            PostContentConfiguration.Context(
+                symbolName: "pin.fill",
+                avatar: nil,
+                text: secondaryRenderer.render(.plain("固定された投稿", emojis: [])),
+                accessibilityText: "固定された投稿"
+            )
+        } else if status.reblog != nil {
+            PostContentConfiguration.Context(
+                symbolName: "arrow.2.squarepath",
+                avatar: avatarContent(of: status.account),
+                text: secondaryRenderer.render(.plain(status.account.displayNameOrUsername, emojis: status.account.emojis)),
+                accessibilityText: "\(status.account.displayNameOrUsername)がブースト"
+            )
+        } else {
+            nil
+        }
+        return PostContentConfiguration(
+            context: context,
+            avatar: avatarContent(of: shown.account),
+            nameParts: nameParts,
+            createdAt: shown.createdAt,
+            timeStyle: settings.statusTimeStyle,
+            body: body(of: shown, base: base),
+            metrics: metrics,
+            mediaImages: mediaImages,
+            avatarImages: avatarImages
+        )
+    }
+
+    func avatarContent(of account: Account) -> AvatarView.Content {
+        AvatarView.Content(
+            url: settings.animatesAvatars ? account.avatar : account.avatarStatic,
+            shape: settings.avatarShape,
+            animates: settings.animatesAvatars
+        )
+    }
+
+    private static func boldFont(_ font: UIFont) -> UIFont {
+        font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
+    }
+
+    /// 投稿の本文。注意書きつきの投稿は、本文を開く操作がまだないため注意書きだけを出す。
+    func body(of status: Status, base: UIListContentConfiguration) -> NSAttributedString {
+        let bodyRenderer = RichTextRenderer(
+            font: base.secondaryTextProperties.font,
+            textColor: base.secondaryTextProperties.color,
+            paragraphSpacing: tuning.value(of: TuningCatalog.paragraphSpacing),
+            emojiImages: emojiImages
+        )
+        guard !status.spoilerText.isEmpty else {
+            return bodyRenderer.render(.status(status))
+        }
+        let spoiler = NSMutableAttributedString(string: "注意書き: ", attributes: [
+            .font: base.secondaryTextProperties.font,
+            .foregroundColor: base.secondaryTextProperties.color,
+        ])
+        spoiler.append(bodyRenderer.render(.plain(status.spoilerText, emojis: status.emojis)))
+        return spoiler
+    }
+}
