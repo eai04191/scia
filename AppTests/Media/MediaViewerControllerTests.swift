@@ -414,6 +414,20 @@ struct MediaViewerControllerTests {
         #expect(try #require(menuAction("共有", in: viewer)).attributes.isEmpty)
     }
 
+    /// 動画やGIFのページでも、長押しでメニューボタンと同じメニューを出す。
+    @Test func longPressOnPlayerOffersMenu() throws {
+        let page = PlayerPageController(attachment: MediaAttachment(id: "1", type: .gifv, url: nil, previewUrl: nil))
+        page.loadViewIfNeeded()
+        page.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        page.view.layoutIfNeeded()
+        let interaction = try #require(contextMenuInteraction(in: page.view))
+        let center = CGPoint(x: 195, y: 422)
+
+        #expect(page.contextMenuInteraction(interaction, configurationForMenuAtLocation: center) == nil)
+        page.menuElements = { [UIAction(title: "共有") { _ in }] }
+        #expect(page.contextMenuInteraction(interaction, configurationForMenuAtLocation: center) != nil)
+    }
+
     /// 処理中でURLのない添付ファイルは、共有するものがないため選べない。
     @Test func menuDisablesShareWhenThereIsNothingToShare() throws {
         let processing = makeViewer(attachments: [image("2", url: nil)])

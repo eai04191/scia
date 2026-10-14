@@ -1381,6 +1381,7 @@ final class PlayerPageController: MediaPageController {
         playerController.view.backgroundColor = .clear
         view.addSubview(playerController.view)
         playerController.didMove(toParent: self)
+        addLongPressMenu(to: playerController.view)
         guard let url = attachment.url ?? attachment.remoteUrl else { return }
         let item = AVPlayerItem(url: url)
         if attachment.type == .gifv {
