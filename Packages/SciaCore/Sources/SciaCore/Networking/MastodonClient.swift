@@ -6,16 +6,25 @@ public struct MastodonClient: Sendable {
     public let credential: Credential
     private let transport: any HTTPTransport
     private let rateLimit: RateLimitGate
+    private let features: FeatureAvailability
     private let retry: RetryPolicy
     private static let logger = SciaLog.logger(category: "network")
 
     /// - Parameters:
     ///   - rateLimit: 429や503で止められたときに、自動の通信を控える門。セッションの中で共有する。
+    ///   - features: 使えないと分かった機能を、セッションの間だけ止める。セッションの中で共有する。
     ///   - retry: 一時的な失敗で送り直す回数と間隔。
-    public init(credential: Credential, transport: any HTTPTransport, rateLimit: RateLimitGate = RateLimitGate(), retry: RetryPolicy = .standard) {
+    public init(
+        credential: Credential,
+        transport: any HTTPTransport,
+        rateLimit: RateLimitGate = RateLimitGate(),
+        features: FeatureAvailability = FeatureAvailability(),
+        retry: RetryPolicy = .standard
+    ) {
         self.credential = credential
         self.transport = transport
         self.rateLimit = rateLimit
+        self.features = features
         self.retry = retry
     }
 
@@ -36,14 +45,14 @@ public struct MastodonClient: Sendable {
     /// 既読位置。まだ保存されていなければnil。
     /// https://docs.joinmastodon.org/methods/markers/#get
     public func marker(for timeline: MarkerTimeline) async throws -> String? {
-        let (markers, _) = try await get([String: Marker].self, path: "api/v1/markers", query: [URLQueryItem(name: "timeline[]", value: timeline.rawValue)])
+        let (markers, _) = try await get([String: Marker].self, path: "api/v1/markers", query: [URLQueryItem(name: "timeline[]", value: timeline.rawValue)], feature: .markers)
         return markers[timeline.rawValue]?.lastReadId
     }
 
     /// 既読位置を保存する。他の端末と同時に保存して競合すると409が返る。
     /// https://docs.joinmastodon.org/methods/markers/#create
     public func saveMarker(for timeline: MarkerTimeline, lastReadID: String) async throws {
-        _ = try await post([String: Marker].self, path: "api/v1/markers", form: [URLQueryItem(name: "\(timeline.rawValue)[last_read_id]", value: lastReadID)])
+        _ = try await post([String: Marker].self, path: "api/v1/markers", form: [URLQueryItem(name: "\(timeline.rawValue)[last_read_id]", value: lastReadID)], feature: .markers)
     }
 
     /// ストリーミングAPIの接続先。REST APIと別のホストのことがある。
@@ -58,7 +67,7 @@ public struct MastodonClient: Sendable {
             }
             let configuration: Configuration
         }
-        return try await get(Instance.self, path: "api/v2/instance", query: []).0.configuration.urls.streaming
+        return try await get(Instance.self, path: "api/v2/instance", query: [], feature: .instanceV2).0.configuration.urls.streaming
     }
 
     /// v2の`instance`がないサーバーのための、v1の接続先。
@@ -95,7 +104,7 @@ public struct MastodonClient: Sendable {
             }
             let configuration: Configuration
         }
-        let configuration = try await get(Instance.self, path: "api/v2/instance", query: []).0.configuration
+        let configuration = try await get(Instance.self, path: "api/v2/instance", query: [], feature: .instanceV2).0.configuration
         // 投稿の設定を返さないサーバーには、Mastodonの既定値を使う。
         // 代替テキストの上限は4.4.0から返るが、それより前のMastodonも1500文字で検証している。
         return InstanceConfiguration(
@@ -119,7 +128,7 @@ public struct MastodonClient: Sendable {
             }
         }
         // キーにコロンを含むため、スネークケースからの変換を通さずに読む。
-        let (data, _) = try await send(URLRequest(url: credential.instance.appending(path: "api/v1/preferences")))
+        let (data, _) = try await send(URLRequest(url: credential.instance.appending(path: "api/v1/preferences")), feature: .preferences)
         return try JSONDecoder().decode(Preferences.self, from: data).visibility ?? .public
     }
 
@@ -302,13 +311,20 @@ public struct MastodonClient: Sendable {
         try await post(Relationship.self, path: "api/v1/accounts/\(id)/unfollow", form: []).0
     }
 
-    private func get<T: Decodable>(_ type: T.Type, path: String, query: [URLQueryItem]) async throws -> (T, HTTPURLResponse) {
+    /// - Parameter feature: なくても使える機能のAPIなら、その機能。使えないと分かったら、セッションの間は送らない。
+    private func get<T: Decodable>(_ type: T.Type, path: String, query: [URLQueryItem], feature: OptionalFeature? = nil) async throws -> (T, HTTPURLResponse) {
         let url = credential.instance.appending(path: path)
-        return try await send(URLRequest(url: query.isEmpty ? url : url.appending(queryItems: query)), decoding: type)
+        return try await send(URLRequest(url: query.isEmpty ? url : url.appending(queryItems: query)), decoding: type, feature: feature)
     }
 
-    private func post<T: Decodable>(_ type: T.Type, path: String, form: [URLQueryItem], headers: [String: String] = [:]) async throws -> (T, HTTPURLResponse) {
-        try await send(formRequest(method: "POST", path: path, form: form, headers: headers), decoding: type)
+    private func post<T: Decodable>(
+        _ type: T.Type,
+        path: String,
+        form: [URLQueryItem],
+        headers: [String: String] = [:],
+        feature: OptionalFeature? = nil
+    ) async throws -> (T, HTTPURLResponse) {
+        try await send(formRequest(method: "POST", path: path, form: form, headers: headers), decoding: type, feature: feature)
     }
 
     private func formRequest(method: String, path: String, form: [URLQueryItem], headers: [String: String] = [:]) -> URLRequest {
@@ -326,17 +342,21 @@ public struct MastodonClient: Sendable {
         return request
     }
 
-    private func send<T: Decodable>(_ request: URLRequest, decoding type: T.Type) async throws -> (T, HTTPURLResponse) {
-        let (data, response) = try await send(request)
+    private func send<T: Decodable>(_ request: URLRequest, decoding type: T.Type, feature: OptionalFeature? = nil) async throws -> (T, HTTPURLResponse) {
+        let (data, response) = try await send(request, feature: feature)
         return (try MastodonDecoder.make().decode(type, from: data), response)
     }
 
-    private func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    private func send(_ request: URLRequest, feature: OptionalFeature? = nil) async throws -> (Data, HTTPURLResponse) {
         var request = request
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
         let canRetry = RetryPolicy.canRetry(request)
         var retries = 0
         while true {
+            // 送り直しを待っている間に、並行する別の呼び出しが止めていることがある。
+            if let feature {
+                try await features.check(feature)
+            }
             if RequestOrigin.current == .automatic {
                 try await rateLimit.checkAutomaticRequest()
             }
@@ -346,6 +366,11 @@ public struct MastodonClient: Sendable {
                 let (data, response) = try await transport.send(request)
                 if (200..<300).contains(response.statusCode) {
                     return (data, response)
+                }
+                if let feature, FeatureAvailability.indicatesUnsupported(statusCode: response.statusCode) {
+                    // 止めると決めた呼び出しも、止めた機能として失敗させる。呼び出し側が、ほかの失敗と分けて扱えるようにする。
+                    await features.disable(feature, statusCode: response.statusCode)
+                    throw FeatureUnavailable(feature: feature)
                 }
                 var isPaused = false
                 if response.statusCode == 429 || response.statusCode == 503 {

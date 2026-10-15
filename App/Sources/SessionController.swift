@@ -14,6 +14,8 @@ final class SessionController {
     private let client: MastodonClient
     /// 429や503で止められたときに、自動の通信を控える。このセッションの通信で共有する。
     private let rateLimit = RateLimitGate()
+    /// 使えないと分かった機能を、このセッションの間だけ止める。次の起動では作り直し、もう一度試す。
+    private let features = FeatureAvailability()
     /// 電波が戻ったときと、レート制限が明けたときに、読み込みをやり直す。
     private var recoveryTasks: [Task<Void, Never>] = []
     private let interactions: StatusInteractions
@@ -42,9 +44,9 @@ final class SessionController {
         self.credential = credential
         self.onReauthenticate = onReauthenticate
         #if DEBUG
-        let client = MastodonClient(credential: credential, transport: FaultInjectingTransport(base: URLSessionTransport()), rateLimit: rateLimit)
+        let client = MastodonClient(credential: credential, transport: FaultInjectingTransport(base: URLSessionTransport()), rateLimit: rateLimit, features: features)
         #else
-        let client = MastodonClient(credential: credential, transport: URLSessionTransport(), rateLimit: rateLimit)
+        let client = MastodonClient(credential: credential, transport: URLSessionTransport(), rateLimit: rateLimit, features: features)
         #endif
         #if DEBUG
         let streaming = StreamingClient(credential: credential, connector: FaultInjectingWebSocketConnector(base: URLSessionWebSocketConnector()))
