@@ -33,9 +33,9 @@ actor StubTransport: HTTPTransport {
 }
 
 extension StubTransport.Response {
-    static func fixture(_ name: String, statusCode: Int = 200) throws -> Self {
-        let url = try #require(Bundle.module.url(forResource: name, withExtension: "json", subdirectory: "Fixtures"))
-        return Self(statusCode: statusCode, body: try Data(contentsOf: url))
+    static func fixture(_ name: String, withExtension fileExtension: String = "json", statusCode: Int = 200, headers: [String: String] = [:]) throws -> Self {
+        let url = try #require(Bundle.module.url(forResource: name, withExtension: fileExtension, subdirectory: "Fixtures"))
+        return Self(statusCode: statusCode, body: try Data(contentsOf: url), headers: headers)
     }
 
     static func failure(_ code: URLError.Code) -> Self {
