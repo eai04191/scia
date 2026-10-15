@@ -18,6 +18,68 @@ extension KeyedDecodingContainer {
     }
 }
 
+/// 一覧を要素ごとに読む。読めない要素は、IDが読めれば`UnreadableItem`として残し、IDも読めなければ外して記録する。
+///
+/// IDも読めない要素は、一覧に場所を取れず、続きを読む位置にも使えない。1ページの全部がIDも読めない要素だと、空のページと同じに見えて
+/// 読み切ったと判断してしまう。それを避けるには`Link`ヘッダーで続きをたどる必要があるが、IDすら返さないサーバーは考えにくいため、そこまではしない。
+struct ElementList<Element: Decodable>: Decodable {
+    let elements: [Element]
+    let unreadable: [UnreadableItem]
+
+    init(from decoder: any Decoder) throws {
+        var container = try decoder.unkeyedContainer()
+        var elements: [Element] = []
+        var unreadable: [UnreadableItem] = []
+        while !container.isAtEnd {
+            switch try container.decode(ListElement<Element>.self) {
+            case .readable(let element): elements.append(element)
+            case .unreadable(let item): unreadable.append(item)
+            case .unidentifiable: break
+            }
+        }
+        self.elements = elements
+        self.unreadable = unreadable
+    }
+}
+
+/// 一覧の要素1つ。読めなくても投げず、読めたところまでを返す。投げると、その後ろの要素へ進めないため。
+private enum ListElement<Element: Decodable>: Decodable {
+    case readable(Element)
+    case unreadable(UnreadableItem)
+    case unidentifiable
+
+    init(from decoder: any Decoder) {
+        do {
+            self = .readable(try Element(from: decoder))
+        } catch {
+            DecodingLog.dropped(Element.self, at: decoder.codingPath, error)
+            guard let identity = try? Identity(from: decoder) else {
+                self = .unidentifiable
+                return
+            }
+            self = .unreadable(UnreadableItem(id: identity.id, url: identity.url))
+        }
+    }
+
+    /// 読めなかった要素から、一覧に並べるのに要るものだけを読む。
+    private struct Identity: Decodable {
+        let id: String
+        let url: URL?
+
+        private enum CodingKeys: String, CodingKey {
+            case id, url, status
+        }
+
+        /// 投稿ならその投稿のURL、通知なら対象の投稿のURLを読む。
+        init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            url = container.decodeDisplayURL(forKey: .url)
+                ?? (try? container.nestedContainer(keyedBy: CodingKeys.self, forKey: .status))?.decodeDisplayURL(forKey: .url)
+        }
+    }
+}
+
 /// 読めなければnilになる要素。読めなかったことは記録する。
 struct Lossy<Value: Decodable>: Decodable {
     let value: Value?

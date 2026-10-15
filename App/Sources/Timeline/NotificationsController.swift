@@ -87,7 +87,7 @@ final class NotificationsController {
     }
 
     private func retry() {
-        if store.notifications.isEmpty {
+        if store.isEmpty {
             start()
         } else {
             loadOlder()
@@ -111,7 +111,7 @@ final class NotificationsController {
     }
 
     private func loadOlder() {
-        guard !isStopped, !store.isLoading, !store.reachedEnd, !store.notifications.isEmpty else { return }
+        guard !isStopped, !store.isLoading, !store.reachedEnd, !store.isEmpty else { return }
         viewController.setFooterState(.loading)
         run { controller in
             do {
@@ -188,12 +188,13 @@ final class NotificationsController {
     private func fillFromLatest() {
         run { controller in
             do {
-                let before = controller.store.notifications
+                let before = controller.store.entries
                 let maxPages = Int(controller.tuning.value(of: TuningCatalog.fillPageLimit))
                 guard let added = try await controller.store.fillFromLatest(maxPages: maxPages), !controller.isStopped else { return }
                 controller.logger.info("notifications fill done added=\(added.count, privacy: .public)")
                 // 待っている間に同じ通知がストリーミングで挿入されていても、古い側を捨てていることがある。
-                guard controller.store.notifications != before else { return }
+                // 読めなかった通知だけが増えたときも描き直すよう、表示する並びで比べる。
+                guard controller.store.entries != before else { return }
                 controller.showEntries()
                 controller.viewController.setFooterState(controller.store.reachedEnd ? .reachedEnd : .idle)
             } catch {

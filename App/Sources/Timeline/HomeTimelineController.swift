@@ -104,7 +104,7 @@ final class HomeTimelineController {
     }
 
     private func retry() {
-        if store.statuses.isEmpty {
+        if store.isEmpty {
             start()
         } else {
             loadOlder()
@@ -121,7 +121,7 @@ final class HomeTimelineController {
             viewController.setEntries(store.entries, placingAtTop: topID)
             updateUnreadCount()
             hasLoadedInitial = true
-            viewController.setContentState(statuses.isEmpty && store.isRegenerating ? .regenerating : .loaded)
+            viewController.setContentState(store.isEmpty && store.isRegenerating ? .regenerating : .loaded)
             viewController.setFooterState(store.reachedEnd ? .reachedEnd : .idle)
             logger.info("home loadInitial done count=\(statuses.count, privacy: .public) regenerating=\(self.store.isRegenerating, privacy: .public)")
             startStreaming()
@@ -131,7 +131,7 @@ final class HomeTimelineController {
     }
 
     private func loadOlder() {
-        guard !isStopped, !store.isLoading, !store.reachedEnd, !store.statuses.isEmpty else { return }
+        guard !isStopped, !store.isLoading, !store.reachedEnd, !store.isEmpty else { return }
         viewController.setFooterState(.loading)
         run { controller in
             controller.logger.info("home loadOlder start")

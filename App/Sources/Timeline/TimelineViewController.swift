@@ -18,10 +18,12 @@ final class TimelineViewController: UIViewController {
         let empty: String
         /// これより古いものがないとき。
         let reachedEnd: String
+        /// サーバーから届いたが、読めなかった要素の行。
+        let unreadable: String
 
-        static let home = Texts(dumpName: "timeline", title: "ホーム", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません")
-        static let notifications = Texts(dumpName: "notifications", title: "通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません")
-        static let profile = Texts(dumpName: "profile", title: "", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません")
+        static let home = Texts(dumpName: "timeline", title: "ホーム", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
+        static let notifications = Texts(dumpName: "notifications", title: "通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
+        static let profile = Texts(dumpName: "profile", title: "", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
     }
 
     /// 一覧全体の状態。投稿がないときの表示に使う。
@@ -246,7 +248,7 @@ final class TimelineViewController: UIViewController {
             switch entries[id] {
             case .status(let status), .pinned(let status): !Self.emojiURLs(of: status).isDisjoint(with: urls)
             case .notification(let notification): !Self.emojiURLs(of: notification).isDisjoint(with: urls)
-            case .gap, nil: false
+            case .gap, .unreadable, nil: false
             }
         }
         reconfigure(Set(ids))
@@ -492,6 +494,7 @@ final class TimelineViewController: UIViewController {
         case .gap(let id): id
         case .notification(let id): "notification-\(id)"
         case .pinned(let id): "pinned-\(id)"
+        case .unreadable(let id): "unreadable-\(id)"
         }
     }
 
@@ -557,14 +560,14 @@ final class TimelineViewController: UIViewController {
             // 固定投稿は、同じ投稿が下の一覧にも並ぶことがあり、IDでは見分けられない。上にある固定投稿の方へ移る。
             case .status(let status), .pinned(let status): status.id == statusID
             case .notification(let notification): notification.status?.id == statusID
-            case .gap, nil: false
+            case .gap, .unreadable, nil: false
             }
         }
         let found = chosen ?? ids.first { id in
             switch entries[id] {
             case .status(let status), .pinned(let status): status.displayed.id == displayedID
             case .notification(let notification): notification.status?.displayed.id == displayedID
-            case .gap, nil: false
+            case .gap, .unreadable, nil: false
             }
         }
         guard let found, let indexPath = dataSource.indexPath(for: found) else { return false }
@@ -688,6 +691,8 @@ final class TimelineViewController: UIViewController {
             case .notification(let notification):
                 let list = self.contentConfiguration(for: notification, base: cell.defaultContentConfiguration())
                 cell.contentConfiguration = self.statusContentConfiguration(list: list, notification: notification)
+            case .unreadable(let item):
+                cell.contentConfiguration = self.unreadableContentConfiguration(for: item, base: cell.defaultContentConfiguration())
             }
         }
         let footerRegistration = UICollectionView.SupplementaryRegistration<TimelineFooterView>(
@@ -720,6 +725,20 @@ final class TimelineViewController: UIViewController {
         // ヘッダーのある一覧では、投稿がないことも全面の表示ではなくフッターで示す。
         // データソースを作る途中でも呼ばれるため、データソースではなく表示中の要素から数える。
         footer.apply(footerState, reachedEndText: entries.isEmpty ? texts.empty : texts.reachedEnd)
+    }
+
+    /// 読めなかった投稿や通知の行。読めなかったことを隠さず、開けるならブラウザで開けることを示す。
+    func unreadableContentConfiguration(for item: UnreadableItem, base: UIListContentConfiguration) -> UIListContentConfiguration {
+        var content = base
+        content.image = UIImage(systemName: "exclamationmark.triangle")
+        content.imageProperties.tintColor = .secondaryLabel
+        content.text = texts.unreadable
+        content.textProperties.color = .secondaryLabel
+        content.secondaryText = item.url == nil
+            ? "サーバーから届いた内容を読めませんでした。"
+            : "サーバーから届いた内容を読めませんでした。タップするとブラウザで開きます。"
+        content.secondaryTextProperties.color = .secondaryLabel
+        return content
     }
 
     func gapContentConfiguration(isLoading: Bool, base: UIListContentConfiguration) -> UIListContentConfiguration {
@@ -845,9 +864,14 @@ extension TimelineViewController: UICollectionViewDelegate {
         })
     }
 
-    /// 選べるのはギャップだけにする。投稿にはまだ開く画面がなく、タップすると選んだ状態の背景が残ったままになるため。
+    /// 選べるのはギャップと、ブラウザで開ける読めなかった要素だけにする。投稿にはまだ開く画面がなく、タップすると選んだ状態の背景が残ったままになるため。
     func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
-        if case .gap = dataSource.itemIdentifier(for: indexPath) { true } else { false }
+        guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
+        return switch (id, entries[id]) {
+        case (.gap, _): true
+        case (_, .unreadable(let item)): item.url != nil
+        default: false
+        }
     }
 
     func collectionView(_ collectionView: UICollectionView, shouldHighlightItemAt indexPath: IndexPath) -> Bool {
@@ -857,6 +881,11 @@ extension TimelineViewController: UICollectionViewDelegate {
     /// ギャップは、画面の上半分にあれば下から遡ってきたとみなして古い側から、下半分にあれば新しい側から読む。
     /// どちらも、いま読んでいる側に続く投稿から埋まる。
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        if let id = dataSource.itemIdentifier(for: indexPath), case .unreadable(let item) = entries[id], let url = item.url {
+            collectionView.deselectItem(at: indexPath, animated: true)
+            UIApplication.shared.open(url)
+            return
+        }
         guard case .gap(let gapID) = dataSource.itemIdentifier(for: indexPath) else { return }
         collectionView.deselectItem(at: indexPath, animated: true)
         guard !loadingGapIDs.contains(gapID), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return }

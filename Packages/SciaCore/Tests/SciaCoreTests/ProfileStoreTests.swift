@@ -47,7 +47,7 @@ struct ProfileStoreTests {
             relationship: { _ in relationship },
             statuses: { _, filter, _ in
                 await calls.record(filter)
-                return filter.pinned ? pinned : []
+                return TimelinePage(statuses: filter.pinned ? pinned : [], isRegenerating: false)
             },
             follow: { id in
                 await calls.recordFollow("follow")

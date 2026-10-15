@@ -31,6 +31,8 @@ public final class TimelineStore {
     private var refillSinceID: String?
     /// 削除のイベントで消した投稿のID。削除の前に読み始めたRESTの結果に含まれていても、表示に戻さない。
     private var deletedIDs: Set<String> = []
+    /// 読めなかった投稿。同じIDの投稿が読めたら外す。
+    private var unreadableItems: [UnreadableItem] = []
     private let pageSize: Int
     private let fetch: Fetch
     private let logger = SciaLog.logger(category: "timeline")
@@ -42,6 +44,21 @@ public final class TimelineStore {
 
     /// 新しい順。
     public var statuses: [Status] { entries.compactMap(\.status) }
+
+    /// 読めた投稿も読めなかった投稿もない。読めなかった投稿しかなくても、続きは読めるため空ではない。
+    public var isEmpty: Bool { itemIDs.isEmpty }
+
+    /// 読めた投稿と読めなかった投稿のID。新しい順。続きを読む位置に使う。
+    /// 読めなかった投稿も含めるのは、1ページの全部が読めなかったときにも、その先へ進めるようにするため。
+    private var itemIDs: [String] {
+        entries.compactMap { entry in
+            switch entry {
+            case .status(let status): status.id
+            case .unreadable(let item): item.id
+            case .gap, .notification, .pinned: nil
+            }
+        }
+    }
 
     public var gaps: [TimelineGap] {
         entries.compactMap { entry in
@@ -60,23 +77,24 @@ public final class TimelineStore {
         defer { isLoading = false }
 
         let latest = try await fetch(TimelineQuery(limit: pageSize))
-        var loaded = latest.statuses
+        var loaded = [latest]
         var loadedGaps: [TimelineGap] = []
-        if let markerID, !latest.isRegenerating, let oldestLatest = Self.oldest(of: latest.statuses), StatusID.isNewer(oldestLatest.id, than: markerID) {
+        if let markerID, !latest.isRegenerating, let oldestLatest = Self.oldestID(of: latest), StatusID.isNewer(oldestLatest, than: markerID) {
             let afterMarker = try await fetch(TimelineQuery(minID: markerID, limit: pageSize))
-            let fromMarker = try await fetch(TimelineQuery(maxID: Self.oldest(of: afterMarker.statuses)?.id ?? oldestLatest.id, limit: pageSize))
-            loaded += afterMarker.statuses + fromMarker.statuses
+            let fromMarker = try await fetch(TimelineQuery(maxID: Self.oldestID(of: afterMarker) ?? oldestLatest, limit: pageSize))
+            loaded += [afterMarker, fromMarker]
             // 件数では判断しない。求めた件数より少なく返すサーバーでは、満杯でなくても間に投稿が残っているため。
             // 間に投稿がなかったときは、ギャップを読んだときに0件が返って閉じる。
-            if let newestAfterMarker = Self.newest(of: afterMarker.statuses),
-               StatusID.isNewer(oldestLatest.id, than: newestAfterMarker.id) {
-                loadedGaps.append(TimelineGap(newerID: oldestLatest.id, olderID: newestAfterMarker.id))
+            if let newestAfterMarker = Self.newestID(of: afterMarker),
+               StatusID.isNewer(oldestLatest, than: newestAfterMarker) {
+                loadedGaps.append(TimelineGap(newerID: oldestLatest, olderID: newestAfterMarker))
             }
         }
-        let unique = Dictionary(loaded.filter { !isDeleted($0) }.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let unique = Dictionary(loaded.flatMap(\.statuses).filter { !isDeleted($0) }.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        unreadableItems = Self.unique(loaded.flatMap(\.unreadable).filter { !deletedIDs.contains($0.id) })
         rebuild(statuses: Array(unique.values), gaps: loadedGaps)
         isRegenerating = latest.isRegenerating
-        reachedEnd = latest.statuses.isEmpty && !latest.isRegenerating
+        reachedEnd = latest.isEmpty && !latest.isRegenerating
         if let markerID {
             applySavedMarker(markerID)
         }
@@ -86,14 +104,14 @@ public final class TimelineStore {
     /// 末尾より古いページを読み、新たに足した投稿を返す。
     /// 読み込み中、終端に達している、まだ1件もない場合は何もせずnilを返す。
     public func loadOlder() async throws -> [Status]? {
-        guard !isLoading, !reachedEnd, let oldest = statuses.last else { return nil }
+        guard !isLoading, !reachedEnd, let oldestID = itemIDs.last else { return nil }
         isLoading = true
         defer { isLoading = false }
 
-        let page = try await fetch(TimelineQuery(maxID: oldest.id, limit: pageSize))
+        let page = try await fetch(TimelineQuery(maxID: oldestID, limit: pageSize))
         isRegenerating = page.isRegenerating
-        let added = merge(page.statuses)
-        if page.statuses.isEmpty && !page.isRegenerating {
+        let added = merge(page)
+        if page.isEmpty && !page.isRegenerating {
             reachedEnd = true
         }
         return added
@@ -116,7 +134,7 @@ public final class TimelineStore {
     /// 2ページ目以降の読み込みに失敗したら、そこで止めて残りをギャップとして残す。1ページ目の結果はもう反映しているため。
     public func fillFromLatest(maxPages: Int = 1) async throws -> [Status]? {
         guard !isFilling else {
-            if let newest = statuses.first?.id {
+            if let newest = itemIDs.first {
                 refillSinceID = refillSinceID.map { Self.older($0, newest) } ?? newest
             }
             return nil
@@ -125,7 +143,7 @@ public final class TimelineStore {
         defer { isFilling = false }
 
         var added: [Status] = []
-        var next = unfilledSinceID ?? statuses.first?.id
+        var next = unfilledSinceID ?? itemIDs.first
         while let sinceID = next {
             unfilledSinceID = sinceID
             let page: TimelinePage
@@ -141,11 +159,11 @@ public final class TimelineStore {
             if !page.isRegenerating {
                 unfilledSinceID = nil
             }
-            added += merge(page.statuses)
-            if let oldestFetched = Self.oldest(of: page.statuses) {
-                let gap = TimelineGap(newerID: oldestFetched.id, olderID: sinceID)
+            added += merge(page)
+            if let oldestFetched = Self.oldestID(of: page) {
+                let gap = TimelineGap(newerID: oldestFetched, olderID: sinceID)
                 rebuild(statuses: statuses, gaps: gaps + [gap])
-                let isFull = page.statuses.count >= pageSize
+                let isFull = page.count >= pageSize
                 added += await fillGap(gap.id, pages: isFull ? maxPages - 1 : max(maxPages - 1, 1))
             }
             next = refillSinceID
@@ -186,8 +204,8 @@ public final class TimelineStore {
                 logger.error("gap confirmation failed: \(error.localizedDescription, privacy: .public)")
                 break
             }
-            added += merge(page.statuses)
-            guard shrink(id, by: page, from: direction), page.statuses.count < pageSize, !page.isRegenerating else { break }
+            added += merge(page)
+            guard shrink(id, by: page, from: direction), page.count < pageSize, !page.isRegenerating else { break }
         }
         return added.sorted { StatusID.isNewer($0.id, than: $1.id) }
     }
@@ -204,7 +222,7 @@ public final class TimelineStore {
     private func shrink(_ id: String, by page: TimelinePage, from direction: GapDirection) -> Bool {
         var remaining = gaps
         guard let index = remaining.firstIndex(where: { $0.id == id }) else { return false }
-        if page.statuses.isEmpty {
+        if page.isEmpty {
             guard !page.isRegenerating else { return true }
             remaining.remove(at: index)
             rebuild(statuses: statuses, gaps: remaining)
@@ -212,12 +230,12 @@ public final class TimelineStore {
         }
         switch direction {
         case .fromNewer:
-            if let oldestFetched = Self.oldest(of: page.statuses) {
-                remaining[index] = remaining[index].narrowed(newerID: oldestFetched.id)
+            if let oldestFetched = Self.oldestID(of: page) {
+                remaining[index] = remaining[index].narrowed(newerID: oldestFetched)
             }
         case .fromOlder:
-            if let newestFetched = Self.newest(of: page.statuses) {
-                remaining[index] = remaining[index].narrowed(olderID: newestFetched.id)
+            if let newestFetched = Self.newestID(of: page) {
+                remaining[index] = remaining[index].narrowed(olderID: newestFetched)
             }
         }
         rebuild(statuses: statuses, gaps: remaining)
@@ -262,14 +280,22 @@ public final class TimelineStore {
             pending.append(status)
             return pending.count == 1 ? .pendingStarted : .none
         case .statusUpdate(let edited):
+            // 読めなかった投稿の編集が読めたら、読めなかった行をその投稿に置き換える。
+            if unreadableItems.contains(where: { $0.id == edited.id }) {
+                return merge([edited]).isEmpty ? .none : .entriesChanged
+            }
             return replace(edited) ? .entriesChanged : .none
         case .delete(let id):
             deletedIDs.insert(id)
             // 元の投稿が消えると、それをブーストした投稿も表示できなくなる。
             pending.removeAll { $0.id == id || $0.reblog?.id == id }
+            unreadableItems.removeAll { $0.id == id }
             let remaining = entries.filter { entry in
-                guard case .status(let status) = entry else { return true }
-                return status.id != id && status.reblog?.id != id
+                switch entry {
+                case .status(let status): status.id != id && status.reblog?.id != id
+                case .unreadable(let item): item.id != id
+                case .gap, .notification, .pinned: true
+                }
             }
             guard remaining.count != entries.count else { return .none }
             entries = remaining
@@ -302,11 +328,13 @@ public final class TimelineStore {
     /// 保留していた投稿をIDの順に合流させ、新たに加わった投稿を新しい順に返す。
     ///
     /// 読み込んだ末尾より古い投稿は捨てる。末尾に足すと、次に古いページを読むときの`max_id`がずれて、間の投稿を読み飛ばすため。
+    /// 読めなかった投稿と同じIDの投稿は、末尾にあっても置き換える。並びの位置は変わらないため。
     public func flushPending() -> [Status] {
         defer { pending.removeAll() }
         var arrivals = pending
-        if !reachedEnd, let oldest = statuses.last {
-            arrivals = arrivals.filter { StatusID.isNewer($0.id, than: oldest.id) }
+        if !reachedEnd, let oldestID = itemIDs.last {
+            let unreadableIDs = Set(unreadableItems.map(\.id))
+            arrivals = arrivals.filter { StatusID.isNewer($0.id, than: oldestID) || unreadableIDs.contains($0.id) }
         }
         return merge(arrivals)
     }
@@ -377,12 +405,25 @@ public final class TimelineStore {
     public func debugForgetNewest(_ count: Int) {
         let remaining = Array(statuses.dropFirst(count))
         let newestKept = remaining.first?.id
+        unreadableItems.removeAll { item in newestKept.map { StatusID.isNewer(item.id, than: $0) } ?? true }
         // 新しい側の端の投稿を忘れたギャップは、補完で読み直す範囲に含まれるので消す。
         rebuild(statuses: remaining, gaps: gaps.filter { gap in newestKept.map { !StatusID.isNewer(gap.newerID, than: $0) } ?? false })
     }
     #endif
 
     // MARK: - 並べ替え
+
+    /// ページの投稿と読めなかった投稿のうち、まだないものを足し、足した投稿を新しい順に返す。
+    private func merge(_ page: TimelinePage) -> [Status] {
+        let known = Set(itemIDs)
+        let newUnreadable = page.unreadable.filter { !known.contains($0.id) && !deletedIDs.contains($0.id) }
+        unreadableItems = Self.unique(unreadableItems + newUnreadable)
+        let added = merge(page.statuses)
+        if added.isEmpty, !newUnreadable.isEmpty {
+            rebuild(statuses: statuses, gaps: gaps)
+        }
+        return added
+    }
 
     /// まだない投稿を足し、足した投稿を新しい順に返す。
     private func merge(_ incoming: [Status]) -> [Status] {
@@ -395,23 +436,27 @@ public final class TimelineStore {
         return added
     }
 
-    /// 投稿をIDの新しい順に並べ、ギャップを新しい側の端の投稿のすぐ下に置く。
+    /// 投稿と読めなかった投稿をIDの新しい順に並べ、ギャップを新しい側の端の投稿のすぐ下に置く。
     /// 画面は要素をIDで区別するため、同じIDのギャップは1つにする。同じ基準で補完が重なると、同じ範囲のギャップができる。
+    /// 読めなかった投稿は、同じIDの投稿が読めていれば外す。
     private func rebuild(statuses: [Status], gaps: [TimelineGap]) {
-        let sortedStatuses = statuses.sorted { StatusID.isNewer($0.id, than: $1.id) }
+        let statusIDs = Set(statuses.map(\.id))
+        unreadableItems.removeAll { statusIDs.contains($0.id) }
+        let items = (statuses.map { ($0.id, TimelineEntry.status($0)) } + unreadableItems.map { ($0.id, TimelineEntry.unreadable($0)) })
+            .sorted { StatusID.isNewer($0.0, than: $1.0) }
         var seenGapIDs: Set<String> = []
         let sortedGaps = gaps
             .filter { seenGapIDs.insert($0.id).inserted }
             .sorted { StatusID.isNewer($0.newerID, than: $1.newerID) }
         var result: [TimelineEntry] = []
-        result.reserveCapacity(sortedStatuses.count + sortedGaps.count)
+        result.reserveCapacity(items.count + sortedGaps.count)
         var gapIndex = sortedGaps.startIndex
-        for status in sortedStatuses {
-            while gapIndex < sortedGaps.endIndex, StatusID.isNewer(sortedGaps[gapIndex].newerID, than: status.id) {
+        for (id, item) in items {
+            while gapIndex < sortedGaps.endIndex, StatusID.isNewer(sortedGaps[gapIndex].newerID, than: id) {
                 result.append(.gap(sortedGaps[gapIndex]))
                 gapIndex += 1
             }
-            result.append(.status(status))
+            result.append(item)
         }
         result.append(contentsOf: sortedGaps[gapIndex...].map(TimelineEntry.gap))
         entries = result
@@ -425,12 +470,20 @@ public final class TimelineStore {
         StatusID.isNewer(lhs, than: rhs) ? rhs : lhs
     }
 
-    private static func newest(of statuses: [Status]) -> Status? {
-        statuses.max { StatusID.isNewer($1.id, than: $0.id) }
+    /// ページの中で最も新しいID。読めなかった投稿も含める。
+    private static func newestID(of page: TimelinePage) -> String? {
+        page.ids.max { StatusID.isNewer($1, than: $0) }
     }
 
-    private static func oldest(of statuses: [Status]) -> Status? {
-        statuses.min { StatusID.isNewer($1.id, than: $0.id) }
+    /// ページの中で最も古いID。読めなかった投稿も含める。
+    private static func oldestID(of page: TimelinePage) -> String? {
+        page.ids.min { StatusID.isNewer($1, than: $0) }
+    }
+
+    /// 同じIDは1つにする。
+    private static func unique(_ items: [UnreadableItem]) -> [UnreadableItem] {
+        var seen: Set<String> = []
+        return items.filter { seen.insert($0.id).inserted }
     }
 
     static func updating(_ id: Status.ID, in status: Status, _ transform: (Status) -> Status) -> Status {

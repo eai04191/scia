@@ -8,6 +8,75 @@ import Testing
 struct TimelineGapTests {
     private static let pageSize = 3
 
+    // MARK: - 読めない投稿
+
+    /// 1ページの全部が読めなくても、読めなかった投稿のIDから続きを読む。
+    @Test func pageOfOnlyUnreadableStatusesDoesNotStopLoadingOlder() async throws {
+        let server = FakeHomeServer(ids: 1...10, unreadableIDs: [8, 9, 10])
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+
+        #expect(store.entries.map(\.debugLabel) == ["unreadable(10)", "unreadable(9)", "unreadable(8)"])
+        #expect(!store.reachedEnd)
+
+        #expect(try await store.loadOlder()?.map(\.id) == ["7", "6", "5"])
+        #expect(server.queries.last == TimelineQuery(maxID: "8", limit: Self.pageSize))
+    }
+
+    @Test func readableStatusReplacesUnreadableWithSameID() async throws {
+        let server = FakeHomeServer(ids: 1...10, unreadableIDs: [9])
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        #expect(store.entries.map(\.debugLabel) == ["10", "unreadable(9)", "8"])
+
+        _ = store.receive(.update(server.status(9)))
+        _ = store.flushPending()
+
+        #expect(store.entries.map(\.debugLabel) == ["10", "9", "8"])
+    }
+
+    @Test func storeWithOnlyUnreadableStatusesIsNotEmpty() async throws {
+        let server = FakeHomeServer(ids: 8...10, unreadableIDs: [8, 9, 10])
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+
+        #expect(store.statuses.isEmpty)
+        #expect(!store.isEmpty, "読めなかった投稿しかないと、画面が空とみなして続きを読みません")
+    }
+
+    /// 末尾の読めない投稿と同じIDの投稿が届いたら、末尾より古い投稿を捨てる条件に当てはめず、置き換える。
+    @Test func readableStatusReplacesUnreadableAtTail() async throws {
+        let server = FakeHomeServer(ids: 1...10, unreadableIDs: [8])
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        #expect(store.entries.map(\.debugLabel) == ["10", "9", "unreadable(8)"])
+
+        _ = store.receive(.update(server.status(8)))
+        _ = store.flushPending()
+
+        #expect(store.entries.map(\.debugLabel) == ["10", "9", "8"])
+    }
+
+    @Test func editedStatusReplacesUnreadable() async throws {
+        let server = FakeHomeServer(ids: 1...10, unreadableIDs: [9])
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+
+        #expect(store.receive(.statusUpdate(server.status(9))) == .entriesChanged)
+
+        #expect(store.entries.map(\.debugLabel) == ["10", "9", "8"])
+    }
+
+    @Test func deletingUnreadableStatusRemovesIt() async throws {
+        let server = FakeHomeServer(ids: 1...10, unreadableIDs: [9])
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+
+        #expect(store.receive(.delete(statusID: "9")) == .entriesChanged)
+
+        #expect(store.entries.map(\.debugLabel) == ["10", "8"])
+    }
+
     // MARK: - 求めた件数より少なく返すサーバー
 
     /// 件数が`limit`に届かなくても、それだけでは読み切ったと判断しない。サーバーが件数を丸めていることがあるため。
@@ -414,10 +483,11 @@ struct TimelineGapTests {
 
     /// 切断と補完、ギャップの読み込み、古いページの読み込みを、決まった乱数で混ぜても、サーバーと同じ並びになる。
     /// 求めた件数より少なく返すサーバーでも同じ。
+    /// 読めない投稿が混ざっていても同じ。読めない投稿は、読めた投稿と同じ位置に並ぶ。
     @Test(arguments: 0..<20, [nil, 2] as [Int?])
     func randomizedSessionsMatchServer(seed: UInt64, maxLimit: Int?) async throws {
         var random = SplitMix64(seed: seed)
-        let server = FakeHomeServer(ids: 1...30, maxLimit: maxLimit)
+        let server = FakeHomeServer(ids: 1...30, maxLimit: maxLimit, unreadableIDs: Set((1...100).filter { $0 % 7 == 0 }))
         let store = makeStore(server)
         _ = try await store.loadInitial()
         var nextID = 31
@@ -445,7 +515,7 @@ struct TimelineGapTests {
             default:
                 _ = try await store.loadOlder()
             }
-            let shown = ids(store)
+            let shown = itemIDs(store)
             #expect(Set(shown).count == shown.count, "重複があります: \(shown)")
             #expect(shown == shown.sorted(by: >), "IDの順になっていません: \(shown)")
         }
@@ -453,7 +523,7 @@ struct TimelineGapTests {
         while let gap = store.gaps.first {
             _ = try await store.loadGap(gap.id, from: random.next() % 2 == 0 ? .fromNewer : .fromOlder)
         }
-        let shown = ids(store)
+        let shown = itemIDs(store)
         let oldest = try #require(shown.last)
         #expect(shown == server.ids.filter { $0 >= oldest }.sorted(by: >), "漏れがあります")
     }
@@ -465,6 +535,17 @@ struct TimelineGapTests {
     private func ids(_ store: TimelineStore) -> [Int] {
         store.statuses.compactMap { Int($0.id) }
     }
+
+    /// 読めなかった投稿も含めた並び。
+    private func itemIDs(_ store: TimelineStore) -> [Int] {
+        store.entries.compactMap { entry in
+            switch entry {
+            case .status(let status): Int(status.id)
+            case .unreadable(let item): Int(item.id)
+            case .gap, .notification, .pinned: nil
+            }
+        }
+    }
 }
 
 /// MastodonのホームタイムラインAPIのページングを再現する。IDは整数で、大きいほど新しい。
@@ -472,10 +553,13 @@ final class FakeHomeServer: Sendable {
     private let state: Mutex<(ids: [Int], queries: [TimelineQuery])>
     /// 求められた`limit`より少なく返すサーバーを再現する。nilなら`limit`どおりに返す。
     private let maxLimit: Int?
+    /// 読めない投稿として返すID。
+    private let unreadableIDs: Set<Int>
 
-    init(ids: ClosedRange<Int>, maxLimit: Int? = nil) {
+    init(ids: ClosedRange<Int>, maxLimit: Int? = nil, unreadableIDs: Set<Int> = []) {
         state = Mutex((Array(ids), []))
         self.maxLimit = maxLimit
+        self.unreadableIDs = unreadableIDs
     }
 
     var ids: [Int] { state.withLock { $0.ids } }
@@ -498,7 +582,12 @@ final class FakeHomeServer: Sendable {
         let picked = query.minID != nil
             ? Array(inRange.sorted().prefix(limit))
             : Array(inRange.sorted(by: >).prefix(limit))
-        return TimelinePage(statuses: picked.sorted(by: >).map(status), isRegenerating: false)
+        let sorted = picked.sorted(by: >)
+        return TimelinePage(
+            statuses: sorted.filter { !unreadableIDs.contains($0) }.map(status),
+            unreadable: sorted.filter { unreadableIDs.contains($0) }.map { UnreadableItem(id: String($0), url: nil) },
+            isRegenerating: false
+        )
     }
 
     func status(_ id: Int) -> Status {
@@ -528,6 +617,7 @@ extension TimelineEntry {
         case .gap(let gap): "gap(\(gap.newerID)...\(gap.olderID))"
         case .notification(let notification): "notification(\(notification.id))"
         case .pinned(let status): "pinned(\(status.id))"
+        case .unreadable(let item): "unreadable(\(item.id))"
         }
     }
 }

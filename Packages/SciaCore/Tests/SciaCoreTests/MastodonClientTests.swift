@@ -37,6 +37,36 @@ struct MastodonClientTests {
         #expect(page.statuses[1].displayed.id == "113000000000000002")
     }
 
+    /// 読めない投稿があっても、ページの他の投稿は読む。IDが読めた投稿は、読めなかったものとして場所を残す。
+    @Test func homeTimelineKeepsUnreadableStatusesApart() async throws {
+        let url = try #require(Bundle.module.url(forResource: "status", withExtension: "json", subdirectory: "Fixtures"))
+        let readable = try String(contentsOf: url, encoding: .utf8)
+        let body = "[" + [
+            readable,
+            #"{"id":"112999999999999999","url":"https://example.social/@alice/112999999999999999","content":42}"#,
+            #"{"content":"IDのない投稿"}"#,
+        ].joined(separator: ",") + "]"
+        let transport = StubTransport([.json(body, statusCode: 200)])
+
+        let page = try await makeClient(transport).homeTimeline(TimelineQuery(limit: 40))
+
+        #expect(page.statuses.map(\.id) == ["113000000000000001"])
+        #expect(page.unreadable == [
+            UnreadableItem(id: "112999999999999999", url: URL(string: "https://example.social/@alice/112999999999999999")),
+        ])
+    }
+
+    /// 読めない通知は、対象の投稿のURLを開けるように残す。
+    @Test func notificationsKeepUnreadableNotificationsApart() async throws {
+        let body = #"[{"id":"9","type":"mention","status":{"url":"https://example.social/@alice/1"}}]"#
+        let transport = StubTransport([.json(body, statusCode: 200)])
+
+        let page = try await makeClient(transport).notifications(TimelineQuery(limit: 40))
+
+        #expect(page.notifications.isEmpty)
+        #expect(page.unreadable == [UnreadableItem(id: "9", url: URL(string: "https://example.social/@alice/1"))])
+    }
+
     @Test func homeTimelineSendsPagingQueryAndToken() async throws {
         let transport = StubTransport([.json("[]", statusCode: 200)])
 
@@ -93,7 +123,7 @@ struct MastodonClientTests {
     @Test func notificationsDecodeKnownAndUnknownTypes() async throws {
         let transport = StubTransport([try .fixture("notifications")])
 
-        let notifications = try await makeClient(transport).notifications(TimelineQuery(maxID: "34975870", limit: 40))
+        let notifications = try await makeClient(transport).notifications(TimelineQuery(maxID: "34975870", limit: 40)).notifications
 
         #expect(notifications.map(\.id) == ["34975864", "34975863", "34975862", "34975861"])
         #expect(notifications.map(\.type) == [.other("admin.sign_up"), .mention, .follow, .favourite])

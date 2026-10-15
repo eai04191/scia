@@ -12,15 +12,16 @@ public struct MastodonClient: Sendable {
 
     /// https://docs.joinmastodon.org/methods/timelines/#home
     public func homeTimeline(_ query: TimelineQuery) async throws -> TimelinePage {
-        let (statuses, response) = try await get([Status].self, path: "api/v1/timelines/home", query: query.queryItems)
+        let (list, response) = try await get(ElementList<Status>.self, path: "api/v1/timelines/home", query: query.queryItems)
         // ホームの再生成中は206が返り、中身が空でも終端とは限らない。
-        return TimelinePage(statuses: statuses, isRegenerating: response.statusCode == 206)
+        return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: response.statusCode == 206)
     }
 
     /// 通知を新しい順に返す。1回に読める件数の上限は80件。
     /// https://docs.joinmastodon.org/methods/notifications/#get
-    public func notifications(_ query: TimelineQuery) async throws -> [MastodonNotification] {
-        try await get([MastodonNotification].self, path: "api/v1/notifications", query: query.queryItems).0
+    public func notifications(_ query: TimelineQuery) async throws -> NotificationPage {
+        let list = try await get(ElementList<MastodonNotification>.self, path: "api/v1/notifications", query: query.queryItems).0
+        return NotificationPage(notifications: list.elements, unreadable: list.unreadable)
     }
 
     /// 既読位置。まだ保存されていなければnil。
@@ -147,8 +148,9 @@ public struct MastodonClient: Sendable {
 
     /// アカウントの投稿を新しい順に返す。
     /// https://docs.joinmastodon.org/methods/accounts/#statuses
-    public func accountStatuses(_ id: String, filter: AccountStatusFilter, query: TimelineQuery) async throws -> [Status] {
-        try await get([Status].self, path: "api/v1/accounts/\(id)/statuses", query: filter.queryItems + query.queryItems).0
+    public func accountStatuses(_ id: String, filter: AccountStatusFilter, query: TimelineQuery) async throws -> TimelinePage {
+        let list = try await get(ElementList<Status>.self, path: "api/v1/accounts/\(id)/statuses", query: filter.queryItems + query.queryItems).0
+        return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: false)
     }
 
     /// `user@domain`の形のacctからアカウントを探す。自分のサーバーが知らないアカウントも、相手のサーバーに問い合わせて探す。
@@ -296,13 +298,38 @@ public struct TimelineQuery: Sendable, Equatable {
 public struct TimelinePage: Sendable, Equatable {
     /// 新しい順。
     public let statuses: [Status]
+    /// 読めなかった投稿。読めた投稿と同じく、並びと続きを読む位置に使う。
+    public let unreadable: [UnreadableItem]
     /// サーバーがホームを再生成中で、結果が揃っていない。
     public let isRegenerating: Bool
 
-    public init(statuses: [Status], isRegenerating: Bool) {
+    public init(statuses: [Status], unreadable: [UnreadableItem] = [], isRegenerating: Bool) {
         self.statuses = statuses
+        self.unreadable = unreadable
         self.isRegenerating = isRegenerating
     }
+
+    /// 読めたものと読めなかったものを合わせたID。
+    var ids: [String] { statuses.map(\.id) + unreadable.map(\.id) }
+    var count: Int { statuses.count + unreadable.count }
+    var isEmpty: Bool { statuses.isEmpty && unreadable.isEmpty }
+}
+
+/// 通知の1ページ分。
+public struct NotificationPage: Sendable, Equatable {
+    public let notifications: [MastodonNotification]
+    /// 読めなかった通知。読めた通知と同じく、並びと続きを読む位置に使う。
+    public let unreadable: [UnreadableItem]
+
+    public init(notifications: [MastodonNotification], unreadable: [UnreadableItem] = []) {
+        self.notifications = notifications
+        self.unreadable = unreadable
+    }
+
+    /// 読めたものと読めなかったものを合わせたID。
+    var ids: [String] { notifications.map(\.id) + unreadable.map(\.id) }
+    var count: Int { notifications.count + unreadable.count }
+    var isEmpty: Bool { notifications.isEmpty && unreadable.isEmpty }
 }
 
 extension MastodonAPIError {

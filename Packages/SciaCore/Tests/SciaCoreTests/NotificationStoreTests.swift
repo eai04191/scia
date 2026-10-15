@@ -49,7 +49,7 @@ struct NotificationStoreTests {
     private static let pageSize = 3
 
     private func makeStore(_ queue: PageQueue) -> NotificationStore {
-        NotificationStore(pageSize: Self.pageSize) { query in try queue.next(query) }
+        NotificationStore(pageSize: Self.pageSize) { query in NotificationPage(notifications: try queue.next(query)) }
     }
 
     private func ids(_ store: NotificationStore) -> [String] {
@@ -95,6 +95,43 @@ struct NotificationStoreTests {
 
         #expect(store.flushPending().isEmpty)
         #expect(ids(store) == ["30", "29", "28"])
+    }
+
+    /// 1ページの全部が読めなくても、読めなかった通知のIDから続きを読む。
+    @Test func pageOfOnlyUnreadableNotificationsDoesNotStopLoadingOlder() async throws {
+        let pages = [
+            NotificationPage(notifications: [], unreadable: [30, 29, 28].map { UnreadableItem(id: String($0), url: nil) }),
+            NotificationPage(notifications: try notifications([27, 26])),
+        ]
+        let queries = Mutex<[TimelineQuery]>([])
+        let store = NotificationStore(pageSize: Self.pageSize) { query in
+            queries.withLock { queries in
+                queries.append(query)
+                return pages[queries.count - 1]
+            }
+        }
+        _ = try await store.loadInitial()
+        #expect(store.entries.map(\.id) == ["30", "29", "28"].map { .unreadable($0) })
+        #expect(!store.reachedEnd)
+
+        #expect(try await store.loadOlder()?.map(\.id) == ["27", "26"])
+        #expect(queries.withLock { $0.last } == TimelineQuery(maxID: "28", limit: Self.pageSize))
+        #expect(store.entries.map(\.id) == [.unreadable("30"), .unreadable("29"), .unreadable("28"), .notification("27"), .notification("26")])
+    }
+
+    /// 読めなかった通知と同じIDの通知が届いたら、置き換える。末尾の読めなかった通知でも同じ。
+    @Test(arguments: [30, 28])
+    func readableNotificationReplacesUnreadable(id: Int) async throws {
+        let unreadable = [30, 29, 28].filter { $0 == id }.map { UnreadableItem(id: String($0), url: nil) }
+        let readable = try notifications([30, 29, 28].filter { $0 != id })
+        let store = NotificationStore(pageSize: Self.pageSize) { _ in NotificationPage(notifications: readable, unreadable: unreadable) }
+        _ = try await store.loadInitial()
+        #expect(!store.isEmpty)
+
+        _ = store.receive(try notifications([id])[0])
+        #expect(store.flushPending().map(\.id) == [String(id)])
+
+        #expect(store.entries.map(\.id) == ["30", "29", "28"].map { .notification($0) })
     }
 
     /// 満杯でないページの後に0件が返ったら、手元とつながっている。
@@ -185,7 +222,7 @@ struct NotificationStoreTests {
             if query.maxID == "28" {
                 await gate.wait()
             }
-            return page
+            return NotificationPage(notifications: page)
         }
         _ = try await store.loadInitial()
 

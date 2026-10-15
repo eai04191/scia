@@ -4,10 +4,12 @@
 /// 古い側を捨てて最新の側から読み直せば足りるため。
 @MainActor
 public final class NotificationStore {
-    public typealias Fetch = @Sendable (TimelineQuery) async throws -> [MastodonNotification]
+    public typealias Fetch = @Sendable (TimelineQuery) async throws -> NotificationPage
 
     /// 新しい順。
     public private(set) var notifications: [MastodonNotification] = []
+    /// 読めなかった通知。新しい順。同じIDの通知が読めたら外す。
+    public private(set) var unreadable: [UnreadableItem] = []
     /// これより古い通知はない。
     public private(set) var reachedEnd = false
     public private(set) var isLoading = false
@@ -33,7 +35,20 @@ public final class NotificationStore {
         self.fetch = fetch
     }
 
-    public var entries: [TimelineEntry] { notifications.map(TimelineEntry.notification) }
+    public var entries: [TimelineEntry] {
+        (notifications.map { ($0.id, TimelineEntry.notification($0)) } + unreadable.map { ($0.id, TimelineEntry.unreadable($0)) })
+            .sorted { StatusID.isNewer($0.0, than: $1.0) }
+            .map(\.1)
+    }
+
+    /// 読めた通知も読めなかった通知もない。読めなかった通知しかなくても、続きは読めるため空ではない。
+    public var isEmpty: Bool { notifications.isEmpty && unreadable.isEmpty }
+
+    /// 読めた通知と読めなかった通知のID。新しい順。続きを読む位置に使う。
+    /// 読めなかった通知も含めるのは、1ページの全部が読めなかったときにも、その先へ進めるようにするため。
+    private var itemIDs: [String] {
+        (notifications.map(\.id) + unreadable.map(\.id)).sorted { StatusID.isNewer($0, than: $1) }
+    }
 
     /// 最新のページで置き換える。読み込み中なら何もせずnilを返す。`markerID`を渡すと、そこを既読位置にする。
     public func loadInitial(markerID: String? = nil) async throws -> [MastodonNotification]? {
@@ -42,7 +57,8 @@ public final class NotificationStore {
         defer { isLoading = false }
 
         let page = try await fetch(TimelineQuery(limit: pageSize))
-        notifications = Self.sorted(page)
+        notifications = Self.sorted(page.notifications)
+        unreadable = Self.sorted(page.unreadable, excluding: notifications)
         reachedEnd = page.isEmpty
         if let markerID {
             applySavedMarker(markerID)
@@ -55,12 +71,12 @@ public final class NotificationStore {
     ///
     /// 読んでいる間に補完が古い側を捨てたら、読んだページは捨てた範囲の続きなので合流させず、空を返す。
     public func loadOlder() async throws -> [MastodonNotification]? {
-        guard !isLoading, !reachedEnd, let oldest = notifications.last else { return nil }
+        guard !isLoading, !reachedEnd, let oldestID = itemIDs.last else { return nil }
         isLoading = true
         defer { isLoading = false }
 
         let generation = rangeGeneration
-        let page = try await fetch(TimelineQuery(maxID: oldest.id, limit: pageSize))
+        let page = try await fetch(TimelineQuery(maxID: oldestID, limit: pageSize))
         guard generation == rangeGeneration else { return [] }
         if page.isEmpty {
             reachedEnd = true
@@ -78,7 +94,7 @@ public final class NotificationStore {
     /// そのときの基準を覚えて、今の補完が終わった後に続けて読む。
     public func fillFromLatest(maxPages: Int) async throws -> [MastodonNotification]? {
         guard !isFilling else {
-            if let newest = notifications.first?.id {
+            if let newest = itemIDs.first {
                 refillSinceID = refillSinceID.map { Self.older($0, newest) } ?? newest
             }
             return nil
@@ -87,11 +103,11 @@ public final class NotificationStore {
         defer { isFilling = false }
 
         var added: [MastodonNotification] = []
-        var next = unfilledSinceID ?? notifications.first?.id
+        var next = unfilledSinceID ?? itemIDs.first
         repeat {
             let sinceID = next
             unfilledSinceID = sinceID
-            let fetched: [MastodonNotification]
+            let fetched: NotificationPage
             let isConnected: Bool
             do {
                 (fetched, isConnected) = try await fetchNewer(than: sinceID, maxPages: maxPages)
@@ -110,10 +126,11 @@ public final class NotificationStore {
             }
             if isConnected {
                 added += merge(fetched)
-            } else if let oldestFetched = Self.sorted(fetched).last {
+            } else if let oldestFetched = fetched.ids.min(by: { StatusID.isNewer($1, than: $0) }) {
                 let known = Set(notifications.map(\.id))
-                added += fetched.filter { !known.contains($0.id) }
-                notifications = Self.sorted(notifications.filter { StatusID.isNewer($0.id, than: oldestFetched.id) } + fetched)
+                added += fetched.notifications.filter { !known.contains($0.id) }
+                notifications = Self.sorted(notifications.filter { StatusID.isNewer($0.id, than: oldestFetched) } + fetched.notifications)
+                unreadable = Self.sorted(unreadable.filter { StatusID.isNewer($0.id, than: oldestFetched) } + fetched.unreadable, excluding: notifications)
                 reachedEnd = false
                 rangeGeneration += 1
             }
@@ -128,21 +145,21 @@ public final class NotificationStore {
     ///
     /// 満杯でないページだけでは、つながったと判断しない。求めた件数より少なく返すサーバーでは、その下にも通知が残っているため。
     /// 上限のページを読んだ時点でそのページが満杯でなければ、0件かを確かめるために1回だけ多く読む。
-    private func fetchNewer(than sinceID: String?, maxPages: Int) async throws -> ([MastodonNotification], isConnected: Bool) {
+    private func fetchNewer(than sinceID: String?, maxPages: Int) async throws -> (NotificationPage, isConnected: Bool) {
         guard let sinceID else {
             return (try await fetch(TimelineQuery(limit: pageSize)), true)
         }
-        var fetched: [MastodonNotification] = []
+        var fetched = NotificationPage(notifications: [])
         var maxID: String?
         var remainingPages = max(maxPages, 1)
         var canConfirm = true
         while true {
             let page = try await fetch(TimelineQuery(maxID: maxID, sinceID: sinceID, limit: pageSize))
-            guard let oldest = Self.sorted(page).last else {
+            guard let oldest = page.ids.min(by: { StatusID.isNewer($1, than: $0) }) else {
                 return (fetched, true)
             }
-            fetched += page
-            maxID = oldest.id
+            fetched = NotificationPage(notifications: fetched.notifications + page.notifications, unreadable: fetched.unreadable + page.unreadable)
+            maxID = oldest
             remainingPages -= 1
             guard remainingPages == 0 else { continue }
             guard page.count < pageSize, canConfirm else {
@@ -167,13 +184,15 @@ public final class NotificationStore {
     /// 保留していた通知をIDの順に合流させ、新たに加わった通知を新しい順に返す。
     ///
     /// 読み込んだ末尾より古い通知は捨てる。末尾に足すと、次に古いページを読むときの`max_id`がずれて、間の通知を読み飛ばすため。
+    /// 読めなかった通知と同じIDの通知は、末尾にあっても置き換える。並びの位置は変わらないため。
     public func flushPending() -> [MastodonNotification] {
         defer { pending.removeAll() }
         var arrivals = pending
-        if !reachedEnd, let oldest = notifications.last {
-            arrivals = arrivals.filter { StatusID.isNewer($0.id, than: oldest.id) }
+        if !reachedEnd, let oldestID = itemIDs.last {
+            let unreadableIDs = Set(unreadable.map(\.id))
+            arrivals = arrivals.filter { StatusID.isNewer($0.id, than: oldestID) || unreadableIDs.contains($0.id) }
         }
-        return merge(arrivals)
+        return merge(NotificationPage(notifications: arrivals))
     }
 
     /// 通知の対象の投稿を`transform`で変える。お気に入りなどの操作の結果を反映する。表示に関わる変化があればtrueを返す。
@@ -229,24 +248,33 @@ public final class NotificationStore {
 
     /// 既読の位置より古い通知をまだ読み込んでおらず、未読は`unreadCount`より多いかもしれない。
     public var hasUnloadedUnread: Bool {
-        guard let lastReadID, !reachedEnd, let oldest = notifications.last else { return false }
-        return StatusID.isNewer(oldest.id, than: lastReadID)
+        guard let lastReadID, !reachedEnd, let oldestID = itemIDs.last else { return false }
+        return StatusID.isNewer(oldestID, than: lastReadID)
     }
 
     // MARK: - 並べ替え
 
-    /// まだない通知を足し、足した通知を新しい順に返す。
-    private func merge(_ incoming: [MastodonNotification]) -> [MastodonNotification] {
-        let known = Set(notifications.map(\.id))
-        let added = Self.sorted(incoming.filter { !known.contains($0.id) })
-        guard !added.isEmpty else { return [] }
+    /// まだない通知と読めなかった通知を足し、足した通知を新しい順に返す。読めなかった通知と同じIDの通知は、読めなかった行と置き換える。
+    private func merge(_ page: NotificationPage) -> [MastodonNotification] {
+        let readIDs = Set(notifications.map(\.id))
+        let added = Self.sorted(page.notifications.filter { !readIDs.contains($0.id) })
         notifications = Self.sorted(notifications + added)
+        let known = Set(itemIDs)
+        unreadable = Self.sorted(unreadable + page.unreadable.filter { !known.contains($0.id) }, excluding: notifications)
         return added
     }
 
     /// IDの新しい順に並べ、同じIDは1つにする。
     private static func sorted(_ notifications: [MastodonNotification]) -> [MastodonNotification] {
         Dictionary(notifications.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+            .values
+            .sorted { StatusID.isNewer($0.id, than: $1.id) }
+    }
+
+    /// IDの新しい順に並べ、同じIDは1つにする。同じIDの通知が読めていれば外す。
+    private static func sorted(_ items: [UnreadableItem], excluding notifications: [MastodonNotification]) -> [UnreadableItem] {
+        let readIDs = Set(notifications.map(\.id))
+        return Dictionary(items.filter { !readIDs.contains($0.id) }.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
             .values
             .sorted { StatusID.isNewer($0.id, than: $1.id) }
     }

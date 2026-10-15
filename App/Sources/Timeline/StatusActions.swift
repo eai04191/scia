@@ -14,7 +14,7 @@ extension TimelineViewController {
         switch entry(for: id) {
         case .status(let status), .pinned(let status): status
         case .notification(let notification): notification.status
-        case .gap, nil: nil
+        case .gap, .unreadable, nil: nil
         }
     }
 
@@ -23,7 +23,7 @@ extension TimelineViewController {
         let accounts: [Account] = switch entry {
         case .status(let status), .pinned(let status): [status.displayed.account, status.account]
         case .notification(let notification): [notification.account] + (notification.status.map { [$0.displayed.account] } ?? [])
-        case .gap: []
+        case .gap, .unreadable: []
         }
         var seen: Set<Account.ID> = []
         return accounts.filter { seen.insert($0.id).inserted }

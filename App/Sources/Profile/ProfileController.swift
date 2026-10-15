@@ -169,7 +169,7 @@ final class ProfileController {
 
     private func loadOlder() {
         let timeline = store.timeline
-        guard !timeline.isLoading, !timeline.reachedEnd, !timeline.statuses.isEmpty else { return }
+        guard !timeline.isLoading, !timeline.reachedEnd, !timeline.isEmpty else { return }
         viewController?.setFooterState(.loading)
         run { controller in
             do {
@@ -191,7 +191,7 @@ final class ProfileController {
     }
 
     private func retry() {
-        if store.timeline.statuses.isEmpty {
+        if store.timeline.isEmpty {
             loadInitial()
         } else {
             loadOlder()

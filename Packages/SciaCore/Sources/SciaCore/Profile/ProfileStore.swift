@@ -43,14 +43,14 @@ public final class ProfileStore {
     public struct API: Sendable {
         public var account: @Sendable (String) async throws -> Account
         public var relationship: @Sendable (String) async throws -> Relationship?
-        public var statuses: @Sendable (String, AccountStatusFilter, TimelineQuery) async throws -> [Status]
+        public var statuses: @Sendable (String, AccountStatusFilter, TimelineQuery) async throws -> TimelinePage
         public var follow: @Sendable (String) async throws -> Relationship
         public var unfollow: @Sendable (String) async throws -> Relationship
 
         public init(
             account: @escaping @Sendable (String) async throws -> Account,
             relationship: @escaping @Sendable (String) async throws -> Relationship?,
-            statuses: @escaping @Sendable (String, AccountStatusFilter, TimelineQuery) async throws -> [Status],
+            statuses: @escaping @Sendable (String, AccountStatusFilter, TimelineQuery) async throws -> TimelinePage,
             follow: @escaping @Sendable (String) async throws -> Relationship,
             unfollow: @escaping @Sendable (String) async throws -> Relationship
         ) {
@@ -122,7 +122,8 @@ public final class ProfileStore {
             if !isMyself {
                 group.addTask { await Result { .relationship(try await api.relationship(id)) } }
             }
-            group.addTask { await Result { .pinned(try await api.statuses(id, AccountStatusFilter(pinned: true), TimelineQuery(limit: pageSize))) } }
+            // 固定された投稿は一覧の補足なので、読めなかったものは並べない。読めなかったことはデコードの記録に残る。
+            group.addTask { await Result { .pinned(try await api.statuses(id, AccountStatusFilter(pinned: true), TimelineQuery(limit: pageSize)).statuses) } }
             var firstError: (any Error)?
             for await result in group {
                 switch result {
@@ -197,7 +198,7 @@ public final class ProfileStore {
 
     private static func makeTimeline(accountID: String, filter: AccountStatusFilter, pageSize: Int, api: API) -> TimelineStore {
         TimelineStore(pageSize: pageSize) { query in
-            TimelinePage(statuses: try await api.statuses(accountID, filter, query), isRegenerating: false)
+            try await api.statuses(accountID, filter, query)
         }
     }
 }

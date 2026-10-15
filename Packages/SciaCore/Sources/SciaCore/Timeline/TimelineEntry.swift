@@ -1,3 +1,5 @@
+public import Foundation
+
 /// タイムラインに並ぶ要素。
 public enum TimelineEntry: Hashable, Sendable, Identifiable {
     case status(Status)
@@ -7,12 +9,15 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
     case notification(MastodonNotification)
     /// プロフィールの一覧の上に置く、固定された投稿。同じ投稿が下の一覧にも並ぶため、IDを分ける。
     case pinned(Status)
+    /// 読めなかった投稿や通知。
+    case unreadable(UnreadableItem)
 
     public enum ID: Hashable, Sendable {
         case status(Status.ID)
         case gap(String)
         case notification(MastodonNotification.ID)
         case pinned(Status.ID)
+        case unreadable(String)
     }
 
     public var id: ID {
@@ -21,12 +26,26 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
         case .gap(let gap): .gap(gap.id)
         case .notification(let notification): .notification(notification.id)
         case .pinned(let status): .pinned(status.id)
+        case .unreadable(let item): .unreadable(item.id)
         }
     }
 
     /// 一覧に並ぶ投稿。固定された投稿は含まない。読み込みの境目や既読位置の判定に使うため。
     public var status: Status? {
         if case .status(let status) = self { status } else { nil }
+    }
+}
+
+/// サーバーから届いたが、読めなかった投稿や通知。IDが読めたものだけを一覧に並べ、並びと、続きを読む位置に使う。
+/// 読めなかったことを隠さず、ブラウザで開けるようにするため。
+public struct UnreadableItem: Hashable, Sendable, Identifiable {
+    public let id: String
+    /// ブラウザで開くページ。投稿ならその投稿、通知なら対象の投稿。読めなければnil。
+    public let url: URL?
+
+    public init(id: String, url: URL?) {
+        self.id = id
+        self.url = url
     }
 }
 
