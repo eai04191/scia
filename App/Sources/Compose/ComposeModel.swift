@@ -17,6 +17,8 @@ final class ComposeModel {
     private(set) var maxCharacters = 500
     private(set) var charactersReservedPerURL = 23
     private(set) var maxMediaAttachments = 4
+    /// 代替テキストの文字数の上限。
+    private(set) var mediaDescriptionLimit = 1500
     private(set) var isPosting = false
     var errorMessage: String?
     /// 添付したメディア。この順で投稿に並ぶ。
@@ -41,6 +43,9 @@ final class ComposeModel {
     @ObservationIgnored private let media: ComposeMediaService
     @ObservationIgnored private var uploadTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
     @ObservationIgnored private var thumbnailTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
+    /// 代替テキストを送っている添付。送っている間は、書き戻してサーバーの値と同じになっても、送り終えるまで投稿させない。
+    /// 送り終えた後のサーバーの値が、書き戻した値と違うことがあるため。投稿の可否が変わるので、変更を見張れるようにする。
+    private var descriptionTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
     @ObservationIgnored private var pickerSelection = MediaPickerSelection()
     /// 投稿できて、下書きを空に戻したあとに呼ぶ。
     @ObservationIgnored var onPosted: () -> Void = {}
@@ -73,7 +78,7 @@ final class ComposeModel {
     }
 
     var canPost: Bool {
-        !isPosting && (hasResolvedDefaults || hasChosenVisibility) && draftToPost.canPost(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL, maxMediaAttachments: maxMediaAttachments)
+        !isPosting && descriptionTasks.isEmpty && (hasResolvedDefaults || hasChosenVisibility) && draftToPost.canPost(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL, maxMediaAttachments: maxMediaAttachments)
     }
 
     /// メディアを選べる。枚数の上限をサーバーの値で読むまでは、ピッカーを開かない。
@@ -95,6 +100,7 @@ final class ComposeModel {
             maxCharacters = configuration.maxCharacters
             charactersReservedPerURL = configuration.charactersReservedPerURL
             maxMediaAttachments = configuration.maxMediaAttachments
+            mediaDescriptionLimit = configuration.mediaDescriptionLimit
             hasLoadedConfiguration = true
         }
         guard let defaultVisibility else { return }
@@ -195,12 +201,32 @@ struct LocalMedia {
     var thumbnail: UIImage?
     /// 失敗の理由。`DraftAttachment.State.failed`は理由を持たないため、ここに持つ。再試行が待ち直しか送り直しかも、これで決める。
     var failure: (any Error)?
+    /// 代替テキストを送れなかった理由。送れないと`needsDescriptionUpdate`のまま止まるため、送り直す操作と表示に使う。
+    var descriptionFailure: (any Error)?
+}
+
+/// 添付1つの、投稿欄とビューアで見せる状態。
+enum ComposeAttachmentStatus: Equatable {
+    /// ファイルを読み込んで送っている。
+    case uploading
+    /// サーバーでの変換を待っている。
+    case processing
+    /// 投稿に付けられる。
+    case ready
+    /// 書いた代替テキストを送っている。
+    case sendingDescription
+    /// アップロードに失敗した。
+    case failed
+    /// 代替テキストを送れなかった。
+    case descriptionFailed
 }
 
 /// 投稿欄がメディアのアップロードに使うもの。
 struct ComposeMediaService {
     var upload: (MediaUpload) async throws -> MediaAttachment
     var waitUntilProcessed: (String) async throws -> MediaAttachment
+    /// サーバーのIDと代替テキストを受け取り、`PUT /api/v1/media/:id`で送る。
+    var updateDescription: (String, String) async throws -> MediaAttachment
     var makeThumbnail: (LocalMediaFile) async -> UIImage?
 
     /// メディアを添付しない画面とテストで使う。
@@ -208,6 +234,7 @@ struct ComposeMediaService {
         ComposeMediaService(
             upload: { _ in throw CancellationError() },
             waitUntilProcessed: { _ in throw CancellationError() },
+            updateDescription: { _, _ in throw CancellationError() },
             makeThumbnail: { _ in nil }
         )
     }
@@ -250,14 +277,53 @@ extension ComposeModel {
     }
 
     /// 失敗した添付を送り直す。処理の待ち時間切れなら、サーバーに残っている同じIDで待ち直す。
+    /// 代替テキストだけを送れなかったなら、代替テキストだけを送り直す。
     func retryAttachment(_ id: DraftAttachment.ID) {
-        guard let index = attachments.firstIndex(where: { $0.id == id }), case .failed = attachments[index].state else { return }
-        startUpload(id)
+        guard let attachment = attachments.first(where: { $0.id == id }) else { return }
+        switch attachment.state {
+        case .failed:
+            startUpload(id)
+        case .uploaded:
+            localMedia[id]?.descriptionFailure = nil
+            sendDescriptionIfNeeded(id)
+        case .uploading, .processing:
+            return
+        }
+    }
+
+    /// 代替テキストを書き換える。アップロードが済んでいればすぐ送り、済む前ならアップロードと一緒に（間に合わなければ済んでから）送る。
+    func setDescription(_ description: String, of id: DraftAttachment.ID) {
+        guard let index = attachments.firstIndex(where: { $0.id == id }), attachments[index].description != description else { return }
+        attachments[index].description = description
+        localMedia[id]?.descriptionFailure = nil
+        sendDescriptionIfNeeded(id)
+    }
+
+    /// 添付を`index`の位置へ移す。投稿の`media_ids[]`はこの順になる。
+    func moveAttachment(_ id: DraftAttachment.ID, to index: Int) {
+        guard let from = attachments.firstIndex(where: { $0.id == id }) else { return }
+        let attachment = attachments.remove(at: from)
+        attachments.insert(attachment, at: min(max(index, 0), attachments.count))
+    }
+
+    /// 投稿欄とビューアで見せる状態。
+    func attachmentStatus(of id: DraftAttachment.ID) -> ComposeAttachmentStatus? {
+        guard let attachment = attachments.first(where: { $0.id == id }) else { return nil }
+        switch attachment.state {
+        case .uploading: return .uploading
+        case .processing: return .processing
+        case .failed: return .failed
+        case .uploaded:
+            if descriptionTasks[id] != nil { return .sendingDescription }
+            guard attachment.needsDescriptionUpdate else { return .ready }
+            return localMedia[id]?.descriptionFailure == nil ? .sendingDescription : .descriptionFailed
+        }
     }
 
     private func discardAttachment(_ id: DraftAttachment.ID) {
         uploadTasks.removeValue(forKey: id)?.cancel()
         thumbnailTasks.removeValue(forKey: id)?.cancel()
+        descriptionTasks.removeValue(forKey: id)?.cancel()
         localMedia.removeValue(forKey: id)?.file?.remove()
         attachments.removeAll { $0.id == id }
     }
@@ -281,8 +347,10 @@ extension ComposeModel {
 
     /// ファイルを読み込み、アップロードし、サーバーでの変換が済むまで待つ。途中で添付から外されたら、何も書き戻さない。
     private func upload(_ id: DraftAttachment.ID) async {
-        guard let local = localMedia[id], let attachment = attachments.first(where: { $0.id == id }) else { return }
+        guard let local = localMedia[id], attachments.contains(where: { $0.id == id }) else { return }
         localMedia[id]?.failure = nil
+        localMedia[id]?.descriptionFailure = nil
+        var sentDescription: String?
         do {
             let processed: MediaAttachment
             if case .processingTimedOut(let serverID) = local.failure as? MediaUploadError {
@@ -291,7 +359,10 @@ extension ComposeModel {
             } else {
                 setState(.uploading, of: id)
                 let file = try await loadFile(id, local: local)
-                let accepted = try await media.upload(LocalMediaLoader.upload(of: file, description: attachment.description))
+                // 読み込む間に書いた代替テキストも一緒に送れるよう、送る直前の値を読む。
+                let description = attachments.first { $0.id == id }?.description ?? ""
+                sentDescription = description
+                let accepted = try await media.upload(LocalMediaLoader.upload(of: file, description: description))
                 try Task.checkCancellation()
                 if accepted.url == nil {
                     setState(.processing(serverID: accepted.id), of: id)
@@ -302,6 +373,10 @@ extension ComposeModel {
             }
             try Task.checkCancellation()
             setState(.uploaded(processed), of: id)
+            if let sentDescription {
+                acceptServerDescription(of: id, sent: sentDescription, returned: processed)
+            }
+            sendDescriptionIfNeeded(id)
         } catch {
             guard !Task.isCancelled, localMedia[id] != nil else { return }
             localMedia[id]?.failure = error
@@ -324,5 +399,35 @@ extension ComposeModel {
             self?.localMedia[id]?.thumbnail = thumbnail
         }
         return file
+    }
+
+    /// 書いた代替テキストがサーバーの値と違えば送る。送っている間に書き直されたら、送り終えてから書き直した値を送る。
+    private func sendDescriptionIfNeeded(_ id: DraftAttachment.ID) {
+        guard descriptionTasks[id] == nil, localMedia[id]?.descriptionFailure == nil,
+              let attachment = attachments.first(where: { $0.id == id }), attachment.needsDescriptionUpdate,
+              let serverID = attachment.serverID
+        else { return }
+        let description = attachment.description
+        descriptionTasks[id] = Task { [weak self, media] in
+            do {
+                let updated = try await media.updateDescription(serverID, description)
+                guard let self, !Task.isCancelled else { return }
+                self.descriptionTasks[id] = nil
+                self.setState(.uploaded(updated), of: id)
+                self.acceptServerDescription(of: id, sent: description, returned: updated)
+                self.sendDescriptionIfNeeded(id)
+            } catch {
+                guard let self, !Task.isCancelled else { return }
+                self.descriptionTasks[id] = nil
+                self.localMedia[id]?.descriptionFailure = error
+            }
+        }
+    }
+
+    /// 送ったあと書き直していなければ、サーバーが返した代替テキストを下書きの値にする。
+    /// 前後の空白を除くなど、サーバーが整えて返す実装でも、送った値との違いで送り続けないようにする（Mastodonは整えない）。
+    private func acceptServerDescription(of id: DraftAttachment.ID, sent: String, returned: MediaAttachment) {
+        guard let index = attachments.firstIndex(where: { $0.id == id }), attachments[index].description == sent else { return }
+        attachments[index].description = returned.description ?? ""
     }
 }

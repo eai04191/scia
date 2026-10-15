@@ -20,6 +20,13 @@ struct ComposeModelMediaTests {
             attachment(id: "m-\(upload.filename)", processed: true)
         }
         var waitResult: (String) throws -> MediaAttachment = { id in attachment(id: id, processed: true) }
+        var descriptionUpdates: [(id: String, description: String)] = []
+        var descriptionResult: (String, String) throws -> MediaAttachment = { id, description in
+            attachment(id: id, processed: true, description: description)
+        }
+        /// trueなら、代替テキストの送信を止めておき、テストから返す。
+        var holdsDescriptionUpdates = false
+        private var pendingDescriptionUpdates: [(id: String, description: String, continuation: CheckedContinuation<MediaAttachment, any Error>)] = []
 
         var service: ComposeMediaService {
             ComposeMediaService(
@@ -32,6 +39,13 @@ struct ComposeModelMediaTests {
                     waits.append(id)
                     return try waitResult(id)
                 },
+                updateDescription: { [self] id, description in
+                    descriptionUpdates.append((id, description))
+                    if holdsDescriptionUpdates {
+                        return try await withCheckedThrowingContinuation { pendingDescriptionUpdates.append((id, description, $0)) }
+                    }
+                    return try descriptionResult(id, description)
+                },
                 makeThumbnail: { _ in nil }
             )
         }
@@ -41,10 +55,18 @@ struct ComposeModelMediaTests {
         }
 
         var pendingCount: Int { pendingUploads.count }
+
+        var pendingDescriptionCount: Int { pendingDescriptionUpdates.count }
+
+        /// 止めていた代替テキストの送信を、送った値で済ませる。
+        func finishNextDescriptionUpdate() {
+            let pending = pendingDescriptionUpdates.removeFirst()
+            pending.continuation.resume(returning: attachment(id: pending.id, processed: true, description: pending.description))
+        }
     }
 
-    private static func attachment(id: String, processed: Bool) -> MediaAttachment {
-        MediaAttachment(id: id, type: .image, url: processed ? URL(string: "https://example.social/\(id).jpg") : nil, previewUrl: nil)
+    private static func attachment(id: String, processed: Bool, description: String? = nil) -> MediaAttachment {
+        MediaAttachment(id: id, type: .image, url: processed ? URL(string: "https://example.social/\(id).jpg") : nil, previewUrl: nil, description: description)
     }
 
     private func picked(_ id: String) throws -> PickedMedia {
@@ -237,6 +259,171 @@ struct ComposeModelMediaTests {
         #expect(sent[0].idempotencyKey == sent[1].idempotencyKey)
         #expect(sent[1].idempotencyKey != sent[2].idempotencyKey)
         #expect(sent[2].mediaIDs == ["m-a.jpg", "m-b.jpg"])
+    }
+
+    /// アップロードの前に書いた代替テキストは、アップロードと一緒に送る。
+    @Test func descriptionWrittenBeforeUploadIsSentWithUpload() async throws {
+        let server = FakeServer()
+        server.completesImmediately = false
+        let model = makeModel(server)
+        model.applyPickerSelection([try picked("a")])
+        let id = try #require(model.attachments.first?.id)
+        model.setDescription("猫", of: id)
+        await settle { server.pendingCount == 1 }
+        server.finishNextUpload(with: .success(Self.attachment(id: "1", processed: true, description: "猫")))
+        await settle { isSettled(model) }
+
+        #expect(server.uploads.first?.description == "猫")
+        #expect(server.descriptionUpdates.isEmpty)
+        #expect(model.attachments.first?.isReady == true)
+    }
+
+    /// アップロードの途中に書いた代替テキストは、済んでから送る。済むまで投稿できない。
+    @Test func descriptionWrittenDuringUploadIsSentAfterUpload() async throws {
+        let server = FakeServer()
+        server.completesImmediately = false
+        let model = makeModel(server)
+        model.applyPickerSelection([try picked("a")])
+        await settle { server.pendingCount == 1 }
+        let id = try #require(model.attachments.first?.id)
+
+        model.setDescription("猫", of: id)
+        server.finishNextUpload(with: .success(Self.attachment(id: "1", processed: true)))
+        await settle { model.attachments.first?.isReady == true }
+
+        #expect(server.uploads.first?.description == "")
+        #expect(server.descriptionUpdates.map(\.description) == ["猫"])
+        #expect(model.canPost)
+    }
+
+    @Test func descriptionWrittenAfterUploadIsSentAndBlocksPostingUntilDone() async throws {
+        let server = FakeServer()
+        let model = makeModel(server)
+        model.applyPickerSelection([try picked("a")])
+        await settle { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+
+        model.setDescription("猫", of: id)
+        #expect(!model.canPost)
+        #expect(model.attachmentStatus(of: id) == .sendingDescription)
+        await settle { model.attachments.first?.isReady == true }
+
+        #expect(server.descriptionUpdates.map(\.id) == ["m-a.jpg"])
+        #expect(model.attachmentStatus(of: id) == .ready)
+        #expect(model.canPost)
+    }
+
+    /// 代替テキストを送れなかったら理由を残し、再試行で送り直す。ファイルは送り直さない。
+    @Test func failedDescriptionUpdateCanBeRetried() async throws {
+        let server = FakeServer()
+        server.descriptionResult = { _, _ in throw MastodonAPIError(statusCode: 500, message: "") }
+        let model = makeModel(server)
+        model.applyPickerSelection([try picked("a")])
+        await settle { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+
+        model.setDescription("猫", of: id)
+        await settle { model.attachmentStatus(of: id) == .descriptionFailed }
+        #expect(model.localMedia[id]?.descriptionFailure != nil)
+        #expect(!model.canPost)
+
+        server.descriptionResult = { id, description in Self.attachment(id: id, processed: true, description: description) }
+        model.retryAttachment(id)
+        await settle { model.attachments.first?.isReady == true }
+
+        #expect(server.uploads.count == 1)
+        #expect(server.descriptionUpdates.count == 2)
+        #expect(model.localMedia[id]?.descriptionFailure == nil)
+    }
+
+    /// 送っている間に書き直したら、送り終えてから書き直した値を送る。
+    @Test func descriptionChangedWhileSendingIsSentAgain() async throws {
+        let server = FakeServer()
+        let model = makeModel(server)
+        model.applyPickerSelection([try picked("a")])
+        await settle { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+
+        model.setDescription("猫", of: id)
+        model.setDescription("黒猫", of: id)
+        await settle { model.attachments.first?.isReady == true }
+
+        #expect(server.descriptionUpdates.last?.description == "黒猫")
+        #expect(model.attachments.first?.description == "黒猫")
+    }
+
+    /// 送っている間に元の値へ書き戻しても、送り終えるまでは投稿できない。送り終えたら、書き戻した値を送り直す。
+    @Test func descriptionRevertedWhileSendingBlocksPostingUntilResent() async throws {
+        let server = FakeServer()
+        server.uploadResult = { _ in Self.attachment(id: "1", processed: true, description: "猫") }
+        let model = makeModel(server)
+        model.applyPickerSelection([try picked("a")])
+        let id = try #require(model.attachments.first?.id)
+        model.setDescription("猫", of: id)
+        await settle { model.attachments.first?.isReady == true }
+        server.holdsDescriptionUpdates = true
+
+        model.setDescription("黒猫", of: id)
+        await settle { server.pendingDescriptionCount == 1 }
+        model.setDescription("猫", of: id)
+
+        #expect(model.attachmentStatus(of: id) == .sendingDescription)
+        #expect(!model.canPost)
+
+        server.finishNextDescriptionUpdate()
+        await settle { server.pendingDescriptionCount == 1 }
+        server.finishNextDescriptionUpdate()
+        await settle { model.attachmentStatus(of: id) == .ready }
+
+        #expect(server.descriptionUpdates.map(\.description) == ["黒猫", "猫"])
+        #expect(model.canPost)
+    }
+
+    /// サーバーが代替テキストを整えて返しても、書き直していなければ、返った値で済んだとみなして送り続けない。
+    @Test func normalizedDescriptionFromServerIsAccepted() async throws {
+        let server = FakeServer()
+        server.descriptionResult = { id, description in
+            Self.attachment(id: id, processed: true, description: description.trimmingCharacters(in: .whitespaces))
+        }
+        let model = makeModel(server)
+        model.applyPickerSelection([try picked("a")])
+        await settle { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+
+        model.setDescription("猫 ", of: id)
+        await settle { model.attachments.first?.isReady == true }
+
+        #expect(server.descriptionUpdates.count == 1)
+        #expect(model.attachments.first?.description == "猫")
+    }
+
+    /// 並べ替えた順で投稿する。
+    @Test func movedAttachmentsArePostedInNewOrder() async throws {
+        let server = FakeServer()
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+        model.applyPickerSelection([try picked("a"), try picked("b"), try picked("c")])
+        await settle { isSettled(model) }
+
+        try model.moveAttachment(#require(model.attachments.last).id, to: 0)
+        try model.moveAttachment(#require(model.attachments.last).id, to: 1)
+        await model.submit()
+
+        #expect(sent.first?.mediaIDs == ["m-c.jpg", "m-b.jpg", "m-a.jpg"])
+    }
+
+    /// 並べ替えた後にピッカーで足したものは後ろに付き、並べ替えた順は保たれる。
+    @Test func pickerSelectionKeepsMovedOrder() async throws {
+        let server = FakeServer()
+        let model = makeModel(server)
+        let a = try picked("a")
+        let b = try picked("b")
+        model.applyPickerSelection([a, b])
+        try model.moveAttachment(#require(model.attachments.last).id, to: 0)
+
+        model.applyPickerSelection([a, b, try picked("c")])
+
+        #expect(model.attachedAssetIdentifiers == ["b", "a", "c"])
     }
 
     /// 枚数の上限を読めるまでは、メディアを選ばせない。読めなかったときも、既定の4枚で選ばせない。

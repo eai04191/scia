@@ -121,6 +121,14 @@ final class SessionController {
                     throw error
                 }
             },
+            updateDescription: { id, description in
+                do {
+                    return try await client.updateMediaDescription(id, description: description)
+                } catch {
+                    reportIfUnauthorized(error)
+                    throw error
+                }
+            },
             makeThumbnail: { file in await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize) }
         )
         composer = InlineComposeController(model: ComposeModel(myAccountID: credential.accountID, media: media) { draft in
