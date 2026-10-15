@@ -32,6 +32,31 @@ enum DebugFaults {
         corruptsListElements.withLock { $0 = true }
     }
 
+    /// 下ろすと、開いているストリーミングの接続を切り、以後の接続を失敗させる。RESTは通したまま、ストリーミングだけがつながらないサーバーを再現する。
+    private static let streaming = Mutex((isOnline: true, nextID: 0, connections: [Int: any WebSocketConnection]()))
+
+    static var isStreamingOnline: Bool { streaming.withLock { $0.isOnline } }
+
+    static func setStreamingOnline(_ isOnline: Bool) {
+        let cut = streaming.withLock { state in
+            state.isOnline = isOnline
+            return isOnline ? [] : Array(state.connections.values)
+        }
+        cut.forEach { $0.close() }
+    }
+
+    /// 開いている間だけ覚え、下ろしたときに切れるようにする。閉じたら外す。
+    static func track(_ connection: any WebSocketConnection) -> any WebSocketConnection {
+        let id = streaming.withLock { state in
+            defer { state.nextID += 1 }
+            state.connections[state.nextID] = connection
+            return state.nextID
+        }
+        return TrackedWebSocketConnection(base: connection) {
+            streaming.withLock { _ = $0.connections.removeValue(forKey: id) }
+        }
+    }
+
     /// 配列の3件に1件の`created_at`を、日時として読めない値に変える。IDとURLは残すので、読めなかった行として並ぶ。
     static func corrupt(_ data: Data) -> Data {
         guard var elements = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { return data }
@@ -64,5 +89,46 @@ struct FaultInjectingTransport: HTTPTransport {
         }
         return (data, response)
     }
+}
+/// `DebugFaults`に従って、ストリーミングの接続を失敗させるWebSocketConnector。
+struct FaultInjectingWebSocketConnector: WebSocketConnector {
+    let base: any WebSocketConnector
+
+    func connect(_ request: URLRequest) -> any WebSocketConnection {
+        guard DebugFaults.isStreamingOnline else { return UnreachableWebSocketConnection() }
+        return DebugFaults.track(base.connect(request))
+    }
+}
+
+/// 閉じたときに`DebugFaults`の記録から外す接続。
+private struct TrackedWebSocketConnection: WebSocketConnection {
+    let base: any WebSocketConnection
+    let onClose: @Sendable () -> Void
+
+    func receive() async throws -> String {
+        try await base.receive()
+    }
+
+    func ping() async throws {
+        try await base.ping()
+    }
+
+    func close() {
+        onClose()
+        base.close()
+    }
+}
+
+/// ハンドシェイクで失敗する接続。
+private struct UnreachableWebSocketConnection: WebSocketConnection {
+    func receive() async throws -> String {
+        throw URLError(.cannotConnectToHost)
+    }
+
+    func ping() async throws {
+        throw URLError(.cannotConnectToHost)
+    }
+
+    func close() {}
 }
 #endif

@@ -42,7 +42,11 @@ final class SessionController {
         #else
         let client = MastodonClient(credential: credential, transport: URLSessionTransport())
         #endif
+        #if DEBUG
+        let streaming = StreamingClient(credential: credential, connector: FaultInjectingWebSocketConnector(base: URLSessionWebSocketConnector()))
+        #else
         let streaming = StreamingClient(credential: credential, connector: URLSessionWebSocketConnector())
+        #endif
         authorization = AuthorizationCheck { try await client.verifyCredentials() }
         // selfを作り終える前に組み立てる部品から呼ぶため、後で中身を差し替える。
         var forward: () -> Void = {}
@@ -369,6 +373,8 @@ final class SessionController {
             DebugFaults.fail(withStatus: statusCode)
             home.start()
             notifications.start()
+        case .streaming(let isOnline):
+            DebugFaults.setStreamingOnline(isOnline)
         }
     }
     #endif

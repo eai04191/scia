@@ -14,6 +14,8 @@ enum DebugURL: Equatable {
     case unreadable
     /// `scia-debug://status/<ステータスコード>`。以後のREST APIにそのステータスのHTMLのエラーページを返させ、読み込み直す。
     case status(Int)
+    /// `scia-debug://streaming/offline`で今のストリーミングの接続を切り、以後の接続を失敗させる。`scia-debug://streaming/online`で戻す。
+    case streaming(isOnline: Bool)
 
     init?(_ url: URL) {
         guard url.scheme == Self.scheme else { return nil }
@@ -28,6 +30,12 @@ enum DebugURL: Equatable {
         case "status":
             guard let statusCode = Int(url.lastPathComponent), (100..<600).contains(statusCode) else { return nil }
             self = .status(statusCode)
+        case "streaming":
+            switch url.lastPathComponent {
+            case "offline": self = .streaming(isOnline: false)
+            case "online": self = .streaming(isOnline: true)
+            default: return nil
+            }
         default:
             return nil
         }

@@ -60,6 +60,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - トークンが無効になったときの表示の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unauthorized'`で、以後のREST APIに401を返させる。資格情報は消えず、起動し直すと戻る
 - 読めなかった投稿や通知の行の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unreadable'`で、以後のホームと通知の応答の3件に1件を読めない形に壊して読み込み直す。起動し直すと戻る
 - サーバーやプロキシの障害の表示の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://status/502'`のように、以後のREST APIにそのステータスのHTMLのエラーページを返させて読み込み直す。起動し直すと戻る
+- ストリーミングにつながらないときの表示とポーリングの確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://streaming/offline'`で、RESTは通したままストリーミングの接続を切り、以後の接続を失敗させる。`scia-debug://streaming/online`で戻す
 - プロフィール画面の確認には、`xcrun simctl openurl '<使う端末>' 'scia://profile/<user@domain>'`でホームのタブにプロフィールを開く。アプリが起動していなくても開く。フォローとフォローの解除は、@Bot_testing@stellaria.networkで確かめる
 - 描画性能: スクロール時のhitchは`xcrun xctrace record --template 'Animation Hitches'`や`XCTOSSignpostMetric.scrollDecelerationMetric`で測る。シミュレーターの値は参考値で、最終確認は実機で行う
 - 見た目: 実データに近いfixtureを使い、スクリーンショットで確認する
