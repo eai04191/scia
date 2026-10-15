@@ -15,6 +15,7 @@ final class ComposeModel {
     private(set) var replyTo: Status?
     private(set) var maxCharacters = 500
     private(set) var charactersReservedPerURL = 23
+    private(set) var maxMediaAttachments = 4
     private(set) var isPosting = false
     var errorMessage: String?
 
@@ -59,7 +60,7 @@ final class ComposeModel {
     }
 
     var canPost: Bool {
-        !isPosting && (hasResolvedDefaults || hasChosenVisibility) && draftToPost.canPost(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL)
+        !isPosting && (hasResolvedDefaults || hasChosenVisibility) && draftToPost.canPost(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL, maxMediaAttachments: maxMediaAttachments)
     }
 
     /// 返信先と既定値から決まる公開範囲。
@@ -74,6 +75,7 @@ final class ComposeModel {
         if let configuration {
             maxCharacters = configuration.maxCharacters
             charactersReservedPerURL = configuration.charactersReservedPerURL
+            maxMediaAttachments = configuration.maxMediaAttachments
         }
         guard let defaultVisibility else { return }
         self.defaultVisibility = defaultVisibility

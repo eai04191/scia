@@ -200,6 +200,44 @@ struct MastodonClientTests {
         ])
     }
 
+    @Test func postStatusSendsMediaIDsInOrder() async throws {
+        let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
+        let attachments = ["113000000000000102", "113000000000000100"].map { id in
+            DraftAttachment(state: .uploaded(MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/\(id).png"), previewUrl: nil)))
+        }
+
+        _ = try await makeClient(transport).postStatus(StatusDraft(attachments: attachments, idempotencyKey: "key-1"))
+
+        let request = try #require(await transport.requests.first)
+        var components = URLComponents()
+        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
+        #expect(components.queryItems == [
+            URLQueryItem(name: "status", value: ""),
+            URLQueryItem(name: "visibility", value: "public"),
+            URLQueryItem(name: "media_ids[]", value: "113000000000000102"),
+            URLQueryItem(name: "media_ids[]", value: "113000000000000100"),
+        ])
+    }
+
+    @Test func postStatusRefusesPendingAttachmentsWithoutSending() async throws {
+        let transport = StubTransport([])
+        let draft = StatusDraft(text: "見て", attachments: [DraftAttachment(state: .processing(serverID: "113000000000000101"))])
+
+        await #expect(throws: StatusPostError.attachmentsNotReady) {
+            _ = try await makeClient(transport).postStatus(draft)
+        }
+        #expect(await transport.requests.isEmpty)
+    }
+
+    @Test func rejectedPostIsReported() async throws {
+        let message = "Validation failed: Cannot attach files that have not finished processing. Try again in a moment!"
+        let transport = StubTransport([.json(#"{"error":"\#(message)"}"#, statusCode: 422)])
+
+        await #expect(throws: MastodonAPIError(statusCode: 422, message: message, serverMessage: message)) {
+            _ = try await makeClient(transport).postStatus(StatusDraft(text: "見て"))
+        }
+    }
+
     @Test func defaultVisibilityReadsPreferences() async throws {
         let transport = StubTransport([.json(#"{"posting:default:visibility":"unlisted","posting:default:sensitive":false,"posting:default:language":null}"#, statusCode: 200)])
 
@@ -215,6 +253,9 @@ struct MastodonClientTests {
         #expect(configuration.maxCharacters == 500)
         #expect(configuration.charactersReservedPerURL == 23)
         #expect(configuration.streamingURL.absoluteString == "wss://streaming.example.social")
+        #expect(configuration.maxMediaAttachments == 6)
+        #expect(configuration.mediaDescriptionLimit == 1500)
+        #expect(configuration.supportedMediaTypes?.contains("image/heic") == true)
     }
 
     @Test func instanceConfigurationFallsBackWithoutStatusLimits() async throws {
@@ -223,6 +264,9 @@ struct MastodonClientTests {
         let configuration = try await makeClient(transport).instanceConfiguration()
 
         #expect(configuration.maxCharacters == 500)
+        #expect(configuration.maxMediaAttachments == 4)
+        #expect(configuration.mediaDescriptionLimit == 1500)
+        #expect(configuration.supportedMediaTypes == nil)
     }
 
     @Test func homeMarkerReadsLastReadID() async throws {

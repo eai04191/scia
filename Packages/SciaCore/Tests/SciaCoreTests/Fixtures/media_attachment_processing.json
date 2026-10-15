@@ -1,0 +1,14 @@
+{
+  "id": "113000000000000101",
+  "type": "video",
+  "url": null,
+  "preview_url": "https://files.example.social/media_attachments/files/113/000/000/000/000/101/small/cebc6d51be03e509.png",
+  "remote_url": null,
+  "preview_remote_url": null,
+  "text_url": null,
+  "meta": {
+    "original": { "width": 1280, "height": 720, "frame_rate": "30/1", "duration": 6.0, "bitrate": 1500000 }
+  },
+  "description": null,
+  "blurhash": null
+}

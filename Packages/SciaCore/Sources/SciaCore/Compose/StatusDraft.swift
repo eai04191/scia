@@ -7,6 +7,8 @@ public struct StatusDraft: Sendable, Equatable {
     public var spoilerText: String
     public var visibility: Status.Visibility
     public let inReplyToID: String?
+    /// 添付するメディア。この順番で投稿に並ぶ。
+    public var attachments: [DraftAttachment]
     /// 送り直しても二重に投稿されないよう、下書きごとに決めてサーバーに渡す。
     public let idempotencyKey: String
 
@@ -15,12 +17,14 @@ public struct StatusDraft: Sendable, Equatable {
         spoilerText: String = "",
         visibility: Status.Visibility = .public,
         inReplyToID: String? = nil,
+        attachments: [DraftAttachment] = [],
         idempotencyKey: String = UUID().uuidString
     ) {
         self.text = text
         self.spoilerText = spoilerText
         self.visibility = visibility
         self.inReplyToID = inReplyToID
+        self.attachments = attachments
         self.idempotencyKey = idempotencyKey
     }
 
@@ -50,10 +54,24 @@ public struct StatusDraft: Sendable, Equatable {
         StatusLength.count(text: text, spoilerText: spoilerText, charactersReservedPerURL: charactersReservedPerURL)
     }
 
-    /// 送れる内容になっている。本文が空白だけなら送れない。
-    public func canPost(maxCharacters: Int, charactersReservedPerURL: Int) -> Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    /// 投稿の`media_ids[]`に並べるサーバー側のID。添付ファイルが1つでも済んでいなければnil。
+    public var mediaIDs: [String]? {
+        var ids: [String] = []
+        for attachment in attachments {
+            guard attachment.isReady, let serverID = attachment.serverID else { return nil }
+            ids.append(serverID)
+        }
+        return ids
+    }
+
+    /// 送れる内容になっている。
+    /// 本文が空白だけでも、メディアを添付していれば送れる（Mastodonは`media_ids`があれば`status`を省ける）。
+    /// 添付ファイルは、上限の数以内で、全部のアップロードと代替テキストの送信が済むまで送れない。
+    public func canPost(maxCharacters: Int, charactersReservedPerURL: Int, maxMediaAttachments: Int) -> Bool {
+        (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty)
             && length(charactersReservedPerURL: charactersReservedPerURL) <= maxCharacters
+            && attachments.count <= maxMediaAttachments
+            && mediaIDs != nil
     }
 }
 

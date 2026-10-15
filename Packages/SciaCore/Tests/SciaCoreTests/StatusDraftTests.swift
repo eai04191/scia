@@ -102,10 +102,66 @@ struct StatusDraftTests {
         #expect(try !status(.direct, by: "1").canBeReblogged(by: "1"))
     }
 
+    private func canPost(_ draft: StatusDraft, maxMediaAttachments: Int = 4) -> Bool {
+        draft.canPost(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: maxMediaAttachments)
+    }
+
+    private func uploaded(_ id: String, description: String? = nil) -> DraftAttachment {
+        let attachment = MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/\(id).png"), previewUrl: nil, description: description)
+        return DraftAttachment(state: .uploaded(attachment), description: description ?? "")
+    }
+
     @Test func cannotPostBlankOrTooLongText() {
-        #expect(!StatusDraft(text: " \n").canPost(maxCharacters: 500, charactersReservedPerURL: 23))
-        #expect(StatusDraft(text: String(repeating: "あ", count: 500)).canPost(maxCharacters: 500, charactersReservedPerURL: 23))
-        #expect(!StatusDraft(text: String(repeating: "あ", count: 501)).canPost(maxCharacters: 500, charactersReservedPerURL: 23))
+        #expect(!canPost(StatusDraft(text: " \n")))
+        #expect(canPost(StatusDraft(text: String(repeating: "あ", count: 500))))
+        #expect(!canPost(StatusDraft(text: String(repeating: "あ", count: 501))))
+    }
+
+    @Test func canPostMediaWithoutText() {
+        #expect(canPost(StatusDraft(text: " \n", attachments: [uploaded("1")])))
+    }
+
+    @Test func cannotPostUntilEveryAttachmentIsUploaded() {
+        let done = uploaded("1")
+        for pending in [
+            DraftAttachment(state: .uploading),
+            DraftAttachment(state: .processing(serverID: "2")),
+            DraftAttachment(state: .failed(serverID: nil)),
+            DraftAttachment(state: .failed(serverID: "2")),
+        ] {
+            let draft = StatusDraft(text: "見て", attachments: [done, pending])
+            #expect(!canPost(draft))
+            #expect(draft.mediaIDs == nil)
+        }
+    }
+
+    @Test func cannotPostUntilDescriptionReachesServer() {
+        var attachment = uploaded("1", description: "猫")
+        #expect(canPost(StatusDraft(attachments: [attachment])))
+
+        attachment.description = "窓辺の猫"
+        #expect(attachment.needsDescriptionUpdate)
+        #expect(!canPost(StatusDraft(attachments: [attachment])))
+    }
+
+    @Test func descriptionWaitsForUpload() {
+        // 送るのはアップロードが済んでからなので、済む前は送り待ちに数えない。
+        let attachment = DraftAttachment(state: .processing(serverID: "1"), description: "猫")
+        #expect(!attachment.needsDescriptionUpdate)
+        #expect(!attachment.isReady)
+        #expect(attachment.serverID == "1")
+    }
+
+    @Test func cannotPostMoreAttachmentsThanServerAllows() {
+        let draft = StatusDraft(attachments: ["1", "2", "3", "4", "5"].map { uploaded($0) })
+        #expect(!canPost(draft, maxMediaAttachments: 4))
+        #expect(canPost(draft, maxMediaAttachments: 5))
+    }
+
+    @Test func mediaIDsFollowAttachmentOrder() {
+        var draft = StatusDraft(attachments: ["1", "2", "3"].map { uploaded($0) })
+        draft.attachments.insert(draft.attachments.removeLast(), at: 0)
+        #expect(draft.mediaIDs == ["3", "1", "2"])
     }
 
     @Test func eachDraftHasItsOwnIdempotencyKey() {

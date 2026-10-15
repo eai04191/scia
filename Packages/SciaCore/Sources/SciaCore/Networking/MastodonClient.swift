@@ -51,19 +51,29 @@ public struct MastodonClient: Sendable {
                 }
                 struct Statuses: Decodable {
                     let maxCharacters: Int?
+                    let maxMediaAttachments: Int?
                     let charactersReservedPerUrl: Int?
+                }
+                struct MediaAttachments: Decodable {
+                    let supportedMimeTypes: [String]?
+                    let descriptionLimit: Int?
                 }
                 let urls: URLs
                 let statuses: Statuses?
+                let mediaAttachments: MediaAttachments?
             }
             let configuration: Configuration
         }
         let configuration = try await get(Instance.self, path: "api/v2/instance", query: []).0.configuration
         // 投稿の設定を返さないサーバーには、Mastodonの既定値を使う。
+        // 代替テキストの上限は4.4.0から返るが、それより前のMastodonも1500文字で検証している。
         return InstanceConfiguration(
             streamingURL: configuration.urls.streaming,
             maxCharacters: configuration.statuses?.maxCharacters ?? 500,
-            charactersReservedPerURL: configuration.statuses?.charactersReservedPerUrl ?? 23
+            charactersReservedPerURL: configuration.statuses?.charactersReservedPerUrl ?? 23,
+            maxMediaAttachments: configuration.statuses?.maxMediaAttachments ?? 4,
+            mediaDescriptionLimit: configuration.mediaAttachments?.descriptionLimit ?? 1500,
+            supportedMediaTypes: configuration.mediaAttachments?.supportedMimeTypes
         )
     }
 
@@ -110,8 +120,11 @@ public struct MastodonClient: Sendable {
     }
 
     /// 投稿する。同じ下書きを送り直しても二重に投稿されないよう、下書きごとの`Idempotency-Key`を付ける。
+    /// 添付ファイルが済んでいなければ送らずに`StatusPostError.attachmentsNotReady`を投げる。
+    /// サーバーが内容を拒んだら、422の`MastodonAPIError`を投げる。
     /// https://docs.joinmastodon.org/methods/statuses/#create
     public func postStatus(_ draft: StatusDraft) async throws -> Status {
+        guard let mediaIDs = draft.mediaIDs else { throw StatusPostError.attachmentsNotReady }
         var form = [
             URLQueryItem(name: "status", value: draft.text),
             URLQueryItem(name: "visibility", value: draft.visibility.rawValue),
@@ -122,7 +135,84 @@ public struct MastodonClient: Sendable {
         if let inReplyToID = draft.inReplyToID {
             form.append(URLQueryItem(name: "in_reply_to_id", value: inReplyToID))
         }
+        form += mediaIDs.map { URLQueryItem(name: "media_ids[]", value: $0) }
         return try await post(Status.self, path: "api/v1/statuses", form: form, headers: ["Idempotency-Key": draft.idempotencyKey]).0
+    }
+
+    // MARK: - メディアの添付
+
+    /// メディアをアップロードする。小さな画像はその場で変換が済み、`url`の入った添付ファイルが返る。
+    /// 動画や大きな画像は変換を待たずに返り、`url`がnilになる。その場合は`waitUntilProcessed`で待つ。
+    /// サーバーがファイルを受け付けなければ`MediaUploadError.rejected`、変換に失敗したら`.processingFailed`を投げる。
+    /// https://docs.joinmastodon.org/methods/media/#v2
+    public func uploadMedia(_ upload: MediaUpload) async throws -> MediaAttachment {
+        var form = MultipartFormData()
+        form.append(name: "file", filename: upload.filename, mimeType: upload.mimeType, data: upload.data)
+        if !upload.description.isEmpty {
+            form.append(name: "description", value: upload.description)
+        }
+        var request = URLRequest(url: credential.instance.appending(path: "api/v2/media"))
+        request.httpMethod = "POST"
+        request.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = form.finalized()
+        do {
+            return try await send(request, decoding: MediaAttachment.self).0
+        } catch let error as MastodonAPIError {
+            switch error.statusCode {
+            case 413, 422: throw MediaUploadError.rejected(error)
+            case 500: throw MediaUploadError.processingFailed(error)
+            default: throw error
+            }
+        }
+    }
+
+    /// アップロードした添付ファイルの変換の状態。変換に失敗していたら`MediaUploadError.processingFailed`を投げる。
+    /// https://docs.joinmastodon.org/methods/media/#get
+    public func mediaProcessingState(_ id: String) async throws -> MediaProcessingState {
+        let request = URLRequest(url: credential.instance.appending(path: "api/v1/media/\(id)"))
+        let data: Data
+        let response: HTTPURLResponse
+        do {
+            (data, response) = try await send(request)
+        } catch let error as MastodonAPIError where error.statusCode == 422 {
+            throw MediaUploadError.processingFailed(error)
+        }
+        // 変換中は206が返る。本文が空のこともあるので読まない。
+        guard response.statusCode != 206 else { return .processing }
+        let attachment = try MastodonDecoder.make().decode(MediaAttachment.self, from: data)
+        return attachment.url == nil ? .processing : .processed(attachment)
+    }
+
+    /// 変換が済むまで、`pollInterval`ごとに状態を問い合わせて待つ。
+    /// 待ち始めてから`timeout`を過ぎたら`MediaUploadError.processingTimedOut`を投げる。問い合わせにかかった時間も含めて数える。
+    /// 問い合わせ1回の長さは通信の設定のタイムアウトに任せるので、最後の問い合わせの分だけ`timeout`を超えることがある。
+    /// サーバーの添付ファイルは残るので、同じIDで待ち直せる。
+    public func waitUntilProcessed(
+        _ id: String,
+        pollInterval: Duration = .seconds(1),
+        timeout: Duration = .seconds(180)
+    ) async throws -> MediaAttachment {
+        try await waitUntilProcessed(id, pollInterval: pollInterval, timeout: timeout, clock: ContinuousClock())
+    }
+
+    func waitUntilProcessed<C: Clock<Duration>>(_ id: String, pollInterval: Duration, timeout: Duration, clock: C) async throws -> MediaAttachment {
+        let deadline = clock.now.advanced(by: timeout)
+        while true {
+            if case .processed(let attachment) = try await mediaProcessingState(id) {
+                return attachment
+            }
+            guard clock.now.advanced(by: pollInterval) <= deadline else { throw MediaUploadError.processingTimedOut(serverID: id) }
+            try await clock.sleep(for: pollInterval)
+        }
+    }
+
+    /// 代替テキストを送る。空文字列を送ると消える。投稿に付ける前の添付ファイルにだけ使える。
+    /// https://docs.joinmastodon.org/methods/media/#update
+    public func updateMediaDescription(_ id: String, description: String) async throws -> MediaAttachment {
+        try await send(
+            formRequest(method: "PUT", path: "api/v1/media/\(id)", form: [URLQueryItem(name: "description", value: description)]),
+            decoding: MediaAttachment.self
+        ).0
     }
 
     /// トークンが有効なら返り、無効なら401の`MastodonAPIError`を投げる。
@@ -187,8 +277,12 @@ public struct MastodonClient: Sendable {
     }
 
     private func post<T: Decodable>(_ type: T.Type, path: String, form: [URLQueryItem], headers: [String: String] = [:]) async throws -> (T, HTTPURLResponse) {
+        try await send(formRequest(method: "POST", path: path, form: form, headers: headers), decoding: type)
+    }
+
+    private func formRequest(method: String, path: String, form: [URLQueryItem], headers: [String: String] = [:]) -> URLRequest {
         var request = URLRequest(url: credential.instance.appending(path: path))
-        request.httpMethod = "POST"
+        request.httpMethod = method
         for (field, value) in headers {
             request.setValue(value, forHTTPHeaderField: field)
         }
@@ -198,7 +292,7 @@ public struct MastodonClient: Sendable {
         // URLComponentsは`+`をエンコードしないが、form-urlencodedでは`+`が空白として読まれるため、エンコードしておく。
         let body = (components.percentEncodedQuery ?? "").replacingOccurrences(of: "+", with: "%2B")
         request.httpBody = Data(body.utf8)
-        return try await send(request, decoding: type)
+        return request
     }
 
     private func send<T: Decodable>(_ request: URLRequest, decoding type: T.Type) async throws -> (T, HTTPURLResponse) {
@@ -224,12 +318,52 @@ public struct InstanceConfiguration: Sendable, Equatable {
     public let maxCharacters: Int
     /// 本文中のURLを何文字と数えるか。
     public let charactersReservedPerURL: Int
+    /// 1つの投稿に添付できるメディアの数。
+    public let maxMediaAttachments: Int
+    /// 代替テキストの文字数の上限。
+    public let mediaDescriptionLimit: Int
+    /// アップロードできるファイルのMIMEタイプ。返さないサーバーではnilで、送ってみるまで分からない。
+    public let supportedMediaTypes: [String]?
 
-    public init(streamingURL: URL, maxCharacters: Int, charactersReservedPerURL: Int) {
+    public init(
+        streamingURL: URL,
+        maxCharacters: Int,
+        charactersReservedPerURL: Int,
+        maxMediaAttachments: Int,
+        mediaDescriptionLimit: Int,
+        supportedMediaTypes: [String]?
+    ) {
         self.streamingURL = streamingURL
         self.maxCharacters = maxCharacters
         self.charactersReservedPerURL = charactersReservedPerURL
+        self.maxMediaAttachments = maxMediaAttachments
+        self.mediaDescriptionLimit = mediaDescriptionLimit
+        self.supportedMediaTypes = supportedMediaTypes
     }
+}
+
+/// アップロードするファイル。
+public struct MediaUpload: Sendable, Equatable {
+    public let data: Data
+    public let filename: String
+    /// Mastodonはファイルの部分にMIMEタイプが付いていることを求める。
+    public let mimeType: String
+    /// 代替テキスト。空なら送らない。
+    public let description: String
+
+    public init(data: Data, filename: String, mimeType: String, description: String = "") {
+        self.data = data
+        self.filename = filename
+        self.mimeType = mimeType
+        self.description = description
+    }
+}
+
+/// アップロードした添付ファイルの、サーバーでの変換の状態。
+public enum MediaProcessingState: Sendable, Equatable {
+    case processing
+    /// 変換が済み、`url`が入った。
+    case processed(MediaAttachment)
 }
 
 /// 既読位置を保存できるタイムライン。

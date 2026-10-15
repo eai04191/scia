@@ -11,7 +11,16 @@
       "status": null
     },
     "accounts": { "max_featured_tags": 10, "max_pinned_statuses": 5 },
-    "statuses": { "max_characters": 500, "max_media_attachments": 4, "characters_reserved_per_url": 23 }
+    "statuses": { "max_characters": 500, "max_media_attachments": 6, "characters_reserved_per_url": 23 },
+    "media_attachments": {
+      "description_limit": 1500,
+      "image_matrix_limit": 33177600,
+      "image_size_limit": 16777216,
+      "supported_mime_types": ["image/jpeg", "image/png", "image/gif", "image/heic", "video/mp4", "video/quicktime"],
+      "video_frame_rate_limit": 120,
+      "video_matrix_limit": 8294400,
+      "video_size_limit": 103809024
+    }
   },
   "registrations": { "enabled": false, "approval_required": false, "message": null },
   "contact": { "email": "", "account": null },
