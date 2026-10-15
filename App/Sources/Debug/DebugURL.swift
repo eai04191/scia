@@ -21,6 +21,8 @@ enum DebugURL: Equatable {
     case unsupported(OptionalFeature)
     /// `scia-debug://streaming/offline`で今のストリーミングの接続を切り、以後の接続を失敗させる。`scia-debug://streaming/online`で戻す。
     case streaming(isOnline: Bool)
+    /// `scia-debug://catalog`で部品のカタログを開く。`scia-debug://catalog/<CatalogComponent.rawValue>`なら、その部品の状態を並べた画面まで開く。
+    case catalog(CatalogComponent?)
 
     init?(_ url: URL) {
         guard url.scheme == Self.scheme else { return nil }
@@ -49,6 +51,14 @@ enum DebugURL: Equatable {
             case "online": self = .streaming(isOnline: true)
             default: return nil
             }
+        case "catalog":
+            let path = url.path(percentEncoded: false)
+            if path.isEmpty || path == "/" {
+                self = .catalog(nil)
+                return
+            }
+            guard let component = CatalogComponent(rawValue: url.lastPathComponent) else { return nil }
+            self = .catalog(component)
         default:
             return nil
         }

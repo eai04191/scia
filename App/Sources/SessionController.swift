@@ -475,6 +475,8 @@ final class SessionController {
             notifications.start()
         case .streaming(let isOnline):
             DebugFaults.setStreamingOnline(isOnline)
+        case .catalog(let component):
+            topViewController.presentComponentCatalog(opening: component)
         }
     }
     #endif
