@@ -14,7 +14,9 @@ import VisionKit
 /// ビューアはアニメーションなしで出し入れし、動きはビューアの中で描く。開く途中で指が触れたら、動きをその場で止めて指に追従させる。
 /// 画像を隠さないよう閉じるボタンは置かず、VoiceOverのエスケープとキーボードのEscでも閉じられるようにする。
 final class MediaViewerController: UIViewController {
-    private let attachments: [MediaAttachment]
+    private var items: [MediaViewerItem]
+    /// 投稿欄で選んだメディアを開いたときの操作。投稿の添付ファイルを見るときはnil。
+    private let draftEditing: Editing?
     private let store: MediaImageStore
     private let pageController = UIPageViewController(transitionStyle: .scroll, navigationOrientation: .horizontal, options: [.interPageSpacing: 16])
     private var pages: [Int: MediaPageController] = [:]
@@ -23,6 +25,12 @@ final class MediaViewerController: UIViewController {
     private let menuButton = UIButton(configuration: .glass())
     private let counterLabel = UILabel()
     let captionView = CaptionView()
+    /// 投稿欄から開いたとき、代替テキストを書く入力欄。書いている間だけ出す。
+    let descriptionEditor = AltTextEditorView()
+    /// 代替テキストを書いている。
+    private(set) var isEditingDescription = false
+    /// 投稿欄から開いたとき、アップロードや代替テキストの送信の状態を、上の中央に出す。失敗していれば押して理由を見られる。
+    let draftStatusButton = UIButton(configuration: .glass())
     /// 写真に保存したことを、メニューボタンの下で知らせる。
     private let statusChip = StatusChip()
     private let photoSaver: PhotoLibrarySaver
@@ -39,8 +47,10 @@ final class MediaViewerController: UIViewController {
     private lazy var dismissPan = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPan(_:)))
     /// 閉じる操作を始めたときに押していた位置。`view`の座標。画像をこの点を中心に縮め、指の下に同じ場所が来るようにする。
     private var dismissPanAnchor: CGPoint = .zero
-    /// 閉じ終わったときに呼ぶ。
+    /// 閉じ終わったときに呼ぶ。写しがサムネイルへ戻る動きは、このあとも続く。
     var onDismiss: (() -> Void)?
+    /// 写しがサムネイルへ戻る動きを終えたときに呼ぶ。投稿欄は、ここで入力欄にキーボードを戻す。
+    var onCloseFinish: (() -> Void)?
     /// 黒い下地。画像だけを動かし、下地はその場で濃くしたり薄くしたりする。
     private let backdrop = UIView()
     /// 開閉とドラッグで動かす画像の写し。縦横比を保って枠を埋めるように切り抜くため、枠の形をサムネイルとビューアの画像のあいだで変えるだけで、
@@ -54,7 +64,7 @@ final class MediaViewerController: UIViewController {
     private var morphFollowsPage = false
     private var motion = Motion.idle
     private let timing: Timing
-    private let sourceTile: @MainActor (MediaAttachment.ID) -> MediaTileView?
+    private let sourceTile: @MainActor (String) -> MediaTileView?
     /// 写しを動かしている間、隠している一覧のサムネイル。画像がそこへ戻っていく途中で消えて見えないよう、動かし始めから隠す。
     private var hiddenTile: MediaTileView?
     /// 開く途中と、開く途中でつかんでから写しを手前へ寄せ終えるまで、写しを一覧のバーの手前と奥に描き分ける。
@@ -94,20 +104,34 @@ final class MediaViewerController: UIViewController {
         let savedChipAtBottom: Bool
     }
 
-    /// - Parameter sourceTile: 添付ファイルのサムネイルを返す。開閉のたびに呼ぶため、閉じるまでに一覧の行が再利用されても今の位置を返せる。
+    /// 投稿欄で選んだメディアを開いたときの操作。ビューアは投稿欄を知らず、メニューと代替テキストの書き終わりをここから渡す。
+    struct Editing {
+        /// 代替テキストの文字数の上限。
+        let descriptionLimit: Int
+        /// メニューに「代替テキストを編集」に続けて出す項目。`MediaViewerItem.id`を受け取る。
+        let menuElements: @MainActor (String) -> [UIMenuElement]
+        /// 代替テキストを書き終えた。書き直していなくても呼ぶ。
+        let commitDescription: @MainActor (String, String) -> Void
+        /// 失敗の表示を押した。理由と、送り直すか外すかを、渡したビューアの上に出す。
+        let showFailure: @MainActor (String, UIViewController) -> Void
+    }
+
+    /// - Parameter sourceTile: `MediaViewerItem.id`のサムネイルを返す。開閉のたびに呼ぶため、閉じるまでに一覧の行が再利用されても今の位置を返せる。
     ///   見つからなければnilを返し、画像を動かさずに薄くして開閉する。
     init(
-        attachments: [MediaAttachment],
+        items: [MediaViewerItem],
         startIndex: Int,
         store: MediaImageStore,
         dragToDismiss: DragToDismiss,
         timing: Timing,
+        editing: Editing? = nil,
         photoSaver: PhotoLibrarySaver = .photoLibrary,
         downloads: MediaDownloads = AppDependencies.mediaDownloads,
-        sourceTile: @escaping @MainActor (MediaAttachment.ID) -> MediaTileView?
+        sourceTile: @escaping @MainActor (String) -> MediaTileView?
     ) {
-        precondition(attachments.indices.contains(startIndex), "開く添付ファイルの位置が範囲外です")
-        self.attachments = attachments
+        precondition(items.indices.contains(startIndex), "開く添付ファイルの位置が範囲外です")
+        self.items = items
+        self.draftEditing = editing
         self.store = store
         self.photoSaver = photoSaver
         self.downloads = downloads
@@ -124,12 +148,34 @@ final class MediaViewerController: UIViewController {
         modalPresentationCapturesStatusBarAppearance = true
     }
 
+    convenience init(
+        attachments: [MediaAttachment],
+        startIndex: Int,
+        store: MediaImageStore,
+        dragToDismiss: DragToDismiss,
+        timing: Timing,
+        photoSaver: PhotoLibrarySaver = .photoLibrary,
+        downloads: MediaDownloads = AppDependencies.mediaDownloads,
+        sourceTile: @escaping @MainActor (MediaAttachment.ID) -> MediaTileView?
+    ) {
+        self.init(
+            items: attachments.map(MediaViewerItem.init),
+            startIndex: startIndex,
+            store: store,
+            dragToDismiss: dragToDismiss,
+            timing: timing,
+            photoSaver: photoSaver,
+            downloads: downloads,
+            sourceTile: sourceTile
+        )
+    }
+
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 
-    var currentAttachment: MediaAttachment { attachments[currentIndex] }
+    var currentItem: MediaViewerItem { items[currentIndex] }
 
     /// 拡大して見ている間は、下へのスワイプを画像の移動に使い、閉じる操作にしない。
     var allowsInteractiveDismiss: Bool {
@@ -164,7 +210,9 @@ final class MediaViewerController: UIViewController {
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        becomeFirstResponder()
+        if !isEditingDescription {
+            becomeFirstResponder()
+        }
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -196,7 +244,7 @@ final class MediaViewerController: UIViewController {
         return true
     }
 
-    /// 写しをサムネイルへ縮めてから閉じる。
+    /// 写しをサムネイルへ縮めてから閉じる。代替テキストを書いていれば、書き終えてから閉じる。
     @objc func close() {
         beginClosing()
     }
@@ -238,8 +286,9 @@ final class MediaViewerController: UIViewController {
         let page = pages[currentIndex]
         return """
         motion: \(motion.label)
-        index: \(currentIndex) / \(attachments.count) type=\(currentAttachment.type)
-        aspectRatio: \(currentAttachment.aspectRatio.map { "\($0)" } ?? "nil")
+        index: \(currentIndex) / \(items.count) type=\(currentItem.kind) local=\(currentItem.serverAttachment == nil) status=\(currentItem.draftStatus.map { "\($0)" } ?? "nil")
+        aspectRatio: \(currentItem.aspectRatio.map { "\($0)" } ?? "nil")
+        editingDescription: \(isEditingDescription)
         view.bounds: \(view.bounds.size)
         morph: hidden=\(morph.isHidden) frame=\(morph.frame) image=\(morph.image.map { "\($0.size)" } ?? "nil")
         contentFrame: \(contentFrame(in: view))
@@ -256,12 +305,21 @@ final class MediaViewerController: UIViewController {
             completion(self?.menuElements() ?? [])
         }])
         menuButton.showsMenuAsPrimaryAction = true
-        captionView.onOpen = { [weak self] in self?.showAltText() }
+        captionView.onOpen = { [weak self] in
+            guard let self else { return }
+            if self.draftEditing != nil {
+                self.beginEditingDescription()
+            } else {
+                self.showAltText()
+            }
+        }
+        captionView.isEditable = draftEditing != nil
         counterLabel.font = .preferredFont(forTextStyle: .subheadline)
         counterLabel.textColor = .white
-        counterLabel.isHidden = attachments.count == 1
+        counterLabel.isHidden = items.count == 1
         setUpDownloadButton()
-        for view in [menuButton, counterLabel, captionView, statusChip, downloadButton] {
+        setUpDescriptionEditing()
+        for view in [menuButton, counterLabel, captionView, statusChip, downloadButton, draftStatusButton, descriptionEditor] {
             view.translatesAutoresizingMaskIntoConstraints = false
             self.view.addSubview(view)
         }
@@ -282,7 +340,33 @@ final class MediaViewerController: UIViewController {
             // 落とし終えると同じ場所に保存したことを知らせるため、知らせる表示と同じ場所に出す。
             downloadButton.centerXAnchor.constraint(equalTo: statusChip.centerXAnchor),
             downloadButton.centerYAnchor.constraint(equalTo: statusChip.centerYAnchor),
+            draftStatusButton.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
+            draftStatusButton.topAnchor.constraint(equalTo: menuButton.bottomAnchor, constant: 8),
+            draftStatusButton.widthAnchor.constraint(lessThanOrEqualTo: guide.widthAnchor, constant: -32),
+            descriptionEditor.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            descriptionEditor.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            descriptionEditor.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
         ])
+    }
+
+    private func setUpDescriptionEditing() {
+        descriptionEditor.isHidden = true
+        descriptionEditor.limit = draftEditing?.descriptionLimit ?? 0
+        descriptionEditor.onEnd = { [weak self] text in self?.descriptionEditingDidEnd(text) }
+        descriptionEditor.onDone = { [weak self] in self?.endEditingDescription() }
+        draftStatusButton.isHidden = true
+        draftStatusButton.configuration?.imagePadding = 6
+        draftStatusButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .subheadline)
+        draftStatusButton.configuration?.titleLineBreakMode = .byTruncatingTail
+        draftStatusButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes
+            attributes.font = .preferredFont(forTextStyle: .subheadline)
+            return attributes
+        }
+        draftStatusButton.addAction(UIAction { [weak self] _ in
+            guard let self, let editing = self.draftEditing else { return }
+            editing.showFailure(self.currentItem.id, self)
+        }, for: .primaryActionTriggered)
     }
 
     private func setUpDownloadButton() {
@@ -301,11 +385,52 @@ final class MediaViewerController: UIViewController {
         downloadButton.addAction(UIAction { [weak self] _ in self?.cancelDownload() }, for: .primaryActionTriggered)
     }
 
-    private var chromeViews: [UIView] { [menuButton, counterLabel, captionView] }
+    private var chromeViews: [UIView] { [menuButton, counterLabel, captionView, draftStatusButton] }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        layOutPages()
         updateBottomCoveredHeight()
+    }
+
+    /// 代替テキストを書いている間は、画像をキーボードと入力欄に隠れない範囲に縮めて収め、書きながら見られるようにする。
+    /// 枠の大きさを変えると拡大表示が倍率を決め直して画像が飛ぶため、枠は画面いっぱいのまま、縮めて動かす変形をかける。
+    /// 入力欄はキーボードに付いて動き、この並べ直しはキーボードの動きの中で呼ばれるため、変形もキーボードと一緒に動く。
+    private func layOutPages() {
+        let bounds = CGRect(origin: .zero, size: view.bounds.size)
+        if pageController.view.bounds != bounds {
+            pageController.view.bounds = bounds
+        }
+        let center = CGPoint(x: view.bounds.midX, y: view.bounds.midY)
+        if pageController.view.center != center {
+            pageController.view.center = center
+        }
+        let transform = editingPageTransform()
+        if pageController.view.transform != transform {
+            pageController.view.transform = transform
+        }
+    }
+
+    /// キーボードが出ている間だけ縮める。書き始める前の並べ直しや、書き終えた後は、キーボードの動きの外で呼ばれるため縮めない。
+    private func editingPageTransform() -> CGAffineTransform {
+        guard isEditingDescription, descriptionEditor.isEditing, let page = pages[currentIndex] else { return .identity }
+        // 枠は画面と同じ大きさで原点も同じなので、枠の座標がそのまま画面の座標になる。
+        let content = page.view.convert(page.contentFrame, to: pageController.view)
+        // 上は書いていないときと同じく、ボタンや状態の表示と重ねてよい。ボタンは右上にしかなく、タップで隠せるため。
+        let available = CGRect(x: 0, y: 0, width: view.bounds.width, height: descriptionEditor.frame.minY)
+        return Self.fittingTransform(content: content, into: available, in: view.bounds)
+    }
+
+    /// `bounds`の中央を軸にした変形で、`content`を`available`に収まるまで縮め、`available`の中央に置く。収まっていれば縮めない。
+    /// 拡大して画面からはみ出していれば、見えている部分だけを収める。はみ出した画像全体を収めると、見えている範囲ごと小さくなりすぎるため。
+    static func fittingTransform(content: CGRect, into available: CGRect, in bounds: CGRect) -> CGAffineTransform {
+        let content = content.intersection(bounds)
+        guard !content.isNull, content.width > 0, content.height > 0, available.width > 0, available.height > 0 else { return .identity }
+        let scale = min(1, available.width / content.width, available.height / content.height)
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let x = available.midX - center.x - scale * (content.midX - center.x)
+        let y = available.midY - center.y - scale * (content.midY - center.y)
+        return CGAffineTransform(translationX: x, y: y).scaledBy(x: scale, y: scale)
     }
 
     /// 画面の下で、説明に隠れている高さ。説明を出していなければ0。
@@ -321,10 +446,12 @@ final class MediaViewerController: UIViewController {
     }
 
     private func updateChrome() {
-        counterLabel.text = "\(currentIndex + 1) / \(attachments.count)"
-        let description = currentAttachment.description ?? ""
+        counterLabel.text = "\(currentIndex + 1) / \(items.count)"
+        let description = currentItem.description ?? ""
         captionView.text = description
-        captionView.isHidden = isChromeHidden || description.isEmpty
+        // 投稿欄から開いたときは、空でも代替テキストを書き始められるよう出しておく。
+        captionView.isHidden = isChromeHidden || isEditingDescription || (description.isEmpty && draftEditing == nil)
+        updateDraftStatus()
         view.setNeedsLayout()
     }
 
@@ -347,11 +474,11 @@ final class MediaViewerController: UIViewController {
 
     private func page(at index: Int) -> MediaPageController {
         if let page = pages[index] { return page }
-        let attachment = attachments[index]
-        let page: MediaPageController = switch attachment.type {
-        case .image: ImagePageController(attachment: attachment, store: store, preview: sourceTile(attachment.id)?.loadedThumbnail)
-        case .video, .gifv, .audio: PlayerPageController(attachment: attachment)
-        case .unknown: UnsupportedPageController(attachment: attachment)
+        let item = items[index]
+        let page: MediaPageController = switch Self.pageKind(of: item) {
+        case .image: ImagePageController(item: item, store: store, preview: sourceTile(item.id)?.loadedThumbnail ?? item.localThumbnail)
+        case .player: PlayerPageController(item: item)
+        case .unsupported: UnsupportedPageController(item: item)
         }
         page.index = index
         page.onSingleTap = { [weak self] in self?.toggleChrome() }
@@ -366,26 +493,50 @@ final class MediaViewerController: UIViewController {
         return page
     }
 
+    /// 中身を描くページの種類。
+    private enum PageKind {
+        case image, player, unsupported
+    }
+
+    private static func pageKind(of item: MediaViewerItem) -> PageKind {
+        switch item.kind {
+        case .image: .image
+        // 投稿欄で選んだGIFは動画ではなく画像のファイルで、AVPlayerでは再生できないため、最初のコマを画像として見せる。
+        case .gifv where item.serverAttachment == nil: .image
+        case .video, .gifv, .audio: .player
+        case .unknown: .unsupported
+        }
+    }
+
+    private static func pageKind(of page: MediaPageController) -> PageKind {
+        switch page {
+        case is ImagePageController: .image
+        case is PlayerPageController: .player
+        default: .unsupported
+        }
+    }
+
     /// 共有や保存で渡すファイルのURL。画像は元のファイルを読み込み終えるまでnilにし、届く前に共有できないようにする。
     /// 動画、GIF、音声は選んでから落とすため、URLがあれば返す。アプリで開けない種類のファイルと、URLのない添付ファイルではnil。
     private var currentFileURL: URL? {
-        switch currentAttachment.type {
-        case .image: (pages[currentIndex] as? ImagePageController)?.originalURL
-        case .video, .gifv, .audio: currentAttachment.url ?? currentAttachment.remoteUrl
-        case .unknown: nil
+        guard let attachment = currentItem.serverAttachment else { return nil }
+        switch attachment.type {
+        case .image: return (pages[currentIndex] as? ImagePageController)?.originalURL
+        case .video, .gifv, .audio: return attachment.url ?? attachment.remoteUrl
+        case .unknown: return nil
         }
     }
 
     /// アプリで開けない種類のファイルで、ファイルの代わりに共有するURL。
     private var currentUnsupportedURL: URL? {
-        guard case .unknown = currentAttachment.type else { return nil }
-        return currentAttachment.url ?? currentAttachment.remoteUrl
+        guard let attachment = currentItem.serverAttachment, case .unknown = attachment.type else { return nil }
+        return attachment.url ?? attachment.remoteUrl
     }
 
     /// 共有シートに渡すもの。見出しのプレビューに、`index`の添付ファイルの描いている画像（動画は再生しているコマ）か一覧のサムネイルを添える。
     /// 落としている間にページを替えられるため、表示中のページではなく、共有を選んだときのページから取る。
     private func shareSheetItem(for file: URL, at index: Int) -> Any {
-        guard let preview = pages[index]?.transitionImage ?? sourceTile(attachments[index].id)?.loadedThumbnail else { return file }
+        guard let preview = pages[index]?.transitionImage ?? sourceTile(items[index].id)?.loadedThumbnail else { return file }
         return MediaShareSheetItem(file: file, preview: preview)
     }
 
@@ -394,9 +545,17 @@ final class MediaViewerController: UIViewController {
         pages[currentIndex] as? ImagePageController
     }
 
+    /// 左右の切り替えで今見せているページ。
+    var displayedPage: MediaPageController? {
+        pageController.viewControllers?.first as? MediaPageController
+    }
+
     /// メニューの項目。画像の共有や保存は、元のファイルが届くまで選べなくする。動画などは選んでから落とす。
     /// 保存は写真に入る画像、動画、GIFだけ、翻訳は画像から文字を読み取れたときだけ、代替テキストは付いているときだけ出す。
     func menuElements() -> [UIMenuElement] {
+        if let editing = draftEditing {
+            return editingMenuElements(editing)
+        }
         var elements: [UIMenuElement] = [
             UIAction(
                 title: "共有",
@@ -406,7 +565,7 @@ final class MediaViewerController: UIViewController {
                 self?.share()
             },
         ]
-        if [.image, .video, .gifv].contains(currentAttachment.type) {
+        if [.image, .video, .gifv].contains(currentItem.kind) {
             elements.append(UIAction(
                 title: "写真に保存",
                 image: UIImage(systemName: "square.and.arrow.down"),
@@ -420,7 +579,7 @@ final class MediaViewerController: UIViewController {
                 self?.translation.present(text)
             })
         }
-        if let description = currentAttachment.description, !description.isEmpty {
+        if let description = currentItem.description, !description.isEmpty {
             elements.append(UIAction(title: "代替テキスト", image: UIImage(systemName: "text.below.photo")) { [weak self] _ in
                 self?.showAltText()
             })
@@ -430,8 +589,107 @@ final class MediaViewerController: UIViewController {
 
     /// 代替テキストの全文をシートで出す。
     func showAltText() {
-        guard let description = currentAttachment.description, !description.isEmpty else { return }
+        guard let description = currentItem.description, !description.isEmpty else { return }
         present(AltTextViewController.sheet(text: description), animated: true)
+    }
+
+    // MARK: 投稿欄から開いたとき
+
+    /// 開いている間に、投稿欄の添付の状態や代替テキストが変わった。並びは変わらない前提で、同じIDのものだけ差し替える。
+    /// 外された添付は、外した側がビューアを閉じるため、ここでは並びから除かない。
+    func update(items newItems: [MediaViewerItem]) {
+        let updated = Dictionary(newItems.map { ($0.id, $0) }) { first, _ in first }
+        for index in items.indices {
+            guard let item = updated[items[index].id] else { continue }
+            items[index] = item
+            guard let page = pages[index] else { continue }
+            if Self.pageKind(of: page) == Self.pageKind(of: item) {
+                page.update(item)
+            } else {
+                // 投稿欄で選んだメディアは、読み込むまで種類が分からず画像として開くため、動画と分かったらページを作り直す。
+                pages[index] = nil
+                if index == currentIndex {
+                    pageController.setViewControllers([self.page(at: index)], direction: .forward, animated: false)
+                }
+            }
+        }
+        updateChrome()
+    }
+
+    /// メニューの「代替テキストを編集」と、投稿欄から渡された項目。
+    private func editingMenuElements(_ editing: Editing) -> [UIMenuElement] {
+        let edit = UIAction(title: "代替テキストを編集", image: UIImage(systemName: "text.below.photo")) { [weak self] _ in
+            self?.beginEditingDescription()
+        }
+        return [edit] + editing.menuElements(currentItem.id)
+    }
+
+    /// 代替テキストの入力欄をキーボードのすぐ上に出して書き始める。
+    func beginEditingDescription() {
+        guard let editing = draftEditing, !isEditingDescription else { return }
+        // 開いている途中や戻している途中なら、動きを終えてから書き始める。
+        completeMotionImmediately()
+        guard case .idle = motion else { return }
+        SciaLog.logger(category: "media").info("begin editing description")
+        isEditingDescription = true
+        descriptionEditor.limit = editing.descriptionLimit
+        descriptionEditor.text = currentItem.description ?? ""
+        descriptionEditor.isHidden = false
+        updateChrome()
+        view.layoutIfNeeded()
+        descriptionEditor.beginEditing()
+    }
+
+    /// キーボードを下げて書き終える。書き終えた値は`descriptionEditingDidEnd`で受け取る。
+    func endEditingDescription() {
+        guard isEditingDescription else { return }
+        if descriptionEditor.isEditing {
+            descriptionEditor.endEditing()
+        } else {
+            // キーボードを出せていなければ書き終えた知らせが来ないため、ここで書き終える。
+            descriptionEditingDidEnd(descriptionEditor.text)
+        }
+    }
+
+    /// 書き終えた値を投稿欄に渡し、投稿欄から届く前にビューアで先に見せる。
+    private func descriptionEditingDidEnd(_ text: String) {
+        guard isEditingDescription else { return }
+        SciaLog.logger(category: "media").info("end editing description length=\(text.count, privacy: .public)")
+        isEditingDescription = false
+        descriptionEditor.isHidden = true
+        let id = currentItem.id
+        items[currentIndex].description = text.isEmpty ? nil : text
+        draftEditing?.commitDescription(id, text)
+        updateChrome()
+        // キーボードのEscで閉じられるよう、最初の応答者に戻る。
+        if case .idle = motion {
+            becomeFirstResponder()
+        }
+    }
+
+    /// 投稿欄から開いたとき、上の中央にアップロードや代替テキストの送信の状態を出す。済んでいれば出さない。
+    private func updateDraftStatus() {
+        guard let status = currentItem.draftStatus, status != .ready else {
+            draftStatusButton.isHidden = true
+            return
+        }
+        let (title, isFailure): (String, Bool) = switch status {
+        case .uploading: ("アップロード中", false)
+        case .processing: ("サーバーで処理中", false)
+        case .sendingDescription: ("代替テキストを送信中", false)
+        case .failed: ("アップロードできませんでした", true)
+        case .descriptionFailed: ("代替テキストを送信できませんでした", true)
+        case .ready: ("", false)
+        }
+        draftStatusButton.configuration?.title = title
+        draftStatusButton.configuration?.showsActivityIndicator = !isFailure
+        draftStatusButton.configuration?.image = isFailure ? UIImage(systemName: "exclamationmark.circle.fill") : nil
+        draftStatusButton.configuration?.imageColorTransformer = isFailure ? UIConfigurationColorTransformer { _ in .systemRed } : nil
+        // 失敗したときだけ押して、理由と送り直す操作を出せる。
+        draftStatusButton.isUserInteractionEnabled = isFailure
+        draftStatusButton.accessibilityTraits = isFailure ? .button : .staticText
+        draftStatusButton.accessibilityHint = isFailure ? "理由と、再試行か削除を選べます。" : nil
+        draftStatusButton.isHidden = false
     }
 
     /// 表示中の添付ファイルを写真に保存し、済んだらメニューボタンの下で知らせる。キャッシュになければ落としてから保存する。
@@ -576,7 +834,21 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
         guard gestureRecognizer === dismissPan else { return true }
         if case .closing = motion { return false }
         let velocity = dismissPan.velocity(in: view)
-        return allowsInteractiveDismiss && velocity.y > 0 && velocity.y > abs(velocity.x)
+        let isDownward = velocity.y > 0 && velocity.y > abs(velocity.x)
+        if isEditingDescription {
+            // 書いている間に払ったら、閉じずにキーボードを下げて書き終える。もう一度払えば閉じる。
+            if isDownward {
+                endEditingDescription()
+            }
+            return false
+        }
+        return allowsInteractiveDismiss && isDownward
+    }
+
+    /// 代替テキストの入力欄の中のドラッグ（スクロールや、長押しからのカーソル移動）は、閉じる操作にせず入力欄に任せる。
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard gestureRecognizer === dismissPan, let touched = touch.view else { return true }
+        return !touched.isDescendant(of: descriptionEditor)
     }
 
     @objc fileprivate func handleDismissPan(_ recognizer: UIPanGestureRecognizer) {
@@ -659,7 +931,7 @@ extension MediaViewerController {
     }
 
     private var currentTile: MediaTileView? {
-        sourceTile(currentAttachment.id)
+        sourceTile(currentItem.id)
     }
 
     private func tileFrame(of tile: MediaTileView) -> CGRect {
@@ -929,6 +1201,9 @@ extension MediaViewerController {
     /// ビューアを残したまま動かすと、残った画面が触れたものを吸い、閉じた直後に別の画像を叩いても開けない。
     /// サムネイルが見つからなければ、その場で薄くする。
     private func beginClosing() {
+        if isEditingDescription {
+            endEditingDescription()
+        }
         switch motion {
         case .closing:
             return
@@ -957,6 +1232,7 @@ extension MediaViewerController {
         }
         guard let window = view.window else {
             dismiss(animated: false)
+            onCloseFinish?()
             return
         }
         let overlay = UIView(frame: window.bounds)
@@ -983,7 +1259,7 @@ extension MediaViewerController {
         hiddenTile = nil
         dismiss(animated: false)
 
-        let attachmentID = currentAttachment.id
+        let attachmentID = currentItem.id
         let sourceTile = sourceTile
         let flight = MediaClosingFlight(
             parts: MediaClosingFlight.Parts(
@@ -1011,6 +1287,7 @@ extension MediaViewerController {
             concealedTile: closingTile,
             findTile: { sourceTile(attachmentID) }
         )
+        flight.onFinish = onCloseFinish
         flight.start()
     }
 
@@ -1038,18 +1315,24 @@ extension MediaViewerController: UIPageViewControllerDataSource, UIPageViewContr
     }
 
     func pageViewController(_ pageViewController: UIPageViewController, viewControllerAfter viewController: UIViewController) -> UIViewController? {
-        guard let index = (viewController as? MediaPageController)?.index, index < attachments.count - 1 else { return nil }
+        guard let index = (viewController as? MediaPageController)?.index, index < items.count - 1 else { return nil }
         return page(at: index + 1)
     }
 
     /// 開いている途中に左右へ切り替え始めたら、開く動きを終えて切り替えを優先する。
+    /// 代替テキストを書いている途中なら、切り替え始めた時点の内容で、切り替える前の添付の代替テキストを確定する。
     func pageViewController(_ pageViewController: UIPageViewController, willTransitionTo pendingViewControllers: [UIViewController]) {
         completeMotionImmediately()
+        endEditingDescription()
     }
 
     func pageViewController(_ pageViewController: UIPageViewController, didFinishAnimating finished: Bool, previousViewControllers: [UIViewController], transitionCompleted completed: Bool) {
         guard completed, let page = pageViewController.viewControllers?.first as? MediaPageController else { return }
         currentIndex = page.index
+        // 切り替えの途中で種類が分かって作り直したページは、切り替えを終えてから差し替える。途中では古いページを見せている。
+        if pages[page.index] !== page {
+            self.pageController.setViewControllers([self.page(at: page.index)], direction: .forward, animated: false)
+        }
         updateChrome()
     }
 }
@@ -1083,7 +1366,7 @@ extension MediaViewerController {
 
 /// ビューアの1ページ。
 class MediaPageController: UIViewController {
-    let attachment: MediaAttachment
+    private(set) var item: MediaViewerItem
     var index = 0
     var onSingleTap: (() -> Void)?
     /// 描いている画像が変わった。開閉の写しを、元の画像が届いた時点で差し替えるために使う。
@@ -1091,10 +1374,21 @@ class MediaPageController: UIViewController {
     /// 長押しで出すメニューの項目。右上のメニューボタンと同じものを返す。
     var menuElements: (() -> [UIMenuElement])?
 
-    init(attachment: MediaAttachment) {
-        self.attachment = attachment
+    init(item: MediaViewerItem) {
+        self.item = item
         super.init(nibName: nil, bundle: nil)
     }
+
+    /// 開いている間に中身が変わった。手元のファイルを読み込み終えたときや、代替テキストを書き直したとき。
+    func update(_ item: MediaViewerItem) {
+        self.item = item
+        if isViewLoaded {
+            itemDidChange()
+        }
+    }
+
+    /// `item`が変わったあとに呼ぶ。
+    func itemDidChange() {}
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
@@ -1185,11 +1479,14 @@ final class ImagePageController: MediaPageController {
     /// 出している画像の出どころ。違和感レポートに残す。
     private var imageSource = "none"
 
+    /// 元の画像を読み始めた。手元のメディアでは、ファイルを読み込み終えるまで読み始められない。
+    private var hasStartedLoading = false
+
     /// - Parameter preview: 一覧で読み込んだサムネイル。元の画像が届くまでの下地にする。
-    init(attachment: MediaAttachment, store: MediaImageStore, preview: UIImage?) {
+    init(item: MediaViewerItem, store: MediaImageStore, preview: UIImage?) {
         self.store = store
         self.preview = preview
-        super.init(attachment: attachment)
+        super.init(item: item)
     }
 
     deinit {
@@ -1259,7 +1556,7 @@ final class ImagePageController: MediaPageController {
         zoomView.frame = view.bounds
         zoomView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         zoomView.onSingleTap = { [weak self] in self?.onSingleTap?() }
-        zoomView.imageAccessibilityLabel = attachment.description
+        zoomView.imageAccessibilityLabel = item.description
         view.addSubview(zoomView)
         liveText.preferredInteractionTypes = [.textSelection, .dataDetectors]
         zoomView.addImageInteraction(liveText)
@@ -1277,15 +1574,61 @@ final class ImagePageController: MediaPageController {
             ])
         }
         // 一覧のサムネイルが手元にあればそれを、なければblurhashのぼかしを、元の画像が届くまでの下地にする。
-        let placeholder = preview == nil ? attachment.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment.aspectRatio) } : nil
+        let attachment = item.serverAttachment
+        let placeholder = preview == nil ? attachment?.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment?.aspectRatio) } : nil
         imageSource = preview != nil ? "thumbnail" : placeholder != nil ? "blurhash" : "none"
         zoomView.image = preview ?? placeholder
         onImageChange?()
         load(hasPreview: preview != nil)
     }
 
+    override func itemDidChange() {
+        zoomView.imageAccessibilityLabel = item.description
+        if !hasStartedLoading {
+            load(hasPreview: preview != nil)
+        }
+    }
+
     /// - Parameter hasPreview: 中身の分かるサムネイルを出せている。blurhashのぼかしだけなら、読み込み中と失敗を知らせる。
     private func load(hasPreview: Bool) {
+        switch item.source {
+        case .server(let attachment):
+            hasStartedLoading = true
+            load(attachment, hasPreview: hasPreview)
+        case .local(let file, _):
+            guard let file else {
+                // 読み込み終えたら`itemDidChange`で読み始める。
+                if !hasPreview {
+                    spinner.startAnimating()
+                }
+                return
+            }
+            hasStartedLoading = true
+            load(file, hasPreview: hasPreview)
+        }
+    }
+
+    /// 投稿欄で選んだメディアを、手元のファイルから読む。キャッシュには写さない。
+    private func load(_ file: LocalMediaFile, hasPreview: Bool) {
+        if !hasPreview {
+            spinner.startAnimating()
+        }
+        loadTask = Task { [weak self] in
+            let image = await LocalMediaThumbnail.make(for: file, maxPixelSize: CGFloat(MediaImageStore.fullPixelSize))
+            guard let self, !Task.isCancelled else { return }
+            self.spinner.stopAnimating()
+            if let image {
+                self.imageSource = "local"
+                self.zoomView.image = image
+                self.onImageChange?()
+                self.analyze(image)
+            } else {
+                self.failureLabel.isHidden = hasPreview
+            }
+        }
+    }
+
+    private func load(_ attachment: MediaAttachment, hasPreview: Bool) {
         guard let url = attachment.url ?? attachment.remoteUrl ?? attachment.previewUrl else {
             failureLabel.isHidden = hasPreview
             return
@@ -1359,7 +1702,7 @@ final class PlayerPageController: MediaPageController {
         if !videoBounds.isEmpty {
             return playerController.view.convert(videoBounds, to: view)
         }
-        guard let aspectRatio = attachment.aspectRatio, aspectRatio > 0 else { return view.bounds }
+        guard let aspectRatio = item.aspectRatio, aspectRatio > 0 else { return view.bounds }
         return AVMakeRect(aspectRatio: CGSize(width: aspectRatio, height: 1), insideRect: view.bounds)
     }
 
@@ -1373,19 +1716,40 @@ final class PlayerPageController: MediaPageController {
         view.addSubview(playerController.view)
         playerController.didMove(toParent: self)
         addLongPressMenu(to: playerController.view)
-        guard let url = attachment.url ?? attachment.remoteUrl else { return }
-        let item = AVPlayerItem(url: url)
+        setUpPlayer()
+    }
+
+    /// 投稿の添付ファイルはURLから、投稿欄で選んだメディアは手元のファイルから再生する。手元のファイルを読み込み終える前なら、読み込み終えたときに作る。
+    override func itemDidChange() {
+        if playerController.player == nil {
+            setUpPlayer()
+            if viewIfLoaded?.window != nil {
+                playerController.player?.play()
+            }
+        }
+    }
+
+    private var mediaURL: URL? {
+        switch item.source {
+        case .server(let attachment): attachment.url ?? attachment.remoteUrl
+        case .local(let file, _): file?.url
+        }
+    }
+
+    private func setUpPlayer() {
+        guard let url = mediaURL else { return }
+        let playerItem = AVPlayerItem(url: url)
         // 再生しているコマを取り出せるようにする。AVPlayerLayerの絵は描き写せないため、映像の出口を別に付ける。
-        item.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]))
-        let player = AVPlayer(playerItem: item)
+        playerItem.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]))
+        let player = AVPlayer(playerItem: playerItem)
         playerController.player = player
-        if attachment.type == .gifv {
+        if item.kind == .gifv {
             // `AVPlayerLooper`は使わず、同じ項目を最後で先頭へ戻してくり返す。
             // `AVPlayerLooper`は周ごとに再生する項目を替えるが、実機（iPhone 16 Pro、iOS 27.0.1）の`AVPlayerViewController`では、
             // 再生は周を重ねて進むのに、画面の絵が1周目の終わりで止まった。シミュレーターでは起きない。
             player.isMuted = true
             player.actionAtItemEnd = .none
-            loopObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: item, queue: .main) { [weak player] _ in
+            loopObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: playerItem, queue: .main) { [weak player] _ in
                 MainActor.assumeIsolated {
                     player?.seek(to: .zero)
                 }
@@ -1395,7 +1759,7 @@ final class PlayerPageController: MediaPageController {
             playerController.view.addGestureRecognizer(tap)
         }
         Task { [weak self] in
-            guard let track = try? await item.asset.loadTracks(withMediaType: .video).first,
+            guard let track = try? await playerItem.asset.loadTracks(withMediaType: .video).first,
                   let transform = try? await track.load(.preferredTransform)
             else { return }
             self?.frameOrientation = Self.orientation(of: transform)
@@ -1454,7 +1818,7 @@ final class UnsupportedPageController: MediaPageController {
         var configuration = UIContentUnavailableConfiguration.empty()
         configuration.image = UIImage(systemName: "doc")
         configuration.text = "このファイルはアプリで表示できません"
-        if let url = attachment.remoteUrl ?? attachment.url {
+        if let url = item.serverAttachment.flatMap({ $0.remoteUrl ?? $0.url }) {
             configuration.button = .bordered()
             configuration.button.title = "ブラウザで開く"
             configuration.buttonProperties.primaryAction = UIAction { _ in UIApplication.shared.open(url) }
@@ -1468,15 +1832,24 @@ final class UnsupportedPageController: MediaPageController {
 final class CaptionView: UIView {
     private let label = UILabel()
     private let contentGuide = UILayoutGuide()
-    /// 全文を読む操作をした。
+    /// 全文を読む操作をした。書ける説明では、書き始める操作。
     var onOpen: (() -> Void)?
 
-    var text: String {
-        get { label.text ?? "" }
-        set {
-            label.text = newValue
-            accessibilityLabel = newValue
-        }
+    /// 投稿欄で選んだメディアの説明。空でも「代替テキストを追加」と出し、タップで書き始める。
+    var isEditable = false {
+        didSet { updateLabel() }
+    }
+
+    var text: String = "" {
+        didSet { updateLabel() }
+    }
+
+    private func updateLabel() {
+        let isPlaceholder = isEditable && text.isEmpty
+        label.text = isPlaceholder ? "代替テキストを追加" : text
+        label.textColor = isPlaceholder ? UIColor.white.withAlphaComponent(0.6) : .white
+        accessibilityLabel = isPlaceholder ? "代替テキストを追加" : text
+        accessibilityHint = isEditable ? "代替テキストを編集します。" : "全文を表示します。"
     }
 
     /// 文字の下端。安全領域に合わせるために使う。
@@ -1523,5 +1896,25 @@ final class CaptionView: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+}
+
+extension MediaViewerController.Timing {
+    /// チューニングパネルの値で作る。
+    /// - Parameter drawsUnderBars: falseなら、チューニングの値によらず、開閉で画像をバーの奥に描かない。
+    @MainActor
+    init(tuning: TuningStore, drawsUnderBars: Bool = true) {
+        self.init(
+            openDuration: tuning.value(of: TuningCatalog.mediaOpenDuration),
+            closeDuration: tuning.value(of: TuningCatalog.mediaCloseDuration),
+            bounce: tuning.value(of: TuningCatalog.mediaTransitionBounce),
+            drawsUnderBars: drawsUnderBars && tuning.value(of: TuningCatalog.mediaCloseDrawsUnderBars),
+            openHandoffEnd: tuning.value(of: TuningCatalog.mediaOpenHandoffEnd),
+            openBarOverlapFadeStart: tuning.value(of: TuningCatalog.mediaOpenBarOverlapFadeStart),
+            handoffStart: tuning.value(of: TuningCatalog.mediaCloseHandoffStart),
+            barOverlapFadeEnd: tuning.value(of: TuningCatalog.mediaCloseBarOverlapFadeEnd),
+            savedChipDuration: tuning.value(of: TuningCatalog.mediaSavedChipDuration),
+            savedChipAtBottom: tuning.value(of: TuningCatalog.mediaSavedChipAtBottom)
+        )
     }
 }

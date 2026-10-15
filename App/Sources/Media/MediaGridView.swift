@@ -294,6 +294,28 @@ final class MediaTileView: UIButton {
         accessibilityValue = hiddenCount > 0 ? "ほか\(hiddenCount)件" : nil
     }
 
+    /// 投稿欄で選んだ手元のメディアを描く。サーバーから読まず、投稿欄で作ったサムネイルをそのまま出す。
+    /// 手元のGIFはビューアでも最初のコマを画像として見せるため、動画だけをサムネイルと違うコマを描くものとして扱う。
+    /// - Parameter kind: 種類。ファイルを読み込む前で分からなければnilで、読み上げでは「メディア」にする。
+    func applyLocal(thumbnail: UIImage?, kind: MediaAttachment.Kind?, description: String) {
+        loadTask?.cancel()
+        loadTask = nil
+        attachment = nil
+        source = nil
+        showsMovingImage = kind == .video
+        loadedThumbnail = thumbnail
+        thumbnailView.image = thumbnail
+        symbolView.image = kind.flatMap(Self.symbolName(of:)).flatMap { UIImage(systemName: $0) }
+        symbolView.tintColor = .white
+        symbolView.layer.shadowOpacity = 0.4
+        gifBadge.isHidden = kind != .gifv
+        altBadge.isHidden = description.isEmpty
+        moreLabel.isHidden = true
+        accessibilityLabel = [kind.map(Self.kindName(of:)) ?? "メディア", description].filter { !$0.isEmpty }.joined(separator: "、")
+        accessibilityValue = nil
+        setNeedsLayout()
+    }
+
     /// 枠の大きさと条件から読む画像を選び、変わっていれば読み直す。
     private func updateSource() {
         let source = attachment.map { attachment in

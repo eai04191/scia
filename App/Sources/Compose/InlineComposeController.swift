@@ -43,7 +43,7 @@ final class InlineComposeController: NSObject {
     })
     private lazy var replyRow = makeReplyRow()
     /// 添付したメディアのサムネイルの列。書いていて、添付があるときだけ出す。
-    private let attachmentStrip = ComposeAttachmentStrip()
+    let attachmentStrip = ComposeAttachmentStrip()
     private let textView = ComposeTextView()
     private let placeholderLabel = UILabel()
     /// 書き終えて入力欄を隠すと、スタックビューが高さ0の制約を付ける。それと競合しないよう、必須より1つ下げる。
@@ -75,9 +75,20 @@ final class InlineComposeController: NSObject {
     private var mediaPicker: MediaPickerSheet?
     /// 最後に出したキーボードの、画面の下端からの高さ。メディアを選ぶシートをこの高さで出す。
     private var lastKeyboardHeight: CGFloat?
-    /// メディアを選ぶシートを出している間、キーボードが閉じてもバーをシートの上端に留める。
-    /// シートを閉じてキーボードが上がりきるまで付けておき、バーがタブバーの上に落ちないようにする。
-    private var holdAboveMediaPicker: NSLayoutConstraint?
+    /// メディアを選ぶシートやビューアを出している間、キーボードが閉じてもバーをシート（ビューアならキーボード）の上端の高さに留める。
+    /// シートやビューアを閉じてキーボードが上がりきるまで付けておき、バーがタブバーの上に落ちないようにする。
+    private var holdAboveKeyboard: NSLayoutConstraint?
+    /// 今のキーボードの、画面の下端からの高さ。隠れていれば0。
+    private var currentKeyboardHeight: CGFloat = 0
+    /// 添付の長押しのメニューを出したときのキーボードの高さ。メニューの間はiOSがソフトウェアキーボードを隠すため、
+    /// キーボードがこの高さまで戻るまでバーを今の位置に留める。留めていなければnil。
+    private var keyboardHeightBeforeContextMenu: CGFloat?
+    /// 添付を開いているビューア。閉じたら（閉じる動きの途中でも）nilにする。
+    private weak var mediaViewer: MediaViewerController?
+    /// ビューアを開いてから、閉じる動きを終えるまでtrue。この間は、キーボードを閉じても書いている状態を解かない。
+    private var isShowingMediaViewer = false
+    /// ビューアを開くたびに増やす。閉じる途中に別の添付を開いたら、前のビューアの閉じ終わりでキーボードを戻さないようにする。
+    private var mediaViewerGeneration = 0
 
     /// 触れるとわずかに膨らんで明るくなるガラス。押せるものだと指に伝える。
     private static func interactiveGlass() -> UIGlassEffect {
@@ -121,7 +132,7 @@ final class InlineComposeController: NSObject {
             bar.bottomAnchor.constraint(lessThanOrEqualTo: host.view.keyboardLayoutGuide.topAnchor, constant: -barSpacing),
             restingBottom,
         ])
-        holdAboveMediaPicker = bar.bottomAnchor.constraint(lessThanOrEqualTo: host.view.bottomAnchor)
+        holdAboveKeyboard = bar.bottomAnchor.constraint(lessThanOrEqualTo: host.view.bottomAnchor)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChangeFrame(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardDidShow(_:)), name: UIResponder.keyboardDidShowNotification, object: nil)
         bar.onFrameChange = { [weak self] in self?.reportObscuredHeight() }
@@ -146,11 +157,14 @@ final class InlineComposeController: NSObject {
         textView.resignFirstResponder()
     }
 
+    /// バーをキーボードに付けず、決めた位置に留めている。
+    var isBarHeld: Bool { holdAboveKeyboard?.isActive ?? false }
+
     /// 違和感レポートに残す状態。行が重なっていれば、どの行かも書く。
     func stateDump() -> String {
         """
         editing: \(isEditing) firstResponder: \(textView.isFirstResponder) replyTo: \(model.replyTo?.id ?? "nil")
-        mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") holdAbovePicker: \(holdAboveMediaPicker?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
+        mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
         bar.frame: \(bar.frame)
         rows: \(rowStates.map { "\($0.name) hidden=\($0.view.isHidden) frame=\($0.view.frame)" }.joined(separator: ", "))
@@ -226,7 +240,7 @@ final class InlineComposeController: NSObject {
         let fixedHeight = tuning.value(of: TuningCatalog.composePickerHeight)
         let matchesKeyboard = tuning.value(of: TuningCatalog.composePickerMatchesKeyboard)
         let height = matchesKeyboard ? (lastKeyboardHeight ?? fixedHeight) : fixedHeight
-        setHoldAboveMediaPicker(height: height)
+        setHoldAboveKeyboard(height: height)
         // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
         let picker = MediaPickerSheet(
             selectedIDs: model.attachedAssetIdentifiers,
@@ -254,20 +268,20 @@ final class InlineComposeController: NSObject {
         // シートを出している間に投稿に失敗していたら、ここで知らせる。
         presentErrorIfNeeded()
         guard !textView.isFirstResponder else { return }
-        releaseHoldAboveMediaPicker()
+        releaseHoldAboveKeyboard()
         setEditing(false)
     }
 
-    private func setHoldAboveMediaPicker(height: CGFloat) {
-        guard let holdAboveMediaPicker else { return }
-        holdAboveMediaPicker.constant = -(height + barSpacing)
-        holdAboveMediaPicker.isActive = true
+    private func setHoldAboveKeyboard(height: CGFloat) {
+        guard let holdAboveKeyboard else { return }
+        holdAboveKeyboard.constant = -(height + barSpacing)
+        holdAboveKeyboard.isActive = true
         animateBarPosition()
     }
 
-    private func releaseHoldAboveMediaPicker() {
-        guard let holdAboveMediaPicker, holdAboveMediaPicker.isActive else { return }
-        holdAboveMediaPicker.isActive = false
+    private func releaseHoldAboveKeyboard() {
+        guard let holdAboveKeyboard, holdAboveKeyboard.isActive else { return }
+        holdAboveKeyboard.isActive = false
         animateBarPosition()
     }
 
@@ -285,14 +299,42 @@ final class InlineComposeController: NSObject {
               let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
         let keyboardTop = host.view.convert(window.convert(frame, from: nil), from: window).minY
         let height = host.view.bounds.maxY - keyboardTop
+        currentKeyboardHeight = max(height, 0)
+        if let before = keyboardHeightBeforeContextMenu, currentKeyboardHeight >= before {
+            releaseBarHeldForContextMenu()
+        }
         guard height > 100 else { return }
         lastKeyboardHeight = height
+    }
+
+    /// 添付の長押しのメニューを出すと、iOSは入力欄のフォーカスを残したままソフトウェアキーボードを隠す。
+    /// バーがキーボードについてタブバーの上まで下がり、メニューを閉じるかドラッグに移ると上がり直すため、メニューの間は今の位置に留める。
+    private func holdBarForContextMenu() {
+        guard let host, textView.isFirstResponder, mediaPicker == nil, !isShowingMediaViewer else { return }
+        logger.info("attachment context menu: holding bar (keyboardHeight=\(self.currentKeyboardHeight))")
+        keyboardHeightBeforeContextMenu = currentKeyboardHeight
+        setHoldAboveKeyboard(height: host.view.bounds.maxY - bar.frame.maxY - barSpacing)
+    }
+
+    /// キーボードが隠れなかったとき（ハードウェアキーボードなど）や、もう戻っているときは、メニューを閉じ始めた時点で外す。
+    /// 隠れたままなら、キーボードが戻ったときに外す。
+    private func contextMenuWillEnd() {
+        guard let before = keyboardHeightBeforeContextMenu, currentKeyboardHeight >= before else { return }
+        releaseBarHeldForContextMenu()
+    }
+
+    private func releaseBarHeldForContextMenu() {
+        guard keyboardHeightBeforeContextMenu != nil else { return }
+        logger.info("attachment context menu: releasing bar")
+        keyboardHeightBeforeContextMenu = nil
+        releaseHoldAboveKeyboard()
     }
 
     /// シートを閉じてキーボードが上がりきったら、バーをキーボードに付ける。
     @objc private func keyboardDidShow(_ notification: Notification) {
         guard textView.isFirstResponder else { return }
-        releaseHoldAboveMediaPicker()
+        keyboardHeightBeforeContextMenu = nil
+        releaseHoldAboveKeyboard()
     }
 
     /// バーの上端から画面の下端までを覆っている。書いていればキーボードも含む。バーが動くたびに測り直す。
@@ -384,7 +426,14 @@ final class InlineComposeController: NSObject {
         }
         setRowShown(replyRow, isEditing && replyAcct != nil)
 
-        attachmentStrip.update(attachments: model.attachments, localMedia: model.localMedia)
+        attachmentStrip.update(model.attachments.map { attachment in
+            ComposeAttachmentStrip.Item(
+                attachment: attachment,
+                local: model.localMedia[attachment.id],
+                status: model.attachmentStatus(of: attachment.id) ?? .uploading
+            )
+        })
+        mediaViewer?.update(items: viewerItems())
         setRowShown(attachmentStrip, isEditing && !model.attachments.isEmpty)
         mediaButton.configuration?.title = model.attachments.isEmpty ? nil : "\(model.attachments.count)"
         mediaButton.isEnabled = model.canAttachMedia || mediaPicker != nil
@@ -473,27 +522,130 @@ final class InlineComposeController: NSObject {
         host.present(alert, animated: true)
     }
 
-    /// 失敗した添付を押したら、理由と、送り直すか外すかを聞く。
-    /// 他の添付を押したときにビューアで開くのは、次の段階で作る。
-    private func attachmentSelected(_ id: DraftAttachment.ID) {
-        guard let host, let attachment = model.attachments.first(where: { $0.id == id }), case .failed = attachment.state else { return }
-        let message = model.localMedia[id]?.failure.map { ErrorPresentation($0).text }
-        let alert = UIAlertController(title: "アップロードできませんでした", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "再試行", style: .default) { [weak self] _ in self?.model.retryAttachment(id) })
-        alert.addAction(UIAlertAction(title: "削除", style: .destructive) { [weak self] _ in
-            guard let self else { return }
-            if let assetIdentifier = model.localMedia[id]?.assetIdentifier {
-                mediaPicker?.deselect([assetIdentifier])
+    // MARK: - 添付のビューア
+
+    /// 添付を押したら、タイムラインと同じビューアで開く。失敗したものも開き、上の中央の失敗の表示から理由と送り直す操作を出す。
+    ///
+    /// ビューアは表示されると最初の応答者になるため、何もしないとキーボードが下がって投稿欄がカプセルに戻り、サムネイルの列が隠れて閉じる画像の戻り先がなくなる。
+    /// 開く前に自分でキーボードを閉じ、バーをキーボードの高さに留め、開いている間は書いている状態を解かない。
+    /// 入力欄を最初の応答者のまま開くと、閉じた時点でUIKitが入力欄にキーボードを戻し、閉じ始めの画像が止まって見えたため、キーボードは閉じる動きが終わってから戻す。
+    private func openAttachment(_ id: DraftAttachment.ID) {
+        guard let host, isEditing, let index = model.attachments.firstIndex(where: { $0.id == id }) else { return }
+        guard mediaViewer == nil else {
+            logger.info("open attachment viewer ignored: viewer is still shown")
+            return
+        }
+        logger.info("open attachment viewer index=\(index, privacy: .public) count=\(self.model.attachments.count, privacy: .public)")
+        mediaViewerGeneration += 1
+        let generation = mediaViewerGeneration
+        isShowingMediaViewer = true
+        if mediaPicker == nil, textView.isFirstResponder {
+            if let lastKeyboardHeight {
+                setHoldAboveKeyboard(height: lastKeyboardHeight)
             }
-            model.removeAttachment(id, pickerIsOpen: mediaPicker != nil)
+            textView.resignFirstResponder()
+        }
+        let viewer = MediaViewerController(
+            items: viewerItems(),
+            startIndex: index,
+            store: AppDependencies.mediaImages,
+            dragToDismiss: TuningCatalog.dragToDismiss(in: tuning),
+            // バーの奥と手前の描き分けは、タイムラインの一覧のバーのためのもので、投稿欄のサムネイルには使わない。
+            timing: MediaViewerController.Timing(tuning: tuning, drawsUnderBars: false),
+            editing: MediaViewerController.Editing(
+                descriptionLimit: model.mediaDescriptionLimit,
+                menuElements: { [weak self] itemID in self?.viewerMenuElements(for: itemID) ?? [] },
+                commitDescription: { [weak self] itemID, text in
+                    guard let id = UUID(uuidString: itemID) else { return }
+                    self?.model.setDescription(text, of: id)
+                },
+                showFailure: { [weak self] itemID, presenter in
+                    guard let id = UUID(uuidString: itemID) else { return }
+                    self?.presentAttachmentFailure(id, from: presenter)
+                }
+            ),
+            sourceTile: { [weak self] itemID in
+                UUID(uuidString: itemID).flatMap { self?.attachmentStrip.tile(for: $0) }
+            }
+        )
+        // 閉じたビューアがすぐには解放されず、weakの参照がnilに戻るのを待つと、2回目からサムネイルを押しても開けなかった（シミュレーターで確認）。
+        // 解放されない原因は調べていない。開いているかの判断は解放に頼らず、閉じた時点で参照を外して決める。
+        viewer.onDismiss = { [weak self] in self?.mediaViewer = nil }
+        viewer.onCloseFinish = { [weak self] in self?.mediaViewerDidFinishClosing(generation: generation) }
+        mediaViewer = viewer
+        // Macで動かしていても別ウィンドウにはせず、その場で開く。別のシーンと下書きをつながずに済ませるため。
+        // ピッカーのシートを出していれば、その上に開き、閉じるとシートと投稿欄はそのまま残る。
+        topPresenter(from: host).present(viewer, animated: false)
+    }
+
+    /// 閉じる動きが終わったら、入力欄にキーボードを戻す。ピッカーのシートを出していれば、シートの上に戻ったのでキーボードは出さない。
+    private func mediaViewerDidFinishClosing(generation: Int) {
+        guard generation == mediaViewerGeneration else { return }
+        logger.info("attachment viewer did finish closing (picker=\(self.mediaPicker != nil))")
+        isShowingMediaViewer = false
+        guard mediaPicker == nil, isEditing else { return }
+        textView.becomeFirstResponder()
+    }
+
+    /// ビューアのメニューで、「代替テキストを編集」に続けて出す項目。失敗したものには「再試行」も出す。
+    private func viewerMenuElements(for itemID: String) -> [UIMenuElement] {
+        guard let id = UUID(uuidString: itemID), let status = model.attachmentStatus(of: id) else { return [] }
+        var elements: [UIMenuElement] = []
+        if status == .failed || status == .descriptionFailed {
+            elements.append(UIAction(title: "再試行", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
+                self?.model.retryAttachment(id)
+            })
+        }
+        elements.append(UIAction(title: "削除", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
+            self?.removeAttachmentFromViewer(id)
         })
+        return elements
+    }
+
+    /// 失敗の理由と、送り直すか外すかを、`presenter`の上に出す。
+    private func presentAttachmentFailure(_ id: DraftAttachment.ID, from presenter: UIViewController) {
+        guard let status = model.attachmentStatus(of: id), status == .failed || status == .descriptionFailed else { return }
+        let local = model.localMedia[id]
+        let failure = status == .failed ? local?.failure : local?.descriptionFailure
+        let title = status == .failed ? "アップロードできませんでした" : "代替テキストを送信できませんでした"
+        let alert = UIAlertController(title: title, message: failure.map { ErrorPresentation($0).text }, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "再試行", style: .default) { [weak self] _ in self?.model.retryAttachment(id) })
+        alert.addAction(UIAlertAction(title: "削除", style: .destructive) { [weak self] _ in self?.removeAttachmentFromViewer(id) })
         alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        // ピッカーのシートを出していれば、その上に出す。
-        var presenter: UIViewController = host
+        presenter.present(alert, animated: true)
+    }
+
+    /// ビューアで開いている添付を外す。先にビューアを閉じ始め、戻り先のサムネイルが消えたら画像はその場で薄くなる。
+    private func removeAttachmentFromViewer(_ id: DraftAttachment.ID) {
+        mediaViewer?.close()
+        if let assetIdentifier = model.localMedia[id]?.assetIdentifier {
+            mediaPicker?.deselect([assetIdentifier])
+        }
+        model.removeAttachment(id, pickerIsOpen: mediaPicker != nil)
+    }
+
+    /// ビューアで見せる中身。種類はファイルを読み込むまで分からないため、それまでは画像として扱う。
+    private func viewerItems() -> [MediaViewerItem] {
+        model.attachments.map { attachment in
+            let local = model.localMedia[attachment.id]
+            return MediaViewerItem(
+                id: attachment.id.uuidString,
+                kind: local?.file?.kind ?? .image,
+                description: attachment.description,
+                file: local?.file,
+                thumbnail: local?.thumbnail,
+                status: model.attachmentStatus(of: attachment.id) ?? .uploading
+            )
+        }
+    }
+
+    /// いちばん手前に出している画面。閉じている途中のものは除く。
+    private func topPresenter(from host: UIViewController) -> UIViewController {
+        var presenter = host
         while let presented = presenter.presentedViewController, !presented.isBeingDismissed {
             presenter = presented
         }
-        presenter.present(alert, animated: true)
+        return presenter
     }
 
     /// 入力が長くなったら、決めた高さまでは伸ばし、超えたら中でスクロールする。
@@ -619,7 +771,10 @@ final class InlineComposeController: NSObject {
         }
         tools.alignment = .center
         tools.spacing = 4
-        attachmentStrip.onSelect = { [weak self] id in self?.attachmentSelected(id) }
+        attachmentStrip.onSelect = { [weak self] id in self?.openAttachment(id) }
+        attachmentStrip.onMove = { [weak self] id, index in self?.model.moveAttachment(id, to: index) }
+        attachmentStrip.onContextMenuWillShow = { [weak self] in self?.holdBarForContextMenu() }
+        attachmentStrip.onContextMenuWillEnd = { [weak self] in self?.contextMenuWillEnd() }
         for view in [restRow, replyRow, attachmentStrip, textView, tools] {
             stack.addArrangedSubview(view)
         }
@@ -667,9 +822,10 @@ extension InlineComposeController: UITextViewDelegate {
 
     func textViewDidEndEditing(_ textView: UITextView) {
         // メディアを選ぶシートを出すためにキーボードを閉じたときは、書いている状態のままにする。
+        // 添付のビューアを開くためにキーボードを閉じたときも同じ。閉じ終わったら入力欄にキーボードを戻す。
         // シートを閉じたあとに書き終えたときは、キーボードが上がりきった知らせが来ずにバーを留めたままでも、カプセルに戻す。
-        guard mediaPicker == nil else { return }
-        releaseHoldAboveMediaPicker()
+        guard mediaPicker == nil, !isShowingMediaViewer else { return }
+        releaseHoldAboveKeyboard()
         setEditing(false)
     }
 }

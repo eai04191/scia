@@ -198,6 +198,210 @@ struct MediaViewerControllerTests {
         alert.dismiss(animated: false)
     }
 
+    /// 投稿欄から開いたときの操作を受け取る。
+    @MainActor
+    private final class DraftActions {
+        var commits: [(id: String, text: String)] = []
+        var failures: [String] = []
+
+        var editing: MediaViewerController.Editing {
+            MediaViewerController.Editing(
+                descriptionLimit: 20,
+                menuElements: { _ in [UIAction(title: "削除", attributes: .destructive) { _ in }] },
+                commitDescription: { [self] id, text in commits.append((id, text)) },
+                showFailure: { [self] id, _ in failures.append(id) }
+            )
+        }
+    }
+
+    private func draftItem(_ id: String, description: String = "", status: ComposeAttachmentStatus = .ready) -> MediaViewerItem {
+        MediaViewerItem(id: id, kind: .image, description: description, file: nil, thumbnail: nil, status: status)
+    }
+
+    private func presentDraftViewer(on harness: TimelineHarness, items: [MediaViewerItem], actions: DraftActions) -> MediaViewerController {
+        let viewer = MediaViewerController(items: items, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, editing: actions.editing, sourceTile: { _ in nil })
+        harness.viewController.present(viewer, animated: false)
+        viewer.view.layoutIfNeeded()
+        return viewer
+    }
+
+    /// 投稿欄から開いたとき、代替テキストが空でも帯に「代替テキストを追加」と出し、押すとキーボードの上の入力欄で書き始める。
+    /// 書き終えた値は投稿欄に渡し、届く前から帯に出す。
+    @Test func draftCaptionStartsEditingDescription() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let actions = DraftActions()
+        let viewer = presentDraftViewer(on: harness, items: [draftItem("a")], actions: actions)
+        defer { viewer.dismiss(animated: false) }
+
+        #expect(!viewer.captionView.isHidden)
+        #expect(viewer.captionView.accessibilityLabel == "代替テキストを追加")
+        #expect(viewer.captionView.accessibilityActivate())
+        #expect(viewer.isEditingDescription)
+        #expect(!viewer.descriptionEditor.isHidden)
+        #expect(viewer.captionView.isHidden)
+
+        viewer.descriptionEditor.text = "黒猫"
+        viewer.endEditingDescription()
+
+        #expect(!viewer.isEditingDescription)
+        #expect(actions.commits.map(\.text) == ["黒猫"])
+        #expect(actions.commits.map(\.id) == ["a"])
+        #expect(viewer.captionView.accessibilityLabel == "黒猫")
+    }
+
+    /// 投稿欄から開いたときのメニューは、代替テキストの編集に、投稿欄から渡した項目を続ける。共有や保存は出さない。
+    @Test func draftMenuOffersEditingAndGivenItems() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let viewer = presentDraftViewer(on: harness, items: [draftItem("a")], actions: DraftActions())
+        defer { viewer.dismiss(animated: false) }
+
+        #expect(viewer.menuElements().compactMap { ($0 as? UIAction)?.title } == ["代替テキストを編集", "削除"])
+    }
+
+    /// 書いている途中に左右へ切り替え始めたら、その時点の内容で、切り替える前の添付の代替テキストを確定する。
+    @Test func switchingPageWhileEditingCommitsDescription() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let actions = DraftActions()
+        let viewer = presentDraftViewer(on: harness, items: [draftItem("a"), draftItem("b")], actions: actions)
+        defer { viewer.dismiss(animated: false) }
+        viewer.beginEditingDescription()
+        viewer.descriptionEditor.text = "猫"
+
+        viewer.pageViewController(UIPageViewController(), willTransitionTo: [])
+
+        #expect(!viewer.isEditingDescription)
+        #expect(actions.commits.map(\.id) == ["a"])
+        #expect(actions.commits.map(\.text) == ["猫"])
+    }
+
+    /// 入力欄の右端のボタンを押したら、その時点の内容で書き終える。
+    @Test func doneButtonCommitsDescription() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let actions = DraftActions()
+        let viewer = presentDraftViewer(on: harness, items: [draftItem("a")], actions: actions)
+        defer { viewer.dismiss(animated: false) }
+        viewer.beginEditingDescription()
+        viewer.descriptionEditor.text = "猫"
+
+        viewer.descriptionEditor.doneButton.sendActions(for: .primaryActionTriggered)
+
+        #expect(!viewer.isEditingDescription)
+        #expect(actions.commits.map(\.text) == ["猫"])
+    }
+
+    /// 書いている間に閉じる操作をしたら、書き終えてから閉じる。
+    @Test func closingWhileEditingCommitsDescription() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let actions = DraftActions()
+        let viewer = presentDraftViewer(on: harness, items: [draftItem("a", description: "猫")], actions: actions)
+        viewer.beginEditingDescription()
+        viewer.descriptionEditor.text = "三毛猫"
+
+        #expect(viewer.accessibilityPerformEscape())
+
+        #expect(actions.commits.map(\.text) == ["三毛猫"])
+        try await waitUntil { harness.viewController.presentedViewController == nil }
+    }
+
+    /// アップロードの状態は上の中央に出し、開いている間に変わったら描き直す。失敗したときだけ押せて、理由を出す操作を投稿欄に頼む。
+    @Test func draftStatusFollowsUpdates() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let actions = DraftActions()
+        let viewer = presentDraftViewer(on: harness, items: [draftItem("a", status: .uploading)], actions: actions)
+        defer { viewer.dismiss(animated: false) }
+
+        #expect(!viewer.draftStatusButton.isHidden)
+        #expect(viewer.draftStatusButton.configuration?.title == "アップロード中")
+        #expect(!viewer.draftStatusButton.isUserInteractionEnabled)
+
+        viewer.update(items: [draftItem("a", status: .failed)])
+        #expect(viewer.draftStatusButton.configuration?.title == "アップロードできませんでした")
+        viewer.draftStatusButton.sendActions(for: .primaryActionTriggered)
+        #expect(actions.failures == ["a"])
+
+        viewer.update(items: [draftItem("a", description: "猫", status: .ready)])
+        #expect(viewer.draftStatusButton.isHidden)
+        #expect(viewer.captionView.accessibilityLabel == "猫")
+    }
+
+    /// 書いている間は、画像を入力欄より上の範囲に収まるまで縮め、その範囲の中央に置く。上はボタンと重ねてよいので画面の上端から数える。
+    @Test(arguments: [
+        CGRect(x: 0, y: 200, width: 400, height: 225),  // 横長
+        CGRect(x: 0, y: 112, width: 400, height: 400),  // 正方形
+        CGRect(x: 50, y: 0, width: 300, height: 800),  // 縦長
+        CGRect(x: 100, y: 300, width: 200, height: 100),  // 小さい
+    ])
+    func editingTransformFitsContentAboveEditor(content: CGRect) {
+        let bounds = CGRect(x: 0, y: 0, width: 400, height: 800)
+        let available = CGRect(x: 0, y: 0, width: 400, height: 450)
+        let transform = MediaViewerController.fittingTransform(content: content, into: available, in: bounds)
+
+        // 変形は`bounds`の中央を軸にかかる。
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let moved = content.offsetBy(dx: -center.x, dy: -center.y).applying(transform).offsetBy(dx: center.x, dy: center.y)
+        #expect(moved.minX >= available.minX - 0.5 && moved.maxX <= available.maxX + 0.5)
+        #expect(moved.minY >= available.minY - 0.5 && moved.maxY <= available.maxY + 0.5)
+        #expect(abs(moved.midX - available.midX) < 0.5 && abs(moved.midY - available.midY) < 0.5)
+        #expect(moved.width <= content.width + 0.5)
+        // 縮めるなら、どちらかの辺が範囲いっぱいになるまでにとどめる。
+        if moved.width < content.width - 0.5 {
+            #expect(abs(moved.width - available.width) < 0.5 || abs(moved.height - available.height) < 0.5)
+        }
+    }
+
+    /// 拡大して画面からはみ出していれば、見えている部分（画面いっぱい）を収める。はみ出した画像全体に合わせて縮めすぎない。
+    @Test func editingTransformFitsVisiblePartOfZoomedContent() {
+        let bounds = CGRect(x: 0, y: 0, width: 400, height: 800)
+        let available = CGRect(x: 0, y: 0, width: 400, height: 400)
+        let zoomed = CGRect(x: -800, y: -1600, width: 2000, height: 4000)
+
+        let transform = MediaViewerController.fittingTransform(content: zoomed, into: available, in: bounds)
+
+        #expect(transform == MediaViewerController.fittingTransform(content: bounds, into: available, in: bounds))
+        #expect(abs(transform.a - 0.5) < 0.001)
+    }
+
+    /// 読み込む前は種類が分からず画像として開くため、読み込んで動画と分かったら、表示中のページを動画のページに作り直す。
+    @Test func pageIsRebuiltWhenLoadedMediaTurnsOutToBeVideo() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let viewer = presentDraftViewer(on: harness, items: [draftItem("a", status: .uploading)], actions: DraftActions())
+        defer { viewer.dismiss(animated: false) }
+        #expect(viewer.currentImagePage != nil)
+
+        let file = LocalMediaFile(url: URL(filePath: "/tmp/a.mov"), mimeType: "video/quicktime", kind: .video)
+        viewer.update(items: [MediaViewerItem(id: "a", kind: .video, description: "", file: file, thumbnail: nil, status: .uploading)])
+
+        #expect(viewer.currentImagePage == nil)
+        #expect(viewer.currentItem.kind == .video)
+    }
+
+    /// 横に払っている途中で切り替え先が動画と分かったら、切り替えを終えた時点で、残っていた画像のページを動画のページに差し替える。
+    @Test func pendingPageIsRebuiltAfterTransitionWhenLoadedMediaTurnsOutToBeVideo() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let viewer = presentDraftViewer(on: harness, items: [draftItem("a"), draftItem("b", status: .uploading)], actions: DraftActions())
+        defer { viewer.dismiss(animated: false) }
+        let swiping = UIPageViewController()
+        let current = try #require(viewer.displayedPage)
+        let pending = try #require(viewer.pageViewController(swiping, viewControllerAfter: current))
+        #expect(pending is ImagePageController)
+
+        let file = LocalMediaFile(url: URL(filePath: "/tmp/b.mov"), mimeType: "video/quicktime", kind: .video)
+        viewer.update(items: [draftItem("a"), MediaViewerItem(id: "b", kind: .video, description: "", file: file, thumbnail: nil, status: .uploading)])
+        swiping.setViewControllers([pending], direction: .forward, animated: false)
+        viewer.pageViewController(swiping, didFinishAnimating: true, previousViewControllers: [current], transitionCompleted: true)
+
+        #expect(viewer.currentIndex == 1)
+        #expect(viewer.displayedPage is PlayerPageController)
+    }
+
     /// 画面下の説明は1行で見せ、全文はそこからシートで読む。VoiceOverでは払えないため、実行しても開く。
     @Test func captionOpensAltTextSheet() async throws {
         let harness = try TimelineHarness()
@@ -250,7 +454,7 @@ struct MediaViewerControllerTests {
 
     /// 画像の文字のない場所を長押しすると、メニューボタンと同じメニューを出す。出すものがなければ出さない。
     @Test func longPressOnImageWithoutTextOffersMenu() throws {
-        let page = ImagePageController(attachment: image("1", url: nil), store: .offline, preview: nil)
+        let page = ImagePageController(item: MediaViewerItem(image("1", url: nil)), store: .offline, preview: nil)
         page.loadViewIfNeeded()
         page.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
         page.view.layoutIfNeeded()
@@ -467,7 +671,7 @@ struct MediaViewerControllerTests {
 
     /// 動画やGIFのページでも、長押しでメニューボタンと同じメニューを出す。
     @Test func longPressOnPlayerOffersMenu() throws {
-        let page = PlayerPageController(attachment: MediaAttachment(id: "1", type: .gifv, url: nil, previewUrl: nil))
+        let page = PlayerPageController(item: MediaViewerItem(MediaAttachment(id: "1", type: .gifv, url: nil, previewUrl: nil)))
         page.loadViewIfNeeded()
         page.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
         page.view.layoutIfNeeded()

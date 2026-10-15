@@ -132,6 +132,50 @@ struct InlineComposeControllerTests {
     }
 
     /// 札の文字が省略も切り取りもされずに収まっている。文字ラベルが本来の幅を確保し、札がその文字を囲んでいる。
+    /// 添付の長押しでメニューを出すと、iOSがソフトウェアキーボードを隠す。その間もバーを今の位置に留め、キーボードが戻ったら外す。
+    @Test func contextMenuHoldsBarUntilKeyboardReturns() async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(500))
+        postKeyboardFrame(height: 336)
+
+        showContextMenu()
+        #expect(composer.isBarHeld, "メニューを出しても、バーを留めていません\n\(composer.stateDump())")
+        postKeyboardFrame(height: 0)
+        endContextMenu()
+        #expect(composer.isBarHeld, "キーボードが戻る前に、バーを外しました\n\(composer.stateDump())")
+        postKeyboardFrame(height: 336)
+        #expect(!composer.isBarHeld, "キーボードが戻っても、バーを留めたままです\n\(composer.stateDump())")
+    }
+
+    /// ハードウェアキーボードのようにキーボードが隠れなければ、メニューを閉じた時点でバーを外す。
+    @Test func contextMenuReleasesBarWhenKeyboardStayed() async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(500))
+        postKeyboardFrame(height: 336)
+
+        showContextMenu()
+        endContextMenu()
+        #expect(!composer.isBarHeld, "メニューを閉じても、バーを留めたままです\n\(composer.stateDump())")
+    }
+
+    private func showContextMenu() {
+        let collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewFlowLayout())
+        composer.attachmentStrip.collectionView(collectionView, willDisplayContextMenu: UIContextMenuConfiguration(), animator: nil)
+    }
+
+    private func endContextMenu() {
+        let collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewFlowLayout())
+        composer.attachmentStrip.collectionView(collectionView, willEndContextMenuInteraction: UIContextMenuConfiguration(), animator: nil)
+    }
+
+    /// 画面の下端から`height`だけキーボードが上がった、という知らせを送る。0なら隠れた。
+    private func postKeyboardFrame(height: CGFloat) {
+        let frame = CGRect(x: 0, y: window.bounds.maxY - height, width: window.bounds.width, height: height)
+        NotificationCenter.default.post(name: UIResponder.keyboardWillChangeFrameNotification, object: nil, userInfo: [UIResponder.keyboardFrameEndUserInfoKey: frame])
+    }
+
     private func expectChipFitsTitle(_ button: UIButton, sourceLocation: SourceLocation = #_sourceLocation) {
         guard let label = button.titleLabel else {
             Issue.record("札に文字ラベルがありません", sourceLocation: sourceLocation)

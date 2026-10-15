@@ -48,6 +48,8 @@ final class MediaClosingFlight: NSObject {
     private var lastTarget: (frame: CGRect, radius: CGFloat)?
     private var startTime: CFTimeInterval = 0
     private var displayLink: CADisplayLink?
+    /// 戻り終えたときに呼ぶ。
+    var onFinish: (() -> Void)?
 
     /// - Parameters:
     ///   - concealedTile: 戻り先として隠しているサムネイル。戻り終えたら見せる。
@@ -154,6 +156,7 @@ final class MediaClosingFlight: NSObject {
         parts.layering.tearDown()
         concealedTile?.isConcealedForViewer = false
         concealedTile = nil
+        onFinish?()
     }
 
     private static func interpolate(_ from: CGRect, _ to: CGRect, _ progress: CGFloat) -> CGRect {

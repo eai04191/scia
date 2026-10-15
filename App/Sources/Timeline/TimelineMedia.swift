@@ -59,18 +59,7 @@ extension TimelineViewController {
     /// 開いている間にその行が再利用されたら、表示中の別の行から探す。
     func openMedia(_ attachments: [MediaAttachment], at index: Int, from grid: MediaGridView) {
         SciaLog.logger(category: "media").info("open viewer count=\(attachments.count, privacy: .public) index=\(index, privacy: .public)")
-        let timing = MediaViewerController.Timing(
-            openDuration: tuning.value(of: TuningCatalog.mediaOpenDuration),
-            closeDuration: tuning.value(of: TuningCatalog.mediaCloseDuration),
-            bounce: tuning.value(of: TuningCatalog.mediaTransitionBounce),
-            drawsUnderBars: tuning.value(of: TuningCatalog.mediaCloseDrawsUnderBars),
-            openHandoffEnd: tuning.value(of: TuningCatalog.mediaOpenHandoffEnd),
-            openBarOverlapFadeStart: tuning.value(of: TuningCatalog.mediaOpenBarOverlapFadeStart),
-            handoffStart: tuning.value(of: TuningCatalog.mediaCloseHandoffStart),
-            barOverlapFadeEnd: tuning.value(of: TuningCatalog.mediaCloseBarOverlapFadeEnd),
-            savedChipDuration: tuning.value(of: TuningCatalog.mediaSavedChipDuration),
-            savedChipAtBottom: tuning.value(of: TuningCatalog.mediaSavedChipAtBottom)
-        )
+        let timing = MediaViewerController.Timing(tuning: tuning)
         let dragToDismiss = TuningCatalog.dragToDismiss(in: tuning)
         if MediaWindow.isAvailable {
             let request = MediaWindow.Request(
