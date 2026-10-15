@@ -8,24 +8,28 @@ public struct MastodonClient: Sendable {
     private let rateLimit: RateLimitGate
     private let features: FeatureAvailability
     private let retry: RetryPolicy
+    private let requestLog: RequestLog
     private static let logger = SciaLog.logger(category: "network")
 
     /// - Parameters:
     ///   - rateLimit: 429や503で止められたときに、自動の通信を控える門。セッションの中で共有する。
     ///   - features: 使えないと分かった機能を、セッションの間だけ止める。セッションの中で共有する。
     ///   - retry: 一時的な失敗で送り直す回数と間隔。
+    ///   - requestLog: 失敗の記録。セッションの中で共有する。
     public init(
         credential: Credential,
         transport: any HTTPTransport,
         rateLimit: RateLimitGate = RateLimitGate(),
         features: FeatureAvailability = FeatureAvailability(),
-        retry: RetryPolicy = .standard
+        retry: RetryPolicy = .standard,
+        requestLog: RequestLog = RequestLog(includesBody: false)
     ) {
         self.credential = credential
         self.transport = transport
         self.rateLimit = rateLimit
         self.features = features
         self.retry = retry
+        self.requestLog = requestLog
     }
 
     /// https://docs.joinmastodon.org/methods/timelines/#home
@@ -82,6 +86,21 @@ public struct MastodonClient: Sendable {
         return try await get(Instance.self, path: "api/v1/instance", query: []).0.urls.streamingApi
     }
 
+    /// サーバーの版。Mastodon以外のサーバーは、互換の版のあとに自分の名前と版を書くことが多い。記録に残し、原因を絞るのに使う。
+    /// https://docs.joinmastodon.org/entities/Instance/#version
+    public func serverVersion() async throws -> String {
+        struct Instance: Decodable {
+            let version: String
+        }
+        do {
+            return try await get(Instance.self, path: "api/v2/instance", query: [], feature: .instanceV2).0.version
+        } catch let error as MastodonAPIError where error.isUnauthorized {
+            throw error
+        } catch {
+            return try await get(Instance.self, path: "api/v1/instance", query: []).0.version
+        }
+    }
+
     /// https://docs.joinmastodon.org/methods/instance/#v2
     public func instanceConfiguration() async throws -> InstanceConfiguration {
         struct Instance: Decodable {
@@ -128,8 +147,9 @@ public struct MastodonClient: Sendable {
             }
         }
         // キーにコロンを含むため、スネークケースからの変換を通さずに読む。
-        let (data, _) = try await send(URLRequest(url: credential.instance.appending(path: "api/v1/preferences")), feature: .preferences)
-        return try JSONDecoder().decode(Preferences.self, from: data).visibility ?? .public
+        let request = URLRequest(url: credential.instance.appending(path: "api/v1/preferences"))
+        let (data, response) = try await send(request, feature: .preferences)
+        return try decode(Preferences.self, from: data, of: response, for: request, using: JSONDecoder()).visibility ?? .public
     }
 
     // MARK: - 投稿への操作
@@ -219,7 +239,7 @@ public struct MastodonClient: Sendable {
         }
         // 変換中は206が返る。本文が空のこともあるので読まない。
         guard response.statusCode != 206 else { return .processing }
-        let attachment = try MastodonDecoder.make().decode(MediaAttachment.self, from: data)
+        let attachment = try decode(MediaAttachment.self, from: data, of: response, for: request)
         return attachment.url == nil ? .processing : .processed(attachment)
     }
 
@@ -344,7 +364,26 @@ public struct MastodonClient: Sendable {
 
     private func send<T: Decodable>(_ request: URLRequest, decoding type: T.Type, feature: OptionalFeature? = nil) async throws -> (T, HTTPURLResponse) {
         let (data, response) = try await send(request, feature: feature)
-        return (try MastodonDecoder.make().decode(type, from: data), response)
+        return (try decode(type, from: data, of: response, for: request), response)
+    }
+
+    /// 読めなければ、どの項目が読めなかったかを記録して投げる。
+    private func decode<T: Decodable>(
+        _ type: T.Type,
+        from data: Data,
+        of response: HTTPURLResponse,
+        for request: URLRequest,
+        using decoder: JSONDecoder = MastodonDecoder.make()
+    ) throws -> T {
+        do {
+            let context = DecodingLog.Context(request: "\(request.httpMethod ?? "GET") \(request.url.map(RequestLog.redactedPath) ?? "")", data: data)
+            return try DecodingLog.$context.withValue(context) {
+                try decoder.decode(type, from: data)
+            }
+        } catch {
+            requestLog.record(request, statusCode: response.statusCode, error: error, body: data)
+            throw error
+        }
     }
 
     private func send(_ request: URLRequest, feature: OptionalFeature? = nil) async throws -> (Data, HTTPURLResponse) {
@@ -362,6 +401,8 @@ public struct MastodonClient: Sendable {
             }
             let isTemporary: Bool
             let failure: any Error
+            var statusCode: Int?
+            var body: Data?
             do {
                 let (data, response) = try await transport.send(request)
                 if (200..<300).contains(response.statusCode) {
@@ -369,6 +410,7 @@ public struct MastodonClient: Sendable {
                 }
                 if let feature, FeatureAvailability.indicatesUnsupported(statusCode: response.statusCode) {
                     // 止めると決めた呼び出しも、止めた機能として失敗させる。呼び出し側が、ほかの失敗と分けて扱えるようにする。
+                    requestLog.record(request, statusCode: response.statusCode, error: MastodonAPIError.from(statusCode: response.statusCode, body: data), body: data)
                     await features.disable(feature, statusCode: response.statusCode)
                     throw FeatureUnavailable(feature: feature)
                 }
@@ -377,12 +419,17 @@ public struct MastodonClient: Sendable {
                     isPaused = await rateLimit.pause(respondingTo: response)
                 }
                 isTemporary = !isPaused && RetryPolicy.isTemporary(statusCode: response.statusCode)
+                statusCode = response.statusCode
+                body = data
                 failure = MastodonAPIError.from(statusCode: response.statusCode, body: data)
             } catch let error as URLError {
                 isTemporary = RetryPolicy.isTemporary(error)
                 failure = error
             }
-            guard canRetry, isTemporary, retries < retry.maxRetries else { throw failure }
+            guard canRetry, isTemporary, retries < retry.maxRetries else {
+                requestLog.record(request, statusCode: statusCode, error: failure, body: body)
+                throw failure
+            }
             retries += 1
             // パスはIDを含むため残さない。
             Self.logger.info("request retry \(retries, privacy: .public) method=\(request.httpMethod ?? "GET", privacy: .public) reason=\(ErrorPresentation(failure).code ?? "unknown", privacy: .public)")

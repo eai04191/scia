@@ -193,7 +193,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         } catch is CancellationError {
             logger.info("reauthentication cancelled")
         } catch {
-            logger.error("reauthentication failed: \(error.localizedDescription, privacy: .public)")
+            logger.error("reauthentication failed: \(SciaLog.describe(error), privacy: .public)")
             let alert = UIAlertController(title: "ログインし直せませんでした", message: ErrorPresentation(error).text, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .cancel))
             window.rootViewController?.present(alert, animated: true)

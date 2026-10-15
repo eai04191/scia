@@ -209,7 +209,7 @@ public final class TimelineStore {
             } catch {
                 // 確かめるための2回目が失敗しても、1回目で読めた分は反映済みなので、ギャップを残して返す。
                 guard attempt > 0 else { throw error }
-                logger.error("gap confirmation failed: \(error.localizedDescription, privacy: .public)")
+                logger.error("gap confirmation failed: \(SciaLog.describe(error), privacy: .public)")
                 break
             }
             added += merge(page)
@@ -259,7 +259,7 @@ public final class TimelineStore {
                 guard let page = try await loadGap(id, from: .fromNewer) else { break }
                 added += page
             } catch {
-                logger.error("fill gap failed: \(error.localizedDescription, privacy: .public)")
+                logger.error("fill gap failed: \(SciaLog.describe(error), privacy: .public)")
                 break
             }
         }

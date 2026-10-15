@@ -21,7 +21,7 @@ public actor StreamingEndpoint {
             do {
                 return try await client.streamingURLFromV2()
             } catch {
-                logger.info("streaming endpoint v2 failed, trying v1 error=\(String(describing: error), privacy: .public)")
+                logger.info("streaming endpoint v2 failed, trying v1 error=\(SciaLog.describe(error), privacy: .public)")
                 return try await client.streamingURLFromV1()
             }
         }

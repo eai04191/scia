@@ -361,7 +361,7 @@ final class HomeTimelineController {
         } catch is FeatureUnavailable {
             return nil
         } catch {
-            logger.error("home marker load failed: \(error.localizedDescription, privacy: .public)")
+            logger.error("home marker load failed: \(SciaLog.describe(error), privacy: .public)")
             return nil
         }
     }
@@ -450,7 +450,7 @@ final class HomeTimelineController {
         guard !isStopped, !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
         // 既読位置の保存など、このサーバーでは使えないと分かって止めた機能。止めたことは記録してあり、使う人に見せることもない。
         guard !(error is FeatureUnavailable) else { return }
-        logger.error("home \(operation, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+        logger.error("home \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
         if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
             onUnauthorized()
         }

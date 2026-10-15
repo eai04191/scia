@@ -16,6 +16,12 @@ final class SessionController {
     private let rateLimit = RateLimitGate()
     /// 使えないと分かった機能を、このセッションの間だけ止める。次の起動では作り直し、もう一度試す。
     private let features = FeatureAvailability()
+    /// 失敗の記録。デバッグ版でだけ応答の本文も残す。
+    #if DEBUG
+    private let requestLog = RequestLog(includesBody: true)
+    #else
+    private let requestLog = RequestLog(includesBody: false)
+    #endif
     /// 電波が戻ったときと、レート制限が明けたときに、読み込みをやり直す。
     private var recoveryTasks: [Task<Void, Never>] = []
     private let interactions: StatusInteractions
@@ -44,9 +50,9 @@ final class SessionController {
         self.credential = credential
         self.onReauthenticate = onReauthenticate
         #if DEBUG
-        let client = MastodonClient(credential: credential, transport: FaultInjectingTransport(base: URLSessionTransport()), rateLimit: rateLimit, features: features)
+        let client = MastodonClient(credential: credential, transport: FaultInjectingTransport(base: URLSessionTransport()), rateLimit: rateLimit, features: features, requestLog: requestLog)
         #else
-        let client = MastodonClient(credential: credential, transport: URLSessionTransport(), rateLimit: rateLimit, features: features)
+        let client = MastodonClient(credential: credential, transport: URLSessionTransport(), rateLimit: rateLimit, features: features, requestLog: requestLog)
         #endif
         #if DEBUG
         let streaming = StreamingClient(credential: credential, connector: FaultInjectingWebSocketConnector(base: URLSessionWebSocketConnector()))
@@ -177,7 +183,7 @@ final class SessionController {
                 let account = try await myAccount()
                 openProfile(account, from: source)
             } catch {
-                logger.error("my profile load failed: \(error.localizedDescription, privacy: .public)")
+                logger.error("my profile load failed: \(SciaLog.describe(error), privacy: .public)")
                 handle(error, title: "プロフィールを読み込めませんでした")
             }
         }
@@ -212,7 +218,7 @@ final class SessionController {
             do {
                 try await interactions.toggle(action, on: status)
             } catch {
-                logger.error("toggle \(String(describing: action), privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
+                logger.error("toggle \(String(describing: action), privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
                 handle(error, title: failureTitle)
             }
         }
@@ -281,6 +287,23 @@ final class SessionController {
         home.start()
         notifications.start()
         observeRecoveries()
+        loadServerVersion()
+    }
+
+    /// 原因を絞れるよう、サーバーの版を記録に残す。読めなくても使うのに困らないので、失敗は記録するだけにする。
+    private func loadServerVersion() {
+        let client = client
+        let instance = credential.instance.host() ?? credential.instance.absoluteString
+        RequestOrigin.$current.withValue(.automatic) {
+            Task { [weak self] in
+                do {
+                    let version = try await client.serverVersion()
+                    self?.logger.info("server instance=\(instance, privacy: .public) version=\(version, privacy: .public)")
+                } catch {
+                    self?.logger.info("server version unavailable instance=\(instance, privacy: .public) error=\(SciaLog.describe(error), privacy: .public)")
+                }
+            }
+        }
     }
 
     private func observeRecoveries() {

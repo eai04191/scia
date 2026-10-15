@@ -65,6 +65,44 @@ struct StreamingEndpointTests {
         #expect(try await endpoint.url().absoluteString == "wss://streaming.example.social")
     }
 
+    /// 記録に残すサーバーの版。v2のinstanceがなければv1から読む。
+    @Test func serverVersionFallsBackToV1() async throws {
+        let transport = StubTransport([
+            .json("<html>Not Found</html>", statusCode: 404),
+            .json(#"{"uri":"example.social","version":"3.5.3","urls":{"streaming_api":"wss://example.social"}}"#, statusCode: 200),
+        ])
+        let client = MastodonClient(
+            credential: Credential(
+                instance: try #require(URL(string: "https://example.social")),
+                accessToken: "token",
+                clientID: "client-id",
+                clientSecret: "client-secret",
+                accountID: "1",
+                username: "alice"
+            ),
+            transport: transport
+        )
+
+        #expect(try await client.serverVersion() == "3.5.3")
+    }
+
+    @Test func serverVersionReadsV2() async throws {
+        let transport = StubTransport([.json(#"{"version":"4.3.0+glitch","configuration":{"urls":{"streaming":"wss://example.social"}}}"#, statusCode: 200)])
+        let client = MastodonClient(
+            credential: Credential(
+                instance: try #require(URL(string: "https://example.social")),
+                accessToken: "token",
+                clientID: "client-id",
+                clientSecret: "client-secret",
+                accountID: "1",
+                username: "alice"
+            ),
+            transport: transport
+        )
+
+        #expect(try await client.serverVersion() == "4.3.0+glitch")
+    }
+
     /// トークンが無効なら、ストリーミングの接続と同じく401として呼び出し側に知らせる。
     @Test func reportsUnauthorizedFromV1() async throws {
         let transport = StubTransport([

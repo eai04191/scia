@@ -81,7 +81,7 @@ struct ReconnectingStreamTests {
         _ = await task.result
 
         #expect(await log.labels == ["connected", "disconnected after 10ms", "connected"])
-        #expect(await log.reasons.first == ReconnectingStream.PingTimeout().localizedDescription)
+        #expect(await log.reasons.first == "PingTimeout")
     }
 
     /// URLSessionWebSocketTaskは未読のメッセージの後ろにあるpingの応答を遅らせるため、最初のメッセージでも成立とみなす。

@@ -42,7 +42,7 @@ final class LoginModel {
         } catch is CancellationError {
             logger.info("login cancelled")
         } catch {
-            logger.error("login failed: \(error.localizedDescription, privacy: .public)")
+            logger.error("login failed: \(SciaLog.describe(error), privacy: .public)")
             errorMessage = ErrorPresentation(error).text
         }
     }

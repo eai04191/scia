@@ -10,7 +10,7 @@ public struct ReconnectingStream: Sendable {
         case event(StreamingEvent)
         /// 接続が401で断られた。トークンが無効かは呼び出し側が確かめる。この後に`disconnected`が続き、つなぎ直しも続ける。
         case unauthorized
-        /// 接続が切れた、またはつながらなかった。`retryAfter`だけ待ってつなぎ直す。
+        /// 接続が切れた、またはつながらなかった。`retryAfter`だけ待ってつなぎ直す。`reason`はログに書く説明で、応答の中身を含まない。
         case disconnected(reason: String, retryAfter: Duration)
     }
 
@@ -87,7 +87,7 @@ public struct ReconnectingStream: Sendable {
                 }
                 failures += 1
                 let delay = policy.retryDelay(afterFailures: failures)
-                await handle(.disconnected(reason: error.localizedDescription, retryAfter: delay))
+                await handle(.disconnected(reason: SciaLog.describe(error), retryAfter: delay))
                 try await Task.sleep(for: delay)
             }
         }

@@ -143,7 +143,7 @@ final class ProfileController {
             do {
                 try await controller.store.loadProfile()
             } catch {
-                controller.logger.error("profile load failed: \(error.localizedDescription, privacy: .public)")
+                controller.logger.error("profile load failed: \(SciaLog.describe(error), privacy: .public)")
                 controller.onError(error, "プロフィールを読み込めませんでした")
             }
         }
@@ -161,7 +161,7 @@ final class ProfileController {
                 controller.viewController?.setFooterState(timeline.reachedEnd ? .reachedEnd : .idle)
             } catch {
                 guard timeline === controller.store.timeline else { return }
-                controller.logger.error("profile statuses failed: \(error.localizedDescription, privacy: .public)")
+                controller.logger.error("profile statuses failed: \(SciaLog.describe(error), privacy: .public)")
                 controller.showListFailure(error)
             }
         }
@@ -243,7 +243,7 @@ final class ProfileController {
             do {
                 try await controller.store.toggleFollow()
             } catch {
-                controller.logger.error("follow change failed: \(error.localizedDescription, privacy: .public)")
+                controller.logger.error("follow change failed: \(SciaLog.describe(error), privacy: .public)")
                 controller.onError(error, "フォローを変更できませんでした")
             }
         }

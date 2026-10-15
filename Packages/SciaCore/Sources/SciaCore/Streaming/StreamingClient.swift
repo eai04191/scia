@@ -49,7 +49,7 @@ public struct StreamingConnection: Sendable {
             } catch let error as StreamingServerError {
                 throw error
             } catch {
-                logger.error("streaming decode failed: \(String(describing: error), privacy: .public)")
+                logger.error("streaming decode failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }
     }
