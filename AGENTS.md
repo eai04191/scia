@@ -57,6 +57,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - タップが効かないなど、どのビューが触れたものを受けているか分からないときは、lldbで実行中のアプリにつなぎ（`lldb -p <pid> --batch -s <コマンドのファイル>`）、`expr -l swift -O -- `でウィンドウの`hitTest`やビュー階層（`recursiveDescription`）を調べる
 - ビューアの確認には、デバッグメニューのダミー投稿（形の違う4枚、縦長1枚、透過画像1枚、動画とGIF）を使う。通信せずに一覧の一番上に出せる（起動し直すと消える）。動画とGIFは初回だけ端末で書き出すため、少し遅れて流れる
 - agentはメニューを開かず、起動済みのアプリへ`xcrun simctl openurl '<使う端末>' 'scia-debug://dummy/<種類>'`でダミー投稿を流す。種類は`arrivals`（新着10件）、`images`（4枚）、`tall`（縦長1枚）、`transparent`（透過画像1枚）、`video`（動画とGIF）。アプリが起動していないときに送ると、アプリは起動するがダミーは流れない
+- 部品の状態ごとの見た目（失敗の表示など）は、失敗を起こさずに、デバッグメニューの「部品カタログ」で並べて見る。agentは起動済みのアプリへ`xcrun simctl openurl '<使う端末>' 'scia-debug://catalog/<部品>'`で開く。部品は`App/Sources/Debug/ComponentCatalog.swift`の`CatalogComponent`にあり、状態の見た目を変えたら、そこに状態を足す
 - トークンが無効になったときの表示の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unauthorized'`で、以後のREST APIに401を返させる。資格情報は消えず、起動し直すと戻る
 - 読めなかった投稿や通知の行の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unreadable'`で、以後のホームと通知の応答の3件に1件を読めない形に壊して読み込み直す。起動し直すと戻る
 - サーバーやプロキシの障害の表示の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://status/502'`のように、以後のREST APIにそのステータスのHTMLのエラーページを返させて読み込み直す。`?retry-after=<秒>`を付けると`Retry-After`ヘッダーも返し、429や503で自動の通信を止めて明けたら読み込み直すところを確かめられる。`scia-debug://status/ok`か起動し直すと戻る
