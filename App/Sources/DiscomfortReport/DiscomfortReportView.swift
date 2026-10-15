@@ -14,6 +14,8 @@ final class DiscomfortReportDraft {
     let stateDumps: [StateDump]
     var memo = ""
     private(set) var logs: Result<[LogLine], any Error>?
+    /// ログから機械的に組み立てた、確保した時刻の直前の操作。
+    private(set) var operations: [OperationTimeline.Step] = []
 
     init(capturedAt: Date, logMarker: String, stateDumps: [StateDump]) {
         self.capturedAt = capturedAt
@@ -23,7 +25,9 @@ final class DiscomfortReportDraft {
 
     func loadLogs() async {
         do {
-            logs = .success(try await RecentLogReader.read(from: capturedAt.addingTimeInterval(-Self.logWindow), untilMarker: logMarker))
+            let lines = try await RecentLogReader.read(from: capturedAt.addingTimeInterval(-Self.logWindow), untilMarker: logMarker)
+            logs = .success(lines)
+            operations = OperationTimeline.steps(from: lines, capturedAt: capturedAt)
         } catch {
             logs = .failure(error)
         }
@@ -56,6 +60,9 @@ struct DiscomfortReportView: View {
                         .frame(minHeight: 120)
                         .focused($memoFocused)
                 }
+                if draft.logs != nil {
+                    operationsSection
+                }
                 Section("確保した内容") {
                     LabeledContent("時刻", value: draft.capturedAt, format: .dateTime.hour().minute().second())
                     LabeledContent("状態ダンプ", value: "\(draft.stateDumps.count)件")
@@ -81,6 +88,21 @@ struct DiscomfortReportView: View {
             .task {
                 memoFocused = true
                 await draft.loadLogs()
+            }
+        }
+    }
+
+    private var operationsSection: some View {
+        Section("直前の操作") {
+            if draft.operations.isEmpty {
+                Text("記録された操作はありません")
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(draft.operations.enumerated()), id: \.offset) { _, step in
+                    Text(step.line)
+                        .font(.footnote)
+                        .foregroundStyle(step.isAppEvent ? .secondary : .primary)
+                }
             }
         }
     }
