@@ -153,7 +153,7 @@ final class ComposeModel {
             reset()
             onPosted()
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorPresentation(error).text
         }
     }
 }

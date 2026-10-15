@@ -32,14 +32,14 @@ final class TimelineViewController: UIViewController {
         case loaded
         /// サーバーがホームを再生成中で、まだ投稿が返ってこない。
         case regenerating
-        case failed(String)
+        case failed(ErrorPresentation)
     }
 
     /// 末尾の読み込みの状態。フッターに出す。
     enum FooterState: Equatable {
         case idle
         case loading
-        case failed(String)
+        case failed(ErrorPresentation)
         case reachedEnd
     }
 
@@ -452,7 +452,9 @@ final class TimelineViewController: UIViewController {
                 buttonTitle: "再読み込み"
             )
         case .failed(let message):
-            contentUnavailableConfiguration = emptyConfiguration(text: "読み込めませんでした", secondaryText: message, buttonTitle: "再試行")
+            var configuration = emptyConfiguration(text: "読み込めませんでした", secondaryText: nil, buttonTitle: "再試行")
+            configuration.secondaryAttributedText = message.attributedText(textStyle: .body)
+            contentUnavailableConfiguration = configuration
         }
     }
 

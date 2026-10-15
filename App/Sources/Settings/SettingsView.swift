@@ -84,7 +84,7 @@ struct SettingsView: View {
                 do {
                     previewAccount = try await loadPreviewAccount()
                 } catch {
-                    previewError = error.localizedDescription
+                    previewError = ErrorPresentation(error).text
                 }
             }
             .navigationTitle("設定")

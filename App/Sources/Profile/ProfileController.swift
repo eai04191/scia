@@ -187,7 +187,7 @@ final class ProfileController {
         if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
             onUnauthorized()
         }
-        viewController?.setFooterState(.failed(error.localizedDescription))
+        viewController?.setFooterState(.failed(ErrorPresentation(error)))
     }
 
     private func retry() {

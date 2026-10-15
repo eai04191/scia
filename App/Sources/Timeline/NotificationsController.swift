@@ -318,12 +318,12 @@ final class NotificationsController {
         onUnreadCountChange?(store.unreadCount, store.hasUnloadedUnread)
     }
 
-    private func handle(_ error: any Error, during operation: String, show: (String) -> Void) {
+    private func handle(_ error: any Error, during operation: String, show: (ErrorPresentation) -> Void) {
         guard !isStopped, !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
         logger.error("notifications \(operation, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
         if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
             onUnauthorized()
         }
-        show(error.localizedDescription)
+        show(ErrorPresentation(error))
     }
 }

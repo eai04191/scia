@@ -208,14 +208,14 @@ final class SessionController {
 
     private func handle(_ error: any Error, title: String) {
         guard let apiError = error as? MastodonAPIError, apiError.isUnauthorized else {
-            presentAlert(title: title, message: error.localizedDescription)
+            presentAlert(title: title, message: ErrorPresentation(error).text)
             return
         }
         // 一部のAPIだけが401を返すこともあるため、確かめてから文言を選ぶ。
         Task { [weak self] in
             guard let self else { return }
             let state = await self.authorization.reportUnauthorized()
-            self.presentAlert(title: title, message: state == .invalid ? Self.reauthenticationMessage : error.localizedDescription)
+            self.presentAlert(title: title, message: state == .invalid ? Self.reauthenticationMessage : ErrorPresentation(error).text)
         }
     }
 
@@ -294,7 +294,7 @@ final class SessionController {
         }
         viewController.onRetry = { [weak self] in self?.reauthenticate() }
         // 読み込みの途中で止めた一覧が、読み込み中のまま残らないようにする。
-        let message = "ログインし直すと読み込めます。"
+        let message = ErrorPresentation(message: "ログインし直すと読み込めます。", code: nil)
         if viewController.contentState == .loading {
             viewController.setContentState(.failed(message))
         }

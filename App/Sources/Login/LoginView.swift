@@ -27,7 +27,7 @@ final class LoginModel {
         do {
             instance = try InstanceAddress.parse(instanceInput)
         } catch {
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorPresentation(error).text
             return
         }
 
@@ -43,7 +43,7 @@ final class LoginModel {
             logger.info("login cancelled")
         } catch {
             logger.error("login failed: \(error.localizedDescription, privacy: .public)")
-            errorMessage = error.localizedDescription
+            errorMessage = ErrorPresentation(error).text
         }
     }
 }

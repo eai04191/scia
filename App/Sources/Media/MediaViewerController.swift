@@ -563,7 +563,7 @@ final class MediaViewerController: UIViewController {
 
     private func presentDownloadFailure(_ error: any Error) {
         UINotificationFeedbackGenerator(view: view).notificationOccurred(.error)
-        let alert = UIAlertController(title: "ダウンロードできませんでした", message: error.localizedDescription, preferredStyle: .alert)
+        let alert = UIAlertController(title: "ダウンロードできませんでした", message: ErrorPresentation(error).text, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .cancel))
         presentOnTop(alert)
     }

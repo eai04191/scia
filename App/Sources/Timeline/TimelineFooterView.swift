@@ -50,9 +50,9 @@ final class TimelineFooterView: UICollectionReusableView {
             indicator.startAnimating()
             label.text = nil
             retryButton.isHidden = true
-        case .failed(let message):
+        case .failed(let presentation):
             indicator.stopAnimating()
-            label.text = "読み込めませんでした: \(message)"
+            label.attributedText = presentation.attributedText(prefix: "読み込めませんでした: ", textStyle: .footnote)
             retryButton.isHidden = false
         case .reachedEnd:
             indicator.stopAnimating()

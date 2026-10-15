@@ -141,7 +141,8 @@ struct OAuthClientTests {
         ])
         let client = OAuthClient(configuration: try makeConfiguration(), transport: transport)
 
-        await #expect(throws: MastodonAPIError(statusCode: 422, message: "Validation failed: Redirect URI must be an absolute URI.")) {
+        let reason = "Validation failed: Redirect URI must be an absolute URI."
+        await #expect(throws: MastodonAPIError(statusCode: 422, message: reason, serverMessage: reason)) {
             _ = try await client.login(instance: try makeInstance()) { _ in
                 Issue.record("アプリ登録に失敗したら認可画面を開かない")
                 throw CancellationError()
