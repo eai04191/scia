@@ -15,6 +15,8 @@ enum CatalogComponent: String, CaseIterable {
     case timelineEmpty = "timeline-empty"
     case timelineFooter = "timeline-footer"
     case timelineRows = "timeline-rows"
+    case mediaGrid = "media-grid"
+    case profileHeader = "profile-header"
 
     var title: String {
         switch self {
@@ -25,6 +27,8 @@ enum CatalogComponent: String, CaseIterable {
         case .timelineEmpty: "タイムラインが空のときの表示"
         case .timelineFooter: "タイムラインの末尾"
         case .timelineRows: "読めない行とギャップの行"
+        case .mediaGrid: "一覧の添付ファイルのサムネイル"
+        case .profileHeader: "プロフィールのヘッダー"
         }
     }
 
@@ -38,6 +42,8 @@ enum CatalogComponent: String, CaseIterable {
         case .timelineEmpty: TimelineCatalog.emptyStates()
         case .timelineFooter: TimelineCatalog.footerStates()
         case .timelineRows: TimelineCatalog.rowStates()
+        case .mediaGrid: MediaGridCatalog.states()
+        case .profileHeader: ProfileHeaderCatalog.states()
         }
     }
 }
