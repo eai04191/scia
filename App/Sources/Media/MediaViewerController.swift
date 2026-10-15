@@ -228,6 +228,8 @@ final class MediaViewerController: UIViewController {
         dismissPan.delegate = self
         // ピンチの2本指を閉じる操作と取り違えないようにする。
         dismissPan.maximumNumberOfTouches = 1
+        // トラックパッドの2本指スクロールでも、指で払うのと同じように閉じられるようにする（Macやトラックパッド付きのiPad）。
+        dismissPan.allowedScrollTypesMask = .continuous
         view.addGestureRecognizer(dismissPan)
         AppDependencies.stateDumps.register("mediaViewer", owner: self) { $0.stateDump() }
     }
