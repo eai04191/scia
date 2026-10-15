@@ -7,8 +7,8 @@ public enum UserAction: Sendable, Equatable {
     case selectTab(String)
     /// 選んでいるタブをもう一度押した。
     case reselectTab(String)
-    /// 指で一覧を動かし始めた。
-    case scroll(screen: String)
+    /// 指で一覧を動かし、止まった。
+    case scroll(ScrollRecord)
     /// ステータスバーを押して最上部へ動かした。
     case scrollToTop(screen: String)
     case tapNewArrivals(screen: String)
@@ -37,7 +37,8 @@ public enum UserAction: Sendable, Equatable {
         switch self {
         case .selectTab(let tab): "tab.select \(tab)"
         case .reselectTab(let tab): "tab.reselect \(tab)"
-        case .scroll(let screen): "scroll \(screen)"
+        case .scroll(let record):
+            "scroll \(record.screen) \(record.direction.rawValue) \(Self.number(record.pages)) \(Self.number(record.duration)) \(record.hitches.droppedFrames) \(Self.number(record.hitches.hitchTime, digits: 3))"
         case .scrollToTop(let screen): "scroll.top \(screen)"
         case .tapNewArrivals(let screen): "newArrivals.tap \(screen)"
         case .tapGap(let screen): "gap.tap \(screen)"
@@ -63,7 +64,20 @@ public enum UserAction: Sendable, Equatable {
         switch (name, args.count) {
         case ("tab.select", 1): self = .selectTab(args[0])
         case ("tab.reselect", 1): self = .reselectTab(args[0])
-        case ("scroll", 1): self = .scroll(screen: args[0])
+        case ("scroll", 6):
+            guard let direction = ScrollRecord.Direction(rawValue: args[1]),
+                  let pages = Double(args[2]),
+                  let duration = Double(args[3]),
+                  let droppedFrames = Int(args[4]),
+                  let hitchTime = Double(args[5])
+            else { return nil }
+            self = .scroll(ScrollRecord(
+                screen: args[0],
+                direction: direction,
+                pages: pages,
+                duration: duration,
+                hitches: HitchCounter.Summary(droppedFrames: droppedFrames, hitchTime: hitchTime)
+            ))
         case ("scroll.top", 1): self = .scrollToTop(screen: args[0])
         case ("newArrivals.tap", 1): self = .tapNewArrivals(screen: args[0])
         case ("gap.tap", 1): self = .tapGap(screen: args[0])
@@ -96,7 +110,7 @@ public enum UserAction: Sendable, Equatable {
         switch self {
         case .selectTab(let tab): "\(Self.screenName(tab))のタブを選んだ"
         case .reselectTab(let tab): "\(Self.screenName(tab))のタブをもう一度押した"
-        case .scroll(let screen): "\(Self.screenName(screen))をスクロールした"
+        case .scroll(let record): Self.summary(of: record)
         case .scrollToTop(let screen): "ステータスバーを押して\(Self.screenName(screen))の最上部へ戻った"
         case .tapNewArrivals(let screen): "\(Self.screenName(screen))の新着ボタンを押した"
         case .tapGap(let screen): "\(Self.screenName(screen))の読み込んでいない部分を押した"
@@ -114,6 +128,20 @@ public enum UserAction: Sendable, Equatable {
         case .enterForeground: "アプリに戻った"
         case .enterBackground: "アプリを離れた"
         }
+    }
+
+    private static func summary(of record: ScrollRecord) -> String {
+        let direction = record.direction == .down ? "下" : "上"
+        var details = [String(format: "%.1f秒", record.duration)]
+        if record.hitches.droppedFrames > 0 {
+            details.append("落ちたフレーム\(record.hitches.droppedFrames)・計\(Int((record.hitches.hitchTime * 1000).rounded()))ms")
+        }
+        return "\(screenName(record.screen))を\(direction)へ\(String(format: "%.1f", record.pages))画面分スクロールした（\(details.joined(separator: "、"))）"
+    }
+
+    /// ログの本文に書く数値。端末の地域の設定で小数点が変わらないよう、`String(format:)`で書く。
+    private static func number(_ value: Double, digits: Int = 2) -> String {
+        String(format: "%.\(digits)f", value)
     }
 
     private static func screenName(_ id: String) -> String {

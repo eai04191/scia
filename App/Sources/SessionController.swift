@@ -535,12 +535,19 @@ private final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate
     }
 
     func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool {
-        (tab == tabBarController.selectedTab ? UserAction.reselectTab(tab.identifier) : .selectTab(tab.identifier)).record()
-        guard tab == tabBarController.selectedTab,
-              let navigation = tab.viewController as? UINavigationController,
+        guard tab == tabBarController.selectedTab else {
+            UserAction.selectTab(tab.identifier).record()
+            return true
+        }
+        guard let navigation = tab.viewController as? UINavigationController,
               navigation.viewControllers.count == 1
-        else { return true }
+        else {
+            UserAction.reselectTab(tab.identifier).record()
+            return true
+        }
+        // 慣性で動いている途中なら、最上部へ動かす時点でそれまでのスクロールが記録される。一覧で押した操作がその後に並ぶよう、後で記録する。
         scrollToTop(navigation)
+        UserAction.reselectTab(tab.identifier).record()
         return false
     }
 }

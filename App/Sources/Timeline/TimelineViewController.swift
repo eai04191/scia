@@ -107,6 +107,9 @@ final class TimelineViewController: UIViewController {
     private var isRestoringAnchor = false
     /// 新着ボタンで最上部へ動かしている。
     private var isScrollingToTop = false
+    /// 指で動かしているスクロールの始まり。止まったら違和感レポート用に記録する。
+    private var scrollStart: (offset: CGFloat, time: CFTimeInterval)?
+    private let scrollHitches = ScrollHitchMonitor()
     private lazy var newArrivalsButton = makeNewArrivalsButton()
     private lazy var reauthenticationButton = makeReauthenticationButton()
     private var onReauthenticate: (() -> Void)?
@@ -549,8 +552,9 @@ final class TimelineViewController: UIViewController {
         configuration.buttonSize = .small
         let button = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in
             guard let self else { return }
-            UserAction.tapNewArrivals(screen: texts.dumpName).record()
+            // 慣性で動いている途中なら、それまでのスクロールが先に記録されるよう、動かしてから記録する。
             scrollToNewest()
+            UserAction.tapNewArrivals(screen: texts.dumpName).record()
         })
         button.translatesAutoresizingMaskIntoConstraints = false
         button.isHidden = true
@@ -616,6 +620,8 @@ final class TimelineViewController: UIViewController {
     /// 最上部へ動かす。上のセルは表示されたときに見積もりから実寸へ変わり、そのぶん位置が補正されて最上部に届かないことがあるため、
     /// 届くまで動かし直す。
     func scrollToNewest() {
+        // 慣性で動いている途中にこちらで動かすと、止まりの通知が来ないため、ここまでのスクロールを記録する。
+        recordScroll()
         isScrollingToTop = true
         collectionView.setContentOffset(CGPoint(x: 0, y: -collectionView.adjustedContentInset.top), animated: true)
     }
@@ -808,12 +814,14 @@ extension TimelineViewController: UICollectionViewDelegate {
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
+            recordScroll()
             reportVisibleItemsAfterLayout()
             onInteractionSettle?()
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        recordScroll()
         reportVisibleItemsAfterLayout()
         onInteractionSettle?()
     }
@@ -831,8 +839,26 @@ extension TimelineViewController: UICollectionViewDelegate {
 
     /// 最上部へ動かしている途中で指が触れたら、それ以上は動かし直さない。
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        UserAction.scroll(screen: texts.dumpName).record()
+        // 慣性で動いている途中で触れると、前のスクロールは止まりの通知を受けずに終わるため、ここで記録する。
+        recordScroll()
+        scrollStart = (scrollView.contentOffset.y, CACurrentMediaTime())
+        scrollHitches.start()
         isScrollingToTop = false
+    }
+
+    /// スクロールの途中で新着の挿入などにより位置を補正すると、補正の分も動いた量に入る。
+    private func recordScroll() {
+        guard let start = scrollStart else { return }
+        scrollStart = nil
+        let hitches = scrollHitches.stop()
+        UserAction.scroll(ScrollRecord(
+            screen: texts.dumpName,
+            startOffset: start.offset,
+            endOffset: collectionView.contentOffset.y,
+            viewportHeight: collectionView.bounds.inset(by: collectionView.adjustedContentInset).height,
+            duration: CACurrentMediaTime() - start.time,
+            hitches: hitches
+        )).record()
     }
 
     /// 指を離したときの勢いで向きを決め直す。慣性で動く間はこの向きのまま。
@@ -840,6 +866,12 @@ extension TimelineViewController: UICollectionViewDelegate {
         if velocity.y != 0 {
             lastScrollDirection = velocity.y < 0 ? .towardNewer : .towardOlder
         }
+    }
+
+    /// ステータスバーのタップで最上部へ動かし始めるとき。慣性で動いている途中なら、止まりの通知が来ないため、ここまでのスクロールを記録する。
+    func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
+        recordScroll()
+        return true
     }
 
     /// ステータスバーのタップで最上部へ動かしたとき。
