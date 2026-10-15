@@ -448,13 +448,18 @@ final class TimelineViewController: UIViewController {
             contentUnavailableConfiguration = nil
             return
         }
-        switch contentState {
+        contentUnavailableConfiguration = contentUnavailableConfiguration(for: contentState)
+    }
+
+    /// 投稿が1件もないときに、一覧の全面に出す表示。
+    func contentUnavailableConfiguration(for state: ContentState) -> UIContentUnavailableConfiguration {
+        switch state {
         case .loading:
-            contentUnavailableConfiguration = UIContentUnavailableConfiguration.loading()
+            return UIContentUnavailableConfiguration.loading()
         case .loaded:
-            contentUnavailableConfiguration = emptyConfiguration(text: texts.empty, secondaryText: nil, buttonTitle: "再読み込み")
+            return emptyConfiguration(text: texts.empty, secondaryText: nil, buttonTitle: "再読み込み")
         case .regenerating:
-            contentUnavailableConfiguration = emptyConfiguration(
+            return emptyConfiguration(
                 text: "ホームを準備しています",
                 secondaryText: "しばらく使っていなかったため、サーバーがホームを作り直しています。少し待ってから読み込み直してください。",
                 buttonTitle: "再読み込み"
@@ -462,7 +467,7 @@ final class TimelineViewController: UIViewController {
         case .failed(let message):
             var configuration = emptyConfiguration(text: "読み込めませんでした", secondaryText: nil, buttonTitle: "再試行")
             configuration.secondaryAttributedText = message.attributedText(textStyle: .body)
-            contentUnavailableConfiguration = configuration
+            return configuration
         }
     }
 
