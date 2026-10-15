@@ -13,7 +13,9 @@ struct StreamingEndpointTests {
                 accountID: "1",
                 username: "alice"
             ),
-            transport: transport
+            transport: transport,
+            // v2とv1の切り替えを確かめる。一時的な失敗の送り直しはRetryTestsで確かめる。
+            retry: RetryPolicy(maxRetries: 0, initialDelay: .zero)
         ))
     }
 

@@ -1,16 +1,22 @@
 public import Foundation
+import os
 
 /// ログイン済みアカウントとしてMastodon APIを呼ぶ。
 public struct MastodonClient: Sendable {
     public let credential: Credential
     private let transport: any HTTPTransport
     private let rateLimit: RateLimitGate
+    private let retry: RetryPolicy
+    private static let logger = SciaLog.logger(category: "network")
 
-    /// - Parameter rateLimit: 429や503で止められたときに、自動の通信を控える門。セッションの中で共有する。
-    public init(credential: Credential, transport: any HTTPTransport, rateLimit: RateLimitGate = RateLimitGate()) {
+    /// - Parameters:
+    ///   - rateLimit: 429や503で止められたときに、自動の通信を控える門。セッションの中で共有する。
+    ///   - retry: 一時的な失敗で送り直す回数と間隔。
+    public init(credential: Credential, transport: any HTTPTransport, rateLimit: RateLimitGate = RateLimitGate(), retry: RetryPolicy = .standard) {
         self.credential = credential
         self.transport = transport
         self.rateLimit = rateLimit
+        self.retry = retry
     }
 
     /// https://docs.joinmastodon.org/methods/timelines/#home
@@ -326,19 +332,37 @@ public struct MastodonClient: Sendable {
     }
 
     private func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        if RequestOrigin.current == .automatic {
-            try await rateLimit.checkAutomaticRequest()
-        }
         var request = request
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
-        let (data, response) = try await transport.send(request)
-        guard (200..<300).contains(response.statusCode) else {
-            if response.statusCode == 429 || response.statusCode == 503 {
-                await rateLimit.pause(respondingTo: response)
+        let canRetry = RetryPolicy.canRetry(request)
+        var retries = 0
+        while true {
+            if RequestOrigin.current == .automatic {
+                try await rateLimit.checkAutomaticRequest()
             }
-            throw MastodonAPIError.from(statusCode: response.statusCode, body: data)
+            let isTemporary: Bool
+            let failure: any Error
+            do {
+                let (data, response) = try await transport.send(request)
+                if (200..<300).contains(response.statusCode) {
+                    return (data, response)
+                }
+                var isPaused = false
+                if response.statusCode == 429 || response.statusCode == 503 {
+                    isPaused = await rateLimit.pause(respondingTo: response)
+                }
+                isTemporary = !isPaused && RetryPolicy.isTemporary(statusCode: response.statusCode)
+                failure = MastodonAPIError.from(statusCode: response.statusCode, body: data)
+            } catch let error as URLError {
+                isTemporary = RetryPolicy.isTemporary(error)
+                failure = error
+            }
+            guard canRetry, isTemporary, retries < retry.maxRetries else { throw failure }
+            retries += 1
+            // パスはIDを含むため残さない。
+            Self.logger.info("request retry \(retries, privacy: .public) method=\(request.httpMethod ?? "GET", privacy: .public) reason=\(ErrorPresentation(failure).code ?? "unknown", privacy: .public)")
+            try await Task.sleep(for: retry.delay(beforeRetry: retries))
         }
-        return (data, response)
     }
 }
 
