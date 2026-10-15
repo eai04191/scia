@@ -7,6 +7,9 @@ struct SettingsView: View {
     @Bindable var settings: AppSettings
     /// 見本の投稿に使う、ログイン中のアカウントを読む。
     let loadPreviewAccount: () async throws -> Account
+    /// ログイン中のアカウントのサーバー。
+    let instance: URL
+    let diagnostics: ConnectionDiagnostics
     @Environment(\.dismiss) private var dismiss
     @State private var previewAccount: Account?
     @State private var previewError: String?
@@ -79,6 +82,11 @@ struct SettingsView: View {
                 } footer: {
                     Text("代替テキストが「undefined」や「Screenshot」だけのメディアを、代替テキストのないメディアとして扱います。空白だけの代替テキストは、この設定にかかわらず無視します。")
                 }
+                Section {
+                    NavigationLink("接続の状態") {
+                        ConnectionStatusView(instance: instance, diagnostics: diagnostics)
+                    }
+                }
             }
             .task {
                 do {
@@ -99,8 +107,12 @@ struct SettingsView: View {
 }
 
 extension UIViewController {
-    /// - Parameter loadPreviewAccount: 見本の投稿に使う、ログイン中のアカウントを読む。
-    func presentSettings(loadPreviewAccount: @escaping () async throws -> Account) {
-        present(UIHostingController(rootView: SettingsView(settings: AppDependencies.settings, loadPreviewAccount: loadPreviewAccount)), animated: true)
+    /// - Parameters:
+    ///   - loadPreviewAccount: 見本の投稿に使う、ログイン中のアカウントを読む。
+    ///   - instance: ログイン中のアカウントのサーバー。
+    ///   - diagnostics: 「接続の状態」画面に出す、ログイン中のアカウントの接続の状態。
+    func presentSettings(loadPreviewAccount: @escaping () async throws -> Account, instance: URL, diagnostics: ConnectionDiagnostics) {
+        let view = SettingsView(settings: AppDependencies.settings, loadPreviewAccount: loadPreviewAccount, instance: instance, diagnostics: diagnostics)
+        present(UIHostingController(rootView: view), animated: true)
     }
 }

@@ -1,0 +1,110 @@
+import SciaCore
+import SwiftUI
+
+/// 接続しているサーバーと、通信の状態を確かめる画面。うまく読み込めないときに、使う人が原因の見当を付けたり、報告に添えたりするために使う。
+struct ConnectionStatusView: View {
+    let instance: URL
+    let diagnostics: ConnectionDiagnostics
+    @State private var status: ConnectionDiagnostics.Status?
+
+    var body: some View {
+        List {
+            Section("サーバー") {
+                LabeledContent("アドレス", value: instance.host() ?? instance.absoluteString)
+                LabeledContent("バージョン", value: diagnostics.serverVersion ?? "読み込めていません")
+            }
+            Section {
+                LabeledContent("ホーム", value: Self.text(diagnostics.streaming[.home]))
+                LabeledContent("通知", value: Self.text(diagnostics.streaming[.notifications]))
+            } header: {
+                Text("リアルタイムの更新")
+            } footer: {
+                Text("つながっていない間も、つなぎ直しを続けながら、定期的に新着を読み込みます。")
+            }
+            if let status {
+                Section("レート制限") {
+                    if let pausedUntil = status.pausedUntil {
+                        LabeledContent("自動の読み込みを控えています", value: "\(pausedUntil.formatted(date: .omitted, time: .standard))まで")
+                    } else {
+                        Text("制限されていません")
+                    }
+                }
+                Section {
+                    if status.disabledFeatures.isEmpty {
+                        Text("ありません")
+                    } else {
+                        ForEach(status.disabledFeatures, id: \.feature) { disabled in
+                            LabeledContent(Self.name(of: disabled.feature), value: "HTTP \(disabled.statusCode)・\(disabled.date.formatted(date: .omitted, time: .shortened))")
+                        }
+                    }
+                } header: {
+                    Text("使っていない機能")
+                } footer: {
+                    Text("このサーバーにないと分かった機能は、アプリを起動し直すまで使いません。起動し直すと、もう一度試します。")
+                }
+                Section("最近のエラー") {
+                    if status.recentFailures.isEmpty {
+                        Text("ありません")
+                    } else {
+                        ForEach(status.recentFailures) { failure in
+                            FailureRow(failure: failure)
+                        }
+                    }
+                }
+                Section {
+                    LabeledContent("読めなかった項目", value: "\(status.droppedCount)件")
+                } footer: {
+                    Text("アプリを起動してから、サーバーから届いた内容のうち読めなかった投稿や通知などの数です。")
+                }
+            }
+        }
+        .navigationTitle("接続の状態")
+        .task {
+            // 開いている間も状態は変わるため、読み直し続ける。
+            while !Task.isCancelled {
+                status = await diagnostics.status()
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+
+    private static func text(_ state: ConnectionDiagnostics.StreamingState?) -> String {
+        switch state {
+        case .connected: "つながっています"
+        case .polling: "つながっていません"
+        case .stopped, nil: "止めています"
+        }
+    }
+
+    private static func name(of feature: OptionalFeature) -> String {
+        switch feature {
+        case .markers: "既読位置の保存"
+        case .preferences: "公開範囲の既定値"
+        case .instanceV2: "サーバーの設定（v2）"
+        }
+    }
+}
+
+private struct FailureRow: View {
+    let failure: RequestFailure
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(failure.method) \(failure.path)")
+                .font(.footnote.monospaced())
+                .lineLimit(1)
+                .truncationMode(.middle)
+            Text("\(failure.date.formatted(date: .omitted, time: .standard))・\(failure.kindDescription)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            if let body = failure.body {
+                // デバッグ版でだけ残す応答の本文。
+                Text(body)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+            }
+        }
+    }
+}

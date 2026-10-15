@@ -22,6 +22,8 @@ final class SessionController {
     #else
     private let requestLog = RequestLog(includesBody: false)
     #endif
+    /// 「接続の状態」画面に出す、このセッションの接続の状態。
+    let diagnostics: ConnectionDiagnostics
     /// 電波が戻ったときと、レート制限が明けたときに、読み込みをやり直す。
     private var recoveryTasks: [Task<Void, Never>] = []
     private let interactions: StatusInteractions
@@ -68,6 +70,10 @@ final class SessionController {
         let notifications = NotificationsController(client: client, streaming: streaming, streamingEndpoint: streamingEndpoint) { forward() }
         self.home = home
         self.notifications = notifications
+        let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog)
+        self.diagnostics = diagnostics
+        home.onStreamingStateChange = { diagnostics.setStreaming($0, for: .home) }
+        notifications.onStreamingStateChange = { diagnostics.setStreaming($0, for: .notifications) }
         self.client = client
         let profiles = ProfileRegistry()
         self.profiles = profiles
@@ -299,6 +305,7 @@ final class SessionController {
                 do {
                     let version = try await client.serverVersion()
                     self?.logger.info("server instance=\(instance, privacy: .public) version=\(version, privacy: .public)")
+                    self?.diagnostics.setServerVersion(version)
                 } catch {
                     self?.logger.info("server version unavailable instance=\(instance, privacy: .public) error=\(SciaLog.describe(error), privacy: .public)")
                 }

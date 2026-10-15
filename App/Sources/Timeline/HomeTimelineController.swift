@@ -23,6 +23,8 @@ final class HomeTimelineController {
     private var streamingTask: Task<Void, Never>?
     /// ストリーミングがつながっている。電波が戻ったときなどに、つながっていなければつなぎ直す。
     private var isStreamingConnected = false
+    /// ストリーミングの状態が変わったときに呼ぶ。「接続の状態」画面に出す。
+    var onStreamingStateChange: ((ConnectionDiagnostics.StreamingState) -> Void)?
     /// 接続を始めるたびに増やす。止めた接続の終了の知らせが、後から始めた接続を消さないようにする。
     private var streamingGeneration = 0
     /// 最初の読み込みが済んだ。空のホームでも、済んでいればつなぐ。
@@ -129,6 +131,7 @@ final class HomeTimelineController {
         streamingTask.cancel()
         self.streamingTask = nil
         isStreamingConnected = false
+        onStreamingStateChange?(.stopped)
         // 次につなぐときは、切れている時間を数え直す。
         viewController.setOutageNotice(false)
     }
@@ -194,6 +197,8 @@ final class HomeTimelineController {
     private func startStreaming() {
         guard !isStopped, isInForeground, streamingTask == nil else { return }
         streamingGeneration += 1
+        // つながるまでは、つなぎ直しを続けながらポーリングで補う。
+        onStreamingStateChange?(.polling)
         let generation = streamingGeneration
         let streaming = streaming
         let endpoint = streamingEndpoint
@@ -235,6 +240,7 @@ final class HomeTimelineController {
         switch activity {
         case .connected:
             isStreamingConnected = true
+            onStreamingStateChange?(.connected)
             logger.info("streaming connected")
             fillFromLatest()
         case .event(let event):
@@ -244,6 +250,7 @@ final class HomeTimelineController {
             onUnauthorized()
         case .disconnected(let reason, let retryAfter):
             isStreamingConnected = false
+            onStreamingStateChange?(.polling)
             logger.info("streaming disconnected reason=\(reason, privacy: .public) retryAfter=\(retryAfter, privacy: .public)")
         }
     }
