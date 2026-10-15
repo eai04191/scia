@@ -75,10 +75,12 @@ struct PostContentBuilder {
     }
 
     /// 投稿の本文。注意書きつきの投稿は、本文を開く操作がまだないため注意書きだけを出す。
-    func body(of status: Status, base: UIListContentConfiguration) -> NSAttributedString {
+    /// 文字の大きさは標準のリストの2行目の文字に揃え、色は読むものなのでいちばん濃い色を既定にする。
+    /// 引用ブロックは、RichTextRendererがこれより一段薄く描く。
+    func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> NSAttributedString {
         let bodyRenderer = RichTextRenderer(
             font: base.secondaryTextProperties.font,
-            textColor: base.secondaryTextProperties.color,
+            textColor: color,
             paragraphSpacing: tuning.value(of: TuningCatalog.paragraphSpacing),
             emojiImages: emojiImages
         )
@@ -87,7 +89,7 @@ struct PostContentBuilder {
         }
         let spoiler = NSMutableAttributedString(string: "注意書き: ", attributes: [
             .font: base.secondaryTextProperties.font,
-            .foregroundColor: base.secondaryTextProperties.color,
+            .foregroundColor: color,
         ])
         spoiler.append(bodyRenderer.render(.plain(status.spoilerText, emojis: status.emojis)))
         return spoiler

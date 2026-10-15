@@ -134,6 +134,34 @@ struct TimelineContentTests {
         #expect(content.onOpenContextAccount == nil)
     }
 
+    private func color(of text: NSAttributedString?) -> UIColor? {
+        text?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
+    }
+
+    /// 本文は読むものなので、いちばん濃い文字色にする。
+    @Test func postBodyUsesPrimaryColor() throws {
+        let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+
+        let content = makeViewController().contentConfiguration(for: status, base: .cell())
+
+        #expect(color(of: content.body) == .label)
+    }
+
+    /// 会話にあたる通知の本文は濃くし、自分の投稿へのお気に入りやブーストの通知では、再掲の本文を控えめにして誰が何をしたかを目立たせる。
+    @Test(arguments: [
+        (MastodonNotification.Kind.mention, UIColor.label),
+        (.favourite, .secondaryLabel),
+        (.reblog, .secondaryLabel),
+    ])
+    func notificationBodyColorDependsOnKind(_ kind: MastodonNotification.Kind, expected: UIColor) throws {
+        let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let notification = MastodonNotification(id: "1", type: kind, createdAt: .now, account: status.account, status: status)
+
+        let content = makeViewController().contentConfiguration(for: notification, base: .cell())
+
+        #expect(color(of: content.secondaryAttributedText) == expected)
+    }
+
     @Test func spoilerHidesContent() throws {
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let status = Status(

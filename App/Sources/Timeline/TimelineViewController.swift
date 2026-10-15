@@ -664,8 +664,8 @@ final class TimelineViewController: UIViewController {
     }
 
     /// 投稿の本文。注意書きつきの投稿は、本文を開く操作がまだないため注意書きだけを出す。
-    func body(of status: Status, base: UIListContentConfiguration) -> NSAttributedString {
-        postContentBuilder.body(of: status, base: base)
+    func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> NSAttributedString {
+        postContentBuilder.body(of: status, base: base, color: color)
     }
 }
 

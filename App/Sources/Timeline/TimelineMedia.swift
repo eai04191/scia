@@ -98,11 +98,14 @@ extension TimelineViewController {
 }
 
 extension MastodonNotification.Kind {
-    /// 対象の投稿の添付ファイルを並べる通知。お気に入りやブーストの通知は自分の投稿なので、本文だけにして行を低く保つ。
-    var showsMedia: Bool {
+    /// 会話にあたる通知。対象の投稿は相手が書いたもので、読む必要がある。お気に入りやブーストの通知は、自分の投稿の再掲になる。
+    var isConversation: Bool {
         switch self {
         case .mention, .status, .quote: true
         case .reblog, .favourite, .poll, .update, .quotedUpdate, .follow, .followRequest, .other: false
         }
     }
+
+    /// 対象の投稿の添付ファイルを並べる通知。自分の投稿の再掲になる通知は、本文だけにして行を低く保つ。
+    var showsMedia: Bool { isConversation }
 }

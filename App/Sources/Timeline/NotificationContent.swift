@@ -22,7 +22,8 @@ extension TimelineViewController {
         content.attributedText = header
 
         if let status = notification.status {
-            content.secondaryAttributedText = body(of: status.displayed, base: base)
+            // お気に入りやブーストの通知の本文は自分の投稿の再掲なので、控えめにして誰が何をしたかの行を目立たせる。
+            content.secondaryAttributedText = body(of: status.displayed, base: base, color: notification.type.isConversation ? .label : .secondaryLabel)
         } else {
             content.secondaryAttributedText = NSAttributedString(string: "@\(notification.account.acct)", attributes: [
                 .font: base.secondaryTextProperties.font,
