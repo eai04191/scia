@@ -9,10 +9,16 @@ import UIKit
 /// デバッグメニューの「部品カタログ」か、`scia-debug://catalog/<rawValue>`で開く。
 enum CatalogComponent: String, CaseIterable {
     case attachmentStrip = "attachment-strip"
+    case altTextEditor = "alt-text-editor"
+    case caption
+    case statusChip = "status-chip"
 
     var title: String {
         switch self {
         case .attachmentStrip: "投稿欄の添付のサムネイル"
+        case .altTextEditor: "代替テキストの入力欄"
+        case .caption: "ビューアの説明"
+        case .statusChip: "操作が済んだことを知らせる表示"
         }
     }
 
@@ -20,6 +26,9 @@ enum CatalogComponent: String, CaseIterable {
     func makeStates() -> [CatalogState] {
         switch self {
         case .attachmentStrip: AttachmentStripCatalog.states()
+        case .altTextEditor: AltTextEditorCatalog.states()
+        case .caption: CaptionCatalog.states()
+        case .statusChip: StatusChipCatalog.states()
         }
     }
 }
@@ -28,6 +37,35 @@ enum CatalogComponent: String, CaseIterable {
 struct CatalogState {
     let title: String
     let makeView: @MainActor () -> UIView
+}
+
+/// ビューアのように画像の上に重ねる部品を置く下地。半透明の部品が画像に重なった見え方を確かめられるよう、格子の画像を敷く。
+enum CatalogBackdrop {
+    /// - Parameter constraints: 下地と部品を受け取り、部品の置き方を返す。下地の高さも、これで決まるようにする。
+    @MainActor
+    static func image(_ content: UIView, constraints: (_ backdrop: UIView, _ content: UIView) -> [NSLayoutConstraint]) -> UIView {
+        let backdrop = UIView()
+        backdrop.clipsToBounds = true
+        let imageView = UIImageView(image: DummyMedia.image(size: CGSize(width: 800, height: 800), color: .systemOrange, label: ""))
+        imageView.contentMode = .scaleAspectFill
+        // 画像の大きさで下地が伸びないよう、高さは部品の置き方だけで決める。
+        // 部品の中の文字と優先度が並ぶと高さが決まらないため、どちらも最も低くする。
+        for axis in [NSLayoutConstraint.Axis.horizontal, .vertical] {
+            imageView.setContentHuggingPriority(UILayoutPriority(1), for: axis)
+            imageView.setContentCompressionResistancePriority(UILayoutPriority(1), for: axis)
+        }
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        content.translatesAutoresizingMaskIntoConstraints = false
+        backdrop.addSubview(imageView)
+        backdrop.addSubview(content)
+        NSLayoutConstraint.activate([
+            imageView.topAnchor.constraint(equalTo: backdrop.topAnchor),
+            imageView.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor),
+            imageView.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
+            imageView.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
+        ] + constraints(backdrop, content))
+        return backdrop
+    }
 }
 
 extension UIViewController {
