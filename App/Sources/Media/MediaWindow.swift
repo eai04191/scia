@@ -9,6 +9,8 @@ enum MediaWindow {
     static let activityType = "net.mizle.scia.media-viewer"
     static let configurationName = "Media Viewer"
     private static let requestIDKey = "requestID"
+    /// Macのウィンドウのタイトル。AeroSpaceなどがタイムラインのウィンドウと見分けるために使う。
+    static let windowTitle = "Scia メディア"
 
     struct Request {
         let attachments: [MediaAttachment]
@@ -72,6 +74,9 @@ final class MediaWindowSceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         self.window = window
         window.makeKeyAndVisible()
+        #if DEBUG
+        MacWindowTitle.set(MediaWindow.windowTitle, for: window)
+        #endif
     }
 }
 
