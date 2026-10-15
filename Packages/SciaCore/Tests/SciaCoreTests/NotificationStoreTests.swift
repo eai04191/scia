@@ -97,15 +97,41 @@ struct NotificationStoreTests {
         #expect(ids(store) == ["30", "29", "28"])
     }
 
+    /// 満杯でないページの後に0件が返ったら、手元とつながっている。
     @Test func fillConnectsWithinOnePage() async throws {
-        let queue = PageQueue([try page([30, 29, 28]), try page([32, 31])])
+        let queue = PageQueue([try page([30, 29, 28]), try page([32, 31]), try page([])])
         let store = makeStore(queue)
         _ = try await store.loadInitial()
 
-        #expect(try await store.fillFromLatest(maxPages: 3)?.map(\.id) == ["32", "31"])
+        #expect(try await store.fillFromLatest(maxPages: 1)?.map(\.id) == ["32", "31"])
 
         #expect(ids(store) == ["32", "31", "30", "29", "28"])
-        #expect(queue.queries.last == TimelineQuery(sinceID: "30", limit: Self.pageSize))
+        #expect(Array(queue.queries.suffix(2)) == [
+            TimelineQuery(sinceID: "30", limit: Self.pageSize),
+            TimelineQuery(maxID: "31", sinceID: "30", limit: Self.pageSize),
+        ])
+    }
+
+    /// 求めた件数より少なく返すサーバーでは、満杯でないページの下にも通知が残っているため、それだけではつながったと判断しない。
+    @Test func shortPageFromCappingServerIsNotTreatedAsConnected() async throws {
+        let queue = PageQueue([try page([30, 29, 28]), try page([36, 35]), try page([34, 33])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        #expect(try await store.fillFromLatest(maxPages: 1)?.map(\.id) == ["36", "35", "34", "33"])
+
+        #expect(ids(store) == ["36", "35", "34", "33"], "間を欠いたまま古い通知を残しました")
+        #expect(!store.reachedEnd)
+    }
+
+    @Test func fillFromEmptyWithShortPageKeepsOlderLoadable() async throws {
+        let queue = PageQueue([try page([]), try page([5, 4])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        _ = try await store.fillFromLatest(maxPages: 1)
+
+        #expect(!store.reachedEnd, "求めた件数より少ないだけで、それより古い通知がないと判断しました")
     }
 
     @Test func fillReadsFurtherPagesUntilConnected() async throws {

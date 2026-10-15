@@ -8,6 +8,47 @@ import Testing
 struct TimelineGapTests {
     private static let pageSize = 3
 
+    // MARK: - 求めた件数より少なく返すサーバー
+
+    /// 件数が`limit`に届かなくても、それだけでは読み切ったと判断しない。サーバーが件数を丸めていることがあるため。
+    @Test func fillDoesNotSkipStatusesWhenServerReturnsFewerThanRequested() async throws {
+        let server = FakeHomeServer(ids: 1...10, maxLimit: 2)
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        server.post(11...14)
+
+        _ = try await store.fillFromLatest()
+
+        #expect(store.entries.map(\.debugLabel) == ["14", "13", "12", "11", "10", "9"])
+    }
+
+    @Test(arguments: [TimelineStore.GapDirection.fromNewer, .fromOlder])
+    func gapIsNotClosedByShortPageFromCappingServer(direction: TimelineStore.GapDirection) async throws {
+        let server = FakeHomeServer(ids: 1...10, maxLimit: 2)
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        server.post(11...30)
+        _ = try await store.fillFromLatest()
+        let gap = try #require(store.gaps.first)
+
+        _ = try await store.loadGap(gap.id, from: direction)
+
+        #expect(store.gaps.map(\.id) == [gap.id], "読み切っていないギャップが閉じました")
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: direction)
+        }
+        #expect(ids(store) == Array((9...30).reversed()))
+    }
+
+    @Test func markerGapIsKeptWhenServerReturnsFewerThanRequested() async throws {
+        let server = FakeHomeServer(ids: 1...20, maxLimit: 2)
+        let store = makeStore(server)
+
+        _ = try await store.loadInitial(around: "5")
+
+        #expect(store.entries.map(\.debugLabel) == ["20", "19", "gap(19...7)", "7", "6", "5", "4"])
+    }
+
     @Test func fillWithinOnePageLeavesNoGap() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)
@@ -18,7 +59,11 @@ struct TimelineGapTests {
 
         #expect(store.gaps.isEmpty)
         #expect(ids(store) == [12, 11, 10, 9, 8])
-        #expect(server.queries.last == TimelineQuery(sinceID: "10", limit: Self.pageSize))
+        // 満杯でないページの下も、0件が返るまでは読み切ったと判断しない。
+        #expect(Array(server.queries.suffix(2)) == [
+            TimelineQuery(sinceID: "10", limit: Self.pageSize),
+            TimelineQuery(maxID: "11", sinceID: "10", limit: Self.pageSize),
+        ])
     }
 
     @Test func fillLeavesGapWhenMoreThanOnePageWasMissed() async throws {
@@ -368,10 +413,11 @@ struct TimelineGapTests {
     }
 
     /// 切断と補完、ギャップの読み込み、古いページの読み込みを、決まった乱数で混ぜても、サーバーと同じ並びになる。
-    @Test(arguments: 0..<20)
-    func randomizedSessionsMatchServer(seed: UInt64) async throws {
+    /// 求めた件数より少なく返すサーバーでも同じ。
+    @Test(arguments: 0..<20, [nil, 2] as [Int?])
+    func randomizedSessionsMatchServer(seed: UInt64, maxLimit: Int?) async throws {
         var random = SplitMix64(seed: seed)
-        let server = FakeHomeServer(ids: 1...30)
+        let server = FakeHomeServer(ids: 1...30, maxLimit: maxLimit)
         let store = makeStore(server)
         _ = try await store.loadInitial()
         var nextID = 31
@@ -424,9 +470,12 @@ struct TimelineGapTests {
 /// MastodonのホームタイムラインAPIのページングを再現する。IDは整数で、大きいほど新しい。
 final class FakeHomeServer: Sendable {
     private let state: Mutex<(ids: [Int], queries: [TimelineQuery])>
+    /// 求められた`limit`より少なく返すサーバーを再現する。nilなら`limit`どおりに返す。
+    private let maxLimit: Int?
 
-    init(ids: ClosedRange<Int>) {
+    init(ids: ClosedRange<Int>, maxLimit: Int? = nil) {
         state = Mutex((Array(ids), []))
+        self.maxLimit = maxLimit
     }
 
     var ids: [Int] { state.withLock { $0.ids } }
@@ -445,9 +494,10 @@ final class FakeHomeServer: Sendable {
         let upper: Int = query.maxID.flatMap { Int($0) } ?? Int.max
         let lower: Int = max(query.sinceID.flatMap { Int($0) } ?? Int.min, query.minID.flatMap { Int($0) } ?? Int.min)
         let inRange = ids.filter { lower < $0 && $0 < upper }
+        let limit = min(query.limit, maxLimit ?? query.limit)
         let picked = query.minID != nil
-            ? Array(inRange.sorted().prefix(query.limit))
-            : Array(inRange.sorted(by: >).prefix(query.limit))
+            ? Array(inRange.sorted().prefix(limit))
+            : Array(inRange.sorted(by: >).prefix(limit))
         return TimelinePage(statuses: picked.sorted(by: >).map(status), isRegenerating: false)
     }
 

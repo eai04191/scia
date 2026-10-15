@@ -66,8 +66,9 @@ public final class TimelineStore {
             let afterMarker = try await fetch(TimelineQuery(minID: markerID, limit: pageSize))
             let fromMarker = try await fetch(TimelineQuery(maxID: Self.oldest(of: afterMarker.statuses)?.id ?? oldestLatest.id, limit: pageSize))
             loaded += afterMarker.statuses + fromMarker.statuses
-            if afterMarker.statuses.count >= pageSize,
-               let newestAfterMarker = Self.newest(of: afterMarker.statuses),
+            // 件数では判断しない。求めた件数より少なく返すサーバーでは、満杯でなくても間に投稿が残っているため。
+            // 間に投稿がなかったときは、ギャップを読んだときに0件が返って閉じる。
+            if let newestAfterMarker = Self.newest(of: afterMarker.statuses),
                StatusID.isNewer(oldestLatest.id, than: newestAfterMarker.id) {
                 loadedGaps.append(TimelineGap(newerID: oldestLatest.id, olderID: newestAfterMarker.id))
             }
@@ -102,14 +103,16 @@ public final class TimelineStore {
 
     /// ストリーミングが切れていた間の投稿を読み、新たに加わった投稿を新しい順に返す。まだ1件もなければ何もせずnilを返す。
     ///
-    /// 読み込んだ中で最も新しい投稿より新しいものを、最新の側から1ページ読む。1ページに収まらなければ、残りをギャップとして置く。
+    /// 読み込んだ中で最も新しい投稿より新しいものを、最新の側から1ページ読む。読めた投稿と手元の投稿の間にはギャップを置き、
+    /// 0件が返るまで読み切ったとは判断しない。求めた件数より少なく返すサーバーでは、満杯でないページの下にも投稿が残っているため。
     /// 接続し直した後に呼ぶ。その間に届いた新着が先に挿入されていても、基準のIDは読み始める前に決めるため、間を読み飛ばさない。
     /// 失敗したとき、またはサーバーがホームを再生成中で結果が揃っていないときは、次の呼び出しも同じ基準から読む。
     ///
     /// 補完の最中に呼ばれたら、そのときの基準を覚えてnilを返し、今の補完が終わった後に続けて読む。
     /// 同じ基準で並行して読むと、同じギャップが2つできるため。
     ///
-    /// 1ページに収まらなければ、手元の投稿とつながるまで`maxPages`ページまで続けて読み、ギャップを残さないようにする。
+    /// 満杯のページなら、手元の投稿とつながるまで`maxPages`ページまで続けて読み、ギャップを残さないようにする。
+    /// 満杯でないページなら、`maxPages`によらずギャップを1回は読み、間が空なのを確かめて閉じる。
     /// 2ページ目以降の読み込みに失敗したら、そこで止めて残りをギャップとして残す。1ページ目の結果はもう反映しているため。
     public func fillFromLatest(maxPages: Int = 1) async throws -> [Status]? {
         guard !isFilling else {
@@ -139,10 +142,11 @@ public final class TimelineStore {
                 unfilledSinceID = nil
             }
             added += merge(page.statuses)
-            if page.statuses.count >= pageSize, let oldestFetched = Self.oldest(of: page.statuses) {
+            if let oldestFetched = Self.oldest(of: page.statuses) {
                 let gap = TimelineGap(newerID: oldestFetched.id, olderID: sinceID)
                 rebuild(statuses: statuses, gaps: gaps + [gap])
-                added += await fillGap(gap.id, pages: maxPages - 1)
+                let isFull = page.statuses.count >= pageSize
+                added += await fillGap(gap.id, pages: isFull ? maxPages - 1 : max(maxPages - 1, 1))
             }
             next = refillSinceID
             refillSinceID = nil
@@ -158,39 +162,66 @@ public final class TimelineStore {
         case fromOlder
     }
 
-    /// ギャップを1ページ分読み、新たに加わった投稿を新しい順に返す。読み切れなかった分はギャップとして残す。
+    /// ギャップを読み、新たに加わった投稿を新しい順に返す。読み切れなかった分はギャップとして残す。
     /// そのギャップがない、または読み込み中なら何もせずnilを返す。
+    ///
+    /// ギャップを閉じるのは0件が返ったときだけにする。求めた件数より少なく返すサーバーでは、満杯でないページの先にも投稿が残っているため。
+    /// 満杯のページなら、続きは次の読み込みに任せる。満杯でないページなら、その場でもう1回だけ読み、0件ならギャップを閉じる。
+    /// 間が空のギャップを、もう一度読み込むまで残さないため。
     public func loadGap(_ id: String, from direction: GapDirection) async throws -> [Status]? {
-        guard let gap = gaps.first(where: { $0.id == id }), !loadingGapIDs.contains(id) else { return nil }
+        guard gaps.contains(where: { $0.id == id }), !loadingGapIDs.contains(id) else { return nil }
         loadingGapIDs.insert(id)
         defer { loadingGapIDs.remove(id) }
 
-        let query = switch direction {
-        case .fromNewer: TimelineQuery(maxID: gap.newerID, sinceID: gap.olderID, limit: pageSize)
-        case .fromOlder: TimelineQuery(maxID: gap.newerID, minID: gap.olderID, limit: pageSize)
+        var added: [Status] = []
+        for attempt in 0..<2 {
+            // 読んでいる間に削除などで並びが変わっていても、ギャップはIDで探し直す。
+            guard let gap = gaps.first(where: { $0.id == id }) else { break }
+            let page: TimelinePage
+            do {
+                page = try await fetch(Self.query(for: gap, from: direction, limit: pageSize))
+            } catch {
+                // 確かめるための2回目が失敗しても、1回目で読めた分は反映済みなので、ギャップを残して返す。
+                guard attempt > 0 else { throw error }
+                logger.error("gap confirmation failed: \(error.localizedDescription, privacy: .public)")
+                break
+            }
+            added += merge(page.statuses)
+            guard shrink(id, by: page, from: direction), page.statuses.count < pageSize, !page.isRegenerating else { break }
         }
-        let page = try await fetch(query)
-        let added = merge(page.statuses)
-        // 読んでいる間に削除などで並びが変わっていても、ギャップはIDで探し直す。
+        return added.sorted { StatusID.isNewer($0.id, than: $1.id) }
+    }
+
+    private static func query(for gap: TimelineGap, from direction: GapDirection, limit: Int) -> TimelineQuery {
+        switch direction {
+        case .fromNewer: TimelineQuery(maxID: gap.newerID, sinceID: gap.olderID, limit: limit)
+        case .fromOlder: TimelineQuery(maxID: gap.newerID, minID: gap.olderID, limit: limit)
+        }
+    }
+
+    /// 読んだページの分だけギャップを縮める。0件なら閉じる。再生成中の0件は結果が揃っていないため残す。
+    /// ギャップが残っていればtrueを返す。
+    private func shrink(_ id: String, by page: TimelinePage, from direction: GapDirection) -> Bool {
         var remaining = gaps
-        guard let index = remaining.firstIndex(where: { $0.id == id }) else { return added }
-        if page.statuses.count < pageSize, !page.isRegenerating {
+        guard let index = remaining.firstIndex(where: { $0.id == id }) else { return false }
+        if page.statuses.isEmpty {
+            guard !page.isRegenerating else { return true }
             remaining.remove(at: index)
-        } else if !page.statuses.isEmpty {
-            // 満杯のページなら続きがある。再生成中の短いページは結果が揃っていない。どちらも読めた分だけ縮めてギャップを残す。
-            switch direction {
-            case .fromNewer:
-                if let oldestFetched = Self.oldest(of: page.statuses) {
-                    remaining[index] = remaining[index].narrowed(newerID: oldestFetched.id)
-                }
-            case .fromOlder:
-                if let newestFetched = Self.newest(of: page.statuses) {
-                    remaining[index] = remaining[index].narrowed(olderID: newestFetched.id)
-                }
+            rebuild(statuses: statuses, gaps: remaining)
+            return false
+        }
+        switch direction {
+        case .fromNewer:
+            if let oldestFetched = Self.oldest(of: page.statuses) {
+                remaining[index] = remaining[index].narrowed(newerID: oldestFetched.id)
+            }
+        case .fromOlder:
+            if let newestFetched = Self.newest(of: page.statuses) {
+                remaining[index] = remaining[index].narrowed(olderID: newestFetched.id)
             }
         }
         rebuild(statuses: statuses, gaps: remaining)
-        return added
+        return true
     }
 
     /// ギャップを新しい側から最大`pages`ページ読み、加わった投稿を返す。失敗したらそこで止め、ギャップを残す。

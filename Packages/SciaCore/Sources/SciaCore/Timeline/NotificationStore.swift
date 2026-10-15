@@ -104,8 +104,9 @@ public final class NotificationStore {
             }
             unfilledSinceID = nil
             if sinceID == nil {
-                // 1件もないところへ読んだ最新のページが満杯なら、さらに古い通知があるかもしれない。
-                reachedEnd = fetched.count < pageSize
+                // 1件もないところへ読んだ最新のページに通知があれば、さらに古い通知があるかもしれない。
+                // 満杯かどうかでは判断しない。求めた件数より少なく返すサーバーがあるため。
+                reachedEnd = fetched.isEmpty
             }
             if isConnected {
                 added += merge(fetched)
@@ -122,23 +123,34 @@ public final class NotificationStore {
         return Self.sorted(added)
     }
 
-    /// `sinceID`より新しい通知を、最新の側から最大`maxPages`ページ読む。最後のページが満杯でなければ、手元とつながっている。
+    /// `sinceID`より新しい通知を、最新の側から最大`maxPages`ページ読む。0件が返ったら、手元とつながっている。
     /// `sinceID`がなければ、手元に通知がないため、最新の1ページだけ読んでつながったものとする。
+    ///
+    /// 満杯でないページだけでは、つながったと判断しない。求めた件数より少なく返すサーバーでは、その下にも通知が残っているため。
+    /// 上限のページを読んだ時点でそのページが満杯でなければ、0件かを確かめるために1回だけ多く読む。
     private func fetchNewer(than sinceID: String?, maxPages: Int) async throws -> ([MastodonNotification], isConnected: Bool) {
         guard let sinceID else {
             return (try await fetch(TimelineQuery(limit: pageSize)), true)
         }
         var fetched: [MastodonNotification] = []
         var maxID: String?
-        for _ in 0..<max(maxPages, 1) {
+        var remainingPages = max(maxPages, 1)
+        var canConfirm = true
+        while true {
             let page = try await fetch(TimelineQuery(maxID: maxID, sinceID: sinceID, limit: pageSize))
-            fetched += page
-            guard page.count >= pageSize, let oldest = Self.sorted(page).last else {
+            guard let oldest = Self.sorted(page).last else {
                 return (fetched, true)
             }
+            fetched += page
             maxID = oldest.id
+            remainingPages -= 1
+            guard remainingPages == 0 else { continue }
+            guard page.count < pageSize, canConfirm else {
+                return (fetched, false)
+            }
+            canConfirm = false
+            remainingPages = 1
         }
-        return (fetched, false)
     }
 
     // MARK: - ストリーミング
