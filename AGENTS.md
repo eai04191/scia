@@ -9,6 +9,12 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `Packages/SciaCore`: UIに依存しないロジック（モデル、APIクライアント、ストリーミング、タイムラインの状態管理）。iOSとmacOSで共有するため、UIKit／AppKit／SwiftUIをimportしない
 - `App/Sources`: iOSアプリ（UIKitライフサイクル）
 
+## 文書の使い分け
+
+- `docs/vision.md`: 何を作り、何を作らないかと、設計の判断の基準。作業が終わっても残す考え方を書く
+- `docs/roadmap.md`: 作業の単位と順序。1項目1行で、何をするかだけを書く。設計の判断や、作業を進めるための細かい合意・状態・調べて分かったことは書かない
+- 作業を別のthreadへ引き継ぐためのメモ（合意した細部、進み具合、検証の道具など）は、元のcheckoutの`.handoff/`に置く。`.git/info/exclude`で除いてあるのでcommitされない。worktreeは作業が終わると消えるため、worktreeの中には置かない。作業が終わったら消す
+
 ## コマンド
 
 - `make generate`: Xcodeプロジェクトを生成する
