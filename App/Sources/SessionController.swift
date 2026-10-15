@@ -363,6 +363,10 @@ final class SessionController {
             DebugFaults.corruptListElements()
             home.start()
             notifications.start()
+        case .status(let statusCode):
+            DebugFaults.fail(withStatus: statusCode)
+            home.start()
+            notifications.start()
         }
     }
     #endif

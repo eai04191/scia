@@ -12,6 +12,8 @@ enum DebugURL: Equatable {
     case unauthorized
     /// `scia-debug://unreadable`。以後のホームと通知の応答の一部を読めない形に壊し、読み込み直す。
     case unreadable
+    /// `scia-debug://status/<ステータスコード>`。以後のREST APIにそのステータスのHTMLのエラーページを返させ、読み込み直す。
+    case status(Int)
 
     init?(_ url: URL) {
         guard url.scheme == Self.scheme else { return nil }
@@ -23,6 +25,9 @@ enum DebugURL: Equatable {
             self = .unauthorized
         case "unreadable":
             self = .unreadable
+        case "status":
+            guard let statusCode = Int(url.lastPathComponent), (100..<600).contains(statusCode) else { return nil }
+            self = .status(statusCode)
         default:
             return nil
         }

@@ -14,6 +14,15 @@ enum DebugFaults {
         rejectsAsUnauthorized.withLock { $0 = true }
     }
 
+    /// 決めると、以後のREST APIのリクエストに、そのステータスコードとHTMLのエラーページを返す。プロキシやサーバーの障害を再現する。
+    private static let failingStatusCode = Mutex<Int?>(nil)
+
+    static var failingStatus: Int? { failingStatusCode.withLock { $0 } }
+
+    static func fail(withStatus statusCode: Int) {
+        failingStatusCode.withLock { $0 = statusCode }
+    }
+
     /// 立てると、以後のホームと通知の応答のうち、3件に1件を読めない形に壊す。読めなかった投稿や通知の行を、実際の読み込みの経路で確かめる。
     private static let corruptsListElements = Mutex(false)
 
@@ -42,6 +51,11 @@ struct FaultInjectingTransport: HTTPTransport {
            let url = request.url,
            let response = HTTPURLResponse(url: url, statusCode: 401, httpVersion: nil, headerFields: nil) {
             return (Data(#"{"error":"The access token is invalid"}"#.utf8), response)
+        }
+        if let statusCode = DebugFaults.failingStatus,
+           let url = request.url,
+           let response = HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: ["Content-Type": "text/html"]) {
+            return (Data("<html><body><h1>\(statusCode)</h1><p>nginx</p></body></html>".utf8), response)
         }
         let (data, response) = try await base.send(request)
         let path = request.url?.path() ?? ""
