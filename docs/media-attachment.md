@@ -15,13 +15,13 @@
 
 - 低い状態で写真の上を上へ払うと、最大に広がって部品が出る。下げると部品が消える
 - 下へ払うか、最大で✓を押すと閉じる。閉じることが決まった時点で、キーボードが上がってくる
-- 選んだ写真はその場で受け取る。上限は4枚
+- 選んだ写真はその場で受け取る。枚数の上限は接続先のサーバーに合わせる
 - シートを出している間も、投稿欄は書いている形のまま、低いシートのすぐ上に留まる。投稿欄のメディアのボタンをもう一度押すか、入力欄に触れると、シートを閉じてキーボードに戻る
 - 前に選んだものがある状態で開き直すと、ピッカーは前に選んだ写真の位置で開く
 
 ## 実装の決め事
 
-- 選択は`selection = .continuousAndOrdered`で受け取り、`selectionLimit = 4`にする
+- 選択は`selection = .continuousAndOrdered`で受け取る。`selectionLimit`は、`/api/v2/instance`の`configuration.statuses.max_media_attachments`（Mastodon 4.0から）にする。項目がないサーバーでは、Mastodonの既定値の4にする
 - シートの`detents`は低い（独自の高さ）と`.large()`の2つにする。`largestUndimmedDetentIdentifier`は低いほう、`prefersScrollingExpandsWhenScrolledToEdge`は`true`にする
 - 部品の出し入れは、余白の設定`edgesWithoutContentMargins`で行う。低いときは`.all`、最大のときは`[]`にすると、バーが消えたり出たりする。`sheetPresentationControllerDidChangeSelectedDetentIdentifier`で高さの変化を受け取り、`updatePicker(using:)`で切り替える。`disabledCapabilities`はピッカーを作った後に変えられないので使わない
 - キーボードは、`presentationControllerWillDismiss`で`transitionCoordinator.notifyWhenInteractionChanges`を待ち、閉じることが決まった時点（キャンセルされていないとき）で出す。`presentationControllerDidDismiss`まで待つと、シートが閉じ終わってから一拍遅れて出る
@@ -56,7 +56,7 @@
 - ピッカーをキーボードの代わりに出す（`inputViewController`に埋め込む）: キーボードと同じ高さで入れ替えられ、選択もその場で届いた。ただし切り替えは瞬時で動きがなく、セルの大きさや並びは変えられない
 - ピッカーを自前の入れ物に入れてシートで出す: 入れ物にはフラグが立たないので選んでも閉じられ、✓も要らない。ただしピッカーは別プロセスで動くため、シートから写真のスクロールが見えず、写真の上を払ってもシートが広がらない。上端に自前のつまみの帯を置かないと広げられない
 - 選択を✓を押したときだけ受け取る（`continuous`にしない）: ✓は公式に通知されるが、選んだメディアがその場で反映されない。選択がある間は払って閉じられず、部品を消した低い状態では✓も見えないので、閉じられなくなる
-- 上限を無制限にして、4枚の制限をアプリ側で守る: 「4項目まで選択できます。」の表示は消えるが、5枚目を押しても何も起きないように見える
+- 上限を無制限にして、枚数の上限をアプリ側で守る: 「4項目まで選択できます。」の表示は消えるが、5枚目を押しても何も起きないように見える
 - PhotoKitで独自のグリッドを作る: 見た目は自由にできるが、写真ライブラリへのアクセス許可が要る
 
 ## 未決のこと
