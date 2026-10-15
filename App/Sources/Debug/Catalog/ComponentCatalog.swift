@@ -9,6 +9,7 @@ import UIKit
 /// デバッグメニューの「部品カタログ」か、`scia-debug://catalog/<rawValue>`で開く。
 enum CatalogComponent: String, CaseIterable {
     case attachmentStrip = "attachment-strip"
+    case draftStatus = "draft-status"
     case altTextEditor = "alt-text-editor"
     case caption
     case statusChip = "status-chip"
@@ -23,6 +24,7 @@ enum CatalogComponent: String, CaseIterable {
     var title: String {
         switch self {
         case .attachmentStrip: "投稿欄の添付のサムネイル"
+        case .draftStatus: "ビューアのアップロードの状態"
         case .altTextEditor: "代替テキストの入力欄"
         case .caption: "ビューアの説明"
         case .statusChip: "操作が済んだことを知らせる表示"
@@ -40,6 +42,7 @@ enum CatalogComponent: String, CaseIterable {
     func makeStates() -> [CatalogState] {
         switch self {
         case .attachmentStrip: AttachmentStripCatalog.states()
+        case .draftStatus: DraftStatusCatalog.states()
         case .altTextEditor: AltTextEditorCatalog.states()
         case .caption: CaptionCatalog.states()
         case .statusChip: StatusChipCatalog.states()
