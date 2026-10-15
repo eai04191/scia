@@ -87,6 +87,15 @@ public enum TuningCatalog {
         defaultValue: 16
     )
 
+    /// 投稿の名前の行が入りきらないときに、行末をぼかす幅。
+    public static let nameFadeWidth = NumberTuning(
+        id: "timeline.nameFadeWidth",
+        title: "名前の行末をぼかす幅（pt）",
+        range: 4...60,
+        step: 2,
+        defaultValue: 20
+    )
+
     /// ストリーミングで届いた新着を、まとめてタイムラインに挿入する間隔。最初の新着が届いてからこの時間待つ。
     public static let insertionInterval = NumberTuning(
         id: "streaming.insertionInterval",
@@ -305,6 +314,7 @@ public enum TuningCatalog {
             .number(paragraphSpacing),
             .number(avatarSize),
             .number(boosterAvatarSize),
+            .number(nameFadeWidth),
             .number(mediaTallestAspectRatio),
             .number(mediaThumbnailUpscaleTolerance),
         ]),
