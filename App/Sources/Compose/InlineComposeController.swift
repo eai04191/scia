@@ -1,4 +1,5 @@
 import Observation
+import os
 import SciaCore
 import UIKit
 
@@ -23,6 +24,7 @@ final class InlineComposeController: NSObject {
 
     private weak var host: UIViewController?
     private let tuning: TuningStore
+    private let logger = SciaLog.logger(category: "compose")
     /// 書いていないときに見せる、下書きの1行。押すと書き始める。
     private let restRow = UIControl()
     private let restLabel = UILabel()
@@ -106,6 +108,7 @@ final class InlineComposeController: NSObject {
             restingBottom,
         ])
         bar.onFrameChange = { [weak self] in self?.reportObscuredHeight() }
+        AppDependencies.stateDumps.register("composer", owner: self) { $0.stateDump() }
         applyEditingLayout()
         observeModel()
         observeTuning()
@@ -119,6 +122,37 @@ final class InlineComposeController: NSObject {
         bar.layoutIfNeeded()
         textDidChange()
         textView.becomeFirstResponder()
+    }
+
+    /// キーボードを閉じて、バーを細いカプセルに戻す。
+    func endEditing() {
+        textView.resignFirstResponder()
+    }
+
+    /// 違和感レポートに残す状態。行が重なっていれば、どの行かも書く。
+    func stateDump() -> String {
+        """
+        editing: \(isEditing) firstResponder: \(textView.isFirstResponder) replyTo: \(model.replyTo?.id ?? "nil")
+        bar.frame: \(bar.frame)
+        rows: \(rowStates.map { "\($0.name) hidden=\($0.view.isHidden) frame=\($0.view.frame)" }.joined(separator: ", "))
+        overlaps: \(overlappingRows.isEmpty ? "none" : overlappingRows.joined(separator: ", "))
+        replyChip: title=\(replyButton.configuration?.title ?? "nil") frame=\(replyButton.frame) label=\(replyButton.titleLabel.map { "text=\($0.text ?? "nil") frame=\($0.frame) alpha=\($0.alpha) hidden=\($0.isHidden)" } ?? "nil")
+        """
+    }
+
+    private var rowStates: [(name: String, view: UIView)] {
+        [("rest", restRow), ("reply", replyRow), ("text", textView), ("tools", tools)]
+    }
+
+    /// 表示しているのに高さを確保できていない行と、縦に重なっている行の組み。
+    /// スタックビューが行を隠したものとして扱うと、行は見えたまま高さが0になり、中身が下の行に重なって描かれる。
+    var overlappingRows: [String] {
+        let visible = rowStates.filter { !$0.view.isHidden && $0.view.alpha > 0 }
+        let collapsed = visible.filter { $0.view.frame.height < 1 }.map { "\($0.name)(高さ0)" }
+        let overlapped = zip(visible, visible.dropFirst()).compactMap { upper, lower in
+            upper.view.frame.maxY > lower.view.frame.minY + 0.5 ? "\(upper.name)/\(lower.name)" : nil
+        }
+        return collapsed + overlapped
     }
 
     /// 返信先を付けて書き始める。
@@ -155,6 +189,8 @@ final class InlineComposeController: NSObject {
         UIView.animate(withDuration: tuning.value(of: TuningCatalog.composeMorphDuration), delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
             self.applyEditingLayout()
             self.host?.view.layoutIfNeeded()
+        } completion: { _ in
+            self.logOverlappingRows(after: editing ? "begin editing" : "end editing")
         }
     }
 
@@ -177,6 +213,16 @@ final class InlineComposeController: NSObject {
     private func setRowHidden(_ view: UIView, _ hidden: Bool) {
         guard view.isHidden != hidden else { return }
         view.isHidden = hidden
+    }
+
+    /// 行が重なっていたら、違和感レポートで追えるようログに残す。
+    /// 画面に置いた直後は、まだ大きさが決まっておらず行の高さがどれも0なので見ない。
+    private func logOverlappingRows(after event: String) {
+        guard bar.window != nil, bar.bounds.height > 0 else { return }
+        bar.layoutIfNeeded()
+        let overlaps = overlappingRows
+        guard !overlaps.isEmpty else { return }
+        logger.error("rows overlap after \(event, privacy: .public): \(overlaps.joined(separator: ", "), privacy: .public)")
     }
 
     /// 書いていないときのバーの高さを、チューニングの値に揃える。
@@ -232,6 +278,7 @@ final class InlineComposeController: NSObject {
 
         restLabel.attributedText = restText(replyAcct: replyAcct)
         presentErrorIfNeeded()
+        logOverlappingRows(after: "update")
     }
 
     /// 書いている間に札を出したり消したりするときは、パッと切り替えず、札を薄くしながら行を縮める（広げる）。
