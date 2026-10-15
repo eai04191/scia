@@ -1,5 +1,6 @@
 import Observation
 import os
+import PhotosUI
 import SciaCore
 import UIKit
 
@@ -67,6 +68,16 @@ final class InlineComposeController: NSObject {
     private let tools = UIStackView()
     /// 入力バーの中身を載せるスクロールビュー。バーを下へ引くと、キーボードが指に付いて下がる。
     private let dragArea = KeyboardDragArea()
+    private lazy var mediaButton = UIButton(configuration: .plain(), primaryAction: UIAction { [weak self] _ in self?.toggleMediaPicker() })
+    /// メディアを選ぶシート。出している間だけある。
+    private var mediaPicker: MediaPickerSheet?
+    /// 選んだメディアのID。シートを開き直したときに選んだ状態で出す。
+    private var selectedMediaIDs: [String] = []
+    /// 最後に出したキーボードの、画面の下端からの高さ。メディアを選ぶシートをこの高さで出す。
+    private var lastKeyboardHeight: CGFloat?
+    /// メディアを選ぶシートを出している間、キーボードが閉じてもバーをシートの上端に留める。
+    /// シートを閉じてキーボードが上がりきるまで付けておき、バーがタブバーの上に落ちないようにする。
+    private var holdAboveMediaPicker: NSLayoutConstraint?
 
     /// 触れるとわずかに膨らんで明るくなるガラス。押せるものだと指に伝える。
     private static func interactiveGlass() -> UIGlassEffect {
@@ -85,6 +96,10 @@ final class InlineComposeController: NSObject {
         self.tuning = tuning
         super.init()
         model.onPosted = { [weak self] in
+            // シートの上に見えている投稿ボタンから送ったときは、入力欄はもうキーボードを出していないので、シートを閉じて書き終える。
+            self?.mediaPicker?.close(notifiesWillClose: false)
+            // 下書きは投稿できたときに空になるので、選んだメディアも外し、次の投稿に持ち越さない。
+            self?.mediaSelectionDidChange([])
             self?.textView.resignFirstResponder()
             self?.onPosted()
         }
@@ -107,6 +122,9 @@ final class InlineComposeController: NSObject {
             bar.bottomAnchor.constraint(lessThanOrEqualTo: host.view.keyboardLayoutGuide.topAnchor, constant: -barSpacing),
             restingBottom,
         ])
+        holdAboveMediaPicker = bar.bottomAnchor.constraint(lessThanOrEqualTo: host.view.bottomAnchor)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChangeFrame(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardDidShow(_:)), name: UIResponder.keyboardDidShowNotification, object: nil)
         bar.onFrameChange = { [weak self] in self?.reportObscuredHeight() }
         AppDependencies.stateDumps.register("composer", owner: self) { $0.stateDump() }
         applyEditingLayout()
@@ -133,6 +151,7 @@ final class InlineComposeController: NSObject {
     func stateDump() -> String {
         """
         editing: \(isEditing) firstResponder: \(textView.isFirstResponder) replyTo: \(model.replyTo?.id ?? "nil")
+        mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") holdAbovePicker: \(holdAboveMediaPicker?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil") selectedMedia: \(selectedMediaIDs.count)
         bar.frame: \(bar.frame)
         rows: \(rowStates.map { "\($0.name) hidden=\($0.view.isHidden) frame=\($0.view.frame)" }.joined(separator: ", "))
         overlaps: \(overlappingRows.isEmpty ? "none" : overlappingRows.joined(separator: ", "))
@@ -165,12 +184,115 @@ final class InlineComposeController: NSObject {
 
     /// 書きかけの下書きのまま、全画面の投稿画面に広げる。
     func expand() {
+        if let mediaPicker {
+            // シートを出したままでは全画面の投稿画面を出せないので、閉じ終わってから広げる。
+            mediaPicker.onDidClose = { [weak self] in
+                self?.mediaPickerDidClose()
+                self?.onExpand()
+            }
+            mediaPicker.close(notifiesWillClose: false)
+            return
+        }
         textView.resignFirstResponder()
         onExpand()
     }
 
     private func submit() {
         Task { await model.submit() }
+    }
+
+    // MARK: - メディアを選ぶシート
+
+    /// 出していなければシートを出し、出していれば閉じてキーボードに戻る。
+    /// 払って閉じられなくなったときの逃げ道も兼ねる。シートの上に見えているこのボタンからは、いつでも閉じられる。
+    private func toggleMediaPicker() {
+        if let mediaPicker {
+            // 閉じる途中に押されたら、本来はシートを開き直したい。ただしUIKitは閉じ終わるまで次のシートを出せず、
+            // 閉じ終わってから開き直すと、上がってきたキーボードがまた下がる往復になる。どちらが良いか決めていない試作なので、今は押されたことだけを残す。
+            guard !mediaPicker.isClosing else {
+                logger.info("media picker: button tapped while closing, ignored")
+                return
+            }
+            logger.info("media picker: closing from compose button")
+            mediaPicker.close(notifiesWillClose: true)
+            return
+        }
+        presentMediaPicker()
+    }
+
+    /// キーボードと同じ高さのシートを出し、バーをその上端に留めたまま、書いている状態を保つ。
+    private func presentMediaPicker() {
+        guard let host, isEditing else { return }
+        let fixedHeight = tuning.value(of: TuningCatalog.composePickerHeight)
+        let matchesKeyboard = tuning.value(of: TuningCatalog.composePickerMatchesKeyboard)
+        let height = matchesKeyboard ? (lastKeyboardHeight ?? fixedHeight) : fixedHeight
+        setHoldAboveMediaPicker(height: height)
+        // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
+        let picker = MediaPickerSheet(
+            selectedIDs: selectedMediaIDs,
+            selectionLimit: model.maxMediaAttachments,
+            lowHeight: height - host.view.safeAreaInsets.bottom
+        )
+        picker.onSelectionChange = { [weak self] results in self?.mediaSelectionDidChange(results) }
+        picker.onWillClose = { [weak self] in self?.textView.becomeFirstResponder() }
+        picker.onDidClose = { [weak self] in self?.mediaPickerDidClose() }
+        mediaPicker = picker
+        logger.info("media picker: presenting (height=\(height), keyboardHeight=\(self.lastKeyboardHeight ?? -1))")
+        textView.resignFirstResponder()
+        picker.present(from: host)
+    }
+
+    private func mediaSelectionDidChange(_ results: [PHPickerResult]) {
+        selectedMediaIDs = results.compactMap(\.assetIdentifier)
+        mediaButton.configuration?.title = selectedMediaIDs.isEmpty ? nil : "\(selectedMediaIDs.count)"
+    }
+
+    /// キーボードに戻らずに閉じたとき（全画面に広げたときなど）は、書き終えたときと同じくバーを細いカプセルに戻す。
+    private func mediaPickerDidClose() {
+        logger.info("media picker: did close (firstResponder=\(self.textView.isFirstResponder))")
+        mediaPicker = nil
+        // シートを出している間に投稿に失敗していたら、ここで知らせる。
+        presentErrorIfNeeded()
+        guard !textView.isFirstResponder else { return }
+        releaseHoldAboveMediaPicker()
+        setEditing(false)
+    }
+
+    private func setHoldAboveMediaPicker(height: CGFloat) {
+        guard let holdAboveMediaPicker else { return }
+        holdAboveMediaPicker.constant = -(height + barSpacing)
+        holdAboveMediaPicker.isActive = true
+        animateBarPosition()
+    }
+
+    private func releaseHoldAboveMediaPicker() {
+        guard let holdAboveMediaPicker, holdAboveMediaPicker.isActive else { return }
+        holdAboveMediaPicker.isActive = false
+        animateBarPosition()
+    }
+
+    /// シートの高さとキーボードの高さが違うときに、バーが飛ばずに動くようにする。
+    private func animateBarPosition() {
+        UIView.animate(withDuration: tuning.value(of: TuningCatalog.composeMorphDuration), delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            self.host?.view.layoutIfNeeded()
+        }
+    }
+
+    /// シートをキーボードと同じ高さで出せるよう、キーボードの高さを覚えておく。
+    /// ハードウェアキーボードでは候補の段だけになるので、低すぎる高さは覚えない。
+    @objc private func keyboardWillChangeFrame(_ notification: Notification) {
+        guard let host, let window = host.view.window,
+              let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+        let keyboardTop = host.view.convert(window.convert(frame, from: nil), from: window).minY
+        let height = host.view.bounds.maxY - keyboardTop
+        guard height > 100 else { return }
+        lastKeyboardHeight = height
+    }
+
+    /// シートを閉じてキーボードが上がりきったら、バーをキーボードに付ける。
+    @objc private func keyboardDidShow(_ notification: Notification) {
+        guard textView.isFirstResponder else { return }
+        releaseHoldAboveMediaPicker()
     }
 
     /// バーの上端から画面の下端までを覆っている。書いていればキーボードも含む。バーが動くたびに測り直す。
@@ -457,7 +579,11 @@ final class InlineComposeController: NSObject {
 
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        for view in [visibilityButton, expandButton, spacer, remainingLabel, sendButton] {
+        mediaButton.configuration?.image = UIImage(systemName: "photo.on.rectangle")
+        mediaButton.configuration?.baseForegroundColor = .label
+        mediaButton.configuration?.imagePadding = 4
+        mediaButton.accessibilityLabel = "メディアを添付"
+        for view in [visibilityButton, mediaButton, expandButton, spacer, remainingLabel, sendButton] {
             tools.addArrangedSubview(view)
         }
         tools.alignment = .center
@@ -500,7 +626,18 @@ extension InlineComposeController: UITextViewDelegate {
         textDidChange()
     }
 
+    /// シートを出している間に入力欄に触れたら、シートを閉じてキーボードに戻る。
+    func textViewDidBeginEditing(_ textView: UITextView) {
+        guard let mediaPicker, !mediaPicker.isClosing else { return }
+        logger.info("media picker: closing because text view began editing")
+        mediaPicker.close(notifiesWillClose: false)
+    }
+
     func textViewDidEndEditing(_ textView: UITextView) {
+        // メディアを選ぶシートを出すためにキーボードを閉じたときは、書いている状態のままにする。
+        // シートを閉じたあとに書き終えたときは、キーボードが上がりきった知らせが来ずにバーを留めたままでも、カプセルに戻す。
+        guard mediaPicker == nil else { return }
+        releaseHoldAboveMediaPicker()
         setEditing(false)
     }
 }
