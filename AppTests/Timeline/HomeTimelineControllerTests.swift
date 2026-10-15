@@ -22,7 +22,7 @@ struct HomeTimelineControllerTests {
         transport: some HTTPTransport,
         connector: some WebSocketConnector = MessageQueueConnector(),
         tuning: TuningStore = TuningStore(defaults: nil),
-        onUnauthorized: @escaping (HomeTimelineController, String) -> Void = { _, _ in }
+        onUnauthorized: @escaping () -> Void = {}
     ) throws -> HomeTimelineController {
         let credential = try makeCredential()
         return HomeTimelineController(
@@ -60,7 +60,7 @@ struct HomeTimelineControllerTests {
             return (401, Data(#"{"error":"The access token is invalid"}"#.utf8))
         }
         let reported = Box(false)
-        let controller = try makeController(transport: transport) { _, _ in
+        let controller = try makeController(transport: transport) {
             reported.value = true
         }
 

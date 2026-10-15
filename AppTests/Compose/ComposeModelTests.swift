@@ -13,7 +13,7 @@ struct ComposeModelTests {
         Status(
             id: "10",
             createdAt: .now,
-            account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: try #require(URL(string: "https://example.social/a.png"))),
+            account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://example.social/a.png")),
             content: "",
             spoilerText: spoilerText,
             url: nil,

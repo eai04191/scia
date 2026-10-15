@@ -29,7 +29,7 @@ struct InlineComposeControllerTests {
         Status(
             id: id,
             createdAt: .now,
-            account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: try #require(URL(string: "https://example.social/a.png"))),
+            account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://example.social/a.png")),
             content: "",
             spoilerText: "",
             url: nil
@@ -79,7 +79,7 @@ struct InlineComposeControllerTests {
     @Test func replyChipKeepsWidthWhenReselectingBoostOfSameStatus() async throws {
         defer { window.isHidden = true }
         let original = try status(id: "10")
-        let booster = Account(id: "3", username: "carol", acct: "carol", displayName: "Carol", avatar: try #require(URL(string: "https://example.social/c.png")))
+        let booster = Account(id: "3", username: "carol", acct: "carol", displayName: "Carol", avatar: URL(string: "https://example.social/c.png"))
         let boost = Status(id: "20", createdAt: .now, account: booster, content: "", spoilerText: "", url: nil, reblog: original)
 
         composer.reply(to: original)
