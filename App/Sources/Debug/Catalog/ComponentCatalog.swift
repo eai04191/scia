@@ -17,6 +17,8 @@ enum CatalogComponent: String, CaseIterable {
     case timelineRows = "timeline-rows"
     case mediaGrid = "media-grid"
     case profileHeader = "profile-header"
+    case posts
+    case notifications
 
     var title: String {
         switch self {
@@ -29,6 +31,8 @@ enum CatalogComponent: String, CaseIterable {
         case .timelineRows: "読めない行とギャップの行"
         case .mediaGrid: "一覧の添付ファイルのサムネイル"
         case .profileHeader: "プロフィールのヘッダー"
+        case .posts: "一覧の投稿"
+        case .notifications: "通知の種類"
         }
     }
 
@@ -44,6 +48,8 @@ enum CatalogComponent: String, CaseIterable {
         case .timelineRows: TimelineCatalog.rowStates()
         case .mediaGrid: MediaGridCatalog.states()
         case .profileHeader: ProfileHeaderCatalog.states()
+        case .posts: PostRowCatalog.postStates()
+        case .notifications: PostRowCatalog.notificationStates()
         }
     }
 }
