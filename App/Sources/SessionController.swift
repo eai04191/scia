@@ -37,7 +37,11 @@ final class SessionController {
     init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, onReauthenticate: @escaping (SessionController) async -> Void) {
         self.credential = credential
         self.onReauthenticate = onReauthenticate
+        #if DEBUG
+        let client = MastodonClient(credential: credential, transport: FaultInjectingTransport(base: URLSessionTransport()))
+        #else
         let client = MastodonClient(credential: credential, transport: URLSessionTransport())
+        #endif
         let streaming = StreamingClient(credential: credential, connector: URLSessionWebSocketConnector())
         authorization = AuthorizationCheck { try await client.verifyCredentials() }
         // selfを作り終える前に組み立てる部品から呼ぶため、後で中身を差し替える。
@@ -352,6 +356,9 @@ final class SessionController {
         switch url {
         case .dummy(let post):
             home.streamDummy(post)
+        case .unauthorized:
+            DebugFaults.rejectAsUnauthorized()
+            reportUnauthorized()
         }
     }
     #endif
