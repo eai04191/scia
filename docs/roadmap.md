@@ -52,3 +52,4 @@ M4までで足りない機能や違和感を、使いながら1つずつ足す�
 - [x] タブバーの上に常に置く投稿欄: 1、2行の短い投稿や返信を、タイムラインを見たまま書けるようにする。書いていないときは細いカプセルにして閲覧を邪魔せず、書くときは同じバーがキーボードの上へ上がる
 - [ ] 投稿欄の下書きを、アプリを起動し直しても残す: いまはメモリにだけ持っている
 - [ ] 投稿欄で注意書き（CW）を書く: いまは全画面の投稿画面に広げたときだけ書ける
+- [ ] Mac（Designed for iPad）で、投稿やチューニングのシートが出始めるまで遅いのを直す: 押してから何も出ずにもたつき、そのあとパッと出る。iPhoneでは起きない。AeroSpaceを終了しても、Releaseビルドでも変わらなかった。Time Profilerでは、シートを出す直前のSwiftUIの最初のレイアウト（`UISheetPresentationController _transitionWillBegin` → `_UIHostingView.layoutSubviews`）に120〜190msかかっていたが、それだけで説明できるかは分かっていない。次はInstrumentsのAnimation HitchesやSwiftUIのテンプレートで、押してから出始めるまでを測る
