@@ -116,6 +116,8 @@ final class AltTextEditorView: UIView {
         let lineHeight = (textView.font ?? .preferredFont(forTextStyle: .body)).lineHeight
         doneButtonCenter.constant = -(textView.textContainerInset.bottom + lineHeight / 2)
         super.layoutSubviews()
+        // 入力欄の幅は、入れたスタックが並べ直したときに決まる。幅が決まる前に文字を入れられていても測れるよう、先に並べさせる。
+        textView.superview?.layoutIfNeeded()
         updateTextHeight()
     }
 
