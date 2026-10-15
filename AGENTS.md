@@ -81,3 +81,4 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 開発のための変更（チューニングパネル、違和感レポート、検証ハーネス、ビルドやlintの設定など）を`feat`・`fix`・`perf`で書くときは、`feat(dev):`、`fix(dev):`のようにdev scopeを付けてリリースノートから外す
 - 使う人向けの変更と開発のための変更は別のcommitに分ける
 - pushはユーザーが行う。agentはcommitまでで止め、pushやpush承認の依頼はしない
+- worktreeの中では、fixup commitを作ることも、`rebase --autosquash`で元のcommitへまとめることも、確認なしで行ってよい。後ろに載ったユーザーのcommitのhashが作り直されても構わない
