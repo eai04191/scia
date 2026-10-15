@@ -6,3 +6,5 @@ xcuserdata/
 DerivedData/
 .build/
 .swiftpm/
+# 人ごとのビルド設定（Config/Base.xcconfigから読み込む）
+Config/Local.xcconfig

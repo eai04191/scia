@@ -5,6 +5,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 ## 構成
 
 - `project.yml`: XcodeGenの定義。`Scia.xcodeproj`と`App/Info.plist`は生成物なのでコミットせず、直接編集しない。ターゲットや設定の変更は`project.yml`で行う
+- `Config/Local.xcconfig`: 署名のチーム（`DEVELOPMENT_TEAM = <チームID>`）など、人ごとに違うビルド設定を書く。コミットしないので、worktreeを作ったら元のcheckoutからコピーする。なくてもシミュレーター向けにはビルドできる
 - `Packages/SciaCore`: UIに依存しないロジック（モデル、APIクライアント、ストリーミング、タイムラインの状態管理）。iOSとmacOSで共有するため、UIKit／AppKit／SwiftUIをimportしない
 - `App/Sources`: iOSアプリ（UIKitライフサイクル）
 

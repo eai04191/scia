@@ -1,0 +1,2 @@
+// 人ごとに違う設定（DEVELOPMENT_TEAMなど）はLocal.xcconfigに書く。Local.xcconfigはコミットせず、なければ読み込まない
+#include? "Local.xcconfig"
