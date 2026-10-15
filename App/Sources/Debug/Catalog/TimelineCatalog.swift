@@ -16,7 +16,7 @@ enum TimelineCatalog {
         let notifications = TimelineViewController(texts: .notifications)
         func state(_ title: String, _ controller: TimelineViewController, _ state: TimelineViewController.ContentState) -> CatalogState {
             CatalogState(title: title) {
-                framed(UIContentUnavailableView(configuration: controller.contentUnavailableConfiguration(for: state)), height: 280)
+                CatalogFrame.bordered(UIContentUnavailableView(configuration: controller.contentUnavailableConfiguration(for: state)), height: 280)
             }
         }
         return [
@@ -37,7 +37,7 @@ enum TimelineCatalog {
             CatalogState(title: title) {
                 let footer = TimelineFooterView()
                 footer.apply(state, reachedEndText: reachedEndText)
-                return framed(footer)
+                return CatalogFrame.bordered(footer)
             }
         }
         return [
@@ -57,7 +57,7 @@ enum TimelineCatalog {
         let home = TimelineViewController(texts: .home)
         let notifications = TimelineViewController(texts: .notifications)
         func row(_ title: String, _ configuration: UIListContentConfiguration) -> CatalogState {
-            CatalogState(title: title) { framed(UIListContentView(configuration: configuration)) }
+            CatalogState(title: title) { CatalogFrame.bordered(UIListContentView(configuration: configuration)) }
         }
         let base = UIListContentConfiguration.cell()
         return [
@@ -66,24 +66,6 @@ enum TimelineCatalog {
             row("読み込んでいない投稿がある", home.gapContentConfiguration(isLoading: false, base: base)),
             row("読み込んでいない投稿を読み込み中", home.gapContentConfiguration(isLoading: true, base: base)),
         ]
-    }
-
-    /// 一覧の中の表示と同じく背景の上に置き、範囲が分かるよう枠を付ける。`height`を渡すと、その高さにする。
-    @MainActor
-    private static func framed(_ content: UIView, height: CGFloat? = nil) -> UIView {
-        let frame = UIView()
-        frame.backgroundColor = .systemBackground
-        frame.layer.borderColor = UIColor.separator.cgColor
-        frame.layer.borderWidth = 1
-        content.translatesAutoresizingMaskIntoConstraints = false
-        frame.addSubview(content)
-        NSLayoutConstraint.activate([
-            content.topAnchor.constraint(equalTo: frame.topAnchor),
-            content.bottomAnchor.constraint(equalTo: frame.bottomAnchor),
-            content.leadingAnchor.constraint(equalTo: frame.leadingAnchor),
-            content.trailingAnchor.constraint(equalTo: frame.trailingAnchor),
-        ] + (height.map { [frame.heightAnchor.constraint(equalToConstant: $0)] } ?? []))
-        return frame
     }
 }
 #endif

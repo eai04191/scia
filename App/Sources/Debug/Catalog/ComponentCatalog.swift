@@ -83,6 +83,27 @@ enum CatalogBackdrop {
     }
 }
 
+/// 一覧の中に出す部品を置く枠。
+enum CatalogFrame {
+    /// 一覧の中の表示と同じく背景の上に置き、範囲が分かるよう枠を付ける。`height`を渡すと、その高さにする。
+    @MainActor
+    static func bordered(_ content: UIView, height: CGFloat? = nil) -> UIView {
+        let frame = UIView()
+        frame.backgroundColor = .systemBackground
+        frame.layer.borderColor = UIColor.separator.cgColor
+        frame.layer.borderWidth = 1
+        content.translatesAutoresizingMaskIntoConstraints = false
+        frame.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.topAnchor.constraint(equalTo: frame.topAnchor),
+            content.bottomAnchor.constraint(equalTo: frame.bottomAnchor),
+            content.leadingAnchor.constraint(equalTo: frame.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: frame.trailingAnchor),
+        ] + (height.map { [frame.heightAnchor.constraint(equalToConstant: $0)] } ?? []))
+        return frame
+    }
+}
+
 extension UIViewController {
     /// 部品のカタログを出す。`component`を渡すと、その部品の状態を並べた画面まで開く。
     /// カタログを出している上で呼ばれたら、重ねずに開いている画面を差し替える。URLで部品を次々に開くため。
