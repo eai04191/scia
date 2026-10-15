@@ -384,7 +384,7 @@ final class MediaTileView: UIButton {
         }
     }
 
-    private static func makeBadge(_ text: String) -> UILabel {
+    static func makeBadge(_ text: String) -> UILabel {
         let label = PaddedLabel()
         label.text = text
         label.font = .preferredFont(forTextStyle: .caption2).bold

@@ -42,6 +42,8 @@ final class InlineComposeController: NSObject {
         self?.onShowReplyTarget(target)
     })
     private lazy var replyRow = makeReplyRow()
+    /// 添付したメディアのサムネイルの列。書いていて、添付があるときだけ出す。
+    private let attachmentStrip = ComposeAttachmentStrip()
     private let textView = ComposeTextView()
     private let placeholderLabel = UILabel()
     /// 書き終えて入力欄を隠すと、スタックビューが高さ0の制約を付ける。それと競合しないよう、必須より1つ下げる。
@@ -71,8 +73,6 @@ final class InlineComposeController: NSObject {
     private lazy var mediaButton = UIButton(configuration: .plain(), primaryAction: UIAction { [weak self] _ in self?.toggleMediaPicker() })
     /// メディアを選ぶシート。出している間だけある。
     private var mediaPicker: MediaPickerSheet?
-    /// 選んだメディアのID。シートを開き直したときに選んだ状態で出す。
-    private var selectedMediaIDs: [String] = []
     /// 最後に出したキーボードの、画面の下端からの高さ。メディアを選ぶシートをこの高さで出す。
     private var lastKeyboardHeight: CGFloat?
     /// メディアを選ぶシートを出している間、キーボードが閉じてもバーをシートの上端に留める。
@@ -97,9 +97,8 @@ final class InlineComposeController: NSObject {
         super.init()
         model.onPosted = { [weak self] in
             // シートの上に見えている投稿ボタンから送ったときは、入力欄はもうキーボードを出していないので、シートを閉じて書き終える。
+            // 添付したメディアは、下書きと一緒にモデルが空にしている。
             self?.mediaPicker?.close(notifiesWillClose: false)
-            // 下書きは投稿できたときに空になるので、選んだメディアも外し、次の投稿に持ち越さない。
-            self?.mediaSelectionDidChange([])
             self?.textView.resignFirstResponder()
             self?.onPosted()
         }
@@ -151,7 +150,8 @@ final class InlineComposeController: NSObject {
     func stateDump() -> String {
         """
         editing: \(isEditing) firstResponder: \(textView.isFirstResponder) replyTo: \(model.replyTo?.id ?? "nil")
-        mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") holdAbovePicker: \(holdAboveMediaPicker?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil") selectedMedia: \(selectedMediaIDs.count)
+        mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") holdAbovePicker: \(holdAboveMediaPicker?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
+        attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
         bar.frame: \(bar.frame)
         rows: \(rowStates.map { "\($0.name) hidden=\($0.view.isHidden) frame=\($0.view.frame)" }.joined(separator: ", "))
         overlaps: \(overlappingRows.isEmpty ? "none" : overlappingRows.joined(separator: ", "))
@@ -160,7 +160,7 @@ final class InlineComposeController: NSObject {
     }
 
     private var rowStates: [(name: String, view: UIView)] {
-        [("rest", restRow), ("reply", replyRow), ("text", textView), ("tools", tools)]
+        [("rest", restRow), ("reply", replyRow), ("attachments", attachmentStrip), ("text", textView), ("tools", tools)]
     }
 
     /// 表示しているのに高さを確保できていない行と、縦に重なっている行の組み。
@@ -222,18 +222,22 @@ final class InlineComposeController: NSObject {
 
     /// キーボードと同じ高さのシートを出し、バーをその上端に留めたまま、書いている状態を保つ。
     private func presentMediaPicker() {
-        guard let host, isEditing else { return }
+        guard let host, isEditing, model.canAttachMedia else { return }
         let fixedHeight = tuning.value(of: TuningCatalog.composePickerHeight)
         let matchesKeyboard = tuning.value(of: TuningCatalog.composePickerMatchesKeyboard)
         let height = matchesKeyboard ? (lastKeyboardHeight ?? fixedHeight) : fixedHeight
         setHoldAboveMediaPicker(height: height)
         // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
         let picker = MediaPickerSheet(
-            selectedIDs: selectedMediaIDs,
+            selectedIDs: model.attachedAssetIdentifiers,
             selectionLimit: model.maxMediaAttachments,
             lowHeight: height - host.view.safeAreaInsets.bottom
         )
-        picker.onSelectionChange = { [weak self] results in self?.mediaSelectionDidChange(results) }
+        picker.onSelectionChange = { [weak self] results in
+            self?.model.applyPickerSelection(results.compactMap { result in
+                result.assetIdentifier.map { LocalMediaLoader.picked(assetIdentifier: $0, provider: result.itemProvider) }
+            })
+        }
         picker.onWillClose = { [weak self] in self?.textView.becomeFirstResponder() }
         picker.onDidClose = { [weak self] in self?.mediaPickerDidClose() }
         mediaPicker = picker
@@ -242,15 +246,11 @@ final class InlineComposeController: NSObject {
         picker.present(from: host)
     }
 
-    private func mediaSelectionDidChange(_ results: [PHPickerResult]) {
-        selectedMediaIDs = results.compactMap(\.assetIdentifier)
-        mediaButton.configuration?.title = selectedMediaIDs.isEmpty ? nil : "\(selectedMediaIDs.count)"
-    }
-
     /// キーボードに戻らずに閉じたとき（全画面に広げたときなど）は、書き終えたときと同じくバーを細いカプセルに戻す。
     private func mediaPickerDidClose() {
         logger.info("media picker: did close (firstResponder=\(self.textView.isFirstResponder))")
         mediaPicker = nil
+        model.mediaPickerDidClose()
         // シートを出している間に投稿に失敗していたら、ここで知らせる。
         presentErrorIfNeeded()
         guard !textView.isFirstResponder else { return }
@@ -326,6 +326,9 @@ final class InlineComposeController: NSObject {
         let showsReply = isEditing && model.replyTo != nil
         setRowHidden(replyRow, !showsReply)
         replyRow.alpha = showsReply ? 1 : 0
+        let showsAttachments = isEditing && !model.attachments.isEmpty
+        setRowHidden(attachmentStrip, !showsAttachments)
+        attachmentStrip.alpha = showsAttachments ? 1 : 0
         stackTop.constant = isEditing ? 10 : restInset
         stackBottom.constant = isEditing ? -10 : -restInset
     }
@@ -379,7 +382,12 @@ final class InlineComposeController: NSObject {
         if let replyAcct {
             setReplyTitle("\(replyAcct)への返信" + (model.showsSpoiler ? "（注意書き付き）" : ""))
         }
-        setReplyRowShown(isEditing && replyAcct != nil)
+        setRowShown(replyRow, isEditing && replyAcct != nil)
+
+        attachmentStrip.update(attachments: model.attachments, localMedia: model.localMedia)
+        setRowShown(attachmentStrip, isEditing && !model.attachments.isEmpty)
+        mediaButton.configuration?.title = model.attachments.isEmpty ? nil : "\(model.attachments.count)"
+        mediaButton.isEnabled = model.canAttachMedia || mediaPicker != nil
 
         let option = VisibilityOption(model.visibility)
         visibilityButton.configuration?.image = UIImage(systemName: option.symbolName)
@@ -403,22 +411,22 @@ final class InlineComposeController: NSObject {
         logOverlappingRows(after: "update")
     }
 
-    /// 書いている間に札を出したり消したりするときは、パッと切り替えず、札を薄くしながら行を縮める（広げる）。
+    /// 書いている間に札やサムネイルの列を出したり消したりするときは、パッと切り替えず、行を薄くしながら縮める（広げる）。
     /// パッと切り替えると、バーの高さが一瞬で変わり、上端とタイムラインの下の余白が飛んで見える。
     /// 書いていないときは、バーの形を変える動きの中で行を出し入れするので、ここでは動かさない。
-    private func setReplyRowShown(_ shown: Bool) {
-        guard replyRow.isHidden == shown else { return }
+    private func setRowShown(_ row: UIView, _ shown: Bool) {
+        guard row.isHidden == shown else { return }
         guard isEditing, bar.window != nil else {
-            setRowHidden(replyRow, !shown)
-            replyRow.alpha = shown ? 1 : 0
+            setRowHidden(row, !shown)
+            row.alpha = shown ? 1 : 0
             return
         }
         if shown {
-            replyRow.alpha = 0
+            row.alpha = 0
         }
         UIView.animate(withDuration: tuning.value(of: TuningCatalog.composeMorphDuration), delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
-            self.setRowHidden(self.replyRow, !shown)
-            self.replyRow.alpha = shown ? 1 : 0
+            self.setRowHidden(row, !shown)
+            row.alpha = shown ? 1 : 0
             self.host?.view.layoutIfNeeded()
         }
     }
@@ -463,6 +471,29 @@ final class InlineComposeController: NSObject {
             self?.model.errorMessage = nil
         })
         host.present(alert, animated: true)
+    }
+
+    /// 失敗した添付を押したら、理由と、送り直すか外すかを聞く。
+    /// 他の添付を押したときにビューアで開くのは、次の段階で作る。
+    private func attachmentSelected(_ id: DraftAttachment.ID) {
+        guard let host, let attachment = model.attachments.first(where: { $0.id == id }), case .failed = attachment.state else { return }
+        let message = model.localMedia[id]?.failure.map { ErrorPresentation($0).text }
+        let alert = UIAlertController(title: "アップロードできませんでした", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "再試行", style: .default) { [weak self] _ in self?.model.retryAttachment(id) })
+        alert.addAction(UIAlertAction(title: "削除", style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            if let assetIdentifier = model.localMedia[id]?.assetIdentifier {
+                mediaPicker?.deselect([assetIdentifier])
+            }
+            model.removeAttachment(id, pickerIsOpen: mediaPicker != nil)
+        })
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        // ピッカーのシートを出していれば、その上に出す。
+        var presenter: UIViewController = host
+        while let presented = presenter.presentedViewController, !presented.isBeingDismissed {
+            presenter = presented
+        }
+        presenter.present(alert, animated: true)
     }
 
     /// 入力が長くなったら、決めた高さまでは伸ばし、超えたら中でスクロールする。
@@ -588,7 +619,8 @@ final class InlineComposeController: NSObject {
         }
         tools.alignment = .center
         tools.spacing = 4
-        for view in [restRow, replyRow, textView, tools] {
+        attachmentStrip.onSelect = { [weak self] id in self?.attachmentSelected(id) }
+        for view in [restRow, replyRow, attachmentStrip, textView, tools] {
             stack.addArrangedSubview(view)
         }
         stack.axis = .vertical

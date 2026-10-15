@@ -71,6 +71,16 @@ final class MediaPickerSheet: NSObject {
         picker.dismiss(animated: true) { [weak self] in self?.onDidClose() }
     }
 
+    /// 投稿欄で外したメディアを、ピッカーの選択からも外す。外さないと、ピッカーの枚数の上限に数えられたままになる。
+    ///
+    /// 外すとピッカーは新しい選択を送ってくる（観察した挙動で、ヘッダーには書かれていない）。それを受けて`selectedIDs`を更新するので、
+    /// ここでは先に書き換えない。先に書き換えると、届いた選択が今の選択と同じになり、✓と見分けられずに閉じてしまう。
+    func deselect(_ ids: [String]) {
+        guard !isClosing, !ids.isEmpty else { return }
+        logger.info("media picker: deselect removed media (count=\(ids.count))")
+        picker.deselectAssets(withIdentifiers: ids)
+    }
+
     private func notifyWillClose() {
         guard !isClosing else { return }
         isClosing = true

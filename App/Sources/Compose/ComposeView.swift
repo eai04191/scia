@@ -35,6 +35,11 @@ struct ComposeView: View {
                             .focused($focusedField, equals: .spoiler)
                     }
                 }
+                if !model.attachments.isEmpty {
+                    Section {
+                        attachments
+                    }
+                }
                 Section {
                     TextField("いまどうしてる？", text: $model.text, axis: .vertical)
                         .lineLimit(6...)
@@ -53,6 +58,38 @@ struct ComposeView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(model.errorMessage ?? "")
+        }
+    }
+
+    /// 添付したメディアのサムネイル。メディアを選んだり外したりするのは、タブバーの上の投稿欄で行う。
+    private var attachments: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(model.attachments) { attachment in
+                    let size = ComposeAttachmentStrip.itemSize
+                    ZStack {
+                        Color(uiColor: .secondarySystemFill)
+                        if let thumbnail = model.localMedia[attachment.id]?.thumbnail {
+                            Image(uiImage: thumbnail)
+                                .resizable()
+                                .scaledToFill()
+                        }
+                        switch attachment.state {
+                        case .uploading, .processing:
+                            Color.black.opacity(0.35)
+                            ProgressView().tint(.white)
+                        case .uploaded:
+                            EmptyView()
+                        case .failed:
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .font(.system(size: 24))
+                                .foregroundStyle(.white, .red)
+                        }
+                    }
+                    .frame(width: size, height: size)
+                    .clipShape(.rect(cornerRadius: MediaGridView.cornerRadius, style: .continuous))
+                }
+            }
         }
     }
 

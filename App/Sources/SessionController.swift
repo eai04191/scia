@@ -98,11 +98,36 @@ final class SessionController {
             (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
         }
         tabBarController.delegate = tabBarDelegate
-        composer = InlineComposeController(model: ComposeModel(myAccountID: credential.accountID) { draft in
+        // トークンの失効は、どのAPIで分かっても同じくログインし直しを促す。
+        let reportIfUnauthorized = { (error: any Error) in
+            if let error = error as? MastodonAPIError, error.isUnauthorized {
+                forward()
+            }
+        }
+        let media = ComposeMediaService(
+            upload: { upload in
+                do {
+                    return try await client.uploadMedia(upload)
+                } catch {
+                    reportIfUnauthorized(error)
+                    throw error
+                }
+            },
+            waitUntilProcessed: { id in
+                do {
+                    return try await client.waitUntilProcessed(id)
+                } catch {
+                    reportIfUnauthorized(error)
+                    throw error
+                }
+            },
+            makeThumbnail: { file in await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize) }
+        )
+        composer = InlineComposeController(model: ComposeModel(myAccountID: credential.accountID, media: media) { draft in
             do {
                 _ = try await client.postStatus(draft)
-            } catch let error as MastodonAPIError where error.isUnauthorized {
-                forward()
+            } catch {
+                reportIfUnauthorized(error)
                 throw error
             }
         })
