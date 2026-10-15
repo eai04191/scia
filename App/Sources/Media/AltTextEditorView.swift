@@ -1,3 +1,4 @@
+import SciaCore
 import UIKit
 
 /// ビューアの下に出す、代替テキストを書く複数行の入力欄。キーボードのすぐ上に付ける。
@@ -13,6 +14,15 @@ final class AltTextEditorView: UIView {
         didSet { updateRemaining() }
     }
 
+    /// 残りの文字数がこれ以下になったら、残りを出す。
+    var remainingThreshold = Int(TuningCatalog.mediaDescriptionRemainingThreshold.defaultValue) {
+        didSet { updateRemaining() }
+    }
+    /// 書いた分だけ伸ばす最大の行数。超えたら伸ばさずに中でスクロールする。
+    var maxLines = Int(TuningCatalog.mediaDescriptionMaxLines.defaultValue) {
+        didSet { updateTextHeight() }
+    }
+
     let textView = UITextView()
     private let placeholderLabel = UILabel()
     private let remainingLabel = UILabel()
@@ -22,11 +32,9 @@ final class AltTextEditorView: UIView {
     /// ボタンの絵の中心を、入力欄の最後の行の中心にそろえる。文字の大きさで行の高さが変わるため、並べ直すたびに合わせる。
     private lazy var doneButtonCenter = doneButton.centerYAnchor.constraint(equalTo: textView.bottomAnchor)
 
-    /// 残りの文字数を出し始める、残りの文字数。
-    private static let remainingThreshold = 100
     /// 入力欄がこれより高くなったら、伸ばさずに中でスクロールする。
     private var maxTextHeight: CGFloat {
-        (textView.font ?? .preferredFont(forTextStyle: .body)).lineHeight * 6 + textView.textContainerInset.top + textView.textContainerInset.bottom
+        (textView.font ?? .preferredFont(forTextStyle: .body)).lineHeight * CGFloat(maxLines) + textView.textContainerInset.top + textView.textContainerInset.bottom
     }
 
     override init(frame: CGRect) {
@@ -134,7 +142,7 @@ final class AltTextEditorView: UIView {
 
     private func updateRemaining() {
         let remaining = remaining
-        remainingLabel.isHidden = remaining > Self.remainingThreshold
+        remainingLabel.isHidden = remaining > remainingThreshold
         remainingLabel.text = "\(remaining)"
         remainingLabel.textColor = remaining < 0 ? .systemRed : UIColor.white.withAlphaComponent(0.7)
         remainingLabel.accessibilityLabel = "残り\(remaining)文字"

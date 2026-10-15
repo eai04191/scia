@@ -207,6 +207,8 @@ struct MediaViewerControllerTests {
         var editing: MediaViewerController.Editing {
             MediaViewerController.Editing(
                 descriptionLimit: 20,
+                descriptionRemainingThreshold: 5,
+                descriptionMaxLines: 3,
                 menuElements: { _ in [UIAction(title: "削除", attributes: .destructive) { _ in }] },
                 commitDescription: { [self] id, text in commits.append((id, text)) },
                 showFailure: { [self] id, _ in failures.append(id) }
@@ -248,6 +250,17 @@ struct MediaViewerControllerTests {
         #expect(actions.commits.map(\.text) == ["黒猫"])
         #expect(actions.commits.map(\.id) == ["a"])
         #expect(viewer.captionView.accessibilityLabel == "黒猫")
+    }
+
+    /// 残りの文字数を出し始める数と入力欄の最大の行数は、投稿欄から渡した値を使う。
+    @Test func draftEditingUsesGivenEditorTuning() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let viewer = presentDraftViewer(on: harness, items: [draftItem("a")], actions: DraftActions())
+        defer { viewer.dismiss(animated: false) }
+
+        #expect(viewer.descriptionEditor.remainingThreshold == 5)
+        #expect(viewer.descriptionEditor.maxLines == 3)
     }
 
     /// 投稿欄から開いたときのメニューは、代替テキストの編集に、投稿欄から渡した項目を続ける。共有や保存は出さない。

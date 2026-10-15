@@ -315,6 +315,24 @@ public enum TuningCatalog {
         defaultValue: false
     )
 
+    /// 代替テキストを書いているとき、残りの文字数がこれ以下になったら残りを出す。
+    public static let mediaDescriptionRemainingThreshold = NumberTuning(
+        id: "media.descriptionRemainingThreshold",
+        title: "代替テキストの残りの文字数を出し始める数",
+        range: 0...1500,
+        step: 10,
+        defaultValue: 100
+    )
+
+    /// 代替テキストの入力欄を、書いた分だけ伸ばす最大の行数。超えたら伸ばさずに中でスクロールする。
+    public static let mediaDescriptionMaxLines = NumberTuning(
+        id: "media.descriptionMaxLines",
+        title: "代替テキストの入力欄の最大の行数",
+        range: 1...12,
+        step: 1,
+        defaultValue: 6
+    )
+
     /// 書いていないときの投稿欄の高さ（pt）。細いほど一覧の閲覧を邪魔しない。
     public static let composeRestingHeight = NumberTuning(
         id: "compose.restingHeight",
@@ -418,6 +436,10 @@ public enum TuningCatalog {
         TuningSection(id: "media.menu", title: "ビューア：メニュー", items: [
             .number(mediaSavedChipDuration),
             .toggle(mediaSavedChipAtBottom),
+        ]),
+        TuningSection(id: "media.description", title: "ビューア：代替テキスト", items: [
+            .number(mediaDescriptionRemainingThreshold),
+            .number(mediaDescriptionMaxLines),
         ]),
     ]
 }

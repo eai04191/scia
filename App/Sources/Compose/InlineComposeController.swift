@@ -554,6 +554,8 @@ final class InlineComposeController: NSObject {
             timing: MediaViewerController.Timing(tuning: tuning, drawsUnderBars: false),
             editing: MediaViewerController.Editing(
                 descriptionLimit: model.mediaDescriptionLimit,
+                descriptionRemainingThreshold: Int(tuning.value(of: TuningCatalog.mediaDescriptionRemainingThreshold)),
+                descriptionMaxLines: Int(tuning.value(of: TuningCatalog.mediaDescriptionMaxLines)),
                 menuElements: { [weak self] itemID in self?.viewerMenuElements(for: itemID) ?? [] },
                 commitDescription: { [weak self] itemID, text in
                     guard let id = UUID(uuidString: itemID) else { return }

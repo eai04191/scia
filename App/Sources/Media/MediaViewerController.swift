@@ -108,6 +108,10 @@ final class MediaViewerController: UIViewController {
     struct Editing {
         /// 代替テキストの文字数の上限。
         let descriptionLimit: Int
+        /// 代替テキストの残りの文字数がこれ以下になったら、残りを出す。
+        let descriptionRemainingThreshold: Int
+        /// 代替テキストの入力欄を伸ばす最大の行数。
+        let descriptionMaxLines: Int
         /// メニューに「代替テキストを編集」に続けて出す項目。`MediaViewerItem.id`を受け取る。
         let menuElements: @MainActor (String) -> [UIMenuElement]
         /// 代替テキストを書き終えた。書き直していなくても呼ぶ。
@@ -352,6 +356,10 @@ final class MediaViewerController: UIViewController {
     private func setUpDescriptionEditing() {
         descriptionEditor.isHidden = true
         descriptionEditor.limit = draftEditing?.descriptionLimit ?? 0
+        if let draftEditing {
+            descriptionEditor.remainingThreshold = draftEditing.descriptionRemainingThreshold
+            descriptionEditor.maxLines = draftEditing.descriptionMaxLines
+        }
         descriptionEditor.onEnd = { [weak self] text in self?.descriptionEditingDidEnd(text) }
         descriptionEditor.onDone = { [weak self] in self?.endEditingDescription() }
         draftStatusButton.isHidden = true
