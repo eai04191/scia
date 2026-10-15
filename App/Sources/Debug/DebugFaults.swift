@@ -15,12 +15,14 @@ enum DebugFaults {
     }
 
     /// 決めると、以後のREST APIのリクエストに、そのステータスコードとHTMLのエラーページを返す。プロキシやサーバーの障害を再現する。
-    private static let failingStatusCode = Mutex<Int?>(nil)
+    private static let failingStatusCode = Mutex<(statusCode: Int, retryAfter: Int?)?>(nil)
 
-    static var failingStatus: Int? { failingStatusCode.withLock { $0 } }
+    static var failingStatus: (statusCode: Int, retryAfter: Int?)? { failingStatusCode.withLock { $0 } }
 
-    static func fail(withStatus statusCode: Int) {
-        failingStatusCode.withLock { $0 = statusCode }
+    /// - Parameter statusCode: nilなら戻す。
+    /// - Parameter retryAfter: `Retry-After`ヘッダーで返す秒数。
+    static func fail(withStatus statusCode: Int?, retryAfter: Int? = nil) {
+        failingStatusCode.withLock { $0 = statusCode.map { ($0, retryAfter) } }
     }
 
     /// 立てると、以後のホームと通知の応答のうち、3件に1件を読めない形に壊す。読めなかった投稿や通知の行を、実際の読み込みの経路で確かめる。
@@ -77,9 +79,14 @@ struct FaultInjectingTransport: HTTPTransport {
            let response = HTTPURLResponse(url: url, statusCode: 401, httpVersion: nil, headerFields: nil) {
             return (Data(#"{"error":"The access token is invalid"}"#.utf8), response)
         }
-        if let statusCode = DebugFaults.failingStatus,
+        if let (statusCode, retryAfter) = DebugFaults.failingStatus,
            let url = request.url,
-           let response = HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: ["Content-Type": "text/html"]) {
+           let response = HTTPURLResponse(
+               url: url,
+               statusCode: statusCode,
+               httpVersion: nil,
+               headerFields: ["Content-Type": "text/html"].merging(retryAfter.map { ["Retry-After": String($0)] } ?? [:]) { first, _ in first }
+           ) {
             return (Data("<html><body><h1>\(statusCode)</h1><p>nginx</p></body></html>".utf8), response)
         }
         let (data, response) = try await base.send(request)

@@ -398,10 +398,12 @@ final class SessionController {
             DebugFaults.corruptListElements()
             home.start()
             notifications.start()
-        case .status(let statusCode):
-            DebugFaults.fail(withStatus: statusCode)
+        case .status(let statusCode, let retryAfter):
+            DebugFaults.fail(withStatus: statusCode, retryAfter: retryAfter)
             home.start()
             notifications.start()
+        case .statusCleared:
+            DebugFaults.fail(withStatus: nil)
         case .streaming(let isOnline):
             DebugFaults.setStreamingOnline(isOnline)
         }

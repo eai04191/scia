@@ -13,7 +13,9 @@ enum DebugURL: Equatable {
     /// `scia-debug://unreadable`。以後のホームと通知の応答の一部を読めない形に壊し、読み込み直す。
     case unreadable
     /// `scia-debug://status/<ステータスコード>`。以後のREST APIにそのステータスのHTMLのエラーページを返させ、読み込み直す。
-    case status(Int)
+    /// `?retry-after=<秒>`を付けると、`Retry-After`ヘッダーも返す。`scia-debug://status/ok`で戻す。
+    case status(Int, retryAfter: Int?)
+    case statusCleared
     /// `scia-debug://streaming/offline`で今のストリーミングの接続を切り、以後の接続を失敗させる。`scia-debug://streaming/online`で戻す。
     case streaming(isOnline: Bool)
 
@@ -28,8 +30,13 @@ enum DebugURL: Equatable {
         case "unreadable":
             self = .unreadable
         case "status":
+            if url.lastPathComponent == "ok" {
+                self = .statusCleared
+                return
+            }
             guard let statusCode = Int(url.lastPathComponent), (100..<600).contains(statusCode) else { return nil }
-            self = .status(statusCode)
+            let retryAfter = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "retry-after" }?.value
+            self = .status(statusCode, retryAfter: retryAfter.flatMap { Int($0) })
         case "streaming":
             switch url.lastPathComponent {
             case "offline": self = .streaming(isOnline: false)
