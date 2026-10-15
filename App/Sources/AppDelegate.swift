@@ -18,6 +18,9 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         configurationForConnecting connectingSceneSession: UISceneSession,
         options: UIScene.ConnectionOptions
     ) -> UISceneConfiguration {
-        UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
+        if MediaWindow.isViewerActivity(options.userActivities.first) {
+            return UISceneConfiguration(name: MediaWindow.configurationName, sessionRole: connectingSceneSession.role)
+        }
+        return UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
     }
 }

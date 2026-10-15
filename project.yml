@@ -56,6 +56,9 @@ targets:
             UIWindowSceneSessionRoleApplication:
               - UISceneConfigurationName: Default Configuration
                 UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+              # Macで添付ファイルのビューアを開く別のウィンドウ（App/Sources/Media/MediaWindow.swift）
+              - UISceneConfigurationName: Media Viewer
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).MediaWindowSceneDelegate
         # iPhoneでは、これがないとCADisplayLinkやCAAnimationで指定したフレームレートが60Hzに抑えられる
         CADisableMinimumFrameDurationOnPhone: true
         # agentが`xcrun simctl openurl`でデバッグメニューの操作を呼ぶためのスキーム（App/Sources/Debug/DebugURL.swift）。
