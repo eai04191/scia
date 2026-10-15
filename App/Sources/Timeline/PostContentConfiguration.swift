@@ -40,6 +40,8 @@ struct PostContentConfiguration: UIContentConfiguration {
         var margins: NSDirectionalEdgeInsets
         var avatarSize: CGFloat
         var boosterAvatarSize: CGFloat
+        /// 名前が入りきらないときに、行末をぼかす幅。
+        var nameFadeWidth: CGFloat
         var nameFont: UIFont
         var secondaryFont: UIFont
     }
@@ -69,8 +71,8 @@ final class PostContentView: UIView, UIContentView {
     private let avatarView: AvatarView
     private let contextIcon = UIImageView()
     private let contextAvatarView: AvatarView
-    private let contextLabel = UILabel()
-    private let nameLabels = [UILabel(), UILabel()]
+    private let contextLabel = FadingLabel()
+    private let nameLabels = [FadingLabel(), FadingLabel()]
     private let timeLabel = UILabel()
     private let nameRow = UIStackView()
     private let bodyLabel = UILabel()
@@ -135,11 +137,9 @@ final class PostContentView: UIView, UIContentView {
         contextIcon.tintColor = .secondaryLabel
         contextIcon.contentMode = .scaleAspectFit
         contextIcon.setContentHuggingPriority(.required, for: .horizontal)
-        contextLabel.lineBreakMode = .byTruncatingTail
 
         // 幅が足りなければ、2つ目（既定ではacct）から先に縮め、時刻は縮めない。
         for (index, label) in nameLabels.enumerated() {
-            label.lineBreakMode = .byTruncatingTail
             label.setContentCompressionResistancePriority(index == 0 ? .defaultHigh : .defaultLow, for: .horizontal)
             label.setContentHuggingPriority(index == 0 ? .required : .defaultLow, for: .horizontal)
             nameRow.addArrangedSubview(label)
@@ -178,6 +178,7 @@ final class PostContentView: UIView, UIContentView {
         contextLabel.isHidden = context == nil
         contextAvatarView.apply(context?.avatar)
         contextLabel.attributedText = context?.text
+        contextLabel.fadeWidth = metrics.nameFadeWidth
         contextIcon.image = context.flatMap { UIImage(systemName: $0.symbolName) }
         contextIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(font: metrics.secondaryFont, scale: .small)
 
@@ -185,6 +186,7 @@ final class PostContentView: UIView, UIContentView {
             let text = configuration.nameParts.indices.contains(index) ? configuration.nameParts[index] : nil
             label.attributedText = text
             label.isHidden = text == nil
+            label.fadeWidth = metrics.nameFadeWidth
         }
         // 2つ目がないときは、1つ目が余りの幅を受け持つ。
         nameLabels[0].setContentHuggingPriority(configuration.nameParts.count > 1 ? .required : .defaultLow, for: .horizontal)

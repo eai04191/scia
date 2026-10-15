@@ -212,6 +212,7 @@ final class TimelineViewController: UIViewController {
             _ = tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
             _ = tuning.value(of: TuningCatalog.avatarSize)
             _ = tuning.value(of: TuningCatalog.boosterAvatarSize)
+            _ = tuning.value(of: TuningCatalog.nameFadeWidth)
             _ = network.conditions
             _ = settings.usesOriginalThumbnailsOnExpensiveNetwork
             _ = settings.ignoresUselessAltText

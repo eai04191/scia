@@ -19,6 +19,7 @@ struct PostContentBuilder {
             margins: base.directionalLayoutMargins,
             avatarSize: tuning.value(of: TuningCatalog.avatarSize),
             boosterAvatarSize: tuning.value(of: TuningCatalog.boosterAvatarSize),
+            nameFadeWidth: tuning.value(of: TuningCatalog.nameFadeWidth),
             nameFont: Self.boldFont(base.textProperties.font),
             secondaryFont: secondaryFont
         )
