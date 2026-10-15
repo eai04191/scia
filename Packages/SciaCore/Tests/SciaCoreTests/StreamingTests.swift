@@ -118,26 +118,6 @@ struct StreamingClientTests {
     }
 }
 
-struct MastodonClientStreamingURLTests {
-    @Test func readsStreamingURLFromInstance() async throws {
-        let transport = StubTransport([try .fixture("instance_v2")])
-        let client = MastodonClient(
-            credential: Credential(
-                instance: try #require(URL(string: "https://example.social")),
-                accessToken: "token",
-                clientID: "client-id",
-                clientSecret: "client-secret",
-                accountID: "1",
-                username: "alice"
-            ),
-            transport: transport
-        )
-
-        #expect(try await client.streamingURL().absoluteString == "wss://streaming.example.social")
-        #expect(await transport.requests.first?.url?.absoluteString == "https://example.social/api/v2/instance")
-    }
-}
-
 /// 登録したメッセージを順に返し、尽きたら接続が切れたものとして投げる。
 final class StubWebSocketConnector: WebSocketConnector {
     private let state: Mutex<(messages: [String], requests: [URLRequest])>

@@ -293,6 +293,22 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((8...13).reversed()))
     }
 
+    /// ストリーミングにつながらないサーバーでは、ポーリングの補完だけが新着を届ける。空のホームでも最新のページを読む。
+    @Test func fillOnEmptyTimelineLoadsLatestPage() async throws {
+        let server = FakeHomeServer(ids: [])
+        let store = TimelineStore(pageSize: Self.pageSize) { server.page($0) }
+        _ = try await store.loadInitial()
+        #expect(store.isEmpty && store.reachedEnd)
+        server.post(1...3)
+
+        let added = try await store.fillFromLatest()
+
+        #expect(added?.map(\.id) == ["3", "2", "1"])
+        #expect(store.statuses.map(\.id) == ["3", "2", "1"])
+        #expect(store.gaps.isEmpty)
+        #expect(!store.reachedEnd, "古い投稿が残っているかもしれないのに、終端としています")
+    }
+
     /// 補完の最中に接続し直しても、同じギャップを2つ作らず、後の要求も終わった後に読む。
     @Test func overlappingFillsAreSerialized() async throws {
         let server = FakeHomeServer(ids: 1...10)
@@ -556,10 +572,14 @@ final class FakeHomeServer: Sendable {
     /// 読めない投稿として返すID。
     private let unreadableIDs: Set<Int>
 
-    init(ids: ClosedRange<Int>, maxLimit: Int? = nil, unreadableIDs: Set<Int> = []) {
-        state = Mutex((Array(ids), []))
+    init(ids: [Int], maxLimit: Int? = nil, unreadableIDs: Set<Int> = []) {
+        state = Mutex((ids, []))
         self.maxLimit = maxLimit
         self.unreadableIDs = unreadableIDs
+    }
+
+    convenience init(ids: ClosedRange<Int>, maxLimit: Int? = nil, unreadableIDs: Set<Int> = []) {
+        self.init(ids: Array(ids), maxLimit: maxLimit, unreadableIDs: unreadableIDs)
     }
 
     var ids: [Int] { state.withLock { $0.ids } }

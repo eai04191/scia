@@ -46,8 +46,10 @@ final class SessionController {
         authorization = AuthorizationCheck { try await client.verifyCredentials() }
         // selfを作り終える前に組み立てる部品から呼ぶため、後で中身を差し替える。
         var forward: () -> Void = {}
-        let home = HomeTimelineController(client: client, streaming: streaming) { forward() }
-        let notifications = NotificationsController(client: client, streaming: streaming) { forward() }
+        // ホームと通知で、調べた接続先を使い回す。
+        let streamingEndpoint = StreamingEndpoint(client: client)
+        let home = HomeTimelineController(client: client, streaming: streaming, streamingEndpoint: streamingEndpoint) { forward() }
+        let notifications = NotificationsController(client: client, streaming: streaming, streamingEndpoint: streamingEndpoint) { forward() }
         self.home = home
         self.notifications = notifications
         self.client = client

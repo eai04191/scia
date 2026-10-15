@@ -13,6 +13,7 @@ final class HomeTimelineController {
     private let store: TimelineStore
     private let client: MastodonClient
     private let streaming: StreamingClient
+    private let streamingEndpoint: StreamingEndpoint
     private let tuning: TuningStore
     /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
@@ -37,6 +38,7 @@ final class HomeTimelineController {
     init(
         client: MastodonClient,
         streaming: StreamingClient,
+        streamingEndpoint: StreamingEndpoint,
         tuning: TuningStore = AppDependencies.tuning,
         onUnauthorized: @escaping () -> Void
     ) {
@@ -45,6 +47,7 @@ final class HomeTimelineController {
         }
         self.client = client
         self.streaming = streaming
+        self.streamingEndpoint = streamingEndpoint
         self.tuning = tuning
         self.onUnauthorized = onUnauthorized
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder() }
@@ -93,6 +96,8 @@ final class HomeTimelineController {
         logger.info("streaming stop")
         streamingTask.cancel()
         self.streamingTask = nil
+        // 次につなぐときは、切れている時間を数え直す。
+        viewController.setOutageNotice(false)
     }
 
     private func run(_ operation: @escaping @MainActor (HomeTimelineController) async -> Void) {
@@ -152,26 +157,40 @@ final class HomeTimelineController {
         guard !isStopped, isInForeground, streamingTask == nil else { return }
         streamingGeneration += 1
         let generation = streamingGeneration
-        let client = client
         let streaming = streaming
-        // 接続先はインスタンスの設定で変わりうるため、つなぐたびに調べる。
+        let endpoint = streamingEndpoint
         let stream = ReconnectingStream {
-            streaming.open(.user, baseURL: try await client.streamingURL())
+            streaming.open(.user, baseURL: try await endpoint.url())
         }
-        let deliver: @Sendable (ReconnectingStream.Activity) async -> Void = { [weak self] activity in
-            await self?.streamingDidChange(activity)
+        let updates = LiveUpdates(stream: stream, policy: TuningCatalog.liveUpdates(in: tuning))
+        let deliver: @Sendable (LiveUpdates.Activity) async -> Void = { [weak self] activity in
+            await self?.streamingDidChange(activity, generation: generation)
         }
         streamingTask = Task { [weak self] in
             do {
-                try await stream.run(deliver)
+                try await updates.run(deliver)
             } catch {
                 self?.streamingDidEnd(error, generation: generation)
             }
         }
     }
 
-    private func streamingDidChange(_ activity: ReconnectingStream.Activity) {
-        guard !isStopped else { return }
+    /// 止めた接続の知らせは捨てる。止めるときに消した表示を、後から出し直さないため。
+    private func streamingDidChange(_ activity: LiveUpdates.Activity, generation: Int) {
+        guard !isStopped, generation == streamingGeneration, streamingTask != nil else { return }
+        switch activity {
+        case .stream(let activity):
+            streamDidChange(activity)
+        case .poll:
+            logger.info("home poll")
+            fillFromLatest()
+        case .outage(let isOngoing):
+            logger.info("streaming outage ongoing=\(isOngoing, privacy: .public)")
+            viewController.setOutageNotice(isOngoing)
+        }
+    }
+
+    private func streamDidChange(_ activity: ReconnectingStream.Activity) {
         switch activity {
         case .connected:
             logger.info("streaming connected")
@@ -194,7 +213,7 @@ final class HomeTimelineController {
         handle(error, during: "streaming") { _ in }
     }
 
-    /// つながるたびに、切れていた間の投稿を読む。1ページに収まらなければギャップを置く。
+    /// つながるたびと、つながらない間のポーリングで、切れていた間の投稿を読む。1ページに収まらなければギャップを置く。
     private func fillFromLatest() {
         run { controller in
             do {
@@ -205,6 +224,10 @@ final class HomeTimelineController {
                 // 待っている間に同じ投稿がストリーミングで挿入されていても、ギャップだけが増えていることがある。
                 guard controller.store.entries != before else { return }
                 controller.showEntries()
+                if before.isEmpty {
+                    // 空のホームへ最新のページを読んだ。その先に古い投稿が残っているかもしれない。
+                    controller.viewController.setFooterState(controller.store.reachedEnd ? .reachedEnd : .idle)
+                }
             } catch {
                 // 失敗しても、次につながったときに同じ基準から読み直す。
                 controller.handle(error, during: "fill") { _ in }

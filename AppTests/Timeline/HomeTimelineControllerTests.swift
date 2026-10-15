@@ -25,9 +25,11 @@ struct HomeTimelineControllerTests {
         onUnauthorized: @escaping () -> Void = {}
     ) throws -> HomeTimelineController {
         let credential = try makeCredential()
+        let client = MastodonClient(credential: credential, transport: transport)
         return HomeTimelineController(
-            client: MastodonClient(credential: credential, transport: transport),
+            client: client,
             streaming: StreamingClient(credential: credential, connector: connector),
+            streamingEndpoint: StreamingEndpoint(client: client),
             tuning: tuning,
             onUnauthorized: onUnauthorized
         )

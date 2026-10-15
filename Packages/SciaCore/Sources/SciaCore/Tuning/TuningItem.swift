@@ -131,6 +131,24 @@ public enum TuningCatalog {
         defaultValue: 5
     )
 
+    /// ストリーミングにつながらない間、切れていた間の新着をRESTで読む間隔。つなぎ直しはその間も続ける。
+    public static let pollingInterval = NumberTuning(
+        id: "streaming.pollingInterval",
+        title: "つながらない間に新着を読む間隔（秒）",
+        range: 15...300,
+        step: 15,
+        defaultValue: 60
+    )
+
+    /// ストリーミングにつながらない状態がこれだけ続いたら、ナビゲーションバーで知らせる。短い切断のたびには知らせない。
+    public static let outageNoticeDelay = NumberTuning(
+        id: "streaming.outageNoticeDelay",
+        title: "切れていると知らせるまでの時間（秒）",
+        range: 0...120,
+        step: 5,
+        defaultValue: 30
+    )
+
     /// ギャップが表示領域からこの距離（画面の高さの何倍か）まで近づいたら、タップを待たずに読み始める。
     public static let gapAutoLoadDistance = NumberTuning(
         id: "timeline.gapAutoLoadDistance",
@@ -333,6 +351,15 @@ public enum TuningCatalog {
         defaultValue: 336
     )
 
+    /// ストリーミングにつながらない間の、ポーリングと知らせるまでの時間。
+    @MainActor
+    public static func liveUpdates(in store: TuningStore) -> LiveUpdates.Policy {
+        LiveUpdates.Policy(
+            pollingInterval: .seconds(store.value(of: pollingInterval)),
+            outageNoticeDelay: .seconds(store.value(of: outageNoticeDelay))
+        )
+    }
+
     /// ビューアの閉じる操作の判定。
     @MainActor
     public static func dragToDismiss(in store: TuningStore) -> DragToDismiss {
@@ -360,6 +387,8 @@ public enum TuningCatalog {
             .toggle(animatesInsertionAtTop),
             .number(fillPageLimit),
             .number(gapAutoLoadDistance),
+            .number(pollingInterval),
+            .number(outageNoticeDelay),
         ]),
         TuningSection(id: "compose", title: "投稿欄", items: [
             .number(composeRestingHeight),

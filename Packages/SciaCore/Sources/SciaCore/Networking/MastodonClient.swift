@@ -38,8 +38,30 @@ public struct MastodonClient: Sendable {
     }
 
     /// ストリーミングAPIの接続先。REST APIと別のホストのことがある。
-    public func streamingURL() async throws -> URL {
-        try await instanceConfiguration().streamingURL
+    /// https://docs.joinmastodon.org/methods/instance/#v2
+    func streamingURLFromV2() async throws -> URL {
+        struct Instance: Decodable {
+            struct Configuration: Decodable {
+                struct URLs: Decodable {
+                    let streaming: URL
+                }
+                let urls: URLs
+            }
+            let configuration: Configuration
+        }
+        return try await get(Instance.self, path: "api/v2/instance", query: []).0.configuration.urls.streaming
+    }
+
+    /// v2の`instance`がないサーバーのための、v1の接続先。
+    /// https://docs.joinmastodon.org/entities/V1_Instance/#streaming_api
+    func streamingURLFromV1() async throws -> URL {
+        struct Instance: Decodable {
+            struct URLs: Decodable {
+                let streamingApi: URL
+            }
+            let urls: URLs
+        }
+        return try await get(Instance.self, path: "api/v1/instance", query: []).0.urls.streamingApi
     }
 
     /// https://docs.joinmastodon.org/methods/instance/#v2

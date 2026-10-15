@@ -410,6 +410,11 @@ final class TimelineViewController: UIViewController {
         newArrivalsButton.configuration?.title = isLowerBound ? "\(count)件以上の新着" : "\(count)件の新着"
     }
 
+    /// ストリーミングにつながらない状態が続いていることを、タイトルの下に控えめに出す。
+    func setOutageNotice(_ isShown: Bool) {
+        navigationItem.subtitle = isShown ? "リアルタイムの更新が止まっています" : nil
+    }
+
     /// ログインし直しを促すボタンを出す。押されたら`action`を呼ぶ。表示中の一覧はそのまま残す。
     func showReauthenticationPrompt(handle: String, action: @escaping () -> Void) {
         onReauthenticate = action

@@ -119,7 +119,8 @@ public final class TimelineStore {
 
     // MARK: - 切れていた間の補完
 
-    /// ストリーミングが切れていた間の投稿を読み、新たに加わった投稿を新しい順に返す。まだ1件もなければ何もせずnilを返す。
+    /// ストリーミングが切れていた間の投稿を読み、新たに加わった投稿を新しい順に返す。
+    /// まだ1件もなければ最新のページを読む。ストリーミングにつながらないサーバーでは、ポーリングの補完だけが空のホームに新着を届けるため。
     ///
     /// 読み込んだ中で最も新しい投稿より新しいものを、最新の側から1ページ読む。読めた投稿と手元の投稿の間にはギャップを置き、
     /// 0件が返るまで読み切ったとは判断しない。求めた件数より少なく返すサーバーでは、満杯でないページの下にも投稿が残っているため。
@@ -142,8 +143,15 @@ public final class TimelineStore {
         isFilling = true
         defer { isFilling = false }
 
+        guard let firstSinceID = unfilledSinceID ?? itemIDs.first else {
+            let page = try await fetch(TimelineQuery(limit: pageSize))
+            isRegenerating = page.isRegenerating
+            let added = merge(page)
+            reachedEnd = page.isEmpty && !page.isRegenerating
+            return added
+        }
         var added: [Status] = []
-        var next = unfilledSinceID ?? itemIDs.first
+        var next: String? = firstSinceID
         while let sinceID = next {
             unfilledSinceID = sinceID
             let page: TimelinePage

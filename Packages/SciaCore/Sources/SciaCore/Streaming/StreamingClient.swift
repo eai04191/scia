@@ -20,7 +20,7 @@ public struct StreamingClient: Sendable {
         self.connector = connector
     }
 
-    /// - Parameter baseURL: `MastodonClient.streamingURL()`で得た接続先。
+    /// - Parameter baseURL: `StreamingEndpoint.url()`で得た接続先。
     public func open(_ stream: Stream, baseURL: URL) -> StreamingConnection {
         var request = URLRequest(url: baseURL.appending(path: "api/v1/streaming").appending(queryItems: [
             URLQueryItem(name: "stream", value: stream.rawValue),
