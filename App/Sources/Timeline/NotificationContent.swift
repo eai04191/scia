@@ -36,12 +36,15 @@ extension TimelineViewController {
 
 extension TimelineViewController {
     /// 通知を送った人の名前の前に置く、文字と同じ高さのアイコン。届くまでは同じ大きさの灰色で場所を取っておく。
+    /// サーバーがアイコンのURLを返さなかったときも、灰色のままにする。
     private func avatarAttachment(of account: Account, font: UIFont) -> NSAttributedString {
         let side = font.lineHeight
         let content = avatarContent(of: account)
-        let key = AvatarImageStore.Key(url: content.url, maxPixelSize: Int((side * traitCollection.displayScale).rounded(.up)), animates: false)
+        let image = content.url.flatMap { url in
+            avatarImages.requestImage(for: AvatarImageStore.Key(url: url, maxPixelSize: Int((side * traitCollection.displayScale).rounded(.up)), animates: false))
+        }
         let attachment = NSTextAttachment()
-        attachment.image = Self.shapedAvatar(avatarImages.requestImage(for: key), side: side, shape: content.shape)
+        attachment.image = Self.shapedAvatar(image, side: side, shape: content.shape)
         attachment.bounds = CGRect(x: 0, y: font.descender, width: side, height: side)
         let string = NSMutableAttributedString(attachment: attachment)
         // アイコンと名前のあいだを空ける。

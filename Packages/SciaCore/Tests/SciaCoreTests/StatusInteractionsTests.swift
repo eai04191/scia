@@ -11,7 +11,7 @@ struct StatusInteractionsTests {
         Status(
             id: id,
             createdAt: Date(timeIntervalSince1970: 0),
-            account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: try #require(URL(string: "https://example.social/a.png"))),
+            account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://example.social/a.png")),
             content: "<p>\(id)</p>",
             spoilerText: "",
             url: nil,

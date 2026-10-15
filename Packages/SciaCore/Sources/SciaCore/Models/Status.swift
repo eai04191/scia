@@ -71,6 +71,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     }
 
     /// 自分の操作を表す項目と件数は、ログインせずに読んだときや、サーバーの実装によっては返らないため、無ければ既定値にする。
+    /// URLと、メンションなどの配列も、サーバーによって空や欠落で返るため、URLはnil、配列は空にする。
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
@@ -78,11 +79,11 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         account = try container.decode(Account.self, forKey: .account)
         content = try container.decode(String.self, forKey: .content)
         spoilerText = try container.decode(String.self, forKey: .spoilerText)
-        url = try container.decodeIfPresent(URL.self, forKey: .url)
-        mentions = try container.decode([Mention].self, forKey: .mentions)
-        tags = try container.decode([Tag].self, forKey: .tags)
-        emojis = try container.decode([CustomEmoji].self, forKey: .emojis)
-        mediaAttachments = try container.decode([MediaAttachment].self, forKey: .mediaAttachments)
+        url = container.decodeDisplayURL(forKey: .url)
+        mentions = try container.decodeLossyArray(Mention.self, forKey: .mentions)
+        tags = try container.decodeLossyArray(Tag.self, forKey: .tags)
+        emojis = try container.decodeLossyArray(CustomEmoji.self, forKey: .emojis)
+        mediaAttachments = try container.decodeLossyArray(MediaAttachment.self, forKey: .mediaAttachments)
         sensitive = try container.decode(Bool.self, forKey: .sensitive)
         visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
         inReplyToId = try container.decodeIfPresent(String.self, forKey: .inReplyToId)

@@ -33,9 +33,9 @@ struct StatusDecodingTests {
         let url = try #require(Bundle.module.url(forResource: "account", withExtension: "json", subdirectory: "Fixtures"))
         let account = try MastodonDecoder.make().decode(Account.self, from: Data(contentsOf: url))
 
-        #expect(account.avatarStatic.absoluteString == "https://example.social/cache/accounts/avatars/static/bob.png")
-        #expect(account.headerStatic.absoluteString == "https://example.social/cache/accounts/headers/static/bob.png")
-        #expect(account.url.absoluteString == "https://remote.example/@bob")
+        #expect(account.avatarStatic?.absoluteString == "https://example.social/cache/accounts/avatars/static/bob.png")
+        #expect(account.headerStatic?.absoluteString == "https://example.social/cache/accounts/headers/static/bob.png")
+        #expect(account.url?.absoluteString == "https://remote.example/@bob")
         #expect(account.locked)
         #expect(account.bot)
         #expect(account.statusesCount == 56_789)

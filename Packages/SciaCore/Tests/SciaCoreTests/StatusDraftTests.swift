@@ -36,11 +36,11 @@ struct StatusLengthTests {
 
 struct StatusDraftTests {
     private func account(_ id: String, _ acct: String) throws -> Account {
-        Account(id: id, username: acct, acct: acct, displayName: "", avatar: try #require(URL(string: "https://example.social/a.png")))
+        Account(id: id, username: acct, acct: acct, displayName: "", avatar: URL(string: "https://example.social/a.png"))
     }
 
     private func mention(_ id: String, _ acct: String) throws -> Mention {
-        Mention(id: id, username: acct, url: try #require(URL(string: "https://example.social/@\(acct)")), acct: acct)
+        Mention(id: id, username: acct, url: URL(string: "https://example.social/@\(acct)"), acct: acct)
     }
 
     @Test func replyAddressesAuthorAndMentionsExceptMe() throws {

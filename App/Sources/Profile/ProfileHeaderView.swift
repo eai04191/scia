@@ -39,6 +39,7 @@ final class ProfileHeaderView: UIView {
     private let fieldsStack = UIStackView()
     private let countsLabel = UILabel()
     private let remoteStack = UIStackView()
+    private let openOriginalButton = UIButton(configuration: .plain())
     private let tabControl = UISegmentedControl(items: ["投稿", "メディア"])
     private let filterButton = UIButton(configuration: .plain())
     private var content: Content?
@@ -90,7 +91,7 @@ final class ProfileHeaderView: UIView {
         remoteLabel.font = .preferredFont(forTextStyle: .footnote)
         remoteLabel.textColor = .secondaryLabel
         remoteLabel.text = "他のサーバーのアカウントです。投稿は、このサーバーが受け取ったものだけを表示しています。"
-        let openOriginal = UIButton(configuration: .plain())
+        let openOriginal = openOriginalButton
         openOriginal.configuration?.title = "元のサーバーで開く"
         openOriginal.configuration?.image = UIImage(systemName: "safari")
         openOriginal.configuration?.imagePadding = 4
@@ -185,6 +186,8 @@ final class ProfileHeaderView: UIView {
         applyFields(account)
         countsLabel.attributedText = countsText(of: account)
         remoteStack.isHidden = !content.isRemote
+        // サーバーがプロフィールのURLを返さなかったら、開く先がないのでボタンを出さない。
+        openOriginalButton.isHidden = account.url == nil
 
         applyFollowButton(content)
         tabControl.selectedSegmentIndex = content.tab == .media ? 1 : 0
@@ -307,11 +310,13 @@ final class ProfileHeaderView: UIView {
         return isOn ? image : image?.withTintColor(.clear, renderingMode: .alwaysOriginal)
     }
 
-    private func loadBanner(_ url: URL) {
+    /// URLがなければ、ヘッダー画像を出さずに下地の色のままにする。
+    private func loadBanner(_ url: URL?) {
         guard url != bannerURL else { return }
         bannerURL = url
         bannerTask?.cancel()
         bannerView.image = nil
+        guard let url else { return }
         let pixelSize = Int((max(bounds.width, 402) * traitCollection.displayScale).rounded(.up))
         if let cached = mediaImages.cachedImage(for: url, maxPixelSize: pixelSize) {
             bannerView.image = cached

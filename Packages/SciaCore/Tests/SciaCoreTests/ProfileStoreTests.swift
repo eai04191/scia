@@ -16,12 +16,13 @@ struct ProfileStoreTests {
     private struct Failure: Error {}
 
     private func account(locked: Bool = false, statusesCount: Int = 0) throws -> Account {
-        Account(
+        let avatar = try #require(URL(string: "https://example.social/avatars/bob.png"))
+        return Account(
             id: "2",
             username: "bob",
             acct: "bob@remote.example",
             displayName: "Bob",
-            avatar: try #require(URL(string: "https://example.social/avatars/bob.png")),
+            avatar: avatar,
             locked: locked,
             statusesCount: statusesCount
         )

@@ -69,8 +69,8 @@ final class ProfileController {
         header.onSelectTab = { [weak self] tab in self?.select(tab) }
         header.onChangePostsFilter = { [weak self] filter in self?.changePostsFilter(filter) }
         header.onOpenOriginal = { [weak self] in
-            guard let self else { return }
-            UIApplication.shared.open(self.store.account.url)
+            guard let url = self?.store.account.url else { return }
+            UIApplication.shared.open(url)
         }
         observeHeaderContent()
         // 名前や自己紹介の絵文字が届いたら、ヘッダーを描き直す。投稿の絵文字は一覧が描き直す。

@@ -38,6 +38,19 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
     }
 
     /// 幅を高さで割った値。大きさの分からない添付ファイル（音声など）ではnil。
+    /// URLはサーバーによって空で返るため、読めなければnilにする。
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        type = try container.decode(Kind.self, forKey: .type)
+        url = container.decodeDisplayURL(forKey: .url)
+        previewUrl = container.decodeDisplayURL(forKey: .previewUrl)
+        remoteUrl = container.decodeDisplayURL(forKey: .remoteUrl)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        meta = try container.decodeIfPresent(Meta.self, forKey: .meta)
+        blurhash = try container.decodeIfPresent(String.self, forKey: .blurhash)
+    }
+
     public var aspectRatio: Double? {
         for size in [meta?.original, meta?.small] {
             if let width = size?.width, let height = size?.height, width > 0, height > 0 {

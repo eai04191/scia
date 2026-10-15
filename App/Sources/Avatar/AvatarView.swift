@@ -1,11 +1,12 @@
 import SciaCore
 import UIKit
 
-/// アカウントのアイコン。大きさは制約で決め、届くまでは同じ形の灰色で埋める。
+/// アカウントのアイコン。大きさは制約で決め、届くまでは同じ形の灰色で埋める。URLがなければ灰色のままにする。
 /// 画像が届いても大きさは変わらないため、行の高さも変わらない。
 final class AvatarView: UIImageView {
     struct Content: Equatable {
-        let url: URL
+        /// サーバーが画像のURLを返さなかったときはnil。
+        let url: URL?
         let shape: AvatarShape
         let animates: Bool
     }
@@ -57,12 +58,12 @@ final class AvatarView: UIImageView {
     /// 今の大きさと内容で読む画像を決める。同じ画像を読んでいる途中なら、そのまま待つ。
     private func updateImage() {
         let scale = traitCollection.displayScale
-        guard let content, bounds.width > 0, scale > 0 else {
+        guard let content, let url = content.url, bounds.width > 0, scale > 0 else {
             cancelLoad()
             image = nil
             return
         }
-        let key = AvatarImageStore.Key(url: content.url, maxPixelSize: Int((bounds.width * scale).rounded(.up)), animates: content.animates)
+        let key = AvatarImageStore.Key(url: url, maxPixelSize: Int((bounds.width * scale).rounded(.up)), animates: content.animates)
         guard key != loadingKey else { return }
         cancelLoad()
         loadingKey = key
