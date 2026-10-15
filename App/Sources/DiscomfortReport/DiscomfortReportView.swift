@@ -16,6 +16,8 @@ final class DiscomfortReportDraft {
     private(set) var logs: Result<[LogLine], any Error>?
     /// ログから機械的に組み立てた、確保した時刻の直前の操作。
     private(set) var operations: [OperationTimeline.Step] = []
+    /// 一覧の何番目の操作に付けたコメントか。
+    private(set) var comments: [Int: String] = [:]
 
     init(capturedAt: Date, logMarker: String, stateDumps: [StateDump]) {
         self.capturedAt = capturedAt
@@ -33,6 +35,12 @@ final class DiscomfortReportDraft {
         }
     }
 
+    /// 空のコメントは、付いていないものとして扱う。
+    func setComment(_ text: String, at index: Int) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        comments[index] = trimmed.isEmpty ? nil : trimmed
+    }
+
     /// ログの読み込みに失敗した場合も、状態ダンプとメモは残すため、失敗内容をログの代わりに入れて保存する。
     func makeReport() -> DiscomfortReport {
         let lines: [LogLine]
@@ -41,7 +49,11 @@ final class DiscomfortReportDraft {
         case .failure(let error): lines = [LogLine(date: capturedAt, category: "report", level: "error", message: "ログを読めませんでした: \(error)")]
         case nil: lines = []
         }
-        return DiscomfortReport(capturedAt: capturedAt, memo: memo, stateDumps: stateDumps, logs: lines)
+        let operationComments = comments.keys.sorted().compactMap { index -> OperationComment? in
+            guard let text = comments[index], operations.indices.contains(index) else { return nil }
+            return OperationComment(date: operations[index].date, operation: operations[index].line, text: text)
+        }
+        return DiscomfortReport(capturedAt: capturedAt, memo: memo, operationComments: operationComments, stateDumps: stateDumps, logs: lines)
     }
 }
 
@@ -51,6 +63,9 @@ struct DiscomfortReportView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var saveError: String?
     @FocusState private var memoFocused: Bool
+    /// コメントを書いている操作の、一覧での位置。
+    @State private var commentingIndex: Int?
+    @State private var commentText = ""
 
     var body: some View {
         NavigationStack {
@@ -85,6 +100,19 @@ struct DiscomfortReportView: View {
                         .disabled(draft.logs == nil)
                 }
             }
+            .alert("操作へのコメント", isPresented: Binding(
+                get: { commentingIndex != nil },
+                set: { if !$0 { commentingIndex = nil } }
+            ), presenting: commentingIndex) { index in
+                TextField("この操作で気になったこと", text: $commentText)
+                Button("保存") { draft.setComment(commentText, at: index) }
+                if draft.comments[index] != nil {
+                    Button("削除", role: .destructive) { draft.setComment("", at: index) }
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: { index in
+                Text(draft.operations[index].line)
+            }
             .task {
                 memoFocused = true
                 await draft.loadLogs()
@@ -93,16 +121,40 @@ struct DiscomfortReportView: View {
     }
 
     private var operationsSection: some View {
-        Section("直前の操作") {
+        Section {
             if draft.operations.isEmpty {
                 Text("記録された操作はありません")
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(Array(draft.operations.enumerated()), id: \.offset) { _, step in
-                    Text(step.line)
-                        .font(.footnote)
-                        .foregroundStyle(step.isAppEvent ? .secondary : .primary)
+                ForEach(Array(draft.operations.enumerated()), id: \.offset) { index, step in
+                    Button {
+                        commentText = draft.comments[index] ?? ""
+                        commentingIndex = index
+                    } label: {
+                        operationRow(step, comment: draft.comments[index])
+                    }
+                    // Formの中のボタンは文字がすべてtintの色になるため、行は普通の文字の色で出す。
+                    .tint(.primary)
                 }
+            }
+        } header: {
+            Text("直前の操作")
+        } footer: {
+            if !draft.operations.isEmpty {
+                Text("押すと、その操作にコメントを付けられます")
+            }
+        }
+    }
+
+    private func operationRow(_ step: OperationTimeline.Step, comment: String?) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(step.line)
+                .font(.footnote)
+                .foregroundStyle(step.isAppEvent ? .secondary : .primary)
+            if let comment {
+                Label(comment, systemImage: "text.bubble")
+                    .font(.footnote)
+                    .foregroundStyle(Color.accentColor)
             }
         }
     }

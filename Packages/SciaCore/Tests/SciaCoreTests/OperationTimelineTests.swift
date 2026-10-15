@@ -87,6 +87,18 @@ struct OperationTimelineTests {
         ])
     }
 
+    @Test func keepsScrollsWithTheSameSummarySeparate() {
+        let record = ScrollRecord(screen: "timeline", direction: .down, pages: 1, duration: 0.5, hitches: HitchCounter.Summary(droppedFrames: 0, hitchTime: 0))
+        let logs = [log(30, .scroll(record)), log(20, .scroll(record))]
+
+        let steps = OperationTimeline.steps(from: logs, capturedAt: capturedAt)
+        #expect(steps.map(\.line) == [
+            "30秒前 ホームを下へ1.0画面分スクロールした（0.5秒）",
+            "20秒前 ホームを下へ1.0画面分スクロールした（0.5秒）",
+        ])
+        #expect(steps.map(\.date) == logs.map(\.date))
+    }
+
     @Test func includesFailuresWithoutTheirMessage() {
         let logs = [
             log(30, .tapGap(screen: "timeline")),

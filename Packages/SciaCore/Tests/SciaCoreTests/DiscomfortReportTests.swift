@@ -44,6 +44,7 @@ struct DiscomfortReportStoreTests {
         DiscomfortReport(
             capturedAt: capturedAt,
             memo: "新着が来たときに一瞬ガクッとした",
+            operationComments: [OperationComment(date: capturedAt.addingTimeInterval(-2), operation: "2秒前 ホームを下へ1.0画面分スクロールした（0.5秒）", text: "ここでガクッとした")],
             stateDumps: [StateDump(name: "timeline", text: "items=60")],
             logs: [LogLine(date: capturedAt.addingTimeInterval(-1), category: "timeline", level: "info", message: "prepend 3")]
         )
@@ -60,6 +61,7 @@ struct DiscomfortReportStoreTests {
         // 日時はISO 8601のミリ秒までで保存するため、それより細かい精度は落ちる。
         #expect(abs(loaded.capturedAt.timeIntervalSince(report.capturedAt)) < 0.001)
         #expect(loaded.memo == report.memo)
+        #expect(loaded.operationComments.map(\.text) == report.operationComments.map(\.text))
         #expect(loaded.stateDumps == report.stateDumps)
         #expect(loaded.logs.map(\.message) == report.logs.map(\.message))
     }
