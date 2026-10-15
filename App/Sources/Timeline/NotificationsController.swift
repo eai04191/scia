@@ -23,6 +23,8 @@ final class NotificationsController {
     private var tasks: [Task<Void, Never>] = []
     private var isStopped = false
     private var streamingTask: Task<Void, Never>?
+    /// ストリーミングがつながっている。電波が戻ったときなどに、つながっていなければつなぎ直す。
+    private var isStreamingConnected = false
     /// 接続を始めるたびに増やす。止めた接続の終了の知らせが、後から始めた接続を消さないようにする。
     private var streamingGeneration = 0
     private var hasLoadedInitial = false
@@ -46,16 +48,17 @@ final class NotificationsController {
         self.streamingEndpoint = streamingEndpoint
         self.tuning = tuning
         self.onUnauthorized = onUnauthorized
-        viewController.onApproachingEnd = { [weak self] in self?.loadOlder() }
+        viewController.onApproachingEnd = { [weak self] in self?.loadOlder(origin: .automatic) }
         viewController.onRetry = { [weak self] in self?.retry() }
         viewController.onVisibleNotificationsChange = { [weak self] ids in self?.markRead(ids) }
         viewController.onInteractionSettle = { [weak self] in self?.interactionDidSettle() }
     }
 
-    func start() {
+    /// - Parameter origin: 電波の回復などでやり直すときは`.automatic`。レート制限で止められている間は送らない。
+    func start(origin: RequestOrigin = .user) {
         guard !isStopped else { return }
         viewController.setContentState(.loading)
-        run { await $0.loadInitial() }
+        run(origin) { await $0.loadInitial() }
     }
 
     /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときに呼ぶ。
@@ -76,17 +79,25 @@ final class NotificationsController {
     /// バックグラウンドから戻ったときに呼ぶ。つなぎ直して切れていた間の通知を補い、他の端末で読み進めた位置を取り込む。
     func enterForeground() {
         isInForeground = true
-        guard !isStopped, hasLoadedInitial else { return }
+        guard !isStopped else { return }
+        // バックグラウンドにいる間に電波が戻ったり、レート制限が明けたりしても、その知らせでは読み込まない。戻ったここでやり直す。
+        retryFailedLoads()
+        guard hasLoadedInitial else { return }
         startStreaming()
         syncReadPosition()
     }
 
-    private func run(_ operation: @escaping @MainActor (NotificationsController) async -> Void) {
+    /// - Parameter origin: 自動の読み込みなら`.automatic`。レート制限で止められている間は送らずに失敗させる。
+    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (NotificationsController) async -> Void) {
         tasks.removeAll { $0.isCancelled }
-        tasks.append(Task { [weak self] in
-            guard let self else { return }
-            await operation(self)
-        })
+        // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
+        let task = RequestOrigin.$current.withValue(origin) {
+            Task { [weak self] in
+                guard let self else { return }
+                await operation(self)
+            }
+        }
+        tasks.append(task)
     }
 
     private func retry() {
@@ -113,10 +124,10 @@ final class NotificationsController {
         }
     }
 
-    private func loadOlder() {
+    private func loadOlder(origin: RequestOrigin = .user) {
         guard !isStopped, !store.isLoading, !store.reachedEnd, !store.isEmpty else { return }
         viewController.setFooterState(.loading)
-        run { controller in
+        run(origin) { controller in
             do {
                 guard let added = try await controller.store.loadOlder(), !controller.isStopped else { return }
                 controller.showEntries()
@@ -144,12 +155,40 @@ final class NotificationsController {
         let deliver: @Sendable (LiveUpdates.Activity) async -> Void = { [weak self] activity in
             await self?.streamingDidChange(activity, generation: generation)
         }
-        streamingTask = Task { [weak self] in
-            do {
-                try await updates.run(deliver)
-            } catch {
-                self?.streamingDidEnd(error, generation: generation)
+        // 接続先を調べる通信も、自動の通信として扱う。
+        streamingTask = RequestOrigin.$current.withValue(.automatic) {
+            Task { [weak self] in
+                do {
+                    try await updates.run(deliver)
+                } catch {
+                    self?.streamingDidEnd(error, generation: generation)
+                }
             }
+        }
+    }
+
+    /// 電波が戻ったときや、レート制限が明けたときに呼ぶ。失敗したままの読み込みと、切れているストリーミングをすぐやり直す。
+    /// ストリーミングのつなぎ直しは、待っている間隔を飛ばしてつなぎ直す。
+    func recover() {
+        guard !isStopped, isInForeground else { return }
+        if hasLoadedInitial, !isStreamingConnected {
+            // つながったら、切れていた間を補う。
+            logger.info("notifications streaming restart to recover")
+            stopStreaming()
+            startStreaming()
+        } else if hasLoadedInitial {
+            // つながったときの補完が、止められている間や電波のない間に失敗していることがある。
+            fillFromLatest()
+        }
+        retryFailedLoads()
+    }
+
+    /// 失敗したままの最初の読み込みか、末尾の読み込みをやり直す。最初の読み込みが済めば、そこでつなぐ。
+    private func retryFailedLoads() {
+        if case .failed = viewController.contentState {
+            start(origin: .automatic)
+        } else if case .failed = viewController.footerState {
+            loadOlder(origin: .automatic)
         }
     }
 
@@ -158,6 +197,7 @@ final class NotificationsController {
         logger.info("notifications streaming stop")
         streamingTask.cancel()
         self.streamingTask = nil
+        isStreamingConnected = false
         // 次につなぐときは、切れている時間を数え直す。
         viewController.setOutageNotice(false)
     }
@@ -180,6 +220,7 @@ final class NotificationsController {
     private func streamDidChange(_ activity: ReconnectingStream.Activity) {
         switch activity {
         case .connected:
+            isStreamingConnected = true
             logger.info("notifications streaming connected")
             fillFromLatest()
         case .event(.notification(let notification)):
@@ -192,6 +233,7 @@ final class NotificationsController {
             logger.info("notifications streaming unauthorized")
             onUnauthorized()
         case .disconnected(let reason, let retryAfter):
+            isStreamingConnected = false
             logger.info("notifications streaming disconnected reason=\(reason, privacy: .public) retryAfter=\(retryAfter, privacy: .public)")
         }
     }
@@ -206,7 +248,7 @@ final class NotificationsController {
 
     /// つながるたびと、つながらない間のポーリングで、切れていた間の通知を読む。
     private func fillFromLatest() {
-        run { controller in
+        run(.automatic) { controller in
             do {
                 let before = controller.store.entries
                 let maxPages = Int(controller.tuning.value(of: TuningCatalog.fillPageLimit))
@@ -274,7 +316,7 @@ final class NotificationsController {
     }
 
     private func syncReadPosition() {
-        run { controller in
+        run(.automatic) { controller in
             do {
                 guard let markerID = try await controller.client.marker(for: .notifications), !controller.isStopped else { return }
                 controller.store.applySavedMarker(markerID)
@@ -296,19 +338,22 @@ final class NotificationsController {
         guard !isSavingReadPosition else { return }
         isSavingReadPosition = true
         let client = client
-        Task { [weak self] in
-            while let self, !self.isStopped, let id = self.store.readIDToSave {
-                do {
-                    try await client.saveMarker(for: .notifications, lastReadID: id)
-                    self.store.markSaved(id)
-                    self.logger.info("notifications marker saved id=\(id, privacy: .public)")
-                } catch {
-                    self.handle(error, during: "marker save") { _ in }
-                    break
+        // 既読位置の保存は、スクロールやバックグラウンドへの移行で自動で送る。
+        RequestOrigin.$current.withValue(.automatic) {
+            Task { [weak self] in
+                while let self, !self.isStopped, let id = self.store.readIDToSave {
+                    do {
+                        try await client.saveMarker(for: .notifications, lastReadID: id)
+                        self.store.markSaved(id)
+                        self.logger.info("notifications marker saved id=\(id, privacy: .public)")
+                    } catch {
+                        self.handle(error, during: "marker save") { _ in }
+                        break
+                    }
                 }
+                self?.isSavingReadPosition = false
+                self?.endReadPositionBackgroundTask()
             }
-            self?.isSavingReadPosition = false
-            self?.endReadPositionBackgroundTask()
         }
     }
 

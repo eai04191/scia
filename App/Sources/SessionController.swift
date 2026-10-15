@@ -12,6 +12,10 @@ final class SessionController {
     private let home: HomeTimelineController
     private let notifications: NotificationsController
     private let client: MastodonClient
+    /// 429や503で止められたときに、自動の通信を控える。このセッションの通信で共有する。
+    private let rateLimit = RateLimitGate()
+    /// 電波が戻ったときと、レート制限が明けたときに、読み込みをやり直す。
+    private var recoveryTasks: [Task<Void, Never>] = []
     private let interactions: StatusInteractions
     /// APIが401を返したときに、トークンが本当に無効かを確かめる。
     private let authorization: AuthorizationCheck
@@ -38,9 +42,9 @@ final class SessionController {
         self.credential = credential
         self.onReauthenticate = onReauthenticate
         #if DEBUG
-        let client = MastodonClient(credential: credential, transport: FaultInjectingTransport(base: URLSessionTransport()))
+        let client = MastodonClient(credential: credential, transport: FaultInjectingTransport(base: URLSessionTransport()), rateLimit: rateLimit)
         #else
-        let client = MastodonClient(credential: credential, transport: URLSessionTransport())
+        let client = MastodonClient(credential: credential, transport: URLSessionTransport(), rateLimit: rateLimit)
         #endif
         #if DEBUG
         let streaming = StreamingClient(credential: credential, connector: FaultInjectingWebSocketConnector(base: URLSessionWebSocketConnector()))
@@ -274,6 +278,29 @@ final class SessionController {
     func start() {
         home.start()
         notifications.start()
+        observeRecoveries()
+    }
+
+    private func observeRecoveries() {
+        let rateLimit = rateLimit
+        let network = AppDependencies.network
+        recoveryTasks.append(Task { [weak self] in
+            for await _ in rateLimit.resumptions {
+                self?.recover(reason: "rate limit resumed")
+            }
+        })
+        recoveryTasks.append(Task { [weak self] in
+            // 最初の値は今の回数なので飛ばす。
+            for await _ in Observations({ network.recoveryCount }).dropFirst() {
+                self?.recover(reason: "network recovered")
+            }
+        })
+    }
+
+    private func recover(reason: String) {
+        logger.info("recover reason=\(reason, privacy: .public)")
+        home.recover()
+        notifications.recover()
     }
 
     // MARK: - ログインし直し
@@ -329,6 +356,8 @@ final class SessionController {
     func stop() {
         home.stop()
         notifications.stop()
+        recoveryTasks.forEach { $0.cancel() }
+        recoveryTasks.removeAll()
     }
 
     /// 他のアプリから開かれたURLの画面を出す。

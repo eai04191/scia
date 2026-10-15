@@ -7,6 +7,7 @@ actor StubTransport: HTTPTransport {
     struct Response {
         let statusCode: Int
         let body: Data
+        var headers: [String: String] = [:]
     }
 
     private var responses: [Response]
@@ -21,7 +22,7 @@ actor StubTransport: HTTPTransport {
         let next = try #require(responses.first, "想定より多くリクエストされました: \(request)")
         responses.removeFirst()
         let url = try #require(request.url)
-        let response = try #require(HTTPURLResponse(url: url, statusCode: next.statusCode, httpVersion: nil, headerFields: nil))
+        let response = try #require(HTTPURLResponse(url: url, statusCode: next.statusCode, httpVersion: nil, headerFields: next.headers))
         return (next.body, response)
     }
 }
@@ -32,7 +33,7 @@ extension StubTransport.Response {
         return Self(statusCode: statusCode, body: try Data(contentsOf: url))
     }
 
-    static func json(_ text: String, statusCode: Int) -> Self {
-        Self(statusCode: statusCode, body: Data(text.utf8))
+    static func json(_ text: String, statusCode: Int, headers: [String: String] = [:]) -> Self {
+        Self(statusCode: statusCode, body: Data(text.utf8), headers: headers)
     }
 }

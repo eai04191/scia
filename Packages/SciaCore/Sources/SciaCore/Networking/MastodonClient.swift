@@ -4,10 +4,13 @@ public import Foundation
 public struct MastodonClient: Sendable {
     public let credential: Credential
     private let transport: any HTTPTransport
+    private let rateLimit: RateLimitGate
 
-    public init(credential: Credential, transport: any HTTPTransport) {
+    /// - Parameter rateLimit: 429や503で止められたときに、自動の通信を控える門。セッションの中で共有する。
+    public init(credential: Credential, transport: any HTTPTransport, rateLimit: RateLimitGate = RateLimitGate()) {
         self.credential = credential
         self.transport = transport
+        self.rateLimit = rateLimit
     }
 
     /// https://docs.joinmastodon.org/methods/timelines/#home
@@ -323,10 +326,16 @@ public struct MastodonClient: Sendable {
     }
 
     private func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        if RequestOrigin.current == .automatic {
+            try await rateLimit.checkAutomaticRequest()
+        }
         var request = request
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
         let (data, response) = try await transport.send(request)
         guard (200..<300).contains(response.statusCode) else {
+            if response.statusCode == 429 || response.statusCode == 503 {
+                await rateLimit.pause(respondingTo: response)
+            }
             throw MastodonAPIError.from(statusCode: response.statusCode, body: data)
         }
         return (data, response)

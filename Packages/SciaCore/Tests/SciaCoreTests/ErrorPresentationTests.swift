@@ -12,6 +12,15 @@ struct ErrorPresentationTests {
         #expect(presentation.code == "URLError \(code.rawValue)")
     }
 
+    /// 止められている間の自動の読み込みは、いつまで待てば自動でやり直すかを伝える。
+    @Test func automaticRequestsPaused() {
+        let until = Date(timeIntervalSince1970: 1_800_000_000)
+        let presentation = ErrorPresentation(AutomaticRequestsPaused(until: until))
+
+        #expect(presentation.message == "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。\(until.formatted(date: .omitted, time: .shortened))を過ぎたら自動で読み込み直します。")
+        #expect(presentation.code == nil)
+    }
+
     @Test func timedOut() {
         #expect(ErrorPresentation(URLError(.timedOut)).message == "サーバーから時間内に応答がありませんでした。")
     }
