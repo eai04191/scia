@@ -15,6 +15,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     ) {
         guard let windowScene = scene as? UIWindowScene else { return }
         logger.info("scene willConnect")
+        if ProcessInfo.processInfo.isiOSAppOnMac {
+            // Macで縦長のウィンドウに並べられるよう、最小幅を今のiPhoneで一番狭い幅まで下げる
+            windowScene.sizeRestrictions?.minimumSize = CGSize(width: 375, height: 480)
+        }
         let window = ShakeDetectingWindow(windowScene: windowScene)
         self.window = window
         switch AppDependencies.accounts {
