@@ -315,6 +315,24 @@ public enum TuningCatalog {
         defaultValue: 0.35
     )
 
+    /// メディアを選ぶシートの低いときの高さを、最後に出したキーボードの高さに合わせる。
+    /// 切ると、キーボードを一度も出していないときと同じく、決めた高さで出す。
+    public static let composePickerMatchesKeyboard = ToggleTuning(
+        id: "compose.pickerMatchesKeyboard",
+        title: "メディアを選ぶシートをキーボードの高さに合わせる",
+        defaultValue: true
+    )
+
+    /// メディアを選ぶシートの低いときの、画面の下端からの高さ（pt）。キーボードの高さが分からないときや、合わせないときに使う。
+    /// キーボードの高さは日本語入力の候補の段や他社のキーボードで変わり、ハードウェアキーボードでは0になる。
+    public static let composePickerHeight = NumberTuning(
+        id: "compose.pickerHeight",
+        title: "メディアを選ぶシートの決めた高さ（pt）",
+        range: 200...500,
+        step: 2,
+        defaultValue: 336
+    )
+
     /// ビューアの閉じる操作の判定。
     @MainActor
     public static func dragToDismiss(in store: TuningStore) -> DragToDismiss {
@@ -346,6 +364,8 @@ public enum TuningCatalog {
         TuningSection(id: "compose", title: "投稿欄", items: [
             .number(composeRestingHeight),
             .number(composeMorphDuration),
+            .toggle(composePickerMatchesKeyboard),
+            .number(composePickerHeight),
         ]),
         TuningSection(id: "media.dismiss", title: "ビューア：閉じる操作", items: [
             .number(mediaDismissDistance),
