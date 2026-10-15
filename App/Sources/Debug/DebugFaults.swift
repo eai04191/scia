@@ -13,6 +13,24 @@ enum DebugFaults {
     static func rejectAsUnauthorized() {
         rejectsAsUnauthorized.withLock { $0 = true }
     }
+
+    /// 立てると、以後のホームと通知の応答のうち、3件に1件を読めない形に壊す。読めなかった投稿や通知の行を、実際の読み込みの経路で確かめる。
+    private static let corruptsListElements = Mutex(false)
+
+    static var isCorruptingListElements: Bool { corruptsListElements.withLock { $0 } }
+
+    static func corruptListElements() {
+        corruptsListElements.withLock { $0 = true }
+    }
+
+    /// 配列の3件に1件の`created_at`を、日時として読めない値に変える。IDとURLは残すので、読めなかった行として並ぶ。
+    static func corrupt(_ data: Data) -> Data {
+        guard var elements = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { return data }
+        for index in elements.indices where index % 3 == 1 {
+            elements[index]["created_at"] = "壊れた日時"
+        }
+        return (try? JSONSerialization.data(withJSONObject: elements)) ?? data
+    }
 }
 
 /// `DebugFaults`に従って失敗を返すHTTPTransport。
@@ -25,7 +43,12 @@ struct FaultInjectingTransport: HTTPTransport {
            let response = HTTPURLResponse(url: url, statusCode: 401, httpVersion: nil, headerFields: nil) {
             return (Data(#"{"error":"The access token is invalid"}"#.utf8), response)
         }
-        return try await base.send(request)
+        let (data, response) = try await base.send(request)
+        let path = request.url?.path() ?? ""
+        if DebugFaults.isCorruptingListElements, path.hasSuffix("api/v1/timelines/home") || path.hasSuffix("api/v1/notifications") {
+            return (DebugFaults.corrupt(data), response)
+        }
+        return (data, response)
     }
 }
 #endif

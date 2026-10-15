@@ -359,6 +359,10 @@ final class SessionController {
         case .unauthorized:
             DebugFaults.rejectAsUnauthorized()
             reportUnauthorized()
+        case .unreadable:
+            DebugFaults.corruptListElements()
+            home.start()
+            notifications.start()
         }
     }
     #endif

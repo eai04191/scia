@@ -10,6 +10,8 @@ enum DebugURL: Equatable {
     case dummy(DebugDummyPost)
     /// `scia-debug://unauthorized`。以後のREST APIに401を返させ、トークンが無効になった状態にする。
     case unauthorized
+    /// `scia-debug://unreadable`。以後のホームと通知の応答の一部を読めない形に壊し、読み込み直す。
+    case unreadable
 
     init?(_ url: URL) {
         guard url.scheme == Self.scheme else { return nil }
@@ -19,6 +21,8 @@ enum DebugURL: Equatable {
             self = .dummy(post)
         case "unauthorized":
             self = .unauthorized
+        case "unreadable":
+            self = .unreadable
         default:
             return nil
         }

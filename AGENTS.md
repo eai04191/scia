@@ -52,6 +52,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - ビューアの確認には、デバッグメニューのダミー投稿（形の違う4枚、縦長1枚、透過画像1枚、動画とGIF）を使う。通信せずに一覧の一番上に出せる（起動し直すと消える）。動画とGIFは初回だけ端末で書き出すため、少し遅れて流れる
 - agentはメニューを開かず、起動済みのアプリへ`xcrun simctl openurl '<使う端末>' 'scia-debug://dummy/<種類>'`でダミー投稿を流す。種類は`arrivals`（新着10件）、`images`（4枚）、`tall`（縦長1枚）、`transparent`（透過画像1枚）、`video`（動画とGIF）。アプリが起動していないときに送ると、アプリは起動するがダミーは流れない
 - トークンが無効になったときの表示の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unauthorized'`で、以後のREST APIに401を返させる。資格情報は消えず、起動し直すと戻る
+- 読めなかった投稿や通知の行の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unreadable'`で、以後のホームと通知の応答の3件に1件を読めない形に壊して読み込み直す。起動し直すと戻る
 - プロフィール画面の確認には、`xcrun simctl openurl '<使う端末>' 'scia://profile/<user@domain>'`でホームのタブにプロフィールを開く。アプリが起動していなくても開く。フォローとフォローの解除は、@Bot_testing@stellaria.networkで確かめる
 - 描画性能: スクロール時のhitchは`xcrun xctrace record --template 'Animation Hitches'`や`XCTOSSignpostMetric.scrollDecelerationMetric`で測る。シミュレーターの値は参考値で、最終確認は実機で行う
 - 見た目: 実データに近いfixtureを使い、スクリーンショットで確認する
