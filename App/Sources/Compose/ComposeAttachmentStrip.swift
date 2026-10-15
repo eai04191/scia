@@ -6,7 +6,8 @@ import UIKit
 /// 上限が4枚より多いサーバーでも1段のまま並べ、収まらない分は横にスクロールする。
 ///
 /// 並べ替えはドラッグ&ドロップで行う。iOS 15からはiPhoneでもコレクションビューのドラッグが既定で有効になっている。
-/// VoiceOverとキーボードのために、同じ操作を「前へ移動」「後ろへ移動」として、セルのカスタムアクションと長押しのメニューにも置く。
+/// VoiceOverとキーボードのために、同じ操作を「先頭へ移動」「前へ移動」「後ろへ移動」「末尾へ移動」として、セルのカスタムアクションと長押しのメニューにも置く。
+/// 同じ場所に、添付を外す「削除」も置く。
 @MainActor
 final class ComposeAttachmentStrip: UIView {
     /// サムネイルの一辺。
@@ -18,6 +19,8 @@ final class ComposeAttachmentStrip: UIView {
     var onSelect: (DraftAttachment.ID) -> Void = { _ in }
     /// 並べ替えたときに、移した添付と移した先の位置を渡して呼ぶ。
     var onMove: (DraftAttachment.ID, Int) -> Void = { _, _ in }
+    /// 削除を選んだときに、外す添付を渡して呼ぶ。
+    var onRemove: (DraftAttachment.ID) -> Void = { _ in }
     /// 長押しのメニューを出す直前と、閉じ始めたときに呼ぶ。メニューの間、iOSはソフトウェアキーボードを隠す。
     var onContextMenuWillShow: () -> Void = {}
     var onContextMenuWillEnd: () -> Void = {}
@@ -58,7 +61,7 @@ final class ComposeAttachmentStrip: UIView {
         ])
         let registration = UICollectionView.CellRegistration<ComposeAttachmentCell, DraftAttachment.ID> { [weak self] cell, indexPath, id in
             guard let self, let item = self.items[id] else { return }
-            cell.configure(item, moveActions: self.moveActions(for: id, at: indexPath.item))
+            cell.configure(item, actions: self.actions(for: id, at: indexPath.item))
         }
         let dataSource = UICollectionViewDiffableDataSource<Int, DraftAttachment.ID>(collectionView: collectionView) { collectionView, indexPath, id in
             collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: id)
@@ -107,15 +110,24 @@ final class ComposeAttachmentStrip: UIView {
         dataSource?.snapshot().numberOfItems ?? 0
     }
 
-    /// 前へ・後ろへの移動。端にあって動かせない向きは含めない。
-    private func moveActions(for id: DraftAttachment.ID, at index: Int) -> [MoveAction] {
-        var actions: [MoveAction] = []
+    /// 移動と削除の操作。端にあって動かせない向きは含めない。
+    /// 先頭へ・末尾へは、前へ・後ろへと同じ位置に移すとき（隣が端のとき）は出さず、同じ結果の項目を並べない。
+    private func actions(for id: DraftAttachment.ID, at index: Int) -> [AttachmentAction] {
+        let last = itemCount - 1
+        var actions: [AttachmentAction] = []
+        if index > 1 {
+            actions.append(AttachmentAction(title: "先頭へ移動", systemImage: "arrow.left.to.line") { [weak self] in self?.onMove(id, 0) })
+        }
         if index > 0 {
-            actions.append(MoveAction(title: "前へ移動", systemImage: "arrow.left") { [weak self] in self?.onMove(id, index - 1) })
+            actions.append(AttachmentAction(title: "前へ移動", systemImage: "arrow.left") { [weak self] in self?.onMove(id, index - 1) })
         }
-        if index < itemCount - 1 {
-            actions.append(MoveAction(title: "後ろへ移動", systemImage: "arrow.right") { [weak self] in self?.onMove(id, index + 1) })
+        if index < last {
+            actions.append(AttachmentAction(title: "後ろへ移動", systemImage: "arrow.right") { [weak self] in self?.onMove(id, index + 1) })
         }
+        if index < last - 1 {
+            actions.append(AttachmentAction(title: "末尾へ移動", systemImage: "arrow.right.to.line") { [weak self] in self?.onMove(id, last) })
+        }
+        actions.append(AttachmentAction(title: "削除", systemImage: "trash", isDestructive: true) { [weak self] in self?.onRemove(id) })
         return actions
     }
 
@@ -129,10 +141,11 @@ final class ComposeAttachmentStrip: UIView {
     }
 }
 
-/// 前へ・後ろへの移動の操作。セルのカスタムアクションと長押しのメニューで同じものを出す。
-private struct MoveAction {
+/// 移動と削除の操作。セルのカスタムアクションと長押しのメニューで同じものを出す。
+private struct AttachmentAction {
     let title: String
     let systemImage: String
+    var isDestructive = false
     let handler: () -> Void
 }
 
@@ -153,12 +166,15 @@ extension ComposeAttachmentStrip: UICollectionViewDelegate {
 
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
         guard let indexPath = indexPaths.first, let id = dataSource?.itemIdentifier(for: indexPath) else { return nil }
-        let actions = moveActions(for: id, at: indexPath.item)
-        guard !actions.isEmpty else { return nil }
+        let actions = actions(for: id, at: indexPath.item)
         return UIContextMenuConfiguration(actionProvider: { _ in
-            UIMenu(children: actions.map { action in
-                UIAction(title: action.title, image: UIImage(systemName: action.systemImage)) { _ in action.handler() }
-            })
+            let elements = actions.map { action in
+                UIAction(title: action.title, image: UIImage(systemName: action.systemImage), attributes: action.isDestructive ? .destructive : []) { _ in action.handler() }
+            }
+            // 削除は移動と区切って最後に置く。
+            let moves = elements.filter { !$0.attributes.contains(.destructive) }
+            let removes = elements.filter { $0.attributes.contains(.destructive) }
+            return UIMenu(children: [UIMenu(options: .displayInline, children: moves), UIMenu(options: .displayInline, children: removes)])
         })
     }
 }
@@ -276,7 +292,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func configure(_ item: ComposeAttachmentStrip.Item, moveActions: [MoveAction]) {
+    func configure(_ item: ComposeAttachmentStrip.Item, actions: [AttachmentAction]) {
         let description = item.attachment.description
         let showsDescriptionState = item.status == .sendingDescription || item.status == .descriptionFailed
         // 代替テキストの送信中と失敗は、ALTの札の位置に状態を出すため、札を出さない。
@@ -300,7 +316,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         }
         accessibilityTraits = .button
         accessibilityHint = "開いて代替テキストを編集できます。"
-        accessibilityCustomActions = moveActions.map { action in
+        accessibilityCustomActions = actions.map { action in
             UIAccessibilityCustomAction(name: action.title) { _ in
                 action.handler()
                 return true

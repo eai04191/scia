@@ -599,7 +599,7 @@ final class InlineComposeController: NSObject {
             })
         }
         elements.append(UIAction(title: "削除", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
-            self?.removeAttachmentFromViewer(id)
+            self?.removeAttachment(id)
         })
         return elements
     }
@@ -612,13 +612,14 @@ final class InlineComposeController: NSObject {
         let title = status == .failed ? "アップロードできませんでした" : "代替テキストを送信できませんでした"
         let alert = UIAlertController(title: title, message: failure.map { ErrorPresentation($0).text }, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "再試行", style: .default) { [weak self] _ in self?.model.retryAttachment(id) })
-        alert.addAction(UIAlertAction(title: "削除", style: .destructive) { [weak self] _ in self?.removeAttachmentFromViewer(id) })
+        alert.addAction(UIAlertAction(title: "削除", style: .destructive) { [weak self] _ in self?.removeAttachment(id) })
         alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         presenter.present(alert, animated: true)
     }
 
-    /// ビューアで開いている添付を外す。先にビューアを閉じ始め、戻り先のサムネイルが消えたら画像はその場で薄くなる。
-    private func removeAttachmentFromViewer(_ id: DraftAttachment.ID) {
+    /// 添付を外す。ピッカーを出していれば、その選択からも外す。
+    /// ビューアから外すときは、先にビューアを閉じ始め、戻り先のサムネイルが消えたら画像はその場で薄くなる。列の長押しから外すときはビューアを開いていない。
+    private func removeAttachment(_ id: DraftAttachment.ID) {
         mediaViewer?.close()
         if let assetIdentifier = model.localMedia[id]?.assetIdentifier {
             mediaPicker?.deselect([assetIdentifier])
@@ -775,6 +776,7 @@ final class InlineComposeController: NSObject {
         tools.spacing = 4
         attachmentStrip.onSelect = { [weak self] id in self?.openAttachment(id) }
         attachmentStrip.onMove = { [weak self] id, index in self?.model.moveAttachment(id, to: index) }
+        attachmentStrip.onRemove = { [weak self] id in self?.removeAttachment(id) }
         attachmentStrip.onContextMenuWillShow = { [weak self] in self?.holdBarForContextMenu() }
         attachmentStrip.onContextMenuWillEnd = { [weak self] in self?.contextMenuWillEnd() }
         for view in [restRow, replyRow, attachmentStrip, textView, tools] {
