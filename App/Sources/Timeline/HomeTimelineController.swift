@@ -14,8 +14,8 @@ final class HomeTimelineController {
     private let client: MastodonClient
     private let streaming: StreamingClient
     private let tuning: TuningStore
-    /// トークンが無効だったとき、どのコントローラーからの通知かを添えて呼ぶ。
-    private let onUnauthorized: (HomeTimelineController, String) -> Void
+    /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
+    private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "timeline")
     private var tasks: [Task<Void, Never>] = []
     private var isStopped = false
@@ -38,7 +38,7 @@ final class HomeTimelineController {
         client: MastodonClient,
         streaming: StreamingClient,
         tuning: TuningStore = AppDependencies.tuning,
-        onUnauthorized: @escaping (HomeTimelineController, String) -> Void
+        onUnauthorized: @escaping () -> Void
     ) {
         store = TimelineStore(pageSize: Self.pageSize) { query in
             try await client.homeTimeline(query)
@@ -83,7 +83,7 @@ final class HomeTimelineController {
     /// 最初の読み込みが済んでいなければ、済んだ時点でつなぐので何もしない。
     func enterForeground() {
         isInForeground = true
-        guard hasLoadedInitial else { return }
+        guard !isStopped, hasLoadedInitial else { return }
         startStreaming()
         syncReadPosition()
     }
@@ -178,12 +178,15 @@ final class HomeTimelineController {
             fillFromLatest()
         case .event(let event):
             receive(event)
+        case .unauthorized:
+            logger.info("streaming unauthorized")
+            onUnauthorized()
         case .disconnected(let reason, let retryAfter):
             logger.info("streaming disconnected reason=\(reason, privacy: .public) retryAfter=\(retryAfter, privacy: .public)")
         }
     }
 
-    /// トークンが無効になったときと、取り消したときだけ届く。
+    /// 取り消したときだけ届く。401で断られても、つなぎ直しは続く。
     private func streamingDidEnd(_ error: any Error, generation: Int) {
         if generation == streamingGeneration {
             streamingTask = nil
@@ -376,10 +379,9 @@ final class HomeTimelineController {
         guard !isStopped, !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
         logger.error("home \(operation, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
         if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-            onUnauthorized(self, "ログインの有効期限が切れたか、アプリの許可が取り消されました。ログインし直してください。")
-        } else {
-            show(error.localizedDescription)
+            onUnauthorized()
         }
+        show(error.localizedDescription)
     }
 }
 

@@ -82,6 +82,14 @@ struct MastodonClientTests {
         #expect(error?.message == "The access token is invalid")
     }
 
+    /// アカウントの他の項目が読めないサーバーでも確かめられるよう、IDだけを読む。
+    @Test func verifyCredentialsReadsOnlyID() async throws {
+        let transport = StubTransport([.json(#"{"id":"1","avatar":""}"#, statusCode: 200)])
+
+        try await makeClient(transport).verifyCredentials()
+        #expect(await transport.requests.first?.url?.path() == "/api/v1/accounts/verify_credentials")
+    }
+
     @Test func notificationsDecodeKnownAndUnknownTypes() async throws {
         let transport = StubTransport([try .fixture("notifications")])
 

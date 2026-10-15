@@ -15,6 +15,8 @@ final class ProfileController {
     private let settings: AppSettings
     /// 失敗をどう知らせるか。ログインし直しが要るなどの判断はセッションに任せる。
     private let onError: (any Error, String) -> Void
+    /// 一覧の読み込みが401で失敗したときに呼ぶ。一覧の失敗はアラートを出さずフッターに出すため、`onError`とは分ける。
+    private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "profile")
     private var tasks: [Task<Void, Never>] = []
     /// 表示している一覧と、その一覧のタブ。切り替えた一覧が届くまでは、前の一覧を出し続ける。
@@ -26,21 +28,37 @@ final class ProfileController {
         account: Account,
         client: MastodonClient,
         settings: AppSettings = AppDependencies.settings,
-        onError: @escaping (any Error, String) -> Void
+        onError: @escaping (any Error, String) -> Void,
+        onUnauthorized: @escaping () -> Void
     ) -> (ProfileController, TimelineViewController) {
         let viewController = TimelineViewController(texts: .profile)
-        let controller = ProfileController(account: account, client: client, settings: settings, viewController: viewController, onError: onError)
+        let controller = ProfileController(
+            account: account,
+            client: client,
+            settings: settings,
+            viewController: viewController,
+            onError: onError,
+            onUnauthorized: onUnauthorized
+        )
         viewController.lifetimeOwner = controller
         return (controller, viewController)
     }
 
-    private init(account: Account, client: MastodonClient, settings: AppSettings, viewController: TimelineViewController, onError: @escaping (any Error, String) -> Void) {
+    private init(
+        account: Account,
+        client: MastodonClient,
+        settings: AppSettings,
+        viewController: TimelineViewController,
+        onError: @escaping (any Error, String) -> Void,
+        onUnauthorized: @escaping () -> Void
+    ) {
         store = ProfileStore(account: account, myAccountID: client.credential.accountID, postsFilter: settings.profilePostsFilter, api: ProfileStore.API(client: client))
         header = ProfileHeaderView(emojiImages: viewController.emojiImages, mediaImages: viewController.mediaImages, avatarImages: viewController.avatarImages)
         shownTimeline = store.timeline
         shownTab = store.tab
         self.settings = settings
         self.onError = onError
+        self.onUnauthorized = onUnauthorized
         self.viewController = viewController
         viewController.headerView = header
         viewController.myAccountID = client.credential.accountID
@@ -144,7 +162,7 @@ final class ProfileController {
             } catch {
                 guard timeline === controller.store.timeline else { return }
                 controller.logger.error("profile statuses failed: \(error.localizedDescription, privacy: .public)")
-                controller.viewController?.setFooterState(.failed(error.localizedDescription))
+                controller.showListFailure(error)
             }
         }
     }
@@ -160,9 +178,16 @@ final class ProfileController {
                 controller.viewController?.setFooterState(timeline.reachedEnd ? .reachedEnd : .idle)
             } catch {
                 guard timeline === controller.store.timeline else { return }
-                controller.viewController?.setFooterState(.failed(error.localizedDescription))
+                controller.showListFailure(error)
             }
         }
+    }
+
+    private func showListFailure(_ error: any Error) {
+        if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
+            onUnauthorized()
+        }
+        viewController?.setFooterState(.failed(error.localizedDescription))
     }
 
     private func retry() {

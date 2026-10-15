@@ -13,7 +13,11 @@ final class SessionController {
     private let notifications: NotificationsController
     private let client: MastodonClient
     private let interactions: StatusInteractions
-    private let report: (String) -> Void
+    /// APIが401を返したときに、トークンが本当に無効かを確かめる。
+    private let authorization: AuthorizationCheck
+    private let onReauthenticate: (SessionController) async -> Void
+    /// ログインし直しの途中。続けて押されても、認可画面を重ねて出さない。
+    private var isReauthenticating = false
     private let tabBarDelegate: TabReselectionDelegate
     /// 開いているプロフィール画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
     private let profiles: ProfileRegistry
@@ -29,14 +33,17 @@ final class SessionController {
 
     /// - Parameters:
     ///   - accountMenu: アカウントの切り替えなどのメニュー。開くたびに呼んで組み立て直す。
-    ///   - onUnauthorized: トークンが無効だったとき、どのセッションからの通知かを添えて呼ぶ。
-    init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, onUnauthorized: @escaping (SessionController, String) -> Void) {
+    ///   - onReauthenticate: トークンが無効なアカウントで、ログインし直しのボタンが押されたときに呼ぶ。ログインし直しが終わるか、取り消されたら返る。
+    init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, onReauthenticate: @escaping (SessionController) async -> Void) {
         self.credential = credential
+        self.onReauthenticate = onReauthenticate
         let client = MastodonClient(credential: credential, transport: URLSessionTransport())
         let streaming = StreamingClient(credential: credential, connector: URLSessionWebSocketConnector())
-        var forward: (String) -> Void = { _ in }
-        let home = HomeTimelineController(client: client, streaming: streaming) { _, message in forward(message) }
-        let notifications = NotificationsController(client: client, streaming: streaming) { _, message in forward(message) }
+        authorization = AuthorizationCheck { try await client.verifyCredentials() }
+        // selfを作り終える前に組み立てる部品から呼ぶため、後で中身を差し替える。
+        var forward: () -> Void = {}
+        let home = HomeTimelineController(client: client, streaming: streaming) { forward() }
+        let notifications = NotificationsController(client: client, streaming: streaming) { forward() }
         self.home = home
         self.notifications = notifications
         self.client = client
@@ -48,7 +55,6 @@ final class SessionController {
             notifications.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
         }
-        report = { message in forward(message) }
 
         let homeNavigation = UINavigationController(rootViewController: home.viewController)
         let notificationsNavigation = UINavigationController(rootViewController: notifications.viewController)
@@ -65,12 +71,18 @@ final class SessionController {
         }
         tabBarController.delegate = tabBarDelegate
         composer = InlineComposeController(model: ComposeModel(myAccountID: credential.accountID) { draft in
-            _ = try await client.postStatus(draft)
+            do {
+                _ = try await client.postStatus(draft)
+            } catch let error as MastodonAPIError where error.isUnauthorized {
+                forward()
+                throw error
+            }
         })
         rootViewController = tabBarController
-        forward = { [weak self] message in
-            guard let self else { return }
-            onUnauthorized(self, message)
+        forward = { [weak self] in self?.reportUnauthorized() }
+        authorization.onChange = { [weak self] state in
+            guard state == .invalid else { return }
+            self?.credentialsDidBecomeInvalid()
         }
         for viewController in [home.viewController, notifications.viewController] {
             viewController.navigationItem.leftBarButtonItem = Self.accountButton(for: credential) { [weak self, weak viewController] in
@@ -108,6 +120,10 @@ final class SessionController {
     /// 一覧から投稿への操作とプロフィールを開けるようにする。プロフィール画面の一覧にも使う。
     private func configure(_ viewController: TimelineViewController) {
         timelines.add(viewController)
+        if authorization.state == .invalid {
+            showReauthenticationPrompt(on: viewController)
+            viewController.setReauthenticating(isReauthenticating)
+        }
         viewController.setObscuredBottomHeight(composerObscuredHeight)
         viewController.myAccountID = credential.accountID
         viewController.onStatusAction = { [weak self] action, status in self?.perform(action, on: status) }
@@ -122,6 +138,8 @@ final class SessionController {
     private func openProfile(_ account: Account, from source: UIViewController) {
         let (controller, viewController) = ProfileController.make(account: account, client: client) { [weak self] error, title in
             self?.handle(error, title: title)
+        } onUnauthorized: { [weak self] in
+            self?.reportUnauthorized()
         }
         configure(viewController)
         profiles.add(controller)
@@ -185,11 +203,22 @@ final class SessionController {
     }
 
     private func handle(_ error: any Error, title: String) {
-        if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-            report("ログインの有効期限が切れたか、アプリの許可が取り消されました。ログインし直してください。")
+        guard let apiError = error as? MastodonAPIError, apiError.isUnauthorized else {
+            presentAlert(title: title, message: error.localizedDescription)
             return
         }
-        let alert = UIAlertController(title: title, message: error.localizedDescription, preferredStyle: .alert)
+        // 一部のAPIだけが401を返すこともあるため、確かめてから文言を選ぶ。
+        Task { [weak self] in
+            guard let self else { return }
+            let state = await self.authorization.reportUnauthorized()
+            self.presentAlert(title: title, message: state == .invalid ? Self.reauthenticationMessage : error.localizedDescription)
+        }
+    }
+
+    private static let reauthenticationMessage = "ログインの有効期限が切れたか、アプリの許可が取り消されました。上のボタンからログインし直してください。"
+
+    private func presentAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .cancel))
         topViewController.present(alert, animated: true)
     }
@@ -235,6 +264,55 @@ final class SessionController {
     func start() {
         home.start()
         notifications.start()
+    }
+
+    // MARK: - ログインし直し
+
+    private func reportUnauthorized() {
+        Task { await authorization.reportUnauthorized() }
+    }
+
+    /// トークンが無効だと確かめられたら、表示中の内容とアカウントのメニューは残したまま、自動の通信を止めてログインし直しを促す。
+    /// 資格情報は消さない。消すのは、使う人がログアウトを選んだときだけ。
+    private func credentialsDidBecomeInvalid() {
+        logger.info("credentials invalid")
+        home.stop()
+        notifications.stop()
+        for timeline in timelines.allObjects {
+            showReauthenticationPrompt(on: timeline)
+        }
+    }
+
+    /// 一覧の再試行ボタンも、ログインし直しにする。止めた後の再試行は何も読まず、ログインし直すまで読み込めないため。
+    private func showReauthenticationPrompt(on viewController: TimelineViewController) {
+        viewController.showReauthenticationPrompt(handle: credential.handle) { [weak self] in
+            self?.reauthenticate()
+        }
+        viewController.onRetry = { [weak self] in self?.reauthenticate() }
+        // 読み込みの途中で止めた一覧が、読み込み中のまま残らないようにする。
+        let message = "ログインし直すと読み込めます。"
+        if viewController.contentState == .loading {
+            viewController.setContentState(.failed(message))
+        }
+        if viewController.footerState == .loading {
+            viewController.setFooterState(.failed(message))
+        }
+    }
+
+    private func reauthenticate() {
+        guard !isReauthenticating else { return }
+        setReauthenticating(true)
+        Task {
+            await onReauthenticate(self)
+            setReauthenticating(false)
+        }
+    }
+
+    private func setReauthenticating(_ isReauthenticating: Bool) {
+        self.isReauthenticating = isReauthenticating
+        for timeline in timelines.allObjects {
+            timeline.setReauthenticating(isReauthenticating)
+        }
     }
 
     /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときに呼ぶ。

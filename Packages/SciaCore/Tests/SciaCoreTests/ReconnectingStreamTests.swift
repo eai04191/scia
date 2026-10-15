@@ -47,17 +47,21 @@ struct ReconnectingStreamTests {
         ])
     }
 
-    @Test func unauthorizedHandshakeStopsRetrying() async throws {
+    /// ストリーミングだけが401を返すサーバーもあるため、トークンが無効かどうかは呼び出し側が確かめる。ここでは知らせてつなぎ直しを続ける。
+    @Test func unauthorizedHandshakeIsReportedAndRetried() async throws {
         let connector = ScriptedConnector([
             .init(handshake: .fail(MastodonAPIError(statusCode: 401, message: "Unauthorized"))),
+            .init(messages: [Self.deleteOne]),
         ])
+        let log = ActivityLog()
         let stream = makeStream(connector, policy: Self.fastPolicy)
 
-        let error = await #expect(throws: MastodonAPIError.self) {
-            try await stream.run { _ in }
-        }
-        #expect(error?.isUnauthorized == true)
-        #expect(connector.connectCount == 1)
+        let task = Task { try await stream.run { await log.append($0) } }
+        await log.waitUntil(count: 4)
+        task.cancel()
+        _ = await task.result
+
+        #expect(await log.labels == ["unauthorized", "disconnected after 10ms", "connected", "event delete 1"])
     }
 
     @Test func unansweredPingIsTreatedAsDisconnection() async throws {
@@ -146,6 +150,7 @@ private actor ActivityLog {
         activities.map { activity in
             switch activity {
             case .connected: "connected"
+            case .unauthorized: "unauthorized"
             case .event(.delete(let id)): "event delete \(id)"
             case .event(let event): "event \(event)"
             case .disconnected(_, let delay): "disconnected after \(delay.components.attoseconds / 1_000_000_000_000_000)ms"

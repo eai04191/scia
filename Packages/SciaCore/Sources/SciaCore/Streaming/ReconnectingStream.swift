@@ -8,6 +8,8 @@ public struct ReconnectingStream: Sendable {
         /// 接続が成立した。つなぎ直したときは、切れていた間の投稿をRESTで補う。
         case connected
         case event(StreamingEvent)
+        /// 接続が401で断られた。トークンが無効かは呼び出し側が確かめる。この後に`disconnected`が続き、つなぎ直しも続ける。
+        case unauthorized
         /// 接続が切れた、またはつながらなかった。`retryAfter`だけ待ってつなぎ直す。
         case disconnected(reason: String, retryAfter: Duration)
     }
@@ -58,7 +60,7 @@ public struct ReconnectingStream: Sendable {
     }
 
     /// キャンセルされるまで、接続とつなぎ直しを続ける。`handle`は届いた順に1つずつ呼ぶ。
-    /// トークンが無効なときは、つなぎ直しても成功しないため、`MastodonAPIError`を投げて終わる。
+    /// 401で断られても終わらない。ストリーミングだけが401を返すサーバーもあるため、`unauthorized`で知らせて、トークンが無効かは呼び出し側に任せる。
     public func run(_ handle: @escaping @Sendable (Activity) async -> Void) async throws {
         var failures = 0
         while true {
@@ -80,7 +82,9 @@ public struct ReconnectingStream: Sendable {
                 }
             } catch {
                 if Task.isCancelled { throw CancellationError() }
-                if let apiError = error as? MastodonAPIError, apiError.isUnauthorized { throw apiError }
+                if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
+                    await handle(.unauthorized)
+                }
                 failures += 1
                 let delay = policy.retryDelay(afterFailures: failures)
                 await handle(.disconnected(reason: error.localizedDescription, retryAfter: delay))

@@ -97,10 +97,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         session?.stop()
         let session = SessionController(credential: credential, accountMenu: { [weak self] in
             self?.makeAccountMenu() ?? UIMenu()
-        }, onUnauthorized: { [weak self] session, message in
-            // ログインし直した後や切り替えた後に古い画面の401が届いても、いま使っているアカウントを消さない。
+        }, onReauthenticate: { [weak self] session in
             guard let self, session === self.session else { return }
-            self.logOut(session.credential, message: message)
+            await self.reauthenticate(session.credential)
         })
         self.session = session
         window?.rootViewController = session.rootViewController
@@ -147,7 +146,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     /// 選んでいるアカウントはシーンをまたいで1つなので、変えたらすべてのシーンの画面をそれに揃える。
-    /// 揃えないと、別のシーンが古いアカウントのまま投稿したり、そのアカウントの失効で選んでいるアカウントを消したりするため。
+    /// 揃えないと、別のシーンが古いアカウントや、ログインし直す前の古いトークンのまま投稿したりするため。
     private static func syncAllScenes() {
         for scene in UIApplication.shared.connectedScenes {
             (scene.delegate as? SceneDelegate)?.showCurrentAccount()
@@ -155,17 +154,50 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     /// 選んでいるアカウントの画面にする。すでにそのアカウントの画面なら何もしない。アカウントがなければログイン画面にする。
-    private func showCurrentAccount(message: String? = nil) {
+    /// ログインし直してトークンが変わったときは、同じアカウントでも作り直す。
+    private func showCurrentAccount() {
         guard let current = accounts?.current else {
             // すでにログイン画面なら作り直さない。出しているエラーの文言を消さないため。
             guard session != nil else { return }
             session?.stop()
             session = nil
-            showLogin(errorMessage: message)
+            showLogin(errorMessage: nil)
             return
         }
-        guard session?.credential.id != current.id else { return }
+        guard session?.credential != current else { return }
         showTimeline(for: current)
+    }
+
+    /// トークンが無効になったアカウントに、ログインし直す。ログイン画面は挟まず、そのアカウントのサーバーの認可画面を出す。
+    /// 別のアカウントでログインされたら、そのアカウントは加えない。ログインし直しのつもりで、アカウントが増えたり切り替わったりしないようにするため。
+    /// ログインし直している間に、使うアカウントが変わったら、結果を捨てる。
+    private func reauthenticate(_ credential: Credential) async {
+        guard let window, let accounts else { return }
+        let authenticator = WebAuthenticator(anchor: window)
+        do {
+            let renewed = try await AppDependencies.oauth.login(instance: credential.instance) { url in
+                try await authenticator.authenticate(url: url, callbackScheme: AppDependencies.oauthCallbackScheme)
+            }
+            guard renewed.id == credential.id else {
+                throw DifferentAccountLoggedIn(expected: credential.handle, actual: renewed.handle)
+            }
+            // ログインし直している間に、別のシーンでログアウトや切り替えをしていたら、結果を捨てる。
+            // 加えると、消したアカウントが戻ったり、切り替えたアカウントから戻ったりするため。
+            guard accounts.current?.id == credential.id else {
+                logger.info("reauthentication discarded: account changed")
+                return
+            }
+            try accounts.add(renewed)
+            logger.info("account reauthenticated")
+            Self.syncAllScenes()
+        } catch is CancellationError {
+            logger.info("reauthentication cancelled")
+        } catch {
+            logger.error("reauthentication failed: \(error.localizedDescription, privacy: .public)")
+            let alert = UIAlertController(title: "ログインし直せませんでした", message: error.localizedDescription, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "OK", style: .cancel))
+            window.rootViewController?.present(alert, animated: true)
+        }
     }
 
     /// ログイン画面をシートで出し、ログインできたらそのアカウントに切り替える。
@@ -202,16 +234,16 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         )
         alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         alert.addAction(UIAlertAction(title: "ログアウト", style: .destructive) { [weak self] _ in
-            self?.logOut(current, message: nil)
+            self?.logOut(current)
         })
         presenter.present(alert, animated: true)
     }
 
     /// アカウントの情報を端末から消す。ほかにアカウントがあればそちらに切り替え、なければログイン画面に戻る。
-    /// サーバー側のトークンは失効させない。
-    private func logOut(_ credential: Credential, message: String?) {
+    /// サーバー側のトークンは失効させない。使う人がログアウトを選んだときだけ呼ぶ。APIの応答を理由には呼ばない。
+    private func logOut(_ credential: Credential) {
         guard let accounts else {
-            showCurrentAccount(message: message)
+            showCurrentAccount()
             return
         }
         do {
@@ -221,13 +253,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         logger.info("account removed")
-        showCurrentAccount(message: message)
+        showCurrentAccount()
         Self.syncAllScenes()
-        if let message, accounts.current != nil {
-            let alert = UIAlertController(title: "\(credential.handle)からログアウトしました", message: message, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .cancel))
-            window?.rootViewController?.present(alert, animated: true)
-        }
     }
 
     func showLogin(errorMessage: String?) {
@@ -252,6 +279,16 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 @MainActor
 private final class AddAccountAttempt {
     var isCancelled = false
+}
+
+/// ログインし直しで、元とは別のアカウントでログインされた。
+private struct DifferentAccountLoggedIn: LocalizedError {
+    let expected: String
+    let actual: String
+
+    var errorDescription: String? {
+        "\(actual)でログインされました。\(expected)でログインし直してください。"
+    }
 }
 
 /// 起動時にKeychainを読めず、アカウントを保存できない。

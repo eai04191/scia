@@ -106,6 +106,8 @@ final class TimelineViewController: UIViewController {
     /// 新着ボタンで最上部へ動かしている。
     private var isScrollingToTop = false
     private lazy var newArrivalsButton = makeNewArrivalsButton()
+    private lazy var reauthenticationButton = makeReauthenticationButton()
+    private var onReauthenticate: (() -> Void)?
     private var timeRefreshTimer: Timer?
     private let texts: Texts
     let tuning: TuningStore
@@ -162,10 +164,17 @@ final class TimelineViewController: UIViewController {
         // タブバーの上の投稿欄で書いている間も、読み進めるだけならキーボードを閉じない。キーボードまで引き下ろしたら閉じる。
         collectionView.keyboardDismissMode = .interactive
         view.addSubview(collectionView)
-        view.addSubview(newArrivalsButton)
+        // 一覧に重ねて上に浮かべる。隠したボタンは詰める。
+        let topButtons = UIStackView(arrangedSubviews: [reauthenticationButton, newArrivalsButton])
+        topButtons.axis = .vertical
+        topButtons.alignment = .center
+        topButtons.spacing = 8
+        topButtons.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(topButtons)
         NSLayoutConstraint.activate([
-            newArrivalsButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            newArrivalsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            topButtons.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            topButtons.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            topButtons.leadingAnchor.constraint(greaterThanOrEqualTo: view.layoutMarginsGuide.leadingAnchor),
         ])
         AppDependencies.stateDumps.register(texts.dumpName, owner: self) { $0.stateDump() }
         emojiImages.addListener(owner: self) { [weak self] urls in self?.emojiImagesDidLoad(urls) }
@@ -399,6 +408,19 @@ final class TimelineViewController: UIViewController {
         newArrivalsButton.configuration?.title = isLowerBound ? "\(count)件以上の新着" : "\(count)件の新着"
     }
 
+    /// ログインし直しを促すボタンを出す。押されたら`action`を呼ぶ。表示中の一覧はそのまま残す。
+    func showReauthenticationPrompt(handle: String, action: @escaping () -> Void) {
+        onReauthenticate = action
+        reauthenticationButton.configuration?.title = "ログインし直してください"
+        reauthenticationButton.configuration?.subtitle = handle
+        reauthenticationButton.isHidden = false
+    }
+
+    /// ログインし直しを始めてから認可画面が出るまでの間、ボタンに読み込み中を示す。
+    func setReauthenticating(_ isReauthenticating: Bool) {
+        reauthenticationButton.configuration?.showsActivityIndicator = isReauthenticating
+    }
+
     func setContentState(_ state: ContentState) {
         contentState = state
         setNeedsUpdateContentUnavailableConfiguration()
@@ -491,6 +513,22 @@ final class TimelineViewController: UIViewController {
 
     func entry(for id: ItemID) -> TimelineEntry? {
         entries[id]
+    }
+
+    private func makeReauthenticationButton() -> UIButton {
+        var configuration = UIButton.Configuration.borderedProminent()
+        configuration.cornerStyle = .capsule
+        configuration.baseBackgroundColor = .systemOrange
+        configuration.image = UIImage(systemName: "person.crop.circle.badge.exclamationmark")
+        configuration.imagePadding = 8
+        configuration.titleLineBreakMode = .byTruncatingTail
+        configuration.subtitleLineBreakMode = .byTruncatingMiddle
+        let button = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in
+            self?.onReauthenticate?()
+        })
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.isHidden = true
+        return button
     }
 
     private func makeNewArrivalsButton() -> UIButton {

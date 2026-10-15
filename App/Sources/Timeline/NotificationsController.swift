@@ -16,8 +16,8 @@ final class NotificationsController {
     private let client: MastodonClient
     private let streaming: StreamingClient
     private let tuning: TuningStore
-    /// トークンが無効だったとき、どのコントローラーからの通知かを添えて呼ぶ。
-    private let onUnauthorized: (NotificationsController, String) -> Void
+    /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
+    private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "notifications")
     private var tasks: [Task<Void, Never>] = []
     private var isStopped = false
@@ -34,7 +34,7 @@ final class NotificationsController {
         client: MastodonClient,
         streaming: StreamingClient,
         tuning: TuningStore = AppDependencies.tuning,
-        onUnauthorized: @escaping (NotificationsController, String) -> Void
+        onUnauthorized: @escaping () -> Void
     ) {
         store = NotificationStore(pageSize: Self.pageSize) { query in
             try await client.notifications(query)
@@ -73,7 +73,7 @@ final class NotificationsController {
     /// バックグラウンドから戻ったときに呼ぶ。つなぎ直して切れていた間の通知を補い、他の端末で読み進めた位置を取り込む。
     func enterForeground() {
         isInForeground = true
-        guard hasLoadedInitial else { return }
+        guard !isStopped, hasLoadedInitial else { return }
         startStreaming()
         syncReadPosition()
     }
@@ -168,12 +168,15 @@ final class NotificationsController {
             }
         case .event:
             break
+        case .unauthorized:
+            logger.info("notifications streaming unauthorized")
+            onUnauthorized()
         case .disconnected(let reason, let retryAfter):
             logger.info("notifications streaming disconnected reason=\(reason, privacy: .public) retryAfter=\(retryAfter, privacy: .public)")
         }
     }
 
-    /// トークンが無効になったときと、取り消したときだけ届く。
+    /// 取り消したときだけ届く。401で断られても、つなぎ直しは続く。
     private func streamingDidEnd(_ error: any Error, generation: Int) {
         if generation == streamingGeneration {
             streamingTask = nil
@@ -318,9 +321,8 @@ final class NotificationsController {
         guard !isStopped, !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
         logger.error("notifications \(operation, privacy: .public) failed: \(error.localizedDescription, privacy: .public)")
         if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
-            onUnauthorized(self, "ログインの有効期限が切れたか、アプリの許可が取り消されました。ログインし直してください。")
-        } else {
-            show(error.localizedDescription)
+            onUnauthorized()
         }
+        show(error.localizedDescription)
     }
 }

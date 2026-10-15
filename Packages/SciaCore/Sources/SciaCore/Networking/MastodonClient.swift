@@ -124,6 +124,16 @@ public struct MastodonClient: Sendable {
         return try await post(Status.self, path: "api/v1/statuses", form: form, headers: ["Idempotency-Key": draft.idempotencyKey]).0
     }
 
+    /// トークンが有効なら返り、無効なら401の`MastodonAPIError`を投げる。
+    /// アカウントの他の項目が読めないサーバーでも確かめられるよう、IDだけを読む。
+    /// https://docs.joinmastodon.org/methods/accounts/#verify_credentials
+    public func verifyCredentials() async throws {
+        struct Verified: Decodable {
+            let id: String
+        }
+        _ = try await get(Verified.self, path: "api/v1/accounts/verify_credentials", query: [])
+    }
+
     /// https://docs.joinmastodon.org/methods/accounts/#get
     public func account(_ id: String) async throws -> Account {
         try await get(Account.self, path: "api/v1/accounts/\(id)", query: []).0
@@ -296,6 +306,6 @@ public struct TimelinePage: Sendable, Equatable {
 }
 
 extension MastodonAPIError {
-    /// トークンが無効で、ログインし直す必要がある。
+    /// 401。トークンが無効なことが多いが、一部のAPIだけを断るサーバーもあるため、ログインし直しが要るかは`AuthorizationCheck`で確かめる。
     public var isUnauthorized: Bool { statusCode == 401 }
 }
