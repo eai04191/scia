@@ -406,6 +406,10 @@ final class SessionController {
             notifications.start()
         case .statusCleared:
             DebugFaults.fail(withStatus: nil)
+        case .unsupported(let feature):
+            DebugFaults.makeUnsupported(feature)
+            home.start()
+            notifications.start()
         case .streaming(let isOnline):
             DebugFaults.setStreamingOnline(isOnline)
         }

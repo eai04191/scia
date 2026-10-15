@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import os
 import SciaCore
 import Synchronization
 
@@ -23,6 +24,27 @@ enum DebugFaults {
     /// - Parameter retryAfter: `Retry-After`ヘッダーで返す秒数。
     static func fail(withStatus statusCode: Int?, retryAfter: Int? = nil) {
         failingStatusCode.withLock { $0 = statusCode.map { ($0, retryAfter) } }
+    }
+
+    /// 入れた機能のAPIに、以後は404のHTMLを返す。その機能を実装していないサーバーを再現する。
+    private static let unsupportedFeatures = Mutex<Set<OptionalFeature>>([])
+
+    static func makeUnsupported(_ feature: OptionalFeature) {
+        unsupportedFeatures.withLock { _ = $0.insert(feature) }
+    }
+
+    /// そのリクエストが、実装していないことにした機能のAPIへのものか。
+    static func isUnsupported(_ request: URLRequest) -> Bool {
+        let path = request.url?.path() ?? ""
+        return unsupportedFeatures.withLock { features in
+            features.contains { feature in
+                switch feature {
+                case .markers: path.hasSuffix("api/v1/markers")
+                case .preferences: path.hasSuffix("api/v1/preferences")
+                case .instanceV2: path.hasSuffix("api/v2/instance")
+                }
+            }
+        }
     }
 
     /// 立てると、以後のホームと通知の応答のうち、3件に1件を読めない形に壊す。読めなかった投稿や通知の行を、実際の読み込みの経路で確かめる。
@@ -88,6 +110,12 @@ struct FaultInjectingTransport: HTTPTransport {
                headerFields: ["Content-Type": "text/html"].merging(retryAfter.map { ["Retry-After": String($0)] } ?? [:]) { first, _ in first }
            ) {
             return (Data("<html><body><h1>\(statusCode)</h1><p>nginx</p></body></html>".utf8), response)
+        }
+        if DebugFaults.isUnsupported(request),
+           let url = request.url,
+           let response = HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: ["Content-Type": "text/html"]) {
+            SciaLog.logger(category: "debug").info("debug unsupported \(url.path(), privacy: .public)")
+            return (Data("<html><body><h1>404 Not Found</h1></body></html>".utf8), response)
         }
         let (data, response) = try await base.send(request)
         let path = request.url?.path() ?? ""

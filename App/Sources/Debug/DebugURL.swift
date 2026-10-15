@@ -1,5 +1,6 @@
 #if DEBUG
 import Foundation
+import SciaCore
 
 /// デバッグメニューと同じ操作を、`xcrun simctl openurl '<端末>' 'scia-debug://dummy/images'`のようにURLで呼ぶ。
 /// agentがメニューを開いて叩かずに、コマンドで確認の準備をするため。
@@ -16,6 +17,8 @@ enum DebugURL: Equatable {
     /// `?retry-after=<秒>`を付けると、`Retry-After`ヘッダーも返す。`scia-debug://status/ok`で戻す。
     case status(Int, retryAfter: Int?)
     case statusCleared
+    /// `scia-debug://unsupported/<OptionalFeature.rawValue>`。以後その機能のAPIに404のHTMLを返させ、このサーバーにはない機能にする。
+    case unsupported(OptionalFeature)
     /// `scia-debug://streaming/offline`で今のストリーミングの接続を切り、以後の接続を失敗させる。`scia-debug://streaming/online`で戻す。
     case streaming(isOnline: Bool)
 
@@ -37,6 +40,9 @@ enum DebugURL: Equatable {
             guard let statusCode = Int(url.lastPathComponent), (100..<600).contains(statusCode) else { return nil }
             let retryAfter = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "retry-after" }?.value
             self = .status(statusCode, retryAfter: retryAfter.flatMap { Int($0) })
+        case "unsupported":
+            guard let feature = OptionalFeature(rawValue: url.lastPathComponent) else { return nil }
+            self = .unsupported(feature)
         case "streaming":
             switch url.lastPathComponent {
             case "offline": self = .streaming(isOnline: false)
