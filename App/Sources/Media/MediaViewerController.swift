@@ -30,7 +30,7 @@ final class MediaViewerController: UIViewController {
     /// 代替テキストを書いている。
     private(set) var isEditingDescription = false
     /// 投稿欄から開いたとき、アップロードや代替テキストの送信の状態を、上の中央に出す。失敗していれば押して理由を見られる。
-    let draftStatusButton = UIButton(configuration: .glass())
+    let draftStatusButton = DraftStatusButton()
     /// 写真に保存したことを、メニューボタンの下で知らせる。
     private let statusChip = StatusChip()
     private let photoSaver: PhotoLibrarySaver
@@ -363,15 +363,6 @@ final class MediaViewerController: UIViewController {
         }
         descriptionEditor.onEnd = { [weak self] text in self?.descriptionEditingDidEnd(text) }
         descriptionEditor.onDone = { [weak self] in self?.endEditingDescription() }
-        draftStatusButton.isHidden = true
-        draftStatusButton.configuration?.imagePadding = 6
-        draftStatusButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .subheadline)
-        draftStatusButton.configuration?.titleLineBreakMode = .byTruncatingTail
-        draftStatusButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = attributes
-            attributes.font = .preferredFont(forTextStyle: .subheadline)
-            return attributes
-        }
         draftStatusButton.addAction(UIAction { [weak self] _ in
             guard let self, let editing = self.draftEditing else { return }
             editing.showFailure(self.currentItem.id, self)
@@ -676,29 +667,9 @@ final class MediaViewerController: UIViewController {
         }
     }
 
-    /// 投稿欄から開いたとき、上の中央にアップロードや代替テキストの送信の状態を出す。済んでいれば出さない。
+    /// 投稿欄から開いたとき、上の中央にアップロードや代替テキストの送信の状態を出す。
     private func updateDraftStatus() {
-        guard let status = currentItem.draftStatus, status != .ready else {
-            draftStatusButton.isHidden = true
-            return
-        }
-        let (title, isFailure): (String, Bool) = switch status {
-        case .uploading: ("アップロード中", false)
-        case .processing: ("サーバーで処理中", false)
-        case .sendingDescription: ("代替テキストを送信中", false)
-        case .failed: ("アップロードできませんでした", true)
-        case .descriptionFailed: ("代替テキストを送信できませんでした", true)
-        case .ready: ("", false)
-        }
-        draftStatusButton.configuration?.title = title
-        draftStatusButton.configuration?.showsActivityIndicator = !isFailure
-        draftStatusButton.configuration?.image = isFailure ? UIImage(systemName: "exclamationmark.circle.fill") : nil
-        draftStatusButton.configuration?.imageColorTransformer = isFailure ? UIConfigurationColorTransformer { _ in .systemRed } : nil
-        // 失敗したときだけ押して、理由と送り直す操作を出せる。
-        draftStatusButton.isUserInteractionEnabled = isFailure
-        draftStatusButton.accessibilityTraits = isFailure ? .button : .staticText
-        draftStatusButton.accessibilityHint = isFailure ? "理由と、再試行か削除を選べます。" : nil
-        draftStatusButton.isHidden = false
+        draftStatusButton.apply(currentItem.draftStatus)
     }
 
     /// 表示中の添付ファイルを写真に保存し、済んだらメニューボタンの下で知らせる。キャッシュになければ落としてから保存する。
