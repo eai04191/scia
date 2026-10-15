@@ -250,6 +250,7 @@ final class MediaViewerController: UIViewController {
 
     /// 写しをサムネイルへ縮めてから閉じる。代替テキストを書いていれば、書き終えてから閉じる。
     @objc func close() {
+        UserAction.closeViewer(.button).record()
         beginClosing()
     }
 
@@ -881,6 +882,7 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
             let velocity = recognizer.velocity(in: view).y
             if dragToDismiss.shouldDismiss(translation: translation.y, velocity: velocity, height: height) {
                 SciaLog.logger(category: "media").info("dismiss by drag translation=\(translation.y, privacy: .public) velocity=\(velocity, privacy: .public)")
+                UserAction.closeViewer(.drag).record()
                 beginClosing()
             } else {
                 settle()

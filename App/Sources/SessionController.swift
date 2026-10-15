@@ -202,6 +202,7 @@ final class SessionController {
         } onUnauthorized: { [weak self] in
             self?.reportUnauthorized()
         }
+        UserAction.openProfile.record()
         configure(viewController)
         profiles.add(controller)
         source.navigationController?.pushViewController(viewController, animated: true)
@@ -244,10 +245,13 @@ final class SessionController {
     private func perform(_ action: StatusAction, on status: Status) {
         switch action {
         case .reply:
+            UserAction.reply.record()
             composer.reply(to: status)
         case .favourite:
+            UserAction.toggleFavourite.record()
             toggle(.favourite, on: status, failureTitle: "お気に入りを変更できませんでした")
         case .reblog:
+            UserAction.toggleReblog.record()
             toggle(.reblog, on: status, failureTitle: "ブーストを変更できませんでした")
         }
     }
@@ -297,6 +301,7 @@ final class SessionController {
 
     /// 投稿欄の下書きのまま、全画面の投稿画面を出す。
     private func expandCompose() {
+        UserAction.expandCompose.record()
         applyComposeDefaults()
         rootViewController.present(ComposeHostingController(model: composer.model), animated: true)
     }
@@ -530,6 +535,7 @@ private final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate
     }
 
     func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool {
+        (tab == tabBarController.selectedTab ? UserAction.reselectTab(tab.identifier) : .selectTab(tab.identifier)).record()
         guard tab == tabBarController.selectedTab,
               let navigation = tab.viewController as? UINavigationController,
               navigation.viewControllers.count == 1

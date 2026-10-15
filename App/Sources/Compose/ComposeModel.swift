@@ -174,6 +174,7 @@ final class ComposeModel {
     /// 投稿し、成功したら下書きを空に戻す。失敗したら下書きを残し、同じ下書きで送り直せるようにする。
     func submit() async {
         guard canPost else { return }
+        UserAction.submitPost.record()
         isPosting = true
         defer { isPosting = false }
         let draft = submission(of: draftToPost)

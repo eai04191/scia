@@ -548,7 +548,9 @@ final class TimelineViewController: UIViewController {
         configuration.imagePadding = 6
         configuration.buttonSize = .small
         let button = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in
-            self?.scrollToNewest()
+            guard let self else { return }
+            UserAction.tapNewArrivals(screen: texts.dumpName).record()
+            scrollToNewest()
         })
         button.translatesAutoresizingMaskIntoConstraints = false
         button.isHidden = true
@@ -829,6 +831,7 @@ extension TimelineViewController: UICollectionViewDelegate {
 
     /// 最上部へ動かしている途中で指が触れたら、それ以上は動かし直さない。
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        UserAction.scroll(screen: texts.dumpName).record()
         isScrollingToTop = false
     }
 
@@ -841,11 +844,13 @@ extension TimelineViewController: UICollectionViewDelegate {
 
     /// ステータスバーのタップで最上部へ動かしたとき。
     func scrollViewDidScrollToTop(_ scrollView: UIScrollView) {
+        UserAction.scrollToTop(screen: texts.dumpName).record()
         reportVisibleItemsAfterLayout()
         onInteractionSettle?()
     }
 
     func collectionView(_ collectionView: UICollectionView, willDisplayContextMenu configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
+        UserAction.openMenu(screen: texts.dumpName).record()
         menuWillShow()
     }
 
@@ -894,6 +899,7 @@ extension TimelineViewController: UICollectionViewDelegate {
             return
         }
         guard case .gap(let gapID) = dataSource.itemIdentifier(for: indexPath) else { return }
+        UserAction.tapGap(screen: texts.dumpName).record()
         collectionView.deselectItem(at: indexPath, animated: true)
         guard !loadingGapIDs.contains(gapID), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return }
         let visibleRect = collectionView.bounds.inset(by: collectionView.adjustedContentInset)

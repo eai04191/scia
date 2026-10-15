@@ -58,6 +58,7 @@ extension TimelineViewController {
     /// 閉じるときは、タップした行のサムネイルへ戻す。同じ投稿とそのブーストが並んでいると、同じ添付ファイルのサムネイルが複数あるため。
     /// 開いている間にその行が再利用されたら、表示中の別の行から探す。
     func openMedia(_ attachments: [MediaAttachment], at index: Int, from grid: MediaGridView) {
+        UserAction.openViewer(count: attachments.count, index: index).record()
         SciaLog.logger(category: "media").info("open viewer count=\(attachments.count, privacy: .public) index=\(index, privacy: .public)")
         let timing = MediaViewerController.Timing(tuning: tuning)
         let dragToDismiss = TuningCatalog.dragToDismiss(in: tuning)

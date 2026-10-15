@@ -85,11 +85,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     func sceneWillEnterForeground(_ scene: UIScene) {
         logger.info("scene willEnterForeground")
+        UserAction.enterForeground.record()
         session?.enterForeground()
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
         logger.info("scene didEnterBackground")
+        UserAction.enterBackground.record()
         session?.enterBackground()
     }
 
