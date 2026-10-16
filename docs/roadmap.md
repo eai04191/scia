@@ -70,3 +70,5 @@ M4までで足りない機能や違和感を、使いながら1つずつ足す�
 - [ ] 投稿欄で5枚以上添付し、サムネイルの列が横にスクロールするときのドラッグの並べ替えを確かめる: 開発で使っているサーバーは上限が4枚で、横にスクロールする状態を起こせていない
 - [ ] 投稿欄で注意書き（CW）を書く: いまは全画面の投稿画面に広げたときだけ書ける
 - [ ] Mac（Designed for iPad）で、投稿やチューニングのシートが出始めるまで遅いのを直す: 押してから何も出ずにもたつき、そのあとパッと出る。iPhoneでは起きない。AeroSpaceを終了しても、Releaseビルドでも変わらなかった。Time Profilerでは、シートを出す直前のSwiftUIの最初のレイアウト（`UISheetPresentationController _transitionWillBegin` → `_UIHostingView.layoutSubviews`）に120〜190msかかっていたが、それだけで説明できるかは分かっていない。次はInstrumentsのAnimation HitchesやSwiftUIのテンプレートで、押してから出始めるまでを測る
+- [ ] 投稿欄の添付で、処理中の動画の回る表示と再生の印が重なるのを直す: 部品カタログ（`scia-debug://catalog/attachment-strip`）で見られる
+- [ ] 一覧の添付ファイルで、読み込めなかったことが読み込み中と見分けられるかを確かめる: 部品カタログ（`scia-debug://catalog/media-grid`）では同じ見た目に見える。実物ではまだ確かめていない
