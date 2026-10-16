@@ -15,4 +15,31 @@ protocol MediaViewerSource: UIView {
     /// ビューアがこのビューとのあいだで画像を動かしている間、見えなくする。
     /// 透明にすると触れても反応しなくなり、閉じる途中に叩き直しても開けないため、空のマスクで隠す。
     var isConcealedForViewer: Bool { get set }
+    /// このビューの上に重なっているビュー。手前にあるものほど後ろに並べる。ビューアは画像の写しのさらに手前に、これらの写しを重ねる。
+    var overlappingViews: [UIView] { get }
+}
+
+extension MediaViewerSource {
+    var overlappingViews: [UIView] { [] }
+}
+
+/// 画像を1枚描くだけのビュー。プロフィールのアイコンやヘッダー画像のように、上に重ねる印がない。
+extension MediaViewerSource where Self: UIImageView {
+    var thumbnailImage: UIImage? { image }
+    var loadedThumbnail: UIImage? { image }
+
+    var placeholderColor: UIColor? {
+        backgroundColor?.resolvedColor(with: traitCollection)
+    }
+
+    func makeDecorationCopy() -> UIView {
+        let container = UIView(frame: bounds)
+        container.isUserInteractionEnabled = false
+        return container
+    }
+
+    var isConcealedForViewer: Bool {
+        get { layer.mask != nil }
+        set { layer.mask = newValue ? CALayer() : nil }
+    }
 }

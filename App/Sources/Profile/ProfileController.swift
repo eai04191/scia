@@ -72,6 +72,7 @@ final class ProfileController {
             guard let url = self?.store.account.url else { return }
             UIApplication.shared.open(url)
         }
+        header.onOpenImage = { [weak self] image in self?.openImage(image) }
         observeHeaderContent()
         // 名前や自己紹介の絵文字が届いたら、ヘッダーを描き直す。投稿の絵文字は一覧が描き直す。
         viewController.emojiImages.addListener(owner: self) { [weak self] urls in
@@ -134,6 +135,14 @@ final class ProfileController {
     private func showEntries(replacing: Bool = false) {
         let pinned = shownTab == .posts ? store.pinned : []
         viewController?.setEntries(pinned.map(TimelineEntry.pinned) + shownTimeline.entries, keepsOffset: replacing)
+    }
+
+    /// アイコンかヘッダー画像を、添付ファイルと同じビューアで開く。1枚だけを開き、左右に切り替えない。
+    private func openImage(_ image: ProfileImage) {
+        guard let attachment = store.account.attachment(of: image) else { return }
+        viewController?.openMedia([attachment], at: 0) { [weak header] _ in
+            header?.viewerSource(for: image)
+        }
     }
 
     // MARK: - 読み込み

@@ -63,6 +63,8 @@ final class MediaViewerController: UIViewController {
     private let morph = UIImageView()
     /// 写しに載せる、サムネイルの印（ALT、GIF、残りの枚数）の写し。サムネイルに近いほど濃くし、ビューアの画像の大きさでは見せない。
     private var morphDecoration: UIView?
+    /// 写しのさらに手前に置く、サムネイルに重なっているビューの写し。印と同じ濃さで出し入れする。
+    private var morphOverlap: MediaSourceOverlap?
     /// 写しに敷く、サムネイルの背景の色。印と同じ濃さで出し入れし、透明な部分のある画像でサムネイルとの見え方をそろえる。
     private var morphPlaceholderColor: UIColor?
     /// 写しの画像を、ページが描いている画像に合わせ続けるか。元の画像が届いたら、動いている途中でも差し替える。
@@ -995,12 +997,19 @@ extension MediaViewerController {
             morph.addSubview(decoration)
             return decoration
         }
+        morphOverlap?.view.removeFromSuperview()
+        morphOverlap = tile.flatMap { tile in view.window.flatMap { MediaSourceOverlap(source: tile, in: $0) } }
+        if let overlap = morphOverlap {
+            overlap.move(to: view)
+            view.insertSubview(overlap.view, aboveSubview: morph)
+        }
         setDecorationAlpha(alpha)
     }
 
     /// サムネイルの印と背景の濃さ。サムネイルの大きさで1、ビューアの画像の大きさで0。
     private func setDecorationAlpha(_ alpha: CGFloat) {
         morphDecoration?.alpha = alpha
+        morphOverlap?.view.alpha = alpha
         morph.backgroundColor = Self.placeholderColor(morphPlaceholderColor, alpha: alpha)
     }
 
@@ -1010,6 +1019,8 @@ extension MediaViewerController {
 
     private func hideMorph() {
         morph.isHidden = true
+        morphOverlap?.view.removeFromSuperview()
+        morphOverlap = nil
         morphFollowsPage = false
         setPageHidden(false)
     }
@@ -1277,6 +1288,7 @@ extension MediaViewerController {
         }
         morph.frame = view.convert(morph.frame, to: window)
         overlay.addSubview(morph)
+        morphOverlap?.move(to: overlay)
         window.addSubview(overlay)
         let moves = movesImage && tile != nil
         // 写しをサムネイルへ戻すときは、戻り終えてから見せるため、ビューアを閉じたときには戻さない。
@@ -1306,6 +1318,7 @@ extension MediaViewerController {
                 overlay: overlay,
                 morph: morph,
                 decoration: morphDecoration,
+                overlap: morphOverlap,
                 placeholderColor: morphPlaceholderColor,
                 backdrop: backdrop,
                 fadingViews: [backdrop] + chromeSnapshots,

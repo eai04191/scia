@@ -20,6 +20,8 @@ final class MediaClosingFlight: NSObject {
         let morph: UIImageView
         /// 写しに載せた、サムネイルの印の写し。
         let decoration: UIView?
+        /// 写しのさらに手前に置いた、サムネイルに重なっているビューの写し。印と同じ濃さで出し入れする。
+        let overlap: MediaSourceOverlap?
         /// 写しに敷く、サムネイルの背景の色。印と同じ濃さで出し入れする。
         let placeholderColor: UIColor?
         /// 一覧を暗くする下地。`fadingViews`にも含め、閉じながら薄くする。
@@ -114,6 +116,7 @@ final class MediaClosingFlight: NSObject {
         if let tile {
             lastTarget = (tile.convert(tile.bounds, to: window), tile.layer.cornerRadius)
             parts.layering.track(tile)
+            parts.overlap?.follow(tile)
         }
         if movesImage, let target = lastTarget {
             parts.morph.frame = Self.interpolate(startFrame, target.frame, progress)
@@ -125,8 +128,11 @@ final class MediaClosingFlight: NSObject {
                 // 戻り先が画面から外れたら、最後の位置へ向かいながら薄くする。
                 visibility = min(visibility, 1 - clamped)
             }
+            // 一覧の中の写しへ受け渡す間も、受け渡した写しの手前に重なって見えるよう、写しの濃さとは別に出す。
+            parts.overlap?.view.alpha = decorationAlpha * visibility
         } else {
             visibility = 1 - clamped
+            parts.overlap?.view.alpha = 0
         }
         let layering = parts.layering
         if layering.drawsUnderBars {

@@ -20,6 +20,8 @@ final class ProfileHeaderView: UIView {
     var onSelectTab: ((ProfileTab) -> Void)?
     var onChangePostsFilter: ((ProfilePostsFilter) -> Void)?
     var onOpenOriginal: (() -> Void)?
+    /// アイコンかヘッダー画像がタップされた。画像を読み込み終えていなければ呼ばない。
+    var onOpenImage: ((ProfileImage) -> Void)?
 
     /// ヘッダー画像の縦横比（高さ÷幅）。Mastodonのヘッダー画像は3:1を想定している。
     private static let bannerAspect: CGFloat = 1 / 3
@@ -28,7 +30,7 @@ final class ProfileHeaderView: UIView {
 
     private let emojiImages: EmojiImageStore
     private let mediaImages: MediaImageStore
-    private let bannerView = UIImageView()
+    private let bannerView = ProfileBannerView()
     private let avatarRingView = UIView()
     private let avatarView: AvatarView
     private let followButton = UIButton(configuration: .filled())
@@ -63,6 +65,18 @@ final class ProfileHeaderView: UIView {
         bannerView.contentMode = .scaleAspectFill
         bannerView.clipsToBounds = true
         bannerView.backgroundColor = .secondarySystemFill
+
+        bannerView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openHeader)))
+        avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAvatar)))
+        for (view, label) in [(bannerView, "ヘッダー画像"), (avatarView, "アイコン")] as [(UIImageView, String)] {
+            view.isUserInteractionEnabled = true
+            view.isAccessibilityElement = true
+            view.accessibilityLabel = label
+            view.accessibilityTraits = [.image, .button]
+        }
+
+        // アイコンはヘッダー画像に半分かかるため、ヘッダー画像を開閉する間もアイコンを手前に見せる。
+        bannerView.overlappingViews = [avatarRingView, avatarView]
 
         avatarRingView.backgroundColor = .systemBackground
         avatarRingView.layer.cornerCurve = .continuous
@@ -155,6 +169,32 @@ final class ProfileHeaderView: UIView {
             infoStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
             infoStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
         ])
+    }
+
+    @objc private func openAvatar() {
+        open(.avatar)
+    }
+
+    @objc private func openHeader() {
+        open(.header)
+    }
+
+    private func open(_ image: ProfileImage) {
+        guard viewerSource(for: image) != nil else { return }
+        onOpenImage?(image)
+    }
+
+    /// ビューアを開閉する起点。画像を読み込み終えていなければ、大きくして見るものがないのでnil。
+    /// Mastodonは、ヘッダー画像を設定していないアカウントに1×1の透明な画像（`/headers/original/missing.png`）を返すため、それも開かない。
+    func viewerSource(for image: ProfileImage) -> (any MediaViewerSource)? {
+        let view: any UIImageView & MediaViewerSource = switch image {
+        case .avatar: avatarView
+        case .header: bannerView
+        }
+        guard let shown = view.image, window != nil else { return nil }
+        let pixels = CGSize(width: shown.size.width * shown.scale, height: shown.size.height * shown.scale)
+        guard pixels.width > 1 || pixels.height > 1 else { return nil }
+        return view
     }
 
     func apply(_ content: Content) {
@@ -329,6 +369,11 @@ final class ProfileHeaderView: UIView {
             }
         }
     }
+}
+
+/// ヘッダー画像。タップすると、ビューアで大きく見る。
+private final class ProfileBannerView: UIImageView, MediaViewerSource {
+    var overlappingViews: [UIView] = []
 }
 
 /// 背景色の内側に余白を取るラベル。

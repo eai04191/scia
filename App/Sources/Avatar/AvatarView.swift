@@ -87,3 +87,6 @@ final class AvatarView: UIImageView {
         loadingKey = nil
     }
 }
+
+/// プロフィールでは、アイコンをタップしてビューアで大きく見る。
+extension AvatarView: MediaViewerSource {}
