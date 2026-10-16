@@ -1,4 +1,5 @@
 import AVKit
+import Combine
 import CoreImage
 import os
 import SciaCore
@@ -22,7 +23,11 @@ final class MediaViewerController: UIViewController {
     private var pages: [Int: MediaPageController] = [:]
     private(set) var currentIndex: Int
     /// 添付ファイルへの操作をまとめたメニューを出す。
-    private let menuButton = UIButton(configuration: .glass())
+    private let menuButton: MenuButton = {
+        let button = MenuButton()
+        button.configuration = .glass()
+        return button
+    }()
     private let counterLabel = UILabel()
     let captionView = CaptionView()
     /// 投稿欄から開いたとき、代替テキストを書く入力欄。書いている間だけ出す。
@@ -103,6 +108,10 @@ final class MediaViewerController: UIViewController {
         let savedChipDuration: TimeInterval
         /// 写真に保存したことを知らせる表示を、メニューボタンの下ではなく、画面下の説明のすぐ上に出す。
         let savedChipAtBottom: Bool
+        /// 動画を再生している間、最後に触れてから操作の部品とボタンを隠すまでの時間。
+        let videoControlsHideDelay: TimeInterval
+        /// ダブルタップで10秒戻ったか進んだことを知らせる表示を、出しておく時間。
+        let videoSkipEffectDuration: TimeInterval
     }
 
     /// 投稿欄で選んだメディアを開いたときの操作。ビューアは投稿欄を知らず、メニューと代替テキストの書き終わりをここから渡す。
@@ -306,6 +315,11 @@ final class MediaViewerController: UIViewController {
     private func setUpChrome() {
         menuButton.configuration?.image = UIImage(systemName: "ellipsis")
         menuButton.accessibilityLabel = "その他の操作"
+        // メニューを開いている間は、動画の部品を自動で隠さない。閉じたら、そこから数え直す。
+        menuButton.onMenuOpenChange = { [weak self] isOpen in
+            guard let self, !isOpen else { return }
+            self.pages[self.currentIndex]?.interactionDidEnd()
+        }
         // 開くたびに、表示中の添付ファイルに合わせて項目を作り直す。
         menuButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
             completion(self?.menuElements() ?? [])
@@ -452,8 +466,21 @@ final class MediaViewerController: UIViewController {
         captionView.text = description
         // 投稿欄から開いたときは、空でも代替テキストを書き始められるよう出しておく。
         captionView.isHidden = isChromeHidden || isEditingDescription || (description.isEmpty && draftEditing == nil)
+        for page in pages.values {
+            page.isEditingDescription = isEditingDescription
+        }
         updateDraftStatus()
         view.setNeedsLayout()
+    }
+
+    /// 動画のページに頼まれて、ボタンと説明を隠すか出す。再生している間に触れずにいたときと、再生し終えたとき。
+    /// 代替テキストを書いている間と、開閉や閉じる操作で動かしている間は、隠さない。
+    private func setChromeHidden(_ hidden: Bool) {
+        guard hidden != isChromeHidden else { return }
+        if hidden {
+            guard !isEditingDescription, !menuButton.isMenuOpen, case .idle = motion else { return }
+        }
+        toggleChrome()
     }
 
     /// 画像を1回タップしたら、ボタンと説明を隠して画像だけにする。もう1回で戻す。
@@ -486,6 +513,15 @@ final class MediaViewerController: UIViewController {
         page.menuElements = { [weak self] in self?.menuElements() ?? [] }
         page.setChromeHidden(isChromeHidden, animated: false)
         page.bottomCoveredHeight = captionCoveredHeight
+        page.isEditingDescription = isEditingDescription
+        if let player = page as? PlayerPageController {
+            player.controlsHideDelay = timing.videoControlsHideDelay
+            player.skipEffectDuration = timing.videoSkipEffectDuration
+            player.onRequestChromeHidden = { [weak self, weak player] hidden in
+                guard let self, let player, player.index == self.currentIndex else { return }
+                self.setChromeHidden(hidden)
+            }
+        }
         page.onImageChange = { [weak self, weak page] in
             guard let self, let page, self.morphFollowsPage, page.index == self.currentIndex, let image = page.transitionImage else { return }
             self.morph.image = image
@@ -827,9 +863,14 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
     }
 
     /// 代替テキストの入力欄の中のドラッグ（スクロールや、長押しからのカーソル移動）は、閉じる操作にせず入力欄に任せる。
+    /// ボタンやシークバーの上から始めたドラッグも、閉じる操作にせず、その部品に任せる。
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
         guard gestureRecognizer === dismissPan, let touched = touch.view else { return true }
-        return !touched.isDescendant(of: descriptionEditor)
+        return !touched.isDescendant(of: descriptionEditor) && !Self.isInsideControl(touched)
+    }
+
+    private static func isInsideControl(_ view: UIView) -> Bool {
+        sequence(first: view, next: \.superview).contains { $0 is UIControl }
     }
 
     @objc fileprivate func handleDismissPan(_ recognizer: UIPanGestureRecognizer) {
@@ -1123,6 +1164,7 @@ extension MediaViewerController {
         showHiddenTile()
         pageController.view.alpha = 1
         motion = .idle
+        pages[currentIndex]?.interactionDidEnd()
     }
 
     /// 開いている途中や戻している途中なら、その場で止めてつかむ。開ききっていれば、ビューアの画像の位置に写しを出してつかむ。
@@ -1406,8 +1448,15 @@ class MediaPageController: UIViewController {
     /// ボタンと説明を隠して画像だけにしたとき、ページの中に出しているボタンも合わせて隠す。
     func setChromeHidden(_ hidden: Bool, animated: Bool) {}
 
+    /// 開き終えたか、閉じる操作で動かしたあと閉じずに戻し終えたか、右上のメニューを閉じた。
+    /// その間、ビューアはボタンを隠す頼みを受けないため、ここで頼み直す。
+    func interactionDidEnd() {}
+
     /// 画面の下で、ビューアの説明に隠れている高さ。ページの中のボタンをこれより上に出す。
     var bottomCoveredHeight: CGFloat = 0
+
+    /// ビューアで代替テキストを書いている。
+    var isEditingDescription = false
 
     /// 長押しのメニューを指の位置に出すための、見えない小さな目印。
     private let menuAnchor = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
@@ -1683,12 +1732,42 @@ extension ImagePageController {
 }
 
 /// 動画、GIF、音声のページ。GIFはループして音を出さず、操作の部品も出さない。
+///
+/// 動画と音声には、標準の再生画面の操作の部品の代わりに`VideoControlsView`を重ねる。タップで、ビューアのボタンや説明とまとめて出し入れする。
+/// 再生している間は、最後に触れてから`controlsHideDelay`秒で、ビューアに隠すよう頼む。長押ししている間は2倍速で再生する。
 final class PlayerPageController: MediaPageController {
     private let playerController = AVPlayerViewController()
     /// GIFを最後まで再生したら先頭へ戻す、通知の受け口。
     private var loopObserver: (any NSObjectProtocol)?
+    /// 動画を最後まで再生したら、隠したボタンや操作の部品を出すための通知の受け口。
+    private var endObserver: (any NSObjectProtocol)?
+    /// VoiceOverを入れたり切ったりしたときに、自動で隠すかを決め直す通知の受け口。
+    private var voiceOverObserver: (any NSObjectProtocol)?
+    /// 再生している間、操作の部品の再生位置を進める受け口。
+    private var timeObserver: Any?
+    private var statusObservation: AnyCancellable?
     /// 動画の画素を表示の向きにする回し方。端末を縦にして撮った動画は、横向きの画素に回転情報を付けて保存されている。
     private var frameOrientation = UIImage.Orientation.up
+    /// 動画と音声の操作の部品。GIFではnil。
+    private var controls: VideoControlsView?
+    /// 音声のトラックがあるか。なければ消音のボタンを出さない。
+    private var hasAudio = false
+    /// 再生している間、最後に触れてから操作の部品とビューアのボタンを隠すまでの時間。
+    var controlsHideDelay: TimeInterval = 3
+    /// ダブルタップで10秒戻ったか進んだことを知らせる表示を、出しておく時間。
+    var skipEffectDuration: TimeInterval = 0.3
+    /// ビューアのボタンと説明を隠す（true）か出す（false）よう、ビューアに頼む。
+    var onRequestChromeHidden: ((Bool) -> Void)?
+    private var isChromeHidden = false
+    private var hideTask: Task<Void, Never>?
+    /// シークしている行き先の秒数。シークし終えたらnil。
+    private var pendingSeek: Double?
+    /// 出したシークの番号。取り消された古いシークの完了を、最新のシークの完了と取り違えないために使う。
+    private var seekGeneration = 0
+    /// シークバーを動かし始めたとき、再生していたか。動かし終えたら、その状態に戻す。
+    private var wasPlayingBeforeScrub = false
+    /// 長押しで速く再生し始めたとき、再生していたか。指を離したら、その状態に戻す。長押ししていなければnil。
+    private var wasPlayingBeforeFastForward: Bool?
 
     /// 動画の表示の準備が整うまでは、添付ファイルの縦横比で画面に収めた枠を返す。開く遷移はその準備より先に始まるため。
     override var contentFrame: CGRect {
@@ -1707,9 +1786,28 @@ final class PlayerPageController: MediaPageController {
         playerController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         // 閉じる操作で動かしたときに画面大の黒い枠が動かないよう、黒はビューアの背景に任せる。
         playerController.view.backgroundColor = .clear
+        playerController.showsPlaybackControls = false
+        // 止めたコマの文字を長押しで選べる機能は、長押しの2倍速とぶつかるため切る。
+        playerController.allowsVideoFrameAnalysis = false
         view.addSubview(playerController.view)
         playerController.didMove(toParent: self)
-        addLongPressMenu(to: playerController.view)
+        let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
+        tap.delegate = self
+        view.addGestureRecognizer(tap)
+        if item.kind == .gifv {
+            addLongPressMenu(to: playerController.view)
+        } else {
+            // 標準の再生画面は、操作の部品を出さなくても、ダブルタップやピンチを自前で受けて、こちらのタップやダブルタップと取り合う。
+            // 映像を描かせるだけにし、タッチはこのページで受ける。
+            playerController.view.isUserInteractionEnabled = false
+            setUpControls()
+            // 標準の再生画面と同じく、左右をダブルタップして10秒戻る・進む。1回のタップは、ダブルタップでないと分かってから扱う。
+            let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
+            doubleTap.numberOfTapsRequired = 2
+            doubleTap.delegate = self
+            view.addGestureRecognizer(doubleTap)
+            tap.require(toFail: doubleTap)
+        }
         setUpPlayer()
     }
 
@@ -1748,9 +1846,8 @@ final class PlayerPageController: MediaPageController {
                     player?.seek(to: .zero)
                 }
             }
-            playerController.showsPlaybackControls = false
-            let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
-            playerController.view.addGestureRecognizer(tap)
+        } else {
+            observe(player, playing: playerItem)
         }
         Task { [weak self] in
             guard let track = try? await playerItem.asset.loadTracks(withMediaType: .video).first,
@@ -1760,9 +1857,272 @@ final class PlayerPageController: MediaPageController {
         }
     }
 
+    /// 再生の状態と位置を、操作の部品に映す。
+    private func observe(_ player: AVPlayer, playing playerItem: AVPlayerItem) {
+        timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(value: 1, timescale: 10), queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.updateControls()
+            }
+        }
+        statusObservation = player.publisher(for: \.timeControlStatus)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated {
+                    self?.playbackStatusDidChange()
+                }
+            }
+        endObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: playerItem, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.onRequestChromeHidden?(false)
+            }
+        }
+        Task { [weak self] in
+            let audible = try? await playerItem.asset.loadTracks(withMediaCharacteristic: .audible)
+            _ = try? await playerItem.asset.load(.duration)
+            self?.hasAudio = audible?.isEmpty == false
+            self?.updateControls()
+        }
+    }
+
+    private func setUpControls() {
+        let controls = VideoControlsView()
+        controls.translatesAutoresizingMaskIntoConstraints = false
+        controls.coveredBottom = bottomCoveredHeight
+        controls.onPlayPause = { [weak self] in self?.togglePlayback() }
+        controls.onSkip = { [weak self] seconds in
+            guard let self else { return }
+            self.skip(by: seconds)
+            // ボタンで10秒戻ったり進んだりしたときも、ダブルタップと同じく矢印を回す。
+            self.controls?.showSkipEffect(forward: seconds > 0, duration: self.skipEffectDuration)
+        }
+        controls.onScrub = { [weak self] phase, progress in self?.scrub(phase, to: progress) }
+        controls.onMuteToggle = { [weak self] in self?.toggleMute() }
+        controls.speedMenuElements = { [weak self] in self?.speedMenuElements() ?? [] }
+        controls.onInteraction = { [weak self] in self?.scheduleAutoHide() }
+        view.addSubview(controls)
+        NSLayoutConstraint.activate([
+            controls.topAnchor.constraint(equalTo: view.topAnchor),
+            controls.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            controls.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            controls.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+        self.controls = controls
+        // ビューアは、ページを読み込む前に隠しているかを伝えるため、作った時点の状態を映す。
+        controls.setControlsHidden(isChromeHidden || isEditingDescription, animated: false)
+        let longPress = UILongPressGestureRecognizer(target: self, action: #selector(longPressed(_:)))
+        longPress.delegate = self
+        view.addGestureRecognizer(longPress)
+        voiceOverObserver = NotificationCenter.default.addObserver(forName: UIAccessibility.voiceOverStatusDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.voiceOverStatusDidChange()
+            }
+        }
+    }
+
+    /// VoiceOverを入れたら、隠していた部品を出し、自動で隠すのをやめる。切ったら、再生中なら数え直す。
+    private func voiceOverStatusDidChange() {
+        if UIAccessibility.isVoiceOverRunning {
+            onRequestChromeHidden?(false)
+        }
+        scheduleAutoHide()
+    }
+
     isolated deinit {
         if let loopObserver {
             NotificationCenter.default.removeObserver(loopObserver)
+        }
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+        }
+        if let voiceOverObserver {
+            NotificationCenter.default.removeObserver(voiceOverObserver)
+        }
+        if let timeObserver {
+            playerController.player?.removeTimeObserver(timeObserver)
+        }
+    }
+
+    /// 再生している位置を部品に映す。`elapsed`を渡したら、プレイヤーの位置の代わりにそれを出す。シークしてから位置が届くまでの間に使う。
+    private func updateControls() {
+        guard let controls, let player = playerController.player else { return }
+        let current = player.currentItem
+        controls.apply(VideoControlsView.State(
+            isPlaying: player.timeControlStatus != .paused,
+            time: PlaybackTime(elapsed: displayedElapsed ?? 0, duration: current?.duration.seconds ?? 0),
+            isMuted: player.isMuted,
+            hasAudio: hasAudio
+        ))
+    }
+
+    private func playbackStatusDidChange() {
+        updateControls()
+        scheduleAutoHide()
+    }
+
+    /// 止まっていれば再生し、再生していれば止める。最後まで再生し終えていたら、先頭から再生する。
+    private func togglePlayback() {
+        guard let player = playerController.player else { return }
+        guard player.timeControlStatus == .paused else {
+            player.pause()
+            return
+        }
+        if let current = player.currentItem, current.duration.isNumeric, current.currentTime() >= current.duration {
+            player.seek(to: .zero)
+        }
+        player.play()
+    }
+
+    /// 部品に出す再生位置。シークしている間は、まだ移動前の位置を返すプレイヤーではなく、行き先を出す。
+    private var displayedElapsed: Double? {
+        pendingSeek ?? playerController.player?.currentItem?.currentTime().seconds
+    }
+
+    /// 10秒戻る・進む。続けて押されたときも押した回数だけ動くよう、シークしている間は行き先から数える。
+    private func skip(by seconds: Double) {
+        guard let player = playerController.player, let current = player.currentItem else { return }
+        var target = max((displayedElapsed ?? 0) + seconds, 0)
+        let duration = current.duration.seconds
+        if duration.isFinite {
+            target = min(target, duration)
+        }
+        seek(player, to: target)
+    }
+
+    private func scrub(_ phase: VideoControlsView.ScrubPhase, to progress: Double) {
+        guard let player = playerController.player, let current = player.currentItem else { return }
+        let duration = current.duration.seconds
+        guard duration.isFinite, duration > 0 else { return }
+        switch phase {
+        case .began:
+            wasPlayingBeforeScrub = player.timeControlStatus != .paused
+            player.pause()
+        case .changed:
+            seek(player, to: progress * duration)
+        case .ended:
+            seek(player, to: progress * duration)
+            if wasPlayingBeforeScrub {
+                player.play()
+            }
+        }
+    }
+
+    /// シークし終えるまでは、部品に行き先を出し続ける。シークを始めた直後のプレイヤーは移動前の位置を返し、
+    /// 0.1秒ごとの再生位置の更新がシークバーを一度元へ戻してから行き先へ飛ばしていたため。
+    /// 次のシークで取り消された古いシークの完了は無視する。シークバーを離したときは同じ秒数のシークが続けて出るため、秒数ではなく番号で見分ける。
+    private func seek(_ player: AVPlayer, to seconds: Double) {
+        pendingSeek = seconds
+        seekGeneration += 1
+        let generation = seekGeneration
+        updateControls()
+        player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.seekGeneration == generation else { return }
+                    self.pendingSeek = nil
+                    self.updateControls()
+                }
+            }
+        }
+    }
+
+    private func toggleMute() {
+        playerController.player?.isMuted.toggle()
+        updateControls()
+    }
+
+    /// 再生速度を選ぶ項目。選んだ速さは、止めてから再生し直しても続く。
+    private func speedMenuElements() -> [UIMenuElement] {
+        guard let player = playerController.player else { return [] }
+        let actions = AVPlaybackSpeed.systemDefaultSpeeds.map { speed in
+            UIAction(title: speed.localizedNumericName, state: speed.rate == player.defaultRate ? .on : .off) { [weak player] _ in
+                guard let player else { return }
+                player.defaultRate = speed.rate
+                // 再生中なら今の速さも変える。止まっていれば、次に再生したときに`defaultRate`で再生される。
+                if player.rate != 0 {
+                    player.rate = speed.rate
+                }
+            }
+        }
+        return [UIMenu(title: "再生速度", options: .displayInline, children: actions)]
+    }
+
+    /// 再生している間、最後に触れてから`controlsHideDelay`秒たったら、ビューアに隠すよう頼む。
+    private func scheduleAutoHide() {
+        hideTask?.cancel()
+        guard let controls,
+              Self.hidesAutomatically(
+                  isPlaying: playerController.player.map { $0.timeControlStatus != .paused } ?? false,
+                  isShown: !isChromeHidden && !isEditingDescription,
+                  isInteracting: controls.isInteracting,
+                  isVoiceOverRunning: UIAccessibility.isVoiceOverRunning
+              )
+        else { return }
+        hideTask = Task { [weak self, delay = controlsHideDelay] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard let self, !Task.isCancelled else { return }
+            self.onRequestChromeHidden?(true)
+        }
+    }
+
+    /// 操作の部品を自動で隠すか。再生していて、部品を出していて、シークバーを動かしたりメニューを開いたりしていないときだけ隠す。
+    /// VoiceOverが動いている間は隠さない。画面に出ていない部品は読み上げの対象から外れるため、探している途中で消えると、出し直すところからやり直しになる。
+    static func hidesAutomatically(isPlaying: Bool, isShown: Bool, isInteracting: Bool, isVoiceOverRunning: Bool) -> Bool {
+        isPlaying && isShown && !isInteracting && !isVoiceOverRunning
+    }
+
+    override func setChromeHidden(_ hidden: Bool, animated: Bool) {
+        isChromeHidden = hidden
+        updateControlsVisibility(animated: animated)
+    }
+
+    /// 動かしている間やメニューを開いている間に隠す時間が来ていても、ビューアはその頼みを捨てるため、終えたところから数え直す。
+    override func interactionDidEnd() {
+        scheduleAutoHide()
+    }
+
+    override var isEditingDescription: Bool {
+        didSet {
+            guard isEditingDescription != oldValue else { return }
+            updateControlsVisibility(animated: true)
+        }
+    }
+
+    /// ボタンと説明を隠している間と、代替テキストを書いている間は、操作の部品も隠す。書いている間は、部品が入力欄やキーボードと重なるため。
+    private func updateControlsVisibility(animated: Bool) {
+        controls?.setControlsHidden(isChromeHidden || isEditingDescription, animated: animated)
+        scheduleAutoHide()
+    }
+
+    override var bottomCoveredHeight: CGFloat {
+        didSet {
+            // ボタンと説明を隠したときや、代替テキストを書き始めたときは、説明の高さが0になる。
+            // 部品を薄くしている途中でシークバーが下へ動かないよう、部品を隠している間は位置を変えない。
+            if !isChromeHidden && !isEditingDescription {
+                controls?.coveredBottom = bottomCoveredHeight
+            }
+        }
+    }
+
+    /// 長押ししている間は2倍速で再生し、離したら元の速さと、再生していたかどうかに戻す。
+    @objc private func longPressed(_ recognizer: UILongPressGestureRecognizer) {
+        guard let player = playerController.player else { return }
+        switch recognizer.state {
+        case .began:
+            wasPlayingBeforeFastForward = player.timeControlStatus != .paused
+            player.rate = 2
+            controls?.setFastForwarding(true)
+            UIImpactFeedbackGenerator(style: .light, view: view).impactOccurred()
+        case .ended, .cancelled, .failed:
+            guard let wasPlaying = wasPlayingBeforeFastForward else { return }
+            wasPlayingBeforeFastForward = nil
+            if wasPlaying {
+                player.rate = player.defaultRate
+            } else {
+                player.pause()
+            }
+            controls?.setFastForwarding(false)
+        default:
+            break
         }
     }
 
@@ -1794,6 +2154,24 @@ final class PlayerPageController: MediaPageController {
         onSingleTap?()
     }
 
+    /// 左右をダブルタップしたら10秒戻る・進み、その側に短く知らせる。真ん中では何もしない。
+    /// 隠している操作の部品は出さない。映像だけを見ているときに、一時停止のボタンなどが映像に重なって出ないようにするため。
+    /// 部品を出しているときは出したままにし、隠すまでの時間を数え直す。
+    @objc private func doubleTapped(_ recognizer: UITapGestureRecognizer) {
+        guard let seconds = Self.skipSeconds(forDoubleTapAt: recognizer.location(in: view).x, width: view.bounds.width) else { return }
+        skip(by: seconds)
+        controls?.showSkipEffect(forward: seconds > 0, duration: skipEffectDuration)
+        scheduleAutoHide()
+    }
+
+    /// ダブルタップした位置で、戻る・進む秒数を決める。左の3分の1で戻り、右の3分の1で進む。真ん中ではnil。
+    static func skipSeconds(forDoubleTapAt x: CGFloat, width: CGFloat) -> Double? {
+        guard width > 0 else { return nil }
+        if x < width / 3 { return -10 }
+        if x > width * 2 / 3 { return 10 }
+        return nil
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         playerController.player?.play()
@@ -1802,6 +2180,20 @@ final class PlayerPageController: MediaPageController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         playerController.player?.pause()
+        hideTask?.cancel()
+    }
+
+    override func stateDump() -> String {
+        guard let controls else { return "" }
+        return "controls: playing=\(controls.state.isPlaying) chromeHidden=\(isChromeHidden) interacting=\(controls.isInteracting) fastForward=\(wasPlayingBeforeFastForward != nil)"
+    }
+}
+
+extension PlayerPageController: UIGestureRecognizerDelegate {
+    /// 操作の部品の上のタッチは、部品に任せ、動画のタップや長押しにしない。
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        guard let controls, let touched = touch.view else { return true }
+        return !touched.isDescendant(of: controls)
     }
 }
 
@@ -1908,7 +2300,9 @@ extension MediaViewerController.Timing {
             handoffStart: tuning.value(of: TuningCatalog.mediaCloseHandoffStart),
             barOverlapFadeEnd: tuning.value(of: TuningCatalog.mediaCloseBarOverlapFadeEnd),
             savedChipDuration: tuning.value(of: TuningCatalog.mediaSavedChipDuration),
-            savedChipAtBottom: tuning.value(of: TuningCatalog.mediaSavedChipAtBottom)
+            savedChipAtBottom: tuning.value(of: TuningCatalog.mediaSavedChipAtBottom),
+            videoControlsHideDelay: tuning.value(of: TuningCatalog.mediaVideoControlsHideDelay),
+            videoSkipEffectDuration: tuning.value(of: TuningCatalog.mediaVideoSkipEffectDuration)
         )
     }
 }

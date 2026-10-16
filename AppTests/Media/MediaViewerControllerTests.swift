@@ -11,7 +11,7 @@ import VisionKit
 struct MediaViewerControllerTests {
     private let drag = DragToDismiss(distanceThreshold: 0.12, velocityThreshold: 0.8, smallestScale: 0.6, fadeDistance: 0.5, restoreDuration: 0.35)
 
-    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, savedChipAtBottom: false)
+    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, savedChipAtBottom: false, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3)
 
     private func makeViewer(attachments: [MediaAttachment]) -> MediaViewerController {
         MediaViewerController(attachments: attachments, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil })
@@ -479,6 +479,65 @@ struct MediaViewerControllerTests {
         #expect(page.contextMenuInteraction(interaction, configurationForMenuAtLocation: center) != nil)
     }
 
+    /// ボタンと説明を隠したまま、まだ作っていない動画のページへ移ったら、作った時点で再生の操作の部品も隠す。
+    /// 隠している間は部品の上でもタッチを受けず、下の動画のタップに渡す。
+    @Test func videoControlsStartHiddenWhenChromeIsHidden() throws {
+        let file = LocalMediaFile(url: URL(filePath: "/tmp/v.mov"), mimeType: "video/quicktime", kind: .video)
+        let page = PlayerPageController(item: MediaViewerItem(id: "v", kind: .video, description: "", file: file, thumbnail: nil, status: .ready))
+        page.setChromeHidden(true, animated: false)
+        page.loadViewIfNeeded()
+        page.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        page.view.layoutIfNeeded()
+        let controls = try #require(page.view.subviews.lazy.compactMap { $0 as? VideoControlsView }.first)
+        let playButton = CGPoint(x: 195, y: 422)
+
+        #expect(!controls.point(inside: playButton, with: nil))
+        page.setChromeHidden(false, animated: false)
+        #expect(controls.point(inside: playButton, with: nil))
+    }
+
+    /// 動画の長押しは2倍速に使うため、メニューを出さない。メニューは右上のボタンから開く。
+    @Test func longPressOnVideoDoesNotOfferMenu() {
+        let file = LocalMediaFile(url: URL(filePath: "/tmp/v.mov"), mimeType: "video/quicktime", kind: .video)
+        let page = PlayerPageController(item: MediaViewerItem(id: "v", kind: .video, description: "", file: file, thumbnail: nil, status: .ready))
+        page.loadViewIfNeeded()
+
+        // 標準の再生画面は内部に自前のメニューの仕組みを持つことがあるため、ページが付けたものだけを見る。
+        #expect(!allContextMenuInteractions(in: page.view).contains { $0.delegate === page })
+        #expect(page.view.gestureRecognizers?.contains { $0 is UILongPressGestureRecognizer } == true)
+    }
+
+    /// 再生していて部品を出しているときだけ自動で隠す。止めている間、シークバーを動かしたりメニューを開いたりしている間、VoiceOverが動いている間は隠さない。
+    @Test func videoControlsHideAutomaticallyOnlyWhilePlayingWithoutVoiceOver() {
+        #expect(PlayerPageController.hidesAutomatically(isPlaying: true, isShown: true, isInteracting: false, isVoiceOverRunning: false))
+        #expect(!PlayerPageController.hidesAutomatically(isPlaying: true, isShown: true, isInteracting: false, isVoiceOverRunning: true))
+        #expect(!PlayerPageController.hidesAutomatically(isPlaying: false, isShown: true, isInteracting: false, isVoiceOverRunning: false))
+        #expect(!PlayerPageController.hidesAutomatically(isPlaying: true, isShown: true, isInteracting: true, isVoiceOverRunning: false))
+        #expect(!PlayerPageController.hidesAutomatically(isPlaying: true, isShown: false, isInteracting: false, isVoiceOverRunning: false))
+    }
+
+    /// 動画の左の3分の1をダブルタップすると10秒戻り、右の3分の1で10秒進む。真ん中では動かさない。
+    @Test(arguments: [(CGFloat(10), -10.0 as Double?), (130, -10), (135, nil), (200, nil), (265, nil), (270, 10), (390, 10)])
+    func doubleTapSkipsByRegion(x: CGFloat, expected: Double?) {
+        #expect(PlayerPageController.skipSeconds(forDoubleTapAt: x, width: 402) == expected)
+    }
+
+    /// 10秒の矢印は、回っている途中で続けて回しても、元の向き（1回転の倍数）で止まる。少なくとも半回転は回して、回ったと分かるようにする。
+    @Test(arguments: [0, 0.5, 1.2, 2 * Double.pi, 2 * Double.pi + 0.3])
+    func skipArrowAlwaysStopsUpright(current: Double) {
+        let turn = 2 * Double.pi
+        let forward = SkipArrowSpin.target(from: current, forward: true)
+        let backward = SkipArrowSpin.target(from: current, forward: false)
+        #expect(abs(forward.remainder(dividingBy: turn)) < 1e-9)
+        #expect(abs(backward.remainder(dividingBy: turn)) < 1e-9)
+        #expect(forward - current >= Double.pi)
+        #expect(current - backward >= Double.pi)
+    }
+
+    private func allContextMenuInteractions(in view: UIView) -> [UIContextMenuInteraction] {
+        view.interactions.compactMap { $0 as? UIContextMenuInteraction } + view.subviews.flatMap { allContextMenuInteractions(in: $0) }
+    }
+
     private func contextMenuInteraction(in view: UIView) -> UIContextMenuInteraction? {
         if let interaction = view.interactions.lazy.compactMap({ $0 as? UIContextMenuInteraction }).first {
             return interaction
@@ -867,7 +926,7 @@ struct MediaViewerControllerTests {
             startIndex: 0,
             store: store,
             dragToDismiss: drag,
-            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, savedChipAtBottom: false),
+            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, savedChipAtBottom: false, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3),
             from: harness.viewController,
             sourceTile: { _ in tile },
             onDismiss: {}
