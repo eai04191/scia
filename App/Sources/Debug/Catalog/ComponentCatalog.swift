@@ -16,6 +16,7 @@ enum CatalogComponent: String, CaseIterable {
     case timelineEmpty = "timeline-empty"
     case timelineFooter = "timeline-footer"
     case timelineRows = "timeline-rows"
+    case timelineOverlays = "timeline-overlays"
     case mediaGrid = "media-grid"
     case profileHeader = "profile-header"
     case posts
@@ -31,6 +32,7 @@ enum CatalogComponent: String, CaseIterable {
         case .timelineEmpty: "タイムラインが空のときの表示"
         case .timelineFooter: "タイムラインの末尾"
         case .timelineRows: "読めない行とギャップの行"
+        case .timelineOverlays: "一覧の上に重ねる表示"
         case .mediaGrid: "一覧の添付ファイルのサムネイル"
         case .profileHeader: "プロフィールのヘッダー"
         case .posts: "一覧の投稿"
@@ -49,6 +51,7 @@ enum CatalogComponent: String, CaseIterable {
         case .timelineEmpty: TimelineCatalog.emptyStates()
         case .timelineFooter: TimelineCatalog.footerStates()
         case .timelineRows: TimelineCatalog.rowStates()
+        case .timelineOverlays: TimelineOverlayCatalog.states()
         case .mediaGrid: MediaGridCatalog.states()
         case .profileHeader: ProfileHeaderCatalog.states()
         case .posts: PostRowCatalog.postStates()
@@ -89,6 +92,39 @@ enum CatalogBackdrop {
             imageView.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
         ] + constraints(backdrop, content))
         return backdrop
+    }
+}
+
+/// ナビゲーションバーの小見出しのように、画面ごと置かないと実物どおりに見えない部品の入れ物。
+/// 状態を並べる画面が`controller`を子の画面として抱え、決まった高さの枠に収める。
+final class CatalogControllerHost: UIView {
+    let controller: UIViewController
+
+    init(_ controller: UIViewController, height: CGFloat) {
+        self.controller = controller
+        super.init(frame: .zero)
+        clipsToBounds = true
+        layer.borderColor = UIColor.separator.cgColor
+        layer.borderWidth = 1
+        heightAnchor.constraint(equalToConstant: height).isActive = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// 子の画面として抱えた後に、画面のビューを枠いっぱいに置く。
+    func installControllerView() {
+        let view = controller.view ?? UIView()
+        view.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(view)
+        NSLayoutConstraint.activate([
+            view.topAnchor.constraint(equalTo: topAnchor),
+            view.bottomAnchor.constraint(equalTo: bottomAnchor),
+            view.leadingAnchor.constraint(equalTo: leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: trailingAnchor),
+        ])
     }
 }
 
@@ -202,7 +238,15 @@ final class ComponentStatesViewController: UIViewController {
             label.textColor = .secondaryLabel
             label.numberOfLines = 0
             stack.addArrangedSubview(label)
-            stack.addArrangedSubview(state.makeView())
+            let content = state.makeView()
+            if let host = content as? CatalogControllerHost {
+                addChild(host.controller)
+                host.installControllerView()
+                stack.addArrangedSubview(host)
+                host.controller.didMove(toParent: self)
+            } else {
+                stack.addArrangedSubview(content)
+            }
             stack.setCustomSpacing(24, after: stack.arrangedSubviews[stack.arrangedSubviews.count - 1])
         }
         let scrollView = UIScrollView()
