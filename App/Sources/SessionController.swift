@@ -192,7 +192,7 @@ final class SessionController {
         }
         viewController.setObscuredBottomHeight(composerObscuredHeight)
         viewController.myAccountID = credential.accountID
-        viewController.onStatusAction = { [weak self] action, status in self?.perform(action, on: status) }
+        viewController.onStatusAction = { [weak self, weak viewController] action, status in self?.perform(action, on: status, from: viewController) }
         viewController.onShowRecentNotices = { [weak self] presenter in self?.showRecentNotices(from: presenter) }
         viewController.onOpenProfile = { [weak self, weak viewController] account in
             guard let viewController else { return }
@@ -275,27 +275,36 @@ final class SessionController {
 
     // MARK: - 投稿への操作
 
-    private func perform(_ action: StatusAction, on status: Status) {
+    /// - Parameter timeline: 操作した一覧。失敗したら、そこに知らせを出す。
+    private func perform(_ action: StatusAction, on status: Status, from timeline: TimelineViewController?) {
         switch action {
         case .reply:
             UserAction.reply.record()
             composer.reply(to: status)
         case .favourite:
             UserAction.toggleFavourite.record()
-            toggle(.favourite, on: status, failureTitle: "お気に入りを変更できませんでした")
+            toggle(.favourite, on: status, failureTitle: "お気に入りを変更できませんでした", from: timeline)
         case .reblog:
             UserAction.toggleReblog.record()
-            toggle(.reblog, on: status, failureTitle: "ブーストを変更できませんでした")
+            toggle(.reblog, on: status, failureTitle: "ブーストを変更できませんでした", from: timeline)
         }
     }
 
-    private func toggle(_ action: StatusInteractions.Action, on status: Status, failureTitle: String) {
-        Task {
+    /// 押し直せば済む失敗なので、操作を止めるアラートにせず、操作した一覧に数秒で消えるチップを出し、押すと理由を出す。
+    /// 消えたあとも確かめられるよう、「最近の失敗」に残す。
+    private func toggle(_ action: StatusInteractions.Action, on status: Status, failureTitle: String, from timeline: TimelineViewController?) {
+        let interactions = interactions
+        Task { [weak self, weak timeline] in
             do {
                 try await interactions.toggle(action, on: status)
             } catch {
+                guard let self else { return }
                 logger.error("toggle \(String(describing: action), privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-                handle(error, title: failureTitle)
+                let reason = await failureReason(for: error)
+                recentNotices.recordFailure(title: failureTitle, reason: reason, subject: RecentNotices.Subject(status))
+                timeline?.showNotice(.interactionFailure(title: failureTitle) { [weak self] in
+                    self?.presentAlert(title: failureTitle, message: reason.text)
+                })
             }
         }
     }
@@ -305,12 +314,21 @@ final class SessionController {
             presentAlert(title: title, message: ErrorPresentation(error).text)
             return
         }
-        // 一部のAPIだけが401を返すこともあるため、確かめてから文言を選ぶ。
         Task { [weak self] in
             guard let self else { return }
-            let state = await self.authorization.reportUnauthorized()
-            self.presentAlert(title: title, message: state == .invalid ? Self.reauthenticationMessage : ErrorPresentation(error).text)
+            let reason = await self.failureReason(for: error)
+            self.presentAlert(title: title, message: reason.text)
         }
+    }
+
+    /// 失敗の理由。401なら、一部のAPIだけが401を返すこともあるため、トークンが本当に無効かを確かめてから文言を選ぶ。
+    /// 無効だと分かれば、ログインし直しのボタンも出る。
+    private func failureReason(for error: any Error) async -> ErrorPresentation {
+        guard let apiError = error as? MastodonAPIError, apiError.isUnauthorized else {
+            return ErrorPresentation(error)
+        }
+        let state = await authorization.reportUnauthorized()
+        return state == .invalid ? ErrorPresentation(message: Self.reauthenticationMessage, code: nil) : ErrorPresentation(error)
     }
 
     private static let reauthenticationMessage = "ログインの有効期限が切れたか、アプリの許可が取り消されました。上のボタンからログインし直してください。"

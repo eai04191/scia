@@ -24,6 +24,10 @@ final class NoticeStackView: UIView {
     var transientNotice: Notice? { transientChip?.notice }
     /// 上から順に、出しているチップ。消している途中のものは含まない。
     var chips: [NoticeChip] { [persistentChip, transientChip].compactMap(\.self) }
+    /// どれかのチップに指が触れているか、VoiceOverの読み上げ位置が乗っている。置く側は、この間このビューを動かさない。
+    var isHeld: Bool { chips.contains(where: \.isHeld) }
+    /// `isHeld`が変わったかもしれないときに呼ぶ。
+    var onHoldChange: (() -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -149,6 +153,10 @@ final class NoticeStackView: UIView {
             chip.removeFromSuperview()
             self.removingChips.removeAll { $0 === chip }
         }
+        // 触れている間に消えたら、触れ終わりの知らせが届かないため、ここで知らせる。
+        if chip.isHeld {
+            onHoldChange?()
+        }
     }
 
     private func removeTransient() {
@@ -198,6 +206,7 @@ final class NoticeStackView: UIView {
         if !chip.isHeld {
             relayout()
         }
+        onHoldChange?()
     }
 
     // MARK: 並べ方

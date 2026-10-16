@@ -121,6 +121,14 @@ final class TimelineViewController: UIViewController {
     private lazy var reauthenticationButton = makeReauthenticationButton()
     /// 一覧に重ねて上に浮かべるボタン。隠したボタンは詰める。
     private lazy var topButtons = UIStackView(arrangedSubviews: [reauthenticationButton, newArrivalsButton])
+    /// 上のボタンの列の下に出す知らせ。お気に入りやブーストの失敗。
+    let noticeStack = NoticeStackView()
+    /// 知らせを上のボタンの列のすぐ下に置く。
+    private lazy var noticeStackTop = noticeStack.topAnchor.constraint(equalTo: topButtons.bottomAnchor)
+    /// 指が触れている間、知らせを今の場所に留める。触れていなければnil。
+    private var heldNoticeStackTop: NSLayoutConstraint?
+    /// 上のボタンの列が出入りする前の、知らせの位置。次に並べ直したときに、ここから動かす。
+    private var noticeStackMoveOrigin: CGPoint?
     private var onReauthenticate: (() -> Void)?
     /// 「最近の失敗」の一覧を、渡した画面の上に開く。ビューアで出たままの知らせが重なったときに使う。
     var onShowRecentNotices: (@MainActor (UIViewController) -> Void)?
@@ -191,6 +199,15 @@ final class TimelineViewController: UIViewController {
             topButtons.centerXAnchor.constraint(equalTo: view.centerXAnchor),
             topButtons.leadingAnchor.constraint(greaterThanOrEqualTo: view.layoutMarginsGuide.leadingAnchor),
         ])
+        noticeStack.translatesAutoresizingMaskIntoConstraints = false
+        noticeStack.onHoldChange = { [weak self] in self?.noticeHoldDidChange() }
+        view.addSubview(noticeStack)
+        NSLayoutConstraint.activate([
+            noticeStackTop,
+            noticeStack.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
+            noticeStack.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
+        ])
+        updateNoticeStackPosition(animated: false)
         AppDependencies.stateDumps.register(texts.dumpName, owner: self) { $0.stateDump() }
         emojiImages.addListener(owner: self) { [weak self] urls in self?.emojiImagesDidLoad(urls) }
         avatarImages.addListener(owner: self) { [weak self] key in self?.avatarImageDidLoad(key) }
@@ -433,7 +450,65 @@ final class TimelineViewController: UIViewController {
 
     /// 最上部へ動かしている間は隠す。新着を足して最上部へ動かすときに、新着が画面に入るまでの間だけ出てしまうため。
     private func updateNewArrivalsButtonVisibility() {
-        newArrivalsButton.isHidden = unreadCount == 0 || isScrollingToTop
+        let isHidden = unreadCount == 0 || isScrollingToTop
+        guard newArrivalsButton.isHidden != isHidden else { return }
+        newArrivalsButton.isHidden = isHidden
+        updateNoticeStackPosition(animated: true)
+    }
+
+    // MARK: 知らせ
+
+    /// 押し直せば済む失敗を、上のボタンの列の下に数秒出す。決まりはdocs/notices.mdの「置き場所」にある。
+    func showNotice(_ notice: Notice) {
+        loadViewIfNeeded()
+        noticeStack.animationDuration = tuning.value(of: TuningCatalog.noticeAnimationDuration)
+        noticeStack.showTransient(notice, duration: tuning.value(of: TuningCatalog.noticeFailureChipDuration))
+    }
+
+    /// 上のボタンの列が出入りしたら、知らせをその下へ動かす。指が触れている間は動かさず、離したときに動かす。
+    /// ボタンの出入りそのものは動かさずに切り替わるため、知らせだけを前の位置から動かす。
+    private func updateNoticeStackPosition(animated: Bool) {
+        guard isViewLoaded else { return }
+        let hasButtons = topButtons.arrangedSubviews.contains { !$0.isHidden }
+        noticeStackTop.constant = hasButtons ? topButtons.spacing : 0
+        guard heldNoticeStackTop == nil, animated, !noticeStack.chips.isEmpty, view.window != nil, !UIAccessibility.isReduceMotionEnabled else { return }
+        // 一覧の更新の途中で呼ばれることがあるため、ここでは並べ直さず、次に並べ直したときに前の位置から動かす。
+        if noticeStackMoveOrigin == nil {
+            noticeStackMoveOrigin = noticeStack.center
+        }
+        view.setNeedsLayout()
+    }
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard let from = noticeStackMoveOrigin else { return }
+        noticeStackMoveOrigin = nil
+        let to = noticeStack.center
+        guard from != to else { return }
+        noticeStack.center = from
+        UIView.animate(withDuration: noticeStack.animationDuration, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]) {
+            self.noticeStack.center = to
+        }
+    }
+
+    private func noticeHoldDidChange() {
+        if noticeStack.isHeld, heldNoticeStackTop == nil {
+            // 新着のボタンの出入りで動いている途中なら、いま見えている位置で止める。centerは動きの終わりの位置を指しているため、見えている位置を使う。
+            // 引っぱって下げている分（transform）は位置に含まれないため、置いた位置で留まる。
+            let shown = noticeStack.layer.presentation()?.position ?? noticeStack.center
+            noticeStack.layer.removeAllAnimations()
+            noticeStack.center = shown
+            noticeStackMoveOrigin = nil
+            let top = noticeStack.topAnchor.constraint(equalTo: view.topAnchor, constant: shown.y - noticeStack.bounds.height / 2)
+            noticeStackTop.isActive = false
+            top.isActive = true
+            heldNoticeStackTop = top
+        } else if !noticeStack.isHeld, let held = heldNoticeStackTop {
+            held.isActive = false
+            noticeStackTop.isActive = true
+            heldNoticeStackTop = nil
+            updateNoticeStackPosition(animated: true)
+        }
     }
 
     /// ストリーミングにつながらない状態が続いていることを、タイトルの下に控えめに出す。
@@ -447,6 +522,7 @@ final class TimelineViewController: UIViewController {
         reauthenticationButton.configuration?.title = "ログインし直してください"
         reauthenticationButton.configuration?.subtitle = handle
         reauthenticationButton.isHidden = false
+        updateNoticeStackPosition(animated: true)
     }
 
     /// ログインし直しを始めてから認可画面が出るまでの間、ボタンに読み込み中を示す。
@@ -942,6 +1018,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         // 最上部からさらに引っぱっている間は、浮かぶボタンも一覧と一緒に下げる。上に現れるストリーミングの状態を覆わないようにする。
         let pulled = -(scrollView.contentOffset.y + scrollView.adjustedContentInset.top)
         topButtons.transform = CGAffineTransform(translationX: 0, y: max(pulled, 0))
+        noticeStack.transform = topButtons.transform
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
