@@ -346,6 +346,15 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
+    /// お気に入りやブーストの失敗など、押し直せば済む失敗を知らせるチップを出しておく時間。指が触れている間は数えない。
+    public static let noticeFailureChipDuration = NumberTuning(
+        id: "notice.failureChipDuration",
+        title: "失敗を知らせるチップを出しておく時間（秒）",
+        range: 1...10,
+        step: 0.5,
+        defaultValue: 4
+    )
+
     /// 動画を再生している間、最後に触れてから操作の部品とボタンを隠すまでの時間。
     public static let mediaVideoControlsHideDelay = NumberTuning(
         id: "media.videoControlsHideDelay",
@@ -492,6 +501,7 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "notice", title: "知らせ", items: [
             .number(noticeAnimationDuration),
+            .number(noticeFailureChipDuration),
         ]),
         TuningSection(id: "media.video", title: "ビューア：動画", items: [
             .number(mediaVideoControlsHideDelay),
