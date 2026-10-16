@@ -3,8 +3,9 @@ import Foundation
 import SciaCore
 import UIKit
 
-/// 一覧の上に重ねて出す表示。ストリーミングが止まったときのナビゲーションバーの小見出し、新着のボタン、ログインし直しのボタン。
-/// 本物の一覧の画面をナビゲーションバーごと置き、一覧が外から受け取る操作で状態を作る。
+/// 一覧の上に重ねて出す表示。ストリーミングが止まったときのナビゲーションバーの小見出し、新着のボタン、ログインし直しのボタン、
+/// お気に入りやブーストの失敗のチップ。
+/// 本物の一覧の画面をナビゲーションバーごと置き、一覧が外から受け取る操作で状態を作る。数秒で消えるチップは、カタログでは1時間出したままにする。
 enum TimelineOverlayCatalog {
     @MainActor
     static func states() -> [CatalogState] {
@@ -20,12 +21,27 @@ enum TimelineOverlayCatalog {
             state("ログインし直しを促す（長いアカウント名）") {
                 $0.showReauthenticationPrompt(handle: "@a-very-long-account-name-for-checking-truncation@subdomain.example.com") {}
             },
+            state("お気に入りの失敗（押すと理由）") { showFailure("お気に入りを変更できませんでした", on: $0) },
+            state("ブーストの失敗を新着のボタンの下に出す") { timeline in
+                timeline.setUnreadCount(12)
+                showFailure("ブーストを変更できませんでした", on: timeline)
+            },
+            state("失敗の長い文言") {
+                showFailure("長い文言のときにチップがどこまで広がり、どこで切れて「›」が残るかを確かめるための失敗", on: $0)
+            },
             state("すべて同時に出す") { timeline in
                 timeline.setOutageNotice(true)
                 timeline.setUnreadCount(40, isLowerBound: true)
                 timeline.showReauthenticationPrompt(handle: "@catalog@example.com") {}
+                showFailure("お気に入りを変更できませんでした", on: timeline)
             },
         ]
+    }
+
+    @MainActor
+    private static func showFailure(_ title: String, on timeline: TimelineViewController) {
+        timeline.noticeStack.animationDuration = 0
+        timeline.noticeStack.showTransient(.interactionFailure(title: title) {}, duration: 3600)
     }
 
     @MainActor
