@@ -337,6 +337,14 @@ public enum TuningCatalog {
         defaultValue: 1.5
     )
 
+    /// 知らせのチップ（写真に保存しました、ダウンロード中など）が出入りし、並びを詰め直す時間。
+    public static let noticeAnimationDuration = NumberTuning(
+        id: "notice.animationDuration",
+        title: "知らせのチップの出入りの時間（秒）",
+        range: 0.05...2,
+        step: 0.05,
+        defaultValue: 0.2
+    )
 
     /// 動画を再生している間、最後に触れてから操作の部品とボタンを隠すまでの時間。
     public static let mediaVideoControlsHideDelay = NumberTuning(
@@ -481,6 +489,9 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "media.menu", title: "ビューア：メニュー", items: [
             .number(mediaSavedChipDuration),
+        ]),
+        TuningSection(id: "notice", title: "知らせ", items: [
+            .number(noticeAnimationDuration),
         ]),
         TuningSection(id: "media.video", title: "ビューア：動画", items: [
             .number(mediaVideoControlsHideDelay),

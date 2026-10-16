@@ -2366,7 +2366,7 @@ extension MediaViewerController.Timing {
             handoffStart: tuning.value(of: TuningCatalog.mediaCloseHandoffStart),
             barOverlapFadeEnd: tuning.value(of: TuningCatalog.mediaCloseBarOverlapFadeEnd),
             savedChipDuration: tuning.value(of: TuningCatalog.mediaSavedChipDuration),
-            noticeAnimationDuration: 0.2,
+            noticeAnimationDuration: tuning.value(of: TuningCatalog.noticeAnimationDuration),
             videoControlsHideDelay: tuning.value(of: TuningCatalog.mediaVideoControlsHideDelay),
             videoSkipEffectDuration: tuning.value(of: TuningCatalog.mediaVideoSkipEffectDuration)
         )
