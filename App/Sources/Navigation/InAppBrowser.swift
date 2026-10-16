@@ -61,9 +61,18 @@ final class InAppBrowser: NSObject, @MainActor SFSafariViewControllerDelegate, U
         }
         current = safari
         detentBeforeCompose = nil
-        logger.info("in-app browser open")
+        let grows = tuning.value(of: TuningCatalog.inAppBrowserGrowsFromCollapsed)
+        if grows {
+            safari.sheetPresentationController?.selectedDetentIdentifier = Self.collapsedIdentifier
+        }
+        logger.info("in-app browser open grows=\(grows, privacy: .public)")
         onPresenceChange?(true)
-        root.frontmostPresented.present(safari, animated: true)
+        root.frontmostPresented.present(safari, animated: true) { [weak self, weak safari] in
+            guard grows, let self, let safari, self.current === safari, let sheet = safari.sheetPresentationController,
+                  sheet.selectedDetentIdentifier == Self.collapsedIdentifier
+            else { return }
+            self.select(Self.mediumIdentifier, on: sheet)
+        }
     }
 
     /// 投稿欄で書き始めたときに呼ぶ。シートは投稿欄より手前に出るため、伏せた高さまで下げてキーボードの裏へ逃がす。

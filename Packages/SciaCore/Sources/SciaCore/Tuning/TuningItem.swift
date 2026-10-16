@@ -421,6 +421,15 @@ public enum TuningCatalog {
         defaultValue: 120
     )
 
+    /// アプリ内のSafariを、伏せた高さで出してから中くらいの高さへ広げる。
+    /// 実機では、中くらいの高さで直接出すと、ページを描く前の面が上がってきて、手前で本物のシートに跳んで止まって見える。
+    /// 小さく出して、上がりきってから広げると、広げる動きはページを描いたシートで動くかを比べるためのもの。
+    public static let inAppBrowserGrowsFromCollapsed = ToggleTuning(
+        id: "browser.growsFromCollapsed",
+        title: "アプリ内のSafariを伏せた高さから広げて出す",
+        defaultValue: false
+    )
+
     /// 投稿欄が、細いカプセルと書くときの形の間で形を変える時間（秒）。位置の動きはキーボードに合わせて別に動く。
     public static let composeMorphDuration = NumberTuning(
         id: "compose.morphDuration",
@@ -501,6 +510,7 @@ public enum TuningCatalog {
         TuningSection(id: "browser", title: "アプリ内のSafari", items: [
             .number(inAppBrowserMediumFraction),
             .number(inAppBrowserCollapsedHeight),
+            .toggle(inAppBrowserGrowsFromCollapsed),
         ]),
         TuningSection(id: "media.dismiss", title: "ビューア：閉じる操作", items: [
             .number(mediaDismissDistance),
