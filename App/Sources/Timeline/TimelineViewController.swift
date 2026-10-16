@@ -122,6 +122,8 @@ final class TimelineViewController: UIViewController {
     /// 一覧に重ねて上に浮かべるボタン。隠したボタンは詰める。
     private lazy var topButtons = UIStackView(arrangedSubviews: [reauthenticationButton, newArrivalsButton])
     private var onReauthenticate: (() -> Void)?
+    /// 「最近の失敗」の一覧を、渡した画面の上に開く。ビューアで出たままの知らせが重なったときに使う。
+    var onShowRecentNotices: (@MainActor (UIViewController) -> Void)?
     private var timeRefreshTimer: Timer?
     private let texts: Texts
     let tuning: TuningStore
@@ -592,7 +594,7 @@ final class TimelineViewController: UIViewController {
     /// 同じ投稿が元の投稿とブースト、通知などで何か所にも並ぶことがあるため、まず返信を選んだ要素そのもの（ブーストならブーストのID）を探し、
     /// なければ中身が同じ投稿（`displayedID`、ブーストなら元の投稿のID）を探す。一覧になければ動かさずにfalseを返す。
     @discardableResult
-    func scrollToStatus(_ statusID: Status.ID, displayedID: Status.ID? = nil, animated: Bool = true) -> Bool {
+    func scrollToStatus(_ statusID: Status.ID, displayedID: Status.ID? = nil, at position: UICollectionView.ScrollPosition = .bottom, animated: Bool = true) -> Bool {
         let displayedID = displayedID ?? statusID
         let ids = displayedItemIDs
         let chosen = ids.first { id in
@@ -613,7 +615,7 @@ final class TimelineViewController: UIViewController {
         guard let found, let indexPath = dataSource.indexPath(for: found) else { return false }
         // 最上部へ動かしている途中なら、それをやめる。続けると、返信先へ動かす位置と取り合う。
         stopScrollingToTop()
-        collectionView.scrollToItem(at: indexPath, at: .bottom, animated: animated)
+        collectionView.scrollToItem(at: indexPath, at: position, animated: animated)
         return true
     }
 

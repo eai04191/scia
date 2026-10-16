@@ -88,6 +88,7 @@ extension TimelineViewController {
             timing: timing,
             from: self,
             sourceTile: sourceTile,
+            onShowRecentNotices: onShowRecentNotices,
             // 一覧は残したままなので表示し直しの通知が来ない。開いている間に届いた新着を、閉じたところで報告する。
             onDismiss: { [weak self] in self?.reportVisibleItems() }
         )

@@ -27,6 +27,8 @@ final class SessionController {
     /// 電波が戻ったときと、レート制限が明けたときに、読み込みをやり直す。
     private var recoveryTasks: [Task<Void, Never>] = []
     private let interactions: StatusInteractions
+    /// 「最近の失敗」の一覧に並べる、処理の途中と最近の失敗。
+    let recentNotices = RecentNotices()
     /// APIが401を返したときに、トークンが本当に無効かを確かめる。
     private let authorization: AuthorizationCheck
     private let onReauthenticate: (SessionController) async -> Void
@@ -151,7 +153,10 @@ final class SessionController {
                     guard let viewController else { return }
                     self?.openMyProfile(from: viewController)
                 }
-                return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile])] + accountMenu().children)
+                let recent = UIAction(title: "最近の失敗", image: UIImage(systemName: "exclamationmark.circle")) { _ in
+                    self?.showRecentNotices()
+                }
+                return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile, recent])] + accountMenu().children)
             }
             configure(viewController)
         }
@@ -188,6 +193,7 @@ final class SessionController {
         viewController.setObscuredBottomHeight(composerObscuredHeight)
         viewController.myAccountID = credential.accountID
         viewController.onStatusAction = { [weak self] action, status in self?.perform(action, on: status) }
+        viewController.onShowRecentNotices = { [weak self] presenter in self?.showRecentNotices(from: presenter) }
         viewController.onOpenProfile = { [weak self, weak viewController] account in
             guard let viewController else { return }
             self?.openProfile(account, from: viewController)
@@ -238,6 +244,33 @@ final class SessionController {
         item.accessibilityLabel = "アカウント"
         item.accessibilityValue = credential.handle
         return item
+    }
+
+    // MARK: - 最近の失敗
+
+    /// 「最近の失敗」の一覧をシートで開く。行の投稿を選んだら、シートを閉じてから開く。
+    /// - Parameter presenter: シートを出す画面。nilならいちばん手前の画面。
+    func showRecentNotices(from presenter: UIViewController? = nil) {
+        weak var sheet: UIViewController?
+        let controller = RecentNoticesView.makeSheet(notices: recentNotices) { [weak self] subject in
+            sheet?.dismiss(animated: true) {
+                self?.open(subject)
+            }
+        }
+        sheet = controller
+        (presenter ?? topViewController).present(controller, animated: true)
+    }
+
+    /// 投稿の詳細の画面はまだないため、今見えている一覧（ホーム、通知、開いているプロフィール）にあればそこへ動かし、なければ投稿のページを開く。
+    private func open(_ subject: RecentNotices.Subject) {
+        let navigation = (rootViewController as? UITabBarController)?.selectedTab?.viewController as? UINavigationController
+        if let timeline = navigation?.topViewController as? TimelineViewController,
+           timeline.scrollToStatus(subject.statusID, displayedID: subject.displayedID, at: .centeredVertically) {
+            return
+        }
+        if let url = subject.url {
+            UIApplication.shared.open(url)
+        }
     }
 
     // MARK: - 投稿への操作

@@ -1,0 +1,167 @@
+import SciaCore
+import SwiftUI
+import UIKit
+
+/// 「最近の失敗」の一覧。処理の途中と、消えたチップの失敗をあとから確かめる。決まりはdocs/notices.mdの「最近の失敗」にある。
+/// タブの「通知」（Mastodonの通知）と紛れないよう、「通知」という言葉は使わない。
+struct RecentNoticesView: View {
+    let notices: RecentNotices
+    /// 行の投稿を開く。一覧を閉じてから開くのは呼ぶ側で行う。
+    let onOpen: (RecentNotices.Subject) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            content
+                .navigationTitle("最近の失敗")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("完了") { dismiss() }
+                    }
+                }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if notices.activities.isEmpty && notices.failures.isEmpty {
+            ContentUnavailableView {
+                Label("最近の失敗はありません", systemImage: "checkmark.circle")
+            } description: {
+                Text("お気に入りやブーストなどの失敗が、アプリを終了するまでここに残ります。")
+            }
+        } else {
+            List {
+                if !notices.activities.isEmpty {
+                    Section("進行中") {
+                        ForEach(notices.activities) { activity in
+                            ActivityRow(activity: activity)
+                        }
+                    }
+                }
+                Section {
+                    if notices.failures.isEmpty {
+                        Text("最近の失敗はありません")
+                            .foregroundStyle(.secondary)
+                    }
+                    ForEach(notices.failures) { failure in
+                        FailureRow(failure: failure, onOpen: onOpen)
+                    }
+                } header: {
+                    Text("最近の失敗")
+                } footer: {
+                    Text("アプリを終了するまで、直近の\(RecentNotices.failureLimit)件を残します。")
+                }
+            }
+        }
+    }
+}
+
+private struct ActivityRow: View {
+    let activity: RecentNotices.Activity
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                ProgressView()
+                Text(activity.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                if let value = activity.value {
+                    Text(value)
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let subject = activity.subject {
+                SubjectLine(subject: subject)
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct FailureRow: View {
+    let failure: RecentNotices.Failure
+    let onOpen: (RecentNotices.Subject) -> Void
+
+    var body: some View {
+        if let subject = failure.subject {
+            Button {
+                onOpen(subject)
+            } label: {
+                HStack(spacing: 8) {
+                    details
+                    Image(systemName: "chevron.forward")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("投稿を開きます。")
+        } else {
+            details
+        }
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .foregroundStyle(.red)
+                    .accessibilityHidden(true)
+                Text(failure.title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(failure.date, format: .dateTime.hour().minute())
+                    .font(.footnote.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+            }
+            Text(failure.reason.text)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(4)
+            if let subject = failure.subject {
+                SubjectLine(subject: subject)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// どの投稿の知らせかを、投稿者と本文の冒頭で示す。
+private struct SubjectLine: View {
+    let subject: RecentNotices.Subject
+
+    var body: some View {
+        Text("\(Text(subject.authorName).fontWeight(.semibold))  \(subject.excerpt)")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+            .lineLimit(2)
+            .padding(.leading, 10)
+            .overlay(alignment: .leading) {
+                Capsule()
+                    .fill(.quaternary)
+                    .frame(width: 3)
+            }
+    }
+}
+
+extension RecentNoticesView {
+    /// 下から半分の高さで開き、引き上げると広がるシートにする。
+    @MainActor
+    static func makeSheet(notices: RecentNotices, onOpen: @escaping (RecentNotices.Subject) -> Void) -> UIViewController {
+        let controller = UIHostingController(rootView: RecentNoticesView(notices: notices, onOpen: onOpen))
+        if let sheet = controller.sheetPresentationController {
+            sheet.detents = [.medium(), .large()]
+            sheet.prefersGrabberVisible = true
+        }
+        return controller
+    }
+}

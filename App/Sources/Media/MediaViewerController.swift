@@ -37,6 +37,8 @@ final class MediaViewerController: UIViewController {
     /// 上の中央、メニューボタンの行のすぐ下に出す知らせ。写真に保存したこと、落としている途中の進み具合、
     /// 投稿欄から開いたときのアップロードや代替テキストの送信の状態。
     let noticeStack = NoticeStackView()
+    /// 出たままの知らせ。2件以上あっても、チップには1件を選んで出す。
+    private var persistentNotices = PersistentNotices()
     private let photoSaver: PhotoLibrarySaver
     /// 動画、GIF、音声を、共有や保存のために落とす。
     private let downloads: MediaDownloads
@@ -53,6 +55,8 @@ final class MediaViewerController: UIViewController {
     private var dismissPanAnchor: CGPoint = .zero
     /// 閉じ終わったときに呼ぶ。写しがサムネイルへ戻る動きは、このあとも続く。
     var onDismiss: (() -> Void)?
+    /// 出たままの知らせが2件以上のときにチップを押したら、この画面の上に「最近の失敗」の一覧を開く。nilなら開けない。
+    var onShowRecentNotices: (@MainActor (UIViewController) -> Void)?
     /// 写しがサムネイルへ戻る動きを終えたときに呼ぶ。投稿欄は、ここで入力欄にキーボードを戻す。
     var onCloseFinish: (() -> Void)?
     /// 黒い下地。画像だけを動かし、下地はその場で濃くしたり薄くしたりする。
@@ -688,10 +692,23 @@ final class MediaViewerController: UIViewController {
     /// 投稿欄から開いたとき、上の中央にアップロードや代替テキストの送信の状態を出す。投稿欄から開いたときは落とすことがないため、落としている途中の知らせとは重ならない。
     private func updateDraftStatus() {
         guard draftEditing != nil else { return }
-        noticeStack.setPersistent(Notice.draftStatus(currentItem.draftStatus) { [weak self] in
+        setPersistentNotice(Notice.draftStatus(currentItem.draftStatus) { [weak self] in
             guard let self, let editing = self.draftEditing else { return }
             editing.showFailure(self.currentItem.id, self)
-        })
+        }, in: .draft)
+    }
+
+    /// 出たままの知らせを置き換え、チップに出す1件を選び直す。
+    private func setPersistentNotice(_ notice: Notice?, in slot: PersistentNotices.Slot) {
+        persistentNotices.set(notice, in: slot)
+        var showAll: (@MainActor () -> Void)?
+        if let show = onShowRecentNotices {
+            showAll = { [weak self] in
+                guard let self else { return }
+                show(self)
+            }
+        }
+        noticeStack.setPersistent(persistentNotices.chipNotice(showAll: showAll))
     }
 
     /// 表示中の添付ファイルを写真に保存し、済んだらメニューボタンの下で知らせる。キャッシュになければ落としてから保存する。
@@ -722,13 +739,21 @@ final class MediaViewerController: UIViewController {
 
     private func didSaveToPhotos(replacing downloadNoticeID: String?) {
         UINotificationFeedbackGenerator(view: view).notificationOccurred(.success)
+        // 落としている途中の知らせを外してから、チップをその場所で入れ替える。ほかに出たままの知らせがあれば、そのあとで出し直す。
+        let replacesDownload = downloadNoticeID != nil && persistentNotices.notice(in: .download)?.id == downloadNoticeID
+        if replacesDownload {
+            persistentNotices.set(nil, in: .download)
+        }
         noticeStack.showTransient(.savedToPhotos, duration: timing.savedChipDuration, replacingPersistent: downloadNoticeID)
+        if replacesDownload {
+            setPersistentNotice(nil, in: .download)
+        }
     }
 
     /// 落としている途中のチップが`id`の知らせのままなら消す。保存している間に別のものを落とし始めていれば、そちらを残す。
     private func clearDownloadNotice(_ id: String?) {
-        guard let id, noticeStack.persistentNotice?.id == id else { return }
-        noticeStack.setPersistent(nil)
+        guard let id, persistentNotices.notice(in: .download)?.id == id else { return }
+        setPersistentNotice(nil, in: .download)
     }
 
     private func presentSaveFailure(_ error: any Error) {
@@ -781,8 +806,7 @@ final class MediaViewerController: UIViewController {
 
     /// 落としている途中の進み具合の文言。落としていなければnil。
     var downloadProgressText: String? {
-        guard let notice = noticeStack.persistentNotice, notice.id.hasPrefix(Notice.downloadIDPrefix) else { return nil }
-        return notice.text
+        persistentNotices.notice(in: .download)?.text
     }
 
     /// `url`のファイルの写しを用意してから`completion`に渡す。キャッシュになければ落とし、落としている間は進み具合を出して、押せば止めるかを確かめる。
@@ -797,21 +821,21 @@ final class MediaViewerController: UIViewController {
             do {
                 let file = try await downloads.fileForSharing(for: url) { fraction in
                     guard let self, self.download?.url == url else { return }
-                    self.noticeStack.setPersistent(.download(of: url, fraction: fraction) { [weak self] in
+                    self.setPersistentNotice(.download(of: url, fraction: fraction) { [weak self] in
                         self?.confirmStoppingDownload()
-                    })
+                    }, in: .download)
                 }
                 guard let self, !Task.isCancelled else { return }
                 let completion = self.download?.completion
-                let noticeID = self.noticeStack.persistentNotice?.id == Notice.downloadID(of: url) ? Notice.downloadID(of: url) : nil
+                let noticeID = self.persistentNotices.notice(in: .download)?.id == Notice.downloadID(of: url) ? Notice.downloadID(of: url) : nil
                 // 済んだあとに行うこと（保存など）の間は、もう止められないため押せなくする。
                 if noticeID != nil {
-                    self.noticeStack.setPersistent(.download(of: url, fraction: 1, onStop: nil))
+                    self.setPersistentNotice(.download(of: url, fraction: 1, onStop: nil), in: .download)
                 }
                 self.endDownload { completion?(file, noticeID) }
             } catch {
                 guard let self, !Task.isCancelled else { return }
-                self.noticeStack.setPersistent(nil)
+                self.setPersistentNotice(nil, in: .download)
                 self.endDownload { [weak self] in self?.presentDownloadFailure(error) }
             }
         }
@@ -1426,6 +1450,7 @@ extension MediaViewerController {
         timing: Timing,
         from presenter: UIViewController,
         sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?,
+        onShowRecentNotices: (@MainActor (UIViewController) -> Void)? = nil,
         onDismiss: @escaping @MainActor () -> Void
     ) {
         let viewer = MediaViewerController(
@@ -1437,6 +1462,7 @@ extension MediaViewerController {
             sourceTile: sourceTile
         )
         viewer.onDismiss = onDismiss
+        viewer.onShowRecentNotices = onShowRecentNotices
         // 開く動きはビューアの中で描く。
         presenter.present(viewer, animated: false)
     }
