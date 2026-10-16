@@ -23,6 +23,7 @@ enum CatalogComponent: String, CaseIterable {
     case timelineFooter = "timeline-footer"
     case timelineRows = "timeline-rows"
     case timelineOverlays = "timeline-overlays"
+    case streamingStatus = "streaming-status"
     case mediaGrid = "media-grid"
     case profileHeader = "profile-header"
     case posts
@@ -39,6 +40,7 @@ enum CatalogComponent: String, CaseIterable {
         case .timelineFooter: "タイムラインの末尾"
         case .timelineRows: "読めない行とギャップの行"
         case .timelineOverlays: "一覧の上に重ねる表示"
+        case .streamingStatus: "引っぱると見えるストリーミングの状態"
         case .mediaGrid: "一覧の添付ファイルのサムネイル"
         case .profileHeader: "プロフィールのヘッダー"
         case .posts: "一覧の投稿"
@@ -58,6 +60,7 @@ enum CatalogComponent: String, CaseIterable {
         case .timelineFooter: TimelineCatalog.footerStates()
         case .timelineRows: TimelineCatalog.rowStates()
         case .timelineOverlays: TimelineOverlayCatalog.states()
+        case .streamingStatus: StreamingStatusCatalog.states()
         case .mediaGrid: MediaGridCatalog.states()
         case .profileHeader: ProfileHeaderCatalog.states()
         case .posts: PostRowCatalog.postStates()
