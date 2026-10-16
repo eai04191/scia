@@ -16,6 +16,7 @@ enum CatalogComponent: String, CaseIterable {
     case attachmentStrip = "attachment-strip"
     case altTextEditor = "alt-text-editor"
     case caption
+    case notices
     case videoControls = "video-controls"
     case timelineEmpty = "timeline-empty"
     case timelineFooter = "timeline-footer"
@@ -32,6 +33,7 @@ enum CatalogComponent: String, CaseIterable {
         case .attachmentStrip: "投稿欄の添付のサムネイル"
         case .altTextEditor: "代替テキストの入力欄"
         case .caption: "ビューアの説明"
+        case .notices: "知らせのチップ"
         case .videoControls: "動画の再生の操作"
         case .timelineEmpty: "タイムラインが空のときの表示"
         case .timelineFooter: "タイムラインの末尾"
@@ -51,6 +53,7 @@ enum CatalogComponent: String, CaseIterable {
         case .attachmentStrip: AttachmentStripCatalog.states()
         case .altTextEditor: AltTextEditorCatalog.states()
         case .caption: CaptionCatalog.states()
+        case .notices: NoticeCatalog.states()
         case .videoControls: VideoControlsCatalog.states()
         case .timelineEmpty: TimelineCatalog.emptyStates()
         case .timelineFooter: TimelineCatalog.footerStates()
