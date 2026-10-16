@@ -58,6 +58,13 @@ extension TimelineViewController {
     /// 閉じるときは、タップした行のサムネイルへ戻す。同じ投稿とそのブーストが並んでいると、同じ添付ファイルのサムネイルが複数あるため。
     /// 開いている間にその行が再利用されたら、表示中の別の行から探す。
     func openMedia(_ attachments: [MediaAttachment], at index: Int, from grid: MediaGridView) {
+        openMedia(attachments, at: index) { [weak self, weak grid] attachmentID in
+            grid?.tile(for: attachmentID) ?? self?.visibleMediaTile(for: attachmentID)
+        }
+    }
+
+    /// - Parameter sourceTile: 開閉の起点にするビューを返す。見つからなければnilを返し、画像を動かさずに薄くして開閉する。
+    func openMedia(_ attachments: [MediaAttachment], at index: Int, sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?) {
         UserAction.openViewer(count: attachments.count, index: index).record()
         SciaLog.logger(category: "media").info("open viewer count=\(attachments.count, privacy: .public) index=\(index, privacy: .public)")
         let timing = MediaViewerController.Timing(tuning: tuning)
@@ -80,9 +87,7 @@ extension TimelineViewController {
             dragToDismiss: dragToDismiss,
             timing: timing,
             from: self,
-            sourceTile: { [weak self, weak grid] attachmentID in
-                grid?.tile(for: attachmentID) ?? self?.visibleMediaTile(for: attachmentID)
-            },
+            sourceTile: sourceTile,
             // 一覧は残したままなので表示し直しの通知が来ない。開いている間に届いた新着を、閉じたところで報告する。
             onDismiss: { [weak self] in self?.reportVisibleItems() }
         )

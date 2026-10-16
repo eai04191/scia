@@ -130,7 +130,7 @@ final class MediaGridView: UIView {
 ///
 /// タップ、キーボード、ポインタのどれで選ばれても`.primaryActionTriggered`で受けられるよう、`UIButton`にする。
 /// `UIControl`を直接継承したものは、このイベントを送らない。
-final class MediaTileView: UIButton {
+final class MediaTileView: UIButton, MediaViewerSource {
     private let store: MediaImageStore
     private let thumbnailView = UIImageView()
     private let symbolView = UIImageView()

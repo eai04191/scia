@@ -86,10 +86,19 @@ final class MediaBarLayering {
     }
 
     /// サムネイルから、一覧の中の写しを載せる行と、一覧のバーに隠れない範囲を探し直す。
-    func track(_ tile: MediaTileView) {
+    func track(_ tile: any MediaViewerSource) {
         guard let (scrollView, row) = Self.enclosingRow(of: tile) else { return }
         underlayHost = row
-        visibleRect = scrollView.convert(scrollView.bounds.inset(by: scrollView.adjustedContentInset), to: window)
+        visibleRect = Self.visibleRect(of: scrollView, in: window)
+    }
+
+    /// `view`を含む一覧の、バーに隠れない範囲。ウィンドウ座標。一覧に含まれていなければnil。
+    static func visibleRect(around view: UIView, in window: UIWindow) -> CGRect? {
+        enclosingRow(of: view).map { scrollView, _ in visibleRect(of: scrollView, in: window) }
+    }
+
+    private static func visibleRect(of scrollView: UIScrollView, in window: UIWindow) -> CGRect {
+        scrollView.convert(scrollView.bounds.inset(by: scrollView.adjustedContentInset), to: window)
     }
 
     /// 最前面の写しの今の位置と見た目に合わせて、2枚の写しと下地の穴を描き直す。最前面の写しの`alpha`は呼び出し側で決める。

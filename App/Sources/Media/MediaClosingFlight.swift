@@ -39,12 +39,12 @@ final class MediaClosingFlight: NSObject {
     private let startOverlapOpacity: CGFloat
     /// 戻り先を見失ってから薄くしている度合い。1で不透明。
     private var visibility: CGFloat = 1
-    private let findTile: @MainActor () -> MediaTileView?
+    private let findTile: @MainActor () -> (any MediaViewerSource)?
     private let startFrame: CGRect
     private let startRadius: CGFloat
     private let startDecorationAlpha: CGFloat
     private let startFadingAlphas: [CGFloat]
-    private var concealedTile: MediaTileView?
+    private var concealedTile: (any MediaViewerSource)?
     private var lastTarget: (frame: CGRect, radius: CGFloat)?
     private var startTime: CFTimeInterval = 0
     private var displayLink: CADisplayLink?
@@ -65,8 +65,8 @@ final class MediaClosingFlight: NSObject {
         barOverlapFadeEnd: CGFloat,
         startOverlapOpacity: CGFloat,
         movesImage: Bool,
-        concealedTile: MediaTileView?,
-        findTile: @escaping @MainActor () -> MediaTileView?
+        concealedTile: (any MediaViewerSource)?,
+        findTile: @escaping @MainActor () -> (any MediaViewerSource)?
     ) {
         self.parts = parts
         self.window = window

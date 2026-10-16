@@ -69,9 +69,9 @@ final class MediaViewerController: UIViewController {
     private var morphFollowsPage = false
     private var motion = Motion.idle
     private let timing: Timing
-    private let sourceTile: @MainActor (String) -> MediaTileView?
+    private let sourceTile: @MainActor (String) -> (any MediaViewerSource)?
     /// 写しを動かしている間、隠している一覧のサムネイル。画像がそこへ戻っていく途中で消えて見えないよう、動かし始めから隠す。
-    private var hiddenTile: MediaTileView?
+    private var hiddenTile: (any MediaViewerSource)?
     /// 開く途中と、開く途中でつかんでから写しを手前へ寄せ終えるまで、写しを一覧のバーの手前と奥に描き分ける。
     private var barLayering: MediaBarLayering?
     /// `barLayering`で、写しをバーの手前と奥のどちらに見せているか。
@@ -141,7 +141,7 @@ final class MediaViewerController: UIViewController {
         editing: Editing? = nil,
         photoSaver: PhotoLibrarySaver = .photoLibrary,
         downloads: MediaDownloads = AppDependencies.mediaDownloads,
-        sourceTile: @escaping @MainActor (String) -> MediaTileView?
+        sourceTile: @escaping @MainActor (String) -> (any MediaViewerSource)?
     ) {
         precondition(items.indices.contains(startIndex), "開く添付ファイルの位置が範囲外です")
         self.items = items
@@ -170,7 +170,7 @@ final class MediaViewerController: UIViewController {
         timing: Timing,
         photoSaver: PhotoLibrarySaver = .photoLibrary,
         downloads: MediaDownloads = AppDependencies.mediaDownloads,
-        sourceTile: @escaping @MainActor (MediaAttachment.ID) -> MediaTileView?
+        sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?
     ) {
         self.init(
             items: attachments.map(MediaViewerItem.init),
@@ -957,11 +957,11 @@ extension MediaViewerController {
         }
     }
 
-    private var currentTile: MediaTileView? {
+    private var currentTile: (any MediaViewerSource)? {
         sourceTile(currentItem.id)
     }
 
-    private func tileFrame(of tile: MediaTileView) -> CGRect {
+    private func tileFrame(of tile: any MediaViewerSource) -> CGRect {
         tile.convert(tile.bounds, to: view)
     }
 
@@ -969,7 +969,7 @@ extension MediaViewerController {
     /// どちらもなければ（アプリで表示できないファイルなど）、ページを描き写した画像を使う。
     /// 画像を描くページなら、最初に画像がなくても、届いた時点で写しを差し替える。
     /// - Parameter decorationAlpha: サムネイルの印の濃さ。サムネイルの位置から始めるなら1、ビューアの画像の位置から始めるなら0。
-    private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: MediaTileView?, decorationAlpha: CGFloat) {
+    private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: (any MediaViewerSource)?, decorationAlpha: CGFloat) {
         let page = pages[currentIndex]
         morph.image = page?.transitionImage ?? tile?.thumbnailImage ?? page.map(Self.snapshot)
         attachDecoration(from: tile, alpha: decorationAlpha)
@@ -985,7 +985,7 @@ extension MediaViewerController {
 
     /// サムネイルの印の写しを、写しに載せ直す。サムネイルを隠す前に描き写す必要がある。
     /// 写しの大きさが変わっても角からの位置を保つよう、写しいっぱいに広げて自動で位置を合わせる。
-    private func attachDecoration(from tile: MediaTileView?, alpha: CGFloat) {
+    private func attachDecoration(from tile: (any MediaViewerSource)?, alpha: CGFloat) {
         morphDecoration?.removeFromSuperview()
         morphPlaceholderColor = tile?.placeholderColor
         morphDecoration = tile.map { tile in
@@ -1042,7 +1042,7 @@ extension MediaViewerController {
     }
 
     /// 隠すサムネイルを入れ替える。左右の切り替えで、隠していたものと別の添付ファイルに移っていることがあるため。
-    private func hide(_ tile: MediaTileView?) {
+    private func hide(_ tile: (any MediaViewerSource)?) {
         guard tile !== hiddenTile else { return }
         showHiddenTile()
         tile?.isConcealedForViewer = true
@@ -1109,7 +1109,7 @@ extension MediaViewerController {
     }
 
     /// 写しをバーの手前と奥に描き分ける準備をする。バーの奥に描かない設定や、サムネイルを含む一覧の行が見つからなければnil。
-    private func makeBarLayering(tile: MediaTileView) -> MediaBarLayering? {
+    private func makeBarLayering(tile: any MediaViewerSource) -> MediaBarLayering? {
         guard timing.drawsUnderBars, let window = view.window else { return nil }
         let layering = MediaBarLayering(
             morph: morph,
@@ -1332,7 +1332,7 @@ extension MediaViewerController {
     }
 
     /// バーの奥に描く写し。写しと同じ画像と切り抜き方で、サムネイルの印も載せる。
-    private func makeUnderlay(decoratedLike tile: MediaTileView?) -> MediaBarLayering.Underlay {
+    private func makeUnderlay(decoratedLike tile: (any MediaViewerSource)?) -> MediaBarLayering.Underlay {
         let image = UIImageView(image: morph.image)
         image.contentMode = morph.contentMode
         image.clipsToBounds = true
@@ -1387,7 +1387,7 @@ extension MediaViewerController {
         dragToDismiss: DragToDismiss,
         timing: Timing,
         from presenter: UIViewController,
-        sourceTile: @escaping @MainActor (MediaAttachment.ID) -> MediaTileView?,
+        sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?,
         onDismiss: @escaping @MainActor () -> Void
     ) {
         let viewer = MediaViewerController(
