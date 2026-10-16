@@ -415,7 +415,7 @@ final class TimelineViewController: UIViewController {
 
     /// ストリーミングにつながらない状態が続いていることを、タイトルの下に控えめに出す。
     func setOutageNotice(_ isShown: Bool) {
-        navigationItem.subtitle = isShown ? "リアルタイムの更新が止まっています" : nil
+        navigationItem.subtitle = isShown ? "ストリーミング切断中" : nil
     }
 
     /// ログインし直しを促すボタンを出す。押されたら`action`を呼ぶ。表示中の一覧はそのまま残す。

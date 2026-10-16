@@ -29,6 +29,7 @@ final class NotificationsController {
     var onStreamingStateChange: ((ConnectionDiagnostics.StreamingState) -> Void)?
     /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態。
     private let streamingStatusView = StreamingStatusPullView()
+    private var streamingState: ConnectionDiagnostics.StreamingState?
     /// 接続を始めるたびに増やす。止めた接続の終了の知らせが、後から始めた接続を消さないようにする。
     private var streamingGeneration = 0
     private var hasLoadedInitial = false
@@ -72,6 +73,12 @@ final class NotificationsController {
         stopStreaming()
         tasks.forEach { $0.cancel() }
         tasks.removeAll()
+    }
+
+    /// トークンが無効になったときに呼ぶ。`stop()`と同じく止め、ログインし直すまでつながないことを状態に出す。
+    func stopUntilLogin() {
+        stop()
+        setStreamingState(.loginRequired)
     }
 
     /// バックグラウンドに入るときに呼ぶ。接続を切り、既読位置を保存する。
@@ -150,7 +157,7 @@ final class NotificationsController {
         guard !isStopped, isInForeground, streamingTask == nil else { return }
         streamingGeneration += 1
         // つながるまでは、つなぎ直しを続けながらポーリングで補う。
-        setStreamingState(.polling)
+        setStreamingState(.connecting)
         let generation = streamingGeneration
         let streaming = streaming
         let endpoint = streamingEndpoint
@@ -201,6 +208,7 @@ final class NotificationsController {
 
     /// ストリーミングの状態を、「接続の状態」画面と、引っぱったときに見せる表示へ伝える。
     private func setStreamingState(_ state: ConnectionDiagnostics.StreamingState) {
+        streamingState = state
         streamingStatusView.setState(state)
         onStreamingStateChange?(state)
     }
@@ -228,6 +236,9 @@ final class NotificationsController {
         case .outage(let isOngoing):
             logger.info("notifications streaming outage ongoing=\(isOngoing, privacy: .public)")
             viewController.setOutageNotice(isOngoing)
+            if isOngoing {
+                setStreamingState(.polling)
+            }
         }
     }
 
@@ -249,7 +260,10 @@ final class NotificationsController {
             onUnauthorized()
         case .disconnected(let reason, let retryAfter):
             isStreamingConnected = false
-            setStreamingState(.polling)
+            // 切れていると知らせた後も、つなぎ直しに失敗するたびに届く。知らせた後は切断中のままにする。
+            if streamingState != .polling {
+                setStreamingState(.connecting)
+            }
             logger.info("notifications streaming disconnected reason=\(reason, privacy: .public) retryAfter=\(retryAfter, privacy: .public)")
         }
     }

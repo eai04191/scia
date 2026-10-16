@@ -7,34 +7,23 @@ import UIKit
 /// 一覧の内容の上端より上（引っぱると現れる余白）に置く。`contentInset`や内容の大きさは変えないため、スクロール位置を保つ処理に関わらない。
 /// 引っぱって離しても、読み直しなどはしない。
 final class StreamingStatusPullView: UIView {
-    private let titleLabel = UILabel()
-    private let detailLabel = UILabel()
+    private let label = UILabel()
     private var observations: [NSKeyValueObservation] = []
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        titleLabel.font = .preferredFont(forTextStyle: .footnote)
-        titleLabel.adjustsFontForContentSizeCategory = true
-        titleLabel.textColor = .secondaryLabel
-        titleLabel.numberOfLines = 0
-        titleLabel.textAlignment = .center
-        detailLabel.font = .preferredFont(forTextStyle: .caption2)
-        detailLabel.adjustsFontForContentSizeCategory = true
-        detailLabel.textColor = .tertiaryLabel
-        detailLabel.numberOfLines = 0
-        detailLabel.textAlignment = .center
-
-        // 複数行のラベルを中央寄せの積み重ねに入れると幅が決まらず潰れるため、幅いっぱいに置いて文字を中央に揃える。
-        let stack = UIStackView(arrangedSubviews: [titleLabel, detailLabel])
-        stack.axis = .vertical
-        stack.spacing = 2
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(stack)
+        label.font = .preferredFont(forTextStyle: .footnote)
+        label.adjustsFontForContentSizeCategory = true
+        label.textColor = .secondaryLabel
+        label.numberOfLines = 0
+        label.textAlignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(label)
         NSLayoutConstraint.activate([
-            stack.topAnchor.constraint(equalTo: topAnchor, constant: 12),
-            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
-            stack.leadingAnchor.constraint(equalTo: layoutMarginsGuide.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: layoutMarginsGuide.trailingAnchor),
+            label.topAnchor.constraint(equalTo: topAnchor, constant: 12),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+            label.leadingAnchor.constraint(equalTo: layoutMarginsGuide.leadingAnchor),
+            label.trailingAnchor.constraint(equalTo: layoutMarginsGuide.trailingAnchor),
         ])
         isAccessibilityElement = true
         setState(nil)
@@ -45,13 +34,11 @@ final class StreamingStatusPullView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// まだつないでいない間は`nil`。「接続の状態」画面と同じく、止めているものとして出す。
+    /// 最初の読み込みが済むまでは、まだつなぎに行っていないため`nil`。
     func setState(_ state: ConnectionDiagnostics.StreamingState?) {
         let content = Self.content(for: state)
-        titleLabel.attributedText = Self.title(content)
-        detailLabel.text = content.detail
-        detailLabel.isHidden = content.detail == nil
-        accessibilityLabel = [content.title, content.detail].compactMap(\.self).joined(separator: "、")
+        label.attributedText = Self.text(content)
+        accessibilityLabel = content.text
         layoutInScrollView()
     }
 
@@ -92,38 +79,39 @@ final class StreamingStatusPullView: UIView {
     }
 
     /// アイコンを文字の頭に埋め込む。折り返しても、アイコンが1行目の文字と並ぶようにする。
-    private static func title(_ content: Content) -> NSAttributedString {
-        let title = NSMutableAttributedString()
+    /// 複数行のラベルとアイコンを横に並べると幅が決まらず潰れるため、1つのラベルにまとめる。
+    private static func text(_ content: Content) -> NSAttributedString {
+        let text = NSMutableAttributedString()
         let symbol = UIImage(systemName: content.symbol, withConfiguration: UIImage.SymbolConfiguration(textStyle: .footnote))?
             .withTintColor(content.tint, renderingMode: .alwaysOriginal)
         if let symbol {
-            title.append(NSAttributedString(attachment: NSTextAttachment(image: symbol)))
-            title.append(NSAttributedString(string: " "))
+            text.append(NSAttributedString(attachment: NSTextAttachment(image: symbol)))
+            text.append(NSAttributedString(string: " "))
         }
-        title.append(NSAttributedString(string: content.title))
-        return title
+        text.append(NSAttributedString(string: content.text))
+        return text
     }
 
     private struct Content {
         let symbol: String
         let tint: UIColor
-        let title: String
-        let detail: String?
+        let text: String
     }
 
     private static func content(for state: ConnectionDiagnostics.StreamingState?) -> Content {
         switch state {
         case .connected:
-            Content(symbol: "checkmark.circle.fill", tint: .systemGreen, title: "ストリーミングに接続しています", detail: nil)
+            Content(symbol: "checkmark.circle.fill", tint: .systemGreen, text: "ストリーミング接続中")
+        case .connecting:
+            Content(symbol: "ellipsis.circle.fill", tint: .secondaryLabel, text: "ストリーミング接続待ち")
         case .polling:
-            Content(
-                symbol: "exclamationmark.triangle.fill",
-                tint: .systemOrange,
-                title: "ストリーミングに接続できていません",
-                detail: "再接続を試しながら、ポーリングで新着を読み込んでいます"
-            )
-        case .stopped, nil:
-            Content(symbol: "pause.circle.fill", tint: .secondaryLabel, title: "ストリーミングを止めています", detail: nil)
+            Content(symbol: "exclamationmark.triangle.fill", tint: .systemOrange, text: "ストリーミング切断中・ポーリング中")
+        case .stopped:
+            Content(symbol: "pause.circle.fill", tint: .secondaryLabel, text: "ストリーミング停止中")
+        case .loginRequired:
+            Content(symbol: "pause.circle.fill", tint: .secondaryLabel, text: "ストリーミング停止中（ログインが必要）")
+        case nil:
+            Content(symbol: "circle.dashed", tint: .secondaryLabel, text: "ストリーミング未接続")
         }
     }
 }

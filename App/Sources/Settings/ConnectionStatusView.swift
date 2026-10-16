@@ -13,13 +13,9 @@ struct ConnectionStatusView: View {
                 LabeledContent("アドレス", value: instance.host() ?? instance.absoluteString)
                 LabeledContent("バージョン", value: diagnostics.serverVersion ?? "読み込めていません")
             }
-            Section {
+            Section("ストリーミング") {
                 LabeledContent("ホーム", value: Self.text(diagnostics.streaming[.home]))
                 LabeledContent("通知", value: Self.text(diagnostics.streaming[.notifications]))
-            } header: {
-                Text("リアルタイムの更新")
-            } footer: {
-                Text("つながっていない間も、つなぎ直しを続けながら、定期的に新着を読み込みます。")
             }
             if let status {
                 Section("レート制限") {
@@ -70,9 +66,12 @@ struct ConnectionStatusView: View {
 
     private static func text(_ state: ConnectionDiagnostics.StreamingState?) -> String {
         switch state {
-        case .connected: "つながっています"
-        case .polling: "つながっていません"
-        case .stopped, nil: "止めています"
+        case .connected: "接続中"
+        case .connecting: "接続待ち"
+        case .polling: "切断中・ポーリング中"
+        case .stopped: "停止中"
+        case .loginRequired: "停止中（ログインが必要）"
+        case nil: "未接続"
         }
     }
 

@@ -383,8 +383,8 @@ final class SessionController {
     /// 資格情報は消さない。消すのは、使う人がログアウトを選んだときだけ。
     private func credentialsDidBecomeInvalid() {
         logger.info("credentials invalid")
-        home.stop()
-        notifications.stop()
+        home.stopUntilLogin()
+        notifications.stopUntilLogin()
         for timeline in timelines.allObjects {
             showReauthenticationPrompt(on: timeline)
         }

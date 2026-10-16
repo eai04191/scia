@@ -12,10 +12,14 @@ public final class ConnectionDiagnostics {
 
     public enum StreamingState: Sendable, Equatable {
         case connected
-        /// つながっていない。つなぎ直しを続けながら、定期的にRESTで新着を読んでいる。
+        /// つなぎ始めた、または切れてつなぎ直している。切れていると知らせるまでの短い間。
+        case connecting
+        /// つながらない状態が続いている。つなぎ直しを続けながら、ポーリングでRESTから新着を読んでいる。
         case polling
-        /// バックグラウンドなどで、つなぐのを止めている。
+        /// バックグラウンドやログアウトで、つなぐのを止めている。
         case stopped
+        /// トークンが無効になり、ログインし直すまでつなぐのを止めている。
+        case loginRequired
     }
 
     /// サーバーが返した版。まだ読めていなければnil。
