@@ -27,12 +27,26 @@ public enum FollowState: Equatable, Sendable {
     case myself
     /// 関係をまだ読んでいない。
     case unknown
+    /// 関係を読めなかった。フォローのボタンの場所で、読めなかったことと再試行を示す。
+    case loadFailed
     case notFollowing(locked: Bool)
     /// フォローの承認を待っている。
     case requested
     case following
     /// ブロックしている、またはされている。フォローできない。
     case blocked
+}
+
+/// プロフィールの読み込みで失敗したもの。読めたものはnil。
+/// 知らせ方が違うため分けて返す。関係はフォローのボタンの場所で知らせ、アカウントと固定された投稿はログだけにする。
+public struct ProfileLoadFailures: Sendable {
+    public var account: (any Error)?
+    public var relationship: (any Error)?
+    public var pinned: (any Error)?
+
+    public var isEmpty: Bool {
+        account == nil && relationship == nil && pinned == nil
+    }
 }
 
 /// プロフィール画面の状態。表示した時点で分かっているアカウントから始め、届いたものから差し替える。
@@ -76,6 +90,10 @@ public final class ProfileStore {
     public private(set) var relationship: Relationship?
     /// 固定された投稿。「投稿」の一覧の上に置く。
     public private(set) var pinned: [Status] = []
+    /// 関係を読めず、まだ読み直せていない。
+    public private(set) var relationshipFailed = false
+    /// 読めなかった関係を読み直している途中。
+    public private(set) var isReloadingRelationship = false
     /// フォローやフォローの解除を送っている途中。
     public private(set) var isChangingFollow = false
     public private(set) var tab: ProfileTab
@@ -99,7 +117,7 @@ public final class ProfileStore {
 
     public var followState: FollowState {
         if isMyself { return .myself }
-        guard let relationship else { return .unknown }
+        guard let relationship else { return relationshipFailed ? .loadFailed : .unknown }
         if relationship.blocking || relationship.blockedBy { return .blocked }
         if relationship.following { return .following }
         if relationship.requested { return .requested }
@@ -107,8 +125,13 @@ public final class ProfileStore {
     }
 
     /// アカウント、関係、固定された投稿を並行して読み、届いたものから差し替える。どれかが失敗しても、他の結果は反映する。
-    /// 最初に失敗したものを投げる。
-    public func loadProfile() async throws {
+    /// 失敗したものを、どれが失敗したか分けて返す。
+    public func loadProfile() async -> ProfileLoadFailures {
+        enum Part: Sendable {
+            case account
+            case relationship
+            case pinned
+        }
         enum Loaded: Sendable {
             case account(Account)
             case relationship(Relationship?)
@@ -117,25 +140,42 @@ public final class ProfileStore {
         let id = account.id
         let api = api
         let pageSize = pageSize
-        let firstError = await withTaskGroup(of: Result<Loaded, any Error>.self) { group -> (any Error)? in
-            group.addTask { await Result { .account(try await api.account(id)) } }
+        return await withTaskGroup(of: (Part, Result<Loaded, any Error>).self) { group -> ProfileLoadFailures in
+            group.addTask { (.account, await Result { .account(try await api.account(id)) }) }
             if !isMyself {
-                group.addTask { await Result { .relationship(try await api.relationship(id)) } }
+                group.addTask { (.relationship, await Result { .relationship(try await api.relationship(id)) }) }
             }
             // 固定された投稿は一覧の補足なので、読めなかったものは並べない。読めなかったことはデコードの記録に残る。
-            group.addTask { await Result { .pinned(try await api.statuses(id, AccountStatusFilter(pinned: true), TimelineQuery(limit: pageSize)).statuses) } }
-            var firstError: (any Error)?
-            for await result in group {
+            group.addTask { (.pinned, await Result { .pinned(try await api.statuses(id, AccountStatusFilter(pinned: true), TimelineQuery(limit: pageSize)).statuses) }) }
+            var failures = ProfileLoadFailures()
+            for await (part, result) in group {
                 switch result {
                 case .success(.account(let account)): self.account = account
-                case .success(.relationship(let relationship)): self.relationship = relationship
+                case .success(.relationship(let relationship)):
+                    self.relationship = relationship
+                    relationshipFailed = false
                 case .success(.pinned(let pinned)): self.pinned = pinned
-                case .failure(let error): firstError = firstError ?? error
+                case .failure(let error):
+                    switch part {
+                    case .account: failures.account = error
+                    case .relationship:
+                        failures.relationship = error
+                        relationshipFailed = relationship == nil
+                    case .pinned: failures.pinned = error
+                    }
                 }
             }
-            return firstError
+            return failures
         }
-        if let firstError { throw firstError }
+    }
+
+    /// 読めなかった関係を読み直す。失敗したら、読めなかったままにして投げる。読み直している途中なら何もしない。
+    public func reloadRelationship() async throws {
+        guard !isMyself, !isReloadingRelationship else { return }
+        isReloadingRelationship = true
+        defer { isReloadingRelationship = false }
+        relationship = try await api.relationship(account.id)
+        relationshipFailed = false
     }
 
     /// 一覧を切り替え、新しい一覧を返す。同じなら作り直さずnilを返す。
@@ -166,7 +206,7 @@ public final class ProfileStore {
         switch followState {
         case .notFollowing: follows = true
         case .following, .requested: follows = false
-        case .myself, .unknown, .blocked: return false
+        case .myself, .unknown, .loadFailed, .blocked: return false
         }
         isChangingFollow = true
         defer { isChangingFollow = false }

@@ -8,6 +8,8 @@ final class ProfileHeaderView: UIView {
         let followState: FollowState
         let followedBy: Bool
         let isChangingFollow: Bool
+        /// 読めなかったフォローの関係を読み直している途中。
+        let isReloadingRelationship: Bool
         let tab: ProfileTab
         let postsFilter: ProfilePostsFilter
         let avatarShape: AvatarShape
@@ -17,6 +19,8 @@ final class ProfileHeaderView: UIView {
     }
 
     var onToggleFollow: ((UIView) -> Void)?
+    /// フォローの関係を読めなかったときに、フォローのボタンの場所に出す再試行が押された。
+    var onRetryRelationship: (() -> Void)?
     var onSelectTab: ((ProfileTab) -> Void)?
     var onChangePostsFilter: ((ProfilePostsFilter) -> Void)?
     var onOpenOriginal: (() -> Void)?
@@ -34,6 +38,8 @@ final class ProfileHeaderView: UIView {
     private let avatarRingView = UIView()
     private let avatarView: AvatarView
     private let followButton = UIButton(configuration: .filled())
+    private let relationshipFailureStack = UIStackView()
+    private let relationshipRetryButton = UIButton(configuration: .plain())
     private let nameLabel = UILabel()
     private let acctLabel = UILabel()
     private let followedByLabel = PaddedLabel()
@@ -87,6 +93,30 @@ final class ProfileHeaderView: UIView {
         }, for: .primaryActionTriggered)
         followButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
+        // フォローの関係を読めなかったら、ボタンを黙って消さず、その場所で読めなかったことと再試行を示す。
+        let relationshipFailureLabel = UILabel()
+        relationshipFailureLabel.text = "読み込みエラー"
+        relationshipFailureLabel.font = .preferredFont(forTextStyle: .footnote)
+        relationshipFailureLabel.adjustsFontForContentSizeCategory = true
+        relationshipFailureLabel.textColor = .secondaryLabel
+        relationshipFailureLabel.numberOfLines = 0
+        relationshipFailureLabel.textAlignment = .right
+        relationshipRetryButton.configuration?.title = "再試行"
+        relationshipRetryButton.configuration?.image = UIImage(systemName: "arrow.clockwise")
+        relationshipRetryButton.configuration?.imagePadding = 4
+        relationshipRetryButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .footnote)
+        relationshipRetryButton.accessibilityHint = "フォローの状態を読み込み直します"
+        relationshipRetryButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        relationshipRetryButton.addAction(UIAction { [weak self] _ in self?.onRetryRelationship?() }, for: .primaryActionTriggered)
+        relationshipFailureStack.axis = .horizontal
+        relationshipFailureStack.alignment = .center
+        relationshipFailureStack.spacing = 0
+        relationshipFailureStack.addArrangedSubview(relationshipFailureLabel)
+        relationshipFailureStack.addArrangedSubview(relationshipRetryButton)
+        let followArea = UIStackView(arrangedSubviews: [relationshipFailureStack, followButton])
+        followArea.axis = .horizontal
+        followArea.alignment = .center
+
         nameLabel.numberOfLines = 0
         acctLabel.numberOfLines = 0
         followedByLabel.font = .preferredFont(forTextStyle: .caption1)
@@ -139,7 +169,7 @@ final class ProfileHeaderView: UIView {
         infoStack.setCustomSpacing(12, after: remoteStack)
         infoStack.setCustomSpacing(12, after: countsLabel)
 
-        for view in [bannerView, avatarRingView, avatarView, followButton, infoStack] as [UIView] {
+        for view in [bannerView, avatarRingView, avatarView, followArea, infoStack] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -160,9 +190,9 @@ final class ProfileHeaderView: UIView {
             avatarRingView.widthAnchor.constraint(equalTo: avatarView.widthAnchor, constant: Self.avatarRing * 2),
             avatarRingView.heightAnchor.constraint(equalTo: avatarView.heightAnchor, constant: Self.avatarRing * 2),
 
-            followButton.topAnchor.constraint(equalTo: bannerView.bottomAnchor, constant: 12),
-            followButton.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
-            followButton.leadingAnchor.constraint(greaterThanOrEqualTo: avatarRingView.trailingAnchor, constant: 12),
+            followArea.topAnchor.constraint(equalTo: bannerView.bottomAnchor, constant: 12),
+            followArea.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
+            followArea.leadingAnchor.constraint(greaterThanOrEqualTo: avatarRingView.trailingAnchor, constant: 12),
 
             infoStack.topAnchor.constraint(equalTo: avatarView.bottomAnchor, constant: 12),
             infoStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margin),
@@ -295,7 +325,7 @@ final class ProfileHeaderView: UIView {
         let title: String?
         var configuration: UIButton.Configuration
         switch content.followState {
-        case .myself, .unknown, .blocked:
+        case .myself, .unknown, .loadFailed, .blocked:
             title = nil
             configuration = .filled()
         case .notFollowing(let locked):
@@ -314,6 +344,10 @@ final class ProfileHeaderView: UIView {
         followButton.configuration = configuration
         followButton.isHidden = title == nil
         followButton.isEnabled = !content.isChangingFollow
+
+        relationshipFailureStack.isHidden = content.followState != .loadFailed
+        relationshipRetryButton.configuration?.showsActivityIndicator = content.isReloadingRelationship
+        relationshipRetryButton.isEnabled = !content.isReloadingRelationship
     }
 
     private func applyFilterButton(_ filter: ProfilePostsFilter) {

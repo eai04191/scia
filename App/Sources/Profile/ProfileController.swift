@@ -13,9 +13,9 @@ final class ProfileController {
     private let store: ProfileStore
     private let header: ProfileHeaderView
     private let settings: AppSettings
-    /// 失敗をどう知らせるか。ログインし直しが要るなどの判断はセッションに任せる。
+    /// フォローの失敗をどう知らせるか。ログインし直しが要るなどの判断はセッションに任せる。
     private let onError: (any Error, String) -> Void
-    /// 一覧の読み込みが401で失敗したときに呼ぶ。一覧の失敗はアラートを出さずフッターに出すため、`onError`とは分ける。
+    /// 読み込みが401で失敗したときに呼ぶ。読み込みの失敗はアラートを出さず画面の中に出すため、`onError`とは分ける。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "profile")
     private var tasks: [Task<Void, Never>] = []
@@ -66,6 +66,7 @@ final class ProfileController {
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder() }
         viewController.onRetry = { [weak self] in self?.retry() }
         header.onToggleFollow = { [weak self] source in self?.confirmToggleFollow(from: source) }
+        header.onRetryRelationship = { [weak self] in self?.reloadRelationship() }
         header.onSelectTab = { [weak self] tab in self?.select(tab) }
         header.onChangePostsFilter = { [weak self] filter in self?.changePostsFilter(filter) }
         header.onOpenOriginal = { [weak self] in
@@ -121,6 +122,7 @@ final class ProfileController {
             followState: store.followState,
             followedBy: store.relationship?.followedBy ?? false,
             isChangingFollow: store.isChangingFollow,
+            isReloadingRelationship: store.isReloadingRelationship,
             tab: store.tab,
             postsFilter: store.postsFilter,
             avatarShape: settings.avatarShape,
@@ -147,13 +149,26 @@ final class ProfileController {
 
     // MARK: - 読み込み
 
+    /// 読めなかったものはアラートにしない。関係はフォローのボタンの場所で知らせ、アカウントと固定された投稿は、開いた時点の内容のままにしてログだけ残す。
     private func loadProfile() {
         run { controller in
+            let failures = await controller.store.loadProfile()
+            for (part, error) in [("account", failures.account), ("relationship", failures.relationship), ("pinned", failures.pinned)] {
+                guard let error else { continue }
+                controller.logger.error("profile \(part, privacy: .public) load failed: \(SciaLog.describe(error), privacy: .public)")
+                controller.handleUnauthorized(error)
+            }
+        }
+    }
+
+    /// フォローのボタンの場所の再試行。失敗したら、読めなかった表示のまま残す。
+    private func reloadRelationship() {
+        run { controller in
             do {
-                try await controller.store.loadProfile()
+                try await controller.store.reloadRelationship()
             } catch {
-                controller.logger.error("profile load failed: \(SciaLog.describe(error), privacy: .public)")
-                controller.onError(error, "プロフィールを読み込めませんでした")
+                controller.logger.error("profile relationship reload failed: \(SciaLog.describe(error), privacy: .public)")
+                controller.handleUnauthorized(error)
             }
         }
     }
@@ -193,10 +208,14 @@ final class ProfileController {
     }
 
     private func showListFailure(_ error: any Error) {
+        handleUnauthorized(error)
+        viewController?.setFooterState(.failed(ErrorPresentation(error)))
+    }
+
+    private func handleUnauthorized(_ error: any Error) {
         if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
             onUnauthorized()
         }
-        viewController?.setFooterState(.failed(ErrorPresentation(error)))
     }
 
     private func retry() {
@@ -235,7 +254,7 @@ final class ProfileController {
             title = "@\(store.account.acct)のフォローを外しますか？"
         case .requested:
             title = "@\(store.account.acct)へのフォローのリクエストを取り消しますか？"
-        case .myself, .unknown, .blocked:
+        case .myself, .unknown, .loadFailed, .blocked:
             return
         }
         let sheet = UIAlertController(title: title, message: nil, preferredStyle: .actionSheet)

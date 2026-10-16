@@ -30,6 +30,8 @@ enum ProfileHeaderCatalog {
             CatalogState(title: "フォロー中で、フォローされている") { header(fullAccount, .following, followedBy: true) },
             CatalogState(title: "フォローを変えている途中") { header(fullAccount, .following, isChangingFollow: true) },
             CatalogState(title: "関係を読み込む前") { header(fullAccount, .unknown) },
+            CatalogState(title: "関係を読み込めなかった（再試行を押すと読み込み直す途中になる）") { header(fullAccount, .loadFailed) },
+            CatalogState(title: "読み込めなかった関係を読み込み直している途中") { header(fullAccount, .loadFailed, isReloadingRelationship: true) },
             CatalogState(title: "自分（ボタンなし）、ヘッダー画像・自己紹介・補足情報・アイコンなし") {
                 header(Fixtures.account(acct: "me", avatar: nil), .myself)
             },
@@ -49,6 +51,7 @@ enum ProfileHeaderCatalog {
         _ followState: FollowState,
         followedBy: Bool = false,
         isChangingFollow: Bool = false,
+        isReloadingRelationship: Bool = false,
         tab: ProfileTab = .posts,
         postsFilter: ProfilePostsFilter = .standard,
         avatarShape: AvatarShape = .circle
@@ -63,6 +66,7 @@ enum ProfileHeaderCatalog {
             followState: followState,
             followedBy: followedBy,
             isChangingFollow: isChangingFollow,
+            isReloadingRelationship: isReloadingRelationship,
             tab: tab,
             postsFilter: postsFilter,
             avatarShape: avatarShape,
@@ -73,6 +77,16 @@ enum ProfileHeaderCatalog {
         header.onToggleFollow = { [weak header] _ in
             content = content.replacing(followState: nextFollowState(after: content.followState, locked: account.locked))
             header?.apply(content)
+        }
+        // 再試行を押したら読み込み直す途中にし、少し待って読めたことにする。
+        header.onRetryRelationship = { [weak header] in
+            content = content.replacing(isReloadingRelationship: true)
+            header?.apply(content)
+            Task { @MainActor [weak header] in
+                try? await Task.sleep(for: .seconds(1))
+                content = content.replacing(followState: .notFollowing(locked: account.locked), isReloadingRelationship: false)
+                header?.apply(content)
+            }
         }
         header.onSelectTab = { [weak header] tab in
             content = content.replacing(tab: tab)
@@ -91,18 +105,19 @@ enum ProfileHeaderCatalog {
         case .notFollowing(locked: true): .requested
         case .notFollowing(locked: false): .following
         case .requested, .following: .notFollowing(locked: locked)
-        case .myself, .unknown, .blocked: state
+        case .myself, .unknown, .loadFailed, .blocked: state
         }
     }
 }
 
 private extension ProfileHeaderView.Content {
-    func replacing(followState: FollowState? = nil, tab: ProfileTab? = nil, postsFilter: ProfilePostsFilter? = nil) -> Self {
+    func replacing(followState: FollowState? = nil, isReloadingRelationship: Bool? = nil, tab: ProfileTab? = nil, postsFilter: ProfilePostsFilter? = nil) -> Self {
         Self(
             account: account,
             followState: followState ?? self.followState,
             followedBy: followedBy,
             isChangingFollow: isChangingFollow,
+            isReloadingRelationship: isReloadingRelationship ?? self.isReloadingRelationship,
             tab: tab ?? self.tab,
             postsFilter: postsFilter ?? self.postsFilter,
             avatarShape: avatarShape,

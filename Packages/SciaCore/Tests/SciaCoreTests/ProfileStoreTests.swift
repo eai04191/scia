@@ -21,6 +21,17 @@ struct ProfileStoreTests {
         func set() { value = true }
     }
 
+    /// 関係の読み込みを、決めた回数だけ失敗させる。
+    private actor RelationshipFailures {
+        var remaining: Int
+        init(_ count: Int) { remaining = count }
+        func consume() -> Bool {
+            guard remaining > 0 else { return false }
+            remaining -= 1
+            return true
+        }
+    }
+
     private func account(locked: Bool = false, statusesCount: Int = 0) throws -> Account {
         let avatar = try #require(URL(string: "https://example.social/avatars/bob.png"))
         return Account(
@@ -43,19 +54,26 @@ struct ProfileStoreTests {
         account: Account,
         relationship: Relationship? = Relationship(id: "2"),
         failsAccount: Bool = false,
+        failsRelationshipTimes: Int = 0,
+        failsPinned: Bool = false,
         pinned: [Status] = [],
         accountAfterFollow: Account? = nil
     ) -> ProfileStore.API {
         let followed = Followed()
+        let relationshipFailures = RelationshipFailures(failsRelationshipTimes)
         return ProfileStore.API(
             account: { _ in
                 if failsAccount { throw Failure() }
                 if let accountAfterFollow, await followed.value { return accountAfterFollow }
                 return account
             },
-            relationship: { _ in relationship },
+            relationship: { _ in
+                if await relationshipFailures.consume() { throw Failure() }
+                return relationship
+            },
             statuses: { _, filter, _ in
                 await calls.record(filter)
+                if failsPinned, filter.pinned { throw Failure() }
                 return TimelinePage(statuses: filter.pinned ? pinned : [], isRegenerating: false)
             },
             follow: { id in
@@ -87,32 +105,91 @@ struct ProfileStoreTests {
             pinned: [pinned]
         ))
 
-        try await store.loadProfile()
+        let failures = await store.loadProfile()
 
+        #expect(failures.isEmpty)
         #expect(store.account.statusesCount == 42)
         #expect(store.followState == .following)
         #expect(store.displayedPinned == [pinned])
     }
 
-    /// アカウントの読み直しに失敗しても、関係と固定された投稿は反映する。
+    /// アカウントの読み直しに失敗しても、関係と固定された投稿は反映する。失敗はアカウントの分だけ返す。
     @Test func loadProfileKeepsOtherResultsWhenOneFails() async throws {
         let known = try account()
+        let pinned = try pinnedStatus()
         let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, api: makeAPI(
             account: known,
             relationship: Relationship(id: "2", requested: true),
-            failsAccount: true
+            failsAccount: true,
+            pinned: [pinned]
         ))
 
-        await #expect(throws: Failure.self) { try await store.loadProfile() }
+        let failures = await store.loadProfile()
+
+        #expect(failures.account is Failure)
+        #expect(failures.relationship == nil)
+        #expect(failures.pinned == nil)
         #expect(store.account == known)
         #expect(store.followState == .requested)
+        #expect(store.displayedPinned == [pinned])
+    }
+
+    /// 固定された投稿を読めなくても、フォローのボタンには関係しない。
+    @Test func pinnedFailureIsReportedSeparately() async throws {
+        let known = try account()
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, api: makeAPI(
+            account: known,
+            relationship: Relationship(id: "2", following: true),
+            failsPinned: true
+        ))
+
+        let failures = await store.loadProfile()
+
+        #expect(failures.pinned is Failure)
+        #expect(failures.account == nil)
+        #expect(failures.relationship == nil)
+        #expect(store.followState == .following)
+    }
+
+    /// 関係を読めなかったら、フォローのボタンを黙って消さず、読めなかったことを示す。読み直せたら、ボタンに戻す。
+    @Test func relationshipFailureCanBeRetried() async throws {
+        let known = try account()
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, api: makeAPI(
+            account: known,
+            relationship: Relationship(id: "2", following: true),
+            failsRelationshipTimes: 2
+        ))
+
+        let failures = await store.loadProfile()
+        #expect(failures.relationship is Failure)
+        #expect(failures.account == nil)
+        #expect(store.followState == .loadFailed)
+
+        // 読み直しにも失敗したら、読めなかったままにする。
+        await #expect(throws: Failure.self) { try await store.reloadRelationship() }
+        #expect(store.followState == .loadFailed)
+        #expect(!store.isReloadingRelationship)
+
+        try await store.reloadRelationship()
+        #expect(store.followState == .following)
+    }
+
+    /// 読めなかった関係を、フォローやフォローの解除で上書きしない。
+    @Test func toggleFollowDoesNothingWhileRelationshipIsUnreadable() async throws {
+        let known = try account()
+        let calls = Calls()
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, api: makeAPI(calls: calls, account: known, failsRelationshipTimes: 1))
+        _ = await store.loadProfile()
+
+        #expect(try await store.toggleFollow() == false)
+        #expect(await calls.follows.isEmpty)
     }
 
     @Test func myselfHasNoFollowButtonAndSkipsRelationship() async throws {
         let known = try account()
         let store = ProfileStore(account: known, myAccountID: known.id, postsFilter: .standard, api: makeAPI(account: known, relationship: nil))
 
-        try await store.loadProfile()
+        _ = await store.loadProfile()
 
         #expect(store.followState == .myself)
     }
@@ -121,7 +198,7 @@ struct ProfileStoreTests {
         let locked = try account(locked: true)
         let calls = Calls()
         let store = ProfileStore(account: locked, myAccountID: "1", postsFilter: .standard, api: makeAPI(calls: calls, account: locked))
-        try await store.loadProfile()
+        _ = await store.loadProfile()
         #expect(store.followState == .notFollowing(locked: true))
 
         try await store.toggleFollow()
@@ -138,7 +215,7 @@ struct ProfileStoreTests {
         let known = try account()
         let followedAccount = Account(id: known.id, username: known.username, acct: known.acct, displayName: known.displayName, avatar: known.avatar, followersCount: 1)
         let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, api: makeAPI(account: known, accountAfterFollow: followedAccount))
-        try await store.loadProfile()
+        _ = await store.loadProfile()
         #expect(store.account.followersCount == 0)
 
         #expect(try await store.toggleFollow())
@@ -183,7 +260,7 @@ struct ProfileStoreTests {
         let known = try account()
         let pinned = try pinnedStatus()
         let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, api: makeAPI(account: known, pinned: [pinned]))
-        try await store.loadProfile()
+        _ = await store.loadProfile()
 
         _ = store.select(.media)
 
