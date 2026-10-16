@@ -268,10 +268,11 @@ public enum TuningCatalog {
         defaultValue: 0.4
     )
 
-    /// ビューアを開閉するときの弾み。0で行き過ぎずに止まる。
-    public static let mediaTransitionBounce = NumberTuning(
-        id: "media.transitionBounce",
-        title: "ビューアの開閉の弾み",
+    /// ビューアを下へ払って閉じるときの弾み。0で行き過ぎずに止まる。
+    /// 指で力を加えたときだけ弾ませ、タップで開くときや、ボタンで閉じるときは弾ませない。
+    public static let mediaDragCloseBounce = NumberTuning(
+        id: "media.dragCloseBounce",
+        title: "ビューアを払って閉じるときの弾み",
         range: 0...0.4,
         step: 0.05,
         defaultValue: 0.1
@@ -457,7 +458,7 @@ public enum TuningCatalog {
         TuningSection(id: "media.transition", title: "ビューア：開閉の動き", items: [
             .number(mediaOpenDuration),
             .number(mediaCloseDuration),
-            .number(mediaTransitionBounce),
+            .number(mediaDragCloseBounce),
         ]),
         TuningSection(id: "media.bars", title: "ビューア：バーとの重なり", items: [
             .toggle(mediaCloseDrawsUnderBars),

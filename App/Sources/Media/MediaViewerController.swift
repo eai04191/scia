@@ -86,8 +86,9 @@ final class MediaViewerController: UIViewController {
         let openDuration: TimeInterval
         /// サムネイルへ縮めて戻すまでの時間。
         let closeDuration: TimeInterval
-        /// 0で弾まずに止まり、大きいほど行き過ぎてから戻る。
-        let bounce: CGFloat
+        /// 下へ払って閉じるときの弾み。0で弾まずに止まり、大きいほど行き過ぎてから戻る。
+        /// 指で力を加えたときだけ弾ませ、タップで開くときや、ボタンで閉じるときは弾ませない。
+        let dragCloseBounce: CGFloat
         /// 開閉するとき、画像のうちバーにかかる部分を、一覧の中に置いた写しでバーの奥に描く。
         let drawsUnderBars: Bool
         /// バーの奥にも描くとき、一覧の中の写しから最前面の写しへ受け渡し終える、開く動きの進み具合。0から1。
@@ -854,7 +855,7 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
             if dragToDismiss.shouldDismiss(translation: translation.y, velocity: velocity, height: height) {
                 SciaLog.logger(category: "media").info("dismiss by drag translation=\(translation.y, privacy: .public) velocity=\(velocity, privacy: .public)")
                 UserAction.closeViewer(.drag).record()
-                beginClosing()
+                beginClosing(byDrag: true)
             } else {
                 settle()
             }
@@ -1038,7 +1039,7 @@ extension MediaViewerController {
                 self?.setVisibility(clamped)
             }
         }
-        let driver = SpringDriver(spring: SpringCurve(duration: timing.openDuration, bounce: timing.bounce), update: update) { [weak self] in
+        let driver = SpringDriver(spring: SpringCurve(duration: timing.openDuration, bounce: 0), update: update) { [weak self] in
             self?.finishOpen()
         }
         motion = .opening(driver)
@@ -1181,7 +1182,8 @@ extension MediaViewerController {
     /// 閉じると決めたら、すぐにビューアを閉じ、写しと下地とボタンの写しを、操作を素通しする最前面の層へ移してサムネイルへ縮める。
     /// ビューアを残したまま動かすと、残った画面が触れたものを吸い、閉じた直後に別の画像を叩いても開けない。
     /// サムネイルが見つからなければ、その場で薄くする。
-    private func beginClosing() {
+    /// - Parameter byDrag: 下へ払って閉じた。払って閉じるときだけ弾ませる。
+    private func beginClosing(byDrag: Bool = false) {
         if isEditingDescription {
             endEditingDescription()
         }
@@ -1259,7 +1261,7 @@ extension MediaViewerController {
                 )
             ),
             window: window,
-            spring: SpringCurve(duration: timing.closeDuration, bounce: timing.bounce),
+            spring: SpringCurve(duration: timing.closeDuration, bounce: byDrag ? timing.dragCloseBounce : 0),
             handoffStart: CGFloat(timing.handoffStart),
             barOverlapFadeEnd: CGFloat(timing.barOverlapFadeEnd),
             startOverlapOpacity: startOverlapOpacity,
@@ -1888,7 +1890,7 @@ extension MediaViewerController.Timing {
         self.init(
             openDuration: tuning.value(of: TuningCatalog.mediaOpenDuration),
             closeDuration: tuning.value(of: TuningCatalog.mediaCloseDuration),
-            bounce: tuning.value(of: TuningCatalog.mediaTransitionBounce),
+            dragCloseBounce: tuning.value(of: TuningCatalog.mediaDragCloseBounce),
             drawsUnderBars: drawsUnderBars && tuning.value(of: TuningCatalog.mediaCloseDrawsUnderBars),
             openHandoffEnd: tuning.value(of: TuningCatalog.mediaOpenHandoffEnd),
             openBarOverlapFadeStart: tuning.value(of: TuningCatalog.mediaOpenBarOverlapFadeStart),
