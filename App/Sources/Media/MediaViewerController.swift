@@ -34,17 +34,16 @@ final class MediaViewerController: UIViewController {
     let descriptionEditor = AltTextEditorView()
     /// 代替テキストを書いている。
     private(set) var isEditingDescription = false
-    /// 投稿欄から開いたとき、アップロードや代替テキストの送信の状態を、上の中央に出す。失敗していれば押して理由を見られる。
-    let draftStatusButton = DraftStatusButton()
-    /// 写真に保存したことを、メニューボタンの下で知らせる。
-    private let statusChip = StatusChip()
+    /// 上の中央、メニューボタンの行のすぐ下に出す知らせ。写真に保存したこと、落としている途中の進み具合、
+    /// 投稿欄から開いたときのアップロードや代替テキストの送信の状態。
+    let noticeStack = NoticeStackView()
     private let photoSaver: PhotoLibrarySaver
     /// 動画、GIF、音声を、共有や保存のために落とす。
     private let downloads: MediaDownloads
-    /// 落としている間、進み具合を出す。押すと取り消す。
-    private let downloadButton = UIButton(configuration: .glass())
     /// 落としている途中のもの。
     private var download: Download?
+    /// 落としている途中のチップを押して出した、止めるかの確認。落とし終えたら閉じる。
+    private weak var stopDownloadConfirmation: UIAlertController?
     /// 画像から読み取った文字を、システムの翻訳シートで訳す。
     private let translation = SystemTranslation()
     private var isChromeHidden = false
@@ -85,7 +84,8 @@ final class MediaViewerController: UIViewController {
         let url: URL
         let task: Task<Void, Never>
         /// 落とし終えたら行うこと。落としている途中に別の操作を選んだら、後から選んだものにする。
-        var completion: @MainActor (URL) -> Void
+        /// `noticeID`は落としている途中のチップの知らせのid（チップを出していなければnil）で、行うことの側で消すか入れ替える。
+        var completion: @MainActor (_ file: URL, _ noticeID: String?) -> Void
     }
 
     struct Timing {
@@ -108,8 +108,8 @@ final class MediaViewerController: UIViewController {
         let barOverlapFadeEnd: Double
         /// 写真に保存したことを知らせる表示を出しておく時間。
         let savedChipDuration: TimeInterval
-        /// 写真に保存したことを知らせる表示を、メニューボタンの下ではなく、画面下の説明のすぐ上に出す。
-        let savedChipAtBottom: Bool
+        /// 知らせのチップの出入りと並べ直しの時間。
+        let noticeAnimationDuration: TimeInterval
         /// 動画を再生している間、最後に触れてから操作の部品とボタンを隠すまでの時間。
         let videoControlsHideDelay: TimeInterval
         /// ダブルタップで10秒戻ったか進んだことを知らせる表示を、出しておく時間。
@@ -339,9 +339,9 @@ final class MediaViewerController: UIViewController {
         counterLabel.font = .preferredFont(forTextStyle: .subheadline)
         counterLabel.textColor = .white
         counterLabel.isHidden = items.count == 1
-        setUpDownloadButton()
+        noticeStack.animationDuration = timing.noticeAnimationDuration
         setUpDescriptionEditing()
-        for view in [menuButton, counterLabel, captionView, statusChip, downloadButton, draftStatusButton, descriptionEditor] {
+        for view in [menuButton, counterLabel, captionView, noticeStack, descriptionEditor] {
             view.translatesAutoresizingMaskIntoConstraints = false
             self.view.addSubview(view)
         }
@@ -355,16 +355,10 @@ final class MediaViewerController: UIViewController {
             captionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             captionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             captionView.contentBottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -8),
-            statusChip.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
-            timing.savedChipAtBottom
-                ? statusChip.bottomAnchor.constraint(equalTo: captionView.topAnchor, constant: -12)
-                : statusChip.topAnchor.constraint(equalTo: menuButton.bottomAnchor, constant: 12),
-            // 落とし終えると同じ場所に保存したことを知らせるため、知らせる表示と同じ場所に出す。
-            downloadButton.centerXAnchor.constraint(equalTo: statusChip.centerXAnchor),
-            downloadButton.centerYAnchor.constraint(equalTo: statusChip.centerYAnchor),
-            draftStatusButton.centerXAnchor.constraint(equalTo: guide.centerXAnchor),
-            draftStatusButton.topAnchor.constraint(equalTo: menuButton.bottomAnchor, constant: 8),
-            draftStatusButton.widthAnchor.constraint(lessThanOrEqualTo: guide.widthAnchor, constant: -32),
+            // 保存を選ぶメニューの近くで知らせる。
+            noticeStack.topAnchor.constraint(equalTo: menuButton.bottomAnchor, constant: 8),
+            noticeStack.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 16),
+            noticeStack.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
             descriptionEditor.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             descriptionEditor.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             descriptionEditor.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
@@ -380,29 +374,9 @@ final class MediaViewerController: UIViewController {
         }
         descriptionEditor.onEnd = { [weak self] text in self?.descriptionEditingDidEnd(text) }
         descriptionEditor.onDone = { [weak self] in self?.endEditingDescription() }
-        draftStatusButton.addAction(UIAction { [weak self] _ in
-            guard let self, let editing = self.draftEditing else { return }
-            editing.showFailure(self.currentItem.id, self)
-        }, for: .primaryActionTriggered)
     }
 
-    private func setUpDownloadButton() {
-        downloadButton.isHidden = true
-        downloadButton.configuration?.image = UIImage(systemName: "xmark")
-        downloadButton.configuration?.imagePlacement = .trailing
-        downloadButton.configuration?.imagePadding = 8
-        downloadButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .footnote, scale: .small)
-        // 進み具合の数字が変わるたびに幅が揺れないよう、数字の幅をそろえる。
-        downloadButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = attributes
-            attributes.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(for: .monospacedDigitSystemFont(ofSize: 15, weight: .regular))
-            return attributes
-        }
-        downloadButton.accessibilityLabel = "ダウンロードを取り消す"
-        downloadButton.addAction(UIAction { [weak self] _ in self?.cancelDownload() }, for: .primaryActionTriggered)
-    }
-
-    private var chromeViews: [UIView] { [menuButton, counterLabel, captionView, draftStatusButton] }
+    private var chromeViews: [UIView] { [menuButton, counterLabel, captionView] }
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
@@ -496,6 +470,7 @@ final class MediaViewerController: UIViewController {
             self.updateChrome()
             self.setNeedsStatusBarAppearanceUpdate()
         }
+        noticeStack.setChromeHidden(isChromeHidden, animated: true)
         for page in pages.values {
             page.setChromeHidden(isChromeHidden, animated: true)
         }
@@ -710,25 +685,31 @@ final class MediaViewerController: UIViewController {
         }
     }
 
-    /// 投稿欄から開いたとき、上の中央にアップロードや代替テキストの送信の状態を出す。
+    /// 投稿欄から開いたとき、上の中央にアップロードや代替テキストの送信の状態を出す。投稿欄から開いたときは落とすことがないため、落としている途中の知らせとは重ならない。
     private func updateDraftStatus() {
-        draftStatusButton.apply(currentItem.draftStatus)
+        guard draftEditing != nil else { return }
+        noticeStack.setPersistent(Notice.draftStatus(currentItem.draftStatus) { [weak self] in
+            guard let self, let editing = self.draftEditing else { return }
+            editing.showFailure(self.currentItem.id, self)
+        })
     }
 
     /// 表示中の添付ファイルを写真に保存し、済んだらメニューボタンの下で知らせる。キャッシュになければ落としてから保存する。
     /// 失敗したときは理由をアラートで出す。
     func saveToPhotos() {
         guard let url = currentFileURL else { return }
-        withDownloadedFile(of: url) { [weak self] file in self?.save(file) }
+        withDownloadedFile(of: url) { [weak self] file, noticeID in self?.save(file, downloadNoticeID: noticeID) }
     }
 
-    private func save(_ file: URL) {
+    /// 落としてから保存するときは、保存し終えるまで落としている途中のチップを残し、保存したことと同じ場所で入れ替える。
+    private func save(_ file: URL, downloadNoticeID: String? = nil) {
         Task { [weak self, photoSaver] in
             do {
                 try await photoSaver.save(file)
-                self?.didSaveToPhotos()
+                self?.didSaveToPhotos(replacing: downloadNoticeID)
             } catch {
                 SciaLog.logger(category: "media").error("save to photos failed: \(SciaLog.describe(error), privacy: .public)")
+                self?.clearDownloadNotice(downloadNoticeID)
                 self?.presentSaveFailure(error)
             }
         }
@@ -736,12 +717,18 @@ final class MediaViewerController: UIViewController {
 
     /// 写真に保存したことを知らせている文言。知らせていなければnil。
     var statusChipText: String? {
-        statusChip.shownText
+        noticeStack.transientNotice?.text
     }
 
-    private func didSaveToPhotos() {
+    private func didSaveToPhotos(replacing downloadNoticeID: String?) {
         UINotificationFeedbackGenerator(view: view).notificationOccurred(.success)
-        statusChip.show("写真に保存しました", systemImage: "checkmark.circle.fill", duration: timing.savedChipDuration)
+        noticeStack.showTransient(.savedToPhotos, duration: timing.savedChipDuration, replacingPersistent: downloadNoticeID)
+    }
+
+    /// 落としている途中のチップが`id`の知らせのままなら消す。保存している間に別のものを落とし始めていれば、そちらを残す。
+    private func clearDownloadNotice(_ id: String?) {
+        guard let id, noticeStack.persistentNotice?.id == id else { return }
+        noticeStack.setPersistent(nil)
     }
 
     private func presentSaveFailure(_ error: any Error) {
@@ -774,8 +761,9 @@ final class MediaViewerController: UIViewController {
     private func share() {
         if let url = currentFileURL {
             let index = currentIndex
-            withDownloadedFile(of: url) { [weak self] file in
+            withDownloadedFile(of: url) { [weak self] file, noticeID in
                 guard let self else { return }
+                self.clearDownloadNotice(noticeID)
                 self.presentShareSheet(self.shareSheetItem(for: file, at: index))
             }
         } else if let url = currentUnsupportedURL {
@@ -793,12 +781,13 @@ final class MediaViewerController: UIViewController {
 
     /// 落としている途中の進み具合の文言。落としていなければnil。
     var downloadProgressText: String? {
-        downloadButton.isHidden ? nil : downloadButton.configuration?.title
+        guard let notice = noticeStack.persistentNotice, notice.id.hasPrefix(Notice.downloadIDPrefix) else { return nil }
+        return notice.text
     }
 
-    /// `url`のファイルの写しを用意してから`completion`に渡す。キャッシュになければ落とし、落としている間は進み具合を出して、押せば取り消せるようにする。
+    /// `url`のファイルの写しを用意してから`completion`に渡す。キャッシュになければ落とし、落としている間は進み具合を出して、押せば止めるかを確かめる。
     /// 同じURLを用意している途中なら、用意し直さずに行うことだけを替える。別のURLなら、前のものを取り消す。
-    private func withDownloadedFile(of url: URL, then completion: @escaping @MainActor (URL) -> Void) {
+    private func withDownloadedFile(of url: URL, then completion: @escaping @MainActor (_ file: URL, _ noticeID: String?) -> Void) {
         if download?.url == url {
             download?.completion = completion
             return
@@ -808,38 +797,73 @@ final class MediaViewerController: UIViewController {
             do {
                 let file = try await downloads.fileForSharing(for: url) { fraction in
                     guard let self, self.download?.url == url else { return }
-                    self.updateDownloadButton(fraction: fraction)
-                    self.downloadButton.isHidden = false
+                    self.noticeStack.setPersistent(.download(of: url, fraction: fraction) { [weak self] in
+                        self?.confirmStoppingDownload()
+                    })
                 }
                 guard let self, !Task.isCancelled else { return }
                 let completion = self.download?.completion
-                self.endDownload()
-                completion?(file)
+                let noticeID = self.noticeStack.persistentNotice?.id == Notice.downloadID(of: url) ? Notice.downloadID(of: url) : nil
+                // 済んだあとに行うこと（保存など）の間は、もう止められないため押せなくする。
+                if noticeID != nil {
+                    self.noticeStack.setPersistent(.download(of: url, fraction: 1, onStop: nil))
+                }
+                self.endDownload { completion?(file, noticeID) }
             } catch {
                 guard let self, !Task.isCancelled else { return }
-                self.endDownload()
-                self.presentDownloadFailure(error)
+                self.noticeStack.setPersistent(nil)
+                self.endDownload { [weak self] in self?.presentDownloadFailure(error) }
             }
         }
         download = Download(url: url, task: task, completion: completion)
     }
 
+    /// 落としている途中のチップを押したときに、止めるかを確かめる。
+    func confirmStoppingDownload() {
+        guard download != nil, stopDownloadConfirmation == nil else { return }
+        // チップから吹き出すシートでは「続ける」が省かれ、外をタップして続けることになるため、両方を並べるアラートにする。
+        let alert = UIAlertController(title: "ダウンロードを止めますか？", message: nil, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "止める", style: .destructive) { [weak self] _ in self?.cancelDownload() })
+        alert.addAction(UIAlertAction(title: "続ける", style: .cancel))
+        stopDownloadConfirmation = alert
+        presentOnTop(alert)
+    }
+
     /// 落としている途中のものを取り消す。
     func cancelDownload() {
-        download?.task.cancel()
-        endDownload()
+        guard let download else { return }
+        download.task.cancel()
+        endDownload {}
+        clearDownloadNotice(Notice.downloadID(of: download.url))
     }
 
-    private func endDownload() {
+    /// 落とし終えるか取り消したら、止めるかの確認を開いていれば閉じ、閉じ終えてから`next`を行う。チップは呼んだ側で消すか入れ替える。
+    /// 確認の上から共有のシートや失敗のアラートを出すと、確認を閉じるときに一緒に閉じられるか、出せずに終わるため。
+    private func endDownload(then next: @escaping @MainActor () -> Void) {
         download = nil
-        downloadButton.isHidden = true
+        let confirmation = stopDownloadConfirmation
+        stopDownloadConfirmation = nil
+        guard let confirmation, confirmation.presentingViewController != nil else {
+            next()
+            return
+        }
+        // 出る途中や、「続ける」で閉じる途中なら、その動きを終えてから閉じる。出る途中に閉じると、閉じる指示が捨てられる。
+        if let coordinator = confirmation.transitionCoordinator {
+            coordinator.animate(alongsideTransition: nil) { [weak confirmation] _ in
+                Self.dismissIfPresented(confirmation, then: next)
+            }
+        } else {
+            Self.dismissIfPresented(confirmation, then: next)
+        }
     }
 
-    /// 全体の大きさが分かるまでは`fraction`が0のため、割合を出さない。
-    private func updateDownloadButton(fraction: Double) {
-        let percent = Int((fraction * 100).rounded(.down))
-        downloadButton.configuration?.title = percent > 0 ? "ダウンロード中 \(percent)%" : "ダウンロード中"
-        downloadButton.accessibilityValue = percent > 0 ? "\(percent)%" : nil
+    /// 続けて共有のシートなどを出すため、閉じる動きを待たせないよう動かさずに閉じる。
+    private static func dismissIfPresented(_ viewController: UIViewController?, then next: @escaping @MainActor () -> Void) {
+        guard let viewController, viewController.presentingViewController != nil else {
+            next()
+            return
+        }
+        viewController.dismiss(animated: false) { next() }
     }
 
     private func presentDownloadFailure(_ error: any Error) {
@@ -892,10 +916,11 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
             applyBarLayering()
             let backgroundAlpha = visibility * dragToDismiss.backgroundAlpha(translation: translation.y, height: height)
             backdrop.alpha = backgroundAlpha
-            // ボタンと説明は、背景が半分透けたところで消えきるようにする。
+            // ボタンと説明は、背景が半分透けたところで消えきるようにする。知らせは、ボタン類を隠していても残るものがあるため、隠したかによらず薄くする。
             for chrome in chromeViews {
                 chrome.alpha = isChromeHidden ? 0 : max(backgroundAlpha * 2 - 1, 0)
             }
+            noticeStack.alpha = max(backgroundAlpha * 2 - 1, 0)
         case .ended:
             pageController.view.isUserInteractionEnabled = true
             let velocity = recognizer.velocity(in: view).y
@@ -953,7 +978,7 @@ extension MediaViewerController {
     /// 開いている度合い。0で下地とボタンが透明、1で不透明。
     private func setVisibility(_ visibility: CGFloat) {
         backdrop.alpha = visibility
-        downloadButton.alpha = visibility
+        noticeStack.alpha = visibility
         for chrome in chromeViews {
             chrome.alpha = isChromeHidden ? 0 : visibility
         }
@@ -1279,7 +1304,7 @@ extension MediaViewerController {
         overlay.isUserInteractionEnabled = false
         backdrop.frame = overlay.bounds
         overlay.addSubview(backdrop)
-        let chromeSnapshots = chromeViews.compactMap { chrome -> UIView? in
+        let chromeSnapshots = (chromeViews + [noticeStack]).compactMap { chrome -> UIView? in
             guard !chrome.isHidden, chrome.alpha > 0, let snapshot = chrome.snapshotView(afterScreenUpdates: false) else { return nil }
             snapshot.frame = chrome.convert(chrome.bounds, to: window)
             snapshot.alpha = chrome.alpha
@@ -2341,7 +2366,7 @@ extension MediaViewerController.Timing {
             handoffStart: tuning.value(of: TuningCatalog.mediaCloseHandoffStart),
             barOverlapFadeEnd: tuning.value(of: TuningCatalog.mediaCloseBarOverlapFadeEnd),
             savedChipDuration: tuning.value(of: TuningCatalog.mediaSavedChipDuration),
-            savedChipAtBottom: tuning.value(of: TuningCatalog.mediaSavedChipAtBottom),
+            noticeAnimationDuration: 0.2,
             videoControlsHideDelay: tuning.value(of: TuningCatalog.mediaVideoControlsHideDelay),
             videoSkipEffectDuration: tuning.value(of: TuningCatalog.mediaVideoSkipEffectDuration)
         )

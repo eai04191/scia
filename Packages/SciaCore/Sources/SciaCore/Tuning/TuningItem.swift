@@ -337,13 +337,6 @@ public enum TuningCatalog {
         defaultValue: 1.5
     )
 
-    /// 写真に保存したことを知らせる表示を、メニューボタンの下ではなく、画面下の説明のすぐ上に出す。
-    /// 長押しでメニューを開いたときに、どちらが目に入りやすいかを比べるために使う。
-    public static let mediaSavedChipAtBottom = ToggleTuning(
-        id: "media.savedChipAtBottom",
-        title: "保存を知らせる表示を画面の下に出す",
-        defaultValue: false
-    )
 
     /// 動画を再生している間、最後に触れてから操作の部品とボタンを隠すまでの時間。
     public static let mediaVideoControlsHideDelay = NumberTuning(
@@ -488,7 +481,6 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "media.menu", title: "ビューア：メニュー", items: [
             .number(mediaSavedChipDuration),
-            .toggle(mediaSavedChipAtBottom),
         ]),
         TuningSection(id: "media.video", title: "ビューア：動画", items: [
             .number(mediaVideoControlsHideDelay),

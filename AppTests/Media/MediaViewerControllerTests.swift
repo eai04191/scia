@@ -11,7 +11,7 @@ import VisionKit
 struct MediaViewerControllerTests {
     private let drag = DragToDismiss(distanceThreshold: 0.12, velocityThreshold: 0.8, smallestScale: 0.6, fadeDistance: 0.5, restoreDuration: 0.35)
 
-    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, savedChipAtBottom: false, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3)
+    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, noticeAnimationDuration: 0.2, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3)
 
     private func makeViewer(attachments: [MediaAttachment]) -> MediaViewerController {
         MediaViewerController(attachments: attachments, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil })
@@ -321,7 +321,7 @@ struct MediaViewerControllerTests {
         try await waitUntil { harness.viewController.presentedViewController == nil }
     }
 
-    /// アップロードの状態は上の中央に出し、開いている間に変わったら描き直す。失敗したときだけ押せて、理由を出す操作を投稿欄に頼む。
+    /// アップロードの状態は上の中央に出たままのチップで出し、開いている間に変わったら描き直す。失敗したときだけ押せて、理由を出す操作を投稿欄に頼む。
     @Test func draftStatusFollowsUpdates() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -329,17 +329,20 @@ struct MediaViewerControllerTests {
         let viewer = presentDraftViewer(on: harness, items: [draftItem("a", status: .uploading)], actions: actions)
         defer { viewer.dismiss(animated: false) }
 
-        #expect(!viewer.draftStatusButton.isHidden)
-        #expect(viewer.draftStatusButton.configuration?.title == "アップロード中")
-        #expect(!viewer.draftStatusButton.isUserInteractionEnabled)
+        let uploading = try #require(viewer.noticeStack.chips.first)
+        #expect(viewer.noticeStack.persistentNotice?.text == "アップロード中")
+        #expect(!uploading.isUserInteractionEnabled)
 
         viewer.update(items: [draftItem("a", status: .failed)])
-        #expect(viewer.draftStatusButton.configuration?.title == "アップロードできませんでした")
-        viewer.draftStatusButton.sendActions(for: .primaryActionTriggered)
+        let failed = try #require(viewer.noticeStack.chips.first)
+        #expect(failed === uploading)
+        #expect(viewer.noticeStack.persistentNotice?.text == "アップロードできませんでした")
+        #expect(failed.isUserInteractionEnabled)
+        failed.sendActions(for: .primaryActionTriggered)
         #expect(actions.failures == ["a"])
 
         viewer.update(items: [draftItem("a", description: "猫", status: .ready)])
-        #expect(viewer.draftStatusButton.isHidden)
+        #expect(viewer.noticeStack.persistentNotice == nil)
         #expect(viewer.captionView.accessibilityLabel == "猫")
     }
 
@@ -660,6 +663,57 @@ struct MediaViewerControllerTests {
         #expect(try Data(contentsOf: file) == data)
     }
 
+    /// 落としている途中のチップは押すと止めるかを確かめ、確かめている間に落とし終えたら、確認を閉じて保存する。
+    @Test func tappingDownloadChipConfirmsStopAndClosesWhenDone() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let saved = SavedFiles()
+        let viewer = presentVideoViewer(on: harness, photoSaver: PhotoLibrarySaver { saved.files.append($0) }, download: Self.slowDownload(Data("movie".utf8), duration: .seconds(2)))
+        defer { viewer.dismiss(animated: false) }
+
+        viewer.saveToPhotos()
+        try await waitUntil { viewer.downloadProgressText == "ダウンロード中 50%" }
+        let chip = try #require(viewer.noticeStack.chips.first)
+        #expect(chip.isUserInteractionEnabled)
+        #expect(chip.accessibilityHint == "ダウンロードを止めるか選べます。")
+        chip.sendActions(for: .primaryActionTriggered)
+
+        let alert = try #require(viewer.presentedViewController as? UIAlertController)
+        #expect(alert.title == "ダウンロードを止めますか？")
+        #expect(alert.actions.map(\.title) == ["止める", "続ける"])
+        try await waitUntil { !alert.isBeingPresented }
+        #expect(saved.files.isEmpty)
+
+        try await waitUntil { saved.files.count == 1 }
+        try await waitUntil { viewer.presentedViewController == nil }
+        try await waitUntil { viewer.statusChipText == "写真に保存しました" }
+        // ダウンロード中のチップがあった場所で、保存したことに入れ替える。
+        #expect(viewer.noticeStack.chips.first === chip)
+        #expect(viewer.downloadProgressText == nil)
+    }
+
+    /// 止めるかの確認が出る途中に落とせなかったら、確認を閉じ終えてから理由を出す。確認の上に出すと、確認と一緒に閉じられるか、出せずに終わるため。
+    @Test func downloadFailureWhileConfirmationAppearsIsShownAfterClosingIt() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let viewer = presentVideoViewer(on: harness) { _, _, onProgress in
+            onProgress(0.5)
+            try await Task.sleep(for: .milliseconds(150))
+            throw URLError(.networkConnectionLost)
+        }
+        defer { viewer.dismiss(animated: false) }
+
+        viewer.saveToPhotos()
+        try await waitUntil { viewer.downloadProgressText != nil }
+        try #require(viewer.noticeStack.chips.first).sendActions(for: .primaryActionTriggered)
+        let confirmation = try #require(viewer.presentedViewController as? UIAlertController)
+        #expect(confirmation.isBeingPresented)
+
+        try await waitUntil { (viewer.presentedViewController as? UIAlertController)?.title == "ダウンロードできませんでした" }
+        #expect(viewer.presentedViewController?.presentedViewController == nil)
+        viewer.presentedViewController?.dismiss(animated: false)
+    }
+
     /// 落としている途中で取り消したら、通信を止め、保存しない。
     @Test func cancelingDownloadStopsItWithoutSaving() async throws {
         let harness = try TimelineHarness()
@@ -951,7 +1005,7 @@ struct MediaViewerControllerTests {
             startIndex: 0,
             store: store,
             dragToDismiss: drag,
-            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, savedChipAtBottom: false, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3),
+            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, noticeAnimationDuration: 0.2, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3),
             from: harness.viewController,
             sourceTile: { _ in tile },
             onDismiss: {}

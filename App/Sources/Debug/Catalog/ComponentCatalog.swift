@@ -11,14 +11,11 @@ import UIKit
 /// 次の部品は、AGENTS.mdの基準では載せるべきだが、外から状態を渡せないため載せていない。その部品に手を入れるときに、合わせて載せる。
 /// - 接続の状態の画面（`ConnectionStatusView`）: `ConnectionDiagnostics.Status`にpublicなinitがなく、SciaCoreの外から作れない。`Status`を受け取る中身のビューを分けるか、publicなinitを足す
 /// - 投稿欄（`ComposeView`、`InlineComposeController`）: 投稿中や添付の失敗は`ComposeModel`の`private(set)`で、`InlineComposeController`はタブバーとキーボードに頼る。残りの文字数のカプセルなどを切り出す
-/// - ビューアの保存の進み具合（`MediaViewerController`の`downloadButton`）: privateなので、`DraftStatusButton`と同じように切り出す
 /// - ログイン画面のエラー（`LoginView`）: `isLoggingIn`が`private(set)`で、ログイン中を出すには実際の認可を待たせる必要がある
 enum CatalogComponent: String, CaseIterable {
     case attachmentStrip = "attachment-strip"
-    case draftStatus = "draft-status"
     case altTextEditor = "alt-text-editor"
     case caption
-    case statusChip = "status-chip"
     case videoControls = "video-controls"
     case timelineEmpty = "timeline-empty"
     case timelineFooter = "timeline-footer"
@@ -33,10 +30,8 @@ enum CatalogComponent: String, CaseIterable {
     var title: String {
         switch self {
         case .attachmentStrip: "投稿欄の添付のサムネイル"
-        case .draftStatus: "ビューアのアップロードの状態"
         case .altTextEditor: "代替テキストの入力欄"
         case .caption: "ビューアの説明"
-        case .statusChip: "操作が済んだことを知らせる表示"
         case .videoControls: "動画の再生の操作"
         case .timelineEmpty: "タイムラインが空のときの表示"
         case .timelineFooter: "タイムラインの末尾"
@@ -54,10 +49,8 @@ enum CatalogComponent: String, CaseIterable {
     func makeStates() -> [CatalogState] {
         switch self {
         case .attachmentStrip: AttachmentStripCatalog.states()
-        case .draftStatus: DraftStatusCatalog.states()
         case .altTextEditor: AltTextEditorCatalog.states()
         case .caption: CaptionCatalog.states()
-        case .statusChip: StatusChipCatalog.states()
         case .videoControls: VideoControlsCatalog.states()
         case .timelineEmpty: TimelineCatalog.emptyStates()
         case .timelineFooter: TimelineCatalog.footerStates()

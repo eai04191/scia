@@ -1,0 +1,198 @@
+import UIKit
+
+/// 知らせを1件描くガラスのカプセル。並べ方と消えるまでの時計は`NoticeStackView`が持つ。
+///
+/// UIButtonの構成では、先頭の処理中の印と末尾の「›」を両方置けず、文言が切れたときに件数と「›」を残せないため、自前で組む。
+final class NoticeChip: UIControl {
+    /// 押せる範囲の最小の大きさ。見た目より小さければ、外側まで広げる。
+    static let minimumHitSize: CGFloat = 44
+
+    private let effectView = UIVisualEffectView(effect: UIGlassEffect())
+    private let iconView = UIImageView()
+    private let spinner = UIActivityIndicatorView(style: .medium)
+    private let titleLabel = UILabel()
+    private let countLabel = UILabel()
+    private let disclosureView = UIImageView(image: UIImage(systemName: "chevron.right"))
+    private(set) var notice: Notice?
+
+    /// 指が触れているか、VoiceOverの読み上げ位置が乗っている。
+    private(set) var isHeld = false
+    private var isTouching = false {
+        didSet { updateHeld() }
+    }
+    private var isAccessibilityFocused = false {
+        didSet { updateHeld() }
+    }
+    /// `isHeld`が変わったときに呼ぶ。
+    var onHoldChange: (() -> Void)?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        effectView.cornerConfiguration = .capsule()
+        effectView.isUserInteractionEnabled = false
+        iconView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .subheadline, scale: .medium)
+        iconView.tintColor = .label
+        spinner.hidesWhenStopped = true
+        // 進み具合の数字が変わるたびに幅が揺れないよう、数字の幅をそろえる。
+        titleLabel.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(for: .monospacedDigitSystemFont(ofSize: 15, weight: .regular))
+        titleLabel.adjustsFontForContentSizeCategory = true
+        titleLabel.textColor = .label
+        titleLabel.lineBreakMode = .byTruncatingTail
+        countLabel.font = .preferredFont(forTextStyle: .subheadline)
+        countLabel.adjustsFontForContentSizeCategory = true
+        countLabel.textColor = .secondaryLabel
+        disclosureView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .footnote, scale: .medium)
+            .applying(UIImage.SymbolConfiguration(weight: .semibold))
+        disclosureView.tintColor = .secondaryLabel
+        // 文言が長くても、件数と「›」は残し、文言だけを切る。
+        for view in [iconView, spinner, countLabel, disclosureView] as [UIView] {
+            view.setContentCompressionResistancePriority(.required, for: .horizontal)
+            view.setContentHuggingPriority(.required, for: .horizontal)
+        }
+        titleLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let stack = UIStackView(arrangedSubviews: [iconView, spinner, titleLabel, countLabel, disclosureView])
+        stack.spacing = 6
+        stack.alignment = .center
+        stack.setCustomSpacing(4, after: countLabel)
+        stack.isUserInteractionEnabled = false
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        effectView.translatesAutoresizingMaskIntoConstraints = false
+        effectView.contentView.addSubview(stack)
+        addSubview(effectView)
+        NSLayoutConstraint.activate([
+            effectView.topAnchor.constraint(equalTo: topAnchor),
+            effectView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            effectView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            effectView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            stack.topAnchor.constraint(equalTo: effectView.contentView.topAnchor, constant: 10),
+            stack.bottomAnchor.constraint(equalTo: effectView.contentView.bottomAnchor, constant: -10),
+            stack.leadingAnchor.constraint(equalTo: effectView.contentView.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: effectView.contentView.trailingAnchor, constant: -16),
+        ])
+        isAccessibilityElement = true
+        addAction(UIAction { [weak self] _ in self?.perform() }, for: .primaryActionTriggered)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// 中身を描き直す。読み上げは並べる側が`announce`で行う。
+    func apply(_ notice: Notice) {
+        self.notice = notice
+        titleLabel.text = notice.text
+        switch notice.kind {
+        case .progress:
+            iconView.isHidden = true
+            spinner.isHidden = false
+            spinner.startAnimating()
+        case .success, .failure:
+            spinner.stopAnimating()
+            spinner.isHidden = true
+            iconView.isHidden = false
+            iconView.image = UIImage(systemName: notice.kind == .success ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+        }
+        countLabel.text = notice.additionalCount > 0 ? "+\(notice.additionalCount)件" : nil
+        countLabel.isHidden = notice.additionalCount == 0
+        let hint: String?
+        switch notice.action {
+        case .none:
+            hint = nil
+            disclosureView.isHidden = true
+        case .disclosure(let text, _):
+            hint = text
+            disclosureView.isHidden = false
+        case .immediate(let text, _):
+            hint = text
+            disclosureView.isHidden = true
+        }
+        isUserInteractionEnabled = notice.isActionable
+        if !notice.isActionable {
+            isTouching = false
+        }
+        // 「›」は読ませず、押すと何が起きるかをヒントで伝える。
+        accessibilityLabel = notice.additionalCount > 0 ? "\(notice.title)、ほかに\(notice.additionalCount)件" : notice.title
+        accessibilityValue = notice.value
+        accessibilityHint = hint
+        var traits: UIAccessibilityTraits = notice.isActionable ? .button : .staticText
+        if notice.kind == .progress {
+            traits.insert(.updatesFrequently)
+        }
+        accessibilityTraits = traits
+    }
+
+    /// 初めて出したときと、文言か種類か件数が変わったときに、VoiceOverで読み上げる。進み具合が変わっただけでは読み上げない。
+    func announce(changingFrom previous: Notice?) {
+        guard let notice else { return }
+        guard previous == nil || previous?.title != notice.title || previous?.kind != notice.kind || previous?.additionalCount != notice.additionalCount else { return }
+        UIAccessibility.post(notification: .announcement, argument: accessibilityLabel)
+    }
+
+    private func perform() {
+        switch notice?.action {
+        case .some(.disclosure(_, let handler)), .some(.immediate(_, let handler)): handler()
+        case .some(.none), nil: break
+        }
+    }
+
+    override func accessibilityActivate() -> Bool {
+        guard notice?.isActionable == true else { return false }
+        perform()
+        return true
+    }
+
+    override func accessibilityElementDidBecomeFocused() {
+        super.accessibilityElementDidBecomeFocused()
+        isAccessibilityFocused = true
+    }
+
+    override func accessibilityElementDidLoseFocus() {
+        super.accessibilityElementDidLoseFocus()
+        isAccessibilityFocused = false
+    }
+
+    // MARK: 触れている間
+
+    override func beginTracking(_ touch: UITouch, with event: UIEvent?) -> Bool {
+        isTouching = true
+        return super.beginTracking(touch, with: event)
+    }
+
+    override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
+        super.endTracking(touch, with: event)
+        let isInside = touch.map { point(inside: $0.location(in: self), with: event) } ?? false
+        isTouching = false
+        if isInside {
+            sendActions(for: .primaryActionTriggered)
+        }
+    }
+
+    override func cancelTracking(with event: UIEvent?) {
+        super.cancelTracking(with: event)
+        isTouching = false
+    }
+
+    override var isHighlighted: Bool {
+        didSet {
+            guard isHighlighted != oldValue else { return }
+            UIView.animate(withDuration: isHighlighted ? 0 : 0.2, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+                self.effectView.contentView.alpha = self.isHighlighted ? 0.5 : 1
+            }
+        }
+    }
+
+    private func updateHeld() {
+        let held = isTouching || isAccessibilityFocused
+        guard held != isHeld else { return }
+        isHeld = held
+        onHoldChange?()
+    }
+
+    /// 見た目が44ptに満たなくても、44pt四方までは押せるようにする。
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        let dx = max(0, (Self.minimumHitSize - bounds.width) / 2)
+        let dy = max(0, (Self.minimumHitSize - bounds.height) / 2)
+        return bounds.insetBy(dx: -dx, dy: -dy).contains(point)
+    }
+}
