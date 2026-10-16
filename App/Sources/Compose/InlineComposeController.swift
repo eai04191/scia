@@ -14,6 +14,17 @@ final class InlineComposeController: NSObject {
     let model: ComposeModel
     /// 編集を始めるときに呼ぶ。既定の公開範囲などをまだ読めていなければ読む。
     var onBeginEditing: () -> Void = {}
+    /// 書き終えてバーを細いカプセルに戻したときに呼ぶ。メディアを選ぶシートやビューアのためにキーボードを閉じたときは、書いている途中なので呼ばない。
+    var onEndEditing: () -> Void = {}
+    /// 失敗の知らせや、メディアを選ぶシートを重ねる画面を返す。アプリ内のSafariのシートを出している間は、その上に重ねる必要がある。
+    /// 全画面の投稿画面を出している間は、そちらが失敗を知らせるためnilを返す。渡されなければ、何も重ねていないときだけ投稿欄の画面に重ねる。
+    var presenterAboveInlineCompose: (() -> UIViewController?)?
+
+    private var presenterForErrors: UIViewController? {
+        if let presenterAboveInlineCompose { return presenterAboveInlineCompose() }
+        guard let host, host.presentedViewController == nil else { return nil }
+        return host
+    }
     /// 全画面の投稿画面に広げる。
     var onExpand: () -> Void = {}
     /// 返信先の札を押したときに呼ぶ。返信先の投稿を見せる。
@@ -257,7 +268,7 @@ final class InlineComposeController: NSObject {
         mediaPicker = picker
         logger.info("media picker: presenting (height=\(height), keyboardHeight=\(self.lastKeyboardHeight ?? -1))")
         textView.resignFirstResponder()
-        picker.present(from: host)
+        picker.present(from: presenterAboveInlineCompose?() ?? host)
     }
 
     /// キーボードに戻らずに閉じたとき（全画面に広げたときなど）は、書き終えたときと同じくバーを細いカプセルに戻す。
@@ -510,16 +521,16 @@ final class InlineComposeController: NSObject {
         return result
     }
 
-    /// 全画面の投稿画面を出している間は、そちらが失敗を知らせる。
+    /// 全画面の投稿画面やメディアを選ぶシートなどを出している間は出さない。全画面の投稿画面は、そちらが失敗を知らせる。
     private func presentErrorIfNeeded() {
-        guard let message = model.errorMessage, !isPresentingError, let host, host.presentedViewController == nil else { return }
+        guard let message = model.errorMessage, !isPresentingError, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
         isPresentingError = true
         let alert = UIAlertController(title: "投稿できませんでした", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .cancel) { [weak self] _ in
             self?.isPresentingError = false
             self?.model.errorMessage = nil
         })
-        host.present(alert, animated: true)
+        presenter.present(alert, animated: true)
     }
 
     // MARK: - 添付のビューア
@@ -833,6 +844,7 @@ extension InlineComposeController: UITextViewDelegate {
         guard mediaPicker == nil, !isShowingMediaViewer else { return }
         releaseHoldAboveKeyboard()
         setEditing(false)
+        onEndEditing()
     }
 }
 

@@ -55,6 +55,15 @@ final class TimelineViewController: UIViewController {
     var onStatusAction: ((StatusAction, Status) -> Void)?
     /// 投稿ボタンが押されたときに呼ぶ。設定されていれば、ナビゲーションバーに投稿ボタンを出す。表示より前に設定する。
     var onCompose: (() -> Void)?
+    /// アプリ内のSafariのシートを出している間だけ右上に出す、投稿欄で書き始めるボタンが押されたときに呼ぶ。
+    /// シートを出している間は投稿欄がシートの裏に隠れて触れないため、その入口にする。
+    var onFocusInlineCompose: (() -> Void)?
+    private lazy var focusInlineComposeItem: UIBarButtonItem = {
+        let item = UIBarButtonItem(image: UIImage(systemName: "text.cursor"), primaryAction: UIAction { [weak self] _ in self?.onFocusInlineCompose?() })
+        item.accessibilityLabel = "投稿欄に書く"
+        return item
+    }()
+    private var showsFocusInlineCompose = false
     /// ログイン中のアカウントのID。ブーストできる投稿かの判定に使う。
     var myAccountID: String?
     /// 指によるスクロールが止まったとき、または長押しのメニューが閉じたときに呼ぶ。
@@ -169,6 +178,21 @@ final class TimelineViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// 画面を読み込んだときに並べた右上のボタン。投稿欄で書き始めるボタンは、出すときにこの先頭に足す。
+    private var baseBarItems: [UIBarButtonItem] = []
+
+    /// アプリ内のSafariのシートを出している間だけ、右上に投稿欄で書き始めるボタンを出す。画面を読み込む前は値だけ覚える。
+    func setShowsFocusInlineCompose(_ shows: Bool) {
+        guard showsFocusInlineCompose != shows else { return }
+        showsFocusInlineCompose = shows
+        if isViewLoaded { applyBarItems() }
+    }
+
+    /// `rightBarButtonItems`は右から並ぶため、先頭に足したボタンがいちばん右に来る。
+    private func applyBarItems() {
+        navigationItem.rightBarButtonItems = (showsFocusInlineCompose && onFocusInlineCompose != nil ? [focusInlineComposeItem] : []) + baseBarItems
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         if !texts.title.isEmpty {
@@ -183,7 +207,8 @@ final class TimelineViewController: UIViewController {
         #if DEBUG
         barItems.append(makeDebugMenuButton(screenActions: debugActions))
         #endif
-        navigationItem.rightBarButtonItems = barItems
+        baseBarItems = barItems
+        applyBarItems()
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         collectionView.delegate = self

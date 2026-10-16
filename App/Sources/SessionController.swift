@@ -1,4 +1,5 @@
 import os
+import SafariServices
 import SciaCore
 import SwiftUI
 import UIKit
@@ -167,7 +168,18 @@ final class SessionController {
             configure(viewController)
         }
         home.viewController.onCompose = { [weak self] in self?.expandCompose() }
-        composer.onBeginEditing = { [weak self] in self?.applyComposeDefaults() }
+        composer.onBeginEditing = { [weak self] in
+            self?.applyComposeDefaults()
+            // アプリ内のSafariのシートは投稿欄より手前に出るため、書いている間は伏せた高さまで下げる。
+            self?.browser.lowerForCompose()
+        }
+        composer.onEndEditing = { [weak self] in self?.browser.restoreAfterCompose() }
+        composer.presenterAboveInlineCompose = { [weak tabBarController] in
+            // 投稿欄より手前にあるのは、アプリ内のSafariのシートだけのとき。ほかの画面を出していれば、その上には重ねない。
+            guard let tabBarController else { return nil }
+            let top = tabBarController.frontmostPresented
+            return top === tabBarController || top is SFSafariViewController ? top : nil
+        }
         composer.onExpand = { [weak self] in self?.expandCompose() }
         composer.onShowReplyTarget = { [weak tabBarController] status in
             // 今見えている一覧（ホーム、通知、開いているプロフィール）に返信先があれば、そこへ戻る。なければ動かさない。
@@ -183,6 +195,12 @@ final class SessionController {
             guard let self else { return }
             browserObscuredHeight = height
             applyObscuredBottomHeight()
+        }
+        browser.onPresenceChange = { [weak self] presented in
+            guard let self else { return }
+            for timeline in timelines.allObjects {
+                timeline.setShowsFocusInlineCompose(presented)
+            }
         }
         browser.onCoverageChange = { [weak self] covered in
             guard let self else { return }
@@ -218,6 +236,8 @@ final class SessionController {
         }
         viewController.setObscuredBottomHeight(obscuredBottomHeight)
         viewController.setCoveredByInAppBrowser(browserCoversTimelines)
+        viewController.onFocusInlineCompose = { [weak self] in self?.composer.beginEditing() }
+        viewController.setShowsFocusInlineCompose(browser.isPresented)
         viewController.myAccountID = credential.accountID
         viewController.onStatusAction = { [weak self, weak viewController] action, status in self?.perform(action, on: status, from: viewController) }
         viewController.onShowRecentNotices = { [weak self] presenter in self?.showRecentNotices(from: presenter) }
