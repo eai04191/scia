@@ -69,6 +69,17 @@ struct SettingsView: View {
                     Text("相対時刻では、1週間より前の投稿は日付で表示します。")
                 }
                 Section {
+                    Picker("最上部での新着の挿入", selection: $settings.insertionMotion) {
+                        Text("自動").tag(InsertionMotion.followsSystem)
+                        Text("動かして見せる").tag(InsertionMotion.animated)
+                        Text("動かさない").tag(InsertionMotion.instant)
+                    }
+                } header: {
+                    Text("動き")
+                } footer: {
+                    Text("一覧の最上部にいるときに届いた新着を、下から動かして見せるかを選びます。「自動」では、iPhoneの設定の「アクセシビリティ」>「動作」>「視差効果を減らす」がオンのときは動かしません。")
+                }
+                Section {
                     Toggle("モバイル通信で高画質のサムネイルを使う", isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
                 } header: {
                     Text("画像")

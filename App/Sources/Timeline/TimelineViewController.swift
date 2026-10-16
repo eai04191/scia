@@ -342,7 +342,7 @@ final class TimelineViewController: UIViewController {
             logger.info("setEntries count=\(newEntries.count, privacy: .public) keepsOffset=true")
         } else if followsTop {
             // 最初に並べるときは、行が浮かび上がって見えないよう、アニメーションしない。
-            let animates = !previous.isEmpty && tuning.value(of: TuningCatalog.animatesInsertionAtTop)
+            let animates = !previous.isEmpty && settings.insertionMotion.animates(reducesMotion: UIAccessibility.isReduceMotionEnabled)
             if animates {
                 // 行はアニメーションなしで足し、いままで最上部にあった行を同じ位置に残す。足した行の高さぶん下にずれた位置から、
                 // 最上部へ1つの動きで戻して新着を見せる。

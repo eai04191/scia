@@ -9,11 +9,17 @@ final class TimelineHarness {
     let viewController: TimelineViewController
     /// アプリの設定に触れないよう、保存しないチューニングを使う。
     let tuning = TuningStore(defaults: nil)
+    /// アプリの設定に触れないよう、テストごとの保存先を使う。
+    let settings: AppSettings
     private let window: UIWindow
 
     /// - Parameter headerView: プロフィールのように、一覧の頭に置くビュー。
     init(size: CGSize = CGSize(width: 393, height: 852), mediaImages: MediaImageStore = .offline, headerView: UIView? = nil) throws {
-        viewController = TimelineViewController(tuning: tuning, emojiImages: .offline, mediaImages: mediaImages, avatarImages: .offline)
+        let suite = "TimelineHarness.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        settings = AppSettings(defaults: defaults)
+        viewController = TimelineViewController(tuning: tuning, emojiImages: .offline, mediaImages: mediaImages, avatarImages: .offline, settings: settings)
         viewController.headerView = headerView
         let scene = try #require(
             UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,

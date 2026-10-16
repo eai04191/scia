@@ -59,6 +59,27 @@ struct AppSettingsTests {
         #expect(restored.animatesAvatars)
     }
 
+    /// 新着の挿入は、既定では端末の「視差効果を減らす」に従い、選び直した値は起動し直しても残る。
+    @Test func insertionMotionFollowsSystemByDefaultAndPersists() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.insertionMotion == .followsSystem)
+
+        settings.insertionMotion = .instant
+
+        #expect(AppSettings(defaults: defaults).insertionMotion == .instant)
+    }
+
+    @Test(arguments: [
+        (InsertionMotion.followsSystem, false, true),
+        (.followsSystem, true, false),
+        (.animated, true, true),
+        (.instant, false, false),
+    ])
+    func insertionMotionAnimates(_ motion: InsertionMotion, reducesMotion: Bool, expected: Bool) {
+        #expect(motion.animates(reducesMotion: reducesMotion) == expected)
+    }
+
     @Test func persistsProfilePostsFilter() throws {
         let defaults = try makeDefaults()
         #expect(AppSettings(defaults: defaults).profilePostsFilter == .standard)

@@ -68,7 +68,7 @@ struct ScrollAnchorTests {
     func prependAtTopWithAnimationEndsAtTop(animates: Bool) async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
-        harness.tuning.setValue(animates, for: TuningCatalog.animatesInsertionAtTop)
+        harness.settings.insertionMotion = animates ? .animated : .instant
         let existing = StatusFactory.make(count: 60, startingAt: 1_000)
         harness.setStatuses(existing)
         harness.scroll(toFraction: 0)
@@ -87,7 +87,7 @@ struct ScrollAnchorTests {
     func animatedPrependAtTopStartsFromPreviousTopAndMovesUp(insertCount: Int) async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
-        harness.tuning.setValue(true, for: TuningCatalog.animatesInsertionAtTop)
+        harness.settings.insertionMotion = .animated
         let existing = StatusFactory.make(count: 60, startingAt: 1_000)
         harness.setStatuses(existing)
         harness.scroll(toFraction: 0)
@@ -140,7 +140,7 @@ struct ScrollAnchorTests {
     @Test func prependBelowTopKeepsAnchorEvenWhenAnimationIsOn() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
-        harness.tuning.setValue(true, for: TuningCatalog.animatesInsertionAtTop)
+        harness.settings.insertionMotion = .animated
         let existing = StatusFactory.make(count: 60, startingAt: 1_000)
         harness.setStatuses(existing)
         harness.scroll(toFraction: 0.4)

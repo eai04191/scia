@@ -113,14 +113,6 @@ public enum TuningCatalog {
         defaultValue: true
     )
 
-    /// 最上部で新着に追従しているとき、足した行の高さぶん下から最上部へ動かして新着を見せる。オフなら一度に差し替える。
-    /// 最上部より下で読んでいるときは、読んでいる位置を保つため、この値によらずアニメーションしない。
-    public static let animatesInsertionAtTop = ToggleTuning(
-        id: "streaming.animatesInsertionAtTop",
-        title: "最上部では新着をアニメーションで挿入する",
-        defaultValue: true
-    )
-
     /// 最上部で新着に追従しているとき、足した行の高さぶん下から最上部へ動かす時間。
     public static let insertionScrollDuration = NumberTuning(
         id: "timeline.insertionScrollDuration",
@@ -438,7 +430,6 @@ public enum TuningCatalog {
         TuningSection(id: "timeline.motion", title: "タイムラインの動き", items: [
             .number(scrollToTopDuration),
             .number(scrollToTopBounce),
-            .toggle(animatesInsertionAtTop),
             .number(insertionScrollDuration),
             .number(insertionScrollBounce),
         ]),
