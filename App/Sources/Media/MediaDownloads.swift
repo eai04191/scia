@@ -61,6 +61,15 @@ final class MediaDownloads {
 
     /// URLSessionで落とす。共有先でファイル名として見えるため、名前はURLのものを残し、拡張子がなければ応答の形式から付ける。
     nonisolated static let urlSession: Download = { url, folder, onProgress in
+        #if DEBUG
+        if let delay = DebugFaults.slowDownloadDelay {
+            let steps = 20
+            for step in 1...steps {
+                try await Task.sleep(for: delay / steps)
+                onProgress(Double(step) / Double(steps) * 0.99)
+            }
+        }
+        #endif
         let reporter = ProgressReporter(onProgress: onProgress)
         let (location, response) = try await URLSession.shared.download(from: url, delegate: reporter)
         // エラーの応答でも本文が落ちてくるため、添付ファイルとして残さない。

@@ -56,6 +56,16 @@ enum DebugFaults {
         corruptsListElements.withLock { $0 = true }
     }
 
+    /// 決めると、以後の共有や保存のためのダウンロードを、進み具合を刻みながらその時間だけ遅らせる。ダウンロード中の知らせを、大きなファイルを用意せずに確かめる。
+    private static let downloadDelay = Mutex<Duration?>(nil)
+
+    static var slowDownloadDelay: Duration? { downloadDelay.withLock { $0 } }
+
+    /// - Parameter delay: nilなら戻す。
+    static func slowDownloads(by delay: Duration?) {
+        downloadDelay.withLock { $0 = delay }
+    }
+
     /// 下ろすと、開いているストリーミングの接続を切り、以後の接続を失敗させる。RESTは通したまま、ストリーミングだけがつながらないサーバーを再現する。
     private static let streaming = Mutex((isOnline: true, nextID: 0, connections: [Int: any WebSocketConnection]()))
 

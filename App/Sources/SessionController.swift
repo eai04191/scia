@@ -480,6 +480,8 @@ final class SessionController {
             notifications.start()
         case .streaming(let isOnline):
             DebugFaults.setStreamingOnline(isOnline)
+        case .slowDownload(let seconds):
+            DebugFaults.slowDownloads(by: seconds.map { .seconds($0) })
         case .catalog(let component):
             topViewController.presentComponentCatalog(opening: component)
         }

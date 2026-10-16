@@ -20,7 +20,14 @@ struct DebugURLTests {
         #expect(DebugURL(url) == .catalog(component))
     }
 
+    @Test func readsSlowDownload() throws {
+        #expect(DebugURL(try #require(URL(string: "scia-debug://download/slow"))) == .slowDownload(seconds: 10))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://download/slow?seconds=30"))) == .slowDownload(seconds: 30))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://download/normal"))) == .slowDownload(seconds: nil))
+    }
+
     @Test(arguments: [
+        "scia-debug://download/unknown",
         "scia-debug://catalog/unknown",
         "scia-debug://dummy/unknown",
         "scia-debug://unknown/images",

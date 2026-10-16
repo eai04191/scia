@@ -21,6 +21,9 @@ enum DebugURL: Equatable {
     case unsupported(OptionalFeature)
     /// `scia-debug://streaming/offline`で今のストリーミングの接続を切り、以後の接続を失敗させる。`scia-debug://streaming/online`で戻す。
     case streaming(isOnline: Bool)
+    /// `scia-debug://download/slow`で、以後の共有や保存のためのダウンロードを、進み具合を刻みながら10秒遅らせる。
+    /// `?seconds=<秒>`で遅らせる時間を変える。`scia-debug://download/normal`で戻す。
+    case slowDownload(seconds: Double?)
     /// `scia-debug://catalog`で部品のカタログを開く。`scia-debug://catalog/<CatalogComponent.rawValue>`なら、その部品の状態を並べた画面まで開く。
     case catalog(CatalogComponent?)
 
@@ -49,6 +52,14 @@ enum DebugURL: Equatable {
             switch url.lastPathComponent {
             case "offline": self = .streaming(isOnline: false)
             case "online": self = .streaming(isOnline: true)
+            default: return nil
+            }
+        case "download":
+            switch url.lastPathComponent {
+            case "slow":
+                let seconds = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "seconds" }?.value
+                self = .slowDownload(seconds: seconds.flatMap { Double($0) } ?? 10)
+            case "normal": self = .slowDownload(seconds: nil)
             default: return nil
             }
         case "catalog":
