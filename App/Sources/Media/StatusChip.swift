@@ -66,7 +66,8 @@ final class StatusChip: UIView {
             try? await Task.sleep(for: .seconds(duration))
             guard let self, !Task.isCancelled else { return }
             self.shownText = nil
-            UIView.animate(withDuration: 0.3, delay: 0, options: [.beginFromCurrentState, .curveEaseIn]) {
+            // 消えるときも、ゆっくり始めず、出るときより重くならない時間で消す。
+            UIView.animate(withDuration: 0.2, delay: 0, options: [.beginFromCurrentState, .curveEaseOut]) {
                 self.alpha = 0
             }
         }
