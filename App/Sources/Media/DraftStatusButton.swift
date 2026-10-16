@@ -39,7 +39,6 @@ final class DraftStatusButton: UIButton {
         configuration?.title = title
         configuration?.showsActivityIndicator = !isFailure
         configuration?.image = isFailure ? UIImage(systemName: "exclamationmark.circle.fill") : nil
-        configuration?.imageColorTransformer = isFailure ? UIConfigurationColorTransformer { _ in .systemRed } : nil
         isUserInteractionEnabled = isFailure
         accessibilityTraits = isFailure ? .button : .staticText
         accessibilityHint = isFailure ? "理由と、再試行か削除を選べます。" : nil
