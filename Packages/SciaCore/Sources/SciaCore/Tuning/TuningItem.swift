@@ -256,7 +256,7 @@ public enum TuningCatalog {
         title: "ビューアを開く時間（秒）",
         range: 0.1...1,
         step: 0.05,
-        defaultValue: 0.4
+        defaultValue: 0.2
     )
 
     /// ビューアを閉じるとき、サムネイルへ縮めて戻すまでの時間。
@@ -265,7 +265,7 @@ public enum TuningCatalog {
         title: "ビューアを閉じる時間（秒）",
         range: 0.1...1,
         step: 0.05,
-        defaultValue: 0.4
+        defaultValue: 0.2
     )
 
     /// ビューアを下へ払って閉じるときの弾み。0で行き過ぎずに止まる。
