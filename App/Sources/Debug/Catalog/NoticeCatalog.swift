@@ -19,10 +19,17 @@ enum NoticeCatalog {
             CatalogState(title: "代替テキストを送信中") { stack(persistent: draft(.sendingDescription)) },
             CatalogState(title: "アップロードできませんでした（押すと理由）") { stack(persistent: draft(.failed)) },
             CatalogState(title: "代替テキストを送信できませんでした（押すと理由）") { stack(persistent: draft(.descriptionFailed)) },
-            CatalogState(title: "出たままの知らせが2件") {
-                var notice = Notice.download(of: url, fraction: 0.42) {}
-                notice.additionalCount = 1
-                return stack(persistent: notice)
+            CatalogState(title: "出たままの知らせが2件（処理の途中、押すと最近の失敗の一覧）") {
+                var notices = PersistentNotices()
+                notices.set(.download(of: url, fraction: 0.42) {}, in: .download)
+                notices.set(Notice(id: "other", kind: .progress, title: "アップロード中"), in: .draft)
+                return stack(persistent: notices.chipNotice {})
+            },
+            CatalogState(title: "出たままの知らせが2件（失敗を優先する）") {
+                var notices = PersistentNotices()
+                notices.set(draft(.failed), in: .draft)
+                notices.set(.download(of: url, fraction: 0.42) {}, in: .download)
+                return stack(persistent: notices.chipNotice {})
             },
             CatalogState(title: "長い文言") {
                 stack(transient: Notice(id: "long", kind: .success, title: "長い文言のときに幅がどこまで広がるかを確かめるための文"))

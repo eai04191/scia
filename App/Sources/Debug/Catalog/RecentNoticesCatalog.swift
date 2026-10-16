@@ -1,0 +1,70 @@
+#if DEBUG
+import Foundation
+import SciaCore
+import SwiftUI
+import UIKit
+
+/// 「最近の失敗」の一覧のシート。失敗を起こさずに、空のとき、件数が多いとき、文言が長いときを並べる。行を押しても何も起きない。
+enum RecentNoticesCatalog {
+    @MainActor
+    static func states() -> [CatalogState] {
+        [
+            state("空") { _ in },
+            state("最近の失敗（投稿に結び付いたものと、結び付いていないもの）") { notices in
+                notices.recordFailure(title: "ブーストを変更できませんでした", reason: ErrorPresentation(message: "サーバーに接続できませんでした。", code: "URLError -1004"), subject: subject(1))
+                notices.recordFailure(title: "プロフィールを開けませんでした", reason: ErrorPresentation(message: "@nobody@example.comが見つかりませんでした。", code: nil))
+                notices.recordFailure(title: "お気に入りを変更できませんでした", reason: badGateway, subject: subject(2))
+            },
+            state("進行中と最近の失敗") { notices in
+                notices.update(.init(id: "download", title: "ダウンロード中", value: "42%", subject: subject(3)))
+                notices.update(.init(id: "upload", title: "アップロード中"))
+                notices.recordFailure(title: "お気に入りを変更できませんでした", reason: badGateway, subject: subject(2))
+            },
+            state("進行中だけ（最近の失敗はない）") { notices in
+                notices.update(.init(id: "download", title: "ダウンロード中", value: "42%", subject: subject(3)))
+            },
+            state("上限の\(RecentNotices.failureLimit)件") { notices in
+                for index in 1...(RecentNotices.failureLimit + 5) {
+                    notices.recordFailure(title: index.isMultiple(of: 2) ? "お気に入りを変更できませんでした" : "ブーストを変更できませんでした", reason: badGateway, subject: subject(index))
+                }
+            },
+            state("長い文言") { notices in
+                notices.recordFailure(
+                    title: "長い文言のときに見出しがどこで折り返して、どこで切れるかを確かめるための失敗の見出し",
+                    reason: ErrorPresentation(message: "長い理由のときに何行まで出して、どこで切るかを確かめるための理由の文です。サーバーが返した文言がとても長いこともあります。さらに続けて、4行を超えるかどうかを確かめます。もう少し続けます。", code: "HTTP 503"),
+                    subject: RecentNotices.Subject(
+                        statusID: "long",
+                        displayedID: "long",
+                        url: nil,
+                        authorName: "とても長い表示名のアカウントで、名前だけで1行を使い切ってしまうかもしれない人",
+                        excerpt: "長い本文の冒頭を2行で切るかを確かめるための本文です。改行を含む投稿も1行にまとめて出します。ここから先は切れて見えないはずの文です。"
+                    )
+                )
+            },
+        ]
+    }
+
+    private static let badGateway = ErrorPresentation(message: "サーバーかその手前で問題が起きています。しばらくしてからやり直してください。", code: "HTTP 502")
+
+    private static func subject(_ index: Int) -> RecentNotices.Subject {
+        RecentNotices.Subject(
+            statusID: "catalog-\(index)",
+            displayedID: "catalog-\(index)",
+            url: nil,
+            authorName: "カタログのアカウント",
+            excerpt: "「最近の失敗」の一覧を確かめるための投稿 \(index)。"
+        )
+    }
+
+    @MainActor
+    private static func state(_ title: String, fill: @escaping @MainActor (RecentNotices) -> Void) -> CatalogState {
+        CatalogState(title: title) {
+            // 時刻がそろうよう、記録した時刻を決めておく。
+            let notices = RecentNotices { Date(timeIntervalSince1970: 1_790_000_000) }
+            fill(notices)
+            let controller = UIHostingController(rootView: RecentNoticesView(notices: notices) { _ in })
+            return CatalogControllerHost(controller, height: 480)
+        }
+    }
+}
+#endif
