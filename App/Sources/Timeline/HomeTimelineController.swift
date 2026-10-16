@@ -519,7 +519,9 @@ extension HomeTimelineController {
         case .transparent:
             streamDummyMediaStatus(content: "ビューアの確認用に透明な部分のある画像を1枚添付", attachments: DummyMedia.singleTransparentAttachment)
         case .video:
-            streamDummyVideoStatus()
+            streamDummyVideoStatus(content: "ビューアの確認用に動画とGIFを1本ずつ添付", make: DummyMedia.videoAttachments)
+        case .longVideo:
+            streamDummyVideoStatus(content: "ビューアの確認用に、毎秒音が鳴る90秒の動画を添付", make: DummyMedia.longVideoAttachment)
         }
     }
 
@@ -561,12 +563,12 @@ extension HomeTimelineController {
         }
     }
 
-    /// 動画とGIFを1本ずつ付けたダミー投稿を流す。動画は初回だけ端末で書き出すため、少し遅れて流れる。
-    private func streamDummyVideoStatus() {
+    /// 動画を付けたダミー投稿を流す。動画は初回だけ端末で書き出すため、少し遅れて流れる。
+    private func streamDummyVideoStatus(content: String, make: @escaping () async throws -> (String) -> [MediaAttachment]) {
         Task {
             do {
-                let attachments = try await DummyMedia.videoAttachments()
-                streamDummyMediaStatus(content: "ビューアの確認用に動画とGIFを1本ずつ添付", attachments: attachments)
+                let attachments = try await make()
+                streamDummyMediaStatus(content: content, attachments: attachments)
             } catch {
                 SciaLog.logger(category: "media").error("dummy video failed: \(error.localizedDescription, privacy: .public)")
             }
@@ -624,6 +626,7 @@ enum DebugDummyPost: String, CaseIterable {
     case tall
     case transparent
     case video
+    case longVideo = "long-video"
 
     var title: String {
         switch self {
@@ -632,6 +635,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .tall: "縦長の画像1枚"
         case .transparent: "透過画像1枚"
         case .video: "動画とGIF"
+        case .longVideo: "音声付きの長い動画"
         }
     }
 
@@ -642,6 +646,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .tall: "rectangle.portrait"
         case .transparent: "circle.dashed"
         case .video: "play.rectangle"
+        case .longVideo: "speaker.wave.2"
         }
     }
 }

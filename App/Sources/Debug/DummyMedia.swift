@@ -150,10 +150,103 @@ enum DummyMedia {
         }
     }
 
-    /// `spec`の絵に白い帯が流れる2秒のmp4を書き出す。
+    /// 90秒の横長の動画1本。毎秒の頭に短い音を鳴らし、10秒ごとに高い音にする。絵には経過した秒数を大きく描く。
+    /// 再生の操作の部品で、シークバーや10秒戻る・進むで動かした位置と、消音を、絵と音の両方で確かめられるようにする。
+    /// 書き出しに時間がかかるため、初回だけ書き出し、2回目からは一時ディレクトリに残したファイルを使う。
+    static func longVideoAttachment() async throws -> (String) -> [MediaAttachment] {
+        let spec = Spec(size: CGSize(width: 640, height: 360), color: .systemOrange, label: "8 長い動画", description: nil)
+        let url = try await longMovieURL(for: spec, name: "dummy-long-video", seconds: 90)
+        let preview = dataURL(for: spec)
+        return { idPrefix in
+            [
+                MediaAttachment(
+                    id: "\(idPrefix)-0",
+                    type: .video,
+                    url: url,
+                    previewUrl: preview,
+                    description: nil,
+                    meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: Int(spec.size.width), height: Int(spec.size.height)))
+                ),
+            ]
+        }
+    }
+
+    /// 音のない動画と音声を別々に書き出し、1つのmp4にまとめる。
+    private static func longMovieURL(for spec: Spec, name: String, seconds: Int) async throws -> URL {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(name).mp4")
+        if FileManager.default.fileExists(atPath: url.path) {
+            return url
+        }
+        let silent = try await movieURL(for: spec, name: "\(name)-silent", frameCount: seconds * 10, framesPerSecond: 10) { time in
+            String(format: "%d:%02d", Int(time) / 60, Int(time) % 60)
+        }
+        let audio = FileManager.default.temporaryDirectory.appendingPathComponent("\(name)-\(UUID().uuidString).m4a")
+        defer { try? FileManager.default.removeItem(at: audio) }
+        try writeBeeps(to: audio, seconds: seconds)
+        let partial = FileManager.default.temporaryDirectory.appendingPathComponent("\(name)-\(UUID().uuidString).mp4")
+        defer { try? FileManager.default.removeItem(at: partial) }
+        try await combine(video: silent, audio: audio, to: partial)
+        if !FileManager.default.fileExists(atPath: url.path) {
+            try FileManager.default.moveItem(at: partial, to: url)
+        }
+        return url
+    }
+
+    /// 毎秒の頭に0.1秒の音を鳴らすAACを書き出す。10秒ごとの音は高くし、何秒目かを耳で数えやすくする。
+    private static func writeBeeps(to url: URL, seconds: Int) throws {
+        let sampleRate = 44_100.0
+        let file = try AVAudioFile(
+            forWriting: url,
+            settings: [AVFormatIDKey: kAudioFormatMPEG4AAC, AVSampleRateKey: sampleRate, AVNumberOfChannelsKey: 1],
+            commonFormat: .pcmFormatFloat32,
+            interleaved: false
+        )
+        let frames = AVAudioFrameCount(sampleRate)
+        for second in 0..<seconds {
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frames),
+                  let samples = buffer.floatChannelData?[0]
+            else { throw DummyMediaError.writeFailed }
+            buffer.frameLength = frames
+            let frequency = second % 10 == 0 ? 880.0 : 440.0
+            let beepFrames = Int(sampleRate * 0.1)
+            for index in 0..<Int(frames) {
+                samples[index] = index < beepFrames ? Float(0.3 * sin(2 * .pi * frequency * Double(index) / sampleRate)) : 0
+            }
+            try file.write(from: buffer)
+        }
+    }
+
+    /// 動画と音声のトラックを、再エンコードせずに1つのmp4にまとめる。
+    private static func combine(video: URL, audio: URL, to output: URL) async throws {
+        let videoAsset = AVURLAsset(url: video)
+        let audioAsset = AVURLAsset(url: audio)
+        let composition = AVMutableComposition()
+        guard let videoTrack = try await videoAsset.loadTracks(withMediaType: .video).first,
+              let audioTrack = try await audioAsset.loadTracks(withMediaType: .audio).first,
+              let videoOut = composition.addMutableTrack(withMediaType: .video, preferredTrackID: kCMPersistentTrackID_Invalid),
+              let audioOut = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid)
+        else { throw DummyMediaError.writeFailed }
+        let duration = try await videoAsset.load(.duration)
+        let audioDuration = try await audioAsset.load(.duration)
+        try videoOut.insertTimeRange(CMTimeRange(start: .zero, duration: duration), of: videoTrack, at: .zero)
+        try audioOut.insertTimeRange(CMTimeRange(start: .zero, duration: CMTimeMinimum(duration, audioDuration)), of: audioTrack, at: .zero)
+        guard let export = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else { throw DummyMediaError.writeFailed }
+        try await export.export(to: output, as: .mp4)
+    }
+
+    /// `spec`の絵に白い帯が流れるmp4を書き出す。既定では30コマで2秒。
     /// 途中で失敗したファイルを次に使わないよう、別の名前で書き出してから置き換える。
-    /// - Parameter rotated: 画素を左へ90°回して書き、表示では右へ90°回す回転情報を付ける。
-    private static func movieURL(for spec: Spec, name: String, rotated: Bool = false) async throws -> URL {
+    /// - Parameters:
+    ///   - rotated: 画素を左へ90°回して書き、表示では右へ90°回す回転情報を付ける。
+    ///   - labelAt: 秒数を受け取り、そのコマに描く文字を返す。nilなら`spec`の文字を描く。
+    private static func movieURL(
+        for spec: Spec,
+        name: String,
+        rotated: Bool = false,
+        frameCount: Int = 60,
+        framesPerSecond: Int32 = 30,
+        labelAt: ((Double) -> String)? = nil
+    ) async throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(name).mp4")
         if FileManager.default.fileExists(atPath: url.path) {
             return url
@@ -178,16 +271,19 @@ enum DummyMedia {
         writer.add(input)
         guard writer.startWriting() else { throw writer.error ?? DummyMediaError.writeFailed }
         writer.startSession(atSourceTime: .zero)
-        let frameCount = 60
         for frame in 0..<frameCount {
             while !input.isReadyForMoreMediaData {
                 // 書き出しが失敗すると、受け付けられる状態に戻らない。
                 guard writer.status == .writing else { throw writer.error ?? DummyMediaError.writeFailed }
                 try await Task.sleep(for: .milliseconds(5))
             }
-            let image = render(spec, progress: CGFloat(frame) / CGFloat(frameCount - 1))
+            var frameSpec = spec
+            if let labelAt {
+                frameSpec = Spec(size: spec.size, color: spec.color, label: labelAt(Double(frame) / Double(framesPerSecond)), description: spec.description)
+            }
+            let image = render(frameSpec, progress: CGFloat(frame) / CGFloat(frameCount - 1))
             guard let buffer = pixelBuffer(of: image, in: adaptor, rotated: rotated),
-                  adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: 30))
+                  adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: framesPerSecond))
             else { throw writer.error ?? DummyMediaError.writeFailed }
         }
         input.markAsFinished()
