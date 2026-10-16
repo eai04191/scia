@@ -856,13 +856,13 @@ struct MediaViewerControllerTests {
         viewer.close()
 
         // 閉じると決めた時点でビューアを閉じ、サムネイルへ戻る動きの途中でも一覧を操作できるようにする。
-        // ビューアを残したまま動かすと、閉じた直後に別の画像を叩いても届かない。
+        // ビューアを残したまま動かすと、閉じた直後に別の画像をタップしても届かない。
         // ビューアを外すのは次の描画の機会になるため、それを待つ。写しが戻り終えるより先に外れていなければ失敗する。
         try await waitUntil { harness.viewController.presentedViewController == nil }
         let window = try #require(tile.window)
         let tapPoint = tile.convert(CGPoint(x: tile.bounds.midX, y: tile.bounds.midY), to: window)
         let hit = window.hitTest(tapPoint, with: nil)
-        #expect(hit === tile || hit?.isDescendant(of: tile) == true, "閉じる動きの間、サムネイルを叩いても届きません: \(String(describing: hit))")
+        #expect(hit === tile || hit?.isDescendant(of: tile) == true, "閉じる動きの間、サムネイルをタップしても届きません: \(String(describing: hit))")
         #expect(tile.isConcealedForViewer, "戻り終える前にサムネイルを見せています")
 
         try await waitUntil { !tile.isConcealedForViewer }

@@ -259,7 +259,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
     }
 
     /// ビューアがこのサムネイルとのあいだで画像を動かしている間、見えなくする。
-    /// 透明にすると触れても反応しなくなり、閉じる途中に叩き直しても開けないため、空のマスクで隠す。
+    /// 透明にすると触れても反応しなくなり、閉じる途中にタップし直しても開けないため、空のマスクで隠す。
     var isConcealedForViewer = false {
         didSet { layer.mask = isConcealedForViewer ? CALayer() : nil }
     }
