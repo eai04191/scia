@@ -20,7 +20,7 @@ final class MediaPickerSheet: NSObject {
     private let logger = SciaLog.logger(category: "compose")
     /// 高さが変わるたびにグリッドを最初の位置に戻す。前に選んだものがある状態で開いたときは戻さない。
     /// そのときピッカーは前に選んだ写真の位置で開くが、戻す先はそこではなく一番上で、選んだ写真を見失わせてしまう。
-    /// 戻さない代わりに、広げると最新の段が見出しの分だけ潜り、広げて低くした後は写真の上を払ってもシートが広がらずにスクロールする。
+    /// 戻さない代わりに、広げると最新の段が見出しの分だけ潜り、広げて低くした後は写真の上をスワイプしてもシートが広がらずにスクロールする。
     /// 選んだものを足し引きするために開き直したなら、選んだ写真の近くから離れない方を取る。
     private let resetsScrollOnDetentChange: Bool
     private static let lowDetent = UISheetPresentationController.Detent.Identifier("low")
@@ -59,7 +59,7 @@ final class MediaPickerSheet: NSObject {
         host.present(picker, animated: true)
     }
 
-    /// プログラムから閉じる。払って閉じられなくなったときも、こちらは効く。
+    /// プログラムから閉じる。スワイプして閉じられなくなったときも、こちらは効く。
     func close(notifiesWillClose: Bool) {
         guard picker.presentingViewController != nil else { return }
         if notifiesWillClose {
@@ -101,7 +101,7 @@ extension MediaPickerSheet: PHPickerViewControllerDelegate {
         selectedIDs = ids
         logger.info("media picker: selection changed (count=\(ids.count))")
         onSelectionChange(results)
-        // 1枚選ぶとピッカーが自分のisModalInPresentationを立て、払っても閉じられなくなる。
+        // 1枚選ぶとピッカーが自分のisModalInPresentationを立て、スワイプしても閉じられなくなる。
         // 選択はその場で受け取っていて閉じても失われないので、下ろしておく。
         DispatchQueue.main.async { [logger] in
             guard picker.isModalInPresentation else { return }
@@ -119,7 +119,7 @@ extension MediaPickerSheet: UISheetPresentationControllerDelegate {
         update.edgesWithoutContentMargins = isLarge ? [] : .all
         picker.updatePicker(using: update)
         // 余白を変えても、ピッカーはグリッドの位置を合わせ直さない。広げると最新の写真の段が見出しの裏に潜り、低くすると一番上からずれて、
-        // 写真の上を払ってもシートが広がらずにグリッドがスクロールする。写真の上を払って広げたときは、同じ指の動きでグリッドもスクロールする。
+        // 写真の上をスワイプしてもシートが広がらずにグリッドがスクロールする。写真の上をスワイプして広げたときは、同じ指の動きでグリッドもスクロールする。
         // そのため高さが変わるたびに最初の位置に戻す。余白の変更と同じ処理の中で戻すと、変更前の余白で戻ってしまうので、次の順番に回す。
         // 最大でスクロールして古い写真を見ていた場合も、低くすると最新に戻る。
         guard resetsScrollOnDetentChange else { return }
@@ -131,7 +131,7 @@ extension MediaPickerSheet: UISheetPresentationControllerDelegate {
         }
     }
 
-    /// 払って閉じるとき、閉じ終わるのを待たず、指を離して閉じることが決まった時点で知らせる。
+    /// スワイプして閉じるとき、閉じ終わるのを待たず、指を離して閉じることが決まった時点で知らせる。
     /// 閉じ終わってからキーボードを出すと、一拍遅れて上がってくる。
     func presentationControllerWillDismiss(_ presentationController: UIPresentationController) {
         guard let coordinator = presentationController.presentedViewController.transitionCoordinator else { return }
@@ -141,7 +141,7 @@ extension MediaPickerSheet: UISheetPresentationControllerDelegate {
         }
     }
 
-    /// 払って閉じたときだけ呼ばれる。
+    /// スワイプして閉じたときだけ呼ばれる。
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
         isClosing = true
         onDidClose()

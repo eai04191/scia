@@ -26,7 +26,7 @@ enum DummyMedia {
             size: CGSize(width: 1_200, height: 1_200),
             color: .systemOrange,
             label: "3 正方形",
-            description: "正方形の画像。オレンジの地に白い格子が引かれ、中央に「3 正方形」と大きく書かれている。代替テキストが長いときに、ビューアの下の説明が1行で切れ、上へ払うと全文をシートで読めることを確かめるための文。"
+            description: "正方形の画像。オレンジの地に白い格子が引かれ、中央に「3 正方形」と大きく書かれている。代替テキストが長いときに、ビューアの下の説明が1行で切れ、上へスワイプすると全文をシートで読めることを確かめるための文。"
         ),
         Spec(size: CGSize(width: 600, height: 2_000), color: .systemPurple, label: "4 細長", description: "画面の下端まで届く細長い画像"),
     ]

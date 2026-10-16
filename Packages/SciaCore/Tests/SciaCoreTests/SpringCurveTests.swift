@@ -36,7 +36,7 @@ struct SpringCurveTests {
         #expect(SpringCurve(duration: 0.4, bounce: 0.9).isSettled(at: 1.6))
     }
 
-    /// 払って離したときの速さを引き継ぐと、動き始めからその速さで進み、同じ時間のうちに1に落ち着く。
+    /// スワイプして離したときの速さを引き継ぐと、動き始めからその速さで進み、同じ時間のうちに1に落ち着く。
     @Test(arguments: [0.0, 0.3])
     func initialVelocityStartsMovingAtThatSpeed(bounce: Double) {
         let still = SpringCurve(duration: 0.4, bounce: bounce)

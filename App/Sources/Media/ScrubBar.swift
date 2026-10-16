@@ -4,7 +4,7 @@ import UIKit
 ///
 /// 標準の再生画面と同じく、つまみを出さず、バーのどこを触ってもその位置へ動かせるようにする。`UISlider`はつまみを消すとつかめなくなるため、自前で描く。
 /// 触れた位置の割合を`value`にして、触れたとき`.touchDown`、動かしている間`.valueChanged`、離したとき`.touchUpInside`か`.touchUpOutside`を送る。
-/// 動かしている間は、指の下で見えるようバーを太くする。VoiceOverでは、上下に払って1割ずつ動かす。
+/// 動かしている間は、指の下で見えるようバーを太くする。VoiceOverでは、上下にスワイプして1割ずつ動かす。
 final class ScrubBar: UIControl {
     /// 長さのうち再生した割合。0から1。
     var value: Double = 0 {

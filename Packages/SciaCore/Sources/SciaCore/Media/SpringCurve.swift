@@ -9,7 +9,7 @@ public struct SpringCurve: Sendable, Equatable {
     public let duration: TimeInterval
     /// 0で弾まずに止まり、大きいほど行き過ぎてから戻る。
     public let bounce: Double
-    /// 動き始めの、進み具合の速さ（1秒あたり）。指で払って離したときの速さを引き継ぐのに使う。
+    /// 動き始めの、進み具合の速さ（1秒あたり）。指でスワイプして離したときの速さを引き継ぐのに使う。
     public let initialVelocity: Double
 
     public init(duration: TimeInterval, bounce: Double, initialVelocity: Double = 0) {
@@ -20,11 +20,11 @@ public struct SpringCurve: Sendable, Equatable {
         self.initialVelocity = initialVelocity
     }
 
-    /// 指で払って離したときの速さ（pt/秒）を、`start`から`target`へ向かう進み具合の速さに直す。
+    /// 指でスワイプして離したときの速さ（pt/秒）を、`start`から`target`へ向かう進み具合の速さに直す。
     ///
-    /// 行き先へ向かう向きの成分だけを使い、行き先から離れる向きに払った分は捨てる。離れる向きの速さを引き継ぐと、
-    /// 一度行き先と反対へ流れてから戻り、払った向きと違う動きに見える。
-    /// 速すぎる払い方では、弾まない設定でも行き先を越えてしまうため、弾まないばねが行き過ぎない速さ（角振動数）で抑える。
+    /// 行き先へ向かう向きの成分だけを使い、行き先から離れる向きにスワイプした分は捨てる。離れる向きの速さを引き継ぐと、
+    /// 一度行き先と反対へ流れてから戻り、スワイプした向きと違う動きに見える。
+    /// 速すぎるスワイプでは、弾まない設定でも行き先を越えてしまうため、弾まないばねが行き過ぎない速さ（角振動数）で抑える。
     public static func initialVelocity(
         releaseVelocity: (x: Double, y: Double),
         from start: (x: Double, y: Double),

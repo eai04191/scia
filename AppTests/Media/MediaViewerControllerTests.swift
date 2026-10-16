@@ -395,7 +395,7 @@ struct MediaViewerControllerTests {
         #expect(viewer.currentItem.kind == .video)
     }
 
-    /// 横に払っている途中で切り替え先が動画と分かったら、切り替えを終えた時点で、残っていた画像のページを動画のページに差し替える。
+    /// 横にスワイプしている途中で切り替え先が動画と分かったら、切り替えを終えた時点で、残っていた画像のページを動画のページに差し替える。
     @Test func pendingPageIsRebuiltAfterTransitionWhenLoadedMediaTurnsOutToBeVideo() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -415,7 +415,7 @@ struct MediaViewerControllerTests {
         #expect(viewer.displayedPage is PlayerPageController)
     }
 
-    /// 画面下の説明は1行で見せ、全文はそこからシートで読む。VoiceOverでは払えないため、実行しても開く。
+    /// 画面下の説明は1行で見せ、全文はそこからシートで読む。VoiceOverではスワイプできないため、実行しても開く。
     @Test func captionOpensAltTextSheet() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

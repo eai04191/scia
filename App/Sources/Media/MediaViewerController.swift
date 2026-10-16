@@ -11,7 +11,7 @@ import VisionKit
 /// 開くとき、閉じるとき、下へのスワイプで閉じる操作の間は、画像の写しを一覧のサムネイルとのあいだで動かす。
 ///
 /// UIKitの遷移（標準のズームや、遷移を自前で描く仕組み）は使わない。標準のズームは画面全体に角丸と影を付けて変形するため画面の形の枠が見え、
-/// 遷移を自前で描く仕組みは動いている間の操作を受け付けないため、開く途中で下へ払っても閉じられない。
+/// 遷移を自前で描く仕組みは動いている間の操作を受け付けないため、開く途中で下へスワイプしても閉じられない。
 /// ビューアはアニメーションなしで出し入れし、動きはビューアの中で描く。開く途中で指が触れたら、動きをその場で止めて指に追従させる。
 /// 画像を隠さないよう閉じるボタンは置かず、VoiceOverのエスケープとキーボードのEscでも閉じられるようにする。
 final class MediaViewerController: UIViewController {
@@ -93,7 +93,7 @@ final class MediaViewerController: UIViewController {
         let openDuration: TimeInterval
         /// サムネイルへ縮めて戻すまでの時間。
         let closeDuration: TimeInterval
-        /// 下へ払って閉じるときの弾み。0で弾まずに止まり、大きいほど行き過ぎてから戻る。
+        /// 下へスワイプして閉じるときの弾み。0で弾まずに止まり、大きいほど行き過ぎてから戻る。
         /// 指で力を加えたときだけ弾ませ、タップで開くときや、ボタンで閉じるときは弾ませない。
         let dragCloseBounce: CGFloat
         /// 開閉するとき、画像のうちバーにかかる部分を、一覧の中に置いた写しでバーの奥に描く。
@@ -293,7 +293,7 @@ final class MediaViewerController: UIViewController {
         dismissPan.delegate = self
         // ピンチの2本指を閉じる操作と取り違えないようにする。
         dismissPan.maximumNumberOfTouches = 1
-        // トラックパッドの2本指スクロールでも、指で払うのと同じように閉じられるようにする（Macやトラックパッド付きのiPad）。
+        // トラックパッドの2本指スクロールでも、指でスワイプするのと同じように閉じられるようにする（Macやトラックパッド付きのiPad）。
         dismissPan.allowedScrollTypesMask = .continuous
         view.addGestureRecognizer(dismissPan)
         AppDependencies.stateDumps.register("mediaViewer", owner: self) { $0.stateDump() }
@@ -859,7 +859,7 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
         let velocity = dismissPan.velocity(in: view)
         let isDownward = velocity.y > 0 && velocity.y > abs(velocity.x)
         if isEditingDescription {
-            // 書いている間に払ったら、閉じずにキーボードを下げて書き終える。もう一度払えば閉じる。
+            // 書いている間にスワイプしたら、閉じずにキーボードを下げて書き終える。もう一度スワイプすれば閉じる。
             if isDownward {
                 endEditingDescription()
             }
@@ -1239,7 +1239,7 @@ extension MediaViewerController {
     /// 閉じると決めたら、すぐにビューアを閉じ、写しと下地とボタンの写しを、操作を素通しする最前面の層へ移してサムネイルへ縮める。
     /// ビューアを残したまま動かすと、残った画面が触れたものを吸い、閉じた直後に別の画像をタップしても開けない。
     /// サムネイルが見つからなければ、その場で薄くする。
-    /// - Parameter releaseVelocity: 下へ払って閉じたときの、指を離したときの速さ。払って閉じるときだけ、この速さを引き継いで弾ませる。
+    /// - Parameter releaseVelocity: 下へスワイプして閉じたときの、指を離したときの速さ。スワイプして閉じるときだけ、この速さを引き継いで弾ませる。
     private func beginClosing(releaseVelocity: CGPoint? = nil) {
         if isEditingDescription {
             endEditingDescription()
@@ -1256,7 +1256,7 @@ extension MediaViewerController {
         }
         // 開く途中から閉じるときは、バーと重なる部分をそのときの濃さから奥へ入れ替える。
         // 一覧のバーに隠れない範囲での受け渡しは、閉じる動きでは手前から始めるため、開き始めのごく短い間に閉じると、新着ボタンなどに重なる部分が手前に切り替わる。
-        // Escやメニューから閉じたときに限られ、下へ払って閉じるときはつかんだ時点で手前へ寄せ始めているため受け入れる。
+        // Escやメニューから閉じたときに限られ、下へスワイプして閉じるときはつかんだ時点で手前へ寄せ始めているため受け入れる。
         let startOverlapOpacity = barLayering == nil ? 1 : barSwap.overlapOpacity
         endBarLayering()
         motion = .closing
@@ -1302,7 +1302,7 @@ extension MediaViewerController {
 
         let attachmentID = currentItem.id
         let sourceTile = sourceTile
-        // 払った速さで縮み始めるよう、サムネイルへ向かう向きの速さを引き継ぐ。止まった状態から縮み始めると、離した瞬間に一度止まって見える。
+        // スワイプした速さで縮み始めるよう、サムネイルへ向かう向きの速さを引き継ぐ。止まった状態から縮み始めると、離した瞬間に一度止まって見える。
         let initialVelocity: Double = if moves, let releaseVelocity, let target = sourceTile(attachmentID).map({ $0.convert($0.bounds, to: window) }) {
             SpringCurve.initialVelocity(
                 releaseVelocity: (releaseVelocity.x, releaseVelocity.y),
@@ -2255,7 +2255,7 @@ final class UnsupportedPageController: MediaPageController {
 }
 
 /// 画面の下に出す代替テキスト。長ければスクロールして読む。
-/// 添付ファイルの説明を、画像を覆わないよう1行で見せる。全文は、タップするか上へ払うかVoiceOverで実行して、シートで読む。
+/// 添付ファイルの説明を、画像を覆わないよう1行で見せる。全文は、タップするか上へスワイプするかVoiceOverで実行して、シートで読む。
 final class CaptionView: UIView {
     private let label = UILabel()
     private let contentGuide = UILayoutGuide()

@@ -215,10 +215,10 @@ public enum TuningCatalog {
         defaultValue: 0.12
     )
 
-    /// ビューアを下へのスワイプで閉じる速さ。毎秒何画面ぶんか。これより速く払えば、短い距離でも閉じる。
+    /// ビューアを下へのスワイプで閉じる速さ。毎秒何画面ぶんか。これより速くスワイプすれば、短い距離でも閉じる。
     public static let mediaDismissVelocity = NumberTuning(
         id: "media.dismissVelocity",
-        title: "ビューアを閉じる払う速さ（画面数／秒）",
+        title: "ビューアを閉じるスワイプの速さ（画面数／秒）",
         range: 0.2...3,
         step: 0.1,
         defaultValue: 0.8
@@ -269,11 +269,11 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
-    /// ビューアを下へ払って閉じるときの弾み。0で行き過ぎずに止まる。
+    /// ビューアを下へスワイプして閉じるときの弾み。0で行き過ぎずに止まる。
     /// 指で力を加えたときだけ弾ませ、タップで開くときや、ボタンで閉じるときは弾ませない。
     public static let mediaDragCloseBounce = NumberTuning(
         id: "media.dragCloseBounce",
-        title: "ビューアを払って閉じるときの弾み",
+        title: "ビューアをスワイプして閉じるときの弾み",
         range: 0...0.4,
         step: 0.05,
         defaultValue: 0.1
@@ -317,7 +317,7 @@ public enum TuningCatalog {
         defaultValue: 0.7
     )
 
-    /// バーの奥にも描くとき、閉じ始めにバーと重なっていた部分（縦長の画像や、下へ払ってタブバーにかかった画像）を、
+    /// バーの奥にも描くとき、閉じ始めにバーと重なっていた部分（縦長の画像や、下へスワイプしてタブバーにかかった画像）を、
     /// バーより手前の写しから一覧の中の写しへ入れ替え終える、閉じる動きの進み具合。
     /// 小さいほど早くバーの奥の見え方になり、大きいほど閉じ始めの画像の端がバーの位置で長く手前に残る。
     public static let mediaCloseBarOverlapFadeEnd = NumberTuning(
