@@ -195,6 +195,75 @@ struct TimelineGapTests {
         #expect(store.entries.map(\.debugLabel) == ["20", "19", "18", "gap(18...10)", "10", "9", "8"])
     }
 
+    /// ギャップを読めなかったら、行の中で知らせられるよう、どのギャップがなぜ読めなかったかを残す。読み直せたら消す。
+    @Test func failedGapIsRememberedUntilItLoads() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let failsGap = Atomic(false)
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if failsGap.load(ordering: .relaxed), query.maxID != nil {
+                throw URLError(.networkConnectionLost)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(11...20)
+        _ = try await store.fillFromLatest(maxPages: 1)
+        let gap = try #require(store.gaps.first)
+        #expect(store.gapFailures.isEmpty)
+
+        failsGap.store(true, ordering: .relaxed)
+        await #expect(throws: URLError.self) { try await store.loadGap(gap.id, from: .fromNewer) }
+        #expect(store.gapFailures == [gap.id: ErrorPresentation(URLError(.networkConnectionLost))])
+
+        failsGap.store(false, ordering: .relaxed)
+        _ = try await store.loadGap(gap.id, from: .fromNewer)
+        #expect(store.gapFailures.isEmpty)
+    }
+
+    /// 満杯でないページの後の確かめる読み込みに失敗しても、読めた分は返し、残ったギャップは読めなかったことにする。
+    @Test func failedConfirmationKeepsLoadedStatusesAndRemembersFailure() async throws {
+        // 求めた件数より少なく返すサーバーで、確かめる読み込みを起こす。
+        let server = FakeHomeServer(ids: 1...10, maxLimit: 2)
+        let gapLoads = Atomic(0)
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID != nil, query.sinceID != nil, gapLoads.add(1, ordering: .relaxed).newValue == 2 {
+                throw URLError(.timedOut)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(11...30)
+        _ = try await store.fillFromLatest(maxPages: 1)
+        let gap = try #require(store.gaps.first)
+        gapLoads.store(0, ordering: .relaxed)
+
+        let added = try await store.loadGap(gap.id, from: .fromNewer)
+
+        #expect(added?.count == 2)
+        #expect(store.gaps.map(\.id) == [gap.id])
+        #expect(store.gapFailures == [gap.id: ErrorPresentation(URLError(.timedOut))])
+    }
+
+    /// 取り消しは失敗ではないので、読めなかったことにしない。
+    @Test func cancelledGapLoadIsNotRememberedAsFailure() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let cancels = Atomic(false)
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if cancels.load(ordering: .relaxed), query.maxID != nil {
+                throw CancellationError()
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(11...20)
+        _ = try await store.fillFromLatest(maxPages: 1)
+        let gap = try #require(store.gaps.first)
+
+        cancels.store(true, ordering: .relaxed)
+        await #expect(throws: CancellationError.self) { try await store.loadGap(gap.id, from: .fromNewer) }
+        #expect(store.gapFailures.isEmpty)
+    }
+
     @Test(arguments: [TimelineStore.GapDirection.fromNewer, .fromOlder])
     func loadingGapRepeatedlyClosesItWithoutDuplicatesOrOmissions(direction: TimelineStore.GapDirection) async throws {
         let server = FakeHomeServer(ids: 1...10)

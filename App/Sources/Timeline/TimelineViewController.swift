@@ -82,6 +82,8 @@ final class TimelineViewController: UIViewController {
     private lazy var dataSource = makeDataSource()
     private var entries: [ItemID: TimelineEntry] = [:]
     private var loadingGapIDs: Set<String> = []
+    /// 直近の読み込みに失敗したギャップと、その理由。行の中で読めなかったことを知らせる。
+    private var gapFailures: [String: ErrorPresentation] = [:]
     private var isShowingMenu = false
     /// メニューを出している間に届いた並びの更新。閉じたときに反映する。
     private var heldEntries: HeldEntries?
@@ -367,10 +369,12 @@ final class TimelineViewController: UIViewController {
         reportApproachingGaps()
     }
 
-    /// 読み込み中のギャップを、読み込み中の表示にする。
-    func setLoadingGaps(_ ids: Set<String>) {
-        let changed = ids.symmetricDifference(loadingGapIDs).map(ItemID.gap)
+    /// 読み込み中のギャップを読み込み中の表示に、読めなかったギャップを読めなかった表示にする。
+    func setGapStates(loading ids: Set<String>, failures: [String: ErrorPresentation]) {
+        let failureChanged = Set(failures.keys).union(gapFailures.keys).filter { failures[$0] != gapFailures[$0] }
+        let changed = ids.symmetricDifference(loadingGapIDs).union(failureChanged).map(ItemID.gap)
         loadingGapIDs = ids
+        gapFailures = failures
         let existing = Set(dataSource.snapshot().itemIdentifiers)
         reconfigure(Set(changed).intersection(existing))
     }
@@ -516,6 +520,7 @@ final class TimelineViewController: UIViewController {
         isAtTop: \(isAtTop)
         unreadCount: \(unreadCount)
         loadingGaps: \(loadingGapIDs.sorted().joined(separator: ", "))
+        failedGaps: \(gapFailures.keys.sorted().joined(separator: ", "))
         """
     }
 
@@ -808,7 +813,11 @@ final class TimelineViewController: UIViewController {
             case .pinned(let status):
                 cell.contentConfiguration = self.contentConfiguration(for: status, isPinned: true, base: cell.defaultContentConfiguration())
             case .gap(let gap):
-                cell.contentConfiguration = self.gapContentConfiguration(isLoading: self.loadingGapIDs.contains(gap.id), base: cell.defaultContentConfiguration())
+                cell.contentConfiguration = self.gapContentConfiguration(
+                    isLoading: self.loadingGapIDs.contains(gap.id),
+                    failure: self.gapFailures[gap.id],
+                    base: cell.defaultContentConfiguration()
+                )
             case .notification(let notification):
                 let list = self.contentConfiguration(for: notification, base: cell.defaultContentConfiguration())
                 cell.contentConfiguration = self.statusContentConfiguration(list: list, notification: notification)
@@ -862,11 +871,23 @@ final class TimelineViewController: UIViewController {
         return content
     }
 
-    func gapContentConfiguration(isLoading: Bool, base: UIListContentConfiguration) -> UIListContentConfiguration {
+    /// - Parameter failure: 直近の読み込みに失敗した理由。読み込み中なら、読み込み中の表示を優先する。
+    func gapContentConfiguration(isLoading: Bool, failure: ErrorPresentation? = nil, base: UIListContentConfiguration) -> UIListContentConfiguration {
         var content = base
-        content.text = isLoading ? "読み込み中…" : "読み込んでいない投稿を読み込む"
         content.textProperties.alignment = .center
-        content.textProperties.color = isLoading ? .secondaryLabel : .tintColor
+        if isLoading {
+            content.text = "読み込み中…"
+            content.textProperties.color = .secondaryLabel
+        } else if let failure {
+            // 押すと読み込み直すため、押せることを色で示す。理由は下に小さく添える。
+            content.text = "読み込めませんでした。タップして再試行"
+            content.textProperties.color = .tintColor
+            content.secondaryAttributedText = failure.attributedText(textStyle: .footnote)
+            content.secondaryTextProperties.alignment = .center
+        } else {
+            content.text = "読み込んでいない投稿を読み込む"
+            content.textProperties.color = .tintColor
+        }
         return content
     }
 

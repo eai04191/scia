@@ -319,7 +319,7 @@ final class HomeTimelineController {
         guard !isStopped, !store.loadingGapIDs.contains(id), let index = store.entries.firstIndex(where: { $0.id == .gap(id) }) else { return }
         let neighborIndex = direction == .fromOlder ? store.entries.index(after: index) : store.entries.index(before: index)
         let anchorID = store.entries.indices.contains(neighborIndex) ? store.entries[neighborIndex].id : nil
-        viewController.setLoadingGaps(store.loadingGapIDs.union([id]))
+        viewController.setGapStates(loading: store.loadingGapIDs.union([id]), failures: store.gapFailures.filter { $0.key != id })
         let gapBefore = store.gaps.first { $0.id == id }
         run(isAutomatic ? .automatic : .user) { controller in
             controller.logger.info("home loadGap start id=\(id, privacy: .public) direction=\(String(describing: direction), privacy: .public) automatic=\(isAutomatic, privacy: .public)")
@@ -331,7 +331,7 @@ final class HomeTimelineController {
                 if isAutomatic, added?.isEmpty == true, controller.store.gaps.contains(where: { $0 == gapBefore }) {
                     controller.autoLoadFailedGapIDs.insert(id)
                 }
-                controller.viewController.setLoadingGaps(controller.store.loadingGapIDs)
+                controller.showGapStates()
                 guard let added else { return }
                 controller.viewController.setEntries(controller.store.entries, keeping: anchorID)
                 controller.updateUnreadCount()
@@ -340,7 +340,7 @@ final class HomeTimelineController {
                 if isAutomatic {
                     controller.autoLoadFailedGapIDs.insert(id)
                 }
-                controller.viewController.setLoadingGaps(controller.store.loadingGapIDs)
+                controller.showGapStates()
                 controller.handle(error, during: "loadGap") { _ in }
             }
         }
@@ -461,9 +461,15 @@ final class HomeTimelineController {
         showEntries()
     }
 
+    /// 自動の補完の中でギャップを読めなかったときも、並びと一緒に読めなかった表示にする。
     private func showEntries() {
+        showGapStates()
         viewController.setEntries(store.entries)
         updateUnreadCount()
+    }
+
+    private func showGapStates() {
+        viewController.setGapStates(loading: store.loadingGapIDs, failures: store.gapFailures)
     }
 
     private func markRead(_ ids: [Status.ID]) {

@@ -23,6 +23,8 @@ public final class TimelineStore {
     public private(set) var savedReadID: String?
     /// 読み込み中のギャップのID。
     public private(set) var loadingGapIDs: Set<String> = []
+    /// 直近の読み込みに失敗したギャップと、その理由。読み直し始めたら外す。
+    private var failedGaps: [String: ErrorPresentation] = [:]
 
     /// 補完を始めたが、まだ成功していない基準のID。失敗した後に新着が挿入されて最新のIDが進んでも、次の補完はここから読む。
     private var unfilledSinceID: String?
@@ -64,6 +66,12 @@ public final class TimelineStore {
         entries.compactMap { entry in
             if case .gap(let gap) = entry { gap } else { nil }
         }
+    }
+
+    /// 直近の読み込みに失敗したギャップと、その理由。行の中で読めなかったことを知らせるのに使う。閉じたギャップは含めない。
+    public var gapFailures: [String: ErrorPresentation] {
+        let ids = Set(gaps.map(\.id))
+        return failedGaps.filter { ids.contains($0.key) }
     }
 
     /// 最新のページで置き換える。読み込み中なら何もせずnilを返す。
@@ -197,6 +205,7 @@ public final class TimelineStore {
     public func loadGap(_ id: String, from direction: GapDirection) async throws -> [Status]? {
         guard gaps.contains(where: { $0.id == id }), !loadingGapIDs.contains(id) else { return nil }
         loadingGapIDs.insert(id)
+        failedGaps[id] = nil
         defer { loadingGapIDs.remove(id) }
 
         var added: [Status] = []
@@ -207,6 +216,10 @@ public final class TimelineStore {
             do {
                 page = try await fetch(Self.query(for: gap, from: direction, limit: pageSize))
             } catch {
+                // 取り消しは失敗ではないので、読めなかったことにしない。
+                if !(error is CancellationError), (error as? URLError)?.code != .cancelled {
+                    failedGaps[id] = ErrorPresentation(error)
+                }
                 // 確かめるための2回目が失敗しても、1回目で読めた分は反映済みなので、ギャップを残して返す。
                 guard attempt > 0 else { throw error }
                 logger.error("gap confirmation failed: \(SciaLog.describe(error), privacy: .public)")

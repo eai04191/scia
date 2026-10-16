@@ -65,6 +65,16 @@ enum TimelineCatalog {
             row("読めない通知（開ける先がない）", notifications.unreadableContentConfiguration(for: UnreadableItem(id: "2", url: nil), base: base)),
             row("読み込んでいない投稿がある", home.gapContentConfiguration(isLoading: false, base: base)),
             row("読み込んでいない投稿を読み込み中", home.gapContentConfiguration(isLoading: true, base: base)),
+            row("読み込んでいない投稿を読み込めなかった（サーバーの失敗）", home.gapContentConfiguration(
+                isLoading: false,
+                failure: badGateway,
+                base: base
+            )),
+            row("読み込んでいない投稿を読み込めなかった（レート制限、長い理由）", home.gapContentConfiguration(
+                isLoading: false,
+                failure: tooManyRequests,
+                base: base
+            )),
         ]
     }
 }
