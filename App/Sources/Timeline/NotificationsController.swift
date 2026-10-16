@@ -27,6 +27,8 @@ final class NotificationsController {
     private var isStreamingConnected = false
     /// ストリーミングの状態が変わったときに呼ぶ。「接続の状態」画面に出す。
     var onStreamingStateChange: ((ConnectionDiagnostics.StreamingState) -> Void)?
+    /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態。
+    private let streamingStatusView = StreamingStatusPullView()
     /// 接続を始めるたびに増やす。止めた接続の終了の知らせが、後から始めた接続を消さないようにする。
     private var streamingGeneration = 0
     private var hasLoadedInitial = false
@@ -54,6 +56,7 @@ final class NotificationsController {
         viewController.onRetry = { [weak self] in self?.retry() }
         viewController.onVisibleNotificationsChange = { [weak self] ids in self?.markRead(ids) }
         viewController.onInteractionSettle = { [weak self] in self?.interactionDidSettle() }
+        streamingStatusView.install(in: viewController.collectionView)
     }
 
     /// - Parameter origin: 電波の回復などでやり直すときは`.automatic`。レート制限で止められている間は送らない。
@@ -147,7 +150,7 @@ final class NotificationsController {
         guard !isStopped, isInForeground, streamingTask == nil else { return }
         streamingGeneration += 1
         // つながるまでは、つなぎ直しを続けながらポーリングで補う。
-        onStreamingStateChange?(.polling)
+        setStreamingState(.polling)
         let generation = streamingGeneration
         let streaming = streaming
         let endpoint = streamingEndpoint
@@ -196,13 +199,19 @@ final class NotificationsController {
         }
     }
 
+    /// ストリーミングの状態を、「接続の状態」画面と、引っぱったときに見せる表示へ伝える。
+    private func setStreamingState(_ state: ConnectionDiagnostics.StreamingState) {
+        streamingStatusView.setState(state)
+        onStreamingStateChange?(state)
+    }
+
     private func stopStreaming() {
         guard let streamingTask else { return }
         logger.info("notifications streaming stop")
         streamingTask.cancel()
         self.streamingTask = nil
         isStreamingConnected = false
-        onStreamingStateChange?(.stopped)
+        setStreamingState(.stopped)
         // 次につなぐときは、切れている時間を数え直す。
         viewController.setOutageNotice(false)
     }
@@ -226,7 +235,7 @@ final class NotificationsController {
         switch activity {
         case .connected:
             isStreamingConnected = true
-            onStreamingStateChange?(.connected)
+            setStreamingState(.connected)
             logger.info("notifications streaming connected")
             fillFromLatest()
         case .event(.notification(let notification)):
@@ -240,7 +249,7 @@ final class NotificationsController {
             onUnauthorized()
         case .disconnected(let reason, let retryAfter):
             isStreamingConnected = false
-            onStreamingStateChange?(.polling)
+            setStreamingState(.polling)
             logger.info("notifications streaming disconnected reason=\(reason, privacy: .public) retryAfter=\(retryAfter, privacy: .public)")
         }
     }

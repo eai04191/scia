@@ -112,6 +112,8 @@ final class TimelineViewController: UIViewController {
     private let scrollHitches = ScrollHitchMonitor()
     private lazy var newArrivalsButton = makeNewArrivalsButton()
     private lazy var reauthenticationButton = makeReauthenticationButton()
+    /// 一覧に重ねて上に浮かべるボタン。隠したボタンは詰める。
+    private lazy var topButtons = UIStackView(arrangedSubviews: [reauthenticationButton, newArrivalsButton])
     private var onReauthenticate: (() -> Void)?
     private var timeRefreshTimer: Timer?
     private let texts: Texts
@@ -169,8 +171,6 @@ final class TimelineViewController: UIViewController {
         // タブバーの上の投稿欄で書いている間も、読み進めるだけならキーボードを閉じない。キーボードまで引き下ろしたら閉じる。
         collectionView.keyboardDismissMode = .interactive
         view.addSubview(collectionView)
-        // 一覧に重ねて上に浮かべる。隠したボタンは詰める。
-        let topButtons = UIStackView(arrangedSubviews: [reauthenticationButton, newArrivalsButton])
         topButtons.axis = .vertical
         topButtons.alignment = .center
         topButtons.spacing = 8
@@ -815,6 +815,9 @@ extension TimelineViewController: UICollectionViewDelegate {
         }
         reportVisibleItems()
         reportApproachingGaps()
+        // 最上部からさらに引っぱっている間は、浮かぶボタンも一覧と一緒に下げる。上に現れるストリーミングの状態を覆わないようにする。
+        let pulled = -(scrollView.contentOffset.y + scrollView.adjustedContentInset.top)
+        topButtons.transform = CGAffineTransform(translationX: 0, y: max(pulled, 0))
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {

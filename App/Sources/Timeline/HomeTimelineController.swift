@@ -25,6 +25,8 @@ final class HomeTimelineController {
     private var isStreamingConnected = false
     /// ストリーミングの状態が変わったときに呼ぶ。「接続の状態」画面に出す。
     var onStreamingStateChange: ((ConnectionDiagnostics.StreamingState) -> Void)?
+    /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態。
+    private let streamingStatusView = StreamingStatusPullView()
     /// 接続を始めるたびに増やす。止めた接続の終了の知らせが、後から始めた接続を消さないようにする。
     private var streamingGeneration = 0
     /// 最初の読み込みが済んだ。空のホームでも、済んでいればつなぐ。
@@ -58,6 +60,7 @@ final class HomeTimelineController {
         viewController.onRetry = { [weak self] in self?.retry() }
         viewController.onVisibleStatusesChange = { [weak self] ids in self?.markRead(ids) }
         viewController.onInteractionSettle = { [weak self] in self?.interactionDidSettle() }
+        streamingStatusView.install(in: viewController.collectionView)
         viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction, isAutomatic: false) }
         viewController.onGapApproach = { [weak self] id, direction in self?.loadGap(id, from: direction, isAutomatic: true) }
         #if DEBUG
@@ -125,13 +128,19 @@ final class HomeTimelineController {
         }
     }
 
+    /// ストリーミングの状態を、「接続の状態」画面と、引っぱったときに見せる表示へ伝える。
+    private func setStreamingState(_ state: ConnectionDiagnostics.StreamingState) {
+        streamingStatusView.setState(state)
+        onStreamingStateChange?(state)
+    }
+
     private func stopStreaming() {
         guard let streamingTask else { return }
         logger.info("streaming stop")
         streamingTask.cancel()
         self.streamingTask = nil
         isStreamingConnected = false
-        onStreamingStateChange?(.stopped)
+        setStreamingState(.stopped)
         // 次につなぐときは、切れている時間を数え直す。
         viewController.setOutageNotice(false)
     }
@@ -198,7 +207,7 @@ final class HomeTimelineController {
         guard !isStopped, isInForeground, streamingTask == nil else { return }
         streamingGeneration += 1
         // つながるまでは、つなぎ直しを続けながらポーリングで補う。
-        onStreamingStateChange?(.polling)
+        setStreamingState(.polling)
         let generation = streamingGeneration
         let streaming = streaming
         let endpoint = streamingEndpoint
@@ -240,7 +249,7 @@ final class HomeTimelineController {
         switch activity {
         case .connected:
             isStreamingConnected = true
-            onStreamingStateChange?(.connected)
+            setStreamingState(.connected)
             logger.info("streaming connected")
             fillFromLatest()
         case .event(let event):
@@ -250,7 +259,7 @@ final class HomeTimelineController {
             onUnauthorized()
         case .disconnected(let reason, let retryAfter):
             isStreamingConnected = false
-            onStreamingStateChange?(.polling)
+            setStreamingState(.polling)
             logger.info("streaming disconnected reason=\(reason, privacy: .public) retryAfter=\(retryAfter, privacy: .public)")
         }
     }
