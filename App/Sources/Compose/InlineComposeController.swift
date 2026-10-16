@@ -660,6 +660,8 @@ final class InlineComposeController: NSObject {
         if textView.isScrollEnabled != scrolls {
             textView.isScrollEnabled = scrolls
             textHeightLimit.isActive = scrolls
+            // スクロールを止めても、入力欄は本来の高さを測り直さない。測り直させないと、5行から4行に減らしたときに入力欄が潰れ、下のボタンの行に重なった。
+            textView.invalidateIntrinsicContentSize()
         }
     }
 

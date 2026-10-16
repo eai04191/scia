@@ -160,6 +160,30 @@ struct InlineComposeControllerTests {
         #expect(!composer.isBarHeld, "メニューを閉じても、バーを留めたままです\n\(composer.stateDump())")
     }
 
+    /// 入力欄の中でスクロールするほど書いてから行を消して収まる長さに戻すと、入力欄は書いた行の高さまで縮み、潰れない。
+    @Test(arguments: [5, 6])
+    func textViewKeepsHeightWhenShrinkingBelowScrollLimit(lines: Int) async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(500))
+        composer.model.text = (1...lines).map { "\($0)" }.joined(separator: "\n")
+        try await Task.sleep(for: .milliseconds(100))
+        window.layoutIfNeeded()
+
+        composer.model.text = (1...4).map { "\($0)" }.joined(separator: "\n")
+        try await Task.sleep(for: .milliseconds(100))
+        window.layoutIfNeeded()
+
+        let textView = try #require(textViews(in: window).first)
+        let fitting = textView.sizeThatFits(CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)).height
+        #expect(textView.bounds.height >= fitting - 0.5, "入力欄が4行の高さより縮みました: \(textView.bounds.height) / \(fitting)\n\(composer.stateDump())")
+        #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
+    }
+
+    private func textViews(in view: UIView) -> [UITextView] {
+        (view as? UITextView).map { [$0] } ?? view.subviews.flatMap(textViews(in:))
+    }
+
     private func showContextMenu() {
         let collectionView = UICollectionView(frame: .zero, collectionViewLayout: UICollectionViewFlowLayout())
         composer.attachmentStrip.collectionView(collectionView, willDisplayContextMenu: UIContextMenuConfiguration(), animator: nil)
