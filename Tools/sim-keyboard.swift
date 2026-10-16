@@ -1,6 +1,7 @@
 // シミュレーターのハードウェアキーボードの接続を切り替え、ソフトウェアキーボードを出す・出さないを決める。
 // simctlとdevicectlにはこの操作がないため、CoreSimulatorの非公開API（SimDeviceのsetHardwareKeyboardEnabled:keyboardType:error:）を呼ぶ。
-// Device Hubのメニューの「オンスクリーンキーボードを表示」と同じ設定で、Xcodeの更新で名前や型が変わると動かなくなる。そのときは型を確かめて失敗させる。
+// GUIでは、Device Hubの「Simulate hardware keyboard」やClaude Codeのシミュレーターのパネルの「オンスクリーンキーボードを表示」で切り替える。
+// Xcodeの更新で名前や型が変わると動かなくなる。そのときは型を確かめて失敗させる。
 // 使い方: swift Tools/sim-keyboard.swift '<端末の名前またはUDID>' software|hardware
 
 import Foundation
