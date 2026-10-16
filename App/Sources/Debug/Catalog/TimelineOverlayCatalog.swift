@@ -29,6 +29,22 @@ enum TimelineOverlayCatalog {
             state("失敗の長い文言") {
                 showFailure("長い文言のときにチップがどこまで広がり、どこで切れて「›」が残るかを確かめるための失敗", on: $0)
             },
+            state("ビューアを閉じたあとのダウンロード中（1件、押すと止めるかの確認）") { timeline in
+                timeline.setUnreadCount(12)
+                showPersistent(.download(of: catalogURL, fraction: 0.42) {}, on: timeline)
+            },
+            state("ビューアを閉じたあとのダウンロード中（2件以上は件数）") { timeline in
+                timeline.setUnreadCount(12)
+                showPersistent(.downloads(count: 2, action: .disclosure(hint: "最近の失敗の一覧を開きます。") {}), on: timeline)
+            },
+            state("ダウンロード中と、ほかのものを写真に保存しました") { timeline in
+                showPersistent(.download(of: catalogURL, fraction: 0.42) {}, on: timeline)
+                timeline.showNotice(.savedToPhotos, duration: 3600)
+            },
+            state("ビューアを閉じたあとの失敗（種類で示す）") { timeline in
+                timeline.showNotice(.transferFailure(title: Notice.transferFailureTitle(of: .video, purpose: .save)) {}, duration: 3600)
+            },
+            state("共有を止めました") { $0.showNotice(.shareStopped, duration: 3600) },
             state("すべて同時に出す") { timeline in
                 timeline.setOutageNotice(true)
                 timeline.setUnreadCount(40, isLowerBound: true)
@@ -36,6 +52,14 @@ enum TimelineOverlayCatalog {
                 showFailure("お気に入りを変更できませんでした", on: timeline)
             },
         ]
+    }
+
+    private static let catalogURL = URL(string: "https://x.example/video.mp4") ?? URL(filePath: "/")
+
+    @MainActor
+    private static func showPersistent(_ notice: Notice, on timeline: TimelineViewController) {
+        timeline.noticeStack.animationDuration = 0
+        timeline.setPersistentNotice(notice)
     }
 
     @MainActor

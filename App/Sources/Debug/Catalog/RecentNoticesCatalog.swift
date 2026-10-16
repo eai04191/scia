@@ -16,12 +16,26 @@ enum RecentNoticesCatalog {
                 notices.recordFailure(title: "お気に入りを変更できませんでした", reason: badGateway, subject: subject(2))
             },
             state("進行中と最近の失敗") { notices in
-                notices.update(.init(id: "download", title: "ダウンロード中", value: "42%", subject: subject(3)))
+                notices.update(.init(id: "download", title: "ダウンロード中", value: "42%", subject: subject(3)), onStop: {})
                 notices.update(.init(id: "upload", title: "アップロード中"))
                 notices.recordFailure(title: "お気に入りを変更できませんでした", reason: badGateway, subject: subject(2))
             },
             state("進行中だけ（最近の失敗はない）") { notices in
-                notices.update(.init(id: "download", title: "ダウンロード中", value: "42%", subject: subject(3)))
+                notices.update(.init(id: "download", title: "ダウンロード中", value: "42%", subject: subject(3)), onStop: {})
+            },
+            state("ダウンロードがいくつも進行中（写真に足している間は止められない）") { notices in
+                notices.update(.init(id: "download-1", title: "ダウンロード中", subject: subject(4)), onStop: {})
+                notices.update(.init(id: "download-2", title: "ダウンロード中", value: "42%", subject: subject(5)), onStop: {})
+                notices.update(.init(id: "download-3", title: "ダウンロード中", value: "100%", subject: subject(6)))
+                notices.recordFailure(title: "動画を保存できませんでした", reason: ErrorPresentation(message: "インターネットに接続されていません。", code: "URLError -1009"), subject: subject(7))
+            },
+            state("進行中の長い文言") { notices in
+                notices.update(.init(
+                    id: "download",
+                    title: "ダウンロード中",
+                    value: "100%",
+                    subject: RecentNotices.Subject(statusID: "long", displayedID: "long", url: nil, authorName: "とても長い表示名のアカウントで、名前だけで1行を使い切ってしまうかもしれない人", excerpt: "止めるボタンと並べたときに本文がどこで切れるかを確かめるための長い本文です。")
+                ), onStop: {})
             },
             state("上限の\(RecentNotices.failureLimit)件") { notices in
                 for index in 1...(RecentNotices.failureLimit + 5) {

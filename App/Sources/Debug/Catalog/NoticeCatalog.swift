@@ -1,4 +1,5 @@
 #if DEBUG
+import SciaCore
 import UIKit
 
 /// 知らせのチップ（`NoticeStackView`）の状態。ガラスの効果を見られるよう、ビューアのように画像の上に置く。
@@ -14,6 +15,24 @@ enum NoticeCatalog {
             CatalogState(title: "ダウンロード中（大きさが分かる前）") { stack(persistent: .download(of: url, fraction: 0) {}) },
             CatalogState(title: "ダウンロード中（押すと止めるかの確認）") { stack(persistent: .download(of: url, fraction: 0.42) {}) },
             CatalogState(title: "ダウンロードを終えて保存している間（押せない）") { stack(persistent: .download(of: url, fraction: 1, onStop: nil)) },
+            CatalogState(title: "ダウンロード中（ほかの添付ファイルも落としている。押すと最近の失敗の一覧）") {
+                var notice = Notice.download(of: url, fraction: 0.42) {}
+                notice.additionalCount = 2
+                notice.action = disclosure
+                return stack(persistent: notice)
+            },
+            CatalogState(title: "ダウンロード中（見ている添付ファイルにはなく、件数だけ）") { stack(persistent: .downloads(count: 1, action: disclosure)) },
+            CatalogState(title: "ダウンロード中（件数が多い）") { stack(persistent: .downloads(count: 12, action: disclosure)) },
+            CatalogState(title: "見ている添付ファイルを落とせなかった（数秒で消える、押すと理由）") {
+                stack(transient: .transferFailure(title: Notice.currentTransferFailureTitle(.download(URLError(.notConnectedToInternet)))) {})
+            },
+            CatalogState(title: "見ている添付ファイルを写真に足せなかった") {
+                stack(transient: .transferFailure(title: Notice.currentTransferFailureTitle(.save(CocoaError(.fileWriteOutOfSpace)))) {})
+            },
+            CatalogState(title: "ほかの添付ファイルの失敗（種類で示す）") {
+                stack(persistent: .download(of: url, fraction: 0.42) {}, transient: .transferFailure(title: Notice.transferFailureTitle(of: .gifv, purpose: .share)) {})
+            },
+            CatalogState(title: "共有を止めました（数秒で消える）") { stack(transient: .shareStopped) },
             CatalogState(title: "アップロード中") { stack(persistent: draft(.uploading)) },
             CatalogState(title: "サーバーで処理中") { stack(persistent: draft(.processing)) },
             CatalogState(title: "代替テキストを送信中") { stack(persistent: draft(.sendingDescription)) },
