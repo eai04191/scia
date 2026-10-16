@@ -15,6 +15,12 @@ struct ProfileStoreTests {
 
     private struct Failure: Error {}
 
+    /// フォローを送ったか。送ったあとに読むアカウントを差し替えるのに使う。
+    private actor Followed {
+        var value = false
+        func set() { value = true }
+    }
+
     private func account(locked: Bool = false, statusesCount: Int = 0) throws -> Account {
         let avatar = try #require(URL(string: "https://example.social/avatars/bob.png"))
         return Account(
@@ -37,11 +43,14 @@ struct ProfileStoreTests {
         account: Account,
         relationship: Relationship? = Relationship(id: "2"),
         failsAccount: Bool = false,
-        pinned: [Status] = []
+        pinned: [Status] = [],
+        accountAfterFollow: Account? = nil
     ) -> ProfileStore.API {
-        ProfileStore.API(
+        let followed = Followed()
+        return ProfileStore.API(
             account: { _ in
                 if failsAccount { throw Failure() }
+                if let accountAfterFollow, await followed.value { return accountAfterFollow }
                 return account
             },
             relationship: { _ in relationship },
@@ -51,6 +60,7 @@ struct ProfileStoreTests {
             },
             follow: { id in
                 await calls.recordFollow("follow")
+                await followed.set()
                 return Relationship(id: id, following: !account.locked, requested: account.locked)
             },
             unfollow: { id in
@@ -121,6 +131,31 @@ struct ProfileStoreTests {
         try await store.toggleFollow()
         #expect(store.followState == .notFollowing(locked: true))
         #expect(await calls.follows == ["follow", "unfollow"])
+    }
+
+    /// フォローのAPIは関係だけを返すので、フォロワー数はアカウントを読み直して変える。
+    @Test func reloadAccountReflectsFollowersCountAfterFollow() async throws {
+        let known = try account()
+        let followedAccount = Account(id: known.id, username: known.username, acct: known.acct, displayName: known.displayName, avatar: known.avatar, followersCount: 1)
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, api: makeAPI(account: known, accountAfterFollow: followedAccount))
+        try await store.loadProfile()
+        #expect(store.account.followersCount == 0)
+
+        #expect(try await store.toggleFollow())
+        try await store.reloadAccount()
+
+        #expect(store.followState == .following)
+        #expect(store.account.followersCount == 1)
+    }
+
+    /// 自分のアカウントでは何も送らないので、読み直しも要らない。
+    @Test func toggleFollowReportsNothingSentForMyself() async throws {
+        let known = try account()
+        let calls = Calls()
+        let store = ProfileStore(account: known, myAccountID: known.id, postsFilter: .standard, api: makeAPI(calls: calls, account: known))
+
+        #expect(try await store.toggleFollow() == false)
+        #expect(await calls.follows.isEmpty)
     }
 
     @Test func postsFilterChangesQueryOnlyOnPostsTab() async throws {

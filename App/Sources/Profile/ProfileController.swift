@@ -250,10 +250,17 @@ final class ProfileController {
     private func toggleFollow() {
         run { controller in
             do {
-                try await controller.store.toggleFollow()
+                guard try await controller.store.toggleFollow() else { return }
             } catch {
                 controller.logger.error("follow change failed: \(SciaLog.describe(error), privacy: .public)")
                 controller.onError(error, "フォローを変更できませんでした")
+                return
+            }
+            do {
+                try await controller.store.reloadAccount()
+            } catch {
+                // フォローは済んでいて、数が古いままなのはサーバーの反映が遅れたときと見分けがつかないため、知らせずに記録だけ残す。
+                controller.logger.error("account reload after follow change failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }
     }

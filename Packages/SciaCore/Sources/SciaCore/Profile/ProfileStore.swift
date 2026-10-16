@@ -158,17 +158,25 @@ public final class ProfileStore {
     }
 
     /// フォローしていなければフォローし、フォロー中かリクエスト中なら外す。送っている途中なら何もしない。
-    public func toggleFollow() async throws {
-        guard !isChangingFollow else { return }
+    /// 送ったらtrue。フォローのAPIは関係だけを返し、フォロワー数は古いままなので、送ったら`reloadAccount()`で読み直す。
+    @discardableResult
+    public func toggleFollow() async throws -> Bool {
+        guard !isChangingFollow else { return false }
         let follows: Bool
         switch followState {
         case .notFollowing: follows = true
         case .following, .requested: follows = false
-        case .myself, .unknown, .blocked: return
+        case .myself, .unknown, .blocked: return false
         }
         isChangingFollow = true
         defer { isChangingFollow = false }
         relationship = try await follows ? api.follow(account.id) : api.unfollow(account.id)
+        return true
+    }
+
+    /// アカウントだけを読み直す。
+    public func reloadAccount() async throws {
+        account = try await api.account(account.id)
     }
 
     /// 固定された投稿と今の一覧の、IDが一致する投稿を書き換える。一覧のブーストは、中の元の投稿のIDでも一致させる。
