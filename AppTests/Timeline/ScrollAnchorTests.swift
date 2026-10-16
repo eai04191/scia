@@ -46,7 +46,7 @@ struct ScrollAnchorTests {
     }
 
     @Test(arguments: [1, 20])
-    func prependAtTopFollowsNewArrivals(insertCount: Int) throws {
+    func prependAtTopFollowsNewArrivals(insertCount: Int) async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
 
@@ -56,6 +56,7 @@ struct ScrollAnchorTests {
         let inserted = StatusFactory.make(count: insertCount, startingAt: 1_000 + insertCount)
 
         harness.setStatuses(inserted + existing)
+        try await harness.waitUntilScrollingToTopEnds()
 
         #expect(harness.viewController.isAtTop)
         let newest = try #require(inserted.first)
@@ -74,10 +75,65 @@ struct ScrollAnchorTests {
         let inserted = StatusFactory.make(count: 3, startingAt: 1_003)
 
         harness.setStatuses(inserted + existing)
-        try await Task.sleep(for: .milliseconds(600))
+        try await harness.waitUntilScrollingToTopEnds()
 
         #expect(harness.viewController.isAtTop, "最上部から外れました: contentOffset.y=\(harness.collectionView.contentOffset.y)")
         #expect(harness.viewController.currentAnchor()?.id == .status(inserted[0].id))
+    }
+
+    /// アニメーションで挿入するときは、行を足した瞬間はいままで最上部にあった投稿を同じ位置に残し、そこから最上部へ動く。
+    /// 行が先に動いてから一覧が戻る2段の動きにしない。
+    @Test(arguments: [1, 20])
+    func animatedPrependAtTopStartsFromPreviousTopAndMovesUp(insertCount: Int) async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.tuning.setValue(true, for: TuningCatalog.animatesInsertionAtTop)
+        let existing = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(existing)
+        harness.scroll(toFraction: 0)
+        let previousTop = try #require(existing.first)
+        let before = try #require(harness.windowMinY(of: .status(previousTop.id)))
+        let inserted = StatusFactory.make(count: insertCount, startingAt: 1_000 + insertCount)
+
+        harness.setStatuses(inserted + existing)
+
+        let start = try #require(harness.windowMinY(of: .status(previousTop.id)), "挿入した直後に、それまで最上部にあった投稿が画面外へ出ました")
+        #expect(abs(start - before) <= tolerance, "挿入した直後に、それまで最上部にあった投稿が\(start - before)pt動きました")
+        #expect(harness.viewController.isScrollingToTop)
+        // 上のセルが見積もりから実寸に変わると、スクロール位置は補正で戻ることがあるが、画面上の中身は動かない。
+        // 見えている間の、それまで最上部にあった投稿の画面上の位置で、最上部へ向かって下がり続けることを確かめる。
+        var previousY = start
+        while harness.viewController.isScrollingToTop {
+            try await Task.sleep(for: .milliseconds(10))
+            guard let y = harness.windowMinY(of: .status(previousTop.id)) else { break }
+            #expect(y >= previousY - tolerance, "最上部へ向かう途中で上へ戻りました: \(previousY) → \(y)")
+            previousY = y
+        }
+        try await harness.waitUntilScrollingToTopEnds()
+
+        #expect(harness.viewController.isAtTop, "最上部から外れました: contentOffset.y=\(harness.collectionView.contentOffset.y)")
+        #expect(harness.viewController.currentAnchor()?.id == .status(inserted[0].id))
+    }
+
+    /// 最上部へ動かしている途中で指が触れたら、そこで止まり、それ以上は動かさない。
+    @Test func touchWhileScrollingToNewestStops() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.tuning.setValue(1, for: TuningCatalog.scrollToTopDuration)
+        harness.setStatuses(StatusFactory.make(count: 60, startingAt: 1_000))
+        harness.scroll(toFraction: 0.4)
+        let start = harness.collectionView.contentOffset.y
+
+        harness.viewController.scrollToNewest()
+        try await Task.sleep(for: .milliseconds(200))
+        harness.viewController.scrollViewWillBeginDragging(harness.collectionView)
+        let stopped = harness.collectionView.contentOffset.y
+        try await Task.sleep(for: .milliseconds(300))
+
+        #expect(stopped < start, "触れる前に動いていません")
+        #expect(!harness.viewController.isScrollingToTop)
+        #expect(harness.collectionView.contentOffset.y == stopped, "触れたあとも動きました")
+        #expect(!harness.viewController.isAtTop)
     }
 
     /// 最上部より下で読んでいるときは、アニメーションの設定によらず、読んでいる位置を保つ。
@@ -354,9 +410,7 @@ struct ScrollAnchorTests {
         harness.scroll(toFraction: 1)
 
         harness.viewController.scrollToNewest()
-        for _ in 0..<200 where !harness.viewController.isAtTop {
-            try await Task.sleep(for: .milliseconds(20))
-        }
+        try await harness.waitUntilScrollingToTopEnds()
 
         #expect(harness.viewController.isAtTop, "最上部に届きませんでした: contentOffset.y=\(harness.collectionView.contentOffset.y)")
     }

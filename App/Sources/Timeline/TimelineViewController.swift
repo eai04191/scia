@@ -105,8 +105,13 @@ final class TimelineViewController: UIViewController {
     private(set) var unreadCount = 0
     /// スクロール位置を補正している間は、途中の表示を既読として報告しない。
     private var isRestoringAnchor = false
-    /// 新着ボタンで最上部へ動かしている。
-    private var isScrollingToTop = false
+    /// 最上部へばねで動かしている間、毎フレーム経過時間を渡すもの。
+    private var topScrollTicker: FrameTicker?
+    /// 最上部へ動かしている間の、ばねの位置の進め方と今の速さ。
+    private var topScroll: SpringScroll?
+    /// 最上部へ動かしている間だけ有効にし、指が触れた時点で止める。触れたタッチは中身に渡さない。
+    /// UIKitのスクロールと同じく、動いている一覧に触れて止めたつもりで、指の下の画像やリンクが開かないようにするため。
+    private lazy var scrollToTopInterruption = makeScrollToTopInterruption()
     /// 指で動かしているスクロールの始まり。止まったら違和感レポート用に記録する。
     private var scrollStart: (offset: CGFloat, time: CFTimeInterval)?
     private let scrollHitches = ScrollHitchMonitor()
@@ -168,6 +173,7 @@ final class TimelineViewController: UIViewController {
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         collectionView.delegate = self
+        collectionView.addGestureRecognizer(scrollToTopInterruption)
         // タブバーの上の投稿欄で書いている間も、読み進めるだけならキーボードを閉じない。キーボードまで引き下ろしたら閉じる。
         collectionView.keyboardDismissMode = .interactive
         view.addSubview(collectionView)
@@ -337,14 +343,20 @@ final class TimelineViewController: UIViewController {
         } else if followsTop {
             // 最初に並べるときは、行が浮かび上がって見えないよう、アニメーションしない。
             let animates = !previous.isEmpty && tuning.value(of: TuningCatalog.animatesInsertionAtTop)
-            isRestoringAnchor = true
-            dataSource.apply(snapshot, animatingDifferences: animates) { [weak self] in
-                // 動いている間に、見積もりから実寸へ変わったセルの分だけ位置が補正され、最上部から外れることがあるため、戻す。
-                guard animates, let self, !self.isUserScrolling, !self.isAtTop else { return }
-                self.collectionView.setContentOffset(CGPoint(x: 0, y: -self.collectionView.adjustedContentInset.top), animated: true)
+            if animates {
+                // 行はアニメーションなしで足し、いままで最上部にあった行を同じ位置に残す。足した行の高さぶん下にずれた位置から、
+                // 最上部へ1つの動きで戻して新着を見せる。
+                applyPreservingAnchor(snapshot)
+                scrollToTop(
+                    duration: tuning.value(of: TuningCatalog.insertionScrollDuration),
+                    bounce: tuning.value(of: TuningCatalog.insertionScrollBounce)
+                )
+            } else {
+                isRestoringAnchor = true
+                dataSource.apply(snapshot, animatingDifferences: false)
+                collectionView.contentOffset.y = -collectionView.adjustedContentInset.top
+                isRestoringAnchor = false
             }
-            collectionView.contentOffset.y = -collectionView.adjustedContentInset.top
-            isRestoringAnchor = false
             logger.info("setEntries count=\(newEntries.count, privacy: .public) followsTop=true animated=\(animates, privacy: .public)")
         } else {
             let anchor = applyPreservingAnchor(snapshot, keeping: anchorID)
@@ -409,8 +421,13 @@ final class TimelineViewController: UIViewController {
     /// - Parameter isLowerBound: 未読の区間に読み込んでいない投稿があり、実際はもっと多い。
     func setUnreadCount(_ count: Int, isLowerBound: Bool = false) {
         unreadCount = count
-        newArrivalsButton.isHidden = count == 0
+        updateNewArrivalsButtonVisibility()
         newArrivalsButton.configuration?.title = isLowerBound ? "\(count)件以上の新着" : "\(count)件の新着"
+    }
+
+    /// 最上部へ動かしている間は隠す。新着を足して最上部へ動かすときに、新着が画面に入るまでの間だけ出てしまうため。
+    private func updateNewArrivalsButtonVisibility() {
+        newArrivalsButton.isHidden = unreadCount == 0 || isScrollingToTop
     }
 
     /// ストリーミングにつながらない状態が続いていることを、タイトルの下に控えめに出す。
@@ -589,8 +606,8 @@ final class TimelineViewController: UIViewController {
             }
         }
         guard let found, let indexPath = dataSource.indexPath(for: found) else { return false }
-        // 最上部へ動かしている途中なら、それをやめる。続けると、返信先へ動き終えたときに最上部へ動かし直してしまう。
-        isScrollingToTop = false
+        // 最上部へ動かしている途中なら、それをやめる。続けると、返信先へ動かす位置と取り合う。
+        stopScrollingToTop()
         collectionView.scrollToItem(at: indexPath, at: .bottom, animated: animated)
         return true
     }
@@ -622,13 +639,97 @@ final class TimelineViewController: UIViewController {
         updateObscuredBottomInset()
     }
 
-    /// 最上部へ動かす。上のセルは表示されたときに見積もりから実寸へ変わり、そのぶん位置が補正されて最上部に届かないことがあるため、
-    /// 届くまで動かし直す。
+    /// 新着ボタン、タブの選び直し、ステータスバーのタップで、最上部へ戻る。
     func scrollToNewest() {
         // 慣性で動いている途中にこちらで動かすと、止まりの通知が来ないため、ここまでのスクロールを記録する。
         recordScroll()
-        isScrollingToTop = true
-        collectionView.setContentOffset(CGPoint(x: 0, y: -collectionView.adjustedContentInset.top), animated: true)
+        scrollToTop(
+            duration: tuning.value(of: TuningCatalog.scrollToTopDuration),
+            bounce: tuning.value(of: TuningCatalog.scrollToTopBounce)
+        )
+    }
+
+    /// 最上部へばねで動かす。UIKitのスクロールのアニメーションは時間も曲線も変えられないため、毎フレーム位置を置く。
+    ///
+    /// 上のセルは表示されたときに見積もりから実寸へ変わり、UICollectionViewがそのぶん位置を補正する。
+    /// 動いている途中に新着を足したときも、読んでいる位置を保つためにずらす。どちらも、ずれた位置から速さを持ち越して
+    /// 最上部へ向かうため、中身は飛ばず、止まり直しもしない。すでに動かしていれば、速さを持ち越して時間と弾みだけ替える。
+    /// 動いている途中に指が触れたら止め、指の操作に任せる。
+    private func scrollToTop(duration: TimeInterval, bounce: Double) {
+        topScroll = SpringScroll(duration: duration, bounce: bounce, velocity: topScroll?.velocity ?? 0)
+        guard topScrollTicker == nil else { return }
+        // 慣性で動いている途中なら止める。止めないと、慣性で動かす位置と取り合う。
+        collectionView.setContentOffset(collectionView.contentOffset, animated: false)
+        // 動いている途中にこの画面が閉じられて解放されたら、続けないと返して止めさせる。
+        let ticker = FrameTicker { [weak self] elapsed in
+            guard let self else { return false }
+            stepScrollingToTop(elapsed: elapsed)
+            return isScrollingToTop
+        }
+        topScrollTicker = ticker
+        scrollToTopInterruption.isEnabled = true
+        ticker.start()
+        updateNewArrivalsButtonVisibility()
+    }
+
+    /// 最上部にいるときのスクロール位置。
+    private var topOffset: CGFloat {
+        -collectionView.adjustedContentInset.top
+    }
+
+    private func stepScrollingToTop(elapsed: CFTimeInterval) {
+        // 指が触れた時点で止める。ドラッグが始まるのを待つと、触れてから指が動くまでの間も動き続け、指の下で中身がずれる。
+        guard !collectionView.isTracking, var scroll = topScroll else {
+            stopScrollingToTop()
+            return
+        }
+        let target = topOffset
+        let next = scroll.step(from: collectionView.contentOffset.y, toward: target, by: elapsed)
+        topScroll = scroll
+        guard !scroll.isSettled(at: next, target: target) else {
+            didFinishScrollingToTop()
+            return
+        }
+        collectionView.contentOffset.y = next
+    }
+
+    /// 落ち着いたら最上部にそろえる。新着ボタンは、見えた投稿を既読にしてから出し直す。先に出すと、既読になるまでの一瞬だけ出てしまう。
+    private func didFinishScrollingToTop() {
+        endScrollingToTop()
+        collectionView.contentOffset.y = topOffset
+        reportVisibleItemsAfterLayout()
+        updateNewArrivalsButtonVisibility()
+        onInteractionSettle?()
+    }
+
+    private func stopScrollingToTop() {
+        endScrollingToTop()
+        updateNewArrivalsButtonVisibility()
+    }
+
+    private func endScrollingToTop() {
+        topScrollTicker?.stop()
+        topScrollTicker = nil
+        topScroll = nil
+        scrollToTopInterruption.isEnabled = false
+    }
+
+    /// 最上部へばねで動かしている。
+    var isScrollingToTop: Bool {
+        topScrollTicker != nil
+    }
+
+    private func makeScrollToTopInterruption() -> UILongPressGestureRecognizer {
+        let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(interruptScrollingToTop(_:)))
+        recognizer.minimumPressDuration = 0
+        recognizer.isEnabled = false
+        recognizer.delegate = self
+        return recognizer
+    }
+
+    @objc private func interruptScrollingToTop(_ recognizer: UILongPressGestureRecognizer) {
+        guard recognizer.state == .began else { return }
+        stopScrollingToTop()
     }
 
     /// 表示領域から一定の距離に入ったギャップを報告する。指で動かしている間と慣性で動いている間は、上へ戻っているなら
@@ -834,24 +935,19 @@ extension TimelineViewController: UICollectionViewDelegate {
         onInteractionSettle?()
     }
 
-    /// 新着ボタンで最上部へ動かしたとき。
+    /// 返信先の投稿へ動かしたとき。
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
-        if isScrollingToTop, !isAtTop {
-            scrollToNewest()
-            return
-        }
-        isScrollingToTop = false
         reportVisibleItemsAfterLayout()
         onInteractionSettle?()
     }
 
-    /// 最上部へ動かしている途中で指が触れたら、それ以上は動かし直さない。
+    /// 最上部へ動かしている途中で指が触れたら、そこで止める。
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        stopScrollingToTop()
         // 慣性で動いている途中で触れると、前のスクロールは止まりの通知を受けずに終わるため、ここで記録する。
         recordScroll()
         scrollStart = (scrollView.contentOffset.y, CACurrentMediaTime())
         scrollHitches.start()
-        isScrollingToTop = false
     }
 
     /// スクロールの途中で新着の挿入などにより位置を補正すると、補正の分も動いた量に入る。
@@ -876,17 +972,11 @@ extension TimelineViewController: UICollectionViewDelegate {
         }
     }
 
-    /// ステータスバーのタップで最上部へ動かし始めるとき。慣性で動いている途中なら、止まりの通知が来ないため、ここまでのスクロールを記録する。
+    /// ステータスバーのタップ。UIKitに動かさせず、新着ボタンと同じ動きで最上部へ戻る。
     func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
-        recordScroll()
-        return true
-    }
-
-    /// ステータスバーのタップで最上部へ動かしたとき。
-    func scrollViewDidScrollToTop(_ scrollView: UIScrollView) {
+        scrollToNewest()
         UserAction.scrollToTop(screen: texts.dumpName).record()
-        reportVisibleItemsAfterLayout()
-        onInteractionSettle?()
+        return false
     }
 
     func collectionView(_ collectionView: UICollectionView, willDisplayContextMenu configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
@@ -951,6 +1041,13 @@ extension TimelineViewController: UICollectionViewDelegate {
         if indexPath.item >= count - prefetchThreshold {
             onApproachingEnd?()
         }
+    }
+}
+
+extension TimelineViewController: UIGestureRecognizerDelegate {
+    /// 触れて止めたまま、指でスクロールし始められるようにする。
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        gestureRecognizer === scrollToTopInterruption && otherGestureRecognizer === collectionView.panGestureRecognizer
     }
 }
 

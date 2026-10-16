@@ -64,6 +64,14 @@ final class TimelineHarness {
         (visibleCell(of: .status(id))?.contentConfiguration as? PostContentConfiguration)?.body.string
     }
 
+    /// 最上部へばねで動かしているのが終わるまで待つ。
+    func waitUntilScrollingToTopEnds() async throws {
+        for _ in 0..<300 where viewController.isScrollingToTop {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(!viewController.isScrollingToTop, "最上部へ動かすのが終わりません")
+    }
+
     func visibleCell(of id: TimelineViewController.ItemID) -> UICollectionViewCell? {
         collectionView.layoutIfNeeded()
         return collectionView.visibleCells.first { cell in
