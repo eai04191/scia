@@ -345,6 +345,24 @@ public enum TuningCatalog {
         defaultValue: false
     )
 
+    /// 動画を再生している間、最後に触れてから操作の部品とボタンを隠すまでの時間。
+    public static let mediaVideoControlsHideDelay = NumberTuning(
+        id: "media.videoControlsHideDelay",
+        title: "再生中に操作の部品を隠すまでの時間（秒）",
+        range: 1...10,
+        step: 0.5,
+        defaultValue: 3
+    )
+
+    /// 動画をダブルタップして10秒戻ったか進んだことを知らせる表示を、出しておく時間。
+    public static let mediaVideoSkipEffectDuration = NumberTuning(
+        id: "media.videoSkipEffectDuration",
+        title: "ダブルタップで飛んだ知らせを出しておく時間（秒）",
+        range: 0.1...1.5,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
     /// 代替テキストを書いているとき、残りの文字数がこれ以下になったら残りを出す。
     public static let mediaDescriptionRemainingThreshold = NumberTuning(
         id: "media.descriptionRemainingThreshold",
@@ -471,6 +489,10 @@ public enum TuningCatalog {
         TuningSection(id: "media.menu", title: "ビューア：メニュー", items: [
             .number(mediaSavedChipDuration),
             .toggle(mediaSavedChipAtBottom),
+        ]),
+        TuningSection(id: "media.video", title: "ビューア：動画", items: [
+            .number(mediaVideoControlsHideDelay),
+            .number(mediaVideoSkipEffectDuration),
         ]),
         TuningSection(id: "media.description", title: "ビューア：代替テキスト", items: [
             .number(mediaDescriptionRemainingThreshold),
