@@ -855,7 +855,7 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
             if dragToDismiss.shouldDismiss(translation: translation.y, velocity: velocity, height: height) {
                 SciaLog.logger(category: "media").info("dismiss by drag translation=\(translation.y, privacy: .public) velocity=\(velocity, privacy: .public)")
                 UserAction.closeViewer(.drag).record()
-                beginClosing(byDrag: true)
+                beginClosing(releaseVelocity: recognizer.velocity(in: view))
             } else {
                 settle()
             }
@@ -1182,8 +1182,8 @@ extension MediaViewerController {
     /// 閉じると決めたら、すぐにビューアを閉じ、写しと下地とボタンの写しを、操作を素通しする最前面の層へ移してサムネイルへ縮める。
     /// ビューアを残したまま動かすと、残った画面が触れたものを吸い、閉じた直後に別の画像を叩いても開けない。
     /// サムネイルが見つからなければ、その場で薄くする。
-    /// - Parameter byDrag: 下へ払って閉じた。払って閉じるときだけ弾ませる。
-    private func beginClosing(byDrag: Bool = false) {
+    /// - Parameter releaseVelocity: 下へ払って閉じたときの、指を離したときの速さ。払って閉じるときだけ、この速さを引き継いで弾ませる。
+    private func beginClosing(releaseVelocity: CGPoint? = nil) {
         if isEditingDescription {
             endEditingDescription()
         }
@@ -1244,6 +1244,17 @@ extension MediaViewerController {
 
         let attachmentID = currentItem.id
         let sourceTile = sourceTile
+        // 払った速さで縮み始めるよう、サムネイルへ向かう向きの速さを引き継ぐ。止まった状態から縮み始めると、離した瞬間に一度止まって見える。
+        let initialVelocity: Double = if moves, let releaseVelocity, let target = sourceTile(attachmentID).map({ $0.convert($0.bounds, to: window) }) {
+            SpringCurve.initialVelocity(
+                releaseVelocity: (releaseVelocity.x, releaseVelocity.y),
+                from: (morph.frame.midX, morph.frame.midY),
+                to: (target.midX, target.midY),
+                duration: timing.closeDuration
+            )
+        } else {
+            0
+        }
         let flight = MediaClosingFlight(
             parts: MediaClosingFlight.Parts(
                 overlay: overlay,
@@ -1261,7 +1272,7 @@ extension MediaViewerController {
                 )
             ),
             window: window,
-            spring: SpringCurve(duration: timing.closeDuration, bounce: byDrag ? timing.dragCloseBounce : 0),
+            spring: SpringCurve(duration: timing.closeDuration, bounce: releaseVelocity == nil ? 0 : timing.dragCloseBounce, initialVelocity: initialVelocity),
             handoffStart: CGFloat(timing.handoffStart),
             barOverlapFadeEnd: CGFloat(timing.barOverlapFadeEnd),
             startOverlapOpacity: startOverlapOpacity,
