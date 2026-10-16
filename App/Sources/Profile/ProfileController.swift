@@ -263,7 +263,7 @@ final class ProfileController {
         })
         sheet.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         sheet.popoverPresentationController?.sourceView = source
-        viewController?.present(sheet, animated: true)
+        viewController?.frontmostPresented.present(sheet, animated: true)
     }
 
     private func toggleFollow() {

@@ -697,8 +697,19 @@ final class TimelineViewController: UIViewController {
         return true
     }
 
-    /// 画面の下端から、投稿欄のキーボードと入力バーが覆っている高さ。
+    /// 画面の下端から、投稿欄のキーボードと入力バー、アプリ内のSafariのシートが覆っている高さ。
     private var obscuredBottomHeight: CGFloat = 0
+
+    /// アプリ内のSafariを全画面に広げて、一覧を覆っている。
+    private var isCoveredByInAppBrowser = false
+
+    /// アプリ内のSafariは後ろに一覧を残したまま全画面に広がるため、広げている間は一覧の投稿を見たと報告しない。
+    /// 中くらいの高さに戻したら、そこで見えている投稿を報告し直す。
+    func setCoveredByInAppBrowser(_ covered: Bool) {
+        guard isCoveredByInAppBrowser != covered else { return }
+        isCoveredByInAppBrowser = covered
+        if !covered { reportVisibleItems() }
+    }
 
     /// 下端の覆われた部分を一覧の表示領域から外し、そこに隠れた要素を表示中として報告しないようにする。
     /// 下側の余白を変えるだけなので、上端を基準にした読んでいる位置は動かない。ただし一覧の末尾までスクロールしていると、
@@ -849,9 +860,9 @@ final class TimelineViewController: UIViewController {
     }
 
     /// 表示領域に半分以上入っている投稿と通知を、表示中として報告する。ナビゲーションバーの下に隠れている部分は数えない。
-    /// 他のタブにいる間や、添付ファイルのビューアで覆っている間など、画面に出ていなければ報告しない。
+    /// 他のタブにいる間や、添付ファイルのビューアや全画面のアプリ内のSafariで覆っている間など、画面に出ていなければ報告しない。
     func reportVisibleItems() {
-        guard !isRestoringAnchor, viewIfLoaded?.window != nil, !isCoveredByMediaViewer else { return }
+        guard !isRestoringAnchor, viewIfLoaded?.window != nil, !isCoveredByMediaViewer, !isCoveredByInAppBrowser else { return }
         let visibleRect = collectionView.bounds.inset(by: collectionView.adjustedContentInset)
         let ids = collectionView.indexPathsForVisibleItems.compactMap { indexPath -> ItemID? in
             guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return nil }

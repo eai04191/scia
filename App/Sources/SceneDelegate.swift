@@ -127,7 +127,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         let settings = UIAction(title: "設定", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             guard let session = self?.session else { return }
-            self?.window?.rootViewController?.presentSettings(
+            self?.window?.rootViewController?.frontmostPresented.presentSettings(
                 loadPreviewAccount: { try await session.myAccount() },
                 instance: session.credential.instance,
                 diagnostics: session.diagnostics
@@ -202,14 +202,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             logger.error("reauthentication failed: \(SciaLog.describe(error), privacy: .public)")
             let alert = UIAlertController(title: "ログインし直せませんでした", message: ErrorPresentation(error).text, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .cancel))
-            window.rootViewController?.present(alert, animated: true)
+            window.rootViewController?.frontmostPresented.present(alert, animated: true)
         }
     }
 
     /// ログイン画面をシートで出し、ログインできたらそのアカウントに切り替える。
     /// キャンセルした後にログインの続きが終わっても、アカウントは加えない。閉じたのに別のアカウントへ切り替わらないようにするため。
     private func presentAddAccount() {
-        guard let presenter = window?.rootViewController else { return }
+        guard let presenter = window?.rootViewController?.frontmostPresented else { return }
         weak var sheet: UIViewController?
         let attempt = AddAccountAttempt()
         let model = LoginModel { [weak self] credential in
@@ -232,7 +232,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     private func confirmLogOut() {
-        guard let presenter = window?.rootViewController, let current = accounts?.current else { return }
+        guard let presenter = window?.rootViewController?.frontmostPresented, let current = accounts?.current else { return }
         let alert = UIAlertController(
             title: "\(current.handle)からログアウトしますか？",
             message: "この端末からアカウントの情報を消します。もう一度使うにはログインし直します。",

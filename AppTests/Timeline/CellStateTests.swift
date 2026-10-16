@@ -25,6 +25,23 @@ struct CellStateTests {
         #expect(reported.contains(statuses[0].id), "最上部の投稿を見たと報告しませんでした: \(reported.prefix(3))")
     }
 
+    /// アプリ内のSafariを全画面に広げている間は一覧が見えないため、流れ込んだ新着を見たと報告せず、中くらいの高さに戻したら報告する。
+    @Test func reportsVisibleStatusesOnlyWhileNotCoveredByInAppBrowser() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 5, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        var reported: [Status.ID] = []
+        harness.viewController.onVisibleStatusesChange = { reported = $0 }
+
+        harness.viewController.setCoveredByInAppBrowser(true)
+        harness.viewController.reportVisibleItems()
+        #expect(reported.isEmpty, "全画面のSafariで覆っている間に報告しました: \(reported.prefix(3))")
+
+        harness.viewController.setCoveredByInAppBrowser(false)
+        #expect(reported.contains(statuses[0].id), "覆いが外れたのに報告しませんでした")
+    }
+
     /// 投稿にはまだ開く画面がないため、タップしても選んだ状態にしない。
     @Test func statusCellsAreNotSelectable() throws {
         let harness = try TimelineHarness()

@@ -49,6 +49,11 @@ public final class AppSettings {
         }
     }
 
+    /// 本文のURLのリンクを、既定のブラウザとアプリ内のSafariのどちらで開くか。
+    public var linkBrowser: LinkBrowser {
+        didSet { defaults.set(linkBrowser.rawValue, forKey: Keys.linkBrowser) }
+    }
+
     private enum Keys {
         static let usesOriginalThumbnailsOnExpensiveNetwork = "settings.usesOriginalThumbnailsOnExpensiveNetwork"
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
@@ -59,6 +64,7 @@ public final class AppSettings {
         static let insertionMotion = "settings.insertionMotion"
         static let profileShowsReplies = "settings.profileShowsReplies"
         static let profileShowsBoosts = "settings.profileShowsBoosts"
+        static let linkBrowser = "settings.linkBrowser"
     }
 
     public init(defaults: UserDefaults) {
@@ -70,6 +76,7 @@ public final class AppSettings {
         avatarShape = defaults.string(forKey: Keys.avatarShape).flatMap(AvatarShape.init(rawValue:)) ?? .roundedSquare
         animatesAvatars = defaults.object(forKey: Keys.animatesAvatars) as? Bool ?? false
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
+        linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .external
         profilePostsFilter = ProfilePostsFilter(
             showsReplies: defaults.object(forKey: Keys.profileShowsReplies) as? Bool ?? ProfilePostsFilter.standard.showsReplies,
             showsBoosts: defaults.object(forKey: Keys.profileShowsBoosts) as? Bool ?? ProfilePostsFilter.standard.showsBoosts

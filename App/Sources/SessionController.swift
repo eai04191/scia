@@ -43,6 +43,12 @@ final class SessionController {
     /// 投稿欄が覆っている高さを伝える一覧。ホームと通知に加え、開いているプロフィールの一覧も入る。閉じたものは自然に消える。
     private let timelines = NSHashTable<TimelineViewController>.weakObjects()
     private var composerObscuredHeight: CGFloat = 0
+    /// 本文のリンクを開くアプリ内のSafari。シートが覆っている高さも、投稿欄と同じく一覧の下の余白にする。
+    private let browser = InAppBrowser()
+    private var browserObscuredHeight: CGFloat = 0
+    private var browserCoversTimelines = false
+    /// 一覧の下を覆っている高さ。投稿欄とアプリ内のSafariのシートのうち、高いほう。
+    private var obscuredBottomHeight: CGFloat { max(composerObscuredHeight, browserObscuredHeight) }
     /// 投稿画面で使う、インスタンスの上限とユーザーの既定の公開範囲。一度読めたら使い回す。
     private var composeDefaults: (configuration: InstanceConfiguration?, visibility: Status.Visibility?)?
     private let logger = SciaLog.logger(category: "session")
@@ -171,16 +177,36 @@ final class SessionController {
         composer.onObscuredHeightChange = { [weak self] height in
             guard let self else { return }
             composerObscuredHeight = height
+            applyObscuredBottomHeight()
+        }
+        browser.onObscuredHeightChange = { [weak self] height in
+            guard let self else { return }
+            browserObscuredHeight = height
+            applyObscuredBottomHeight()
+        }
+        browser.onCoverageChange = { [weak self] covered in
+            guard let self else { return }
+            browserCoversTimelines = covered
             for timeline in timelines.allObjects {
-                timeline.setObscuredBottomHeight(height)
+                timeline.setCoveredByInAppBrowser(covered)
             }
         }
         composer.onPosted = { [weak self] in
-            guard let self, self.rootViewController.presentedViewController is ComposeHostingController else { return }
-            self.rootViewController.dismiss(animated: true)
+            // 投稿画面はアプリ内のSafariのシートの上に重ねていることがあるため、重ねている画面をたどって探す。
+            var presented = self?.rootViewController.presentedViewController
+            while let current = presented, !(current is ComposeHostingController) {
+                presented = current.presentedViewController
+            }
+            presented?.dismiss(animated: true)
         }
         // 投稿欄を置くとタブバーの画面を読み込むため、各一覧の設定（投稿ボタンを付けるonComposeなど）を終えてから置く。
         composer.install(in: tabBarController)
+    }
+
+    private func applyObscuredBottomHeight() {
+        for timeline in timelines.allObjects {
+            timeline.setObscuredBottomHeight(obscuredBottomHeight)
+        }
     }
 
     /// 一覧から投稿への操作とプロフィールを開けるようにする。プロフィール画面の一覧にも使う。
@@ -190,7 +216,8 @@ final class SessionController {
             showReauthenticationPrompt(on: viewController)
             viewController.setReauthenticating(isReauthenticating)
         }
-        viewController.setObscuredBottomHeight(composerObscuredHeight)
+        viewController.setObscuredBottomHeight(obscuredBottomHeight)
+        viewController.setCoveredByInAppBrowser(browserCoversTimelines)
         viewController.myAccountID = credential.accountID
         viewController.onStatusAction = { [weak self, weak viewController] action, status in self?.perform(action, on: status, from: viewController) }
         viewController.onShowRecentNotices = { [weak self] presenter in self?.showRecentNotices(from: presenter) }
@@ -204,12 +231,15 @@ final class SessionController {
         }
     }
 
-    /// 本文のリンクを開く。URLはブラウザで、メンションはその人のプロフィールを開いた一覧に積む。
+    /// 本文のリンクを開く。URLは設定に応じて既定のブラウザかアプリ内のSafariで、メンションはその人のプロフィールを開いた一覧に積む。
     /// ハッシュタグはまだハッシュタグのタイムラインがないため、押しても何もしない。ブラウザで開くと、タイムラインを足したときに挙動が変わってしまう。
     private func open(_ destination: RichText.LinkDestination, in status: Status, from source: UIViewController) {
         switch destination {
         case .url(let url):
-            UIApplication.shared.open(url)
+            switch AppDependencies.settings.linkBrowser.browser(for: url) {
+            case .external: UIApplication.shared.open(url)
+            case .inApp: browser.open(url, from: rootViewController)
+            }
         case .mention(let acct, let url):
             // ローカルのacctはドメインを含まず、検索では完全一致にならないため、投稿のメンションの一覧にあるIDで引く。
             guard let mention = status.mentions.first(where: { $0.url == url || $0.acct == acct }) else {
@@ -389,7 +419,8 @@ final class SessionController {
     private func expandCompose() {
         UserAction.expandCompose.record()
         applyComposeDefaults()
-        rootViewController.present(ComposeHostingController(model: composer.model), animated: true)
+        // アプリ内のSafariのシートを出していれば、その上に重ねる。
+        rootViewController.frontmostPresented.present(ComposeHostingController(model: composer.model), animated: true)
     }
 
     /// 既定の公開範囲などを読めたら、投稿欄に反映する。読めなかったら、次に書き始めたときに読み直す。

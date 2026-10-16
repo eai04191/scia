@@ -81,6 +81,16 @@ struct SettingsView: View {
                     Text("一覧の最上部にいるときに届いた新着を、下から動かして見せるかを選びます。「自動」では、iPhoneの設定の「アクセシビリティ」>「動作」>「視差効果を減らす」がオンのときは動かしません。")
                 }
                 Section {
+                    Picker("開く場所", selection: $settings.linkBrowser) {
+                        Text("既定のブラウザ").tag(LinkBrowser.external)
+                        Text("アプリ内のSafari").tag(LinkBrowser.inApp)
+                    }
+                } header: {
+                    Text("リンク")
+                } footer: {
+                    Text("URLのリンクを開く場所です。アプリ内のSafariでは、画面の下半分にページを開き、上に一覧を見ながら読めます。読んでいる間も新着が届きます。httpとhttps以外のリンクは、この設定にかかわらず対応するアプリで開きます。")
+                }
+                Section {
                     Toggle("モバイル通信で高画質のサムネイルを使う", isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
                 } header: {
                     Text("画像")

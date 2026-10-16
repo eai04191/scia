@@ -88,4 +88,15 @@ struct AppSettingsTests {
 
         #expect(AppSettings(defaults: defaults).profilePostsFilter == ProfilePostsFilter(showsReplies: true, showsBoosts: false))
     }
+
+    /// アプリを離れて既定のブラウザで開くのが一般に好まれるため、既定は外で開く。
+    @Test func opensLinksExternallyByDefault() throws {
+        #expect(AppSettings(defaults: try makeDefaults()).linkBrowser == .external)
+    }
+
+    @Test func persistsLinkBrowser() throws {
+        let defaults = try makeDefaults()
+        AppSettings(defaults: defaults).linkBrowser = .inApp
+        #expect(AppSettings(defaults: defaults).linkBrowser == .inApp)
+    }
 }

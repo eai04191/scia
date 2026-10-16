@@ -50,9 +50,14 @@ extension TimelineViewController {
 
     /// 添付ファイルのビューアで覆っている。ビューアは閉じる操作の間に一覧を透かすため、開いている間も一覧を画面に残す。
     /// 閉じ終わりに報告し直せるよう、閉じている途中のビューアは数えない。
+    /// ビューアはアプリ内のSafariのシートの上に重ねていることがあるため、重ねている画面をたどって探す。
     var isCoveredByMediaViewer: Bool {
-        guard let viewer = presentedViewController as? MediaViewerController else { return false }
-        return !viewer.isBeingDismissed
+        var presented = presentedViewController
+        while let current = presented {
+            if let viewer = current as? MediaViewerController { return !viewer.isBeingDismissed }
+            presented = current.presentedViewController
+        }
+        return false
     }
 
     /// 閉じるときは、タップした行のサムネイルへ戻す。同じ投稿とそのブーストが並んでいると、同じ添付ファイルのサムネイルが複数あるため。
@@ -86,7 +91,8 @@ extension TimelineViewController {
             store: mediaImages,
             dragToDismiss: dragToDismiss,
             timing: timing,
-            from: self,
+            // アプリ内のSafariのシートを出していれば、その上に重ねる。
+            from: frontmostPresented,
             sourceTile: sourceTile,
             onShowRecentNotices: onShowRecentNotices,
             // 一覧は残したままなので表示し直しの通知が来ない。開いている間に届いた新着を、閉じたところで報告する。
