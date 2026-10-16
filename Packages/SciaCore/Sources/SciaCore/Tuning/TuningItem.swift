@@ -400,6 +400,27 @@ public enum TuningCatalog {
         defaultValue: 40
     )
 
+    /// 本文のリンクを開くアプリ内のSafariの、全画面でないときのシートの高さ。シートが取れる最大の高さに対する割合。
+    /// 0.5でシステムの中くらいの高さとほぼ同じになる。シートを出したまま、上に一覧を見る高さ。
+    public static let inAppBrowserMediumFraction = NumberTuning(
+        id: "browser.mediumFraction",
+        title: "アプリ内のSafariのシートの高さ（割合）",
+        range: 0.25...0.85,
+        step: 0.05,
+        defaultValue: 0.5
+    )
+
+    /// アプリ内のSafariのシートをいちばん下げたときの高さ（pt、下の安全領域を除く）。投稿欄で書いている間はこの高さまで下げる。
+    /// 一時的に伏せておくために、つまみで下げることもできる。中くらいの高さで一覧をスクロールする指がシートを引き下ろしても、
+    /// いったんこの高さで止まるため、閉じにくくする役も持つ。
+    public static let inAppBrowserCollapsedHeight = NumberTuning(
+        id: "browser.collapsedHeight",
+        title: "アプリ内のSafariを伏せたときの高さ（pt）",
+        range: 40...200,
+        step: 4,
+        defaultValue: 120
+    )
+
     /// 投稿欄が、細いカプセルと書くときの形の間で形を変える時間（秒）。位置の動きはキーボードに合わせて別に動く。
     public static let composeMorphDuration = NumberTuning(
         id: "compose.morphDuration",
@@ -476,6 +497,10 @@ public enum TuningCatalog {
             .number(composeMorphDuration),
             .toggle(composePickerMatchesKeyboard),
             .number(composePickerHeight),
+        ]),
+        TuningSection(id: "browser", title: "アプリ内のSafari", items: [
+            .number(inAppBrowserMediumFraction),
+            .number(inAppBrowserCollapsedHeight),
         ]),
         TuningSection(id: "media.dismiss", title: "ビューア：閉じる操作", items: [
             .number(mediaDismissDistance),
