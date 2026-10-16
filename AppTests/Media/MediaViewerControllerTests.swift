@@ -534,6 +534,31 @@ struct MediaViewerControllerTests {
         #expect(current - backward >= Double.pi)
     }
 
+    /// ループ再生は、その動画を見ている間だけ切り替える。最初は切っていて、入れたらメニューに印を付け、最後まで再生したら先頭から続ける。
+    @Test func loopPlaybackTogglesPerVideo() throws {
+        let file = LocalMediaFile(url: URL(filePath: "/tmp/v.mov"), mimeType: "video/quicktime", kind: .video)
+        let page = PlayerPageController(item: MediaViewerItem(id: "v", kind: .video, description: "", file: file, thumbnail: nil, status: .ready))
+        page.loadViewIfNeeded()
+        #expect(page.loopMenuAction()?.title == "ループ再生")
+        #expect(page.loopMenuAction()?.state == .off)
+
+        page.setLooping(true)
+        #expect(page.loopMenuAction()?.state == .on)
+        #expect(page.isLooping)
+
+        let another = PlayerPageController(item: MediaViewerItem(id: "w", kind: .video, description: "", file: file, thumbnail: nil, status: .ready))
+        another.loadViewIfNeeded()
+        #expect(another.loopMenuAction()?.state == .off)
+    }
+
+    /// GIFはもとからくり返すため、ループ再生の項目を出さない。
+    @Test func gifDoesNotOfferLoopPlayback() {
+        let file = LocalMediaFile(url: URL(filePath: "/tmp/g.mp4"), mimeType: "video/mp4", kind: .gifv)
+        let page = PlayerPageController(item: MediaViewerItem(id: "g", kind: .gifv, description: "", file: file, thumbnail: nil, status: .ready))
+        page.loadViewIfNeeded()
+        #expect(page.loopMenuAction() == nil)
+    }
+
     private func allContextMenuInteractions(in view: UIView) -> [UIContextMenuInteraction] {
         view.interactions.compactMap { $0 as? UIContextMenuInteraction } + view.subviews.flatMap { allContextMenuInteractions(in: $0) }
     }
@@ -621,7 +646,7 @@ struct MediaViewerControllerTests {
         let saved = SavedFiles()
         let viewer = presentVideoViewer(on: harness, photoSaver: PhotoLibrarySaver { saved.files.append($0) }, download: Self.slowDownload(data))
         defer { viewer.dismiss(animated: false) }
-        #expect(viewer.menuElements().compactMap { ($0 as? UIAction)?.title } == ["共有", "写真に保存"])
+        #expect(viewer.menuElements().compactMap { ($0 as? UIAction)?.title } == ["共有", "写真に保存", "ループ再生"])
         #expect(try #require(menuAction("写真に保存", in: viewer)).attributes.isEmpty)
 
         viewer.saveToPhotos()
@@ -730,14 +755,14 @@ struct MediaViewerControllerTests {
         viewer.presentedViewController?.dismiss(animated: false)
     }
 
-    /// 音声は写真に入らないため、共有だけを出す。
+    /// 音声は写真に入らないため、保存は出さない。
     @Test func audioOffersOnlySharing() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         let viewer = presentVideoViewer(on: harness, type: .audio, download: Self.slowDownload(Data()))
         defer { viewer.dismiss(animated: false) }
 
-        #expect(viewer.menuElements().compactMap { ($0 as? UIAction)?.title } == ["共有"])
+        #expect(viewer.menuElements().compactMap { ($0 as? UIAction)?.title } == ["共有", "ループ再生"])
         #expect(try #require(menuAction("共有", in: viewer)).attributes.isEmpty)
     }
 

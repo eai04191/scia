@@ -621,6 +621,9 @@ final class MediaViewerController: UIViewController {
                 self?.showAltText()
             })
         }
+        if let loop = (pages[currentIndex] as? PlayerPageController)?.loopMenuAction() {
+            elements.append(loop)
+        }
         return elements
     }
 
@@ -658,7 +661,8 @@ final class MediaViewerController: UIViewController {
         let edit = UIAction(title: "代替テキストを編集", image: UIImage(systemName: "text.below.photo")) { [weak self] _ in
             self?.beginEditingDescription()
         }
-        return [edit] + editing.menuElements(currentItem.id)
+        let loop = (pages[currentIndex] as? PlayerPageController)?.loopMenuAction()
+        return [edit] + [loop].compactMap(\.self) + editing.menuElements(currentItem.id)
     }
 
     /// 代替テキストの入力欄をキーボードのすぐ上に出して書き始める。
@@ -1756,6 +1760,8 @@ final class PlayerPageController: MediaPageController {
     var controlsHideDelay: TimeInterval = 3
     /// ダブルタップで10秒戻ったか進んだことを知らせる表示を、出しておく時間。
     var skipEffectDuration: TimeInterval = 0.3
+    /// 最後まで再生したら先頭から続ける。右上のメニューで、その動画を見ている間だけ切り替える。
+    private(set) var isLooping = false
     /// ビューアのボタンと説明を隠す（true）か出す（false）よう、ビューアに頼む。
     var onRequestChromeHidden: ((Bool) -> Void)?
     private var isChromeHidden = false
@@ -1847,6 +1853,7 @@ final class PlayerPageController: MediaPageController {
                 }
             }
         } else {
+            player.actionAtItemEnd = isLooping ? .none : .pause
             observe(player, playing: playerItem)
         }
         Task { [weak self] in
@@ -1871,9 +1878,15 @@ final class PlayerPageController: MediaPageController {
                     self?.playbackStatusDidChange()
                 }
             }
-        endObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: playerItem, queue: .main) { [weak self] _ in
+        endObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: playerItem, queue: .main) { [weak self, weak player] _ in
             MainActor.assumeIsolated {
-                self?.onRequestChromeHidden?(false)
+                guard let self else { return }
+                if self.isLooping {
+                    // 最後で止めずに先頭から続ける。止めないため、隠したボタンや操作の部品は出さない。
+                    player?.seek(to: .zero)
+                } else {
+                    self.onRequestChromeHidden?(false)
+                }
             }
         }
         Task { [weak self] in
@@ -2152,6 +2165,21 @@ final class PlayerPageController: MediaPageController {
 
     @objc private func tapped() {
         onSingleTap?()
+    }
+
+    /// 右上のメニューに出す、ループ再生を切り替える項目。GIFはもとからくり返すため、nilを返す。
+    func loopMenuAction() -> UIAction? {
+        guard item.kind != .gifv else { return nil }
+        return UIAction(title: "ループ再生", image: UIImage(systemName: "repeat"), state: isLooping ? .on : .off) { [weak self] _ in
+            guard let self else { return }
+            self.setLooping(!self.isLooping)
+        }
+    }
+
+    /// ループ再生を切り替える。入れている間は、最後で止めずに先頭へ戻して再生を続ける。
+    func setLooping(_ looping: Bool) {
+        isLooping = looping
+        playerController.player?.actionAtItemEnd = looping ? .none : .pause
     }
 
     /// 左右をダブルタップしたら10秒戻る・進み、その側に短く知らせる。真ん中では何もしない。
