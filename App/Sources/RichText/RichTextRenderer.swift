@@ -46,7 +46,7 @@ struct RichTextRenderer {
         case .link(let text, let destination, let style):
             var attributes = attributes(style: style, block: block)
             attributes[.foregroundColor] = linkColor
-            attributes[.linkDestination] = Self.url(of: destination)
+            attributes[.linkDestination] = destination
             return NSAttributedString(string: Self.lineSeparated(text), attributes: attributes)
         case .emoji(let emoji):
             return render(emoji, block: block)
@@ -82,12 +82,6 @@ struct RichTextRenderer {
     }
 
     private static let placeholder = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { _ in }
-
-    private static func url(of destination: RichText.LinkDestination) -> URL {
-        switch destination {
-        case .url(let url), .mention(_, let url), .hashtag(_, let url): url
-        }
-    }
 
     private func attributes(style: RichText.Style, block: RichText.Block) -> [NSAttributedString.Key: Any] {
         var attributes: [NSAttributedString.Key: Any] = [
@@ -132,7 +126,7 @@ struct RichTextRenderer {
 }
 
 extension NSAttributedString.Key {
-    /// リンク先のURL。`.link`はUILabelが特別に扱い、再利用したラベルで前の内容の色のまま次の本文を描くことがあるため、
-    /// UILabelが関知しない独自の名前で持つ。リンクを押せるようにするときは、この属性から行き先を読む。
+    /// リンクの行き先（`RichText.LinkDestination`）。`.link`はUILabelが特別に扱い、再利用したラベルで前の内容の色のまま次の本文を描くことがあるため、
+    /// UILabelが関知しない独自の名前で持つ。押されたリンクは`LinkLabel`がこの属性から読む。
     static let linkDestination = NSAttributedString.Key("net.mizle.scia.linkDestination")
 }

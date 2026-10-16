@@ -198,6 +198,41 @@ final class SessionController {
             guard let viewController else { return }
             self?.openProfile(account, from: viewController)
         }
+        viewController.onOpenLink = { [weak self, weak viewController] destination, status in
+            guard let viewController else { return }
+            self?.open(destination, in: status, from: viewController)
+        }
+    }
+
+    /// 本文のリンクを開く。URLはブラウザで、メンションはその人のプロフィールを開いた一覧に積む。
+    /// ハッシュタグはまだハッシュタグのタイムラインがないため、押しても何もしない。ブラウザで開くと、タイムラインを足したときに挙動が変わってしまう。
+    private func open(_ destination: RichText.LinkDestination, in status: Status, from source: UIViewController) {
+        switch destination {
+        case .url(let url):
+            UIApplication.shared.open(url)
+        case .mention(let acct, let url):
+            // ローカルのacctはドメインを含まず、検索では完全一致にならないため、投稿のメンションの一覧にあるIDで引く。
+            guard let mention = status.mentions.first(where: { $0.url == url || $0.acct == acct }) else {
+                logger.error("mention not in status acct=\(acct, privacy: .public)")
+                handle(ProfileNotFound(acct: acct), title: "プロフィールを開けませんでした")
+                return
+            }
+            openProfile(accountID: mention.id, from: source)
+        case .hashtag:
+            break
+        }
+    }
+
+    private func openProfile(accountID: String, from source: UIViewController) {
+        let client = client
+        Task {
+            do {
+                let account = try await client.account(accountID)
+                openProfile(account, from: source)
+            } catch {
+                handle(error, title: "プロフィールを開けませんでした")
+            }
+        }
     }
 
     // MARK: - プロフィール

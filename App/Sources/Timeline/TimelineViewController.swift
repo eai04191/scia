@@ -65,6 +65,8 @@ final class TimelineViewController: UIViewController {
     var onGapApproach: ((String, TimelineStore.GapDirection) -> Void)?
     /// 投稿のアイコンや名前がタップされたとき、または長押しのメニューで選ばれたときに、そのアカウントを渡して呼ぶ。
     var onOpenProfile: ((Account) -> Void)?
+    /// 投稿の本文のリンクがタップされたときに、行き先と、本文を描いた投稿（ブーストなら元の投稿）を渡して呼ぶ。
+    var onOpenLink: ((RichText.LinkDestination, Status) -> Void)?
     /// この画面が表示されている間、生かしておくもの。画面を組み立てたコントローラーを、ナビゲーションから外されるまで残すのに使う。
     var lifetimeOwner: AnyObject?
     /// 一覧の頭に置き、一緒にスクロールするビュー。プロフィールのヘッダーに使う。表示より前に設定する。
@@ -979,6 +981,7 @@ final class TimelineViewController: UIViewController {
         let shown = status.displayed
         var configuration = postContentBuilder.configuration(for: status, isPinned: isPinned, base: base)
         configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(shown.account) }
+        configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
         if status.reblog != nil, !isPinned {
             configuration.onOpenContextAccount = { [weak self] in self?.onOpenProfile?(status.account) }
         }

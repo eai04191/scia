@@ -34,6 +34,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var onOpenAccount: (() -> Void)?
     /// 名前の上の行がタップされたときに呼ぶ。ブーストした人のプロフィールを開く。
     var onOpenContextAccount: (() -> Void)?
+    /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
+    var onOpenLink: ((RichText.LinkDestination) -> Void)?
 
     /// 大きさと文字の見た目。
     struct Metrics {
@@ -75,7 +77,7 @@ final class PostContentView: UIView, UIContentView {
     private let nameLabels = [FadingLabel(), FadingLabel()]
     private let timeLabel = UILabel()
     private let nameRow = UIStackView()
-    private let bodyLabel = UILabel()
+    private let bodyLabel = LinkLabel()
     private let mediaView: MediaGridView
     private let textGuide = UILayoutGuide()
     private var current: PostContentConfiguration
@@ -109,6 +111,7 @@ final class PostContentView: UIView, UIContentView {
             self.current.onSelectMedia?(index, self.mediaView)
         }
         mediaView.onReveal = { [weak self] in self?.current.onRevealMedia?() }
+        bodyLabel.onTapLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
         for view in [avatarView, nameRow] as [UIView] {
             view.isUserInteractionEnabled = true
             view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAccount)))
@@ -291,8 +294,30 @@ final class PostContentView: UIView, UIContentView {
         parts.append(timeLabel.text ?? "")
         parts.append(configuration.body.string)
         textAccessibilityElement.accessibilityLabel = parts.filter { !$0.isEmpty }.joined(separator: "、")
+        textAccessibilityElement.accessibilityCustomActions = Self.links(in: configuration.body).map { text, destination in
+            UIAccessibilityCustomAction(name: text) { [weak self] _ in
+                self?.current.onOpenLink?(destination)
+                return true
+            }
+        }
         textAccessibilityElement.accessibilityFrameInContainerSpace = .null
         accessibilityElements = [textAccessibilityElement] + (mediaView.isHidden ? [] : [mediaView])
+    }
+
+    /// 本文のリンクを、文字と行き先の組で順に返す。書式で分かれた同じリンクはつなげる。押しても何もしないハッシュタグは除く。
+    private static func links(in body: NSAttributedString) -> [(text: String, destination: RichText.LinkDestination)] {
+        var result: [(text: String, destination: RichText.LinkDestination, end: Int)] = []
+        body.enumerateAttribute(.linkDestination, in: NSRange(location: 0, length: body.length)) { value, range, _ in
+            guard let destination = value as? RichText.LinkDestination else { return }
+            if case .hashtag = destination { return }
+            let text = (body.string as NSString).substring(with: range)
+            if let last = result.last, last.destination == destination, last.end == range.location {
+                result[result.count - 1] = (last.text + text, destination, NSMaxRange(range))
+            } else {
+                result.append((text, destination, NSMaxRange(range)))
+            }
+        }
+        return result.map { ($0.text, $0.destination) }
     }
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)

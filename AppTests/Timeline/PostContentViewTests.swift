@@ -48,4 +48,81 @@ struct PostContentViewTests {
 
         #expect(fittingHeight(of: controller.contentConfiguration(for: boost, base: .cell())) > fittingHeight(of: controller.contentConfiguration(for: original, base: .cell())))
     }
+    /// VoiceOverでは本文を1つの要素で読むため、リンクは要素の操作から開く。押しても何もしないハッシュタグは出さない。
+    @Test func exposesLinksAsAccessibilityActions() throws {
+        let content = #"<p>見て <a href="https://example.com/a"><span class="invisible">https://</span>example.com/a</a> <a href="https://example.social/tags/scia" class="mention hashtag" rel="tag">#<span>scia</span></a></p>"#
+        var configuration = makeViewController().contentConfiguration(for: try status(content: content), base: .cell())
+        var opened: [RichText.LinkDestination] = []
+        configuration.onOpenLink = { opened.append($0) }
+        let view = configuration.makeContentView()
+
+        let element = try #require(view.accessibilityElements?.first as? UIAccessibilityElement)
+        let actions = element.accessibilityCustomActions ?? []
+        #expect(actions.map(\.name) == ["example.com/a"])
+        _ = actions.first?.actionHandler?(try #require(actions.first))
+        #expect(opened == [.url(try #require(URL(string: "https://example.com/a")))])
+    }
+    /// 空行の多い本文の末尾のリンクも押せる。判定の位置を、ラベルが実際に描いた位置と比べる。
+    /// TextKit 1で並べ直すと、空行のたびに行の位置がUILabelの描画からずれ、末尾のリンクを外したことがある。
+    @Test func linkAfterManyBlankLinesIsTappableWhereDrawn() throws {
+        let content = #"<blockquote>これ系のセキュリティ系のお漏らしや脆弱性を見つけることは割とするんだけど、<br><br>純粋に煙たがられますね<br><br>普通の経営者って労働者を時間いっぱい働かすことに合理性があって、労働者はパンパンの状態で働く。その中で、セキュリティの指摘をするやつは、<br><br>経営者から見れば、経営不安にさせる指摘をする奴<br>労働者から見れば、余計な仕事を増やす奴<br><br>なので、いいことないですよ。<br>で、基本的には自分の個人情報ではなく、自分以外の顧客情報が洩れることになるので、経営者・労働者、双方にノーダメだったりする。そうすると<br><br>いかにセキュリティの脆弱性を見つけても、指摘したやつが問題や余計な仕事を増やす嫌な奴<br><br>になる。<br>だから煙たがられる。</blockquote><a href="https://x.com/kotauchisunsun/status/2111061896434782560" rel="nofollow noopener" target="_blank">https://x.com/kotauchisunsun/status/2111061896434782560</a>"#
+        let configuration = makeViewController().contentConfiguration(for: try status(content: content), base: .cell())
+        let view = configuration.makeContentView()
+        let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        view.frame = CGRect(origin: .zero, size: size)
+        view.layoutIfNeeded()
+        let label = try #require(view.subviews.compactMap { $0 as? LinkLabel }.first)
+        let drawn = try #require(lowestLinkColoredPoint(in: label))
+
+        let url = try #require(URL(string: "https://x.com/kotauchisunsun/status/2111061896434782560"))
+        #expect(label.link(at: drawn) == .url(url), "label=\(label.bounds) drawn=\(drawn)")
+    }
+
+    /// 右から左へ書く文字のリンクも、描いた位置で押せる。文字の端の位置は書く向きで左右が入れ替わる。
+    @Test func rightToLeftLinkIsTappableWhereDrawn() throws {
+        let content = #"<p>אאאא <a href="https://example.com/rtl">בבבבבבבב</a> גגגג</p>"#
+        let configuration = makeViewController().contentConfiguration(for: try status(content: content), base: .cell())
+        let view = configuration.makeContentView()
+        let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        view.frame = CGRect(origin: .zero, size: size)
+        view.layoutIfNeeded()
+        let label = try #require(view.subviews.compactMap { $0 as? LinkLabel }.first)
+        let drawn = try #require(lowestLinkColoredPoint(in: label))
+
+        let url = try #require(URL(string: "https://example.com/rtl"))
+        #expect(label.link(at: drawn) == .url(url), "label=\(label.bounds) drawn=\(drawn)")
+    }
+
+    /// ラベルを画像に描き、リンクの色（tintColor）で描かれた画素のうち、いちばん下の行の中ほどの点を返す。
+    private func lowestLinkColoredPoint(in label: UILabel) -> CGPoint? {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(bounds: label.bounds, format: format).image { context in
+            label.layer.render(in: context.cgContext)
+        }
+        guard let cgImage = image.cgImage, let data = cgImage.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else { return nil }
+        let bytesPerPixel = cgImage.bitsPerPixel / 8
+        // 青が強く、赤が弱い画素をリンクの文字とみなす。
+        func isLink(_ x: Int, _ y: Int) -> Bool {
+            let offset = y * cgImage.bytesPerRow + x * bytesPerPixel
+            let blue = Int(bytes[offset]), red = Int(bytes[offset + 2]), alpha = Int(bytes[offset + 3])
+            return alpha > 100 && blue > 150 && red < 100
+        }
+        var rows: [Int] = []
+        var columns: [Int] = []
+        for y in 0..<cgImage.height {
+            let hits = (0..<cgImage.width).filter { isLink($0, y) }
+            if !hits.isEmpty {
+                rows.append(y)
+                columns += hits
+            }
+        }
+        guard let bottom = rows.last else { return nil }
+        // いちばん下の行のまとまりの、上下の中ほど。
+        var top = bottom
+        while rows.contains(top - 1) || rows.contains(top - 2) { top -= 1 }
+        let lineColumns = (top...bottom).flatMap { y in (0..<cgImage.width).filter { isLink($0, y) } }
+        guard let minX = lineColumns.min(), let maxX = lineColumns.max() else { return nil }
+        return CGPoint(x: CGFloat(minX + maxX) / 2, y: CGFloat(top + bottom) / 2)
+    }
 }
