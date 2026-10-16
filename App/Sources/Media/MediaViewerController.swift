@@ -728,7 +728,7 @@ final class MediaViewerController: UIViewController {
                 try await photoSaver.save(file)
                 self?.didSaveToPhotos()
             } catch {
-                SciaLog.logger(category: "media").error("save to photos failed: \(error.localizedDescription, privacy: .public)")
+                SciaLog.logger(category: "media").error("save to photos failed: \(SciaLog.describe(error), privacy: .public)")
                 self?.presentSaveFailure(error)
             }
         }
@@ -756,7 +756,7 @@ final class MediaViewerController: UIViewController {
             })
             alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         } else {
-            alert = UIAlertController(title: "写真に保存できませんでした", message: error.localizedDescription, preferredStyle: .alert)
+            alert = UIAlertController(title: "写真に保存できませんでした", message: PhotoLibrarySaver.failurePresentation(of: error).text, preferredStyle: .alert)
             alert.addAction(UIAlertAction(title: "OK", style: .cancel))
         }
         presentOnTop(alert)

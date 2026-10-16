@@ -1,5 +1,6 @@
 import Foundation
 import Photos
+import SciaCore
 import Testing
 import UIKit
 @testable import Scia
@@ -37,5 +38,19 @@ struct PhotoLibrarySaverTests {
 
     @Test func audioCannotBeSaved() {
         #expect(PhotoLibrarySaver.resourceType(of: URL(filePath: "/tmp/a.mp3")) == nil)
+    }
+
+    /// システムの説明文をそのまま出さず、種類ごとの文言にする。調べるときのために、種類の番号を補足に添える。
+    @Test func failureIsPresentedByKind() {
+        #expect(PhotoLibrarySaver.failurePresentation(of: PhotoLibrarySaver.UnsupportedFile()) == ErrorPresentation(message: "写真に入らない形式のファイルです。", code: nil))
+        #expect(PhotoLibrarySaver.failurePresentation(of: PHPhotosError(.notEnoughSpace)) == ErrorPresentation(
+            message: "端末の空き容量が足りません。",
+            code: "PHPhotosError \(PHPhotosError.Code.notEnoughSpace.rawValue)"
+        ))
+        #expect(PhotoLibrarySaver.failurePresentation(of: PHPhotosError(.invalidResource)).message == "写真に入らない形式のファイルです。")
+        #expect(PhotoLibrarySaver.failurePresentation(of: CocoaError(.fileReadNoSuchFile)) == ErrorPresentation(
+            message: "写真に追加できませんでした。",
+            code: "NSCocoaErrorDomain \(CocoaError.Code.fileReadNoSuchFile.rawValue)"
+        ))
     }
 }

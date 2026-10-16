@@ -1,5 +1,6 @@
 import Foundation
 import Photos
+import SciaCore
 import UniformTypeIdentifiers
 
 /// 画像や動画を写真に保存する。テストで写真ライブラリに触れずに保存の結果を確かめられるよう、差し替えられるようにする。
@@ -16,6 +17,25 @@ struct PhotoLibrarySaver: Sendable {
     /// 写真への追加だけの許可を求めて保存する。UIImageから保存すると形式がJPEGなどに変わるため、ファイルをそのまま足す。
     static let photoLibrary = PhotoLibrarySaver { file in
         try await addToPhotoLibrary(file)
+    }
+
+    /// 保存できなかった理由を、使う人に見せる形にする。システムの説明文は出さず、種類ごとに決めた文言にする。
+    /// 許可がないときは設定を開く案内が要るため、呼ぶ側で別に扱う。
+    static func failurePresentation(of error: any Error) -> ErrorPresentation {
+        if error is UnsupportedFile {
+            return ErrorPresentation(message: "写真に入らない形式のファイルです。", code: nil)
+        }
+        if let error = error as? PHPhotosError {
+            let message = switch error.code {
+            case .notEnoughSpace: "端末の空き容量が足りません。"
+            case .invalidResource: "写真に入らない形式のファイルです。"
+            case .accessRestricted, .accessUserDenied: "写真への追加が許可されていません。"
+            default: "写真に追加できませんでした。"
+            }
+            return ErrorPresentation(message: message, code: "PHPhotosError \(error.code.rawValue)")
+        }
+        let nsError = error as NSError
+        return ErrorPresentation(message: "写真に追加できませんでした。", code: "\(nsError.domain) \(nsError.code)")
     }
 
     /// ファイルを写真に足すときの種類。拡張子から決める。GIFの添付ファイルは中身がmp4のため、動画として入る。
