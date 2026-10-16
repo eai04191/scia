@@ -30,6 +30,8 @@ final class SessionController {
     private let interactions: StatusInteractions
     /// 「最近の失敗」の一覧に並べる、処理の途中と最近の失敗。
     let recentNotices = RecentNotices()
+    /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても保存を続け、閉じたあとの知らせは一覧に出す。
+    private lazy var mediaTransfers = MediaTransferCenter(recentNotices: recentNotices)
     /// APIが401を返したときに、トークンが本当に無効かを確かめる。
     private let authorization: AuthorizationCheck
     private let onReauthenticate: (SessionController) async -> Void
@@ -220,8 +222,26 @@ final class SessionController {
             }
             presented?.dismiss(animated: true)
         }
+        mediaTransfers.showRecentNotices = { [weak self] presenter in self?.showRecentNotices(from: presenter) }
+        mediaTransfers.host = MediaTransferCenter.Host(
+            setPersistent: { [weak self] notice in
+                for timeline in self?.timelines.allObjects ?? [] {
+                    timeline.setPersistentNotice(notice)
+                }
+            },
+            showTransient: { [weak self] notice, duration, replacesPersistent in
+                self?.visibleTimeline?.showNotice(notice, duration: duration, replacesPersistent: replacesPersistent)
+            },
+            presenter: { [weak self] in self?.topViewController }
+        )
         // 投稿欄を置くとタブバーの画面を読み込むため、各一覧の設定（投稿ボタンを付けるonComposeなど）を終えてから置く。
         composer.install(in: tabBarController)
+    }
+
+    /// いま見えている一覧（ホーム、通知、開いているプロフィール）。ほかの画面を開いていればnil。
+    private var visibleTimeline: TimelineViewController? {
+        let navigation = (rootViewController as? UITabBarController)?.selectedTab?.viewController as? UINavigationController
+        return navigation?.topViewController as? TimelineViewController
     }
 
     private func applyObscuredBottomHeight() {
@@ -244,6 +264,8 @@ final class SessionController {
         viewController.myAccountID = credential.accountID
         viewController.onStatusAction = { [weak self, weak viewController] action, status in self?.perform(action, on: status, from: viewController) }
         viewController.onShowRecentNotices = { [weak self] presenter in self?.showRecentNotices(from: presenter) }
+        viewController.mediaTransfers = mediaTransfers
+        mediaTransfers.updateTimelineChip()
         viewController.onOpenProfile = { [weak self, weak viewController] account in
             guard let viewController else { return }
             self?.openProfile(account, from: viewController)
@@ -337,12 +359,18 @@ final class SessionController {
     // MARK: - 最近の失敗
 
     /// 「最近の失敗」の一覧をシートで開く。行の投稿を選んだら、シートを閉じてから開く。
+    /// ビューアのチップから開いたときは、投稿が裏の一覧で動いても見えないため、ビューアも閉じ終えてから開く。
     /// - Parameter presenter: シートを出す画面。nilならいちばん手前の画面。
     func showRecentNotices(from presenter: UIViewController? = nil) {
         weak var sheet: UIViewController?
-        let controller = RecentNoticesView.makeSheet(notices: recentNotices) { [weak self] subject in
+        let controller = RecentNoticesView.makeSheet(notices: recentNotices) { [weak self, weak presenter] subject in
             sheet?.dismiss(animated: true) {
-                self?.open(subject)
+                guard let viewer = presenter as? MediaViewerController else {
+                    self?.open(subject)
+                    return
+                }
+                viewer.onCloseFinish = { [weak self] in self?.open(subject) }
+                viewer.close()
             }
         }
         sheet = controller

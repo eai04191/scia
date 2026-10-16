@@ -36,7 +36,7 @@ struct RecentNoticesView: View {
                 if !notices.activities.isEmpty {
                     Section("進行中") {
                         ForEach(notices.activities) { activity in
-                            ActivityRow(activity: activity)
+                            ActivityRow(activity: activity) { notices.stop(activity.id) }
                         }
                     }
                 }
@@ -60,25 +60,37 @@ struct RecentNoticesView: View {
 
 private struct ActivityRow: View {
     let activity: RecentNotices.Activity
+    /// 行から止める。止められないものでは出さない。
+    let onStop: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                ProgressView()
-                Text(activity.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(2)
-                if let value = activity.value {
-                    Text(value)
-                        .font(.subheadline.monospacedDigit())
-                        .foregroundStyle(.secondary)
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text(activity.title)
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(2)
+                    if let value = activity.value {
+                        Text(value)
+                            .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if let subject = activity.subject {
+                    SubjectLine(subject: subject)
                 }
             }
-            if let subject = activity.subject {
-                SubjectLine(subject: subject)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            if activity.isStoppable {
+                // 確かめずに止める。行の中の小さなボタンで、押し間違えにくいため。
+                Button("止める", role: .destructive, action: onStop)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .fixedSize()
             }
         }
-        .accessibilityElement(children: .combine)
     }
 }
 

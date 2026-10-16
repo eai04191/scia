@@ -88,9 +88,9 @@ struct MediaViewerControllerTests {
             try await Task.sleep(for: .milliseconds(150))
             return data
         }
-        let downloads = makeDownloads(files: files, download: download)
+        let transfers = makeTransfers(downloads: makeDownloads(files: files, download: download), photoSaver: photoSaver)
         let attachment = MediaAttachment(id: "1", type: .image, url: URL(string: "https://x.example/original/1"), previewUrl: nil, description: description)
-        let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: store, dragToDismiss: drag, timing: timing, photoSaver: photoSaver, downloads: downloads, sourceTile: { _ in nil })
+        let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: store, dragToDismiss: drag, timing: timing, transfers: transfers, sourceTile: { _ in nil })
         harness.viewController.present(viewer, animated: false)
         return viewer
     }
@@ -127,7 +127,8 @@ struct MediaViewerControllerTests {
             throw URLError(.timedOut)
         }
         let attachment = MediaAttachment(id: "1", type: .image, url: url, previewUrl: nil)
-        let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: store, dragToDismiss: drag, timing: timing, downloads: makeDownloads(files: files) { _, _, _ in throw URLError(.notConnectedToInternet) }, sourceTile: { _ in nil })
+        let transfers = makeTransfers(downloads: makeDownloads(files: files) { _, _, _ in throw URLError(.notConnectedToInternet) })
+        let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: store, dragToDismiss: drag, timing: timing, transfers: transfers, sourceTile: { _ in nil })
         harness.viewController.present(viewer, animated: false)
         defer { viewer.dismiss(animated: false) }
 
@@ -615,16 +616,44 @@ struct MediaViewerControllerTests {
         MediaDownloads(files: files, stagingDirectory: .temporaryDirectory.appending(path: "MediaViewerControllerTests-\(UUID().uuidString)"), download: download)
     }
 
+    private func makeTransfers(
+        downloads: MediaDownloads,
+        photoSaver: PhotoLibrarySaver = PhotoLibrarySaver { _ in },
+        recentNotices: RecentNotices = RecentNotices()
+    ) -> MediaTransferCenter {
+        MediaTransferCenter(recentNotices: recentNotices, downloads: downloads, photoSaver: photoSaver)
+    }
+
+    /// ビューアを閉じたあとに一覧へ出した知らせ。
+    @MainActor
+    final class TimelineNotices {
+        var persistent: Notice?
+        var transient: [String] = []
+        var replacedPersistent: [Bool] = []
+
+        func host(presenter: UIViewController) -> MediaTransferCenter.Host {
+            MediaTransferCenter.Host(
+                setPersistent: { [weak self] in self?.persistent = $0 },
+                showTransient: { [weak self] notice, _, replaces in
+                    self?.transient.append(notice.text)
+                    self?.replacedPersistent.append(replaces)
+                },
+                presenter: { [weak presenter] in presenter }
+            )
+        }
+    }
+
     /// 動画のビューアを、落とし方を差し替えて一覧の上に開く。
     private func presentVideoViewer(
         on harness: TimelineHarness,
         type: MediaAttachment.Kind = .video,
         photoSaver: PhotoLibrarySaver = PhotoLibrarySaver { _ in },
+        transfers: MediaTransferCenter? = nil,
         download: @escaping MediaDownloads.Download
     ) -> MediaViewerController {
-        let downloads = makeDownloads(download: download)
+        let transfers = transfers ?? makeTransfers(downloads: makeDownloads(download: download), photoSaver: photoSaver)
         let attachment = MediaAttachment(id: "1", type: type, url: URL(string: "https://x.example/original/1.mp4"), previewUrl: nil)
-        let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, photoSaver: photoSaver, downloads: downloads, sourceTile: { _ in nil })
+        let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, transfers: transfers, sourceTile: { _ in nil })
         harness.viewController.present(viewer, animated: false)
         return viewer
     }
@@ -638,6 +667,20 @@ struct MediaViewerControllerTests {
             let file = folder.appending(path: url.lastPathComponent)
             try data.write(to: file)
             return file
+        }
+    }
+
+    /// 取り消されるまで落とし続ける。取り消されたら`stopped`に印を付ける。
+    private static func endlessDownload(stopped: Flag) -> MediaDownloads.Download {
+        { _, _, onProgress in
+            onProgress(0.5)
+            do {
+                try await Task.sleep(for: .seconds(10))
+            } catch {
+                stopped.set()
+                throw error
+            }
+            throw URLError(.timedOut)
         }
     }
 
@@ -692,15 +735,17 @@ struct MediaViewerControllerTests {
         #expect(viewer.downloadProgressText == nil)
     }
 
-    /// 止めるかの確認が出る途中に落とせなかったら、確認を閉じ終えてから理由を出す。確認の上に出すと、確認と一緒に閉じられるか、出せずに終わるため。
-    @Test func downloadFailureWhileConfirmationAppearsIsShownAfterClosingIt() async throws {
+    /// 止めるかの確認が出る途中に落とせなかったら、確認を閉じて、失敗を数秒で消えるチップで知らせ、「最近の失敗」に残す。
+    @Test func downloadFailureWhileConfirmationAppearsClosesItAndShowsChip() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
-        let viewer = presentVideoViewer(on: harness) { _, _, onProgress in
+        let recent = RecentNotices()
+        let transfers = makeTransfers(downloads: makeDownloads { _, _, onProgress in
             onProgress(0.5)
             try await Task.sleep(for: .milliseconds(150))
             throw URLError(.networkConnectionLost)
-        }
+        }, recentNotices: recent)
+        let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
         defer { viewer.dismiss(animated: false) }
 
         viewer.saveToPhotos()
@@ -709,37 +754,37 @@ struct MediaViewerControllerTests {
         let confirmation = try #require(viewer.presentedViewController as? UIAlertController)
         #expect(confirmation.isBeingPresented)
 
-        try await waitUntil { (viewer.presentedViewController as? UIAlertController)?.title == "ダウンロードできませんでした" }
-        #expect(viewer.presentedViewController?.presentedViewController == nil)
-        viewer.presentedViewController?.dismiss(animated: false)
+        try await waitUntil { viewer.statusChipText == "ダウンロードできませんでした" }
+        try await waitUntil { viewer.presentedViewController == nil }
+        #expect(recent.failures.map(\.title) == ["動画を保存できませんでした"])
+        #expect(recent.activities.isEmpty)
     }
 
-    /// 落としている途中で取り消したら、通信を止め、保存しない。
-    @Test func cancelingDownloadStopsItWithoutSaving() async throws {
+    /// 落としている途中のものは「最近の失敗」の「進行中」に並び、行から止めたら通信を止め、保存しない。
+    @Test func stoppingFromRecentNoticesStopsDownloadWithoutSaving() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         let saved = SavedFiles()
-        let stopped = Mutex(false)
-        let viewer = presentVideoViewer(on: harness, photoSaver: PhotoLibrarySaver { saved.files.append($0) }) { _, _, _ in
-            do {
-                try await Task.sleep(for: .seconds(10))
-            } catch {
-                stopped.withLock { $0 = true }
-                throw error
-            }
-            throw URLError(.timedOut)
-        }
+        let stopped = Flag()
+        let recent = RecentNotices()
+        let transfers = makeTransfers(downloads: makeDownloads(download: Self.endlessDownload(stopped: stopped)), photoSaver: PhotoLibrarySaver { saved.files.append($0) }, recentNotices: recent)
+        let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
         defer { viewer.dismiss(animated: false) }
 
         viewer.saveToPhotos()
-        try await waitUntil { viewer.downloadProgressText != nil }
-        viewer.cancelDownload()
+        try await waitUntil { recent.activities.first?.value == "50%" }
+        let activity = try #require(recent.activities.first)
+        #expect(activity.title == "ダウンロード中")
+        #expect(activity.isStoppable)
+        recent.stop(activity.id)
 
         #expect(viewer.downloadProgressText == nil)
-        try await waitUntil { stopped.withLock { $0 } }
+        #expect(recent.activities.isEmpty)
+        try await waitUntil { stopped.isSet }
         try await Task.sleep(for: .milliseconds(100))
         #expect(saved.files.isEmpty)
-        #expect(viewer.presentedViewController == nil)
+        #expect(viewer.statusChipText == nil)
+        #expect(recent.failures.isEmpty)
     }
 
     /// ページを`index`の添付ファイルへ切り替える。スワイプで切り替え終えたときと同じ知らせをビューアに送る。
@@ -754,20 +799,18 @@ struct MediaViewerControllerTests {
         #expect(viewer.currentIndex == index)
     }
 
-    /// 動画を落としている途中に、落とし終えた別の動画へ移って保存したら、落としている途中のものは取り消す。
-    /// 残すと進み具合が出たままになり、落とし終えたときに前に選んだ保存まで行われる。
-    @Test func savingAnotherDownloadedVideoCancelsPendingDownload() async throws {
-        let harness = try TimelineHarness()
-        defer { harness.tearDown() }
-        let saved = SavedFiles()
-        let stopped = Mutex(false)
-        let downloads = makeDownloads { url, folder, _ in
-            if url.lastPathComponent == "slow.mp4" {
-                do {
-                    try await Task.sleep(for: .seconds(10))
-                } catch {
-                    stopped.withLock { $0 = true }
-                    throw error
+    /// 2つの動画を落とす。`gated`の名前のファイルは、`release`をtrueにするまで落とし終えない。
+    private func makeTwoVideoViewer(
+        on harness: TimelineHarness,
+        gated: Set<String> = ["slow.mp4"],
+        transfers: (MediaDownloads) -> MediaTransferCenter,
+        release: Flag
+    ) -> MediaViewerController {
+        let downloads = makeDownloads { url, folder, onProgress in
+            onProgress(0.25)
+            if gated.contains(url.lastPathComponent) {
+                while !release.isSet {
+                    try await Task.sleep(for: .milliseconds(20))
                 }
             }
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -776,25 +819,179 @@ struct MediaViewerControllerTests {
             return file
         }
         let attachments = ["slow", "fast"].map { MediaAttachment(id: $0, type: .video, url: URL(string: "https://x.example/original/\($0).mp4"), previewUrl: nil) }
-        let viewer = MediaViewerController(attachments: attachments, startIndex: 1, store: .offline, dragToDismiss: drag, timing: timing, photoSaver: PhotoLibrarySaver { saved.files.append($0) }, downloads: downloads, sourceTile: { _ in nil })
+        let viewer = MediaViewerController(attachments: attachments, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, transfers: transfers(downloads), sourceTile: { _ in nil })
         harness.viewController.present(viewer, animated: false)
-        defer { viewer.dismiss(animated: false) }
-        viewer.saveToPhotos()
-        try await waitUntil { saved.files.count == 1 }
-
-        try showPage(0, in: viewer)
-        viewer.saveToPhotos()
-        try await waitUntil { viewer.downloadProgressText != nil }
-        try showPage(1, in: viewer)
-        viewer.saveToPhotos()
-
-        #expect(viewer.downloadProgressText == nil)
-        try await waitUntil { stopped.withLock { $0 } }
-        try await waitUntil { saved.files.count == 2 }
-        #expect(saved.files.map(\.lastPathComponent) == ["fast.mp4", "fast.mp4"])
+        return viewer
     }
 
-    /// 落とせなかったら、理由をアラートで出す。
+    /// 保存は並べて落とし、済んだ順に知らせる。チップには見ている添付ファイルのものを出し、ほかは件数で添える。
+    @Test func savesDownloadInParallelAndChipFollowsCurrentPage() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let saved = SavedFiles()
+        let release = Flag()
+        let viewer = makeTwoVideoViewer(on: harness, transfers: { makeTransfers(downloads: $0, photoSaver: PhotoLibrarySaver { saved.files.append($0) }) }, release: release)
+        defer { viewer.dismiss(animated: false) }
+
+        viewer.saveToPhotos()
+        try await waitUntil { viewer.downloadProgressText == "ダウンロード中 25%" }
+        try showPage(1, in: viewer)
+        // いま見ている添付ファイルにはないため、件数だけを出す。
+        #expect(viewer.downloadProgressText == "ダウンロード中 1件")
+        viewer.saveToPhotos()
+
+        try await waitUntil { saved.files.map(\.lastPathComponent) == ["fast.mp4"] }
+        try await waitUntil { viewer.statusChipText == "写真に保存しました" }
+        #expect(viewer.downloadProgressText == "ダウンロード中 1件")
+        try showPage(0, in: viewer)
+        #expect(viewer.downloadProgressText == "ダウンロード中 25%")
+
+        release.set()
+        try await waitUntil { saved.files.count == 2 }
+        #expect(saved.files.map(\.lastPathComponent) == ["fast.mp4", "slow.mp4"])
+        try await waitUntil { viewer.downloadProgressText == nil }
+    }
+
+    /// 見ている添付ファイルのものを落としている途中に、ほかのものも落としていれば、件数を添え、押すと「最近の失敗」の一覧を開く。
+    @Test func chipWithOtherDownloadsOpensRecentNotices() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let release = Flag()
+        defer { release.set() }
+        let opened = OpenedLists()
+        let viewer = makeTwoVideoViewer(on: harness, gated: ["slow.mp4", "fast.mp4"], transfers: { downloads in
+            let center = makeTransfers(downloads: downloads)
+            center.showRecentNotices = { opened.presenters.append($0) }
+            return center
+        }, release: release)
+        defer { viewer.dismiss(animated: false) }
+
+        viewer.saveToPhotos()
+        try showPage(1, in: viewer)
+        viewer.saveToPhotos()
+        try await waitUntil { viewer.noticeStack.persistentNotice?.value == "25%" }
+
+        let notice = try #require(viewer.noticeStack.persistentNotice)
+        #expect(notice.additionalCount == 1)
+        let chip = try #require(viewer.noticeStack.chips.first)
+        #expect(chip.accessibilityHint == "最近の失敗の一覧を開きます。")
+        chip.sendActions(for: .primaryActionTriggered)
+        #expect(opened.presenters.first === viewer)
+    }
+
+    /// ビューアを閉じても保存のためのダウンロードは続け、済んだら一覧の知らせの場所で、落としている途中のチップと入れ替えて知らせる。
+    @Test func closingViewerKeepsSavingAndReportsOnTimeline() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let saved = SavedFiles()
+        let timeline = TimelineNotices()
+        let transfers = makeTransfers(downloads: makeDownloads(download: Self.slowDownload(Data("movie".utf8), duration: .milliseconds(500))), photoSaver: PhotoLibrarySaver { saved.files.append($0) })
+        transfers.host = timeline.host(presenter: harness.viewController)
+        let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
+
+        viewer.saveToPhotos()
+        try await waitUntil { timeline.persistent?.text == "ダウンロード中 50%" }
+        viewer.dismiss(animated: false)
+
+        try await waitUntil { saved.files.count == 1 }
+        try await waitUntil { timeline.transient == ["写真に保存しました"] }
+        #expect(timeline.replacedPersistent == [true])
+        #expect(timeline.persistent == nil)
+    }
+
+    /// 共有のために落としている途中でビューアを閉じたら止め、止めたことを一覧に数秒出す。保存のためのものは続ける。
+    @Test func closingViewerStopsSharingAndReportsOnTimeline() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let stopped = Flag()
+        let timeline = TimelineNotices()
+        let transfers = makeTransfers(downloads: makeDownloads(download: Self.endlessDownload(stopped: stopped)))
+        transfers.host = timeline.host(presenter: harness.viewController)
+        let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
+
+        try #require(menuAction("共有", in: viewer)).performWithSender(nil, target: nil)
+        try await waitUntil { viewer.downloadProgressText != nil }
+        viewer.dismiss(animated: false)
+
+        try await waitUntil { stopped.isSet }
+        #expect(timeline.transient == ["共有を止めました"])
+        #expect(timeline.persistent == nil)
+        #expect(transfers.transfers.transfers.isEmpty)
+    }
+
+    /// Macではビューアを別々のウィンドウで開くため、ほかのビューアを開いたり閉じたりしても、共有は始めたビューアに届け、そのビューアを閉じたときだけ止める。
+    @Test func sharingBelongsToViewerThatStartedIt() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let release = Flag()
+        let stopped = Flag()
+        let timeline = TimelineNotices()
+        let transfers = makeTransfers(downloads: makeDownloads { url, folder, onProgress in
+            onProgress(0.5)
+            do {
+                while !release.isSet {
+                    try await Task.sleep(for: .milliseconds(20))
+                }
+            } catch {
+                stopped.set()
+                throw error
+            }
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let file = folder.appending(path: url.lastPathComponent)
+            try Data("movie".utf8).write(to: file)
+            return file
+        })
+        transfers.host = timeline.host(presenter: harness.viewController)
+        let first = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
+        try #require(menuAction("共有", in: first)).performWithSender(nil, target: nil)
+        try await waitUntil { first.downloadProgressText != nil }
+
+        let second = MediaViewerController(attachments: [MediaAttachment(id: "2", type: .video, url: URL(string: "https://x.example/original/2.mp4"), previewUrl: nil)], startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, transfers: transfers, sourceTile: { _ in nil })
+        first.present(second, animated: false)
+        // ほかのビューアでは、見ている添付ファイルのものではないため件数だけを出す。
+        try await waitUntil { second.downloadProgressText == "ダウンロード中 1件" }
+        second.dismiss(animated: false)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!stopped.isSet)
+        #expect(timeline.transient.isEmpty)
+
+        release.set()
+        try await waitUntil { first.presentedViewController is UIActivityViewController }
+        first.presentedViewController?.dismiss(animated: false)
+        first.dismiss(animated: false)
+    }
+
+    /// 見ていない添付ファイルの失敗は、どれの失敗か分かるよう種類で示す。
+    @Test func failureOfOtherAttachmentNamesItsKind() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let fail = Flag()
+        let downloads = makeDownloads { url, _, onProgress in
+            onProgress(0.25)
+            while !fail.isSet {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            throw URLError(.networkConnectionLost)
+        }
+        let attachments = [
+            MediaAttachment(id: "gif", type: .gifv, url: URL(string: "https://x.example/original/a.mp4"), previewUrl: nil),
+            MediaAttachment(id: "video", type: .video, url: URL(string: "https://x.example/original/b.mp4"), previewUrl: nil),
+        ]
+        let viewer = MediaViewerController(attachments: attachments, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, transfers: makeTransfers(downloads: downloads), sourceTile: { _ in nil })
+        harness.viewController.present(viewer, animated: false)
+        defer { viewer.dismiss(animated: false) }
+
+        try #require(menuAction("共有", in: viewer)).performWithSender(nil, target: nil)
+        try await waitUntil { viewer.downloadProgressText != nil }
+        try showPage(1, in: viewer)
+        fail.set()
+
+        try await waitUntil { viewer.statusChipText == "GIFを共有できませんでした" }
+        let chip = try #require(viewer.noticeStack.chips.first)
+        #expect(chip.accessibilityHint == "理由を見られます。")
+    }
+
+    /// 見ている添付ファイルを落とせなかったら、何ができなかったかだけを数秒で消えるチップで出し、押すと理由を出す。
     @Test func downloadFailureIsShown() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -803,9 +1000,11 @@ struct MediaViewerControllerTests {
 
         viewer.saveToPhotos()
 
+        try await waitUntil { viewer.statusChipText == "ダウンロードできませんでした" }
+        #expect(viewer.downloadProgressText == nil)
+        try #require(viewer.noticeStack.chips.first).sendActions(for: .primaryActionTriggered)
         try await waitUntil { viewer.presentedViewController is UIAlertController }
         #expect((viewer.presentedViewController as? UIAlertController)?.title == "ダウンロードできませんでした")
-        #expect(viewer.downloadProgressText == nil)
         viewer.presentedViewController?.dismiss(animated: false)
     }
 
@@ -1070,4 +1269,20 @@ struct MediaViewerControllerTests {
 @MainActor
 private final class SavedFiles {
     var files: [URL] = []
+}
+
+/// 落とす処理とテストの間で受け渡す印。
+private final class Flag: Sendable {
+    private let value = Mutex(false)
+
+    var isSet: Bool { value.withLock { $0 } }
+
+    func set() {
+        value.withLock { $0 = true }
+    }
+}
+
+@MainActor
+private final class OpenedLists {
+    var presenters: [UIViewController] = []
 }

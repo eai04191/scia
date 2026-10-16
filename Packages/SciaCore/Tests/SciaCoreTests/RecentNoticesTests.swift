@@ -85,6 +85,24 @@ struct RecentNoticesTests {
         #expect(notices.activities.map(\.id) == ["b"])
     }
 
+    @Test func stoppableActivityCanBeStoppedFromTheList() {
+        let notices = RecentNotices()
+        var stopped: [String] = []
+        notices.update(.init(id: "a", title: "ダウンロード中"), onStop: { stopped.append("a") })
+        notices.update(.init(id: "b", title: "アップロード中"))
+
+        #expect(notices.activities.map(\.isStoppable) == [true, false])
+        notices.stop("b")
+        notices.stop("a")
+        #expect(stopped == ["a"])
+
+        // 書き換えで止める操作を外したら、もう止められない。
+        notices.update(.init(id: "a", title: "ダウンロード中", value: "100%"))
+        notices.stop("a")
+        #expect(stopped == ["a"])
+        #expect(notices.activities.first?.isStoppable == false)
+    }
+
     @Test func persistentChoicePrefersNewestFailureThenNewestProgress() {
         struct Item: Equatable {
             let name: String

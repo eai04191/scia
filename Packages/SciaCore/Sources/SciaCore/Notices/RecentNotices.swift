@@ -76,6 +76,8 @@ public final class RecentNotices {
         /// 進み具合など、文言のあとに添える値。
         public var value: String?
         public var subject: Subject?
+        /// 行から止められるか。`update(_:onStop:)`で止める操作を渡したときにtrueになる。
+        public fileprivate(set) var isStoppable = false
 
         public init(id: String, title: String, value: String? = nil, subject: Subject? = nil) {
             self.id = id
@@ -93,6 +95,7 @@ public final class RecentNotices {
     /// 新しい順。
     public private(set) var failures: [Failure] = []
     @ObservationIgnored private let now: () -> Date
+    @ObservationIgnored private var stopHandlers: [Activity.ID: @MainActor () -> Void] = [:]
 
     public init(now: @escaping () -> Date = Date.init) {
         self.now = now
@@ -110,7 +113,11 @@ public final class RecentNotices {
     }
 
     /// 処理の途中を足すか、同じidのものを書き換える。書き換えても並びの位置は変えない。
-    public func update(_ activity: Activity) {
+    /// - Parameter onStop: 行から止めたときに行うこと。nilなら行から止められない。
+    public func update(_ activity: Activity, onStop: (@MainActor () -> Void)? = nil) {
+        var activity = activity
+        activity.isStoppable = onStop != nil
+        stopHandlers[activity.id] = onStop
         if let index = activities.firstIndex(where: { $0.id == activity.id }) {
             activities[index] = activity
         } else {
@@ -119,7 +126,13 @@ public final class RecentNotices {
     }
 
     public func end(_ activityID: Activity.ID) {
+        stopHandlers[activityID] = nil
         activities.removeAll { $0.id == activityID }
+    }
+
+    /// 行から止める。止めたあとに外すのは、止められた側が`end`で行う。
+    public func stop(_ activityID: Activity.ID) {
+        stopHandlers[activityID]?()
     }
 }
 

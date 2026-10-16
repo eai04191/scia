@@ -39,13 +39,10 @@ final class MediaViewerController: UIViewController {
     let noticeStack = NoticeStackView()
     /// 出たままの知らせ。2件以上あっても、チップには1件を選んで出す。
     private var persistentNotices = PersistentNotices()
-    private let photoSaver: PhotoLibrarySaver
-    /// 動画、GIF、音声を、共有や保存のために落とす。
-    private let downloads: MediaDownloads
-    /// 落としている途中のもの。
-    private var download: Download?
-    /// 落としている途中のチップを押して出した、止めるかの確認。落とし終えたら閉じる。
-    private weak var stopDownloadConfirmation: UIAlertController?
+    /// 共有や保存のために落とす処理。ビューアを閉じても保存を続けるため、セッションで持つ。nilなら共有と保存を出さない（投稿欄から開いたとき）。
+    private let transfers: MediaTransferCenter?
+    /// 添付ファイルの投稿。共有や保存の失敗を「最近の失敗」に残すときに添える。プロフィールの画像を開いたときはnil。
+    private let subject: RecentNotices.Subject?
     /// 画像から読み取った文字を、システムの翻訳シートで訳す。
     private let translation = SystemTranslation()
     private var isChromeHidden = false
@@ -83,14 +80,6 @@ final class MediaViewerController: UIViewController {
     private var barSwap = MediaBarSwap.front
     /// 開く途中でつかんだあと、写しをすべてバーの手前へ寄せる動き。
     private var barConvergence: SpringDriver?
-
-    private struct Download {
-        let url: URL
-        let task: Task<Void, Never>
-        /// 落とし終えたら行うこと。落としている途中に別の操作を選んだら、後から選んだものにする。
-        /// `noticeID`は落としている途中のチップの知らせのid（チップを出していなければnil）で、行うことの側で消すか入れ替える。
-        var completion: @MainActor (_ file: URL, _ noticeID: String?) -> Void
-    }
 
     struct Timing {
         /// サムネイルから広げて、ビューアで表示し終えるまでの時間。
@@ -145,16 +134,16 @@ final class MediaViewerController: UIViewController {
         dragToDismiss: DragToDismiss,
         timing: Timing,
         editing: Editing? = nil,
-        photoSaver: PhotoLibrarySaver = .photoLibrary,
-        downloads: MediaDownloads = AppDependencies.mediaDownloads,
+        transfers: MediaTransferCenter? = nil,
+        subject: RecentNotices.Subject? = nil,
         sourceTile: @escaping @MainActor (String) -> (any MediaViewerSource)?
     ) {
         precondition(items.indices.contains(startIndex), "開く添付ファイルの位置が範囲外です")
         self.items = items
         self.draftEditing = editing
         self.store = store
-        self.photoSaver = photoSaver
-        self.downloads = downloads
+        self.transfers = transfers
+        self.subject = subject
         self.dragToDismiss = dragToDismiss
         self.timing = timing
         self.sourceTile = sourceTile
@@ -174,8 +163,8 @@ final class MediaViewerController: UIViewController {
         store: MediaImageStore,
         dragToDismiss: DragToDismiss,
         timing: Timing,
-        photoSaver: PhotoLibrarySaver = .photoLibrary,
-        downloads: MediaDownloads = AppDependencies.mediaDownloads,
+        transfers: MediaTransferCenter? = nil,
+        subject: RecentNotices.Subject? = nil,
         sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?
     ) {
         self.init(
@@ -184,8 +173,8 @@ final class MediaViewerController: UIViewController {
             store: store,
             dragToDismiss: dragToDismiss,
             timing: timing,
-            photoSaver: photoSaver,
-            downloads: downloads,
+            transfers: transfers,
+            subject: subject,
             sourceTile: sourceTile
         )
     }
@@ -224,6 +213,7 @@ final class MediaViewerController: UIViewController {
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
         if isBeingPresented {
+            transfers?.viewerDidOpen(self)
             beginOpening()
         }
     }
@@ -238,7 +228,7 @@ final class MediaViewerController: UIViewController {
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed {
-            cancelDownload()
+            transfers?.viewerDidClose(self)
             showHiddenTile()
             onDismiss?()
         }
@@ -450,6 +440,7 @@ final class MediaViewerController: UIViewController {
             page.isEditingDescription = isEditingDescription
         }
         updateDraftStatus()
+        transferNoticesDidChange()
         view.setNeedsLayout()
     }
 
@@ -537,12 +528,21 @@ final class MediaViewerController: UIViewController {
     /// 共有や保存で渡すファイルのURL。画像は元のファイルを読み込み終えるまでnilにし、届く前に共有できないようにする。
     /// 動画、GIF、音声は選んでから落とすため、URLがあれば返す。アプリで開けない種類のファイルと、URLのない添付ファイルではnil。
     private var currentFileURL: URL? {
-        guard let attachment = currentItem.serverAttachment else { return nil }
+        fileURL(at: currentIndex)
+    }
+
+    private func fileURL(at index: Int) -> URL? {
+        guard let attachment = items[index].serverAttachment else { return nil }
         switch attachment.type {
-        case .image: return (pages[currentIndex] as? ImagePageController)?.originalURL
+        case .image: return (pages[index] as? ImagePageController)?.originalURL
         case .video, .gifv, .audio: return attachment.url ?? attachment.remoteUrl
         case .unknown: return nil
         }
+    }
+
+    /// いま見ている添付ファイルの、共有や保存で落とすファイルのURL。落としている途中の知らせを、いま見ているものとほかとに分けるために使う。
+    var currentTransferURL: URL? {
+        currentFileURL
     }
 
     /// アプリで開けない種類のファイルで、ファイルの代わりに共有するURL。
@@ -578,7 +578,7 @@ final class MediaViewerController: UIViewController {
             UIAction(
                 title: "共有",
                 image: UIImage(systemName: "square.and.arrow.up"),
-                attributes: currentFileURL == nil && currentUnsupportedURL == nil ? .disabled : []
+                attributes: (currentFileURL == nil || transfers == nil) && currentUnsupportedURL == nil ? .disabled : []
             ) { [weak self] _ in
                 self?.share()
             },
@@ -587,7 +587,7 @@ final class MediaViewerController: UIViewController {
             elements.append(UIAction(
                 title: "写真に保存",
                 image: UIImage(systemName: "square.and.arrow.down"),
-                attributes: currentFileURL == nil ? .disabled : []
+                attributes: currentFileURL == nil || transfers == nil ? .disabled : []
             ) { [weak self] _ in
                 self?.saveToPhotos()
             })
@@ -711,67 +711,42 @@ final class MediaViewerController: UIViewController {
         noticeStack.setPersistent(persistentNotices.chipNotice(showAll: showAll))
     }
 
-    /// 表示中の添付ファイルを写真に保存し、済んだらメニューボタンの下で知らせる。キャッシュになければ落としてから保存する。
-    /// 失敗したときは理由をアラートで出す。
+    /// 表示中の添付ファイルを写真に保存する。手元になければ落としてから保存する。ビューアを閉じても続け、済んだら閉じた先の一覧で知らせる。
     func saveToPhotos() {
-        guard let url = currentFileURL else { return }
-        withDownloadedFile(of: url) { [weak self] file, noticeID in self?.save(file, downloadNoticeID: noticeID) }
+        guard let target = currentTransferTarget else { return }
+        transfers?.start(.save, target, from: self)
     }
 
-    /// 落としてから保存するときは、保存し終えるまで落としている途中のチップを残し、保存したことと同じ場所で入れ替える。
-    private func save(_ file: URL, downloadNoticeID: String? = nil) {
-        Task { [weak self, photoSaver] in
-            do {
-                try await photoSaver.save(file)
-                self?.didSaveToPhotos(replacing: downloadNoticeID)
-            } catch {
-                SciaLog.logger(category: "media").error("save to photos failed: \(SciaLog.describe(error), privacy: .public)")
-                self?.clearDownloadNotice(downloadNoticeID)
-                self?.presentSaveFailure(error)
-            }
-        }
+    /// 表示中の添付ファイルを、共有や保存のために落とすときの対象。
+    private var currentTransferTarget: MediaTransfers.Target? {
+        guard let url = currentFileURL else { return nil }
+        return MediaTransfers.Target(url: url, kind: currentItem.kind, subject: subject)
     }
 
-    /// 写真に保存したことを知らせている文言。知らせていなければnil。
+    /// 写真に保存したことや、共有や保存の失敗を知らせている文言。知らせていなければnil。
     var statusChipText: String? {
         noticeStack.transientNotice?.text
     }
 
-    private func didSaveToPhotos(replacing downloadNoticeID: String?) {
-        UINotificationFeedbackGenerator(view: view).notificationOccurred(.success)
+    /// 共有や保存の結果を、メニューボタンの下に数秒出す。落としている途中のチップがこれで消えるなら、その場所で入れ替える。
+    /// 呼ぶ時点で、済んだものは落としている途中のものから外してある。
+    func showTransientNotice(_ notice: Notice, duration: TimeInterval) {
+        let next = transfers?.viewerChipNotice(currentURL: currentTransferURL, presenter: self)
+        let replacing = next == nil ? persistentNotices.notice(in: .download)?.id : nil
         // 落としている途中の知らせを外してから、チップをその場所で入れ替える。ほかに出たままの知らせがあれば、そのあとで出し直す。
-        let replacesDownload = downloadNoticeID != nil && persistentNotices.notice(in: .download)?.id == downloadNoticeID
-        if replacesDownload {
+        if replacing != nil {
             persistentNotices.set(nil, in: .download)
         }
-        noticeStack.showTransient(.savedToPhotos, duration: timing.savedChipDuration, replacingPersistent: downloadNoticeID)
-        if replacesDownload {
+        noticeStack.showTransient(notice, duration: duration, replacingPersistent: replacing)
+        if replacing != nil {
             setPersistentNotice(nil, in: .download)
         }
     }
 
-    /// 落としている途中のチップが`id`の知らせのままなら消す。保存している間に別のものを落とし始めていれば、そちらを残す。
-    private func clearDownloadNotice(_ id: String?) {
-        guard let id, persistentNotices.notice(in: .download)?.id == id else { return }
-        setPersistentNotice(nil, in: .download)
-    }
-
-    private func presentSaveFailure(_ error: any Error) {
-        UINotificationFeedbackGenerator(view: view).notificationOccurred(.error)
-        let alert: UIAlertController
-        if error is PhotoLibrarySaver.NotAuthorized {
-            alert = UIAlertController(title: "写真に保存できません", message: "写真への追加が許可されていません。設定でSciaに写真の追加を許可してください。", preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "設定を開く", style: .default) { _ in
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
-                }
-            })
-            alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        } else {
-            alert = UIAlertController(title: "写真に保存できませんでした", message: PhotoLibrarySaver.failurePresentation(of: error).text, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .cancel))
-        }
-        presentOnTop(alert)
+    /// 落としている途中のものが変わったか、見ている添付ファイルが変わった。チップを出し直す。
+    func transferNoticesDidChange() {
+        guard let transfers else { return }
+        setPersistentNotice(transfers.viewerChipNotice(currentURL: currentTransferURL, presenter: self), in: .download)
     }
 
     /// 保存やダウンロードを待つ間に、代替テキストや共有のシートを開いていることがある。ビューアから出すと拒否されるため、いちばん手前の画面から出す。
@@ -784,16 +759,17 @@ final class MediaViewerController: UIViewController {
     }
 
     private func share() {
-        if let url = currentFileURL {
-            let index = currentIndex
-            withDownloadedFile(of: url) { [weak self] file, noticeID in
-                guard let self else { return }
-                self.clearDownloadNotice(noticeID)
-                self.presentShareSheet(self.shareSheetItem(for: file, at: index))
-            }
+        if let target = currentTransferTarget, let transfers {
+            transfers.start(.share, target, from: self)
         } else if let url = currentUnsupportedURL {
             presentShareSheet(url)
         }
+    }
+
+    /// 共有のために用意したファイルの、共有のシートを出す。落としている間にページを替えられるため、`url`の添付ファイルのページからプレビューを取る。
+    func presentShareSheet(for file: URL, of url: URL) {
+        let index = items.indices.first { fileURL(at: $0) == url } ?? currentIndex
+        presentShareSheet(shareSheetItem(for: file, at: index))
     }
 
     private func presentShareSheet(_ item: Any) {
@@ -807,94 +783,6 @@ final class MediaViewerController: UIViewController {
     /// 落としている途中の進み具合の文言。落としていなければnil。
     var downloadProgressText: String? {
         persistentNotices.notice(in: .download)?.text
-    }
-
-    /// `url`のファイルの写しを用意してから`completion`に渡す。キャッシュになければ落とし、落としている間は進み具合を出して、押せば止めるかを確かめる。
-    /// 同じURLを用意している途中なら、用意し直さずに行うことだけを替える。別のURLなら、前のものを取り消す。
-    private func withDownloadedFile(of url: URL, then completion: @escaping @MainActor (_ file: URL, _ noticeID: String?) -> Void) {
-        if download?.url == url {
-            download?.completion = completion
-            return
-        }
-        cancelDownload()
-        let task = Task { [weak self, downloads] in
-            do {
-                let file = try await downloads.fileForSharing(for: url) { fraction in
-                    guard let self, self.download?.url == url else { return }
-                    self.setPersistentNotice(.download(of: url, fraction: fraction) { [weak self] in
-                        self?.confirmStoppingDownload()
-                    }, in: .download)
-                }
-                guard let self, !Task.isCancelled else { return }
-                let completion = self.download?.completion
-                let noticeID = self.persistentNotices.notice(in: .download)?.id == Notice.downloadID(of: url) ? Notice.downloadID(of: url) : nil
-                // 済んだあとに行うこと（保存など）の間は、もう止められないため押せなくする。
-                if noticeID != nil {
-                    self.setPersistentNotice(.download(of: url, fraction: 1, onStop: nil), in: .download)
-                }
-                self.endDownload { completion?(file, noticeID) }
-            } catch {
-                guard let self, !Task.isCancelled else { return }
-                self.setPersistentNotice(nil, in: .download)
-                self.endDownload { [weak self] in self?.presentDownloadFailure(error) }
-            }
-        }
-        download = Download(url: url, task: task, completion: completion)
-    }
-
-    /// 落としている途中のチップを押したときに、止めるかを確かめる。
-    func confirmStoppingDownload() {
-        guard download != nil, stopDownloadConfirmation == nil else { return }
-        // チップから吹き出すシートでは「続ける」が省かれ、外をタップして続けることになるため、両方を並べるアラートにする。
-        let alert = UIAlertController(title: "ダウンロードを止めますか？", message: nil, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "止める", style: .destructive) { [weak self] _ in self?.cancelDownload() })
-        alert.addAction(UIAlertAction(title: "続ける", style: .cancel))
-        stopDownloadConfirmation = alert
-        presentOnTop(alert)
-    }
-
-    /// 落としている途中のものを取り消す。
-    func cancelDownload() {
-        guard let download else { return }
-        download.task.cancel()
-        endDownload {}
-        clearDownloadNotice(Notice.downloadID(of: download.url))
-    }
-
-    /// 落とし終えるか取り消したら、止めるかの確認を開いていれば閉じ、閉じ終えてから`next`を行う。チップは呼んだ側で消すか入れ替える。
-    /// 確認の上から共有のシートや失敗のアラートを出すと、確認を閉じるときに一緒に閉じられるか、出せずに終わるため。
-    private func endDownload(then next: @escaping @MainActor () -> Void) {
-        download = nil
-        let confirmation = stopDownloadConfirmation
-        stopDownloadConfirmation = nil
-        guard let confirmation, confirmation.presentingViewController != nil else {
-            next()
-            return
-        }
-        // 出る途中や、「続ける」で閉じる途中なら、その動きを終えてから閉じる。出る途中に閉じると、閉じる指示が捨てられる。
-        if let coordinator = confirmation.transitionCoordinator {
-            coordinator.animate(alongsideTransition: nil) { [weak confirmation] _ in
-                Self.dismissIfPresented(confirmation, then: next)
-            }
-        } else {
-            Self.dismissIfPresented(confirmation, then: next)
-        }
-    }
-
-    /// 続けて共有のシートなどを出すため、閉じる動きを待たせないよう動かさずに閉じる。
-    private static func dismissIfPresented(_ viewController: UIViewController?, then next: @escaping @MainActor () -> Void) {
-        guard let viewController, viewController.presentingViewController != nil else {
-            next()
-            return
-        }
-        viewController.dismiss(animated: false) { next() }
-    }
-
-    private func presentDownloadFailure(_ error: any Error) {
-        UINotificationFeedbackGenerator(view: view).notificationOccurred(.error)
-        let alert = UIAlertController(title: "ダウンロードできませんでした", message: ErrorPresentation(error).text, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .cancel))
-        presentOnTop(alert)
     }
 }
 
@@ -1449,6 +1337,8 @@ extension MediaViewerController {
         dragToDismiss: DragToDismiss,
         timing: Timing,
         from presenter: UIViewController,
+        transfers: MediaTransferCenter? = nil,
+        subject: RecentNotices.Subject? = nil,
         sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?,
         onShowRecentNotices: (@MainActor (UIViewController) -> Void)? = nil,
         onDismiss: @escaping @MainActor () -> Void
@@ -1459,6 +1349,8 @@ extension MediaViewerController {
             store: store,
             dragToDismiss: dragToDismiss,
             timing: timing,
+            transfers: transfers,
+            subject: subject,
             sourceTile: sourceTile
         )
         viewer.onDismiss = onDismiss

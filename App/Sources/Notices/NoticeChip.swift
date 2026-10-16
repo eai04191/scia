@@ -92,6 +92,11 @@ final class NoticeChip: UIControl {
             spinner.isHidden = true
             iconView.isHidden = false
             iconView.image = UIImage(systemName: notice.kind == .success ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+        case .info:
+            // 成功でも失敗でもないため、どちらの印とも取り違えないよう印を付けず、文言だけで伝える。
+            spinner.stopAnimating()
+            spinner.isHidden = true
+            iconView.isHidden = true
         }
         countLabel.text = notice.additionalCount > 0 ? "+\(notice.additionalCount)件" : nil
         countLabel.isHidden = notice.additionalCount == 0

@@ -18,6 +18,8 @@ enum MediaWindow {
         let store: MediaImageStore
         let dragToDismiss: DragToDismiss
         let timing: MediaViewerController.Timing
+        let transfers: MediaTransferCenter?
+        let subject: RecentNotices.Subject?
     }
 
     private static var pending: [UUID: Request] = [:]
@@ -112,6 +114,8 @@ private final class MediaWindowRootController: UIViewController {
             dragToDismiss: request.dragToDismiss,
             timing: request.timing,
             from: self,
+            transfers: request.transfers,
+            subject: request.subject,
             // 戻る先のサムネイルがないので、画像を動かさずに薄くして開閉する。
             sourceTile: { _ in nil },
             onDismiss: onClose

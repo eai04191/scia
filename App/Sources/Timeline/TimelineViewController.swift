@@ -145,6 +145,8 @@ final class TimelineViewController: UIViewController {
     private var onReauthenticate: (() -> Void)?
     /// 「最近の失敗」の一覧を、渡した画面の上に開く。ビューアで出たままの知らせが重なったときに使う。
     var onShowRecentNotices: (@MainActor (UIViewController) -> Void)?
+    /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても続けるため、セッションで持つ。
+    var mediaTransfers: MediaTransferCenter?
     private var timeRefreshTimer: Timer?
     private let texts: Texts
     let tuning: TuningStore
@@ -489,9 +491,22 @@ final class TimelineViewController: UIViewController {
 
     /// 押し直せば済む失敗を、上のボタンの列の下に数秒出す。決まりはdocs/notices.mdの「置き場所」にある。
     func showNotice(_ notice: Notice) {
+        showNotice(notice, duration: tuning.value(of: TuningCatalog.noticeFailureChipDuration))
+    }
+
+    /// 数秒で消える知らせを出す。
+    /// - Parameter replacesPersistent: 出たままのチップ（落としている途中）を、その場所で入れ替える。
+    func showNotice(_ notice: Notice, duration: TimeInterval, replacesPersistent: Bool = false) {
         loadViewIfNeeded()
         noticeStack.animationDuration = tuning.value(of: TuningCatalog.noticeAnimationDuration)
-        noticeStack.showTransient(notice, duration: tuning.value(of: TuningCatalog.noticeFailureChipDuration))
+        noticeStack.showTransient(notice, duration: duration, replacingPersistent: replacesPersistent ? noticeStack.persistentNotice?.id : nil)
+    }
+
+    /// 出たままの知らせ（ビューアを閉じたあとも続く、保存のために落としている途中のもの）を出す。nilなら消す。
+    func setPersistentNotice(_ notice: Notice?) {
+        loadViewIfNeeded()
+        noticeStack.animationDuration = tuning.value(of: TuningCatalog.noticeAnimationDuration)
+        noticeStack.setPersistent(notice)
     }
 
     /// 上のボタンの列が出入りしたら、知らせをその下へ動かす。指が触れている間は動かさず、離したときに動かす。
@@ -1026,7 +1041,7 @@ final class TimelineViewController: UIViewController {
         if let media = mediaContent(for: shown) {
             configuration.media = media
             configuration.onSelectMedia = { [weak self] index, grid in
-                self?.openMedia(media.attachments, at: index, from: grid)
+                self?.openMedia(media.attachments, at: index, of: shown, from: grid)
             }
             configuration.onRevealMedia = { [weak self] in
                 self?.revealMedia(of: shown.id)

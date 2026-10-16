@@ -34,12 +34,12 @@ struct PersistentNotices {
     }
 
     /// チップに出す1件。失敗を優先し、次に処理の途中、その中では新しいものを選ぶ。
-    /// 2件以上なら残りの件数を添え、押すと`showAll`で「最近の失敗」の一覧を開く。
+    /// 2件以上なら残りの件数を、選んだ知らせが添えていた件数に足して添え、押すと`showAll`で「最近の失敗」の一覧を開く。
     /// - Parameter showAll: nilなら一覧を開けない画面なので、選んだ知らせの続きを出す。
     func chipNotice(showAll: (@MainActor () -> Void)?) -> Notice? {
         guard let (chosen, others) = PersistentNoticeChoice.choose(entries.map(\.notice), isFailure: { $0.kind == .failure }) else { return nil }
         var notice = chosen
-        notice.additionalCount = others
+        notice.additionalCount += others
         if others > 0, let showAll {
             notice.action = .disclosure(hint: "最近の失敗の一覧を開きます。", handler: showAll)
         }

@@ -142,7 +142,7 @@ final class ProfileController {
     /// アイコンかヘッダー画像を、添付ファイルと同じビューアで開く。1枚だけを開き、左右に切り替えない。
     private func openImage(_ image: ProfileImage) {
         guard let attachment = store.account.attachment(of: image) else { return }
-        viewController?.openMedia([attachment], at: 0) { [weak header] _ in
+        viewController?.openMedia([attachment], at: 0, subject: nil) { [weak header] _ in
             header?.viewerSource(for: image)
         }
     }
