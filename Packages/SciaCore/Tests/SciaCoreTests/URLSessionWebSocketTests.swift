@@ -32,6 +32,17 @@ struct URLSessionWebSocketTests {
         try await connection.ping()
     }
 
+    /// 接続が切れると、URLSessionはpingの完了ハンドラを違うエラーで2回呼ぶことがある。最初のエラーで1回だけ終わる。
+    @Test func pingCompletionCalledTwiceThrowsFirstErrorOnce() async throws {
+        let error = await #expect(throws: POSIXError.self) {
+            try await URLSessionWebSocketConnection.awaitFirstCompletion { completion in
+                completion(POSIXError(.ENOTCONN))
+                completion(POSIXError(.ECONNABORTED))
+            }
+        }
+        #expect(error?.code == .ENOTCONN)
+    }
+
     @Test func rejectedHandshakeIsReportedAsAPIErrorFromPing() async throws {
         let server = try await LocalWebSocketServer(rejectingWith: 401)
         defer { server.stop() }

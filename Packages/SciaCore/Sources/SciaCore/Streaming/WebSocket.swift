@@ -1,4 +1,5 @@
 public import Foundation
+import Synchronization
 
 /// WebSocketの接続を開く口。テストではstubに差し替える。
 public protocol WebSocketConnector: Sendable {
@@ -50,17 +51,25 @@ struct URLSessionWebSocketConnection: WebSocketConnection {
 
     func ping() async throws {
         do {
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-                task.sendPing { error in
-                    if let error {
-                        continuation.resume(throwing: error)
-                    } else {
-                        continuation.resume()
-                    }
-                }
-            }
+            try await Self.awaitFirstCompletion(task.sendPing)
         } catch {
             throw handshakeError() ?? error
+        }
+    }
+
+    /// 完了ハンドラが最初に呼ばれるまで待つ。2回目以降の呼び出しは無視する。
+    ///
+    /// macOSのURLSessionWebSocketTaskは、pingの応答を待つ間に接続が切れると、`sendPing`の完了ハンドラを違うエラーで2回呼ぶことがある（Code 57のあとに53など）。そのまま続きを再開すると二重の再開でクラッシュする。
+    static func awaitFirstCompletion(_ send: (@escaping @Sendable ((any Error)?) -> Void) -> Void) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            let pending = PendingContinuation(continuation)
+            send { error in
+                if let error {
+                    pending.take()?.resume(throwing: error)
+                } else {
+                    pending.take()?.resume()
+                }
+            }
         }
     }
 
@@ -73,5 +82,22 @@ struct URLSessionWebSocketConnection: WebSocketConnection {
     private func handshakeError() -> MastodonAPIError? {
         guard let response = task.response as? HTTPURLResponse, response.statusCode != 101 else { return nil }
         return MastodonAPIError(statusCode: response.statusCode, message: HTTPURLResponse.localizedString(forStatusCode: response.statusCode))
+    }
+}
+
+/// 続きを1回だけ取り出せるように持つ。
+private final class PendingContinuation: Sendable {
+    private let continuation: Mutex<CheckedContinuation<Void, any Error>?>
+
+    init(_ continuation: CheckedContinuation<Void, any Error>) {
+        self.continuation = Mutex(continuation)
+    }
+
+    /// 最初の呼び出しだけ続きを返す。
+    func take() -> CheckedContinuation<Void, any Error>? {
+        continuation.withLock { continuation in
+            defer { continuation = nil }
+            return continuation
+        }
     }
 }
