@@ -423,11 +423,11 @@ public enum TuningCatalog {
 
     /// アプリ内のSafariを、伏せた高さで出してから中くらいの高さへ広げる。
     /// 実機では、中くらいの高さで直接出すと、ページを描く前の面が上がってきて、手前で本物のシートに跳んで止まって見える。
-    /// 小さく出して、上がりきってから広げると、広げる動きはページを描いたシートで動くかを比べるためのもの。
+    /// 小さく出して上がりきってから広げると、広げる動きはページを描いたシートで動き、跳ぶ動きが目立ちにくくなる。実機で比べて、こちらを既定にした。
     public static let inAppBrowserGrowsFromCollapsed = ToggleTuning(
         id: "browser.growsFromCollapsed",
         title: "アプリ内のSafariを伏せた高さから広げて出す",
-        defaultValue: false
+        defaultValue: true
     )
 
     /// 投稿欄が、細いカプセルと書くときの形の間で形を変える時間（秒）。位置の動きはキーボードに合わせて別に動く。
