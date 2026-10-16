@@ -15,7 +15,7 @@ enum DiscomfortReportPresenter {
         let draft = DiscomfortReportDraft(
             capturedAt: Date(),
             logMarker: RecentLogReader.writeMarker(),
-            stateDumps: AppDependencies.stateDumps.dumpAll()
+            stateDumps: [StateDump(name: "build", text: BuildInfo.current.text)] + AppDependencies.stateDumps.dumpAll()
         )
         let controller = DiscomfortReportHostingController(draft: draft)
         top.present(controller, animated: true)

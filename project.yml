@@ -29,6 +29,14 @@ targets:
       - App/Resources
     dependencies:
       - package: SciaCore
+    postBuildScripts:
+      - name: Embed Build Info
+        script: '"$SRCROOT/Tools/embed-build-info.sh"'
+        # 入力に指定しないと、Info.plistを作る処理より先に走り、書き込んだ値が上書きされる
+        inputFiles:
+          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
+        # ブランチの切り替えやcommitはXcodeの入力として追えないため、毎回走らせる
+        basedOnDependencyAnalysis: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.mizle.scia

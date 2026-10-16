@@ -7,6 +7,15 @@ extension UIViewController {
     /// - Parameter screenActions: 画面ごとの検証用の操作。共通の項目の前に区切って並べる。
     func makeDebugMenuButton(screenActions: [UIMenuElement] = []) -> UIBarButtonItem {
         let common: [UIMenuElement] = [
+            // メニューの見出しはタップできないため、ビルド情報はコピーする項目として出す。
+            // 1行にまとめると長いブランチ名でcommitが切れるため、commitは2行目に分ける
+            UIAction(
+                title: BuildInfo.current.branch,
+                subtitle: "\(BuildInfo.current.version) @ \(BuildInfo.current.commit)",
+                image: UIImage(systemName: "doc.on.doc")
+            ) { _ in
+                UIPasteboard.general.string = BuildInfo.current.text
+            },
             UIAction(title: "チューニング", image: UIImage(systemName: "slider.horizontal.3")) { [weak self] _ in
                 self?.presentTuningPanel()
             },

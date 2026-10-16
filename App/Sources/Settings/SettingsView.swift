@@ -14,6 +14,7 @@ struct SettingsView: View {
     @State private var previewAccount: Account?
     @State private var previewError: String?
     @State private var previewDate = Date.now.addingTimeInterval(-180)
+    @State private var copiedBuildInfo = false
 
     var body: some View {
         NavigationStack {
@@ -96,6 +97,33 @@ struct SettingsView: View {
                 Section {
                     NavigationLink("接続の状態") {
                         ConnectionStatusView(instance: instance, diagnostics: diagnostics)
+                    }
+                    // いろいろなブランチのビルドを入れ替えて試すときに、いま入っているのがどれか分かるようにする。
+                    // 違和感の報告などに貼れるよう、タップでコピーする
+                    Button {
+                        UIPasteboard.general.string = BuildInfo.current.text
+                        copiedBuildInfo = true
+                    } label: {
+                        HStack {
+                            VStack(alignment: .leading) {
+                                Text(BuildInfo.current.branch)
+                                Text("\(BuildInfo.current.version) @ \(BuildInfo.current.commit)")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: copiedBuildInfo ? "checkmark" : "doc.on.doc")
+                                .foregroundStyle(.secondary)
+                                .accessibilityHidden(true)
+                        }
+                    }
+                    // 押すとコピーする行だが、ほかの行と同じ文字の色にそろえる
+                    .tint(.primary)
+                    .accessibilityHint(copiedBuildInfo ? "コピーしました" : "タップでコピーします")
+                    .task(id: copiedBuildInfo) {
+                        guard copiedBuildInfo else { return }
+                        try? await Task.sleep(for: .seconds(1.5))
+                        copiedBuildInfo = false
                     }
                 }
             }
