@@ -113,12 +113,48 @@ public enum TuningCatalog {
         defaultValue: true
     )
 
-    /// 最上部で新着に追従しているとき、新着をUIKit標準のアニメーションで挿入する。オフなら一度に差し替える。
+    /// 最上部で新着に追従しているとき、足した行の高さぶん下から最上部へ動かして新着を見せる。オフなら一度に差し替える。
     /// 最上部より下で読んでいるときは、読んでいる位置を保つため、この値によらずアニメーションしない。
     public static let animatesInsertionAtTop = ToggleTuning(
         id: "streaming.animatesInsertionAtTop",
         title: "最上部では新着をアニメーションで挿入する",
         defaultValue: true
+    )
+
+    /// 最上部で新着に追従しているとき、足した行の高さぶん下から最上部へ動かす時間。
+    public static let insertionScrollDuration = NumberTuning(
+        id: "timeline.insertionScrollDuration",
+        title: "新着を挿入して最上部へ動かす時間（秒）",
+        range: 0.1...1.5,
+        step: 0.05,
+        defaultValue: 0.1
+    )
+
+    /// 新着を挿入して最上部へ動かすときの弾み。0で行き過ぎずに止まる。
+    public static let insertionScrollBounce = NumberTuning(
+        id: "timeline.insertionScrollBounce",
+        title: "新着を挿入して最上部へ動かす弾み",
+        range: 0...0.4,
+        step: 0.05,
+        defaultValue: 0
+    )
+
+    /// 新着ボタン、タブの選び直し、ステータスバーのタップで最上部へ戻る時間。どれだけ離れていても、この時間で戻る。
+    public static let scrollToTopDuration = NumberTuning(
+        id: "timeline.scrollToTopDuration",
+        title: "最上部へ戻る時間（秒）",
+        range: 0.1...1.5,
+        step: 0.05,
+        defaultValue: 0.25
+    )
+
+    /// 最上部へ戻るときの弾み。0で行き過ぎずに止まる。
+    public static let scrollToTopBounce = NumberTuning(
+        id: "timeline.scrollToTopBounce",
+        title: "最上部へ戻る弾み",
+        range: 0...0.4,
+        step: 0.05,
+        defaultValue: 0
     )
 
     /// つなぎ直したとき、切れていた間の投稿を手元とつながるまで続けて読むページ数の上限。1ページは40件。
@@ -399,10 +435,16 @@ public enum TuningCatalog {
             .number(mediaTallestAspectRatio),
             .number(mediaThumbnailUpscaleTolerance),
         ]),
+        TuningSection(id: "timeline.motion", title: "タイムラインの動き", items: [
+            .number(scrollToTopDuration),
+            .number(scrollToTopBounce),
+            .toggle(animatesInsertionAtTop),
+            .number(insertionScrollDuration),
+            .number(insertionScrollBounce),
+        ]),
         TuningSection(id: "streaming", title: "新着と読み込み", items: [
             .number(insertionInterval),
             .toggle(followsNewArrivalsAtTop),
-            .toggle(animatesInsertionAtTop),
             .number(fillPageLimit),
             .number(gapAutoLoadDistance),
             .number(pollingInterval),
