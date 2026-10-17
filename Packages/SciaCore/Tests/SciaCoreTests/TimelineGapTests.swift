@@ -670,11 +670,13 @@ struct TimelineGapTests {
         server.post(11...12)
 
         #expect(try await store.fillFromLatest() == [])
+        #expect(store.isRegenerating, "補完が再生成中の結果を受けたことが残っていません")
         server.post(13...13)
         _ = store.receive(.update(server.status(13)))
         _ = store.flushPending()
         _ = try await store.fillFromLatest()
 
+        #expect(!store.isRegenerating)
         #expect(ids(store) == Array((8...13).reversed()))
     }
 

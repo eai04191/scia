@@ -178,6 +178,7 @@ public final class TimelineStore {
             }
             // 再生成中の結果は揃っておらず、返った投稿の間にも、最も新しい投稿より上にも、まだ出ていない投稿が残りうる。
             // 最も新しい投稿から下はギャップにし、上は次の補完でそこから読む。
+            isRegenerating = page.isRegenerating
             let gapNewerID = page.isRegenerating ? Self.newestID(of: page) : Self.oldestID(of: page)
             unfilledSinceID = page.isRegenerating ? gapNewerID ?? sinceID : nil
             added += merge(page)

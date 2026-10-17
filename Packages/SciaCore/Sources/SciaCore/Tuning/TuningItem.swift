@@ -169,6 +169,16 @@ public enum TuningCatalog {
         defaultValue: 60
     )
 
+    /// 補完の読み込みに、サーバーがホームを作り直している最中だと返されたとき、読み直すまでの間隔。
+    /// 作り直しが終わるまで、この間隔で読み直し続ける。
+    public static let regeneratingRetryInterval = NumberTuning(
+        id: "streaming.regeneratingRetryInterval",
+        title: "ホームの作り直し中に読み直す間隔（秒）",
+        range: 5...120,
+        step: 5,
+        defaultValue: 10
+    )
+
     /// ストリーミングにつながらない状態がこれだけ続いたら、ナビゲーションバーで知らせる。短い切断のたびには知らせない。
     public static let outageNoticeDelay = NumberTuning(
         id: "streaming.outageNoticeDelay",
@@ -499,6 +509,7 @@ public enum TuningCatalog {
             .number(fillPageLimit),
             .number(gapAutoLoadDistance),
             .number(pollingInterval),
+            .number(regeneratingRetryInterval),
             .number(outageNoticeDelay),
         ]),
         TuningSection(id: "compose", title: "投稿欄", items: [

@@ -41,6 +41,8 @@ final class HomeTimelineController {
     private var readPositionBackgroundTask = UIBackgroundTaskIdentifier.invalid
     /// 新着を挿入する時機が来たが、スクロールや長押しのメニューなどの操作中なので、終わるのを待っている。
     private var isWaitingForInteractionToSettle = false
+    /// サーバーがホームを作り直している最中だったので、時間をおいて補完を読み直す。読み直すまで次は予約しない。
+    private var regeneratingRetryTask: Task<Void, Never>?
 
     init(
         client: MastodonClient,
@@ -80,6 +82,7 @@ final class HomeTimelineController {
     func stop() {
         isStopped = true
         stopStreaming()
+        cancelRegeneratingRetry()
         tasks.forEach { $0.cancel() }
         tasks.removeAll()
     }
@@ -94,6 +97,8 @@ final class HomeTimelineController {
     func enterBackground() {
         isInForeground = false
         stopStreaming()
+        // 戻ったときは、つなぎ直したところで補完する。
+        cancelRegeneratingRetry()
         saveReadPosition(inBackground: true)
     }
 
@@ -293,7 +298,10 @@ final class HomeTimelineController {
                 let before = controller.store.entries
                 let maxPages = Int(controller.tuning.value(of: TuningCatalog.fillPageLimit))
                 guard let added = try await controller.store.fillFromLatest(maxPages: maxPages), !controller.isStopped else { return }
-                controller.logger.info("home fill done added=\(added.count, privacy: .public) gaps=\(controller.store.gaps.count, privacy: .public)")
+                controller.logger.info("home fill done added=\(added.count, privacy: .public) gaps=\(controller.store.gaps.count, privacy: .public) regenerating=\(controller.store.isRegenerating, privacy: .public)")
+                if controller.store.isRegenerating {
+                    controller.scheduleRegeneratingRetry()
+                }
                 // 待っている間に同じ投稿がストリーミングで挿入されていても、ギャップだけが増えていることがある。
                 guard controller.store.entries != before else { return }
                 controller.showEntries()
@@ -304,8 +312,32 @@ final class HomeTimelineController {
             } catch {
                 // 失敗しても、次につながったときに同じ基準から読み直す。
                 controller.handle(error, during: "fill") { _ in }
+                // 作り直し中の読み直しが失敗したら、つながったままでは次のきっかけが来ないので、読み直しを続ける。
+                if controller.store.isRegenerating {
+                    controller.scheduleRegeneratingRetry()
+                }
             }
         }
+    }
+
+    /// サーバーがホームを作り直している最中で結果が揃っていなかったので、時間をおいて補完を読み直す。
+    /// つながりが安定していると、次に補完するきっかけが来ず、作り直しの後に揃った投稿が届かないため。
+    private func scheduleRegeneratingRetry() {
+        guard regeneratingRetryTask == nil, !isStopped, isInForeground else { return }
+        let interval = tuning.value(of: TuningCatalog.regeneratingRetryInterval)
+        logger.info("home regenerating retry scheduled after=\(interval, privacy: .public)")
+        regeneratingRetryTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(interval))
+            guard !Task.isCancelled, let self else { return }
+            regeneratingRetryTask = nil
+            guard !isStopped, isInForeground else { return }
+            fillFromLatest()
+        }
+    }
+
+    private func cancelRegeneratingRetry() {
+        regeneratingRetryTask?.cancel()
+        regeneratingRetryTask = nil
     }
 
     /// ギャップを1ページ分読む。読んでいる側に続く要素を基準にして、その位置を保つ。
