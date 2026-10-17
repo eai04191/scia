@@ -302,6 +302,8 @@ final class TimelineViewController: UIViewController {
             _ = tuning.value(of: TuningCatalog.nameBodySpacing)
             _ = tuning.value(of: TuningCatalog.bodyMediaSpacing)
             _ = tuning.value(of: TuningCatalog.nameMediaSpacing)
+            _ = tuning.value(of: TuningCatalog.spoilerPadding)
+            _ = tuning.value(of: TuningCatalog.spoilerBodySpacing)
             _ = tuning.value(of: TuningCatalog.mediaTileSpacing)
             _ = tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing)
             _ = tuning.value(of: TuningCatalog.notificationHeaderDetailSpacing)

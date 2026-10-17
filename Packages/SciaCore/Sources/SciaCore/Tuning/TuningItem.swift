@@ -628,6 +628,8 @@ public enum TuningCatalog {
             .number(nameBodySpacing),
             .number(bodyMediaSpacing),
             .number(nameMediaSpacing),
+            .number(spoilerPadding),
+            .number(spoilerBodySpacing),
             .number(mediaTileSpacing),
             .number(nameFadeWidth),
             .number(mediaTallestAspectRatio),
