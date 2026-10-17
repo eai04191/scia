@@ -143,7 +143,7 @@ final class TimelineViewController: UIViewController {
     /// 上のボタンの列が出入りする前の、知らせの位置。次に並べ直したときに、ここから動かす。
     private var noticeStackMoveOrigin: CGPoint?
     private var onReauthenticate: (() -> Void)?
-    /// 「最近の失敗」の一覧を、渡した画面の上に開く。ビューアで出たままの知らせが重なったときに使う。
+    /// 「操作の状況」の一覧を、渡した画面の上に開く。ビューアで出たままの知らせが重なったときに使う。
     var onShowRecentNotices: (@MainActor (UIViewController) -> Void)?
     /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても続けるため、セッションで持つ。
     var mediaTransfers: MediaTransferCenter?

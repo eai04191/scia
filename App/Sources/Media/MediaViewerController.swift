@@ -52,7 +52,7 @@ final class MediaViewerController: UIViewController {
     private var dismissPanAnchor: CGPoint = .zero
     /// 閉じ終わったときに呼ぶ。写しがサムネイルへ戻る動きは、このあとも続く。
     var onDismiss: (() -> Void)?
-    /// 出たままの知らせが2件以上のときにチップを押したら、この画面の上に「最近の失敗」の一覧を開く。nilなら開けない。
+    /// 出たままの知らせが2件以上のときにチップを押したら、この画面の上に「操作の状況」の一覧を開く。nilなら開けない。
     var onShowRecentNotices: (@MainActor (UIViewController) -> Void)?
     /// 写しがサムネイルへ戻る動きを終えたときに呼ぶ。投稿欄は、ここで入力欄にキーボードを戻す。
     var onCloseFinish: (() -> Void)?

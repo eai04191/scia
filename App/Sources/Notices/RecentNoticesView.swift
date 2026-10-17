@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 「最近の失敗」の一覧。処理の途中と、消えたチップの失敗をあとから確かめる。決まりはdocs/notices.mdの「最近の失敗」にある。
+/// 「操作の状況」の一覧。処理の途中と、消えたチップの失敗をあとから確かめる。決まりはdocs/notices.mdの「操作の状況」にある。
 /// タブの「通知」（Mastodonの通知）と紛れないよう、「通知」という言葉は使わない。
 struct RecentNoticesView: View {
     let notices: RecentNotices

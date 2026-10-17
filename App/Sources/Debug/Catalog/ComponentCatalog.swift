@@ -35,7 +35,7 @@ enum CatalogComponent: String, CaseIterable {
         case .altTextEditor: "代替テキストの入力欄"
         case .caption: "ビューアの説明"
         case .notices: "知らせのチップ"
-        case .recentNotices: "最近の失敗の一覧"
+        case .recentNotices: "操作の状況の一覧"
         case .videoControls: "動画の再生の操作"
         case .timelineEmpty: "タイムラインが空のときの表示"
         case .timelineFooter: "タイムラインの末尾"

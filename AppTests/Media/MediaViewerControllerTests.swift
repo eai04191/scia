@@ -760,7 +760,7 @@ struct MediaViewerControllerTests {
         #expect(recent.activities.isEmpty)
     }
 
-    /// 落としている途中のものは「最近の失敗」の「進行中」に並び、行から止めたら通信を止め、保存しない。
+    /// 落としている途中のものは「操作の状況」の「進行中」に並び、行から止めたら通信を止め、保存しない。
     @Test func stoppingFromRecentNoticesStopsDownloadWithoutSaving() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -852,7 +852,7 @@ struct MediaViewerControllerTests {
         try await waitUntil { viewer.downloadProgressText == nil }
     }
 
-    /// 見ている添付ファイルのものを落としている途中に、ほかのものも落としていれば、件数を添え、押すと「最近の失敗」の一覧を開く。
+    /// 見ている添付ファイルのものを落としている途中に、ほかのものも落としていれば、件数を添え、押すと「操作の状況」の一覧を開く。
     @Test func chipWithOtherDownloadsOpensRecentNotices() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

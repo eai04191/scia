@@ -15,7 +15,7 @@ enum NoticeCatalog {
             CatalogState(title: "ダウンロード中（大きさが分かる前）") { stack(persistent: .download(of: url, fraction: 0) {}) },
             CatalogState(title: "ダウンロード中（押すと止めるかの確認）") { stack(persistent: .download(of: url, fraction: 0.42) {}) },
             CatalogState(title: "ダウンロードを終えて保存している間（押せない）") { stack(persistent: .download(of: url, fraction: 1, onStop: nil)) },
-            CatalogState(title: "ダウンロード中（ほかの添付ファイルも落としている。押すと最近の失敗の一覧）") {
+            CatalogState(title: "ダウンロード中（ほかの添付ファイルも落としている。押すと操作の状況の一覧）") {
                 var notice = Notice.download(of: url, fraction: 0.42) {}
                 notice.additionalCount = 2
                 notice.action = disclosure
@@ -38,7 +38,7 @@ enum NoticeCatalog {
             CatalogState(title: "代替テキストを送信中") { stack(persistent: draft(.sendingDescription)) },
             CatalogState(title: "アップロードできませんでした（押すと理由）") { stack(persistent: draft(.failed)) },
             CatalogState(title: "代替テキストを送信できませんでした（押すと理由）") { stack(persistent: draft(.descriptionFailed)) },
-            CatalogState(title: "出たままの知らせが2件（処理の途中、押すと最近の失敗の一覧）") {
+            CatalogState(title: "出たままの知らせが2件（処理の途中、押すと操作の状況の一覧）") {
                 var notices = PersistentNotices()
                 notices.set(.download(of: url, fraction: 0.42) {}, in: .download)
                 notices.set(Notice(id: "other", kind: .progress, title: "アップロード中"), in: .draft)

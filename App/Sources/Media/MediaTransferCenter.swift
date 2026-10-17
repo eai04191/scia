@@ -7,7 +7,7 @@ import UIKit
 ///
 /// ビューアを開いている間は、済んだことや失敗をビューアに出す。閉じたあとは、一覧（タイムライン）の知らせの場所に出す。
 /// 落としている途中のチップは、ビューアにはいま見ている添付ファイルのものを、一覧には1件なら進み具合を、2件以上なら件数を出す。
-/// 落としている途中のものは「最近の失敗」の一覧の「進行中」にも並べ、行から止められるようにする。
+/// 落としている途中のものは「操作の状況」の一覧の「進行中」にも並べ、行から止められるようにする。
 @MainActor
 final class MediaTransferCenter {
     /// ビューアを閉じているときに知らせを出す先。
@@ -16,15 +16,15 @@ final class MediaTransferCenter {
         let setPersistent: @MainActor (Notice?) -> Void
         /// 数秒で消えるチップを、見えている一覧に出す。`replacesChip`なら、落としている途中のチップをその場所で入れ替える。
         let showTransient: @MainActor (_ notice: Notice, _ duration: TimeInterval, _ replacesChip: Bool) -> Void
-        /// いちばん手前の画面。アラートや「最近の失敗」の一覧を、この上に出す。
+        /// いちばん手前の画面。アラートや「操作の状況」の一覧を、この上に出す。
         let presenter: @MainActor () -> UIViewController?
     }
 
     let transfers: MediaTransfers
-    /// 落としている途中のものと失敗を並べる「最近の失敗」。
+    /// 落としている途中のものと失敗を並べる「操作の状況」。
     private let recentNotices: RecentNotices
     private let tuning: TuningStore
-    /// 「最近の失敗」の一覧を開く。nilなら開けないため、出たままの知らせが2件以上でもチップを押すと止めるかの確認を出す。
+    /// 「操作の状況」の一覧を開く。nilなら開けないため、出たままの知らせが2件以上でもチップを押すと止めるかの確認を出す。
     var showRecentNotices: (@MainActor (UIViewController) -> Void)?
     var host: Host? {
         didSet { updateTimelineChip() }
@@ -40,7 +40,7 @@ final class MediaTransferCenter {
     /// 落としている途中のチップを押して出した、止めるかの確認と、その対象。対象が済むか止まったら閉じる。
     private weak var stopConfirmation: UIAlertController?
     private var stopConfirmationTarget: MediaTransfers.Transfer.ID?
-    /// 「最近の失敗」の「進行中」に並べているもの。
+    /// 「操作の状況」の「進行中」に並べているもの。
     private var listedActivities: Set<RecentNotices.Activity.ID> = []
     private let logger = SciaLog.logger(category: "media")
 
@@ -89,7 +89,7 @@ final class MediaTransferCenter {
     }
 
     /// ビューアのチップ。いま見ている添付ファイルのものを出し、ほかは件数で添える。
-    /// 2件以上のときに押したら、`presenter`の上に「最近の失敗」の一覧を開く。
+    /// 2件以上のときに押したら、`presenter`の上に「操作の状況」の一覧を開く。
     func viewerChipNotice(currentURL: URL?, presenter: UIViewController) -> Notice? {
         MediaTransferChip.viewer(transfers.transfers, currentURL: currentURL).map { notice(for: $0, presenter: presenter) }
     }
@@ -120,7 +120,7 @@ final class MediaTransferCenter {
         notice(for: chip) { [weak presenter] in presenter }
     }
 
-    /// 1件だけなら、押すと止めるかの確認を出す。2件以上なら、押すと「最近の失敗」の一覧を開く。
+    /// 1件だけなら、押すと止めるかの確認を出す。2件以上なら、押すと「操作の状況」の一覧を開く。
     private func notice(for chip: MediaTransferChip, presenter: @escaping @MainActor () -> UIViewController?) -> Notice {
         var showAll: (@MainActor () -> Void)?
         if let show = showRecentNotices {
@@ -162,7 +162,7 @@ final class MediaTransferCenter {
         }
     }
 
-    /// 「最近の失敗」の「進行中」の行を、落としている途中のものに合わせる。
+    /// 「操作の状況」の「進行中」の行を、落としている途中のものに合わせる。
     private func updateActivities() {
         var current: Set<RecentNotices.Activity.ID> = []
         for transfer in transfers.transfers where transfer.isVisible {

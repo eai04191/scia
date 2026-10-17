@@ -35,7 +35,7 @@ enum TimelineOverlayCatalog {
             },
             state("ビューアを閉じたあとのダウンロード中（2件以上は件数）") { timeline in
                 timeline.setUnreadCount(12)
-                showPersistent(.downloads(count: 2, action: .disclosure(hint: "最近の失敗の一覧を開きます。") {}), on: timeline)
+                showPersistent(.downloads(count: 2, action: .disclosure(hint: "操作の状況を開きます。") {}), on: timeline)
             },
             state("ダウンロード中と、ほかのものを写真に保存しました") { timeline in
                 showPersistent(.download(of: catalogURL, fraction: 0.42) {}, on: timeline)

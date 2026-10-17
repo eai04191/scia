@@ -28,7 +28,7 @@ final class SessionController {
     /// 電波が戻ったときと、レート制限が明けたときに、読み込みをやり直す。
     private var recoveryTasks: [Task<Void, Never>] = []
     private let interactions: StatusInteractions
-    /// 「最近の失敗」の一覧に並べる、処理の途中と最近の失敗。
+    /// 「操作の状況」の一覧に並べる、処理の途中と最近の失敗。
     let recentNotices = RecentNotices()
     /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても保存を続け、閉じたあとの知らせは一覧に出す。
     private lazy var mediaTransfers = MediaTransferCenter(recentNotices: recentNotices)
@@ -356,9 +356,9 @@ final class SessionController {
         return item
     }
 
-    // MARK: - 最近の失敗
+    // MARK: - 操作の状況
 
-    /// 「最近の失敗」の一覧をシートで開く。行の投稿を選んだら、シートを閉じてから開く。
+    /// 「操作の状況」の一覧をシートで開く。行の投稿を選んだら、シートを閉じてから開く。
     /// ビューアのチップから開いたときは、投稿が裏の一覧で動いても見えないため、ビューアも閉じ終えてから開く。
     /// - Parameter presenter: シートを出す画面。nilならいちばん手前の画面。
     func showRecentNotices(from presenter: UIViewController? = nil) {

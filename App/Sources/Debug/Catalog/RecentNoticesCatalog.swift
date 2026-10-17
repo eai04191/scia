@@ -4,7 +4,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 「最近の失敗」の一覧のシート。失敗を起こさずに、空のとき、件数が多いとき、文言が長いときを並べる。行を押しても何も起きない。
+/// 「操作の状況」の一覧のシート。失敗を起こさずに、空のとき、件数が多いとき、文言が長いときを並べる。行を押しても何も起きない。
 enum RecentNoticesCatalog {
     @MainActor
     static func states() -> [CatalogState] {
@@ -66,7 +66,7 @@ enum RecentNoticesCatalog {
             displayedID: "catalog-\(index)",
             url: nil,
             authorName: "カタログのアカウント",
-            excerpt: "「最近の失敗」の一覧を確かめるための投稿 \(index)。"
+            excerpt: "「操作の状況」の一覧を確かめるための投稿 \(index)。"
         )
     }
 
