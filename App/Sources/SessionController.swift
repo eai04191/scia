@@ -162,7 +162,7 @@ final class SessionController {
                     guard let viewController else { return }
                     self?.openMyProfile(from: viewController)
                 }
-                let recent = UIAction(title: "最近の失敗", image: UIImage(systemName: "exclamationmark.circle")) { _ in
+                let recent = UIAction(title: "操作の状況", image: UIImage(systemName: "list.bullet.clipboard")) { _ in
                     self?.showRecentNotices()
                 }
                 return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile, recent])] + accountMenu().children)

@@ -13,7 +13,7 @@ struct RecentNoticesView: View {
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle("最近の失敗")
+                .navigationTitle("操作の状況")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
@@ -27,9 +27,9 @@ struct RecentNoticesView: View {
     private var content: some View {
         if notices.activities.isEmpty && notices.failures.isEmpty {
             ContentUnavailableView {
-                Label("最近の失敗はありません", systemImage: "checkmark.circle")
+                Label("進行中の操作も失敗もありません", systemImage: "checkmark.circle")
             } description: {
-                Text("お気に入りやブーストなどの失敗が、アプリを終了するまでここに残ります。")
+                Text("保存のためのダウンロードと、お気に入りやブーストなどの失敗が並びます。失敗はアプリを終了するまで残ります。")
             }
         } else {
             List {
@@ -42,7 +42,7 @@ struct RecentNoticesView: View {
                 }
                 Section {
                     if notices.failures.isEmpty {
-                        Text("最近の失敗はありません")
+                        Text("失敗はありません")
                             .foregroundStyle(.secondary)
                     }
                     ForEach(notices.failures) { failure in

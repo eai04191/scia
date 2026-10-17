@@ -874,7 +874,7 @@ struct MediaViewerControllerTests {
         let notice = try #require(viewer.noticeStack.persistentNotice)
         #expect(notice.additionalCount == 1)
         let chip = try #require(viewer.noticeStack.chips.first)
-        #expect(chip.accessibilityHint == "最近の失敗の一覧を開きます。")
+        #expect(chip.accessibilityHint == "操作の状況を開きます。")
         chip.sendActions(for: .primaryActionTriggered)
         #expect(opened.presenters.first === viewer)
     }

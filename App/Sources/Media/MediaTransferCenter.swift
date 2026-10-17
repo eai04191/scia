@@ -142,14 +142,14 @@ final class MediaTransferCenter {
             var notice = Notice.download(of: transfer.target.url, fraction: transfer.fraction ?? 0, onStop: onStop)
             notice.additionalCount = others
             if others > 0, let showAll {
-                notice.action = .disclosure(hint: "最近の失敗の一覧を開きます。", handler: showAll)
+                notice.action = .disclosure(hint: "操作の状況を開きます。", handler: showAll)
             }
             return notice
         case .count(let count):
             let only = transfers.transfers.filter(\.isVisible)
             let action: Notice.Action
             if count > 1, let showAll {
-                action = .disclosure(hint: "最近の失敗の一覧を開きます。", handler: showAll)
+                action = .disclosure(hint: "操作の状況を開きます。", handler: showAll)
             } else if let transfer = only.last, transfer.isStoppable {
                 action = .disclosure(hint: "ダウンロードを止めるか選べます。") { [weak self] in
                     guard let presenter = presenter() else { return }

@@ -41,7 +41,7 @@ struct PersistentNotices {
         var notice = chosen
         notice.additionalCount += others
         if others > 0, let showAll {
-            notice.action = .disclosure(hint: "最近の失敗の一覧を開きます。", handler: showAll)
+            notice.action = .disclosure(hint: "操作の状況を開きます。", handler: showAll)
         }
         return notice
     }
