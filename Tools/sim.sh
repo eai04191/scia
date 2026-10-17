@@ -7,6 +7,11 @@
 #     --fullを付けると、ユーザーに送るための原寸のPNGも残す。
 #   Tools/sim.sh settle '<端末>'
 #     画面が止まるまで待つ。撮らずに待ちたいとき（操作の直後にdumpする前など）に使う。
+#   Tools/sim.sh drag <x1> <y1> <x2> <y2>
+#     慣性を残さずに止まるドラッグの点の並びを、シミュレーターのツールのtouch_pathのpointsに渡せるJSONで出す。
+#     ツールのtouch_pathは同じ座標の点を「動いた」として送らないため、最後に同じ点を並べても離した瞬間の速さが残り、慣性で流れる。
+#     そこで、終点で0.5ptずつ揺らして速さを0にしてから離す。最初の一歩（20pt）は、スクロールが始まるまでの遊びに吸われるので、
+#     一覧をDだけ動かしたいときは、指をD+20pt動かす。
 #   Tools/sim.sh dump '<端末>' [--settle]
 #     起動済みのアプリに`scia-debug://dump`を送り、画面にある要素の名前と枠（ポイント）を出す。--settleを付けると、画面が止まってから出す。
 set -euo pipefail
@@ -179,12 +184,30 @@ command_dump() {
     cat "$file"
 }
 
-[ $# -ge 2 ] || fail "使い方: Tools/sim.sh shot|settle|dump '<端末>' [オプション]"
+command_drag() {
+    [ $# -eq 4 ] || fail "使い方: Tools/sim.sh drag <x1> <y1> <x2> <y2>"
+    /usr/bin/python3 -I -c '
+import json, math, sys
+x1, y1, x2, y2 = map(float, sys.argv[1:5])
+# 1歩20pt、32ms間隔（約600pt/s）。速すぎると、揺らす前に速さが積み上がる。
+steps = max(1, math.ceil(math.hypot(x2 - x1, y2 - y1) / 20))
+points = [{"x": x1, "y": y1, "dt_ms": 0}]
+for i in range(1, steps + 1):
+    points.append({"x": round(x1 + (x2 - x1) * i / steps, 1), "y": round(y1 + (y2 - y1) * i / steps, 1), "dt_ms": 32})
+# 終点で16ms ごとに0.5pt揺らし、約250ms止める。
+for i in range(16):
+    points.append({"x": x2, "y": y2 + (0.5 if i % 2 == 0 else 0), "dt_ms": 16})
+print(json.dumps(points, separators=(",", ":")))
+' "$@"
+}
+
+[ $# -ge 2 ] || fail "使い方: Tools/sim.sh shot|settle|dump '<端末>' [オプション]、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
 subcommand=$1
 shift
 case $subcommand in
     shot) command_shot "$@" ;;
     settle) command_settle "$1" ;;
     dump) command_dump "$@" ;;
+    drag) command_drag "$@" ;;
     *) fail "知らない操作: $subcommand" ;;
 esac
