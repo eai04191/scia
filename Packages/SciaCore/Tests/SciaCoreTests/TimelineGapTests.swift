@@ -520,6 +520,57 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((8...20).reversed()))
     }
 
+    /// ギャップの中に届いた投稿を既読にしても、その新しい側に読み込んでいない投稿があれば、未読はまだある。
+    @Test func readInsideGapStillHasUnloadedUnread() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = TimelineStore(pageSize: Self.pageSize) { server.page($0) }
+        _ = try await store.loadInitial()
+        server.post(11...20)
+        _ = try await store.fillFromLatest()
+        let gap = try #require(store.gaps.first)
+        #expect((gap.newerID, gap.olderID) == ("18", "10"))
+
+        _ = store.receive(.update(server.status(15)))
+        _ = store.flushPending()
+        store.markRead(["15"])
+
+        #expect(store.hasUnloadedUnread, "16と17を読み込んでいないのに未読なしになりました")
+        store.markRead(["18"])
+        #expect(!store.hasUnloadedUnread)
+    }
+
+    /// 補完の最中に次の補完を受け付けた後で、今の補完が失敗しても、次の補完で受け付けた分まで読む。
+    @Test func failedFillAfterOverlapIsRecoveredByNextFill() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let gate = FetchGate()
+        let gated = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.sinceID != nil, query.maxID == nil, gated.shouldFail() {
+                await gate.wait()
+                throw URLError(.networkConnectionLost)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(11...12)
+
+        let first = Task { try await store.fillFromLatest() }
+        await gate.waitUntilWaiting()
+        server.post(13...13)
+        _ = store.receive(.update(server.status(13)))
+        _ = store.flushPending()
+        #expect(try await store.fillFromLatest() == nil)
+        await gate.open()
+        await #expect(throws: URLError.self) { try await first.value }
+        server.post(14...14)
+
+        _ = try await store.fillFromLatest()
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        #expect(ids(store) == Array((8...14).reversed()))
+    }
+
     @Test func regeneratingShortPageKeepsGap() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let regenerating = FailOnce()

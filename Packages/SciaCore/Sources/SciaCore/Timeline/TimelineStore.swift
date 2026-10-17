@@ -428,9 +428,10 @@ public final class TimelineStore {
     }
 
     /// 既読の位置より新しい区間にギャップがあり、未読は`unreadCount`より多い。
+    /// ギャップの中に届いた投稿を既読にしても、新しい側の端との間は読み込んでいないため、新しい側の端と比べる。
     public var hasUnloadedUnread: Bool {
         guard let lastReadID else { return false }
-        return gaps.contains { !StatusID.isNewer(lastReadID, than: $0.olderID) }
+        return gaps.contains { StatusID.isNewer($0.newerID, than: lastReadID) }
     }
 
     #if DEBUG
