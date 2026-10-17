@@ -10,6 +10,7 @@ struct StatusDecodingTests {
         #expect(status.id == "113000000000000001")
         #expect(status.account.displayName == "Alice :blobcat:")
         #expect(status.spoilerText.isEmpty)
+        #expect(status.language == "ja")
         #expect(abs(status.createdAt.timeIntervalSince1970 - 1_791_861_705.123) < 0.001)
         #expect(status.visibility == .public)
         // 自分の操作を表す項目が無いレスポンスでも読める。

@@ -14,6 +14,8 @@ final class ProfileHeaderView: UIView {
         let postsFilter: ProfilePostsFilter
         let avatarShape: AvatarShape
         let animatesAvatar: Bool
+        /// 名前や自己紹介に付ける言語。言語が分からないため、設定から決める。
+        let glyphLanguage: String
         /// 自分のサーバーのアカウントではない。投稿や数が実際と合わないことを知らせる。
         let isRemote: Bool
     }
@@ -244,17 +246,17 @@ final class ProfileHeaderView: UIView {
 
         let title = UIFont.preferredFont(forTextStyle: .title2)
         let boldTitle = title.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? title
-        nameLabel.attributedText = RichTextRenderer(font: boldTitle, textColor: .label, emojiImages: emojiImages)
+        nameLabel.attributedText = RichTextRenderer(font: boldTitle, textColor: .label, emojiImages: emojiImages, language: content.glyphLanguage)
             .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
         acctLabel.attributedText = acctText(of: account)
         followedByLabel.superview?.isHidden = !content.followedBy || content.followState == .myself
 
         let body = UIFont.preferredFont(forTextStyle: .body)
-        let note = RichTextRenderer(font: body, textColor: .label, paragraphSpacing: 6, emojiImages: emojiImages).render(.html(account.note, emojis: account.emojis))
+        let note = RichTextRenderer(font: body, textColor: .label, paragraphSpacing: 6, emojiImages: emojiImages, language: content.glyphLanguage).render(.html(account.note, emojis: account.emojis))
         noteLabel.attributedText = note
         noteLabel.isHidden = note.length == 0
-        applyFields(account)
-        countsLabel.attributedText = countsText(of: account)
+        applyFields(account, language: content.glyphLanguage)
+        countsLabel.attributedText = countsText(of: account, language: content.glyphLanguage)
         remoteStack.isHidden = !content.isRemote
         // サーバーがプロフィールのURLを返さなかったら、開く先がないのでボタンを出さない。
         openOriginalButton.isHidden = account.url == nil
@@ -278,7 +280,7 @@ final class ProfileHeaderView: UIView {
         return text
     }
 
-    private func applyFields(_ account: Account) {
+    private func applyFields(_ account: Account, language: String) {
         fieldsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         fieldsStack.isHidden = account.fields.isEmpty
         let nameFont = UIFont.preferredFont(forTextStyle: .footnote)
@@ -286,11 +288,11 @@ final class ProfileHeaderView: UIView {
         for field in account.fields {
             let nameLabel = UILabel()
             nameLabel.numberOfLines = 0
-            nameLabel.attributedText = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, emojiImages: emojiImages)
+            nameLabel.attributedText = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, emojiImages: emojiImages, language: language)
                 .render(.plain(field.name, emojis: account.emojis))
             let valueLabel = UILabel()
             valueLabel.numberOfLines = 0
-            let value = NSMutableAttributedString(attributedString: RichTextRenderer(font: valueFont, textColor: .label, emojiImages: emojiImages)
+            let value = NSMutableAttributedString(attributedString: RichTextRenderer(font: valueFont, textColor: .label, emojiImages: emojiImages, language: language)
                 .render(.html(field.value, emojis: account.emojis)))
             if field.verifiedAt != nil,
                let check = UIImage(systemName: "checkmark.seal.fill", withConfiguration: UIImage.SymbolConfiguration(font: valueFont, scale: .small)) {
@@ -307,7 +309,7 @@ final class ProfileHeaderView: UIView {
         }
     }
 
-    private func countsText(of account: Account) -> NSAttributedString {
+    private func countsText(of account: Account, language: String) -> NSAttributedString {
         let font = UIFont.preferredFont(forTextStyle: .subheadline)
         let bold = font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
         let text = NSMutableAttributedString()
@@ -316,7 +318,7 @@ final class ProfileHeaderView: UIView {
                 text.append(NSAttributedString(string: "　", attributes: [.font: font]))
             }
             text.append(NSAttributedString(string: count.formatted(), attributes: [.font: bold, .foregroundColor: UIColor.label]))
-            text.append(NSAttributedString(string: " \(label)", attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel]))
+            text.append(NSAttributedString(string: " \(label)", attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel, .languageIdentifier: language]))
         }
         return text
     }

@@ -71,6 +71,7 @@ enum ProfileHeaderCatalog {
             postsFilter: postsFilter,
             avatarShape: avatarShape,
             animatesAvatar: false,
+            glyphLanguage: AppDependencies.settings.glyphLanguageIdentifier(),
             isRemote: account.acct.contains("@")
         )
         header.apply(content)
@@ -122,6 +123,7 @@ private extension ProfileHeaderView.Content {
             postsFilter: postsFilter ?? self.postsFilter,
             avatarShape: avatarShape,
             animatesAvatar: animatesAvatar,
+            glyphLanguage: glyphLanguage,
             isRemote: isRemote
         )
     }

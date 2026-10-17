@@ -10,6 +10,8 @@ struct RichTextRenderer {
     var linkColor: UIColor = .tintColor
     var paragraphSpacing: CGFloat = 0
     let emojiImages: EmojiImageStore
+    /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
+    let language: String
 
     /// 引用とリストの1段あたりの字下げ。
     private let indentPerLevel: CGFloat = 16
@@ -87,6 +89,7 @@ struct RichTextRenderer {
         var attributes: [NSAttributedString.Key: Any] = [
             .font: font(for: style, block: block),
             .foregroundColor: block.quoteLevel > 0 ? secondaryColor : textColor,
+            .languageIdentifier: language,
         ]
         if style.contains(.strikethrough) {
             attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue

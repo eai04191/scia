@@ -7,6 +7,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     /// Mastodonが返すHTML文字列。リッチテキストへの変換は表示層で行う。
     public let content: String
     public let spoilerText: String
+    /// 投稿した人が選んだ本文の言語（ISO 639-1の2文字）。選ばれていなければnil。
+    public let language: String?
     public let url: URL?
     public let mentions: [Mention]
     public let tags: [Tag]
@@ -43,6 +45,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         account: Account,
         content: String,
         spoilerText: String,
+        language: String? = nil,
         url: URL?,
         mentions: [Mention] = [],
         tags: [Tag] = [],
@@ -68,6 +71,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         self.account = account
         self.content = content
         self.spoilerText = spoilerText
+        self.language = language
         self.url = url
         self.mentions = mentions
         self.tags = tags
@@ -99,6 +103,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         account = try container.decode(Account.self, forKey: .account)
         content = try container.decode(String.self, forKey: .content)
         spoilerText = try container.decode(String.self, forKey: .spoilerText)
+        language = try container.decodeIfPresent(String.self, forKey: .language)
         url = container.decodeDisplayURL(forKey: .url)
         mentions = try container.decodeLossyArray(Mention.self, forKey: .mentions)
         tags = try container.decodeLossyArray(Tag.self, forKey: .tags)
@@ -184,7 +189,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, createdAt, account, content, spoilerText, url, mentions, tags, emojis, mediaAttachments, sensitive
+        case id, createdAt, account, content, spoilerText, language, url, mentions, tags, emojis, mediaAttachments, sensitive
         case visibility, inReplyToId, poll, card, filtered, editedAt
         case favourited, reblogged, bookmarked, favouritesCount, reblogsCount, repliesCount
         case reblogBox = "reblog"

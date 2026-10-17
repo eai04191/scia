@@ -127,6 +127,7 @@ final class ProfileController {
             postsFilter: store.postsFilter,
             avatarShape: settings.avatarShape,
             animatesAvatar: settings.animatesAvatars,
+            glyphLanguage: settings.glyphLanguageIdentifier(),
             // ローカルのアカウントのacctには@以降が付かない。
             isRemote: account.acct.contains("@")
         ))

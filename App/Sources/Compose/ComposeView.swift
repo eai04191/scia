@@ -19,11 +19,11 @@ struct ComposeView: View {
                     Section("返信先") {
                         VStack(alignment: .leading, spacing: 4) {
                             RichTextLabel(numberOfLines: 1) {
-                                RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline).bold, textColor: .label, emojiImages: AppDependencies.emojiImages)
+                                RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline).bold, textColor: .label, emojiImages: AppDependencies.emojiImages, language: AppDependencies.settings.glyphLanguageIdentifier())
                                     .render(.plain(replyTo.account.displayNameOrUsername, emojis: replyTo.account.emojis))
                             }
                             RichTextLabel(numberOfLines: 3) {
-                                RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .secondaryLabel, emojiImages: AppDependencies.emojiImages)
+                                RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .secondaryLabel, emojiImages: AppDependencies.emojiImages, language: AppDependencies.settings.glyphLanguageIdentifier(for: replyTo.language))
                                     .render(replyTo.spoilerText.isEmpty ? .status(replyTo) : .plain(replyTo.spoilerText, emojis: replyTo.emojis))
                             }
                         }

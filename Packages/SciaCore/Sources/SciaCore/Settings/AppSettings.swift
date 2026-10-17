@@ -27,6 +27,11 @@ public final class AppSettings {
         didSet { defaults.set(statusTimeStyle.rawValue, forKey: Keys.statusTimeStyle) }
     }
 
+    /// 漢字とかなを描く字形。投稿に日本語・中国語・韓国語の言語が付いていれば、そちらを優先する。
+    public var glyphLanguage: GlyphLanguage {
+        didSet { defaults.set(glyphLanguage.rawValue, forKey: Keys.glyphLanguage) }
+    }
+
     public var avatarShape: AvatarShape {
         didSet { defaults.set(avatarShape.rawValue, forKey: Keys.avatarShape) }
     }
@@ -69,6 +74,7 @@ public final class AppSettings {
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
         static let statusNameStyle = "settings.statusNameStyle"
         static let statusTimeStyle = "settings.statusTimeStyle"
+        static let glyphLanguage = "settings.glyphLanguage"
         static let avatarShape = "settings.avatarShape"
         static let animatesAvatars = "settings.animatesAvatars"
         static let insertionMotion = "settings.insertionMotion"
@@ -85,6 +91,7 @@ public final class AppSettings {
         ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
         statusNameStyle = defaults.string(forKey: Keys.statusNameStyle).flatMap(StatusNameStyle.init(rawValue:)) ?? .nameAndAcct
         statusTimeStyle = defaults.string(forKey: Keys.statusTimeStyle).flatMap(StatusTimeStyle.init(rawValue:)) ?? .relative
+        glyphLanguage = defaults.string(forKey: Keys.glyphLanguage).flatMap(GlyphLanguage.init(rawValue:)) ?? .automatic
         avatarShape = defaults.string(forKey: Keys.avatarShape).flatMap(AvatarShape.init(rawValue:)) ?? .roundedSquare
         animatesAvatars = defaults.object(forKey: Keys.animatesAvatars) as? Bool ?? false
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem

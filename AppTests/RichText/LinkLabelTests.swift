@@ -7,7 +7,7 @@ import UIKit
 @MainActor
 struct LinkLabelTests {
     private func label(for text: RichText, width: CGFloat = 300) -> LinkLabel {
-        let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: .offline)
+        let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: .offline, language: "ja")
         let label = LinkLabel()
         label.numberOfLines = 0
         label.attributedText = renderer.render(text)

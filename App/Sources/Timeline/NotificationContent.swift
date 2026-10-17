@@ -23,7 +23,7 @@ extension TimelineViewController {
     private func postConfiguration(for notification: MastodonNotification, status: Status, itemID: ItemID?, base: UIListContentConfiguration) -> PostContentConfiguration {
         var configuration = contentConfiguration(for: status, itemID: itemID, base: base)
         let appearance = NotificationAppearance(notification.type)
-        let renderer = RichTextRenderer(font: base.secondaryTextProperties.font, textColor: .secondaryLabel, emojiImages: emojiImages)
+        let renderer = RichTextRenderer(font: base.secondaryTextProperties.font, textColor: .secondaryLabel, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
         let text = NSMutableAttributedString(attributedString: renderer.render(.plain(appearance.phrase.before, emojis: [])))
         if appearance.phrase.includesName {
             text.append(renderer.render(.plain(notification.account.displayNameOrUsername, emojis: notification.account.emojis)))
@@ -96,8 +96,9 @@ extension TimelineViewController {
     ) -> NotificationContentConfiguration {
         let appearance = NotificationAppearance(notification.type)
         let font = base.textProperties.font
-        let nameRenderer = RichTextRenderer(font: font, textColor: base.textProperties.color, emojiImages: emojiImages)
-        let phraseAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
+        let language = settings.glyphLanguageIdentifier()
+        let nameRenderer = RichTextRenderer(font: font, textColor: base.textProperties.color, emojiImages: emojiImages, language: language)
+        let phraseAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel, .languageIdentifier: language]
         let header = NSMutableAttributedString(string: appearance.phrase.before, attributes: phraseAttributes)
         if appearance.phrase.includesName {
             header.append(avatarAttachment(of: notification.account, font: font))

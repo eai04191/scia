@@ -14,7 +14,7 @@ struct RichTextRendererTests {
     }
 
     private func renderer(_ store: EmojiImageStore, paragraphSpacing: CGFloat = 0) -> RichTextRenderer {
-        RichTextRenderer(font: font, textColor: .label, paragraphSpacing: paragraphSpacing, emojiImages: store)
+        RichTextRenderer(font: font, textColor: .label, paragraphSpacing: paragraphSpacing, emojiImages: store, language: "ja")
     }
 
     private func attachments(in string: NSAttributedString) -> [NSTextAttachment] {

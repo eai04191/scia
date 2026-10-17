@@ -30,8 +30,9 @@ struct PostContentBuilder {
             secondaryFont: secondaryFont,
             notificationSymbolFont: base.textProperties.font
         )
-        let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiImages: emojiImages)
-        let secondaryRenderer = RichTextRenderer(font: secondaryFont, textColor: .secondaryLabel, emojiImages: emojiImages)
+        let language = settings.glyphLanguageIdentifier()
+        let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiImages: emojiImages, language: language)
+        let secondaryRenderer = RichTextRenderer(font: secondaryFont, textColor: .secondaryLabel, emojiImages: emojiImages, language: language)
         let nameParts = settings.statusNameStyle.parts.enumerated().map { index, part in
             let renderer = index == 0 ? primaryRenderer : secondaryRenderer
             return switch part {
@@ -86,26 +87,29 @@ struct PostContentBuilder {
     /// 文字の大きさは標準のリストの2行目の文字に揃え、色は読むものなのでいちばん濃い色を既定にする。
     /// 引用ブロックは、RichTextRendererがこれより一段薄く描く。
     func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> NSAttributedString {
-        bodyRenderer(base: base, color: color).render(.status(status))
+        bodyRenderer(of: status, base: base, color: color).render(.status(status))
     }
 
     /// 投稿の注意書き。注意書きがなければnil。開いているかは一覧が覚えているため、ここでは畳んだ形で返す。
     func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> PostBodyContent.Spoiler? {
         guard !status.spoilerText.isEmpty else { return nil }
         return PostBodyContent.Spoiler(
-            text: bodyRenderer(base: base, color: color).render(.plain(status.spoilerText, emojis: status.emojis)),
+            text: bodyRenderer(of: status, base: base, color: color).render(.plain(status.spoilerText, emojis: status.emojis)),
             isCollapsed: true,
             padding: tuning.value(of: TuningCatalog.spoilerPadding),
-            bodySpacing: tuning.value(of: TuningCatalog.spoilerBodySpacing)
+            bodySpacing: tuning.value(of: TuningCatalog.spoilerBodySpacing),
+            toggleLanguage: settings.glyphLanguageIdentifier()
         )
     }
 
-    private func bodyRenderer(base: UIListContentConfiguration, color: UIColor) -> RichTextRenderer {
+    /// 本文と注意書きは投稿した人が書いたものなので、投稿の言語で描く。
+    private func bodyRenderer(of status: Status, base: UIListContentConfiguration, color: UIColor) -> RichTextRenderer {
         RichTextRenderer(
             font: base.secondaryTextProperties.font,
             textColor: color,
             paragraphSpacing: tuning.value(of: TuningCatalog.paragraphSpacing),
-            emojiImages: emojiImages
+            emojiImages: emojiImages,
+            language: settings.glyphLanguageIdentifier(for: status.language)
         )
     }
 }
