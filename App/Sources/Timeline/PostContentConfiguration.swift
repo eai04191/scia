@@ -240,7 +240,11 @@ final class PostContentView: UIView, UIContentView {
             textGuide.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.trailing),
             nameRow.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
             nameRow.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
-            bodyView.topAnchor.constraint(equalTo: nameRow.bottomAnchor, constant: bodyView.startsWithMedia ? metrics.nameMediaSpacing : metrics.nameBodySpacing),
+            // 間隔は、名前の字面の下端から測る。
+            bodyView.topAnchor.constraint(
+                equalTo: nameLabels[0].lastBaselineAnchor,
+                constant: (bodyView.startsWithMedia ? metrics.nameMediaSpacing : metrics.nameBodySpacing) + metrics.nameFont.pointSize * PostBodyView.emBoxDescent
+            ),
             bodyView.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
             bodyView.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
             // 本文が短くても、アイコンが下の余白に食い込まないようにする。

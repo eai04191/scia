@@ -111,7 +111,7 @@ public enum TuningCatalog {
         title: "名前の行と本文のあいだ（pt）",
         range: 0...16,
         step: 1,
-        defaultValue: 2
+        defaultValue: 5
     )
 
     /// 投稿の本文と、添付ファイルのサムネイルのあいだ。
@@ -120,7 +120,7 @@ public enum TuningCatalog {
         title: "本文とメディアのあいだ（pt）",
         range: 0...24,
         step: 1,
-        defaultValue: 8
+        defaultValue: 10
     )
 
     /// 注意書き（CW）の箱の内側の余白。
@@ -129,7 +129,7 @@ public enum TuningCatalog {
         title: "注意書きの箱の内側の余白（pt）",
         range: 0...20,
         step: 1,
-        defaultValue: 8
+        defaultValue: 9
     )
 
     /// 注意書き（CW）の箱と、開いた本文のあいだ。
@@ -138,7 +138,7 @@ public enum TuningCatalog {
         title: "注意書きと本文のあいだ（pt）",
         range: 0...24,
         step: 1,
-        defaultValue: 8
+        defaultValue: 9
     )
 
     /// 本文のない投稿で、名前の行と、添付ファイルのサムネイルのあいだ。
@@ -147,7 +147,7 @@ public enum TuningCatalog {
         title: "名前の行とメディアのあいだ（本文なし）（pt）",
         range: 0...24,
         step: 1,
-        defaultValue: 10
+        defaultValue: 12
     )
 
     /// 添付ファイルのサムネイルを並べるときの、サムネイル同士のすき間。
@@ -184,7 +184,7 @@ public enum TuningCatalog {
         title: "通知で再掲する本文とサムネイルのあいだ（pt）",
         range: 0...24,
         step: 1,
-        defaultValue: 8
+        defaultValue: 10
     )
 
     /// フォローなどの通知で、誰が何をしたかの行と、その下に添えるアカウント名のあいだ。
@@ -193,7 +193,7 @@ public enum TuningCatalog {
         title: "通知の行とアカウント名のあいだ（pt）",
         range: 0...16,
         step: 1,
-        defaultValue: 2
+        defaultValue: 5
     )
 
     /// お気に入りやブーストの通知で、誰が何をしたかの行と、再掲する投稿のあいだの余白。
@@ -203,7 +203,7 @@ public enum TuningCatalog {
         title: "通知で再掲する投稿の上の余白（pt）",
         range: 0...16,
         step: 1,
-        defaultValue: 6
+        defaultValue: 9
     )
 
     /// お気に入りやブーストの通知で、再掲する投稿の本文を切る行数。誰が何をしたかの行を主役にするため、本文は短く切る。

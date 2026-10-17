@@ -48,10 +48,10 @@ final class SpoilerView: UIControl {
         toggleLabel.attributedText = Self.toggleText(isCollapsed: content.isCollapsed, font: toggleLabel.font)
         NSLayoutConstraint.deactivate(paddingConstraints)
         paddingConstraints = [
-            textLabel.topAnchor.constraint(equalTo: topAnchor, constant: content.padding),
+            textLabel.firstBaselineAnchor.constraint(equalTo: topAnchor, constant: content.padding + PostBodyView.textTopInset(of: content.text)),
             textLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: content.padding),
             textLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -content.padding),
-            bottomAnchor.constraint(equalTo: toggleLabel.bottomAnchor, constant: content.padding),
+            bottomAnchor.constraint(equalTo: toggleLabel.lastBaselineAnchor, constant: content.padding + toggleLabel.font.pointSize * PostBodyView.emBoxDescent),
         ]
         NSLayoutConstraint.activate(paddingConstraints)
     }

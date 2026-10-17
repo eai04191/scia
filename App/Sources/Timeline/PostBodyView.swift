@@ -105,14 +105,14 @@ final class PostBodyView: UIView {
         // 本文と添付ファイルは、注意書きがあればその下から並べる。
         let contentTop = content.spoiler.map { (anchor: spoilerView.bottomAnchor, spacing: $0.bodySpacing) } ?? (anchor: topAnchor, spacing: 0)
         if !textLabel.isHidden {
-            variableConstraints.append(textLabel.topAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing))
+            variableConstraints.append(textLabel.firstBaselineAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing + Self.textTopInset(of: content.text)))
         }
         if let media, let aspectRatio = media.aspectRatio {
             mediaView.isHidden = false
             mediaView.apply(media)
             let mediaTop = textLabel.isHidden
                 ? mediaView.topAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing)
-                : mediaView.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: content.mediaSpacing)
+                : mediaView.topAnchor.constraint(equalTo: textLabel.lastBaselineAnchor, constant: content.mediaSpacing + Self.textBottomInset(of: content.text))
             variableConstraints += [
                 mediaTop,
                 mediaView.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -131,6 +131,23 @@ final class PostBodyView: UIView {
             variableConstraints.append(bottomAnchor.constraint(equalTo: last.bottomAnchor))
         }
         NSLayoutConstraint.activate(variableConstraints)
+    }
+
+    /// 和文の字面の枠（em枠）の、ベースラインから上端と下端までの距離。日本語の字面はcapHeightより上に出るため、em枠で測る。
+    /// em枠はベースラインの上0.88em、下0.12emにあるとみなす。
+    static let emBoxAscent: CGFloat = 0.88
+    static let emBoxDescent: CGFloat = 0.12
+
+    /// 先頭の文字の、ベースラインから字面の上端まで。
+    static func textTopInset(of text: NSAttributedString) -> CGFloat {
+        guard text.length > 0, let font = text.attribute(.font, at: 0, effectiveRange: nil) as? UIFont else { return 0 }
+        return font.pointSize * emBoxAscent
+    }
+
+    /// 最後の文字の、ベースラインから字面の下端まで。
+    static func textBottomInset(of text: NSAttributedString) -> CGFloat {
+        guard text.length > 0, let font = text.attribute(.font, at: text.length - 1, effectiveRange: nil) as? UIFont else { return 0 }
+        return font.pointSize * emBoxDescent
     }
 
     /// 読み上げで、注意書きの本文を開閉する操作。注意書きがなければnil。

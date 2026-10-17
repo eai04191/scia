@@ -115,7 +115,8 @@ final class NotificationContentView: UIView, UIContentView {
             headerLabel.topAnchor.constraint(equalTo: topAnchor, constant: margins.top),
             headerLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: textLeading),
             headerLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.trailing),
-            bodyView.topAnchor.constraint(equalTo: headerLabel.bottomAnchor, constant: metrics.bodySpacing),
+            // 間隔は、誰が何をしたかの行の字面の下端から測る。
+            bodyView.topAnchor.constraint(equalTo: headerLabel.lastBaselineAnchor, constant: metrics.bodySpacing + metrics.headerFont.pointSize * PostBodyView.emBoxDescent),
             bodyView.leadingAnchor.constraint(equalTo: headerLabel.leadingAnchor),
             bodyView.trailingAnchor.constraint(equalTo: headerLabel.trailingAnchor),
             bottomAnchor.constraint(equalTo: bodyView.bottomAnchor, constant: margins.bottom),
