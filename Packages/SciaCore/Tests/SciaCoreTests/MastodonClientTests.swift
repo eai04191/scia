@@ -238,11 +238,18 @@ struct MastodonClientTests {
         }
     }
 
-    @Test func defaultVisibilityReadsPreferences() async throws {
-        let transport = StubTransport([.json(#"{"posting:default:visibility":"unlisted","posting:default:sensitive":false,"posting:default:language":null}"#, statusCode: 200)])
+    @Test func readsPreferences() async throws {
+        let transport = StubTransport([.json(#"{"posting:default:visibility":"unlisted","posting:default:sensitive":false,"posting:default:language":null,"reading:expand:media":"default","reading:expand:spoilers":true}"#, statusCode: 200)])
 
-        #expect(try await makeClient(transport).defaultVisibility() == .unlisted)
+        #expect(try await makeClient(transport).preferences() == ServerPreferences(defaultVisibility: .unlisted, expandsSpoilers: true))
         #expect(await transport.requests.first?.url?.path() == "/api/v1/preferences")
+    }
+
+    /// 返さない項目は、Mastodonの既定値にする。
+    @Test func missingPreferencesUseMastodonDefaults() async throws {
+        let transport = StubTransport([.json("{}", statusCode: 200)])
+
+        #expect(try await makeClient(transport).preferences() == ServerPreferences(defaultVisibility: .public, expandsSpoilers: false))
     }
 
     @Test func instanceConfigurationReadsStatusLimits() async throws {

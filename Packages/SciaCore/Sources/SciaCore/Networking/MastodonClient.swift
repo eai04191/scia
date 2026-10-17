@@ -136,20 +136,24 @@ public struct MastodonClient: Sendable {
         )
     }
 
-    /// 新しく投稿するときの公開範囲の既定値。ユーザーがアカウントの設定で決めたもの。
+    /// ユーザーがアカウントの設定で決めた、クライアントをまたいで使う設定。
     /// https://docs.joinmastodon.org/methods/preferences/#get
-    public func defaultVisibility() async throws -> Status.Visibility {
+    public func preferences() async throws -> ServerPreferences {
         struct Preferences: Decodable {
             let visibility: Status.Visibility?
+            let expandsSpoilers: Bool?
 
             private enum CodingKeys: String, CodingKey {
                 case visibility = "posting:default:visibility"
+                case expandsSpoilers = "reading:expand:spoilers"
             }
         }
         // キーにコロンを含むため、スネークケースからの変換を通さずに読む。
         let request = URLRequest(url: credential.instance.appending(path: "api/v1/preferences"))
         let (data, response) = try await send(request, feature: .preferences)
-        return try decode(Preferences.self, from: data, of: response, for: request, using: JSONDecoder()).visibility ?? .public
+        let preferences = try decode(Preferences.self, from: data, of: response, for: request, using: JSONDecoder())
+        // 返さない項目は、Mastodonの既定値を使う。
+        return ServerPreferences(defaultVisibility: preferences.visibility ?? .public, expandsSpoilers: preferences.expandsSpoilers ?? false)
     }
 
     // MARK: - 投稿への操作

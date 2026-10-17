@@ -78,7 +78,7 @@ struct ConnectionStatusView: View {
     private static func name(of feature: OptionalFeature) -> String {
         switch feature {
         case .markers: "既読位置の保存"
-        case .preferences: "公開範囲の既定値"
+        case .preferences: "アカウントの設定（公開範囲の既定値など）"
         case .instanceV2: "サーバーの設定（v2）"
         }
     }

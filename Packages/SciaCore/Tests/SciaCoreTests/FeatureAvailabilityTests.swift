@@ -85,8 +85,8 @@ struct FeatureAvailabilityTests {
         let transport = StubTransport([.json("<html>Not Found</html>", statusCode: 404)])
         let client = try makeClient(transport, features: features)
 
-        await #expect(throws: FeatureUnavailable.self) { try await client.defaultVisibility() }
-        await #expect(throws: FeatureUnavailable.self) { try await client.defaultVisibility() }
+        await #expect(throws: FeatureUnavailable.self) { try await client.preferences() }
+        await #expect(throws: FeatureUnavailable.self) { try await client.preferences() }
 
         #expect(await features.disabled.map(\.feature) == [.preferences])
     }

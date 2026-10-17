@@ -5,7 +5,7 @@ import os
 public enum OptionalFeature: String, Sendable, CaseIterable {
     /// 既読位置の読み込みと保存。https://docs.joinmastodon.org/methods/markers/
     case markers
-    /// 投稿の公開範囲の既定値。https://docs.joinmastodon.org/methods/preferences/
+    /// アカウントの設定（投稿の公開範囲の既定値、注意書きを開いておくか）。https://docs.joinmastodon.org/methods/preferences/
     case preferences
     /// v2の`instance`。投稿欄の上限とストリーミングの接続先に使う。https://docs.joinmastodon.org/methods/instance/#v2
     case instanceV2

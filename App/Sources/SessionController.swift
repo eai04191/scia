@@ -52,8 +52,10 @@ final class SessionController {
     private var browserCoversTimelines = false
     /// 一覧の下を覆っている高さ。投稿欄とアプリ内のSafariのシートのうち、高いほう。
     private var obscuredBottomHeight: CGFloat { max(composerObscuredHeight, browserObscuredHeight) }
-    /// 投稿画面で使う、インスタンスの上限とユーザーの既定の公開範囲。一度読めたら使い回す。
-    private var composeDefaults: (configuration: InstanceConfiguration?, visibility: Status.Visibility?)?
+    /// 投稿画面で使う、インスタンスの上限。一度読めたら使い回す。
+    private var instanceConfiguration: InstanceConfiguration?
+    /// アカウントの設定。一度読めたら使い回す。
+    private var preferences: ServerPreferences?
     private let logger = SciaLog.logger(category: "session")
 
     /// - Parameters:
@@ -262,6 +264,7 @@ final class SessionController {
         viewController.onFocusInlineCompose = { [weak self] in self?.composer.beginEditing() }
         viewController.setShowsFocusInlineCompose(browser.isPresented)
         viewController.myAccountID = credential.accountID
+        viewController.spoilerExpansion.expandsByDefault = preferences?.expandsSpoilers ?? false
         viewController.onStatusAction = { [weak self, weak viewController] action, status in self?.perform(action, on: status, from: viewController) }
         viewController.onShowOperationStatus = { [weak self] presenter in self?.showOperationStatus(from: presenter) }
         viewController.mediaTransfers = mediaTransfers
@@ -482,21 +485,35 @@ final class SessionController {
     private func applyComposeDefaults() {
         Task { [weak self] in
             guard let self else { return }
-            let defaults = await self.loadComposeDefaults()
-            self.composer.model.apply(configuration: defaults.configuration, defaultVisibility: defaults.visibility)
+            async let configuration = self.loadInstanceConfiguration()
+            async let preferences = self.loadPreferences()
+            self.composer.model.apply(configuration: await configuration, defaultVisibility: await preferences?.defaultVisibility)
         }
     }
 
-    /// 読めなかった値は既定のまま投稿画面を使えるようnilにし、次に開いたときに読み直す。
-    private func loadComposeDefaults() async -> (configuration: InstanceConfiguration?, visibility: Status.Visibility?) {
-        if let composeDefaults { return composeDefaults }
-        async let configuration = try? client.instanceConfiguration()
-        async let visibility = try? client.defaultVisibility()
-        let defaults = (await configuration, await visibility)
-        if defaults.0 != nil, defaults.1 != nil {
-            composeDefaults = defaults
+    /// 読めなければ、既定のまま投稿画面を使えるようnilを返し、次に開いたときに読み直す。
+    private func loadInstanceConfiguration() async -> InstanceConfiguration? {
+        if let instanceConfiguration { return instanceConfiguration }
+        instanceConfiguration = try? await client.instanceConfiguration()
+        return instanceConfiguration
+    }
+
+    /// アカウントの設定を読み、注意書きを最初から開いておくかを一覧に反映する。
+    /// 読めなければnilを返す。一覧は注意書きを畳んだままにし、次に投稿画面を開いたときに読み直す。
+    @discardableResult
+    private func loadPreferences() async -> ServerPreferences? {
+        if let preferences { return preferences }
+        do {
+            let loaded = try await client.preferences()
+            preferences = loaded
+            for timeline in timelines.allObjects {
+                timeline.spoilerExpansion.expandsByDefault = loaded.expandsSpoilers
+            }
+            return loaded
+        } catch {
+            logger.info("preferences unavailable error=\(SciaLog.describe(error), privacy: .public)")
+            return nil
         }
-        return defaults
     }
 
     func start() {
@@ -504,6 +521,9 @@ final class SessionController {
         notifications.start()
         observeRecoveries()
         loadServerVersion()
+        RequestOrigin.$current.withValue(.automatic) {
+            Task { [weak self] in await self?.loadPreferences() }
+        }
     }
 
     /// 原因を絞れるよう、サーバーの版を記録に残す。読めなくても使うのに困らないので、失敗は記録するだけにする。
