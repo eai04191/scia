@@ -1,7 +1,6 @@
 import os
 import SafariServices
 import SciaCore
-import SwiftUI
 import UIKit
 
 /// ログイン中のアカウントの画面一式。タブの組み立てと、各タブの読み込みと接続の寿命をまとめる。
@@ -52,7 +51,7 @@ final class SessionController {
     private var browserCoversTimelines = false
     /// 一覧の下を覆っている高さ。投稿欄とアプリ内のSafariのシートのうち、高いほう。
     private var obscuredBottomHeight: CGFloat { max(composerObscuredHeight, browserObscuredHeight) }
-    /// 投稿画面で使う、インスタンスの上限。一度読めたら使い回す。
+    /// 投稿欄で使う、インスタンスの上限。一度読めたら使い回す。
     private var instanceConfiguration: InstanceConfiguration?
     /// アカウントの設定。一度読めたら使い回す。
     private var preferences: ServerPreferences?
@@ -174,7 +173,6 @@ final class SessionController {
             #endif
             configure(viewController)
         }
-        home.viewController.onCompose = { [weak self] in self?.expandCompose() }
         composer.onBeginEditing = { [weak self] in
             self?.applyComposeDefaults()
             // アプリ内のSafariのシートは投稿欄より手前に出るため、書いている間は伏せた高さまで下げる。
@@ -187,7 +185,6 @@ final class SessionController {
             let top = tabBarController.frontmostPresented
             return top === tabBarController || top is SFSafariViewController ? top : nil
         }
-        composer.onExpand = { [weak self] in self?.expandCompose() }
         composer.onShowReplyTarget = { [weak tabBarController] status in
             // 今見えている一覧（ホーム、通知、開いているプロフィール）に返信先があれば、そこへ戻る。なければ動かさない。
             let navigation = tabBarController?.selectedTab?.viewController as? UINavigationController
@@ -216,14 +213,6 @@ final class SessionController {
                 timeline.setCoveredByInAppBrowser(covered)
             }
         }
-        composer.onPosted = { [weak self] in
-            // 投稿画面はアプリ内のSafariのシートの上に重ねていることがあるため、重ねている画面をたどって探す。
-            var presented = self?.rootViewController.presentedViewController
-            while let current = presented, !(current is ComposeHostingController) {
-                presented = current.presentedViewController
-            }
-            presented?.dismiss(animated: true)
-        }
         mediaTransfers.showOperationStatus = { [weak self] presenter in self?.showOperationStatus(from: presenter) }
         mediaTransfers.host = MediaTransferCenter.Host(
             setPersistent: { [weak self] notice in
@@ -236,7 +225,7 @@ final class SessionController {
             },
             presenter: { [weak self] in self?.topViewController }
         )
-        // 投稿欄を置くとタブバーの画面を読み込むため、各一覧の設定（投稿ボタンを付けるonComposeなど）を終えてから置く。
+        // 投稿欄を置くとタブバーの画面を読み込むため、各一覧の設定を終えてから置く。
         composer.install(in: tabBarController)
     }
 
@@ -462,7 +451,7 @@ final class SessionController {
         topViewController.present(alert, animated: true)
     }
 
-    /// いちばん手前に出ている画面。投稿画面を出している間の失敗も、その上に出す。
+    /// いちばん手前に出ている画面。
     private var topViewController: UIViewController {
         var top = rootViewController
         while let presented = top.presentedViewController {
@@ -472,14 +461,6 @@ final class SessionController {
     }
 
     // MARK: - 投稿
-
-    /// 投稿欄の下書きのまま、全画面の投稿画面を出す。
-    private func expandCompose() {
-        UserAction.expandCompose.record()
-        applyComposeDefaults()
-        // アプリ内のSafariのシートを出していれば、その上に重ねる。
-        rootViewController.frontmostPresented.present(ComposeHostingController(model: composer.model), animated: true)
-    }
 
     /// 既定の公開範囲などを読めたら、投稿欄に反映する。読めなかったら、次に書き始めたときに読み直す。
     private func applyComposeDefaults() {
@@ -491,7 +472,7 @@ final class SessionController {
         }
     }
 
-    /// 読めなければ、既定のまま投稿画面を使えるようnilを返し、次に開いたときに読み直す。
+    /// 読めなければ、既定のまま投稿欄を使えるようnilを返し、次に書き始めたときに読み直す。
     private func loadInstanceConfiguration() async -> InstanceConfiguration? {
         if let instanceConfiguration { return instanceConfiguration }
         instanceConfiguration = try? await client.instanceConfiguration()
@@ -499,7 +480,7 @@ final class SessionController {
     }
 
     /// アカウントの設定を読み、注意書きを最初から開いておくかを一覧に反映する。
-    /// 読めなければnilを返す。一覧は注意書きを畳んだままにし、次に投稿画面を開いたときに読み直す。
+    /// 読めなければnilを返す。一覧は注意書きを畳んだままにし、次に投稿欄で書き始めたときに読み直す。
     @discardableResult
     private func loadPreferences() async -> ServerPreferences? {
         if let preferences { return preferences }
@@ -745,28 +726,5 @@ private final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate
         scrollToTop(navigation)
         UserAction.reselectTab(tab.identifier).record()
         return false
-    }
-}
-
-/// 投稿欄を広げた画面を出す。閉じても下書きは投稿欄に残るため、下へのスワイプでも閉じられる。投稿中だけは閉じない。
-@MainActor
-private final class ComposeHostingController: UIHostingController<ComposeView>, UIAdaptivePresentationControllerDelegate {
-    private let model: ComposeModel
-
-    init(model: ComposeModel) {
-        self.model = model
-        super.init(rootView: ComposeView(model: model) {})
-        // 閉じる操作は自分を参照するため、初期化を終えてから差し替える。
-        rootView = ComposeView(model: model) { [weak self] in self?.dismiss(animated: true) }
-        presentationController?.delegate = self
-    }
-
-    @available(*, unavailable)
-    @MainActor required dynamic init?(coder aDecoder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
-        !model.isPosting
     }
 }

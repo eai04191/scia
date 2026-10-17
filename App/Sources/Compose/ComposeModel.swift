@@ -3,7 +3,7 @@ import Observation
 import SciaCore
 import UIKit
 
-/// 投稿欄の下書きの状態。タブバーの上の入力欄と、展開した投稿画面で同じものを使う。
+/// 投稿欄の下書きの状態。
 @MainActor
 @Observable
 final class ComposeModel {

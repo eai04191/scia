@@ -123,7 +123,7 @@ public enum UserAction: Sendable, Equatable {
         // 投稿への操作と投稿は通信の前に記録するため、失敗した場合や応答を待つ間もあるので、成功したとは書かない。
         case .toggleFavourite: "投稿のお気に入りを押した"
         case .toggleReblog: "投稿のブーストを押した"
-        case .expandCompose: "投稿欄を全画面に広げた"
+        case .expandCompose: "投稿欄を広げた"
         case .submitPost: "投稿を送った"
         case .enterForeground: "アプリに戻った"
         case .enterBackground: "アプリを離れた"

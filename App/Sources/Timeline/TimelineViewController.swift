@@ -53,8 +53,6 @@ final class TimelineViewController: UIViewController {
     var onVisibleNotificationsChange: (([MastodonNotification.ID]) -> Void)?
     /// 投稿への操作が選ばれたときに呼ぶ。ブーストなら、ブーストした投稿を渡す。
     var onStatusAction: ((StatusAction, Status) -> Void)?
-    /// 投稿ボタンが押されたときに呼ぶ。設定されていれば、ナビゲーションバーに投稿ボタンを出す。表示より前に設定する。
-    var onCompose: (() -> Void)?
     /// アプリ内のSafariのシートを出している間だけ右上に出す、投稿欄で書き始めるボタンが押されたときに呼ぶ。
     /// シートを出している間は投稿欄がシートの裏に隠れて触れないため、その入口にする。
     var onFocusInlineCompose: (() -> Void)?
@@ -211,16 +209,9 @@ final class TimelineViewController: UIViewController {
         if !texts.title.isEmpty {
             title = texts.title
         }
-        var barItems: [UIBarButtonItem] = []
-        if onCompose != nil {
-            let compose = UIBarButtonItem(image: UIImage(systemName: "square.and.pencil"), primaryAction: UIAction { [weak self] _ in self?.onCompose?() })
-            compose.accessibilityLabel = "投稿"
-            barItems.append(compose)
-        }
         #if DEBUG
-        barItems.append(makeDebugMenuButton(screenActions: debugActions, faults: onDebugURL.map { DebugFaultMenu.make(handle: $0) }))
+        baseBarItems = [makeDebugMenuButton(screenActions: debugActions, faults: onDebugURL.map { DebugFaultMenu.make(handle: $0) })]
         #endif
-        baseBarItems = barItems
         applyBarItems()
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]

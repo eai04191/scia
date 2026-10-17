@@ -10,7 +10,7 @@ import UIKit
 ///
 /// 次の部品は、AGENTS.mdの基準では載せるべきだが、外から状態を渡せないため載せていない。その部品に手を入れるときに、合わせて載せる。
 /// - 接続の状態の画面（`ConnectionStatusView`）: `ConnectionDiagnostics.Status`にpublicなinitがなく、SciaCoreの外から作れない。`Status`を受け取る中身のビューを分けるか、publicなinitを足す
-/// - 投稿欄（`ComposeView`、`InlineComposeController`）: 投稿中や添付の失敗は`ComposeModel`の`private(set)`で、`InlineComposeController`はタブバーとキーボードに頼る。残りの文字数のカプセルなどを切り出す
+/// - 投稿欄（`InlineComposeController`）: 投稿中や添付の失敗は`ComposeModel`の`private(set)`で、`InlineComposeController`はタブバーとキーボードに頼る。残りの文字数のカプセルなどを切り出す
 /// - ログイン画面のエラー（`LoginView`）: `isLoggingIn`が`private(set)`で、ログイン中を出すには実際の認可を待たせる必要がある
 enum CatalogComponent: String, CaseIterable {
     case attachmentStrip = "attachment-strip"

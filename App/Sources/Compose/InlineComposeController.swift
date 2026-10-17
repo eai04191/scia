@@ -17,7 +17,7 @@ final class InlineComposeController: NSObject {
     /// 書き終えてバーを細いカプセルに戻したときに呼ぶ。メディアを選ぶシートやビューアのためにキーボードを閉じたときは、書いている途中なので呼ばない。
     var onEndEditing: () -> Void = {}
     /// 失敗の知らせや、メディアを選ぶシートを重ねる画面を返す。アプリ内のSafariのシートを出している間は、その上に重ねる必要がある。
-    /// 全画面の投稿画面を出している間は、そちらが失敗を知らせるためnilを返す。渡されなければ、何も重ねていないときだけ投稿欄の画面に重ねる。
+    /// ほかの画面を出している間はnilを返す。渡されなければ、何も重ねていないときだけ投稿欄の画面に重ねる。
     var presenterAboveInlineCompose: (() -> UIViewController?)?
 
     private var presenterForErrors: UIViewController? {
@@ -25,8 +25,6 @@ final class InlineComposeController: NSObject {
         guard let host, host.presentedViewController == nil else { return nil }
         return host
     }
-    /// 全画面の投稿画面に広げる。
-    var onExpand: () -> Void = {}
     /// 返信先の札を押したときに呼ぶ。返信先の投稿を見せる。
     var onShowReplyTarget: (Status) -> Void = { _ in }
     /// 投稿できたあとに呼ぶ。
@@ -64,6 +62,15 @@ final class InlineComposeController: NSObject {
         return constraint
     }()
     private let visibilityButton = UIButton(configuration: .plain())
+    private lazy var expandButton = UIButton(configuration: .plain(), primaryAction: UIAction { [weak self] _ in self?.toggleExpanded() })
+    /// 展開ボタンで広げている。本文の5行の上限を外し、バーの上端を上の安全領域の上端に付ける。
+    private var isExpanded = false
+    /// 広げている間だけ付ける、バーの上端を上の安全領域の上端に揃える制約。
+    private var expandedTop: NSLayoutConstraint?
+    /// 広げた状態から戻す動きの間はtrue。この間は本文をスクロールできるままにし、高さだけを本文に合わせる。
+    private var isCollapsingFromExpanded = false
+    /// 広げる・戻すたびに増やす。前の動きの終わりで、次の戻す動きの途中に本文のスクロールを切り替えないようにする。
+    private var expansionGeneration = 0
     private let remainingLabel = UILabel()
     private lazy var sendButton = UIButton(configuration: .filled(), primaryAction: UIAction { [weak self] _ in self?.submit() })
     private var isPresentingError = false
@@ -144,11 +151,13 @@ final class InlineComposeController: NSObject {
             restingBottom,
         ])
         holdAboveKeyboard = bar.bottomAnchor.constraint(lessThanOrEqualTo: host.view.bottomAnchor)
+        expandedTop = bar.topAnchor.constraint(equalTo: host.view.safeAreaLayoutGuide.topAnchor)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChangeFrame(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardDidShow(_:)), name: UIResponder.keyboardDidShowNotification, object: nil)
         bar.onFrameChange = { [weak self] in self?.reportObscuredHeight() }
         AppDependencies.stateDumps.register("composer", owner: self) { $0.stateDump() }
         applyEditingLayout()
+        applyExpandedLayout()
         observeModel()
         observeTuning()
     }
@@ -174,7 +183,7 @@ final class InlineComposeController: NSObject {
     /// 違和感レポートに残す状態。行が重なっていれば、どの行かも書く。
     func stateDump() -> String {
         """
-        editing: \(isEditing) firstResponder: \(textView.isFirstResponder) replyTo: \(model.replyTo?.id ?? "nil")
+        editing: \(isEditing) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder) replyTo: \(model.replyTo?.id ?? "nil")
         mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
         bar.frame: \(bar.frame)
@@ -207,19 +216,45 @@ final class InlineComposeController: NSObject {
         beginEditing()
     }
 
-    /// 書きかけの下書きのまま、全画面の投稿画面に広げる。
-    func expand() {
-        if let mediaPicker {
-            // シートを出したままでは全画面の投稿画面を出せないので、閉じ終わってから広げる。
-            mediaPicker.onDidClose = { [weak self] in
-                self?.mediaPickerDidClose()
-                self?.onExpand()
-            }
-            mediaPicker.close(notifiesWillClose: false)
-            return
+    /// 本文の長さに関係なく、すぐバーの上端を上の安全領域の上端まで広げる。広げていれば、本文の5行の上限がある高さに戻す。
+    /// 打つたびにバーの上端が動かないよう、本文に合わせて伸ばすことはしない。
+    private func toggleExpanded() {
+        isExpanded.toggle()
+        if isExpanded {
+            UserAction.expandCompose.record()
         }
-        textView.resignFirstResponder()
-        onExpand()
+        logger.info("compose: \(self.isExpanded ? "expand" : "collapse", privacy: .public)")
+        let generation = beginExpansionChange()
+        UIView.animate(withDuration: tuning.value(of: TuningCatalog.composeExpandDuration), delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            self.applyExpandedLayout()
+            self.host?.view.layoutIfNeeded()
+            // 5行の高さに戻すと、本文が先頭に戻ってカーソルが隠れることがあるため、カーソルの行を見せる。
+            self.textView.scrollRangeToVisible(self.textView.selectedRange)
+        } completion: { _ in
+            self.endCollapse(generation: generation)
+        }
+    }
+
+    /// 広げるか戻すかを決めたあと、動かす前に呼ぶ。戻すときは、動き終わるまで本文をスクロールできるままにする。
+    private func beginExpansionChange() -> Int {
+        expansionGeneration += 1
+        isCollapsingFromExpanded = !isExpanded
+        return expansionGeneration
+    }
+
+    /// 戻す動きが終わったら、本文の長さに合わせて、伸ばすかスクロールするかを決め直す。
+    private func endCollapse(generation: Int) {
+        guard generation == expansionGeneration, isCollapsingFromExpanded else { return }
+        isCollapsingFromExpanded = false
+        textDidChange()
+    }
+
+    /// 広げている間は、本文が残りの高さを使い、超えたら中でスクロールする。
+    private func applyExpandedLayout() {
+        expandedTop?.isActive = isExpanded
+        expandButton.configuration?.image = UIImage(systemName: isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+        expandButton.accessibilityLabel = isExpanded ? "元の大きさに戻す" : "広げて書く"
+        textDidChange()
     }
 
     private func submit() {
@@ -271,7 +306,7 @@ final class InlineComposeController: NSObject {
         picker.present(from: presenterAboveInlineCompose?() ?? host)
     }
 
-    /// キーボードに戻らずに閉じたとき（全画面に広げたときなど）は、書き終えたときと同じくバーを細いカプセルに戻す。
+    /// キーボードに戻らずに閉じたとき（シートの上の投稿ボタンから送ったときなど）は、書き終えたときと同じくバーを細いカプセルに戻す。
     private func mediaPickerDidClose() {
         logger.info("media picker: did close (firstResponder=\(self.textView.isFirstResponder))")
         mediaPicker = nil
@@ -349,8 +384,9 @@ final class InlineComposeController: NSObject {
     }
 
     /// バーの上端から画面の下端までを覆っている。書いていればキーボードも含む。バーが動くたびに測り直す。
+    /// 広げている間は、一覧が隠れたままでよいので知らせない。知らせると一覧の下の余白が画面の高さほどに変わり、戻したときに一覧の位置が動きうる。
     private func reportObscuredHeight() {
-        guard let host else { return }
+        guard let host, !isExpanded else { return }
         let height = max(0, host.view.bounds.maxY - bar.frame.minY + barSpacing)
         guard height != obscuredHeight else { return }
         obscuredHeight = height
@@ -358,13 +394,26 @@ final class InlineComposeController: NSObject {
     }
 
     /// 書き始めと書き終わりで、バーの中身を入れ替える。高さの変化はキーボードの動きと並べて動かす。
+    /// 書き終えたら（投稿したときも）、広げていても5行の上限がある高さに戻し、細いカプセルにする。
     private func setEditing(_ editing: Bool) {
         guard isEditing != editing else { return }
         isEditing = editing
+        let collapses = !editing && isExpanded
+        var generation: Int?
+        if collapses {
+            isExpanded = false
+            generation = beginExpansionChange()
+        }
         UIView.animate(withDuration: tuning.value(of: TuningCatalog.composeMorphDuration), delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            if collapses {
+                self.applyExpandedLayout()
+            }
             self.applyEditingLayout()
             self.host?.view.layoutIfNeeded()
         } completion: { _ in
+            if let generation {
+                self.endCollapse(generation: generation)
+            }
             self.logOverlappingRows(after: editing ? "begin editing" : "end editing")
         }
     }
@@ -521,7 +570,7 @@ final class InlineComposeController: NSObject {
         return result
     }
 
-    /// 全画面の投稿画面やメディアを選ぶシートなどを出している間は出さない。全画面の投稿画面は、そちらが失敗を知らせる。
+    /// メディアを選ぶシートなどを出している間は出さず、閉じたときに知らせる。
     private func presentErrorIfNeeded() {
         guard let message = model.errorMessage, !isPresentingError, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
         isPresentingError = true
@@ -663,14 +712,23 @@ final class InlineComposeController: NSObject {
     }
 
     /// 入力が長くなったら、決めた高さまでは伸ばし、超えたら中でスクロールする。
+    /// 広げている間は、長さに関係なく残りの高さを使い、中でスクロールする。
     private func textDidChange() {
         // 幅が決まる前に測ると1文字ずつ折り返した高さになり、短い文でもスクロールに切り替わってしまう。
         guard textView.bounds.width > 0 else { return }
         let fitting = textView.sizeThatFits(CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)).height
-        let scrolls = fitting > maxTextHeight
+        if isCollapsingFromExpanded {
+            // 戻す動きの途中でスクロールを止めると、バーが動きを待たずにほぼ戻した高さまで縮んで見えた（スクロールを止めると、UIKitが入力欄の高さを動きの外で決め直すためと見ている）。
+            // 動き終わるまではスクロールできるまま、高さの制約で本文に合わせる。
+            textHeightLimit.constant = min(fitting, maxTextHeight)
+            textHeightLimit.isActive = true
+            return
+        }
+        textHeightLimit.constant = maxTextHeight
+        let scrolls = isExpanded || fitting > maxTextHeight
+        textHeightLimit.isActive = scrolls && !isExpanded
         if textView.isScrollEnabled != scrolls {
             textView.isScrollEnabled = scrolls
-            textHeightLimit.isActive = scrolls
             // スクロールを止めても、入力欄は本来の高さを測り直さない。測り直させないと、5行から4行に減らしたときに入力欄が潰れ、下のボタンの行に重なった。
             textView.invalidateIntrinsicContentSize()
         }
@@ -750,6 +808,9 @@ final class InlineComposeController: NSObject {
         textView.delegate = self
         textView.onSubmit = { [weak self] in self?.submit() }
         textView.accessibilityLabel = "本文"
+        // 広げたときに、残りの高さを本文が使う。行が収まらない高さでは、本文から縮める。
+        textView.setContentHuggingPriority(.defaultLow - 1, for: .vertical)
+        textView.setContentCompressionResistancePriority(.defaultLow - 1, for: .vertical)
 
         placeholderLabel.text = "いまどうしてる？"
         placeholderLabel.font = .preferredFont(forTextStyle: .body)
@@ -763,11 +824,7 @@ final class InlineComposeController: NSObject {
 
         visibilityButton.configuration?.baseForegroundColor = .label
         visibilityButton.showsMenuAsPrimaryAction = true
-        var expandConfiguration = UIButton.Configuration.plain()
-        expandConfiguration.image = UIImage(systemName: "arrow.up.left.and.arrow.down.right")
-        expandConfiguration.baseForegroundColor = .label
-        let expandButton = UIButton(configuration: expandConfiguration, primaryAction: UIAction { [weak self] _ in self?.expand() })
-        expandButton.accessibilityLabel = "広げて書く"
+        expandButton.configuration?.baseForegroundColor = .label
 
         remainingLabel.font = .monospacedDigitSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote).pointSize, weight: .regular)
         remainingLabel.setContentHuggingPriority(.required, for: .horizontal)
