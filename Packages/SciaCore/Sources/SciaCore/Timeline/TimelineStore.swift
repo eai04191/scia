@@ -249,13 +249,14 @@ public final class TimelineStore {
         }
     }
 
-    /// 読んだページの分だけギャップを縮める。0件なら閉じる。再生成中の0件は結果が揃っていないため残す。
+    /// 読んだページの分だけギャップを縮める。0件なら閉じる。
+    /// 再生成中のページは結果が揃っておらず、返った投稿の間にもまだ出ていない投稿が残りうるため、0件でなくても端を動かさない。
     /// ギャップが残っていればtrueを返す。
     private func shrink(_ id: String, by page: TimelinePage, from direction: GapDirection) -> Bool {
         var remaining = gaps
         guard let index = remaining.firstIndex(where: { $0.id == id }) else { return false }
+        guard !page.isRegenerating else { return true }
         if page.isEmpty {
-            guard !page.isRegenerating else { return true }
             remaining.remove(at: index)
             rebuild(statuses: statuses, gaps: remaining)
             return false

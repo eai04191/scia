@@ -493,6 +493,33 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((18...22).reversed()))
     }
 
+    /// 再生成中のページは揃っていないので、返った投稿の間にも投稿が残りうる。ギャップの端を進めず、後で読み切ったときに読み飛ばさない。
+    @Test(arguments: [TimelineStore.GapDirection.fromNewer, .fromOlder])
+    func regeneratingPageDoesNotNarrowGap(direction: TimelineStore.GapDirection) async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let regenerating = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.maxID != nil, regenerating.shouldFail() {
+                let partial = direction == .fromNewer ? [17, 15] : [13, 11]
+                return TimelinePage(statuses: partial.map(server.status), isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(11...20)
+        _ = try await store.fillFromLatest()
+        let gap = try #require(store.gaps.first)
+        #expect((gap.newerID, gap.olderID) == ("18", "10"))
+
+        _ = try await store.loadGap(gap.id, from: direction)
+        let kept = try #require(store.gaps.first)
+        #expect((kept.newerID, kept.olderID) == ("18", "10"), "再生成中のページでギャップの端が進みました")
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: direction)
+        }
+        #expect(ids(store) == Array((8...20).reversed()))
+    }
+
     @Test func regeneratingShortPageKeepsGap() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let regenerating = FailOnce()
