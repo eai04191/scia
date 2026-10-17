@@ -15,6 +15,23 @@ struct SettingsView: View {
     @State private var previewError: String?
     @State private var previewDate = Date.now.addingTimeInterval(-180)
     @State private var copiedBuildInfo = false
+    @State private var appIconError: String?
+
+    /// 選択の表示は共有のAppIconSelectionから読む。設定を複数のウィンドウで開いていても、どれも同じ選択を表示する。
+    private var appIconBinding: Binding<AppIconChoice> {
+        Binding {
+            AppDependencies.appIcon.current
+        } set: { choice in
+            appIconError = nil
+            Task {
+                do {
+                    try await AppDependencies.appIcon.select(choice)
+                } catch {
+                    appIconError = ErrorPresentation(error).text
+                }
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -105,6 +122,22 @@ struct SettingsView: View {
                     Text("代替テキストが「undefined」や「Screenshot」だけのメディアを、代替テキストのないメディアとして扱います。空白だけの代替テキストは、この設定にかかわらず無視します。")
                 }
                 Section {
+                    Picker("アイコン", selection: appIconBinding) {
+                        ForEach(AppIconChoice.allCases, id: \.self) { choice in
+                            AppIconChoiceRow(choice: choice)
+                                .tag(choice)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                } header: {
+                    Text("アプリのアイコン")
+                } footer: {
+                    if let appIconError {
+                        Text("アイコンを変えられませんでした。\(appIconError)")
+                    }
+                }
+                Section {
                     NavigationLink("接続の状態") {
                         ConnectionStatusView(instance: instance, diagnostics: diagnostics)
                     }
@@ -151,6 +184,28 @@ struct SettingsView: View {
                     Button("完了") { dismiss() }
                 }
             }
+        }
+    }
+}
+
+/// アイコンを選ぶ行。ホーム画面と同じ見た目の絵と名前を並べる。
+private struct AppIconChoiceRow: View {
+    let choice: AppIconChoice
+
+    var body: some View {
+        HStack(spacing: 16) {
+            if let image = choice.previewImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .frame(width: 60, height: 60)
+                    // 白地のアイコンは行の背景に溶けて輪郭が見えないため、ホーム画面の外でアイコンを見せるときの慣習にならって縁を引く
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 13.5, style: .continuous)
+                            .strokeBorder(Color(uiColor: .separator), lineWidth: 0.5)
+                    }
+                    .accessibilityHidden(true)
+            }
+            Text(choice.title)
         }
     }
 }

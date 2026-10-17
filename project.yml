@@ -37,6 +37,16 @@ targets:
           - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
         # ブランチの切り替えやcommitはXcodeの入力として追えないため、毎回走らせる
         basedOnDependencyAnalysis: false
+      - name: Render App Icon Previews
+        script: '"$SRCROOT/Tools/render-app-icon-previews.sh"'
+        inputFiles:
+          - $(SRCROOT)/App/Resources/AppIcon.icon/icon.json
+          - $(SRCROOT)/App/Resources/AppIcon.icon/Assets/trail.svg
+          - $(SRCROOT)/App/Resources/AppIconLight.icon/icon.json
+          - $(SRCROOT)/App/Resources/AppIconLight.icon/Assets/trail.svg
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIconPreview@3x.png
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIconLightPreview@3x.png
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.mizle.scia
@@ -45,6 +55,8 @@ targets:
         MARKETING_VERSION: "0.0.0"
         CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # 設定で選べる、白地に青のアイコン（App/Sources/Settings/AppIconChoice.swift）
+        ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES: AppIconLight
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
