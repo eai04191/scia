@@ -142,6 +142,7 @@ A4に入れていない、Mastodonのクライアントとしてできること�
 - [ ] Mac（Designed for iPad）で、投稿やチューニングのシートが出始めるまで遅いのを直す: 押してから何も出ずにもたつき、そのあとパッと出る。iPhoneでは起きない。AeroSpaceを終了しても、Releaseビルドでも変わらなかった。Time Profilerでは、シートを出す直前のSwiftUIの最初のレイアウト（`UISheetPresentationController _transitionWillBegin` → `_UIHostingView.layoutSubviews`）に120〜190msかかっていたが、それだけで説明できるかは分かっていない。次はInstrumentsのAnimation HitchesやSwiftUIのテンプレートで、押してから出始めるまでを測る
 - [ ] インライン投稿欄の添付で、処理中の動画の回る表示と再生の印が重なるのを直す: 部品カタログ（`scia-debug://catalog/attachment-strip`）で見られる
 - [ ] 一覧の添付ファイルで、読み込めなかったことが読み込み中と見分けられるかを確かめる: 部品カタログ（`scia-debug://catalog/media-grid`）では同じ見た目に見える。実物ではまだ確かめていない
+- [ ] 通知の行を、投稿のセルと同じ中身の部品で組む: 見せ方は[notification-display.md](notification-display.md)。A4で投稿の中身を増やす前に済ませる
 
 ### X3: 知らせ方を整える
 
