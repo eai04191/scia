@@ -1,0 +1,123 @@
+{
+  "id": "113000000000000302",
+  "created_at": "2026-10-13T03:21:45.123Z",
+  "in_reply_to_id": null,
+  "sensitive": false,
+  "spoiler_text": "",
+  "visibility": "public",
+  "url": null,
+  "content": "",
+  "account": {
+    "id": "2",
+    "username": "bob",
+    "acct": "bob@remote.example",
+    "display_name": "Bob",
+    "avatar": "https://example.social/avatars/alice.png",
+    "avatar_static": "https://example.social/avatars/alice.png",
+    "header": "https://example.social/headers/original/missing.png",
+    "header_static": "https://example.social/headers/original/missing.png",
+    "locked": false,
+    "bot": false,
+    "note": "",
+    "url": "https://example.social/@alice",
+    "fields": [],
+    "followers_count": 0,
+    "following_count": 0,
+    "statuses_count": 0,
+    "emojis": []
+  },
+  "mentions": [],
+  "tags": [],
+  "emojis": [],
+  "media_attachments": [],
+  "bookmarked": false,
+  "reblog": {
+    "id": "113000000000000301",
+    "created_at": "2026-10-13T03:21:45.123Z",
+    "in_reply_to_id": null,
+    "sensitive": false,
+    "spoiler_text": "",
+    "visibility": "public",
+    "url": "https://example.social/@alice/113000000000000301",
+    "content": "<p>Hello, <a href=\"https://example.social/tags/scia\" class=\"mention hashtag\" rel=\"tag\">#<span>scia</span></a></p>",
+    "account": {
+      "id": "1",
+      "username": "alice",
+      "acct": "alice",
+      "display_name": "Alice :blobcat:",
+      "avatar": "https://example.social/avatars/alice.png",
+      "avatar_static": "https://example.social/avatars/alice.png",
+      "header": "https://example.social/headers/original/missing.png",
+      "header_static": "https://example.social/headers/original/missing.png",
+      "locked": false,
+      "bot": false,
+      "note": "",
+      "url": "https://example.social/@alice",
+      "fields": [],
+      "followers_count": 0,
+      "following_count": 0,
+      "statuses_count": 0,
+      "emojis": []
+    },
+    "mentions": [],
+    "tags": [],
+    "emojis": [],
+    "media_attachments": [],
+    "edited_at": "2026-10-13T05:00:00Z",
+    "bookmarked": true,
+    "poll": {
+      "id": "34831",
+      "expires_at": null,
+      "expired": true,
+      "multiple": false,
+      "votes_count": 4,
+      "voters_count": null,
+      "options": [
+        {
+          "title": "はい",
+          "votes_count": null
+        },
+        {
+          "title": "いいえ",
+          "votes_count": null
+        }
+      ],
+      "emojis": []
+    },
+    "card": {
+      "url": "https://video.example/watch/1",
+      "title": "動画",
+      "description": "",
+      "type": "video",
+      "author_name": "",
+      "provider_name": "Video Example",
+      "html": "<iframe></iframe>",
+      "width": 480,
+      "height": 270,
+      "image": "",
+      "embed_url": "",
+      "blurhash": null
+    },
+    "filtered": [
+      {
+        "filter": {
+          "id": "3",
+          "title": "見たくない",
+          "context": [
+            "home"
+          ],
+          "expires_at": "2026-12-01T00:00:00.000Z",
+          "filter_action": "hide"
+        },
+        "keyword_matches": null,
+        "status_matches": [
+          "113000000000000301"
+        ]
+      }
+    ]
+  },
+  "poll": null,
+  "card": null,
+  "filtered": [],
+  "edited_at": null
+}

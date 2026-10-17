@@ -17,6 +17,17 @@ extension KeyedDecodingContainer {
         guard let elements = try decodeIfPresent([Lossy<Element>].self, forKey: key) else { return [] }
         return elements.compactMap(\.value)
     }
+
+    /// 表示を添えるための値を読む。項目がない、またはnullならnil、読めなければ記録してnilにする。
+    /// 投票やリンクカードのように、なくても投稿の本文は読める値に使う。
+    func decodeLossyIfPresent<Value: Decodable>(_ type: Value.Type, forKey key: Key) -> Value? {
+        do {
+            return try decodeIfPresent(Value.self, forKey: key)
+        } catch {
+            DecodingLog.dropped(Value.self, at: codingPath + [key], error)
+            return nil
+        }
+    }
 }
 
 /// 一覧を要素ごとに読む。読めない要素は、IDが読めれば`UnreadableItem`として残し、IDも読めなければ外して記録する。

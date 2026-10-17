@@ -18,10 +18,19 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public let visibility: Visibility
     /// 返信先の投稿のID。
     public let inReplyToId: String?
+    public let poll: Poll?
+    /// 本文のリンク先から作ったカード。
+    public let card: PreviewCard?
+    /// 当たった自分のフィルター。ログインせずに読んだときや、Mastodon 4.0より前のサーバーでは返らないため、無ければ空にする。
+    public let filtered: [FilterResult]
+    /// 最後に編集した日時。編集していなければnil。
+    public let editedAt: Date?
     /// 自分がお気に入りに登録している。
     public private(set) var favourited: Bool
     /// 自分がブーストしている。
     public private(set) var reblogged: Bool
+    /// 自分がブックマークしている。
+    public private(set) var bookmarked: Bool
     public private(set) var favouritesCount: Int
     public private(set) var reblogsCount: Int
     public let repliesCount: Int
@@ -42,8 +51,13 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         sensitive: Bool = false,
         visibility: Visibility = .public,
         inReplyToId: String? = nil,
+        poll: Poll? = nil,
+        card: PreviewCard? = nil,
+        filtered: [FilterResult] = [],
+        editedAt: Date? = nil,
         favourited: Bool = false,
         reblogged: Bool = false,
+        bookmarked: Bool = false,
         favouritesCount: Int = 0,
         reblogsCount: Int = 0,
         repliesCount: Int = 0,
@@ -62,8 +76,13 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         self.sensitive = sensitive
         self.visibility = visibility
         self.inReplyToId = inReplyToId
+        self.poll = poll
+        self.card = card
+        self.filtered = filtered
+        self.editedAt = editedAt
         self.favourited = favourited
         self.reblogged = reblogged
+        self.bookmarked = bookmarked
         self.favouritesCount = favouritesCount
         self.reblogsCount = reblogsCount
         self.repliesCount = repliesCount
@@ -72,6 +91,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
 
     /// 自分の操作を表す項目と件数は、ログインせずに読んだときや、サーバーの実装によっては返らないため、無ければ既定値にする。
     /// URLと、メンションなどの配列も、サーバーによって空や欠落で返るため、URLはnil、配列は空にする。
+    /// 投票、カード、編集した日時は、読めなくても本文は読めるため、読めなければ記録してnilにする。
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
@@ -87,8 +107,13 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         sensitive = try container.decode(Bool.self, forKey: .sensitive)
         visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
         inReplyToId = try container.decodeIfPresent(String.self, forKey: .inReplyToId)
+        poll = container.decodeLossyIfPresent(Poll.self, forKey: .poll)
+        card = container.decodeLossyIfPresent(PreviewCard.self, forKey: .card)
+        filtered = try container.decodeLossyArray(FilterResult.self, forKey: .filtered)
+        editedAt = container.decodeLossyIfPresent(Date.self, forKey: .editedAt)
         favourited = try container.decodeIfPresent(Bool.self, forKey: .favourited) ?? false
         reblogged = try container.decodeIfPresent(Bool.self, forKey: .reblogged) ?? false
+        bookmarked = try container.decodeIfPresent(Bool.self, forKey: .bookmarked) ?? false
         favouritesCount = try container.decodeIfPresent(Int.self, forKey: .favouritesCount) ?? 0
         reblogsCount = try container.decodeIfPresent(Int.self, forKey: .reblogsCount) ?? 0
         repliesCount = try container.decodeIfPresent(Int.self, forKey: .repliesCount) ?? 0
@@ -151,9 +176,17 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         return status
     }
 
+    /// ブックマークの状態を変えたもの。サーバーの結果を待たずに表示へ反映するために使う。
+    public func settingBookmarked(_ bookmarked: Bool) -> Status {
+        var status = self
+        status.bookmarked = bookmarked
+        return status
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, account, content, spoilerText, url, mentions, tags, emojis, mediaAttachments, sensitive
-        case visibility, inReplyToId, favourited, reblogged, favouritesCount, reblogsCount, repliesCount
+        case visibility, inReplyToId, poll, card, filtered, editedAt
+        case favourited, reblogged, bookmarked, favouritesCount, reblogsCount, repliesCount
         case reblogBox = "reblog"
     }
 
