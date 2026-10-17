@@ -290,7 +290,7 @@ public enum TuningCatalog {
     )
 
     /// ビューアを開閉するとき、画像のうちバーにかかる部分を、バーの奥にも描く。
-    /// オフなら、開くときは写しをバーの手前にだけ描き、閉じるときはバーにかかる部分を着地へ近づくにつれて切り落とすだけにする。
+    /// オフなら、開くときは複製をバーの手前にだけ描き、閉じるときはバーにかかる部分を着地へ近づくにつれて切り落とすだけにする。
     /// 開き始めにバーの下のサムネイルがバーの手前へ急に出て、閉じる着地の瞬間にバー越しのサムネイルが急に現れる。
     public static let mediaCloseDrawsUnderBars = ToggleTuning(
         id: "media.closeDrawsUnderBars",
@@ -298,16 +298,16 @@ public enum TuningCatalog {
         defaultValue: true
     )
 
-    /// バーの奥にも描くとき、一覧の中の写しから最前面の写しへ受け渡し終える、開く動きの進み具合。0なら開き始めから最前面の写しにする。
+    /// バーの奥にも描くとき、一覧の中の複製から最前面の複製へ受け渡し終える、開く動きの進み具合。0なら開き始めから最前面の複製にする。
     public static let mediaOpenHandoffEnd = NumberTuning(
         id: "media.openHandoffEnd",
-        title: "開くとき、一覧の中の写しから受け渡し終える進み具合",
+        title: "開くとき、一覧の中の複製から受け渡し終える進み具合",
         range: 0...1,
         step: 0.05,
         defaultValue: 0.3
     )
 
-    /// バーの奥にも描くとき、バーと重なる部分を一覧の中の写しからバーより手前の写しへ入れ替え始める、開く動きの進み具合。
+    /// バーの奥にも描くとき、バーと重なる部分を一覧の中の複製からバーより手前の複製へ入れ替え始める、開く動きの進み具合。
     /// 小さいほど早くバーの手前の見え方になり、大きいほど画像がバーの奥に長く残る。
     public static let mediaOpenBarOverlapFadeStart = NumberTuning(
         id: "media.openBarOverlapFadeStart",
@@ -317,18 +317,18 @@ public enum TuningCatalog {
         defaultValue: 0.7
     )
 
-    /// バーの奥にも描くとき、最前面の写しを薄くして一覧の中の写しへ受け渡し始める、閉じる動きの進み具合。1なら着地の瞬間に切り替える。
-    /// 一覧の中の写しには、バーの下のぼかしや一覧に重なるボタンが正しくかかる。受け渡しが遅いほど、着地でそれらが急に現れる。
+    /// バーの奥にも描くとき、最前面の複製を薄くして一覧の中の複製へ受け渡し始める、閉じる動きの進み具合。1なら着地の瞬間に切り替える。
+    /// 一覧の中の複製には、バーの下のぼかしや一覧に重なるボタンが正しくかかる。受け渡しが遅いほど、着地でそれらが急に現れる。
     public static let mediaCloseHandoffStart = NumberTuning(
         id: "media.closeHandoffStart",
-        title: "閉じるとき、一覧の中の写しへ受け渡し始める進み具合",
+        title: "閉じるとき、一覧の中の複製へ受け渡し始める進み具合",
         range: 0...1,
         step: 0.05,
         defaultValue: 0.7
     )
 
     /// バーの奥にも描くとき、閉じ始めにバーと重なっていた部分（縦長の画像や、下へスワイプしてタブバーにかかった画像）を、
-    /// バーより手前の写しから一覧の中の写しへ入れ替え終える、閉じる動きの進み具合。
+    /// バーより手前の複製から一覧の中の複製へ入れ替え終える、閉じる動きの進み具合。
     /// 小さいほど早くバーの奥の見え方になり、大きいほど閉じ始めの画像の端がバーの位置で長く手前に残る。
     public static let mediaCloseBarOverlapFadeEnd = NumberTuning(
         id: "media.closeBarOverlapFadeEnd",

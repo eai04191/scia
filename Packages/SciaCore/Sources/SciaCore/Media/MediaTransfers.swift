@@ -59,7 +59,7 @@ public final class MediaTransfers {
         case save(any Error)
     }
 
-    /// `url`のファイルの、共有や保存に渡す写しを返す。手元になければ落とし、落とし始めたら0を、そのあと進み具合を0から1で`onProgress`に渡す。
+    /// `url`のファイルの、共有や保存に渡すコピーを返す。手元になければ落とし、落とし始めたら0を、そのあと進み具合を0から1で`onProgress`に渡す。
     /// 呼び出し側のタスクを取り消したら、通信も止める。
     public typealias Fetch = @MainActor (_ url: URL, _ onProgress: @escaping @MainActor (Double) -> Void) async throws -> URL
     /// ファイルを写真に足す。

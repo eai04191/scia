@@ -4,13 +4,13 @@ import SciaCore
 import UIKit
 import UniformTypeIdentifiers
 
-/// 端末から選び、アプリの一時ディレクトリに写したメディアのファイル。アップロードと、投稿欄のサムネイルに使う。
+/// 端末から選び、アプリの一時ディレクトリにコピーしたメディアのファイル。アップロードと、投稿欄のサムネイルに使う。
 struct LocalMediaFile: Sendable, Equatable {
     let url: URL
     let mimeType: String
     let kind: MediaAttachment.Kind
 
-    /// ファイルを、写したときに作ったディレクトリごと消す。添付から外したときと、投稿できたときに呼ぶ。
+    /// ファイルを、コピーしたときに作ったディレクトリごと消す。添付から外したときと、投稿できたときに呼ぶ。
     func remove() {
         try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
     }
@@ -39,7 +39,7 @@ enum LocalMediaError: Error, LocalizedError {
 }
 
 enum LocalMediaLoader {
-    /// 選んだメディアを写す先。起動し直すと、OSが一時ディレクトリの中身をいずれ消す。
+    /// 選んだメディアをコピーする先。起動し直すと、OSが一時ディレクトリの中身をいずれ消す。
     static let directory = FileManager.default.temporaryDirectory.appending(path: "ComposeMedia", directoryHint: .isDirectory)
 
     /// ピッカーの選択から、読み込みを後回しにした`PickedMedia`を作る。
@@ -49,8 +49,8 @@ enum LocalMediaLoader {
         PickedMedia(assetIdentifier: assetIdentifier) { try await load(from: provider) }
     }
 
-    /// 画像か動画の表現を、元の形式のままファイルで受け取り、一時ディレクトリに写す。
-    /// 受け取ったファイルは完了の処理を抜けると消されるため、その中で写す。
+    /// 画像か動画の表現を、元の形式のままファイルで受け取り、一時ディレクトリにコピーする。
+    /// 受け取ったファイルは完了の処理を抜けると消されるため、その中でコピーする。
     ///
     /// HEICなどをJPEGに変換せずに送る。Mastodonは受け付けて変換するが、受け付けないサーバーでは422で断られ、添付の失敗として見せる。
     @MainActor

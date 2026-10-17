@@ -32,7 +32,7 @@ final class MediaDownloads {
         try? FileManager.default.removeItem(at: stagingDirectory)
     }
 
-    /// `url`のファイルの、共有や保存に渡す写しを返す。キャッシュになければ落として置いてから写す。
+    /// `url`のファイルの、共有や保存に渡すコピーを返す。キャッシュになければ落として置いてからコピーする。
     /// - Parameter onProgress: 落とし始めたら0を、そのあと進み具合を0から1で、メインアクターで受け取る。キャッシュにあれば呼ばない。
     func fileForSharing(for url: URL, onProgress: @escaping @MainActor (Double) -> Void) async throws -> URL {
         if let copy = try await files.copyForSharing(for: url) {

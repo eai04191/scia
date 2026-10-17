@@ -83,7 +83,7 @@ struct MediaFileCacheTests {
         #expect(await cache.contains(try url("big")))
     }
 
-    /// 共有や保存には写しを渡す。元のファイルが整理で消えても、写しは読める。
+    /// 共有や保存にはコピーを渡す。元のファイルが整理で消えても、コピーは読める。
     @Test func sharingCopySurvivesRemovalOfCachedFile() async throws {
         let directories = Directories()
         defer { directories.remove() }
@@ -99,7 +99,7 @@ struct MediaFileCacheTests {
         #expect(try Data(contentsOf: copy) == data)
     }
 
-    /// 共有先が読み終えたことは知れないため、写しは次に作るとき（起動時）にまとめて消す。キャッシュのファイルは残す。
+    /// 共有先が読み終えたことは知れないため、コピーは次に作るとき（起動時）にまとめて消す。キャッシュのファイルは残す。
     @Test func clearsSharingCopiesOnInit() async throws {
         let directories = Directories()
         defer { directories.remove() }
@@ -112,7 +112,7 @@ struct MediaFileCacheTests {
         #expect(FileManager.default.fileExists(atPath: file.path))
     }
 
-    /// 同じURLのファイルを置き直している最中でも、共有に渡す写しは作れる。表示のための読み込みが元のファイルを置き直すのと、
+    /// 同じURLのファイルを置き直している最中でも、共有に渡すコピーは作れる。表示のための読み込みが元のファイルを置き直すのと、
     /// 共有の操作が重なっても、失敗しないようにするため。
     @Test func copyForSharingIsNotBrokenByConcurrentReplacement() async throws {
         let directories = Directories()

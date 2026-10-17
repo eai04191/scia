@@ -2,52 +2,52 @@ import QuartzCore
 import SciaCore
 import UIKit
 
-/// ビューアの開閉で、画像の写しを一覧のバーの手前と奥に描き分ける。写しを動かすたびに、同じフレームで`apply`を呼ぶ。
+/// ビューアの開閉で、画像の複製を一覧のバーの手前と奥に描き分ける。複製を動かすたびに、同じフレームで`apply`を呼ぶ。
 ///
-/// 最前面の写し（ビューアや閉じる動きの層に置く、バーより手前の写し）は、一覧のバーに隠れない範囲と、指定した重なりの枠にだけ見せる。
+/// 最前面の複製（ビューアや閉じる動きの層に置く、バーより手前の複製）は、一覧のバーに隠れない範囲と、指定した重なりの枠にだけ見せる。
 /// バーの位置に見せると、バーの手前を通って貫通して見えるため。
-/// バーの位置は、一覧の中に置いた同じ写し（`Underlay`）が埋める。一覧の中の写しにはバーの下のぼかしがかかるため、
+/// バーの位置は、一覧の中に置いた同じ複製（`Underlay`）が埋める。一覧の中の複製にはバーの下のぼかしがかかるため、
 /// サムネイルの位置でも、バーにかかる部分の見え方がサムネイルとそろう。
 /// iOS 26のバーの下のぼかし（scroll edge effect）は、一覧の行（セル）の中身だけを取り込む。コレクションビューの直下に足したビューには
-/// かからないため、写しはサムネイルを含む一覧の行の中に置く。
-/// バーの`alpha`を下げて写しをバーより手前に見せる方法は使えない。UIKitがナビゲーションバーとタブバーの`alpha`を戻すため、
+/// かからないため、複製はサムネイルを含む一覧の行の中に置く。
+/// バーの`alpha`を下げて複製をバーより手前に見せる方法は使えない。UIKitがナビゲーションバーとタブバーの`alpha`を戻すため、
 /// 開いているビューアの上にバーが透けて見えた。
 /// バーの下のぼかしはバーの下端より少し下までなだらかにかかり、新着ボタンのように一覧に重なる部品もあるため、
-/// サムネイルに近い間は、バーに隠れない範囲でも一覧の中の写しを見せる（受け渡し）。
-/// バーと重なる部分は、2枚の写しの濃さを入れ替える。入れ替えの途中は、最前面の写しがバーの部品（タブバーのピルなど）の上に半透明で重なる。
+/// サムネイルに近い間は、バーに隠れない範囲でも一覧の中の複製を見せる（受け渡し）。
+/// バーと重なる部分は、2枚の複製の濃さを入れ替える。入れ替えの途中は、最前面の複製がバーの部品（タブバーのピルなど）の上に半透明で重なる。
 /// 下地の穴をバーに隠れない範囲に限り、入れ替えを暗い下地の奥で済ませる方法も試したが、バーの位置にあたる画面幅いっぱいの帯が
 /// 下地の濃さで暗くなり、録画で見比べてこちらを選んだ。
 @MainActor
 final class MediaBarLayering {
-    /// 一覧の中に置き、最前面の写しと同じ位置と見た目で動かす写し。
+    /// 一覧の中に置き、最前面の複製と同じ位置と見た目で動かす複製。
     struct Underlay {
         let image: UIImageView
         let decoration: UIView?
     }
 
     private let morph: UIImageView
-    /// 最前面の写しに載せた、サムネイルの印の写し。
+    /// 最前面の複製に載せた、サムネイルの印の複製。
     private let decoration: UIView?
     private let backdrop: UIView
-    /// nilなら、最前面の写しの見せる範囲を絞るだけにする。
+    /// nilなら、最前面の複製の見せる範囲を絞るだけにする。
     private let underlay: Underlay?
     private let window: UIWindow
     /// サムネイルを含む一覧の、バーに隠れない範囲（ウィンドウ座標）。見つかるまでは画面全体。
     private(set) var visibleRect: CGRect
-    /// 一覧の中の写しを載せる、サムネイルを含む一覧の行。
+    /// 一覧の中の複製を載せる、サムネイルを含む一覧の行。
     private weak var underlayHost: UIView?
-    /// 最前面の写しのマスク。不透明に見せる範囲と、重なりの枠を重ねる。
+    /// 最前面の複製のマスク。不透明に見せる範囲と、重なりの枠を重ねる。
     private let morphMask = CALayer()
     private let clipMask = CALayer()
     private let overlapMask = CALayer()
-    /// 一覧の中の写しのマスク。最前面の写しを不透明に見せている範囲の外は不透明、内は受け渡しの度合いで濃くする。
+    /// 一覧の中の複製のマスク。最前面の複製を不透明に見せている範囲の外は不透明、内は受け渡しの度合いで濃くする。
     private let underlayMask = CALayer()
     private let underlayOutsideMask = CAShapeLayer()
     private let underlayInsideMask = CALayer()
-    /// 下地のマスク。一覧の中の写しを描くとき、写しの枠に穴を開ける。
+    /// 下地のマスク。一覧の中の複製を描くとき、複製の枠に穴を開ける。
     private let backdropMask = CALayer()
     private let backdropOutsideMask = CAShapeLayer()
-    /// 穴の中で、画像の透明な部分にだけ下地を残す。画像の透明度を反転した画像を、写しと同じ切り抜き方で描く。
+    /// 穴の中で、画像の透明な部分にだけ下地を残す。画像の透明度を反転した画像を、複製と同じ切り抜き方で描く。
     private let backdropHoleFill = CALayer()
     /// `backdropHoleFill`に描いている、反転の元にした画像。
     private weak var holeFillSource: UIImage?
@@ -80,12 +80,12 @@ final class MediaBarLayering {
         backdrop.layer.mask = backdropMask
     }
 
-    /// 一覧の中の写しを描けるか。サムネイルを含む一覧の行が見つかっていなければ描けない。
+    /// 一覧の中の複製を描けるか。サムネイルを含む一覧の行が見つかっていなければ描けない。
     var drawsUnderBars: Bool {
         underlay != nil && underlayHost != nil
     }
 
-    /// サムネイルから、一覧の中の写しを載せる行と、一覧のバーに隠れない範囲を探し直す。
+    /// サムネイルから、一覧の中の複製を載せる行と、一覧のバーに隠れない範囲を探し直す。
     func track(_ tile: any MediaViewerSource) {
         guard let (scrollView, row) = Self.enclosingRow(of: tile) else { return }
         underlayHost = row
@@ -101,11 +101,11 @@ final class MediaBarLayering {
         scrollView.convert(scrollView.bounds.inset(by: scrollView.adjustedContentInset), to: window)
     }
 
-    /// 最前面の写しの今の位置と見た目に合わせて、2枚の写しと下地の穴を描き直す。最前面の写しの`alpha`は呼び出し側で決める。
+    /// 最前面の複製の今の位置と見た目に合わせて、2枚の複製と下地の穴を描き直す。最前面の複製の`alpha`は呼び出し側で決める。
     /// - Parameters:
-    ///   - clipRect: 最前面の写しを不透明に見せる範囲。ウィンドウ座標。
-    ///   - overlapRect: `clipRect`のほかに、最前面の写しを`swap.overlapOpacity`の濃さで見せる枠。ウィンドウ座標。
-    ///   - visibility: 写しの濃さ。戻り先を見失って薄くするときに1未満にする。
+    ///   - clipRect: 最前面の複製を不透明に見せる範囲。ウィンドウ座標。
+    ///   - overlapRect: `clipRect`のほかに、最前面の複製を`swap.overlapOpacity`の濃さで見せる枠。ウィンドウ座標。
+    ///   - visibility: 複製の濃さ。戻り先を見失って薄くするときに1未満にする。
     func apply(clipRect: CGRect, overlapRect: CGRect, swap: MediaBarSwap, visibility: CGFloat) {
         guard let container = morph.superview else { return }
         let morphFrame = container.convert(morph.frame, to: window)
@@ -119,7 +119,7 @@ final class MediaBarLayering {
         updateBackdropHole(morphFrame: morphFrame)
     }
 
-    /// マスクと一覧の中の写しを外し、最前面の写しをどこでも見せる状態に戻す。
+    /// マスクと一覧の中の複製を外し、最前面の複製をどこでも見せる状態に戻す。
     func tearDown() {
         if morph.layer.mask === morphMask {
             morph.layer.mask = nil
@@ -130,13 +130,13 @@ final class MediaBarLayering {
         underlay?.image.removeFromSuperview()
     }
 
-    /// 一覧の中の写しを、最前面の写しと同じ位置と見た目にそろえる。
-    /// 写しは行からはみ出すため、行をほかの行より手前に描く。`zPosition`を上げるとバーの下のぼかしより手前に出てしまうため、
+    /// 一覧の中の複製を、最前面の複製と同じ位置と見た目にそろえる。
+    /// 複製は行からはみ出すため、行をほかの行より手前に描く。`zPosition`を上げるとバーの下のぼかしより手前に出てしまうため、
     /// 同じ`zPosition`の行どうしの並び順で手前に出す。一覧は行を足すときに並び順を変えるため、毎フレーム出し直す。
-    /// 最前面の写しを不透明に見せている範囲では、受け渡しの度合いで濃くし、半透明の画像で2枚の写しが重なって濃く見えないようにする。
-    /// 重なりの枠では不透明のままにする。そこでは最前面の写しの濃さで入れ替えるため、半透明の画像はその間だけ濃く見える。
-    /// 受け渡しの間は2枚を重ねる。不透明な画像は、下の写しを不透明にしないと重ねた結果が薄くなる（上を1-h、下をhの濃さにすると1-h+h²）。
-    /// そのため下の写しは受け渡しの度合いが小さいうちに不透明にし、不透明な画像が薄く見えるのを数%に抑える。
+    /// 最前面の複製を不透明に見せている範囲では、受け渡しの度合いで濃くし、半透明の画像で2枚の複製が重なって濃く見えないようにする。
+    /// 重なりの枠では不透明のままにする。そこでは最前面の複製の濃さで入れ替えるため、半透明の画像はその間だけ濃く見える。
+    /// 受け渡しの間は2枚を重ねる。不透明な画像は、下の複製を不透明にしないと重ねた結果が薄くなる（上を1-h、下をhの濃さにすると1-h+h²）。
+    /// そのため下の複製は受け渡しの度合いが小さいうちに不透明にし、不透明な画像が薄く見えるのを数%に抑える。
     /// 代わりに半透明の画像では、受け渡しの間（既定で開閉の時間の3割）だけ半透明の部分が濃く見える。添付の多くは不透明な写真なので、こちらを受け入れる。
     private func updateUnderlay(morphFrame: CGRect, clipRect: CGRect, handoff: CGFloat, visibility: CGFloat) {
         guard let underlay, let host = underlayHost else { return }
@@ -173,12 +173,12 @@ final class MediaBarLayering {
         CATransaction.commit()
     }
 
-    /// 下地のうち写しのある部分に穴を開ける。一覧の中の写しは下地の奥にあるため、穴がないと、
-    /// 最前面の写しと入れ替えた部分（バーと重なる部分や、受け渡しの間）だけが暗く見え、境目ができる。
-    /// 写しはビューアの画像として下地より手前にあるものなので、どちらの写しを見せていても暗くしない。
+    /// 下地のうち複製のある部分に穴を開ける。一覧の中の複製は下地の奥にあるため、穴がないと、
+    /// 最前面の複製と入れ替えた部分（バーと重なる部分や、受け渡しの間）だけが暗く見え、境目ができる。
+    /// 複製はビューアの画像として下地より手前にあるものなので、どちらの複製を見せていても暗くしない。
     /// 画像の透明な部分は、開いている間も下地の上に描いていたため、そこには下地を残す。
-    /// 透明な部分には写しの背景の色（サムネイルの背景）も敷いている。最前面の写しでは背景の色が下地の手前に、一覧の中の写しでは奥にあるため、
-    /// 残す下地を背景の色の濃さの分だけ薄くし、下地による暗さを2枚の写しでそろえる。背景の色そのものの明るさには
+    /// 透明な部分には複製の背景の色（サムネイルの背景）も敷いている。最前面の複製では背景の色が下地の手前に、一覧の中の複製では奥にあるため、
+    /// 残す下地を背景の色の濃さの分だけ薄くし、下地による暗さを2枚の複製でそろえる。背景の色そのものの明るさには
     /// 下地の濃さと背景の色の濃さの積ほどの差が残るが、背景の色は薄く、下地は開閉しながら濃さが変わるため、受け入れる。
     private func updateBackdropHole(morphFrame: CGRect) {
         guard underlay != nil else { return }
@@ -225,7 +225,7 @@ final class MediaBarLayering {
         }.cgImage
     }
 
-    /// 受け渡しの度合いのうち、最前面の写しを見せている範囲で一覧の中の写しを不透明にし終えるまでの割合。
+    /// 受け渡しの度合いのうち、最前面の複製を見せている範囲で一覧の中の複製を不透明にし終えるまでの割合。
     private static let underlayFadeInPortion: CGFloat = 0.15
 
     /// サムネイルを含む一覧と、その一覧の直下にある行。

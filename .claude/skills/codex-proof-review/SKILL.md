@@ -1,6 +1,6 @@
 ---
 name: codex-proof-review
-description: SciaCoreの変更を、Codexに使い捨ての写しで実際に動かして確かめさせるレビュー。変更が安全だと言える前提の事実を見つけ、失敗するテストで反証を探す。Packages/SciaCoreに変更があるとき、pr-readinessのCodexレビューと並べて走らせる。「証明つきでレビューして」と頼まれたときにも使う。
+description: SciaCoreの変更を、Codexに使い捨ての複製で実際に動かして確かめさせるレビュー。変更が安全だと言える前提の事実を見つけ、失敗するテストで反証を探す。Packages/SciaCoreに変更があるとき、pr-readinessのCodexレビューと並べて走らせる。「証明つきでレビューして」と頼まれたときにも使う。
 ---
 
 # 証明つきのCodexレビュー
@@ -17,7 +17,7 @@ description: SciaCoreの変更を、Codexに使い捨ての写しで実際に動
 ## 手順
 
 1. pr-readinessと同じ方法で、比較元のbase branchとmerge-baseを決める
-2. 写しを作る。写しは作業ツリーの外に置き、Codexが書くテストやビルドの成果物で作業ツリーを汚さないようにする
+2. 複製を作る。複製は作業ツリーの外に置き、Codexが書くテストやビルドの成果物で作業ツリーを汚さないようにする
 
    ```bash
    dir="$(mktemp -d)/copy"
@@ -25,7 +25,7 @@ description: SciaCoreの変更を、Codexに使い捨ての写しで実際に動
    ```
 
    `make-copy.sh`は、HEADに未commitの変更と未追跡のファイルを足した状態を再現する。このリポジトリのbranchを書き換えないよう、remoteは外してある
-3. 下の「Codexへの指示」を一時ファイルに書き、写しの中でCodexを走らせる。証明のテストを書いて実行させるため、sandboxは`workspace-write`にする。`workspace-write`は既定でネットワークを止めるので、Mastodonのソースを読めるよう`network_access`を開ける。数分かかるので、バックグラウンドで走らせる
+3. 下の「Codexへの指示」を一時ファイルに書き、複製の中でCodexを走らせる。証明のテストを書いて実行させるため、sandboxは`workspace-write`にする。`workspace-write`は既定でネットワークを止めるので、Mastodonのソースを読めるよう`network_access`を開ける。数分かかるので、バックグラウンドで走らせる
 
    ```bash
    gh_empty="$(mktemp -d)"
@@ -37,9 +37,9 @@ description: SciaCoreの変更を、Codexに使い捨ての写しで実際に動
 
    pr-readinessと同じく、結果はstdoutの`<out-file>`だけを読み、`<log-file>`は失敗したときだけ見る。`codex`が失敗したら、ほかの手段で代わりをせず、エラーを示して未確認とする
 4. 指摘を扱う。pr-readinessのCodexレビューの指摘とまとめて、重なるものは1つにする
-   - 証明のテストが付いた指摘は、テストが変更の意図どおりの前提を試しているかを確かめる。正しければ確かめ済みとして扱い、テストは作業ツリーのテストに書き直して取り込む（写しのファイルをそのままコピーしない）
+   - 証明のテストが付いた指摘は、テストが変更の意図どおりの前提を試しているかを確かめる。正しければ確かめ済みとして扱い、テストは作業ツリーのテストに書き直して取り込む（複製のファイルをそのままコピーしない）
    - 証明のない指摘は、pr-readinessと同じく、手元で本当に起きると確かめたものだけ相手にする
-5. 写しを消す（`rm -rf "$(dirname "$dir")"`）。証明の出力は`<out-file>`に残っている
+5. 複製を消す（`rm -rf "$(dirname "$dir")"`）。証明の出力は`<out-file>`に残っている
 
 ## Codexへの指示
 
@@ -54,7 +54,7 @@ Review the code changes against the base branch '<base>'. The merge base commit 
 
 ## レビューの進め方
 
-このディレクトリは使い捨ての写しで、何を書いてもよい。ネットワークは公開の情報を読むためだけに使い、外部には何も書き込まない（issue、PR、push、APIへの書き込みをしない）。`Packages/SciaCore`はSwiftPMのパッケージで、そのディレクトリで`swift test`（`--filter`で絞れる）が動く。本番のソースは書き換えない。証明のテストは`Packages/SciaCore/Tests/SciaCoreTests/`の下に、名前の先頭を`Proof`にしたファイルで置く。
+このディレクトリは使い捨ての複製で、何を書いてもよい。ネットワークは公開の情報を読むためだけに使い、外部には何も書き込まない（issue、PR、push、APIへの書き込みをしない）。`Packages/SciaCore`はSwiftPMのパッケージで、そのディレクトリで`swift test`（`--filter`で絞れる）が動く。本番のソースは書き換えない。証明のテストは`Packages/SciaCore/Tests/SciaCoreTests/`の下に、名前の先頭を`Proof`にしたファイルで置く。
 
 差分の外で、この変更が壊すものを探す。呼び出し元を並べることが目的ではない。grepで見えない壊れ方を探す。
 

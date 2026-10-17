@@ -1,7 +1,7 @@
 import QuartzCore
 import SciaCore
 
-/// ばねの進み具合を、画面を描き換えるたびに渡す。写しの位置と、マスクのようにUIKitのアニメーションで動かせない見た目を、同じフレームでそろえるために使う。
+/// ばねの進み具合を、画面を描き換えるたびに渡す。複製の位置と、マスクのようにUIKitのアニメーションで動かせない見た目を、同じフレームでそろえるために使う。
 @MainActor
 final class SpringDriver: NSObject {
     private let spring: SpringCurve

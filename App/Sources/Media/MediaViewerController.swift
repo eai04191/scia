@@ -8,7 +8,7 @@ import VisionKit
 
 /// 投稿の添付ファイルを全画面で見る。左右のスワイプで切り替え、画像はピンチとダブルタップで拡大する。
 ///
-/// 開くとき、閉じるとき、下へのスワイプで閉じる操作の間は、画像の写しを一覧のサムネイルとのあいだで動かす。
+/// 開くとき、閉じるとき、下へのスワイプで閉じる操作の間は、画像の複製を一覧のサムネイルとのあいだで動かす。
 ///
 /// UIKitの遷移（標準のズームや、遷移を自前で描く仕組み）は使わない。標準のズームは画面全体に角丸と影を付けて変形するため画面の形の枠が見え、
 /// 遷移を自前で描く仕組みは動いている間の操作を受け付けないため、開く途中で下へスワイプしても閉じられない。
@@ -50,35 +50,35 @@ final class MediaViewerController: UIViewController {
     private lazy var dismissPan = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPan(_:)))
     /// 閉じる操作を始めたときに押していた位置。`view`の座標。画像をこの点を中心に縮め、指の下に同じ場所が来るようにする。
     private var dismissPanAnchor: CGPoint = .zero
-    /// 閉じ終わったときに呼ぶ。写しがサムネイルへ戻る動きは、このあとも続く。
+    /// 閉じ終わったときに呼ぶ。複製がサムネイルへ戻る動きは、このあとも続く。
     var onDismiss: (() -> Void)?
     /// 出たままの知らせが2件以上のときにチップを押したら、この画面の上に「操作の状況」の一覧を開く。nilなら開けない。
     var onShowOperationStatus: (@MainActor (UIViewController) -> Void)?
-    /// 写しがサムネイルへ戻る動きを終えたときに呼ぶ。投稿欄は、ここで入力欄にキーボードを戻す。
+    /// 複製がサムネイルへ戻る動きを終えたときに呼ぶ。投稿欄は、ここで入力欄にキーボードを戻す。
     var onCloseFinish: (() -> Void)?
     /// 黒い下地。画像だけを動かし、下地はその場で濃くしたり薄くしたりする。
     private let backdrop = UIView()
-    /// 開閉とドラッグで動かす画像の写し。縦横比を保って枠を埋めるように切り抜くため、枠の形をサムネイルとビューアの画像のあいだで変えるだけで、
+    /// 開閉とドラッグで動かす画像の複製。縦横比を保って枠を埋めるように切り抜くため、枠の形をサムネイルとビューアの画像のあいだで変えるだけで、
     /// サムネイルと同じ切り抜き方へ移る。
     private let morph = UIImageView()
-    /// 写しに載せる、サムネイルの印（ALT、GIF、残りの枚数）の写し。サムネイルに近いほど濃くし、ビューアの画像の大きさでは見せない。
+    /// 複製に載せる、サムネイルの印（ALT、GIF、残りの枚数）の複製。サムネイルに近いほど濃くし、ビューアの画像の大きさでは見せない。
     private var morphDecoration: UIView?
-    /// 写しのさらに手前に置く、サムネイルに重なっているビューの写し。印と同じ濃さで出し入れする。
+    /// 複製のさらに手前に置く、サムネイルに重なっているビューの複製。印と同じ濃さで出し入れする。
     private var morphOverlap: MediaSourceOverlap?
-    /// 写しに敷く、サムネイルの背景の色。印と同じ濃さで出し入れし、透明な部分のある画像でサムネイルとの見え方をそろえる。
+    /// 複製に敷く、サムネイルの背景の色。印と同じ濃さで出し入れし、透明な部分のある画像でサムネイルとの見え方をそろえる。
     private var morphPlaceholderColor: UIColor?
-    /// 写しの画像を、ページが描いている画像に合わせ続けるか。元の画像が届いたら、動いている途中でも差し替える。
+    /// 複製の画像を、ページが描いている画像に合わせ続けるか。元の画像が届いたら、動いている途中でも差し替える。
     private var morphFollowsPage = false
     private var motion = Motion.idle
     private let timing: Timing
     private let sourceTile: @MainActor (String) -> (any MediaViewerSource)?
-    /// 写しを動かしている間、隠している一覧のサムネイル。画像がそこへ戻っていく途中で消えて見えないよう、動かし始めから隠す。
+    /// 複製を動かしている間、隠している一覧のサムネイル。画像がそこへ戻っていく途中で消えて見えないよう、動かし始めから隠す。
     private var hiddenTile: (any MediaViewerSource)?
-    /// 開く途中と、開く途中でつかんでから写しを手前へ寄せ終えるまで、写しを一覧のバーの手前と奥に描き分ける。
+    /// 開く途中と、開く途中でつかんでから複製を手前へ寄せ終えるまで、複製を一覧のバーの手前と奥に描き分ける。
     private var barLayering: MediaBarLayering?
-    /// `barLayering`で、写しをバーの手前と奥のどちらに見せているか。
+    /// `barLayering`で、複製をバーの手前と奥のどちらに見せているか。
     private var barSwap = MediaBarSwap.front
-    /// 開く途中でつかんだあと、写しをすべてバーの手前へ寄せる動き。
+    /// 開く途中でつかんだあと、複製をすべてバーの手前へ寄せる動き。
     private var barConvergence: SpringDriver?
 
     struct Timing {
@@ -89,15 +89,15 @@ final class MediaViewerController: UIViewController {
         /// 下へスワイプして閉じるときの弾み。0で弾まずに止まり、大きいほど行き過ぎてから戻る。
         /// 指で力を加えたときだけ弾ませ、タップで開くときや、ボタンで閉じるときは弾ませない。
         let dragCloseBounce: CGFloat
-        /// 開閉するとき、画像のうちバーにかかる部分を、一覧の中に置いた写しでバーの奥に描く。
+        /// 開閉するとき、画像のうちバーにかかる部分を、一覧の中に置いた複製でバーの奥に描く。
         let drawsUnderBars: Bool
-        /// バーの奥にも描くとき、一覧の中の写しから最前面の写しへ受け渡し終える、開く動きの進み具合。0から1。
+        /// バーの奥にも描くとき、一覧の中の複製から最前面の複製へ受け渡し終える、開く動きの進み具合。0から1。
         let openHandoffEnd: Double
-        /// バーの奥にも描くとき、バーと重なる部分を最前面の写しへ入れ替え始める、開く動きの進み具合。0から1。
+        /// バーの奥にも描くとき、バーと重なる部分を最前面の複製へ入れ替え始める、開く動きの進み具合。0から1。
         let openBarOverlapFadeStart: Double
-        /// バーの奥にも描くとき、最前面の写しを一覧の中の写しへ受け渡し始める進み具合。0から1。
+        /// バーの奥にも描くとき、最前面の複製を一覧の中の複製へ受け渡し始める進み具合。0から1。
         let handoffStart: Double
-        /// バーの奥にも描くとき、閉じ始めにバーと重なっていた部分を一覧の中の写しへ入れ替え終える進み具合。0から1。
+        /// バーの奥にも描くとき、閉じ始めにバーと重なっていた部分を一覧の中の複製へ入れ替え終える進み具合。0から1。
         let barOverlapFadeEnd: Double
         /// 写真に保存したことを知らせる表示を出しておく時間。
         let savedChipDuration: TimeInterval
@@ -197,7 +197,7 @@ final class MediaViewerController: UIViewController {
         return page.view.convert(page.contentFrame, to: view)
     }
 
-    /// 写しを動かしているか。開き終わり、閉じる操作もしていなければfalse。
+    /// 複製を動かしているか。開き終わり、閉じる操作もしていなければfalse。
     var isMoving: Bool {
         if case .idle = motion { return false }
         return true
@@ -209,7 +209,7 @@ final class MediaViewerController: UIViewController {
     /// キーボードのEscを受けるため、表示されたら最初の応答者になる。
     override var canBecomeFirstResponder: Bool { true }
 
-    /// 画面に入った最初のフレームから、サムネイルの位置に写しを置いて開き始める。
+    /// 画面に入った最初のフレームから、サムネイルの位置に複製を置いて開き始める。
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
         if isBeingPresented {
@@ -234,12 +234,12 @@ final class MediaViewerController: UIViewController {
         }
     }
 
-    /// 画像の写しが見えているか。見えている間はページの画像を隠す。
+    /// 画像の複製が見えているか。見えている間はページの画像を隠す。
     var isContentHiddenForTransition: Bool {
         !morph.isHidden
     }
 
-    /// 写しに描いている画像。
+    /// 複製に描いている画像。
     var morphImage: UIImage? {
         morph.image
     }
@@ -254,7 +254,7 @@ final class MediaViewerController: UIViewController {
         return true
     }
 
-    /// 写しをサムネイルへ縮めてから閉じる。代替テキストを書いていれば、書き終えてから閉じる。
+    /// 複製をサムネイルへ縮めてから閉じる。代替テキストを書いていれば、書き終えてから閉じる。
     @objc func close() {
         UserAction.closeViewer(.button).record()
         beginClosing()
@@ -862,15 +862,15 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
     }
 }
 
-// MARK: - 写しの動き
+// MARK: - 複製の動き
 
 extension MediaViewerController {
-    /// 写しの動き。開く、指に追従する、元へ戻す、閉じるの順に移る。開く途中と戻す途中は、指が触れたら止めて追従に移る。
+    /// 複製の動き。開く、指に追従する、元へ戻す、閉じるの順に移る。開く途中と戻す途中は、指が触れたら止めて追従に移る。
     fileprivate enum Motion {
-        /// 写しを隠し、ページの画像を見せている。
+        /// 複製を隠し、ページの画像を見せている。
         case idle
         case opening(SpringDriver)
-        /// 指に追従している。`start`はつかんだときの写しの枠、`visibility`はそのときの開いている度合い。
+        /// 指に追従している。`start`はつかんだときの複製の枠、`visibility`はそのときの開いている度合い。
         case dragging(start: CGRect, visibility: CGFloat)
         /// 閉じずに離したあと、ビューアの画像の枠へ戻している。
         case settling(UIViewPropertyAnimator)
@@ -904,9 +904,9 @@ extension MediaViewerController {
         tile.convert(tile.bounds, to: view)
     }
 
-    /// 写しを見せ、ページの画像と一覧のサムネイルを隠す。写しの画像は、ページが描いている画像か、まだ描いていなければサムネイルの画像。
+    /// 複製を見せ、ページの画像と一覧のサムネイルを隠す。複製の画像は、ページが描いている画像か、まだ描いていなければサムネイルの画像。
     /// どちらもなければ（アプリで表示できないファイルなど）、ページを描き写した画像を使う。
-    /// 画像を描くページなら、最初に画像がなくても、届いた時点で写しを差し替える。
+    /// 画像を描くページなら、最初に画像がなくても、届いた時点で複製を差し替える。
     /// - Parameter decorationAlpha: サムネイルの印の濃さ。サムネイルの位置から始めるなら1、ビューアの画像の位置から始めるなら0。
     private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: (any MediaViewerSource)?, decorationAlpha: CGFloat) {
         let page = pages[currentIndex]
@@ -922,8 +922,8 @@ extension MediaViewerController {
         hide(tile)
     }
 
-    /// サムネイルの印の写しを、写しに載せ直す。サムネイルを隠す前に描き写す必要がある。
-    /// 写しの大きさが変わっても角からの位置を保つよう、写しいっぱいに広げて自動で位置を合わせる。
+    /// サムネイルの印の複製を、複製に載せ直す。サムネイルを隠す前に描き写す必要がある。
+    /// 複製の大きさが変わっても角からの位置を保つよう、複製いっぱいに広げて自動で位置を合わせる。
     private func attachDecoration(from tile: (any MediaViewerSource)?, alpha: CGFloat) {
         morphDecoration?.removeFromSuperview()
         morphPlaceholderColor = tile?.placeholderColor
@@ -962,7 +962,7 @@ extension MediaViewerController {
         setPageHidden(false)
     }
 
-    /// ページを見えなくする。透明にすると触れても反応しなくなるため、空のマスクで隠し、写しを動かしている間も左右の切り替えやタップを受け付ける。
+    /// ページを見えなくする。透明にすると触れても反応しなくなるため、空のマスクで隠し、複製を動かしている間も左右の切り替えやタップを受け付ける。
     private func setPageHidden(_ hidden: Bool) {
         pageController.view.layer.mask = hidden ? CALayer() : nil
     }
@@ -1011,7 +1011,7 @@ extension MediaViewerController {
         UIViewPropertyAnimator(duration: duration, timingParameters: UISpringTimingParameters(duration: duration, bounce: bounce))
     }
 
-    /// 写しをサムネイルの位置からビューアの画像の位置へ広げる。バーの奥と手前の描き分けを写しの位置と同じフレームで描くため、
+    /// 複製をサムネイルの位置からビューアの画像の位置へ広げる。バーの奥と手前の描き分けを複製の位置と同じフレームで描くため、
     /// UIKitのアニメーションではなく、ばねを毎フレーム進めて動かす。
     private func beginOpening() {
         view.layoutIfNeeded()
@@ -1056,7 +1056,7 @@ extension MediaViewerController {
         }
     }
 
-    /// 写しをバーの手前と奥に描き分ける準備をする。バーの奥に描かない設定や、サムネイルを含む一覧の行が見つからなければnil。
+    /// 複製をバーの手前と奥に描き分ける準備をする。バーの奥に描かない設定や、サムネイルを含む一覧の行が見つからなければnil。
     private func makeBarLayering(tile: any MediaViewerSource) -> MediaBarLayering? {
         guard timing.drawsUnderBars, let window = view.window else { return nil }
         let layering = MediaBarLayering(
@@ -1074,14 +1074,14 @@ extension MediaViewerController {
         return layering
     }
 
-    /// 写しの今の位置で、バーの手前と奥の描き分けを描き直す。描き分けていなければ何もしない。
+    /// 複製の今の位置で、バーの手前と奥の描き分けを描き直す。描き分けていなければ何もしない。
     private func applyBarLayering() {
         guard let layering = barLayering, let window = view.window else { return }
         morph.alpha = 1 - barSwap.handoff
         layering.apply(clipRect: layering.visibleRect, overlapRect: window.bounds, swap: barSwap, visibility: 1)
     }
 
-    /// 開く途中でつかんだら、指で動かす写しをすべてバーの手前へ短い時間で寄せる。閉じる操作の間は、写しをバーの手前に描くため。
+    /// 開く途中でつかんだら、指で動かす複製をすべてバーの手前へ短い時間で寄せる。閉じる操作の間は、複製をバーの手前に描くため。
     private func convergeBarLayeringToFront() {
         guard barLayering != nil else { return }
         let from = barSwap
@@ -1095,7 +1095,7 @@ extension MediaViewerController {
         driver.start()
     }
 
-    /// 描き分けをやめ、写しをすべてバーの手前に見せる。
+    /// 描き分けをやめ、複製をすべてバーの手前に見せる。
     private func endBarLayering() {
         barConvergence?.stop()
         barConvergence = nil
@@ -1106,10 +1106,10 @@ extension MediaViewerController {
         morph.alpha = 1
     }
 
-    /// 開く途中でつかんだあと、写しをバーの手前へ寄せ終えるまでの時間。
+    /// 開く途中でつかんだあと、複製をバーの手前へ寄せ終えるまでの時間。
     private static let barConvergenceDuration: TimeInterval = 0.15
 
-    /// 開ききったら、写しを隠してページの画像に戻す。隠していたサムネイルも、黒い下地で覆われているので戻す。
+    /// 開ききったら、複製を隠してページの画像に戻す。隠していたサムネイルも、黒い下地で覆われているので戻す。
     private func finishOpen() {
         endBarLayering()
         hideMorph()
@@ -1119,7 +1119,7 @@ extension MediaViewerController {
         pages[currentIndex]?.interactionDidEnd()
     }
 
-    /// 開いている途中や戻している途中なら、その場で止めてつかむ。開ききっていれば、ビューアの画像の位置に写しを出してつかむ。
+    /// 開いている途中や戻している途中なら、その場で止めてつかむ。開ききっていれば、ビューアの画像の位置に複製を出してつかむ。
     private func beginDragging(at location: CGPoint) {
         switch motion {
         case .opening(let driver):
@@ -1140,21 +1140,21 @@ extension MediaViewerController {
         motion = .dragging(start: morph.frame, visibility: backdrop.alpha)
     }
 
-    /// 開いている途中や戻している途中に止めた写しをつかむ。
+    /// 開いている途中や戻している途中に止めた複製をつかむ。
     private func grabMovingMorph() {
         if morph.isHidden {
-            // 薄くして開いていた途中なら、ここから写しを出す。
+            // 薄くして開いていた途中なら、ここから複製を出す。
             showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: currentTile, decorationAlpha: 0)
         } else {
             hide(currentTile)
         }
     }
 
-    /// 閉じずに離したら、写しをビューアの画像の枠へ戻し、開ききった状態にする。
+    /// 閉じずに離したら、複製をビューアの画像の枠へ戻し、開ききった状態にする。
     private func settle() {
         guard case .dragging = motion else { return }
-        // つかんでから写しを手前へ寄せ終える前に離していたら、残りを寄せずに手前に見せる。寄せる時間（0.15秒）より短い操作に限られるため受け入れる。
-        // 戻す動きはUIKitのアニメーションで描くため、描き分けのマスクを写しの位置に合わせ続けられない。
+        // つかんでから複製を手前へ寄せ終える前に離していたら、残りを寄せずに手前に見せる。寄せる時間（0.15秒）より短い操作に限られるため受け入れる。
+        // 戻す動きはUIKitのアニメーションで描くため、描き分けのマスクを複製の位置に合わせ続けられない。
         endBarLayering()
         let animator = makeAnimator(duration: dragToDismiss.restoreDuration, bounce: 0)
         let target = contentFrame(in: view)
@@ -1173,7 +1173,7 @@ extension MediaViewerController {
         animator.startAnimation()
     }
 
-    /// 閉じると決めたら、すぐにビューアを閉じ、写しと下地とボタンの写しを、操作を素通しする最前面の層へ移してサムネイルへ縮める。
+    /// 閉じると決めたら、すぐにビューアを閉じ、複製と下地とボタンの複製を、操作を素通しする最前面の層へ移してサムネイルへ縮める。
     /// ビューアを残したまま動かすと、残った画面が触れたものを吸い、閉じた直後に別の画像をタップしても開けない。
     /// サムネイルが見つからなければ、その場で薄くする。
     /// - Parameter releaseVelocity: 下へスワイプして閉じたときの、指を離したときの速さ。スワイプして閉じるときだけ、この速さを引き継いで弾ませる。
@@ -1228,8 +1228,8 @@ extension MediaViewerController {
         morphOverlap?.move(to: overlay)
         window.addSubview(overlay)
         let moves = movesImage && tile != nil
-        // 写しをサムネイルへ戻すときは、戻り終えてから見せるため、ビューアを閉じたときには戻さない。
-        // 写しを動かさないときは、閉じる前に見せる。閉じると画面が描き直されるため、閉じてから見せると、その間サムネイルが消えて見える。
+        // 複製をサムネイルへ戻すときは、戻り終えてから見せるため、ビューアを閉じたときには戻さない。
+        // 複製を動かさないときは、閉じる前に見せる。閉じると画面が描き直されるため、閉じてから見せると、その間サムネイルが消えて見える。
         if !moves {
             showHiddenTile()
         }
@@ -1281,7 +1281,7 @@ extension MediaViewerController {
         flight.start()
     }
 
-    /// バーの奥に描く写し。写しと同じ画像と切り抜き方で、サムネイルの印も載せる。
+    /// バーの奥に描く複製。複製と同じ画像と切り抜き方で、サムネイルの印も載せる。
     private func makeUnderlay(decoratedLike tile: (any MediaViewerSource)?) -> MediaBarLayering.Underlay {
         let image = UIImageView(image: morph.image)
         image.contentMode = morph.contentMode
@@ -1365,7 +1365,7 @@ class MediaPageController: UIViewController {
     private(set) var item: MediaViewerItem
     var index = 0
     var onSingleTap: (() -> Void)?
-    /// 描いている画像が変わった。開閉の写しを、元の画像が届いた時点で差し替えるために使う。
+    /// 描いている画像が変わった。開閉の複製を、元の画像が届いた時点で差し替えるために使う。
     var onImageChange: (() -> Void)?
     /// 長押しで出すメニューの項目。右上のメニューボタンと同じものを返す。
     var menuElements: (() -> [UIMenuElement])?
@@ -1399,7 +1399,7 @@ class MediaPageController: UIViewController {
     /// 開閉で動かす、描いている画像。
     var transitionImage: UIImage? { nil }
 
-    /// 画像を描くページ。開閉の写しを、このページの画像の更新に合わせて差し替える。
+    /// 画像を描くページ。開閉の複製を、このページの画像の更新に合わせて差し替える。
     var drawsImage: Bool { false }
 
     /// 違和感レポートに残す、ページの状態。
@@ -1475,7 +1475,7 @@ final class ImagePageController: MediaPageController {
     /// Live Textのボタンの、システムが決めた既定の余白。`supplementaryInterfaceContentInsets`を上書きすると既定の余白が消えるため、説明に重なる分はこれに足す。
     /// 余白は画面上のポイントで指定する。画像を拡大していても、拡大率で割り戻さない。
     private lazy var baseLiveTextInsets = liveText.supplementaryInterfaceContentInsets
-    /// 元のファイルをキャッシュに置き終えていれば、そのURL。共有や保存はこのURLでキャッシュから写しを取る。
+    /// 元のファイルをキャッシュに置き終えていれば、そのURL。共有や保存はこのURLでキャッシュからコピーを取る。
     private(set) var originalURL: URL?
     /// 一覧で読み込んだサムネイル。
     private let preview: UIImage?
@@ -1611,7 +1611,7 @@ final class ImagePageController: MediaPageController {
         }
     }
 
-    /// 投稿欄で選んだメディアを、手元のファイルから読む。キャッシュには写さない。
+    /// 投稿欄で選んだメディアを、手元のファイルから読む。キャッシュにはコピーしない。
     private func load(_ file: LocalMediaFile, hasPreview: Bool) {
         if !hasPreview {
             spinner.startAnimating()
@@ -2095,7 +2095,7 @@ final class PlayerPageController: MediaPageController {
         }
     }
 
-    /// 再生しているコマ。つかんだり閉じたりしたときに、写しを最初のコマ（サムネイル）へ戻さず、その場の絵から動かすために使う。
+    /// 再生しているコマ。つかんだり閉じたりしたときに、複製を最初のコマ（サムネイル）へ戻さず、その場の絵から動かすために使う。
     /// まだコマを描いていなければnilで、サムネイルを使う。
     override var transitionImage: UIImage? {
         guard let item = playerController.player?.currentItem,

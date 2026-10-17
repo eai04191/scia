@@ -1,6 +1,6 @@
 #!/bin/bash
-# 今のworktreeの状態（commit済み、未commit、未追跡のファイル）を、使い捨ての写しに再現する。
-# 写しはこのリポジトリのオブジェクトを共有するcloneで、remoteは外す。写しでの操作がこのリポジトリのbranchに届かないようにするため。
+# 今のworktreeの状態（commit済み、未commit、未追跡のファイル）を、使い捨ての複製に再現する。
+# 複製はこのリポジトリのオブジェクトを共有するcloneで、remoteは外す。複製での操作がこのリポジトリのbranchに届かないようにするため。
 # 使い方: make-copy.sh <作る場所>（まだない場所を渡す）
 set -euo pipefail
 

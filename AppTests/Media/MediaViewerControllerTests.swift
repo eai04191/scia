@@ -136,7 +136,7 @@ struct MediaViewerControllerTests {
         #expect(try #require(menuAction("写真に保存", in: viewer)).attributes.isEmpty)
     }
 
-    /// 写真には元のファイルの写しを、形式と名前を変えずに渡し、済んだらメニューボタンの下で知らせる。
+    /// 写真には元のファイルのコピーを、形式と名前を変えずに渡し、済んだらメニューボタンの下で知らせる。
     @Test func savingToPhotosPassesOriginalFileAndShowsChip() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -1099,7 +1099,7 @@ struct MediaViewerControllerTests {
         #expect(reported.contains(statuses[0].id), "閉じたあとに報告しませんでした")
     }
 
-    /// 開閉の間はサムネイルとビューアの画像を隠して写しを動かし、開ききったら両方とも元どおり見せる。閉じる動きの間も一覧を操作でき、戻り終えたらサムネイルを見せる。
+    /// 開閉の間はサムネイルとビューアの画像を隠して複製を動かし、開ききったら両方とも元どおり見せる。閉じる動きの間も一覧を操作でき、戻り終えたらサムネイルを見せる。
     @Test func transitionRestoresThumbnailAndContentAfterOpeningAndClosing() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -1127,7 +1127,7 @@ struct MediaViewerControllerTests {
             onDismiss: {}
         )
         let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
-        // 開く動きは画面に入るときに始まるため、写しが出るのを待つ。写しを出さなければ時間切れで失敗する。
+        // 開く動きは画面に入るときに始まるため、複製が出るのを待つ。複製を出さなければ時間切れで失敗する。
         try await waitUntil { viewer.isContentHiddenForTransition }
         #expect(tile.isConcealedForViewer, "開いている間にサムネイルを隠していません")
         try await waitUntil { !viewer.isMoving }
@@ -1139,7 +1139,7 @@ struct MediaViewerControllerTests {
 
         // 閉じると決めた時点でビューアを閉じ、サムネイルへ戻る動きの途中でも一覧を操作できるようにする。
         // ビューアを残したまま動かすと、閉じた直後に別の画像をタップしても届かない。
-        // ビューアを外すのは次の描画の機会になるため、それを待つ。写しが戻り終えるより先に外れていなければ失敗する。
+        // ビューアを外すのは次の描画の機会になるため、それを待つ。複製が戻り終えるより先に外れていなければ失敗する。
         try await waitUntil { harness.viewController.presentedViewController == nil }
         let window = try #require(tile.window)
         let tapPoint = tile.convert(CGPoint(x: tile.bounds.midX, y: tile.bounds.midY), to: window)
@@ -1151,7 +1151,7 @@ struct MediaViewerControllerTests {
         #expect(viewer.view.superview == nil)
     }
 
-    /// 開く途中は、バーの下のサムネイルと同じ見え方から始めるため、サムネイルを含む一覧の行の中にも写しを置く。開ききったら外し、最前面の写しのマスクも外す。
+    /// 開く途中は、バーの下のサムネイルと同じ見え方から始めるため、サムネイルを含む一覧の行の中にも複製を置く。開ききったら外し、最前面の複製のマスクも外す。
     @Test func openingDrawsUnderBarsUntilOpened() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -1186,10 +1186,10 @@ struct MediaViewerControllerTests {
         )
         let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
         try await waitUntil { viewer.isContentHiddenForTransition }
-        #expect(row.subviews.contains { $0 !== tile }, "開く途中に一覧の行の中へ写しを置いていません")
+        #expect(row.subviews.contains { $0 !== tile }, "開く途中に一覧の行の中へ複製を置いていません")
 
         try await waitUntil { !viewer.isMoving }
-        #expect(row.subviews.allSatisfy { $0 === tile }, "開ききったあとも一覧の行の中に写しが残っています")
+        #expect(row.subviews.allSatisfy { $0 === tile }, "開ききったあとも一覧の行の中に複製が残っています")
         viewer.dismiss(animated: false)
     }
 
@@ -1203,7 +1203,7 @@ struct MediaViewerControllerTests {
         #expect(PlayerPageController.orientation(of: CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 1_080, ty: 0)) == .right)
     }
 
-    /// 手元にプレビューもぼかしもない画像でも、開く途中に元の画像が届いたら、写しをその画像に差し替える。
+    /// 手元にプレビューもぼかしもない画像でも、開く途中に元の画像が届いたら、複製をその画像に差し替える。
     @Test func morphFollowsImageThatArrivesWhileOpening() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -1242,7 +1242,7 @@ struct MediaViewerControllerTests {
         try await waitUntil { viewer.isContentHiddenForTransition }
 
         try await waitUntil { viewer.morphImage?.size == arriving.size }
-        #expect(viewer.isMoving, "写しを差し替える前に開き終わりました")
+        #expect(viewer.isMoving, "複製を差し替える前に開き終わりました")
     }
 
     /// ビューアは一覧を残したまま上に重ねるため、開いている間も閉じたあとも、一覧の読んでいる位置を動かさない。

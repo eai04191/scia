@@ -2,32 +2,32 @@ import QuartzCore
 import SciaCore
 import UIKit
 
-/// 閉じたビューアの写しを、一覧のサムネイルへ戻す動き。ビューアを閉じたあと、操作を素通しする最前面の層で描く。
+/// 閉じたビューアの複製を、一覧のサムネイルへ戻す動き。ビューアを閉じたあと、操作を素通しする最前面の層で描く。
 ///
 /// 戻る途中に一覧をスクロールされるとサムネイルが動くため、UIKitのアニメーションで行き先を決めると、古い位置へ戻ってから消えて見える。
 /// 毎フレーム今のサムネイルを探し直し、始点とその位置のあいだをばねの進み具合で補う。
 /// 途中で行が再利用されたら、隠すサムネイルも探し直したものに替える。見つからなくなったら、最後の位置へ向かいながら薄くする。
 ///
-/// 写しをバーの手前と奥に描き分ける仕組みは`MediaBarLayering`にある。閉じ始めにバーと重なっていた部分（縦長の画像や、下へスワイプしてタブバーにかかった画像）は、
-/// それまでバーより手前に描いていたため、急に奥へ移すと切り替わって見える。そこだけは閉じ始めの早いうちに薄くして、一覧の中の写しへ入れ替える。
-/// 着地の手前からは最前面の写し全体を薄くして、一覧の中の写しへ受け渡す。
-/// 一覧の中の写しがないときは、見せる範囲を画面全体から一覧のバーに隠れない範囲へ、着地へ近づくにつれて絞る。
+/// 複製をバーの手前と奥に描き分ける仕組みは`MediaBarLayering`にある。閉じ始めにバーと重なっていた部分（縦長の画像や、下へスワイプしてタブバーにかかった画像）は、
+/// それまでバーより手前に描いていたため、急に奥へ移すと切り替わって見える。そこだけは閉じ始めの早いうちに薄くして、一覧の中の複製へ入れ替える。
+/// 着地の手前からは最前面の複製全体を薄くして、一覧の中の複製へ受け渡す。
+/// 一覧の中の複製がないときは、見せる範囲を画面全体から一覧のバーに隠れない範囲へ、着地へ近づくにつれて絞る。
 @MainActor
 final class MediaClosingFlight: NSObject {
     struct Parts {
-        /// 写しや下地を載せる、操作を素通しする層。終わったら外す。
+        /// 複製や下地を載せる、操作を素通しする層。終わったら外す。
         let overlay: UIView
         let morph: UIImageView
-        /// 写しに載せた、サムネイルの印の写し。
+        /// 複製に載せた、サムネイルの印の複製。
         let decoration: UIView?
-        /// 写しのさらに手前に置いた、サムネイルに重なっているビューの写し。印と同じ濃さで出し入れする。
+        /// 複製のさらに手前に置いた、サムネイルに重なっているビューの複製。印と同じ濃さで出し入れする。
         let overlap: MediaSourceOverlap?
-        /// 写しに敷く、サムネイルの背景の色。印と同じ濃さで出し入れする。
+        /// 複製に敷く、サムネイルの背景の色。印と同じ濃さで出し入れする。
         let placeholderColor: UIColor?
         /// 一覧を暗くする下地。`fadingViews`にも含め、閉じながら薄くする。
         let backdrop: UIView
         let fadingViews: [UIView]
-        /// 写しをバーの手前と奥に描き分ける。一覧の中の写しを持たなければ、バーにかかる部分を切り落とすだけにする。
+        /// 複製をバーの手前と奥に描き分ける。一覧の中の複製を持たなければ、バーにかかる部分を切り落とすだけにする。
         let layering: MediaBarLayering
     }
 
@@ -55,10 +55,10 @@ final class MediaClosingFlight: NSObject {
 
     /// - Parameters:
     ///   - concealedTile: 戻り先として隠しているサムネイル。戻り終えたら見せる。
-    ///   - handoffStart: 一覧の中の写しへ受け渡し始める進み具合。一覧の中の写しがなければ使わない。
-    ///   - barOverlapFadeEnd: 閉じ始めにバーと重なっていた部分を、一覧の中の写しへ入れ替え終える進み具合。一覧の中の写しがなければ使わない。
+    ///   - handoffStart: 一覧の中の複製へ受け渡し始める進み具合。一覧の中の複製がなければ使わない。
+    ///   - barOverlapFadeEnd: 閉じ始めにバーと重なっていた部分を、一覧の中の複製へ入れ替え終える進み具合。一覧の中の複製がなければ使わない。
     ///   - startOverlapOpacity: 閉じ始めに、バーと重なっていた部分を手前に見せていた濃さ。開く途中から閉じるときは1未満になる。
-    ///   - movesImage: falseなら写しを動かさず、その場で薄くする。
+    ///   - movesImage: falseなら複製を動かさず、その場で薄くする。
     init(
         parts: Parts,
         window: UIWindow,
@@ -106,7 +106,7 @@ final class MediaClosingFlight: NSObject {
         let progress = CGFloat(spring.value(at: time))
         let clamped = min(max(progress, 0), 1)
         let tile = findTile()
-        // 写しを動かさないときは、写しがサムネイルへ戻らないため隠さない。隠すと、写しが消えてからサムネイルが急に現れる。
+        // 複製を動かさないときは、複製がサムネイルへ戻らないため隠さない。隠すと、複製が消えてからサムネイルが急に現れる。
         let tileToConceal = movesImage ? tile : nil
         if tileToConceal !== concealedTile {
             concealedTile?.isConcealedForViewer = false
@@ -128,7 +128,7 @@ final class MediaClosingFlight: NSObject {
                 // 戻り先が画面から外れたら、最後の位置へ向かいながら薄くする。
                 visibility = min(visibility, 1 - clamped)
             }
-            // 一覧の中の写しへ受け渡す間も、受け渡した写しの手前に重なって見えるよう、写しの濃さとは別に出す。
+            // 一覧の中の複製へ受け渡す間も、受け渡した複製の手前に重なって見えるよう、複製の濃さとは別に出す。
             parts.overlap?.view.alpha = decorationAlpha * visibility
         } else {
             visibility = 1 - clamped
@@ -136,7 +136,7 @@ final class MediaClosingFlight: NSObject {
         }
         let layering = parts.layering
         if layering.drawsUnderBars {
-            // バーの位置は一覧の中の写しが埋めるため、最前面の写しを見せるのは一覧のバーに隠れない範囲と、閉じ始めにすでに描いていた枠だけにする。
+            // バーの位置は一覧の中の複製が埋めるため、最前面の複製を見せるのは一覧のバーに隠れない範囲と、閉じ始めにすでに描いていた枠だけにする。
             let swap = MediaBarSwap.closing(
                 progress: clamped,
                 handoffStart: handoffStart,

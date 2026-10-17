@@ -2,7 +2,7 @@ import SciaCore
 import Testing
 
 struct MediaBarSwapTests {
-    /// 閉じ始めはすべて手前、着地ではすべて一覧の中の写しに見せる。
+    /// 閉じ始めはすべて手前、着地ではすべて一覧の中の複製に見せる。
     @Test func closingStartsInFrontAndLandsBehindBars() {
         let start = MediaBarSwap.closing(progress: 0, handoffStart: 0.7, overlapFadeEnd: 0.3)
         #expect(start == .front)
@@ -28,7 +28,7 @@ struct MediaBarSwapTests {
         #expect(MediaBarSwap.closing(progress: 1, handoffStart: 1, overlapFadeEnd: 0.3).handoff == 1)
     }
 
-    /// 開き始めはサムネイルと同じくすべて一覧の中の写し、開ききるとすべて手前に見せる。
+    /// 開き始めはサムネイルと同じくすべて一覧の中の複製、開ききるとすべて手前に見せる。
     @Test func openingStartsBehindBarsAndEndsInFront() {
         let start = MediaBarSwap.opening(progress: 0, handoffEnd: 0.3, overlapFadeStart: 0.7)
         #expect(start == MediaBarSwap(handoff: 1, overlapOpacity: 0))

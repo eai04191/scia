@@ -6,7 +6,7 @@ import UIKit
 /// 画像の保存やコピーで縮めて展開した画像を渡さないよう、元のファイルをそのまま渡す。
 /// ファイルだけを渡すと共有シートの見出しのプレビューが仮のアイコンになるため、描いている画像（動画は再生しているコマ）をプレビューとして添える。
 final class MediaShareSheetItem: NSObject, UIActivityItemSource {
-    /// 元のファイルの写し。拡張子は中身の形式に合わせてある。
+    /// 元のファイルのコピー。拡張子は中身の形式に合わせてある。
     private let file: URL
     private let preview: UIImage
 

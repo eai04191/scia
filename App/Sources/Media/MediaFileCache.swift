@@ -9,23 +9,23 @@ import SciaCore
 /// 画像ライブラリ（Nuke、Kingfisherなど）のディスクキャッシュと同じく、OSが空き容量に応じて消してよい`Caches`に置き、起動をまたいで残す。
 /// 合計が上限を超えたら、最後に使った日時の古いものから消す。最後に使った日時は、OSの更新を当てにせず、引くたびにファイルへ書き込む。
 ///
-/// キャッシュのファイルは共有や保存に直接渡さず、`copyForSharing(for:)`で作る写しを渡す。渡したあとも共有先が読み続けている間に、
+/// キャッシュのファイルは共有や保存に直接渡さず、`copyForSharing(for:)`で作るコピーを渡す。渡したあとも共有先が読み続けている間に、
 /// 整理で消してしまわないようにするため。
 ///
-/// 置く、整理する、引いて写すといった操作が重なると、引いたファイルを写す前に置き直しや整理で消してしまうため、actorで1つずつ行う。
+/// 置く、整理する、引いてコピーするといった操作が重なると、引いたファイルをコピーする前に置き直しや整理で消してしまうため、actorで1つずつ行う。
 actor MediaFileCache {
     /// 上限を超えたとき、ここまで減らす割合。整理のたびにすぐまた上限を超えないよう、少し余裕を持たせる（Nukeと同じ値）。
     private static let trimRatio = 0.7
 
     nonisolated let directory: URL
-    /// 共有や保存に渡す写しを置く場所。
+    /// 共有や保存に渡すコピーを置く場所。
     nonisolated let sharingDirectory: URL
     /// 合計の大きさの上限（バイト）。
     let sizeLimit: Int
     private let logger = SciaLog.logger(category: "media")
 
     /// - Parameters:
-    ///   - sharingDirectory: 共有や保存に渡す写しを置く場所。共有先が読み終えたことを知るすべがないため、作るときに前回の起動で残した写しを消す。
+    ///   - sharingDirectory: 共有や保存に渡すコピーを置く場所。共有先が読み終えたことを知るすべがないため、作るときに前回の起動で残したコピーを消す。
     ///   - sizeLimit: 合計の大きさの上限（バイト）。既定はNukeのディスクキャッシュの既定値と同じ150MB。
     init(
         directory: URL = .cachesDirectory.appending(path: "MediaFiles"),
@@ -83,8 +83,8 @@ actor MediaFileCache {
         return try publish(source, named: name, in: folder)
     }
 
-    /// `url`のファイルが置いてあれば、共有や保存に渡す写しを作る。引いてから写すまでの間に置き直しや整理で消えないよう、1つの操作で行う。
-    /// APFSでは中身を写さずに複製するため、大きなファイルでもすぐに済み、元が残っている間は場所も取らない。
+    /// `url`のファイルが置いてあれば、共有や保存に渡すコピーを作る。引いてからコピーするまでの間に置き直しや整理で消えないよう、1つの操作で行う。
+    /// APFSでは中身をコピーせずに複製するため、大きなファイルでもすぐに済み、元が残っている間は場所も取らない。
     func copyForSharing(for url: URL) throws -> URL? {
         guard let file = file(for: url) else { return nil }
         let folder = sharingDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)

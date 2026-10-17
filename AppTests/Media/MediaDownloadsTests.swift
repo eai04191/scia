@@ -10,7 +10,7 @@ struct MediaDownloadsTests {
         .temporaryDirectory.appending(path: "MediaDownloadsTests-\(UUID().uuidString)")
     }
 
-    /// 落としたファイルはキャッシュに置き、同じ添付ファイルをまた共有するときは落とし直さない。渡すのは毎回キャッシュの写し。
+    /// 落としたファイルはキャッシュに置き、同じ添付ファイルをまた共有するときは落とし直さない。渡すのは毎回キャッシュのコピー。
     @Test func reusesCachedFileAndReturnsCopies() async throws {
         let files = MediaFileCache.temporary()
         let count = Mutex(0)

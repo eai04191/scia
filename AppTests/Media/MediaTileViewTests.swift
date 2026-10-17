@@ -3,10 +3,10 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// サムネイルの印の写し。ビューアの開閉で動かす写しに載せ、サムネイルとのあいだで見え方がそろうことを確かめる。
+/// サムネイルの印の複製。ビューアの開閉で動かす複製に載せ、サムネイルとのあいだで見え方がそろうことを確かめる。
 @MainActor
 struct MediaTileViewTests {
-    /// 動画の再生マークも写しに載せる。載せないと、開き始めに再生マークが消え、閉じる着地で急に現れる。
+    /// 動画の再生マークも複製に載せる。載せないと、開き始めに再生マークが消え、閉じる着地で急に現れる。
     @Test func decorationCopyIncludesPlaySymbol() {
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: 0, y: 0, width: 160, height: 90)
@@ -16,10 +16,10 @@ struct MediaTileViewTests {
         let copy = tile.makeDecorationCopy()
 
         let symbols = copy.subviews.compactMap { ($0 as? UIImageView)?.image }.filter(\.isSymbolImage)
-        #expect(symbols.count == 1, "再生マークを写しに載せていません")
+        #expect(symbols.count == 1, "再生マークを複製に載せていません")
     }
 
-    /// 画像には再生マークがないため、写しにも載せない。
+    /// 画像には再生マークがないため、複製にも載せない。
     @Test func decorationCopyOfImageHasNoSymbol() {
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: 0, y: 0, width: 160, height: 90)
@@ -31,7 +31,7 @@ struct MediaTileViewTests {
         #expect(copy.subviews.compactMap { ($0 as? UIImageView)?.image }.allSatisfy { !$0.isSymbolImage })
     }
 
-    /// 動画とGIFでは、サムネイルも写しに載せる。写しはビューアで再生していたコマを描くため、載せないと閉じる着地でサムネイルの絵に急に切り替わる。
+    /// 動画とGIFでは、サムネイルも複製に載せる。複製はビューアで再生していたコマを描くため、載せないと閉じる着地でサムネイルの絵に急に切り替わる。
     @Test func decorationCopyOfMovingMediaIncludesThumbnail() {
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: 0, y: 0, width: 160, height: 90)
@@ -42,10 +42,10 @@ struct MediaTileViewTests {
         let copy = tile.makeDecorationCopy()
 
         #expect(thumbnail != nil)
-        #expect(copy.subviews.contains { ($0 as? UIImageView)?.image === thumbnail }, "サムネイルを写しに載せていません")
+        #expect(copy.subviews.contains { ($0 as? UIImageView)?.image === thumbnail }, "サムネイルを複製に載せていません")
     }
 
-    /// 画像では、写しとサムネイルが同じ絵なので載せない。載せると、透明な部分が重なって濃く見える。
+    /// 画像では、複製とサムネイルが同じ絵なので載せない。載せると、透明な部分が重なって濃く見える。
     @Test func decorationCopyOfImageHasNoThumbnail() {
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: 0, y: 0, width: 160, height: 90)
