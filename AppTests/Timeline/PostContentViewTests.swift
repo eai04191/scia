@@ -40,6 +40,43 @@ struct PostContentViewTests {
         #expect(fittingHeight(of: configuration) >= metrics.margins.top + metrics.avatarSize + metrics.margins.bottom)
     }
 
+    /// 本文が1行でアイコンの方が下まで届くときも、本文の文字を引き伸ばさず、余りは行の下の余白に回す。
+    /// UILabelは伸ばされた枠の上下中央に文字を描くため、伸ばすと本文が名前の行から下にずれる。畳んだ注意書きの文字も同じ。
+    @Test(arguments: [false, true])
+    func shortBodyIsNotStretchedToAvatarHeight(spoiler: Bool) throws {
+        let base = try status(content: "<p>短い本文。Body text</p>")
+        let post = Status(id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: spoiler ? "ネタバレ" : "", url: nil)
+        var configuration = makeViewController().contentConfiguration(for: post, base: .cell())
+        // 既定の大きさでは、1行の本文とアイコンの下端がほぼ揃う。確実にアイコンの方が下まで届くよう、アイコンを大きくする。
+        configuration.metrics.avatarSize = 80
+        let view = configuration.makeContentView()
+        let size = view.systemLayoutSizeFitting(CGSize(width: 360, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        view.frame = CGRect(origin: .zero, size: size)
+        view.layoutIfNeeded()
+        let body = try #require(postBodyView(in: view))
+        let labels = visibleLabels(in: body)
+        let metrics = configuration.metrics
+
+        #expect(size.height >= metrics.margins.top + metrics.avatarSize + metrics.margins.bottom)
+        #expect(!labels.isEmpty)
+        for label in labels {
+            #expect(abs(label.bounds.height - label.intrinsicContentSize.height) < 0.5, "\(label.text ?? "") label=\(label.bounds) intrinsic=\(label.intrinsicContentSize)")
+        }
+    }
+
+    private func postBodyView(in view: UIView) -> PostBodyView? {
+        for subview in view.subviews {
+            if let body = subview as? PostBodyView ?? postBodyView(in: subview) { return body }
+        }
+        return nil
+    }
+
+    private func visibleLabels(in view: UIView) -> [UILabel] {
+        view.subviews.filter { !$0.isHidden }.flatMap { subview in
+            (subview as? UILabel).map { [$0] } ?? visibleLabels(in: subview)
+        }
+    }
+
     @Test func boostAddsRowAboveName() throws {
         let original = try status(content: "<p>短い</p>")
         let booster = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: original.account.avatar)

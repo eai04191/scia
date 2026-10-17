@@ -276,8 +276,10 @@ final class PostContentView: UIView, UIContentView {
         }
         let contentBottom = bodyView.bottomAnchor
         // アイコンの方が下まで届くときは、等しさを諦めてアイコンの下に余白を取る。
+        // 文字のラベルの縦のhugging（defaultLow）より弱くし、余りの高さでラベルを伸ばさずに、本文の下に空きを置く。
+        // UILabelは伸ばされた枠の上下中央に文字を描くため、伸ばすと本文が名前の行から下にずれる。
         let fitsContent = bottomAnchor.constraint(equalTo: contentBottom, constant: margins.bottom)
-        fitsContent.priority = .required - 1
+        fitsContent.priority = .defaultLow - 1
         constraints += [
             bottomAnchor.constraint(greaterThanOrEqualTo: contentBottom, constant: margins.bottom),
             fitsContent,
