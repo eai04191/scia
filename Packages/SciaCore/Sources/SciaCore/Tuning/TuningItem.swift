@@ -87,6 +87,16 @@ public enum TuningCatalog {
         defaultValue: 16
     )
 
+    /// 名前の上の行（ブースト、固定、通知の種類）の記号と、その右の文字やアイコンとのすき間。
+    /// 記号はアイコンの列の右端に揃えず、文字の列からこの幅だけ離して置く。記号どうしの縦の揃いは保たれる。
+    public static let contextSymbolSpacing = NumberTuning(
+        id: "timeline.contextSymbolSpacing",
+        title: "名前の上の行の記号と文字のすき間（pt）",
+        range: 0...12,
+        step: 1,
+        defaultValue: 4
+    )
+
     /// 投稿の名前の行が入りきらないときに、行末をぼかす幅。
     public static let nameFadeWidth = NumberTuning(
         id: "timeline.nameFadeWidth",
@@ -94,6 +104,35 @@ public enum TuningCatalog {
         range: 4...60,
         step: 2,
         defaultValue: 20
+    )
+
+    /// お気に入りやブーストの通知で、誰が何をしたかの行と、再掲する投稿のあいだの余白。
+    /// 本文がなく添付ファイルだけの投稿も、同じ余白で添付ファイルを置く。
+    public static let notificationQuotedSpacing = NumberTuning(
+        id: "notification.quotedSpacing",
+        title: "通知で再掲する投稿の上の余白（pt）",
+        range: 0...16,
+        step: 1,
+        defaultValue: 6
+    )
+
+    /// お気に入りやブーストの通知で、再掲する投稿の本文を切る行数。誰が何をしたかの行を主役にするため、本文は短く切る。
+    public static let notificationQuotedBodyLines = NumberTuning(
+        id: "notification.quotedBodyLines",
+        title: "通知で再掲する本文の行数",
+        range: 1...10,
+        step: 1,
+        defaultValue: 3
+    )
+
+    /// お気に入りやブーストの通知で、再掲する投稿の添付ファイルを1列に並べるサムネイルの一辺。
+    /// 行の幅に収まらない分は横にスクロールして見せるため、大きくしても並べられる数は減らない。
+    public static let notificationQuotedThumbnailSize = NumberTuning(
+        id: "notification.quotedThumbnailSize",
+        title: "通知で再掲するサムネイルの大きさ（pt）",
+        range: 24...100,
+        step: 2,
+        defaultValue: 40
     )
 
     /// ストリーミングで届いた新着を、まとめてタイムラインに挿入する間隔。最初の新着が届いてからこの時間待つ。
@@ -493,9 +532,15 @@ public enum TuningCatalog {
             .number(paragraphSpacing),
             .number(avatarSize),
             .number(boosterAvatarSize),
+            .number(contextSymbolSpacing),
             .number(nameFadeWidth),
             .number(mediaTallestAspectRatio),
             .number(mediaThumbnailUpscaleTolerance),
+        ]),
+        TuningSection(id: "notification", title: "通知の見た目", items: [
+            .number(notificationQuotedSpacing),
+            .number(notificationQuotedBodyLines),
+            .number(notificationQuotedThumbnailSize),
         ]),
         TuningSection(id: "timeline.motion", title: "タイムラインの動き", items: [
             .number(scrollToTopDuration),
