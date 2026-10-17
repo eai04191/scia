@@ -21,6 +21,11 @@ struct PostContentBuilder {
             boosterAvatarSize: tuning.value(of: TuningCatalog.boosterAvatarSize),
             nameFadeWidth: tuning.value(of: TuningCatalog.nameFadeWidth),
             contextSymbolSpacing: tuning.value(of: TuningCatalog.contextSymbolSpacing),
+            avatarSpacing: tuning.value(of: TuningCatalog.avatarSpacing),
+            contextSpacing: tuning.value(of: TuningCatalog.contextSpacing),
+            nameBodySpacing: tuning.value(of: TuningCatalog.nameBodySpacing),
+            bodyMediaSpacing: tuning.value(of: TuningCatalog.bodyMediaSpacing),
+            nameMediaSpacing: tuning.value(of: TuningCatalog.nameMediaSpacing),
             nameFont: Self.boldFont(base.textProperties.font),
             secondaryFont: secondaryFont,
             notificationSymbolFont: base.textProperties.font

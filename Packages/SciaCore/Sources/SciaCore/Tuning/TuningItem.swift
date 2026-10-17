@@ -87,6 +87,60 @@ public enum TuningCatalog {
         defaultValue: 16
     )
 
+    /// 投稿と通知の行で、左のアイコンの列と、右の文字の列のあいだ。
+    public static let avatarSpacing = NumberTuning(
+        id: "timeline.avatarSpacing",
+        title: "アイコンの列と文字のあいだ（pt）",
+        range: 0...24,
+        step: 1,
+        defaultValue: 10
+    )
+
+    /// ブーストや固定、通知の種類を示す名前の上の行と、名前の行のあいだ。
+    public static let contextSpacing = NumberTuning(
+        id: "timeline.contextSpacing",
+        title: "名前の上の行と名前の行のあいだ（pt）",
+        range: 0...16,
+        step: 1,
+        defaultValue: 4
+    )
+
+    /// 投稿の名前の行と本文のあいだ。
+    public static let nameBodySpacing = NumberTuning(
+        id: "timeline.nameBodySpacing",
+        title: "名前の行と本文のあいだ（pt）",
+        range: 0...16,
+        step: 1,
+        defaultValue: 2
+    )
+
+    /// 投稿の本文と、添付ファイルのサムネイルのあいだ。
+    public static let bodyMediaSpacing = NumberTuning(
+        id: "timeline.bodyMediaSpacing",
+        title: "本文とメディアのあいだ（pt）",
+        range: 0...24,
+        step: 1,
+        defaultValue: 8
+    )
+
+    /// 本文のない投稿で、名前の行と、添付ファイルのサムネイルのあいだ。
+    public static let nameMediaSpacing = NumberTuning(
+        id: "timeline.nameMediaSpacing",
+        title: "名前の行とメディアのあいだ（本文なし）（pt）",
+        range: 0...24,
+        step: 1,
+        defaultValue: 10
+    )
+
+    /// 添付ファイルのサムネイルを並べるときの、サムネイル同士のすき間。
+    public static let mediaTileSpacing = NumberTuning(
+        id: "timeline.mediaTileSpacing",
+        title: "メディアのサムネイル同士のすき間（pt）",
+        range: 0...12,
+        step: 1,
+        defaultValue: 4
+    )
+
     /// 名前の上の行（ブースト、固定、通知の種類）の記号と、その右の文字やアイコンとのすき間。
     /// 記号はアイコンの列の右端に揃えず、文字の列からこの幅だけ離して置く。記号どうしの縦の揃いは保たれる。
     public static let contextSymbolSpacing = NumberTuning(
@@ -104,6 +158,24 @@ public enum TuningCatalog {
         range: 4...60,
         step: 2,
         defaultValue: 20
+    )
+
+    /// お気に入りやブーストの通知で、再掲する本文と、1列に並べるサムネイルのあいだ。
+    public static let notificationQuotedMediaSpacing = NumberTuning(
+        id: "notification.quotedMediaSpacing",
+        title: "通知で再掲する本文とサムネイルのあいだ（pt）",
+        range: 0...24,
+        step: 1,
+        defaultValue: 8
+    )
+
+    /// フォローなどの通知で、誰が何をしたかの行と、その下に添えるアカウント名のあいだ。
+    public static let notificationHeaderDetailSpacing = NumberTuning(
+        id: "notification.headerDetailSpacing",
+        title: "通知の行とアカウント名のあいだ（pt）",
+        range: 0...16,
+        step: 1,
+        defaultValue: 2
     )
 
     /// お気に入りやブーストの通知で、誰が何をしたかの行と、再掲する投稿のあいだの余白。
@@ -533,12 +605,20 @@ public enum TuningCatalog {
             .number(avatarSize),
             .number(boosterAvatarSize),
             .number(contextSymbolSpacing),
+            .number(avatarSpacing),
+            .number(contextSpacing),
+            .number(nameBodySpacing),
+            .number(bodyMediaSpacing),
+            .number(nameMediaSpacing),
+            .number(mediaTileSpacing),
             .number(nameFadeWidth),
             .number(mediaTallestAspectRatio),
             .number(mediaThumbnailUpscaleTolerance),
         ]),
         TuningSection(id: "notification", title: "通知の見た目", items: [
             .number(notificationQuotedSpacing),
+            .number(notificationQuotedMediaSpacing),
+            .number(notificationHeaderDetailSpacing),
             .number(notificationQuotedBodyLines),
             .number(notificationQuotedThumbnailSize),
         ]),

@@ -18,7 +18,8 @@ extension TimelineViewController {
                     usesOriginalOnExpensiveNetwork: settings.usesOriginalThumbnailsOnExpensiveNetwork
                 ),
                 upscaleTolerance: tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
-            )
+            ),
+            spacing: tuning.value(of: TuningCatalog.mediaTileSpacing)
         )
     }
 

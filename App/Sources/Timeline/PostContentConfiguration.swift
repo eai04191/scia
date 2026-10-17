@@ -51,6 +51,16 @@ struct PostContentConfiguration: UIContentConfiguration {
         var nameFadeWidth: CGFloat
         /// 名前の上の行の記号と、その右の文字やアイコンとのすき間。
         var contextSymbolSpacing: CGFloat
+        /// アイコンの列と、文字の列のあいだ。
+        var avatarSpacing: CGFloat
+        /// 名前の上の行と名前の行のあいだ。
+        var contextSpacing: CGFloat
+        /// 名前の行と本文のあいだ。
+        var nameBodySpacing: CGFloat
+        /// 本文と添付ファイルのあいだ。
+        var bodyMediaSpacing: CGFloat
+        /// 本文のない投稿で、名前の行と添付ファイルのあいだ。
+        var nameMediaSpacing: CGFloat
         var nameFont: UIFont
         var secondaryFont: UIFont
         /// 通知の種類を示す記号の大きさを決める文字。誰が何をしたかの行を主役にする通知の記号と同じ大きさに揃えるため、
@@ -73,10 +83,6 @@ struct PostContentConfiguration: UIContentConfiguration {
 }
 
 final class PostContentView: UIView, UIContentView {
-    /// アイコンと本文のあいだの余白。
-    private static let avatarSpacing: CGFloat = 10
-    /// 名前の上の行と名前の行のあいだの余白。
-    private static let contextSpacing: CGFloat = 4
 
     private let avatarView: AvatarView
     private let contextIcon = UIImageView()
@@ -203,7 +209,7 @@ final class PostContentView: UIView, UIContentView {
         timeLabel.font = metrics.secondaryFont
         timeLabel.text = configuration.timeText(now: .now)
 
-        bodyView.apply(PostBodyContent(text: configuration.body, media: configuration.media))
+        bodyView.apply(PostBodyContent(text: configuration.body, media: configuration.media, mediaSpacing: metrics.bodyMediaSpacing))
         updateConstraints(for: configuration)
         updateAccessibility(for: configuration)
     }
@@ -226,12 +232,11 @@ final class PostContentView: UIView, UIContentView {
             avatarView.topAnchor.constraint(equalTo: nameRow.topAnchor),
             avatarView.widthAnchor.constraint(equalToConstant: metrics.avatarSize),
             avatarView.heightAnchor.constraint(equalToConstant: metrics.avatarSize),
-            textGuide.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: Self.avatarSpacing),
+            textGuide.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: metrics.avatarSpacing),
             textGuide.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.trailing),
             nameRow.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
             nameRow.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
-            // 本文のない投稿は、本文があったときと同じく、名前の行から本文と添付ファイルの余白を足した位置に添付ファイルを置く。
-            bodyView.topAnchor.constraint(equalTo: nameRow.bottomAnchor, constant: 2 + (bodyView.startsWithMedia ? PostBodyView.mediaSpacing : 0)),
+            bodyView.topAnchor.constraint(equalTo: nameRow.bottomAnchor, constant: bodyView.startsWithMedia ? metrics.nameMediaSpacing : metrics.nameBodySpacing),
             bodyView.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
             bodyView.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
             // 本文が短くても、アイコンが下の余白に食い込まないようにする。
@@ -245,7 +250,7 @@ final class PostContentView: UIView, UIContentView {
                 // アイコンの列の右端に揃えると、細い記号では文字とのあいだが間延びして見えるため。
                 contextIcon.trailingAnchor.constraint(equalTo: textGuide.leadingAnchor, constant: -metrics.contextSymbolSpacing),
                 Self.symbolVerticalConstraint(contextIcon, beside: contextLabel, onBaseline: context.isNotificationSymbol),
-                nameRow.topAnchor.constraint(equalTo: contextLabel.bottomAnchor, constant: Self.contextSpacing),
+                nameRow.topAnchor.constraint(equalTo: contextLabel.bottomAnchor, constant: metrics.contextSpacing),
             ]
             if context.avatar != nil {
                 constraints += [

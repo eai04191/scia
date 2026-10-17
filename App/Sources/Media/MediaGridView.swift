@@ -19,6 +19,8 @@ final class MediaGridView: UIView {
         let isCovered: Bool
         let tallestAspectRatio: Double
         let thumbnailPolicy: MediaThumbnailPolicy
+        /// サムネイル同士のすき間。
+        let spacing: CGFloat
         var arrangement: Arrangement = .grid
 
         /// 全体の幅を高さで割った値。添付ファイルがなければnil。
@@ -32,17 +34,16 @@ final class MediaGridView: UIView {
                 MediaGridLayout(
                     aspectRatios: attachments.map(\.aspectRatio),
                     width: width,
-                    spacing: MediaGridView.spacing,
+                    spacing: spacing,
                     tallestAspectRatio: tallestAspectRatio,
                     widestAspectRatio: MediaGridView.widestAspectRatio
                 )
             case .strip(let side):
-                MediaGridLayout(stripOf: attachments.count, side: side, spacing: MediaGridView.spacing)
+                MediaGridLayout(stripOf: attachments.count, side: side, spacing: spacing)
             }
         }
     }
 
-    nonisolated static let spacing: CGFloat = 4
     static let cornerRadius: CGFloat = 8
     /// 1つだけ出すとき、これより横長なものは左右を切り落とす。パノラマ写真が細くなりすぎないようにする。
     nonisolated static let widestAspectRatio = 3.0

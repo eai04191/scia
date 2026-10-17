@@ -11,12 +11,11 @@ struct PostBodyContent {
     var maximumLines = 0
     /// 添付ファイルがなければnil。
     var media: MediaGridView.Content?
+    /// 本文と添付ファイルのあいだの余白。本文がなければ取らない。
+    var mediaSpacing: CGFloat
 }
 
 final class PostBodyView: UIView {
-    /// 本文とサムネイルのあいだの余白。
-    static let mediaSpacing: CGFloat = 8
-
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     var onRevealMedia: (() -> Void)?
@@ -82,7 +81,7 @@ final class PostBodyView: UIView {
             mediaView.apply(media)
             let mediaTop = textLabel.isHidden
                 ? mediaView.topAnchor.constraint(equalTo: topAnchor)
-                : mediaView.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: Self.mediaSpacing)
+                : mediaView.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: content.mediaSpacing)
             variableConstraints += [
                 mediaTop,
                 mediaView.leadingAnchor.constraint(equalTo: leadingAnchor),

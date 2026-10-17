@@ -51,7 +51,8 @@ extension TimelineViewController {
             body: PostBodyContent(
                 text: body(of: shown, base: base, color: .secondaryLabel),
                 maximumLines: Int(tuning.value(of: TuningCatalog.notificationQuotedBodyLines)),
-                media: media
+                media: media,
+                mediaSpacing: tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing)
             ),
             bodySpacing: tuning.value(of: TuningCatalog.notificationQuotedSpacing),
             base: base
@@ -75,11 +76,14 @@ extension TimelineViewController {
             .font: base.secondaryTextProperties.font,
             .foregroundColor: UIColor.secondaryLabel,
         ])
-        return headerConfiguration(for: notification, body: PostBodyContent(text: acct), bodySpacing: Self.headerDetailSpacing, base: base)
+        return headerConfiguration(
+            for: notification,
+            // アカウントの下には添付ファイルを置かないため、本文と添付ファイルのあいだの余白は使われない。
+            body: PostBodyContent(text: acct, mediaSpacing: 0),
+            bodySpacing: tuning.value(of: TuningCatalog.notificationHeaderDetailSpacing),
+            base: base
+        )
     }
-
-    /// 誰が何をしたかの行と、その下に添えるアカウントのあいだの余白。投稿のセルの名前の行と本文のあいだと揃える。
-    private static let headerDetailSpacing: CGFloat = 2
 
     private func headerConfiguration(
         for notification: MastodonNotification,
@@ -107,7 +111,8 @@ extension TimelineViewController {
                 avatarSize: tuning.value(of: TuningCatalog.avatarSize),
                 headerFont: font,
                 bodySpacing: bodySpacing,
-                symbolSpacing: tuning.value(of: TuningCatalog.contextSymbolSpacing)
+                symbolSpacing: tuning.value(of: TuningCatalog.contextSymbolSpacing),
+                avatarSpacing: tuning.value(of: TuningCatalog.avatarSpacing)
             ),
             mediaImages: mediaImages
         )

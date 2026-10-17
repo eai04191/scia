@@ -83,7 +83,8 @@ enum MediaGridCatalog {
                 attachments: content.attachments,
                 isCovered: false,
                 tallestAspectRatio: content.tallestAspectRatio,
-                thumbnailPolicy: content.thumbnailPolicy
+                thumbnailPolicy: content.thumbnailPolicy,
+                spacing: content.spacing
             ))
         }
         grid.heightAnchor.constraint(equalTo: grid.widthAnchor, multiplier: 1 / aspectRatio).isActive = true

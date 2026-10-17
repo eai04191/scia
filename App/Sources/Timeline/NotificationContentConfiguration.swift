@@ -31,6 +31,8 @@ struct NotificationContentConfiguration: UIContentConfiguration {
         var bodySpacing: CGFloat
         /// 記号と、誰が何をしたかの行の文字とのすき間。
         var symbolSpacing: CGFloat
+        /// アイコンの列と、文字の列のあいだ。
+        var avatarSpacing: CGFloat
     }
 
     func makeContentView() -> any UIView & UIContentView {
@@ -43,8 +45,6 @@ struct NotificationContentConfiguration: UIContentConfiguration {
 }
 
 final class NotificationContentView: UIView, UIContentView {
-    /// アイコンの列と本文の列のあいだの余白。投稿のセルと揃える。
-    private static let avatarSpacing: CGFloat = 10
 
     private let symbolView = UIImageView()
     private let headerLabel = UILabel()
@@ -104,7 +104,7 @@ final class NotificationContentView: UIView, UIContentView {
 
         NSLayoutConstraint.deactivate(variableConstraints)
         let margins = metrics.margins
-        let textLeading = margins.leading + metrics.avatarSize + Self.avatarSpacing
+        let textLeading = margins.leading + metrics.avatarSize + metrics.avatarSpacing
         variableConstraints = [
             // 記号は、投稿のセルの名前の上の行と同じく、文字の列から決まった幅だけ離して置く。
             symbolView.trailingAnchor.constraint(equalTo: leadingAnchor, constant: textLeading - metrics.symbolSpacing),

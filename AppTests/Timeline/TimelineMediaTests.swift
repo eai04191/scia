@@ -171,13 +171,13 @@ struct TimelineMediaTests {
         let media = try #require(vc.mediaContent(for: withMedia(base, [image("1", width: 100, height: 100)])))
         let view = PostBodyView(mediaImages: .offline)
 
-        view.apply(PostBodyContent(text: NSAttributedString(), media: media))
+        view.apply(PostBodyContent(text: NSAttributedString(), media: media, mediaSpacing: 8))
         #expect(view.startsWithMedia)
         view.frame = CGRect(x: 0, y: 0, width: 300, height: 0)
         let size = view.systemLayoutSizeFitting(CGSize(width: 300, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
         #expect(abs(size.height - 300) < 0.5, "高さ\(size.height)")
 
-        view.apply(PostBodyContent(text: NSAttributedString(string: "本文"), media: media))
+        view.apply(PostBodyContent(text: NSAttributedString(string: "本文"), media: media, mediaSpacing: 8))
         #expect(!view.startsWithMedia)
     }
 
