@@ -71,11 +71,19 @@ struct PostContentViewTests {
         let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
         view.frame = CGRect(origin: .zero, size: size)
         view.layoutIfNeeded()
-        let label = try #require(view.subviews.compactMap { $0 as? LinkLabel }.first)
+        let label = try #require(linkLabel(in: view))
         let drawn = try #require(lowestLinkColoredPoint(in: label))
 
         let url = try #require(URL(string: "https://x.com/kotauchisunsun/status/2111061896434782560"))
         #expect(label.link(at: drawn) == .url(url), "label=\(label.bounds) drawn=\(drawn)")
+    }
+
+    /// 本文のラベル。本文は投稿の中身の部品の中にあるため、子孫のビューから探す。
+    private func linkLabel(in view: UIView) -> LinkLabel? {
+        for subview in view.subviews {
+            if let label = subview as? LinkLabel ?? linkLabel(in: subview) { return label }
+        }
+        return nil
     }
 
     /// 右から左へ書く文字のリンクも、描いた位置で押せる。文字の端の位置は書く向きで左右が入れ替わる。
@@ -86,7 +94,7 @@ struct PostContentViewTests {
         let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
         view.frame = CGRect(origin: .zero, size: size)
         view.layoutIfNeeded()
-        let label = try #require(view.subviews.compactMap { $0 as? LinkLabel }.first)
+        let label = try #require(linkLabel(in: view))
         let drawn = try #require(lowestLinkColoredPoint(in: label))
 
         let url = try #require(URL(string: "https://example.com/rtl"))

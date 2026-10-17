@@ -65,8 +65,6 @@ struct PostContentConfiguration: UIContentConfiguration {
 final class PostContentView: UIView, UIContentView {
     /// アイコンと本文のあいだの余白。
     private static let avatarSpacing: CGFloat = 10
-    /// 本文とサムネイルのあいだの余白。
-    private static let mediaSpacing: CGFloat = 8
     /// 名前の上の行と名前の行のあいだの余白。
     private static let contextSpacing: CGFloat = 4
 
@@ -77,8 +75,7 @@ final class PostContentView: UIView, UIContentView {
     private let nameLabels = [FadingLabel(), FadingLabel()]
     private let timeLabel = UILabel()
     private let nameRow = UIStackView()
-    private let bodyLabel = LinkLabel()
-    private let mediaView: MediaGridView
+    private let bodyView: PostBodyView
     private let textGuide = UILayoutGuide()
     private var current: PostContentConfiguration
 
@@ -95,23 +92,20 @@ final class PostContentView: UIView, UIContentView {
 
     /// 表示中のサムネイル。ビューアの拡大と縮小の起点を探すときに使う。
     var mediaGrid: MediaGridView? {
-        mediaView.isHidden ? nil : mediaView
+        bodyView.mediaGrid
     }
 
     init(configuration: PostContentConfiguration) {
         current = configuration
         avatarView = AvatarView(store: configuration.avatarImages)
         contextAvatarView = AvatarView(store: configuration.avatarImages)
-        mediaView = MediaGridView(store: configuration.mediaImages)
+        bodyView = PostBodyView(mediaImages: configuration.mediaImages)
         super.init(frame: .zero)
         addLayoutGuide(textGuide)
         configureSubviews()
-        mediaView.onSelect = { [weak self] index in
-            guard let self else { return }
-            self.current.onSelectMedia?(index, self.mediaView)
-        }
-        mediaView.onReveal = { [weak self] in self?.current.onRevealMedia?() }
-        bodyLabel.onTapLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
+        bodyView.onSelectMedia = { [weak self] index, grid in self?.current.onSelectMedia?(index, grid) }
+        bodyView.onRevealMedia = { [weak self] in self?.current.onRevealMedia?() }
+        bodyView.onOpenLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
         for view in [avatarView, nameRow] as [UIView] {
             view.isUserInteractionEnabled = true
             view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAccount)))
@@ -162,9 +156,7 @@ final class PostContentView: UIView, UIContentView {
         compactNameRow.priority = .defaultLow
         compactNameRow.isActive = true
 
-        bodyLabel.numberOfLines = 0
-
-        for view in [avatarView, contextIcon, contextAvatarView, contextLabel, nameRow, bodyLabel, mediaView] as [UIView] {
+        for view in [avatarView, contextIcon, contextAvatarView, contextLabel, nameRow, bodyView] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -196,14 +188,7 @@ final class PostContentView: UIView, UIContentView {
         timeLabel.font = metrics.secondaryFont
         timeLabel.text = configuration.timeText(now: .now)
 
-        bodyLabel.attributedText = configuration.body
-
-        if let media = configuration.media, media.aspectRatio != nil {
-            mediaView.isHidden = false
-            mediaView.apply(media)
-        } else {
-            mediaView.isHidden = true
-        }
+        bodyView.apply(PostBodyContent(text: configuration.body, media: configuration.media))
         updateConstraints(for: configuration)
         updateAccessibility(for: configuration)
     }
@@ -230,9 +215,9 @@ final class PostContentView: UIView, UIContentView {
             textGuide.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.trailing),
             nameRow.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
             nameRow.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
-            bodyLabel.topAnchor.constraint(equalTo: nameRow.bottomAnchor, constant: 2),
-            bodyLabel.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
-            bodyLabel.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
+            bodyView.topAnchor.constraint(equalTo: nameRow.bottomAnchor, constant: 2),
+            bodyView.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
+            bodyView.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
             // 本文が短くても、アイコンが下の余白に食い込まないようにする。
             bottomAnchor.constraint(greaterThanOrEqualTo: avatarView.bottomAnchor, constant: margins.bottom),
         ]
@@ -259,20 +244,7 @@ final class PostContentView: UIView, UIContentView {
         } else {
             constraints.append(nameRow.topAnchor.constraint(equalTo: topAnchor, constant: margins.top))
         }
-        let contentBottom: NSLayoutYAxisAnchor
-        if mediaView.isHidden {
-            contentBottom = bodyLabel.bottomAnchor
-        } else if let media = configuration.media, let aspectRatio = media.aspectRatio {
-            constraints += [
-                mediaView.topAnchor.constraint(equalTo: bodyLabel.bottomAnchor, constant: Self.mediaSpacing),
-                mediaView.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
-                mediaView.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
-                mediaView.heightAnchor.constraint(equalTo: mediaView.widthAnchor, multiplier: 1 / aspectRatio),
-            ]
-            contentBottom = mediaView.bottomAnchor
-        } else {
-            contentBottom = bodyLabel.bottomAnchor
-        }
+        let contentBottom = bodyView.bottomAnchor
         // アイコンの方が下まで届くときは、等しさを諦めてアイコンの下に余白を取る。
         let fitsContent = bottomAnchor.constraint(equalTo: contentBottom, constant: margins.bottom)
         fitsContent.priority = .required - 1
@@ -294,37 +266,19 @@ final class PostContentView: UIView, UIContentView {
         parts.append(timeLabel.text ?? "")
         parts.append(configuration.body.string)
         textAccessibilityElement.accessibilityLabel = parts.filter { !$0.isEmpty }.joined(separator: "、")
-        textAccessibilityElement.accessibilityCustomActions = Self.links(in: configuration.body).map { text, destination in
-            UIAccessibilityCustomAction(name: text) { [weak self] _ in
-                self?.current.onOpenLink?(destination)
-                return true
-            }
-        }
+        textAccessibilityElement.accessibilityCustomActions = bodyView.linkAccessibilityActions()
         textAccessibilityElement.accessibilityFrameInContainerSpace = .null
-        accessibilityElements = [textAccessibilityElement] + (mediaView.isHidden ? [] : [mediaView])
-    }
-
-    /// 本文のリンクを、文字と行き先の組で順に返す。書式で分かれた同じリンクはつなげる。押しても何もしないハッシュタグは除く。
-    private static func links(in body: NSAttributedString) -> [(text: String, destination: RichText.LinkDestination)] {
-        var result: [(text: String, destination: RichText.LinkDestination, end: Int)] = []
-        body.enumerateAttribute(.linkDestination, in: NSRange(location: 0, length: body.length)) { value, range, _ in
-            guard let destination = value as? RichText.LinkDestination else { return }
-            if case .hashtag = destination { return }
-            let text = (body.string as NSString).substring(with: range)
-            if let last = result.last, last.destination == destination, last.end == range.location {
-                result[result.count - 1] = (last.text + text, destination, NSMaxRange(range))
-            } else {
-                result.append((text, destination, NSMaxRange(range)))
-            }
-        }
-        return result.map { ($0.text, $0.destination) }
+        accessibilityElements = [textAccessibilityElement] + [bodyView.mediaGrid].compactMap(\.self)
     }
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let textFrame = [contextLabel, nameRow, bodyLabel].filter { !$0.isHidden }.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+        // 本文の枠は中身の部品の中で決まるため、先に並べておく。
+        bodyView.layoutIfNeeded()
+        let bodyTextFrame = bodyView.convert(bodyView.textFrame, to: self)
+        let textFrame = [contextLabel, nameRow].filter { !$0.isHidden }.map(\.frame).reduce(bodyTextFrame) { $0.union($1) }
         textAccessibilityElement.accessibilityFrameInContainerSpace = textFrame.union(avatarView.frame)
     }
 }
