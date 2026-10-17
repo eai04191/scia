@@ -101,6 +101,8 @@ public final class TimelineStore {
         let unique = Dictionary(loaded.flatMap(\.statuses).filter { !isDeleted($0) }.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         unreadableItems = Self.unique(loaded.flatMap(\.unreadable).filter { !deletedIDs.contains($0.id) })
         rebuild(statuses: Array(unique.values), gaps: loadedGaps)
+        // 前の一覧で埋まらなかった基準は、読み直した一覧の範囲の外にあり、そこから読むと読み込み済みの区間にギャップを置いてしまう。
+        unfilledSinceID = nil
         isRegenerating = latest.isRegenerating
         reachedEnd = latest.isEmpty && !latest.isRegenerating
         if let markerID {
@@ -136,7 +138,8 @@ public final class TimelineStore {
     /// 失敗したとき、またはサーバーがホームを再生成中で結果が揃っていないときは、次の呼び出しも同じ基準から読む。
     ///
     /// 補完の最中に呼ばれたら、そのときの基準を覚えてnilを返し、今の補完が終わった後に続けて読む。
-    /// 同じ基準で並行して読むと、同じギャップが2つできるため。
+    /// 同じ基準で並行して読むと、同じギャップが2つできるため。続けて読むときは、今の補完で読み終えた範囲より新しいところから読む。
+    /// 今の補完が再生成中で読めなかったら、読めなかった基準から読み直す。
     ///
     /// 満杯のページなら、手元の投稿とつながるまで`maxPages`ページまで続けて読み、ギャップを残さないようにする。
     /// 満杯でないページなら、`maxPages`によらずギャップを1回は読み、間が空なのを確かめて閉じる。
@@ -182,7 +185,15 @@ public final class TimelineStore {
                 let isFull = page.count >= pageSize
                 added += await fillGap(gap.id, pages: isFull ? maxPages - 1 : max(maxPages - 1, 1))
             }
-            next = refillSinceID
+            next = refillSinceID.map { refillSinceID in
+                if let unfilledSinceID {
+                    // 再生成中で読めなかった基準より新しいところから読み直すと、その間を読み飛ばすため。
+                    Self.older(unfilledSinceID, refillSinceID)
+                } else {
+                    // 読み終えた範囲を読み直すと、同じ範囲にギャップがもう1つできるため。
+                    Self.newer(refillSinceID, Self.newestID(of: page) ?? sinceID)
+                }
+            }
             refillSinceID = nil
         }
         return added.sorted { StatusID.isNewer($0.id, than: $1.id) }
@@ -489,6 +500,10 @@ public final class TimelineStore {
 
     private static func older(_ lhs: String, _ rhs: String) -> String {
         StatusID.isNewer(lhs, than: rhs) ? rhs : lhs
+    }
+
+    private static func newer(_ lhs: String, _ rhs: String) -> String {
+        StatusID.isNewer(lhs, than: rhs) ? lhs : rhs
     }
 
     /// ページの中で最も新しいID。読めなかった投稿も含める。

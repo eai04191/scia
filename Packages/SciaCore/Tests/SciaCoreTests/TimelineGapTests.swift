@@ -407,6 +407,92 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((8...21).reversed()))
     }
 
+    /// 補完の読み込み中に新着が挿入されて補完が重なり、1回目が再生成中で空だったときも、間の投稿を失わない。
+    @Test func overlappingFillAfterRegeneratingKeepsBaseline() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let gate = FetchGate()
+        let gated = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.sinceID != nil, query.maxID == nil, gated.shouldFail() {
+                await gate.wait()
+                return TimelinePage(statuses: [], isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(11...12)
+
+        let first = Task { try await store.fillFromLatest() }
+        await gate.waitUntilWaiting()
+        server.post(13...13)
+        _ = store.receive(.update(server.status(13)))
+        _ = store.flushPending()
+        #expect(try await store.fillFromLatest() == nil)
+        await gate.open()
+        _ = try await first.value
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        _ = try await store.fillFromLatest()
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+
+        #expect(ids(store) == Array((8...13).reversed()))
+    }
+
+    /// 重なった補完の2回の読み込みの間に新着が増えても、範囲の重なるギャップを作らない。
+    @Test func overlappingFillDoesNotDuplicateGap() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let gate = FetchGate()
+        let gated = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.sinceID != nil, query.maxID == nil, gated.shouldFail() {
+                await gate.wait()
+                let page = server.page(query)
+                server.post(21...21)
+                return page
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(11...20)
+
+        let first = Task { try await store.fillFromLatest() }
+        await gate.waitUntilWaiting()
+        #expect(try await store.fillFromLatest() == nil)
+        await gate.open()
+        _ = try await first.value
+
+        #expect(store.gaps.count == 1, "範囲の重なるギャップがあります: \(store.entries.map(\.debugLabel))")
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        #expect(ids(store) == Array((8...21).reversed()))
+    }
+
+    /// 補完に失敗した後に最新のページで読み直したら、次の補完は読み直した一覧の最新から読む。
+    @Test func reloadAfterFailedFillDropsStaleBaseline() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let failing = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.sinceID != nil, failing.shouldFail() {
+                throw URLError(.notConnectedToInternet)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(11...20)
+        await #expect(throws: URLError.self) { try await store.fillFromLatest() }
+
+        _ = try await store.loadInitial()
+        server.post(21...22)
+        _ = try await store.fillFromLatest()
+
+        #expect(store.gaps.isEmpty, "読み込み済みの区間に重なるギャップがあります: \(store.entries.map(\.debugLabel))")
+        #expect(ids(store) == Array((18...22).reversed()))
+    }
+
     @Test func regeneratingShortPageKeepsGap() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let regenerating = FailOnce()
