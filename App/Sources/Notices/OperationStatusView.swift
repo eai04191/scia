@@ -148,20 +148,27 @@ private struct FailureRow: View {
 }
 
 /// どの投稿の知らせかを、投稿者と本文の冒頭で示す。
+/// 名前は1行で切り、本文は次の行から出す。つなげて出すと、長い名前が行を使い切って本文が見えなくなるため。
 private struct SubjectLine: View {
     let subject: OperationStatus.Subject
 
     var body: some View {
-        Text("\(Text(subject.authorName).fontWeight(.semibold))  \(subject.excerpt)")
-            .font(.footnote)
-            .foregroundStyle(.secondary)
-            .lineLimit(2)
-            .padding(.leading, 10)
-            .overlay(alignment: .leading) {
-                Capsule()
-                    .fill(.quaternary)
-                    .frame(width: 3)
-            }
+        VStack(alignment: .leading, spacing: 2) {
+            Text(subject.authorName)
+                .fontWeight(.semibold)
+                .lineLimit(1)
+            Text(subject.excerpt)
+                .lineLimit(2)
+        }
+        .font(.footnote)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.leading, 10)
+        .overlay(alignment: .leading) {
+            Capsule()
+                .fill(.quaternary)
+                .frame(width: 3)
+        }
     }
 }
 
