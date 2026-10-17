@@ -775,6 +775,7 @@ struct MediaViewerControllerTests {
         try await waitUntil { recent.activities.first?.value == "50%" }
         let activity = try #require(recent.activities.first)
         #expect(activity.title == "ダウンロード中")
+        #expect(activity.fraction == 0.5)
         #expect(activity.isStoppable)
         recent.stop(activity.id)
 
@@ -785,6 +786,34 @@ struct MediaViewerControllerTests {
         #expect(saved.files.isEmpty)
         #expect(viewer.statusChipText == nil)
         #expect(recent.failures.isEmpty)
+    }
+
+    /// 全体の大きさが分からず進み具合が0のままのものは、「操作の状況」の「進行中」で、0%に止まった輪ではなく分からない進み具合として並ぶ。
+    @Test func downloadWithUnknownSizeIsListedWithoutFraction() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let stopped = Flag()
+        let recent = OperationStatus()
+        let download: MediaDownloads.Download = { _, _, _ in
+            do {
+                try await Task.sleep(for: .seconds(10))
+            } catch {
+                stopped.set()
+                throw error
+            }
+            throw URLError(.timedOut)
+        }
+        let transfers = makeTransfers(downloads: makeDownloads(download: download), photoSaver: PhotoLibrarySaver { _ in }, operationStatus: recent)
+        let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
+        defer { viewer.dismiss(animated: false) }
+
+        viewer.saveToPhotos()
+        try await waitUntil { !recent.activities.isEmpty }
+        let activity = try #require(recent.activities.first)
+        #expect(activity.fraction == nil)
+        #expect(activity.isStoppable)
+        recent.stop(activity.id)
+        try await waitUntil { stopped.isSet }
     }
 
     /// ページを`index`の添付ファイルへ切り替える。スワイプで切り替え終えたときと同じ知らせをビューアに送る。

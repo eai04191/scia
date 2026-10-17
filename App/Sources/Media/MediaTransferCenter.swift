@@ -172,6 +172,8 @@ final class MediaTransferCenter {
                 id: id,
                 title: "ダウンロード中",
                 value: Notice.percentText(of: transfer.fraction ?? 0),
+                // 全体の大きさが分かるまでは0のため、0%に止まった輪にせず、分からない進み具合として回す。
+                fraction: transfer.fraction == 0 ? nil : transfer.fraction,
                 subject: transfer.target.subject
             )
             var onStop: (@MainActor () -> Void)?

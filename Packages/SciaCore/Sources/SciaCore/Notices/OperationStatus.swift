@@ -75,14 +75,17 @@ public final class OperationStatus {
         public var title: String
         /// 進み具合など、文言のあとに添える値。
         public var value: String?
+        /// 0から1の進み具合。分からないときはnil。
+        public var fraction: Double?
         public var subject: Subject?
         /// 行から止められるか。`update(_:onStop:)`で止める操作を渡したときにtrueになる。
         public fileprivate(set) var isStoppable = false
 
-        public init(id: String, title: String, value: String? = nil, subject: Subject? = nil) {
+        public init(id: String, title: String, value: String? = nil, fraction: Double? = nil, subject: Subject? = nil) {
             self.id = id
             self.title = title
             self.value = value
+            self.fraction = fraction
             self.subject = subject
         }
     }

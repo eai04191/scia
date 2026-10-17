@@ -67,7 +67,6 @@ private struct ActivityRow: View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
-                    ProgressView()
                     Text(activity.title)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(2)
@@ -83,13 +82,68 @@ private struct ActivityRow: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
-            if activity.isStoppable {
-                // 確かめずに止める。行の中の小さなボタンで、押し間違えにくいため。
-                Button("止める", role: .destructive, action: onStop)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .fixedSize()
+            ProgressRingStopButton(activity: activity, onStop: onStop)
+        }
+    }
+}
+
+/// App Storeのように、進み具合の輪と止める操作を1つにする。止められるなら中に停止の四角を置き、押すと確かめずに止める。
+/// 確かめないのは、行ごとに置いた44pt四方のボタンで、押し間違えにくいため。
+/// 進み具合が分からないときと、落とし終えて写真に足している間は、満ちた輪では済んだように見えるため、欠けた輪を回す。
+private struct ProgressRingStopButton: View {
+    let activity: OperationStatus.Activity
+    let onStop: () -> Void
+
+    private static let diameter: CGFloat = 28
+    private static let lineWidth: CGFloat = 2.5
+
+    var body: some View {
+        if activity.isStoppable {
+            Button(action: onStop) {
+                ring
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(.tint)
+                            .frame(width: 9, height: 9)
+                    }
+                    // 輪は小さいため、押せる範囲は44ptにする。
+                    .frame(width: 44, height: 44)
+                    .contentShape(.rect)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("止める")
+        } else {
+            ring
+                .frame(width: 44, height: 44)
+                .accessibilityHidden(true)
+        }
+    }
+
+    @ViewBuilder
+    private var ring: some View {
+        let track = Circle().stroke(.quaternary, lineWidth: Self.lineWidth)
+        if let fraction = activity.fraction, fraction < 1 {
+            track
+                .overlay {
+                    Circle()
+                        .trim(from: 0, to: max(fraction, 0.02))
+                        .stroke(.tint, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(.linear(duration: 0.2), value: fraction)
+                }
+                .frame(width: Self.diameter, height: Self.diameter)
+        } else {
+            TimelineView(.animation) { context in
+                let turn = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1)
+                track
+                    .overlay {
+                        Circle()
+                            .trim(from: 0, to: 0.25)
+                            .stroke(.tint, style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round))
+                            .rotationEffect(.degrees(turn * 360))
+                    }
+            }
+            .frame(width: Self.diameter, height: Self.diameter)
         }
     }
 }
