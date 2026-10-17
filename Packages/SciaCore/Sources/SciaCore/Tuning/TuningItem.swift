@@ -578,6 +578,15 @@ public enum TuningCatalog {
         defaultValue: 0.35
     )
 
+    /// 投稿欄を展開ボタンで安全領域の上端まで広げる時間と、5行の高さに戻す時間（秒）。
+    public static let composeExpandDuration = NumberTuning(
+        id: "compose.expandDuration",
+        title: "投稿欄を広げる・戻す時間（秒）",
+        range: 0.05...1.5,
+        step: 0.05,
+        defaultValue: 0.35
+    )
+
     /// メディアを選ぶシートの低いときの高さを、最後に出したキーボードの高さに合わせる。
     /// 切ると、キーボードを一度も出していないときと同じく、決めた高さで出す。
     public static let composePickerMatchesKeyboard = ToggleTuning(
@@ -660,6 +669,7 @@ public enum TuningCatalog {
         TuningSection(id: "compose", title: "投稿欄", items: [
             .number(composeRestingHeight),
             .number(composeMorphDuration),
+            .number(composeExpandDuration),
             .toggle(composePickerMatchesKeyboard),
             .number(composePickerHeight),
         ]),
