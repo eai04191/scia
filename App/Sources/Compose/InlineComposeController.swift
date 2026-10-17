@@ -89,7 +89,8 @@ final class InlineComposeController: NSObject {
     private let tools = UIStackView()
     /// 入力バーの中身を載せるスクロールビュー。バーを下へ引くと、キーボードが指に付いて下がる。
     private let dragArea = KeyboardDragArea()
-    private lazy var mediaButton = UIButton(configuration: .plain(), primaryAction: UIAction { [weak self] _ in self?.toggleMediaPicker() })
+    /// 添付などの部品を足す項目をまとめたメニューのボタン。書いていないときや短い投稿のときに、欄を部品のボタンで大きくしないため、1つにまとめる。
+    private let addButton = UIButton(configuration: .plain())
     /// メディアを選ぶシート。出している間だけある。
     private var mediaPicker: MediaPickerSheet?
     /// 最後に出したキーボードの、画面の下端からの高さ。メディアを選ぶシートをこの高さで出す。
@@ -263,10 +264,24 @@ final class InlineComposeController: NSObject {
         Task { await model.submit() }
     }
 
+    // MARK: - ＋のメニュー
+
+    /// ＋のメニューの項目。
+    private func addMenuElements() -> [UIMenuElement] {
+        // シートを出している間は、同じ項目でシートを閉じてキーボードに戻れるようにする。
+        let media = mediaPicker == nil
+            ? UIAction(title: "メディアを添付", image: UIImage(systemName: "photo.on.rectangle")) { [weak self] _ in self?.toggleMediaPicker() }
+            : UIAction(title: "キーボードに戻る", image: UIImage(systemName: "keyboard")) { [weak self] _ in self?.toggleMediaPicker() }
+        if mediaPicker == nil, !model.canAttachMedia {
+            media.attributes = .disabled
+        }
+        return [media]
+    }
+
     // MARK: - メディアを選ぶシート
 
     /// 出していなければシートを出し、出していれば閉じてキーボードに戻る。
-    /// スワイプして閉じられなくなったときの逃げ道も兼ねる。シートの上に見えているこのボタンからは、いつでも閉じられる。
+    /// スワイプして閉じられなくなったときの逃げ道も兼ねる。シートの上に見えている＋のメニューからは、いつでも閉じられる。
     private func toggleMediaPicker() {
         if let mediaPicker {
             // 閉じる途中に押されたら、本来はシートを開き直したい。ただしUIKitは閉じ終わるまで次のシートを出せず、
@@ -497,8 +512,6 @@ final class InlineComposeController: NSObject {
         })
         mediaViewer?.update(items: viewerItems())
         setRowShown(attachmentStrip, isEditing && !model.attachments.isEmpty)
-        mediaButton.configuration?.title = model.attachments.isEmpty ? nil : "\(model.attachments.count)"
-        mediaButton.isEnabled = model.canAttachMedia || mediaPicker != nil
 
         let option = VisibilityOption(model.visibility)
         visibilityButton.configuration?.image = UIImage(systemName: option.symbolName)
@@ -839,11 +852,15 @@ final class InlineComposeController: NSObject {
 
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        mediaButton.configuration?.image = UIImage(systemName: "photo.on.rectangle")
-        mediaButton.configuration?.baseForegroundColor = .label
-        mediaButton.configuration?.imagePadding = 4
-        mediaButton.accessibilityLabel = "メディアを添付"
-        for view in [visibilityButton, mediaButton, expandButton, spacer, remainingLabel, sendButton] {
+        addButton.configuration?.image = UIImage(systemName: "plus")
+        addButton.configuration?.baseForegroundColor = .label
+        addButton.accessibilityLabel = "追加"
+        addButton.showsMenuAsPrimaryAction = true
+        // 開くたびに項目を作り直し、添付できるかやシートを出しているかを、その時点の状態で出す。
+        addButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
+            completion(self?.addMenuElements() ?? [])
+        }])
+        for view in [visibilityButton, addButton, expandButton, spacer, remainingLabel, sendButton] {
             tools.addArrangedSubview(view)
         }
         tools.alignment = .center
