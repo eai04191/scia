@@ -7,4 +7,7 @@ extension Notice {
     static func interactionFailure(title: String, showReason: @escaping @MainActor () -> Void) -> Notice {
         Notice(id: "timeline.interactionFailure", kind: .failure, title: title, action: .disclosure(hint: "理由を見られます。", handler: showReason))
     }
+
+    /// 投稿のリンクをコピーした。コピーは画面の変化で見えないため知らせる。
+    static let linkCopied = Notice(id: "timeline.linkCopied", kind: .success, title: "リンクをコピーしました")
 }

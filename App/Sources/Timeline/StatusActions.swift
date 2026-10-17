@@ -35,7 +35,8 @@ extension TimelineViewController {
         }
     }
 
-    func statusMenu(for status: Status) -> UIMenu {
+    /// - Parameter id: メニューを出した要素。共有のシートを、その行から出す。
+    func statusMenu(for status: Status, id: ItemID) -> UIMenu {
         let shown = status.displayed
         let reply = UIAction(title: "返信", image: UIImage(systemName: "arrowshape.turn.up.left")) { [weak self] _ in
             self?.onStatusAction?(.reply, status)
@@ -53,7 +54,36 @@ extension TimelineViewController {
         ) { [weak self] _ in
             self?.onStatusAction?(.reblog, status)
         }
-        return UIMenu(children: [reply, favourite, reblog])
+        return UIMenu(children: [reply, favourite, reblog, linkMenu(for: status, id: id)])
+    }
+
+    /// 投稿のページへのリンクの操作。ブーストなら元の投稿のページを指す。
+    /// `url`はMastodonのAPIでnullを取りうるため、ないときは押せないまま並べる。`uri`はActivityPubのIDで、ブラウザで開けるページとは限らないため代わりにしない。
+    private func linkMenu(for status: Status, id: ItemID) -> UIMenu {
+        let url = status.displayed.url
+        let attributes: UIMenuElement.Attributes = url == nil ? .disabled : []
+        let copy = UIAction(title: "リンクをコピー", image: UIImage(systemName: "link"), attributes: attributes) { [weak self] _ in
+            guard let self, let url else { return }
+            UIPasteboard.general.url = url
+            showNotice(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+        }
+        let share = UIAction(title: "共有", image: UIImage(systemName: "square.and.arrow.up"), attributes: attributes) { [weak self] _ in
+            guard let url else { return }
+            self?.presentShareSheet(for: url, from: id)
+        }
+        let open = UIAction(title: "ブラウザで開く", image: UIImage(systemName: "safari"), attributes: attributes) { [weak self] _ in
+            guard let url else { return }
+            self?.onOpenLink?(.url(url), status.displayed)
+        }
+        return UIMenu(options: .displayInline, children: [copy, share, open])
+    }
+
+    private func presentShareSheet(for url: URL, from id: ItemID) {
+        let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+        // iPadとMacではポップオーバーで出るため、メニューを出した行を起点にする。行が画面の外へ流れていれば一覧を起点にする。
+        activity.popoverPresentationController?.sourceItem = cell(for: id) ?? collectionView
+        // アプリ内のSafariのシートを出したまま上の一覧から共有することがあるため、いちばん手前の画面から出す。
+        frontmostPresented.present(activity, animated: true)
     }
 
     private func canReblog(_ status: Status) -> Bool {

@@ -689,6 +689,11 @@ final class TimelineViewController: UIViewController {
         entries[id]
     }
 
+    /// 要素の行。画面の外にあればnil。
+    func cell(for id: ItemID) -> UICollectionViewCell? {
+        dataSource.indexPath(for: id).flatMap(collectionView.cellForItem(at:))
+    }
+
     private func makeReauthenticationButton() -> UIButton {
         var configuration = UIButton.Configuration.borderedProminent()
         configuration.cornerStyle = .capsule
@@ -1169,7 +1174,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         return UIContextMenuConfiguration(actionProvider: { [weak self] _ in
             guard let self else { return nil }
             let profiles = UIMenu(options: .displayInline, children: accounts.map(self.profileAction(for:)))
-            return UIMenu(children: (status.map { self.statusMenu(for: $0).children } ?? []) + [profiles])
+            return UIMenu(children: (status.map { self.statusMenu(for: $0, id: id).children } ?? []) + [profiles])
         })
     }
 
