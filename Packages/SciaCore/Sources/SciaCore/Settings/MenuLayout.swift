@@ -1,0 +1,175 @@
+/// 長押しのメニューの項目の種類。対象（投稿、ユーザー）ごとに1つ作る。
+/// `rawValue`は設定に保存するため、一度使った値は変えない。
+public protocol MenuItemKind: RawRepresentable<String>, CaseIterable, Hashable, Sendable {
+    /// 既定の並び。項目を足すときは、ここにも足す。足した項目を保存済みの並びのどこに入れるかも、この並びで決まる。
+    static var defaultLayout: MenuLayout<Self> { get }
+}
+
+/// 長押しのメニューの並び。項目、区切り線、「その他」の境目を1本に並べる。決まりはdocs/menus.mdにある。
+public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
+    public enum Element: Hashable, Sendable {
+        /// 非表示にした項目も、同じ場所に残す。
+        case item(Item, isVisible: Bool)
+        case separator
+        /// これより下の項目は「その他」のサブメニューに入る。並びに1つだけある。
+        case more
+    }
+
+    /// メニューに出す項目を、区切り線で分けたまとまりにしたもの。空のまとまりは含めない。
+    public struct Groups: Equatable, Sendable {
+        public var main: [[Item]]
+        /// 「その他」のサブメニューの中身。空なら「その他」を出さない。
+        public var more: [[Item]]
+    }
+
+    public private(set) var elements: [Element]
+
+    /// 既定の並びを書くためのもの。項目と「その他」がちょうど1つずつあるかは確かめない。
+    /// 保存した値から作るときは`init(tokens:)`を使う。
+    public init(defaultElements elements: [Element]) {
+        self.elements = elements
+    }
+
+    /// 並べ替えや表示の切り替えのあとの並び。足りない項目と「その他」は、保存した並びを読んだときと同じ決まりで差し込む。
+    public init(elements: [Element]) {
+        self.elements = Self.completing(elements)
+    }
+
+    public var groups: Groups {
+        var groups = Groups(main: [], more: [])
+        var current: [Item] = []
+        var inMore = false
+        func close() {
+            if !current.isEmpty {
+                if inMore { groups.more.append(current) } else { groups.main.append(current) }
+            }
+            current = []
+        }
+        for element in elements {
+            switch element {
+            case .item(let item, let isVisible):
+                if isVisible { current.append(item) }
+            case .separator:
+                close()
+            case .more:
+                close()
+                inMore = true
+            }
+        }
+        close()
+        return groups
+    }
+
+    // MARK: - 保存
+
+    /// 設定に保存する形。項目は`item:<rawValue>`か非表示の`hidden:<rawValue>`、区切り線は`separator`、「その他」は`more`。
+    public var tokens: [String] {
+        elements.map { element in
+            switch element {
+            case .item(let item, let isVisible): "\(isVisible ? "item" : "hidden"):\(item.rawValue)"
+            case .separator: "separator"
+            case .more: "more"
+            }
+        }
+    }
+
+    /// 保存した並びを読む。知らない項目（なくなった項目）は捨て、まだ知らない新しい項目は既定の位置に差し込む。
+    public init(tokens: [String]) {
+        self.init(elements: tokens.compactMap(Self.element(from:)))
+    }
+
+    private static func element(from token: String) -> Element? {
+        switch token {
+        case "separator": return .separator
+        case "more": return .more
+        default:
+            let parts = token.split(separator: ":", maxSplits: 1).map(String.init)
+            guard parts.count == 2, let item = Item(rawValue: parts[1]) else { return nil }
+            switch parts[0] {
+            case "item": return .item(item, isVisible: true)
+            case "hidden": return .item(item, isVisible: false)
+            default: return nil
+            }
+        }
+    }
+
+    // MARK: - 足りないものを差し込む
+
+    /// 項目と「その他」の目印。差し込む位置を決めるときに、区切り線を数えないために使う。
+    private enum Key: Hashable {
+        case item(Item)
+        case more
+    }
+
+    private static func key(of element: Element) -> Key? {
+        switch element {
+        case .item(let item, _): .item(item)
+        case .more: .more
+        case .separator: nil
+        }
+    }
+
+    /// 重なった項目と「その他」は先に出たほうを残す。足りない項目と「その他」は、既定の並びで直前にあるもの（区切り線は数えない）の後ろに差し込み、表示は既定に従う。
+    private static func completing(_ elements: [Element]) -> [Element] {
+        var seen: Set<Key> = []
+        var result = elements.filter { element in
+            guard let key = key(of: element) else { return true }
+            return seen.insert(key).inserted
+        }
+        var previous: Key?
+        for element in Item.defaultLayout.elements {
+            guard let key = key(of: element) else { continue }
+            defer { previous = key }
+            guard !seen.contains(key) else { continue }
+            let index = previous.flatMap { anchor in result.firstIndex { Self.key(of: $0) == anchor } }.map { $0 + 1 } ?? 0
+            result.insert(element, at: index)
+            seen.insert(key)
+        }
+        return result
+    }
+}
+
+/// 投稿のメニューの項目。通知のメニューも、対象の投稿のこのメニューで組む。
+public enum StatusMenuItem: String, MenuItemKind {
+    case reply
+    case favourite
+    case reblog
+    case copyLink
+    case share
+    case openInBrowser
+    /// 通知した人のユーザーのメニュー。通知でだけ出る。
+    case notifyingUser
+    /// 投稿した人のユーザーのメニュー。ブーストなら元の投稿を書いた人。
+    case author
+    /// ブーストした人のユーザーのメニュー。ブーストでだけ出る。
+    case booster
+    /// メンションされた人ごとのユーザーのメニュー。
+    case mentionedUsers
+
+    /// 設定を足す前のメニューと同じ並び。足す前になかったメンションされたユーザーは隠しておく。
+    public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
+        .item(.reply, isVisible: true),
+        .item(.favourite, isVisible: true),
+        .item(.reblog, isVisible: true),
+        .separator,
+        .item(.copyLink, isVisible: true),
+        .item(.share, isVisible: true),
+        .item(.openInBrowser, isVisible: true),
+        .separator,
+        .item(.notifyingUser, isVisible: true),
+        .item(.author, isVisible: true),
+        .item(.booster, isVisible: true),
+        .item(.mentionedUsers, isVisible: false),
+        .more,
+    ])
+}
+
+/// ユーザーのメニューの項目。投稿のメニューの中で、ユーザーごとのサブメニューとして出る。
+public enum UserMenuItem: String, MenuItemKind {
+    case profile
+
+    public static let defaultLayout = MenuLayout<UserMenuItem>(defaultElements: [
+        .item(.profile, isVisible: true),
+        .more,
+    ])
+}

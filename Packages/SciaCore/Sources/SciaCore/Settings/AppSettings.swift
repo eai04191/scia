@@ -54,6 +54,16 @@ public final class AppSettings {
         didSet { defaults.set(linkBrowser.rawValue, forKey: Keys.linkBrowser) }
     }
 
+    /// 投稿を長押しして出すメニューの並び。通知のメニューもこれで組む。
+    public var statusMenuLayout: MenuLayout<StatusMenuItem> {
+        didSet { defaults.set(statusMenuLayout.tokens, forKey: Keys.statusMenuLayout) }
+    }
+
+    /// 投稿のメニューの中に、ユーザーごとのサブメニューとして出すメニューの並び。
+    public var userMenuLayout: MenuLayout<UserMenuItem> {
+        didSet { defaults.set(userMenuLayout.tokens, forKey: Keys.userMenuLayout) }
+    }
+
     private enum Keys {
         static let usesOriginalThumbnailsOnExpensiveNetwork = "settings.usesOriginalThumbnailsOnExpensiveNetwork"
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
@@ -65,6 +75,8 @@ public final class AppSettings {
         static let profileShowsReplies = "settings.profileShowsReplies"
         static let profileShowsBoosts = "settings.profileShowsBoosts"
         static let linkBrowser = "settings.linkBrowser"
+        static let statusMenuLayout = "settings.statusMenuLayout"
+        static let userMenuLayout = "settings.userMenuLayout"
     }
 
     public init(defaults: UserDefaults) {
@@ -77,6 +89,8 @@ public final class AppSettings {
         animatesAvatars = defaults.object(forKey: Keys.animatesAvatars) as? Bool ?? false
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
         linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .external
+        statusMenuLayout = defaults.stringArray(forKey: Keys.statusMenuLayout).map(MenuLayout.init(tokens:)) ?? StatusMenuItem.defaultLayout
+        userMenuLayout = defaults.stringArray(forKey: Keys.userMenuLayout).map(MenuLayout.init(tokens:)) ?? UserMenuItem.defaultLayout
         profilePostsFilter = ProfilePostsFilter(
             showsReplies: defaults.object(forKey: Keys.profileShowsReplies) as? Bool ?? ProfilePostsFilter.standard.showsReplies,
             showsBoosts: defaults.object(forKey: Keys.profileShowsBoosts) as? Bool ?? ProfilePostsFilter.standard.showsBoosts

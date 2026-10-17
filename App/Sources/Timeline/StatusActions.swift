@@ -11,71 +11,134 @@ enum StatusAction {
 extension TimelineViewController {
     /// 要素が指す投稿。通知なら対象の投稿。ギャップやフォローの通知などではnil。
     func status(for id: ItemID) -> Status? {
-        switch entry(for: id) {
+        entry(for: id).flatMap(Self.status(of:))
+    }
+
+    static func status(of entry: TimelineEntry) -> Status? {
+        switch entry {
         case .status(let status), .pinned(let status): status
         case .notification(let notification): notification.status
-        case .gap, .unreadable, nil: nil
+        case .gap, .unreadable: nil
         }
     }
 
-    /// 長押しのメニューから開けるプロフィール。投稿なら投稿した人とブーストした人、通知なら操作した人と対象の投稿を書いた人。
-    static func profileAccounts(of entry: TimelineEntry) -> [Account] {
-        let accounts: [Account] = switch entry {
-        case .status(let status), .pinned(let status): [status.displayed.account, status.account]
-        case .notification(let notification): [notification.account] + (notification.status.map { [$0.displayed.account] } ?? [])
-        case .gap, .unreadable: []
-        }
-        var seen: Set<Account.ID> = []
-        return accounts.filter { seen.insert($0.id).inserted }
-    }
-
-    func profileAction(for account: Account) -> UIAction {
-        UIAction(title: "@\(account.acct)のプロフィール", image: UIImage(systemName: "person.crop.circle")) { [weak self] _ in
-            self?.onOpenProfile?(account)
-        }
-    }
-
+    /// 長押しのメニュー。並びは設定の投稿のメニューに従い、関係するユーザーはユーザーのメニューのサブメニューにする。決まりはdocs/menus.mdにある。
+    /// 出す項目がなければnil。
     /// - Parameter id: メニューを出した要素。共有のシートを、その行から出す。
-    func statusMenu(for status: Status, id: ItemID) -> UIMenu {
-        let shown = status.displayed
-        let reply = UIAction(title: "返信", image: UIImage(systemName: "arrowshape.turn.up.left")) { [weak self] _ in
-            self?.onStatusAction?(.reply, status)
+    func contextMenu(for entry: TimelineEntry, id: ItemID) -> UIMenu? {
+        let status = Self.status(of: entry)
+        let notifyingAccount: Account? = if case .notification(let notification) = entry { notification.account } else { nil }
+        var shownUserIDs: Set<String> = []
+        let children = menuElements(for: settings.statusMenuLayout.groups) { item in
+            elements(for: item, status: status, notifyingAccount: notifyingAccount, id: id, shownUserIDs: &shownUserIDs)
         }
-        let favourite = UIAction(
-            title: shown.favourited ? "お気に入りを取り消す" : "お気に入り",
-            image: UIImage(systemName: shown.favourited ? "star.slash" : "star")
-        ) { [weak self] _ in
-            self?.onStatusAction?(.favourite, status)
-        }
-        let reblog = UIAction(
-            title: shown.reblogged ? "ブーストを取り消す" : "ブースト",
-            image: UIImage(systemName: "arrow.2.squarepath"),
-            attributes: canReblog(status) ? [] : .disabled
-        ) { [weak self] _ in
-            self?.onStatusAction?(.reblog, status)
-        }
-        return UIMenu(children: [reply, favourite, reblog, linkMenu(for: status, id: id)])
+        return children.isEmpty ? nil : UIMenu(children: children)
     }
 
-    /// 投稿のページへのリンクの操作。ブーストなら元の投稿のページを指す。
-    /// `url`はMastodonのAPIでnullを取りうるため、ないときは押せないまま並べる。`uri`はActivityPubのIDで、ブラウザで開けるページとは限らないため代わりにしない。
-    private func linkMenu(for status: Status, id: ItemID) -> UIMenu {
-        let url = status.displayed.url
-        let attributes: UIMenuElement.Attributes = url == nil ? .disabled : []
-        let copy = UIAction(title: "リンクをコピー", image: UIImage(systemName: "link"), attributes: attributes) { [weak self] _ in
-            guard let self, let url else { return }
-            UIPasteboard.general.url = url
-            showNotice(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+    /// まとまりごとに区切り線で分けて並べ、「その他」の中身はサブメニューにする。中身のないまとまりと「その他」は出さない。
+    private func menuElements<Item>(for groups: MenuLayout<Item>.Groups, elements: (Item) -> [UIMenuElement]) -> [UIMenuElement] {
+        func inline(_ groups: [[Item]]) -> [UIMenuElement] {
+            groups.compactMap { group in
+                let children = group.flatMap(elements)
+                return children.isEmpty ? nil : UIMenu(options: .displayInline, children: children)
+            }
         }
-        let share = UIAction(title: "共有", image: UIImage(systemName: "square.and.arrow.up"), attributes: attributes) { [weak self] _ in
-            guard let url else { return }
-            self?.presentShareSheet(for: url, from: id)
+        let main = inline(groups.main)
+        let more = inline(groups.more)
+        guard !more.isEmpty else { return main }
+        return main + [UIMenu(title: "その他", image: UIImage(systemName: "ellipsis.circle"), children: more)]
+    }
+
+    /// 同じユーザーが2つの項目に当たるときは、先に出る項目で1度だけ出す。
+    private func elements(for item: StatusMenuItem, status: Status?, notifyingAccount: Account?, id: ItemID, shownUserIDs: inout Set<String>) -> [UIMenuElement] {
+        func users(_ users: [MenuUser]) -> [UIMenuElement] {
+            users.filter { shownUserIDs.insert($0.id).inserted }.compactMap(userElement(for:))
         }
-        let open = UIAction(title: "ブラウザで開く", image: UIImage(systemName: "safari"), attributes: attributes) { [weak self] _ in
-            guard let url else { return }
-            self?.onOpenLink?(.url(url), status.displayed)
+        switch item {
+        case .notifyingUser:
+            return users(notifyingAccount.map { [.account($0)] } ?? [])
+        case .author:
+            return users(status.map { [.account($0.displayed.account)] } ?? [])
+        case .booster:
+            guard let status, status.reblog != nil else { return [] }
+            return users([.account(status.account)])
+        case .mentionedUsers:
+            return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
+        case .reply, .favourite, .reblog, .copyLink, .share, .openInBrowser:
+            guard let status else { return [] }
+            return statusAction(item, on: status, id: id).map { [$0] } ?? []
         }
-        return UIMenu(options: .displayInline, children: [copy, share, open])
+    }
+
+    /// 投稿への操作。ユーザーの項目は`userElement(for:)`で組むため、nilを返す。
+    private func statusAction(_ item: StatusMenuItem, on status: Status, id: ItemID) -> UIAction? {
+        let shown = status.displayed
+        // `url`はMastodonのAPIでnullを取りうるため、ないときは押せないまま並べる。`uri`はActivityPubのIDで、ブラウザで開けるページとは限らないため代わりにしない。
+        // ブーストなら元の投稿のページを指す。
+        let url = shown.url
+        let linkAttributes: UIMenuElement.Attributes = url == nil ? .disabled : []
+        switch item {
+        case .reply:
+            return UIAction(title: item.title, image: item.image) { [weak self] _ in
+                self?.onStatusAction?(.reply, status)
+            }
+        case .favourite:
+            return UIAction(
+                title: shown.favourited ? "お気に入りを取り消す" : item.title,
+                image: shown.favourited ? UIImage(systemName: "star.slash") : item.image
+            ) { [weak self] _ in
+                self?.onStatusAction?(.favourite, status)
+            }
+        case .reblog:
+            return UIAction(
+                title: shown.reblogged ? "ブーストを取り消す" : item.title,
+                image: item.image,
+                attributes: canReblog(status) ? [] : .disabled
+            ) { [weak self] _ in
+                self?.onStatusAction?(.reblog, status)
+            }
+        case .copyLink:
+            return UIAction(title: item.title, image: item.image, attributes: linkAttributes) { [weak self] _ in
+                guard let self, let url else { return }
+                UIPasteboard.general.url = url
+                showNotice(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            }
+        case .share:
+            return UIAction(title: item.title, image: item.image, attributes: linkAttributes) { [weak self] _ in
+                guard let url else { return }
+                self?.presentShareSheet(for: url, from: id)
+            }
+        case .openInBrowser:
+            return UIAction(title: item.title, image: item.image, attributes: linkAttributes) { [weak self] _ in
+                guard let url else { return }
+                self?.onOpenLink?(.url(url), shown)
+            }
+        case .notifyingUser, .author, .booster, .mentionedUsers:
+            return nil
+        }
+    }
+
+    /// ユーザーのメニューを`@acct`のサブメニューにする。中身が1つで「その他」が空なら、サブメニューにせず直接並べる。
+    private func userElement(for user: MenuUser) -> UIMenuElement? {
+        let groups = settings.userMenuLayout.groups
+        if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first, only.count == 1 {
+            return userAction(only[0], for: user, inSubmenu: false)
+        }
+        let children = menuElements(for: groups) { item in [userAction(item, for: user, inSubmenu: true)] }
+        guard !children.isEmpty else { return nil }
+        return UIMenu(title: "@\(user.acct)", image: UIImage(systemName: "person.crop.circle"), children: children)
+    }
+
+    private func userAction(_ item: UserMenuItem, for user: MenuUser, inSubmenu: Bool) -> UIAction {
+        switch item {
+        case .profile:
+            UIAction(title: inSubmenu ? item.title : "@\(user.acct)のプロフィール", image: item.image) { [weak self] _ in
+                switch user {
+                case .account(let account): self?.onOpenProfile?(account)
+                case .mention(let mention): self?.onOpenProfileID?(mention.id)
+                }
+            }
+        }
     }
 
     private func presentShareSheet(for url: URL, from id: ItemID) {

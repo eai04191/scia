@@ -270,6 +270,10 @@ final class SessionController {
             guard let viewController else { return }
             self?.openProfile(account, from: viewController)
         }
+        viewController.onOpenProfileID = { [weak self, weak viewController] accountID in
+            guard let viewController else { return }
+            self?.openProfile(accountID: accountID, from: viewController)
+        }
         viewController.onOpenLink = { [weak self, weak viewController] destination, status in
             guard let viewController else { return }
             self?.open(destination, in: status, from: viewController)

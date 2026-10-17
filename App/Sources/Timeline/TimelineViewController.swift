@@ -74,6 +74,8 @@ final class TimelineViewController: UIViewController {
     var onGapApproach: ((String, TimelineStore.GapDirection) -> Void)?
     /// 投稿のアイコンや名前がタップされたとき、または長押しのメニューで選ばれたときに、そのアカウントを渡して呼ぶ。
     var onOpenProfile: ((Account) -> Void)?
+    /// アカウントの全体を持たない相手（メンション）のプロフィールを、IDで開く。
+    var onOpenProfileID: ((String) -> Void)?
     /// 投稿の本文のリンクがタップされたときに、行き先と、本文を描いた投稿（ブーストなら元の投稿）を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination, Status) -> Void)?
     /// この画面が表示されている間、生かしておくもの。画面を組み立てたコントローラーを、ナビゲーションから外されるまで残すのに使う。
@@ -1167,15 +1169,10 @@ extension TimelineViewController: UICollectionViewDelegate {
 
     /// 長押しで投稿への操作のメニューを出す。
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
-        guard indexPaths.count == 1, let indexPath = indexPaths.first, let id = dataSource.itemIdentifier(for: indexPath), let entry = entry(for: id) else { return nil }
-        let status = status(for: id)
-        let accounts = Self.profileAccounts(of: entry)
-        guard status != nil || !accounts.isEmpty else { return nil }
-        return UIContextMenuConfiguration(actionProvider: { [weak self] _ in
-            guard let self else { return nil }
-            let profiles = UIMenu(options: .displayInline, children: accounts.map(self.profileAction(for:)))
-            return UIMenu(children: (status.map { self.statusMenu(for: $0, id: id).children } ?? []) + [profiles])
-        })
+        guard indexPaths.count == 1, let indexPath = indexPaths.first, let id = dataSource.itemIdentifier(for: indexPath), let entry = entry(for: id),
+              let menu = contextMenu(for: entry, id: id)
+        else { return nil }
+        return UIContextMenuConfiguration(actionProvider: { _ in menu })
     }
 
     /// 選べるのはギャップと、ブラウザで開ける読めなかった要素だけにする。投稿にはまだ開く画面がなく、タップすると選んだ状態の背景が残ったままになるため。
