@@ -18,9 +18,9 @@ public final class MediaTransfers {
         /// 失敗をどの添付ファイルのものか分かる文言にするために持つ。
         public let kind: MediaAttachment.Kind
         /// 添付ファイルの投稿。「操作の状況」の行から投稿を開くために持つ。
-        public let subject: RecentNotices.Subject?
+        public let subject: OperationStatus.Subject?
 
-        public init(url: URL, kind: MediaAttachment.Kind, subject: RecentNotices.Subject?) {
+        public init(url: URL, kind: MediaAttachment.Kind, subject: OperationStatus.Subject?) {
             self.url = url
             self.kind = kind
             self.subject = subject

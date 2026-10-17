@@ -3,7 +3,7 @@ import Testing
 @testable import SciaCore
 
 @MainActor
-struct RecentNoticesTests {
+struct OperationStatusTests {
     private let reason = ErrorPresentation(message: "サーバーで問題が起きています。", code: "HTTP 502")
 
     private func status(id: String, content: String = "<p>本文</p>", spoilerText: String = "", displayName: String = "Bob", reblogOf original: Status? = nil) -> Status {
@@ -19,19 +19,19 @@ struct RecentNoticesTests {
     }
 
     @Test func keepsOnlyTheNewestFailures() {
-        let notices = RecentNotices()
-        for index in 0..<(RecentNotices.failureLimit + 5) {
+        let notices = OperationStatus()
+        for index in 0..<(OperationStatus.failureLimit + 5) {
             notices.recordFailure(title: "失敗\(index)", reason: reason)
         }
 
-        #expect(notices.failures.count == RecentNotices.failureLimit)
-        #expect(notices.failures.first?.title == "失敗\(RecentNotices.failureLimit + 4)")
+        #expect(notices.failures.count == OperationStatus.failureLimit)
+        #expect(notices.failures.first?.title == "失敗\(OperationStatus.failureLimit + 4)")
         #expect(notices.failures.last?.title == "失敗5")
     }
 
     @Test func failureKeepsReasonAndTime() {
         let date = Date(timeIntervalSince1970: 1000)
-        let notices = RecentNotices { date }
+        let notices = OperationStatus { date }
 
         let failure = notices.recordFailure(title: "お気に入りを変更できませんでした", reason: reason, subject: .init(status(id: "1")))
 
@@ -43,7 +43,7 @@ struct RecentNoticesTests {
 
     @Test func subjectOfBoostPointsToBothIDsAndTheOriginalPage() {
         let original = status(id: "1", content: "<p>一行目</p><p>二行目</p>", displayName: "")
-        let subject = RecentNotices.Subject(status(id: "2", reblogOf: original))
+        let subject = OperationStatus.Subject(status(id: "2", reblogOf: original))
 
         #expect(subject.statusID == "2")
         #expect(subject.displayedID == "1")
@@ -59,20 +59,20 @@ struct RecentNoticesTests {
         let author = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob :verified:", avatar: nil, emojis: [emoji])
         let status = Status(id: "1", createdAt: Date(timeIntervalSince1970: 0), account: author, content: "<p>やった :verified: できた</p>", spoilerText: "", url: nil, emojis: [emoji])
 
-        let subject = RecentNotices.Subject(status)
+        let subject = OperationStatus.Subject(status)
 
         #expect(subject.authorName == "Bob")
         #expect(subject.excerpt == "やった できた")
     }
 
     @Test func subjectOfSpoileredStatusShowsOnlyTheSpoiler() {
-        let subject = RecentNotices.Subject(status(id: "1", content: "<p>隠した本文</p>", spoilerText: "ネタバレ"))
+        let subject = OperationStatus.Subject(status(id: "1", content: "<p>隠した本文</p>", spoilerText: "ネタバレ"))
 
         #expect(subject.excerpt == "ネタバレ")
     }
 
     @Test func activitiesKeepTheirPlaceWhenUpdated() {
-        let notices = RecentNotices()
+        let notices = OperationStatus()
         notices.update(.init(id: "a", title: "ダウンロード中"))
         notices.update(.init(id: "b", title: "アップロード中"))
         notices.update(.init(id: "a", title: "ダウンロード中", value: "42%"))
@@ -86,7 +86,7 @@ struct RecentNoticesTests {
     }
 
     @Test func stoppableActivityCanBeStoppedFromTheList() {
-        let notices = RecentNotices()
+        let notices = OperationStatus()
         var stopped: [String] = []
         notices.update(.init(id: "a", title: "ダウンロード中"), onStop: { stopped.append("a") })
         notices.update(.init(id: "b", title: "アップロード中"))

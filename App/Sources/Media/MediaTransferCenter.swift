@@ -22,10 +22,10 @@ final class MediaTransferCenter {
 
     let transfers: MediaTransfers
     /// 落としている途中のものと失敗を並べる「操作の状況」。
-    private let recentNotices: RecentNotices
+    private let operationStatus: OperationStatus
     private let tuning: TuningStore
     /// 「操作の状況」の一覧を開く。nilなら開けないため、出たままの知らせが2件以上でもチップを押すと止めるかの確認を出す。
-    var showRecentNotices: (@MainActor (UIViewController) -> Void)?
+    var showOperationStatus: (@MainActor (UIViewController) -> Void)?
     var host: Host? {
         didSet { updateTimelineChip() }
     }
@@ -41,11 +41,11 @@ final class MediaTransferCenter {
     private weak var stopConfirmation: UIAlertController?
     private var stopConfirmationTarget: MediaTransfers.Transfer.ID?
     /// 「操作の状況」の「進行中」に並べているもの。
-    private var listedActivities: Set<RecentNotices.Activity.ID> = []
+    private var listedActivities: Set<OperationStatus.Activity.ID> = []
     private let logger = SciaLog.logger(category: "media")
 
-    init(recentNotices: RecentNotices, tuning: TuningStore = AppDependencies.tuning, transfers: MediaTransfers) {
-        self.recentNotices = recentNotices
+    init(operationStatus: OperationStatus, tuning: TuningStore = AppDependencies.tuning, transfers: MediaTransfers) {
+        self.operationStatus = operationStatus
         self.tuning = tuning
         self.transfers = transfers
         transfers.onChange = { [weak self] in self?.transfersDidChange() }
@@ -53,8 +53,8 @@ final class MediaTransferCenter {
     }
 
     /// アプリの通信と写真ライブラリを使う。
-    convenience init(recentNotices: RecentNotices, downloads: MediaDownloads = AppDependencies.mediaDownloads, photoSaver: PhotoLibrarySaver = .photoLibrary) {
-        self.init(recentNotices: recentNotices, transfers: MediaTransfers(
+    convenience init(operationStatus: OperationStatus, downloads: MediaDownloads = AppDependencies.mediaDownloads, photoSaver: PhotoLibrarySaver = .photoLibrary) {
+        self.init(operationStatus: operationStatus, transfers: MediaTransfers(
             fetch: { url, onProgress in try await downloads.fileForSharing(for: url, onProgress: onProgress) },
             saveToPhotos: { file in try await photoSaver.save(file) }
         ))
@@ -123,7 +123,7 @@ final class MediaTransferCenter {
     /// 1件だけなら、押すと止めるかの確認を出す。2件以上なら、押すと「操作の状況」の一覧を開く。
     private func notice(for chip: MediaTransferChip, presenter: @escaping @MainActor () -> UIViewController?) -> Notice {
         var showAll: (@MainActor () -> Void)?
-        if let show = showRecentNotices {
+        if let show = showOperationStatus {
             showAll = {
                 if let presenter = presenter() {
                     show(presenter)
@@ -164,11 +164,11 @@ final class MediaTransferCenter {
 
     /// 「操作の状況」の「進行中」の行を、落としている途中のものに合わせる。
     private func updateActivities() {
-        var current: Set<RecentNotices.Activity.ID> = []
+        var current: Set<OperationStatus.Activity.ID> = []
         for transfer in transfers.transfers where transfer.isVisible {
             let id = "media.transfer.\(transfer.id.uuidString)"
             current.insert(id)
-            let activity = RecentNotices.Activity(
+            let activity = OperationStatus.Activity(
                 id: id,
                 title: "ダウンロード中",
                 value: Notice.percentText(of: transfer.fraction ?? 0),
@@ -179,10 +179,10 @@ final class MediaTransferCenter {
                 let id = transfer.id
                 onStop = { [weak self] in self?.transfers.stop(id) }
             }
-            recentNotices.update(activity, onStop: onStop)
+            operationStatus.update(activity, onStop: onStop)
         }
         for id in listedActivities.subtracting(current) {
-            recentNotices.end(id)
+            operationStatus.end(id)
         }
         listedActivities = current
     }
@@ -230,7 +230,7 @@ final class MediaTransferCenter {
             reason = PhotoLibrarySaver.failurePresentation(of: error)
         }
         // 「最近の失敗」では投稿を添えるが、どの添付ファイルかは種類で分かるようにする。
-        recentNotices.recordFailure(title: Notice.transferFailureTitle(of: transfer.target.kind, purpose: purpose), reason: reason, subject: transfer.target.subject)
+        operationStatus.recordFailure(title: Notice.transferFailureTitle(of: transfer.target.kind, purpose: purpose), reason: reason, subject: transfer.target.subject)
         let isCurrent = viewer?.currentTransferURL == transfer.target.url
         let title = isCurrent ? Notice.currentTransferFailureTitle(failure) : Notice.transferFailureTitle(of: transfer.target.kind, purpose: purpose)
         let notice = Notice.transferFailure(title: title) { [weak self, weak viewer] in

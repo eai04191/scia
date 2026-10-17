@@ -4,10 +4,10 @@ import UIKit
 
 /// 「操作の状況」の一覧。処理の途中と、消えたチップの失敗をあとから確かめる。決まりはdocs/notices.mdの「操作の状況」にある。
 /// タブの「通知」（Mastodonの通知）と紛れないよう、「通知」という言葉は使わない。
-struct RecentNoticesView: View {
-    let notices: RecentNotices
+struct OperationStatusView: View {
+    let notices: OperationStatus
     /// 行の投稿を開く。一覧を閉じてから開くのは呼ぶ側で行う。
-    let onOpen: (RecentNotices.Subject) -> Void
+    let onOpen: (OperationStatus.Subject) -> Void
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -51,7 +51,7 @@ struct RecentNoticesView: View {
                 } header: {
                     Text("最近の失敗")
                 } footer: {
-                    Text("アプリを終了するまで、直近の\(RecentNotices.failureLimit)件を残します。")
+                    Text("アプリを終了するまで、直近の\(OperationStatus.failureLimit)件を残します。")
                 }
             }
         }
@@ -59,7 +59,7 @@ struct RecentNoticesView: View {
 }
 
 private struct ActivityRow: View {
-    let activity: RecentNotices.Activity
+    let activity: OperationStatus.Activity
     /// 行から止める。止められないものでは出さない。
     let onStop: () -> Void
 
@@ -95,8 +95,8 @@ private struct ActivityRow: View {
 }
 
 private struct FailureRow: View {
-    let failure: RecentNotices.Failure
-    let onOpen: (RecentNotices.Subject) -> Void
+    let failure: OperationStatus.Failure
+    let onOpen: (OperationStatus.Subject) -> Void
 
     var body: some View {
         if let subject = failure.subject {
@@ -149,7 +149,7 @@ private struct FailureRow: View {
 
 /// どの投稿の知らせかを、投稿者と本文の冒頭で示す。
 private struct SubjectLine: View {
-    let subject: RecentNotices.Subject
+    let subject: OperationStatus.Subject
 
     var body: some View {
         Text("\(Text(subject.authorName).fontWeight(.semibold))  \(subject.excerpt)")
@@ -165,11 +165,11 @@ private struct SubjectLine: View {
     }
 }
 
-extension RecentNoticesView {
+extension OperationStatusView {
     /// 下から半分の高さで開き、引き上げると広がるシートにする。
     @MainActor
-    static func makeSheet(notices: RecentNotices, onOpen: @escaping (RecentNotices.Subject) -> Void) -> UIViewController {
-        let controller = UIHostingController(rootView: RecentNoticesView(notices: notices, onOpen: onOpen))
+    static func makeSheet(notices: OperationStatus, onOpen: @escaping (OperationStatus.Subject) -> Void) -> UIViewController {
+        let controller = UIHostingController(rootView: OperationStatusView(notices: notices, onOpen: onOpen))
         if let sheet = controller.sheetPresentationController {
             sheet.detents = [.medium(), .large()]
             sheet.prefersGrabberVisible = true

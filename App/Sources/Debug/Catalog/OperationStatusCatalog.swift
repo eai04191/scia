@@ -5,7 +5,7 @@ import SwiftUI
 import UIKit
 
 /// 「操作の状況」の一覧のシート。失敗を起こさずに、空のとき、件数が多いとき、文言が長いときを並べる。行を押しても何も起きない。
-enum RecentNoticesCatalog {
+enum OperationStatusCatalog {
     @MainActor
     static func states() -> [CatalogState] {
         [
@@ -34,11 +34,11 @@ enum RecentNoticesCatalog {
                     id: "download",
                     title: "ダウンロード中",
                     value: "100%",
-                    subject: RecentNotices.Subject(statusID: "long", displayedID: "long", url: nil, authorName: "とても長い表示名のアカウントで、名前だけで1行を使い切ってしまうかもしれない人", excerpt: "止めるボタンと並べたときに本文がどこで切れるかを確かめるための長い本文です。")
+                    subject: OperationStatus.Subject(statusID: "long", displayedID: "long", url: nil, authorName: "とても長い表示名のアカウントで、名前だけで1行を使い切ってしまうかもしれない人", excerpt: "止めるボタンと並べたときに本文がどこで切れるかを確かめるための長い本文です。")
                 ), onStop: {})
             },
-            state("上限の\(RecentNotices.failureLimit)件") { notices in
-                for index in 1...(RecentNotices.failureLimit + 5) {
+            state("上限の\(OperationStatus.failureLimit)件") { notices in
+                for index in 1...(OperationStatus.failureLimit + 5) {
                     notices.recordFailure(title: index.isMultiple(of: 2) ? "お気に入りを変更できませんでした" : "ブーストを変更できませんでした", reason: badGateway, subject: subject(index))
                 }
             },
@@ -46,7 +46,7 @@ enum RecentNoticesCatalog {
                 notices.recordFailure(
                     title: "長い文言のときに見出しがどこで折り返して、どこで切れるかを確かめるための失敗の見出し",
                     reason: ErrorPresentation(message: "長い理由のときに何行まで出して、どこで切るかを確かめるための理由の文です。サーバーが返した文言がとても長いこともあります。さらに続けて、4行を超えるかどうかを確かめます。もう少し続けます。", code: "HTTP 503"),
-                    subject: RecentNotices.Subject(
+                    subject: OperationStatus.Subject(
                         statusID: "long",
                         displayedID: "long",
                         url: nil,
@@ -60,8 +60,8 @@ enum RecentNoticesCatalog {
 
     private static let badGateway = ErrorPresentation(message: "サーバーかその手前で問題が起きています。しばらくしてからやり直してください。", code: "HTTP 502")
 
-    private static func subject(_ index: Int) -> RecentNotices.Subject {
-        RecentNotices.Subject(
+    private static func subject(_ index: Int) -> OperationStatus.Subject {
+        OperationStatus.Subject(
             statusID: "catalog-\(index)",
             displayedID: "catalog-\(index)",
             url: nil,
@@ -71,12 +71,12 @@ enum RecentNoticesCatalog {
     }
 
     @MainActor
-    private static func state(_ title: String, fill: @escaping @MainActor (RecentNotices) -> Void) -> CatalogState {
+    private static func state(_ title: String, fill: @escaping @MainActor (OperationStatus) -> Void) -> CatalogState {
         CatalogState(title: title) {
             // 時刻がそろうよう、記録した時刻を決めておく。
-            let notices = RecentNotices { Date(timeIntervalSince1970: 1_790_000_000) }
+            let notices = OperationStatus { Date(timeIntervalSince1970: 1_790_000_000) }
             fill(notices)
-            let controller = UIHostingController(rootView: RecentNoticesView(notices: notices) { _ in })
+            let controller = UIHostingController(rootView: OperationStatusView(notices: notices) { _ in })
             return CatalogControllerHost(controller, height: 480)
         }
     }

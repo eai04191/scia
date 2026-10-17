@@ -619,9 +619,9 @@ struct MediaViewerControllerTests {
     private func makeTransfers(
         downloads: MediaDownloads,
         photoSaver: PhotoLibrarySaver = PhotoLibrarySaver { _ in },
-        recentNotices: RecentNotices = RecentNotices()
+        operationStatus: OperationStatus = OperationStatus()
     ) -> MediaTransferCenter {
-        MediaTransferCenter(recentNotices: recentNotices, downloads: downloads, photoSaver: photoSaver)
+        MediaTransferCenter(operationStatus: operationStatus, downloads: downloads, photoSaver: photoSaver)
     }
 
     /// ビューアを閉じたあとに一覧へ出した知らせ。
@@ -739,12 +739,12 @@ struct MediaViewerControllerTests {
     @Test func downloadFailureWhileConfirmationAppearsClosesItAndShowsChip() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
-        let recent = RecentNotices()
+        let recent = OperationStatus()
         let transfers = makeTransfers(downloads: makeDownloads { _, _, onProgress in
             onProgress(0.5)
             try await Task.sleep(for: .milliseconds(150))
             throw URLError(.networkConnectionLost)
-        }, recentNotices: recent)
+        }, operationStatus: recent)
         let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
         defer { viewer.dismiss(animated: false) }
 
@@ -761,13 +761,13 @@ struct MediaViewerControllerTests {
     }
 
     /// 落としている途中のものは「操作の状況」の「進行中」に並び、行から止めたら通信を止め、保存しない。
-    @Test func stoppingFromRecentNoticesStopsDownloadWithoutSaving() async throws {
+    @Test func stoppingFromOperationStatusStopsDownloadWithoutSaving() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         let saved = SavedFiles()
         let stopped = Flag()
-        let recent = RecentNotices()
-        let transfers = makeTransfers(downloads: makeDownloads(download: Self.endlessDownload(stopped: stopped)), photoSaver: PhotoLibrarySaver { saved.files.append($0) }, recentNotices: recent)
+        let recent = OperationStatus()
+        let transfers = makeTransfers(downloads: makeDownloads(download: Self.endlessDownload(stopped: stopped)), photoSaver: PhotoLibrarySaver { saved.files.append($0) }, operationStatus: recent)
         let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
         defer { viewer.dismiss(animated: false) }
 
@@ -853,7 +853,7 @@ struct MediaViewerControllerTests {
     }
 
     /// 見ている添付ファイルのものを落としている途中に、ほかのものも落としていれば、件数を添え、押すと「操作の状況」の一覧を開く。
-    @Test func chipWithOtherDownloadsOpensRecentNotices() async throws {
+    @Test func chipWithOtherDownloadsOpensOperationStatus() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         let release = Flag()
@@ -861,7 +861,7 @@ struct MediaViewerControllerTests {
         let opened = OpenedLists()
         let viewer = makeTwoVideoViewer(on: harness, gated: ["slow.mp4", "fast.mp4"], transfers: { downloads in
             let center = makeTransfers(downloads: downloads)
-            center.showRecentNotices = { opened.presenters.append($0) }
+            center.showOperationStatus = { opened.presenters.append($0) }
             return center
         }, release: release)
         defer { viewer.dismiss(animated: false) }

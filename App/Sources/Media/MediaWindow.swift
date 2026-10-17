@@ -19,7 +19,7 @@ enum MediaWindow {
         let dragToDismiss: DragToDismiss
         let timing: MediaViewerController.Timing
         let transfers: MediaTransferCenter?
-        let subject: RecentNotices.Subject?
+        let subject: OperationStatus.Subject?
     }
 
     private static var pending: [UUID: Request] = [:]

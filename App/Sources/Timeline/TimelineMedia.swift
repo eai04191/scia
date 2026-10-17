@@ -64,7 +64,7 @@ extension TimelineViewController {
     /// 開いている間にその行が再利用されたら、表示中の別の行から探す。
     /// - Parameter status: 添付ファイルの投稿。共有や保存の失敗を「最近の失敗」に残すときに添える。
     func openMedia(_ attachments: [MediaAttachment], at index: Int, of status: Status, from grid: MediaGridView) {
-        openMedia(attachments, at: index, subject: RecentNotices.Subject(status)) { [weak self, weak grid] attachmentID in
+        openMedia(attachments, at: index, subject: OperationStatus.Subject(status)) { [weak self, weak grid] attachmentID in
             grid?.tile(for: attachmentID) ?? self?.visibleMediaTile(for: attachmentID)
         }
     }
@@ -72,7 +72,7 @@ extension TimelineViewController {
     /// - Parameters:
     ///   - subject: 添付ファイルの投稿。プロフィールの画像ならnil。
     ///   - sourceTile: 開閉の起点にするビューを返す。見つからなければnilを返し、画像を動かさずに薄くして開閉する。
-    func openMedia(_ attachments: [MediaAttachment], at index: Int, subject: RecentNotices.Subject?, sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?) {
+    func openMedia(_ attachments: [MediaAttachment], at index: Int, subject: OperationStatus.Subject?, sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?) {
         UserAction.openViewer(count: attachments.count, index: index).record()
         SciaLog.logger(category: "media").info("open viewer count=\(attachments.count, privacy: .public) index=\(index, privacy: .public)")
         let timing = MediaViewerController.Timing(tuning: tuning)
@@ -101,7 +101,7 @@ extension TimelineViewController {
             transfers: mediaTransfers,
             subject: subject,
             sourceTile: sourceTile,
-            onShowRecentNotices: onShowRecentNotices,
+            onShowOperationStatus: onShowOperationStatus,
             // 一覧は残したままなので表示し直しの通知が来ない。開いている間に届いた新着を、閉じたところで報告する。
             onDismiss: { [weak self] in self?.reportVisibleItems() }
         )

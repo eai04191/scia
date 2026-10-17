@@ -42,7 +42,7 @@ final class MediaViewerController: UIViewController {
     /// 共有や保存のために落とす処理。ビューアを閉じても保存を続けるため、セッションで持つ。nilなら共有と保存を出さない（投稿欄から開いたとき）。
     private let transfers: MediaTransferCenter?
     /// 添付ファイルの投稿。共有や保存の失敗を「最近の失敗」に残すときに添える。プロフィールの画像を開いたときはnil。
-    private let subject: RecentNotices.Subject?
+    private let subject: OperationStatus.Subject?
     /// 画像から読み取った文字を、システムの翻訳シートで訳す。
     private let translation = SystemTranslation()
     private var isChromeHidden = false
@@ -53,7 +53,7 @@ final class MediaViewerController: UIViewController {
     /// 閉じ終わったときに呼ぶ。写しがサムネイルへ戻る動きは、このあとも続く。
     var onDismiss: (() -> Void)?
     /// 出たままの知らせが2件以上のときにチップを押したら、この画面の上に「操作の状況」の一覧を開く。nilなら開けない。
-    var onShowRecentNotices: (@MainActor (UIViewController) -> Void)?
+    var onShowOperationStatus: (@MainActor (UIViewController) -> Void)?
     /// 写しがサムネイルへ戻る動きを終えたときに呼ぶ。投稿欄は、ここで入力欄にキーボードを戻す。
     var onCloseFinish: (() -> Void)?
     /// 黒い下地。画像だけを動かし、下地はその場で濃くしたり薄くしたりする。
@@ -135,7 +135,7 @@ final class MediaViewerController: UIViewController {
         timing: Timing,
         editing: Editing? = nil,
         transfers: MediaTransferCenter? = nil,
-        subject: RecentNotices.Subject? = nil,
+        subject: OperationStatus.Subject? = nil,
         sourceTile: @escaping @MainActor (String) -> (any MediaViewerSource)?
     ) {
         precondition(items.indices.contains(startIndex), "開く添付ファイルの位置が範囲外です")
@@ -164,7 +164,7 @@ final class MediaViewerController: UIViewController {
         dragToDismiss: DragToDismiss,
         timing: Timing,
         transfers: MediaTransferCenter? = nil,
-        subject: RecentNotices.Subject? = nil,
+        subject: OperationStatus.Subject? = nil,
         sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?
     ) {
         self.init(
@@ -702,7 +702,7 @@ final class MediaViewerController: UIViewController {
     private func setPersistentNotice(_ notice: Notice?, in slot: PersistentNotices.Slot) {
         persistentNotices.set(notice, in: slot)
         var showAll: (@MainActor () -> Void)?
-        if let show = onShowRecentNotices {
+        if let show = onShowOperationStatus {
             showAll = { [weak self] in
                 guard let self else { return }
                 show(self)
@@ -1338,9 +1338,9 @@ extension MediaViewerController {
         timing: Timing,
         from presenter: UIViewController,
         transfers: MediaTransferCenter? = nil,
-        subject: RecentNotices.Subject? = nil,
+        subject: OperationStatus.Subject? = nil,
         sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?,
-        onShowRecentNotices: (@MainActor (UIViewController) -> Void)? = nil,
+        onShowOperationStatus: (@MainActor (UIViewController) -> Void)? = nil,
         onDismiss: @escaping @MainActor () -> Void
     ) {
         let viewer = MediaViewerController(
@@ -1354,7 +1354,7 @@ extension MediaViewerController {
             sourceTile: sourceTile
         )
         viewer.onDismiss = onDismiss
-        viewer.onShowRecentNotices = onShowRecentNotices
+        viewer.onShowOperationStatus = onShowOperationStatus
         // 開く動きはビューアの中で描く。
         presenter.present(viewer, animated: false)
     }

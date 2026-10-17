@@ -29,9 +29,9 @@ final class SessionController {
     private var recoveryTasks: [Task<Void, Never>] = []
     private let interactions: StatusInteractions
     /// 「操作の状況」の一覧に並べる、処理の途中と最近の失敗。
-    let recentNotices = RecentNotices()
+    let operationStatus = OperationStatus()
     /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても保存を続け、閉じたあとの知らせは一覧に出す。
-    private lazy var mediaTransfers = MediaTransferCenter(recentNotices: recentNotices)
+    private lazy var mediaTransfers = MediaTransferCenter(operationStatus: operationStatus)
     /// APIが401を返したときに、トークンが本当に無効かを確かめる。
     private let authorization: AuthorizationCheck
     private let onReauthenticate: (SessionController) async -> Void
@@ -163,7 +163,7 @@ final class SessionController {
                     self?.openMyProfile(from: viewController)
                 }
                 let recent = UIAction(title: "操作の状況", image: UIImage(systemName: "list.bullet.clipboard")) { _ in
-                    self?.showRecentNotices()
+                    self?.showOperationStatus()
                 }
                 return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile, recent])] + accountMenu().children)
             }
@@ -222,7 +222,7 @@ final class SessionController {
             }
             presented?.dismiss(animated: true)
         }
-        mediaTransfers.showRecentNotices = { [weak self] presenter in self?.showRecentNotices(from: presenter) }
+        mediaTransfers.showOperationStatus = { [weak self] presenter in self?.showOperationStatus(from: presenter) }
         mediaTransfers.host = MediaTransferCenter.Host(
             setPersistent: { [weak self] notice in
                 for timeline in self?.timelines.allObjects ?? [] {
@@ -263,7 +263,7 @@ final class SessionController {
         viewController.setShowsFocusInlineCompose(browser.isPresented)
         viewController.myAccountID = credential.accountID
         viewController.onStatusAction = { [weak self, weak viewController] action, status in self?.perform(action, on: status, from: viewController) }
-        viewController.onShowRecentNotices = { [weak self] presenter in self?.showRecentNotices(from: presenter) }
+        viewController.onShowOperationStatus = { [weak self] presenter in self?.showOperationStatus(from: presenter) }
         viewController.mediaTransfers = mediaTransfers
         mediaTransfers.updateTimelineChip()
         viewController.onOpenProfile = { [weak self, weak viewController] account in
@@ -361,9 +361,9 @@ final class SessionController {
     /// 「操作の状況」の一覧をシートで開く。行の投稿を選んだら、シートを閉じてから開く。
     /// ビューアのチップから開いたときは、投稿が裏の一覧で動いても見えないため、ビューアも閉じ終えてから開く。
     /// - Parameter presenter: シートを出す画面。nilならいちばん手前の画面。
-    func showRecentNotices(from presenter: UIViewController? = nil) {
+    func showOperationStatus(from presenter: UIViewController? = nil) {
         weak var sheet: UIViewController?
-        let controller = RecentNoticesView.makeSheet(notices: recentNotices) { [weak self, weak presenter] subject in
+        let controller = OperationStatusView.makeSheet(notices: operationStatus) { [weak self, weak presenter] subject in
             sheet?.dismiss(animated: true) {
                 guard let viewer = presenter as? MediaViewerController else {
                     self?.open(subject)
@@ -378,7 +378,7 @@ final class SessionController {
     }
 
     /// 投稿の詳細の画面はまだないため、今見えている一覧（ホーム、通知、開いているプロフィール）にあればそこへ動かし、なければ投稿のページを開く。
-    private func open(_ subject: RecentNotices.Subject) {
+    private func open(_ subject: OperationStatus.Subject) {
         let navigation = (rootViewController as? UITabBarController)?.selectedTab?.viewController as? UINavigationController
         if let timeline = navigation?.topViewController as? TimelineViewController,
            timeline.scrollToStatus(subject.statusID, displayedID: subject.displayedID, at: .centeredVertically) {
@@ -417,7 +417,7 @@ final class SessionController {
                 guard let self else { return }
                 logger.error("toggle \(String(describing: action), privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
                 let reason = await failureReason(for: error)
-                recentNotices.recordFailure(title: failureTitle, reason: reason, subject: RecentNotices.Subject(status))
+                operationStatus.recordFailure(title: failureTitle, reason: reason, subject: OperationStatus.Subject(status))
                 timeline?.showNotice(.interactionFailure(title: failureTitle) { [weak self] in
                     self?.presentAlert(title: failureTitle, message: reason.text)
                 })

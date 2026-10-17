@@ -6,7 +6,7 @@ public import Observation
 /// 起動している間だけメモリに持ち、ログには書かない。どの投稿の失敗かを持つため、IDを伏せた「接続の状態」の記録とは分ける。
 @MainActor
 @Observable
-public final class RecentNotices {
+public final class OperationStatus {
     /// 知らせが結び付いた投稿。行から投稿を開くために持つ。
     public struct Subject: Sendable, Equatable {
         /// 操作した要素のID。ブーストならブーストのID。
