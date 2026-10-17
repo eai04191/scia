@@ -12,6 +12,7 @@ struct PostPreview: UIViewRepresentable {
     let timeStyle: StatusTimeStyle
     let avatarShape: AvatarShape
     let animatesAvatars: Bool
+    let glyphLanguage: GlyphLanguage
     let builder: PostContentBuilder
 
     private var status: Status {
