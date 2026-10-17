@@ -19,6 +19,23 @@ public struct MediaGridLayout: Equatable, Sendable {
     /// 枠が足りずに出していない数。
     public let hiddenCount: Int
 
+    /// 一辺`side`の正方形を、左から1列にすべて並べる。通知で投稿を控えめに再掲するときに使う。
+    /// 行の幅に収まらない分は、置く側が横にスクロールして見せるため、数を切らない。
+    public init(stripOf count: Int, side: CGFloat, spacing: CGFloat) {
+        let shown = count
+        hiddenCount = 0
+        guard shown > 0 else {
+            aspectRatio = nil
+            height = 0
+            frames = []
+            return
+        }
+        let width = CGFloat(shown) * side + CGFloat(shown - 1) * spacing
+        aspectRatio = width / side
+        height = side
+        frames = (0..<shown).map { CGRect(x: CGFloat($0) * (side + spacing), y: 0, width: side, height: side) }
+    }
+
     /// - Parameters:
     ///   - aspectRatios: 添付ファイルごとの幅と高さの比。分からなければnil。
     ///   - tallestAspectRatio: 1つだけ出すとき、これより縦長なものは上下を切り落とす。

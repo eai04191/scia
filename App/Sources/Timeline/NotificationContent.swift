@@ -2,14 +2,92 @@ import SciaCore
 import UIKit
 
 extension TimelineViewController {
-    /// 通知のセル。種類のアイコン、誰が何をしたか、対象の投稿の本文を並べる。
-    func contentConfiguration(for notification: MastodonNotification, base: UIListContentConfiguration) -> UIListContentConfiguration {
-        var content = base
-        let appearance = NotificationAppearance(notification.type)
-        content.image = UIImage(systemName: appearance.symbolName)
-        content.imageProperties.tintColor = appearance.color
-        content.imageProperties.reservedLayoutSize = CGSize(width: 28, height: 28)
+    /// 通知のセルの中身。種類ごとの組み方は`MastodonNotification.Layout`で決める。
+    func contentConfiguration(for notification: MastodonNotification, base: UIListContentConfiguration) -> any UIContentConfiguration {
+        switch notification.layout {
+        case .post:
+            guard let status = notification.status else { return headerOnlyConfiguration(for: notification, base: base) }
+            return postConfiguration(for: notification, status: status, base: base)
+        case .quoted:
+            // 投票の終了の通知（showsPollResults）では、投票の部品ができたら、ここで投票を結果の形で足す。
+            guard let status = notification.status else { return headerOnlyConfiguration(for: notification, base: base) }
+            return quotedConfiguration(for: notification, status: status, base: base)
+        case .headerOnly:
+            return headerOnlyConfiguration(for: notification, base: base)
+        }
+    }
 
+    /// メンションなど、相手が書いた投稿を読む通知。ホームの投稿と同じ見た目にし、名前の上に誰が何をしたかの行を足す。
+    /// 投稿した人は通知を送った人と同じで、下の名前の行にアイコンが出るため、上の行にはアイコンを出さない。
+    private func postConfiguration(for notification: MastodonNotification, status: Status, base: UIListContentConfiguration) -> PostContentConfiguration {
+        var configuration = contentConfiguration(for: status, base: base)
+        let appearance = NotificationAppearance(notification.type)
+        let renderer = RichTextRenderer(font: base.secondaryTextProperties.font, textColor: .secondaryLabel, emojiImages: emojiImages)
+        let text = NSMutableAttributedString(attributedString: renderer.render(.plain(appearance.phrase.before, emojis: [])))
+        if appearance.phrase.includesName {
+            text.append(renderer.render(.plain(notification.account.displayNameOrUsername, emojis: notification.account.emojis)))
+        }
+        text.append(renderer.render(.plain(appearance.phrase.after, emojis: [])))
+        configuration.context = PostContentConfiguration.Context(
+            symbolName: appearance.symbolName,
+            symbolColor: appearance.color,
+            isNotificationSymbol: true,
+            avatar: nil,
+            text: text,
+            accessibilityText: text.string
+        )
+        configuration.onOpenContextAccount = { [weak self] in self?.onOpenProfile?(notification.account) }
+        return configuration
+    }
+
+    /// お気に入りやブーストなど、自分の投稿の再掲になる通知。誰が何をしたかの行を目立たせ、本文は控えめな色で短く切り、
+    /// 添付ファイルは小さなサムネイルを1列だけ並べる。
+    private func quotedConfiguration(for notification: MastodonNotification, status: Status, base: UIListContentConfiguration) -> NotificationContentConfiguration {
+        let shown = status.displayed
+        var media = mediaContent(for: shown)
+        media?.arrangement = .strip(side: tuning.value(of: TuningCatalog.notificationQuotedThumbnailSize))
+        var configuration = headerConfiguration(
+            for: notification,
+            body: PostBodyContent(
+                text: body(of: shown, base: base, color: .secondaryLabel),
+                maximumLines: Int(tuning.value(of: TuningCatalog.notificationQuotedBodyLines)),
+                media: media
+            ),
+            bodySpacing: tuning.value(of: TuningCatalog.notificationQuotedSpacing),
+            base: base
+        )
+        configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
+        if let media {
+            configuration.onSelectMedia = { [weak self] index, grid in
+                self?.openMedia(media.attachments, at: index, of: shown, from: grid)
+            }
+            configuration.onRevealMedia = { [weak self] in
+                self?.revealMedia(of: shown.id)
+            }
+        }
+        return configuration
+    }
+
+    /// フォローなど、誰が何をしたかの行だけの通知。誰からかが分かるよう、名前の下にアカウントを添える。
+    /// アカウントは誰が何をしたかの行の続きなので、再掲する投稿より詰めて置く。
+    private func headerOnlyConfiguration(for notification: MastodonNotification, base: UIListContentConfiguration) -> NotificationContentConfiguration {
+        let acct = NSAttributedString(string: "@\(notification.account.acct)", attributes: [
+            .font: base.secondaryTextProperties.font,
+            .foregroundColor: UIColor.secondaryLabel,
+        ])
+        return headerConfiguration(for: notification, body: PostBodyContent(text: acct), bodySpacing: Self.headerDetailSpacing, base: base)
+    }
+
+    /// 誰が何をしたかの行と、その下に添えるアカウントのあいだの余白。投稿のセルの名前の行と本文のあいだと揃える。
+    private static let headerDetailSpacing: CGFloat = 2
+
+    private func headerConfiguration(
+        for notification: MastodonNotification,
+        body: PostBodyContent,
+        bodySpacing: CGFloat,
+        base: UIListContentConfiguration
+    ) -> NotificationContentConfiguration {
+        let appearance = NotificationAppearance(notification.type)
         let font = base.textProperties.font
         let nameRenderer = RichTextRenderer(font: font, textColor: base.textProperties.color, emojiImages: emojiImages)
         let phraseAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
@@ -19,18 +97,24 @@ extension TimelineViewController {
             header.append(nameRenderer.render(.plain(notification.account.displayNameOrUsername, emojis: notification.account.emojis)))
         }
         header.append(NSAttributedString(string: appearance.phrase.after, attributes: phraseAttributes))
-        content.attributedText = header
-
-        if let status = notification.status {
-            // お気に入りやブーストの通知の本文は自分の投稿の再掲なので、控えめにして誰が何をしたかの行を目立たせる。
-            content.secondaryAttributedText = body(of: status.displayed, base: base, color: notification.type.isConversation ? .label : .secondaryLabel)
-        } else {
-            content.secondaryAttributedText = NSAttributedString(string: "@\(notification.account.acct)", attributes: [
-                .font: base.secondaryTextProperties.font,
-                .foregroundColor: UIColor.secondaryLabel,
-            ])
+        var configuration = NotificationContentConfiguration(
+            symbolName: appearance.symbolName,
+            symbolColor: appearance.color,
+            header: header,
+            body: body,
+            metrics: NotificationContentConfiguration.Metrics(
+                margins: base.directionalLayoutMargins,
+                avatarSize: tuning.value(of: TuningCatalog.avatarSize),
+                headerFont: font,
+                bodySpacing: bodySpacing,
+                symbolSpacing: tuning.value(of: TuningCatalog.contextSymbolSpacing)
+            ),
+            mediaImages: mediaImages
+        )
+        if appearance.phrase.includesName {
+            configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(notification.account) }
         }
-        return content
+        return configuration
     }
 }
 

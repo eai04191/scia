@@ -9,6 +9,11 @@ struct PostContentConfiguration: UIContentConfiguration {
     /// 名前の上の行。左のアイコンの列の右端に記号を置き、本文の列に、あればアイコンと文字を並べる。
     struct Context {
         let symbolName: String
+        /// 通知では種類ごとの色で描く。
+        var symbolColor: UIColor = .secondaryLabel
+        /// 通知の種類を示す記号。誰が何をしたかの行を主役にする通知の記号と縦に並ぶため、同じ大きさで描く。
+        /// ブーストや固定の記号は、小さい文字の補足の行に釣り合うよう、文字より一段小さく描く。
+        var isNotificationSymbol = false
         /// ブーストした人のアイコン。
         let avatar: AvatarView.Content?
         let text: NSAttributedString
@@ -32,7 +37,7 @@ struct PostContentConfiguration: UIContentConfiguration {
     var onRevealMedia: (() -> Void)?
     /// アイコンか名前の行がタップされたときに呼ぶ。投稿した人のプロフィールを開く。
     var onOpenAccount: (() -> Void)?
-    /// 名前の上の行がタップされたときに呼ぶ。ブーストした人のプロフィールを開く。
+    /// 名前の上の行がタップされたときに呼ぶ。ブーストした人や、通知のもとになる操作をした人のプロフィールを開く。
     var onOpenContextAccount: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
@@ -44,8 +49,13 @@ struct PostContentConfiguration: UIContentConfiguration {
         var boosterAvatarSize: CGFloat
         /// 名前が入りきらないときに、行末をぼかす幅。
         var nameFadeWidth: CGFloat
+        /// 名前の上の行の記号と、その右の文字やアイコンとのすき間。
+        var contextSymbolSpacing: CGFloat
         var nameFont: UIFont
         var secondaryFont: UIFont
+        /// 通知の種類を示す記号の大きさを決める文字。誰が何をしたかの行を主役にする通知の記号と同じ大きさに揃えるため、
+        /// 名前の上の行の小さい文字ではなく、本文と同じ大きさの文字にする。
+        var notificationSymbolFont: UIFont
     }
 
     func makeContentView() -> any UIView & UIContentView {
@@ -131,7 +141,6 @@ final class PostContentView: UIView, UIContentView {
     }
 
     private func configureSubviews() {
-        contextIcon.tintColor = .secondaryLabel
         contextIcon.contentMode = .scaleAspectFit
         contextIcon.setContentHuggingPriority(.required, for: .horizontal)
 
@@ -174,8 +183,14 @@ final class PostContentView: UIView, UIContentView {
         contextAvatarView.apply(context?.avatar)
         contextLabel.attributedText = context?.text
         contextLabel.fadeWidth = metrics.nameFadeWidth
-        contextIcon.image = context.flatMap { UIImage(systemName: $0.symbolName) }
-        contextIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(font: metrics.secondaryFont, scale: .small)
+        let symbolConfiguration = if context?.isNotificationSymbol == true {
+            UIImage.SymbolConfiguration(font: metrics.notificationSymbolFont)
+        } else {
+            UIImage.SymbolConfiguration(font: metrics.secondaryFont, scale: .small)
+        }
+        // ベースラインの位置を読むため、大きさの設定を画像そのものに当てておく。
+        contextIcon.image = context.flatMap { UIImage(systemName: $0.symbolName, withConfiguration: symbolConfiguration) }
+        contextIcon.tintColor = context?.symbolColor ?? .secondaryLabel
 
         for (index, label) in nameLabels.enumerated() {
             let text = configuration.nameParts.indices.contains(index) ? configuration.nameParts[index] : nil
@@ -215,7 +230,8 @@ final class PostContentView: UIView, UIContentView {
             textGuide.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.trailing),
             nameRow.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
             nameRow.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
-            bodyView.topAnchor.constraint(equalTo: nameRow.bottomAnchor, constant: 2),
+            // 本文のない投稿は、本文があったときと同じく、名前の行から本文と添付ファイルの余白を足した位置に添付ファイルを置く。
+            bodyView.topAnchor.constraint(equalTo: nameRow.bottomAnchor, constant: 2 + (bodyView.startsWithMedia ? PostBodyView.mediaSpacing : 0)),
             bodyView.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
             bodyView.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
             // 本文が短くても、アイコンが下の余白に食い込まないようにする。
@@ -225,9 +241,10 @@ final class PostContentView: UIView, UIContentView {
             constraints += [
                 contextLabel.topAnchor.constraint(equalTo: topAnchor, constant: margins.top),
                 contextLabel.trailingAnchor.constraint(lessThanOrEqualTo: textGuide.trailingAnchor),
-                // 記号はアイコンの列の右端に揃え、ブーストした人のアイコンと名前は本文の列に揃える。
-                contextIcon.trailingAnchor.constraint(equalTo: avatarView.trailingAnchor),
-                contextIcon.centerYAnchor.constraint(equalTo: contextLabel.centerYAnchor),
+                // 記号は本文の列から決まった幅だけ離して置き、ブーストした人のアイコンと名前は本文の列に揃える。
+                // アイコンの列の右端に揃えると、細い記号では文字とのあいだが間延びして見えるため。
+                contextIcon.trailingAnchor.constraint(equalTo: textGuide.leadingAnchor, constant: -metrics.contextSymbolSpacing),
+                Self.symbolVerticalConstraint(contextIcon, beside: contextLabel, onBaseline: context.isNotificationSymbol),
                 nameRow.topAnchor.constraint(equalTo: contextLabel.bottomAnchor, constant: Self.contextSpacing),
             ]
             if context.avatar != nil {
@@ -254,6 +271,22 @@ final class PostContentView: UIView, UIContentView {
         ]
         variableConstraints = constraints
         NSLayoutConstraint.activate(constraints)
+    }
+
+    /// 記号を、右の文字の行に対して縦に置く制約。
+    /// 通知の種類の記号は文字より大きいため、中心で揃えると上下にはみ出して浮いて見える。文字のベースラインに乗せ、はみ出す分を上にだけ出す。
+    /// ブーストや固定の記号は文字と同じくらいの大きさなので、中心で揃える。
+    static func symbolVerticalConstraint(_ symbol: UIImageView, beside label: UILabel, onBaseline: Bool) -> NSLayoutConstraint {
+        guard onBaseline, let image = symbol.image else {
+            return symbol.centerYAnchor.constraint(equalTo: label.centerYAnchor)
+        }
+        return symbol.bottomAnchor.constraint(equalTo: label.firstBaselineAnchor, constant: Self.baselineToAlignmentBottom(of: image))
+    }
+
+    /// 記号の画像の、ベースラインから、Auto Layoutで揃える枠の下端までの距離。下端がベースラインより下にあれば正の値。
+    /// `baselineOffsetFromBottom`は画像の下端から測るが、`bottomAnchor`は画像の余白を除いた枠の下端なので、その差を引く。
+    static func baselineToAlignmentBottom(of image: UIImage) -> CGFloat {
+        (image.baselineOffsetFromBottom ?? 0) - image.alignmentRectInsets.bottom
     }
 
     /// 読み上げでは、名前の上の行、名前、時刻、本文の順に1つの要素として読む。サムネイルは別の要素のまま残す。

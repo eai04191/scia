@@ -4,15 +4,18 @@ import UIKit
 /// 投稿の中身。投稿のセルと通知のセルで同じ部品を使い、どの部品をどう出すかは置く側が決める。
 ///
 /// 上から、本文、添付ファイルの順に並べる。注意書きの折りたたみ、投票、リンクカード、引用、編集済みの印は、部品ができたらここに足す。
+/// 本文が空なら、本文と添付ファイルのあいだの余白も取らず、添付ファイルを上端から置く。上の行との間隔は置く側が`startsWithMedia`を見て決める。
 struct PostBodyContent {
     var text: NSAttributedString
+    /// 本文を切る行数。0なら切らない。
+    var maximumLines = 0
     /// 添付ファイルがなければnil。
     var media: MediaGridView.Content?
 }
 
 final class PostBodyView: UIView {
     /// 本文とサムネイルのあいだの余白。
-    private static let mediaSpacing: CGFloat = 8
+    static let mediaSpacing: CGFloat = 8
 
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
@@ -31,6 +34,11 @@ final class PostBodyView: UIView {
         mediaView.isHidden ? nil : mediaView
     }
 
+    /// 本文がなく、添付ファイルが上端から始まる。
+    var startsWithMedia: Bool {
+        textLabel.isHidden && !mediaView.isHidden
+    }
+
     /// 本文の枠。読み上げの要素の範囲を決めるときに使う。
     var textFrame: CGRect {
         textLabel.frame
@@ -45,7 +53,6 @@ final class PostBodyView: UIView {
             addSubview(view)
         }
         NSLayoutConstraint.activate([
-            textLabel.topAnchor.constraint(equalTo: topAnchor),
             textLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
             textLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
         ])
@@ -64,23 +71,47 @@ final class PostBodyView: UIView {
 
     func apply(_ content: PostBodyContent) {
         self.content = content
-        textLabel.attributedText = content.text
+        textLabel.attributedText = Self.truncatingTail(content.text, when: content.maximumLines > 0)
+        textLabel.numberOfLines = content.maximumLines
         NSLayoutConstraint.deactivate(variableConstraints)
-        if let media = content.media, let aspectRatio = media.aspectRatio {
+        let media = content.media.flatMap { $0.aspectRatio == nil ? nil : $0 }
+        textLabel.isHidden = content.text.length == 0 && media != nil
+        variableConstraints = [textLabel.topAnchor.constraint(equalTo: topAnchor)]
+        if let media, let aspectRatio = media.aspectRatio {
             mediaView.isHidden = false
             mediaView.apply(media)
-            variableConstraints = [
-                mediaView.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: Self.mediaSpacing),
+            let mediaTop = textLabel.isHidden
+                ? mediaView.topAnchor.constraint(equalTo: topAnchor)
+                : mediaView.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: Self.mediaSpacing)
+            variableConstraints += [
+                mediaTop,
                 mediaView.leadingAnchor.constraint(equalTo: leadingAnchor),
                 mediaView.trailingAnchor.constraint(equalTo: trailingAnchor),
-                mediaView.heightAnchor.constraint(equalTo: mediaView.widthAnchor, multiplier: 1 / aspectRatio),
                 bottomAnchor.constraint(equalTo: mediaView.bottomAnchor),
             ]
+            let height = switch media.arrangement {
+            case .grid: mediaView.heightAnchor.constraint(equalTo: mediaView.widthAnchor, multiplier: 1 / aspectRatio)
+            case .strip(let side): mediaView.heightAnchor.constraint(equalToConstant: side)
+            }
+            variableConstraints.append(height)
         } else {
             mediaView.isHidden = true
-            variableConstraints = [bottomAnchor.constraint(equalTo: textLabel.bottomAnchor)]
+            variableConstraints.append(bottomAnchor.constraint(equalTo: textLabel.bottomAnchor))
         }
         NSLayoutConstraint.activate(variableConstraints)
+    }
+
+    /// 行数で切る本文の末尾に、省略記号を出す。本文の段落は折り返しの指定を持ち、そのままでは最後の行が黙って切れるため。
+    /// UILabelは、複数行のときの末尾の省略を折り返したうえで最後の行に当てる。
+    private static func truncatingTail(_ text: NSAttributedString, when truncates: Bool) -> NSAttributedString {
+        guard truncates else { return text }
+        let result = NSMutableAttributedString(attributedString: text)
+        result.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: result.length)) { value, range, _ in
+            guard let style = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle else { return }
+            style.lineBreakMode = .byTruncatingTail
+            result.addAttribute(.paragraphStyle, value: style, range: range)
+        }
+        return result
     }
 
     /// 読み上げで、本文のリンクを開く操作。押しても何もしないハッシュタグは除く。

@@ -3,14 +3,23 @@ import UIKit
 
 /// 一覧の行に、投稿の添付ファイルのサムネイルを並べる。
 ///
-/// 高さは添付ファイルの情報から決め、画像が届いても変えない。幅との比を制約にするのは、置く側の役目。
+/// 高さは添付ファイルの情報から決め、画像が届いても変えない。高さの制約を張るのは、置く側の役目。
 final class MediaGridView: UIView {
+    /// サムネイルの並べ方。
+    enum Arrangement: Equatable {
+        /// 行の幅いっぱいに、添付ファイルの形に合わせて並べる。高さは幅との比で決まる。
+        case grid
+        /// 一辺`side`の小さな正方形を、左から1列にすべて並べる。行の幅に収まらない分は横にスクロールして見る。高さは`side`で決まる。
+        case strip(side: CGFloat)
+    }
+
     struct Content: Equatable {
         let attachments: [MediaAttachment]
         /// 閲覧注意として覆っている。
         let isCovered: Bool
         let tallestAspectRatio: Double
         let thumbnailPolicy: MediaThumbnailPolicy
+        var arrangement: Arrangement = .grid
 
         /// 全体の幅を高さで割った値。添付ファイルがなければnil。
         var aspectRatio: Double? {
@@ -18,13 +27,18 @@ final class MediaGridView: UIView {
         }
 
         func layout(width: CGFloat) -> MediaGridLayout {
-            MediaGridLayout(
-                aspectRatios: attachments.map(\.aspectRatio),
-                width: width,
-                spacing: MediaGridView.spacing,
-                tallestAspectRatio: tallestAspectRatio,
-                widestAspectRatio: MediaGridView.widestAspectRatio
-            )
+            switch arrangement {
+            case .grid:
+                MediaGridLayout(
+                    aspectRatios: attachments.map(\.aspectRatio),
+                    width: width,
+                    spacing: MediaGridView.spacing,
+                    tallestAspectRatio: tallestAspectRatio,
+                    widestAspectRatio: MediaGridView.widestAspectRatio
+                )
+            case .strip(let side):
+                MediaGridLayout(stripOf: attachments.count, side: side, spacing: MediaGridView.spacing)
+            }
         }
     }
 
@@ -39,14 +53,24 @@ final class MediaGridView: UIView {
     var onReveal: (() -> Void)?
 
     private let store: MediaImageStore
+    /// サムネイルと覆いを載せる。1列に並べるときだけ横にスクロールでき、ほかでは自分と同じ大きさで動かない。
+    private let tileContainer = RowContentScrollView()
     private var tiles: [MediaTileView] = []
     private lazy var cover = makeCover()
+    private var coverButton: UIButton?
     private(set) var content: Content?
 
     init(store: MediaImageStore) {
         self.store = store
         super.init(frame: .zero)
-        addSubview(cover)
+        tileContainer.showsHorizontalScrollIndicator = false
+        tileContainer.showsVerticalScrollIndicator = false
+        tileContainer.alwaysBounceVertical = false
+        tileContainer.contentInsetAdjustmentBehavior = .never
+        // ステータスバーのタップで先頭へ戻る対象は一覧だけにする。画面に対象が複数あると、UIKitはどれも動かさない。
+        tileContainer.scrollsToTop = false
+        addSubview(tileContainer)
+        tileContainer.addSubview(cover)
     }
 
     @available(*, unavailable)
@@ -56,13 +80,17 @@ final class MediaGridView: UIView {
 
     func apply(_ content: Content) {
         guard content != self.content else { return }
+        // 別の投稿のサムネイルに入れ替わったら、横のスクロールを先頭に戻す。覆いを外しただけなら、見ている位置を保つ。
+        if content.attachments.map(\.id) != self.content?.attachments.map(\.id) {
+            tileContainer.contentOffset = .zero
+        }
         self.content = content
         let layout = content.layout(width: bounds.width)
         while tiles.count < layout.frames.count {
             let tile = MediaTileView(store: store)
             let index = tiles.count
             tile.addAction(UIAction { [weak self] _ in self?.onSelect?(index) }, for: .primaryActionTriggered)
-            insertSubview(tile, belowSubview: cover)
+            tileContainer.insertSubview(tile, belowSubview: cover)
             tiles.append(tile)
         }
         for (index, tile) in tiles.enumerated() {
@@ -81,17 +109,25 @@ final class MediaGridView: UIView {
             )
         }
         cover.isHidden = !content.isCovered
+        updateCoverButton(for: content.arrangement)
         // 覆っている間は、中のサムネイルを読み上げない。
         tiles.forEach { $0.accessibilityElementsHidden = content.isCovered }
         setNeedsLayout()
     }
 
     /// 添付ファイルのサムネイル。ビューアを開くときと閉じるときに、拡大と縮小の起点にする。表示していなければnil。
+    /// 1列に並べていて、横のスクロールで行の外に出ているときは、見える位置までスクロールしてから返す。
+    /// ビューアでめくった先の画像へ閉じるとき、行の外へ縮んで消えないようにするため。
     func tile(for attachmentID: MediaAttachment.ID) -> MediaTileView? {
         guard let content, !content.isCovered, let index = content.attachments.firstIndex(where: { $0.id == attachmentID }),
               index < tiles.count, !tiles[index].isHidden, window != nil
         else { return nil }
-        return tiles[index]
+        let tile = tiles[index]
+        if case .strip = content.arrangement {
+            tileContainer.layoutIfNeeded()
+            tileContainer.scrollRectToVisible(tile.frame, animated: false)
+        }
+        return tile
     }
 
     override func layoutSubviews() {
@@ -101,7 +137,34 @@ final class MediaGridView: UIView {
         for (tile, frame) in zip(tiles, layout.frames) {
             tile.frame = frame
         }
-        cover.frame = bounds
+        tileContainer.frame = bounds
+        switch content.arrangement {
+        case .grid:
+            tileContainer.isScrollEnabled = false
+            tileContainer.contentSize = bounds.size
+            cover.frame = bounds
+        case .strip:
+            // 1列に並べるときは、行の幅いっぱいではなく、並べたサムネイルだけを覆う。
+            let tilesFrame = layout.frames.reduce(CGRect.null) { $0.union($1) }
+            tileContainer.isScrollEnabled = tilesFrame.width > bounds.width
+            tileContainer.contentSize = CGSize(width: max(tilesFrame.maxX, bounds.width), height: bounds.height)
+            cover.frame = tilesFrame
+        }
+    }
+
+    /// 小さなサムネイルには文字が入りきらないため、1列に並べるときは記号だけを出す。
+    private func updateCoverButton(for arrangement: Arrangement) {
+        guard let coverButton, var configuration = coverButton.configuration else { return }
+        switch arrangement {
+        case .grid:
+            configuration.title = "閲覧注意"
+            configuration.subtitle = "タップして表示"
+        case .strip:
+            configuration.title = nil
+            configuration.subtitle = nil
+        }
+        coverButton.configuration = configuration
+        coverButton.accessibilityLabel = "閲覧注意、タップして表示"
     }
 
     private func makeCover() -> UIView {
@@ -122,9 +185,13 @@ final class MediaGridView: UIView {
         button.frame = effect.contentView.bounds
         button.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         effect.contentView.addSubview(button)
+        coverButton = button
         return effect
     }
 }
+
+/// 一覧の行の中で、横にだけスクロールする入れ物。行の一部なので、ビューアが開閉の動きで一覧と行を探すときは飛ばす。
+final class RowContentScrollView: UIScrollView {}
 
 /// 添付ファイル1つ分のサムネイル。
 ///

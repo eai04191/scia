@@ -20,8 +20,10 @@ struct PostContentBuilder {
             avatarSize: tuning.value(of: TuningCatalog.avatarSize),
             boosterAvatarSize: tuning.value(of: TuningCatalog.boosterAvatarSize),
             nameFadeWidth: tuning.value(of: TuningCatalog.nameFadeWidth),
+            contextSymbolSpacing: tuning.value(of: TuningCatalog.contextSymbolSpacing),
             nameFont: Self.boldFont(base.textProperties.font),
-            secondaryFont: secondaryFont
+            secondaryFont: secondaryFont,
+            notificationSymbolFont: base.textProperties.font
         )
         let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiImages: emojiImages)
         let secondaryRenderer = RichTextRenderer(font: secondaryFont, textColor: .secondaryLabel, emojiImages: emojiImages)

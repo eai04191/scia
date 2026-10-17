@@ -287,6 +287,10 @@ final class TimelineViewController: UIViewController {
             _ = tuning.value(of: TuningCatalog.avatarSize)
             _ = tuning.value(of: TuningCatalog.boosterAvatarSize)
             _ = tuning.value(of: TuningCatalog.nameFadeWidth)
+            _ = tuning.value(of: TuningCatalog.contextSymbolSpacing)
+            _ = tuning.value(of: TuningCatalog.notificationQuotedSpacing)
+            _ = tuning.value(of: TuningCatalog.notificationQuotedBodyLines)
+            _ = tuning.value(of: TuningCatalog.notificationQuotedThumbnailSize)
             _ = network.conditions
             _ = settings.usesOriginalThumbnailsOnExpensiveNetwork
             _ = settings.ignoresUselessAltText
@@ -952,8 +956,7 @@ final class TimelineViewController: UIViewController {
                     base: cell.defaultContentConfiguration()
                 )
             case .notification(let notification):
-                let list = self.contentConfiguration(for: notification, base: cell.defaultContentConfiguration())
-                cell.contentConfiguration = self.statusContentConfiguration(list: list, notification: notification)
+                cell.contentConfiguration = self.contentConfiguration(for: notification, base: cell.defaultContentConfiguration())
             case .unreadable(let item):
                 cell.contentConfiguration = self.unreadableContentConfiguration(for: item, base: cell.defaultContentConfiguration())
             }

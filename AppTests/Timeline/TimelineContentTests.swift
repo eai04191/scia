@@ -30,11 +30,36 @@ struct TimelineContentTests {
         let actor = Account(id: "2", username: "bob", acct: "bob@remote.example", displayName: "Bob", avatar: status.account.avatar)
         let notification = MastodonNotification(id: "1", type: .favourite, createdAt: .now, account: actor, status: status)
 
-        let content = makeViewController().contentConfiguration(for: notification, base: .cell())
+        let content = try #require(makeViewController().contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
 
-        #expect(content.attributedText?.string == "\u{FFFC} Bobがお気に入りに登録しました")
-        #expect(content.secondaryAttributedText?.string == makeViewController().body(of: status, base: .cell()).string)
-        #expect(content.image != nil)
+        #expect(content.header.string == "\u{FFFC} Bobがお気に入りに登録しました")
+        #expect(content.body.text.string == makeViewController().body(of: status, base: .cell()).string)
+        #expect(content.symbolName == "star.fill")
+    }
+
+    /// メンションはホームの投稿と同じ見た目にし、名前の上に誰が何をしたかの行を足す。
+    @Test func mentionLooksLikePostWithContext() throws {
+        let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let notification = MastodonNotification(id: "1", type: .mention, createdAt: .now, account: status.account, status: status)
+
+        let content = try #require(makeViewController().contentConfiguration(for: notification, base: .cell()) as? PostContentConfiguration)
+
+        #expect(content.context?.text.string == "\(status.account.displayNameOrUsername)からのメンション")
+        #expect(content.context?.symbolName == "at")
+        #expect(content.body.string == makeViewController().body(of: status, base: .cell()).string)
+    }
+
+    /// 再掲する本文は、チューニングの行数で切る。
+    @Test func quotedBodyIsTruncatedByTuning() throws {
+        let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let notification = MastodonNotification(id: "1", type: .reblog, createdAt: .now, account: status.account, status: status)
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(5, for: TuningCatalog.notificationQuotedBodyLines)
+        let vc = TimelineViewController(tuning: tuning, emojiImages: .offline, avatarImages: .offline)
+
+        let content = try #require(vc.contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
+
+        #expect(content.body.maximumLines == 5)
     }
 
     @Test func followNotificationShowsAccountAddress() throws {
@@ -42,10 +67,11 @@ struct TimelineContentTests {
         let actor = Account(id: "2", username: "bob", acct: "bob@remote.example", displayName: "", avatar: avatar)
         let notification = MastodonNotification(id: "1", type: .follow, createdAt: .now, account: actor)
 
-        let content = makeViewController().contentConfiguration(for: notification, base: .cell())
+        let content = try #require(makeViewController().contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
 
-        #expect(content.attributedText?.string == "\u{FFFC} bobにフォローされました")
-        #expect(content.secondaryAttributedText?.string == "@bob@remote.example")
+        #expect(content.header.string == "\u{FFFC} bobにフォローされました")
+        #expect(content.body.text.string == "@bob@remote.example")
+        #expect(content.body.media == nil)
     }
 
     @Test func unknownNotificationTypeStillShowsActor() throws {
@@ -53,9 +79,9 @@ struct TimelineContentTests {
         let actor = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: avatar)
         let notification = MastodonNotification(id: "1", type: .other("admin.sign_up"), createdAt: .now, account: actor)
 
-        let content = makeViewController().contentConfiguration(for: notification, base: .cell())
+        let content = try #require(makeViewController().contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
 
-        #expect(content.attributedText?.string == "\u{FFFC} Bobからの通知（admin.sign_up）")
+        #expect(content.header.string == "\u{FFFC} Bobからの通知（admin.sign_up）")
     }
 
     @Test func setEntriesReflectsChangedContentOfSameID() throws {
@@ -158,8 +184,9 @@ struct TimelineContentTests {
         let notification = MastodonNotification(id: "1", type: kind, createdAt: .now, account: status.account, status: status)
 
         let content = makeViewController().contentConfiguration(for: notification, base: .cell())
+        let body = (content as? PostContentConfiguration)?.body ?? (content as? NotificationContentConfiguration)?.body.text
 
-        #expect(color(of: content.secondaryAttributedText) == expected)
+        #expect(color(of: body) == expected)
     }
 
     @Test func spoilerHidesContent() throws {

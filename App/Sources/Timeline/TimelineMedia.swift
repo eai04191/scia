@@ -3,25 +3,6 @@ import SciaCore
 import UIKit
 
 extension TimelineViewController {
-    /// 通知の本文の下に、`status`の添付ファイルを並べるセルの中身。`status`がnilなら本文だけにする。
-    private func statusContentConfiguration(list: UIListContentConfiguration, status: Status?) -> StatusContentConfiguration {
-        var configuration = StatusContentConfiguration(list: list, mediaImages: mediaImages)
-        guard let shown = status?.displayed, let media = mediaContent(for: shown) else { return configuration }
-        configuration.media = media
-        configuration.onSelectMedia = { [weak self] index, grid in
-            self?.openMedia(media.attachments, at: index, of: shown, from: grid)
-        }
-        configuration.onRevealMedia = { [weak self] in
-            self?.revealMedia(of: shown.id)
-        }
-        return configuration
-    }
-
-    /// 通知のセルの中身。添付ファイルは、会話にあたる通知でだけ並べる。
-    func statusContentConfiguration(list: UIListContentConfiguration, notification: MastodonNotification) -> StatusContentConfiguration {
-        statusContentConfiguration(list: list, status: notification.type.showsMedia ? notification.status : nil)
-    }
-
     /// 閲覧注意の投稿と、注意書きのある投稿は、タップするまで添付ファイルを覆う。
     /// 説明にならない代替テキストは、ALTの目印にもビューアにも読み上げにも出さないよう、ここで除いておく。
     func mediaContent(for status: Status) -> MediaGridView.Content? {
@@ -110,24 +91,11 @@ extension TimelineViewController {
     /// 添付ファイルのサムネイルを、表示中のセルから探す。開いている間にセルが再利用されても、閉じるときに今の位置を探せるようにする。
     private func visibleMediaTile(for attachmentID: MediaAttachment.ID) -> MediaTileView? {
         for cell in collectionView.visibleCells {
-            let grid = (cell.contentView as? PostContentView)?.mediaGrid ?? (cell.contentView as? StatusContentView)?.mediaGrid
+            let grid = (cell.contentView as? PostContentView)?.mediaGrid ?? (cell.contentView as? NotificationContentView)?.mediaGrid
             if let tile = grid?.tile(for: attachmentID) {
                 return tile
             }
         }
         return nil
     }
-}
-
-extension MastodonNotification.Kind {
-    /// 会話にあたる通知。対象の投稿は相手が書いたもので、読む必要がある。お気に入りやブーストの通知は、自分の投稿の再掲になる。
-    var isConversation: Bool {
-        switch self {
-        case .mention, .status, .quote: true
-        case .reblog, .favourite, .poll, .update, .quotedUpdate, .follow, .followRequest, .other: false
-        }
-    }
-
-    /// 対象の投稿の添付ファイルを並べる通知。自分の投稿の再掲になる通知は、本文だけにして行を低く保つ。
-    var showsMedia: Bool { isConversation }
 }

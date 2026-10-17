@@ -228,11 +228,11 @@ final class MediaBarLayering {
     /// 受け渡しの度合いのうち、最前面の複製を見せている範囲で一覧の中の複製を不透明にし終えるまでの割合。
     private static let underlayFadeInPortion: CGFloat = 0.15
 
-    /// サムネイルを含む一覧と、その一覧の直下にある行。
+    /// サムネイルを含む一覧と、その一覧の直下にある行。行の中で横にスクロールするサムネイルの入れ物は、一覧とみなさない。
     private static func enclosingRow(of view: UIView) -> (UIScrollView, UIView)? {
         var row = view
         while let parent = row.superview {
-            if let scrollView = parent as? UIScrollView {
+            if let scrollView = parent as? UIScrollView, !(scrollView is RowContentScrollView) {
                 return (scrollView, row)
             }
             row = parent

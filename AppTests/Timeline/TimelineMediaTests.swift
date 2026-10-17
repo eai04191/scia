@@ -112,18 +112,73 @@ struct TimelineMediaTests {
         #expect(abs(after - before) < 0.01, "基準の投稿が\(after - before)pt動きました")
     }
 
-    /// 自分の投稿へのお気に入りの通知には並べず、メンションには並べる。
-    @Test func onlyConversationalNotificationsShowMedia() throws {
-        let vc = TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline)
+    /// メンションでは投稿と同じく行の幅いっぱいに並べ、自分の投稿へのお気に入りやブーストの通知では、小さなサムネイルを1列に並べる。
+    @Test func notificationMediaArrangementDependsOnKind() throws {
+        let tuning = TuningStore(defaults: nil)
+        let vc = TimelineViewController(tuning: tuning, emojiImages: .offline, mediaImages: .offline)
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let status = withMedia(base, [image("1", width: 100, height: 100)])
         let actor = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: base.account.avatar)
+        let side = tuning.value(of: TuningCatalog.notificationQuotedThumbnailSize)
 
-        for (kind, shows) in [(MastodonNotification.Kind.mention, true), (.favourite, false), (.reblog, false)] {
+        let mention = MastodonNotification(id: "1", type: .mention, createdAt: .now, account: actor, status: status)
+        let post = try #require(vc.contentConfiguration(for: mention, base: .cell()) as? PostContentConfiguration)
+        #expect(post.media?.arrangement == .grid)
+
+        for kind in [MastodonNotification.Kind.favourite, .reblog] {
             let notification = MastodonNotification(id: "1", type: kind, createdAt: .now, account: actor, status: status)
-            let configuration = vc.statusContentConfiguration(list: .cell(), notification: notification)
-            #expect((configuration.media != nil) == shows, "\(kind)")
+            let quoted = try #require(vc.contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
+            #expect(quoted.body.media?.arrangement == .strip(side: side), "\(kind)")
         }
+    }
+
+    /// ビューアの開閉で画像を切り抜く範囲は、サムネイルの入れ物ではなく、行を並べている一覧の表示範囲にする。
+    /// サムネイルを横にスクロールする入れ物に載せたとき、入れ物を一覧と取り違えて、閉じる途中に行が前に浮いて見えたことがある。
+    @Test func viewerClipsToListNotThumbnailContainer() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 3, startingAt: 1_000)
+        let attachment = image("1", width: 400, height: 300)
+        harness.setStatuses([withMedia(statuses[0], [attachment])] + statuses.dropFirst())
+        let cell = try #require(harness.visibleCell(of: .status(statuses[0].id)))
+        let tile = try #require((cell.contentView as? PostContentView)?.mediaGrid?.tile(for: attachment.id))
+        let window = try #require(tile.window)
+        let list = harness.viewController.collectionView
+
+        let expected = list.convert(list.bounds.inset(by: list.adjustedContentInset), to: window)
+        #expect(MediaBarLayering.visibleRect(around: tile, in: window) == expected)
+    }
+
+    /// サムネイルの横スクロールの入れ物は、ステータスバーのタップで先頭へ戻る対象にしない。
+    /// 画面に対象が複数あるとUIKitはどれも動かさないため、一覧を新着へ戻す操作が効かなくなる。
+    @Test func thumbnailContainerDoesNotTakeScrollToTop() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 3, startingAt: 1_000)
+        harness.setStatuses([withMedia(statuses[0], [image("1", width: 400, height: 300)])] + statuses.dropFirst())
+        let cell = try #require(harness.visibleCell(of: .status(statuses[0].id)))
+        let grid = try #require((cell.contentView as? PostContentView)?.mediaGrid)
+
+        let containers = grid.subviews.compactMap { $0 as? UIScrollView }
+        #expect(!containers.isEmpty)
+        #expect(containers.allSatisfy { !$0.scrollsToTop })
+    }
+
+    /// 本文のない投稿は、本文の場所と本文の下の余白を取らず、添付ファイルを上端から置く。上の行との間隔は置く側が決める。
+    @Test func mediaStartsAtTopWithoutText() throws {
+        let vc = TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline)
+        let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let media = try #require(vc.mediaContent(for: withMedia(base, [image("1", width: 100, height: 100)])))
+        let view = PostBodyView(mediaImages: .offline)
+
+        view.apply(PostBodyContent(text: NSAttributedString(), media: media))
+        #expect(view.startsWithMedia)
+        view.frame = CGRect(x: 0, y: 0, width: 300, height: 0)
+        let size = view.systemLayoutSizeFitting(CGSize(width: 300, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        #expect(abs(size.height - 300) < 0.5, "高さ\(size.height)")
+
+        view.apply(PostBodyContent(text: NSAttributedString(string: "本文"), media: media))
+        #expect(!view.startsWithMedia)
     }
 
     /// 閲覧注意で覆っている間は画像を読みに行かず、覆いを外したら読む。覆いを外さない投稿で通信しないため。

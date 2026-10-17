@@ -43,6 +43,28 @@ struct MediaAttachmentTests {
 }
 
 struct MediaGridLayoutTests {
+    @Test func stripLinesUpSquaresFromTheLeading() {
+        let strip = MediaGridLayout(stripOf: 2, side: 40, spacing: 4)
+        #expect(strip.frames == [CGRect(x: 0, y: 0, width: 40, height: 40), CGRect(x: 44, y: 0, width: 40, height: 40)])
+        #expect(strip.height == 40)
+        #expect(strip.hiddenCount == 0)
+    }
+
+    /// 行の幅に収まらない分は横にスクロールして見せるため、数を切らずにすべて並べる。
+    @Test func stripLinesUpEveryAttachment() {
+        let strip = MediaGridLayout(stripOf: 6, side: 40, spacing: 4)
+        #expect(strip.frames.count == 6)
+        #expect(strip.frames.last == CGRect(x: 220, y: 0, width: 40, height: 40))
+        #expect(strip.hiddenCount == 0)
+    }
+
+    @Test func emptyStripTakesNoSpace() {
+        let strip = MediaGridLayout(stripOf: 0, side: 40, spacing: 4)
+        #expect(strip.height == 0)
+        #expect(strip.frames.isEmpty)
+        #expect(strip.aspectRatio == nil)
+    }
+
     private func layout(_ ratios: [Double?], width: CGFloat = 300) -> MediaGridLayout {
         MediaGridLayout(aspectRatios: ratios, width: width, spacing: 4, tallestAspectRatio: 0.75, widestAspectRatio: 3)
     }

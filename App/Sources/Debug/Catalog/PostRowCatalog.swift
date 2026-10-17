@@ -51,9 +51,8 @@ enum PostRowCatalog {
         func row(_ title: String, _ type: MastodonNotification.Kind, status: Status? = mentioned) -> CatalogState {
             CatalogState(title: title) {
                 let notification = MastodonNotification(id: UUID().uuidString, type: type, createdAt: .now.addingTimeInterval(-300), account: booster, status: status)
-                @MainActor func configuration() -> StatusContentConfiguration {
-                    let list = notifications.contentConfiguration(for: notification, base: .cell())
-                    return notifications.statusContentConfiguration(list: list, notification: notification)
+                @MainActor func configuration() -> any UIContentConfiguration {
+                    notifications.contentConfiguration(for: notification, base: .cell())
                 }
                 let view = configuration().makeContentView()
                 // 名前の前のアイコンは、届くまで灰色の枠で出す。一覧と同じく、届いたら組み立て直す。
