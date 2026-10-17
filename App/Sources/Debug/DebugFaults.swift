@@ -33,6 +33,10 @@ enum DebugFaults {
         unsupportedFeatures.withLock { _ = $0.insert(feature) }
     }
 
+    static func isUnsupported(_ feature: OptionalFeature) -> Bool {
+        unsupportedFeatures.withLock { $0.contains(feature) }
+    }
+
     /// そのリクエストが、実装していないことにした機能のAPIへのものか。
     static func isUnsupported(_ request: URLRequest) -> Bool {
         let path = request.url?.path() ?? ""

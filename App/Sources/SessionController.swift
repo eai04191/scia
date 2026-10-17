@@ -165,6 +165,9 @@ final class SessionController {
                 }
                 return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile, recent])] + accountMenu().children)
             }
+            #if DEBUG
+            viewController.onDebugURL = { [weak self] url in self?.handle(url) }
+            #endif
             configure(viewController)
         }
         home.viewController.onCompose = { [weak self] in self?.expandCompose() }

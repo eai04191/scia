@@ -84,6 +84,8 @@ final class TimelineViewController: UIViewController {
     #if DEBUG
     /// デバッグメニューに出す、このタイムライン用の検証の操作。表示より前に設定する。
     var debugActions: [UIMenuElement] = []
+    /// デバッグメニューから起こした障害を、URLで届いたときと同じく処理する。nilなら障害の項目を出さない。表示より前に設定する。
+    var onDebugURL: (@MainActor (DebugURL) -> Void)?
     #endif
 
     /// 末尾から何件手前で古い投稿の読み込みを始めるか。
@@ -205,7 +207,7 @@ final class TimelineViewController: UIViewController {
             barItems.append(compose)
         }
         #if DEBUG
-        barItems.append(makeDebugMenuButton(screenActions: debugActions))
+        barItems.append(makeDebugMenuButton(screenActions: debugActions, faults: onDebugURL.map { DebugFaultMenu.make(handle: $0) }))
         #endif
         baseBarItems = barItems
         applyBarItems()

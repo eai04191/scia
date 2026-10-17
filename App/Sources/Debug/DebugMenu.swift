@@ -5,7 +5,8 @@ import UIKit
 extension UIViewController {
     /// Debugビルドだけで出す、開発用の機能をまとめたメニューボタン。
     /// - Parameter screenActions: 画面ごとの検証用の操作。共通の項目の前に区切って並べる。
-    func makeDebugMenuButton(screenActions: [UIMenuElement] = []) -> UIBarButtonItem {
+    /// - Parameter faults: 障害を起こす項目。セッションの読み込み直しにつながる画面でだけ渡す。
+    func makeDebugMenuButton(screenActions: [UIMenuElement] = [], faults: UIMenu? = nil) -> UIBarButtonItem {
         let common: [UIMenuElement] = [
             // メニューの見出しはタップできないため、ビルド情報はコピーする項目として出す。
             // 1行にまとめると長いブランチ名でcommitが切れるため、commitは2行目に分ける
@@ -27,7 +28,7 @@ extension UIViewController {
                 guard let window = self?.view.window else { return }
                 DiscomfortReportPresenter.present(in: window)
             },
-        ]
+        ] + (faults.map { [$0] } ?? [])
         let menu = UIMenu(children: [UIMenu(options: .displayInline, children: screenActions)] + common)
         let item = UIBarButtonItem(image: UIImage(systemName: "ladybug"), menu: menu)
         item.accessibilityLabel = "デバッグメニュー"
