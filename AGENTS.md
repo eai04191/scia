@@ -70,6 +70,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - サーバーやプロキシの障害の表示の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://status/502'`のように、以後のREST APIにそのステータスのHTMLのエラーページを返させて読み込み直す。`?retry-after=<秒>`を付けると`Retry-After`ヘッダーも返し、429や503で自動の通信を止めて明けたら読み込み直すところを確かめられる。`scia-debug://status/ok`か起動し直すと戻る
 - サーバーにない機能を止める確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unsupported/markers'`のように、以後その機能のAPIに404を返させて読み込み直す。機能は`markers`、`preferences`、`instanceV2`。起動し直すと戻る
 - ストリーミングにつながらないときの表示とポーリングの確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://streaming/offline'`で、RESTは通したままストリーミングの接続を切り、以後の接続を失敗させる。`scia-debug://streaming/online`で戻す
+- サーバーがホームを作り直している最中の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://regenerating/on'`で、以後のホームの応答を中身はそのままステータスだけ206にする。補完は`scia-debug://streaming/offline`と`online`でつなぎ直して起こす。`scia-debug://regenerating/off`か起動し直すと戻る
 - ダウンロード中の知らせの確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://download/slow'`で、以後の共有や保存のためのダウンロードを、進み具合を刻みながら10秒遅らせる。端末の中のファイルのダミー投稿の動画でも使える。`?seconds=<秒>`で時間を変え、`scia-debug://download/normal`か起動し直すと戻る
 - プロフィール画面の確認には、`xcrun simctl openurl '<使う端末>' 'scia://profile/<user@domain>'`でホームのタブにプロフィールを開く。アプリが起動していなくても開く。フォローとフォローの解除は、@Bot_testing@stellaria.networkで確かめる
 - 描画性能: スクロール時のhitchは`xcrun xctrace record --template 'Animation Hitches'`や`XCTOSSignpostMetric.scrollDecelerationMetric`で測る。シミュレーターの値は参考値で、最終確認は実機で行う

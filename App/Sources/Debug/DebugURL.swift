@@ -17,6 +17,8 @@ enum DebugURL: Equatable {
     /// `?retry-after=<秒>`を付けると、`Retry-After`ヘッダーも返す。`scia-debug://status/ok`で戻す。
     case status(Int, retryAfter: Int?)
     case statusCleared
+    /// `scia-debug://regenerating/on`で、以後のホームの応答を206（サーバーがホームを作り直している最中）にする。`scia-debug://regenerating/off`で戻す。
+    case regenerating(Bool)
     /// `scia-debug://unsupported/<OptionalFeature.rawValue>`。以後その機能のAPIに404のHTMLを返させ、このサーバーにはない機能にする。
     case unsupported(OptionalFeature)
     /// `scia-debug://streaming/offline`で今のストリーミングの接続を切り、以後の接続を失敗させる。`scia-debug://streaming/online`で戻す。
@@ -45,6 +47,12 @@ enum DebugURL: Equatable {
             guard let statusCode = Int(url.lastPathComponent), (100..<600).contains(statusCode) else { return nil }
             let retryAfter = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "retry-after" }?.value
             self = .status(statusCode, retryAfter: retryAfter.flatMap { Int($0) })
+        case "regenerating":
+            switch url.lastPathComponent {
+            case "on": self = .regenerating(true)
+            case "off": self = .regenerating(false)
+            default: return nil
+            }
         case "unsupported":
             guard let feature = OptionalFeature(rawValue: url.lastPathComponent) else { return nil }
             self = .unsupported(feature)

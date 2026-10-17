@@ -646,6 +646,8 @@ final class SessionController {
             DebugFaults.makeUnsupported(feature)
             home.start()
             notifications.start()
+        case .regenerating(let isOn):
+            DebugFaults.setRegeneratingHome(isOn)
         case .streaming(let isOnline):
             DebugFaults.setStreamingOnline(isOnline)
         case .slowDownload(let seconds):

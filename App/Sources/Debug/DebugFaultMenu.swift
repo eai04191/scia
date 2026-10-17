@@ -23,6 +23,9 @@ enum DebugFaultMenu {
             UIMenu(title: "ない機能にする", image: UIImage(systemName: "nosign"), children: OptionalFeature.allCases.map { feature in
                 untilRestart(feature.rawValue, image: nil, isOn: DebugFaults.isUnsupported(feature)) { handle(.unsupported(feature)) }
             }),
+            toggle("ホームを作り直し中にする", image: "hammer", isOn: DebugFaults.isRegeneratingHome) { isOn in
+                handle(.regenerating(isOn))
+            },
             toggle("ストリーミングを切る", image: "antenna.radiowaves.left.and.right.slash", isOn: !DebugFaults.isStreamingOnline) { isOn in
                 handle(.streaming(isOnline: !isOn))
             },

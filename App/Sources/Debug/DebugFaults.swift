@@ -26,6 +26,15 @@ enum DebugFaults {
         failingStatusCode.withLock { $0 = statusCode.map { ($0, retryAfter) } }
     }
 
+    /// 立てると、以後のホームの応答のステータスを206にする。中身はそのまま返すので、サーバーがホームを作り直している最中に一部だけ返した状態になる。
+    private static let regeneratesHome = Mutex(false)
+
+    static var isRegeneratingHome: Bool { regeneratesHome.withLock { $0 } }
+
+    static func setRegeneratingHome(_ isOn: Bool) {
+        regeneratesHome.withLock { $0 = isOn }
+    }
+
     /// 入れた機能のAPIに、以後は404のHTMLを返す。その機能を実装していないサーバーを再現する。
     private static let unsupportedFeatures = Mutex<Set<OptionalFeature>>([])
 
@@ -131,10 +140,16 @@ struct FaultInjectingTransport: HTTPTransport {
             SciaLog.logger(category: "debug").info("debug unsupported \(url.path(), privacy: .public)")
             return (Data("<html><body><h1>404 Not Found</h1></body></html>".utf8), response)
         }
-        let (data, response) = try await base.send(request)
+        var (data, response) = try await base.send(request)
         let path = request.url?.path() ?? ""
+        // 本文の破損とステータスの変更は、同時に入れても両方効かせる。
         if DebugFaults.isCorruptingListElements, path.hasSuffix("api/v1/timelines/home") || path.hasSuffix("api/v1/notifications") {
-            return (DebugFaults.corrupt(data), response)
+            data = DebugFaults.corrupt(data)
+        }
+        if DebugFaults.isRegeneratingHome, path.hasSuffix("api/v1/timelines/home"), response.statusCode == 200,
+           let url = response.url,
+           let partial = HTTPURLResponse(url: url, statusCode: 206, httpVersion: nil, headerFields: response.allHeaderFields as? [String: String]) {
+            response = partial
         }
         return (data, response)
     }
