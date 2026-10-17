@@ -47,10 +47,12 @@ enum PostRowCatalog {
     @MainActor
     static func notificationStates() -> [CatalogState] {
         let notifications = TimelineViewController(texts: .notifications)
-        let mentioned = status(content: "<p>@me 通知の元になった投稿。</p>")
-        func row(_ title: String, _ type: MastodonNotification.Kind, status: Status? = mentioned) -> CatalogState {
+        // メンションなどの投稿は通知を送った人が書き、お気に入りなどで再掲する投稿は自分が書いたもの。
+        let mentioned = status(content: "<p>@me 通知の元になった投稿。</p>", account: booster)
+        let mine = status(content: "<p>お気に入りやブーストをされた自分の投稿。</p>")
+        func row(_ title: String, _ type: MastodonNotification.Kind, status: Status? = mentioned, account: Account = booster) -> CatalogState {
             CatalogState(title: title) {
-                let notification = MastodonNotification(id: UUID().uuidString, type: type, createdAt: .now.addingTimeInterval(-300), account: booster, status: status)
+                let notification = MastodonNotification(id: UUID().uuidString, type: type, createdAt: .now.addingTimeInterval(-300), account: account, status: status)
                 @MainActor func configuration() -> any UIContentConfiguration {
                     notifications.contentConfiguration(for: notification, base: .cell())
                 }
@@ -62,20 +64,46 @@ enum PostRowCatalog {
                 return CatalogFrame.bordered(view)
             }
         }
+        let longBody = "<p>" + String(repeating: "お気に入りに登録された自分の投稿が長いときに、再掲する本文を何行で切るかを確かめるための文。", count: 4) + "</p>"
         return [
             row("メンション", .mention),
-            row("メンション（画像つき）", .mention, status: status(content: "<p>@me 画像つきのメンション。</p>", media: [
+            row("メンション（画像つき）", .mention, status: status(content: "<p>@me 画像つきのメンション。</p>", account: booster, media: [
                 Fixtures.attachment("a", width: 1_200, height: 900, color: .systemBlue),
             ])),
+            row("メンション（投稿が届かなかった）", .mention, status: nil),
             row("投稿の通知", .status),
-            row("ブースト", .reblog),
-            row("お気に入り", .favourite),
-            row("フォロー", .follow, status: nil),
-            row("フォローリクエスト", .followRequest, status: nil),
-            row("投票の終了", .poll),
-            row("ブーストした投稿の編集", .update),
             row("引用", .quote),
-            row("引用した投稿の編集", .quotedUpdate),
+            row("ブースト", .reblog, status: mine),
+            row("お気に入り", .favourite, status: mine),
+            row("お気に入り（長い本文を切る）", .favourite, status: status(content: longBody)),
+            row("お気に入り（注意書き）", .favourite, status: status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ")),
+            row("お気に入り（画像2枚、ALTつき）", .favourite, status: status(content: "<p>画像を2枚添付した自分の投稿。</p>", media: [
+                Fixtures.attachment("a", width: 1_200, height: 900, color: .systemBlue),
+                Fixtures.attachment("b", width: 900, height: 1_600, color: .systemGreen, description: "緑の地に白い格子"),
+            ])),
+            row("お気に入り（画像が行に収まらず、横にスクロールする）", .favourite, status: status(content: "<p>画像を6枚添付した自分の投稿。</p>", media: [
+                Fixtures.attachment("a", width: 1_200, height: 900, color: .systemBlue),
+                Fixtures.attachment("b", width: 1_200, height: 900, color: .systemGreen),
+                Fixtures.attachment("c", width: 1_200, height: 900, color: .systemOrange),
+                Fixtures.attachment("d", width: 1_200, height: 900, color: .systemPurple),
+                Fixtures.attachment("e", width: 1_200, height: 900, color: .systemRed),
+                Fixtures.attachment("f", width: 1_200, height: 900, color: .systemTeal),
+            ])),
+            row("ブースト（閲覧注意の画像）", .reblog, status: status(content: "<p>閲覧注意の画像を添付した自分の投稿。</p>", media: [
+                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
+            ], sensitive: true)),
+            row("ブースト（本文のない画像だけの投稿）", .reblog, status: status(content: "", media: [
+                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemIndigo),
+            ])),
+            row("投票の終了", .poll, status: mine),
+            row("ブーストした投稿の編集", .update, status: mine),
+            row("引用した投稿の編集", .quotedUpdate, status: mine),
+            row("フォロー", .follow, status: nil),
+            row("フォロー（名前が長い）", .follow, status: nil, account: Fixtures.account(
+                displayName: String(repeating: "とても長い名前", count: 4),
+                acct: "a-very-long-account-name@subdomain.example.com"
+            )),
+            row("フォローリクエスト", .followRequest, status: nil),
             row("知らない種類", .other("admin.sign_up"), status: nil),
         ]
     }
