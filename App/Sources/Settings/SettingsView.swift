@@ -108,6 +108,18 @@ struct SettingsView: View {
                     Text("URLのリンクを開く場所です。アプリ内のSafariでは、画面の下半分にページを開き、上に一覧を見ながら読めます。読んでいる間も新着が届きます。httpとhttps以外のリンクは、この設定にかかわらず対応するアプリで開きます。")
                 }
                 Section {
+                    NavigationLink("投稿のメニュー") {
+                        MenuLayoutSettingsView(title: "投稿のメニュー", layout: $settings.statusMenuLayout)
+                    }
+                    NavigationLink("ユーザーのメニュー") {
+                        MenuLayoutSettingsView(title: "ユーザーのメニュー", layout: $settings.userMenuLayout)
+                    }
+                } header: {
+                    Text("長押しのメニュー")
+                } footer: {
+                    Text("投稿や通知を長押ししたときのメニューに出す項目と、その並びを選びます。ユーザーのメニューは、投稿のメニューの中に、投稿したユーザーなどのサブメニューとして出ます。")
+                }
+                Section {
                     Toggle("モバイル通信で高画質のサムネイルを使う", isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
                 } header: {
                     Text("画像")
