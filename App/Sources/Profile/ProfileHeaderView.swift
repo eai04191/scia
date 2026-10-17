@@ -256,7 +256,7 @@ final class ProfileHeaderView: UIView {
         noteLabel.attributedText = note
         noteLabel.isHidden = note.length == 0
         applyFields(account, language: content.glyphLanguage)
-        countsLabel.attributedText = countsText(of: account, language: content.glyphLanguage)
+        countsLabel.attributedText = Self.countsText(of: account)
         remoteStack.isHidden = !content.isRemote
         // サーバーがプロフィールのURLを返さなかったら、開く先がないのでボタンを出さない。
         openOriginalButton.isHidden = account.url == nil
@@ -309,7 +309,7 @@ final class ProfileHeaderView: UIView {
         }
     }
 
-    private func countsText(of account: Account, language: String) -> NSAttributedString {
+    static func countsText(of account: Account) -> NSAttributedString {
         let font = UIFont.preferredFont(forTextStyle: .subheadline)
         let bold = font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
         let text = NSMutableAttributedString()
@@ -318,7 +318,7 @@ final class ProfileHeaderView: UIView {
                 text.append(NSAttributedString(string: "　", attributes: [.font: font]))
             }
             text.append(NSAttributedString(string: count.formatted(), attributes: [.font: bold, .foregroundColor: UIColor.label]))
-            text.append(NSAttributedString(string: " \(label)", attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel, .languageIdentifier: language]))
+            text.append(NSAttributedString(string: " \(label)", attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel]))
         }
         return text
     }

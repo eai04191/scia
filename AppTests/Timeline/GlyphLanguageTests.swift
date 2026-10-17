@@ -49,18 +49,43 @@ struct GlyphLanguageTests {
         #expect(isJapanese(fontNames(of: configuration.body)), "\(fontNames(of: configuration.body))")
     }
 
-    /// 名前と、注意書きと、注意書きの箱のアプリの文言も、ヒラギノで描く。
+    /// 名前と注意書きも、ヒラギノで描く。
     @Test func nameAndSpoilerUseJapaneseFont() throws {
         let configuration = try controller(glyphLanguage: .japanese).contentConfiguration(for: status("本文", language: nil, spoiler: "見る前に"), base: .cell())
 
         #expect(isJapanese(fontNames(of: configuration.nameParts[0])), "\(fontNames(of: configuration.nameParts[0]))")
         let spoiler = try #require(configuration.spoiler)
         #expect(isJapanese(fontNames(of: spoiler.text)), "\(fontNames(of: spoiler.text))")
-        let font = UIFont.preferredFont(forTextStyle: .footnote)
-        // ラベルの文字の大きさで描くため、文字列には書体が付いていない。ラベルと同じく、付いていない範囲に書体を足して測る。
-        let toggle = NSMutableAttributedString(attributedString: SpoilerView.toggleText(isCollapsed: true, font: font, language: spoiler.toggleLanguage))
-        toggle.addAttribute(.font, value: font, range: NSRange(location: 0, length: toggle.length))
-        #expect(isJapanese(fontNames(of: toggle)), "\(fontNames(of: toggle))")
+    }
+
+    /// 「本文を表示」や通知の言い回し、プロフィールの件数の名前のようなアプリの文言は、設定の字形ではなく、ウィンドウに付けたアプリの言語で描く。
+    /// 字形の設定で中国語を選んでも、文字列には言語を付けない。
+    @Test func appTextHasNoGlyphLanguage() throws {
+        let controller = try controller(glyphLanguage: .simplifiedChinese)
+        let toggle = SpoilerView.toggleText(isCollapsed: true, font: .preferredFont(forTextStyle: .footnote))
+        #expect(languages(in: toggle, of: "本文を表示") == [nil])
+
+        let follow = MastodonNotification(id: "1", type: .follow, createdAt: .now, account: account)
+        let header = try #require(controller.contentConfiguration(for: follow, base: .cell()) as? NotificationContentConfiguration).header
+        #expect(languages(in: header, of: "日本語の名前") == ["zh-Hans"])
+        #expect(languages(in: header, of: "にフォローされました") == [nil])
+
+        let mention = MastodonNotification(id: "2", type: .mention, createdAt: .now, account: account, status: status("本文", language: nil))
+        let context = try #require((controller.contentConfiguration(for: mention, base: .cell()) as? PostContentConfiguration)?.context?.text)
+        #expect(languages(in: context, of: "日本語の名前") == ["zh-Hans"])
+        #expect(languages(in: context, of: "からのメンション") == [nil])
+
+        let counts = ProfileHeaderView.countsText(of: account)
+        #expect(languages(in: counts, of: "フォロワー") == [nil])
+    }
+
+    /// 文字列のうち、`part`の範囲に付いている言語。
+    private func languages(in string: NSAttributedString, of part: String) -> Set<String?> {
+        let range = (string.string as NSString).range(of: part)
+        guard range.location != NSNotFound else { return [] }
+        var result = Set<String?>()
+        string.enumerateAttribute(.languageIdentifier, in: range) { value, _, _ in result.insert(value as? String) }
+        return result
     }
 
     /// 中国語の投稿は、設定にかかわらず中国語の書体で描く。

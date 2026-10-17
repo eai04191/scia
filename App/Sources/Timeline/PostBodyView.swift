@@ -14,8 +14,6 @@ struct PostBodyContent {
         var padding: CGFloat
         /// 開いているときの、注意書きの箱と本文のあいだ。
         var bodySpacing: CGFloat
-        /// 「本文を表示」などのアプリの文言に付ける言語。付けないと、英語の設定の端末で中国語の書体になる。
-        var toggleLanguage: String
     }
 
     /// 注意書きがなければnil。
@@ -97,7 +95,7 @@ final class PostBodyView: UIView {
         variableConstraints = []
         if let spoiler = content.spoiler {
             spoilerView.isHidden = false
-            spoilerView.apply(SpoilerView.Content(text: spoiler.text, isCollapsed: spoiler.isCollapsed, padding: spoiler.padding, toggleLanguage: spoiler.toggleLanguage))
+            spoilerView.apply(SpoilerView.Content(text: spoiler.text, isCollapsed: spoiler.isCollapsed, padding: spoiler.padding))
         } else {
             spoilerView.isHidden = true
         }

@@ -9,8 +9,6 @@ final class SpoilerView: UIControl {
         var isCollapsed: Bool
         /// 箱の内側の余白。
         var padding: CGFloat
-        /// 「本文を表示」などのアプリの文言に付ける言語。
-        var toggleLanguage: String
     }
 
     private let textLabel = UILabel()
@@ -47,7 +45,7 @@ final class SpoilerView: UIControl {
 
     func apply(_ content: Content) {
         textLabel.attributedText = content.text
-        toggleLabel.attributedText = Self.toggleText(isCollapsed: content.isCollapsed, font: toggleLabel.font, language: content.toggleLanguage)
+        toggleLabel.attributedText = Self.toggleText(isCollapsed: content.isCollapsed, font: toggleLabel.font)
         NSLayoutConstraint.deactivate(paddingConstraints)
         paddingConstraints = [
             textLabel.firstBaselineAnchor.constraint(equalTo: topAnchor, constant: content.padding + PostBodyView.textTopInset(of: content.text)),
@@ -62,8 +60,8 @@ final class SpoilerView: UIControl {
         isCollapsed ? "本文を表示" : "本文を隠す"
     }
 
-    static func toggleText(isCollapsed: Bool, font: UIFont, language: String) -> NSAttributedString {
-        let text = NSMutableAttributedString(string: toggleTitle(isCollapsed: isCollapsed) + " ", attributes: [.languageIdentifier: language])
+    static func toggleText(isCollapsed: Bool, font: UIFont) -> NSAttributedString {
+        let text = NSMutableAttributedString(string: toggleTitle(isCollapsed: isCollapsed) + " ")
         let symbol = UIImage(
             systemName: isCollapsed ? "chevron.down" : "chevron.up",
             withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)

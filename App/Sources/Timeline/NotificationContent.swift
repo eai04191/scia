@@ -24,11 +24,17 @@ extension TimelineViewController {
         var configuration = contentConfiguration(for: status, itemID: itemID, base: base)
         let appearance = NotificationAppearance(notification.type)
         let renderer = RichTextRenderer(font: base.secondaryTextProperties.font, textColor: .secondaryLabel, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
-        let text = NSMutableAttributedString(attributedString: renderer.render(.plain(appearance.phrase.before, emojis: [])))
+        // 言い回しはアプリの文言なので、言語を外し、ウィンドウに付けたアプリの言語で描く。
+        func phrase(_ string: String) -> NSAttributedString {
+            let rendered = NSMutableAttributedString(attributedString: renderer.render(.plain(string, emojis: [])))
+            rendered.removeAttribute(.languageIdentifier, range: NSRange(location: 0, length: rendered.length))
+            return rendered
+        }
+        let text = NSMutableAttributedString(attributedString: phrase(appearance.phrase.before))
         if appearance.phrase.includesName {
             text.append(renderer.render(.plain(notification.account.displayNameOrUsername, emojis: notification.account.emojis)))
         }
-        text.append(renderer.render(.plain(appearance.phrase.after, emojis: [])))
+        text.append(phrase(appearance.phrase.after))
         configuration.context = PostContentConfiguration.Context(
             symbolName: appearance.symbolName,
             symbolColor: appearance.color,
@@ -96,9 +102,9 @@ extension TimelineViewController {
     ) -> NotificationContentConfiguration {
         let appearance = NotificationAppearance(notification.type)
         let font = base.textProperties.font
-        let language = settings.glyphLanguageIdentifier()
-        let nameRenderer = RichTextRenderer(font: font, textColor: base.textProperties.color, emojiImages: emojiImages, language: language)
-        let phraseAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel, .languageIdentifier: language]
+        let nameRenderer = RichTextRenderer(font: font, textColor: base.textProperties.color, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
+        // 言い回しはアプリの文言なので、言語を付けず、ウィンドウに付けたアプリの言語で描く。
+        let phraseAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
         let header = NSMutableAttributedString(string: appearance.phrase.before, attributes: phraseAttributes)
         if appearance.phrase.includesName {
             header.append(avatarAttachment(of: notification.account, font: font))

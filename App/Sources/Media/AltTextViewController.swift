@@ -1,17 +1,20 @@
+import SciaCore
 import UIKit
 
 /// 添付ファイルの代替テキストの全文。ビューアの下の説明は1行で切れて文字も選べないため、
 /// 長い説明を読んだり一部をコピーしたりするときに使う。
 final class AltTextViewController: UIViewController {
     let text: String
-    private let textView = UITextView()
+    private let settings: AppSettings
+    private let textView = GlyphLanguageTextView()
     private let translation = SystemTranslation()
 
     /// システムの翻訳シートを出している、または出そうとしている。
     var isTranslationPresented: Bool { translation.isPresented }
 
-    init(text: String) {
+    init(text: String, settings: AppSettings = AppDependencies.settings) {
         self.text = text
+        self.settings = settings
         super.init(nibName: nil, bundle: nil)
         title = "代替テキスト"
     }
@@ -24,6 +27,8 @@ final class AltTextViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
+        // 人が書いた代替テキストは言語が分からないため、設定の字形で描く。
+        textView.followGlyphLanguage(of: settings)
         textView.text = text
         textView.isEditable = false
         textView.font = .preferredFont(forTextStyle: .body)

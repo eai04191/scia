@@ -20,6 +20,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             windowScene.sizeRestrictions?.minimumSize = CGSize(width: 375, height: 480)
         }
         let window = ShakeDetectingWindow(windowScene: windowScene)
+        window.useAppLanguage()
         self.window = window
         switch AppDependencies.accounts {
         case .success(let accounts):

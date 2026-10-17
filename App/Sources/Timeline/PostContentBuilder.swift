@@ -97,8 +97,7 @@ struct PostContentBuilder {
             text: bodyRenderer(of: status, base: base, color: color).render(.plain(status.spoilerText, emojis: status.emojis)),
             isCollapsed: true,
             padding: tuning.value(of: TuningCatalog.spoilerPadding),
-            bodySpacing: tuning.value(of: TuningCatalog.spoilerBodySpacing),
-            toggleLanguage: settings.glyphLanguageIdentifier()
+            bodySpacing: tuning.value(of: TuningCatalog.spoilerBodySpacing)
         )
     }
 

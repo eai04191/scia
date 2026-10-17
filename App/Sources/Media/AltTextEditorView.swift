@@ -23,7 +23,7 @@ final class AltTextEditorView: UIView {
         didSet { updateTextHeight() }
     }
 
-    let textView = UITextView()
+    let textView = GlyphLanguageTextView()
     private let placeholderLabel = UILabel()
     private let remainingLabel = UILabel()
     /// 書き終えるボタン。「完了」と書くとビューアを閉じるボタンに見えるため、キーボードを下げる絵にする。
@@ -37,8 +37,8 @@ final class AltTextEditorView: UIView {
         (textView.font ?? .preferredFont(forTextStyle: .body)).lineHeight * CGFloat(maxLines) + textView.textContainerInset.top + textView.textContainerInset.bottom
     }
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    init(settings: AppSettings = AppDependencies.settings) {
+        super.init(frame: .zero)
         backgroundColor = UIColor.black.withAlphaComponent(0.6)
         textView.font = .preferredFont(forTextStyle: .body)
         textView.adjustsFontForContentSizeCategory = true
@@ -48,6 +48,8 @@ final class AltTextEditorView: UIView {
         textView.textContainerInset = UIEdgeInsets(top: 4, left: 0, bottom: 4, right: 0)
         textView.textContainer.lineFragmentPadding = 0
         textView.accessibilityLabel = "代替テキスト"
+        // 書いている代替テキストは言語が分からないため、設定の字形で描く。
+        textView.followGlyphLanguage(of: settings)
         textView.delegate = self
         placeholderLabel.text = "代替テキストを追加"
         placeholderLabel.font = .preferredFont(forTextStyle: .body)

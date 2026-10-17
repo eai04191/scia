@@ -2201,6 +2201,7 @@ final class UnsupportedPageController: MediaPageController {
 /// 添付ファイルの説明を、画像を覆わないよう1行で見せる。全文は、タップするか上へスワイプするかVoiceOverで実行して、シートで読む。
 final class CaptionView: UIView {
     private let label = UILabel()
+    private let settings: AppSettings
     private let contentGuide = UILayoutGuide()
     /// 全文を読む操作をした。書ける説明では、書き始める操作。
     var onOpen: (() -> Void)?
@@ -2216,7 +2217,12 @@ final class CaptionView: UIView {
 
     private func updateLabel() {
         let isPlaceholder = isEditable && text.isEmpty
-        label.text = isPlaceholder ? "代替テキストを追加" : text
+        if isPlaceholder {
+            label.text = "代替テキストを追加"
+        } else {
+            // 人が書いた代替テキストは言語が分からないため、設定の字形で描く。書き始めを促す文言は、ウィンドウに付けたアプリの言語で描く。
+            label.attributedText = NSAttributedString(string: text, attributes: [.languageIdentifier: settings.glyphLanguageIdentifier()])
+        }
         label.textColor = isPlaceholder ? UIColor.white.withAlphaComponent(0.6) : .white
         accessibilityLabel = isPlaceholder ? "代替テキストを追加" : text
         accessibilityHint = isEditable ? "代替テキストを編集します。" : "全文を表示します。"
@@ -2225,8 +2231,9 @@ final class CaptionView: UIView {
     /// 文字の下端。安全領域に合わせるために使う。
     var contentBottomAnchor: NSLayoutYAxisAnchor { contentGuide.bottomAnchor }
 
-    override init(frame: CGRect) {
-        super.init(frame: frame)
+    init(settings: AppSettings = AppDependencies.settings) {
+        self.settings = settings
+        super.init(frame: .zero)
         backgroundColor = UIColor.black.withAlphaComponent(0.6)
         label.numberOfLines = 1
         label.lineBreakMode = .byTruncatingTail

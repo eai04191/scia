@@ -34,6 +34,7 @@ final class InlineComposeController: NSObject {
 
     private weak var host: UIViewController?
     private let tuning: TuningStore
+    private let settings: AppSettings
     private let logger = SciaLog.logger(category: "compose")
     /// 書いていないときに見せる、下書きの1行。押すと書き始める。
     private let restRow = UIControl()
@@ -120,9 +121,10 @@ final class InlineComposeController: NSObject {
         UIFont.preferredFont(forTextStyle: .body).lineHeight * 5 + textView.textContainerInset.top + textView.textContainerInset.bottom
     }
 
-    init(model: ComposeModel, tuning: TuningStore = AppDependencies.tuning) {
+    init(model: ComposeModel, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings) {
         self.model = model
         self.tuning = tuning
+        self.settings = settings
         super.init()
         model.onPosted = { [weak self] in
             // シートの上に見えている投稿ボタンから送ったときは、入力欄はもうキーボードを出していないので、シートを閉じて書き終える。
@@ -565,7 +567,7 @@ final class InlineComposeController: NSObject {
         if body.isEmpty {
             result.append(NSAttributedString(string: "いまどうしてる？", attributes: [.font: font, .foregroundColor: UIColor.placeholderText]))
         } else {
-            result.append(NSAttributedString(string: body, attributes: [.font: font, .foregroundColor: UIColor.label]))
+            result.append(NSAttributedString(string: body, attributes: [.font: font, .foregroundColor: UIColor.label, .languageIdentifier: settings.glyphLanguageIdentifier()]))
         }
         return result
     }
@@ -811,6 +813,8 @@ final class InlineComposeController: NSObject {
         // 広げたときに、残りの高さを本文が使う。行が収まらない高さでは、本文から縮める。
         textView.setContentHuggingPriority(.defaultLow - 1, for: .vertical)
         textView.setContentCompressionResistancePriority(.defaultLow - 1, for: .vertical)
+        // 書いている文字は自分の文で言語が分からないため、設定の字形で描く。
+        textView.followGlyphLanguage(of: settings)
 
         placeholderLabel.text = "いまどうしてる？"
         placeholderLabel.font = .preferredFont(forTextStyle: .body)
@@ -906,7 +910,7 @@ extension InlineComposeController: UITextViewDelegate {
 }
 
 /// Returnは改行と変換の確定に使うため、送信はボタンと、ハードウェアキーボードの⌘Returnだけにする。
-private final class ComposeTextView: UITextView {
+private final class ComposeTextView: GlyphLanguageTextView {
     var onSubmit: () -> Void = {}
 
     override var keyCommands: [UIKeyCommand]? {
