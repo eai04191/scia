@@ -261,6 +261,17 @@ final class TimelineViewController: UIViewController {
         startRefreshingTimes()
     }
 
+    /// ハードウェアキーボードのnで、投稿欄で書き始める。入力欄に書いている間は、文字の入力が先に受けるため効かない。
+    override var keyCommands: [UIKeyCommand]? {
+        guard onFocusInlineCompose != nil else { return super.keyCommands }
+        let focus = UIKeyCommand(title: "投稿欄に書く", action: #selector(focusInlineComposeFromKeyboard), input: "n")
+        return (super.keyCommands ?? []) + [focus]
+    }
+
+    @objc private func focusInlineComposeFromKeyboard() {
+        onFocusInlineCompose?()
+    }
+
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         timeRefreshTimer?.invalidate()
