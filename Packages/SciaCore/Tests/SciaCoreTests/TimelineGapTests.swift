@@ -520,6 +520,31 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((8...20).reversed()))
     }
 
+    /// 補完の読み込みが再生成中で一部の投稿だけを返したら、返った中で最も新しい投稿から下をギャップにして、間の投稿を読み飛ばさない。
+    /// 最も新しい投稿より上は、次の補完でそこから読む。
+    @Test func regeneratingFillPageKeepsGapBelowNewest() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let regenerating = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.sinceID != nil, query.maxID == nil, regenerating.shouldFail() {
+                return TimelinePage(statuses: [13, 11].map(server.status), isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(11...20)
+
+        _ = try await store.fillFromLatest()
+        #expect(ids(store) == Array((8...13).reversed()), "再生成中の結果の間の投稿を読み飛ばしました: \(store.entries.map(\.debugLabel))")
+
+        _ = try await store.fillFromLatest()
+        #expect(store.gaps.count <= 1, "範囲の重なるギャップがあります: \(store.entries.map(\.debugLabel))")
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        #expect(ids(store) == Array((8...20).reversed()))
+    }
+
     /// ギャップの中に届いた投稿を既読にしても、その新しい側に読み込んでいない投稿があれば、未読はまだある。
     @Test func readInsideGapStillHasUnloadedUnread() async throws {
         let server = FakeHomeServer(ids: 1...10)
@@ -569,6 +594,47 @@ struct TimelineGapTests {
             _ = try await store.loadGap(gap.id, from: .fromNewer)
         }
         #expect(ids(store) == Array((8...14).reversed()))
+    }
+
+    /// 重なった補完の1回目が再生成中で一部の投稿だけを返し、置いたギャップを読んでもまだ再生成中だったとき、
+    /// 2回目はそのギャップに含めた範囲を読み直さず、範囲の重なるギャップを作らない。
+    @Test func overlappingFillAfterRegeneratingPageDoesNotOverlapGaps() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let gate = FetchGate()
+        let gated = FailOnce()
+        let gapRegenerating = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.sinceID != nil, query.maxID == nil, gated.shouldFail() {
+                await gate.wait()
+                return TimelinePage(statuses: [16, 11].map(server.status), isRegenerating: true)
+            }
+            if query.maxID != nil, gapRegenerating.shouldFail() {
+                return TimelinePage(statuses: [], isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(11...20)
+
+        let first = Task { try await store.fillFromLatest() }
+        await gate.waitUntilWaiting()
+        _ = store.receive(.update(server.status(13)))
+        _ = store.flushPending()
+        #expect(try await store.fillFromLatest() == nil)
+        await gate.open()
+        _ = try await first.value
+
+        let gaps = store.gaps
+        let overlapping = gaps.indices.contains { i in
+            gaps.indices.contains { j in
+                i != j && StatusID.isNewer(gaps[i].newerID, than: gaps[j].olderID) && StatusID.isNewer(gaps[j].newerID, than: gaps[i].olderID)
+            }
+        }
+        #expect(!overlapping, "範囲の重なるギャップがあります: \(store.entries.map(\.debugLabel))")
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        #expect(ids(store) == Array((8...20).reversed()))
     }
 
     @Test func regeneratingShortPageKeepsGap() async throws {

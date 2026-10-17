@@ -136,6 +136,7 @@ public final class TimelineStore {
     /// 0件が返るまで読み切ったとは判断しない。求めた件数より少なく返すサーバーでは、満杯でないページの下にも投稿が残っているため。
     /// 接続し直した後に呼ぶ。その間に届いた新着が先に挿入されていても、基準のIDは読み始める前に決めるため、間を読み飛ばさない。
     /// 失敗したとき、またはサーバーがホームを再生成中で結果が揃っていないときは、次の呼び出しも同じ基準から読む。
+    /// 再生成中でも投稿が返ったら、返った中で最も新しい投稿から下をギャップにし、次の呼び出しはその投稿から読む。
     ///
     /// 補完の最中に呼ばれたら、そのときの基準を覚えてnilを返し、今の補完が終わった後に続けて読む。
     /// 同じ基準で並行して読むと、同じギャップが2つできるため。続けて読むときは、今の補完で読み終えた範囲より新しいところから読む。
@@ -175,20 +176,22 @@ public final class TimelineStore {
                 }
                 throw error
             }
-            if !page.isRegenerating {
-                unfilledSinceID = nil
-            }
+            // 再生成中の結果は揃っておらず、返った投稿の間にも、最も新しい投稿より上にも、まだ出ていない投稿が残りうる。
+            // 最も新しい投稿から下はギャップにし、上は次の補完でそこから読む。
+            let gapNewerID = page.isRegenerating ? Self.newestID(of: page) : Self.oldestID(of: page)
+            unfilledSinceID = page.isRegenerating ? gapNewerID ?? sinceID : nil
             added += merge(page)
-            if let oldestFetched = Self.oldestID(of: page) {
-                let gap = TimelineGap(newerID: oldestFetched, olderID: sinceID)
+            if let gapNewerID {
+                let gap = TimelineGap(newerID: gapNewerID, olderID: sinceID)
                 rebuild(statuses: statuses, gaps: gaps + [gap])
                 let isFull = page.count >= pageSize
                 added += await fillGap(gap.id, pages: isFull ? maxPages - 1 : max(maxPages - 1, 1))
             }
             next = refillSinceID.map { refillSinceID in
                 if let unfilledSinceID {
-                    // 再生成中で読めなかった基準より新しいところから読み直すと、その間を読み飛ばすため。
-                    Self.older(unfilledSinceID, refillSinceID)
+                    // 再生成中だった。基準より古い側は、読み込み済みかギャップに含めてある。
+                    // これより新しいところから読み直すとその間を読み飛ばし、古いところから読み直すとギャップが重なるため。
+                    unfilledSinceID
                 } else {
                     // 読み終えた範囲を読み直すと、同じ範囲にギャップがもう1つできるため。
                     Self.newer(refillSinceID, Self.newestID(of: page) ?? sinceID)
