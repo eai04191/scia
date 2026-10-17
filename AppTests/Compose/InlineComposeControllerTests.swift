@@ -180,6 +180,83 @@ struct InlineComposeControllerTests {
         #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
     }
 
+    /// 注意書きの欄を出す途中で外したり、外す途中で出し直したりしても、行が重ならず、最後の状態で止まる。
+    /// 待ち時間を変えて、アニメーションのいろいろな途中に次の操作を送る。
+    @Test(arguments: [0, 30, 120, 250])
+    func spoilerRowKeepsItsSpaceWhenToggledDuringAnimation(waitMilliseconds: Int) async throws {
+        defer { window.isHidden = true }
+        let wait = Duration.milliseconds(waitMilliseconds)
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(500))
+        for shows in [true, false, true, false, true] {
+            composer.model.showsSpoiler = shows
+            try await Task.sleep(for: wait)
+        }
+        try await Task.sleep(for: .milliseconds(800))
+        window.layoutIfNeeded()
+
+        let row = try #require(textFields(in: window).first?.superview?.superview)
+        #expect(!row.isHidden && row.alpha == 1, "注意書きの欄が出ていません: hidden=\(row.isHidden) alpha=\(row.alpha)")
+        #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
+    }
+
+    /// 本文と注意書きの間でキーボードを移しても、書き終えたことにならず、欄はカプセルに戻らない。
+    @Test func movingFocusBetweenSpoilerAndTextKeepsEditing() async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        composer.model.showsSpoiler = true
+        try await Task.sleep(for: .milliseconds(500))
+        let field = try #require(textFields(in: window).first)
+        let textView = try #require(textViews(in: window).first)
+        #expect(textView.isFirstResponder)
+
+        field.becomeFirstResponder()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(field.isFirstResponder)
+        #expect(composer.stateDump().contains("editing: true"), "注意書きへ移ると、書き終えたことになりました\n\(composer.stateDump())")
+
+        textView.becomeFirstResponder()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(textView.isFirstResponder)
+        #expect(composer.stateDump().contains("editing: true"), "本文へ戻ると、書き終えたことになりました\n\(composer.stateDump())")
+
+        composer.endEditing()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(composer.stateDump().contains("editing: false"), "閉じても書いている状態のままです\n\(composer.stateDump())")
+    }
+
+    /// 注意書き付きの投稿への返信で、引き継いだ注意書きの欄にキーボードを出したまま返信をやめると、欄が隠れ、キーボードは本文に移る。
+    /// 隠れた欄にキーボードが残ると、打った文字が投稿されない注意書きに入ってしまう。
+    @Test func clearingReplyWithInheritedSpoilerMovesFocusToText() async throws {
+        defer { window.isHidden = true }
+        let target = Status(
+            id: "10",
+            createdAt: .now,
+            account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://example.social/a.png")),
+            content: "",
+            spoilerText: "ネタバレ",
+            url: nil
+        )
+        composer.reply(to: target)
+        try await Task.sleep(for: .milliseconds(500))
+        let field = try #require(textFields(in: window).first)
+        let textView = try #require(textViews(in: window).first)
+        #expect(field.text == "ネタバレ")
+        field.becomeFirstResponder()
+        try await Task.sleep(for: .milliseconds(100))
+
+        composer.model.setReplyTarget(nil)
+        try await Task.sleep(for: .milliseconds(700))
+        #expect(!composer.model.showsSpoiler)
+        #expect(!field.isFirstResponder, "隠れた注意書きの欄にキーボードが残っています\n\(composer.stateDump())")
+        #expect(textView.isFirstResponder)
+        #expect(composer.stateDump().contains("editing: true"), "返信をやめると書き終えたことになりました\n\(composer.stateDump())")
+    }
+
+    private func textFields(in view: UIView) -> [UITextField] {
+        (view as? UITextField).map { [$0] } ?? view.subviews.flatMap(textFields(in:))
+    }
+
     private func textViews(in view: UIView) -> [UITextView] {
         (view as? UITextView).map { [$0] } ?? view.subviews.flatMap(textViews(in:))
     }

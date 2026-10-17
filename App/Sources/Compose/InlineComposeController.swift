@@ -54,7 +54,14 @@ final class InlineComposeController: NSObject {
     private lazy var replyRow = makeReplyRow()
     /// 添付したメディアのサムネイルの列。書いていて、添付があるときだけ出す。
     let attachmentStrip = ComposeAttachmentStrip()
+    /// 注意書きの入力欄。＋のメニューから足したときと、注意書きの付いた投稿へ返信したときだけ、本文の上に出す。
+    private let spoilerField = ComposeSpoilerField()
+    private lazy var spoilerRow = makeSpoilerRow()
     private let textView = ComposeTextView()
+    /// 最後にキーボードを出していた入力欄。シートやビューアを閉じたら、ここへキーボードを戻す。
+    private weak var lastFocusedInput: UIView?
+    /// 本文と注意書きの間でフォーカスを移している最中。移す前の入力欄の編集が終わっても、書き終えたとして扱わない。
+    private var isMovingFocus = false
     private let placeholderLabel = UILabel()
     /// 書き終えて入力欄を隠すと、スタックビューが高さ0の制約を付ける。それと競合しないよう、必須より1つ下げる。
     private lazy var textHeightLimit: NSLayoutConstraint = {
@@ -131,7 +138,7 @@ final class InlineComposeController: NSObject {
             // シートの上に見えている投稿ボタンから送ったときは、入力欄はもうキーボードを出していないので、シートを閉じて書き終える。
             // 添付したメディアは、下書きと一緒にモデルが空にしている。
             self?.mediaPicker?.close(notifiesWillClose: false)
-            self?.textView.resignFirstResponder()
+            self?.resignInput()
             self?.onPosted()
         }
     }
@@ -177,7 +184,24 @@ final class InlineComposeController: NSObject {
 
     /// キーボードを閉じて、バーを細いカプセルに戻す。
     func endEditing() {
+        resignInput()
+    }
+
+    /// 本文か注意書きの入力欄が、キーボードを出している。
+    private var isInputFocused: Bool { textView.isFirstResponder || spoilerField.isFirstResponder }
+
+    private func resignInput() {
         textView.resignFirstResponder()
+        spoilerField.resignFirstResponder()
+    }
+
+    /// 最後に書いていた入力欄にキーボードを戻す。注意書きの欄を外していれば本文に戻す。
+    private func focusLastInput() {
+        if lastFocusedInput === spoilerField, model.showsSpoiler {
+            spoilerField.becomeFirstResponder()
+        } else {
+            textView.becomeFirstResponder()
+        }
     }
 
     /// バーをキーボードに付けず、決めた位置に留めている。
@@ -186,7 +210,7 @@ final class InlineComposeController: NSObject {
     /// 違和感レポートに残す状態。行が重なっていれば、どの行かも書く。
     func stateDump() -> String {
         """
-        editing: \(isEditing) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder) replyTo: \(model.replyTo?.id ?? "nil")
+        editing: \(isEditing) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : "none") spoiler: \(model.showsSpoiler) replyTo: \(model.replyTo?.id ?? "nil")
         mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
         bar.frame: \(bar.frame)
@@ -197,7 +221,7 @@ final class InlineComposeController: NSObject {
     }
 
     private var rowStates: [(name: String, view: UIView)] {
-        [("rest", restRow), ("reply", replyRow), ("attachments", attachmentStrip), ("text", textView), ("tools", tools)]
+        [("rest", restRow), ("reply", replyRow), ("spoiler", spoilerRow), ("attachments", attachmentStrip), ("text", textView), ("tools", tools)]
     }
 
     /// 表示しているのに高さを確保できていない行と、縦に重なっている行の組み。
@@ -275,7 +299,32 @@ final class InlineComposeController: NSObject {
         if mediaPicker == nil, !model.canAttachMedia {
             media.attributes = .disabled
         }
-        return [media]
+        let spoiler = UIAction(title: "注意書き", image: UIImage(systemName: "exclamationmark.triangle"), state: model.showsSpoiler ? .on : .off) { [weak self] _ in
+            self?.setSpoilerShown(!(self?.model.showsSpoiler ?? true))
+        }
+        return [media, spoiler]
+    }
+
+    // MARK: - 注意書き
+
+    /// 注意書きの欄を出して書き始めるか、外して本文に戻る。外しても書いた注意書きは残し、もう一度足すと戻る。投稿には付けない。
+    private func setSpoilerShown(_ shown: Bool) {
+        logger.info("compose: spoiler \(shown ? "shown" : "hidden", privacy: .public)")
+        if shown {
+            model.showsSpoiler = true
+            // モデルの変更が画面に届くのは少しあとなので、欄を出してからフォーカスを移す。
+            update()
+            // シートを出している間は、シートを閉じてから注意書きの欄にキーボードを出す。
+            lastFocusedInput = spoilerField
+            if mediaPicker == nil {
+                spoilerField.becomeFirstResponder()
+            } else {
+                mediaPicker?.close(notifiesWillClose: true)
+            }
+        } else {
+            model.showsSpoiler = false
+            update()
+        }
     }
 
     // MARK: - メディアを選ぶシート
@@ -315,22 +364,22 @@ final class InlineComposeController: NSObject {
                 result.assetIdentifier.map { LocalMediaLoader.picked(assetIdentifier: $0, provider: result.itemProvider) }
             })
         }
-        picker.onWillClose = { [weak self] in self?.textView.becomeFirstResponder() }
+        picker.onWillClose = { [weak self] in self?.focusLastInput() }
         picker.onDidClose = { [weak self] in self?.mediaPickerDidClose() }
         mediaPicker = picker
         logger.info("media picker: presenting (height=\(height), keyboardHeight=\(self.lastKeyboardHeight ?? -1))")
-        textView.resignFirstResponder()
+        resignInput()
         picker.present(from: presenterAboveInlineCompose?() ?? host)
     }
 
     /// キーボードに戻らずに閉じたとき（シートの上の投稿ボタンから送ったときなど）は、書き終えたときと同じくバーを細いカプセルに戻す。
     private func mediaPickerDidClose() {
-        logger.info("media picker: did close (firstResponder=\(self.textView.isFirstResponder))")
+        logger.info("media picker: did close (firstResponder=\(self.isInputFocused))")
         mediaPicker = nil
         model.mediaPickerDidClose()
         // シートを出している間に投稿に失敗していたら、ここで知らせる。
         presentErrorIfNeeded()
-        guard !textView.isFirstResponder else { return }
+        guard !isInputFocused else { return }
         releaseHoldAboveKeyboard()
         setEditing(false)
     }
@@ -373,7 +422,7 @@ final class InlineComposeController: NSObject {
     /// 添付の長押しのメニューを出すと、iOSは入力欄のフォーカスを残したままソフトウェアキーボードを隠す。
     /// バーがキーボードについてタブバーの上まで下がり、メニューを閉じるかドラッグに移ると上がり直すため、メニューの間は今の位置に留める。
     private func holdBarForContextMenu() {
-        guard let host, textView.isFirstResponder, mediaPicker == nil, !isShowingMediaViewer else { return }
+        guard let host, isInputFocused, mediaPicker == nil, !isShowingMediaViewer else { return }
         logger.info("attachment context menu: holding bar (keyboardHeight=\(self.currentKeyboardHeight))")
         keyboardHeightBeforeContextMenu = currentKeyboardHeight
         setHoldAboveKeyboard(height: host.view.bounds.maxY - bar.frame.maxY - barSpacing)
@@ -395,7 +444,7 @@ final class InlineComposeController: NSObject {
 
     /// シートを閉じてキーボードが上がりきったら、バーをキーボードに付ける。
     @objc private func keyboardDidShow(_ notification: Notification) {
-        guard textView.isFirstResponder else { return }
+        guard isInputFocused else { return }
         keyboardHeightBeforeContextMenu = nil
         releaseHoldAboveKeyboard()
     }
@@ -445,6 +494,9 @@ final class InlineComposeController: NSObject {
         let showsReply = isEditing && model.replyTo != nil
         setRowHidden(replyRow, !showsReply)
         replyRow.alpha = showsReply ? 1 : 0
+        let showsSpoiler = isEditing && model.showsSpoiler
+        setRowHidden(spoilerRow, !showsSpoiler)
+        spoilerRow.alpha = showsSpoiler ? 1 : 0
         let showsAttachments = isEditing && !model.attachments.isEmpty
         setRowHidden(attachmentStrip, !showsAttachments)
         attachmentStrip.alpha = showsAttachments ? 1 : 0
@@ -495,11 +547,26 @@ final class InlineComposeController: NSObject {
             textDidChange()
         }
         placeholderLabel.isHidden = !model.text.isEmpty
+        if spoilerField.text != model.spoilerText {
+            spoilerField.text = model.spoilerText
+        }
+        spoilerField.isEnabled = !model.isPosting
+        // 返信先を外して引き継いだ注意書きが消えたときなども含め、欄を隠すときは、隠れた欄にキーボードを残さず本文へ移す。
+        if !model.showsSpoiler {
+            if spoilerField.isFirstResponder {
+                textView.becomeFirstResponder()
+            }
+            if lastFocusedInput === spoilerField {
+                lastFocusedInput = textView
+            }
+        }
+        setRowShown(spoilerRow, isEditing && model.showsSpoiler)
 
         let replyAcct = model.replyTo.map { "@\($0.displayed.account.acct)" }
         // 札を消すときは、薄くなる間も文字が残るよう、前の文字のままにする。
+        // 返信先から引き継いだ注意書きは、注意書きの欄に見えているので、札には書かない。
         if let replyAcct {
-            setReplyTitle("\(replyAcct)への返信" + (model.showsSpoiler ? "（注意書き付き）" : ""))
+            setReplyTitle("\(replyAcct)への返信")
         }
         setRowShown(replyRow, isEditing && replyAcct != nil)
 
@@ -614,11 +681,11 @@ final class InlineComposeController: NSObject {
         mediaViewerGeneration += 1
         let generation = mediaViewerGeneration
         isShowingMediaViewer = true
-        if mediaPicker == nil, textView.isFirstResponder {
+        if mediaPicker == nil, isInputFocused {
             if let lastKeyboardHeight {
                 setHoldAboveKeyboard(height: lastKeyboardHeight)
             }
-            textView.resignFirstResponder()
+            resignInput()
         }
         let viewer = MediaViewerController(
             items: viewerItems(),
@@ -661,7 +728,7 @@ final class InlineComposeController: NSObject {
         logger.info("attachment viewer did finish closing (picker=\(self.mediaPicker != nil))")
         isShowingMediaViewer = false
         guard mediaPicker == nil, isEditing else { return }
-        textView.becomeFirstResponder()
+        focusLastInput()
     }
 
     /// ビューアのメニューで、「代替テキストを編集」に続けて出す項目。失敗したものには「再試行」も出す。
@@ -799,6 +866,58 @@ final class InlineComposeController: NSObject {
         return row
     }
 
+    /// 注意書きの行。印、入力欄、外すボタンを並べ、下に線を引いて本文と分ける。
+    private func makeSpoilerRow() -> UIView {
+        let icon = UIImageView(image: UIImage(systemName: "exclamationmark.triangle"))
+        icon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .footnote)
+        icon.tintColor = .secondaryLabel
+        icon.setContentHuggingPriority(.required, for: .horizontal)
+        icon.setContentCompressionResistancePriority(.required, for: .horizontal)
+        icon.isAccessibilityElement = false
+
+        spoilerField.font = .preferredFont(forTextStyle: .body)
+        spoilerField.adjustsFontForContentSizeCategory = true
+        spoilerField.placeholder = "注意書き"
+        spoilerField.accessibilityLabel = "注意書き"
+        spoilerField.returnKeyType = .next
+        spoilerField.delegate = self
+        spoilerField.onSubmit = { [weak self] in self?.submit() }
+        spoilerField.addAction(UIAction { [weak self] _ in
+            self?.model.spoilerText = self?.spoilerField.text ?? ""
+        }, for: .editingChanged)
+
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: "xmark.circle.fill")
+        configuration.baseForegroundColor = .secondaryLabel
+        configuration.contentInsets = .zero
+        let clear = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.setSpoilerShown(false) })
+        clear.accessibilityLabel = "注意書きを外す"
+        clear.setContentHuggingPriority(.required, for: .horizontal)
+        clear.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let content = UIStackView(arrangedSubviews: [icon, spoilerField, clear])
+        content.alignment = .center
+        content.spacing = 6
+        content.translatesAutoresizingMaskIntoConstraints = false
+        let separator = UIView()
+        separator.backgroundColor = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        let row = UIView()
+        row.addSubview(content)
+        row.addSubview(separator)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+            content.topAnchor.constraint(equalTo: row.topAnchor, constant: 6),
+            content.bottomAnchor.constraint(equalTo: separator.topAnchor, constant: -6),
+            separator.leadingAnchor.constraint(equalTo: row.leadingAnchor),
+            separator.trailingAnchor.constraint(equalTo: row.trailingAnchor),
+            separator.bottomAnchor.constraint(equalTo: row.bottomAnchor),
+            separator.heightAnchor.constraint(equalToConstant: 0.5),
+        ])
+        return row
+    }
+
     private func configureBar() {
         bar.translatesAutoresizingMaskIntoConstraints = false
         // 書いていないときは細いカプセル、書いているときは角の丸い板にする。
@@ -870,7 +989,7 @@ final class InlineComposeController: NSObject {
         attachmentStrip.onRemove = { [weak self] id in self?.removeAttachment(id) }
         attachmentStrip.onContextMenuWillShow = { [weak self] in self?.holdBarForContextMenu() }
         attachmentStrip.onContextMenuWillEnd = { [weak self] in self?.contextMenuWillEnd() }
-        for view in [restRow, replyRow, attachmentStrip, textView, tools] {
+        for view in [restRow, replyRow, spoilerRow, attachmentStrip, textView, tools] {
             stack.addArrangedSubview(view)
         }
         stack.axis = .vertical
@@ -908,26 +1027,85 @@ extension InlineComposeController: UITextViewDelegate {
         textDidChange()
     }
 
-    /// シートを出している間に入力欄に触れたら、シートを閉じてキーボードに戻る。
+    func textViewShouldBeginEditing(_ textView: UITextView) -> Bool {
+        inputWillBeginEditing(from: spoilerField)
+        return true
+    }
+
     func textViewDidBeginEditing(_ textView: UITextView) {
-        guard let mediaPicker, !mediaPicker.isClosing else { return }
-        logger.info("media picker: closing because text view began editing")
-        mediaPicker.close(notifiesWillClose: false)
+        inputDidBeginEditing(textView)
     }
 
     func textViewDidEndEditing(_ textView: UITextView) {
-        // メディアを選ぶシートを出すためにキーボードを閉じたときは、書いている状態のままにする。
+        inputDidEndEditing()
+    }
+
+    /// 入力欄がキーボードを出す前に呼ぶ。UIKitは、次の入力欄に出してよいかを聞いてから、前の入力欄の編集を終える。
+    /// 前の入力欄がキーボードを出していれば、フォーカスを移す途中として、前の入力欄の編集が終わっても書き終えたことにしない。
+    private func inputWillBeginEditing(from other: UIResponder) {
+        if other.isFirstResponder {
+            isMovingFocus = true
+        }
+    }
+
+    /// シートを出している間に入力欄に触れたら、シートを閉じてキーボードに戻る。
+    private func inputDidBeginEditing(_ input: UIView) {
+        isMovingFocus = false
+        lastFocusedInput = input
+        guard let mediaPicker, !mediaPicker.isClosing else { return }
+        logger.info("media picker: closing because an input began editing")
+        mediaPicker.close(notifiesWillClose: false)
+    }
+
+    private func inputDidEndEditing() {
+        // 本文と注意書きの間でフォーカスを移しているときは、書いている状態のままにする。
+        // メディアを選ぶシートを出すためにキーボードを閉じたときも同じ。
         // 添付のビューアを開くためにキーボードを閉じたときも同じ。閉じ終わったら入力欄にキーボードを戻す。
         // シートを閉じたあとに書き終えたときは、キーボードが上がりきった知らせが来ずにバーを留めたままでも、カプセルに戻す。
-        guard mediaPicker == nil, !isShowingMediaViewer else { return }
+        guard !isMovingFocus, mediaPicker == nil, !isShowingMediaViewer else { return }
         releaseHoldAboveKeyboard()
         setEditing(false)
         onEndEditing()
     }
 }
 
+extension InlineComposeController: UITextFieldDelegate {
+    func textFieldShouldBeginEditing(_ textField: UITextField) -> Bool {
+        inputWillBeginEditing(from: textView)
+        return true
+    }
+
+    func textFieldDidBeginEditing(_ textField: UITextField) {
+        inputDidBeginEditing(textField)
+    }
+
+    func textFieldDidEndEditing(_ textField: UITextField) {
+        inputDidEndEditing()
+    }
+
+    /// 注意書きを書き終えたら、Returnで本文へ移る。
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        textView.becomeFirstResponder()
+        return false
+    }
+}
+
 /// Returnは改行と変換の確定に使うため、送信はボタンと、ハードウェアキーボードの⌘Returnだけにする。
 private final class ComposeTextView: GlyphLanguageTextView {
+    var onSubmit: () -> Void = {}
+
+    override var keyCommands: [UIKeyCommand]? {
+        let submit = UIKeyCommand(title: "投稿", action: #selector(submitFromKeyboard), input: "\r", modifierFlags: .command)
+        return (super.keyCommands ?? []) + [submit]
+    }
+
+    @objc private func submitFromKeyboard() {
+        onSubmit()
+    }
+}
+
+/// 注意書きの入力欄。本文と同じく、ハードウェアキーボードの⌘Returnで送信する。
+private final class ComposeSpoilerField: UITextField {
     var onSubmit: () -> Void = {}
 
     override var keyCommands: [UIKeyCommand]? {
