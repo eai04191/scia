@@ -28,6 +28,25 @@ enum DebugURL: Equatable {
     case slowDownload(seconds: Double?)
     /// `scia-debug://catalog`で部品のカタログを開く。`scia-debug://catalog/<CatalogComponent.rawValue>`なら、その部品の状態を並べた画面まで開く。
     case catalog(CatalogComponent?)
+    /// `scia-debug://dump`。画面にある要素の名前と枠を、アプリのDocuments/AgentDump/screen.txtに書き出す。
+    /// agentがスクリーンショットを読まずに、タップする座標や今の画面を文字で知るため。
+    case dump
+    /// `scia-debug://reset`。重ねた画面をすべて閉じ、どのタブも最初の画面に戻して、ホームのタブを選ぶ。
+    case reset
+    /// `scia-debug://settings`。設定を開く。
+    case settings
+    /// `scia-debug://tuning`。チューニングパネルを開く。
+    case tuning
+    /// `scia-debug://tab/<home|notifications>`。タブを切り替える。
+    case tab(Tab)
+    /// `scia-debug://viewer?index=<n>`。選んでいるタブの、画面のいちばん上に見えている添付ファイル付きの投稿を、n番目（0から）の添付ファイルでビューアに開く。
+    /// サムネイルをタップしたのと同じ経路で開く。
+    case viewer(index: Int)
+
+    enum Tab: String {
+        case home
+        case notifications
+    }
 
     init?(_ url: URL) {
         guard url.scheme == Self.scheme else { return nil }
@@ -78,6 +97,21 @@ enum DebugURL: Equatable {
             }
             guard let component = CatalogComponent(rawValue: url.lastPathComponent) else { return nil }
             self = .catalog(component)
+        case "dump":
+            self = .dump
+        case "reset":
+            self = .reset
+        case "settings":
+            self = .settings
+        case "tuning":
+            self = .tuning
+        case "tab":
+            guard let tab = Tab(rawValue: url.lastPathComponent) else { return nil }
+            self = .tab(tab)
+        case "viewer":
+            let index = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "index" }?.value
+            guard let index = Int(index ?? "0"), index >= 0 else { return nil }
+            self = .viewer(index: index)
         default:
             return nil
         }

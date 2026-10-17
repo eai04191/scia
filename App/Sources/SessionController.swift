@@ -659,7 +659,54 @@ final class SessionController {
             DebugFaults.slowDownloads(by: seconds.map { .seconds($0) })
         case .catalog(let component):
             topViewController.presentComponentCatalog(opening: component)
+        case .dump:
+            AgentScreenDump.write(scene: rootViewController.view.window?.windowScene)
+        case .reset:
+            rootViewController.dismiss(animated: false)
+            let tabs = rootViewController as? UITabBarController
+            for case let navigation as UINavigationController in tabs?.viewControllers ?? [] {
+                navigation.popToRootViewController(animated: false)
+            }
+            tabs?.selectedIndex = 0
+        case .settings:
+            // 直前のresetで閉じている途中の画面には重ねられないため、閉じる途中の画面を飛ばして重ねる。
+            rootViewController.frontmostPresented.presentSettings(
+                loadPreviewAccount: { [weak self] in
+                    guard let self else { throw CancellationError() }
+                    return try await self.myAccount()
+                },
+                instance: credential.instance,
+                diagnostics: diagnostics
+            )
+        case .tuning:
+            rootViewController.frontmostPresented.presentTuningPanel()
+        case .tab(let tab):
+            (rootViewController as? UITabBarController)?.selectedIndex = tab == .home ? 0 : 1
+        case .viewer(let index):
+            openTopmostMedia(at: index)
         }
+    }
+
+    /// 選んでいるタブで、画面のいちばん上に見えている添付ファイル付きの投稿を、サムネイルをタップしたのと同じ経路でビューアに開く。
+    private func openTopmostMedia(at index: Int) {
+        guard let view = (rootViewController as? UITabBarController)?.selectedViewController?.view, let window = view.window else { return }
+        let grids = Self.mediaGrids(in: view)
+            .filter { grid in
+                guard let content = grid.content, !content.isCovered, index < content.attachments.count else { return false }
+                return grid.convert(grid.bounds, to: window).intersects(window.bounds)
+            }
+            .sorted { $0.convert($0.bounds, to: window).minY < $1.convert($1.bounds, to: window).minY }
+        guard let grid = grids.first else {
+            logger.error("debug viewer: no visible media with index=\(index, privacy: .public)")
+            return
+        }
+        grid.onSelect?(index)
+    }
+
+    private static func mediaGrids(in view: UIView) -> [MediaGridView] {
+        guard !view.isHidden else { return [] }
+        if let grid = view as? MediaGridView { return [grid] }
+        return view.subviews.flatMap(mediaGrids(in:))
     }
     #endif
 

@@ -26,7 +26,20 @@ struct DebugURLTests {
         #expect(DebugURL(try #require(URL(string: "scia-debug://download/normal"))) == .slowDownload(seconds: nil))
     }
 
+    @Test func readsAgentNavigation() throws {
+        #expect(DebugURL(try #require(URL(string: "scia-debug://dump"))) == .dump)
+        #expect(DebugURL(try #require(URL(string: "scia-debug://reset"))) == .reset)
+        #expect(DebugURL(try #require(URL(string: "scia-debug://settings"))) == .settings)
+        #expect(DebugURL(try #require(URL(string: "scia-debug://tuning"))) == .tuning)
+        #expect(DebugURL(try #require(URL(string: "scia-debug://tab/home"))) == .tab(.home))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://tab/notifications"))) == .tab(.notifications))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://viewer"))) == .viewer(index: 0))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://viewer?index=2"))) == .viewer(index: 2))
+    }
+
     @Test(arguments: [
+        "scia-debug://tab/unknown",
+        "scia-debug://viewer?index=-1",
         "scia-debug://download/unknown",
         "scia-debug://catalog/unknown",
         "scia-debug://dummy/unknown",
