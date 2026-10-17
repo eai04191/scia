@@ -133,4 +133,53 @@ struct PostContentViewTests {
         guard let minX = lineColumns.min(), let maxX = lineColumns.max() else { return nil }
         return CGPoint(x: CGFloat(minX + maxX) / 2, y: CGFloat(top + bottom) / 2)
     }
+
+    private func spoilerStatus() throws -> Status {
+        let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let content = #"<p>注意書きの下の本文。<a href="https://example.com/a">example.com/a</a></p>"#
+        return Status(id: base.id, createdAt: base.createdAt, account: base.account, content: content, spoilerText: "ネタバレ", url: nil)
+    }
+
+    /// 畳んでいる間は注意書きだけを出し、開くと本文の分だけ高くなる。
+    @Test func collapsedSpoilerHidesBody() throws {
+        let controller = makeViewController()
+        let status = try spoilerStatus()
+        let collapsed = controller.contentConfiguration(for: status, base: .cell())
+        controller.toggleSpoiler(of: status)
+        let expanded = controller.contentConfiguration(for: status, base: .cell())
+
+        #expect(collapsed.spoiler?.isCollapsed == true)
+        #expect(expanded.spoiler?.isCollapsed == false)
+        #expect(fittingHeight(of: expanded) > fittingHeight(of: collapsed))
+    }
+
+    /// 読み上げでは、畳んでいる間は本文を読まず、本文のリンクも出さない。開閉は要素の操作から行う。
+    @Test func collapsedSpoilerReadsOnlyWarning() throws {
+        let controller = makeViewController()
+        let status = try spoilerStatus()
+        var configuration = controller.contentConfiguration(for: status, base: .cell())
+        var toggled = 0
+        configuration.onToggleSpoiler = { toggled += 1 }
+        let view = configuration.makeContentView()
+
+        let element = try #require(view.accessibilityElements?.first as? UIAccessibilityElement)
+        let label = try #require(element.accessibilityLabel)
+        #expect(label.contains("注意書き、ネタバレ"))
+        #expect(!label.contains("本文"))
+        let actions = element.accessibilityCustomActions ?? []
+        #expect(actions.map(\.name) == ["本文を表示"])
+        _ = actions.first?.actionHandler?(try #require(actions.first))
+        #expect(toggled == 1)
+    }
+
+    @Test func expandedSpoilerReadsBodyAndLinks() throws {
+        let controller = makeViewController()
+        let status = try spoilerStatus()
+        controller.toggleSpoiler(of: status)
+        let view = controller.contentConfiguration(for: status, base: .cell()).makeContentView()
+
+        let element = try #require(view.accessibilityElements?.first as? UIAccessibilityElement)
+        #expect(element.accessibilityLabel?.contains("注意書きの下の本文") == true)
+        #expect((element.accessibilityCustomActions ?? []).map(\.name) == ["本文を隠す", "example.com/a"])
+    }
 }

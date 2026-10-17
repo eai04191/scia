@@ -443,4 +443,71 @@ struct ScrollAnchorTests {
         let after = try #require(harness.windowMinY(of: anchor.id), "描き直し後に基準の投稿が画面外へ出ました")
         #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
     }
+
+    private func spoilerStatuses(count: Int) -> [Status] {
+        StatusFactory.make(count: count, startingAt: 1_000).map {
+            Status(id: $0.id, createdAt: $0.createdAt, account: $0.account, content: $0.content, spoilerText: "ネタバレ", url: nil)
+        }
+    }
+
+    /// 注意書きの本文を開閉しても、押した行の上端は画面上で動かない。表示領域の上端にかかって一部が隠れた行でも同じ。
+    @Test(arguments: [0.0, -40.0])
+    func togglingSpoilerKeepsRowTop(offsetFromVisibleTop: CGFloat) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = spoilerStatuses(count: 60)
+        harness.setStatuses(statuses)
+        let target = statuses[20]
+        try harness.scroll(to: .status(target.id), at: .top)
+        harness.collectionView.contentOffset.y -= offsetFromVisibleTop
+        harness.collectionView.layoutIfNeeded()
+        let before = try #require(harness.windowMinY(of: .status(target.id)))
+        let heightBefore = try #require(harness.visibleCell(of: .status(target.id))).bounds.height
+
+        harness.viewController.toggleSpoiler(of: target)
+        let opened = try #require(harness.windowMinY(of: .status(target.id)))
+        let heightOpened = try #require(harness.visibleCell(of: .status(target.id))).bounds.height
+        harness.viewController.toggleSpoiler(of: target)
+        let closed = try #require(harness.windowMinY(of: .status(target.id)))
+
+        #expect(heightOpened > heightBefore)
+        #expect(abs(opened - before) <= tolerance, "開いたときに\(opened - before)pt動きました")
+        #expect(abs(closed - before) <= tolerance, "閉じたときに\(closed - before)pt動きました")
+    }
+
+    /// 画面の中ほどの行を開いても、その上の行は動かない。
+    @Test func togglingSpoilerInMiddleKeepsRowsAbove() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = spoilerStatuses(count: 60)
+        harness.setStatuses(statuses)
+        try harness.scroll(to: .status(statuses[20].id), at: .top)
+        let above = statuses[20], target = statuses[22]
+        let aboveBefore = try #require(harness.windowMinY(of: .status(above.id)))
+        let targetBefore = try #require(harness.windowMinY(of: .status(target.id)))
+
+        harness.viewController.toggleSpoiler(of: target)
+
+        #expect(abs(try #require(harness.windowMinY(of: .status(above.id))) - aboveBefore) <= tolerance)
+        #expect(abs(try #require(harness.windowMinY(of: .status(target.id))) - targetBefore) <= tolerance)
+    }
+
+    /// 同じ投稿のブーストが上に並んでいても、押した行は動かない。上の行も一緒に伸びるため、表示領域の上端の行を基準にするとずれる。
+    @Test func togglingSpoilerKeepsTappedRowWhenSameStatusIsAbove() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        var statuses = spoilerStatuses(count: 60)
+        let original = statuses[22]
+        let booster = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: original.account.avatar)
+        let boost = Status(id: String(format: "%018d", 5_000), createdAt: original.createdAt, account: booster, content: "", spoilerText: "", url: nil, reblog: original)
+        statuses.insert(boost, at: 20)
+        harness.setStatuses(statuses)
+        try harness.scroll(to: .status(boost.id), at: .top)
+        let before = try #require(harness.windowMinY(of: .status(original.id)))
+
+        harness.viewController.toggleSpoiler(of: original, keeping: .status(original.id))
+
+        let after = try #require(harness.windowMinY(of: .status(original.id)), "開いたあとに押した行が画面外へ出ました")
+        #expect(abs(after - before) <= tolerance, "押した行が\(after - before)pt動きました")
+    }
 }

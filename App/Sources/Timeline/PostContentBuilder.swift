@@ -63,6 +63,7 @@ struct PostContentBuilder {
             createdAt: shown.createdAt,
             timeStyle: settings.statusTimeStyle,
             body: body(of: shown, base: base),
+            spoiler: spoiler(of: shown, base: base),
             metrics: metrics,
             mediaImages: mediaImages,
             avatarImages: avatarImages
@@ -81,24 +82,30 @@ struct PostContentBuilder {
         font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
     }
 
-    /// 投稿の本文。注意書きつきの投稿は、本文を開く操作がまだないため注意書きだけを出す。
+    /// 投稿の本文。注意書きがあっても本文を返し、畳むかどうかは`spoiler(of:base:color:)`で決める。
     /// 文字の大きさは標準のリストの2行目の文字に揃え、色は読むものなのでいちばん濃い色を既定にする。
     /// 引用ブロックは、RichTextRendererがこれより一段薄く描く。
     func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> NSAttributedString {
-        let bodyRenderer = RichTextRenderer(
+        bodyRenderer(base: base, color: color).render(.status(status))
+    }
+
+    /// 投稿の注意書き。注意書きがなければnil。開いているかは一覧が覚えているため、ここでは畳んだ形で返す。
+    func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> PostBodyContent.Spoiler? {
+        guard !status.spoilerText.isEmpty else { return nil }
+        return PostBodyContent.Spoiler(
+            text: bodyRenderer(base: base, color: color).render(.plain(status.spoilerText, emojis: status.emojis)),
+            isCollapsed: true,
+            padding: tuning.value(of: TuningCatalog.spoilerPadding),
+            bodySpacing: tuning.value(of: TuningCatalog.spoilerBodySpacing)
+        )
+    }
+
+    private func bodyRenderer(base: UIListContentConfiguration, color: UIColor) -> RichTextRenderer {
+        RichTextRenderer(
             font: base.secondaryTextProperties.font,
             textColor: color,
             paragraphSpacing: tuning.value(of: TuningCatalog.paragraphSpacing),
             emojiImages: emojiImages
         )
-        guard !status.spoilerText.isEmpty else {
-            return bodyRenderer.render(.status(status))
-        }
-        let spoiler = NSMutableAttributedString(string: "注意書き: ", attributes: [
-            .font: base.secondaryTextProperties.font,
-            .foregroundColor: color,
-        ])
-        spoiler.append(bodyRenderer.render(.plain(status.spoilerText, emojis: status.emojis)))
-        return spoiler
     }
 }

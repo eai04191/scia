@@ -159,6 +159,13 @@ final class TimelineViewController: UIViewController {
     let settings: AppSettings
     /// 閲覧注意の覆いを外した投稿のID。ブーストなら元の投稿のID。
     var revealedMediaStatusIDs: Set<Status.ID> = []
+    /// 注意書きのある投稿の本文を開いているか。サーバーの設定が読めたら、セッションが既定を入れる。
+    var spoilerExpansion = SpoilerExpansion() {
+        didSet {
+            guard spoilerExpansion.expandsByDefault != oldValue.expandsByDefault, isViewLoaded else { return }
+            reconfigure(Set(displayedItemIDs.filter { status(for: $0)?.displayed.spoilerText.isEmpty == false }))
+        }
+    }
 
     init(
         texts: Texts = .home,
@@ -348,7 +355,8 @@ final class TimelineViewController: UIViewController {
     }
 
     /// 内容が変わってセルの高さが変わっても、読んでいる位置が動かないように描き直す。
-    func reconfigure(_ ids: Set<ItemID>) {
+    /// - Parameter anchorID: 画面上の位置を保つ要素。なければ、表示領域の上端にかかっている要素にする。
+    func reconfigure(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil) {
         guard !ids.isEmpty else { return }
         guard !isShowingMenu else {
             heldReconfigureIDs.formUnion(ids)
@@ -356,7 +364,7 @@ final class TimelineViewController: UIViewController {
         }
         var snapshot = dataSource.snapshot()
         snapshot.reconfigureItems(Array(ids))
-        applyPreservingAnchor(snapshot)
+        applyPreservingAnchor(snapshot, keeping: anchorID)
     }
 
     /// 表示中の要素を、新しい順に並んだ`newEntries`で置き換える。
@@ -961,9 +969,9 @@ final class TimelineViewController: UIViewController {
             cell.accessories = Self.interactionAccessories(for: self.status(for: id))
             switch entry {
             case .status(let status):
-                cell.contentConfiguration = self.contentConfiguration(for: status, base: cell.defaultContentConfiguration())
+                cell.contentConfiguration = self.contentConfiguration(for: status, itemID: id, base: cell.defaultContentConfiguration())
             case .pinned(let status):
-                cell.contentConfiguration = self.contentConfiguration(for: status, isPinned: true, base: cell.defaultContentConfiguration())
+                cell.contentConfiguration = self.contentConfiguration(for: status, isPinned: true, itemID: id, base: cell.defaultContentConfiguration())
             case .gap(let gap):
                 cell.contentConfiguration = self.gapContentConfiguration(
                     isLoading: self.loadingGapIDs.contains(gap.id),
@@ -971,7 +979,7 @@ final class TimelineViewController: UIViewController {
                     base: cell.defaultContentConfiguration()
                 )
             case .notification(let notification):
-                cell.contentConfiguration = self.contentConfiguration(for: notification, base: cell.defaultContentConfiguration())
+                cell.contentConfiguration = self.contentConfiguration(for: notification, itemID: id, base: cell.defaultContentConfiguration())
             case .unreadable(let item):
                 cell.contentConfiguration = self.unreadableContentConfiguration(for: item, base: cell.defaultContentConfiguration())
             }
@@ -1047,8 +1055,10 @@ final class TimelineViewController: UIViewController {
         PostContentBuilder(tuning: tuning, settings: settings, emojiImages: emojiImages, mediaImages: mediaImages, avatarImages: avatarImages)
     }
 
-    /// - Parameter isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。
-    func contentConfiguration(for status: Status, isPinned: Bool = false, base: UIListContentConfiguration) -> PostContentConfiguration {
+    /// - Parameters:
+    ///   - isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。
+    ///   - itemID: この中身を置く行。注意書きを開閉したときに、この行の画面上の位置を保つ。
+    func contentConfiguration(for status: Status, isPinned: Bool = false, itemID: ItemID? = nil, base: UIListContentConfiguration) -> PostContentConfiguration {
         let shown = status.displayed
         var configuration = postContentBuilder.configuration(for: status, isPinned: isPinned, base: base)
         configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(shown.account) }
@@ -1065,16 +1075,36 @@ final class TimelineViewController: UIViewController {
                 self?.revealMedia(of: shown.id)
             }
         }
+        configuration.spoiler?.isCollapsed = spoilerExpansion.isCollapsed(shown)
+        configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: shown, keeping: itemID) }
         return configuration
+    }
+
+    /// 注意書きの本文を開閉する。同じ投稿をブーストした行と通知の行もまとめて描き直す。
+    /// 行の高さが変わるため、押した行の画面上の位置を保つ。同じ投稿の行が上にも並んでいると、その行も伸び縮みするため、
+    /// 表示領域の上端の行を基準にすると、押した行がずれる。
+    /// - Parameter anchorID: 押した行。なければ、表示領域の上端にかかっている行を基準にする。
+    func toggleSpoiler(of status: Status, keeping anchorID: ItemID? = nil) {
+        spoilerExpansion.toggle(status)
+        guard isViewLoaded else { return }
+        let shownID = status.displayed.id
+        let ids = displayedItemIDs.filter { self.status(for: $0)?.displayed.id == shownID }
+        reconfigure(Set(ids), keeping: anchorID)
     }
 
     func avatarContent(of account: Account) -> AvatarView.Content {
         postContentBuilder.avatarContent(of: account)
     }
 
-    /// 投稿の本文。注意書きつきの投稿は、本文を開く操作がまだないため注意書きだけを出す。
     func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> NSAttributedString {
         postContentBuilder.body(of: status, base: base, color: color)
+    }
+
+    /// 注意書き。開いているかは、この一覧で覚えている状態を当てる。
+    func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> PostBodyContent.Spoiler? {
+        var spoiler = postContentBuilder.spoiler(of: status, base: base, color: color)
+        spoiler?.isCollapsed = spoilerExpansion.isCollapsed(status)
+        return spoiler
     }
 }
 

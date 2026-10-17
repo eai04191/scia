@@ -3,9 +3,21 @@ import UIKit
 
 /// 投稿の中身。投稿のセルと通知のセルで同じ部品を使い、どの部品をどう出すかは置く側が決める。
 ///
-/// 上から、本文、添付ファイルの順に並べる。注意書きの折りたたみ、投票、リンクカード、引用、編集済みの印は、部品ができたらここに足す。
+/// 上から、注意書き、本文、添付ファイルの順に並べる。投票、リンクカード、引用、編集済みの印は、部品ができたらここに足す。
+/// 注意書きで畳んでいる間は、注意書きだけを出す。
 /// 本文が空なら、本文と添付ファイルのあいだの余白も取らず、添付ファイルを上端から置く。上の行との間隔は置く側が`startsWithMedia`を見て決める。
 struct PostBodyContent {
+    struct Spoiler {
+        var text: NSAttributedString
+        var isCollapsed: Bool
+        /// 注意書きの箱の内側の余白。
+        var padding: CGFloat
+        /// 開いているときの、注意書きの箱と本文のあいだ。
+        var bodySpacing: CGFloat
+    }
+
+    /// 注意書きがなければnil。
+    var spoiler: Spoiler?
     var text: NSAttributedString
     /// 本文を切る行数。0なら切らない。
     var maximumLines = 0
@@ -19,9 +31,12 @@ final class PostBodyView: UIView {
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     var onRevealMedia: (() -> Void)?
+    /// 注意書きが押されたときに呼ぶ。開閉した状態を持つのは置く側で、適用し直すまで見た目は変わらない。
+    var onToggleSpoiler: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
 
+    private let spoilerView = SpoilerView()
     private let textLabel = LinkLabel()
     private let mediaView: MediaGridView
     private(set) var content: PostBodyContent?
@@ -33,25 +48,28 @@ final class PostBodyView: UIView {
         mediaView.isHidden ? nil : mediaView
     }
 
-    /// 本文がなく、添付ファイルが上端から始まる。
+    /// 注意書きも本文もなく、添付ファイルが上端から始まる。
     var startsWithMedia: Bool {
-        textLabel.isHidden && !mediaView.isHidden
+        spoilerView.isHidden && textLabel.isHidden && !mediaView.isHidden
     }
 
-    /// 本文の枠。読み上げの要素の範囲を決めるときに使う。
+    /// 注意書きと本文の枠。読み上げの要素の範囲を決めるときに使う。
     var textFrame: CGRect {
-        textLabel.frame
+        [spoilerView, textLabel].filter { !$0.isHidden }.map(\.frame).reduce(CGRect.null) { $0.union($1) }
     }
 
     init(mediaImages: MediaImageStore) {
         mediaView = MediaGridView(store: mediaImages)
         super.init(frame: .zero)
         textLabel.numberOfLines = 0
-        for view in [textLabel, mediaView] as [UIView] {
+        for view in [spoilerView, textLabel, mediaView] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
         NSLayoutConstraint.activate([
+            spoilerView.topAnchor.constraint(equalTo: topAnchor),
+            spoilerView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            spoilerView.trailingAnchor.constraint(equalTo: trailingAnchor),
             textLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
             textLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
         ])
@@ -60,6 +78,7 @@ final class PostBodyView: UIView {
             self.onSelectMedia?(index, self.mediaView)
         }
         mediaView.onReveal = { [weak self] in self?.onRevealMedia?() }
+        spoilerView.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?() }, for: .touchUpInside)
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
     }
 
@@ -73,14 +92,26 @@ final class PostBodyView: UIView {
         textLabel.attributedText = Self.truncatingTail(content.text, when: content.maximumLines > 0)
         textLabel.numberOfLines = content.maximumLines
         NSLayoutConstraint.deactivate(variableConstraints)
-        let media = content.media.flatMap { $0.aspectRatio == nil ? nil : $0 }
-        textLabel.isHidden = content.text.length == 0 && media != nil
-        variableConstraints = [textLabel.topAnchor.constraint(equalTo: topAnchor)]
+        variableConstraints = []
+        if let spoiler = content.spoiler {
+            spoilerView.isHidden = false
+            spoilerView.apply(SpoilerView.Content(text: spoiler.text, isCollapsed: spoiler.isCollapsed, padding: spoiler.padding))
+        } else {
+            spoilerView.isHidden = true
+        }
+        let isCollapsed = content.spoiler?.isCollapsed ?? false
+        let media = isCollapsed ? nil : content.media.flatMap { $0.aspectRatio == nil ? nil : $0 }
+        textLabel.isHidden = isCollapsed || (content.text.length == 0 && (media != nil || content.spoiler != nil))
+        // 本文と添付ファイルは、注意書きがあればその下から並べる。
+        let contentTop = content.spoiler.map { (anchor: spoilerView.bottomAnchor, spacing: $0.bodySpacing) } ?? (anchor: topAnchor, spacing: 0)
+        if !textLabel.isHidden {
+            variableConstraints.append(textLabel.topAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing))
+        }
         if let media, let aspectRatio = media.aspectRatio {
             mediaView.isHidden = false
             mediaView.apply(media)
             let mediaTop = textLabel.isHidden
-                ? mediaView.topAnchor.constraint(equalTo: topAnchor)
+                ? mediaView.topAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing)
                 : mediaView.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: content.mediaSpacing)
             variableConstraints += [
                 mediaTop,
@@ -95,9 +126,28 @@ final class PostBodyView: UIView {
             variableConstraints.append(height)
         } else {
             mediaView.isHidden = true
-            variableConstraints.append(bottomAnchor.constraint(equalTo: textLabel.bottomAnchor))
+            // 添付ファイルがないのに本文を隠すのは、注意書きがあるときだけ。
+            let last: UIView = textLabel.isHidden ? spoilerView : textLabel
+            variableConstraints.append(bottomAnchor.constraint(equalTo: last.bottomAnchor))
         }
         NSLayoutConstraint.activate(variableConstraints)
+    }
+
+    /// 読み上げで、注意書きの本文を開閉する操作。注意書きがなければnil。
+    func spoilerAccessibilityAction() -> UIAccessibilityCustomAction? {
+        guard let spoiler = content?.spoiler else { return nil }
+        return UIAccessibilityCustomAction(name: SpoilerView.toggleTitle(isCollapsed: spoiler.isCollapsed)) { [weak self] _ in
+            self?.onToggleSpoiler?()
+            return true
+        }
+    }
+
+    /// 読み上げる文。注意書きがあれば先に読み、畳んでいる間は本文を読まない。
+    var accessibilityText: String {
+        guard let content else { return "" }
+        guard let spoiler = content.spoiler else { return content.text.string }
+        let parts = ["注意書き", spoiler.text.string] + (spoiler.isCollapsed ? [] : [content.text.string])
+        return parts.filter { !$0.isEmpty }.joined(separator: "、")
     }
 
     /// 行数で切る本文の末尾に、省略記号を出す。本文の段落は折り返しの指定を持ち、そのままでは最後の行が黙って切れるため。
@@ -115,7 +165,7 @@ final class PostBodyView: UIView {
 
     /// 読み上げで、本文のリンクを開く操作。押しても何もしないハッシュタグは除く。
     func linkAccessibilityActions() -> [UIAccessibilityCustomAction] {
-        guard let text = content?.text else { return [] }
+        guard let text = content?.text, content?.spoiler?.isCollapsed != true else { return [] }
         return Self.links(in: text).map { text, destination in
             UIAccessibilityCustomAction(name: text) { [weak self] _ in
                 self?.onOpenLink?(destination)

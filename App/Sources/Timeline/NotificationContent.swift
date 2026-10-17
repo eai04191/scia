@@ -3,15 +3,16 @@ import UIKit
 
 extension TimelineViewController {
     /// 通知のセルの中身。種類ごとの組み方は`MastodonNotification.Layout`で決める。
-    func contentConfiguration(for notification: MastodonNotification, base: UIListContentConfiguration) -> any UIContentConfiguration {
+    /// - Parameter itemID: この中身を置く行。注意書きを開閉したときに、この行の画面上の位置を保つ。
+    func contentConfiguration(for notification: MastodonNotification, itemID: ItemID? = nil, base: UIListContentConfiguration) -> any UIContentConfiguration {
         switch notification.layout {
         case .post:
             guard let status = notification.status else { return headerOnlyConfiguration(for: notification, base: base) }
-            return postConfiguration(for: notification, status: status, base: base)
+            return postConfiguration(for: notification, status: status, itemID: itemID, base: base)
         case .quoted:
             // 投票の終了の通知（showsPollResults）では、投票の部品ができたら、ここで投票を結果の形で足す。
             guard let status = notification.status else { return headerOnlyConfiguration(for: notification, base: base) }
-            return quotedConfiguration(for: notification, status: status, base: base)
+            return quotedConfiguration(for: notification, status: status, itemID: itemID, base: base)
         case .headerOnly:
             return headerOnlyConfiguration(for: notification, base: base)
         }
@@ -19,8 +20,8 @@ extension TimelineViewController {
 
     /// メンションなど、相手が書いた投稿を読む通知。ホームの投稿と同じ見た目にし、名前の上に誰が何をしたかの行を足す。
     /// 投稿した人は通知を送った人と同じで、下の名前の行にアイコンが出るため、上の行にはアイコンを出さない。
-    private func postConfiguration(for notification: MastodonNotification, status: Status, base: UIListContentConfiguration) -> PostContentConfiguration {
-        var configuration = contentConfiguration(for: status, base: base)
+    private func postConfiguration(for notification: MastodonNotification, status: Status, itemID: ItemID?, base: UIListContentConfiguration) -> PostContentConfiguration {
+        var configuration = contentConfiguration(for: status, itemID: itemID, base: base)
         let appearance = NotificationAppearance(notification.type)
         let renderer = RichTextRenderer(font: base.secondaryTextProperties.font, textColor: .secondaryLabel, emojiImages: emojiImages)
         let text = NSMutableAttributedString(attributedString: renderer.render(.plain(appearance.phrase.before, emojis: [])))
@@ -42,13 +43,14 @@ extension TimelineViewController {
 
     /// お気に入りやブーストなど、自分の投稿の再掲になる通知。誰が何をしたかの行を目立たせ、本文は控えめな色で短く切り、
     /// 添付ファイルは小さなサムネイルを1列だけ並べる。
-    private func quotedConfiguration(for notification: MastodonNotification, status: Status, base: UIListContentConfiguration) -> NotificationContentConfiguration {
+    private func quotedConfiguration(for notification: MastodonNotification, status: Status, itemID: ItemID?, base: UIListContentConfiguration) -> NotificationContentConfiguration {
         let shown = status.displayed
         var media = mediaContent(for: shown)
         media?.arrangement = .strip(side: tuning.value(of: TuningCatalog.notificationQuotedThumbnailSize))
         var configuration = headerConfiguration(
             for: notification,
             body: PostBodyContent(
+                spoiler: spoiler(of: shown, base: base, color: .secondaryLabel),
                 text: body(of: shown, base: base, color: .secondaryLabel),
                 maximumLines: Int(tuning.value(of: TuningCatalog.notificationQuotedBodyLines)),
                 media: media,
@@ -58,6 +60,7 @@ extension TimelineViewController {
             base: base
         )
         configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
+        configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: shown, keeping: itemID) }
         if let media {
             configuration.onSelectMedia = { [weak self] index, grid in
                 self?.openMedia(media.attachments, at: index, of: shown, from: grid)

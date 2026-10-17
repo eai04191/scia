@@ -202,7 +202,8 @@ struct TimelineContentTests {
 
         let content = makeViewController().contentConfiguration(for: status, base: .cell())
 
-        #expect(content.body.string == "注意書き: ネタバレ")
+        #expect(content.spoiler?.text.string == "ネタバレ")
+        #expect(content.spoiler?.isCollapsed == true)
     }
 
     /// 末尾のフッターは一覧の最後に置き、表示範囲の下端に貼り付けない。

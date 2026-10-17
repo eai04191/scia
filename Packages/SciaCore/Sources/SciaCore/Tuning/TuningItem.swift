@@ -123,6 +123,24 @@ public enum TuningCatalog {
         defaultValue: 8
     )
 
+    /// 注意書き（CW）の箱の内側の余白。
+    public static let spoilerPadding = NumberTuning(
+        id: "timeline.spoilerPadding",
+        title: "注意書きの箱の内側の余白（pt）",
+        range: 0...20,
+        step: 1,
+        defaultValue: 8
+    )
+
+    /// 注意書き（CW）の箱と、開いた本文のあいだ。
+    public static let spoilerBodySpacing = NumberTuning(
+        id: "timeline.spoilerBodySpacing",
+        title: "注意書きと本文のあいだ（pt）",
+        range: 0...24,
+        step: 1,
+        defaultValue: 8
+    )
+
     /// 本文のない投稿で、名前の行と、添付ファイルのサムネイルのあいだ。
     public static let nameMediaSpacing = NumberTuning(
         id: "timeline.nameMediaSpacing",

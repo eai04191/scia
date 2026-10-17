@@ -27,6 +27,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var createdAt: Date
     var timeStyle: StatusTimeStyle
     var body: NSAttributedString
+    /// 注意書きがなければnil。
+    var spoiler: PostBodyContent.Spoiler?
     var metrics: Metrics
     /// 添付ファイルがなければnil。
     var media: MediaGridView.Content?
@@ -35,6 +37,7 @@ struct PostContentConfiguration: UIContentConfiguration {
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     var onRevealMedia: (() -> Void)?
+    var onToggleSpoiler: (() -> Void)?
     /// アイコンか名前の行がタップされたときに呼ぶ。投稿した人のプロフィールを開く。
     var onOpenAccount: (() -> Void)?
     /// 名前の上の行がタップされたときに呼ぶ。ブーストした人や、通知のもとになる操作をした人のプロフィールを開く。
@@ -121,6 +124,7 @@ final class PostContentView: UIView, UIContentView {
         configureSubviews()
         bodyView.onSelectMedia = { [weak self] index, grid in self?.current.onSelectMedia?(index, grid) }
         bodyView.onRevealMedia = { [weak self] in self?.current.onRevealMedia?() }
+        bodyView.onToggleSpoiler = { [weak self] in self?.current.onToggleSpoiler?() }
         bodyView.onOpenLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
         for view in [avatarView, nameRow] as [UIView] {
             view.isUserInteractionEnabled = true
@@ -209,7 +213,7 @@ final class PostContentView: UIView, UIContentView {
         timeLabel.font = metrics.secondaryFont
         timeLabel.text = configuration.timeText(now: .now)
 
-        bodyView.apply(PostBodyContent(text: configuration.body, media: configuration.media, mediaSpacing: metrics.bodyMediaSpacing))
+        bodyView.apply(PostBodyContent(spoiler: configuration.spoiler, text: configuration.body, media: configuration.media, mediaSpacing: metrics.bodyMediaSpacing))
         updateConstraints(for: configuration)
         updateAccessibility(for: configuration)
     }
@@ -302,9 +306,9 @@ final class PostContentView: UIView, UIContentView {
         }
         parts += configuration.nameParts.map(\.string)
         parts.append(timeLabel.text ?? "")
-        parts.append(configuration.body.string)
+        parts.append(bodyView.accessibilityText)
         textAccessibilityElement.accessibilityLabel = parts.filter { !$0.isEmpty }.joined(separator: "、")
-        textAccessibilityElement.accessibilityCustomActions = bodyView.linkAccessibilityActions()
+        textAccessibilityElement.accessibilityCustomActions = [bodyView.spoilerAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
         textAccessibilityElement.accessibilityFrameInContainerSpace = .null
         accessibilityElements = [textAccessibilityElement] + [bodyView.mediaGrid].compactMap(\.self)
     }

@@ -16,6 +16,7 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     var onRevealMedia: (() -> Void)?
+    var onToggleSpoiler: (() -> Void)?
     /// 誰が何をしたかの行がタップされたときに呼ぶ。通知のもとになる操作をした人のプロフィールを開く。
     var onOpenAccount: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
@@ -78,6 +79,7 @@ final class NotificationContentView: UIView, UIContentView {
         }
         bodyView.onSelectMedia = { [weak self] index, grid in self?.current.onSelectMedia?(index, grid) }
         bodyView.onRevealMedia = { [weak self] in self?.current.onRevealMedia?() }
+        bodyView.onToggleSpoiler = { [weak self] in self?.current.onToggleSpoiler?() }
         bodyView.onOpenLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
         headerLabel.isUserInteractionEnabled = true
         headerLabel.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAccount)))
@@ -124,12 +126,12 @@ final class NotificationContentView: UIView, UIContentView {
 
     /// 読み上げでは、誰が何をしたかの行と本文を1つの要素として読む。サムネイルは別の要素のまま残す。
     private func updateAccessibility(for configuration: NotificationContentConfiguration) {
-        textAccessibilityElement.accessibilityLabel = [configuration.header.string, configuration.body.text.string]
+        textAccessibilityElement.accessibilityLabel = [configuration.header.string, bodyView.accessibilityText]
             // 名前の前に差し込んだアイコンの文字は読まない。
             .map { $0.replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: "、")
-        textAccessibilityElement.accessibilityCustomActions = bodyView.linkAccessibilityActions()
+        textAccessibilityElement.accessibilityCustomActions = [bodyView.spoilerAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
         textAccessibilityElement.accessibilityFrameInContainerSpace = .null
         accessibilityElements = [textAccessibilityElement] + [bodyView.mediaGrid].compactMap(\.self)
     }
