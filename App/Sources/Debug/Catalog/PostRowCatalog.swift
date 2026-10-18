@@ -62,9 +62,11 @@ enum PostRowCatalog {
     @MainActor
     static func linkCardStates() -> [CatalogState] {
         let home = TimelineViewController(texts: .home)
-        func post(_ title: String, _ status: Status) -> CatalogState {
+        func post(_ title: String, _ status: Status, revealsMedia: Bool = false, expandsSpoiler: Bool = false) -> CatalogState {
             CatalogState(title: title) {
-                CatalogFrame.bordered(PostContentView(configuration: home.contentConfiguration(for: status, base: .cell())))
+                if revealsMedia { home.mediaCovers.reveal(status) }
+                if expandsSpoiler { home.toggleSpoiler(of: status) }
+                return CatalogFrame.bordered(PostContentView(configuration: home.contentConfiguration(for: status, base: .cell())))
             }
         }
         let link = "https://news.example/articles/2026/10/link-card"
@@ -80,11 +82,11 @@ enum PostRowCatalog {
             pendingCard.apply(LinkCardView.Content(card: .card(loading), padding: home.tuning.value(of: TuningCatalog.linkCardPadding), transitionDuration: 0, thumbnailSide: .left))
         }
         // 画像の位置の設定によらず、左右と文字の方向の組み合わせを並べるため、カードだけを置く。
-        func cardOnly(_ title: String, _ linkCard: LinkCard?, side: LinkCardThumbnailSide) -> CatalogState {
+        func cardOnly(_ title: String, _ linkCard: LinkCard?, side: LinkCardThumbnailSide, coversImage: Bool = false) -> CatalogState {
             CatalogState(title: title) {
                 let view = LinkCardView(store: AppDependencies.mediaImages)
                 if let linkCard {
-                    view.apply(LinkCardView.Content(card: linkCard, padding: home.tuning.value(of: TuningCatalog.linkCardPadding), transitionDuration: 0, thumbnailSide: side))
+                    view.apply(LinkCardView.Content(card: linkCard, padding: home.tuning.value(of: TuningCatalog.linkCardPadding), transitionDuration: 0, thumbnailSide: side, coversImage: coversImage))
                 }
                 let frame = UIView()
                 view.translatesAutoresizingMaskIntoConstraints = false
@@ -111,6 +113,14 @@ enum PostRowCatalog {
             post("見出しのないカード（URLを出す）", status(content: content, card: card(title: "", description: "", providerName: ""))),
             post("見出しと要約が長い", status(content: content, card: card(title: longText, description: longText, providerName: String(repeating: "長いサイトの名前", count: 4)))),
             post("ブーストされた投稿のカード", status(content: content, card: card(), rebloggedBy: booster)),
+            post("閲覧注意のカード（覆った）", status(content: content, sensitive: true, card: card())),
+            post("閲覧注意のカード（表示した）", status(content: content, sensitive: true, card: card()), revealsMedia: true),
+            cardOnly("閲覧注意のカード（覆った、画像は右）", card().map(LinkCard.card), side: .right, coversImage: true),
+            post("閲覧注意のカード（ぼかしの下地がない）", status(content: content, sensitive: true, card: card().map {
+                PreviewCard(url: $0.url, title: $0.title, description: $0.description, type: $0.type, providerName: $0.providerName, image: $0.image, width: $0.width, height: $0.height)
+            })),
+            post("注意書きと閲覧注意のカード（開いた、画像は覆ったまま）", status(content: content, spoilerText: "ネタバレ", sensitive: true, card: card()), expandsSpoiler: true),
+            post("閲覧注意の投稿の画像のないカード（覆わない）", status(content: content, sensitive: true, card: card(image: nil))),
             CatalogState(title: "サムネイルの読み込み中（ぼかし）") { CatalogFrame.bordered(pendingCard) },
         ]
     }

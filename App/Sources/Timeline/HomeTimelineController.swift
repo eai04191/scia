@@ -528,6 +528,8 @@ extension HomeTimelineController {
             streamDummyLinkCard(withImage: false)
         case .linkCardImage:
             streamDummyLinkCard(withImage: true)
+        case .linkCardSensitive:
+            streamDummyLinkCard(withImage: true, sensitive: true)
         }
     }
 
@@ -536,7 +538,8 @@ extension HomeTimelineController {
 
     /// リンクだけのダミーの投稿を新着と同じ経路で流し、`dummyLinkCardDelay`のあとに、通信せずにカードを届ける。
     /// カードが届いたときの動きを、サーバーがカードを付ける時機によらず、何度でも同じ条件で確かめるため。
-    private func streamDummyLinkCard(withImage: Bool) {
+    /// - Parameter sensitive: 閲覧注意の投稿にする。届いたカードの画像を覆うところを確かめる。
+    private func streamDummyLinkCard(withImage: Bool, sensitive: Bool = false) {
         let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
         let base = Self.dummyStatus(number: 1, avatar: avatar)
         guard let link = URL(string: "https://news.example/articles/\(base.id)") else { return }
@@ -546,7 +549,8 @@ extension HomeTimelineController {
             account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー（リンクカード）", avatar: avatar),
             content: #"<p>リンクカードが届くときの確認用 <a href="\#(link.absoluteString)">news.example/articles/\#(base.id)</a></p>"#,
             spoilerText: "",
-            url: nil
+            url: nil,
+            sensitive: sensitive
         )
         let card = PreviewCard(
             url: link,
@@ -556,7 +560,8 @@ extension HomeTimelineController {
             providerName: withImage ? "News Example" : "",
             image: withImage ? CatalogFixtures.imageURL(width: 400, height: 225, color: .systemIndigo) : nil,
             width: withImage ? 400 : 0,
-            height: withImage ? 225 : 0
+            height: withImage ? 225 : 0,
+            blurhash: withImage ? CatalogFixtures.blurhash : nil
         )
         // 取り直しで届くのと同じく、カードの付いた同じ版の投稿として渡す。
         let carded = Status(
@@ -566,6 +571,7 @@ extension HomeTimelineController {
             content: dummy.content,
             spoilerText: "",
             url: nil,
+            sensitive: sensitive,
             card: card
         )
         run { controller in
@@ -680,6 +686,7 @@ enum DebugDummyPost: String, CaseIterable {
     case longVideo = "long-video"
     case linkCard = "link-card"
     case linkCardImage = "link-card-image"
+    case linkCardSensitive = "link-card-sensitive"
 
     var title: String {
         switch self {
@@ -691,6 +698,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .longVideo: "音声付きの長い動画"
         case .linkCard: "後から届くリンクカード（画像なし）"
         case .linkCardImage: "後から届くリンクカード（画像あり）"
+        case .linkCardSensitive: "後から届くリンクカード（閲覧注意）"
         }
     }
 
@@ -702,7 +710,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .transparent: "circle.dashed"
         case .video: "play.rectangle"
         case .longVideo: "speaker.wave.2"
-        case .linkCard, .linkCardImage: "link"
+        case .linkCard, .linkCardImage, .linkCardSensitive: "link"
         }
     }
 }
