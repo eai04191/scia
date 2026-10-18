@@ -34,6 +34,7 @@ struct PostBodyContent {
 final class PostBodyView: UIView {
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
+    /// 添付ファイルか、リンクカードの画像の、閲覧注意の覆いが押されたときに呼ぶ。覆いを外すのは置く側で、適用し直すまで見た目は変わらない。
     var onRevealMedia: (() -> Void)?
     /// 注意書きが押されたときに呼ぶ。開閉した状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onToggleSpoiler: (() -> Void)?
@@ -94,6 +95,7 @@ final class PostBodyView: UIView {
         spoilerView.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?() }, for: .touchUpInside)
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
         cardView.onOpenImage = { [weak self] thumbnail in self?.onOpenLinkCardImage?(thumbnail) }
+        cardView.onRevealImage = { [weak self] in self?.onRevealMedia?() }
         cardView.addAction(UIAction { [weak self] _ in
             guard let self, let url = self.cardView.content?.card.url else { return }
             self.onOpenLink?(.url(url))

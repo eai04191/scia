@@ -1101,10 +1101,11 @@ final class TimelineViewController: UIViewController {
             configuration.onSelectMedia = { [weak self] index, grid in
                 self?.openMedia(media.attachments, at: index, of: shown, from: grid)
             }
-            configuration.onRevealMedia = { [weak self] in
-                self?.revealMedia(of: shown)
-            }
         }
+        configuration.onRevealMedia = { [weak self] in
+            self?.revealMedia(of: shown)
+        }
+        configuration.card?.coversImage = mediaCovers.linkCardImageCover(for: shown) != nil
         if case .card(let card)? = configuration.card?.card, let attachment = card.imageAttachment {
             configuration.onOpenLinkCardImage = { [weak self] thumbnail in
                 // 開いている間に行が別の投稿に使い回されていたら、その画像へは戻さず、薄くして閉じる。

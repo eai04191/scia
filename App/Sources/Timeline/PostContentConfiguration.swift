@@ -38,6 +38,7 @@ struct PostContentConfiguration: UIContentConfiguration {
     let avatarImages: AvatarImageStore
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
+    /// 添付ファイルか、リンクカードの画像の、閲覧注意の覆いが押されたときに呼ぶ。覆いを外すのは置く側で、適用し直すまで見た目は変わらない。
     var onRevealMedia: (() -> Void)?
     var onToggleSpoiler: (() -> Void)?
     /// アイコンか名前の行がタップされたときに呼ぶ。投稿した人のプロフィールを開く。

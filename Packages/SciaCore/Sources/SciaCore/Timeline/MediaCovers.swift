@@ -13,6 +13,8 @@ public enum MediaCover: Sendable, Equatable {
 public struct MediaCovers: Sendable, Equatable {
     /// 投稿ごとに、覆うと選んだか。
     private var choices: [Status.ID: Bool] = [:]
+    /// 覆いを外した投稿。リンクカードの画像は、外したら覆い直さないため、隠した選択とは分けて覚える。
+    private var revealed: Set<Status.ID> = []
 
     public init() {}
 
@@ -25,8 +27,18 @@ public struct MediaCovers: Sendable, Equatable {
         return isSensitive ? .sensitive : .hidden
     }
 
+    /// リンクカードの画像を覆っていれば`.sensitive`、覆っていなければnil。画像のないカードとカードのない投稿ではnil。
+    /// 閲覧注意と注意書きのある投稿を、添付ファイルと同じく、覆いを外すまで覆う。添付ファイルを隠した選択には従わない。
+    /// カードの付いた投稿に、本文を変えずに添付ファイルを足して編集すると、Mastodonはカードを残すため、添付ファイルとカードの画像が同じ投稿に並ぶことがある。
+    public func linkCardImageCover(for status: Status) -> MediaCover? {
+        let shown = status.displayed
+        guard shown.card?.image != nil, shown.sensitive || !shown.spoilerText.isEmpty, !revealed.contains(shown.id) else { return nil }
+        return .sensitive
+    }
+
     public mutating func reveal(_ status: Status) {
         choices[status.displayed.id] = false
+        revealed.insert(status.displayed.id)
     }
 
     public mutating func hide(_ status: Status) {
