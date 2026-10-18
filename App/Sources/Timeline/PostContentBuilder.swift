@@ -98,7 +98,8 @@ struct PostContentBuilder {
             LinkCardView.Content(
                 card: $0,
                 padding: tuning.value(of: TuningCatalog.linkCardPadding),
-                transitionDuration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)
+                transitionDuration: tuning.value(of: TuningCatalog.linkCardTransitionDuration),
+                thumbnailSide: settings.linkCardThumbnailSide
             )
         }
     }

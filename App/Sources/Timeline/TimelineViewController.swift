@@ -327,6 +327,7 @@ final class TimelineViewController: UIViewController {
             _ = settings.statusTimeStyle
             _ = settings.avatarShape
             _ = settings.animatesAvatars
+            _ = settings.linkCardThumbnailSide
             _ = settings.glyphLanguage
         } onChange: { [weak self] in
             Task { @MainActor in

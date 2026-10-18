@@ -36,6 +36,11 @@ public final class AppSettings {
         didSet { defaults.set(avatarShape.rawValue, forKey: Keys.avatarShape) }
     }
 
+    /// リンクカードのサムネイルを置く端。
+    public var linkCardThumbnailSide: LinkCardThumbnailSide {
+        didSet { defaults.set(linkCardThumbnailSide.rawValue, forKey: Keys.linkCardThumbnailSide) }
+    }
+
     /// 一覧で、GIFなどのアニメーションするアイコンを動かす。オフなら最初のコマで止めた版を読む。
     public var animatesAvatars: Bool {
         didSet { defaults.set(animatesAvatars, forKey: Keys.animatesAvatars) }
@@ -82,6 +87,7 @@ public final class AppSettings {
         static let glyphLanguage = "settings.glyphLanguage"
         static let avatarShape = "settings.avatarShape"
         static let animatesAvatars = "settings.animatesAvatars"
+        static let linkCardThumbnailSide = "settings.linkCardThumbnailSide"
         static let insertionMotion = "settings.insertionMotion"
         static let profileShowsReplies = "settings.profileShowsReplies"
         static let profileShowsBoosts = "settings.profileShowsBoosts"
@@ -100,6 +106,7 @@ public final class AppSettings {
         glyphLanguage = defaults.string(forKey: Keys.glyphLanguage).flatMap(GlyphLanguage.init(rawValue:)) ?? .automatic
         avatarShape = defaults.string(forKey: Keys.avatarShape).flatMap(AvatarShape.init(rawValue:)) ?? .roundedSquare
         animatesAvatars = defaults.object(forKey: Keys.animatesAvatars) as? Bool ?? false
+        linkCardThumbnailSide = defaults.string(forKey: Keys.linkCardThumbnailSide).flatMap(LinkCardThumbnailSide.init(rawValue:)) ?? .left
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
         linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .external
         statusMenuLayout = defaults.stringArray(forKey: Keys.statusMenuLayout).map(MenuLayout.init(tokens:)) ?? StatusMenuItem.defaultLayout

@@ -40,6 +40,7 @@ struct AppSettingsTests {
         #expect(settings.statusNameStyle == .nameAndAcct)
         #expect(settings.statusTimeStyle == .relative)
         #expect(settings.avatarShape == .roundedSquare)
+        #expect(settings.linkCardThumbnailSide == .left)
         #expect(settings.glyphLanguage == .automatic)
         // 一覧でたくさん動くと読みにくいため、既定では止める。
         #expect(!settings.animatesAvatars)
@@ -51,6 +52,7 @@ struct AppSettingsTests {
         settings.statusNameStyle = .acctOnly
         settings.statusTimeStyle = .absolute
         settings.avatarShape = .circle
+        settings.linkCardThumbnailSide = .right
         settings.glyphLanguage = .traditionalChinese
         settings.animatesAvatars = true
 
@@ -58,6 +60,7 @@ struct AppSettingsTests {
         #expect(restored.statusNameStyle == .acctOnly)
         #expect(restored.statusTimeStyle == .absolute)
         #expect(restored.avatarShape == .circle)
+        #expect(restored.linkCardThumbnailSide == .right)
         #expect(restored.glyphLanguage == .traditionalChinese)
         #expect(restored.animatesAvatars)
     }

@@ -1,3 +1,4 @@
+import NaturalLanguage
 import SciaCore
 import UIKit
 
@@ -14,6 +15,8 @@ final class LinkCardView: UIButton {
         var padding: CGFloat
         /// リンク先だけのカードに、サーバーのカードが届いたときの、描き替えの時間。
         var transitionDuration: TimeInterval
+        /// サムネイルを置く端。
+        var thumbnailSide: LinkCardThumbnailSide
 
         /// サムネイルの枠を出す。画像のあるカードと、まだカードの届いていないリンク先だけのカード。
         var showsThumbnail: Bool {
@@ -164,9 +167,13 @@ final class LinkCardView: UIButton {
         transitionSnapshots.removeAll { removing.contains($0) }
     }
 
-    /// 文字を、動きを止めて、すぐに出す。
+    /// 文字を、動きを止めて、すぐに出す。カードが届いた動きの途中で、セルが別の投稿に使い回されたときも、
+    /// 前の投稿の枠や文字の動きが新しい中身に重ならないよう、ここで止める。
     private func showText(of content: Content) {
         removeTransitionSnapshots()
+        for view in [thumbnailView, symbolView] {
+            view.layer.removeAllAnimations()
+        }
         for label in [siteLabel, headlineLabel, descriptionLabel] {
             label.layer.removeAllAnimations()
             label.alpha = 1
@@ -176,11 +183,19 @@ final class LinkCardView: UIButton {
 
     private func setText(of content: Content) {
         let text = Self.text(of: content.card)
-        siteLabel.text = text.site
-        headlineLabel.text = text.title
-        descriptionLabel.text = text.description
+        for (label, string) in [(siteLabel, text.site), (headlineLabel, text.title), (descriptionLabel, text.description)] {
+            label.text = string
+            label.textAlignment = Self.alignment(of: string)
+        }
         headlineLabel.textColor = text.titleIsURL ? .secondaryLabel : .label
         updateFonts()
+    }
+
+    /// 文字を、その言語の書く方向に寄せる。サムネイルの位置にも、アプリの言語の方向にもよらない。
+    /// リンク先のページの言語はサーバーから分からないため、文字から推し量る。
+    private static func alignment(of string: String) -> NSTextAlignment {
+        guard let language = NLLanguageRecognizer.dominantLanguage(for: string) else { return .left }
+        return Locale.Language(identifier: language.rawValue).characterDirection == .rightToLeft ? .right : .left
     }
 
     /// 同じリンクの、リンク先だけのカードに、サーバーのカードが届いた。
@@ -257,7 +272,8 @@ final class LinkCardView: UIButton {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        thumbnailView.frame = CGRect(x: 0, y: 0, width: thumbnailWidth, height: bounds.height)
+        let thumbnailOnRight = content?.thumbnailSide == .right
+        thumbnailView.frame = CGRect(x: thumbnailOnRight ? bounds.width - thumbnailWidth : 0, y: 0, width: thumbnailWidth, height: bounds.height)
         // 記号は枠と一緒に押し潰さず、枠の中央で、枠を縮めて消すあいだに小さくしながら薄くする。
         let hidesThumbnail = thumbnailWidth == 0
         symbolView.bounds = CGRect(x: 0, y: 0, width: bounds.height, height: bounds.height)
@@ -266,8 +282,8 @@ final class LinkCardView: UIButton {
         thumbnailView.alpha = hidesThumbnail ? 0 : 1
         symbolView.alpha = hidesThumbnail ? 0 : 1
         let padding = content?.padding ?? 0
-        let textX = thumbnailWidth + padding
-        let textWidth = max(bounds.width - textX - padding, 0)
+        let textX = (thumbnailOnRight ? 0 : thumbnailWidth) + padding
+        let textWidth = max(bounds.width - thumbnailWidth - padding * 2, 0)
         var y = (bounds.height - (siteFont.lineHeight * 2 + titleFont.lineHeight + Self.lineSpacing * 2)) / 2
         for (label, font) in [(siteLabel, siteFont), (headlineLabel, titleFont), (descriptionLabel, siteFont)] {
             label.frame = CGRect(x: textX, y: y, width: textWidth, height: ceil(font.lineHeight))

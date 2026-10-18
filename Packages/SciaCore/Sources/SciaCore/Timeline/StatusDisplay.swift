@@ -37,6 +37,13 @@ public enum AvatarShape: String, CaseIterable, Sendable {
     case roundedSquare
 }
 
+/// リンクカードのサムネイルを、カードのどちらの端に置くか。画面の向きによらず、左右をそのまま指す。
+/// 文字はこれによらず、文字の言語の方向に寄せる。
+public enum LinkCardThumbnailSide: String, CaseIterable, Sendable {
+    case left
+    case right
+}
+
 public enum StatusTimestamp {
     /// 相対表記で、日付に切り替えるまでの日数。
     static let relativeDays = 7

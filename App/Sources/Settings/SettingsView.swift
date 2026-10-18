@@ -45,6 +45,7 @@ struct SettingsView: View {
                             timeStyle: settings.statusTimeStyle,
                             avatarShape: settings.avatarShape,
                             animatesAvatars: settings.animatesAvatars,
+                            linkCardThumbnailSide: settings.linkCardThumbnailSide,
                             glyphLanguage: settings.glyphLanguage,
                             builder: PostContentBuilder(
                                 tuning: AppDependencies.tuning,
@@ -82,6 +83,10 @@ struct SettingsView: View {
                         Text("角丸の四角").tag(AvatarShape.roundedSquare)
                     }
                     Toggle("アイコンのアニメーションを再生する", isOn: $settings.animatesAvatars)
+                    Picker("リンクカードの画像の位置", selection: $settings.linkCardThumbnailSide) {
+                        Text("左").tag(LinkCardThumbnailSide.left)
+                        Text("右").tag(LinkCardThumbnailSide.right)
+                    }
                     Picker("漢字の字形", selection: $settings.glyphLanguage) {
                         Text("自動").tag(GlyphLanguage.automatic)
                         Text("日本語").tag(GlyphLanguage.japanese)

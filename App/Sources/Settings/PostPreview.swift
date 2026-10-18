@@ -12,6 +12,7 @@ struct PostPreview: UIViewRepresentable {
     let timeStyle: StatusTimeStyle
     let avatarShape: AvatarShape
     let animatesAvatars: Bool
+    let linkCardThumbnailSide: LinkCardThumbnailSide
     let glyphLanguage: GlyphLanguage
     let builder: PostContentBuilder
 
@@ -20,10 +21,18 @@ struct PostPreview: UIViewRepresentable {
             id: "preview",
             createdAt: createdAt,
             account: account,
-            content: "<p>設定を変えると、タイムラインの投稿がこのように表示されます。</p>",
+            content: #"<p>設定を変えると、タイムラインの投稿がこのように表示されます。<a href="https://joinmastodon.org/">joinmastodon.org</a></p>"#,
             spoilerText: "",
-            url: nil
+            url: nil,
+            card: previewCard
         )
+    }
+
+    /// リンクカードの見本。画像は、通信を増やさないよう、読み込み済みのアカウントのアイコンを使う。
+    private var previewCard: PreviewCard? {
+        URL(string: "https://joinmastodon.org/").map {
+            PreviewCard(url: $0, title: "リンクカードの見本", description: "画像の位置を選べます。", type: .link, providerName: "joinmastodon.org", image: account.avatarStatic)
+        }
     }
 
     private var configuration: PostContentConfiguration {
