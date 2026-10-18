@@ -7,8 +7,119 @@ import UIKit
 /// スクリーンショットを読まずに、タップする座標や今の画面を知るため。VoiceOverが読む要素をたどるので、SwiftUIの画面の要素も出る。
 @MainActor
 enum AgentScreenDump {
+    /// 画面が止まるのを待ってから書き出す。スクリーンショットを撮り比べて待つより速く、動きの途中を書き出さない。
     static func write(scene: UIWindowScene?) {
-        let text = describe(scene: scene)
+        Task { @MainActor in
+            let started = ContinuousClock.now
+            let moving = await waitUntilSettled(scene: scene)
+            let elapsed = started.duration(to: .now).components
+            let seconds = String(format: "%.1f", Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18)
+            let status = moving.map { "画面: 止まっていない（\(settleTimeout.components.seconds)秒で諦めた。動いているもの: \($0)）" } ?? "画面: 止まった（\(seconds)秒）"
+            save(status + "\n" + describe(scene: scene))
+        }
+    }
+
+    private static let settleTimeout = Duration.seconds(5)
+    /// 動きのない状態がこれだけ続いたら、止まったとみなす。新着の挿入のように、少し遅れて始まる動きを待つ。
+    private static let quietPeriod = Duration.milliseconds(250)
+
+    /// 止まったらnil、止まらないまま時間切れになったら、最後に動いていたものの説明を返す。
+    private static func waitUntilSettled(scene: UIWindowScene?) async -> String? {
+        guard let scene else { return nil }
+        let deadline = ContinuousClock.now + settleTimeout
+        var quietSince: ContinuousClock.Instant?
+        var lastMoving: String?
+        var previous: [ObjectIdentifier: ViewState] = [:]
+        while ContinuousClock.now < deadline {
+            let current = viewStates(in: scene)
+            let changed = previous.isEmpty ? nil : changedView(from: previous, to: current)
+            previous = current
+            if let moving = changed ?? movingThing(in: scene) {
+                lastMoving = moving
+                quietSince = nil
+            } else if let since = quietSince {
+                if since.duration(to: .now) >= quietPeriod { return nil }
+            } else {
+                quietSince = .now
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return lastMoving ?? "不明"
+    }
+
+    /// 画面の更新ごとに自前で動かす部品（CADisplayLinkで位置やcontentOffsetを書き換えるもの）は、
+    /// アニメーションとしては見えないため、見えているビューの位置、大きさ、透明度、スクロール位置を前回と比べて捉える。
+    private struct ViewState: Equatable {
+        let name: String
+        let frame: CGRect
+        let alpha: CGFloat
+        let contentOffset: CGPoint
+    }
+
+    private static func viewStates(in scene: UIWindowScene) -> [ObjectIdentifier: ViewState] {
+        var states: [ObjectIdentifier: ViewState] = [:]
+        func visit(_ view: UIView) {
+            guard !view.isHidden, view.alpha >= 0.01 else { return }
+            states[ObjectIdentifier(view)] = ViewState(
+                name: String(describing: type(of: view)),
+                frame: view.convert(view.bounds, to: nil),
+                alpha: view.alpha,
+                contentOffset: (view as? UIScrollView)?.contentOffset ?? .zero
+            )
+            view.subviews.forEach(visit)
+        }
+        scene.windows.filter { !$0.isHidden }.forEach(visit)
+        return states
+    }
+
+    private static func changedView(from previous: [ObjectIdentifier: ViewState], to current: [ObjectIdentifier: ViewState]) -> String? {
+        for (id, state) in current where previous[id] != state {
+            return "\(state.name)の位置や透明度の変化"
+        }
+        return previous.keys.contains { current[$0] == nil } ? "ビューの増減" : nil
+    }
+
+    private static func movingThing(in scene: UIWindowScene) -> String? {
+        for window in scene.windows where !window.isHidden {
+            if let moving = movingScrollView(in: window) ?? animatingLayer(in: window.layer) {
+                return moving
+            }
+        }
+        return nil
+    }
+
+    /// 終わりのあるアニメーションが残っているレイヤー。読み込み中の表示のようにずっと繰り返すものと、
+    /// タブバーのガラスの表現（_UILiquidLensView）が位置を追いかけ続けるもののように、常駐する長いものは数えない。
+    private static func animatingLayer(in layer: CALayer) -> String? {
+        guard !layer.isHidden else { return nil }
+        let keys = layer.animationKeys()?.filter { key in
+            guard let animation = layer.animation(forKey: key) else { return false }
+            let length = animation.duration * Double(max(animation.repeatCount, 1))
+            return animation.repeatCount != .infinity && animation.repeatDuration != .infinity && length <= 60
+        } ?? []
+        if !keys.isEmpty {
+            let owner = layer.delegate.map { String(describing: type(of: $0)) } ?? String(describing: type(of: layer))
+            return "\(owner)のアニメーション \(keys.joined(separator: ","))"
+        }
+        for sublayer in layer.sublayers ?? [] {
+            if let moving = animatingLayer(in: sublayer) { return moving }
+        }
+        return nil
+    }
+
+    /// 指で動かしている最中か、慣性で動いているスクロールビュー。
+    private static func movingScrollView(in view: UIView) -> String? {
+        guard !view.isHidden else { return nil }
+        if let scrollView = view as? UIScrollView, scrollView.isDragging || scrollView.isDecelerating {
+            return "\(type(of: scrollView))のスクロール"
+        }
+        for subview in view.subviews {
+            if let moving = movingScrollView(in: subview) { return moving }
+        }
+        return nil
+    }
+
+    private static func save(_ text: String) {
         do {
             let directory = URL.documentsDirectory.appending(path: "AgentDump")
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

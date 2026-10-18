@@ -5,15 +5,14 @@
 #     画面が止まるまで待ってから撮り、縮小したJPEGのパスを出す。--widthの既定は端末のポイント幅で、画像の1pxがタップの1ptになる。
 #     --cropはポイントで指定し、切り出した範囲だけを同じ倍率で出す（座標は切り出した左上からになる）。
 #     --fullを付けると、ユーザーに送るための原寸のPNGも残す。
-#   Tools/sim.sh settle '<端末>'
-#     画面が止まるまで待つ。撮らずに待ちたいとき（操作の直後にdumpする前など）に使う。
 #   Tools/sim.sh drag <x1> <y1> <x2> <y2>
 #     慣性を残さずに止まるドラッグの点の並びを、シミュレーターのツールのtouch_pathのpointsに渡せるJSONで出す。
 #     ツールのtouch_pathは同じ座標の点を「動いた」として送らないため、最後に同じ点を並べても離した瞬間の速さが残り、慣性で流れる。
 #     そこで、終点で0.5ptずつ揺らして速さを0にしてから離す。最初の一歩（20pt）は、スクロールが始まるまでの遊びに吸われるので、
 #     一覧をDだけ動かしたいときは、指をD+20pt動かす。
-#   Tools/sim.sh dump '<端末>' [--settle]
-#     起動済みのアプリに`scia-debug://dump`を送り、画面にある要素の名前と枠（ポイント）を出す。--settleを付けると、画面が止まってから出す。
+#   Tools/sim.sh dump '<端末>'
+#     起動済みのアプリに`scia-debug://dump`を送り、画面にある要素の名前と枠（ポイント）を出す。
+#     アプリの中で、アニメーションとスクロールの慣性が止まるのを待ってから書き出すので、操作の直後に呼んでよい。
 set -euo pipefail
 
 BUNDLE_ID=net.mizle.scia
@@ -151,21 +150,8 @@ command_shot() {
     [ -z "$full" ] || echo "原寸: $full"
 }
 
-command_settle() {
-    local dir started elapsed
-    dir=$(work_dir)
-    started=$(/usr/bin/python3 -I -c 'import time; print(time.time())')
-    if settle "$1" "$dir/raw.png"; then
-        elapsed=$(/usr/bin/python3 -I -c "import time; print(round(time.time() - $started, 1))")
-        echo "画面: 止まった（${elapsed}秒）"
-    else
-        echo "画面: 止まっていない（${SETTLE_TIMEOUT}秒で諦めた）"
-    fi
-}
-
 command_dump() {
     local sim=$1 container file deadline
-    [ "${2:-}" != --settle ] || command_settle "$sim"
     # アプリは起動時に、この設定を見てアクセシビリティの要素を作るかを決める。ないとボタンやタブの名前が取れない。
     # VoiceOverは動かないが、要素を作るぶんアプリが少し重くなるので、hitchを測るときは`defaults delete`で外す。
     if [ "$(xcrun simctl spawn "$sim" defaults read com.apple.Accessibility ApplicationAccessibilityEnabled 2>/dev/null)" != 1 ]; then
@@ -176,7 +162,8 @@ command_dump() {
     file="$container/Documents/AgentDump/screen.txt"
     rm -f "$file"
     xcrun simctl openurl "$sim" 'scia-debug://dump'
-    deadline=$(( $(date +%s) + 5 ))
+    # アプリは画面が止まるのを最大5秒待ってから書き出す。
+    deadline=$(( $(date +%s) + 8 ))
     while [ ! -f "$file" ]; do
         [ "$(date +%s)" -lt "$deadline" ] || fail "書き出されない。アプリが起動していないか、デバッグビルドでない"
         sleep 0.1
@@ -201,12 +188,11 @@ print(json.dumps(points, separators=(",", ":")))
 ' "$@"
 }
 
-[ $# -ge 2 ] || fail "使い方: Tools/sim.sh shot|settle|dump '<端末>' [オプション]、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
+[ $# -ge 2 ] || fail "使い方: Tools/sim.sh shot|dump '<端末>' [オプション]、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
 subcommand=$1
 shift
 case $subcommand in
     shot) command_shot "$@" ;;
-    settle) command_settle "$1" ;;
     dump) command_dump "$@" ;;
     drag) command_drag "$@" ;;
     *) fail "知らない操作: $subcommand" ;;
