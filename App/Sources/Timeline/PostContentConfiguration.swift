@@ -32,6 +32,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var metrics: Metrics
     /// 添付ファイルがなければnil。
     var media: MediaGridView.Content?
+    /// リンクカードを出さなければnil。
+    var card: LinkCardView.Content?
     let mediaImages: MediaImageStore
     let avatarImages: AvatarImageStore
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
@@ -64,6 +66,8 @@ struct PostContentConfiguration: UIContentConfiguration {
         var bodyMediaSpacing: CGFloat
         /// 本文のない投稿で、名前の行と添付ファイルのあいだ。
         var nameMediaSpacing: CGFloat
+        /// 本文か添付ファイルと、リンクカードのあいだ。
+        var bodyLinkCardSpacing: CGFloat
         var nameFont: UIFont
         var secondaryFont: UIFont
         /// 通知の種類を示す記号の大きさを決める文字。誰が何をしたかの行を主役にする通知の記号と同じ大きさに揃えるため、
@@ -213,7 +217,14 @@ final class PostContentView: UIView, UIContentView {
         timeLabel.font = metrics.secondaryFont
         timeLabel.text = configuration.timeText(now: .now)
 
-        bodyView.apply(PostBodyContent(spoiler: configuration.spoiler, text: configuration.body, media: configuration.media, mediaSpacing: metrics.bodyMediaSpacing))
+        bodyView.apply(PostBodyContent(
+            spoiler: configuration.spoiler,
+            text: configuration.body,
+            media: configuration.media,
+            mediaSpacing: metrics.bodyMediaSpacing,
+            card: configuration.card,
+            cardSpacing: metrics.bodyLinkCardSpacing
+        ))
         updateConstraints(for: configuration)
         updateAccessibility(for: configuration)
     }
@@ -304,7 +315,7 @@ final class PostContentView: UIView, UIContentView {
         (image.baselineOffsetFromBottom ?? 0) - image.alignmentRectInsets.bottom
     }
 
-    /// 読み上げでは、名前の上の行、名前、時刻、本文の順に1つの要素として読む。サムネイルは別の要素のまま残す。
+    /// 読み上げでは、名前の上の行、名前、時刻、本文の順に1つの要素として読む。サムネイルとリンクカードは別の要素のまま残す。
     private func updateAccessibility(for configuration: PostContentConfiguration) {
         var parts: [String] = []
         if let context = configuration.context {
@@ -318,7 +329,7 @@ final class PostContentView: UIView, UIContentView {
         // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
         setNeedsLayout()
-        accessibilityElements = [textAccessibilityElement] + [bodyView.mediaGrid].compactMap(\.self)
+        accessibilityElements = [textAccessibilityElement] + [bodyView.mediaGrid, bodyView.linkCard].compactMap(\.self)
     }
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)

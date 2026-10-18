@@ -123,6 +123,24 @@ public enum TuningCatalog {
         defaultValue: 10
     )
 
+    /// 投稿の本文や添付ファイルと、リンクカードのあいだ。
+    public static let bodyLinkCardSpacing = NumberTuning(
+        id: "timeline.bodyLinkCardSpacing",
+        title: "本文とリンクカードのあいだ（pt）",
+        range: 0...24,
+        step: 1,
+        defaultValue: 10
+    )
+
+    /// リンクカードの文字の、枠とサムネイルからの余白。
+    public static let linkCardPadding = NumberTuning(
+        id: "timeline.linkCardPadding",
+        title: "リンクカードの内側の余白（pt）",
+        range: 0...20,
+        step: 1,
+        defaultValue: 10
+    )
+
     /// 注意書き（CW）の箱の内側の余白。
     public static let spoilerPadding = NumberTuning(
         id: "timeline.spoilerPadding",
@@ -637,6 +655,8 @@ public enum TuningCatalog {
             .number(nameBodySpacing),
             .number(bodyMediaSpacing),
             .number(nameMediaSpacing),
+            .number(bodyLinkCardSpacing),
+            .number(linkCardPadding),
             .number(spoilerPadding),
             .number(spoilerBodySpacing),
             .number(mediaTileSpacing),

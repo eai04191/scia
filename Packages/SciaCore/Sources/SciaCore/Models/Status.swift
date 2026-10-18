@@ -23,6 +23,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public let poll: Poll?
     /// 本文のリンク先から作ったカード。
     public let card: PreviewCard?
+    /// 引用。引用していなければnil。
+    public let quote: Quote?
     /// 当たった自分のフィルター。ログインせずに読んだときや、Mastodon 4.0より前のサーバーでは返らないため、無ければ空にする。
     public let filtered: [FilterResult]
     /// 最後に編集した日時。編集していなければnil。
@@ -56,6 +58,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         inReplyToId: String? = nil,
         poll: Poll? = nil,
         card: PreviewCard? = nil,
+        quote: Quote? = nil,
         filtered: [FilterResult] = [],
         editedAt: Date? = nil,
         favourited: Bool = false,
@@ -82,6 +85,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         self.inReplyToId = inReplyToId
         self.poll = poll
         self.card = card
+        self.quote = quote
         self.filtered = filtered
         self.editedAt = editedAt
         self.favourited = favourited
@@ -95,7 +99,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
 
     /// 自分の操作を表す項目と件数は、ログインせずに読んだときや、サーバーの実装によっては返らないため、無ければ既定値にする。
     /// URLと、メンションなどの配列も、サーバーによって空や欠落で返るため、URLはnil、配列は空にする。
-    /// 投票、カード、編集した日時は、読めなくても本文は読めるため、読めなければ記録してnilにする。
+    /// 投票、カード、引用、編集した日時は、読めなくても本文は読めるため、読めなければ記録してnilにする。
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
@@ -114,6 +118,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         inReplyToId = try container.decodeIfPresent(String.self, forKey: .inReplyToId)
         poll = container.decodeLossyIfPresent(Poll.self, forKey: .poll)
         card = container.decodeLossyIfPresent(PreviewCard.self, forKey: .card)
+        quote = container.decodeLossyIfPresent(Quote.self, forKey: .quote)
         filtered = try container.decodeLossyArray(FilterResult.self, forKey: .filtered)
         editedAt = container.decodeLossyIfPresent(Date.self, forKey: .editedAt)
         favourited = try container.decodeIfPresent(Bool.self, forKey: .favourited) ?? false
@@ -190,7 +195,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, account, content, spoilerText, language, url, mentions, tags, emojis, mediaAttachments, sensitive
-        case visibility, inReplyToId, poll, card, filtered, editedAt
+        case visibility, inReplyToId, poll, card, quote, filtered, editedAt
         case favourited, reblogged, bookmarked, favouritesCount, reblogsCount, repliesCount
         case reblogBox = "reblog"
     }

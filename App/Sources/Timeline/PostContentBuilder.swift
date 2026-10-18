@@ -26,6 +26,7 @@ struct PostContentBuilder {
             nameBodySpacing: tuning.value(of: TuningCatalog.nameBodySpacing),
             bodyMediaSpacing: tuning.value(of: TuningCatalog.bodyMediaSpacing),
             nameMediaSpacing: tuning.value(of: TuningCatalog.nameMediaSpacing),
+            bodyLinkCardSpacing: tuning.value(of: TuningCatalog.bodyLinkCardSpacing),
             nameFont: Self.boldFont(base.textProperties.font),
             secondaryFont: secondaryFont,
             notificationSymbolFont: base.textProperties.font
@@ -66,6 +67,7 @@ struct PostContentBuilder {
             body: body(of: shown, base: base),
             spoiler: spoiler(of: shown, base: base),
             metrics: metrics,
+            card: linkCard(of: shown),
             mediaImages: mediaImages,
             avatarImages: avatarImages
         )
@@ -88,6 +90,11 @@ struct PostContentBuilder {
     /// 引用ブロックは、RichTextRendererがこれより一段薄く描く。
     func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> NSAttributedString {
         bodyRenderer(of: status, base: base, color: color).render(.status(status))
+    }
+
+    /// 投稿のリンクカード。出さない投稿ならnil。
+    func linkCard(of status: Status) -> LinkCardView.Content? {
+        LinkCard(status: status).map { LinkCardView.Content(card: $0, padding: tuning.value(of: TuningCatalog.linkCardPadding)) }
     }
 
     /// 投稿の注意書き。注意書きがなければnil。開いているかは一覧が覚えているため、ここでは畳んだ形で返す。

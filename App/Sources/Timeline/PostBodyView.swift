@@ -3,7 +3,7 @@ import UIKit
 
 /// 投稿の中身。投稿のセルと通知のセルで同じ部品を使い、どの部品をどう出すかは置く側が決める。
 ///
-/// 上から、注意書き、本文、添付ファイルの順に並べる。投票、リンクカード、引用、編集済みの印は、部品ができたらここに足す。
+/// 上から、注意書き、本文、添付ファイル、リンクカードの順に並べる。投票、引用、編集済みの印は、部品ができたらここに足す。
 /// 注意書きで畳んでいる間は、注意書きだけを出す。
 /// 本文が空なら、本文と添付ファイルのあいだの余白も取らず、添付ファイルを上端から置く。上の行との間隔は置く側が`startsWithMedia`を見て決める。
 struct PostBodyContent {
@@ -25,6 +25,10 @@ struct PostBodyContent {
     var media: MediaGridView.Content?
     /// 本文と添付ファイルのあいだの余白。本文がなければ取らない。
     var mediaSpacing: CGFloat
+    /// リンクカードを出さなければnil。
+    var card: LinkCardView.Content?
+    /// 本文か添付ファイルと、リンクカードのあいだの余白。
+    var cardSpacing: CGFloat = 0
 }
 
 final class PostBodyView: UIView {
@@ -39,6 +43,7 @@ final class PostBodyView: UIView {
     private let spoilerView = SpoilerView()
     private let textLabel = LinkLabel()
     private let mediaView: MediaGridView
+    private let cardView: LinkCardView
     private(set) var content: PostBodyContent?
     /// 添付ファイルの有無と並べ方で変わる制約。適用のたびに作り直す。
     private var variableConstraints: [NSLayoutConstraint] = []
@@ -46,6 +51,11 @@ final class PostBodyView: UIView {
     /// 表示中のサムネイル。ビューアの拡大と縮小の起点を探すときに使う。
     var mediaGrid: MediaGridView? {
         mediaView.isHidden ? nil : mediaView
+    }
+
+    /// 表示中のリンクカード。読み上げの要素に加える。
+    var linkCard: LinkCardView? {
+        cardView.isHidden ? nil : cardView
     }
 
     /// 注意書きも本文もなく、添付ファイルが上端から始まる。
@@ -60,9 +70,10 @@ final class PostBodyView: UIView {
 
     init(mediaImages: MediaImageStore) {
         mediaView = MediaGridView(store: mediaImages)
+        cardView = LinkCardView(store: mediaImages)
         super.init(frame: .zero)
         textLabel.numberOfLines = 0
-        for view in [spoilerView, textLabel, mediaView] as [UIView] {
+        for view in [spoilerView, textLabel, mediaView, cardView] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -80,6 +91,10 @@ final class PostBodyView: UIView {
         mediaView.onReveal = { [weak self] in self?.onRevealMedia?() }
         spoilerView.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?() }, for: .touchUpInside)
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
+        cardView.addAction(UIAction { [weak self] _ in
+            guard let self, let url = self.cardView.content?.card.url else { return }
+            self.onOpenLink?(.url(url))
+        }, for: .primaryActionTriggered)
     }
 
     @available(*, unavailable)
@@ -101,7 +116,8 @@ final class PostBodyView: UIView {
         }
         let isCollapsed = content.spoiler?.isCollapsed ?? false
         let media = isCollapsed ? nil : content.media.flatMap { $0.aspectRatio == nil ? nil : $0 }
-        textLabel.isHidden = isCollapsed || (content.text.length == 0 && (media != nil || content.spoiler != nil))
+        let card = isCollapsed ? nil : content.card
+        textLabel.isHidden = isCollapsed || (content.text.length == 0 && (media != nil || card != nil || content.spoiler != nil))
         // 本文と添付ファイルは、注意書きがあればその下から並べる。
         let contentTop = content.spoiler.map { (anchor: spoilerView.bottomAnchor, spacing: $0.bodySpacing) } ?? (anchor: topAnchor, spacing: 0)
         if !textLabel.isHidden {
@@ -117,7 +133,6 @@ final class PostBodyView: UIView {
                 mediaTop,
                 mediaView.leadingAnchor.constraint(equalTo: leadingAnchor),
                 mediaView.trailingAnchor.constraint(equalTo: trailingAnchor),
-                bottomAnchor.constraint(equalTo: mediaView.bottomAnchor),
             ]
             let height = switch media.arrangement {
             case .grid: mediaView.heightAnchor.constraint(equalTo: mediaView.widthAnchor, multiplier: 1 / aspectRatio)
@@ -126,10 +141,34 @@ final class PostBodyView: UIView {
             variableConstraints.append(height)
         } else {
             mediaView.isHidden = true
-            // 添付ファイルがないのに本文を隠すのは、注意書きがあるときだけ。
-            let last: UIView = textLabel.isHidden ? spoilerView : textLabel
-            variableConstraints.append(bottomAnchor.constraint(equalTo: last.bottomAnchor))
         }
+        if let card {
+            cardView.isHidden = false
+            cardView.apply(card)
+            let cardTop = if !mediaView.isHidden {
+                cardView.topAnchor.constraint(equalTo: mediaView.bottomAnchor, constant: content.cardSpacing)
+            } else if !textLabel.isHidden {
+                cardView.topAnchor.constraint(equalTo: textLabel.lastBaselineAnchor, constant: content.cardSpacing + Self.textBottomInset(of: content.text))
+            } else {
+                cardView.topAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing)
+            }
+            variableConstraints += [
+                cardTop,
+                cardView.leadingAnchor.constraint(equalTo: leadingAnchor),
+                cardView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            ]
+        } else {
+            cardView.isHidden = true
+        }
+        // 添付ファイルもリンクカードもないのに本文を隠すのは、注意書きがあるときだけ。
+        let last: UIView = if !cardView.isHidden {
+            cardView
+        } else if !mediaView.isHidden {
+            mediaView
+        } else {
+            textLabel.isHidden ? spoilerView : textLabel
+        }
+        variableConstraints.append(bottomAnchor.constraint(equalTo: last.bottomAnchor))
         NSLayoutConstraint.activate(variableConstraints)
     }
 
