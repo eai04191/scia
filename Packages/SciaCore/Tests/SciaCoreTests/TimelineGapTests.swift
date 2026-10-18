@@ -637,6 +637,57 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((8...20).reversed()))
     }
 
+    /// 最新のページで読み直したら再生成中で一部の投稿だけが返っても、返った投稿の間をギャップにして、後で読み切ったときに読み飛ばさない。
+    /// 補完に失敗した基準は読み直しで捨てるので、その間の投稿は読み直したページのギャップからしか読めない。
+    @Test func regeneratingReloadAfterFailedFillKeepsGapBetweenReturnedStatuses() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let failing = FailOnce()
+        let latestLoads = Mutex(0)
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if query.sinceID != nil, failing.shouldFail() {
+                throw URLError(.notConnectedToInternet)
+            }
+            // 2回目の最新のページ（読み直し）だけ、再生成中で一部の投稿を返す。
+            if query.maxID == nil, query.sinceID == nil, query.minID == nil, latestLoads.withLock({ count in count += 1; return count == 2 }) {
+                return TimelinePage(statuses: [20, 11].map(server.status), isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        server.post(11...20)
+        await #expect(throws: URLError.self) { try await store.fillFromLatest() }
+
+        _ = try await store.loadInitial()
+        #expect(store.isRegenerating)
+        _ = try await store.fillFromLatest()
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        _ = try await store.loadOlder()
+
+        #expect(ids(store) == Array((8...20).reversed()), "再生成中の結果の間の投稿を読み飛ばしました: \(store.entries.map(\.debugLabel))")
+    }
+
+    /// 起動して最初の読み込みが再生成中で一部の投稿だけを返しても、返った投稿の間をギャップにする。
+    @Test func regeneratingFirstLoadKeepsGapBetweenReturnedStatuses() async throws {
+        let server = FakeHomeServer(ids: 1...20)
+        let regenerating = FailOnce()
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            if regenerating.shouldFail() {
+                return TimelinePage(statuses: [20, 11].map(server.status), isRegenerating: true)
+            }
+            return server.page(query)
+        }
+        _ = try await store.loadInitial()
+        let gap = try #require(store.gaps.first, "再生成中の結果の間にギャップがありません: \(store.entries.map(\.debugLabel))")
+        #expect((gap.newerID, gap.olderID) == ("20", "11"))
+
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        #expect(ids(store) == Array((11...20).reversed()))
+    }
+
     @Test func regeneratingShortPageKeepsGap() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let regenerating = FailOnce()

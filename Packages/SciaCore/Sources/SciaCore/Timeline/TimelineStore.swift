@@ -79,6 +79,7 @@ public final class TimelineStore {
     /// `markerID`（サーバーに保存された既読位置）を渡すと、そこを既読位置にする。最新のページより古ければ、
     /// 既読位置のすぐ後に続く投稿と、既読位置から古い投稿も読み、最新のページとの間が埋まらなければギャップを置く。
     /// 既読位置から続きを読めるようにするため。
+    /// サーバーがホームを再生成中なら既読位置の周りは読まず、返った投稿の間をギャップにする。
     public func loadInitial(around markerID: String? = nil) async throws -> [Status]? {
         guard !isLoading else { return nil }
         isLoading = true
@@ -97,6 +98,11 @@ public final class TimelineStore {
                StatusID.isNewer(oldestLatest, than: newestAfterMarker) {
                 loadedGaps.append(TimelineGap(newerID: oldestLatest, olderID: newestAfterMarker))
             }
+        }
+        // 再生成中の結果は揃っておらず、返った投稿の間にもまだ出ていない投稿が残りうる。最も新しい投稿から最も古い投稿までをギャップにする。
+        // 最も古い投稿より下は古いページの読み込みで、最も新しい投稿より上は次の補完で読む。
+        if latest.isRegenerating, let newest = Self.newestID(of: latest), let oldest = Self.oldestID(of: latest), newest != oldest {
+            loadedGaps.append(TimelineGap(newerID: newest, olderID: oldest))
         }
         let unique = Dictionary(loaded.flatMap(\.statuses).filter { !isDeleted($0) }.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         unreadableItems = Self.unique(loaded.flatMap(\.unreadable).filter { !deletedIDs.contains($0.id) })
