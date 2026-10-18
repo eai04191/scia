@@ -161,6 +161,16 @@ public struct MastodonClient: Sendable {
     // MARK: - 投稿への操作
 
     /// お気に入りに登録し、登録後の投稿を返す。
+    /// 一度に読める投稿の数。Mastodonは、これより多く求めると422を返す。
+    public static let multipleStatusesLimit = 20
+
+    /// 投稿をまとめて読む。消えた投稿と見られない投稿は返らず、読めない投稿は除く。
+    /// https://docs.joinmastodon.org/methods/statuses/#index
+    public func statuses(_ ids: [Status.ID]) async throws -> [Status] {
+        let query = ids.map { URLQueryItem(name: "id[]", value: $0) }
+        return try await get(ElementList<Status>.self, path: "api/v1/statuses", query: query, feature: .multipleStatuses).0.elements
+    }
+
     /// https://docs.joinmastodon.org/methods/statuses/#favourite
     public func favourite(_ statusID: String) async throws -> Status {
         try await post(Status.self, path: "api/v1/statuses/\(statusID)/favourite", form: []).0

@@ -29,6 +29,8 @@ final class SessionController {
     /// 電波が戻ったときと、レート制限が明けたときに、読み込みをやり直す。
     private var recoveryTasks: [Task<Void, Never>] = []
     private let interactions: StatusInteractions
+    /// カードが付く前に受け取った投稿を、見えている間に取り直す。
+    private let linkCards: LinkCardRefresher
     /// 「操作の状況」の一覧に並べる、処理の途中と最近の失敗。
     let operationStatus = OperationStatus()
     /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても保存を続け、閉じたあとの知らせは一覧に出す。
@@ -108,6 +110,11 @@ final class SessionController {
             home.updateStatus(id, transform)
             notifications.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
+        }
+        linkCards = LinkCardRefresher(client: client) { refetched in
+            for update in [home.updateStatus, notifications.updateStatus, profiles.updateStatus] {
+                update(refetched.id) { $0.adoptingCard(of: refetched) }
+            }
         }
 
         let homeNavigation = UINavigationController(rootViewController: home.viewController)
@@ -287,6 +294,10 @@ final class SessionController {
         viewController.onOpenLink = { [weak self, weak viewController] destination, status in
             guard let viewController else { return }
             self?.open(destination, in: status, from: viewController)
+        }
+        viewController.onVisibleLinkOnlyCardsChange = { [weak self, weak viewController] statuses in
+            guard let viewController else { return }
+            self?.linkCards.setVisible(statuses, from: viewController)
         }
     }
 

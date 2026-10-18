@@ -99,6 +99,7 @@ struct ConnectionStatusView: View {
         case .markers: "既読位置の保存"
         case .preferences: "アカウントの設定（公開範囲の既定値など）"
         case .instanceV2: "サーバーの設定（v2）"
+        case .multipleStatuses: "リンクカードの取り直し"
         }
     }
 }

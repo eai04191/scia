@@ -9,6 +9,9 @@ public enum OptionalFeature: String, Sendable, CaseIterable {
     case preferences
     /// v2の`instance`。投稿欄の上限とストリーミングの接続先に使う。https://docs.joinmastodon.org/methods/instance/#v2
     case instanceV2
+    /// 複数の投稿をまとめて読む。Mastodon 4.3から。カードが付く前に受け取った投稿のカードを取り直すのに使う。
+    /// https://docs.joinmastodon.org/methods/statuses/#index
+    case multipleStatuses
 }
 
 /// 使えないと分かった機能を、そのセッションの間だけ止める。セッションの中で共有する。

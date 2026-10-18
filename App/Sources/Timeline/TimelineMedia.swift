@@ -77,6 +77,8 @@ extension TimelineViewController {
     ///   - sourceTile: 開閉の起点にするビューを返す。見つからなければnilを返し、画像を動かさずに薄くして開閉する。
     func openMedia(_ attachments: [MediaAttachment], at index: Int, subject: OperationStatus.Subject?, sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?) {
         UserAction.openViewer(count: attachments.count, index: index).record()
+        // ビューアは一覧を残したまま覆うため、覆っている間は、リンクカードを取り直す投稿として見えていないことにする。閉じたら報告し直す。
+        onVisibleLinkOnlyCardsChange?([])
         SciaLog.logger(category: "media").info("open viewer count=\(attachments.count, privacy: .public) index=\(index, privacy: .public)")
         let timing = MediaViewerController.Timing(tuning: tuning)
         let dragToDismiss = TuningCatalog.dragToDismiss(in: tuning)

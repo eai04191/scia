@@ -21,8 +21,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     /// 返信先の投稿のID。
     public let inReplyToId: String?
     public let poll: Poll?
-    /// 本文のリンク先から作ったカード。
-    public let card: PreviewCard?
+    /// 本文のリンク先から作ったカード。サーバーは投稿を配信してからカードを付けるため、後から取り直して差し替えることがある。
+    public private(set) var card: PreviewCard?
     /// 引用。引用していなければnil。
     public let quote: Quote?
     /// 当たった自分のフィルター。ログインせずに読んだときや、Mastodon 4.0より前のサーバーでは返らないため、無ければ空にする。
@@ -183,6 +183,15 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         var status = self
         status.reblogged = reblogged
         status.reblogsCount = max(reblogsCount + (reblogged ? 1 : -1), 0)
+        return status
+    }
+
+    /// 取り直した同じ投稿のカードを付けたもの。取り直している間に編集が届いていたら、取り直したのは編集の前の版で、
+    /// カードもその版のリンクのものなので、付けずにそのまま返す。
+    public func adoptingCard(of refetched: Status) -> Status {
+        guard refetched.id == id, refetched.editedAt == editedAt else { return self }
+        var status = self
+        status.card = refetched.card
         return status
     }
 

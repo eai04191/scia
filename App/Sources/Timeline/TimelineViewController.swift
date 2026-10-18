@@ -51,6 +51,9 @@ final class TimelineViewController: UIViewController {
     var onVisibleStatusesChange: (([Status.ID]) -> Void)?
     /// 画面に表示されている通知が変わったときに、表示中の通知のIDを渡して呼ぶ。
     var onVisibleNotificationsChange: (([MastodonNotification.ID]) -> Void)?
+    /// 画面に表示されている行のうち、サーバーのカードがまだなく、リンク先だけのカードを出している投稿が変わったときに呼ぶ。
+    /// ブーストなら、ブーストされた投稿を渡す。画面から消えたら空で呼ぶ。
+    var onVisibleLinkOnlyCardsChange: (([Status]) -> Void)?
     /// 投稿への操作が選ばれたときに呼ぶ。ブーストなら、ブーストした投稿を渡す。
     var onStatusAction: ((StatusAction, Status) -> Void)?
     /// アプリ内のSafariのシートを出している間だけ右上に出す、投稿欄で書き始めるボタンが押されたときに呼ぶ。
@@ -269,6 +272,7 @@ final class TimelineViewController: UIViewController {
         super.viewDidDisappear(animated)
         timeRefreshTimer?.invalidate()
         timeRefreshTimer = nil
+        onVisibleLinkOnlyCardsChange?([])
     }
 
     /// 相対表記の時刻を、表示中の行だけ1秒ごとに書き直す。行の高さは変わらないため、並びは描き直さない。
@@ -786,7 +790,11 @@ final class TimelineViewController: UIViewController {
     func setCoveredByInAppBrowser(_ covered: Bool) {
         guard isCoveredByInAppBrowser != covered else { return }
         isCoveredByInAppBrowser = covered
-        if !covered { reportVisibleItems() }
+        if covered {
+            onVisibleLinkOnlyCardsChange?([])
+        } else {
+            reportVisibleItems()
+        }
     }
 
     /// 下端の覆われた部分を一覧の表示領域から外し、そこに隠れた要素を表示中として報告しないようにする。
@@ -954,6 +962,18 @@ final class TimelineViewController: UIViewController {
         onVisibleNotificationsChange?(ids.compactMap { id in
             if case .notification(let notificationID) = id { notificationID } else { nil }
         })
+        onVisibleLinkOnlyCardsChange?(linkOnlyCardStatuses(among: ids))
+    }
+
+    /// `ids`の行のうち、リンク先だけのカードを出している投稿。通知でカードを出さない行は除くため、組み立てた中身で見分ける。
+    private func linkOnlyCardStatuses(among ids: [ItemID]) -> [Status] {
+        ids.compactMap { id -> Status? in
+            guard let indexPath = dataSource.indexPath(for: id),
+                  let configuration = collectionView.cellForItem(at: indexPath)?.contentConfiguration as? PostContentConfiguration,
+                  case .link = configuration.card?.card
+            else { return nil }
+            return status(for: id)?.displayed
+        }
     }
 
     private func makeLayout() -> UICollectionViewLayout {
