@@ -58,6 +58,38 @@ enum PostRowCatalog {
         ]
     }
 
+    /// リンクカードの付いた投稿。サーバーのカードが後から届いても行の高さが変わらないことを、カードとリンク先だけのカードを並べて見比べる。
+    @MainActor
+    static func linkCardStates() -> [CatalogState] {
+        let home = TimelineViewController(texts: .home)
+        func post(_ title: String, _ status: Status) -> CatalogState {
+            CatalogState(title: title) {
+                CatalogFrame.bordered(PostContentView(configuration: home.contentConfiguration(for: status, base: .cell())))
+            }
+        }
+        let link = "https://news.example/articles/2026/10/link-card"
+        let content = #"<p>記事を読んだ。<a href="\#(link)" rel="nofollow noopener" target="_blank"><span class="invisible">https://</span><span class="ellipsis">news.example/articles/2026/10/</span><span class="invisible">link-card</span></a></p>"#
+        func card(title: String = "記事の見出し", description: String = "記事の要約が入る。", providerName: String = "News Example", image: URL? = Fixtures.imageURL(width: 400, height: 225, color: .systemIndigo)) -> PreviewCard? {
+            URL(string: link).map {
+                PreviewCard(url: $0, title: title, description: description, type: .link, providerName: providerName, image: image, width: 400, height: 225, blurhash: Fixtures.blurhash)
+            }
+        }
+        let longText = String(repeating: "見出しや要約が1行に収まらないときに末尾を省くことを確かめる文。", count: 3)
+        let pendingCard = LinkCardView(store: Fixtures.pendingMediaImages)
+        if let loading = card() {
+            pendingCard.apply(LinkCardView.Content(card: .card(loading), padding: home.tuning.value(of: TuningCatalog.linkCardPadding)))
+        }
+        return [
+            post("サーバーのカード", status(content: content, card: card())),
+            post("サーバーがまだカードを付けていない（リンク先だけ）", status(content: content)),
+            post("サムネイルのないカード", status(content: content, card: card(image: nil))),
+            post("見出しのないカード（URLを出す）", status(content: content, card: card(title: "", description: "", providerName: ""))),
+            post("見出しと要約が長い", status(content: content, card: card(title: longText, description: longText, providerName: String(repeating: "長いサイトの名前", count: 4)))),
+            post("ブーストされた投稿のカード", status(content: content, card: card(), rebloggedBy: booster)),
+            CatalogState(title: "サムネイルの読み込み中（ぼかし）") { CatalogFrame.bordered(pendingCard) },
+        ]
+    }
+
     @MainActor
     static func notificationStates() -> [CatalogState] {
         let notifications = TimelineViewController(texts: .notifications)
@@ -85,6 +117,11 @@ enum PostRowCatalog {
             row("メンション（画像つき）", .mention, status: status(content: "<p>@me 画像つきのメンション。</p>", account: booster, media: [
                 Fixtures.attachment("a", width: 1_200, height: 900, color: .systemBlue),
             ])),
+            row("メンション（リンクカードつき）", .mention, status: status(
+                content: #"<p>@me <a href="https://news.example/articles/1">news.example/articles/1</a></p>"#,
+                account: booster
+            )),
+            row("お気に入り（リンクカードは出さない）", .favourite, status: status(content: #"<p><a href="https://news.example/articles/1">news.example/articles/1</a></p>"#)),
             row("メンション（投稿が届かなかった）", .mention, status: nil),
             row("投稿の通知", .status),
             row("引用", .quote),
@@ -131,6 +168,7 @@ enum PostRowCatalog {
         spoilerText: String = "",
         media: [MediaAttachment] = [],
         sensitive: Bool = false,
+        card: PreviewCard? = nil,
         rebloggedBy: Account? = nil
     ) -> Status {
         let original = Status(
@@ -141,7 +179,8 @@ enum PostRowCatalog {
             spoilerText: spoilerText,
             url: nil,
             mediaAttachments: media,
-            sensitive: sensitive
+            sensitive: sensitive,
+            card: card
         )
         guard let rebloggedBy else { return original }
         return Status(id: UUID().uuidString, createdAt: .now.addingTimeInterval(-600), account: rebloggedBy, content: "", spoilerText: "", url: nil, reblog: original)
