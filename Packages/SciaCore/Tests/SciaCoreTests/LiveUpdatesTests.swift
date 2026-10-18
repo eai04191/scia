@@ -52,6 +52,8 @@ struct LiveUpdatesTests {
         let updates = makeUpdates(connector)
 
         let task = Task { try await updates.run { await log.append($0) } }
+        // 決まった時間だけ待つと、ほかのテストが重いときにつなぎ終える前に見てしまうので、つないだと知らせるまで待ってから、静かなままかを見る。
+        await log.waitUntil { $0.contains("connected") }
         try await Task.sleep(for: .milliseconds(150))
         task.cancel()
         _ = await task.result
