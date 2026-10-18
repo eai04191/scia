@@ -9,6 +9,7 @@ import UIKit
 struct InlineComposeControllerTests {
     private let window: UIWindow
     private let composer: InlineComposeController
+    private let settings: AppSettings
 
     init() throws {
         let scene = try #require(
@@ -20,7 +21,11 @@ struct InlineComposeControllerTests {
         window.frame = CGRect(x: 0, y: 0, width: 393, height: 852)
         window.rootViewController = tabBarController
         window.makeKeyAndVisible()
-        composer = InlineComposeController(model: ComposeModel(myAccountID: "1") { _ in }, tuning: TuningStore(defaults: nil))
+        let suite = "InlineComposeControllerTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        settings = AppSettings(defaults: defaults)
+        composer = InlineComposeController(model: ComposeModel(myAccountID: "1") { _ in }, tuning: TuningStore(defaults: nil), settings: settings)
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
     }
@@ -251,6 +256,113 @@ struct InlineComposeControllerTests {
         #expect(!field.isFirstResponder, "隠れた注意書きの欄にキーボードが残っています\n\(composer.stateDump())")
         #expect(textView.isFirstResponder)
         #expect(composer.stateDump().contains("editing: true"), "返信をやめると書き終えたことになりました\n\(composer.stateDump())")
+    }
+
+    /// 書いている間に設定で並びを変えると、すぐにボタンの行と＋が並びに合う。行の中のボタンが重ならない。
+    @Test func toolButtonsFollowLayoutChangedWhileEditing() async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(500))
+        let add = try #require(buttons(in: window).first { $0.accessibilityLabel == "追加" })
+        let media = try #require(buttons(in: window).first { $0.accessibilityLabel == "メディアを添付" })
+        let spoiler = try #require(buttons(in: window).first { $0.accessibilityLabel == "注意書き" })
+        expectShown([add, media], hidden: [spoiler])
+
+        // カスタマイズは並びに書かなければ既定どおり＋の中に差し込まれるので、隠して＋を空にする。
+        settings.composeToolLayout = MenuLayout(elements: [.item(.customize, isVisible: false), .more, .item(.visibility, isVisible: true), .item(.media, isVisible: true), .item(.expand, isVisible: true), .item(.spoiler, isVisible: true)])
+        try await Task.sleep(for: .milliseconds(300))
+        window.layoutIfNeeded()
+        expectShown([media, spoiler], hidden: [add])
+
+        settings.composeToolLayout = ComposeToolItem.defaultLayout
+        try await Task.sleep(for: .milliseconds(300))
+        window.layoutIfNeeded()
+        expectShown([add, media], hidden: [spoiler])
+    }
+
+    /// 公開範囲と展開も、＋の中に入れれば行から隠れる。
+    @Test func visibilityAndExpandMoveIntoMenu() async throws {
+        defer { window.isHidden = true }
+        settings.composeToolLayout = MenuLayout(elements: [.item(.visibility, isVisible: true), .item(.expand, isVisible: true), .item(.spoiler, isVisible: true), .more, .item(.media, isVisible: true)])
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(500))
+        window.layoutIfNeeded()
+        let add = try #require(buttons(in: window).first { $0.accessibilityLabel == "追加" })
+        let media = try #require(buttons(in: window).first { $0.accessibilityLabel == "メディアを添付" })
+        let visibility = try #require(buttons(in: window).first { $0.accessibilityLabel == "公開範囲" })
+        let expand = try #require(buttons(in: window).first { $0.accessibilityLabel == "広げて書く" })
+        expectShown([add, media], hidden: [visibility, expand])
+    }
+
+    /// すべての項目を非表示にして書き始めると、項目のボタンも＋も出さない。
+    @Test func hidesEverythingWhenAllItemsHidden() async throws {
+        defer { window.isHidden = true }
+        settings.composeToolLayout = MenuLayout(elements: ComposeToolItem.allCases.map { .item($0, isVisible: false) } + [.more])
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(500))
+        window.layoutIfNeeded()
+        let labels = ["追加", "公開範囲", "メディアを添付", "広げて書く", "注意書き"]
+        let hidden = try labels.map { label in try #require(buttons(in: window).first { $0.accessibilityLabel == label }) }
+        expectShown([], hidden: hidden)
+    }
+
+    /// 書いている途中にカスタマイズを開いても書いている状態のままで、閉じたらキーボードが本文に戻る。
+    @Test func customizeKeepsEditingAndReturnsKeyboard() async throws {
+        defer { window.isHidden = true }
+        settings.composeToolLayout = MenuLayout(elements: [.more, .item(.customize, isVisible: true)])
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(500))
+        window.layoutIfNeeded()
+        let customize = try #require(buttons(in: window).first { $0.accessibilityLabel == "カスタマイズ" })
+        customize.sendActions(for: .primaryActionTriggered)
+        try await Task.sleep(for: .milliseconds(800))
+        let sheet = try #require(window.rootViewController?.presentedViewController as? ComposeToolLayoutSheet)
+        #expect(composer.stateDump().contains("editing: true"), "開くと書き終えたことになりました\n\(composer.stateDump())")
+
+        sheet.dismiss(animated: true)
+        let textView = try #require(textViews(in: window).first)
+        // 閉じる動きにかかる時間は実行ごとにばらつくので、閉じ終わってキーボードが戻るまで、少しずつ待つ。
+        for _ in 0..<30 where !textView.isFirstResponder {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(textView.isFirstResponder, "閉じてもキーボードが戻りません\n\(composer.stateDump())")
+    }
+
+    /// ほかの画面が閉じていく途中にカスタマイズを押すと、その瞬間は画面を重ねられないので何もしない。
+    /// 開いた扱いだけが残ると、以後キーボードを閉じても欄がカプセルに戻らなくなる。
+    @Test func customizeWhileAnotherSheetClosingDoesNothing() async throws {
+        defer { window.isHidden = true }
+        settings.composeToolLayout = MenuLayout(elements: [.more, .item(.customize, isVisible: true)])
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(500))
+        window.layoutIfNeeded()
+        let host = try #require(window.rootViewController)
+        host.present(UIViewController(), animated: false)
+        try await Task.sleep(for: .milliseconds(100))
+        host.dismiss(animated: true)
+
+        let customize = try #require(buttons(in: window).first { $0.accessibilityLabel == "カスタマイズ" })
+        customize.sendActions(for: .primaryActionTriggered)
+        try await Task.sleep(for: .milliseconds(800))
+        #expect(!(host.presentedViewController is ComposeToolLayoutSheet))
+
+        composer.endEditing()
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(composer.stateDump().contains("editing: false"), "キーボードを閉じても書いている状態のままです\n\(composer.stateDump())")
+    }
+
+    private func expectShown(_ shown: [UIButton], hidden: [UIButton], sourceLocation: SourceLocation = #_sourceLocation) {
+        for button in shown {
+            let row = (button.superview as? UIStackView)?.arrangedSubviews.map { "\(type(of: $0)) \($0.accessibilityLabel ?? "") hidden=\($0.isHidden) frame=\($0.frame) constraints=\($0.constraints.map(\.description))" }.joined(separator: "\n") ?? ""
+            #expect(!button.isHidden && button.bounds.width > 0, "\(button.accessibilityLabel ?? "")のボタンが出ていません: frame=\(button.frame)\n\(row)", sourceLocation: sourceLocation)
+        }
+        for button in hidden {
+            #expect(button.isHidden, "\(button.accessibilityLabel ?? "")のボタンが隠れていません\n\(composer.stateDump())", sourceLocation: sourceLocation)
+        }
+        let frames = shown.map(\.frame).sorted { $0.minX < $1.minX }
+        for (left, right) in zip(frames, frames.dropFirst()) {
+            #expect(left.maxX <= right.minX + 0.5, "ボタンが重なっています: \(left) / \(right)", sourceLocation: sourceLocation)
+        }
     }
 
     private func textFields(in view: UIView) -> [UITextField] {

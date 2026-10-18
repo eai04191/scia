@@ -7,12 +7,23 @@ protocol MenuItemPresentable {
     /// 名前の下に添える説明。
     var note: String? { get }
     var symbolName: String { get }
+    /// 「その他」の境目の行の名前と説明と印。境目より下の項目をどこへ入れるかは、項目の種類ごとに違う。
+    static var moreBoundaryTitle: String { get }
+    static var moreBoundaryNote: String { get }
+    static var moreBoundarySymbolName: String { get }
+}
+
+/// 長押しのメニューでは、境目より下の項目は「その他」のサブメニューに入る。
+extension MenuItemPresentable {
+    static var moreBoundaryTitle: String { "その他" }
+    static var moreBoundaryNote: String { "これより下の項目は、メニューの「その他」の中に入ります" }
+    static var moreBoundarySymbolName: String { "ellipsis.circle" }
 }
 
 extension StatusMenuItem: MenuItemPresentable {}
 extension UserMenuItem: MenuItemPresentable {}
 
-/// 長押しのメニューの並びを変える画面。項目、区切り線、「その他」の境目を1本のリストで並べ替え、項目ごとに表示を切り替える。決まりはdocs/menus.mdにある。
+/// 長押しのメニューや投稿欄の＋の並びを変える画面。項目、区切り線、「その他」の境目を1本のリストで並べ替え、項目ごとに表示を切り替える。決まりはdocs/menus.mdにある。
 struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     let title: String
     @Binding var layout: MenuLayout<Item>
@@ -110,13 +121,13 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
         case .more:
             Label {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("その他")
-                    Text("これより下の項目は、メニューの「その他」の中に入ります")
+                    Text(Item.moreBoundaryTitle)
+                    Text(Item.moreBoundaryNote)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
             } icon: {
-                Image(systemName: "ellipsis.circle")
+                Image(systemName: Item.moreBoundarySymbolName)
             }
         }
     }

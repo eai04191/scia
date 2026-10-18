@@ -1,0 +1,35 @@
+import SciaCore
+
+/// 投稿欄のボタンと＋のメニュー、並びの設定画面に出す、項目の名前と印。
+extension ComposeToolItem: MenuItemPresentable {
+    var title: String {
+        switch self {
+        case .visibility: "公開範囲"
+        case .media: "メディアを添付"
+        case .expand: "広げて書く"
+        case .spoiler: "注意書き"
+        case .customize: "カスタマイズ"
+        }
+    }
+
+    var note: String? {
+        switch self {
+        case .customize: "この並びを変える画面を開きます。隠しても、設定の「投稿欄のボタン」から変えられます"
+        default: nil
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .visibility: "globe"
+        case .media: "photo.on.rectangle"
+        case .expand: "arrow.up.left.and.arrow.down.right"
+        case .spoiler: "exclamationmark.triangle"
+        case .customize: "slider.horizontal.3"
+        }
+    }
+
+    static var moreBoundaryTitle: String { "＋ボタン" }
+    static var moreBoundaryNote: String { "これより上の項目は＋の中に入れ、下の項目はボタンの行に＋の右から並べます。行に入りきらない項目は＋の中に入ります" }
+    static var moreBoundarySymbolName: String { "plus.circle" }
+}

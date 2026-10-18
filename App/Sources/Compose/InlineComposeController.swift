@@ -93,11 +93,23 @@ final class InlineComposeController: NSObject {
     private lazy var stackTop = stack.topAnchor.constraint(equalTo: dragArea.contentLayoutGuide.topAnchor)
     private lazy var stackBottom = stack.bottomAnchor.constraint(equalTo: dragArea.contentLayoutGuide.bottomAnchor)
     private let stack = UIStackView()
-    private let tools = UIStackView()
+    private let tools = ComposeToolsView()
     /// 入力バーの中身を載せるスクロールビュー。バーを下へ引くと、キーボードが指に付いて下がる。
     private let dragArea = KeyboardDragArea()
     /// 添付などの部品を足す項目をまとめたメニューのボタン。書いていないときや短い投稿のときに、欄を部品のボタンで大きくしないため、1つにまとめる。
     private let addButton = UIButton(configuration: .plain())
+    /// 部品を足す項目のうち、設定でボタンの行に常に出すもののボタン。行に入りきらなければ隠し、＋のメニューに回す。
+    private lazy var toolButtons: [ComposeToolItem: UIButton] = Dictionary(uniqueKeysWithValues: ComposeToolItem.allCases.map { item in
+        switch item {
+        case .visibility: (item, visibilityButton)
+        case .expand: (item, expandButton)
+        case .media, .spoiler, .customize: (item, makeToolButton(item))
+        }
+    })
+    /// 今のボタンの行と＋のメニューへの振り分け。ボタンの行の幅が決まるたびに決め直す。まだ一度も振り分けていなければnil。
+    /// 全部を非表示にした振り分けは行も＋も空になるので、空の値を初期値にすると、最初の振り分けを済んだものとして飛ばしてしまう。
+    private var toolPlacement: ComposeToolPlacement?
+    private var isToolPlacementScheduled = false
     /// メディアを選ぶシート。出している間だけある。
     private var mediaPicker: MediaPickerSheet?
     /// 最後に出したキーボードの、画面の下端からの高さ。メディアを選ぶシートをこの高さで出す。
@@ -114,6 +126,8 @@ final class InlineComposeController: NSObject {
     private weak var mediaViewer: MediaViewerController?
     /// ビューアを開いてから、閉じる動きを終えるまでtrue。この間は、キーボードを閉じても書いている状態を解かない。
     private var isShowingMediaViewer = false
+    /// 書いている途中に並びを変える画面を開いてから、閉じるまでtrue。この間は、キーボードを閉じても書いている状態を解かない。
+    private var isShowingToolLayoutSettings = false
     /// ビューアを開くたびに増やす。閉じる途中に別の添付を開いたら、前のビューアの閉じ終わりでキーボードを戻さないようにする。
     private var mediaViewerGeneration = 0
 
@@ -170,6 +184,7 @@ final class InlineComposeController: NSObject {
         applyExpandedLayout()
         observeModel()
         observeTuning()
+        observeToolLayout()
     }
 
     /// バーを広げて、キーボードを出す。
@@ -213,6 +228,7 @@ final class InlineComposeController: NSObject {
         editing: \(isEditing) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : "none") spoiler: \(model.showsSpoiler) replyTo: \(model.replyTo?.id ?? "nil")
         mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
+        tools: row=\(toolPlacement.map { "\($0.row.map(\.rawValue))" } ?? "nil") menu=\(toolPlacement.map { "\($0.menu.map { $0.map(\.rawValue) })" } ?? "nil")
         bar.frame: \(bar.frame)
         rows: \(rowStates.map { "\($0.name) hidden=\($0.view.isHidden) frame=\($0.view.frame)" }.joined(separator: ", "))
         overlaps: \(overlappingRows.isEmpty ? "none" : overlappingRows.joined(separator: ", "))
@@ -290,19 +306,175 @@ final class InlineComposeController: NSObject {
 
     // MARK: - ＋のメニュー
 
-    /// ＋のメニューの項目。
+    /// ＋のメニューの項目。設定の区切り線で分けたまとまりごとに、区切って並べる。
     private func addMenuElements() -> [UIMenuElement] {
-        // シートを出している間は、同じ項目でシートを閉じてキーボードに戻れるようにする。
-        let media = mediaPicker == nil
-            ? UIAction(title: "メディアを添付", image: UIImage(systemName: "photo.on.rectangle")) { [weak self] _ in self?.toggleMediaPicker() }
-            : UIAction(title: "キーボードに戻る", image: UIImage(systemName: "keyboard")) { [weak self] _ in self?.toggleMediaPicker() }
-        if mediaPicker == nil, !model.canAttachMedia {
-            media.attributes = .disabled
+        (toolPlacement?.menu ?? []).map { group in
+            UIMenu(options: .displayInline, children: group.map(menuAction(for:)))
         }
-        let spoiler = UIAction(title: "注意書き", image: UIImage(systemName: "exclamationmark.triangle"), state: model.showsSpoiler ? .on : .off) { [weak self] _ in
-            self?.setSpoilerShown(!(self?.model.showsSpoiler ?? true))
+    }
+
+    /// 設定と同じ、投稿欄のボタンの並びを変える画面を重ねる。書いている途中なら、閉じたあとにキーボードを戻す。
+    /// 開いている間は、キーボードを閉じても書いている状態を解かない。添付のビューアと同じ扱い。
+    private func presentToolLayoutSettings() {
+        guard let host else { return }
+        // ほかの画面が閉じていく途中は、その画面を出していた画面にまだ次の画面を重ねられず、出そうとしても出ない。
+        // 開いた扱いだけが残ると、以後キーボードを閉じても欄がカプセルに戻らなくなるため、何もしない。
+        // 閉じる動きが始まると、UIKitは閉じていく画面を重ねている画面として返さなくなるので、切り替えの最中かどうかで見分ける。
+        let presenter = topPresenter(from: host)
+        guard presenter.presentedViewController == nil, presenter.transitionCoordinator == nil else {
+            logger.info("compose: tool layout settings ignored while another sheet is closing")
+            return
         }
-        return [media, spoiler]
+        let resumesEditing = isEditing
+        logger.info("compose: present tool layout settings (editing=\(resumesEditing))")
+        isShowingToolLayoutSettings = resumesEditing
+        resignInput()
+        let sheet = ComposeToolLayoutSheet(settings: settings) { [weak self] in
+            self?.toolLayoutSettingsDidClose(resumesEditing: resumesEditing)
+        }
+        presenter.present(sheet, animated: true)
+        // それでも出せなかったら、開いた扱いを取り消してキーボードを戻す。
+        guard presenter.presentedViewController !== sheet else { return }
+        logger.error("compose: tool layout settings could not be presented")
+        isShowingToolLayoutSettings = false
+        if resumesEditing {
+            focusLastInput()
+        }
+    }
+
+    private func toolLayoutSettingsDidClose(resumesEditing: Bool) {
+        logger.info("compose: tool layout settings closed")
+        isShowingToolLayoutSettings = false
+        guard resumesEditing, isEditing else { return }
+        focusLastInput()
+    }
+
+    private func menuAction(for item: ComposeToolItem) -> UIMenuElement {
+        switch item {
+        case .visibility:
+            // 選んでいる公開範囲が分かるよう、サブメニューの項目に今の値を添える。
+            let menu = UIMenu(title: item.title, subtitle: VisibilityOption(model.visibility).title, image: UIImage(systemName: VisibilityOption(model.visibility).symbolName), children: visibilityActions())
+            return menu
+        case .customize:
+            return UIAction(title: item.title, image: UIImage(systemName: item.symbolName)) { [weak self] _ in
+                self?.presentToolLayoutSettings()
+            }
+        case .expand:
+            return UIAction(title: isExpanded ? "元の大きさに戻す" : item.title, image: UIImage(systemName: isExpanded ? "arrow.down.right.and.arrow.up.left" : item.symbolName)) { [weak self] _ in
+                self?.toggleExpanded()
+            }
+        case .media:
+            // シートを出している間は、同じ項目でシートを閉じてキーボードに戻れるようにする。
+            let action = mediaPicker == nil
+                ? UIAction(title: item.title, image: UIImage(systemName: item.symbolName)) { [weak self] _ in self?.toggleMediaPicker() }
+                : UIAction(title: "キーボードに戻る", image: UIImage(systemName: "keyboard")) { [weak self] _ in self?.toggleMediaPicker() }
+            if mediaPicker == nil, !model.canAttachMedia {
+                action.attributes = .disabled
+            }
+            return action
+        case .spoiler:
+            return UIAction(title: item.title, image: UIImage(systemName: item.symbolName), state: model.showsSpoiler ? .on : .off) { [weak self] _ in
+                self?.toggleSpoiler()
+            }
+        }
+    }
+
+    private func visibilityActions() -> [UIAction] {
+        VisibilityOption.choices.map { choice in
+            UIAction(title: choice.title, image: UIImage(systemName: choice.symbolName), state: choice.visibility == model.visibility ? .on : .off) { [weak self] _ in
+                self?.model.choose(choice.visibility)
+            }
+        }
+    }
+
+    private func toggleSpoiler() {
+        setSpoilerShown(!model.showsSpoiler)
+    }
+
+    // MARK: - ボタンの行に出す部品のボタン
+
+    /// 添付、注意書き、カスタマイズのボタン。公開範囲と展開は、＋を置く前からあるボタンをそのまま使う。
+    private func makeToolButton(_ item: ComposeToolItem) -> UIButton {
+        let button = UIButton(configuration: .plain(), primaryAction: UIAction { [weak self] _ in
+            switch item {
+            case .media: self?.toggleMediaPicker()
+            case .spoiler: self?.toggleSpoiler()
+            case .customize: self?.presentToolLayoutSettings()
+            case .visibility, .expand: break
+            }
+        })
+        button.configuration?.image = UIImage(systemName: item.symbolName)
+        button.configuration?.baseForegroundColor = .label
+        button.configuration?.imagePadding = 4
+        button.accessibilityLabel = item.title
+        button.isHidden = true
+        return button
+    }
+
+    /// ボタンの状態を下書きに合わせる。添付は枚数を添え、注意書きは付けている間だけ色を付ける。
+    private func updateToolButtons() {
+        if let media = toolButtons[.media] {
+            media.configuration?.title = model.attachments.isEmpty ? nil : "\(model.attachments.count)"
+            media.isEnabled = model.canAttachMedia || mediaPicker != nil
+        }
+        if let spoiler = toolButtons[.spoiler] {
+            spoiler.configuration?.baseForegroundColor = model.showsSpoiler ? .tintColor : .label
+            spoiler.accessibilityTraits = model.showsSpoiler ? [.button, .selected] : .button
+        }
+    }
+
+    /// 設定の並びが変わったら、ボタンを並びの順に置き直し、振り分けを決め直す。
+    private func observeToolLayout() {
+        withObservationTracking {
+            arrangeToolButtons(settings.composeToolLayout)
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.observeToolLayout() }
+        }
+    }
+
+    private func arrangeToolButtons(_ layout: MenuLayout<ComposeToolItem>) {
+        // ＋をいちばん左に置き、その後ろに項目のボタンを並びの順に置く。
+        tools.insertArrangedSubview(addButton, at: 0)
+        var index = 1
+        for element in layout.elements {
+            guard case .item(let item, _) = element, let button = toolButtons[item] else { continue }
+            tools.insertArrangedSubview(button, at: index)
+            index += 1
+        }
+        tools.setNeedsLayout()
+        placeTools()
+    }
+
+    /// ボタンの行に常に出す項目のうち、行に入りきらない分を＋のメニューへ回す。幅は文字の大きさや残り文字数の桁で変わるので、行を並べ直すたびに決め直す。
+    private func placeTools() {
+        // 書いていないときは行を隠していて幅が決まらないので、決め直さない。
+        guard !tools.isHidden, tools.bounds.width > 0 else { return }
+        let fixed = [remainingLabel, sendButton].map { $0.intrinsicContentSize.width }.reduce(0, +)
+        // 間を埋める空き、残り文字数、送信の間の2つの間隔。項目と＋のボタンは、それぞれ後ろの間隔1つ分を足す。
+        let available = tools.bounds.width - fixed - tools.spacing * 2
+        let placement = ComposeToolPlacement(
+            layout: settings.composeToolLayout,
+            available: available,
+            addButtonWidth: addButton.intrinsicContentSize.width + tools.spacing,
+            width: { [toolButtons, tools] item in (toolButtons[item]?.intrinsicContentSize.width ?? 0) + tools.spacing }
+        )
+        guard placement != toolPlacement else { return }
+        logger.info("compose tools: row=\(placement.row.map(\.rawValue), privacy: .public) menu=\(placement.menu.map { $0.map(\.rawValue) }, privacy: .public) available=\(available)")
+        toolPlacement = placement
+        for (item, button) in toolButtons {
+            setRowHidden(button, !placement.row.contains(item))
+        }
+        setRowHidden(addButton, !placement.showsAddButton)
+    }
+
+    /// 行を並べ終えてから振り分けを決め直す。並べている最中にボタンを出したり隠したりすると、スタックビューが別のボタンを幅0で並べ、出したボタンと重なった。
+    private func placeToolsAfterLayout() {
+        guard !isToolPlacementScheduled else { return }
+        isToolPlacementScheduled = true
+        Task { @MainActor [weak self] in
+            self?.isToolPlacementScheduled = false
+            self?.placeTools()
+        }
     }
 
     // MARK: - 注意書き
@@ -584,11 +756,9 @@ final class InlineComposeController: NSObject {
         visibilityButton.configuration?.image = UIImage(systemName: option.symbolName)
         visibilityButton.accessibilityLabel = "公開範囲"
         visibilityButton.accessibilityValue = option.title
-        visibilityButton.menu = UIMenu(title: "公開範囲", children: VisibilityOption.choices.map { choice in
-            UIAction(title: choice.title, image: UIImage(systemName: choice.symbolName), state: choice.visibility == model.visibility ? .on : .off) { [weak self] _ in
-                self?.model.choose(choice.visibility)
-            }
-        })
+        visibilityButton.menu = UIMenu(title: "公開範囲", children: visibilityActions())
+
+        updateToolButtons()
 
         remainingLabel.text = "\(model.remainingCharacters)"
         remainingLabel.textColor = model.remainingCharacters < 0 ? .systemRed : .secondaryLabel
@@ -979,7 +1149,9 @@ final class InlineComposeController: NSObject {
         addButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
             completion(self?.addMenuElements() ?? [])
         }])
-        for view in [visibilityButton, addButton, expandButton, spacer, remainingLabel, sendButton] {
+        tools.onLayout = { [weak self] in self?.placeToolsAfterLayout() }
+        // 公開範囲、展開、添付などの項目のボタンと＋は、設定の並びに合わせて`arrangeToolButtons`が前に置く。
+        for view in [spacer, remainingLabel, sendButton] {
             tools.addArrangedSubview(view)
         }
         tools.alignment = .center
@@ -1062,7 +1234,7 @@ extension InlineComposeController: UITextViewDelegate {
         // メディアを選ぶシートを出すためにキーボードを閉じたときも同じ。
         // 添付のビューアを開くためにキーボードを閉じたときも同じ。閉じ終わったら入力欄にキーボードを戻す。
         // シートを閉じたあとに書き終えたときは、キーボードが上がりきった知らせが来ずにバーを留めたままでも、カプセルに戻す。
-        guard !isMovingFocus, mediaPicker == nil, !isShowingMediaViewer else { return }
+        guard !isMovingFocus, mediaPicker == nil, !isShowingMediaViewer, !isShowingToolLayoutSettings else { return }
         releaseHoldAboveKeyboard()
         setEditing(false)
         onEndEditing()
@@ -1101,6 +1273,16 @@ private final class ComposeTextView: GlyphLanguageTextView {
 
     @objc private func submitFromKeyboard() {
         onSubmit()
+    }
+}
+
+/// 投稿欄のボタンの行。並べ直すたびに知らせ、行に入りきらない部品のボタンを＋へ回せるようにする。
+private final class ComposeToolsView: UIStackView {
+    var onLayout: () -> Void = {}
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onLayout()
     }
 }
 

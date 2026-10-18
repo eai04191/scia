@@ -128,6 +128,15 @@ struct SettingsView: View {
                     Text("投稿や通知を長押ししたときのメニューに出す項目と、その並びを選びます。ユーザーのメニューは、投稿のメニューの中に、投稿したユーザーなどのサブメニューとして出ます。")
                 }
                 Section {
+                    NavigationLink("投稿欄のボタン") {
+                        MenuLayoutSettingsView(title: "投稿欄のボタン", layout: $settings.composeToolLayout)
+                    }
+                } header: {
+                    Text("投稿欄")
+                } footer: {
+                    Text("公開範囲、添付、注意書きのような項目を、投稿欄のボタンの行に常に出すか、＋の中に入れるかと、その並びを選びます。")
+                }
+                Section {
                     Toggle("モバイル通信で高画質のサムネイルを使う", isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
                 } header: {
                     Text("画像")

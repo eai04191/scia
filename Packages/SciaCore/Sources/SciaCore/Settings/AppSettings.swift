@@ -69,6 +69,11 @@ public final class AppSettings {
         didSet { defaults.set(userMenuLayout.tokens, forKey: Keys.userMenuLayout) }
     }
 
+    /// 投稿欄の部品を足す項目の並び。どれをボタンの行に常に出し、どれを＋のメニューに入れるか。
+    public var composeToolLayout: MenuLayout<ComposeToolItem> {
+        didSet { defaults.set(composeToolLayout.tokens, forKey: Keys.composeToolLayout) }
+    }
+
     private enum Keys {
         static let usesOriginalThumbnailsOnExpensiveNetwork = "settings.usesOriginalThumbnailsOnExpensiveNetwork"
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
@@ -83,6 +88,7 @@ public final class AppSettings {
         static let linkBrowser = "settings.linkBrowser"
         static let statusMenuLayout = "settings.statusMenuLayout"
         static let userMenuLayout = "settings.userMenuLayout"
+        static let composeToolLayout = "settings.composeToolLayout"
     }
 
     public init(defaults: UserDefaults) {
@@ -98,6 +104,7 @@ public final class AppSettings {
         linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .external
         statusMenuLayout = defaults.stringArray(forKey: Keys.statusMenuLayout).map(MenuLayout.init(tokens:)) ?? StatusMenuItem.defaultLayout
         userMenuLayout = defaults.stringArray(forKey: Keys.userMenuLayout).map(MenuLayout.init(tokens:)) ?? UserMenuItem.defaultLayout
+        composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout
         profilePostsFilter = ProfilePostsFilter(
             showsReplies: defaults.object(forKey: Keys.profileShowsReplies) as? Bool ?? ProfilePostsFilter.standard.showsReplies,
             showsBoosts: defaults.object(forKey: Keys.profileShowsBoosts) as? Bool ?? ProfilePostsFilter.standard.showsBoosts
