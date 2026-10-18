@@ -32,11 +32,12 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 並行して作業するスレッドは、worktreeも分ける。`make build`・`make test`はworktree直下の`DerivedData`、`make test-core`は`Packages/SciaCore/.build`を使うため、同じworktreeで同時に走らせると、ロック待ちで失敗したり成果物を上書きし合ったりする
 - 3台は同じアカウントでログインしているため、サーバー上の状態は共有される。読んだ位置は`api/v1/markers`でサーバーに保存され、起動時に読み込まれるので、別のスレッドがスクロールすると次の起動位置が変わる。投稿やブーストも、ストリーミングで他の端末に流れ込む。起動時の位置や新着の挙動を確かめるときは、他のスレッドの操作で結果が乱れていないか疑う
 - 端末のリセット（`xcrun simctl erase`）や別の端末での起動をすると、ユーザーにログインし直してもらう必要がある
-- 画面は`Tools/sim.sh dump '<使う端末>' --settle`で文字として読む。画面が止まるのを待ってから、要素の名前と中心の座標（タップと同じポイント）、タイムラインの`contentOffset.y`などの状態を出す。初回は、アプリに要素を作らせる設定を端末に入れ、起動し直しを求める。この設定でアプリが少し重くなるので、hitchを測るときは`xcrun simctl spawn '<使う端末>' defaults delete com.apple.Accessibility ApplicationAccessibilityEnabled`で外す
+- 画面は`Tools/sim.sh dump '<使う端末>'`で文字として読む。アプリの中でアニメーションとスクロールの慣性が止まるのを待ってから（多くは1秒ほど）、要素の名前と中心の座標（タップと同じポイント）、タイムラインの`contentOffset.y`などの状態を出す。初回は、アプリに要素を作らせる設定を端末に入れ、起動し直しを求める。この設定でアプリが少し重くなるので、hitchを測るときは`xcrun simctl spawn '<使う端末>' defaults delete com.apple.Accessibility ApplicationAccessibilityEnabled`で外す
 - 見た目を確かめるときは、シミュレーターのツールの`screenshot`ではなく`Tools/sim.sh shot '<使う端末>'`で撮る。画面が止まるのを待ってから、端末のポイント幅に縮小したJPEGを出すので、画像の座標がそのままタップの座標になり、1枚のトークンも約1/5になる。`--crop x,y,幅,高さ`で一部を切り出し、`--full <ファイル>`でユーザーに送る原寸のPNGも残す。原寸は自分では読まない
 - よく使う画面は、タップでたどらず`xcrun simctl openurl '<使う端末>' '<URL>'`で開く。`scia-debug://reset`（重ねた画面を閉じてホームに戻す）、`scia-debug://tab/<home|notifications>`、`scia-debug://settings`、`scia-debug://tuning`、`scia-debug://viewer?index=<n>`（選んでいるタブで一番上に見えている画像付きの投稿を、n番目の添付ファイルで開く）
-- URLを送ったあとや操作のあとに`sleep`しない。`dump --settle`と`shot`が画面が止まるまで待つので、続けて行うコマンドは1つのBashの呼び出しにまとめる（例: `xcrun simctl openurl '<使う端末>' 'scia-debug://reset' && Tools/sim.sh dump '<使う端末>' --settle`）
+- URLを送ったあとや操作のあとに`sleep`しない。`dump`と`shot`が画面が止まるまで待つので、続けて行うコマンドは1つのBashの呼び出しにまとめる（例: `xcrun simctl openurl '<使う端末>' 'scia-debug://reset' && Tools/sim.sh dump '<使う端末>'`）
 - タップやスワイプのあとは、dumpで結果を確かめてから次へ進む。思った画面でなければ、同じ座標を打ち直さず、dumpから座標を取り直す
+- 画像の読み込みのように、動きのないまま中身が後から入る表示は、止まっていても終わっていない。目的の要素が出るまでdumpし直す。ダミー投稿の画像は、流してから1〜2秒で入る
 - 一覧の一番上にいると、新着で行が下へずれ、dumpで読んだ座標が古くなる。一覧の行をタップする前に`scia-debug://arrivals/hold`を送ると、ホームと通知のタブは新着を挿入せずに溜める。終わったら`scia-debug://arrivals/release`で、溜まった新着をまとめて挿入する。ストリーミングはつないだままなので、`streaming/offline`と違って、切断の知らせやポーリングで一覧が動かない。再接続などで新着を読む補完も、解くまで見送る。投稿の編集や削除と、保留を送る前に始まっていた補完の結果は、すぐ反映される
 - ハードウェアキーボードがつながった扱いだと、ソフトウェアキーボードが出ない。キーボードが出た状態を確かめるときは、`make sim-keyboard SIM='<使う端末>'`でハードウェアキーボードを外す。フォーカス済みの入力欄にも出るが、出るまで少しかかるので、直後のスクリーンショットで判断しない。`KEYBOARD=hardware`を付けるとつなぎ直す
 
