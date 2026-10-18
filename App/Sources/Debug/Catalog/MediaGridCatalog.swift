@@ -20,6 +20,8 @@ enum MediaGridCatalog {
             CatalogState(title: "6枚（4枚目に残りの数）") { grid(images(6)) },
             CatalogState(title: "閲覧注意で覆う") { grid(images(2), sensitive: true) },
             CatalogState(title: "メニューから隠した") { grid(images(2), hidden: true) },
+            CatalogState(title: "フィルターで覆う") { grid(images(2), filterTitle: "ネタバレ") },
+            CatalogState(title: "フィルターで覆う（名前が長い）") { grid(images(2), filterTitle: String(repeating: "長いフィルターの名前", count: 4)) },
             CatalogState(title: "代替テキスト（ALTあり、説明にならない「Screenshot」。設定で無視していれば右にALTは出ない）") {
                 grid([
                     Fixtures.attachment("a", width: 1_200, height: 1_200, color: .systemGreen, description: "緑の地に白い格子"),
@@ -64,7 +66,11 @@ enum MediaGridCatalog {
     }
 
     @MainActor
-    private static func grid(_ attachments: [MediaAttachment], sensitive: Bool = false, hidden: Bool = false, store: MediaImageStore = AppDependencies.mediaImages) -> UIView {
+    /// - Parameter filterTitle: 添付ファイルをぼかすフィルターに一致したことにするなら、その名前。
+    private static func grid(_ attachments: [MediaAttachment], sensitive: Bool = false, hidden: Bool = false, filterTitle: String? = nil, store: MediaImageStore = AppDependencies.mediaImages) -> UIView {
+        let filtered = filterTitle.map { title in
+            [FilterResult(filter: FilterResult.Filter(id: title, title: title, context: [.home], filterAction: .blur))]
+        } ?? []
         let status = Status(
             id: UUID().uuidString,
             createdAt: .now,
@@ -73,10 +79,12 @@ enum MediaGridCatalog {
             spoilerText: "",
             url: nil,
             mediaAttachments: attachments,
-            sensitive: sensitive
+            sensitive: sensitive,
+            filtered: filtered
         )
         let grid = MediaGridView(store: store)
         let timeline = TimelineViewController(texts: .home)
+        timeline.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
         if hidden {
             timeline.mediaCovers.hide(status)
         }

@@ -8,6 +8,7 @@ enum PostRowCatalog {
     private typealias Fixtures = CatalogFixtures
 
     private static let author = Fixtures.account(displayName: "カタログのアカウント", acct: "catalog@example.com")
+    private static let longFilterTitle = String(repeating: "長いフィルターの名前", count: 4)
     private static let booster = Fixtures.account(
         displayName: "ブーストした人",
         acct: "booster@example.com",
@@ -17,10 +18,18 @@ enum PostRowCatalog {
     @MainActor
     static func postStates() -> [CatalogState] {
         let home = TimelineViewController(texts: .home)
-        func post(_ title: String, _ status: Status, isPinned: Bool = false, expandsSpoiler: Bool = false) -> CatalogState {
+        home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
+        // カタログのアカウントを自分として組む一覧。自分の投稿は、フィルターに一致しても畳まずに印を出す。
+        let mine = TimelineViewController(texts: .home)
+        mine.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: author.id))
+        /// - Parameters:
+        ///   - expandsSpoiler: 注意書きを開く。フィルターの警告で畳んでいれば、警告を開く。
+        ///   - isMine: カタログのアカウントを自分として組む。
+        func post(_ title: String, _ status: Status, isPinned: Bool = false, expandsSpoiler: Bool = false, isMine: Bool = false) -> CatalogState {
             CatalogState(title: title) {
-                if expandsSpoiler { home.toggleSpoiler(of: status) }
-                return CatalogFrame.bordered(PostContentView(configuration: home.contentConfiguration(for: status, isPinned: isPinned, base: .cell())))
+                let timeline = isMine ? mine : home
+                if expandsSpoiler { timeline.toggleSpoiler(of: status) }
+                return CatalogFrame.bordered(PostContentView(configuration: timeline.contentConfiguration(for: status, isPinned: isPinned, base: .cell())))
             }
         }
         let longSpoiler = String(repeating: "注意書きが長く、何行にもわたるときの折り返しを確かめる。", count: 4)
@@ -43,6 +52,30 @@ enum PostRowCatalog {
                 Fixtures.attachment("a", width: 1_600, height: 900, color: .systemTeal),
             ], sensitive: true), expandsSpoiler: true),
             post("ブーストされた注意書き（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", rebloggedBy: booster)),
+            post("フィルターの警告", status(content: "<p>警告で畳んだ本文。</p>", filtered: [filter("ネタバレ", .warn)])),
+            post("フィルターの警告（名前が長い、2つに一致した）", status(content: "<p>警告で畳んだ本文。</p>", filtered: [filter(longFilterTitle, .warn), filter("ネタバレ", .warn)])),
+            post("フィルターの警告と画像とリンクカード（どれも出さない）", status(
+                content: #"<p>警告で畳んだ本文。<a href="https://news.example/articles/1">news.example/articles/1</a></p>"#,
+                media: [Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange)],
+                filtered: [filter("ネタバレ", .warn)]
+            )),
+            post("フィルターの警告と注意書き（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)])),
+            post("フィルターの警告と注意書き（警告を開いた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)]), expandsSpoiler: true),
+            post("ブーストされたフィルターの警告", status(content: "<p>警告で畳んだ本文。</p>", filtered: [filter("ネタバレ", .warn)], rebloggedBy: booster)),
+            post("フィルターで画像をぼかす", status(content: "<p>フィルターで画像をぼかした投稿。</p>", media: [
+                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
+            ], filtered: [filter("ネタバレ", .blur)])),
+            post("フィルターで画像をぼかす（閲覧注意も付いた、名前が長い）", status(content: "<p>フィルターで画像をぼかした投稿。</p>", media: [
+                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
+            ], sensitive: true, filtered: [filter(longFilterTitle, .blur)])),
+            post("自分の投稿がフィルターに一致した（畳まずに印を出す）", status(content: "<p>フィルターした話題に自分で触れた投稿。</p>", filtered: [filter("ネタバレ", .hide)]), isMine: true),
+            post("自分の投稿が複数のフィルターに一致した（名前が長い、画像つき）", status(content: "<p>フィルターした話題に自分で触れた投稿。</p>", media: [
+                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
+            ], filtered: [filter(longFilterTitle, .warn), filter("画像", .blur)]), isMine: true),
+            post("自分の投稿がフィルターに一致した（注意書き、閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)]), isMine: true),
+            post("フィルターの警告とぼかし（警告を開いた）", status(content: "<p>警告を開くと、画像はぼかしたまま出る。</p>", media: [
+                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
+            ], filtered: [filter("ネタバレ", .warn), filter("画像", .blur)]), expandsSpoiler: true),
             post("画像2枚", status(content: "<p>画像を2枚添付した投稿。</p>", media: [
                 Fixtures.attachment("a", width: 1_200, height: 900, color: .systemBlue),
                 Fixtures.attachment("b", width: 1_200, height: 900, color: .systemGreen, description: "緑の地に白い格子"),
@@ -134,6 +167,7 @@ enum PostRowCatalog {
     @MainActor
     static func notificationStates() -> [CatalogState] {
         let notifications = TimelineViewController(texts: .notifications)
+        notifications.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .notifications, myAccountID: nil))
         // メンションなどの投稿は通知を送った人が書き、お気に入りなどで再掲する投稿は自分が書いたもの。
         let mentioned = status(content: "<p>@me 通知の元になった投稿。</p>", account: booster)
         let mine = status(content: "<p>お気に入りやブーストをされた自分の投稿。</p>")
@@ -172,6 +206,10 @@ enum PostRowCatalog {
             row("お気に入り（注意書き、閉じた）", .favourite, status: status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ")),
             row("お気に入り（注意書き、開いた）", .favourite, status: status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ"), expandsSpoiler: true),
             row("メンション（注意書き、閉じた）", .mention, status: status(content: "<p>@me 注意書きの下の本文。</p>", account: booster, spoilerText: "ネタバレ")),
+            row("メンション（フィルターの警告）", .mention, status: status(content: "<p>@me 警告で畳んだ本文。</p>", account: booster, filtered: [filter("ネタバレ", .warn, context: [.notifications])])),
+            row("投稿の通知（フィルターで画像をぼかす）", .status, status: status(content: "<p>フィルターで画像をぼかした投稿。</p>", account: booster, media: [
+                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
+            ], filtered: [filter("ネタバレ", .blur, context: [.notifications])])),
             row("お気に入り（画像2枚、ALTつき）", .favourite, status: status(content: "<p>画像を2枚添付した自分の投稿。</p>", media: [
                 Fixtures.attachment("a", width: 1_200, height: 900, color: .systemBlue),
                 Fixtures.attachment("b", width: 900, height: 1_600, color: .systemGreen, description: "緑の地に白い格子"),
@@ -211,6 +249,7 @@ enum PostRowCatalog {
         sensitive: Bool = false,
         card: PreviewCard? = nil,
         editedAt: Date? = nil,
+        filtered: [FilterResult] = [],
         rebloggedBy: Account? = nil
     ) -> Status {
         let original = Status(
@@ -223,10 +262,15 @@ enum PostRowCatalog {
             mediaAttachments: media,
             sensitive: sensitive,
             card: card,
+            filtered: filtered,
             editedAt: editedAt
         )
         guard let rebloggedBy else { return original }
-        return Status(id: UUID().uuidString, createdAt: .now.addingTimeInterval(-600), account: rebloggedBy, content: "", spoilerText: "", url: nil, reblog: original)
+        return Status(id: UUID().uuidString, createdAt: .now.addingTimeInterval(-600), account: rebloggedBy, content: "", spoilerText: "", url: nil, filtered: filtered, reblog: original)
+    }
+
+    private static func filter(_ title: String, _ action: FilterResult.Action, context: [FilterResult.Context] = [.home]) -> FilterResult {
+        FilterResult(filter: FilterResult.Filter(id: title, title: title, context: context, filterAction: action), keywordMatches: [title])
     }
 }
 #endif

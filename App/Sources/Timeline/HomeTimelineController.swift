@@ -548,6 +548,41 @@ extension HomeTimelineController {
             streamDummyLinkCard(withImage: true, sensitive: true)
         case .xPost:
             streamDummyXPost()
+        case .filtered:
+            streamDummyFiltered()
+        }
+    }
+
+    /// サーバーのフィルターに一致したダミーの投稿を、新着と同じ経路で流す。警告、警告と注意書き、添付ファイルのぼかし、隠すの4件。
+    /// 隠す投稿は一覧に出ないので、3件だけ並べば合っている。実際にフィルターを作らずに、何度でも同じ条件で確かめるため。
+    private func streamDummyFiltered() {
+        let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
+        func filter(_ title: String, _ action: FilterResult.Action) -> [FilterResult] {
+            [FilterResult(filter: FilterResult.Filter(id: "dummy-\(title)", title: title, context: [.home], filterAction: action), keywordMatches: [title])]
+        }
+        let posts: [(content: String, spoilerText: String, filtered: [FilterResult], media: Bool)] = [
+            ("警告のフィルターに一致したダミーの投稿", "", filter("ダミーの警告", .warn), false),
+            ("警告のフィルターと注意書きのあるダミーの投稿", "ダミーの注意書き", filter("ダミーの警告", .warn), false),
+            ("添付ファイルをぼかすフィルターに一致したダミーの投稿", "", filter("ダミーのぼかし", .blur), true),
+            ("隠すフィルターに一致したダミーの投稿。一覧に出たら誤り", "", filter("ダミーの非表示", .hide), false),
+        ]
+        run { controller in
+            for (index, post) in posts.enumerated() {
+                guard !controller.isStopped else { return }
+                let base = Self.dummyStatus(number: index + 1, avatar: avatar)
+                let dummy = Status(
+                    id: base.id,
+                    createdAt: base.createdAt,
+                    account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー（フィルター）", avatar: avatar),
+                    content: "<p>\(post.content)</p>",
+                    spoilerText: post.spoilerText,
+                    url: nil,
+                    mediaAttachments: post.media ? DummyMedia.attachments(idPrefix: base.id) : [],
+                    filtered: post.filtered
+                )
+                controller.store.debugLocalOnlyIDs.insert(dummy.id)
+                controller.receive(.update(dummy))
+            }
         }
     }
 
@@ -741,6 +776,7 @@ enum DebugDummyPost: String, CaseIterable {
     case linkCardImage = "link-card-image"
     case linkCardSensitive = "link-card-sensitive"
     case xPost = "x-post"
+    case filtered
 
     var title: String {
         switch self {
@@ -754,6 +790,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .linkCardImage: "後から届くリンクカード（画像あり）"
         case .linkCardSensitive: "後から届くリンクカード（閲覧注意）"
         case .xPost: "後から届くXの投稿（画像4枚）"
+        case .filtered: "フィルターに一致した投稿（警告、ぼかし、隠す）"
         }
     }
 
@@ -767,6 +804,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .longVideo: "speaker.wave.2"
         case .linkCard, .linkCardImage, .linkCardSensitive: "link"
         case .xPost: "quote.bubble"
+        case .filtered: "line.3.horizontal.decrease.circle"
         }
     }
 }
