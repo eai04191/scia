@@ -158,6 +158,16 @@ public enum TuningCatalog {
         defaultValue: false
     )
 
+    /// 編集履歴で、前の版から変わっていない部分がこの割合に満たない版は、書き直したものとして、前の版をまるごと消し、新しい版をまるごと足した形で出す。
+    /// 0にすると、どれだけ書き直しても単語ごとの違いを重ねる。
+    public static let editHistoryMinimumUnchangedRatio = NumberTuning(
+        id: "editHistory.minimumUnchangedRatio",
+        title: "編集履歴で書き直しとみなす、変わらない部分の割合",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
     /// Xの投稿の囲みの、作者の行に出すアイコンの一辺。
     public static let xPostAvatarSize = NumberTuning(
         id: "timeline.xPostAvatarSize",
@@ -833,6 +843,9 @@ public enum TuningCatalog {
             .number(scrollToTopBounce),
             .number(insertionScrollDuration),
             .number(insertionScrollBounce),
+        ]),
+        TuningSection(id: "editHistory", title: "編集履歴", items: [
+            .number(editHistoryMinimumUnchangedRatio),
         ]),
         TuningSection(id: "streaming", title: "新着と読み込み", items: [
             .number(insertionInterval),

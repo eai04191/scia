@@ -430,6 +430,23 @@ final class SessionController {
         }
     }
 
+    /// プロフィールのURLでアカウントを探して開く。自分のサーバーが知らないアカウントも、相手のサーバーに問い合わせて探す。
+    private func openProfile(resolving url: URL, acct: String, from source: UIViewController) {
+        let client = client
+        Task {
+            do {
+                guard let account = try await client.resolveAccount(url.absoluteString) else {
+                    logger.error("profile not found url=\(url.absoluteString, privacy: .public)")
+                    handle(ProfileNotFound(acct: acct), title: "プロフィールを開けませんでした")
+                    return
+                }
+                openProfile(account, from: source)
+            } catch {
+                handle(error, title: "プロフィールを開けませんでした")
+            }
+        }
+    }
+
     // MARK: - プロフィール
 
     private func openProfile(_ account: Account, from source: UIViewController) {
@@ -523,12 +540,42 @@ final class SessionController {
         case .reblog:
             UserAction.toggleReblog.record()
             toggle(.reblog, on: status, failureTitle: "ブーストを変更できませんでした", from: timeline)
+        case .editHistory:
+            UserAction.openEditHistory.record()
+            openEditHistory(of: status.displayed, from: timeline)
         case .edit:
             UserAction.editStatus.record()
             startEditing(status, from: timeline)
         case .delete:
             confirmDeleting(status, from: timeline)
         }
+    }
+
+    /// 編集履歴を、操作した一覧の上に重ねて開く。履歴は開いた画面が読む。
+    private func openEditHistory(of status: Status, from source: UIViewController?) {
+        let client = client
+        let viewController = EditHistoryViewController(status: status) {
+            try await client.statusHistory(status.id)
+        } describe: { [weak self] error in
+            guard let self else { return EditHistoryViewController.Failure(message: ErrorPresentation(error)) }
+            let reason = await failureReason(for: error)
+            guard authorization.state == .invalid else { return EditHistoryViewController.Failure(message: reason) }
+            return EditHistoryViewController.Failure(
+                message: ErrorPresentation(message: "ログインし直すと読み込めます。", code: nil)
+            ) { [weak self] in
+                self?.reauthenticate()
+            }
+        }
+        viewController.onOpenLink = { [weak self, weak viewController] destination in
+            guard let self, let viewController else { return }
+            // 編集で消したメンションは、今の投稿のメンションの一覧にないため、一覧と同じ引き方ではIDが分からない。プロフィールのURLから探す。
+            if case .mention(let acct, let url) = destination, !status.mentions.contains(where: { $0.url == url || $0.acct == acct }) {
+                openProfile(resolving: url, acct: acct, from: viewController)
+            } else {
+                open(destination, in: status, from: viewController)
+            }
+        }
+        source?.navigationController?.pushViewController(viewController, animated: true)
     }
 
     /// 編集している途中で返信を選んだら、編集をやめてよいか聞いてから返信を始める。編集でなければすぐ始める。

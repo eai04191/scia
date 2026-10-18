@@ -137,6 +137,8 @@ public enum StatusMenuItem: String, MenuItemKind {
     case copyLink
     case share
     case openInBrowser
+    /// 投稿の編集履歴を開く。編集された投稿でだけ出る。
+    case editHistory
     /// 自分の投稿を投稿欄で編集する。自分の投稿でだけ出る。
     case edit
     /// 自分の投稿を削除する。自分の投稿でだけ出る。
@@ -153,7 +155,7 @@ public enum StatusMenuItem: String, MenuItemKind {
     case mentionedUsers
 
     /// 設定を足す前のメニューと同じ並び。足す前になかったメンションされたユーザーは隠しておく。
-    /// 設定を足したあとに増えた項目（メディアを隠す、編集、削除）は、足したことに気づけるよう表示しておく。
+    /// 設定を足したあとに増えた項目（メディアを隠す、編集履歴、編集、削除）は、足したことに気づけるよう表示しておく。
     /// 削除は、誤って押さないよう「その他」に入れる。
     public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
         .item(.reply, isVisible: true),
@@ -164,6 +166,7 @@ public enum StatusMenuItem: String, MenuItemKind {
         .item(.copyLink, isVisible: true),
         .item(.share, isVisible: true),
         .item(.openInBrowser, isVisible: true),
+        .item(.editHistory, isVisible: true),
         .item(.hideMedia, isVisible: true),
         .separator,
         .item(.notifyingUser, isVisible: true),

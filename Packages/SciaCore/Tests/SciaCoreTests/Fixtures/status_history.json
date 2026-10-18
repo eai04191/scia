@@ -1,0 +1,204 @@
+[
+  {
+    "content": "<p>明日の勉強会は14時からです。場所は会議室Bです</p>",
+    "spoiler_text": "",
+    "sensitive": false,
+    "created_at": "2026-10-13T03:00:00.000Z",
+    "account": {
+      "id": "1",
+      "username": "alice",
+      "acct": "alice",
+      "display_name": "Alice",
+      "avatar": "https://example.social/avatars/alice.png",
+      "avatar_static": "https://example.social/avatars/alice.png",
+      "header": "https://example.social/headers/original/missing.png",
+      "header_static": "https://example.social/headers/original/missing.png",
+      "note": "",
+      "url": "https://example.social/@alice",
+      "fields": [],
+      "locked": false,
+      "bot": false,
+      "followers_count": 0,
+      "following_count": 0,
+      "statuses_count": 0,
+      "emojis": []
+    },
+    "media_attachments": [
+      {
+        "id": "201",
+        "type": "image",
+        "url": "https://example.social/media/201.png",
+        "preview_url": "https://example.social/media/201_small.png",
+        "remote_url": null,
+        "description": "会議室",
+        "meta": {
+          "original": {
+            "width": 1200,
+            "height": 900
+          }
+        },
+        "blurhash": null
+      }
+    ],
+    "emojis": []
+  },
+  {
+    "content": "<p>明日の勉強会は14時からです。場所は会議室Bです</p>",
+    "spoiler_text": "",
+    "sensitive": false,
+    "created_at": "2026-10-13T03:05:00.000Z",
+    "account": {
+      "id": "1",
+      "username": "alice",
+      "acct": "alice",
+      "display_name": "Alice",
+      "avatar": "https://example.social/avatars/alice.png",
+      "avatar_static": "https://example.social/avatars/alice.png",
+      "header": "https://example.social/headers/original/missing.png",
+      "header_static": "https://example.social/headers/original/missing.png",
+      "note": "",
+      "url": "https://example.social/@alice",
+      "fields": [],
+      "locked": false,
+      "bot": false,
+      "followers_count": 0,
+      "following_count": 0,
+      "statuses_count": 0,
+      "emojis": []
+    },
+    "media_attachments": [
+      {
+        "id": "201",
+        "type": "image",
+        "url": "https://example.social/media/201.png",
+        "preview_url": "https://example.social/media/201_small.png",
+        "remote_url": null,
+        "description": "会議室Bの入口",
+        "meta": {
+          "original": {
+            "width": 1200,
+            "height": 900
+          }
+        },
+        "blurhash": null
+      }
+    ],
+    "emojis": []
+  },
+  {
+    "content": "<p>明日の勉強会は15時からです。場所はいつもの会議室Bです</p>",
+    "spoiler_text": "勉強会",
+    "sensitive": true,
+    "created_at": "2026-10-13T03:10:00.000Z",
+    "account": {
+      "id": "1",
+      "username": "alice",
+      "acct": "alice",
+      "display_name": "Alice",
+      "avatar": "https://example.social/avatars/alice.png",
+      "avatar_static": "https://example.social/avatars/alice.png",
+      "header": "https://example.social/headers/original/missing.png",
+      "header_static": "https://example.social/headers/original/missing.png",
+      "note": "",
+      "url": "https://example.social/@alice",
+      "fields": [],
+      "locked": false,
+      "bot": false,
+      "followers_count": 0,
+      "following_count": 0,
+      "statuses_count": 0,
+      "emojis": []
+    },
+    "media_attachments": [
+      {
+        "id": "201",
+        "type": "image",
+        "url": "https://example.social/media/201.png",
+        "preview_url": "https://example.social/media/201_small.png",
+        "remote_url": null,
+        "description": "会議室Bの入口",
+        "meta": {
+          "original": {
+            "width": 1200,
+            "height": 900
+          }
+        },
+        "blurhash": null
+      },
+      {
+        "id": "202",
+        "type": "image",
+        "url": "https://example.social/media/202.png",
+        "preview_url": "https://example.social/media/202_small.png",
+        "remote_url": null,
+        "description": null,
+        "meta": {
+          "original": {
+            "width": 1200,
+            "height": 900
+          }
+        },
+        "blurhash": null
+      }
+    ],
+    "emojis": []
+  },
+  {
+    "content": "<p>明日の勉強会は15時からです。場所はいつもの会議室Bです</p>",
+    "spoiler_text": "",
+    "sensitive": false,
+    "created_at": "2026-10-13T03:20:00.000Z",
+    "account": {
+      "id": "1",
+      "username": "alice",
+      "acct": "alice",
+      "display_name": "Alice",
+      "avatar": "https://example.social/avatars/alice.png",
+      "avatar_static": "https://example.social/avatars/alice.png",
+      "header": "https://example.social/headers/original/missing.png",
+      "header_static": "https://example.social/headers/original/missing.png",
+      "note": "",
+      "url": "https://example.social/@alice",
+      "fields": [],
+      "locked": false,
+      "bot": false,
+      "followers_count": 0,
+      "following_count": 0,
+      "statuses_count": 0,
+      "emojis": []
+    },
+    "media_attachments": [
+      {
+        "id": "202",
+        "type": "image",
+        "url": "https://example.social/media/202.png",
+        "preview_url": "https://example.social/media/202_small.png",
+        "remote_url": null,
+        "description": null,
+        "meta": {
+          "original": {
+            "width": 1200,
+            "height": 900
+          }
+        },
+        "blurhash": null
+      },
+      {
+        "id": "201",
+        "type": "image",
+        "url": "https://example.social/media/201.png",
+        "preview_url": "https://example.social/media/201_small.png",
+        "remote_url": null,
+        "description": "会議室Bの入口",
+        "meta": {
+          "original": {
+            "width": 1200,
+            "height": 900
+          }
+        },
+        "blurhash": null
+      }
+    ],
+    "emojis": []
+  }
+]

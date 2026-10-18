@@ -21,6 +21,7 @@ public enum UserAction: Sendable, Equatable {
     case reply
     case toggleFavourite
     case toggleReblog
+    case openEditHistory
     case editStatus
     case deleteStatus
     case expandCompose
@@ -51,6 +52,7 @@ public enum UserAction: Sendable, Equatable {
         case .reply: "status.reply"
         case .toggleFavourite: "status.favourite"
         case .toggleReblog: "status.reblog"
+        case .openEditHistory: "status.editHistory"
         case .editStatus: "status.edit"
         case .deleteStatus: "status.delete"
         case .expandCompose: "compose.expand"
@@ -96,6 +98,7 @@ public enum UserAction: Sendable, Equatable {
         case ("status.reply", 0): self = .reply
         case ("status.favourite", 0): self = .toggleFavourite
         case ("status.reblog", 0): self = .toggleReblog
+        case ("status.editHistory", 0): self = .openEditHistory
         case ("status.edit", 0): self = .editStatus
         case ("status.delete", 0): self = .deleteStatus
         case ("compose.expand", 0): self = .expandCompose
@@ -129,6 +132,7 @@ public enum UserAction: Sendable, Equatable {
         // 投稿への操作と投稿は通信の前に記録するため、失敗した場合や応答を待つ間もあるので、成功したとは書かない。
         case .toggleFavourite: "投稿のお気に入りを押した"
         case .toggleReblog: "投稿のブーストを押した"
+        case .openEditHistory: "投稿の編集履歴を開いた"
         case .editStatus: "自分の投稿の編集を選んだ"
         case .deleteStatus: "自分の投稿の削除を決めた"
         case .expandCompose: "投稿欄を広げた"

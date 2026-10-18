@@ -11,6 +11,7 @@ extension StatusMenuItem {
         case .copyLink: "リンクをコピー"
         case .share: "共有"
         case .openInBrowser: "ブラウザで開く"
+        case .editHistory: "編集履歴"
         case .edit: "編集"
         case .delete: "削除"
         case .hideMedia: "メディアを隠す"
@@ -24,6 +25,7 @@ extension StatusMenuItem {
     /// 設定画面で、名前の下に添える説明。
     var note: String? {
         switch self {
+        case .editHistory: "編集された投稿でだけ出ます"
         case .edit, .delete: "自分の投稿でだけ出ます"
         case .hideMedia: "表示している添付ファイルがある投稿でだけ出ます"
         case .notifyingUser: "通知でだけ出ます"
@@ -40,6 +42,7 @@ extension StatusMenuItem {
         case .copyLink: "link"
         case .share: "square.and.arrow.up"
         case .openInBrowser: "safari"
+        case .editHistory: "clock.arrow.circlepath"
         case .edit: "pencil"
         case .delete: "trash"
         case .hideMedia: "eye.slash"

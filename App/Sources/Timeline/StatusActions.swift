@@ -6,6 +6,7 @@ enum StatusAction {
     case reply
     case favourite
     case reblog
+    case editHistory
     case edit
     case delete
 }
@@ -66,7 +67,7 @@ extension TimelineViewController {
             return users([.account(status.account)])
         case .mentionedUsers:
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
-        case .reply, .favourite, .reblog, .copyLink, .share, .openInBrowser, .hideMedia, .edit, .delete:
+        case .reply, .favourite, .reblog, .copyLink, .share, .openInBrowser, .editHistory, .hideMedia, .edit, .delete:
             guard let status else { return [] }
             return statusAction(item, on: status, id: id).map { [$0] } ?? []
         }
@@ -114,6 +115,11 @@ extension TimelineViewController {
             return UIAction(title: item.title, image: item.image, attributes: linkAttributes) { [weak self] _ in
                 guard let url else { return }
                 self?.onOpenLink?(.url(url), shown)
+            }
+        case .editHistory:
+            guard shown.editedAt != nil else { return nil }
+            return UIAction(title: item.title, image: item.image) { [weak self] _ in
+                self?.onStatusAction?(.editHistory, status)
             }
         case .edit:
             guard let myAccountID, status.isAuthored(by: myAccountID) else { return nil }

@@ -237,6 +237,12 @@ public struct MastodonClient: Sendable {
         try await get(StatusSource.self, path: "api/v1/statuses/\(statusID)/source", query: []).0
     }
 
+    /// 投稿の編集履歴。最初の投稿から今の投稿までの版を、古い順に返す。
+    /// https://docs.joinmastodon.org/methods/statuses/#history
+    public func statusHistory(_ statusID: Status.ID) async throws -> [StatusRevision] {
+        try await get([StatusRevision].self, path: "api/v1/statuses/\(statusID)/history", query: []).0
+    }
+
     /// 自分の投稿を`draft`の内容に編集し、編集したあとの投稿を返す。`target`は`draft.editing`。
     /// 添付ファイルが済んでいなければ送らずに`StatusPostError.attachmentsNotReady`を投げる。
     /// https://docs.joinmastodon.org/methods/statuses/#edit
@@ -357,7 +363,7 @@ public struct MastodonClient: Sendable {
         return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: false)
     }
 
-    /// `user@domain`の形のacctからアカウントを探す。自分のサーバーが知らないアカウントも、相手のサーバーに問い合わせて探す。
+    /// `user@domain`の形のacctか、プロフィールのURLからアカウントを探す。自分のサーバーが知らないアカウントも、相手のサーバーに問い合わせて探す。
     /// 見つからなければnil。
     /// https://docs.joinmastodon.org/methods/search/#v2
     public func resolveAccount(_ acct: String) async throws -> Account? {

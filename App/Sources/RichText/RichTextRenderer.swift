@@ -34,6 +34,97 @@ struct RichTextRenderer {
         return result
     }
 
+    /// 編集履歴の、前の版との違いを重ねた本文。足した部分は緑の地、消した部分は赤の地で描く。
+    /// 色だけに頼らないよう、消した部分には取り消し線も引く。
+    /// 文字を変えずに段落を分けた編集は、ほかに見分ける手がかりがないため、分けた位置に足した改行の印を置く。
+    func render(_ diff: RichTextDiff) -> NSAttributedString {
+        let result = NSMutableAttributedString()
+        for (index, diffBlock) in diff.blocks.enumerated() {
+            let block = RichText.Block(
+                inlines: [],
+                quoteLevel: diffBlock.quoteLevel,
+                isCode: diffBlock.isCode,
+                listMarker: diffBlock.listMarker,
+                listLevel: diffBlock.listLevel
+            )
+            if index > 0 {
+                if diffBlock.breakChange == .inserted, diffBlock.pieces.first?.change != .inserted {
+                    var attributes = attributes(style: [], block: block)
+                    attributes.merge(Self.attributes(for: .inserted)) { $1 }
+                    result.append(NSAttributedString(string: "↵", attributes: attributes))
+                }
+                result.append(NSAttributedString(string: "\n"))
+            }
+            let start = result.length
+            if let marker = block.listMarker {
+                result.append(NSAttributedString(string: marker, attributes: attributes(style: [], block: block)))
+            }
+            for piece in diffBlock.pieces {
+                let rendered = NSMutableAttributedString(attributedString: render(piece.inline, block: block))
+                rendered.addAttributes(Self.attributes(for: piece.change), range: NSRange(location: 0, length: rendered.length))
+                result.append(rendered)
+            }
+            result.addAttribute(.paragraphStyle, value: paragraphStyle(for: block), range: NSRange(location: start, length: result.length - start))
+        }
+        return result
+    }
+
+    /// 差分の変わり方ごとに、文字に重ねる見た目。
+    static func attributes(for change: DiffChange) -> [NSAttributedString.Key: Any] {
+        switch change {
+        case .unchanged:
+            [:]
+        case .inserted:
+            [.backgroundColor: UIColor.systemGreen.withAlphaComponent(0.25)]
+        case .removed:
+            [
+                .backgroundColor: UIColor.systemRed.withAlphaComponent(0.2),
+                .strikethroughStyle: NSUnderlineStyle.single.rawValue,
+            ]
+        }
+    }
+
+    /// 差分を読み上げる文。色と線は読み上げられないため、足した部分と消した部分を言葉で示す。
+    static func accessibilityText(of diff: RichTextDiff) -> String {
+        var parts: [String] = []
+        var run: (change: DiffChange, text: String)?
+        func close() {
+            guard let run, !run.text.isEmpty else { return }
+            switch run.change {
+            case .unchanged: parts.append(run.text)
+            case .inserted: parts.append("追加：\(run.text)")
+            case .removed: parts.append("削除：\(run.text)")
+            }
+        }
+        for (index, block) in diff.blocks.enumerated() {
+            if index > 0 {
+                // 文字を変えずに段落を分けた位置は、画面の改行の印と同じく、言葉で示す。
+                if block.breakChange == .inserted, block.pieces.first?.change != .inserted {
+                    close()
+                    run = nil
+                    parts.append("追加：段落の区切り")
+                } else {
+                    run?.text += "\n"
+                }
+            }
+            for piece in block.pieces {
+                let text = switch piece.inline {
+                case .text(let string, _), .link(let string, _, _): string
+                case .emoji(let emoji): ":\(emoji.shortcode):"
+                case .lineBreak: "\n"
+                }
+                if run?.change == piece.change {
+                    run?.text += text
+                } else {
+                    close()
+                    run = (piece.change, text)
+                }
+            }
+        }
+        close()
+        return parts.joined(separator: "、")
+    }
+
     /// 本文中のすべてのカスタム絵文字の、表示に使うURL。
     static func emojiURLs(in text: RichText) -> Set<URL> {
         Set(text.blocks.flatMap(\.inlines).compactMap { inline in
