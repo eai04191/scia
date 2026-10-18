@@ -182,7 +182,7 @@ struct InlineComposeControllerTests {
             window.rootViewController?.dismiss(animated: false)
             window.isHidden = true
         }
-        composer.model.apply(configuration: InstanceConfiguration(streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil), defaultVisibility: .public, defaultSensitive: nil)
+        composer.model.apply(configuration: InstanceConfiguration(streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil, mediaLimits: .unknown), defaultVisibility: .public, defaultSensitive: nil)
         composer.beginEditing()
         postKeyboardFrame(height: 0)
         try await Task.sleep(for: .milliseconds(500))
@@ -473,7 +473,10 @@ struct InlineComposeControllerTests {
             upload: { upload in MediaAttachment(id: "m-\(upload.filename)", type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
             waitUntilProcessed: { id in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
             updateDescription: { id, _ in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
-            makeThumbnail: { _ in nil }
+            makeThumbnail: { _ in nil },
+            unprocessableImageTypes: { [] },
+            recordUnprocessableImageType: { _ in },
+            preparation: { .keepsOriginal }
         )
         let composer = try installComposer(media: media) { _ in await gate.wait() }
         composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
@@ -513,7 +516,10 @@ struct InlineComposeControllerTests {
             upload: { upload in MediaAttachment(id: "m-\(upload.filename)", type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
             waitUntilProcessed: { id in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
             updateDescription: { id, _ in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
-            makeThumbnail: { _ in nil }
+            makeThumbnail: { _ in nil },
+            unprocessableImageTypes: { [] },
+            recordUnprocessableImageType: { _ in },
+            preparation: { .keepsOriginal }
         )
         // 入力欄に戻したときに届く端末の本物のキーボードの知らせが混ざると、どちらの場合かが端末の設定と間合いで変わるので、送った知らせだけを受けさせる。
         let keyboard = NotificationCenter()
@@ -589,8 +595,12 @@ struct InlineComposeControllerTests {
         let folder = FileManager.default.temporaryDirectory.appending(path: "InlineComposeControllerTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "a.jpg")
-        try Data([0xFF, 0xD8, 0xFF]).write(to: url)
-        return PickedMedia(assetIdentifier: "a") { LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image) }
+        // 送る前に大きさを読むので、読める画像にする。
+        try #require(UIGraphicsImageRenderer(size: CGSize(width: 4, height: 3)).jpegData(withCompressionQuality: 0.8) { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 4, height: 3))
+        } as Data?).write(to: url)
+        return PickedMedia(assetIdentifier: "a") { _ in LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image) }
     }
 
     private func attachmentStrips(in view: UIView) -> [ComposeAttachmentStrip] {

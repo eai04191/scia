@@ -142,6 +142,22 @@ struct SettingsView: View {
                     Text("公開範囲、添付、注意書きのような項目を、投稿欄のボタンの行に常に出すか、＋の中に入れるかと、その並びを選びます。")
                 }
                 Section {
+                    Picker("画像", selection: $settings.imageUploadSize) {
+                        ForEach(ImageUploadSize.allCases, id: \.self) { size in
+                            Text(size.title).tag(size)
+                        }
+                    }
+                    Picker("動画", selection: $settings.videoUploadSize) {
+                        ForEach(VideoUploadSize.allCases, id: \.self) { size in
+                            Text(size.title).tag(size)
+                        }
+                    }
+                } header: {
+                    Text("送る前に縮める")
+                } footer: {
+                    Text("添付するメディアを、送る前にこの大きさまで縮めて、通信量を減らします。この大きさに収まるメディアは、元のまま送ります。「縮めない」でも、サーバーの上限を超えるメディアは、上限に合わせて縮めます。")
+                }
+                Section {
                     Toggle("モバイル通信で高画質のサムネイルを使う", isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
                 } header: {
                     Text("画像")

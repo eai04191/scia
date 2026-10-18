@@ -33,7 +33,21 @@ enum NoticeCatalog {
                 stack(persistent: .download(of: url, fraction: 0.42) {}, transient: .transferFailure(title: Notice.transferFailureTitle(of: .gifv, purpose: .share)) {})
             },
             CatalogState(title: "共有を止めました（数秒で消える）") { stack(transient: .shareStopped) },
+            CatalogState(title: "書き出し中（23%）") { stack(persistent: Notice.draftStatus(.exporting, progress: 0.23) {}) },
             CatalogState(title: "アップロード中") { stack(persistent: draft(.uploading)) },
+            CatalogState(title: "アップロード中（67%）") { stack(persistent: Notice.draftStatus(.uploading, progress: 0.67) {}) },
+            CatalogState(title: "サーバーの上限に合わせて縮めた（大きさ、容量）") {
+                stack(persistent: Notice.draftStatus(.ready, reduction: MediaReduction(
+                    fromSize: PixelSize(width: 8064, height: 6048), toSize: PixelSize(width: 6640, height: 4980), fromByteCount: 24_000_000, toByteCount: 15_800_000
+                )) {})
+            },
+            CatalogState(title: "品質だけを下げて縮めた（容量）") {
+                stack(persistent: Notice.draftStatus(.ready, reduction: MediaReduction(
+                    fromSize: PixelSize(width: 4032, height: 3024), toSize: PixelSize(width: 4032, height: 3024), fromByteCount: 18_200_000, toByteCount: 15_100_000
+                )) {})
+            },
+            CatalogState(title: "画像をサーバーの上限に合わせて縮めました（数秒で消える）") { stack(transient: .mediaReduced(.image)) },
+            CatalogState(title: "動画をサーバーの上限に合わせて縮めました（数秒で消える）") { stack(transient: .mediaReduced(.video)) },
             CatalogState(title: "サーバーで処理中") { stack(persistent: draft(.processing)) },
             CatalogState(title: "代替テキストを送信中") { stack(persistent: draft(.sendingDescription)) },
             CatalogState(title: "アップロードできませんでした（押すと理由）") { stack(persistent: draft(.failed)) },

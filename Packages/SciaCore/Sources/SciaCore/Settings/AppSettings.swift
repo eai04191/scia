@@ -79,6 +79,16 @@ public final class AppSettings {
         didSet { defaults.set(composeToolLayout.tokens, forKey: Keys.composeToolLayout) }
     }
 
+    /// 送る前に画像を縮める大きさ。選んだ大きさに収まる画像は元のまま送る。
+    public var imageUploadSize: ImageUploadSize {
+        didSet { defaults.set(imageUploadSize.rawValue, forKey: Keys.imageUploadSize) }
+    }
+
+    /// 送る前に動画を縮める大きさ。選んだ大きさに収まる動画は元のまま送る。
+    public var videoUploadSize: VideoUploadSize {
+        didSet { defaults.set(videoUploadSize.rawValue, forKey: Keys.videoUploadSize) }
+    }
+
     private enum Keys {
         static let usesOriginalThumbnailsOnExpensiveNetwork = "settings.usesOriginalThumbnailsOnExpensiveNetwork"
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
@@ -95,6 +105,8 @@ public final class AppSettings {
         static let statusMenuLayout = "settings.statusMenuLayout"
         static let userMenuLayout = "settings.userMenuLayout"
         static let composeToolLayout = "settings.composeToolLayout"
+        static let imageUploadSize = "settings.imageUploadSize"
+        static let videoUploadSize = "settings.videoUploadSize"
     }
 
     public init(defaults: UserDefaults) {
@@ -112,6 +124,9 @@ public final class AppSettings {
         statusMenuLayout = defaults.stringArray(forKey: Keys.statusMenuLayout).map(MenuLayout.init(tokens:)) ?? StatusMenuItem.defaultLayout
         userMenuLayout = defaults.stringArray(forKey: Keys.userMenuLayout).map(MenuLayout.init(tokens:)) ?? UserMenuItem.defaultLayout
         composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout
+        // iPhoneの標準の写真（4032×3024）と動画（1080p）はそのまま送られ、それより大きな写真と4Kの動画だけが縮む。
+        imageUploadSize = defaults.string(forKey: Keys.imageUploadSize).flatMap(ImageUploadSize.init(rawValue:)) ?? .long4096
+        videoUploadSize = defaults.string(forKey: Keys.videoUploadSize).flatMap(VideoUploadSize.init(rawValue:)) ?? .p1080
         profilePostsFilter = ProfilePostsFilter(
             showsReplies: defaults.object(forKey: Keys.profileShowsReplies) as? Bool ?? ProfilePostsFilter.standard.showsReplies,
             showsBoosts: defaults.object(forKey: Keys.profileShowsBoosts) as? Bool ?? ProfilePostsFilter.standard.showsBoosts

@@ -34,7 +34,7 @@ final class ComposeAttachmentStrip: UIView {
         let local: LocalMedia?
         let status: ComposeAttachmentStatus
         /// 送っている間の進み具合。0から1。送っていなければnil。
-        let progress: Double?
+        var progress: Double? = nil
         /// 閲覧注意にして投稿する。どの添付も同じ値になる。
         let isSensitive: Bool
 
@@ -327,7 +327,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
             tile.applyLocal(thumbnail: item.local?.thumbnail, kind: item.local?.file?.kind, description: showsDescriptionState ? "" : description)
         }
         // 送っている間は進み具合の円を満たし、満ちたらサーバーの変換待ちの回る表示に替える。変換にかかる時間は分からない。
-        let isWorking = item.status == .uploading || item.status == .processing
+        let isWorking = item.status == .exporting || item.status == .uploading || item.status == .processing
         dimView.isHidden = !isWorking
         progressRing.isHidden = item.progress == nil
         progressRing.progress = item.progress ?? 0
@@ -339,6 +339,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         let kindName = (item.local?.file?.kind ?? item.attachedMedia?.type).map(MediaTileView.kindName(of:)) ?? "メディア"
         accessibilityLabel = [kindName, item.isSensitive ? "閲覧注意" : "", description].filter { !$0.isEmpty }.joined(separator: "、")
         accessibilityValue = switch item.status {
+        case .exporting: ["書き出し中", item.progress.flatMap(Notice.percentText(of:))].compactMap(\.self).joined(separator: "、")
         case .uploading: ["アップロード中", item.progress.flatMap(Notice.percentText(of:))].compactMap(\.self).joined(separator: "、")
         case .processing: "サーバーで処理中"
         case .ready: nil

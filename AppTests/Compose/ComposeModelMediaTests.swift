@@ -1,6 +1,7 @@
 import Foundation
 import SciaCore
 import Testing
+import UIKit
 @testable import Scia
 
 /// 投稿欄で選んだメディアのアップロードと、投稿の`media_ids[]`。
@@ -20,6 +21,8 @@ struct ComposeModelMediaTests {
             attachment(id: "m-\(upload.filename)", processed: true)
         }
         var waitResult: (String) throws -> MediaAttachment = { id in attachment(id: id, processed: true) }
+        /// 処理できないと覚えた画像の形式。
+        var unprocessableImageTypes: [String] = []
         var descriptionUpdates: [(id: String, description: String)] = []
         var descriptionResult: (String, String) throws -> MediaAttachment = { id, description in
             attachment(id: id, processed: true, description: description)
@@ -46,7 +49,10 @@ struct ComposeModelMediaTests {
                     }
                     return try descriptionResult(id, description)
                 },
-                makeThumbnail: { _ in nil }
+                makeThumbnail: { _ in nil },
+                unprocessableImageTypes: { [self] in Set(unprocessableImageTypes) },
+                recordUnprocessableImageType: { [self] in unprocessableImageTypes.append($0) },
+                preparation: { .keepsOriginal }
             )
         }
 
@@ -73,14 +79,25 @@ struct ComposeModelMediaTests {
         let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "\(id).jpg")
-        try Data([0xFF, 0xD8, 0xFF]).write(to: url)
-        return PickedMedia(assetIdentifier: id) { LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image) }
+        // 送る前に大きさを読むので、読める画像にする。
+        try #require(UIGraphicsImageRenderer(size: CGSize(width: 4, height: 3)).jpegData(withCompressionQuality: 0.8) { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 4, height: 3))
+        } as Data?).write(to: url)
+        return PickedMedia(assetIdentifier: id) { _ in LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image) }
     }
 
     private func makeModel(_ server: FakeServer, post: @escaping (StatusDraft) async throws -> Void = { _ in }) -> ComposeModel {
         let model = ComposeModel(myAccountID: "1", media: server.service, post: post)
         model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         return model
+    }
+
+    /// 画像を作り直すような、別のスレッドで時間のかかる処理が済むまで待つ。
+    private func settleSlowly(until condition: () -> Bool) async throws {
+        for _ in 0..<500 where !condition() {
+            try await Task.sleep(for: .milliseconds(10))
+        }
     }
 
     /// 非同期のアップロードが進むまで待つ。
@@ -97,6 +114,92 @@ struct ComposeModelMediaTests {
             case .uploading, .processing: false
             }
         }
+    }
+
+    /// 写真を書き出す。`noise`なら、縮めると容量が減るよう、画素ごとにばらばらの色にする。
+    private func writePhoto(width: Int, height: Int, noise: Bool = false, to url: URL) throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let data = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).jpegData(withCompressionQuality: 0.9) { context in
+            UIColor.systemBlue.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            guard noise else { return }
+            for y in stride(from: 0, to: height, by: 4) {
+                for x in stride(from: 0, to: width, by: 4) {
+                    UIColor(hue: .random(in: 0...1), saturation: 1, brightness: .random(in: 0.3...1), alpha: 1).setFill()
+                    context.fill(CGRect(x: x, y: y, width: 4, height: 4))
+                }
+            }
+        }
+        try data.write(to: url)
+    }
+
+    /// 対応形式として返しながらHEICを処理できないサーバー（Mastodon 4.7.2と4.7.3）では、同じ写真のJPEGで1回だけ送り直し、その形式を覚える。
+    @Test func resendsUnprocessableHEICAsJPEGOnce() async throws {
+        let server = FakeServer()
+        server.uploadResult = { upload in
+            guard upload.mimeType != "image/heic" else {
+                throw MediaUploadError.processingFailed(MastodonAPIError(statusCode: 500, message: "Error processing thumbnail for uploaded media"))
+            }
+            return Self.attachment(id: "m-\(upload.filename)", processed: true)
+        }
+        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        // ピッカーから読み込むたびに別のディレクトリへコピーするのと同じく、HEICとJPEGを別のディレクトリに置く。送り直すときはHEICをディレクトリごと消すため。
+        let jpegFolder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: jpegFolder, withIntermediateDirectories: true)
+        let heic = folder.appending(path: "a.heic")
+        let jpeg = jpegFolder.appending(path: "a.jpg")
+        try writePhoto(width: 40, height: 30, to: heic)
+        try writePhoto(width: 40, height: 30, to: jpeg)
+        var avoided: [Set<String>] = []
+        let picked = PickedMedia(assetIdentifier: "a") { avoiding in
+            avoided.append(avoiding)
+            return avoiding.contains("image/heic")
+                ? LocalMediaFile(url: jpeg, mimeType: "image/jpeg", kind: .image)
+                : LocalMediaFile(url: heic, mimeType: "image/heic", kind: .image)
+        }
+        let model = makeModel(server)
+
+        model.applyPickerSelection([picked])
+        try await settleSlowly { isSettled(model) }
+
+        #expect(server.uploads.map(\.mimeType) == ["image/heic", "image/jpeg"])
+        #expect(server.unprocessableImageTypes == ["image/heic"])
+        #expect(avoided == [[], ["image/heic"]])
+        #expect(model.attachmentStatus(of: try #require(model.attachments.first?.id)) == .ready)
+    }
+
+    /// サーバーの容量の上限を超える画像は、収まるまで縮めて送り、使う人が選んでいない変化なので知らせる。
+    @Test func shrinksImageToFitTheServerSizeLimitAndTells() async throws {
+        let server = FakeServer()
+        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: "large.jpg")
+        try writePhoto(width: 800, height: 600, noise: true, to: url)
+        let byteCount = try #require(try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int)
+        let model = ComposeModel(myAccountID: "1", media: server.service) { _ in }
+        model.apply(
+            configuration: InstanceConfiguration(
+                streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4,
+                mediaDescriptionLimit: 1500, supportedMediaTypes: ["image/jpeg"],
+                mediaLimits: MediaLimits(imageSizeLimit: byteCount / 2, imageMatrixLimit: nil, videoSizeLimit: nil, videoMatrixLimit: nil, videoFrameRateLimit: nil)
+            ),
+            defaultVisibility: .public,
+            defaultSensitive: nil
+        )
+        var reduced: [MediaAttachment.Kind] = []
+        model.onMediaReduced = { reduced.append($0) }
+
+        model.applyPickerSelection([PickedMedia(assetIdentifier: "a") { _ in LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image) }])
+        try await settleSlowly { isSettled(model) }
+
+        let upload = try #require(server.uploads.first)
+        #expect(upload.data.count <= byteCount / 2)
+        #expect(upload.mimeType == "image/jpeg")
+        #expect(reduced == [.image])
+        let id = try #require(model.attachments.first?.id)
+        #expect(model.localMedia[id]?.reduction?.fromSize == PixelSize(width: 800, height: 600))
     }
 
     @Test func postsMediaIDsInPickerOrderWithEmptyText() async throws {
@@ -472,7 +575,7 @@ struct ComposeModelMediaTests {
         model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         #expect(!model.canAttachMedia)
 
-        model.apply(configuration: InstanceConfiguration(streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 16, mediaDescriptionLimit: 1500, supportedMediaTypes: nil), defaultVisibility: nil, defaultSensitive: nil)
+        model.apply(configuration: InstanceConfiguration(streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 16, mediaDescriptionLimit: 1500, supportedMediaTypes: nil, mediaLimits: .unknown), defaultVisibility: nil, defaultSensitive: nil)
 
         #expect(model.canAttachMedia)
         #expect(model.maxMediaAttachments == 16)

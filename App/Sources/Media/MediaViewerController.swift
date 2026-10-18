@@ -692,7 +692,7 @@ final class MediaViewerController: UIViewController {
     /// 投稿欄から開いたとき、上の中央にアップロードや代替テキストの送信の状態を出す。投稿欄から開いたときは落とすことがないため、落としている途中の知らせとは重ならない。
     private func updateDraftStatus() {
         guard draftEditing != nil else { return }
-        setPersistentNotice(Notice.draftStatus(currentItem.draftStatus, progress: currentItem.draftProgress) { [weak self] in
+        setPersistentNotice(Notice.draftStatus(currentItem.draftStatus, progress: currentItem.draftProgress, reduction: currentItem.draftReduction) { [weak self] in
             guard let self, let editing = self.draftEditing else { return }
             editing.showFailure(self.currentItem.id, self)
         }, in: .draft)
@@ -1489,6 +1489,8 @@ final class ImagePageController: MediaPageController {
 
     /// 元の画像を読み始めた。手元のメディアでは、ファイルを読み込み終えるまで読み始められない。
     private var hasStartedLoading = false
+    /// 読み始めた手元のファイル。投稿欄で縮めて作り直したら替わる。
+    private var loadedLocalURL: URL?
 
     /// - Parameter preview: 一覧で読み込んだサムネイル。元の画像が届くまでの下地にする。
     init(item: MediaViewerItem, store: MediaImageStore, preview: UIImage?) {
@@ -1594,6 +1596,9 @@ final class ImagePageController: MediaPageController {
         zoomView.imageAccessibilityLabel = item.description
         if !hasStartedLoading {
             load(hasPreview: preview != nil)
+        } else if case .local(let file?, _) = item.source, file.url != loadedLocalURL {
+            // 投稿欄で縮めて作り直したら、投稿される中身を確かめられるよう読み直す。読み終えるまで、前の画像を出したままにする。
+            load(file, hasPreview: true)
         }
     }
 
@@ -1621,6 +1626,8 @@ final class ImagePageController: MediaPageController {
         if !hasPreview {
             spinner.startAnimating()
         }
+        loadedLocalURL = file.url
+        loadTask?.cancel()
         loadTask = Task { [weak self] in
             let image = await LocalMediaThumbnail.make(for: file, maxPixelSize: CGFloat(MediaImageStore.fullPixelSize))
             guard let self, !Task.isCancelled else { return }
@@ -1788,7 +1795,38 @@ final class PlayerPageController: MediaPageController {
             if viewIfLoaded?.window != nil {
                 playerController.player?.play()
             }
+        } else {
+            reloadPlayerIfFileChanged()
         }
+    }
+
+    /// 投稿欄で動画を書き出し終えたら、投稿される中身を確かめられるよう、書き出したファイルに替える。見ていた位置と再生の状態は保つ。
+    private func reloadPlayerIfFileChanged() {
+        guard let player = playerController.player, let url = mediaURL, let playing = playingURL, playing != url else { return }
+        let time = player.currentTime()
+        let wasPlaying = player.timeControlStatus != .paused
+        for observer in [loopObserver, endObserver].compactMap(\.self) {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        loopObserver = nil
+        endObserver = nil
+        if let timeObserver {
+            player.removeTimeObserver(timeObserver)
+        }
+        timeObserver = nil
+        statusObservation = nil
+        player.pause()
+        playerController.player = nil
+        setUpPlayer()
+        playerController.player?.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        if wasPlaying {
+            playerController.player?.play()
+        }
+    }
+
+    /// 再生しているファイルやURL。プレイヤーを作る前はnil。
+    var playingURL: URL? {
+        (playerController.player?.currentItem?.asset as? AVURLAsset)?.url
     }
 
     private var mediaURL: URL? {

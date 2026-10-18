@@ -500,6 +500,18 @@ struct MediaViewerControllerTests {
         #expect(controls.point(inside: playButton, with: nil))
     }
 
+    /// 投稿欄で動画を書き出し終えたら、開いているページも書き出したファイルに替え、投稿される中身を確かめられるようにする。
+    @Test func playerSwitchesToTheExportedFile() {
+        let original = LocalMediaFile(url: URL(filePath: "/tmp/original.mov"), mimeType: "video/quicktime", kind: .video)
+        let exported = LocalMediaFile(url: URL(filePath: "/tmp/prepared-original.mp4"), mimeType: "video/mp4", kind: .video)
+        let page = PlayerPageController(item: MediaViewerItem(id: "v", kind: .video, description: "", file: original, thumbnail: nil, status: .exporting, progress: 0.3))
+        page.loadViewIfNeeded()
+        #expect(page.playingURL == original.url)
+
+        page.update(MediaViewerItem(id: "v", kind: .video, description: "", file: exported, thumbnail: nil, status: .uploading, progress: 0.6))
+        #expect(page.playingURL == exported.url)
+    }
+
     /// 動画の長押しは2倍速に使うため、メニューを出さない。メニューは右上のボタンから開く。
     @Test func longPressOnVideoDoesNotOfferMenu() {
         let file = LocalMediaFile(url: URL(filePath: "/tmp/v.mov"), mimeType: "video/quicktime", kind: .video)

@@ -659,6 +659,63 @@ public enum TuningCatalog {
         defaultValue: 336
     )
 
+    /// 送る前に縮めるとき、JPEGとHEICで作り直す品質。
+    public static let mediaImageQuality = NumberTuning(
+        id: "compose.media.imageQuality",
+        title: "画像を作り直す品質",
+        range: 0.5...1,
+        step: 0.01,
+        defaultValue: 0.85
+    )
+
+    /// 送る前に縮めるとき、1920×1080で書き出す動画のビットレート（Mbps）。ほかの大きさでは画素数に比例させる。
+    public static let mediaVideoBitRate = NumberTuning(
+        id: "compose.media.videoBitRate",
+        title: "動画のビットレート（1080p、Mbps）",
+        range: 2...20,
+        step: 0.5,
+        defaultValue: 8
+    )
+
+    /// サーバーの容量の上限に収めるとき、これより低いビットレートにしか収まらない動画は、解像度を下げる。解像度を下げても収まらなければ、送らない。
+    /// 1920×1080のときの値（Mbps）で、ほかの大きさでは画素数に比例させる。
+    public static let mediaVideoMinimumBitRate = NumberTuning(
+        id: "compose.media.videoMinimumBitRate",
+        title: "動画の見られる画質の下限（1080p、Mbps）",
+        range: 0.3...4,
+        step: 0.1,
+        defaultValue: 1
+    )
+
+    /// サーバーの容量の上限に収めるとき、上限のどれだけまでを使うか。動画は書き出したあとに上限をわずかに超えることがあるため、余裕を残す。
+    public static let mediaSizeLimitMargin = NumberTuning(
+        id: "compose.media.sizeLimitMargin",
+        title: "容量の上限のうち使う割合",
+        range: 0.8...1,
+        step: 0.01,
+        defaultValue: 0.95
+    )
+
+    /// 端末で書き出してから送るとき、進み具合の円のうち書き出しに割り振る割合。かかる時間は動画の長さ、容量、電波で変わり、予想できないので決め打ちする。
+    public static let mediaExportProgressShare = NumberTuning(
+        id: "compose.media.exportProgressShare",
+        title: "進み具合のうち書き出しの割合",
+        range: 0.1...0.9,
+        step: 0.05,
+        defaultValue: 0.5
+    )
+
+    /// 動画の書き出しの好みの値。
+    @MainActor
+    public static func videoQuality(in store: TuningStore) -> VideoPlan.Quality {
+        VideoPlan.Quality(
+            bitRate1080p: Int(store.value(of: mediaVideoBitRate) * 1_000_000),
+            minimumBitRate1080p: Int(store.value(of: mediaVideoMinimumBitRate) * 1_000_000),
+            sizeLimitMargin: store.value(of: mediaSizeLimitMargin),
+            audioBitRate: 128_000
+        )
+    }
+
     /// メンションとハッシュタグの補完で、打つのが止まってから問い合わせるまでの時間（秒）。
     public static let completionDebounce = NumberTuning(
         id: "compose.completion.debounce",
@@ -798,6 +855,13 @@ public enum TuningCatalog {
             .number(completionMinimumQuery),
             .number(completionEmojiMinimumQuery),
             .number(completionFadeDuration),
+        ]),
+        TuningSection(id: "compose.media", title: "投稿欄：送る前に縮める", items: [
+            .number(mediaImageQuality),
+            .number(mediaVideoBitRate),
+            .number(mediaVideoMinimumBitRate),
+            .number(mediaSizeLimitMargin),
+            .number(mediaExportProgressShare),
         ]),
         TuningSection(id: "browser", title: "アプリ内のSafari", items: [
             .number(inAppBrowserMediumFraction),

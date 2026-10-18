@@ -116,6 +116,11 @@ public struct MastodonClient: Sendable {
                 struct MediaAttachments: Decodable {
                     let supportedMimeTypes: [String]?
                     let descriptionLimit: Int?
+                    let imageSizeLimit: Int?
+                    let imageMatrixLimit: Int?
+                    let videoSizeLimit: Int?
+                    let videoMatrixLimit: Int?
+                    let videoFrameRateLimit: Int?
                 }
                 let urls: URLs
                 let statuses: Statuses?
@@ -132,7 +137,15 @@ public struct MastodonClient: Sendable {
             charactersReservedPerURL: configuration.statuses?.charactersReservedPerUrl ?? 23,
             maxMediaAttachments: configuration.statuses?.maxMediaAttachments ?? 4,
             mediaDescriptionLimit: configuration.mediaAttachments?.descriptionLimit ?? 1500,
-            supportedMediaTypes: configuration.mediaAttachments?.supportedMimeTypes
+            supportedMediaTypes: configuration.mediaAttachments?.supportedMimeTypes,
+            // 上限はサーバーごとに変えられていることが多いので、返さない項目をMastodonの既定値で補わない。
+            mediaLimits: MediaLimits(
+                imageSizeLimit: configuration.mediaAttachments?.imageSizeLimit,
+                imageMatrixLimit: configuration.mediaAttachments?.imageMatrixLimit,
+                videoSizeLimit: configuration.mediaAttachments?.videoSizeLimit,
+                videoMatrixLimit: configuration.mediaAttachments?.videoMatrixLimit,
+                videoFrameRateLimit: configuration.mediaAttachments?.videoFrameRateLimit
+            )
         )
     }
 
@@ -541,6 +554,8 @@ public struct InstanceConfiguration: Sendable, Equatable {
     public let mediaDescriptionLimit: Int
     /// アップロードできるファイルのMIMEタイプ。返さないサーバーではnilで、送ってみるまで分からない。
     public let supportedMediaTypes: [String]?
+    /// アップロードできるメディアの大きさの上限。
+    public let mediaLimits: MediaLimits
 
     public init(
         streamingURL: URL,
@@ -548,7 +563,8 @@ public struct InstanceConfiguration: Sendable, Equatable {
         charactersReservedPerURL: Int,
         maxMediaAttachments: Int,
         mediaDescriptionLimit: Int,
-        supportedMediaTypes: [String]?
+        supportedMediaTypes: [String]?,
+        mediaLimits: MediaLimits
     ) {
         self.streamingURL = streamingURL
         self.maxCharacters = maxCharacters
@@ -556,6 +572,7 @@ public struct InstanceConfiguration: Sendable, Equatable {
         self.maxMediaAttachments = maxMediaAttachments
         self.mediaDescriptionLimit = mediaDescriptionLimit
         self.supportedMediaTypes = supportedMediaTypes
+        self.mediaLimits = mediaLimits
     }
 }
 

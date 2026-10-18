@@ -17,6 +17,23 @@ struct AppSettingsTests {
         #expect(settings.usesOriginalThumbnailsOnExpensiveNetwork)
     }
 
+    /// 標準では、iPhoneの標準の写真と動画より大きなものだけを縮める。
+    @Test func uploadSizeDefaults() throws {
+        let settings = AppSettings(defaults: try makeDefaults())
+        #expect(settings.imageUploadSize == .long4096)
+        #expect(settings.videoUploadSize == .p1080)
+    }
+
+    @Test func persistsUploadSizes() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.imageUploadSize = .original
+        settings.videoUploadSize = .p720
+        let relaunched = AppSettings(defaults: defaults)
+        #expect(relaunched.imageUploadSize == .original)
+        #expect(relaunched.videoUploadSize == .p720)
+    }
+
     @Test func persistsChangesAcrossLaunches() throws {
         let defaults = try makeDefaults()
         AppSettings(defaults: defaults).usesOriginalThumbnailsOnExpensiveNetwork = false

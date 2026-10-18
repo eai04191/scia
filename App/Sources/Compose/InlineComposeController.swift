@@ -1122,10 +1122,12 @@ final class InlineComposeController: NSObject {
                 id: attachment.id.uuidString,
                 kind: local?.file?.kind ?? .image,
                 description: attachment.description,
-                file: local?.file,
+                // 縮めたら、投稿される中身を確かめられるよう、縮めたあとのファイルを出す。
+                file: local?.sending ?? local?.file,
                 thumbnail: local?.thumbnail,
                 status: status,
-                progress: model.attachmentProgress(of: attachment.id)
+                progress: model.attachmentProgress(of: attachment.id),
+                reduction: local?.reduction
             )
         }
     }

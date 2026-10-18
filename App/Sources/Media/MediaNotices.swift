@@ -10,16 +10,42 @@ extension Notice {
     /// 失敗したときだけ押せ、押すと理由と、再試行か削除を出す。
     /// - Parameter status: 投稿欄から開いていなければnil。
     /// - Parameter progress: 送っている間の進み具合。
-    static func draftStatus(_ status: ComposeAttachmentStatus?, progress: Double? = nil, showFailure: @escaping @MainActor () -> Void) -> Notice? {
+    /// - Parameter reduction: サーバーの上限のために縮めたときの前と後。済んでいれば、縮めたことと理由を出す。
+    static func draftStatus(
+        _ status: ComposeAttachmentStatus?,
+        progress: Double? = nil,
+        reduction: MediaReduction? = nil,
+        showFailure: @escaping @MainActor () -> Void
+    ) -> Notice? {
         let failureAction = Action.disclosure(hint: "理由と、再試行か削除を選べます。", handler: showFailure)
         return switch status {
-        case nil, .ready: nil
+        case nil: nil
+        case .ready: reduction.map(mediaReducedDetail)
+        case .exporting: Notice(id: "media.draft", kind: .progress, title: "書き出し中", value: progress.flatMap(percentText(of:)))
         case .uploading: Notice(id: "media.draft", kind: .progress, title: "アップロード中", value: progress.flatMap(percentText(of:)))
         case .processing: Notice(id: "media.draft", kind: .progress, title: "サーバーで処理中")
         case .sendingDescription: Notice(id: "media.draft", kind: .progress, title: "代替テキストを送信中")
         case .failed: Notice(id: "media.draft", kind: .failure, title: "アップロードできませんでした", action: failureAction)
         case .descriptionFailed: Notice(id: "media.draft", kind: .failure, title: "代替テキストを送信できませんでした", action: failureAction)
         }
+    }
+
+    /// ビューアで、サーバーの上限のために縮めた添付を開いたときに出す理由。大きさを変えたら大きさの、品質だけを下げたら容量の前と後を出す。
+    static func mediaReducedDetail(_ reduction: MediaReduction) -> Notice {
+        // ビューアの幅に収まるよう、「サーバーの」を省き、矢印の前後に空白を入れない。投稿欄で添付したときのチップで、サーバーの上限のためと伝えている。
+        let change = reduction.fromSize != reduction.toSize
+            ? "\(reduction.fromSize)→\(reduction.toSize)"
+            : "\(byteText(reduction.fromByteCount))→\(byteText(reduction.toByteCount))"
+        return Notice(id: "media.draft", kind: .info, title: "上限に合わせて縮小", value: change)
+    }
+
+    /// 投稿欄で添付を、サーバーの上限に合わせて縮めた。使う人が選んでいない画質の変化なので、数秒で消えるチップで知らせる。
+    static func mediaReduced(_ kind: MediaAttachment.Kind) -> Notice {
+        Notice(id: "compose.mediaReduced", kind: .info, title: "\(kind == .video ? "動画" : "画像")をサーバーの上限に合わせて縮めました")
+    }
+
+    private static func byteText(_ count: Int) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .file)
     }
 
     static let downloadIDPrefix = "media.download."

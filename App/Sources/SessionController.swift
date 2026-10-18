@@ -168,7 +168,17 @@ final class SessionController {
             makeThumbnail: { file in await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize) },
             // 版を読めていないときは、版の分からないサーバーとして覚える。版を読めたあとは、もう一度試す。
             unprocessableImageTypes: { mediaFormats.mimeTypes(serverVersion: diagnostics.serverVersion) },
-            recordUnprocessableImageType: { mimeType in mediaFormats.record(mimeType, serverVersion: diagnostics.serverVersion) }
+            recordUnprocessableImageType: { mimeType in mediaFormats.record(mimeType, serverVersion: diagnostics.serverVersion) },
+            preparation: {
+                let settings = AppDependencies.settings
+                return MediaPreparationSettings(
+                    imageSize: settings.imageUploadSize,
+                    videoSize: settings.videoUploadSize,
+                    imageQuality: tuning.value(of: TuningCatalog.mediaImageQuality),
+                    videoQuality: TuningCatalog.videoQuality(in: tuning),
+                    exportProgressShare: tuning.value(of: TuningCatalog.mediaExportProgressShare)
+                )
+            }
         )
         // 補完の問い合わせ口は別のスレッドから呼ばれるため、ほかの口と同じ知らせ方を、隔離されたAuthorizationCheckに直接送る。
         let reportCompletionFailure: @Sendable (any Error) async -> Void = { [authorization] error in
@@ -238,6 +248,9 @@ final class SessionController {
         )
         rootViewController = tabBarController
         forward = { [weak self] in self?.reportUnauthorized() }
+        composer.model.onMediaReduced = { [weak self] kind in
+            self?.visibleTimeline?.showNotice(.mediaReduced(kind), duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+        }
         authorization.onChange = { [weak self] state in
             guard state == .invalid else { return }
             self?.credentialsDidBecomeInvalid()

@@ -23,6 +23,10 @@ final class ComposeModel {
     private(set) var maxMediaAttachments = 4
     /// 代替テキストの文字数の上限。
     private(set) var mediaDescriptionLimit = 1500
+    /// サーバーが受け付けるメディアの大きさの上限。読めるまでは分からないものとして、縮めない。
+    @ObservationIgnored private var mediaLimits = MediaLimits.unknown
+    /// サーバーが受け付けると返した形式。返さないサーバーではnil。
+    @ObservationIgnored private var supportedMediaTypes: [String]?
     private(set) var isPosting = false
     var errorMessage: String?
     /// 添付したメディア。この順で投稿に並ぶ。
@@ -56,6 +60,8 @@ final class ComposeModel {
     @ObservationIgnored private let logger = SciaLog.logger(category: "compose")
     /// 投稿できて、下書きを空に戻したあとに呼ぶ。
     @ObservationIgnored var onPosted: () -> Void = {}
+    /// サーバーの上限のために、設定で選んだより小さく、または低い画質にした。使う人が選んでいない画質の変化なので、知らせる。
+    @ObservationIgnored var onMediaReduced: (MediaAttachment.Kind) -> Void = { _ in }
 
     init(replyTo: Status? = nil, myAccountID: String, media: ComposeMediaService = .unavailable, post: @escaping (StatusDraft) async throws -> Void) {
         let draft = replyTo.map { StatusDraft.reply(to: $0, myAccountID: myAccountID) } ?? StatusDraft()
@@ -116,6 +122,8 @@ final class ComposeModel {
             charactersReservedPerURL = configuration.charactersReservedPerURL
             maxMediaAttachments = configuration.maxMediaAttachments
             mediaDescriptionLimit = configuration.mediaDescriptionLimit
+            mediaLimits = configuration.mediaLimits
+            supportedMediaTypes = configuration.supportedMediaTypes
             hasLoadedConfiguration = true
         }
         if let defaultSensitive {
@@ -274,10 +282,18 @@ struct LocalMedia {
     var descriptionFailure: (any Error)?
     /// 送っている間の進み具合。0から1。
     var progress: Double = 0
+    /// 端末で書き出している間と書き出したあとの進み具合。0から1。書き出さないならnil。
+    var exportProgress: Double?
+    /// 送るファイル。縮めるために作り直したら、そのファイル。作り直さないなら読み込んだファイル。決める前はnil。
+    var sending: LocalMediaFile?
+    /// サーバーの上限のために縮めたときの前と後。
+    var reduction: MediaReduction?
 }
 
 /// 添付1つの、投稿欄とビューアで見せる状態。
 enum ComposeAttachmentStatus: Equatable {
+    /// 送るために、端末で動画を書き出している。
+    case exporting
     /// ファイルを読み込んで送っている。
     case uploading
     /// サーバーでの変換を待っている。
@@ -292,6 +308,25 @@ enum ComposeAttachmentStatus: Equatable {
     case descriptionFailed
 }
 
+/// 送る前に縮める大きさ（設定）と、作り直すときの好みの値（チューニング）。
+struct MediaPreparationSettings {
+    var imageSize: ImageUploadSize
+    var videoSize: VideoUploadSize
+    var imageQuality: Double
+    var videoQuality: VideoPlan.Quality
+    /// 書き出してから送るとき、進み具合の円のうち書き出しに割り振る割合。
+    var exportProgressShare: Double
+
+    /// 設定では縮めない。サーバーの上限を超えるものだけを縮める。メディアを添付しない画面とテストで使う。
+    static let keepsOriginal = MediaPreparationSettings(
+        imageSize: .original,
+        videoSize: .original,
+        imageQuality: TuningCatalog.mediaImageQuality.defaultValue,
+        videoQuality: VideoPlan.Quality(bitRate1080p: 8_000_000, minimumBitRate1080p: 1_000_000, sizeLimitMargin: 0.95, audioBitRate: 128_000),
+        exportProgressShare: TuningCatalog.mediaExportProgressShare.defaultValue
+    )
+}
+
 /// 投稿欄がメディアのアップロードに使うもの。
 struct ComposeMediaService {
     var upload: (MediaUpload) async throws -> MediaAttachment
@@ -303,6 +338,8 @@ struct ComposeMediaService {
     var unprocessableImageTypes: @MainActor () -> Set<String>
     /// 画像の形式を、接続しているサーバーの今の版では処理できないと覚える。
     var recordUnprocessableImageType: @MainActor (String) -> Void
+    /// 送る前に縮める大きさと、作り直すときの好みの値。
+    var preparation: @MainActor () -> MediaPreparationSettings
 
     /// メディアを添付しない画面とテストで使う。
     static var unavailable: ComposeMediaService {
@@ -312,7 +349,8 @@ struct ComposeMediaService {
             updateDescription: { _, _ in throw CancellationError() },
             makeThumbnail: { _ in nil },
             unprocessableImageTypes: { [] },
-            recordUnprocessableImageType: { _ in }
+            recordUnprocessableImageType: { _ in },
+            preparation: { .keepsOriginal }
         )
     }
 }
@@ -396,17 +434,22 @@ extension ComposeModel {
         attachments.insert(attachment, at: min(max(index, 0), attachments.count))
     }
 
-    /// 送っている間の進み具合。0から1。送っていなければnil。
+    /// 書き出しと送信の進み具合を1つにまとめた値。0から1。どちらもしていなければnil。
+    /// 書き出すときは、円の前半を書き出し、後半を送信に割り振る。段階ごとに円を出し直すと、満ちた円がまた0から始まって見えるため。
     func attachmentProgress(of id: DraftAttachment.ID) -> Double? {
-        guard attachmentStatus(of: id) == .uploading else { return nil }
-        return localMedia[id]?.progress ?? 0
+        guard let status = attachmentStatus(of: id), status == .exporting || status == .uploading, let local = localMedia[id] else { return nil }
+        guard let export = local.exportProgress else { return local.progress }
+        let share = media.preparation().exportProgressShare
+        return share * export + (1 - share) * (status == .exporting ? 0 : local.progress)
     }
 
     /// 投稿欄とビューアで見せる状態。
     func attachmentStatus(of id: DraftAttachment.ID) -> ComposeAttachmentStatus? {
         guard let attachment = attachments.first(where: { $0.id == id }) else { return nil }
         switch attachment.state {
-        case .uploading: return .uploading
+        case .uploading:
+            if let export = localMedia[id]?.exportProgress, export < 1, localMedia[id]?.sending == nil { return .exporting }
+            return .uploading
         case .processing: return .processing
         case .failed: return .failed
         case .uploaded:
@@ -420,7 +463,13 @@ extension ComposeModel {
         uploadTasks.removeValue(forKey: id)?.cancel()
         thumbnailTasks.removeValue(forKey: id)?.cancel()
         descriptionTasks.removeValue(forKey: id)?.cancel()
-        localMedia.removeValue(forKey: id)?.file?.remove()
+        if let local = localMedia.removeValue(forKey: id) {
+            local.file?.remove()
+            // 作り直したファイルは、読み込んだファイルと同じディレクトリに置くので、上で一緒に消える。
+            if let sending = local.sending, sending.url.deletingLastPathComponent() != local.file?.url.deletingLastPathComponent() {
+                sending.remove()
+            }
+        }
         attachments.removeAll { $0.id == id }
     }
 
@@ -455,15 +504,24 @@ extension ComposeModel {
             } else {
                 setState(.uploading, of: id)
                 let file = try await loadFile(id, local: local)
+                let sending = try await prepare(file, of: id)
                 let accepted: MediaAttachment
                 do {
-                    accepted = try await send(file, of: id, sentDescription: &sentDescription)
-                } catch let error where UnprocessableMediaFormats.shouldReplaceWithJPEG(mimeType: file.mimeType, error: error) {
+                    accepted = try await send(sending, of: id, sentDescription: &sentDescription)
+                } catch let error where UnprocessableMediaFormats.shouldReplaceWithJPEG(mimeType: sending.mimeType, error: error) {
                     // 対応形式として返しているのに処理できないサーバーがある（Mastodon 4.7.2と4.7.3のHEICなど）。
                     // 同じ写真のJPEGで1回だけ送り直し、このサーバーのこの版ではその形式を送らないと覚える。
-                    logger.info("attachment format unprocessable, resending as jpeg mime=\(file.mimeType, privacy: .public)")
-                    media.recordUnprocessableImageType(file.mimeType)
-                    let replacement = try await reloadFile(id, local: local, avoiding: file)
+                    logger.info("attachment format unprocessable, resending as jpeg mime=\(sending.mimeType, privacy: .public) reencoded=\(sending != file, privacy: .public)")
+                    media.recordUnprocessableImageType(sending.mimeType)
+                    let replacement: LocalMediaFile
+                    if sending != file {
+                        // 縮めるために作り直したファイルなら、元から作り直す。HEICは使わないと覚えたので、JPEGになる。
+                        try? FileManager.default.removeItem(at: sending.url)
+                        localMedia[id]?.sending = nil
+                        replacement = try await prepare(file, of: id, forcingJPEG: true)
+                    } else {
+                        replacement = try await prepare(try await reloadFile(id, local: local, avoiding: file), of: id, forcingJPEG: true)
+                    }
                     accepted = try await send(replacement, of: id, sentDescription: &sentDescription)
                 }
                 try Task.checkCancellation()
@@ -508,10 +566,101 @@ extension ComposeModel {
         localMedia[id]?.progress = fraction
     }
 
+    /// 送るファイルを決める。設定で選んだ大きさとサーバーの上限に収まれば、読み込んだファイルのまま送る。
+    /// 収まらなければ作り直し、サーバーの上限のために設定より小さくしたら知らせる。送り直すときは、前に決めたファイルを使う。
+    /// - Parameter forcingJPEG: JPEGで送り直すので、縮めて作り直すときもHEICなどにしない。覚えたのは処理できなかった形式（HEIFなど）だけで、
+    ///   HEICは覚えていないことがあり、同じサーバーがHEICも処理できないことが多いため。
+    private func prepare(_ file: LocalMediaFile, of id: DraftAttachment.ID, forcingJPEG: Bool = false) async throws -> LocalMediaFile {
+        if let sending = localMedia[id]?.sending { return sending }
+        let settings = media.preparation()
+        let byteCount = ImageReencoder.byteCount(of: file.url)
+        let prepared: PreparedMedia?
+        switch file.kind {
+        case .image:
+            guard let size = ImageReencoder.size(of: file.url) else { throw MediaReencodingError.imageFailed }
+            let plan = ImagePlan.make(
+                size: size, byteCount: byteCount, mimeType: file.mimeType, setting: settings.imageSize, limits: mediaLimits,
+                supportedMIMETypes: supportedMediaTypes,
+                unprocessableMIMETypes: media.unprocessableImageTypes().union(forcingJPEG ? UnprocessableMediaFormats.replaceableMIMETypes : [])
+            )
+            prepared = if let plan {
+                try await ImageReencoder.reencode(
+                    file.url, plan: plan, originalSize: size, sizeLimit: mediaLimits.imageSizeLimit, quality: settings.imageQuality,
+                    destination: Self.preparedURL(for: file)
+                )
+            } else {
+                nil
+            }
+        case .video:
+            prepared = try await prepareVideo(file, of: id, byteCount: byteCount, settings: settings)
+        case .gifv, .audio, .unknown:
+            prepared = nil
+        }
+        try Task.checkCancellation()
+        guard localMedia[id] != nil else {
+            if let prepared { try? FileManager.default.removeItem(at: prepared.url) }
+            throw CancellationError()
+        }
+        let sending = prepared.map { LocalMediaFile(url: $0.url, mimeType: $0.mimeType, kind: file.kind) } ?? file
+        localMedia[id]?.sending = sending
+        localMedia[id]?.reduction = prepared?.reduction
+        if let prepared {
+            logger.info("attachment prepared kind=\(String(describing: file.kind), privacy: .public) mime=\(prepared.mimeType, privacy: .public) size=\(prepared.size.description, privacy: .public) reducedByServer=\(prepared.reduction != nil, privacy: .public)")
+        }
+        if prepared?.reduction != nil {
+            onMediaReduced(file.kind)
+        }
+        return sending
+    }
+
+    /// 動画を、設定で選んだ大きさとサーバーの上限に収まるよう書き出す。収まっていればnil。
+    private func prepareVideo(_ file: LocalMediaFile, of id: DraftAttachment.ID, byteCount: Int, settings: MediaPreparationSettings) async throws -> PreparedMedia? {
+        guard let info = await VideoReencoder.info(of: file.url) else { throw MediaReencodingError.videoFailed }
+        let plan = VideoPlan.make(
+            size: info.size, duration: info.duration, frameRate: info.frameRate, hasAudio: info.hasAudio, byteCount: byteCount,
+            setting: settings.videoSize, limits: mediaLimits, quality: settings.videoQuality
+        )
+        switch plan {
+        case .original:
+            return nil
+        case .tooLong:
+            throw MediaReencodingError.videoTooLong
+        case .export(let size, let frameRate, let bitRate, let reducedByServer):
+            localMedia[id]?.exportProgress = 0
+            let destination = Self.preparedURL(for: file).deletingPathExtension().appendingPathExtension("mp4")
+            let report: @Sendable (Double) -> Void = { [weak self] fraction in
+                Task { @MainActor in self?.setExportProgress(fraction, of: id) }
+            }
+            try await VideoReencoder.export(
+                file.url, size: size, frameRate: frameRate, bitRate: bitRate, audioBitRate: settings.videoQuality.audioBitRate,
+                destination: destination, progress: report
+            )
+            let exportedByteCount = ImageReencoder.byteCount(of: destination)
+            if let limit = mediaLimits.videoSizeLimit, exportedByteCount > limit {
+                try? FileManager.default.removeItem(at: destination)
+                throw MediaReencodingError.cannotFitSizeLimit
+            }
+            let reduction = reducedByServer ? MediaReduction(fromSize: info.size, toSize: size, fromByteCount: byteCount, toByteCount: exportedByteCount) : nil
+            return PreparedMedia(url: destination, mimeType: "video/mp4", size: size, reduction: reduction)
+        }
+    }
+
+    /// 作り直したファイルの置き場所。読み込んだファイルと同じディレクトリに、名前を変えて置く。
+    private static func preparedURL(for file: LocalMediaFile) -> URL {
+        file.url.deletingLastPathComponent().appending(path: "prepared-" + file.url.lastPathComponent)
+    }
+
+    /// 書き出した割合を進み具合にする。送った割合と同じく、見た目の変わらない差では描き直さず、戻る向きには動かさない。
+    private func setExportProgress(_ fraction: Double, of id: DraftAttachment.ID) {
+        guard let current = localMedia[id]?.exportProgress, fraction - current >= 0.01 || (fraction >= 1 && current < 1) else { return }
+        localMedia[id]?.exportProgress = fraction
+    }
+
     /// サーバーが処理できなかったファイルを捨て、その形式を避けて読み込み直す。サムネイルは同じ写真なので作り直さない。
     private func reloadFile(_ id: DraftAttachment.ID, local: LocalMedia, avoiding rejected: LocalMediaFile) async throws -> LocalMediaFile {
         rejected.remove()
         localMedia[id]?.file = nil
+        localMedia[id]?.sending = nil
         let file = try await local.load(media.unprocessableImageTypes().union([rejected.mimeType]))
         guard localMedia[id] != nil, !Task.isCancelled else {
             file.remove()

@@ -283,6 +283,13 @@ struct MastodonClientTests {
         #expect(configuration.maxMediaAttachments == 6)
         #expect(configuration.mediaDescriptionLimit == 1500)
         #expect(configuration.supportedMediaTypes?.contains("image/heic") == true)
+        #expect(configuration.mediaLimits == MediaLimits(
+            imageSizeLimit: 16_777_216,
+            imageMatrixLimit: 33_177_600,
+            videoSizeLimit: 103_809_024,
+            videoMatrixLimit: 8_294_400,
+            videoFrameRateLimit: 120
+        ))
     }
 
     @Test func instanceConfigurationFallsBackWithoutStatusLimits() async throws {
@@ -294,6 +301,8 @@ struct MastodonClientTests {
         #expect(configuration.maxMediaAttachments == 4)
         #expect(configuration.mediaDescriptionLimit == 1500)
         #expect(configuration.supportedMediaTypes == nil)
+        // 上限を返さないサーバーでは、Mastodonの既定値で補わず、分からないままにする。
+        #expect(configuration.mediaLimits == MediaLimits(imageSizeLimit: nil, imageMatrixLimit: nil, videoSizeLimit: nil, videoMatrixLimit: nil, videoFrameRateLimit: nil))
     }
 
     @Test func homeMarkerReadsLastReadID() async throws {
