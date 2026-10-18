@@ -365,6 +365,120 @@ struct InlineComposeControllerTests {
         }
     }
 
+    /// 本文から送っても注意書きから送っても、送っている間はキーボードと書いている状態を保ち、打った文字は受け付けない。
+    /// 成功したら、いまどおり書き終えてカプセルに戻る。
+    @Test(arguments: [false, true])
+    func postingKeepsEditingUntilPosted(fromSpoiler: Bool) async throws {
+        defer { window.isHidden = true }
+        let gate = PostGate()
+        let composer = try installComposer { _ in await gate.wait() }
+        composer.model.apply(configuration: nil, defaultVisibility: .public)
+        composer.beginEditing()
+        composer.model.showsSpoiler = true
+        try await Task.sleep(for: .milliseconds(500))
+        let field = try #require(textFields(in: window).first)
+        let textView = try #require(textViews(in: window).first)
+        let input: UIResponder = fromSpoiler ? field : textView
+        input.becomeFirstResponder()
+        composer.model.text = "本文"
+        composer.model.spoilerText = "注意書き"
+        try await Task.sleep(for: .milliseconds(100))
+
+        let posting = Task { await composer.model.submit() }
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(composer.model.isPosting)
+        #expect(input.isFirstResponder, "送っている間にキーボードが外れました\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("editing: true"), "送っている間に書き終えたことになりました\n\(composer.stateDump())")
+        #expect(textView.delegate?.textView?(textView, shouldChangeTextIn: NSRange(location: 0, length: 0), replacementText: "あ") == false)
+        #expect(field.delegate?.textField?(field, shouldChangeCharactersIn: NSRange(location: 0, length: 0), replacementString: "あ") == false)
+
+        gate.open()
+        await posting.value
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(!input.isFirstResponder)
+        #expect(composer.stateDump().contains("editing: false"), "投稿したのに書いている状態のままです\n\(composer.stateDump())")
+    }
+
+    /// 送信に失敗して知らせを出している間も、書き終えたことにせず、バーをキーボードの高さに留めて広げた欄を保つ。
+    /// 知らせを閉じたあとにキーボードが戻ることは、知らせのボタンを押せないためシミュレーターで確かめる。
+    @Test func failedPostKeepsEditingWhileShowingError() async throws {
+        defer { window.isHidden = true }
+        struct Failure: Error {}
+        let composer = try installComposer { _ in throw Failure() }
+        composer.model.apply(configuration: nil, defaultVisibility: .public)
+        composer.beginEditing()
+        postKeyboardFrame(height: 300)
+        composer.model.text = "本文"
+        try await Task.sleep(for: .milliseconds(500))
+
+        await composer.model.submit()
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(window.rootViewController?.presentedViewController is UIAlertController)
+        #expect(composer.stateDump().contains("editing: true"), "失敗の知らせを出すと書き終えたことになりました\n\(composer.stateDump())")
+        #expect(composer.isBarHeld, "失敗の知らせを出すとバーがキーボードの高さから外れました\n\(composer.stateDump())")
+        window.rootViewController?.dismiss(animated: false)
+    }
+
+    /// 送っている間に添付のビューアを開いたまま投稿できたら、ビューアを閉じるのを待たずに書き終え、空になった本文にキーボードを戻さない。
+    @Test func postingWhileViewerIsOpenEndsEditing() async throws {
+        defer {
+            window.rootViewController?.dismiss(animated: false)
+            window.isHidden = true
+        }
+        let gate = PostGate()
+        let media = ComposeMediaService(
+            upload: { upload in MediaAttachment(id: "m-\(upload.filename)", type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
+            waitUntilProcessed: { id in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
+            updateDescription: { id, _ in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
+            makeThumbnail: { _ in nil }
+        )
+        let composer = try installComposer(media: media) { _ in await gate.wait() }
+        composer.model.apply(configuration: nil, defaultVisibility: .public)
+        composer.beginEditing()
+        composer.model.applyPickerSelection([try pickedImage()])
+        composer.model.text = "本文"
+        for _ in 0..<100 where !composer.model.canPost {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        try await Task.sleep(for: .milliseconds(500))
+        let id = try #require(composer.model.attachments.first?.id)
+        let strip = try #require(attachmentStrips(in: window).first)
+
+        let posting = Task { await composer.model.submit() }
+        try await Task.sleep(for: .milliseconds(100))
+        strip.onSelect(id)
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(window.rootViewController?.presentedViewController != nil, "添付のビューアが開きませんでした")
+
+        gate.open()
+        await posting.value
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(composer.stateDump().contains("editing: false"), "ビューアを開いたまま投稿すると、書いている状態のままです\n\(composer.stateDump())")
+        #expect(!composer.isBarHeld, "ビューアを開いたまま投稿すると、バーがキーボードの高さに留まったままです\n\(composer.stateDump())")
+    }
+
+    /// 送信を待たせるComposeModelで投稿欄を置き直す。
+    private func installComposer(media: ComposeMediaService = .unavailable, post: @escaping (StatusDraft) async throws -> Void) throws -> InlineComposeController {
+        let tabBarController = UITabBarController(tabs: [UITab(title: "ホーム", image: nil, identifier: "home") { _ in UIViewController() }])
+        window.rootViewController = tabBarController
+        let composer = InlineComposeController(model: ComposeModel(myAccountID: "1", media: media, post: post), tuning: TuningStore(defaults: nil), settings: settings)
+        composer.install(in: tabBarController)
+        window.layoutIfNeeded()
+        return composer
+    }
+
+    private func pickedImage() throws -> PickedMedia {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "InlineComposeControllerTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: "a.jpg")
+        try Data([0xFF, 0xD8, 0xFF]).write(to: url)
+        return PickedMedia(assetIdentifier: "a") { LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image) }
+    }
+
+    private func attachmentStrips(in view: UIView) -> [ComposeAttachmentStrip] {
+        (view as? ComposeAttachmentStrip).map { [$0] } ?? view.subviews.flatMap(attachmentStrips(in:))
+    }
+
     private func textFields(in view: UIView) -> [UITextField] {
         (view as? UITextField).map { [$0] } ?? view.subviews.flatMap(textFields(in:))
     }
@@ -400,5 +514,23 @@ struct InlineComposeControllerTests {
 
     private func buttons(in view: UIView) -> [UIButton] {
         (view as? UIButton).map { [$0] } ?? view.subviews.flatMap(buttons(in:))
+    }
+}
+
+/// 開けるまで投稿の送信を待たせる。
+@MainActor
+private final class PostGate {
+    private var continuations: [CheckedContinuation<Void, Never>] = []
+    private var isOpen = false
+
+    func wait() async {
+        guard !isOpen else { return }
+        await withCheckedContinuation { continuations.append($0) }
+    }
+
+    func open() {
+        isOpen = true
+        continuations.forEach { $0.resume() }
+        continuations = []
     }
 }

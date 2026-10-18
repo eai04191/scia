@@ -151,9 +151,17 @@ final class InlineComposeController: NSObject {
         model.onPosted = { [weak self] in
             // シートの上に見えている投稿ボタンから送ったときは、入力欄はもうキーボードを出していないので、シートを閉じて書き終える。
             // 添付したメディアは、下書きと一緒にモデルが空にしている。
-            self?.mediaPicker?.close(notifiesWillClose: false)
-            self?.resignInput()
-            self?.onPosted()
+            guard let self else { return }
+            mediaPicker?.close(notifiesWillClose: false)
+            resignInput()
+            // 送っている間に添付のビューアを開いていると、入力欄はもうキーボードを出しておらず、書き終えたことにならない。
+            // ビューアを閉じるのを待たずにここで書き終え、閉じたあとに空になった本文へキーボードを戻さないようにする。
+            if isEditing, mediaPicker == nil {
+                releaseHoldAboveKeyboard()
+                setEditing(false)
+                onEndEditing()
+            }
+            onPosted()
         }
     }
 
@@ -549,9 +557,10 @@ final class InlineComposeController: NSObject {
         logger.info("media picker: did close (firstResponder=\(self.isInputFocused))")
         mediaPicker = nil
         model.mediaPickerDidClose()
-        // シートを出している間に投稿に失敗していたら、ここで知らせる。
+        // シートを出している間に投稿に失敗していたら、ここで知らせる。知らせはキーボードに戻った入力欄を一度閉じるので、戻ったかは知らせる前に見る。
+        let returnedToKeyboard = isInputFocused
         presentErrorIfNeeded()
-        guard !isInputFocused else { return }
+        guard !returnedToKeyboard else { return }
         releaseHoldAboveKeyboard()
         setEditing(false)
     }
@@ -616,7 +625,9 @@ final class InlineComposeController: NSObject {
 
     /// シートを閉じてキーボードが上がりきったら、バーをキーボードに付ける。
     @objc private func keyboardDidShow(_ notification: Notification) {
-        guard isInputFocused else { return }
+        // 投稿の失敗の知らせは、シートを閉じて戻したキーボードが上がりきる前に出ることがあり、その知らせが知らせを出したあとに届く。
+        // 知らせを出している間はキーボードが下がるので、バーはキーボードの高さに留めたままにする。
+        guard isInputFocused, !isPresentingError else { return }
         keyboardHeightBeforeContextMenu = nil
         releaseHoldAboveKeyboard()
     }
@@ -722,7 +733,6 @@ final class InlineComposeController: NSObject {
         if spoilerField.text != model.spoilerText {
             spoilerField.text = model.spoilerText
         }
-        spoilerField.isEnabled = !model.isPosting
         // 返信先を外して引き継いだ注意書きが消えたときなども含め、欄を隠すときは、隠れた欄にキーボードを残さず本文へ移す。
         if !model.showsSpoiler {
             if spoilerField.isFirstResponder {
@@ -765,7 +775,6 @@ final class InlineComposeController: NSObject {
         remainingLabel.accessibilityLabel = "残り\(model.remainingCharacters)文字"
         sendButton.isEnabled = model.canPost
         sendButton.configuration?.showsActivityIndicator = model.isPosting
-        textView.isEditable = !model.isPosting
 
         restLabel.attributedText = restText(replyAcct: replyAcct)
         presentErrorIfNeeded()
@@ -823,13 +832,26 @@ final class InlineComposeController: NSObject {
     }
 
     /// メディアを選ぶシートなどを出している間は出さず、閉じたときに知らせる。
+    ///
+    /// 知らせは表示されると最初の応答者になるため、何もしないとキーボードが下がって投稿欄がカプセルに戻り、書いていたところから直せない。
+    /// 添付のビューアと同じく、出す前に自分でキーボードを閉じ、バーをキーボードの高さに留め、閉じたら最後に書いていた入力欄にキーボードを戻す。
     private func presentErrorIfNeeded() {
         guard let message = model.errorMessage, !isPresentingError, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
         isPresentingError = true
+        logger.info("compose: presenting post error (focused=\(self.isInputFocused) editing=\(self.isEditing) picker=\(self.mediaPicker != nil))")
+        if mediaPicker == nil, isInputFocused {
+            if let lastKeyboardHeight {
+                setHoldAboveKeyboard(height: lastKeyboardHeight)
+            }
+            resignInput()
+        }
         let alert = UIAlertController(title: "投稿できませんでした", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .cancel) { [weak self] _ in
-            self?.isPresentingError = false
-            self?.model.errorMessage = nil
+            guard let self else { return }
+            isPresentingError = false
+            model.errorMessage = nil
+            guard mediaPicker == nil, isEditing else { return }
+            focusLastInput()
         })
         presenter.present(alert, animated: true)
     }
@@ -1199,6 +1221,12 @@ extension InlineComposeController: UITextViewDelegate {
         textDidChange()
     }
 
+    /// 送っている間は、送っている下書きと食い違わないよう打った文字を受け付けない。
+    /// 入力欄を止める（`isEditable`を外す）とキーボードが外れて書き終えたことになり、失敗したときに書いていたところへ戻れないため、フォーカスは残す。
+    func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
+        !model.isPosting
+    }
+
     func textViewShouldBeginEditing(_ textView: UITextView) -> Bool {
         inputWillBeginEditing(from: spoilerField)
         return true
@@ -1232,9 +1260,9 @@ extension InlineComposeController: UITextViewDelegate {
     private func inputDidEndEditing() {
         // 本文と注意書きの間でフォーカスを移しているときは、書いている状態のままにする。
         // メディアを選ぶシートを出すためにキーボードを閉じたときも同じ。
-        // 添付のビューアを開くためにキーボードを閉じたときも同じ。閉じ終わったら入力欄にキーボードを戻す。
+        // 添付のビューアや、投稿の失敗の知らせを開くためにキーボードを閉じたときも同じ。閉じ終わったら入力欄にキーボードを戻す。
         // シートを閉じたあとに書き終えたときは、キーボードが上がりきった知らせが来ずにバーを留めたままでも、カプセルに戻す。
-        guard !isMovingFocus, mediaPicker == nil, !isShowingMediaViewer, !isShowingToolLayoutSettings else { return }
+        guard !isMovingFocus, mediaPicker == nil, !isShowingMediaViewer, !isShowingToolLayoutSettings, !isPresentingError else { return }
         releaseHoldAboveKeyboard()
         setEditing(false)
         onEndEditing()
@@ -1245,6 +1273,11 @@ extension InlineComposeController: UITextFieldDelegate {
     func textFieldShouldBeginEditing(_ textField: UITextField) -> Bool {
         inputWillBeginEditing(from: textView)
         return true
+    }
+
+    /// 本文と同じく、送っている間はフォーカスを残したまま、打った文字を受け付けない。
+    func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
+        !model.isPosting
     }
 
     func textFieldDidBeginEditing(_ textField: UITextField) {
