@@ -37,8 +37,14 @@ struct DebugURLTests {
         #expect(DebugURL(try #require(URL(string: "scia-debug://viewer?index=2"))) == .viewer(index: 2))
     }
 
+    @Test func readsArrivalHold() throws {
+        #expect(DebugURL(try #require(URL(string: "scia-debug://arrivals/hold"))) == .holdArrivals(true))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://arrivals/release"))) == .holdArrivals(false))
+    }
+
     @Test(arguments: [
         "scia-debug://tab/unknown",
+        "scia-debug://arrivals/unknown",
         "scia-debug://viewer?index=-1",
         "scia-debug://download/unknown",
         "scia-debug://catalog/unknown",

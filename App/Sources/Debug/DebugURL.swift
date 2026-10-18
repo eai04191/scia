@@ -42,6 +42,9 @@ enum DebugURL: Equatable {
     /// `scia-debug://viewer?index=<n>`。選んでいるタブの、画面のいちばん上に見えている添付ファイル付きの投稿を、n番目（0から）の添付ファイルでビューアに開く。
     /// サムネイルをタップしたのと同じ経路で開く。
     case viewer(index: Int)
+    /// `scia-debug://arrivals/hold`で、以後に届いた新着を一覧に挿入せずに溜める。`scia-debug://arrivals/release`で、溜まった新着をまとめて挿入する。
+    /// ストリーミングはつないだままなので、切断の知らせやポーリングで一覧が動かない。
+    case holdArrivals(Bool)
 
     enum Tab: String {
         case home
@@ -108,6 +111,12 @@ enum DebugURL: Equatable {
         case "tab":
             guard let tab = Tab(rawValue: url.lastPathComponent) else { return nil }
             self = .tab(tab)
+        case "arrivals":
+            switch url.lastPathComponent {
+            case "hold": self = .holdArrivals(true)
+            case "release": self = .holdArrivals(false)
+            default: return nil
+            }
         case "viewer":
             let index = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "index" }?.value
             guard let index = Int(index ?? "0"), index >= 0 else { return nil }

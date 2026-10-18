@@ -37,6 +37,10 @@ final class NotificationsController {
     private var isSavingReadPosition = false
     private var readPositionBackgroundTask = UIBackgroundTaskIdentifier.invalid
     private var isWaitingForInteractionToSettle = false
+    #if DEBUG
+    /// 新着の挿入を保留している間に、補完を見送った。保留を解いたときに補完する。
+    private var isFillHeld = false
+    #endif
 
     init(
         client: MastodonClient,
@@ -278,6 +282,15 @@ final class NotificationsController {
 
     /// つながるたびと、つながらない間のポーリングで、切れていた間の通知を読む。
     private func fillFromLatest() {
+        #if DEBUG
+        // 補完で読んだ新着はストアへ直接合流し、insertPendingの保留を通らないため、保留中は補完を始めない。
+        // 保留を送る前に始まった補完は止めない。その結果は、保留中でも一覧に入る。
+        if DebugFaults.isHoldingArrivals {
+            isFillHeld = true
+            logger.info("notifications fill held")
+            return
+        }
+        #endif
         run(.automatic) { controller in
             do {
                 let before = controller.store.entries
@@ -310,6 +323,21 @@ final class NotificationsController {
         }
     }
 
+    #if DEBUG
+    /// `scia-debug://arrivals/release`で保留を解いたとき、見送った補完を始め、溜まった新着を挿入する。指で操作している最中なら、操作が終わってから挿入する。
+    func releaseHeldArrivals() {
+        if isFillHeld {
+            isFillHeld = false
+            fillFromLatest()
+        }
+        if viewController.isUserInteracting {
+            isWaitingForInteractionToSettle = true
+        } else {
+            insertPending()
+        }
+    }
+    #endif
+
     private func interactionDidSettle() {
         saveReadPosition(inBackground: false)
         guard isWaitingForInteractionToSettle else { return }
@@ -325,6 +353,13 @@ final class NotificationsController {
 
     private func insertPending() {
         guard !isStopped else { return }
+        #if DEBUG
+        // 保留を解いたときに、releaseHeldArrivalsから挿入する。
+        guard !DebugFaults.isHoldingArrivals else {
+            logger.info("notifications insert pending held")
+            return
+        }
+        #endif
         let added = store.flushPending()
         logger.info("notifications insert pending added=\(added.count, privacy: .public)")
         guard !added.isEmpty else { return }

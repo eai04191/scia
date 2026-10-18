@@ -79,6 +79,15 @@ enum DebugFaults {
         downloadDelay.withLock { $0 = delay }
     }
 
+    /// 立てると、ホームと通知のタブは、届いた新着を一覧に挿入せずに溜める。agentが一覧の行をタップする間に、新着で行がずれないようにする。
+    private static let holdsArrivals = Mutex(false)
+
+    static var isHoldingArrivals: Bool { holdsArrivals.withLock { $0 } }
+
+    static func setHoldingArrivals(_ isOn: Bool) {
+        holdsArrivals.withLock { $0 = isOn }
+    }
+
     /// 下ろすと、開いているストリーミングの接続を切り、以後の接続を失敗させる。RESTは通したまま、ストリーミングだけがつながらないサーバーを再現する。
     private static let streaming = Mutex((isOnline: true, nextID: 0, connections: [Int: any WebSocketConnection]()))
 

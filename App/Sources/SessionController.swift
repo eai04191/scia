@@ -684,6 +684,12 @@ final class SessionController {
             (rootViewController as? UITabBarController)?.selectedIndex = tab == .home ? 0 : 1
         case .viewer(let index):
             openTopmostMedia(at: index)
+        case .holdArrivals(let isOn):
+            DebugFaults.setHoldingArrivals(isOn)
+            if !isOn {
+                home.releaseHeldArrivals()
+                notifications.releaseHeldArrivals()
+            }
         }
     }
 

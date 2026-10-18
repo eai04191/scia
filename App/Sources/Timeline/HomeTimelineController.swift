@@ -41,6 +41,10 @@ final class HomeTimelineController {
     private var readPositionBackgroundTask = UIBackgroundTaskIdentifier.invalid
     /// 新着を挿入する時機が来たが、スクロールや長押しのメニューなどの操作中なので、終わるのを待っている。
     private var isWaitingForInteractionToSettle = false
+    #if DEBUG
+    /// 新着の挿入を保留している間に、補完を見送った。保留を解いたときに補完する。
+    private var isFillHeld = false
+    #endif
     /// サーバーがホームを作り直している最中だったので、時間をおいて補完を読み直す。読み直すまで次は予約しない。
     private var regeneratingRetryTask: Task<Void, Never>?
 
@@ -293,6 +297,15 @@ final class HomeTimelineController {
 
     /// つながるたびと、つながらない間のポーリングで、切れていた間の投稿を読む。1ページに収まらなければギャップを置く。
     private func fillFromLatest() {
+        #if DEBUG
+        // 補完で読んだ新着はストアへ直接合流し、insertPendingの保留を通らないため、保留中は補完を始めない。
+        // 保留を送る前に始まった補完は止めない。その結果は、保留中でも一覧に入る。
+        if DebugFaults.isHoldingArrivals {
+            isFillHeld = true
+            logger.info("home fill held")
+            return
+        }
+        #endif
         run(.automatic) { controller in
             do {
                 let before = controller.store.entries
@@ -405,6 +418,21 @@ final class HomeTimelineController {
         }
     }
 
+    #if DEBUG
+    /// `scia-debug://arrivals/release`で保留を解いたとき、見送った補完を始め、溜まった新着を挿入する。指で操作している最中なら、操作が終わってから挿入する。
+    func releaseHeldArrivals() {
+        if isFillHeld {
+            isFillHeld = false
+            fillFromLatest()
+        }
+        if viewController.isUserInteracting {
+            isWaitingForInteractionToSettle = true
+        } else {
+            insertPending()
+        }
+    }
+    #endif
+
     private func interactionDidSettle() {
         saveReadPosition(inBackground: false)
         guard isWaitingForInteractionToSettle else { return }
@@ -487,6 +515,13 @@ final class HomeTimelineController {
 
     private func insertPending() {
         guard !isStopped else { return }
+        #if DEBUG
+        // 保留を解いたときに、releaseHeldArrivalsから挿入する。
+        guard !DebugFaults.isHoldingArrivals else {
+            logger.info("home insert pending held")
+            return
+        }
+        #endif
         let added = store.flushPending()
         logger.info("home insert pending added=\(added.count, privacy: .public)")
         guard !added.isEmpty else { return }
