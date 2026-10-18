@@ -29,10 +29,21 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     @Binding var layout: MenuLayout<Item>
     /// 区切り線は同じ値が並ぶため、リストで見分けるIDを行ごとに振る。
     @State private var rows: [Row]
+    /// 行の中での、項目の名前の左端の位置。行どうしの線をここから引き、リストの標準の線と同じ位置に揃える。
+    @State private var lineLeading: CGFloat = 0
+    /// リストの標準の行と同じ余白。リストの上下の余白を0にして、同じ量を行の中身に持たせ、中身の下端を行の下端に揃える。
+    private let rowInsets = EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
 
-    private struct Row: Identifiable {
+    private struct Row: Identifiable, Equatable {
         let id = UUID()
         var element: MenuLayout<Item>.Element
+    }
+
+    /// 項目どうしの間だけに線を引く。区切り線の行は自分が線なので、その上下には引かない。いちばん下の行にも引かない。
+    private var rowsWithBottomLine: Set<Row.ID> {
+        Set(zip(rows, rows.dropFirst()).compactMap { row, next in
+            row.element != .separator && next.element != .separator ? row.id : nil
+        })
     }
 
     init(title: String, layout: Binding<MenuLayout<Item>>) {
@@ -44,8 +55,24 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     var body: some View {
         List {
             Section {
-                ForEach($rows) { $row in
-                    rowView($row)
+                ForEach(rows) { row in
+                    rowView(binding(for: row))
+                        // スイッチのない行（「その他」の境目）も横いっぱいに広げ、線の右端を揃える。
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .coordinateSpace(.named(Self.rowSpace))
+                        .padding(.vertical, rowInsets.top)
+                        .overlay(alignment: .bottomLeading) {
+                            if rowsWithBottomLine.contains(row.id) {
+                                line.padding(.leading, lineLeading)
+                            }
+                        }
+                        // 行どうしの線は、リストの線を使わずに、行の中身の下端に自分で引く。
+                        // リストの線や行の背景（listRowBackground）は、リストが行ごとの設定として持っていて、並べ替えや削除のあとに隣の行の設定を組み直さないことがあり、
+                        // 出ないはずの線が残ったり、出るはずの線が消えたりした。行を作り直して組み直させると、項目がちらついた。
+                        // 画面での位置を測って境目に引く形も、削除や並べ替えでリストが行を動かしたときに位置が測り直されず、線がずれて隠れた。
+                        // 中身の下端を行の下端に揃えれば、位置を測らずに済み、線は行と一緒に動く。
+                        .listRowInsets(EdgeInsets(top: 0, leading: rowInsets.leading, bottom: 0, trailing: rowInsets.trailing))
+                        .listRowSeparator(.hidden)
                         .deleteDisabled(row.element != .separator)
                 }
                 .onMove { source, destination in
@@ -101,6 +128,7 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.rowSpace)).minX } action: { lineLeading = $0 }
                 } icon: {
                     Image(systemName: item.symbolName)
                 }
@@ -116,8 +144,6 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("区切り線")
-            // 行そのものが線なので、リストの行の線は出さない。出すと、リストが行の中の文字（真ん中の「区切り線」）に揃えて、線を途中から引いてしまう。
-            .listRowSeparator(.hidden)
         case .more:
             Label {
                 VStack(alignment: .leading, spacing: 2) {
@@ -132,10 +158,24 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
         }
     }
 
+    /// 行のスイッチから`rows`の同じ行を書き換える。並べ替えたあとも、IDで行を探す。
+    private func binding(for row: Row) -> Binding<Row> {
+        Binding {
+            rows.first { $0.id == row.id } ?? row
+        } set: { newValue in
+            guard let index = rows.firstIndex(where: { $0.id == row.id }) else { return }
+            rows[index] = newValue
+        }
+    }
+
+    private static var rowSpace: String { "row" }
+
+    private let lineThickness: CGFloat = 1
+
     private var line: some View {
         Rectangle()
             .fill(Color(uiColor: .separator))
-            .frame(height: 1)
+            .frame(height: lineThickness)
     }
 
     private func save() {
