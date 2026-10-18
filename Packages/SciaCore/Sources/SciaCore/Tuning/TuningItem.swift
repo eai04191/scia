@@ -150,6 +150,23 @@ public enum TuningCatalog {
         defaultValue: 0.4
     )
 
+    /// Xの投稿へのリンクを、fxtwitterから読んだ作者、本文、添付ファイルの囲みで出す。読み終えるまでと、読めなかったときは、リンクカードを出す。
+    /// 表示の試作。読み終えたときに行が伸びるため、ガタつきが気になるかを実機で確かめる。
+    public static let xPostEmbeds = ToggleTuning(
+        id: "timeline.xPostEmbeds",
+        title: "Xの投稿をfxtwitterから読んで出す（試作）",
+        defaultValue: false
+    )
+
+    /// Xの投稿の囲みの、作者の行に出すアイコンの一辺。
+    public static let xPostAvatarSize = NumberTuning(
+        id: "timeline.xPostAvatarSize",
+        title: "Xの投稿の囲みのアイコンの大きさ（pt）",
+        range: 12...32,
+        step: 1,
+        defaultValue: 20
+    )
+
     /// 注意書き（CW）の箱の内側の余白。
     public static let spoilerPadding = NumberTuning(
         id: "timeline.spoilerPadding",
@@ -738,6 +755,8 @@ public enum TuningCatalog {
             .number(bodyLinkCardSpacing),
             .number(linkCardPadding),
             .number(linkCardTransitionDuration),
+            .toggle(xPostEmbeds),
+            .number(xPostAvatarSize),
             .number(spoilerPadding),
             .number(spoilerBodySpacing),
             .number(mediaTileSpacing),

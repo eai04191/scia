@@ -34,6 +34,10 @@ struct PostContentConfiguration: UIContentConfiguration {
     var media: MediaGridView.Content?
     /// リンクカードを出さなければnil。
     var card: LinkCardView.Content?
+    /// Xの投稿の囲み。あれば、リンクカードの代わりに出す。
+    var xPost: XPostView.Content?
+    /// 表示している投稿。ブーストなら、ブーストされた投稿。
+    var statusID: Status.ID?
     let mediaImages: MediaImageStore
     let avatarImages: AvatarImageStore
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
@@ -49,6 +53,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
+    /// Xの投稿の囲みのサムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
+    var onSelectXPostMedia: ((Int, MediaGridView) -> Void)?
 
     /// 大きさと文字の見た目。
     struct Metrics {
@@ -121,11 +127,16 @@ final class PostContentView: UIView, UIContentView {
         bodyView.mediaGrid
     }
 
+    /// 表示中の、Xの投稿の囲みのサムネイル。
+    var xPostMediaGrid: MediaGridView? {
+        bodyView.xPost?.mediaGrid
+    }
+
     init(configuration: PostContentConfiguration) {
         current = configuration
         avatarView = AvatarView(store: configuration.avatarImages)
         contextAvatarView = AvatarView(store: configuration.avatarImages)
-        bodyView = PostBodyView(mediaImages: configuration.mediaImages)
+        bodyView = PostBodyView(mediaImages: configuration.mediaImages, avatarImages: configuration.avatarImages)
         super.init(frame: .zero)
         addLayoutGuide(textGuide)
         configureSubviews()
@@ -134,6 +145,7 @@ final class PostContentView: UIView, UIContentView {
         bodyView.onToggleSpoiler = { [weak self] in self?.current.onToggleSpoiler?() }
         bodyView.onOpenLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
         bodyView.onOpenLinkCardImage = { [weak self] thumbnail in self?.current.onOpenLinkCardImage?(thumbnail) }
+        bodyView.onSelectXPostMedia = { [weak self] index, grid in self?.current.onSelectXPostMedia?(index, grid) }
         for view in [avatarView, nameRow] as [UIView] {
             view.isUserInteractionEnabled = true
             view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAccount)))
@@ -227,7 +239,9 @@ final class PostContentView: UIView, UIContentView {
             media: configuration.media,
             mediaSpacing: metrics.bodyMediaSpacing,
             card: configuration.card,
-            cardSpacing: metrics.bodyLinkCardSpacing
+            cardSpacing: metrics.bodyLinkCardSpacing,
+            xPost: configuration.xPost,
+            statusID: configuration.statusID
         ))
         updateConstraints(for: configuration)
         updateAccessibility(for: configuration)
@@ -333,7 +347,7 @@ final class PostContentView: UIView, UIContentView {
         // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
         setNeedsLayout()
-        accessibilityElements = [textAccessibilityElement] + [bodyView.mediaGrid, bodyView.linkCard].compactMap(\.self)
+        accessibilityElements = [textAccessibilityElement] + [bodyView.mediaGrid, bodyView.linkCard, bodyView.xPost].compactMap(\.self)
     }
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)

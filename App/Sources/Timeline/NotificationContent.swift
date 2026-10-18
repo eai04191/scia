@@ -124,7 +124,8 @@ extension TimelineViewController {
                 symbolSpacing: tuning.value(of: TuningCatalog.contextSymbolSpacing),
                 avatarSpacing: tuning.value(of: TuningCatalog.avatarSpacing)
             ),
-            mediaImages: mediaImages
+            mediaImages: mediaImages,
+            avatarImages: avatarImages
         )
         if appearance.phrase.includesName {
             configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(notification.account) }

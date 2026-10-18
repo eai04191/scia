@@ -9,7 +9,7 @@ extension TimelineViewController {
         mediaContent(of: status.mediaAttachments, cover: mediaCovers.cover(for: status))
     }
 
-    /// `attachments`を並べる中身。
+    /// `attachments`を並べる中身。Xの投稿の囲みの添付ファイルにも使う。
     func mediaContent(of attachments: [MediaAttachment], cover: MediaCover?) -> MediaGridView.Content? {
         guard !attachments.isEmpty else { return nil }
         return MediaGridView.Content(
@@ -48,6 +48,28 @@ extension TimelineViewController {
         // まだ開いていない画面は、開いたときにこの状態で描く。描き直しのために画面を読み込ませない。
         guard isViewLoaded else { return }
         reconfigureRows(showing: status)
+    }
+
+    /// Xの投稿を読み終えた。その投稿へのリンクを出している行を描き直し、リンクカードを囲みに替える。
+    /// 行が伸びる分は、リンクカードが届いたときの描き替えと同じ時間で動きでつなぐ。
+    func applyXPost(id: String) {
+        guard isViewLoaded, tuning.value(of: TuningCatalog.xPostEmbeds) else { return }
+        let ids = displayedItemIDs.filter { itemID in
+            self.status(for: itemID).flatMap { XPostLink.postID(of: $0.displayed) } == id
+        }
+        reconfigureAnimatingHeight(Set(ids), duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration))
+    }
+
+    /// Xの投稿へのリンクを出す投稿なら、読み終えた投稿の囲みを返す。まだなら読みに行き、読み終えるまではnilを返してリンクカードを出す。
+    func xPostContent(for status: Status, base: UIListContentConfiguration) -> (content: XPostView.Content, media: [MediaAttachment])? {
+        guard tuning.value(of: TuningCatalog.xPostEmbeds), let xPosts, let id = XPostLink.postID(of: status) else { return nil }
+        guard let post = xPosts.post(id: id) else {
+            xPosts.request(id: id)
+            return nil
+        }
+        // 投稿した人が閲覧注意を付けていれば、Xの添付ファイルも覆う。覆いを外すと、投稿の添付ファイルと同じくそろって外れる。
+        let media = mediaContent(of: post.media, cover: mediaCovers.cover(for: status))
+        return (postContentBuilder.xPost(post, media: media, base: base), media?.attachments ?? [])
     }
 
     private func reconfigureRows(showing status: Status) {
@@ -120,8 +142,9 @@ extension TimelineViewController {
     /// 添付ファイルのサムネイルを、表示中のセルから探す。開いている間にセルが再利用されても、閉じるときに今の位置を探せるようにする。
     private func visibleMediaTile(for attachmentID: MediaAttachment.ID) -> MediaTileView? {
         for cell in collectionView.visibleCells {
-            let grid = (cell.contentView as? PostContentView)?.mediaGrid ?? (cell.contentView as? NotificationContentView)?.mediaGrid
-            if let tile = grid?.tile(for: attachmentID) {
+            let post = cell.contentView as? PostContentView
+            let grids = [post?.mediaGrid, post?.xPostMediaGrid, (cell.contentView as? NotificationContentView)?.mediaGrid]
+            if let tile = grids.lazy.compactMap({ $0?.tile(for: attachmentID) }).first {
                 return tile
             }
         }

@@ -216,7 +216,7 @@ struct TimelineMediaTests {
         let vc = TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline)
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let media = try #require(vc.mediaContent(for: withMedia(base, [image("1", width: 100, height: 100)])))
-        let view = PostBodyView(mediaImages: .offline)
+        let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
 
         view.apply(PostBodyContent(text: NSAttributedString(), media: media, mediaSpacing: 8))
         #expect(view.startsWithMedia)

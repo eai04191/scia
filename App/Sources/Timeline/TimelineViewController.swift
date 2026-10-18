@@ -162,6 +162,8 @@ final class TimelineViewController: UIViewController {
     var mediaCovers = MediaCovers()
     /// この画面で開いたり隠したりしたときに、変えたあとの状態と、変えた投稿を渡して呼ぶ。
     var onChangeMediaCovers: ((MediaCovers, Status) -> Void)?
+    /// fxtwitterから読んだXの投稿。セッションの中で1つを共有する。
+    var xPosts: XPostStore?
     /// 注意書きのある投稿の本文を開いているか。サーバーの設定が読めたら、セッションが既定を入れる。
     var spoilerExpansion = SpoilerExpansion() {
         didSet {
@@ -313,6 +315,8 @@ final class TimelineViewController: UIViewController {
             _ = tuning.value(of: TuningCatalog.nameMediaSpacing)
             _ = tuning.value(of: TuningCatalog.bodyLinkCardSpacing)
             _ = tuning.value(of: TuningCatalog.linkCardPadding)
+            _ = tuning.value(of: TuningCatalog.xPostEmbeds)
+            _ = tuning.value(of: TuningCatalog.xPostAvatarSize)
             _ = tuning.value(of: TuningCatalog.spoilerPadding)
             _ = tuning.value(of: TuningCatalog.spoilerBodySpacing)
             _ = tuning.value(of: TuningCatalog.mediaTileSpacing)
@@ -380,6 +384,36 @@ final class TimelineViewController: UIViewController {
         var snapshot = dataSource.snapshot()
         snapshot.reconfigureItems(Array(ids))
         applyPreservingAnchor(snapshot, keeping: anchorID)
+    }
+
+    /// 行の中身を描き直し、高さが変わる分を、下の行ごとスプリングで動かしてつなぐ。動きの途中も操作を受け付ける。
+    /// 上端が表示領域の上端より上にある行は、伸びると読んでいる位置がずれるため、動かさずに位置を保って描き直す。
+    /// 画面に出ていない行と、メニューを出している間も、動かさずに描き直す。
+    func reconfigureAnimatingHeight(_ ids: Set<ItemID>, duration: TimeInterval) {
+        guard !ids.isEmpty else { return }
+        guard duration > 0, view.window != nil, !isShowingMenu, !UIAccessibility.isReduceMotionEnabled else {
+            reconfigure(ids)
+            return
+        }
+        let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
+        let visible = Set(collectionView.indexPathsForVisibleItems)
+        var animated: [ItemID] = []
+        var others: Set<ItemID> = []
+        for id in ids {
+            if let indexPath = dataSource.indexPath(for: id), visible.contains(indexPath),
+               let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame, frame.minY >= visibleTop {
+                animated.append(id)
+            } else {
+                others.insert(id)
+            }
+        }
+        reconfigure(others)
+        guard !animated.isEmpty else { return }
+        var snapshot = dataSource.snapshot()
+        snapshot.reconfigureItems(animated)
+        UIView.animate(springDuration: duration, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            self.dataSource.apply(snapshot, animatingDifferences: true)
+        }
     }
 
     /// 表示中の要素を、新しい順に並んだ`newEntries`で置き換える。
@@ -1107,6 +1141,12 @@ final class TimelineViewController: UIViewController {
             self?.revealMedia(of: shown)
         }
         configuration.card?.coversImage = mediaCovers.linkCardImageCover(for: shown) != nil
+        if let xPost = xPostContent(for: shown, base: base) {
+            configuration.xPost = xPost.content
+            configuration.onSelectXPostMedia = { [weak self] index, grid in
+                self?.openMedia(xPost.media, at: index, of: shown, from: grid)
+            }
+        }
         if case .card(let card)? = configuration.card?.card, let attachment = card.imageAttachment {
             configuration.onOpenLinkCardImage = { [weak self] thumbnail in
                 // 開いている間に行が別の投稿に使い回されていたら、その画像へは戻さず、薄くして閉じる。

@@ -29,6 +29,10 @@ struct PostBodyContent {
     var card: LinkCardView.Content?
     /// 本文か添付ファイルと、リンクカードのあいだの余白。
     var cardSpacing: CGFloat = 0
+    /// Xの投稿の囲み。あれば、リンクカードの代わりに同じ位置に置く。
+    var xPost: XPostView.Content?
+    /// 表示している投稿。リンクカードから囲みに替わったのが同じ投稿の行かを見分ける。同じXの投稿へのリンクは、別の投稿にもありうるため。
+    var statusID: Status.ID?
 }
 
 final class PostBodyView: UIView {
@@ -42,11 +46,14 @@ final class PostBodyView: UIView {
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
+    /// Xの投稿の囲みのサムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
+    var onSelectXPostMedia: ((Int, MediaGridView) -> Void)?
 
     private let spoilerView = SpoilerView()
     private let textLabel = LinkLabel()
     private let mediaView: MediaGridView
     private let cardView: LinkCardView
+    private let xPostView: XPostView
     private(set) var content: PostBodyContent?
     /// 添付ファイルの有無と並べ方で変わる制約。適用のたびに作り直す。
     private var variableConstraints: [NSLayoutConstraint] = []
@@ -61,6 +68,11 @@ final class PostBodyView: UIView {
         cardView.isHidden ? nil : cardView
     }
 
+    /// 表示中のXの投稿の囲み。読み上げの要素に加え、ビューアの拡大と縮小の起点を探すときにも使う。
+    var xPost: XPostView? {
+        xPostView.isHidden ? nil : xPostView
+    }
+
     /// 注意書きも本文もなく、添付ファイルが上端から始まる。
     var startsWithMedia: Bool {
         spoilerView.isHidden && textLabel.isHidden && !mediaView.isHidden
@@ -71,12 +83,13 @@ final class PostBodyView: UIView {
         [spoilerView, textLabel].filter { !$0.isHidden }.map(\.frame).reduce(CGRect.null) { $0.union($1) }
     }
 
-    init(mediaImages: MediaImageStore) {
+    init(mediaImages: MediaImageStore, avatarImages: AvatarImageStore) {
         mediaView = MediaGridView(store: mediaImages)
         cardView = LinkCardView(store: mediaImages)
+        xPostView = XPostView(store: mediaImages, avatarImages: avatarImages)
         super.init(frame: .zero)
         textLabel.numberOfLines = 0
-        for view in [spoilerView, textLabel, mediaView, cardView] as [UIView] {
+        for view in [spoilerView, textLabel, mediaView, cardView, xPostView] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -100,6 +113,12 @@ final class PostBodyView: UIView {
             guard let self, let url = self.cardView.content?.card.url else { return }
             self.onOpenLink?(.url(url))
         }, for: .primaryActionTriggered)
+        xPostView.onSelectMedia = { [weak self] index, grid in self?.onSelectXPostMedia?(index, grid) }
+        xPostView.onRevealMedia = { [weak self] in self?.onRevealMedia?() }
+        xPostView.addAction(UIAction { [weak self] _ in
+            guard let self, let url = self.xPostView.content?.post.url else { return }
+            self.onOpenLink?(.url(url))
+        }, for: .primaryActionTriggered)
     }
 
     @available(*, unavailable)
@@ -108,6 +127,7 @@ final class PostBodyView: UIView {
     }
 
     func apply(_ content: PostBodyContent) {
+        let previous = self.content
         self.content = content
         textLabel.attributedText = Self.truncatingTail(content.text, when: content.maximumLines > 0)
         textLabel.numberOfLines = content.maximumLines
@@ -121,8 +141,9 @@ final class PostBodyView: UIView {
         }
         let isCollapsed = content.spoiler?.isCollapsed ?? false
         let media = isCollapsed ? nil : content.media.flatMap { $0.aspectRatio == nil ? nil : $0 }
-        let card = isCollapsed ? nil : content.card
-        textLabel.isHidden = isCollapsed || (content.text.length == 0 && (media != nil || card != nil || content.spoiler != nil))
+        let xPost = isCollapsed ? nil : content.xPost
+        let card = isCollapsed || xPost != nil ? nil : content.card
+        textLabel.isHidden = isCollapsed || (content.text.length == 0 && (media != nil || card != nil || xPost != nil || content.spoiler != nil))
         // 本文と添付ファイルは、注意書きがあればその下から並べる。
         let contentTop = content.spoiler.map { (anchor: spoilerView.bottomAnchor, spacing: $0.bodySpacing) } ?? (anchor: topAnchor, spacing: 0)
         if !textLabel.isHidden {
@@ -165,8 +186,45 @@ final class PostBodyView: UIView {
         } else {
             cardView.isHidden = true
         }
+        if let xPost {
+            // 同じ投稿のリンクカードから替わったときだけ、囲みを浮かび上がらせる。行が伸びる動きは一覧が付ける。
+            // 使い回された行で別の投稿に替わったときは、動かさずに出す。
+            let replacesCard = previous?.xPost == nil && previous?.card != nil && content.statusID != nil && previous?.statusID == content.statusID
+            let fadesIn = replacesCard && window != nil && xPost.transitionDuration > 0 && !UIAccessibility.isReduceMotionEnabled
+            xPostView.isHidden = false
+            xPostView.apply(xPost)
+            xPostView.alpha = fadesIn ? 0 : 1
+            if fadesIn {
+                // 一覧は動きを止めて描き直すことがあり、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
+                DispatchQueue.main.async { [weak self] in
+                    guard let self, self.content?.xPost == xPost else {
+                        self?.xPostView.alpha = 1
+                        return
+                    }
+                    UIView.animate(withDuration: xPost.transitionDuration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]) {
+                        self.xPostView.alpha = 1
+                    }
+                }
+            }
+            let xPostTop = if !mediaView.isHidden {
+                xPostView.topAnchor.constraint(equalTo: mediaView.bottomAnchor, constant: content.cardSpacing)
+            } else if !textLabel.isHidden {
+                xPostView.topAnchor.constraint(equalTo: textLabel.lastBaselineAnchor, constant: content.cardSpacing + Self.textBottomInset(of: content.text))
+            } else {
+                xPostView.topAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing)
+            }
+            variableConstraints += [
+                xPostTop,
+                xPostView.leadingAnchor.constraint(equalTo: leadingAnchor),
+                xPostView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            ]
+        } else {
+            xPostView.isHidden = true
+        }
         // 添付ファイルもリンクカードもないのに本文を隠すのは、注意書きがあるときだけ。
-        let last: UIView = if !cardView.isHidden {
+        let last: UIView = if !xPostView.isHidden {
+            xPostView
+        } else if !cardView.isHidden {
             cardView
         } else if !mediaView.isHidden {
             mediaView

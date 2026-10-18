@@ -50,6 +50,8 @@ final class SessionController {
     private let timelines = NSHashTable<TimelineViewController>.weakObjects()
     /// 添付ファイルを覆うか。ホームと通知とプロフィールでそろえ、閉じて開き直したプロフィールにも引き継ぐ。
     private var mediaCovers = MediaCovers()
+    /// fxtwitterから読んだXの投稿。ホームと通知とプロフィールで同じ投稿を1回だけ読む。
+    private let xPosts = XPostStore(client: XPostClient(transport: URLSessionTransport()))
     private var composerObscuredHeight: CGFloat = 0
     /// 本文のリンクを開くアプリ内のSafari。シートが覆っている高さも、投稿欄と同じく一覧の下の余白にする。
     private let browser = InAppBrowser()
@@ -304,6 +306,11 @@ final class SessionController {
             },
             presenter: { [weak self] in self?.topViewController }
         )
+        xPosts.onLoad = { [weak self] id in
+            for timeline in self?.timelines.allObjects ?? [] {
+                timeline.applyXPost(id: id)
+            }
+        }
         // 投稿欄を置くとタブバーの画面を読み込むため、各一覧の設定を終えてから置く。
         composer.install(in: tabBarController)
     }
@@ -334,6 +341,7 @@ final class SessionController {
         viewController.myAccountID = credential.accountID
         viewController.spoilerExpansion.expandsByDefault = preferences?.expandsSpoilers ?? false
         viewController.mediaCovers = mediaCovers
+        viewController.xPosts = xPosts
         viewController.onChangeMediaCovers = { [weak self, weak viewController] covers, status in
             self?.shareMediaCovers(covers, changed: status, from: viewController)
         }

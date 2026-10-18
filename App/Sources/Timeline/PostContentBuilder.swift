@@ -68,6 +68,7 @@ struct PostContentBuilder {
             spoiler: spoiler(of: shown, base: base),
             metrics: metrics,
             card: linkCard(of: shown),
+            statusID: shown.id,
             mediaImages: mediaImages,
             avatarImages: avatarImages
         )
@@ -102,6 +103,30 @@ struct PostContentBuilder {
                 thumbnailSide: settings.linkCardThumbnailSide
             )
         }
+    }
+
+    /// fxtwitterから読んだXの投稿の囲み。作者の行と本文はリンクカードの文字と同じ大きさにし、名前だけを太くする。
+    /// 本文はXの投稿の言語が分からないため、使う人の言語で描く。
+    func xPost(_ post: XPost, media: MediaGridView.Content?, base: UIListContentConfiguration) -> XPostView.Content {
+        let font = base.secondaryTextProperties.font
+        let language = settings.glyphLanguageIdentifier()
+        let primary = RichTextRenderer(font: Self.boldFont(font), textColor: base.textProperties.color, emojiImages: emojiImages, language: language)
+        let secondary = RichTextRenderer(font: font, textColor: .secondaryLabel, emojiImages: emojiImages, language: language)
+        let name = NSMutableAttributedString(attributedString: primary.render(.plain(post.authorName, emojis: [])))
+        name.append(secondary.render(.plain(" @\(post.authorScreenName)", emojis: [])))
+        let body = RichTextRenderer(font: font, textColor: .label, emojiImages: emojiImages, language: language)
+        return XPostView.Content(
+            post: post,
+            // Xのアイコンは静止画なので、アニメーションの設定によらず動かさない。
+            avatar: AvatarView.Content(url: post.authorAvatar, shape: settings.avatarShape, animates: false),
+            avatarSize: tuning.value(of: TuningCatalog.xPostAvatarSize),
+            name: name,
+            text: body.render(.plain(post.text, emojis: [])),
+            media: media,
+            padding: tuning.value(of: TuningCatalog.linkCardPadding),
+            spacing: tuning.value(of: TuningCatalog.bodyMediaSpacing),
+            transitionDuration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)
+        )
     }
 
     /// 投稿の注意書き。注意書きがなければnil。開いているかは一覧が覚えているため、ここでは畳んだ形で返す。
