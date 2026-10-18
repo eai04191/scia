@@ -77,10 +77,35 @@ enum PostRowCatalog {
         let longText = String(repeating: "見出しや要約が1行に収まらないときに末尾を省くことを確かめる文。", count: 3)
         let pendingCard = LinkCardView(store: Fixtures.pendingMediaImages)
         if let loading = card() {
-            pendingCard.apply(LinkCardView.Content(card: .card(loading), padding: home.tuning.value(of: TuningCatalog.linkCardPadding), transitionDuration: 0))
+            pendingCard.apply(LinkCardView.Content(card: .card(loading), padding: home.tuning.value(of: TuningCatalog.linkCardPadding), transitionDuration: 0, thumbnailSide: .left))
         }
+        // 画像の位置の設定によらず、左右と文字の方向の組み合わせを並べるため、カードだけを置く。
+        func cardOnly(_ title: String, _ linkCard: LinkCard?, side: LinkCardThumbnailSide) -> CatalogState {
+            CatalogState(title: title) {
+                let view = LinkCardView(store: AppDependencies.mediaImages)
+                if let linkCard {
+                    view.apply(LinkCardView.Content(card: linkCard, padding: home.tuning.value(of: TuningCatalog.linkCardPadding), transitionDuration: 0, thumbnailSide: side))
+                }
+                let frame = UIView()
+                view.translatesAutoresizingMaskIntoConstraints = false
+                frame.addSubview(view)
+                NSLayoutConstraint.activate([
+                    view.topAnchor.constraint(equalTo: frame.topAnchor, constant: 8),
+                    view.bottomAnchor.constraint(equalTo: frame.bottomAnchor, constant: -8),
+                    view.leadingAnchor.constraint(equalTo: frame.leadingAnchor, constant: 16),
+                    view.trailingAnchor.constraint(equalTo: frame.trailingAnchor, constant: -16),
+                ])
+                return CatalogFrame.bordered(frame)
+            }
+        }
+        let arabic = card(title: "عنوان المقال باللغة العربية", description: "ملخص المقال يظهر هنا.", providerName: "أخبار")
         return [
             post("サーバーのカード", status(content: content, card: card())),
+            cardOnly("画像を右に", card().map(LinkCard.card), side: .right),
+            cardOnly("画像を右に（リンク先だけ）", URL(string: link).map(LinkCard.link), side: .right),
+            cardOnly("画像を右に（画像のないカード）", card(image: nil).map(LinkCard.card), side: .right),
+            cardOnly("右から書く言語の見出し（画像は左）", arabic.map(LinkCard.card), side: .left),
+            cardOnly("右から書く言語の見出し（画像は右）", arabic.map(LinkCard.card), side: .right),
             post("サーバーがまだカードを付けていない（リンク先だけ）", status(content: content)),
             post("サムネイルのないカード", status(content: content, card: card(image: nil))),
             post("見出しのないカード（URLを出す）", status(content: content, card: card(title: "", description: "", providerName: ""))),
