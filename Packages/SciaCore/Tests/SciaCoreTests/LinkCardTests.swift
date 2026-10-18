@@ -79,6 +79,41 @@ struct LinkCardTests {
         #expect(LinkCard(status: status(content: content)) == .link(try url("https://news.example/")))
     }
 
+    /// Misskeyの投稿は、ハッシュタグのリンクに`class`がなく、`rel`も書き換えられて`tag`が残らない。
+    /// リンクの文字列が、投稿のタグの名前に`#`を付けたものなら、ハッシュタグとして除く。
+    @Test func skipsRemoteHashtagsWithoutMarkers() throws {
+        let content = #"<p><span>本文 </span><a href="https://misskey.example/tags/Bot" rel="nofollow noopener" target="_blank">#Bot</a> "#
+            + #"<a href="https://news.example/" rel="nofollow noopener" target="_blank">#news</a></p>"#
+        let target = Status(
+            id: "10",
+            createdAt: Date(timeIntervalSince1970: 0),
+            account: account,
+            content: content,
+            spoilerText: "",
+            url: nil,
+            tags: [Tag(name: "bot", url: try url("https://example.social/tags/bot"))]
+        )
+
+        #expect(LinkCard(status: target) == .link(try url("https://news.example/")))
+    }
+
+    /// リンクの文字列は、文字参照を戻してからタグの名前と比べる。
+    @Test func comparesHashtagTextAfterDecodingReferences() throws {
+        let content = #"<p><a href="https://misskey.example/tags/bot" rel="nofollow noopener">&#35;b&#111;t</a> "#
+            + #"<a href="https://news.example/" rel="nofollow noopener">#R&amp;D</a></p>"#
+        let target = Status(
+            id: "10",
+            createdAt: Date(timeIntervalSince1970: 0),
+            account: account,
+            content: content,
+            spoilerText: "",
+            url: nil,
+            tags: [Tag(name: "bot", url: nil), Tag(name: "rampd", url: nil)]
+        )
+
+        #expect(LinkCard(status: target) == .link(try url("https://news.example/")))
+    }
+
     /// カードのサムネイルを、ビューアで開く添付ファイルにする。
     @Test func cardImageBecomesAttachment() throws {
         let card = PreviewCard(

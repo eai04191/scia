@@ -32,7 +32,8 @@ public enum LinkCard: Equatable, Sendable {
     /// 除くリンクは、MastodonのFetchLinkCardServiceと同じく、`rel`に`tag`があるもの、`class`に`u-url`か`h-card`を含むもの、
     /// 投稿のメンションの相手のURLと同じものと、表示でハッシュタグとメンションに分けている、`class`に`hashtag`か`mention`があるもの。
     /// サーバーは整える前の本文を見るが、APIで返る他のサーバーの投稿の本文は、`rel`が`nofollow noopener`に書き換えられて`tag`が残らないため、
-    /// `class`でも除く。本文のHTMLのリンクを直接見るのは、`u-url`や`h-card`のように、表示の分類にない印も見るため。
+    /// `class`でも除く。Misskeyの投稿のように`class`もないハッシュタグは、リンクの文字列が投稿のタグの名前に`#`を付けたものかで除く。
+    /// 本文のHTMLのリンクを直接見るのは、`u-url`や`h-card`のように、表示の分類にない印も見るため。
     ///
     /// Mastodonは、自分のサーバーへのリンクも除く。ここでは除かないため、自分のサーバーの投稿へのリンクには、
     /// サーバーがカードを付けないまま、リンク先だけのカードが出る。見せ方の決まりで、カードが付かなかったときも
@@ -40,20 +41,45 @@ public enum LinkCard: Equatable, Sendable {
     static func cardCandidate(in status: Status) -> URL? {
         guard status.mediaAttachments.isEmpty, status.quote == nil else { return nil }
         let mentionURLs = Set(status.mentions.compactMap(\.url))
+        let tagNames = Set(status.tags.map { Hashtag.normalizedName($0.name) })
+        var candidate: (url: URL, text: String)?
         for token in HTMLTokenizer.tokenize(status.content) {
-            guard case .open("a", let attributes) = token,
-                  let href = attributes["href"], let url = URL(string: href),
-                  let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
-                  url.host() != nil
-            else { continue }
-            let rels = (attributes["rel"] ?? "").split(separator: " ")
-            let classString = attributes["class"] ?? ""
-            let classes = classString.split(separator: " ")
-            guard !rels.contains("tag"), !classes.contains("hashtag"), !classes.contains("mention"),
-                  !classString.contains("u-url"), !classString.contains("h-card"), !mentionURLs.contains(url)
-            else { continue }
-            return url
+            switch token {
+            case .open("a", let attributes):
+                candidate = markedLinkURL(attributes, mentionURLs: mentionURLs).map { ($0, "") }
+            case .text(let text):
+                candidate?.text += HTMLEntities.decode(text)
+            case .close("a"):
+                guard let link = candidate else { continue }
+                candidate = nil
+                if isHashtagText(link.text, tagNames: tagNames) { continue }
+                return link.url
+            default:
+                continue
+            }
         }
-        return nil
+        return candidate?.url
+    }
+
+    /// `a`の属性から、httpかhttpsのリンクで、メンションとハッシュタグの印がないもののURLを返す。
+    private static func markedLinkURL(_ attributes: [String: String], mentionURLs: Set<URL>) -> URL? {
+        guard let href = attributes["href"], let url = URL(string: href),
+              let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",
+              url.host() != nil
+        else { return nil }
+        let rels = (attributes["rel"] ?? "").split(separator: " ")
+        let classString = attributes["class"] ?? ""
+        let classes = classString.split(separator: " ")
+        guard !rels.contains("tag"), !classes.contains("hashtag"), !classes.contains("mention"),
+              !classString.contains("u-url"), !classString.contains("h-card"), !mentionURLs.contains(url)
+        else { return nil }
+        return url
+    }
+
+    /// リンクの文字列が、投稿のタグのどれかの名前に`#`を付けたものか。
+    private static func isHashtagText(_ text: String, tagNames: Set<String>) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.first == "#" else { return false }
+        return tagNames.contains(Hashtag.normalizedName(String(trimmed.dropFirst())))
     }
 }
