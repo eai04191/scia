@@ -104,6 +104,78 @@ struct WindowGlyphLanguageTests {
         #expect(languages(of: textView) == ["ja"])
     }
 
+    /// 1行の入力欄も、打った文字にも置いた文字にも設定の字形の言語を付け、選び直すと付け直す。
+    /// UITextFieldは前後の文字の言語を引き継がず、打つ文字の属性を書き始めたときと文字が入るたびに消すため、続けて打つ、途中に打つ、全部消してから打つ、を確かめる。
+    /// キーボードからの入力では、文字が変わるたびにUIKitが`editingChanged`を送る。この入力欄の`insertText`などを呼んでも送られないため、テストで送る。
+    @Test func textFieldLabelsTextWithSettingLanguage() async throws {
+        let settings = try settings(.traditionalChinese)
+        let window = try window()
+        window.isHidden = false
+        let field = GlyphLanguageTextField(frame: CGRect(x: 0, y: 0, width: 300, height: 40))
+        window.addSubview(field)
+        field.followGlyphLanguage(of: settings)
+        field.text = "直"
+        #expect(languages(of: field) == ["zh-Hant"])
+
+        // 打った文字を入れられるのは、書いている最中の入力欄だけ。
+        #expect(field.becomeFirstResponder())
+        func type(_ text: String) {
+            field.insertText(text)
+            field.sendActions(for: .editingChanged)
+        }
+        type("骨")
+        type("関")
+        field.selectedTextRange = field.textRange(from: field.beginningOfDocument, to: field.beginningOfDocument)
+        type("直")
+        #expect(field.text == "直直骨関")
+        #expect(languages(of: field) == ["zh-Hant"])
+
+        field.deleteBackward()
+        field.selectedTextRange = field.textRange(from: field.endOfDocument, to: field.endOfDocument)
+        for _ in 0..<3 {
+            field.deleteBackward()
+            field.sendActions(for: .editingChanged)
+        }
+        #expect(field.text == "")
+        field.setMarkedText("ちょく", selectedRange: NSRange(location: 3, length: 0))
+        field.sendActions(for: .editingChanged)
+        field.setMarkedText("直", selectedRange: NSRange(location: 1, length: 0))
+        field.sendActions(for: .editingChanged)
+        field.unmarkText()
+        field.sendActions(for: .editingChanged)
+        #expect(field.text == "直")
+        #expect(languages(of: field) == ["zh-Hant"])
+
+        // 自動修正のように打つ文字の属性を使わずに置き換わった文字にも、あとから付ける。
+        let all = try #require(field.textRange(from: field.beginningOfDocument, to: field.endOfDocument))
+        field.typingAttributes = field.defaultTextAttributes
+        field.replace(all, withText: "直骨")
+        field.sendActions(for: .editingChanged)
+        #expect(field.text == "直骨")
+        #expect(languages(of: field) == ["zh-Hant"])
+
+        field.font = .preferredFont(forTextStyle: .title1)
+        #expect(languages(of: field) == ["zh-Hant"])
+
+        let middle = try #require(field.position(from: field.beginningOfDocument, offset: 1))
+        field.selectedTextRange = field.textRange(from: middle, to: middle)
+        settings.glyphLanguage = .japanese
+        await Task.yield()
+
+        #expect(languages(of: field) == ["ja"])
+        #expect(field.offset(from: field.beginningOfDocument, to: try #require(field.selectedTextRange).start) == 1)
+        type("関")
+        #expect(field.text == "直関骨")
+        #expect(languages(of: field) == ["ja"])
+    }
+
+    private func languages(of field: UITextField) -> Set<String?> {
+        var result = Set<String?>()
+        let text = field.attributedText ?? NSAttributedString()
+        text.enumerateAttribute(.languageIdentifier, in: NSRange(location: 0, length: text.length)) { value, _, _ in result.insert(value as? String) }
+        return result
+    }
+
     private func languages(of textView: UITextView) -> Set<String?> {
         var result = Set<String?>()
         let storage = textView.textStorage
@@ -141,7 +213,7 @@ struct WindowGlyphLanguageTests {
         #expect(window.traitCollection.typesettingLanguage == Locale.Language(identifier: appLanguage))
     }
 
-    /// 投稿欄の入力は、設定の字形で描く。
+    /// 投稿欄の本文と注意書きの入力は、設定の字形で描く。
     @Test func inlineComposeLabelsTypedText() throws {
         let window = try window()
         let host = UITabBarController(tabs: [UITab(title: "ホーム", image: nil, identifier: "home") { _ in UIViewController() }])
@@ -152,6 +224,10 @@ struct WindowGlyphLanguageTests {
         textView.insertText("直骨")
 
         #expect(languages(of: textView) == ["zh-Hant"])
+
+        let spoilerField = try #require(host.view.descendants(of: UITextField.self).first { $0.accessibilityLabel == "注意書き" })
+        spoilerField.text = "直骨"
+        #expect(languages(of: spoilerField) == ["zh-Hant"])
     }
 
     /// 代替テキストの入力と全文は、設定の字形で描く。

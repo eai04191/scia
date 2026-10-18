@@ -1069,6 +1069,8 @@ final class InlineComposeController: NSObject {
 
         spoilerField.font = .preferredFont(forTextStyle: .body)
         spoilerField.adjustsFontForContentSizeCategory = true
+        // 本文と同じく、自分の文で言語が分からないため、設定の字形で描く。
+        spoilerField.followGlyphLanguage(of: settings)
         spoilerField.placeholder = "注意書き"
         spoilerField.accessibilityLabel = "注意書き"
         spoilerField.returnKeyType = .next
@@ -1320,7 +1322,7 @@ private final class ComposeToolsView: UIStackView {
 }
 
 /// 注意書きの入力欄。本文と同じく、ハードウェアキーボードの⌘Returnで送信する。
-private final class ComposeSpoilerField: UITextField {
+private final class ComposeSpoilerField: GlyphLanguageTextField {
     var onSubmit: () -> Void = {}
 
     override var keyCommands: [UIKeyCommand]? {
