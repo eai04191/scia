@@ -168,7 +168,7 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
         }
     }
 
-    private static var rowSpace: String { "row" }
+    private nonisolated static var rowSpace: String { "row" }
 
     private let lineThickness: CGFloat = 1
 
