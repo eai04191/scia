@@ -121,6 +121,8 @@ final class InlineComposeController: NSObject {
     private var holdAboveKeyboard: NSLayoutConstraint?
     /// 今のキーボードの、画面の下端からの高さ。隠れていれば0。
     private var currentKeyboardHeight: CGFloat = 0
+    /// キーボードの高さがこれ以下なら、ソフトウェアキーボードは出ていない。ハードウェアキーボードでは候補の段だけになる。
+    private static let softwareKeyboardMinimumHeight: CGFloat = 100
     /// 添付の長押しのメニューを出したときのキーボードの高さ。メニューの間はiOSがソフトウェアキーボードを隠すため、
     /// キーボードがこの高さまで戻るまでバーを今の位置に留める。留めていなければnil。
     private var keyboardHeightBeforeContextMenu: CGFloat?
@@ -567,6 +569,10 @@ final class InlineComposeController: NSObject {
         model.mediaPickerDidClose()
         // シートを出している間に投稿に失敗していたら、ここで知らせる。知らせはキーボードに戻った入力欄を一度閉じるので、戻ったかは知らせる前に見る。
         let returnedToKeyboard = isInputFocused
+        // ハードウェアキーボードではキーボードが上がらず、上がりきった知らせも来ないので、待たずにバーをシートの上端から外す。
+        if returnedToKeyboard, currentKeyboardHeight <= Self.softwareKeyboardMinimumHeight {
+            releaseHoldAboveKeyboard()
+        }
         presentErrorIfNeeded()
         guard !returnedToKeyboard else { return }
         releaseHoldAboveKeyboard()
@@ -598,13 +604,14 @@ final class InlineComposeController: NSObject {
     @objc private func keyboardWillChangeFrame(_ notification: Notification) {
         guard let host, let window = host.view.window,
               let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-        let keyboardTop = host.view.convert(window.convert(frame, from: nil), from: window).minY
-        let height = host.view.bounds.maxY - keyboardTop
-        currentKeyboardHeight = max(height, 0)
+        // 上端だけで測ると、大きさのない枠（原点が画面の左上）が届いたときに、画面の高さだけ上がったことになる。画面と重なる部分の高さで測る。
+        let keyboardFrame = host.view.convert(window.convert(frame, from: nil), from: window)
+        let height = host.view.bounds.intersection(keyboardFrame).height
+        currentKeyboardHeight = height
         if let before = keyboardHeightBeforeContextMenu, currentKeyboardHeight >= before {
             releaseBarHeldForContextMenu()
         }
-        guard height > 100 else { return }
+        guard height > Self.softwareKeyboardMinimumHeight else { return }
         lastKeyboardHeight = height
     }
 
@@ -852,8 +859,9 @@ final class InlineComposeController: NSObject {
         isPresentingError = true
         logger.info("compose: presenting post error (focused=\(self.isInputFocused) editing=\(self.isEditing) picker=\(self.mediaPicker != nil))")
         if mediaPicker == nil, isInputFocused {
-            if let lastKeyboardHeight {
-                setHoldAboveKeyboard(height: lastKeyboardHeight)
+            // ハードウェアキーボードでは、閉じたあとに上がりきった知らせが来ず、留めると外れなくなる。ソフトウェアキーボードが出ているときだけ留める。
+            if currentKeyboardHeight > Self.softwareKeyboardMinimumHeight {
+                setHoldAboveKeyboard(height: currentKeyboardHeight)
             }
             resignInput()
         }
@@ -886,8 +894,9 @@ final class InlineComposeController: NSObject {
         let generation = mediaViewerGeneration
         isShowingMediaViewer = true
         if mediaPicker == nil, isInputFocused {
-            if let lastKeyboardHeight {
-                setHoldAboveKeyboard(height: lastKeyboardHeight)
+            // ハードウェアキーボードでは、閉じたあとに上がりきった知らせが来ず、留めると外れなくなる。ソフトウェアキーボードが出ているときだけ留める。
+            if currentKeyboardHeight > Self.softwareKeyboardMinimumHeight {
+                setHoldAboveKeyboard(height: currentKeyboardHeight)
             }
             resignInput()
         }

@@ -1,3 +1,4 @@
+import PhotosUI
 import SciaCore
 import Testing
 import UIKit
@@ -163,6 +164,47 @@ struct InlineComposeControllerTests {
         showContextMenu()
         endContextMenu()
         #expect(!composer.isBarHeld, "メニューを閉じても、バーを留めたままです\n\(composer.stateDump())")
+    }
+
+    /// 大きさのないキーボードの枠が届いても、画面の上端までキーボードが上がったとは受け取らない。
+    /// 受け取ると、メディアを選ぶシートを画面の高さで出し、バーを画面の外に留めてしまう。
+    @Test func emptyKeyboardFrameIsNotRememberedAsKeyboardHeight() async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        NotificationCenter.default.post(name: UIResponder.keyboardWillChangeFrameNotification, object: nil, userInfo: [UIResponder.keyboardFrameEndUserInfoKey: CGRect.zero])
+        #expect(composer.stateDump().contains("lastKeyboardHeight: nil"), "大きさのない枠を、キーボードの高さとして覚えました\n\(composer.stateDump())")
+    }
+
+    /// ハードウェアキーボードではキーボードが上がらず、上がりきった知らせも来ない。メディアを選ぶシートを閉じて入力欄に戻ったら、
+    /// その時点でバーをシートの上端から外し、入力欄に付ける。
+    @Test func closingMediaPickerWithoutSoftwareKeyboardReleasesBar() async throws {
+        defer {
+            window.rootViewController?.dismiss(animated: false)
+            window.isHidden = true
+        }
+        composer.model.apply(configuration: InstanceConfiguration(streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil), defaultVisibility: .public, defaultSensitive: nil)
+        composer.beginEditing()
+        postKeyboardFrame(height: 0)
+        try await Task.sleep(for: .milliseconds(500))
+        window.layoutIfNeeded()
+        let mediaButton = try #require(buttons(in: window).first { $0.accessibilityLabel == ComposeToolItem.media.title })
+
+        mediaButton.sendActions(for: .primaryActionTriggered)
+        for _ in 0..<30 where !(window.rootViewController?.presentedViewController is PHPickerViewController) {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(window.rootViewController?.presentedViewController is PHPickerViewController, "シートが表示されませんでした: \(String(describing: window.rootViewController?.presentedViewController))")
+        #expect(composer.stateDump().contains("mediaPicker: shown"), "シートが開きませんでした\n\(composer.stateDump())")
+        #expect(composer.isBarHeld, "シートを開いても、バーを留めていません\n\(composer.stateDump())")
+
+        mediaButton.sendActions(for: .primaryActionTriggered)
+        // 閉じる動きにかかる時間は実行ごとにばらつくので、閉じ終わるまで少しずつ待つ。
+        for _ in 0..<30 where !composer.stateDump().contains("mediaPicker: nil") {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(composer.stateDump().contains("mediaPicker: nil"), "シートが閉じませんでした\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("editing: true"), "シートを閉じると書き終えたことになりました\n\(composer.stateDump())")
+        #expect(!composer.isBarHeld, "キーボードが上がらないのに、バーをシートの上端に留めたままです\n\(composer.stateDump())")
     }
 
     /// 入力欄の中でスクロールするほど書いてから行を消して収まる長さに戻すと、入力欄は書いた行の高さまで縮み、潰れない。
@@ -407,9 +449,10 @@ struct InlineComposeControllerTests {
         let composer = try installComposer { _ in throw Failure() }
         composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         composer.beginEditing()
-        postKeyboardFrame(height: 300)
         composer.model.text = "本文"
         try await Task.sleep(for: .milliseconds(500))
+        // テストを動かす端末のキーボードの知らせが先に届き終わってから、ソフトウェアキーボードが上がった知らせを送る。
+        postKeyboardFrame(height: 300)
 
         await composer.model.submit()
         try await Task.sleep(for: .milliseconds(500))
