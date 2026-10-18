@@ -38,17 +38,20 @@ struct ConnectionStatusView: View {
                     }
                 }
                 Section {
-                    if status.disabledFeatures.isEmpty {
+                    if status.disabledFeatures.isEmpty && unprocessableFormats.isEmpty {
                         Text("ありません")
                     } else {
                         ForEach(status.disabledFeatures, id: \.feature) { disabled in
                             LabeledContent(Self.name(of: disabled.feature), value: "HTTP \(disabled.statusCode)・\(disabled.date.formatted(date: .omitted, time: .shortened))")
                         }
+                        ForEach(unprocessableFormats, id: \.mimeType) { entry in
+                            LabeledContent(Self.name(ofImageType: entry.mimeType), value: "JPEGで送っています・\(entry.serverVersion.isEmpty ? "版が不明" : entry.serverVersion)")
+                        }
                     }
                 } header: {
                     Text("使っていない機能")
                 } footer: {
-                    Text("このサーバーにないと分かった機能は、アプリを起動し直すまで使いません。起動し直すと、もう一度試します。")
+                    Text("このサーバーにないと分かった機能は、アプリを起動し直すまで使いません。起動し直すと、もう一度試します。サーバーが処理できなかった画像の形式は、起動し直しても使いません。サーバーの版が変わると、もう一度試します。")
                 }
                 Section("最近のエラー") {
                     if status.recentFailures.isEmpty {
@@ -92,6 +95,22 @@ struct ConnectionStatusView: View {
         case .user: "ホームと通知"
         default: subscription.stream
         }
+    }
+
+    /// 今の版のサーバーでは送らないと覚えている形式。
+    private var unprocessableFormats: [UnprocessableMediaFormats.Entry] {
+        let version = diagnostics.serverVersion ?? ""
+        return diagnostics.mediaFormats.entries.filter { $0.serverVersion == version }
+    }
+
+    private static func name(ofImageType mimeType: String) -> String {
+        let format = switch mimeType {
+        case "image/heic": "HEIC"
+        case "image/heif": "HEIF"
+        case "image/avif": "AVIF"
+        default: mimeType
+        }
+        return "\(format)の画像を送る"
     }
 
     private static func name(of feature: OptionalFeature) -> String {

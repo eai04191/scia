@@ -94,7 +94,8 @@ final class SessionController {
         let notifications = NotificationsController(client: client, streamingHub: streamingHub) { forward() }
         self.home = home
         self.notifications = notifications
-        let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog)
+        let mediaFormats = UnprocessableMediaFormats(defaults: .standard, instance: credential.instance)
+        let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog, mediaFormats: mediaFormats)
         self.diagnostics = diagnostics
         // コントローラーはHubを持っているので、弱く持って循環させない。
         streamingHub.onChange = { [weak streamingHub, weak home, weak notifications] in
@@ -164,7 +165,10 @@ final class SessionController {
                     throw error
                 }
             },
-            makeThumbnail: { file in await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize) }
+            makeThumbnail: { file in await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize) },
+            // 版を読めていないときは、版の分からないサーバーとして覚える。版を読めたあとは、もう一度試す。
+            unprocessableImageTypes: { mediaFormats.mimeTypes(serverVersion: diagnostics.serverVersion) },
+            recordUnprocessableImageType: { mimeType in mediaFormats.record(mimeType, serverVersion: diagnostics.serverVersion) }
         )
         // 補完の問い合わせ口は別のスレッドから呼ばれるため、ほかの口と同じ知らせ方を、隔離されたAuthorizationCheckに直接送る。
         let reportCompletionFailure: @Sendable (any Error) async -> Void = { [authorization] error in

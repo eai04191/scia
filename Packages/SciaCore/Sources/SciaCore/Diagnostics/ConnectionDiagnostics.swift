@@ -26,11 +26,14 @@ public final class ConnectionDiagnostics {
     @ObservationIgnored private let rateLimit: RateLimitGate
     @ObservationIgnored private let features: FeatureAvailability
     @ObservationIgnored private let requestLog: RequestLog
+    /// サーバーが処理できなかったので、送るのをやめた画像の形式。
+    public let mediaFormats: UnprocessableMediaFormats
 
-    public init(rateLimit: RateLimitGate, features: FeatureAvailability, requestLog: RequestLog) {
+    public init(rateLimit: RateLimitGate, features: FeatureAvailability, requestLog: RequestLog, mediaFormats: UnprocessableMediaFormats) {
         self.rateLimit = rateLimit
         self.features = features
         self.requestLog = requestLog
+        self.mediaFormats = mediaFormats
     }
 
     public func setServerVersion(_ version: String) {

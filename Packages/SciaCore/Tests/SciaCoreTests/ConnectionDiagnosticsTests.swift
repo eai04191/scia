@@ -4,11 +4,18 @@ import Testing
 
 @MainActor
 struct ConnectionDiagnosticsTests {
+    private func makeMediaFormats() throws -> UnprocessableMediaFormats {
+        let suite = "ConnectionDiagnosticsTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        return UnprocessableMediaFormats(defaults: defaults, instance: try #require(URL(string: "https://example.social")))
+    }
+
     @Test func statusGathersSessionState() async throws {
         let rateLimit = RateLimitGate()
         let features = FeatureAvailability()
         let requestLog = RequestLog(includesBody: false)
-        let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog)
+        let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog, mediaFormats: try makeMediaFormats())
         let until = Date().addingTimeInterval(600)
         await rateLimit.pause(until: until)
         await features.disable(.markers, statusCode: 404)
@@ -25,8 +32,8 @@ struct ConnectionDiagnosticsTests {
         #expect(status.droppedCount >= droppedBefore + 1)
     }
 
-    @Test func keepsStreamingStateAndSubscriptions() {
-        let diagnostics = ConnectionDiagnostics(rateLimit: RateLimitGate(), features: FeatureAvailability(), requestLog: RequestLog(includesBody: false))
+    @Test func keepsStreamingStateAndSubscriptions() throws {
+        let diagnostics = ConnectionDiagnostics(rateLimit: RateLimitGate(), features: FeatureAvailability(), requestLog: RequestLog(includesBody: false), mediaFormats: try makeMediaFormats())
 
         diagnostics.setStreaming(.polling, subscriptions: [.user])
 

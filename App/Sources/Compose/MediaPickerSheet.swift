@@ -38,6 +38,9 @@ final class MediaPickerSheet: NSObject {
         configuration.filter = .any(of: [.images, .videos])
         configuration.selectionLimit = selectionLimit
         configuration.selection = .continuousAndOrdered
+        // 写真を元の形式のまま受け取る。既定（.automatic）では、HEICの写真が、解像度はそのままで元より大きなJPEGに変えられて届く。
+        // サーバーが処理できない形式だったときは、同じ写真のJPEGを受け取り直す（`LocalMediaLoader.load(from:avoiding:)`）。
+        configuration.preferredAssetRepresentationMode = .current
         configuration.preselectedAssetIdentifiers = selectedIDs
         // 低いときは余白をなくしてバーを消す。最大に広げたら余白を戻してバーを出す。
         configuration.edgesWithoutContentMargins = .all

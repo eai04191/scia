@@ -20,7 +20,8 @@ struct LocalMediaFile: Sendable, Equatable {
 struct PickedMedia {
     /// ピッカーの`assetIdentifier`。開き直したときに前の選択として渡す。
     let assetIdentifier: String
-    let load: @MainActor () async throws -> LocalMediaFile
+    /// 引数のMIMEタイプの形式を避けて読み込む。サーバーが処理できない形式を避けて、同じ写真のJPEGを受け取るのに使う。
+    let load: @MainActor (_ avoiding: Set<String>) async throws -> LocalMediaFile
 }
 
 /// 端末からメディアを読み込めなかった。
@@ -46,18 +47,20 @@ enum LocalMediaLoader {
     /// 前に選んだメディアは`itemProvider`が空で返るため読み込めないが、それらは添付に残っていて読み込まない。
     @MainActor
     static func picked(assetIdentifier: String, provider: NSItemProvider) -> PickedMedia {
-        PickedMedia(assetIdentifier: assetIdentifier) { try await load(from: provider) }
+        PickedMedia(assetIdentifier: assetIdentifier) { avoiding in try await load(from: provider, avoiding: avoiding) }
     }
 
-    /// 画像か動画の表現を、元の形式のままファイルで受け取り、一時ディレクトリにコピーする。
+    /// 画像か動画の表現をファイルで受け取り、一時ディレクトリにコピーする。
     /// 受け取ったファイルは完了の処理を抜けると消されるため、その中でコピーする。
     ///
-    /// HEICなどをJPEGに変換せずに送る。Mastodonは受け付けて変換するが、受け付けないサーバーでは422で断られ、添付の失敗として見せる。
+    /// ピッカーには形式を変えさせない（`MediaPickerSheet`）ので、写真はHEICのまま並ぶ。その後ろに、ピッカーが作るJPEGも並ぶ
+    /// （シミュレーターで確かめた並びで、ドキュメントには書かれていない）。`avoiding`の形式を飛ばすと、同じ写真のJPEGを受け取れる。
     @MainActor
-    static func load(from provider: NSItemProvider) async throws -> LocalMediaFile {
+    static func load(from provider: NSItemProvider, avoiding: Set<String>) async throws -> LocalMediaFile {
         let type = provider.registeredTypeIdentifiers
             .compactMap { UTType($0) }
-            .first { $0.conforms(to: .movie) || $0.conforms(to: .image) }
+            .filter { $0.conforms(to: .movie) || $0.conforms(to: .image) }
+            .first { $0.preferredMIMEType.map { !avoiding.contains($0) } ?? true }
         guard let type else { throw LocalMediaError.unsupportedType }
         let kind: MediaAttachment.Kind = type.conforms(to: .gif) ? .gifv : type.conforms(to: .movie) ? .video : .image
         let mimeType = type.preferredMIMEType ?? (kind == .video ? "video/mp4" : "image/jpeg")

@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import os
 import SciaCore
 import UIKit
 
@@ -52,6 +53,7 @@ final class ComposeModel {
     /// 送り終えた後のサーバーの値が、書き戻した値と違うことがあるため。投稿の可否が変わるので、変更を見張れるようにする。
     private var descriptionTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
     @ObservationIgnored private var pickerSelection = MediaPickerSelection()
+    @ObservationIgnored private let logger = SciaLog.logger(category: "compose")
     /// 投稿できて、下書きを空に戻したあとに呼ぶ。
     @ObservationIgnored var onPosted: () -> Void = {}
 
@@ -261,7 +263,8 @@ struct LocalMedia {
     /// ピッカーの`assetIdentifier`。開き直したときに前の選択として渡す。
     let assetIdentifier: String
     /// 読み込みを送り直すときに使う。前に選んだメディアはピッカーから読み直せないため、選んだときのものを持っておく。
-    let load: @MainActor () async throws -> LocalMediaFile
+    /// 引数のMIMEタイプの形式を避けて読み込む。
+    let load: @MainActor (_ avoiding: Set<String>) async throws -> LocalMediaFile
     /// 読み込んだファイル。読み込む前と、読み込みに失敗したときはnil。
     var file: LocalMediaFile?
     var thumbnail: UIImage?
@@ -294,6 +297,10 @@ struct ComposeMediaService {
     /// サーバーのIDと代替テキストを受け取り、`PUT /api/v1/media/:id`で送る。
     var updateDescription: (String, String) async throws -> MediaAttachment
     var makeThumbnail: (LocalMediaFile) async -> UIImage?
+    /// 接続しているサーバーの今の版が処理できないと分かっている、画像の形式のMIMEタイプ。
+    var unprocessableImageTypes: @MainActor () -> Set<String>
+    /// 画像の形式を、接続しているサーバーの今の版では処理できないと覚える。
+    var recordUnprocessableImageType: @MainActor (String) -> Void
 
     /// メディアを添付しない画面とテストで使う。
     static var unavailable: ComposeMediaService {
@@ -301,7 +308,9 @@ struct ComposeMediaService {
             upload: { _ in throw CancellationError() },
             waitUntilProcessed: { _ in throw CancellationError() },
             updateDescription: { _, _ in throw CancellationError() },
-            makeThumbnail: { _ in nil }
+            makeThumbnail: { _ in nil },
+            unprocessableImageTypes: { [] },
+            recordUnprocessableImageType: { _ in }
         )
     }
 }
@@ -438,10 +447,17 @@ extension ComposeModel {
             } else {
                 setState(.uploading, of: id)
                 let file = try await loadFile(id, local: local)
-                // 読み込む間に書いた代替テキストも一緒に送れるよう、送る直前の値を読む。
-                let description = attachments.first { $0.id == id }?.description ?? ""
-                sentDescription = description
-                let accepted = try await media.upload(LocalMediaLoader.upload(of: file, description: description))
+                let accepted: MediaAttachment
+                do {
+                    accepted = try await send(file, of: id, sentDescription: &sentDescription)
+                } catch let error where UnprocessableMediaFormats.shouldReplaceWithJPEG(mimeType: file.mimeType, error: error) {
+                    // 対応形式として返しているのに処理できないサーバーがある（Mastodon 4.7.2と4.7.3のHEICなど）。
+                    // 同じ写真のJPEGで1回だけ送り直し、このサーバーのこの版ではその形式を送らないと覚える。
+                    logger.info("attachment format unprocessable, resending as jpeg mime=\(file.mimeType, privacy: .public)")
+                    media.recordUnprocessableImageType(file.mimeType)
+                    let replacement = try await reloadFile(id, local: local, avoiding: file)
+                    accepted = try await send(replacement, of: id, sentDescription: &sentDescription)
+                }
                 try Task.checkCancellation()
                 if accepted.url == nil {
                     setState(.processing(serverID: accepted.id), of: id)
@@ -463,10 +479,30 @@ extension ComposeModel {
         }
     }
 
+    /// ファイルを送る。読み込む間に書いた代替テキストも一緒に送れるよう、送る直前の値を読み、送った値を`sentDescription`に入れる。
+    private func send(_ file: LocalMediaFile, of id: DraftAttachment.ID, sentDescription: inout String?) async throws -> MediaAttachment {
+        let description = attachments.first { $0.id == id }?.description ?? ""
+        sentDescription = description
+        return try await media.upload(LocalMediaLoader.upload(of: file, description: description))
+    }
+
+    /// サーバーが処理できなかったファイルを捨て、その形式を避けて読み込み直す。サムネイルは同じ写真なので作り直さない。
+    private func reloadFile(_ id: DraftAttachment.ID, local: LocalMedia, avoiding rejected: LocalMediaFile) async throws -> LocalMediaFile {
+        rejected.remove()
+        localMedia[id]?.file = nil
+        let file = try await local.load(media.unprocessableImageTypes().union([rejected.mimeType]))
+        guard localMedia[id] != nil, !Task.isCancelled else {
+            file.remove()
+            throw CancellationError()
+        }
+        localMedia[id]?.file = file
+        return file
+    }
+
     /// 読み込み済みならそのファイルを使う。初めて読み込んだら、サムネイルも作り始める。
     private func loadFile(_ id: DraftAttachment.ID, local: LocalMedia) async throws -> LocalMediaFile {
         if let file = local.file { return file }
-        let file = try await local.load()
+        let file = try await local.load(media.unprocessableImageTypes())
         guard localMedia[id] != nil, !Task.isCancelled else {
             file.remove()
             throw CancellationError()

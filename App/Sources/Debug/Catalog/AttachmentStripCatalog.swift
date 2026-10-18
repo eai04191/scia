@@ -100,7 +100,7 @@ enum AttachmentStripCatalog {
         }
         let local = LocalMedia(
             assetIdentifier: id.uuidString,
-            load: { throw LocalMediaError.loadFailed },
+            load: { _ in throw LocalMediaError.loadFailed },
             file: kind.map { LocalMediaFile(url: URL(filePath: "/dev/null"), mimeType: "", kind: $0) },
             thumbnail: kind.map { _ in DummyMedia.image(size: CGSize(width: 192, height: 192), color: color, label: label) }
         )
