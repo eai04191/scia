@@ -54,6 +54,12 @@ enum PostRowCatalog {
                 content: "<p>名前が1行に収まらない投稿。</p>",
                 account: Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com")
             )),
+            post("編集された投稿", status(content: "<p>投稿したあとに編集した投稿。</p>", editedAt: .now.addingTimeInterval(-60))),
+            post("編集された投稿で名前が長い", status(
+                content: "<p>名前が1行に収まらず、編集済みの印も付く投稿。</p>",
+                account: Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com"),
+                editedAt: .now.addingTimeInterval(-60)
+            )),
             post("アイコンがない", status(content: "<p>アイコンのURLがないアカウントの投稿。</p>", account: Fixtures.account(acct: "noavatar@example.com", avatar: nil))),
         ]
     }
@@ -204,6 +210,7 @@ enum PostRowCatalog {
         media: [MediaAttachment] = [],
         sensitive: Bool = false,
         card: PreviewCard? = nil,
+        editedAt: Date? = nil,
         rebloggedBy: Account? = nil
     ) -> Status {
         let original = Status(
@@ -215,7 +222,8 @@ enum PostRowCatalog {
             url: nil,
             mediaAttachments: media,
             sensitive: sensitive,
-            card: card
+            card: card,
+            editedAt: editedAt
         )
         guard let rebloggedBy else { return original }
         return Status(id: UUID().uuidString, createdAt: .now.addingTimeInterval(-600), account: rebloggedBy, content: "", spoilerText: "", url: nil, reblog: original)
