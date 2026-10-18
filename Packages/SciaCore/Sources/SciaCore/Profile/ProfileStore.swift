@@ -101,6 +101,8 @@ public final class ProfileStore {
     /// 今の一覧。切り替えるたびに作り直す。
     @ObservationIgnored public private(set) var timeline: TimelineStore
 
+    /// 削除した投稿のID。削除の前に読み始めた固定された投稿の応答で、戻さないようにする。
+    private var deletedIDs: Set<Status.ID> = []
     private let isMyself: Bool
     private let api: API
     private let pageSize: Int
@@ -154,7 +156,7 @@ public final class ProfileStore {
                 case .success(.relationship(let relationship)):
                     self.relationship = relationship
                     relationshipFailed = false
-                case .success(.pinned(let pinned)): self.pinned = pinned
+                case .success(.pinned(let pinned)): self.pinned = pinned.filter { !deletedIDs.contains($0.id) }
                 case .failure(let error):
                     switch part {
                     case .account: failures.account = error
@@ -228,6 +230,18 @@ public final class ProfileStore {
             guard status.id == id else { return status }
             changed = true
             return transform(status)
+        }
+        return changed
+    }
+
+    /// 削除された投稿を、固定された投稿と今の一覧から除く。除いたものがあればtrue。
+    @discardableResult
+    public func removeStatus(_ id: Status.ID) -> Bool {
+        deletedIDs.insert(id)
+        var changed = timeline.removeStatus(id)
+        if pinned.contains(where: { $0.id == id }) {
+            pinned.removeAll { $0.id == id }
+            changed = true
         }
         return changed
     }

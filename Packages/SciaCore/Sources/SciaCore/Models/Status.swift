@@ -20,6 +20,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public let visibility: Visibility
     /// 返信先の投稿のID。
     public let inReplyToId: String?
+    /// 返信先の投稿を書いた人のID。
+    public let inReplyToAccountId: String?
     public let poll: Poll?
     /// 本文のリンク先から作ったカード。サーバーは投稿を配信してからカードを付けるため、後から取り直して差し替えることがある。
     public private(set) var card: PreviewCard?
@@ -56,6 +58,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         sensitive: Bool = false,
         visibility: Visibility = .public,
         inReplyToId: String? = nil,
+        inReplyToAccountId: String? = nil,
         poll: Poll? = nil,
         card: PreviewCard? = nil,
         quote: Quote? = nil,
@@ -83,6 +86,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         self.sensitive = sensitive
         self.visibility = visibility
         self.inReplyToId = inReplyToId
+        self.inReplyToAccountId = inReplyToAccountId
         self.poll = poll
         self.card = card
         self.quote = quote
@@ -116,6 +120,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         sensitive = try container.decode(Bool.self, forKey: .sensitive)
         visibility = try container.decodeIfPresent(Visibility.self, forKey: .visibility) ?? .public
         inReplyToId = try container.decodeIfPresent(String.self, forKey: .inReplyToId)
+        inReplyToAccountId = try container.decodeIfPresent(String.self, forKey: .inReplyToAccountId)
         poll = container.decodeLossyIfPresent(Poll.self, forKey: .poll)
         card = container.decodeLossyIfPresent(PreviewCard.self, forKey: .card)
         quote = container.decodeLossyIfPresent(Quote.self, forKey: .quote)
@@ -204,7 +209,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, account, content, spoilerText, language, url, mentions, tags, emojis, mediaAttachments, sensitive
-        case visibility, inReplyToId, poll, card, quote, filtered, editedAt
+        case visibility, inReplyToId, inReplyToAccountId, poll, card, quote, filtered, editedAt
         case favourited, reblogged, bookmarked, favouritesCount, reblogsCount, repliesCount
         case reblogBox = "reblog"
     }

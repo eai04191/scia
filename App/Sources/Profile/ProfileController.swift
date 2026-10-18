@@ -107,6 +107,12 @@ final class ProfileController {
         showEntries()
     }
 
+    /// 削除した投稿を、固定された投稿と一覧から除く。
+    func removeStatus(_ id: Status.ID) {
+        guard store.removeStatus(id) else { return }
+        showEntries()
+    }
+
     private func run(_ operation: @escaping @MainActor (ProfileController) async -> Void) {
         tasks.removeAll { $0.isCancelled }
         tasks.append(Task { [weak self] in

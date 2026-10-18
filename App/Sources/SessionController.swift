@@ -214,7 +214,15 @@ final class SessionController {
         composer = InlineComposeController(
             model: ComposeModel(myAccountID: credential.accountID, media: media) { draft in
                 do {
-                    _ = try await client.postStatus(draft)
+                    if let editing = draft.editing {
+                        // ストリーミングの編集の知らせを待たずに、どの一覧にも編集したあとの投稿を出す。切れている間も直るようにするため。
+                        let edited = try await client.editStatus(editing, to: draft)
+                        for update in [home.updateStatus, notifications.updateStatus, profiles.updateStatus] {
+                            update(edited.id) { _ in edited }
+                        }
+                    } else {
+                        _ = try await client.postStatus(draft)
+                    }
                 } catch {
                     reportIfUnauthorized(error)
                     throw error
@@ -483,13 +491,139 @@ final class SessionController {
         switch action {
         case .reply:
             UserAction.reply.record()
-            composer.reply(to: status)
+            confirmLeavingEdit { [weak self] in self?.composer.reply(to: status) }
         case .favourite:
             UserAction.toggleFavourite.record()
             toggle(.favourite, on: status, failureTitle: "お気に入りを変更できませんでした", from: timeline)
         case .reblog:
             UserAction.toggleReblog.record()
             toggle(.reblog, on: status, failureTitle: "ブーストを変更できませんでした", from: timeline)
+        case .edit:
+            UserAction.editStatus.record()
+            startEditing(status, from: timeline)
+        case .delete:
+            confirmDeleting(status, from: timeline)
+        }
+    }
+
+    /// 編集している途中で返信を選んだら、編集をやめてよいか聞いてから返信を始める。編集でなければすぐ始める。
+    /// 返信は書いた本文を残して返信先を付け替えるが、編集の本文は元の投稿のものなので、返信には引き継がない。
+    private func confirmLeavingEdit(_ proceed: @escaping () -> Void) {
+        guard composer.model.editedStatus != nil else {
+            proceed()
+            return
+        }
+        let alert = UIAlertController(title: "編集をやめて返信しますか？", message: "編集中の内容は消えます。", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        alert.addAction(UIAlertAction(title: "編集をやめる", style: .destructive) { [weak self] _ in
+            // 編集を送っている間はやめず、返信も始めない。送り終えれば空に戻るので、返信はそのあと選び直してもらう。
+            guard self?.composer.cancelStatusEdit() == true else { return }
+            proceed()
+        })
+        topViewController.present(alert, animated: true)
+    }
+
+    /// 編集の元にする本文をサーバーから読み、読めたら投稿欄で編集を始める。同じ投稿を編集している途中なら、読み直さずに投稿欄を開く。
+    /// 読めなかったら、お気に入りの失敗と同じく、操作した一覧にチップを出す。
+    private func startEditing(_ status: Status, from timeline: TimelineViewController?) {
+        let target = status.displayed
+        if composer.model.editedStatus?.id == target.id {
+            composer.beginEditing()
+            return
+        }
+        let client = client
+        Task { [weak self, weak timeline] in
+            do {
+                let source = try await client.statusSource(target.id)
+                self?.confirmEditing(target, source: source)
+            } catch {
+                guard let self else { return }
+                let title = "編集を始められませんでした"
+                logger.error("edit source failed: \(SciaLog.describe(error), privacy: .public)")
+                let reason = await failureReason(for: error)
+                operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
+                timeline?.showNotice(.interactionFailure(title: title) { [weak self] in
+                    self?.presentAlert(title: title, message: reason.text)
+                })
+            }
+        }
+    }
+
+    /// 書きかけの下書きがあれば捨ててよいかを、投票の付いた投稿なら締め切りがずれることを、聞いてから編集を始める。どちらもなければすぐ始める。
+    /// 本文を読んでから聞く。先に聞くと、読んでいる間に書いたものを、聞かずに捨ててしまうため。
+    private func confirmEditing(_ status: Status, source: StatusSource) {
+        guard status.canBeEdited(now: Date()) else {
+            presentPollTooCloseAlert()
+            return
+        }
+        let discards = composer.model.hasWrittenContent
+        let hasPoll = status.poll != nil
+        guard discards || hasPoll else {
+            composer.edit(status, source: source)
+            return
+        }
+        var lines: [String] = []
+        if discards {
+            lines.append(composer.model.editedStatus != nil ? "編集中の内容は消えます。" : "書きかけの下書きは消えます。")
+        }
+        if hasPoll {
+            lines.append("投票はそのまま残りますが、締め切りは送った時点から数え直すため、少しずれます。")
+        }
+        let alert = UIAlertController(title: discards ? "下書きを捨てて編集しますか？" : "投票の付いた投稿を編集しますか？", message: lines.joined(separator: "\n"), preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        alert.addAction(UIAlertAction(title: discards ? "捨てて編集" : "編集", style: discards ? .destructive : .default) { [weak self] _ in
+            guard let self else { return }
+            // 聞いている間に締め切りが近づいたら、投票なしで送って投票を消さないよう、編集を始めない。
+            if !status.canBeEdited(now: Date()) {
+                presentPollTooCloseAlert()
+            } else {
+                composer.edit(status, source: source)
+            }
+        })
+        topViewController.present(alert, animated: true)
+    }
+
+    /// メニューを出してから編集を始めるまでに、投票の締め切りまで5分を切ったとき。
+    private func presentPollTooCloseAlert() {
+        presentAlert(title: "編集できません", message: "投票の締め切りまで5分を切ったため、この投稿は編集できません。")
+    }
+
+    /// 削除は元に戻せないので、確かめてから送る。
+    private func confirmDeleting(_ status: Status, from timeline: TimelineViewController?) {
+        let alert = UIAlertController(title: "投稿を削除しますか？", message: "削除した投稿は元に戻せません。", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        alert.addAction(UIAlertAction(title: "削除", style: .destructive) { [weak self, weak timeline] _ in
+            self?.delete(status, from: timeline)
+        })
+        topViewController.present(alert, animated: true)
+    }
+
+    /// 消えたらどの一覧からも除く。編集している投稿を消したら、編集もやめる。
+    /// 失敗は押し直せば済むので、お気に入りの失敗と同じく、操作した一覧にチップを出す。
+    private func delete(_ status: Status, from timeline: TimelineViewController?) {
+        UserAction.deleteStatus.record()
+        let target = status.displayed
+        let client = client
+        Task { [weak self, weak timeline] in
+            do {
+                try await client.deleteStatus(target.id)
+                guard let self else { return }
+                home.removeStatus(target.id)
+                notifications.removeStatus(target.id)
+                profiles.removeStatus(target.id)
+                if composer.model.editedStatus?.id == target.id {
+                    composer.cancelStatusEdit()
+                }
+            } catch {
+                guard let self else { return }
+                let title = "投稿を削除できませんでした"
+                logger.error("delete failed: \(SciaLog.describe(error), privacy: .public)")
+                let reason = await failureReason(for: error)
+                operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
+                timeline?.showNotice(.interactionFailure(title: title) { [weak self] in
+                    self?.presentAlert(title: title, message: reason.text)
+                })
+            }
         }
     }
 
@@ -845,6 +979,13 @@ private final class ProfileRegistry {
         entries.removeAll { $0.controller == nil }
         for entry in entries {
             entry.controller?.updateStatus(id, transform)
+        }
+    }
+
+    func removeStatus(_ id: Status.ID) {
+        entries.removeAll { $0.controller == nil }
+        for entry in entries {
+            entry.controller?.removeStatus(id)
         }
     }
 }

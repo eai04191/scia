@@ -35,6 +35,12 @@ final class ComposeAttachmentStrip: UIView {
         let status: ComposeAttachmentStatus
         /// 閲覧注意にして投稿する。どの添付も同じ値になる。
         let isSensitive: Bool
+
+        /// 編集している投稿に付いている添付の、サーバーの添付ファイル。手元で選んだ添付ではnil。
+        var attachedMedia: MediaAttachment? {
+            guard attachment.isAttachedToStatus, case .uploaded(let media) = attachment.state else { return nil }
+            return media
+        }
     }
 
     override init(frame: CGRect) {
@@ -228,6 +234,9 @@ extension ComposeAttachmentStrip: UICollectionViewDragDelegate, UICollectionView
 /// 添付したメディア1つのサムネイル。タイムラインと同じ`MediaTileView`に、アップロードと代替テキストの送信の状態を重ねて見せる。
 /// ビューアはこのサムネイルとのあいだで画像を動かす。
 private final class ComposeAttachmentCell: UICollectionViewCell {
+    /// 編集している投稿に付いている添付のサムネイル。枠が64ptと小さいので、元の画像は読まず、サーバーのプレビュー画像を少し引き伸ばして出す。
+    private static let attachedThumbnailPolicy = MediaThumbnailPolicy(allowsOriginal: false, upscaleTolerance: 2)
+
     let tile = MediaTileView(store: AppDependencies.mediaImages)
     /// 状態の表示を、サムネイルと同じ角の丸い枠に収める。
     private let overlay = UIView()
@@ -303,7 +312,12 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         let description = item.attachment.description
         let showsDescriptionState = item.status == .sendingDescription || item.status == .descriptionFailed
         // 代替テキストの送信中と失敗は、ALTの札の位置に状態を出すため、札を出さない。
-        tile.applyLocal(thumbnail: item.local?.thumbnail, kind: item.local?.file?.kind, description: showsDescriptionState ? "" : description)
+        if let attached = item.attachedMedia {
+            // 編集している投稿に付いている添付は、手元にファイルがないので、サーバーのプレビュー画像を描く。ALTの札は書き換えた代替テキストで決める。
+            tile.apply(attached.replacingDescription(description), hiddenCount: 0, isCovered: false, policy: Self.attachedThumbnailPolicy)
+        } else {
+            tile.applyLocal(thumbnail: item.local?.thumbnail, kind: item.local?.file?.kind, description: showsDescriptionState ? "" : description)
+        }
         // 送信の進み具合はまだ受け取っていないので、送信中も変換待ちと同じ回る表示にする。
         let isWorking = item.status == .uploading || item.status == .processing
         dimView.isHidden = !isWorking
@@ -312,7 +326,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         setAnimating(descriptionSpinner, item.status == .sendingDescription)
         descriptionFailureView.isHidden = item.status != .descriptionFailed
         sensitiveBadge.isHidden = !item.isSensitive
-        let kindName = item.local?.file.map { MediaTileView.kindName(of: $0.kind) } ?? "メディア"
+        let kindName = (item.local?.file?.kind ?? item.attachedMedia?.type).map(MediaTileView.kindName(of:)) ?? "メディア"
         accessibilityLabel = [kindName, item.isSensitive ? "閲覧注意" : "", description].filter { !$0.isEmpty }.joined(separator: "、")
         accessibilityValue = switch item.status {
         case .uploading: "アップロード中"

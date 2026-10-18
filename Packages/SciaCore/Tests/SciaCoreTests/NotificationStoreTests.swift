@@ -273,6 +273,62 @@ struct NotificationStoreTests {
         #expect(!store.updateStatus("999") { $0.settingFavourited(true) })
     }
 
+    /// 削除した投稿についての通知を除き、ほかの通知は残す。
+    @Test func removesNotificationsAboutDeletedStatus() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
+        let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
+        let target = Status(id: "100", createdAt: .now, account: account, content: "", spoilerText: "", url: nil)
+        let favourite = MastodonNotification(id: "30", type: .favourite, createdAt: .now, account: account, status: target)
+        let follow = try notifications([29])[0]
+        let queue = PageQueue([.success([favourite, follow])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        #expect(store.removeStatus("100"))
+        #expect(ids(store) == ["29"])
+        #expect(!store.removeStatus("100"))
+    }
+
+    /// 削除の前に読み始めたページや、遅れて届いた通知で、削除した投稿についての通知を戻さない。
+    @Test func deletedStatusNotificationsDoNotReturn() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
+        let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
+        let target = Status(id: "100", createdAt: .now, account: account, content: "", spoilerText: "", url: nil)
+        let favourite = MastodonNotification(id: "31", type: .favourite, createdAt: .now, account: account, status: target)
+        let queue = PageQueue([try page([29]), .success([favourite] + (try notifications([30]))), try page([])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        store.removeStatus("100")
+        #expect(!store.receive(favourite))
+        _ = try await store.fillFromLatest(maxPages: 1)
+
+        #expect(ids(store) == ["30", "29"])
+    }
+
+    /// 削除の前に読み始めた古いページが、削除のあとに届いても、削除した投稿についての通知を戻さない。
+    @Test func deletedStatusNotificationsDoNotReturnFromReadStartedBefore() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
+        let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
+        let target = Status(id: "100", createdAt: .now, account: account, content: "", spoilerText: "", url: nil)
+        let older = MastodonNotification(id: "200", type: .favourite, createdAt: .now, account: account, status: target)
+        let newer = MastodonNotification(id: "300", type: .favourite, createdAt: .now, account: account, status: target)
+        let gate = PageGate(NotificationPage(notifications: [older]))
+        let store = NotificationStore(pageSize: 40) { query in
+            query.maxID == nil ? NotificationPage(notifications: [newer]) : await gate.fetch()
+        }
+        _ = try await store.loadInitial()
+        await gate.hold()
+        let read = Task { try await store.loadOlder() }
+        await gate.waitForRequest()
+
+        #expect(store.removeStatus("100"))
+        await gate.release()
+        _ = try await read.value
+
+        #expect(store.notifications.isEmpty)
+    }
+
     @Test func countsUnreadNewerThanMarker() async throws {
         let queue = PageQueue([try page([30, 29, 28])])
         let store = makeStore(queue)

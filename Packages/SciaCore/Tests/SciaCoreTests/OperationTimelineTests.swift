@@ -19,6 +19,8 @@ struct UserActionTests {
         .reply,
         .toggleFavourite,
         .toggleReblog,
+        .editStatus,
+        .deleteStatus,
         .expandCompose,
         .submitPost,
         .enterForeground,

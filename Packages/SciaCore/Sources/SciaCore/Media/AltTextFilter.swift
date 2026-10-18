@@ -27,15 +27,6 @@ extension MediaAttachment {
     public func filteringAltText(ignoresUseless: Bool) -> MediaAttachment {
         let filtered = AltTextFilter.meaningful(description, ignoresUseless: ignoresUseless)
         guard filtered != description else { return self }
-        return MediaAttachment(
-            id: id,
-            type: type,
-            url: url,
-            previewUrl: previewUrl,
-            remoteUrl: remoteUrl,
-            description: filtered,
-            meta: meta,
-            blurhash: blurhash
-        )
+        return replacingDescription(filtered)
     }
 }

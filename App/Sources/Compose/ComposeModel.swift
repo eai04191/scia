@@ -13,8 +13,10 @@ final class ComposeModel {
     /// 出していれば、注意書きが空でも、添付を閲覧注意にする。
     var showsSpoiler: Bool
     private(set) var visibility: Status.Visibility
-    /// 返信先。新しい投稿ならnil。
+    /// 返信先。新しい投稿と、編集ならnil。
     private(set) var replyTo: Status?
+    /// 編集している自分の投稿。編集でなければnil。公開範囲と返信先は変えられない。
+    private(set) var editedStatus: Status?
     private(set) var maxCharacters = 500
     private(set) var charactersReservedPerURL = 23
     private(set) var maxMediaAttachments = 4
@@ -87,13 +89,14 @@ final class ComposeModel {
     }
 
     var canPost: Bool {
-        !isPosting && descriptionTasks.isEmpty && (hasResolvedDefaults || hasChosenVisibility) && draftToPost.canPost(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL, maxMediaAttachments: maxMediaAttachments)
+        !isPosting && descriptionTasks.isEmpty && (hasResolvedDefaults || hasChosenVisibility || editedStatus != nil) && draftToPost.canPost(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL, maxMediaAttachments: maxMediaAttachments)
     }
 
     /// メディアを選べる。枚数の上限をサーバーの値で読むまでは、ピッカーを開かない。
     /// 読めなかったときは、次に書き始めたときに読み直す。
+    /// 編集している投稿の添付で上限まで埋まっていても開かない。ピッカーの上限の0は、選べないではなく上限なしを意味するため。
     var canAttachMedia: Bool {
-        !isPosting && hasLoadedConfiguration
+        !isPosting && hasLoadedConfiguration && pickerSelectionLimit > 0
     }
 
     /// 返信先と既定値から決まる公開範囲。
@@ -118,18 +121,31 @@ final class ComposeModel {
         }
         guard let defaultVisibility else { return }
         self.defaultVisibility = defaultVisibility
-        guard !hasChosenVisibility else { return }
+        guard !hasChosenVisibility, editedStatus == nil else { return }
         visibility = resolvedVisibility
     }
 
+    /// 編集では公開範囲を変えられないため、選んでも変えない。
     func choose(_ visibility: Status.Visibility) {
+        guard editedStatus == nil else { return }
         self.visibility = visibility
         hasChosenVisibility = true
     }
 
     /// 本文のうち、返信先から自動で入れた宛先を除いた、自分で書いた部分。宛先を書き換えていたら本文全体。
+    /// 編集では、元の本文も自分で書いたものなので本文全体。
     var typedText: String {
-        text.hasPrefix(initialDraft.text) ? String(text.dropFirst(initialDraft.text.count)) : text
+        guard editedStatus == nil else { return text }
+        return text.hasPrefix(initialDraft.text) ? String(text.dropFirst(initialDraft.text.count)) : text
+    }
+
+    /// 編集の札の文字。返信の編集なら、誰への返信かも書く。返信先はメンションの中から探し、見つからなければ相手を書かない。
+    var editChipTitle: String? {
+        guard let editedStatus else { return nil }
+        guard editedStatus.inReplyToId != nil else { return "投稿を編集中" }
+        if editedStatus.inReplyToAccountId == myAccountID { return "自分への返信を編集中" }
+        guard let acct = editedStatus.mentions.first(where: { $0.id == editedStatus.inReplyToAccountId })?.acct else { return "返信を編集中" }
+        return "@\(acct)への返信を編集中"
     }
 
     /// 返信先を付け替える。nilなら新しい投稿に戻す。
@@ -162,10 +178,40 @@ final class ComposeModel {
         visibility = resolvedVisibility
     }
 
-    /// 下書きを空にして、返信先のない新しい投稿に戻す。
+    /// 捨てると失われる、自分で書いたものがある。編集は書き換えていなくても、始めたこと自体を失うものとして扱う。
+    /// 返信先から自動で入れた宛先と注意書きは数えない。
+    var hasWrittenContent: Bool {
+        editedStatus != nil
+            || !typedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !attachments.isEmpty
+            || (!spoilerText.isEmpty && spoilerText != initialDraft.spoilerText)
+    }
+
+    /// 自分の投稿の編集を始める。今の下書きは捨てる。送っている間は始めずfalseを返す。
+    /// 投票を送り直せない投稿（締め切りまで5分を切った）でも、下書きを変えずにfalseを返す。
+    /// 本文と注意書きは、HTMLの`content`ではなく、書いたときのソースから入れる。
+    @discardableResult
+    func beginEditing(_ status: Status, source: StatusSource, now: Date = Date()) -> Bool {
+        guard !isPosting, let draft = StatusDraft.edit(of: status, source: source, now: now) else { return false }
+        removeAllAttachments()
+        initialDraft = draft
+        editedStatus = status
+        replyTo = nil
+        text = draft.text
+        spoilerText = draft.spoilerText
+        showsSpoiler = draft.hasSpoiler
+        visibility = draft.visibility
+        attachments = draft.attachments
+        lastSubmitted = nil
+        hasChosenVisibility = false
+        return true
+    }
+
+    /// 下書きを空にして、返信先のない新しい投稿に戻す。編集していれば、編集をやめる。
     func reset() {
         initialDraft = StatusDraft()
         replyTo = nil
+        editedStatus = nil
         text = ""
         spoilerText = ""
         showsSpoiler = false
@@ -175,8 +221,9 @@ final class ComposeModel {
         visibility = resolvedVisibility
     }
 
+    /// 編集には`Idempotency-Key`を付けないため、そのまま送る。同じ編集を送り直しても、サーバーは変化がなければ編集として残さない。
     private func submission(of draft: StatusDraft) -> StatusDraft {
-        guard let lastSubmitted else { return draft }
+        guard draft.editing == nil, let lastSubmitted else { return draft }
         if lastSubmitted.text == draft.text, lastSubmitted.spoilerText == draft.spoilerText, lastSubmitted.sensitive == draft.sensitive,
            lastSubmitted.visibility == draft.visibility, lastSubmitted.mediaIDs == draft.mediaIDs {
             return lastSubmitted
@@ -197,6 +244,11 @@ final class ComposeModel {
             reset()
             onPosted()
         } catch {
+            // 編集は応答だけを失っても、代替テキストはサーバーに届いていることがある。元の値に戻して送り直しても届くよう、送った添付に印を付ける。
+            let sentIDs = Set(draft.changedAttachedDescriptions.map(\.id))
+            for index in attachments.indices where attachments[index].serverID.map(sentIDs.contains) ?? false {
+                attachments[index].hasUnconfirmedDescription = true
+            }
             errorMessage = ErrorPresentation(error).text
         }
     }
@@ -260,6 +312,11 @@ extension ComposeModel {
         attachments.compactMap { localMedia[$0.id]?.assetIdentifier }
     }
 
+    /// ピッカーで選べる枚数。編集している投稿に付いている添付は、ピッカーの選択に入らないため、その分を除く。
+    var pickerSelectionLimit: Int {
+        max(maxMediaAttachments - attachments.filter(\.isAttachedToStatus).count, 0)
+    }
+
     /// ピッカーの今の選択を取り込む。外されたものは添付から外し、足されたものは後ろに足してアップロードを始める。
     /// 投稿を待つ間も取り込む。ピッカーは選択が変わったことを覚えるので、捨てると投稿に失敗した後の下書きとピッカーの選択が食い違う。
     /// 送っている下書きは送る前にコピーしてあるので、ここで変えても影響しない。
@@ -288,9 +345,13 @@ extension ComposeModel {
     }
 
     /// 投稿欄から添付を外す。ピッカーを開いていれば、ピッカーがまだ選んだままの選択を送ってきても足し直さない。
+    /// 編集している投稿に付いている添付は、ピッカーで選んだものではないため、そのまま外す。
     func removeAttachment(_ id: DraftAttachment.ID, pickerIsOpen: Bool) {
-        guard let assetIdentifier = localMedia[id]?.assetIdentifier else { return }
-        pickerSelection.didRemoveInDraft(assetIdentifier, pickerIsOpen: pickerIsOpen)
+        if let assetIdentifier = localMedia[id]?.assetIdentifier {
+            pickerSelection.didRemoveInDraft(assetIdentifier, pickerIsOpen: pickerIsOpen)
+        } else if !(attachments.first { $0.id == id }?.isAttachedToStatus ?? false) {
+            return
+        }
         discardAttachment(id)
     }
 

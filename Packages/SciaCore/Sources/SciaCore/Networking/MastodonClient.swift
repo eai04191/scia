@@ -218,6 +218,28 @@ public struct MastodonClient: Sendable {
         return try await post(Status.self, path: "api/v1/statuses", form: form, headers: ["Idempotency-Key": draft.idempotencyKey]).0
     }
 
+    /// 編集の元にする、投稿を書いたときの本文と注意書き。
+    /// https://docs.joinmastodon.org/methods/statuses/#source
+    public func statusSource(_ statusID: Status.ID) async throws -> StatusSource {
+        try await get(StatusSource.self, path: "api/v1/statuses/\(statusID)/source", query: []).0
+    }
+
+    /// 自分の投稿を`draft`の内容に編集し、編集したあとの投稿を返す。`target`は`draft.editing`。
+    /// 添付ファイルが済んでいなければ送らずに`StatusPostError.attachmentsNotReady`を投げる。
+    /// https://docs.joinmastodon.org/methods/statuses/#edit
+    public func editStatus(_ target: StatusEditTarget, to draft: StatusDraft, now: Date = Date()) async throws -> Status {
+        guard let form = draft.editForm(poll: target.poll, now: now) else { throw StatusPostError.attachmentsNotReady }
+        return try await send(formRequest(method: "PUT", path: "api/v1/statuses/\(target.statusID)", form: form), decoding: Status.self).0
+    }
+
+    /// 自分の投稿を削除する。応答の中身は使わない。
+    /// https://docs.joinmastodon.org/methods/statuses/#delete
+    public func deleteStatus(_ statusID: Status.ID) async throws {
+        var request = URLRequest(url: credential.instance.appending(path: "api/v1/statuses/\(statusID)"))
+        request.httpMethod = "DELETE"
+        _ = try await send(request)
+    }
+
     // MARK: - メディアの添付
 
     /// メディアをアップロードする。小さな画像はその場で変換が済み、`url`の入った添付ファイルが返る。

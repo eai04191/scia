@@ -127,9 +127,17 @@ struct MenuLayoutTests {
     @Test func statusMenuDefaultMatchesMenuBeforeCustomization() {
         let groups = StatusMenuItem.defaultLayout.groups
 
-        #expect(groups.main == [[.reply, .favourite, .reblog], [.copyLink, .share, .openInBrowser, .hideMedia], [.notifyingUser, .author, .booster]])
-        #expect(groups.more == [])
+        #expect(groups.main == [[.reply, .favourite, .reblog, .edit], [.copyLink, .share, .openInBrowser, .hideMedia], [.notifyingUser, .author, .booster]])
+        #expect(groups.more == [[.delete]])
         #expect(UserMenuItem.defaultLayout.groups.main == [[.profile]])
+    }
+
+    /// 編集と削除を足す前に保存した並びでも、編集はブーストの後ろに、削除は「その他」に入る。
+    @Test func savedStatusMenuGainsEditAndDelete() {
+        let saved = MenuLayout<StatusMenuItem>(tokens: ["item:reblog", "item:reply", "item:favourite", "separator", "item:copyLink", "more", "hidden:share"])
+
+        #expect(saved.groups.main.first == [.reblog, .edit, .reply, .favourite])
+        #expect(saved.groups.more.first?.first == .delete)
     }
 
     @Test func appSettingsPersistsMenuLayouts() throws {

@@ -28,7 +28,7 @@ final class InlineComposeController: NSObject {
         guard let host, host.presentedViewController == nil else { return nil }
         return host
     }
-    /// 返信先の札を押したときに呼ぶ。返信先の投稿を見せる。
+    /// 返信先の札を押したときに呼ぶ。返信先の投稿を見せる。編集の札なら、編集している投稿を見せる。
     var onShowReplyTarget: (Status) -> Void = { _ in }
     /// 投稿できたあとに呼ぶ。
     var onPosted: () -> Void = {}
@@ -51,10 +51,25 @@ final class InlineComposeController: NSObject {
     private let bar = ComposeBarView(effect: InlineComposeController.interactiveGlass())
     /// 背景の付いた札にする。背景のない文字だけのボタンは、ガラスの上で単色に描かれることがあり、色合いの青が消えた。
     private lazy var replyButton = UIButton(configuration: .tinted(), primaryAction: UIAction { [weak self] _ in
-        guard let target = self?.model.replyTo else { return }
+        guard let target = self?.model.editedStatus ?? self?.model.replyTo else { return }
         self?.onShowReplyTarget(target)
     })
     private lazy var replyRow = makeReplyRow()
+    /// 札の右の×。返信なら返信先を外して書いた本文を残し、編集なら編集をやめて空の投稿欄に戻す。
+    private lazy var replyClearButton: UIButton = {
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: "xmark.circle.fill")
+        configuration.baseForegroundColor = .secondaryLabel
+        configuration.contentInsets = .zero
+        return UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in
+            guard let self else { return }
+            if model.editedStatus != nil {
+                cancelStatusEdit()
+            } else {
+                model.setReplyTarget(nil)
+            }
+        })
+    }()
     /// 添付したメディアのサムネイルの列。書いていて、添付があるときだけ出す。
     let attachmentStrip = ComposeAttachmentStrip()
     /// 注意書きの入力欄。＋のメニューから足したときと、注意書きの付いた投稿へ返信したときだけ、本文の上に出す。
@@ -262,7 +277,7 @@ final class InlineComposeController: NSObject {
     /// 違和感レポートに残す状態。行が重なっていれば、どの行かも書く。
     func stateDump() -> String {
         """
-        editing: \(isEditing) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : "none") spoiler: \(model.showsSpoiler) sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil")
+        editing: \(isEditing) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : "none") spoiler: \(model.showsSpoiler) sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil")
         mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
         tools: row=\(toolPlacement.map { "\($0.row.map(\.rawValue))" } ?? "nil") menu=\(toolPlacement.map { "\($0.menu.map { $0.map(\.rawValue) })" } ?? "nil")
@@ -287,6 +302,29 @@ final class InlineComposeController: NSObject {
             upper.view.frame.maxY > lower.view.frame.minY + 0.5 ? "\(upper.name)/\(lower.name)" : nil
         }
         return collapsed + overlapped
+    }
+
+    /// 自分の投稿の編集を始める。今の下書きは捨てるので、捨ててよいかは呼ぶ側で確かめておく。
+    /// 始められなければ（送っている途中、投票を送り直せない）、下書きを変えずにfalseを返す。
+    /// メディアのピッカーを開いていれば閉じる。開いたままだと、捨てた下書きの選択がピッカーに残り、次に選んだときに足し直されるため。
+    @discardableResult
+    func edit(_ status: Status, source: StatusSource) -> Bool {
+        guard !model.isPosting, status.canBeEdited(now: Date()) else { return false }
+        mediaPicker?.close(notifiesWillClose: true)
+        guard model.beginEditing(status, source: source) else { return false }
+        update()
+        beginEditing()
+        return true
+    }
+
+    /// 編集をやめて、空の投稿欄に戻す。送っている間はやめない。失敗したときに送り直せるよう、下書きを残すため。
+    /// 開いているピッカーは、`edit(_:source:)`と同じ理由で閉じる。
+    @discardableResult
+    func cancelStatusEdit() -> Bool {
+        guard model.editedStatus != nil, !model.isPosting else { return false }
+        mediaPicker?.close(notifiesWillClose: true)
+        model.reset()
+        return true
     }
 
     /// 返信先を付けて書き始める。
@@ -432,9 +470,11 @@ final class InlineComposeController: NSObject {
         }
     }
 
+    /// 編集では公開範囲を変えられないため、今の範囲に印を付けたまま、どれも押せないようにする。
     private func visibilityActions() -> [UIAction] {
-        VisibilityOption.choices.map { choice in
-            UIAction(title: choice.title, image: UIImage(systemName: choice.symbolName), state: choice.visibility == model.visibility ? .on : .off) { [weak self] _ in
+        let attributes: UIMenuElement.Attributes = model.editedStatus == nil ? [] : .disabled
+        return VisibilityOption.choices.map { choice in
+            UIAction(title: choice.title, image: UIImage(systemName: choice.symbolName), attributes: attributes, state: choice.visibility == model.visibility ? .on : .off) { [weak self] _ in
                 self?.model.choose(choice.visibility)
             }
         }
@@ -582,7 +622,7 @@ final class InlineComposeController: NSObject {
         // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
         let picker = MediaPickerSheet(
             selectedIDs: model.attachedAssetIdentifiers,
-            selectionLimit: model.maxMediaAttachments,
+            selectionLimit: model.pickerSelectionLimit,
             lowHeight: height - host.view.safeAreaInsets.bottom
         )
         picker.onSelectionChange = { [weak self] results in
@@ -726,7 +766,7 @@ final class InlineComposeController: NSObject {
             setRowHidden(view, !isEditing)
             view.alpha = isEditing ? 1 : 0
         }
-        let showsReply = isEditing && model.replyTo != nil
+        let showsReply = isEditing && chip != nil
         setRowHidden(replyRow, !showsReply)
         replyRow.alpha = showsReply ? 1 : 0
         let showsSpoiler = isEditing && model.showsSpoiler
@@ -806,13 +846,16 @@ final class InlineComposeController: NSObject {
         spoilerField.placeholder = model.attachments.isEmpty ? "注意書き" : "注意書き（空なら閲覧注意だけ）"
         spoilerClearButton.accessibilityLabel = model.isSensitive ? "注意書きと閲覧注意を外す" : "注意書きを外す"
 
-        let replyAcct = model.replyTo.map { "@\($0.displayed.account.acct)" }
+        let chip = chip
         // 札を消すときは、薄くなる間も文字が残るよう、前の文字のままにする。
         // 返信先から引き継いだ注意書きは、注意書きの欄に見えているので、札には書かない。
-        if let replyAcct {
-            setReplyTitle("\(replyAcct)への返信")
+        if let chip {
+            setReplyTitle(chip.title)
+            replyButton.configuration?.image = UIImage(systemName: chip.symbolName)
+            replyButton.accessibilityHint = chip.hint
+            replyClearButton.accessibilityLabel = chip.clearLabel
         }
-        setRowShown(replyRow, isEditing && replyAcct != nil)
+        setRowShown(replyRow, isEditing && chip != nil)
 
         attachmentStrip.update(model.attachments.map { attachment in
             ComposeAttachmentStrip.Item(
@@ -839,7 +882,7 @@ final class InlineComposeController: NSObject {
         sendButton.isEnabled = model.canPost
         sendButton.configuration?.showsActivityIndicator = model.isPosting
 
-        restLabel.attributedText = restText(replyAcct: replyAcct)
+        restLabel.attributedText = restText(chip: chip)
         presentErrorIfNeeded()
         logOverlappingRows(after: "update")
     }
@@ -875,14 +918,34 @@ final class InlineComposeController: NSObject {
         replyRow.setNeedsLayout()
     }
 
-    /// 書いていないときに出す下書きの1行。返信なら宛先を札にまとめ、自分で書いた部分だけを続ける。何も書いていなければ書き出しを促す。
-    private func restText(replyAcct: String?) -> NSAttributedString {
+    /// 本文の上の札。返信なら返信先、編集なら編集していること（返信の編集なら返信先も）を書く。
+    /// 編集では返信先を変えられないので、返信先の札は出さず、編集の札にまとめる。返信と編集で1つの行を使い、行を増やさない。
+    private struct Chip {
+        let title: String
+        let symbolName: String
+        /// 書いていないときの1行に出す、短い文字。
+        let restTitle: String
+        let hint: String
+        let clearLabel: String
+    }
+
+    private var chip: Chip? {
+        if let title = model.editChipTitle {
+            return Chip(title: title, symbolName: "pencil", restTitle: "編集中", hint: "タイムラインの編集している投稿を表示します", clearLabel: "編集をやめる")
+        }
+        guard let replyTo = model.replyTo else { return nil }
+        let acct = "@\(replyTo.displayed.account.acct)"
+        return Chip(title: "\(acct)への返信", symbolName: "arrowshape.turn.up.left.fill", restTitle: acct, hint: "タイムラインの返信先の投稿を表示します", clearLabel: "返信をやめる")
+    }
+
+    /// 書いていないときに出す下書きの1行。返信なら宛先を、編集なら編集中であることを札にまとめ、自分で書いた部分だけを続ける。何も書いていなければ書き出しを促す。
+    private func restText(chip: Chip?) -> NSAttributedString {
         let font = UIFont.preferredFont(forTextStyle: .body)
         let result = NSMutableAttributedString()
-        if let replyAcct {
-            let arrow = NSTextAttachment(image: UIImage(systemName: "arrowshape.turn.up.left.fill", withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)) ?? UIImage())
-            result.append(NSAttributedString(attachment: arrow))
-            result.append(NSAttributedString(string: " \(replyAcct)  "))
+        if let chip {
+            let icon = NSTextAttachment(image: UIImage(systemName: chip.symbolName, withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)) ?? UIImage())
+            result.append(NSAttributedString(attachment: icon))
+            result.append(NSAttributedString(string: " \(chip.restTitle)  "))
             result.addAttributes([.font: font, .foregroundColor: UIColor.tintColor], range: NSRange(location: 0, length: result.length))
         }
         let body = model.typedText.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
@@ -1029,6 +1092,10 @@ final class InlineComposeController: NSObject {
     /// ビューアで見せる中身。種類はファイルを読み込むまで分からないため、それまでは画像として扱う。
     private func viewerItems() -> [MediaViewerItem] {
         model.attachments.map { attachment in
+            let status = model.attachmentStatus(of: attachment.id) ?? .uploading
+            if attachment.isAttachedToStatus, case .uploaded(let media) = attachment.state {
+                return MediaViewerItem(id: attachment.id.uuidString, attached: media, description: attachment.description, status: status)
+            }
             let local = model.localMedia[attachment.id]
             return MediaViewerItem(
                 id: attachment.id.uuidString,
@@ -1036,7 +1103,7 @@ final class InlineComposeController: NSObject {
                 description: attachment.description,
                 file: local?.file,
                 thumbnail: local?.thumbnail,
-                status: model.attachmentStatus(of: attachment.id) ?? .uploading
+                status: status
             )
         }
     }
@@ -1309,7 +1376,6 @@ final class InlineComposeController: NSObject {
     }
 
     private func makeReplyRow() -> UIView {
-        replyButton.configuration?.image = UIImage(systemName: "arrowshape.turn.up.left.fill")
         replyButton.configuration?.imagePadding = 4
         replyButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .footnote, scale: .small)
         replyButton.configuration?.titleLineBreakMode = .byTruncatingTail
@@ -1321,14 +1387,8 @@ final class InlineComposeController: NSObject {
         replyButton.configuration?.cornerStyle = .capsule
         replyButton.configuration?.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 10)
         replyButton.contentHorizontalAlignment = .leading
-        replyButton.accessibilityHint = "タイムラインの返信先の投稿を表示します"
         replyButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        var configuration = UIButton.Configuration.plain()
-        configuration.image = UIImage(systemName: "xmark.circle.fill")
-        configuration.baseForegroundColor = .secondaryLabel
-        configuration.contentInsets = .zero
-        let clear = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.model.setReplyTarget(nil) })
-        clear.accessibilityLabel = "返信をやめる"
+        let clear = replyClearButton
         clear.setContentHuggingPriority(.required, for: .horizontal)
         // 札は宛先の長さに合わせ、余った幅は札と×の間に空ける。
         replyButton.setContentHuggingPriority(.required, for: .horizontal)

@@ -6,6 +6,8 @@ enum StatusAction {
     case reply
     case favourite
     case reblog
+    case edit
+    case delete
 }
 
 extension TimelineViewController {
@@ -64,7 +66,7 @@ extension TimelineViewController {
             return users([.account(status.account)])
         case .mentionedUsers:
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
-        case .reply, .favourite, .reblog, .copyLink, .share, .openInBrowser, .hideMedia:
+        case .reply, .favourite, .reblog, .copyLink, .share, .openInBrowser, .hideMedia, .edit, .delete:
             guard let status else { return [] }
             return statusAction(item, on: status, id: id).map { [$0] } ?? []
         }
@@ -112,6 +114,23 @@ extension TimelineViewController {
             return UIAction(title: item.title, image: item.image, attributes: linkAttributes) { [weak self] _ in
                 guard let url else { return }
                 self?.onOpenLink?(.url(url), shown)
+            }
+        case .edit:
+            guard let myAccountID, status.isAuthored(by: myAccountID) else { return nil }
+            // 投票の締め切りが近い投稿は、送り直すとサーバーが拒むので、押せないまま理由を添える。
+            let canEdit = status.canBeEdited(now: Date())
+            return UIAction(
+                title: item.title,
+                subtitle: canEdit ? nil : "締め切りまで5分を切った投票は編集できません",
+                image: item.image,
+                attributes: canEdit ? [] : .disabled
+            ) { [weak self] _ in
+                self?.onStatusAction?(.edit, status)
+            }
+        case .delete:
+            guard let myAccountID, status.isAuthored(by: myAccountID) else { return nil }
+            return UIAction(title: item.title, image: item.image, attributes: .destructive) { [weak self] _ in
+                self?.onStatusAction?(.delete, status)
             }
         case .hideMedia:
             // 覆っている投稿では出さない。開くときは、閲覧注意と同じく覆いをタップする。

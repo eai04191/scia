@@ -51,6 +51,11 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
         blurhash = try container.decodeIfPresent(String.self, forKey: .blurhash)
     }
 
+    /// 代替テキストだけを差し替えたもの。
+    public func replacingDescription(_ description: String?) -> MediaAttachment {
+        MediaAttachment(id: id, type: type, url: url, previewUrl: previewUrl, remoteUrl: remoteUrl, description: description, meta: meta, blurhash: blurhash)
+    }
+
     public var aspectRatio: Double? {
         for size in [meta?.original, meta?.small] {
             if let width = size?.width, let height = size?.height, width > 0, height > 0 {

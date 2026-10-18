@@ -329,23 +329,29 @@ public final class TimelineStore {
             }
             return replace(edited) ? .entriesChanged : .none
         case .delete(let id):
-            deletedIDs.insert(id)
-            // 元の投稿が消えると、それをブーストした投稿も表示できなくなる。
-            pending.removeAll { $0.id == id || $0.reblog?.id == id }
-            unreadableItems.removeAll { $0.id == id }
-            let remaining = entries.filter { entry in
-                switch entry {
-                case .status(let status): status.id != id && status.reblog?.id != id
-                case .unreadable(let item): item.id != id
-                case .gap, .notification, .pinned: true
-                }
-            }
-            guard remaining.count != entries.count else { return .none }
-            entries = remaining
-            return .entriesChanged
+            return removeStatus(id) ? .entriesChanged : .none
         case .notification, .filtersChanged, .unhandled:
             return .none
         }
+    }
+
+    /// 削除された投稿と、それをブーストした投稿を除く。あとから届いても足さない。表示に関わる変化があればtrueを返す。
+    @discardableResult
+    public func removeStatus(_ id: Status.ID) -> Bool {
+        deletedIDs.insert(id)
+        // 元の投稿が消えると、それをブーストした投稿も表示できなくなる。
+        pending.removeAll { $0.id == id || $0.reblog?.id == id }
+        unreadableItems.removeAll { $0.id == id }
+        let remaining = entries.filter { entry in
+            switch entry {
+            case .status(let status), .pinned(let status): status.id != id && status.reblog?.id != id
+            case .unreadable(let item): item.id != id
+            case .gap, .notification: true
+            }
+        }
+        guard remaining.count != entries.count else { return false }
+        entries = remaining
+        return true
     }
 
     /// 同じIDの投稿と、それをブーストした投稿の中身を差し替える。編集や、お気に入りなどの操作の結果を反映する。

@@ -443,6 +443,12 @@ final class HomeTimelineController {
         showEntries()
     }
 
+    /// 削除した投稿と、それをブーストした投稿を除く。ストリーミングの削除の知らせを待たずに消す。
+    func removeStatus(_ id: Status.ID) {
+        guard !isStopped, store.removeStatus(id) else { return }
+        showEntries()
+    }
+
     private func insertPending() {
         guard !isStopped else { return }
         #if DEBUG

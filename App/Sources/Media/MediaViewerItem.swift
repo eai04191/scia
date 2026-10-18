@@ -42,6 +42,17 @@ struct MediaViewerItem {
         draftStatus = status
     }
 
+    /// 投稿欄で編集している投稿に、もう付いている添付ファイル。開閉の起点は投稿欄のサムネイルなので、IDは下書きの添付のIDにする。
+    /// 代替テキストは、投稿欄で書き換えた値を出す。
+    init(id: String, attached attachment: MediaAttachment, description: String, status: ComposeAttachmentStatus) {
+        self.id = id
+        kind = attachment.type
+        aspectRatio = attachment.aspectRatio
+        self.description = description.isEmpty ? nil : description
+        source = .server(attachment)
+        draftStatus = status
+    }
+
     /// 投稿の添付ファイル。手元のメディアではnil。
     var serverAttachment: MediaAttachment? {
         guard case .server(let attachment) = source else { return nil }

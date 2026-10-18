@@ -20,6 +20,8 @@ public final class NotificationStore {
     /// サーバーのmarkerに保存されている既読位置。
     public private(set) var savedReadID: String?
 
+    /// 削除した投稿のID。削除の前に読み始めたページや、遅れて届いた通知で、その投稿についての通知を戻さない。
+    private var deletedStatusIDs: Set<Status.ID> = []
     /// 補完を始めたが、まだ成功していない基準のID。失敗した後に新着が挿入されて最新のIDが進んでも、次の補完はここから読む。
     private var unfilledSinceID: String?
     private var isFilling = false
@@ -57,7 +59,7 @@ public final class NotificationStore {
         defer { isLoading = false }
 
         let page = try await fetch(TimelineQuery(limit: pageSize))
-        notifications = Self.sorted(page.notifications)
+        notifications = Self.sorted(page.notifications.filter { !isAboutDeletedStatus($0) })
         unreadable = Self.sorted(page.unreadable, excluding: notifications)
         reachedEnd = page.isEmpty
         if let markerID {
@@ -128,8 +130,9 @@ public final class NotificationStore {
                 added += merge(fetched)
             } else if let oldestFetched = fetched.ids.min(by: { StatusID.isNewer($1, than: $0) }) {
                 let known = Set(notifications.map(\.id))
-                added += fetched.notifications.filter { !known.contains($0.id) }
-                notifications = Self.sorted(notifications.filter { StatusID.isNewer($0.id, than: oldestFetched) } + fetched.notifications)
+                let kept = fetched.notifications.filter { !isAboutDeletedStatus($0) }
+                added += kept.filter { !known.contains($0.id) }
+                notifications = Self.sorted(notifications.filter { StatusID.isNewer($0.id, than: oldestFetched) } + kept)
                 unreadable = Self.sorted(unreadable.filter { StatusID.isNewer($0.id, than: oldestFetched) } + fetched.unreadable, excluding: notifications)
                 reachedEnd = false
                 rangeGeneration += 1
@@ -174,7 +177,7 @@ public final class NotificationStore {
 
     /// 届いた通知を保留に溜める。保留が空のところへ届いたらtrueを返す。挿入の時機をはかり始める合図にする。
     public func receive(_ notification: MastodonNotification) -> Bool {
-        guard !notifications.contains(where: { $0.id == notification.id }), !pending.contains(where: { $0.id == notification.id }) else {
+        guard !isAboutDeletedStatus(notification), !notifications.contains(where: { $0.id == notification.id }), !pending.contains(where: { $0.id == notification.id }) else {
             return false
         }
         pending.append(notification)
@@ -202,6 +205,17 @@ public final class NotificationStore {
         let replaced = notifications.map { Self.updating(id, in: $0, transform) }
         guard replaced != notifications else { return false }
         notifications = replaced
+        return true
+    }
+
+    /// 削除された投稿についての通知を除く。サーバーも、投稿を消すとその投稿へのお気に入りなどの通知を消す。表示に関わる変化があればtrueを返す。
+    @discardableResult
+    public func removeStatus(_ id: Status.ID) -> Bool {
+        deletedStatusIDs.insert(id)
+        pending.removeAll(where: isAboutDeletedStatus)
+        let remaining = notifications.filter { !isAboutDeletedStatus($0) }
+        guard remaining.count != notifications.count else { return false }
+        notifications = remaining
         return true
     }
 
@@ -255,9 +269,14 @@ public final class NotificationStore {
     // MARK: - 並べ替え
 
     /// まだない通知と読めなかった通知を足し、足した通知を新しい順に返す。読めなかった通知と同じIDの通知は、読めなかった行と置き換える。
+    private func isAboutDeletedStatus(_ notification: MastodonNotification) -> Bool {
+        guard let status = notification.status else { return false }
+        return deletedStatusIDs.contains(status.id) || status.reblog.map { deletedStatusIDs.contains($0.id) } ?? false
+    }
+
     private func merge(_ page: NotificationPage) -> [MastodonNotification] {
         let readIDs = Set(notifications.map(\.id))
-        let added = Self.sorted(page.notifications.filter { !readIDs.contains($0.id) })
+        let added = Self.sorted(page.notifications.filter { !readIDs.contains($0.id) && !isAboutDeletedStatus($0) })
         notifications = Self.sorted(notifications + added)
         let known = Set(itemIDs)
         unreadable = Self.sorted(unreadable + page.unreadable.filter { !known.contains($0.id) }, excluding: notifications)

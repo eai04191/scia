@@ -14,6 +14,8 @@ public struct StatusDraft: Sendable, Equatable {
     public var attachments: [DraftAttachment]
     /// 送り直しても二重に投稿されないよう、下書きごとに決めてサーバーに渡す。
     public let idempotencyKey: String
+    /// 自分の投稿の編集なら、元の投稿から引き継ぐもの。新しい投稿ならnil。
+    public let editing: StatusEditTarget?
 
     public init(
         text: String = "",
@@ -22,7 +24,8 @@ public struct StatusDraft: Sendable, Equatable {
         visibility: Status.Visibility = .public,
         inReplyToID: String? = nil,
         attachments: [DraftAttachment] = [],
-        idempotencyKey: String = UUID().uuidString
+        idempotencyKey: String = UUID().uuidString,
+        editing: StatusEditTarget? = nil
     ) {
         self.text = text
         self.spoilerText = spoilerText
@@ -31,6 +34,7 @@ public struct StatusDraft: Sendable, Equatable {
         self.inReplyToID = inReplyToID
         self.attachments = attachments
         self.idempotencyKey = idempotencyKey
+        self.editing = editing
     }
 
     /// 返信の下書き。返信先の投稿者と、その投稿でメンションされた相手を宛先に入れる。自分は入れない。

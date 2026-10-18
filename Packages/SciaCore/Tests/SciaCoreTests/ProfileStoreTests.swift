@@ -113,6 +113,40 @@ struct ProfileStoreTests {
         #expect(store.displayedPinned == [pinned])
     }
 
+    @Test func removesDeletedPinnedStatus() async throws {
+        let known = try account()
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, api: makeAPI(account: known, pinned: [try pinnedStatus()]))
+        _ = await store.loadProfile()
+
+        #expect(store.removeStatus("10"))
+        #expect(store.displayedPinned.isEmpty)
+        #expect(!store.removeStatus("10"))
+    }
+
+    /// 削除の前に読み始めた固定された投稿の応答が、削除のあとに届いても、削除した投稿を戻さない。
+    @Test func deletedPinnedStatusDoesNotReturnFromReadStartedBefore() async throws {
+        let known = try account()
+        let pinned = try pinnedStatus()
+        let gate = PageGate(TimelinePage(statuses: [pinned], isRegenerating: false))
+        let api = ProfileStore.API(
+            account: { _ in known },
+            relationship: { _ in nil },
+            statuses: { _, filter, _ in filter.pinned ? await gate.fetch() : TimelinePage(statuses: [], isRegenerating: false) },
+            follow: { _ in throw Failure() },
+            unfollow: { _ in throw Failure() }
+        )
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, api: api)
+        await gate.hold()
+        let read = Task { await store.loadProfile() }
+        await gate.waitForRequest()
+
+        store.removeStatus("10")
+        await gate.release()
+        _ = await read.value
+
+        #expect(store.displayedPinned.isEmpty)
+    }
+
     /// アカウントの読み直しに失敗しても、関係と固定された投稿は反映する。失敗はアカウントの分だけ返す。
     @Test func loadProfileKeepsOtherResultsWhenOneFails() async throws {
         let known = try account()
