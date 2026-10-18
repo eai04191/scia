@@ -78,6 +78,18 @@ public final class XPostStore {
         }
     }
 
+    /// 読みに行かずに、読み込み中にしておく。`deliver(_:)`で届けるまで、`request(id:)`されても読まない。
+    /// ダミー投稿で、投稿が後から届くときの動きを、fxtwitterに頼まずに確かめるために使う。
+    public func reserve(id: String) {
+        guard entries[id] == nil else { return }
+        entries[id] = .loading
+    }
+
+    /// 読まずに投稿を届ける。読み終えたときと同じく`onLoad`で知らせる。
+    public func deliver(_ post: XPost) {
+        finish(post.id, with: .loaded(post))
+    }
+
     private func finish(_ id: String, with entry: Entry) {
         entries[id] = entry
         if case .loaded = entry {

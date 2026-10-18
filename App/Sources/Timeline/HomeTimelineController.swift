@@ -542,6 +542,8 @@ extension HomeTimelineController {
             streamDummyLinkCard(withImage: true)
         case .linkCardSensitive:
             streamDummyLinkCard(withImage: true, sensitive: true)
+        case .xPost:
+            streamDummyXPost()
         }
     }
 
@@ -591,6 +593,41 @@ extension HomeTimelineController {
             controller.receive(.update(dummy))
             guard (try? await Task.sleep(for: Self.dummyLinkCardDelay)) != nil, !controller.isStopped else { return }
             controller.updateStatus(dummy.id) { $0.adoptingCard(of: carded) }
+        }
+    }
+
+    /// Xの投稿へのリンクだけのダミーの投稿を流し、`dummyLinkCardDelay`のあとに、fxtwitterに頼まずに4枚の画像付きのXの投稿を届ける。
+    /// リンクカードから囲みに替わるときの動きを、何度でも同じ条件で確かめるため。囲みは、チューニングで出すようにしているときだけ出る。
+    private func streamDummyXPost() {
+        let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
+        let base = Self.dummyStatus(number: 1, avatar: avatar)
+        guard let link = URL(string: "https://x.com/dummy/status/\(base.id)") else { return }
+        let dummy = Status(
+            id: base.id,
+            createdAt: base.createdAt,
+            account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー（Xの投稿）", avatar: avatar),
+            content: #"<p>Xの投稿の囲みが届くときの確認用 <a href="\#(link.absoluteString)">x.com/dummy/status/\#(base.id)</a></p>"#,
+            spoilerText: "",
+            url: nil
+        )
+        let post = XPost(
+            id: base.id,
+            url: link,
+            authorName: "ダミーのXのアカウント",
+            authorScreenName: "dummy",
+            authorAvatar: avatar,
+            text: "5秒後に届いたダミーのXの投稿。4枚の画像を添付している。",
+            createdAt: .now,
+            media: DummyMedia.attachments(idPrefix: "x-\(base.id)")
+        )
+        let xPosts = viewController.xPosts
+        // 行を描いたときにfxtwitterへ読みに行かないよう、届けるまで読み込み中にしておく。
+        xPosts?.reserve(id: post.id)
+        run { controller in
+            controller.store.debugLocalOnlyIDs.insert(dummy.id)
+            controller.receive(.update(dummy))
+            guard (try? await Task.sleep(for: Self.dummyLinkCardDelay)) != nil, !controller.isStopped else { return }
+            xPosts?.deliver(post)
         }
     }
 
@@ -699,6 +736,7 @@ enum DebugDummyPost: String, CaseIterable {
     case linkCard = "link-card"
     case linkCardImage = "link-card-image"
     case linkCardSensitive = "link-card-sensitive"
+    case xPost = "x-post"
 
     var title: String {
         switch self {
@@ -711,6 +749,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .linkCard: "後から届くリンクカード（画像なし）"
         case .linkCardImage: "後から届くリンクカード（画像あり）"
         case .linkCardSensitive: "後から届くリンクカード（閲覧注意）"
+        case .xPost: "後から届くXの投稿（画像4枚）"
         }
     }
 
@@ -723,6 +762,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .video: "play.rectangle"
         case .longVideo: "speaker.wave.2"
         case .linkCard, .linkCardImage, .linkCardSensitive: "link"
+        case .xPost: "quote.bubble"
         }
     }
 }

@@ -130,6 +130,28 @@ struct XPostTests {
         #expect(await counter.count("1") == 1)
         #expect(await counter.count("2") == 1)
     }
+
+    /// ダミー投稿のために、読みに行かずに読み込み中にしておき、あとから投稿を届けられる。届けたら読み終えたときと同じく知らせる。
+    @MainActor @Test func storeDeliversWithoutFetching() async throws {
+        let counter = FetchCounter()
+        let post = XPost(id: "1", url: try url("https://x.com/a/status/1"), authorName: "A", authorScreenName: "a", text: "本文")
+        let store = XPostStore { id in
+            await counter.increment(id)
+            return post
+        }
+        var loaded: [String] = []
+        store.onLoad = { loaded.append($0) }
+
+        store.reserve(id: "1")
+        store.request(id: "1")
+        await Task.yield()
+        #expect(store.post(id: "1") == nil)
+
+        store.deliver(post)
+        #expect(store.post(id: "1") == post)
+        #expect(loaded == ["1"])
+        #expect(await counter.count("1") == 0)
+    }
 }
 
 private actor FetchCounter {
