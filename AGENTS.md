@@ -46,6 +46,8 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - ロジックはできるだけSciaCoreに置き、`swift test`で検証できる形にする。アプリ側はSciaCoreの状態を描画するだけの薄い層に保つ
 - タイムラインはUICollectionViewとdiffable data sourceで組む。スクロール位置を細かく制御する必要があるため、SwiftUIのListやScrollViewにはしない
 - 独自のアニメーションやジェスチャーを足す前に、UIKit標準の部品と挙動で実現できないか検討する
+- 画面の骨格、スクロール位置の制御、入力（入力欄、変換、キー操作、フォーカス）、ジェスチャーはUIKitで作る。中に入力もスクロール位置の精密な制御も持たない表示の部品は、SwiftUIで作れないかを先に考え、UIKitの画面に`UIHostingController`で載せる。Liquid Glassの組み方（`glassEffect`、`ConcentricRectangle`、`.containerShape`）をそのまま使えるため。補完の候補の一覧では、UIKitの`containerConcentric`がスクロールに追従しなかったが、SwiftUIでは追従した
+- UIKitで作った部品でLiquid Glassの不都合が出たら、SwiftUIへの置き換えを候補に入れる。UIKitとSwiftUIの境目では、`UIViewRepresentable`の中身が大きさの希望を変え続けて並べ直しが止まらなくなることがあるので、包む部品は`sizeThatFits`で大きさを決める
 - Mastodon APIの仕様は推測せず、公式ドキュメント（https://docs.joinmastodon.org/ ）で確認する。サーバー実装による差異（glitch-soc、Fedibird、GoToSocialなど）は、必要になった時点で個別に対応してテストに残す
 - Swift 6のstrict concurrencyを有効にしている。`@unchecked Sendable`や`nonisolated(unsafe)`で警告を消さず、設計で解決する
 
