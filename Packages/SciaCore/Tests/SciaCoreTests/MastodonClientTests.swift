@@ -396,4 +396,82 @@ struct MastodonClientTests {
         ])
         #expect(resolved?.acct == "bob@remote.example")
     }
+
+    // MARK: - 補完
+
+    @Test func searchAccountsForCompletionDoesNotResolveRemoteAccounts() async throws {
+        let transport = StubTransport([try .fixture("accounts_search")])
+
+        let accounts = try await makeClient(transport).searchAccountsForCompletion("ca", limit: 5)
+
+        let url = try #require(await transport.requests.first?.url)
+        #expect(url.path() == "/api/v1/accounts/search")
+        #expect(Set(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []) == [
+            URLQueryItem(name: "q", value: "ca"),
+            URLQueryItem(name: "resolve", value: "false"),
+            URLQueryItem(name: "limit", value: "5"),
+        ])
+        // 読めないアカウントがあっても、読めた分は候補にする。
+        #expect(accounts.map(\.acct) == ["carol", "bob@remote.example"])
+    }
+
+    /// 打っている途中の問い合わせは、一時的な失敗でも送り直さない。
+    @Test func completionSearchDoesNotRetry() async throws {
+        let transport = StubTransport([try .fixture("error_502", withExtension: "html", statusCode: 502)])
+
+        await #expect(throws: MastodonAPIError.self) {
+            try await makeClient(transport).searchAccountsForCompletion("ca", limit: 5)
+        }
+        #expect(await transport.requests.count == 1)
+    }
+
+    @Test func searchHashtagsForCompletion() async throws {
+        let transport = StubTransport([try .fixture("search_hashtags")])
+
+        let hashtags = try await makeClient(transport).searchHashtagsForCompletion("猫", limit: 4)
+
+        let url = try #require(await transport.requests.first?.url)
+        #expect(url.path() == "/api/v2/search")
+        #expect(Set(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []) == [
+            URLQueryItem(name: "q", value: "猫"),
+            URLQueryItem(name: "type", value: "hashtags"),
+            URLQueryItem(name: "resolve", value: "false"),
+            URLQueryItem(name: "limit", value: "4"),
+        ])
+        #expect(hashtags.map(\.name) == ["猫", "猫のいる暮らし", "猫写真"])
+        // 数は文字列で届く。履歴のないタグは0にする。
+        #expect(hashtags.map(\.recentUses) == [73, 0, 0])
+    }
+
+    @Test func customEmojis() async throws {
+        let transport = StubTransport([try .fixture("custom_emojis")])
+
+        let emojis = try await makeClient(transport).customEmojis()
+
+        #expect(await transport.requests.first?.url?.path() == "/api/v1/custom_emojis")
+        #expect(emojis.count == 7)
+        #expect(emojis.first { $0.shortcode == "hidden_blob" }?.visibleInPicker == false)
+        #expect(emojis.first { $0.shortcode == "blobcat" }?.category == "Blobs")
+        // 選択に出すかを返さない絵文字は、出すものとして扱う。
+        #expect(emojis.first { $0.shortcode == "no_picker_flag" }?.visibleInPicker == true)
+    }
+
+    /// 自分の投稿の数は、文書どおりの文字列でも、Mastodonが返す数でも読む。
+    @Test func featuredTags() async throws {
+        let transport = StubTransport([try .fixture("featured_tags")])
+
+        let tags = try await makeClient(transport).featuredTags()
+
+        #expect(await transport.requests.first?.url?.path() == "/api/v1/featured_tags")
+        #expect(tags == [FeaturedTag(name: "nowplaying", statusesCount: 70), FeaturedTag(name: "猫写真", statusesCount: 312)])
+    }
+
+    @Test func featuredTagSuggestions() async throws {
+        let transport = StubTransport([try .fixture("featured_tags_suggestions")])
+
+        let tags = try await makeClient(transport).featuredTagSuggestions()
+
+        #expect(await transport.requests.first?.url?.path() == "/api/v1/featured_tags/suggestions")
+        #expect(tags.map(\.name) == ["猫", "mastodev"])
+    }
 }

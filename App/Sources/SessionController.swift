@@ -164,14 +164,64 @@ final class SessionController {
             },
             makeThumbnail: { file in await LocalMediaThumbnail.make(for: file, maxPixelSize: ComposeAttachmentStrip.thumbnailPixelSize) }
         )
-        composer = InlineComposeController(model: ComposeModel(myAccountID: credential.accountID, media: media) { draft in
-            do {
-                _ = try await client.postStatus(draft)
-            } catch {
-                reportIfUnauthorized(error)
-                throw error
+        // 補完の問い合わせ口は別のスレッドから呼ばれるため、ほかの口と同じ知らせ方を、隔離されたAuthorizationCheckに直接送る。
+        let reportCompletionFailure: @Sendable (any Error) async -> Void = { [authorization] error in
+            guard let error = error as? MastodonAPIError, error.isUnauthorized else { return }
+            _ = await authorization.reportUnauthorized()
+        }
+        let completionSources = ComposeCompletion.Sources(
+            searchAccounts: { query, limit in
+                do {
+                    return try await client.searchAccountsForCompletion(query, limit: limit)
+                } catch {
+                    await reportCompletionFailure(error)
+                    throw error
+                }
+            },
+            searchHashtags: { query, limit in
+                do {
+                    return try await client.searchHashtagsForCompletion(query, limit: limit)
+                } catch {
+                    await reportCompletionFailure(error)
+                    throw error
+                }
+            },
+            customEmojis: {
+                do {
+                    return try await client.customEmojis()
+                } catch {
+                    await reportCompletionFailure(error)
+                    throw error
+                }
+            },
+            featuredTags: {
+                do {
+                    return try await client.featuredTags()
+                } catch {
+                    await reportCompletionFailure(error)
+                    throw error
+                }
+            },
+            recentTags: {
+                do {
+                    return try await client.featuredTagSuggestions()
+                } catch {
+                    await reportCompletionFailure(error)
+                    throw error
+                }
             }
-        })
+        )
+        composer = InlineComposeController(
+            model: ComposeModel(myAccountID: credential.accountID, media: media) { draft in
+                do {
+                    _ = try await client.postStatus(draft)
+                } catch {
+                    reportIfUnauthorized(error)
+                    throw error
+                }
+            },
+            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning))
+        )
         rootViewController = tabBarController
         forward = { [weak self] in self?.reportUnauthorized() }
         authorization.onChange = { [weak self] state in

@@ -337,6 +337,54 @@ public struct MastodonClient: Sendable {
         return try await get(Results.self, path: "api/v2/search", query: query).0.accounts.first
     }
 
+    /// 投稿欄のメンションの補完に使う。web UIと同じく、打つたびに相手のサーバーへ問い合わせると遅いので、自分のサーバーが知っているアカウントだけを探す。
+    /// `api/v2/search`の`type=accounts`もサーバーの中では同じ検索をするが、アカウントだけを返す専用の口で、web UIの補完と同じこちらを使う。
+    /// 打っている途中の問い合わせなので、一時的な失敗でも送り直さない。待つより、次に打った文字で問い合わせ直すほうが早い。
+    /// https://docs.joinmastodon.org/methods/accounts/#search
+    public func searchAccountsForCompletion(_ query: String, limit: Int) async throws -> [Account] {
+        let items = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "resolve", value: "false"),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+        ]
+        return try await get(ElementList<Account>.self, path: "api/v1/accounts/search", query: items, retries: false).0.elements
+    }
+
+    /// 投稿欄のハッシュタグの補完に使う。web UIは`exclude_unreviewed`を付けるが、管理者が確かめていないタグ（小さなサーバーではほとんど）が出なくなるため付けない。
+    /// メンションと同じく、一時的な失敗でも送り直さない。
+    /// https://docs.joinmastodon.org/methods/search/#v2
+    public func searchHashtagsForCompletion(_ query: String, limit: Int) async throws -> [Hashtag] {
+        struct Results: Decodable {
+            let hashtags: ElementList<Hashtag>
+        }
+        let items = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "type", value: "hashtags"),
+            URLQueryItem(name: "resolve", value: "false"),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+        ]
+        return try await get(Results.self, path: "api/v2/search", query: items, retries: false).0.hashtags.elements
+    }
+
+    /// プロフィールに載せているハッシュタグ。補完で、自分のタグとして先に出す。
+    /// https://docs.joinmastodon.org/methods/featured_tags/#get
+    public func featuredTags() async throws -> [FeaturedTag] {
+        try await get(ElementList<FeaturedTag>.self, path: "api/v1/featured_tags", query: []).0.elements
+    }
+
+    /// 最近使ったハッシュタグ（最大10件）。補完で、自分のタグとして先に出す。
+    /// サーバーは直近1年の最新1000投稿で2回以上使ったタグから、プロフィールに載せているものを除いて返す。
+    /// https://docs.joinmastodon.org/methods/featured_tags/#suggestions
+    public func featuredTagSuggestions() async throws -> [Hashtag] {
+        try await get(ElementList<Hashtag>.self, path: "api/v1/featured_tags/suggestions", query: []).0.elements
+    }
+
+    /// サーバーで使えるカスタム絵文字の一覧。補完ではまとめて一度だけ取り、手元で絞る。
+    /// https://docs.joinmastodon.org/methods/custom_emojis/
+    public func customEmojis() async throws -> [ServerEmoji] {
+        try await get(ElementList<ServerEmoji>.self, path: "api/v1/custom_emojis", query: []).0.elements
+    }
+
     /// 鍵のかかったアカウントには、フォローのリクエストを送る。
     /// https://docs.joinmastodon.org/methods/accounts/#follow
     public func follow(_ id: String) async throws -> Relationship {
@@ -350,9 +398,10 @@ public struct MastodonClient: Sendable {
     }
 
     /// - Parameter feature: なくても使える機能のAPIなら、その機能。使えないと分かったら、セッションの間は送らない。
-    private func get<T: Decodable>(_ type: T.Type, path: String, query: [URLQueryItem], feature: OptionalFeature? = nil) async throws -> (T, HTTPURLResponse) {
+    /// - Parameter retries: 一時的な失敗で送り直すか。
+    private func get<T: Decodable>(_ type: T.Type, path: String, query: [URLQueryItem], feature: OptionalFeature? = nil, retries: Bool = true) async throws -> (T, HTTPURLResponse) {
         let url = credential.instance.appending(path: path)
-        return try await send(URLRequest(url: query.isEmpty ? url : url.appending(queryItems: query)), decoding: type, feature: feature)
+        return try await send(URLRequest(url: query.isEmpty ? url : url.appending(queryItems: query)), decoding: type, feature: feature, retries: retries)
     }
 
     private func post<T: Decodable>(
@@ -380,8 +429,8 @@ public struct MastodonClient: Sendable {
         return request
     }
 
-    private func send<T: Decodable>(_ request: URLRequest, decoding type: T.Type, feature: OptionalFeature? = nil) async throws -> (T, HTTPURLResponse) {
-        let (data, response) = try await send(request, feature: feature)
+    private func send<T: Decodable>(_ request: URLRequest, decoding type: T.Type, feature: OptionalFeature? = nil, retries: Bool = true) async throws -> (T, HTTPURLResponse) {
+        let (data, response) = try await send(request, feature: feature, retries: retries)
         return (try decode(type, from: data, of: response, for: request), response)
     }
 
@@ -404,10 +453,10 @@ public struct MastodonClient: Sendable {
         }
     }
 
-    private func send(_ request: URLRequest, feature: OptionalFeature? = nil) async throws -> (Data, HTTPURLResponse) {
+    private func send(_ request: URLRequest, feature: OptionalFeature? = nil, retries allowsRetry: Bool = true) async throws -> (Data, HTTPURLResponse) {
         var request = request
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
-        let canRetry = RetryPolicy.canRetry(request)
+        let canRetry = allowsRetry && RetryPolicy.canRetry(request)
         var retries = 0
         while true {
             // 送り直しを待っている間に、並行する別の呼び出しが止めていることがある。

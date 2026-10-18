@@ -1,0 +1,16 @@
+[
+  {
+    "id": "627",
+    "name": "nowplaying",
+    "url": "https://example.social/@alice/tagged/nowplaying",
+    "statuses_count": 70,
+    "last_status_at": "2026-10-01"
+  },
+  {
+    "id": "628",
+    "name": "猫写真",
+    "url": "https://example.social/@alice/tagged/%E7%8C%AB%E5%86%99%E7%9C%9F",
+    "statuses_count": "312",
+    "last_status_at": "2026-10-17"
+  }
+]

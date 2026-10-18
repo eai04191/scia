@@ -89,4 +89,8 @@ public actor RateLimitGate {
 public struct AutomaticRequestsPaused: Error, Equatable {
     /// 再開の時刻。
     public let until: Date
+
+    public init(until: Date) {
+        self.until = until
+    }
 }

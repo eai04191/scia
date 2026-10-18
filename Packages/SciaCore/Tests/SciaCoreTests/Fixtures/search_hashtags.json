@@ -1,0 +1,34 @@
+{
+  "accounts": [],
+  "statuses": [],
+  "hashtags": [
+    {
+      "id": "41572",
+      "name": "猫",
+      "url": "https://example.social/tags/%E7%8C%AB",
+      "history": [
+        {
+          "day": "1792281600",
+          "accounts": "6",
+          "uses": "17"
+        },
+        {
+          "day": "1792195200",
+          "accounts": "22",
+          "uses": "56"
+        }
+      ]
+    },
+    {
+      "id": "708",
+      "name": "猫のいる暮らし",
+      "url": "https://example.social/tags/%E7%8C%AB%E3%81%AE%E3%81%84%E3%82%8B%E6%9A%AE%E3%82%89%E3%81%97",
+      "history": []
+    },
+    {
+      "id": "9",
+      "name": "猫写真"
+    }
+  ],
+  "collections": []
+}

@@ -12,6 +12,9 @@ import UIKit
 @MainActor
 final class InlineComposeController: NSObject {
     let model: ComposeModel
+    /// 本文と注意書きの補完。本文ではメンション、ハッシュタグ、カスタム絵文字を、注意書きではカスタム絵文字だけを補完する。
+    /// サーバーは注意書きのメンションとハッシュタグを読まないため。
+    let completion: ComposeCompletion
     /// 編集を始めるときに呼ぶ。既定の公開範囲などをまだ読めていなければ読む。
     var onBeginEditing: () -> Void = {}
     /// 書き終えてバーを細いカプセルに戻したときに呼ぶ。メディアを選ぶシートやビューアのためにキーボードを閉じたときは、書いている途中なので呼ばない。
@@ -134,6 +137,21 @@ final class InlineComposeController: NSObject {
     private var isShowingToolLayoutSettings = false
     /// ビューアを開くたびに増やす。閉じる途中に別の添付を開いたら、前のビューアの閉じ終わりでキーボードを戻さないようにする。
     private var mediaViewerGeneration = 0
+    /// 補完の候補の一覧。タイムラインに重ねて欄の上に出し、広げているときは打っている行のすぐ下に重ねる。
+    private let completionList = ComposeCompletionList()
+    /// 広げていないときの、一覧の下端を欄の上端に付ける制約。
+    private var completionListAboveBar: NSLayoutConstraint?
+    /// 広げているときの、一覧の上端の位置。打っている行に合わせて決める。
+    private var completionListTop: NSLayoutConstraint?
+    private var completionListHeight: NSLayoutConstraint?
+    /// 一覧を出している（消える動きの途中はfalse）。
+    private var isCompletionListShown = false
+    /// 補完している入力欄。本文か注意書き。
+    private weak var completionInput: (any UITextInput)?
+    /// 補完している入力欄に、最後に本文が変わったとき変換中の文字があった。
+    private var completionInputHadMarkedText = false
+    /// 一覧と欄や打っている行との間。
+    private let completionListSpacing: CGFloat = 6
 
     /// 触れるとわずかに膨らんで明るくなるガラス。押せるものだと指に伝える。
     private static func interactiveGlass() -> UIGlassEffect {
@@ -147,8 +165,9 @@ final class InlineComposeController: NSObject {
         UIFont.preferredFont(forTextStyle: .body).lineHeight * 5 + textView.textContainerInset.top + textView.textContainerInset.bottom
     }
 
-    init(model: ComposeModel, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings) {
+    init(model: ComposeModel, completion: ComposeCompletion? = nil, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings) {
         self.model = model
+        self.completion = completion ?? ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning))
         self.tuning = tuning
         self.settings = settings
         super.init()
@@ -190,18 +209,24 @@ final class InlineComposeController: NSObject {
         expandedTop = bar.topAnchor.constraint(equalTo: host.view.safeAreaLayoutGuide.topAnchor)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChangeFrame(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
         NotificationCenter.default.addObserver(self, selector: #selector(keyboardDidShow(_:)), name: UIResponder.keyboardDidShowNotification, object: nil)
-        bar.onFrameChange = { [weak self] in self?.reportObscuredHeight() }
+        bar.onFrameChange = { [weak self] in
+            self?.reportObscuredHeight()
+            self?.layoutCompletionListIfShown()
+        }
+        installCompletionList(in: host)
         AppDependencies.stateDumps.register("composer", owner: self) { $0.stateDump() }
         applyEditingLayout()
         applyExpandedLayout()
         observeModel()
         observeTuning()
         observeToolLayout()
+        observeCompletion()
     }
 
     /// バーを広げて、キーボードを出す。
     func beginEditing() {
         onBeginEditing()
+        completion.prefetch()
         setEditing(true)
         // 書いていない間に下書きが変わっていても、出す前に高さを合わせる。
         bar.layoutIfNeeded()
@@ -244,6 +269,7 @@ final class InlineComposeController: NSObject {
         bar.frame: \(bar.frame)
         rows: \(rowStates.map { "\($0.name) hidden=\($0.view.isHidden) frame=\($0.view.frame)" }.joined(separator: ", "))
         overlaps: \(overlappingRows.isEmpty ? "none" : overlappingRows.joined(separator: ", "))
+        completion: input=\(completionInput === textView ? "text" : completionInput === spoilerField ? "spoiler" : "none") kind=\(completion.token?.kind.rawValue ?? "nil") content=\(completionContentSummary) shown=\(isCompletionListShown) list.frame=\(completionList.frame)
         replyChip: title=\(replyButton.configuration?.title ?? "nil") frame=\(replyButton.frame) label=\(replyButton.titleLabel.map { "text=\($0.text ?? "nil") frame=\($0.frame) alpha=\($0.alpha) hidden=\($0.isHidden)" } ?? "nil")
         """
     }
@@ -285,8 +311,18 @@ final class InlineComposeController: NSObject {
             self.host?.view.layoutIfNeeded()
             // 5行の高さに戻すと、本文が先頭に戻ってカーソルが隠れることがあるため、カーソルの行を見せる。
             self.textView.scrollRangeToVisible(self.textView.selectedRange)
+            // 補完の一覧も、同じ動きで、動いたあとの欄と打っている行の位置へ動かす（広げると打っている行の下へ、戻すと欄の上へ）。
+            // 動き終わってから置き直すと、動きの間、広げるときは欄の上端に付いて画面の外へ押し出され、戻すときは上端に取り残された。
+            // 上で並べ直した時点で、欄と打っている行の位置は動いたあとの値になっている。
+            // 一覧の指定は、上の並べ直しの途中（欄が動いた知らせ）で切り替わることがあり、その回の並べ直しには反映されない。
+            // 決め直したうえで並べ直しをはっきり求め、この動きの中で一覧を動かす。
+            self.layoutCompletionListIfShown()
+            self.host?.view.setNeedsLayout()
+            self.host?.view.layoutIfNeeded()
         } completion: { _ in
             self.endCollapse(generation: generation)
+            // 戻したあとに本文の高さが決め直されると欄の高さも変わるので、置き直す。
+            self.layoutCompletionListIfShown()
         }
     }
 
@@ -662,6 +698,7 @@ final class InlineComposeController: NSObject {
     private func setEditing(_ editing: Bool) {
         guard isEditing != editing else { return }
         isEditing = editing
+        updateCompletionList()
         let collapses = !editing && isExpanded
         var generation: Int?
         if collapses {
@@ -743,10 +780,17 @@ final class InlineComposeController: NSObject {
         if textView.text != model.text {
             textView.text = model.text
             textDidChange()
+            // 投稿して空に戻したときや返信先を替えたときは、補完していた語がなくなる。
+            if completionInput === textView {
+                completion.textDidChange(nil)
+            }
         }
         placeholderLabel.isHidden = !model.text.isEmpty
         if spoilerField.text != model.spoilerText {
             spoilerField.text = model.spoilerText
+            if completionInput === spoilerField {
+                completion.textDidChange(nil)
+            }
         }
         // 返信先を外して引き継いだ注意書きが消えたときなども含め、欄を隠すときは、隠れた欄にキーボードを残さず本文へ移す。
         if !model.showsSpoiler {
@@ -1029,6 +1073,223 @@ final class InlineComposeController: NSObject {
         }
     }
 
+    // MARK: - 補完
+
+    private func installCompletionList(in host: UIViewController) {
+        completionList.translatesAutoresizingMaskIntoConstraints = false
+        completionList.alpha = 0
+        completionList.isHidden = true
+        completionList.onSelect = { [weak self] candidate in self?.complete(with: candidate) }
+        completionList.onRetry = { [weak self] in self?.completion.retry() }
+        // 投稿欄より手前に置く。広げているときは、欄の中の本文に重ねるため。
+        host.view.insertSubview(completionList, aboveSubview: bar)
+        let height = completionList.heightAnchor.constraint(equalToConstant: 0)
+        let aboveBar = completionList.bottomAnchor.constraint(equalTo: bar.topAnchor, constant: -completionListSpacing)
+        NSLayoutConstraint.activate([
+            completionList.leadingAnchor.constraint(equalTo: bar.leadingAnchor),
+            completionList.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
+            height,
+            aboveBar,
+        ])
+        completionListHeight = height
+        completionListAboveBar = aboveBar
+        completionListTop = completionList.topAnchor.constraint(equalTo: host.view.topAnchor)
+    }
+
+    private func observeCompletion() {
+        withObservationTracking {
+            updateCompletionList()
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.observeCompletion() }
+        }
+    }
+
+    /// 違和感レポートに残す、補完の状態。打った語は残さない。
+    private var completionContentSummary: String {
+        switch completion.content {
+        case nil: "nil"
+        case .candidates(let candidates): "candidates(\(candidates.count)) selected=\(completion.selectedIndex)"
+        case .loading: "loading"
+        case .empty: "empty"
+        case .failed: "failed"
+        case .candidatesWithFailure(let candidates, _): "candidates(\(candidates.count))+failed selected=\(completion.selectedIndex)"
+        }
+    }
+
+    /// 入力欄のカーソルの位置の語。本文ではメンション、タグ、絵文字を、注意書きでは絵文字だけを補完する。
+    /// - Parameter appliesMinimumLength: 候補を出すのに要る文字数を見るか。選んだときに範囲を決め直すだけなら見ない。
+    private func completionToken(in input: any UITextInput, appliesMinimumLength: Bool = true) -> CompletionToken? {
+        let text = (input as? UITextView)?.text ?? (input as? UITextField)?.text ?? ""
+        guard let selection = input.selectedTextRange else { return nil }
+        let begin = input.beginningOfDocument
+        let start = input.offset(from: begin, to: selection.start)
+        let end = input.offset(from: begin, to: selection.end)
+        let marked = input.markedTextRange.map { input.offset(from: begin, to: $0.start) ..< input.offset(from: begin, to: $0.end) }
+        return CompletionTokenizer.token(
+            in: text,
+            selection: start ..< max(start, end),
+            markedRange: marked,
+            kinds: input === textView ? Set(CompletionKind.allCases) : [.emoji],
+            minimumQueryLength: appliesMinimumLength ? TuningCatalog.completionMinimumQueryLength(in: tuning) : [:]
+        )
+    }
+
+    private func completionTextDidChange(in input: any UITextInput) {
+        completionInput = input
+        completionInputHadMarkedText = input.markedTextRange != nil
+        completion.settings = TuningCatalog.completionSettings(in: tuning)
+        completion.textDidChange(completionToken(in: input))
+    }
+
+    private func completionSelectionDidChange(in input: any UITextInput) {
+        guard completionInput === input else { return }
+        // 変換を確定しただけでは本文が変わったことにならないことがあるため、確定したらここで語を読み直す。
+        if completionInputHadMarkedText, input.markedTextRange == nil {
+            completionTextDidChange(in: input)
+            return
+        }
+        completion.selectionDidChange(completionToken(in: input))
+    }
+
+    /// 入力欄の編集が終わったら閉じる。メディアを選ぶシートやビューアを出すためにキーボードを閉じたときも閉じ、戻ったら打ち直すまで出さない。
+    private func endCompletion(in input: any UITextInput) {
+        guard completionInput === input else { return }
+        completion.textDidChange(nil)
+        completionInput = nil
+    }
+
+    /// 候補を本文に入れる。日本語の直後なら前に空白を、後ろに空白がなければ後ろにも空白を入れる。
+    /// 入力欄の`replace`で入れ、取り消し（シェイクや⌘Z）で戻せるようにする。
+    private func complete(with candidate: CompletionCandidate) {
+        guard let input = completionInput, let shown = completion.token, !model.isPosting else { return }
+        // 候補を出したあとにカーソルだけを語の中で動かしていれば、置き換える範囲はいまのカーソルで決め直す。
+        // ハッシュタグはカーソルより後ろを語に含めないため、出したときの範囲のままだと後ろの文まで消してしまう。
+        let current = completionToken(in: input, appliesMinimumLength: false)
+        let token = current.flatMap { $0.kind == shown.kind && $0.range.lowerBound == shown.range.lowerBound ? $0 : nil } ?? shown
+        let text = (input as? UITextView)?.text ?? (input as? UITextField)?.text ?? ""
+        let insertion = CompletionTokenizer.insertion(of: candidate.completion, replacing: token, in: text)
+        let begin = input.beginningOfDocument
+        guard let start = input.position(from: begin, offset: insertion.range.lowerBound),
+              let end = input.position(from: begin, offset: insertion.range.upperBound),
+              let range = input.textRange(from: start, to: end)
+        else { return }
+        logger.info("completion: selected \(token.kind.rawValue, privacy: .public) leadingSpace=\(token.needsLeadingSpace)")
+        input.replace(range, withText: insertion.text)
+        if let cursor = input.position(from: begin, offset: insertion.cursor) {
+            input.selectedTextRange = input.textRange(from: cursor, to: cursor)
+        }
+        // 入力欄の知らせが来なくても、下書きを入力欄に合わせる。
+        if input === textView {
+            model.text = textView.text
+            textDidChange()
+        } else if input === spoilerField {
+            model.spoilerText = spoilerField.text ?? ""
+        }
+        completion.didComplete()
+    }
+
+    private func completionKeys() -> CompletionKeys {
+        CompletionKeys(
+            hasCandidate: { [weak self] in self?.isCompletionListShown == true && self?.completion.selectedCandidate != nil },
+            isShown: { [weak self] in self?.isCompletionListShown == true },
+            // ↑↓は見た目の向きに動かす。下から積んでいるときは、↑で優先度の低い候補へ移る。
+            move: { [weak self] offset in
+                guard let self else { return }
+                completion.moveSelection(by: completionList.growsUpward ? -offset : offset)
+            },
+            confirm: { [weak self] in
+                guard let self, let candidate = completion.selectedCandidate else { return }
+                complete(with: candidate)
+            },
+            dismiss: { [weak self] in self?.completion.dismiss() }
+        )
+    }
+
+    /// 補完の状態を一覧に映す。書いていて、補完している入力欄がキーボードを出しているときだけ出す。
+    private func updateCompletionList() {
+        let content = completion.content
+        if let content, let kind = completion.token?.kind {
+            completionList.update(content, kind: kind, selectedIndex: completion.selectedIndex)
+        }
+        let shows = content != nil && isEditing && (completionInput as? UIResponder)?.isFirstResponder == true
+        if shows {
+            layoutCompletionList()
+        }
+        setCompletionListShown(shows)
+    }
+
+    private func layoutCompletionListIfShown() {
+        guard isCompletionListShown else { return }
+        layoutCompletionList()
+    }
+
+    /// 広げていなければ欄の上に、広げていれば打っている行のすぐ下（入りきらなければ行の上）に置く。
+    /// 入りきらない高さは、一覧の中でスクロールする。
+    private func layoutCompletionList() {
+        guard let host, let completionListHeight, let completionListAboveBar, let completionListTop else { return }
+        let wanted = completionList.contentHeight
+        var height: CGFloat
+        if isExpanded, let caret = completionCaretRect(in: host.view) {
+            let lower = tools.convert(tools.bounds, to: host.view).minY - completionListSpacing
+            let upper = bar.frame.minY + completionListSpacing
+            let below = lower - (caret.maxY + completionListSpacing)
+            let above = caret.minY - completionListSpacing - upper
+            let top: CGFloat
+            // 下に全部入れば下、入らず上なら入るなら上、どちらにも入らなければ広い方に出して中でスクロールする。
+            if below >= wanted || (above < wanted && below >= above) {
+                height = min(wanted, max(below, 0))
+                top = caret.maxY + completionListSpacing
+                completionList.growsUpward = false
+            } else {
+                height = min(wanted, max(above, 0))
+                top = caret.minY - completionListSpacing - height
+                completionList.growsUpward = true
+            }
+            setConstant(completionListTop, top)
+            completionListAboveBar.isActive = false
+            completionListTop.isActive = true
+        } else {
+            let safeTop = host.view.safeAreaLayoutGuide.layoutFrame.minY
+            let available = bar.frame.minY - completionListSpacing * 2 - safeTop
+            height = min(wanted, max(available, min(wanted, ComposeCompletionList.rowHeight * 2)))
+            completionList.growsUpward = true
+            completionListTop.isActive = false
+            completionListAboveBar.isActive = true
+        }
+        setConstant(completionListHeight, height)
+    }
+
+    /// 同じ値を入れ直すと、欄が動くたびに測り直しが続くので、変わったときだけ入れる。
+    private func setConstant(_ constraint: NSLayoutConstraint, _ value: CGFloat) {
+        guard abs(constraint.constant - value) > 0.5 else { return }
+        constraint.constant = value
+    }
+
+    /// 打っている行の、`view`の座標での位置。
+    private func completionCaretRect(in view: UIView) -> CGRect? {
+        guard let input = completionInput as? any UIView & UITextInput, let selection = input.selectedTextRange else { return nil }
+        let caret = input.caretRect(for: selection.end)
+        guard !caret.isNull, !caret.isInfinite else { return nil }
+        return input.convert(caret, to: view)
+    }
+
+    /// 出し入れは薄くするだけにする。動きの途中でも、一覧を押せるようにする。
+    private func setCompletionListShown(_ shown: Bool) {
+        guard shown != isCompletionListShown else { return }
+        isCompletionListShown = shown
+        let duration = tuning.value(of: TuningCatalog.completionFadeDuration)
+        if shown {
+            completionList.isHidden = false
+            host?.view.layoutIfNeeded()
+        }
+        UIView.animate(withDuration: duration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            self.completionList.alpha = shown ? 1 : 0
+        } completion: { _ in
+            guard !self.isCompletionListShown else { return }
+            self.completionList.isHidden = true
+        }
+    }
+
     // MARK: - 部品
 
     private func configureRestRow() {
@@ -1098,8 +1359,11 @@ final class InlineComposeController: NSObject {
         spoilerField.delegate = self
         spoilerField.onSubmit = { [weak self] in self?.submit() }
         spoilerField.addAction(UIAction { [weak self] _ in
-            self?.model.spoilerText = self?.spoilerField.text ?? ""
+            guard let self else { return }
+            model.spoilerText = spoilerField.text ?? ""
+            completionTextDidChange(in: spoilerField)
         }, for: .editingChanged)
+        spoilerField.completionKeys = completionKeys()
 
         var configuration = UIButton.Configuration.plain()
         configuration.image = UIImage(systemName: "xmark.circle.fill")
@@ -1157,6 +1421,7 @@ final class InlineComposeController: NSObject {
         textView.textContainer.lineFragmentPadding = 0
         textView.delegate = self
         textView.onSubmit = { [weak self] in self?.submit() }
+        textView.completionKeys = completionKeys()
         textView.accessibilityLabel = "本文"
         // 広げたときに、残りの高さを本文が使う。行が収まらない高さでは、本文から縮める。
         textView.setContentHuggingPriority(.defaultLow - 1, for: .vertical)
@@ -1236,6 +1501,11 @@ final class InlineComposeController: NSObject {
 extension InlineComposeController: UITextViewDelegate {
     /// 入力バーを引いても中身は動かさない。入力欄も同じ通知を受けるため、バーのスクロールビューだけを止める。
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        // 広げている間に本文をスクロールしたら、打っている行に付けた一覧も動かす。
+        if scrollView === textView {
+            layoutCompletionListIfShown()
+            return
+        }
         guard scrollView === dragArea, scrollView.contentOffset != .zero else { return }
         scrollView.contentOffset = .zero
     }
@@ -1243,6 +1513,11 @@ extension InlineComposeController: UITextViewDelegate {
     func textViewDidChange(_ textView: UITextView) {
         model.text = textView.text
         textDidChange()
+        completionTextDidChange(in: textView)
+    }
+
+    func textViewDidChangeSelection(_ textView: UITextView) {
+        completionSelectionDidChange(in: textView)
     }
 
     /// 送っている間は、送っている下書きと食い違わないよう打った文字を受け付けない。
@@ -1261,6 +1536,7 @@ extension InlineComposeController: UITextViewDelegate {
     }
 
     func textViewDidEndEditing(_ textView: UITextView) {
+        endCompletion(in: textView)
         inputDidEndEditing()
     }
 
@@ -1276,6 +1552,10 @@ extension InlineComposeController: UITextViewDelegate {
     private func inputDidBeginEditing(_ input: UIView) {
         isMovingFocus = false
         lastFocusedInput = input
+        if let completionInput, completionInput !== input {
+            completion.textDidChange(nil)
+            self.completionInput = nil
+        }
         guard let mediaPicker, !mediaPicker.isClosing else { return }
         logger.info("media picker: closing because an input began editing")
         mediaPicker.close(notifiesWillClose: false)
@@ -1309,7 +1589,12 @@ extension InlineComposeController: UITextFieldDelegate {
     }
 
     func textFieldDidEndEditing(_ textField: UITextField) {
+        endCompletion(in: textField)
         inputDidEndEditing()
+    }
+
+    func textFieldDidChangeSelection(_ textField: UITextField) {
+        completionSelectionDidChange(in: textField)
     }
 
     /// 注意書きを書き終えたら、Returnで本文へ移る。
@@ -1320,16 +1605,32 @@ extension InlineComposeController: UITextFieldDelegate {
 }
 
 /// Returnは改行と変換の確定に使うため、送信はボタンと、ハードウェアキーボードの⌘Returnだけにする。
+/// 補完の候補を出している間だけ、Tab・Returnで確定、↑↓で選ぶ候補を移し、Escで閉じる（web UIと同じ）。
 private final class ComposeTextView: GlyphLanguageTextView {
     var onSubmit: () -> Void = {}
+    var completionKeys = CompletionKeys()
 
     override var keyCommands: [UIKeyCommand]? {
         let submit = UIKeyCommand(title: "投稿", action: #selector(submitFromKeyboard), input: "\r", modifierFlags: .command)
-        return (super.keyCommands ?? []) + [submit]
+        return (super.keyCommands ?? []) + [submit] + completionKeys.commands(
+            move: #selector(moveCompletion(_:)), confirm: #selector(confirmCompletion), dismiss: #selector(dismissCompletion)
+        )
     }
 
     @objc private func submitFromKeyboard() {
         onSubmit()
+    }
+
+    @objc private func moveCompletion(_ command: UIKeyCommand) {
+        completionKeys.move(command.input == UIKeyCommand.inputUpArrow ? -1 : 1)
+    }
+
+    @objc private func confirmCompletion() {
+        completionKeys.confirm()
+    }
+
+    @objc private func dismissCompletion() {
+        completionKeys.dismiss()
     }
 }
 
@@ -1343,17 +1644,65 @@ private final class ComposeToolsView: UIStackView {
     }
 }
 
-/// 注意書きの入力欄。本文と同じく、ハードウェアキーボードの⌘Returnで送信する。
+/// 注意書きの入力欄。本文と同じく、ハードウェアキーボードの⌘Returnで送信し、補完の候補を出している間はキーで選べる。
 private final class ComposeSpoilerField: GlyphLanguageTextField {
     var onSubmit: () -> Void = {}
+    var completionKeys = CompletionKeys()
 
     override var keyCommands: [UIKeyCommand]? {
         let submit = UIKeyCommand(title: "投稿", action: #selector(submitFromKeyboard), input: "\r", modifierFlags: .command)
-        return (super.keyCommands ?? []) + [submit]
+        return (super.keyCommands ?? []) + [submit] + completionKeys.commands(
+            move: #selector(moveCompletion(_:)), confirm: #selector(confirmCompletion), dismiss: #selector(dismissCompletion)
+        )
     }
 
     @objc private func submitFromKeyboard() {
         onSubmit()
+    }
+
+    @objc private func moveCompletion(_ command: UIKeyCommand) {
+        completionKeys.move(command.input == UIKeyCommand.inputUpArrow ? -1 : 1)
+    }
+
+    @objc private func confirmCompletion() {
+        completionKeys.confirm()
+    }
+
+    @objc private func dismissCompletion() {
+        completionKeys.dismiss()
+    }
+}
+
+/// 補完の候補を出している間の、ハードウェアキーボードの操作。
+@MainActor
+struct CompletionKeys {
+    /// 確定できる候補を出している。
+    var hasCandidate: () -> Bool = { false }
+    /// 一覧を出している（候補がなくても、読み込み中や失敗の行を出している）。
+    var isShown: () -> Bool = { false }
+    var move: (Int) -> Void = { _ in }
+    var confirm: () -> Void = {}
+    var dismiss: () -> Void = {}
+
+    /// 出している間だけ返す。出していないときは、↑↓・Tab・Return・Escはふだんどおり入力欄が受ける。
+    func commands(move: Selector, confirm: Selector, dismiss: Selector) -> [UIKeyCommand] {
+        var commands: [UIKeyCommand] = []
+        if hasCandidate() {
+            commands += [
+                UIKeyCommand(input: UIKeyCommand.inputUpArrow, modifierFlags: [], action: move),
+                UIKeyCommand(input: UIKeyCommand.inputDownArrow, modifierFlags: [], action: move),
+                UIKeyCommand(input: "\t", modifierFlags: [], action: confirm),
+                UIKeyCommand(input: "\r", modifierFlags: [], action: confirm),
+            ]
+        }
+        if isShown() {
+            commands.append(UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: dismiss))
+        }
+        // 矢印やTab、Returnは、入力欄の移動や改行より先に受ける。
+        for command in commands {
+            command.wantsPriorityOverSystemBehavior = true
+        }
+        return commands
     }
 }
 

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "41572",
+    "name": "猫",
+    "url": "https://example.social/tags/%E7%8C%AB",
+    "history": [
+      {"day": "1792281600", "accounts": "1", "uses": "3"}
+    ],
+    "following": false
+  },
+  {
+    "id": "708",
+    "name": "mastodev",
+    "url": "https://example.social/tags/mastodev",
+    "history": [],
+    "following": true
+  }
+]

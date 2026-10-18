@@ -1,0 +1,46 @@
+[
+  {
+    "shortcode": "shimiru_01",
+    "url": "https://media.example.social/custom_emojis/images/000/000/264/original/shimiru_01.png",
+    "static_url": "https://media.example.social/custom_emojis/images/000/000/264/static/shimiru_01.png",
+    "visible_in_picker": true
+  },
+  {
+    "shortcode": "pacochi_taiyaki",
+    "url": "https://media.example.social/custom_emojis/images/000/000/144/original/pacochi_taiyaki.png",
+    "static_url": "https://media.example.social/custom_emojis/images/000/000/144/static/pacochi_taiyaki.png",
+    "visible_in_picker": true,
+    "category": "pacochi"
+  },
+  {
+    "shortcode": "taiyaki",
+    "url": "https://media.example.social/custom_emojis/images/000/000/145/original/taiyaki.png",
+    "static_url": "https://media.example.social/custom_emojis/images/000/000/145/static/taiyaki.png",
+    "visible_in_picker": true
+  },
+  {
+    "shortcode": "blobcat",
+    "url": "https://media.example.social/custom_emojis/images/000/000/012/original/blobcat.png",
+    "static_url": "https://media.example.social/custom_emojis/images/000/000/012/static/blobcat.png",
+    "visible_in_picker": true,
+    "category": "Blobs"
+  },
+  {
+    "shortcode": "blobcat_heart",
+    "url": "https://media.example.social/custom_emojis/images/000/000/013/original/blobcat_heart.png",
+    "static_url": "https://media.example.social/custom_emojis/images/000/000/013/static/blobcat_heart.png",
+    "visible_in_picker": true,
+    "category": "Blobs"
+  },
+  {
+    "shortcode": "hidden_blob",
+    "url": "https://media.example.social/custom_emojis/images/000/000/014/original/hidden_blob.png",
+    "static_url": "https://media.example.social/custom_emojis/images/000/000/014/static/hidden_blob.png",
+    "visible_in_picker": false
+  },
+  {
+    "shortcode": "no_picker_flag",
+    "url": "https://media.example.social/custom_emojis/images/000/000/015/original/x.png",
+    "static_url": "https://media.example.social/custom_emojis/images/000/000/015/static/x.png"
+  }
+]

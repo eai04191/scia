@@ -642,6 +642,67 @@ public enum TuningCatalog {
         defaultValue: 336
     )
 
+    /// メンションとハッシュタグの補完で、打つのが止まってから問い合わせるまでの時間（秒）。
+    public static let completionDebounce = NumberTuning(
+        id: "compose.completion.debounce",
+        title: "補完：問い合わせまでの待ち（秒）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.15
+    )
+
+    /// 補完の候補を出す数。
+    public static let completionLimit = NumberTuning(
+        id: "compose.completion.limit",
+        title: "補完：候補の数",
+        range: 1...10,
+        step: 1,
+        defaultValue: 5
+    )
+
+    /// メンションとハッシュタグで、印のあとに何文字打ったら候補を出すか。
+    /// web UIと同じく2文字にする。1文字で問い合わせると、stellaria.networkのアカウント検索は500を返した（2026年10月）。
+    public static let completionMinimumQuery = NumberTuning(
+        id: "compose.completion.minimumQuery",
+        title: "補完：メンションとタグを出す文字数",
+        range: 1...4,
+        step: 1,
+        defaultValue: 2
+    )
+
+    /// カスタム絵文字で、`:`のあとに何文字打ったら候補を出すか。一覧は手元にあり問い合わせないので、少なくてよい。
+    /// 0にすると、「例:」のように日本語のすぐ後に`:`を打つたびに一覧が出るため、既定は1にする。
+    public static let completionEmojiMinimumQuery = NumberTuning(
+        id: "compose.completion.emojiMinimumQuery",
+        title: "補完：絵文字を出す文字数",
+        range: 0...4,
+        step: 1,
+        defaultValue: 1
+    )
+
+    /// 補完の候補の一覧を出し入れする時間（秒）。
+    public static let completionFadeDuration = NumberTuning(
+        id: "compose.completion.fadeDuration",
+        title: "補完：一覧の出入りの時間（秒）",
+        range: 0...0.6,
+        step: 0.02,
+        defaultValue: 0.12
+    )
+
+    @MainActor
+    public static func completionSettings(in store: TuningStore) -> ComposeCompletion.Settings {
+        ComposeCompletion.Settings(
+            debounce: .milliseconds(Int(store.value(of: completionDebounce) * 1000)),
+            limit: Int(store.value(of: completionLimit))
+        )
+    }
+
+    @MainActor
+    public static func completionMinimumQueryLength(in store: TuningStore) -> [CompletionKind: Int] {
+        let mentionAndTag = Int(store.value(of: completionMinimumQuery))
+        return [.mention: mentionAndTag, .hashtag: mentionAndTag, .emoji: Int(store.value(of: completionEmojiMinimumQuery))]
+    }
+
     /// ストリーミングにつながらない間の、ポーリングと知らせるまでの時間。
     @MainActor
     public static func liveUpdates(in store: TuningStore) -> LiveUpdates.Policy {
@@ -713,6 +774,11 @@ public enum TuningCatalog {
             .number(composeExpandDuration),
             .toggle(composePickerMatchesKeyboard),
             .number(composePickerHeight),
+            .number(completionDebounce),
+            .number(completionLimit),
+            .number(completionMinimumQuery),
+            .number(completionEmojiMinimumQuery),
+            .number(completionFadeDuration),
         ]),
         TuningSection(id: "browser", title: "アプリ内のSafari", items: [
             .number(inAppBrowserMediumFraction),
