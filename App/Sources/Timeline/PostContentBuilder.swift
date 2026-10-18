@@ -63,6 +63,7 @@ struct PostContentBuilder {
             avatar: avatarContent(of: shown.account),
             nameParts: nameParts,
             createdAt: shown.createdAt,
+            isEdited: shown.editedAt != nil,
             timeStyle: settings.statusTimeStyle,
             body: body(of: shown, base: base),
             spoiler: spoiler(of: shown, base: base),

@@ -25,6 +25,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     /// 名前の行に並べる文字。先頭を目立たせ、2つ目は控えめに描く。
     var nameParts: [NSAttributedString]
     var createdAt: Date
+    /// 投稿が編集されていれば、時刻の前に印を付ける。時刻は編集した時刻ではなく、投稿した時刻のまま。
+    var isEdited = false
     var timeStyle: StatusTimeStyle
     var body: NSAttributedString
     /// 注意書きがなければnil。
@@ -94,7 +96,14 @@ struct PostContentConfiguration: UIContentConfiguration {
 
     /// `now`の時点での時刻の表記。
     func timeText(now: Date) -> String {
-        StatusTimestamp.text(for: createdAt, now: now, style: timeStyle)
+        let text = StatusTimestamp.text(for: createdAt, now: now, style: timeStyle)
+        return isEdited ? "*\(text)" : text
+    }
+
+    /// 読み上げる時刻。印の記号は読まず、言葉にする。
+    func timeAccessibilityText(now: Date) -> String {
+        let text = StatusTimestamp.text(for: createdAt, now: now, style: timeStyle)
+        return isEdited ? "編集済み、\(text)" : text
     }
 }
 
@@ -340,7 +349,7 @@ final class PostContentView: UIView, UIContentView {
             parts.append(context.accessibilityText)
         }
         parts += configuration.nameParts.map(\.string)
-        parts.append(timeLabel.text ?? "")
+        parts.append(configuration.timeAccessibilityText(now: .now))
         parts.append(bodyView.accessibilityText)
         textAccessibilityElement.accessibilityLabel = parts.filter { !$0.isEmpty }.joined(separator: "、")
         textAccessibilityElement.accessibilityCustomActions = [bodyView.spoilerAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
