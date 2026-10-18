@@ -219,14 +219,29 @@ public final class LinkCardRefresher {
                 apply(status)
             }
             // カードが届いた版と、返らなかった投稿（消えたか見られなくなった）は、もう取り直さない。
-            let finishedIDs = Set(carded.map(\.id)).union(Set(ids).subtracting(statuses.map(\.id)))
+            let cardedIDs = Set(carded.map(\.id))
+            let finishedIDs = cardedIDs.union(Set(ids).subtracting(statuses.map(\.id)))
             schedule.finish(attempts.map(\.version).filter { finishedIDs.contains($0.statusID) })
             logger.info("link card refresh requested=\(ids.count, privacy: .public) carded=\(carded.count, privacy: .public)")
+            logOutcomes(of: attempts, cardedIDs: cardedIDs)
         } catch is FeatureUnavailable {
             isUnsupported = true
         } catch {
             logger.error("link card refresh failed: \(error.localizedDescription, privacy: .public)")
+            logOutcomes(of: attempts, cardedIDs: [])
         }
     }
 
+    /// 間隔や諦めるまでの時間を見直せるよう、カードが届くまでの時間と、諦めた投稿を残す。
+    private func logOutcomes(of attempts: [LinkCardRefreshSchedule.Attempt], cardedIDs: Set<Status.ID>) {
+        let now = now()
+        for attempt in attempts {
+            let elapsed = Int(now.timeIntervalSince(attempt.firstSeen).rounded())
+            if cardedIDs.contains(attempt.version.statusID) {
+                logger.info("link card arrived elapsed=\(elapsed, privacy: .public)s attempts=\(attempt.count, privacy: .public)")
+            } else if attempt.isFinal {
+                logger.info("link card gave up elapsed=\(elapsed, privacy: .public)s attempts=\(attempt.count, privacy: .public)")
+            }
+        }
+    }
 }
