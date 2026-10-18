@@ -3,7 +3,11 @@ import UIKit
 
 /// アカウントのアイコン。大きさは制約で決め、届くまでは同じ形の灰色で埋める。URLがなければ灰色のままにする。
 /// 画像が届いても大きさは変わらないため、行の高さも変わらない。
-final class AvatarView: UIImageView {
+///
+/// 灰色はこのビューの背景に敷き、画像は中のビューに描く。届いた画像は、中のビューの透明度だけを上げて灰色の上に浮かび上がらせる。
+/// `UIView.transition`のクロスフェードは最後に画面に描いた見た目から始まるため、使い回したセルで灰色に戻した直後に画像が届くと、
+/// 灰色が一度も描かれず、前に表示していた人のアイコンから切り替わって見える。
+final class AvatarView: UIView {
     struct Content: Equatable {
         /// サーバーが画像のURLを返さなかったときはnil。
         let url: URL?
@@ -12,6 +16,7 @@ final class AvatarView: UIImageView {
     }
 
     private let store: AvatarImageStore
+    private let imageView = UIImageView()
     private var content: Content?
     private var loadingKey: AvatarImageStore.Key?
     private var loadTask: Task<Void, Never>?
@@ -19,7 +24,10 @@ final class AvatarView: UIImageView {
     init(store: AvatarImageStore) {
         self.store = store
         super.init(frame: .zero)
-        contentMode = .scaleAspectFill
+        imageView.contentMode = .scaleAspectFill
+        imageView.frame = bounds
+        imageView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(imageView)
         clipsToBounds = true
         layer.cornerCurve = .continuous
         backgroundColor = .secondarySystemFill
@@ -60,7 +68,7 @@ final class AvatarView: UIImageView {
         let scale = traitCollection.displayScale
         guard let content, let url = content.url, bounds.width > 0, scale > 0 else {
             cancelLoad()
-            image = nil
+            show(nil)
             return
         }
         let key = AvatarImageStore.Key(url: url, maxPixelSize: Int((bounds.width * scale).rounded(.up)), animates: content.animates)
@@ -68,17 +76,26 @@ final class AvatarView: UIImageView {
         cancelLoad()
         loadingKey = key
         if let cached = store.cachedImage(for: key) {
-            image = cached
+            show(cached)
             return
         }
-        image = nil
+        show(nil)
         loadTask = Task { [weak self, store] in
             guard let image = try? await store.image(for: key), let self, !Task.isCancelled, self.loadingKey == key else { return }
+            self.show(image)
+            self.imageView.alpha = 0
             // フェードの間もプロフィールを開くタップを受け付ける。
-            UIView.transition(with: self, duration: 0.15, options: [.transitionCrossDissolve, .allowUserInteraction]) {
-                self.image = image
+            UIView.animate(withDuration: 0.15, delay: 0, options: [.allowUserInteraction]) {
+                self.imageView.alpha = 1
             }
         }
+    }
+
+    /// 画像をすぐに描く。読み込み中のフェードの途中なら止める。
+    private func show(_ image: UIImage?) {
+        imageView.layer.removeAllAnimations()
+        imageView.alpha = 1
+        imageView.image = image
     }
 
     private func cancelLoad() {
@@ -89,4 +106,22 @@ final class AvatarView: UIImageView {
 }
 
 /// プロフィールでは、アイコンをタップしてビューアで大きく見る。
-extension AvatarView: MediaViewerSource {}
+extension AvatarView: MediaViewerSource {
+    var thumbnailImage: UIImage? { imageView.image }
+    var loadedThumbnail: UIImage? { imageView.image }
+
+    var placeholderColor: UIColor? {
+        backgroundColor?.resolvedColor(with: traitCollection)
+    }
+
+    func makeDecorationCopy() -> UIView {
+        let container = UIView(frame: bounds)
+        container.isUserInteractionEnabled = false
+        return container
+    }
+
+    var isConcealedForViewer: Bool {
+        get { layer.mask != nil }
+        set { layer.mask = newValue ? CALayer() : nil }
+    }
+}

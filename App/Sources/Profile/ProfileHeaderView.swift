@@ -76,7 +76,7 @@ final class ProfileHeaderView: UIView {
 
         bannerView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openHeader)))
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAvatar)))
-        for (view, label) in [(bannerView, "ヘッダー画像"), (avatarView, "アイコン")] as [(UIImageView, String)] {
+        for (view, label) in [(bannerView, "ヘッダー画像"), (avatarView, "アイコン")] as [(UIView, String)] {
             view.isUserInteractionEnabled = true
             view.isAccessibilityElement = true
             view.accessibilityLabel = label
@@ -219,11 +219,11 @@ final class ProfileHeaderView: UIView {
     /// ビューアを開閉する起点。画像を読み込み終えていなければ、大きくして見るものがないのでnil。
     /// Mastodonは、ヘッダー画像を設定していないアカウントに1×1の透明な画像（`/headers/original/missing.png`）を返すため、それも開かない。
     func viewerSource(for image: ProfileImage) -> (any MediaViewerSource)? {
-        let view: any UIImageView & MediaViewerSource = switch image {
+        let view: any MediaViewerSource = switch image {
         case .avatar: avatarView
         case .header: bannerView
         }
-        guard let shown = view.image, window != nil else { return nil }
+        guard let shown = view.loadedThumbnail, window != nil else { return nil }
         let pixels = CGSize(width: shown.size.width * shown.scale, height: shown.size.height * shown.scale)
         guard pixels.width > 1 || pixels.height > 1 else { return nil }
         return view
