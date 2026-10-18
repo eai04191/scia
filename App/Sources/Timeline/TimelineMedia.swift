@@ -6,10 +6,15 @@ extension TimelineViewController {
     /// 閲覧注意の投稿と、注意書きのある投稿は、タップするまで添付ファイルを覆う。メニューから隠した投稿も覆う。
     /// 説明にならない代替テキストは、ALTの目印にもビューアにも読み上げにも出さないよう、ここで除いておく。
     func mediaContent(for status: Status) -> MediaGridView.Content? {
-        guard !status.mediaAttachments.isEmpty else { return nil }
+        mediaContent(of: status.mediaAttachments, cover: mediaCovers.cover(for: status))
+    }
+
+    /// `attachments`を並べる中身。
+    func mediaContent(of attachments: [MediaAttachment], cover: MediaCover?) -> MediaGridView.Content? {
+        guard !attachments.isEmpty else { return nil }
         return MediaGridView.Content(
-            attachments: status.mediaAttachments.map { $0.filteringAltText(ignoresUseless: settings.ignoresUselessAltText) },
-            cover: mediaCovers.cover(for: status),
+            attachments: attachments.map { $0.filteringAltText(ignoresUseless: settings.ignoresUselessAltText) },
+            cover: cover,
             tallestAspectRatio: tuning.value(of: TuningCatalog.mediaTallestAspectRatio),
             thumbnailPolicy: MediaThumbnailPolicy(
                 allowsOriginal: MediaThumbnailSelection.allowsOriginal(
