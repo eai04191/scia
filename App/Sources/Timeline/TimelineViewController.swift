@@ -57,7 +57,7 @@ final class TimelineViewController: UIViewController {
     /// シートを出している間は投稿欄がシートの裏に隠れて触れないため、その入口にする。
     var onFocusInlineCompose: (() -> Void)?
     private lazy var focusInlineComposeItem: UIBarButtonItem = {
-        let item = UIBarButtonItem(image: UIImage(systemName: "text.cursor"), primaryAction: UIAction { [weak self] _ in self?.onFocusInlineCompose?() })
+        let item = UIBarButtonItem(image: UIImage(systemName: "square.and.pencil"), primaryAction: UIAction { [weak self] _ in self?.onFocusInlineCompose?() })
         item.accessibilityLabel = "投稿欄に書く"
         return item
     }()
