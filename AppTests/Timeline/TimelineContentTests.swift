@@ -37,6 +37,25 @@ struct TimelineContentTests {
         #expect(content.symbolName == "star.fill")
     }
 
+    /// 絵文字やアイコンの画像が届いて同じ大きさで描き直したあとも、読み上げの要素は画面上の文字の位置を指したままにする。
+    @Test func notificationAccessibilityFrameSurvivesRedrawWithoutLayout() throws {
+        let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let actor = Account(id: "2", username: "bob", acct: "bob@remote.example", displayName: "Bob", avatar: status.account.avatar)
+        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: .now, account: actor, status: status)
+        let content = try #require(makeViewController().contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
+        let view = content.makeContentView()
+        let size = view.systemLayoutSizeFitting(CGSize(width: 360, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        view.frame = CGRect(origin: .zero, size: size)
+        view.layoutIfNeeded()
+        let element = try #require(view.accessibilityElements?.first as? UIAccessibilityElement)
+        let laidOut = element.accessibilityFrameInContainerSpace
+        #expect(!laidOut.isEmpty)
+
+        view.configuration = content
+        view.layoutIfNeeded()
+        #expect(element.accessibilityFrameInContainerSpace == laidOut)
+    }
+
     /// メンションはホームの投稿と同じ見た目にし、名前の上に誰が何をしたかの行を足す。
     @Test func mentionLooksLikePostWithContext() throws {
         let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)

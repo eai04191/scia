@@ -85,6 +85,27 @@ struct PostContentViewTests {
 
         #expect(fittingHeight(of: controller.contentConfiguration(for: boost, base: .cell())) > fittingHeight(of: controller.contentConfiguration(for: original, base: .cell())))
     }
+    /// 絵文字の画像が届いたときや時刻の表記が変わったときは、大きさの変わらない描き直しで並べ直しが起きない。
+    /// そのあとも、読み上げの要素は画面上の文字の位置を指したままにする。枠が空になると、VoiceOverで指でなぞってもその投稿に止まらない。
+    @Test func accessibilityFrameSurvivesRedrawWithoutLayout() throws {
+        let configuration = makeViewController().contentConfiguration(for: try status(content: "<p>短い</p>"), base: .cell())
+        let view = configuration.makeContentView()
+        let size = view.systemLayoutSizeFitting(CGSize(width: 360, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        view.frame = CGRect(origin: .zero, size: size)
+        view.layoutIfNeeded()
+        let element = try #require(view.accessibilityElements?.first as? UIAccessibilityElement)
+        let laidOut = element.accessibilityFrameInContainerSpace
+        #expect(!laidOut.isEmpty)
+
+        view.configuration = configuration
+        view.layoutIfNeeded()
+        #expect(element.accessibilityFrameInContainerSpace == laidOut)
+
+        try #require(view as? PostContentView).refreshTime(now: .now.addingTimeInterval(60 * 60 * 24 * 400))
+        view.layoutIfNeeded()
+        #expect(element.accessibilityFrameInContainerSpace == laidOut)
+    }
+
     /// VoiceOverでは本文を1つの要素で読むため、リンクは要素の操作から開く。押しても何もしないハッシュタグは出さない。
     @Test func exposesLinksAsAccessibilityActions() throws {
         let content = #"<p>見て <a href="https://example.com/a"><span class="invisible">https://</span>example.com/a</a> <a href="https://example.social/tags/scia" class="mention hashtag" rel="tag">#<span>scia</span></a></p>"#

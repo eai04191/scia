@@ -133,7 +133,9 @@ final class NotificationContentView: UIView, UIContentView {
             .filter { !$0.isEmpty }
             .joined(separator: "、")
         textAccessibilityElement.accessibilityCustomActions = [bodyView.spoilerAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
-        textAccessibilityElement.accessibilityFrameInContainerSpace = .null
+        // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
+        // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
+        setNeedsLayout()
         accessibilityElements = [textAccessibilityElement] + [bodyView.mediaGrid].compactMap(\.self)
     }
 
