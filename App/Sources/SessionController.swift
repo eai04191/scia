@@ -718,7 +718,12 @@ final class SessionController {
             guard let self else { return }
             async let configuration = self.loadInstanceConfiguration()
             async let preferences = self.loadPreferences()
-            self.composer.model.apply(configuration: await configuration, defaultVisibility: await preferences?.defaultVisibility, defaultSensitive: await preferences?.defaultSensitive)
+            #if DEBUG
+            let loaded = DebugFaults.applyingMediaLimits(to: await configuration)
+            #else
+            let loaded = await configuration
+            #endif
+            self.composer.model.apply(configuration: loaded, defaultVisibility: await preferences?.defaultVisibility, defaultSensitive: await preferences?.defaultSensitive)
         }
     }
 
@@ -910,6 +915,8 @@ final class SessionController {
             DebugFaults.setStreamingOnline(isOnline)
         case .slowDownload(let seconds):
             DebugFaults.slowDownloads(by: seconds.map { .seconds($0) })
+        case .mediaLimits(let limits):
+            DebugFaults.overrideMediaLimits(limits)
         case .catalog(let component):
             topViewController.presentComponentCatalog(opening: component)
         case .dump:

@@ -80,6 +80,35 @@ enum DebugFaults {
         downloadDelay.withLock { $0 = delay }
     }
 
+    /// 決めると、投稿欄が使うサーバーのメディアの上限のうち、決めた項目だけを差し替える。送る前に縮める流れを、大きなメディアなしで確かめるため。
+    private static let mediaLimitsOverride = Mutex<MediaLimits?>(nil)
+
+    /// - Parameter limits: nilなら戻す。
+    static func overrideMediaLimits(_ limits: MediaLimits?) {
+        mediaLimitsOverride.withLock { $0 = limits }
+    }
+
+    /// サーバーの設定の上限に、差し替えた項目を当てる。
+    static func applyingMediaLimits(to configuration: InstanceConfiguration?) -> InstanceConfiguration? {
+        guard let configuration, let override = mediaLimitsOverride.withLock({ $0 }) else { return configuration }
+        let server = configuration.mediaLimits
+        return InstanceConfiguration(
+            streamingURL: configuration.streamingURL,
+            maxCharacters: configuration.maxCharacters,
+            charactersReservedPerURL: configuration.charactersReservedPerURL,
+            maxMediaAttachments: configuration.maxMediaAttachments,
+            mediaDescriptionLimit: configuration.mediaDescriptionLimit,
+            supportedMediaTypes: configuration.supportedMediaTypes,
+            mediaLimits: MediaLimits(
+                imageSizeLimit: override.imageSizeLimit ?? server.imageSizeLimit,
+                imageMatrixLimit: override.imageMatrixLimit ?? server.imageMatrixLimit,
+                videoSizeLimit: override.videoSizeLimit ?? server.videoSizeLimit,
+                videoMatrixLimit: override.videoMatrixLimit ?? server.videoMatrixLimit,
+                videoFrameRateLimit: override.videoFrameRateLimit ?? server.videoFrameRateLimit
+            )
+        )
+    }
+
     /// 立てると、ホームと通知のタブは、届いた新着を一覧に挿入せずに溜める。agentが一覧の行をタップする間に、新着で行がずれないようにする。
     private static let holdsArrivals = Mutex(false)
 

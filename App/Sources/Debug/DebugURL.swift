@@ -26,6 +26,9 @@ enum DebugURL: Equatable {
     /// `scia-debug://download/slow`で、以後の共有や保存のためのダウンロードを、進み具合を刻みながら10秒遅らせる。
     /// `?seconds=<秒>`で遅らせる時間を変える。`scia-debug://download/normal`で戻す。
     case slowDownload(seconds: Double?)
+    /// `scia-debug://media-limits?image-size=<バイト>&image-matrix=<画素>&video-size=<バイト>&video-matrix=<画素>&video-frame-rate=<fps>`。
+    /// 投稿欄が使うサーバーのメディアの上限を、指定した項目だけ差し替える。次に投稿欄で書き始めたときから効く。`scia-debug://media-limits/server`で戻す。
+    case mediaLimits(MediaLimits?)
     /// `scia-debug://catalog`で部品のカタログを開く。`scia-debug://catalog/<CatalogComponent.rawValue>`なら、その部品の状態を並べた画面まで開く。
     case catalog(CatalogComponent?)
     /// `scia-debug://dump`。画面にある要素の名前と枠を、アプリのDocuments/AgentDump/screen.txtに書き出す。
@@ -92,6 +95,20 @@ enum DebugURL: Equatable {
             case "normal": self = .slowDownload(seconds: nil)
             default: return nil
             }
+        case "media-limits":
+            if url.lastPathComponent == "server" {
+                self = .mediaLimits(nil)
+                return
+            }
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            func value(_ name: String) -> Int? { items.first { $0.name == name }?.value.flatMap { Int($0) } }
+            self = .mediaLimits(MediaLimits(
+                imageSizeLimit: value("image-size"),
+                imageMatrixLimit: value("image-matrix"),
+                videoSizeLimit: value("video-size"),
+                videoMatrixLimit: value("video-matrix"),
+                videoFrameRateLimit: value("video-frame-rate")
+            ))
         case "catalog":
             let path = url.path(percentEncoded: false)
             if path.isEmpty || path == "/" {
