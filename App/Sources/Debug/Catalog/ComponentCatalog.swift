@@ -30,6 +30,7 @@ enum CatalogComponent: String, CaseIterable {
     case posts
     case linkCards = "link-cards"
     case notifications
+    case editHistory = "edit-history"
 
     var title: String {
         switch self {
@@ -50,6 +51,7 @@ enum CatalogComponent: String, CaseIterable {
         case .posts: "一覧の投稿"
         case .linkCards: "リンクカード"
         case .notifications: "通知の種類"
+        case .editHistory: "編集履歴の版"
         }
     }
 
@@ -73,6 +75,7 @@ enum CatalogComponent: String, CaseIterable {
         case .posts: PostRowCatalog.postStates()
         case .linkCards: PostRowCatalog.linkCardStates()
         case .notifications: PostRowCatalog.notificationStates()
+        case .editHistory: EditHistoryCatalog.states()
         }
     }
 }
