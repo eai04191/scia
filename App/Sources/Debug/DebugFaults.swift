@@ -55,6 +55,7 @@ enum DebugFaults {
                 case .markers: path.hasSuffix("api/v1/markers")
                 case .preferences: path.hasSuffix("api/v1/preferences")
                 case .instanceV2: path.hasSuffix("api/v2/instance")
+                case .multipleStatuses: path.hasSuffix("api/v1/statuses") && request.httpMethod == "GET"
                 }
             }
         }
