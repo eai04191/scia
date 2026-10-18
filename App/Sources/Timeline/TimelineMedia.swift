@@ -11,20 +11,7 @@ extension TimelineViewController {
 
     /// `attachments`を並べる中身。Xの投稿の囲みの添付ファイルにも使う。
     func mediaContent(of attachments: [MediaAttachment], cover: MediaCover?) -> MediaGridView.Content? {
-        guard !attachments.isEmpty else { return nil }
-        return MediaGridView.Content(
-            attachments: attachments.map { $0.filteringAltText(ignoresUseless: settings.ignoresUselessAltText) },
-            cover: cover,
-            tallestAspectRatio: tuning.value(of: TuningCatalog.mediaTallestAspectRatio),
-            thumbnailPolicy: MediaThumbnailPolicy(
-                allowsOriginal: MediaThumbnailSelection.allowsOriginal(
-                    on: network.conditions,
-                    usesOriginalOnExpensiveNetwork: settings.usesOriginalThumbnailsOnExpensiveNetwork
-                ),
-                upscaleTolerance: tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
-            ),
-            spacing: tuning.value(of: TuningCatalog.mediaTileSpacing)
-        )
+        MediaGridView.Content.make(of: attachments, cover: cover, settings: settings, tuning: tuning, network: network)
     }
 
     /// 覆いを外す。同じ投稿をブーストした行と通知の行もまとめて描き直す。覆いと中身は同じ大きさのため、行の高さは変わらない。
@@ -149,5 +136,27 @@ extension TimelineViewController {
             }
         }
         return nil
+    }
+}
+
+extension MediaGridView.Content {
+    /// `attachments`を、今の設定とチューニングで並べる中身。添付ファイルがなければnil。一覧の外（編集履歴など）でも同じ見た目にする。
+    /// 説明にならない代替テキストは、ALTの目印にもビューアにも読み上げにも出さないよう、ここで除いておく。
+    @MainActor
+    static func make(of attachments: [MediaAttachment], cover: MediaCover?, settings: AppSettings, tuning: TuningStore, network: NetworkConditionsMonitor) -> Self? {
+        guard !attachments.isEmpty else { return nil }
+        return MediaGridView.Content(
+            attachments: attachments.map { $0.filteringAltText(ignoresUseless: settings.ignoresUselessAltText) },
+            cover: cover,
+            tallestAspectRatio: tuning.value(of: TuningCatalog.mediaTallestAspectRatio),
+            thumbnailPolicy: MediaThumbnailPolicy(
+                allowsOriginal: MediaThumbnailSelection.allowsOriginal(
+                    on: network.conditions,
+                    usesOriginalOnExpensiveNetwork: settings.usesOriginalThumbnailsOnExpensiveNetwork
+                ),
+                upscaleTolerance: tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
+            ),
+            spacing: tuning.value(of: TuningCatalog.mediaTileSpacing)
+        )
     }
 }
