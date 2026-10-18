@@ -77,7 +77,7 @@ enum PostRowCatalog {
         let longText = String(repeating: "見出しや要約が1行に収まらないときに末尾を省くことを確かめる文。", count: 3)
         let pendingCard = LinkCardView(store: Fixtures.pendingMediaImages)
         if let loading = card() {
-            pendingCard.apply(LinkCardView.Content(card: .card(loading), padding: home.tuning.value(of: TuningCatalog.linkCardPadding)))
+            pendingCard.apply(LinkCardView.Content(card: .card(loading), padding: home.tuning.value(of: TuningCatalog.linkCardPadding), transitionDuration: 0))
         }
         return [
             post("サーバーのカード", status(content: content, card: card())),

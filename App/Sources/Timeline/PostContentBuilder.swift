@@ -94,7 +94,13 @@ struct PostContentBuilder {
 
     /// 投稿のリンクカード。出さない投稿ならnil。
     func linkCard(of status: Status) -> LinkCardView.Content? {
-        LinkCard(status: status).map { LinkCardView.Content(card: $0, padding: tuning.value(of: TuningCatalog.linkCardPadding)) }
+        LinkCard(status: status).map {
+            LinkCardView.Content(
+                card: $0,
+                padding: tuning.value(of: TuningCatalog.linkCardPadding),
+                transitionDuration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)
+            )
+        }
     }
 
     /// 投稿の注意書き。注意書きがなければnil。開いているかは一覧が覚えているため、ここでは畳んだ形で返す。
