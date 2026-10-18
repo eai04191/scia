@@ -1,0 +1,40 @@
+{
+  "code": 200,
+  "message": "OK",
+  "tweet": {
+    "url": "https://x.com/IIDX_OFFICIAL/status/2110205221557453003",
+    "id": "2110205221557453003",
+    "text": "【WR】\n今週のWEEKLY RANKINGは「⁽⁽ଘ( ˙꒳˙ )ଓ⁾⁾ beyond reason」です。\nランキング集計期間は10/21(水)11:59まで！\n集計期間中は、e-amusement passを使ってプレーすれば楽曲未解禁でも遊べます！\n#IIDX",
+    "created_at": "Wed Oct 14 03:05:05 +0000 2026",
+    "created_timestamp": 1791947105,
+    "possibly_sensitive": false,
+    "lang": "ja",
+    "author": {
+      "screen_name": "IIDX_OFFICIAL",
+      "url": "https://x.com/IIDX_OFFICIAL",
+      "id": "783589862829981696",
+      "name": "【公式】beatmania IIDX",
+      "avatar_url": "https://pbs.twimg.com/profile_images/2100030885806616576/SIbic6k0_200x200.png"
+    },
+    "media": {
+      "all": [
+        {
+          "type": "photo",
+          "id": "2110204454675038208",
+          "url": "https://pbs.twimg.com/media/HUjzxWxaQAA23C9.jpg?name=orig",
+          "width": 640,
+          "height": 360
+        }
+      ],
+      "photos": [
+        {
+          "type": "photo",
+          "id": "2110204454675038208",
+          "url": "https://pbs.twimg.com/media/HUjzxWxaQAA23C9.jpg?name=orig",
+          "width": 640,
+          "height": 360
+        }
+      ]
+    }
+  }
+}

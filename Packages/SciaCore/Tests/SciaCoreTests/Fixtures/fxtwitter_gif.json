@@ -1,0 +1,78 @@
+{
+  "code": 200,
+  "message": "OK",
+  "tweet": {
+    "url": "https://x.com/example/status/2111793760032215508",
+    "id": "2111793760032215508",
+    "text": "test",
+    "created_at": "Sun Oct 18 12:17:22 +0000 2026",
+    "created_timestamp": 1792325842,
+    "possibly_sensitive": false,
+    "lang": "en",
+    "author": {
+      "screen_name": "example",
+      "url": "https://x.com/example",
+      "id": "1",
+      "name": "Example",
+      "avatar_url": "https://pbs.twimg.com/profile_images/1/example_200x200.jpg"
+    },
+    "media": {
+      "all": [
+        {
+          "id": "2111793757284937728",
+          "url": "https://video.twimg.com/tweet_video/HU6ZO8XbMAAmDz9.mp4",
+          "thumbnail_url": "https://pbs.twimg.com/tweet_video_thumb/HU6ZO8XbMAAmDz9.jpg",
+          "duration": 0,
+          "width": 324,
+          "height": 240,
+          "format": "video/mp4",
+          "type": "gif",
+          "formats": [
+            {
+              "url": "https://video.twimg.com/tweet_video/HU6ZO8XbMAAmDz9.mp4",
+              "bitrate": 0,
+              "container": "mp4",
+              "codec": "h264"
+            }
+          ],
+          "publisher": null,
+          "variants": [
+            {
+              "url": "https://video.twimg.com/tweet_video/HU6ZO8XbMAAmDz9.mp4",
+              "bitrate": 0,
+              "content_type": "video/mp4"
+            }
+          ]
+        }
+      ],
+      "videos": [
+        {
+          "id": "2111793757284937728",
+          "url": "https://video.twimg.com/tweet_video/HU6ZO8XbMAAmDz9.mp4",
+          "thumbnail_url": "https://pbs.twimg.com/tweet_video_thumb/HU6ZO8XbMAAmDz9.jpg",
+          "duration": 0,
+          "width": 324,
+          "height": 240,
+          "format": "video/mp4",
+          "type": "gif",
+          "formats": [
+            {
+              "url": "https://video.twimg.com/tweet_video/HU6ZO8XbMAAmDz9.mp4",
+              "bitrate": 0,
+              "container": "mp4",
+              "codec": "h264"
+            }
+          ],
+          "publisher": null,
+          "variants": [
+            {
+              "url": "https://video.twimg.com/tweet_video/HU6ZO8XbMAAmDz9.mp4",
+              "bitrate": 0,
+              "content_type": "video/mp4"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
