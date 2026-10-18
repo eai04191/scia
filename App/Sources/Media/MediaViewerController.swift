@@ -1726,6 +1726,9 @@ final class PlayerPageController: MediaPageController {
     /// ビューアのボタンと説明を隠す（true）か出す（false）よう、ビューアに頼む。
     var onRequestChromeHidden: ((Bool) -> Void)?
     private var isChromeHidden = false
+    /// このページで、一度でもボタンと部品を隠したか。隠すまでは、再生を始めたらすぐ隠し、映像だけを見せて始める。
+    /// 開く途中など、ビューアが隠す頼みを捨てたときは、動き終えたところで頼み直す。
+    private var hasHiddenChrome = false
     private var hideTask: Task<Void, Never>?
     /// シークしている行き先の秒数。シークし終えたらnil。
     private var pendingSeek: Double?
@@ -2020,7 +2023,7 @@ final class PlayerPageController: MediaPageController {
         return [UIMenu(title: "再生速度", options: .displayInline, children: actions)]
     }
 
-    /// 再生している間、最後に触れてから`controlsHideDelay`秒たったら、ビューアに隠すよう頼む。
+    /// 再生している間、最後に触れてから`controlsHideDelay`秒たったら、ビューアに隠すよう頼む。このページでまだ隠していなければ、すぐ頼む。
     private func scheduleAutoHide() {
         hideTask?.cancel()
         guard let controls,
@@ -2031,7 +2034,7 @@ final class PlayerPageController: MediaPageController {
                   isVoiceOverRunning: UIAccessibility.isVoiceOverRunning
               )
         else { return }
-        hideTask = Task { [weak self, delay = controlsHideDelay] in
+        hideTask = Task { [weak self, delay = hasHiddenChrome ? controlsHideDelay : 0] in
             try? await Task.sleep(for: .seconds(delay))
             guard let self, !Task.isCancelled else { return }
             self.onRequestChromeHidden?(true)
@@ -2046,6 +2049,9 @@ final class PlayerPageController: MediaPageController {
 
     override func setChromeHidden(_ hidden: Bool, animated: Bool) {
         isChromeHidden = hidden
+        if hidden {
+            hasHiddenChrome = true
+        }
         updateControlsVisibility(animated: animated)
     }
 
