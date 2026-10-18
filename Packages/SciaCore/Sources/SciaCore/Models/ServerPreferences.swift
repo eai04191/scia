@@ -3,11 +3,14 @@
 public struct ServerPreferences: Sendable, Equatable {
     /// 新しく投稿するときの公開範囲の既定値。
     public var defaultVisibility: Status.Visibility
+    /// 添付のある投稿を、既定で閲覧注意にするか。
+    public var defaultSensitive: Bool
     /// 注意書き（CW）のある投稿を、最初から開いておくか。
     public var expandsSpoilers: Bool
 
-    public init(defaultVisibility: Status.Visibility, expandsSpoilers: Bool) {
+    public init(defaultVisibility: Status.Visibility, defaultSensitive: Bool, expandsSpoilers: Bool) {
         self.defaultVisibility = defaultVisibility
+        self.defaultSensitive = defaultSensitive
         self.expandsSpoilers = expandsSpoilers
     }
 }

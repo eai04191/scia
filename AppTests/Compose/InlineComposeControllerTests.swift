@@ -372,7 +372,7 @@ struct InlineComposeControllerTests {
         defer { window.isHidden = true }
         let gate = PostGate()
         let composer = try installComposer { _ in await gate.wait() }
-        composer.model.apply(configuration: nil, defaultVisibility: .public)
+        composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         composer.beginEditing()
         composer.model.showsSpoiler = true
         try await Task.sleep(for: .milliseconds(500))
@@ -405,7 +405,7 @@ struct InlineComposeControllerTests {
         defer { window.isHidden = true }
         struct Failure: Error {}
         let composer = try installComposer { _ in throw Failure() }
-        composer.model.apply(configuration: nil, defaultVisibility: .public)
+        composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         composer.beginEditing()
         postKeyboardFrame(height: 300)
         composer.model.text = "本文"
@@ -433,7 +433,7 @@ struct InlineComposeControllerTests {
             makeThumbnail: { _ in nil }
         )
         let composer = try installComposer(media: media) { _ in await gate.wait() }
-        composer.model.apply(configuration: nil, defaultVisibility: .public)
+        composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         composer.beginEditing()
         composer.model.applyPickerSelection([try pickedImage()])
         composer.model.text = "本文"

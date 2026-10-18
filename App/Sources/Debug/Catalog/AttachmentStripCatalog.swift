@@ -77,7 +77,8 @@ enum AttachmentStripCatalog {
         color: UIColor,
         label: String = "",
         description: String = "",
-        status: ComposeAttachmentStatus = .ready
+        status: ComposeAttachmentStatus = .ready,
+        isSensitive: Bool = false
     ) -> ComposeAttachmentStrip.Item {
         let id = UUID()
         let state: DraftAttachment.State = switch status {
@@ -93,7 +94,7 @@ enum AttachmentStripCatalog {
             file: kind.map { LocalMediaFile(url: URL(filePath: "/dev/null"), mimeType: "", kind: $0) },
             thumbnail: kind.map { _ in DummyMedia.image(size: CGSize(width: 192, height: 192), color: color, label: label) }
         )
-        return ComposeAttachmentStrip.Item(attachment: DraftAttachment(id: id, state: state, description: description), local: local, status: status)
+        return ComposeAttachmentStrip.Item(attachment: DraftAttachment(id: id, state: state, description: description), local: local, status: status, isSensitive: isSensitive)
     }
 }
 #endif

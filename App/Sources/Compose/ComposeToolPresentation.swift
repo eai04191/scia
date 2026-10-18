@@ -14,6 +14,7 @@ extension ComposeToolItem: MenuItemPresentable {
 
     var note: String? {
         switch self {
+        case .spoiler: "添付があれば、添付も閲覧注意にします。注意書きを空にすると、閲覧注意だけを付けます"
         case .customize: "この並びを変える画面を開きます。隠しても、設定の「投稿欄のボタン」から変えられます"
         default: nil
         }

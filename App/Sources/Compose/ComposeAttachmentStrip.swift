@@ -33,6 +33,8 @@ final class ComposeAttachmentStrip: UIView {
         let attachment: DraftAttachment
         let local: LocalMedia?
         let status: ComposeAttachmentStatus
+        /// 閲覧注意にして投稿する。どの添付も同じ値になる。
+        let isSensitive: Bool
     }
 
     override init(frame: CGRect) {
@@ -237,6 +239,8 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
     private let descriptionSpinner = UIActivityIndicatorView(style: .medium)
     /// 代替テキストを送れなかったときに、ALTの札の位置に出す印。
     private let descriptionFailureView = UIImageView(image: UIImage(systemName: "exclamationmark.circle.fill"))
+    /// 閲覧注意にして投稿するときに、右上に出す札。画像は隠さず、並べ替えや代替テキストを書くときに、どの添付か見分けられるようにする。
+    private let sensitiveBadge = ComposeAttachmentCell.makeSensitiveBadge()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -265,7 +269,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
                 view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             ])
         }
-        for view in [dimView, spinner, failureView, descriptionSpinner, descriptionFailureView] {
+        for view in [dimView, spinner, failureView, descriptionSpinner, descriptionFailureView, sensitiveBadge] {
             view.translatesAutoresizingMaskIntoConstraints = false
             overlay.addSubview(view)
         }
@@ -283,6 +287,9 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
             descriptionSpinner.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -2),
             descriptionFailureView.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 5),
             descriptionFailureView.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -5),
+            // ALTやGIFの札と同じく、枠から6pt離す。
+            sensitiveBadge.trailingAnchor.constraint(equalTo: overlay.trailingAnchor, constant: -6),
+            sensitiveBadge.topAnchor.constraint(equalTo: overlay.topAnchor, constant: 6),
         ])
         isAccessibilityElement = true
     }
@@ -304,8 +311,9 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         failureView.isHidden = item.status != .failed
         setAnimating(descriptionSpinner, item.status == .sendingDescription)
         descriptionFailureView.isHidden = item.status != .descriptionFailed
+        sensitiveBadge.isHidden = !item.isSensitive
         let kindName = item.local?.file.map { MediaTileView.kindName(of: $0.kind) } ?? "メディア"
-        accessibilityLabel = [kindName, description].filter { !$0.isEmpty }.joined(separator: "、")
+        accessibilityLabel = [kindName, item.isSensitive ? "閲覧注意" : "", description].filter { !$0.isEmpty }.joined(separator: "、")
         accessibilityValue = switch item.status {
         case .uploading: "アップロード中"
         case .processing: "サーバーで処理中"
@@ -322,6 +330,27 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
                 return true
             }
         }
+    }
+
+    /// ALTの札と同じ黒い下地に、タイムラインの閲覧注意の覆いと同じ印を描く。
+    private static func makeSensitiveBadge() -> UIView {
+        let image = UIImageView(image: UIImage(systemName: "eye.slash"))
+        image.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption2, scale: .small).applying(UIImage.SymbolConfiguration(weight: .bold))
+        image.tintColor = .white
+        image.translatesAutoresizingMaskIntoConstraints = false
+        let badge = UIView()
+        badge.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+        badge.layer.cornerRadius = 4
+        badge.layer.cornerCurve = .continuous
+        badge.isHidden = true
+        badge.addSubview(image)
+        NSLayoutConstraint.activate([
+            image.leadingAnchor.constraint(equalTo: badge.leadingAnchor, constant: 4),
+            image.trailingAnchor.constraint(equalTo: badge.trailingAnchor, constant: -4),
+            image.topAnchor.constraint(equalTo: badge.topAnchor, constant: 3),
+            image.bottomAnchor.constraint(equalTo: badge.bottomAnchor, constant: -3),
+        ])
+        return badge
     }
 
     private func setAnimating(_ spinner: UIActivityIndicatorView, _ animating: Bool) {

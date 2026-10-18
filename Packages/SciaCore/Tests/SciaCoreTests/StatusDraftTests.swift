@@ -43,6 +43,16 @@ struct StatusDraftTests {
         Mention(id: id, username: acct, url: URL(string: "https://example.social/@\(acct)"), acct: acct)
     }
 
+    /// 閲覧注意は注意書きの欄で兼ねる。欄を出していて添付があるときだけ付ける。
+    @Test func sensitiveFollowsSpoilerOnlyWithAttachments() {
+        let media = [DraftAttachment()]
+        #expect(StatusDraft(hasSpoiler: true, attachments: media).sensitive)
+        #expect(StatusDraft(spoilerText: "ネタバレ", attachments: media).sensitive)
+        #expect(!StatusDraft(attachments: media).sensitive)
+        #expect(!StatusDraft(hasSpoiler: true).sensitive)
+        #expect(!StatusDraft(spoilerText: "ネタバレ").sensitive)
+    }
+
     @Test func replyAddressesAuthorAndMentionsExceptMe() throws {
         let status = Status(
             id: "10",

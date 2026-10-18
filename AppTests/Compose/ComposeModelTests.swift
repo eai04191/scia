@@ -24,11 +24,11 @@ struct ComposeModelTests {
     @Test func defaultVisibilityAppliesUntilUserChooses() {
         let model = ComposeModel(replyTo: nil, myAccountID: "1") { _ in }
 
-        model.apply(configuration: nil, defaultVisibility: .unlisted)
+        model.apply(configuration: nil, defaultVisibility: .unlisted, defaultSensitive: nil)
         #expect(model.visibility == .unlisted)
 
         model.choose(.private)
-        model.apply(configuration: nil, defaultVisibility: .public)
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         #expect(model.visibility == .private)
     }
 
@@ -38,7 +38,7 @@ struct ComposeModelTests {
         model.text = "こんにちは"
         #expect(!model.canPost)
 
-        model.apply(configuration: nil, defaultVisibility: .private)
+        model.apply(configuration: nil, defaultVisibility: .private, defaultSensitive: nil)
         #expect(model.canPost)
 
         let chosen = ComposeModel(replyTo: nil, myAccountID: "1") { _ in }
@@ -52,7 +52,7 @@ struct ComposeModelTests {
         let model = ComposeModel(replyTo: nil, myAccountID: "1") { _ in }
         model.text = "こんにちは"
 
-        model.apply(configuration: nil, defaultVisibility: nil)
+        model.apply(configuration: nil, defaultVisibility: nil, defaultSensitive: nil)
 
         #expect(model.canPost)
     }
@@ -63,7 +63,7 @@ struct ComposeModelTests {
             sent.append(draft)
             throw Failure()
         }
-        model.apply(configuration: nil, defaultVisibility: .public)
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         model.text = "一回目"
 
         await model.submit()
@@ -82,7 +82,7 @@ struct ComposeModelTests {
     @Test func replyVisibilityIsNarrowedByDefault() throws {
         let model = ComposeModel(replyTo: try status(visibility: .public), myAccountID: "1") { _ in }
 
-        model.apply(configuration: nil, defaultVisibility: .unlisted)
+        model.apply(configuration: nil, defaultVisibility: .unlisted, defaultSensitive: nil)
 
         #expect(model.visibility == .unlisted)
         #expect(model.text == "@bob ")
@@ -94,7 +94,7 @@ struct ComposeModelTests {
         model.text = String(repeating: "あ", count: 600)
         #expect(!model.canPost)
 
-        model.apply(configuration: InstanceConfiguration(streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 1000, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil), defaultVisibility: nil)
+        model.apply(configuration: InstanceConfiguration(streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 1000, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil), defaultVisibility: nil, defaultSensitive: nil)
 
         #expect(model.remainingCharacters == 400)
         #expect(model.canPost)
@@ -109,7 +109,7 @@ struct ComposeModelTests {
             if fails { throw Failure() }
         }
         model.onPosted = { posted = true }
-        model.apply(configuration: nil, defaultVisibility: .public)
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         model.text = "こんにちは"
         model.spoilerText = "隠した注意書き"
 
@@ -129,7 +129,7 @@ struct ComposeModelTests {
 
     @Test func replyTargetSwapsMentionsAndKeepsTypedText() throws {
         let model = ComposeModel(myAccountID: "1") { _ in }
-        model.apply(configuration: nil, defaultVisibility: .public)
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         model.text = "なるほど"
 
         model.setReplyTarget(try status(visibility: .public))
@@ -154,7 +154,7 @@ struct ComposeModelTests {
     /// 新しい投稿で選んだ公開範囲を、フォロワー限定の投稿への返信に持ち込まない。
     @Test func replyTargetResetsChosenVisibility() throws {
         let model = ComposeModel(myAccountID: "1") { _ in }
-        model.apply(configuration: nil, defaultVisibility: .unlisted)
+        model.apply(configuration: nil, defaultVisibility: .unlisted, defaultSensitive: nil)
         model.choose(.public)
 
         model.setReplyTarget(try status(visibility: .private))
@@ -181,12 +181,44 @@ struct ComposeModelTests {
         #expect(model.spoilerText == "自分の注意書き")
     }
 
+    /// 自分で開いた空の注意書きの欄は、返信先を替えても残す。添付があれば、閲覧注意を付けたままにするため。
+    @Test func replyTargetKeepsSpoilerFieldOpenedByUser() throws {
+        let target = try status(visibility: .public)
+        let model = ComposeModel(myAccountID: "1") { _ in }
+        model.setReplyTarget(target)
+        model.showsSpoiler = true
+
+        model.setReplyTarget(nil)
+        #expect(model.showsSpoiler)
+
+        model.setReplyTarget(target)
+        #expect(model.showsSpoiler)
+    }
+
+    /// 添付のない投稿では、空の注意書きの欄を開け閉めしても送る内容は変わらないので、同じIdempotency-Keyで送り直す。
+    @Test func togglingEmptySpoilerWithoutMediaKeepsIdempotencyKey() async {
+        var sent: [StatusDraft] = []
+        let model = ComposeModel(replyTo: nil, myAccountID: "1") { draft in
+            sent.append(draft)
+            throw Failure()
+        }
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        model.text = "本文"
+
+        await model.submit()
+        model.showsSpoiler = true
+        await model.submit()
+
+        #expect(sent.count == 2)
+        #expect(sent[0].idempotencyKey == sent[1].idempotencyKey)
+    }
+
     @Test func postingResetsDraftForNextPost() async throws {
         var sent: [StatusDraft] = []
         var posted = false
         let model = ComposeModel(myAccountID: "1") { sent.append($0) }
         model.onPosted = { posted = true }
-        model.apply(configuration: nil, defaultVisibility: .unlisted)
+        model.apply(configuration: nil, defaultVisibility: .unlisted, defaultSensitive: nil)
         model.setReplyTarget(try status(visibility: .private))
         model.text += "了解"
 
@@ -215,7 +247,7 @@ struct ComposeModelTests {
             replyToDuringPost = model?.replyTo?.id
         }
         model = posting
-        posting.apply(configuration: nil, defaultVisibility: .public)
+        posting.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         posting.text += "了解"
 
         await posting.submit()
@@ -231,7 +263,7 @@ struct ComposeModelTests {
             sent.append(draft)
             throw Failure()
         }
-        model.apply(configuration: nil, defaultVisibility: .public)
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         model.setReplyTarget(target)
         model.text += "了解"
 

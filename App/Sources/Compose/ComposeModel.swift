@@ -10,6 +10,7 @@ final class ComposeModel {
     var text: String
     var spoilerText: String
     /// 注意書きの欄を出している。隠しているときは注意書きなしで投稿する。
+    /// 出していれば、注意書きが空でも、添付を閲覧注意にする。
     var showsSpoiler: Bool
     private(set) var visibility: Status.Visibility
     /// 返信先。新しい投稿ならnil。
@@ -33,6 +34,8 @@ final class ComposeModel {
     /// 既定の公開範囲を読み終えた、または読めなかった。読み終えるまでは、既定より広い範囲で投稿しないよう、選ばない限り投稿させない。
     private var hasResolvedDefaults = false
     @ObservationIgnored private var defaultVisibility: Status.Visibility?
+    /// アカウントの「既定で閲覧注意にする」。最初の添付を足したときに、注意書きの欄を開く。
+    @ObservationIgnored private var defaultSensitive = false
     /// サーバーの上限を読めた。読めるまでは、添付の枚数の上限が分からないのでメディアを選ばせない。
     private var hasLoadedConfiguration = false
     /// 最後に送った内容。同じ内容を送り直すときだけ同じIdempotency-Keyを使い、変えたら別の投稿として新しいキーにする。
@@ -68,9 +71,15 @@ final class ComposeModel {
         var draft = initialDraft
         draft.text = text
         draft.spoilerText = showsSpoiler ? spoilerText : ""
+        draft.hasSpoiler = showsSpoiler
         draft.visibility = visibility
         draft.attachments = attachments
         return draft
+    }
+
+    /// 添付を閲覧注意にして投稿する。
+    var isSensitive: Bool {
+        draftToPost.sensitive
     }
 
     var remainingCharacters: Int {
@@ -93,8 +102,9 @@ final class ComposeModel {
         return replyTo.map { StatusDraft.reply(to: $0, myAccountID: myAccountID, defaultVisibility: base).visibility } ?? base
     }
 
-    /// インスタンスの上限と、ユーザーの既定の公開範囲を反映する。公開範囲を自分で選んでいたら変えない。
-    func apply(configuration: InstanceConfiguration?, defaultVisibility: Status.Visibility?) {
+    /// インスタンスの上限と、ユーザーの既定の公開範囲と閲覧注意を反映する。公開範囲を自分で選んでいたら変えない。
+    /// 既定の閲覧注意は、この後に最初の添付を足したときから使う。
+    func apply(configuration: InstanceConfiguration?, defaultVisibility: Status.Visibility?, defaultSensitive: Bool?) {
         hasResolvedDefaults = true
         if let configuration {
             maxCharacters = configuration.maxCharacters
@@ -102,6 +112,9 @@ final class ComposeModel {
             maxMediaAttachments = configuration.maxMediaAttachments
             mediaDescriptionLimit = configuration.mediaDescriptionLimit
             hasLoadedConfiguration = true
+        }
+        if let defaultSensitive {
+            self.defaultSensitive = defaultSensitive
         }
         guard let defaultVisibility else { return }
         self.defaultVisibility = defaultVisibility
@@ -122,7 +135,7 @@ final class ComposeModel {
     /// 返信先を付け替える。nilなら新しい投稿に戻す。
     ///
     /// 自分で書いた本文は残し、前の返信先から自動で入れた宛先だけを入れ替える。宛先を書き換えていたら、本文はそのまま残して新しい宛先を前に足す。
-    /// 注意書きも、前の返信先から引き継いだままなら入れ替え、自分で書き換えていれば残す。
+    /// 注意書きも、前の返信先から引き継いだままなら入れ替え、自分で書き換えていれば残す。引き継いだ注意書きがないのに欄を出していれば、自分で開いた欄なので、空でも残す（添付の閲覧注意を外さないため）。
     /// 公開範囲は選び直しにする。新しい投稿で選んだ公開範囲のまま、フォロワー限定の投稿へ公開で返信してしまわないため。
     ///
     /// 送信を待つ間は変えない。送っている下書きと食い違い、成功して空に戻すときに新しい返信先まで消してしまうため。
@@ -136,7 +149,7 @@ final class ComposeModel {
         }
         guard status != nil || replyTo != nil else { return }
         let typed = typedText
-        let keepsSpoiler = showsSpoiler && spoilerText != initialDraft.spoilerText
+        let keepsSpoiler = showsSpoiler && (spoilerText != initialDraft.spoilerText || initialDraft.spoilerText.isEmpty)
         initialDraft = status.map { StatusDraft.reply(to: $0, myAccountID: myAccountID) } ?? StatusDraft()
         replyTo = status
         text = initialDraft.text + typed
@@ -164,11 +177,11 @@ final class ComposeModel {
 
     private func submission(of draft: StatusDraft) -> StatusDraft {
         guard let lastSubmitted else { return draft }
-        if lastSubmitted.text == draft.text, lastSubmitted.spoilerText == draft.spoilerText, lastSubmitted.visibility == draft.visibility,
-           lastSubmitted.mediaIDs == draft.mediaIDs {
+        if lastSubmitted.text == draft.text, lastSubmitted.spoilerText == draft.spoilerText, lastSubmitted.sensitive == draft.sensitive,
+           lastSubmitted.visibility == draft.visibility, lastSubmitted.mediaIDs == draft.mediaIDs {
             return lastSubmitted
         }
-        return StatusDraft(text: draft.text, spoilerText: draft.spoilerText, visibility: draft.visibility, inReplyToID: draft.inReplyToID, attachments: draft.attachments)
+        return StatusDraft(text: draft.text, spoilerText: draft.spoilerText, hasSpoiler: draft.hasSpoiler, visibility: draft.visibility, inReplyToID: draft.inReplyToID, attachments: draft.attachments)
     }
 
     /// 投稿し、成功したら下書きを空に戻す。失敗したら下書きを残し、同じ下書きで送り直せるようにする。
@@ -257,6 +270,10 @@ extension ComposeModel {
             discardAttachment(attachment.id)
         }
         let added = Set(changes.added)
+        // Mastodonのweb UIと同じく、既定で閲覧注意にする人は、最初の添付を足したときに注意書きの欄を開く。開いた欄で閲覧注意が付いたと分かる。
+        if attachments.isEmpty, defaultSensitive, selection.contains(where: { added.contains($0.assetIdentifier) }) {
+            showsSpoiler = true
+        }
         for picked in selection where added.contains(picked.assetIdentifier) {
             let attachment = DraftAttachment()
             attachments.append(attachment)

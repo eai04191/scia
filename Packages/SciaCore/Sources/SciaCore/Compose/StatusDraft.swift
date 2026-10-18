@@ -5,6 +5,9 @@ public struct StatusDraft: Sendable, Equatable {
     public var text: String
     /// 空なら注意書きなしで投稿する。
     public var spoilerText: String
+    /// 注意書きの欄を出している。注意書きが空でも、添付があれば添付を閲覧注意にする。注意書きがあれば、falseでも出しているものとして扱う。
+    /// Mastodonのweb UIと同じく、閲覧注意を注意書きの欄で兼ねるため。決まりはdocs/vision.mdの「投稿欄」にある。
+    public var hasSpoiler: Bool
     public var visibility: Status.Visibility
     public let inReplyToID: String?
     /// 添付するメディア。この順番で投稿に並ぶ。
@@ -15,6 +18,7 @@ public struct StatusDraft: Sendable, Equatable {
     public init(
         text: String = "",
         spoilerText: String = "",
+        hasSpoiler: Bool = false,
         visibility: Status.Visibility = .public,
         inReplyToID: String? = nil,
         attachments: [DraftAttachment] = [],
@@ -22,6 +26,7 @@ public struct StatusDraft: Sendable, Equatable {
     ) {
         self.text = text
         self.spoilerText = spoilerText
+        self.hasSpoiler = hasSpoiler
         self.visibility = visibility
         self.inReplyToID = inReplyToID
         self.attachments = attachments
@@ -47,6 +52,12 @@ public struct StatusDraft: Sendable, Equatable {
             visibility: visibility,
             inReplyToID: target.id
         )
+    }
+
+    /// 添付を閲覧注意にする。注意書きの欄を出していて、添付があるとき。
+    /// 添付のない投稿に付けても、Mastodonは何も隠さないので付けない（注意書きがあれば、サーバーが投稿を閲覧注意にする）。
+    public var sensitive: Bool {
+        (hasSpoiler || !spoilerText.isEmpty) && !attachments.isEmpty
     }
 
     /// サーバーと同じ数え方での文字数。

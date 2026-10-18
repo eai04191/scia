@@ -57,6 +57,8 @@ final class InlineComposeController: NSObject {
     /// 注意書きの入力欄。＋のメニューから足したときと、注意書きの付いた投稿へ返信したときだけ、本文の上に出す。
     private let spoilerField = ComposeSpoilerField()
     private lazy var spoilerRow = makeSpoilerRow()
+    /// 注意書きの欄を閉じるボタン。閲覧注意も一緒に外れる。
+    private let spoilerClearButton = UIButton(type: .system)
     private let textView = ComposeTextView()
     /// 最後にキーボードを出していた入力欄。シートやビューアを閉じたら、ここへキーボードを戻す。
     private weak var lastFocusedInput: UIView?
@@ -233,7 +235,7 @@ final class InlineComposeController: NSObject {
     /// 違和感レポートに残す状態。行が重なっていれば、どの行かも書く。
     func stateDump() -> String {
         """
-        editing: \(isEditing) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : "none") spoiler: \(model.showsSpoiler) replyTo: \(model.replyTo?.id ?? "nil")
+        editing: \(isEditing) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : "none") spoiler: \(model.showsSpoiler) sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil")
         mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
         tools: row=\(toolPlacement.map { "\($0.row.map(\.rawValue))" } ?? "nil") menu=\(toolPlacement.map { "\($0.menu.map { $0.map(\.rawValue) })" } ?? "nil")
@@ -381,9 +383,14 @@ final class InlineComposeController: NSObject {
             }
             return action
         case .spoiler:
-            return UIAction(title: item.title, image: UIImage(systemName: item.symbolName), state: model.showsSpoiler ? .on : .off) { [weak self] _ in
+            // 添付があれば、注意書きの欄を出すと閲覧注意にもなることを添える。
+            let action = UIAction(title: item.title, image: UIImage(systemName: item.symbolName), state: model.showsSpoiler ? .on : .off) { [weak self] _ in
                 self?.toggleSpoiler()
             }
+            if !model.attachments.isEmpty {
+                action.subtitle = "添付も閲覧注意にします"
+            }
+            return action
         }
     }
 
@@ -428,6 +435,7 @@ final class InlineComposeController: NSObject {
         if let spoiler = toolButtons[.spoiler] {
             spoiler.configuration?.baseForegroundColor = model.showsSpoiler ? .tintColor : .label
             spoiler.accessibilityTraits = model.showsSpoiler ? [.button, .selected] : .button
+            spoiler.accessibilityValue = model.isSensitive ? "添付も閲覧注意" : nil
         }
     }
 
@@ -743,6 +751,9 @@ final class InlineComposeController: NSObject {
             }
         }
         setRowShown(spoilerRow, isEditing && model.showsSpoiler)
+        // 添付があると、空の注意書きでも閲覧注意になる。空のまま出している意味が分かるよう、案内を変える。
+        spoilerField.placeholder = model.attachments.isEmpty ? "注意書き" : "注意書き（空なら閲覧注意だけ）"
+        spoilerClearButton.accessibilityLabel = model.isSensitive ? "注意書きと閲覧注意を外す" : "注意書きを外す"
 
         let replyAcct = model.replyTo.map { "@\($0.displayed.account.acct)" }
         // 札を消すときは、薄くなる間も文字が残るよう、前の文字のままにする。
@@ -756,7 +767,8 @@ final class InlineComposeController: NSObject {
             ComposeAttachmentStrip.Item(
                 attachment: attachment,
                 local: model.localMedia[attachment.id],
-                status: model.attachmentStatus(of: attachment.id) ?? .uploading
+                status: model.attachmentStatus(of: attachment.id) ?? .uploading,
+                isSensitive: model.isSensitive
             )
         })
         mediaViewer?.update(items: viewerItems())
@@ -1084,8 +1096,9 @@ final class InlineComposeController: NSObject {
         configuration.image = UIImage(systemName: "xmark.circle.fill")
         configuration.baseForegroundColor = .secondaryLabel
         configuration.contentInsets = .zero
-        let clear = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.setSpoilerShown(false) })
-        clear.accessibilityLabel = "注意書きを外す"
+        let clear = spoilerClearButton
+        clear.configuration = configuration
+        clear.addAction(UIAction { [weak self] _ in self?.setSpoilerShown(false) }, for: .primaryActionTriggered)
         clear.setContentHuggingPriority(.required, for: .horizontal)
         clear.setContentCompressionResistancePriority(.required, for: .horizontal)
 

@@ -468,7 +468,7 @@ final class SessionController {
             guard let self else { return }
             async let configuration = self.loadInstanceConfiguration()
             async let preferences = self.loadPreferences()
-            self.composer.model.apply(configuration: await configuration, defaultVisibility: await preferences?.defaultVisibility)
+            self.composer.model.apply(configuration: await configuration, defaultVisibility: await preferences?.defaultVisibility, defaultSensitive: await preferences?.defaultSensitive)
         }
     }
 

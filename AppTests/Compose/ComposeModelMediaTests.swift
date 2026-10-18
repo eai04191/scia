@@ -79,7 +79,7 @@ struct ComposeModelMediaTests {
 
     private func makeModel(_ server: FakeServer, post: @escaping (StatusDraft) async throws -> Void = { _ in }) -> ComposeModel {
         let model = ComposeModel(myAccountID: "1", media: server.service, post: post)
-        model.apply(configuration: nil, defaultVisibility: .public)
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         return model
     }
 
@@ -110,6 +110,45 @@ struct ComposeModelMediaTests {
 
         #expect(sent.first?.mediaIDs == ["m-b.jpg", "m-a.jpg"])
         #expect(model.attachments.isEmpty)
+    }
+
+    /// 注意書きの欄を空のまま出して添付付きで送ると、注意書きなしで閲覧注意だけを付ける。欄を閉じれば付けない。
+    @Test func emptySpoilerFieldMarksMediaSensitive() async throws {
+        let server = FakeServer()
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+        model.showsSpoiler = true
+        #expect(!model.isSensitive)
+
+        model.applyPickerSelection([try picked("a")])
+        await settle { isSettled(model) }
+        #expect(model.isSensitive)
+        await model.submit()
+        #expect(sent.last?.sensitive == true)
+        #expect(sent.last?.spoilerText == "")
+
+        model.applyPickerSelection([try picked("b")])
+        await settle { isSettled(model) }
+        #expect(!model.isSensitive)
+        await model.submit()
+        #expect(sent.last?.sensitive == false)
+    }
+
+    /// 既定で閲覧注意にする人は、最初の添付を足したときに注意書きの欄が開く。閉じたあとに足しても、開き直さない。
+    @Test func defaultSensitiveOpensSpoilerOnFirstAttachment() async throws {
+        let server = FakeServer()
+        let model = makeModel(server)
+        model.apply(configuration: nil, defaultVisibility: nil, defaultSensitive: true)
+        #expect(!model.showsSpoiler)
+
+        model.applyPickerSelection([try picked("a")])
+        #expect(model.showsSpoiler)
+        #expect(model.isSensitive)
+
+        model.showsSpoiler = false
+        model.applyPickerSelection([try picked("a"), try picked("b")])
+        #expect(!model.showsSpoiler)
+        #expect(!model.isSensitive)
     }
 
     @Test func cannotPostUntilEveryUploadFinishes() async throws {
@@ -430,10 +469,10 @@ struct ComposeModelMediaTests {
     @Test func pickerUsesServerAttachmentLimit() throws {
         let model = ComposeModel(myAccountID: "1") { _ in }
         #expect(!model.canAttachMedia)
-        model.apply(configuration: nil, defaultVisibility: .public)
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         #expect(!model.canAttachMedia)
 
-        model.apply(configuration: InstanceConfiguration(streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 16, mediaDescriptionLimit: 1500, supportedMediaTypes: nil), defaultVisibility: nil)
+        model.apply(configuration: InstanceConfiguration(streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 16, mediaDescriptionLimit: 1500, supportedMediaTypes: nil), defaultVisibility: nil, defaultSensitive: nil)
 
         #expect(model.canAttachMedia)
         #expect(model.maxMediaAttachments == 16)

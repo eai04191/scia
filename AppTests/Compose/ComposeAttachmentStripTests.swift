@@ -23,7 +23,7 @@ struct ComposeAttachmentStripTests {
     }
 
     private func items(_ count: Int) -> [ComposeAttachmentStrip.Item] {
-        (0..<count).map { _ in ComposeAttachmentStrip.Item(attachment: DraftAttachment(state: .uploading), local: nil, status: .uploading) }
+        (0..<count).map { _ in ComposeAttachmentStrip.Item(attachment: DraftAttachment(state: .uploading), local: nil, status: .uploading, isSensitive: false) }
     }
 
     private func cells() -> [UICollectionViewCell] {

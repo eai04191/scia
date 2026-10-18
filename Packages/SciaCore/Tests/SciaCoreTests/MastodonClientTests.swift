@@ -195,6 +195,7 @@ struct MastodonClientTests {
         #expect(components.queryItems == [
             URLQueryItem(name: "status", value: "@bob こんにちは + テスト"),
             URLQueryItem(name: "visibility", value: "private"),
+            URLQueryItem(name: "sensitive", value: "false"),
             URLQueryItem(name: "spoiler_text", value: "注意"),
             URLQueryItem(name: "in_reply_to_id", value: "113000000000000000"),
         ])
@@ -214,8 +215,27 @@ struct MastodonClientTests {
         #expect(components.queryItems == [
             URLQueryItem(name: "status", value: ""),
             URLQueryItem(name: "visibility", value: "public"),
+            URLQueryItem(name: "sensitive", value: "false"),
             URLQueryItem(name: "media_ids[]", value: "113000000000000102"),
             URLQueryItem(name: "media_ids[]", value: "113000000000000100"),
+        ])
+    }
+
+    /// 注意書きの欄を出して空のまま添付付きで送ると、注意書きなしで閲覧注意だけを付ける。
+    @Test func postStatusMarksMediaSensitiveWithEmptySpoiler() async throws {
+        let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
+        let attachment = DraftAttachment(state: .uploaded(MediaAttachment(id: "113000000000000102", type: .image, url: URL(string: "https://example.social/a.png"), previewUrl: nil)))
+
+        _ = try await makeClient(transport).postStatus(StatusDraft(hasSpoiler: true, attachments: [attachment], idempotencyKey: "key-1"))
+
+        let request = try #require(await transport.requests.first)
+        var components = URLComponents()
+        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
+        #expect(components.queryItems == [
+            URLQueryItem(name: "status", value: ""),
+            URLQueryItem(name: "visibility", value: "public"),
+            URLQueryItem(name: "sensitive", value: "true"),
+            URLQueryItem(name: "media_ids[]", value: "113000000000000102"),
         ])
     }
 
@@ -239,9 +259,9 @@ struct MastodonClientTests {
     }
 
     @Test func readsPreferences() async throws {
-        let transport = StubTransport([.json(#"{"posting:default:visibility":"unlisted","posting:default:sensitive":false,"posting:default:language":null,"reading:expand:media":"default","reading:expand:spoilers":true}"#, statusCode: 200)])
+        let transport = StubTransport([.json(#"{"posting:default:visibility":"unlisted","posting:default:sensitive":true,"posting:default:language":null,"reading:expand:media":"default","reading:expand:spoilers":true}"#, statusCode: 200)])
 
-        #expect(try await makeClient(transport).preferences() == ServerPreferences(defaultVisibility: .unlisted, expandsSpoilers: true))
+        #expect(try await makeClient(transport).preferences() == ServerPreferences(defaultVisibility: .unlisted, defaultSensitive: true, expandsSpoilers: true))
         #expect(await transport.requests.first?.url?.path() == "/api/v1/preferences")
     }
 
@@ -249,7 +269,7 @@ struct MastodonClientTests {
     @Test func missingPreferencesUseMastodonDefaults() async throws {
         let transport = StubTransport([.json("{}", statusCode: 200)])
 
-        #expect(try await makeClient(transport).preferences() == ServerPreferences(defaultVisibility: .public, expandsSpoilers: false))
+        #expect(try await makeClient(transport).preferences() == ServerPreferences(defaultVisibility: .public, defaultSensitive: false, expandsSpoilers: false))
     }
 
     @Test func instanceConfigurationReadsStatusLimits() async throws {

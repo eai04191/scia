@@ -141,10 +141,12 @@ public struct MastodonClient: Sendable {
     public func preferences() async throws -> ServerPreferences {
         struct Preferences: Decodable {
             let visibility: Status.Visibility?
+            let sensitive: Bool?
             let expandsSpoilers: Bool?
 
             private enum CodingKeys: String, CodingKey {
                 case visibility = "posting:default:visibility"
+                case sensitive = "posting:default:sensitive"
                 case expandsSpoilers = "reading:expand:spoilers"
             }
         }
@@ -153,7 +155,7 @@ public struct MastodonClient: Sendable {
         let (data, response) = try await send(request, feature: .preferences)
         let preferences = try decode(Preferences.self, from: data, of: response, for: request, using: JSONDecoder())
         // 返さない項目は、Mastodonの既定値を使う。
-        return ServerPreferences(defaultVisibility: preferences.visibility ?? .public, expandsSpoilers: preferences.expandsSpoilers ?? false)
+        return ServerPreferences(defaultVisibility: preferences.visibility ?? .public, defaultSensitive: preferences.sensitive ?? false, expandsSpoilers: preferences.expandsSpoilers ?? false)
     }
 
     // MARK: - 投稿への操作
@@ -192,6 +194,8 @@ public struct MastodonClient: Sendable {
         var form = [
             URLQueryItem(name: "status", value: draft.text),
             URLQueryItem(name: "visibility", value: draft.visibility.rawValue),
+            // 付けないときも送る。送らなければ、サーバーはアカウントの「既定で閲覧注意にする」に従い、注意書きの欄を閉じた投稿まで閲覧注意にするため。
+            URLQueryItem(name: "sensitive", value: draft.sensitive ? "true" : "false"),
         ]
         if !draft.spoilerText.isEmpty {
             form.append(URLQueryItem(name: "spoiler_text", value: draft.spoilerText))
