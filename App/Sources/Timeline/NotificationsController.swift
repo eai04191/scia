@@ -193,6 +193,8 @@ final class NotificationsController {
             if store.receive(notification) {
                 scheduleInsertion()
             }
+            // 挿入までに読み終えられるよう、届いたらすぐアイコンを読み始める。
+            viewController.prefetchAvatars(for: store.pending.map(TimelineEntry.notification))
         case .event:
             break
         case .poll:
@@ -233,10 +235,14 @@ final class NotificationsController {
     }
 
     /// 最初の通知が届いてから間隔をおいて、溜まった通知をまとめて挿入する。ホームと同じ間隔を使う。
+    /// 挿入する前に、ホームと同じく、通知のアイコンが読み込み終わるのを上限まで待つ。
     private func scheduleInsertion() {
         let interval = tuning.value(of: TuningCatalog.insertionInterval)
         run { controller in
             try? await Task.sleep(for: .seconds(interval))
+            guard !Task.isCancelled else { return }
+            let deadline = ContinuousClock.now + .seconds(controller.tuning.value(of: TuningCatalog.arrivalAvatarWait))
+            await controller.viewController.waitForAvatars(of: { controller.store.pending.map(TimelineEntry.notification) }, until: deadline)
             guard !Task.isCancelled else { return }
             if controller.viewController.isUserInteracting {
                 controller.isWaitingForInteractionToSettle = true

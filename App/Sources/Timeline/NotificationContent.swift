@@ -139,9 +139,7 @@ extension TimelineViewController {
     private func avatarAttachment(of account: Account, font: UIFont) -> NSAttributedString {
         let side = font.lineHeight
         let content = avatarContent(of: account)
-        let image = content.url.flatMap { url in
-            avatarImages.requestImage(for: AvatarImageStore.Key(url: url, maxPixelSize: Int((side * traitCollection.displayScale).rounded(.up)), animates: false))
-        }
+        let image = notificationAvatarKey(of: account, font: font).flatMap(avatarImages.requestImage(for:))
         let attachment = NSTextAttachment()
         attachment.image = Self.shapedAvatar(image, side: side, shape: content.shape)
         attachment.bounds = CGRect(x: 0, y: font.descender, width: side, height: side)
@@ -149,6 +147,25 @@ extension TimelineViewController {
         // アイコンと名前のあいだを空ける。
         string.append(NSAttributedString(string: " ", attributes: [.font: font]))
         return string
+    }
+
+    /// 通知の組み方ごとに、`contentConfiguration(for:itemID:base:)`が描くアイコン。
+    func avatarKeys(for notification: MastodonNotification) -> [AvatarImageStore.Key] {
+        // 投稿として組む通知は、投稿と同じアイコンを出し、誰が何をしたかの行にはアイコンを出さない。
+        if case .post = notification.layout, let status = notification.status {
+            return avatarKeys(for: status)
+        }
+        guard NotificationAppearance(notification.type).phrase.includesName else { return [] }
+        // 行の中身は、セルの`defaultContentConfiguration()`の文字の大きさで組む。一覧のセルはどれも`cell()`の見た目になる。
+        let font = UIListContentConfiguration.cell().textProperties.font
+        return notificationAvatarKey(of: notification.account, font: font).map { [$0] } ?? []
+    }
+
+    /// 名前の前に差し込むアイコンの画像。文字に描き込むため、動くアイコンでも先頭のコマで止める。URLがなければnil。
+    func notificationAvatarKey(of account: Account, font: UIFont) -> AvatarImageStore.Key? {
+        avatarContent(of: account).url.map { url in
+            AvatarView.key(url: url, animates: false, side: font.lineHeight, scale: traitCollection.displayScale)
+        }
     }
 
     private static func shapedAvatar(_ image: UIImage?, side: CGFloat, shape: AvatarShape) -> UIImage {

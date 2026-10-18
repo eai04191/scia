@@ -19,6 +19,9 @@ final class AvatarImageStore {
     private let fetch: Fetch
     private let cache = NSCache<NSString, UIImage>()
     private var inFlight: [Key: Task<UIImage, any Error>] = [:]
+    /// 読めなかった画像。先読みと新着の挿入前の待ちでは読み直さず、読めないアイコンのために通信を増やしたり挿入を遅らせたりしない。
+    /// 行に描くときは読み直し、読めたら外す。
+    private var failedKeys: Set<Key> = []
     private var listeners: [Listener] = []
     private let logger = SciaLog.logger(category: "avatar")
 
@@ -56,6 +59,51 @@ final class AvatarImageStore {
         return nil
     }
 
+    /// 行を出す前に読み込みを始める。読み込み済みと、前に読めなかった画像は読まない。
+    func prefetch(_ keys: some Sequence<Key>) {
+        for key in keys where cachedImage(for: key) == nil && !failedKeys.contains(key) {
+            Task { _ = try? await image(for: key) }
+        }
+    }
+
+    /// 画像を読み込み終える（読めなかった場合も含む）か、`deadline`になるまで待つ。まだ読み込んでいなければ読み込みを始める。
+    /// 前に読めなかった画像は、読み直さず待たない。`deadline`で戻っても、読み込みは止めずにキャッシュへ入れる。
+    func load(_ keys: Set<Key>, until deadline: ContinuousClock.Instant) async {
+        let missing = keys.filter { cachedImage(for: $0) == nil && !failedKeys.contains($0) }
+        guard !missing.isEmpty, ContinuousClock.now < deadline else { return }
+        let loads = missing.map { key in Task { _ = try? await image(for: key) } }
+        // 読み込みのTaskの結果を待つ（`value`）と、待っている側を取り消しても読み込みが終わるまで戻らないため、
+        // 先に終わった方が続きを再開させる。
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let resumer = Resumer(continuation)
+            let timer = Task {
+                try? await Task.sleep(until: deadline, clock: .continuous)
+                resumer.resume()
+            }
+            Task {
+                for load in loads {
+                    await load.value
+                }
+                timer.cancel()
+                resumer.resume()
+            }
+        }
+    }
+
+    /// 続きを一度だけ再開させる。
+    private final class Resumer {
+        private var continuation: CheckedContinuation<Void, Never>?
+
+        init(_ continuation: CheckedContinuation<Void, Never>) {
+            self.continuation = continuation
+        }
+
+        func resume() {
+            continuation?.resume()
+            continuation = nil
+        }
+    }
+
     /// 画像が届いたときに呼ぶ処理を登録する。`owner`が解放されると呼ばれなくなる。
     func addListener(owner: AnyObject, onLoad: @escaping @MainActor (Key) -> Void) {
         listeners.append(Listener(owner: owner, onLoad: onLoad))
@@ -83,6 +131,7 @@ final class AvatarImageStore {
         do {
             let image = try await task.value
             cache.setObject(image, forKey: key.cacheKey, cost: Self.cost(of: image))
+            failedKeys.remove(key)
             listeners.removeAll { $0.owner == nil }
             for listener in listeners {
                 listener.onLoad(key)
@@ -90,6 +139,7 @@ final class AvatarImageStore {
             return image
         } catch {
             logger.error("avatar load failed url=\(key.url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            failedKeys.insert(key)
             throw error
         }
     }

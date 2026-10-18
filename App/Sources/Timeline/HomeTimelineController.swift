@@ -325,13 +325,19 @@ final class HomeTimelineController {
         case .entriesChanged:
             showEntries()
         }
+        // 挿入までに読み終えられるよう、届いたらすぐアイコンを読み始める。
+        viewController.prefetchAvatars(for: store.pending.map(TimelineEntry.status))
     }
 
     /// 最初の新着が届いてから間隔をおいて、溜まった新着をまとめて挿入する。
+    /// 挿入する前に、新着のアイコンが読み込み終わるのを上限まで待ち、行が出た時点でアイコンを描けているようにする。
     private func scheduleInsertion() {
         let interval = tuning.value(of: TuningCatalog.insertionInterval)
         run { controller in
             try? await Task.sleep(for: .seconds(interval))
+            guard !Task.isCancelled else { return }
+            let deadline = ContinuousClock.now + .seconds(controller.tuning.value(of: TuningCatalog.arrivalAvatarWait))
+            await controller.viewController.waitForAvatars(of: { controller.store.pending.map(TimelineEntry.status) }, until: deadline)
             guard !Task.isCancelled else { return }
             if controller.viewController.isUserInteracting {
                 // 指の動きと関係なく画面が動かないよう、スクロールや長押しのメニューなどの操作が終わってから挿入する。

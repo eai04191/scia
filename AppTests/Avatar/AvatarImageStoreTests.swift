@@ -1,5 +1,6 @@
 import Foundation
 import ImageIO
+import Synchronization
 import Testing
 import UIKit
 import UniformTypeIdentifiers
@@ -43,5 +44,40 @@ struct AvatarImageStoreTests {
         let image = try await store.image(for: AvatarImageStore.Key(url: url, maxPixelSize: 8, animates: false))
 
         #expect(image.images == nil)
+    }
+
+    /// 読めなかったアイコンは、新着の挿入前に待つたびに読み直さない。読めないアイコンのために通信が増え、挿入が上限まで遅れるため。
+    @Test func loadDoesNotRefetchKeysThatFailed() async throws {
+        let fetchCount = Mutex(0)
+        let store = AvatarImageStore { _ in
+            fetchCount.withLock { $0 += 1 }
+            throw URLError(.fileDoesNotExist)
+        }
+        let url = try #require(URL(string: "https://example.social/missing.png"))
+        let key = AvatarImageStore.Key(url: url, maxPixelSize: 8, animates: false)
+
+        await store.load([key], until: .now + .seconds(5))
+        await store.load([key], until: .now + .seconds(5))
+
+        #expect(fetchCount.withLock { $0 } == 1)
+    }
+
+    /// 読み込みが終わらなくても、期限で戻る。戻ったあとも読み込みは続け、届いたらキャッシュに入れる。
+    @Test func loadReturnsAtDeadlineAndKeepsLoading() async throws {
+        let data = try gif(delays: [0.1])
+        let store = AvatarImageStore { _ in
+            try await Task.sleep(for: .milliseconds(300))
+            return data
+        }
+        let url = try #require(URL(string: "https://example.social/slow.gif"))
+        let key = AvatarImageStore.Key(url: url, maxPixelSize: 8, animates: false)
+
+        let start = ContinuousClock.now
+        await store.load([key], until: start + .milliseconds(50))
+
+        #expect(ContinuousClock.now - start < .milliseconds(250))
+        #expect(store.cachedImage(for: key) == nil)
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(store.cachedImage(for: key) != nil)
     }
 }

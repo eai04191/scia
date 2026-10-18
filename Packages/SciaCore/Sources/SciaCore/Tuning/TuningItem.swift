@@ -262,6 +262,16 @@ public enum TuningCatalog {
         defaultValue: 0
     )
 
+    /// 新着を挿入する前に、新着の行のアイコンが読み込み終わるのを待つ上限。読み込み終われば上限を待たずに挿入する。
+    /// 上限を過ぎたら待たずに挿入し、アイコンは届いてから出す。0なら待たない。
+    public static let arrivalAvatarWait = NumberTuning(
+        id: "streaming.arrivalAvatarWait",
+        title: "新着のアイコンを待つ上限（秒）",
+        range: 0...2,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
     /// 最上部にいるとき、新着を挿入しても最上部に留まり、新着が流れて見えるようにする。
     /// オフなら最上部でも読んでいる位置を保ち、新着件数を出す。
     public static let followsNewArrivalsAtTop = ToggleTuning(
@@ -689,6 +699,7 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "streaming", title: "新着と読み込み", items: [
             .number(insertionInterval),
+            .number(arrivalAvatarWait),
             .toggle(followsNewArrivalsAtTop),
             .number(fillPageLimit),
             .number(gapAutoLoadDistance),

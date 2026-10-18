@@ -71,7 +71,7 @@ final class AvatarView: UIView {
             show(nil)
             return
         }
-        let key = AvatarImageStore.Key(url: url, maxPixelSize: Int((bounds.width * scale).rounded(.up)), animates: content.animates)
+        let key = Self.key(url: url, animates: content.animates, side: bounds.width, scale: scale)
         guard key != loadingKey else { return }
         cancelLoad()
         loadingKey = key
@@ -89,6 +89,11 @@ final class AvatarView: UIView {
                 self.imageView.alpha = 1
             }
         }
+    }
+
+    /// `side`ポイント四方に描くときに読む画像。行を出す前に読み込んでおくときも、描くときと同じ画像を指すよう、これで決める。
+    static func key(url: URL, animates: Bool, side: CGFloat, scale: CGFloat) -> AvatarImageStore.Key {
+        AvatarImageStore.Key(url: url, maxPixelSize: Int((side * scale).rounded(.up)), animates: animates)
     }
 
     /// 画像をすぐに描く。読み込み中のフェードの途中なら止める。

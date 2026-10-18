@@ -221,6 +221,7 @@ final class TimelineViewController: UIViewController {
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         collectionView.delegate = self
+        collectionView.prefetchDataSource = self
         collectionView.addGestureRecognizer(scrollToTopInterruption)
         // タブバーの上の投稿欄で書いている間も、読み進めるだけならキーボードを閉じない。キーボードまで引き下ろしたら閉じる。
         collectionView.keyboardDismissMode = .interactive
@@ -1279,6 +1280,13 @@ extension TimelineViewController: UICollectionViewDelegate {
         if indexPath.item >= count - prefetchThreshold {
             onApproachingEnd?()
         }
+    }
+}
+
+extension TimelineViewController: UICollectionViewDataSourcePrefetching {
+    /// スクロールで画面に入りそうな行のアイコンを読み始める。
+    func collectionView(_ collectionView: UICollectionView, prefetchItemsAt indexPaths: [IndexPath]) {
+        prefetchAvatars(for: indexPaths.compactMap { dataSource.itemIdentifier(for: $0).flatMap { entries[$0] } })
     }
 }
 
