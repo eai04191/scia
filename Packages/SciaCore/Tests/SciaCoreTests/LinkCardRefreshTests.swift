@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SciaCore
 
-/// カードが付く前に受け取った投稿を、見えている間だけ予定どおりに取り直し、届いたカードを反映することを確かめる。
+/// カードが付く前に受け取った投稿を、見えている間だけ間隔を空けてまとめて取り直し、届いたカードを反映することを確かめる。
 struct LinkCardRefreshTests {
     private static let account = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://example.social/a.png"))
     private static let start = Date(timeIntervalSince1970: 1_000_000)
@@ -26,29 +26,65 @@ struct LinkCardRefreshTests {
 
     // MARK: - 予定
 
-    @Test func refreshesAtEachDelayWhileVisible() {
+    /// 最初は3秒後に、そのあとは10秒ごとに取り直し、初めて見てから180秒を過ぎた取り直しで諦める。
+    @Test func refreshesEveryIntervalUntilGivingUp() throws {
         var schedule = LinkCardRefreshSchedule()
         schedule.note([Self.status("1")], now: Self.start)
+        let visible: Set = [Self.version("1")]
 
-        #expect(schedule.due(now: Self.start.addingTimeInterval(2), visible: [Self.version("1")], limit: 20).isEmpty)
-        #expect(schedule.nextDate(visible: [Self.version("1")]) == Self.start.addingTimeInterval(3))
-        #expect(schedule.due(now: Self.start.addingTimeInterval(3), visible: [Self.version("1")], limit: 20).map(\.statusID) == ["1"])
-        #expect(schedule.nextDate(visible: [Self.version("1")]) == Self.start.addingTimeInterval(15))
-        #expect(schedule.due(now: Self.start.addingTimeInterval(15), visible: [Self.version("1")], limit: 20).map(\.statusID) == ["1"])
-        #expect(schedule.due(now: Self.start.addingTimeInterval(70), visible: [Self.version("1")], limit: 20).map(\.statusID) == ["1"])
-        #expect(schedule.nextDate(visible: [Self.version("1")]) == nil)
-        #expect(schedule.due(now: Self.start.addingTimeInterval(500), visible: [Self.version("1")], limit: 20).isEmpty)
+        #expect(schedule.due(now: Self.start.addingTimeInterval(2), visible: visible, limit: 20).isEmpty)
+        #expect(schedule.nextDate(visible: visible) == Self.start.addingTimeInterval(3))
+        #expect(schedule.due(now: Self.start.addingTimeInterval(3), visible: visible, limit: 20).map(\.version.statusID) == ["1"])
+        #expect(schedule.nextDate(visible: visible) == Self.start.addingTimeInterval(13))
+        #expect(schedule.due(now: Self.start.addingTimeInterval(12), visible: visible, limit: 20).isEmpty)
+        var last: LinkCardRefreshSchedule.Attempt?
+        var date = Self.start.addingTimeInterval(13)
+        while let next = schedule.nextDate(visible: visible), next <= Self.start.addingTimeInterval(500) {
+            #expect(next == date)
+            let attempt = try #require(schedule.due(now: next, visible: visible, limit: 20).first)
+            #expect(attempt.isFinal == (next >= Self.start.addingTimeInterval(180)))
+            last = attempt
+            date = next.addingTimeInterval(10)
+        }
+        #expect(last?.isFinal == true)
+        #expect(last?.count == 19)
+        #expect(schedule.due(now: Self.start.addingTimeInterval(500), visible: visible, limit: 20).isEmpty)
     }
 
-    /// 見えない間は取り直さず、また見えたら、過ぎた予定をまとめて1回取り直す。
+    /// 見えない間は取り直さず、また見えたら、すぐに取り直す。
     @Test func waitsWhileHiddenAndCatchesUpOnce() {
         var schedule = LinkCardRefreshSchedule()
         schedule.note([Self.status("1")], now: Self.start)
 
         #expect(schedule.due(now: Self.start.addingTimeInterval(20), visible: [], limit: 20).isEmpty)
         #expect(schedule.nextDate(visible: []) == nil)
-        #expect(schedule.due(now: Self.start.addingTimeInterval(20), visible: [Self.version("1")], limit: 20).map(\.statusID) == ["1"])
-        #expect(schedule.nextDate(visible: [Self.version("1")]) == Self.start.addingTimeInterval(70))
+        #expect(schedule.due(now: Self.start.addingTimeInterval(20), visible: [Self.version("1")], limit: 20).map(\.version.statusID) == ["1"])
+        #expect(schedule.nextDate(visible: [Self.version("1")]) == Self.start.addingTimeInterval(30))
+    }
+
+    /// 見えないまま諦める時刻を過ぎても、また見えたら1回だけ取り直す。
+    @Test func refreshesOnceWhenSeenAgainAfterGivingUpTime() {
+        var schedule = LinkCardRefreshSchedule()
+        schedule.note([Self.status("1")], now: Self.start)
+
+        let due = schedule.due(now: Self.start.addingTimeInterval(300), visible: [Self.version("1")], limit: 20)
+
+        #expect(due.map(\.version.statusID) == ["1"])
+        #expect(due.first?.isFinal == true)
+        #expect(schedule.nextDate(visible: [Self.version("1")]) == nil)
+    }
+
+    /// 投稿がいくつあっても、取り直しは10秒に1回にまとめる。
+    @Test func batchesStatusesIntoOneRequestPerInterval() {
+        var schedule = LinkCardRefreshSchedule()
+        schedule.note([Self.status("a")], now: Self.start)
+        schedule.note([Self.status("b")], now: Self.start.addingTimeInterval(5))
+        let visible: Set = [Self.version("a"), Self.version("b")]
+
+        #expect(schedule.due(now: Self.start.addingTimeInterval(3), visible: visible, limit: 20).map(\.version.statusID) == ["a"])
+        #expect(schedule.due(now: Self.start.addingTimeInterval(8), visible: visible, limit: 20).isEmpty)
+        #expect(schedule.nextDate(visible: visible) == Self.start.addingTimeInterval(13))
+        #expect(schedule.due(now: Self.start.addingTimeInterval(13), visible: visible, limit: 20).map(\.version.statusID) == ["b", "a"])
     }
 
     /// サーバーのカードがある投稿と、リンクのない投稿と、カードを付け終えたとみなせる古い投稿は、予定に入れない。
@@ -92,13 +128,16 @@ struct LinkCardRefreshTests {
         #expect(schedule.nextDate(visible: [Self.version("1")]) == nil)
     }
 
-    @Test func limitsOneRequestToOldestSeen() {
+    /// 1回で送れる件数を超えたら、長く取り直していない投稿から送る。
+    @Test func rotatesStatusesBeyondLimit() {
         var schedule = LinkCardRefreshSchedule()
         schedule.note([Self.status("b")], now: Self.start)
         schedule.note([Self.status("a")], now: Self.start.addingTimeInterval(1))
+        let visible: Set = [Self.version("a"), Self.version("b")]
 
-        #expect(schedule.due(now: Self.start.addingTimeInterval(10), visible: [Self.version("a"), Self.version("b")], limit: 1).map(\.statusID) == ["b"])
-        #expect(schedule.due(now: Self.start.addingTimeInterval(10), visible: [Self.version("a"), Self.version("b")], limit: 1).map(\.statusID) == ["a"])
+        #expect(schedule.due(now: Self.start.addingTimeInterval(10), visible: visible, limit: 1).map(\.version.statusID) == ["b"])
+        #expect(schedule.due(now: Self.start.addingTimeInterval(20), visible: visible, limit: 1).map(\.version.statusID) == ["a"])
+        #expect(schedule.due(now: Self.start.addingTimeInterval(30), visible: visible, limit: 1).map(\.version.statusID) == ["b"])
     }
 
     // MARK: - 取り直し
@@ -127,7 +166,7 @@ struct LinkCardRefreshTests {
         #expect(await fetches.values == [["1"], ["1"]])
         #expect(applied.map(\.id) == ["1"])
         #expect(applied.first?.card == card)
-        #expect(clock.now == Self.start.addingTimeInterval(15))
+        #expect(clock.now == Self.start.addingTimeInterval(13))
     }
 
     /// サーバーが返さなかった投稿は、消えたものとして取り直さない。

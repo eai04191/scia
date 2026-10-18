@@ -165,10 +165,11 @@ public struct MastodonClient: Sendable {
     public static let multipleStatusesLimit = 20
 
     /// 投稿をまとめて読む。消えた投稿と見られない投稿は返らず、読めない投稿は除く。
+    /// リンクカードの取り直しに使い、リクエストを間隔ごとに1回に収めるため、一時的な失敗でも送り直さず、次の取り直しに任せる。
     /// https://docs.joinmastodon.org/methods/statuses/#index
     public func statuses(_ ids: [Status.ID]) async throws -> [Status] {
         let query = ids.map { URLQueryItem(name: "id[]", value: $0) }
-        return try await get(ElementList<Status>.self, path: "api/v1/statuses", query: query, feature: .multipleStatuses).0.elements
+        return try await get(ElementList<Status>.self, path: "api/v1/statuses", query: query, feature: .multipleStatuses, retries: false).0.elements
     }
 
     /// https://docs.joinmastodon.org/methods/statuses/#favourite

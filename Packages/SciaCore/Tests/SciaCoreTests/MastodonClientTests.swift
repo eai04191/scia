@@ -425,6 +425,16 @@ struct MastodonClientTests {
         #expect(await transport.requests.count == 1)
     }
 
+    /// リンクカードの取り直しは、リクエストを間隔ごとに1回に収めるため、一時的な失敗でも送り直さない。
+    @Test func multipleStatusesDoesNotRetry() async throws {
+        let transport = StubTransport([try .fixture("error_502", withExtension: "html", statusCode: 502)])
+
+        await #expect(throws: MastodonAPIError.self) {
+            try await makeClient(transport).statuses(["1"])
+        }
+        #expect(await transport.requests.count == 1)
+    }
+
     @Test func searchHashtagsForCompletion() async throws {
         let transport = StubTransport([try .fixture("search_hashtags")])
 
