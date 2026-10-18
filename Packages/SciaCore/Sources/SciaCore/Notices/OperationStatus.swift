@@ -31,7 +31,7 @@ public final class OperationStatus {
         public init(_ status: Status) {
             let displayed = status.displayed
             let text = displayed.spoilerText.isEmpty
-                ? MastodonHTMLParser(mentions: displayed.mentions, emojis: displayed.emojis).parse(displayed.content)
+                ? MastodonHTMLParser(mentions: displayed.mentions, tags: displayed.tags, emojis: displayed.emojis).parse(displayed.content)
                 : RichText.plain(displayed.spoilerText, emojis: displayed.emojis)
             let name = Self.textWithoutEmojis(RichText.plain(displayed.account.displayName, emojis: displayed.account.emojis))
             self.init(

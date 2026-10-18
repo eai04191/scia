@@ -82,11 +82,11 @@ extension RichText {
     /// 投稿本文のHTMLを、メンション、ハッシュタグ、カスタム絵文字を解決して変換する。
     /// プロフィールの自己紹介や補足情報のような、投稿の本文以外のHTML。メンションの一覧がないため、メンションはリンクとして読む。
     public static func html(_ html: String, emojis: [CustomEmoji]) -> RichText {
-        MastodonHTMLParser(mentions: [], emojis: emojis).parse(html)
+        MastodonHTMLParser(mentions: [], tags: [], emojis: emojis).parse(html)
     }
 
     public static func status(_ status: Status) -> RichText {
-        MastodonHTMLParser(mentions: status.mentions, emojis: status.emojis).parse(status.content)
+        MastodonHTMLParser(mentions: status.mentions, tags: status.tags, emojis: status.emojis).parse(status.content)
     }
 }
 

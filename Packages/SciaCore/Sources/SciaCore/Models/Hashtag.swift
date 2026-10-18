@@ -35,6 +35,20 @@ public struct Hashtag: Decodable, Hashable, Sendable {
         return String(folded.unicodeScalars.filter(isValidScalar).map(Character.init))
     }
 
+    /// 投稿のタグの名前を、`normalizedName`でそろえた集合にする。`isTagText`に渡す。
+    static func normalizedNames(of tags: [Tag]) -> Set<String> {
+        Set(tags.map { normalizedName($0.name) })
+    }
+
+    /// リンクの文字列が、投稿のタグのどれかの名前に`#`を付けたものか。
+    /// Misskeyの投稿のハッシュタグは、`class`がなく、`rel`も`nofollow noopener`に書き換わって届くため、リンクの印では見分けられない。
+    /// `normalizedNames`は`normalizedNames(of:)`でそろえたもの。`text`は文字参照を戻したものを渡す。
+    static func isTagText(_ text: String, normalizedNames: Set<String>) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.first == "#" else { return false }
+        return normalizedNames.contains(normalizedName(String(trimmed.dropFirst())))
+    }
+
     private static let asciiFolding: [Character: Character] = {
         let from = Array("ÀÁÂÃÄÅàáâãäåĀāĂăĄąÇçĆćĈĉĊċČčÐðĎďĐđÈÉÊËèéêëĒēĔĕĖėĘęĚěĜĝĞğĠġĢģĤĥĦħÌÍÎÏìíîïĨĩĪīĬĭĮįİıĴĵĶķĸĹĺĻļĽľĿŀŁłÑñŃńŅņŇňŉŊŋÒÓÔÕÖØòóôõöøŌōŎŏŐőŔŕŖŗŘřŚśŜŝŞşŠšſŢţŤťŦŧÙÚÛÜùúûüŨũŪūŬŭŮůŰűŲųŴŵÝýÿŶŷŸŹźŻżŽž")
         let to = Array("AAAAAAaaaaaaAaAaAaCcCcCcCcCcDdDdDdEEEEeeeeEeEeEeEeEeGgGgGgGgHhHhIIIIiiiiIiIiIiIiIiJjKkkLlLlLlLlLlNnNnNnNnnNnOOOOOOooooooOoOoOoRrRrRrSsSsSsSssTtTtTtUUUUuuuuUuUuUuUuUuUuWwYyyYyYZzZzZz")

@@ -6,15 +6,18 @@ import Foundation
 /// https://docs.joinmastodon.org/spec/activitypub/#sanitization
 public struct MastodonHTMLParser {
     private let mentions: [Mention]
+    private let tagNames: Set<String>
     private let emojiSplitter: CustomEmojiSplitter
 
-    public init(mentions: [Mention], emojis: [CustomEmoji]) {
+    /// `tags`は投稿のタグ。`class`も`rel`もないハッシュタグを、リンクの文字列で見分けるのに使う。
+    public init(mentions: [Mention], tags: [Tag], emojis: [CustomEmoji]) {
         self.mentions = mentions
+        tagNames = Hashtag.normalizedNames(of: tags)
         emojiSplitter = CustomEmojiSplitter(emojis: emojis)
     }
 
     public func parse(_ html: String) -> RichText {
-        var builder = Builder(mentions: mentions, emojiSplitter: emojiSplitter)
+        var builder = Builder(mentions: mentions, tagNames: tagNames, emojiSplitter: emojiSplitter)
         for token in HTMLTokenizer.tokenize(html) {
             builder.handle(token)
         }
@@ -57,6 +60,7 @@ private struct Builder {
     }
 
     let mentions: [Mention]
+    let tagNames: Set<String>
     let emojiSplitter: CustomEmojiSplitter
 
     private var blocks: [RichText.Block] = []
@@ -69,8 +73,9 @@ private struct Builder {
     private var link: LinkContext?
     private var spans: [SpanKind] = []
 
-    init(mentions: [Mention], emojiSplitter: CustomEmojiSplitter) {
+    init(mentions: [Mention], tagNames: Set<String>, emojiSplitter: CustomEmojiSplitter) {
         self.mentions = mentions
+        self.tagNames = tagNames
         self.emojiSplitter = emojiSplitter
     }
 
@@ -205,7 +210,7 @@ private struct Builder {
             return
         }
         let destination: RichText.LinkDestination
-        if link.classes.contains("hashtag") || link.rels.contains("tag") {
+        if link.classes.contains("hashtag") || link.rels.contains("tag") || Hashtag.isTagText(text, normalizedNames: tagNames) {
             destination = .hashtag(name: String(text.drop { $0 == "#" }), url: url)
         } else if link.classes.contains("mention") {
             let acct = mentions.first { $0.url == url }?.acct ?? String(text.drop { $0 == "@" })

@@ -41,7 +41,7 @@ public enum LinkCard: Equatable, Sendable {
     static func cardCandidate(in status: Status) -> URL? {
         guard status.mediaAttachments.isEmpty, status.quote == nil else { return nil }
         let mentionURLs = Set(status.mentions.compactMap(\.url))
-        let tagNames = Set(status.tags.map { Hashtag.normalizedName($0.name) })
+        let tagNames = Hashtag.normalizedNames(of: status.tags)
         var candidate: (url: URL, text: String)?
         for token in HTMLTokenizer.tokenize(status.content) {
             switch token {
@@ -52,7 +52,7 @@ public enum LinkCard: Equatable, Sendable {
             case .close("a"):
                 guard let link = candidate else { continue }
                 candidate = nil
-                if isHashtagText(link.text, tagNames: tagNames) { continue }
+                if Hashtag.isTagText(link.text, normalizedNames: tagNames) { continue }
                 return link.url
             default:
                 continue
@@ -74,12 +74,5 @@ public enum LinkCard: Equatable, Sendable {
               !classString.contains("u-url"), !classString.contains("h-card"), !mentionURLs.contains(url)
         else { return nil }
         return url
-    }
-
-    /// リンクの文字列が、投稿のタグのどれかの名前に`#`を付けたものか。
-    private static func isHashtagText(_ text: String, tagNames: Set<String>) -> Bool {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.first == "#" else { return false }
-        return tagNames.contains(Hashtag.normalizedName(String(trimmed.dropFirst())))
     }
 }

@@ -15,8 +15,8 @@ struct MastodonHTMLParserTests {
         )
     }
 
-    private func parse(_ html: String, mentions: [Mention] = [], emojis: [CustomEmoji] = []) -> RichText {
-        MastodonHTMLParser(mentions: mentions, emojis: emojis).parse(html)
+    private func parse(_ html: String, mentions: [Mention] = [], tags: [SciaCore.Tag] = [], emojis: [CustomEmoji] = []) -> RichText {
+        MastodonHTMLParser(mentions: mentions, tags: tags, emojis: emojis).parse(html)
     }
 
     @Test func paragraphsAndLineBreaks() {
@@ -72,6 +72,18 @@ struct MastodonHTMLParserTests {
 
         #expect(parse(html).blocks.first?.inlines == [
             .link("#scia", .hashtag(name: "scia", url: try url("https://example.social/tags/scia")), []),
+        ])
+    }
+
+    /// Misskeyの投稿のハッシュタグは`class`がなく、`rel`も`nofollow noopener`に書き換わって届く。
+    /// リンクの文字列が投稿のタグの名前に`#`を付けたものなら、ハッシュタグとして読む。
+    @Test func misskeyHashtagWithoutMarkersMatchesStatusTags() throws {
+        let html = #"<p><a href="https://misskey.example/tags/bot" rel="nofollow noopener" target="_blank">#bot</a> <a href="https://misskey.example/tags/other" rel="nofollow noopener" target="_blank">#other</a></p>"#
+
+        #expect(parse(html, tags: [SciaCore.Tag(name: "bot", url: nil)]).blocks.first?.inlines == [
+            .link("#bot", .hashtag(name: "bot", url: try url("https://misskey.example/tags/bot")), []),
+            .text(" ", []),
+            .link("#other", .url(try url("https://misskey.example/tags/other")), []),
         ])
     }
 
