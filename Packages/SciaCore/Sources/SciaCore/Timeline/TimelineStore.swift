@@ -402,6 +402,7 @@ public final class TimelineStore {
     #if DEBUG
     /// サーバーにない検証用の投稿のID。見れば手元では既読になるが、サーバーに保存する既読位置には使わない。
     /// 保存すると、本物の投稿がそれを追い越すまで、前回の既読位置から読み始められなくなるため。
+    /// リンクカードの取り直しにも使わない。サーバーにない投稿を取りに行く通信になるため。
     public var debugLocalOnlyIDs: Set<String> = []
     /// サーバーに保存できる投稿のうち、見た中で最も新しいもののID。
     private var lastSavableReadID: String?

@@ -503,6 +503,11 @@ extension HomeTimelineController {
         ]
     }
 
+    /// サーバーにない検証用の投稿か。リンクカードの取り直しから外すために使う。
+    func isDebugLocalOnly(_ id: Status.ID) -> Bool {
+        store.debugLocalOnlyIDs.contains(id)
+    }
+
     /// デバッグメニューや、URLで指定したダミー投稿を流す。
     func streamDummy(_ post: DebugDummyPost) {
         logger.info("debug stream dummy \(post.rawValue, privacy: .public)")
@@ -519,6 +524,55 @@ extension HomeTimelineController {
             streamDummyVideoStatus(content: "ビューアの確認用に動画とGIFを1本ずつ添付", make: DummyMedia.videoAttachments)
         case .longVideo:
             streamDummyVideoStatus(content: "ビューアの確認用に、毎秒音が鳴る90秒の動画を添付", make: DummyMedia.longVideoAttachment)
+        case .linkCard:
+            streamDummyLinkCard(withImage: false)
+        case .linkCardImage:
+            streamDummyLinkCard(withImage: true)
+        }
+    }
+
+    /// サーバーのカードが後から届くまでの秒数。届く瞬間に合わせて、スクロールなどの操作を送れるよう、少し長めにする。
+    static let dummyLinkCardDelay: Duration = .seconds(5)
+
+    /// リンクだけのダミーの投稿を新着と同じ経路で流し、`dummyLinkCardDelay`のあとに、通信せずにカードを届ける。
+    /// カードが届いたときの動きを、サーバーがカードを付ける時機によらず、何度でも同じ条件で確かめるため。
+    private func streamDummyLinkCard(withImage: Bool) {
+        let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
+        let base = Self.dummyStatus(number: 1, avatar: avatar)
+        guard let link = URL(string: "https://news.example/articles/\(base.id)") else { return }
+        let dummy = Status(
+            id: base.id,
+            createdAt: base.createdAt,
+            account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー（リンクカード）", avatar: avatar),
+            content: #"<p>リンクカードが届くときの確認用 <a href="\#(link.absoluteString)">news.example/articles/\#(base.id)</a></p>"#,
+            spoilerText: "",
+            url: nil
+        )
+        let card = PreviewCard(
+            url: link,
+            title: "ダミーの記事の見出し",
+            description: "5秒後に届いたダミーのカード。",
+            type: .link,
+            providerName: withImage ? "News Example" : "",
+            image: withImage ? CatalogFixtures.imageURL(width: 400, height: 225, color: .systemIndigo) : nil,
+            width: withImage ? 400 : 0,
+            height: withImage ? 225 : 0
+        )
+        // 取り直しで届くのと同じく、カードの付いた同じ版の投稿として渡す。
+        let carded = Status(
+            id: dummy.id,
+            createdAt: dummy.createdAt,
+            account: dummy.account,
+            content: dummy.content,
+            spoilerText: "",
+            url: nil,
+            card: card
+        )
+        run { controller in
+            controller.store.debugLocalOnlyIDs.insert(dummy.id)
+            controller.receive(.update(dummy))
+            guard (try? await Task.sleep(for: Self.dummyLinkCardDelay)) != nil, !controller.isStopped else { return }
+            controller.updateStatus(dummy.id) { $0.adoptingCard(of: carded) }
         }
     }
 
@@ -624,6 +678,8 @@ enum DebugDummyPost: String, CaseIterable {
     case transparent
     case video
     case longVideo = "long-video"
+    case linkCard = "link-card"
+    case linkCardImage = "link-card-image"
 
     var title: String {
         switch self {
@@ -633,6 +689,8 @@ enum DebugDummyPost: String, CaseIterable {
         case .transparent: "透過画像1枚"
         case .video: "動画とGIF"
         case .longVideo: "音声付きの長い動画"
+        case .linkCard: "後から届くリンクカード（画像なし）"
+        case .linkCardImage: "後から届くリンクカード（画像あり）"
         }
     }
 
@@ -644,6 +702,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .transparent: "circle.dashed"
         case .video: "play.rectangle"
         case .longVideo: "speaker.wave.2"
+        case .linkCard, .linkCardImage: "link"
         }
     }
 }

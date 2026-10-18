@@ -296,8 +296,12 @@ final class SessionController {
             self?.open(destination, in: status, from: viewController)
         }
         viewController.onVisibleLinkOnlyCardsChange = { [weak self, weak viewController] statuses in
-            guard let viewController else { return }
-            self?.linkCards.setVisible(statuses, from: viewController)
+            guard let self, let viewController else { return }
+            #if DEBUG
+            // ダミー投稿はサーバーにないため、取り直さない。カードはダミーを流した側が届ける。
+            let statuses = statuses.filter { !self.home.isDebugLocalOnly($0.id) }
+            #endif
+            self.linkCards.setVisible(statuses, from: viewController)
         }
     }
 
