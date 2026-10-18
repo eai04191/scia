@@ -908,6 +908,8 @@ extension MediaViewerController {
     /// どちらもなければ（アプリで表示できないファイルなど）、ページを描き写した画像を使う。
     /// 画像を描くページなら、最初に画像がなくても、届いた時点で複製を差し替える。
     /// - Parameter decorationAlpha: サムネイルの印の濃さ。サムネイルの位置から始めるなら1、ビューアの画像の位置から始めるなら0。
+    static let allCorners: CACornerMask = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+
     private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: (any MediaViewerSource)?, decorationAlpha: CGFloat) {
         let page = pages[currentIndex]
         morph.image = page?.transitionImage ?? tile?.thumbnailImage ?? page.map(Self.snapshot)
@@ -916,6 +918,8 @@ extension MediaViewerController {
         morph.frame = frame
         morph.layer.cornerRadius = cornerRadius
         morph.layer.cornerCurve = tile?.layer.cornerCurve ?? .continuous
+        // リンクカードのサムネイルのように、外側の角だけを丸めたサムネイルもあるため、丸める角も合わせる。
+        morph.layer.maskedCorners = tile?.layer.maskedCorners ?? Self.allCorners
         morph.alpha = 1
         morph.isHidden = false
         setPageHidden(true)
@@ -1287,6 +1291,7 @@ extension MediaViewerController {
         image.contentMode = morph.contentMode
         image.clipsToBounds = true
         image.layer.cornerCurve = morph.layer.cornerCurve
+        image.layer.maskedCorners = morph.layer.maskedCorners
         image.isUserInteractionEnabled = false
         let decoration = tile?.makeDecorationCopy()
         if let decoration {

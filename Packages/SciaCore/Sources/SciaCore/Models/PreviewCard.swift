@@ -98,3 +98,20 @@ public struct PreviewCard: Codable, Hashable, Sendable {
         }
     }
 }
+
+extension PreviewCard {
+    /// サムネイルを、ビューアで開く添付ファイルとして表す。サムネイルがなければnil。
+    /// IDは添付ファイルのIDと混ざらないよう、カードのリンク先から作る。大きさはMastodonが分からないとき0を返すため、そのときは持たせない。
+    public var imageAttachment: MediaAttachment? {
+        guard let image else { return nil }
+        let size = width > 0 && height > 0 ? MediaAttachment.Size(width: width, height: height) : nil
+        return MediaAttachment(
+            id: "card:\(url.absoluteString)",
+            type: .image,
+            url: image,
+            previewUrl: image,
+            meta: size.map { MediaAttachment.Meta(original: $0) },
+            blurhash: blurhash
+        )
+    }
+}

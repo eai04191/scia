@@ -28,7 +28,10 @@ final class LinkCardView: UIButton {
     }
 
     private let store: MediaImageStore
-    private let thumbnailView = UIImageView()
+    private let thumbnailView = LinkCardThumbnailView()
+    /// サムネイルの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
+    /// 画像を読み込み終えたカードでだけ受け付け、それ以外の場所や画像のないカードのタップは、リンクを開く。
+    var onOpenImage: ((LinkCardThumbnailView) -> Void)?
     private let symbolView = UIImageView(image: UIImage(systemName: "link"))
     private let siteLabel = UILabel()
     private let headlineLabel = UILabel()
@@ -56,6 +59,9 @@ final class LinkCardView: UIButton {
         accessibilityTraits = .link
 
         thumbnailView.backgroundColor = .secondarySystemFill
+        thumbnailView.layer.cornerRadius = MediaGridView.cornerRadius
+        thumbnailView.layer.cornerCurve = .continuous
+        thumbnailView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openImage)))
         thumbnailView.contentMode = .scaleAspectFill
         thumbnailView.clipsToBounds = true
         symbolView.contentMode = .center
@@ -69,6 +75,7 @@ final class LinkCardView: UIButton {
             view.isUserInteractionEnabled = false
             addSubview(view)
         }
+        accessibilityCustomActions = []
         updateFonts()
         updateBorderColor()
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
@@ -165,6 +172,22 @@ final class LinkCardView: UIButton {
         let removing = snapshots ?? transitionSnapshots
         for snapshot in removing { snapshot.removeFromSuperview() }
         transitionSnapshots.removeAll { removing.contains($0) }
+    }
+
+    /// サムネイルの画像を開けるのは、読み込み終えた画像を出しているとき。ぼかしの下地のうちは、大きくして見るものがないため、リンクを開く。
+    private func updateImageInteraction() {
+        let opensImage = thumbnailView.loadedThumbnail != nil && thumbnailView.imageURL == request?.url
+        thumbnailView.isUserInteractionEnabled = opensImage
+        accessibilityCustomActions = opensImage
+            ? [UIAccessibilityCustomAction(name: "画像を開く") { [weak self] _ in
+                self?.openImage()
+                return true
+            }]
+            : []
+    }
+
+    @objc private func openImage() {
+        onOpenImage?(thumbnailView)
     }
 
     /// 文字を、動きを止めて、すぐに出す。カードが届いた動きの途中で、セルが別の投稿に使い回されたときも、
@@ -274,6 +297,10 @@ final class LinkCardView: UIButton {
         super.layoutSubviews()
         let thumbnailOnRight = content?.thumbnailSide == .right
         thumbnailView.frame = CGRect(x: thumbnailOnRight ? bounds.width - thumbnailWidth : 0, y: 0, width: thumbnailWidth, height: bounds.height)
+        // カードの外側の角だけを丸め、文字の側は角を立てる。ビューアは、この丸みに合わせて画像を縮めて戻す。
+        thumbnailView.layer.maskedCorners = thumbnailOnRight
+            ? [.layerMaxXMinYCorner, .layerMaxXMaxYCorner]
+            : [.layerMinXMinYCorner, .layerMinXMaxYCorner]
         // 記号は枠と一緒に押し潰さず、枠の中央で、枠を縮めて消すあいだに小さくしながら薄くする。
         let hidesThumbnail = thumbnailWidth == 0
         symbolView.bounds = CGRect(x: 0, y: 0, width: bounds.height, height: bounds.height)
@@ -308,11 +335,13 @@ final class LinkCardView: UIButton {
         loadTask?.cancel()
         loadTask = nil
         if !keepsImage {
-            thumbnailView.image = card?.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: bounds.height > 0 ? thumbnailWidth / bounds.height : 1) }
+            thumbnailView.showPlaceholder(card?.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: bounds.height > 0 ? thumbnailWidth / bounds.height : 1) })
         }
+        updateImageInteraction()
         guard let request else { return }
         if let cached = store.cachedImage(for: request.url, maxPixelSize: request.maxPixelSize) {
-            thumbnailView.image = cached
+            thumbnailView.showLoaded(cached, from: request.url)
+            updateImageInteraction()
             return
         }
         loadTask = Task { [weak self, store] in
@@ -320,8 +349,43 @@ final class LinkCardView: UIButton {
                   let self, !Task.isCancelled, self.request == request
             else { return }
             UIView.transition(with: self.thumbnailView, duration: 0.15, options: .transitionCrossDissolve) {
-                self.thumbnailView.image = image
+                self.thumbnailView.showLoaded(image, from: request.url)
             }
+            self.updateImageInteraction()
         }
+    }
+}
+
+/// リンクカードのサムネイル。カードの画像をビューアで開くとき、開閉の起点にもなる。
+final class LinkCardThumbnailView: UIImageView, MediaViewerSource {
+    /// 読み込んだ画像。ぼかしの下地は含まない。ビューアで元の画像が届くまでの下地にする。
+    private(set) var loadedThumbnail: UIImage?
+    /// 読み込んだ画像のURL。ビューアを閉じるとき、セルが別の投稿に使い回されていないかを確かめる。
+    private(set) var imageURL: URL?
+
+    var thumbnailImage: UIImage? { image }
+
+    func showPlaceholder(_ placeholder: UIImage?) {
+        loadedThumbnail = nil
+        imageURL = nil
+        image = placeholder
+    }
+
+    func showLoaded(_ loaded: UIImage, from url: URL) {
+        loadedThumbnail = loaded
+        imageURL = url
+        image = loaded
+    }
+
+    /// `url`の画像を、画面に出ているカードで描いている。行が別の投稿に使い回されると、カードのない投稿ではカードごと隠れるだけで、
+    /// URLが残るため、隠れていないことも確かめる。ビューアを閉じるときの戻り先にしてよいかを決める。
+    func isShowing(_ url: URL?) -> Bool {
+        guard imageURL == url, window != nil else { return false }
+        var view: UIView? = self
+        while let current = view {
+            if current.isHidden || current.alpha == 0 { return false }
+            view = current.superview
+        }
+        return true
     }
 }

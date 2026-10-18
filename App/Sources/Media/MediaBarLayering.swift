@@ -154,6 +154,7 @@ final class MediaBarLayering {
         }
         image.frame = host.convert(morphFrame, from: window)
         image.layer.cornerRadius = morph.layer.cornerRadius
+        image.layer.maskedCorners = morph.layer.maskedCorners
         image.alpha = visibility
         underlay.decoration?.alpha = decoration?.alpha ?? 0
         image.backgroundColor = morph.backgroundColor
@@ -185,7 +186,7 @@ final class MediaBarLayering {
         let hole = backdrop.convert(morphFrame, from: window)
         let radius = morph.layer.cornerRadius
         let path = UIBezierPath(rect: backdrop.bounds)
-        path.append(UIBezierPath(roundedRect: hole, cornerRadius: radius))
+        path.append(UIBezierPath(roundedRect: hole, byRoundingCorners: Self.rectCorners(of: morph.layer.maskedCorners), cornerRadii: CGSize(width: radius, height: radius)))
         if morph.image !== holeFillSource {
             holeFillSource = morph.image
             backdropHoleFill.contents = morph.image.flatMap(Self.inverseAlphaImage)
@@ -198,8 +199,19 @@ final class MediaBarLayering {
         backdropHoleFill.frame = hole
         backdropHoleFill.cornerRadius = radius
         backdropHoleFill.cornerCurve = morph.layer.cornerCurve
+        backdropHoleFill.maskedCorners = morph.layer.maskedCorners
         backdropHoleFill.opacity = Float(1 - (morph.backgroundColor?.cgColor.alpha ?? 0))
         CATransaction.commit()
+    }
+
+    /// レイヤーの丸める角を、パスの丸める角に置き換える。どちらも左上を原点にした座標で、Yの小さい側が上になる。
+    private static func rectCorners(of mask: CACornerMask) -> UIRectCorner {
+        var corners: UIRectCorner = []
+        if mask.contains(.layerMinXMinYCorner) { corners.insert(.topLeft) }
+        if mask.contains(.layerMaxXMinYCorner) { corners.insert(.topRight) }
+        if mask.contains(.layerMinXMaxYCorner) { corners.insert(.bottomLeft) }
+        if mask.contains(.layerMaxXMaxYCorner) { corners.insert(.bottomRight) }
+        return corners
     }
 
     /// 透明度を反転した画像。不透明な部分が透明に、透明な部分が不透明になる。透明度を持たない画像ならnilで、穴を開けきる。

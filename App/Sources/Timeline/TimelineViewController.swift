@@ -1105,6 +1105,14 @@ final class TimelineViewController: UIViewController {
                 self?.revealMedia(of: shown)
             }
         }
+        if case .card(let card)? = configuration.card?.card, let attachment = card.imageAttachment {
+            configuration.onOpenLinkCardImage = { [weak self] thumbnail in
+                // 開いている間に行が別の投稿に使い回されていたら、その画像へは戻さず、薄くして閉じる。
+                self?.openMedia([attachment], at: 0, subject: OperationStatus.Subject(shown)) { [weak thumbnail] _ in
+                    thumbnail?.isShowing(attachment.url) == true ? thumbnail : nil
+                }
+            }
+        }
         configuration.spoiler?.isCollapsed = spoilerExpansion.isCollapsed(shown)
         configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: shown, keeping: itemID) }
         return configuration

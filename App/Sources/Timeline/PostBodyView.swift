@@ -39,6 +39,8 @@ final class PostBodyView: UIView {
     var onToggleSpoiler: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
+    /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
+    var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
 
     private let spoilerView = SpoilerView()
     private let textLabel = LinkLabel()
@@ -91,6 +93,7 @@ final class PostBodyView: UIView {
         mediaView.onReveal = { [weak self] in self?.onRevealMedia?() }
         spoilerView.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?() }, for: .touchUpInside)
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
+        cardView.onOpenImage = { [weak self] thumbnail in self?.onOpenLinkCardImage?(thumbnail) }
         cardView.addAction(UIAction { [weak self] _ in
             guard let self, let url = self.cardView.content?.card.url else { return }
             self.onOpenLink?(.url(url))

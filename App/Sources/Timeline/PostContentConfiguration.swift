@@ -46,6 +46,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var onOpenContextAccount: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
+    /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
+    var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
 
     /// 大きさと文字の見た目。
     struct Metrics {
@@ -130,6 +132,7 @@ final class PostContentView: UIView, UIContentView {
         bodyView.onRevealMedia = { [weak self] in self?.current.onRevealMedia?() }
         bodyView.onToggleSpoiler = { [weak self] in self?.current.onToggleSpoiler?() }
         bodyView.onOpenLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
+        bodyView.onOpenLinkCardImage = { [weak self] thumbnail in self?.current.onOpenLinkCardImage?(thumbnail) }
         for view in [avatarView, nameRow] as [UIView] {
             view.isUserInteractionEnabled = true
             view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAccount)))

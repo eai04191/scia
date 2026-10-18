@@ -79,6 +79,39 @@ struct LinkCardTests {
         #expect(LinkCard(status: status(content: content)) == .link(try url("https://news.example/")))
     }
 
+    /// カードのサムネイルを、ビューアで開く添付ファイルにする。
+    @Test func cardImageBecomesAttachment() throws {
+        let card = PreviewCard(
+            url: try url("https://news.example/articles/1"),
+            title: "見出し",
+            description: "",
+            type: .link,
+            providerName: "News",
+            image: try url("https://example.social/cache/preview_cards/images/1.jpeg"),
+            width: 400,
+            height: 225,
+            blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+        )
+        let attachment = try #require(card.imageAttachment)
+
+        #expect(attachment.id == "card:https://news.example/articles/1")
+        #expect(attachment.type == .image)
+        #expect(attachment.url == card.image)
+        #expect(attachment.previewUrl == card.image)
+        #expect(attachment.meta?.original == MediaAttachment.Size(width: 400, height: 225))
+        #expect(attachment.blurhash == card.blurhash)
+    }
+
+    /// サムネイルのないカードは開かない。大きさが分からないカードは、大きさを持たせずに開く。
+    @Test func cardWithoutImageHasNoAttachment() throws {
+        let link = try url("https://news.example/articles/1")
+        let noImage = PreviewCard(url: link, title: "", description: "", type: .link, providerName: "")
+        let unknownSize = PreviewCard(url: link, title: "", description: "", type: .link, providerName: "", image: try url("https://example.social/1.jpeg"))
+
+        #expect(noImage.imageAttachment == nil)
+        #expect(try #require(unknownSize.imageAttachment).meta == nil)
+    }
+
     @Test func noCardWithoutLink() {
         #expect(LinkCard(status: status(content: "<p>リンクのない本文</p>")) == nil)
     }

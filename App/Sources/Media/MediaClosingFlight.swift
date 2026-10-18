@@ -115,6 +115,7 @@ final class MediaClosingFlight: NSObject {
         }
         if let tile {
             lastTarget = (tile.convert(tile.bounds, to: window), tile.layer.cornerRadius)
+            parts.morph.layer.maskedCorners = tile.layer.maskedCorners
             parts.layering.track(tile)
             parts.overlap?.follow(tile)
         }
