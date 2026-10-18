@@ -19,6 +19,7 @@ enum MediaGridCatalog {
             CatalogState(title: "4枚") { grid(images(4)) },
             CatalogState(title: "6枚（4枚目に残りの数）") { grid(images(6)) },
             CatalogState(title: "閲覧注意で覆う") { grid(images(2), sensitive: true) },
+            CatalogState(title: "メニューから隠した") { grid(images(2), hidden: true) },
             CatalogState(title: "代替テキスト（ALTあり、説明にならない「Screenshot」。設定で無視していれば右にALTは出ない）") {
                 grid([
                     Fixtures.attachment("a", width: 1_200, height: 1_200, color: .systemGreen, description: "緑の地に白い格子"),
@@ -63,7 +64,7 @@ enum MediaGridCatalog {
     }
 
     @MainActor
-    private static func grid(_ attachments: [MediaAttachment], sensitive: Bool = false, store: MediaImageStore = AppDependencies.mediaImages) -> UIView {
+    private static func grid(_ attachments: [MediaAttachment], sensitive: Bool = false, hidden: Bool = false, store: MediaImageStore = AppDependencies.mediaImages) -> UIView {
         let status = Status(
             id: UUID().uuidString,
             createdAt: .now,
@@ -75,13 +76,17 @@ enum MediaGridCatalog {
             sensitive: sensitive
         )
         let grid = MediaGridView(store: store)
-        guard let content = TimelineViewController(texts: .home).mediaContent(for: status), let aspectRatio = content.aspectRatio else { return grid }
+        let timeline = TimelineViewController(texts: .home)
+        if hidden {
+            timeline.mediaCovers.hide(status)
+        }
+        guard let content = timeline.mediaContent(for: status), let aspectRatio = content.aspectRatio else { return grid }
         grid.apply(content)
         // 覆いを押したら外す。一覧と同じく、覆いと中身は同じ大きさのため高さは変わらない。
         grid.onReveal = { [weak grid] in
             grid?.apply(MediaGridView.Content(
                 attachments: content.attachments,
-                isCovered: false,
+                cover: nil,
                 tallestAspectRatio: content.tallestAspectRatio,
                 thumbnailPolicy: content.thumbnailPolicy,
                 spacing: content.spacing

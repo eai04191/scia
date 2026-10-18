@@ -85,11 +85,58 @@ struct TimelineMediaTests {
         let grid = try #require(mediaGrid(in: harness, of: sensitive.id))
         #expect(grid.content?.isCovered == true)
 
-        vc.revealedMediaStatusIDs.insert(sensitive.id)
-        vc.reconfigure([.status(sensitive.id)])
+        vc.revealMedia(of: sensitive)
 
         #expect(mediaGrid(in: harness, of: sensitive.id)?.content?.isCovered == false)
         #expect(vc.mediaContent(for: spoiler)?.isCovered == true)
+        #expect(harness.windowMinY(of: .status(below)) == belowY)
+    }
+
+    /// 閲覧注意のない投稿も、メニューから隠すと覆う。覆っても行の高さは変わらず、覆いをタップすれば開く。
+    @Test func hidingPlainMediaCoversItWithoutChangingHeight() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        let plain = withMedia(statuses[0], [image("1", width: 300, height: 400)])
+        harness.setStatuses([plain] + statuses.dropFirst())
+        let vc = harness.viewController
+        let below = statuses[1].id
+        let belowY = try #require(harness.windowMinY(of: .status(below)))
+        #expect(try #require(mediaGrid(in: harness, of: plain.id)).content?.isCovered == false)
+
+        vc.hideMedia(of: plain)
+
+        #expect(mediaGrid(in: harness, of: plain.id)?.content?.cover == .hidden)
+        #expect(harness.windowMinY(of: .status(below)) == belowY)
+
+        vc.revealMedia(of: plain)
+
+        #expect(mediaGrid(in: harness, of: plain.id)?.content?.isCovered == false)
+        #expect(harness.windowMinY(of: .status(below)) == belowY)
+    }
+
+    /// ほかの画面で隠した結果を受け取ると、その投稿の行を覆い直す。隠した画面は、変えたあとの状態をセッションに渡す。
+    @Test func mediaCoversChangedElsewhereAreApplied() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        let plain = withMedia(statuses[0], [image("1", width: 300, height: 400)])
+        harness.setStatuses([plain] + statuses.dropFirst())
+        let vc = harness.viewController
+        var shared: MediaCovers?
+        vc.onChangeMediaCovers = { covers, _ in shared = covers }
+        let below = statuses[1].id
+        let belowY = try #require(harness.windowMinY(of: .status(below)))
+
+        vc.hideMedia(of: plain)
+        let hidden = try #require(shared)
+        #expect(hidden.cover(for: plain) == .hidden)
+        vc.revealMedia(of: plain)
+        #expect(mediaGrid(in: harness, of: plain.id)?.content?.isCovered == false)
+
+        vc.applyMediaCovers(hidden, changed: plain)
+
+        #expect(mediaGrid(in: harness, of: plain.id)?.content?.cover == .hidden)
         #expect(harness.windowMinY(of: .status(below)) == belowY)
     }
 
@@ -195,8 +242,7 @@ struct TimelineMediaTests {
 
         #expect(log.fetched.isEmpty)
 
-        harness.viewController.revealedMediaStatusIDs.insert(sensitive.id)
-        harness.viewController.reconfigure([.status(sensitive.id)])
+        harness.viewController.revealMedia(of: sensitive)
         _ = harness.visibleCell(of: .status(sensitive.id))
         let deadline = ContinuousClock.now + .seconds(2)
         while log.fetched.isEmpty, ContinuousClock.now < deadline {

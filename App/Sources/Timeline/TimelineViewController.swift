@@ -155,8 +155,10 @@ final class TimelineViewController: UIViewController {
     let avatarImages: AvatarImageStore
     let network: NetworkConditionsMonitor
     let settings: AppSettings
-    /// 閲覧注意の覆いを外した投稿のID。ブーストなら元の投稿のID。
-    var revealedMediaStatusIDs: Set<Status.ID> = []
+    /// 添付ファイルを覆うか。閲覧注意の覆いを外した投稿と、メニューから隠した投稿を覚える。セッションがほかの画面とそろえる。
+    var mediaCovers = MediaCovers()
+    /// この画面で開いたり隠したりしたときに、変えたあとの状態と、変えた投稿を渡して呼ぶ。
+    var onChangeMediaCovers: ((MediaCovers, Status) -> Void)?
     /// 注意書きのある投稿の本文を開いているか。サーバーの設定が読めたら、セッションが既定を入れる。
     var spoilerExpansion = SpoilerExpansion() {
         didSet {
@@ -1077,7 +1079,7 @@ final class TimelineViewController: UIViewController {
                 self?.openMedia(media.attachments, at: index, of: shown, from: grid)
             }
             configuration.onRevealMedia = { [weak self] in
-                self?.revealMedia(of: shown.id)
+                self?.revealMedia(of: shown)
             }
         }
         configuration.spoiler?.isCollapsed = spoilerExpansion.isCollapsed(shown)

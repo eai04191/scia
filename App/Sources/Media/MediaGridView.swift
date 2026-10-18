@@ -15,13 +15,15 @@ final class MediaGridView: UIView {
 
     struct Content: Equatable {
         let attachments: [MediaAttachment]
-        /// 閲覧注意として覆っている。
-        let isCovered: Bool
+        /// 覆っていればその理由。
+        let cover: MediaCover?
         let tallestAspectRatio: Double
         let thumbnailPolicy: MediaThumbnailPolicy
         /// サムネイル同士のすき間。
         let spacing: CGFloat
         var arrangement: Arrangement = .grid
+
+        var isCovered: Bool { cover != nil }
 
         /// 全体の幅を高さで割った値。添付ファイルがなければnil。
         var aspectRatio: Double? {
@@ -50,7 +52,7 @@ final class MediaGridView: UIView {
 
     /// サムネイルがタップされたときに、何番目の添付ファイルかを渡して呼ぶ。
     var onSelect: ((Int) -> Void)?
-    /// 閲覧注意の覆いがタップされたときに呼ぶ。
+    /// 覆いがタップされたときに呼ぶ。
     var onReveal: (() -> Void)?
 
     private let store: MediaImageStore
@@ -110,7 +112,7 @@ final class MediaGridView: UIView {
             )
         }
         cover.isHidden = !content.isCovered
-        updateCoverButton(for: content.arrangement)
+        updateCoverButton(for: content)
         // 覆っている間は、中のサムネイルを読み上げない。
         tiles.forEach { $0.accessibilityElementsHidden = content.isCovered }
         setNeedsLayout()
@@ -154,18 +156,20 @@ final class MediaGridView: UIView {
     }
 
     /// 小さなサムネイルには文字が入りきらないため、1列に並べるときは記号だけを出す。
-    private func updateCoverButton(for arrangement: Arrangement) {
+    private func updateCoverButton(for content: Content) {
         guard let coverButton, var configuration = coverButton.configuration else { return }
-        switch arrangement {
+        // 使う人が隠した投稿に「閲覧注意」と出すと、投稿者が付けたように読めるため、文言を分ける。
+        let title = content.cover == .hidden ? "非表示" : "閲覧注意"
+        switch content.arrangement {
         case .grid:
-            configuration.title = "閲覧注意"
+            configuration.title = title
             configuration.subtitle = "タップして表示"
         case .strip:
             configuration.title = nil
             configuration.subtitle = nil
         }
         coverButton.configuration = configuration
-        coverButton.accessibilityLabel = "閲覧注意、タップして表示"
+        coverButton.accessibilityLabel = "\(title)、タップして表示"
     }
 
     private func makeCover() -> UIView {

@@ -46,6 +46,8 @@ final class SessionController {
     private let composer: InlineComposeController
     /// 投稿欄が覆っている高さを伝える一覧。ホームと通知に加え、開いているプロフィールの一覧も入る。閉じたものは自然に消える。
     private let timelines = NSHashTable<TimelineViewController>.weakObjects()
+    /// 添付ファイルを覆うか。ホームと通知とプロフィールでそろえ、閉じて開き直したプロフィールにも引き継ぐ。
+    private var mediaCovers = MediaCovers()
     private var composerObscuredHeight: CGFloat = 0
     /// 本文のリンクを開くアプリ内のSafari。シートが覆っている高さも、投稿欄と同じく一覧の下の余白にする。
     private let browser = InAppBrowser()
@@ -266,6 +268,10 @@ final class SessionController {
         viewController.setShowsFocusInlineCompose(browser.isPresented)
         viewController.myAccountID = credential.accountID
         viewController.spoilerExpansion.expandsByDefault = preferences?.expandsSpoilers ?? false
+        viewController.mediaCovers = mediaCovers
+        viewController.onChangeMediaCovers = { [weak self, weak viewController] covers, status in
+            self?.shareMediaCovers(covers, changed: status, from: viewController)
+        }
         viewController.onStatusAction = { [weak self, weak viewController] action, status in self?.perform(action, on: status, from: viewController) }
         viewController.onShowOperationStatus = { [weak self] presenter in self?.showOperationStatus(from: presenter) }
         viewController.mediaTransfers = mediaTransfers
@@ -281,6 +287,14 @@ final class SessionController {
         viewController.onOpenLink = { [weak self, weak viewController] destination, status in
             guard let viewController else { return }
             self?.open(destination, in: status, from: viewController)
+        }
+    }
+
+    /// 一覧で開いたり隠したりした結果を、ほかの一覧にもそろえる。
+    private func shareMediaCovers(_ covers: MediaCovers, changed status: Status, from source: TimelineViewController?) {
+        mediaCovers = covers
+        for timeline in timelines.allObjects where timeline !== source {
+            timeline.applyMediaCovers(covers, changed: status)
         }
     }
 

@@ -3,14 +3,13 @@ import SciaCore
 import UIKit
 
 extension TimelineViewController {
-    /// 閲覧注意の投稿と、注意書きのある投稿は、タップするまで添付ファイルを覆う。
+    /// 閲覧注意の投稿と、注意書きのある投稿は、タップするまで添付ファイルを覆う。メニューから隠した投稿も覆う。
     /// 説明にならない代替テキストは、ALTの目印にもビューアにも読み上げにも出さないよう、ここで除いておく。
     func mediaContent(for status: Status) -> MediaGridView.Content? {
         guard !status.mediaAttachments.isEmpty else { return nil }
-        let isSensitive = status.sensitive || !status.spoilerText.isEmpty
         return MediaGridView.Content(
             attachments: status.mediaAttachments.map { $0.filteringAltText(ignoresUseless: settings.ignoresUselessAltText) },
-            isCovered: isSensitive && !revealedMediaStatusIDs.contains(status.id),
+            cover: mediaCovers.cover(for: status),
             tallestAspectRatio: tuning.value(of: TuningCatalog.mediaTallestAspectRatio),
             thumbnailPolicy: MediaThumbnailPolicy(
                 allowsOriginal: MediaThumbnailSelection.allowsOriginal(
@@ -24,9 +23,31 @@ extension TimelineViewController {
     }
 
     /// 覆いを外す。同じ投稿をブーストした行と通知の行もまとめて描き直す。覆いと中身は同じ大きさのため、行の高さは変わらない。
-    func revealMedia(of statusID: Status.ID) {
-        revealedMediaStatusIDs.insert(statusID)
-        let ids = displayedItemIDs.filter { status(for: $0)?.displayed.id == statusID }
+    /// ほかの画面にもそろえるよう、セッションに知らせる。
+    func revealMedia(of status: Status) {
+        mediaCovers.reveal(status)
+        reconfigureRows(showing: status)
+        onChangeMediaCovers?(mediaCovers, status)
+    }
+
+    /// 覆う。開くときと同じく、同じ投稿の行をまとめて描き直し、行の高さは変わらない。ほかの画面にもそろえる。
+    func hideMedia(of status: Status) {
+        mediaCovers.hide(status)
+        reconfigureRows(showing: status)
+        onChangeMediaCovers?(mediaCovers, status)
+    }
+
+    /// ほかの画面で開いたり隠したりした結果を受け取り、その投稿の行を描き直す。
+    func applyMediaCovers(_ covers: MediaCovers, changed status: Status) {
+        mediaCovers = covers
+        // まだ開いていない画面は、開いたときにこの状態で描く。描き直しのために画面を読み込ませない。
+        guard isViewLoaded else { return }
+        reconfigureRows(showing: status)
+    }
+
+    private func reconfigureRows(showing status: Status) {
+        let statusID = status.displayed.id
+        let ids = displayedItemIDs.filter { self.status(for: $0)?.displayed.id == statusID }
         reconfigure(Set(ids))
     }
 

@@ -72,7 +72,7 @@ extension TimelineViewController {
                 self?.openMedia(media.attachments, at: index, of: shown, from: grid)
             }
             configuration.onRevealMedia = { [weak self] in
-                self?.revealMedia(of: shown.id)
+                self?.revealMedia(of: shown)
             }
         }
         return configuration

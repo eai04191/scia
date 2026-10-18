@@ -123,11 +123,11 @@ struct MenuLayoutTests {
         #expect(layout.elements.first == .item(.a, isVisible: true))
     }
 
-    /// 既定の並びは、設定を足す前のメニューと同じにする。
+    /// 既定の並びは、設定を足す前のメニューと同じにし、あとから足した項目を加える。
     @Test func statusMenuDefaultMatchesMenuBeforeCustomization() {
         let groups = StatusMenuItem.defaultLayout.groups
 
-        #expect(groups.main == [[.reply, .favourite, .reblog], [.copyLink, .share, .openInBrowser], [.notifyingUser, .author, .booster]])
+        #expect(groups.main == [[.reply, .favourite, .reblog], [.copyLink, .share, .openInBrowser, .hideMedia], [.notifyingUser, .author, .booster]])
         #expect(groups.more == [])
         #expect(UserMenuItem.defaultLayout.groups.main == [[.profile]])
     }

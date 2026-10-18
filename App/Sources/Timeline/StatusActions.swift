@@ -64,7 +64,7 @@ extension TimelineViewController {
             return users([.account(status.account)])
         case .mentionedUsers:
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
-        case .reply, .favourite, .reblog, .copyLink, .share, .openInBrowser:
+        case .reply, .favourite, .reblog, .copyLink, .share, .openInBrowser, .hideMedia:
             guard let status else { return [] }
             return statusAction(item, on: status, id: id).map { [$0] } ?? []
         }
@@ -112,6 +112,13 @@ extension TimelineViewController {
             return UIAction(title: item.title, image: item.image, attributes: linkAttributes) { [weak self] _ in
                 guard let url else { return }
                 self?.onOpenLink?(.url(url), shown)
+            }
+        case .hideMedia:
+            // 覆っている投稿では出さない。開くときは、閲覧注意と同じく覆いをタップする。
+            guard !shown.mediaAttachments.isEmpty, mediaCovers.cover(for: shown) == nil else { return nil }
+            let isImageOnly = shown.mediaAttachments.allSatisfy { $0.type == .image }
+            return UIAction(title: isImageOnly ? "画像を隠す" : item.title, image: item.image) { [weak self] _ in
+                self?.hideMedia(of: shown)
             }
         case .notifyingUser, .author, .booster, .mentionedUsers:
             return nil
