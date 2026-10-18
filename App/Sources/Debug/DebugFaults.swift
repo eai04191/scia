@@ -182,6 +182,10 @@ private struct TrackedWebSocketConnection: WebSocketConnection {
         try await base.receive()
     }
 
+    func send(_ text: String) async throws {
+        try await base.send(text)
+    }
+
     func ping() async throws {
         try await base.ping()
     }
@@ -195,6 +199,10 @@ private struct TrackedWebSocketConnection: WebSocketConnection {
 /// ハンドシェイクで失敗する接続。
 private struct UnreachableWebSocketConnection: WebSocketConnection {
     func receive() async throws -> String {
+        throw URLError(.cannotConnectToHost)
+    }
+
+    func send(_ text: String) async throws {
         throw URLError(.cannotConnectToHost)
     }
 

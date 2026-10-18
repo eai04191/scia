@@ -12,24 +12,17 @@ final class HomeTimelineController {
     let viewController = TimelineViewController()
     private let store: TimelineStore
     private let client: MastodonClient
-    private let streaming: StreamingClient
-    private let streamingEndpoint: StreamingEndpoint
+    private let streamingHub: StreamingHub
     private let tuning: TuningStore
     /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "timeline")
     private var tasks: [Task<Void, Never>] = []
     private var isStopped = false
-    private var streamingTask: Task<Void, Never>?
-    /// ストリーミングがつながっている。電波が戻ったときなどに、つながっていなければつなぎ直す。
-    private var isStreamingConnected = false
-    /// ストリーミングの状態が変わったときに呼ぶ。「接続の状態」画面に出す。
-    var onStreamingStateChange: ((ConnectionDiagnostics.StreamingState) -> Void)?
+    /// `user`ストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
+    private var streamingSubscription: StreamingHub.Subscription?
     /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態。
     private let streamingStatusView = StreamingStatusPullView()
-    private var streamingState: ConnectionDiagnostics.StreamingState?
-    /// 接続を始めるたびに増やす。止めた接続の終了の知らせが、後から始めた接続を消さないようにする。
-    private var streamingGeneration = 0
     /// 最初の読み込みが済んだ。空のホームでも、済んでいればつなぐ。
     private var hasLoadedInitial = false
     /// バックグラウンドでは接続しない。最初の読み込みの途中でバックグラウンドへ入っても、読み込み後につながないようにする。
@@ -50,8 +43,7 @@ final class HomeTimelineController {
 
     init(
         client: MastodonClient,
-        streaming: StreamingClient,
-        streamingEndpoint: StreamingEndpoint,
+        streamingHub: StreamingHub,
         tuning: TuningStore = AppDependencies.tuning,
         onUnauthorized: @escaping () -> Void
     ) {
@@ -59,8 +51,7 @@ final class HomeTimelineController {
             try await client.homeTimeline(query)
         }
         self.client = client
-        self.streaming = streaming
-        self.streamingEndpoint = streamingEndpoint
+        self.streamingHub = streamingHub
         self.tuning = tuning
         self.onUnauthorized = onUnauthorized
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder(origin: .automatic) }
@@ -91,12 +82,6 @@ final class HomeTimelineController {
         tasks.removeAll()
     }
 
-    /// トークンが無効になったときに呼ぶ。`stop()`と同じく止め、ログインし直すまでつながないことを状態に出す。
-    func stopUntilLogin() {
-        stop()
-        setStreamingState(.loginRequired)
-    }
-
     /// バックグラウンドに入るときに呼ぶ。バックグラウンドでは接続が止められるため自分から切り、既読位置を保存する。
     func enterBackground() {
         isInForeground = false
@@ -119,16 +104,11 @@ final class HomeTimelineController {
     }
 
     /// 電波が戻ったときや、レート制限が明けたときに呼ぶ。失敗したままの読み込みと、切れているストリーミングをすぐやり直す。
-    /// ストリーミングのつなぎ直しは、待っている間隔を飛ばしてつなぎ直す。
     func recover() {
         guard !isStopped, isInForeground else { return }
         autoLoadFailedGapIDs.removeAll()
-        if hasLoadedInitial, !isStreamingConnected {
-            // つながったら、切れていた間を補う。
-            logger.info("streaming restart to recover")
-            stopStreaming()
-            startStreaming()
-        } else if hasLoadedInitial {
+        // 切れていれば、セッションがつなぎ直させ、つながったところで切れていた間を補う。
+        if hasLoadedInitial, streamingHub.isConnected {
             // つながったときの補完が、止められている間や電波のない間に失敗していることがある。
             fillFromLatest()
         }
@@ -144,21 +124,17 @@ final class HomeTimelineController {
         }
     }
 
-    /// ストリーミングの状態を、「接続の状態」画面と、引っぱったときに見せる表示へ伝える。
-    private func setStreamingState(_ state: ConnectionDiagnostics.StreamingState) {
-        streamingState = state
+    /// ストリーミングの接続の状態を、引っぱったときに見せる表示へ伝える。
+    func showStreamingState(_ state: ConnectionDiagnostics.StreamingState?) {
         streamingStatusView.setState(state)
-        onStreamingStateChange?(state)
     }
 
     private func stopStreaming() {
-        guard let streamingTask else { return }
-        logger.info("streaming stop")
-        streamingTask.cancel()
-        self.streamingTask = nil
-        isStreamingConnected = false
-        setStreamingState(.stopped)
-        // 次につなぐときは、切れている時間を数え直す。
+        guard let streamingSubscription else { return }
+        logger.info("home streaming unsubscribe")
+        streamingSubscription.cancel()
+        self.streamingSubscription = nil
+        // 購読をやめた後は知らせが届かないので、出していた表示を消す。
         viewController.setOutageNotice(false)
     }
 
@@ -221,78 +197,26 @@ final class HomeTimelineController {
     // MARK: - ストリーミング
 
     private func startStreaming() {
-        guard !isStopped, isInForeground, streamingTask == nil else { return }
-        streamingGeneration += 1
-        // つながるまでは、つなぎ直しを続けながらポーリングで補う。
-        setStreamingState(.connecting)
-        let generation = streamingGeneration
-        let streaming = streaming
-        let endpoint = streamingEndpoint
-        let stream = ReconnectingStream {
-            streaming.open(.user, baseURL: try await endpoint.url())
-        }
-        let updates = LiveUpdates(stream: stream, policy: TuningCatalog.liveUpdates(in: tuning))
-        let deliver: @Sendable (LiveUpdates.Activity) async -> Void = { [weak self] activity in
-            await self?.streamingDidChange(activity, generation: generation)
-        }
-        // 接続先を調べる通信も、自動の通信として扱う。
-        streamingTask = RequestOrigin.$current.withValue(.automatic) {
-            Task { [weak self] in
-                do {
-                    try await updates.run(deliver)
-                } catch {
-                    self?.streamingDidEnd(error, generation: generation)
-                }
-            }
+        guard !isStopped, isInForeground, streamingSubscription == nil else { return }
+        streamingSubscription = streamingHub.subscribe(.user) { [weak self] activity in
+            self?.streamingDidChange(activity)
         }
     }
 
-    /// 止めた接続の知らせは捨てる。止めるときに消した表示を、後から出し直さないため。
-    private func streamingDidChange(_ activity: LiveUpdates.Activity, generation: Int) {
-        guard !isStopped, generation == streamingGeneration, streamingTask != nil else { return }
+    private func streamingDidChange(_ activity: StreamingHub.Activity) {
+        guard !isStopped else { return }
         switch activity {
-        case .stream(let activity):
-            streamDidChange(activity)
+        case .connected:
+            logger.info("home streaming connected")
+            fillFromLatest()
+        case .event(let event):
+            receive(event)
         case .poll:
             logger.info("home poll")
             fillFromLatest()
         case .outage(let isOngoing):
-            logger.info("streaming outage ongoing=\(isOngoing, privacy: .public)")
             viewController.setOutageNotice(isOngoing)
-            if isOngoing {
-                setStreamingState(.polling)
-            }
         }
-    }
-
-    private func streamDidChange(_ activity: ReconnectingStream.Activity) {
-        switch activity {
-        case .connected:
-            isStreamingConnected = true
-            setStreamingState(.connected)
-            logger.info("streaming connected")
-            fillFromLatest()
-        case .event(let event):
-            receive(event)
-        case .unauthorized:
-            logger.info("streaming unauthorized")
-            onUnauthorized()
-        case .disconnected(let reason, let retryAfter):
-            isStreamingConnected = false
-            // 切れていると知らせた後も、つなぎ直しに失敗するたびに届く。知らせた後は切断中のままにする。
-            if streamingState != .polling {
-                setStreamingState(.connecting)
-            }
-            logger.info("streaming disconnected reason=\(reason, privacy: .public) retryAfter=\(retryAfter, privacy: .public)")
-        }
-    }
-
-    /// 取り消したときだけ届く。401で断られても、つなぎ直しは続く。
-    private func streamingDidEnd(_ error: any Error, generation: Int) {
-        if generation == streamingGeneration {
-            streamingTask = nil
-        }
-        handle(error, during: "streaming") { _ in }
     }
 
     /// つながるたびと、つながらない間のポーリングで、切れていた間の投稿を読む。1ページに収まらなければギャップを置く。

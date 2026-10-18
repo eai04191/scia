@@ -7,7 +7,7 @@ public struct ReconnectingStream: Sendable {
     public enum Activity: Sendable, Equatable {
         /// 接続が成立した。つなぎ直したときは、切れていた間の投稿をRESTで補う。
         case connected
-        case event(StreamingEvent)
+        case event(StreamingMessage)
         /// 接続が401で断られた。トークンが無効かは呼び出し側が確かめる。この後に`disconnected`が続き、つなぎ直しも続ける。
         case unauthorized
         /// 接続が切れた、またはつながらなかった。`retryAfter`だけ待ってつなぎ直す。`reason`はログに書く説明で、応答の中身を含まない。
@@ -176,7 +176,7 @@ private final class ActivityQueue: Sendable {
         }
     }
 
-    func event(_ event: StreamingEvent) {
+    func event(_ event: StreamingMessage) {
         state.withLock { state in
             if !state.isConnected {
                 state.isConnected = true

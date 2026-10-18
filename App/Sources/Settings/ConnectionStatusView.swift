@@ -14,8 +14,20 @@ struct ConnectionStatusView: View {
                 LabeledContent("バージョン", value: diagnostics.serverVersion ?? "読み込めていません")
             }
             Section("ストリーミング") {
-                LabeledContent("ホーム", value: Self.text(diagnostics.streaming[.home]))
-                LabeledContent("通知", value: Self.text(diagnostics.streaming[.notifications]))
+                LabeledContent("接続", value: Self.text(diagnostics.streaming))
+            }
+            Section {
+                if diagnostics.streamingSubscriptions.isEmpty {
+                    Text("ありません")
+                } else {
+                    ForEach(diagnostics.streamingSubscriptions, id: \.self) { subscription in
+                        LabeledContent(Self.name(of: subscription), value: subscription.stream)
+                    }
+                }
+            } header: {
+                Text("購読しているストリーム")
+            } footer: {
+                Text("1本の接続で、これらの更新をまとめて受け取ります。")
             }
             if let status {
                 Section("レート制限") {
@@ -72,6 +84,13 @@ struct ConnectionStatusView: View {
         case .stopped: "停止中"
         case .loginRequired: "停止中（ログインが必要）"
         case nil: "未接続"
+        }
+    }
+
+    private static func name(of subscription: StreamingSubscription) -> String {
+        switch subscription {
+        case .user: "ホームと通知"
+        default: subscription.stream
         }
     }
 

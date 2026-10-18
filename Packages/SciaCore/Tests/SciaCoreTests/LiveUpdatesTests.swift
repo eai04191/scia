@@ -118,7 +118,7 @@ struct LiveUpdatesTests {
             connector: connector
         )
         let stream = ReconnectingStream(policy: Self.reconnect) {
-            client.open(.user, baseURL: URL(filePath: "/"))
+            client.open(baseURL: URL(filePath: "/"))
         }
         return LiveUpdates(stream: stream, policy: policy)
     }

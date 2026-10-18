@@ -11,6 +11,8 @@ final class SessionController {
     let credential: Credential
     private let home: HomeTimelineController
     private let notifications: NotificationsController
+    /// ホームと通知で共有する、ストリーミングの接続。
+    private let streamingHub: StreamingHub
     private let client: MastodonClient
     /// 429や503で止められたときに、自動の通信を控える。このセッションの通信で共有する。
     private let rateLimit = RateLimitGate()
@@ -76,16 +78,26 @@ final class SessionController {
         authorization = AuthorizationCheck { try await client.verifyCredentials() }
         // selfを作り終える前に組み立てる部品から呼ぶため、後で中身を差し替える。
         var forward: () -> Void = {}
-        // ホームと通知で、調べた接続先を使い回す。
         let streamingEndpoint = StreamingEndpoint(client: client)
-        let home = HomeTimelineController(client: client, streaming: streaming, streamingEndpoint: streamingEndpoint) { forward() }
-        let notifications = NotificationsController(client: client, streaming: streaming, streamingEndpoint: streamingEndpoint) { forward() }
+        let tuning = AppDependencies.tuning
+        let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: tuning) }) {
+            streaming.open(baseURL: try await streamingEndpoint.url())
+        }
+        self.streamingHub = streamingHub
+        let home = HomeTimelineController(client: client, streamingHub: streamingHub) { forward() }
+        let notifications = NotificationsController(client: client, streamingHub: streamingHub) { forward() }
         self.home = home
         self.notifications = notifications
         let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog)
         self.diagnostics = diagnostics
-        home.onStreamingStateChange = { diagnostics.setStreaming($0, for: .home) }
-        notifications.onStreamingStateChange = { diagnostics.setStreaming($0, for: .notifications) }
+        // コントローラーはHubを持っているので、弱く持って循環させない。
+        streamingHub.onChange = { [weak streamingHub, weak home, weak notifications] in
+            guard let streamingHub else { return }
+            diagnostics.setStreaming(streamingHub.state, subscriptions: streamingHub.subscriptions)
+            home?.showStreamingState(streamingHub.state)
+            notifications?.showStreamingState(streamingHub.state)
+        }
+        streamingHub.onUnauthorized = { forward() }
         self.client = client
         let profiles = ProfileRegistry()
         self.profiles = profiles
@@ -542,6 +554,8 @@ final class SessionController {
 
     private func recover(reason: String) {
         logger.info("recover reason=\(reason, privacy: .public)")
+        // つながっていなければ、待っている間隔を飛ばしてつなぎ直す。
+        streamingHub.recover()
         home.recover()
         notifications.recover()
     }
@@ -556,8 +570,9 @@ final class SessionController {
     /// 資格情報は消さない。消すのは、使う人がログアウトを選んだときだけ。
     private func credentialsDidBecomeInvalid() {
         logger.info("credentials invalid")
-        home.stopUntilLogin()
-        notifications.stopUntilLogin()
+        streamingHub.stopUntilLogin()
+        home.stop()
+        notifications.stop()
         for timeline in timelines.allObjects {
             showReauthenticationPrompt(on: timeline)
         }

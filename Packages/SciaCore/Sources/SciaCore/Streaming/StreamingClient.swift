@@ -1,17 +1,9 @@
 public import Foundation
 import os
 
-/// ストリーミングAPIへWebSocketで接続する。
+/// ストリーミングAPIへWebSocketで接続する。購読するタイムラインは、つないだ後に`StreamingConnection.subscribe(_:)`で選ぶ。
 /// https://docs.joinmastodon.org/methods/streaming/#websocket
 public struct StreamingClient: Sendable {
-    /// 購読するタイムライン。
-    public enum Stream: String, Sendable {
-        /// ホームタイムラインと通知。
-        case user
-        /// 通知だけ。
-        case userNotification = "user:notification"
-    }
-
     public let credential: Credential
     private let connector: any WebSocketConnector
 
@@ -21,13 +13,30 @@ public struct StreamingClient: Sendable {
     }
 
     /// - Parameter baseURL: `StreamingEndpoint.url()`で得た接続先。
-    public func open(_ stream: Stream, baseURL: URL) -> StreamingConnection {
-        var request = URLRequest(url: baseURL.appending(path: "api/v1/streaming").appending(queryItems: [
-            URLQueryItem(name: "stream", value: stream.rawValue),
-        ]))
+    public func open(baseURL: URL) -> StreamingConnection {
+        var request = URLRequest(url: baseURL.appending(path: "api/v1/streaming"))
         // クエリのaccess_tokenはアクセスログに残りうるため、推奨されているヘッダーで渡す。
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
         return StreamingConnection(connection: connector.connect(request))
+    }
+}
+
+/// 1本の接続で購読するタイムライン。
+/// https://docs.joinmastodon.org/methods/streaming/#streams
+public struct StreamingSubscription: Sendable, Hashable {
+    /// ホームタイムラインと通知。
+    public static let user = StreamingSubscription(stream: "user")
+
+    /// `subscribe`で送るストリームの名前。
+    public let stream: String
+
+    /// 届いたイベントの`stream`欄。リストなら`["list", "<id>"]`のように引数が続くが、今は引数のないストリームだけを扱う。
+    var streamPath: [String] { [stream] }
+
+    func message(_ type: String) throws -> String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        return String(decoding: try encoder.encode(["type": type, "stream": stream]), as: UTF8.self)
     }
 }
 
@@ -41,7 +50,7 @@ public struct StreamingConnection: Sendable {
     }
 
     /// 次のイベントを待つ。読めないイベントはログに残して読み飛ばす。接続が切れたら投げる。
-    public func next() async throws -> StreamingEvent {
+    public func next() async throws -> StreamingMessage {
         while true {
             let text = try await connection.receive()
             do {
@@ -52,6 +61,15 @@ public struct StreamingConnection: Sendable {
                 logger.error("streaming decode failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }
+    }
+
+    /// 購読を始める。受け付けたかの応答はなく、失敗したときだけエラーのメッセージが届く。
+    public func subscribe(_ subscription: StreamingSubscription) async throws {
+        try await connection.send(try subscription.message("subscribe"))
+    }
+
+    public func unsubscribe(_ subscription: StreamingSubscription) async throws {
+        try await connection.send(try subscription.message("unsubscribe"))
     }
 
     /// 応答が返るまで待つ。接続が生きているかを確かめるのに使う。

@@ -17,6 +17,18 @@ public enum StreamingEvent: Sendable, Equatable {
     case unhandled(name: String)
 }
 
+/// 届いたイベントと、それがどの購読のものか。
+public struct StreamingMessage: Sendable, Equatable {
+    /// 購読のストリーム。`["user"]`や`["list", "<id>"]`。
+    public let stream: [String]
+    public let event: StreamingEvent
+
+    public init(stream: [String], event: StreamingEvent) {
+        self.stream = stream
+        self.event = event
+    }
+}
+
 /// ストリーミングサーバーが接続の中で返したエラー。
 public struct StreamingServerError: Error, Equatable, LocalizedError {
     public let message: String
@@ -30,6 +42,7 @@ public struct StreamingServerError: Error, Equatable, LocalizedError {
 /// WebSocketで届いたテキストを読む。
 public enum StreamingMessageDecoder {
     private struct Envelope: Decodable {
+        let stream: [String]?
         let event: String?
         /// `update`などではJSONを文字列にしたもの、`delete`ではIDそのもの。`filters_changed`では無い。
         let payload: String?
@@ -38,7 +51,7 @@ public enum StreamingMessageDecoder {
     }
 
     /// エラーの通知なら`StreamingServerError`を投げる。
-    public static func decode(_ text: String) throws -> StreamingEvent {
+    public static func decode(_ text: String) throws -> StreamingMessage {
         let decoder = MastodonDecoder.make()
         let envelope = try decoder.decode(Envelope.self, from: Data(text.utf8))
         if let error = envelope.error {
@@ -47,6 +60,14 @@ public enum StreamingMessageDecoder {
         guard let event = envelope.event else {
             throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "eventがありません: \(text)"))
         }
+        // 1本の接続で複数を購読するため、どの購読のイベントかが分からなければ配れない。
+        guard let stream = envelope.stream else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "\(event)のstreamがありません"))
+        }
+        return StreamingMessage(stream: stream, event: try decodeEvent(event, envelope, decoder))
+    }
+
+    private static func decodeEvent(_ event: String, _ envelope: Envelope, _ decoder: JSONDecoder) throws -> StreamingEvent {
         switch event {
         case "update":
             return .update(try decoder.decode(Status.self, from: Data(try payload(of: envelope).utf8)))

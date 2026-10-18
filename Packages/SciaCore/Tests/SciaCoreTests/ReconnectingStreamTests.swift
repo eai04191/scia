@@ -124,7 +124,7 @@ struct ReconnectingStreamTests {
             connector: connector
         )
         return ReconnectingStream(policy: policy) {
-            client.open(.user, baseURL: URL(filePath: "/"))
+            client.open(baseURL: URL(filePath: "/"))
         }
     }
 }
@@ -151,8 +151,8 @@ private actor ActivityLog {
             switch activity {
             case .connected: "connected"
             case .unauthorized: "unauthorized"
-            case .event(.delete(let id)): "event delete \(id)"
-            case .event(let event): "event \(event)"
+            case .event(let message):
+                if case .delete(let id) = message.event { "event delete \(id)" } else { "event \(message.event)" }
             case .disconnected(_, let delay): "disconnected after \(delay.components.attoseconds / 1_000_000_000_000_000)ms"
             }
         }
@@ -186,24 +186,31 @@ final class ScriptedConnector: WebSocketConnector {
         var afterMessages: AfterMessages = .stay
         /// これを超えたpingには応答しない。ハンドシェイクの確認のpingも数える。
         var answeredPings = Int.max
+        /// 送ったメッセージが記録されるまでの遅れ。送信がpingより遅れる経路を再現する。
+        var sendDelay: Duration = .zero
     }
 
-    private let state: Mutex<(scripts: [Script], connectCount: Int, closedCount: Int)>
+    private let state: Mutex<(scripts: [Script], connectCount: Int, closedCount: Int, sent: [[String]])>
 
     init(_ scripts: [Script]) {
-        state = Mutex((scripts, 0, 0))
+        state = Mutex((scripts, 0, 0, []))
     }
 
     var connectCount: Int { state.withLock { $0.connectCount } }
     var closedCount: Int { state.withLock { $0.closedCount } }
+    /// 接続ごとに、送られたメッセージ。
+    var sent: [[String]] { state.withLock { $0.sent } }
 
     func connect(_ request: URLRequest) -> any WebSocketConnection {
-        let script = state.withLock { state in
+        let (script, index) = state.withLock { state in
             state.connectCount += 1
-            return state.scripts.isEmpty ? Script() : state.scripts.removeFirst()
+            state.sent.append([])
+            return (state.scripts.isEmpty ? Script() : state.scripts.removeFirst(), state.sent.count - 1)
         }
         return ScriptedConnection(script: script) { [weak self] in
             self?.state.withLock { $0.closedCount += 1 }
+        } onSend: { [weak self] text in
+            self?.state.withLock { $0.sent[index].append(text) }
         }
     }
 }
@@ -218,10 +225,21 @@ private final class ScriptedConnection: WebSocketConnection {
 
     private let state: Mutex<State>
     private let onClose: @Sendable () -> Void
+    private let onSend: @Sendable (String) -> Void
 
-    init(script: ScriptedConnector.Script, onClose: @escaping @Sendable () -> Void) {
+    init(script: ScriptedConnector.Script, onClose: @escaping @Sendable () -> Void, onSend: @escaping @Sendable (String) -> Void) {
         state = Mutex(State(script: script))
         self.onClose = onClose
+        self.onSend = onSend
+    }
+
+    func send(_ text: String) async throws {
+        let (isClosed, delay) = state.withLock { ($0.isClosed, $0.script.sendDelay) }
+        if isClosed { throw URLError(.cancelled) }
+        if delay > .zero {
+            try await Task.sleep(for: delay)
+        }
+        onSend(text)
     }
 
     func receive() async throws -> String {

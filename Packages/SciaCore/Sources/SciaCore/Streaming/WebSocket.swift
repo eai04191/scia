@@ -10,6 +10,8 @@ public protocol WebSocketConnector: Sendable {
 public protocol WebSocketConnection: Sendable {
     /// 次のテキストメッセージを待つ。接続が切れたら投げる。
     func receive() async throws -> String
+    /// テキストメッセージを送る。ハンドシェイクが済んでいなければ、済むのを待ってから送る。
+    func send(_ text: String) async throws
     /// 応答が返るまで待つ。ハンドシェイクが済んでいなければ、済むのを待ってから送る。
     func ping() async throws
     /// 待っている`receive()`と`ping()`は投げて終わる。
@@ -44,6 +46,14 @@ struct URLSessionWebSocketConnection: WebSocketConnection {
             @unknown default:
                 throw URLError(.cannotParseResponse)
             }
+        } catch {
+            throw handshakeError() ?? error
+        }
+    }
+
+    func send(_ text: String) async throws {
+        do {
+            try await task.send(.string(text))
         } catch {
             throw handshakeError() ?? error
         }

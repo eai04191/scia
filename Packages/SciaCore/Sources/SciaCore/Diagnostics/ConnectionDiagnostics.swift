@@ -5,11 +5,6 @@ public import Observation
 @MainActor
 @Observable
 public final class ConnectionDiagnostics {
-    public enum Channel: Sendable, Hashable, CaseIterable {
-        case home
-        case notifications
-    }
-
     public enum StreamingState: Sendable, Equatable {
         case connected
         /// つなぎ始めた、または切れてつなぎ直している。切れていると知らせるまでの短い間。
@@ -24,7 +19,10 @@ public final class ConnectionDiagnostics {
 
     /// サーバーが返した版。まだ読めていなければnil。
     public private(set) var serverVersion: String?
-    public private(set) var streaming: [Channel: StreamingState] = [:]
+    /// ストリーミングの接続の状態。まだつなぎ始めていなければnil。
+    public private(set) var streaming: StreamingState?
+    /// その接続で購読しているストリーム。
+    public private(set) var streamingSubscriptions: [StreamingSubscription] = []
     @ObservationIgnored private let rateLimit: RateLimitGate
     @ObservationIgnored private let features: FeatureAvailability
     @ObservationIgnored private let requestLog: RequestLog
@@ -39,8 +37,9 @@ public final class ConnectionDiagnostics {
         serverVersion = version
     }
 
-    public func setStreaming(_ state: StreamingState, for channel: Channel) {
-        streaming[channel] = state
+    public func setStreaming(_ state: StreamingState, subscriptions: [StreamingSubscription]) {
+        streaming = state
+        streamingSubscriptions = subscriptions
     }
 
     /// 他の部品が持っている状態を、今の時点で集める。

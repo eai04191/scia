@@ -25,13 +25,12 @@ struct ConnectionDiagnosticsTests {
         #expect(status.droppedCount >= droppedBefore + 1)
     }
 
-    @Test func streamingStatusIsKeptPerChannel() {
+    @Test func keepsStreamingStateAndSubscriptions() {
         let diagnostics = ConnectionDiagnostics(rateLimit: RateLimitGate(), features: FeatureAvailability(), requestLog: RequestLog(includesBody: false))
 
-        diagnostics.setStreaming(.connected, for: .home)
-        diagnostics.setStreaming(.polling, for: .notifications)
+        diagnostics.setStreaming(.polling, subscriptions: [.user])
 
-        #expect(diagnostics.streaming[.home] == .connected)
-        #expect(diagnostics.streaming[.notifications] == .polling)
+        #expect(diagnostics.streaming == .polling)
+        #expect(diagnostics.streamingSubscriptions == [.user])
     }
 }
