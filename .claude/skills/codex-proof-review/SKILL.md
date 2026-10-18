@@ -11,12 +11,12 @@ description: SciaCoreの変更を、Codexに使い捨ての複製で実際に動
 
 ## 使う場面
 
-- `git diff --name-only <merge-base>`と`git status --short`に`Packages/SciaCore/`が含まれるとき。pr-readinessの「Codexレビュー」と同じ区切りで、同じ比較元に対して、並べて走らせる
+- `git diff --name-only <review-from>`と`git status --short`に`Packages/SciaCore/`が含まれるとき。pr-readinessの「Codexレビュー」と同じときに、同じ`<review-from>`に対して、並べて走らせる
 - アプリ側（`App/`）だけの変更には使わない。証明にシミュレーターが要り、ほかのスレッドと端末を取り合うため。対象外の理由を報告に1行で書く
 
 ## 手順
 
-1. pr-readinessと同じ方法で、比較元のbase branchとmerge-baseを決める
+1. pr-readinessと同じ方法で、比較元のbase branch、merge-base、`<review-from>`を決める
 2. 複製を作る。複製は作業ツリーの外に置き、Codexが書くテストやビルドの成果物で作業ツリーを汚さないようにする
 
    ```bash
@@ -43,10 +43,10 @@ description: SciaCoreの変更を、Codexに使い捨ての複製で実際に動
 
 ## Codexへの指示
 
-`<base>`、`<merge-base>`、変更の意図をうめて、そのまま渡す。
+`<base>`、`<merge-base>`、`<review-from>`、変更の意図をうめて、そのまま渡す。
 
 ````markdown
-Review the code changes against the base branch '<base>'. The merge base commit is <merge-base>. Run `git diff <merge-base>` and `git status --short` to inspect the changes, including uncommitted and untracked files. Provide prioritized, actionable findings.
+Review the code changes against the base branch '<base>'. The merge base commit is <merge-base>. Run `git diff <review-from>` and `git status --short` to inspect the changes to review, including uncommitted and untracked files. Changes before <review-from> were already reviewed; read them only as context. Provide prioritized, actionable findings.
 
 ## 変更の意図
 
