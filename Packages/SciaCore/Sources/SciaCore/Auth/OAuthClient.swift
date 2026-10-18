@@ -77,7 +77,8 @@ public struct OAuthClient: Sendable {
     func registerApp(instance: URL) async throws -> RegisteredApp {
         struct Body: Encodable {
             let client_name: String
-            let redirect_uris: [String]
+            /// 配列でも送れるのは4.3からで、それより前のサーバーは配列を捨てて422を返すため、1つの文字列で送る。
+            let redirect_uris: String
             let scopes: String
         }
         var request = URLRequest(url: instance.appending(path: "api/v1/apps"))
@@ -85,7 +86,7 @@ public struct OAuthClient: Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(Body(
             client_name: configuration.clientName,
-            redirect_uris: [configuration.redirectURI.absoluteString],
+            redirect_uris: configuration.redirectURI.absoluteString,
             scopes: configuration.scopes
         ))
         return try await decode(RegisteredApp.self, from: request)

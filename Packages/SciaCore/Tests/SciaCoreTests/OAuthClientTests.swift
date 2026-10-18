@@ -74,7 +74,8 @@ struct OAuthClientTests {
         let appBody = try #require(requests[0].httpBody)
         let app = try #require(try JSONSerialization.jsonObject(with: appBody) as? [String: Any])
         #expect(app["client_name"] as? String == "Scia")
-        #expect(app["redirect_uris"] as? [String] == ["net.mizle.scia://oauth"])
+        // 4.3より前のMastodonは配列を受け取らず、リダイレクトURIが空として422を返す。
+        #expect(app["redirect_uris"] as? String == "net.mizle.scia://oauth")
         #expect(app["scopes"] as? String == "read write")
 
         let token = formItems(requests[1].httpBody)
