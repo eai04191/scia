@@ -500,11 +500,86 @@ struct InlineComposeControllerTests {
         #expect(!composer.isBarHeld, "ビューアを開いたまま投稿すると、バーがキーボードの高さに留まったままです\n\(composer.stateDump())")
     }
 
+    /// ソフトウェアキーボードで開いたビューアを閉じるまでにハードウェアキーボードに替わると、キーボードは上がらず、上がりきった知らせも来ない。
+    /// 閉じて入力欄に戻したあとに届いたキーボードの高さがソフトウェアキーボードのものでなければ、その時点でバーをキーボードの高さから外す。
+    /// ソフトウェアキーボードが上がってくるなら、上がりきるまで留めたままにする。知らせが届く前に別の添付を開き直したら、開き直したビューアの間は留めたままにする。
+    @Test(arguments: [ViewerCloseFollowUp.softwareKeyboard, .hardwareKeyboard, .reopenBeforeKeyboard])
+    func closingViewerReleasesBarOnlyWithoutSoftwareKeyboard(followUp: ViewerCloseFollowUp) async throws {
+        defer {
+            window.rootViewController?.dismiss(animated: false)
+            window.isHidden = true
+        }
+        let media = ComposeMediaService(
+            upload: { upload in MediaAttachment(id: "m-\(upload.filename)", type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
+            waitUntilProcessed: { id in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
+            updateDescription: { id, _ in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
+            makeThumbnail: { _ in nil }
+        )
+        // 入力欄に戻したときに届く端末の本物のキーボードの知らせが混ざると、どちらの場合かが端末の設定と間合いで変わるので、送った知らせだけを受けさせる。
+        let keyboard = NotificationCenter()
+        let composer = try installComposer(media: media, keyboardNotifications: keyboard) { _ in }
+        composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        composer.beginEditing()
+        composer.model.applyPickerSelection([try pickedImage()])
+        try await Task.sleep(for: .milliseconds(500))
+        postKeyboardFrame(height: 300, to: keyboard)
+        let id = try #require(composer.model.attachments.first?.id)
+        let strip = try #require(attachmentStrips(in: window).first)
+
+        strip.onSelect(id)
+        try await Task.sleep(for: .milliseconds(300))
+        let viewer = try #require(window.rootViewController?.presentedViewController as? MediaViewerController, "添付のビューアが開きませんでした")
+        #expect(composer.isBarHeld, "ビューアを開いても、バーをキーボードの高さに留めていません\n\(composer.stateDump())")
+        postKeyboardFrame(height: 0, to: keyboard)
+
+        viewer.close()
+        for _ in 0..<30 where !composer.stateDump().contains("mediaViewer: nil") {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        #expect(composer.stateDump().contains("mediaViewer: nil"), "ビューアが閉じませんでした\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("editing: true"), "ビューアを閉じると書き終えたことになりました\n\(composer.stateDump())")
+        #expect(composer.isBarHeld, "キーボードの知らせが届く前に、バーを外しました\n\(composer.stateDump())")
+
+        // 入力欄に戻したあとに、どちらのキーボードかが分かる高さの知らせが届く。
+        switch followUp {
+        case .softwareKeyboard:
+            postKeyboardFrame(height: 300, to: keyboard)
+            #expect(composer.isBarHeld, "ソフトウェアキーボードが上がりきる前に、バーを外しました\n\(composer.stateDump())")
+        case .hardwareKeyboard:
+            postKeyboardFrame(height: 0, to: keyboard)
+            #expect(!composer.isBarHeld, "キーボードが上がらないのに、バーをキーボードの高さに留めたままです\n\(composer.stateDump())")
+        case .reopenBeforeKeyboard:
+            strip.onSelect(id)
+            try await Task.sleep(for: .milliseconds(300))
+            #expect(window.rootViewController?.presentedViewController is MediaViewerController, "添付のビューアを開き直せませんでした")
+            // 開き直すときに入力欄を閉じた知らせ。
+            postKeyboardFrame(height: 0, to: keyboard)
+            #expect(composer.isBarHeld, "開き直したビューアを出している間に、バーを外しました\n\(composer.stateDump())")
+        }
+    }
+
+    enum ViewerCloseFollowUp: CustomTestStringConvertible {
+        /// ソフトウェアキーボードが上がってくる。
+        case softwareKeyboard
+        /// 開いている間にハードウェアキーボードに替わり、キーボードが上がらない。
+        case hardwareKeyboard
+        /// キーボードの知らせが届く前に、別の添付を開き直す。
+        case reopenBeforeKeyboard
+
+        var testDescription: String {
+            switch self {
+            case .softwareKeyboard: "ソフトウェアキーボードが上がる"
+            case .hardwareKeyboard: "ハードウェアキーボードに替わった"
+            case .reopenBeforeKeyboard: "知らせの前に開き直す"
+            }
+        }
+    }
+
     /// 送信を待たせるComposeModelで投稿欄を置き直す。
-    private func installComposer(media: ComposeMediaService = .unavailable, post: @escaping (StatusDraft) async throws -> Void) throws -> InlineComposeController {
+    private func installComposer(media: ComposeMediaService = .unavailable, keyboardNotifications: NotificationCenter = .default, post: @escaping (StatusDraft) async throws -> Void) throws -> InlineComposeController {
         let tabBarController = UITabBarController(tabs: [UITab(title: "ホーム", image: nil, identifier: "home") { _ in UIViewController() }])
         window.rootViewController = tabBarController
-        let composer = InlineComposeController(model: ComposeModel(myAccountID: "1", media: media, post: post), tuning: TuningStore(defaults: nil), settings: settings)
+        let composer = InlineComposeController(model: ComposeModel(myAccountID: "1", media: media, post: post), tuning: TuningStore(defaults: nil), settings: settings, keyboardNotifications: keyboardNotifications)
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
         return composer
@@ -541,9 +616,9 @@ struct InlineComposeControllerTests {
     }
 
     /// 画面の下端から`height`だけキーボードが上がった、という知らせを送る。0なら隠れた。
-    private func postKeyboardFrame(height: CGFloat) {
+    private func postKeyboardFrame(height: CGFloat, to center: NotificationCenter = .default) {
         let frame = CGRect(x: 0, y: window.bounds.maxY - height, width: window.bounds.width, height: height)
-        NotificationCenter.default.post(name: UIResponder.keyboardWillChangeFrameNotification, object: nil, userInfo: [UIResponder.keyboardFrameEndUserInfoKey: frame])
+        center.post(name: UIResponder.keyboardWillChangeFrameNotification, object: nil, userInfo: [UIResponder.keyboardFrameEndUserInfoKey: frame])
     }
 
     private func expectChipFitsTitle(_ button: UIButton, sourceLocation: SourceLocation = #_sourceLocation) {

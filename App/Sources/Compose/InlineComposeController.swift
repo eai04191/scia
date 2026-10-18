@@ -38,6 +38,8 @@ final class InlineComposeController: NSObject {
     private weak var host: UIViewController?
     private let tuning: TuningStore
     private let settings: AppSettings
+    /// キーボードの知らせを受ける先。テストでは、端末の本物のキーボードの知らせが混ざらないよう別のものを渡す。
+    private let keyboardNotifications: NotificationCenter
     private let logger = SciaLog.logger(category: "compose")
     /// 書いていないときに見せる、下書きの1行。押すと書き始める。
     private let restRow = UIControl()
@@ -150,6 +152,9 @@ final class InlineComposeController: NSObject {
     private var isShowingMediaViewer = false
     /// 書いている途中に並びを変える画面を開いてから、閉じるまでtrue。この間は、キーボードを閉じても書いている状態を解かない。
     private var isShowingToolLayoutSettings = false
+    /// ビューアを閉じて入力欄にキーボードを戻してから、最初のキーボードの高さの知らせが届くまでtrue。
+    /// 届いた高さがソフトウェアキーボードのものでなければ（ハードウェアキーボードなら）、上がりきった知らせを待たずにバーを外す。
+    private var isWaitingForKeyboardAfterViewer = false
     /// ビューアを開くたびに増やす。閉じる途中に別の添付を開いたら、前のビューアの閉じ終わりでキーボードを戻さないようにする。
     private var mediaViewerGeneration = 0
     /// 補完の候補の一覧。タイムラインに重ねて欄の上に出し、広げているときは打っている行のすぐ下に重ねる。
@@ -180,11 +185,12 @@ final class InlineComposeController: NSObject {
         UIFont.preferredFont(forTextStyle: .body).lineHeight * 5 + textView.textContainerInset.top + textView.textContainerInset.bottom
     }
 
-    init(model: ComposeModel, completion: ComposeCompletion? = nil, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings) {
+    init(model: ComposeModel, completion: ComposeCompletion? = nil, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, keyboardNotifications: NotificationCenter = .default) {
         self.model = model
         self.completion = completion ?? ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning))
         self.tuning = tuning
         self.settings = settings
+        self.keyboardNotifications = keyboardNotifications
         super.init()
         model.onPosted = { [weak self] in
             // シートの上に見えている投稿ボタンから送ったときは、入力欄はもうキーボードを出していないので、シートを閉じて書き終える。
@@ -222,8 +228,8 @@ final class InlineComposeController: NSObject {
         ])
         holdAboveKeyboard = bar.bottomAnchor.constraint(lessThanOrEqualTo: host.view.bottomAnchor)
         expandedTop = bar.topAnchor.constraint(equalTo: host.view.safeAreaLayoutGuide.topAnchor)
-        NotificationCenter.default.addObserver(self, selector: #selector(keyboardWillChangeFrame(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
-        NotificationCenter.default.addObserver(self, selector: #selector(keyboardDidShow(_:)), name: UIResponder.keyboardDidShowNotification, object: nil)
+        keyboardNotifications.addObserver(self, selector: #selector(keyboardWillChangeFrame(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
+        keyboardNotifications.addObserver(self, selector: #selector(keyboardDidShow(_:)), name: UIResponder.keyboardDidShowNotification, object: nil)
         bar.onFrameChange = { [weak self] in
             self?.reportObscuredHeight()
             self?.layoutCompletionListIfShown()
@@ -659,10 +665,12 @@ final class InlineComposeController: NSObject {
         guard let holdAboveKeyboard else { return }
         holdAboveKeyboard.constant = -(height + barSpacing)
         holdAboveKeyboard.isActive = true
+        isWaitingForKeyboardAfterViewer = false
         animateBarPosition()
     }
 
     private func releaseHoldAboveKeyboard() {
+        isWaitingForKeyboardAfterViewer = false
         guard let holdAboveKeyboard, holdAboveKeyboard.isActive else { return }
         holdAboveKeyboard.isActive = false
         animateBarPosition()
@@ -686,6 +694,13 @@ final class InlineComposeController: NSObject {
         currentKeyboardHeight = height
         if let before = keyboardHeightBeforeContextMenu, currentKeyboardHeight >= before {
             releaseBarHeldForContextMenu()
+        }
+        if isWaitingForKeyboardAfterViewer {
+            isWaitingForKeyboardAfterViewer = false
+            if height <= Self.softwareKeyboardMinimumHeight {
+                logger.info("attachment viewer: no software keyboard after closing, releasing bar (keyboardHeight=\(height))")
+                releaseHoldAboveKeyboard()
+            }
         }
         guard height > Self.softwareKeyboardMinimumHeight else { return }
         lastKeyboardHeight = height
@@ -1000,6 +1015,8 @@ final class InlineComposeController: NSObject {
         mediaViewerGeneration += 1
         let generation = mediaViewerGeneration
         isShowingMediaViewer = true
+        // 前のビューアを閉じた直後に開き直したら、閉じたあとのキーボードの知らせはもう待たない。待ったままだと、開き直すときに入力欄を閉じた知らせで、ビューアを出している間にバーを外してしまう。
+        isWaitingForKeyboardAfterViewer = false
         if mediaPicker == nil, isInputFocused {
             // ハードウェアキーボードでは、閉じたあとに上がりきった知らせが来ず、留めると外れなくなる。ソフトウェアキーボードが出ているときだけ留める。
             if currentKeyboardHeight > Self.softwareKeyboardMinimumHeight {
@@ -1049,6 +1066,9 @@ final class InlineComposeController: NSObject {
         isShowingMediaViewer = false
         guard mediaPicker == nil, isEditing else { return }
         focusLastInput()
+        // 開いている間にハードウェアキーボードに替わると、キーボードは上がらず、上がりきった知らせも来ないので、留めたバーが外れなくなる。
+        // 入力欄に戻した時点ではどちらのキーボードかの知らせがまだ届いていないため、次に届いた高さで決める。
+        isWaitingForKeyboardAfterViewer = isInputFocused && isBarHeld
     }
 
     /// ビューアのメニューで、「代替テキストを編集」に続けて出す項目。失敗したものには「再試行」も出す。
