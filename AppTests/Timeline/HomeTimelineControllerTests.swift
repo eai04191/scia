@@ -26,10 +26,14 @@ struct HomeTimelineControllerTests {
     ) throws -> HomeTimelineController {
         let credential = try makeCredential()
         let client = MastodonClient(credential: credential, transport: transport)
+        let streaming = StreamingClient(credential: credential, connector: connector)
+        let streamingEndpoint = StreamingEndpoint(client: client)
+        let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: tuning) }) {
+            streaming.open(baseURL: try await streamingEndpoint.url())
+        }
         return HomeTimelineController(
             client: client,
-            streaming: StreamingClient(credential: credential, connector: connector),
-            streamingEndpoint: StreamingEndpoint(client: client),
+            streamingHub: streamingHub,
             tuning: tuning,
             onUnauthorized: onUnauthorized
         )
@@ -294,6 +298,9 @@ final class MessageQueueConnector: WebSocketConnector {
         func receive() async throws -> String {
             try await owner.receive()
         }
+
+        /// 購読の申し込みは確かめないので捨てる。届けるイベントは`MessageQueueConnector.send`で決める。
+        func send(_ text: String) async throws {}
 
         func ping() async throws {}
 
