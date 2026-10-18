@@ -877,6 +877,7 @@ final class InlineComposeController: NSObject {
                 attachment: attachment,
                 local: model.localMedia[attachment.id],
                 status: model.attachmentStatus(of: attachment.id) ?? .uploading,
+                progress: model.attachmentProgress(of: attachment.id),
                 isSensitive: model.isSensitive
             )
         })
@@ -1123,7 +1124,8 @@ final class InlineComposeController: NSObject {
                 description: attachment.description,
                 file: local?.file,
                 thumbnail: local?.thumbnail,
-                status: status
+                status: status,
+                progress: model.attachmentProgress(of: attachment.id)
             )
         }
     }

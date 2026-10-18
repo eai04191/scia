@@ -16,6 +16,8 @@ struct MediaViewerItem {
     let source: Source
     /// 手元のメディアの、アップロードと代替テキストの送信の状態。投稿の添付ファイルではnil。
     let draftStatus: ComposeAttachmentStatus?
+    /// 手元のメディアを送っている間の進み具合。0から1。送っていなければnil。
+    let draftProgress: Double?
 
     enum Source {
         case server(MediaAttachment)
@@ -30,16 +32,18 @@ struct MediaViewerItem {
         description = attachment.description.flatMap { $0.isEmpty ? nil : $0 }
         source = .server(attachment)
         draftStatus = nil
+        draftProgress = nil
     }
 
     /// 投稿欄で選んだメディア。縦横比はサムネイルから決め、サムネイルを作る前はnilにする。
-    init(id: String, kind: MediaAttachment.Kind, description: String, file: LocalMediaFile?, thumbnail: UIImage?, status: ComposeAttachmentStatus) {
+    init(id: String, kind: MediaAttachment.Kind, description: String, file: LocalMediaFile?, thumbnail: UIImage?, status: ComposeAttachmentStatus, progress: Double?) {
         self.id = id
         self.kind = kind
         aspectRatio = thumbnail.flatMap { $0.size.height > 0 ? Double($0.size.width / $0.size.height) : nil }
         self.description = description.isEmpty ? nil : description
         source = .local(file: file, thumbnail: thumbnail)
         draftStatus = status
+        draftProgress = progress
     }
 
     /// 投稿欄で編集している投稿に、もう付いている添付ファイル。開閉の起点は投稿欄のサムネイルなので、IDは下書きの添付のIDにする。
@@ -51,6 +55,7 @@ struct MediaViewerItem {
         self.description = description.isEmpty ? nil : description
         source = .server(attachment)
         draftStatus = status
+        draftProgress = nil
     }
 
     /// 投稿の添付ファイル。手元のメディアではnil。

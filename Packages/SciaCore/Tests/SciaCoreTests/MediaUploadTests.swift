@@ -80,6 +80,28 @@ struct MediaUploadTests {
         #expect(request.httpBody == expected)
     }
 
+    /// 送った割合を知らせる口が、`MastodonClient`を通って通信の部品まで届く。
+    @Test func uploadProgressReachesTransport() async throws {
+        struct ReportingTransport: HTTPTransport {
+            let base: StubTransport
+
+            func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+                UploadProgress.report?(0.5)
+                UploadProgress.report?(1)
+                return try await base.send(request)
+            }
+        }
+        let client = MastodonClient(
+            credential: try makeClient(StubTransport([])).credential,
+            transport: ReportingTransport(base: StubTransport([try .fixture("media_attachment")]))
+        )
+        let received = Mutex([Double]())
+        _ = try await UploadProgress.$report.withValue({ fraction in received.withLock { $0.append(fraction) } }) {
+            try await client.uploadMedia(upload)
+        }
+        #expect(received.withLock { $0 } == [0.5, 1])
+    }
+
     @Test func uploadOmitsEmptyDescription() async throws {
         let transport = StubTransport([try .fixture("media_attachment")])
 

@@ -9,11 +9,12 @@ extension Notice {
     /// 投稿欄から開いたビューアの、アップロードや代替テキストの送信の状態。済んでいればnil。
     /// 失敗したときだけ押せ、押すと理由と、再試行か削除を出す。
     /// - Parameter status: 投稿欄から開いていなければnil。
-    static func draftStatus(_ status: ComposeAttachmentStatus?, showFailure: @escaping @MainActor () -> Void) -> Notice? {
+    /// - Parameter progress: 送っている間の進み具合。
+    static func draftStatus(_ status: ComposeAttachmentStatus?, progress: Double? = nil, showFailure: @escaping @MainActor () -> Void) -> Notice? {
         let failureAction = Action.disclosure(hint: "理由と、再試行か削除を選べます。", handler: showFailure)
         return switch status {
         case nil, .ready: nil
-        case .uploading: Notice(id: "media.draft", kind: .progress, title: "アップロード中")
+        case .uploading: Notice(id: "media.draft", kind: .progress, title: "アップロード中", value: progress.flatMap(percentText(of:)))
         case .processing: Notice(id: "media.draft", kind: .progress, title: "サーバーで処理中")
         case .sendingDescription: Notice(id: "media.draft", kind: .progress, title: "代替テキストを送信中")
         case .failed: Notice(id: "media.draft", kind: .failure, title: "アップロードできませんでした", action: failureAction)

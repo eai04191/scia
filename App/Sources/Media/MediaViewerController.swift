@@ -692,7 +692,7 @@ final class MediaViewerController: UIViewController {
     /// 投稿欄から開いたとき、上の中央にアップロードや代替テキストの送信の状態を出す。投稿欄から開いたときは落とすことがないため、落としている途中の知らせとは重ならない。
     private func updateDraftStatus() {
         guard draftEditing != nil else { return }
-        setPersistentNotice(Notice.draftStatus(currentItem.draftStatus) { [weak self] in
+        setPersistentNotice(Notice.draftStatus(currentItem.draftStatus, progress: currentItem.draftProgress) { [weak self] in
             guard let self, let editing = self.draftEditing else { return }
             editing.showFailure(self.currentItem.id, self)
         }, in: .draft)

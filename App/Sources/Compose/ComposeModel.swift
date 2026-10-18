@@ -272,6 +272,8 @@ struct LocalMedia {
     var failure: (any Error)?
     /// 代替テキストを送れなかった理由。送れないと`needsDescriptionUpdate`のまま止まるため、送り直す操作と表示に使う。
     var descriptionFailure: (any Error)?
+    /// 送っている間の進み具合。0から1。
+    var progress: Double = 0
 }
 
 /// 添付1つの、投稿欄とビューアで見せる状態。
@@ -394,6 +396,12 @@ extension ComposeModel {
         attachments.insert(attachment, at: min(max(index, 0), attachments.count))
     }
 
+    /// 送っている間の進み具合。0から1。送っていなければnil。
+    func attachmentProgress(of id: DraftAttachment.ID) -> Double? {
+        guard attachmentStatus(of: id) == .uploading else { return nil }
+        return localMedia[id]?.progress ?? 0
+    }
+
     /// 投稿欄とビューアで見せる状態。
     func attachmentStatus(of id: DraftAttachment.ID) -> ComposeAttachmentStatus? {
         guard let attachment = attachments.first(where: { $0.id == id }) else { return nil }
@@ -483,7 +491,21 @@ extension ComposeModel {
     private func send(_ file: LocalMediaFile, of id: DraftAttachment.ID, sentDescription: inout String?) async throws -> MediaAttachment {
         let description = attachments.first { $0.id == id }?.description ?? ""
         sentDescription = description
-        return try await media.upload(LocalMediaLoader.upload(of: file, description: description))
+        localMedia[id]?.progress = 0
+        let report: @Sendable (Double) -> Void = { [weak self] fraction in
+            Task { @MainActor in self?.setProgress(fraction, of: id) }
+        }
+        let upload = try await LocalMediaLoader.upload(of: file, description: description)
+        return try await UploadProgress.$report.withValue(report) {
+            try await media.upload(upload)
+        }
+    }
+
+    /// 送った割合を進み具合にする。URLSessionは細かく知らせてくるので、見た目の変わらない差では描き直さない。
+    /// 知らせはメインスレッドへ順に回すとは限らないので、戻る向きには動かさない。
+    private func setProgress(_ fraction: Double, of id: DraftAttachment.ID) {
+        guard let current = localMedia[id]?.progress, fraction - current >= 0.01 || (fraction >= 1 && current < 1) else { return }
+        localMedia[id]?.progress = fraction
     }
 
     /// サーバーが処理できなかったファイルを捨て、その形式を避けて読み込み直す。サムネイルは同じ写真なので作り直さない。

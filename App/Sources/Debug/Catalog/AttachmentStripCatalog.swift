@@ -16,9 +16,11 @@ enum AttachmentStripCatalog {
                     item(.video, color: .systemOrange, description: "代替テキスト"),
                 ])
             },
-            CatalogState(title: "アップロード中（サムネイルあり、読み込み前）") {
+            CatalogState(title: "アップロード中（0%、40%、100%、読み込み前）") {
                 strip([
                     item(.image, color: .systemBlue, status: .uploading),
+                    item(.image, color: .systemGreen, status: .uploading, progress: 0.4),
+                    item(.video, color: .systemTeal, status: .uploading, progress: 1),
                     item(nil, color: .clear, status: .uploading),
                 ])
             },
@@ -88,6 +90,7 @@ enum AttachmentStripCatalog {
         label: String = "",
         description: String = "",
         status: ComposeAttachmentStatus = .ready,
+        progress: Double = 0,
         isSensitive: Bool = false
     ) -> ComposeAttachmentStrip.Item {
         let id = UUID()
@@ -104,7 +107,7 @@ enum AttachmentStripCatalog {
             file: kind.map { LocalMediaFile(url: URL(filePath: "/dev/null"), mimeType: "", kind: $0) },
             thumbnail: kind.map { _ in DummyMedia.image(size: CGSize(width: 192, height: 192), color: color, label: label) }
         )
-        return ComposeAttachmentStrip.Item(attachment: DraftAttachment(id: id, state: state, description: description), local: local, status: status, isSensitive: isSensitive)
+        return ComposeAttachmentStrip.Item(attachment: DraftAttachment(id: id, state: state, description: description), local: local, status: status, progress: status == .uploading ? progress : nil, isSensitive: isSensitive)
     }
 }
 #endif

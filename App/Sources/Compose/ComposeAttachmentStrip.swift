@@ -33,6 +33,8 @@ final class ComposeAttachmentStrip: UIView {
         let attachment: DraftAttachment
         let local: LocalMedia?
         let status: ComposeAttachmentStatus
+        /// 送っている間の進み具合。0から1。送っていなければnil。
+        let progress: Double?
         /// 閲覧注意にして投稿する。どの添付も同じ値になる。
         let isSensitive: Bool
 
@@ -243,6 +245,8 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
     /// 送信中と変換待ちの間、サムネイルを少し暗くする。
     private let dimView = UIView()
     private let spinner = UIActivityIndicatorView(style: .medium)
+    /// 送っている間の進み具合。満ちたら、サーバーの変換待ちの回る表示に替わる。
+    private let progressRing = ProgressRingView()
     private let failureView = UIImageView(image: UIImage(systemName: "exclamationmark.circle.fill"))
     /// 代替テキストの送信中に、ALTの札の位置に出す小さな回る表示。
     private let descriptionSpinner = UIActivityIndicatorView(style: .medium)
@@ -278,7 +282,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
                 view.bottomAnchor.constraint(equalTo: contentView.bottomAnchor),
             ])
         }
-        for view in [dimView, spinner, failureView, descriptionSpinner, descriptionFailureView, sensitiveBadge] {
+        for view in [dimView, spinner, progressRing, failureView, descriptionSpinner, descriptionFailureView, sensitiveBadge] {
             view.translatesAutoresizingMaskIntoConstraints = false
             overlay.addSubview(view)
         }
@@ -289,6 +293,10 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
             dimView.bottomAnchor.constraint(equalTo: overlay.bottomAnchor),
             spinner.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
             spinner.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
+            progressRing.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
+            progressRing.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
+            progressRing.widthAnchor.constraint(equalToConstant: 24),
+            progressRing.heightAnchor.constraint(equalToConstant: 24),
             failureView.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
             failureView.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
             // ALTの札と同じ左下に置く。
@@ -318,10 +326,12 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         } else {
             tile.applyLocal(thumbnail: item.local?.thumbnail, kind: item.local?.file?.kind, description: showsDescriptionState ? "" : description)
         }
-        // 送信の進み具合はまだ受け取っていないので、送信中も変換待ちと同じ回る表示にする。
+        // 送っている間は進み具合の円を満たし、満ちたらサーバーの変換待ちの回る表示に替える。変換にかかる時間は分からない。
         let isWorking = item.status == .uploading || item.status == .processing
         dimView.isHidden = !isWorking
-        setAnimating(spinner, isWorking)
+        progressRing.isHidden = item.progress == nil
+        progressRing.progress = item.progress ?? 0
+        setAnimating(spinner, item.status == .processing)
         failureView.isHidden = item.status != .failed
         setAnimating(descriptionSpinner, item.status == .sendingDescription)
         descriptionFailureView.isHidden = item.status != .descriptionFailed
@@ -329,7 +339,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         let kindName = (item.local?.file?.kind ?? item.attachedMedia?.type).map(MediaTileView.kindName(of:)) ?? "メディア"
         accessibilityLabel = [kindName, item.isSensitive ? "閲覧注意" : "", description].filter { !$0.isEmpty }.joined(separator: "、")
         accessibilityValue = switch item.status {
-        case .uploading: "アップロード中"
+        case .uploading: ["アップロード中", item.progress.flatMap(Notice.percentText(of:))].compactMap(\.self).joined(separator: "、")
         case .processing: "サーバーで処理中"
         case .ready: nil
         case .sendingDescription: "代替テキストを送信中"
@@ -372,6 +382,46 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
             spinner.startAnimating()
         } else {
             spinner.stopAnimating()
+        }
+    }
+}
+
+/// 進み具合の円。下地の円の上に、割合の分だけ時計回りに弧を描く。
+private final class ProgressRingView: UIView {
+    var progress: Double = 0 {
+        didSet { progressLayer.strokeEnd = min(max(progress, 0), 1) }
+    }
+
+    private let trackLayer = CAShapeLayer()
+    private let progressLayer = CAShapeLayer()
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        for layer in [trackLayer, progressLayer] {
+            layer.fillColor = UIColor.clear.cgColor
+            layer.lineWidth = 3
+            self.layer.addSublayer(layer)
+        }
+        trackLayer.strokeColor = UIColor.white.withAlphaComponent(0.35).cgColor
+        progressLayer.strokeColor = UIColor.white.cgColor
+        progressLayer.lineCap = .round
+        progressLayer.strokeEnd = 0
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let inset = trackLayer.lineWidth / 2
+        let rect = bounds.insetBy(dx: inset, dy: inset)
+        // 上から時計回りに満たす。
+        let path = UIBezierPath(arcCenter: CGPoint(x: rect.midX, y: rect.midY), radius: rect.width / 2, startAngle: -.pi / 2, endAngle: .pi * 1.5, clockwise: true)
+        for layer in [trackLayer, progressLayer] {
+            layer.frame = bounds
+            layer.path = path.cgPath
         }
     }
 }
