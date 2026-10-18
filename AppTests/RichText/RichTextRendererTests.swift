@@ -40,7 +40,7 @@ struct RichTextRendererTests {
     }
 
     @Test func appliesParagraphSpacingAndKeepsLineBreakInsideParagraph() throws {
-        let text = MastodonHTMLParser(mentions: [], emojis: []).parse("<p>a<br>b</p><p>c</p>")
+        let text = MastodonHTMLParser(mentions: [], tags: [], emojis: []).parse("<p>a<br>b</p><p>c</p>")
 
         let rendered = renderer(.offline, paragraphSpacing: 12).render(text)
 
@@ -50,7 +50,7 @@ struct RichTextRendererTests {
     }
 
     @Test func codeBlockLinesStayInOneParagraph() {
-        let text = MastodonHTMLParser(mentions: [], emojis: []).parse("<pre><code>a\nb</code></pre>")
+        let text = MastodonHTMLParser(mentions: [], tags: [], emojis: []).parse("<pre><code>a\nb</code></pre>")
 
         #expect(renderer(.offline, paragraphSpacing: 12).render(text).string == "a\u{2028}b")
     }
