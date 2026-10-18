@@ -46,6 +46,16 @@ enum AttachmentStripCatalog {
                     item(.gifv, color: .systemIndigo, description: "代替テキスト", status: .descriptionFailed),
                 ])
             },
+            CatalogState(title: "閲覧注意（画像、ALTあり、GIF、動画、アップロード中、失敗）") {
+                strip([
+                    item(.image, color: .systemBlue, isSensitive: true),
+                    item(.image, color: .systemGreen, description: "代替テキスト", isSensitive: true),
+                    item(.gifv, color: .systemIndigo, isSensitive: true),
+                    item(.video, color: .systemTeal, isSensitive: true),
+                    item(.image, color: .systemOrange, status: .uploading, isSensitive: true),
+                    item(.image, color: .systemPink, status: .failed, isSensitive: true),
+                ])
+            },
             CatalogState(title: "幅に収まらず横にスクロールする（8枚）") {
                 strip((1...8).map { index in
                     item(.image, color: index.isMultiple(of: 2) ? .systemPink : .systemPurple, label: "\(index)", description: index.isMultiple(of: 3) ? "代替テキスト" : "")
