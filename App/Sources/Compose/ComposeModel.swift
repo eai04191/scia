@@ -288,6 +288,8 @@ struct LocalMedia {
     var sending: LocalMediaFile?
     /// サーバーの上限のために縮めたときの前と後。
     var reduction: MediaReduction?
+    /// 送るファイルを、縮めるために作り直した。位置情報だけを除いて書き直したときは、元と同じ中身なのでfalse。
+    var sendingIsReencoded = false
 }
 
 /// 添付1つの、投稿欄とビューアで見せる状態。
@@ -514,12 +516,13 @@ extension ComposeModel {
                     logger.info("attachment format unprocessable, resending as jpeg mime=\(sending.mimeType, privacy: .public) reencoded=\(sending != file, privacy: .public)")
                     media.recordUnprocessableImageType(sending.mimeType)
                     let replacement: LocalMediaFile
-                    if sending != file {
-                        // 縮めるために作り直したファイルなら、元から作り直す。HEICは使わないと覚えたので、JPEGになる。
+                    if localMedia[id]?.sendingIsReencoded == true {
+                        // 縮めるために作り直したファイルなら、元から作り直す。JPEGに決めて作り直す。
                         try? FileManager.default.removeItem(at: sending.url)
                         localMedia[id]?.sending = nil
                         replacement = try await prepare(file, of: id, forcingJPEG: true)
                     } else {
+                        // 元のまま、または位置情報だけを除いて送ったファイルなら、ピッカーから同じ写真のJPEGを受け取り直す。
                         replacement = try await prepare(try await reloadFile(id, local: local, avoiding: file), of: id, forcingJPEG: true)
                     }
                     accepted = try await send(replacement, of: id, sentDescription: &sentDescription)
@@ -566,7 +569,7 @@ extension ComposeModel {
         localMedia[id]?.progress = fraction
     }
 
-    /// 送るファイルを決める。設定で選んだ大きさとサーバーの上限に収まれば、読み込んだファイルのまま送る。
+    /// 送るファイルを決める。設定で選んだ大きさとサーバーの上限に収まれば、読み込んだファイルのまま送る。位置情報があれば、それだけを除いたファイルにする。
     /// 収まらなければ作り直し、サーバーの上限のために設定より小さくしたら知らせる。送り直すときは、前に決めたファイルを使う。
     /// - Parameter forcingJPEG: JPEGで送り直すので、縮めて作り直すときもHEICなどにしない。覚えたのは処理できなかった形式（HEIFなど）だけで、
     ///   HEICは覚えていないことがあり、同じサーバーがHEICも処理できないことが多いため。
@@ -575,6 +578,7 @@ extension ComposeModel {
         let settings = media.preparation()
         let byteCount = ImageReencoder.byteCount(of: file.url)
         let prepared: PreparedMedia?
+        var reencoded = false
         switch file.kind {
         case .image:
             guard let size = ImageReencoder.size(of: file.url) else { throw MediaReencodingError.imageFailed }
@@ -583,16 +587,18 @@ extension ComposeModel {
                 supportedMIMETypes: supportedMediaTypes,
                 unprocessableMIMETypes: media.unprocessableImageTypes().union(forcingJPEG ? UnprocessableMediaFormats.replaceableMIMETypes : [])
             )
+            reencoded = plan != nil
             prepared = if let plan {
                 try await ImageReencoder.reencode(
                     file.url, plan: plan, originalSize: size, sizeLimit: mediaLimits.imageSizeLimit, quality: settings.imageQuality,
                     destination: Self.preparedURL(for: file)
                 )
             } else {
-                nil
+                try await LocationRemover.removingLocation(fromImage: file.url, destination: Self.preparedURL(for: file))
+                    .map { PreparedMedia(url: $0, mimeType: file.mimeType, size: size, reduction: nil) }
             }
         case .video:
-            prepared = try await prepareVideo(file, of: id, byteCount: byteCount, settings: settings)
+            (prepared, reencoded) = try await prepareVideo(file, of: id, byteCount: byteCount, settings: settings)
         case .gifv, .audio, .unknown:
             prepared = nil
         }
@@ -604,6 +610,7 @@ extension ComposeModel {
         let sending = prepared.map { LocalMediaFile(url: $0.url, mimeType: $0.mimeType, kind: file.kind) } ?? file
         localMedia[id]?.sending = sending
         localMedia[id]?.reduction = prepared?.reduction
+        localMedia[id]?.sendingIsReencoded = reencoded
         if let prepared {
             logger.info("attachment prepared kind=\(String(describing: file.kind), privacy: .public) mime=\(prepared.mimeType, privacy: .public) size=\(prepared.size.description, privacy: .public) reducedByServer=\(prepared.reduction != nil, privacy: .public)")
         }
@@ -613,8 +620,14 @@ extension ComposeModel {
         return sending
     }
 
-    /// 動画を、設定で選んだ大きさとサーバーの上限に収まるよう書き出す。収まっていればnil。
-    private func prepareVideo(_ file: LocalMediaFile, of id: DraftAttachment.ID, byteCount: Int, settings: MediaPreparationSettings) async throws -> PreparedMedia? {
+    /// 動画を、設定で選んだ大きさとサーバーの上限に収まるよう書き出す。収まっていれば、位置情報があるときだけ除いて書き直す。どちらもしなければnil。
+    /// - Returns: 書き出したか書き直したファイルと、縮めるために書き出したか。
+    private func prepareVideo(
+        _ file: LocalMediaFile,
+        of id: DraftAttachment.ID,
+        byteCount: Int,
+        settings: MediaPreparationSettings
+    ) async throws -> (PreparedMedia?, reencoded: Bool) {
         guard let info = await VideoReencoder.info(of: file.url) else { throw MediaReencodingError.videoFailed }
         let plan = VideoPlan.make(
             size: info.size, duration: info.duration, frameRate: info.frameRate, hasAudio: info.hasAudio, byteCount: byteCount,
@@ -622,7 +635,9 @@ extension ComposeModel {
         )
         switch plan {
         case .original:
-            return nil
+            // 書き出す動画には位置情報を書かないので、元のまま送るときだけ除く。
+            let cleaned = try await LocationRemover.removingLocation(fromVideo: file.url, destination: Self.preparedURL(for: file))
+            return (cleaned.map { PreparedMedia(url: $0, mimeType: file.mimeType, size: info.size, reduction: nil) }, false)
         case .tooLong:
             throw MediaReencodingError.videoTooLong
         case .export(let size, let frameRate, let bitRate, let reducedByServer):
@@ -641,7 +656,7 @@ extension ComposeModel {
                 throw MediaReencodingError.cannotFitSizeLimit
             }
             let reduction = reducedByServer ? MediaReduction(fromSize: info.size, toSize: size, fromByteCount: byteCount, toByteCount: exportedByteCount) : nil
-            return PreparedMedia(url: destination, mimeType: "video/mp4", size: size, reduction: reduction)
+            return (PreparedMedia(url: destination, mimeType: "video/mp4", size: size, reduction: reduction), true)
         }
     }
 

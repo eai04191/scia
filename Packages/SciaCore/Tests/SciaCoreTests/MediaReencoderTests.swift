@@ -78,6 +78,63 @@ struct MediaReencoderTests {
         #expect(prepared.size == PixelSize(width: 400, height: 300))
     }
 
+    /// 画像の画素。向きを反映せずに読む。
+    private func pixels(of url: URL) throws -> Data {
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let image = try #require(CGImageSourceCreateImageAtIndex(source, 0, nil))
+        return try #require(image.dataProvider?.data as Data?)
+    }
+
+    /// 元のまま送る写真から、位置情報だけを除く。向きと画素は変えない。
+    @Test(arguments: [UTType.jpeg, UTType.heic])
+    func removesLocationKeepingOrientationAndPixels(type: UTType) async throws {
+        let directory = try makeDirectory()
+        let source = directory.appending(path: "photo.\(type.preferredFilenameExtension ?? "img")")
+        try writeImage(width: 320, height: 240, type: type, noise: true, orientation: 6, gps: true, to: source)
+        #expect(try properties(of: source)[kCGImagePropertyGPSDictionary] != nil)
+
+        let output = try #require(await LocationRemover.removingLocation(fromImage: source, destination: directory.appending(path: "clean.\(type.preferredFilenameExtension ?? "img")")))
+
+        let cleaned = try properties(of: output)
+        #expect(cleaned[kCGImagePropertyGPSDictionary] == nil)
+        #expect(cleaned[kCGImagePropertyOrientation] as? Int == 6)
+        #expect(try pixels(of: output) == pixels(of: source))
+    }
+
+    private func metadataTag(_ path: String, in url: URL) throws -> CGImageMetadataTag? {
+        let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))
+        let metadata = try #require(CGImageSourceCopyMetadataAtIndex(source, 0, nil))
+        return CGImageMetadataCopyTagWithPath(metadata, nil, path as CFString)
+    }
+
+    /// EXIFのGPSのほかに、XMPやIPTCに書いた撮った場所の名前も除く。EXIFのGPSがなくても除く。
+    @Test func removesLocationNamesInXMPAndIPTC() async throws {
+        let directory = try makeDirectory()
+        let plain = directory.appending(path: "plain.jpg")
+        try writeImage(width: 32, height: 24, type: .jpeg, to: plain)
+        let source = directory.appending(path: "named.jpg")
+        let imageSource = try #require(CGImageSourceCreateWithURL(plain as CFURL, nil))
+        let metadata = CGImageMetadataCreateMutable()
+        #expect(CGImageMetadataSetValueWithPath(metadata, nil, "photoshop:City" as CFString, "千代田区" as CFString))
+        #expect(CGImageMetadataSetValueWithPath(metadata, nil, "Iptc4xmpCore:Location" as CFString, "東京駅" as CFString))
+        let destination = try #require(CGImageDestinationCreateWithURL(source as CFURL, UTType.jpeg.identifier as CFString, 1, nil))
+        #expect(CGImageDestinationCopyImageSource(destination, imageSource, [kCGImageDestinationMetadata: metadata, kCGImageDestinationMergeMetadata: true] as CFDictionary, nil))
+        #expect(try metadataTag("photoshop:City", in: source) != nil)
+
+        let output = try #require(await LocationRemover.removingLocation(fromImage: source, destination: directory.appending(path: "clean.jpg")))
+
+        #expect(try metadataTag("photoshop:City", in: output) == nil)
+        #expect(try metadataTag("Iptc4xmpCore:Location", in: output) == nil)
+    }
+
+    /// 位置情報のない画像は、書き直さない。
+    @Test func leavesImageWithoutLocationAlone() async throws {
+        let directory = try makeDirectory()
+        let source = directory.appending(path: "photo.jpg")
+        try writeImage(width: 32, height: 24, type: .jpeg, to: source)
+        #expect(try await LocationRemover.removingLocation(fromImage: source, destination: directory.appending(path: "clean.jpg")) == nil)
+    }
+
     /// PNGはPNGのまま縮め、透過を残す。
     @Test func keepsPNGTransparency() async throws {
         let directory = try makeDirectory()
@@ -107,14 +164,40 @@ struct MediaReencoderTests {
 
     // MARK: - 動画
 
+    enum VideoLocation {
+        case none
+        /// iPhoneのカメラと同じく、撮った場所の座標を動画全体のQuickTimeのメタデータに書く。
+        case coordinates
+        /// 場所の名前だけを書く。共通のキー（commonKey）を持たない。
+        case name
+        /// 座標を、映像のトラックのメタデータにだけ書く。
+        case trackCoordinates
+    }
+
+    private func metadataItem(_ identifier: AVMetadataIdentifier, _ value: String) -> AVMetadataItem {
+        let item = AVMutableMetadataItem()
+        item.identifier = identifier
+        item.value = value as NSString
+        item.dataType = kCMMetadataBaseDataType_UTF8 as String
+        return item
+    }
+
     /// 1秒の塗りつぶしの動画を書き出す。
-    private func writeVideo(width: Int, height: Int, frameRate: Int = 30, to url: URL) async throws {
-        let writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
+    private func writeVideo(width: Int, height: Int, frameRate: Int = 30, location: VideoLocation = .none, to url: URL) async throws {
+        let writer = try AVAssetWriter(outputURL: url, fileType: url.pathExtension == "mov" ? .mov : .mp4)
+        switch location {
+        case .none, .trackCoordinates: break
+        case .coordinates: writer.metadata = [metadataItem(.quickTimeMetadataLocationISO6709, "+35.6812+139.7671/")]
+        case .name: writer.metadata = [metadataItem(.quickTimeMetadataLocationName, "東京駅")]
+        }
         let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: width,
             AVVideoHeightKey: height,
         ])
+        if location == .trackCoordinates {
+            input.metadata = [metadataItem(.quickTimeMetadataLocationISO6709, "+35.6812+139.7671/")]
+        }
         let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
             kCVPixelBufferWidthKey as String: width,
@@ -158,6 +241,44 @@ struct MediaReencoderTests {
         #expect(abs(info.duration - sourceInfo.duration) < 0.1)
         #expect(lastProgress.get() == 1)
         #expect(!info.hasAudio)
+    }
+
+    /// 動画全体と、各トラックのメタデータに、場所の項目があるか。
+    private func hasLocation(_ url: URL) async throws -> Bool {
+        let asset = AVURLAsset(url: url)
+        var items = try await asset.load(.metadata)
+        for track in try await asset.load(.tracks) {
+            items += try await track.load(.metadata)
+        }
+        return items.contains { $0.identifier == .quickTimeMetadataLocationISO6709 || $0.identifier == .quickTimeMetadataLocationName }
+    }
+
+    /// 元のまま送る動画から、映像を作り直さずに位置情報を除く。場所の名前だけのときも、トラックにだけ書いてあるときも除く。
+    @Test(arguments: [VideoLocation.coordinates, .name, .trackCoordinates])
+    func removesLocationFromVideoWithoutReencoding(location: VideoLocation) async throws {
+        let directory = try makeDirectory()
+        let source = directory.appending(path: "clip.mov")
+        try await writeVideo(width: 320, height: 180, location: location, to: source)
+        #expect(try await hasLocation(source))
+
+        let output = try #require(await LocationRemover.removingLocation(fromVideo: source, destination: directory.appending(path: "clean.mov")))
+
+        #expect(try await !hasLocation(output))
+        let info = try #require(await VideoReencoder.info(of: output))
+        #expect(info.size == PixelSize(width: 320, height: 180))
+        // 作り直していないので、映像の容量はほとんど変わらない。
+        let ratio = Double(ImageReencoder.byteCount(of: output)) / Double(ImageReencoder.byteCount(of: source))
+        #expect(ratio > 0.9 && ratio < 1.1)
+    }
+
+    /// 縮めて書き出した動画には、位置情報を書かない。
+    @Test func exportedVideoHasNoLocation() async throws {
+        let directory = try makeDirectory()
+        let source = directory.appending(path: "clip.mov")
+        try await writeVideo(width: 320, height: 180, location: .coordinates, to: source)
+        let output = directory.appending(path: "small.mp4")
+        try await VideoReencoder.export(source, size: PixelSize(width: 160, height: 90), frameRate: nil, bitRate: 200_000, audioBitRate: 128_000, destination: output) { _ in }
+        #expect(try await !hasLocation(output))
     }
 
     /// 上限のフレームレートを決めたら、元のコマの時刻に従わずに、そのフレームレートで書き出す。

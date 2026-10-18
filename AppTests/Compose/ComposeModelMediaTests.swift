@@ -1,5 +1,7 @@
 import Foundation
+import ImageIO
 import SciaCore
+import UniformTypeIdentifiers
 import Testing
 import UIKit
 @testable import Scia
@@ -167,6 +169,69 @@ struct ComposeModelMediaTests {
         #expect(server.uploads.map(\.mimeType) == ["image/heic", "image/jpeg"])
         #expect(server.unprocessableImageTypes == ["image/heic"])
         #expect(avoided == [[], ["image/heic"]])
+        #expect(model.attachmentStatus(of: try #require(model.attachments.first?.id)) == .ready)
+    }
+
+    /// 元のまま送る写真でも、撮った場所の位置情報は除いて送る。サーバーが除くかはAPIで分からないため。
+    @Test func removesLocationBeforeSending() async throws {
+        let server = FakeServer()
+        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: "located.jpg")
+        let image = try #require(UIGraphicsImageRenderer(size: CGSize(width: 40, height: 30)).image { context in
+            UIColor.systemGreen.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 40, height: 30))
+        }.cgImage)
+        let destination = try #require(CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, [kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 35.68, kCGImagePropertyGPSLatitudeRef: "N"]] as CFDictionary)
+        #expect(CGImageDestinationFinalize(destination))
+        let model = makeModel(server)
+
+        model.applyPickerSelection([PickedMedia(assetIdentifier: "a") { _ in LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image) }])
+        try await settleSlowly { isSettled(model) }
+
+        let upload = try #require(server.uploads.first)
+        let source = try #require(CGImageSourceCreateWithData(upload.data as CFData, nil))
+        let properties = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        #expect(properties[kCGImagePropertyGPSDictionary] == nil)
+        #expect(upload.mimeType == "image/jpeg")
+    }
+
+    /// 位置情報のあるHEICは、位置情報だけを除いて送る。それを処理できないと500が返ったら、作り直したものではないので、ピッカーから同じ写真のJPEGを受け取り直して送る。
+    @Test func resendsLocatedHEICAsJPEGFromPicker() async throws {
+        let server = FakeServer()
+        server.uploadResult = { upload in
+            guard upload.mimeType != "image/heic" else {
+                throw MediaUploadError.processingFailed(MastodonAPIError(statusCode: 500, message: "Error processing thumbnail for uploaded media"))
+            }
+            return Self.attachment(id: "m-\(upload.filename)", processed: true)
+        }
+        func folder() throws -> URL {
+            let url = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            return url
+        }
+        let heic = try folder().appending(path: "a.heic")
+        let jpeg = try folder().appending(path: "a.jpg")
+        let image = try #require(UIGraphicsImageRenderer(size: CGSize(width: 40, height: 30)).image { context in
+            UIColor.systemGreen.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 40, height: 30))
+        }.cgImage)
+        let destination = try #require(CGImageDestinationCreateWithURL(heic as CFURL, UTType.heic.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, [kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 35.68, kCGImagePropertyGPSLatitudeRef: "N"]] as CFDictionary)
+        #expect(CGImageDestinationFinalize(destination))
+        try writePhoto(width: 40, height: 30, to: jpeg)
+        let picked = PickedMedia(assetIdentifier: "a") { avoiding in
+            avoiding.contains("image/heic")
+                ? LocalMediaFile(url: jpeg, mimeType: "image/jpeg", kind: .image)
+                : LocalMediaFile(url: heic, mimeType: "image/heic", kind: .image)
+        }
+        let model = makeModel(server)
+
+        model.applyPickerSelection([picked])
+        try await settleSlowly { isSettled(model) }
+
+        #expect(server.uploads.map(\.mimeType) == ["image/heic", "image/jpeg"])
         #expect(model.attachmentStatus(of: try #require(model.attachments.first?.id)) == .ready)
     }
 
