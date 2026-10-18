@@ -19,24 +19,24 @@ struct MediaCoversTests {
         var covers = MediaCovers()
         let sensitive = status(id: "1", sensitive: true)
         let spoiler = status(id: "2", spoilerText: "ネタバレ")
-        #expect(covers.cover(for: sensitive) == .sensitive)
-        #expect(covers.cover(for: spoiler) == .sensitive)
+        #expect(covers.cover(for: sensitive, filterTitles: []) == .sensitive)
+        #expect(covers.cover(for: spoiler, filterTitles: []) == .sensitive)
 
         covers.reveal(sensitive)
-        #expect(covers.cover(for: sensitive) == nil)
-        #expect(covers.cover(for: spoiler) == .sensitive)
+        #expect(covers.cover(for: sensitive, filterTitles: []) == nil)
+        #expect(covers.cover(for: spoiler, filterTitles: []) == .sensitive)
     }
 
     @Test func showsPlainStatusUntilHidden() {
         var covers = MediaCovers()
         let plain = status()
-        #expect(covers.cover(for: plain) == nil)
+        #expect(covers.cover(for: plain, filterTitles: []) == nil)
 
         covers.hide(plain)
-        #expect(covers.cover(for: plain) == .hidden)
+        #expect(covers.cover(for: plain, filterTitles: []) == .hidden)
 
         covers.reveal(plain)
-        #expect(covers.cover(for: plain) == nil)
+        #expect(covers.cover(for: plain, filterTitles: []) == nil)
     }
 
     /// 開いたあとに隠した閲覧注意の投稿は、開く前と同じ覆いに戻す。
@@ -46,7 +46,7 @@ struct MediaCoversTests {
         covers.reveal(sensitive)
         covers.hide(sensitive)
 
-        #expect(covers.cover(for: sensitive) == .sensitive)
+        #expect(covers.cover(for: sensitive, filterTitles: []) == .sensitive)
     }
 
     @Test func choiceAppliesToBoostsOfSameStatus() {
@@ -55,8 +55,8 @@ struct MediaCoversTests {
         let boost = status(id: "20", reblog: original)
 
         covers.hide(boost)
-        #expect(covers.cover(for: original) == .hidden)
-        #expect(covers.cover(for: boost) == .hidden)
+        #expect(covers.cover(for: original, filterTitles: []) == .hidden)
+        #expect(covers.cover(for: boost, filterTitles: []) == .hidden)
     }
 
     @Test func coversLinkCardImageOfSensitiveStatusUntilRevealed() {
@@ -97,13 +97,13 @@ struct MediaCoversTests {
         var covers = MediaCovers()
         let plain = status(id: "1", card: card())
         covers.hide(plain)
-        #expect(covers.cover(for: plain) == .hidden)
+        #expect(covers.cover(for: plain, filterTitles: []) == .hidden)
         #expect(covers.linkCardImageCover(for: plain) == nil)
 
         let sensitive = status(id: "2", sensitive: true, card: card())
         covers.reveal(sensitive)
         covers.hide(sensitive)
-        #expect(covers.cover(for: sensitive) == .sensitive)
+        #expect(covers.cover(for: sensitive, filterTitles: []) == .sensitive)
         #expect(covers.linkCardImageCover(for: sensitive) == nil)
     }
 }

@@ -47,13 +47,15 @@ final class HomeTimelineController {
         tuning: TuningStore = AppDependencies.tuning,
         onUnauthorized: @escaping () -> Void
     ) {
-        store = TimelineStore(pageSize: Self.pageSize) { query in
+        let filtering = StatusFiltering(context: .home, myAccountID: client.credential.accountID)
+        store = TimelineStore(pageSize: Self.pageSize, filtering: filtering) { query in
             try await client.homeTimeline(query)
         }
         self.client = client
         self.streamingHub = streamingHub
         self.tuning = tuning
         self.onUnauthorized = onUnauthorized
+        viewController.filterWarnings = FilterWarnings(filtering: filtering)
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder(origin: .automatic) }
         viewController.onRetry = { [weak self] in self?.retry() }
         viewController.onVisibleStatusesChange = { [weak self] ids in self?.markRead(ids) }
@@ -458,9 +460,11 @@ final class HomeTimelineController {
             return
         }
         #endif
+        let before = store.entries
         let added = store.flushPending()
         logger.info("home insert pending added=\(added.count, privacy: .public)")
-        guard !added.isEmpty else { return }
+        // フィルターで隠す投稿は足さないが、同じIDの読めなかった行は消えるため、並びの変化で見る。
+        guard store.entries != before else { return }
         showEntries()
     }
 

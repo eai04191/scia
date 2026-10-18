@@ -113,6 +113,20 @@ struct ProfileStoreTests {
         #expect(store.displayedPinned == [pinned])
     }
 
+    /// プロフィールの場所で隠すフィルターに一致した固定された投稿は出さない。編集で一致しなくなれば出す。
+    @Test func hidesFilteredPinnedStatus() async throws {
+        let known = try account()
+        let hide = FilterResult(filter: FilterResult.Filter(id: "1", title: "x", context: [.account], filterAction: .hide))
+        let hidden = Status(id: "10", createdAt: Date(timeIntervalSince1970: 0), account: known, content: "<p>固定</p>", spoilerText: "", url: nil, filtered: [hide])
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, api: makeAPI(account: known, pinned: [hidden]))
+        _ = await store.loadProfile()
+        #expect(store.pinned.isEmpty)
+
+        let edited = try pinnedStatus()
+        store.updateStatus("10") { _ in edited }
+        #expect(store.pinned.map(\.id) == ["10"])
+    }
+
     @Test func removesDeletedPinnedStatus() async throws {
         let known = try account()
         let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, api: makeAPI(account: known, pinned: [try pinnedStatus()]))

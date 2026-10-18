@@ -130,7 +130,7 @@ struct TimelineMediaTests {
 
         vc.hideMedia(of: plain)
         let hidden = try #require(shared)
-        #expect(hidden.cover(for: plain) == .hidden)
+        #expect(hidden.cover(for: plain, filterTitles: []) == .hidden)
         vc.revealMedia(of: plain)
         #expect(mediaGrid(in: harness, of: plain.id)?.content?.isCovered == false)
 

@@ -141,6 +141,21 @@ struct PostContentBuilder {
         )
     }
 
+    /// フィルターの警告。本文の代わりに注意書きの箱に入れて出し、開くまで本文も添付ファイルも出さない。
+    /// フィルターの名前は使う人が付けたものなので、投稿の言語ではなく、アプリの文字で描く。
+    func filterWarning(titles: [String], base: UIListContentConfiguration) -> PostBodyContent.Spoiler {
+        let font = base.secondaryTextProperties.font
+        let text = NSMutableAttributedString(string: "フィルター: ", attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
+        text.append(NSAttributedString(string: titles.joined(separator: "、"), attributes: [.font: font, .foregroundColor: UIColor.label]))
+        return PostBodyContent.Spoiler(
+            text: text,
+            isCollapsed: true,
+            kind: .filter,
+            padding: tuning.value(of: TuningCatalog.spoilerPadding),
+            bodySpacing: tuning.value(of: TuningCatalog.spoilerBodySpacing)
+        )
+    }
+
     /// 本文と注意書きは投稿した人が書いたものなので、投稿の言語で描く。
     private func bodyRenderer(of status: Status, base: UIListContentConfiguration, color: UIColor) -> RichTextRenderer {
         RichTextRenderer(

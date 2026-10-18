@@ -62,7 +62,7 @@ struct GlyphLanguageTests {
     /// 字形の設定で中国語を選んでも、文字列には言語を付けない。
     @Test func appTextHasNoGlyphLanguage() throws {
         let controller = try controller(glyphLanguage: .simplifiedChinese)
-        let toggle = SpoilerView.toggleText(isCollapsed: true, font: .preferredFont(forTextStyle: .footnote))
+        let toggle = SpoilerView.toggleText(isCollapsed: true, kind: .contentWarning, font: .preferredFont(forTextStyle: .footnote))
         #expect(languages(in: toggle, of: "本文を表示") == [nil])
 
         let follow = MastodonNotification(id: "1", type: .follow, createdAt: .now, account: account)

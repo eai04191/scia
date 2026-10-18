@@ -1,12 +1,13 @@
 import UIKit
 
-/// 注意書き（CW）。本文の上に置き、押すと本文を開閉する。
+/// 注意書き（CW）。本文の上に置き、押すと本文を開閉する。フィルターの警告も、同じ箱で本文の代わりに出す。
 ///
 /// 注意書きはただの文字と見分けがつくよう、地の色を敷いた箱に入れ、押せることが分かるよう、開閉の文言と記号を添える。
 final class SpoilerView: UIControl {
     struct Content {
         var text: NSAttributedString
         var isCollapsed: Bool
+        var kind: PostBodyContent.Spoiler.Kind
         /// 箱の内側の余白。
         var padding: CGFloat
     }
@@ -45,7 +46,7 @@ final class SpoilerView: UIControl {
 
     func apply(_ content: Content) {
         textLabel.attributedText = content.text
-        toggleLabel.attributedText = Self.toggleText(isCollapsed: content.isCollapsed, font: toggleLabel.font)
+        toggleLabel.attributedText = Self.toggleText(isCollapsed: content.isCollapsed, kind: content.kind, font: toggleLabel.font)
         NSLayoutConstraint.deactivate(paddingConstraints)
         paddingConstraints = [
             textLabel.firstBaselineAnchor.constraint(equalTo: topAnchor, constant: content.padding + PostBodyView.textTopInset(of: content.text)),
@@ -56,12 +57,16 @@ final class SpoilerView: UIControl {
         NSLayoutConstraint.activate(paddingConstraints)
     }
 
-    static func toggleTitle(isCollapsed: Bool) -> String {
-        isCollapsed ? "本文を表示" : "本文を隠す"
+    static func toggleTitle(isCollapsed: Bool, kind: PostBodyContent.Spoiler.Kind) -> String {
+        switch kind {
+        case .contentWarning: isCollapsed ? "本文を表示" : "本文を隠す"
+        // フィルターの警告は、本文だけでなく添付ファイルやリンクカードも隠しているため、本文に限らない言い方にする。
+        case .filter: "投稿を表示"
+        }
     }
 
-    static func toggleText(isCollapsed: Bool, font: UIFont) -> NSAttributedString {
-        let text = NSMutableAttributedString(string: toggleTitle(isCollapsed: isCollapsed) + " ")
+    static func toggleText(isCollapsed: Bool, kind: PostBodyContent.Spoiler.Kind, font: UIFont) -> NSAttributedString {
+        let text = NSMutableAttributedString(string: toggleTitle(isCollapsed: isCollapsed, kind: kind) + " ")
         let symbol = UIImage(
             systemName: isCollapsed ? "chevron.down" : "chevron.up",
             withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)

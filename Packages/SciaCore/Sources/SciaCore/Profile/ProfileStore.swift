@@ -88,8 +88,13 @@ public final class ProfileStore {
 
     public private(set) var account: Account
     public private(set) var relationship: Relationship?
-    /// 固定された投稿。「投稿」の一覧の上に置く。
-    public private(set) var pinned: [Status] = []
+    /// 固定された投稿。「投稿」の一覧の上に置く。フィルターで出さない投稿は除く。
+    public var pinned: [Status] {
+        let now = Date()
+        return loadedPinned.filter { !filtering.verdict(for: $0, now: now).isHidden }
+    }
+    /// 読んだ固定された投稿。編集でフィルターに一致しなくなったら出せるよう、隠す投稿も持つ。
+    private var loadedPinned: [Status] = []
     /// 関係を読めず、まだ読み直せていない。
     public private(set) var relationshipFailed = false
     /// 読めなかった関係を読み直している途中。
@@ -104,17 +109,20 @@ public final class ProfileStore {
     /// 削除した投稿のID。削除の前に読み始めた固定された投稿の応答で、戻さないようにする。
     private var deletedIDs: Set<Status.ID> = []
     private let isMyself: Bool
+    /// プロフィールの一覧に当てるサーバーのフィルター。
+    public let filtering: StatusFiltering
     private let api: API
     private let pageSize: Int
 
     public init(account: Account, myAccountID: String?, tab: ProfileTab = .posts, postsFilter: ProfilePostsFilter, pageSize: Int = 40, api: API) {
         self.account = account
         isMyself = account.id == myAccountID
+        filtering = StatusFiltering(context: .account, myAccountID: myAccountID)
         self.tab = tab
         self.postsFilter = postsFilter
         self.pageSize = pageSize
         self.api = api
-        timeline = Self.makeTimeline(accountID: account.id, filter: Self.statusFilter(tab: tab, postsFilter: postsFilter), pageSize: pageSize, api: api)
+        timeline = Self.makeTimeline(accountID: account.id, filter: Self.statusFilter(tab: tab, postsFilter: postsFilter), filtering: filtering, pageSize: pageSize, api: api)
     }
 
     public var followState: FollowState {
@@ -156,7 +164,7 @@ public final class ProfileStore {
                 case .success(.relationship(let relationship)):
                     self.relationship = relationship
                     relationshipFailed = false
-                case .success(.pinned(let pinned)): self.pinned = pinned.filter { !deletedIDs.contains($0.id) }
+                case .success(.pinned(let pinned)): loadedPinned = pinned.filter { !deletedIDs.contains($0.id) }
                 case .failure(let error):
                     switch part {
                     case .account: failures.account = error
@@ -226,7 +234,7 @@ public final class ProfileStore {
     @discardableResult
     public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) -> Bool {
         var changed = timeline.updateStatus(id, transform)
-        pinned = pinned.map { status in
+        loadedPinned = loadedPinned.map { status in
             guard status.id == id else { return status }
             changed = true
             return transform(status)
@@ -239,15 +247,15 @@ public final class ProfileStore {
     public func removeStatus(_ id: Status.ID) -> Bool {
         deletedIDs.insert(id)
         var changed = timeline.removeStatus(id)
-        if pinned.contains(where: { $0.id == id }) {
-            pinned.removeAll { $0.id == id }
+        if loadedPinned.contains(where: { $0.id == id }) {
+            loadedPinned.removeAll { $0.id == id }
             changed = true
         }
         return changed
     }
 
     private func rebuildTimeline() -> TimelineStore {
-        timeline = Self.makeTimeline(accountID: account.id, filter: Self.statusFilter(tab: tab, postsFilter: postsFilter), pageSize: pageSize, api: api)
+        timeline = Self.makeTimeline(accountID: account.id, filter: Self.statusFilter(tab: tab, postsFilter: postsFilter), filtering: filtering, pageSize: pageSize, api: api)
         return timeline
     }
 
@@ -258,8 +266,8 @@ public final class ProfileStore {
         }
     }
 
-    private static func makeTimeline(accountID: String, filter: AccountStatusFilter, pageSize: Int, api: API) -> TimelineStore {
-        TimelineStore(pageSize: pageSize) { query in
+    private static func makeTimeline(accountID: String, filter: AccountStatusFilter, filtering: StatusFiltering, pageSize: Int, api: API) -> TimelineStore {
+        TimelineStore(pageSize: pageSize, filtering: filtering) { query in
             try await api.statuses(accountID, filter, query)
         }
     }

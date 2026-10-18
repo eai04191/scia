@@ -159,7 +159,12 @@ final class MediaGridView: UIView {
     private func updateCoverButton(for content: Content) {
         guard let coverButton, var configuration = coverButton.configuration else { return }
         // 使う人が隠した投稿に「閲覧注意」と出すと、投稿者が付けたように読めるため、文言を分ける。
-        let title = content.cover == .hidden ? "非表示" : "閲覧注意"
+        // フィルターで覆った投稿は、どのフィルターに一致したかを出す。
+        let title = switch content.cover {
+        case .hidden: "非表示"
+        case .filtered(let titles): "フィルター: \(titles.joined(separator: "、"))"
+        case .sensitive, nil: "閲覧注意"
+        }
         switch content.arrangement {
         case .grid:
             configuration.title = title

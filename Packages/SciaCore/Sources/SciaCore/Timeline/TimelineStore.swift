@@ -35,31 +35,43 @@ public final class TimelineStore {
     private var deletedIDs: Set<String> = []
     /// 読めなかった投稿。同じIDの投稿が読めたら外す。
     private var unreadableItems: [UnreadableItem] = []
+    /// フィルターで出さない投稿。一覧には並べないが、読めなかった投稿と同じく、続きを読む位置には使う。
+    /// 1ページの全部が隠れても、その先へ進めるようにするため。編集でフィルターに一致しなくなれば、一覧に戻す。
+    private var hiddenStatuses: [Status] = []
     private let pageSize: Int
+    private let filtering: StatusFiltering?
     private let fetch: Fetch
     private let logger = SciaLog.logger(category: "timeline")
 
-    public init(pageSize: Int, fetch: @escaping Fetch) {
+    /// - Parameter filtering: この一覧で当てるサーバーのフィルター。nilなら当てない。
+    public init(pageSize: Int, filtering: StatusFiltering? = nil, fetch: @escaping Fetch) {
         self.pageSize = pageSize
+        self.filtering = filtering
         self.fetch = fetch
     }
 
-    /// 新しい順。
+    /// 一覧に並べる投稿。新しい順。フィルターで出さない投稿は含まない。
     public var statuses: [Status] { entries.compactMap(\.status) }
+
+    /// フィルターで出さない投稿も含めた、読み込んだ投稿。
+    private var allStatuses: [Status] { statuses + hiddenStatuses }
 
     /// 読めた投稿も読めなかった投稿もない。読めなかった投稿しかなくても、続きは読めるため空ではない。
     public var isEmpty: Bool { itemIDs.isEmpty }
 
     /// 読めた投稿と読めなかった投稿のID。新しい順。続きを読む位置に使う。
     /// 読めなかった投稿も含めるのは、1ページの全部が読めなかったときにも、その先へ進めるようにするため。
+    /// フィルターで出さない投稿も含める。
     private var itemIDs: [String] {
-        entries.compactMap { entry in
+        let shown = entries.compactMap { entry -> String? in
             switch entry {
             case .status(let status): status.id
             case .unreadable(let item): item.id
             case .gap, .notification, .pinned: nil
             }
         }
+        guard !hiddenStatuses.isEmpty else { return shown }
+        return (shown + hiddenStatuses.map(\.id)).sorted { StatusID.isNewer($0, than: $1) }
     }
 
     public var gaps: [TimelineGap] {
@@ -111,6 +123,18 @@ public final class TimelineStore {
         unfilledSinceID = nil
         isRegenerating = latest.isRegenerating
         reachedEnd = latest.isEmpty && !latest.isRegenerating
+        // 読んだ投稿が全部フィルターで隠れて行が1つもないと、続きを読むきっかけがないため、並べる投稿が出るまで古い方を読む。
+        // 続きの読み込みに失敗したら空に戻す。隠した投稿だけが残ると空でない扱いになり、読み込み直しが最初の読み込みからやり直さなくなるため。
+        if entries.isEmpty, !reachedEnd, !isRegenerating, let oldestID = itemIDs.last {
+            do {
+                _ = try await fetchOlder(than: oldestID)
+            } catch {
+                unreadableItems = []
+                rebuild(statuses: [], gaps: [])
+                reachedEnd = false
+                throw error
+            }
+        }
         if let markerID {
             applySavedMarker(markerID)
         }
@@ -124,13 +148,27 @@ public final class TimelineStore {
         isLoading = true
         defer { isLoading = false }
 
-        let page = try await fetch(TimelineQuery(maxID: oldestID, limit: pageSize))
-        isRegenerating = page.isRegenerating
-        let added = merge(page)
-        if page.isEmpty && !page.isRegenerating {
-            reachedEnd = true
+        return try await fetchOlder(than: oldestID)
+    }
+
+    /// `oldestID`より古いページを読み、足した投稿のうち一覧に並べたものを返す。
+    /// 読んだ投稿が全部フィルターで隠れたら、並べる投稿か読めなかった投稿が出るか、終わりに着くまで続けて読む。
+    /// 一覧の末尾の行が画面に出ることが続きを読むきっかけなので、行が増えないと、そこで止まってしまうため。
+    private func fetchOlder(than oldestID: String) async throws -> [Status] {
+        var maxID = oldestID
+        while true {
+            let page = try await fetch(TimelineQuery(maxID: maxID, limit: pageSize))
+            isRegenerating = page.isRegenerating
+            let added = merge(page)
+            if page.isEmpty && !page.isRegenerating {
+                reachedEnd = true
+            }
+            // 削除済みの投稿しかなかったときなど、続きを読む位置が進まなければ、同じページを読み続けないよう止める。
+            guard added.isEmpty, !page.isEmpty, page.unreadable.isEmpty, !page.isRegenerating, let next = itemIDs.last, next != maxID else {
+                return added
+            }
+            maxID = next
         }
-        return added
     }
 
     // MARK: - 切れていた間の補完
@@ -190,7 +228,7 @@ public final class TimelineStore {
             added += merge(page)
             if let gapNewerID {
                 let gap = TimelineGap(newerID: gapNewerID, olderID: sinceID)
-                rebuild(statuses: statuses, gaps: gaps + [gap])
+                rebuild(statuses: allStatuses, gaps: gaps + [gap])
                 let isFull = page.count >= pageSize
                 added += await fillGap(gap.id, pages: isFull ? maxPages - 1 : max(maxPages - 1, 1))
             }
@@ -268,7 +306,7 @@ public final class TimelineStore {
         guard !page.isRegenerating else { return true }
         if page.isEmpty {
             remaining.remove(at: index)
-            rebuild(statuses: statuses, gaps: remaining)
+            rebuild(statuses: allStatuses, gaps: remaining)
             return false
         }
         switch direction {
@@ -281,7 +319,7 @@ public final class TimelineStore {
                 remaining[index] = remaining[index].narrowed(olderID: newestFetched)
             }
         }
-        rebuild(statuses: statuses, gaps: remaining)
+        rebuild(statuses: allStatuses, gaps: remaining)
         return true
     }
 
@@ -317,15 +355,18 @@ public final class TimelineStore {
     public func receive(_ event: StreamingEvent) -> EventResult {
         switch event {
         case .update(let status):
-            guard !statuses.contains(where: { $0.id == status.id }), !pending.contains(where: { $0.id == status.id }) else {
+            guard !allStatuses.contains(where: { $0.id == status.id }), !pending.contains(where: { $0.id == status.id }) else {
                 return .none
             }
             pending.append(status)
             return pending.count == 1 ? .pendingStarted : .none
         case .statusUpdate(let edited):
             // 読めなかった投稿の編集が読めたら、読めなかった行をその投稿に置き換える。
+            // 隠す投稿だったときは、読めなかった行が消えるだけなので、足した投稿ではなく並びの変化で見る。
             if unreadableItems.contains(where: { $0.id == edited.id }) {
-                return merge([edited]).isEmpty ? .none : .entriesChanged
+                let before = entries
+                _ = merge([edited])
+                return entries != before ? .entriesChanged : .none
             }
             return replace(edited) ? .entriesChanged : .none
         case .delete(let id):
@@ -342,6 +383,7 @@ public final class TimelineStore {
         // 元の投稿が消えると、それをブーストした投稿も表示できなくなる。
         pending.removeAll { $0.id == id || $0.reblog?.id == id }
         unreadableItems.removeAll { $0.id == id }
+        hiddenStatuses.removeAll { $0.id == id || $0.reblog?.id == id }
         let remaining = entries.filter { entry in
             switch entry {
             case .status(let status), .pinned(let status): status.id != id && status.reblog?.id != id
@@ -355,23 +397,27 @@ public final class TimelineStore {
     }
 
     /// 同じIDの投稿と、それをブーストした投稿の中身を差し替える。編集や、お気に入りなどの操作の結果を反映する。
-    /// 表示に関わる変化があればtrueを返す。
+    /// サーバーが結果を付け直した投稿なので、ブーストに付いたフィルターの結果もそろえる。表示に関わる変化があればtrueを返す。
     @discardableResult
     public func replace(_ updated: Status) -> Bool {
-        updateStatus(updated.id) { _ in updated }
+        updateStatus(updated.id, adoptsFilterResults: true) { _ in updated }
     }
 
     /// 同じIDの投稿と、それをブーストした投稿の中身を`transform`で変える。表示に関わる変化があればtrueを返す。
+    /// 編集でフィルターに一致するようになった投稿は一覧から外し、一致しなくなった投稿は一覧に戻す。
     @discardableResult
     public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) -> Bool {
-        pending = pending.map { Self.updating(id, in: $0, transform) }
-        let replaced = entries.map { entry -> TimelineEntry in
-            guard case .status(let status) = entry else { return entry }
-            return .status(Self.updating(id, in: status, transform))
-        }
-        guard replaced != entries else { return false }
-        entries = replaced
-        return true
+        updateStatus(id, adoptsFilterResults: false, transform)
+    }
+
+    private func updateStatus(_ id: Status.ID, adoptsFilterResults: Bool, _ transform: (Status) -> Status) -> Bool {
+        pending = pending.map { Self.updating(id, in: $0, adoptsFilterResults: adoptsFilterResults, transform) }
+        let all = allStatuses
+        let replaced = all.map { Self.updating(id, in: $0, adoptsFilterResults: adoptsFilterResults, transform) }
+        guard replaced != all else { return false }
+        let before = entries
+        rebuild(statuses: replaced, gaps: gaps)
+        return entries != before
     }
 
     /// 保留していた投稿をIDの順に合流させ、新たに加わった投稿を新しい順に返す。
@@ -457,8 +503,9 @@ public final class TimelineStore {
         let remaining = Array(statuses.dropFirst(count))
         let newestKept = remaining.first?.id
         unreadableItems.removeAll { item in newestKept.map { StatusID.isNewer(item.id, than: $0) } ?? true }
+        let hiddenKept = hiddenStatuses.filter { status in newestKept.map { !StatusID.isNewer(status.id, than: $0) } ?? false }
         // 新しい側の端の投稿を忘れたギャップは、補完で読み直す範囲に含まれるので消す。
-        rebuild(statuses: remaining, gaps: gaps.filter { gap in newestKept.map { !StatusID.isNewer(gap.newerID, than: $0) } ?? false })
+        rebuild(statuses: remaining + hiddenKept, gaps: gaps.filter { gap in newestKept.map { !StatusID.isNewer(gap.newerID, than: $0) } ?? false })
     }
     #endif
 
@@ -471,29 +518,33 @@ public final class TimelineStore {
         unreadableItems = Self.unique(unreadableItems + newUnreadable)
         let added = merge(page.statuses)
         if added.isEmpty, !newUnreadable.isEmpty {
-            rebuild(statuses: statuses, gaps: gaps)
+            rebuild(statuses: allStatuses, gaps: gaps)
         }
         return added
     }
 
-    /// まだない投稿を足し、足した投稿を新しい順に返す。
+    /// まだない投稿を足し、足した投稿のうち一覧に並べたものを新しい順に返す。
     private func merge(_ incoming: [Status]) -> [Status] {
-        let known = Set(statuses.map(\.id))
+        let all = allStatuses
+        let known = Set(all.map(\.id))
         let added = Dictionary(incoming.filter { !known.contains($0.id) && !isDeleted($0) }.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
             .values
             .sorted { StatusID.isNewer($0.id, than: $1.id) }
         guard !added.isEmpty else { return [] }
-        rebuild(statuses: statuses + added, gaps: gaps)
-        return added
+        rebuild(statuses: all + added, gaps: gaps)
+        return added.filter { !isFilteredOut($0) }
     }
 
     /// 投稿と読めなかった投稿をIDの新しい順に並べ、ギャップを新しい側の端の投稿のすぐ下に置く。
     /// 画面は要素をIDで区別するため、同じIDのギャップは1つにする。同じ基準で補完が重なると、同じ範囲のギャップができる。
-    /// 読めなかった投稿は、同じIDの投稿が読めていれば外す。
+    /// 読めなかった投稿は、同じIDの投稿が読めていれば外す。フィルターで出さない投稿は並べず、別に持つ。
     private func rebuild(statuses: [Status], gaps: [TimelineGap]) {
         let statusIDs = Set(statuses.map(\.id))
         unreadableItems.removeAll { statusIDs.contains($0.id) }
-        let items = (statuses.map { ($0.id, TimelineEntry.status($0)) } + unreadableItems.map { ($0.id, TimelineEntry.unreadable($0)) })
+        let now = Date()
+        hiddenStatuses = statuses.filter { isFilteredOut($0, now: now) }
+        let shown = hiddenStatuses.isEmpty ? statuses : statuses.filter { !isFilteredOut($0, now: now) }
+        let items = (shown.map { ($0.id, TimelineEntry.status($0)) } + unreadableItems.map { ($0.id, TimelineEntry.unreadable($0)) })
             .sorted { StatusID.isNewer($0.0, than: $1.0) }
         var seenGapIDs: Set<String> = []
         let sortedGaps = gaps
@@ -511,6 +562,10 @@ public final class TimelineStore {
         }
         result.append(contentsOf: sortedGaps[gapIndex...].map(TimelineEntry.gap))
         entries = result
+    }
+
+    private func isFilteredOut(_ status: Status, now: Date = Date()) -> Bool {
+        filtering?.verdict(for: status, now: now).isHidden ?? false
     }
 
     private func isDeleted(_ status: Status) -> Bool {
@@ -541,9 +596,10 @@ public final class TimelineStore {
         return items.filter { seen.insert($0.id).inserted }
     }
 
-    static func updating(_ id: Status.ID, in status: Status, _ transform: (Status) -> Status) -> Status {
+    /// - Parameter adoptsFilterResults: ブーストを書き換えるときに、フィルターの結果も元の投稿の結果にそろえる。`Status.replacingReblog(with:adoptsFilterResults:)`を参照。
+    static func updating(_ id: Status.ID, in status: Status, adoptsFilterResults: Bool = false, _ transform: (Status) -> Status) -> Status {
         if status.id == id { return transform(status) }
-        if let reblog = status.reblog, reblog.id == id { return status.replacingReblog(with: transform(reblog)) }
+        if let reblog = status.reblog, reblog.id == id { return status.replacingReblog(with: transform(reblog), adoptsFilterResults: adoptsFilterResults) }
         return status
     }
 }

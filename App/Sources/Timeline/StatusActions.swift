@@ -140,7 +140,7 @@ extension TimelineViewController {
             }
         case .hideMedia:
             // 覆っている投稿では出さない。開くときは、閲覧注意と同じく覆いをタップする。
-            guard !shown.mediaAttachments.isEmpty, mediaCovers.cover(for: shown) == nil else { return nil }
+            guard !shown.mediaAttachments.isEmpty, mediaCover(for: status) == nil else { return nil }
             let isImageOnly = shown.mediaAttachments.allSatisfy { $0.type == .image }
             return UIAction(title: isImageOnly ? "画像を隠す" : item.title, image: item.image) { [weak self] _ in
                 self?.hideMedia(of: shown)

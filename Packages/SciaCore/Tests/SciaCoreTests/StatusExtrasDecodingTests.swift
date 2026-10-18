@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SciaCore
 
-/// 投票、リンクカード、当たったフィルター、編集した日時、ブックマークを読めることと、それらが壊れていても投稿は読めることを確かめる。
+/// 投票、リンクカード、一致したフィルター、編集した日時、ブックマークを読めることと、それらが壊れていても投稿は読めることを確かめる。
 struct StatusExtrasDecodingTests {
     @Test func decodesPollCardFilterEditAndBookmark() throws {
         let status = try decodeFixture("status_with_poll_and_card")

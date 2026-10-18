@@ -51,12 +51,12 @@ extension TimelineViewController {
     /// 添付ファイルは小さなサムネイルを1列だけ並べる。
     private func quotedConfiguration(for notification: MastodonNotification, status: Status, itemID: ItemID?, base: UIListContentConfiguration) -> NotificationContentConfiguration {
         let shown = status.displayed
-        var media = mediaContent(for: shown)
+        var media = mediaContent(for: status)
         media?.arrangement = .strip(side: tuning.value(of: TuningCatalog.notificationQuotedThumbnailSize))
         var configuration = headerConfiguration(
             for: notification,
             body: PostBodyContent(
-                spoiler: spoiler(of: shown, base: base, color: .secondaryLabel),
+                spoiler: spoiler(of: status, base: base, color: .secondaryLabel),
                 text: body(of: shown, base: base, color: .secondaryLabel),
                 maximumLines: Int(tuning.value(of: TuningCatalog.notificationQuotedBodyLines)),
                 media: media,
@@ -66,7 +66,7 @@ extension TimelineViewController {
             base: base
         )
         configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
-        configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: shown, keeping: itemID) }
+        configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
         if let media {
             configuration.onSelectMedia = { [weak self] index, grid in
                 self?.openMedia(media.attachments, at: index, of: shown, from: grid)

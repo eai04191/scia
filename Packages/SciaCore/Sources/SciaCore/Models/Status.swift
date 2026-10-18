@@ -27,8 +27,9 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public private(set) var card: PreviewCard?
     /// 引用。引用していなければnil。
     public let quote: Quote?
-    /// 当たった自分のフィルター。ログインせずに読んだときや、Mastodon 4.0より前のサーバーでは返らないため、無ければ空にする。
-    public let filtered: [FilterResult]
+    /// 一致した自分のフィルター。ログインせずに読んだときや、Mastodon 4.0より前のサーバーでは返らないため、無ければ空にする。
+    /// ブーストでは、サーバーは元の投稿と同じ結果をブーストにも付ける。
+    public private(set) var filtered: [FilterResult]
     /// 最後に編集した日時。編集していなければnil。
     public let editedAt: Date?
     /// 自分がお気に入りに登録している。
@@ -141,9 +142,15 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public var displayed: Status { reblog ?? self }
 
     /// ブーストした元の投稿を差し替えたもの。元の投稿が編集されたときに使う。
-    public func replacingReblog(with reblog: Status) -> Status {
+    /// - Parameter adoptsFilterResults: ブーストに付いたフィルターの結果も、`reblog`の結果にそろえる。
+    ///   サーバーが結果を付け直した投稿で差し替えるときに使う。編集でフィルターに一致しなくなったのに、ブーストに残った前の結果で隠し続けないため。
+    ///   お気に入りなどの部分的な更新では使わない。ストリーミングのブーストでは結果が外側にだけ付くことがあり、元の投稿の空の結果で消してしまうため。
+    public func replacingReblog(with reblog: Status, adoptsFilterResults: Bool = false) -> Status {
         var status = self
         status.reblogBox = StatusBox(reblog)
+        if adoptsFilterResults {
+            status.filtered = reblog.filtered
+        }
         return status
     }
 

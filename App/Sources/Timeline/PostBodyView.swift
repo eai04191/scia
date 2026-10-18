@@ -8,8 +8,17 @@ import UIKit
 /// 本文が空なら、本文と添付ファイルのあいだの余白も取らず、添付ファイルを上端から置く。上の行との間隔は置く側が`startsWithMedia`を見て決める。
 struct PostBodyContent {
     struct Spoiler {
+        /// 箱に入れて本文を畳むもの。
+        enum Kind {
+            /// 投稿した人が付けた注意書き。開閉できる。
+            case contentWarning
+            /// 使う人のフィルターに一致した警告。開いたら箱ごと消え、閉じ直さない。
+            case filter
+        }
+
         var text: NSAttributedString
         var isCollapsed: Bool
+        var kind: Kind = .contentWarning
         /// 注意書きの箱の内側の余白。
         var padding: CGFloat
         /// 開いているときの、注意書きの箱と本文のあいだ。
@@ -135,7 +144,7 @@ final class PostBodyView: UIView {
         variableConstraints = []
         if let spoiler = content.spoiler {
             spoilerView.isHidden = false
-            spoilerView.apply(SpoilerView.Content(text: spoiler.text, isCollapsed: spoiler.isCollapsed, padding: spoiler.padding))
+            spoilerView.apply(SpoilerView.Content(text: spoiler.text, isCollapsed: spoiler.isCollapsed, kind: spoiler.kind, padding: spoiler.padding))
         } else {
             spoilerView.isHidden = true
         }
@@ -255,7 +264,7 @@ final class PostBodyView: UIView {
     /// 読み上げで、注意書きの本文を開閉する操作。注意書きがなければnil。
     func spoilerAccessibilityAction() -> UIAccessibilityCustomAction? {
         guard let spoiler = content?.spoiler else { return nil }
-        return UIAccessibilityCustomAction(name: SpoilerView.toggleTitle(isCollapsed: spoiler.isCollapsed)) { [weak self] _ in
+        return UIAccessibilityCustomAction(name: SpoilerView.toggleTitle(isCollapsed: spoiler.isCollapsed, kind: spoiler.kind)) { [weak self] _ in
             self?.onToggleSpoiler?()
             return true
         }
@@ -265,7 +274,12 @@ final class PostBodyView: UIView {
     var accessibilityText: String {
         guard let content else { return "" }
         guard let spoiler = content.spoiler else { return content.text.string }
-        let parts = ["注意書き", spoiler.text.string] + (spoiler.isCollapsed ? [] : [content.text.string])
+        let label = switch spoiler.kind {
+        case .contentWarning: "注意書き"
+        // 箱の文字が「フィルター: 名前」なので、重ねて読まない。
+        case .filter: ""
+        }
+        let parts = [label, spoiler.text.string] + (spoiler.isCollapsed ? [] : [content.text.string])
         return parts.filter { !$0.isEmpty }.joined(separator: "、")
     }
 

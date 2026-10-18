@@ -60,6 +60,7 @@ final class ProfileController {
         self.onError = onError
         self.onUnauthorized = onUnauthorized
         self.viewController = viewController
+        viewController.filterWarnings = FilterWarnings(filtering: store.filtering)
         viewController.headerView = header
         viewController.myAccountID = client.credential.accountID
         viewController.navigationItem.title = "@\(account.acct)"

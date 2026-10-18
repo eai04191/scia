@@ -164,6 +164,8 @@ final class TimelineViewController: UIViewController {
     var onChangeMediaCovers: ((MediaCovers, Status) -> Void)?
     /// fxtwitterから読んだXの投稿。セッションの中で1つを共有する。
     var xPosts: XPostStore?
+    /// この一覧で当てるサーバーのフィルターと、警告で畳んだ投稿のうち開いたもの。一覧を持つ側が、一覧の場所に合わせて入れる。
+    var filterWarnings = FilterWarnings()
     /// 注意書きのある投稿の本文を開いているか。サーバーの設定が読めたら、セッションが既定を入れる。
     var spoilerExpansion = SpoilerExpansion() {
         didSet {
@@ -1131,7 +1133,8 @@ final class TimelineViewController: UIViewController {
         if status.reblog != nil, !isPinned {
             configuration.onOpenContextAccount = { [weak self] in self?.onOpenProfile?(status.account) }
         }
-        if let media = mediaContent(for: shown) {
+        // フィルターの結果はブーストの外側にだけ付くことがあるため、判定にはブーストごと渡す。
+        if let media = mediaContent(for: status) {
             configuration.media = media
             configuration.onSelectMedia = { [weak self] index, grid in
                 self?.openMedia(media.attachments, at: index, of: shown, from: grid)
@@ -1155,17 +1158,21 @@ final class TimelineViewController: UIViewController {
                 }
             }
         }
-        configuration.spoiler?.isCollapsed = spoilerExpansion.isCollapsed(shown)
-        configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: shown, keeping: itemID) }
+        configuration.spoiler = spoiler(of: status, base: base)
+        configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
         return configuration
     }
 
-    /// 注意書きの本文を開閉する。同じ投稿をブーストした行と通知の行もまとめて描き直す。
+    /// 注意書きの本文を開閉する。フィルターの警告で畳んでいれば、注意書きの代わりに警告を開く。同じ投稿をブーストした行と通知の行もまとめて描き直す。
     /// 行の高さが変わるため、押した行の画面上の位置を保つ。同じ投稿の行が上にも並んでいると、その行も伸び縮みするため、
     /// 表示領域の上端の行を基準にすると、押した行がずれる。
     /// - Parameter anchorID: 押した行。なければ、表示領域の上端にかかっている行を基準にする。
     func toggleSpoiler(of status: Status, keeping anchorID: ItemID? = nil) {
-        spoilerExpansion.toggle(status)
+        if filterWarnings.verdict(for: status).warningTitles.isEmpty {
+            spoilerExpansion.toggle(status)
+        } else {
+            filterWarnings.reveal(status)
+        }
         guard isViewLoaded else { return }
         let shownID = status.displayed.id
         let ids = displayedItemIDs.filter { self.status(for: $0)?.displayed.id == shownID }
@@ -1180,9 +1187,12 @@ final class TimelineViewController: UIViewController {
         postContentBuilder.body(of: status, base: base, color: color)
     }
 
-    /// 注意書き。開いているかは、この一覧で覚えている状態を当てる。
+    /// 注意書き。開いているかは、この一覧で覚えている状態を当てる。ブーストなら元の投稿の注意書きにする。
+    /// フィルターの警告で畳んでいれば、注意書きの代わりに警告を出す。警告を開くと、注意書きのある投稿は注意書きで畳んだ形に戻る。
     func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> PostBodyContent.Spoiler? {
-        var spoiler = postContentBuilder.spoiler(of: status, base: base, color: color)
+        let warningTitles = filterWarnings.verdict(for: status).warningTitles
+        guard warningTitles.isEmpty else { return postContentBuilder.filterWarning(titles: warningTitles, base: base) }
+        var spoiler = postContentBuilder.spoiler(of: status.displayed, base: base, color: color)
         spoiler?.isCollapsed = spoilerExpansion.isCollapsed(status)
         return spoiler
     }

@@ -41,13 +41,15 @@ final class NotificationsController {
         tuning: TuningStore = AppDependencies.tuning,
         onUnauthorized: @escaping () -> Void
     ) {
-        store = NotificationStore(pageSize: Self.pageSize) { query in
+        let filtering = StatusFiltering(context: .notifications, myAccountID: client.credential.accountID)
+        store = NotificationStore(pageSize: Self.pageSize, filtering: filtering) { query in
             try await client.notifications(query)
         }
         self.client = client
         self.streamingHub = streamingHub
         self.tuning = tuning
         self.onUnauthorized = onUnauthorized
+        viewController.filterWarnings = FilterWarnings(filtering: filtering)
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder(origin: .automatic) }
         viewController.onRetry = { [weak self] in self?.retry() }
         viewController.onVisibleNotificationsChange = { [weak self] ids in self?.markRead(ids) }

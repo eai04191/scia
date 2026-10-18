@@ -3,10 +3,16 @@ import SciaCore
 import UIKit
 
 extension TimelineViewController {
-    /// 閲覧注意の投稿と、注意書きのある投稿は、タップするまで添付ファイルを覆う。メニューから隠した投稿も覆う。
+    /// 閲覧注意の投稿と、注意書きのある投稿と、添付ファイルをぼかすフィルターに一致した投稿は、タップするまで添付ファイルを覆う。
+    /// メニューから隠した投稿も覆う。ブーストなら元の投稿の添付ファイルを並べる。
     /// 説明にならない代替テキストは、ALTの目印にもビューアにも読み上げにも出さないよう、ここで除いておく。
     func mediaContent(for status: Status) -> MediaGridView.Content? {
-        mediaContent(of: status.mediaAttachments, cover: mediaCovers.cover(for: status))
+        mediaContent(of: status.displayed.mediaAttachments, cover: mediaCover(for: status))
+    }
+
+    /// 添付ファイルを覆う理由。覆わなければnil。
+    func mediaCover(for status: Status) -> MediaCover? {
+        mediaCovers.cover(for: status, filterTitles: filterWarnings.verdict(for: status).mediaTitles)
     }
 
     /// `attachments`を並べる中身。Xの投稿の囲みの添付ファイルにも使う。
@@ -55,7 +61,7 @@ extension TimelineViewController {
             return nil
         }
         // 投稿した人が閲覧注意を付けていれば、Xの添付ファイルも覆う。覆いを外すと、投稿の添付ファイルと同じくそろって外れる。
-        let media = mediaContent(of: post.media, cover: mediaCovers.cover(for: status))
+        let media = mediaContent(of: post.media, cover: mediaCover(for: status))
         return (postContentBuilder.xPost(post, media: media, base: base), media?.attachments ?? [])
     }
 

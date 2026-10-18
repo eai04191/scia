@@ -1,12 +1,12 @@
 public import Foundation
 
-/// 投稿に当たった、自分のフィルター。
+/// 投稿に一致した、自分のフィルター。
 /// https://docs.joinmastodon.org/entities/FilterResult/
 public struct FilterResult: Codable, Hashable, Sendable {
     public let filter: Filter
-    /// 当たったキーワード。
+    /// 一致したキーワード。
     public let keywordMatches: [String]?
-    /// 当たった投稿のID。
+    /// 一致した投稿のID。
     public let statusMatches: [String]?
 
     public init(filter: Filter, keywordMatches: [String]? = nil, statusMatches: [String]? = nil) {
@@ -15,14 +15,14 @@ public struct FilterResult: Codable, Hashable, Sendable {
         self.statusMatches = statusMatches
     }
 
-    /// 当たったフィルター。投稿に付くときは、キーワードと投稿の一覧を含まない。
+    /// 一致したフィルター。投稿に付くときは、キーワードと投稿の一覧を含まない。
     /// https://docs.joinmastodon.org/entities/Filter/
     public struct Filter: Codable, Hashable, Sendable, Identifiable {
         public let id: String
         public let title: String
         /// フィルターを使う場所。
         public let context: [Context]
-        /// 当たった投稿をどう扱うか。
+        /// 一致した投稿をどう扱うか。
         public let filterAction: Action
         /// フィルターの期限。期限のないフィルターではnil。
         public let expiresAt: Date?
