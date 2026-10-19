@@ -39,7 +39,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - タップやスワイプのあとは、dumpで結果を確かめてから次へ進む。思った画面でなければ、同じ座標を打ち直さず、dumpから座標を取り直す
 - 画像の読み込みのように、動きのないまま中身が後から入る表示は、止まっていても終わっていない。目的の要素が出るまでdumpし直す。ダミー投稿の画像は、流してから1〜2秒で入る
 - 写真のピッカーは別のプロセスが描くので、`sim.sh`はその表示を待たない。アプリを起動して最初に開いたときだけ、表示まで数秒かかる。撮った画像にピッカーが写っていなければ、dumpで`mediaPicker: shown`を確かめて、数秒後に撮り直す
-- 一覧の一番上にいると、新着で行が下へずれ、dumpで読んだ座標が古くなる。一覧の行をタップする前に`scia-debug://arrivals/hold`を送ると、ホームと通知のタブは新着を挿入せずに溜める。終わったら`scia-debug://arrivals/release`で、溜まった新着をまとめて挿入する。ストリーミングはつないだままなので、`streaming/offline`と違って、切断の知らせやポーリングで一覧が動かない。再接続などで新着を読む補完も、解くまで見送る。投稿の編集や削除と、保留を送る前に始まっていた補完の結果は、すぐ反映される
+- 一覧の一番上にいると、新着で行が下へずれ、dumpで読んだ座標が古くなる。一覧の行をタップする前に`scia-debug://arrivals/hold`を送ると、ホームと通知のタブは新着を挿入せずに溜める。終わったら`scia-debug://arrivals/release`で、溜まった新着をまとめて挿入する。ストリーミングはつないだままなので、`streaming/offline`と違って、切断の表示やポーリングで一覧が動かない。再接続などで新着を読む補完も、解くまで見送る。投稿の編集や削除と、保留を送る前に始まっていた補完の結果は、すぐ反映される
 - ハードウェアキーボードがつながった扱いだと、ソフトウェアキーボードが出ない。キーボードが出た状態を確かめるときは、`make sim-keyboard SIM='<使う端末>'`でハードウェアキーボードを外す。フォーカス済みの入力欄にも出るが、出るまで少しかかるので、直後のスクリーンショットで判断しない。`KEYBOARD=hardware`を付けるとつなぎ直す
 
 ## 設計原則
@@ -82,7 +82,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - ストリーミングにつながらないときの表示とポーリングの確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://streaming/offline'`で、RESTは通したままストリーミングの接続を切り、以後の接続を失敗させる。`scia-debug://streaming/online`で戻す
 - サーバーがホームを作り直している最中の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://regenerating/on'`で、以後のホームの応答を中身はそのままステータスだけ206にする。補完は`scia-debug://streaming/offline`と`online`でつなぎ直して起こす。`scia-debug://regenerating/off`か起動し直すと戻る
 - 送る前に縮める流れの確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://media-limits?image-size=1000000&video-size=3000000'`のように、投稿欄が使うサーバーのメディアの上限を、指定した項目だけ差し替える。項目は`image-size`・`video-size`（バイト）、`image-matrix`・`video-matrix`（画素数）、`video-frame-rate`。下書きのない状態で投稿欄を開いたときから効くので、下書きがあるときは起動し直してから送る。`scia-debug://media-limits/server`か起動し直すと戻る
-- ダウンロード中の知らせの確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://download/slow'`で、以後の共有や保存のためのダウンロードを、進み具合を刻みながら10秒遅らせる。端末の中のファイルのダミー投稿の動画でも使える。`?seconds=<秒>`で時間を変え、`scia-debug://download/normal`か起動し直すと戻る
+- ダウンロード中のアプリ内通知の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://download/slow'`で、以後の共有や保存のためのダウンロードを、進み具合を刻みながら10秒遅らせる。端末の中のファイルのダミー投稿の動画でも使える。`?seconds=<秒>`で時間を変え、`scia-debug://download/normal`か起動し直すと戻る
 - プロフィール画面の確認には、`xcrun simctl openurl '<使う端末>' 'scia://profile/<user@domain>'`でホームのタブにプロフィールを開く。アプリが起動していなくても開く。フォローとフォローの解除は、@Bot_testing@stellaria.networkで確かめる
 - 描画性能: スクロール時のhitchは`xcrun xctrace record --template 'Animation Hitches'`や`XCTOSSignpostMetric.scrollDecelerationMetric`で測る。シミュレーターの値は参考値で、最終確認は実機で行う
 - 見た目: 実データに近いfixtureを使い、スクリーンショットで確認する
