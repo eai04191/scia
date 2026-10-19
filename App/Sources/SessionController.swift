@@ -349,6 +349,7 @@ final class SessionController {
     private func configureStatusBarTicker(tabBarController: UITabBarController) {
         let ticker = statusBarTicker
         ticker.scene = { [weak tabBarController] in tabBarController?.view.window?.windowScene }
+        ticker.rootController = { [weak tabBarController] in tabBarController }
         ticker.canShow = { [weak tabBarController] in
             guard AppDependencies.settings.showsStatusBarTicker, StatusBarCutout.isAvailable else { return false }
             guard let tabBarController, tabBarController.selectedTab?.identifier != "notifications" else { return false }

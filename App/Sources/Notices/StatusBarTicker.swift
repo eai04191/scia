@@ -16,6 +16,10 @@ final class StatusBarTicker {
 
     /// 流す画面のシーン。セッションの画面がウィンドウに載る前に作るため、流すときに尋ねる。
     var scene: () -> UIWindowScene? = { nil }
+    /// アプリの画面のいちばん下の画面。ステータスバーを隠している間、安全領域を保つのに使う。
+    var rootController: () -> UIViewController? = { nil }
+    /// ステータスバーを隠している間、アプリの画面の安全領域の上端に足している高さ。
+    private var keptSafeAreaTop: CGFloat = 0
     private let tuning: TuningStore
     private var queue: StatusBarTickerQueue<StatusBarTickerItem>
     private var window: TickerWindow?
@@ -74,6 +78,7 @@ final class StatusBarTicker {
         window.ticker.animationDuration = tuning.value(of: TuningCatalog.statusBarTickerAnimationDuration)
         if !wasShowing {
             window.isHidden = false
+            keepSafeArea(whileHiding: true, window: window)
             window.host.hidesStatusBar = true
             UIView.animate(withDuration: window.ticker.animationDuration * 0.5) {
                 window.host.setNeedsStatusBarAppearanceUpdate()
@@ -103,12 +108,24 @@ final class StatusBarTicker {
         }
     }
 
+    /// 切り欠きのない画面（iPhone SE、iPad）では、ステータスバーを隠すと、アプリの画面の安全領域の上端がステータスバーの分だけ縮み、画面全体が上へずれる。
+    /// 隠している間は、縮んだ分をアプリの画面の安全領域に足して、画面を動かさない。アイランドとノッチの機種では、ステータスバーを隠しても安全領域は変わらない。
+    private func keepSafeArea(whileHiding hiding: Bool, window: TickerWindow) {
+        guard let root = rootController() else { return }
+        root.additionalSafeAreaInsets.top -= keptSafeAreaTop
+        keptSafeAreaTop = 0
+        guard hiding, case .none = window.ticker.cutout else { return }
+        keptSafeAreaTop = window.windowScene?.statusBarManager?.statusBarFrame.height ?? 0
+        root.additionalSafeAreaInsets.top += keptSafeAreaTop
+    }
+
     private func dismiss() {
         guard shownAt != nil, let window else {
             shownAt = nil
             return
         }
         shownAt = nil
+        keepSafeArea(whileHiding: false, window: window)
         window.host.hidesStatusBar = false
         window.ticker.hide(animated: true) { [weak self, weak window] in
             // 消している間に次の通知が来て出し直していたら、ウィンドウは隠さない。
