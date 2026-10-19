@@ -32,6 +32,7 @@ enum CatalogComponent: String, CaseIterable {
     case linkCards = "link-cards"
     case notifications
     case editHistory = "edit-history"
+    case hdrEmoji = "hdr-emoji"
 
     var title: String {
         switch self {
@@ -54,6 +55,7 @@ enum CatalogComponent: String, CaseIterable {
         case .linkCards: "リンクカード"
         case .notifications: "通知の種類"
         case .editHistory: "編集履歴の版"
+        case .hdrEmoji: "HDRのカスタム絵文字"
         }
     }
 
@@ -79,6 +81,7 @@ enum CatalogComponent: String, CaseIterable {
         case .linkCards: PostRowCatalog.linkCardStates()
         case .notifications: PostRowCatalog.notificationStates()
         case .editHistory: EditHistoryCatalog.states()
+        case .hdrEmoji: HDREmojiCatalog.states()
         }
     }
 }
