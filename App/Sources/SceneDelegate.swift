@@ -34,6 +34,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             showLogin(errorMessage: error.localizedDescription)
         }
         window.makeKeyAndVisible()
+        installNoticeOverlay()
         // 閉じていたアプリをURLで開いたとき。プロフィールは最初の読み込みを待たずに開ける。
         for context in connectionOptions.urlContexts {
             guard let url = AppURL(context.url), let session = self.session else { continue }
@@ -106,7 +107,18 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         })
         self.session = session
         window?.rootViewController = session.rootViewController
+        installNoticeOverlay()
         session.start()
+    }
+
+    /// アプリ内通知のチップの列を、根の画面のすぐ上に重ねる。根の画面を替えると、その上に新しい画面が載るため、重ね直す。
+    private func installNoticeOverlay() {
+        guard let window else { return }
+        if let session {
+            NoticeOverlay.install(in: window, center: session.notices)
+        } else {
+            NoticeOverlay.remove(from: window)
+        }
     }
 
     // MARK: - アカウント
@@ -281,6 +293,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             self?.window.map { WebAuthenticator(anchor: $0) }
         }
         window?.rootViewController = UIHostingController(rootView: view)
+        installNoticeOverlay()
         if let errorMessage {
             model.showError(errorMessage)
         }

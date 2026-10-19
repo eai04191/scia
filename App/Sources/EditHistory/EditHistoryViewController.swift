@@ -7,16 +7,8 @@ import UIKit
 final class EditHistoryViewController: UIViewController {
     private enum State {
         case loading
-        case failed(Failure)
+        case failed(ErrorPresentation)
         case loaded(StatusEditHistory)
-    }
-
-    /// 読めなかったときに出すもの。
-    struct Failure {
-        var message: ErrorPresentation
-        /// トークンが無効なときの、ログインし直しを始める処理。あれば、再試行の代わりにログインし直しのボタンを出す。
-        /// 同じトークンで読み直しても読めず、一覧にあるログインし直しのボタンはこの画面に重ねていて見えないため。
-        var reauthenticate: (() -> Void)?
     }
 
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
@@ -24,7 +16,7 @@ final class EditHistoryViewController: UIViewController {
 
     private let status: Status
     private let fetch: @MainActor () async throws -> [StatusRevision]
-    private let describe: @MainActor (any Error) async -> Failure
+    private let describe: @MainActor (any Error) async -> ErrorPresentation
     private let tuning: TuningStore
     private let builder: EditHistoryContentBuilder
     private let mediaImages: MediaImageStore
@@ -37,11 +29,11 @@ final class EditHistoryViewController: UIViewController {
     /// - Parameters:
     ///   - status: 履歴を開く投稿。ブーストなら元の投稿を渡す。
     ///   - fetch: 版を古い順に読む。
-    ///   - describe: 読めなかったときに出すもの。
+    ///   - describe: 読めなかったときに出す理由。
     init(
         status: Status,
         fetch: @escaping @MainActor () async throws -> [StatusRevision],
-        describe: @escaping @MainActor (any Error) async -> Failure,
+        describe: @escaping @MainActor (any Error) async -> ErrorPresentation,
         tuning: TuningStore = AppDependencies.tuning,
         settings: AppSettings = AppDependencies.settings,
         emojiImages: EmojiImageStore = AppDependencies.emojiImages,
@@ -157,18 +149,13 @@ final class EditHistoryViewController: UIViewController {
         switch self.state {
         case .loading:
             contentUnavailableConfiguration = UIContentUnavailableConfiguration.loading()
-        case .failed(let failure):
+        case .failed(let reason):
             var configuration = UIContentUnavailableConfiguration.empty()
             configuration.text = "編集履歴を読めませんでした"
-            configuration.secondaryAttributedText = failure.message.attributedText(textStyle: .body)
+            configuration.secondaryAttributedText = reason.attributedText(textStyle: .body)
             configuration.button = .borderedTinted()
-            if let reauthenticate = failure.reauthenticate {
-                configuration.button.title = "ログインし直す"
-                configuration.buttonProperties.primaryAction = UIAction { _ in reauthenticate() }
-            } else {
-                configuration.button.title = "再試行"
-                configuration.buttonProperties.primaryAction = UIAction { [weak self] _ in self?.load() }
-            }
+            configuration.button.title = "再試行"
+            configuration.buttonProperties.primaryAction = UIAction { [weak self] _ in self?.load() }
             contentUnavailableConfiguration = configuration
         case .loaded:
             contentUnavailableConfiguration = nil

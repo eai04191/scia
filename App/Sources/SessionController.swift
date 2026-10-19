@@ -33,14 +33,18 @@ final class SessionController {
     private let linkCards: LinkCardRefresher
     /// 「操作の状況」の一覧に並べる、処理の途中と最近の失敗。
     let operationStatus = OperationStatus()
-    /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても保存を続け、閉じたあとの知らせは一覧に出す。
-    private lazy var mediaTransfers = MediaTransferCenter(operationStatus: operationStatus)
+    /// アプリ全体のアプリ内通知。ウインドウごとのチップの列に配る。
+    let notices = NoticeCenter()
+    /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても保存を続ける。
+    private lazy var mediaTransfers = MediaTransferCenter(operationStatus: operationStatus, notices: notices)
     /// APIが401を返したときに、トークンが本当に無効かを確かめる。
     private let authorization: AuthorizationCheck
     private let onReauthenticate: (SessionController) async -> Void
     /// ログインし直しの途中。続けて押されても、認可画面を重ねて出さない。
     private var isReauthenticating = false
     private let tabBarDelegate: TabReselectionDelegate
+    /// 画面を移る動きに、チップの列を相乗りさせる。
+    private let navigationDelegate = NoticeNavigationDelegate()
     /// 開いているプロフィール画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
     private let profiles: ProfileRegistry
     private var cachedMyAccount: Account?
@@ -132,8 +136,14 @@ final class SessionController {
         ])
         tabBarDelegate = TabReselectionDelegate { navigation in
             (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
+        } didSelect: { tabBarController in
+            // タブの切り替えには画面の移り変わりの動きがないため、チップだけを短く動かす。
+            tabBarController.noticeOverlay?.follow(nil)
         }
         tabBarController.delegate = tabBarDelegate
+        for navigation in [homeNavigation, notificationsNavigation] {
+            navigation.delegate = navigationDelegate
+        }
         // トークンの失効は、どのAPIで分かっても同じくログインし直しを促す。
         let reportIfUnauthorized = { (error: any Error) in
             if let error = error as? MastodonAPIError, error.isUnauthorized {
@@ -249,7 +259,7 @@ final class SessionController {
         rootViewController = tabBarController
         forward = { [weak self] in self?.reportUnauthorized() }
         composer.model.onMediaReduced = { [weak self] kind in
-            self?.visibleTimeline?.showNotice(.mediaReduced(kind), duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            self?.notices.showTransient(.mediaReduced(kind), duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
         authorization.onChange = { [weak self] state in
             guard state == .invalid else { return }
@@ -311,18 +321,7 @@ final class SessionController {
                 timeline.setCoveredByInAppBrowser(covered)
             }
         }
-        mediaTransfers.showOperationStatus = { [weak self] presenter in self?.showOperationStatus(from: presenter) }
-        mediaTransfers.host = MediaTransferCenter.Host(
-            setPersistent: { [weak self] notice in
-                for timeline in self?.timelines.allObjects ?? [] {
-                    timeline.setPersistentNotice(notice)
-                }
-            },
-            showTransient: { [weak self] notice, duration, replacesPersistent in
-                self?.visibleTimeline?.showNotice(notice, duration: duration, replacesPersistent: replacesPersistent)
-            },
-            presenter: { [weak self] in self?.topViewController }
-        )
+        notices.showOperationStatus = { [weak self] presenter in self?.showOperationStatus(from: presenter) }
         xPosts.onLoad = { [weak self] id in
             for timeline in self?.timelines.allObjects ?? [] {
                 timeline.applyXPost(id: id)
@@ -330,12 +329,6 @@ final class SessionController {
         }
         // 投稿欄を置くとタブバーの画面を読み込むため、各一覧の設定を終えてから置く。
         composer.install(in: tabBarController)
-    }
-
-    /// いま見えている一覧（ホーム、通知、開いているプロフィール）。ほかの画面を開いていればnil。
-    private var visibleTimeline: TimelineViewController? {
-        let navigation = (rootViewController as? UITabBarController)?.selectedTab?.viewController as? UINavigationController
-        return navigation?.topViewController as? TimelineViewController
     }
 
     private func applyObscuredBottomHeight() {
@@ -347,9 +340,9 @@ final class SessionController {
     /// 一覧から投稿への操作とプロフィールを開けるようにする。プロフィール画面の一覧にも使う。
     private func configure(_ viewController: TimelineViewController) {
         timelines.add(viewController)
+        viewController.notices = notices
         if authorization.state == .invalid {
             showReauthenticationPrompt(on: viewController)
-            viewController.setReauthenticating(isReauthenticating)
         }
         viewController.setObscuredBottomHeight(obscuredBottomHeight)
         viewController.setCoveredByInAppBrowser(browserCoversTimelines)
@@ -363,9 +356,7 @@ final class SessionController {
             self?.shareMediaCovers(covers, changed: status, from: viewController)
         }
         viewController.onStatusAction = { [weak self, weak viewController] action, status in self?.perform(action, on: status, from: viewController) }
-        viewController.onShowOperationStatus = { [weak self] presenter in self?.showOperationStatus(from: presenter) }
         viewController.mediaTransfers = mediaTransfers
-        mediaTransfers.updateTimelineChip()
         viewController.onOpenProfile = { [weak self, weak viewController] account in
             guard let viewController else { return }
             self?.openProfile(account, from: viewController)
@@ -528,7 +519,7 @@ final class SessionController {
 
     // MARK: - 投稿への操作
 
-    /// - Parameter timeline: 操作した一覧。失敗したら、そこに知らせを出す。
+    /// - Parameter timeline: 操作した一覧。編集履歴は、この一覧の上に重ねて開く。
     private func perform(_ action: StatusAction, on status: Status, from timeline: TimelineViewController?) {
         switch action {
         case .reply:
@@ -536,35 +527,29 @@ final class SessionController {
             confirmLeavingEdit { [weak self] in self?.composer.reply(to: status) }
         case .favourite:
             UserAction.toggleFavourite.record()
-            toggle(.favourite, on: status, failureTitle: "お気に入りを変更できませんでした", from: timeline)
+            toggle(.favourite, on: status, failureTitle: "お気に入りを変更できませんでした")
         case .reblog:
             UserAction.toggleReblog.record()
-            toggle(.reblog, on: status, failureTitle: "ブーストを変更できませんでした", from: timeline)
+            toggle(.reblog, on: status, failureTitle: "ブーストを変更できませんでした")
         case .editHistory:
             UserAction.openEditHistory.record()
             openEditHistory(of: status.displayed, from: timeline)
         case .edit:
             UserAction.editStatus.record()
-            startEditing(status, from: timeline)
+            startEditing(status)
         case .delete:
-            confirmDeleting(status, from: timeline)
+            confirmDeleting(status)
         }
     }
 
     /// 編集履歴を、操作した一覧の上に重ねて開く。履歴は開いた画面が読む。
     private func openEditHistory(of status: Status, from source: UIViewController?) {
         let client = client
+        // トークンが無効なら、理由はチップの列の一番上のログインし直しの段へ案内する。ログインし直したあとは、再試行で読める。
         let viewController = EditHistoryViewController(status: status) {
             try await client.statusHistory(status.id)
         } describe: { [weak self] error in
-            guard let self else { return EditHistoryViewController.Failure(message: ErrorPresentation(error)) }
-            let reason = await failureReason(for: error)
-            guard authorization.state == .invalid else { return EditHistoryViewController.Failure(message: reason) }
-            return EditHistoryViewController.Failure(
-                message: ErrorPresentation(message: "ログインし直すと読み込めます。", code: nil)
-            ) { [weak self] in
-                self?.reauthenticate()
-            }
+            await self?.failureReason(for: error) ?? ErrorPresentation(error)
         }
         viewController.onOpenLink = { [weak self, weak viewController] destination in
             guard let self, let viewController else { return }
@@ -596,15 +581,15 @@ final class SessionController {
     }
 
     /// 編集の元にする本文をサーバーから読み、読めたら投稿欄で編集を始める。同じ投稿を編集している途中なら、読み直さずに投稿欄を開く。
-    /// 読めなかったら、お気に入りの失敗と同じく、操作した一覧にチップを出す。
-    private func startEditing(_ status: Status, from timeline: TimelineViewController?) {
+    /// 読めなかったら、お気に入りの失敗と同じく、チップの列に出す。
+    private func startEditing(_ status: Status) {
         let target = status.displayed
         if composer.model.editedStatus?.id == target.id {
             composer.beginEditing()
             return
         }
         let client = client
-        Task { [weak self, weak timeline] in
+        Task { [weak self] in
             do {
                 let source = try await client.statusSource(target.id)
                 self?.confirmEditing(target, source: source)
@@ -614,7 +599,7 @@ final class SessionController {
                 logger.error("edit source failed: \(SciaLog.describe(error), privacy: .public)")
                 let reason = await failureReason(for: error)
                 operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
-                timeline?.showNotice(.interactionFailure(title: title) { [weak self] in
+                showFailureNotice(.interactionFailure(title: title) { [weak self] in
                     self?.presentAlert(title: title, message: reason.text)
                 })
             }
@@ -661,22 +646,22 @@ final class SessionController {
     }
 
     /// 削除は元に戻せないので、確かめてから送る。
-    private func confirmDeleting(_ status: Status, from timeline: TimelineViewController?) {
+    private func confirmDeleting(_ status: Status) {
         let alert = UIAlertController(title: "投稿を削除しますか？", message: "削除した投稿は元に戻せません。", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        alert.addAction(UIAlertAction(title: "削除", style: .destructive) { [weak self, weak timeline] _ in
-            self?.delete(status, from: timeline)
+        alert.addAction(UIAlertAction(title: "削除", style: .destructive) { [weak self] _ in
+            self?.delete(status)
         })
         topViewController.present(alert, animated: true)
     }
 
     /// 消えたらどの一覧からも除く。編集している投稿を消したら、編集もやめる。
-    /// 失敗は押し直せば済むので、お気に入りの失敗と同じく、操作した一覧にチップを出す。
-    private func delete(_ status: Status, from timeline: TimelineViewController?) {
+    /// 失敗は押し直せば済むので、お気に入りの失敗と同じく、チップの列に出す。
+    private func delete(_ status: Status) {
         UserAction.deleteStatus.record()
         let target = status.displayed
         let client = client
-        Task { [weak self, weak timeline] in
+        Task { [weak self] in
             do {
                 try await client.deleteStatus(target.id)
                 guard let self else { return }
@@ -692,18 +677,23 @@ final class SessionController {
                 logger.error("delete failed: \(SciaLog.describe(error), privacy: .public)")
                 let reason = await failureReason(for: error)
                 operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
-                timeline?.showNotice(.interactionFailure(title: title) { [weak self] in
+                showFailureNotice(.interactionFailure(title: title) { [weak self] in
                     self?.presentAlert(title: title, message: reason.text)
                 })
             }
         }
     }
 
-    /// 押し直せば済む失敗なので、操作を止めるアラートにせず、操作した一覧に数秒で消えるチップを出し、押すと理由を出す。
+    /// 押し直せば済む失敗を、チップの列に数秒出す。押すと理由が出る。
+    private func showFailureNotice(_ notice: Notice) {
+        notices.showTransient(notice, duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))
+    }
+
+    /// 押し直せば済む失敗なので、操作を止めるアラートにせず、チップの列に数秒で消えるチップを出し、押すと理由を出す。
     /// 消えたあとも確かめられるよう、「最近の失敗」に残す。
-    private func toggle(_ action: StatusInteractions.Action, on status: Status, failureTitle: String, from timeline: TimelineViewController?) {
+    private func toggle(_ action: StatusInteractions.Action, on status: Status, failureTitle: String) {
         let interactions = interactions
-        Task { [weak self, weak timeline] in
+        Task { [weak self] in
             do {
                 try await interactions.toggle(action, on: status)
             } catch {
@@ -711,7 +701,7 @@ final class SessionController {
                 logger.error("toggle \(String(describing: action), privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
                 let reason = await failureReason(for: error)
                 operationStatus.recordFailure(title: failureTitle, reason: reason, subject: OperationStatus.Subject(status))
-                timeline?.showNotice(.interactionFailure(title: failureTitle) { [weak self] in
+                showFailureNotice(.interactionFailure(title: failureTitle) { [weak self] in
                     self?.presentAlert(title: failureTitle, message: reason.text)
                 })
             }
@@ -863,6 +853,10 @@ final class SessionController {
         streamingHub.stopUntilLogin()
         home.stop()
         notifications.stop()
+        // どの画面にいても見えるよう、チップの列の一番上に段を出す。
+        notices.reauthentication = NoticeCenter.Reauthentication(handle: credential.handle, isInProgress: isReauthenticating) { [weak self] in
+            self?.reauthenticate()
+        }
         for timeline in timelines.allObjects {
             showReauthenticationPrompt(on: timeline)
         }
@@ -870,9 +864,6 @@ final class SessionController {
 
     /// 一覧の再試行ボタンも、ログインし直しにする。止めた後の再試行は何も読まず、ログインし直すまで読み込めないため。
     private func showReauthenticationPrompt(on viewController: TimelineViewController) {
-        viewController.showReauthenticationPrompt(handle: credential.handle) { [weak self] in
-            self?.reauthenticate()
-        }
         viewController.onRetry = { [weak self] in self?.reauthenticate() }
         // 読み込みの途中で止めた一覧が、読み込み中のまま残らないようにする。
         let message = ErrorPresentation(message: "ログインし直すと読み込めます。", code: nil)
@@ -895,9 +886,7 @@ final class SessionController {
 
     private func setReauthenticating(_ isReauthenticating: Bool) {
         self.isReauthenticating = isReauthenticating
-        for timeline in timelines.allObjects {
-            timeline.setReauthenticating(isReauthenticating)
-        }
+        notices.reauthentication?.isInProgress = isReauthenticating
     }
 
     /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときに呼ぶ。
@@ -1070,12 +1059,20 @@ private final class ProfileRegistry {
 }
 
 /// 選んでいるタブをもう一度押したとき、奥の画面を開いていれば標準どおり最初の画面へ戻し、最初の画面にいれば最上部へ動かす。
+/// タブを切り替えたら、`didSelect`で知らせる。
 @MainActor
 private final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate {
     private let scrollToTop: (UINavigationController) -> Void
+    private let didSelect: (UITabBarController) -> Void
 
-    init(scrollToTop: @escaping (UINavigationController) -> Void) {
+    init(scrollToTop: @escaping (UINavigationController) -> Void, didSelect: @escaping (UITabBarController) -> Void) {
         self.scrollToTop = scrollToTop
+        self.didSelect = didSelect
+    }
+
+    func tabBarController(_ tabBarController: UITabBarController, didSelectTab selectedTab: UITab, previousTab: UITab?) {
+        guard selectedTab != previousTab else { return }
+        didSelect(tabBarController)
     }
 
     func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool {

@@ -124,6 +124,21 @@ struct NoticeStackViewTests {
         #expect(top.isUserInteractionEnabled)
     }
 
+    /// ボタン類と一緒に隠している失敗は、同じ見た目のまま中身を替えても、押せないままにする。透明なチップがタップを受けないようにするため。
+    @Test func hiddenFailureStaysUntouchableWhenRefreshed() throws {
+        let stack = makeStack()
+        let failure = Notice(id: "upload", kind: .failure, title: "アップロードできませんでした", action: .disclosure(hint: "", handler: {}))
+        stack.setPersistent(failure)
+        stack.setChromeHidden(true, animated: false)
+        let chip = try #require(stack.chips.first)
+
+        stack.setPersistent(failure)
+
+        #expect(stack.chips.first === chip)
+        #expect(chip.alpha == 0)
+        #expect(!chip.isUserInteractionEnabled)
+    }
+
     /// 数秒で消えるチップは、新しいものが来たら同じチップで差し替え、時間が来たら消す。
     @Test func transientIsReplacedAndExpires() async throws {
         let stack = makeStack()

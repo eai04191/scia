@@ -11,16 +11,21 @@ final class TimelineHarness {
     let tuning = TuningStore(defaults: nil)
     /// アプリの設定に触れないよう、テストごとの保存先を使う。
     let settings: AppSettings
-    private let window: UIWindow
+    /// アプリ全体のアプリ内通知と、ウインドウに重ねたチップの列。
+    let notices: NoticeCenter
+    let overlay: NoticeOverlay
+    let window: UIWindow
 
     /// - Parameter headerView: プロフィールのように、一覧の頭に置くビュー。
-    init(size: CGSize = CGSize(width: 393, height: 852), mediaImages: MediaImageStore = .offline, headerView: UIView? = nil) throws {
+    init(size: CGSize = CGSize(width: 393, height: 852), mediaImages: MediaImageStore = .offline, headerView: UIView? = nil, notices: NoticeCenter = NoticeCenter()) throws {
         let suite = "TimelineHarness.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
         settings = AppSettings(defaults: defaults)
         viewController = TimelineViewController(tuning: tuning, emojiImages: .offline, mediaImages: mediaImages, avatarImages: .offline, settings: settings)
         viewController.headerView = headerView
+        viewController.notices = notices
+        self.notices = notices
         let scene = try #require(
             UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
             "テストのホストアプリにウィンドウシーンがありません"
@@ -29,6 +34,7 @@ final class TimelineHarness {
         window.frame = CGRect(origin: .zero, size: size)
         window.rootViewController = UINavigationController(rootViewController: viewController)
         window.makeKeyAndVisible()
+        overlay = NoticeOverlay.install(in: window, center: notices, tuning: tuning)
         window.layoutIfNeeded()
     }
 

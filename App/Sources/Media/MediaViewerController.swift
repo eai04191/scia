@@ -34,11 +34,12 @@ final class MediaViewerController: UIViewController {
     let descriptionEditor = AltTextEditorView()
     /// 代替テキストを書いている。
     private(set) var isEditingDescription = false
-    /// 上の中央、メニューボタンの行のすぐ下に出す知らせ。写真に保存したこと、落としている途中の進み具合、
-    /// 投稿欄から開いたときのアップロードや代替テキストの送信の状態。
-    let noticeStack = NoticeStackView()
-    /// 出たままの知らせ。2件以上あっても、チップには1件を選んで出す。
-    private var persistentNotices = PersistentNotices()
+    /// 投稿欄から開いたときの、アップロードや代替テキストの送信の状態。この画面だけのアプリ内通知として、チップの列に差し出す。
+    private var draftNotice: Notice?
+    /// チップの列から見た、開いている度合い。0で下の画面の位置、1でメニューボタンの行のすぐ下に列を置く。
+    private var noticePresence: CGFloat = 0
+    /// この画面だけのチップの濃さ。開閉では開いている度合いに、払って閉じる途中はボタン類と同じく背景に合わせる。
+    private var noticeScreenAlpha: CGFloat = 0
     /// 共有や保存のために落とす処理。ビューアを閉じても保存を続けるため、セッションで持つ。nilなら共有と保存を出さない（投稿欄から開いたとき）。
     private let transfers: MediaTransferCenter?
     /// 添付ファイルの投稿。共有や保存の失敗を「最近の失敗」に残すときに添える。プロフィールの画像を開いたときはnil。
@@ -52,8 +53,6 @@ final class MediaViewerController: UIViewController {
     private var dismissPanAnchor: CGPoint = .zero
     /// 閉じ終わったときに呼ぶ。複製がサムネイルへ戻る動きは、このあとも続く。
     var onDismiss: (() -> Void)?
-    /// 出たままの知らせが2件以上のときにチップを押したら、この画面の上に「操作の状況」の一覧を開く。nilなら開けない。
-    var onShowOperationStatus: (@MainActor (UIViewController) -> Void)?
     /// 複製がサムネイルへ戻る動きを終えたときに呼ぶ。投稿欄は、ここで入力欄にキーボードを戻す。
     var onCloseFinish: (() -> Void)?
     /// 黒い下地。画像だけを動かし、下地はその場で濃くしたり薄くしたりする。
@@ -101,8 +100,6 @@ final class MediaViewerController: UIViewController {
         let barOverlapFadeEnd: Double
         /// 写真に保存したことを知らせる表示を出しておく時間。
         let savedChipDuration: TimeInterval
-        /// 知らせのチップの出入りと並べ直しの時間。
-        let noticeAnimationDuration: TimeInterval
         /// 動画を再生している間、最後に触れてから操作の部品とボタンを隠すまでの時間。
         let videoControlsHideDelay: TimeInterval
         /// ダブルタップで10秒戻ったか進んだことを知らせる表示を、出しておく時間。
@@ -214,6 +211,9 @@ final class MediaViewerController: UIViewController {
         super.viewIsAppearing(animated)
         if isBeingPresented {
             transfers?.viewerDidOpen(self)
+            // チップの列は根の画面のすぐ上にあり、重ねて出したビューアに隠れるため、ビューアの上へ出す。
+            overlay?.bringToFront()
+            overlay?.update()
             beginOpening()
         }
     }
@@ -225,9 +225,21 @@ final class MediaViewerController: UIViewController {
         }
     }
 
+    /// 閉じたら、チップの列のアプリ全体のものを、閉じる動きと同じ時間をかけて下の画面の位置へ動かす。この画面だけのものは、列から外れて薄くなる。
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        if isBeingDismissed {
+            overlay?.update(.animated(timing.closeDuration))
+        }
+    }
+
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         if isBeingDismissed {
+            // 閉じる動きを通らずに閉じられたら、ここでチップの列を根の画面のすぐ上に戻す。動きを通るときは、動きを終えてから戻す。
+            if case .closing = motion {} else {
+                presentingViewController?.noticeOverlay?.returnBelowPresentations()
+            }
             transfers?.viewerDidClose(self)
             showHiddenTile()
             onDismiss?()
@@ -333,9 +345,8 @@ final class MediaViewerController: UIViewController {
         counterLabel.font = .preferredFont(forTextStyle: .subheadline)
         counterLabel.textColor = .white
         counterLabel.isHidden = items.count == 1
-        noticeStack.animationDuration = timing.noticeAnimationDuration
         setUpDescriptionEditing()
-        for view in [menuButton, counterLabel, captionView, noticeStack, descriptionEditor] {
+        for view in [menuButton, counterLabel, captionView, descriptionEditor] {
             view.translatesAutoresizingMaskIntoConstraints = false
             self.view.addSubview(view)
         }
@@ -349,10 +360,6 @@ final class MediaViewerController: UIViewController {
             captionView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             captionView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
             captionView.contentBottomAnchor.constraint(equalTo: guide.bottomAnchor, constant: -8),
-            // 保存を選ぶメニューの近くで知らせる。
-            noticeStack.topAnchor.constraint(equalTo: menuButton.bottomAnchor, constant: 8),
-            noticeStack.leadingAnchor.constraint(equalTo: guide.leadingAnchor, constant: 16),
-            noticeStack.trailingAnchor.constraint(equalTo: guide.trailingAnchor, constant: -16),
             descriptionEditor.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             descriptionEditor.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             descriptionEditor.bottomAnchor.constraint(equalTo: view.keyboardLayoutGuide.topAnchor),
@@ -440,7 +447,8 @@ final class MediaViewerController: UIViewController {
             page.isEditingDescription = isEditingDescription
         }
         updateDraftStatus()
-        transferNoticesDidChange()
+        // ページをめくったら、落としている途中のチップを、いま見ている添付ファイルに合わせて出し直す。
+        overlay?.update()
         view.setNeedsLayout()
     }
 
@@ -465,7 +473,6 @@ final class MediaViewerController: UIViewController {
             self.updateChrome()
             self.setNeedsStatusBarAppearanceUpdate()
         }
-        noticeStack.setChromeHidden(isChromeHidden, animated: true)
         for page in pages.values {
             page.setChromeHidden(isChromeHidden, animated: true)
         }
@@ -689,26 +696,14 @@ final class MediaViewerController: UIViewController {
         }
     }
 
-    /// 投稿欄から開いたとき、上の中央にアップロードや代替テキストの送信の状態を出す。投稿欄から開いたときは落とすことがないため、落としている途中の知らせとは重ならない。
+    /// 投稿欄から開いたとき、アップロードや代替テキストの送信の状態を、チップの列に差し出す。投稿欄から開いたときは落とすことがないため、落としている途中のものとは重ならない。
     private func updateDraftStatus() {
         guard draftEditing != nil else { return }
-        setPersistentNotice(Notice.draftStatus(currentItem.draftStatus, progress: currentItem.draftProgress, reduction: currentItem.draftReduction) { [weak self] in
+        draftNotice = Notice.draftStatus(currentItem.draftStatus, progress: currentItem.draftProgress, reduction: currentItem.draftReduction) { [weak self] in
             guard let self, let editing = self.draftEditing else { return }
             editing.showFailure(self.currentItem.id, self)
-        }, in: .draft)
-    }
-
-    /// 出たままの知らせを置き換え、チップに出す1件を選び直す。
-    private func setPersistentNotice(_ notice: Notice?, in slot: PersistentNotices.Slot) {
-        persistentNotices.set(notice, in: slot)
-        var showAll: (@MainActor () -> Void)?
-        if let show = onShowOperationStatus {
-            showAll = { [weak self] in
-                guard let self else { return }
-                show(self)
-            }
         }
-        noticeStack.setPersistent(persistentNotices.chipNotice(showAll: showAll))
+        overlay?.update()
     }
 
     /// 表示中の添付ファイルを写真に保存する。手元になければ落としてから保存する。ビューアを閉じても続け、済んだら閉じた先の一覧で知らせる。
@@ -723,30 +718,19 @@ final class MediaViewerController: UIViewController {
         return MediaTransfers.Target(url: url, kind: currentItem.kind, subject: subject)
     }
 
+    /// 重ねているウインドウのチップの列。出した直後でウインドウに載る前は、出した画面のウインドウから探す。
+    private var overlay: NoticeOverlay? {
+        noticeOverlay ?? presentingViewController?.noticeOverlay
+    }
+
+    /// このウインドウのチップの列。テストで中身を確かめるのに使う。
+    var noticeStack: NoticeStackView? {
+        overlay?.column.stack
+    }
+
     /// 写真に保存したことや、共有や保存の失敗を知らせている文言。知らせていなければnil。
     var statusChipText: String? {
-        noticeStack.transientNotice?.text
-    }
-
-    /// 共有や保存の結果を、メニューボタンの下に数秒出す。落としている途中のチップがこれで消えるなら、その場所で入れ替える。
-    /// 呼ぶ時点で、済んだものは落としている途中のものから外してある。
-    func showTransientNotice(_ notice: Notice, duration: TimeInterval) {
-        let next = transfers?.viewerChipNotice(currentURL: currentTransferURL, presenter: self)
-        let replacing = next == nil ? persistentNotices.notice(in: .download)?.id : nil
-        // 落としている途中の知らせを外してから、チップをその場所で入れ替える。ほかに出たままの知らせがあれば、そのあとで出し直す。
-        if replacing != nil {
-            persistentNotices.set(nil, in: .download)
-        }
-        noticeStack.showTransient(notice, duration: duration, replacingPersistent: replacing)
-        if replacing != nil {
-            setPersistentNotice(nil, in: .download)
-        }
-    }
-
-    /// 落としている途中のものが変わったか、見ている添付ファイルが変わった。チップを出し直す。
-    func transferNoticesDidChange() {
-        guard let transfers else { return }
-        setPersistentNotice(transfers.viewerChipNotice(currentURL: currentTransferURL, presenter: self), in: .download)
+        noticeStack?.transientNotice?.text
     }
 
     /// 保存やダウンロードを待つ間に、代替テキストや共有のシートを開いていることがある。ビューアから出すと拒否されるため、いちばん手前の画面から出す。
@@ -782,7 +766,7 @@ final class MediaViewerController: UIViewController {
 
     /// 落としている途中の進み具合の文言。落としていなければnil。
     var downloadProgressText: String? {
-        persistentNotices.notice(in: .download)?.text
+        transfers?.chipNotice(in: NoticeContext(viewer: NoticeContext.Viewer(currentURL: currentTransferURL)))?.text
     }
 }
 
@@ -828,11 +812,12 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
             applyBarLayering()
             let backgroundAlpha = visibility * dragToDismiss.backgroundAlpha(translation: translation.y, height: height)
             backdrop.alpha = backgroundAlpha
-            // ボタンと説明は、背景が半分透けたところで消えきるようにする。知らせは、ボタン類を隠していても残るものがあるため、隠したかによらず薄くする。
+            // ボタンと説明は、背景が半分透けたところで消えきるようにする。この画面だけのチップは、ボタン類を隠していても残るものがあるため、隠したかによらず薄くする。
+            // アプリ全体のチップは消さず、背景の濃さに合わせて下の画面の位置へ近づける。
             for chrome in chromeViews {
                 chrome.alpha = isChromeHidden ? 0 : max(backgroundAlpha * 2 - 1, 0)
             }
-            noticeStack.alpha = max(backgroundAlpha * 2 - 1, 0)
+            setNoticePresence(backgroundAlpha, screenAlpha: max(backgroundAlpha * 2 - 1, 0))
         case .ended:
             pageController.view.isUserInteractionEnabled = true
             let velocity = recognizer.velocity(in: view).y
@@ -890,10 +875,17 @@ extension MediaViewerController {
     /// 開いている度合い。0で下地とボタンが透明、1で不透明。
     private func setVisibility(_ visibility: CGFloat) {
         backdrop.alpha = visibility
-        noticeStack.alpha = visibility
         for chrome in chromeViews {
             chrome.alpha = isChromeHidden ? 0 : visibility
         }
+        setNoticePresence(visibility, screenAlpha: visibility)
+    }
+
+    /// チップの列に、開いている度合いを伝える。呼んだ側のアニメーションに任せて動かす。
+    private func setNoticePresence(_ presence: CGFloat, screenAlpha: CGFloat) {
+        noticePresence = presence
+        noticeScreenAlpha = screenAlpha
+        overlay?.update()
     }
 
     private var currentTile: (any MediaViewerSource)? {
@@ -1220,7 +1212,7 @@ extension MediaViewerController {
         overlay.isUserInteractionEnabled = false
         backdrop.frame = overlay.bounds
         overlay.addSubview(backdrop)
-        let chromeSnapshots = (chromeViews + [noticeStack]).compactMap { chrome -> UIView? in
+        let chromeSnapshots = chromeViews.compactMap { chrome -> UIView? in
             guard !chrome.isHidden, chrome.alpha > 0, let snapshot = chrome.snapshotView(afterScreenUpdates: false) else { return nil }
             snapshot.frame = chrome.convert(chrome.bounds, to: window)
             snapshot.alpha = chrome.alpha
@@ -1231,6 +1223,9 @@ extension MediaViewerController {
         overlay.addSubview(morph)
         morphOverlap?.move(to: overlay)
         window.addSubview(overlay)
+        // チップの列は、閉じる動きを描く層の手前に残す。閉じ終えたら、根の画面のすぐ上に戻す。
+        let noticeOverlay = self.overlay
+        noticeOverlay?.bringToFront()
         let moves = movesImage && tile != nil
         // 複製をサムネイルへ戻すときは、戻り終えてから見せるため、ビューアを閉じたときには戻さない。
         // 複製を動かさないときは、閉じる前に見せる。閉じると画面が描き直されるため、閉じてから見せると、その間サムネイルが消えて見える。
@@ -1281,7 +1276,11 @@ extension MediaViewerController {
             concealedTile: closingTile,
             findTile: { sourceTile(attachmentID) }
         )
-        flight.onFinish = onCloseFinish
+        let onCloseFinish = onCloseFinish
+        flight.onFinish = { [weak noticeOverlay] in
+            noticeOverlay?.returnBelowPresentations()
+            onCloseFinish?()
+        }
         flight.start()
     }
 
@@ -1345,7 +1344,6 @@ extension MediaViewerController {
         transfers: MediaTransferCenter? = nil,
         subject: OperationStatus.Subject? = nil,
         sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?,
-        onShowOperationStatus: (@MainActor (UIViewController) -> Void)? = nil,
         onDismiss: @escaping @MainActor () -> Void
     ) {
         let viewer = MediaViewerController(
@@ -1359,7 +1357,6 @@ extension MediaViewerController {
             sourceTile: sourceTile
         )
         viewer.onDismiss = onDismiss
-        viewer.onShowOperationStatus = onShowOperationStatus
         // 開く動きはビューアの中で描く。
         presenter.present(viewer, animated: false)
     }
@@ -2340,9 +2337,23 @@ extension MediaViewerController.Timing {
             handoffStart: tuning.value(of: TuningCatalog.mediaCloseHandoffStart),
             barOverlapFadeEnd: tuning.value(of: TuningCatalog.mediaCloseBarOverlapFadeEnd),
             savedChipDuration: tuning.value(of: TuningCatalog.mediaSavedChipDuration),
-            noticeAnimationDuration: tuning.value(of: TuningCatalog.noticeAnimationDuration),
             videoControlsHideDelay: tuning.value(of: TuningCatalog.mediaVideoControlsHideDelay),
             videoSkipEffectDuration: tuning.value(of: TuningCatalog.mediaVideoSkipEffectDuration)
+        )
+    }
+}
+
+extension MediaViewerController: NoticeScreen {
+    /// メニューボタンと枚数の表示の行のすぐ下に置く。保存を選ぶメニューの近くで知らせるため。
+    /// 開く途中と閉じる途中は、開いている度合いに合わせて、下の画面の位置とのあいだに置く。
+    func noticePlacement(below: CGFloat) -> NoticePlacement {
+        let own = menuButton.convert(CGPoint(x: 0, y: menuButton.bounds.maxY + 8), to: nil).y
+        return NoticePlacement(
+            top: below + (own - below) * noticePresence,
+            viewer: NoticeContext.Viewer(currentURL: currentTransferURL),
+            screenNotice: draftNotice,
+            screenAlpha: noticeScreenAlpha,
+            hidesChrome: isChromeHidden
         )
     }
 }

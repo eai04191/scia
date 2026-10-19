@@ -23,7 +23,7 @@ struct PersistentNoticesTests {
 
     @Test func failureWinsAndTappingOpensTheList() throws {
         var notices = PersistentNotices()
-        notices.set(uploadFailure, in: .draft)
+        notices.set(uploadFailure, in: .screen)
         notices.set(download, in: .download)
         var opened = false
 
@@ -40,7 +40,7 @@ struct PersistentNoticesTests {
 
     @Test func withoutListTheChosenNoticeKeepsItsAction() throws {
         var notices = PersistentNotices()
-        notices.set(uploadFailure, in: .draft)
+        notices.set(uploadFailure, in: .screen)
         notices.set(download, in: .download)
 
         let chip = try #require(notices.chipNotice(showAll: nil))
@@ -54,7 +54,7 @@ struct PersistentNoticesTests {
     @Test func updatingTheSameNoticeKeepsItsOrder() throws {
         var notices = PersistentNotices()
         notices.set(download, in: .download)
-        notices.set(Notice(id: "upload", kind: .progress, title: "アップロード中"), in: .draft)
+        notices.set(Notice(id: "upload", kind: .progress, title: "アップロード中"), in: .screen)
         var progressed = download
         progressed.value = "80%"
         notices.set(progressed, in: .download)
@@ -62,7 +62,7 @@ struct PersistentNoticesTests {
         // 書き換えたダウンロードより、あとから出たアップロードの方が新しい。
         #expect(notices.chipNotice {}?.id == "upload")
 
-        notices.set(nil, in: .draft)
+        notices.set(nil, in: .screen)
         #expect(notices.chipNotice {}?.text == "ダウンロード中 80%")
         notices.set(nil, in: .download)
         #expect(notices.chipNotice {} == nil)

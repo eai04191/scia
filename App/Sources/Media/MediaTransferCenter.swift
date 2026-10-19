@@ -2,36 +2,23 @@ import os
 import SciaCore
 import UIKit
 
-/// 共有や保存のために添付ファイルを落とす処理の知らせを、開いているビューアか一覧に出す。セッションごとに1つ持ち、ビューアを閉じても保存を続ける。
+/// 共有や保存のために添付ファイルを落とす処理のアプリ内通知を、アプリ全体のチップの列に出す。セッションごとに1つ持ち、ビューアを閉じても保存を続ける。
 /// 決まりはdocs/notices.mdの「場面ごと」の「ダウンロード」と「複数のダウンロード」にある。
 ///
-/// ビューアを開いている間は、済んだことや失敗をビューアに出す。閉じたあとは、一覧（タイムライン）の知らせの場所に出す。
-/// 落としている途中のチップは、ビューアにはいま見ている添付ファイルのものを、一覧には1件なら進み具合を、2件以上なら件数を出す。
+/// 文言は前に出ている画面の様子で決める。ビューアでは、落としている途中のチップにはいま見ている添付ファイルのものを出し、ほかは件数で添える。
+/// ビューアでなければ、1件なら進み具合を、2件以上なら件数を出す。済んだことや失敗は、いま見ている添付ファイルなら何ができなかったかだけを、ほかは種類で示す。
 /// 落としている途中のものは「操作の状況」の一覧の「進行中」にも並べ、行から止められるようにする。
 @MainActor
 final class MediaTransferCenter {
-    /// ビューアを閉じているときに知らせを出す先。
-    struct Host {
-        /// 落としている途中のチップを、すべての一覧に出す。nilなら消す。
-        let setPersistent: @MainActor (Notice?) -> Void
-        /// 数秒で消えるチップを、見えている一覧に出す。`replacesChip`なら、落としている途中のチップをその場所で入れ替える。
-        let showTransient: @MainActor (_ notice: Notice, _ duration: TimeInterval, _ replacesChip: Bool) -> Void
-        /// いちばん手前の画面。アラートや「操作の状況」の一覧を、この上に出す。
-        let presenter: @MainActor () -> UIViewController?
-    }
-
     let transfers: MediaTransfers
+    /// アプリ内通知を出す先。
+    let notices: NoticeCenter
     /// 落としている途中のものと失敗を並べる「操作の状況」。
     private let operationStatus: OperationStatus
     private let tuning: TuningStore
-    /// 「操作の状況」の一覧を開く。nilなら開けないため、出たままの知らせが2件以上でもチップを押すと止めるかの確認を出す。
-    var showOperationStatus: (@MainActor (UIViewController) -> Void)?
-    var host: Host? {
-        didSet { updateTimelineChip() }
-    }
     /// 開いているビューア。Macではビューアを別々のウィンドウで開くため、いくつも開いていることがある。
     private let openViewers = NSHashTable<MediaViewerController>.weakObjects()
-    /// 落としているものごとの、最後にその操作を始めたビューア。開いている間は、済んだことや失敗をそのビューアに出す。
+    /// 落としているものごとの、最後にその操作を始めたビューア。開いている間は、共有のシートと理由のアラートをそのビューアに出す。
     private var requesters: [MediaTransfers.Transfer.ID: WeakViewer] = [:]
 
     private struct WeakViewer {
@@ -44,17 +31,19 @@ final class MediaTransferCenter {
     private var listedActivities: Set<OperationStatus.Activity.ID> = []
     private let logger = SciaLog.logger(category: "media")
 
-    init(operationStatus: OperationStatus, tuning: TuningStore = AppDependencies.tuning, transfers: MediaTransfers) {
+    init(operationStatus: OperationStatus, notices: NoticeCenter, tuning: TuningStore = AppDependencies.tuning, transfers: MediaTransfers) {
         self.operationStatus = operationStatus
+        self.notices = notices
         self.tuning = tuning
         self.transfers = transfers
         transfers.onChange = { [weak self] in self?.transfersDidChange() }
         transfers.onEvent = { [weak self] event in self?.handle(event) }
+        notices.setPersistent({ [weak self] context in self?.chipNotice(in: context) }, in: .download)
     }
 
     /// アプリの通信と写真ライブラリを使う。
-    convenience init(operationStatus: OperationStatus, downloads: MediaDownloads = AppDependencies.mediaDownloads, photoSaver: PhotoLibrarySaver = .photoLibrary) {
-        self.init(operationStatus: operationStatus, transfers: MediaTransfers(
+    convenience init(operationStatus: OperationStatus, notices: NoticeCenter, downloads: MediaDownloads = AppDependencies.mediaDownloads, photoSaver: PhotoLibrarySaver = .photoLibrary) {
+        self.init(operationStatus: operationStatus, notices: notices, transfers: MediaTransfers(
             fetch: { url, onProgress in try await downloads.fileForSharing(for: url, onProgress: onProgress) },
             saveToPhotos: { file in try await photoSaver.save(file) }
         ))
@@ -62,7 +51,7 @@ final class MediaTransferCenter {
 
     // MARK: ビューア
 
-    /// ビューアを開いた。閉じるまで、そのビューアで始めたものの知らせをビューアに出す。
+    /// ビューアを開いた。閉じるまで、そのビューアで始めたものの共有のシートや理由をビューアに出す。
     func viewerDidOpen(_ viewer: MediaViewerController) {
         openViewers.add(viewer)
     }
@@ -76,7 +65,7 @@ final class MediaTransferCenter {
 
     func start(_ purpose: MediaTransfers.Purpose, _ target: MediaTransfers.Target, from viewer: MediaViewerController) {
         logger.info("start media transfer purpose=\(String(describing: purpose), privacy: .public) kind=\(String(describing: target.kind), privacy: .public)")
-        // 開き終える前に始めてすぐ済んでも、知らせの届け先を失わないよう、始めたビューアは開いているものとして扱う。
+        // 開き終える前に始めてすぐ済んでも、届け先を失わないよう、始めたビューアは開いているものとして扱う。
         openViewers.add(viewer)
         let id = transfers.start(purpose, target)
         requesters[id] = WeakViewer(viewer: viewer)
@@ -88,42 +77,29 @@ final class MediaTransferCenter {
         return viewer
     }
 
-    /// ビューアのチップ。いま見ている添付ファイルのものを出し、ほかは件数で添える。
-    /// 2件以上のときに押したら、`presenter`の上に「操作の状況」の一覧を開く。
-    func viewerChipNotice(currentURL: URL?, presenter: UIViewController) -> Notice? {
-        MediaTransferChip.viewer(transfers.transfers, currentURL: currentURL).map { notice(for: $0, presenter: presenter) }
-    }
-
-    // MARK: 知らせ
+    // MARK: アプリ内通知
 
     private func transfersDidChange() {
         updateActivities()
-        updateTimelineChip()
         requesters = requesters.filter { id, _ in transfers.transfer(id) != nil }
-        for viewer in openViewers.allObjects {
-            viewer.transferNoticesDidChange()
-        }
+        notices.persistentDidChange()
         closeStopConfirmationIfDone()
     }
 
-    /// 一覧のチップを出し直す。一覧を足したときにも呼ぶ。
-    func updateTimelineChip() {
-        guard let host else { return }
-        let chip = MediaTransferChip.timeline(transfers.transfers)
-        host.setPersistent(chip.map { [weak self] chip in
-            guard let self else { return nil }
-            return self.notice(for: chip) { [weak self] in self?.host?.presenter() }
-        } ?? nil)
-    }
-
-    private func notice(for chip: MediaTransferChip, presenter: UIViewController) -> Notice {
-        notice(for: chip) { [weak presenter] in presenter }
+    /// 前の画面の様子が`context`のときの、落としている途中のチップ。落としているものがなければnil。
+    func chipNotice(in context: NoticeContext) -> Notice? {
+        let chip = if let viewer = context.viewer {
+            MediaTransferChip.viewer(transfers.transfers, currentURL: viewer.currentURL)
+        } else {
+            MediaTransferChip.timeline(transfers.transfers)
+        }
+        return chip.map { notice(for: $0) { context.presenter } }
     }
 
     /// 1件だけなら、押すと止めるかの確認を出す。2件以上なら、押すと「操作の状況」の一覧を開く。
     private func notice(for chip: MediaTransferChip, presenter: @escaping @MainActor () -> UIViewController?) -> Notice {
         var showAll: (@MainActor () -> Void)?
-        if let show = showOperationStatus {
+        if let show = notices.showOperationStatus {
             showAll = {
                 if let presenter = presenter() {
                     show(presenter)
@@ -199,22 +175,22 @@ final class MediaTransferCenter {
             }
         case .failed(let transfer, let purpose, let failure):
             didFail(transfer, purpose: purpose, failure: failure)
-        case .shareStopped(let transfer):
-            showTransient(.shareStopped, for: transfer, duration: tuning.value(of: TuningCatalog.noticeFailureChipDuration))
+        case .shareStopped:
+            showTransient(duration: tuning.value(of: TuningCatalog.noticeFailureChipDuration)) { _ in .shareStopped }
         }
     }
 
     /// 写真に保存したことを知らせる。落としている途中のチップがこれで消えるなら、その場所で入れ替える。
     private func didSave(_ transfer: MediaTransfers.Transfer) {
-        if let view = viewer(of: transfer)?.viewIfLoaded ?? host?.presenter()?.viewIfLoaded {
+        if let view = viewer(of: transfer)?.viewIfLoaded ?? notices.presenter?.viewIfLoaded {
             UINotificationFeedbackGenerator(view: view).notificationOccurred(.success)
         }
-        showTransient(.savedToPhotos, for: transfer, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+        showTransient(duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration)) { _ in .savedToPhotos }
     }
 
     private func didFail(_ transfer: MediaTransfers.Transfer, purpose: MediaTransfers.Purpose, failure: MediaTransfers.Failure) {
         let viewer = viewer(of: transfer)
-        if let view = viewer?.viewIfLoaded ?? host?.presenter()?.viewIfLoaded {
+        if let view = viewer?.viewIfLoaded ?? notices.presenter?.viewIfLoaded {
             UINotificationFeedbackGenerator(view: view).notificationOccurred(.error)
         }
         let reason: ErrorPresentation
@@ -233,24 +209,20 @@ final class MediaTransferCenter {
         }
         // 「最近の失敗」では投稿を添えるが、どの添付ファイルかは種類で分かるようにする。
         operationStatus.recordFailure(title: Notice.transferFailureTitle(of: transfer.target.kind, purpose: purpose), reason: reason, subject: transfer.target.subject)
-        let isCurrent = viewer?.currentTransferURL == transfer.target.url
-        let title = isCurrent ? Notice.currentTransferFailureTitle(failure) : Notice.transferFailureTitle(of: transfer.target.kind, purpose: purpose)
-        let notice = Notice.transferFailure(title: title) { [weak self, weak viewer] in
-            let alert = UIAlertController(title: title, message: reason.text, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "OK", style: .cancel))
-            self?.present(alert, on: viewer)
+        showTransient(duration: tuning.value(of: TuningCatalog.noticeFailureChipDuration)) { [weak self] context in
+            let isCurrent = context.viewer?.currentURL == transfer.target.url
+            let title = isCurrent ? Notice.currentTransferFailureTitle(failure) : Notice.transferFailureTitle(of: transfer.target.kind, purpose: purpose)
+            return Notice.transferFailure(title: title) { [weak self] in
+                let alert = UIAlertController(title: title, message: reason.text, preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "OK", style: .cancel))
+                self?.present(alert, onTopOf: context.presenter)
+            }
         }
-        showTransient(notice, for: transfer, duration: tuning.value(of: TuningCatalog.noticeFailureChipDuration))
     }
 
-    /// `transfer`を始めたビューアが開いていればそこに、閉じていれば見えている一覧に出す。落としている途中のチップが消えるなら、その場所で入れ替える。
-    /// 呼ぶ時点で、済んだものは`transfers`から外してある。
-    private func showTransient(_ notice: Notice, for transfer: MediaTransfers.Transfer, duration: TimeInterval) {
-        if let viewer = viewer(of: transfer) {
-            viewer.showTransientNotice(notice, duration: duration)
-        } else if let host {
-            host.showTransient(notice, duration, MediaTransferChip.timeline(transfers.transfers) == nil)
-        }
+    /// 数秒で消えるチップを出す。呼ぶ時点で、済んだものは`transfers`から外してあるため、落としている途中のチップがこれで消えるなら、その場所で入れ替える。
+    private func showTransient(duration: TimeInterval, _ content: @escaping @MainActor (NoticeContext) -> Notice) {
+        notices.showTransient(duration: duration, replacing: .download, content)
     }
 
     private static func notAuthorizedAlert() -> UIAlertController {
@@ -264,13 +236,14 @@ final class MediaTransferCenter {
         return alert
     }
 
-    /// `viewer`が開いていればそこから、閉じていればいちばん手前の画面から出す。ビューアの上に代替テキストや共有のシートを開いていれば、その上に出す。
+    /// `viewer`が開いていればそこから、閉じていればいちばん手前の画面から出す。
     private func present(_ viewController: UIViewController, on viewer: MediaViewerController?) {
-        guard var presenter = viewer.flatMap({ openViewers.contains($0) ? $0 : nil }) ?? host?.presenter() else { return }
-        while let presented = presenter.presentedViewController, !presented.isBeingDismissed {
-            presenter = presented
-        }
-        presenter.present(viewController, animated: true)
+        present(viewController, onTopOf: viewer.flatMap { openViewers.contains($0) ? $0 : nil } ?? notices.presenter)
+    }
+
+    /// `presenter`の上に代替テキストや共有のシートを開いていれば、その上に出す。
+    private func present(_ viewController: UIViewController, onTopOf presenter: UIViewController?) {
+        presenter?.frontmostPresented.present(viewController, animated: true)
     }
 
     // MARK: 止めるかの確認

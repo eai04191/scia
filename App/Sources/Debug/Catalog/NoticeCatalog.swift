@@ -55,12 +55,12 @@ enum NoticeCatalog {
             CatalogState(title: "出たままの知らせが2件（処理の途中、押すと操作の状況の一覧）") {
                 var notices = PersistentNotices()
                 notices.set(.download(of: url, fraction: 0.42) {}, in: .download)
-                notices.set(Notice(id: "other", kind: .progress, title: "アップロード中"), in: .draft)
+                notices.set(Notice(id: "other", kind: .progress, title: "アップロード中"), in: .screen)
                 return stack(persistent: notices.chipNotice {})
             },
             CatalogState(title: "出たままの知らせが2件（失敗を優先する）") {
                 var notices = PersistentNotices()
-                notices.set(draft(.failed), in: .draft)
+                notices.set(draft(.failed), in: .screen)
                 notices.set(.download(of: url, fraction: 0.42) {}, in: .download)
                 return stack(persistent: notices.chipNotice {})
             },

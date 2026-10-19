@@ -1,6 +1,6 @@
 import UIKit
 
-/// 知らせのチップを、出たままのものを上に1枚、数秒で消えるものをその下に1枚、縦に並べる。1枚だけなら上に詰める。
+/// アプリ内通知のチップを、出たままのものを上に1枚、数秒で消えるものをその下に1枚、縦に並べる。1枚だけなら上に詰める。
 /// 出方の決まりはdocs/notices.mdの「チップ」と「置き場所」にある。
 ///
 /// 置く側は幅と上端を決める。高さは中身によらず2枚分を取り、チップのないところは触れても下へ通す。
@@ -17,6 +17,15 @@ final class NoticeStackView: UIView {
     private var transientDeadline: ContinuousClock.Instant?
     private var hideTask: Task<Void, Never>?
     private var isChromeHidden = false
+    /// 出たままのチップが、前に出ている画面の中だけのものか。画面と一緒に薄くするため。
+    private var persistentBelongsToScreen = false
+    /// 画面だけのチップの濃さ。画面を払って閉じる途中は、背景に合わせて薄くする。呼んだ側のアニメーションに任せて変える。
+    var screenAlpha: CGFloat = 1 {
+        didSet {
+            guard screenAlpha != oldValue, let chip = persistentChip, persistentBelongsToScreen else { return }
+            chip.alpha = targetAlpha(of: chip)
+        }
+    }
     /// 高さを測るための、画面に出さないチップ。
     private let sizingChip = NoticeChip()
 
@@ -47,8 +56,20 @@ final class NoticeStackView: UIView {
 
     // MARK: 出す、消す
 
-    /// 出たままのチップを出すか、中身を替える。nilなら消す。
-    func setPersistent(_ notice: Notice?) {
+    /// 出たままのチップを出すか、中身を替える。nilなら消す。同じ見た目のままなら、描き直さずに押したときの処理だけを替える。
+    /// - Parameter belongsToScreen: 前に出ている画面の中だけのものなら、`screenAlpha`に合わせて薄くする。
+    func setPersistent(_ notice: Notice?, belongsToScreen: Bool = false) {
+        let belongsChanged = persistentBelongsToScreen != belongsToScreen
+        persistentBelongsToScreen = belongsToScreen
+        if let notice, let chip = persistentChip, let shown = chip.notice, shown.looksSame(as: notice) {
+            chip.apply(notice)
+            // 描き直すと押せるかが中身から決め直されるため、ボタン類と一緒に隠している間は押せないままにする。
+            chip.isUserInteractionEnabled = notice.isActionable && !isHiddenWithChrome(chip)
+            if belongsChanged {
+                chip.alpha = targetAlpha(of: chip)
+            }
+            return
+        }
         guard let notice else {
             if let chip = persistentChip {
                 persistentChip = nil
@@ -295,7 +316,8 @@ final class NoticeStackView: UIView {
     }
 
     private func targetAlpha(of chip: NoticeChip) -> CGFloat {
-        isHiddenWithChrome(chip) ? 0 : 1
+        if isHiddenWithChrome(chip) { return 0 }
+        return chip === persistentChip && persistentBelongsToScreen ? screenAlpha : 1
     }
 
     private func updateChromeVisibility(animated: Bool) {

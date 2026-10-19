@@ -9,9 +9,11 @@ import VisionKit
 @MainActor
 @Suite(.serialized)
 struct MediaViewerControllerTests {
+    /// アプリ全体のアプリ内通知。ハーネスのウインドウに重ねた列と、落とす処理の両方に渡す。
+    private let notices = NoticeCenter()
     private let drag = DragToDismiss(distanceThreshold: 0.12, velocityThreshold: 0.8, smallestScale: 0.6, fadeDistance: 0.5, restoreDuration: 0.35)
 
-    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, noticeAnimationDuration: 0.2, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3)
+    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3)
 
     private func makeViewer(attachments: [MediaAttachment]) -> MediaViewerController {
         MediaViewerController(attachments: attachments, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil })
@@ -34,7 +36,7 @@ struct MediaViewerControllerTests {
 
     /// 開いている間は、違和感レポートに表示中の画像の倍率と出どころが残る。画像が極端に小さく出る不具合の調べに使う。
     @Test func stateDumpIncludesZoomOfCurrentImage() throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = makeViewer(attachments: [image("1", url: URL(string: "https://x.example/1.png"))])
         harness.viewController.present(viewer, animated: false)
@@ -47,7 +49,7 @@ struct MediaViewerControllerTests {
 
     /// VoiceOverの2本指のZで閉じる。
     @Test func accessibilityEscapeDismisses() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = makeViewer(attachments: [image("1", url: URL(string: "https://x.example/1.png"))])
         harness.viewController.present(viewer, animated: false)
@@ -101,7 +103,7 @@ struct MediaViewerControllerTests {
 
     /// 画像は、元のファイルが届いてからメニューで共有と保存ができる。届く前にURLを共有しないよう、それまでは選べない。
     @Test func imageCanBeSharedAndSavedOnlyAfterOriginalArrives() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let data = try pngData()
         let viewer = presentLoadingViewer(on: harness, data: data)
@@ -117,7 +119,7 @@ struct MediaViewerControllerTests {
 
     /// 前に開いて元のファイルがキャッシュに残っていれば、表示のための読み込みを待たずに共有と保存を選べる。
     @Test func cachedOriginalEnablesSharingBeforeImageLoads() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let files = MediaFileCache.temporary()
         let url = try #require(URL(string: "https://x.example/original/1"))
@@ -138,7 +140,7 @@ struct MediaViewerControllerTests {
 
     /// 写真には元のファイルのコピーを、形式と名前を変えずに渡し、済んだらメニューボタンの下で知らせる。
     @Test func savingToPhotosPassesOriginalFileAndShowsChip() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let data = try pngData()
         let saved = SavedFiles()
@@ -159,7 +161,7 @@ struct MediaViewerControllerTests {
 
     /// 開いている間に元のファイルが整理で消えていても、保存を選べば落とし直して保存する。選べるのに失敗しないようにするため。
     @Test func savingRefetchesOriginalRemovedFromCache() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let data = try pngData()
         let saved = SavedFiles()
@@ -182,9 +184,55 @@ struct MediaViewerControllerTests {
         #expect(try Data(contentsOf: file) == data)
     }
 
+    /// アプリ全体のチップは、ビューアを開くとメニューボタンの行の下へ動き、閉じると一覧の位置へ戻る。消えずに同じチップのまま残る。
+    @Test func appWideChipMovesBetweenListAndViewer() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        notices.showTransient(.linkCopied, duration: 60)
+        let column = harness.overlay.column
+        harness.window.layoutIfNeeded()
+        let onList = column.frame.minY
+        let chip = try #require(column.stack.chips.first)
+
+        let viewer = makeViewer(attachments: [image("1", url: nil)])
+        harness.viewController.present(viewer, animated: false)
+        try await waitUntil { !viewer.isMoving }
+        #expect(abs(column.frame.minY - viewer.noticePlacement(below: onList).top) < 1)
+        #expect(harness.window.subviews.last === harness.overlay)
+        #expect(column.stack.chips.first === chip)
+
+        #expect(viewer.accessibilityPerformEscape())
+        try await waitUntil { harness.viewController.presentedViewController == nil }
+        #expect(column.frame.minY == onList)
+        #expect(column.stack.chips.first === chip)
+    }
+
+    /// シートの上でビューアを開いて閉じたら、チップの列を根の画面のすぐ上に戻し、残ったシートが列を覆うようにする。
+    @Test func closingViewerOverSheetReturnsOverlayBelowSheet() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let sheet = UIViewController()
+        harness.viewController.present(sheet, animated: false)
+        defer { sheet.dismiss(animated: false) }
+        try await waitUntil { sheet.view.window != nil }
+        let viewer = makeViewer(attachments: [image("1", url: nil)])
+        sheet.present(viewer, animated: false)
+        try await waitUntil { viewer.viewIfLoaded?.window != nil }
+        try await waitUntil { !viewer.isMoving }
+        #expect(harness.window.subviews.last === harness.overlay)
+
+        #expect(viewer.accessibilityPerformEscape())
+        try await waitUntil { sheet.presentedViewController == nil }
+        let sheetContainer = try #require(harness.window.subviews.first { sheet.view.isDescendant(of: $0) })
+        try await waitUntil {
+            let order = harness.window.subviews
+            return (order.firstIndex(of: harness.overlay) ?? 0) < (order.firstIndex(of: sheetContainer) ?? 0)
+        }
+    }
+
     /// 写真への追加が許可されていなければ、知らせる表示ではなくアラートで理由を出し、設定へ案内する。
     @Test func savingWithoutPermissionOffersSettings() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = presentLoadingViewer(on: harness, data: try pngData(), photoSaver: PhotoLibrarySaver { _ in throw PhotoLibrarySaver.NotAuthorized() })
         defer { viewer.dismiss(animated: false) }
@@ -231,7 +279,7 @@ struct MediaViewerControllerTests {
     /// 投稿欄から開いたとき、代替テキストが空でも帯に「代替テキストを追加」と出し、押すとキーボードの上の入力欄で書き始める。
     /// 書き終えた値は投稿欄に渡し、届く前から帯に出す。
     @Test func draftCaptionStartsEditingDescription() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let actions = DraftActions()
         let viewer = presentDraftViewer(on: harness, items: [draftItem("a")], actions: actions)
@@ -255,7 +303,7 @@ struct MediaViewerControllerTests {
 
     /// 残りの文字数を出し始める数と入力欄の最大の行数は、投稿欄から渡した値を使う。
     @Test func draftEditingUsesGivenEditorTuning() throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = presentDraftViewer(on: harness, items: [draftItem("a")], actions: DraftActions())
         defer { viewer.dismiss(animated: false) }
@@ -266,7 +314,7 @@ struct MediaViewerControllerTests {
 
     /// 投稿欄から開いたときのメニューは、代替テキストの編集に、投稿欄から渡した項目を続ける。共有や保存は出さない。
     @Test func draftMenuOffersEditingAndGivenItems() throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = presentDraftViewer(on: harness, items: [draftItem("a")], actions: DraftActions())
         defer { viewer.dismiss(animated: false) }
@@ -276,7 +324,7 @@ struct MediaViewerControllerTests {
 
     /// 書いている途中に左右へ切り替え始めたら、その時点の内容で、切り替える前の添付の代替テキストを確定する。
     @Test func switchingPageWhileEditingCommitsDescription() throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let actions = DraftActions()
         let viewer = presentDraftViewer(on: harness, items: [draftItem("a"), draftItem("b")], actions: actions)
@@ -293,7 +341,7 @@ struct MediaViewerControllerTests {
 
     /// 入力欄の右端のボタンを押したら、その時点の内容で書き終える。
     @Test func doneButtonCommitsDescription() throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let actions = DraftActions()
         let viewer = presentDraftViewer(on: harness, items: [draftItem("a")], actions: actions)
@@ -309,7 +357,7 @@ struct MediaViewerControllerTests {
 
     /// 書いている間に閉じる操作をしたら、書き終えてから閉じる。
     @Test func closingWhileEditingCommitsDescription() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let actions = DraftActions()
         let viewer = presentDraftViewer(on: harness, items: [draftItem("a", description: "猫")], actions: actions)
@@ -323,27 +371,29 @@ struct MediaViewerControllerTests {
     }
 
     /// アップロードの状態は上の中央に出たままのチップで出し、開いている間に変わったら描き直す。失敗したときだけ押せて、理由を出す操作を投稿欄に頼む。
-    @Test func draftStatusFollowsUpdates() throws {
-        let harness = try TimelineHarness()
+    @Test func draftStatusFollowsUpdates() async throws {
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let actions = DraftActions()
         let viewer = presentDraftViewer(on: harness, items: [draftItem("a", status: .uploading)], actions: actions)
         defer { viewer.dismiss(animated: false) }
 
-        let uploading = try #require(viewer.noticeStack.chips.first)
-        #expect(viewer.noticeStack.persistentNotice?.text == "アップロード中")
+        // この画面だけのチップは、ビューアが画面に載ってからチップの列に差し出す。
+        try await waitUntil { viewer.noticeStack?.chips.first != nil }
+        let uploading = try #require(viewer.noticeStack?.chips.first)
+        #expect(viewer.noticeStack?.persistentNotice?.text == "アップロード中")
         #expect(!uploading.isUserInteractionEnabled)
 
         viewer.update(items: [draftItem("a", status: .failed)])
-        let failed = try #require(viewer.noticeStack.chips.first)
+        let failed = try #require(viewer.noticeStack?.chips.first)
         #expect(failed === uploading)
-        #expect(viewer.noticeStack.persistentNotice?.text == "アップロードできませんでした")
+        #expect(viewer.noticeStack?.persistentNotice?.text == "アップロードできませんでした")
         #expect(failed.isUserInteractionEnabled)
         failed.sendActions(for: .primaryActionTriggered)
         #expect(actions.failures == ["a"])
 
         viewer.update(items: [draftItem("a", description: "猫", status: .ready)])
-        #expect(viewer.noticeStack.persistentNotice == nil)
+        #expect(viewer.noticeStack?.persistentNotice == nil)
         #expect(viewer.captionView.accessibilityLabel == "猫")
     }
 
@@ -386,7 +436,7 @@ struct MediaViewerControllerTests {
 
     /// 読み込む前は種類が分からず画像として開くため、読み込んで動画と分かったら、表示中のページを動画のページに作り直す。
     @Test func pageIsRebuiltWhenLoadedMediaTurnsOutToBeVideo() throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = presentDraftViewer(on: harness, items: [draftItem("a", status: .uploading)], actions: DraftActions())
         defer { viewer.dismiss(animated: false) }
@@ -401,7 +451,7 @@ struct MediaViewerControllerTests {
 
     /// 横にスワイプしている途中で切り替え先が動画と分かったら、切り替えを終えた時点で、残っていた画像のページを動画のページに差し替える。
     @Test func pendingPageIsRebuiltAfterTransitionWhenLoadedMediaTurnsOutToBeVideo() throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = presentDraftViewer(on: harness, items: [draftItem("a"), draftItem("b", status: .uploading)], actions: DraftActions())
         defer { viewer.dismiss(animated: false) }
@@ -421,7 +471,7 @@ struct MediaViewerControllerTests {
 
     /// 画面下の説明は1行で見せ、全文はそこからシートで読む。VoiceOverではスワイプできないため、実行しても開く。
     @Test func captionOpensAltTextSheet() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = presentLoadingViewer(on: harness, data: try pngData(), description: "夕焼けの海辺")
         defer { viewer.dismiss(animated: false) }
@@ -450,7 +500,7 @@ struct MediaViewerControllerTests {
     /// 画像から文字を読み取れたら、メニューからその全文を翻訳できる。文字のない画像では出さない。
     @Test(.enabled(if: ImageAnalyzer.isSupported, "Live Textに対応していない環境では解析しない"))
     func menuOffersTranslationOfRecognizedText() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -588,7 +638,7 @@ struct MediaViewerControllerTests {
 
     /// 保存を待つ間に代替テキストのシートを開いても、保存の失敗はそのシートの上にアラートで知らせる。
     @Test func saveFailureIsShownAboveSheetOpenedWhileSaving() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = presentLoadingViewer(on: harness, data: try pngData(), description: "夕焼けの海辺", photoSaver: PhotoLibrarySaver { _ in
             try await Task.sleep(for: .milliseconds(500))
@@ -607,7 +657,7 @@ struct MediaViewerControllerTests {
 
     /// 代替テキストが付いていれば、メニューから全文をシートで出せる。
     @Test func altTextIsOfferedOnlyWhenPresent() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = presentLoadingViewer(on: harness, data: try pngData(), description: "夕焼けの海辺")
         defer { viewer.dismiss(animated: false) }
@@ -633,26 +683,7 @@ struct MediaViewerControllerTests {
         photoSaver: PhotoLibrarySaver = PhotoLibrarySaver { _ in },
         operationStatus: OperationStatus = OperationStatus()
     ) -> MediaTransferCenter {
-        MediaTransferCenter(operationStatus: operationStatus, downloads: downloads, photoSaver: photoSaver)
-    }
-
-    /// ビューアを閉じたあとに一覧へ出した知らせ。
-    @MainActor
-    final class TimelineNotices {
-        var persistent: Notice?
-        var transient: [String] = []
-        var replacedPersistent: [Bool] = []
-
-        func host(presenter: UIViewController) -> MediaTransferCenter.Host {
-            MediaTransferCenter.Host(
-                setPersistent: { [weak self] in self?.persistent = $0 },
-                showTransient: { [weak self] notice, _, replaces in
-                    self?.transient.append(notice.text)
-                    self?.replacedPersistent.append(replaces)
-                },
-                presenter: { [weak presenter] in presenter }
-            )
-        }
+        MediaTransferCenter(operationStatus: operationStatus, notices: notices, downloads: downloads, photoSaver: photoSaver)
     }
 
     /// 動画のビューアを、落とし方を差し替えて一覧の上に開く。
@@ -698,7 +729,7 @@ struct MediaViewerControllerTests {
 
     /// 動画は、保存を選んでから落とし、落としている間は進み具合を出す。落とし終えたら写真に渡して知らせる。
     @Test func savingVideoDownloadsItFirstAndShowsProgress() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let data = Data("movie".utf8)
         let saved = SavedFiles()
@@ -720,7 +751,7 @@ struct MediaViewerControllerTests {
 
     /// 落としている途中のチップは押すと止めるかを確かめ、確かめている間に落とし終えたら、確認を閉じて保存する。
     @Test func tappingDownloadChipConfirmsStopAndClosesWhenDone() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let saved = SavedFiles()
         let viewer = presentVideoViewer(on: harness, photoSaver: PhotoLibrarySaver { saved.files.append($0) }, download: Self.slowDownload(Data("movie".utf8), duration: .seconds(2)))
@@ -728,7 +759,7 @@ struct MediaViewerControllerTests {
 
         viewer.saveToPhotos()
         try await waitUntil { viewer.downloadProgressText == "ダウンロード中 50%" }
-        let chip = try #require(viewer.noticeStack.chips.first)
+        let chip = try #require(viewer.noticeStack?.chips.first)
         #expect(chip.isUserInteractionEnabled)
         #expect(chip.accessibilityHint == "ダウンロードを止めるか選べます。")
         chip.sendActions(for: .primaryActionTriggered)
@@ -743,13 +774,13 @@ struct MediaViewerControllerTests {
         try await waitUntil { viewer.presentedViewController == nil }
         try await waitUntil { viewer.statusChipText == "写真に保存しました" }
         // ダウンロード中のチップがあった場所で、保存したことに入れ替える。
-        #expect(viewer.noticeStack.chips.first === chip)
+        #expect(viewer.noticeStack?.chips.first === chip)
         #expect(viewer.downloadProgressText == nil)
     }
 
     /// 止めるかの確認が出る途中に落とせなかったら、確認を閉じて、失敗を数秒で消えるチップで知らせ、「最近の失敗」に残す。
     @Test func downloadFailureWhileConfirmationAppearsClosesItAndShowsChip() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let recent = OperationStatus()
         let transfers = makeTransfers(downloads: makeDownloads { _, _, onProgress in
@@ -762,7 +793,7 @@ struct MediaViewerControllerTests {
 
         viewer.saveToPhotos()
         try await waitUntil { viewer.downloadProgressText != nil }
-        try #require(viewer.noticeStack.chips.first).sendActions(for: .primaryActionTriggered)
+        try #require(viewer.noticeStack?.chips.first).sendActions(for: .primaryActionTriggered)
         let confirmation = try #require(viewer.presentedViewController as? UIAlertController)
         #expect(confirmation.isBeingPresented)
 
@@ -774,7 +805,7 @@ struct MediaViewerControllerTests {
 
     /// 落としている途中のものは「操作の状況」の「進行中」に並び、行から止めたら通信を止め、保存しない。
     @Test func stoppingFromOperationStatusStopsDownloadWithoutSaving() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let saved = SavedFiles()
         let stopped = Flag()
@@ -802,7 +833,7 @@ struct MediaViewerControllerTests {
 
     /// 全体の大きさが分からず進み具合が0のままのものは、「操作の状況」の「進行中」で、0%に止まった輪ではなく分からない進み具合として並ぶ。
     @Test func downloadWithUnknownSizeIsListedWithoutFraction() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let stopped = Flag()
         let recent = OperationStatus()
@@ -867,7 +898,7 @@ struct MediaViewerControllerTests {
 
     /// 保存は並べて落とし、済んだ順に知らせる。チップには見ている添付ファイルのものを出し、ほかは件数で添える。
     @Test func savesDownloadInParallelAndChipFollowsCurrentPage() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let saved = SavedFiles()
         let release = Flag()
@@ -895,14 +926,14 @@ struct MediaViewerControllerTests {
 
     /// 見ている添付ファイルのものを落としている途中に、ほかのものも落としていれば、件数を添え、押すと「操作の状況」の一覧を開く。
     @Test func chipWithOtherDownloadsOpensOperationStatus() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let release = Flag()
         defer { release.set() }
         let opened = OpenedLists()
         let viewer = makeTwoVideoViewer(on: harness, gated: ["slow.mp4", "fast.mp4"], transfers: { downloads in
             let center = makeTransfers(downloads: downloads)
-            center.showOperationStatus = { opened.presenters.append($0) }
+            center.notices.showOperationStatus = { opened.presenters.append($0) }
             return center
         }, release: release)
         defer { viewer.dismiss(animated: false) }
@@ -910,11 +941,11 @@ struct MediaViewerControllerTests {
         viewer.saveToPhotos()
         try showPage(1, in: viewer)
         viewer.saveToPhotos()
-        try await waitUntil { viewer.noticeStack.persistentNotice?.value == "25%" }
+        try await waitUntil { viewer.noticeStack?.persistentNotice?.value == "25%" }
 
-        let notice = try #require(viewer.noticeStack.persistentNotice)
+        let notice = try #require(viewer.noticeStack?.persistentNotice)
         #expect(notice.additionalCount == 1)
-        let chip = try #require(viewer.noticeStack.chips.first)
+        let chip = try #require(viewer.noticeStack?.chips.first)
         #expect(chip.accessibilityHint == "操作の状況を開きます。")
         chip.sendActions(for: .primaryActionTriggered)
         #expect(opened.presenters.first === viewer)
@@ -922,32 +953,34 @@ struct MediaViewerControllerTests {
 
     /// ビューアを閉じても保存のためのダウンロードは続け、済んだら一覧の知らせの場所で、落としている途中のチップと入れ替えて知らせる。
     @Test func closingViewerKeepsSavingAndReportsOnTimeline() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let saved = SavedFiles()
-        let timeline = TimelineNotices()
+        let stack = harness.overlay.column.stack
         let transfers = makeTransfers(downloads: makeDownloads(download: Self.slowDownload(Data("movie".utf8), duration: .milliseconds(500))), photoSaver: PhotoLibrarySaver { saved.files.append($0) })
-        transfers.host = timeline.host(presenter: harness.viewController)
         let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
 
         viewer.saveToPhotos()
-        try await waitUntil { timeline.persistent?.text == "ダウンロード中 50%" }
+        try await waitUntil { stack.persistentNotice?.text == "ダウンロード中 50%" }
+        let chip = try #require(stack.chips.first)
         viewer.dismiss(animated: false)
+        // 閉じたあとも、同じチップがそのまま一覧の位置に残る。
+        #expect(stack.chips.first === chip)
+        #expect(stack.persistentNotice?.text == "ダウンロード中 50%")
 
         try await waitUntil { saved.files.count == 1 }
-        try await waitUntil { timeline.transient == ["写真に保存しました"] }
-        #expect(timeline.replacedPersistent == [true])
-        #expect(timeline.persistent == nil)
+        try await waitUntil { stack.transientNotice?.text == "写真に保存しました" }
+        #expect(stack.chips.first === chip)
+        #expect(stack.persistentNotice == nil)
     }
 
     /// 共有のために落としている途中でビューアを閉じたら止め、止めたことを一覧に数秒出す。保存のためのものは続ける。
     @Test func closingViewerStopsSharingAndReportsOnTimeline() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let stopped = Flag()
-        let timeline = TimelineNotices()
+        let stack = harness.overlay.column.stack
         let transfers = makeTransfers(downloads: makeDownloads(download: Self.endlessDownload(stopped: stopped)))
-        transfers.host = timeline.host(presenter: harness.viewController)
         let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
 
         try #require(menuAction("共有", in: viewer)).performWithSender(nil, target: nil)
@@ -955,18 +988,18 @@ struct MediaViewerControllerTests {
         viewer.dismiss(animated: false)
 
         try await waitUntil { stopped.isSet }
-        #expect(timeline.transient == ["共有を止めました"])
-        #expect(timeline.persistent == nil)
+        #expect(stack.transientNotice?.text == "共有を止めました")
+        #expect(stack.persistentNotice == nil)
         #expect(transfers.transfers.transfers.isEmpty)
     }
 
     /// Macではビューアを別々のウィンドウで開くため、ほかのビューアを開いたり閉じたりしても、共有は始めたビューアに届け、そのビューアを閉じたときだけ止める。
     @Test func sharingBelongsToViewerThatStartedIt() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let release = Flag()
         let stopped = Flag()
-        let timeline = TimelineNotices()
+        let stack = harness.overlay.column.stack
         let transfers = makeTransfers(downloads: makeDownloads { url, folder, onProgress in
             onProgress(0.5)
             do {
@@ -982,7 +1015,6 @@ struct MediaViewerControllerTests {
             try Data("movie".utf8).write(to: file)
             return file
         })
-        transfers.host = timeline.host(presenter: harness.viewController)
         let first = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
         try #require(menuAction("共有", in: first)).performWithSender(nil, target: nil)
         try await waitUntil { first.downloadProgressText != nil }
@@ -994,7 +1026,7 @@ struct MediaViewerControllerTests {
         second.dismiss(animated: false)
         try await Task.sleep(for: .milliseconds(100))
         #expect(!stopped.isSet)
-        #expect(timeline.transient.isEmpty)
+        #expect(stack.transientNotice == nil)
 
         release.set()
         try await waitUntil { first.presentedViewController is UIActivityViewController }
@@ -1004,7 +1036,7 @@ struct MediaViewerControllerTests {
 
     /// 見ていない添付ファイルの失敗は、どれの失敗か分かるよう種類で示す。
     @Test func failureOfOtherAttachmentNamesItsKind() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let fail = Flag()
         let downloads = makeDownloads { url, _, onProgress in
@@ -1028,13 +1060,13 @@ struct MediaViewerControllerTests {
         fail.set()
 
         try await waitUntil { viewer.statusChipText == "GIFを共有できませんでした" }
-        let chip = try #require(viewer.noticeStack.chips.first)
+        let chip = try #require(viewer.noticeStack?.chips.first)
         #expect(chip.accessibilityHint == "理由を見られます。")
     }
 
     /// 見ている添付ファイルを落とせなかったら、何ができなかったかだけを数秒で消えるチップで出し、押すと理由を出す。
     @Test func downloadFailureIsShown() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = presentVideoViewer(on: harness) { _, _, _ in throw URLError(.notConnectedToInternet) }
         defer { viewer.dismiss(animated: false) }
@@ -1043,7 +1075,7 @@ struct MediaViewerControllerTests {
 
         try await waitUntil { viewer.statusChipText == "ダウンロードできませんでした" }
         #expect(viewer.downloadProgressText == nil)
-        try #require(viewer.noticeStack.chips.first).sendActions(for: .primaryActionTriggered)
+        try #require(viewer.noticeStack?.chips.first).sendActions(for: .primaryActionTriggered)
         try await waitUntil { viewer.presentedViewController is UIAlertController }
         #expect((viewer.presentedViewController as? UIAlertController)?.title == "ダウンロードできませんでした")
         viewer.presentedViewController?.dismiss(animated: false)
@@ -1051,7 +1083,7 @@ struct MediaViewerControllerTests {
 
     /// 音声は写真に入らないため、保存は出さない。
     @Test func audioOffersOnlySharing() throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = presentVideoViewer(on: harness, type: .audio, download: Self.slowDownload(Data()))
         defer { viewer.dismiss(animated: false) }
@@ -1084,7 +1116,7 @@ struct MediaViewerControllerTests {
 
     /// ビューアは一覧を残したまま覆うため、開いている間は一覧の投稿を見たと報告せず、閉じ終わったら報告する。
     @Test func timelineReportsVisibleStatusesOnlyAfterViewerCloses() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let statuses = StatusFactory.make(count: 5, startingAt: 1_000)
         harness.setStatuses(statuses)
@@ -1113,7 +1145,7 @@ struct MediaViewerControllerTests {
 
     /// 開閉の間はサムネイルとビューアの画像を隠して複製を動かし、開ききったら両方とも元どおり見せる。閉じる動きの間も一覧を操作でき、戻り終えたらサムネイルを見せる。
     @Test func transitionRestoresThumbnailAndContentAfterOpeningAndClosing() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: 20, y: 200, width: 160, height: 90)
@@ -1165,7 +1197,7 @@ struct MediaViewerControllerTests {
 
     /// 開く途中は、バーの下のサムネイルと同じ見え方から始めるため、サムネイルを含む一覧の行の中にも複製を置く。開ききったら外し、最前面の複製のマスクも外す。
     @Test func openingDrawsUnderBarsUntilOpened() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         // 下端をバーに見立てた一覧。サムネイルの下半分がバーに隠れる。
         let list = UIScrollView(frame: harness.viewController.view.bounds)
@@ -1217,7 +1249,7 @@ struct MediaViewerControllerTests {
 
     /// 手元にプレビューもぼかしもない画像でも、開く途中に元の画像が届いたら、複製をその画像に差し替える。
     @Test func morphFollowsImageThatArrivesWhileOpening() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
@@ -1245,7 +1277,7 @@ struct MediaViewerControllerTests {
             startIndex: 0,
             store: store,
             dragToDismiss: drag,
-            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, noticeAnimationDuration: 0.2, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3),
+            timing: MediaViewerController.Timing(openDuration: 1, closeDuration: 1, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3),
             from: harness.viewController,
             sourceTile: { _ in tile },
             onDismiss: {}
@@ -1259,7 +1291,7 @@ struct MediaViewerControllerTests {
 
     /// ビューアは一覧を残したまま上に重ねるため、開いている間も閉じたあとも、一覧の読んでいる位置を動かさない。
     @Test func timelineKeepsPositionWhileViewerOpensAndCloses() async throws {
-        let harness = try TimelineHarness()
+        let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
         harness.setStatuses(statuses)

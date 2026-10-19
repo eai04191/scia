@@ -110,6 +110,7 @@ extension TimelineViewController {
                 dragToDismiss: dragToDismiss,
                 timing: timing,
                 transfers: mediaTransfers,
+                notices: notices,
                 subject: subject
             )
             MediaWindow.open(request, from: view.window?.windowScene)
@@ -126,7 +127,6 @@ extension TimelineViewController {
             transfers: mediaTransfers,
             subject: subject,
             sourceTile: sourceTile,
-            onShowOperationStatus: onShowOperationStatus,
             // 一覧は残したままなので表示し直しの通知が来ない。開いている間に届いた新着を、閉じたところで報告する。
             onDismiss: { [weak self] in self?.reportVisibleItems() }
         )

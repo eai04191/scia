@@ -19,6 +19,8 @@ enum MediaWindow {
         let dragToDismiss: DragToDismiss
         let timing: MediaViewerController.Timing
         let transfers: MediaTransferCenter?
+        /// アプリ全体のアプリ内通知。ビューアのウィンドウにもチップの列を重ね、全部のウィンドウに出す。
+        let notices: NoticeCenter?
         let subject: OperationStatus.Subject?
     }
 
@@ -76,6 +78,9 @@ final class MediaWindowSceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         self.window = window
         window.makeKeyAndVisible()
+        if let notices = request.notices {
+            NoticeOverlay.install(in: window, center: notices)
+        }
         #if DEBUG
         MacWindowTitle.set(MediaWindow.windowTitle, for: window)
         #endif

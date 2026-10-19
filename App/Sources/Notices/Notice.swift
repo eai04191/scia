@@ -4,7 +4,7 @@ import Foundation
 ///
 /// 数秒で消えるか出たままかは中身に持たせず、`NoticeStackView`のどちらに渡すかで決める。消え方と押せるかを別々に選べるようにするため。
 struct Notice {
-    /// 知らせの種類。先頭の印と、ボタン類を隠したときに一緒に隠すかを決める。
+    /// アプリ内通知の種類。先頭の印と、ボタン類を隠したときに一緒に隠すかを決める。
     enum Kind: Equatable {
         /// 処理の途中。済めば消えるため、ボタン類を隠しても隠さない。
         case progress
@@ -44,5 +44,19 @@ struct Notice {
 
     var isActionable: Bool {
         if case .none = action { false } else { true }
+    }
+
+    /// 画面に出したときに同じ見た目で、VoiceOverでも同じに伝わるか。押したときの処理は比べない。
+    func looksSame(as other: Notice) -> Bool {
+        id == other.id && kind == other.kind && title == other.title && value == other.value
+            && additionalCount == other.additionalCount && actionHint == other.actionHint
+    }
+
+    private var actionHint: String? {
+        switch action {
+        case .none: nil
+        case .disclosure(let hint, _): "disclosure:\(hint)"
+        case .immediate(let hint, _): "immediate:\(hint)"
+        }
     }
 }
