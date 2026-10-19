@@ -11,6 +11,8 @@ enum DebugURL: Equatable {
     case dummy(DebugDummyPost)
     /// `scia-debug://unauthorized`。以後のREST APIに401を返させ、トークンが無効になった状態にする。
     case unauthorized
+    /// `scia-debug://dummy-session`で、ログインせずに、通信しないダミーのデータでホームと通知の画面に入る（`DummyServer`）。ログイン画面でも受け付ける。
+    case dummySession
     /// `scia-debug://unreadable`。以後のホームと通知の応答の一部を読めない形に壊し、読み込み直す。
     case unreadable
     /// `scia-debug://status/<ステータスコード>`。以後のREST APIにそのステータスのHTMLのエラーページを返させ、読み込み直す。
@@ -65,6 +67,8 @@ enum DebugURL: Equatable {
         case "dummy":
             guard let post = DebugDummyPost(rawValue: url.lastPathComponent) else { return nil }
             self = .dummy(post)
+        case "dummy-session":
+            self = .dummySession
         case "unauthorized":
             self = .unauthorized
         case "unreadable":

@@ -70,6 +70,8 @@ struct LoginView: View {
     let makeAuthenticator: @MainActor () -> WebAuthenticator?
     /// アカウントを追加するためにシートで出したときに、閉じるボタンで呼ぶ。nilなら閉じるボタンを出さない。
     var onCancel: (@MainActor () -> Void)?
+    /// デバッグビルドで、ログインせずにダミーのデータで入るボタンを押したとき。nilならボタンを出さない。
+    var onDummySession: (@MainActor () -> Void)?
 
     /// 最初の起動で出すログイン画面か。アカウントの追加のシートでは、アプリの名前を出さない。
     private var isFirstLogin: Bool { onCancel == nil }
@@ -124,6 +126,15 @@ struct LoginView: View {
                     }
                     .disabled(model.isLoggingIn)
                 }
+                #if DEBUG
+                if let onDummySession {
+                    Section {
+                        Button("ダミーのデータで入る") { onDummySession() }
+                    } footer: {
+                        Text("デバッグビルドだけ。通信せず、ダミーの投稿と通知でホームと通知の画面に入ります。")
+                    }
+                }
+                #endif
             }
             // ログインボタンは一覧の外の下端に固定する。候補がいくつ並んでも押し出されず、キーボードが出ればその上に乗る。
             // 一覧を最後までスクロールしたときに、末尾のクレジットがボタンに詰まらないよう、間をあける。

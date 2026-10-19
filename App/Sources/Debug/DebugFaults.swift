@@ -158,6 +158,10 @@ struct FaultInjectingTransport: HTTPTransport {
     let base: any HTTPTransport
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        // ダミーのサーバーには通信しない。ほかの障害は重ねない。
+        if DummyServer.handles(request.url) {
+            return await DummyServer.response(for: request)
+        }
         if DebugFaults.isRejectingAsUnauthorized,
            let url = request.url,
            let response = HTTPURLResponse(url: url, statusCode: 401, httpVersion: nil, headerFields: nil) {
@@ -198,6 +202,7 @@ struct FaultInjectingWebSocketConnector: WebSocketConnector {
     let base: any WebSocketConnector
 
     func connect(_ request: URLRequest) -> any WebSocketConnection {
+        if DummyServer.handles(request.url) { return DummyWebSocketConnection() }
         guard DebugFaults.isStreamingOnline else { return UnreachableWebSocketConnection() }
         return DebugFaults.track(base.connect(request))
     }

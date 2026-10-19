@@ -40,6 +40,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             guard let url = AppURL(context.url), let session = self.session else { continue }
             session.open(url)
         }
+        #if DEBUG
+        // ダミーのセッションは、閉じていたアプリをURLで開いたときも入る。
+        if connectionOptions.urlContexts.contains(where: { DebugURL($0.url) == .dummySession }) {
+            openDummySession()
+        }
+        #endif
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
@@ -71,6 +77,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 logger.error("unknown debug url: \(context.url.absoluteString, privacy: .public)")
                 continue
             }
+            // ダミーのセッションは、ログイン画面からも入れるよう、セッションがなくても受け付ける。
+            if case .dummySession = url {
+                logger.info("debug url: \(context.url.absoluteString, privacy: .public)")
+                openDummySession()
+                continue
+            }
             guard let session else {
                 logger.error("debug url ignored without session: \(context.url.absoluteString, privacy: .public)")
                 continue
@@ -78,6 +90,18 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             logger.info("debug url: \(context.url.absoluteString, privacy: .public)")
             session.handle(url)
         }
+    }
+    #endif
+
+    #if DEBUG
+    /// ログインせずに、ダミーのデータでホームと通知の画面に入る。Keychainのアカウントとは結び付けない。
+    /// ログイン済みのときは入らない。表示だけダミーになると、アカウントのメニューの切り替えやログアウトが、保存してあるアカウントに効いてしまうため。
+    private func openDummySession() {
+        guard session == nil else {
+            logger.error("dummy session ignored: already logged in")
+            return
+        }
+        showTimeline(for: DummyServer.credential)
     }
     #endif
 
@@ -289,9 +313,16 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             try accounts.add(credential)
             Self.syncAllScenes()
         }
-        let view = LoginView(model: model) { [weak self] in
-            self?.window.map { WebAuthenticator(anchor: $0) }
-        }
+        #if DEBUG
+        let onDummySession: (@MainActor () -> Void)? = { [weak self] in self?.openDummySession() }
+        #else
+        let onDummySession: (@MainActor () -> Void)? = nil
+        #endif
+        let view = LoginView(
+            model: model,
+            makeAuthenticator: { [weak self] in self?.window.map { WebAuthenticator(anchor: $0) } },
+            onDummySession: onDummySession
+        )
         window?.rootViewController = UIHostingController(rootView: view)
         installNoticeOverlay()
         if let errorMessage {
