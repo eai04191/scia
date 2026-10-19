@@ -38,7 +38,7 @@ final class StatusBarTicker {
     }
 
     func receive(_ item: StatusBarTickerItem) {
-        guard canShow() else { return }
+        guard canShowNow() else { return }
         queue.timing = TuningCatalog.statusBarTickerTiming(in: tuning)
         queue.enqueue(item)
         if shownAt == nil {
@@ -51,8 +51,20 @@ final class StatusBarTicker {
 
     /// 流してよいかが変わったかもしれないとき（タブを切り替えたときなど）に呼ぶ。流してはいけなくなっていたら、待っている通知ごと消す。
     func reevaluate() {
-        guard shownAt != nil, !canShow() else { return }
+        guard shownAt != nil, !canShowNow() else { return }
         clear()
+    }
+
+    /// アプリの画面が流してよい状態で、今の向きにステータスバーがあるか。
+    /// 出している途中に横向きにしたとき、縦向きの切り欠きの形のまま画面の上を覆わないよう、出している間も向きを確かめる。
+    private func canShowNow() -> Bool {
+        canShow() && currentCutout() != nil
+    }
+
+    /// 今の画面の切り欠きの形。ステータスバーのない向きではnil。
+    private func currentCutout() -> StatusBarCutout? {
+        guard let scene = scene(), let reference = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first else { return nil }
+        return StatusBarCutout.current(in: reference)
     }
 
     /// 待っている通知を捨て、出しているものを消す。
@@ -64,7 +76,7 @@ final class StatusBarTicker {
     }
 
     private func advance() {
-        guard canShow(), let next = queue.next() else {
+        guard canShowNow(), let next = queue.next() else {
             clear()
             return
         }
@@ -99,7 +111,7 @@ final class StatusBarTicker {
                 try? await Task.sleep(for: min(.milliseconds(200), deadline - .now))
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
-                if !self.canShow() {
+                if !self.canShowNow() {
                     self.clear()
                     return
                 }
@@ -171,9 +183,7 @@ final class StatusBarTicker {
 
     /// 流すウィンドウを用意し、今の画面の形を当てる。ステータスバーのない向きではnil。
     private func prepareWindow() -> TickerWindow? {
-        guard let scene = scene(), let reference = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first,
-              let cutout = StatusBarCutout.current(in: reference)
-        else { return nil }
+        guard let scene = scene(), let cutout = currentCutout() else { return nil }
         if let window {
             window.ticker.setCutout(cutout)
             return window
@@ -184,6 +194,10 @@ final class StatusBarTicker {
         }
         window.ticker.onTap = { [weak self] in
             self?.onTap()
+        }
+        // 見張りの間隔を待たず、回し始めたところで消す。
+        window.host.onVerticalSizeClassChange = { [weak self] in
+            self?.reevaluate()
         }
         self.window = window
         return window
@@ -218,10 +232,15 @@ private final class TickerWindow: UIWindow {
 private final class TickerHostController: UIViewController {
     let ticker: StatusBarTickerView
     var hidesStatusBar = false
+    /// 縦と横を回して、ステータスバーのある向きかが変わったとき。
+    var onVerticalSizeClassChange: () -> Void = {}
 
     init(ticker: StatusBarTickerView) {
         self.ticker = ticker
         super.init(nibName: nil, bundle: nil)
+        registerForTraitChanges([UITraitVerticalSizeClass.self]) { (self: Self, _) in
+            self.onVerticalSizeClassChange()
+        }
     }
 
     @available(*, unavailable)
