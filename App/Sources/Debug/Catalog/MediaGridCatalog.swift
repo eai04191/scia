@@ -36,6 +36,12 @@ enum MediaGridCatalog {
                     Fixtures.attachment("d", type: .unknown("unknown"), width: 0, height: 0, hasPreview: false),
                 ])
             },
+            CatalogState(title: "札（ALTとGIF。幅160、80、48ptのタイル。入らなければ頭の1文字）") {
+                tiles(Fixtures.attachment("a", type: .gifv, width: 1_200, height: 900, color: .systemIndigo, description: "動くGIF"))
+            },
+            CatalogState(title: "札（文字の大きさを最大にしたとき。札の文字は上限で止まる）") {
+                tiles(Fixtures.attachment("a", type: .gifv, width: 1_200, height: 900, color: .systemIndigo, description: "動くGIF"), contentSize: .accessibilityExtraExtraExtraLarge)
+            },
             CatalogState(title: "読み込み中（ぼかしの下地あり、なし）") {
                 grid(
                     [
@@ -63,6 +69,35 @@ enum MediaGridCatalog {
         return (0..<count).map { index in
             Fixtures.attachment("\(index)", width: 1_200, height: 900, color: colors[index % colors.count])
         }
+    }
+
+    /// 同じ添付ファイルのタイルを、幅を変えて並べる。一覧の並べ方では狭いタイルが出にくいため、札が幅に入らないときの形を直接見る。
+    /// - Parameter contentSize: 文字の大きさの設定。nilなら端末の設定に従う。
+    @MainActor
+    private static func tiles(_ attachment: MediaAttachment, widths: [CGFloat] = [160, 80, 48], contentSize: UIContentSizeCategory? = nil) -> UIView {
+        let row = UIStackView()
+        row.axis = .horizontal
+        row.alignment = .bottom
+        row.spacing = 8
+        if let contentSize {
+            row.traitOverrides.preferredContentSizeCategory = contentSize
+        }
+        for width in widths {
+            let tile = MediaTileView(store: AppDependencies.mediaImages)
+            tile.apply(attachment, hiddenCount: 0, isCovered: false, policy: MediaThumbnailPolicy(allowsOriginal: true, upscaleTolerance: 2))
+            tile.widthAnchor.constraint(equalToConstant: width).isActive = true
+            tile.heightAnchor.constraint(equalToConstant: 64).isActive = true
+            row.addArrangedSubview(tile)
+        }
+        let container = UIView()
+        row.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(row)
+        NSLayoutConstraint.activate([
+            row.topAnchor.constraint(equalTo: container.topAnchor),
+            row.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            row.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+        ])
+        return container
     }
 
     @MainActor
