@@ -1,4 +1,3 @@
-import os
 import SciaCore
 import UIKit
 
@@ -96,36 +95,14 @@ extension TimelineViewController {
     ///   - subject: 添付ファイルの投稿。プロフィールの画像ならnil。
     ///   - sourceTile: 開閉の起点にするビューを返す。見つからなければnilを返し、画像を動かさずに薄くして開閉する。
     func openMedia(_ attachments: [MediaAttachment], at index: Int, subject: OperationStatus.Subject?, sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?) {
-        UserAction.openViewer(count: attachments.count, index: index).record()
         // ビューアは一覧を残したまま覆うため、覆っている間は、リンクカードを取り直す投稿として見えていないことにする。閉じたら報告し直す。
         onVisibleLinkOnlyCardsChange?([])
-        SciaLog.logger(category: "media").info("open viewer count=\(attachments.count, privacy: .public) index=\(index, privacy: .public)")
-        let timing = MediaViewerController.Timing(tuning: tuning)
-        let dragToDismiss = TuningCatalog.dragToDismiss(in: tuning)
-        if MediaWindow.isAvailable {
-            let request = MediaWindow.Request(
-                attachments: attachments,
-                startIndex: index,
-                store: mediaImages,
-                dragToDismiss: dragToDismiss,
-                timing: timing,
-                transfers: mediaTransfers,
-                notices: notices,
-                subject: subject
-            )
-            MediaWindow.open(request, from: view.window?.windowScene)
-            return
-        }
-        MediaViewerController.present(
-            attachments: attachments,
-            startIndex: index,
-            store: mediaImages,
-            dragToDismiss: dragToDismiss,
-            timing: timing,
-            // アプリ内のSafariのシートを出していれば、その上に重ねる。
-            from: frontmostPresented,
-            transfers: mediaTransfers,
+        MediaViewerOpener(store: mediaImages, tuning: tuning, transfers: mediaTransfers, notices: notices).open(
+            attachments,
+            at: index,
             subject: subject,
+            // アプリ内のSafariのシートを出していれば、その上に重ねる。
+            from: self,
             sourceTile: sourceTile,
             // 一覧は残したままなので表示し直しの通知が来ない。開いている間に届いた新着を、閉じたところで報告する。
             onDismiss: { [weak self] in self?.reportVisibleItems() }
