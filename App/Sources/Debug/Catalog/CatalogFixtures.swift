@@ -12,6 +12,16 @@ enum CatalogFixtures {
         return URL(string: "data:image/jpeg;base64,\(data.base64EncodedString())")
     }
 
+    /// HLGのHDRの画像。読み込むと、一覧のサムネイルがHDRと判定する。
+    static func hdrImageURL(width: Int, height: Int, color: UIColor, label: String = "") -> URL? {
+        let image = DummyMedia.image(size: CGSize(width: width, height: height), color: color, label: label)
+        guard let source = CIImage(image: image),
+              let space = CGColorSpace(name: CGColorSpace.itur_2100_HLG),
+              let data = CIContext().pngRepresentation(of: source, format: .RGBA16, colorSpace: space)
+        else { return nil }
+        return URL(string: "data:image/png;base64,\(data.base64EncodedString())")
+    }
+
     /// 画像が届くまで出すぼかしの下地。blurhashの説明でよく使われる例の値。
     static let blurhash = "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
 
@@ -44,9 +54,12 @@ enum CatalogFixtures {
         label: String = "",
         description: String? = nil,
         blurhash: String? = nil,
-        hasPreview: Bool = true
+        hasPreview: Bool = true,
+        hdr: Bool = false
     ) -> MediaAttachment {
-        let url = hasPreview ? imageURL(width: width, height: height, color: color, label: label) : nil
+        let url = !hasPreview ? nil : hdr
+            ? hdrImageURL(width: width, height: height, color: color, label: label)
+            : imageURL(width: width, height: height, color: color, label: label)
         return MediaAttachment(
             id: id,
             type: type,
