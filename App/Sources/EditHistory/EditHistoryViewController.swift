@@ -75,6 +75,7 @@ final class EditHistoryViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         scrollView.alwaysBounceVertical = true
+        scrollView.hidesTopEdgeEffectOnMac()
         scrollView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(scrollView)
         stack.axis = .vertical

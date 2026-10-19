@@ -136,6 +136,7 @@ struct LoginView: View {
                 }
                 #endif
             }
+            .topEdgeEffectHiddenOnMac()
             // ログインボタンは一覧の外の下端に固定する。候補がいくつ並んでも押し出されず、キーボードが出ればその上に乗る。
             // 一覧を最後までスクロールしたときに、末尾のクレジットがボタンに詰まらないよう、間をあける。
             .safeAreaBar(edge: .bottom, spacing: 16) {

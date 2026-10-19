@@ -89,6 +89,7 @@ struct DiscomfortReportView: View {
                     }
                 }
             }
+            .topEdgeEffectHiddenOnMac()
             .navigationTitle("違和感レポート")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

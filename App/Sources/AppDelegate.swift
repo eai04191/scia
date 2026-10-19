@@ -10,6 +10,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         // シーンのウィンドウができる前に差し替える
         MacNativeScale.installIfOnMac()
         #endif
+        MacNavigationBarBackground.install()
         return true
     }
 

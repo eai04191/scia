@@ -36,6 +36,7 @@ final class AltTextViewController: UIViewController {
         textView.textContainerInset = UIEdgeInsets(top: 8, left: 12, bottom: 16, right: 12)
         textView.frame = view.bounds
         textView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        textView.hidesTopEdgeEffectOnMac()
         view.addSubview(textView)
         // ナビゲーションバーがどのスクロールビューに合わせるかを明示する。翻訳シートを出すための見えないSwiftUIのビューを一番奥に置いたら、
         // バーが本文を見つけられず、本文の先頭がバーの下に潜った。今は本文の上に置いているが、置き場所で壊れないよう明示したままにする。

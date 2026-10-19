@@ -69,6 +69,7 @@ struct ConnectionStatusView: View {
                 }
             }
         }
+        .topEdgeEffectHiddenOnMac()
         .navigationTitle("接続の状態")
         .task {
             // 開いている間も状態は変わるため、読み直し続ける。

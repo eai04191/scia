@@ -96,6 +96,7 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
                 }
             }
         }
+        .topEdgeEffectHiddenOnMac()
         // 別のウィンドウで同じ設定を変えたら、行も作り直す。古い行のまま保存すると、そちらの変更を上書きしてしまうため。
         .onChange(of: layout) { _, newValue in
             guard newValue.elements != rows.map(\.element) else { return }

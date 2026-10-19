@@ -239,6 +239,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .topEdgeEffectHiddenOnMac()
             .task {
                 do {
                     previewAccount = try await loadPreviewAccount()

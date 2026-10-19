@@ -216,6 +216,7 @@ final class TimelineViewController: UIViewController {
         applyBarItems()
         collectionView.frame = view.bounds
         collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        collectionView.hidesTopEdgeEffectOnMac()
         collectionView.delegate = self
         collectionView.prefetchDataSource = self
         collectionView.addGestureRecognizer(scrollToTopInterruption)
