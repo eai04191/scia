@@ -2,8 +2,9 @@
 import SciaCore
 import UIKit
 
-/// 知らせのチップ（`NoticeStackView`）の状態。ガラスの効果を見られるよう、ビューアのように画像の上に置く。
+/// アプリ内通知のチップの列（`NoticeColumnView`）の状態。ガラスの効果を見られるよう、ビューアのように画像の上に置く。
 /// 本物の数秒で消えるチップはすぐ消えるため、カタログでは1時間出したままにする。押しても何も起きない。
+/// 一覧の新着のボタンとの重なりは、「一覧の上に重ねる表示」に並べる。
 enum NoticeCatalog {
     private static let url = URL(string: "https://x.example/video.mp4") ?? URL(filePath: "/")
 
@@ -76,7 +77,73 @@ enum NoticeCatalog {
             CatalogState(title: "画面をタップしてボタン類を隠したとき（失敗は場所を空けて薄くする）") {
                 stack(persistent: draft(.failed), transient: .savedToPhotos, chromeHidden: true)
             },
+            CatalogState(title: "画面だけのチップ（アップロード中）とアプリ全体のダウンロード中が重なる（押すと操作の状況の一覧）") {
+                var notices = PersistentNotices()
+                notices.set(.download(of: url, fraction: 0.42) {}, in: .download)
+                notices.set(draft(.uploading), in: .screen)
+                return stack(persistent: notices.chipNotice {}, belongsToScreen: notices.chosenSlot == .screen)
+            },
+            CatalogState(title: "画面だけのチップを払って閉じる途中（背景に合わせて薄くし、アプリ全体のものは残す）") {
+                stack(persistent: draft(.failed), transient: .savedToPhotos, belongsToScreen: true, screenAlpha: 0.3)
+            },
+            CatalogState(title: "ログインし直し") { column(reauthentication: reauthentication(Self.shortHandle)) },
+            CatalogState(title: "ログインし直し（長いアカウント名は真ん中を省く）") { column(reauthentication: reauthentication(Self.longHandle)) },
+            CatalogState(title: "ログインし直しを始めた（読み込み中）") {
+                column(reauthentication: reauthentication(Self.shortHandle, isInProgress: true))
+            },
+            CatalogState(title: "ログインし直しと、ダウンロード中と写真に保存しました") {
+                column(reauthentication: reauthentication(Self.shortHandle), persistent: .download(of: url, fraction: 0.42) {}, transient: .savedToPhotos)
+            },
+            CatalogState(title: "ログインし直しと長い文言の失敗") {
+                column(reauthentication: reauthentication(Self.longHandle), transient: .interactionFailure(title: "長い文言のときにチップがどこまで広がり、どこで切れて「›」が残るかを確かめるための失敗") {})
+            },
+            CatalogState(title: "ビューアでボタン類を隠したとき（ログインし直しと出たままの失敗を、場所を空けて薄くする）") {
+                column(reauthentication: reauthentication(Self.shortHandle), persistent: draft(.failed), transient: .savedToPhotos, chromeHidden: true)
+            },
         ]
+    }
+
+    private static let shortHandle = "@eai@stellaria.network"
+    private static let longHandle = "@a_rather_long_username_here@social.example-instance.com"
+
+    @MainActor
+    static func reauthentication(_ handle: String, isInProgress: Bool = false) -> NoticeCenter.Reauthentication {
+        NoticeCenter.Reauthentication(handle: handle, isInProgress: isInProgress) {}
+    }
+
+    /// ログインし直しの段も含めた列を、ビューアのように画像の上に置く。
+    @MainActor
+    private static func column(
+        reauthentication: NoticeCenter.Reauthentication?,
+        persistent: Notice? = nil,
+        transient: Notice? = nil,
+        chromeHidden: Bool = false
+    ) -> UIView {
+        let column = makeColumn(reauthentication: reauthentication, persistent: persistent, transient: transient)
+        column.setChromeHidden(chromeHidden, animated: false)
+        let height = column.height(forWidth: 320)
+        return CatalogBackdrop.image(column) { backdrop, column in
+            [
+                column.topAnchor.constraint(equalTo: backdrop.topAnchor, constant: 24),
+                column.heightAnchor.constraint(equalToConstant: height),
+                column.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor, constant: -24),
+                column.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor, constant: 16),
+                column.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor, constant: -16),
+            ]
+        }
+    }
+
+    /// 状態を入れた列。置き場所は呼んだ側が決める。
+    @MainActor
+    static func makeColumn(reauthentication: NoticeCenter.Reauthentication?, persistent: Notice? = nil, transient: Notice? = nil) -> NoticeColumnView {
+        let column = NoticeColumnView()
+        column.animationDuration = 0
+        column.setReauthentication(reauthentication, animated: false)
+        column.stack.setPersistent(persistent)
+        if let transient {
+            column.stack.showTransient(transient, duration: 3600)
+        }
+        return column
     }
 
     @MainActor
@@ -85,10 +152,11 @@ enum NoticeCatalog {
     }
 
     @MainActor
-    private static func stack(persistent: Notice? = nil, transient: Notice? = nil, chromeHidden: Bool = false) -> UIView {
+    private static func stack(persistent: Notice? = nil, transient: Notice? = nil, chromeHidden: Bool = false, belongsToScreen: Bool = false, screenAlpha: CGFloat = 1) -> UIView {
         let stack = NoticeStackView()
         stack.animationDuration = 0
-        stack.setPersistent(persistent)
+        stack.setPersistent(persistent, belongsToScreen: belongsToScreen)
+        stack.screenAlpha = screenAlpha
         if let transient {
             stack.showTransient(transient, duration: 3600)
         }

@@ -31,7 +31,6 @@ enum CatalogComponent: String, CaseIterable {
     case linkCards = "link-cards"
     case notifications
     case editHistory = "edit-history"
-    case reauthenticationPrototype = "reauth-prototype"
 
     var title: String {
         switch self {
@@ -39,7 +38,7 @@ enum CatalogComponent: String, CaseIterable {
         case .completionList: "投稿欄の補完の候補"
         case .altTextEditor: "代替テキストの入力欄"
         case .caption: "ビューアの説明"
-        case .notices: "知らせのチップ"
+        case .notices: "アプリ内通知のチップの列"
         case .operationStatus: "操作の状況の一覧"
         case .videoControls: "動画の再生の操作"
         case .timelineEmpty: "タイムラインが空のときの表示"
@@ -53,7 +52,6 @@ enum CatalogComponent: String, CaseIterable {
         case .linkCards: "リンクカード"
         case .notifications: "通知の種類"
         case .editHistory: "編集履歴の版"
-        case .reauthenticationPrototype: "ログインし直しの形（試作）"
         }
     }
 
@@ -78,7 +76,6 @@ enum CatalogComponent: String, CaseIterable {
         case .linkCards: PostRowCatalog.linkCardStates()
         case .notifications: PostRowCatalog.notificationStates()
         case .editHistory: EditHistoryCatalog.states()
-        case .reauthenticationPrototype: ReauthenticationPrototypeCatalog.states()
         }
     }
 }
@@ -135,6 +132,25 @@ final class CatalogControllerHost: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    /// 画面の上に重ねるビューと、その置き方。ウインドウに重ねる部品（チップの列）を、画面が伝える位置に置いて見せる。
+    private var overlay: (view: UIView, layout: (CatalogControllerHost, UIView) -> Void)?
+
+    /// 画面の上に`view`を重ねる。並べ直すたびに`layout`で置く。
+    func addOverlay(_ view: UIView, layout: @escaping (CatalogControllerHost, UIView) -> Void) {
+        overlay = (view, layout)
+        addSubview(view)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if let overlay {
+            // 重ねるビューは中の画面が伝える位置に置くため、中の画面を先に並べ終える。
+            controller.view.layoutIfNeeded()
+            bringSubviewToFront(overlay.view)
+            overlay.layout(self, overlay.view)
+        }
     }
 
     /// 子の画面として抱えた後に、画面のビューを枠いっぱいに置く。

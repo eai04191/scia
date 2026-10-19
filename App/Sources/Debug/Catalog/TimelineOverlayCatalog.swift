@@ -3,20 +3,62 @@ import Foundation
 import SciaCore
 import UIKit
 
-/// 一覧の上に重ねて出す表示。ストリーミングが止まったときのナビゲーションバーの小見出しと新着のボタン。
-/// 本物の一覧の画面をナビゲーションバーごと置き、一覧が外から受け取る操作で状態を作る。数秒で消えるチップは、カタログでは1時間出したままにする。
+/// 一覧の上に重ねて出す表示。ストリーミングが止まったときのナビゲーションバーの小見出し、新着のボタンと、
+/// ウインドウに重ねるチップの列（ログインし直しの段、お気に入りやブーストの失敗、ダウンロード中）。
+/// 本物の一覧の画面をナビゲーションバーごと置き、一覧が外から受け取る操作で状態を作る。チップの列は、本物と同じく一覧が伝える位置に重ねる。
+/// 数秒で消えるチップは、カタログでは1時間出したままにする。
 enum TimelineOverlayCatalog {
     @MainActor
     static func states() -> [CatalogState] {
-        [
-            state("ストリーミングが止まっている（小見出し）") { $0.setOutageNotice(true) },
-            state("新着がある") { $0.setUnreadCount(12) },
-            state("新着が読み込んだ分より多い") { $0.setUnreadCount(40, isLowerBound: true) },
+        let handle = "@catalog@example.com"
+        return [
+            state("ストリーミングが止まっている（小見出し）") { timeline, _ in timeline.setOutageNotice(true) },
+            state("新着がある") { timeline, _ in timeline.setUnreadCount(12) },
+            state("新着が読み込んだ分より多い") { timeline, _ in timeline.setUnreadCount(40, isLowerBound: true) },
+            state("ログインし直しを促す") { _, column in column.setReauthentication(NoticeCatalog.reauthentication(handle), animated: false) },
+            state("ログインし直しを促す（新着のボタンの下）") { timeline, column in
+                timeline.setUnreadCount(12)
+                column.setReauthentication(NoticeCatalog.reauthentication(handle), animated: false)
+            },
+            state("お気に入りの失敗（押すと理由）") { _, column in showFailure("お気に入りを変更できませんでした", on: column) },
+            state("ブーストの失敗を新着のボタンの下に出す") { timeline, column in
+                timeline.setUnreadCount(12)
+                showFailure("ブーストを変更できませんでした", on: column)
+            },
+            state("ビューアを閉じたあとのダウンロード中（1件、押すと止めるかの確認）") { timeline, column in
+                timeline.setUnreadCount(12)
+                column.stack.setPersistent(.download(of: catalogURL, fraction: 0.42) {})
+            },
+            state("ビューアを閉じたあとのダウンロード中（2件以上は件数）") { timeline, column in
+                timeline.setUnreadCount(12)
+                column.stack.setPersistent(.downloads(count: 2, action: .disclosure(hint: "操作の状況を開きます。") {}))
+            },
+            state("ダウンロード中と、ほかのものを写真に保存しました") { _, column in
+                column.stack.setPersistent(.download(of: catalogURL, fraction: 0.42) {})
+                column.stack.showTransient(.savedToPhotos, duration: 3600)
+            },
+            state("ビューアを閉じたあとの失敗（種類で示す）") { _, column in
+                column.stack.showTransient(.transferFailure(title: Notice.transferFailureTitle(of: .video, purpose: .save)) {}, duration: 3600)
+            },
+            state("すべて同時に出す") { timeline, column in
+                timeline.setOutageNotice(true)
+                timeline.setUnreadCount(40, isLowerBound: true)
+                column.setReauthentication(NoticeCatalog.reauthentication(handle), animated: false)
+                column.stack.setPersistent(.download(of: catalogURL, fraction: 0.42) {})
+                showFailure("お気に入りを変更できませんでした", on: column)
+            },
         ]
     }
 
+    private static let catalogURL = URL(string: "https://x.example/video.mp4") ?? URL(filePath: "/")
+
     @MainActor
-    private static func state(_ title: String, apply: @escaping @MainActor (TimelineViewController) -> Void) -> CatalogState {
+    private static func showFailure(_ title: String, on column: NoticeColumnView) {
+        column.stack.showTransient(.interactionFailure(title: title) {}, duration: 3600)
+    }
+
+    @MainActor
+    private static func state(_ title: String, apply: @escaping @MainActor (TimelineViewController, NoticeColumnView) -> Void) -> CatalogState {
         CatalogState(title: title) {
             // 状態ダンプを本物のホームと取り違えないよう、名前を分ける。
             let timeline = TimelineViewController(texts: TimelineViewController.Texts(
@@ -31,8 +73,15 @@ enum TimelineOverlayCatalog {
             timeline.collectionView.isScrollEnabled = false
             timeline.setContentState(.loaded)
             timeline.setEntries(statuses())
-            apply(timeline)
-            return CatalogControllerHost(UINavigationController(rootViewController: timeline), height: 360)
+            let column = NoticeCatalog.makeColumn(reauthentication: nil)
+            apply(timeline, column)
+            let host = CatalogControllerHost(UINavigationController(rootViewController: timeline), height: 360)
+            host.addOverlay(column) { host, column in
+                let top = host.convert(CGPoint(x: 0, y: timeline.noticeTop), from: timeline.view).y
+                let width = host.bounds.width - 32
+                column.frame = CGRect(x: 16, y: top, width: width, height: (column as? NoticeColumnView)?.height(forWidth: width) ?? 0)
+            }
+            return host
         }
     }
 
