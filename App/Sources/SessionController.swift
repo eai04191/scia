@@ -362,6 +362,11 @@ final class SessionController {
         }
         notifications.onArrival = { notification, verdict in ticker.receive(notification, verdict: verdict) }
         tabBarDelegate.onSelect = { ticker.reevaluate() }
+        #if DEBUG
+        home.onDummyNotifications = { DummyNotifications.stream(into: ticker) }
+        home.onSetStatusBarTickerLooping = { [weak ticker] isOn in ticker?.setLooping(isOn, items: DummyNotifications.samples) }
+        home.isStatusBarTickerLooping = { [weak ticker] in ticker?.isLooping ?? false }
+        #endif
     }
 
 
@@ -1052,6 +1057,8 @@ final class SessionController {
             statusBarTicker.reevaluate()
         case .viewer(let index):
             openTopmostMedia(at: index)
+        case .statusBarTickerLoop(let isOn):
+            statusBarTicker.setLooping(isOn, items: DummyNotifications.samples)
         case .holdArrivals(let isOn):
             DebugFaults.setHoldingArrivals(isOn)
             if !isOn {

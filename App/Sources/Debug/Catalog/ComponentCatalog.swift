@@ -18,6 +18,7 @@ enum CatalogComponent: String, CaseIterable {
     case altTextEditor = "alt-text-editor"
     case caption
     case notices
+    case statusBarTicker = "status-bar-ticker"
     case operationStatus = "operation-status"
     case videoControls = "video-controls"
     case timelineEmpty = "timeline-empty"
@@ -39,6 +40,7 @@ enum CatalogComponent: String, CaseIterable {
         case .altTextEditor: "代替テキストの入力欄"
         case .caption: "ビューアの説明"
         case .notices: "アプリ内通知のチップの列"
+        case .statusBarTicker: "ステータスバーの通知"
         case .operationStatus: "操作の状況の一覧"
         case .videoControls: "動画の再生の操作"
         case .timelineEmpty: "タイムラインが空のときの表示"
@@ -63,6 +65,7 @@ enum CatalogComponent: String, CaseIterable {
         case .altTextEditor: AltTextEditorCatalog.states()
         case .caption: CaptionCatalog.states()
         case .notices: NoticeCatalog.states()
+        case .statusBarTicker: StatusBarTickerCatalog.states()
         case .operationStatus: OperationStatusCatalog.states()
         case .videoControls: VideoControlsCatalog.states()
         case .timelineEmpty: TimelineCatalog.emptyStates()

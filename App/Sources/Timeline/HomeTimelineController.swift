@@ -35,6 +35,12 @@ final class HomeTimelineController {
     /// 新着を挿入する時機が来たが、スクロールや長押しのメニューなどの操作中なので、終わるのを待っている。
     private var isWaitingForInteractionToSettle = false
     #if DEBUG
+    /// ダミー投稿の「ステータスバーの通知」が選ばれたとき。通知はホームの一覧ではなく、ステータスバーに流す。
+    var onDummyNotifications: (() -> Void)?
+    /// デバッグメニューの「ステータスバーの通知を出し続ける」を切り替えたとき。渡す値は切り替えたあとの状態。
+    var onSetStatusBarTickerLooping: ((Bool) -> Void)?
+    /// ステータスバーの通知を出し続けているか。デバッグメニューの印に使う。
+    var isStatusBarTickerLooping: (() -> Bool)?
     /// 新着の挿入を保留している間に、補完を見送った。保留を解いたときに補完する。
     private var isFillHeld = false
     #endif
@@ -516,6 +522,15 @@ extension HomeTimelineController {
             UIAction(title: "直近の投稿を取りこぼして再接続", image: UIImage(systemName: "bolt.horizontal")) { [weak self] _ in
                 self?.simulateMissedWhileDisconnected()
             },
+            // オンとオフの印を、開くたびに今の状態で出す。
+            UIDeferredMenuElement.uncached { [weak self] completion in
+                let isOn = self?.isStatusBarTickerLooping?() ?? false
+                completion([
+                    UIAction(title: "ステータスバーの通知を出し続ける", image: UIImage(systemName: "repeat"), state: isOn ? .on : .off) { [weak self] _ in
+                        self?.onSetStatusBarTickerLooping?(!isOn)
+                    },
+                ])
+            },
         ]
     }
 
@@ -550,6 +565,8 @@ extension HomeTimelineController {
             streamDummyXPost()
         case .filtered:
             streamDummyFiltered()
+        case .notifications:
+            onDummyNotifications?()
         }
     }
 
@@ -777,6 +794,7 @@ enum DebugDummyPost: String, CaseIterable {
     case linkCardSensitive = "link-card-sensitive"
     case xPost = "x-post"
     case filtered
+    case notifications
 
     var title: String {
         switch self {
@@ -791,6 +809,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .linkCardSensitive: "後から届くリンクカード（閲覧注意）"
         case .xPost: "後から届くXの投稿（画像4枚）"
         case .filtered: "フィルターに一致した投稿（警告、ぼかし、隠す）"
+        case .notifications: "ステータスバーに流す通知（連続）"
         }
     }
 
@@ -805,6 +824,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .linkCard, .linkCardImage, .linkCardSensitive: "link"
         case .xPost: "quote.bubble"
         case .filtered: "line.3.horizontal.decrease.circle"
+        case .notifications: "bell.badge"
         }
     }
 }

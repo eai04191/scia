@@ -1,3 +1,4 @@
+import os
 import SciaCore
 import UIKit
 
@@ -325,6 +326,9 @@ final class StatusBarTickerView: UIView {
             }
         }
         CATransaction.commit()
+        #if DEBUG
+        startTrace()
+        #endif
     }
 
     /// 中身を、`motion`の残りの時間、背景の端から余白だけ内側に沿わせる。動き終わったときの位置を、中身の置き場所にする。
@@ -484,6 +488,49 @@ final class StatusBarTickerView: UIView {
         return (left.offsetBy(dx: -visible.minX, dy: -visible.minY), right.offsetBy(dx: -visible.minX, dy: -visible.minY))
     }
 
+    #if DEBUG
+    /// `defaults write net.mizle.scia debug.statusBarTickerTrace -bool true`で、背景を広げたり縮めたりしている間の毎コマ、
+    /// 描いている途中の背景の枠と、左右の中身の位置と濃さを、debugレベルのログに書く。見た目ではなく数値で動きを確かめるため。
+    /// 値は描画が使う見た目の値（presentation layer）から読む。中身の位置は、このビューの座標で、左は左端、右は右端、縦は真ん中。targetは広がり終わったときの位置。
+    private func startTrace() {
+        guard UserDefaults.standard.bool(forKey: "debug.statusBarTickerTrace"), traceLink == nil else { return }
+        let link = CADisplayLink(target: TraceTarget { [weak self] in self?.traceRendered() ?? false }, selector: #selector(TraceTarget.tick(_:)))
+        link.add(to: .main, forMode: .common)
+        traceLink = link
+    }
+
+    /// 動いている間はtrueを返す。
+    private func traceRendered() -> Bool {
+        guard motion != nil else {
+            traceLink = nil
+            return false
+        }
+        // まだ一度も描かれていないレイヤーには描画中の値がない。行き先の値で代えると、画面に出ていない値を書くことになるため、そのコマは書かない。
+        let contents = trackedContents + leavingContents
+        guard let capsulePresentation = capsule.layer.presentation(),
+              contents.allSatisfy({ $0.left.layer.presentation() != nil && $0.right.layer.presentation() != nil })
+        else { return true }
+        let visible = capsulePresentation.frame
+        let frame = expandedFrame
+        let parts = contents.enumerated().compactMap { index, content -> String? in
+            guard let left = content.left.layer.presentation(), let right = content.right.layer.presentation() else { return nil }
+            let leftFrame = left.frame.offsetBy(dx: visible.minX, dy: visible.minY)
+            let rightFrame = right.frame.offsetBy(dx: visible.minX, dy: visible.minY)
+            return String(format: "c%d L=%.2f Ly=%.2f La=%.2f R=%.2f Ry=%.2f Ra=%.2f", index, leftFrame.minX, leftFrame.midY, left.opacity, rightFrame.maxX, rightFrame.midY, right.opacity)
+        }
+        var target = ""
+        if let content = trackedContents.last {
+            let rects = contentRects(content, in: frame)
+            target = String(format: "target L=%.2f R=%.2f y=%.2f", rects.left.minX + frame.minX, rects.right.maxX + frame.minX, rects.left.midY + frame.minY)
+        }
+        let line = String(format: "trace t=%.4f bg=%.2f..%.2f y=%.2f..%.2f ", CACurrentMediaTime(), visible.minX, visible.maxX, visible.minY, visible.maxY) + parts.joined(separator: " ") + " " + target
+        Self.traceLogger.debug("\(line, privacy: .public)")
+        return true
+    }
+
+    private var traceLink: CADisplayLink?
+    private static let traceLogger = SciaLog.logger(category: "statusBarTickerTrace")
+    #endif
 
     /// 左右の中身を置く。座標はカプセルの中。
     private func layoutContent(_ content: ContentViews, in frame: CGRect) {
@@ -717,3 +764,21 @@ final class StatusBarTickerView: UIView {
         }
     }
 }
+
+#if DEBUG
+/// `CADisplayLink`は呼び先を強く持つため、ビューを持たない呼び先を挟む。ビューがなくなるか、動きが終わったら止める。
+@MainActor
+private final class TraceTarget: NSObject {
+    private let action: () -> Bool
+
+    init(_ action: @escaping () -> Bool) {
+        self.action = action
+    }
+
+    @objc func tick(_ link: CADisplayLink) {
+        if !action() {
+            link.invalidate()
+        }
+    }
+}
+#endif

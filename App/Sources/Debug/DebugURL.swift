@@ -51,6 +51,8 @@ enum DebugURL: Equatable {
     /// `scia-debug://arrivals/hold`で、以後に届いた新着を一覧に挿入せずに溜める。`scia-debug://arrivals/release`で、溜まった新着をまとめて挿入する。
     /// ストリーミングはつないだままなので、切断の知らせやポーリングで一覧が動かない。
     case holdArrivals(Bool)
+    /// `scia-debug://ticker-loop/on`で、ステータスバーの通知を、出る、出ている、消えるを繰り返して出し続ける。`scia-debug://ticker-loop/off`で止める。
+    case statusBarTickerLoop(Bool)
 
     enum Tab: String {
         case home
@@ -136,6 +138,12 @@ enum DebugURL: Equatable {
         case "tab":
             guard let tab = Tab(rawValue: url.lastPathComponent) else { return nil }
             self = .tab(tab)
+        case "ticker-loop":
+            switch url.lastPathComponent {
+            case "on": self = .statusBarTickerLoop(true)
+            case "off": self = .statusBarTickerLoop(false)
+            default: return nil
+            }
         case "arrivals":
             switch url.lastPathComponent {
             case "hold": self = .holdArrivals(true)

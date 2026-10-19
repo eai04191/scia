@@ -120,6 +120,38 @@ final class StatusBarTicker {
         }
     }
 
+    #if DEBUG
+    private var loopTask: Task<Void, Never>?
+
+    /// 通知を出し続けているか。デバッグメニューの印に使う。
+    var isLooping: Bool { loopTask != nil }
+
+    /// デバッグメニューの「ステータスバーの通知を出し続ける」。オンの間、`items`を順に1件ずつ、出る、出ている、消えるを繰り返す。
+    /// 前の1件が消え終わってから少し間をおいて次を出し、毎回カプセルが広がるところから見られるようにする。
+    func setLooping(_ isOn: Bool, items: [StatusBarTickerItem]) {
+        loopTask?.cancel()
+        loopTask = nil
+        guard isOn, !items.isEmpty else { return }
+        loopTask = Task { [weak self] in
+            var index = 0
+            while !Task.isCancelled {
+                while let self, !Task.isCancelled, self.shownAt != nil || self.window?.isHidden == false {
+                    try? await Task.sleep(for: .milliseconds(50))
+                }
+                try? await Task.sleep(for: .seconds(0.8))
+                guard !Task.isCancelled, let self else { return }
+                // バックグラウンドでは出さない。実物の通知はストリーミングを止めるので届かないが、見本は止まらずに出そうとするため。
+                guard self.scene()?.activationState == .foregroundActive else { continue }
+                let item = items[index % items.count]
+                index += 1
+                self.receive(StatusBarTickerItem(id: "loop-\(index)", kind: item.kind, account: item.account, subject: item.subject))
+                // 出し始めて、出ている扱いになるのを待つ。通知タブを見ているなどで出せなかったときも、ここで間をおく。
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+        }
+    }
+    #endif
+
     /// 流すウィンドウを用意し、今の画面の形を当てる。ステータスバーのない向きではnil。
     private func prepareWindow() -> TickerWindow? {
         guard let scene = scene(), let reference = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first,
