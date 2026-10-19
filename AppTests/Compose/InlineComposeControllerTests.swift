@@ -272,6 +272,27 @@ struct InlineComposeControllerTests {
         #expect(composer.stateDump().contains("editing: false"), "閉じても書いている状態のままです\n\(composer.stateDump())")
     }
 
+    /// 書いている途中にコントロールセンターを開くなどで、iOSが入力欄のフォーカスを外してから戻しても、投稿欄は広げたままにする。
+    /// フォーカスが戻ったのに細いカプセルのままだと、隠れた入力欄に文字が入り続ける。
+    @Test func focusRestoredBySystemResumesEditing() async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(500))
+        let textView = try #require(textViews(in: window).first)
+        #expect(textView.isFirstResponder)
+
+        textView.resignFirstResponder()
+        try await Task.sleep(for: .milliseconds(100))
+        textView.becomeFirstResponder()
+        try await Task.sleep(for: .milliseconds(500))
+        window.layoutIfNeeded()
+
+        #expect(textView.isFirstResponder)
+        #expect(composer.stateDump().contains("editing: true"), "フォーカスが戻ったのに、投稿欄が閉じたままです\n\(composer.stateDump())")
+        #expect(!textView.isHidden, "フォーカスが戻ったのに、入力欄が隠れたままです")
+        #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
+    }
+
     /// 注意書き付きの投稿への返信で、引き継いだ注意書きの欄にキーボードを出したまま返信をやめると、欄が隠れ、キーボードは本文に移る。
     /// 隠れた欄にキーボードが残ると、打った文字が投稿されない注意書きに入ってしまう。
     @Test func clearingReplyWithInheritedSpoilerMovesFocusToText() async throws {

@@ -249,13 +249,17 @@ final class InlineComposeController: NSObject {
 
     /// バーを広げて、キーボードを出す。
     func beginEditing() {
+        expandForEditing()
+        textView.becomeFirstResponder()
+    }
+
+    private func expandForEditing() {
         onBeginEditing()
         completion.prefetch()
         setEditing(true)
         // 書いていない間に下書きが変わっていても、出す前に高さを合わせる。
         bar.layoutIfNeeded()
         textDidChange()
-        textView.becomeFirstResponder()
     }
 
     /// キーボードを閉じて、バーを細いカプセルに戻す。
@@ -1648,6 +1652,12 @@ extension InlineComposeController: UITextViewDelegate {
     private func inputDidBeginEditing(_ input: UIView) {
         isMovingFocus = false
         lastFocusedInput = input
+        // 書いている途中にコントロールセンターを開いて閉じると、細いカプセルに戻ったまま、隠れた入力欄に文字が入り続けた。
+        // iOSが入力欄のフォーカスを外して書き終えたことにしてから、フォーカスだけを戻すと起きるので、フォーカスが戻ったら書いている状態に戻す。
+        if !isEditing {
+            logger.info("compose: input began editing while collapsed, expanding")
+            expandForEditing()
+        }
         if let completionInput, completionInput !== input {
             completion.textDidChange(nil)
             self.completionInput = nil
