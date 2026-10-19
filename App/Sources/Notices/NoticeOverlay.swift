@@ -19,6 +19,9 @@ final class NoticeOverlay: UIView {
     private var isFollowingTransition = false
     /// 最後に決めた列の上端。指を離したときに、ここへ動かす。
     private var placedTop: CGFloat?
+    /// 上へ払ってしまった出たままのアプリ内通知と、そのとき持っていた出たままのアプリ内通知のid。
+    /// 文言や種類が変わるか、新しいアプリ内通知が出るまで、出さない。進み具合が変わっただけでは出さない。
+    private var dismissedPersistent: (notice: Notice, ids: Set<String>)?
 
     /// 置き直しの動かし方。
     enum Movement {
@@ -34,6 +37,10 @@ final class NoticeOverlay: UIView {
         super.init(frame: .zero)
         autoresizingMask = [.flexibleWidth, .flexibleHeight]
         column.onHoldChange = { [weak self] in self?.holdDidChange() }
+        column.stack.onDismissPersistent = { [weak self] notice in
+            guard let self else { return }
+            dismissedPersistent = (notice, Set(persistentNotices.ids))
+        }
         addSubview(column)
         notices.register(self)
     }
@@ -134,7 +141,7 @@ final class NoticeOverlay: UIView {
     /// 前に出ている画面か、その画面の様子が変わった。中身を決め直し、列を新しい位置へ動かす。
     func update(_ movement: Movement = .inherited) {
         guard let placement = placement() else { return }
-        column.animationDuration = tuning.value(of: TuningCatalog.noticeAnimationDuration)
+        applyTuning()
         refreshContent(placement)
         column.setChromeHidden(placement.hidesChrome, animated: true)
         column.stack.screenAlpha = placement.screenAlpha
@@ -250,7 +257,28 @@ final class NoticeOverlay: UIView {
         for slot in PersistentNotices.Slot.allCases where slot != .screen {
             persistentNotices.set(notices.persistentNotice(in: slot, context: context), in: slot)
         }
-        column.stack.setPersistent(persistentNotices.chipNotice(showAll: showAll(from: context)), belongsToScreen: persistentNotices.chosenSlot == .screen)
+        var notice = persistentNotices.chipNotice(showAll: showAll(from: context))
+        if let dismissed = dismissedPersistent {
+            // 選ばれなかったものでも、新しい出たままのアプリ内通知が出たら、また出す。
+            if let shown = notice, Self.staysDismissed(shown, dismissed: dismissed.notice), Set(persistentNotices.ids).isSubset(of: dismissed.ids) {
+                notice = nil
+            } else {
+                dismissedPersistent = nil
+            }
+        }
+        column.stack.setPersistent(notice, belongsToScreen: persistentNotices.chosenSlot == .screen)
+    }
+
+    /// しまったものと同じアプリ内通知で、進み具合のほかは変わっていない。
+    private static func staysDismissed(_ notice: Notice, dismissed: Notice) -> Bool {
+        notice.id == dismissed.id && notice.kind == dismissed.kind && notice.title == dismissed.title && notice.additionalCount == dismissed.additionalCount
+            && (notice.valueIsProgress || notice.value == dismissed.value)
+    }
+
+    private func applyTuning() {
+        column.animationDuration = tuning.value(of: TuningCatalog.noticeAnimationDuration)
+        column.stack.dismissDistance = tuning.value(of: TuningCatalog.noticeDismissDistance)
+        column.stack.dismissVelocity = tuning.value(of: TuningCatalog.noticeDismissVelocity)
     }
 
     private func showAll(from context: NoticeContext) -> (@MainActor () -> Void)? {
@@ -264,9 +292,11 @@ final class NoticeOverlay: UIView {
     /// 数秒で消えるチップを出す。中身は、出す時点の前の画面の様子で一度だけ決める。
     func showTransient(_ content: @MainActor (NoticeContext) -> Notice, duration: TimeInterval, replacing slot: PersistentNotices.Slot?) {
         guard let placement = placement() else { return }
-        column.animationDuration = tuning.value(of: TuningCatalog.noticeAnimationDuration)
+        applyTuning()
         let context = context(for: placement)
         let notice = content(context)
+        // 新しいアプリ内通知が出たら、しまった出たままのものもまた出す。
+        dismissedPersistent = nil
         // 入れ替える出たままのチップが、このアプリ内通知で消えるなら、その場所で入れ替える。ほかに出たままのものがあれば、そのあとで出し直す。
         var replacingID: String?
         if let slot, let shown = column.stack.persistentNotice, persistentNotices.chosenSlot == slot,

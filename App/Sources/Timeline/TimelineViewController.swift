@@ -134,7 +134,7 @@ final class TimelineViewController: UIViewController {
     private var scrollStart: (offset: CGFloat, time: CFTimeInterval)?
     private let scrollHitches = ScrollHitchMonitor()
     private lazy var newArrivalsButton = makeNewArrivalsButton()
-    /// 一覧の最上部から引っぱって、浮かべた新着のボタンとチップの列を下げている量。
+    /// 一覧の最上部から引っぱって、浮かべた新着のボタンを下げている量。
     private var pulledDistance: CGFloat = 0
     /// アプリ全体のアプリ内通知。お気に入りやブーストの失敗、リンクのコピーを出す。セッションが入れる。
     var notices: NoticeCenter?
@@ -1110,12 +1110,12 @@ extension TimelineViewController: UICollectionViewDelegate {
         }
         reportVisibleItems()
         reportApproachingGaps()
-        // 最上部からさらに引っぱっている間は、浮かぶボタンとチップの列も一覧と一緒に下げる。上に現れるストリーミングの状態を覆わないようにする。
+        // 最上部からさらに引っぱっている間は、浮かぶ新着のボタンも一覧と一緒に下げる。上に現れるストリーミングの状態を覆わないようにする。
+        // チップの列は下げない。十分に引っぱれば、一番上の投稿とストリーミングの状態が列の下に見えるため。
         let pulled = max(-(scrollView.contentOffset.y + scrollView.adjustedContentInset.top), 0)
         if pulled != pulledDistance {
             pulledDistance = pulled
             newArrivalsButton.transform = CGAffineTransform(translationX: 0, y: pulled)
-            noticeOverlay?.update()
         }
     }
 
@@ -1349,9 +1349,9 @@ extension TimelineViewController {
 }
 
 extension TimelineViewController: NoticeScreen {
-    /// チップの列の上端。この画面の座標。ナビゲーションバーの下に置く。新着のボタンが出ていれば、その下。一番上から引っぱっている間は、引っぱった分だけ下げる。
+    /// チップの列の上端。この画面の座標。ナビゲーションバーの下に置く。新着のボタンが出ていれば、その下。一番上から引っぱっても下げない。
     var noticeTop: CGFloat {
-        var top = view.safeAreaInsets.top + 8 + pulledDistance
+        var top = view.safeAreaInsets.top + 8
         if !newArrivalsButton.isHidden {
             top += newArrivalsButton.intrinsicContentSize.height + 8
         }

@@ -23,6 +23,12 @@ final class NoticeChip: UIControl {
     private var isAccessibilityFocused = false {
         didSet { updateHeld() }
     }
+    /// 上へ払ってしまう途中。指で動かしている間も、触れているものとして扱う。
+    var isPanning = false {
+        didSet { updateHeld() }
+    }
+    /// 払い始めたときに、チップを上下にずらして見せていた量。戻る途中につかみ直したら、見えている位置から指に合わせる。
+    var panStartOffset: CGFloat = 0
     /// `isHeld`が変わったときに呼ぶ。
     var onHoldChange: (() -> Void)?
 
@@ -112,10 +118,6 @@ final class NoticeChip: UIControl {
             hint = text
             disclosureView.isHidden = true
         }
-        isUserInteractionEnabled = notice.isActionable
-        if !notice.isActionable {
-            isTouching = false
-        }
         // 「›」は読ませず、押すと何が起きるかをヒントで伝える。
         accessibilityLabel = notice.additionalCount > 0 ? "\(notice.title)、ほかに\(notice.additionalCount)件" : notice.title
         accessibilityValue = notice.value
@@ -178,9 +180,10 @@ final class NoticeChip: UIControl {
         isTouching = false
     }
 
+    /// 押せないチップも、上へ払ってしまえるよう触れたものは受ける。押したときに薄くするのは、押せるときだけ。
     override var isHighlighted: Bool {
         didSet {
-            guard isHighlighted != oldValue else { return }
+            guard isHighlighted != oldValue, notice?.isActionable == true || !isHighlighted else { return }
             UIView.animate(withDuration: isHighlighted ? 0 : 0.2, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
                 self.effectView.contentView.alpha = self.isHighlighted ? 0.5 : 1
             }
@@ -188,7 +191,7 @@ final class NoticeChip: UIControl {
     }
 
     private func updateHeld() {
-        let held = isTouching || isAccessibilityFocused
+        let held = isTouching || isAccessibilityFocused || isPanning
         guard held != isHeld else { return }
         isHeld = held
         onHoldChange?()

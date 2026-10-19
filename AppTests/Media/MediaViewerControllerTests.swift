@@ -382,13 +382,13 @@ struct MediaViewerControllerTests {
         try await waitUntil { viewer.noticeStack?.chips.first != nil }
         let uploading = try #require(viewer.noticeStack?.chips.first)
         #expect(viewer.noticeStack?.persistentNotice?.text == "アップロード中")
-        #expect(!uploading.isUserInteractionEnabled)
+        #expect(!uploading.accessibilityTraits.contains(.button))
 
         viewer.update(items: [draftItem("a", status: .failed)])
         let failed = try #require(viewer.noticeStack?.chips.first)
         #expect(failed === uploading)
         #expect(viewer.noticeStack?.persistentNotice?.text == "アップロードできませんでした")
-        #expect(failed.isUserInteractionEnabled)
+        #expect(failed.accessibilityTraits.contains(.button))
         failed.sendActions(for: .primaryActionTriggered)
         #expect(actions.failures == ["a"])
 

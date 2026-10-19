@@ -37,6 +37,12 @@ final class NoticeStackView: UIView {
     var isHeld: Bool { chips.contains(where: \.isHeld) }
     /// `isHeld`が変わったかもしれないときに呼ぶ。
     var onHoldChange: (() -> Void)?
+    /// 指を離した時点でこれより上へ動かしていたら、チップをしまう。
+    var dismissDistance: CGFloat = 24
+    /// 指を離した時点でこれより速く上へ動いていたら、距離が短くてもチップをしまう。pt/秒。
+    var dismissVelocity: CGFloat = 300
+    /// 出たままのチップを、上へ払ってしまった。しまったアプリ内通知を渡す。また出すかは置く側が決める。
+    var onDismissPersistent: ((Notice) -> Void)?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -64,7 +70,7 @@ final class NoticeStackView: UIView {
         if let notice, let chip = persistentChip, let shown = chip.notice, shown.looksSame(as: notice) {
             chip.apply(notice)
             // 描き直すと押せるかが中身から決め直されるため、ボタン類と一緒に隠している間は押せないままにする。
-            chip.isUserInteractionEnabled = notice.isActionable && !isHiddenWithChrome(chip)
+            chip.isUserInteractionEnabled = !isHiddenWithChrome(chip)
             if belongsChanged {
                 chip.alpha = targetAlpha(of: chip)
             }
@@ -128,6 +134,13 @@ final class NoticeStackView: UIView {
             guard let self, let chip else { return }
             self.holdDidChange(chip)
         }
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handleDismissPan(_:)))
+        pan.delegate = self
+        chip.addGestureRecognizer(pan)
+        chip.accessibilityCustomActions = [UIAccessibilityCustomAction(name: "しまう") { [weak self, weak chip] _ in
+            guard let self, let chip else { return false }
+            return self.dismiss(chip)
+        }]
         addSubview(chip)
         return chip
     }
@@ -186,6 +199,90 @@ final class NoticeStackView: UIView {
         transientDeadline = nil
         remove(chip)
         relayout()
+    }
+
+    // MARK: 払ってしまう
+
+    /// 指に合わせて上へ動かす。下へは、払えないことが分かるよう少しだけ動かす。上へ動かすほど薄くする。
+    @objc private func handleDismissPan(_ pan: UIPanGestureRecognizer) {
+        guard let chip = pan.view as? NoticeChip, chips.contains(where: { $0 === chip }) else { return }
+        let translation = pan.translation(in: self).y
+        switch pan.state {
+        case .began:
+            // 出てくる途中の大きさの動きや戻る途中の動きを止め、いま見えている位置から指に合わせて動かす。
+            chip.panStartOffset = chip.layer.presentation()?.affineTransform().ty ?? chip.transform.ty
+            chip.layer.removeAnimation(forKey: "transform")
+            chip.isPanning = true
+            followFinger(chip, translation: translation)
+        case .changed:
+            followFinger(chip, translation: translation)
+        case .ended:
+            chip.isPanning = false
+            let velocity = pan.velocity(in: self).y
+            let offset = chip.panStartOffset + translation
+            if -offset > dismissDistance || velocity < -dismissVelocity {
+                dismiss(chip)
+            } else {
+                settle(chip)
+            }
+        case .cancelled, .failed:
+            chip.isPanning = false
+            settle(chip)
+        default:
+            break
+        }
+    }
+
+    private func followFinger(_ chip: NoticeChip, translation: CGFloat) {
+        let moved = chip.panStartOffset + translation
+        let offset = moved < 0 ? moved : moved / 4
+        chip.transform = CGAffineTransform(translationX: 0, y: offset)
+        chip.alpha = targetAlpha(of: chip) * max(0.3, 1 + min(offset, 0) / 120)
+    }
+
+    /// 払いきらずに離したら、元の位置へ戻す。
+    private func settle(_ chip: NoticeChip) {
+        UIView.animate(withDuration: animationDuration, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]) {
+            chip.transform = .identity
+            chip.alpha = self.targetAlpha(of: chip)
+        }
+    }
+
+    /// チップを上へ動かしながら薄くして外す。数秒で消えるものはそのまま消し、出たままのものは置く側に知らせる。
+    /// 視差効果を減らす設定では、動かさずに薄くするだけにする。
+    @discardableResult
+    private func dismiss(_ chip: NoticeChip) -> Bool {
+        if chip === transientChip {
+            transientChip = nil
+            transientDeadline = nil
+            hideTask?.cancel()
+            hideTask = nil
+        } else if chip === persistentChip {
+            persistentChip = nil
+            if let notice = chip.notice {
+                onDismissPersistent?(notice)
+            }
+        } else {
+            return false
+        }
+        removingChips.append(chip)
+        chip.isUserInteractionEnabled = false
+        chip.onHoldChange = nil
+        // 動かす前の位置から、列の上の外まで動かす。払って上へずらしていても、そこからさらに上へ動くようにする。
+        let restingTop = chip.center.y - chip.bounds.height / 2
+        let offset = min(-(restingTop + chip.bounds.height + 16), chip.transform.ty - 16)
+        UIView.animate(withDuration: animationDuration, delay: 0, options: [.beginFromCurrentState, .curveEaseOut]) {
+            if !UIAccessibility.isReduceMotionEnabled {
+                chip.transform = CGAffineTransform(translationX: 0, y: offset)
+            }
+            chip.alpha = 0
+        } completion: { _ in
+            chip.removeFromSuperview()
+            self.removingChips.removeAll { $0 === chip }
+        }
+        relayout()
+        onHoldChange?()
+        return true
     }
 
     // MARK: 消えるまでの時計
@@ -327,7 +424,8 @@ final class NoticeStackView: UIView {
             }
         }
         for chip in chips {
-            chip.isUserInteractionEnabled = chip.notice?.isActionable == true && !isHiddenWithChrome(chip)
+            // 押せないチップも、上へ払ってしまえるよう触れたものを受ける。
+            chip.isUserInteractionEnabled = !isHiddenWithChrome(chip)
         }
         if animated {
             UIView.animate(withDuration: animationDuration, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction], animations: apply)
@@ -351,5 +449,16 @@ final class NoticeStackView: UIView {
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
         hitTest(point, with: event) != nil
+    }
+}
+
+extension NoticeStackView: UIGestureRecognizerDelegate {
+    /// 縦に動かし始めたときだけ、払う操作にする。
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let pan = gestureRecognizer as? UIPanGestureRecognizer, pan.view is NoticeChip else {
+            return super.gestureRecognizerShouldBegin(gestureRecognizer)
+        }
+        let velocity = pan.velocity(in: self)
+        return abs(velocity.y) > abs(velocity.x)
     }
 }

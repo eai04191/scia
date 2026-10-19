@@ -139,6 +139,43 @@ struct NoticeStackViewTests {
         #expect(!chip.isUserInteractionEnabled)
     }
 
+    /// VoiceOverの「しまう」の操作で、払ったときと同じくしまう。数秒で消えるものはそのまま消し、出たままのものは置く側に知らせる。
+    @Test func dismissActionRemovesChips() throws {
+        let stack = makeStack()
+        var dismissed: [String] = []
+        stack.onDismissPersistent = { dismissed.append($0.id) }
+        stack.setPersistent(progress)
+        stack.showTransient(saved, duration: 60)
+        let persistent = try #require(stack.chips.first)
+        let transient = try #require(stack.chips.last)
+
+        #expect(try dismissAction(of: transient).actionHandler?(try dismissAction(of: transient)) == true)
+        #expect(stack.transientNotice == nil)
+        #expect(stack.persistentNotice?.id == "download")
+        #expect(dismissed.isEmpty)
+
+        #expect(try dismissAction(of: persistent).actionHandler?(try dismissAction(of: persistent)) == true)
+        #expect(stack.persistentNotice == nil)
+        #expect(dismissed == ["download"])
+    }
+
+    /// 上へずらしたところでしまっても、そこからさらに上へ外す。
+    @Test func dismissingRaisedChipMovesItFurtherUp() throws {
+        let stack = makeStack()
+        stack.setPersistent(progress)
+        stack.layoutIfNeeded()
+        let chip = try #require(stack.chips.first)
+        chip.transform = CGAffineTransform(translationX: 0, y: -80)
+
+        #expect(try dismissAction(of: chip).actionHandler?(try dismissAction(of: chip)) == true)
+
+        #expect(chip.transform.ty < -80)
+    }
+
+    private func dismissAction(of chip: NoticeChip) throws -> UIAccessibilityCustomAction {
+        try #require(chip.accessibilityCustomActions?.first { $0.name == "しまう" })
+    }
+
     /// 数秒で消えるチップは、新しいものが来たら同じチップで差し替え、時間が来たら消す。
     @Test func transientIsReplacedAndExpires() async throws {
         let stack = makeStack()
@@ -204,14 +241,15 @@ struct NoticeStackViewTests {
         #expect(stack.hitTest(CGPoint(x: 2, y: 150), with: nil) == nil)
     }
 
-    /// 押せないチップは触れても下の画面へ通す。
-    @Test func nonActionableChipPassesTouchesThrough() throws {
+    /// 押せないチップも、上へ払ってしまえるよう触れたものを受ける。押しても何も起きない。
+    @Test func nonActionableChipReceivesTouchesForDismissing() throws {
         let stack = makeStack()
         stack.setPersistent(progress)
         stack.layoutIfNeeded()
         let chip = try #require(stack.chips.first)
 
-        #expect(stack.hitTest(CGPoint(x: chip.frame.midX, y: chip.frame.midY), with: nil) == nil)
+        #expect(stack.hitTest(CGPoint(x: chip.frame.midX, y: chip.frame.midY), with: nil) === chip)
+        #expect(!chip.accessibilityTraits.contains(.button))
     }
 
     /// VoiceOverでは「›」を読ませず、件数と、押すと何が起きるかを伝える。

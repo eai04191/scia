@@ -21,8 +21,8 @@ extension Notice {
         return switch status {
         case nil: nil
         case .ready: reduction.map(mediaReducedDetail)
-        case .exporting: Notice(id: "media.draft", kind: .progress, title: "書き出し中", value: progress.flatMap(percentText(of:)))
-        case .uploading: Notice(id: "media.draft", kind: .progress, title: "アップロード中", value: progress.flatMap(percentText(of:)))
+        case .exporting: Notice(id: "media.draft", kind: .progress, title: "書き出し中", value: progress.flatMap(percentText(of:)), valueIsProgress: true)
+        case .uploading: Notice(id: "media.draft", kind: .progress, title: "アップロード中", value: progress.flatMap(percentText(of:)), valueIsProgress: true)
         case .processing: Notice(id: "media.draft", kind: .progress, title: "サーバーで処理中")
         case .sendingDescription: Notice(id: "media.draft", kind: .progress, title: "代替テキストを送信中")
         case .failed: Notice(id: "media.draft", kind: .failure, title: "アップロードできませんでした", action: failureAction)
@@ -63,7 +63,8 @@ extension Notice {
             kind: .progress,
             title: "ダウンロード中",
             value: percentText(of: fraction),
-            action: onStop.map { .disclosure(hint: "ダウンロードを止めるか選べます。", handler: $0) } ?? .none
+            action: onStop.map { .disclosure(hint: "ダウンロードを止めるか選べます。", handler: $0) } ?? .none,
+            valueIsProgress: true
         )
     }
 

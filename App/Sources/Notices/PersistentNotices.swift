@@ -19,6 +19,9 @@ struct PersistentNotices {
 
     var isEmpty: Bool { entries.isEmpty }
 
+    /// 持っているアプリ内通知のid。出た順。
+    var ids: [String] { entries.map(\.notice.id) }
+
     func notice(in slot: Slot) -> Notice? {
         entries.first { $0.slot == slot }?.notice
     }

@@ -78,8 +78,8 @@ struct TimelineNoticeTests {
         #expect(heldMinY > start && heldMinY < end)
     }
 
-    /// 一番上から引っぱったら、引っぱった分だけ列も下げる。ストリーミングの状態の表示を覆わないため。
-    @Test func pullingDownMovesChipWithList() throws {
+    /// 一番上から引っぱっても、列は下げない。十分に引っぱれば、一番上の投稿が列の下に見えるため。
+    @Test func pullingDownLeavesChipInPlace() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         harness.setStatuses(StatusFactory.make(count: 20, startingAt: 1000))
@@ -89,7 +89,7 @@ struct TimelineNoticeTests {
         let collectionView = harness.collectionView
         collectionView.contentOffset.y = -collectionView.adjustedContentInset.top - 50
 
-        #expect(try abs(chipMinY(in: harness) - (before + 50)) < 1)
+        #expect(try chipMinY(in: harness) == before)
     }
 
     /// ログインし直しの段は列の一番上に出し、チップはその下へ動かす。押すとログインし直しを始める。
@@ -154,6 +154,86 @@ struct TimelineNoticeTests {
         harness.notices.setPersistent(nil, in: .download)
 
         #expect(harness.overlay.column.stack.persistentNotice == nil)
+    }
+
+    /// しまった出たままのチップは、進み具合が変わっただけでは出さず、種類が変わったときと、新しいアプリ内通知が出たときに、また出す。
+    @Test func dismissedChipReturnsWhenItChanges() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let stack = harness.overlay.column.stack
+        let source = NoticeSource(Notice(id: "download", kind: .progress, title: "ダウンロード中", value: "10%", valueIsProgress: true))
+        harness.notices.setPersistent({ _ in source.notice }, in: .download)
+        try dismiss(try #require(stack.chips.first))
+        #expect(stack.persistentNotice == nil)
+
+        source.notice?.value = "20%"
+        harness.notices.persistentDidChange()
+        #expect(stack.persistentNotice == nil)
+
+        source.notice = Notice(id: "download", kind: .failure, title: "ダウンロードできませんでした")
+        harness.notices.persistentDidChange()
+        #expect(stack.persistentNotice?.kind == .failure)
+
+        try dismiss(try #require(stack.chips.first))
+        #expect(stack.persistentNotice == nil)
+        harness.viewController.showNotice(failure)
+        #expect(stack.persistentNotice?.kind == .failure)
+        #expect(stack.transientNotice != nil)
+    }
+
+    /// テストの中で書き換える、出たままのアプリ内通知の中身。
+    @MainActor
+    private final class NoticeSource {
+        var notice: Notice?
+        init(_ notice: Notice) { self.notice = notice }
+    }
+
+    /// 件数のように進み具合でない値が変わったら、しまったチップをまた出す。
+    @Test func dismissedChipReturnsWhenCountChanges() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let stack = harness.overlay.column.stack
+        let source = NoticeSource(.downloads(count: 2, action: .none))
+        harness.notices.setPersistent({ _ in source.notice }, in: .download)
+        try dismiss(try #require(stack.chips.first))
+
+        source.notice = .downloads(count: 3, action: .none)
+        harness.notices.persistentDidChange()
+
+        #expect(stack.persistentNotice?.value == "3件")
+    }
+
+    /// 選ばれていない出どころに新しい出たままのアプリ内通知が出ても、しまったチップをまた出す。
+    @Test func dismissedChipReturnsWhenAnotherPersistentNoticeArrives() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let stack = harness.overlay.column.stack
+        harness.notices.setPersistent({ _ in Notice(id: "failure", kind: .failure, title: "ダウンロードできませんでした") }, in: .download)
+        let debug = NoticeSource(Notice(id: "progress.1", kind: .progress, title: "処理中", valueIsProgress: true))
+        harness.notices.setPersistent({ _ in debug.notice }, in: .debug)
+        try dismiss(try #require(stack.chips.first))
+        #expect(stack.persistentNotice == nil)
+
+        debug.notice = Notice(id: "progress.2", kind: .progress, title: "処理中", valueIsProgress: true)
+        harness.notices.persistentDidChange()
+
+        #expect(stack.persistentNotice?.id == "failure")
+    }
+
+    private func dismiss(_ chip: NoticeChip) throws {
+        let action = try #require(chip.accessibilityCustomActions?.first { $0.name == "しまう" })
+        #expect(action.actionHandler?(action) == true)
+    }
+
+    /// ログインし直しの段はしまえない。
+    @Test func reauthenticationRowCannotBeDismissed() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.notices.reauthentication = NoticeCenter.Reauthentication(handle: "@alice@example.social") {}
+
+        let button = harness.overlay.column.reauthenticationButton
+        #expect(button.accessibilityCustomActions?.isEmpty ?? true)
+        #expect(!(button.gestureRecognizers ?? []).contains { $0 is UIPanGestureRecognizer })
     }
 
     /// チップのない場所に触れたら、下の一覧へ通す。
