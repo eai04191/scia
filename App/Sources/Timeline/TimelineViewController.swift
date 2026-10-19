@@ -209,7 +209,7 @@ final class TimelineViewController: UIViewController {
             title = texts.title
         }
         #if DEBUG
-        baseBarItems = [makeDebugMenuButton(screenActions: debugActions, faults: onDebugURL.map { DebugFaultMenu.make(handle: $0) })]
+        baseBarItems = [makeDebugMenuButton(screenActions: debugActions, faults: onDebugURL.map { DebugFaultMenu.make(handle: $0) }, handle: onDebugURL)]
         #endif
         applyBarItems()
         collectionView.frame = view.bounds
