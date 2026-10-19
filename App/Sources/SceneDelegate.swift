@@ -25,17 +25,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             window.traitOverrides.imageDynamicRange = range
         }
         self.window = window
-        switch AppDependencies.accounts {
-        case .success(let accounts):
-            if let credential = accounts.current {
-                showTimeline(for: credential)
-            } else {
-                showLogin(errorMessage: nil)
-            }
-        case .failure(let error):
-            logger.error("credential load failed: \(error.localizedDescription, privacy: .public)")
-            showLogin(errorMessage: error.localizedDescription)
-        }
+        showSavedAccount()
         window.makeKeyAndVisible()
         installNoticeOverlay()
         // 閉じていたアプリをURLで開いたとき。プロフィールは最初の読み込みを待たずに開ける。
@@ -122,6 +112,21 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         logger.info("scene didEnterBackground")
         UserAction.enterBackground.record()
         session?.enterBackground()
+    }
+
+    /// Keychainに保存したアカウントのタイムラインを出す。なければログイン画面を出す。
+    private func showSavedAccount() {
+        switch AppDependencies.accounts {
+        case .success(let accounts):
+            if let credential = accounts.current {
+                showTimeline(for: credential)
+            } else {
+                showLogin(errorMessage: nil)
+            }
+        case .failure(let error):
+            logger.error("credential load failed: \(error.localizedDescription, privacy: .public)")
+            showLogin(errorMessage: error.localizedDescription)
+        }
     }
 
     func showTimeline(for credential: Credential) {
