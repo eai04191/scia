@@ -32,24 +32,10 @@ extension TimelineViewController {
         let status = Self.status(of: entry)
         let notifyingAccount: Account? = if case .notification(let notification) = entry { notification.account } else { nil }
         var shownUserIDs: Set<String> = []
-        let children = menuElements(for: settings.statusMenuLayout.groups) { item in
+        let children = settings.statusMenuLayout.groups.menuElements { item in
             elements(for: item, status: status, notifyingAccount: notifyingAccount, id: id, shownUserIDs: &shownUserIDs)
         }
         return children.isEmpty ? nil : UIMenu(children: children)
-    }
-
-    /// まとまりごとに区切り線で分けて並べ、「その他」の中身はサブメニューにする。中身のないまとまりと「その他」は出さない。
-    private func menuElements<Item>(for groups: MenuLayout<Item>.Groups, elements: (Item) -> [UIMenuElement]) -> [UIMenuElement] {
-        func inline(_ groups: [[Item]]) -> [UIMenuElement] {
-            groups.compactMap { group in
-                let children = group.flatMap(elements)
-                return children.isEmpty ? nil : UIMenu(options: .displayInline, children: children)
-            }
-        }
-        let main = inline(groups.main)
-        let more = inline(groups.more)
-        guard !more.isEmpty else { return main }
-        return main + [UIMenu(title: "その他", image: UIImage(systemName: "ellipsis.circle"), children: more)]
     }
 
     /// 同じユーザーが2つの項目に当たるときは、先に出る項目で1度だけ出す。
@@ -156,7 +142,7 @@ extension TimelineViewController {
         if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first, only.count == 1 {
             return userAction(only[0], for: user, inSubmenu: false)
         }
-        let children = menuElements(for: groups) { item in [userAction(item, for: user, inSubmenu: true)] }
+        let children = groups.menuElements { item in [userAction(item, for: user, inSubmenu: true)] }
         guard !children.isEmpty else { return nil }
         return UIMenu(title: "@\(user.acct)", image: UIImage(systemName: "person.crop.circle"), children: children)
     }

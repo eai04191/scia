@@ -1,6 +1,23 @@
 import SciaCore
 import UIKit
 
+@MainActor
+extension MenuLayout.Groups {
+    /// まとまりごとに区切り線で分けて並べ、「その他」の中身はサブメニューにする。中身のないまとまりと「その他」は出さない。
+    func menuElements(_ elements: (Item) -> [UIMenuElement]) -> [UIMenuElement] {
+        func inline(_ groups: [[Item]]) -> [UIMenuElement] {
+            groups.compactMap { group in
+                let children = group.flatMap(elements)
+                return children.isEmpty ? nil : UIMenu(options: .displayInline, children: children)
+            }
+        }
+        let main = inline(main)
+        let more = inline(more)
+        guard !more.isEmpty else { return main }
+        return main + [UIMenu(title: "その他", image: UIImage(systemName: "ellipsis.circle"), children: more)]
+    }
+}
+
 /// メニューと、並びの設定画面に出す、項目の名前と印。
 extension StatusMenuItem {
     var title: String {
