@@ -27,8 +27,15 @@ public struct MediaCovers: Sendable, Equatable {
     /// - Parameter filterTitles: 添付ファイルをぼかすフィルターのうち、一致したものの名前。
     public func cover(for status: Status, filterTitles: [String]) -> MediaCover? {
         let shown = status.displayed
-        let isSensitive = shown.sensitive || !shown.spoilerText.isEmpty
-        guard choices[shown.id] ?? (isSensitive || !filterTitles.isEmpty) else { return nil }
+        return cover(forStatusID: shown.id, isSensitive: shown.sensitive || !shown.spoilerText.isEmpty, filterTitles: filterTitles)
+    }
+
+    /// 閲覧注意かどうかを投稿の外から渡して決める。編集履歴で、手元の投稿より新しい版の閲覧注意で覆うために使う。
+    /// - Parameters:
+    ///   - statusID: 元の投稿のID。使う人が開いた・隠した選択を、このIDで引く。
+    ///   - isSensitive: 閲覧注意か注意書きがある。
+    public func cover(forStatusID statusID: Status.ID, isSensitive: Bool, filterTitles: [String]) -> MediaCover? {
+        guard choices[statusID] ?? (isSensitive || !filterTitles.isEmpty) else { return nil }
         if !filterTitles.isEmpty { return .filtered(filterTitles) }
         return isSensitive ? .sensitive : .hidden
     }
@@ -40,6 +47,12 @@ public struct MediaCovers: Sendable, Equatable {
         let shown = status.displayed
         guard shown.card?.image != nil, shown.sensitive || !shown.spoilerText.isEmpty, !revealed.contains(shown.id) else { return nil }
         return .sensitive
+    }
+
+    /// 使う人が隠した。開いた投稿と、まだ選んでいない投稿ではfalse。
+    /// - Parameter statusID: 元の投稿のID。
+    public func isHidden(statusID: Status.ID) -> Bool {
+        choices[statusID] == true
     }
 
     public mutating func reveal(_ status: Status) {

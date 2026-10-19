@@ -49,6 +49,34 @@ struct MediaCoversTests {
         #expect(covers.cover(for: sensitive, filterTitles: []) == .sensitive)
     }
 
+    /// 編集履歴では、手元の投稿より新しい版の閲覧注意で既定を決め、使う人の選択は投稿のIDで引く。
+    @Test func coverByIDUsesGivenSensitivityAndChoiceOfStatus() {
+        var covers = MediaCovers()
+        let plain = status(id: "1")
+        #expect(covers.cover(forStatusID: plain.id, isSensitive: true, filterTitles: []) == .sensitive)
+        #expect(covers.cover(forStatusID: plain.id, isSensitive: false, filterTitles: []) == nil)
+
+        covers.reveal(plain)
+        #expect(covers.cover(forStatusID: plain.id, isSensitive: true, filterTitles: []) == nil)
+
+        covers.hide(plain)
+        #expect(covers.cover(forStatusID: plain.id, isSensitive: true, filterTitles: []) == .sensitive)
+        #expect(covers.cover(forStatusID: plain.id, isSensitive: false, filterTitles: []) == .hidden)
+    }
+
+    /// 隠したかどうかだけを引く。開いた選択と、選んでいない投稿は隠していない扱い。編集履歴で、隠した投稿の過去の版も覆うために使う。
+    @Test func remembersOnlyHidingAsHidden() {
+        var covers = MediaCovers()
+        let sensitive = status(id: "1", sensitive: true)
+        #expect(!covers.isHidden(statusID: sensitive.id))
+
+        covers.hide(sensitive)
+        #expect(covers.isHidden(statusID: sensitive.id))
+
+        covers.reveal(sensitive)
+        #expect(!covers.isHidden(statusID: sensitive.id))
+    }
+
     @Test func choiceAppliesToBoostsOfSameStatus() {
         var covers = MediaCovers()
         let original = status(id: "10")

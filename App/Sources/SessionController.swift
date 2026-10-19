@@ -56,6 +56,8 @@ final class SessionController {
     private let composer: InlineComposeController
     /// 投稿欄が覆っている高さを伝える一覧。ホームと通知に加え、開いているプロフィールの一覧も入る。閉じたものは自然に消える。
     private let timelines = NSHashTable<TimelineViewController>.weakObjects()
+    /// 開いている編集履歴。添付ファイルを開いた・隠した選択を一覧とそろえるために持つ。閉じたものは自然に消える。
+    private let editHistories = NSHashTable<EditHistoryViewController>.weakObjects()
     /// 添付ファイルを覆うか。ホームと通知とプロフィールでそろえ、閉じて開き直したプロフィールにも引き継ぐ。
     private var mediaCovers = MediaCovers()
     /// fxtwitterから読んだXの投稿。ホームと通知とプロフィールで同じ投稿を1回だけ読む。
@@ -383,11 +385,14 @@ final class SessionController {
         }
     }
 
-    /// 一覧で開いたり隠したりした結果を、ほかの一覧にもそろえる。
-    private func shareMediaCovers(_ covers: MediaCovers, changed status: Status, from source: TimelineViewController?) {
+    /// 一覧や編集履歴で開いたり隠したりした結果を、ほかの一覧と編集履歴にもそろえる。
+    private func shareMediaCovers(_ covers: MediaCovers, changed status: Status, from source: AnyObject?) {
         mediaCovers = covers
         for timeline in timelines.allObjects where timeline !== source {
             timeline.applyMediaCovers(covers, changed: status)
+        }
+        for history in editHistories.allObjects where history !== source {
+            history.applyMediaCovers(covers, changed: status)
         }
     }
 
@@ -537,7 +542,9 @@ final class SessionController {
             toggle(.reblog, on: status, failureTitle: "ブーストを変更できませんでした")
         case .editHistory:
             UserAction.openEditHistory.record()
-            openEditHistory(of: status.displayed, from: timeline)
+            // フィルターの結果はブーストの外側にだけ付くことがあるため、判定にはブーストごと渡す。
+            let filterTitles = timeline?.filterWarnings.verdict(for: status).mediaTitles ?? []
+            openEditHistory(of: status.displayed, filterTitles: filterTitles, from: timeline)
         case .edit:
             UserAction.editStatus.record()
             startEditing(status)
@@ -547,7 +554,8 @@ final class SessionController {
     }
 
     /// 編集履歴を、操作した一覧の上に重ねて開く。履歴は開いた画面が読む。
-    private func openEditHistory(of status: Status, from source: UIViewController?) {
+    /// - Parameter filterTitles: 添付ファイルをぼかすフィルターのうち、操作した一覧で一致したものの名前。
+    private func openEditHistory(of status: Status, filterTitles: [String], from source: UIViewController?) {
         let client = client
         // トークンが無効なら、理由はチップの列の一番上のログインし直しの段へ案内する。ログインし直したあとは、再試行で読める。
         let viewController = EditHistoryViewController(status: status) {
@@ -555,6 +563,14 @@ final class SessionController {
         } describe: { [weak self] error in
             await self?.failureReason(for: error) ?? ErrorPresentation(error)
         }
+        editHistories.add(viewController)
+        viewController.mediaCovers = mediaCovers
+        viewController.filterTitles = filterTitles
+        viewController.onChangeMediaCovers = { [weak self, weak viewController] covers, status in
+            self?.shareMediaCovers(covers, changed: status, from: viewController)
+        }
+        viewController.notices = notices
+        viewController.mediaTransfers = mediaTransfers
         viewController.onOpenLink = { [weak self, weak viewController] destination in
             guard let self, let viewController else { return }
             // 編集で消したメンションは、今の投稿のメンションの一覧にないため、一覧と同じ引き方ではIDが分からない。プロフィールのURLから探す。

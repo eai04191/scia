@@ -13,6 +13,16 @@ final class EditHistoryViewController: UIViewController {
 
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
+    /// 添付ファイルを覆うか。今の投稿の版は、一覧と同じく、使う人が開いた・隠した選択に従う。セッションがほかの画面とそろえる。
+    var mediaCovers = MediaCovers()
+    /// 添付ファイルをぼかすフィルターのうち、開いた一覧で一致したものの名前。一覧と同じく、全部の版の添付ファイルを覆う。
+    var filterTitles: [String] = []
+    /// 今の投稿の版の覆いを外したときに、変えたあとの状態と、変えた投稿を渡して呼ぶ。
+    var onChangeMediaCovers: ((MediaCovers, Status) -> Void)?
+    /// アプリ全体のアプリ内通知。Macのビューアのウィンドウにもチップの列を重ねる。
+    var notices: NoticeCenter?
+    /// 添付ファイルのビューアで、共有や保存のために落とす処理。
+    var mediaTransfers: MediaTransferCenter?
 
     private let status: Status
     private let fetch: @MainActor () async throws -> [StatusRevision]
@@ -23,7 +33,10 @@ final class EditHistoryViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let stack = UIStackView()
     private var state = State.loading
+    /// 覆いを外した版。過去の版の添付ファイルと、外した添付ファイルの覆いに使う。
     private var revealedEditNumbers: Set<Int> = []
+    /// 並べている版。ビューアを閉じるときに、押したサムネイルを探す。描き直すと入れ替わる。
+    private var entryViews: [Int: EditHistoryEntryView] = [:]
     private var loadTask: Task<Void, Never>?
 
     /// - Parameters:
@@ -110,8 +123,16 @@ final class EditHistoryViewController: UIViewController {
         guard isViewLoaded else { return }
         setNeedsUpdateContentUnavailableConfiguration()
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        entryViews = [:]
         guard case .loaded(let history) = state else { return }
-        let contents = builder.contents(for: history, language: status.language, revealedEditNumbers: revealedEditNumbers)
+        let contents = builder.contents(
+            for: history,
+            language: status.language,
+            latestCover: latestCover(of: history),
+            isHidden: mediaCovers.isHidden(statusID: status.id),
+            filterTitles: filterTitles,
+            revealedEditNumbers: revealedEditNumbers
+        )
         for (index, (entry, content)) in zip(history.entries, contents).enumerated() {
             if index > 0 {
                 stack.addArrangedSubview(separator())
@@ -121,11 +142,53 @@ final class EditHistoryViewController: UIViewController {
             entryView.apply(content)
             entryView.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination) }
             let editNumber = entry.editNumber
-            entryView.onRevealMedia = { [weak self] in
-                self?.revealedEditNumbers.insert(editNumber)
-                self?.render()
+            let isLatest = index == 0
+            entryView.onRevealMedia = { [weak self] in self?.revealMedia(of: editNumber, isLatest: isLatest) }
+            entryView.onSelectMedia = { [weak self] attachments, index, place in
+                self?.openMedia(attachments, at: index, of: editNumber, place: place)
             }
+            entryViews[editNumber] = entryView
             stack.addArrangedSubview(entryView)
+        }
+    }
+
+    /// 今の投稿の版の覆い。一覧を読んだあとに閲覧注意を付ける編集がされていることがあるため、手元の投稿ではなく、読んだ最新の版の閲覧注意で決める。
+    private func latestCover(of history: StatusEditHistory) -> MediaCover? {
+        guard let latest = history.entries.first?.revision else { return nil }
+        return mediaCovers.cover(forStatusID: status.id, isSensitive: latest.sensitive || !latest.spoilerText.isEmpty, filterTitles: filterTitles)
+    }
+
+    /// 覆いを外す。今の投稿の版なら、一覧の同じ投稿の行もそろえるよう、セッションに知らせる。
+    /// 1つの版の覆いは、どれを押してもまとめて外す。
+    private func revealMedia(of editNumber: Int, isLatest: Bool) {
+        revealedEditNumbers.insert(editNumber)
+        if isLatest {
+            mediaCovers.reveal(status)
+            onChangeMediaCovers?(mediaCovers, status)
+        }
+        render()
+    }
+
+    /// ほかの画面で開いたり隠したりした結果を受け取り、描き直す。
+    func applyMediaCovers(_ covers: MediaCovers, changed status: Status) {
+        mediaCovers = covers
+        guard status.displayed.id == self.status.id else { return }
+        // 隠したら、この画面で外した覆いも戻す。隠す選択は過去の版にも当てるため、前に外した版を見えたままにしない。
+        if covers.isHidden(statusID: self.status.id) {
+            revealedEditNumbers = []
+        }
+        render()
+    }
+
+    /// 閉じるときは、押したサムネイルへ戻す。開いている間に描き直していれば、描き直したあとの同じ場所のサムネイルを探す。
+    private func openMedia(_ attachments: [MediaAttachment], at index: Int, of editNumber: Int, place: EditHistoryEntryView.MediaPlace) {
+        MediaViewerOpener(store: mediaImages, tuning: tuning, transfers: mediaTransfers, notices: notices).open(
+            attachments,
+            at: index,
+            subject: OperationStatus.Subject(status),
+            from: self
+        ) { [weak self] attachmentID in
+            self?.entryViews[editNumber]?.mediaGrid(at: place)?.tile(for: attachmentID)
         }
     }
 

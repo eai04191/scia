@@ -37,9 +37,20 @@ final class EditHistoryEntryView: UIView {
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// 閲覧注意の覆いが押されたときに呼ぶ。覆いを外すのは置く側で、適用し直すまで見た目は変わらない。
     var onRevealMedia: (() -> Void)?
+    /// サムネイルが押されたときに、並んでいる添付ファイルと何番目かと、押されたサムネイルの置き場所を渡して呼ぶ。
+    var onSelectMedia: (([MediaAttachment], Int, MediaPlace) -> Void)?
+
+    /// サムネイルの置き場所。ビューアを閉じるときに、押したサムネイルへ戻すために使う。
+    enum MediaPlace: Hashable {
+        /// 版の添付ファイル。
+        case revision
+        /// 添付ファイルの変更の行。何番目の行か。
+        case change(Int)
+    }
 
     private let mediaImages: MediaImageStore
     private let stack = UIStackView()
+    private var mediaGrids: [MediaPlace: MediaGridView] = [:]
 
     init(mediaImages: MediaImageStore) {
         self.mediaImages = mediaImages
@@ -64,6 +75,7 @@ final class EditHistoryEntryView: UIView {
     /// 中身を並べ直す。版ごとに並ぶものが違うため、部品を作り直す。
     func apply(_ content: Content) {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        mediaGrids = [:]
         stack.spacing = content.spacing
         stack.addArrangedSubview(header(title: content.title, date: content.date))
         if !content.notes.isEmpty {
@@ -85,8 +97,8 @@ final class EditHistoryEntryView: UIView {
         if let media = content.media {
             stack.addArrangedSubview(mediaView(media))
         }
-        for change in content.mediaChanges {
-            stack.addArrangedSubview(mediaChangeRow(change))
+        for (index, change) in content.mediaChanges.enumerated() {
+            stack.addArrangedSubview(mediaChangeRow(change, place: .change(index)))
         }
         if let options = content.pollOptions {
             stack.addArrangedSubview(pollView(options))
@@ -131,20 +143,30 @@ final class EditHistoryEntryView: UIView {
         return box
     }
 
-    private func mediaView(_ content: MediaGridView.Content) -> UIView {
+    /// 置き場所に並べているサムネイル。並べていなければnil。
+    func mediaGrid(at place: MediaPlace) -> MediaGridView? {
+        mediaGrids[place]
+    }
+
+    private func makeMediaGrid(_ content: MediaGridView.Content, place: MediaPlace) -> MediaGridView {
         let view = MediaGridView(store: mediaImages)
         view.apply(content)
         view.onReveal = { [weak self] in self?.onRevealMedia?() }
+        view.onSelect = { [weak self] index in self?.onSelectMedia?(content.attachments, index, place) }
+        mediaGrids[place] = view
+        return view
+    }
+
+    private func mediaView(_ content: MediaGridView.Content) -> UIView {
+        let view = makeMediaGrid(content, place: .revision)
         if let aspectRatio = content.aspectRatio {
             view.heightAnchor.constraint(equalTo: view.widthAnchor, multiplier: 1 / aspectRatio).isActive = true
         }
         return view
     }
 
-    private func mediaChangeRow(_ change: MediaChange) -> UIView {
-        let thumbnail = MediaGridView(store: mediaImages)
-        thumbnail.apply(change.thumbnail)
-        thumbnail.onReveal = { [weak self] in self?.onRevealMedia?() }
+    private func mediaChangeRow(_ change: MediaChange, place: MediaPlace) -> UIView {
+        let thumbnail = makeMediaGrid(change.thumbnail, place: place)
         thumbnail.alpha = change.isRemoved ? 0.4 : 1
         let side: CGFloat = if case .strip(let side) = change.thumbnail.arrangement { side } else { 44 }
         thumbnail.translatesAutoresizingMaskIntoConstraints = false

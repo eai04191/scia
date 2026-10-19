@@ -75,9 +75,12 @@ enum EditHistoryCatalog {
                 emojiImages: AppDependencies.emojiImages,
                 network: AppDependencies.network
             )
+            // 画面と同じく、今の投稿の覆いは一覧の選択で決める。
+            let covers = MediaCovers()
+            let latest = latestStatus(of: revisions)
             let column = UIStackView()
             column.axis = .vertical
-            for content in builder.contents(for: history, language: "ja", revealedEditNumbers: []) {
+            for content in builder.contents(for: history, language: "ja", latestCover: covers.cover(for: latest, filterTitles: []), isHidden: covers.isHidden(statusID: latest.id), filterTitles: [], revealedEditNumbers: []) {
                 let view = EditHistoryEntryView(mediaImages: AppDependencies.mediaImages)
                 view.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 16, leading: 20, bottom: 16, trailing: 20)
                 view.apply(content)
@@ -85,6 +88,21 @@ enum EditHistoryCatalog {
             }
             return CatalogFrame.bordered(column)
         }
+    }
+
+    /// 今の投稿。覆うかを決めるところだけを、最後の版に合わせる。
+    private static func latestStatus(of revisions: [StatusRevision]) -> Status {
+        let last = revisions.last
+        return Status(
+            id: "edit-history",
+            createdAt: .now,
+            account: author,
+            content: last?.content ?? "",
+            spoilerText: last?.spoilerText ?? "",
+            url: nil,
+            mediaAttachments: last?.mediaAttachments ?? [],
+            sensitive: last?.sensitive ?? false
+        )
     }
 
     /// 版ごとの日時は、古い版ほど前にする。

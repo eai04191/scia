@@ -12,26 +12,50 @@ struct EditHistoryContentBuilder {
     /// 今の投稿の版から順に並べる。
     /// - Parameters:
     ///   - language: 投稿の言語。本文と注意書きを、その言語の書体で描く。
-    ///   - revealedEditNumbers: 閲覧注意の覆いを外した版。
-    func contents(for history: StatusEditHistory, language: String?, revealedEditNumbers: Set<Int>, now: Date = .now) -> [EditHistoryEntryView.Content] {
+    ///   - latestCover: 今の投稿の版の添付ファイルを覆う理由。一覧と同じく、使う人が開いた・隠した選択に従う。覆わなければnil。
+    ///   - isHidden: 使う人が一覧で添付ファイルを隠した。過去の版と外した添付ファイルも、閲覧注意がなくても覆う。
+    ///     開いた選択は今の投稿の版だけに当てる。過去の版には、開いた今の版にない画像があるため。
+    ///   - filterTitles: 添付ファイルをぼかすフィルターのうち、一致したものの名前。フィルターは今の内容に一致したものだが、
+    ///     覆いたいのはこの投稿の添付ファイルなので、版ごとに判定し直さず、過去の版と外した添付ファイルにも当てる。
+    ///   - revealedEditNumbers: 覆いを外した版。
+    func contents(
+        for history: StatusEditHistory,
+        language: String?,
+        latestCover: MediaCover?,
+        isHidden: Bool,
+        filterTitles: [String],
+        revealedEditNumbers: Set<Int>,
+        now: Date = .now
+    ) -> [EditHistoryEntryView.Content] {
         history.entries.enumerated().map { index, entry in
             content(
                 for: entry,
                 previous: history.entries.indices.contains(index + 1) ? history.entries[index + 1].revision : nil,
                 isLatest: index == 0,
                 language: language,
+                latestCover: latestCover,
+                isHidden: isHidden,
+                filterTitles: filterTitles,
                 isRevealed: revealedEditNumbers.contains(entry.editNumber),
                 now: now
             )
         }
     }
 
-    /// - Parameter previous: 1つ前の版。最初の投稿ではnil。
+    /// - Parameters:
+    ///   - previous: 1つ前の版。最初の投稿ではnil。
+    ///   - latestCover: 今の投稿の版の添付ファイルを覆う理由。過去の版では使わない。
+    ///   - isHidden: 使う人が一覧で添付ファイルを隠した。
+    ///   - filterTitles: 添付ファイルをぼかすフィルターのうち、一致したものの名前。
+    ///   - isRevealed: この版で覆いを外した。過去の版の添付ファイルと、この版で外した添付ファイルの覆いに使う。
     private func content(
         for entry: StatusEditHistory.Entry,
         previous: StatusRevision?,
         isLatest: Bool,
         language: String?,
+        latestCover: MediaCover?,
+        isHidden: Bool,
+        filterTitles: [String],
         isRevealed: Bool,
         now: Date
     ) -> EditHistoryEntryView.Content {
@@ -53,14 +77,19 @@ struct EditHistoryContentBuilder {
         func text(_ diff: RichTextDiff, renderer: RichTextRenderer) -> EditHistoryEntryView.Text {
             EditHistoryEntryView.Text(attributed: renderer.render(diff), accessibilityText: RichTextRenderer.accessibilityText(of: diff))
         }
-        // 一覧と同じく、閲覧注意か注意書きのある版は、タップするまで添付ファイルを覆う。
+        // 過去の版は、閲覧注意か注意書きがあるか、使う人が隠したか、フィルターに一致していれば、タップするまで添付ファイルを覆う。
+        // 理由は一覧と同じく、フィルター、閲覧注意、隠した、の順に出す。
         func cover(of revision: StatusRevision?) -> MediaCover? {
-            guard let revision, revision.sensitive || !revision.spoilerText.isEmpty, !isRevealed else { return nil }
-            return .sensitive
+            guard let revision, !isRevealed else { return nil }
+            let isSensitive = revision.sensitive || !revision.spoilerText.isEmpty
+            if !filterTitles.isEmpty { return .filtered(filterTitles) }
+            guard isSensitive || isHidden else { return nil }
+            return isSensitive ? .sensitive : .hidden
         }
         func media(_ attachments: [MediaAttachment], cover: MediaCover?) -> MediaGridView.Content? {
             MediaGridView.Content.make(of: attachments, cover: cover, settings: settings, tuning: tuning, network: network)
         }
+        let revisionCover = isLatest ? latestCover : cover(of: revision)
         let title = entry.isOriginal ? "最初の投稿" : "\(entry.editNumber)回目の編集"
         return EditHistoryEntryView.Content(
             title: isLatest ? "いまの投稿（\(title)）" : title,
@@ -68,11 +97,11 @@ struct EditHistoryContentBuilder {
             notes: (Self.changesFirstBlockLayout(entry.body) ? ["段落の形を変えた"] : []) + entry.changes.compactMap { note(for: $0, in: revision) },
             spoiler: entry.spoiler.map { text($0, renderer: renderer) },
             body: entry.body.blocks.isEmpty ? nil : text(entry.body, renderer: renderer),
-            media: media(revision.mediaAttachments, cover: cover(of: revision)),
+            media: media(revision.mediaAttachments, cover: revisionCover),
             mediaChanges: entry.changes.compactMap { change in
                 // 外した添付ファイルは、外す前の版にあったものなので、その版の閲覧注意で覆う。
                 // この版で閲覧注意を外していても、外す前に覆っていた画像を、開いただけで見せない。
-                let thumbnailCover = if case .mediaRemoved = change { cover(of: previous) } else { cover(of: revision) }
+                let thumbnailCover = if case .mediaRemoved = change { cover(of: previous) } else { revisionCover }
                 return mediaChange(for: change, renderer: small) { media([$0], cover: thumbnailCover) }
             },
             pollOptions: pollOptions(of: entry, renderer: renderer),
