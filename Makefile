@@ -3,7 +3,7 @@ SCHEME := Scia
 DERIVED_DATA := DerivedData
 SIM_DESTINATION ?= generic/platform=iOS Simulator
 
-.PHONY: generate lint test-core build warnings test sim-keyboard readme-icons check clean
+.PHONY: generate lint test-core build warnings test sim-keyboard readme-icons update-known-servers check clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -48,6 +48,10 @@ readme-icons:
 	cwebp -quiet -lossless -z 9 $$tmp/light.png -o docs/images/icon-light.webp && \
 	cwebp -quiet -lossless -z 9 $$tmp/dark.png -o docs/images/icon-dark.webp && \
 	rm -r $$tmp
+
+## ログイン画面の補完に使うサーバーの一覧を、FediDBのデータセットから作り直す。GitHub Actionsが週1回走らせてPRにする
+update-known-servers:
+	Tools/update-known-servers.sh
 
 ## 変更を報告する前に通すべき検証
 check: lint test-core build warnings
