@@ -45,8 +45,9 @@
       "id": "22546306",
       "type": "video",
       "url": "https://files.example.social/media_attachments/files/022/546/306/original/dab9a597f68b9745.mp4",
-      "preview_url": "https://files.example.social/media_attachments/files/022/546/306/small/dab9a597f68b9745.png",
-      "remote_url": null,
+      "preview_url": "https://files.example.social/cache/media_attachments/thumbnails/022/546/306/original/c3f0e9b2a1d4e5f6.png",
+      "remote_url": "https://remote.example/media_attachments/files/109/876/543/original/dab9a597f68b9745.mp4",
+      "preview_remote_url": "https://remote.example/media_attachments/thumbnails/109/876/543/original/c3f0e9b2a1d4e5f6.png",
       "meta": {
         "length": "0:01:28.65",
         "duration": 88.65,

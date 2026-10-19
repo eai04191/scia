@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import ImageIO
 import os
@@ -11,7 +12,8 @@ import UniformTypeIdentifiers
 /// 描画のたびにメインスレッドで展開しないよう、表示する大きさまで縮めて展開したものを持つ。
 @MainActor
 final class MediaImageStore {
-    typealias Fetch = @Sendable (URL) async throws -> Data
+    /// URLのファイルを読む。範囲を渡したら、その部分だけを読む（ファイルの終わりを越えた分は返さない）。
+    typealias Fetch = @Sendable (URL, Range<Int>?) async throws -> Data
 
     /// ビューアで拡大して見る画像を展開する最大の辺の長さ（ピクセル）。これより大きい画像は縮めて持つ。
     static let fullPixelSize = 4_096
@@ -22,6 +24,8 @@ final class MediaImageStore {
     private var inFlight: [Key: Task<Loaded, any Error>] = [:]
     /// 元のファイルを置くディスクキャッシュ。共有や保存で縮めずに元の形式のまま渡すために残し、ビューアで開き直すときは通信せずにここから読む。
     private let files: MediaFileCache
+    /// 先頭から最初のフレームを作れなかった動画。サーバーのプレビューを出し、読み直さない。通信の失敗は、つながれば作れるため含めない。
+    private var failedVideoFrames: Set<URL> = []
     private let logger = SciaLog.logger(category: "media")
 
     init(files: MediaFileCache, fetch: @escaping Fetch) {
@@ -39,12 +43,73 @@ final class MediaImageStore {
     private struct Key: Hashable {
         let url: URL
         let maxPixelSize: Int
+        /// 動画の先頭から作った最初のフレーム。
+        var isVideoFrame = false
 
-        var cacheKey: NSString { "\(maxPixelSize) \(url.absoluteString)" as NSString }
+        var cacheKey: NSString { "\(isVideoFrame ? "frame " : "")\(maxPixelSize) \(url.absoluteString)" as NSString }
     }
 
     func cachedImage(for url: URL, maxPixelSize: Int) -> UIImage? {
         cache.object(forKey: Key(url: url, maxPixelSize: maxPixelSize).cacheKey)
+    }
+
+    /// 一覧のサムネイルを、読み込み済みならすぐ返す。
+    func cachedThumbnail(for request: MediaThumbnailRequest) -> UIImage? {
+        switch request.source {
+        case .image:
+            return cachedImage(for: request.url, maxPixelSize: request.maxPixelSize)
+        case .videoFrame(let fallback):
+            let key = Key(url: request.url, maxPixelSize: request.maxPixelSize, isVideoFrame: true)
+            if let frame = cache.object(forKey: key.cacheKey) {
+                return frame
+            }
+            return failedVideoFrames.contains(request.url) ? cachedImage(for: fallback, maxPixelSize: request.maxPixelSize) : nil
+        }
+    }
+
+    /// 一覧のサムネイルを読み込む。動画の最初のフレームを作れなければ、サーバーのプレビューを読む。
+    func thumbnail(for request: MediaThumbnailRequest) async throws -> UIImage {
+        switch request.source {
+        case .image:
+            return try await image(for: request.url, maxPixelSize: request.maxPixelSize)
+        case .videoFrame(let fallback):
+            if !failedVideoFrames.contains(request.url) {
+                do {
+                    return try await videoFrame(for: request.url, maxPixelSize: request.maxPixelSize)
+                } catch is URLError {
+                    // 通信の失敗は、つながれば作れるため覚えない。
+                } catch {
+                    failedVideoFrames.insert(request.url)
+                }
+            }
+            return try await image(for: fallback, maxPixelSize: request.maxPixelSize)
+        }
+    }
+
+    /// 動画の先頭だけを読み、最初のフレームを作る。読む長さは`VideoFirstFrame`が動画の目次から決める。
+    private func videoFrame(for url: URL, maxPixelSize: Int) async throws -> UIImage {
+        let key = Key(url: url, maxPixelSize: maxPixelSize, isVideoFrame: true)
+        if let image = cache.object(forKey: key.cacheKey) {
+            return image
+        }
+        if let task = inFlight[key] {
+            return try await task.value.image
+        }
+        let fetch = fetch
+        let task = Task<Loaded, any Error> {
+            let prefix = try await VideoFirstFrame.readPrefix { range in try await fetch(url, range) }
+            return Loaded(image: try await Self.makeVideoFrame(from: prefix, maxPixelSize: maxPixelSize), keptOriginal: false)
+        }
+        inFlight[key] = task
+        defer { inFlight[key] = nil }
+        do {
+            let loaded = try await task.value
+            cache.setObject(loaded.image, forKey: key.cacheKey, cost: Self.cost(of: loaded.image))
+            return loaded.image
+        } catch {
+            logger.info("video frame failed url=\(url.absoluteString, privacy: .public): \(String(describing: error), privacy: .public)")
+            throw error
+        }
     }
 
     /// 元のファイルをキャッシュに置いてあるか。`keepsOriginal`を付けて読み込み終えるまでと、整理で消えたあとはfalse。
@@ -77,7 +142,7 @@ final class MediaImageStore {
             if let files, let cached = await files.data(for: url), let image = await Self.decode(cached, maxPixelSize: maxPixelSize) {
                 return Loaded(image: image, keptOriginal: true)
             }
-            let data = try await fetch(url)
+            let data = try await fetch(url, nil)
             guard let image = await Self.decode(data, maxPixelSize: maxPixelSize) else {
                 throw DecodeError()
             }
@@ -156,6 +221,49 @@ final class MediaImageStore {
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
         return UIImage(cgImage: image)
+    }
+
+    /// 動画の先頭の部分から、0秒目のフレームを`maxPixelSize`まで縮めて作る。AVFoundationはファイルから読むため、一時ファイルに書く。
+    @concurrent
+    private static func makeVideoFrame(from prefix: Data, maxPixelSize: Int) async throws -> UIImage {
+        let file = URL.temporaryDirectory.appending(path: "VideoFrame-\(UUID().uuidString).mp4")
+        try prefix.write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        let generator = AVAssetImageGenerator(asset: AVURLAsset(url: file))
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: maxPixelSize, height: maxPixelSize)
+        // 先頭にあるのは最初のキーフレームだけなので、0秒より後ろのフレームも受け取る。
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = .positiveInfinity
+        return UIImage(cgImage: try await generator.image(at: .zero).image)
+    }
+
+    /// 範囲に応えないサーバー。
+    struct RangeNotSupported: Error {}
+
+    /// URLのファイルを読む。範囲を渡したら、その部分だけを読む。
+    @concurrent
+    nonisolated static func download(_ url: URL, range: Range<Int>?) async throws -> Data {
+        guard let range else {
+            return try await URLSession.shared.data(from: url).0
+        }
+        var request = URLRequest(url: url)
+        request.setValue("bytes=\(range.lowerBound)-\(range.upperBound - 1)", forHTTPHeaderField: "Range")
+        let (bytes, response) = try await URLSession.shared.bytes(for: request)
+        // 範囲に応えないサーバーはファイル全体を返すため、読み始める前に止める。
+        guard (response as? HTTPURLResponse)?.statusCode == 206 else {
+            bytes.task.cancel()
+            throw RangeNotSupported()
+        }
+        var data = Data()
+        data.reserveCapacity(range.count)
+        for try await byte in bytes {
+            data.append(byte)
+            if data.count >= range.count {
+                break
+            }
+        }
+        return data
     }
 
     /// 元のファイルの名前。共有先でファイル名として見えるため、URLの名前を残し、拡張子は中身の形式に合わせる。

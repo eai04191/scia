@@ -26,8 +26,8 @@ enum AppDependencies {
     /// 添付ファイルの元のファイルを置くディスクキャッシュ。ビューアで開いた画像の元のファイルと、共有や保存のために落とした動画などを置く。
     static let mediaFiles = MediaFileCache()
 
-    static let mediaImages = MediaImageStore(files: mediaFiles) { url in
-        try await URLSession.shared.data(from: url).0
+    static let mediaImages = MediaImageStore(files: mediaFiles) { url, range in
+        try await MediaImageStore.download(url, range: range)
     }
 
     static let mediaDownloads = MediaDownloads(files: mediaFiles)

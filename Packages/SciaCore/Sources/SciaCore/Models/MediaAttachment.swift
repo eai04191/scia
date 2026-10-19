@@ -11,6 +11,9 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
     public let previewUrl: URL?
     /// 他のサーバーの投稿で、元のファイルがあるURL。
     public let remoteUrl: URL?
+    /// 他のサーバーの投稿で、作者が付けたサムネイルの元のURL。作者が付けていなければnil。
+    /// 送る側のMastodonは、付けたときだけ添付に`icon`を付けて送り、受け取る側はそれをここに入れる。
+    public let previewRemoteUrl: URL?
     /// 代替テキスト。
     public let description: String?
     public let meta: Meta?
@@ -23,6 +26,7 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
         url: URL?,
         previewUrl: URL?,
         remoteUrl: URL? = nil,
+        previewRemoteUrl: URL? = nil,
         description: String? = nil,
         meta: Meta? = nil,
         blurhash: String? = nil
@@ -32,6 +36,7 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
         self.url = url
         self.previewUrl = previewUrl
         self.remoteUrl = remoteUrl
+        self.previewRemoteUrl = previewRemoteUrl
         self.description = description
         self.meta = meta
         self.blurhash = blurhash
@@ -46,6 +51,7 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
         url = container.decodeDisplayURL(forKey: .url)
         previewUrl = container.decodeDisplayURL(forKey: .previewUrl)
         remoteUrl = container.decodeDisplayURL(forKey: .remoteUrl)
+        previewRemoteUrl = container.decodeDisplayURL(forKey: .previewRemoteUrl)
         description = try container.decodeIfPresent(String.self, forKey: .description)
         meta = try container.decodeIfPresent(Meta.self, forKey: .meta)
         blurhash = try container.decodeIfPresent(String.self, forKey: .blurhash)
@@ -53,7 +59,7 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
 
     /// 代替テキストだけを差し替えたもの。
     public func replacingDescription(_ description: String?) -> MediaAttachment {
-        MediaAttachment(id: id, type: type, url: url, previewUrl: previewUrl, remoteUrl: remoteUrl, description: description, meta: meta, blurhash: blurhash)
+        MediaAttachment(id: id, type: type, url: url, previewUrl: previewUrl, remoteUrl: remoteUrl, previewRemoteUrl: previewRemoteUrl, description: description, meta: meta, blurhash: blurhash)
     }
 
     public var aspectRatio: Double? {

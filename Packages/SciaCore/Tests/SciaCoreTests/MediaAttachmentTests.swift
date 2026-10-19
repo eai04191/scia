@@ -21,6 +21,9 @@ struct MediaAttachmentTests {
         // 音声などではnull。
         #expect(status.mediaAttachments[2].blurhash == nil)
         #expect(status.mediaAttachments[1].aspectRatio == 1280.0 / 720.0)
+        // 他のサーバーの投稿で、作者が動画にサムネイルを付けていれば、その元のURLが入る。
+        #expect(status.mediaAttachments[1].previewRemoteUrl?.absoluteString == "https://remote.example/media_attachments/thumbnails/109/876/543/original/c3f0e9b2a1d4e5f6.png")
+        #expect(status.mediaAttachments[0].previewRemoteUrl == nil)
         // 音声は大きさを持たない。
         #expect(status.mediaAttachments[2].aspectRatio == nil)
         // 処理中や扱えない種類のファイルは、元のファイルのURLがない。

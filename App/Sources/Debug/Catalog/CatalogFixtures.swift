@@ -17,14 +17,14 @@ enum CatalogFixtures {
 
     /// 読み込みが終わらない。届く前の見た目を固定する。
     @MainActor
-    static let pendingMediaImages = MediaImageStore(files: catalogFiles(name: "Pending")) { _ in
+    static let pendingMediaImages = MediaImageStore(files: catalogFiles(name: "Pending")) { _, _ in
         try await Task.sleep(for: .seconds(86_400))
         throw CancellationError()
     }
 
     /// 読み込みがすぐ失敗する。
     @MainActor
-    static let failingMediaImages = MediaImageStore(files: catalogFiles(name: "Failing")) { _ in
+    static let failingMediaImages = MediaImageStore(files: catalogFiles(name: "Failing")) { _, _ in
         throw URLError(.notConnectedToInternet)
     }
 

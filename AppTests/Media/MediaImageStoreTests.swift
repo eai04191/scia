@@ -1,4 +1,5 @@
 import Foundation
+import SciaCore
 import Synchronization
 import Testing
 import UIKit
@@ -21,7 +22,7 @@ struct MediaImageStoreTests {
     @Test func keepsOriginalFileWithExtensionOfItsFormat() async throws {
         let data = try pngData()
         let files = MediaFileCache.temporary()
-        let store = MediaImageStore(files: files) { _ in data }
+        let store = MediaImageStore(files: files) { _, _ in data }
         let url = try #require(URL(string: "https://files.example.social/original/abc.jpg"))
 
         #expect(await store.hasOriginal(for: url) == false)
@@ -36,7 +37,7 @@ struct MediaImageStoreTests {
     /// 一覧のサムネイルのように元のファイルが要らない読み込みでは、ファイルを残さない。
     @Test func doesNotKeepOriginalUnlessAsked() async throws {
         let data = try pngData()
-        let store = MediaImageStore(files: .temporary()) { _ in data }
+        let store = MediaImageStore(files: .temporary()) { _, _ in data }
         let url = try #require(URL(string: "https://files.example.social/small/abc.png"))
 
         _ = try await store.image(for: url, maxPixelSize: 400)
@@ -48,7 +49,7 @@ struct MediaImageStoreTests {
     @Test func refetchesWhenOriginalWasRemoved() async throws {
         let data = try pngData()
         let files = MediaFileCache.temporary()
-        let store = MediaImageStore(files: files) { _ in data }
+        let store = MediaImageStore(files: files) { _, _ in data }
         let url = try #require(URL(string: "https://files.example.social/original/abc.png"))
         _ = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
         try FileManager.default.removeItem(at: files.directory)
@@ -64,7 +65,7 @@ struct MediaImageStoreTests {
         let files = MediaFileCache.temporary()
         let url = try #require(URL(string: "https://files.example.social/original/abc.png"))
         _ = try await files.store(data, named: "abc.png", for: url)
-        let store = MediaImageStore(files: files) { _ in throw URLError(.notConnectedToInternet) }
+        let store = MediaImageStore(files: files) { _, _ in throw URLError(.notConnectedToInternet) }
 
         let image = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
 
@@ -77,7 +78,7 @@ struct MediaImageStoreTests {
         let files = MediaFileCache.temporary()
         let url = try #require(URL(string: "https://files.example.social/original/abc.png"))
         _ = try await files.store(Data("broken".utf8), named: "abc.png", for: url)
-        let store = MediaImageStore(files: files) { _ in data }
+        let store = MediaImageStore(files: files) { _, _ in data }
 
         _ = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
 
@@ -92,7 +93,7 @@ struct MediaImageStoreTests {
         let url = try #require(URL(string: "https://files.example.social/original/abc.png"))
         _ = try await files.store(data, named: "abc.png", for: url)
         let fetched = Mutex(0)
-        let store = MediaImageStore(files: files) { _ in
+        let store = MediaImageStore(files: files) { _, _ in
             fetched.withLock { $0 += 1 }
             return data
         }
@@ -100,5 +101,46 @@ struct MediaImageStoreTests {
         _ = try await store.image(for: url, maxPixelSize: 400)
 
         #expect(fetched.withLock { $0 } == 1)
+    }
+
+    /// 動画の先頭から最初のフレームを作れなければ、サーバーのプレビューを出し、その動画は先頭を読み直さない。
+    @Test func videoFrameFallsBackToPreviewAndIsNotRetried() async throws {
+        let png = try pngData()
+        let rangeReads = Mutex(0)
+        let store = MediaImageStore(files: .temporary()) { _, range in
+            guard range != nil else { return png }
+            rangeReads.withLock { $0 += 1 }
+            return Data("not a video".utf8)
+        }
+        let video = try #require(URL(string: "https://files.example.social/original/abc.mp4"))
+        let preview = try #require(URL(string: "https://files.example.social/small/abc.png"))
+        let request = MediaThumbnailRequest(url: video, maxPixelSize: 1_024, source: .videoFrame(fallback: preview))
+
+        let image = try await store.thumbnail(for: request)
+        _ = try await store.thumbnail(for: request)
+
+        #expect(image.size == CGSize(width: 8, height: 8))
+        #expect(rangeReads.withLock { $0 } == 1)
+        #expect(store.cachedThumbnail(for: request) != nil)
+    }
+
+    /// 通信の失敗では、プレビューを出しても、つながれば作れるため次は読み直す。
+    @Test func videoFrameIsRetriedAfterNetworkFailure() async throws {
+        let png = try pngData()
+        let rangeReads = Mutex(0)
+        let store = MediaImageStore(files: .temporary()) { _, range in
+            guard range != nil else { return png }
+            rangeReads.withLock { $0 += 1 }
+            throw URLError(.notConnectedToInternet)
+        }
+        let video = try #require(URL(string: "https://files.example.social/original/abc.mp4"))
+        let preview = try #require(URL(string: "https://files.example.social/small/abc.png"))
+        let request = MediaThumbnailRequest(url: video, maxPixelSize: 1_024, source: .videoFrame(fallback: preview))
+
+        _ = try await store.thumbnail(for: request)
+        _ = try await store.thumbnail(for: request)
+
+        #expect(rangeReads.withLock { $0 } == 2)
+        #expect(store.cachedThumbnail(for: request) == nil)
     }
 }

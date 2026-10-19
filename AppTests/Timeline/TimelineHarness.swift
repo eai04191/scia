@@ -126,7 +126,7 @@ extension EmojiImageStore {
 extension MediaImageStore {
     /// 画像を読みに行かず、すべて失敗として扱う。
     static var offline: MediaImageStore {
-        MediaImageStore(files: .temporary()) { _ in throw URLError(.notConnectedToInternet) }
+        MediaImageStore(files: .temporary()) { _, _ in throw URLError(.notConnectedToInternet) }
     }
 }
 

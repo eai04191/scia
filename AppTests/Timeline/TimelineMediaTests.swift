@@ -27,7 +27,7 @@ struct TimelineMediaTests {
         var fetched: [URL] { urls.withLock { $0 } }
 
         @MainActor func makeStore() -> MediaImageStore {
-            MediaImageStore(files: .temporary()) { [self] url in
+            MediaImageStore(files: .temporary()) { [self] url, _ in
                 urls.withLock { $0.append(url) }
                 throw URLError(.notConnectedToInternet)
             }

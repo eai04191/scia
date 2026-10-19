@@ -80,10 +80,65 @@ struct MediaThumbnailSelectionTests {
         #expect(request(attachment(hasOriginalURL: false))?.url == preview)
     }
 
-    /// 動画とGIFは、サーバーが作る静止画がプレビューの1種類しかない。
-    @Test func videoAndGifAlwaysReadPreview() {
-        #expect(request(attachment(.video))?.url == preview)
-        #expect(request(attachment(.gifv))?.url == preview)
+    private func video(
+        _ type: MediaAttachment.Kind = .video,
+        preview: String = "https://files.example.social/media_attachments/files/111/222/333/small/abc.png",
+        previewRemoteUrl: String? = nil
+    ) -> MediaAttachment {
+        MediaAttachment(
+            id: "1",
+            type: type,
+            url: original,
+            previewUrl: URL(string: preview),
+            previewRemoteUrl: previewRemoteUrl.flatMap(URL.init(string:)),
+            meta: MediaAttachment.Meta(
+                original: MediaAttachment.Size(width: 1_920, height: 1_080),
+                small: MediaAttachment.Size(width: 640, height: 360)
+            )
+        )
+    }
+
+    /// 動画から作ったプレビューでは足りなければ、元の動画の先頭から最初のフレームを作る。作れなければプレビューを読む。
+    @Test func videoAndGifReadTheFirstFrameWhenThePreviewIsTooSmall() throws {
+        for type in [MediaAttachment.Kind.video, .gifv] {
+            let attachment = video(type)
+            let request = try #require(request(attachment))
+            #expect(request.url == original)
+            #expect(request.source == .videoFrame(fallback: try #require(attachment.previewUrl)))
+        }
+    }
+
+    /// サーバーがファイルを消した他のサーバーの投稿では、プレビューが`media_proxy`を通る。作者がサムネイルを付けていなければ、動画から作ったもの。
+    @Test func mediaProxyPreviewWithoutRemoteThumbnailIsGeneratedFromTheVideo() {
+        #expect(request(video(preview: "https://example.social/media_proxy/123/small"))?.source != .image)
+    }
+
+    /// 作者が付けたサムネイルは差し替えない。他のサーバーの投稿では`previewRemoteUrl`が入り、自分のサーバーの投稿ではプレビューが`thumbnails/…/original/…`になる。
+    @Test func authorThumbnailIsKept() {
+        let remote = video(previewRemoteUrl: "https://other.example/media_attachments/thumbnails/1/original/thumb.png")
+        #expect(request(remote)?.url == remote.previewUrl)
+        #expect(request(remote)?.source == .image)
+
+        let local = video(preview: "https://files.example.social/media_attachments/thumbnails/111/222/333/original/thumb.png")
+        #expect(request(local)?.url == local.previewUrl)
+
+        let proxied = video(preview: "https://example.social/media_proxy/123/small", previewRemoteUrl: "https://other.example/thumb.png")
+        #expect(request(proxied)?.source == .image)
+    }
+
+    /// 動画から作ったか分からないプレビューは差し替えない。`small`はパスの区切りとして見る。
+    @Test func unknownPreviewIsKept() {
+        #expect(request(video(preview: "https://example.com/small.png"))?.source == .image)
+        #expect(request(video(preview: "https://example.com/smaller/abc.png"))?.source == .image)
+    }
+
+    @Test func videoReadsPreviewWhenOriginalIsNotAllowed() {
+        let policy = MediaThumbnailPolicy(allowsOriginal: false, upscaleTolerance: 1)
+        #expect(request(video(), policy: policy)?.source == .image)
+    }
+
+    @Test func videoReadsPreviewWhenItCoversTheTile() {
+        #expect(request(video(), tile: CGSize(width: 160, height: 90), scale: 3)?.source == .image)
     }
 
     @Test func audioAndUnknownKindsHaveNoThumbnail() {

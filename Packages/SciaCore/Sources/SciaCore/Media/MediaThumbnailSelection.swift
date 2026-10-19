@@ -3,13 +3,22 @@ public import Foundation
 
 /// 一覧のサムネイルに読む画像と、展開する大きさ。
 public struct MediaThumbnailRequest: Equatable, Sendable {
+    /// 読むファイル。`source`が`videoFrame`なら動画。
     public let url: URL
     /// 縮めて展開するときの長い辺の最大（ピクセル）。元の画像より大きければ、元の大きさのまま展開する。
     public let maxPixelSize: Int
+    public let source: Source
 
-    public init(url: URL, maxPixelSize: Int) {
+    public enum Source: Equatable, Sendable {
+        case image
+        /// 動画の先頭を読んで、最初のフレームを作る。作れなければ`fallback`の画像（サーバーのプレビュー）を読む。
+        case videoFrame(fallback: URL)
+    }
+
+    public init(url: URL, maxPixelSize: Int, source: Source = .image) {
         self.url = url
         self.maxPixelSize = maxPixelSize
+        self.source = source
     }
 }
 
@@ -43,6 +52,7 @@ public struct NetworkConditions: Equatable, Sendable {
 ///
 /// Mastodonのプレビュー画像は面積230,400ピクセル（16:9で640×360）まで縮めてある。
 /// 3倍の画面で幅いっぱいに出すと約1,000ピクセル要り、引き伸ばしてぼやけるため、足りなければ元の画像を読む。
+/// 動画とGIFのプレビューは長い辺640ピクセルまでのため、足りなければ元の動画の先頭を読んで最初のフレームを作る（`VideoFirstFrame`）。
 /// https://github.com/mastodon/mastodon/blob/main/app/models/media_attachment.rb
 public enum MediaThumbnailSelection {
     /// 展開する大きさを切り上げる刻み。枠の大きさが少し変わるたびに読み直さないようにする。
@@ -68,8 +78,10 @@ public enum MediaThumbnailSelection {
     ) -> MediaThumbnailRequest? {
         let required = requiredPixelSize(tileSize: tileSize, displayScale: displayScale, aspectRatio: attachment.aspectRatio)
         let maxPixelSize = roundedPixelSize(max(required.width, required.height))
+        if let video = videoFrameSource(of: attachment, required: required, policy: policy) {
+            return MediaThumbnailRequest(url: video.url, maxPixelSize: maxPixelSize, source: .videoFrame(fallback: video.fallback))
+        }
         let url: URL? = switch attachment.type {
-        // 動画とGIFは、サーバーが作る静止画がプレビューの1種類しかない。
         case .video, .gifv: attachment.previewUrl
         // 元の画像を読まない条件では、プレビュー画像がなければ読まずにblurhashのぼかしだけを出す。
         case .image: if !policy.allowsOriginal {
@@ -83,6 +95,33 @@ public enum MediaThumbnailSelection {
         case .audio, .unknown: nil
         }
         return url.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize) }
+    }
+
+    /// 動画とGIFで、サーバーのプレビューの代わりに動画の最初のフレームを作るなら、その動画とプレビューのURL。
+    ///
+    /// サーバーが動画から作るプレビューは、動画の0秒目のフレームを縮めたもの。作者がサムネイルを付けていれば、プレビューはその画像になる。
+    /// 作者が選んだ画像を差し替えないよう、プレビューが動画から作ったものだと分かるときだけ置き換える。
+    /// - 他のサーバーの投稿で作者が付けていれば、`previewRemoteUrl`が入る
+    /// - 自分のサーバーの投稿で作者が付けていれば、プレビューは`media_attachments/thumbnails/…/original/…`になる。
+    ///   動画から作ったものは`media_attachments/files/…/small/…`になる。サーバーがファイルを消した他のサーバーの投稿では
+    ///   `/media_proxy/<id>/small`になり、作者が付けていなければ動画から作ったものへ転送される
+    /// https://github.com/mastodon/mastodon/blob/main/app/serializers/rest/media_attachment_serializer.rb
+    /// https://github.com/mastodon/mastodon/blob/main/app/controllers/media_proxy_controller.rb
+    private static func videoFrameSource(of attachment: MediaAttachment, required: CGSize, policy: MediaThumbnailPolicy) -> (url: URL, fallback: URL)? {
+        guard attachment.type == .video || attachment.type == .gifv,
+              policy.allowsOriginal,
+              let video = attachment.url,
+              let preview = attachment.previewUrl,
+              isGeneratedFromVideo(preview: preview, previewRemoteUrl: attachment.previewRemoteUrl),
+              usesOriginal(attachment, required: required, policy: policy)
+        else { return nil }
+        return (video, preview)
+    }
+
+    static func isGeneratedFromVideo(preview: URL, previewRemoteUrl: URL?) -> Bool {
+        guard previewRemoteUrl == nil else { return false }
+        let components = preview.pathComponents
+        return components.last == "small" || components.dropLast().last == "small"
     }
 
     private static func usesOriginal(_ attachment: MediaAttachment, required: CGSize, policy: MediaThumbnailPolicy) -> Bool {

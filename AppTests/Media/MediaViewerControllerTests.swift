@@ -84,7 +84,7 @@ struct MediaViewerControllerTests {
         photoSaver: PhotoLibrarySaver = PhotoLibrarySaver { _ in },
         download: @escaping MediaDownloads.Download = { _, _, _ in throw URLError(.notConnectedToInternet) }
     ) -> MediaViewerController {
-        let store = MediaImageStore(files: files) { _ in
+        let store = MediaImageStore(files: files) { _, _ in
             try await Task.sleep(for: .milliseconds(150))
             return data
         }
@@ -122,7 +122,7 @@ struct MediaViewerControllerTests {
         let files = MediaFileCache.temporary()
         let url = try #require(URL(string: "https://x.example/original/1"))
         _ = try await files.store(try pngData(), named: "1.png", for: url)
-        let store = MediaImageStore(files: files) { _ in
+        let store = MediaImageStore(files: files) { _, _ in
             try await Task.sleep(for: .seconds(10))
             throw URLError(.timedOut)
         }
@@ -1226,7 +1226,7 @@ struct MediaViewerControllerTests {
             context.fill(CGRect(x: 0, y: 0, width: 64, height: 36))
         }
         let data = try #require(arriving.pngData())
-        let store = MediaImageStore(files: .temporary()) { _ in
+        let store = MediaImageStore(files: .temporary()) { _, _ in
             try await Task.sleep(for: .milliseconds(150))
             return data
         }

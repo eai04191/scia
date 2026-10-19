@@ -421,13 +421,13 @@ final class MediaTileView: UIButton, MediaViewerSource {
             }
         }
         guard let request = source?.request else { return }
-        if let cached = store.cachedImage(for: request.url, maxPixelSize: request.maxPixelSize) {
+        if let cached = store.cachedThumbnail(for: request) {
             loadedThumbnail = cached
             thumbnailView.image = cached
             return
         }
         loadTask = Task { [weak self, store] in
-            guard let image = try? await store.image(for: request.url, maxPixelSize: request.maxPixelSize),
+            guard let image = try? await store.thumbnail(for: request),
                   let self, !Task.isCancelled, self.source?.request == request
             else { return }
             self.loadedThumbnail = image
