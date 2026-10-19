@@ -90,14 +90,32 @@ final class ProfileController {
             _ = store.pinned
         } onChange: { [weak self] in
             Task { @MainActor in
-                guard let self else { return }
-                self.observeHeaderContent()
-                self.showEntries()
+                self?.afterTransition { controller in
+                    controller.observeHeaderContent()
+                    controller.showEntries()
+                }
             }
         }
     }
 
+    /// 画面を移る動きの最中なら、移り終わってから行う。ヘッダーを描き直したり一覧の行を作ったりすると、メインスレッドが100msほど止まる。
+    /// 止まっている間も、移り変わりに相乗りする動き（チップの列）は時計どおりに進むため、移り変わりとずれて跳んで見える。
+    private func afterTransition(_ work: @escaping @MainActor (ProfileController) -> Void) {
+        // 戻り値は相乗りの動きを登録できたかで、completionは登録できなくても呼ばれるため、戻り値で分けない。
+        guard let coordinator = viewController?.transitionCoordinator else {
+            work(self)
+            return
+        }
+        coordinator.animate(alongsideTransition: nil) { [weak self] _ in
+            guard let self else { return }
+            work(self)
+        }
+    }
+
     func start() {
+        // ヘッダーは一覧の区切りに載るため、空の一覧を入れて区切りを作り、画面が移り始める前から出しておく。
+        // 読み込みの結果は移り終わるまで待たせるので、ここで入れないと、移る間は何もない画面が流れてくる。
+        showEntries()
         loadProfile()
         loadInitial()
     }
@@ -187,10 +205,14 @@ final class ProfileController {
         run { controller in
             do {
                 guard try await timeline.loadInitial() != nil, timeline === controller.store.timeline else { return }
-                controller.shownTimeline = timeline
-                controller.shownTab = controller.store.tab
-                controller.showEntries(replacing: true)
-                controller.viewController?.setFooterState(timeline.reachedEnd ? .reachedEnd : .idle)
+                controller.afterTransition { controller in
+                    // 待つ間に別のタブへ切り替えていたら、その一覧の読み込みに任せる。
+                    guard timeline === controller.store.timeline else { return }
+                    controller.shownTimeline = timeline
+                    controller.shownTab = controller.store.tab
+                    controller.showEntries(replacing: true)
+                    controller.viewController?.setFooterState(timeline.reachedEnd ? .reachedEnd : .idle)
+                }
             } catch {
                 guard timeline === controller.store.timeline else { return }
                 controller.logger.error("profile statuses failed: \(SciaLog.describe(error), privacy: .public)")
