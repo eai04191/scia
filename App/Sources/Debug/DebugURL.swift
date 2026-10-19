@@ -61,106 +61,86 @@ enum DebugURL: Equatable {
         case notifications
     }
 
+    /// 引数を持たないURL。`host`か`host/path`で引く。
+    private static let fixed: [String: DebugURL] = [
+        "dummy-session": .dummySession,
+        "unauthorized": .unauthorized,
+        "unreadable": .unreadable,
+        "status/ok": .statusCleared,
+        "regenerating/on": .regenerating(true),
+        "regenerating/off": .regenerating(false),
+        "streaming/offline": .streaming(isOnline: false),
+        "streaming/online": .streaming(isOnline: true),
+        "download/normal": .slowDownload(seconds: nil),
+        "media-limits/server": .mediaLimits(nil),
+        "catalog": .catalog(nil),
+        "dump": .dump,
+        "reset": .reset,
+        "settings": .settings,
+        "tuning": .tuning,
+        "ticker-loop/on": .statusBarTickerLoop(true),
+        "ticker-loop/off": .statusBarTickerLoop(false),
+        "arrivals/hold": .holdArrivals(true),
+        "arrivals/release": .holdArrivals(false),
+    ]
+
     init?(_ url: URL) {
-        guard url.scheme == Self.scheme else { return nil }
-        switch url.host() {
-        case "dummy":
-            guard let post = DebugDummyPost(rawValue: url.lastPathComponent) else { return nil }
-            self = .dummy(post)
-        case "dummy-session":
-            self = .dummySession
-        case "unauthorized":
-            self = .unauthorized
-        case "unreadable":
-            self = .unreadable
-        case "status":
-            if url.lastPathComponent == "ok" {
-                self = .statusCleared
-                return
-            }
-            guard let statusCode = Int(url.lastPathComponent), (100..<600).contains(statusCode) else { return nil }
-            let retryAfter = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "retry-after" }?.value
-            self = .status(statusCode, retryAfter: retryAfter.flatMap { Int($0) })
-        case "regenerating":
-            switch url.lastPathComponent {
-            case "on": self = .regenerating(true)
-            case "off": self = .regenerating(false)
-            default: return nil
-            }
-        case "unsupported":
-            guard let feature = OptionalFeature(rawValue: url.lastPathComponent) else { return nil }
-            self = .unsupported(feature)
-        case "streaming":
-            switch url.lastPathComponent {
-            case "offline": self = .streaming(isOnline: false)
-            case "online": self = .streaming(isOnline: true)
-            default: return nil
-            }
-        case "download":
-            switch url.lastPathComponent {
-            case "slow":
-                let seconds = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "seconds" }?.value
-                self = .slowDownload(seconds: seconds.flatMap { Double($0) } ?? 10)
-            case "normal": self = .slowDownload(seconds: nil)
-            default: return nil
-            }
-        case "notice":
-            guard url.lastPathComponent == "progress" else { return nil }
-            let seconds = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "seconds" }?.value
-            guard let seconds = Double(seconds ?? "60"), seconds > 0 else { return nil }
-            self = .progressNotice(seconds: seconds)
-        case "media-limits":
-            if url.lastPathComponent == "server" {
-                self = .mediaLimits(nil)
-                return
-            }
-            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
-            func value(_ name: String) -> Int? { items.first { $0.name == name }?.value.flatMap { Int($0) } }
-            self = .mediaLimits(MediaLimits(
-                imageSizeLimit: value("image-size"),
-                imageMatrixLimit: value("image-matrix"),
-                videoSizeLimit: value("video-size"),
-                videoMatrixLimit: value("video-matrix"),
-                videoFrameRateLimit: value("video-frame-rate")
-            ))
-        case "catalog":
-            let path = url.path(percentEncoded: false)
-            if path.isEmpty || path == "/" {
-                self = .catalog(nil)
-                return
-            }
-            guard let component = CatalogComponent(rawValue: url.lastPathComponent) else { return nil }
-            self = .catalog(component)
-        case "dump":
-            self = .dump
-        case "reset":
-            self = .reset
-        case "settings":
-            self = .settings
-        case "tuning":
-            self = .tuning
-        case "tab":
-            guard let tab = Tab(rawValue: url.lastPathComponent) else { return nil }
-            self = .tab(tab)
-        case "ticker-loop":
-            switch url.lastPathComponent {
-            case "on": self = .statusBarTickerLoop(true)
-            case "off": self = .statusBarTickerLoop(false)
-            default: return nil
-            }
-        case "arrivals":
-            switch url.lastPathComponent {
-            case "hold": self = .holdArrivals(true)
-            case "release": self = .holdArrivals(false)
-            default: return nil
-            }
-        case "viewer":
-            let index = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "index" }?.value
-            guard let index = Int(index ?? "0"), index >= 0 else { return nil }
-            self = .viewer(index: index)
-        default:
-            return nil
+        guard url.scheme == Self.scheme, let host = url.host() else { return nil }
+        let path = url.path(percentEncoded: false).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if let fixed = Self.fixed[path.isEmpty ? host : "\(host)/\(path)"] {
+            self = fixed
+            return
         }
+        let last = url.lastPathComponent
+        let parsed: DebugURL? = switch host {
+        case "dummy": DebugDummyPost(rawValue: last).map { .dummy($0) }
+        case "unsupported": OptionalFeature(rawValue: last).map { .unsupported($0) }
+        case "tab": Tab(rawValue: last).map { .tab($0) }
+        case "catalog": CatalogComponent(rawValue: last).map { .catalog($0) }
+        case "status": Self.status(url)
+        case "download": Self.slowDownload(url)
+        case "notice": Self.progressNotice(url)
+        case "media-limits": Self.mediaLimits(url)
+        case "viewer": Self.viewer(url)
+        default: nil
+        }
+        guard let parsed else { return nil }
+        self = parsed
+    }
+
+    private static func query(_ name: String, in url: URL) -> String? {
+        URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == name }?.value
+    }
+
+    private static func status(_ url: URL) -> DebugURL? {
+        guard let statusCode = Int(url.lastPathComponent), (100..<600).contains(statusCode) else { return nil }
+        return .status(statusCode, retryAfter: query("retry-after", in: url).flatMap { Int($0) })
+    }
+
+    private static func slowDownload(_ url: URL) -> DebugURL? {
+        guard url.lastPathComponent == "slow" else { return nil }
+        return .slowDownload(seconds: query("seconds", in: url).flatMap { Double($0) } ?? 10)
+    }
+
+    private static func progressNotice(_ url: URL) -> DebugURL? {
+        guard url.lastPathComponent == "progress", let seconds = Double(query("seconds", in: url) ?? "60"), seconds > 0 else { return nil }
+        return .progressNotice(seconds: seconds)
+    }
+
+    private static func mediaLimits(_ url: URL) -> DebugURL? {
+        func value(_ name: String) -> Int? { query(name, in: url).flatMap { Int($0) } }
+        return .mediaLimits(MediaLimits(
+            imageSizeLimit: value("image-size"),
+            imageMatrixLimit: value("image-matrix"),
+            videoSizeLimit: value("video-size"),
+            videoMatrixLimit: value("video-matrix"),
+            videoFrameRateLimit: value("video-frame-rate")
+        ))
+    }
+
+    private static func viewer(_ url: URL) -> DebugURL? {
+        guard let index = Int(query("index", in: url) ?? "0"), index >= 0 else { return nil }
+        return .viewer(index: index)
     }
 }
 #endif
