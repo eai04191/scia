@@ -84,6 +84,8 @@ struct LoginView: View {
                 if isFirstLogin {
                     Section {
                         AppHeader()
+                            // 行の既定の上下の余白を除き、アイコンと名前を入力欄の上にまとめて見せる
+                            .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
                     }
                     .listRowBackground(Color.clear)
                 }
@@ -142,7 +144,11 @@ struct LoginView: View {
                 .padding(.horizontal, 20)
                 .padding(.bottom, 8)
             }
+            // セクションの間の既定の間隔は広く、アイコンと名前が入力欄から離れて見えるため詰める
+            .listSectionSpacing(.compact)
             .navigationTitle(isFirstLogin ? "" : "アカウントを追加")
+            // 最初の起動の画面はタイトルもキャンセルのボタンもなく、空のバーが高さだけ取るので隠す
+            .toolbar(isFirstLogin ? .hidden : .automatic, for: .navigationBar)
             .toolbar {
                 if let onCancel {
                     ToolbarItem(placement: .cancellationAction) {
