@@ -11,10 +11,26 @@ final class LoginModel {
 
     /// ログインできたときに呼ぶ。保存に失敗したら投げ、ログイン画面にエラーを出す。
     private let onLogin: @MainActor (Credential) throws -> Void
+    private let serverSuggestions: ServerSuggestions
     private let logger = SciaLog.logger(category: "login")
 
-    init(onLogin: @escaping @MainActor (Credential) throws -> Void) {
+    /// - Parameter accountDomains: ログイン済みのアカウントのサーバー。候補の上に出す。
+    init(accountDomains: [String] = [], onLogin: @escaping @MainActor (Credential) throws -> Void) {
         self.onLogin = onLogin
+        let knownDomains: [String]
+        do {
+            knownDomains = try ServerSuggestions.loadKnownDomains()
+        } catch {
+            // 一覧はアプリに同梱していて、読めないのはビルドの誤りに限る。ログインは打てばできるので、候補をログイン済みのサーバーだけにして続ける。
+            logger.error("known servers unavailable: \(SciaLog.describe(error), privacy: .public)")
+            knownDomains = []
+        }
+        serverSuggestions = ServerSuggestions(accountDomains: accountDomains, knownDomains: knownDomains)
+    }
+
+    /// 打ったアドレスに合うサーバー。
+    var suggestions: [String] {
+        serverSuggestions.suggestions(for: instanceInput)
     }
 
     func showError(_ message: String) {
@@ -74,6 +90,7 @@ struct LoginView: View {
                         Text(errorMessage).foregroundStyle(.red)
                     }
                 }
+                // 候補はボタンの下に出す。上に出すと、キーボードが出ている間にボタンが画面の外へ押し出されるため。
                 Section {
                     Button(action: login) {
                         HStack {
@@ -85,6 +102,25 @@ struct LoginView: View {
                         }
                     }
                     .disabled(model.isLoggingIn || model.instanceInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                }
+                let suggestions = model.suggestions
+                if !suggestions.isEmpty {
+                    Section {
+                        ForEach(suggestions, id: \.self) { domain in
+                            Button {
+                                model.instanceInput = domain
+                            } label: {
+                                Text(domain)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                            // ログインボタンより目立たせないため、操作の色ではなく本文の色にする。
+                            .tint(.primary)
+                        }
+                    } footer: {
+                        Text("サーバー一覧の提供: [FediDB](https://fedidb.com)")
+                    }
+                    .disabled(model.isLoggingIn)
                 }
             }
             .navigationTitle(onCancel == nil ? "Scia" : "アカウントを追加")

@@ -15,7 +15,11 @@ let package = Package(
         .library(name: "SciaCore", targets: ["SciaCore"]),
     ],
     targets: [
-        .target(name: "SciaCore", swiftSettings: swiftSettings),
+        .target(
+            name: "SciaCore",
+            resources: [.copy("Auth/Resources/known-servers.txt")],
+            swiftSettings: swiftSettings
+        ),
         .testTarget(
             name: "SciaCoreTests",
             dependencies: ["SciaCore"],

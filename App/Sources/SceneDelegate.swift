@@ -213,7 +213,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let presenter = window?.rootViewController?.frontmostPresented else { return }
         weak var sheet: UIViewController?
         let attempt = AddAccountAttempt()
-        let model = LoginModel { [weak self] credential in
+        let model = LoginModel(accountDomains: accountDomains) { [weak self] credential in
             guard !attempt.isCancelled else { return }
             try self?.accounts?.add(credential)
             sheet?.dismiss(animated: true)
@@ -264,8 +264,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         Self.syncAllScenes()
     }
 
+    /// ログイン画面の候補の上に出す、ログイン済みのアカウントのサーバー。
+    private var accountDomains: [String] {
+        accounts?.accounts.compactMap { ServerSuggestions.address(of: $0.instance) } ?? []
+    }
+
     func showLogin(errorMessage: String?) {
-        let model = LoginModel { [weak self] credential in
+        let model = LoginModel(accountDomains: accountDomains) { [weak self] credential in
             guard let accounts = self?.accounts else {
                 throw AccountsUnavailable()
             }
