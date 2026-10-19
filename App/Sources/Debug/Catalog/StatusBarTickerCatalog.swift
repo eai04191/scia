@@ -69,7 +69,7 @@ enum StatusBarTickerCatalog {
     }
 
     private static func media(sensitive: Bool) -> StatusBarTickerItem.Subject {
-        .media(CatalogFixtures.attachment("ticker", width: 800, height: 600, color: .systemBlue, label: "画像", blurhash: CatalogFixtures.blurhash), isSensitive: sensitive)
+        .media(CatalogFixtures.attachment("ticker", width: 800, height: 600, color: .systemBlue, label: "画像", blurhash: CatalogFixtures.blurhash), isSensitive: sensitive, isImageOnly: true)
     }
 
     @MainActor

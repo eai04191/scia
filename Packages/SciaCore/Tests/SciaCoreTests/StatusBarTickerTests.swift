@@ -27,6 +27,10 @@ struct StatusBarTickerItemTests {
         MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/\(id).png"), previewUrl: URL(string: "https://example.social/\(id)-small.png"))
     }
 
+    private func video(_ id: String) -> MediaAttachment {
+        MediaAttachment(id: id, type: .video, url: URL(string: "https://example.social/\(id).mp4"), previewUrl: URL(string: "https://example.social/\(id)-small.png"))
+    }
+
     private func text(of item: StatusBarTickerItem?) -> String? {
         guard case .text(let text) = item?.subject else { return nil }
         return text.plainText
@@ -57,7 +61,14 @@ struct StatusBarTickerItemTests {
     @Test func showsFirstAttachmentWhenPostHasNoText() {
         let item = StatusBarTickerItem(notification(.favourite, status: status(content: "", attachments: [image("a"), image("b")], sensitive: true)))
 
-        #expect(item?.subject == .media(image("a"), isSensitive: true))
+        #expect(item?.subject == .media(image("a"), isSensitive: true, isImageOnly: true))
+    }
+
+    @Test func tellsWhenPostAlsoHasNonImageMedia() {
+        // 読み上げで、動画やGIFを含む投稿を「画像だけの投稿」と言わないため。
+        let item = StatusBarTickerItem(notification(.favourite, status: status(content: "", attachments: [image("a"), video("b")])))
+
+        #expect(item?.subject == .media(image("a"), isSensitive: false, isImageOnly: false))
     }
 
     @Test func prefersTextOverAttachments() {
@@ -80,7 +91,7 @@ struct StatusBarTickerItemTests {
 
         let item = StatusBarTickerItem(notification(.mention, status: status(content: "", attachments: [image("a")])), verdict: verdict)
 
-        #expect(item?.subject == .media(image("a"), isSensitive: true))
+        #expect(item?.subject == .media(image("a"), isSensitive: true, isImageOnly: true))
     }
 
     @Test func showsHandleWhenThereIsNoPost() {

@@ -14,7 +14,8 @@ public struct StatusBarTickerItem: Sendable, Equatable, Identifiable {
         /// 投稿の文頭。1段落にしてある。注意書きつきの投稿は、本文を見せないよう注意書きにする。
         case text(RichText)
         /// 文字のない投稿の、最初の添付ファイル。閲覧注意なら、サムネイルを覆う。
-        case media(MediaAttachment, isSensitive: Bool)
+        /// `isImageOnly`は、投稿の添付ファイルがすべて画像か。読み上げで、動画・GIF・音声を含む投稿を「画像」と言わないため。
+        case media(MediaAttachment, isSensitive: Bool, isImageOnly: Bool)
         /// 対象の投稿がない通知（フォローなど）で、操作した人のアカウント名。`@`を付けてある。
         case handle(String)
         case none
@@ -49,7 +50,11 @@ public struct StatusBarTickerItem: Sendable, Equatable, Identifiable {
             return .text(text)
         }
         if let attachment = status.mediaAttachments.first(where: { $0.previewUrl != nil }) {
-            return .media(attachment, isSensitive: status.sensitive || !verdict.mediaTitles.isEmpty)
+            return .media(
+                attachment,
+                isSensitive: status.sensitive || !verdict.mediaTitles.isEmpty,
+                isImageOnly: status.mediaAttachments.allSatisfy { $0.type == .image }
+            )
         }
         return .none
     }

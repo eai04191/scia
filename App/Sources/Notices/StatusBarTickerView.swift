@@ -731,7 +731,7 @@ final class StatusBarTickerView: UIView {
             let action = appearance.phrase.includesName ? "\(appearance.phrase.before)\(name)\(appearance.phrase.after)" : appearance.phrase.before
             accessibilityLabel = switch item.subject {
             case .text(let text): "\(action)。\(text.plainText)"
-            case .media: "\(action)。画像だけの投稿"
+            case .media(_, _, let isImageOnly): "\(action)。\(isImageOnly ? "画像" : "メディア")だけの投稿"
             case .handle(let handle): "\(action)。\(handle)"
             case .none: action
             }
@@ -771,7 +771,7 @@ final class StatusBarTickerView: UIView {
             nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             left.addArrangedSubview(nameLabel)
 
-            if case .media(let attachment, let isSensitive) = item.subject {
+            if case .media(let attachment, let isSensitive, _) = item.subject {
                 right.addArrangedSubview(Self.thumbnail(of: attachment, isSensitive: isSensitive, side: metrics.thumbnailSide))
                 // サムネイルを左に寄せるため、残りを空白で埋める。
                 let spacer = UIView()

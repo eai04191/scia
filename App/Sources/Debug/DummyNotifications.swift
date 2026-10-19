@@ -61,7 +61,7 @@ enum DummyNotifications {
 
     private static func media(sensitive: Bool) -> StatusBarTickerItem.Subject {
         guard let attachment = DummyMedia.attachments(idPrefix: "ticker").first else { return .none }
-        return .media(attachment, isSensitive: sensitive)
+        return .media(attachment, isSensitive: sensitive, isImageOnly: attachment.type == .image)
     }
 
     private static let alice = account("alice", "アリス", color: .systemPink)
