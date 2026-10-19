@@ -79,6 +79,16 @@ public final class AppSettings {
         didSet { defaults.set(userMenuLayout.tokens, forKey: Keys.userMenuLayout) }
     }
 
+    /// 本文のURLのリンクを長押しして出すメニューの並び。メンションはユーザーのメニューで出す。
+    public var linkMenuLayout: MenuLayout<LinkMenuItem> {
+        didSet { defaults.set(linkMenuLayout.tokens, forKey: Keys.linkMenuLayout) }
+    }
+
+    /// 本文のハッシュタグを長押しして出すメニューの並び。
+    public var hashtagMenuLayout: MenuLayout<HashtagMenuItem> {
+        didSet { defaults.set(hashtagMenuLayout.tokens, forKey: Keys.hashtagMenuLayout) }
+    }
+
     /// 投稿欄の部品を足す項目の並び。どれをボタンの行に常に出し、どれを＋のメニューに入れるか。
     public var composeToolLayout: MenuLayout<ComposeToolItem> {
         didSet { defaults.set(composeToolLayout.tokens, forKey: Keys.composeToolLayout) }
@@ -120,6 +130,8 @@ public final class AppSettings {
         static let linkBrowser = "settings.linkBrowser"
         static let statusMenuLayout = "settings.statusMenuLayout"
         static let userMenuLayout = "settings.userMenuLayout"
+        static let linkMenuLayout = "settings.linkMenuLayout"
+        static let hashtagMenuLayout = "settings.hashtagMenuLayout"
         static let composeToolLayout = "settings.composeToolLayout"
         static let imageUploadSize = "settings.imageUploadSize"
         static let videoUploadSize = "settings.videoUploadSize"
@@ -142,6 +154,8 @@ public final class AppSettings {
         linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .external
         statusMenuLayout = defaults.stringArray(forKey: Keys.statusMenuLayout).map(MenuLayout.init(tokens:)) ?? StatusMenuItem.defaultLayout
         userMenuLayout = defaults.stringArray(forKey: Keys.userMenuLayout).map(MenuLayout.init(tokens:)) ?? UserMenuItem.defaultLayout
+        linkMenuLayout = defaults.stringArray(forKey: Keys.linkMenuLayout).map(MenuLayout.init(tokens:)) ?? LinkMenuItem.defaultLayout
+        hashtagMenuLayout = defaults.stringArray(forKey: Keys.hashtagMenuLayout).map(MenuLayout.init(tokens:)) ?? HashtagMenuItem.defaultLayout
         composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout
         // iPhoneの標準の写真（4032×3024）と動画（1080p）はそのまま送られ、それより大きな写真と4Kの動画だけが縮む。
         imageUploadSize = defaults.string(forKey: Keys.imageUploadSize).flatMap(ImageUploadSize.init(rawValue:)) ?? .long4096

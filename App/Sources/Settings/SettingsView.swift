@@ -128,10 +128,16 @@ struct SettingsView: View {
                     NavigationLink("ユーザーのメニュー") {
                         MenuLayoutSettingsView(title: "ユーザーのメニュー", layout: $settings.userMenuLayout)
                     }
+                    NavigationLink("リンクのメニュー") {
+                        MenuLayoutSettingsView(title: "リンクのメニュー", layout: $settings.linkMenuLayout)
+                    }
+                    NavigationLink("ハッシュタグのメニュー") {
+                        MenuLayoutSettingsView(title: "ハッシュタグのメニュー", layout: $settings.hashtagMenuLayout)
+                    }
                 } header: {
                     Text("長押しのメニュー")
                 } footer: {
-                    Text("投稿や通知を長押ししたときのメニューに出す項目と、その並びを選びます。ユーザーのメニューは、投稿のメニューの中に、投稿したユーザーなどのサブメニューとして出ます。")
+                    Text("投稿や通知、本文のリンクやハッシュタグを長押ししたときのメニューに出す項目と、その並びを選びます。ユーザーのメニューは、投稿のメニューの中に、投稿したユーザーなどのサブメニューとして出るほか、本文のメンションを長押ししたときにも出ます。")
                 }
                 Section {
                     NavigationLink("投稿欄のボタン") {

@@ -77,6 +77,8 @@ extension UserMenuItem {
     var title: String {
         switch self {
         case .profile: "プロフィール"
+        case .copyLink: "リンクをコピー"
+        case .share: "共有"
         }
     }
 
@@ -85,6 +87,60 @@ extension UserMenuItem {
     var symbolName: String {
         switch self {
         case .profile: "person.crop.circle"
+        case .copyLink: "link"
+        case .share: "square.and.arrow.up"
+        }
+    }
+
+    var image: UIImage? { UIImage(systemName: symbolName) }
+}
+
+extension LinkMenuItem {
+    var title: String {
+        switch self {
+        case .open: "開く"
+        case .openInBrowser: "ブラウザで開く"
+        case .copyLink: "リンクをコピー"
+        case .share: "共有"
+        }
+    }
+
+    var note: String? {
+        switch self {
+        case .open: "リンクをタップしたときと同じく、設定の開く場所で開きます"
+        case .openInBrowser: "開く場所の設定にかかわらず、既定のブラウザで開きます"
+        default: nil
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .open: "arrow.up.forward.app"
+        case .openInBrowser: "safari"
+        case .copyLink: "link"
+        case .share: "square.and.arrow.up"
+        }
+    }
+
+    var image: UIImage? { UIImage(systemName: symbolName) }
+}
+
+extension HashtagMenuItem {
+    var title: String {
+        switch self {
+        case .openInBrowser: "ブラウザで開く"
+        case .copyLink: "リンクをコピー"
+        case .share: "共有"
+        }
+    }
+
+    var note: String? { nil }
+
+    var symbolName: String {
+        switch self {
+        case .openInBrowser: "safari"
+        case .copyLink: "link"
+        case .share: "square.and.arrow.up"
         }
     }
 
@@ -107,6 +163,14 @@ enum MenuUser {
         switch self {
         case .account(let account): account.acct
         case .mention(let mention): mention.acct
+        }
+    }
+
+    /// プロフィールのページのURL。
+    var url: URL? {
+        switch self {
+        case .account(let account): account.url
+        case .mention(let mention): mention.url
         }
     }
 }

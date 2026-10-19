@@ -3,6 +3,9 @@ import UIKit
 
 /// RichTextRendererで描いた本文の、リンクの部分をタップできるラベル。リンクの外のタップは受けず、セルなど後ろのビューに渡す。
 final class LinkLabel: UILabel {
+    /// 長押しのメニューの並び。
+    var settings: AppSettings = AppDependencies.settings
+
     /// リンクがタップされたときと、長押しのメニューで開くを選んだときに、その行き先を渡して呼ぶ。
     var onTapLink: ((RichText.LinkDestination) -> Void)?
 
@@ -215,11 +218,10 @@ final class LinkHitArea: UIControl {
     ) -> UIContextMenuConfiguration? {
         guard let label else { return nil }
         let point = convert(location, to: label)
-        guard let destination = label.link(at: point) else { return nil }
+        // 出す項目をすべて隠していれば、メニューを出さない。
+        guard let destination = label.link(at: point), let menu = menu(for: destination, at: point) else { return nil }
         // 浮かせるリンクを選び直せるよう、押した場所をidentifierに持たせる。
-        return UIContextMenuConfiguration(identifier: NSValue(cgPoint: point), previewProvider: nil) { [weak self] _ in
-            self?.menu(for: destination, at: point)
-        }
+        return UIContextMenuConfiguration(identifier: NSValue(cgPoint: point), previewProvider: nil) { _ in menu }
     }
 
     override func contextMenuInteraction(
@@ -269,38 +271,65 @@ final class LinkHitArea: UIControl {
         return UITargetedPreview(view: label, parameters: UIPreviewParameters(textLineRects: frames.map { NSValue(cgRect: $0) }))
     }
 
-    /// URLは開く、メンションはプロフィールを開く項目を先頭に置く。ハッシュタグはアプリの中に開く先がまだないため、ブラウザで開く項目だけを出す。
-    private func menu(for destination: RichText.LinkDestination, at point: CGPoint) -> UIMenu {
+    /// 並びは設定のリンクのメニューとハッシュタグのメニューに従う。メンションはユーザーなので、ユーザーのメニューで出す。出す項目がなければnil。
+    func menu(for destination: RichText.LinkDestination, at point: CGPoint) -> UIMenu? {
+        guard let label else { return nil }
+        let settings = label.settings
+        let title: String
+        let children: [UIMenuElement]
         switch destination {
         case .url(let url):
-            return UIMenu(title: url.absoluteString, children: [openAction("開く", symbol: "arrow.up.forward.app", destination), openInBrowserAction(url), copyAction(url), shareAction(url, at: point)])
+            title = url.absoluteString
+            children = settings.linkMenuLayout.groups.menuElements { item in
+                switch item {
+                case .open: [openAction(item.title, image: item.image, destination)]
+                case .openInBrowser: [openInBrowserAction(url, title: item.title, image: item.image)]
+                case .copyLink: [copyAction(url, title: item.title, image: item.image)]
+                case .share: [shareAction(url, at: point, title: item.title, image: item.image)]
+                }
+            }
         case .mention(let acct, let url):
-            return UIMenu(title: "@\(acct)", children: [openAction("プロフィールを開く", symbol: "person.crop.circle", destination), copyAction(url), shareAction(url, at: point)])
+            title = "@\(acct)"
+            children = settings.userMenuLayout.groups.menuElements { item in
+                switch item {
+                case .profile: [openAction(item.title, image: item.image, destination)]
+                case .copyLink: [copyAction(url, title: item.title, image: item.image)]
+                case .share: [shareAction(url, at: point, title: item.title, image: item.image)]
+                }
+            }
         case .hashtag(let name, let url):
-            return UIMenu(title: "#\(name)", children: [openInBrowserAction(url), copyAction(url), shareAction(url, at: point)])
+            title = "#\(name)"
+            children = settings.hashtagMenuLayout.groups.menuElements { item in
+                switch item {
+                case .openInBrowser: [openInBrowserAction(url, title: item.title, image: item.image)]
+                case .copyLink: [copyAction(url, title: item.title, image: item.image)]
+                case .share: [shareAction(url, at: point, title: item.title, image: item.image)]
+                }
+            }
         }
+        return children.isEmpty ? nil : UIMenu(title: title, children: children)
     }
 
-    private func openAction(_ title: String, symbol: String, _ destination: RichText.LinkDestination) -> UIAction {
-        UIAction(title: title, image: UIImage(systemName: symbol)) { [weak self] _ in self?.label?.open(destination) }
+    private func openAction(_ title: String, image: UIImage?, _ destination: RichText.LinkDestination) -> UIAction {
+        UIAction(title: title, image: image) { [weak self] _ in self?.label?.open(destination) }
     }
 
     /// 開くの設定でアプリ内のSafariを選んでいても、既定のブラウザで開く。
-    private func openInBrowserAction(_ url: URL) -> UIAction {
-        UIAction(title: "ブラウザで開く", image: UIImage(systemName: "safari")) { _ in
+    private func openInBrowserAction(_ url: URL, title: String, image: UIImage?) -> UIAction {
+        UIAction(title: title, image: image) { _ in
             UIApplication.shared.open(url)
         }
     }
 
-    private func copyAction(_ url: URL) -> UIAction {
-        UIAction(title: "リンクをコピー", image: UIImage(systemName: "link")) { [weak self] _ in
+    private func copyAction(_ url: URL, title: String, image: UIImage?) -> UIAction {
+        UIAction(title: title, image: image) { [weak self] _ in
             UIPasteboard.general.url = url
             self?.nearest((any LinkMenuHost).self)?.showLinkCopiedNotice()
         }
     }
 
-    private func shareAction(_ url: URL, at point: CGPoint) -> UIAction {
-        UIAction(title: "共有", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
+    private func shareAction(_ url: URL, at point: CGPoint, title: String, image: UIImage?) -> UIAction {
+        UIAction(title: title, image: image) { [weak self] _ in
             guard let self, let label, let presenter = nearest(UIViewController.self) else { return }
             let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
             // iPadとMacではポップオーバーで出るため、押したリンクを起点にする。

@@ -22,6 +22,8 @@ extension MenuItemPresentable {
 
 extension StatusMenuItem: MenuItemPresentable {}
 extension UserMenuItem: MenuItemPresentable {}
+extension LinkMenuItem: MenuItemPresentable {}
+extension HashtagMenuItem: MenuItemPresentable {}
 
 /// 長押しのメニューや投稿欄の＋の並びを変える画面。項目、区切り線、「その他」の境目を1本のリストで並べ替え、項目ごとに表示を切り替える。決まりはdocs/menus.mdにある。
 struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {

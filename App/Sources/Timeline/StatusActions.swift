@@ -41,7 +41,7 @@ extension TimelineViewController {
     /// 同じユーザーが2つの項目に当たるときは、先に出る項目で1度だけ出す。
     private func elements(for item: StatusMenuItem, status: Status?, notifyingAccount: Account?, id: ItemID, shownUserIDs: inout Set<String>) -> [UIMenuElement] {
         func users(_ users: [MenuUser]) -> [UIMenuElement] {
-            users.filter { shownUserIDs.insert($0.id).inserted }.compactMap(userElement(for:))
+            users.filter { shownUserIDs.insert($0.id).inserted }.compactMap { userElement(for: $0, id: id) }
         }
         switch item {
         case .notifyingUser:
@@ -137,24 +137,37 @@ extension TimelineViewController {
     }
 
     /// ユーザーのメニューを`@acct`のサブメニューにする。中身が1つで「その他」が空なら、サブメニューにせず直接並べる。
-    private func userElement(for user: MenuUser) -> UIMenuElement? {
+    private func userElement(for user: MenuUser, id: ItemID) -> UIMenuElement? {
         let groups = settings.userMenuLayout.groups
         if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first, only.count == 1 {
-            return userAction(only[0], for: user, inSubmenu: false)
+            return userAction(only[0], for: user, id: id, inSubmenu: false)
         }
-        let children = groups.menuElements { item in [userAction(item, for: user, inSubmenu: true)] }
+        let children = groups.menuElements { item in [userAction(item, for: user, id: id, inSubmenu: true)] }
         guard !children.isEmpty else { return nil }
         return UIMenu(title: "@\(user.acct)", image: UIImage(systemName: "person.crop.circle"), children: children)
     }
 
-    private func userAction(_ item: UserMenuItem, for user: MenuUser, inSubmenu: Bool) -> UIAction {
+    private func userAction(_ item: UserMenuItem, for user: MenuUser, id: ItemID, inSubmenu: Bool) -> UIAction {
+        let url = user.url
+        let linkAttributes: UIMenuElement.Attributes = url == nil ? .disabled : []
         switch item {
         case .profile:
-            UIAction(title: inSubmenu ? item.title : "@\(user.acct)のプロフィール", image: item.image) { [weak self] _ in
+            return UIAction(title: inSubmenu ? item.title : "@\(user.acct)のプロフィール", image: item.image) { [weak self] _ in
                 switch user {
                 case .account(let account): self?.onOpenProfile?(account)
                 case .mention(let mention): self?.onOpenProfileID?(mention.id)
                 }
+            }
+        case .copyLink:
+            return UIAction(title: inSubmenu ? item.title : "@\(user.acct)のリンクをコピー", image: item.image, attributes: linkAttributes) { [weak self] _ in
+                guard let self, let url else { return }
+                UIPasteboard.general.url = url
+                showNotice(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            }
+        case .share:
+            return UIAction(title: inSubmenu ? item.title : "@\(user.acct)を共有", image: item.image, attributes: linkAttributes) { [weak self] _ in
+                guard let url else { return }
+                self?.presentShareSheet(for: url, from: id)
             }
         }
     }

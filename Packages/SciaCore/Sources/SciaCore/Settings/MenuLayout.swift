@@ -178,12 +178,51 @@ public enum StatusMenuItem: String, MenuItemKind {
     ])
 }
 
-/// ユーザーのメニューの項目。投稿のメニューの中で、ユーザーごとのサブメニューとして出る。
+/// ユーザーのメニューの項目。投稿のメニューの中で、ユーザーごとのサブメニューとして出る。本文のメンションを長押ししたときも、このメニューを出す。
 public enum UserMenuItem: String, MenuItemKind {
     case profile
+    /// プロフィールのページのURLをコピーする。
+    case copyLink
+    /// プロフィールのページのURLを共有する。
+    case share
 
     public static let defaultLayout = MenuLayout<UserMenuItem>(defaultElements: [
         .item(.profile, isVisible: true),
+        .item(.copyLink, isVisible: true),
+        .item(.share, isVisible: true),
+        .more,
+    ])
+}
+
+/// 本文のURLのリンクを長押ししたときのメニューの項目。
+public enum LinkMenuItem: String, MenuItemKind {
+    /// タップしたときと同じく、開く場所の設定に従って開く。
+    case open
+    /// 開く場所の設定にかかわらず、既定のブラウザで開く。
+    case openInBrowser
+    case copyLink
+    case share
+
+    public static let defaultLayout = MenuLayout<LinkMenuItem>(defaultElements: [
+        .item(.open, isVisible: true),
+        .item(.openInBrowser, isVisible: true),
+        .item(.copyLink, isVisible: true),
+        .item(.share, isVisible: true),
+        .more,
+    ])
+}
+
+/// 本文のハッシュタグを長押ししたときのメニューの項目。アプリにはハッシュタグを開く画面がまだないため、開く項目はブラウザで開くだけ。
+public enum HashtagMenuItem: String, MenuItemKind {
+    /// サーバーのハッシュタグのページを、既定のブラウザで開く。
+    case openInBrowser
+    case copyLink
+    case share
+
+    public static let defaultLayout = MenuLayout<HashtagMenuItem>(defaultElements: [
+        .item(.openInBrowser, isVisible: true),
+        .item(.copyLink, isVisible: true),
+        .item(.share, isVisible: true),
         .more,
     ])
 }

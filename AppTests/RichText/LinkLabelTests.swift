@@ -96,4 +96,58 @@ struct LinkLabelTests {
         #expect(EditHistoryScrollView().touchesShouldCancel(in: hitArea))
         #expect(!UIScrollView().touchesShouldCancel(in: hitArea))
     }
+
+    private func settings() throws -> AppSettings {
+        let suite = "LinkLabelTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        return AppSettings(defaults: defaults)
+    }
+
+    /// 本文のリンクの長押しのメニューの、見出しと項目の名前。区切り線のまとまりは`|`で、サブメニューは`名前[中身]`で表す。
+    private func menuOutline(of destination: RichText.LinkDestination, settings: AppSettings) throws -> String? {
+        let label = label(for: RichText(blocks: [.init(inlines: [.link("x", destination, [])])]))
+        label.settings = settings
+        let hitArea = try #require(label.subviews.compactMap { $0 as? LinkHitArea }.first)
+        guard let menu = hitArea.menu(for: destination, at: .zero) else { return nil }
+        func describe(_ element: UIMenuElement) -> String {
+            guard let menu = element as? UIMenu else { return element.title }
+            let children = menu.children.map(describe).joined(separator: ",")
+            return menu.options.contains(.displayInline) ? children : "\(menu.title)[\(children)]"
+        }
+        return "\(menu.title): " + menu.children.map(describe).joined(separator: "|")
+    }
+
+    /// URL、ハッシュタグ、メンションは、それぞれリンクのメニュー、ハッシュタグのメニュー、ユーザーのメニューの既定の並びで出す。
+    @Test func menuFollowsDefaultLayoutOfEachKind() throws {
+        let url = try #require(URL(string: "https://example.com/a"))
+        let tag = try #require(URL(string: "https://example.social/tags/cat"))
+        let profile = try #require(URL(string: "https://example.social/@bob"))
+        let settings = try settings()
+
+        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: 開く,ブラウザで開く,リンクをコピー,共有")
+        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: ブラウザで開く,リンクをコピー,共有")
+        #expect(try menuOutline(of: .mention(acct: "bob@example.social", url: profile), settings: settings) == "@bob@example.social: プロフィール,リンクをコピー,共有")
+    }
+
+    /// 並べ替え、隠した項目、区切り線、「その他」の境目を、投稿のメニューと同じ決まりで反映する。
+    @Test func menuFollowsCustomizedLayout() throws {
+        let url = try #require(URL(string: "https://example.com/a"))
+        let tag = try #require(URL(string: "https://example.social/tags/cat"))
+        let settings = try settings()
+        settings.linkMenuLayout = MenuLayout(elements: [.item(.share, isVisible: true), .separator, .item(.open, isVisible: true), .item(.openInBrowser, isVisible: false), .more, .item(.copyLink, isVisible: true)])
+        settings.hashtagMenuLayout = MenuLayout(elements: [.item(.copyLink, isVisible: true), .item(.openInBrowser, isVisible: false), .item(.share, isVisible: false), .more])
+
+        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: 共有|開く|その他[リンクをコピー]")
+        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: リンクをコピー")
+    }
+
+    /// 出す項目をすべて隠したら、メニューを出さない。
+    @Test func hidingEveryItemShowsNoMenu() throws {
+        let tag = try #require(URL(string: "https://example.social/tags/cat"))
+        let settings = try settings()
+        settings.hashtagMenuLayout = MenuLayout(elements: [.item(.openInBrowser, isVisible: false), .item(.copyLink, isVisible: false), .item(.share, isVisible: false), .more])
+
+        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == nil)
+    }
 }

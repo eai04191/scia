@@ -129,7 +129,23 @@ struct MenuLayoutTests {
 
         #expect(groups.main == [[.reply, .favourite, .reblog, .edit], [.copyLink, .share, .openInBrowser, .editHistory, .hideMedia], [.notifyingUser, .author, .booster]])
         #expect(groups.more == [[.delete]])
-        #expect(UserMenuItem.defaultLayout.groups.main == [[.profile]])
+        #expect(UserMenuItem.defaultLayout.groups.main == [[.profile, .copyLink, .share]])
+    }
+
+    /// 本文のリンクとハッシュタグのメニューは、設定を足す前の決め打ちのメニューと同じ並びにする。
+    @Test func linkAndHashtagMenuDefaultsMatchMenuBeforeCustomization() {
+        #expect(LinkMenuItem.defaultLayout.groups.main == [[.open, .openInBrowser, .copyLink, .share]])
+        #expect(LinkMenuItem.defaultLayout.groups.more.isEmpty)
+        #expect(HashtagMenuItem.defaultLayout.groups.main == [[.openInBrowser, .copyLink, .share]])
+        #expect(HashtagMenuItem.defaultLayout.groups.more.isEmpty)
+    }
+
+    /// リンクをコピーと共有を足す前に保存したユーザーのメニューでも、2つはプロフィールの後ろに出る。
+    @Test func savedUserMenuGainsCopyLinkAndShareAfterProfile() {
+        let saved = MenuLayout<UserMenuItem>(tokens: ["more", "item:profile"])
+
+        #expect(saved.groups.main.isEmpty)
+        #expect(saved.groups.more == [[.profile, .copyLink, .share]])
     }
 
     /// 編集と削除を足す前に保存した並びでも、編集はブーストの後ろに、削除は「その他」に入る。
@@ -150,6 +166,22 @@ struct MenuLayoutTests {
         let restored = AppSettings(defaults: defaults).statusMenuLayout
         #expect(restored == changed)
         #expect(restored.groups.main.first?.first == .share)
+    }
+
+    @Test func appSettingsPersistsLinkAndHashtagMenuLayouts() throws {
+        let defaults = try makeDefaults()
+        #expect(AppSettings(defaults: defaults).linkMenuLayout == LinkMenuItem.defaultLayout)
+        #expect(AppSettings(defaults: defaults).hashtagMenuLayout == HashtagMenuItem.defaultLayout)
+
+        let link = MenuLayout<LinkMenuItem>(elements: [.item(.share, isVisible: true), .more, .item(.open, isVisible: false)])
+        let hashtag = MenuLayout<HashtagMenuItem>(elements: [.item(.copyLink, isVisible: true), .separator, .item(.openInBrowser, isVisible: false), .more])
+        let settings = AppSettings(defaults: defaults)
+        settings.linkMenuLayout = link
+        settings.hashtagMenuLayout = hashtag
+
+        let restored = AppSettings(defaults: defaults)
+        #expect(restored.linkMenuLayout == link)
+        #expect(restored.hashtagMenuLayout == hashtag)
     }
 }
 
