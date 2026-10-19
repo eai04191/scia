@@ -932,11 +932,13 @@ final class SessionController {
     private func showDebugProgress(for duration: Duration) {
         debugProgressTask?.cancel()
         let start = ContinuousClock.now
+        // 出し直すたびに別のアプリ内通知にする。しまったあとに出し直しても、出てくるようにするため。
+        let id = "debug.progress.\(UUID().uuidString)"
         debugProgressTask = Task { [weak self] in
             while !Task.isCancelled {
                 let fraction = min((ContinuousClock.now - start) / duration, 1)
                 self?.notices.setPersistent({ _ in
-                    Notice(id: "debug.progress", kind: .progress, title: "確かめるための処理中", value: Notice.percentText(of: fraction))
+                    Notice(id: id, kind: .progress, title: "確かめるための処理中", value: Notice.percentText(of: fraction), valueIsProgress: true)
                 }, in: .debug)
                 guard fraction < 1 else { break }
                 try? await Task.sleep(for: .milliseconds(500))
