@@ -107,6 +107,10 @@ final class InlineComposeController: NSObject {
     private var isPresentingError = false
     /// 入力バーと、その下のタブバーやキーボードとの間の余白。
     private let barSpacing: CGFloat = 8
+    /// ＋と部品のボタンの幅。記号の幅で決めると、記号ごとに幅が揃わず、公開範囲を切り替えるだけで幅が変わるので、HIGの推奨の当たり判定の44ptに揃え、間を空けずに並べる。
+    private let toolButtonWidth: CGFloat = 44
+    /// 残り文字数と送信の間隔。ボタンの行の間隔は0にしているので、ここだけ空ける。
+    private let sendSpacing: CGFloat = 4
     private var obscuredHeight: CGFloat = 0
     /// 書いていないときの、中身の上下の余白。
     private let restInset: CGFloat = 4
@@ -517,6 +521,16 @@ final class InlineComposeController: NSObject {
         return button
     }
 
+    /// 左右の余白をなくし、幅を`toolButtonWidth`以上にする。記号は中央に置く。添付の枚数のように文字を添えて44ptを超えるときは、その分だけ広がる。
+    /// 優先度は必須より下げる。行に入りきらずに隠したボタンには、スタックビューが必須の幅0の制約を付けるので、必須にするとぶつかり、幅0の制約のほうが外されて、隠したボタンが44ptのまま残った。
+    private func fitToolButtonWidth(_ button: UIButton) {
+        button.configuration?.contentInsets.leading = 0
+        button.configuration?.contentInsets.trailing = 0
+        let width = button.widthAnchor.constraint(greaterThanOrEqualToConstant: toolButtonWidth)
+        width.priority = .required - 1
+        width.isActive = true
+    }
+
     /// ボタンの状態を下書きに合わせる。添付は枚数を添え、注意書きは付けている間だけ色を付ける。
     private func updateToolButtons() {
         if let media = toolButtons[.media] {
@@ -557,13 +571,13 @@ final class InlineComposeController: NSObject {
         // 書いていないときは行を隠していて幅が決まらないので、決め直さない。
         guard !tools.isHidden, tools.bounds.width > 0 else { return }
         let fixed = [remainingLabel, sendButton].map { $0.intrinsicContentSize.width }.reduce(0, +)
-        // 間を埋める空き、残り文字数、送信の間の2つの間隔。項目と＋のボタンは、それぞれ後ろの間隔1つ分を足す。
-        let available = tools.bounds.width - fixed - tools.spacing * 2
+        // 項目と＋のボタンは間を空けずに並べるので、残り文字数と送信の間隔だけを引く。
+        let available = tools.bounds.width - fixed - sendSpacing
         let placement = ComposeToolPlacement(
             layout: settings.composeToolLayout,
             available: available,
-            addButtonWidth: addButton.intrinsicContentSize.width + tools.spacing,
-            width: { [toolButtons, tools] item in (toolButtons[item]?.intrinsicContentSize.width ?? 0) + tools.spacing }
+            addButtonWidth: max(addButton.intrinsicContentSize.width, toolButtonWidth),
+            width: { [toolButtons, toolButtonWidth] item in max(toolButtons[item]?.intrinsicContentSize.width ?? 0, toolButtonWidth) }
         )
         guard placement != toolPlacement else { return }
         logger.info("compose tools: row=\(placement.row.map(\.rawValue), privacy: .public) menu=\(placement.menu.map { $0.map(\.rawValue) }, privacy: .public) available=\(available)")
@@ -1565,8 +1579,12 @@ final class InlineComposeController: NSObject {
         for view in [spacer, remainingLabel, sendButton] {
             tools.addArrangedSubview(view)
         }
+        for button in [addButton] + toolButtons.values {
+            fitToolButtonWidth(button)
+        }
         tools.alignment = .center
-        tools.spacing = 4
+        tools.spacing = 0
+        tools.setCustomSpacing(sendSpacing, after: remainingLabel)
         attachmentStrip.onSelect = { [weak self] id in self?.openAttachment(id) }
         attachmentStrip.onMove = { [weak self] id, index in self?.model.moveAttachment(id, to: index) }
         attachmentStrip.onRemove = { [weak self] id in self?.removeAttachment(id) }
