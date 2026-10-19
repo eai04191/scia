@@ -30,7 +30,7 @@ struct StatusFilteringTests {
 
     @Test func warnsWithTitlesAndBlursMediaSeparately() {
         let verdict = home.verdict(for: status("10", filtered: [filter("a", .warn), filter("b", .blur), filter("a", .warn)]), now: now)
-        #expect(verdict == FilterVerdict(isHidden: false, warningTitles: ["a"], mediaTitles: ["b"]))
+        #expect(verdict == FilterVerdict(isHidden: false, warningTitles: ["a"], mediaTitles: ["b"], ownMatchTitles: []))
     }
 
     /// ドキュメントは、知らない扱いを警告として扱うよう求めている。
@@ -48,18 +48,29 @@ struct StatusFilteringTests {
         let expired = filter("a", .hide, expiresAt: now.addingTimeInterval(-1))
         let active = filter("b", .warn, expiresAt: now.addingTimeInterval(60))
         let verdict = home.verdict(for: status("10", filtered: [expired, active]), now: now)
-        #expect(verdict == FilterVerdict(isHidden: false, warningTitles: ["b"], mediaTitles: []))
+        #expect(verdict == FilterVerdict(isHidden: false, warningTitles: ["b"], mediaTitles: [], ownMatchTitles: []))
     }
 
     /// 公式のWebクライアントと同じく、自分の投稿には当てない。自分のブーストでも、元の投稿が他人のものなら当てる。
     @Test func skipsOwnStatusesButNotOwnBoostsOfOthers() {
-        #expect(home.verdict(for: status("10", by: me, filtered: [filter("a", .hide)]), now: now) == .none)
+        #expect(!home.verdict(for: status("10", by: me, filtered: [filter("a", .hide)]), now: now).isHidden)
 
         let original = status("10", filtered: [filter("a", .hide)])
         #expect(home.verdict(for: status("20", by: me, filtered: [filter("a", .hide)], reblog: original), now: now).isHidden)
 
         let mine = status("11", by: me, filtered: [filter("a", .hide)])
-        #expect(home.verdict(for: status("21", filtered: [filter("a", .hide)], reblog: mine), now: now) == .none)
+        #expect(!home.verdict(for: status("21", filtered: [filter("a", .hide)], reblog: mine), now: now).isHidden)
+    }
+
+    /// 自分の投稿は畳まずに、一致したフィルターの名前を扱いによらず返す。場所と期限では、ほかの投稿と同じく絞る。
+    @Test func reportsFiltersMatchedByOwnStatuses() {
+        let filters = [
+            filter("a", .hide), filter("b", .warn), filter("c", .blur),
+            filter("d", .hide, context: [.public]), filter("e", .hide, expiresAt: now.addingTimeInterval(-1)),
+        ]
+        let verdict = home.verdict(for: status("10", by: me, filtered: filters), now: now)
+        #expect(verdict == FilterVerdict(isHidden: false, warningTitles: [], mediaTitles: [], ownMatchTitles: ["a", "b", "c"]))
+        #expect(home.verdict(for: status("11", filtered: filters), now: now).ownMatchTitles.isEmpty)
     }
 
     /// ブーストでは、元の投稿に付いた結果を使う。元の投稿になければ、ブーストに付いた結果を使う。
@@ -79,7 +90,7 @@ struct StatusFilteringTests {
         #expect(warnings.verdict(for: boost, now: now).warningTitles == ["a"])
 
         warnings.reveal(boost)
-        #expect(warnings.verdict(for: original, now: now) == FilterVerdict(isHidden: false, warningTitles: [], mediaTitles: ["b"]))
+        #expect(warnings.verdict(for: original, now: now) == FilterVerdict(isHidden: false, warningTitles: [], mediaTitles: ["b"], ownMatchTitles: []))
     }
 
     @Test func warningsWithoutFilteringShowEverything() {

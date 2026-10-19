@@ -156,6 +156,19 @@ struct PostContentBuilder {
         )
     }
 
+    /// 自分の投稿が、自分のフィルターに一致していることを示す1行。投稿は畳まないので、目立たせず、本文より小さく控えめな色で描く。
+    func ownFilterNote(titles: [String]) -> NSAttributedString {
+        let font = UIFont.preferredFont(forTextStyle: .footnote)
+        let text = NSMutableAttributedString()
+        if let symbol = UIImage(systemName: "line.3.horizontal.decrease.circle", withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)) {
+            text.append(NSAttributedString(attachment: NSTextAttachment(image: symbol.withRenderingMode(.alwaysTemplate))))
+            text.append(NSAttributedString(string: " "))
+        }
+        text.append(NSAttributedString(string: "フィルター" + titles.map { "「\($0)」" }.joined() + "に一致"))
+        text.addAttributes([.font: font, .foregroundColor: UIColor.secondaryLabel], range: NSRange(location: 0, length: text.length))
+        return text
+    }
+
     /// 本文と注意書きは投稿した人が書いたものなので、投稿の言語で描く。
     private func bodyRenderer(of status: Status, base: UIListContentConfiguration, color: UIColor) -> RichTextRenderer {
         RichTextRenderer(

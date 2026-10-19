@@ -40,6 +40,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var xPost: XPostView.Content?
     /// 表示している投稿。ブーストなら、ブーストされた投稿。
     var statusID: Status.ID?
+    /// 自分の投稿が自分のフィルターに一致していることを示す1行。一致していなければnil。
+    var filterNote: NSAttributedString?
     let mediaImages: MediaImageStore
     let avatarImages: AvatarImageStore
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
@@ -250,7 +252,10 @@ final class PostContentView: UIView, UIContentView {
             card: configuration.card,
             cardSpacing: metrics.bodyLinkCardSpacing,
             xPost: configuration.xPost,
-            statusID: configuration.statusID
+            statusID: configuration.statusID,
+            filterNote: configuration.filterNote,
+            // リンクカードと同じく、本文から少し離した補足として置く。
+            filterNoteSpacing: metrics.bodyLinkCardSpacing
         ))
         updateConstraints(for: configuration)
         updateAccessibility(for: configuration)
@@ -356,7 +361,7 @@ final class PostContentView: UIView, UIContentView {
         // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
         setNeedsLayout()
-        accessibilityElements = [textAccessibilityElement] + [bodyView.mediaGrid, bodyView.linkCard, bodyView.xPost].compactMap(\.self)
+        accessibilityElements = [textAccessibilityElement] + [bodyView.mediaGrid, bodyView.linkCard, bodyView.xPost, bodyView.filterNote].compactMap(\.self)
     }
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)

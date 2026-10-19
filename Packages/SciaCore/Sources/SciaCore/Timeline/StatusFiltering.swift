@@ -5,6 +5,8 @@ public import Foundation
 ///
 /// 自分の投稿には当てない。ドキュメントにはないが、公式のWebクライアントに合わせる。サーバーは自分の投稿にも一致したフィルターを付けるが、
 /// 投稿した直後の自分の投稿が一覧から消えると、投稿に失敗したように見えるため。
+/// 代わりに、一致したフィルターの名前を返し、印だけを出す。昔作ったフィルターに一致する話題を自分が書くと、それに触れた人の投稿が黙って隠れるため、
+/// フィルターがあることに気づけるようにする。
 public struct StatusFiltering: Sendable, Equatable {
     /// この一覧の場所。フィルターは、使う場所にこれを含むものだけを当てる。
     public let context: FilterResult.Context
@@ -19,20 +21,23 @@ public struct StatusFiltering: Sendable, Equatable {
     /// `now`の時点で、`status`をどう出すか。ブーストなら元の投稿で決める。
     public func verdict(for status: Status, now: Date = Date()) -> FilterVerdict {
         let shown = status.displayed
-        guard shown.account.id != myAccountID else { return .none }
         // サーバーはブーストにも元の投稿にも同じ結果を付ける。公式のWebクライアントと同じく、元の投稿の結果を先に見る。
         let results = shown.filtered.isEmpty ? status.filtered : shown.filtered
         let filters = results.map(\.filter).filter { filter in
             filter.context.contains(context) && filter.expiresAt.map { $0 > now } ?? true
         }
+        if shown.account.id == myAccountID {
+            return FilterVerdict(isHidden: false, warningTitles: [], mediaTitles: [], ownMatchTitles: Self.titles(of: filters))
+        }
         if filters.contains(where: { $0.filterAction == .hide }) {
-            return FilterVerdict(isHidden: true, warningTitles: [], mediaTitles: [])
+            return FilterVerdict(isHidden: true, warningTitles: [], mediaTitles: [], ownMatchTitles: [])
         }
         return FilterVerdict(
             isHidden: false,
             // 知らない扱いは、ドキュメントに従って警告にする。
             warningTitles: Self.titles(of: filters.filter { $0.filterAction != .blur }),
-            mediaTitles: Self.titles(of: filters.filter { $0.filterAction == .blur })
+            mediaTitles: Self.titles(of: filters.filter { $0.filterAction == .blur }),
+            ownMatchTitles: []
         )
     }
 
@@ -51,8 +56,10 @@ public struct FilterVerdict: Sendable, Equatable {
     public let warningTitles: [String]
     /// 添付ファイルをぼかすフィルターの名前。ぼかさなければ空。
     public let mediaTitles: [String]
+    /// 自分の投稿が一致したフィルターの名前。扱いによらず並べる。自分の投稿でないか、一致しなければ空。
+    public let ownMatchTitles: [String]
 
-    public static let none = FilterVerdict(isHidden: false, warningTitles: [], mediaTitles: [])
+    public static let none = FilterVerdict(isHidden: false, warningTitles: [], mediaTitles: [], ownMatchTitles: [])
 }
 
 /// 一覧で、フィルターの警告で畳んだ投稿のうち、開いたもの。
@@ -74,7 +81,7 @@ public struct FilterWarnings: Sendable, Equatable {
         guard let filtering else { return .none }
         let verdict = filtering.verdict(for: status, now: now)
         guard !verdict.warningTitles.isEmpty, revealed.contains(status.displayed.id) else { return verdict }
-        return FilterVerdict(isHidden: verdict.isHidden, warningTitles: [], mediaTitles: verdict.mediaTitles)
+        return FilterVerdict(isHidden: verdict.isHidden, warningTitles: [], mediaTitles: verdict.mediaTitles, ownMatchTitles: verdict.ownMatchTitles)
     }
 
     public mutating func reveal(_ status: Status) {

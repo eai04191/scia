@@ -1159,6 +1159,8 @@ final class TimelineViewController: UIViewController {
             }
         }
         configuration.spoiler = spoiler(of: status, base: base)
+        let ownMatchTitles = filterWarnings.verdict(for: status).ownMatchTitles
+        configuration.filterNote = ownMatchTitles.isEmpty ? nil : postContentBuilder.ownFilterNote(titles: ownMatchTitles)
         configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
         return configuration
     }

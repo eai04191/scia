@@ -42,6 +42,10 @@ struct PostBodyContent {
     var xPost: XPostView.Content?
     /// 表示している投稿。リンクカードから囲みに替わったのが同じ投稿の行かを見分ける。同じXの投稿へのリンクは、別の投稿にもありうるため。
     var statusID: Status.ID?
+    /// 自分の投稿が自分のフィルターに一致していることを示す1行。一番下に置く。一致していなければnil。
+    var filterNote: NSAttributedString?
+    /// 上の部品と、フィルターの印のあいだ。
+    var filterNoteSpacing: CGFloat = 0
 }
 
 final class PostBodyView: UIView {
@@ -63,6 +67,7 @@ final class PostBodyView: UIView {
     private let mediaView: MediaGridView
     private let cardView: LinkCardView
     private let xPostView: XPostView
+    private let filterNoteLabel = UILabel()
     private(set) var content: PostBodyContent?
     /// 添付ファイルの有無と並べ方で変わる制約。適用のたびに作り直す。
     private var variableConstraints: [NSLayoutConstraint] = []
@@ -82,6 +87,11 @@ final class PostBodyView: UIView {
         xPostView.isHidden ? nil : xPostView
     }
 
+    /// 表示中のフィルターの印。添付ファイルやリンクカードより下にあるため、読み上げでは本文と分け、それらの後の要素にする。
+    var filterNote: UILabel? {
+        filterNoteLabel.isHidden ? nil : filterNoteLabel
+    }
+
     /// 注意書きも本文もなく、添付ファイルが上端から始まる。
     var startsWithMedia: Bool {
         spoilerView.isHidden && textLabel.isHidden && !mediaView.isHidden
@@ -98,7 +108,8 @@ final class PostBodyView: UIView {
         xPostView = XPostView(store: mediaImages, avatarImages: avatarImages)
         super.init(frame: .zero)
         textLabel.numberOfLines = 0
-        for view in [spoilerView, textLabel, mediaView, cardView, xPostView] as [UIView] {
+        filterNoteLabel.numberOfLines = 0
+        for view in [spoilerView, textLabel, mediaView, cardView, xPostView, filterNoteLabel] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -240,7 +251,25 @@ final class PostBodyView: UIView {
         } else {
             textLabel.isHidden ? spoilerView : textLabel
         }
-        variableConstraints.append(bottomAnchor.constraint(equalTo: last.bottomAnchor))
+        if let note = content.filterNote {
+            filterNoteLabel.isHidden = false
+            filterNoteLabel.attributedText = note
+            // 先頭の記号は画像の文字なので、読み上げでは除く。
+            filterNoteLabel.accessibilityLabel = note.string.trimmingCharacters(in: CharacterSet(charactersIn: "\u{FFFC}").union(.whitespaces))
+            // 本文の下なら、ほかの部品と同じく字面の下端から測る。
+            let lastBottom = last === textLabel
+                ? (anchor: textLabel.lastBaselineAnchor, inset: Self.textBottomInset(of: content.text))
+                : (anchor: last.bottomAnchor, inset: 0)
+            variableConstraints += [
+                filterNoteLabel.firstBaselineAnchor.constraint(equalTo: lastBottom.anchor, constant: lastBottom.inset + content.filterNoteSpacing + Self.textTopInset(of: note)),
+                filterNoteLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
+                filterNoteLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
+                bottomAnchor.constraint(equalTo: filterNoteLabel.lastBaselineAnchor, constant: Self.textBottomInset(of: note)),
+            ]
+        } else {
+            filterNoteLabel.isHidden = true
+            variableConstraints.append(bottomAnchor.constraint(equalTo: last.bottomAnchor))
+        }
         NSLayoutConstraint.activate(variableConstraints)
     }
 
@@ -270,7 +299,7 @@ final class PostBodyView: UIView {
         }
     }
 
-    /// 読み上げる文。注意書きがあれば先に読み、畳んでいる間は本文を読まない。
+    /// 読み上げる文。注意書きがあれば先に読み、畳んでいる間は本文を読まない。フィルターの印は別の要素なので含めない。
     var accessibilityText: String {
         guard let content else { return "" }
         guard let spoiler = content.spoiler else { return content.text.string }
