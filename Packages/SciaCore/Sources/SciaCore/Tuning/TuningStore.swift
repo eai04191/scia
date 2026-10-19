@@ -53,14 +53,22 @@ public final class TuningStore {
         defaults?.set(value, forKey: Self.key(tuning.id))
     }
 
+    /// 項目が既定値から変わっているか。
+    public func isModified(_ item: TuningItem) -> Bool {
+        switch item {
+        case .number(let tuning): value(of: tuning) != tuning.defaultValue
+        case .toggle(let tuning): value(of: tuning) != tuning.defaultValue
+        }
+    }
+
     /// いずれかの項目が既定値から変わっているか。
     public func isModified(_ section: TuningSection) -> Bool {
-        section.items.contains { item in
-            switch item {
-            case .number(let tuning): value(of: tuning) != tuning.defaultValue
-            case .toggle(let tuning): value(of: tuning) != tuning.defaultValue
-            }
-        }
+        section.items.contains(where: isModified)
+    }
+
+    /// 項目を既定値へ戻す。
+    public func reset(_ item: TuningItem) {
+        reset([item])
     }
 
     /// カテゴリの項目を既定値へ戻す。

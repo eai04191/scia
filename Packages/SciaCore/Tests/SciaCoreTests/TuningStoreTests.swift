@@ -96,6 +96,33 @@ struct TuningStoreTests {
         #expect(!store.isModified(streaming))
     }
 
+    @Test func resetItemRestoresOnlyThatItem() throws {
+        let defaults = try makeDefaults()
+        let store = TuningStore(sections: items, defaults: defaults)
+        store.setValue(3, for: interval)
+        store.setValue(false, for: follow)
+        store.reset(.number(interval))
+
+        #expect(store.value(of: interval) == 1)
+        #expect(store.value(of: follow) == false)
+        let reloaded = TuningStore(sections: items, defaults: defaults)
+        #expect(reloaded.value(of: interval) == 1)
+        #expect(reloaded.value(of: follow) == false)
+    }
+
+    @Test func isModifiedItemComparesWithDefaultValue() throws {
+        let store = TuningStore(sections: items, defaults: try makeDefaults())
+        #expect(!store.isModified(.number(interval)))
+
+        store.setValue(3, for: interval)
+        #expect(store.isModified(.number(interval)))
+        #expect(!store.isModified(.toggle(follow)))
+
+        // 既定値と同じ値に戻したら、変更していない扱いにする。
+        store.setValue(1, for: interval)
+        #expect(!store.isModified(.number(interval)))
+    }
+
     @Test func withoutDefaultsDoesNotPersist() {
         let store = TuningStore(sections: items, defaults: nil)
         store.setValue(4, for: interval)

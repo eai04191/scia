@@ -70,14 +70,38 @@ struct TuningPanelView: View {
         case .number(let tuning):
             let value = Binding(get: { store.value(of: tuning) }, set: { store.setValue($0, for: tuning) })
             VStack(alignment: .leading) {
-                LabeledContent(tuning.title) {
-                    Text(value.wrappedValue, format: .number.precision(.fractionLength(0...3)))
+                LabeledContent {
+                    Text(value.wrappedValue, format: Self.numberFormat)
                         .monospacedDigit()
+                } label: {
+                    Text(tuning.title)
+                    modifiedNote(for: item, defaultValue: Text(tuning.defaultValue, format: Self.numberFormat))
                 }
                 Slider(value: value, in: tuning.range, step: tuning.step)
             }
         case .toggle(let tuning):
-            Toggle(tuning.title, isOn: Binding(get: { store.value(of: tuning) }, set: { store.setValue($0, for: tuning) }))
+            Toggle(isOn: Binding(get: { store.value(of: tuning) }, set: { store.setValue($0, for: tuning) })) {
+                Text(tuning.title)
+                modifiedNote(for: item, defaultValue: Text(tuning.defaultValue ? "オン" : "オフ"))
+            }
+        }
+    }
+
+    private static let numberFormat = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0...3))
+
+    /// 既定値から変えた項目にだけ、既定値と戻すボタンを出す。
+    @ViewBuilder
+    private func modifiedNote(for item: TuningItem, defaultValue: Text) -> some View {
+        if store.isModified(item) {
+            HStack(spacing: 8) {
+                Text("既定値 \(defaultValue)")
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+                Button("戻す") { store.reset(item) }
+                    // 行の中のほかの操作（トグル、スライダー）と当たり判定を分ける。
+                    .buttonStyle(.borderless)
+            }
+            .font(.footnote)
         }
     }
 }
