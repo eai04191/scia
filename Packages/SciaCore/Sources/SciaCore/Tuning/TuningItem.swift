@@ -675,15 +675,6 @@ public enum TuningCatalog {
         defaultValue: 0.3
     )
 
-    /// HDRの動画を描く明るさの幅。1はSDRに収め、2はHDRのまま、まわりの表示と並ぶよう明るさを抑え、3は画面の明るさの上限まで使う。
-    public static let mediaVideoDynamicRange = NumberTuning(
-        id: "media.videoDynamicRange",
-        title: "HDRの動画の明るさ（1: SDR、2: 抑えたHDR、3: HDR）",
-        range: 1...3,
-        step: 1,
-        defaultValue: 2
-    )
-
     /// 代替テキストを書いているとき、残りの文字数がこれ以下になったら残りを出す。
     public static let mediaDescriptionRemainingThreshold = NumberTuning(
         id: "media.descriptionRemainingThreshold",
@@ -1042,7 +1033,6 @@ public enum TuningCatalog {
         TuningSection(id: "media.video", title: "ビューア：動画", items: [
             .number(mediaVideoControlsHideDelay),
             .number(mediaVideoSkipEffectDuration),
-            .number(mediaVideoDynamicRange),
         ]),
         TuningSection(id: "media.description", title: "ビューア：代替テキスト", items: [
             .number(mediaDescriptionRemainingThreshold),
