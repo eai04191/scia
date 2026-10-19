@@ -487,7 +487,8 @@ final class MediaTileView: UIButton, MediaViewerSource {
         thumbnailView.frame = bounds
         symbolView.frame = bounds
         moreLabel.frame = bounds
-        let inset: CGFloat = 6
+        // 札をタイルの端から離す余白。狭いタイルでもすべての印を出せるよう、タイルの短い辺に合わせて6ptから2ptまで縮める。
+        let inset = min(max(min(bounds.width, bounds.height) / 10, 2), 6).rounded()
         let badgeSize = badge.sizeThatFits(CGSize(width: max(bounds.width - inset * 2, 0), height: bounds.height))
         badge.frame = CGRect(x: inset, y: bounds.maxY - inset - badgeSize.height, width: badgeSize.width, height: badgeSize.height)
     }
@@ -544,8 +545,10 @@ final class MediaBadgeView: UIView {
     /// 札の文字の大きさの上限。文字の大きさの設定に合わせて大きくするが、いちばん狭いタイルでも1文字の札が入るよう、ここで止める。
     static let maximumContentSizeCategory = UIContentSizeCategory.extraExtraLarge
     private static let padding = UIEdgeInsets(top: 2, left: 5, bottom: 2, right: 5)
-    /// 頭の1文字にしたときの左右の余白。狭いタイルに入れるため、印の名前のときより詰める。
-    private static let shortHorizontalPadding: CGFloat = 3
+    /// 頭の1文字にしたときの左右の余白の範囲。狭いタイルでもすべての印を出せるよう、入るまで最大から最小へ詰める。
+    private static let shortHorizontalPaddings: ClosedRange<CGFloat> = 1...3
+    /// 余白を詰めても入らないとき、文字を小さくする下限。これより小さくすると読めないので、入らない分は切れる。
+    private static let minimumFontSize: CGFloat = 6
     /// 印と印のあいだの隙間。
     private static let gap: CGFloat = 1
     private static let cornerRadius: CGFloat = 4
@@ -560,8 +563,14 @@ final class MediaBadgeView: UIView {
     }
 
     private var segments: [UILabel] = []
-    /// 幅に入らず、頭の1文字にしているか。
-    private(set) var isShortened = false
+    /// いまの幅に入れるために選んだ、印の書き方と左右の余白と文字。
+    private var fit = Fit(shortened: false, horizontalPadding: padding.left, font: .preferredFont(forTextStyle: .caption2))
+
+    private struct Fit {
+        let shortened: Bool
+        let horizontalPadding: CGFloat
+        let font: UIFont
+    }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -586,22 +595,46 @@ final class MediaBadgeView: UIView {
         return marks
     }
 
-    /// `size.width`に入るなら印の名前で、入らなければ頭の1文字で並べた大きさを返し、その形に描き替える。
+    /// `size.width`に入る形を選んで大きさを返し、その形に描き替える。できるだけすべての印を出すため、次の順に詰める。
+    /// 1. 印の名前で並べる
+    /// 2. 頭の1文字にし、左右の余白を最大から最小へ詰める
+    /// 3. 最小の余白でも入らなければ、文字を下限まで小さくする。下限でも入らない分は切れる
     override func sizeThatFits(_ size: CGSize) -> CGSize {
-        let font = Self.font(for: traitCollection)
-        let fullSize = Self.size(of: marks.map(\.title), font: font, horizontalPadding: Self.padding.left)
-        isShortened = fullSize.width > size.width
+        fit = Self.fit(marks: marks, width: size.width, font: Self.font(for: traitCollection))
         for (segment, mark) in zip(segments, marks) {
-            segment.font = font
-            segment.text = isShortened ? mark.shortTitle : mark.title
+            segment.font = fit.font
+            segment.text = fit.shortened ? mark.shortTitle : mark.title
         }
-        return isShortened ? Self.size(of: marks.map(\.shortTitle), font: font, horizontalPadding: Self.shortHorizontalPadding) : fullSize
+        return Self.size(of: titles(for: fit), font: fit.font, horizontalPadding: fit.horizontalPadding)
+    }
+
+    private func titles(for fit: Fit) -> [String] {
+        marks.map { fit.shortened ? $0.shortTitle : $0.title }
+    }
+
+    private static func fit(marks: [Mark], width: CGFloat, font: UIFont) -> Fit {
+        let full = Fit(shortened: false, horizontalPadding: padding.left, font: font)
+        if size(of: marks.map(\.title), font: font, horizontalPadding: full.horizontalPadding).width <= width {
+            return full
+        }
+        let titles = marks.map(\.shortTitle)
+        for padding in stride(from: shortHorizontalPaddings.upperBound, through: shortHorizontalPaddings.lowerBound, by: -1) where size(of: titles, font: font, horizontalPadding: padding).width <= width {
+            return Fit(shortened: true, horizontalPadding: padding, font: font)
+        }
+        // 余白を最小にしたうえで、文字の幅が残りに収まる大きさにする。文字の幅は大きさにほぼ比例する。
+        let padding = shortHorizontalPaddings.lowerBound
+        let textWidth = titles.map { ceil(($0 as NSString).size(withAttributes: [.font: font]).width) }.reduce(0, +)
+        let room = width - padding * 2 * CGFloat(titles.count) - gap * CGFloat(max(titles.count - 1, 0))
+        let scale = textWidth > 0 ? room / textWidth : 1
+        // 切り上げで1ptほどはみ出すことがあるため、少し小さめにする。
+        let fontSize = max(floor(font.pointSize * min(scale, 1) * 10 - 1) / 10, minimumFontSize)
+        return Fit(shortened: true, horizontalPadding: padding, font: font.withSize(fontSize))
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         var x: CGFloat = 0
-        let horizontalPadding = isShortened ? Self.shortHorizontalPadding : Self.padding.left
+        let horizontalPadding = fit.horizontalPadding
         for segment in segments {
             let width = Self.segmentWidth(of: segment.text ?? "", font: segment.font, horizontalPadding: horizontalPadding)
             segment.frame = CGRect(x: x, y: 0, width: width, height: bounds.height)
