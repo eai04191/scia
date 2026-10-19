@@ -26,6 +26,9 @@ enum DebugURL: Equatable {
     /// `scia-debug://download/slow`で、以後の共有や保存のためのダウンロードを、進み具合を刻みながら10秒遅らせる。
     /// `?seconds=<秒>`で遅らせる時間を変える。`scia-debug://download/normal`で戻す。
     case slowDownload(seconds: Double?)
+    /// `scia-debug://notice/progress`で、出たままの「処理中」のチップを、進み具合を刻みながら60秒出す。`?seconds=<秒>`で長さを変える。
+    /// アプリ全体のアプリ内通知として出すため、画面を移る途中や引っぱる途中のチップの列の動きを、ダウンロードを用意せずに確かめられる。
+    case progressNotice(seconds: Double)
     /// `scia-debug://media-limits?image-size=<バイト>&image-matrix=<画素>&video-size=<バイト>&video-matrix=<画素>&video-frame-rate=<fps>`。
     /// 投稿欄が使うサーバーのメディアの上限を、指定した項目だけ差し替える。次に投稿欄で書き始めたときから効く。`scia-debug://media-limits/server`で戻す。
     case mediaLimits(MediaLimits?)
@@ -95,6 +98,11 @@ enum DebugURL: Equatable {
             case "normal": self = .slowDownload(seconds: nil)
             default: return nil
             }
+        case "notice":
+            guard url.lastPathComponent == "progress" else { return nil }
+            let seconds = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "seconds" }?.value
+            guard let seconds = Double(seconds ?? "60"), seconds > 0 else { return nil }
+            self = .progressNotice(seconds: seconds)
         case "media-limits":
             if url.lastPathComponent == "server" {
                 self = .mediaLimits(nil)

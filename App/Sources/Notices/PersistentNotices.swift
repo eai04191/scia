@@ -9,6 +9,10 @@ struct PersistentNotices {
         case screen
         /// 共有や保存のために落としている途中。ビューアを閉じても続くため、アプリ全体のもの。
         case download
+        #if DEBUG
+        /// `scia-debug://notice/progress`で出す、確かめるための処理中。アプリ全体のもの。
+        case debug
+        #endif
     }
 
     private var entries: [(slot: Slot, notice: Notice)] = []

@@ -144,6 +144,18 @@ struct TimelineNoticeTests {
         #expect(context.presenter === sheet)
     }
 
+    /// 出たままのアプリ内通知の決め方を外したら、そのチップを消す。
+    @Test func removingPersistentContentRemovesChip() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.notices.setPersistent({ _ in Notice(id: "progress", kind: .progress, title: "処理中") }, in: .download)
+        #expect(harness.overlay.column.stack.persistentNotice?.title == "処理中")
+
+        harness.notices.setPersistent(nil, in: .download)
+
+        #expect(harness.overlay.column.stack.persistentNotice == nil)
+    }
+
     /// チップのない場所に触れたら、下の一覧へ通す。
     @Test func touchesOutsideChipsReachList() throws {
         let harness = try TimelineHarness()

@@ -90,11 +90,6 @@ final class NoticeCenter {
         persistent[slot]?(context)
     }
 
-    /// 中身の決め方を持っている出どころ。
-    var slots: [PersistentNotices.Slot] {
-        PersistentNotices.Slot.allCases.filter { persistent[$0] != nil }
-    }
-
     /// 数秒で消えるチップを、全部の列に出す。
     /// - Parameter slot: このアプリ内通知で`slot`の出たままのチップが消えるなら、その場所で入れ替える（ダウンロード中から保存しましたへ）。
     func showTransient(duration: TimeInterval, replacing slot: PersistentNotices.Slot? = nil, _ content: @escaping @MainActor (NoticeContext) -> Notice) {

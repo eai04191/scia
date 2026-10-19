@@ -246,7 +246,8 @@ final class NoticeOverlay: UIView {
     private func refreshContent(_ placement: NoticePlacement) {
         let context = context(for: placement)
         persistentNotices.set(placement.screenNotice, in: .screen)
-        for slot in notices.slots {
+        // 決め方を外された出どころも、出していたチップを消すため、画面のもの以外のすべての出どころを決め直す。
+        for slot in PersistentNotices.Slot.allCases where slot != .screen {
             persistentNotices.set(notices.persistentNotice(in: slot, context: context), in: slot)
         }
         column.stack.setPersistent(persistentNotices.chipNotice(showAll: showAll(from: context)), belongsToScreen: persistentNotices.chosenSlot == .screen)

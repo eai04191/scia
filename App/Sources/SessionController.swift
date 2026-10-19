@@ -24,6 +24,10 @@ final class SessionController {
     #else
     private let requestLog = RequestLog(includesBody: false)
     #endif
+    #if DEBUG
+    /// `scia-debug://notice/progress`で出している、確かめるための処理中のチップを進める。
+    private var debugProgressTask: Task<Void, Never>?
+    #endif
     /// 「接続の状態」画面に出す、このセッションの接続の状態。
     let diagnostics: ConnectionDiagnostics
     /// 電波が戻ったときと、レート制限が明けたときに、読み込みをやり直す。
@@ -924,6 +928,24 @@ final class SessionController {
     }
 
     #if DEBUG
+    /// 確かめるための処理中のチップを、進み具合を刻みながら`duration`のあいだ出し、済んだら消す。出している途中に呼び直したら、初めから数え直す。
+    private func showDebugProgress(for duration: Duration) {
+        debugProgressTask?.cancel()
+        let start = ContinuousClock.now
+        debugProgressTask = Task { [weak self] in
+            while !Task.isCancelled {
+                let fraction = min((ContinuousClock.now - start) / duration, 1)
+                self?.notices.setPersistent({ _ in
+                    Notice(id: "debug.progress", kind: .progress, title: "確かめるための処理中", value: Notice.percentText(of: fraction))
+                }, in: .debug)
+                guard fraction < 1 else { break }
+                try? await Task.sleep(for: .milliseconds(500))
+            }
+            guard !Task.isCancelled else { return }
+            self?.notices.setPersistent(nil, in: .debug)
+        }
+    }
+
     func handle(_ url: DebugURL) {
         switch url {
         case .dummy(let post):
@@ -951,6 +973,8 @@ final class SessionController {
             DebugFaults.setStreamingOnline(isOnline)
         case .slowDownload(let seconds):
             DebugFaults.slowDownloads(by: seconds.map { .seconds($0) })
+        case .progressNotice(let seconds):
+            showDebugProgress(for: .seconds(seconds))
         case .mediaLimits(let limits):
             DebugFaults.overrideMediaLimits(limits)
         case .catalog(let component):
