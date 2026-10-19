@@ -209,6 +209,7 @@ final class RowContentScrollView: UIScrollView {}
 /// `UIControl`を直接継承したものは、このイベントを送らない。
 final class MediaTileView: UIButton, MediaViewerSource {
     private let store: MediaImageStore
+    private let settings: AppSettings
     private let thumbnailView = UIImageView()
     private let symbolView = UIImageView()
     private let badge = MediaBadgeView()
@@ -231,8 +232,9 @@ final class MediaTileView: UIButton, MediaViewerSource {
         let aspectRatio: Double?
     }
 
-    init(store: MediaImageStore) {
+    init(store: MediaImageStore, settings: AppSettings = AppDependencies.settings) {
         self.store = store
+        self.settings = settings
         super.init(frame: .zero)
         backgroundColor = .secondarySystemFill
         layer.cornerRadius = MediaGridView.cornerRadius
@@ -260,6 +262,18 @@ final class MediaTileView: UIButton, MediaViewerSource {
         registerForTraitChanges([UITraitDisplayScale.self, UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.setNeedsLayout()
         }
+        followDynamicRanges()
+    }
+
+    /// HDRの札を出す明るさの組み合わせかを、設定から決め続ける。選び直すと、出ている札にもすぐ効かせる。
+    private func followDynamicRanges() {
+        withObservationTracking {
+            marksHDR = MediaDynamicRange.marksHDR(list: settings.mediaDynamicRange, viewer: settings.viewerMediaDynamicRange)
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.followDynamicRanges()
+            }
+        }
     }
 
     @available(*, unavailable)
@@ -271,7 +285,9 @@ final class MediaTileView: UIButton, MediaViewerSource {
     var thumbnailImage: UIImage? { thumbnailView.image }
 
     /// 読み込んだサムネイル。blurhashのぼかしは含まない。ビューアで元の画像が届くまでの下地にする。
-    private(set) var loadedThumbnail: UIImage?
+    private(set) var loadedThumbnail: UIImage? {
+        didSet { updateBadge() }
+    }
 
     /// 画像の奥に敷いている背景の色。透明な部分のある画像では、この色が透けて見える。
     var placeholderColor: UIColor? {
@@ -340,8 +356,24 @@ final class MediaTileView: UIButton, MediaViewerSource {
         didSet { updateBadge() }
     }
 
+    /// 開くと一覧より明るくなる設定か。サムネイルがHDRなら、HDRの札を出す。
+    private var marksHDR = false {
+        didSet { updateBadge() }
+    }
+
+    /// 読み上げに使う、添付ファイルの種類と代替テキスト。
+    private var accessibilityParts: (kind: String, description: String?) = ("", nil)
+
+    /// サムネイルはサーバーが作るので、サーバーがHDRの印を消したメディアでは、HDRでもfalseになる。
+    private var isHDRThumbnail: Bool { loadedThumbnail?.isHighDynamicRange ?? false }
+
     private func updateBadge() {
-        badge.marks = hidesBadge ? [] : marks
+        let showsHDR = marksHDR && isHDRThumbnail
+        badge.marks = hidesBadge ? [] : marks + (showsHDR ? [.hdr] : [])
+        accessibilityLabel = [accessibilityParts.kind, showsHDR ? "HDR" : nil, accessibilityParts.description]
+            .compactMap(\.self)
+            .filter { !$0.isEmpty }
+            .joined(separator: "、")
         setNeedsLayout()
     }
 
@@ -373,10 +405,8 @@ final class MediaTileView: UIButton, MediaViewerSource {
         marks = MediaBadgeView.marks(hasDescription: !(attachment.description?.isEmpty ?? true), kind: attachment.type)
         moreLabel.isHidden = hiddenCount == 0
         moreLabel.text = "+\(hiddenCount)"
-        accessibilityLabel = [Self.kindName(of: attachment.type), attachment.description]
-            .compactMap(\.self)
-            .filter { !$0.isEmpty }
-            .joined(separator: "、")
+        accessibilityParts = (Self.kindName(of: attachment.type), attachment.description)
+        updateBadge()
         accessibilityValue = hiddenCount > 0 ? "ほか\(hiddenCount)件" : nil
     }
 
@@ -396,7 +426,8 @@ final class MediaTileView: UIButton, MediaViewerSource {
         symbolView.layer.shadowOpacity = 0.4
         marks = MediaBadgeView.marks(hasDescription: !description.isEmpty, kind: kind)
         moreLabel.isHidden = true
-        accessibilityLabel = [kind.map(Self.kindName(of:)) ?? "メディア", description].filter { !$0.isEmpty }.joined(separator: "、")
+        accessibilityParts = (kind.map(Self.kindName(of:)) ?? "メディア", description)
+        updateBadge()
         accessibilityValue = nil
         setNeedsLayout()
     }
@@ -490,18 +521,20 @@ final class MediaTileView: UIButton, MediaViewerSource {
     }
 }
 
-/// 添付ファイルの印（ALT、GIF）を1つにまとめた札。タイルの左下に置く。
+/// 添付ファイルの印（ALT、GIF、HDR）を1つにまとめた札。タイルの左下に置く。
 /// タイルの大きさは並べ方で変わり、印ごとに札を置くと狭いタイルに入らないため、1つにまとめ、幅に入らなければ頭の1文字にする。
 /// 印ごとの下地を細い隙間で離してつなげ、つなぎ目の角は立て、外側の角だけを丸める。区切りに線を描くより、1枚の札が区切られて見えるため。
 final class MediaBadgeView: UIView {
     enum Mark: CaseIterable {
         case alt
         case gif
+        case hdr
 
         var title: String {
             switch self {
             case .alt: "ALT"
             case .gif: "GIF"
+            case .hdr: "HDR"
             }
         }
 
