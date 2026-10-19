@@ -28,9 +28,15 @@ public enum VideoReencoder {
         )
     }
 
+    private static let sdrColorProperties = [
+        AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+        AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+        AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
+    ]
+
     /// H.264とAACのmp4で書き出す。動画の長さは保つ。
     ///
-    /// HDRの動画はSDRにする。H.264で書き出す以上、HDRは残せない。色の変換は、映像の合成の色空間をBT.709にして任せる。
+    /// HDRの動画は、トーンマッピングしてSDRにする。H.264で書き出す以上、HDRは残せない。
     /// - Parameters:
     ///   - size: 向きを反映した、書き出す大きさ。
     ///   - frameRate: 落とすフレームレート。落とさないならnil。
@@ -50,11 +56,9 @@ public enum VideoReencoder {
         let audioTrack = try await asset.loadTracks(withMediaType: .audio).first
         let duration = try await asset.load(.duration).seconds
 
-        // 合成に任せて、向きを反映し、BT.709のSDRにする。大きさは書き出す側で縮める。
+        // 合成では向きだけを反映し、色は元のまま渡す。大きさは書き出す側で縮める。
+        // 合成の色空間をBT.709にすると、HLGの値がそのままBT.709の値として出て、トーンマッピングも色域の変換も起きない。
         var configuration = try await AVVideoComposition.Configuration(for: asset)
-        configuration.colorPrimaries = AVVideoColorPrimaries_ITU_R_709_2
-        configuration.colorTransferFunction = AVVideoTransferFunction_ITU_R_709_2
-        configuration.colorYCbCrMatrix = AVVideoYCbCrMatrix_ITU_R_709_2
         if let frameRate {
             // 映像が1本なら、合成は元のトラックのコマの時刻を使い、`frameDuration`を見ない。元の時刻を使わない指定にして、上限のフレームレートにする。
             configuration.sourceTrackIDForFrameTiming = kCMPersistentTrackID_Invalid
@@ -67,9 +71,13 @@ public enum VideoReencoder {
         let writer = try AVAssetWriter(outputURL: destination, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
 
+        // 読み出す側で色をBT.709にすると、AVAssetExportSessionのSDRのプリセットと同じ、Appleの標準の変換でSDRにする。
         let videoOutput = AVAssetReaderVideoCompositionOutput(
             videoTracks: [videoTrack],
-            videoSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange]
+            videoSettings: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                AVVideoColorPropertiesKey: Self.sdrColorProperties,
+            ]
         )
         videoOutput.videoComposition = composition
         videoOutput.alwaysCopiesSampleData = false
@@ -80,11 +88,7 @@ public enum VideoReencoder {
             AVVideoWidthKey: size.width,
             AVVideoHeightKey: size.height,
             AVVideoScalingModeKey: AVVideoScalingModeResizeAspect,
-            AVVideoColorPropertiesKey: [
-                AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
-                AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
-                AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
-            ],
+            AVVideoColorPropertiesKey: Self.sdrColorProperties,
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey: bitRate,
                 AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,

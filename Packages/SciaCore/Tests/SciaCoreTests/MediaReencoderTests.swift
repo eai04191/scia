@@ -308,6 +308,110 @@ struct MediaReencoderTests {
         let info = try #require(await VideoReencoder.info(of: output))
         #expect(info.frameRate <= 31)
     }
+
+    /// HLGの試験動画の、左から並べた灰色の帯の信号の値。HLGの0.75は、BT.2408の参照白（203 nit）。
+    private static let hlgLevels: [Double] = [0.25, 0.5, 0.75, 0.9, 1.0]
+
+    /// iPhoneのHDR動画と同じ、BT.2020とHLGの10bitのHEVCで、灰色の帯を並べた動画を書き出す。
+    private func writeHLGVideo(width: Int, height: Int, to url: URL) async throws {
+        let writer = try AVAssetWriter(outputURL: url, fileType: .mov)
+        let input = AVAssetWriterInput(mediaType: .video, outputSettings: [
+            AVVideoCodecKey: AVVideoCodecType.hevc,
+            AVVideoWidthKey: width,
+            AVVideoHeightKey: height,
+            AVVideoColorPropertiesKey: [
+                AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_2020,
+                AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_2100_HLG,
+                AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_2020,
+            ],
+            AVVideoCompressionPropertiesKey: [AVVideoProfileLevelKey: kVTProfileLevel_HEVC_Main10_AutoLevel as String],
+        ])
+        let adaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: input, sourcePixelBufferAttributes: nil)
+        writer.add(input)
+        #expect(writer.startWriting())
+        writer.startSession(atSourceTime: .zero)
+        for frame in 0..<10 {
+            while !input.isReadyForMoreMediaData {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+            var buffer: CVPixelBuffer?
+            CVPixelBufferCreate(nil, width, height, kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange, nil, &buffer)
+            let pixelBuffer = try #require(buffer)
+            CVPixelBufferLockBaseAddress(pixelBuffer, [])
+            // 10bitのvideo rangeで、16bitの上位10bitに入れる。灰色なので、色差は中央の512。
+            let luma = try #require(CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0)).assumingMemoryBound(to: UInt16.self)
+            let lumaStride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0) / 2
+            for row in 0..<height {
+                for column in 0..<width {
+                    let level = Self.hlgLevels[column * Self.hlgLevels.count / width]
+                    luma[row * lumaStride + column] = UInt16((64 + 876 * level).rounded()) << 6
+                }
+            }
+            let chroma = try #require(CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 1)).assumingMemoryBound(to: UInt16.self)
+            let chromaStride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 1) / 2
+            for index in 0..<(chromaStride * height / 2) {
+                chroma[index] = 512 << 6
+            }
+            CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
+            CVBufferSetAttachment(pixelBuffer, kCVImageBufferColorPrimariesKey, kCVImageBufferColorPrimaries_ITU_R_2020, .shouldPropagate)
+            CVBufferSetAttachment(pixelBuffer, kCVImageBufferTransferFunctionKey, kCVImageBufferTransferFunction_ITU_R_2100_HLG, .shouldPropagate)
+            CVBufferSetAttachment(pixelBuffer, kCVImageBufferYCbCrMatrixKey, kCVImageBufferYCbCrMatrix_ITU_R_2020, .shouldPropagate)
+            #expect(adaptor.append(pixelBuffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: 30)))
+        }
+        input.markAsFinished()
+        await writer.finishWriting()
+        #expect(writer.status == .completed)
+    }
+
+    /// SDRの動画の最初のコマで、帯ごとの真ん中の明るさを、黒0から白1で読む。
+    private func bandLuma(of url: URL) async throws -> [Double] {
+        let asset = AVURLAsset(url: url)
+        let track = try #require(try await asset.loadTracks(withMediaType: .video).first)
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
+            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+        ])
+        reader.add(output)
+        #expect(reader.startReading())
+        let sample = try #require(output.copyNextSampleBuffer())
+        let pixelBuffer = try #require(CMSampleBufferGetImageBuffer(sample))
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let row = CVPixelBufferGetHeight(pixelBuffer) / 2
+        let luma = try #require(CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0)).assumingMemoryBound(to: UInt8.self)
+        let stride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+        return Self.hlgLevels.indices.map { band in
+            let column = (2 * band + 1) * width / (2 * Self.hlgLevels.count)
+            return (Double(luma[row * stride + column]) - 16) / 219
+        }
+    }
+
+    /// HDRの動画は、トーンマッピングしてSDRに書き出す。HLGの値をそのままBT.709の値として書かない。
+    ///
+    /// 正しい結果は、Appleの標準のSDRへの変換とする。AVAssetExportSessionのH.264のプリセットで書き出したものを、同じ試験動画から作って比べる。
+    /// macOS 27では、この変換はHLGの0.25、0.5、0.75、0.9、1.0を、BT.709の0.22、0.38、0.60、0.81、1.00にする。参照白を6割ほどに抑え、その上の明るさの差を残す。
+    /// VTPixelTransferSessionで出力の色をBT.709にしたときも同じ値になる。CIToneMapHeadroom（元のヘッドルーム4.93、目標1）は0.75、0.92、1.00で、参照白を明るく残す代わりに、ハイライトの差が小さくなる。
+    /// 色を変えずにHLGの値を素通しすると、0.75、0.90、1.00がそのまま出て、全体が明るく白っぽくなる。
+    @Test func tonemapsHLGVideoToSDR() async throws {
+        let directory = try makeDirectory()
+        let source = directory.appending(path: "hlg.mov")
+        try await writeHLGVideo(width: 320, height: 180, to: source)
+
+        let reference = directory.appending(path: "reference.mp4")
+        let session = try #require(AVAssetExportSession(asset: AVURLAsset(url: source), presetName: AVAssetExportPreset1280x720))
+        try await session.export(to: reference, as: .mp4)
+        let expected = try await bandLuma(of: reference)
+        // 比べる基準が素通しになっていないこと。
+        #expect(expected[2] < 0.7)
+
+        let output = directory.appending(path: "sdr.mp4")
+        try await VideoReencoder.export(source, size: PixelSize(width: 320, height: 180), frameRate: nil, bitRate: 1_000_000, audioBitRate: 128_000, destination: output) { _ in }
+        let actual = try await bandLuma(of: output)
+        for (actualLuma, expectedLuma) in zip(actual, expected) {
+            #expect(abs(actualLuma - expectedLuma) < 0.03, "書き出した明るさ \(actual)、Appleの変換 \(expected)")
+        }
+    }
 }
 
 /// 別のスレッドから書く値。
