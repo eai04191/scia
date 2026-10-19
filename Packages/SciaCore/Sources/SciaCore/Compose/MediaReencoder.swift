@@ -96,7 +96,9 @@ public enum ImageReencoder {
             if sizeLimit.map({ byteCount <= $0 }) ?? true {
                 // 設定で選んだ大きさのとおりに縮めただけなら、使う人が選んだ変化なので知らせない。
                 let matchesSetting = plan.sizeBySetting != originalSize && size == plan.sizeBySetting
-                let reduction = matchesSetting ? nil : MediaReduction(fromSize: originalSize, toSize: written, fromByteCount: originalByteCount, toByteCount: byteCount)
+                // 処理できない形式を、大きさを変えずに作り直しただけなら、縮めていないので知らせない。
+                let convertsFormatOnly = size == originalSize && !plan.exceedsSizeLimit
+                let reduction = matchesSetting || convertsFormatOnly ? nil : MediaReduction(fromSize: originalSize, toSize: written, fromByteCount: originalByteCount, toByteCount: byteCount)
                 return PreparedMedia(url: output, mimeType: plan.mimeType, size: written, reduction: reduction)
             }
             let smaller = size.scaled(by: 0.85)

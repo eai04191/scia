@@ -78,6 +78,19 @@ struct MediaReencoderTests {
         #expect(prepared.size == PixelSize(width: 400, height: 300))
     }
 
+    /// 処理できない形式を、大きさを変えずにJPEGへ作り直しただけなら、縮めたとは知らせない。
+    @Test func formatOnlyConversionIsNotAReduction() async throws {
+        let directory = try makeDirectory()
+        let source = directory.appending(path: "photo.heic")
+        try writeImage(width: 400, height: 300, type: .heic, to: source)
+        let original = PixelSize(width: 400, height: 300)
+        let plan = ImagePlan(mimeType: "image/jpeg", size: original, sizeBySetting: original, exceedsSizeLimit: false)
+        let prepared = try await ImageReencoder.reencode(source, plan: plan, originalSize: original, sizeLimit: nil, quality: 0.85, destination: directory.appending(path: "out"))
+        #expect(prepared.url.pathExtension == "jpeg")
+        #expect(prepared.size == original)
+        #expect(prepared.reduction == nil)
+    }
+
     /// 画像の画素。向きを反映せずに読む。
     private func pixels(of url: URL) throws -> Data {
         let source = try #require(CGImageSourceCreateWithURL(url as CFURL, nil))

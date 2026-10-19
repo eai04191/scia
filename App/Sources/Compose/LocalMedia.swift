@@ -24,6 +24,15 @@ struct PickedMedia {
     let load: @MainActor (_ avoiding: Set<String>) async throws -> LocalMediaFile
 }
 
+/// 投稿欄にペーストしたメディア1つ。ピッカーで選んだものと違い、あとから読み直せない。
+struct PastedMedia {
+    /// 上限を超えて足さなかったときに、知らせる文言を選ぶのに使う。
+    let kind: MediaAttachment.Kind
+    let load: @MainActor () async throws -> LocalMediaFile
+    /// 添付に足さなかったときに呼ぶ。読み込んだファイルを消す。
+    var discard: @MainActor () -> Void = {}
+}
+
 /// 端末からメディアを読み込めなかった。
 enum LocalMediaError: Error, LocalizedError {
     /// 画像でも動画でもないものが届いた。ピッカーで画像と動画に絞っているので、普通は起きない。
@@ -62,7 +71,7 @@ enum LocalMediaLoader {
             .filter { $0.conforms(to: .movie) || $0.conforms(to: .image) }
             .first { $0.preferredMIMEType.map { !avoiding.contains($0) } ?? true }
         guard let type else { throw LocalMediaError.unsupportedType }
-        let kind: MediaAttachment.Kind = type.conforms(to: .gif) ? .gifv : type.conforms(to: .movie) ? .video : .image
+        let kind = Self.kind(of: type)
         let mimeType = type.preferredMIMEType ?? (kind == .video ? "video/mp4" : "image/jpeg")
         let url = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<URL, any Error>) in
             _ = provider.loadFileRepresentation(for: type, openInPlace: false) { url, _, error in
@@ -83,6 +92,43 @@ enum LocalMediaLoader {
             }
         }
         return LocalMediaFile(url: url, mimeType: mimeType, kind: kind)
+    }
+
+    /// 添付したときの種類。GIFは、サーバーが音のない動画（gifv）に変える。
+    private static func kind(of type: UTType) -> MediaAttachment.Kind {
+        type.conforms(to: .gif) ? .gifv : type.conforms(to: .movie) ? .video : .image
+    }
+
+    /// 投稿欄で受け付けるメディアの型。
+    static let mediaTypes: [UTType] = [.image, .movie]
+
+    /// クリップボードの項目が、本文ではなく添付に回すメディアなら、その型を返す。文字を持つ項目は本文に入れるのでnil。
+    /// 文字と画像を両方持つ項目（画像の説明の文字が付いたものなど）は、本文にペーストするつもりのことが多いため、文字を優先する。
+    static func pastedMediaType(in provider: NSItemProvider) -> UTType? {
+        let types = provider.registeredTypeIdentifiers.compactMap { UTType($0) }
+        guard !types.contains(where: { $0.conforms(to: .plainText) }) else { return nil }
+        return types.first { type in mediaTypes.contains { type.conforms(to: $0) } }
+    }
+
+    /// ペーストした項目の読み込みを、その場で始める。クリップボードの中身はあとから変わり、前にコピーしたものは読めなくなることがあるため
+    /// （シミュレーターでは、「Operation not authorized」（PBErrorDomain 13）で読めなくなった）。
+    /// 添付に足すかは、1回のペーストの項目がそろってから決めるので、足す前から読み込んでおく。
+    /// クリップボードには形式を選び直せる表現が並ぶとは限らないので、避ける形式は渡さない。処理できないと分かった形式は、送る前に作り直す（`ImagePlan.make`）。
+    @MainActor
+    static func startLoadingPasted(from provider: NSItemProvider, type: UTType) -> PastedMedia {
+        let loading = Task.immediate { @MainActor in try await load(from: provider, avoiding: []) }
+        return PastedMedia(kind: kind(of: type), load: { try await loading.value }, discard: {
+            Task { try? await loading.value.remove() }
+        })
+    }
+
+    /// クリップボードに、添付に回すメディアの項目があるか。型だけを見るので、ペーストの許可を求められない。
+    static func pasteboardHasMedia(_ pasteboard: UIPasteboard) -> Bool {
+        (pasteboard.types(forItemSet: nil) ?? []).contains { identifiers in
+            let types = identifiers.compactMap { UTType($0) }
+            return !types.contains { $0.conforms(to: .plainText) }
+                && types.contains { type in mediaTypes.contains { type.conforms(to: $0) } }
+        }
     }
 
     /// アップロードするためにファイルを読む。動画では大きくなるため、メインスレッドの外で読む。

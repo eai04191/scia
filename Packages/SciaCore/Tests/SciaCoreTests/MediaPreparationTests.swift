@@ -91,6 +91,15 @@ struct MediaPreparationTests {
         #expect(plan.mimeType == "image/jpeg")
     }
 
+    /// 処理できないと分かった形式は、大きさが収まっていても、同じ大きさのJPEGで作り直す。
+    /// ペーストしたものは、ピッカーのように同じ写真のJPEGを受け取り直せないため。
+    @Test func reencodesUnprocessableFormatEvenWhenItFits() throws {
+        let plan = try #require(imagePlan(4032, 3024, unprocessable: ["image/heic"]))
+        #expect(plan.mimeType == "image/jpeg")
+        #expect(plan.size == PixelSize(width: 4032, height: 3024))
+        #expect(plan.sizeBySetting == plan.size)
+    }
+
     /// アニメーションを保ったまま縮められないので、GIFは作り直さない。
     @Test func leavesGIFAlone() {
         #expect(imagePlan(8000, 8000, mimeType: "image/gif") == nil)

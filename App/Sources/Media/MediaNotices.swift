@@ -44,6 +44,12 @@ extension Notice {
         Notice(id: "compose.mediaReduced", kind: .info, title: "\(kind == .video ? "動画" : "画像")をサーバーの上限に合わせて縮めました")
     }
 
+    /// 投稿欄にペーストしたメディアのうち、添付の上限を超えて足さなかったもの。足した分は列に見えるので、足さなかった分だけを知らせる。
+    static func pastedMediaSkipped(_ kinds: [MediaAttachment.Kind]) -> Notice {
+        let noun = kinds.allSatisfy { $0 == .image } ? "画像" : "メディア"
+        return Notice(id: "compose.pastedMediaSkipped", kind: .info, title: "上限を超えたため、\(noun)\(kinds.count)件を添付しませんでした")
+    }
+
     private static func byteText(_ count: Int) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .file)
     }

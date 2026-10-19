@@ -62,6 +62,8 @@ final class ComposeModel {
     @ObservationIgnored var onPosted: () -> Void = {}
     /// サーバーの上限のために、設定で選んだより小さく、または低い画質にした。使う人が選んでいない画質の変化なので、知らせる。
     @ObservationIgnored var onMediaReduced: (MediaAttachment.Kind) -> Void = { _ in }
+    /// ペーストしたメディアのうち、添付の上限を超えて足さなかったものの種類。
+    @ObservationIgnored var onPastedMediaSkipped: ([MediaAttachment.Kind]) -> Void = { _ in }
 
     init(replyTo: Status? = nil, myAccountID: String, media: ComposeMediaService = .unavailable, post: @escaping (StatusDraft) async throws -> Void) {
         let draft = replyTo.map { StatusDraft.reply(to: $0, myAccountID: myAccountID) } ?? StatusDraft()
@@ -105,6 +107,11 @@ final class ComposeModel {
     /// 編集している投稿の添付で上限まで埋まっていても開かない。ピッカーの上限の0は、選べないではなく上限なしを意味するため。
     var canAttachMedia: Bool {
         !isPosting && hasLoadedConfiguration && pickerSelectionLimit > 0
+    }
+
+    /// メディアをペーストできる。ピッカーと違い、上限まで埋まっていても受け付け、入りきらない分を知らせる。
+    var canPasteMedia: Bool {
+        !isPosting && hasLoadedConfiguration
     }
 
     /// 返信先と既定値から決まる公開範囲。
@@ -268,11 +275,13 @@ final class ComposeModel {
 
 /// 添付したメディア1つの、端末の側だけで持つもの。
 struct LocalMedia {
-    /// ピッカーの`assetIdentifier`。開き直したときに前の選択として渡す。
-    let assetIdentifier: String
+    /// ピッカーの`assetIdentifier`。開き直したときに前の選択として渡す。ペーストしたものはピッカーで選んでいないのでnil。
+    let assetIdentifier: String?
     /// 読み込みを送り直すときに使う。前に選んだメディアはピッカーから読み直せないため、選んだときのものを持っておく。
     /// 引数のMIMEタイプの形式を避けて読み込む。
     let load: @MainActor (_ avoiding: Set<String>) async throws -> LocalMediaFile
+    /// 添付から外したときに呼ぶ。ペーストしたものは足す前から読み込んでいて、`file`に入る前に外すとファイルが残るため、それを消す。
+    var discardLoading: @MainActor () -> Void = {}
     /// 読み込んだファイル。読み込む前と、読み込みに失敗したときはnil。
     var file: LocalMediaFile?
     var thumbnail: UIImage?
@@ -363,9 +372,9 @@ extension ComposeModel {
         attachments.compactMap { localMedia[$0.id]?.assetIdentifier }
     }
 
-    /// ピッカーで選べる枚数。編集している投稿に付いている添付は、ピッカーの選択に入らないため、その分を除く。
+    /// ピッカーで選べる枚数。編集している投稿に付いている添付とペーストした添付は、ピッカーの選択に入らないため、その分を除く。
     var pickerSelectionLimit: Int {
-        max(maxMediaAttachments - attachments.filter(\.isAttachedToStatus).count, 0)
+        max(maxMediaAttachments - attachments.filter { localMedia[$0.id]?.assetIdentifier == nil }.count, 0)
     }
 
     /// ピッカーの今の選択を取り込む。外されたものは添付から外し、足されたものは後ろに足してアップロードを始める。
@@ -374,7 +383,7 @@ extension ComposeModel {
     func applyPickerSelection(_ selection: [PickedMedia]) {
         let changes = pickerSelection.changes(current: attachedAssetIdentifiers, selected: selection.map(\.assetIdentifier))
         let removed = Set(changes.removed)
-        for attachment in attachments where localMedia[attachment.id].map({ removed.contains($0.assetIdentifier) }) ?? false {
+        for attachment in attachments where localMedia[attachment.id]?.assetIdentifier.map(removed.contains) ?? false {
             discardAttachment(attachment.id)
         }
         let added = Set(changes.added)
@@ -390,18 +399,43 @@ extension ComposeModel {
         }
     }
 
+    /// ペーストしたメディアを後ろに足し、アップロードを始める。上限を超えた分は足さずに知らせる。
+    /// 入る分だけ足すのは、全部を断るより、入りきらない分を選び直すほうが手間が少ないため。
+    func addPastedMedia(_ pasted: [PastedMedia]) {
+        let room = max(maxMediaAttachments - attachments.count, 0)
+        let added = pasted.prefix(room)
+        if attachments.isEmpty, defaultSensitive, !added.isEmpty {
+            showsSpoiler = true
+        }
+        for media in added {
+            let load = media.load
+            let attachment = DraftAttachment()
+            attachments.append(attachment)
+            var local = LocalMedia(assetIdentifier: nil) { _ in try await load() }
+            local.discardLoading = media.discard
+            localMedia[attachment.id] = local
+            startUpload(attachment.id)
+        }
+        let skipped = pasted.dropFirst(room)
+        guard !skipped.isEmpty else { return }
+        for media in skipped {
+            media.discard()
+        }
+        logger.info("pasted media skipped over the limit (added=\(added.count) skipped=\(skipped.count))")
+        onPastedMediaSkipped(skipped.map(\.kind))
+    }
+
     /// ピッカーを閉じた。
     func mediaPickerDidClose() {
         pickerSelection.pickerDidClose()
     }
 
     /// 投稿欄から添付を外す。ピッカーを開いていれば、ピッカーがまだ選んだままの選択を送ってきても足し直さない。
-    /// 編集している投稿に付いている添付は、ピッカーで選んだものではないため、そのまま外す。
+    /// 編集している投稿に付いている添付とペーストした添付は、ピッカーで選んだものではないため、そのまま外す。
     func removeAttachment(_ id: DraftAttachment.ID, pickerIsOpen: Bool) {
+        guard attachments.contains(where: { $0.id == id }) else { return }
         if let assetIdentifier = localMedia[id]?.assetIdentifier {
             pickerSelection.didRemoveInDraft(assetIdentifier, pickerIsOpen: pickerIsOpen)
-        } else if !(attachments.first { $0.id == id }?.isAttachedToStatus ?? false) {
-            return
         }
         discardAttachment(id)
     }
@@ -467,6 +501,7 @@ extension ComposeModel {
         descriptionTasks.removeValue(forKey: id)?.cancel()
         if let local = localMedia.removeValue(forKey: id) {
             local.file?.remove()
+            local.discardLoading()
             // 作り直したファイルは、読み込んだファイルと同じディレクトリに置くので、上で一緒に消える。
             if let sending = local.sending, sending.url.deletingLastPathComponent() != local.file?.url.deletingLastPathComponent() {
                 sending.remove()
@@ -519,6 +554,14 @@ extension ComposeModel {
                     if localMedia[id]?.sendingIsReencoded == true {
                         // 縮めるために作り直したファイルなら、元から作り直す。JPEGに決めて作り直す。
                         try? FileManager.default.removeItem(at: sending.url)
+                        localMedia[id]?.sending = nil
+                        replacement = try await prepare(file, of: id, forcingJPEG: true)
+                    } else if local.assetIdentifier == nil {
+                        // ペーストしたものは、クリップボードの中身が変わっているかもしれず読み直せないので、読み込んだファイルからJPEGを作る。
+                        // 位置情報だけを除いて書き直したファイルは、作り直すファイルと同じ場所を使うので、先に消す。
+                        if sending != file {
+                            try? FileManager.default.removeItem(at: sending.url)
+                        }
                         localMedia[id]?.sending = nil
                         replacement = try await prepare(file, of: id, forcingJPEG: true)
                     } else {

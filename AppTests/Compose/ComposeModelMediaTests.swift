@@ -89,6 +89,15 @@ struct ComposeModelMediaTests {
         return PickedMedia(assetIdentifier: id) { _ in LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image) }
     }
 
+    /// ペーストしたメディア。`kind`は、上限を超えて足さなかったときに知らせる種類にだけ使う。
+    private func pasted(_ name: String, kind: MediaAttachment.Kind = .image) throws -> PastedMedia {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: "\(name).jpg")
+        try writePhoto(width: 4, height: 3, to: url)
+        return PastedMedia(kind: kind) { LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image) }
+    }
+
     private func makeModel(_ server: FakeServer, post: @escaping (StatusDraft) async throws -> Void = { _ in }) -> ComposeModel {
         let model = ComposeModel(myAccountID: "1", media: server.service, post: post)
         model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
@@ -378,6 +387,146 @@ struct ComposeModelMediaTests {
         model.applyPickerSelection([a, try picked("b")])
 
         #expect(model.attachedAssetIdentifiers == ["b"])
+    }
+
+    /// ペーストしたメディアは、ピッカーで選んだものの後ろに足して送る。ピッカーの選択には入れない。
+    @Test func pastedMediaIsAppendedAndUploaded() async throws {
+        let server = FakeServer()
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+
+        model.applyPickerSelection([try picked("a")])
+        model.addPastedMedia([try pasted("p")])
+        await settle { isSettled(model) }
+        await model.submit()
+
+        #expect(sent.first?.mediaIDs == ["m-a.jpg", "m-p.jpg"])
+    }
+
+    /// ピッカーの選択が変わっても、ペーストしたメディアは外さない。ペーストした分だけ、ピッカーで選べる枚数を減らす。
+    @Test func pastedMediaStaysWhenPickerSelectionChanges() async throws {
+        let server = FakeServer()
+        let model = makeModel(server)
+
+        model.addPastedMedia([try pasted("p")])
+        #expect(model.pickerSelectionLimit == 3)
+        model.applyPickerSelection([try picked("a")])
+        model.applyPickerSelection([])
+        await settle { isSettled(model) }
+
+        #expect(model.attachments.count == 1)
+        #expect(model.attachedAssetIdentifiers.isEmpty)
+        #expect(model.pickerSelectionLimit == 3)
+    }
+
+    @Test func pastedMediaCanBeRemoved() async throws {
+        let server = FakeServer()
+        let model = makeModel(server)
+
+        model.addPastedMedia([try pasted("p")])
+        await settle { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+        let file = try #require(model.localMedia[id]?.file)
+        model.removeAttachment(id, pickerIsOpen: false)
+
+        #expect(model.attachments.isEmpty)
+        #expect(!FileManager.default.fileExists(atPath: file.url.path()))
+    }
+
+    /// ペーストしたものは足す前から読み込んでいるので、アップロードが始まる前に外しても、読み込んだファイルを消す。
+    @Test func removingPastedMediaBeforeUploadStartsDiscardsIt() async throws {
+        let server = FakeServer()
+        let model = makeModel(server)
+        var discarded = false
+        var media = try pasted("p")
+        media.discard = { discarded = true }
+
+        model.addPastedMedia([media])
+        model.removeAttachment(try #require(model.attachments.first?.id), pickerIsOpen: false)
+
+        #expect(model.attachments.isEmpty)
+        #expect(discarded)
+    }
+
+    /// 上限を超えた分は足さず、読み込んだファイルを消して、足さなかったものの種類を知らせる。
+    @Test func pastingBeyondTheLimitAddsWhatFitsAndTellsTheRest() async throws {
+        let server = FakeServer()
+        let model = makeModel(server)
+        var skipped: [[MediaAttachment.Kind]] = []
+        model.onPastedMediaSkipped = { skipped.append($0) }
+        var discarded: [String] = []
+        func discardable(_ name: String, kind: MediaAttachment.Kind = .image) throws -> PastedMedia {
+            var media = try pasted(name, kind: kind)
+            media.discard = { discarded.append(name) }
+            return media
+        }
+
+        model.applyPickerSelection([try picked("a"), try picked("b"), try picked("c")])
+        model.addPastedMedia([try discardable("p"), try discardable("q", kind: .video), try discardable("r")])
+        await settle { isSettled(model) }
+
+        #expect(model.attachments.count == 4)
+        #expect(server.uploads.map(\.filename).sorted() == ["a.jpg", "b.jpg", "c.jpg", "p.jpg"])
+        #expect(skipped == [[.video, .image]])
+        #expect(discarded == ["q", "r"])
+    }
+
+    /// ピッカーは上限まで埋まると開けないが、ペーストは受け付けて、入りきらない分を知らせる。サーバーの上限を読むまではどちらもできない。
+    @Test func pasteIsAvailableEvenWhenAttachmentsAreFull() async throws {
+        let server = FakeServer()
+        let model = makeModel(server)
+        #expect(!model.canPasteMedia)
+        model.apply(
+            configuration: InstanceConfiguration(
+                streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 1,
+                mediaDescriptionLimit: 1500, supportedMediaTypes: ["image/jpeg"], mediaLimits: .unknown
+            ),
+            defaultVisibility: .public,
+            defaultSensitive: nil
+        )
+
+        model.addPastedMedia([try pasted("p")])
+
+        #expect(!model.canAttachMedia)
+        #expect(model.canPasteMedia)
+    }
+
+    /// ペーストしたHEICを処理できないと500が返ったら、クリップボードから読み直さず、コピーしたファイルからJPEGを作って送り直す。
+    @Test func resendsPastedHEICAsJPEGWithoutReloading() async throws {
+        let server = FakeServer()
+        server.uploadResult = { upload in
+            guard upload.mimeType != "image/heic" else {
+                throw MediaUploadError.processingFailed(MastodonAPIError(statusCode: 500, message: "Error processing thumbnail for uploaded media"))
+            }
+            return Self.attachment(id: "m-\(upload.filename)", processed: true)
+        }
+        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let heic = folder.appending(path: "p.heic")
+        let image = try #require(UIGraphicsImageRenderer(size: CGSize(width: 40, height: 30)).image { context in
+            UIColor.systemGreen.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 40, height: 30))
+        }.cgImage)
+        let destination = try #require(CGImageDestinationCreateWithURL(heic as CFURL, UTType.heic.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, image, nil)
+        #expect(CGImageDestinationFinalize(destination))
+        var loads = 0
+        let pasted = PastedMedia(kind: .image) {
+            loads += 1
+            return LocalMediaFile(url: heic, mimeType: "image/heic", kind: .image)
+        }
+        let model = makeModel(server)
+        var reduced: [MediaAttachment.Kind] = []
+        model.onMediaReduced = { reduced.append($0) }
+
+        model.addPastedMedia([pasted])
+        try await settleSlowly { isSettled(model) }
+
+        #expect(server.uploads.map(\.mimeType) == ["image/heic", "image/jpeg"])
+        #expect(loads == 1)
+        // 大きさを変えずに形式だけを変えたので、縮めたとは知らせない。
+        #expect(reduced.isEmpty)
+        #expect(model.attachmentStatus(of: try #require(model.attachments.first?.id)) == .ready)
     }
 
     @Test func failedUploadKeepsReasonAndCanBeRetried() async throws {

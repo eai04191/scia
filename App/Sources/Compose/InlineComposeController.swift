@@ -3,6 +3,7 @@ import os
 import PhotosUI
 import SciaCore
 import UIKit
+import UniformTypeIdentifiers
 
 /// タブバーの上に常に出しておく投稿欄。タイムラインを見たまま短い投稿や返信を書けるようにする。
 ///
@@ -146,6 +147,8 @@ final class InlineComposeController: NSObject {
     /// 添付の長押しのメニューを出したときのキーボードの高さ。メニューの間はiOSがソフトウェアキーボードを隠すため、
     /// キーボードがこの高さまで戻るまでバーを今の位置に留める。留めていなければnil。
     private var keyboardHeightBeforeContextMenu: CGFloat?
+    /// 1回のペーストで届いたメディア。項目ごとに届くので、まとめて添付に足し、上限を超えた分の知らせを1回にする。
+    private var pendingPastedMedia: [PastedMedia] = []
     /// 添付を開いているビューア。閉じたら（閉じる動きの途中でも）nilにする。
     private weak var mediaViewer: MediaViewerController?
     /// ビューアを開いてから、閉じる動きを終えるまでtrue。この間は、キーボードを閉じても書いている状態を解かない。
@@ -1504,6 +1507,15 @@ final class InlineComposeController: NSObject {
         textView.textContainerInset = UIEdgeInsets(top: 8, left: 0, bottom: 8, right: 0)
         textView.textContainer.lineFragmentPadding = 0
         textView.delegate = self
+        // 文字に加えて、画像と動画をペーストで受け付ける。届いた項目は`pasteDelegate`で、文字は本文に、メディアは添付に振り分ける。
+        // 注意書きの欄にはメディアを付けられないので、文字だけのまま。
+        let pasteConfiguration = UIPasteConfiguration(forAccepting: NSString.self)
+        pasteConfiguration.addAcceptableTypeIdentifiers(LocalMediaLoader.mediaTypes.map(\.identifier))
+        textView.pasteConfiguration = pasteConfiguration
+        textView.pasteDelegate = self
+        textView.canPasteMedia = { [weak self] in
+            (self?.model.canPasteMedia ?? false) && LocalMediaLoader.pasteboardHasMedia(.general)
+        }
         textView.onSubmit = { [weak self] in self?.submit() }
         textView.completionKeys = completionKeys()
         textView.accessibilityLabel = "本文"
@@ -1657,6 +1669,33 @@ extension InlineComposeController: UITextViewDelegate {
     }
 }
 
+extension InlineComposeController: UITextPasteDelegate {
+    /// ペーストした項目のうち、メディアは本文に入れずに添付に回す。文字はいつもどおり本文に入れる。
+    func textPasteConfigurationSupporting(_ textPasteConfigurationSupporting: any UITextPasteConfigurationSupporting, transform item: any UITextPasteItem) {
+        guard let type = LocalMediaLoader.pastedMediaType(in: item.itemProvider) else {
+            item.setDefaultResult()
+            return
+        }
+        item.setNoResult()
+        // サーバーの上限を読む前と投稿を送っている間は、メディアだけなら「ペースト」を出さない。文字と一緒にコピーしたメディアを
+        // ⌘Vやメニューでペーストしたときだけここに来て、文字だけが入る。ピッカーも開けない間で、数秒で終わるため知らせない。
+        guard model.canPasteMedia else {
+            logger.info("paste: media ignored while attaching is unavailable")
+            return
+        }
+        pendingPastedMedia.append(LocalMediaLoader.startLoadingPasted(from: item.itemProvider, type: type))
+        guard pendingPastedMedia.count == 1 else { return }
+        // 1回のペーストの項目は続けて届くので、次の順番でまとめて足す。
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let pasted = pendingPastedMedia
+            pendingPastedMedia = []
+            logger.info("paste: adding media (count=\(pasted.count))")
+            model.addPastedMedia(pasted)
+        }
+    }
+}
+
 extension InlineComposeController: UITextFieldDelegate {
     func textFieldShouldBeginEditing(_ textField: UITextField) -> Bool {
         inputWillBeginEditing(from: textView)
@@ -1693,6 +1732,16 @@ extension InlineComposeController: UITextFieldDelegate {
 private final class ComposeTextView: GlyphLanguageTextView {
     var onSubmit: () -> Void = {}
     var completionKeys = CompletionKeys()
+    /// クリップボードのメディアを添付できるか。
+    var canPasteMedia: () -> Bool = { false }
+
+    /// クリップボードにメディアしかなくても、「ペースト」を出す。UITextViewは、`pasteConfiguration`に画像と動画を足しても、
+    /// 文字のないときは「ペースト」を出さない（シミュレーターで確かめた）。押したあとは、標準のペーストが`pasteDelegate`に項目を渡す。
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        let canPerform = super.canPerformAction(action, withSender: sender)
+        guard action == #selector(paste(_:)), !canPerform else { return canPerform }
+        return canPasteMedia()
+    }
 
     override var keyCommands: [UIKeyCommand]? {
         let submit = UIKeyCommand(title: "投稿", action: #selector(submitFromKeyboard), input: "\r", modifierFlags: .command)

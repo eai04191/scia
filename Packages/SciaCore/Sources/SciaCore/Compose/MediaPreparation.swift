@@ -126,6 +126,7 @@ public struct ImagePlan: Sendable, Equatable {
 
     /// 元の画像から作り直す必要があるか。決めるには、元の大きさ、容量、形式が要る。
     /// 選んだ大きさに収まり、サーバーの上限にも収まる画像は、作り直さず元のまま送る。iPhoneのHEICは作り直してもほとんど小さくならず、画質だけが落ちるため。
+    /// ただし処理できないと分かった形式は、収まっていても同じ大きさで作り直す。ペーストしたものは、ピッカーのように同じ写真のJPEGを受け取り直せないため。
     /// - Parameters:
     ///   - supportedMIMETypes: サーバーが受け付けると返した形式。返さないサーバーではnil。
     ///   - unprocessableMIMETypes: 受け付けると返しながら、処理できなかった形式。
@@ -144,7 +145,7 @@ public struct ImagePlan: Sendable, Equatable {
         let bySetting = setting.maxLongSide.map { size.scaled(by: Double($0) / Double(size.longSide)) } ?? size
         let target = bySetting.fitting(pixels: limits.imageMatrixLimit)
         let exceedsSizeLimit = limits.imageSizeLimit.map { byteCount > $0 } ?? false
-        guard target != size || exceedsSizeLimit else { return nil }
+        guard target != size || exceedsSizeLimit || unprocessableMIMETypes.contains(mimeType) else { return nil }
         return ImagePlan(
             mimeType: outputMIMEType(for: mimeType, supported: supportedMIMETypes, unprocessable: unprocessableMIMETypes),
             size: target,

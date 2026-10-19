@@ -269,6 +269,10 @@ final class SessionController {
         composer.model.onMediaReduced = { [weak self] kind in
             self?.notices.showTransient(.mediaReduced(kind), duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
+        // 添付しなかったことは失敗に近く、文も長いので、失敗と同じ時間だけ出す。
+        composer.model.onPastedMediaSkipped = { [weak self] kinds in
+            self?.notices.showTransient(.pastedMediaSkipped(kinds), duration: tuning.value(of: TuningCatalog.noticeFailureChipDuration))
+        }
         authorization.onChange = { [weak self] state in
             guard state == .invalid else { return }
             self?.credentialsDidBecomeInvalid()
