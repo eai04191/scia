@@ -49,6 +49,10 @@ enum NoticeCatalog {
             },
             CatalogState(title: "画像をサーバーの上限に合わせて縮めました（数秒で消える）") { stack(transient: .mediaReduced(.image)) },
             CatalogState(title: "動画をサーバーの上限に合わせて縮めました（数秒で消える）") { stack(transient: .mediaReduced(.video)) },
+            CatalogState(title: "ペーストした画像が上限を超えた（数秒で消える）") { stack(transient: .pastedMediaSkipped([.image])) },
+            CatalogState(title: "ペーストした動画を含むメディアが上限を超えた、件数が2桁（数秒で消える）") {
+                stack(transient: .pastedMediaSkipped([.video] + Array(repeating: .image, count: 11)))
+            },
             CatalogState(title: "サーバーで処理中") { stack(persistent: draft(.processing)) },
             CatalogState(title: "代替テキストを送信中") { stack(persistent: draft(.sendingDescription)) },
             CatalogState(title: "アップロードできませんでした（押すと理由）") { stack(persistent: draft(.failed)) },
