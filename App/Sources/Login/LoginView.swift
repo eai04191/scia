@@ -160,13 +160,21 @@ struct LoginView: View {
 }
 
 /// 最初の起動のログイン画面の一番上に出す、アプリのアイコンと名前。
+/// 開くとすぐキーボードが出るので、候補を押し下げすぎないよう小さめにする。
 private struct AppHeader: View {
+    private let iconSize: CGFloat = 72
+
     var body: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 8) {
             if let image = AppDependencies.appIcon.current.previewImage {
                 Image(uiImage: image)
                     .resizable()
-                    .frame(width: 80, height: 80)
+                    .frame(width: iconSize, height: iconSize)
+                    // 白地のアイコンは背景に溶けて輪郭が見えないため、設定のアイコンを選ぶ行と同じく縁を引く。角の丸みは60ptで13.5ptの割合
+                    .overlay {
+                        RoundedRectangle(cornerRadius: iconSize * 13.5 / 60, style: .continuous)
+                            .strokeBorder(Color(uiColor: .separator), lineWidth: 0.5)
+                    }
                     .accessibilityHidden(true)
             }
             Text("Scia")
