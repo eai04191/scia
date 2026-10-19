@@ -1,0 +1,191 @@
+import os
+import SciaCore
+import UIKit
+
+/// 届いた通知を、ステータスバーの場所に1件ずつ流す。通知タブを開かなくても、反応が来たことに気づけるようにするため。
+///
+/// 出している間だけ、アプリの上に重ねたウィンドウでステータスバーを隠し、空いた場所に`StatusBarTickerView`を描く。
+/// システムのステータスバーはアプリの画面より上に描かれ、その上には描けないため。
+/// 流していない間はウィンドウを隠す。隠さないと、重ねたウィンドウがステータスバーの見た目を決めてしまう。
+@MainActor
+final class StatusBarTicker {
+    /// 流してよいか。通知タブを見ているときや、ビューアのように画面全体を覆っているときは流さない。
+    var canShow: () -> Bool = { true }
+    /// 押されたとき。
+    var onTap: () -> Void = {}
+
+    /// 流す画面のシーン。セッションの画面がウィンドウに載る前に作るため、流すときに尋ねる。
+    var scene: () -> UIWindowScene? = { nil }
+    private let tuning: TuningStore
+    private var queue: StatusBarTickerQueue<StatusBarTickerItem>
+    private var window: TickerWindow?
+    private var shownAt: ContinuousClock.Instant?
+    private var advanceTask: Task<Void, Never>?
+    private let logger = SciaLog.logger(category: "statusBarTicker")
+
+    init(tuning: TuningStore = AppDependencies.tuning) {
+        self.tuning = tuning
+        queue = StatusBarTickerQueue(timing: TuningCatalog.statusBarTickerTiming(in: tuning))
+    }
+
+    func receive(_ notification: MastodonNotification, verdict: FilterVerdict) {
+        guard let item = StatusBarTickerItem(notification, verdict: verdict) else { return }
+        receive(item)
+    }
+
+    func receive(_ item: StatusBarTickerItem) {
+        guard canShow() else { return }
+        queue.timing = TuningCatalog.statusBarTickerTiming(in: tuning)
+        queue.enqueue(item)
+        if shownAt == nil {
+            advance()
+        } else {
+            // 出している間に届いたら、待っている数で、今の1件を出しておく時間を測り直す。
+            scheduleAdvance()
+        }
+    }
+
+    /// 流してよいかが変わったかもしれないとき（タブを切り替えたときなど）に呼ぶ。流してはいけなくなっていたら、待っている通知ごと消す。
+    func reevaluate() {
+        guard shownAt != nil, !canShow() else { return }
+        clear()
+    }
+
+    /// 待っている通知を捨て、出しているものを消す。
+    func clear() {
+        queue.removeAll()
+        advanceTask?.cancel()
+        advanceTask = nil
+        dismiss()
+    }
+
+    private func advance() {
+        guard canShow(), let next = queue.next() else {
+            clear()
+            return
+        }
+        guard let window = prepareWindow() else {
+            clear()
+            return
+        }
+        logger.info("show kind=\(next.kind.rawValue, privacy: .public) waiting=\(self.queue.waiting.count, privacy: .public)")
+        let wasShowing = shownAt != nil
+        shownAt = .now
+        window.ticker.animationDuration = tuning.value(of: TuningCatalog.statusBarTickerAnimationDuration)
+        if !wasShowing {
+            window.isHidden = false
+            window.host.hidesStatusBar = true
+            UIView.animate(withDuration: window.ticker.animationDuration * 0.5) {
+                window.host.setNeedsStatusBarAppearanceUpdate()
+            }
+        }
+        window.ticker.show(next, animated: true)
+        UIAccessibility.post(notification: .announcement, argument: window.ticker.accessibilityText)
+        scheduleAdvance()
+    }
+
+    private func scheduleAdvance() {
+        guard let shownAt else { return }
+        advanceTask?.cancel()
+        let deadline = shownAt + .seconds(queue.displayDuration)
+        advanceTask = Task { [weak self] in
+            // 出している間にビューアを開いたときなど、流してはいけなくなったらすぐ消す。画面を出す口は多く、どれにも知らせを足すより、出している間だけ見張るほうが漏れないため。
+            while ContinuousClock.now < deadline {
+                try? await Task.sleep(for: min(.milliseconds(200), deadline - .now))
+                guard !Task.isCancelled else { return }
+                guard let self else { return }
+                if !self.canShow() {
+                    self.clear()
+                    return
+                }
+            }
+            self?.advance()
+        }
+    }
+
+    private func dismiss() {
+        guard shownAt != nil, let window else {
+            shownAt = nil
+            return
+        }
+        shownAt = nil
+        window.host.hidesStatusBar = false
+        window.ticker.hide(animated: true) { [weak self, weak window] in
+            // 消している間に次の通知が来て出し直していたら、ウィンドウは隠さない。
+            guard let self, let window, self.shownAt == nil else { return }
+            window.isHidden = true
+        }
+        UIView.animate(withDuration: window.ticker.animationDuration) {
+            window.host.setNeedsStatusBarAppearanceUpdate()
+        }
+    }
+
+    /// 流すウィンドウを用意し、今の画面の形を当てる。ステータスバーのない向きではnil。
+    private func prepareWindow() -> TickerWindow? {
+        guard let scene = scene(), let reference = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first,
+              let cutout = StatusBarCutout.current(in: reference)
+        else { return nil }
+        if let window {
+            window.ticker.setCutout(cutout)
+            return window
+        }
+        let window = TickerWindow(windowScene: scene, cutout: cutout)
+        window.ticker.onTap = { [weak self] in
+            self?.onTap()
+        }
+        self.window = window
+        return window
+    }
+}
+
+/// 通知を流すときだけ見せる、アプリの上に重ねるウィンドウ。カプセルの外の指は、下のウィンドウに通す。
+private final class TickerWindow: UIWindow {
+    let host: TickerHostController
+    var ticker: StatusBarTickerView { host.ticker }
+
+    init(windowScene: UIWindowScene, cutout: StatusBarCutout) {
+        host = TickerHostController(ticker: StatusBarTickerView(cutout: cutout))
+        super.init(windowScene: windowScene)
+        windowLevel = .statusBar
+        backgroundColor = .clear
+        rootViewController = host
+        isHidden = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        ticker.tapTarget(at: convert(point, to: ticker))
+    }
+}
+
+/// 重ねたウィンドウの画面。流している間だけステータスバーを隠す。
+private final class TickerHostController: UIViewController {
+    let ticker: StatusBarTickerView
+    var hidesStatusBar = false
+
+    init(ticker: StatusBarTickerView) {
+        self.ticker = ticker
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var prefersStatusBarHidden: Bool { hidesStatusBar }
+    override var preferredStatusBarUpdateAnimation: UIStatusBarAnimation { .fade }
+
+    override func loadView() {
+        let view = UIView()
+        view.backgroundColor = .clear
+        ticker.frame = view.bounds
+        ticker.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(ticker)
+        self.view = view
+    }
+}

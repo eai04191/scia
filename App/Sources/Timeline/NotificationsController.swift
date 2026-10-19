@@ -12,6 +12,10 @@ final class NotificationsController {
     let viewController = TimelineViewController(texts: .notifications)
     /// 未読の数が変わったときに呼ぶ。タブのバッジに出す。2つめの値は、実際はもっと多いかもしれないこと。
     var onUnreadCountChange: ((Int, Bool) -> Void)?
+    /// ストリーミングで新しい通知が届いたときに呼ぶ。ステータスバーに流す。2つめの値は、通知の投稿に当てたサーバーのフィルターの判定。
+    var onArrival: ((MastodonNotification, FilterVerdict) -> Void)?
+    /// 通知の投稿に当てるサーバーのフィルター。ステータスバーに流す通知にも、一覧と同じく当てる。
+    private let filtering: StatusFiltering
     private let store: NotificationStore
     private let client: MastodonClient
     private let streamingHub: StreamingHub
@@ -42,6 +46,7 @@ final class NotificationsController {
         onUnauthorized: @escaping () -> Void
     ) {
         let filtering = StatusFiltering(context: .notifications, myAccountID: client.credential.accountID)
+        self.filtering = filtering
         store = NotificationStore(pageSize: Self.pageSize, filtering: filtering) { query in
             try await client.notifications(query)
         }
@@ -192,8 +197,13 @@ final class NotificationsController {
             logger.info("notifications streaming connected")
             fillFromLatest()
         case .event(.notification(let notification)):
+            // receiveの戻り値は、保留が空から1件になったかで、受け取ったかではない。挿入を待つ間に続けて届いた通知も流すよう、保留が増えたかで見る。
+            let pendingCount = store.pending.count
             if store.receive(notification) {
                 scheduleInsertion()
+            }
+            if store.pending.count > pendingCount {
+                onArrival?(notification, notification.status.map { filtering.verdict(for: $0) } ?? .none)
             }
             // 挿入までに読み終えられるよう、届いたらすぐアイコンを読み始める。
             viewController.prefetchAvatars(for: store.pending.map(TimelineEntry.notification))

@@ -191,7 +191,7 @@ extension TimelineViewController {
 }
 
 /// 通知の種類ごとの見た目と文言。
-private struct NotificationAppearance {
+struct NotificationAppearance {
     /// 操作したアカウントの名前の前後に置く文言。
     struct Phrase {
         let before: String

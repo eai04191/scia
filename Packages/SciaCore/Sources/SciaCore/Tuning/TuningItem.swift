@@ -576,6 +576,87 @@ public enum TuningCatalog {
         defaultValue: 4
     )
 
+    /// ステータスバーの場所に流す通知を、待っている通知がないときに出しておく時間。
+    public static let statusBarTickerDuration = NumberTuning(
+        id: "statusBarTicker.duration",
+        title: "ステータスバーの通知を出しておく時間（秒）",
+        range: 1...8,
+        step: 0.1,
+        defaultValue: 3
+    )
+
+    /// 待っている通知が多くても、1件を出しておく最短の時間。
+    public static let statusBarTickerMinimumDuration = NumberTuning(
+        id: "statusBarTicker.minimumDuration",
+        title: "続けざまに流すときの最短の時間（秒）",
+        range: 0.2...3,
+        step: 0.1,
+        defaultValue: 0.8
+    )
+
+    /// 待っている通知1件ごとに、出しておく時間に掛ける割合。小さいほど、溜まったときに速く流れる。
+    public static let statusBarTickerShrink = NumberTuning(
+        id: "statusBarTicker.shrink",
+        title: "待っている1件ごとに時間に掛ける割合",
+        range: 0.3...1,
+        step: 0.05,
+        defaultValue: 0.7
+    )
+
+    /// 待たせておく通知の上限。超えたら古いものから捨てる。
+    public static let statusBarTickerCapacity = NumberTuning(
+        id: "statusBarTicker.capacity",
+        title: "待たせておく通知の上限（件）",
+        range: 5...100,
+        step: 5,
+        defaultValue: 30
+    )
+
+    /// ステータスバーの通知で、何をされたかの記号を、名前の前に並べずアイコンの右下に重ねる。名前の幅が広がる。
+    /// ノッチの機種は左の場所が狭く、並べると名前が入らないため、この設定によらず重ねる。
+    public static let statusBarTickerBadgesSymbol = ToggleTuning(
+        id: "statusBarTicker.badgesSymbol",
+        title: "記号をアイコンに重ねる（アイランドと切り欠きなし）",
+        defaultValue: false
+    )
+
+    /// アイランドの機種で、カプセルの左端から、先頭の記号までの余白。
+    /// 記号ごとに変えず1つの値にする。初めの値は、通知の記号の幅（13ptの太字で14〜20pt、⭐️は17.3pt）の真ん中あたりの記号が、端の半円（半径18.33pt）と同心に見える値。
+    public static let statusBarTickerLeadingPadding = NumberTuning(
+        id: "statusBarTicker.leadingPadding",
+        title: "ステータスバーの通知の左の余白（pt）",
+        range: 0...24,
+        step: 0.5,
+        defaultValue: 10
+    )
+
+    /// アイランドの機種で、右の文頭の行末から、カプセルの右端までの余白。行末はぼかすので、ぼかしの区間を端の半円の中に入れ、余白を別に足さない。
+    public static let statusBarTickerTrailingPadding = NumberTuning(
+        id: "statusBarTicker.trailingPadding",
+        title: "ステータスバーの通知の右の余白（pt）",
+        range: 0...24,
+        step: 0.5,
+        defaultValue: 4
+    )
+
+    /// ステータスバーの通知で、入りきらない名前と文頭の行末をぼかす幅。
+    public static let statusBarTickerFadeWidth = NumberTuning(
+        id: "statusBarTicker.fadeWidth",
+        title: "ステータスバーの通知の行末をぼかす幅（pt）",
+        range: 4...60,
+        step: 2,
+        defaultValue: 20
+    )
+
+    /// ステータスバーの通知が出入りする時間と、次の通知へ入れ替える時間。
+    public static let statusBarTickerAnimationDuration = NumberTuning(
+        id: "statusBarTicker.animationDuration",
+        title: "ステータスバーの通知の出入りの時間（秒）",
+        range: 0.05...1.5,
+        step: 0.05,
+        defaultValue: 0.35
+    )
+
     /// 動画を再生している間、最後に触れてから操作の部品とボタンを隠すまでの時間。
     public static let mediaVideoControlsHideDelay = NumberTuning(
         id: "media.videoControlsHideDelay",
@@ -814,6 +895,17 @@ public enum TuningCatalog {
         )
     }
 
+    /// ステータスバーの通知を流す間合い。
+    @MainActor
+    public static func statusBarTickerTiming(in store: TuningStore) -> StatusBarTickerQueue<StatusBarTickerItem>.Timing {
+        .init(
+            duration: store.value(of: statusBarTickerDuration),
+            minimumDuration: store.value(of: statusBarTickerMinimumDuration),
+            shrink: store.value(of: statusBarTickerShrink),
+            capacity: Int(store.value(of: statusBarTickerCapacity))
+        )
+    }
+
     /// ビューアの閉じる操作の判定。
     @MainActor
     public static func dragToDismiss(in store: TuningStore) -> DragToDismiss {
@@ -926,6 +1018,17 @@ public enum TuningCatalog {
             .number(noticeFailureChipDuration),
             .number(noticeDismissDistance),
             .number(noticeDismissVelocity),
+        ]),
+        TuningSection(id: "statusBarTicker", title: "ステータスバーの通知", items: [
+            .number(statusBarTickerDuration),
+            .number(statusBarTickerMinimumDuration),
+            .number(statusBarTickerShrink),
+            .number(statusBarTickerCapacity),
+            .number(statusBarTickerAnimationDuration),
+            .toggle(statusBarTickerBadgesSymbol),
+            .number(statusBarTickerLeadingPadding),
+            .number(statusBarTickerTrailingPadding),
+            .number(statusBarTickerFadeWidth),
         ]),
         TuningSection(id: "media.video", title: "ビューア：動画", items: [
             .number(mediaVideoControlsHideDelay),

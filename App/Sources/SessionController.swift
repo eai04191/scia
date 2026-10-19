@@ -39,6 +39,8 @@ final class SessionController {
     let operationStatus = OperationStatus()
     /// アプリ全体のアプリ内通知。ウインドウごとのチップの列に配る。
     let notices = NoticeCenter()
+    /// 届いた通知を、ステータスバーの場所に流す。
+    private let statusBarTicker = StatusBarTicker()
     /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても保存を続ける。
     private lazy var mediaTransfers = MediaTransferCenter(operationStatus: operationStatus, notices: notices)
     /// APIが401を返したときに、トークンが本当に無効かを確かめる。
@@ -333,9 +335,35 @@ final class SessionController {
                 timeline.applyXPost(id: id)
             }
         }
+        configureStatusBarTicker(tabBarController: tabBarController)
         // 投稿欄を置くとタブバーの画面を読み込むため、各一覧の設定を終えてから置く。
         composer.install(in: tabBarController)
     }
+
+    /// 通知タブを見ている間と、ビューアのように画面全体を覆う画面を出している間は流さない。
+    /// 押すと通知タブを開く。投稿を1件だけ開く画面がまだないため。
+    private func configureStatusBarTicker(tabBarController: UITabBarController) {
+        let ticker = statusBarTicker
+        ticker.scene = { [weak tabBarController] in tabBarController?.view.window?.windowScene }
+        ticker.canShow = { [weak tabBarController] in
+            guard let tabBarController, tabBarController.selectedTab?.identifier != "notifications" else { return false }
+            // ビューアの上に代替テキストのシートを重ねたときのように、手前がシートでも奥に画面全体を覆う画面があれば流さない。
+            var presented = tabBarController.presentedViewController
+            while let current = presented {
+                if [.fullScreen, .overFullScreen, .custom].contains(current.modalPresentationStyle) { return false }
+                presented = current.presentedViewController
+            }
+            return true
+        }
+        ticker.onTap = { [weak tabBarController, weak ticker] in
+            UserAction.selectTab("notifications").record()
+            tabBarController?.selectedTab = tabBarController?.tabs.first { $0.identifier == "notifications" }
+            ticker?.clear()
+        }
+        notifications.onArrival = { notification, verdict in ticker.receive(notification, verdict: verdict) }
+        tabBarDelegate.onSelect = { ticker.reevaluate() }
+    }
+
 
     private func applyObscuredBottomHeight() {
         for timeline in timelines.allObjects {
@@ -911,6 +939,7 @@ final class SessionController {
 
     /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときに呼ぶ。
     func stop() {
+        statusBarTicker.clear()
         home.stop()
         notifications.stop()
         recoveryTasks.forEach { $0.cancel() }
@@ -1020,6 +1049,7 @@ final class SessionController {
             rootViewController.frontmostPresented.presentTuningPanel()
         case .tab(let tab):
             (rootViewController as? UITabBarController)?.selectedIndex = tab == .home ? 0 : 1
+            statusBarTicker.reevaluate()
         case .viewer(let index):
             openTopmostMedia(at: index)
         case .holdArrivals(let isOn):
@@ -1060,6 +1090,7 @@ final class SessionController {
     }
 
     func enterBackground() {
+        statusBarTicker.clear()
         home.enterBackground()
         notifications.enterBackground()
     }
@@ -1106,6 +1137,8 @@ private final class ProfileRegistry {
 private final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate {
     private let scrollToTop: (UINavigationController) -> Void
     private let didSelect: (UITabBarController) -> Void
+    /// 別のタブを選び終えたとき。ステータスバーの通知を流してよいかを見直す。
+    var onSelect: (() -> Void)?
 
     init(scrollToTop: @escaping (UINavigationController) -> Void, didSelect: @escaping (UITabBarController) -> Void) {
         self.scrollToTop = scrollToTop
@@ -1115,6 +1148,7 @@ private final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate
     func tabBarController(_ tabBarController: UITabBarController, didSelectTab selectedTab: UITab, previousTab: UITab?) {
         guard selectedTab != previousTab else { return }
         didSelect(tabBarController)
+        onSelect?()
     }
 
     func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool {
