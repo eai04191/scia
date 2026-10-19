@@ -29,6 +29,26 @@ enum EditHistoryCatalog {
                 revision("<p>写真</p>", sensitive: true, media: [blue, green]),
                 revision("<p>写真</p>", media: [green]),
             ]),
+            state("今の投稿を一覧で開いた（今の版だけ外れ、過去の版は閲覧注意で覆う）", choice: .revealed, [
+                revision("<p>写真を撮った</p>", sensitive: true, media: [blue]),
+                revision("<p>写真を撮った。もう1枚</p>", sensitive: true, media: [blue, green]),
+            ]),
+            state("今の投稿を一覧で隠した（閲覧注意のない過去の版と外した画像も覆う）", choice: .hidden, [
+                revision("<p>写真を撮った</p>", media: [blue, green]),
+                revision("<p>写真を撮った。1枚にした</p>", media: [blue]),
+            ]),
+            state("フィルターに一致した（過去の版と外した画像もフィルターで覆う）", filterTitles: ["ネタバレ"], [
+                revision("<p>映画を観た</p>", sensitive: true, media: [blue, green]),
+                revision("<p>映画を観た。最後が良かった</p>", media: [blue]),
+            ]),
+            state("フィルターに一致し、一覧で開いた（今の版だけ外れる）", choice: .revealed, filterTitles: ["ネタバレ"], [
+                revision("<p>映画を観た</p>", media: [blue]),
+                revision("<p>映画を観た。最後が良かった</p>", media: [blue, green]),
+            ]),
+            state("フィルターの名前が長い", filterTitles: ["ネタバレになりそうな映画とドラマの話", "食べ物"], [
+                revision("<p>写真</p>", media: [blue]),
+                revision("<p>写真を足した</p>", media: [blue, green]),
+            ]),
             state("添付ファイルの追加、削除、代替テキストの変更、並べ替え", [
                 revision("<p>写真</p>", media: [blue, video]),
                 revision("<p>写真</p>", media: [green, blue.replacingDescription("会議室Bの入口")]),
@@ -58,8 +78,14 @@ enum EditHistoryCatalog {
         ]
     }
 
+    /// 一覧で、今の投稿の添付ファイルを開いたか隠したか。
+    private enum Choice {
+        case revealed
+        case hidden
+    }
+
     @MainActor
-    private static func state(_ title: String, _ revisions: [StatusRevision]) -> CatalogState {
+    private static func state(_ title: String, choice: Choice? = nil, filterTitles: [String] = [], _ revisions: [StatusRevision]) -> CatalogState {
         CatalogState(title: title) {
             let tuning = AppDependencies.tuning
             let history = StatusEditHistory(
@@ -76,11 +102,16 @@ enum EditHistoryCatalog {
                 network: AppDependencies.network
             )
             // 画面と同じく、今の投稿の覆いは一覧の選択で決める。
-            let covers = MediaCovers()
+            var covers = MediaCovers()
             let latest = latestStatus(of: revisions)
+            switch choice {
+            case .revealed: covers.reveal(latest)
+            case .hidden: covers.hide(latest)
+            case nil: break
+            }
             let column = UIStackView()
             column.axis = .vertical
-            for content in builder.contents(for: history, language: "ja", latestCover: covers.cover(for: latest, filterTitles: []), isHidden: covers.isHidden(statusID: latest.id), filterTitles: [], revealedEditNumbers: []) {
+            for content in builder.contents(for: history, language: "ja", latestCover: covers.cover(for: latest, filterTitles: filterTitles), isHidden: covers.isHidden(statusID: latest.id), filterTitles: filterTitles, revealedEditNumbers: []) {
                 let view = EditHistoryEntryView(mediaImages: AppDependencies.mediaImages)
                 view.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 16, leading: 20, bottom: 16, trailing: 20)
                 view.apply(content)
