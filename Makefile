@@ -25,10 +25,13 @@ build: generate
 warnings: build
 	Tools/check-warnings.sh $(DERIVED_DATA)
 
-## シミュレーター上でschemeのテストを実行する。SIM_DESTINATIONに具体的な端末を指定する
-## 例: make test SIM_DESTINATION='platform=iOS Simulator,name=iPhone 17'
+## シミュレーター上でschemeのテストを実行する。SIMに端末の名前を指定する
+## テストはハードウェアキーボードがつながった状態を前提にしているので、先につなぐ。sim-keyboardで外したままだと、投稿欄のテストが落ちる
+## 例: make test SIM='Scia 1'
 test: generate
-	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(SIM_DESTINATION)' -derivedDataPath $(DERIVED_DATA) -collect-test-diagnostics never test
+	@test -n '$(SIM)' || { echo "SIM='<端末の名前>'を指定する" >&2; exit 1; }
+	swift Tools/sim-keyboard.swift '$(SIM)' hardware
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(DERIVED_DATA) -collect-test-diagnostics never test
 
 ## シミュレーターのハードウェアキーボードを外してソフトウェアキーボードを出す（KEYBOARD=hardwareでつなぎ直す）
 ## 例: make sim-keyboard SIM='Scia 1'

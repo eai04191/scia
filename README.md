@@ -82,7 +82,7 @@ make test-core
 SciaCoreのテストをmacOS上で走らせます。シミュレーターは要りませんが、macOS 26以降が必要です。
 
 ```bash
-make test SIM_DESTINATION='platform=iOS Simulator,name=iPhone 16 Pro'
+make test SIM='iPhone 16 Pro'
 ```
 
 アプリのテストをシミュレーターで走らせます。`make check`は、lint、SciaCoreのテスト、ビルド、警告の検出をまとめて行います。
