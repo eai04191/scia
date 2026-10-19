@@ -33,7 +33,7 @@ enum StatusBarTickerCatalog {
         /// 画面の幅と、上端から見せる高さと、切り欠き。アイランドはiPhone 16 Pro、ノッチはiPhone 12、切り欠きなしはiPhone SEの値。
         var screen: (size: CGSize, cutout: StatusBarCutout) {
             switch self {
-            case .island: (CGSize(width: 402, height: 62), .island(CGRect(x: 138.33, y: 14, width: 125.33, height: 36.67)))
+            case .island: (CGSize(width: 402, height: 62), .island(CGRect(x: 138.33, y: 14, width: 125.33, height: 36.67), sideMargin: 24.4))
             case .notch: (CGSize(width: 390, height: 44), .notch(CGRect(x: 90, y: 0, width: 210, height: 32)))
             case .flat: (CGSize(width: 375, height: 28), .none(height: 20))
             }
@@ -77,7 +77,7 @@ enum StatusBarTickerCatalog {
         outline.lineWidth = 1
         outline.lineDashPattern = [3, 3]
         switch cutout {
-        case .island(let rect):
+        case .island(let rect, _):
             outline.path = UIBezierPath(roundedRect: rect, cornerRadius: rect.height / 2).cgPath
         case .notch(let rect):
             outline.path = UIBezierPath(roundedRect: rect, byRoundingCorners: [.bottomLeft, .bottomRight], cornerRadii: CGSize(width: 12, height: 12)).cgPath

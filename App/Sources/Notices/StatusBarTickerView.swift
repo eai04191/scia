@@ -4,17 +4,16 @@ import UIKit
 
 /// 画面の上端の、ステータスバーが使っている場所の形。ステータスバーの通知を、この形に合わせて描く。
 enum StatusBarCutout: Equatable {
-    /// Dynamic Island。枠は画面の座標。
-    case island(CGRect)
+    /// Dynamic Island。枠は画面の座標。`sideMargin`は、広げたカプセルの左右の余白。
+    case island(CGRect, sideMargin: CGFloat)
     /// ノッチ。枠は画面の座標で、上端は画面の上端。
     case notch(CGRect)
     /// 切り欠きがなく、ステータスバーが横幅いっぱいにある（iPhone SE、iPad）。
     case none(height: CGFloat)
 
-    /// 今の画面の形。ステータスバーが出ない向き（iPhoneの横向き）ではnil。
-    /// アイランドとノッチの位置を返すAPIはないため、上の安全領域の高さから機種の形を見分け、測った値を当てる。
-    /// アイランドの上端は、iPhone 16 Pro（安全領域62pt）で14pt、iPhone 14 Proから16（59pt）で11ptと、安全領域の下端から48pt上にある。
-    /// 安全領域がこれと違う機種（iPhone Airなど）では、アイランドとずれて描くことがある。試作のため、機種ごとの値は測っていない。
+    /// 今の画面の形。ステータスバーが出ない向き（iPhoneの横向き）と、アイランドの値を測っていない機種ではnil。
+    /// アイランドの位置と画面の角の形を返すAPIはないため、アイランドの機種は機種の識別子で`IslandModel`の表を引く。
+    /// 画面の大きさと安全領域では見分けない。iPhone 18 Proは、17 Proと画面の大きさも安全領域も同じで、アイランドの幅だけが違うため。
     @MainActor
     static func current(in window: UIWindow) -> StatusBarCutout? {
         let width = window.bounds.width
@@ -23,9 +22,14 @@ enum StatusBarCutout: Equatable {
             return .none(height: max(top, 24))
         }
         guard window.traitCollection.verticalSizeClass != .compact else { return nil }
+        if let model = IslandModel.table[IslandModel.identifier] {
+            return model.scaled(toWidth: width)
+        }
         if top >= 51 {
-            let size = CGSize(width: 125.33, height: 36.67)
-            return .island(CGRect(origin: CGPoint(x: (width - size.width) / 2, y: top - 48), size: size))
+            // アイランドのある、表にない機種。位置と角の形を推し量ると、アイランドとずれた黒いカプセルを描くため、出さない。
+            // 次に表へ足す値が分かるよう、機種と画面の大きさを残す。
+            logger.info("statusBarTicker unknown island model: \(IslandModel.identifier, privacy: .public) \(width, privacy: .public)x\(window.bounds.height, privacy: .public) top=\(top, privacy: .public)")
+            return nil
         }
         if top > 24 {
             // iPhone 13と14のノッチは11と12より細いが、広いほうに合わせる。狭く見積もると、文字がノッチに潜るため。
@@ -34,6 +38,78 @@ enum StatusBarCutout: Equatable {
         }
         return .none(height: max(top, 20))
     }
+
+    private static let logger = SciaLog.logger(category: "statusBarTicker")
+}
+
+/// アイランドのある機種の、シミュレーターで測った値。値は縦向きの画面の座標（pt）。
+/// アイランドの枠は、機種ごとのシミュレーターの画面を`xcrun simctl io <端末> screenshot --mask=black`で撮って測った。
+/// 左右の余白は、画面の外形（機種の定義のframebufferMaskのPDF）を、アイランドの上から画面の上端までの余白だけ内側へ縮めた範囲に、
+/// カプセルの縦の真ん中の左右の端が収まる最小の値を、1/20pt刻みで測った。
+struct IslandModel {
+    /// 測ったときの縦向きの画面の大きさ。
+    let screen: CGSize
+    let island: CGRect
+    let sideMargin: CGFloat
+
+    /// 画面の幅が`width`のときの、アイランドの枠と左右の余白。
+    /// 「拡大表示」の「文字を拡大」では、画面の画素は同じまま、1ptあたりの画素が増えて画面のptが狭くなる。
+    /// iPhone 16 Proの実機では、402×874ptが320×693ptになり、1ptあたりの画素は3から3.76875（1206画素÷320pt）になった。
+    /// 横は画素の幅とptの幅がちょうど対応するので、測った値を画面の幅の比で縮めれば、同じ画素を指す。
+    /// 縦は693ptが2611.7画素で、画面の2622画素より約10画素足りないが、上端から同じ比で縮めればよい。
+    /// 拡大表示のシミュレーターで、広げたカプセルの上下の端がアイランドと同じ画素（42〜151）に、左右の端が式どおりの画素に来ることを確かめた。
+    func scaled(toWidth width: CGFloat) -> StatusBarCutout {
+        let ratio = width / screen.width
+        let rect = CGRect(x: island.minX * ratio, y: island.minY * ratio, width: island.width * ratio, height: island.height * ratio)
+        return .island(rect, sideMargin: sideMargin * ratio)
+    }
+
+    /// 機種の識別子（iPhone17,1など）。シミュレーターでは、まねている機種の識別子。
+    static var identifier: String {
+        #if targetEnvironment(simulator)
+        return ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] ?? ""
+        #else
+        var info = utsname()
+        uname(&info)
+        return withUnsafeBytes(of: &info.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        #endif
+    }
+
+    // 画面の大きさと角の形が同じ機種は、同じ値になる。
+    /// iPhone 14 Pro、15、15 Pro、16（393×852pt）。
+    private static let pro61 = IslandModel(screen: CGSize(width: 393, height: 852), island: CGRect(x: 134, y: 11.33, width: 125, height: 36.67), sideMargin: 19.61)
+    /// iPhone 14 Pro Max、15 Plus、15 Pro Max、16 Plus（430×932pt）。
+    private static let proMax67 = IslandModel(screen: CGSize(width: 430, height: 932), island: CGRect(x: 152.33, y: 11.33, width: 125.33, height: 36.67), sideMargin: 19.61)
+    /// iPhone 16 Pro、17、17 Pro（402×874pt）。
+    private static let pro63 = IslandModel(screen: CGSize(width: 402, height: 874), island: CGRect(x: 138.33, y: 14, width: 125.33, height: 36.67), sideMargin: 24.4)
+    /// iPhone 16 Pro Max、17 Pro Max（440×956pt）。
+    private static let proMax69 = IslandModel(screen: CGSize(width: 440, height: 956), island: CGRect(x: 157.33, y: 14, width: 125.33, height: 36.67), sideMargin: 24.58)
+    /// iPhone Air（420×912pt）。
+    private static let air = IslandModel(screen: CGSize(width: 420, height: 912), island: CGRect(x: 147.33, y: 20, width: 125.33, height: 36.67), sideMargin: 28.81)
+    /// iPhone 18 Pro（402×874pt）。17 Proと画面は同じで、アイランドが狭い。
+    private static let pro18 = IslandModel(screen: CGSize(width: 402, height: 874), island: CGRect(x: 153.67, y: 14, width: 94.67, height: 36.67), sideMargin: 24.4)
+    /// iPhone 18 Pro Max（440×956pt）。
+    private static let proMax18 = IslandModel(screen: CGSize(width: 440, height: 956), island: CGRect(x: 172.67, y: 14, width: 94.67, height: 36.67), sideMargin: 24.58)
+
+    static let table: [String: IslandModel] = [
+        "iPhone15,2": pro61, // iPhone 14 Pro
+        "iPhone15,3": proMax67, // iPhone 14 Pro Max
+        "iPhone15,4": pro61, // iPhone 15
+        "iPhone15,5": proMax67, // iPhone 15 Plus
+        "iPhone16,1": pro61, // iPhone 15 Pro
+        "iPhone16,2": proMax67, // iPhone 15 Pro Max
+        "iPhone17,3": pro61, // iPhone 16
+        "iPhone17,4": proMax67, // iPhone 16 Plus
+        "iPhone17,1": pro63, // iPhone 16 Pro
+        "iPhone17,2": proMax69, // iPhone 16 Pro Max
+        "iPhone18,3": pro63, // iPhone 17
+        "iPhone18,1": pro63, // iPhone 17 Pro
+        "iPhone18,2": proMax69, // iPhone 17 Pro Max
+        "iPhone18,4": air, // iPhone Air
+        "iPhone19,2": pro18, // iPhone 18 Pro
+        "iPhone19,3": proMax18, // iPhone 18 Pro Max
+        "iPhone19,7": proMax18, // iPhone 18 Pro Max（機種の定義のrepresentedModelIdentifiersにある、もう1つの識別子）
+    ]
 }
 
 /// ステータスバーの場所に出す、1件の通知。左に誰が何をしたか、右に対象の投稿の文頭かサムネイルを出す。
@@ -413,22 +489,17 @@ final class StatusBarTickerView: UIView {
     private var metrics: Metrics {
         let badges = AppDependencies.tuning.value(of: TuningCatalog.statusBarTickerBadgesSymbol)
         return switch cutout {
-        case .island(let rect): Metrics(height: rect.height, fontSize: 13, avatarSide: 20, thumbnailSide: 24, badgesSymbol: badges)
+        case .island(let rect, _): Metrics(height: rect.height, fontSize: 13, avatarSide: 20, thumbnailSide: 24, badgesSymbol: badges)
         case .notch(let rect): Metrics(height: rect.height, fontSize: 12, avatarSide: 18, thumbnailSide: 22, badgesSymbol: true)
         case .none(let height): Metrics(height: height, fontSize: 12, avatarSide: 15, thumbnailSide: 16, badgesSymbol: badges)
         }
     }
 
-    /// アイランドの機種で、カプセルの左右の余白。画面の外形を14pt内側へ縮めた範囲の、カプセルの縦の真ん中の高さ（上端から32.33pt）での左の縁。
-    /// 画面の角の形を返すAPIはないため、iPhone 16 Proのシミュレーターの画面の形（機種の定義のframebufferMask）から測った値を当てる。
-    /// 画面の角の大きさが違う機種では、範囲からはみ出したり、余白が広すぎたりすることがある。試作のため、機種ごとの値は測っていない。
-    private static let islandSideMargin: CGFloat = 24.06
-
     /// 広げたときのカプセルの枠。
     private var expandedFrame: CGRect {
         switch cutout {
-        case .island(let rect):
-            CGRect(x: Self.islandSideMargin, y: rect.minY, width: bounds.width - Self.islandSideMargin * 2, height: rect.height)
+        case .island(let rect, let sideMargin):
+            CGRect(x: sideMargin, y: rect.minY, width: bounds.width - sideMargin * 2, height: rect.height)
         case .notch(let rect):
             CGRect(x: 0, y: 0, width: bounds.width, height: rect.maxY)
         case .none(let height):
@@ -438,7 +509,7 @@ final class StatusBarTickerView: UIView {
 
     private var collapsedFrame: CGRect {
         switch cutout {
-        case .island(let rect), .notch(let rect): rect
+        case .island(let rect, _), .notch(let rect): rect
         case .none(let height): CGRect(x: 0, y: -height, width: bounds.width, height: height)
         }
     }
@@ -545,11 +616,11 @@ final class StatusBarTickerView: UIView {
         let left: CGRect
         let right: CGRect
         switch cutout {
-        case .island(let rect):
+        case .island(let rect, let sideMargin):
             // 文字はアイランドと同じ高さの行に、カプセルの端から余白だけ内側に置く。
             let paddings = edgePaddings
-            let leading = Self.islandSideMargin + paddings.leading
-            let trailing = Self.islandSideMargin + paddings.trailing
+            let leading = sideMargin + paddings.leading
+            let trailing = sideMargin + paddings.trailing
             let y = rect.minY - frame.minY
             left = CGRect(x: leading - frame.minX, y: y, width: rect.minX - gap - leading, height: rect.height)
             right = CGRect(x: rect.maxX + gap - frame.minX, y: y, width: bounds.width - trailing - rect.maxX - gap, height: rect.height)
