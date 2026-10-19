@@ -31,6 +31,7 @@ enum CatalogComponent: String, CaseIterable {
     case linkCards = "link-cards"
     case notifications
     case editHistory = "edit-history"
+    case reauthenticationPrototype = "reauth-prototype"
 
     var title: String {
         switch self {
@@ -52,6 +53,7 @@ enum CatalogComponent: String, CaseIterable {
         case .linkCards: "リンクカード"
         case .notifications: "通知の種類"
         case .editHistory: "編集履歴の版"
+        case .reauthenticationPrototype: "ログインし直しの形（試作）"
         }
     }
 
@@ -76,6 +78,7 @@ enum CatalogComponent: String, CaseIterable {
         case .linkCards: PostRowCatalog.linkCardStates()
         case .notifications: PostRowCatalog.notificationStates()
         case .editHistory: EditHistoryCatalog.states()
+        case .reauthenticationPrototype: ReauthenticationPrototypeCatalog.states()
         }
     }
 }
