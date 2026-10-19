@@ -319,7 +319,8 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
     func configure(_ item: ComposeAttachmentStrip.Item, actions: [AttachmentAction]) {
         let description = item.attachment.description
         let showsDescriptionState = item.status == .sendingDescription || item.status == .descriptionFailed
-        // 代替テキストの送信中と失敗は、ALTの札の位置に状態を出すため、札を出さない。
+        // 代替テキストの送信中と失敗は、札の位置（左下）に状態を出すため、札を出さない。
+        tile.hidesBadge = showsDescriptionState
         if let attached = item.attachedMedia {
             // 編集している投稿に付いている添付は、手元にファイルがないので、サーバーのプレビュー画像を描く。ALTの札は書き換えた代替テキストで決める。
             tile.apply(attached.replacingDescription(description), hiddenCount: 0, isCovered: false, policy: Self.attachedThumbnailPolicy)

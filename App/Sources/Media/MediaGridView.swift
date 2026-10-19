@@ -211,8 +211,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
     private let store: MediaImageStore
     private let thumbnailView = UIImageView()
     private let symbolView = UIImageView()
-    private let altBadge = MediaTileView.makeBadge("ALT")
-    private let gifBadge = MediaTileView.makeBadge("GIF")
+    private let badge = MediaBadgeView()
     private let moreLabel = UILabel()
     private var loadTask: Task<Void, Never>?
     private var attachment: MediaAttachment?
@@ -253,12 +252,12 @@ final class MediaTileView: UIButton, MediaViewerSource {
         moreLabel.textColor = .white
         moreLabel.textAlignment = .center
         moreLabel.backgroundColor = UIColor.black.withAlphaComponent(0.45)
-        for view in [thumbnailView, symbolView, moreLabel, altBadge, gifBadge] {
+        for view in [thumbnailView, symbolView, moreLabel, badge] {
             view.isUserInteractionEnabled = false
             addSubview(view)
         }
-        // 読む画像の大きさは画面の倍率で決まるため、別の画面へ移ったら選び直す。
-        registerForTraitChanges([UITraitDisplayScale.self]) { (self: Self, _) in
+        // 読む画像の大きさは画面の倍率で決まるため、別の画面へ移ったら選び直す。札は文字の大きさで幅が変わるため、並べ直す。
+        registerForTraitChanges([UITraitDisplayScale.self, UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.setNeedsLayout()
         }
     }
@@ -279,7 +278,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         backgroundColor?.resolvedColor(with: traitCollection)
     }
 
-    /// 画像の上に重ねている印（ALT、GIF、動画の再生マーク、残りの枚数）の複製。ビューアが動かす画像の複製に載せて、サムネイルとのあいだを一緒に動かす。
+    /// 画像の上に重ねている印（ALTやGIFの札、動画の再生マーク、残りの枚数）の複製。ビューアが動かす画像の複製に載せて、サムネイルとのあいだを一緒に動かす。
     /// 動画とGIFではサムネイルの画像も含める。ビューアの複製は再生していたコマを描くため、印と一緒にサムネイルへ近づくほど濃くし、着地で絵が切り替わらないようにする。
     /// 画像では含めない。複製とサムネイルが同じ絵で、重ねると透明な部分が濃く見えるため。
     /// 複製の大きさが変わっても、サムネイルと同じ角からの位置を保つ。ラベルは画像にし、全体を覆う残りの枚数と中央の再生マークは、伸び縮みしないよう作り直す。
@@ -294,11 +293,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
             copy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             container.addSubview(copy)
         }
-        let corners: [(UIView, UIView.AutoresizingMask)] = [
-            (altBadge, [.flexibleRightMargin, .flexibleTopMargin]),
-            (gifBadge, [.flexibleLeftMargin, .flexibleTopMargin]),
-        ]
-        for (badge, mask) in corners where !badge.isHidden {
+        if !badge.isHidden {
             let format = UIGraphicsImageRendererFormat()
             format.scale = traitCollection.displayScale
             let image = UIGraphicsImageRenderer(bounds: badge.bounds, format: format).image { context in
@@ -306,7 +301,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
             }
             let copy = UIImageView(image: image)
             copy.frame = badge.frame
-            copy.autoresizingMask = mask
+            copy.autoresizingMask = [.flexibleRightMargin, .flexibleTopMargin]
             container.addSubview(copy)
         }
         if let symbol = symbolView.image {
@@ -335,6 +330,21 @@ final class MediaTileView: UIButton, MediaViewerSource {
         return container
     }
 
+    /// 札に出す印。
+    private var marks: [MediaBadgeView.Mark] = [] {
+        didSet { updateBadge() }
+    }
+
+    /// 札を出さない。投稿欄で、札の位置に代替テキストの送信の状態を出している間に使う。
+    var hidesBadge = false {
+        didSet { updateBadge() }
+    }
+
+    private func updateBadge() {
+        badge.marks = hidesBadge ? [] : marks
+        setNeedsLayout()
+    }
+
     /// ビューアがこのサムネイルとのあいだで画像を動かしている間、見えなくする。
     /// 透明にすると触れても反応しなくなり、閉じる途中にタップし直しても開けないため、空のマスクで隠す。
     var isConcealedForViewer = false {
@@ -360,8 +370,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         let isOverImage = (!isCovered && Self.hasThumbnail(attachment)) || attachment.blurhash != nil
         symbolView.tintColor = isOverImage ? .white : .secondaryLabel
         symbolView.layer.shadowOpacity = isOverImage ? 0.4 : 0
-        gifBadge.isHidden = attachment.type != .gifv
-        altBadge.isHidden = attachment.description?.isEmpty ?? true
+        marks = MediaBadgeView.marks(hasDescription: !(attachment.description?.isEmpty ?? true), kind: attachment.type)
         moreLabel.isHidden = hiddenCount == 0
         moreLabel.text = "+\(hiddenCount)"
         accessibilityLabel = [Self.kindName(of: attachment.type), attachment.description]
@@ -385,8 +394,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         symbolView.image = kind.flatMap(Self.symbolName(of:)).flatMap { UIImage(systemName: $0) }
         symbolView.tintColor = .white
         symbolView.layer.shadowOpacity = 0.4
-        gifBadge.isHidden = kind != .gifv
-        altBadge.isHidden = description.isEmpty
+        marks = MediaBadgeView.marks(hasDescription: !description.isEmpty, kind: kind)
         moreLabel.isHidden = true
         accessibilityLabel = [kind.map(Self.kindName(of:)) ?? "メディア", description].filter { !$0.isEmpty }.joined(separator: "、")
         accessibilityValue = nil
@@ -449,10 +457,8 @@ final class MediaTileView: UIButton, MediaViewerSource {
         symbolView.frame = bounds
         moreLabel.frame = bounds
         let inset: CGFloat = 6
-        let altSize = altBadge.intrinsicContentSize
-        altBadge.frame = CGRect(x: inset, y: bounds.maxY - inset - altSize.height, width: altSize.width, height: altSize.height)
-        let gifSize = gifBadge.intrinsicContentSize
-        gifBadge.frame = CGRect(x: bounds.maxX - inset - gifSize.width, y: bounds.maxY - inset - gifSize.height, width: gifSize.width, height: gifSize.height)
+        let badgeSize = badge.sizeThatFits(CGSize(width: max(bounds.width - inset * 2, 0), height: bounds.height))
+        badge.frame = CGRect(x: inset, y: bounds.maxY - inset - badgeSize.height, width: badgeSize.width, height: badgeSize.height)
     }
 
     /// 一覧に画像を出せるか。音声と種類の分からないファイルは、プレビューのURLが画像とは限らないため読まない。
@@ -482,30 +488,129 @@ final class MediaTileView: UIButton, MediaViewerSource {
         case .unknown: "ファイル"
         }
     }
-
-    static func makeBadge(_ text: String) -> UILabel {
-        let label = PaddedLabel()
-        label.text = text
-        label.font = .preferredFont(forTextStyle: .caption2).bold
-        label.textColor = .white
-        label.backgroundColor = UIColor.black.withAlphaComponent(0.6)
-        label.layer.cornerRadius = 4
-        label.layer.cornerCurve = .continuous
-        label.clipsToBounds = true
-        return label
-    }
 }
 
-/// 文字の周りに余白をとるラベル。添付ファイルの種類を示す小さな札に使う。
-private final class PaddedLabel: UILabel {
-    private let padding = UIEdgeInsets(top: 2, left: 5, bottom: 2, right: 5)
+/// 添付ファイルの印（ALT、GIF）を1つにまとめた札。タイルの左下に置く。
+/// タイルの大きさは並べ方で変わり、印ごとに札を置くと狭いタイルに入らないため、1つにまとめ、幅に入らなければ頭の1文字にする。
+/// 印ごとの下地を細い隙間で離してつなげ、つなぎ目の角は立て、外側の角だけを丸める。区切りに線を描くより、1枚の札が区切られて見えるため。
+final class MediaBadgeView: UIView {
+    enum Mark: CaseIterable {
+        case alt
+        case gif
 
-    override var intrinsicContentSize: CGSize {
-        let size = super.intrinsicContentSize
-        return CGSize(width: size.width + padding.left + padding.right, height: size.height + padding.top + padding.bottom)
+        var title: String {
+            switch self {
+            case .alt: "ALT"
+            case .gif: "GIF"
+            }
+        }
+
+        var shortTitle: String { String(title.prefix(1)) }
     }
 
-    override func drawText(in rect: CGRect) {
-        super.drawText(in: rect.inset(by: padding))
+    /// 札の文字の大きさの上限。文字の大きさの設定に合わせて大きくするが、いちばん狭いタイルでも1文字の札が入るよう、ここで止める。
+    static let maximumContentSizeCategory = UIContentSizeCategory.extraExtraLarge
+    private static let padding = UIEdgeInsets(top: 2, left: 5, bottom: 2, right: 5)
+    /// 頭の1文字にしたときの左右の余白。狭いタイルに入れるため、印の名前のときより詰める。
+    private static let shortHorizontalPadding: CGFloat = 3
+    /// 印と印のあいだの隙間。
+    private static let gap: CGFloat = 1
+    private static let cornerRadius: CGFloat = 4
+
+    /// 出す印。空なら札を隠す。
+    var marks: [Mark] = [] {
+        didSet {
+            isHidden = marks.isEmpty
+            rebuildSegments()
+            setNeedsLayout()
+        }
+    }
+
+    private var segments: [UILabel] = []
+    /// 幅に入らず、頭の1文字にしているか。
+    private(set) var isShortened = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isHidden = true
+        isUserInteractionEnabled = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    /// 当てはまる印を、ALT、GIFの順に並べる。
+    static func marks(hasDescription: Bool, kind: MediaAttachment.Kind?) -> [Mark] {
+        var marks: [Mark] = []
+        if hasDescription {
+            marks.append(.alt)
+        }
+        if kind == .gifv {
+            marks.append(.gif)
+        }
+        return marks
+    }
+
+    /// `size.width`に入るなら印の名前で、入らなければ頭の1文字で並べた大きさを返し、その形に描き替える。
+    override func sizeThatFits(_ size: CGSize) -> CGSize {
+        let font = Self.font(for: traitCollection)
+        let fullSize = Self.size(of: marks.map(\.title), font: font, horizontalPadding: Self.padding.left)
+        isShortened = fullSize.width > size.width
+        for (segment, mark) in zip(segments, marks) {
+            segment.font = font
+            segment.text = isShortened ? mark.shortTitle : mark.title
+        }
+        return isShortened ? Self.size(of: marks.map(\.shortTitle), font: font, horizontalPadding: Self.shortHorizontalPadding) : fullSize
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        var x: CGFloat = 0
+        let horizontalPadding = isShortened ? Self.shortHorizontalPadding : Self.padding.left
+        for segment in segments {
+            let width = Self.segmentWidth(of: segment.text ?? "", font: segment.font, horizontalPadding: horizontalPadding)
+            segment.frame = CGRect(x: x, y: 0, width: width, height: bounds.height)
+            x += width + Self.gap
+        }
+    }
+
+    private func rebuildSegments() {
+        segments.forEach { $0.removeFromSuperview() }
+        segments = marks.indices.map { index in
+            let segment = UILabel()
+            segment.textColor = .white
+            segment.textAlignment = .center
+            segment.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+            segment.layer.cornerRadius = Self.cornerRadius
+            segment.layer.cornerCurve = .continuous
+            segment.clipsToBounds = true
+            var corners: CACornerMask = []
+            if index == 0 {
+                corners.formUnion([.layerMinXMinYCorner, .layerMinXMaxYCorner])
+            }
+            if index == marks.count - 1 {
+                corners.formUnion([.layerMaxXMinYCorner, .layerMaxXMaxYCorner])
+            }
+            segment.layer.maskedCorners = corners
+            addSubview(segment)
+            return segment
+        }
+    }
+
+    private static func font(for traits: UITraitCollection) -> UIFont {
+        let category = min(traits.preferredContentSizeCategory, maximumContentSizeCategory)
+        return UIFont.preferredFont(forTextStyle: .caption2, compatibleWith: UITraitCollection(preferredContentSizeCategory: category)).bold
+    }
+
+    private static func segmentWidth(of title: String, font: UIFont, horizontalPadding: CGFloat) -> CGFloat {
+        ceil((title as NSString).size(withAttributes: [.font: font]).width) + horizontalPadding * 2
+    }
+
+    private static func size(of titles: [String], font: UIFont, horizontalPadding: CGFloat) -> CGSize {
+        let widths = titles.map { segmentWidth(of: $0, font: font, horizontalPadding: horizontalPadding) }
+        let width = widths.reduce(0, +) + gap * CGFloat(max(titles.count - 1, 0))
+        return CGSize(width: width, height: ceil(font.lineHeight) + padding.top + padding.bottom)
     }
 }
