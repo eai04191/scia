@@ -104,6 +104,8 @@ final class MediaViewerController: UIViewController {
         let videoControlsHideDelay: TimeInterval
         /// ダブルタップで10秒戻ったか進んだことを知らせる表示を、出しておく時間。
         let videoSkipEffectDuration: TimeInterval
+        /// HDRの動画を描く明るさの幅。
+        var videoDynamicRange: CALayer.DynamicRange = .constrainedHigh
     }
 
     /// 投稿欄で選んだメディアを開いたときの操作。ビューアは投稿欄を知らず、メニューと代替テキストの書き終わりをここから渡す。
@@ -496,6 +498,7 @@ final class MediaViewerController: UIViewController {
         if let player = page as? PlayerPageController {
             player.controlsHideDelay = timing.videoControlsHideDelay
             player.skipEffectDuration = timing.videoSkipEffectDuration
+            player.dynamicRange = timing.videoDynamicRange
             player.onRequestChromeHidden = { [weak self, weak player] hidden in
                 guard let self, let player, player.index == self.currentIndex else { return }
                 self.setChromeHidden(hidden)
@@ -2361,8 +2364,18 @@ extension MediaViewerController.Timing {
             barOverlapFadeEnd: tuning.value(of: TuningCatalog.mediaCloseBarOverlapFadeEnd),
             savedChipDuration: tuning.value(of: TuningCatalog.mediaSavedChipDuration),
             videoControlsHideDelay: tuning.value(of: TuningCatalog.mediaVideoControlsHideDelay),
-            videoSkipEffectDuration: tuning.value(of: TuningCatalog.mediaVideoSkipEffectDuration)
+            videoSkipEffectDuration: tuning.value(of: TuningCatalog.mediaVideoSkipEffectDuration),
+            videoDynamicRange: Self.dynamicRange(tuningValue: tuning.value(of: TuningCatalog.mediaVideoDynamicRange))
         )
+    }
+
+    /// チューニングの1〜3を、SDR、抑えたHDR、上限まで使うHDRにする。
+    private static func dynamicRange(tuningValue: Double) -> CALayer.DynamicRange {
+        switch Int(tuningValue) {
+        case 1: .standard
+        case 3: .high
+        default: .constrainedHigh
+        }
     }
 }
 
