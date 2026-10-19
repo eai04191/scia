@@ -8,8 +8,8 @@ public enum InstanceAddress {
 
         public var errorDescription: String? {
             switch self {
-            case .empty: "インスタンスを入力してください"
-            case .invalid(let input): "インスタンスのアドレスとして読めません: \(input)"
+            case .empty: "サーバーを入力してください"
+            case .invalid(let input): "サーバーのアドレスとして読めません: \(input)"
             }
         }
     }

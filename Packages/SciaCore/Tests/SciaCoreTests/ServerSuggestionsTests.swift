@@ -51,6 +51,21 @@ struct ServerSuggestionsTests {
         #expect(suggestions.suggestions(for: "example", limit: 10) == ["example.social:8443"])
     }
 
+    @Test(arguments: [
+        ("mstdn", "mstdn.jp", "mstdn"),
+        ("social", "mastodon.social", "social"),
+        ("https://MSTDN.jp/", "social.mstdn.jp", "mstdn.jp"),
+    ])
+    func findsTheTypedPartInASuggestion(input: String, domain: String, matched: String) throws {
+        let range = try #require(ServerSuggestions.matchedRange(of: input, in: domain))
+        #expect(domain[range] == matched)
+    }
+
+    @Test(arguments: [("", "mstdn.jp"), ("example", "mstdn.jp")])
+    func findsNoTypedPartWhenNothingIsTypedOrMatched(input: String, domain: String) {
+        #expect(ServerSuggestions.matchedRange(of: input, in: domain) == nil)
+    }
+
     @Test func returnsNothingWhenNothingMatches() {
         let suggestions = ServerSuggestions(accountDomains: [], knownDomains: known)
         #expect(suggestions.suggestions(for: "example.test").isEmpty)

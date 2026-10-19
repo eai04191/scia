@@ -1,7 +1,8 @@
 import SwiftUI
 import UIKit
 
-/// インスタンスのアドレスの入力欄。打ち直しやすいよう、編集中は標準の消去ボタンを出す。
+/// サーバーのアドレスの入力欄。打ち直しやすいよう、編集中は標準の消去ボタンを出す。
+/// 画面を開いたらすぐ打てるよう、最初に表示されたときにフォーカスする。
 /// SwiftUIのTextFieldには消去ボタンを出す方法がないため、UITextFieldを使う。
 struct InstanceTextField: UIViewRepresentable {
     let placeholder: String
@@ -9,7 +10,7 @@ struct InstanceTextField: UIViewRepresentable {
     let onSubmit: @MainActor () -> Void
 
     func makeUIView(context: Context) -> UITextField {
-        let field = UITextField()
+        let field = FocusingTextField()
         field.placeholder = placeholder
         field.font = .preferredFont(forTextStyle: .body)
         field.adjustsFontForContentSizeCategory = true
@@ -64,5 +65,17 @@ struct InstanceTextField: UIViewRepresentable {
             onSubmit()
             return false
         }
+    }
+}
+
+/// ウィンドウに載った最初の1回だけ、フォーカスしてキーボードを出す。
+private final class FocusingTextField: UITextField {
+    private var hasFocusedOnce = false
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard window != nil, !hasFocusedOnce else { return }
+        hasFocusedOnce = true
+        becomeFirstResponder()
     }
 }

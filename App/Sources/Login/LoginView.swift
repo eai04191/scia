@@ -71,31 +71,38 @@ struct LoginView: View {
     /// アカウントを追加するためにシートで出したときに、閉じるボタンで呼ぶ。nilなら閉じるボタンを出さない。
     var onCancel: (@MainActor () -> Void)?
 
+    /// 最初の起動で出すログイン画面か。アカウントの追加のシートでは、アプリの名前を出さない。
+    private var isFirstLogin: Bool { onCancel == nil }
+
+    private var canLogin: Bool {
+        !model.isLoggingIn && !model.instanceInput.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     var body: some View {
         NavigationStack {
             Form {
+                if isFirstLogin {
+                    Section {
+                        AppHeader()
+                    }
+                    .listRowBackground(Color.clear)
+                }
                 Section {
-                    InstanceTextField(placeholder: "stellaria.network", text: $model.instanceInput, onSubmit: login)
-                        .disabled(model.isLoggingIn)
+                    HStack(spacing: 12) {
+                        Image(systemName: "globe")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                        InstanceTextField(placeholder: "stellaria.network", text: $model.instanceInput, onSubmit: login)
+                    }
+                    .disabled(model.isLoggingIn)
                 } header: {
-                    Text("インスタンス")
+                    Text("サーバー")
                 } footer: {
                     if let errorMessage = model.errorMessage {
                         Text(errorMessage).foregroundStyle(.red)
+                    } else {
+                        Text("アカウントがあるMastodonのサーバーのアドレス")
                     }
-                }
-                // 候補はボタンの下に出す。上に出すと、キーボードが出ている間にボタンが画面の外へ押し出されるため。
-                Section {
-                    Button(action: login) {
-                        HStack {
-                            Text("ログイン")
-                            if model.isLoggingIn {
-                                Spacer()
-                                ProgressView()
-                            }
-                        }
-                    }
-                    .disabled(model.isLoggingIn || model.instanceInput.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
                 let suggestions = model.suggestions
                 if !suggestions.isEmpty {
@@ -104,20 +111,38 @@ struct LoginView: View {
                             Button {
                                 model.instanceInput = domain
                             } label: {
-                                Text(domain)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
+                                SuggestionLabel(domain: domain, input: model.instanceInput)
                             }
                             // ログインボタンより目立たせないため、操作の色ではなく本文の色にする。
                             .tint(.primary)
                         }
                     } footer: {
-                        Text("サーバー一覧の提供: [FediDB](https://fedidb.com)")
+                        // 一覧を無償で使わせてもらっている感謝を込めて、キラキラを添える。
+                        Text("サーバー一覧の提供: [FediDB](https://fedidb.com) \(Text(Image(systemName: "sparkles")).foregroundStyle(.yellow))")
                     }
                     .disabled(model.isLoggingIn)
                 }
             }
-            .navigationTitle(onCancel == nil ? "Scia" : "アカウントを追加")
+            // ログインボタンは一覧の外の下端に固定する。候補がいくつ並んでも押し出されず、キーボードが出ればその上に乗る。
+            // 一覧を最後までスクロールしたときに、末尾のクレジットがボタンに詰まらないよう、間をあける。
+            .safeAreaBar(edge: .bottom, spacing: 16) {
+                Button(action: login) {
+                    ZStack {
+                        Text("ログイン")
+                            .opacity(model.isLoggingIn ? 0 : 1)
+                        if model.isLoggingIn {
+                            ProgressView()
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glassProminent)
+                .controlSize(.large)
+                .disabled(!canLogin)
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
+            }
+            .navigationTitle(isFirstLogin ? "" : "アカウントを追加")
             .toolbar {
                 if let onCancel {
                     ToolbarItem(placement: .cancellationAction) {
@@ -131,5 +156,42 @@ struct LoginView: View {
     private func login() {
         guard let authenticator = makeAuthenticator() else { return }
         Task { await model.login(authenticator: authenticator) }
+    }
+}
+
+/// 最初の起動のログイン画面の一番上に出す、アプリのアイコンと名前。
+private struct AppHeader: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            if let image = AppDependencies.appIcon.current.previewImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .frame(width: 80, height: 80)
+                    .accessibilityHidden(true)
+            }
+            Text("Scia")
+                .font(.largeTitle.bold())
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+/// 候補の行。打った部分を太字にして、なぜその候補が出たかを見せる。
+private struct SuggestionLabel: View {
+    let domain: String
+    let input: String
+
+    var body: some View {
+        text
+            .lineLimit(1)
+            .truncationMode(.middle)
+    }
+
+    private var text: Text {
+        guard let range = ServerSuggestions.matchedRange(of: input, in: domain) else { return Text(verbatim: domain) }
+        let before = String(domain[..<range.lowerBound])
+        let matched = String(domain[range])
+        let after = String(domain[range.upperBound...])
+        return Text("\(before)\(Text(verbatim: matched).bold())\(after)")
     }
 }

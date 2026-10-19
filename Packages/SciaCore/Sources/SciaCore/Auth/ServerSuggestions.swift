@@ -55,6 +55,14 @@ public struct ServerSuggestions: Sendable {
         return Array((exact + prefix + contains).prefix(limit))
     }
 
+    /// 候補の中で、打ったものに当たる部分。候補の行で太字にして、なぜその候補が出たかを見せる。
+    /// 何も打っていないときと、当たらないときはnil。
+    public static func matchedRange(of input: String, in domain: String) -> Range<String.Index>? {
+        let query = normalize(input)
+        guard !query.isEmpty else { return nil }
+        return domain.range(of: query)
+    }
+
     /// `https://`や末尾の`/`、`@alice@`のようなアカウントの部分を除き、ドメインとして比べられる形にする。
     static func normalize(_ input: String) -> String {
         var query = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
