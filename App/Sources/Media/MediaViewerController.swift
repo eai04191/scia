@@ -1837,7 +1837,8 @@ final class PlayerPageController: MediaPageController {
         guard let url = mediaURL else { return }
         let playerItem = AVPlayerItem(url: url)
         // 再生しているコマを取り出せるようにする。AVPlayerLayerの絵は描き写せないため、映像の出口を別に付ける。
-        playerItem.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]))
+        // 画素は10bitで受け取る。実機（iPhone 16 Pro、iOS 27）では、8bitのRGBを求めると画面の再生までHDRを失い、HLGの動画が白飛びした。
+        playerItem.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange]))
         let player = AVPlayer(playerItem: playerItem)
         playerController.player = player
         if item.kind == .gifv {
