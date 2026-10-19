@@ -75,13 +75,7 @@ struct LoginView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("stellaria.network", text: $model.instanceInput)
-                        .textContentType(.URL)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .submitLabel(.go)
-                        .onSubmit(login)
+                    InstanceTextField(placeholder: "stellaria.network", text: $model.instanceInput, onSubmit: login)
                         .disabled(model.isLoggingIn)
                 } header: {
                     Text("インスタンス")
