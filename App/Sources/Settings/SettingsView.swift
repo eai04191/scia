@@ -159,6 +159,18 @@ struct SettingsView: View {
                     Text("添付するメディアを、送る前にこの大きさまで縮めて、通信量を減らします。この大きさに収まるメディアは、元のまま送ります。「縮めない」でも、サーバーの上限を超えるメディアは、上限に合わせて縮めます。")
                 }
                 Section {
+                    Picker("ビューア以外", selection: $settings.mediaDynamicRange) {
+                        MediaDynamicRangeOptions()
+                    }
+                    Picker("ビューア", selection: $settings.viewerMediaDynamicRange) {
+                        MediaDynamicRangeOptions()
+                    }
+                } header: {
+                    Text("HDRのメディアの明るさ")
+                } footer: {
+                    Text("HDRで撮った写真や動画を、どれくらいの明るさで表示するかを選びます。「控えめなHDR」は、まわりのボタンや文字と並んでも眩しすぎないよう明るさを抑えます。「HDR」は、画面の明るさの上限まで使います。")
+                }
+                Section {
                     Toggle("モバイル通信で高画質のサムネイルを使う", isOn: $settings.usesOriginalThumbnailsOnExpensiveNetwork)
                 } header: {
                     Text("画像")
@@ -291,5 +303,14 @@ extension UIViewController {
     func presentSettings(loadPreviewAccount: @escaping () async throws -> Account, instance: URL, diagnostics: ConnectionDiagnostics) {
         let view = SettingsView(settings: AppDependencies.settings, loadPreviewAccount: loadPreviewAccount, instance: instance, diagnostics: diagnostics)
         present(UIHostingController(rootView: view), animated: true)
+    }
+}
+
+/// HDRのメディアの明るさの選択肢。ビューア以外とビューアで同じものを並べる。
+private struct MediaDynamicRangeOptions: View {
+    var body: some View {
+        Text("SDR").tag(MediaDynamicRange.standard)
+        Text("控えめなHDR").tag(MediaDynamicRange.constrainedHigh)
+        Text("HDR").tag(MediaDynamicRange.high)
     }
 }

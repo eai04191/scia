@@ -210,6 +210,8 @@ final class MediaImageStore {
     struct DecodeError: Error {}
 
     /// `maxPixelSize`まで縮め、描画できる状態まで展開する。重い処理のため、メインスレッドの外で行う。
+    /// HDRの写真は、ゲインマップを使ってHDRのまま展開する。指定しないとSDRに展開され、HDRで描く設定にしても明るくならない。
+    /// どれくらいの明るさで描くかは、画面ごとのtraitで決める（`MediaDynamicRangeTraits`）。そのため、設定を選び直しても読み込み直さずに済む。
     @concurrent
     private static func decode(_ data: Data, maxPixelSize: Int) async -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
@@ -218,6 +220,7 @@ final class MediaImageStore {
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceDecodeRequest: kCGImageSourceDecodeToHDR,
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
         return UIImage(cgImage: image)
@@ -231,6 +234,8 @@ final class MediaImageStore {
         defer { try? FileManager.default.removeItem(at: file) }
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: file))
         generator.appliesPreferredTrackTransform = true
+        // 既定ではSDRに変換される。HDRの動画のコマもHDRのまま作り、描く明るさは画面ごとのtraitで決める。
+        generator.dynamicRangePolicy = .matchSource
         generator.maximumSize = CGSize(width: maxPixelSize, height: maxPixelSize)
         // 先頭にあるのは最初のキーフレームだけなので、0秒より後ろのフレームも受け取る。
         generator.requestedTimeToleranceBefore = .zero

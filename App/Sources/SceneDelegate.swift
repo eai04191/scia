@@ -21,6 +21,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         let window = ShakeDetectingWindow(windowScene: windowScene)
         window.useAppLanguage()
+        MediaDynamicRangeTraits.follow(window, settings: AppDependencies.settings, { $0.mediaDynamicRange }) { window, range in
+            window.traitOverrides.imageDynamicRange = range
+        }
         self.window = window
         switch AppDependencies.accounts {
         case .success(let accounts):

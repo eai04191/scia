@@ -34,6 +34,23 @@ struct AppSettingsTests {
         #expect(relaunched.videoUploadSize == .p720)
     }
 
+    /// 一覧ではたくさんのメディアが文字と並ぶのでSDRに収め、ビューアでは眩しすぎないよう抑えたHDRで描くのを既定にする。
+    @Test func mediaDynamicRangeDefaults() throws {
+        let settings = AppSettings(defaults: try makeDefaults())
+        #expect(settings.mediaDynamicRange == .standard)
+        #expect(settings.viewerMediaDynamicRange == .constrainedHigh)
+    }
+
+    @Test func persistsMediaDynamicRanges() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.mediaDynamicRange = .high
+        settings.viewerMediaDynamicRange = .standard
+        let relaunched = AppSettings(defaults: defaults)
+        #expect(relaunched.mediaDynamicRange == .high)
+        #expect(relaunched.viewerMediaDynamicRange == .standard)
+    }
+
     @Test func persistsChangesAcrossLaunches() throws {
         let defaults = try makeDefaults()
         AppSettings(defaults: defaults).usesOriginalThumbnailsOnExpensiveNetwork = false

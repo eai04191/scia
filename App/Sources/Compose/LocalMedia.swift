@@ -146,6 +146,8 @@ enum LocalMediaThumbnail {
         if file.kind == .video {
             let generator = AVAssetImageGenerator(asset: AVURLAsset(url: file.url))
             generator.appliesPreferredTrackTransform = true
+            // 既定ではSDRに変換される。HDRの動画のコマもHDRのまま作り、描く明るさは画面ごとのtraitで決める。
+            generator.dynamicRangePolicy = .matchSource
             generator.maximumSize = CGSize(width: maxPixelSize, height: maxPixelSize)
             return try? await UIImage(cgImage: generator.image(at: .zero).image)
         }
@@ -155,6 +157,8 @@ enum LocalMediaThumbnail {
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            // HDRの写真はHDRのまま展開し、描く明るさは画面ごとのtraitで決める。`MediaImageStore`と同じ。
+            kCGImageSourceDecodeRequest: kCGImageSourceDecodeToHDR,
         ]
         return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary).map { UIImage(cgImage: $0) }
     }

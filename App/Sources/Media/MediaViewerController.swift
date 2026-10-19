@@ -19,6 +19,8 @@ final class MediaViewerController: UIViewController {
     /// 投稿欄で選んだメディアを開いたときの操作。投稿の添付ファイルを見るときはnil。
     private let draftEditing: Editing?
     private let store: MediaImageStore
+    /// HDRのメディアを描く明るさを読む設定。
+    private let settings: AppSettings
     private let pageController = UIPageViewController(transitionStyle: .scroll, navigationOrientation: .horizontal, options: [.interPageSpacing: 16])
     private var pages: [Int: MediaPageController] = [:]
     private(set) var currentIndex: Int
@@ -133,10 +135,12 @@ final class MediaViewerController: UIViewController {
         editing: Editing? = nil,
         transfers: MediaTransferCenter? = nil,
         subject: OperationStatus.Subject? = nil,
+        settings: AppSettings = AppDependencies.settings,
         sourceTile: @escaping @MainActor (String) -> (any MediaViewerSource)?
     ) {
         precondition(items.indices.contains(startIndex), "開く添付ファイルの位置が範囲外です")
         self.items = items
+        self.settings = settings
         self.draftEditing = editing
         self.store = store
         self.transfers = transfers
@@ -279,6 +283,9 @@ final class MediaViewerController: UIViewController {
         backdrop.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         view.addSubview(backdrop)
         overrideUserInterfaceStyle = .dark
+        MediaDynamicRangeTraits.follow(self, settings: settings, { $0.viewerMediaDynamicRange }) { viewer, range in
+            viewer.traitOverrides.imageDynamicRange = range
+        }
         // 下に一覧を残しているため、VoiceOverがそちらを読まないようにする。
         view.accessibilityViewIsModal = true
         addChild(pageController)
@@ -1725,9 +1732,6 @@ final class PlayerPageController: MediaPageController {
     var controlsHideDelay: TimeInterval = 3
     /// ダブルタップで10秒戻ったか進んだことを知らせる表示を、出しておく時間。
     var skipEffectDuration: TimeInterval = 0.3
-    /// HDRの動画を描く明るさの幅。SDRの動画には効かない。
-    /// 既定では画面の明るさの上限まで使い、「写真」より眩しいので、まわりのボタンや説明と並ぶよう抑える。
-    var dynamicRange: CALayer.DynamicRange = .constrainedHigh
     /// 最後まで再生したら先頭から続ける。右上のメニューで、その動画を見ている間だけ切り替える。
     private(set) var isLooping = false
     /// ビューアのボタンと説明を隠す（true）か出す（false）よう、ビューアに頼む。
@@ -1786,6 +1790,14 @@ final class PlayerPageController: MediaPageController {
             tap.require(toFail: doubleTap)
         }
         setUpPlayer()
+        registerForTraitChanges([UITraitImageDynamicRange.self]) { (self: Self, _) in
+            self.applyDynamicRange()
+        }
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        applyDynamicRange()
     }
 
     override func viewDidLayoutSubviews() {
@@ -1793,10 +1805,17 @@ final class PlayerPageController: MediaPageController {
         applyDynamicRange()
     }
 
-    /// `AVPlayerViewController`が中に作る`AVPlayerLayer`に、明るさの幅を指定する。
-    /// `AVPlayerViewController`の`preferredDisplayDynamicRange`は、実機（iPhone 16 Pro、iOS 27）でSDRにしても効かなかったため、レイヤーに直接指定する。
+    /// 画像と同じく、ビューアの設定の明るさの幅で動画を描く。
+    /// `AVPlayerViewController`の`preferredDisplayDynamicRange`だけでは、実機（iPhone 16 Pro、iOS 27）でSDRにしても効かなかったため、中の`AVPlayerLayer`にも直接指定する。
+    /// `preferredDisplayDynamicRange`が自動のままだと、`AVPlayerViewController`は画面に出るときにレイヤーを`high`に書き戻すため、こちらにも同じ値を指定して自動をやめさせる。
     /// レイヤーは再生の準備が進んでから作られ、こちらの並べ直しが呼ばれないこともあるので、再生の状態が変わったときにも指定し直す。
     private func applyDynamicRange() {
+        let range = traitCollection.imageDynamicRange
+        let displayRange = AVDisplayDynamicRange(range)
+        if playerController.preferredDisplayDynamicRange != displayRange {
+            playerController.preferredDisplayDynamicRange = displayRange
+        }
+        let dynamicRange = CALayer.DynamicRange(range)
         var pending = [playerController.view.layer]
         while let layer = pending.popLast() {
             if layer is AVPlayerLayer, layer.preferredDynamicRange != dynamicRange {

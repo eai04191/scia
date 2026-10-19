@@ -179,6 +179,9 @@ final class StatusBarTicker {
             return window
         }
         let window = TickerWindow(windowScene: scene, cutout: cutout)
+        MediaDynamicRangeTraits.follow(window, settings: AppDependencies.settings, { $0.mediaDynamicRange }) { window, range in
+            window.traitOverrides.imageDynamicRange = range
+        }
         window.ticker.onTap = { [weak self] in
             self?.onTap()
         }

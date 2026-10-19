@@ -155,6 +155,8 @@ final class AvatarImageStore {
             kCGImageSourceCreateThumbnailWithTransform: true,
             kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            // HDRの画像はHDRのまま展開し、描く明るさは画面ごとのtraitで決める。`MediaImageStore`と同じ。
+            kCGImageSourceDecodeRequest: kCGImageSourceDecodeToHDR,
         ]
         let count = CGImageSourceGetCount(source)
         guard animates, count > 1, count <= maxFrameCount else {

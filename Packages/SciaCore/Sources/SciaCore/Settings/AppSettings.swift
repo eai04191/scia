@@ -94,6 +94,16 @@ public final class AppSettings {
         didSet { defaults.set(videoUploadSize.rawValue, forKey: Keys.videoUploadSize) }
     }
 
+    /// ビューアの外（一覧、プロフィール、リンクカード、投稿欄のサムネイルなど）で、HDRのメディアを描く明るさ。
+    public var mediaDynamicRange: MediaDynamicRange {
+        didSet { defaults.set(mediaDynamicRange.rawValue, forKey: Keys.mediaDynamicRange) }
+    }
+
+    /// ビューアで、HDRのメディアを描く明るさ。
+    public var viewerMediaDynamicRange: MediaDynamicRange {
+        didSet { defaults.set(viewerMediaDynamicRange.rawValue, forKey: Keys.viewerMediaDynamicRange) }
+    }
+
     private enum Keys {
         static let usesOriginalThumbnailsOnExpensiveNetwork = "settings.usesOriginalThumbnailsOnExpensiveNetwork"
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
@@ -113,6 +123,8 @@ public final class AppSettings {
         static let composeToolLayout = "settings.composeToolLayout"
         static let imageUploadSize = "settings.imageUploadSize"
         static let videoUploadSize = "settings.videoUploadSize"
+        static let mediaDynamicRange = "settings.mediaDynamicRange"
+        static let viewerMediaDynamicRange = "settings.viewerMediaDynamicRange"
     }
 
     public init(defaults: UserDefaults) {
@@ -134,6 +146,8 @@ public final class AppSettings {
         // iPhoneの標準の写真（4032×3024）と動画（1080p）はそのまま送られ、それより大きな写真と4Kの動画だけが縮む。
         imageUploadSize = defaults.string(forKey: Keys.imageUploadSize).flatMap(ImageUploadSize.init(rawValue:)) ?? .long4096
         videoUploadSize = defaults.string(forKey: Keys.videoUploadSize).flatMap(VideoUploadSize.init(rawValue:)) ?? .p1080
+        mediaDynamicRange = defaults.string(forKey: Keys.mediaDynamicRange).flatMap(MediaDynamicRange.init(rawValue:)) ?? .standard
+        viewerMediaDynamicRange = defaults.string(forKey: Keys.viewerMediaDynamicRange).flatMap(MediaDynamicRange.init(rawValue:)) ?? .constrainedHigh
         profilePostsFilter = ProfilePostsFilter(
             showsReplies: defaults.object(forKey: Keys.profileShowsReplies) as? Bool ?? ProfilePostsFilter.standard.showsReplies,
             showsBoosts: defaults.object(forKey: Keys.profileShowsBoosts) as? Bool ?? ProfilePostsFilter.standard.showsBoosts
