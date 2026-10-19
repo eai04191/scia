@@ -11,8 +11,8 @@ enum StatusBarCutout: Equatable {
     /// 切り欠きがなく、ステータスバーが横幅いっぱいにある（iPhone SE、iPad）。
     case none(height: CGFloat)
 
-    /// 今の画面の形。ステータスバーが出ない向き（iPhoneの横向き）と、アイランドの値を測っていない機種ではnil。
-    /// アイランドの位置と画面の角の形を返すAPIはないため、アイランドの機種は機種の識別子で`IslandModel`の表を引く。
+    /// 今の画面の形。ステータスバーが出ない向き（iPhoneの横向き）と、切り欠きの値を測っていない機種ではnil。
+    /// アイランドとノッチの位置と画面の角の形を返すAPIはないため、機種の識別子で`IslandModel`と`NotchModel`の表を引く。
     /// 画面の大きさと安全領域では見分けない。iPhone 18 Proは、17 Proと画面の大きさも安全領域も同じで、アイランドの幅だけが違うため。
     @MainActor
     static func current(in window: UIWindow) -> StatusBarCutout? {
@@ -22,19 +22,18 @@ enum StatusBarCutout: Equatable {
             return .none(height: max(top, 24))
         }
         guard window.traitCollection.verticalSizeClass != .compact else { return nil }
-        if let model = IslandModel.table[IslandModel.identifier] {
+        let identifier = DeviceModel.identifier
+        if let model = IslandModel.table[identifier] {
             return model.scaled(toWidth: width)
         }
-        if top >= 51 {
-            // アイランドのある、表にない機種。位置と角の形を推し量ると、アイランドとずれた黒いカプセルを描くため、出さない。
-            // 次に表へ足す値が分かるよう、機種と画面の大きさを残す。
-            logger.info("statusBarTicker unknown island model: \(IslandModel.identifier, privacy: .public) \(width, privacy: .public)x\(window.bounds.height, privacy: .public) top=\(top, privacy: .public)")
-            return nil
+        if let model = NotchModel.table[identifier] {
+            return model.scaled(toWidth: width)
         }
         if top > 24 {
-            // iPhone 13と14のノッチは11と12より細いが、広いほうに合わせる。狭く見積もると、文字がノッチに潜るため。
-            let size = CGSize(width: 210, height: 32)
-            return .notch(CGRect(origin: CGPoint(x: (width - size.width) / 2, y: 0), size: size))
+            // 切り欠きのある、表にない機種。位置と大きさを推し量ると、切り欠きとずれた黒を描くため、出さない。
+            // 次に表へ足す値が分かるよう、機種と画面の大きさを残す。
+            logger.info("statusBarTicker unknown cutout model: \(identifier, privacy: .public) \(width, privacy: .public)x\(window.bounds.height, privacy: .public) top=\(top, privacy: .public)")
+            return nil
         }
         return .none(height: max(top, 20))
     }
@@ -62,17 +61,6 @@ struct IslandModel {
         let ratio = width / screen.width
         let rect = CGRect(x: island.minX * ratio, y: island.minY * ratio, width: island.width * ratio, height: island.height * ratio)
         return .island(rect, sideMargin: sideMargin * ratio)
-    }
-
-    /// 機種の識別子（iPhone17,1など）。シミュレーターでは、まねている機種の識別子。
-    static var identifier: String {
-        #if targetEnvironment(simulator)
-        return ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] ?? ""
-        #else
-        var info = utsname()
-        uname(&info)
-        return withUnsafeBytes(of: &info.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
-        #endif
     }
 
     // 画面の大きさと角の形が同じ機種は、同じ値になる。
@@ -110,6 +98,75 @@ struct IslandModel {
         "iPhone19,3": proMax18, // iPhone 18 Pro Max
         "iPhone19,7": proMax18, // iPhone 18 Pro Max（機種の定義のrepresentedModelIdentifiersにある、もう1つの識別子）
     ]
+}
+
+/// ノッチのある機種の、機種の定義の画面の形（framebufferMaskのPDF）から測った値。値は縦向きの画面の座標（pt）。
+/// ノッチは画面の上端の中央にあり、PDFでは画面の外として抜けている。PDFを画面の画素の大きさで描き、画素を1ptあたりの画素で割った。
+/// 幅は、画面の縁へつながって広がる上端から4pt以下を除いた、いちばん広いところ（どの機種も上から4pt）。そこから下へ少しずつ細くなるので、文字がノッチにかからない。
+/// iPhone 11は、シミュレーターの画面の画像で測った値（高さ33pt、幅230pt）とも合う。
+/// iPhone 12 miniと13 miniは、機種の定義の画素（1080×2340）を3で割った360×780ptではなく、375×812ptで描かれる（1ptは2.88画素）。
+/// PDFは1125×2436なので、そのまま3で割った。12 miniのシミュレーターの画像を2.88で割った値（高さ34.38pt、幅226.4pt）と合う。
+struct NotchModel {
+    /// 測ったときの縦向きの画面の大きさ。
+    let screen: CGSize
+    let notch: CGSize
+
+    /// 画面の幅が`width`のときの、ノッチの枠。拡大表示では、`IslandModel.scaled(toWidth:)`と同じく画面の幅の比で縮める。
+    func scaled(toWidth width: CGFloat) -> StatusBarCutout {
+        let ratio = width / screen.width
+        let size = CGSize(width: notch.width * ratio, height: notch.height * ratio)
+        return .notch(CGRect(origin: CGPoint(x: (width - size.width) / 2, y: 0), size: size))
+    }
+
+    /// iPhone 11（414×896pt）。
+    private static let iPhone11 = NotchModel(screen: CGSize(width: 414, height: 896), notch: CGSize(width: 231, height: 33))
+    /// iPhone 11 Pro（375×812pt）。
+    private static let pro11 = NotchModel(screen: CGSize(width: 375, height: 812), notch: CGSize(width: 209.67, height: 30))
+    /// iPhone 11 Pro Max（414×896pt）。
+    private static let proMax11 = NotchModel(screen: CGSize(width: 414, height: 896), notch: CGSize(width: 210, height: 30))
+    /// iPhone 12 mini（375×812pt）。
+    private static let mini12 = NotchModel(screen: CGSize(width: 375, height: 812), notch: CGSize(width: 227, height: 34.33))
+    /// iPhone 12、12 Pro（390×844pt）。
+    private static let pro12 = NotchModel(screen: CGSize(width: 390, height: 844), notch: CGSize(width: 210.67, height: 32))
+    /// iPhone 12 Pro Max（428×926pt）。
+    private static let proMax12 = NotchModel(screen: CGSize(width: 428, height: 926), notch: CGSize(width: 210, height: 32))
+    /// iPhone 13 mini（375×812pt）。
+    private static let mini13 = NotchModel(screen: CGSize(width: 375, height: 812), notch: CGSize(width: 175, height: 37.33))
+    /// iPhone 13、13 Pro、14、16e、17e（390×844pt）。
+    private static let pro13 = NotchModel(screen: CGSize(width: 390, height: 844), notch: CGSize(width: 162.67, height: 33.67))
+    /// iPhone 13 Pro Max、14 Plus（428×926pt）。
+    private static let proMax13 = NotchModel(screen: CGSize(width: 428, height: 926), notch: CGSize(width: 162, height: 33.67))
+
+    static let table: [String: NotchModel] = [
+        "iPhone12,1": iPhone11, // iPhone 11
+        "iPhone12,3": pro11, // iPhone 11 Pro
+        "iPhone12,5": proMax11, // iPhone 11 Pro Max
+        "iPhone13,1": mini12, // iPhone 12 mini
+        "iPhone13,2": pro12, // iPhone 12
+        "iPhone13,3": pro12, // iPhone 12 Pro
+        "iPhone13,4": proMax12, // iPhone 12 Pro Max
+        "iPhone14,4": mini13, // iPhone 13 mini
+        "iPhone14,5": pro13, // iPhone 13
+        "iPhone14,2": pro13, // iPhone 13 Pro
+        "iPhone14,3": proMax13, // iPhone 13 Pro Max
+        "iPhone14,7": pro13, // iPhone 14
+        "iPhone14,8": proMax13, // iPhone 14 Plus
+        "iPhone17,5": pro13, // iPhone 16e
+        "iPhone18,5": pro13, // iPhone 17e
+    ]
+}
+
+enum DeviceModel {
+    /// 機種の識別子（iPhone17,1など）。シミュレーターでは、まねている機種の識別子。
+    static var identifier: String {
+        #if targetEnvironment(simulator)
+        return ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] ?? ""
+        #else
+        var info = utsname()
+        uname(&info)
+        return withUnsafeBytes(of: &info.machine) { String(decoding: $0.prefix { $0 != 0 }, as: UTF8.self) }
+        #endif
+    }
 }
 
 /// ステータスバーの場所に出す、1件の通知。左に誰が何をしたか、右に対象の投稿の文頭かサムネイルを出す。
