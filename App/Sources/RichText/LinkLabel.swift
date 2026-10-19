@@ -6,10 +6,37 @@ final class LinkLabel: UILabel {
     /// リンクがタップされたときに、その行き先を渡して呼ぶ。
     var onTapLink: ((RichText.LinkDestination) -> Void)?
 
+    override var attributedText: NSAttributedString? {
+        didSet { layoutCache = nil }
+    }
+
+    override var text: String? {
+        didSet { layoutCache = nil }
+    }
+
+    override var numberOfLines: Int {
+        didSet { layoutCache = nil }
+    }
+
+    override var lineBreakMode: NSLineBreakMode {
+        didSet { layoutCache = nil }
+    }
+
+    /// `link(at:)`で並べ直した結果。ポインタを動かすたびに`hitArea`の`point(inside:with:)`から呼ばれるため、文字列と幅が変わるまで使い回す。
+    private var layoutCache: TextLayout?
+
+    /// リンクの上の押下だけを受ける、ラベルと同じ大きさの透明な部品。
+    /// MacのDesigned for iPadでは、アクティブでないウィンドウへの最初のクリックを、押された場所のビューが`UIControl`のときだけアプリに渡し、
+    /// それ以外はウィンドウを前に出すだけで捨てる。ラベルにタップのジェスチャーを付けるだけだと、リンクを押してもまずウィンドウが前に出るだけになるため、
+    /// リンクの上で押されたビューが`UIControl`になるようにする。
+    private lazy var hitArea = LinkHitArea(label: self)
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         isUserInteractionEnabled = true
-        addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
+        hitArea.frame = bounds
+        hitArea.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(hitArea)
     }
 
     @available(*, unavailable)
@@ -17,14 +44,9 @@ final class LinkLabel: UILabel {
         fatalError("init(coder:) has not been implemented")
     }
 
-    @objc private func tapped(_ recognizer: UITapGestureRecognizer) {
-        guard let destination = link(at: recognizer.location(in: self)) else { return }
+    fileprivate func tapped(at point: CGPoint) {
+        guard let destination = link(at: point) else { return }
         onTapLink?(destination)
-    }
-
-    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
-        guard gestureRecognizer.view === self else { return super.gestureRecognizerShouldBegin(gestureRecognizer) }
-        return link(at: gestureRecognizer.location(in: self)) != nil
     }
 
     /// ラベルの座標`point`にある文字のリンクの行き先。リンクでなければnil。
@@ -34,17 +56,9 @@ final class LinkLabel: UILabel {
     /// ラベルは本文の高さに合わせて置くため、UILabelが余った高さで文字を縦に中央へ寄せる分はずれとして扱わない。
     func link(at point: CGPoint) -> RichText.LinkDestination? {
         guard let attributedText, attributedText.length > 0, bounds.contains(point) else { return nil }
-        let contentStorage = NSTextContentStorage()
-        let layoutManager = NSTextLayoutManager()
-        contentStorage.addTextLayoutManager(layoutManager)
-        // 高さは限らない。最後の行の下の行間まで数えるとラベルより高くなり、ラベルの高さで切ると最後の行が並ばない。
-        let container = NSTextContainer(size: CGSize(width: bounds.width, height: 0))
-        container.lineFragmentPadding = 0
-        container.maximumNumberOfLines = numberOfLines
-        container.lineBreakMode = lineBreakMode
-        layoutManager.textContainer = container
-        contentStorage.attributedString = alignedLikeLabel(attributedText)
-        layoutManager.ensureLayout(for: layoutManager.documentRange)
+        let layout = textLayout(of: attributedText)
+        let contentStorage = layout.contentStorage
+        let layoutManager = layout.layoutManager
 
         guard let fragment = layoutManager.textLayoutFragment(for: point),
               let paragraphStart = fragment.textElement?.elementRange?.location
@@ -64,6 +78,28 @@ final class LinkLabel: UILabel {
         let candidates = [boundaryIndex, boundaryIndex - 1].filter { 0 <= $0 && $0 < attributedText.length }
         guard let index = candidates.first(where: { characterFrame(at: $0, in: contentStorage, layoutManager: layoutManager)?.contains(point) ?? false }) else { return nil }
         return attributedText.attribute(.linkDestination, at: index, effectiveRange: nil) as? RichText.LinkDestination
+    }
+
+    /// `attributedText`をラベルと同じ幅で並べた結果。幅か画面の向きが変わったときだけ並べ直す。
+    private func textLayout(of attributedText: NSAttributedString) -> TextLayout {
+        let direction = effectiveUserInterfaceLayoutDirection
+        if let layoutCache, layoutCache.width == bounds.width, layoutCache.direction == direction {
+            return layoutCache
+        }
+        let contentStorage = NSTextContentStorage()
+        let layoutManager = NSTextLayoutManager()
+        contentStorage.addTextLayoutManager(layoutManager)
+        // 高さは限らない。最後の行の下の行間まで数えるとラベルより高くなり、ラベルの高さで切ると最後の行が並ばない。
+        let container = NSTextContainer(size: CGSize(width: bounds.width, height: 0))
+        container.lineFragmentPadding = 0
+        container.maximumNumberOfLines = numberOfLines
+        container.lineBreakMode = lineBreakMode
+        layoutManager.textContainer = container
+        contentStorage.attributedString = alignedLikeLabel(attributedText)
+        layoutManager.ensureLayout(for: layoutManager.documentRange)
+        let layout = TextLayout(width: bounds.width, direction: direction, contentStorage: contentStorage, layoutManager: layoutManager)
+        layoutCache = layout
+        return layout
     }
 
     /// 行の寄せ方を、UILabelが描くのと同じにした文字列。
@@ -94,5 +130,41 @@ final class LinkLabel: UILabel {
             return true
         }
         return frame
+    }
+}
+
+/// `LinkLabel`の文字を並べた結果と、並べたときの条件。
+private struct TextLayout {
+    let width: CGFloat
+    let direction: UIUserInterfaceLayoutDirection
+    let contentStorage: NSTextContentStorage
+    let layoutManager: NSTextLayoutManager
+}
+
+/// `LinkLabel`の上に重ねる、リンクの上だけを当たりにする部品。リンクの外では当たりにならず、押下はラベルの後ろのセルへ渡る。
+/// スクロールビューは標準では`UIControl`の上で始まった押下をスクロールに切り替えないため、載せるスクロールビューは`touchesShouldCancel(in:)`でこの部品にtrueを返す。
+final class LinkHitArea: UIControl {
+    private weak var label: LinkLabel?
+
+    init(label: LinkLabel) {
+        self.label = label
+        super.init(frame: .zero)
+        isAccessibilityElement = false
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        guard let label else { return false }
+        return label.link(at: convert(point, to: label)) != nil
+    }
+
+    override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
+        super.endTracking(touch, with: event)
+        guard let touch, let label, isTouchInside else { return }
+        label.tapped(at: touch.location(in: label))
     }
 }

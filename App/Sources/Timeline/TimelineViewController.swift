@@ -94,7 +94,7 @@ final class TimelineViewController: UIViewController {
     /// 末尾から何件手前で古い投稿の読み込みを始めるか。
     private let prefetchThreshold = 10
 
-    private(set) lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: makeLayout())
+    private(set) lazy var collectionView: UICollectionView = TimelineCollectionView(frame: .zero, collectionViewLayout: makeLayout())
     private lazy var dataSource = makeDataSource()
     private var entries: [ItemID: TimelineEntry] = [:]
     private var loadingGapIDs: Set<String> = []
@@ -1360,5 +1360,12 @@ extension TimelineViewController: NoticeScreen {
 
     func noticePlacement(below: CGFloat) -> NoticePlacement {
         NoticePlacement(top: view.convert(CGPoint(x: 0, y: noticeTop), to: nil).y)
+    }
+}
+
+/// タイムラインの一覧。本文のリンクを押して少し止めてから引いても、スクロールできるようにする。
+final class TimelineCollectionView: UICollectionView {
+    override func touchesShouldCancel(in view: UIView) -> Bool {
+        view is LinkHitArea || super.touchesShouldCancel(in: view)
     }
 }

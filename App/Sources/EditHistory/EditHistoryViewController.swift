@@ -30,7 +30,7 @@ final class EditHistoryViewController: UIViewController {
     private let tuning: TuningStore
     private let builder: EditHistoryContentBuilder
     private let mediaImages: MediaImageStore
-    private let scrollView = UIScrollView()
+    private let scrollView: UIScrollView = EditHistoryScrollView()
     private let stack = UIStackView()
     private var state = State.loading
     /// 覆いを外した版。過去の版の添付ファイルと、外した添付ファイルの覆いに使う。
@@ -223,5 +223,12 @@ final class EditHistoryViewController: UIViewController {
         case .loaded:
             contentUnavailableConfiguration = nil
         }
+    }
+}
+
+/// 編集履歴の版を並べるスクロールビュー。本文のリンクを押して少し止めてから引いても、スクロールできるようにする。
+final class EditHistoryScrollView: UIScrollView {
+    override func touchesShouldCancel(in view: UIView) -> Bool {
+        view is LinkHitArea || super.touchesShouldCancel(in: view)
     }
 }
