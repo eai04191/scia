@@ -1,5 +1,6 @@
 #if DEBUG
 import SciaCore
+import SwiftUI
 import UIKit
 
 /// ステータスバーの場所に流す通知（`StatusBarTickerView`）。
@@ -22,7 +23,16 @@ enum StatusBarTickerCatalog {
             CatalogState(title: "切り欠きなし（iPhone SE、iPad）: お気に入り") { preview(.flat, item(.favourite, alice, text("おはよう"))) },
             CatalogState(title: "切り欠きなし: 長い名前と長い本文") { preview(.flat, item(.favourite, longName, text(longText))) },
             CatalogState(title: "切り欠きなし: 画像だけの投稿") { preview(.flat, item(.favourite, alice, media(sensitive: false))) },
+            CatalogState(title: "設定: 使える機種") { settings(isAvailable: true) },
+            CatalogState(title: "設定: 値を測っていない機種（オフにして灰色にし、理由を出す）") { settings(isAvailable: false) },
         ]
+    }
+
+    /// 設定画面の行。使えない機種は実物で出せないため、ここで並べる。切り替えても実際の設定は変えない。
+    @MainActor
+    private static func settings(isAvailable: Bool) -> UIView {
+        let form = Form { StatusBarTickerSettingsSection(isOn: .constant(true), isAvailable: isAvailable) }
+        return CatalogControllerHost(UIHostingController(rootView: form), height: 200)
     }
 
     private enum Device {
