@@ -400,6 +400,7 @@ final class InlineComposeController: NSObject {
         expandedTop?.isActive = isExpanded
         expandButton.configuration?.image = UIImage(systemName: isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
         expandButton.accessibilityLabel = isExpanded ? "元の大きさに戻す" : "広げて書く"
+        expandButton.largeContentTitle = expandButton.accessibilityLabel
         textDidChange()
     }
 
@@ -519,6 +520,10 @@ final class InlineComposeController: NSObject {
         button.accessibilityLabel = item.title
         button.isHidden = true
         return button
+    }
+
+    private static func remainingFont(for traits: UITraitCollection) -> UIFont {
+        .monospacedDigitSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote, compatibleWith: traits).pointSize, weight: .regular)
     }
 
     /// 左右の余白をなくし、幅を`toolButtonWidth`以上にする。記号は中央に置く。添付の枚数のように文字を添えて44ptを超えるときは、その分だけ広がる。
@@ -909,6 +914,7 @@ final class InlineComposeController: NSObject {
         visibilityButton.configuration?.image = UIImage(systemName: option.symbolName)
         visibilityButton.accessibilityLabel = "公開範囲"
         visibilityButton.accessibilityValue = option.title
+        visibilityButton.largeContentTitle = option.title
         visibilityButton.menu = UIMenu(title: "公開範囲", children: visibilityActions())
 
         updateToolButtons()
@@ -916,6 +922,7 @@ final class InlineComposeController: NSObject {
         remainingLabel.text = "\(model.remainingCharacters)"
         remainingLabel.textColor = model.remainingCharacters < 0 ? .systemRed : .secondaryLabel
         remainingLabel.accessibilityLabel = "残り\(model.remainingCharacters)文字"
+        remainingLabel.largeContentTitle = remainingLabel.accessibilityLabel
         sendButton.isEnabled = model.canPost
         sendButton.configuration?.showsActivityIndicator = model.isPosting
 
@@ -1557,7 +1564,14 @@ final class InlineComposeController: NSObject {
         visibilityButton.showsMenuAsPrimaryAction = true
         expandButton.configuration?.baseForegroundColor = .label
 
-        remainingLabel.font = .monospacedDigitSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote).pointSize, weight: .regular)
+        // 行の文字の大きさの上限を効かせるため、アプリ全体の文字の大きさではなく、ラベルの置かれた場所の文字の大きさで決め、変わるたびに決め直す。
+        // 残り文字数は1段下で止める。投稿の上限が1000文字以上のサーバーで4桁になっても、375pt幅の端末で＋と4項目を行に残すため。
+        remainingLabel.maximumContentSizeCategory = .extraExtraLarge
+        remainingLabel.showsLargeContentViewer = true
+        remainingLabel.font = Self.remainingFont(for: remainingLabel.traitCollection)
+        remainingLabel.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (label: UILabel, _) in
+            label.font = Self.remainingFont(for: label.traitCollection)
+        }
         remainingLabel.setContentHuggingPriority(.required, for: .horizontal)
         sendButton.configuration?.image = UIImage(systemName: "arrow.up")
         sendButton.configuration?.cornerStyle = .capsule
@@ -1585,6 +1599,16 @@ final class InlineComposeController: NSObject {
         tools.alignment = .center
         tools.spacing = 0
         tools.setCustomSpacing(sendSpacing, after: remainingLabel)
+        // 文字を大きくしても、記号、残り文字数、送信は標準の最大で止める。アクセシビリティの大きさまで大きくすると、402pt幅の端末でも行に＋と1項目しか出なかった。止めた分は、長押しの拡大表示で補う。
+        tools.maximumContentSizeCategory = .extraExtraExtraLarge
+        tools.addInteraction(UILargeContentViewerInteraction())
+        // 公開範囲と展開の名前は状態で変わるので、名前を付けるところで拡大表示の名前も付ける。
+        for button in [addButton, sendButton] + toolButtons.values {
+            button.showsLargeContentViewer = true
+            if button.largeContentTitle == nil {
+                button.largeContentTitle = button.accessibilityLabel
+            }
+        }
         attachmentStrip.onSelect = { [weak self] id in self?.openAttachment(id) }
         attachmentStrip.onMove = { [weak self] id, index in self?.model.moveAttachment(id, to: index) }
         attachmentStrip.onRemove = { [weak self] id in self?.removeAttachment(id) }
