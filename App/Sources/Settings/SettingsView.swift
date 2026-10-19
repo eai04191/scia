@@ -110,6 +110,7 @@ struct SettingsView: View {
                 } footer: {
                     Text("一覧の最上部にいるときに届いた新着を、下から動かして見せるかを選びます。「自動」では、iPhoneの設定の「アクセシビリティ」>「動作」>「視差効果を減らす」がオンのときは動かしません。")
                 }
+                StatusBarTickerSettingsSection(isOn: $settings.showsStatusBarTicker, isAvailable: StatusBarCutout.isAvailable)
                 Section {
                     Picker("開く場所", selection: $settings.linkBrowser) {
                         Text("既定のブラウザ").tag(LinkBrowser.external)
@@ -233,6 +234,28 @@ struct SettingsView: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("完了") { dismiss() }
                 }
+            }
+        }
+    }
+}
+
+/// ステータスバーの通知の設定。使えない機種では、切り替えをオフにして灰色にし、理由を添える。
+struct StatusBarTickerSettingsSection: View {
+    @Binding var isOn: Bool
+    /// この機種でステータスバーの通知を出せるか。
+    let isAvailable: Bool
+
+    var body: some View {
+        Section {
+            Toggle("通知をステータスバーに流す", isOn: Binding { isAvailable && isOn } set: { isOn = $0 })
+                .disabled(!isAvailable)
+        } header: {
+            Text("ステータスバーの通知")
+        } footer: {
+            if isAvailable {
+                Text("通知を、画面の上のステータスバーの場所に1件ずつ流します。押すと通知のタブを開きます。通知のタブを見ている間は流しません。")
+            } else {
+                Text("このiPhoneでは使えません。この機種の画面の上端の形をまだ調べていないため、ステータスバーの場所に合わせて描けません。")
             }
         }
     }

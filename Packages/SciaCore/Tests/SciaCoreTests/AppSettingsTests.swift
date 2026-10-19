@@ -52,6 +52,18 @@ struct AppSettingsTests {
         #expect(!AppSettings(defaults: defaults).ignoresUselessAltText)
     }
 
+    /// 届いた通知に気づけるよう、ステータスバーの通知は既定で流す。
+    @Test func showsStatusBarTickerByDefault() throws {
+        let settings = AppSettings(defaults: try makeDefaults())
+        #expect(settings.showsStatusBarTicker)
+    }
+
+    @Test func persistsShowsStatusBarTicker() throws {
+        let defaults = try makeDefaults()
+        AppSettings(defaults: defaults).showsStatusBarTicker = false
+        #expect(!AppSettings(defaults: defaults).showsStatusBarTicker)
+    }
+
     @Test func statusDisplayDefaults() throws {
         let settings = AppSettings(defaults: try makeDefaults())
         #expect(settings.statusNameStyle == .nameAndAcct)

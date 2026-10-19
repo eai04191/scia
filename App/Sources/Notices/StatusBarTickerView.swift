@@ -11,7 +11,14 @@ enum StatusBarCutout: Equatable {
     /// 切り欠きがなく、ステータスバーが横幅いっぱいにある（iPhone SE、iPad）。
     case none(height: CGFloat)
 
-    /// 今の画面の形。ステータスバーが出ない向き（iPhoneの横向き）と、切り欠きの値を測っていない機種ではnil。
+    /// この機種でステータスバーの通知を出せるか。iPhoneでは、アイランドとノッチの値を測った機種と、切り欠きのない機種だけで出せる。
+    /// 表にない機種では、切り欠きの位置と大きさを推し量ると切り欠きとずれた黒を描くため、出さずに、設定画面で使えないことを伝える。
+    @MainActor
+    static var isAvailable: Bool {
+        UIDevice.current.userInterfaceIdiom != .phone || DeviceModel.isMeasured(DeviceModel.identifier)
+    }
+
+    /// 今の画面の形。ステータスバーが出ない向き（iPhoneの横向き）と、`isAvailable`でない機種ではnil。
     /// アイランドとノッチの位置と画面の角の形を返すAPIはないため、機種の識別子で`IslandModel`と`NotchModel`の表を引く。
     /// 画面の大きさと安全領域では見分けない。iPhone 18 Proは、17 Proと画面の大きさも安全領域も同じで、アイランドの幅だけが違うため。
     @MainActor
@@ -29,13 +36,12 @@ enum StatusBarCutout: Equatable {
         if let model = NotchModel.table[identifier] {
             return model.scaled(toWidth: width)
         }
-        if top > 24 {
-            // 切り欠きのある、表にない機種。位置と大きさを推し量ると、切り欠きとずれた黒を描くため、出さない。
-            // 次に表へ足す値が分かるよう、機種と画面の大きさを残す。
-            logger.info("statusBarTicker unknown cutout model: \(identifier, privacy: .public) \(width, privacy: .public)x\(window.bounds.height, privacy: .public) top=\(top, privacy: .public)")
-            return nil
+        if DeviceModel.flatIdentifiers.contains(identifier) {
+            return .none(height: max(top, 20))
         }
-        return .none(height: max(top, 20))
+        // 次に表へ足す値が分かるよう、機種と画面の大きさを残す。
+        logger.info("statusBarTicker unmeasured model: \(identifier, privacy: .public) \(width, privacy: .public)x\(window.bounds.height, privacy: .public) top=\(top, privacy: .public)")
+        return nil
     }
 
     private static let logger = SciaLog.logger(category: "statusBarTicker")
@@ -157,6 +163,14 @@ struct NotchModel {
 }
 
 enum DeviceModel {
+    /// 切り欠きのないiPhone（iPhone SEの第2世代と第3世代）。
+    static let flatIdentifiers: Set<String> = ["iPhone12,8", "iPhone14,6"]
+
+    /// ステータスバーの場所の形を測ってある機種か。
+    static func isMeasured(_ identifier: String) -> Bool {
+        IslandModel.table[identifier] != nil || NotchModel.table[identifier] != nil || flatIdentifiers.contains(identifier)
+    }
+
     /// 機種の識別子（iPhone17,1など）。シミュレーターでは、まねている機種の識別子。
     static var identifier: String {
         #if targetEnvironment(simulator)

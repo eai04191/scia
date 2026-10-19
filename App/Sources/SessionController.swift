@@ -344,12 +344,13 @@ final class SessionController {
         composer.install(in: tabBarController)
     }
 
-    /// 通知タブを見ている間と、ビューアのように画面全体を覆う画面を出している間は流さない。
+    /// 設定でオフにしている間、この機種で使えない間、通知タブを見ている間、ビューアのように画面全体を覆う画面を出している間は流さない。
     /// 押すと通知タブを開く。投稿を1件だけ開く画面がまだないため。
     private func configureStatusBarTicker(tabBarController: UITabBarController) {
         let ticker = statusBarTicker
         ticker.scene = { [weak tabBarController] in tabBarController?.view.window?.windowScene }
         ticker.canShow = { [weak tabBarController] in
+            guard AppDependencies.settings.showsStatusBarTicker, StatusBarCutout.isAvailable else { return false }
             guard let tabBarController, tabBarController.selectedTab?.identifier != "notifications" else { return false }
             // ビューアの上に代替テキストのシートを重ねたときのように、手前がシートでも奥に画面全体を覆う画面があれば流さない。
             var presented = tabBarController.presentedViewController
@@ -366,6 +367,7 @@ final class SessionController {
         }
         notifications.onArrival = { notification, verdict in ticker.receive(notification, verdict: verdict) }
         tabBarDelegate.onSelect = { ticker.reevaluate() }
+        observeStatusBarTickerSetting()
         #if DEBUG
         home.onDummyNotifications = { DummyNotifications.stream(into: ticker) }
         home.onSetStatusBarTickerLooping = { [weak ticker] isOn in ticker?.setLooping(isOn, items: DummyNotifications.samples) }
@@ -373,6 +375,34 @@ final class SessionController {
         #endif
     }
 
+
+    /// 設定でステータスバーの通知をオフからオンにしたら、どう出るかが分かるよう、デモの通知を1件流す。
+    private func observeStatusBarTickerSetting() {
+        let wasOn = AppDependencies.settings.showsStatusBarTicker
+        withObservationTracking {
+            _ = AppDependencies.settings.showsStatusBarTicker
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                if !wasOn, AppDependencies.settings.showsStatusBarTicker {
+                    self.showStatusBarTickerDemo()
+                }
+                self.observeStatusBarTickerSetting()
+            }
+        }
+    }
+
+    /// デモの通知。差出人は自分のアカウントにし、実物の通知と同じくアイコンと名前を出す。
+    private func showStatusBarTickerDemo() {
+        Task {
+            do {
+                let account = try await myAccount()
+                statusBarTicker.receive(StatusBarTickerItem(id: "demo", kind: .favourite, account: account, subject: .text(RichText.plain("通知はここに流れます", emojis: []))))
+            } catch {
+                logger.info("statusBarTicker demo skipped: \(ErrorPresentation(error).text, privacy: .public)")
+            }
+        }
+    }
 
     private func applyObscuredBottomHeight() {
         for timeline in timelines.allObjects {

@@ -18,6 +18,11 @@ public final class AppSettings {
         didSet { defaults.set(ignoresUselessAltText, forKey: Keys.ignoresUselessAltText) }
     }
 
+    /// 届いた通知を、ステータスバーの場所に流す。
+    public var showsStatusBarTicker: Bool {
+        didSet { defaults.set(showsStatusBarTicker, forKey: Keys.showsStatusBarTicker) }
+    }
+
     /// 投稿の名前の行に、表示名とacctをどう並べるか。
     public var statusNameStyle: StatusNameStyle {
         didSet { defaults.set(statusNameStyle.rawValue, forKey: Keys.statusNameStyle) }
@@ -92,6 +97,7 @@ public final class AppSettings {
     private enum Keys {
         static let usesOriginalThumbnailsOnExpensiveNetwork = "settings.usesOriginalThumbnailsOnExpensiveNetwork"
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
+        static let showsStatusBarTicker = "settings.showsStatusBarTicker"
         static let statusNameStyle = "settings.statusNameStyle"
         static let statusTimeStyle = "settings.statusTimeStyle"
         static let glyphLanguage = "settings.glyphLanguage"
@@ -113,6 +119,7 @@ public final class AppSettings {
         self.defaults = defaults
         usesOriginalThumbnailsOnExpensiveNetwork = defaults.object(forKey: Keys.usesOriginalThumbnailsOnExpensiveNetwork) as? Bool ?? true
         ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
+        showsStatusBarTicker = defaults.object(forKey: Keys.showsStatusBarTicker) as? Bool ?? true
         statusNameStyle = defaults.string(forKey: Keys.statusNameStyle).flatMap(StatusNameStyle.init(rawValue:)) ?? .nameAndAcct
         statusTimeStyle = defaults.string(forKey: Keys.statusTimeStyle).flatMap(StatusTimeStyle.init(rawValue:)) ?? .relative
         glyphLanguage = defaults.string(forKey: Keys.glyphLanguage).flatMap(GlyphLanguage.init(rawValue:)) ?? .automatic
