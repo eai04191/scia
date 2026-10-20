@@ -203,6 +203,9 @@ enum PostRowCatalog {
             row("ブースト", .reblog, status: mine),
             row("お気に入り", .favourite, status: mine),
             row("お気に入り（長い本文を切る）", .favourite, status: status(content: longBody)),
+            row("お気に入り（長い本文を切る、画像つき）", .favourite, status: status(content: longBody, media: [
+                Fixtures.attachment("a", width: 1_200, height: 900, color: .systemBlue),
+            ])),
             row("お気に入り（注意書き、閉じた）", .favourite, status: status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ")),
             row("お気に入り（注意書き、開いた）", .favourite, status: status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ"), expandsSpoiler: true),
             row("メンション（注意書き、閉じた）", .mention, status: status(content: "<p>@me 注意書きの下の本文。</p>", account: booster, spoilerText: "ネタバレ")),
