@@ -260,9 +260,12 @@ final class StatusBarTickerView: UIView {
         if case .none = cutout {
             overrideUserInterfaceStyle = .unspecified
             capsule.backgroundColor = .clear
+            // 帯の上から下ろして出し、上へ抜いて消す。iPhoneとiPadでは帯の上は画面の外だが、Macではタイトルバーの上に描かれて見えるため、ウィンドウの外は切る。
+            clipsToBounds = true
         } else {
             overrideUserInterfaceStyle = .dark
             capsule.backgroundColor = .black
+            clipsToBounds = false
         }
     }
 
