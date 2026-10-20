@@ -209,6 +209,13 @@ final class ProfileController {
     private func updateHeader() {
         let account = store.account
         header.followRevealDuration = viewController?.tuning.value(of: TuningCatalog.profileRevealDuration) ?? 0
+        if let tuning = viewController?.tuning {
+            header.reflectionStyle = ProfileBannerBlur.Style(
+                blur: tuning.value(of: TuningCatalog.profileBannerReflectionBlur),
+                dim: tuning.value(of: TuningCatalog.profileBannerReflectionDim),
+                seam: tuning.value(of: TuningCatalog.profileBannerReflectionSeam)
+            )
+        }
         header.apply(ProfileHeaderView.Content(
             account: account,
             followState: store.followState,

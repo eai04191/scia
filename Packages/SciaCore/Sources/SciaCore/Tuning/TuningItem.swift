@@ -288,6 +288,33 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
+    /// プロフィールのヘッダー画像を上へ折り返して伸ばす部分の、ぼかしの強さ（pt）。
+    public static let profileBannerReflectionBlur = NumberTuning(
+        id: "profile.bannerReflectionBlur",
+        title: "ヘッダー画像の上に伸ばす部分のぼかし（pt）",
+        range: 0...40,
+        step: 1,
+        defaultValue: 10
+    )
+
+    /// プロフィールのヘッダー画像を上へ折り返して伸ばす部分を、どれだけ暗くするか。0なら暗くしない。
+    public static let profileBannerReflectionDim = NumberTuning(
+        id: "profile.bannerReflectionDim",
+        title: "ヘッダー画像の上に伸ばす部分の暗さ",
+        range: 0...0.8,
+        step: 0.05,
+        defaultValue: 0.1
+    )
+
+    /// プロフィールのヘッダー画像を上へ折り返して伸ばす部分で、画像の上端からぼかしが最も強くなるまでの長さ。上端の近くを弱くぼかし、画像となめらかにつなげる。
+    public static let profileBannerReflectionSeam = NumberTuning(
+        id: "profile.bannerReflectionSeam",
+        title: "ヘッダー画像の上に伸ばす部分の、ぼかしが強くなるまでの長さ（pt）",
+        range: 0...80,
+        step: 4,
+        defaultValue: 24
+    )
+
     /// プロフィールの最初の投稿の一覧を出す前に、行のアイコンが読み込み終わるのを待つ上限。読み込み終われば上限を待たずに出す。0なら待たない。
     public static let profileAvatarWait = NumberTuning(
         id: "profile.avatarWait",
@@ -1170,6 +1197,9 @@ public enum TuningCatalog {
         TuningSection(id: "profile", title: "プロフィール", items: [
             .number(profileRevealDuration),
             .number(profileAvatarWait),
+            .number(profileBannerReflectionBlur),
+            .number(profileBannerReflectionDim),
+            .number(profileBannerReflectionSeam),
         ]),
         TuningSection(id: "editHistory", title: "編集履歴", items: [
             .number(editHistoryMinimumUnchangedRatio),
