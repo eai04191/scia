@@ -22,6 +22,18 @@ final class ProfileController {
     /// 表示している一覧と、その一覧のタブ。切り替えた一覧が届くまでは、前の一覧を出し続ける。
     private var shownTimeline: TimelineStore
     private var shownTab: ProfileTab
+    /// 開いて最初の一覧を出したか。最初の一覧は、投稿の一覧と固定された投稿の両方が届き、見える行のアイコンを読むのを待ってから、フェードで一度に出す。
+    /// 別々に出すと、投稿が2回に分けて現れたり、アイコンが行より遅れて入ったりする。
+    private var listReveal = ListReveal.waiting
+    /// 最初の一覧に使う投稿の一覧を読み終えた。
+    private var isInitialListLoaded = false
+
+    private enum ListReveal {
+        case waiting
+        /// アイコンを待っている。
+        case revealing
+        case revealed
+    }
 
     /// 画面とコントローラーを作る。画面が閉じられると、コントローラーも解放される。
     static func make(
@@ -97,11 +109,13 @@ final class ProfileController {
         withObservationTracking {
             updateHeader()
             _ = store.pinned
+            _ = store.isPinnedSettled
         } onChange: { [weak self] in
             Task { @MainActor in
                 self?.afterTransition { controller in
                     controller.observeHeaderContent()
                     controller.showEntries()
+                    controller.revealListIfReady()
                 }
             }
         }
@@ -171,8 +185,49 @@ final class ProfileController {
 
     /// - Parameter replacing: 一覧を切り替えた。タブを押した場所に残し、その下の中身だけを差し替える。
     private func showEntries(replacing: Bool = false) {
+        viewController?.setEntries(listReveal == .revealed ? shownEntries() : [], keepsOffset: replacing)
+    }
+
+    private func shownEntries() -> [TimelineEntry] {
         let pinned = shownTab == .posts ? store.pinned : []
-        viewController?.setEntries(pinned.map(TimelineEntry.pinned) + shownTimeline.entries, keepsOffset: replacing)
+        return pinned.map(TimelineEntry.pinned) + shownTimeline.entries
+    }
+
+    /// 最初の一覧を出せるようになっていたら、見える行のアイコンを上限まで待ってから、フェードで出す。
+    /// 「メディア」の一覧には固定された投稿を置かないので、固定された投稿を待たない。
+    private func revealListIfReady() {
+        guard listReveal == .waiting, isReadyToRevealList else { return }
+        listReveal = .revealing
+        run { controller in
+            guard let viewController = controller.viewController else { return }
+            // 1画面に収まる行の数より多めに待つ。全部を待つと、画面の外の行のアイコンまで待たされる。
+            let deadline = ContinuousClock.now + .seconds(viewController.tuning.value(of: TuningCatalog.profileAvatarWait))
+            await viewController.waitForAvatars(of: { Array(controller.shownEntries().prefix(12)) }, until: deadline)
+            controller.afterTransition { controller in
+                // 待つ間に「メディア」から「投稿」へ切り替えていたら、固定された投稿がまだのことがある。届いたら、待ち直す。
+                guard controller.isReadyToRevealList else {
+                    controller.listReveal = .waiting
+                    return
+                }
+                controller.listReveal = .revealed
+                controller.showEntries(replacing: true)
+                // 待つ間に別の一覧へ切り替えていたら、フッターはその一覧の読み込み中や失敗の表示のまま残す。
+                if controller.shownTimeline === controller.store.timeline {
+                    controller.viewController?.setFooterState(controller.shownTimeline.reachedEnd ? .reachedEnd : .idle)
+                }
+                controller.viewController?.fadeInVisibleItems(duration: controller.revealDuration)
+            }
+        }
+    }
+
+    /// 最初の一覧の投稿を読み終え、「投稿」の一覧なら固定された投稿も読み終えた。
+    private var isReadyToRevealList: Bool {
+        isInitialListLoaded && (shownTab != .posts || store.isPinnedSettled)
+    }
+
+    private var revealDuration: TimeInterval {
+        guard let viewController else { return 0 }
+        return viewController.tuning.value(of: TuningCatalog.profileRevealDuration)
     }
 
     /// アイコンかヘッダー画像を、添付ファイルと同じビューアで開く。1枚だけを開き、左右に切り替えない。
@@ -220,6 +275,12 @@ final class ProfileController {
                     guard timeline === controller.store.timeline else { return }
                     controller.shownTimeline = timeline
                     controller.shownTab = controller.store.tab
+                    guard controller.listReveal == .revealed else {
+                        // 最初の一覧は、出すときにフッターもまとめて切り替える。
+                        controller.isInitialListLoaded = true
+                        controller.revealListIfReady()
+                        return
+                    }
                     controller.showEntries(replacing: true)
                     controller.viewController?.setFooterState(timeline.reachedEnd ? .reachedEnd : .idle)
                 }

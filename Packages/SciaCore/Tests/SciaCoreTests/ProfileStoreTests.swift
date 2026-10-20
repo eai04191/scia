@@ -210,6 +210,18 @@ struct ProfileStoreTests {
         #expect(store.followState == .following)
     }
 
+    /// 固定された投稿を読み終えたかは、読めたときも読めなかったときも分かる。一覧は、これを待ってから固定された投稿と一緒に出す。
+    @Test(arguments: [false, true])
+    func pinnedSettlesWhetherLoadedOrFailed(failsPinned: Bool) async throws {
+        let known = try account()
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, api: makeAPI(account: known, failsPinned: failsPinned))
+        #expect(!store.isPinnedSettled)
+
+        _ = await store.loadProfile()
+
+        #expect(store.isPinnedSettled)
+    }
+
     /// プロフィールの場所で隠すフィルターに一致した固定された投稿は出さない。編集で一致しなくなれば出す。
     @Test func hidesFilteredPinnedStatus() async throws {
         let known = try account()

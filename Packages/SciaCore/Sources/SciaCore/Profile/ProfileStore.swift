@@ -98,6 +98,8 @@ public final class ProfileStore {
     }
     /// 読んだ固定された投稿。編集でフィルターに一致しなくなったら出せるよう、隠す投稿も持つ。
     private var loadedPinned: [Status] = []
+    /// 固定された投稿を読み終えた。読めなかったときも含む。一覧を固定された投稿と一緒に出すために、これを待つ。
+    public private(set) var isPinnedSettled = false
     /// 関係を読めず、まだ読み直せていない。
     public private(set) var relationshipFailed = false
     /// 読めなかった関係を読み直している途中。
@@ -183,14 +185,18 @@ public final class ProfileStore {
                     guard followChanges == followChangesAtRequest else { continue }
                     self.relationship = relationship
                     relationshipFailed = false
-                case .success(.pinned(let pinned)): loadedPinned = pinned.filter { !deletedIDs.contains($0.id) }
+                case .success(.pinned(let pinned)):
+                    loadedPinned = pinned.filter { !deletedIDs.contains($0.id) }
+                    isPinnedSettled = true
                 case .failure(let error):
                     switch part {
                     case .account: failures.account = error
                     case .relationship:
                         failures.relationship = error
                         relationshipFailed = relationship == nil
-                    case .pinned: failures.pinned = error
+                    case .pinned:
+                        failures.pinned = error
+                        isPinnedSettled = true
                     }
                 }
             }

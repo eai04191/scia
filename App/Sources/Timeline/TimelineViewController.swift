@@ -482,6 +482,23 @@ final class TimelineViewController: UIViewController {
         reportApproachingGaps()
     }
 
+    /// 画面に見えている行を、透明からフェードで出す。行を入れた直後に呼ぶ。
+    /// 一覧全体をクロスフェードすると、途中でスクロールしたときに前の見た目が残像として重なるため、行だけを動かす。
+    /// フェードの途中にスクロールで入ってきた行は、フェードせずにそのまま出す。0秒か、画面に出ていなければ何もしない。
+    func fadeInVisibleItems(duration: TimeInterval) {
+        guard duration > 0, view.window != nil else { return }
+        collectionView.layoutIfNeeded()
+        let cells = collectionView.visibleCells
+        for cell in cells {
+            cell.alpha = 0
+        }
+        UIView.animate(withDuration: duration, delay: 0, options: [.allowUserInteraction, .curveEaseOut]) {
+            for cell in cells {
+                cell.alpha = 1
+            }
+        }
+    }
+
     /// 読み込み中のギャップを読み込み中の表示に、読めなかったギャップを読めなかった表示にする。
     func setGapStates(loading ids: Set<String>, failures: [String: ErrorPresentation]) {
         let failureChanged = Set(failures.keys).union(gapFailures.keys).filter { failures[$0] != gapFailures[$0] }
