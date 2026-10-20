@@ -1046,7 +1046,7 @@ public enum TuningCatalog {
     public static let reactionGlowFillsWidthWhenAlone = ToggleTuning(
         id: "timeline.reactionGlowFillsWidthWhenAlone",
         title: "片方だけのときは全幅を光らせる",
-        defaultValue: true
+        defaultValue: false
     )
 
     /// 光が何を示すかを、アイコンで添える。0はなし、1は下の端に1つずつ置く、2は下の端に小さく散らす。
@@ -1055,7 +1055,7 @@ public enum TuningCatalog {
         title: "光のアイコン（0: なし、1: 下の端、2: 散らす）",
         range: 0...2,
         step: 1,
-        defaultValue: 1
+        defaultValue: 0
     )
 
     /// 光に添えるアイコンの大きさ。散らすときは、これを基準に大きさを変える。
