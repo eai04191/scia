@@ -49,6 +49,51 @@ struct GlyphLanguageTests {
         #expect(isJapanese(fontNames(of: configuration.body)), "\(fontNames(of: configuration.body))")
     }
 
+    /// 標準の書体にない文字のあとのかなも、ヒラギノで描く。
+    /// 「𝕏」を描ける書体はSTIXしかなく、STIXは「の」も持つ。標準の書体にない文字が続く間、システムは先に使った書体を先に試すため、
+    /// 「𝕏」と、かなや漢字が続く文では、離れた「の」までSTIXで描かれていた。韓国語の書体もかなを持つため、韓国語のすぐあとのかなも同じだった。
+    @Test(arguments: ["𝕏の", "𝕏あいうの", "𝕏。の", "あ𝕏の", "𝕏🦐の", "⨁の", "한국어の"])
+    func kanaAfterFallbackSymbolUsesJapaneseFont(_ content: String) throws {
+        let configuration = try controller(glyphLanguage: .japanese).contentConfiguration(for: status(content, language: "ja"), base: .cell())
+
+        #expect(isJapanese(fontNames(of: configuration.body)), "\(fontNames(of: configuration.body))")
+    }
+
+    /// 標準の書体にない記号のない投稿では、属性のランを分けない。
+    /// ランが分かれると、分かれたランごとにシステムが書体を探し直す。漢字とかなのランを英字と分けたときは、iOSのシミュレーターで並べる時間が約3倍になった。
+    /// 絵文字の書体はかなを持たないため、絵文字のあとのかなでも分けない。
+    @Test func plainBodyKeepsOneAttributeRun() throws {
+        let body = try controller(glyphLanguage: .japanese).contentConfiguration(for: status("今日はMastodonを試した🦐の話。한국어 も", language: "ja"), base: .cell()).body
+        var runs = 0
+        body.enumerateAttributes(in: NSRange(location: 0, length: body.length)) { _, _, _ in runs += 1 }
+
+        #expect(runs == 1)
+    }
+
+    /// 記号の印でランを分けても、異体字セレクターで選んだ見た目は変えない。
+    /// セレクターの手前でランを分けると、「葛󠄀」は選んだ字形でなくなっていた。macOSでは、「㊗️」「〰️」もカラー絵文字でなくヒラギノの記号になる。
+    @Test(arguments: ["㊗️", "〰️", "葛\u{E0100}"])
+    func variationSequenceKeepsItsGlyph(_ sequence: String) throws {
+        let body = try controller(glyphLanguage: .japanese).contentConfiguration(for: status("𝕏\(sequence)b", language: "ja"), base: .cell()).body
+        let plain = NSMutableAttributedString(attributedString: body)
+        plain.removeAttribute(.fallbackSymbol, range: NSRange(location: 0, length: plain.length))
+
+        #expect(glyphs(of: body) == glyphs(of: plain), "\(glyphs(of: plain))")
+    }
+
+    /// 文字列を1行に並べたときの、書体の名前と字形の番号。
+    private func glyphs(of string: NSAttributedString) -> [String] {
+        let runs = CTLineGetGlyphRuns(CTLineCreateWithAttributedString(string)) as? [CTRun] ?? []
+        return runs.flatMap { run -> [String] in
+            let attributes = CTRunGetAttributes(run) as NSDictionary
+            // swiftlint:disable:next force_cast
+            let name = attributes[kCTFontAttributeName].map { CTFontCopyPostScriptName($0 as! CTFont) as String } ?? ""
+            var glyphs = [CGGlyph](repeating: 0, count: CTRunGetGlyphCount(run))
+            CTRunGetGlyphs(run, CFRange(location: 0, length: 0), &glyphs)
+            return glyphs.map { "\(name)#\($0)" }
+        }
+    }
+
     /// 名前と注意書きも、ヒラギノで描く。
     @Test func nameAndSpoilerUseJapaneseFont() throws {
         let configuration = try controller(glyphLanguage: .japanese).contentConfiguration(for: status("本文", language: nil, spoiler: "見る前に"), base: .cell())

@@ -31,6 +31,7 @@ struct RichTextRenderer {
             }
             result.addAttribute(.paragraphStyle, value: paragraphStyle(for: block), range: NSRange(location: start, length: result.length - start))
         }
+        result.separateFallbackSymbols(in: NSRange(location: 0, length: result.length))
         return result
     }
 
@@ -66,6 +67,7 @@ struct RichTextRenderer {
             }
             result.addAttribute(.paragraphStyle, value: paragraphStyle(for: block), range: NSRange(location: start, length: result.length - start))
         }
+        result.separateFallbackSymbols(in: NSRange(location: 0, length: result.length))
         return result
     }
 
