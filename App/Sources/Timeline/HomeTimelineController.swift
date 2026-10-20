@@ -539,6 +539,15 @@ extension HomeTimelineController {
         store.debugLocalOnlyIDs.contains(id)
     }
 
+    /// `scia-debug://inject/home`で読んだ投稿を、新着と同じ経路で流す。サーバーにない投稿なので、既読位置には使わない。
+    func inject(_ statuses: [Status]) {
+        logger.info("debug inject home count=\(statuses.count, privacy: .public)")
+        for status in statuses {
+            store.debugLocalOnlyIDs.insert(status.id)
+            receive(.update(status))
+        }
+    }
+
     /// デバッグメニューや、URLで指定したダミー投稿を流す。
     func streamDummy(_ post: DebugDummyPost) {
         logger.info("debug stream dummy \(post.rawValue, privacy: .public)")

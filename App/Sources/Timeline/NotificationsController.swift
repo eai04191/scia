@@ -197,16 +197,7 @@ final class NotificationsController {
             logger.info("notifications streaming connected")
             fillFromLatest()
         case .event(.notification(let notification)):
-            // receiveの戻り値は、保留が空から1件になったかで、受け取ったかではない。挿入を待つ間に続けて届いた通知も流すよう、保留が増えたかで見る。
-            let pendingCount = store.pending.count
-            if store.receive(notification) {
-                scheduleInsertion()
-            }
-            if store.pending.count > pendingCount {
-                onArrival?(notification, notification.status.map { filtering.verdict(for: $0) } ?? .none)
-            }
-            // 挿入までに読み終えられるよう、届いたらすぐアイコンを読み始める。
-            viewController.prefetchAvatars(for: store.pending.map(TimelineEntry.notification))
+            receive(notification)
         case .event:
             break
         case .poll:
@@ -216,6 +207,31 @@ final class NotificationsController {
             viewController.setOutageNotice(isOngoing)
         }
     }
+
+    private func receive(_ notification: MastodonNotification) {
+        // receiveの戻り値は、保留が空から1件になったかで、受け取ったかではない。挿入を待つ間に続けて届いた通知も流すよう、保留が増えたかで見る。
+        let pendingCount = store.pending.count
+        if store.receive(notification) {
+            scheduleInsertion()
+        }
+        if store.pending.count > pendingCount {
+            onArrival?(notification, notification.status.map { filtering.verdict(for: $0) } ?? .none)
+        }
+        // 挿入までに読み終えられるよう、届いたらすぐアイコンを読み始める。
+        viewController.prefetchAvatars(for: store.pending.map(TimelineEntry.notification))
+    }
+
+    #if DEBUG
+    /// `scia-debug://inject/notifications`で読んだ通知を、ストリーミングで届いた通知と同じ経路で流す。サーバーにない通知なので、既読位置と補完の基準には使わない。
+    func inject(_ notifications: [MastodonNotification]) {
+        guard !isStopped else { return }
+        logger.info("debug inject notifications count=\(notifications.count, privacy: .public)")
+        for notification in notifications {
+            store.debugLocalOnlyIDs.insert(notification.id)
+            receive(notification)
+        }
+    }
+    #endif
 
     /// つながるたびと、つながらない間のポーリングで、切れていた間の通知を読む。
     private func fillFromLatest() {

@@ -356,4 +356,36 @@ struct NotificationStoreTests {
         #expect(store.unreadCount == 3)
         #expect(store.hasUnloadedUnread)
     }
+
+    #if DEBUG
+    /// サーバーにない検証用の通知は、見れば手元では既読にするが、サーバーに保存する既読位置には使わない。
+    @Test func debugLocalOnlyNotificationIsReadLocallyButNotSaved() async throws {
+        let queue = PageQueue([try page([30, 29, 28])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial(markerID: "30")
+        store.debugLocalOnlyIDs.insert("99")
+        _ = store.receive(try notifications([99])[0])
+        _ = store.flushPending()
+
+        #expect(store.unreadCount == 1)
+        store.markRead(["99", "30"])
+
+        #expect(store.unreadCount == 0)
+        #expect(store.readIDToSave == nil)
+    }
+
+    /// 補完はサーバーにない検証用の通知より後ではなく、サーバーから読んだ最も新しい通知より後を読む。
+    /// 検証用の通知のIDは手元の最新より大きいため、それを基準にすると、切れていた間に届いた本物の通知を読み落とす。
+    @Test func fillIgnoresDebugLocalOnlyNotifications() async throws {
+        let queue = PageQueue([try page([30, 29, 28]), try page([31]), try page([])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+        store.debugLocalOnlyIDs.insert("99")
+        _ = store.receive(try notifications([99])[0])
+        _ = store.flushPending()
+
+        #expect(try await store.fillFromLatest(maxPages: 1)?.map(\.id) == ["31"])
+        #expect(queue.queries.dropFirst().first?.sinceID == "30")
+    }
+    #endif
 }

@@ -53,6 +53,9 @@ enum DebugURL: Equatable {
     /// `scia-debug://arrivals/hold`で、以後に届いた新着を一覧に挿入せずに溜める。`scia-debug://arrivals/release`で、溜まった新着をまとめて挿入する。
     /// ストリーミングはつないだままなので、切断の知らせやポーリングで一覧が動かない。
     case holdArrivals(Bool)
+    /// `scia-debug://inject/<home|notifications>?file=<ファイル名>`。アプリのDocuments/DebugInjectに置いたJSONを読み、ストリーミングの新着と同じ経路で一覧に流す。
+    /// ホームは`Status`の配列、通知は`Notification`の配列で、APIの応答と同じ形で書く。実データにない投稿や通知の見え方を、ログインした端末のまま確かめるため。
+    case inject(Tab, file: String)
     /// `scia-debug://ticker-loop/on`で、ステータスバーの通知を、出る、出ている、消えるを繰り返して出し続ける。`scia-debug://ticker-loop/off`で止める。
     case statusBarTickerLoop(Bool)
 
@@ -102,6 +105,7 @@ enum DebugURL: Equatable {
         case "notice": Self.progressNotice(url)
         case "media-limits": Self.mediaLimits(url)
         case "viewer": Self.viewer(url)
+        case "inject": Self.inject(url)
         default: nil
         }
         guard let parsed else { return nil }
@@ -136,6 +140,11 @@ enum DebugURL: Equatable {
             videoMatrixLimit: value("video-matrix"),
             videoFrameRateLimit: value("video-frame-rate")
         ))
+    }
+
+    private static func inject(_ url: URL) -> DebugURL? {
+        guard let tab = Tab(rawValue: url.lastPathComponent), let file = query("file", in: url), !file.isEmpty else { return nil }
+        return .inject(tab, file: file)
     }
 
     private static func viewer(_ url: URL) -> DebugURL? {

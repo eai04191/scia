@@ -1059,6 +1059,21 @@ final class SessionController {
         }
     }
 
+    /// Documents/DebugInjectの`file`をAPIの応答と同じ形のJSONとして読み、`tab`の一覧に新着として流す。読めなければ流さずにログに残す。
+    private func inject(_ file: String, into tab: DebugURL.Tab) {
+        let url = URL.documentsDirectory.appending(path: "DebugInject").appending(path: file)
+        do {
+            let data = try Data(contentsOf: url)
+            let decoder = MastodonDecoder.make()
+            switch tab {
+            case .home: home.inject(try decoder.decode([Status].self, from: data))
+            case .notifications: notifications.inject(try decoder.decode([MastodonNotification].self, from: data))
+            }
+        } catch {
+            logger.error("debug inject failed file=\(file, privacy: .public): \(String(describing: error), privacy: .public)")
+        }
+    }
+
     func handle(_ url: DebugURL) {
         switch url {
         case .dummy(let post):
@@ -1123,6 +1138,8 @@ final class SessionController {
             openTopmostMedia(at: index)
         case .statusBarTickerLoop(let isOn):
             statusBarTicker.setLooping(isOn, items: DummyNotifications.samples)
+        case .inject(let tab, let file):
+            inject(file, into: tab)
         case .holdArrivals(let isOn):
             DebugFaults.setHoldingArrivals(isOn)
             if !isOn {

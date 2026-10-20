@@ -130,7 +130,7 @@ public final class NotificationStore {
     /// そのときの基準を覚えて、今の補完が終わった後に続けて読む。
     public func fillFromLatest(maxPages: Int) async throws -> [MastodonNotification]? {
         guard !isFilling else {
-            if let newest = itemIDs.first {
+            if let newest = newestFillBaseID {
                 refillSinceID = refillSinceID.map { Self.older($0, newest) } ?? newest
             }
             return nil
@@ -139,7 +139,7 @@ public final class NotificationStore {
         defer { isFilling = false }
 
         var added: [MastodonNotification] = []
-        var next = unfilledSinceID ?? itemIDs.first
+        var next = unfilledSinceID ?? newestFillBaseID
         repeat {
             let sinceID = next
             unfilledSinceID = sinceID
@@ -265,9 +265,17 @@ public final class NotificationStore {
 
     /// 画面に表示された通知を既読にする。既読の位置は新しい方へだけ進む。
     public func markRead(_ ids: some Sequence<String>) {
-        guard let newest = ids.max(by: { StatusID.isNewer($1, than: $0) }) else { return }
-        if let lastReadID, !StatusID.isNewer(newest, than: lastReadID) { return }
-        lastReadID = newest
+        let ids = Array(ids)
+        lastReadID = Self.advanced(lastReadID, to: ids)
+        #if DEBUG
+        lastSavableReadID = Self.advanced(lastSavableReadID, to: ids.filter { !debugLocalOnlyIDs.contains($0) })
+        #endif
+    }
+
+    private static func advanced(_ current: String?, to ids: [String]) -> String? {
+        guard let newest = ids.max(by: { StatusID.isNewer($1, than: $0) }) else { return current }
+        if let current, !StatusID.isNewer(newest, than: current) { return current }
+        return newest
     }
 
     /// サーバーに保存された既読位置を取り込む。他の端末で読み進めていれば、未読がその分減る。
@@ -276,11 +284,34 @@ public final class NotificationStore {
         markSaved(id)
     }
 
+    #if DEBUG
+    /// サーバーにない検証用の通知のID。見れば手元では既読になるが、サーバーに保存する既読位置と、補完の基準には使わない。
+    /// 検証用の通知のIDは手元の最新より大きくするため、保存すると本物の通知がそれを追い越すまで未読を数えられず、
+    /// 補完の基準にすると、切れていた間に届いた本物の通知を読み落とす。
+    public var debugLocalOnlyIDs: Set<String> = []
+    /// サーバーに保存できる通知のうち、見た中で最も新しいもののID。
+    private var lastSavableReadID: String?
+    #endif
+
+    /// 補完の基準にする、手元で最も新しい通知のID。
+    private var newestFillBaseID: String? {
+        #if DEBUG
+        itemIDs.first { !debugLocalOnlyIDs.contains($0) }
+        #else
+        itemIDs.first
+        #endif
+    }
+
     /// サーバーへ保存すべき既読位置。保存済みより進んでいなければnil。
     public var readIDToSave: String? {
-        guard let lastReadID else { return nil }
-        if let savedReadID, !StatusID.isNewer(lastReadID, than: savedReadID) { return nil }
-        return lastReadID
+        #if DEBUG
+        let candidate = lastSavableReadID
+        #else
+        let candidate = lastReadID
+        #endif
+        guard let candidate else { return nil }
+        if let savedReadID, !StatusID.isNewer(candidate, than: savedReadID) { return nil }
+        return candidate
     }
 
     /// 既読位置をサーバーに保存した。保存済みの位置は新しい方へだけ進む。

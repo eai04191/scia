@@ -1,0 +1,106 @@
+[
+  {
+    "id": "999999999",
+    "type": "favourite",
+    "created_at": "2026-10-20T03:00:00.000Z",
+    "account": {
+      "id": "2",
+      "username": "friend",
+      "acct": "friend@remote.example",
+      "display_name": "お気に入りした人",
+      "locked": false,
+      "bot": false,
+      "discoverable": true,
+      "group": false,
+      "created_at": "2024-01-01T00:00:00.000Z",
+      "note": "",
+      "url": "https://remote.example/@friend",
+      "uri": "https://remote.example/users/friend",
+      "avatar": "https://mastodon.example/avatars/original/missing.png",
+      "avatar_static": "https://mastodon.example/avatars/original/missing.png",
+      "header": "https://mastodon.example/headers/original/missing.png",
+      "header_static": "https://mastodon.example/headers/original/missing.png",
+      "followers_count": 0,
+      "following_count": 0,
+      "statuses_count": 1,
+      "last_status_at": "2026-10-20",
+      "emojis": [],
+      "fields": []
+    },
+    "status": {
+      "id": "100000000000000001",
+      "created_at": "2026-10-20T03:00:00.000Z",
+      "in_reply_to_id": null,
+      "in_reply_to_account_id": null,
+      "sensitive": false,
+      "spoiler_text": "",
+      "visibility": "public",
+      "language": "ja",
+      "uri": "https://mastodon.example/users/me/statuses/100000000000000001",
+      "url": "https://mastodon.example/@me/100000000000000001",
+      "replies_count": 0,
+      "reblogs_count": 0,
+      "favourites_count": 1,
+      "favourited": false,
+      "reblogged": false,
+      "muted": false,
+      "bookmarked": false,
+      "content": "<p>お気に入りやブーストの通知で、再掲する本文が何行で切れるかと、サムネイルの並びを確かめるための投稿。</p>",
+      "reblog": null,
+      "account": {
+        "id": "1",
+        "username": "me",
+        "acct": "me",
+        "display_name": "自分",
+        "locked": false,
+        "bot": false,
+        "discoverable": true,
+        "group": false,
+        "created_at": "2024-01-01T00:00:00.000Z",
+        "note": "",
+        "url": "https://mastodon.example/@me",
+        "uri": "https://mastodon.example/users/me",
+        "avatar": "https://mastodon.example/avatars/original/missing.png",
+        "avatar_static": "https://mastodon.example/avatars/original/missing.png",
+        "header": "https://mastodon.example/headers/original/missing.png",
+        "header_static": "https://mastodon.example/headers/original/missing.png",
+        "followers_count": 0,
+        "following_count": 0,
+        "statuses_count": 1,
+        "last_status_at": "2026-10-20",
+        "emojis": [],
+        "fields": []
+      },
+      "media_attachments": [
+        {
+          "id": "1",
+          "type": "image",
+          "url": "https://mastodon.example/media/original.png",
+          "preview_url": "https://mastodon.example/media/small.png",
+          "remote_url": null,
+          "description": null,
+          "blurhash": "UARfkAM{xu%M~qM{RjWBRjRjt7t7RPxuozWB",
+          "meta": {
+            "original": {
+              "width": 1475,
+              "height": 665,
+              "size": "1475x665",
+              "aspect": 2.218045112781955
+            },
+            "small": {
+              "width": 714,
+              "height": 322,
+              "size": "714x322",
+              "aspect": 2.217391304347826
+            }
+          }
+        }
+      ],
+      "mentions": [],
+      "tags": [],
+      "emojis": [],
+      "card": null,
+      "poll": null
+    }
+  }
+]
