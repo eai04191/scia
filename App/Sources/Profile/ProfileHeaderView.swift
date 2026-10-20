@@ -28,6 +28,8 @@ final class ProfileHeaderView: UIView {
     var onOpenOriginal: (() -> Void)?
     /// アイコンかヘッダー画像がタップされた。画像を読み込み終えていなければ呼ばない。
     var onOpenImage: ((ProfileImage) -> Void)?
+    /// 関係が届いて、フォローのボタンの場所取りから本物の文字に変わるときのフェードの時間。0なら切り替える。
+    var followRevealDuration: TimeInterval = 0
 
     /// ヘッダー画像の縦横比（高さ÷幅）。Mastodonのヘッダー画像は3:1を想定している。
     private static let bannerAspect: CGFloat = 1 / 3
@@ -230,6 +232,7 @@ final class ProfileHeaderView: UIView {
     }
 
     func apply(_ content: Content) {
+        let previous = self.content
         self.content = content
         let account = content.account
 
@@ -261,7 +264,14 @@ final class ProfileHeaderView: UIView {
         // サーバーがプロフィールのURLを返さなかったら、開く先がないのでボタンを出さない。
         openOriginalButton.isHidden = account.url == nil
 
-        applyFollowButton(content)
+        let revealsFollow = previous?.followState == .unknown && content.followState != .unknown
+        if revealsFollow, followRevealDuration > 0, window != nil, !UIAccessibility.isReduceMotionEnabled {
+            UIView.transition(with: followButton, duration: followRevealDuration, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+                self.applyFollowButton(content)
+            }
+        } else {
+            applyFollowButton(content)
+        }
         tabControl.selectedSegmentIndex = content.tab == .media ? 1 : 0
         // メディアの一覧では使えないが、消すとタブの幅が変わって動くため、場所を残したまま押せなくする。
         filterButton.isEnabled = content.tab == .posts
@@ -326,10 +336,17 @@ final class ProfileHeaderView: UIView {
     private func applyFollowButton(_ content: Content) {
         let title: String?
         var configuration: UIButton.Configuration
+        // 関係を読む前は、届いたときに何もない所から出ないよう、文字を消したボタンで場所を取っておく。
+        // 幅は、一番多い「フォローする」に合わせる。
+        let isPlaceholder = content.followState == .unknown
         switch content.followState {
-        case .myself, .unknown, .loadFailed, .blocked:
+        case .myself, .loadFailed, .blocked:
             title = nil
             configuration = .filled()
+        case .unknown:
+            title = "フォローする"
+            configuration = .gray()
+            configuration.baseForegroundColor = .clear
         case .notFollowing(let locked):
             title = locked ? "フォローをリクエスト" : "フォローする"
             configuration = .filled()
@@ -346,6 +363,10 @@ final class ProfileHeaderView: UIView {
         followButton.configuration = configuration
         followButton.isHidden = title == nil
         followButton.isEnabled = !content.isChangingFollow
+        // 押せない見た目にすると、消した文字が灰色で出てしまうため、見た目はそのままで触れないだけにする。
+        followButton.isUserInteractionEnabled = !isPlaceholder
+        followButton.accessibilityLabel = isPlaceholder ? "フォローの状態を読み込み中" : nil
+        followButton.accessibilityTraits = isPlaceholder ? [.button, .notEnabled] : .button
 
         relationshipFailureStack.isHidden = content.followState != .loadFailed
         relationshipRetryButton.configuration?.showsActivityIndicator = content.isReloadingRelationship

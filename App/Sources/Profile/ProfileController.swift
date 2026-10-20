@@ -142,6 +142,7 @@ final class ProfileController {
 
     private func updateHeader() {
         let account = store.account
+        header.followRevealDuration = viewController?.tuning.value(of: TuningCatalog.profileRevealDuration) ?? 0
         header.apply(ProfileHeaderView.Content(
             account: account,
             followState: store.followState,

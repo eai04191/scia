@@ -279,6 +279,15 @@ public enum TuningCatalog {
         defaultValue: 40
     )
 
+    /// プロフィールを開いたあと、フォローのボタンの文字と最初の投稿の一覧を、読み込みが届いたときにフェードで入れる時間。0なら切り替える。
+    public static let profileRevealDuration = NumberTuning(
+        id: "profile.revealDuration",
+        title: "読み込みが届いたときのフェード（秒）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.2
+    )
+
     /// ストリーミングで届いた新着を、まとめてタイムラインに挿入する間隔。最初の新着が届いてからこの時間待つ。
     /// 0なら届いたらすぐ挿入する。指で触っている間や長押しのメニューを出している間は、この値によらず操作が終わるまで待つ。
     public static let insertionInterval = NumberTuning(
@@ -962,6 +971,9 @@ public enum TuningCatalog {
             .number(scrollToTopBounce),
             .number(insertionScrollDuration),
             .number(insertionScrollBounce),
+        ]),
+        TuningSection(id: "profile", title: "プロフィール", items: [
+            .number(profileRevealDuration),
         ]),
         TuningSection(id: "editHistory", title: "編集履歴", items: [
             .number(editHistoryMinimumUnchangedRatio),
