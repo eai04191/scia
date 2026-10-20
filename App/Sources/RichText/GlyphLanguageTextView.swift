@@ -2,6 +2,7 @@ import SciaCore
 import UIKit
 
 /// 代替テキストや投稿欄のように、人が書いた言語の分からない文字を描く入力欄。打った文字や置いた文字に、設定の字形の言語を付ける。
+/// 漢字とかなの書体を言語から選ばせるため、標準の書体にない記号は、後ろの漢字やかなとランを分ける（`separateFallbackSymbols`）。
 /// ビューの`typesettingLanguage`でも書体を選ぶ言語を渡せるが、UIKitは言語の部分しか保たず、繁体字を選んでも簡体字の書体になるため、文字列に付ける。
 class GlyphLanguageTextView: UITextView, NSTextStorageDelegate {
     private var settings: AppSettings?
@@ -13,6 +14,7 @@ class GlyphLanguageTextView: UITextView, NSTextStorageDelegate {
         withObservationTracking {
             let language = settings.glyphLanguageIdentifier()
             textStorage.addAttribute(.languageIdentifier, value: language, range: NSRange(location: 0, length: textStorage.length))
+            textStorage.separateFallbackSymbols(in: NSRange(location: 0, length: textStorage.length))
         } onChange: { [weak self] in
             Task { @MainActor in
                 self?.followGlyphLanguage(of: settings)
@@ -26,6 +28,7 @@ class GlyphLanguageTextView: UITextView, NSTextStorageDelegate {
         MainActor.assumeIsolated {
             guard let settings else { return }
             self.textStorage.addAttribute(.languageIdentifier, value: settings.glyphLanguageIdentifier(), range: editedRange)
+            self.textStorage.separateFallbackSymbols(in: editedRange)
         }
     }
 }

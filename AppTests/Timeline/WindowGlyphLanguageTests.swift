@@ -1,3 +1,4 @@
+import CoreText
 import SciaCore
 import SwiftUI
 import Testing
@@ -102,6 +103,88 @@ struct WindowGlyphLanguageTests {
         await Task.yield()
 
         #expect(languages(of: textView) == ["ja"])
+    }
+
+    /// 標準の書体にない文字のあとに打ったかなも、ヒラギノで描く。理由は`GlyphLanguageTests.kanaAfterFallbackSymbolUsesJapaneseFont`と同じ。
+    /// 打った文字は、手前の文字の属性を引き継いで入る。「𝕏」のあとに打ったかなが「𝕏」の印を引き継ぐと、ランがつながってSTIXで描かれるため、「𝕏」のあとにかなを打つ場合も確かめる。
+    @Test func textViewKanaAfterFallbackSymbolUsesJapaneseFont() throws {
+        let textView = GlyphLanguageTextView()
+        textView.font = .systemFont(ofSize: 17)
+        textView.followGlyphLanguage(of: try settings(.japanese))
+        textView.insertText("𝕏あいう")
+        textView.insertText("の")
+        textView.insertText(" 𝕏")
+        textView.setMarkedText("の", selectedRange: NSRange(location: 1, length: 0))
+        textView.unmarkText()
+        textView.selectedRange = NSRange(location: 0, length: 0)
+        textView.insertText("ほ")
+        textView.insertText("𝕏")
+        textView.insertText("の")
+
+        #expect(textView.text == "ほ𝕏の𝕏あいうの 𝕏の")
+        let fonts = fontNamesOfNo(in: textView.textStorage)
+        #expect(!fonts.isEmpty && fonts.allSatisfy { $0.contains("HiraKaku") }, "\(fonts)")
+    }
+
+    /// 1行の入力欄でも、標準の書体にない文字のあとのかなをヒラギノで描く。
+    /// 1行の入力欄は、付け直すと変換が切れるため、変換を確定してから付け直す。確定するまでの間は確かめない。
+    /// 「𝕏」のあとに打ったかなが印を引き継ぐ場合と、自動修正のように打つ文字の属性を使わずに置き換わる場合も確かめる。
+    @Test func textFieldKanaAfterFallbackSymbolUsesJapaneseFont() throws {
+        let window = try window()
+        window.isHidden = false
+        let field = GlyphLanguageTextField(frame: CGRect(x: 0, y: 0, width: 300, height: 40))
+        field.font = .systemFont(ofSize: 17)
+        window.addSubview(field)
+        field.followGlyphLanguage(of: try settings(.japanese))
+        field.text = "𝕏の"
+        #expect(field.becomeFirstResponder())
+        func type(_ text: String) {
+            field.insertText(text)
+            field.sendActions(for: .editingChanged)
+        }
+        type(" 𝕏あいう")
+        field.setMarkedText("の", selectedRange: NSRange(location: 1, length: 0))
+        field.sendActions(for: .editingChanged)
+        field.unmarkText()
+        field.sendActions(for: .editingChanged)
+        type(" ほ")
+        type("𝕏")
+        type("の")
+        #expect(field.text == "𝕏の 𝕏あいうの ほ𝕏の")
+        var fonts = fontNamesOfNo(in: field.attributedText ?? NSAttributedString())
+        #expect(!fonts.isEmpty && fonts.allSatisfy { $0.contains("HiraKaku") }, "\(fonts)")
+
+        let all = try #require(field.textRange(from: field.beginningOfDocument, to: field.endOfDocument))
+        field.typingAttributes = field.defaultTextAttributes
+        field.replace(all, withText: "𝕏あいうの")
+        field.sendActions(for: .editingChanged)
+        fonts = fontNamesOfNo(in: field.attributedText ?? NSAttributedString())
+        #expect(!fonts.isEmpty && fonts.allSatisfy { $0.contains("HiraKaku") }, "\(fonts)")
+    }
+
+    /// 文字列を1行に並べたとき、「の」を描いた書体の名前。
+    private func fontNamesOfNo(in string: NSAttributedString) -> Set<String> {
+        let runs = CTLineGetGlyphRuns(CTLineCreateWithAttributedString(string)) as? [CTRun] ?? []
+        return Set(runs.compactMap { run -> String? in
+            let range = CTRunGetStringRange(run)
+            let text = (string.string as NSString).substring(with: NSRange(location: range.location, length: range.length))
+            guard text.contains("の") else { return nil }
+            let attributes = CTRunGetAttributes(run) as NSDictionary
+            // swiftlint:disable:next force_cast
+            return attributes[kCTFontAttributeName].map { CTFontCopyPostScriptName($0 as! CTFont) as String }
+        })
+    }
+
+    /// 異体字セレクターをあとから打っても、手前の漢字と同じランに入れる。セレクターとの間でランを分けると、選んだ字形でなくなる。
+    @Test func textViewKeepsVariationSequenceInOneRun() throws {
+        let textView = GlyphLanguageTextView()
+        textView.followGlyphLanguage(of: try settings(.japanese))
+        textView.insertText("a葛")
+        textView.insertText("\u{E0100}")
+
+        var run = NSRange()
+        textView.textStorage.attributes(at: 1, effectiveRange: &run)
+        #expect(run.location <= 1 && NSMaxRange(run) >= 4, "\(run)")
     }
 
     /// 1行の入力欄も、打った文字にも置いた文字にも設定の字形の言語を付け、選び直すと付け直す。

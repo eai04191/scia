@@ -6,6 +6,7 @@ import UIKit
 /// UITextFieldは`defaultTextAttributes`の言語を文字に付けずに捨てる。前後の文字の言語も引き継がず、`typingAttributes`は書き始めたときと文字が入るたびに消す。
 /// キーボードで打った文字はこの入力欄の`insertText`を通らないため、書き始めたときと文字が変わったときに、次に入る文字の言語を入れ直す。
 /// 自動修正で置き換わった文字は`typingAttributes`を使わずに入るため、文字が変わったあとに言語のない文字が残っていれば、全体を付け直す。
+/// 標準の書体にない記号の印（`separateFallbackSymbols`）も、文字に付けた属性と同じく捨てられたり引き継がれたりするため、言語と合わせて確かめ、付け直す。
 class GlyphLanguageTextField: UITextField {
     private var language: String?
 
@@ -41,7 +42,7 @@ class GlyphLanguageTextField: UITextField {
             }
             var attributes = defaultTextAttributes
             attributes[.languageIdentifier] = language
-            super.attributedText = NSAttributedString(string: newValue, attributes: attributes)
+            super.attributedText = Self.labeled(NSAttributedString(string: newValue, attributes: attributes), language: language)
         }
     }
 
@@ -49,14 +50,7 @@ class GlyphLanguageTextField: UITextField {
     private func labelEdits() {
         labelTyping()
         guard let language, markedTextRange == nil, let current = attributedText else { return }
-        var isLabeled = true
-        current.enumerateAttribute(.languageIdentifier, in: NSRange(location: 0, length: current.length)) { value, _, stop in
-            if value as? String != language {
-                isLabeled = false
-                stop.pointee = true
-            }
-        }
-        if !isLabeled {
+        if !Self.labeled(current, language: language).isEqual(to: current) {
             relabel()
         }
     }
@@ -77,13 +71,20 @@ class GlyphLanguageTextField: UITextField {
             unmarkText()
         }
         let selection = selectedTextRange.map { (offset(from: beginningOfDocument, to: $0.start), offset(from: $0.start, to: $0.end)) }
-        let labeled = NSMutableAttributedString(attributedString: attributedText ?? current)
-        labeled.addAttribute(.languageIdentifier, value: language, range: NSRange(location: 0, length: labeled.length))
-        super.attributedText = labeled
+        super.attributedText = Self.labeled(attributedText ?? current, language: language)
         if let (location, length) = selection,
            let start = position(from: beginningOfDocument, offset: location),
            let end = position(from: start, offset: length) {
             selectedTextRange = textRange(from: start, to: end)
         }
+    }
+
+    /// 言語と、標準の書体にない記号の印を付けた文字列。
+    private static func labeled(_ text: NSAttributedString, language: String) -> NSAttributedString {
+        let labeled = NSMutableAttributedString(attributedString: text)
+        let range = NSRange(location: 0, length: labeled.length)
+        labeled.addAttribute(.languageIdentifier, value: language, range: range)
+        labeled.separateFallbackSymbols(in: range)
+        return labeled
     }
 }
