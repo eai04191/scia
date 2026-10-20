@@ -41,7 +41,7 @@ struct StatusInteractionsTests {
         StatusInteractions.Operations(
             favourite: favourite,
             unfavourite: { _ in throw Failure() },
-            reblog: { _ in throw Failure() },
+            reblog: { _, _ in throw Failure() },
             unreblog: { _ in throw Failure() },
             bookmark: { _ in throw Failure() },
             unbookmark: { _ in throw Failure() },
@@ -108,7 +108,7 @@ struct StatusInteractionsTests {
                 return staleFromServer
             },
             unfavourite: { _ in throw Failure() },
-            reblog: { _ in staleFromServer.settingFavourited(false).settingReblogged(true) },
+            reblog: { _, _ in staleFromServer.settingFavourited(false).settingReblogged(true) },
             unreblog: { _ in throw Failure() },
             bookmark: { _ in throw Failure() },
             unbookmark: { _ in throw Failure() },
@@ -140,7 +140,7 @@ struct StatusInteractionsTests {
         let interactions = StatusInteractions(operations: StatusInteractions.Operations(
             favourite: { _ in throw Failure() },
             unfavourite: { _ in throw Failure() },
-            reblog: { _ in throw Failure() },
+            reblog: { _, _ in throw Failure() },
             unreblog: { id in
                 requested.withLock { $0.append(id) }
                 return original.settingReblogged(false)
@@ -164,7 +164,7 @@ struct StatusInteractionsTests {
         let interactions = StatusInteractions(operations: StatusInteractions.Operations(
             favourite: { _ in throw Failure() },
             unfavourite: { _ in throw Failure() },
-            reblog: { _ in throw Failure() },
+            reblog: { _, _ in throw Failure() },
             unreblog: { _ in throw Failure() },
             bookmark: { _ in throw Failure() },
             unbookmark: { _ in throw Failure() },
@@ -185,7 +185,7 @@ struct StatusInteractionsTests {
         let interactions = StatusInteractions(operations: StatusInteractions.Operations(
             favourite: { _ in throw Failure() },
             unfavourite: { _ in throw Failure() },
-            reblog: { _ in throw Failure() },
+            reblog: { _, _ in throw Failure() },
             unreblog: { _ in throw Failure() },
             bookmark: { _ in throw Failure() },
             unbookmark: { _ in bookmarked.settingBookmarked(false) },
@@ -208,7 +208,7 @@ struct StatusInteractionsTests {
         let interactions = StatusInteractions(operations: StatusInteractions.Operations(
             favourite: { _ in throw Failure() },
             unfavourite: { _ in throw Failure() },
-            reblog: { _ in throw Failure() },
+            reblog: { _, _ in throw Failure() },
             unreblog: { _ in throw Failure() },
             bookmark: { _ in throw Failure() },
             unbookmark: { _ in throw Failure() },
@@ -232,7 +232,7 @@ struct StatusInteractionsTests {
         let interactions = StatusInteractions(operations: StatusInteractions.Operations(
             favourite: { _ in throw Failure() },
             unfavourite: { _ in throw Failure() },
-            reblog: { _ in throw Failure() },
+            reblog: { _, _ in throw Failure() },
             unreblog: { _ in throw Failure() },
             bookmark: { _ in throw Failure() },
             unbookmark: { _ in throw Failure() },
@@ -245,5 +245,31 @@ struct StatusInteractionsTests {
         await #expect(throws: Failure.self) { try await interactions.toggle(.pin, on: shown.status) }
 
         #expect(shown.history.map(\.pinned) == [false, true])
+    }
+
+    @Test func reblogsWithChosenVisibility() async throws {
+        let shown = Shown(try status())
+        let fromServer = try status(reblogged: true)
+        let requested = Mutex<[ReblogVisibility]>([])
+        let interactions = StatusInteractions(operations: StatusInteractions.Operations(
+            favourite: { _ in throw Failure() },
+            unfavourite: { _ in throw Failure() },
+            reblog: { _, visibility in
+                requested.withLock { $0.append(visibility) }
+                return fromServer
+            },
+            unreblog: { _ in throw Failure() },
+            bookmark: { _ in throw Failure() },
+            unbookmark: { _ in throw Failure() },
+            muteConversation: { _ in throw Failure() },
+            unmuteConversation: { _ in throw Failure() },
+            pin: { _ in throw Failure() },
+            unpin: { _ in throw Failure() }
+        )) { shown.update($0, $1) }
+
+        #expect(try await interactions.toggle(.reblog, on: shown.status, reblogVisibility: .unlisted))
+
+        #expect(requested.withLock { $0 } == [.unlisted])
+        #expect(shown.status.reblogged)
     }
 }

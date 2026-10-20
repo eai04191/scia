@@ -218,6 +218,19 @@ struct MastodonClientTests {
         #expect(request.url?.path() == "/api/v1/notifications/34975861/dismiss")
     }
 
+    /// 公開範囲を選んだときだけ`visibility`を送る。選ばなければ、サーバーがアカウントの既定の公開範囲でブーストする。
+    @Test func reblogSendsVisibilityOnlyWhenChosen() async throws {
+        let boost = #"{"id":"113000000000000099","created_at":"2026-10-13T03:22:00.000Z","spoiler_text":"","url":null,"content":"","account":{"id":"1","username":"alice","acct":"alice","display_name":"Alice","avatar":"https://example.social/avatars/alice.png","avatar_static":"https://example.social/avatars/alice.png","header":"https://example.social/headers/original/missing.png","header_static":"https://example.social/headers/original/missing.png","note":"","url":"https://example.social/@alice","fields":[],"locked":false,"bot":false,"followers_count":0,"following_count":0,"statuses_count":0,"emojis":[]},"mentions":[],"tags":[],"emojis":[],"media_attachments":[],"sensitive":false,"reblog":"# + Self.interactedStatus + "}"
+        let transport = StubTransport([.json(boost, statusCode: 200), .json(boost, statusCode: 200)])
+        let client = try makeClient(transport)
+
+        _ = try await client.reblog("113000000000000001", visibility: .private)
+        _ = try await client.reblog("113000000000000001")
+
+        let bodies = await transport.requests.map { $0.httpBody.map { String(decoding: $0, as: UTF8.self) } }
+        #expect(bodies == ["visibility=private", ""])
+    }
+
     /// ブーストのAPIはブーストそのものを返すため、中の元の投稿を返す。
     @Test func reblogReturnsOriginalStatus() async throws {
         let boost = #"{"id":"113000000000000099","created_at":"2026-10-13T03:22:00.000Z","spoiler_text":"","url":null,"content":"","account":{"id":"1","username":"alice","acct":"alice","display_name":"Alice","avatar":"https://example.social/avatars/alice.png","avatar_static":"https://example.social/avatars/alice.png","header":"https://example.social/headers/original/missing.png","header_static":"https://example.social/headers/original/missing.png","note":"","url":"https://example.social/@alice","fields":[],"locked":false,"bot":false,"followers_count":0,"following_count":0,"statuses_count":0,"emojis":[]},"mentions":[],"tags":[],"emojis":[],"media_attachments":[],"sensitive":false,"reblog":"# + Self.interactedStatus + "}"

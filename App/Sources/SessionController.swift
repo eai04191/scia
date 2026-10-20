@@ -653,6 +653,9 @@ final class SessionController {
         case .reblog:
             UserAction.toggleReblog.record()
             toggle(.reblog, on: status, failureTitle: "ブーストを変更できませんでした")
+        case .reblogWithVisibility(let visibility):
+            UserAction.toggleReblog.record()
+            toggle(.reblog, on: status, reblogVisibility: visibility, failureTitle: "ブーストできませんでした")
         case .bookmark:
             UserAction.toggleBookmark.record()
             toggle(.bookmark, on: status, failureTitle: "ブックマークを変更できませんでした")
@@ -898,11 +901,11 @@ final class SessionController {
     /// 押し直せば済む失敗なので、操作を止めるアラートにせず、チップの列に数秒で消えるチップを出し、押すと理由を出す。
     /// 消えたあとも確かめられるよう、「最近の失敗」に残す。
     /// - Parameter onSuccess: サーバーが受け付けたら呼ぶ。同じ操作の結果を待っている間に押されて送らなかったときは呼ばない。
-    private func toggle(_ action: StatusInteractions.Action, on status: Status, failureTitle: String, onSuccess: (() -> Void)? = nil) {
+    private func toggle(_ action: StatusInteractions.Action, on status: Status, reblogVisibility: ReblogVisibility = .accountDefault, failureTitle: String, onSuccess: (() -> Void)? = nil) {
         let interactions = interactions
         Task { [weak self] in
             do {
-                guard try await interactions.toggle(action, on: status) else { return }
+                guard try await interactions.toggle(action, on: status, reblogVisibility: reblogVisibility) else { return }
                 onSuccess?()
             } catch {
                 guard let self else { return }

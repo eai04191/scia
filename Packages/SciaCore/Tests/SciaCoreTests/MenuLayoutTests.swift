@@ -163,7 +163,7 @@ struct MenuLayoutTests {
         let groups = StatusMenuItem.defaultLayout.groups
 
         #expect(groups.main.map(\.isRow) == [true, false, false])
-        #expect(groups.main.map(\.items) == [[.reply, .favourite, .reblog], [.edit, .bookmark, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .editHistory, .hideMedia, .systemTranslate], [.notifyingUser, .author, .booster]])
+        #expect(groups.main.map(\.items) == [[.reply, .favourite, .reblog], [.edit, .bookmark, .muteConversation, .pin, .reblogWithVisibility, .copyLink, .copyText, .share, .openInBrowser, .editHistory, .hideMedia, .systemTranslate], [.notifyingUser, .author, .booster]])
         #expect(groups.more.map(\.items) == [[.dismissNotification, .delete]])
         #expect(UserMenuItem.defaultLayout.groups.main.map(\.items) == [[.profile, .copyLink, .share]])
     }
@@ -205,7 +205,7 @@ struct MenuLayoutTests {
     @Test func savedStatusMenuGainsEditAndDelete() {
         let saved = MenuLayout<StatusMenuItem>(tokens: ["item:reblog", "item:reply", "item:favourite", "separator", "item:copyLink", "more", "hidden:share"])
 
-        #expect(saved.groups.main.map(\.items).first == [.reblog, .edit, .bookmark, .muteConversation, .pin, .reply, .favourite])
+        #expect(saved.groups.main.map(\.items).first == [.reblog, .edit, .bookmark, .muteConversation, .pin, .reblogWithVisibility, .reply, .favourite])
         // 通知の削除は既定で「その他」の先頭にあるため、保存した並びでも「その他」の先頭に入り、削除はその後ろに続く。
         #expect(saved.groups.more.map(\.items).first.map { Array($0.prefix(2)) } == [.dismissNotification, .delete])
     }

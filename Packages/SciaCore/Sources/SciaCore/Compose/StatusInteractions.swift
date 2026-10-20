@@ -15,7 +15,7 @@ public final class StatusInteractions {
     public struct Operations: Sendable {
         public var favourite: @Sendable (Status.ID) async throws -> Status
         public var unfavourite: @Sendable (Status.ID) async throws -> Status
-        public var reblog: @Sendable (Status.ID) async throws -> Status
+        public var reblog: @Sendable (Status.ID, ReblogVisibility) async throws -> Status
         public var unreblog: @Sendable (Status.ID) async throws -> Status
         public var bookmark: @Sendable (Status.ID) async throws -> Status
         public var unbookmark: @Sendable (Status.ID) async throws -> Status
@@ -27,7 +27,7 @@ public final class StatusInteractions {
         public init(
             favourite: @escaping @Sendable (Status.ID) async throws -> Status,
             unfavourite: @escaping @Sendable (Status.ID) async throws -> Status,
-            reblog: @escaping @Sendable (Status.ID) async throws -> Status,
+            reblog: @escaping @Sendable (Status.ID, ReblogVisibility) async throws -> Status,
             unreblog: @escaping @Sendable (Status.ID) async throws -> Status,
             bookmark: @escaping @Sendable (Status.ID) async throws -> Status,
             unbookmark: @escaping @Sendable (Status.ID) async throws -> Status,
@@ -52,7 +52,7 @@ public final class StatusInteractions {
             self.init(
                 favourite: { try await client.favourite($0) },
                 unfavourite: { try await client.unfavourite($0) },
-                reblog: { try await client.reblog($0) },
+                reblog: { try await client.reblog($0, visibility: $1) },
                 unreblog: { try await client.unreblog($0) },
                 bookmark: { try await client.bookmark($0) },
                 unbookmark: { try await client.unbookmark($0) },
@@ -84,8 +84,9 @@ public final class StatusInteractions {
 
     /// `status`（ブーストなら元の投稿）の状態を反転する。同じ操作の結果を待っている間は何もせずfalseを返す。
     /// 失敗したら表示を戻してから投げる。
+    /// - Parameter reblogVisibility: ブーストするときの公開範囲。ほかの操作と、ブーストを取り消すときは使わない。
     @discardableResult
-    public func toggle(_ action: Action, on status: Status) async throws -> Bool {
+    public func toggle(_ action: Action, on status: Status, reblogVisibility: ReblogVisibility = .accountDefault) async throws -> Bool {
         let target = status.displayed
         let key = Key(statusID: target.id, action: action)
         guard inFlight.insert(key).inserted else { return false }
@@ -94,7 +95,7 @@ public final class StatusInteractions {
         let turningOn = !Self.isOn(action, in: target)
         update(target.id) { Self.setting(action, turningOn, on: $0) }
         do {
-            let result = try await call(action, turningOn, target.id)
+            let result = try await call(action, turningOn, target.id, reblogVisibility: reblogVisibility)
             // 投稿全体を置き換えると、待っている間に届いた編集や、並行して成功した別の操作を古い内容で戻すため、この操作の結果だけを反映する。
             update(target.id) { Self.adopting(action, of: result, on: $0) }
         } catch {
@@ -134,11 +135,11 @@ public final class StatusInteractions {
         }
     }
 
-    private func call(_ action: Action, _ turningOn: Bool, _ id: Status.ID) async throws -> Status {
+    private func call(_ action: Action, _ turningOn: Bool, _ id: Status.ID, reblogVisibility: ReblogVisibility) async throws -> Status {
         switch (action, turningOn) {
         case (.favourite, true): try await operations.favourite(id)
         case (.favourite, false): try await operations.unfavourite(id)
-        case (.reblog, true): try await operations.reblog(id)
+        case (.reblog, true): try await operations.reblog(id, reblogVisibility)
         case (.reblog, false): try await operations.unreblog(id)
         case (.bookmark, true): try await operations.bookmark(id)
         case (.bookmark, false): try await operations.unbookmark(id)

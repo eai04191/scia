@@ -229,8 +229,9 @@ public struct MastodonClient: Sendable {
 
     /// ブーストし、ブーストした元の投稿を返す。APIはブーストそのものを返すため、中の元の投稿を取り出す。
     /// https://docs.joinmastodon.org/methods/statuses/#boost
-    public func reblog(_ statusID: String) async throws -> Status {
-        let boost = try await post(Status.self, path: "api/v1/statuses/\(statusID)/reblog", form: []).0
+    public func reblog(_ statusID: String, visibility: ReblogVisibility = .accountDefault) async throws -> Status {
+        let form = visibility.parameter.map { [URLQueryItem(name: "visibility", value: $0)] } ?? []
+        let boost = try await post(Status.self, path: "api/v1/statuses/\(statusID)/reblog", form: form).0
         return boost.reblog ?? boost
     }
 

@@ -160,6 +160,8 @@ public enum StatusMenuItem: String, MenuItemKind {
     case muteConversation
     /// 自分の投稿をプロフィールに固定する。固定できる自分の投稿でだけ出る。
     case pin
+    /// 公開範囲を選んでブーストするサブメニュー。ブーストしていない、公開かひかえめな公開の投稿でだけ出る。
+    case reblogWithVisibility
     case copyLink
     /// 本文をプレーンテキストにしてコピーする。本文のある投稿でだけ出る。
     case copyText
@@ -193,7 +195,7 @@ public enum StatusMenuItem: String, MenuItemKind {
 
     /// 設定を足す前のメニューと同じ並び。足す前になかったメンションされたユーザーは隠しておく。
     /// ただし、返信・お気に入り・ブーストはよく使い、アイコンだけでも見分けられるので、横に並べる。横に並ぶのは3個までのため、同じまとまりにあった編集は次のまとまりの先頭へ移す。
-    /// 設定を足したあとに増えた項目（メディアを隠す、テキストのコピー、翻訳、編集履歴、編集、削除、ブックマーク、会話のミュート、固定、通知の削除）は、足したことに気づけるよう表示しておく。
+    /// 設定を足したあとに増えた項目（メディアを隠す、テキストのコピー、翻訳、編集履歴、編集、削除、ブックマーク、会話のミュート、固定、公開範囲を選んでブースト、通知の削除）は、足したことに気づけるよう表示しておく。
     /// 削除と通知の削除は、誤って押さないよう「その他」に入れる。開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
     public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
         .rowSeparator,
@@ -205,6 +207,7 @@ public enum StatusMenuItem: String, MenuItemKind {
         .item(.bookmark, isVisible: true),
         .item(.muteConversation, isVisible: true),
         .item(.pin, isVisible: true),
+        .item(.reblogWithVisibility, isVisible: true),
         .item(.copyLink, isVisible: true),
         .item(.copyText, isVisible: true),
         .item(.share, isVisible: true),

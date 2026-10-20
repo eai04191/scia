@@ -6,6 +6,8 @@ enum StatusAction {
     case reply
     case favourite
     case reblog
+    /// 公開範囲を選んでブーストする。
+    case reblogWithVisibility(ReblogVisibility)
     case bookmark
     case muteConversation
     case pin
@@ -71,6 +73,9 @@ extension TimelineViewController {
         switch item {
         case .notifyingUser:
             return users(notification.map { [.account($0.account)] } ?? [])
+        case .reblogWithVisibility:
+            guard let status else { return [] }
+            return reblogWithVisibilityMenu(for: status, item: item).map { [$0] } ?? []
         case .dismissNotification:
             // 投稿のない通知（フォローなど）でも出す。
             guard let notification else { return [] }
@@ -191,9 +196,23 @@ extension TimelineViewController {
             return UIAction(title: item.title, image: item.image) { [weak self] _ in
                 self?.translation.present(text)
             }
-        case .notifyingUser, .author, .booster, .mentionedUsers, .dismissNotification:
+        case .notifyingUser, .author, .booster, .mentionedUsers, .dismissNotification, .reblogWithVisibility:
             return nil
         }
+    }
+
+    /// 公開範囲を選んでブーストするサブメニュー。ブーストを取り消すのは「ブースト」の項目に任せ、ブーストしていない投稿でだけ出す。
+    /// フォロワーのみの投稿は、選んでも元の投稿と同じ公開範囲でブーストされるため出さない。
+    private func reblogWithVisibilityMenu(for status: Status, item: StatusMenuItem) -> UIMenu? {
+        let shown = status.displayed
+        guard canReblog(status), !shown.reblogged, shown.visibility == .public || shown.visibility == .unlisted else { return nil }
+        let choices: [(ReblogVisibility, Status.Visibility)] = [(.public, .public), (.unlisted, .unlisted), (.private, .private)]
+        return UIMenu(title: item.title, image: item.image, children: choices.map { reblogVisibility, visibility in
+            let option = VisibilityOption(visibility)
+            return UIAction(title: option.title, image: UIImage(systemName: option.symbolName)) { [weak self] _ in
+                self?.onStatusAction?(.reblogWithVisibility(reblogVisibility), status)
+            }
+        })
     }
 
     /// コピーや翻訳に渡す本文。書式やリンクは落とし、文字だけにする。カスタム絵文字は`:shortcode:`のまま残す。

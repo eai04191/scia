@@ -12,8 +12,10 @@ struct StatusMenuTests {
         return AppSettings(defaults: defaults)
     }
 
-    private func menu(for entry: TimelineEntry, settings: AppSettings? = nil) throws -> UIMenu? {
+    /// - Parameter myAccountID: 自分のアカウントのID。自分の投稿でだけ出る項目を試すときに渡す。
+    private func menu(for entry: TimelineEntry, settings: AppSettings? = nil, myAccountID: String? = nil) throws -> UIMenu? {
         let viewController = TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: try settings ?? makeSettings())
+        viewController.myAccountID = myAccountID
         return viewController.contextMenu(for: entry, id: entry.id)
     }
 
@@ -52,13 +54,14 @@ struct StatusMenuTests {
         return (menu?.children ?? []).flatMap(flatten)
     }
 
-    /// 既定の並びは、設定を足す前のメニューと同じにする。
+    /// 既定の並びは、設定を足す前のメニューと同じにし、あとから足した項目を加える。
+    /// 自分のアカウントが分からない一覧では、会話のミュート、固定、公開範囲を選んでブーストは出ない。
     @Test func defaultMenuMatchesMenuBeforeCustomization() throws {
         let post = try status(url: URL(string: "https://example.social/@alice/100"))
 
         #expect(try outline(menu(for: .status(post))) == [
             ["返信", "お気に入り", "ブースト"],
-            ["リンクをコピー", "テキストをコピー", "共有", "ブラウザで開く", "翻訳"],
+            ["ブックマーク", "リンクをコピー", "テキストをコピー", "共有", "ブラウザで開く", "翻訳"],
             ["@alice[プロフィール,リンクをコピー,共有]"],
         ])
     }
@@ -99,18 +102,19 @@ struct StatusMenuTests {
         #expect(outline(menu).last == ["@alice[プロフィール,リンクをコピー,共有]"])
     }
 
-    /// 投稿のない通知では、通知したユーザーだけを出す。
-    @Test func followNotificationShowsOnlyNotifyingUser() throws {
+    /// 投稿のない通知では、通知したユーザーと、投稿を必要としない通知の削除だけを出す。
+    @Test func followNotificationShowsOnlyNotifyingUserAndDismiss() throws {
         let notification = MastodonNotification(id: "1", type: .follow, createdAt: .now, account: try account("2", "bob"))
 
-        #expect(try outline(menu(for: .notification(notification))) == [["@bob[プロフィール,リンクをコピー,共有]"]])
+        #expect(try outline(menu(for: .notification(notification))) == [["@bob[プロフィール,リンクをコピー,共有]"], ["その他[通知を削除]"]])
     }
 
     /// 通知したユーザーは、対象の投稿を書いた人より先に出る。
     @Test func notificationListsNotifyingUserBeforeAuthor() throws {
         let notification = MastodonNotification(id: "1", type: .favourite, createdAt: .now, account: try account("2", "bob"), status: try status(url: nil))
 
-        #expect(try outline(menu(for: .notification(notification))).last == ["@bob[プロフィール,リンクをコピー,共有]", "@alice[プロフィール,リンクをコピー,共有]"])
+        // 最後のまとまりは、通知の削除を入れた「その他」。
+        #expect(try outline(menu(for: .notification(notification))).dropLast().last == ["@bob[プロフィール,リンクをコピー,共有]", "@alice[プロフィール,リンクをコピー,共有]"])
     }
 
     /// 「その他」より下の項目はサブメニューに入る。非表示の項目は出さず、区切り線で分けたまとまりに従う。
@@ -129,11 +133,11 @@ struct StatusMenuTests {
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings))
 
-        // 並びに書かなかった項目は、既定で直前にある項目の後ろに差し込まれる。ブラウザで開くと翻訳は共有の後ろに、ユーザーの項目はその後ろに、テキストのコピーはリンクのコピーの後ろに入る。
+        // 並びに書かなかった項目は、既定で直前にある項目の後ろに差し込まれる。ブラウザで開くと翻訳は共有の後ろに、ユーザーの項目はその後ろに、テキストのコピーはリンクのコピーの後ろに、ブックマークはブーストの後ろに入る。
         #expect(outline == [
             ["返信"],
             ["共有", "ブラウザで開く", "翻訳", "@alice[プロフィール,リンクをコピー,共有]"],
-            ["その他[リンクをコピー,テキストをコピー,ブースト]"],
+            ["その他[リンクをコピー,テキストをコピー,ブースト,ブックマーク]"],
         ])
     }
 
@@ -194,5 +198,41 @@ struct StatusMenuTests {
         let withoutRow = try menu(for: .status(post), settings: settings)?.children.compactMap { $0 as? UIMenu } ?? []
 
         #expect(withoutRow.allSatisfy { $0.preferredElementSize != .medium })
+    }
+
+    /// 会話のミュートは、自分の投稿、自分へのメンションを含む投稿、通知でだけ出る。
+    @Test func conversationMuteIsShownOnlyWhereIAmInvolved() throws {
+        let me = try account("9", "me")
+        let others = try status(url: nil)
+        let mine = try status(url: nil, account: me)
+        let mentioningMe = try status(url: nil, mentions: [Mention(id: "9", username: "me", url: nil, acct: "me")])
+        func titles(_ entry: TimelineEntry) throws -> [String] { try actions(menu(for: entry, myAccountID: "9")).map(\.title) }
+
+        #expect(try !titles(.status(others)).contains("会話をミュート"))
+        #expect(try titles(.status(mine)).contains("会話をミュート"))
+        #expect(try titles(.status(mentioningMe)).contains("会話をミュート"))
+        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: .now, account: try account("2", "bob"), status: others)
+        #expect(try titles(.notification(notification)).contains("会話をミュート"))
+    }
+
+    /// プロフィールへの固定は、ダイレクトではない自分の投稿でだけ出る。
+    @Test func pinIsShownOnlyForOwnPinnablePosts() throws {
+        let me = try account("9", "me")
+        let base = try status(url: nil, account: me)
+        let direct = Status(id: base.id, createdAt: base.createdAt, account: me, content: base.content, spoilerText: "", url: nil, visibility: .direct)
+        func titles(_ status: Status) throws -> [String] { try actions(menu(for: .status(status), myAccountID: "9")).map(\.title) }
+
+        #expect(try titles(base).contains("プロフィールに固定"))
+        #expect(try !titles(direct).contains("プロフィールに固定"))
+        #expect(try !titles(status(url: nil)).contains("プロフィールに固定"))
+    }
+
+    /// 公開範囲を選んでブーストは、ブーストしていない投稿で、3つの公開範囲のサブメニューとして出る。ブーストした投稿では出さない。
+    @Test func reblogWithVisibilityIsSubmenuOnlyBeforeBoosting() throws {
+        let post = try status(url: nil)
+        let submenu = "公開範囲を選んでブースト[公開,ひかえめな公開,フォロワーのみ]"
+
+        #expect(try outline(menu(for: .status(post), myAccountID: "9")).joined().contains(submenu))
+        #expect(try !outline(menu(for: .status(post.settingReblogged(true)), myAccountID: "9")).joined().contains(submenu))
     }
 }
