@@ -136,7 +136,12 @@ public enum StatusMenuItem: String, MenuItemKind {
     case reblog
     case copyLink
     case share
+    /// 開く場所の設定に従って開く。
     case openInBrowser
+    /// 開く場所の設定にかかわらず、既定のブラウザで開く。
+    case openInDefaultBrowser
+    /// 開く場所の設定にかかわらず、アプリ内のSafariで開く。
+    case openInAppSafari
     /// 投稿の編集履歴を開く。編集された投稿でだけ出る。
     case editHistory
     /// 自分の投稿を投稿欄で編集する。自分の投稿でだけ出る。
@@ -156,7 +161,7 @@ public enum StatusMenuItem: String, MenuItemKind {
 
     /// 設定を足す前のメニューと同じ並び。足す前になかったメンションされたユーザーは隠しておく。
     /// 設定を足したあとに増えた項目（メディアを隠す、編集履歴、編集、削除）は、足したことに気づけるよう表示しておく。
-    /// 削除は、誤って押さないよう「その他」に入れる。
+    /// 削除は、誤って押さないよう「その他」に入れる。開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
     public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
         .item(.reply, isVisible: true),
         .item(.favourite, isVisible: true),
@@ -166,6 +171,8 @@ public enum StatusMenuItem: String, MenuItemKind {
         .item(.copyLink, isVisible: true),
         .item(.share, isVisible: true),
         .item(.openInBrowser, isVisible: true),
+        .item(.openInDefaultBrowser, isVisible: false),
+        .item(.openInAppSafari, isVisible: false),
         .item(.editHistory, isVisible: true),
         .item(.hideMedia, isVisible: true),
         .separator,
@@ -194,33 +201,42 @@ public enum UserMenuItem: String, MenuItemKind {
     ])
 }
 
-/// 本文のURLのリンクを長押ししたときのメニューの項目。
+/// 本文のURLのリンクを長押ししたときのメニューの項目。開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
 public enum LinkMenuItem: String, MenuItemKind {
     /// タップしたときと同じく、開く場所の設定に従って開く。
-    case open
-    /// 開く場所の設定にかかわらず、既定のブラウザで開く。
     case openInBrowser
+    /// 開く場所の設定にかかわらず、既定のブラウザで開く。
+    case openInDefaultBrowser
+    /// 開く場所の設定にかかわらず、アプリ内のSafariで開く。httpとhttps以外のリンクでは押せない。
+    case openInAppSafari
     case copyLink
     case share
 
     public static let defaultLayout = MenuLayout<LinkMenuItem>(defaultElements: [
-        .item(.open, isVisible: true),
         .item(.openInBrowser, isVisible: true),
+        .item(.openInDefaultBrowser, isVisible: false),
+        .item(.openInAppSafari, isVisible: false),
         .item(.copyLink, isVisible: true),
         .item(.share, isVisible: true),
         .more,
     ])
 }
 
-/// 本文のハッシュタグを長押ししたときのメニューの項目。アプリにはハッシュタグを開く画面がまだないため、開く項目はブラウザで開くだけ。
+/// 本文のハッシュタグを長押ししたときのメニューの項目。アプリにはハッシュタグを開く画面がまだないため、開く項目はサーバーのハッシュタグのページをブラウザで開くものだけ。
 public enum HashtagMenuItem: String, MenuItemKind {
-    /// サーバーのハッシュタグのページを、既定のブラウザで開く。
+    /// 開く場所の設定に従って開く。
     case openInBrowser
+    /// 開く場所の設定にかかわらず、既定のブラウザで開く。
+    case openInDefaultBrowser
+    /// 開く場所の設定にかかわらず、アプリ内のSafariで開く。
+    case openInAppSafari
     case copyLink
     case share
 
     public static let defaultLayout = MenuLayout<HashtagMenuItem>(defaultElements: [
         .item(.openInBrowser, isVisible: true),
+        .item(.openInDefaultBrowser, isVisible: false),
+        .item(.openInAppSafari, isVisible: false),
         .item(.copyLink, isVisible: true),
         .item(.share, isVisible: true),
         .more,

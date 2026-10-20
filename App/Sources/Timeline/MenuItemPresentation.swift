@@ -28,6 +28,8 @@ extension StatusMenuItem {
         case .copyLink: URLMenuAction.copyLink.title
         case .share: URLMenuAction.share.title
         case .openInBrowser: URLMenuAction.openInBrowser.title
+        case .openInDefaultBrowser: URLMenuAction.openInDefaultBrowser.title
+        case .openInAppSafari: URLMenuAction.openInAppSafari.title
         case .editHistory: "編集履歴"
         case .edit: "編集"
         case .delete: "削除"
@@ -59,6 +61,8 @@ extension StatusMenuItem {
         case .copyLink: URLMenuAction.copyLink.symbolName
         case .share: URLMenuAction.share.symbolName
         case .openInBrowser: URLMenuAction.openInBrowser.symbolName
+        case .openInDefaultBrowser: URLMenuAction.openInDefaultBrowser.symbolName
+        case .openInAppSafari: URLMenuAction.openInAppSafari.symbolName
         case .editHistory: "clock.arrow.circlepath"
         case .edit: "pencil"
         case .delete: "trash"
@@ -98,8 +102,9 @@ extension UserMenuItem {
 extension LinkMenuItem {
     var title: String {
         switch self {
-        case .open: "開く"
         case .openInBrowser: URLMenuAction.openInBrowser.title
+        case .openInDefaultBrowser: URLMenuAction.openInDefaultBrowser.title
+        case .openInAppSafari: URLMenuAction.openInAppSafari.title
         case .copyLink: URLMenuAction.copyLink.title
         case .share: URLMenuAction.share.title
         }
@@ -107,16 +112,17 @@ extension LinkMenuItem {
 
     var note: String? {
         switch self {
-        case .open: "リンクをタップしたときと同じく、設定の開く場所で開きます"
-        case .openInBrowser: "開く場所の設定にかかわらず、既定のブラウザで開きます"
+        case .openInBrowser: "リンクをタップしたときと同じく、設定の開く場所で開きます"
+        case .openInAppSafari: "httpとhttpsのリンクでだけ押せます"
         default: nil
         }
     }
 
     var symbolName: String {
         switch self {
-        case .open: "arrow.up.forward.app"
         case .openInBrowser: URLMenuAction.openInBrowser.symbolName
+        case .openInDefaultBrowser: URLMenuAction.openInDefaultBrowser.symbolName
+        case .openInAppSafari: URLMenuAction.openInAppSafari.symbolName
         case .copyLink: URLMenuAction.copyLink.symbolName
         case .share: URLMenuAction.share.symbolName
         }
@@ -129,6 +135,8 @@ extension HashtagMenuItem {
     var title: String {
         switch self {
         case .openInBrowser: URLMenuAction.openInBrowser.title
+        case .openInDefaultBrowser: URLMenuAction.openInDefaultBrowser.title
+        case .openInAppSafari: URLMenuAction.openInAppSafari.title
         case .copyLink: URLMenuAction.copyLink.title
         case .share: URLMenuAction.share.title
         }
@@ -139,6 +147,8 @@ extension HashtagMenuItem {
     var symbolName: String {
         switch self {
         case .openInBrowser: URLMenuAction.openInBrowser.symbolName
+        case .openInDefaultBrowser: URLMenuAction.openInDefaultBrowser.symbolName
+        case .openInAppSafari: URLMenuAction.openInAppSafari.symbolName
         case .copyLink: URLMenuAction.copyLink.symbolName
         case .share: URLMenuAction.share.symbolName
         }

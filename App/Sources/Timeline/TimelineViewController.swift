@@ -79,6 +79,8 @@ final class TimelineViewController: UIViewController {
     var onOpenProfileID: ((String) -> Void)?
     /// 投稿の本文のリンクがタップされたときに、行き先と、本文を描いた投稿（ブーストなら元の投稿）を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination, Status) -> Void)?
+    /// 長押しのメニューの開く項目で、開く場所を決めてURLを開く。
+    var onOpenURL: ((URL, LinkBrowser) -> Void)?
     /// この画面が表示されている間、生かしておくもの。画面を組み立てたコントローラーを、ナビゲーションから外されるまで残すのに使う。
     var lifetimeOwner: AnyObject?
     /// 一覧の頭に置き、一緒にスクロールするビュー。プロフィールのヘッダーに使う。表示より前に設定する。
@@ -1111,6 +1113,10 @@ extension TimelineViewController: LinkMenuHost {
 
     func showLinkCopiedNotice() {
         showNotice(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+    }
+
+    func openURL(_ url: URL, in browser: LinkBrowser) {
+        onOpenURL?(url, browser)
     }
 }
 

@@ -132,9 +132,18 @@ struct MenuLayoutTests {
         #expect(UserMenuItem.defaultLayout.groups.main == [[.profile, .copyLink, .share]])
     }
 
-    /// 本文のリンクとハッシュタグのメニューは、設定を足す前の決め打ちのメニューと同じ並びにする。
+    /// 開く場所を選んで開く2つを足す前に保存した投稿のメニューでも、2つはブラウザで開くのすぐ後ろに、隠れて入る。
+    @Test func savedStatusMenuGainsHiddenBrowserChoicesAfterOpenInBrowser() {
+        let saved = MenuLayout<StatusMenuItem>(tokens: StatusMenuItem.defaultLayout.tokens.filter { !$0.hasSuffix(":openInDefaultBrowser") && !$0.hasSuffix(":openInAppSafari") })
+        let index = saved.elements.firstIndex(of: .item(.openInBrowser, isVisible: true))
+
+        #expect(index.map { Array(saved.elements[($0 + 1)...($0 + 2)]) } == [.item(.openInDefaultBrowser, isVisible: false), .item(.openInAppSafari, isVisible: false)])
+        #expect(saved.groups == StatusMenuItem.defaultLayout.groups)
+    }
+
+    /// 本文のリンクとハッシュタグのメニューは、設定を足す前の決め打ちのメニューと同じ並びにする。開く場所を選んで開く2つは隠しておく。
     @Test func linkAndHashtagMenuDefaultsMatchMenuBeforeCustomization() {
-        #expect(LinkMenuItem.defaultLayout.groups.main == [[.open, .openInBrowser, .copyLink, .share]])
+        #expect(LinkMenuItem.defaultLayout.groups.main == [[.openInBrowser, .copyLink, .share]])
         #expect(LinkMenuItem.defaultLayout.groups.more.isEmpty)
         #expect(HashtagMenuItem.defaultLayout.groups.main == [[.openInBrowser, .copyLink, .share]])
         #expect(HashtagMenuItem.defaultLayout.groups.more.isEmpty)
@@ -173,7 +182,7 @@ struct MenuLayoutTests {
         #expect(AppSettings(defaults: defaults).linkMenuLayout == LinkMenuItem.defaultLayout)
         #expect(AppSettings(defaults: defaults).hashtagMenuLayout == HashtagMenuItem.defaultLayout)
 
-        let link = MenuLayout<LinkMenuItem>(elements: [.item(.share, isVisible: true), .more, .item(.open, isVisible: false)])
+        let link = MenuLayout<LinkMenuItem>(elements: [.item(.share, isVisible: true), .more, .item(.openInBrowser, isVisible: false)])
         let hashtag = MenuLayout<HashtagMenuItem>(elements: [.item(.copyLink, isVisible: true), .separator, .item(.openInBrowser, isVisible: false), .more])
         let settings = AppSettings(defaults: defaults)
         settings.linkMenuLayout = link

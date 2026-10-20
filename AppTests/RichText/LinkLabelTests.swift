@@ -125,7 +125,7 @@ struct LinkLabelTests {
         let profile = try #require(URL(string: "https://example.social/@bob"))
         let settings = try settings()
 
-        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: 開く,ブラウザで開く,リンクをコピー,共有")
+        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: ブラウザで開く,リンクをコピー,共有")
         #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: ブラウザで開く,リンクをコピー,共有")
         #expect(try menuOutline(of: .mention(acct: "bob@example.social", url: profile), settings: settings) == "@bob@example.social: プロフィール,リンクをコピー,共有")
     }
@@ -135,11 +135,47 @@ struct LinkLabelTests {
         let url = try #require(URL(string: "https://example.com/a"))
         let tag = try #require(URL(string: "https://example.social/tags/cat"))
         let settings = try settings()
-        settings.linkMenuLayout = MenuLayout(elements: [.item(.share, isVisible: true), .separator, .item(.open, isVisible: true), .item(.openInBrowser, isVisible: false), .more, .item(.copyLink, isVisible: true)])
+        settings.linkMenuLayout = MenuLayout(elements: [.item(.share, isVisible: true), .separator, .item(.openInAppSafari, isVisible: true), .item(.openInBrowser, isVisible: false), .more, .item(.copyLink, isVisible: true)])
         settings.hashtagMenuLayout = MenuLayout(elements: [.item(.copyLink, isVisible: true), .item(.openInBrowser, isVisible: false), .item(.share, isVisible: false), .more])
 
-        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: 共有|開く|その他[リンクをコピー]")
+        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: 共有|アプリ内のSafariで開く|その他[リンクをコピー]")
         #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: リンクをコピー")
+    }
+
+    /// アプリ内のSafariはhttpとhttps以外のURLを開けないため、そのリンクでは押せない。ほかの開く項目は押せる。
+    @Test func appSafariIsDisabledForNonWebLinks() throws {
+        let magnet = try #require(URL(string: "magnet:?xt=urn:btih:0"))
+        let web = try #require(URL(string: "https://example.com/a"))
+        let settings = try settings()
+        settings.linkMenuLayout = MenuLayout(elements: [.item(.openInBrowser, isVisible: true), .item(.openInDefaultBrowser, isVisible: true), .item(.openInAppSafari, isVisible: true), .more])
+
+        #expect(try disabledTitles(of: .url(magnet), settings: settings) == ["アプリ内のSafariで開く"])
+        #expect(try disabledTitles(of: .url(web), settings: settings).isEmpty)
+    }
+
+    private func disabledTitles(of destination: RichText.LinkDestination, settings: AppSettings) throws -> [String] {
+        let label = label(for: RichText(blocks: [.init(inlines: [.link("x", destination, [])])]))
+        label.settings = settings
+        let hitArea = try #require(label.subviews.compactMap { $0 as? LinkHitArea }.first)
+        let menu = try #require(hitArea.menu(for: destination, at: .zero))
+        func actions(_ element: UIMenuElement) -> [UIAction] {
+            (element as? UIAction).map { [$0] } ?? (element as? UIMenu)?.children.flatMap(actions) ?? []
+        }
+        return actions(menu).filter { $0.attributes.contains(.disabled) }.map(\.title)
+    }
+
+    /// 開く項目は、ブラウザで開くだけが開く場所の設定に従い、ほかの2つは設定にかかわらず選んだ場所で開く。
+    /// 設定がアプリ内のSafariでも、httpとhttps以外のURLは既定のブラウザで開く（開く場所の設定の決まり）。
+    @Test func openItemsChooseBrowser() throws {
+        let web = try #require(URL(string: "https://example.com/a"))
+        let magnet = try #require(URL(string: "magnet:?xt=urn:btih:0"))
+
+        #expect(URLMenuAction.openInBrowser.browser(for: web, following: .inApp) == .inApp)
+        #expect(URLMenuAction.openInBrowser.browser(for: web, following: .external) == .external)
+        #expect(URLMenuAction.openInBrowser.browser(for: magnet, following: .inApp) == .external)
+        #expect(URLMenuAction.openInDefaultBrowser.browser(for: web, following: .inApp) == .external)
+        #expect(URLMenuAction.openInAppSafari.browser(for: web, following: .external) == .inApp)
+        #expect(URLMenuAction.openInAppSafari.browser(for: magnet, following: .inApp) == nil)
     }
 
     /// 出す項目をすべて隠したら、メニューを出さない。

@@ -6,7 +6,7 @@ final class LinkLabel: UILabel {
     /// 長押しのメニューの並び。
     var settings: AppSettings = AppDependencies.settings
 
-    /// リンクがタップされたときと、長押しのメニューで開くを選んだときに、その行き先を渡して呼ぶ。
+    /// リンクがタップされたときと、メンションの長押しのメニューでプロフィールを選んだときに、その行き先を渡して呼ぶ。
     var onTapLink: ((RichText.LinkDestination) -> Void)?
 
     override var attributedText: NSAttributedString? {
@@ -181,6 +181,8 @@ protocol LinkMenuHost: AnyObject {
     func linkMenuDidHide()
     /// 「リンクをコピー」を選んだ。
     func showLinkCopiedNotice()
+    /// 開く項目を選んだ。`browser`は選んだ項目と開く場所の設定から決めた、実際に開く場所。
+    func openURL(_ url: URL, in browser: LinkBrowser)
 }
 
 /// `LinkLabel`の上に重ねる、リンクの上だけを当たりにする部品。リンクの外では当たりにならず、押下はラベルの後ろのセルへ渡る。
@@ -272,6 +274,7 @@ final class LinkHitArea: UIControl {
     }
 
     /// 並びは設定のリンクのメニューとハッシュタグのメニューに従う。メンションはユーザーなので、ユーザーのメニューで出す。出す項目がなければnil。
+    /// 開く項目は、メニューを出した画面に開く場所を渡して開かせる。アプリ内のSafariはセッションが持つため、ラベルからは開けない。
     func menu(for destination: RichText.LinkDestination, at point: CGPoint) -> UIMenu? {
         guard let label else { return nil }
         let settings = label.settings
@@ -282,8 +285,9 @@ final class LinkHitArea: UIControl {
             title = url.absoluteString
             children = settings.linkMenuLayout.groups.menuElements { item in
                 switch item {
-                case .open: [openAction(item.title, image: item.image, destination)]
-                case .openInBrowser: [openInBrowserAction(url)]
+                case .openInBrowser: [openAction(.openInBrowser, url, settings: settings)]
+                case .openInDefaultBrowser: [openAction(.openInDefaultBrowser, url, settings: settings)]
+                case .openInAppSafari: [openAction(.openInAppSafari, url, settings: settings)]
                 case .copyLink: [copyAction(url)]
                 case .share: [shareAction(url, at: point)]
                 }
@@ -292,7 +296,7 @@ final class LinkHitArea: UIControl {
             title = "@\(acct)"
             children = settings.userMenuLayout.groups.menuElements { item in
                 switch item {
-                case .profile: [openAction(item.title, image: item.image, destination)]
+                case .profile: [profileAction(item.title, image: item.image, destination)]
                 case .copyLink: [copyAction(url)]
                 case .share: [shareAction(url, at: point)]
                 }
@@ -301,7 +305,9 @@ final class LinkHitArea: UIControl {
             title = "#\(name)"
             children = settings.hashtagMenuLayout.groups.menuElements { item in
                 switch item {
-                case .openInBrowser: [openInBrowserAction(url)]
+                case .openInBrowser: [openAction(.openInBrowser, url, settings: settings)]
+                case .openInDefaultBrowser: [openAction(.openInDefaultBrowser, url, settings: settings)]
+                case .openInAppSafari: [openAction(.openInAppSafari, url, settings: settings)]
                 case .copyLink: [copyAction(url)]
                 case .share: [shareAction(url, at: point)]
                 }
@@ -310,13 +316,14 @@ final class LinkHitArea: UIControl {
         return children.isEmpty ? nil : UIMenu(title: title, children: children)
     }
 
-    private func openAction(_ title: String, image: UIImage?, _ destination: RichText.LinkDestination) -> UIAction {
+    private func profileAction(_ title: String, image: UIImage?, _ destination: RichText.LinkDestination) -> UIAction {
         UIAction(title: title, image: image) { [weak self] _ in self?.label?.open(destination) }
     }
 
-    /// 開くの設定でアプリ内のSafariを選んでいても、既定のブラウザで開く。
-    private func openInBrowserAction(_ url: URL) -> UIAction {
-        URLMenuAction.openInBrowser.menuAction(url: url) { UIApplication.shared.open($0) }
+    private func openAction(_ action: URLMenuAction, _ url: URL, settings: AppSettings) -> UIAction {
+        action.openAction(url: url, following: settings.linkBrowser) { [weak self] url, browser in
+            self?.nearest((any LinkMenuHost).self)?.openURL(url, in: browser)
+        }
     }
 
     private func copyAction(_ url: URL) -> UIAction {

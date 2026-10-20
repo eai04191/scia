@@ -443,6 +443,7 @@ final class SessionController {
             guard let viewController else { return }
             self?.open(destination, in: status, from: viewController)
         }
+        viewController.onOpenURL = { [weak self] url, browser in self?.open(url, in: browser) }
         viewController.onVisibleLinkOnlyCardsChange = { [weak self, weak viewController] statuses in
             guard let self, let viewController else { return }
             #if DEBUG
@@ -469,10 +470,7 @@ final class SessionController {
     private func open(_ destination: RichText.LinkDestination, in status: Status, from source: UIViewController) {
         switch destination {
         case .url(let url):
-            switch AppDependencies.settings.linkBrowser.browser(for: url) {
-            case .external: UIApplication.shared.open(url)
-            case .inApp: browser.open(url, from: rootViewController)
-            }
+            open(url, in: AppDependencies.settings.linkBrowser.browser(for: url))
         case .mention(let acct, let url):
             // ローカルのacctはドメインを含まず、検索では完全一致にならないため、投稿のメンションの一覧にあるIDで引く。
             guard let mention = status.mentions.first(where: { $0.url == url || $0.acct == acct }) else {
@@ -483,6 +481,14 @@ final class SessionController {
             openProfile(accountID: mention.id, from: source)
         case .hashtag:
             break
+        }
+    }
+
+    /// `url`を`browser`で開く。アプリ内のSafariはhttpとhttps以外のURLで例外を出して落ちるため、呼ぶ側が`LinkBrowser.browser(for:)`などで確かめてから渡す。
+    private func open(_ url: URL, in browser: LinkBrowser) {
+        switch browser {
+        case .external: UIApplication.shared.open(url)
+        case .inApp: self.browser.open(url, from: rootViewController)
         }
     }
 
@@ -639,6 +645,7 @@ final class SessionController {
         }
         viewController.notices = notices
         viewController.mediaTransfers = mediaTransfers
+        viewController.onOpenURL = { [weak self] url, browser in self?.open(url, in: browser) }
         viewController.onOpenLink = { [weak self, weak viewController] destination in
             guard let self, let viewController else { return }
             // 編集で消したメンションは、今の投稿のメンションの一覧にないため、一覧と同じ引き方ではIDが分からない。プロフィールのURLから探す。

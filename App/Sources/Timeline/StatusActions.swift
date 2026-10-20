@@ -53,7 +53,7 @@ extension TimelineViewController {
             return users([.account(status.account)])
         case .mentionedUsers:
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
-        case .reply, .favourite, .reblog, .copyLink, .share, .openInBrowser, .editHistory, .hideMedia, .edit, .delete:
+        case .reply, .favourite, .reblog, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .edit, .delete:
             guard let status else { return [] }
             return statusAction(item, on: status, id: id).map { [$0] } ?? []
         }
@@ -90,7 +90,11 @@ extension TimelineViewController {
         case .share:
             return URLMenuAction.share.menuAction(url: url) { [weak self] url in self?.presentShareSheet(for: url, from: id) }
         case .openInBrowser:
-            return URLMenuAction.openInBrowser.menuAction(url: url) { [weak self] url in self?.onOpenLink?(.url(url), shown) }
+            return openAction(.openInBrowser, url: url)
+        case .openInDefaultBrowser:
+            return openAction(.openInDefaultBrowser, url: url)
+        case .openInAppSafari:
+            return openAction(.openInAppSafari, url: url)
         case .editHistory:
             guard shown.editedAt != nil else { return nil }
             return UIAction(title: item.title, image: item.image) { [weak self] _ in
@@ -155,6 +159,10 @@ extension TimelineViewController {
                 self?.presentShareSheet(for: url, from: id)
             }
         }
+    }
+
+    private func openAction(_ action: URLMenuAction, url: URL?) -> UIAction {
+        action.openAction(url: url, following: settings.linkBrowser) { [weak self] url, browser in self?.openURL(url, in: browser) }
     }
 
     /// メニューを出した行を起点にする。行が画面の外へ流れていれば一覧を起点にする。
