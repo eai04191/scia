@@ -83,8 +83,12 @@ private final class EDRHeadroomOverlayView: UIView {
         window.bringSubviewToFront(self)
         let current = screen.currentEDRHeadroom
         let potential = screen.potentialEDRHeadroom
-        let exposure = AppDependencies.tuning.value(of: TuningCatalog.reactionGlowHDRExposure)
-        let glow = potential > 1 && exposure > 1 && AppDependencies.settings.drawsReactionGlowInHDR ? "HDR" : "SDR"
+        // 光の描き方（`ReactionGlowView.render()`）と同じ条件で決める。ダークでは、照らされた側の倍率だけを上げてもHDRで描く。
+        let tuning = AppDependencies.tuning
+        let isDark = window.traitCollection.userInterfaceStyle == .dark
+        let requestsHDR = tuning.value(of: TuningCatalog.reactionGlowHDRExposure) > 1
+            || (isDark && tuning.value(of: TuningCatalog.reactionGlowDarkGlowHDRExposure) > 1)
+        let glow = potential > 1 && requestsHDR && AppDependencies.settings.drawsReactionGlowInHDR ? "HDR" : "SDR"
         label.text = String(format: "EDRの余地 今 %.2f / 最大 %.2f\n光 %@", current, potential, glow)
     }
 }

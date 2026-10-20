@@ -963,10 +963,11 @@ public enum TuningCatalog {
         defaultValue: 0.3
     )
 
-    /// ライトモードでの、光のいちばん明るいところ（下の端）の濃さ。白い背景では濃いと汚れのように見えるため、ダークと分ける。
+    /// ライトモードでSDRで描くときの、光のいちばん明るいところ（下の端）の濃さ。白い背景では濃いと汚れのように見えるため、ダークと分ける。
+    /// HDRで描くときは「光の濃さ（ライト、HDR）」を使う。
     public static let reactionGlowLightOpacity = NumberTuning(
         id: "timeline.reactionGlowLightOpacity",
-        title: "光の濃さ（ライト）",
+        title: "光の濃さ（ライト、SDR）",
         range: 0...1,
         step: 0.05,
         defaultValue: 0.3
@@ -1013,6 +1014,40 @@ public enum TuningCatalog {
     public static let debugShowsEDRHeadroom = ToggleTuning(
         id: "debug.showsEDRHeadroom",
         title: "画面のHDRの余地を表示する（開発用）",
+        defaultValue: false
+    )
+
+    /// ライトモードでHDRで描くときの、照らされた側を重ねる濃さ。1なら「白＋光」の色をそのまま重ねる。SDRで描くときは「光の濃さ（ライト）」を使う。
+    public static let reactionGlowLightHDROpacity = NumberTuning(
+        id: "timeline.reactionGlowLightHDROpacity",
+        title: "光の濃さ（ライト、HDR）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 1
+    )
+
+    /// ライトモードでHDRで描くときの、下の端のにじみの強さ。照らす光の強さの何倍にするか。
+    public static let reactionGlowLightBloomIntensityRatio = NumberTuning(
+        id: "timeline.reactionGlowLightBloomIntensityRatio",
+        title: "にじみの強さ（照らす光の強さの何倍、ライト、HDR）",
+        range: 0...4,
+        step: 0.1,
+        defaultValue: 2
+    )
+
+    /// ダークモードで、照らされた側をSDRの白の何倍の明るさで描くか。1ならSDRのまま描く。
+    public static let reactionGlowDarkGlowHDRExposure = NumberTuning(
+        id: "timeline.reactionGlowDarkGlowHDRExposure",
+        title: "照らされた側のHDRの倍率（ダーク、1でSDR）",
+        range: 1...8,
+        step: 0.1,
+        defaultValue: 1
+    )
+
+    /// ライトモードのお気に入りの色を黄色にする。オフなら橙。白い背景では黄色が見えにくいため、既定は橙。
+    public static let reactionGlowLightFavouriteIsYellow = ToggleTuning(
+        id: "timeline.reactionGlowLightFavouriteIsYellow",
+        title: "ライトのお気に入りの色を黄色にする（オフで橙）",
         defaultValue: false
     )
 
@@ -1106,6 +1141,10 @@ public enum TuningCatalog {
             .number(reactionGlowBloomOpacity),
             .number(reactionGlowHDRExposure),
             .number(reactionGlowLightIntensity),
+            .number(reactionGlowLightHDROpacity),
+            .number(reactionGlowLightBloomIntensityRatio),
+            .number(reactionGlowDarkGlowHDRExposure),
+            .toggle(reactionGlowLightFavouriteIsYellow),
             .toggle(debugShowsEDRHeadroom),
             .toggle(reactionGlowFillsWidthWhenAlone),
             .number(reactionGlowIconStyle),

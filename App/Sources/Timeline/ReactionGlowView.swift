@@ -21,6 +21,14 @@ struct ReactionGlow: Equatable {
         var hdrExposure: CGFloat
         /// 使う人がHDRで光らせることを選んでいるか。オフなら、HDRで描ける画面でもSDRで描く。
         var allowsHDR: Bool
+        /// ライトモードでHDRで描くときの、照らされた側を重ねる濃さ。SDRで描くときは`lightOpacity`を使う。
+        var lightHDROpacity: CGFloat
+        /// ライトモードでHDRで描くときの、にじみの強さ。照らす光の強さの何倍にするか。
+        var lightBloomIntensityRatio: Double
+        /// ダークモードで、照らされた側をSDRの白の何倍の明るさで描くか。1ならSDRのまま描く。
+        var darkGlowHDRExposure: CGFloat
+        /// ライトモードのお気に入りの色を、黄色にする。オフなら橙。
+        var lightFavouriteIsYellow: Bool
         /// ライトモードでHDRで描くときの、照らす光の強さ。白い背景にこの強さで光を足し、白より明るくする。
         var lightIntensity: Double
         var fillsWidthWhenAlone: Bool
@@ -68,6 +76,10 @@ extension ReactionGlow.Style {
             bloomOpacity: tuning.value(of: TuningCatalog.reactionGlowBloomOpacity),
             hdrExposure: tuning.value(of: TuningCatalog.reactionGlowHDRExposure),
             allowsHDR: settings.drawsReactionGlowInHDR,
+            lightHDROpacity: tuning.value(of: TuningCatalog.reactionGlowLightHDROpacity),
+            lightBloomIntensityRatio: tuning.value(of: TuningCatalog.reactionGlowLightBloomIntensityRatio),
+            darkGlowHDRExposure: tuning.value(of: TuningCatalog.reactionGlowDarkGlowHDRExposure),
+            lightFavouriteIsYellow: tuning.value(of: TuningCatalog.reactionGlowLightFavouriteIsYellow),
             lightIntensity: tuning.value(of: TuningCatalog.reactionGlowLightIntensity),
             fillsWidthWhenAlone: tuning.value(of: TuningCatalog.reactionGlowFillsWidthWhenAlone),
             iconStyle: ReactionGlow.IconStyle(tuning.value(of: TuningCatalog.reactionGlowIconStyle)),
@@ -84,8 +96,6 @@ extension ReactionGlow.Style {
 ///
 /// 左から右への色と濃さは、1本のグラデーション（`ReactionGlowGradient`）で描く。縦に上へ薄くなる形は、それにマスクで付ける。
 final class ReactionGlowView: UIView {
-    /// 白い背景では黄色が見えにくいため、ライトモードでは橙に寄せる。
-    private static let favouriteColor = UIColor { $0.userInterfaceStyle == .dark ? .systemYellow : .systemOrange }
 
     private let glow = CAGradientLayer()
     /// 下の端から離れるほど早く暗くなるよう、なめらかに落とす。直線で落とすと、上の端に境目が見える。
@@ -213,7 +223,8 @@ final class ReactionGlowView: UIView {
         }
         let isDark = traitCollection.userInterfaceStyle == .dark
         let boostColor = Self.srgb(.systemGreen, traits: traitCollection)
-        let favouriteColor = Self.srgb(Self.favouriteColor, traits: traitCollection)
+        // 白い背景では黄色が見えにくいため、ライトモードでは既定で橙に寄せる。チューニングで黄色にもできる。
+        let favouriteColor = Self.srgb(isDark || style.lightFavouriteIsYellow ? .systemYellow : .systemOrange, traits: traitCollection)
         let gradient = ReactionGlowGradient(
             boost: boostColor,
             favourite: favouriteColor,
@@ -236,11 +247,11 @@ final class ReactionGlowView: UIView {
         let colors = stops.map { stop in
             addsLight
                 ? Self.cgColor(white.lightAdded(stop.color, intensity: style.lightIntensity), alpha: stop.alpha)
-                : Self.cgColor(stop.color, alpha: stop.alpha)
+                : Self.cgColor(stop.color, alpha: stop.alpha, exposure: isDark && canDrawHDR && style.allowsHDR ? style.darkGlowHDRExposure : 1)
         }
         let bloomColors = stops.map { stop in
             addsLight
-                ? Self.cgColor(white.lightAdded(stop.color, intensity: style.lightIntensity * 2), alpha: stop.alpha)
+                ? Self.cgColor(white.lightAdded(stop.color, intensity: style.lightIntensity * style.lightBloomIntensityRatio), alpha: stop.alpha)
                 : Self.cgColor(stop.color, alpha: stop.alpha, exposure: exposure)
         }
         for (layer, layerColors) in [(glow, colors), (bloom, bloomColors)] {
@@ -248,12 +259,13 @@ final class ReactionGlowView: UIView {
             layer.locations = locations
         }
         // 白より明るい色は、レイヤーがHDRで描くと決めたときだけ、白で頭打ちにならずに描かれる。
-        let dynamicRange: CALayer.DynamicRange = exposure > 1 ? .high : .standard
+        let usesHDR = exposure > 1 || (isDark && canDrawHDR && style.allowsHDR && style.darkGlowHDRExposure > 1)
+        let dynamicRange: CALayer.DynamicRange = usesHDR ? .high : .standard
         for layer in [glow, bloom] {
             layer.preferredDynamicRange = dynamicRange
         }
         // 光を足すときは、濃さは縦の形（falloff）と区切りの濃さだけで決める。重ねる濃さを下げると、足した光がそのぶん弱まるため。
-        glow.opacity = Float(isDark ? style.darkOpacity : addsLight ? 1 : style.lightOpacity)
+        glow.opacity = Float(isDark ? style.darkOpacity : addsLight ? style.lightHDROpacity : style.lightOpacity)
         bloom.opacity = Float(style.bloomOpacity)
         let bloomHeight = min(max(style.bloomHeight, 0), bounds.height)
         bloom.frame = CGRect(x: 0, y: bounds.height - bloomHeight, width: bounds.width, height: bloomHeight)

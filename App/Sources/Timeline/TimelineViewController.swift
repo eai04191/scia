@@ -332,6 +332,10 @@ final class TimelineViewController: UIViewController {
             _ = tuning.value(of: TuningCatalog.reactionGlowFillsWidthWhenAlone)
             _ = tuning.value(of: TuningCatalog.reactionGlowHDRExposure)
             _ = tuning.value(of: TuningCatalog.reactionGlowLightIntensity)
+            _ = tuning.value(of: TuningCatalog.reactionGlowLightHDROpacity)
+            _ = tuning.value(of: TuningCatalog.reactionGlowLightBloomIntensityRatio)
+            _ = tuning.value(of: TuningCatalog.reactionGlowDarkGlowHDRExposure)
+            _ = tuning.value(of: TuningCatalog.reactionGlowLightFavouriteIsYellow)
             _ = tuning.value(of: TuningCatalog.reactionGlowIconStyle)
             _ = network.conditions
             _ = settings.usesOriginalThumbnailsOnExpensiveNetwork
