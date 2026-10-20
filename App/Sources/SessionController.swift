@@ -84,12 +84,12 @@ final class SessionController {
         self.credential = credential
         self.onReauthenticate = onReauthenticate
         #if DEBUG
-        let client = MastodonClient(credential: credential, transport: FaultInjectingTransport(base: URLSessionTransport()), rateLimit: rateLimit, features: features, requestLog: requestLog)
+        let client = MastodonClient(credential: credential, transport: FaultInjectingTransport(base: ScenarioMode.server?.transport ?? URLSessionTransport()), rateLimit: rateLimit, features: features, requestLog: requestLog)
         #else
         let client = MastodonClient(credential: credential, transport: URLSessionTransport(), rateLimit: rateLimit, features: features, requestLog: requestLog)
         #endif
         #if DEBUG
-        let streaming = StreamingClient(credential: credential, connector: FaultInjectingWebSocketConnector(base: URLSessionWebSocketConnector()))
+        let streaming = StreamingClient(credential: credential, connector: FaultInjectingWebSocketConnector(base: ScenarioMode.server?.connector ?? URLSessionWebSocketConnector()))
         #else
         let streaming = StreamingClient(credential: credential, connector: URLSessionWebSocketConnector())
         #endif
@@ -1098,6 +1098,8 @@ final class SessionController {
         case .dummySession:
             // SceneDelegateが、セッションの有無にかかわらず先に受けてダミーのセッションを開くため、ここには来ない。
             break
+        case .scenario(let event):
+            ScenarioMode.handle(event)
         case .unauthorized:
             DebugFaults.rejectAsUnauthorized()
             reportUnauthorized()

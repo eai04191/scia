@@ -17,6 +17,12 @@ settings:
     SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
     SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY: YES
     SWIFT_UPCOMING_FEATURE_INTERNAL_IMPORTS_BY_DEFAULT: YES
+    # アプリのバンドルID、表示名、登録するURLスキーム。プロモーション動画の素材を撮るビルドは、Config/Promo.xcconfigで上書きし、
+    # いつものSciaと並べて入れられるようにし、いつものSciaに届くURLを取らないようにする（docs/promo-video.md）
+    SCIA_BUNDLE_ID: net.mizle.scia
+    SCIA_DISPLAY_NAME: Scia
+    SCIA_URL_SCHEME: scia
+    SCIA_DEBUG_URL_SCHEME: scia-debug
 packages:
   SciaCore:
     path: Packages/SciaCore
@@ -49,7 +55,7 @@ targets:
           - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/AppIconLightPreview@3x.png
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: net.mizle.scia
+        PRODUCT_BUNDLE_IDENTIFIER: $(SCIA_BUNDLE_ID)
         # Info.plistのCFBundleShortVersionStringとCFBundleVersionになる。
         # iOSはなくてもインストールできるが、MacでDesigned for iPadとして動かすときはCFBundleVersionがないとインストールに失敗する
         MARKETING_VERSION: "0.0.0"
@@ -63,7 +69,7 @@ targets:
         # iPadとMac（Designed for iPad）では、4つの向きすべてに対応しないとウィンドウの大きさを自由に変えられない。
         # iPhoneの向きは変えないよう、iPad向けのキーだけに書く
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
-        INFOPLIST_KEY_CFBundleDisplayName: Scia
+        INFOPLIST_KEY_CFBundleDisplayName: $(SCIA_DISPLAY_NAME)
         # ビューアの共有から画像を写真に保存するため
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: 添付ファイルのメディアを写真に保存します。
         CODE_SIGN_STYLE: Automatic
@@ -88,10 +94,13 @@ targets:
           # OAuthの戻り先のnet.mizle.sciaはASWebAuthenticationSessionが受け取るため、取り合わないよう別にする。
           - CFBundleURLName: net.mizle.scia
             CFBundleURLSchemes:
-              - scia
+              - $(SCIA_URL_SCHEME)
           - CFBundleURLName: net.mizle.scia.debug
             CFBundleURLSchemes:
-              - scia-debug
+              - $(SCIA_DEBUG_URL_SCHEME)
+        # アプリがURLを読むときに、自分のスキームを知るため
+        SciaURLScheme: $(SCIA_URL_SCHEME)
+        SciaDebugURLScheme: $(SCIA_DEBUG_URL_SCHEME)
         # 違和感レポートをファイルアプリから取り出せるようにする
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
@@ -107,7 +116,29 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.mizle.scia.tests
         GENERATE_INFOPLIST_FILE: YES
+  # プロモーション動画の素材を撮る台本（docs/promo-video.md）。撮影モードで起動し、操作とイベントを順に送る
+  SciaUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - AppUITests
+    dependencies:
+      - target: Scia
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.mizle.scia.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Scia
 schemes:
+  # 台本は録画と合わせて走らせるため、make testで走る`Scia`のテストに混ぜない
+  SciaPromo:
+    build:
+      targets:
+        Scia: all
+        SciaUITests: [test]
+    test:
+      targets:
+        - SciaUITests
   Scia:
     build:
       targets:

@@ -5,10 +5,18 @@ import SciaCore
 /// デバッグメニューと同じ操作を、`xcrun simctl openurl '<端末>' 'scia-debug://dummy/images'`のようにURLで呼ぶ。
 /// agentがメニューを開いてタップせずに、コマンドで確認の準備をするため。
 enum DebugURL: Equatable {
-    static let scheme = "scia-debug"
+    /// いつものビルドは`scia-debug`、撮影用のビルドは`scia-promo-debug`。project.ymlの`SCIA_DEBUG_URL_SCHEME`を、Info.plistを通して読む。
+    static let scheme: String = {
+        guard let scheme = Bundle.main.object(forInfoDictionaryKey: "SciaDebugURLScheme") as? String else {
+            preconditionFailure("Info.plistにSciaDebugURLSchemeがない")
+        }
+        return scheme
+    }()
 
     /// `scia-debug://dummy/<DebugDummyPost.rawValue>`
     case dummy(DebugDummyPost)
+    /// `scia-debug://scenario/<イベント>`。撮影モード（`ScenarioMode`）の台本のイベントを、ストリーミングで流す。
+    case scenario(String)
     /// `scia-debug://unauthorized`。以後のREST APIに401を返させ、トークンが無効になった状態にする。
     case unauthorized
     /// `scia-debug://dummy-session`で、ログインせずに、通信しないダミーのデータでホームと通知の画面に入る（`DummyServer`）。ログイン画面でも受け付ける。
@@ -97,6 +105,7 @@ enum DebugURL: Equatable {
         let last = url.lastPathComponent
         let parsed: DebugURL? = switch host {
         case "dummy": DebugDummyPost(rawValue: last).map { .dummy($0) }
+        case "scenario": .scenario(last)
         case "unsupported": OptionalFeature(rawValue: last).map { .unsupported($0) }
         case "tab": Tab(rawValue: last).map { .tab($0) }
         case "catalog": CatalogComponent(rawValue: last).map { .catalog($0) }

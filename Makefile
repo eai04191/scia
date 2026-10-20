@@ -3,7 +3,7 @@ SCHEME := Scia
 DERIVED_DATA := DerivedData
 SIM_DESTINATION ?= generic/platform=iOS Simulator
 
-.PHONY: generate lint test-core build warnings test sim-keyboard readme-icons update-known-servers check clean
+.PHONY: generate lint test-core build warnings test sim-keyboard promo readme-icons update-known-servers check clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -38,6 +38,13 @@ test: generate
 KEYBOARD ?= software
 sim-keyboard:
 	swift Tools/sim-keyboard.swift '$(SIM)' $(KEYBOARD)
+
+## プロモーション動画の素材を、台本のUIテストを走らせながら撮る（docs/promo-video.md）。SIMにはシミュレーターか実機の名前を渡す
+## 例: make promo SIM='Scia 1'
+SCENARIO ?= StreamingDemoUITests/testStreamingDemo
+OUT ?= $(DERIVED_DATA)/promo.mp4
+promo: generate
+	Tools/promo-record.sh '$(SIM)' $(SCENARIO) '$(OUT)'
 
 ## READMEに載せるアイコンの絵を、.iconから描き出す。アイコンを変えたら描き出し直してcommitする
 ## ライトはふだんの見た目、ダークはホーム画面のダークモードと同じ見た目にする。128ptで出すので、App Storeのアイコンと同じ1024pxで描き出し、劣化なしのWebPにする

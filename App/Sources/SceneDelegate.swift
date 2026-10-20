@@ -25,7 +25,20 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             window.traitOverrides.imageDynamicRange = range
         }
         self.window = window
+        #if DEBUG
+        if let scenario = ScenarioMode.server {
+            showTimeline(for: scenario.script.credential)
+            ScenarioHeartbeat.start()
+            ScenarioSignals.listen(for: ScenarioMode.signalPaths) { [weak self] path in
+                guard let url = URL(string: "\(DebugURL.scheme)://\(path)"), let debugURL = DebugURL(url) else { return }
+                self?.session?.handle(debugURL)
+            }
+        } else {
+            showSavedAccount()
+        }
+        #else
         showSavedAccount()
+        #endif
         window.makeKeyAndVisible()
         installNoticeOverlay()
         // 閉じていたアプリをURLで開いたとき。プロフィールは最初の読み込みを待たずに開ける。

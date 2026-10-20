@@ -1,0 +1,6 @@
+// プロモーション動画の素材を撮るビルド（docs/promo-video.md）。Tools/promo-record.shが`xcodebuild -xcconfig`で渡す。
+// いつものSciaと並べて入れられるようバンドルIDを変え、いつものSciaに届くURLを取らないようURLスキームを変える。
+SCIA_BUNDLE_ID = net.mizle.scia.promo
+SCIA_DISPLAY_NAME = Scia Promo
+SCIA_URL_SCHEME = scia-promo
+SCIA_DEBUG_URL_SCHEME = scia-promo-debug

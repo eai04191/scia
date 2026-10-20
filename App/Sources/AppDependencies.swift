@@ -7,7 +7,7 @@ enum AppDependencies {
     /// Releaseビルドではパネルを出さないため、値を保存せず常に既定値を使う。
     static let tuning: TuningStore = {
         #if DEBUG
-        TuningStore(defaults: .standard)
+        TuningStore(defaults: ScenarioMode.defaults ?? .standard)
         #else
         TuningStore(defaults: nil)
         #endif
@@ -34,7 +34,13 @@ enum AppDependencies {
 
     static let network = NetworkConditionsMonitor()
 
-    static let settings = AppSettings(defaults: .standard)
+    static let settings: AppSettings = {
+        #if DEBUG
+        AppSettings(defaults: ScenarioMode.defaults ?? .standard)
+        #else
+        AppSettings(defaults: .standard)
+        #endif
+    }()
 
     static let appIcon = AppIconSelection()
 

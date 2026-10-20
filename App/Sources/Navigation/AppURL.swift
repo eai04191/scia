@@ -2,7 +2,13 @@ import Foundation
 
 /// 他のアプリやショートカットから、`scia://profile/user@example.social`のようなURLでSciaの画面を開く。
 enum AppURL: Equatable {
-    static let scheme = "scia"
+    /// いつものビルドは`scia`、撮影用のビルドは`scia-promo`。project.ymlの`SCIA_URL_SCHEME`を、Info.plistを通して読む。
+    static let scheme: String = {
+        guard let scheme = Bundle.main.object(forInfoDictionaryKey: "SciaURLScheme") as? String else {
+            preconditionFailure("Info.plistにSciaURLSchemeがない")
+        }
+        return scheme
+    }()
 
     /// `scia://profile/<user@domain>`。ローカルのアカウントは`<user>`だけでもよい。ホームのタブにプロフィールを開く。
     case profile(acct: String)

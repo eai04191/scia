@@ -213,7 +213,10 @@ final class TimelineViewController: UIViewController {
             title = texts.title
         }
         #if DEBUG
-        baseBarItems = [makeDebugMenuButton(screenActions: debugActions, faults: onDebugURL.map { DebugFaultMenu.make(handle: $0) }, handle: onDebugURL)]
+        // 撮影モードでは、宣伝の素材に開発用のボタンを映さない。
+        if ScenarioMode.server == nil {
+            baseBarItems = [makeDebugMenuButton(screenActions: debugActions, faults: onDebugURL.map { DebugFaultMenu.make(handle: $0) }, handle: onDebugURL)]
+        }
         #endif
         applyBarItems()
         collectionView.frame = view.bounds
