@@ -33,4 +33,6 @@ extension ComposeToolItem: MenuItemPresentable {
     static var moreBoundaryTitle: String { "＋ボタン" }
     static var moreBoundaryNote: String { "これより上の項目は＋の中に入れ、下の項目はボタンの行に＋の右から並べます。行に入りきらない項目は＋の中に入ります" }
     static var moreBoundarySymbolName: String { "plus.circle" }
+    /// ＋のメニューは項目が少なく、ボタンの行は横並びの区切り線に関わらず横に並ぶため、足させない。
+    static var supportsRowSeparators: Bool { false }
 }

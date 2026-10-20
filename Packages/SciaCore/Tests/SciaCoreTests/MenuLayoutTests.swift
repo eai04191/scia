@@ -33,8 +33,8 @@ struct MenuLayoutTests {
     @Test func groupsSplitBySeparatorAndMore() {
         let groups = TestMenuItem.defaultLayout.groups
 
-        #expect(groups.main == [[.a, .b], [.c]])
-        #expect(groups.more == [[.delete]])
+        #expect(groups.main.map(\.items) == [[.a, .b], [.c]])
+        #expect(groups.more.map(\.items) == [[.delete]])
     }
 
     /// 非表示の項目を除いた結果、空になったまとまりは出さない。区切り線が続いても空のまとまりを作らない。
@@ -51,12 +51,47 @@ struct MenuLayoutTests {
             .item(.delete, isVisible: false),
         ])
 
-        #expect(layout.groups.main == [[.b, .c]])
-        #expect(layout.groups.more == [])
+        #expect(layout.groups.main.map(\.items) == [[.b, .c]])
+        #expect(layout.groups.more.map(\.items) == [])
+    }
+
+    /// 横並びの区切り線は、並びの先頭や「その他」の境目のすぐ下でも、その下のまとまりを横に並べる。次の区切り線で横並びは終わる。
+    @Test func rowSeparatorMakesFollowingGroupARow() {
+        let layout = MenuLayout<TestMenuItem>(elements: [
+            .rowSeparator,
+            .item(.a, isVisible: true),
+            .item(.b, isVisible: true),
+            .separator,
+            .item(.c, isVisible: true),
+            .item(.hiddenByDefault, isVisible: false),
+            .more,
+            .rowSeparator,
+            .item(.delete, isVisible: true),
+        ])
+
+        #expect(layout.groups.main == [.init([.a, .b], isRow: true), .init([.c])])
+        #expect(layout.groups.more == [.init([.delete], isRow: true)])
+    }
+
+    /// 中身がすべて非表示の横並びのまとまりは出さず、横並びを次のまとまりに持ち越さない。
+    @Test func emptyRowGroupDoesNotCarryOver() {
+        let layout = MenuLayout<TestMenuItem>(elements: [
+            .item(.a, isVisible: true),
+            .rowSeparator,
+            .item(.b, isVisible: false),
+            .separator,
+            .item(.c, isVisible: true),
+            .item(.hiddenByDefault, isVisible: false),
+            .more,
+            .item(.delete, isVisible: true),
+        ])
+
+        #expect(layout.groups.main == [.init([.a]), .init([.c])])
     }
 
     @Test func tokensRoundTripIncludingHiddenItemsAndSeparators() {
         let layout = MenuLayout<TestMenuItem>(elements: [
+            .rowSeparator,
             .item(.delete, isVisible: true),
             .separator,
             .item(.c, isVisible: false),
@@ -98,8 +133,8 @@ struct MenuLayoutTests {
     @Test func newItemAfterMoreGoesIntoMore() {
         let layout = MenuLayout<TestMenuItem>(tokens: ["item:a", "more", "item:b", "item:c", "hidden:hiddenByDefault"])
 
-        #expect(layout.groups.main == [[.a]])
-        #expect(layout.groups.more == [[.delete, .b, .c]])
+        #expect(layout.groups.main.map(\.items) == [[.a]])
+        #expect(layout.groups.more.map(\.items) == [[.delete, .b, .c]])
     }
 
     /// 新しい項目の表示は、項目ごとの既定に従う。
@@ -127,9 +162,9 @@ struct MenuLayoutTests {
     @Test func statusMenuDefaultMatchesMenuBeforeCustomization() {
         let groups = StatusMenuItem.defaultLayout.groups
 
-        #expect(groups.main == [[.reply, .favourite, .reblog, .edit], [.copyLink, .copyText, .share, .openInBrowser, .editHistory, .hideMedia, .systemTranslate], [.notifyingUser, .author, .booster]])
-        #expect(groups.more == [[.delete]])
-        #expect(UserMenuItem.defaultLayout.groups.main == [[.profile, .copyLink, .share]])
+        #expect(groups.main.map(\.items) == [[.reply, .favourite, .reblog, .edit], [.copyLink, .copyText, .share, .openInBrowser, .editHistory, .hideMedia, .systemTranslate], [.notifyingUser, .author, .booster]])
+        #expect(groups.more.map(\.items) == [[.delete]])
+        #expect(UserMenuItem.defaultLayout.groups.main.map(\.items) == [[.profile, .copyLink, .share]])
     }
 
     /// 開く場所を選んで開く2つを足す前に保存した投稿のメニューでも、2つはブラウザで開くのすぐ後ろに、隠れて入る。
@@ -143,26 +178,26 @@ struct MenuLayoutTests {
 
     /// 本文のリンクとハッシュタグのメニューは、設定を足す前の決め打ちのメニューと同じ並びにする。開く場所を選んで開く2つは隠しておく。
     @Test func linkAndHashtagMenuDefaultsMatchMenuBeforeCustomization() {
-        #expect(LinkMenuItem.defaultLayout.groups.main == [[.openInBrowser, .copyLink, .share]])
-        #expect(LinkMenuItem.defaultLayout.groups.more.isEmpty)
-        #expect(HashtagMenuItem.defaultLayout.groups.main == [[.openInBrowser, .copyLink, .share]])
-        #expect(HashtagMenuItem.defaultLayout.groups.more.isEmpty)
+        #expect(LinkMenuItem.defaultLayout.groups.main.map(\.items) == [[.openInBrowser, .copyLink, .share]])
+        #expect(LinkMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
+        #expect(HashtagMenuItem.defaultLayout.groups.main.map(\.items) == [[.openInBrowser, .copyLink, .share]])
+        #expect(HashtagMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
     }
 
     /// リンクをコピーと共有を足す前に保存したユーザーのメニューでも、2つはプロフィールの後ろに出る。
     @Test func savedUserMenuGainsCopyLinkAndShareAfterProfile() {
         let saved = MenuLayout<UserMenuItem>(tokens: ["more", "item:profile"])
 
-        #expect(saved.groups.main.isEmpty)
-        #expect(saved.groups.more == [[.profile, .copyLink, .share]])
+        #expect(saved.groups.main.map(\.items).isEmpty)
+        #expect(saved.groups.more.map(\.items) == [[.profile, .copyLink, .share]])
     }
 
     /// 編集と削除を足す前に保存した並びでも、編集はブーストの後ろに、削除は「その他」に入る。
     @Test func savedStatusMenuGainsEditAndDelete() {
         let saved = MenuLayout<StatusMenuItem>(tokens: ["item:reblog", "item:reply", "item:favourite", "separator", "item:copyLink", "more", "hidden:share"])
 
-        #expect(saved.groups.main.first == [.reblog, .edit, .reply, .favourite])
-        #expect(saved.groups.more.first?.first == .delete)
+        #expect(saved.groups.main.map(\.items).first == [.reblog, .edit, .reply, .favourite])
+        #expect(saved.groups.more.map(\.items).first?.first == .delete)
     }
 
     @Test func appSettingsPersistsMenuLayouts() throws {
@@ -174,7 +209,7 @@ struct MenuLayoutTests {
 
         let restored = AppSettings(defaults: defaults).statusMenuLayout
         #expect(restored == changed)
-        #expect(restored.groups.main.first?.first == .share)
+        #expect(restored.groups.main.map(\.items).first?.first == .share)
     }
 
     @Test func appSettingsPersistsLinkAndHashtagMenuLayouts() throws {

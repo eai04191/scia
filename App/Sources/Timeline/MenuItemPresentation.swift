@@ -4,11 +4,15 @@ import UIKit
 @MainActor
 extension MenuLayout.Groups {
     /// まとまりごとに区切り線で分けて並べ、「その他」の中身はサブメニューにする。中身のないまとまりと「その他」は出さない。
+    /// 横並びのまとまりは、アイコンと名前を縦に積んだ中くらいの大きさで横に並べる。横に並ぶのは3個までで、4個目からはその下にふだんの行として続く。
     func menuElements(_ elements: (Item) -> [UIMenuElement]) -> [UIMenuElement] {
-        func inline(_ groups: [[Item]]) -> [UIMenuElement] {
+        func inline(_ groups: [MenuLayout<Item>.Group]) -> [UIMenuElement] {
             groups.compactMap { group in
-                let children = group.flatMap(elements)
-                return children.isEmpty ? nil : UIMenu(options: .displayInline, children: children)
+                let children = group.items.flatMap(elements)
+                guard !children.isEmpty else { return nil }
+                let menu = UIMenu(options: .displayInline, children: children)
+                if group.isRow { menu.preferredElementSize = .medium }
+                return menu
             }
         }
         let main = inline(main)

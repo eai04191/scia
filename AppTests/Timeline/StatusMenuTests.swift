@@ -180,4 +180,15 @@ struct StatusMenuTests {
 
         #expect(try outline(menu(for: .status(post), settings: settings)).last == ["@alice[プロフィール,リンクをコピー,共有]", "@carol[プロフィール,リンクをコピー,共有]", "@dave(remote.example)[プロフィール,リンクをコピー,共有]"])
     }
+
+    /// 横並びの区切り線の下のまとまりは、中くらいの大きさで横に並べる。ほかのまとまりは、ふだんの行のまま。
+    @Test func rowSeparatorMakesFollowingGroupMediumSized() throws {
+        let settings = try makeSettings()
+        settings.statusMenuLayout = MenuLayout(elements: [.rowSeparator] + StatusMenuItem.defaultLayout.elements)
+
+        let groups = try menu(for: .status(status(url: nil)), settings: settings)?.children.compactMap { $0 as? UIMenu } ?? []
+
+        #expect(groups.first?.preferredElementSize == .medium)
+        #expect(groups.dropFirst().allSatisfy { $0.preferredElementSize != .medium })
+    }
 }

@@ -44,10 +44,11 @@ public struct ComposeToolPlacement: Equatable, Sendable {
     ///   - width: 項目のボタンの幅。隣との間隔を含める。
     public init(layout: MenuLayout<ComposeToolItem>, available: Double, addButtonWidth: Double, width: (ComposeToolItem) -> Double) {
         let groups = layout.groups
-        // 境目より下（`more`）がボタンの行、上（`main`）が＋のメニュー。行では区切り線を数えない。
-        let wanted = groups.more.flatMap(\.self)
+        // 境目より下（`more`）がボタンの行、上（`main`）が＋のメニュー。行では区切り線を数えない。横並びの区切り線も、ふつうの区切り線と同じに扱う。
+        let wanted = groups.more.flatMap(\.items)
+        let menu = groups.main.map(\.items)
         let widths = wanted.map(width)
-        if groups.main.isEmpty, widths.reduce(0, +) <= available {
+        if menu.isEmpty, widths.reduce(0, +) <= available {
             self.init(row: wanted, menu: [])
             return
         }
@@ -59,6 +60,6 @@ public struct ComposeToolPlacement: Equatable, Sendable {
             count += 1
         }
         let overflow = Array(wanted.dropFirst(count))
-        self.init(row: Array(wanted.prefix(count)), menu: groups.main + (overflow.isEmpty ? [] : [overflow]))
+        self.init(row: Array(wanted.prefix(count)), menu: menu + (overflow.isEmpty ? [] : [overflow]))
     }
 }

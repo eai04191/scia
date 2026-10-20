@@ -169,7 +169,7 @@ extension TimelineViewController {
     /// 見出しはユーザー名だけにし、ほかのサーバーのユーザーならサーバー名をサブタイトルに出す。
     private func userElement(for user: MenuUser, id: ItemID) -> UIMenuElement? {
         let groups = settings.userMenuLayout.groups
-        if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first, only.count == 1 {
+        if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first?.items, only.count == 1 {
             return userAction(only[0], for: user, id: id, inSubmenu: false)
         }
         let children = groups.menuElements { item in userAction(item, for: user, id: id, inSubmenu: true).map { [$0] } ?? [] }

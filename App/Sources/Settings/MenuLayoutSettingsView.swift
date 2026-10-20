@@ -11,6 +11,8 @@ protocol MenuItemPresentable {
     static var moreBoundaryTitle: String { get }
     static var moreBoundaryNote: String { get }
     static var moreBoundarySymbolName: String { get }
+    /// 横並びの区切り線を足せるか。
+    static var supportsRowSeparators: Bool { get }
 }
 
 /// 長押しのメニューでは、境目より下の項目は「その他」のサブメニューに入る。
@@ -18,6 +20,7 @@ extension MenuItemPresentable {
     static var moreBoundaryTitle: String { "その他" }
     static var moreBoundaryNote: String { "これより下の項目は、メニューの「その他」の中に入ります" }
     static var moreBoundarySymbolName: String { "ellipsis.circle" }
+    static var supportsRowSeparators: Bool { true }
 }
 
 /// 長押しのメニューや投稿欄の＋の並びを変える画面。項目、区切り線、「その他」の境目を1本のリストで並べ替え、項目ごとに表示を切り替える。決まりはdocs/menus.mdにある。
@@ -39,8 +42,24 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     /// 項目どうしの間だけに線を引く。区切り線の行は自分が線なので、その上下には引かない。いちばん下の行にも引かない。
     private var rowsWithBottomLine: Set<Row.ID> {
         Set(zip(rows, rows.dropFirst()).compactMap { row, next in
-            row.element != .separator && next.element != .separator ? row.id : nil
+            !row.element.isSeparator && !next.element.isSeparator ? row.id : nil
         })
+    }
+
+    /// メニューで横に並ぶ項目の数。これを超えた項目は、横並びの下にふだんの行として続く。
+    private let rowCapacity = 3
+
+    /// 横並びの区切り線から、次の区切り線か「その他」の境目までにある、表示する項目の数。
+    private func visibleItemCount(after row: Row) -> Int {
+        guard let index = rows.firstIndex(where: { $0.id == row.id }) else { return 0 }
+        var count = 0
+        for next in rows[(index + 1)...] {
+            switch next.element {
+            case .item(_, let isVisible): if isVisible { count += 1 }
+            case .separator, .rowSeparator, .more: return count
+            }
+        }
+        return count
     }
 
     init(title: String, layout: Binding<MenuLayout<Item>>) {
@@ -70,7 +89,7 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
                         // 中身の下端を行の下端に揃えれば、位置を測らずに済み、線は行と一緒に動く。
                         .listRowInsets(EdgeInsets(top: 0, leading: rowInsets.leading, bottom: 0, trailing: rowInsets.trailing))
                         .listRowSeparator(.hidden)
-                        .deleteDisabled(row.element != .separator)
+                        .deleteDisabled(!row.element.isSeparator)
                 }
                 .onMove { source, destination in
                     rows.move(fromOffsets: source, toOffset: destination)
@@ -81,7 +100,9 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
                     save()
                 }
             } footer: {
-                Text("長押ししてドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。")
+                Text(Item.supportsRowSeparators
+                    ? "長押ししてドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。横並びの区切り線より下のまとまりは、メニューの中で横に並びます。"
+                    : "長押ししてドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。")
             }
             Section {
                 Button("区切り線を足す") {
@@ -89,6 +110,13 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
                     let index = rows.firstIndex { $0.element == .more } ?? rows.endIndex
                     rows.insert(Row(element: .separator), at: index)
                     save()
+                }
+                if Item.supportsRowSeparators {
+                    Button("横並びの区切り線を足す") {
+                        // 返信やお気に入りのようなよく使う項目を、メニューのいちばん上に横に並べることが多いため、先頭に置く。
+                        rows.insert(Row(element: .rowSeparator), at: rows.startIndex)
+                        save()
+                    }
                 }
                 Button("最初の並びに戻す", role: .destructive) {
                     rows = Item.defaultLayout.elements.map { Row(element: $0) }
@@ -142,6 +170,28 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("区切り線")
+        case .rowSeparator:
+            let count = visibleItemCount(after: row.wrappedValue)
+            VStack(spacing: 4) {
+                HStack(spacing: 12) {
+                    line
+                    Label("横並び", systemImage: "rectangle.split.3x1")
+                        // リストの行の中では、指定しないとアイコンだけになる。
+                        .labelStyle(.titleAndIcon)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                    line
+                }
+                if count > rowCapacity {
+                    Text("横に並ぶのは\(rowCapacity)個までです。\(rowCapacity + 1)個目からは、その下にふだんの行で出ます")
+                        .font(.footnote)
+                        .foregroundStyle(.orange)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(count > rowCapacity ? "横並びの区切り線。横に並ぶのは\(rowCapacity)個までです" : "横並びの区切り線")
         case .more:
             Label {
                 VStack(alignment: .leading, spacing: 2) {
@@ -178,5 +228,15 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
 
     private func save() {
         layout = MenuLayout(elements: rows.map(\.element))
+    }
+}
+
+private extension MenuLayout.Element {
+    /// 区切り線の仲間か。行どうしの線を引かず、スワイプで消せる。
+    var isSeparator: Bool {
+        switch self {
+        case .separator, .rowSeparator: true
+        case .item, .more: false
+        }
     }
 }

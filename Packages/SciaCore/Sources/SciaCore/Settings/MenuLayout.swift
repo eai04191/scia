@@ -11,15 +11,29 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
         /// 非表示にした項目も、同じ場所に残す。
         case item(Item, isVisible: Bool)
         case separator
+        /// 区切り線と同じくまとまりを分け、これより下のまとまりの項目をメニューで横に並べる。
+        case rowSeparator
         /// これより下の項目は「その他」のサブメニューに入る。並びに1つだけある。
         case more
     }
 
+    /// 区切り線で分けたメニューの1つのまとまり。
+    public struct Group: Equatable, Sendable {
+        public var items: [Item]
+        /// 横並びの区切り線で始まったまとまりなら、項目を横に並べる。
+        public var isRow: Bool
+
+        public init(_ items: [Item], isRow: Bool = false) {
+            self.items = items
+            self.isRow = isRow
+        }
+    }
+
     /// メニューに出す項目を、区切り線で分けたまとまりにしたもの。空のまとまりは含めない。
     public struct Groups: Equatable, Sendable {
-        public var main: [[Item]]
+        public var main: [Group]
         /// 「その他」のサブメニューの中身。空なら「その他」を出さない。
-        public var more: [[Item]]
+        public var more: [Group]
     }
 
     public private(set) var elements: [Element]
@@ -38,36 +52,42 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
     public var groups: Groups {
         var groups = Groups(main: [], more: [])
         var current: [Item] = []
+        var isRow = false
         var inMore = false
-        func close() {
+        func close(startingRow: Bool) {
             if !current.isEmpty {
-                if inMore { groups.more.append(current) } else { groups.main.append(current) }
+                let group = Group(current, isRow: isRow)
+                if inMore { groups.more.append(group) } else { groups.main.append(group) }
             }
             current = []
+            isRow = startingRow
         }
         for element in elements {
             switch element {
             case .item(let item, let isVisible):
                 if isVisible { current.append(item) }
             case .separator:
-                close()
+                close(startingRow: false)
+            case .rowSeparator:
+                close(startingRow: true)
             case .more:
-                close()
+                close(startingRow: false)
                 inMore = true
             }
         }
-        close()
+        close(startingRow: false)
         return groups
     }
 
     // MARK: - 保存
 
-    /// 設定に保存する形。項目は`item:<rawValue>`か非表示の`hidden:<rawValue>`、区切り線は`separator`、「その他」は`more`。
+    /// 設定に保存する形。項目は`item:<rawValue>`か非表示の`hidden:<rawValue>`、区切り線は`separator`、横並びの区切り線は`row`、「その他」は`more`。
     public var tokens: [String] {
         elements.map { element in
             switch element {
             case .item(let item, let isVisible): "\(isVisible ? "item" : "hidden"):\(item.rawValue)"
             case .separator: "separator"
+            case .rowSeparator: "row"
             case .more: "more"
             }
         }
@@ -81,6 +101,7 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
     private static func element(from token: String) -> Element? {
         switch token {
         case "separator": return .separator
+        case "row": return .rowSeparator
         case "more": return .more
         default:
             let parts = token.split(separator: ":", maxSplits: 1).map(String.init)
@@ -105,7 +126,7 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
         switch element {
         case .item(let item, _): .item(item)
         case .more: .more
-        case .separator: nil
+        case .separator, .rowSeparator: nil
         }
     }
 
