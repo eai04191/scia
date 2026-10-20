@@ -741,13 +741,22 @@ public enum TuningCatalog {
         defaultValue: 0.35
     )
 
-    /// 投稿欄を展開ボタンで安全領域の上端まで広げる時間と、5行の高さに戻す時間（秒）。
+    /// 投稿欄を展開ボタンで本文に合わせた高さまで広げる時間と、5行の高さに戻す時間（秒）。
     public static let composeExpandDuration = NumberTuning(
         id: "compose.expandDuration",
         title: "投稿欄を広げる・戻す時間（秒）",
         range: 0.05...1.5,
         step: 0.05,
         defaultValue: 0.35
+    )
+
+    /// 投稿欄を展開ボタンで広げたときの、本文の最低の行数。本文がこれより短くても、この行数の高さまで広げて書き足す場所を先に取る。
+    public static let composeExpandedMinLines = NumberTuning(
+        id: "compose.expandedMinLines",
+        title: "投稿欄を広げたときの最低の行数",
+        range: 1...20,
+        step: 1,
+        defaultValue: 5
     )
 
     /// メディアを選ぶシートの低いときの高さを、最後に出したキーボードの高さに合わせる。
@@ -971,6 +980,7 @@ public enum TuningCatalog {
             .number(composeRestingHeight),
             .number(composeMorphDuration),
             .number(composeExpandDuration),
+            .number(composeExpandedMinLines),
             .toggle(composePickerMatchesKeyboard),
             .number(composePickerHeight),
             .number(completionDebounce),

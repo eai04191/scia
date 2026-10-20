@@ -100,7 +100,7 @@ final class InlineComposeController: NSObject {
     }()
     private let visibilityButton = UIButton(configuration: .plain())
     private lazy var expandButton = UIButton(configuration: .plain(), primaryAction: UIAction { [weak self] _ in self?.toggleExpanded() })
-    /// 展開ボタンで広げている。本文の5行の上限を外し、本文に合わせて上の安全領域の上端まで伸ばす。5行より短ければ5行の高さにする。
+    /// 展開ボタンで広げている。本文の5行の上限を外し、本文に合わせて上の安全領域の上端まで伸ばす。チューニングの最低の行数より短ければ、その行数の高さにする。
     private var isExpanded = false
     /// 広げている間だけ付ける、バーの上端を上の安全領域の上端より下に留める制約。
     private var expandedTop: NSLayoutConstraint?
@@ -223,7 +223,16 @@ final class InlineComposeController: NSObject {
 
     /// 入力欄がこれより高くなったら、伸ばさずに中でスクロールする。
     private var maxTextHeight: CGFloat {
-        UIFont.preferredFont(forTextStyle: .body).lineHeight * 5 + textView.textContainerInset.top + textView.textContainerInset.bottom
+        textHeight(lines: 5)
+    }
+
+    /// 広げたとき、本文がこれより短くても、この高さまで広げる。
+    private var minExpandedTextHeight: CGFloat {
+        textHeight(lines: tuning.value(of: TuningCatalog.composeExpandedMinLines))
+    }
+
+    private func textHeight(lines: Double) -> CGFloat {
+        UIFont.preferredFont(forTextStyle: .body).lineHeight * lines + textView.textContainerInset.top + textView.textContainerInset.bottom
     }
 
     init(model: ComposeModel, completion: ComposeCompletion? = nil, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, keyboardNotifications: NotificationCenter = .default) {
@@ -403,7 +412,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// 本文の5行の上限を外して、本文に合わせた高さまで広げる。広げていれば、本文の5行の上限がある高さに戻す。
-    /// 5行より短ければ、スクロールが始まる5行の高さまで広げ、書き足す行の場所を先に取る。
+    /// 本文がチューニングの最低の行数より短ければ、その行数の高さまで広げ、書き足す行の場所を先に取る。
     private func toggleExpanded() {
         isExpanded.toggle()
         if isExpanded {
@@ -1035,10 +1044,12 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 書いていないときのバーの高さを、チューニングの値に揃える。
+    /// 書いていないときのバーの高さと、広げたときの最低の行数を、チューニングの値に揃える。
     private func observeTuning() {
         withObservationTracking {
             restRowHeight.constant = tuning.value(of: TuningCatalog.composeRestingHeight) - restInset * 2
+            _ = tuning.value(of: TuningCatalog.composeExpandedMinLines)
+            textDidChange()
         } onChange: { [weak self] in
             Task { @MainActor in self?.observeTuning() }
         }
@@ -1368,7 +1379,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// 入力が長くなったら、決めた高さまでは伸ばし、超えたら中でスクロールする。
-    /// 広げている間は、5行の高さを下限に本文に合わせて伸ばし、上の安全領域の上端に届いたら中でスクロールする。
+    /// 広げている間は、チューニングの最低の行数の高さを下限に本文に合わせて伸ばし、上の安全領域の上端に届いたら中でスクロールする。
     private func textDidChange() {
         // 幅が決まる前に測ると1文字ずつ折り返した高さになり、短い文でもスクロールに切り替わってしまう。
         guard textView.bounds.width > 0 else { return }
@@ -1382,7 +1393,7 @@ final class InlineComposeController: NSObject {
             return
         }
         // 上端に届くかどうかで切り替えずに済むよう、広げている間は常にスクロールできるようにしておく。
-        expandedTextHeight.constant = max(fitting, maxTextHeight)
+        expandedTextHeight.constant = max(fitting, minExpandedTextHeight)
         expandedTextHeight.isActive = isExpanded
         textHeightLimit.constant = maxTextHeight
         textHeightLimit.isActive = !isExpanded && fitting > maxTextHeight
