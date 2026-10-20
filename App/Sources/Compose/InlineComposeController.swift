@@ -92,11 +92,17 @@ final class InlineComposeController: NSObject {
         constraint.priority = .required - 1
         return constraint
     }()
+    /// 広げている間の本文の高さ。上端に届いたら、ボタンの行より先にこれが負けて本文が縮み、中でスクロールする。
+    private lazy var expandedTextHeight: NSLayoutConstraint = {
+        let constraint = textView.heightAnchor.constraint(equalToConstant: maxTextHeight)
+        constraint.priority = .defaultLow
+        return constraint
+    }()
     private let visibilityButton = UIButton(configuration: .plain())
     private lazy var expandButton = UIButton(configuration: .plain(), primaryAction: UIAction { [weak self] _ in self?.toggleExpanded() })
-    /// 展開ボタンで広げている。本文の5行の上限を外し、バーの上端を上の安全領域の上端に付ける。
+    /// 展開ボタンで広げている。本文の5行の上限を外し、本文に合わせて上の安全領域の上端まで伸ばす。5行より短ければ5行の高さにする。
     private var isExpanded = false
-    /// 広げている間だけ付ける、バーの上端を上の安全領域の上端に揃える制約。
+    /// 広げている間だけ付ける、バーの上端を上の安全領域の上端より下に留める制約。
     private var expandedTop: NSLayoutConstraint?
     /// 広げた状態から戻す動きの間はtrue。この間は本文をスクロールできるままにし、高さだけを本文に合わせる。
     private var isCollapsingFromExpanded = false
@@ -134,8 +140,8 @@ final class InlineComposeController: NSObject {
     /// 隠す設定で、書いている間にキーボードが下がり始めた。書き終える前から、キーボードと一緒に画面の外へ下げる。
     /// 指でキーボードを引き下ろしたときは、下がりきってから書き終えたことになるので、待つとキーボードが消えたあとにバーだけが遅れて下がるため。
     private var isSinkingWithKeyboard = false
-    /// 画面の外へ下げている間、下げ始めたときの高さに留める制約。広げたまま下げると、上端を安全領域に付ける制約を外すので、
-    /// 留めないと、広げた形を保てず本文を縮めながら下がる。画面の外で書いていないときの形に戻すときに外す。
+    /// 画面の外へ下げている間、下げ始めたときの高さに留める制約。広げたまま下げると、上端を安全領域より下に留める制約を外すので、
+    /// 留めないと、上端に届いて縮めていた本文が伸び、広げた形を保てないまま下がる。画面の外で書いていないときの形に戻すときに外す。
     private var offScreenHeight: NSLayoutConstraint?
     /// バーを出し入れするたびに増やす。前の動きの終わりで、あとから始まった動きの途中にバーの形を変えないようにする。
     private var barSlideGeneration = 0
@@ -192,11 +198,11 @@ final class InlineComposeController: NSObject {
     private var isWaitingForKeyboardAfterViewer = false
     /// ビューアを開くたびに増やす。閉じる途中に別の添付を開いたら、前のビューアの閉じ終わりでキーボードを戻さないようにする。
     private var mediaViewerGeneration = 0
-    /// 補完の候補の一覧。タイムラインに重ねて欄の上に出し、広げているときは打っている行のすぐ下に重ねる。
+    /// 補完の候補の一覧。タイムラインに重ねて欄の上に出し、広げて欄の上に場所がなければ打っている行のすぐ下に重ねる。
     private let completionList = ComposeCompletionList()
-    /// 広げていないときの、一覧の下端を欄の上端に付ける制約。
+    /// 欄の上に出すときの、一覧の下端を欄の上端に付ける制約。
     private var completionListAboveBar: NSLayoutConstraint?
-    /// 広げているときの、一覧の上端の位置。打っている行に合わせて決める。
+    /// 本文に重ねるときの、一覧の上端の位置。打っている行に合わせて決める。
     private var completionListTop: NSLayoutConstraint?
     private var completionListHeight: NSLayoutConstraint?
     /// 一覧を出している（消える動きの途中はfalse）。
@@ -276,7 +282,7 @@ final class InlineComposeController: NSObject {
         self.followKeyboard = followKeyboard
         hiddenTop = bar.topAnchor.constraint(greaterThanOrEqualTo: host.view.bottomAnchor)
         holdAboveKeyboard = bar.bottomAnchor.constraint(lessThanOrEqualTo: host.view.bottomAnchor)
-        expandedTop = bar.topAnchor.constraint(equalTo: host.view.safeAreaLayoutGuide.topAnchor)
+        expandedTop = bar.topAnchor.constraint(greaterThanOrEqualTo: host.view.safeAreaLayoutGuide.topAnchor)
         keyboardNotifications.addObserver(self, selector: #selector(keyboardWillChangeFrame(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
         keyboardNotifications.addObserver(self, selector: #selector(keyboardDidShow(_:)), name: UIResponder.keyboardDidShowNotification, object: nil)
         keyboardNotifications.addObserver(self, selector: #selector(keyboardDidChangeFrame(_:)), name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
@@ -396,8 +402,8 @@ final class InlineComposeController: NSObject {
         beginEditing()
     }
 
-    /// 本文の長さに関係なく、すぐバーの上端を上の安全領域の上端まで広げる。広げていれば、本文の5行の上限がある高さに戻す。
-    /// 打つたびにバーの上端が動かないよう、本文に合わせて伸ばすことはしない。
+    /// 本文の5行の上限を外して、本文に合わせた高さまで広げる。広げていれば、本文の5行の上限がある高さに戻す。
+    /// 5行より短ければ、スクロールが始まる5行の高さまで広げ、書き足す行の場所を先に取る。
     private func toggleExpanded() {
         isExpanded.toggle()
         if isExpanded {
@@ -410,7 +416,7 @@ final class InlineComposeController: NSObject {
             self.host?.view.layoutIfNeeded()
             // 5行の高さに戻すと、本文が先頭に戻ってカーソルが隠れることがあるため、カーソルの行を見せる。
             self.textView.scrollRangeToVisible(self.textView.selectedRange)
-            // 補完の一覧も、同じ動きで、動いたあとの欄と打っている行の位置へ動かす（広げると打っている行の下へ、戻すと欄の上へ）。
+            // 補完の一覧も、同じ動きで、動いたあとの欄と打っている行の位置へ動かす（広げて欄の上に場所がなくなれば打っている行の下へ、戻すと欄の上へ）。
             // 動き終わってから置き直すと、動きの間、広げるときは欄の上端に付いて画面の外へ押し出され、戻すときは上端に取り残された。
             // 上で並べ直した時点で、欄と打っている行の位置は動いたあとの値になっている。
             // 一覧の指定は、上の並べ直しの途中（欄が動いた知らせ）で切り替わることがあり、その回の並べ直しには反映されない。
@@ -439,7 +445,7 @@ final class InlineComposeController: NSObject {
         textDidChange()
     }
 
-    /// 広げている間は、本文が残りの高さを使い、超えたら中でスクロールする。
+    /// 広げている間は、本文に合わせて上の安全領域の上端まで伸ばし、超えたら中でスクロールする。
     private func applyExpandedLayout() {
         expandedTop?.isActive = isExpanded
         expandButton.configuration?.image = UIImage(systemName: isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
@@ -845,9 +851,9 @@ final class InlineComposeController: NSObject {
     }
 
     /// バーの上端から画面の下端までを覆っている。書いていればキーボードも含む。バーが動くたびに測り直す。
-    /// 広げている間は、一覧が隠れたままでよいので知らせない。知らせると一覧の下の余白が画面の高さほどに変わり、戻したときに一覧の位置が動きうる。
+    /// 広げても本文に合わせた高さまでしか伸ばさず一覧が見えたままのことがあるので、広げている間も知らせ、一覧の末尾が欄に隠れないようにする。
     private func reportObscuredHeight() {
-        guard let host, !isExpanded else { return }
+        guard let host else { return }
         let height = isBarHidden ? 0 : max(0, host.view.bounds.maxY - bar.frame.minY + barSpacing)
         guard height != obscuredHeight else { return }
         obscuredHeight = height
@@ -995,7 +1001,7 @@ final class InlineComposeController: NSObject {
         restingBottom?.isActive = !followsKeyboardDown
         followKeyboard?.isActive = followsKeyboardDown
         hiddenTop?.isActive = offScreen
-        // 広げたまま隠すときは、上端を安全領域に付けたままでは画面の外へ出せないので外す。画面の外で、広げる前の形に戻す。
+        // 広げたまま隠すときは、上端を安全領域より下に留める制約を外し、下げている間の高さは`offScreenHeight`で保つ。画面の外で、広げる前の形に戻す。
         expandedTop?.isActive = isExpanded && !offScreen
     }
 
@@ -1362,7 +1368,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// 入力が長くなったら、決めた高さまでは伸ばし、超えたら中でスクロールする。
-    /// 広げている間は、長さに関係なく残りの高さを使い、中でスクロールする。
+    /// 広げている間は、5行の高さを下限に本文に合わせて伸ばし、上の安全領域の上端に届いたら中でスクロールする。
     private func textDidChange() {
         // 幅が決まる前に測ると1文字ずつ折り返した高さになり、短い文でもスクロールに切り替わってしまう。
         guard textView.bounds.width > 0 else { return }
@@ -1370,13 +1376,17 @@ final class InlineComposeController: NSObject {
         if isCollapsingFromExpanded {
             // 戻す動きの途中でスクロールを止めると、バーが動きを待たずにほぼ戻した高さまで縮んで見えた（スクロールを止めると、UIKitが入力欄の高さを動きの外で決め直すためと見ている）。
             // 動き終わるまではスクロールできるまま、高さの制約で本文に合わせる。
+            expandedTextHeight.isActive = false
             textHeightLimit.constant = min(fitting, maxTextHeight)
             textHeightLimit.isActive = true
             return
         }
+        // 上端に届くかどうかで切り替えずに済むよう、広げている間は常にスクロールできるようにしておく。
+        expandedTextHeight.constant = max(fitting, maxTextHeight)
+        expandedTextHeight.isActive = isExpanded
         textHeightLimit.constant = maxTextHeight
+        textHeightLimit.isActive = !isExpanded && fitting > maxTextHeight
         let scrolls = isExpanded || fitting > maxTextHeight
-        textHeightLimit.isActive = scrolls && !isExpanded
         if textView.isScrollEnabled != scrolls {
             textView.isScrollEnabled = scrolls
             // スクロールを止めても、入力欄は本来の高さを測り直さない。測り直させないと、5行から4行に減らしたときに入力欄が潰れ、下のボタンの行に重なった。
@@ -1392,7 +1402,7 @@ final class InlineComposeController: NSObject {
         completionList.isHidden = true
         completionList.onSelect = { [weak self] candidate in self?.complete(with: candidate) }
         completionList.onRetry = { [weak self] in self?.completion.retry() }
-        // 投稿欄より手前に置く。広げているときは、欄の中の本文に重ねるため。
+        // 投稿欄より手前に置く。広げて欄の上に場所がないときは、欄の中の本文に重ねるため。
         host.view.insertSubview(completionList, aboveSubview: bar)
         let height = completionList.heightAnchor.constraint(equalToConstant: 0)
         let aboveBar = completionList.bottomAnchor.constraint(equalTo: bar.topAnchor, constant: -completionListSpacing)
@@ -1534,13 +1544,17 @@ final class InlineComposeController: NSObject {
         layoutCompletionList()
     }
 
-    /// 広げていなければ欄の上に、広げていれば打っている行のすぐ下（入りきらなければ行の上）に置く。
+    /// 欄の上に置く。広げて欄の上に2行ぶんの場所も残っていなければ、打っている行のすぐ下（入りきらなければ行の上）に重ねる。
     /// 入りきらない高さは、一覧の中でスクロールする。
     private func layoutCompletionList() {
         guard let host, let completionListHeight, let completionListAboveBar, let completionListTop else { return }
         let wanted = completionList.contentHeight
+        let safeTop = host.view.safeAreaLayoutGuide.layoutFrame.minY
+        let available = bar.frame.minY - completionListSpacing * 2 - safeTop
+        // 広げていないときは、場所が足りなくても欄の上に2行ぶん出し、上の安全領域に重ねる。広げていると欄が上端まで伸びて上に場所がないことがあるので、そのときだけ本文に重ねる。
+        let fitsAboveBar = available >= min(wanted, ComposeCompletionList.rowHeight * 2)
         var height: CGFloat
-        if isExpanded, let caret = completionCaretRect(in: host.view) {
+        if isExpanded, !fitsAboveBar, let caret = completionCaretRect(in: host.view) {
             let lower = tools.convert(tools.bounds, to: host.view).minY - completionListSpacing
             let upper = bar.frame.minY + completionListSpacing
             let below = lower - (caret.maxY + completionListSpacing)
@@ -1560,8 +1574,6 @@ final class InlineComposeController: NSObject {
             completionListAboveBar.isActive = false
             completionListTop.isActive = true
         } else {
-            let safeTop = host.view.safeAreaLayoutGuide.layoutFrame.minY
-            let available = bar.frame.minY - completionListSpacing * 2 - safeTop
             height = min(wanted, max(available, min(wanted, ComposeCompletionList.rowHeight * 2)))
             completionList.growsUpward = true
             completionListTop.isActive = false
@@ -1734,9 +1746,15 @@ final class InlineComposeController: NSObject {
             (self?.model.canPasteMedia ?? false) && LocalMediaLoader.pasteboardHasMedia(.general)
         }
         textView.onSubmit = { [weak self] in self?.submit() }
+        // 回転やウィンドウの幅の変化で折り返す行の数が変わると、広げている間の本文の高さが合わなくなるため、測り直す。
+        textView.onWidthChange = { [weak self] in self?.textDidChange() }
+        // 文字の大きさが変わっても、行の高さが変わって広げている間の本文の高さが合わなくなるため、測り直す。
+        textView.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { [weak self] (_: UITextView, _) in
+            self?.textDidChange()
+        }
         textView.completionKeys = completionKeys()
         textView.accessibilityLabel = "本文"
-        // 広げたときに、残りの高さを本文が使う。行が収まらない高さでは、本文から縮める。
+        // 広げて上端に届いたときや、行が収まらない高さでは、本文から縮める。
         textView.setContentHuggingPriority(.defaultLow - 1, for: .vertical)
         textView.setContentCompressionResistancePriority(.defaultLow - 1, for: .vertical)
         // 書いている文字は自分の文で言語が分からないため、設定の字形で描く。
@@ -2014,6 +2032,16 @@ extension InlineComposeController: UITextFieldDelegate {
 /// 補完の候補を出している間だけ、Tab・Returnで確定、↑↓で選ぶ候補を移し、Escで閉じる（web UIと同じ）。
 private final class ComposeTextView: GlyphLanguageTextView {
     var onSubmit: () -> Void = {}
+    /// 幅が変わったときに知らせる。折り返す行の数が変わるので、本文の高さを測り直せるようにする。
+    /// スクロールでも`bounds`は変わるため、幅が変わったときだけ知らせる。
+    var onWidthChange: () -> Void = {}
+
+    override var bounds: CGRect {
+        didSet {
+            guard bounds.width != oldValue.width else { return }
+            onWidthChange()
+        }
+    }
     var completionKeys = CompletionKeys()
     /// クリップボードのメディアを添付できるか。
     var canPasteMedia: () -> Bool = { false }
