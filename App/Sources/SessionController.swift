@@ -655,6 +655,9 @@ final class SessionController {
         case .bookmark:
             UserAction.toggleBookmark.record()
             toggle(.bookmark, on: status, failureTitle: "ブックマークを変更できませんでした")
+        case .muteConversation:
+            UserAction.toggleConversationMute.record()
+            toggle(.muteConversation, on: status, failureTitle: "会話のミュートを変更できませんでした")
         case .editHistory:
             UserAction.openEditHistory.record()
             // フィルターの結果はブーストの外側にだけ付くことがあるため、判定にはブーストごと渡す。

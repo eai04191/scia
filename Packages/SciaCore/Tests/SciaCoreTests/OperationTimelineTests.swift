@@ -19,6 +19,7 @@ struct UserActionTests {
         .reply,
         .toggleFavourite,
         .toggleReblog,
+        .toggleConversationMute,
         .toggleBookmark,
         .openEditHistory,
         .editStatus,

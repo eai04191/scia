@@ -205,6 +205,17 @@ public struct MastodonClient: Sendable {
         try await post(Status.self, path: "api/v1/statuses/\(statusID)/unbookmark", form: []).0
     }
 
+    /// 投稿の会話をミュートし、その会話の通知を受け取らないようにする。サーバーは自分が会話に加わっているかを確かめない。
+    /// https://docs.joinmastodon.org/methods/statuses/#mute
+    public func muteConversation(_ statusID: String) async throws -> Status {
+        try await post(Status.self, path: "api/v1/statuses/\(statusID)/mute", form: []).0
+    }
+
+    /// https://docs.joinmastodon.org/methods/statuses/#unmute
+    public func unmuteConversation(_ statusID: String) async throws -> Status {
+        try await post(Status.self, path: "api/v1/statuses/\(statusID)/unmute", form: []).0
+    }
+
     /// ブーストし、ブーストした元の投稿を返す。APIはブーストそのものを返すため、中の元の投稿を取り出す。
     /// https://docs.joinmastodon.org/methods/statuses/#boost
     public func reblog(_ statusID: String) async throws -> Status {

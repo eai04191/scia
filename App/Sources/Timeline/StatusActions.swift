@@ -7,6 +7,7 @@ enum StatusAction {
     case favourite
     case reblog
     case bookmark
+    case muteConversation
     case editHistory
     case edit
     case delete
@@ -75,14 +76,15 @@ extension TimelineViewController {
             return users([.account(status.account)])
         case .mentionedUsers:
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
-        case .reply, .favourite, .reblog, .bookmark, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .systemTranslate, .edit, .delete:
+        case .reply, .favourite, .reblog, .bookmark, .muteConversation, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .systemTranslate, .edit, .delete:
             guard let status else { return [] }
-            return statusAction(item, on: status, id: id).map { [$0] } ?? []
+            return statusAction(item, on: status, isNotification: notifyingAccount != nil, id: id).map { [$0] } ?? []
         }
     }
 
     /// 投稿への操作。ユーザーの項目は`userElement(for:)`で組むため、nilを返す。
-    private func statusAction(_ item: StatusMenuItem, on status: Status, id: ItemID) -> UIAction? {
+    /// - Parameter isNotification: 通知のメニュー。通知の対象の投稿は、自分が加わっている会話のものなので、会話のミュートを出す。
+    private func statusAction(_ item: StatusMenuItem, on status: Status, isNotification: Bool, id: ItemID) -> UIAction? {
         let shown = status.displayed
         // `url`はMastodonのAPIでnullを取りうるため、ないときは押せないまま並べる。`uri`はActivityPubのIDで、ブラウザで開けるページとは限らないため代わりにしない。
         // ブーストなら元の投稿のページを指す。
@@ -116,6 +118,18 @@ extension TimelineViewController {
                 image: shown.bookmarked ? UIImage(systemName: "bookmark.slash") : item.image
             ) { [weak self] _ in
                 self?.onStatusAction?(.bookmark, status)
+            }
+        case .muteConversation:
+            // サーバーはどの会話でもミュートできるが、通知が届かない会話をミュートしても変わらないため、自分が加わっていそうな投稿でだけ出す。
+            // 自分が途中で返信した会話で、自分へのメンションを含まない投稿には出ない。そのときは、通知か自分の投稿からミュートする。
+            guard let myAccountID,
+                  isNotification || shown.account.id == myAccountID || shown.mentions.contains(where: { $0.id == myAccountID })
+            else { return nil }
+            return UIAction(
+                title: shown.muted ? "会話のミュートを解除" : item.title,
+                image: shown.muted ? UIImage(systemName: "bell") : item.image
+            ) { [weak self] _ in
+                self?.onStatusAction?(.muteConversation, status)
             }
         case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
             // 共通の項目は、上で中身から組んだ。

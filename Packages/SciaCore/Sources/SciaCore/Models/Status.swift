@@ -38,6 +38,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public private(set) var reblogged: Bool
     /// 自分がブックマークしている。
     public private(set) var bookmarked: Bool
+    /// 自分がこの投稿の会話をミュートし、その会話の通知を受け取らないようにしている。
+    public private(set) var muted: Bool
     public private(set) var favouritesCount: Int
     public private(set) var reblogsCount: Int
     public let repliesCount: Int
@@ -68,6 +70,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         favourited: Bool = false,
         reblogged: Bool = false,
         bookmarked: Bool = false,
+        muted: Bool = false,
         favouritesCount: Int = 0,
         reblogsCount: Int = 0,
         repliesCount: Int = 0,
@@ -96,6 +99,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         self.favourited = favourited
         self.reblogged = reblogged
         self.bookmarked = bookmarked
+        self.muted = muted
         self.favouritesCount = favouritesCount
         self.reblogsCount = reblogsCount
         self.repliesCount = repliesCount
@@ -130,6 +134,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         favourited = try container.decodeIfPresent(Bool.self, forKey: .favourited) ?? false
         reblogged = try container.decodeIfPresent(Bool.self, forKey: .reblogged) ?? false
         bookmarked = try container.decodeIfPresent(Bool.self, forKey: .bookmarked) ?? false
+        muted = try container.decodeIfPresent(Bool.self, forKey: .muted) ?? false
         favouritesCount = try container.decodeIfPresent(Int.self, forKey: .favouritesCount) ?? 0
         reblogsCount = try container.decodeIfPresent(Int.self, forKey: .reblogsCount) ?? 0
         repliesCount = try container.decodeIfPresent(Int.self, forKey: .repliesCount) ?? 0
@@ -219,10 +224,17 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         settingBookmarked(other.bookmarked)
     }
 
+    /// 会話のミュートの状態を変えたもの。サーバーの結果を待たずに表示へ反映するために使う。
+    public func settingMuted(_ muted: Bool) -> Status {
+        var status = self
+        status.muted = muted
+        return status
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, account, content, spoilerText, language, url, mentions, tags, emojis, mediaAttachments, sensitive
         case visibility, inReplyToId, inReplyToAccountId, poll, card, quote, filtered, editedAt
-        case favourited, reblogged, bookmarked, favouritesCount, reblogsCount, repliesCount
+        case favourited, reblogged, bookmarked, muted, favouritesCount, reblogsCount, repliesCount
         case reblogBox = "reblog"
     }
 

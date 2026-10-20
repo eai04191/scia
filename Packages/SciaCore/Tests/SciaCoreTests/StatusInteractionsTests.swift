@@ -44,7 +44,9 @@ struct StatusInteractionsTests {
             reblog: { _ in throw Failure() },
             unreblog: { _ in throw Failure() },
             bookmark: { _ in throw Failure() },
-            unbookmark: { _ in throw Failure() }
+            unbookmark: { _ in throw Failure() },
+            muteConversation: { _ in throw Failure() },
+            unmuteConversation: { _ in throw Failure() }
         )
     }
 
@@ -107,7 +109,9 @@ struct StatusInteractionsTests {
             reblog: { _ in staleFromServer.settingFavourited(false).settingReblogged(true) },
             unreblog: { _ in throw Failure() },
             bookmark: { _ in throw Failure() },
-            unbookmark: { _ in throw Failure() }
+            unbookmark: { _ in throw Failure() },
+            muteConversation: { _ in throw Failure() },
+            unmuteConversation: { _ in throw Failure() }
         )) { shown.update($0, $1) }
 
         let favourite = Task { try await interactions.toggle(.favourite, on: shown.status) }
@@ -138,7 +142,9 @@ struct StatusInteractionsTests {
                 return original.settingReblogged(false)
             },
             bookmark: { _ in throw Failure() },
-            unbookmark: { _ in throw Failure() }
+            unbookmark: { _ in throw Failure() },
+            muteConversation: { _ in throw Failure() },
+            unmuteConversation: { _ in throw Failure() }
         )) { shown.update($0, $1) }
 
         _ = try await interactions.toggle(.reblog, on: boost)
@@ -155,7 +161,9 @@ struct StatusInteractionsTests {
             reblog: { _ in throw Failure() },
             unreblog: { _ in throw Failure() },
             bookmark: { _ in throw Failure() },
-            unbookmark: { _ in throw Failure() }
+            unbookmark: { _ in throw Failure() },
+            muteConversation: { _ in throw Failure() },
+            unmuteConversation: { _ in throw Failure() }
         )) { shown.update($0, $1) }
 
         await #expect(throws: Failure.self) { try await interactions.toggle(.bookmark, on: shown.status) }
@@ -172,11 +180,38 @@ struct StatusInteractionsTests {
             reblog: { _ in throw Failure() },
             unreblog: { _ in throw Failure() },
             bookmark: { _ in throw Failure() },
-            unbookmark: { _ in bookmarked.settingBookmarked(false) }
+            unbookmark: { _ in bookmarked.settingBookmarked(false) },
+            muteConversation: { _ in throw Failure() },
+            unmuteConversation: { _ in throw Failure() }
         )) { shown.update($0, $1) }
 
         #expect(try await interactions.toggle(.bookmark, on: shown.status))
 
         #expect(shown.history.map(\.bookmarked) == [false, false])
+    }
+
+    @Test func mutesConversationOfOriginalOfBoostAndAppliesResult() async throws {
+        let original = try status()
+        let boost = Status(id: "20", createdAt: .now, account: original.account, content: "", spoilerText: "", url: nil, reblog: original)
+        let shown = Shown(original)
+        let requested = Mutex<[String]>([])
+        let interactions = StatusInteractions(operations: StatusInteractions.Operations(
+            favourite: { _ in throw Failure() },
+            unfavourite: { _ in throw Failure() },
+            reblog: { _ in throw Failure() },
+            unreblog: { _ in throw Failure() },
+            bookmark: { _ in throw Failure() },
+            unbookmark: { _ in throw Failure() },
+            muteConversation: { id in
+                requested.withLock { $0.append(id) }
+                return original.settingMuted(true)
+            },
+            unmuteConversation: { _ in throw Failure() }
+        )) { shown.update($0, $1) }
+
+        #expect(try await interactions.toggle(.muteConversation, on: boost))
+
+        #expect(requested.withLock { $0 } == ["10"])
+        #expect(shown.history.map(\.muted) == [true, true])
     }
 }
