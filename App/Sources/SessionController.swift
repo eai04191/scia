@@ -652,7 +652,7 @@ final class SessionController {
             toggle(.favourite, on: status, failureTitle: "お気に入りを変更できませんでした")
         case .reblog:
             UserAction.toggleReblog.record()
-            toggle(.reblog, on: status, failureTitle: "ブーストを変更できませんでした")
+            toggle(.reblog, on: status, reblogVisibility: AppDependencies.settings.reblogVisibility, failureTitle: "ブーストを変更できませんでした")
         case .reblogWithVisibility(let visibility):
             UserAction.toggleReblog.record()
             toggle(.reblog, on: status, reblogVisibility: visibility, failureTitle: "ブーストできませんでした")

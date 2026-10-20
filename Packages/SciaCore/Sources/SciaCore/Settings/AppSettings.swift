@@ -69,6 +69,11 @@ public final class AppSettings {
         didSet { defaults.set(linkBrowser.rawValue, forKey: Keys.linkBrowser) }
     }
 
+    /// メニューの「ブースト」でブーストするときの公開範囲。
+    public var reblogVisibility: ReblogVisibility {
+        didSet { defaults.set(reblogVisibility.rawValue, forKey: Keys.reblogVisibility) }
+    }
+
     /// 投稿を長押しして出すメニューの並び。通知のメニューもこれで組む。
     public var statusMenuLayout: MenuLayout<StatusMenuItem> {
         didSet { defaults.set(statusMenuLayout.tokens, forKey: Keys.statusMenuLayout) }
@@ -140,6 +145,7 @@ public final class AppSettings {
         static let profileShowsReplies = "settings.profileShowsReplies"
         static let profileShowsBoosts = "settings.profileShowsBoosts"
         static let linkBrowser = "settings.linkBrowser"
+        static let reblogVisibility = "settings.reblogVisibility"
         static let statusMenuLayout = "settings.statusMenuLayout"
         static let userMenuLayout = "settings.userMenuLayout"
         static let linkMenuLayout = "settings.linkMenuLayout"
@@ -166,6 +172,7 @@ public final class AppSettings {
         linkCardThumbnailSide = defaults.string(forKey: Keys.linkCardThumbnailSide).flatMap(LinkCardThumbnailSide.init(rawValue:)) ?? .left
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
         linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .external
+        reblogVisibility = defaults.string(forKey: Keys.reblogVisibility).flatMap(ReblogVisibility.init(rawValue:)) ?? .accountDefault
         statusMenuLayout = defaults.stringArray(forKey: Keys.statusMenuLayout).map(MenuLayout.init(tokens:)) ?? StatusMenuItem.defaultLayout
         userMenuLayout = defaults.stringArray(forKey: Keys.userMenuLayout).map(MenuLayout.init(tokens:)) ?? UserMenuItem.defaultLayout
         linkMenuLayout = defaults.stringArray(forKey: Keys.linkMenuLayout).map(MenuLayout.init(tokens:)) ?? LinkMenuItem.defaultLayout

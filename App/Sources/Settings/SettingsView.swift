@@ -153,6 +153,18 @@ struct SettingsView: View {
                     Text("URLのリンクを開く場所です。アプリ内のSafariでは、画面の下半分にページを開き、上に一覧を見ながら読めます。読んでいる間も新着が届きます。httpとhttps以外のリンクは、この設定にかかわらず対応するアプリで開きます。")
                 }
                 Section {
+                    Picker("公開範囲", selection: $settings.reblogVisibility) {
+                        Text("アカウントの既定").tag(ReblogVisibility.accountDefault)
+                        ForEach([(ReblogVisibility.public, Status.Visibility.public), (.unlisted, .unlisted), (.private, .private)], id: \.0) { reblogVisibility, visibility in
+                            Text(VisibilityOption(visibility).title).tag(reblogVisibility)
+                        }
+                    }
+                } header: {
+                    Text("ブースト")
+                } footer: {
+                    Text("メニューの「ブースト」でブーストするときの公開範囲です。「アカウントの既定」では、サーバーで設定した投稿の公開範囲でブーストします。フォロワーのみの自分の投稿は、この設定にかかわらずフォロワーのみでブーストします。ほかの公開範囲でブーストするときは、メニューの「公開範囲を選んでブースト」を使います。")
+                }
+                Section {
                     NavigationLink("投稿のメニュー") {
                         MenuLayoutSettingsView(title: "投稿のメニュー", layout: $settings.statusMenuLayout)
                     }

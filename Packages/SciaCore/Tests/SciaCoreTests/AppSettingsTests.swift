@@ -175,4 +175,13 @@ struct AppSettingsTests {
         AppSettings(defaults: defaults).linkBrowser = .inApp
         #expect(AppSettings(defaults: defaults).linkBrowser == .inApp)
     }
+
+    /// 既定は、設定を足す前と同じく公開範囲を送らず、アカウントの既定に任せる。
+    @Test func reblogsWithAccountDefaultUntilChosen() throws {
+        let defaults = try makeDefaults()
+        #expect(AppSettings(defaults: defaults).reblogVisibility == .accountDefault)
+
+        AppSettings(defaults: defaults).reblogVisibility = .private
+        #expect(AppSettings(defaults: defaults).reblogVisibility == .private)
+    }
 }
