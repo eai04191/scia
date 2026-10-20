@@ -39,6 +39,14 @@ enum PostRowCatalog {
             post("長い本文", status(content: "<p>" + String(repeating: "長い本文が何行にもわたるときの折り返しと、行の高さを確かめるための文。", count: 5) + "</p>")),
             post("ブーストされた投稿", status(content: "<p>ブーストされた投稿。</p>", rebloggedBy: booster)),
             post("固定された投稿", status(content: "<p>プロフィールの上に固定された投稿。</p>"), isPinned: true),
+            post("お気に入り済み", status(content: "<p>お気に入りした投稿。</p>", favourited: true)),
+            post("ブースト済み", status(content: "<p>ブーストした投稿。</p>", reblogged: true)),
+            post("お気に入りとブースト済み（真ん中で色が変わる）", status(content: "<p>お気に入りもブーストもした投稿。</p>", favourited: true, reblogged: true)),
+            post("お気に入りとブースト済みで、本文が短い", status(content: "<p>あ</p>", favourited: true, reblogged: true)),
+            post("お気に入りとブースト済みで、画像が下の端にある", status(content: "<p>画像の後ろに光が隠れる投稿。</p>", media: [
+                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemTeal),
+            ], favourited: true, reblogged: true)),
+            post("ほかの人がブーストした投稿に、お気に入り済み", status(content: "<p>ブーストで流れてきた投稿。</p>", favourited: true, rebloggedBy: booster)),
             post("注意書き（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ")),
             post("注意書き（開いた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ"), expandsSpoiler: true),
             post("注意書きが長い（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: longSpoiler)),
@@ -202,6 +210,8 @@ enum PostRowCatalog {
             row("引用", .quote),
             row("ブースト", .reblog, status: mine),
             row("お気に入り", .favourite, status: mine),
+            row("お気に入り（自分でもお気に入りとブースト済み）", .favourite, status: status(content: "<p>自分でもお気に入りとブーストをした自分の投稿。</p>", favourited: true, reblogged: true)),
+            row("メンション（お気に入り済み）", .mention, status: status(content: "<p>@me お気に入りしたメンション。</p>", account: booster, favourited: true)),
             row("お気に入り（長い本文を切る）", .favourite, status: status(content: longBody)),
             row("お気に入り（長い本文を切る、画像つき）", .favourite, status: status(content: longBody, media: [
                 Fixtures.attachment("a", width: 1_200, height: 900, color: .systemBlue),
@@ -253,6 +263,8 @@ enum PostRowCatalog {
         card: PreviewCard? = nil,
         editedAt: Date? = nil,
         filtered: [FilterResult] = [],
+        favourited: Bool = false,
+        reblogged: Bool = false,
         rebloggedBy: Account? = nil
     ) -> Status {
         let original = Status(
@@ -266,7 +278,9 @@ enum PostRowCatalog {
             sensitive: sensitive,
             card: card,
             filtered: filtered,
-            editedAt: editedAt
+            editedAt: editedAt,
+            favourited: favourited,
+            reblogged: reblogged
         )
         guard let rebloggedBy else { return original }
         return Status(id: UUID().uuidString, createdAt: .now.addingTimeInterval(-600), account: rebloggedBy, content: "", spoilerText: "", url: nil, filtered: filtered, reblog: original)
