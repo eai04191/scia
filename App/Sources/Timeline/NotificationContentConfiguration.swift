@@ -108,6 +108,10 @@ final class NotificationContentView: UIView, UIContentView {
         NSLayoutConstraint.deactivate(variableConstraints)
         let margins = metrics.margins
         let textLeading = margins.leading + metrics.avatarSize + metrics.avatarSpacing
+        // 一覧は行の高さを画素に丸め、求める高さより1画素未満だけ低くすることがある。足りない分は文字のラベルではなく下の余白から削る。
+        // ラベルから削ると、UILabelは収まらない行を描かないため、2行の本文が1行で切れる。
+        let bottom = bottomAnchor.constraint(equalTo: bodyView.bottomAnchor, constant: margins.bottom)
+        bottom.priority = UILayoutPriority(UILayoutPriority.defaultHigh.rawValue - 1)
         variableConstraints = [
             // 記号は、投稿のセルの名前の上の行と同じく、文字の列から決まった幅だけ離して置く。
             symbolView.trailingAnchor.constraint(equalTo: leadingAnchor, constant: textLeading - metrics.symbolSpacing),
@@ -120,7 +124,7 @@ final class NotificationContentView: UIView, UIContentView {
             bodyView.topAnchor.constraint(equalTo: headerLabel.lastBaselineAnchor, constant: metrics.bodySpacing + metrics.headerFont.pointSize * PostBodyView.emBoxDescent),
             bodyView.leadingAnchor.constraint(equalTo: headerLabel.leadingAnchor),
             bodyView.trailingAnchor.constraint(equalTo: headerLabel.trailingAnchor),
-            bottomAnchor.constraint(equalTo: bodyView.bottomAnchor, constant: margins.bottom),
+            bottom,
         ]
         NSLayoutConstraint.activate(variableConstraints)
         updateAccessibility(for: configuration)
