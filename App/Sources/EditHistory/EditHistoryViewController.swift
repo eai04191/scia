@@ -232,3 +232,16 @@ final class EditHistoryScrollView: UIScrollView {
         view is LinkHitArea || super.touchesShouldCancel(in: view)
     }
 }
+
+extension EditHistoryViewController: LinkMenuHost {
+    /// 編集履歴は開いたときに一度読むだけで、新着で行が動くことはないため、溜めない。
+    /// 読み終えたあとに描き直すのは、ほかの画面で添付ファイルを開いたり隠したりしたときだけで、メニューを出している間に起きるのは、iPadやMacの別のウィンドウでその投稿を操作したときに限る。
+    /// そのときはメニューの後ろで本文が描き直されるが、まれなうえに、溜めるには描き直しを止めて閉じたあとに戻す仕組みを足す必要があるため、対応しない。
+    func linkMenuWillShow() {}
+
+    func linkMenuDidHide() {}
+
+    func showLinkCopiedNotice() {
+        notices?.showTransient(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+    }
+}

@@ -1099,6 +1099,21 @@ final class TimelineViewController: UIViewController {
     }
 }
 
+extension TimelineViewController: LinkMenuHost {
+    func linkMenuWillShow() {
+        UserAction.openMenu(screen: texts.dumpName).record()
+        menuWillShow()
+    }
+
+    func linkMenuDidHide() {
+        menuDidHide()
+    }
+
+    func showLinkCopiedNotice() {
+        showNotice(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+    }
+}
+
 extension TimelineViewController: UICollectionViewDelegate {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         if scrollView.isTracking {

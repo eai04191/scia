@@ -3,7 +3,7 @@ import UIKit
 
 /// RichTextRendererで描いた本文の、リンクの部分をタップできるラベル。リンクの外のタップは受けず、セルなど後ろのビューに渡す。
 final class LinkLabel: UILabel {
-    /// リンクがタップされたときに、その行き先を渡して呼ぶ。
+    /// リンクがタップされたときと、長押しのメニューで開くを選んだときに、その行き先を渡して呼ぶ。
     var onTapLink: ((RichText.LinkDestination) -> Void)?
 
     override var attributedText: NSAttributedString? {
@@ -49,12 +49,41 @@ final class LinkLabel: UILabel {
         onTapLink?(destination)
     }
 
+    fileprivate func open(_ destination: RichText.LinkDestination) {
+        onTapLink?(destination)
+    }
+
     /// ラベルの座標`point`にある文字のリンクの行き先。リンクでなければnil。
     /// UILabelは文字の配置を公開しないため、同じ文字列と幅でTextKit 2に並べ直して文字を探す。
     /// TextKit 1（NSLayoutManager）で並べると、空行や行区切り文字のたびに行の位置がUILabelの描画から数ptずつずれ、
     /// 空行の多い本文では末尾のリンクを外していた。TextKit 2の行の位置は、UILabelが描いた位置と一致することを確かめている。
     /// ラベルは本文の高さに合わせて置くため、UILabelが余った高さで文字を縦に中央へ寄せる分はずれとして扱わない。
     func link(at point: CGPoint) -> RichText.LinkDestination? {
+        guard let attributedText, let index = characterIndex(at: point) else { return nil }
+        return attributedText.attribute(.linkDestination, at: index, effectiveRange: nil) as? RichText.LinkDestination
+    }
+
+    /// ラベルの座標`point`にあるリンクの、文字が描かれる枠。行をまたぐリンクは行ごとの枠になる。リンクでなければ空。
+    func linkFrames(at point: CGPoint) -> [CGRect] {
+        guard let attributedText, let index = characterIndex(at: point) else { return [] }
+        var range = NSRange()
+        guard attributedText.attribute(.linkDestination, at: index, longestEffectiveRange: &range, in: NSRange(location: 0, length: attributedText.length)) != nil else { return [] }
+        let layout = textLayout(of: attributedText)
+        let contentStorage = layout.contentStorage
+        guard let start = contentStorage.location(contentStorage.documentRange.location, offsetBy: range.location),
+              let end = contentStorage.location(start, offsetBy: range.length),
+              let textRange = NSTextRange(location: start, end: end)
+        else { return [] }
+        var frames: [CGRect] = []
+        layout.layoutManager.enumerateTextSegments(in: textRange, type: .standard, options: []) { _, segment, _, _ in
+            frames.append(segment)
+            return true
+        }
+        return frames
+    }
+
+    /// ラベルの座標`point`にある文字の位置。文字の上でなければnil。
+    private func characterIndex(at point: CGPoint) -> Int? {
         guard let attributedText, attributedText.length > 0, bounds.contains(point) else { return nil }
         let layout = textLayout(of: attributedText)
         let contentStorage = layout.contentStorage
@@ -76,8 +105,7 @@ final class LinkLabel: UILabel {
         let boundaryIndex = contentStorage.offset(from: contentStorage.documentRange.location, to: boundary)
         // 返るのは文字と文字の境目で、押した文字の前か後ろかは書く向きで変わる。境目の前後の文字のうち、描かれた枠に押した点が入るほうを選ぶ。
         let candidates = [boundaryIndex, boundaryIndex - 1].filter { 0 <= $0 && $0 < attributedText.length }
-        guard let index = candidates.first(where: { characterFrame(at: $0, in: contentStorage, layoutManager: layoutManager)?.contains(point) ?? false }) else { return nil }
-        return attributedText.attribute(.linkDestination, at: index, effectiveRange: nil) as? RichText.LinkDestination
+        return candidates.first { characterFrame(at: $0, in: contentStorage, layoutManager: layoutManager)?.contains(point) ?? false }
     }
 
     /// `attributedText`をラベルと同じ幅で並べた結果。幅か画面の向きが変わったときだけ並べ直す。
@@ -141,8 +169,20 @@ private struct TextLayout {
     let layoutManager: NSTextLayoutManager
 }
 
+/// 本文のリンクの長押しのメニューを出す画面。ラベルはレスポンダーチェーンをさかのぼって、いちばん近いものに知らせる。
+@MainActor
+protocol LinkMenuHost: AnyObject {
+    /// メニューを出した。メニューの元になった行が動かないよう、閉じるまで一覧の更新を溜めておく。
+    func linkMenuWillShow()
+    /// メニューが閉じるアニメーションまで終わった。
+    func linkMenuDidHide()
+    /// 「リンクをコピー」を選んだ。
+    func showLinkCopiedNotice()
+}
+
 /// `LinkLabel`の上に重ねる、リンクの上だけを当たりにする部品。リンクの外では当たりにならず、押下はラベルの後ろのセルへ渡る。
 /// スクロールビューは標準では`UIControl`の上で始まった押下をスクロールに切り替えないため、載せるスクロールビューは`touchesShouldCancel(in:)`でこの部品にtrueを返す。
+/// リンクの上の長押しは、セルの後ろのコレクションビューに渡らず投稿のメニューにならないため、この部品でリンクのメニューを出す。
 final class LinkHitArea: UIControl {
     private weak var label: LinkLabel?
 
@@ -150,6 +190,7 @@ final class LinkHitArea: UIControl {
         self.label = label
         super.init(frame: .zero)
         isAccessibilityElement = false
+        isContextMenuInteractionEnabled = true
     }
 
     @available(*, unavailable)
@@ -166,5 +207,110 @@ final class LinkHitArea: UIControl {
         super.endTracking(touch, with: event)
         guard let touch, let label, isTouchInside else { return }
         label.tapped(at: touch.location(in: label))
+    }
+
+    override func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction,
+        configurationForMenuAtLocation location: CGPoint
+    ) -> UIContextMenuConfiguration? {
+        guard let label else { return nil }
+        let point = convert(location, to: label)
+        guard let destination = label.link(at: point) else { return nil }
+        // 浮かせるリンクを選び直せるよう、押した場所をidentifierに持たせる。
+        return UIContextMenuConfiguration(identifier: NSValue(cgPoint: point), previewProvider: nil) { [weak self] _ in
+            self?.menu(for: destination, at: point)
+        }
+    }
+
+    override func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction,
+        previewForHighlightingMenuWithConfiguration configuration: UIContextMenuConfiguration
+    ) -> UITargetedPreview? {
+        linkPreview(for: configuration)
+    }
+
+    override func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction,
+        previewForDismissingMenuWithConfiguration configuration: UIContextMenuConfiguration
+    ) -> UITargetedPreview? {
+        linkPreview(for: configuration)
+    }
+
+    override func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction,
+        willDisplayMenuFor configuration: UIContextMenuConfiguration,
+        animator: (any UIContextMenuInteractionAnimating)?
+    ) {
+        super.contextMenuInteraction(interaction, willDisplayMenuFor: configuration, animator: animator)
+        nearest((any LinkMenuHost).self)?.linkMenuWillShow()
+    }
+
+    /// 閉じるアニメーションの間も行を動かさない。
+    override func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction,
+        willEndFor configuration: UIContextMenuConfiguration,
+        animator: (any UIContextMenuInteractionAnimating)?
+    ) {
+        super.contextMenuInteraction(interaction, willEndFor: configuration, animator: animator)
+        // 閉じ終わる前にセルが使い回されてもよいよう、知らせる先は閉じ始めに決めておく。
+        let host = nearest((any LinkMenuHost).self)
+        guard let animator else {
+            host?.linkMenuDidHide()
+            return
+        }
+        animator.addCompletion { host?.linkMenuDidHide() }
+    }
+
+    /// 押したリンクの文字だけを浮かせる。部品はラベルと同じ大きさで透明なため、そのままでは本文の全体が浮く。
+    private func linkPreview(for configuration: UIContextMenuConfiguration) -> UITargetedPreview? {
+        guard let label, let point = (configuration.identifier as? NSValue)?.cgPointValue else { return nil }
+        let frames = label.linkFrames(at: point)
+        guard !frames.isEmpty else { return nil }
+        return UITargetedPreview(view: label, parameters: UIPreviewParameters(textLineRects: frames.map { NSValue(cgRect: $0) }))
+    }
+
+    /// URLは開く、メンションはプロフィールを開く項目を先頭に置く。ハッシュタグはアプリの中に開く先がまだないため、ブラウザで開く項目だけを出す。
+    private func menu(for destination: RichText.LinkDestination, at point: CGPoint) -> UIMenu {
+        switch destination {
+        case .url(let url):
+            return UIMenu(title: url.absoluteString, children: [openAction("開く", symbol: "arrow.up.forward.app", destination), openInBrowserAction(url), copyAction(url), shareAction(url, at: point)])
+        case .mention(let acct, let url):
+            return UIMenu(title: "@\(acct)", children: [openAction("プロフィールを開く", symbol: "person.crop.circle", destination), copyAction(url), shareAction(url, at: point)])
+        case .hashtag(let name, let url):
+            return UIMenu(title: "#\(name)", children: [openInBrowserAction(url), copyAction(url), shareAction(url, at: point)])
+        }
+    }
+
+    private func openAction(_ title: String, symbol: String, _ destination: RichText.LinkDestination) -> UIAction {
+        UIAction(title: title, image: UIImage(systemName: symbol)) { [weak self] _ in self?.label?.open(destination) }
+    }
+
+    /// 開くの設定でアプリ内のSafariを選んでいても、既定のブラウザで開く。
+    private func openInBrowserAction(_ url: URL) -> UIAction {
+        UIAction(title: "ブラウザで開く", image: UIImage(systemName: "safari")) { _ in
+            UIApplication.shared.open(url)
+        }
+    }
+
+    private func copyAction(_ url: URL) -> UIAction {
+        UIAction(title: "リンクをコピー", image: UIImage(systemName: "link")) { [weak self] _ in
+            UIPasteboard.general.url = url
+            self?.nearest((any LinkMenuHost).self)?.showLinkCopiedNotice()
+        }
+    }
+
+    private func shareAction(_ url: URL, at point: CGPoint) -> UIAction {
+        UIAction(title: "共有", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
+            guard let self, let label, let presenter = nearest(UIViewController.self) else { return }
+            let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
+            // iPadとMacではポップオーバーで出るため、押したリンクを起点にする。
+            activity.popoverPresentationController?.sourceView = label
+            activity.popoverPresentationController?.sourceRect = label.linkFrames(at: point).reduce(CGRect.null) { $0.union($1) }
+            presenter.frontmostPresented.present(activity, animated: true)
+        }
+    }
+
+    private func nearest<T>(_ type: T.Type) -> T? {
+        sequence(first: self as UIResponder, next: \.next).lazy.compactMap { $0 as? T }.first
     }
 }
