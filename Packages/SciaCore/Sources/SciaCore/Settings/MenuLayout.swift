@@ -176,6 +176,8 @@ public enum StatusMenuItem: String, MenuItemKind {
     case edit
     /// 自分の投稿を削除する。自分の投稿でだけ出る。
     case delete
+    /// 通知を削除する。通知でだけ出る。
+    case dismissNotification
     /// 一覧で添付ファイルを覆う。添付ファイルがあり、覆っていない投稿でだけ出る。開くときは覆いをタップする。
     case hideMedia
     /// 本文をプレーンテキストにして、システムの翻訳シートで訳す。本文のある投稿でだけ出る。MastodonのAPIで訳す翻訳とは別の項目。
@@ -191,8 +193,8 @@ public enum StatusMenuItem: String, MenuItemKind {
 
     /// 設定を足す前のメニューと同じ並び。足す前になかったメンションされたユーザーは隠しておく。
     /// ただし、返信・お気に入り・ブーストはよく使い、アイコンだけでも見分けられるので、横に並べる。横に並ぶのは3個までのため、同じまとまりにあった編集は次のまとまりの先頭へ移す。
-    /// 設定を足したあとに増えた項目（メディアを隠す、テキストのコピー、翻訳、編集履歴、編集、削除、ブックマーク、会話のミュート、固定）は、足したことに気づけるよう表示しておく。
-    /// 削除は、誤って押さないよう「その他」に入れる。開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
+    /// 設定を足したあとに増えた項目（メディアを隠す、テキストのコピー、翻訳、編集履歴、編集、削除、ブックマーク、会話のミュート、固定、通知の削除）は、足したことに気づけるよう表示しておく。
+    /// 削除と通知の削除は、誤って押さないよう「その他」に入れる。開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
     public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
         .rowSeparator,
         .item(.reply, isVisible: true),
@@ -218,6 +220,7 @@ public enum StatusMenuItem: String, MenuItemKind {
         .item(.booster, isVisible: true),
         .item(.mentionedUsers, isVisible: false),
         .more,
+        .item(.dismissNotification, isVisible: true),
         .item(.delete, isVisible: true),
     ])
 }

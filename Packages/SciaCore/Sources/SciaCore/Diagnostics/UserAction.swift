@@ -21,6 +21,7 @@ public enum UserAction: Sendable, Equatable {
     case reply
     case toggleFavourite
     case toggleReblog
+    case dismissNotification
     case togglePin
     case toggleConversationMute
     case toggleBookmark
@@ -55,6 +56,7 @@ public enum UserAction: Sendable, Equatable {
         case .reply: "status.reply"
         case .toggleFavourite: "status.favourite"
         case .toggleReblog: "status.reblog"
+        case .dismissNotification: "notification.dismiss"
         case .togglePin: "status.pin"
         case .toggleConversationMute: "status.muteConversation"
         case .toggleBookmark: "status.bookmark"
@@ -104,6 +106,7 @@ public enum UserAction: Sendable, Equatable {
         case ("status.reply", 0): self = .reply
         case ("status.favourite", 0): self = .toggleFavourite
         case ("status.reblog", 0): self = .toggleReblog
+        case ("notification.dismiss", 0): self = .dismissNotification
         case ("status.pin", 0): self = .togglePin
         case ("status.muteConversation", 0): self = .toggleConversationMute
         case ("status.bookmark", 0): self = .toggleBookmark
@@ -141,6 +144,7 @@ public enum UserAction: Sendable, Equatable {
         // 投稿への操作と投稿は通信の前に記録するため、失敗した場合や応答を待つ間もあるので、成功したとは書かない。
         case .toggleFavourite: "投稿のお気に入りを押した"
         case .toggleReblog: "投稿のブーストを押した"
+        case .dismissNotification: "通知の削除を選んだ"
         case .togglePin: "投稿のプロフィールへの固定を押した"
         case .toggleConversationMute: "投稿の会話のミュートを押した"
         case .toggleBookmark: "投稿のブックマークを押した"

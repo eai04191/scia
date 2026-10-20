@@ -40,10 +40,10 @@ extension TimelineViewController {
     /// - Parameter id: メニューを出した要素。共有のシートを、その行から出す。
     func contextMenu(for entry: TimelineEntry, id: ItemID) -> UIMenu? {
         let status = Self.status(of: entry)
-        let notifyingAccount: Account? = if case .notification(let notification) = entry { notification.account } else { nil }
+        let notification: MastodonNotification? = if case .notification(let notification) = entry { notification } else { nil }
         var shownUserIDs: Set<String> = []
         var children = settings.statusMenuLayout.groups.menuElements { item in
-            elements(for: item, status: status, notifyingAccount: notifyingAccount, id: id, shownUserIDs: &shownUserIDs)
+            elements(for: item, status: status, notification: notification, id: id, shownUserIDs: &shownUserIDs)
         }
         if case .notification(let notification) = entry, notification.type == .followRequest {
             children.insert(followRequestMenu(for: notification), at: 0)
@@ -63,13 +63,20 @@ extension TimelineViewController {
     }
 
     /// 同じユーザーが2つの項目に当たるときは、先に出る項目で1度だけ出す。
-    private func elements(for item: StatusMenuItem, status: Status?, notifyingAccount: Account?, id: ItemID, shownUserIDs: inout Set<String>) -> [UIMenuElement] {
+    /// - Parameter notification: 通知のメニューなら、その通知。
+    private func elements(for item: StatusMenuItem, status: Status?, notification: MastodonNotification?, id: ItemID, shownUserIDs: inout Set<String>) -> [UIMenuElement] {
         func users(_ users: [MenuUser]) -> [UIMenuElement] {
             users.filter { shownUserIDs.insert($0.id).inserted }.compactMap { userElement(for: $0, id: id) }
         }
         switch item {
         case .notifyingUser:
-            return users(notifyingAccount.map { [.account($0)] } ?? [])
+            return users(notification.map { [.account($0.account)] } ?? [])
+        case .dismissNotification:
+            // 投稿のない通知（フォローなど）でも出す。
+            guard let notification else { return [] }
+            return [UIAction(title: item.title, image: item.image) { [weak self] _ in
+                self?.onDismissNotification?(notification)
+            }]
         case .author:
             return users(status.map { [.account($0.displayed.account)] } ?? [])
         case .booster:
@@ -79,7 +86,7 @@ extension TimelineViewController {
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
         case .reply, .favourite, .reblog, .bookmark, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .systemTranslate, .edit, .delete:
             guard let status else { return [] }
-            return statusAction(item, on: status, isNotification: notifyingAccount != nil, id: id).map { [$0] } ?? []
+            return statusAction(item, on: status, isNotification: notification != nil, id: id).map { [$0] } ?? []
         }
     }
 
@@ -184,7 +191,7 @@ extension TimelineViewController {
             return UIAction(title: item.title, image: item.image) { [weak self] _ in
                 self?.translation.present(text)
             }
-        case .notifyingUser, .author, .booster, .mentionedUsers:
+        case .notifyingUser, .author, .booster, .mentionedUsers, .dismissNotification:
             return nil
         }
     }

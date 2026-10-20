@@ -271,6 +271,21 @@ public final class NotificationStore {
         return true
     }
 
+    /// 使う人が削除した通知を除く。表示に関わる変化があればtrueを返す。
+    /// 削除した通知は、応答を待つ間に補完で一覧から外れていても、IDを覚えて戻さない。
+    /// 応答を待つ間に読んだページで、同じ通知が読めなかった行として入っていれば、それも除く。
+    @discardableResult
+    public func removeNotification(_ id: MastodonNotification.ID) -> Bool {
+        removedNotificationIDs.insert(id)
+        pending.removeAll { $0.id == id }
+        let remaining = notifications.filter { $0.id != id }
+        let remainingUnreadable = unreadable.filter { $0.id != id }
+        guard remaining.count != notifications.count || remainingUnreadable.count != unreadable.count else { return false }
+        notifications = remaining
+        unreadable = remainingUnreadable
+        return true
+    }
+
     private static func updating(_ id: Status.ID, in notification: MastodonNotification, _ transform: (Status) -> Status) -> MastodonNotification {
         guard let status = notification.status else { return notification }
         let replaced = TimelineStore.updating(id, in: status, transform)

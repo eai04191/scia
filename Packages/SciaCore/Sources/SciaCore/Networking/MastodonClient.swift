@@ -471,6 +471,12 @@ public struct MastodonClient: Sendable {
         try await post(Relationship.self, path: "api/v1/accounts/\(id)/unfollow", form: []).0
     }
 
+    /// 通知を1件削除する。応答の中身は使わない。
+    /// https://docs.joinmastodon.org/methods/notifications/#dismiss
+    public func dismissNotification(_ notificationID: MastodonNotification.ID) async throws {
+        _ = try await send(formRequest(method: "POST", path: "api/v1/notifications/\(notificationID)/dismiss", form: []))
+    }
+
     /// 自分へのフォローリクエストを承認する。サーバーはリクエストの通知を消し、代わりにフォローの通知を作る。
     /// 承認を待っているリクエストがなければ404を返す。
     /// https://docs.joinmastodon.org/methods/follow_requests/#accept

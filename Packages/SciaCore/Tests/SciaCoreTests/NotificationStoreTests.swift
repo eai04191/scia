@@ -350,6 +350,45 @@ struct NotificationStoreTests {
         #expect(ids(store) == ["29", "28"])
     }
 
+    /// 削除した通知は一覧から除き、削除の前に読み始めた補完やストリーミングでも戻さない。
+    @Test func removedNotificationDoesNotReturn() async throws {
+        let all = try notifications([30, 29, 28])
+        let queue = PageQueue([.success(all), .success([all[1]]), .success([])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        #expect(store.removeNotification("29"))
+        #expect(ids(store) == ["30", "28"])
+        #expect(!store.removeNotification("29"))
+        #expect(!store.receive(all[1]))
+        _ = try await store.fillFromLatest(maxPages: 1)
+
+        #expect(ids(store) == ["30", "28"])
+    }
+
+    /// 削除の応答を待つ間に、補完で一覧から外れた通知が、古いページで読めなかった行として入っても、削除できたら除く。
+    @Test func removedNotificationAlsoRemovesItsUnreadableRow() async throws {
+        let pages = [
+            NotificationPage(notifications: try notifications([30, 29, 28])),
+            NotificationPage(notifications: try notifications([40, 39, 38])),
+            NotificationPage(notifications: try notifications([37, 36]), unreadable: [UnreadableItem(id: "29", url: nil)]),
+        ]
+        let count = Mutex(0)
+        let store = NotificationStore(pageSize: Self.pageSize) { _ in
+            count.withLock { count in
+                count += 1
+                return pages[count - 1]
+            }
+        }
+        _ = try await store.loadInitial()
+        _ = try await store.fillFromLatest(maxPages: 1)
+        _ = try await store.loadOlder()
+        #expect(store.unreadable.map(\.id) == ["29"])
+
+        #expect(store.removeNotification("29"))
+        #expect(store.unreadable.isEmpty)
+    }
+
     /// 応答を待つ間に補完が古い側を捨てて、片づけた通知が一覧から外れていても、そのあと読んだ古いページで戻さない。
     @Test func resolvedFollowRequestDoesNotReturnAfterTruncatingFill() async throws {
         let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))

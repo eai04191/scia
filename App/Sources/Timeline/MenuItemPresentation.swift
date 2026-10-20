@@ -88,6 +88,7 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .editHistory: .own(title: "編集履歴", symbolName: "clock.arrow.circlepath", note: "編集された投稿でだけ出ます")
         case .edit: .own(title: "編集", symbolName: "pencil", note: "自分の投稿でだけ出ます")
         case .delete: .own(title: "削除", symbolName: "trash", note: "自分の投稿でだけ出ます")
+        case .dismissNotification: .own(title: "通知を削除", symbolName: "xmark.bin", note: "通知でだけ出ます")
         case .hideMedia: .own(title: "メディアを隠す", symbolName: "eye.slash", note: "表示している添付ファイルがある投稿でだけ出ます")
         case .systemTranslate: .own(title: "翻訳", symbolName: "translate", note: "本文のある投稿でだけ出ます")
         case .notifyingUser: .own(title: "通知したユーザー", symbolName: "bell", note: "通知でだけ出ます")

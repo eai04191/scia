@@ -208,6 +208,16 @@ struct MastodonClientTests {
         #expect(requests.map { $0.url?.path() } == ["/api/v1/statuses/113000000000000001/pin", "/api/v1/statuses/113000000000000001/unpin"])
     }
 
+    @Test func dismissNotificationPostsToItsPath() async throws {
+        let transport = StubTransport([.json("{}", statusCode: 200)])
+
+        try await makeClient(transport).dismissNotification("34975861")
+
+        let request = try #require(await transport.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path() == "/api/v1/notifications/34975861/dismiss")
+    }
+
     /// ブーストのAPIはブーストそのものを返すため、中の元の投稿を返す。
     @Test func reblogReturnsOriginalStatus() async throws {
         let boost = #"{"id":"113000000000000099","created_at":"2026-10-13T03:22:00.000Z","spoiler_text":"","url":null,"content":"","account":{"id":"1","username":"alice","acct":"alice","display_name":"Alice","avatar":"https://example.social/avatars/alice.png","avatar_static":"https://example.social/avatars/alice.png","header":"https://example.social/headers/original/missing.png","header_static":"https://example.social/headers/original/missing.png","note":"","url":"https://example.social/@alice","fields":[],"locked":false,"bot":false,"followers_count":0,"following_count":0,"statuses_count":0,"emojis":[]},"mentions":[],"tags":[],"emojis":[],"media_attachments":[],"sensitive":false,"reblog":"# + Self.interactedStatus + "}"
