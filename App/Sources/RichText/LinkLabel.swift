@@ -278,38 +278,38 @@ final class LinkHitArea: UIControl {
     func menu(for destination: RichText.LinkDestination, at point: CGPoint) -> UIMenu? {
         guard let label else { return nil }
         let settings = label.settings
+        let handlers = urlHandlers(at: point, linkBrowser: settings.linkBrowser)
         let title: String
         let children: [UIMenuElement]
         switch destination {
         case .url(let url):
             title = url.absoluteString
             children = settings.linkMenuLayout.groups.menuElements { item in
-                switch item {
-                case .openInBrowser: [openAction(.openInBrowser, url, settings: settings)]
-                case .openInDefaultBrowser: [openAction(.openInDefaultBrowser, url, settings: settings)]
-                case .openInAppSafari: [openAction(.openInAppSafari, url, settings: settings)]
-                case .copyLink: [copyAction(url)]
-                case .share: [shareAction(url, at: point)]
+                switch item.content {
+                case .url(let action, _): [action.action(url: url, handlers: handlers)]
+                // リンクのメニューの項目は、どれも共通の項目。
+                case .own: []
                 }
             }
         case .mention(let acct, let url):
             title = "@\(acct)"
             children = settings.userMenuLayout.groups.menuElements { item in
+                if let action = item.urlAction {
+                    return [action.action(url: url, handlers: handlers)]
+                }
                 switch item {
-                case .profile: [profileAction(item.title, image: item.image, destination)]
-                case .copyLink: [copyAction(url)]
-                case .share: [shareAction(url, at: point)]
+                case .profile: return [profileAction(item.title, image: item.image, destination)]
+                // 共通の項目は、上で中身から組んだ。
+                case .copyLink, .share: return []
                 }
             }
         case .hashtag(let name, let url):
             title = "#\(name)"
             children = settings.hashtagMenuLayout.groups.menuElements { item in
-                switch item {
-                case .openInBrowser: [openAction(.openInBrowser, url, settings: settings)]
-                case .openInDefaultBrowser: [openAction(.openInDefaultBrowser, url, settings: settings)]
-                case .openInAppSafari: [openAction(.openInAppSafari, url, settings: settings)]
-                case .copyLink: [copyAction(url)]
-                case .share: [shareAction(url, at: point)]
+                switch item.content {
+                case .url(let action, _): [action.action(url: url, handlers: handlers)]
+                // ハッシュタグのメニューの項目は、どれも共通の項目。
+                case .own: []
                 }
             }
         }
@@ -320,26 +320,21 @@ final class LinkHitArea: UIControl {
         UIAction(title: title, image: image) { [weak self] _ in self?.label?.open(destination) }
     }
 
-    private func openAction(_ action: URLMenuAction, _ url: URL, settings: AppSettings) -> UIAction {
-        action.openAction(url: url, following: settings.linkBrowser) { [weak self] url, browser in
-            self?.nearest((any LinkMenuHost).self)?.openURL(url, in: browser)
-        }
+    /// コピーと開くは、メニューを出した画面に頼む。共有のシートは、押したリンクから出す。
+    private func urlHandlers(at point: CGPoint, linkBrowser: LinkBrowser) -> URLMenuHandlers {
+        URLMenuHandlers(
+            linkBrowser: linkBrowser,
+            copy: { [weak self] url in URLSharing.copy(url, notifying: self?.nearest((any LinkMenuHost).self)) },
+            share: { [weak self] url in self?.presentShareSheet(for: url, at: point) },
+            open: { [weak self] url, browser in self?.nearest((any LinkMenuHost).self)?.openURL(url, in: browser) }
+        )
     }
 
-    private func copyAction(_ url: URL) -> UIAction {
-        URLMenuAction.copyLink.menuAction(url: url) { [weak self] url in
-            URLSharing.copy(url, notifying: self?.nearest((any LinkMenuHost).self))
-        }
-    }
-
-    /// 押したリンクを起点にする。
-    private func shareAction(_ url: URL, at point: CGPoint) -> UIAction {
-        URLMenuAction.share.menuAction(url: url) { [weak self] url in
-            guard let self, let label, let presenter = nearest(UIViewController.self) else { return }
-            URLSharing.presentShareSheet(for: url, from: presenter) { popover in
-                popover.sourceView = label
-                popover.sourceRect = label.linkFrames(at: point).reduce(CGRect.null) { $0.union($1) }
-            }
+    private func presentShareSheet(for url: URL, at point: CGPoint) {
+        guard let label, let presenter = nearest(UIViewController.self) else { return }
+        URLSharing.presentShareSheet(for: url, from: presenter) { popover in
+            popover.sourceView = label
+            popover.sourceRect = label.linkFrames(at: point).reduce(CGRect.null) { $0.union($1) }
         }
     }
 

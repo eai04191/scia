@@ -65,6 +65,9 @@ extension TimelineViewController {
         // `url`はMastodonのAPIでnullを取りうるため、ないときは押せないまま並べる。`uri`はActivityPubのIDで、ブラウザで開けるページとは限らないため代わりにしない。
         // ブーストなら元の投稿のページを指す。
         let url = shown.url
+        if let action = item.urlAction {
+            return action.action(url: url, handlers: urlHandlers(id: id))
+        }
         switch item {
         case .reply:
             return UIAction(title: item.title, image: item.image) { [weak self] _ in
@@ -85,16 +88,9 @@ extension TimelineViewController {
             ) { [weak self] _ in
                 self?.onStatusAction?(.reblog, status)
             }
-        case .copyLink:
-            return URLMenuAction.copyLink.menuAction(url: url) { [weak self] url in URLSharing.copy(url, notifying: self) }
-        case .share:
-            return URLMenuAction.share.menuAction(url: url) { [weak self] url in self?.presentShareSheet(for: url, from: id) }
-        case .openInBrowser:
-            return openAction(.openInBrowser, url: url)
-        case .openInDefaultBrowser:
-            return openAction(.openInDefaultBrowser, url: url)
-        case .openInAppSafari:
-            return openAction(.openInAppSafari, url: url)
+        case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
+            // 共通の項目は、上で中身から組んだ。
+            return nil
         case .editHistory:
             guard shown.editedAt != nil else { return nil }
             return UIAction(title: item.title, image: item.image) { [weak self] _ in
@@ -135,13 +131,15 @@ extension TimelineViewController {
         if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first, only.count == 1 {
             return userAction(only[0], for: user, id: id, inSubmenu: false)
         }
-        let children = groups.menuElements { item in [userAction(item, for: user, id: id, inSubmenu: true)] }
+        let children = groups.menuElements { item in userAction(item, for: user, id: id, inSubmenu: true).map { [$0] } ?? [] }
         guard !children.isEmpty else { return nil }
         return UIMenu(title: "@\(user.acct)", image: UIImage(systemName: "person.crop.circle"), children: children)
     }
 
-    private func userAction(_ item: UserMenuItem, for user: MenuUser, id: ItemID, inSubmenu: Bool) -> UIAction {
-        let url = user.url
+    private func userAction(_ item: UserMenuItem, for user: MenuUser, id: ItemID, inSubmenu: Bool) -> UIAction? {
+        if let action = item.urlAction {
+            return action.action(title: inSubmenu ? nil : Self.inlineTitle(of: action, for: user), url: user.url, handlers: urlHandlers(id: id))
+        }
         switch item {
         case .profile:
             return UIAction(title: inSubmenu ? item.title : "@\(user.acct)のプロフィール", image: item.image) { [weak self] _ in
@@ -150,19 +148,31 @@ extension TimelineViewController {
                 case .mention(let mention): self?.onOpenProfileID?(mention.id)
                 }
             }
-        case .copyLink:
-            return URLMenuAction.copyLink.menuAction(title: inSubmenu ? nil : "@\(user.acct)のリンクをコピー", url: url) { [weak self] url in
-                URLSharing.copy(url, notifying: self)
-            }
-        case .share:
-            return URLMenuAction.share.menuAction(title: inSubmenu ? nil : "@\(user.acct)を共有", url: url) { [weak self] url in
-                self?.presentShareSheet(for: url, from: id)
-            }
+        case .copyLink, .share:
+            // 共通の項目は、上で中身から組んだ。
+            return nil
         }
     }
 
-    private func openAction(_ action: URLMenuAction, url: URL?) -> UIAction {
-        action.openAction(url: url, following: settings.linkBrowser) { [weak self] url, browser in self?.openURL(url, in: browser) }
+    /// サブメニューにせず投稿のメニューに直接並べるときの、ユーザーの共通の項目の名前。
+    private static func inlineTitle(of action: URLMenuAction, for user: MenuUser) -> String {
+        switch action {
+        case .copyLink: "@\(user.acct)のリンクをコピー"
+        case .share: "@\(user.acct)を共有"
+        case .openInBrowser: "@\(user.acct)をブラウザで開く"
+        case .openInDefaultBrowser: "@\(user.acct)を既定のブラウザで開く"
+        case .openInAppSafari: "@\(user.acct)をアプリ内のSafariで開く"
+        }
+    }
+
+    /// 共有のシートは、メニューを出した行から出す。
+    private func urlHandlers(id: ItemID) -> URLMenuHandlers {
+        URLMenuHandlers(
+            linkBrowser: settings.linkBrowser,
+            copy: { [weak self] url in URLSharing.copy(url, notifying: self) },
+            share: { [weak self] url in self?.presentShareSheet(for: url, from: id) },
+            open: { [weak self] url, browser in self?.openURL(url, in: browser) }
+        )
     }
 
     /// メニューを出した行を起点にする。行が画面の外へ流れていれば一覧を起点にする。

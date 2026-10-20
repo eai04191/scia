@@ -18,143 +18,110 @@ extension MenuLayout.Groups {
     }
 }
 
-/// メニューと、並びの設定画面に出す、項目の名前と印。
-extension StatusMenuItem {
-    var title: String {
-        switch self {
-        case .reply: "返信"
-        case .favourite: "お気に入り"
-        case .reblog: "ブースト"
-        case .copyLink: URLMenuAction.copyLink.title
-        case .share: URLMenuAction.share.title
-        case .openInBrowser: URLMenuAction.openInBrowser.title
-        case .openInDefaultBrowser: URLMenuAction.openInDefaultBrowser.title
-        case .openInAppSafari: URLMenuAction.openInAppSafari.title
-        case .editHistory: "編集履歴"
-        case .edit: "編集"
-        case .delete: "削除"
-        case .hideMedia: "メディアを隠す"
-        case .notifyingUser: "通知したユーザー"
-        case .author: "投稿したユーザー"
-        case .booster: "ブーストしたユーザー"
-        case .mentionedUsers: "メンションされたユーザー"
-        }
-    }
-
-    /// 設定画面で、名前の下に添える説明。
-    var note: String? {
-        switch self {
-        case .editHistory: "編集された投稿でだけ出ます"
-        case .edit, .delete: "自分の投稿でだけ出ます"
-        case .hideMedia: "表示している添付ファイルがある投稿でだけ出ます"
-        case .notifyingUser: "通知でだけ出ます"
-        case .booster: "ブーストでだけ出ます"
-        default: nil
-        }
-    }
-
-    var symbolName: String {
-        switch self {
-        case .reply: "arrowshape.turn.up.left"
-        case .favourite: "star"
-        case .reblog: "arrow.2.squarepath"
-        case .copyLink: URLMenuAction.copyLink.symbolName
-        case .share: URLMenuAction.share.symbolName
-        case .openInBrowser: URLMenuAction.openInBrowser.symbolName
-        case .openInDefaultBrowser: URLMenuAction.openInDefaultBrowser.symbolName
-        case .openInAppSafari: URLMenuAction.openInAppSafari.symbolName
-        case .editHistory: "clock.arrow.circlepath"
-        case .edit: "pencil"
-        case .delete: "trash"
-        case .hideMedia: "eye.slash"
-        case .notifyingUser: "bell"
-        case .author: "person.crop.circle"
-        case .booster: "person.crop.circle.badge.plus"
-        case .mentionedUsers: "at"
-        }
-    }
-
-    var image: UIImage? { UIImage(systemName: symbolName) }
+/// 長押しのメニューの項目の中身。名前、印、説明はここから決める。
+enum MenuItemContent {
+    /// URLに対する共通の項目。名前、印、説明、押したときの動きは共通の項目のものを使う。
+    /// - Parameter noteSuffix: このメニューに固有の決まり。共通の説明の後ろに書き足す。
+    case url(URLMenuAction, noteSuffix: String? = nil)
+    /// このメニューだけの項目。押したときの動きは、メニューを組む側で決める。
+    case own(title: String, symbolName: String, note: String? = nil)
 }
 
-extension UserMenuItem {
-    var title: String {
-        switch self {
-        case .profile: "プロフィール"
-        case .copyLink: URLMenuAction.copyLink.title
-        case .share: URLMenuAction.share.title
-        }
-    }
-
-    var note: String? { nil }
-
-    var symbolName: String {
-        switch self {
-        case .profile: "person.crop.circle"
-        case .copyLink: URLMenuAction.copyLink.symbolName
-        case .share: URLMenuAction.share.symbolName
-        }
-    }
-
-    var image: UIImage? { UIImage(systemName: symbolName) }
+/// 中身から名前、印、説明を決める項目。項目の種類ごとに、`content`の分岐を1つだけ書く。
+/// 分岐に`default`を書かない。項目を足したときに、共通の項目につなぐか、独自の項目にするかをコンパイラに確かめさせるため。
+protocol MenuItemContentProviding: MenuItemPresentable {
+    var content: MenuItemContent { get }
 }
 
-extension LinkMenuItem {
+extension MenuItemContentProviding {
     var title: String {
-        switch self {
-        case .openInBrowser: URLMenuAction.openInBrowser.title
-        case .openInDefaultBrowser: URLMenuAction.openInDefaultBrowser.title
-        case .openInAppSafari: URLMenuAction.openInAppSafari.title
-        case .copyLink: URLMenuAction.copyLink.title
-        case .share: URLMenuAction.share.title
+        switch content {
+        case .url(let action, _): action.title
+        case .own(let title, _, _): title
         }
     }
 
     var note: String? {
-        switch self {
-        case .openInBrowser: "リンクをタップしたときと同じく、設定の開く場所で開きます"
-        case .openInAppSafari: "httpとhttpsのリンクでだけ押せます"
-        default: nil
+        switch content {
+        case .url(let action, let suffix):
+            let parts = [action.note, suffix].compactMap(\.self)
+            return parts.isEmpty ? nil : parts.joined(separator: "。")
+        case .own(_, _, let note):
+            return note
         }
     }
 
     var symbolName: String {
-        switch self {
-        case .openInBrowser: URLMenuAction.openInBrowser.symbolName
-        case .openInDefaultBrowser: URLMenuAction.openInDefaultBrowser.symbolName
-        case .openInAppSafari: URLMenuAction.openInAppSafari.symbolName
-        case .copyLink: URLMenuAction.copyLink.symbolName
-        case .share: URLMenuAction.share.symbolName
+        switch content {
+        case .url(let action, _): action.symbolName
+        case .own(_, let symbolName, _): symbolName
         }
     }
 
     var image: UIImage? { UIImage(systemName: symbolName) }
+
+    /// 共通の項目なら、その項目。
+    var urlAction: URLMenuAction? {
+        if case .url(let action, _) = content { action } else { nil }
+    }
 }
 
-extension HashtagMenuItem {
-    var title: String {
+extension StatusMenuItem: MenuItemContentProviding {
+    var content: MenuItemContent {
         switch self {
-        case .openInBrowser: URLMenuAction.openInBrowser.title
-        case .openInDefaultBrowser: URLMenuAction.openInDefaultBrowser.title
-        case .openInAppSafari: URLMenuAction.openInAppSafari.title
-        case .copyLink: URLMenuAction.copyLink.title
-        case .share: URLMenuAction.share.title
+        case .reply: .own(title: "返信", symbolName: "arrowshape.turn.up.left")
+        case .favourite: .own(title: "お気に入り", symbolName: "star")
+        case .reblog: .own(title: "ブースト", symbolName: "arrow.2.squarepath")
+        case .copyLink: .url(.copyLink)
+        case .share: .url(.share)
+        case .openInBrowser: .url(.openInBrowser)
+        case .openInDefaultBrowser: .url(.openInDefaultBrowser)
+        case .openInAppSafari: .url(.openInAppSafari)
+        case .editHistory: .own(title: "編集履歴", symbolName: "clock.arrow.circlepath", note: "編集された投稿でだけ出ます")
+        case .edit: .own(title: "編集", symbolName: "pencil", note: "自分の投稿でだけ出ます")
+        case .delete: .own(title: "削除", symbolName: "trash", note: "自分の投稿でだけ出ます")
+        case .hideMedia: .own(title: "メディアを隠す", symbolName: "eye.slash", note: "表示している添付ファイルがある投稿でだけ出ます")
+        case .notifyingUser: .own(title: "通知したユーザー", symbolName: "bell", note: "通知でだけ出ます")
+        case .author: .own(title: "投稿したユーザー", symbolName: "person.crop.circle")
+        case .booster: .own(title: "ブーストしたユーザー", symbolName: "person.crop.circle.badge.plus", note: "ブーストでだけ出ます")
+        case .mentionedUsers: .own(title: "メンションされたユーザー", symbolName: "at")
         }
     }
+}
 
-    var note: String? { nil }
-
-    var symbolName: String {
+extension UserMenuItem: MenuItemContentProviding {
+    var content: MenuItemContent {
         switch self {
-        case .openInBrowser: URLMenuAction.openInBrowser.symbolName
-        case .openInDefaultBrowser: URLMenuAction.openInDefaultBrowser.symbolName
-        case .openInAppSafari: URLMenuAction.openInAppSafari.symbolName
-        case .copyLink: URLMenuAction.copyLink.symbolName
-        case .share: URLMenuAction.share.symbolName
+        case .profile: .own(title: "プロフィール", symbolName: "person.crop.circle")
+        case .copyLink: .url(.copyLink)
+        case .share: .url(.share)
         }
     }
+}
 
-    var image: UIImage? { UIImage(systemName: symbolName) }
+extension LinkMenuItem: MenuItemContentProviding {
+    var content: MenuItemContent {
+        switch self {
+        case .openInBrowser: .url(.openInBrowser, noteSuffix: "リンクをタップしたときと同じです")
+        case .openInDefaultBrowser: .url(.openInDefaultBrowser)
+        // 投稿とハッシュタグのURLはMastodonのhttpsのページだが、本文のリンクはほかのスキームもありうる。
+        case .openInAppSafari: .url(.openInAppSafari, noteSuffix: "httpとhttpsのリンクでだけ押せます")
+        case .copyLink: .url(.copyLink)
+        case .share: .url(.share)
+        }
+    }
+}
+
+extension HashtagMenuItem: MenuItemContentProviding {
+    var content: MenuItemContent {
+        switch self {
+        case .openInBrowser: .url(.openInBrowser)
+        case .openInDefaultBrowser: .url(.openInDefaultBrowser)
+        case .openInAppSafari: .url(.openInAppSafari)
+        case .copyLink: .url(.copyLink)
+        case .share: .url(.share)
+        }
+    }
 }
 
 /// 投稿のメニューの中で、ユーザーのメニューを出す相手。メンションはアカウントの全体を持たないため、IDでプロフィールを開く。

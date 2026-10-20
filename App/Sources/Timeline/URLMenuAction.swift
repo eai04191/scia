@@ -33,6 +33,16 @@ enum URLMenuAction {
         }
     }
 
+    /// 並びの設定画面で、名前の下に添える説明。メニューに固有の決まりがあれば、メニューの側でこれに書き足す。
+    var note: String? {
+        switch self {
+        case .openInBrowser: "設定の開く場所で開きます"
+        case .openInDefaultBrowser: "設定の開く場所にかかわらず、既定のブラウザで開きます"
+        case .openInAppSafari: "設定の開く場所にかかわらず、アプリ内のSafariで開きます"
+        case .copyLink, .share: nil
+        }
+    }
+
     var image: UIImage? { UIImage(systemName: symbolName) }
 
     /// 開く項目で`url`を開く場所。その場所で開けなければnil。
@@ -46,10 +56,22 @@ enum URLMenuAction {
         }
     }
 
-    /// 開く項目。`url`がないか、選んだ場所で開けなければ、押せないまま並べる。
-    /// - Parameter setting: 開く場所の設定。メニューを組むときの値で決める。
+    /// メニューの項目。`url`がないか、開く項目で選んだ場所で開けなければ、押せないまま並べる。
+    /// - Parameter title: 共通の名前の代わりに出す名前。投稿のメニューで、ユーザーの項目をサブメニューにせず並べるときに使う。
     @MainActor
-    func openAction(title: String? = nil, url: URL?, following setting: LinkBrowser, open: @escaping @MainActor (URL, LinkBrowser) -> Void) -> UIAction {
+    func action(title: String? = nil, url: URL?, handlers: URLMenuHandlers) -> UIAction {
+        switch self {
+        case .copyLink:
+            simpleAction(title: title, url: url, perform: handlers.copy)
+        case .share:
+            simpleAction(title: title, url: url, perform: handlers.share)
+        case .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
+            openAction(title: title, url: url, following: handlers.linkBrowser, open: handlers.open)
+        }
+    }
+
+    @MainActor
+    private func openAction(title: String?, url: URL?, following setting: LinkBrowser, open: @escaping @MainActor (URL, LinkBrowser) -> Void) -> UIAction {
         let target = url.flatMap { url in browser(for: url, following: setting).map { (url: url, browser: $0) } }
         return UIAction(title: title ?? self.title, image: image, attributes: target == nil ? .disabled : []) { _ in
             guard let target else { return }
@@ -57,15 +79,24 @@ enum URLMenuAction {
         }
     }
 
-    /// メニューの項目。`url`がなければ押せないまま並べる。
-    /// - Parameter title: 共通の名前の代わりに出す名前。投稿のメニューで、ユーザーの項目をサブメニューにせず並べるときに使う。
     @MainActor
-    func menuAction(title: String? = nil, url: URL?, perform: @escaping @MainActor (URL) -> Void) -> UIAction {
+    private func simpleAction(title: String?, url: URL?, perform: @escaping @MainActor (URL) -> Void) -> UIAction {
         UIAction(title: title ?? self.title, image: image, attributes: url == nil ? .disabled : []) { _ in
             guard let url else { return }
             perform(url)
         }
     }
+}
+
+/// 共通の項目を押したときに、メニューごとに違うところ。コピーしたことの知らせ方、共有のシートの起点、開き方。
+@MainActor
+struct URLMenuHandlers {
+    /// 開く場所の設定。メニューを組むときの値で決める。
+    let linkBrowser: LinkBrowser
+    let copy: @MainActor (URL) -> Void
+    let share: @MainActor (URL) -> Void
+    /// `url`を、開く項目と開く場所の設定から決めた場所で開く。
+    let open: @MainActor (URL, LinkBrowser) -> Void
 }
 
 /// メニューで選んだURLの、コピーと共有。
