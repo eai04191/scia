@@ -1132,7 +1132,8 @@ final class SessionController {
         case .reset:
             rootViewController.dismiss(animated: false)
             let tabs = rootViewController as? UITabBarController
-            for case let navigation as UINavigationController in tabs?.viewControllers ?? [] {
+            // UITabで組んだタブバーでは`viewControllers`がnilを返すため、各タブの画面はUITabから取る。
+            for case let navigation as UINavigationController in tabs?.tabs.map(\.viewController) ?? [] {
                 navigation.popToRootViewController(animated: false)
             }
             tabs?.selectedIndex = 0
