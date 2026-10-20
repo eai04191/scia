@@ -56,6 +56,22 @@ final class LinkLabel: UILabel {
         onTapLink?(destination)
     }
 
+    /// 本文のリンクを、文字と行き先の組で順に返す。書式で分かれた同じリンクはつなげる。押しても何もしないハッシュタグは除く。
+    static func links(in body: NSAttributedString) -> [(text: String, destination: RichText.LinkDestination)] {
+        var result: [(text: String, destination: RichText.LinkDestination, end: Int)] = []
+        body.enumerateAttribute(.linkDestination, in: NSRange(location: 0, length: body.length)) { value, range, _ in
+            guard let destination = value as? RichText.LinkDestination else { return }
+            if case .hashtag = destination { return }
+            let text = (body.string as NSString).substring(with: range)
+            if let last = result.last, last.destination == destination, last.end == range.location {
+                result[result.count - 1] = (last.text + text, destination, NSMaxRange(range))
+            } else {
+                result.append((text, destination, NSMaxRange(range)))
+            }
+        }
+        return result.map { ($0.text, $0.destination) }
+    }
+
     /// ラベルの座標`point`にある文字のリンクの行き先。リンクでなければnil。
     /// UILabelは文字の配置を公開しないため、同じ文字列と幅でTextKit 2に並べ直して文字を探す。
     /// TextKit 1（NSLayoutManager）で並べると、空行や行区切り文字のたびに行の位置がUILabelの描画から数ptずつずれ、

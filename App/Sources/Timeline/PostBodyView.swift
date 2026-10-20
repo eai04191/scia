@@ -328,27 +328,11 @@ final class PostBodyView: UIView {
     /// 読み上げで、本文のリンクを開く操作。押しても何もしないハッシュタグは除く。
     func linkAccessibilityActions() -> [UIAccessibilityCustomAction] {
         guard let text = content?.text, content?.spoiler?.isCollapsed != true else { return [] }
-        return Self.links(in: text).map { text, destination in
+        return LinkLabel.links(in: text).map { text, destination in
             UIAccessibilityCustomAction(name: text) { [weak self] _ in
                 self?.onOpenLink?(destination)
                 return true
             }
         }
-    }
-
-    /// 本文のリンクを、文字と行き先の組で順に返す。書式で分かれた同じリンクはつなげる。押しても何もしないハッシュタグは除く。
-    private static func links(in body: NSAttributedString) -> [(text: String, destination: RichText.LinkDestination)] {
-        var result: [(text: String, destination: RichText.LinkDestination, end: Int)] = []
-        body.enumerateAttribute(.linkDestination, in: NSRange(location: 0, length: body.length)) { value, range, _ in
-            guard let destination = value as? RichText.LinkDestination else { return }
-            if case .hashtag = destination { return }
-            let text = (body.string as NSString).substring(with: range)
-            if let last = result.last, last.destination == destination, last.end == range.location {
-                result[result.count - 1] = (last.text + text, destination, NSMaxRange(range))
-            } else {
-                result.append((text, destination, NSMaxRange(range)))
-            }
-        }
-        return result.map { ($0.text, $0.destination) }
     }
 }
