@@ -185,14 +185,16 @@ public enum StatusMenuItem: String, MenuItemKind {
     case mentionedUsers
 
     /// 設定を足す前のメニューと同じ並び。足す前になかったメンションされたユーザーは隠しておく。
+    /// ただし、返信・お気に入り・ブーストはよく使い、アイコンだけでも見分けられるので、横に並べる。横に並ぶのは3個までのため、同じまとまりにあった編集は次のまとまりの先頭へ移す。
     /// 設定を足したあとに増えた項目（メディアを隠す、テキストのコピー、翻訳、編集履歴、編集、削除）は、足したことに気づけるよう表示しておく。
     /// 削除は、誤って押さないよう「その他」に入れる。開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
     public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
+        .rowSeparator,
         .item(.reply, isVisible: true),
         .item(.favourite, isVisible: true),
         .item(.reblog, isVisible: true),
-        .item(.edit, isVisible: true),
         .separator,
+        .item(.edit, isVisible: true),
         .item(.copyLink, isVisible: true),
         .item(.copyText, isVisible: true),
         .item(.share, isVisible: true),

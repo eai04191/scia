@@ -158,11 +158,12 @@ struct MenuLayoutTests {
         #expect(layout.elements.first == .item(.a, isVisible: true))
     }
 
-    /// 既定の並びは、設定を足す前のメニューと同じにし、あとから足した項目を加える。
+    /// 既定の並びは、設定を足す前のメニューと同じにし、あとから足した項目を加える。返信・お気に入り・ブーストは横に並べ、編集は次のまとまりへ移す。
     @Test func statusMenuDefaultMatchesMenuBeforeCustomization() {
         let groups = StatusMenuItem.defaultLayout.groups
 
-        #expect(groups.main.map(\.items) == [[.reply, .favourite, .reblog, .edit], [.copyLink, .copyText, .share, .openInBrowser, .editHistory, .hideMedia, .systemTranslate], [.notifyingUser, .author, .booster]])
+        #expect(groups.main.map(\.isRow) == [true, false, false])
+        #expect(groups.main.map(\.items) == [[.reply, .favourite, .reblog], [.edit, .copyLink, .copyText, .share, .openInBrowser, .editHistory, .hideMedia, .systemTranslate], [.notifyingUser, .author, .booster]])
         #expect(groups.more.map(\.items) == [[.delete]])
         #expect(UserMenuItem.defaultLayout.groups.main.map(\.items) == [[.profile, .copyLink, .share]])
     }
