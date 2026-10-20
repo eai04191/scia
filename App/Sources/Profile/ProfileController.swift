@@ -198,6 +198,23 @@ final class ProfileController {
         showEntries(animatesRemoval: true)
     }
 
+    /// 開いているプロフィールのアカウントのID。
+    var accountID: String { store.account.id }
+
+    /// 固定を変えたあとに、固定された投稿を読み直す。外した投稿は、使う人の操作の結果なので、閉じて詰める動きで消す。
+    /// 読めなかったときは、前の固定された投稿のまま残す。固定の操作はできているので、知らせない。
+    func reloadPinned() {
+        run { controller in
+            do {
+                try await controller.store.reloadPinned()
+                controller.afterTransition { $0.showEntries(animatesRemoval: true) }
+            } catch {
+                controller.logger.error("profile pinned reload failed: \(SciaLog.describe(error), privacy: .public)")
+                controller.handleUnauthorized(error)
+            }
+        }
+    }
+
     private func run(_ operation: @escaping @MainActor (ProfileController) async -> Void) {
         tasks.removeAll { $0.isCancelled }
         tasks.append(Task { [weak self] in

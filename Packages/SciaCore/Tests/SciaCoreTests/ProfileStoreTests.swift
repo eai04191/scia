@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 import Testing
 @testable import SciaCore
 
@@ -14,6 +15,12 @@ struct ProfileStoreTests {
     }
 
     private struct Failure: Error {}
+
+    /// サーバーで固定されている投稿。固定したあとに読み直す応答を変えるのに使う。
+    private actor PinnedOnServer {
+        var statuses: [Status] = []
+        func set(_ statuses: [Status]) { self.statuses = statuses }
+    }
 
     /// フォローを送ったか。送ったあとに読むアカウントを差し替えるのに使う。
     private actor Followed {
@@ -244,6 +251,88 @@ struct ProfileStoreTests {
         #expect(store.removeStatus("10"))
         #expect(store.displayedPinned.isEmpty)
         #expect(!store.removeStatus("10"))
+    }
+
+    /// 固定したり外したりしたあとに、固定された投稿だけを読み直す。
+    @Test func reloadPinnedReplacesPinnedStatuses() async throws {
+        let known = try account()
+        let pinned = try pinnedStatus()
+        let server = PinnedOnServer()
+        let api = ProfileStore.API(
+            account: { _ in known },
+            relationship: { _ in nil },
+            statuses: { _, filter, _ in TimelinePage(statuses: filter.pinned ? await server.statuses : [], isRegenerating: false) },
+            follow: { _ in throw Failure() },
+            unfollow: { _ in throw Failure() }
+        )
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, api: api)
+        _ = await store.loadProfile()
+        #expect(store.displayedPinned.isEmpty)
+
+        await server.set([pinned])
+        try await store.reloadPinned()
+
+        #expect(store.displayedPinned == [pinned])
+    }
+
+    /// 固定と解除を続けて押し、先に読み始めた読み直しの応答が遅れて届いても、あとの読み直しの結果を戻さない。
+    @Test func olderPinnedReloadDoesNotOverwriteNewerOne() async throws {
+        let known = try account()
+        let pinned = try pinnedStatus()
+        let gate = PageGate(TimelinePage(statuses: [pinned], isRegenerating: false))
+        let server = PinnedOnServer()
+        let calls = Mutex(0)
+        let api = ProfileStore.API(
+            account: { _ in known },
+            relationship: { _ in nil },
+            statuses: { _, filter, _ in
+                guard filter.pinned else { return TimelinePage(statuses: [], isRegenerating: false) }
+                // 1回目は最初の読み込み、2回目は固定したあとの読み直しで、止めておく。3回目は外したあとの読み直し。
+                let call = calls.withLock { count in
+                    count += 1
+                    return count
+                }
+                return call == 2 ? await gate.fetch() : TimelinePage(statuses: await server.statuses, isRegenerating: false)
+            },
+            follow: { _ in throw Failure() },
+            unfollow: { _ in throw Failure() }
+        )
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, api: api)
+        _ = await store.loadProfile()
+        await gate.hold()
+        let afterPin = Task { try await store.reloadPinned() }
+        await gate.waitForRequest()
+
+        try await store.reloadPinned()
+        await gate.release()
+        try await afterPin.value
+
+        #expect(store.displayedPinned.isEmpty)
+    }
+
+    /// 読み直しを待つ間に反映したお気に入りを、読み始めた時点の応答で戻さない。
+    @Test func pinnedReloadKeepsUpdatesMadeWhileWaiting() async throws {
+        let known = try account()
+        let pinned = try pinnedStatus()
+        let gate = PageGate(TimelinePage(statuses: [pinned], isRegenerating: false))
+        let api = ProfileStore.API(
+            account: { _ in known },
+            relationship: { _ in nil },
+            statuses: { _, filter, _ in filter.pinned ? await gate.fetch() : TimelinePage(statuses: [], isRegenerating: false) },
+            follow: { _ in throw Failure() },
+            unfollow: { _ in throw Failure() }
+        )
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, api: api)
+        _ = await store.loadProfile()
+        await gate.hold()
+        let reload = Task { try await store.reloadPinned() }
+        await gate.waitForRequest()
+
+        store.updateStatus("10") { $0.settingFavourited(true) }
+        await gate.release()
+        try await reload.value
+
+        #expect(store.displayedPinned.map(\.favourited) == [true])
     }
 
     /// 削除の前に読み始めた固定された投稿の応答が、削除のあとに届いても、削除した投稿を戻さない。

@@ -163,7 +163,7 @@ struct MenuLayoutTests {
         let groups = StatusMenuItem.defaultLayout.groups
 
         #expect(groups.main.map(\.isRow) == [true, false, false])
-        #expect(groups.main.map(\.items) == [[.reply, .favourite, .reblog], [.edit, .bookmark, .muteConversation, .copyLink, .copyText, .share, .openInBrowser, .editHistory, .hideMedia, .systemTranslate], [.notifyingUser, .author, .booster]])
+        #expect(groups.main.map(\.items) == [[.reply, .favourite, .reblog], [.edit, .bookmark, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .editHistory, .hideMedia, .systemTranslate], [.notifyingUser, .author, .booster]])
         #expect(groups.more.map(\.items) == [[.delete]])
         #expect(UserMenuItem.defaultLayout.groups.main.map(\.items) == [[.profile, .copyLink, .share]])
     }
@@ -205,7 +205,7 @@ struct MenuLayoutTests {
     @Test func savedStatusMenuGainsEditAndDelete() {
         let saved = MenuLayout<StatusMenuItem>(tokens: ["item:reblog", "item:reply", "item:favourite", "separator", "item:copyLink", "more", "hidden:share"])
 
-        #expect(saved.groups.main.map(\.items).first == [.reblog, .edit, .bookmark, .muteConversation, .reply, .favourite])
+        #expect(saved.groups.main.map(\.items).first == [.reblog, .edit, .bookmark, .muteConversation, .pin, .reply, .favourite])
         #expect(saved.groups.more.map(\.items).first?.first == .delete)
     }
 

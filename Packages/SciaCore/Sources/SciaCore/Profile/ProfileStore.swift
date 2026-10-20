@@ -114,6 +114,8 @@ public final class ProfileStore {
     /// フォローを変えた回数。前に読んだ関係から始めると、関係を読み直している途中でもフォローを送れるため、
     /// フォローより前に頼んだ読み直しの応答が後から届いたら、古い関係として捨てる。
     private var followChanges = 0
+    /// 固定された投稿を読み始めた回数。固定と解除を続けて押すと読み直しが重なるため、遅れて届いた古い応答を捨てる。
+    private var pinnedLoads = 0
     /// 削除した投稿のID。削除の前に読み始めた固定された投稿の応答で、戻さないようにする。
     private var deletedIDs: Set<Status.ID> = []
     private let isMyself: Bool
@@ -170,6 +172,8 @@ public final class ProfileStore {
         let api = api
         let pageSize = pageSize
         let followChangesAtRequest = followChanges
+        pinnedLoads += 1
+        let pinnedLoad = pinnedLoads
         return await withTaskGroup(of: (Part, Result<Loaded, any Error>).self) { group -> ProfileLoadFailures in
             group.addTask { (.account, await Result { .account(try await api.account(id)) }) }
             if !isMyself {
@@ -186,7 +190,10 @@ public final class ProfileStore {
                     self.relationship = relationship
                     relationshipFailed = false
                 case .success(.pinned(let pinned)):
-                    loadedPinned = pinned.filter { !deletedIDs.contains($0.id) }
+                    // あとから読み始めた読み直しがあれば、その結果に任せる。一覧を出すのは待たせない。
+                    if pinnedLoad == pinnedLoads {
+                        loadedPinned = pinned.filter { !deletedIDs.contains($0.id) }
+                    }
                     isPinnedSettled = true
                 case .failure(let error):
                     switch part {
@@ -202,6 +209,20 @@ public final class ProfileStore {
             }
             return failures
         }
+    }
+
+    /// 固定された投稿だけを読み直す。自分の投稿をプロフィールに固定したり外したりしたあとに呼ぶ。
+    /// 固定した順にどう並ぶかはサーバーが決めるため、手元で差し込まずに読み直す。
+    /// どの投稿をどの順に並べるかだけを応答に合わせ、前から並べていた投稿は手元のものを残す。待つ間に`updateStatus`で反映したお気に入りなどを、読み始めた時点の応答で戻さないため。
+    /// あとから読み始めた読み直しがあれば、この応答は捨てる。
+    public func reloadPinned() async throws {
+        pinnedLoads += 1
+        let pinnedLoad = pinnedLoads
+        let pinned = try await api.statuses(account.id, AccountStatusFilter(pinned: true), TimelineQuery(limit: pageSize)).statuses
+        guard pinnedLoad == pinnedLoads else { return }
+        let current = Dictionary(loadedPinned.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        loadedPinned = pinned.filter { !deletedIDs.contains($0.id) }.map { current[$0.id] ?? $0 }
+        isPinnedSettled = true
     }
 
     /// 読めなかった関係を読み直す。失敗したら、読めなかったままにして投げる。読み直している途中なら何もしない。

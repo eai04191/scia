@@ -8,6 +8,7 @@ enum StatusAction {
     case reblog
     case bookmark
     case muteConversation
+    case pin
     case editHistory
     case edit
     case delete
@@ -76,7 +77,7 @@ extension TimelineViewController {
             return users([.account(status.account)])
         case .mentionedUsers:
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
-        case .reply, .favourite, .reblog, .bookmark, .muteConversation, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .systemTranslate, .edit, .delete:
+        case .reply, .favourite, .reblog, .bookmark, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .systemTranslate, .edit, .delete:
             guard let status else { return [] }
             return statusAction(item, on: status, isNotification: notifyingAccount != nil, id: id).map { [$0] } ?? []
         }
@@ -130,6 +131,14 @@ extension TimelineViewController {
                 image: shown.muted ? UIImage(systemName: "bell") : item.image
             ) { [weak self] _ in
                 self?.onStatusAction?(.muteConversation, status)
+            }
+        case .pin:
+            guard let myAccountID, status.canBePinned(by: myAccountID) else { return nil }
+            return UIAction(
+                title: shown.pinned ? "プロフィールの固定を外す" : item.title,
+                image: shown.pinned ? UIImage(systemName: "pin.slash") : item.image
+            ) { [weak self] _ in
+                self?.onStatusAction?(.pin, status)
             }
         case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
             // 共通の項目は、上で中身から組んだ。

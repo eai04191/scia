@@ -658,6 +658,13 @@ final class SessionController {
         case .muteConversation:
             UserAction.toggleConversationMute.record()
             toggle(.muteConversation, on: status, failureTitle: "会話のミュートを変更できませんでした")
+        case .pin:
+            UserAction.togglePin.record()
+            // 固定の数の上限を超えたときは、サーバーの422の文言が理由に出る。
+            toggle(.pin, on: status, failureTitle: "プロフィールの固定を変更できませんでした") { [weak self] in
+                guard let self else { return }
+                profiles.reloadPinned(of: credential.accountID)
+            }
         case .editHistory:
             UserAction.openEditHistory.record()
             // フィルターの結果はブーストの外側にだけ付くことがあるため、判定にはブーストごと渡す。
@@ -863,11 +870,13 @@ final class SessionController {
 
     /// 押し直せば済む失敗なので、操作を止めるアラートにせず、チップの列に数秒で消えるチップを出し、押すと理由を出す。
     /// 消えたあとも確かめられるよう、「最近の失敗」に残す。
-    private func toggle(_ action: StatusInteractions.Action, on status: Status, failureTitle: String) {
+    /// - Parameter onSuccess: サーバーが受け付けたら呼ぶ。同じ操作の結果を待っている間に押されて送らなかったときは呼ばない。
+    private func toggle(_ action: StatusInteractions.Action, on status: Status, failureTitle: String, onSuccess: (() -> Void)? = nil) {
         let interactions = interactions
         Task { [weak self] in
             do {
-                try await interactions.toggle(action, on: status)
+                guard try await interactions.toggle(action, on: status) else { return }
+                onSuccess?()
             } catch {
                 guard let self else { return }
                 logger.error("toggle \(String(describing: action), privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
@@ -1278,6 +1287,14 @@ private final class ProfileRegistry {
         entries.removeAll { $0.controller == nil }
         for entry in entries {
             entry.controller?.removeStatus(id)
+        }
+    }
+
+    /// `accountID`のプロフィールを開いていれば、固定された投稿を読み直す。
+    func reloadPinned(of accountID: String) {
+        entries.removeAll { $0.controller == nil }
+        for entry in entries where entry.controller?.accountID == accountID {
+            entry.controller?.reloadPinned()
         }
     }
 }

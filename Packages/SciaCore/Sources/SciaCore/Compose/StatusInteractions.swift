@@ -1,4 +1,4 @@
-/// お気に入り、ブースト、ブックマーク、会話のミュートを付け外しする。サーバーの結果を待たずに表示へ反映し、失敗したら戻す。
+/// お気に入り、ブースト、ブックマーク、会話のミュート、プロフィールへの固定を付け外しする。サーバーの結果を待たずに表示へ反映し、失敗したら戻す。
 @MainActor
 public final class StatusInteractions {
     public enum Action: Hashable, Sendable {
@@ -8,6 +8,7 @@ public final class StatusInteractions {
         /// 押した投稿の会話をミュートする。サーバーは会話全体をミュートするが、投稿は会話のIDを持たないため、同じ会話のほかの投稿の`muted`は古いまま残る。
         /// 残った投稿でもう一度ミュートを選んでも、サーバーではミュートしたままで、その投稿の表示が正しくなるだけなので、会話のほかの投稿は読み直さない。
         case muteConversation
+        case pin
     }
 
     /// APIを呼ぶ口。テストでは差し替える。
@@ -20,6 +21,8 @@ public final class StatusInteractions {
         public var unbookmark: @Sendable (Status.ID) async throws -> Status
         public var muteConversation: @Sendable (Status.ID) async throws -> Status
         public var unmuteConversation: @Sendable (Status.ID) async throws -> Status
+        public var pin: @Sendable (Status.ID) async throws -> Status
+        public var unpin: @Sendable (Status.ID) async throws -> Status
 
         public init(
             favourite: @escaping @Sendable (Status.ID) async throws -> Status,
@@ -29,7 +32,9 @@ public final class StatusInteractions {
             bookmark: @escaping @Sendable (Status.ID) async throws -> Status,
             unbookmark: @escaping @Sendable (Status.ID) async throws -> Status,
             muteConversation: @escaping @Sendable (Status.ID) async throws -> Status,
-            unmuteConversation: @escaping @Sendable (Status.ID) async throws -> Status
+            unmuteConversation: @escaping @Sendable (Status.ID) async throws -> Status,
+            pin: @escaping @Sendable (Status.ID) async throws -> Status,
+            unpin: @escaping @Sendable (Status.ID) async throws -> Status
         ) {
             self.favourite = favourite
             self.unfavourite = unfavourite
@@ -39,6 +44,8 @@ public final class StatusInteractions {
             self.unbookmark = unbookmark
             self.muteConversation = muteConversation
             self.unmuteConversation = unmuteConversation
+            self.pin = pin
+            self.unpin = unpin
         }
 
         public init(client: MastodonClient) {
@@ -50,7 +57,9 @@ public final class StatusInteractions {
                 bookmark: { try await client.bookmark($0) },
                 unbookmark: { try await client.unbookmark($0) },
                 muteConversation: { try await client.muteConversation($0) },
-                unmuteConversation: { try await client.unmuteConversation($0) }
+                unmuteConversation: { try await client.unmuteConversation($0) },
+                pin: { try await client.pin($0) },
+                unpin: { try await client.unpin($0) }
             )
         }
     }
@@ -101,6 +110,7 @@ public final class StatusInteractions {
         case .reblog: status.reblogged
         case .bookmark: status.bookmarked
         case .muteConversation: status.muted
+        case .pin: status.pinned
         }
     }
 
@@ -110,6 +120,7 @@ public final class StatusInteractions {
         case .reblog: status.settingReblogged(isOn)
         case .bookmark: status.settingBookmarked(isOn)
         case .muteConversation: status.settingMuted(isOn)
+        case .pin: status.settingPinned(isOn)
         }
     }
 
@@ -119,6 +130,7 @@ public final class StatusInteractions {
         case .reblog: status.adoptingReblog(of: result)
         case .bookmark: status.adoptingBookmark(of: result)
         case .muteConversation: status.settingMuted(result.muted)
+        case .pin: status.settingPinned(result.pinned)
         }
     }
 
@@ -132,6 +144,8 @@ public final class StatusInteractions {
         case (.bookmark, false): try await operations.unbookmark(id)
         case (.muteConversation, true): try await operations.muteConversation(id)
         case (.muteConversation, false): try await operations.unmuteConversation(id)
+        case (.pin, true): try await operations.pin(id)
+        case (.pin, false): try await operations.unpin(id)
         }
     }
 }

@@ -112,6 +112,21 @@ struct StatusDraftTests {
         #expect(try !status(.direct, by: "1").canBeReblogged(by: "1"))
     }
 
+    @Test func onlyOwnPostsOtherThanDirectCanBePinned() throws {
+        func status(_ visibility: Status.Visibility, by accountID: String) throws -> Status {
+            Status(id: "10", createdAt: .now, account: try account(accountID, "x"), content: "", spoilerText: "", url: nil, visibility: visibility)
+        }
+
+        #expect(try status(.public, by: "1").canBePinned(by: "1"))
+        #expect(try status(.unlisted, by: "1").canBePinned(by: "1"))
+        #expect(try status(.private, by: "1").canBePinned(by: "1"))
+        #expect(try !status(.direct, by: "1").canBePinned(by: "1"))
+        #expect(try !status(.public, by: "2").canBePinned(by: "1"))
+        // 自分の投稿をほかの人がブーストしたものは、元の投稿で決める。
+        let boost = Status(id: "20", createdAt: .now, account: try account("2", "bob"), content: "", spoilerText: "", url: nil, reblog: try status(.public, by: "1"))
+        #expect(boost.canBePinned(by: "1"))
+    }
+
     private func canPost(_ draft: StatusDraft, maxMediaAttachments: Int = 4) -> Bool {
         draft.canPost(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: maxMediaAttachments)
     }

@@ -216,6 +216,17 @@ public struct MastodonClient: Sendable {
         try await post(Status.self, path: "api/v1/statuses/\(statusID)/unmute", form: []).0
     }
 
+    /// 自分の投稿をプロフィールに固定する。固定できる数を超えると、サーバーは422を返す。
+    /// https://docs.joinmastodon.org/methods/statuses/#pin
+    public func pin(_ statusID: String) async throws -> Status {
+        try await post(Status.self, path: "api/v1/statuses/\(statusID)/pin", form: []).0
+    }
+
+    /// https://docs.joinmastodon.org/methods/statuses/#unpin
+    public func unpin(_ statusID: String) async throws -> Status {
+        try await post(Status.self, path: "api/v1/statuses/\(statusID)/unpin", form: []).0
+    }
+
     /// ブーストし、ブーストした元の投稿を返す。APIはブーストそのものを返すため、中の元の投稿を取り出す。
     /// https://docs.joinmastodon.org/methods/statuses/#boost
     public func reblog(_ statusID: String) async throws -> Status {

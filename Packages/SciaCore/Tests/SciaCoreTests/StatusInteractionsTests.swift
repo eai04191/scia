@@ -46,7 +46,9 @@ struct StatusInteractionsTests {
             bookmark: { _ in throw Failure() },
             unbookmark: { _ in throw Failure() },
             muteConversation: { _ in throw Failure() },
-            unmuteConversation: { _ in throw Failure() }
+            unmuteConversation: { _ in throw Failure() },
+            pin: { _ in throw Failure() },
+            unpin: { _ in throw Failure() }
         )
     }
 
@@ -111,7 +113,9 @@ struct StatusInteractionsTests {
             bookmark: { _ in throw Failure() },
             unbookmark: { _ in throw Failure() },
             muteConversation: { _ in throw Failure() },
-            unmuteConversation: { _ in throw Failure() }
+            unmuteConversation: { _ in throw Failure() },
+            pin: { _ in throw Failure() },
+            unpin: { _ in throw Failure() }
         )) { shown.update($0, $1) }
 
         let favourite = Task { try await interactions.toggle(.favourite, on: shown.status) }
@@ -144,7 +148,9 @@ struct StatusInteractionsTests {
             bookmark: { _ in throw Failure() },
             unbookmark: { _ in throw Failure() },
             muteConversation: { _ in throw Failure() },
-            unmuteConversation: { _ in throw Failure() }
+            unmuteConversation: { _ in throw Failure() },
+            pin: { _ in throw Failure() },
+            unpin: { _ in throw Failure() }
         )) { shown.update($0, $1) }
 
         _ = try await interactions.toggle(.reblog, on: boost)
@@ -163,7 +169,9 @@ struct StatusInteractionsTests {
             bookmark: { _ in throw Failure() },
             unbookmark: { _ in throw Failure() },
             muteConversation: { _ in throw Failure() },
-            unmuteConversation: { _ in throw Failure() }
+            unmuteConversation: { _ in throw Failure() },
+            pin: { _ in throw Failure() },
+            unpin: { _ in throw Failure() }
         )) { shown.update($0, $1) }
 
         await #expect(throws: Failure.self) { try await interactions.toggle(.bookmark, on: shown.status) }
@@ -182,7 +190,9 @@ struct StatusInteractionsTests {
             bookmark: { _ in throw Failure() },
             unbookmark: { _ in bookmarked.settingBookmarked(false) },
             muteConversation: { _ in throw Failure() },
-            unmuteConversation: { _ in throw Failure() }
+            unmuteConversation: { _ in throw Failure() },
+            pin: { _ in throw Failure() },
+            unpin: { _ in throw Failure() }
         )) { shown.update($0, $1) }
 
         #expect(try await interactions.toggle(.bookmark, on: shown.status))
@@ -206,12 +216,34 @@ struct StatusInteractionsTests {
                 requested.withLock { $0.append(id) }
                 return original.settingMuted(true)
             },
-            unmuteConversation: { _ in throw Failure() }
+            unmuteConversation: { _ in throw Failure() },
+            pin: { _ in throw Failure() },
+            unpin: { _ in throw Failure() }
         )) { shown.update($0, $1) }
 
         #expect(try await interactions.toggle(.muteConversation, on: boost))
 
         #expect(requested.withLock { $0 } == ["10"])
         #expect(shown.history.map(\.muted) == [true, true])
+    }
+
+    @Test func unpinsWhenAlreadyPinnedAndRevertsOnFailure() async throws {
+        let shown = Shown(try status().settingPinned(true))
+        let interactions = StatusInteractions(operations: StatusInteractions.Operations(
+            favourite: { _ in throw Failure() },
+            unfavourite: { _ in throw Failure() },
+            reblog: { _ in throw Failure() },
+            unreblog: { _ in throw Failure() },
+            bookmark: { _ in throw Failure() },
+            unbookmark: { _ in throw Failure() },
+            muteConversation: { _ in throw Failure() },
+            unmuteConversation: { _ in throw Failure() },
+            pin: { _ in throw Failure() },
+            unpin: { _ in throw Failure() }
+        )) { shown.update($0, $1) }
+
+        await #expect(throws: Failure.self) { try await interactions.toggle(.pin, on: shown.status) }
+
+        #expect(shown.history.map(\.pinned) == [false, true])
     }
 }
