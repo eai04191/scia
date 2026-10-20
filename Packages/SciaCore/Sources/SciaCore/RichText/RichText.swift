@@ -1,7 +1,7 @@
 public import Foundation
 
 /// 投稿本文や表示名を、UIに依存しない形で表したもの。表示層がNSAttributedStringなどに変換する。
-public struct RichText: Equatable, Sendable {
+public struct RichText: Hashable, Sendable {
     public var blocks: [Block]
 
     public init(blocks: [Block]) {
@@ -9,7 +9,7 @@ public struct RichText: Equatable, Sendable {
     }
 
     /// 段落、引用、コードブロック、リスト項目のまとまり。
-    public struct Block: Equatable, Sendable {
+    public struct Block: Hashable, Sendable {
         public var inlines: [Inline]
         /// 引用の深さ。0なら引用ではない。
         public var quoteLevel: Int
@@ -29,7 +29,7 @@ public struct RichText: Equatable, Sendable {
         }
     }
 
-    public enum Inline: Equatable, Sendable {
+    public enum Inline: Hashable, Sendable {
         case text(String, Style)
         case link(String, LinkDestination, Style)
         case emoji(CustomEmoji)
@@ -51,7 +51,7 @@ public struct RichText: Equatable, Sendable {
         public static let code = Style(rawValue: 1 << 4)
     }
 
-    public enum LinkDestination: Equatable, Sendable {
+    public enum LinkDestination: Hashable, Sendable {
         case url(URL)
         /// `acct`はローカルならusername、リモートならusername@domain。
         case mention(acct: String, url: URL)

@@ -4,7 +4,7 @@ import UIKit
 /// Xの投稿へのリンクを、作者、本文、添付ファイルの囲みで出す。fxtwitterから読み終えた投稿にだけ、リンクカードの代わりに置く。
 ///
 /// 表示の試作。囲みの形は、引用の見せ方を決めるときの下書きにする。添付ファイルはMastodonの投稿と同じ部品で並べ、同じビューアで開く。
-/// 囲みのどこかが押されたら、リンクと同じくXの投稿を開く。サムネイルの押下は、並べた部品が受ける。
+/// 囲みのどこかが押されたら、リンクと同じくXの投稿を開く。サムネイルと本文のリンクの押下は、並べた部品が受ける。
 final class XPostView: UIButton {
     struct Content: Equatable {
         var post: XPost
@@ -28,10 +28,12 @@ final class XPostView: UIButton {
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     /// 閲覧注意の覆いが押されたときに呼ぶ。
     var onRevealMedia: (() -> Void)?
+    /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
+    var onOpenLink: ((RichText.LinkDestination) -> Void)?
 
     private let avatarView: AvatarView
     private let nameLabel = UILabel()
-    private let textLabel = UILabel()
+    private let textLabel = LinkLabel()
     private let mediaView: MediaGridView
     /// アイコンと名前を並べる作者の行。
     private let headerGuide = UILayoutGuide()
@@ -54,9 +56,11 @@ final class XPostView: UIButton {
         isAccessibilityElement = false
         nameLabel.lineBreakMode = .byTruncatingTail
         textLabel.numberOfLines = 0
-        for view in [avatarView, nameLabel, textLabel] as [UIView] {
+        // 本文はリンクの上だけ押下を受ける。リンクの外の押下は、囲みのボタンが受ける。
+        for view in [avatarView, nameLabel] as [UIView] {
             view.isUserInteractionEnabled = false
         }
+        textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
         for view in [avatarView, nameLabel, textLabel, mediaView] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
@@ -85,6 +89,12 @@ final class XPostView: UIButton {
         nameLabel.attributedText = content.name
         textLabel.attributedText = content.text
         textLabel.isHidden = content.text.length == 0
+        textLabel.accessibilityCustomActions = LinkLabel.links(in: content.text).map { text, destination in
+            UIAccessibilityCustomAction(name: text) { [weak self] _ in
+                self?.onOpenLink?(destination)
+                return true
+            }
+        }
         NSLayoutConstraint.deactivate(variableConstraints)
         let padding = content.padding
         // 作者の行の高さは、アイコンと名前の高いほう。どちらも行の上下中央に揃える。

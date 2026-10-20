@@ -47,6 +47,13 @@ final class LinkLabel: UILabel {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// リンクの外では当たりにならず、押下は後ろのビューに渡る。リンクの上では、重ねた`hitArea`が当たりになる。
+    /// ラベル自身が当たりになると、Xの投稿の囲みのようにボタンの中に置いたとき、リンクの外を押してもボタンが反応しない。
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        let view = super.hitTest(point, with: event)
+        return view === self ? nil : view
+    }
+
     fileprivate func tapped(at point: CGPoint) {
         guard let destination = link(at: point) else { return }
         onTapLink?(destination)

@@ -52,7 +52,7 @@ struct XPostTests {
 
         #expect(post.authorName == "【公式】beatmania IIDX")
         #expect(post.authorScreenName == "IIDX_OFFICIAL")
-        #expect(post.text.hasPrefix("【WR】\n今週のWEEKLY RANKING"))
+        #expect(post.text.plainText.hasPrefix("【WR】\n今週のWEEKLY RANKING"))
         #expect(post.createdAt != nil)
         let photo = try #require(post.media.first)
         #expect(post.media.count == 1)
@@ -63,6 +63,52 @@ struct XPostTests {
         #expect(photo.id.hasPrefix("x:"))
         let request = try #require(await transport.requests.first)
         #expect(request.url == (try url("https://api.fxtwitter.com/status/2110205221557453003")))
+    }
+
+    /// 本文のリンクを、文字と行き先の組で順に返す。
+    private func links(of text: RichText) -> [(String, RichText.LinkDestination)] {
+        text.blocks.flatMap(\.inlines).compactMap { inline in
+            if case .link(let text, let destination, _) = inline { (text, destination) } else { nil }
+        }
+    }
+
+    /// URLは展開した先へのリンクにして短い形を見せ、ハッシュタグはXのページへのリンクにする。
+    /// 位置はUnicodeのスカラー値で数えるため、前にある絵文字（UTF-16で2つ）の分だけずれない。末尾の添付ファイルのt.coは見せない。
+    @Test func linksFacets() async throws {
+        let transport = StubTransport([try .fixture("fxtwitter_facets")])
+        let post = try await XPostClient(transport: transport).post(id: "1899811117221761267")
+
+        #expect(post.text.plainText == "🚀 Status pages now support 11 languages! 🌍\n\nLearn more in our latest announcement 👉 uptimerobot.com/blog/update-st… \n\n#UptimeRobot #StatusPages #uptimemonitoring")
+        let links = links(of: post.text)
+        #expect(links.map(\.0) == ["uptimerobot.com/blog/update-st…", "#UptimeRobot", "#StatusPages", "#uptimemonitoring"])
+        #expect(links.map(\.1) == [
+            .url(try url("https://uptimerobot.com/blog/update-status-pages-now-support-11-languages/")),
+            .url(try url("https://x.com/hashtag/UptimeRobot")),
+            .url(try url("https://x.com/hashtag/StatusPages")),
+            .url(try url("https://x.com/hashtag/uptimemonitoring")),
+        ])
+    }
+
+    /// Xの本文は`<`などを文字参照のまま返し、位置も文字参照のまま数える。切り分けてから文字に戻す。
+    @Test func decodesEntitiesAfterSlicing() async throws {
+        let transport = StubTransport([try .fixture("fxtwitter_escaped")])
+        let post = try await XPostClient(transport: transport).post(id: "1683920951807971329")
+
+        #expect(post.text.plainText.contains("than the Twitter <iframe>\n"))
+        #expect(post.text.plainText.hasSuffix("and more\n\nvercel.com/blog/introduci…"))
+        #expect(links(of: post.text).map(\.1) == [.url(try url("https://vercel.com/blog/introducing-react-tweet"))])
+    }
+
+    /// 長い投稿は、見せる範囲をUTF-16の長さで返すため、全文を見せる。本文にない位置を指す添付ファイルのfacetは使わない。メンションはXのページへのリンクにする。
+    @Test func linksNoteTweet() async throws {
+        let transport = StubTransport([try .fixture("fxtwitter_note_tweet")])
+        let post = try await XPostClient(transport: transport).post(id: "2111375640717033777")
+
+        #expect(post.text.plainText.hasPrefix("🚀 DeepSeek-V4.1-Flash-1017 is here!\n"))
+        #expect(post.text.plainText.hasSuffix("with the new model.\n\n1/4"))
+        let links = links(of: post.text)
+        #expect(links.map(\.0) == ["@DeepSeekHarness"])
+        #expect(links.map(\.1) == [.url(try url("https://x.com/DeepSeekHarness"))])
     }
 
     /// Xの縮小版（`name=small`）は、長い辺を680pxに収める。一覧で元の画像を選べるよう、縮小版の大きさを実際の大きさにする。
@@ -102,7 +148,7 @@ struct XPostTests {
     /// 同じ投稿を並べた行が続けて求めても、読むのは1回。読み終えたら知らせる。失敗した投稿は読み直さない。
     @MainActor @Test func storeFetchesOncePerPost() async throws {
         let counter = FetchCounter()
-        let post = XPost(id: "1", url: try url("https://x.com/a/status/1"), authorName: "A", authorScreenName: "a", text: "本文")
+        let post = XPost(id: "1", url: try url("https://x.com/a/status/1"), authorName: "A", authorScreenName: "a", text: .plain("本文", emojis: []))
         let store = XPostStore { id in
             await counter.increment(id)
             if id == "1" { return post }
@@ -134,7 +180,7 @@ struct XPostTests {
     /// ダミー投稿のために、読みに行かずに読み込み中にしておき、あとから投稿を届けられる。届けたら読み終えたときと同じく知らせる。
     @MainActor @Test func storeDeliversWithoutFetching() async throws {
         let counter = FetchCounter()
-        let post = XPost(id: "1", url: try url("https://x.com/a/status/1"), authorName: "A", authorScreenName: "a", text: "本文")
+        let post = XPost(id: "1", url: try url("https://x.com/a/status/1"), authorName: "A", authorScreenName: "a", text: .plain("本文", emojis: []))
         let store = XPostStore { id in
             await counter.increment(id)
             return post

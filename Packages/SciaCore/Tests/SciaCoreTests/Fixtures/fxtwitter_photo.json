@@ -5,6 +5,34 @@
     "url": "https://x.com/IIDX_OFFICIAL/status/2110205221557453003",
     "id": "2110205221557453003",
     "text": "【WR】\n今週のWEEKLY RANKINGは「⁽⁽ଘ( ˙꒳˙ )ଓ⁾⁾ beyond reason」です。\nランキング集計期間は10/21(水)11:59まで！\n集計期間中は、e-amusement passを使ってプレーすれば楽曲未解禁でも遊べます！\n#IIDX",
+    "raw_text": {
+      "text": "【WR】\n今週のWEEKLY RANKINGは「⁽⁽ଘ( ˙꒳˙ )ଓ⁾⁾ beyond reason」です。\nランキング集計期間は10/21(水)11:59まで！\n集計期間中は、e-amusement passを使ってプレーすれば楽曲未解禁でも遊べます！\n#IIDX https://t.co/7GewhpxYgH",
+      "display_text_range": [
+        0,
+        134
+      ],
+      "facets": [
+        {
+          "type": "hashtag",
+          "indices": [
+            129,
+            134
+          ],
+          "original": "IIDX"
+        },
+        {
+          "type": "media",
+          "indices": [
+            135,
+            158
+          ],
+          "id": "2110204454675038208",
+          "display": "pic.x.com/7GewhpxYgH",
+          "original": "https://t.co/7GewhpxYgH",
+          "replacement": "https://x.com/IIDX_OFFICIAL/status/2110205221557453003/photo/1"
+        }
+      ]
+    },
     "created_at": "Wed Oct 14 03:05:05 +0000 2026",
     "created_timestamp": 1791947105,
     "possibly_sensitive": false,

@@ -5,6 +5,26 @@
     "url": "https://x.com/johnternus/status/2109995948407476369",
     "id": "2109995948407476369",
     "text": "Welcome HomeView",
+    "raw_text": {
+      "text": "Welcome HomeView https://t.co/mXYPyXOZ1U",
+      "display_text_range": [
+        0,
+        17
+      ],
+      "facets": [
+        {
+          "type": "media",
+          "indices": [
+            18,
+            41
+          ],
+          "id": "2109995483389149184",
+          "display": "pic.x.com/mXYPyXOZ1U",
+          "original": "https://t.co/mXYPyXOZ1U",
+          "replacement": "https://x.com/johnternus/status/2109995948407476369/video/1"
+        }
+      ]
+    },
     "created_at": "Tue Oct 13 13:13:30 +0000 2026",
     "created_timestamp": 1791897210,
     "possibly_sensitive": false,

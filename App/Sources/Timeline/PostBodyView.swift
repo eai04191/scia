@@ -135,6 +135,7 @@ final class PostBodyView: UIView {
         }, for: .primaryActionTriggered)
         xPostView.onSelectMedia = { [weak self] index, grid in self?.onSelectXPostMedia?(index, grid) }
         xPostView.onRevealMedia = { [weak self] in self?.onRevealMedia?() }
+        xPostView.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination) }
         xPostView.addAction(UIAction { [weak self] _ in
             guard let self, let url = self.xPostView.content?.post.url else { return }
             self.onOpenLink?(.url(url))

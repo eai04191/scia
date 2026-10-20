@@ -54,7 +54,7 @@ struct LinkLabelTests {
     }
 
     /// MacのDesigned for iPadでは、アクティブでないウィンドウへの最初のクリックを、押された場所のビューが`UIControl`のときだけ通す。
-    /// リンクの上では`UIControl`に当たり、リンクの外ではラベルに当たって後ろのセルへ渡ることを確かめる。
+    /// リンクの上では`UIControl`に当たり、リンクの外ではラベルに当たらず、後ろのビュー（セルや、Xの投稿の囲みのボタン）へ渡ることを確かめる。
     @Test func hitsControlOnlyOverLink() throws {
         let url = try #require(URL(string: "https://example.com/a"))
         let text = RichText(blocks: [.init(inlines: [.text("見て ", []), .link("example.com/a", .url(url), [])])])
@@ -63,7 +63,7 @@ struct LinkLabelTests {
         let onLink = label.hitTest(try center(of: "example.com/a", in: label), with: nil)
         #expect(onLink is UIControl)
         #expect(onLink !== label)
-        #expect(label.hitTest(try center(of: "見て", in: label), with: nil) === label)
+        #expect(label.hitTest(try center(of: "見て", in: label), with: nil) == nil)
     }
 
     /// 文字列や幅が変わったら、前に並べた結果を使わずに並べ直す。

@@ -5,6 +5,26 @@
     "url": "https://x.com/example/status/2111793760032215508",
     "id": "2111793760032215508",
     "text": "test",
+    "raw_text": {
+      "text": "test https://t.co/YJV05O81eW",
+      "display_text_range": [
+        0,
+        4
+      ],
+      "facets": [
+        {
+          "type": "media",
+          "indices": [
+            5,
+            28
+          ],
+          "id": "2111793757284937728",
+          "display": "pic.x.com/YJV05O81eW",
+          "original": "https://t.co/YJV05O81eW",
+          "replacement": "https://x.com/example/status/2111793760032215508/photo/1"
+        }
+      ]
+    },
     "created_at": "Sun Oct 18 12:17:22 +0000 2026",
     "created_timestamp": 1792325842,
     "possibly_sensitive": false,

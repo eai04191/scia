@@ -681,7 +681,7 @@ extension HomeTimelineController {
             authorName: "ダミーのXのアカウント",
             authorScreenName: "dummy",
             authorAvatar: avatar,
-            text: "5秒後に届いたダミーのXの投稿。4枚の画像を添付している。",
+            text: .plain("5秒後に届いたダミーのXの投稿。4枚の画像を添付している。", emojis: []),
             createdAt: .now,
             media: DummyMedia.attachments(idPrefix: "x-\(base.id)")
         )

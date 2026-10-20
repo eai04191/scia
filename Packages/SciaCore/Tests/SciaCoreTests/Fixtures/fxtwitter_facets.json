@@ -1,0 +1,73 @@
+{
+  "code": 200,
+  "message": "OK",
+  "tweet": {
+    "url": "https://x.com/uptimerobot/status/1899811117221761267",
+    "id": "1899811117221761267",
+    "text": "🚀 Status pages now support 11 languages! 🌍\n\nLearn more in our latest announcement 👉 https://uptimerobot.com/blog/update-status-pages-now-support-11-languages/ \n\n#UptimeRobot #StatusPages #uptimemonitoring",
+    "raw_text": {
+      "text": "🚀 Status pages now support 11 languages! 🌍\n\nLearn more in our latest announcement 👉 https://t.co/xAtBSWZIdW \n\n#UptimeRobot #StatusPages #uptimemonitoring https://t.co/gj8o7cUvq6",
+      "display_text_range": [
+        0,
+        153
+      ],
+      "facets": [
+        {
+          "type": "url",
+          "indices": [
+            84,
+            107
+          ],
+          "original": "https://t.co/xAtBSWZIdW",
+          "replacement": "https://uptimerobot.com/blog/update-status-pages-now-support-11-languages/",
+          "display": "uptimerobot.com/blog/update-st…"
+        },
+        {
+          "type": "hashtag",
+          "indices": [
+            110,
+            122
+          ],
+          "original": "UptimeRobot"
+        },
+        {
+          "type": "hashtag",
+          "indices": [
+            123,
+            135
+          ],
+          "original": "StatusPages"
+        },
+        {
+          "type": "hashtag",
+          "indices": [
+            136,
+            153
+          ],
+          "original": "uptimemonitoring"
+        },
+        {
+          "type": "media",
+          "indices": [
+            154,
+            177
+          ],
+          "id": "1899811113853689856",
+          "display": "pic.x.com/gj8o7cUvq6",
+          "original": "https://t.co/gj8o7cUvq6",
+          "replacement": "https://x.com/uptimerobot/status/1899811117221761267/photo/1"
+        }
+      ]
+    },
+    "created_at": "Wed Mar 12 13:14:01 +0000 2025",
+    "created_timestamp": 1741785241,
+    "is_note_tweet": false,
+    "author": {
+      "screen_name": "uptimerobot",
+      "url": "https://x.com/uptimerobot",
+      "id": "103862663",
+      "name": "UptimeRobot",
+      "avatar_url": "https://pbs.twimg.com/profile_images/1404824447052251143/zVZrK9YD_200x200.jpg"
+    }
+  }
+}

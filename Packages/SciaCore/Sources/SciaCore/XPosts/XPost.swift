@@ -10,7 +10,8 @@ public struct XPost: Hashable, Sendable {
     public let authorName: String
     public let authorScreenName: String
     public let authorAvatar: URL?
-    public let text: String
+    /// 本文。URL、ハッシュタグ、メンションはリンクにしてある。
+    public let text: RichText
     public let createdAt: Date?
     /// 添付ファイル。ビューアで開けるよう、Mastodonの添付ファイルの形にしてある。
     public let media: [MediaAttachment]
@@ -21,7 +22,7 @@ public struct XPost: Hashable, Sendable {
         authorName: String,
         authorScreenName: String,
         authorAvatar: URL? = nil,
-        text: String,
+        text: RichText,
         createdAt: Date? = nil,
         media: [MediaAttachment] = []
     ) {
@@ -76,10 +77,31 @@ struct FxTwitterResponse: Decodable {
     struct Tweet: Decodable {
         let id: String
         let url: URL
-        let text: String
+        let rawText: RawText
         let createdTimestamp: Double?
         let author: Author
         let media: Media?
+    }
+
+    /// Xの本文と、リンクの位置。`text`はXの元の本文で、`&`、`<`、`>`は文字参照のまま入っている。
+    struct RawText: Decodable {
+        let text: String
+        /// Xで本文として見せる範囲。末尾の添付ファイルのt.coのURLを除く。
+        let displayTextRange: [Int]?
+        let facets: [Facet]
+    }
+
+    struct Facet: Decodable {
+        /// `url`、`hashtag`、`mention`、`media`、`symbol`、長い投稿の`bold`など。
+        let type: String
+        /// `text`の中の位置。Unicodeのスカラー値で数える。
+        let indices: [Int]
+        /// URLならt.coのURL、ハッシュタグなら`#`を除いた名前、メンションなら`@`を除いたユーザー名。
+        let original: String?
+        /// URLの、t.coを展開した先。
+        let replacement: String?
+        /// URLの、本文に見せる短い形。
+        let display: String?
     }
 
     struct Author: Decodable {
@@ -111,7 +133,7 @@ extension XPost {
             authorName: tweet.author.name,
             authorScreenName: tweet.author.screenName,
             authorAvatar: tweet.author.avatarUrl,
-            text: tweet.text,
+            text: RichText(xPost: tweet.rawText),
             createdAt: tweet.createdTimestamp.map { Date(timeIntervalSince1970: $0) },
             media: (tweet.media?.all ?? []).enumerated().compactMap { index, item in
                 MediaAttachment(item, postID: tweet.id, index: index)

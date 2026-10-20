@@ -1,0 +1,66 @@
+{
+  "code": 200,
+  "message": "OK",
+  "tweet": {
+    "url": "https://x.com/deepseek_ai/status/2111375640717033777",
+    "id": "2111375640717033777",
+    "text": "🚀 DeepSeek-V4.1-Flash-1017 is here!\n\nStronger benchmark performance, faster task completion, and shorter outputs than the previous version—a Pareto improvement in performance and cost. Now live on our website, app, and API.\n\n🛠️ Optimized for @DeepSeekHarness, Tencent CodeBuddy, WorkBuddy, and more. Upgrade to DeepSeek Harness v0.2.1-rc.1 or later for the best experience with the new model.\n\n1/4",
+    "raw_text": {
+      "text": "🚀 DeepSeek-V4.1-Flash-1017 is here!\n\nStronger benchmark performance, faster task completion, and shorter outputs than the previous version—a Pareto improvement in performance and cost. Now live on our website, app, and API.\n\n🛠️ Optimized for @DeepSeekHarness, Tencent CodeBuddy, WorkBuddy, and more. Upgrade to DeepSeek Harness v0.2.1-rc.1 or later for the best experience with the new model.\n\n1/4",
+      "display_text_range": [
+        0,
+        399
+      ],
+      "facets": [
+        {
+          "type": "bold",
+          "indices": [
+            0,
+            36
+          ]
+        },
+        {
+          "type": "mention",
+          "indices": [
+            242,
+            258
+          ],
+          "original": "DeepSeekHarness",
+          "id": "2067518374469640193"
+        },
+        {
+          "type": "media",
+          "indices": [
+            279,
+            302
+          ],
+          "id": "2111374498897571840",
+          "display": "pic.x.com/MiqGbnCiVz",
+          "original": "https://t.co/MiqGbnCiVz",
+          "replacement": "https://x.com/deepseek_ai/status/2111375640717033777/photo/1"
+        },
+        {
+          "type": "media",
+          "indices": [
+            279,
+            302
+          ],
+          "id": "2111374506233413632",
+          "display": "pic.x.com/MiqGbnCiVz",
+          "original": "https://t.co/MiqGbnCiVz",
+          "replacement": "https://x.com/deepseek_ai/status/2111375640717033777/photo/1"
+        }
+      ]
+    },
+    "created_at": "Sat Oct 17 08:35:54 +0000 2026",
+    "created_timestamp": 1792226154,
+    "is_note_tweet": true,
+    "author": {
+      "screen_name": "deepseek_ai",
+      "url": "https://x.com/deepseek_ai",
+      "id": "1714580962569588736",
+      "name": "DeepSeek",
+      "avatar_url": "https://pbs.twimg.com/profile_images/1717417613775757312/Uk1zNOj4_200x200.jpg"
+    }
+  }
+}

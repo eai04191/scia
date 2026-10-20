@@ -122,7 +122,7 @@ struct PostContentBuilder {
             avatar: AvatarView.Content(url: post.authorAvatar, shape: settings.avatarShape, animates: false),
             avatarSize: tuning.value(of: TuningCatalog.xPostAvatarSize),
             name: name,
-            text: body.render(.plain(post.text, emojis: [])),
+            text: body.render(post.text),
             media: media,
             padding: tuning.value(of: TuningCatalog.linkCardPadding),
             spacing: tuning.value(of: TuningCatalog.bodyMediaSpacing),
