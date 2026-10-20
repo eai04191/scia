@@ -27,6 +27,7 @@ final class ProfileController {
     static func make(
         account: Account,
         client: MastodonClient,
+        relationshipCache: RelationshipCache,
         settings: AppSettings = AppDependencies.settings,
         onError: @escaping (any Error, String) -> Void,
         onUnauthorized: @escaping () -> Void
@@ -35,6 +36,7 @@ final class ProfileController {
         let controller = ProfileController(
             account: account,
             client: client,
+            relationshipCache: relationshipCache,
             settings: settings,
             viewController: viewController,
             onError: onError,
@@ -47,12 +49,19 @@ final class ProfileController {
     private init(
         account: Account,
         client: MastodonClient,
+        relationshipCache: RelationshipCache,
         settings: AppSettings,
         viewController: TimelineViewController,
         onError: @escaping (any Error, String) -> Void,
         onUnauthorized: @escaping () -> Void
     ) {
-        store = ProfileStore(account: account, myAccountID: client.credential.accountID, postsFilter: settings.profilePostsFilter, api: ProfileStore.API(client: client))
+        store = ProfileStore(
+            account: account,
+            myAccountID: client.credential.accountID,
+            postsFilter: settings.profilePostsFilter,
+            relationshipCache: relationshipCache,
+            api: ProfileStore.API(client: client)
+        )
         header = ProfileHeaderView(emojiImages: viewController.emojiImages, mediaImages: viewController.mediaImages, avatarImages: viewController.avatarImages)
         shownTimeline = store.timeline
         shownTab = store.tab

@@ -543,7 +543,7 @@ final class SessionController {
     // MARK: - プロフィール
 
     private func openProfile(_ account: Account, from source: UIViewController) {
-        let (controller, viewController) = ProfileController.make(account: account, client: client) { [weak self] error, title in
+        let (controller, viewController) = ProfileController.make(account: account, client: client, relationshipCache: profiles.relationships) { [weak self] error, title in
             self?.handle(error, title: title)
         } onUnauthorized: { [weak self] in
             self?.reportUnauthorized()
@@ -1198,6 +1198,8 @@ private final class ProfileRegistry {
     }
 
     private var entries: [Entry] = []
+    /// 開き直したプロフィールで、前に読んだ関係から始めるための置き場。
+    let relationships = RelationshipCache()
 
     func add(_ controller: ProfileController) {
         entries.removeAll { $0.controller == nil }

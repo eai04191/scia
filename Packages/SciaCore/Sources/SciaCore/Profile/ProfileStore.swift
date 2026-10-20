@@ -87,7 +87,10 @@ public final class ProfileStore {
     }
 
     public private(set) var account: Account
-    public private(set) var relationship: Relationship?
+    /// 読み込む前は、前に同じ相手を開いたときに読んだ関係。
+    public private(set) var relationship: Relationship? {
+        didSet { relationshipCache[account.id] = relationship }
+    }
     /// 固定された投稿。「投稿」の一覧の上に置く。フィルターで出さない投稿は除く。
     public var pinned: [Status] {
         let now = Date()
@@ -106,6 +109,9 @@ public final class ProfileStore {
     /// 今の一覧。切り替えるたびに作り直す。
     @ObservationIgnored public private(set) var timeline: TimelineStore
 
+    /// フォローを変えた回数。前に読んだ関係から始めると、関係を読み直している途中でもフォローを送れるため、
+    /// フォローより前に頼んだ読み直しの応答が後から届いたら、古い関係として捨てる。
+    private var followChanges = 0
     /// 削除した投稿のID。削除の前に読み始めた固定された投稿の応答で、戻さないようにする。
     private var deletedIDs: Set<Status.ID> = []
     private let isMyself: Bool
@@ -113,10 +119,21 @@ public final class ProfileStore {
     public let filtering: StatusFiltering
     private let api: API
     private let pageSize: Int
+    @ObservationIgnored private let relationshipCache: RelationshipCache
 
-    public init(account: Account, myAccountID: String?, tab: ProfileTab = .posts, postsFilter: ProfilePostsFilter, pageSize: Int = 40, api: API) {
+    public init(
+        account: Account,
+        myAccountID: String?,
+        tab: ProfileTab = .posts,
+        postsFilter: ProfilePostsFilter,
+        pageSize: Int = 40,
+        relationshipCache: RelationshipCache = RelationshipCache(),
+        api: API
+    ) {
         self.account = account
         isMyself = account.id == myAccountID
+        self.relationshipCache = relationshipCache
+        relationship = isMyself ? nil : relationshipCache[account.id]
         filtering = StatusFiltering(context: .account, myAccountID: myAccountID)
         self.tab = tab
         self.postsFilter = postsFilter
@@ -150,6 +167,7 @@ public final class ProfileStore {
         let id = account.id
         let api = api
         let pageSize = pageSize
+        let followChangesAtRequest = followChanges
         return await withTaskGroup(of: (Part, Result<Loaded, any Error>).self) { group -> ProfileLoadFailures in
             group.addTask { (.account, await Result { .account(try await api.account(id)) }) }
             if !isMyself {
@@ -162,6 +180,7 @@ public final class ProfileStore {
                 switch result {
                 case .success(.account(let account)): self.account = account
                 case .success(.relationship(let relationship)):
+                    guard followChanges == followChangesAtRequest else { continue }
                     self.relationship = relationship
                     relationshipFailed = false
                 case .success(.pinned(let pinned)): loadedPinned = pinned.filter { !deletedIDs.contains($0.id) }
@@ -184,7 +203,10 @@ public final class ProfileStore {
         guard !isMyself, !isReloadingRelationship else { return }
         isReloadingRelationship = true
         defer { isReloadingRelationship = false }
-        relationship = try await api.relationship(account.id)
+        let followChangesAtRequest = followChanges
+        let reloaded = try await api.relationship(account.id)
+        guard followChanges == followChangesAtRequest else { return }
+        relationship = reloaded
         relationshipFailed = false
     }
 
@@ -221,6 +243,7 @@ public final class ProfileStore {
         isChangingFollow = true
         defer { isChangingFollow = false }
         relationship = try await follows ? api.follow(account.id) : api.unfollow(account.id)
+        followChanges += 1
         return true
     }
 

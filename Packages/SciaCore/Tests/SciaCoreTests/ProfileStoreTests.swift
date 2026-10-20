@@ -113,6 +113,103 @@ struct ProfileStoreTests {
         #expect(store.displayedPinned == [pinned])
     }
 
+    /// 同じ相手を開き直したら、読み込む前から前に読んだ関係で始める。読んだら新しい関係で置き換える。
+    @Test func reopenedProfileStartsFromCachedRelationship() async throws {
+        let known = try account()
+        let cache = RelationshipCache()
+        let first = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: makeAPI(
+            account: known,
+            relationship: Relationship(id: "2", following: true, followedBy: true)
+        ))
+        _ = await first.loadProfile()
+
+        let reopened = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: makeAPI(
+            account: known,
+            relationship: Relationship(id: "2")
+        ))
+        #expect(reopened.followState == .following)
+        #expect(reopened.relationship?.followedBy == true)
+
+        _ = await reopened.loadProfile()
+        #expect(reopened.followState == .notFollowing(locked: false))
+        #expect(cache[known.id] == Relationship(id: "2"))
+    }
+
+    /// フォローを変えたら、開き直したときも変えたあとの関係で始める。
+    @Test func followChangeIsCachedForReopening() async throws {
+        let known = try account()
+        let cache = RelationshipCache()
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: makeAPI(account: known))
+        _ = await store.loadProfile()
+
+        try await store.toggleFollow()
+
+        #expect(cache[known.id]?.following == true)
+    }
+
+    /// 応答を、開けるまで止める。
+    private actor Gate {
+        private var continuation: CheckedContinuation<Void, Never>?
+        private(set) var isEntered = false
+
+        func enter() async {
+            isEntered = true
+            await withCheckedContinuation { continuation = $0 }
+        }
+
+        func open() {
+            continuation?.resume()
+            continuation = nil
+        }
+
+        func waitUntilEntered() async {
+            while !isEntered {
+                await Task.yield()
+            }
+        }
+    }
+
+    /// 前に読んだ関係から始めると、読み直しが終わる前にフォローを送れる。フォローより前に頼んだ読み直しの応答が後から届いても、フォローの結果を古い関係で戻さない。
+    @Test func relationshipRequestedBeforeFollowDoesNotOverwriteFollowResult() async throws {
+        let known = try account()
+        let cache = RelationshipCache()
+        cache[known.id] = Relationship(id: "2")
+        let gate = Gate()
+        let api = ProfileStore.API(
+            account: { _ in known },
+            relationship: { id in
+                await gate.enter()
+                return Relationship(id: id)
+            },
+            statuses: { _, _, _ in TimelinePage(statuses: [], isRegenerating: false) },
+            follow: { id in Relationship(id: id, following: true) },
+            unfollow: { id in Relationship(id: id) }
+        )
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: api)
+
+        let load = Task { await store.loadProfile() }
+        await gate.waitUntilEntered()
+        try await store.toggleFollow()
+        await gate.open()
+        _ = await load.value
+
+        #expect(store.followState == .following)
+        #expect(cache[known.id]?.following == true)
+    }
+
+    /// 読み直しに失敗しても、前に読んだ関係があれば、読めなかった表示にせずそのまま出す。
+    @Test func cachedRelationshipStaysWhenReloadFails() async throws {
+        let known = try account()
+        let cache = RelationshipCache()
+        cache[known.id] = Relationship(id: "2", following: true)
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: makeAPI(account: known, failsRelationshipTimes: 1))
+
+        let failures = await store.loadProfile()
+
+        #expect(failures.relationship is Failure)
+        #expect(store.followState == .following)
+    }
+
     /// プロフィールの場所で隠すフィルターに一致した固定された投稿は出さない。編集で一致しなくなれば出す。
     @Test func hidesFilteredPinnedStatus() async throws {
         let known = try account()
