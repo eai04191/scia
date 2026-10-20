@@ -44,6 +44,12 @@ final class ProfileHeaderView: UIView {
     private let followButton = UIButton(configuration: .filled())
     private let relationshipFailureStack = UIStackView()
     private let relationshipRetryButton = UIButton(configuration: .plain())
+    private let relationshipFailureLabel = UILabel()
+    /// フォローのボタンの行の下端をアイコンの下端に揃える。下地のあるボタンは、カプセルの縁が揃って見える。
+    private var followAreaBottom: NSLayoutConstraint?
+    /// 関係を読めなかったときの文字の行の下端（ディセンダーを含む）を、アイコンの下端に揃える。
+    /// 再試行のボタンには下地がなく、枠の下端で揃えると、見えている文字は枠の上下の余白の分だけ上に浮くため。
+    private var relationshipFailureBaseline: NSLayoutConstraint?
     private let nameLabel = UILabel()
     private let acctLabel = UILabel()
     /// ヘッダー画像の右下に重ねる「フォローされています」。関係が届いてから出るため、縦に並ぶ情報の中に置くと、出たときに下が動く。
@@ -101,7 +107,6 @@ final class ProfileHeaderView: UIView {
         followButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         // フォローの関係を読めなかったら、ボタンを黙って消さず、その場所で読めなかったことと再試行を示す。
-        let relationshipFailureLabel = UILabel()
         relationshipFailureLabel.text = "読み込みエラー"
         relationshipFailureLabel.font = .preferredFont(forTextStyle: .footnote)
         relationshipFailureLabel.adjustsFontForContentSizeCategory = true
@@ -112,11 +117,17 @@ final class ProfileHeaderView: UIView {
         relationshipRetryButton.configuration?.image = UIImage(systemName: "arrow.clockwise")
         relationshipRetryButton.configuration?.imagePadding = 4
         relationshipRetryButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .footnote)
+        // 文字の下端をアイコンの下端に揃えるときにディセンダーの深さを使うため、文字の大きさを決めておく。
+        relationshipRetryButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes
+            attributes.font = .preferredFont(forTextStyle: .body)
+            return attributes
+        }
         relationshipRetryButton.accessibilityHint = "フォローの状態を読み込み直します"
         relationshipRetryButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         relationshipRetryButton.addAction(UIAction { [weak self] _ in self?.onRetryRelationship?() }, for: .primaryActionTriggered)
         relationshipFailureStack.axis = .horizontal
-        relationshipFailureStack.alignment = .center
+        relationshipFailureStack.alignment = .lastBaseline
         relationshipFailureStack.spacing = 0
         relationshipFailureStack.addArrangedSubview(relationshipFailureLabel)
         relationshipFailureStack.addArrangedSubview(relationshipRetryButton)
@@ -202,7 +213,8 @@ final class ProfileHeaderView: UIView {
             avatarRingView.widthAnchor.constraint(equalTo: avatarView.widthAnchor, constant: Self.avatarRing * 2),
             avatarRingView.heightAnchor.constraint(equalTo: avatarView.heightAnchor, constant: Self.avatarRing * 2),
 
-            followArea.topAnchor.constraint(equalTo: bannerView.bottomAnchor, constant: 12),
+            // フォローのボタンの下端をアイコンの下端に揃え、どちらからも名前まで同じ間を空ける。
+            // 文字を大きくしてボタンが高くなったときは上に伸び、名前ではなくヘッダー画像にかかる。
             followArea.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
             followArea.leadingAnchor.constraint(greaterThanOrEqualTo: avatarRingView.trailingAnchor, constant: 12),
 
@@ -211,6 +223,9 @@ final class ProfileHeaderView: UIView {
             infoStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
             infoStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
         ])
+        followAreaBottom = followArea.bottomAnchor.constraint(equalTo: avatarView.bottomAnchor)
+        followAreaBottom?.isActive = true
+        relationshipFailureBaseline = relationshipFailureLabel.lastBaselineAnchor.constraint(equalTo: avatarView.bottomAnchor)
     }
 
     @objc private func openAvatar() {
@@ -381,6 +396,13 @@ final class ProfileHeaderView: UIView {
         followButton.accessibilityTraits = isPlaceholder ? [.button, .notEnabled] : .button
 
         relationshipFailureStack.isHidden = content.followState != .loadFailed
+        let alignsFailureText = content.followState == .loadFailed
+        // 先に外してから付け、2つが同時に効いて矛盾しないようにする。
+        for constraint in [followAreaBottom, relationshipFailureBaseline].compactMap({ $0 }) where constraint.isActive {
+            constraint.isActive = false
+        }
+        relationshipFailureBaseline?.constant = -abs(UIFont.preferredFont(forTextStyle: .body, compatibleWith: traitCollection).descender)
+        (alignsFailureText ? relationshipFailureBaseline : followAreaBottom)?.isActive = true
         relationshipRetryButton.configuration?.showsActivityIndicator = content.isReloadingRelationship
         relationshipRetryButton.isEnabled = !content.isReloadingRelationship
     }
