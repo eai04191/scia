@@ -195,7 +195,7 @@ final class ProfileController {
     /// 削除した投稿を、固定された投稿と一覧から除く。
     func removeStatus(_ id: Status.ID) {
         guard store.removeStatus(id) else { return }
-        showEntries()
+        showEntries(animatesRemoval: true)
     }
 
     private func run(_ operation: @escaping @MainActor (ProfileController) async -> Void) {
@@ -234,8 +234,9 @@ final class ProfileController {
     }
 
     /// - Parameter replacing: 一覧を切り替えた。タブを押した場所に残し、その下の中身だけを差し替える。
-    private func showEntries(replacing: Bool = false) {
-        viewController?.setEntries(listReveal == .revealed ? shownEntries() : [], keepsOffset: replacing)
+    /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。
+    private func showEntries(replacing: Bool = false, animatesRemoval: Bool = false) {
+        viewController?.setEntries(listReveal == .revealed ? shownEntries() : [], keepsOffset: replacing, animatesRemoval: animatesRemoval)
     }
 
     private func shownEntries() -> [TimelineEntry] {

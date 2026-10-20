@@ -453,14 +453,18 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// - Parameter keepsOffset: 一覧の中身を取り替える。要素を基準にせず、スクロール位置をそのまま保つ。
     ///   プロフィールのタブの切り替えのように、ヘッダーを押した場所に残し、その下の中身だけを入れ替えたいときに使う。
     ///   新しい一覧が短くていまの位置までスクロールできなければ、末尾までスクロールしたところで止める。
-    func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil, keepsOffset: Bool = false) {
+    /// - Parameter animatesRemoval: 使う人の操作（フォローリクエストの承認、投稿の削除など）で行を消す。
+    ///   操作の結果が分かるよう、消える行を閉じ、下の行を詰める動きで消す。消せないときは、ほかの更新と同じく動かさずに位置を保つ。
+    func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil, keepsOffset: Bool = false, animatesRemoval: Bool = false) {
         guard !isShowingMenu else {
             // 後の呼び出しの並びが新しい。基準は、メニューが閉じたときに最後に指定されたものを使う。
             heldEntries = HeldEntries(
                 entries: newEntries,
                 anchorID: anchorID ?? heldEntries?.anchorID,
                 topID: topID ?? heldEntries?.topID,
-                keepsOffset: keepsOffset || (heldEntries?.keepsOffset ?? false)
+                keepsOffset: keepsOffset || (heldEntries?.keepsOffset ?? false),
+                // 操作によらない変化と混ざったら、どれが操作の結果か分からないため、動かさない。
+                animatesRemoval: heldEntries == nil && animatesRemoval
             )
             return
         }
@@ -476,7 +480,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // 差分はIDで取られるため、同じIDのまま内容が変わった要素は明示的にセルを再構成する。
         let changedIDs = newEntries.filter { entry in previous[entry.id].map { $0 != entry } ?? false }.map(\.id)
         snapshot.reconfigureItems(Array(Set(changedIDs)))
-        if let topID {
+        if animatesRemoval, changedIDs.isEmpty, canAnimateRemoval(leaving: newEntries.map(\.id)) {
+            dataSource.apply(snapshot, animatingDifferences: true)
+            logger.info("setEntries count=\(newEntries.count, privacy: .public) animatesRemoval=true")
+        } else if let topID {
             isRestoringAnchor = true
             dataSource.apply(snapshot, animatingDifferences: false)
             scrollToTop(of: topID)
@@ -517,6 +524,26 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         setNeedsUpdateContentUnavailableConfiguration()
         reportVisibleItems()
         reportApproachingGaps()
+    }
+
+    /// 行を消すだけの更新を、閉じる動きで当てられるか。
+    /// 行を足すときと、表示領域の上端より上の行が消えるときは動かさない。上の行を詰めると、読んでいる行が上へずれるため。
+    /// 残る行の中身が変わるときも、呼び出し側で除く。高さが変わると、読んでいる行がずれうるため。
+    /// 視差効果を減らす設定では、動きで伝えずに消す。
+    private func canAnimateRemoval(leaving newIDs: [ItemID]) -> Bool {
+        guard view.window != nil, !UIAccessibility.isReduceMotionEnabled else { return false }
+        let currentIDs = dataSource.snapshot().itemIdentifiers
+        let remaining = Set(newIDs)
+        let removed = currentIDs.filter { !remaining.contains($0) }
+        guard !removed.isEmpty, remaining.isSubset(of: currentIDs) else { return false }
+        collectionView.layoutIfNeeded()
+        let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
+        return removed.allSatisfy { id in
+            guard let indexPath = dataSource.indexPath(for: id),
+                  let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
+            else { return false }
+            return frame.minY >= visibleTop
+        }
     }
 
     /// 画面に見えている行を、透明からフェードで出す。行を入れた直後に呼ぶ。
@@ -566,6 +593,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let anchorID: ItemID?
         let topID: ItemID?
         let keepsOffset: Bool
+        let animatesRemoval: Bool
     }
 
     /// 長押しのメニューを出した。メニューの元になった行が動かないよう、閉じるまで一覧の並びの更新と描き直しを溜めておく。
@@ -579,7 +607,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         isShowingMenu = false
         if let held = heldEntries {
             heldEntries = nil
-            setEntries(held.entries, keeping: held.anchorID, placingAtTop: held.topID, keepsOffset: held.keepsOffset)
+            setEntries(held.entries, keeping: held.anchorID, placingAtTop: held.topID, keepsOffset: held.keepsOffset, animatesRemoval: held.animatesRemoval)
         }
         let existing = Set(dataSource.snapshot().itemIdentifiers)
         let reconfigureIDs = heldReconfigureIDs.intersection(existing)

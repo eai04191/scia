@@ -463,9 +463,11 @@ final class HomeTimelineController {
     }
 
     /// 削除した投稿と、それをブーストした投稿を除く。ストリーミングの削除の知らせを待たずに消す。
+    /// 消える行は閉じる動きで消す。ストリーミングの削除の知らせがRESTの応答より先に届くと、そちらで動かさずに消え、ここでは何もしない。
+    /// Mastodonは削除の知らせを応答の後に別のジョブで配るので、まれな競合として、削除中の投稿を覚えて知らせを見分ける仕組みは足さない。
     func removeStatus(_ id: Status.ID) {
         guard !isStopped, store.removeStatus(id) else { return }
-        showEntries()
+        showEntries(animatesRemoval: true)
     }
 
     private func insertPending() {
@@ -486,9 +488,10 @@ final class HomeTimelineController {
     }
 
     /// 自動の補完の中でギャップを読めなかったときも、並びと一緒に読めなかった表示にする。
-    private func showEntries() {
+    /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。
+    private func showEntries(animatesRemoval: Bool = false) {
         showGapStates()
-        viewController.setEntries(store.entries)
+        viewController.setEntries(store.entries, animatesRemoval: animatesRemoval)
         updateUnreadCount()
     }
 

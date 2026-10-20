@@ -311,13 +311,13 @@ final class NotificationsController {
     /// 削除した投稿についての通知を除く。
     func removeStatus(_ id: Status.ID) {
         guard !isStopped, store.removeStatus(id) else { return }
-        showEntries()
+        showEntries(animatesRemoval: true)
     }
 
     /// 片づけたフォローリクエストの通知と、同じユーザーからのリクエストの通知を除く。承認か却下が済んだときに呼ぶ。
     func removeFollowRequests(answering request: MastodonNotification) {
         guard !isStopped, store.removeFollowRequests(answering: request) else { return }
-        showEntries()
+        showEntries(animatesRemoval: true)
     }
 
     private func insertPending() {
@@ -409,8 +409,9 @@ final class NotificationsController {
         }
     }
 
-    private func showEntries() {
-        viewController.setEntries(store.entries)
+    /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。
+    private func showEntries(animatesRemoval: Bool = false) {
+        viewController.setEntries(store.entries, animatesRemoval: animatesRemoval)
         updateUnreadCount()
     }
 
