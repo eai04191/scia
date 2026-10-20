@@ -314,6 +314,12 @@ final class NotificationsController {
         showEntries()
     }
 
+    /// 片づけたフォローリクエストの通知と、同じユーザーからのリクエストの通知を除く。承認か却下が済んだときに呼ぶ。
+    func removeFollowRequests(answering request: MastodonNotification) {
+        guard !isStopped, store.removeFollowRequests(answering: request) else { return }
+        showEntries()
+    }
+
     private func insertPending() {
         guard !isStopped else { return }
         #if DEBUG

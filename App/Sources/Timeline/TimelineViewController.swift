@@ -56,6 +56,8 @@ final class TimelineViewController: UIViewController {
     var onVisibleLinkOnlyCardsChange: (([Status]) -> Void)?
     /// 投稿への操作が選ばれたときに呼ぶ。ブーストなら、ブーストした投稿を渡す。
     var onStatusAction: ((StatusAction, Status) -> Void)?
+    /// フォローリクエストの通知のメニューで、承認か却下が選ばれたときに、その通知を渡して呼ぶ。
+    var onFollowRequestDecision: ((FollowRequestDecision, MastodonNotification) -> Void)?
     /// 右上に出す、投稿欄で書き始めるボタンが押されたときに呼ぶ。
     /// アプリ内のSafariのシートの裏に隠れているときや、設定で空の投稿欄を隠しているときに、投稿欄に触れられないため、その入口にする。
     var onFocusInlineCompose: (() -> Void)?

@@ -24,6 +24,9 @@ public final class NotificationStore {
 
     /// 削除した投稿のID。削除の前に読み始めたページや、遅れて届いた通知で、その投稿についての通知を戻さない。
     private var deletedStatusIDs: Set<Status.ID> = []
+    /// 承認か却下で片づけたフォローリクエストの通知のID。サーバーは片づけた通知を消すが、その前に読み始めたページで戻さない。
+    /// 同じ通知がそのページで読めなかったときも、読めなかった行として戻さない。
+    private var resolvedFollowRequestIDs: Set<MastodonNotification.ID> = []
     /// 補完を始めたが、まだ成功していない基準のID。失敗した後に新着が挿入されて最新のIDが進んでも、次の補完はここから読む。
     private var unfilledSinceID: String?
     private var isFilling = false
@@ -66,8 +69,8 @@ public final class NotificationStore {
         defer { isLoading = false }
 
         let page = try await fetch(TimelineQuery(limit: pageSize))
-        notifications = Self.sorted(page.notifications.filter { !isAboutDeletedStatus($0) })
-        unreadable = Self.sorted(page.unreadable, excluding: notifications)
+        notifications = Self.sorted(page.notifications.filter { !isDiscarded($0) })
+        unreadable = Self.sorted(page.unreadable.filter { !resolvedFollowRequestIDs.contains($0.id) }, excluding: notifications)
         reachedEnd = page.isEmpty
         // 読んだ通知が全部フィルターで隠れて行が1つもないと、続きを読むきっかけがないため、並べる通知が出るまで古い方を読む。
         // 続きの読み込みに失敗したら空に戻す。隠した通知だけが残ると空でない扱いになり、読み込み直しが最初の読み込みからやり直さなくなるため。
@@ -164,10 +167,10 @@ public final class NotificationStore {
                 added += merge(fetched)
             } else if let oldestFetched = fetched.ids.min(by: { StatusID.isNewer($1, than: $0) }) {
                 let known = Set(notifications.map(\.id))
-                let kept = fetched.notifications.filter { !isAboutDeletedStatus($0) }
+                let kept = fetched.notifications.filter { !isDiscarded($0) }
                 added += kept.filter { !known.contains($0.id) }
                 notifications = Self.sorted(notifications.filter { StatusID.isNewer($0.id, than: oldestFetched) } + kept)
-                unreadable = Self.sorted(unreadable.filter { StatusID.isNewer($0.id, than: oldestFetched) } + fetched.unreadable, excluding: notifications)
+                unreadable = Self.sorted(unreadable.filter { StatusID.isNewer($0.id, than: oldestFetched) } + fetched.unreadable.filter { !resolvedFollowRequestIDs.contains($0.id) }, excluding: notifications)
                 reachedEnd = false
                 rangeGeneration += 1
             }
@@ -212,7 +215,7 @@ public final class NotificationStore {
     /// 届いた通知を保留に溜める。保留が空のところへ届いたらtrueを返す。挿入の時機をはかり始める合図にする。
     /// フィルターで出さない投稿についての通知は溜めない。挿入しても一覧が変わらないため。
     public func receive(_ notification: MastodonNotification) -> Bool {
-        guard !isAboutDeletedStatus(notification), !isFilteredOut(notification), !notifications.contains(where: { $0.id == notification.id }), !pending.contains(where: { $0.id == notification.id }) else {
+        guard !isDiscarded(notification), !isFilteredOut(notification), !notifications.contains(where: { $0.id == notification.id }), !pending.contains(where: { $0.id == notification.id }) else {
             return false
         }
         pending.append(notification)
@@ -247,8 +250,22 @@ public final class NotificationStore {
     @discardableResult
     public func removeStatus(_ id: Status.ID) -> Bool {
         deletedStatusIDs.insert(id)
-        pending.removeAll(where: isAboutDeletedStatus)
-        let remaining = notifications.filter { !isAboutDeletedStatus($0) }
+        pending.removeAll(where: isDiscarded)
+        let remaining = notifications.filter { !isDiscarded($0) }
+        guard remaining.count != notifications.count else { return false }
+        notifications = remaining
+        return true
+    }
+
+    /// 承認か却下で片づけたフォローリクエストの通知と、同じユーザーからのほかのフォローリクエストの通知を除く。表示に関わる変化があればtrueを返す。
+    /// 片づけた通知は、応答を待つ間に補完で一覧から外れていても、IDを覚えて戻さない。
+    @discardableResult
+    public func removeFollowRequests(answering request: MastodonNotification) -> Bool {
+        let isResolved = { (notification: MastodonNotification) in notification.type == .followRequest && notification.account.id == request.account.id }
+        resolvedFollowRequestIDs.insert(request.id)
+        resolvedFollowRequestIDs.formUnion((notifications + pending).filter(isResolved).map(\.id))
+        pending.removeAll(where: isResolved)
+        let remaining = notifications.filter { !isResolved($0) }
         guard remaining.count != notifications.count else { return false }
         notifications = remaining
         return true
@@ -336,6 +353,11 @@ public final class NotificationStore {
     // MARK: - 並べ替え
 
     /// まだない通知と読めなかった通知を足し、足した通知を新しい順に返す。読めなかった通知と同じIDの通知は、読めなかった行と置き換える。
+    /// 削除した投稿についての通知か、片づけたフォローリクエストの通知。
+    private func isDiscarded(_ notification: MastodonNotification) -> Bool {
+        resolvedFollowRequestIDs.contains(notification.id) || isAboutDeletedStatus(notification)
+    }
+
     private func isAboutDeletedStatus(_ notification: MastodonNotification) -> Bool {
         guard let status = notification.status else { return false }
         return deletedStatusIDs.contains(status.id) || status.reblog.map { deletedStatusIDs.contains($0.id) } ?? false
@@ -344,10 +366,10 @@ public final class NotificationStore {
     /// 足した通知のうち、一覧に並べたものを返す。
     private func merge(_ page: NotificationPage) -> [MastodonNotification] {
         let readIDs = Set(notifications.map(\.id))
-        let added = Self.sorted(page.notifications.filter { !readIDs.contains($0.id) && !isAboutDeletedStatus($0) })
+        let added = Self.sorted(page.notifications.filter { !readIDs.contains($0.id) && !isDiscarded($0) })
         notifications = Self.sorted(notifications + added)
         let known = Set(itemIDs)
-        unreadable = Self.sorted(unreadable + page.unreadable.filter { !known.contains($0.id) }, excluding: notifications)
+        unreadable = Self.sorted(unreadable + page.unreadable.filter { !known.contains($0.id) && !resolvedFollowRequestIDs.contains($0.id) }, excluding: notifications)
         return added.filter { !isFilteredOut($0) }
     }
 

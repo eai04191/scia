@@ -329,6 +329,79 @@ struct NotificationStoreTests {
         #expect(store.notifications.isEmpty)
     }
 
+    /// 承認か却下で片づけたら、そのユーザーからのフォローリクエストの通知だけを除き、同じユーザーのほかの通知は残す。
+    /// 片づける前に読み始めた補完や、遅れて届いた通知でも戻さない。
+    @Test func removesResolvedFollowRequestsFromAccount() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
+        let alice = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
+        let request = MastodonNotification(id: "30", type: .followRequest, createdAt: .now, account: alice)
+        let otherRequest = MastodonNotification(id: "29", type: .followRequest, createdAt: .now, account: try notifications([29])[0].account)
+        let follow = MastodonNotification(id: "28", type: .follow, createdAt: .now, account: alice)
+        let queue = PageQueue([.success([request, otherRequest, follow]), .success([request]), .success([])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        #expect(store.removeFollowRequests(answering: request))
+        #expect(ids(store) == ["29", "28"])
+        #expect(!store.removeFollowRequests(answering: request))
+        #expect(!store.receive(request))
+        _ = try await store.fillFromLatest(maxPages: 1)
+
+        #expect(ids(store) == ["29", "28"])
+    }
+
+    /// 応答を待つ間に補完が古い側を捨てて、片づけた通知が一覧から外れていても、そのあと読んだ古いページで戻さない。
+    @Test func resolvedFollowRequestDoesNotReturnAfterTruncatingFill() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
+        let alice = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
+        let request = MastodonNotification(id: "30", type: .followRequest, createdAt: .now, account: alice)
+        let initial = NotificationPage(notifications: [request] + (try notifications([29, 28])))
+        let latest = NotificationPage(notifications: try notifications([40, 39, 38]))
+        let older = PageGate(NotificationPage(notifications: try notifications([37, 36]) + [request]))
+        let store = NotificationStore(pageSize: Self.pageSize) { query in
+            if query.sinceID != nil { return latest }
+            if query.maxID != nil { return await older.fetch() }
+            return initial
+        }
+        _ = try await store.loadInitial()
+        _ = try await store.fillFromLatest(maxPages: 1)
+        #expect(ids(store) == ["40", "39", "38"])
+        await older.hold()
+        let read = Task { try await store.loadOlder() }
+        await older.waitForRequest()
+
+        store.removeFollowRequests(answering: request)
+        await older.release()
+        _ = try await read.value
+
+        #expect(ids(store) == ["40", "39", "38", "37", "36"])
+    }
+
+    /// 片づけたフォローリクエストの通知が、あとのページで読めなかったときも、読めなかった行として戻さない。
+    @Test func resolvedFollowRequestDoesNotReturnAsUnreadable() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
+        let alice = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
+        let request = MastodonNotification(id: "30", type: .followRequest, createdAt: .now, account: alice)
+        let pages = [
+            NotificationPage(notifications: [request] + (try notifications([29]))),
+            NotificationPage(notifications: [], unreadable: [UnreadableItem(id: "30", url: nil)]),
+            NotificationPage(notifications: []),
+        ]
+        let count = Mutex(0)
+        let store = NotificationStore(pageSize: Self.pageSize) { _ in
+            count.withLock { count in
+                count += 1
+                return pages[count - 1]
+            }
+        }
+        _ = try await store.loadInitial()
+
+        store.removeFollowRequests(answering: request)
+        _ = try await store.fillFromLatest(maxPages: 1)
+
+        #expect(store.entries.map(\.id) == [.notification("29")])
+    }
+
     @Test func countsUnreadNewerThanMarker() async throws {
         let queue = PageQueue([try page([30, 29, 28])])
         let store = makeStore(queue)

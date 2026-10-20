@@ -450,6 +450,7 @@ final class SessionController {
             self?.shareMediaCovers(covers, changed: status, from: viewController)
         }
         viewController.onStatusAction = { [weak self, weak viewController] action, status in self?.perform(action, on: status, from: viewController) }
+        viewController.onFollowRequestDecision = { [weak self] decision, request in self?.answerFollowRequest(decision, to: request) }
         viewController.mediaTransfers = mediaTransfers
         viewController.onOpenProfile = { [weak self, weak viewController] account in
             guard let viewController else { return }
@@ -809,6 +810,39 @@ final class SessionController {
                 logger.error("delete failed: \(SciaLog.describe(error), privacy: .public)")
                 let reason = await failureReason(for: error)
                 operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
+                showFailureNotice(.interactionFailure(title: title) { [weak self] in
+                    self?.presentAlert(title: title, message: reason.text)
+                })
+            }
+        }
+    }
+
+    /// 承認か却下が済んだら、サーバーと同じく、そのユーザーからのリクエストの通知を一覧から除く。
+    /// 404は、承認を待っているリクエストがもうないこと（相手が取り消した、ほかの端末で片づけたなど）なので、済んだときと同じく除く。
+    /// 失敗は押し直せば済むので、お気に入りの失敗と同じく、チップの列に出す。
+    private func answerFollowRequest(_ decision: FollowRequestDecision, to request: MastodonNotification) {
+        let account = request.account
+        let client = client
+        Task { [weak self] in
+            do {
+                switch decision {
+                case .authorize: _ = try await client.authorizeFollowRequest(from: account.id)
+                case .reject: _ = try await client.rejectFollowRequest(from: account.id)
+                }
+                self?.notifications.removeFollowRequests(answering: request)
+            } catch let error as MastodonAPIError where error.statusCode == 404 {
+                guard let self else { return }
+                logger.info("follow request \(String(describing: decision), privacy: .public) not found")
+                notifications.removeFollowRequests(answering: request)
+            } catch {
+                guard let self else { return }
+                let title = switch decision {
+                case .authorize: "フォローリクエストを承認できませんでした"
+                case .reject: "フォローリクエストを却下できませんでした"
+                }
+                logger.error("follow request \(String(describing: decision), privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
+                let reason = await failureReason(for: error)
+                operationStatus.recordFailure(title: title, reason: reason)
                 showFailureNotice(.interactionFailure(title: title) { [weak self] in
                     self?.presentAlert(title: title, message: reason.text)
                 })

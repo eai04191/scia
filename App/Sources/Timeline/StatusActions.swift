@@ -11,6 +11,12 @@ enum StatusAction {
     case delete
 }
 
+/// フォローリクエストへの返事。
+enum FollowRequestDecision {
+    case authorize
+    case reject
+}
+
 extension TimelineViewController {
     /// 要素が指す投稿。通知なら対象の投稿。ギャップやフォローの通知などではnil。
     func status(for id: ItemID) -> Status? {
@@ -26,16 +32,31 @@ extension TimelineViewController {
     }
 
     /// 長押しのメニュー。並びは設定の投稿のメニューに従い、関係するユーザーはユーザーのメニューのサブメニューにする。決まりはdocs/menus.mdにある。
+    /// フォローリクエストの通知では、設定の並びの前に、承認と却下を設定によらず置く。
     /// 出す項目がなければnil。
     /// - Parameter id: メニューを出した要素。共有のシートを、その行から出す。
     func contextMenu(for entry: TimelineEntry, id: ItemID) -> UIMenu? {
         let status = Self.status(of: entry)
         let notifyingAccount: Account? = if case .notification(let notification) = entry { notification.account } else { nil }
         var shownUserIDs: Set<String> = []
-        let children = settings.statusMenuLayout.groups.menuElements { item in
+        var children = settings.statusMenuLayout.groups.menuElements { item in
             elements(for: item, status: status, notifyingAccount: notifyingAccount, id: id, shownUserIDs: &shownUserIDs)
         }
+        if case .notification(let notification) = entry, notification.type == .followRequest {
+            children.insert(followRequestMenu(for: notification), at: 0)
+        }
         return children.isEmpty ? nil : UIMenu(children: children)
+    }
+
+    private func followRequestMenu(for request: MastodonNotification) -> UIMenu {
+        UIMenu(options: .displayInline, children: [
+            UIAction(title: "承認", image: UIImage(systemName: "checkmark")) { [weak self] _ in
+                self?.onFollowRequestDecision?(.authorize, request)
+            },
+            UIAction(title: "却下", image: UIImage(systemName: "xmark"), attributes: .destructive) { [weak self] _ in
+                self?.onFollowRequestDecision?(.reject, request)
+            },
+        ])
     }
 
     /// 同じユーザーが2つの項目に当たるときは、先に出る項目で1度だけ出す。

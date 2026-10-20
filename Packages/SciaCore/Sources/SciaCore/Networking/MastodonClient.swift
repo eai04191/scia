@@ -439,6 +439,20 @@ public struct MastodonClient: Sendable {
         try await post(Relationship.self, path: "api/v1/accounts/\(id)/unfollow", form: []).0
     }
 
+    /// 自分へのフォローリクエストを承認する。サーバーはリクエストの通知を消し、代わりにフォローの通知を作る。
+    /// 承認を待っているリクエストがなければ404を返す。
+    /// https://docs.joinmastodon.org/methods/follow_requests/#accept
+    public func authorizeFollowRequest(from accountID: String) async throws -> Relationship {
+        try await post(Relationship.self, path: "api/v1/follow_requests/\(accountID)/authorize", form: []).0
+    }
+
+    /// 自分へのフォローリクエストを却下する。サーバーはリクエストの通知を消す。
+    /// 承認を待っているリクエストがなければ404を返す。
+    /// https://docs.joinmastodon.org/methods/follow_requests/#reject
+    public func rejectFollowRequest(from accountID: String) async throws -> Relationship {
+        try await post(Relationship.self, path: "api/v1/follow_requests/\(accountID)/reject", form: []).0
+    }
+
     /// - Parameter feature: なくても使える機能のAPIなら、その機能。使えないと分かったら、セッションの間は送らない。
     /// - Parameter retries: 一時的な失敗で送り直すか。
     private func get<T: Decodable>(_ type: T.Type, path: String, query: [URLQueryItem], feature: OptionalFeature? = nil, retries: Bool = true) async throws -> (T, HTTPURLResponse) {

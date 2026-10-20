@@ -389,6 +389,19 @@ struct MastodonClientTests {
         #expect(requests.map { $0.url?.path() } == ["/api/v1/accounts/2/follow", "/api/v1/accounts/2/unfollow"])
     }
 
+    @Test func authorizeAndRejectFollowRequestPostToFollowRequests() async throws {
+        let relationship = #"{"id":"2","following":false,"followed_by":true,"requested":false,"blocking":false,"blocked_by":false,"muting":false}"#
+        let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
+        let client = try makeClient(transport)
+
+        #expect(try await client.authorizeFollowRequest(from: "2").followedBy)
+        _ = try await client.rejectFollowRequest(from: "3")
+
+        let requests = await transport.requests
+        #expect(requests.map(\.httpMethod) == ["POST", "POST"])
+        #expect(requests.map { $0.url?.path() } == ["/api/v1/follow_requests/2/authorize", "/api/v1/follow_requests/3/reject"])
+    }
+
     @Test func resolveAccountSearchesRemoteAccounts() async throws {
         let account = try String(contentsOf: #require(Bundle.module.url(forResource: "account", withExtension: "json", subdirectory: "Fixtures")), encoding: .utf8)
         let transport = StubTransport([.json(#"{"accounts":["# + account + #"],"statuses":[],"hashtags":[]}"#, statusCode: 200)])
