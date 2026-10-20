@@ -112,6 +112,7 @@ struct AppSettingsTests {
         #expect(settings.avatarShape == .roundedSquare)
         #expect(settings.linkCardThumbnailSide == .left)
         #expect(settings.glyphLanguage == .automatic)
+        #expect(settings.emojiStyle == .system)
         // 一覧でたくさん動くと読みにくいため、既定では止める。
         #expect(!settings.animatesAvatars)
     }
@@ -124,6 +125,7 @@ struct AppSettingsTests {
         settings.avatarShape = .circle
         settings.linkCardThumbnailSide = .right
         settings.glyphLanguage = .traditionalChinese
+        settings.emojiStyle = .twemoji
         settings.animatesAvatars = true
 
         let restored = AppSettings(defaults: defaults)
@@ -132,6 +134,7 @@ struct AppSettingsTests {
         #expect(restored.avatarShape == .circle)
         #expect(restored.linkCardThumbnailSide == .right)
         #expect(restored.glyphLanguage == .traditionalChinese)
+        #expect(restored.emojiStyle == .twemoji)
         #expect(restored.animatesAvatars)
     }
 

@@ -12,6 +12,8 @@ struct RichTextRenderer {
     let emojiImages: EmojiImageStore
     /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
     let language: String
+    /// Unicodeの絵文字を描く絵。描く場所ごとに渡さず、設定から読む。
+    var emojiStyle: EmojiStyle = AppDependencies.settings.emojiStyle
 
     /// 引用とリストの1段あたりの字下げ。
     private let indentPerLevel: CGFloat = 16
@@ -32,6 +34,7 @@ struct RichTextRenderer {
             result.addAttribute(.paragraphStyle, value: paragraphStyle(for: block), range: NSRange(location: start, length: result.length - start))
         }
         result.separateFallbackSymbols(in: NSRange(location: 0, length: result.length))
+        EmojiFont.restoreTextPresentation(in: result)
         return result
     }
 
@@ -68,6 +71,7 @@ struct RichTextRenderer {
             result.addAttribute(.paragraphStyle, value: paragraphStyle(for: block), range: NSRange(location: start, length: result.length - start))
         }
         result.separateFallbackSymbols(in: NSRange(location: 0, length: result.length))
+        EmojiFont.restoreTextPresentation(in: result)
         return result
     }
 
@@ -194,6 +198,10 @@ struct RichTextRenderer {
     }
 
     private func font(for style: RichText.Style, block: RichText.Block) -> UIFont {
+        EmojiFont.font(textFont(for: style, block: block), style: emojiStyle)
+    }
+
+    private func textFont(for style: RichText.Style, block: RichText.Block) -> UIFont {
         if block.isCode || style.contains(.code) {
             let weight: UIFont.Weight = style.contains(.bold) ? .bold : .regular
             return UIFontMetrics.default.scaledFont(for: .monospacedSystemFont(ofSize: font.pointSize, weight: weight))

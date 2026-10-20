@@ -47,6 +47,7 @@ struct SettingsView: View {
                             animatesAvatars: settings.animatesAvatars,
                             linkCardThumbnailSide: settings.linkCardThumbnailSide,
                             glyphLanguage: settings.glyphLanguage,
+                            emojiStyle: settings.emojiStyle,
                             builder: PostContentBuilder(
                                 tuning: AppDependencies.tuning,
                                 settings: settings,
@@ -94,10 +95,14 @@ struct SettingsView: View {
                         Text("繁体字中国語").tag(GlyphLanguage.traditionalChinese)
                         Text("韓国語").tag(GlyphLanguage.korean)
                     }
+                    Picker("絵文字", selection: $settings.emojiStyle) {
+                        Text("Apple").tag(EmojiStyle.system)
+                        Text("Twemoji").tag(EmojiStyle.twemoji)
+                    }
                 } header: {
                     Text("投稿の表示")
                 } footer: {
-                    Text("相対時刻では、1週間より前の投稿は日付で表示します。\n漢字の字形は、言語の付いていない投稿や名前で使います。投稿に日本語・中国語・韓国語の言語が付いていれば、その言語の字形で表示します。「自動」では、iPhoneの言語の一覧で最初の日本語・中国語・韓国語に従い、どれもなければ日本語にします。")
+                    Text("相対時刻では、1週間より前の投稿は日付で表示します。\n漢字の字形は、言語の付いていない投稿や名前で使います。投稿に日本語・中国語・韓国語の言語が付いていれば、その言語の字形で表示します。「自動」では、iPhoneの言語の一覧で最初の日本語・中国語・韓国語に従い、どれもなければ日本語にします。\n絵文字は、カスタム絵文字ではない絵文字の絵です。Twemojiは、Webで見るMastodonと同じ絵です。Twemojiの絵は、Twitter, Inc.とその貢献者がCC-BY 4.0で公開しています。")
                 }
                 Section {
                     if let previewAccount {
@@ -110,6 +115,7 @@ struct SettingsView: View {
                             animatesAvatars: settings.animatesAvatars,
                             linkCardThumbnailSide: settings.linkCardThumbnailSide,
                             glyphLanguage: settings.glyphLanguage,
+                            emojiStyle: settings.emojiStyle,
                             showsReactions: true,
                             drawsReactionGlowInHDR: settings.drawsReactionGlowInHDR,
                             builder: PostContentBuilder(

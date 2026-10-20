@@ -37,6 +37,11 @@ public final class AppSettings {
         didSet { defaults.set(glyphLanguage.rawValue, forKey: Keys.glyphLanguage) }
     }
 
+    /// 本文や名前のUnicodeの絵文字を描く絵。
+    public var emojiStyle: EmojiStyle {
+        didSet { defaults.set(emojiStyle.rawValue, forKey: Keys.emojiStyle) }
+    }
+
     public var avatarShape: AvatarShape {
         didSet { defaults.set(avatarShape.rawValue, forKey: Keys.avatarShape) }
     }
@@ -138,6 +143,7 @@ public final class AppSettings {
         static let statusNameStyle = "settings.statusNameStyle"
         static let statusTimeStyle = "settings.statusTimeStyle"
         static let glyphLanguage = "settings.glyphLanguage"
+        static let emojiStyle = "settings.emojiStyle"
         static let avatarShape = "settings.avatarShape"
         static let animatesAvatars = "settings.animatesAvatars"
         static let linkCardThumbnailSide = "settings.linkCardThumbnailSide"
@@ -167,6 +173,7 @@ public final class AppSettings {
         statusNameStyle = defaults.string(forKey: Keys.statusNameStyle).flatMap(StatusNameStyle.init(rawValue:)) ?? .nameAndAcct
         statusTimeStyle = defaults.string(forKey: Keys.statusTimeStyle).flatMap(StatusTimeStyle.init(rawValue:)) ?? .relative
         glyphLanguage = defaults.string(forKey: Keys.glyphLanguage).flatMap(GlyphLanguage.init(rawValue:)) ?? .automatic
+        emojiStyle = defaults.string(forKey: Keys.emojiStyle).flatMap(EmojiStyle.init(rawValue:)) ?? .system
         avatarShape = defaults.string(forKey: Keys.avatarShape).flatMap(AvatarShape.init(rawValue:)) ?? .roundedSquare
         animatesAvatars = defaults.object(forKey: Keys.animatesAvatars) as? Bool ?? false
         linkCardThumbnailSide = defaults.string(forKey: Keys.linkCardThumbnailSide).flatMap(LinkCardThumbnailSide.init(rawValue:)) ?? .left

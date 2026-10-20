@@ -364,6 +364,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = settings.animatesAvatars
             _ = settings.linkCardThumbnailSide
             _ = settings.glyphLanguage
+            _ = settings.emojiStyle
             _ = settings.drawsReactionGlowInHDR
         } onChange: { [weak self] in
             Task { @MainActor in

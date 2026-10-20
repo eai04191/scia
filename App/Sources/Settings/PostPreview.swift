@@ -14,6 +14,7 @@ struct PostPreview: UIViewRepresentable {
     let animatesAvatars: Bool
     let linkCardThumbnailSide: LinkCardThumbnailSide
     let glyphLanguage: GlyphLanguage
+    let emojiStyle: EmojiStyle
     /// お気に入りとブーストをした投稿の見本にする。下の端の光を見せるため。
     var showsReactions = false
     var drawsReactionGlowInHDR = true
@@ -36,7 +37,7 @@ struct PostPreview: UIViewRepresentable {
             id: "preview",
             createdAt: createdAt,
             account: account,
-            content: #"<p>設定を変えると、タイムラインの投稿がこのように表示されます。<a href="https://joinmastodon.org/">joinmastodon.org</a></p>"#,
+            content: #"<p>設定を変えると、タイムラインの投稿がこのように表示されます🎉 <a href="https://joinmastodon.org/">joinmastodon.org</a></p>"#,
             spoilerText: "",
             url: nil,
             card: previewCard
