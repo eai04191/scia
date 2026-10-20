@@ -166,6 +166,7 @@ extension TimelineViewController {
     }
 
     /// ユーザーのメニューを`@acct`のサブメニューにする。中身が1つで「その他」が空なら、サブメニューにせず直接並べる。
+    /// 見出しはユーザー名だけにし、ほかのサーバーのユーザーならサーバー名をサブタイトルに出す。
     private func userElement(for user: MenuUser, id: ItemID) -> UIMenuElement? {
         let groups = settings.userMenuLayout.groups
         if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first, only.count == 1 {
@@ -173,7 +174,13 @@ extension TimelineViewController {
         }
         let children = groups.menuElements { item in userAction(item, for: user, id: id, inSubmenu: true).map { [$0] } ?? [] }
         guard !children.isEmpty else { return nil }
-        return UIMenu(title: "@\(user.acct)", image: UIImage(systemName: "person.crop.circle"), children: children)
+        let parts = user.acct.split(separator: "@", maxSplits: 1)
+        return UIMenu(
+            title: "@\(parts.first ?? Substring(user.acct))",
+            subtitle: parts.count == 2 ? String(parts[1]) : nil,
+            image: UIImage(systemName: "person.crop.circle"),
+            children: children
+        )
     }
 
     private func userAction(_ item: UserMenuItem, for user: MenuUser, id: ItemID, inSubmenu: Bool) -> UIAction? {

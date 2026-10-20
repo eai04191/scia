@@ -27,7 +27,7 @@ struct StatusMenuTests {
         return Account(id: id, username: acct, acct: acct, displayName: acct, avatar: avatar)
     }
 
-    /// まとまりごとの項目の名前。サブメニューは`名前[中身]`で表す。
+    /// まとまりごとの項目の名前。サブメニューは`名前[中身]`、サブタイトルのあるサブメニューは`名前(サブタイトル)[中身]`で表す。
     private func outline(_ menu: UIMenu?) -> [[String]] {
         (menu?.children ?? []).map { element in
             guard let group = element as? UIMenu, group.options.contains(.displayInline) else { return [describe(element)] }
@@ -38,7 +38,8 @@ struct StatusMenuTests {
     private func describe(_ element: UIMenuElement) -> String {
         guard let menu = element as? UIMenu else { return element.title }
         let children = menu.children.flatMap { child in (child as? UIMenu)?.options.contains(.displayInline) == true ? (child as? UIMenu)?.children ?? [] : [child] }
-        return "\(menu.title)[\(children.map(describe).joined(separator: ","))]"
+        let subtitle = menu.subtitle.map { "(\($0))" } ?? ""
+        return "\(menu.title)\(subtitle)[\(children.map(describe).joined(separator: ","))]"
     }
 
     /// 投稿への操作。ユーザーの`@acct`のサブメニューの中は含めない。
@@ -79,7 +80,7 @@ struct StatusMenuTests {
         let links = actions(menu).filter { ["リンクをコピー", "共有", "ブラウザで開く"].contains($0.title) }
         #expect(links.count == 3)
         #expect(links.allSatisfy { !$0.attributes.contains(.disabled) })
-        #expect(outline(menu).last == ["@bob@remote.example[プロフィール,リンクをコピー,共有]", "@alice[プロフィール,リンクをコピー,共有]"])
+        #expect(outline(menu).last == ["@bob(remote.example)[プロフィール,リンクをコピー,共有]", "@alice[プロフィール,リンクをコピー,共有]"])
     }
 
     /// urlはAPIでnullを取りうる。ないときは押せないまま並べ、uriで代わりにしない。
@@ -177,6 +178,6 @@ struct StatusMenuTests {
             element == .item(.mentionedUsers, isVisible: false) ? .item(.mentionedUsers, isVisible: true) : element
         })
 
-        #expect(try outline(menu(for: .status(post), settings: settings)).last == ["@alice[プロフィール,リンクをコピー,共有]", "@carol[プロフィール,リンクをコピー,共有]", "@dave@remote.example[プロフィール,リンクをコピー,共有]"])
+        #expect(try outline(menu(for: .status(post), settings: settings)).last == ["@alice[プロフィール,リンクをコピー,共有]", "@carol[プロフィール,リンクをコピー,共有]", "@dave(remote.example)[プロフィール,リンクをコピー,共有]"])
     }
 }
