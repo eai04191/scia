@@ -49,8 +49,9 @@ final class ProfileHeaderView: UIView {
     private let relationshipFailureLabel = UILabel()
     /// フォローのボタンの行の下端をアイコンの下端に揃える。下地のあるボタンは、カプセルの縁が揃って見える。
     private var followAreaBottom: NSLayoutConstraint?
-    /// 関係を読めなかったときの文字の行の下端（ディセンダーを含む）を、アイコンの下端に揃える。
+    /// 関係を読めなかったときの文字のベースラインを、アイコンの下端に揃える。
     /// 再試行のボタンには下地がなく、枠の下端で揃えると、見えている文字は枠の上下の余白の分だけ上に浮くため。
+    /// 文言はどちらも日本語で、字はベースラインより下へはみ出さないので、ベースラインが見えている字の下端になる。
     private var relationshipFailureBaseline: NSLayoutConstraint?
     private let nameLabel = UILabel()
     private let acctLabel = UILabel()
@@ -119,12 +120,6 @@ final class ProfileHeaderView: UIView {
         relationshipRetryButton.configuration?.image = UIImage(systemName: "arrow.clockwise")
         relationshipRetryButton.configuration?.imagePadding = 4
         relationshipRetryButton.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .footnote)
-        // 文字の下端をアイコンの下端に揃えるときにディセンダーの深さを使うため、文字の大きさを決めておく。
-        relationshipRetryButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
-            var attributes = attributes
-            attributes.font = .preferredFont(forTextStyle: .body)
-            return attributes
-        }
         relationshipRetryButton.accessibilityHint = "フォローの状態を読み込み直します"
         relationshipRetryButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         relationshipRetryButton.addAction(UIAction { [weak self] _ in self?.onRetryRelationship?() }, for: .primaryActionTriggered)
@@ -417,7 +412,6 @@ final class ProfileHeaderView: UIView {
         for constraint in [followAreaBottom, relationshipFailureBaseline].compactMap({ $0 }) where constraint.isActive {
             constraint.isActive = false
         }
-        relationshipFailureBaseline?.constant = -abs(UIFont.preferredFont(forTextStyle: .body, compatibleWith: traitCollection).descender)
         (alignsFailureText ? relationshipFailureBaseline : followAreaBottom)?.isActive = true
         relationshipRetryButton.configuration?.showsActivityIndicator = content.isReloadingRelationship
         relationshipRetryButton.isEnabled = !content.isReloadingRelationship
