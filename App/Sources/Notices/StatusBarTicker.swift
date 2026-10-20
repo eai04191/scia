@@ -20,6 +20,9 @@ final class StatusBarTicker {
     var rootController: () -> UIViewController? = { nil }
     /// ステータスバーを隠している間、アプリの画面の安全領域の上端に足している高さ。
     private var keptSafeAreaTop: CGFloat = 0
+    /// 出している間、ステータスバーを隠すか。Macでは、ステータスバーは描かれず、ナビゲーションバーの上に帯が空いているだけなので隠さない。
+    /// 隠すと、安全領域がすぐ縮むのに、補う足し分はアニメーションで遅れて効くため、出すたびに画面が約20pt上へ跳ねてから戻る。
+    private let hidesSystemStatusBar = !ProcessInfo.processInfo.isiOSAppOnMac
     private let tuning: TuningStore
     private var queue: StatusBarTickerQueue<StatusBarTickerItem>
     private var window: TickerWindow?
@@ -63,7 +66,7 @@ final class StatusBarTicker {
 
     /// 今の画面の切り欠きの形。ステータスバーのない向きではnil。
     private func currentCutout() -> StatusBarCutout? {
-        // iPadとMacでは、帯をステータスバーの高さで測るが、出している間は自分でステータスバーを隠していて高さが0になるため、出し始めに測った形を使う。
+        // iPadとMacでは、帯をステータスバーの高さで測るが、iPadでは出している間は自分でステータスバーを隠していて高さが0になるため、出し始めに測った形を使う。
         // 出している間にiPadのウィンドウを縮めても、待っている通知を流し終えるまでは同じ形で出す。次に出し始めるときに測り直す。
         if shownAt != nil, let window, window.traitCollection.userInterfaceIdiom != .phone {
             return window.ticker.cutout
@@ -95,6 +98,8 @@ final class StatusBarTicker {
         window.ticker.animationDuration = tuning.value(of: TuningCatalog.statusBarTickerAnimationDuration)
         if !wasShowing {
             window.isHidden = false
+        }
+        if !wasShowing, hidesSystemStatusBar {
             keepSafeArea(whileHiding: true, window: window)
             window.host.hidesStatusBar = true
             UIView.animate(withDuration: window.ticker.animationDuration * 0.5) {
@@ -142,15 +147,19 @@ final class StatusBarTicker {
             return
         }
         shownAt = nil
-        keepSafeArea(whileHiding: false, window: window)
-        window.host.hidesStatusBar = false
+        if hidesSystemStatusBar {
+            keepSafeArea(whileHiding: false, window: window)
+            window.host.hidesStatusBar = false
+        }
         window.ticker.hide(animated: true) { [weak self, weak window] in
             // 消している間に次の通知が来て出し直していたら、ウィンドウは隠さない。
             guard let self, let window, self.shownAt == nil else { return }
             window.isHidden = true
         }
-        UIView.animate(withDuration: window.ticker.animationDuration) {
-            window.host.setNeedsStatusBarAppearanceUpdate()
+        if hidesSystemStatusBar {
+            UIView.animate(withDuration: window.ticker.animationDuration) {
+                window.host.setNeedsStatusBarAppearanceUpdate()
+            }
         }
     }
 
