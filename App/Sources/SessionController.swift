@@ -132,8 +132,8 @@ final class SessionController {
             }
         }
 
-        let homeNavigation = UINavigationController(rootViewController: home.viewController)
-        let notificationsNavigation = UINavigationController(rootViewController: notifications.viewController)
+        let homeNavigation = ContentNavigationController(rootViewController: home.viewController)
+        let notificationsNavigation = ContentNavigationController(rootViewController: notifications.viewController)
         let notificationsTab = UITab(title: "通知", image: UIImage(systemName: "bell"), identifier: "notifications") { _ in notificationsNavigation }
         notifications.onUnreadCountChange = { count, isLowerBound in
             notificationsTab.badgeValue = count == 0 ? nil : isLowerBound ? "\(count)+" : "\(count)"

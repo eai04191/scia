@@ -12,6 +12,8 @@ final class ProfileController {
     private(set) weak var viewController: TimelineViewController?
     private let store: ProfileStore
     private let header: ProfileHeaderView
+    /// ヘッダー画像をバーの下に見せていて、タイトルとスクロールの上端の効果を消している。まだ決めていなければnil。
+    private var showsBannerUnderBars: Bool?
     private let settings: AppSettings
     /// フォローの失敗をどう知らせるか。ログインし直しが要るなどの判断はセッションに任せる。
     private let onError: (any Error, String) -> Void
@@ -86,7 +88,6 @@ final class ProfileController {
         viewController.filterWarnings = FilterWarnings(filtering: store.filtering)
         viewController.headerView = header
         viewController.myAccountID = client.credential.accountID
-        viewController.navigationItem.title = "@\(account.acct)"
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder() }
         viewController.onRetry = { [weak self] in self?.retry() }
         header.onToggleFollow = { [weak self] source in self?.confirmToggleFollow(from: source) }
@@ -99,12 +100,51 @@ final class ProfileController {
         }
         header.onOpenImage = { [weak self] image in self?.openImage(image) }
         header.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination) }
+        viewController.onScroll = { [weak self] scrollView in self?.updateBars(scrollView) }
+        header.onChangeBannerLayout = { [weak self] in self?.viewController?.headerDidChangeSize() }
+        header.onChangeExtendsUnderBars = { [weak self] in
+            guard let scrollView = self?.viewController?.collectionView else { return }
+            self?.updateBars(scrollView)
+        }
         observeHeaderContent()
+        // ヘッダー画像をバーの下に見せる間はタイトルを出さない。最初に出してから消すと、開いた直後にちらつくため、最初から決める。
+        viewController.navigationItem.title = header.extendsUnderBars ? nil : "@\(account.acct)"
         // 名前や自己紹介の絵文字が届いたら、ヘッダーを描き直す。投稿の絵文字は一覧が描き直す。
         viewController.emojiImages.addListener(owner: self) { [weak self] urls in
             guard let self, !Set(self.store.account.emojis.map(\.staticUrl)).isDisjoint(with: urls) else { return }
             self.updateHeader()
         }
+    }
+
+    /// ヘッダー画像の上を画面の上端まで伸ばす。画像がバーの下に見えている間は、タイトルとスクロールの上端の効果を消して画像を見せ、
+    /// ステータスバーの文字を、その下に見えている画像の明るさに合わせて白か黒にする。画像がバーの下に隠れたら戻す。
+    private func updateBars(_ scrollView: UIScrollView) {
+        guard header.isDescendant(of: scrollView) else { return }
+        let statusBarHeight = scrollView.window?.safeAreaInsets.top ?? 0
+        header.barHeights = ProfileHeaderView.BarHeights(
+            statusBar: statusBarHeight,
+            navigationBar: max(scrollView.adjustedContentInset.top - statusBarHeight, 0)
+        )
+        let headerTop = header.convert(CGPoint.zero, to: scrollView).y
+        let visibleTop = scrollView.contentOffset.y + scrollView.adjustedContentInset.top
+        let pulled = max(-visibleTop, 0)
+        header.pulledDistance = pulled
+        let extensionHeight = max(headerTop - scrollView.contentOffset.y - pulled, 0)
+        if header.topExtension != extensionHeight {
+            header.topExtension = extensionHeight
+        }
+        let shows = header.extendsUnderBars && visibleTop < headerTop + header.bannerBottom
+        let statusBar = scrollView.window?.windowScene?.statusBarManager?.statusBarFrame ?? .zero
+        viewController?.statusBarStyle = switch shows ? header.textTone(under: statusBar) : nil {
+        case .light: .lightContent
+        case .dark: .darkContent
+        case nil: .default
+        }
+        guard shows != showsBannerUnderBars else { return }
+        showsBannerUnderBars = shows
+        viewController?.passesEmptyNavigationBarTaps = shows
+        viewController?.navigationItem.title = shows ? nil : "@\(store.account.acct)"
+        scrollView.topEdgeEffect.isHidden = shows || MacNavigationBarBackground.isNeeded
     }
 
     /// ヘッダーに出す値が変わったら描き直す。フォローを送っている途中の表示も、ここで切り替わる。

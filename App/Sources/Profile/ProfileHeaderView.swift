@@ -32,15 +32,84 @@ final class ProfileHeaderView: UIView {
     var followRevealDuration: TimeInterval = 0
     /// 自己紹介か補足情報の値のリンクがタップされたときと、メンションの長押しのメニューでプロフィールを選んだときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
+    /// ヘッダー画像を読み込み終えて、バーの下へ伸ばすかが変わったときに呼ぶ。
+    var onChangeExtendsUnderBars: (() -> Void)?
+    /// ヘッダー画像の大きさや位置が変わって、ヘッダーの高さが変わったときに呼ぶ。
+    var onChangeBannerLayout: (() -> Void)?
+    /// ステータスバーとナビゲーションバーの高さ。ヘッダー画像を、ナビゲーションバーの高さの分だけ上げてボタンの下に入れるのに使う。
+    var barHeights = BarHeights(statusBar: 0, navigationBar: 0) {
+        didSet {
+            guard barHeights != oldValue else { return }
+            applyBannerLayout()
+        }
+    }
+    /// ヘッダーの上端から画面の上端までの長さから、引っぱった分を除いたもの。ヘッダー画像の上を、この分だけぼかして伸ばす。
+    /// スクロールに合わせて設定し直す。
+    var topExtension: CGFloat = 0 {
+        didSet { applyTopExtension() }
+    }
+    /// 一覧の一番上からさらに引っぱっている長さ。ヘッダー画像はその分だけ上へずらして画面に止め、下の内容だけを下げる。
+    /// 画像を拡大して隙間を埋めることはしない。
+    var pulledDistance: CGFloat = 0 {
+        didSet {
+            guard pulledDistance != oldValue else { return }
+            let pin = CGAffineTransform(translationX: 0, y: -pulledDistance)
+            for view in [bannerReflectionClip, bannerView, bannerCover, followedByBadge] as [UIView] {
+                view.transform = pin
+            }
+        }
+    }
+    /// ヘッダー画像の上に伸ばす部分のぼかし方。
+    var reflectionStyle = ProfileBannerBlur.Style(blur: 10, dim: 0.1, seam: 24) {
+        didSet {
+            guard reflectionStyle != oldValue else { return }
+            applyBannerBlur()
+        }
+    }
+    /// ヘッダー画像をバーの下まで上げている。画像がないアカウントでは、灰色の下地を上げても見栄えがしないため上げない。
+    /// 画像を読み込む前から、画像のURLで決める。
+    var extendsUnderBars: Bool { liftsBanner }
 
-    /// ヘッダー画像の縦横比（高さ÷幅）。Mastodonのヘッダー画像は3:1を想定している。
-    private static let bannerAspect: CGFloat = 1 / 3
+    struct BarHeights: Equatable {
+        var statusBar: CGFloat
+        var navigationBar: CGFloat
+    }
+    /// ヘッダー画像の下端の、ヘッダーの上端からの位置。
+    var bannerBottom: CGFloat { bannerView.frame.maxY }
+    /// 読み込んだヘッダー画像の、行ごとの明るさ。バーの下まで伸ばしていなければnil。
+    private var bannerLuminance: BannerLuminance?
+
     private static let avatarSize: CGFloat = 80
     private static let avatarRing: CGFloat = 3
 
     private let emojiImages: EmojiImageStore
     private let mediaImages: MediaImageStore
     private let bannerView = ProfileBannerView()
+    /// ヘッダー画像の上を、画面の上端までぼかして伸ばす部分。画像はナビゲーションバーのボタンの奥まで上げて置き（`ProfileBannerLayout`）、
+    /// 届かないステータスバーの帯と、引っぱった分だけを埋める。中の画像の下端を画像の上端に合わせ、見える高さで切り抜く。
+    private let bannerReflectionClip = UIView()
+    private let bannerReflection = UIImageView()
+    private var bannerReflectionTop: NSLayoutConstraint?
+    /// 読み込んだヘッダー画像。ぼかした画像を、枠の大きさやぼかし方が変わったときに作り直すのに使う。
+    private var bannerSource: CGImage?
+    private var bannerBlur: ProfileBannerBlur?
+    /// ぼかした画像を作ったときの、枠の縦横比とぼかし方。
+    private var bannerBlurKey: (aspect: CGFloat, style: ProfileBannerBlur.Style)?
+    private var bannerTop: NSLayoutConstraint?
+    private var bannerHeight: NSLayoutConstraint?
+    /// 置き場所を最後に決めたときの幅。
+    private var measuredWidth: CGFloat = 0
+    /// 制約に入れた、ヘッダー画像を置く場所。
+    private var bannerLayout = ProfileBannerLayout(top: 0, height: 0)
+    /// ビューアで開いている間、ヘッダー画像を隠す覆い。周りは画像をぼかして伸ばした部分なので、画面の背景の色で隠すと塗り残しのように見えるため、
+    /// ぼかしたヘッダー画像で埋める。
+    private let bannerCover = UIImageView()
+    private var hasBannerImage = false {
+        didSet {
+            guard hasBannerImage != oldValue else { return }
+            applyBannerLayout()
+        }
+    }
     private let avatarRingView = UIView()
     private let avatarView: AvatarView
     private let followButton = UIButton(configuration: .filled())
@@ -87,6 +156,7 @@ final class ProfileHeaderView: UIView {
         bannerView.clipsToBounds = true
         bannerView.backgroundColor = .secondarySystemFill
 
+        // 伸ばしたぼかしを描くビューがヘッダー画像の手前に重なり、タップを受けるため、伸ばす部品の側でタップを受ける。ぼかした部分をタップしても開く。
         bannerView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openHeader)))
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAvatar)))
         for (view, label) in [(bannerView, "ヘッダー画像"), (avatarView, "アイコン")] as [(UIView, String)] {
@@ -186,16 +256,48 @@ final class ProfileHeaderView: UIView {
         infoStack.setCustomSpacing(12, after: remoteStack)
         infoStack.setCustomSpacing(12, after: countsLabel)
 
-        for view in [bannerView, followedByBadge, avatarRingView, avatarView, followArea, infoStack] as [UIView] {
+        bannerReflectionClip.clipsToBounds = true
+        bannerReflectionClip.isUserInteractionEnabled = false
+        bannerReflectionClip.isHidden = true
+        bannerReflection.translatesAutoresizingMaskIntoConstraints = false
+        bannerReflectionClip.addSubview(bannerReflection)
+        bannerCover.backgroundColor = .systemBackground
+        // 覆いの画像は、枠に見えている範囲から作るので、枠に合わせて伸ばす。
+        bannerCover.contentMode = .scaleToFill
+        bannerCover.isHidden = true
+        // 閉じる途中にタップし直しても開けるよう、タップは下に通す。
+        bannerCover.isUserInteractionEnabled = false
+        bannerView.cover = bannerCover
+        bannerView.onChangeConcealment = { [weak self] in self?.applyReflectionImage() }
+
+        for view in [bannerReflectionClip, bannerView, bannerCover, followedByBadge, avatarRingView, avatarView, followArea, infoStack] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
         let margin: CGFloat = 16
+        let bannerReflectionTop = bannerReflectionClip.topAnchor.constraint(equalTo: topAnchor)
+        self.bannerReflectionTop = bannerReflectionTop
+        let bannerTop = bannerView.topAnchor.constraint(equalTo: topAnchor)
+        self.bannerTop = bannerTop
+        let bannerHeight = bannerView.heightAnchor.constraint(equalToConstant: 0)
+        self.bannerHeight = bannerHeight
         NSLayoutConstraint.activate([
-            bannerView.topAnchor.constraint(equalTo: topAnchor),
+            bannerReflectionTop,
+            bannerTop,
+            bannerHeight,
+            bannerReflectionClip.leadingAnchor.constraint(equalTo: leadingAnchor),
+            bannerReflectionClip.trailingAnchor.constraint(equalTo: trailingAnchor),
+            bannerReflectionClip.bottomAnchor.constraint(equalTo: bannerView.topAnchor),
+            bannerReflection.leadingAnchor.constraint(equalTo: bannerReflectionClip.leadingAnchor),
+            bannerReflection.trailingAnchor.constraint(equalTo: bannerReflectionClip.trailingAnchor),
+            bannerReflection.bottomAnchor.constraint(equalTo: bannerReflectionClip.bottomAnchor),
+            bannerReflection.heightAnchor.constraint(equalTo: bannerView.heightAnchor, multiplier: ProfileBannerBlur.reflectionHeightRatio),
             bannerView.leadingAnchor.constraint(equalTo: leadingAnchor),
             bannerView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            bannerView.heightAnchor.constraint(equalTo: bannerView.widthAnchor, multiplier: Self.bannerAspect),
+            bannerCover.topAnchor.constraint(equalTo: bannerView.topAnchor),
+            bannerCover.leadingAnchor.constraint(equalTo: bannerView.leadingAnchor),
+            bannerCover.trailingAnchor.constraint(equalTo: bannerView.trailingAnchor),
+            bannerCover.bottomAnchor.constraint(equalTo: bannerView.bottomAnchor),
 
             // 添付ファイルのタイルの札と同じく、端から6pt離す。
             followedByBadge.trailingAnchor.constraint(equalTo: bannerView.trailingAnchor, constant: -6),
@@ -224,6 +326,69 @@ final class ProfileHeaderView: UIView {
         followAreaBottom = followArea.bottomAnchor.constraint(equalTo: avatarView.bottomAnchor)
         followAreaBottom?.isActive = true
         relationshipFailureBaseline = relationshipFailureLabel.lastBaselineAnchor.constraint(equalTo: avatarView.bottomAnchor)
+    }
+
+    private func applyTopExtension() {
+        // 画像がなければ伸ばさない。画像の上端が画面の上端より上へ流れたら、高さが負にならないよう、伸ばす部分の上端を画像の上端に止める。
+        bannerReflectionTop?.constant = min(-topExtension, bannerLayout.top)
+        bannerReflectionClip.isHidden = !hasBannerImage
+    }
+
+    /// 一覧はヘッダーの大きさを、幅を決めてから測る。画像の高さは幅で決まるため、測る前に幅に合わせて置き直す。
+    override func systemLayoutSizeFitting(
+        _ targetSize: CGSize,
+        withHorizontalFittingPriority horizontalFittingPriority: UILayoutPriority,
+        verticalFittingPriority: UILayoutPriority
+    ) -> CGSize {
+        applyBannerLayout(width: targetSize.width, notifies: false)
+        return super.systemLayoutSizeFitting(targetSize, withHorizontalFittingPriority: horizontalFittingPriority, verticalFittingPriority: verticalFittingPriority)
+    }
+
+    override func layoutSubviews() {
+        applyBannerLayout(width: bounds.width, notifies: false)
+        super.layoutSubviews()
+    }
+
+    /// ヘッダーの外へ上にはみ出したヘッダー画像も、タップを受ける。
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        super.point(inside: point, with: event) || bannerView.frame.contains(point)
+    }
+
+    /// 並べる前（幅が0）に置き場所を決め直すときは、一覧が最後に測った幅を使う。幅0で決めると画像の高さが0になり、その高さで測られるため。
+    private func applyBannerLayout() {
+        applyBannerLayout(width: bounds.width > 0 ? bounds.width : measuredWidth, notifies: true)
+    }
+
+    private func applyBannerLayout(width: CGFloat, notifies: Bool) {
+        guard width > 0 else { return }
+        measuredWidth = width
+        let image = bannerView.image
+        let layout = ProfileBannerLayout(
+            width: width,
+            imageAspect: hasBannerImage ? image.map { $0.size.height / $0.size.width } : nil,
+            statusBarHeight: barHeights.statusBar,
+            navigationBarHeight: barHeights.navigationBar,
+            liftsUnderBars: liftsBanner
+        )
+        applyTopExtension()
+        guard layout != bannerLayout else { return }
+        defer { applyBannerBlur(width: width) }
+        let changesHeight = layout.bottom != bannerLayout.bottom
+        bannerLayout = layout
+        bannerTop?.constant = layout.top
+        bannerHeight?.constant = layout.height
+        applyTopExtension()
+        if notifies, changesHeight {
+            onChangeBannerLayout?()
+        }
+    }
+
+    /// ヘッダー画像をバーの下まで上げるか。読み込む前から上げておき、画像が届いたときにヘッダーの下が動かないようにする。
+    /// Mastodonは、ヘッダー画像を設定していないアカウントにも`missing.png`という名前の画像のURLを返すため、その名前なら上げない。
+    /// 名前で分からなくても、届いた画像が1×1の透明な画像なら上げない。
+    private var liftsBanner: Bool {
+        guard let bannerURL, bannerURL.lastPathComponent != "missing.png" else { return false }
+        return bannerView.image == nil || hasBannerImage
     }
 
     @objc private func openAvatar() {
@@ -461,25 +626,98 @@ final class ProfileHeaderView: UIView {
         guard url != bannerURL else { return }
         bannerURL = url
         bannerTask?.cancel()
-        bannerView.image = nil
+        setBanner(nil)
         guard let url else { return }
         let pixelSize = Int((max(bounds.width, 402) * traitCollection.displayScale).rounded(.up))
         if let cached = mediaImages.cachedImage(for: url, maxPixelSize: pixelSize) {
-            bannerView.image = cached
+            setBanner(cached)
             return
         }
         bannerTask = Task { [weak self, mediaImages] in
             guard let image = try? await mediaImages.image(for: url, maxPixelSize: pixelSize), let self, !Task.isCancelled, self.bannerURL == url else { return }
-            UIView.transition(with: self.bannerView, duration: 0.15, options: .transitionCrossDissolve) {
-                self.bannerView.image = image
+            UIView.transition(with: self, duration: 0.15, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+                self.setBanner(image)
             }
         }
+    }
+
+    private func setBanner(_ image: UIImage?) {
+        bannerView.image = image
+        let isReal = image.map(Self.isRealBanner) ?? false
+        let cgImage = isReal ? image?.cgImage : nil
+        bannerSource = cgImage
+        bannerBlurKey = nil
+        hasBannerImage = isReal
+        // 画像の縦横比と、上げるかどうかで置き場所が変わる。
+        applyBannerLayout()
+        applyBannerBlur()
+        onChangeExtendsUnderBars?()
+    }
+
+    private func applyBannerBlur() {
+        applyBannerBlur(width: bounds.width)
+    }
+
+    /// 覆いを出している間は、覆いとつながる一様なぼかしにする。
+    private func applyReflectionImage() {
+        bannerReflection.image = bannerView.isConcealedForViewer ? bannerBlur?.uniformReflection : bannerBlur?.reflection
+    }
+
+    /// 伸ばす部分と覆いの画像を、今の枠の縦横比とぼかし方で作る。同じ条件で作ってあれば作り直さない。
+    private func applyBannerBlur(width: CGFloat) {
+        guard let bannerSource, width > 0, bannerLayout.height > 0 else {
+            bannerBlur = nil
+            bannerLuminance = nil
+            bannerReflection.image = nil
+            bannerCover.image = nil
+            return
+        }
+        let aspect = bannerLayout.height / width
+        if let key = bannerBlurKey, key.aspect == aspect, key.style == reflectionStyle { return }
+        bannerBlurKey = (aspect, reflectionStyle)
+        let blur = ProfileBannerBlur.make(from: bannerSource, frameWidth: width, frameAspect: aspect, style: reflectionStyle)
+        // 明るさも、ぼかしと同じく枠に見えている範囲で測る。
+        bannerLuminance = BannerLuminance(image: bannerSource, frameAspect: aspect)
+        bannerBlur = blur
+        applyReflectionImage()
+        bannerCover.image = blur?.cover
+    }
+
+    /// ウィンドウの座標で渡した帯（ステータスバー）の下に見えるヘッダー画像やそのぼかしに、読みやすい文字の色。
+    /// バーの下まで伸ばしていないか、画面に出ていなければnil。
+    func textTone(under band: CGRect) -> StatusBarTextTone? {
+        guard hasBannerImage, let bannerLuminance, let window, !band.isEmpty else { return nil }
+        let bannerTop = bannerView.convert(CGPoint.zero, to: window).y
+        return bannerLuminance.luminance(
+            underBandFrom: band.minY - bannerTop,
+            to: band.maxY - bannerTop,
+            bannerHeight: bannerView.bounds.height
+        ).map(StatusBarTextTone.init(backgroundLuminance:))
+    }
+
+    /// Mastodonが、ヘッダー画像を設定していないアカウントに返す1×1の透明な画像ではない。
+    private static func isRealBanner(_ image: UIImage) -> Bool {
+        image.size.width * image.scale > 1 || image.size.height * image.scale > 1
     }
 }
 
 /// ヘッダー画像。タップすると、ビューアで大きく見る。
 private final class ProfileBannerView: UIImageView, MediaViewerSource {
     var overlappingViews: [UIView] = []
+    /// ビューアが画像を動かしている間、ヘッダー画像に重ねて隠す覆い。
+    /// ヘッダー画像そのものを隠すと、上へ伸ばしたぼかしも消え、隠すのをやめてからも数コマ遅れて出るため、画像は隠さずに覆う。
+    weak var cover: UIView?
+    /// 覆いを出したり外したりしたときに呼ぶ。
+    var onChangeConcealment: (() -> Void)?
+
+    var isConcealedForViewer: Bool {
+        get { cover?.isHidden == false }
+        set {
+            guard newValue != isConcealedForViewer else { return }
+            cover?.isHidden = !newValue
+            onChangeConcealment?()
+        }
+    }
 }
 
 /// 背景色の内側に余白を取るラベル。

@@ -3,7 +3,7 @@ import SciaCore
 import UIKit
 
 /// タイムライン表示。スクロール位置の制御を細かく行うため、UICollectionViewとdiffable data sourceで組む。
-final class TimelineViewController: UIViewController {
+final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private enum Section { case main }
     typealias ItemID = TimelineEntry.ID
 
@@ -88,6 +88,17 @@ final class TimelineViewController: UIViewController {
     /// 一覧の頭に置き、一緒にスクロールするビュー。プロフィールのヘッダーに使う。表示より前に設定する。
     /// 置くと、投稿がないときの全面の表示は出さず、読み込みの状態はフッターだけで示す。ヘッダーを覆わないようにするため。
     var headerView: UIView?
+    /// 一覧がスクロールしたときと、安全領域やバーの高さが変わったときに呼ぶ。ヘッダーを置いた画面が、ヘッダーやバーの見た目を位置に合わせるのに使う。
+    var onScroll: ((UIScrollView) -> Void)?
+    /// ステータスバーの文字の色。ヘッダーを置いた画面が、ステータスバーの下に見えているものに合わせて変える。
+    /// ナビゲーションバーのボタンのない場所のタップを、一覧に通す。ヘッダーを置いた画面が、バーの下に入れたヘッダー画像を押せるようにする。
+    var passesEmptyNavigationBarTaps = false
+    var statusBarStyle: UIStatusBarStyle = .default {
+        didSet {
+            guard statusBarStyle != oldValue else { return }
+            setNeedsStatusBarAppearanceUpdate()
+        }
+    }
     #if DEBUG
     /// デバッグメニューに出す、このタイムライン用の検証の操作。表示より前に設定する。
     var debugActions: [UIMenuElement] = []
@@ -244,10 +255,13 @@ final class TimelineViewController: UIViewController {
         translation.install(in: self)
     }
 
+    override var preferredStatusBarStyle: UIStatusBarStyle { statusBarStyle }
+
     /// 安全領域やナビゲーションバーの高さが変わったら、チップの列を置き直す。
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         noticeOverlay?.update()
+        onScroll?(collectionView)
     }
 
     /// 他のタブにいる間に表示が変わっても既読にしないため、画面に出たときに改めて報告する。
@@ -1183,6 +1197,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         }
         reportVisibleItems()
         reportApproachingGaps()
+        onScroll?(scrollView)
         // 最上部からさらに引っぱっている間は、浮かぶ新着のボタンも一覧と一緒に下げる。上に現れるストリーミングの状態を覆わないようにする。
         // チップの列は下げない。十分に引っぱれば、一番上の投稿とストリーミングの状態が列の下に見えるため。
         let pulled = max(-(scrollView.contentOffset.y + scrollView.adjustedContentInset.top), 0)
