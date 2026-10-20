@@ -152,7 +152,10 @@ final class InlineComposeController: NSObject {
     /// キーボードがこの高さまで戻るまでバーを今の位置に留める。留めていなければnil。
     private var keyboardHeightBeforeContextMenu: CGFloat?
     /// 1回のペーストで届いたメディア。項目ごとに届くので、まとめて添付に足し、上限を超えた分の知らせを1回にする。
-    private var pendingPastedMedia: [PastedMedia] = []
+    /// ファイルのURLの項目は、指す先を調べ終えるまでnilで場所を取り、ペーストした順に並べる。
+    private var pendingPastedMedia: [PastedMedia?] = []
+    /// 指す先を調べているファイルのURLの項目。なくなるまで、添付に足すのも投稿を送るのも待つ。
+    private var resolvingPastedFiles: [UUID: Task<Void, Never>] = [:]
     /// 添付を開いているビューア。閉じたら（閉じる動きの途中でも）nilにする。
     private weak var mediaViewer: MediaViewerController?
     /// ビューアを開いてから、閉じる動きを終えるまでtrue。この間は、キーボードを閉じても書いている状態を解かない。
@@ -405,7 +408,14 @@ final class InlineComposeController: NSObject {
     }
 
     private func submit() {
-        Task { await model.submit() }
+        Task {
+            // ペーストしたファイルを添付に回すか決まる前に送ると、画像のない投稿になるため、決まるのを待ってから送る。
+            while let resolving = resolvingPastedFiles.values.first {
+                await resolving.value
+            }
+            addPendingPastedMedia()
+            await model.submit()
+        }
     }
 
     // MARK: - ＋のメニュー
@@ -1724,6 +1734,10 @@ extension InlineComposeController: UITextViewDelegate {
 extension InlineComposeController: UITextPasteDelegate {
     /// ペーストした項目のうち、メディアは本文に入れずに添付に回す。文字はいつもどおり本文に入れる。
     func textPasteConfigurationSupporting(_ textPasteConfigurationSupporting: any UITextPasteConfigurationSupporting, transform item: any UITextPasteItem) {
+        if LocalMediaLoader.hasFileURL(item.itemProvider) {
+            transformPastedFile(item)
+            return
+        }
         guard let type = LocalMediaLoader.pastedMediaType(in: item.itemProvider) else {
             item.setDefaultResult()
             return
@@ -1736,15 +1750,50 @@ extension InlineComposeController: UITextPasteDelegate {
             return
         }
         pendingPastedMedia.append(LocalMediaLoader.startLoadingPasted(from: item.itemProvider, type: type))
-        guard pendingPastedMedia.count == 1 else { return }
-        // 1回のペーストの項目は続けて届くので、次の順番でまとめて足す。
-        DispatchQueue.main.async { [weak self] in
+        addPendingPastedMediaLater()
+    }
+
+    /// ファイルのURLの項目は、指す先が画像か動画なら、文字やアイコンより優先してそのファイルを添付する。それ以外のファイルなら、
+    /// いつもどおり本文に入れる。
+    private func transformPastedFile(_ item: any UITextPasteItem) {
+        let index = pendingPastedMedia.count
+        pendingPastedMedia.append(nil)
+        let id = UUID()
+        resolvingPastedFiles[id] = Task { @MainActor [weak self] in
+            let pasted = await LocalMediaLoader.startLoadingPastedFile(from: item.itemProvider)
             guard let self else { return }
-            let pasted = pendingPastedMedia
-            pendingPastedMedia = []
-            logger.info("paste: adding media (count=\(pasted.count))")
-            model.addPastedMedia(pasted)
+            resolvingPastedFiles[id] = nil
+            if let pasted {
+                item.setNoResult()
+                // 投稿を送っている間などは、ほかのメディアと同じく添付しない。ファイルのURLを本文に入れても役に立たないので、文字も入れない。
+                if model.canPasteMedia {
+                    pendingPastedMedia[index] = pasted
+                } else {
+                    logger.info("paste: media file ignored while attaching is unavailable")
+                    pasted.discard()
+                }
+            } else {
+                item.setDefaultResult()
+            }
+            addPendingPastedMediaLater()
         }
+    }
+
+    /// 1回のペーストの項目は続けて届くので、次の順番でまとめて足す。
+    private func addPendingPastedMediaLater() {
+        DispatchQueue.main.async { [weak self] in
+            self?.addPendingPastedMedia()
+        }
+    }
+
+    /// 指す先を調べているファイルがなくなっていれば、ペーストしたメディアを添付に足す。
+    private func addPendingPastedMedia() {
+        guard resolvingPastedFiles.isEmpty, !pendingPastedMedia.isEmpty else { return }
+        let pasted = pendingPastedMedia.compactMap(\.self)
+        pendingPastedMedia = []
+        guard !pasted.isEmpty else { return }
+        logger.info("paste: adding media (count=\(pasted.count))")
+        model.addPastedMedia(pasted)
     }
 }
 

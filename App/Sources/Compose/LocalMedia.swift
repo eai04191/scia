@@ -127,6 +127,44 @@ enum LocalMediaLoader {
         })
     }
 
+    /// クリップボードの項目が、ファイルを指すURLを持つか。MacのFinderでコピーしたファイルは、中身ではなく、ファイルのURL
+    /// （`file:///.file/id=…`の形）、ファイル名の文字、Finderのアイコンの画像として入る（Macで確かめた）。文字やアイコンで振り分けると、
+    /// URLが本文に入るかアイコンが添付されるため、こうした項目は指す先のファイルで振り分ける（`startLoadingPastedFile`）。
+    static func hasFileURL(_ provider: NSItemProvider) -> Bool {
+        provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier)
+    }
+
+    /// ペーストした項目のURLが画像か動画のファイルを指すなら、そのファイルのコピーを始める。それ以外のファイルならnil。
+    @MainActor
+    static func startLoadingPastedFile(from provider: NSItemProvider) async -> PastedMedia? {
+        guard let url = await fileURL(in: provider),
+              let type = UTType(filenameExtension: url.pathExtension),
+              mediaTypes.contains(where: { type.conforms(to: $0) })
+        else { return nil }
+        let kind = kind(of: type)
+        let mimeType = type.preferredMIMEType ?? (kind == .video ? "video/mp4" : "image/jpeg")
+        let loading = Task.immediate { try await copyPastedFile(url, mimeType: mimeType, kind: kind) }
+        return PastedMedia(kind: kind, load: { try await loading.value }, discard: {
+            Task { try? await loading.value.remove() }
+        })
+    }
+
+    /// 項目のURLを、ファイルのパスの形で読む。Finderの`file:///.file/id=…`は拡張子を持たないため、パスに直して形式を見る。
+    @MainActor
+    private static func fileURL(in provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { continuation in
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                continuation.resume(returning: url.flatMap { ($0 as NSURL).filePathURL })
+            }
+        }
+    }
+
+    /// 動画では大きくなるため、メインスレッドの外でコピーする。
+    @concurrent
+    private static func copyPastedFile(_ url: URL, mimeType: String, kind: MediaAttachment.Kind) async throws -> LocalMediaFile {
+        LocalMediaFile(url: try copyToDirectory(url), mimeType: mimeType, kind: kind)
+    }
+
     /// クリップボードに、添付に回すメディアの項目があるか。型だけを見るので、ペーストの許可を求められない。
     static func pasteboardHasMedia(_ pasteboard: UIPasteboard) -> Bool {
         (pasteboard.types(forItemSet: nil) ?? []).contains { identifiers in
