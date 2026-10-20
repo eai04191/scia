@@ -551,7 +551,9 @@ final class MediaBadgeView: UIView {
     private static let minimumFontSize: CGFloat = 6
     /// 印と印のあいだの隙間。
     private static let gap: CGFloat = 1
-    private static let cornerRadius: CGFloat = 4
+    static let cornerRadius: CGFloat = 4
+    /// 札の下地。画像の明るさによらず白い文字が読めるよう、黒を透かす。
+    static let backgroundColor = UIColor.black.withAlphaComponent(0.6)
 
     /// 出す印。空なら札を隠す。
     var marks: [Mark] = [] {
@@ -648,7 +650,7 @@ final class MediaBadgeView: UIView {
             let segment = UILabel()
             segment.textColor = .white
             segment.textAlignment = .center
-            segment.backgroundColor = UIColor.black.withAlphaComponent(0.6)
+            segment.backgroundColor = Self.backgroundColor
             segment.layer.cornerRadius = Self.cornerRadius
             segment.layer.cornerCurve = .continuous
             segment.clipsToBounds = true
@@ -665,7 +667,7 @@ final class MediaBadgeView: UIView {
         }
     }
 
-    private static func font(for traits: UITraitCollection) -> UIFont {
+    static func font(for traits: UITraitCollection) -> UIFont {
         let category = min(traits.preferredContentSizeCategory, maximumContentSizeCategory)
         return UIFont.preferredFont(forTextStyle: .caption2, compatibleWith: UITraitCollection(preferredContentSizeCategory: category)).bold
     }
