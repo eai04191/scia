@@ -320,6 +320,22 @@ final class TimelineViewController: UIViewController {
             _ = tuning.value(of: TuningCatalog.notificationQuotedSpacing)
             _ = tuning.value(of: TuningCatalog.notificationQuotedBodyLines)
             _ = tuning.value(of: TuningCatalog.notificationQuotedThumbnailSize)
+            _ = tuning.value(of: TuningCatalog.reactionGlowHeight)
+            _ = tuning.value(of: TuningCatalog.reactionGlowDarkOpacity)
+            _ = tuning.value(of: TuningCatalog.reactionGlowLightOpacity)
+            _ = tuning.value(of: TuningCatalog.reactionGlowLineWidth)
+            _ = tuning.value(of: TuningCatalog.reactionGlowLineOpacity)
+            _ = tuning.value(of: TuningCatalog.reactionGlowBlendWidth)
+            _ = tuning.value(of: TuningCatalog.reactionGlowMixesInOKLab)
+            _ = tuning.value(of: TuningCatalog.reactionGlowDarkLineCoreWhiteness)
+            _ = tuning.value(of: TuningCatalog.reactionGlowLightLineCoreWhiteness)
+            _ = tuning.value(of: TuningCatalog.reactionGlowIconSize)
+            _ = tuning.value(of: TuningCatalog.reactionGlowIconOpacity)
+            _ = tuning.value(of: TuningCatalog.reactionGlowLineBloomHeight)
+            _ = tuning.value(of: TuningCatalog.reactionGlowLightShadeOpacity)
+            _ = tuning.value(of: TuningCatalog.reactionGlowLightCoreLift)
+            _ = tuning.value(of: TuningCatalog.reactionGlowFillsWidthWhenAlone)
+            _ = tuning.value(of: TuningCatalog.reactionGlowIconStyle)
             _ = network.conditions
             _ = settings.usesOriginalThumbnailsOnExpensiveNetwork
             _ = settings.ignoresUselessAltText
@@ -945,6 +961,15 @@ final class TimelineViewController: UIViewController {
         configuration.headerMode = headerView == nil ? .none : .supplementary
         // ヘッダー画像をナビゲーションバーのすぐ下から置く。
         configuration.headerTopPadding = 0
+        // お気に入りやブーストで下の端が光っている行は、光の線を区切りにする。区切り線が光の線に重なると、光源が灰色に濁って見えるため。
+        configuration.itemSeparatorHandler = { [weak self] indexPath, separator in
+            var separator = separator
+            if let self, let id = self.dataSource.itemIdentifier(for: indexPath), let shown = self.status(for: id)?.displayed,
+               shown.favourited || shown.reblogged {
+                separator.bottomSeparatorVisibility = .hidden
+            }
+            return separator
+        }
         return UICollectionViewCompositionalLayout { _, environment in
             let section = NSCollectionLayoutSection.list(using: configuration, layoutEnvironment: environment)
             // plainのリストはフッターを表示範囲の下端に貼り付ける。貼り付いたフッターは、中身がなくてもタブバーのすぐ上を覆ってタップを吸うため、一覧の末尾に置く。
@@ -958,7 +983,6 @@ final class TimelineViewController: UIViewController {
     private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, ItemID> {
         let registration = UICollectionView.CellRegistration<UICollectionViewListCell, ItemID> { [weak self] cell, _, id in
             guard let self, let entry = self.entries[id] else { return }
-            cell.accessories = Self.interactionAccessories(for: self.status(for: id))
             switch entry {
             case .status(let status):
                 cell.contentConfiguration = self.contentConfiguration(for: status, itemID: id, base: cell.defaultContentConfiguration())

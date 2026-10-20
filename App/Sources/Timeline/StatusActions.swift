@@ -204,24 +204,4 @@ extension TimelineViewController {
         guard let myAccountID else { return false }
         return status.canBeReblogged(by: myAccountID)
     }
-
-    /// お気に入りとブーストの状態を、セルの右端にアイコンで出す。
-    static func interactionAccessories(for status: Status?) -> [UICellAccessory] {
-        guard let shown = status?.displayed else { return [] }
-        let icons: [(String, UIColor, String)] = [
-            shown.reblogged ? ("arrow.2.squarepath", .systemGreen, "ブースト済み") : nil,
-            shown.favourited ? ("star.fill", .systemOrange, "お気に入り済み") : nil,
-        ].compactMap(\.self)
-        guard !icons.isEmpty else { return [] }
-        let stack = UIStackView(arrangedSubviews: icons.map { name, color, label in
-            let imageView = UIImageView(image: UIImage(systemName: name, withConfiguration: UIImage.SymbolConfiguration(textStyle: .footnote)))
-            imageView.tintColor = color
-            imageView.isAccessibilityElement = true
-            imageView.accessibilityLabel = label
-            return imageView
-        })
-        stack.axis = .vertical
-        stack.spacing = 4
-        return [.customView(configuration: .init(customView: stack, placement: .trailing(), reservedLayoutWidth: .actual))]
-    }
 }

@@ -58,7 +58,7 @@ struct PostContentBuilder {
         } else {
             nil
         }
-        return PostContentConfiguration(
+        var configuration = PostContentConfiguration(
             context: context,
             avatar: avatarContent(of: shown.account),
             nameParts: nameParts,
@@ -73,6 +73,13 @@ struct PostContentBuilder {
             mediaImages: mediaImages,
             avatarImages: avatarImages
         )
+        configuration.reactionGlow = reactionGlow(for: shown)
+        return configuration
+    }
+
+    /// `shown`は表示している投稿。ブーストなら、ブーストされた投稿。
+    func reactionGlow(for shown: Status) -> ReactionGlow {
+        ReactionGlow(statusID: shown.id, isReblogged: shown.reblogged, isFavourited: shown.favourited, style: ReactionGlow.Style(tuning: tuning))
     }
 
     func avatarContent(of account: Account) -> AvatarView.Content {

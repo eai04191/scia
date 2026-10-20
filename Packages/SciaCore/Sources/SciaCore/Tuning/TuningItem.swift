@@ -945,6 +945,156 @@ public enum TuningCatalog {
         )
     }
 
+    /// お気に入りとブーストをした投稿の行の、下の端から照らす光の高さ。光は行の中にだけ伸ばす。
+    public static let reactionGlowHeight = NumberTuning(
+        id: "timeline.reactionGlowHeight",
+        title: "光の高さ（pt）",
+        range: 0...120,
+        step: 2,
+        defaultValue: 32
+    )
+
+    /// ダークモードでの、光のいちばん明るいところ（下の端）の濃さ。
+    public static let reactionGlowDarkOpacity = NumberTuning(
+        id: "timeline.reactionGlowDarkOpacity",
+        title: "光の濃さ（ダーク）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
+    /// ライトモードでの、光のいちばん明るいところ（下の端）の濃さ。白い背景では濃いと汚れのように見えるため、ダークと分ける。
+    public static let reactionGlowLightOpacity = NumberTuning(
+        id: "timeline.reactionGlowLightOpacity",
+        title: "光の濃さ（ライト）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
+    /// 行の下の端に引く、光の元になる線の太さ。0で線を引かない。
+    public static let reactionGlowLineWidth = NumberTuning(
+        id: "timeline.reactionGlowLineWidth",
+        title: "光の下の線の太さ（pt）",
+        range: 0...4,
+        step: 0.5,
+        defaultValue: 1.5
+    )
+
+    /// 光の下の線の濃さ。
+    public static let reactionGlowLineOpacity = NumberTuning(
+        id: "timeline.reactionGlowLineOpacity",
+        title: "光の下の線の濃さ",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 1
+    )
+
+    /// ダークモードで、光の下の線の芯を白に寄せる割合。光源は中心が白く飛んで見えるため。0で光の色のまま。
+    public static let reactionGlowDarkLineCoreWhiteness = NumberTuning(
+        id: "timeline.reactionGlowDarkLineCoreWhiteness",
+        title: "光の下の線の芯の白さ（ダーク）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.5
+    )
+
+    /// ライトモードで、光の下の線の芯を白に寄せる割合。白い背景では、色の縁とにじみに囲まれて、はじめて芯が白く光って見える。
+    public static let reactionGlowLightLineCoreWhiteness = NumberTuning(
+        id: "timeline.reactionGlowLightLineCoreWhiteness",
+        title: "光の下の線の芯の白さ（ライト）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 1
+    )
+
+    /// 光の下の線のまわりに付ける、色のにじみの高さ。0でにじませない。
+    public static let reactionGlowLineBloomHeight = NumberTuning(
+        id: "timeline.reactionGlowLineBloomHeight",
+        title: "光の下の線のにじみの高さ（pt）",
+        range: 0...16,
+        step: 1,
+        defaultValue: 6
+    )
+
+    /// ライトモードで、光っている行の下の端の近くにだけ敷く陰の濃さ。光が届かなくなるあたりと、上へ向けた照明の下に置く。
+    /// 白い背景より明るいものは描けないため、光源から離れたところを少し暗くしないと、光源がいちばん明るく見えない。0で敷かない。
+    public static let reactionGlowLightShadeOpacity = NumberTuning(
+        id: "timeline.reactionGlowLightShadeOpacity",
+        title: "下の端の陰の濃さ（ライト）",
+        range: 0...0.3,
+        step: 0.01,
+        defaultValue: 0.06
+    )
+
+    /// ライトモードで、光の下の線の芯を行の下の端から持ち上げる高さ。芯の下にも陰が入り、芯が白く光って見える。0で下の端に置く。
+    public static let reactionGlowLightCoreLift = NumberTuning(
+        id: "timeline.reactionGlowLightCoreLift",
+        title: "芯を下の端から離す高さ（ライト、pt）",
+        range: 0...6,
+        step: 0.5,
+        defaultValue: 2
+    )
+
+    /// 片方だけのときは、その色で全幅を光らせる。オフなら、片方だけでもその半分だけを光らせる。
+    public static let reactionGlowFillsWidthWhenAlone = ToggleTuning(
+        id: "timeline.reactionGlowFillsWidthWhenAlone",
+        title: "片方だけのときは全幅を光らせる",
+        defaultValue: true
+    )
+
+    /// 光が何を示すかを、アイコンで添える。0はなし、1は光の下の線の上に1つずつ載せる、2は下の端に小さく散らす。
+    public static let reactionGlowIconStyle = NumberTuning(
+        id: "timeline.reactionGlowIconStyle",
+        title: "光のアイコン（0: なし、1: 線の上、2: 散らす）",
+        range: 0...2,
+        step: 1,
+        defaultValue: 1
+    )
+
+    /// 光に添えるアイコンの大きさ。散らすときは、これを基準に大きさを変える。
+    public static let reactionGlowIconSize = NumberTuning(
+        id: "timeline.reactionGlowIconSize",
+        title: "光のアイコンの大きさ（pt）",
+        range: 4...14,
+        step: 1,
+        defaultValue: 8
+    )
+
+    /// 光に添えるアイコンの濃さ。光より目立たせないため、薄くする。
+    public static let reactionGlowIconOpacity = NumberTuning(
+        id: "timeline.reactionGlowIconOpacity",
+        title: "光のアイコンの濃さ",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.6
+    )
+
+    /// 左半分のブーストと右半分のお気に入りの光を、真ん中で混ぜる幅。0でくっきり分ける。
+    public static let reactionGlowBlendWidth = NumberTuning(
+        id: "timeline.reactionGlowBlendWidth",
+        title: "光の真ん中で混ぜる幅（pt）",
+        range: 0...240,
+        step: 4,
+        defaultValue: 48
+    )
+
+    /// ブーストとお気に入りの光の色を、真ん中でOKLabで混ぜる。オフなら光の強さ（線形）で混ぜる。
+    public static let reactionGlowMixesInOKLab = ToggleTuning(
+        id: "timeline.reactionGlowMixesInOKLab",
+        title: "光の真ん中の色をOKLabで混ぜる（オフなら線形）",
+        defaultValue: false
+    )
+
+    /// お気に入りやブーストをしたとき、取り消したときに、光を点けたり消したりする時間。
+    public static let reactionGlowDuration = NumberTuning(
+        id: "timeline.reactionGlowDuration",
+        title: "光を点ける・消す時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.35
+    )
+
     public static let sections: [TuningSection] = [
         TuningSection(id: "timeline", title: "タイムラインの見た目", items: [
             .number(paragraphSpacing),
@@ -967,6 +1117,25 @@ public enum TuningCatalog {
             .number(nameFadeWidth),
             .number(mediaTallestAspectRatio),
             .number(mediaThumbnailUpscaleTolerance),
+        ]),
+        TuningSection(id: "timeline.reactionGlow", title: "お気に入りとブーストの光", items: [
+            .number(reactionGlowHeight),
+            .number(reactionGlowDarkOpacity),
+            .number(reactionGlowLightOpacity),
+            .number(reactionGlowLineWidth),
+            .number(reactionGlowLineOpacity),
+            .number(reactionGlowDarkLineCoreWhiteness),
+            .number(reactionGlowLightLineCoreWhiteness),
+            .number(reactionGlowLineBloomHeight),
+            .number(reactionGlowLightShadeOpacity),
+            .number(reactionGlowLightCoreLift),
+            .toggle(reactionGlowFillsWidthWhenAlone),
+            .number(reactionGlowIconStyle),
+            .number(reactionGlowIconSize),
+            .number(reactionGlowIconOpacity),
+            .number(reactionGlowBlendWidth),
+            .toggle(reactionGlowMixesInOKLab),
+            .number(reactionGlowDuration),
         ]),
         TuningSection(id: "notification", title: "通知の見た目", items: [
             .number(notificationQuotedSpacing),

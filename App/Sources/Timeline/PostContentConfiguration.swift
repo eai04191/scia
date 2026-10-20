@@ -42,6 +42,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var statusID: Status.ID?
     /// 自分の投稿が自分のフィルターに一致していることを示す1行。一致していなければnil。
     var filterNote: NSAttributedString?
+    /// お気に入りとブーストをしたことを示す、行の下の端の光。
+    var reactionGlow: ReactionGlow?
     let mediaImages: MediaImageStore
     let avatarImages: AvatarImageStore
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
@@ -120,6 +122,7 @@ final class PostContentView: UIView, UIContentView {
     private let nameRow = UIStackView()
     private let bodyView: PostBodyView
     private let textGuide = UILayoutGuide()
+    private let reactionGlowView = ReactionGlowView()
     private var current: PostContentConfiguration
 
     /// 大きさや有無で変わる制約。適用のたびに作り直す。
@@ -210,6 +213,7 @@ final class PostContentView: UIView, UIContentView {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
+        reactionGlowView.install(in: self)
     }
 
     private func apply(_ configuration: PostContentConfiguration) {
@@ -257,6 +261,7 @@ final class PostContentView: UIView, UIContentView {
             // リンクカードと同じく、本文から少し離した補足として置く。
             filterNoteSpacing: metrics.bodyLinkCardSpacing
         ))
+        reactionGlowView.apply(configuration.reactionGlow)
         updateConstraints(for: configuration)
         updateAccessibility(for: configuration)
     }
@@ -360,6 +365,7 @@ final class PostContentView: UIView, UIContentView {
         parts += configuration.nameParts.map(\.string)
         parts.append(configuration.timeAccessibilityText(now: .now))
         parts.append(bodyView.accessibilityText)
+        parts += [configuration.reactionGlow?.accessibilityText].compactMap(\.self)
         textAccessibilityElement.accessibilityLabel = parts.filter { !$0.isEmpty }.joined(separator: "、")
         textAccessibilityElement.accessibilityCustomActions = [bodyView.spoilerAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
         // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
@@ -372,6 +378,7 @@ final class PostContentView: UIView, UIContentView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        reactionGlowView.layout(in: bounds, bottomMargin: current.metrics.margins.bottom)
         // 本文の枠は中身の部品の中で決まるため、先に並べておく。
         bodyView.layoutIfNeeded()
         let bodyTextFrame = bodyView.convert(bodyView.textFrame, to: self)

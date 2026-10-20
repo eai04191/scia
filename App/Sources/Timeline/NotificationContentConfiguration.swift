@@ -12,6 +12,8 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     var header: NSAttributedString
     var body: PostBodyContent
     var metrics: Metrics
+    /// 再掲した投稿に、お気に入りやブーストをしたことを示す、行の下の端の光。
+    var reactionGlow: ReactionGlow?
     let mediaImages: MediaImageStore
     let avatarImages: AvatarImageStore
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
@@ -51,6 +53,7 @@ final class NotificationContentView: UIView, UIContentView {
     private let symbolView = UIImageView()
     private let headerLabel = UILabel()
     private let bodyView: PostBodyView
+    private let reactionGlowView = ReactionGlowView()
     private var current: NotificationContentConfiguration
     /// 大きさで変わる制約。適用のたびに作り直す。
     private var variableConstraints: [NSLayoutConstraint] = []
@@ -78,6 +81,7 @@ final class NotificationContentView: UIView, UIContentView {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
+        reactionGlowView.install(in: self)
         bodyView.onSelectMedia = { [weak self] index, grid in self?.current.onSelectMedia?(index, grid) }
         bodyView.onRevealMedia = { [weak self] in self?.current.onRevealMedia?() }
         bodyView.onToggleSpoiler = { [weak self] in self?.current.onToggleSpoiler?() }
@@ -104,6 +108,7 @@ final class NotificationContentView: UIView, UIContentView {
         symbolView.tintColor = configuration.symbolColor
         headerLabel.attributedText = configuration.header
         bodyView.apply(configuration.body)
+        reactionGlowView.apply(configuration.reactionGlow)
 
         NSLayoutConstraint.deactivate(variableConstraints)
         let margins = metrics.margins
@@ -132,7 +137,7 @@ final class NotificationContentView: UIView, UIContentView {
 
     /// 読み上げでは、誰が何をしたかの行と本文を1つの要素として読む。サムネイルは別の要素のまま残す。
     private func updateAccessibility(for configuration: NotificationContentConfiguration) {
-        textAccessibilityElement.accessibilityLabel = [configuration.header.string, bodyView.accessibilityText]
+        textAccessibilityElement.accessibilityLabel = [configuration.header.string, bodyView.accessibilityText, configuration.reactionGlow?.accessibilityText ?? ""]
             // 名前の前に差し込んだアイコンの文字は読まない。
             .map { $0.replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
@@ -148,6 +153,7 @@ final class NotificationContentView: UIView, UIContentView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        reactionGlowView.layout(in: bounds, bottomMargin: current.metrics.margins.bottom)
         // 本文の枠は中身の部品の中で決まるため、先に並べておく。
         bodyView.layoutIfNeeded()
         let bodyTextFrame = bodyView.convert(bodyView.textFrame, to: self)

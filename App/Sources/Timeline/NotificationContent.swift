@@ -65,6 +65,7 @@ extension TimelineViewController {
             bodySpacing: tuning.value(of: TuningCatalog.notificationQuotedSpacing),
             base: base
         )
+        configuration.reactionGlow = postContentBuilder.reactionGlow(for: shown)
         configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
         configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
         if let media {
