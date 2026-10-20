@@ -64,6 +64,41 @@ struct PostContentViewTests {
         }
     }
 
+    enum ShortRowShape: String, CaseIterable {
+        case plain, boost, media, spoiler
+    }
+
+    /// 一覧は行の高さを画素に丸めるため、行が求める高さより1画素未満だけ低くなることがある。
+    /// 足りない分を文字のラベルから削ると、UILabelは収まらない行を描かず、本文の最後の行が消える。
+    /// 足りない分は本文の下の余白で吸い、どの形でも文字のラベルは求める高さを保つ。
+    @Test(arguments: ShortRowShape.allCases)
+    func labelsKeepTheirHeightWhenRowIsSlightlyShort(shape: ShortRowShape) throws {
+        let base = try status(content: "<p>急に全部のアプリが死んで何と思ったらclaudeにultrakillされてた</p>")
+        let media = MediaAttachment(
+            id: "1",
+            type: .image,
+            url: URL(string: "https://files.example.social/original/1.png"),
+            previewUrl: URL(string: "https://files.example.social/small/1.png"),
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_475, height: 665))
+        )
+        let post = switch shape {
+        case .plain: base
+        case .boost: Status(id: "200", createdAt: base.createdAt, account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: base.account.avatar), content: "", spoilerText: "", url: nil, reblog: base)
+        case .media: Status(id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil, mediaAttachments: [media])
+        case .spoiler: Status(id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "急に全部のアプリが死んで何と思ったらclaudeにultrakillされてた", url: nil)
+        }
+        let view = makeViewController().contentConfiguration(for: post, base: .cell()).makeContentView()
+        let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        view.frame = CGRect(x: 0, y: 0, width: size.width, height: size.height - 0.3)
+        view.layoutIfNeeded()
+        let labels = visibleLabels(in: view).filter { $0.intrinsicContentSize.height > 0 }
+
+        #expect(labels.count >= 2)
+        for label in labels {
+            #expect(label.bounds.height >= label.intrinsicContentSize.height - 0.01, "\(label.text ?? "") label=\(label.bounds) intrinsic=\(label.intrinsicContentSize)")
+        }
+    }
+
     private func postBodyView(in view: UIView) -> PostBodyView? {
         for subview in view.subviews {
             if let body = subview as? PostBodyView ?? postBodyView(in: subview) { return body }

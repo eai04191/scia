@@ -323,8 +323,12 @@ final class PostContentView: UIView, UIContentView {
         // UILabelは伸ばされた枠の上下中央に文字を描くため、伸ばすと本文が名前の行から下にずれる。
         let fitsContent = bottomAnchor.constraint(equalTo: contentBottom, constant: margins.bottom)
         fitsContent.priority = .defaultLow - 1
+        // 一覧は行の高さを画素に丸め、求める高さより1画素未満だけ低くすることがある。足りない分は文字のラベルではなく下の余白から削る。
+        // ラベルから削ると、UILabelは収まらない行を描かないため、本文の最後の行が消える。
+        let belowContent = bottomAnchor.constraint(greaterThanOrEqualTo: contentBottom, constant: margins.bottom)
+        belowContent.priority = .defaultHigh - 1
         constraints += [
-            bottomAnchor.constraint(greaterThanOrEqualTo: contentBottom, constant: margins.bottom),
+            belowContent,
             fitsContent,
         ]
         variableConstraints = constraints
