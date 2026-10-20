@@ -328,6 +328,7 @@ final class TimelineViewController: UIViewController {
             _ = tuning.value(of: TuningCatalog.reactionGlowMixesInOKLab)
             _ = tuning.value(of: TuningCatalog.reactionGlowIconSize)
             _ = tuning.value(of: TuningCatalog.reactionGlowIconOpacity)
+            _ = tuning.value(of: TuningCatalog.reactionGlowIconRiseDelay)
             _ = tuning.value(of: TuningCatalog.reactionGlowFillsWidthWhenAlone)
             _ = tuning.value(of: TuningCatalog.reactionGlowHDRExposure)
             _ = tuning.value(of: TuningCatalog.reactionGlowLightIntensity)

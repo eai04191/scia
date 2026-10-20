@@ -1076,6 +1076,15 @@ public enum TuningCatalog {
         defaultValue: 0.6
     )
 
+    /// 散らしたアイコンを、光源から遠いほど遅れて点け、早く消す強さ。0なら全部が一緒に点く。
+    public static let reactionGlowIconRiseDelay = NumberTuning(
+        id: "timeline.reactionGlowIconRiseDelay",
+        title: "散らしたアイコンが下から順に点く遅れ",
+        range: 0...8,
+        step: 0.5,
+        defaultValue: 3
+    )
+
     /// 左半分のブーストと右半分のお気に入りの光を、真ん中で混ぜる幅。0でくっきり分ける。
     public static let reactionGlowBlendWidth = NumberTuning(
         id: "timeline.reactionGlowBlendWidth",
@@ -1140,6 +1149,7 @@ public enum TuningCatalog {
             .number(reactionGlowIconStyle),
             .number(reactionGlowIconSize),
             .number(reactionGlowIconOpacity),
+            .number(reactionGlowIconRiseDelay),
             .number(reactionGlowBlendWidth),
             .toggle(reactionGlowMixesInOKLab),
             .number(reactionGlowDuration),
