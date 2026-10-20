@@ -135,6 +135,8 @@ final class TimelineViewController: UIViewController {
     /// 指で動かしているスクロールの始まり。止まったら違和感レポート用に記録する。
     private var scrollStart: (offset: CGFloat, time: CFTimeInterval)?
     private let scrollHitches = ScrollHitchMonitor()
+    /// 投稿のメニューの、システムの翻訳で出す翻訳シート。
+    let translation = SystemTranslation()
     private lazy var newArrivalsButton = makeNewArrivalsButton()
     /// 一覧の最上部から引っぱって、浮かべた新着のボタンを下げている量。
     private var pulledDistance: CGFloat = 0
@@ -234,6 +236,7 @@ final class TimelineViewController: UIViewController {
         emojiImages.addListener(owner: self) { [weak self] urls in self?.emojiImagesDidLoad(urls) }
         avatarImages.addListener(owner: self) { [weak self] key in self?.avatarImageDidLoad(key) }
         observeTuning()
+        translation.install(in: self)
     }
 
     /// 安全領域やナビゲーションバーの高さが変わったら、チップの列を置き直す。

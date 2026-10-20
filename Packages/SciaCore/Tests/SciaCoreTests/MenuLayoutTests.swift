@@ -127,7 +127,7 @@ struct MenuLayoutTests {
     @Test func statusMenuDefaultMatchesMenuBeforeCustomization() {
         let groups = StatusMenuItem.defaultLayout.groups
 
-        #expect(groups.main == [[.reply, .favourite, .reblog, .edit], [.copyLink, .share, .openInBrowser, .editHistory, .hideMedia], [.notifyingUser, .author, .booster]])
+        #expect(groups.main == [[.reply, .favourite, .reblog, .edit], [.copyLink, .share, .openInBrowser, .editHistory, .hideMedia, .systemTranslate], [.notifyingUser, .author, .booster]])
         #expect(groups.more == [[.delete]])
         #expect(UserMenuItem.defaultLayout.groups.main == [[.profile, .copyLink, .share]])
     }

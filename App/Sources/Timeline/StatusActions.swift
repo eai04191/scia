@@ -53,7 +53,7 @@ extension TimelineViewController {
             return users([.account(status.account)])
         case .mentionedUsers:
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
-        case .reply, .favourite, .reblog, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .edit, .delete:
+        case .reply, .favourite, .reblog, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .systemTranslate, .edit, .delete:
             guard let status else { return [] }
             return statusAction(item, on: status, id: id).map { [$0] } ?? []
         }
@@ -119,6 +119,13 @@ extension TimelineViewController {
             let isImageOnly = shown.mediaAttachments.allSatisfy { $0.type == .image }
             return UIAction(title: isImageOnly ? "画像を隠す" : item.title, image: item.image) { [weak self] _ in
                 self?.hideMedia(of: shown)
+            }
+        case .systemTranslate:
+            // 書式やリンクは落とし、本文の文字だけを訳す。カスタム絵文字は`:shortcode:`のまま渡す。
+            let text = RichText.status(shown).plainText
+            guard !text.allSatisfy(\.isWhitespace) else { return nil }
+            return UIAction(title: item.title, image: item.image) { [weak self] _ in
+                self?.translation.present(text)
             }
         case .notifyingUser, .author, .booster, .mentionedUsers:
             return nil

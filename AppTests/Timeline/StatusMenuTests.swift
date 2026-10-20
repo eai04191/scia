@@ -17,9 +17,9 @@ struct StatusMenuTests {
         return viewController.contextMenu(for: entry, id: entry.id)
     }
 
-    private func status(url: URL?, account: Account? = nil, mentions: [Mention] = [], reblog: Status? = nil) throws -> Status {
+    private func status(url: URL?, account: Account? = nil, content: String? = nil, mentions: [Mention] = [], reblog: Status? = nil) throws -> Status {
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
-        return Status(id: base.id, createdAt: base.createdAt, account: account ?? base.account, content: base.content, spoilerText: "", url: url, mentions: mentions, reblog: reblog)
+        return Status(id: base.id, createdAt: base.createdAt, account: account ?? base.account, content: content ?? base.content, spoilerText: "", url: url, mentions: mentions, reblog: reblog)
     }
 
     private func account(_ id: String, _ acct: String) throws -> Account {
@@ -57,9 +57,16 @@ struct StatusMenuTests {
 
         #expect(try outline(menu(for: .status(post))) == [
             ["返信", "お気に入り", "ブースト"],
-            ["リンクをコピー", "共有", "ブラウザで開く"],
+            ["リンクをコピー", "共有", "ブラウザで開く", "翻訳"],
             ["@alice[プロフィール,リンクをコピー,共有]"],
         ])
+    }
+
+    /// 本文が空白だけの投稿では、訳すものがないので翻訳を出さない。
+    @Test func systemTranslateIsHiddenWithoutText() throws {
+        let titles = try actions(menu(for: .status(status(url: nil, content: "<p> </p>")))).map(\.title)
+
+        #expect(!titles.contains("翻訳"))
     }
 
     /// ブーストは元の投稿のページを指す。ブーストの側のurlがなくても、元の投稿にあれば押せる。
@@ -120,10 +127,10 @@ struct StatusMenuTests {
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings))
 
-        // 並びに書かなかった項目は、既定で直前にある項目の後ろに差し込まれる。ブラウザで開くは共有の後ろに、ユーザーの項目はその後ろに入る。
+        // 並びに書かなかった項目は、既定で直前にある項目の後ろに差し込まれる。ブラウザで開くと翻訳は共有の後ろに、ユーザーの項目はその後ろに入る。
         #expect(outline == [
             ["返信"],
-            ["共有", "ブラウザで開く", "@alice[プロフィール,リンクをコピー,共有]"],
+            ["共有", "ブラウザで開く", "翻訳", "@alice[プロフィール,リンクをコピー,共有]"],
             ["その他[リンクをコピー,ブースト]"],
         ])
     }

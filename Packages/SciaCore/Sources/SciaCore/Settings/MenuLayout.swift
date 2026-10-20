@@ -150,6 +150,8 @@ public enum StatusMenuItem: String, MenuItemKind {
     case delete
     /// 一覧で添付ファイルを覆う。添付ファイルがあり、覆っていない投稿でだけ出る。開くときは覆いをタップする。
     case hideMedia
+    /// 本文をプレーンテキストにして、システムの翻訳シートで訳す。本文のある投稿でだけ出る。MastodonのAPIで訳す翻訳とは別の項目。
+    case systemTranslate
     /// 通知した人のユーザーのメニュー。通知でだけ出る。
     case notifyingUser
     /// 投稿した人のユーザーのメニュー。ブーストなら元の投稿を書いた人。
@@ -160,7 +162,7 @@ public enum StatusMenuItem: String, MenuItemKind {
     case mentionedUsers
 
     /// 設定を足す前のメニューと同じ並び。足す前になかったメンションされたユーザーは隠しておく。
-    /// 設定を足したあとに増えた項目（メディアを隠す、編集履歴、編集、削除）は、足したことに気づけるよう表示しておく。
+    /// 設定を足したあとに増えた項目（メディアを隠す、翻訳、編集履歴、編集、削除）は、足したことに気づけるよう表示しておく。
     /// 削除は、誤って押さないよう「その他」に入れる。開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
     public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
         .item(.reply, isVisible: true),
@@ -175,6 +177,7 @@ public enum StatusMenuItem: String, MenuItemKind {
         .item(.openInAppSafari, isVisible: false),
         .item(.editHistory, isVisible: true),
         .item(.hideMedia, isVisible: true),
+        .item(.systemTranslate, isVisible: true),
         .separator,
         .item(.notifyingUser, isVisible: true),
         .item(.author, isVisible: true),
