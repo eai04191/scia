@@ -12,11 +12,10 @@ struct ReactionGlow: Equatable {
 
     struct Style: Equatable {
         var height: CGFloat
+        /// ライトモードでSDRで描くときの光の高さ。
+        var lightSDRHeight: CGFloat
         var darkOpacity: CGFloat
         var lightOpacity: CGFloat
-        /// 下の端のすぐ上に重ねる、いちばん明るいにじみの高さと濃さ。
-        var bloomHeight: CGFloat
-        var bloomOpacity: CGFloat
         /// にじみを、SDRの白の何倍の明るさで描くか。1ならSDRのまま描く。HDRで描ける画面でだけ、白より明るく光る。
         var hdrExposure: CGFloat
         /// 使う人がHDRで光らせることを選んでいるか。オフなら、HDRで描ける画面でもSDRで描く。
@@ -70,10 +69,9 @@ extension ReactionGlow.Style {
     init(tuning: TuningStore, settings: AppSettings) {
         self.init(
             height: tuning.value(of: TuningCatalog.reactionGlowHeight),
+            lightSDRHeight: tuning.value(of: TuningCatalog.reactionGlowLightSDRHeight),
             darkOpacity: tuning.value(of: TuningCatalog.reactionGlowDarkOpacity),
             lightOpacity: tuning.value(of: TuningCatalog.reactionGlowLightOpacity),
-            bloomHeight: tuning.value(of: TuningCatalog.reactionGlowBloomHeight),
-            bloomOpacity: tuning.value(of: TuningCatalog.reactionGlowBloomOpacity),
             hdrExposure: tuning.value(of: TuningCatalog.reactionGlowHDRExposure),
             allowsHDR: settings.drawsReactionGlowInHDR,
             lightHDROpacity: tuning.value(of: TuningCatalog.reactionGlowLightHDROpacity),
@@ -147,6 +145,8 @@ final class ReactionGlowView: UIView {
         bloomFalloff.colors = [0, 0.3, 0.8, 1].map { UIColor(white: 0, alpha: $0).cgColor }
         bloom.mask = bloomFalloff
         registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (self: Self, _: UITraitCollection) in
+            // ライトとダークで光の高さが変わるため、行の中身に並べ直してもらう。
+            self.superview?.setNeedsLayout()
             self.render()
         }
     }
@@ -164,7 +164,7 @@ final class ReactionGlowView: UIView {
     /// 行の中身を並べ終えたあとに呼び、下の端に置く。行より高い光は、行の上の端で切る。
     /// - Parameter bottomMargin: 行の下の余白。中身は少なくともこれだけ下の端から離れている。
     func layout(in bounds: CGRect, bottomMargin: CGFloat) {
-        let height = min(current?.style.height ?? 0, bounds.height)
+        let height = min(glowHeight, bounds.height)
         frame = CGRect(x: bounds.minX, y: bounds.maxY - height, width: bounds.width, height: height)
         if iconAreaHeight != bottomMargin {
             iconAreaHeight = bottomMargin
@@ -266,8 +266,8 @@ final class ReactionGlowView: UIView {
         }
         // 光を足すときは、濃さは縦の形（falloff）と区切りの濃さだけで決める。重ねる濃さを下げると、足した光がそのぶん弱まるため。
         glow.opacity = Float(isDark ? style.darkOpacity : addsLight ? style.lightHDROpacity : style.lightOpacity)
-        bloom.opacity = Float(style.bloomOpacity)
-        let bloomHeight = min(max(style.bloomHeight, 0), bounds.height)
+        bloom.opacity = Self.bloomOpacity
+        let bloomHeight = min(Self.bloomHeight, bounds.height)
         bloom.frame = CGRect(x: 0, y: bounds.height - bloomHeight, width: bounds.width, height: bloomHeight)
         bloomFalloff.frame = bloom.bounds
         glow.frame = bounds
@@ -338,6 +338,10 @@ final class ReactionGlowView: UIView {
         value - value.rounded(.down)
     }
 
+    /// 下の端のすぐ上に重ねる、いちばん明るいにじみの高さと濃さ。実機で見比べて決めた。
+    private static let bloomHeight: CGFloat = 1
+    private static let bloomOpacity: Float = 1
+
     /// アイコンと、その上の本文とのすき間。
     private static let iconTextGap: CGFloat = 1
     /// アイコンと、行の下の端とのすき間。
@@ -364,6 +368,14 @@ final class ReactionGlowView: UIView {
         return SRGBColor(red: red, green: green, blue: blue)
     }
 
+    /// ライトでSDRで描くときだけ、専用の高さを使う。
+    private var glowHeight: CGFloat {
+        guard let style = current?.style else { return 0 }
+        let isDark = traitCollection.userInterfaceStyle == .dark
+        let drawsLightInHDR = canDrawHDR && style.allowsHDR && style.hdrExposure > 1
+        return !isDark && !drawsLightInHDR ? style.lightSDRHeight : style.height
+    }
+
     /// 置かれた画面が、SDRの白より明るく描けるか。画面に置かれる前は分からないので、描けないものとして扱い、置かれたら描き直す。
     private var canDrawHDR: Bool {
         (window?.windowScene?.screen.potentialEDRHeadroom ?? 1) > 1
@@ -371,6 +383,8 @@ final class ReactionGlowView: UIView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        // HDRで描けるかが分かると、ライトの光の高さが変わることがあるため、行の中身に並べ直してもらう。
+        superview?.setNeedsLayout()
         render()
     }
 

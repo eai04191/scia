@@ -945,7 +945,7 @@ public enum TuningCatalog {
         )
     }
 
-    /// お気に入りとブーストをした投稿の行の、下の端から照らす光の高さ。光は行の中にだけ伸ばす。
+    /// お気に入りとブーストをした投稿の行の、下の端から照らす光の高さ。光は行の中にだけ伸ばす。ライトでSDRで描くときは、`reactionGlowLightSDRHeight`を使う。
     public static let reactionGlowHeight = NumberTuning(
         id: "timeline.reactionGlowHeight",
         title: "光の高さ（pt）",
@@ -954,13 +954,22 @@ public enum TuningCatalog {
         defaultValue: 64
     )
 
+    /// ライトモードでSDRで描くときの光の高さ。白い背景に光の色を薄く重ねるだけなので、HDRのときより低くする。
+    public static let reactionGlowLightSDRHeight = NumberTuning(
+        id: "timeline.reactionGlowLightSDRHeight",
+        title: "光の高さ（ライト、SDR、pt）",
+        range: 0...120,
+        step: 2,
+        defaultValue: 38
+    )
+
     /// ダークモードでの、光のいちばん明るいところ（下の端）の濃さ。
     public static let reactionGlowDarkOpacity = NumberTuning(
         id: "timeline.reactionGlowDarkOpacity",
         title: "光の濃さ（ダーク）",
         range: 0...1,
         step: 0.05,
-        defaultValue: 0.3
+        defaultValue: 0.4
     )
 
     /// ライトモードでSDRで描くときの、光のいちばん明るいところ（下の端）の濃さ。白い背景では濃いと汚れのように見えるため、ダークと分ける。
@@ -971,24 +980,6 @@ public enum TuningCatalog {
         range: 0...1,
         step: 0.05,
         defaultValue: 0.3
-    )
-
-    /// 光の下の端のすぐ上に重ねる、いちばん明るいにじみの高さ。0でにじませない。
-    public static let reactionGlowBloomHeight = NumberTuning(
-        id: "timeline.reactionGlowBloomHeight",
-        title: "下の端のにじみの高さ（pt）",
-        range: 0...16,
-        step: 1,
-        defaultValue: 6
-    )
-
-    /// 光の下の端のすぐ上に重ねる、いちばん明るいにじみの濃さ。
-    public static let reactionGlowBloomOpacity = NumberTuning(
-        id: "timeline.reactionGlowBloomOpacity",
-        title: "下の端のにじみの濃さ",
-        range: 0...1,
-        step: 0.05,
-        defaultValue: 0.6
     )
 
     /// 光をHDRで描くときの倍率。にじみをSDRの白の何倍の明るさで描くかで、1ならSDRのまま描く。ライトでは1を超えると、照らされた面を白より明るく描く。
@@ -1023,7 +1014,7 @@ public enum TuningCatalog {
         title: "光の濃さ（ライト、HDR）",
         range: 0...1,
         step: 0.05,
-        defaultValue: 1
+        defaultValue: 0.95
     )
 
     /// ライトモードでHDRで描くときの、下の端のにじみの強さ。照らす光の強さの何倍にするか。
@@ -1135,10 +1126,9 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "timeline.reactionGlow", title: "お気に入りとブーストの光", items: [
             .number(reactionGlowHeight),
+            .number(reactionGlowLightSDRHeight),
             .number(reactionGlowDarkOpacity),
             .number(reactionGlowLightOpacity),
-            .number(reactionGlowBloomHeight),
-            .number(reactionGlowBloomOpacity),
             .number(reactionGlowHDRExposure),
             .number(reactionGlowLightIntensity),
             .number(reactionGlowLightHDROpacity),
