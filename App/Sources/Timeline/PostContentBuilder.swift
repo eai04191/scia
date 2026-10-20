@@ -79,7 +79,7 @@ struct PostContentBuilder {
 
     /// `shown`は表示している投稿。ブーストなら、ブーストされた投稿。
     func reactionGlow(for shown: Status) -> ReactionGlow {
-        ReactionGlow(statusID: shown.id, isReblogged: shown.reblogged, isFavourited: shown.favourited, style: ReactionGlow.Style(tuning: tuning))
+        ReactionGlow(statusID: shown.id, isReblogged: shown.reblogged, isFavourited: shown.favourited, style: ReactionGlow.Style(tuning: tuning, settings: settings))
     }
 
     func avatarContent(of account: Account) -> AvatarView.Content {

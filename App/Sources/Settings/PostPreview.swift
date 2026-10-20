@@ -14,10 +14,25 @@ struct PostPreview: UIViewRepresentable {
     let animatesAvatars: Bool
     let linkCardThumbnailSide: LinkCardThumbnailSide
     let glyphLanguage: GlyphLanguage
+    /// お気に入りとブーストをした投稿の見本にする。下の端の光を見せるため。
+    var showsReactions = false
+    var drawsReactionGlowInHDR = true
     let builder: PostContentBuilder
 
     private var status: Status {
-        Status(
+        if showsReactions {
+            return Status(
+                id: "preview-reactions",
+                createdAt: createdAt,
+                account: account,
+                content: "<p>お気に入りとブーストをした投稿は、このように表示されます。</p>",
+                spoilerText: "",
+                url: nil,
+                favourited: true,
+                reblogged: true
+            )
+        }
+        return Status(
             id: "preview",
             createdAt: createdAt,
             account: account,

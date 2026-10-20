@@ -342,6 +342,7 @@ final class TimelineViewController: UIViewController {
             _ = settings.animatesAvatars
             _ = settings.linkCardThumbnailSide
             _ = settings.glyphLanguage
+            _ = settings.drawsReactionGlowInHDR
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }

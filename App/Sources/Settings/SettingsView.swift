@@ -100,6 +100,37 @@ struct SettingsView: View {
                     Text("相対時刻では、1週間より前の投稿は日付で表示します。\n漢字の字形は、言語の付いていない投稿や名前で使います。投稿に日本語・中国語・韓国語の言語が付いていれば、その言語の字形で表示します。「自動」では、iPhoneの言語の一覧で最初の日本語・中国語・韓国語に従い、どれもなければ日本語にします。")
                 }
                 Section {
+                    if let previewAccount {
+                        PostPreview(
+                            account: previewAccount,
+                            createdAt: previewDate,
+                            nameStyle: settings.statusNameStyle,
+                            timeStyle: settings.statusTimeStyle,
+                            avatarShape: settings.avatarShape,
+                            animatesAvatars: settings.animatesAvatars,
+                            linkCardThumbnailSide: settings.linkCardThumbnailSide,
+                            glyphLanguage: settings.glyphLanguage,
+                            showsReactions: true,
+                            drawsReactionGlowInHDR: settings.drawsReactionGlowInHDR,
+                            builder: PostContentBuilder(
+                                tuning: AppDependencies.tuning,
+                                settings: settings,
+                                emojiImages: AppDependencies.emojiImages,
+                                mediaImages: AppDependencies.mediaImages,
+                                avatarImages: AppDependencies.avatarImages
+                            )
+                        )
+                        .listRowInsets(EdgeInsets())
+                        // タイムラインと同じく、光の下の端を区切りにする。区切り線が光に重なると、光が灰色に濁って見えるため。
+                        .listRowSeparator(.hidden, edges: .bottom)
+                    }
+                    Toggle("HDRで光らせる", isOn: $settings.drawsReactionGlowInHDR)
+                } header: {
+                    Text("お気に入りとブーストの光")
+                } footer: {
+                    Text("お気に入りやブーストをした投稿の下の端の光を、HDRに対応した画面では白より明るく表示します。オフにすると、ほかの表示と同じ明るさにします。HDRのメディアの明るさの設定とは別に選べます。")
+                }
+                Section {
                     Picker("最上部での新着の挿入", selection: $settings.insertionMotion) {
                         Text("自動").tag(InsertionMotion.followsSystem)
                         Text("動かして見せる").tag(InsertionMotion.animated)

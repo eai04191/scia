@@ -19,6 +19,8 @@ struct ReactionGlow: Equatable {
         var bloomOpacity: CGFloat
         /// にじみを、SDRの白の何倍の明るさで描くか。1ならSDRのまま描く。HDRで描ける画面でだけ、白より明るく光る。
         var hdrExposure: CGFloat
+        /// 使う人がHDRで光らせることを選んでいるか。オフなら、HDRで描ける画面でもSDRで描く。
+        var allowsHDR: Bool
         /// ライトモードでHDRで描くときの、照らす光の強さ。白い背景にこの強さで光を足し、白より明るくする。
         var lightIntensity: Double
         var fillsWidthWhenAlone: Bool
@@ -57,7 +59,7 @@ struct ReactionGlow: Equatable {
 
 extension ReactionGlow.Style {
     @MainActor
-    init(tuning: TuningStore) {
+    init(tuning: TuningStore, settings: AppSettings) {
         self.init(
             height: tuning.value(of: TuningCatalog.reactionGlowHeight),
             darkOpacity: tuning.value(of: TuningCatalog.reactionGlowDarkOpacity),
@@ -65,6 +67,7 @@ extension ReactionGlow.Style {
             bloomHeight: tuning.value(of: TuningCatalog.reactionGlowBloomHeight),
             bloomOpacity: tuning.value(of: TuningCatalog.reactionGlowBloomOpacity),
             hdrExposure: tuning.value(of: TuningCatalog.reactionGlowHDRExposure),
+            allowsHDR: settings.drawsReactionGlowInHDR,
             lightIntensity: tuning.value(of: TuningCatalog.reactionGlowLightIntensity),
             fillsWidthWhenAlone: tuning.value(of: TuningCatalog.reactionGlowFillsWidthWhenAlone),
             iconStyle: ReactionGlow.IconStyle(tuning.value(of: TuningCatalog.reactionGlowIconStyle)),
@@ -225,7 +228,7 @@ final class ReactionGlowView: UIView {
         // にじみを、白より明るいHDRの色で描く。ライトでは照らされた側もHDRの色にし、白い背景の上に白より明るい光を足す。
         // ダークでは照らされた側はSDRのまま。黒い背景の上ではSDRの色でも十分に明るく見えるため。
         // HDRで描けない画面（白より明るくできる余地が1倍）では、SDRで描く。白より明るい色は白に丸められ、ライトでは光が白い背景に溶けて見えなくなるため。
-        let exposure = canDrawHDR ? style.hdrExposure : 1
+        let exposure = canDrawHDR && style.allowsHDR ? style.hdrExposure : 1
         // ライトでHDRを使うときは、照らされた面を「背景の白＋光」の色で描く。光の色を明るくして白に重ねるだけでは、
         // 光の色にない成分（橙なら青）が白より暗くなり、面が明るくならずに色が付いて見えるだけになるため。
         let addsLight = !isDark && exposure > 1

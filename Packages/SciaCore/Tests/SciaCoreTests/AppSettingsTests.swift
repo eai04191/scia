@@ -69,6 +69,18 @@ struct AppSettingsTests {
         #expect(!AppSettings(defaults: defaults).ignoresUselessAltText)
     }
 
+    /// HDRで描ける画面では、お気に入りとブーストの光を既定で白より明るく光らせる。白い背景の上では、HDRでないと光って見えないため。
+    @Test func drawsReactionGlowInHDRByDefault() throws {
+        let settings = AppSettings(defaults: try makeDefaults())
+        #expect(settings.drawsReactionGlowInHDR)
+    }
+
+    @Test func persistsDrawsReactionGlowInHDR() throws {
+        let defaults = try makeDefaults()
+        AppSettings(defaults: defaults).drawsReactionGlowInHDR = false
+        #expect(!AppSettings(defaults: defaults).drawsReactionGlowInHDR)
+    }
+
     /// 届いた通知に気づけるよう、ステータスバーの通知は既定で流す。
     @Test func showsStatusBarTickerByDefault() throws {
         let settings = AppSettings(defaults: try makeDefaults())

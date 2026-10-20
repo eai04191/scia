@@ -115,6 +115,12 @@ public final class AppSettings {
         didSet { defaults.set(mediaDynamicRange.rawValue, forKey: Keys.mediaDynamicRange) }
     }
 
+    /// お気に入りとブーストの光を、HDRで描ける画面では白より明るく光らせる。オフならSDRで描く。
+    /// メディアの明るさの設定（`mediaDynamicRange`）はメディアに対するものなので、光はそれに従わせず、ここで別に選ぶ。
+    public var drawsReactionGlowInHDR: Bool {
+        didSet { defaults.set(drawsReactionGlowInHDR, forKey: Keys.drawsReactionGlowInHDR) }
+    }
+
     /// ビューアで、HDRのメディアを描く明るさ。
     public var viewerMediaDynamicRange: MediaDynamicRange {
         didSet { defaults.set(viewerMediaDynamicRange.rawValue, forKey: Keys.viewerMediaDynamicRange) }
@@ -144,6 +150,7 @@ public final class AppSettings {
         static let videoUploadSize = "settings.videoUploadSize"
         static let mediaDynamicRange = "settings.mediaDynamicRange"
         static let viewerMediaDynamicRange = "settings.viewerMediaDynamicRange"
+        static let drawsReactionGlowInHDR = "settings.drawsReactionGlowInHDR"
     }
 
     public init(defaults: UserDefaults) {
@@ -170,6 +177,7 @@ public final class AppSettings {
         videoUploadSize = defaults.string(forKey: Keys.videoUploadSize).flatMap(VideoUploadSize.init(rawValue:)) ?? .p1080
         mediaDynamicRange = defaults.string(forKey: Keys.mediaDynamicRange).flatMap(MediaDynamicRange.init(rawValue:)) ?? .standard
         viewerMediaDynamicRange = defaults.string(forKey: Keys.viewerMediaDynamicRange).flatMap(MediaDynamicRange.init(rawValue:)) ?? .constrainedHigh
+        drawsReactionGlowInHDR = defaults.object(forKey: Keys.drawsReactionGlowInHDR) as? Bool ?? true
         profilePostsFilter = ProfilePostsFilter(
             showsReplies: defaults.object(forKey: Keys.profileShowsReplies) as? Bool ?? ProfilePostsFilter.standard.showsReplies,
             showsBoosts: defaults.object(forKey: Keys.profileShowsBoosts) as? Bool ?? ProfilePostsFilter.standard.showsBoosts
