@@ -210,7 +210,7 @@ final class RowContentScrollView: UIScrollView {}
 final class MediaTileView: UIButton, MediaViewerSource {
     private let store: MediaImageStore
     private let settings: AppSettings
-    private let thumbnailView = UIImageView()
+    private let thumbnailView = FocusCroppedImageView()
     private let symbolView = UIImageView()
     private let badge = MediaBadgeView()
     private let moreLabel = UILabel()
@@ -243,8 +243,6 @@ final class MediaTileView: UIButton, MediaViewerSource {
         isAccessibilityElement = true
         accessibilityTraits = [.button, .image]
 
-        thumbnailView.contentMode = .scaleAspectFill
-        thumbnailView.clipsToBounds = true
         symbolView.contentMode = .center
         symbolView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 36)
         symbolView.layer.shadowColor = UIColor.black.cgColor
@@ -284,6 +282,8 @@ final class MediaTileView: UIButton, MediaViewerSource {
     /// 描いているサムネイル。ビューアの開閉で、まだ画像を描いていないページの代わりに動かす。
     var thumbnailImage: UIImage? { thumbnailView.image }
 
+    var thumbnailFocus: MediaFocus? { thumbnailView.focus }
+
     /// 読み込んだサムネイル。blurhashのぼかしは含まない。ビューアで元の画像が届くまでの下地にする。
     private(set) var loadedThumbnail: UIImage? {
         didSet { updateBadge() }
@@ -302,10 +302,9 @@ final class MediaTileView: UIButton, MediaViewerSource {
         let container = UIView(frame: bounds)
         container.isUserInteractionEnabled = false
         if showsMovingImage, let thumbnail = thumbnailView.image {
-            let copy = UIImageView(image: thumbnail)
-            copy.frame = bounds
-            copy.contentMode = thumbnailView.contentMode
-            copy.clipsToBounds = true
+            let copy = FocusCroppedImageView(frame: bounds)
+            copy.image = thumbnail
+            copy.focus = thumbnailView.focus
             copy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             container.addSubview(copy)
         }
@@ -395,6 +394,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         self.isCovered = isCovered
         self.policy = policy
         showsMovingImage = attachment?.type == .video || attachment?.type == .gifv
+        thumbnailView.focus = attachment?.meta?.focus
         setNeedsLayout()
         guard let attachment else { return }
         symbolView.image = Self.symbolName(of: attachment.type).flatMap { UIImage(systemName: $0) }
@@ -419,6 +419,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         attachment = nil
         source = nil
         showsMovingImage = kind == .video
+        thumbnailView.focus = nil
         loadedThumbnail = thumbnail
         thumbnailView.image = thumbnail
         symbolView.image = kind.flatMap(Self.symbolName(of:)).flatMap { UIImage(systemName: $0) }

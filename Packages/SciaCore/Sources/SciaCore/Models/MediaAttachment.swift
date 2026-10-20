@@ -114,10 +114,13 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
     public struct Meta: Codable, Hashable, Sendable {
         public let original: Size?
         public let small: Size?
+        /// 投稿者が付けた焦点。付けていなければnil。
+        public let focus: MediaFocus?
 
-        public init(original: Size? = nil, small: Size? = nil) {
+        public init(original: Size? = nil, small: Size? = nil, focus: MediaFocus? = nil) {
             self.original = original
             self.small = small
+            self.focus = focus
         }
     }
 

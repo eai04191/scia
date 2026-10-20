@@ -17,7 +17,7 @@ final class MediaClosingFlight: NSObject {
     struct Parts {
         /// 複製や下地を載せる、操作を素通しする層。終わったら外す。
         let overlay: UIView
-        let morph: UIImageView
+        let morph: FocusCroppedImageView
         /// 複製に載せた、サムネイルの印の複製。
         let decoration: UIView?
         /// 複製のさらに手前に置いた、サムネイルに重なっているビューの複製。印と同じ濃さで出し入れする。

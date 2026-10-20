@@ -42,7 +42,7 @@ struct MediaTileViewTests {
         let copy = tile.makeDecorationCopy()
 
         #expect(thumbnail != nil)
-        #expect(copy.subviews.contains { ($0 as? UIImageView)?.image === thumbnail }, "サムネイルを複製に載せていません")
+        #expect(copy.subviews.contains { ($0 as? FocusCroppedImageView)?.image === thumbnail }, "サムネイルを複製に載せていません")
     }
 
     /// 画像では、複製とサムネイルが同じ絵なので載せない。載せると、透明な部分が重なって濃く見える。
@@ -56,17 +56,31 @@ struct MediaTileViewTests {
         let copy = tile.makeDecorationCopy()
 
         #expect(thumbnail != nil)
-        #expect(!copy.subviews.contains { ($0 as? UIImageView)?.image === thumbnail })
+        #expect(!copy.subviews.contains { ($0 as? FocusCroppedImageView)?.image === thumbnail })
+    }
+
+    /// 動画とGIFのサムネイルの複製も、サムネイルと同じ焦点で切り抜く。違うと、閉じる着地で絵がずれる。
+    @Test func decorationCopyKeepsFocus() throws {
+        let tile = MediaTileView(store: .offline)
+        tile.frame = CGRect(x: 0, y: 0, width: 160, height: 90)
+        let focus = MediaFocus(x: 0.3, y: -0.6)
+        tile.apply(movingAttachment(type: .gifv, focus: focus), hiddenCount: 0, isCovered: false, policy: .offline)
+        tile.layoutIfNeeded()
+
+        let copy = try #require(tile.makeDecorationCopy().subviews.compactMap { $0 as? FocusCroppedImageView }.first)
+
+        #expect(tile.thumbnailFocus == focus)
+        #expect(copy.focus == focus)
     }
 
     /// 通信せずにサムネイルを出すため、blurhashのぼかしを使う。
-    private func movingAttachment(type: MediaAttachment.Kind) -> MediaAttachment {
+    private func movingAttachment(type: MediaAttachment.Kind, focus: MediaFocus? = nil) -> MediaAttachment {
         MediaAttachment(
             id: "1",
             type: type,
             url: nil,
             previewUrl: nil,
-            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900)),
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900), focus: focus),
             blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
         )
     }

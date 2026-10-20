@@ -21,11 +21,11 @@ import UIKit
 final class MediaBarLayering {
     /// 一覧の中に置き、最前面の複製と同じ位置と見た目で動かす複製。
     struct Underlay {
-        let image: UIImageView
+        let image: FocusCroppedImageView
         let decoration: UIView?
     }
 
-    private let morph: UIImageView
+    private let morph: FocusCroppedImageView
     /// 最前面の複製に載せた、サムネイルの印の複製。
     private let decoration: UIView?
     private let backdrop: UIView
@@ -52,7 +52,7 @@ final class MediaBarLayering {
     /// `backdropHoleFill`に描いている、反転の元にした画像。
     private weak var holeFillSource: UIImage?
 
-    init(morph: UIImageView, decoration: UIView?, backdrop: UIView, underlay: Underlay?, window: UIWindow) {
+    init(morph: FocusCroppedImageView, decoration: UIView?, backdrop: UIView, underlay: Underlay?, window: UIWindow) {
         self.morph = morph
         self.decoration = decoration
         self.backdrop = backdrop
@@ -73,7 +73,8 @@ final class MediaBarLayering {
         underlay.image.layer.mask = underlayMask
         backdropOutsideMask.fillColor = UIColor.black.cgColor
         backdropOutsideMask.fillRule = .evenOdd
-        backdropHoleFill.contentsGravity = .resizeAspectFill
+        // 見せる部分は`contentsRect`で切り抜くため、その部分を枠に合わせて引き伸ばす。
+        backdropHoleFill.contentsGravity = .resize
         backdropHoleFill.masksToBounds = true
         backdropMask.addSublayer(backdropOutsideMask)
         backdropMask.addSublayer(backdropHoleFill)
@@ -152,6 +153,7 @@ final class MediaBarLayering {
         if image.image !== morph.image {
             image.image = morph.image
         }
+        image.focus = morph.focus
         image.frame = host.convert(morphFrame, from: window)
         image.layer.cornerRadius = morph.layer.cornerRadius
         image.layer.maskedCorners = morph.layer.maskedCorners
@@ -197,6 +199,7 @@ final class MediaBarLayering {
         backdropOutsideMask.frame = backdrop.bounds
         backdropOutsideMask.path = path.cgPath
         backdropHoleFill.frame = hole
+        backdropHoleFill.contentsRect = morph.image.map { MediaFocus.contentsRect(imageSize: $0.size, boundsSize: hole.size, focus: morph.focus) } ?? CGRect(x: 0, y: 0, width: 1, height: 1)
         backdropHoleFill.cornerRadius = radius
         backdropHoleFill.cornerCurve = morph.layer.cornerCurve
         backdropHoleFill.maskedCorners = morph.layer.maskedCorners

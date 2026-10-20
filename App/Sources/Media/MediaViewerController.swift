@@ -61,7 +61,7 @@ final class MediaViewerController: UIViewController {
     private let backdrop = UIView()
     /// 開閉とドラッグで動かす画像の複製。縦横比を保って枠を埋めるように切り抜くため、枠の形をサムネイルとビューアの画像のあいだで変えるだけで、
     /// サムネイルと同じ切り抜き方へ移る。
-    private let morph = UIImageView()
+    private let morph = FocusCroppedImageView()
     /// 複製に載せる、サムネイルの印（ALT、GIF、残りの枚数）の複製。サムネイルに近いほど濃くし、ビューアの画像の大きさでは見せない。
     private var morphDecoration: UIView?
     /// 複製のさらに手前に置く、サムネイルに重なっているビューの複製。印と同じ濃さで出し入れする。
@@ -296,8 +296,6 @@ final class MediaViewerController: UIViewController {
         pageController.dataSource = self
         pageController.delegate = self
         pageController.setViewControllers([page(at: currentIndex)], direction: .forward, animated: false)
-        morph.contentMode = .scaleAspectFill
-        morph.clipsToBounds = true
         morph.isHidden = true
         view.addSubview(morph)
         setUpChrome()
@@ -926,9 +924,11 @@ extension MediaViewerController {
     }
 
     /// サムネイルの印の複製を、複製に載せ直す。サムネイルを隠す前に描き写す必要がある。
+    /// 切り抜く位置も、サムネイルの焦点に合わせ直す。
     /// 複製の大きさが変わっても角からの位置を保つよう、複製いっぱいに広げて自動で位置を合わせる。
     private func attachDecoration(from tile: (any MediaViewerSource)?, alpha: CGFloat) {
         morphDecoration?.removeFromSuperview()
+        morph.focus = tile?.thumbnailFocus
         morphPlaceholderColor = tile?.placeholderColor
         morphDecoration = tile.map { tile in
             let decoration = tile.makeDecorationCopy()
@@ -1163,6 +1163,7 @@ extension MediaViewerController {
         let target = contentFrame(in: view)
         animator.addAnimations {
             self.morph.frame = target
+            self.morph.layoutIfNeeded()
             self.morph.layer.cornerRadius = 0
             self.setDecorationAlpha(0)
             self.setVisibility(1)
@@ -1293,9 +1294,9 @@ extension MediaViewerController {
 
     /// バーの奥に描く複製。複製と同じ画像と切り抜き方で、サムネイルの印も載せる。
     private func makeUnderlay(decoratedLike tile: (any MediaViewerSource)?) -> MediaBarLayering.Underlay {
-        let image = UIImageView(image: morph.image)
-        image.contentMode = morph.contentMode
-        image.clipsToBounds = true
+        let image = FocusCroppedImageView()
+        image.image = morph.image
+        image.focus = morph.focus
         image.layer.cornerCurve = morph.layer.cornerCurve
         image.layer.maskedCorners = morph.layer.maskedCorners
         image.isUserInteractionEnabled = false

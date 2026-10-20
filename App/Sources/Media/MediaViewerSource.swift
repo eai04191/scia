@@ -1,3 +1,4 @@
+import SciaCore
 import UIKit
 
 /// ビューアを開閉するときに、画像を広げ始め、縮めて戻す先のビュー。投稿の添付ファイルのサムネイルのほか、プロフィールのアイコンやヘッダー画像がなる。
@@ -8,6 +9,8 @@ protocol MediaViewerSource: UIView {
     var thumbnailImage: UIImage? { get }
     /// 読み込んだ画像。ぼかしなどの仮の下地は含まない。ビューアで元の画像が届くまでの下地にする。
     var loadedThumbnail: UIImage? { get }
+    /// 投稿者が付けた焦点。このビューは焦点に合わせて切り抜いていて、ビューアの複製もこのビューの近くでは同じように切り抜く。
+    var thumbnailFocus: MediaFocus? { get }
     /// 画像の奥に敷いている背景の色。透明な部分のある画像では、この色が透けて見える。
     var placeholderColor: UIColor? { get }
     /// 画像の上に重ねている印の複製。ビューアが動かす画像の複製に載せて、このビューとのあいだを一緒に動かす。印がなければ空のビューを返す。
@@ -21,6 +24,7 @@ protocol MediaViewerSource: UIView {
 
 extension MediaViewerSource {
     var overlappingViews: [UIView] { [] }
+    var thumbnailFocus: MediaFocus? { nil }
 }
 
 /// 画像を1枚描くだけのビュー。プロフィールのアイコンやヘッダー画像のように、上に重ねる印がない。
