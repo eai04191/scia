@@ -91,6 +91,8 @@ make test SIM='iPhone 16 Pro'
 
 ソースコードは[MIT No Attribution（MIT-0）](LICENSE)で公開しています。ただし、名称とアプリアイコン・ロゴは除きます。
 
+`App/Resources/Twemoji.ttf`は、[Twemoji](https://github.com/jdecked/twemoji)の絵（Copyright Twitter, Inc and other contributors、[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)）から`Tools/build-twemoji-font.py`で作った書体です。
+
 ## 名称とアイコン・ロゴ
 
 「Scia」という名称と、アプリアイコン・ロゴ（`App/Resources/AppIcon.icon`、`App/Resources/AppIconLight.icon`、そこから描き出した`docs/images/icon-*.webp`）は、MIT-0の対象に含めません。
