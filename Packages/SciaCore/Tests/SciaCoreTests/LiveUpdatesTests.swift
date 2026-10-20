@@ -58,7 +58,11 @@ struct LiveUpdatesTests {
         task.cancel()
         _ = await task.result
 
-        #expect(await log.labels == ["connected"])
+        // 起動直後などでつなぎ終えるまでがポーリングの間隔より長いと、つながる前のポーリングや知らせは正しく届く。見るのはつながった後だけにする。
+        let labels = await log.labels
+        let connected = try #require(labels.firstIndex(of: "connected"))
+        let expected = labels[..<connected].contains("outage started") ? ["connected", "outage ended"] : ["connected"]
+        #expect(Array(labels[connected...]) == expected, "\(labels)")
     }
 
     /// 短く切れてすぐつながったときは、知らせず、ポーリングもしない。
@@ -86,12 +90,18 @@ struct LiveUpdatesTests {
         let updates = makeUpdates(connector)
 
         let task = Task { try await updates.run { await log.append($0) } }
-        await log.waitUntil { $0.contains("poll") && $0.contains("outage started") }
+        // つなぎ終えるまでがポーリングの間隔より長いと、つながる前にもポーリングと知らせが届くので、切れた後のものを待つ。
+        await log.waitUntil { labels in
+            guard let disconnected = labels.firstIndex(of: "disconnected") else { return false }
+            return labels[disconnected...].contains("poll") && labels[disconnected...].contains("outage started")
+        }
         task.cancel()
         _ = await task.result
 
         let labels = await log.labels
-        #expect(Array(labels.prefix(3)) == ["connected", "event", "disconnected"], "\(labels)")
+        let connected = try #require(labels.firstIndex(of: "connected"))
+        let expected = labels[..<connected].contains("outage started") ? ["connected", "outage ended", "event", "disconnected"] : ["connected", "event", "disconnected"]
+        #expect(Array(labels[connected...].prefix(expected.count)) == expected, "\(labels)")
     }
 
     @Test func cancellationEndsRun() async throws {
