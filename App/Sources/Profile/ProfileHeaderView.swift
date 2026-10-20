@@ -30,6 +30,8 @@ final class ProfileHeaderView: UIView {
     var onOpenImage: ((ProfileImage) -> Void)?
     /// 関係が届いて、フォローのボタンの場所取りから本物の文字に変わるときのフェードの時間。0なら切り替える。
     var followRevealDuration: TimeInterval = 0
+    /// 自己紹介か補足情報の値のリンクがタップされたときと、メンションの長押しのメニューでプロフィールを選んだときに、その行き先を渡して呼ぶ。
+    var onOpenLink: ((RichText.LinkDestination) -> Void)?
 
     /// ヘッダー画像の縦横比（高さ÷幅）。Mastodonのヘッダー画像は3:1を想定している。
     private static let bannerAspect: CGFloat = 1 / 3
@@ -55,7 +57,7 @@ final class ProfileHeaderView: UIView {
     /// ヘッダー画像の右下に重ねる「フォローされています」。関係が届いてから出るため、縦に並ぶ情報の中に置くと、出たときに下が動く。
     /// ヘッダー画像の上なら場所を取らない。添付ファイルのALTの札と同じ見た目にする。
     private let followedByBadge = PaddedLabel()
-    private let noteLabel = UILabel()
+    private let noteLabel = LinkLabel()
     private let fieldsStack = UIStackView()
     private let countsLabel = UILabel()
     private let remoteStack = UIStackView()
@@ -146,6 +148,7 @@ final class ProfileHeaderView: UIView {
         // 触れたらヘッダー画像を開けるよう、タップは下のヘッダー画像に通す。
         followedByBadge.isUserInteractionEnabled = false
         noteLabel.numberOfLines = 0
+        noteLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
         fieldsStack.axis = .vertical
         fieldsStack.spacing = 8
         countsLabel.numberOfLines = 0
@@ -279,6 +282,7 @@ final class ProfileHeaderView: UIView {
         let body = UIFont.preferredFont(forTextStyle: .body)
         let note = RichTextRenderer(font: body, textColor: .label, paragraphSpacing: 6, emojiImages: emojiImages, language: content.glyphLanguage).render(.html(account.note, emojis: account.emojis))
         noteLabel.attributedText = note
+        noteLabel.accessibilityCustomActions = linkAccessibilityActions(in: note)
         noteLabel.isHidden = note.length == 0
         applyFields(account, language: content.glyphLanguage)
         countsLabel.attributedText = Self.countsText(of: account)
@@ -327,8 +331,9 @@ final class ProfileHeaderView: UIView {
             nameLabel.numberOfLines = 0
             nameLabel.attributedText = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, emojiImages: emojiImages, language: language)
                 .render(.plain(field.name, emojis: account.emojis))
-            let valueLabel = UILabel()
+            let valueLabel = LinkLabel()
             valueLabel.numberOfLines = 0
+            valueLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
             let value = NSMutableAttributedString(attributedString: RichTextRenderer(font: valueFont, textColor: .label, emojiImages: emojiImages, language: language)
                 .render(.html(field.value, emojis: account.emojis)))
             if field.verifiedAt != nil,
@@ -339,10 +344,21 @@ final class ProfileHeaderView: UIView {
                 valueLabel.accessibilityValue = "確認済み"
             }
             valueLabel.attributedText = value
+            valueLabel.accessibilityCustomActions = linkAccessibilityActions(in: value)
             let row = UIStackView(arrangedSubviews: [nameLabel, valueLabel])
             row.axis = .vertical
             row.spacing = 2
             fieldsStack.addArrangedSubview(row)
+        }
+    }
+
+    /// 読み上げで、リンクを開く操作。押しても何もしないハッシュタグは除く。
+    private func linkAccessibilityActions(in text: NSAttributedString) -> [UIAccessibilityCustomAction] {
+        LinkLabel.links(in: text).map { text, destination in
+            UIAccessibilityCustomAction(name: text) { [weak self] _ in
+                self?.onOpenLink?(destination)
+                return true
+            }
         }
     }
 

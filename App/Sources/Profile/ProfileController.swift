@@ -18,6 +18,8 @@ final class ProfileController {
     /// 読み込みが401で失敗したときに呼ぶ。読み込みの失敗はアラートを出さず画面の中に出すため、`onError`とは分ける。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "profile")
+    /// 自己紹介か補足情報のリンクを開く。開き方はセッションが決める。
+    var onOpenLink: ((RichText.LinkDestination) -> Void)?
     private var tasks: [Task<Void, Never>] = []
     /// 表示している一覧と、その一覧のタブ。切り替えた一覧が届くまでは、前の一覧を出し続ける。
     private var shownTimeline: TimelineStore
@@ -96,6 +98,7 @@ final class ProfileController {
             UIApplication.shared.open(url)
         }
         header.onOpenImage = { [weak self] image in self?.openImage(image) }
+        header.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination) }
         observeHeaderContent()
         // 名前や自己紹介の絵文字が届いたら、ヘッダーを描き直す。投稿の絵文字は一覧が描き直す。
         viewController.emojiImages.addListener(owner: self) { [weak self] urls in

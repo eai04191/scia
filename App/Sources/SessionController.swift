@@ -503,6 +503,19 @@ final class SessionController {
         }
     }
 
+    /// プロフィールの自己紹介や補足情報のリンクを開く。投稿の本文と同じく、ハッシュタグは押しても何もしない。
+    /// 自己紹介には投稿のようなメンションの一覧がなく、IDが分からないため、メンションはプロフィールのURLから探す。
+    private func open(_ destination: RichText.LinkDestination, inProfileFrom source: UIViewController) {
+        switch destination {
+        case .url(let url):
+            open(url, in: AppDependencies.settings.linkBrowser.browser(for: url))
+        case .mention(let acct, let url):
+            openProfile(resolving: url, acct: acct, from: source)
+        case .hashtag:
+            break
+        }
+    }
+
     /// `url`を`browser`で開く。アプリ内のSafariはhttpとhttps以外のURLで例外を出して落ちるため、呼ぶ側が`LinkBrowser.browser(for:)`などで確かめてから渡す。
     private func open(_ url: URL, in browser: LinkBrowser) {
         switch browser {
@@ -550,6 +563,10 @@ final class SessionController {
         }
         UserAction.openProfile.record()
         configure(viewController)
+        controller.onOpenLink = { [weak self, weak viewController] destination in
+            guard let viewController else { return }
+            self?.open(destination, inProfileFrom: viewController)
+        }
         profiles.add(controller)
         source.navigationController?.pushViewController(viewController, animated: true)
         controller.start()
