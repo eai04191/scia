@@ -323,9 +323,20 @@ final class HomeTimelineController {
         }
     }
 
+    /// 投稿の応答で返った自分の投稿を、ストリーミングで届くのを待たずに新着と同じ経路で流す。
+    func receivePosted(_ status: Status) {
+        guard !isStopped else { return }
+        logger.info("home posted status=\(status.id, privacy: .public)")
+        apply(store.receivePosted(status))
+    }
+
     private func receive(_ event: StreamingEvent) {
         guard !isStopped else { return }
-        switch store.receive(event) {
+        apply(store.receive(event))
+    }
+
+    private func apply(_ result: TimelineStore.EventResult) {
+        switch result {
         case .none:
             break
         case .pendingStarted:

@@ -38,6 +38,8 @@ public final class TimelineStore {
     /// フィルターで出さない投稿。一覧には並べないが、読めなかった投稿と同じく、続きを読む位置には使う。
     /// 1ページの全部が隠れても、その先へ進めるようにするため。編集でフィルターに一致しなくなれば、一覧に戻す。
     private var hiddenStatuses: [Status] = []
+    /// 投稿の応答で入れ、まだストリーミングでも補完でも届いていない自分の投稿のID。
+    private var unconfirmedPostedIDs: Set<String> = []
     private let pageSize: Int
     private let filtering: StatusFiltering?
     private let fetch: Fetch
@@ -72,6 +74,11 @@ public final class TimelineStore {
         }
         guard !hiddenStatuses.isEmpty else { return shown }
         return (shown + hiddenStatuses.map(\.id)).sorted { StatusID.isNewer($0, than: $1) }
+    }
+
+    /// 補完で、これより新しい投稿を読む基準。投稿の応答で入れた自分の投稿は、届いたと確かめるまで使わない。
+    private var fillBaseID: String? {
+        itemIDs.first { !unconfirmedPostedIDs.contains($0) }
     }
 
     public var gaps: [TimelineGap] {
@@ -191,7 +198,7 @@ public final class TimelineStore {
     /// 2ページ目以降の読み込みに失敗したら、そこで止めて残りをギャップとして残す。1ページ目の結果はもう反映しているため。
     public func fillFromLatest(maxPages: Int = 1) async throws -> [Status]? {
         guard !isFilling else {
-            if let newest = itemIDs.first {
+            if let newest = fillBaseID {
                 refillSinceID = refillSinceID.map { Self.older($0, newest) } ?? newest
             }
             return nil
@@ -199,7 +206,7 @@ public final class TimelineStore {
         isFilling = true
         defer { isFilling = false }
 
-        guard let firstSinceID = unfilledSinceID ?? itemIDs.first else {
+        guard let firstSinceID = unfilledSinceID ?? fillBaseID else {
             let page = try await fetch(TimelineQuery(limit: pageSize))
             isRegenerating = page.isRegenerating
             let added = merge(page)
@@ -355,6 +362,7 @@ public final class TimelineStore {
     public func receive(_ event: StreamingEvent) -> EventResult {
         switch event {
         case .update(let status):
+            unconfirmedPostedIDs.remove(status.id)
             guard !allStatuses.contains(where: { $0.id == status.id }), !pending.contains(where: { $0.id == status.id }) else {
                 return .none
             }
@@ -374,6 +382,22 @@ public final class TimelineStore {
         case .notification, .filtersChanged, .unhandled:
             return .none
         }
+    }
+
+    /// 投稿の応答で返った自分の投稿を、新着と同じく保留に溜める。ストリーミングで届くのを待たずに一覧に出すため。
+    ///
+    /// ストリーミングで届くか、補完で読めるまでは、補完の基準にしない。サーバーは投稿を配信の順に流すので、
+    /// 自分の投稿より少し前に他の人が投稿し、まだ届いていない投稿がありうる。届く前に切れて補完すると、それを読み飛ばすため。
+    /// 既読位置には、ほかの投稿と同じく使う。見ているうちに、自分の投稿より古い投稿があとから下に届くと、未読に数えない。
+    /// そのとき一番上を見ていれば、下に入るところも見えているので、数えなくても見落とさないため。
+    ///
+    /// 補完の基準にできる投稿が1件もない一覧（最初の読み込みの前や失敗した後、空のホーム）には入れず、ストリーミングを待つ。
+    /// 入れると一覧が空でなくなり、読み込み直す代わりに続きを読むようになって、最新のページと応答の投稿の間を読まなくなるため。
+    public func receivePosted(_ status: Status) -> EventResult {
+        guard fillBaseID != nil else { return .none }
+        let result = receive(.update(status))
+        unconfirmedPostedIDs.insert(status.id)
+        return result
     }
 
     /// 削除された投稿と、それをブーストした投稿を除く。あとから届いても足さない。表示に関わる変化があればtrueを返す。
@@ -513,6 +537,7 @@ public final class TimelineStore {
 
     /// ページの投稿と読めなかった投稿のうち、まだないものを足し、足した投稿を新しい順に返す。
     private func merge(_ page: TimelinePage) -> [Status] {
+        unconfirmedPostedIDs.subtract(page.statuses.map(\.id))
         let known = Set(itemIDs)
         let newUnreadable = page.unreadable.filter { !known.contains($0.id) && !deletedIDs.contains($0.id) }
         unreadableItems = Self.unique(unreadableItems + newUnreadable)

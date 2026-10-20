@@ -255,7 +255,8 @@ final class SessionController {
                             update(edited.id) { _ in edited }
                         }
                     } else {
-                        _ = try await client.postStatus(draft)
+                        // ストリーミングで届くまで数秒かかることがあるため、応答の投稿をすぐホームに出す。
+                        home.receivePosted(try await client.postStatus(draft))
                     }
                 } catch {
                     reportIfUnauthorized(error)

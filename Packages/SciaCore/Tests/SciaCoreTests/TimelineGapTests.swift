@@ -785,6 +785,100 @@ struct TimelineGapTests {
     }
     #endif
 
+    // MARK: - 投稿の応答で入れた自分の投稿
+
+    /// 投稿の応答で入れた自分の投稿は、ストリーミングで同じ投稿が届いても重ねない。
+    @Test func postedStatusIsNotDuplicatedByStreaming() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        server.post(11...11)
+
+        #expect(store.receivePosted(server.status(11)) == .pendingStarted)
+        _ = store.flushPending()
+        #expect(store.receive(.update(server.status(11))) == .none)
+
+        #expect(ids(store) == [11, 10, 9, 8])
+    }
+
+    /// ストリーミングで届く前の自分の投稿を、補完の基準にしない。
+    /// 自分の投稿より前に他の人が投稿し、まだストリーミングで届いていない投稿を、読み飛ばさないため。
+    @Test func fillDoesNotSkipStatusesOlderThanUnconfirmedPostedStatus() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        server.post(11...12)
+        _ = store.receivePosted(server.status(12))
+        _ = store.flushPending()
+
+        _ = try await store.fillFromLatest()
+
+        #expect(ids(store) == [12, 11, 10, 9, 8])
+        #expect(store.gaps.isEmpty)
+    }
+
+    /// ストリーミングで届いたら、ほかの投稿と同じく補完の基準にする。
+    @Test func postedStatusConfirmedByStreamingBecomesFillBase() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        server.post(11...11)
+        _ = store.receivePosted(server.status(11))
+        _ = store.flushPending()
+        _ = store.receive(.update(server.status(11)))
+
+        _ = try await store.fillFromLatest()
+
+        #expect(server.queries.last == TimelineQuery(sinceID: "11", limit: Self.pageSize))
+    }
+
+    /// 補完で読めたら、そこまでの間は読み終えているので、ストリーミングを待たずに補完の基準にする。
+    @Test func postedStatusLoadedByFillBecomesFillBase() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        server.post(11...11)
+        _ = store.receivePosted(server.status(11))
+        _ = store.flushPending()
+        _ = try await store.fillFromLatest()
+
+        _ = try await store.fillFromLatest()
+
+        #expect(server.queries.last == TimelineQuery(sinceID: "11", limit: Self.pageSize))
+    }
+
+    /// 確かめた投稿が1件もない一覧には、応答の投稿を入れずにストリーミングを待つ。
+    /// 入れると、補完の基準がないのに一覧が空でなくなり、切れていた間の投稿と応答の投稿の間を読まなくなるため。
+    @Test func postedStatusIntoEmptyTimelineDoesNotLoseRangeOnReconnect() async throws {
+        let server = FakeHomeServer(ids: [])
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        server.post(1...1)
+        _ = store.receivePosted(server.status(1))
+        _ = store.flushPending()
+        server.post(2...10)
+
+        _ = try await store.fillFromLatest()
+        while let gap = store.gaps.first {
+            _ = try await store.loadGap(gap.id, from: .fromNewer)
+        }
+        while !store.reachedEnd {
+            _ = try await store.loadOlder()
+        }
+
+        #expect(ids(store) == Array((1...10).reversed()))
+    }
+
+    /// 最初の読み込みに失敗した一覧に入れると、空でなくなり、読み込み直す代わりに続きを読むようになるため、入れない。
+    @Test func postedStatusIsNotInsertedBeforeInitialLoad() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = TimelineStore(pageSize: Self.pageSize) { _ in throw URLError(.networkConnectionLost) }
+        _ = try? await store.loadInitial()
+
+        #expect(store.receivePosted(server.status(11)) == .none)
+        #expect(store.isEmpty)
+    }
+
     // MARK: - 既読位置から読み始める
 
     @Test func markerInLatestPageNeedsNoExtraRequests() async throws {
