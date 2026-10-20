@@ -6,6 +6,7 @@ enum StatusAction {
     case reply
     case favourite
     case reblog
+    case bookmark
     case editHistory
     case edit
     case delete
@@ -74,7 +75,7 @@ extension TimelineViewController {
             return users([.account(status.account)])
         case .mentionedUsers:
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
-        case .reply, .favourite, .reblog, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .systemTranslate, .edit, .delete:
+        case .reply, .favourite, .reblog, .bookmark, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .systemTranslate, .edit, .delete:
             guard let status else { return [] }
             return statusAction(item, on: status, id: id).map { [$0] } ?? []
         }
@@ -108,6 +109,13 @@ extension TimelineViewController {
                 attributes: canReblog(status) ? [] : .disabled
             ) { [weak self] _ in
                 self?.onStatusAction?(.reblog, status)
+            }
+        case .bookmark:
+            return UIAction(
+                title: shown.bookmarked ? "ブックマークを外す" : item.title,
+                image: shown.bookmarked ? UIImage(systemName: "bookmark.slash") : item.image
+            ) { [weak self] _ in
+                self?.onStatusAction?(.bookmark, status)
             }
         case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
             // 共通の項目は、上で中身から組んだ。

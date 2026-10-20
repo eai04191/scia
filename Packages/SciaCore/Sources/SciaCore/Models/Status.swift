@@ -214,6 +214,11 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         return status
     }
 
+    /// ブックマークの状態を`other`に揃えたもの。
+    public func adoptingBookmark(of other: Status) -> Status {
+        settingBookmarked(other.bookmarked)
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, account, content, spoilerText, language, url, mentions, tags, emojis, mediaAttachments, sensitive
         case visibility, inReplyToId, inReplyToAccountId, poll, card, quote, filtered, editedAt

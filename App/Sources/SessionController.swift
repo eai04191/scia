@@ -652,6 +652,9 @@ final class SessionController {
         case .reblog:
             UserAction.toggleReblog.record()
             toggle(.reblog, on: status, failureTitle: "ブーストを変更できませんでした")
+        case .bookmark:
+            UserAction.toggleBookmark.record()
+            toggle(.bookmark, on: status, failureTitle: "ブックマークを変更できませんでした")
         case .editHistory:
             UserAction.openEditHistory.record()
             // フィルターの結果はブーストの外側にだけ付くことがあるため、判定にはブーストごと渡す。

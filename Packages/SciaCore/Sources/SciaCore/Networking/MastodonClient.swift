@@ -195,6 +195,16 @@ public struct MastodonClient: Sendable {
         try await post(Status.self, path: "api/v1/statuses/\(statusID)/unfavourite", form: []).0
     }
 
+    /// https://docs.joinmastodon.org/methods/statuses/#bookmark
+    public func bookmark(_ statusID: String) async throws -> Status {
+        try await post(Status.self, path: "api/v1/statuses/\(statusID)/bookmark", form: []).0
+    }
+
+    /// https://docs.joinmastodon.org/methods/statuses/#unbookmark
+    public func unbookmark(_ statusID: String) async throws -> Status {
+        try await post(Status.self, path: "api/v1/statuses/\(statusID)/unbookmark", form: []).0
+    }
+
     /// ブーストし、ブーストした元の投稿を返す。APIはブーストそのものを返すため、中の元の投稿を取り出す。
     /// https://docs.joinmastodon.org/methods/statuses/#boost
     public func reblog(_ statusID: String) async throws -> Status {

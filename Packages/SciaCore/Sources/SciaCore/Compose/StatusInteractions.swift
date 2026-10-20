@@ -1,9 +1,10 @@
-/// お気に入りとブーストを付け外しする。サーバーの結果を待たずに表示へ反映し、失敗したら戻す。
+/// お気に入り、ブースト、ブックマークを付け外しする。サーバーの結果を待たずに表示へ反映し、失敗したら戻す。
 @MainActor
 public final class StatusInteractions {
     public enum Action: Hashable, Sendable {
         case favourite
         case reblog
+        case bookmark
     }
 
     /// APIを呼ぶ口。テストでは差し替える。
@@ -12,17 +13,23 @@ public final class StatusInteractions {
         public var unfavourite: @Sendable (Status.ID) async throws -> Status
         public var reblog: @Sendable (Status.ID) async throws -> Status
         public var unreblog: @Sendable (Status.ID) async throws -> Status
+        public var bookmark: @Sendable (Status.ID) async throws -> Status
+        public var unbookmark: @Sendable (Status.ID) async throws -> Status
 
         public init(
             favourite: @escaping @Sendable (Status.ID) async throws -> Status,
             unfavourite: @escaping @Sendable (Status.ID) async throws -> Status,
             reblog: @escaping @Sendable (Status.ID) async throws -> Status,
-            unreblog: @escaping @Sendable (Status.ID) async throws -> Status
+            unreblog: @escaping @Sendable (Status.ID) async throws -> Status,
+            bookmark: @escaping @Sendable (Status.ID) async throws -> Status,
+            unbookmark: @escaping @Sendable (Status.ID) async throws -> Status
         ) {
             self.favourite = favourite
             self.unfavourite = unfavourite
             self.reblog = reblog
             self.unreblog = unreblog
+            self.bookmark = bookmark
+            self.unbookmark = unbookmark
         }
 
         public init(client: MastodonClient) {
@@ -30,7 +37,9 @@ public final class StatusInteractions {
                 favourite: { try await client.favourite($0) },
                 unfavourite: { try await client.unfavourite($0) },
                 reblog: { try await client.reblog($0) },
-                unreblog: { try await client.unreblog($0) }
+                unreblog: { try await client.unreblog($0) },
+                bookmark: { try await client.bookmark($0) },
+                unbookmark: { try await client.unbookmark($0) }
             )
         }
     }
@@ -79,6 +88,7 @@ public final class StatusInteractions {
         switch action {
         case .favourite: status.favourited
         case .reblog: status.reblogged
+        case .bookmark: status.bookmarked
         }
     }
 
@@ -86,6 +96,7 @@ public final class StatusInteractions {
         switch action {
         case .favourite: status.settingFavourited(isOn)
         case .reblog: status.settingReblogged(isOn)
+        case .bookmark: status.settingBookmarked(isOn)
         }
     }
 
@@ -93,6 +104,7 @@ public final class StatusInteractions {
         switch action {
         case .favourite: status.adoptingFavourite(of: result)
         case .reblog: status.adoptingReblog(of: result)
+        case .bookmark: status.adoptingBookmark(of: result)
         }
     }
 
@@ -102,6 +114,8 @@ public final class StatusInteractions {
         case (.favourite, false): try await operations.unfavourite(id)
         case (.reblog, true): try await operations.reblog(id)
         case (.reblog, false): try await operations.unreblog(id)
+        case (.bookmark, true): try await operations.bookmark(id)
+        case (.bookmark, false): try await operations.unbookmark(id)
         }
     }
 }
