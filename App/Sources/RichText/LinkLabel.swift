@@ -283,9 +283,9 @@ final class LinkHitArea: UIControl {
             children = settings.linkMenuLayout.groups.menuElements { item in
                 switch item {
                 case .open: [openAction(item.title, image: item.image, destination)]
-                case .openInBrowser: [openInBrowserAction(url, title: item.title, image: item.image)]
-                case .copyLink: [copyAction(url, title: item.title, image: item.image)]
-                case .share: [shareAction(url, at: point, title: item.title, image: item.image)]
+                case .openInBrowser: [openInBrowserAction(url)]
+                case .copyLink: [copyAction(url)]
+                case .share: [shareAction(url, at: point)]
                 }
             }
         case .mention(let acct, let url):
@@ -293,17 +293,17 @@ final class LinkHitArea: UIControl {
             children = settings.userMenuLayout.groups.menuElements { item in
                 switch item {
                 case .profile: [openAction(item.title, image: item.image, destination)]
-                case .copyLink: [copyAction(url, title: item.title, image: item.image)]
-                case .share: [shareAction(url, at: point, title: item.title, image: item.image)]
+                case .copyLink: [copyAction(url)]
+                case .share: [shareAction(url, at: point)]
                 }
             }
         case .hashtag(let name, let url):
             title = "#\(name)"
             children = settings.hashtagMenuLayout.groups.menuElements { item in
                 switch item {
-                case .openInBrowser: [openInBrowserAction(url, title: item.title, image: item.image)]
-                case .copyLink: [copyAction(url, title: item.title, image: item.image)]
-                case .share: [shareAction(url, at: point, title: item.title, image: item.image)]
+                case .openInBrowser: [openInBrowserAction(url)]
+                case .copyLink: [copyAction(url)]
+                case .share: [shareAction(url, at: point)]
                 }
             }
         }
@@ -315,27 +315,24 @@ final class LinkHitArea: UIControl {
     }
 
     /// 開くの設定でアプリ内のSafariを選んでいても、既定のブラウザで開く。
-    private func openInBrowserAction(_ url: URL, title: String, image: UIImage?) -> UIAction {
-        UIAction(title: title, image: image) { _ in
-            UIApplication.shared.open(url)
+    private func openInBrowserAction(_ url: URL) -> UIAction {
+        URLMenuAction.openInBrowser.menuAction(url: url) { UIApplication.shared.open($0) }
+    }
+
+    private func copyAction(_ url: URL) -> UIAction {
+        URLMenuAction.copyLink.menuAction(url: url) { [weak self] url in
+            URLSharing.copy(url, notifying: self?.nearest((any LinkMenuHost).self))
         }
     }
 
-    private func copyAction(_ url: URL, title: String, image: UIImage?) -> UIAction {
-        UIAction(title: title, image: image) { [weak self] _ in
-            UIPasteboard.general.url = url
-            self?.nearest((any LinkMenuHost).self)?.showLinkCopiedNotice()
-        }
-    }
-
-    private func shareAction(_ url: URL, at point: CGPoint, title: String, image: UIImage?) -> UIAction {
-        UIAction(title: title, image: image) { [weak self] _ in
+    /// 押したリンクを起点にする。
+    private func shareAction(_ url: URL, at point: CGPoint) -> UIAction {
+        URLMenuAction.share.menuAction(url: url) { [weak self] url in
             guard let self, let label, let presenter = nearest(UIViewController.self) else { return }
-            let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-            // iPadとMacではポップオーバーで出るため、押したリンクを起点にする。
-            activity.popoverPresentationController?.sourceView = label
-            activity.popoverPresentationController?.sourceRect = label.linkFrames(at: point).reduce(CGRect.null) { $0.union($1) }
-            presenter.frontmostPresented.present(activity, animated: true)
+            URLSharing.presentShareSheet(for: url, from: presenter) { popover in
+                popover.sourceView = label
+                popover.sourceRect = label.linkFrames(at: point).reduce(CGRect.null) { $0.union($1) }
+            }
         }
     }
 

@@ -25,9 +25,9 @@ extension StatusMenuItem {
         case .reply: "返信"
         case .favourite: "お気に入り"
         case .reblog: "ブースト"
-        case .copyLink: "リンクをコピー"
-        case .share: "共有"
-        case .openInBrowser: "ブラウザで開く"
+        case .copyLink: URLMenuAction.copyLink.title
+        case .share: URLMenuAction.share.title
+        case .openInBrowser: URLMenuAction.openInBrowser.title
         case .editHistory: "編集履歴"
         case .edit: "編集"
         case .delete: "削除"
@@ -56,9 +56,9 @@ extension StatusMenuItem {
         case .reply: "arrowshape.turn.up.left"
         case .favourite: "star"
         case .reblog: "arrow.2.squarepath"
-        case .copyLink: "link"
-        case .share: "square.and.arrow.up"
-        case .openInBrowser: "safari"
+        case .copyLink: URLMenuAction.copyLink.symbolName
+        case .share: URLMenuAction.share.symbolName
+        case .openInBrowser: URLMenuAction.openInBrowser.symbolName
         case .editHistory: "clock.arrow.circlepath"
         case .edit: "pencil"
         case .delete: "trash"
@@ -77,8 +77,8 @@ extension UserMenuItem {
     var title: String {
         switch self {
         case .profile: "プロフィール"
-        case .copyLink: "リンクをコピー"
-        case .share: "共有"
+        case .copyLink: URLMenuAction.copyLink.title
+        case .share: URLMenuAction.share.title
         }
     }
 
@@ -87,8 +87,8 @@ extension UserMenuItem {
     var symbolName: String {
         switch self {
         case .profile: "person.crop.circle"
-        case .copyLink: "link"
-        case .share: "square.and.arrow.up"
+        case .copyLink: URLMenuAction.copyLink.symbolName
+        case .share: URLMenuAction.share.symbolName
         }
     }
 
@@ -99,9 +99,9 @@ extension LinkMenuItem {
     var title: String {
         switch self {
         case .open: "開く"
-        case .openInBrowser: "ブラウザで開く"
-        case .copyLink: "リンクをコピー"
-        case .share: "共有"
+        case .openInBrowser: URLMenuAction.openInBrowser.title
+        case .copyLink: URLMenuAction.copyLink.title
+        case .share: URLMenuAction.share.title
         }
     }
 
@@ -116,9 +116,9 @@ extension LinkMenuItem {
     var symbolName: String {
         switch self {
         case .open: "arrow.up.forward.app"
-        case .openInBrowser: "safari"
-        case .copyLink: "link"
-        case .share: "square.and.arrow.up"
+        case .openInBrowser: URLMenuAction.openInBrowser.symbolName
+        case .copyLink: URLMenuAction.copyLink.symbolName
+        case .share: URLMenuAction.share.symbolName
         }
     }
 
@@ -128,9 +128,9 @@ extension LinkMenuItem {
 extension HashtagMenuItem {
     var title: String {
         switch self {
-        case .openInBrowser: "ブラウザで開く"
-        case .copyLink: "リンクをコピー"
-        case .share: "共有"
+        case .openInBrowser: URLMenuAction.openInBrowser.title
+        case .copyLink: URLMenuAction.copyLink.title
+        case .share: URLMenuAction.share.title
         }
     }
 
@@ -138,9 +138,9 @@ extension HashtagMenuItem {
 
     var symbolName: String {
         switch self {
-        case .openInBrowser: "safari"
-        case .copyLink: "link"
-        case .share: "square.and.arrow.up"
+        case .openInBrowser: URLMenuAction.openInBrowser.symbolName
+        case .copyLink: URLMenuAction.copyLink.symbolName
+        case .share: URLMenuAction.share.symbolName
         }
     }
 

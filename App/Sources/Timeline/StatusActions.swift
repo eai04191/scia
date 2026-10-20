@@ -65,7 +65,6 @@ extension TimelineViewController {
         // `url`はMastodonのAPIでnullを取りうるため、ないときは押せないまま並べる。`uri`はActivityPubのIDで、ブラウザで開けるページとは限らないため代わりにしない。
         // ブーストなら元の投稿のページを指す。
         let url = shown.url
-        let linkAttributes: UIMenuElement.Attributes = url == nil ? .disabled : []
         switch item {
         case .reply:
             return UIAction(title: item.title, image: item.image) { [weak self] _ in
@@ -87,21 +86,11 @@ extension TimelineViewController {
                 self?.onStatusAction?(.reblog, status)
             }
         case .copyLink:
-            return UIAction(title: item.title, image: item.image, attributes: linkAttributes) { [weak self] _ in
-                guard let self, let url else { return }
-                UIPasteboard.general.url = url
-                showNotice(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
-            }
+            return URLMenuAction.copyLink.menuAction(url: url) { [weak self] url in URLSharing.copy(url, notifying: self) }
         case .share:
-            return UIAction(title: item.title, image: item.image, attributes: linkAttributes) { [weak self] _ in
-                guard let url else { return }
-                self?.presentShareSheet(for: url, from: id)
-            }
+            return URLMenuAction.share.menuAction(url: url) { [weak self] url in self?.presentShareSheet(for: url, from: id) }
         case .openInBrowser:
-            return UIAction(title: item.title, image: item.image, attributes: linkAttributes) { [weak self] _ in
-                guard let url else { return }
-                self?.onOpenLink?(.url(url), shown)
-            }
+            return URLMenuAction.openInBrowser.menuAction(url: url) { [weak self] url in self?.onOpenLink?(.url(url), shown) }
         case .editHistory:
             guard shown.editedAt != nil else { return nil }
             return UIAction(title: item.title, image: item.image) { [weak self] _ in
@@ -149,7 +138,6 @@ extension TimelineViewController {
 
     private func userAction(_ item: UserMenuItem, for user: MenuUser, id: ItemID, inSubmenu: Bool) -> UIAction {
         let url = user.url
-        let linkAttributes: UIMenuElement.Attributes = url == nil ? .disabled : []
         switch item {
         case .profile:
             return UIAction(title: inSubmenu ? item.title : "@\(user.acct)のプロフィール", image: item.image) { [weak self] _ in
@@ -159,25 +147,20 @@ extension TimelineViewController {
                 }
             }
         case .copyLink:
-            return UIAction(title: inSubmenu ? item.title : "@\(user.acct)のリンクをコピー", image: item.image, attributes: linkAttributes) { [weak self] _ in
-                guard let self, let url else { return }
-                UIPasteboard.general.url = url
-                showNotice(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            return URLMenuAction.copyLink.menuAction(title: inSubmenu ? nil : "@\(user.acct)のリンクをコピー", url: url) { [weak self] url in
+                URLSharing.copy(url, notifying: self)
             }
         case .share:
-            return UIAction(title: inSubmenu ? item.title : "@\(user.acct)を共有", image: item.image, attributes: linkAttributes) { [weak self] _ in
-                guard let url else { return }
+            return URLMenuAction.share.menuAction(title: inSubmenu ? nil : "@\(user.acct)を共有", url: url) { [weak self] url in
                 self?.presentShareSheet(for: url, from: id)
             }
         }
     }
 
+    /// メニューを出した行を起点にする。行が画面の外へ流れていれば一覧を起点にする。
     private func presentShareSheet(for url: URL, from id: ItemID) {
-        let activity = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        // iPadとMacではポップオーバーで出るため、メニューを出した行を起点にする。行が画面の外へ流れていれば一覧を起点にする。
-        activity.popoverPresentationController?.sourceItem = cell(for: id) ?? collectionView
-        // アプリ内のSafariのシートを出したまま上の一覧から共有することがあるため、いちばん手前の画面から出す。
-        frontmostPresented.present(activity, animated: true)
+        let source = cell(for: id) ?? collectionView
+        URLSharing.presentShareSheet(for: url, from: self) { $0.sourceItem = source }
     }
 
     private func canReblog(_ status: Status) -> Bool {
