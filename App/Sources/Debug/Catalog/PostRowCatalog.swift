@@ -101,6 +101,15 @@ enum PostRowCatalog {
                 account: Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com"),
                 editedAt: .now.addingTimeInterval(-60)
             )),
+            post("ひかえめな公開", status(content: "<p>ひかえめな公開の投稿。</p>", visibility: .unlisted)),
+            post("フォロワーのみ", status(content: "<p>フォロワーのみの投稿。</p>", visibility: .private)),
+            post("メンションした相手のみ", status(content: "<p>メンションした相手のみの投稿。</p>", visibility: .direct)),
+            post("フォロワーのみで編集され、名前が長い", status(
+                content: "<p>名前が1行に収まらず、公開範囲の記号と編集済みの印も付く投稿。</p>",
+                account: Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com"),
+                editedAt: .now.addingTimeInterval(-60),
+                visibility: .private
+            )),
             post("アイコンがない", status(content: "<p>アイコンのURLがないアカウントの投稿。</p>", account: Fixtures.account(acct: "noavatar@example.com", avatar: nil))),
         ]
     }
@@ -262,6 +271,7 @@ enum PostRowCatalog {
         sensitive: Bool = false,
         card: PreviewCard? = nil,
         editedAt: Date? = nil,
+        visibility: Status.Visibility = .public,
         filtered: [FilterResult] = [],
         favourited: Bool = false,
         reblogged: Bool = false,
@@ -276,6 +286,7 @@ enum PostRowCatalog {
             url: nil,
             mediaAttachments: media,
             sensitive: sensitive,
+            visibility: visibility,
             card: card,
             filtered: filtered,
             editedAt: editedAt,
