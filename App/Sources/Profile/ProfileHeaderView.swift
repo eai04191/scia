@@ -46,7 +46,9 @@ final class ProfileHeaderView: UIView {
     private let relationshipRetryButton = UIButton(configuration: .plain())
     private let nameLabel = UILabel()
     private let acctLabel = UILabel()
-    private let followedByLabel = PaddedLabel()
+    /// ヘッダー画像の右下に重ねる「フォローされています」。関係が届いてから出るため、縦に並ぶ情報の中に置くと、出たときに下が動く。
+    /// ヘッダー画像の上なら場所を取らない。添付ファイルのALTの札と同じ見た目にする。
+    private let followedByBadge = PaddedLabel()
     private let noteLabel = UILabel()
     private let fieldsStack = UIStackView()
     private let countsLabel = UILabel()
@@ -85,8 +87,9 @@ final class ProfileHeaderView: UIView {
             view.accessibilityTraits = [.image, .button]
         }
 
-        // アイコンはヘッダー画像に半分かかるため、ヘッダー画像を開閉する間もアイコンを手前に見せる。
-        bannerView.overlappingViews = [avatarRingView, avatarView]
+        // アイコンと「フォローされています」はヘッダー画像に重なるため、ヘッダー画像を開閉する間も手前に見せる。
+        // 「フォローされています」はアカウントについての印で、画像の印ではないため、画像と一緒には動かさない。
+        bannerView.overlappingViews = [avatarRingView, avatarView, followedByBadge]
 
         avatarRingView.backgroundColor = .systemBackground
         avatarRingView.layer.cornerCurve = .continuous
@@ -123,12 +126,14 @@ final class ProfileHeaderView: UIView {
 
         nameLabel.numberOfLines = 0
         acctLabel.numberOfLines = 0
-        followedByLabel.font = .preferredFont(forTextStyle: .caption1)
-        followedByLabel.textColor = .secondaryLabel
-        followedByLabel.backgroundColor = .secondarySystemFill
-        followedByLabel.layer.cornerRadius = 4
-        followedByLabel.clipsToBounds = true
-        followedByLabel.text = "フォローされています"
+        followedByBadge.textColor = .white
+        followedByBadge.backgroundColor = MediaBadgeView.backgroundColor
+        followedByBadge.layer.cornerRadius = MediaBadgeView.cornerRadius
+        followedByBadge.layer.cornerCurve = .continuous
+        followedByBadge.clipsToBounds = true
+        followedByBadge.text = "フォローされています"
+        // 触れたらヘッダー画像を開けるよう、タップは下のヘッダー画像に通す。
+        followedByBadge.isUserInteractionEnabled = false
         noteLabel.numberOfLines = 0
         fieldsStack.axis = .vertical
         fieldsStack.spacing = 8
@@ -165,15 +170,14 @@ final class ProfileHeaderView: UIView {
         tabRow.spacing = 8
         tabRow.alignment = .center
 
-        let followedByRow = UIStackView(arrangedSubviews: [followedByLabel, UIView()])
-        let infoStack = UIStackView(arrangedSubviews: [nameLabel, acctLabel, followedByRow, noteLabel, fieldsStack, countsLabel, remoteStack, tabRow])
+        let infoStack = UIStackView(arrangedSubviews: [nameLabel, acctLabel, noteLabel, fieldsStack, countsLabel, remoteStack, tabRow])
         infoStack.axis = .vertical
         infoStack.spacing = 8
         infoStack.setCustomSpacing(2, after: nameLabel)
         infoStack.setCustomSpacing(12, after: remoteStack)
         infoStack.setCustomSpacing(12, after: countsLabel)
 
-        for view in [bannerView, avatarRingView, avatarView, followArea, infoStack] as [UIView] {
+        for view in [bannerView, followedByBadge, avatarRingView, avatarView, followArea, infoStack] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -183,6 +187,10 @@ final class ProfileHeaderView: UIView {
             bannerView.leadingAnchor.constraint(equalTo: leadingAnchor),
             bannerView.trailingAnchor.constraint(equalTo: trailingAnchor),
             bannerView.heightAnchor.constraint(equalTo: bannerView.widthAnchor, multiplier: Self.bannerAspect),
+
+            // 添付ファイルのタイルの札と同じく、端から6pt離す。
+            followedByBadge.trailingAnchor.constraint(equalTo: bannerView.trailingAnchor, constant: -6),
+            followedByBadge.bottomAnchor.constraint(equalTo: bannerView.bottomAnchor, constant: -6),
 
             // アイコンはヘッダー画像の下端に半分かける。
             avatarView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margin + Self.avatarRing),
@@ -252,7 +260,6 @@ final class ProfileHeaderView: UIView {
         nameLabel.attributedText = RichTextRenderer(font: boldTitle, textColor: .label, emojiImages: emojiImages, language: content.glyphLanguage)
             .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
         acctLabel.attributedText = acctText(of: account)
-        followedByLabel.superview?.isHidden = !content.followedBy || content.followState == .myself
 
         let body = UIFont.preferredFont(forTextStyle: .body)
         let note = RichTextRenderer(font: body, textColor: .label, paragraphSpacing: 6, emojiImages: emojiImages, language: content.glyphLanguage).render(.html(account.note, emojis: account.emojis))
@@ -266,11 +273,16 @@ final class ProfileHeaderView: UIView {
 
         let revealsFollow = previous?.followState == .unknown && content.followState != .unknown
         if revealsFollow, followRevealDuration > 0, window != nil, !UIAccessibility.isReduceMotionEnabled {
-            UIView.transition(with: followButton, duration: followRevealDuration, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+            let options: UIView.AnimationOptions = [.transitionCrossDissolve, .allowUserInteraction]
+            UIView.transition(with: followButton, duration: followRevealDuration, options: options) {
                 self.applyFollowButton(content)
+            }
+            UIView.transition(with: followedByBadge, duration: followRevealDuration, options: options) {
+                self.applyFollowedByBadge(content)
             }
         } else {
             applyFollowButton(content)
+            applyFollowedByBadge(content)
         }
         tabControl.selectedSegmentIndex = content.tab == .media ? 1 : 0
         // メディアの一覧では使えないが、消すとタブの幅が変わって動くため、場所を残したまま押せなくする。
@@ -373,6 +385,11 @@ final class ProfileHeaderView: UIView {
         relationshipRetryButton.isEnabled = !content.isReloadingRelationship
     }
 
+    private func applyFollowedByBadge(_ content: Content) {
+        followedByBadge.isHidden = !content.followedBy || content.followState == .myself
+        followedByBadge.font = MediaBadgeView.font(for: traitCollection)
+    }
+
     private func applyFilterButton(_ filter: ProfilePostsFilter) {
         let isFiltered = filter != .standard
         filterButton.configuration?.image = UIImage(systemName: isFiltered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
@@ -435,7 +452,8 @@ private final class ProfileBannerView: UIImageView, MediaViewerSource {
 
 /// 背景色の内側に余白を取るラベル。
 private final class PaddedLabel: UILabel {
-    private let insets = UIEdgeInsets(top: 2, left: 6, bottom: 2, right: 6)
+    /// 添付ファイルの札（`MediaBadgeView`）と同じ余白。
+    private let insets = UIEdgeInsets(top: 2, left: 5, bottom: 2, right: 5)
 
     override func drawText(in rect: CGRect) {
         super.drawText(in: rect.inset(by: insets))

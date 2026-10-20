@@ -28,6 +28,13 @@ enum ProfileHeaderCatalog {
             },
             CatalogState(title: "フォローの承認を待っている") { header(Fixtures.account(acct: "locked", locked: true), .requested) },
             CatalogState(title: "フォロー中で、フォローされている") { header(fullAccount, .following, followedBy: true) },
+            CatalogState(title: "明るいヘッダー画像で、フォローされている（「フォローされています」の読みやすさ）") {
+                header(Fixtures.account(acct: "bright", header: Fixtures.imageURL(width: 1_500, height: 500, color: .white)), .notFollowing(locked: false), followedBy: true)
+            },
+            CatalogState(title: "ヘッダー画像なしで、承認制のアカウントにフォローされている") {
+                // ヘッダー画像を設定していないアカウントには透明な画像が返り、下地の色が見える。読めない画像を渡して、同じ見え方にする。
+                header(Fixtures.account(acct: "locked", header: URL(string: "data:image/png;base64,"), locked: true), .notFollowing(locked: true), followedBy: true)
+            },
             CatalogState(title: "フォローを変えている途中") { header(fullAccount, .following, isChangingFollow: true) },
             CatalogState(title: "関係を読み込む前") { header(fullAccount, .unknown) },
             CatalogState(title: "関係を読み込めなかった（再試行を押すと読み込み直す途中になる）") { header(fullAccount, .loadFailed) },
