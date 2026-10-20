@@ -1009,6 +1009,13 @@ public enum TuningCatalog {
         defaultValue: 1
     )
 
+    /// 開発用。画面がSDRの白の何倍まで明るく描けるか（今の余地と最大の余地）と、光をHDRとSDRのどちらで描くかを、画面の隅に出し続ける。
+    public static let debugShowsEDRHeadroom = ToggleTuning(
+        id: "debug.showsEDRHeadroom",
+        title: "画面のHDRの余地を表示する（開発用）",
+        defaultValue: false
+    )
+
     /// 片方だけのときは、その色で全幅を光らせる。オフなら、片方だけでもその半分だけを光らせる。
     public static let reactionGlowFillsWidthWhenAlone = ToggleTuning(
         id: "timeline.reactionGlowFillsWidthWhenAlone",
@@ -1099,6 +1106,7 @@ public enum TuningCatalog {
             .number(reactionGlowBloomOpacity),
             .number(reactionGlowHDRExposure),
             .number(reactionGlowLightIntensity),
+            .toggle(debugShowsEDRHeadroom),
             .toggle(reactionGlowFillsWidthWhenAlone),
             .number(reactionGlowIconStyle),
             .number(reactionGlowIconSize),
