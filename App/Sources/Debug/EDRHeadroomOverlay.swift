@@ -84,7 +84,7 @@ private final class EDRHeadroomOverlayView: UIView {
         let current = screen.currentEDRHeadroom
         let potential = screen.potentialEDRHeadroom
         let exposure = AppDependencies.tuning.value(of: TuningCatalog.reactionGlowHDRExposure)
-        let glow = potential > 1 && exposure > 1 ? "HDR" : "SDR"
+        let glow = potential > 1 && exposure > 1 && AppDependencies.settings.drawsReactionGlowInHDR ? "HDR" : "SDR"
         label.text = String(format: "EDRの余地 今 %.2f / 最大 %.2f\n光 %@", current, potential, glow)
     }
 }
