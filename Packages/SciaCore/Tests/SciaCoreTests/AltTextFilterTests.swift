@@ -12,7 +12,7 @@ struct AltTextFilterTests {
         #expect(AltTextFilter.meaningful(description, ignoresUseless: false) == nil)
     }
 
-    @Test(arguments: ["undefined", " undefined\n", "Screenshot", "screenshot", "SCREENSHOT", " Screenshot "])
+    @Test(arguments: ["undefined", " undefined\n", "Screenshot", "screenshot", "SCREENSHOT", " Screenshot ", "image.png", "Image.PNG", " image.png\n"])
     func ignoresUselessWhenEnabled(_ description: String) {
         #expect(AltTextFilter.meaningful(description, ignoresUseless: true) == nil)
         #expect(AltTextFilter.meaningful(description, ignoresUseless: false) == description)
@@ -20,7 +20,7 @@ struct AltTextFilterTests {
 
     /// undefinedは、JavaScriptで未設定の値を文字列にしたものだけを対象にし、大文字・小文字を区別する。
     /// 完全に一致するものだけを対象にし、説明の一部に含むものは残す。
-    @Test(arguments: ["Undefined", "UNDEFINED", "Screenshot of the settings", "undefined behavior", "スクリーンショット"])
+    @Test(arguments: ["Undefined", "UNDEFINED", "Screenshot of the settings", "undefined behavior", "スクリーンショット", "image.png of the settings", "image.jpg"])
     func keepsOtherText(_ description: String) {
         #expect(AltTextFilter.meaningful(description, ignoresUseless: true) == description)
     }

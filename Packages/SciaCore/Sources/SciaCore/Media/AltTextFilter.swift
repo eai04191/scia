@@ -16,9 +16,11 @@ public enum AltTextFilter {
 
     /// 投稿するアプリが自動で付ける、説明にならない文字列。
     /// undefinedは、JavaScriptで未設定の値を文字列にしたものなので、大文字・小文字を区別する。
-    /// Screenshotは、書き方の揺れがあっても説明にならないため、区別しない。
+    /// Screenshotと、貼り付けた画像に付くファイル名のimage.pngは、書き方の揺れがあっても説明にならないため、区別しない。
     private static func isUseless(_ trimmed: String) -> Bool {
-        trimmed == "undefined" || trimmed.caseInsensitiveCompare("Screenshot") == .orderedSame
+        trimmed == "undefined"
+            || trimmed.caseInsensitiveCompare("Screenshot") == .orderedSame
+            || trimmed.caseInsensitiveCompare("image.png") == .orderedSame
     }
 }
 
