@@ -80,18 +80,23 @@ enum LocalMediaLoader {
                     return
                 }
                 do {
-                    // 元の名前のままサーバーに送れるよう、選ぶたびにディレクトリを分ける。
-                    let folder = directory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
-                    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-                    let destination = folder.appending(path: url.lastPathComponent)
-                    try FileManager.default.copyItem(at: url, to: destination)
-                    continuation.resume(returning: destination)
+                    continuation.resume(returning: try copyToDirectory(url))
                 } catch {
                     continuation.resume(throwing: error)
                 }
             }
         }
         return LocalMediaFile(url: url, mimeType: mimeType, kind: kind)
+    }
+
+    /// ファイルを一時ディレクトリにコピーし、コピーした先を返す。
+    private static func copyToDirectory(_ url: URL) throws -> URL {
+        // 元の名前のままサーバーに送れるよう、選ぶたびにディレクトリを分ける。
+        let folder = directory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let destination = folder.appending(path: url.lastPathComponent)
+        try FileManager.default.copyItem(at: url, to: destination)
+        return destination
     }
 
     /// 添付したときの種類。GIFは、サーバーが音のない動画（gifv）に変える。
