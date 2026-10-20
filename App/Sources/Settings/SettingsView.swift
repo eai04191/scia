@@ -140,13 +140,14 @@ struct SettingsView: View {
                     Text("投稿や通知、本文のリンクやハッシュタグを長押ししたときのメニューに出す項目と、その並びを選びます。ユーザーのメニューは、投稿のメニューの中に、投稿したユーザーなどのサブメニューとして出るほか、本文のメンションを長押ししたときにも出ます。")
                 }
                 Section {
+                    Toggle("書いていないときは隠す", isOn: $settings.hidesEmptyComposeBar)
                     NavigationLink("投稿欄のボタン") {
                         MenuLayoutSettingsView(title: "投稿欄のボタン", layout: $settings.composeToolLayout)
                     }
                 } header: {
                     Text("投稿欄")
                 } footer: {
-                    Text("公開範囲、添付、注意書きのような項目を、投稿欄のボタンの行に常に出すか、＋の中に入れるかと、その並びを選びます。")
+                    Text("隠すと、一覧を広く使えます。書くときは、右上のボタンで投稿欄を出します。書きかけの下書きや返信先があるときは、隠さずに表示します。\n投稿欄のボタンでは、公開範囲、添付、注意書きのような項目を、投稿欄のボタンの行に常に出すか、＋の中に入れるかと、その並びを選びます。")
                 }
                 Section {
                     Picker("画像", selection: $settings.imageUploadSize) {

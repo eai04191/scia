@@ -94,6 +94,12 @@ public final class AppSettings {
         didSet { defaults.set(composeToolLayout.tokens, forKey: Keys.composeToolLayout) }
     }
 
+    /// 書いていないときに、空の投稿欄を隠す。書くときは、一覧の右上のボタンで出す。
+    /// 下書きや返信先があるときは、残っていると分かるよう隠さない。
+    public var hidesEmptyComposeBar: Bool {
+        didSet { defaults.set(hidesEmptyComposeBar, forKey: Keys.hidesEmptyComposeBar) }
+    }
+
     /// 送る前に画像を縮める大きさ。選んだ大きさに収まる画像は元のまま送る。
     public var imageUploadSize: ImageUploadSize {
         didSet { defaults.set(imageUploadSize.rawValue, forKey: Keys.imageUploadSize) }
@@ -133,6 +139,7 @@ public final class AppSettings {
         static let linkMenuLayout = "settings.linkMenuLayout"
         static let hashtagMenuLayout = "settings.hashtagMenuLayout"
         static let composeToolLayout = "settings.composeToolLayout"
+        static let hidesEmptyComposeBar = "settings.hidesEmptyComposeBar"
         static let imageUploadSize = "settings.imageUploadSize"
         static let videoUploadSize = "settings.videoUploadSize"
         static let mediaDynamicRange = "settings.mediaDynamicRange"
@@ -157,6 +164,7 @@ public final class AppSettings {
         linkMenuLayout = defaults.stringArray(forKey: Keys.linkMenuLayout).map(MenuLayout.init(tokens:)) ?? LinkMenuItem.defaultLayout
         hashtagMenuLayout = defaults.stringArray(forKey: Keys.hashtagMenuLayout).map(MenuLayout.init(tokens:)) ?? HashtagMenuItem.defaultLayout
         composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout
+        hidesEmptyComposeBar = defaults.object(forKey: Keys.hidesEmptyComposeBar) as? Bool ?? false
         // iPhoneの標準の写真（4032×3024）と動画（1080p）はそのまま送られ、それより大きな写真と4Kの動画だけが縮む。
         imageUploadSize = defaults.string(forKey: Keys.imageUploadSize).flatMap(ImageUploadSize.init(rawValue:)) ?? .long4096
         videoUploadSize = defaults.string(forKey: Keys.videoUploadSize).flatMap(VideoUploadSize.init(rawValue:)) ?? .p1080

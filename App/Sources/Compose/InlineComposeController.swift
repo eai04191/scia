@@ -116,6 +116,31 @@ final class InlineComposeController: NSObject {
     private let restInset: CGFloat = 4
     /// 書いている。バーを広げて、入力欄とボタンを出している。
     private var isEditing = false
+    /// 設定で空の投稿欄を隠していて、今は隠している。画面の下の外に出し、触れず、一覧の下の余白にも数えない。
+    private(set) var isBarHidden = false
+    /// バーの下端をタブバーの上で止める制約。隠すときと、隠す設定でキーボードに付いて下まで動かすときは外す。
+    private var restingFloor: NSLayoutConstraint?
+    /// バーの下端をキーボードの上で止める制約。隠すときは、キーボードがまだ下がりきっていなくても画面の外へ出すので外す。
+    /// 付けたままにすると、隠す制約とぶつかり、バーが縮められる。
+    private var keyboardCeiling: NSLayoutConstraint?
+    /// バーの下端をタブバーの上に寄せる制約。キーボードに付いて下まで動かすときは外す。
+    private var restingBottom: NSLayoutConstraint?
+    /// 隠す設定で書いている間、閉じきるまでバーをキーボードに付けて、タブバーの裏まで一緒に下げる制約。
+    private var followKeyboard: NSLayoutConstraint?
+    /// 隠している間、バーの上端を画面の下端より下に置く制約。
+    private var hiddenTop: NSLayoutConstraint?
+    /// ソフトウェアキーボードが出ている。出始めから、下がりきるまで。
+    private var isSoftwareKeyboardShown = false
+    /// 隠す設定で、書いている間にキーボードが下がり始めた。書き終える前から、キーボードと一緒に画面の外へ下げる。
+    /// 指でキーボードを引き下ろしたときは、下がりきってから書き終えたことになるので、待つとキーボードが消えたあとにバーだけが遅れて下がるため。
+    private var isSinkingWithKeyboard = false
+    /// 画面の外へ下げている間、下げ始めたときの高さに留める制約。広げたまま下げると、上端を安全領域に付ける制約を外すので、
+    /// 留めないと、広げた形を保てず本文を縮めながら下がる。画面の外で書いていないときの形に戻すときに外す。
+    private var offScreenHeight: NSLayoutConstraint?
+    /// バーを出し入れするたびに増やす。前の動きの終わりで、あとから始まった動きの途中にバーの形を変えないようにする。
+    private var barSlideGeneration = 0
+    /// 最後に届いたキーボードの動きの時間と曲線。バーを出し入れする動きを、キーボードの動きに揃える。
+    private var keyboardAnimation = (duration: 0.25, curve: UIView.AnimationCurve(rawValue: 7) ?? .easeInOut)
     /// 中身の上下の余白。書いていないときは細くするため詰める。
     private lazy var stackTop = stack.topAnchor.constraint(equalTo: dragArea.contentLayoutGuide.topAnchor)
     private lazy var stackBottom = stack.bottomAnchor.constraint(equalTo: dragArea.contentLayoutGuide.bottomAnchor)
@@ -226,20 +251,35 @@ final class InlineComposeController: NSObject {
     func install(in host: UITabBarController) {
         self.host = host
         configureBar()
-        host.view.addSubview(bar)
+        // タブバーの入れ物のすぐ奥に置く。隠すときに、タブバーの裏へ沈んで見えるようにするため。
+        if let tabBarContainer = host.view.subviews.first(where: { host.tabBar.isDescendant(of: $0) }) {
+            host.view.insertSubview(bar, belowSubview: tabBarContainer)
+        } else {
+            host.view.addSubview(bar)
+        }
         let restingBottom = bar.bottomAnchor.constraint(equalTo: host.contentLayoutGuide.bottomAnchor, constant: -barSpacing)
         restingBottom.priority = .defaultHigh
+        let restingFloor = bar.bottomAnchor.constraint(lessThanOrEqualTo: host.contentLayoutGuide.bottomAnchor, constant: -barSpacing)
+        let keyboardCeiling = bar.bottomAnchor.constraint(lessThanOrEqualTo: host.view.keyboardLayoutGuide.topAnchor, constant: -barSpacing)
+        let followKeyboard = bar.bottomAnchor.constraint(equalTo: host.view.keyboardLayoutGuide.topAnchor, constant: -barSpacing)
+        followKeyboard.priority = .defaultHigh
         NSLayoutConstraint.activate([
             bar.leadingAnchor.constraint(equalTo: host.view.safeAreaLayoutGuide.leadingAnchor, constant: 20),
             bar.trailingAnchor.constraint(equalTo: host.view.safeAreaLayoutGuide.trailingAnchor, constant: -20),
-            bar.bottomAnchor.constraint(lessThanOrEqualTo: host.contentLayoutGuide.bottomAnchor, constant: -barSpacing),
-            bar.bottomAnchor.constraint(lessThanOrEqualTo: host.view.keyboardLayoutGuide.topAnchor, constant: -barSpacing),
+            restingFloor,
+            keyboardCeiling,
             restingBottom,
         ])
+        self.restingFloor = restingFloor
+        self.keyboardCeiling = keyboardCeiling
+        self.restingBottom = restingBottom
+        self.followKeyboard = followKeyboard
+        hiddenTop = bar.topAnchor.constraint(greaterThanOrEqualTo: host.view.bottomAnchor)
         holdAboveKeyboard = bar.bottomAnchor.constraint(lessThanOrEqualTo: host.view.bottomAnchor)
         expandedTop = bar.topAnchor.constraint(equalTo: host.view.safeAreaLayoutGuide.topAnchor)
         keyboardNotifications.addObserver(self, selector: #selector(keyboardWillChangeFrame(_:)), name: UIResponder.keyboardWillChangeFrameNotification, object: nil)
         keyboardNotifications.addObserver(self, selector: #selector(keyboardDidShow(_:)), name: UIResponder.keyboardDidShowNotification, object: nil)
+        keyboardNotifications.addObserver(self, selector: #selector(keyboardDidChangeFrame(_:)), name: UIResponder.keyboardDidChangeFrameNotification, object: nil)
         bar.onFrameChange = { [weak self] in
             self?.reportObscuredHeight()
             self?.layoutCompletionListIfShown()
@@ -248,6 +288,7 @@ final class InlineComposeController: NSObject {
         AppDependencies.stateDumps.register("composer", owner: self) { $0.stateDump() }
         applyEditingLayout()
         applyExpandedLayout()
+        observeBarVisibility()
         observeModel()
         observeTuning()
         observeToolLayout()
@@ -297,7 +338,7 @@ final class InlineComposeController: NSObject {
     /// 違和感レポートに残す状態。行が重なっていれば、どの行かも書く。
     func stateDump() -> String {
         """
-        editing: \(isEditing) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : "none") spoiler: \(model.showsSpoiler) sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil")
+        editing: \(isEditing) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : "none") spoiler: \(model.showsSpoiler) sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil")
         mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
         tools: row=\(toolPlacement.map { "\($0.row.map(\.rawValue))" } ?? "nil") menu=\(toolPlacement.map { "\($0.menu.map { $0.map(\.rawValue) })" } ?? "nil")
@@ -728,6 +769,17 @@ final class InlineComposeController: NSObject {
         let keyboardFrame = host.view.convert(window.convert(frame, from: nil), from: window)
         let height = host.view.bounds.intersection(keyboardFrame).height
         currentKeyboardHeight = height
+        if let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double, duration > 0,
+           let curve = (notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? Int).flatMap(UIView.AnimationCurve.init(rawValue:)) {
+            keyboardAnimation = (duration, curve)
+        }
+        // 出始めで立て、下がりきった知らせ（`keyboardDidChangeFrame`）で下ろす。下がり始めで下ろすと、指で引き下ろして離したとき、
+        // 書き終える前にバーがタブバーの上へ戻ってから隠れることがあるため。
+        if height > Self.softwareKeyboardMinimumHeight, !isSoftwareKeyboardShown {
+            isSoftwareKeyboardShown = true
+            applyBarPlacement()
+        }
+        updateSinkingWithKeyboard(keyboardHeight: height)
         if let before = keyboardHeightBeforeContextMenu, currentKeyboardHeight >= before {
             releaseBarHeldForContextMenu()
         }
@@ -765,6 +817,24 @@ final class InlineComposeController: NSObject {
         releaseHoldAboveKeyboard()
     }
 
+    /// キーボードが下がり始めたら、書き終えるのを待たずにバーも下げる。メディアを選ぶシートやビューアなどのためにキーボードを閉じたときは、
+    /// 書いている途中でバーを留めるので下げない。下げている途中でキーボードが戻ったら、バーも戻す。
+    private func updateSinkingWithKeyboard(keyboardHeight height: CGFloat) {
+        let sinks = height <= Self.softwareKeyboardMinimumHeight && isSoftwareKeyboardShown && sinksWhenDone && isEditing
+            && !isBarHeld && mediaPicker == nil && !isShowingMediaViewer && !isPresentingError && !isShowingToolLayoutSettings && !isMovingFocus
+        guard sinks != isSinkingWithKeyboard else { return }
+        isSinkingWithKeyboard = sinks
+        logger.info("compose: bar \(sinks ? "sinking with" : "returning with", privacy: .public) keyboard")
+        applyBarPlacement()
+        slideBar {}
+    }
+
+    @objc private func keyboardDidChangeFrame(_ notification: Notification) {
+        guard isSoftwareKeyboardShown, currentKeyboardHeight <= Self.softwareKeyboardMinimumHeight else { return }
+        isSoftwareKeyboardShown = false
+        applyBarPlacement()
+    }
+
     /// シートを閉じてキーボードが上がりきったら、バーをキーボードに付ける。
     @objc private func keyboardDidShow(_ notification: Notification) {
         // 投稿の失敗の知らせは、シートを閉じて戻したキーボードが上がりきる前に出ることがあり、その知らせが知らせを出したあとに届く。
@@ -778,7 +848,7 @@ final class InlineComposeController: NSObject {
     /// 広げている間は、一覧が隠れたままでよいので知らせない。知らせると一覧の下の余白が画面の高さほどに変わり、戻したときに一覧の位置が動きうる。
     private func reportObscuredHeight() {
         guard let host, !isExpanded else { return }
-        let height = max(0, host.view.bounds.maxY - bar.frame.minY + barSpacing)
+        let height = isBarHidden ? 0 : max(0, host.view.bounds.maxY - bar.frame.minY + barSpacing)
         guard height != obscuredHeight else { return }
         obscuredHeight = height
         onObscuredHeightChange(height)
@@ -790,6 +860,21 @@ final class InlineComposeController: NSObject {
         guard isEditing != editing else { return }
         isEditing = editing
         updateCompletionList()
+        // 隠すときは、カプセルに変えずに書いていたときの形のまま下げ、画面の外に出てから形を戻す。
+        if hidesBar {
+            applyBarVisibility()
+            return
+        }
+        // 隠していたバーを出すときは、形を画面の外で書くときのものに変えてから上げる。
+        if isBarHidden {
+            UIView.performWithoutAnimation {
+                self.applyEditingLayout()
+                self.host?.view.layoutIfNeeded()
+            }
+            applyBarVisibility()
+            logOverlappingRows(after: "begin editing")
+            return
+        }
         let collapses = !editing && isExpanded
         var generation: Int?
         if collapses {
@@ -845,6 +930,103 @@ final class InlineComposeController: NSObject {
         let overlaps = overlappingRows
         guard !overlaps.isEmpty else { return }
         logger.error("rows overlap after \(event, privacy: .public): \(overlaps.joined(separator: ", "), privacy: .public)")
+    }
+
+    /// 隠す設定で、残すもの（自分で書いたもの、返信先、編集）がない。このときは、書き終えたら隠す。
+    /// 残すものがあるときに隠すと、下書きが残っていることに気づけないため。
+    private var sinksWhenDone: Bool {
+        settings.hidesEmptyComposeBar && !model.hasWrittenContent && model.replyTo == nil
+    }
+
+    /// 監視していない`isEditing`は最後に読む。先に読むと、書いている間の評価で下書きを読まずに終わり、下書きが監視から外れる。
+    /// そのあと書き終えてから下書きが空になっても（送っている間に閉じ、送り終えて空に戻したときなど）、隠せなくなる。
+    private var hidesBar: Bool {
+        sinksWhenDone && !isEditing
+    }
+
+    /// 設定と下書きが変わったら、バーを出すか隠すかと、どこに留めるかを決め直す。書き始めと書き終わりは`setEditing`で決め直す。
+    private func observeBarVisibility() {
+        withObservationTracking {
+            applyBarVisibility()
+        } onChange: { [weak self] in
+            Task { @MainActor in self?.observeBarVisibility() }
+        }
+    }
+
+    /// バーを、キーボードが去る方へ下げて画面の外に出す。出すときは、画面の下からキーボードと一緒に上げる。
+    /// 隠し始めた時点で触れなくし、一覧の下の余白からも外す。
+    private func applyBarVisibility() {
+        let hidden = hidesBar
+        applyBarPlacement()
+        guard hidden != isBarHidden else { return }
+        isBarHidden = hidden
+        isSinkingWithKeyboard = false
+        logger.info("compose: bar \(hidden ? "hidden" : "shown", privacy: .public)")
+        bar.isUserInteractionEnabled = !hidden
+        bar.accessibilityElementsHidden = hidden
+        applyBarPlacement()
+        reportObscuredHeight()
+        barSlideGeneration += 1
+        let generation = barSlideGeneration
+        guard bar.window != nil else {
+            if hidden { restRowsAfterHiding() }
+            return
+        }
+        slideBar { [weak self] in
+            guard let self, isBarHidden, generation == barSlideGeneration else { return }
+            restRowsAfterHiding()
+        }
+    }
+
+    /// バーを留める位置の制約を、今の状態に合わせる。
+    /// 隠す設定で書いている間は、閉じきるまでキーボードに付けて下まで下げる。ハードウェアキーボードでは、キーボードが下にあるので、タブバーの上で止める。
+    private func applyBarPlacement() {
+        let offScreen = isBarHidden || isSinkingWithKeyboard
+        if offScreen, isExpanded, offScreenHeight == nil {
+            let height = bar.heightAnchor.constraint(equalToConstant: bar.bounds.height)
+            height.isActive = true
+            offScreenHeight = height
+        } else if !offScreen {
+            releaseOffScreenHeight()
+        }
+        let followsKeyboardDown = sinksWhenDone && isSoftwareKeyboardShown && !offScreen
+        restingFloor?.isActive = !offScreen && !followsKeyboardDown
+        keyboardCeiling?.isActive = !offScreen
+        restingBottom?.isActive = !followsKeyboardDown
+        followKeyboard?.isActive = followsKeyboardDown
+        hiddenTop?.isActive = offScreen
+        // 広げたまま隠すときは、上端を安全領域に付けたままでは画面の外へ出せないので外す。画面の外で、広げる前の形に戻す。
+        expandedTop?.isActive = isExpanded && !offScreen
+    }
+
+    /// キーボードが出入りする間は、キーボードと同じ時間と曲線で動かす。ハードウェアキーボードや、書いていないときに設定や下書きが変わったときは、決まった時間で動かす。
+    private func slideBar(completion: @escaping () -> Void) {
+        let duration = isInputFocused || isSoftwareKeyboardShown ? keyboardAnimation.duration : tuning.value(of: TuningCatalog.composeMorphDuration)
+        let options = UIView.AnimationOptions(rawValue: UInt(keyboardAnimation.curve.rawValue) << 16).union([.allowUserInteraction, .beginFromCurrentState])
+        UIView.animate(withDuration: duration, delay: 0, options: options) {
+            self.host?.view.layoutIfNeeded()
+        } completion: { _ in
+            completion()
+        }
+    }
+
+    private func releaseOffScreenHeight() {
+        offScreenHeight?.isActive = false
+        offScreenHeight = nil
+    }
+
+    /// 画面の外に出したバーを、書いていないときの形に戻す。広げていれば戻す。次に出すときは、書くときの形に変えてから上げる。
+    private func restRowsAfterHiding() {
+        releaseOffScreenHeight()
+        UIView.performWithoutAnimation {
+            if isExpanded {
+                isExpanded = false
+                endCollapse(generation: beginExpansionChange())
+                applyExpandedLayout()
+            }
+            applyEditingLayout()
+            host?.view.layoutIfNeeded()
+        }
     }
 
     /// 書いていないときのバーの高さを、チューニングの値に揃える。

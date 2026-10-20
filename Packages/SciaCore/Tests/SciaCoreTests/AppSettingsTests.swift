@@ -81,6 +81,18 @@ struct AppSettingsTests {
         #expect(!AppSettings(defaults: defaults).showsStatusBarTicker)
     }
 
+    /// 投稿欄がいつも見えていることで、タイムラインを見たまま書き始められるため、既定では隠さない。
+    @Test func showsEmptyComposeBarByDefault() throws {
+        let settings = AppSettings(defaults: try makeDefaults())
+        #expect(!settings.hidesEmptyComposeBar)
+    }
+
+    @Test func persistsHidesEmptyComposeBar() throws {
+        let defaults = try makeDefaults()
+        AppSettings(defaults: defaults).hidesEmptyComposeBar = true
+        #expect(AppSettings(defaults: defaults).hidesEmptyComposeBar)
+    }
+
     @Test func statusDisplayDefaults() throws {
         let settings = AppSettings(defaults: try makeDefaults())
         #expect(settings.statusNameStyle == .nameAndAcct)

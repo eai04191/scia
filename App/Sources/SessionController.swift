@@ -320,12 +320,7 @@ final class SessionController {
             browserObscuredHeight = height
             applyObscuredBottomHeight()
         }
-        browser.onPresenceChange = { [weak self] presented in
-            guard let self else { return }
-            for timeline in timelines.allObjects {
-                timeline.setShowsFocusInlineCompose(presented)
-            }
-        }
+        browser.onPresenceChange = { [weak self] _ in self?.applyShowsFocusInlineCompose() }
         browser.onCoverageChange = { [weak self] covered in
             guard let self else { return }
             browserCoversTimelines = covered
@@ -340,6 +335,7 @@ final class SessionController {
             }
         }
         configureStatusBarTicker(tabBarController: tabBarController)
+        observeHidesEmptyComposeBar()
         // 投稿欄を置くとタブバーの画面を読み込むため、各一覧の設定を終えてから置く。
         composer.install(in: tabBarController)
     }
@@ -405,6 +401,29 @@ final class SessionController {
         }
     }
 
+    /// 右上の投稿欄で書き始めるボタンは、投稿欄に触れられないときに出す。アプリ内のSafariのシートの裏に隠れている間と、設定で空の投稿欄を隠している間。
+    /// 設定で隠しているときは、下書きがあって投稿欄が見えていても出したままにする。下書きの有無でボタンが出たり消えたりしないようにするため。
+    private var showsFocusInlineCompose: Bool {
+        browser.isPresented || AppDependencies.settings.hidesEmptyComposeBar
+    }
+
+    private func applyShowsFocusInlineCompose() {
+        for timeline in timelines.allObjects {
+            timeline.setShowsFocusInlineCompose(showsFocusInlineCompose)
+        }
+    }
+
+    private func observeHidesEmptyComposeBar() {
+        withObservationTracking {
+            _ = AppDependencies.settings.hidesEmptyComposeBar
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.applyShowsFocusInlineCompose()
+                self?.observeHidesEmptyComposeBar()
+            }
+        }
+    }
+
     private func applyObscuredBottomHeight() {
         for timeline in timelines.allObjects {
             timeline.setObscuredBottomHeight(obscuredBottomHeight)
@@ -421,7 +440,7 @@ final class SessionController {
         viewController.setObscuredBottomHeight(obscuredBottomHeight)
         viewController.setCoveredByInAppBrowser(browserCoversTimelines)
         viewController.onFocusInlineCompose = { [weak self] in self?.composer.beginEditing() }
-        viewController.setShowsFocusInlineCompose(browser.isPresented)
+        viewController.setShowsFocusInlineCompose(showsFocusInlineCompose)
         viewController.myAccountID = credential.accountID
         viewController.spoilerExpansion.expandsByDefault = preferences?.expandsSpoilers ?? false
         viewController.mediaCovers = mediaCovers

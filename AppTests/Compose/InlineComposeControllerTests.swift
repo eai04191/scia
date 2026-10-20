@@ -11,6 +11,7 @@ struct InlineComposeControllerTests {
     private let window: UIWindow
     private let composer: InlineComposeController
     private let settings: AppSettings
+    private let tuning = TuningStore(defaults: nil)
 
     init() throws {
         let scene = try #require(
@@ -26,7 +27,7 @@ struct InlineComposeControllerTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
         settings = AppSettings(defaults: defaults)
-        composer = InlineComposeController(model: ComposeModel(myAccountID: "1") { _ in }, tuning: TuningStore(defaults: nil), settings: settings)
+        composer = InlineComposeController(model: ComposeModel(myAccountID: "1") { _ in }, tuning: tuning, settings: settings)
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
     }
@@ -659,6 +660,149 @@ struct InlineComposeControllerTests {
         }
         #expect(label.bounds.width >= label.intrinsicContentSize.width - 0.5, "札の文字が縮んでいます: \(label.bounds.width) / \(label.intrinsicContentSize.width)\n\(composer.stateDump())", sourceLocation: sourceLocation)
         #expect(button.bounds.width >= label.frame.maxX, "札が文字より狭くなりました\n\(composer.stateDump())", sourceLocation: sourceLocation)
+    }
+
+    /// 設定で隠すと、空の投稿欄は書いていない間だけ隠れ、一覧の下の余白にも数えない。書き始めると出て、空のまま閉じるとまた隠れる。
+    @Test func hidesEmptyBarOnlyWhileNotEditing() async throws {
+        defer { window.isHidden = true }
+        var obscured: CGFloat = -1
+        composer.onObscuredHeightChange = { obscured = $0 }
+        settings.hidesEmptyComposeBar = true
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(composer.isBarHidden, "設定で隠しても、空の投稿欄が隠れません\n\(composer.stateDump())")
+        #expect(obscured == 0, "隠しているのに、一覧の下の余白に数えています: \(obscured)")
+
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!composer.isBarHidden, "書き始めても、投稿欄が隠れたままです\n\(composer.stateDump())")
+        #expect(obscured > 0)
+
+        composer.endEditing()
+        try await Task.sleep(for: .milliseconds(80))
+        #expect(composer.isBarHidden, "空のまま閉じても、投稿欄が隠れません\n\(composer.stateDump())")
+        let bar = try composerBar()
+        let moving = try #require(bar.layer.presentation()).frame
+        #expect(moving.minY < window.bounds.maxY, "投稿欄が下がらずに消えました: \(moving)")
+        try await Task.sleep(for: .milliseconds(500))
+        window.layoutIfNeeded()
+        #expect(bar.frame.minY >= window.bounds.maxY, "隠したのに、投稿欄が画面の外に出ていません: \(bar.frame)")
+        #expect(bar.frame.height >= 30, "画面の外に出すときに、投稿欄が縮められました: \(bar.frame)")
+
+        settings.hidesEmptyComposeBar = false
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!composer.isBarHidden, "設定を戻しても、投稿欄が隠れたままです\n\(composer.stateDump())")
+    }
+
+    /// 書きかけの本文や返信先があるときは、閉じても隠さない。残っていることに気づけるようにする。
+    @Test func keepsBarShownWhileDraftRemains() async throws {
+        defer { window.isHidden = true }
+        settings.hidesEmptyComposeBar = true
+        composer.beginEditing()
+        composer.model.text = "書きかけ"
+        composer.endEditing()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!composer.isBarHidden, "書きかけの本文があるのに、投稿欄を隠しました\n\(composer.stateDump())")
+
+        composer.model.text = ""
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(composer.isBarHidden, "本文を消しても、投稿欄が隠れません\n\(composer.stateDump())")
+
+        composer.reply(to: try status(id: "10"))
+        composer.endEditing()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(!composer.isBarHidden, "返信先があるのに、投稿欄を隠しました\n\(composer.stateDump())")
+    }
+
+    /// 書いている間に下書きが変わったあと、閉じてから下書きが空になっても（送っている間に閉じ、送り終えて空に戻したときなど）、隠す。
+    @Test func hidesBarWhenDraftEmptiesAfterEndingEditing() async throws {
+        defer { window.isHidden = true }
+        settings.hidesEmptyComposeBar = true
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(50))
+        composer.model.text = "書きかけ"
+        try await Task.sleep(for: .milliseconds(50))
+        composer.endEditing()
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(!composer.isBarHidden)
+
+        composer.model.text = ""
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(composer.isBarHidden, "閉じたあとに下書きが空になっても、投稿欄が隠れません\n\(composer.stateDump())")
+    }
+
+    /// 隠す設定で、書いている間にキーボードが下がり始めたら、書き終えるのを待たずにバーも画面の外へ下げる。
+    /// キーボードが戻ったら、バーもキーボードの上に戻す。
+    @Test func sinksWithKeyboardBeforeEndingEditing() async throws {
+        defer { window.isHidden = true }
+        settings.hidesEmptyComposeBar = true
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(100))
+        postKeyboardFrame(height: 336)
+        try await Task.sleep(for: .milliseconds(500))
+        window.layoutIfNeeded()
+        let bar = try composerBar()
+        // テストで送るキーボードの知らせでは`keyboardLayoutGuide`が動かないので、キーボードの上にあるかではなく、画面の中にあるかを見る。
+        #expect(bar.frame.maxY <= window.bounds.maxY, "書き始めても、投稿欄が画面の中にありません: \(bar.frame)")
+
+        postKeyboardFrame(height: 0)
+        try await Task.sleep(for: .milliseconds(500))
+        window.layoutIfNeeded()
+        #expect(composer.stateDump().contains("editing: true"))
+        #expect(bar.frame.minY >= window.bounds.maxY, "キーボードが下がっても、投稿欄が画面の外に出ていません: \(bar.frame)")
+
+        postKeyboardFrame(height: 336)
+        try await Task.sleep(for: .milliseconds(500))
+        window.layoutIfNeeded()
+        #expect(bar.frame.maxY <= window.bounds.maxY, "キーボードが戻っても、投稿欄が画面の中に戻りません: \(bar.frame)")
+    }
+
+    /// 出てくる途中で閉じても、出す動きの終わりで、下がっている途中のバーを書いていないときの形に変えない。画面の外に出てから変える。
+    @Test func interruptedShowKeepsEditingShapeWhileSlidingOut() async throws {
+        defer { window.isHidden = true }
+        tuning.setValue(1.0, for: TuningCatalog.composeMorphDuration)
+        settings.hidesEmptyComposeBar = true
+        try await Task.sleep(for: .milliseconds(100))
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(300))
+        composer.endEditing()
+        // 下がっている間、何度か見て、書いていないときの形になっていれば、もう画面の外で止まっていることを確かめる。
+        let bar = try composerBar()
+        for _ in 0..<30 {
+            try await Task.sleep(for: .milliseconds(50))
+            guard composer.stateDump().contains("rest hidden=false") else { continue }
+            let moving = (bar.layer.animationKeys() ?? []).filter { $0.hasPrefix("position") }
+            #expect(moving.isEmpty && bar.frame.minY >= window.bounds.maxY, "下がっている途中で、書いていないときの形に変えました: \(moving) \(bar.frame)\n\(composer.stateDump())")
+            break
+        }
+        try await Task.sleep(for: .milliseconds(500))
+        #expect(composer.stateDump().contains("rest hidden=false"), "画面の外に出ても、書いていないときの形に戻していません\n\(composer.stateDump())")
+    }
+
+    /// 広げたまま閉じても、画面の外に出るまでは広げた形のまま下げる。
+    @Test func expandedBarKeepsHeightWhileSlidingOut() async throws {
+        defer { window.isHidden = true }
+        settings.hidesEmptyComposeBar = true
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(100))
+        let expand = try #require(buttons(in: window).first { $0.accessibilityLabel == "広げて書く" })
+        expand.sendActions(for: .primaryActionTriggered)
+        try await Task.sleep(for: .milliseconds(800))
+        window.layoutIfNeeded()
+        let bar = try composerBar()
+        let expandedHeight = bar.bounds.height
+
+        composer.endEditing()
+        try await Task.sleep(for: .milliseconds(50))
+        window.layoutIfNeeded()
+        #expect(abs(bar.bounds.height - expandedHeight) < 1, "下げ始めたときに、広げた高さを保っていません: \(bar.bounds.height) / \(expandedHeight)")
+        try await Task.sleep(for: .milliseconds(800))
+        window.layoutIfNeeded()
+        #expect(bar.frame.minY >= window.bounds.maxY)
+        #expect(bar.bounds.height < expandedHeight, "画面の外に出ても、広げる前の形に戻していません\n\(composer.stateDump())")
+    }
+
+    private func composerBar() throws -> UIView {
+        try #require(window.rootViewController?.view.subviews.first { String(describing: type(of: $0)) == "ComposeBarView" })
     }
 
     private func buttons(in view: UIView) -> [UIButton] {

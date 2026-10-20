@@ -56,8 +56,8 @@ final class TimelineViewController: UIViewController {
     var onVisibleLinkOnlyCardsChange: (([Status]) -> Void)?
     /// 投稿への操作が選ばれたときに呼ぶ。ブーストなら、ブーストした投稿を渡す。
     var onStatusAction: ((StatusAction, Status) -> Void)?
-    /// アプリ内のSafariのシートを出している間だけ右上に出す、投稿欄で書き始めるボタンが押されたときに呼ぶ。
-    /// シートを出している間は投稿欄がシートの裏に隠れて触れないため、その入口にする。
+    /// 右上に出す、投稿欄で書き始めるボタンが押されたときに呼ぶ。
+    /// アプリ内のSafariのシートの裏に隠れているときや、設定で空の投稿欄を隠しているときに、投稿欄に触れられないため、その入口にする。
     var onFocusInlineCompose: (() -> Void)?
     private lazy var focusInlineComposeItem: UIBarButtonItem = {
         let item = UIBarButtonItem(image: UIImage(systemName: "square.and.pencil"), primaryAction: UIAction { [weak self] _ in self?.onFocusInlineCompose?() })
@@ -193,7 +193,7 @@ final class TimelineViewController: UIViewController {
     /// 画面を読み込んだときに並べた右上のボタン。投稿欄で書き始めるボタンは、出すときにこの先頭に足す。
     private var baseBarItems: [UIBarButtonItem] = []
 
-    /// アプリ内のSafariのシートを出している間だけ、右上に投稿欄で書き始めるボタンを出す。画面を読み込む前は値だけ覚える。
+    /// 右上に投稿欄で書き始めるボタンを出すかを決める。画面を読み込む前は値だけ覚える。
     func setShowsFocusInlineCompose(_ shows: Bool) {
         guard showsFocusInlineCompose != shows else { return }
         showsFocusInlineCompose = shows
