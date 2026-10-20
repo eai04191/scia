@@ -53,7 +53,7 @@ extension TimelineViewController {
             return users([.account(status.account)])
         case .mentionedUsers:
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
-        case .reply, .favourite, .reblog, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .systemTranslate, .edit, .delete:
+        case .reply, .favourite, .reblog, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .systemTranslate, .edit, .delete:
             guard let status else { return [] }
             return statusAction(item, on: status, id: id).map { [$0] } ?? []
         }
@@ -120,16 +120,28 @@ extension TimelineViewController {
             return UIAction(title: isImageOnly ? "画像を隠す" : item.title, image: item.image) { [weak self] _ in
                 self?.hideMedia(of: shown)
             }
+        case .copyText:
+            guard let text = Self.plainText(of: shown) else { return nil }
+            return UIAction(title: item.title, image: item.image) { [weak self] _ in
+                UIPasteboard.general.string = text
+                guard let self else { return }
+                showNotice(.textCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            }
         case .systemTranslate:
-            // 書式やリンクは落とし、本文の文字だけを訳す。カスタム絵文字は`:shortcode:`のまま渡す。
-            let text = RichText.status(shown).plainText
-            guard !text.allSatisfy(\.isWhitespace) else { return nil }
+            guard let text = Self.plainText(of: shown) else { return nil }
             return UIAction(title: item.title, image: item.image) { [weak self] _ in
                 self?.translation.present(text)
             }
         case .notifyingUser, .author, .booster, .mentionedUsers:
             return nil
         }
+    }
+
+    /// コピーや翻訳に渡す本文。書式やリンクは落とし、文字だけにする。カスタム絵文字は`:shortcode:`のまま残す。
+    /// 本文が空白だけならnil。
+    private static func plainText(of status: Status) -> String? {
+        let text = RichText.status(status).plainText
+        return text.allSatisfy(\.isWhitespace) ? nil : text
     }
 
     /// ユーザーのメニューを`@acct`のサブメニューにする。中身が1つで「その他」が空なら、サブメニューにせず直接並べる。

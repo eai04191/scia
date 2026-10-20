@@ -73,6 +73,7 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .favourite: .own(title: "お気に入り", symbolName: "star")
         case .reblog: .own(title: "ブースト", symbolName: "arrow.2.squarepath")
         case .copyLink: .url(.copyLink)
+        case .copyText: .own(title: "テキストをコピー", symbolName: "doc.on.doc", note: "本文のある投稿でだけ出ます")
         case .share: .url(.share)
         case .openInBrowser: .url(.openInBrowser)
         case .openInDefaultBrowser: .url(.openInDefaultBrowser)

@@ -135,6 +135,8 @@ public enum StatusMenuItem: String, MenuItemKind {
     case favourite
     case reblog
     case copyLink
+    /// 本文をプレーンテキストにしてコピーする。本文のある投稿でだけ出る。
+    case copyText
     case share
     /// 開く場所の設定に従って開く。
     case openInBrowser
@@ -162,7 +164,7 @@ public enum StatusMenuItem: String, MenuItemKind {
     case mentionedUsers
 
     /// 設定を足す前のメニューと同じ並び。足す前になかったメンションされたユーザーは隠しておく。
-    /// 設定を足したあとに増えた項目（メディアを隠す、翻訳、編集履歴、編集、削除）は、足したことに気づけるよう表示しておく。
+    /// 設定を足したあとに増えた項目（メディアを隠す、テキストのコピー、翻訳、編集履歴、編集、削除）は、足したことに気づけるよう表示しておく。
     /// 削除は、誤って押さないよう「その他」に入れる。開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
     public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
         .item(.reply, isVisible: true),
@@ -171,6 +173,7 @@ public enum StatusMenuItem: String, MenuItemKind {
         .item(.edit, isVisible: true),
         .separator,
         .item(.copyLink, isVisible: true),
+        .item(.copyText, isVisible: true),
         .item(.share, isVisible: true),
         .item(.openInBrowser, isVisible: true),
         .item(.openInDefaultBrowser, isVisible: false),

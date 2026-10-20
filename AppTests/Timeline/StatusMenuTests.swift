@@ -57,15 +57,16 @@ struct StatusMenuTests {
 
         #expect(try outline(menu(for: .status(post))) == [
             ["返信", "お気に入り", "ブースト"],
-            ["リンクをコピー", "共有", "ブラウザで開く", "翻訳"],
+            ["リンクをコピー", "テキストをコピー", "共有", "ブラウザで開く", "翻訳"],
             ["@alice[プロフィール,リンクをコピー,共有]"],
         ])
     }
 
-    /// 本文が空白だけの投稿では、訳すものがないので翻訳を出さない。
-    @Test func systemTranslateIsHiddenWithoutText() throws {
+    /// 本文が空白だけの投稿では、扱う文字がないのでテキストのコピーと翻訳を出さない。
+    @Test func textItemsAreHiddenWithoutText() throws {
         let titles = try actions(menu(for: .status(status(url: nil, content: "<p> </p>")))).map(\.title)
 
+        #expect(!titles.contains("テキストをコピー"))
         #expect(!titles.contains("翻訳"))
     }
 
@@ -127,11 +128,11 @@ struct StatusMenuTests {
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings))
 
-        // 並びに書かなかった項目は、既定で直前にある項目の後ろに差し込まれる。ブラウザで開くと翻訳は共有の後ろに、ユーザーの項目はその後ろに入る。
+        // 並びに書かなかった項目は、既定で直前にある項目の後ろに差し込まれる。ブラウザで開くと翻訳は共有の後ろに、ユーザーの項目はその後ろに、テキストのコピーはリンクのコピーの後ろに入る。
         #expect(outline == [
             ["返信"],
             ["共有", "ブラウザで開く", "翻訳", "@alice[プロフィール,リンクをコピー,共有]"],
-            ["その他[リンクをコピー,ブースト]"],
+            ["その他[リンクをコピー,テキストをコピー,ブースト]"],
         ])
     }
 
