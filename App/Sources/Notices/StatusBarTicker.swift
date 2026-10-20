@@ -63,6 +63,11 @@ final class StatusBarTicker {
 
     /// 今の画面の切り欠きの形。ステータスバーのない向きではnil。
     private func currentCutout() -> StatusBarCutout? {
+        // iPadとMacでは、帯をステータスバーの高さで測るが、出している間は自分でステータスバーを隠していて高さが0になるため、出し始めに測った形を使う。
+        // 出している間にiPadのウィンドウを縮めても、待っている通知を流し終えるまでは同じ形で出す。次に出し始めるときに測り直す。
+        if shownAt != nil, let window, window.traitCollection.userInterfaceIdiom != .phone {
+            return window.ticker.cutout
+        }
         guard let scene = scene(), let reference = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first else { return nil }
         return StatusBarCutout.current(in: reference)
     }

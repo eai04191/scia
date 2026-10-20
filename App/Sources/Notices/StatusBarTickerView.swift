@@ -26,7 +26,7 @@ enum StatusBarCutout: Equatable {
         let width = window.bounds.width
         let top = window.safeAreaInsets.top
         guard window.traitCollection.userInterfaceIdiom == .phone else {
-            return .none(height: max(top, 24))
+            return flatBand(in: window)
         }
         guard window.traitCollection.verticalSizeClass != .compact else { return nil }
         let identifier = DeviceModel.identifier
@@ -42,6 +42,18 @@ enum StatusBarCutout: Equatable {
         // 次に表へ足す値が分かるよう、機種と画面の大きさを残す。
         logger.info("statusBarTicker unmeasured model: \(identifier, privacy: .public) \(width, privacy: .public)x\(window.bounds.height, privacy: .public) top=\(top, privacy: .public)")
         return nil
+    }
+
+    /// iPadとMacの、ウィンドウの上端のステータスバーの帯。ステータスバーがウィンドウの上に重なっていなければnil。
+    /// 全画面のiPadでは、ステータスバーの高さ（iPad miniで32pt）と安全領域の上端が同じ。Macでは、ステータスバーを描かないが、
+    /// ナビゲーションバーの上に同じ高さ（20pt）の安全領域を空けているので、そこに流す。
+    /// ウィンドウ表示のiPadでは、ステータスバーは画面の上端にあってウィンドウの上にはなく、`statusBarFrame`は32ptを返すのに、
+    /// 安全領域の上端は10ptしかない。流すと、ウィンドウの操作ボタンに重なり、ステータスバーを隠した分の補いで画面が下へずれる。
+    @MainActor
+    private static func flatBand(in window: UIWindow) -> StatusBarCutout? {
+        let height = window.windowScene?.statusBarManager?.statusBarFrame.height ?? 0
+        guard height > 0, window.safeAreaInsets.top >= height else { return nil }
+        return .none(height: height)
     }
 
     private static let logger = SciaLog.logger(category: "statusBarTicker")
