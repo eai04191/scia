@@ -86,6 +86,24 @@ extension SRGBColor {
     }
 }
 
+/// 白より明るい色を、0...1のsRGBの色と、それを何倍の明るさにするか（光の強さに比例する倍率）で表したもの。
+/// HDRの色を作るAPIは、この形で受け取る。
+public struct ExposedColor: Equatable, Sendable {
+    public var color: SRGBColor
+    /// 1以上。1ならSDRの色。
+    public var exposure: Double
+}
+
+extension SRGBColor {
+    /// `base`の面を`light`の光で照らした色。光は面の明るさに足されるので、白い面でも白より明るくなる。
+    /// - Parameter intensity: 光の強さ。1なら、白い光で白い面を2倍の明るさにする。
+    public func lightAdded(_ light: SRGBColor, intensity: Double) -> ExposedColor {
+        let lit = linear + light.linear * max(intensity, 0)
+        let exposure = max(lit.max(), 1)
+        return ExposedColor(color: SRGBColor(linear: lit / exposure), exposure: exposure)
+    }
+}
+
 /// お気に入りとブーストの光の、左から右への色と濃さ。両方光っていれば、左半分がブースト、右半分がお気に入りで、真ん中の混ぜる幅の中で入れ替わる。
 ///
 /// 2色を別々に薄くして重ねると、真ん中で覆う割合が足りずに暗くなり、上に重ねた色が勝つ。

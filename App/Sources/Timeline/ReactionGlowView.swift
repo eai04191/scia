@@ -14,16 +14,13 @@ struct ReactionGlow: Equatable {
         var height: CGFloat
         var darkOpacity: CGFloat
         var lightOpacity: CGFloat
-        var lineWidth: CGFloat
-        var lineOpacity: CGFloat
-        /// 線の芯を白に寄せる割合。
-        var darkLineCoreWhiteness: Double
-        var lightLineCoreWhiteness: Double
-        var lineBloomHeight: CGFloat
-        /// ライトモードで、行の下の端の近くに敷く陰の濃さ。
-        var lightShadeOpacity: Double
-        /// ライトモードで、芯を行の下の端から持ち上げる高さ。芯の下にも陰が入り、芯が上下とも背景より明るく見える。
-        var lightCoreLift: CGFloat
+        /// 下の端のすぐ上に重ねる、いちばん明るいにじみの高さと濃さ。
+        var bloomHeight: CGFloat
+        var bloomOpacity: CGFloat
+        /// にじみを、SDRの白の何倍の明るさで描くか。1ならSDRのまま描く。HDRで描ける画面でだけ、白より明るく光る。
+        var hdrExposure: CGFloat
+        /// ライトモードでHDRで描くときの、照らす光の強さ。白い背景にこの強さで光を足し、白より明るくする。
+        var lightIntensity: Double
         var fillsWidthWhenAlone: Bool
         var iconStyle: IconStyle
         var iconSize: CGFloat
@@ -36,15 +33,15 @@ struct ReactionGlow: Equatable {
 
     enum IconStyle: Equatable {
         case none
-        /// 光の下の線の上に、ブーストとお気に入りのアイコンを1つずつ載せる。光源そのものをアイコンにする。
-        case onLine
+        /// 下の端に、ブーストとお気に入りのアイコンを1つずつ置く。
+        case atBottom
         /// 下の端に、小さなアイコンを大きさと濃さを変えて散らす。本文と重ならないよう、下の余白の高さに収める。
         case scattered
 
-        /// チューニングの数値（0: なし、1: 線の上、2: 散らす）から選ぶ。
+        /// チューニングの数値（0: なし、1: 下の端、2: 散らす）から選ぶ。
         init(_ value: Double) {
             self = switch value {
-            case 1: .onLine
+            case 1: .atBottom
             case 2: .scattered
             default: .none
             }
@@ -65,13 +62,10 @@ extension ReactionGlow.Style {
             height: tuning.value(of: TuningCatalog.reactionGlowHeight),
             darkOpacity: tuning.value(of: TuningCatalog.reactionGlowDarkOpacity),
             lightOpacity: tuning.value(of: TuningCatalog.reactionGlowLightOpacity),
-            lineWidth: tuning.value(of: TuningCatalog.reactionGlowLineWidth),
-            lineOpacity: tuning.value(of: TuningCatalog.reactionGlowLineOpacity),
-            darkLineCoreWhiteness: tuning.value(of: TuningCatalog.reactionGlowDarkLineCoreWhiteness),
-            lightLineCoreWhiteness: tuning.value(of: TuningCatalog.reactionGlowLightLineCoreWhiteness),
-            lineBloomHeight: tuning.value(of: TuningCatalog.reactionGlowLineBloomHeight),
-            lightShadeOpacity: tuning.value(of: TuningCatalog.reactionGlowLightShadeOpacity),
-            lightCoreLift: tuning.value(of: TuningCatalog.reactionGlowLightCoreLift),
+            bloomHeight: tuning.value(of: TuningCatalog.reactionGlowBloomHeight),
+            bloomOpacity: tuning.value(of: TuningCatalog.reactionGlowBloomOpacity),
+            hdrExposure: tuning.value(of: TuningCatalog.reactionGlowHDRExposure),
+            lightIntensity: tuning.value(of: TuningCatalog.reactionGlowLightIntensity),
             fillsWidthWhenAlone: tuning.value(of: TuningCatalog.reactionGlowFillsWidthWhenAlone),
             iconStyle: ReactionGlow.IconStyle(tuning.value(of: TuningCatalog.reactionGlowIconStyle)),
             iconSize: tuning.value(of: TuningCatalog.reactionGlowIconSize),
@@ -91,13 +85,9 @@ final class ReactionGlowView: UIView {
     private static let favouriteColor = UIColor { $0.userInterfaceStyle == .dark ? .systemYellow : .systemOrange }
 
     private let glow = CAGradientLayer()
-    /// 光の縦の形。ダークとライトで形を変える（`render()`）。
+    /// 下の端から離れるほど早く暗くなるよう、なめらかに落とす。直線で落とすと、上の端に境目が見える。
     private let falloff = CAGradientLayer()
-    private let line = CAGradientLayer()
-    /// ライトモードで、行の下の端の近くにだけ敷く、ごく薄い陰。光が届かなくなるあたりと、上へ向けた照明の下に置く。
-    /// 白い背景より明るいものは描けないため、光源から離れたところを少し暗くして、光源がいちばん明るく見えるようにする。
-    private let shade = CAGradientLayer()
-    /// 線のまわりの色のにじみ。下の端から上へすぐに消える。
+    /// 下の端のすぐ上に重ねる、いちばん明るいにじみ。上へすぐに消える。
     private let bloom = CAGradientLayer()
     private let bloomFalloff = CAGradientLayer()
     private var icons: [IconView] = []
@@ -127,10 +117,7 @@ final class ReactionGlowView: UIView {
         super.init(frame: frame)
         isUserInteractionEnabled = false
         isAccessibilityElement = false
-        shade.startPoint = CGPoint(x: 0.5, y: 0)
-        shade.endPoint = CGPoint(x: 0.5, y: 1)
-        layer.addSublayer(shade)
-        for gradient in [glow, bloom, line] {
+        for gradient in [glow, bloom] {
             gradient.startPoint = CGPoint(x: 0, y: 0.5)
             gradient.endPoint = CGPoint(x: 1, y: 0.5)
             layer.addSublayer(gradient)
@@ -142,7 +129,7 @@ final class ReactionGlowView: UIView {
         glow.mask = falloff
         bloomFalloff.startPoint = CGPoint(x: 0.5, y: 0)
         bloomFalloff.endPoint = CGPoint(x: 0.5, y: 1)
-        // 芯のすぐ上を濃くし、上へすばやく薄くする。芯のまわりに色が集まっていると、芯が光って見える。
+        // 下の端を濃くし、上へすばやく薄くする。
         bloomFalloff.locations = [0, 0.35, 0.7, 1]
         bloomFalloff.colors = [0, 0.3, 0.8, 1].map { UIColor(white: 0, alpha: $0).cgColor }
         bloom.mask = bloomFalloff
@@ -214,7 +201,7 @@ final class ReactionGlowView: UIView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         let isLit = levels.boost > 0 || levels.favourite > 0
-        for layer in [shade, glow, bloom, line] {
+        for layer in [glow, bloom] {
             layer.isHidden = !isLit
         }
         guard isLit, let style = current?.style else {
@@ -234,58 +221,50 @@ final class ReactionGlowView: UIView {
             fillsWidthWhenAlone: style.fillsWidthWhenAlone
         )
         let stops = gradient.stops()
-        let whiteness = isDark ? style.darkLineCoreWhiteness : style.lightLineCoreWhiteness
         let locations = stops.map { NSNumber(value: $0.location) }
-        let colors = stops.map { Self.cgColor($0.color, alpha: $0.alpha) }
-        let coreColors = stops.map { Self.cgColor(Self.core($0.color, whiteness: whiteness), alpha: $0.alpha) }
-        for (layer, layerColors) in [(glow, colors), (line, coreColors)] {
+        // にじみを、白より明るいHDRの色で描く。ライトでは照らされた側もHDRの色にし、白い背景の上に白より明るい光を足す。
+        // ダークでは照らされた側はSDRのまま。黒い背景の上ではSDRの色でも十分に明るく見えるため。
+        // HDRで描けない画面（白より明るくできる余地が1倍）では、SDRで描く。白より明るい色は白に丸められ、ライトでは光が白い背景に溶けて見えなくなるため。
+        let exposure = canDrawHDR ? style.hdrExposure : 1
+        // ライトでHDRを使うときは、照らされた面を「背景の白＋光」の色で描く。光の色を明るくして白に重ねるだけでは、
+        // 光の色にない成分（橙なら青）が白より暗くなり、面が明るくならずに色が付いて見えるだけになるため。
+        let addsLight = !isDark && exposure > 1
+        let white = SRGBColor(red: 1, green: 1, blue: 1)
+        let colors = stops.map { stop in
+            addsLight
+                ? Self.cgColor(white.lightAdded(stop.color, intensity: style.lightIntensity), alpha: stop.alpha)
+                : Self.cgColor(stop.color, alpha: stop.alpha)
+        }
+        let bloomColors = stops.map { stop in
+            addsLight
+                ? Self.cgColor(white.lightAdded(stop.color, intensity: style.lightIntensity * 2), alpha: stop.alpha)
+                : Self.cgColor(stop.color, alpha: stop.alpha, exposure: exposure)
+        }
+        for (layer, layerColors) in [(glow, colors), (bloom, bloomColors)] {
             layer.colors = layerColors
             layer.locations = locations
         }
-        // にじみは、ダークでは光の色で芯を包む。ライトでは芯と同じ白に近い色にし、芯のすぐ上をいちばん明るくする。
-        // ライトで光の色のにじみを芯に当てると、芯のすぐ上が芯より暗くなり、光源のまわりが明るく見えないため。
-        bloom.colors = isDark ? colors : coreColors
-        bloom.locations = locations
-        glow.opacity = Float(isDark ? style.darkOpacity : style.lightOpacity)
-        line.opacity = Float(style.lineOpacity)
-        bloom.opacity = Float(style.lineOpacity) * (isDark ? 0.6 : 1)
-        // 光源から上へ、明るさがどう落ちていくか。ダークでは光源のそばほど光の色が濃い。
-        // ライトでは光源のそばは白に近く、離れるにつれて光の色が出て、その先で薄い陰になり、投稿の白に戻る。
-        falloff.locations = isDark ? [0, 0.35, 0.65, 0.85, 1] : [0, 0.3, 0.7, 1]
-        falloff.colors = (isDark ? [0, 0.08, 0.3, 0.65, 1] : [0, 1, 0.7, 0.25]).map { UIColor(white: 0, alpha: $0).cgColor }
-        // ライトでは、照明を行の下の端から持ち上げ、その下を照明の陰にする。光は上にしか向かないため。
-        let coreLift = isDark ? 0 : min(max(style.lightCoreLift, 0), bounds.height)
-        let litBottom = bounds.height - coreLift
-        line.frame = CGRect(x: 0, y: max(litBottom - style.lineWidth, 0), width: bounds.width, height: min(style.lineWidth, litBottom))
-        let bloomHeight = min(style.lineBloomHeight + style.lineWidth, litBottom)
-        bloom.frame = CGRect(x: 0, y: litBottom - bloomHeight, width: bounds.width, height: bloomHeight)
+        // 白より明るい色は、レイヤーがHDRで描くと決めたときだけ、白で頭打ちにならずに描かれる。
+        let dynamicRange: CALayer.DynamicRange = exposure > 1 ? .high : .standard
+        for layer in [glow, bloom] {
+            layer.preferredDynamicRange = dynamicRange
+        }
+        // 光を足すときは、濃さは縦の形（falloff）と区切りの濃さだけで決める。重ねる濃さを下げると、足した光がそのぶん弱まるため。
+        glow.opacity = Float(isDark ? style.darkOpacity : addsLight ? 1 : style.lightOpacity)
+        bloom.opacity = Float(style.bloomOpacity)
+        let bloomHeight = min(max(style.bloomHeight, 0), bounds.height)
+        bloom.frame = CGRect(x: 0, y: bounds.height - bloomHeight, width: bounds.width, height: bloomHeight)
         bloomFalloff.frame = bloom.bounds
-        glow.frame = CGRect(x: 0, y: 0, width: bounds.width, height: litBottom)
+        glow.frame = bounds
         falloff.frame = glow.bounds
-        renderShade(style: style, isDark: isDark, litBottom: litBottom, bloomHeight: bloomHeight)
-        // アイコンは芯の白に寄せず、光の色のまま薄く出す。白に寄せると、ライトでは背景に溶け、ダークでは光より目立つため。
+        // アイコンは光の色のまま薄く出す。光より目立たせないため。
         renderIcons(style: style, gradient: gradient, boost: boostColor, favourite: favouriteColor)
-    }
-
-    /// 陰は黒の濃さで描き、光が点いたり消えたりするのに合わせて濃さを変える。ダークの背景では見えず、光を濁らせるだけなので出さない。
-    private func renderShade(style: ReactionGlow.Style, isDark: Bool, litBottom: CGFloat, bloomHeight: CGFloat) {
-        let opacity = style.lightShadeOpacity * (1 - (1 - levels.boost) * (1 - levels.favourite))
-        shade.isHidden = isDark || opacity == 0 || bounds.height == 0
-        guard !shade.isHidden else { return }
-        shade.frame = bounds
-        let height = bounds.height
-        // 上から順に、投稿の白、光が届かなくなるあたりの陰、光源のそばの明るいところ（陰なし）、照明の下の陰。
-        let fadeIn = 0.3 * litBottom / height
-        let bright = max((litBottom - bloomHeight) / height, fadeIn)
-        let core = litBottom / height
-        shade.locations = [0, fadeIn, bright, core, core, 1].map { NSNumber(value: Double($0)) }
-        shade.colors = [0, 1, 0, 0, 1, 1].map { UIColor(white: 0, alpha: opacity * $0).cgColor }
     }
 
     private func renderIcons(style: ReactionGlow.Style, gradient: ReactionGlowGradient, boost: SRGBColor, favourite: SRGBColor) {
         let placements: [IconPlacement] = switch style.iconStyle {
         case .none: []
-        case .onLine: onLinePlacements(style: style, boost: boost, favourite: favourite)
+        case .atBottom: bottomPlacements(style: style, boost: boost, favourite: favourite)
         case .scattered: scatteredPlacements(style: style, gradient: gradient)
         }
         while icons.count < placements.count {
@@ -304,11 +283,11 @@ final class ReactionGlowView: UIView {
 
     /// 両方なら、それぞれの半分の真ん中に置く。全幅に広げるときは、片方だけなら真ん中に置き、もう片方が点くのに合わせて半分の真ん中へ寄せる。
     /// 視差効果を減らす設定では、アイコンを動かさずに行き先へ置き、濃さだけを変える。
-    private func onLinePlacements(style: ReactionGlow.Style, boost: SRGBColor, favourite: SRGBColor) -> [IconPlacement] {
+    private func bottomPlacements(style: ReactionGlow.Style, boost: SRGBColor, favourite: SRGBColor) -> [IconPlacement] {
         let positionLevels = UIAccessibility.isReduceMotionEnabled ? fade?.to ?? levels : levels
         let boostX = style.fillsWidthWhenAlone ? 0.5 - 0.25 * positionLevels.favourite : 0.25
         let favouriteX = style.fillsWidthWhenAlone ? 0.5 + 0.25 * positionLevels.boost : 0.75
-        let lift = style.lineWidth + coreLift + 1
+        let lift = Self.iconBottomGap
         let maxHeight = iconAreaHeight - lift - Self.iconTextGap
         return [
             IconPlacement(kind: .boost, x: bounds.width * boostX, bottom: bounds.height - lift, size: style.iconSize, maxHeight: maxHeight, color: boost, alpha: levels.boost * style.iconOpacity),
@@ -325,7 +304,7 @@ final class ReactionGlowView: UIView {
             let x = (i + 0.5 + (Self.fraction(i * 0.618) - 0.5) * 0.7) / Double(count)
             let size = style.iconSize * (0.6 + Self.fraction(i * 0.754 + 0.3) * 0.5)
             // 余白の下半分の中で高さをずらし、大きさは余白の残りに収める。
-            let base = style.lineWidth + coreLift + 1
+            let base = Self.iconBottomGap
             let lift = base + Self.fraction(i * 0.382 + 0.1) * max(iconAreaHeight - base, 0) / 2
             let sample = gradient.sample(at: x)
             return IconPlacement(
@@ -340,25 +319,27 @@ final class ReactionGlowView: UIView {
         }
     }
 
-    /// ライトモードで芯を持ち上げる高さ。アイコンも、その分だけ上に置く。
-    private var coreLift: CGFloat {
-        traitCollection.userInterfaceStyle == .dark ? 0 : current?.style.lightCoreLift ?? 0
-    }
-
     private static func fraction(_ value: Double) -> Double {
         value - value.rounded(.down)
     }
 
     /// アイコンと、その上の本文とのすき間。
     private static let iconTextGap: CGFloat = 1
+    /// アイコンと、行の下の端とのすき間。
+    private static let iconBottomGap: CGFloat = 1
 
-    /// 光源の芯の色。光源は中心が白く飛んで見えるため、光の強さで白に寄せる。
-    private static func core(_ color: SRGBColor, whiteness: Double) -> SRGBColor {
-        whiteness > 0 ? color.mixed(with: SRGBColor(red: 1, green: 1, blue: 1), fraction: whiteness, in: .linear) : color
+    /// - Parameter exposure: SDRの白の何倍の明るさにするか。1を超えると、明るさの余地（headroom）の印が付いたHDRの色になる。
+    ///   HDRの色の成分は0...1で渡す決まりなので、広い色域で外に出た成分は丸める。
+    private static func cgColor(_ color: ExposedColor, alpha: Double) -> CGColor {
+        cgColor(color.color, alpha: alpha, exposure: color.exposure)
     }
 
-    private static func cgColor(_ color: SRGBColor, alpha: Double) -> CGColor {
-        UIColor(red: color.red, green: color.green, blue: color.blue, alpha: alpha).cgColor
+    private static func cgColor(_ color: SRGBColor, alpha: Double, exposure: CGFloat = 1) -> CGColor {
+        guard exposure > 1 else {
+            return UIColor(red: color.red, green: color.green, blue: color.blue, alpha: alpha).cgColor
+        }
+        func clamped(_ value: Double) -> Double { min(max(value, 0), 1) }
+        return UIColor(red: clamped(color.red), green: clamped(color.green), blue: clamped(color.blue), alpha: alpha, linearExposure: exposure).cgColor
     }
 
     /// `UIColor`の成分は、広い色域でも0...1の外に出る形のsRGBで取れる。
@@ -366,6 +347,16 @@ final class ReactionGlowView: UIView {
         var red: CGFloat = 0, green: CGFloat = 0, blue: CGFloat = 0, alpha: CGFloat = 0
         color.resolvedColor(with: traits).getRed(&red, green: &green, blue: &blue, alpha: &alpha)
         return SRGBColor(red: red, green: green, blue: blue)
+    }
+
+    /// 置かれた画面が、SDRの白より明るく描けるか。画面に置かれる前は分からないので、描けないものとして扱い、置かれたら描き直す。
+    private var canDrawHDR: Bool {
+        (window?.windowScene?.screen.potentialEDRHeadroom ?? 1) > 1
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        render()
     }
 
     override func layoutSubviews() {

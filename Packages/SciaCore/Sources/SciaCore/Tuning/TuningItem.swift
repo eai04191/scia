@@ -951,7 +951,7 @@ public enum TuningCatalog {
         title: "光の高さ（pt）",
         range: 0...120,
         step: 2,
-        defaultValue: 32
+        defaultValue: 64
     )
 
     /// ダークモードでの、光のいちばん明るいところ（下の端）の濃さ。
@@ -972,68 +972,41 @@ public enum TuningCatalog {
         defaultValue: 0.3
     )
 
-    /// 行の下の端に引く、光の元になる線の太さ。0で線を引かない。
-    public static let reactionGlowLineWidth = NumberTuning(
-        id: "timeline.reactionGlowLineWidth",
-        title: "光の下の線の太さ（pt）",
-        range: 0...4,
-        step: 0.5,
-        defaultValue: 1.5
-    )
-
-    /// 光の下の線の濃さ。
-    public static let reactionGlowLineOpacity = NumberTuning(
-        id: "timeline.reactionGlowLineOpacity",
-        title: "光の下の線の濃さ",
-        range: 0...1,
-        step: 0.05,
-        defaultValue: 1
-    )
-
-    /// ダークモードで、光の下の線の芯を白に寄せる割合。光源は中心が白く飛んで見えるため。0で光の色のまま。
-    public static let reactionGlowDarkLineCoreWhiteness = NumberTuning(
-        id: "timeline.reactionGlowDarkLineCoreWhiteness",
-        title: "光の下の線の芯の白さ（ダーク）",
-        range: 0...1,
-        step: 0.05,
-        defaultValue: 0.5
-    )
-
-    /// ライトモードで、光の下の線の芯を白に寄せる割合。白い背景では、色の縁とにじみに囲まれて、はじめて芯が白く光って見える。
-    public static let reactionGlowLightLineCoreWhiteness = NumberTuning(
-        id: "timeline.reactionGlowLightLineCoreWhiteness",
-        title: "光の下の線の芯の白さ（ライト）",
-        range: 0...1,
-        step: 0.05,
-        defaultValue: 1
-    )
-
-    /// 光の下の線のまわりに付ける、色のにじみの高さ。0でにじませない。
-    public static let reactionGlowLineBloomHeight = NumberTuning(
-        id: "timeline.reactionGlowLineBloomHeight",
-        title: "光の下の線のにじみの高さ（pt）",
+    /// 光の下の端のすぐ上に重ねる、いちばん明るいにじみの高さ。0でにじませない。
+    public static let reactionGlowBloomHeight = NumberTuning(
+        id: "timeline.reactionGlowBloomHeight",
+        title: "下の端のにじみの高さ（pt）",
         range: 0...16,
         step: 1,
         defaultValue: 6
     )
 
-    /// ライトモードで、光っている行の下の端の近くにだけ敷く陰の濃さ。光が届かなくなるあたりと、上へ向けた照明の下に置く。
-    /// 白い背景より明るいものは描けないため、光源から離れたところを少し暗くしないと、光源がいちばん明るく見えない。0で敷かない。
-    public static let reactionGlowLightShadeOpacity = NumberTuning(
-        id: "timeline.reactionGlowLightShadeOpacity",
-        title: "下の端の陰の濃さ（ライト）",
-        range: 0...0.3,
-        step: 0.01,
-        defaultValue: 0.06
+    /// 光の下の端のすぐ上に重ねる、いちばん明るいにじみの濃さ。
+    public static let reactionGlowBloomOpacity = NumberTuning(
+        id: "timeline.reactionGlowBloomOpacity",
+        title: "下の端のにじみの濃さ",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.6
     )
 
-    /// ライトモードで、光の下の線の芯を行の下の端から持ち上げる高さ。芯の下にも陰が入り、芯が白く光って見える。0で下の端に置く。
-    public static let reactionGlowLightCoreLift = NumberTuning(
-        id: "timeline.reactionGlowLightCoreLift",
-        title: "芯を下の端から離す高さ（ライト、pt）",
-        range: 0...6,
+    /// 光をHDRで描くときの倍率。にじみをSDRの白の何倍の明るさで描くかで、1ならSDRのまま描く。ライトでは1を超えると、照らされた面を白より明るく描く。
+    /// どこまで明るくなるかは、画面の明るさと周りの明るさで変わる。
+    public static let reactionGlowHDRExposure = NumberTuning(
+        id: "timeline.reactionGlowHDRExposure",
+        title: "HDRの倍率（1でSDR）",
+        range: 1...8,
         step: 0.5,
-        defaultValue: 2
+        defaultValue: 1.5
+    )
+
+    /// ライトモードでHDRで描くときの、照らす光の強さ。白い背景にこの強さで光を足す。1なら、光源のそばの白を最大で2倍の明るさにする。
+    public static let reactionGlowLightIntensity = NumberTuning(
+        id: "timeline.reactionGlowLightIntensity",
+        title: "照らす光の強さ（ライト、HDR）",
+        range: 0...4,
+        step: 0.1,
+        defaultValue: 1
     )
 
     /// 片方だけのときは、その色で全幅を光らせる。オフなら、片方だけでもその半分だけを光らせる。
@@ -1043,10 +1016,10 @@ public enum TuningCatalog {
         defaultValue: true
     )
 
-    /// 光が何を示すかを、アイコンで添える。0はなし、1は光の下の線の上に1つずつ載せる、2は下の端に小さく散らす。
+    /// 光が何を示すかを、アイコンで添える。0はなし、1は下の端に1つずつ置く、2は下の端に小さく散らす。
     public static let reactionGlowIconStyle = NumberTuning(
         id: "timeline.reactionGlowIconStyle",
-        title: "光のアイコン（0: なし、1: 線の上、2: 散らす）",
+        title: "光のアイコン（0: なし、1: 下の端、2: 散らす）",
         range: 0...2,
         step: 1,
         defaultValue: 1
@@ -1122,13 +1095,10 @@ public enum TuningCatalog {
             .number(reactionGlowHeight),
             .number(reactionGlowDarkOpacity),
             .number(reactionGlowLightOpacity),
-            .number(reactionGlowLineWidth),
-            .number(reactionGlowLineOpacity),
-            .number(reactionGlowDarkLineCoreWhiteness),
-            .number(reactionGlowLightLineCoreWhiteness),
-            .number(reactionGlowLineBloomHeight),
-            .number(reactionGlowLightShadeOpacity),
-            .number(reactionGlowLightCoreLift),
+            .number(reactionGlowBloomHeight),
+            .number(reactionGlowBloomOpacity),
+            .number(reactionGlowHDRExposure),
+            .number(reactionGlowLightIntensity),
             .toggle(reactionGlowFillsWidthWhenAlone),
             .number(reactionGlowIconStyle),
             .number(reactionGlowIconSize),

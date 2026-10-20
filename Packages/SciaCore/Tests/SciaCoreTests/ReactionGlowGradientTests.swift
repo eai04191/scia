@@ -98,4 +98,34 @@ struct ReactionGlowGradientTests {
         #expect(gradient.sample(at: 0).favouriteShare < 1e-9)
         #expect(abs(gradient.sample(at: 1).favouriteShare - 0.4) < 1e-9)
     }
+
+    private let white = SRGBColor(red: 1, green: 1, blue: 1)
+
+    /// 光を足さなければ、もとの色のまま、倍率は1。
+    @Test func noLightKeepsTheBase() {
+        let lit = white.lightAdded(yellow, intensity: 0)
+
+        #expect(isClose(lit.color, white))
+        #expect(lit.exposure == 1)
+    }
+
+    /// 白い面を白い光で照らすと、白のまま2倍の明るさになる。
+    @Test func whiteLightDoublesWhite() {
+        let lit = white.lightAdded(white, intensity: 1)
+
+        #expect(isClose(lit.color, white))
+        #expect(abs(lit.exposure - 2) < 1e-9)
+    }
+
+    /// 白い面を色の光で照らすと、どの成分も白より暗くならず、光の色に寄る。倍率を掛け戻すと、面に光を足した値になる。
+    @Test func coloredLightBrightensWhiteTowardItsColor() {
+        let lit = white.lightAdded(yellow, intensity: 0.5)
+        let restored = lit.color.linear * lit.exposure
+
+        #expect(lit.exposure > 1)
+        #expect(restored.min() >= 1 - 1e-9)
+        #expect(restored.x > restored.z)
+        let expected = white.linear + yellow.linear * 0.5
+        #expect(abs(restored.x - expected.x) < 1e-6 && abs(restored.y - expected.y) < 1e-6 && abs(restored.z - expected.z) < 1e-6)
+    }
 }
