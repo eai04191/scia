@@ -27,6 +27,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var createdAt: Date
     /// 投稿が編集されていれば、時刻の前に印を付ける。時刻は編集した時刻ではなく、投稿した時刻のまま。
     var isEdited = false
+    /// 公開以外なら、時刻と編集済みの印の前に、投稿欄で選ぶときと同じ記号を付ける。
+    var visibility: Status.Visibility = .public
     var timeStyle: StatusTimeStyle
     var body: NSAttributedString
     /// 注意書きがなければnil。
@@ -104,10 +106,21 @@ struct PostContentConfiguration: UIContentConfiguration {
         return isEdited ? "*\(text)" : text
     }
 
+    /// 時刻の前に付ける公開範囲の記号。公開ならnil。
+    var visibilitySymbolName: String? {
+        visibility == .public ? nil : VisibilityOption(visibility).symbolName
+    }
+
     /// 読み上げる時刻。印の記号は読まず、言葉にする。
     func timeAccessibilityText(now: Date) -> String {
-        let text = StatusTimestamp.text(for: createdAt, now: now, style: timeStyle)
-        return isEdited ? "編集済み、\(text)" : text
+        var text = StatusTimestamp.text(for: createdAt, now: now, style: timeStyle)
+        if isEdited {
+            text = "編集済み、\(text)"
+        }
+        if visibility != .public {
+            text = "\(VisibilityOption(visibility).title)、\(text)"
+        }
+        return text
     }
 }
 
@@ -119,6 +132,8 @@ final class PostContentView: UIView, UIContentView {
     private let contextLabel = FadingLabel()
     private let nameLabels = [FadingLabel(), FadingLabel()]
     private let timeLabel = UILabel()
+    /// 描いている時刻の表記。記号を除いた文字で、書き直すかどうかを比べる。
+    private var timeText = ""
     private let nameRow = UIStackView()
     private let bodyView: PostBodyView
     private let textGuide = UILayoutGuide()
@@ -246,7 +261,8 @@ final class PostContentView: UIView, UIContentView {
         // 2つ目がないときは、1つ目が余りの幅を受け持つ。
         nameLabels[0].setContentHuggingPriority(configuration.nameParts.count > 1 ? .required : .defaultLow, for: .horizontal)
         timeLabel.font = metrics.secondaryFont
-        timeLabel.text = configuration.timeText(now: .now)
+        timeText = configuration.timeText(now: .now)
+        timeLabel.attributedText = timeAttributedText(timeText, for: configuration)
 
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,
@@ -269,10 +285,26 @@ final class PostContentView: UIView, UIContentView {
     /// 時刻の表記だけを今の時刻で書き直す。名前の行は1行で高さが決まっているため、行の高さは変わらない。
     func refreshTime(now: Date) {
         let text = current.timeText(now: now)
-        if timeLabel.text != text {
-            timeLabel.text = text
+        if timeText != text {
+            timeText = text
+            timeLabel.attributedText = timeAttributedText(text, for: current)
             updateAccessibility(for: current)
         }
+    }
+
+    /// 時刻の表記に、公開範囲の記号を前置きする。記号は文字に添えるので、ベースラインに乗り、文字と同じ色で描かれる。
+    private func timeAttributedText(_ text: String, for configuration: PostContentConfiguration) -> NSAttributedString {
+        let font = configuration.metrics.secondaryFont
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
+        let result = NSMutableAttributedString()
+        if let symbolName = configuration.visibilitySymbolName,
+           let image = UIImage(systemName: symbolName, withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)) {
+            result.append(NSAttributedString(attachment: NSTextAttachment(image: image)))
+            result.append(NSAttributedString(string: " "))
+        }
+        result.append(NSAttributedString(string: text))
+        result.addAttributes(attributes, range: NSRange(location: 0, length: result.length))
+        return result
     }
 
     private func updateConstraints(for configuration: PostContentConfiguration) {

@@ -120,6 +120,26 @@ struct PostContentViewTests {
 
         #expect(fittingHeight(of: controller.contentConfiguration(for: boost, base: .cell())) > fittingHeight(of: controller.contentConfiguration(for: original, base: .cell())))
     }
+    /// 公開以外の投稿は、時刻の前に公開範囲の記号を描き、読み上げでは言葉にする。公開の投稿には何も付けない。
+    @Test(arguments: [(Status.Visibility.public, nil), (.unlisted, "ひかえめな公開"), (.private, "フォロワーのみ"), (.direct, "メンションした相手のみ")] as [(Status.Visibility, String?)])
+    func visibilityIsShownBeforeTime(visibility: Status.Visibility, spokenTitle: String?) throws {
+        let base = try status(content: "<p>短い</p>")
+        let status = Status(id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil, visibility: visibility, editedAt: base.createdAt)
+        let configuration = makeViewController().contentConfiguration(for: status, base: .cell())
+        let view = configuration.makeContentView()
+
+        let timeText = try #require(visibleLabels(in: view).compactMap(\.attributedText).first { $0.string.contains("*") })
+        let attachmentRange = timeText.length > 0 ? timeText.attribute(.attachment, at: 0, effectiveRange: nil) : nil
+        #expect((attachmentRange != nil) == (spokenTitle != nil))
+        let element = try #require(view.accessibilityElements?.first as? UIAccessibilityElement)
+        let label = try #require(element.accessibilityLabel)
+        if let spokenTitle {
+            #expect(label.contains("\(spokenTitle)、編集済み、"))
+        } else {
+            #expect(!label.contains("公開"))
+        }
+    }
+
     /// 絵文字の画像が届いたときや時刻の表記が変わったときは、大きさの変わらない描き直しで並べ直しが起きない。
     /// そのあとも、読み上げの要素は画面上の文字の位置を指したままにする。枠が空になると、VoiceOverで指でなぞってもその投稿に止まらない。
     @Test func accessibilityFrameSurvivesRedrawWithoutLayout() throws {

@@ -64,6 +64,7 @@ struct PostContentBuilder {
             nameParts: nameParts,
             createdAt: shown.createdAt,
             isEdited: shown.editedAt != nil,
+            visibility: shown.visibility,
             timeStyle: settings.statusTimeStyle,
             body: body(of: shown, base: base),
             spoiler: spoiler(of: shown, base: base),
