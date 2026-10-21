@@ -288,6 +288,11 @@ final class MediaTileView: UIButton, MediaViewerSource {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// 動画の再生などの印の大きさ。投稿欄のカプセルのように小さな枠では小さくする。
+    var symbolPointSize: CGFloat = 36 {
+        didSet { symbolView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: symbolPointSize) }
+    }
+
     /// 描いているサムネイル。ビューアの開閉で、まだ画像を描いていないページの代わりに動かす。
     var thumbnailImage: UIImage? { thumbnailView.image }
 

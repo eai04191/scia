@@ -786,6 +786,97 @@ public enum TuningCatalog {
         defaultValue: 0.35
     )
 
+    /// 書いていない投稿欄のカプセルに重ねた写真のうち、手前の1枚目を回す角度（度）。正の値で右回り。
+    public static let composeStackFrontRotation = NumberTuning(
+        id: "compose.stackFrontRotation",
+        title: "カプセルの1枚目の写真の角度（度）",
+        range: -15...15,
+        step: 0.5,
+        defaultValue: -2
+    )
+
+    /// カプセルに重ねた写真のうち、2枚目を回す角度（度）。正の値で右回り。
+    public static let composeStackBackRotation = NumberTuning(
+        id: "compose.stackBackRotation",
+        title: "カプセルの2枚目の写真の角度（度）",
+        range: -15...15,
+        step: 0.5,
+        defaultValue: 7
+    )
+
+    /// カプセルの2枚目の写真の中心を、1枚目の中心から横にずらす量（pt）。負の値で左。
+    public static let composeStackBackOffsetX = NumberTuning(
+        id: "compose.stackBackOffsetX",
+        title: "カプセルの2枚目の写真を横にずらす量（pt、負で左）",
+        range: -8...8,
+        step: 0.5,
+        defaultValue: 4
+    )
+
+    /// カプセルの2枚目の写真の中心を、1枚目の中心から縦にずらす量（pt）。負の値で上。
+    public static let composeStackBackOffsetY = NumberTuning(
+        id: "compose.stackBackOffsetY",
+        title: "カプセルの2枚目の写真を縦にずらす量（pt、負で上）",
+        range: -8...8,
+        step: 0.5,
+        defaultValue: 1
+    )
+
+    /// カプセルに重ねた写真のうち、1枚目の左上側からのぞかせる3枚目を回す角度（度）。正の値で右回り。2枚目と逆の向きにして、束の左右の釣り合いを取る。
+    public static let composeStackThirdRotation = NumberTuning(
+        id: "compose.stackThirdAngle",
+        title: "カプセルの3枚目の写真の角度（度）",
+        range: -15...15,
+        step: 0.5,
+        defaultValue: -8
+    )
+
+    /// カプセルの3枚目の写真の中心を、1枚目の中心から横にずらす量（pt）。負の値で左。
+    public static let composeStackThirdOffsetX = NumberTuning(
+        id: "compose.stackThirdOffsetX",
+        title: "カプセルの3枚目の写真を横にずらす量（pt、負で左）",
+        range: -8...8,
+        step: 0.5,
+        defaultValue: -3
+    )
+
+    /// カプセルの3枚目の写真の中心を、1枚目の中心から縦にずらす量（pt）。負の値で上。
+    public static let composeStackThirdOffsetY = NumberTuning(
+        id: "compose.stackThirdOffsetY",
+        title: "カプセルの3枚目の写真を縦にずらす量（pt、負で上）",
+        range: -8...8,
+        step: 0.5,
+        defaultValue: -1
+    )
+
+    /// カプセルに重ねた写真の束が、カプセルの面に落とす影の濃さ。
+    public static let composeStackShadowOpacity = NumberTuning(
+        id: "compose.stackShadowOpacity",
+        title: "カプセルの写真の束が背景に落とす影の濃さ",
+        range: 0...0.6,
+        step: 0.01,
+        defaultValue: 0.15
+    )
+
+    /// カプセルに重ねた写真のうち、上の写真が下の写真に落とす影の濃さ。
+    public static let composeStackBetweenShadowOpacity = NumberTuning(
+        id: "compose.stackBetweenShadowOpacity",
+        title: "カプセルの写真同士の影の濃さ",
+        range: 0...0.6,
+        step: 0.01,
+        defaultValue: 0.15
+    )
+
+    /// 投稿欄の開閉で、3枚目より後ろの添付の写真を、1枚ごとに遅らせて動かす間隔（秒）。重ねた写真の下のほうにある写真が、手前の写真と一緒に動いてひと塊に見えないようにする。
+    /// 遅らせた分だけ速く動かし、着く時刻は形を変える動きの終わりに揃える。
+    public static let composeStackStagger = NumberTuning(
+        id: "compose.stackStagger",
+        title: "投稿欄の開閉で、3枚目より後ろの写真を遅らせる間隔（秒）",
+        range: 0...0.15,
+        step: 0.01,
+        defaultValue: 0.04
+    )
+
     /// 投稿欄を展開ボタンで本文に合わせた高さまで広げる時間と、5行の高さに戻す時間（秒）。
     /// リンクにタイトルを付けるとき、URLを次の行の位置へ動かし、タイトルを浮かび上がらせる動きの時間。0なら動かさずに置き換える。
     public static let linkTitleMorphDuration = NumberTuning(
@@ -1235,6 +1326,16 @@ public enum TuningCatalog {
         TuningSection(id: "compose", title: "投稿欄", items: [
             .number(composeRestingHeight),
             .number(composeMorphDuration),
+            .number(composeStackStagger),
+            .number(composeStackFrontRotation),
+            .number(composeStackBackRotation),
+            .number(composeStackBackOffsetX),
+            .number(composeStackBackOffsetY),
+            .number(composeStackThirdRotation),
+            .number(composeStackThirdOffsetX),
+            .number(composeStackThirdOffsetY),
+            .number(composeStackShadowOpacity),
+            .number(composeStackBetweenShadowOpacity),
             .number(composeExpandDuration),
             .number(composeExpandedMinLines),
             .number(linkTitleMorphDuration),

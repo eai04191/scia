@@ -15,6 +15,10 @@ final class ComposeAttachmentStrip: UIView {
     /// サムネイルを読み込む大きさ。iPhoneの画面の倍率の最大（3倍）に合わせる。
     static let thumbnailPixelSize = itemSize * 3
 
+    /// 編集している投稿に付いている添付のサムネイル。枠が64ptと小さいので、元の画像は読まず、サーバーのプレビュー画像を少し引き伸ばして出す。
+    /// 書いていないときのカプセルのサムネイルも、同じ決め方で読む。
+    static let attachedThumbnailPolicy = MediaThumbnailPolicy(allowsOriginal: false, upscaleTolerance: 2)
+
     /// サムネイルを押したときに呼ぶ。
     var onSelect: (DraftAttachment.ID) -> Void = { _ in }
     /// 並べ替えたときに、移した添付と移した先の位置を渡して呼ぶ。
@@ -236,9 +240,6 @@ extension ComposeAttachmentStrip: UICollectionViewDragDelegate, UICollectionView
 /// 添付したメディア1つのサムネイル。タイムラインと同じ`MediaTileView`に、アップロードと代替テキストの送信の状態を重ねて見せる。
 /// ビューアはこのサムネイルとのあいだで画像を動かす。
 private final class ComposeAttachmentCell: UICollectionViewCell {
-    /// 編集している投稿に付いている添付のサムネイル。枠が64ptと小さいので、元の画像は読まず、サーバーのプレビュー画像を少し引き伸ばして出す。
-    private static let attachedThumbnailPolicy = MediaThumbnailPolicy(allowsOriginal: false, upscaleTolerance: 2)
-
     let tile = MediaTileView(store: AppDependencies.mediaImages)
     /// 状態の表示を、サムネイルと同じ角の丸い枠に収める。
     private let overlay = UIView()
@@ -323,7 +324,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         tile.hidesBadge = showsDescriptionState
         if let attached = item.attachedMedia {
             // 編集している投稿に付いている添付は、手元にファイルがないので、サーバーのプレビュー画像を描く。ALTの札は書き換えた代替テキストで決める。
-            tile.apply(attached.replacingDescription(description), hiddenCount: 0, isCovered: false, policy: Self.attachedThumbnailPolicy)
+            tile.apply(attached.replacingDescription(description), hiddenCount: 0, isCovered: false, policy: ComposeAttachmentStrip.attachedThumbnailPolicy)
         } else {
             tile.applyLocal(thumbnail: item.local?.thumbnail, kind: item.local?.file?.kind, description: showsDescriptionState ? "" : description)
         }

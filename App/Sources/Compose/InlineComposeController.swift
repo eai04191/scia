@@ -48,7 +48,9 @@ final class InlineComposeController: NSObject {
     private let logger = SciaLog.logger(category: "compose")
     /// 書いていないときに見せる、下書きの1行。押すと書き始める。
     private let restRow = UIControl()
-    private let restLabel = UILabel()
+    private let restContent = ComposeRestContent()
+    /// 開閉で、カプセルの札のアイコンとサムネイルを、書いているときの同じものの位置へ動かす。
+    private lazy var morphFlights = ComposeMorphFlights(container: bar.contentView)
     /// 書き始めて行を隠すと、スタックビューが高さ0の制約を付ける。それと競合しないよう、必須より1つ下げる。
     private lazy var restRowHeight: NSLayoutConstraint = {
         let constraint = restRow.heightAnchor.constraint(equalToConstant: 0)
@@ -1062,18 +1064,97 @@ final class InlineComposeController: NSObject {
             isExpanded = false
             generation = beginExpansionChange()
         }
-        UIView.animate(withDuration: tuning.value(of: TuningCatalog.composeMorphDuration), delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+        // 視差効果を減らす設定では、写真と札を飛ばさず、行を薄くしながら入れ替えるだけにする。
+        let animatesFlights = bar.window != nil && !UIAccessibility.isReduceMotionEnabled
+        if animatesFlights {
+            // カプセルで重ねているとおり、後ろの添付ほど下に、1枚目をその上に、札のアイコンをいちばん上に重ねて動かす。
+            let order = model.attachments.reversed().map { ComposeMorphFlights.Key.attachment($0.id) } + [.chip]
+            // 開くときはカプセルの写真の束の影から、閉じるときは影のない列の写真から動き始める。
+            let stackShadow = editing ? ComposeRestThumbnails.stackShadowOpacity(in: tuning) : 0
+            morphFlights.takeOff(from: morphEnds(editing: !editing), stackingOrder: order, stackShadowOpacity: stackShadow)
+        }
+        var flightGeneration: Int?
+        let morphDuration = tuning.value(of: TuningCatalog.composeMorphDuration)
+        let morphEnd = CACurrentMediaTime() + morphDuration
+        UIView.animate(withDuration: morphDuration, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
             if collapses {
                 self.applyExpandedLayout()
             }
             self.applyEditingLayout()
             self.host?.view.layoutIfNeeded()
+            if animatesFlights {
+                // 3枚目より後ろは重ねた写真の下のほうにあるので、1枚ごとに遅らせて動かし、手前の写真とひと塊に見えないようにする。
+                let stagger = self.tuning.value(of: TuningCatalog.composeStackStagger)
+                let delays = Dictionary(uniqueKeysWithValues: self.model.attachments.enumerated().dropFirst(2).map { index, attachment in
+                    (ComposeMorphFlights.Key.attachment(attachment.id), min(Double(index - 1) * stagger, morphDuration * 0.5))
+                })
+                let stackShadow = editing ? 0 : ComposeRestThumbnails.stackShadowOpacity(in: self.tuning)
+                flightGeneration = self.morphFlights.land(on: self.morphEnds(editing: editing), delays: delays, stackShadowOpacity: stackShadow, duration: morphDuration) { delay, animations in
+                    // 外側のアニメーションの中で呼ぶので、時間と曲線を受け継がないよう上書きする。受け継ぐと遅らせた分だけ着くのが遅れ、外側の終わりで複製が消えて本物の位置へ飛ぶ。
+                    UIView.animate(withDuration: morphDuration - delay, delay: delay, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState, .overrideInheritedDuration, .overrideInheritedCurve], animations: animations)
+                }
+            }
         } completion: { _ in
             if let generation {
                 self.endCollapse(generation: generation)
             }
+            if let flightGeneration {
+                // 写真同士の影は、動いている間の複製が落とさないので、カプセルに着いてから浮かび上がらせる。
+                if self.morphFlights.finish(generation: flightGeneration), !editing {
+                    self.restContent.thumbnails.revealBetweenShadows(duration: 0.15)
+                }
+            }
             self.logOverlappingRows(after: editing ? "begin editing" : "end editing")
         }
+        if let flightGeneration {
+            // 行が次の実行ループで並べ直されたときは、複製の行き先を測り直す。残りの時間で、行の動きと同じ時刻に着かせる。
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                morphFlights.retarget(on: morphEnds(editing: editing), generation: flightGeneration) { delay, animations in
+                    UIView.animate(withDuration: max(morphEnd - CACurrentMediaTime() - delay, 0.05), delay: delay, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState], animations: animations)
+                }
+            }
+        }
+    }
+
+    /// 開閉で動かす札のアイコンとサムネイルの、カプセルか書いているときの行の本物。行を出していなければ空にする。
+    /// 列の1枚目から3枚目は、カプセルで重ねている同じ添付の写真と行き来する。4枚目より後ろは、カプセルでは3枚目の下に隠れて重なっているものとして、3枚目の写真の位置と行き来する。
+    /// 出したばかりの行は中身がまだ並んでいないことがあるので、位置を読む前に並べる。
+    /// 動かしている間は、本物を透明にして隠す。空のマスクで隠すと、ガラスのバーの上に、隠した部品の形の灰色の跡が残り、複製とは別に見えたため。
+    /// 列のサムネイルは触れたものをセルで受けるので、透明にしても押せなくはならない。
+    private func morphEnds(editing: Bool) -> [ComposeMorphFlights.Key: ComposeMorphFlights.End] {
+        var ends: [ComposeMorphFlights.Key: ComposeMorphFlights.End] = [:]
+        let ids = model.attachments.map(\.id)
+        if editing {
+            if !replyRow.isHidden, let icon = replyButton.imageView, icon.image != nil {
+                replyButton.layoutIfNeeded()
+                ends[.chip] = .init(view: icon, content: .symbol(icon.image)) { icon.alpha = $0 ? 0 : 1 }
+            }
+            for id in ids {
+                guard let tile = attachmentStrip.tile(for: id) else { continue }
+                tile.superview?.layoutIfNeeded()
+                ends[.attachment(id)] = .init(view: tile, content: .thumbnail(tile.thumbnailImage, tile.thumbnailFocus), cornerRadius: MediaGridView.cornerRadius) { tile.alpha = $0 ? 0 : 1 }
+            }
+        } else if !restRow.isHidden {
+            restContent.layoutIfNeeded()
+            let icon = restContent.chipIcon
+            if !icon.isHidden, icon.image != nil {
+                ends[.chip] = .init(view: icon, content: .symbol(icon.image)) { icon.alpha = $0 ? 0 : 1 }
+            }
+            for (index, id) in ids.enumerated() {
+                let thumbnails = restContent.thumbnails
+                guard !thumbnails.isHidden, let photo = thumbnails.photo(for: id) ?? (index >= 3 ? thumbnails.photo(for: ids[2]) : nil) else { continue }
+                // 4枚目より後ろは3枚目の写真の位置に重ねるので、描くのはその添付の画像にする。手元にない画像は、列に着くときに列の画像に替える。
+                let content: ComposeMorphFlights.Content = index < 3
+                    ? .thumbnail(photo.tile.thumbnailImage, photo.tile.thumbnailFocus)
+                    : .thumbnail(model.localMedia[id]?.thumbnail, nil)
+                ends[.attachment(id)] = .init(view: photo, content: content, cornerRadius: ComposeRestPhoto.cornerRadius, border: ComposeRestPhoto.border) { concealed in
+                    photo.alpha = concealed ? 0 : 1
+                    thumbnails.setStackShadowConcealed(concealed)
+                }
+            }
+        }
+        return ends
     }
 
     private func applyEditingLayout() {
@@ -1214,6 +1295,8 @@ final class InlineComposeController: NSObject {
     private func observeTuning() {
         withObservationTracking {
             restRowHeight.constant = tuning.value(of: TuningCatalog.composeRestingHeight) - restInset * 2
+            // 奥の1枚を回してはみ出す分を残して、1行の高さに収める。
+            restContent.thumbnails.photoSide = max(restRowHeight.constant - 6, 12)
             _ = tuning.value(of: TuningCatalog.composeExpandedMinLines)
             textDidChange()
         } onChange: { [weak self] in
@@ -1273,7 +1356,7 @@ final class InlineComposeController: NSObject {
         }
         setRowShown(replyRow, isEditing && chip != nil)
 
-        attachmentStrip.update(model.attachments.map { attachment in
+        let attachmentItems = model.attachments.map { attachment in
             ComposeAttachmentStrip.Item(
                 attachment: attachment,
                 local: model.localMedia[attachment.id],
@@ -1281,7 +1364,8 @@ final class InlineComposeController: NSObject {
                 progress: model.attachmentProgress(of: attachment.id),
                 isSensitive: model.isSensitive
             )
-        })
+        }
+        attachmentStrip.update(attachmentItems)
         mediaViewer?.update(items: viewerItems())
         setRowShown(attachmentStrip, isEditing && !model.attachments.isEmpty)
 
@@ -1301,7 +1385,8 @@ final class InlineComposeController: NSObject {
         sendButton.isEnabled = model.canPost
         sendButton.configuration?.showsActivityIndicator = model.isPosting
 
-        restLabel.attributedText = restText(chip: chip)
+        restContent.configure(symbolName: chip?.symbolName, attachments: attachmentItems, text: restText())
+        restRow.accessibilityValue = restAccessibilityValue(chip: chip, attachments: attachmentItems)
         presentErrorIfNeeded()
         logOverlappingRows(after: "update")
     }
@@ -1342,38 +1427,44 @@ final class InlineComposeController: NSObject {
     private struct Chip {
         let title: String
         let symbolName: String
-        /// 書いていないときの1行に出す、短い文字。
-        let restTitle: String
         let hint: String
         let clearLabel: String
     }
 
     private var chip: Chip? {
         if let title = model.editChipTitle {
-            return Chip(title: title, symbolName: "pencil", restTitle: "編集中", hint: "タイムラインの編集している投稿を表示します", clearLabel: "編集をやめる")
+            return Chip(title: title, symbolName: "pencil", hint: "タイムラインの編集している投稿を表示します", clearLabel: "編集をやめる")
         }
         guard let replyTo = model.replyTo else { return nil }
         let acct = "@\(replyTo.displayed.account.acct)"
-        return Chip(title: "\(acct)への返信", symbolName: "arrowshape.turn.up.left.fill", restTitle: acct, hint: "タイムラインの返信先の投稿を表示します", clearLabel: "返信をやめる")
+        return Chip(title: "\(acct)への返信", symbolName: "arrowshape.turn.up.left.fill", hint: "タイムラインの返信先の投稿を表示します", clearLabel: "返信をやめる")
     }
 
-    /// 書いていないときに出す下書きの1行。返信なら宛先を、編集なら編集中であることを札にまとめ、自分で書いた部分だけを続ける。何も書いていなければ書き出しを促す。
-    private func restText(chip: Chip?) -> NSAttributedString {
+    /// 書いていないときの1行に、札のアイコンとサムネイルに続けて出す、自分で書いた本文。何も書いていなければ書き出しを促す。
+    private func restText() -> NSAttributedString {
         let font = UIFont.preferredFont(forTextStyle: .body)
-        let result = NSMutableAttributedString()
-        if let chip {
-            let icon = NSTextAttachment(image: UIImage(systemName: chip.symbolName, withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)) ?? UIImage())
-            result.append(NSAttributedString(attachment: icon))
-            result.append(NSAttributedString(string: " \(chip.restTitle)  "))
-            result.addAttributes([.font: font, .foregroundColor: UIColor.tintColor], range: NSRange(location: 0, length: result.length))
-        }
         let body = model.typedText.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
         if body.isEmpty {
-            result.append(NSAttributedString(string: "いまどうしてる？", attributes: [.font: font, .foregroundColor: UIColor.placeholderText]))
-        } else {
-            result.append(NSAttributedString(string: body, attributes: [.font: font, .foregroundColor: UIColor.label, .languageIdentifier: settings.glyphLanguageIdentifier()]))
+            return NSAttributedString(string: "いまどうしてる？", attributes: [.font: font, .foregroundColor: UIColor.placeholderText])
         }
-        return result
+        return NSAttributedString(string: body, attributes: [.font: font, .foregroundColor: UIColor.label, .languageIdentifier: settings.glyphLanguageIdentifier()])
+    }
+
+    /// 書いていないときの1行の読み上げ。札とサムネイルは文字を出さないので、書いているときの札と同じ文と、添付の数を読む。
+    private func restAccessibilityValue(chip: Chip?, attachments: [ComposeAttachmentStrip.Item]) -> String {
+        var parts: [String] = []
+        if let chip {
+            parts.append(chip.title)
+        }
+        if !attachments.isEmpty {
+            let onlyImages = attachments.allSatisfy { ($0.local?.file?.kind ?? $0.attachedMedia?.type) == .image }
+            parts.append(onlyImages ? "画像\(attachments.count)枚を添付" : "メディア\(attachments.count)件を添付")
+            if attachments.contains(where: { $0.status == .failed || $0.status == .descriptionFailed }) {
+                parts.append("送信できなかった添付があります")
+            }
+        }
+        parts.append(restText().string)
+        return parts.joined(separator: "、")
     }
 
     /// メディアを選ぶシートなどを出している間は出さず、閉じたときに知らせる。
@@ -1793,13 +1884,12 @@ final class InlineComposeController: NSObject {
     // MARK: - 部品
 
     private func configureRestRow() {
-        restLabel.lineBreakMode = .byTruncatingTail
-        restLabel.translatesAutoresizingMaskIntoConstraints = false
-        restRow.addSubview(restLabel)
+        restContent.translatesAutoresizingMaskIntoConstraints = false
+        restRow.addSubview(restContent)
         NSLayoutConstraint.activate([
-            restLabel.leadingAnchor.constraint(equalTo: restRow.leadingAnchor),
-            restLabel.trailingAnchor.constraint(equalTo: restRow.trailingAnchor),
-            restLabel.centerYAnchor.constraint(equalTo: restRow.centerYAnchor),
+            restContent.leadingAnchor.constraint(equalTo: restRow.leadingAnchor),
+            restContent.trailingAnchor.constraint(equalTo: restRow.trailingAnchor),
+            restContent.centerYAnchor.constraint(equalTo: restRow.centerYAnchor),
             restRowHeight,
         ])
         restRow.addAction(UIAction { [weak self] _ in self?.beginEditing() }, for: .touchUpInside)
