@@ -345,8 +345,8 @@ struct InlineComposeControllerTests {
         let spoiler = try #require(buttons(in: window).first { $0.accessibilityLabel == "注意書き" })
         expectShown([add, media], hidden: [spoiler])
 
-        // カスタマイズは並びに書かなければ既定どおり＋の中に差し込まれるので、隠して＋を空にする。
-        settings.composeToolLayout = MenuLayout(elements: [.item(.customize, isVisible: false), .more, .item(.visibility, isVisible: true), .item(.media, isVisible: true), .item(.expand, isVisible: true), .item(.spoiler, isVisible: true)])
+        // カスタマイズとリンクにタイトルを付けるは、並びに書かなければ既定どおり＋の中に差し込まれるので、隠して＋を空にする。
+        settings.composeToolLayout = MenuLayout(elements: [.item(.customize, isVisible: false), .item(.linkTitle, isVisible: false), .more, .item(.visibility, isVisible: true), .item(.media, isVisible: true), .item(.expand, isVisible: true), .item(.spoiler, isVisible: true)])
         try await Task.sleep(for: .milliseconds(300))
         window.layoutIfNeeded()
         expectShown([media, spoiler], hidden: [add])
