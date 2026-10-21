@@ -89,6 +89,10 @@ extension TimelineViewController {
             return users([.account(status.account)])
         case .mentionedUsers:
             return users(status?.displayed.mentions.map(MenuUser.mention) ?? [])
+        case .customEmojis:
+            let emojis = notification?.emojisInRow ?? status?.emojisInRow ?? []
+            let subject = status.map { OperationStatus.Subject($0.displayed) }
+            return emojis.compactMap { emojiElement(for: $0, subject: subject) }
         case .reply, .favourite, .reblog, .bookmark, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .systemTranslate, .edit, .delete:
             guard let status else { return [] }
             return statusAction(item, on: status, isNotification: notification != nil, id: id).map { [$0] } ?? []
@@ -196,7 +200,7 @@ extension TimelineViewController {
             return UIAction(title: item.title, image: item.image) { [weak self] _ in
                 self?.translation.present(text)
             }
-        case .notifyingUser, .author, .booster, .mentionedUsers, .dismissNotification, .reblogWithVisibility:
+        case .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .dismissNotification, .reblogWithVisibility:
             return nil
         }
     }
@@ -220,6 +224,38 @@ extension TimelineViewController {
     private static func plainText(of status: Status) -> String? {
         let text = RichText.status(status).plainText
         return text.allSatisfy(\.isWhitespace) ? nil : text
+    }
+
+    /// カスタム絵文字の画像のメディアのメニューを、絵文字の画像と`:shortcode:`のサブメニューにする。「投稿」はこのメニューの中なので出さない。
+    /// 画像は行に描いているアニメーションしない版を、メニューに文字色で塗られないよう元の色のまま置く。まだ届いていなければ、項目の印を置く。
+    private func emojiElement(for emoji: CustomEmoji, subject: OperationStatus.Subject?) -> UIMenuElement? {
+        let attachment = emoji.attachment
+        let image = emojiImages.image(for: emoji.staticUrl)
+        let target = MediaMenuTarget(attachment: attachment, source: nil, preview: image) { [weak self] in
+            self?.openMedia([attachment], at: 0, subject: subject) { _ in nil }
+        }
+        guard let children = mediaMenu(for: target, subject: subject, statusMenu: nil)?.children else { return nil }
+        return UIMenu(
+            title: ":\(emoji.shortcode):",
+            image: image.map(Self.menuIcon) ?? StatusMenuItem.customEmojis.image,
+            children: children
+        )
+    }
+
+    /// 絵文字の画像を、メニューの印の大きさの正方形に収め、元の色のまま描く。
+    /// メニューは並べるときは印の枠に縮めるが、開いたサブメニューの見出しでは画像を元の大きさのまま置き、メニューの外まではみ出したため。
+    /// 印の大きさは、本文の文字の大きさの設定に合わせる。
+    private static func menuIcon(_ image: UIImage) -> UIImage {
+        let side = UIFontMetrics(forTextStyle: .body).scaledValue(for: 22)
+        guard image.size.width > 0, image.size.height > 0 else { return image }
+        let scale = min(side / image.size.width, side / image.size.height)
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let canvas = CGSize(width: side, height: side)
+        let format = UIGraphicsImageRendererFormat.preferred()
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: canvas, format: format).image { _ in
+            image.draw(in: CGRect(origin: CGPoint(x: (side - size.width) / 2, y: (side - size.height) / 2), size: size))
+        }.withRenderingMode(.alwaysOriginal)
     }
 
     /// ユーザーのメニューを`@acct`のサブメニューにする。中身が1つで「その他」が空なら、サブメニューにせず直接並べる。

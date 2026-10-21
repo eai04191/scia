@@ -96,6 +96,7 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .author: .own(title: "投稿したユーザー", symbolName: "person.crop.circle")
         case .booster: .own(title: "ブーストしたユーザー", symbolName: "person.crop.circle.badge.plus", note: "ブーストでだけ出ます")
         case .mentionedUsers: .own(title: "メンションされたユーザー", symbolName: "at")
+        case .customEmojis: .own(title: "カスタム絵文字", symbolName: "face.smiling", note: "行にカスタム絵文字があるときだけ出ます。絵文字ごとに、画像のメディアのメニューを出します")
         }
     }
 }

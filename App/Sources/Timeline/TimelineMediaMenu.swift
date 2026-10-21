@@ -1,15 +1,25 @@
 import SciaCore
 import UIKit
 
-/// 一覧のサムネイル、リンクカードの画像、プロフィールの画像を長押ししたときの、メディアのメニュー。決まりはdocs/menus.mdの「メディアのメニュー」にある。
+/// 一覧のサムネイル、リンクカードの画像、プロフィールの画像を長押ししたときと、投稿のメニューのカスタム絵文字の、メディアのメニュー。決まりはdocs/menus.mdの「メディアのメニュー」にある。
 extension TimelineViewController {
     /// 長押しした場所にあるメディア。
     struct MediaMenuTarget {
         let attachment: MediaAttachment
         /// 持ち上げて見せるビュー。共有のシートの起点と、見出しのプレビューにも使う。
-        let source: any MediaViewerSource
+        /// 投稿のメニューから選ぶカスタム絵文字は、画面に1つのビューとして描いていないためnilにし、共有のシートは画面の真ん中か一覧から出す。
+        let source: (any MediaViewerSource)?
+        /// `source`がないときに、共有のシートの見出しに添える画像。
+        var preview: UIImage?
         /// タップしたときと同じく、ビューアで開く。
         let open: @MainActor () -> Void
+
+        init(attachment: MediaAttachment, source: (any MediaViewerSource)?, preview: UIImage? = nil, open: @escaping @MainActor () -> Void) {
+            self.attachment = attachment
+            self.source = source
+            self.preview = preview
+            self.open = open
+        }
     }
 
     /// `point`（一覧の座標）にある、覆っていないサムネイルかリンクカードの画像。なければnil。
@@ -58,21 +68,20 @@ extension TimelineViewController {
         menu.open = MediaMenu.Command(perform: target.open)
         if let fileURL {
             let source = target.source
+            let preview = target.preview
             if case .unknown = attachment.type {
                 // アプリで開けない種類のファイルは、ビューアと同じく、ファイルの代わりにURLを共有する。
                 menu.share = MediaMenu.Command { [weak self, weak source] in
                     guard let self else { return }
-                    URLSharing.presentShareSheet(for: fileURL, from: self) { $0.sourceItem = source }
+                    URLSharing.presentShareSheet(for: fileURL, from: self) { $0.sourceItem = source ?? self.collectionView }
                 }
             } else if let mediaTransfers {
                 let transferTarget = MediaTransfers.Target(url: fileURL, kind: attachment.type, subject: subject)
                 menu.share = MediaMenu.Command { [weak mediaTransfers, weak source] in
-                    guard let source else { return }
-                    mediaTransfers?.start(.share, transferTarget, from: source)
+                    mediaTransfers?.start(.share, transferTarget, from: source, preview: source?.loadedThumbnail ?? preview)
                 }
                 menu.saveToPhotos = MediaMenu.Command { [weak mediaTransfers, weak source] in
-                    guard let source else { return }
-                    mediaTransfers?.start(.save, transferTarget, from: source)
+                    mediaTransfers?.start(.save, transferTarget, from: source, preview: source?.loadedThumbnail ?? preview)
                 }
             }
         }
@@ -92,14 +101,14 @@ extension TimelineViewController {
         return menu.menu(layout: settings.mediaMenuLayout)
     }
 
-    /// メディアのメニューのURLの項目。共有のシートは、長押ししたサムネイルから出す。
-    private func mediaURLHandlers(source: any MediaViewerSource) -> URLMenuHandlers {
+    /// メディアのメニューのURLの項目。共有のシートは、長押ししたサムネイルから出す。サムネイルがなければ一覧から出す。
+    private func mediaURLHandlers(source: (any MediaViewerSource)?) -> URLMenuHandlers {
         URLMenuHandlers(
             linkBrowser: settings.linkBrowser,
             copy: { [weak self] url in URLSharing.copy(url, notifying: self) },
             share: { [weak self, weak source] url in
                 guard let self else { return }
-                URLSharing.presentShareSheet(for: url, from: self) { $0.sourceItem = source }
+                URLSharing.presentShareSheet(for: url, from: self) { $0.sourceItem = source ?? self.collectionView }
             },
             open: { [weak self] url, browser in self?.openURL(url, in: browser) }
         )

@@ -80,10 +80,13 @@ final class MediaTransferCenter {
 
     /// 一覧のメディアのメニューから始めた。ビューアを開いていないので、共有のシートは前に出ている画面から、`source`を起点に出す。
     /// ビューアと違い、閉じて共有をやめる操作がないため、共有のためのものも済むまで続ける。
-    func start(_ purpose: MediaTransfers.Purpose, _ target: MediaTransfers.Target, from source: any MediaViewerSource) {
+    /// - Parameters:
+    ///   - source: 長押ししたサムネイル。カスタム絵文字のように、起点にできるビューがなければnil。
+    ///   - preview: 共有のシートの見出しに添える画像。サムネイルを起点にするときは、サムネイルが描いている画像を渡す。
+    func start(_ purpose: MediaTransfers.Purpose, _ target: MediaTransfers.Target, from source: (any MediaViewerSource)?, preview: UIImage?) {
         logger.info("start media transfer from menu purpose=\(String(describing: purpose), privacy: .public) kind=\(String(describing: target.kind), privacy: .public)")
         let id = transfers.start(purpose, target)
-        requesters[id] = Requester(isFromMenu: true, source: source, preview: source.loadedThumbnail)
+        requesters[id] = Requester(isFromMenu: true, source: source, preview: preview)
     }
 
     /// `transfer`を始めたビューア。閉じていればnil。

@@ -187,6 +187,29 @@ struct StatusMenuTests {
         #expect(try outline(menu(for: .status(post), settings: settings)).last == ["@alice[プロフィール,リンクをコピー,共有]", "@carol[プロフィール,リンクをコピー,共有]", "@dave(remote.example)[プロフィール,リンクをコピー,共有]"])
     }
 
+    /// カスタム絵文字は「その他」に、絵文字ごとの`:shortcode:`のサブメニューで並び、中に絵文字の画像のメディアのメニューを出す。
+    /// 投稿のメニューの中なので、メディアのメニューの「投稿」は出さない。
+    @Test func customEmojisListMediaMenuPerEmojiInMore() throws {
+        let emojiURL = try #require(URL(string: "https://example.social/emoji/blobcat.png"))
+        let base = try status(url: nil)
+        let post = Status(
+            id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil,
+            emojis: [CustomEmoji(shortcode: "blobcat", url: emojiURL, staticUrl: emojiURL)]
+        )
+
+        let more = try #require(menu(for: .status(post))?.children.last as? UIMenu)
+        #expect(more.title == "その他")
+        let emoji = try #require(more.children.flatMap { ($0 as? UIMenu)?.children ?? [$0] }.first { $0.title == ":blobcat:" })
+        #expect(describe(emoji) == ":blobcat:[開く,リンクをコピー,ブラウザで開く,その他[メディアの情報[PNG]]]")
+    }
+
+    /// カスタム絵文字のない投稿では、カスタム絵文字の項目を出さない。
+    @Test func customEmojisAreHiddenWithoutEmojis() throws {
+        let titles = try outline(menu(for: .status(status(url: nil)))).joined()
+
+        #expect(!titles.contains { $0.contains("カスタム絵文字") || $0.hasPrefix(":") })
+    }
+
     /// 横並びの区切り線の下のまとまりは、中くらいの大きさで横に並べる。既定では返信・お気に入り・ブーストのまとまりだけが横並びになる。
     @Test func rowSeparatorMakesFollowingGroupMediumSized() throws {
         let post = try status(url: nil)
