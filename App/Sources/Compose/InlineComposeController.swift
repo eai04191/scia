@@ -189,6 +189,11 @@ final class InlineComposeController: NSObject {
     /// メニューを出してから、キーボードが隠れた知らせを受けたか。メディアを選ぶシートを閉じたあとは、メニューを出すとすぐ、
     /// iOSが高さの変わらないキーボードの枠を知らせてくる。隠れる前のこの知らせを、キーボードが戻ったと受け取らないために使う。
     private var didKeyboardHideForContextMenu = false
+    /// 長押しのメニューを出したときの、キーボードに沿う枠（`keyboardLayoutGuide`）の高さ。
+    /// メニューの間にキーボードが隠れても知らせが届かないことがあり、知らせから覚えた高さでは、閉じ始めたときにキーボードが戻っているか分からないため、枠でも比べる。
+    private var keyboardGuideHeightBeforeContextMenu: CGFloat = 0
+    /// 画面に出ているキーボードに沿う枠の高さを測る。テストの窓では枠がキーボードの知らせに追従しないので、テストから差し替える。
+    var measureKeyboardGuideHeight: (UIView) -> CGFloat = { $0.keyboardLayoutGuide.layoutFrame.height }
     /// 1回のペーストで届いたメディア。項目ごとに届くので、まとめて添付に足し、上限を超えた分の知らせを1回にする。
     /// ファイルのURLの項目は、指す先を調べ終えるまでnilで場所を取り、ペーストした順に並べる。
     private var pendingPastedMedia: [PastedMedia?] = []
@@ -966,15 +971,24 @@ final class InlineComposeController: NSObject {
         guard let host, isInputFocused, mediaPicker == nil, !isShowingMediaViewer else { return }
         logger.info("attachment context menu: holding bar (keyboardHeight=\(self.currentKeyboardHeight))")
         keyboardHeightBeforeContextMenu = currentKeyboardHeight
+        keyboardGuideHeightBeforeContextMenu = measureKeyboardGuideHeight(host.view)
         didKeyboardHideForContextMenu = false
         setHoldAboveKeyboard(height: host.view.bounds.maxY - bar.frame.maxY - barSpacing)
     }
 
     /// キーボードが隠れなかったとき（ハードウェアキーボードなど）や、もう戻っているときは、メニューを閉じ始めた時点で外す。
-    /// 隠れたままなら、キーボードが戻ったときに外す。
+    /// 隠れたままなら、キーボードが戻ったときに外す。隠れたままで外すと、バーがキーボードに沿う枠について一度下がり、
+    /// UIKitがその位置へ押した画像を戻そうとして、画像が上から下りてくるように見える。
     private func contextMenuWillEnd() {
-        guard let before = keyboardHeightBeforeContextMenu, currentKeyboardHeight >= before else { return }
-        releaseBarHeldForContextMenu()
+        guard let host, let before = keyboardHeightBeforeContextMenu else { return }
+        let guideHeight = measureKeyboardGuideHeight(host.view)
+        guard currentKeyboardHeight < before || guideHeight < keyboardGuideHeightBeforeContextMenu else {
+            releaseBarHeldForContextMenu()
+            return
+        }
+        logger.info("attachment context menu: waiting for keyboard (keyboardHeight=\(self.currentKeyboardHeight), guideHeight=\(guideHeight))")
+        // 隠れた知らせが届いていなくても、戻った知らせで外せるようにする。
+        didKeyboardHideForContextMenu = true
     }
 
     private func releaseBarHeldForContextMenu() {

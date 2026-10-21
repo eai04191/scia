@@ -168,6 +168,25 @@ struct InlineComposeControllerTests {
         #expect(composer.isBarHeld, "キーボードが隠れる前に、バーを外しました\n\(composer.stateDump())")
     }
 
+    /// メニューの間にキーボードが隠れても、知らせが届かないことがある。閉じ始めたときにキーボードがまだ隠れていれば、バーを外さない。
+    /// 外すと、バーがキーボードに沿う枠について一度下がり、押した画像が上から下りてくるように戻る。
+    @Test func contextMenuKeepsBarHeldWhenKeyboardHidWithoutNotification() async throws {
+        defer { window.isHidden = true }
+        var guideHeight: CGFloat = 336
+        composer.measureKeyboardGuideHeight = { _ in guideHeight }
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(500))
+        postKeyboardFrame(height: 336)
+
+        showContextMenu()
+        guideHeight = 34
+        endContextMenu()
+        #expect(composer.isBarHeld, "キーボードが隠れたまま、バーを外しました\n\(composer.stateDump())")
+        guideHeight = 336
+        postKeyboardFrame(height: 336)
+        #expect(!composer.isBarHeld, "キーボードが戻っても、バーを留めたままです\n\(composer.stateDump())")
+    }
+
     /// ハードウェアキーボードのようにキーボードが隠れなければ、メニューを閉じた時点でバーを外す。
     @Test func contextMenuReleasesBarWhenKeyboardStayed() async throws {
         defer { window.isHidden = true }
