@@ -158,13 +158,21 @@ struct MenuLayoutTests {
         #expect(layout.elements.first == .item(.a, isVisible: true))
     }
 
-    /// 既定の並びは、設定を足す前のメニューと同じにし、あとから足した項目を加える。返信・お気に入り・ブーストは横に並べ、編集は次のまとまりへ移す。
-    @Test func statusMenuDefaultMatchesMenuBeforeCustomization() {
+    /// 既定のメニューはよく押す項目だけにし、何のための操作かでまとまりを分ける。返信・お気に入り・ブーストは横に並べる。
+    /// たまにしか使わない項目と取り消せない操作は「その他」に入れ、ほかの設定で代わりがきく公開範囲を選んでブーストは隠す。
+    @Test func statusMenuDefaultGroupsItemsByPurpose() {
         let groups = StatusMenuItem.defaultLayout.groups
 
-        #expect(groups.main.map(\.isRow) == [true, false, false])
-        #expect(groups.main.map(\.items) == [[.reply, .favourite, .reblog], [.edit, .bookmark, .muteConversation, .pin, .reblogWithVisibility, .copyLink, .copyText, .share, .openInBrowser, .editHistory, .hideMedia, .systemTranslate], [.notifyingUser, .author, .booster]])
-        #expect(groups.more.map(\.items) == [[.dismissNotification, .delete]])
+        #expect(groups.main.map(\.isRow) == [true, false, false, false, false])
+        #expect(groups.main.map(\.items) == [
+            [.reply, .favourite, .reblog],
+            [.edit, .bookmark],
+            [.copyLink, .copyText, .share, .openInBrowser],
+            [.systemTranslate],
+            [.notifyingUser, .author, .booster],
+        ])
+        #expect(groups.more.map(\.items) == [[.editHistory, .hideMedia], [.muteConversation, .pin], [.dismissNotification, .delete]])
+        #expect(StatusMenuItem.defaultLayout.elements.contains(.item(.reblogWithVisibility, isVisible: false)))
         #expect(UserMenuItem.defaultLayout.groups.main.map(\.items) == [[.profile, .copyLink, .share]])
     }
 
@@ -205,9 +213,10 @@ struct MenuLayoutTests {
     @Test func savedStatusMenuGainsEditAndDelete() {
         let saved = MenuLayout<StatusMenuItem>(tokens: ["item:reblog", "item:reply", "item:favourite", "separator", "item:copyLink", "more", "hidden:share"])
 
-        #expect(saved.groups.main.map(\.items).first == [.reblog, .edit, .bookmark, .muteConversation, .pin, .reblogWithVisibility, .reply, .favourite])
-        // 通知の削除は既定で「その他」の先頭にあるため、保存した並びでも「その他」の先頭に入り、削除はその後ろに続く。
-        #expect(saved.groups.more.map(\.items).first.map { Array($0.prefix(2)) } == [.dismissNotification, .delete])
+        #expect(saved.groups.main.map(\.items).first == [.reblog, .edit, .bookmark, .reply, .favourite])
+        // 編集履歴は既定で「その他」の先頭にあるため、保存した並びでも「その他」の先頭に入り、削除までの項目がその後ろに続く。
+        // 共有を「その他」に入れた並びなので、共有の後ろに来るブラウザで開くなども、その後ろに続く。
+        #expect(saved.groups.more.map(\.items).first.map { Array($0.prefix(6)) } == [.editHistory, .hideMedia, .muteConversation, .pin, .dismissNotification, .delete])
     }
 
     @Test func appSettingsPersistsMenuLayouts() throws {

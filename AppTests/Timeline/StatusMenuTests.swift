@@ -54,14 +54,16 @@ struct StatusMenuTests {
         return (menu?.children ?? []).flatMap(flatten)
     }
 
-    /// 既定の並びは、設定を足す前のメニューと同じにし、あとから足した項目を加える。
+    /// 既定の並びは、何のための操作かでまとまりを分ける。
     /// 自分のアカウントが分からない一覧では、会話のミュート、固定、公開範囲を選んでブーストは出ない。
-    @Test func defaultMenuMatchesMenuBeforeCustomization() throws {
+    @Test func defaultMenuGroupsItemsByPurpose() throws {
         let post = try status(url: URL(string: "https://example.social/@alice/100"))
 
         #expect(try outline(menu(for: .status(post))) == [
             ["返信", "お気に入り", "ブースト"],
-            ["ブックマーク", "リンクをコピー", "テキストをコピー", "共有", "ブラウザで開く", "翻訳"],
+            ["ブックマーク"],
+            ["リンクをコピー", "テキストをコピー", "共有", "ブラウザで開く"],
+            ["翻訳"],
             ["@alice[プロフィール,リンクをコピー,共有]"],
         ])
     }
@@ -227,12 +229,18 @@ struct StatusMenuTests {
         #expect(try !titles(status(url: nil)).contains("プロフィールに固定"))
     }
 
-    /// 公開範囲を選んでブーストは、ブーストしていない投稿で、3つの公開範囲のサブメニューとして出る。ブーストした投稿では出さない。
+    /// 公開範囲を選んでブーストは、既定では隠す。出したときは、ブーストしていない投稿で、3つの公開範囲のサブメニューとして出る。ブーストした投稿では出さない。
     @Test func reblogWithVisibilityIsSubmenuOnlyBeforeBoosting() throws {
         let post = try status(url: nil)
         let submenu = "公開範囲を選んでブースト[公開,ひかえめな公開,フォロワーのみ]"
+        #expect(try !outline(menu(for: .status(post), myAccountID: "9")).joined().contains(submenu))
 
-        #expect(try outline(menu(for: .status(post), myAccountID: "9")).joined().contains(submenu))
-        #expect(try !outline(menu(for: .status(post.settingReblogged(true)), myAccountID: "9")).joined().contains(submenu))
+        let settings = try makeSettings()
+        settings.statusMenuLayout = MenuLayout(elements: StatusMenuItem.defaultLayout.elements.map { element in
+            element == .item(.reblogWithVisibility, isVisible: false) ? .item(.reblogWithVisibility, isVisible: true) : element
+        })
+
+        #expect(try outline(menu(for: .status(post), settings: settings, myAccountID: "9")).joined().contains(submenu))
+        #expect(try !outline(menu(for: .status(post.settingReblogged(true)), settings: settings, myAccountID: "9")).joined().contains(submenu))
     }
 }

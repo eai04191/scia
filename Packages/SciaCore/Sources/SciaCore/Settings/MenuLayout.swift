@@ -193,10 +193,14 @@ public enum StatusMenuItem: String, MenuItemKind {
     /// メンションされた人ごとのユーザーのメニュー。
     case mentionedUsers
 
-    /// 設定を足す前のメニューと同じ並び。足す前になかったメンションされたユーザーは隠しておく。
-    /// ただし、返信・お気に入り・ブーストはよく使い、アイコンだけでも見分けられるので、横に並べる。横に並ぶのは3個までのため、同じまとまりにあった編集は次のまとまりの先頭へ移す。
-    /// 設定を足したあとに増えた項目（メディアを隠す、テキストのコピー、翻訳、編集履歴、編集、削除、ブックマーク、会話のミュート、固定、公開範囲を選んでブースト、通知の削除）は、足したことに気づけるよう表示しておく。
-    /// 削除と通知の削除は、誤って押さないよう「その他」に入れる。開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
+    /// 既定は、よく押す項目だけをメニューに並べ、上ほどよく押すものを置いて、何のための操作かでまとまりを分ける。
+    /// どの項目も設定を開かずに選べるよう、たまにしか使わない項目は隠さずに「その他」へ入れる。隠すのは、ほかの設定で代わりがきく項目と、メニューを長くしやすい項目だけにする。
+    /// - 返信・お気に入り・ブースト: いちばんよく使い、アイコンだけでも見分けられるので、横に並べる
+    /// - 反応のつづき: 編集（自分の投稿でだけ出る。自分の投稿では返信などより先に使う）、ブックマーク。公開範囲を選んでブーストは、ブーストの公開範囲の設定で代わりがきくため隠し、出したときにブーストの近くに来るようここに置く
+    /// - 持ち出す: リンクとテキストのコピー、共有、ブラウザで開く。開く場所を選んで開く2つは、開く場所の設定と重なるため隠す
+    /// - 読む: 翻訳
+    /// - 関係するユーザー: メンションされたユーザーは、何人もいるとメニューが長くなるため隠す
+    /// - 「その他」: たまにしか使わない編集履歴、メディアを隠す、会話のミュート、固定と、取り消せない通知の削除、投稿の削除
     public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
         .rowSeparator,
         .item(.reply, isVisible: true),
@@ -205,17 +209,15 @@ public enum StatusMenuItem: String, MenuItemKind {
         .separator,
         .item(.edit, isVisible: true),
         .item(.bookmark, isVisible: true),
-        .item(.muteConversation, isVisible: true),
-        .item(.pin, isVisible: true),
-        .item(.reblogWithVisibility, isVisible: true),
+        .item(.reblogWithVisibility, isVisible: false),
+        .separator,
         .item(.copyLink, isVisible: true),
         .item(.copyText, isVisible: true),
         .item(.share, isVisible: true),
         .item(.openInBrowser, isVisible: true),
         .item(.openInDefaultBrowser, isVisible: false),
         .item(.openInAppSafari, isVisible: false),
-        .item(.editHistory, isVisible: true),
-        .item(.hideMedia, isVisible: true),
+        .separator,
         .item(.systemTranslate, isVisible: true),
         .separator,
         .item(.notifyingUser, isVisible: true),
@@ -223,6 +225,12 @@ public enum StatusMenuItem: String, MenuItemKind {
         .item(.booster, isVisible: true),
         .item(.mentionedUsers, isVisible: false),
         .more,
+        .item(.editHistory, isVisible: true),
+        .item(.hideMedia, isVisible: true),
+        .separator,
+        .item(.muteConversation, isVisible: true),
+        .item(.pin, isVisible: true),
+        .separator,
         .item(.dismissNotification, isVisible: true),
         .item(.delete, isVisible: true),
     ])
