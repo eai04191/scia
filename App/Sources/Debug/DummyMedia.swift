@@ -73,6 +73,23 @@ enum DummyMedia {
         return URL(string: "data:image/jpeg;base64,\(data.base64EncodedString())")
     }
 
+    /// 番号を描いた色違いの画像を、ペーストしたメディアとして渡す。添付の並びを見分けられるよう、1枚目から赤、青、オレンジ……の順にする。
+    /// 添付から外すとファイルを置いたディレクトリごと消すので、1枚ずつ別のディレクトリに書く。
+    static func pastedImages(count: Int) -> [PastedMedia] {
+        let colors: [UIColor] = [.systemRed, .systemBlue, .systemOrange, .systemPurple, .systemGreen, .systemPink, .systemTeal, .systemYellow]
+        return (0..<count).map { index in
+            let image = DummyMedia.image(size: CGSize(width: 600, height: 600), color: colors[index % colors.count], label: "\(index + 1)")
+            return PastedMedia(kind: .image) {
+                let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
+                try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                let url = directory.appending(path: "dummy-\(index + 1).png")
+                guard let data = image.pngData() else { throw LocalMediaError.loadFailed }
+                try data.write(to: url)
+                return LocalMediaFile(url: url, mimeType: "image/png", kind: .image)
+            }
+        }
+    }
+
     /// 単色に格子と`label`を描いた画像。部品のカタログで、通信せずにサムネイルを出すために使う。
     static func image(size: CGSize, color: UIColor, label: String) -> UIImage {
         render(Spec(size: size, color: color, label: label, description: nil))

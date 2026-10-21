@@ -1264,9 +1264,12 @@ final class SessionController {
             statusBarTicker.setLooping(isOn, items: DummyNotifications.samples)
         case .inject(let tab, let file):
             inject(file, into: tab)
-        case .composeText(let text):
+        case .compose(let text, let mediaCount):
             composer.beginEditing()
-            composer.model.text = text
+            if let text {
+                composer.model.text = text
+            }
+            composer.model.addPastedMedia(DummyMedia.pastedImages(count: mediaCount))
         case .holdArrivals(let isOn):
             DebugFaults.setHoldingArrivals(isOn)
             if !isOn {

@@ -64,9 +64,10 @@ enum DebugURL: Equatable {
     /// `scia-debug://inject/<home|notifications>?file=<ファイル名>`。アプリのDocuments/DebugInjectに置いたJSONを読み、ストリーミングの新着と同じ経路で一覧に流す。
     /// ホームは`Status`の配列、通知は`Notification`の配列で、APIの応答と同じ形で書く。実データにない投稿や通知の見え方を、ログインした端末のまま確かめるため。
     case inject(Tab, file: String)
-    /// `scia-debug://compose?text=<本文>`。インライン投稿欄で書き始め、本文を渡した文に置き換える。
-    /// シミュレーターのクリップボードが使えないときにも、URLを含む本文などを打たずに用意するため。
-    case composeText(String)
+    /// `scia-debug://compose?text=<本文>&media=<枚数>`。インライン投稿欄で書き始め、本文を渡した文に置き換え、番号を描いた色違いの画像を添付に足す。
+    /// どちらも省ける。シミュレーターのクリップボードが使えないときにも、URLを含む本文などを打たずに用意し、ピッカーを操作せずに添付を用意するため。
+    /// 画像はペーストと同じ経路で足すので、サーバーに送る。
+    case compose(text: String?, mediaCount: Int)
     /// `scia-debug://ticker-loop/on`で、ステータスバーの通知を、出る、出ている、消えるを繰り返して出し続ける。`scia-debug://ticker-loop/off`で止める。
     case statusBarTickerLoop(Bool)
 
@@ -118,7 +119,7 @@ enum DebugURL: Equatable {
         case "media-limits": Self.mediaLimits(url)
         case "viewer": Self.viewer(url)
         case "inject": Self.inject(url)
-        case "compose": Self.query("text", in: url).map { .composeText($0) }
+        case "compose": Self.compose(url)
         default: nil
         }
         guard let parsed else { return nil }
@@ -158,6 +159,12 @@ enum DebugURL: Equatable {
     private static func inject(_ url: URL) -> DebugURL? {
         guard let tab = Tab(rawValue: url.lastPathComponent), let file = query("file", in: url), !file.isEmpty else { return nil }
         return .inject(tab, file: file)
+    }
+
+    private static func compose(_ url: URL) -> DebugURL? {
+        let text = query("text", in: url)
+        guard let mediaCount = Int(query("media", in: url) ?? "0"), mediaCount >= 0, text != nil || mediaCount > 0 else { return nil }
+        return .compose(text: text, mediaCount: mediaCount)
     }
 
     private static func viewer(_ url: URL) -> DebugURL? {
