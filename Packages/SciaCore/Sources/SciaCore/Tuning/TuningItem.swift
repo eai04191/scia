@@ -849,6 +849,49 @@ public enum TuningCatalog {
         defaultValue: -1
     )
 
+    /// 投稿欄を勢いよく下げて閉じたときに、カプセルに重ねた写真を散らばらせる。オフなら、いつも正解の形に重ねる。
+    public static let composeStackScatter = ToggleTuning(
+        id: "compose.stackScatter",
+        title: "投稿欄を勢いよく下げて閉じると、カプセルの写真を散らばらせる",
+        defaultValue: true
+    )
+
+    /// 写真を散らばらせるときに、角度に足す乱数の最大（度）。閉じる速さが最大のときの幅。
+    public static let composeStackScatterRotation = NumberTuning(
+        id: "compose.stackScatterRotation",
+        title: "カプセルの写真を散らばらせる角度の最大（度）",
+        range: 0...20,
+        step: 0.5,
+        defaultValue: 6
+    )
+
+    /// 写真を散らばらせるときに、ずらしに足す乱数の最大（pt）。閉じる速さが最大のときの幅。
+    public static let composeStackScatterOffset = NumberTuning(
+        id: "compose.stackScatterOffset",
+        title: "カプセルの写真を散らばらせるずらしの最大（pt）",
+        range: 0...8,
+        step: 0.5,
+        defaultValue: 2.5
+    )
+
+    /// 写真を散らばらせ始める、投稿欄を下げる速さ（pt/秒）。これより遅ければ散らばらせない。
+    public static let composeStackScatterMinVelocity = NumberTuning(
+        id: "compose.stackScatterMinVelocity",
+        title: "カプセルの写真を散らばらせ始める、下げる速さ（pt/秒）",
+        range: 0...5000,
+        step: 100,
+        defaultValue: 500
+    )
+
+    /// 写真を最も大きく散らばらせる、投稿欄を下げる速さ（pt/秒）。
+    public static let composeStackScatterMaxVelocity = NumberTuning(
+        id: "compose.stackScatterMaxVelocity",
+        title: "カプセルの写真を最も散らばらせる、下げる速さ（pt/秒）",
+        range: 500...10000,
+        step: 100,
+        defaultValue: 2500
+    )
+
     /// カプセルに重ねた写真の束が、カプセルの面に落とす影の濃さ。
     public static let composeStackShadowOpacity = NumberTuning(
         id: "compose.stackShadowOpacity",
@@ -1334,6 +1377,11 @@ public enum TuningCatalog {
             .number(composeStackThirdRotation),
             .number(composeStackThirdOffsetX),
             .number(composeStackThirdOffsetY),
+            .toggle(composeStackScatter),
+            .number(composeStackScatterRotation),
+            .number(composeStackScatterOffset),
+            .number(composeStackScatterMinVelocity),
+            .number(composeStackScatterMaxVelocity),
             .number(composeStackShadowOpacity),
             .number(composeStackBetweenShadowOpacity),
             .number(composeExpandDuration),

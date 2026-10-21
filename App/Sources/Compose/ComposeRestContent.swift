@@ -132,18 +132,68 @@ final class ComposeRestThumbnails: UIView {
         }
     }
 
+    /// チューニングで決めた正解の置き方（1枚目、2枚目、3枚目）。
+    private var basePlacements: [PhotoStackPlacement] = []
+    /// 勢いよく閉じて散らばらせた置き方。散らばらせていなければnilで、正解の置き方を使う。次に散らばらせ直すか、チューニングを変えるまで残す。
+    private var scatteredPlacements: [PhotoStackPlacement]?
+
     private func applyTuning() {
+        basePlacements = [
+            PhotoStackPlacement(rotation: tuning.value(of: TuningCatalog.composeStackFrontRotation)),
+            PhotoStackPlacement(
+                rotation: tuning.value(of: TuningCatalog.composeStackBackRotation),
+                offsetX: tuning.value(of: TuningCatalog.composeStackBackOffsetX),
+                offsetY: tuning.value(of: TuningCatalog.composeStackBackOffsetY)
+            ),
+            PhotoStackPlacement(
+                rotation: tuning.value(of: TuningCatalog.composeStackThirdRotation),
+                offsetX: tuning.value(of: TuningCatalog.composeStackThirdOffsetX),
+                offsetY: tuning.value(of: TuningCatalog.composeStackThirdOffsetY)
+            ),
+        ]
+        // 正解を調整しているときは、調整した形をそのまま見せる。
+        scatteredPlacements = nil
+        applyPlacements()
+        ComposeRestShadow.castStack(on: stackShadow.layer, opacity: Self.stackShadowOpacity(in: tuning))
+        betweenShadowOpacity = Float(tuning.value(of: TuningCatalog.composeStackBetweenShadowOpacity))
+    }
+
+    /// 投稿欄を下げた速さ（pt/秒、下向きが正）に応じて、正解の置き方から散らばらせる。遅ければ、またはチューニングでオフなら、正解の置き方に戻す。
+    func scatter(velocity: Double) {
+        let intensity = tuning.value(of: TuningCatalog.composeStackScatter)
+            ? PhotoStackScatter.intensity(
+                velocity: velocity,
+                minimumVelocity: tuning.value(of: TuningCatalog.composeStackScatterMinVelocity),
+                maximumVelocity: tuning.value(of: TuningCatalog.composeStackScatterMaxVelocity)
+            )
+            : 0
+        if intensity > 0 {
+            var generator = SystemRandomNumberGenerator()
+            scatteredPlacements = PhotoStackScatter.scatter(
+                basePlacements,
+                intensity: intensity,
+                maximumRotation: tuning.value(of: TuningCatalog.composeStackScatterRotation),
+                maximumOffset: tuning.value(of: TuningCatalog.composeStackScatterOffset),
+                using: &generator
+            )
+        } else {
+            scatteredPlacements = nil
+        }
+        applyPlacements()
+    }
+
+    private func applyPlacements() {
+        let placements = scatteredPlacements ?? basePlacements
+        guard placements.count == 3 else { return }
         let degree = CGFloat.pi / 180
-        frontRotation = tuning.value(of: TuningCatalog.composeStackFrontRotation) * degree
-        backRotation = tuning.value(of: TuningCatalog.composeStackBackRotation) * degree
-        backOffset = CGPoint(x: tuning.value(of: TuningCatalog.composeStackBackOffsetX), y: tuning.value(of: TuningCatalog.composeStackBackOffsetY))
-        thirdRotation = tuning.value(of: TuningCatalog.composeStackThirdRotation) * degree
-        thirdOffset = CGPoint(x: tuning.value(of: TuningCatalog.composeStackThirdOffsetX), y: tuning.value(of: TuningCatalog.composeStackThirdOffsetY))
+        frontRotation = placements[0].rotation * degree
+        backRotation = placements[1].rotation * degree
+        backOffset = CGPoint(x: placements[1].offsetX, y: placements[1].offsetY)
+        thirdRotation = placements[2].rotation * degree
+        thirdOffset = CGPoint(x: placements[2].offsetX, y: placements[2].offsetY)
         front.transform = CGAffineTransform(rotationAngle: frontRotation)
         back.transform = CGAffineTransform(rotationAngle: backRotation)
         third.transform = CGAffineTransform(rotationAngle: thirdRotation)
-        ComposeRestShadow.castStack(on: stackShadow.layer, opacity: Self.stackShadowOpacity(in: tuning))
-        betweenShadowOpacity = Float(tuning.value(of: TuningCatalog.composeStackBetweenShadowOpacity))
         invalidateIntrinsicContentSize()
         setNeedsLayout()
     }

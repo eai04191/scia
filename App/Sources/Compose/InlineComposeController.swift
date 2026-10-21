@@ -49,6 +49,8 @@ final class InlineComposeController: NSObject {
     /// 書いていないときに見せる、下書きの1行。押すと書き始める。
     private let restRow = UIControl()
     private let restContent = ComposeRestContent()
+    /// 最後にバーを下へ引いて離したときの、指の速さ（pt/秒、下向きが正）と時刻。
+    private var barFling: (velocity: CGFloat, time: CFTimeInterval)?
     /// 開閉で、カプセルの札のアイコンとサムネイルを、書いているときの同じものの位置へ動かす。
     private lazy var morphFlights = ComposeMorphFlights(container: bar.contentView)
     /// 書き始めて行を隠すと、スタックビューが高さ0の制約を付ける。それと競合しないよう、必須より1つ下げる。
@@ -1043,6 +1045,14 @@ final class InlineComposeController: NSObject {
         guard isEditing != editing else { return }
         isEditing = editing
         updateCompletionList()
+        if !editing {
+            // バーを勢いよく下げて閉じたときだけ、カプセルの写真を散らばらせる。キーボードが下がりきるまで待つので、離してから少し間がある。
+            // ほかの閉じ方（タップや投稿）では、正解の形に戻す。
+            let fling = barFling.flatMap { CACurrentMediaTime() - $0.time < 1.5 ? $0.velocity : nil } ?? 0
+            barFling = nil
+            logger.info("compose: end editing fling=\(Int(fling), privacy: .public)")
+            restContent.thumbnails.scatter(velocity: Double(fling))
+        }
         // 隠すときは、カプセルに変えずに書いていたときの形のまま下げ、画面の外に出てから形を戻す。
         if hidesBar {
             applyBarVisibility()
@@ -2139,6 +2149,12 @@ extension InlineComposeController: UITextViewDelegate {
         }
         guard scrollView === dragArea, scrollView.contentOffset != .zero else { return }
         scrollView.contentOffset = .zero
+    }
+
+    /// バーを下へ引いて離したときの速さを覚えておく。キーボードが下がりきって書き終えたときに、カプセルの写真を散らばらせる強さに使う。
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        guard scrollView === dragArea else { return }
+        barFling = (velocity: scrollView.panGestureRecognizer.velocity(in: scrollView).y, time: CACurrentMediaTime())
     }
 
     func textViewDidChange(_ textView: UITextView) {
