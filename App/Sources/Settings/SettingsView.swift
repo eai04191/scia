@@ -102,7 +102,7 @@ struct SettingsView: View {
                 } header: {
                     Text("投稿の表示")
                 } footer: {
-                    Text("相対時刻では、1週間より前の投稿は日付で表示します。\n漢字の字形は、言語の付いていない投稿や名前で使います。投稿に日本語・中国語・韓国語の言語が付いていれば、その言語の字形で表示します。「自動」では、iPhoneの言語の一覧で最初の日本語・中国語・韓国語に従い、どれもなければ日本語にします。\n絵文字は、カスタム絵文字ではない絵文字の絵です。Twemojiは、Webで見るMastodonと同じ絵です。Twemojiの絵は、Twitter, Inc.とその貢献者がCC-BY 4.0で公開しています。")
+                    Text("相対時刻では、1週間より前の投稿は日付で表示します。\n漢字の字形は、言語の付いていない投稿や名前で使います。投稿に日本語・中国語・韓国語の言語が付いていれば、その言語の字形で表示します。「自動」では、iPhoneの言語の一覧で最初の日本語・中国語・韓国語に従い、どれもなければ日本語にします。")
                 }
                 Section {
                     if let previewAccount {
@@ -259,6 +259,9 @@ struct SettingsView: View {
                 Section {
                     NavigationLink("接続の状態") {
                         ConnectionStatusView(instance: instance, diagnostics: diagnostics)
+                    }
+                    NavigationLink("ライセンス") {
+                        LicensesView()
                     }
                     // いろいろなブランチのビルドを入れ替えて試すときに、いま入っているのがどれか分かるようにする。
                     // 違和感の報告などに貼れるよう、タップでコピーする
