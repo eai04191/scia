@@ -644,7 +644,8 @@ final class InlineComposeController: NSObject {
             } catch {
                 _ = self?.linkTitleEffects.endLoading(loadingID)
                 self?.linkTitleLoadCount -= 1
-                self?.logger.error("compose: link title failed: \(String(describing: error), privacy: .public)")
+                // 失敗の説明には、失敗したURL（書いている投稿に貼ったリンク）が入るため、種類だけを残す。
+                self?.logger.error("compose: link title failed: \(SciaLog.describe(error), privacy: .public)")
                 self?.onLinkTitleFailed(.unreadable(error))
                 return
             }
