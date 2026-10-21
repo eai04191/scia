@@ -8,6 +8,7 @@ extension ComposeToolItem: MenuItemPresentable {
         case .media: "メディアを添付"
         case .expand: "広げて書く"
         case .spoiler: "注意書き"
+        case .linkTitle: "リンクにタイトルを付ける"
         case .customize: "カスタマイズ"
         }
     }
@@ -15,6 +16,7 @@ extension ComposeToolItem: MenuItemPresentable {
     var note: String? {
         switch self {
         case .spoiler: "添付があれば、添付も閲覧注意にします。注意書きを空にすると、閲覧注意だけを付けます"
+        case .linkTitle: "本文のURLを選ぶと、リンク先のページのタイトルを読み、URLの前に入れます。URLが行の頭にあれば、タイトルを1行にします"
         case .customize: "この並びを変える画面を開きます。隠しても、設定の「投稿欄のボタン」から変えられます"
         default: nil
         }
@@ -26,6 +28,7 @@ extension ComposeToolItem: MenuItemPresentable {
         case .media: "photo.on.rectangle"
         case .expand: "arrow.up.left.and.arrow.down.right"
         case .spoiler: "exclamationmark.triangle"
+        case .linkTitle: "link.badge.plus"
         case .customize: "slider.horizontal.3"
         }
     }

@@ -5,14 +5,17 @@ public enum ComposeToolItem: String, MenuItemKind {
     case media
     case expand
     case spoiler
+    /// 本文のURLを選び、リンク先のページのタイトルを付ける。
+    case linkTitle
     /// この並びを変える画面を開く。ほかの項目と同じく、置き場所を選べ、使わなければ隠せる。
     case customize
 
-    /// ＋の中は、上からカスタマイズ、区切り線、注意書きにし、ボタンの行は「＋ 公開範囲 添付 展開」にする。
+    /// ＋の中は、上からカスタマイズ、区切り線、リンクにタイトルを付ける、注意書きにし、ボタンの行は「＋ 公開範囲 添付 展開」にする。
     /// ＋のメニューはボタンの上に開き、下ほど指が届きやすいので、使う頻度の低いカスタマイズをいちばん上に置く。
     public static let defaultLayout = MenuLayout<ComposeToolItem>(defaultElements: [
         .item(.customize, isVisible: true),
         .separator,
+        .item(.linkTitle, isVisible: true),
         .item(.spoiler, isVisible: true),
         .more,
         .item(.visibility, isVisible: true),

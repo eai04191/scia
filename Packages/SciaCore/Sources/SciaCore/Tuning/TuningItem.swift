@@ -787,6 +787,24 @@ public enum TuningCatalog {
     )
 
     /// 投稿欄を展開ボタンで本文に合わせた高さまで広げる時間と、5行の高さに戻す時間（秒）。
+    /// リンクにタイトルを付けるとき、URLを次の行の位置へ動かし、タイトルを浮かび上がらせる動きの時間。0なら動かさずに置き換える。
+    public static let linkTitleMorphDuration = NumberTuning(
+        id: "compose.linkTitleMorphDuration",
+        title: "リンクにタイトルを付けるときの変形の時間（秒）",
+        range: 0...3,
+        step: 0.05,
+        defaultValue: 0.6
+    )
+
+    /// リンクにタイトルを付けるとき、読んでいるURLの上をきらめきが1回流れる時間。
+    public static let linkTitleShimmerPeriod = NumberTuning(
+        id: "compose.linkTitleShimmerPeriod",
+        title: "タイトルを読んでいる間のきらめきが流れる時間（秒）",
+        range: 0.3...4,
+        step: 0.1,
+        defaultValue: 1.2
+    )
+
     public static let composeExpandDuration = NumberTuning(
         id: "compose.expandDuration",
         title: "投稿欄を広げる・戻す時間（秒）",
@@ -1219,6 +1237,8 @@ public enum TuningCatalog {
             .number(composeMorphDuration),
             .number(composeExpandDuration),
             .number(composeExpandedMinLines),
+            .number(linkTitleMorphDuration),
+            .number(linkTitleShimmerPeriod),
             .toggle(composePickerMatchesKeyboard),
             .number(composePickerHeight),
             .number(completionDebounce),

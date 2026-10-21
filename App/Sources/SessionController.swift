@@ -274,6 +274,8 @@ final class SessionController {
         composer.model.onPastedMediaSkipped = { [weak self] kinds in
             self?.notices.showTransient(.pastedMediaSkipped(kinds), duration: tuning.value(of: TuningCatalog.noticeFailureChipDuration))
         }
+        composer.onLinkTitleLoadingChange = { [weak self] in self?.linkTitleActivityDidChange() }
+        composer.onLinkTitleFailed = { [weak self] failure in self?.linkTitleDidFail(failure) }
         authorization.onChange = { [weak self] state in
             guard state == .invalid else { return }
             self?.credentialsDidBecomeInvalid()
@@ -890,6 +892,32 @@ final class SessionController {
                     self?.presentAlert(title: title, message: reason.text)
                 })
             }
+        }
+    }
+
+    private static let linkTitleActivityID = "compose.linkTitle"
+
+    /// 投稿欄でタイトルを読んでいる間は、読んでいるURLの上にきらめきを流すほか、「操作の状況」の進行中にも並べる。
+    private func linkTitleActivityDidChange() {
+        if composer.isLoadingLinkTitle {
+            operationStatus.update(OperationStatus.Activity(id: Self.linkTitleActivityID, title: "タイトルを読み込み中"))
+        } else {
+            operationStatus.end(Self.linkTitleActivityID)
+        }
+    }
+
+    /// 失敗を「操作の状況」に残し、数秒で消えるチップで知らせる。
+    private func linkTitleDidFail(_ failure: LinkTitleFailure) {
+        linkTitleActivityDidChange()
+        let reason = switch failure {
+        case .unreadable(let error as URLError): ErrorPresentation(error)
+        case .unreadable(PageTitleLoadError.status(let statusCode)): ErrorPresentation(message: "リンク先のページを読み込めませんでした。", code: "HTTP \(statusCode)")
+        case .unreadable: ErrorPresentation(message: "リンク先のページを読み込めませんでした。", code: nil)
+        case .noTitle: ErrorPresentation(message: "リンク先のページにタイトルがありませんでした。", code: nil)
+        }
+        operationStatus.recordFailure(title: failure.title, reason: reason)
+        notices.showTransient(duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration)) { [weak self] _ in
+            .linkTitleFailed(failure) { self?.presentAlert(title: failure.title, message: reason.text) }
         }
     }
 

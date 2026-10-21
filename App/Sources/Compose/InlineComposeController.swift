@@ -35,6 +35,10 @@ final class InlineComposeController: NSObject {
     var onPosted: () -> Void = {}
     /// 画面の下端から、投稿欄（書いているときはキーボードも）が覆っている高さが変わったときに呼ぶ。
     var onObscuredHeightChange: (CGFloat) -> Void = { _ in }
+    /// リンクに付けるタイトルを読み始めたときと、付け終えたときに呼ぶ。読んでいる途中かは`isLoadingLinkTitle`で見る。
+    var onLinkTitleLoadingChange: () -> Void = {}
+    /// リンクにタイトルを付けられなかったときに、読んでいる途中の数を減らしてから呼ぶ。`onLinkTitleLoadingChange`は呼ばない。
+    var onLinkTitleFailed: (LinkTitleFailure) -> Void = { _ in }
 
     private weak var host: UIViewController?
     private let tuning: TuningStore
@@ -161,7 +165,7 @@ final class InlineComposeController: NSObject {
         switch item {
         case .visibility: (item, visibilityButton)
         case .expand: (item, expandButton)
-        case .media, .spoiler, .customize: (item, makeToolButton(item))
+        case .media, .spoiler, .linkTitle, .customize: (item, makeToolButton(item))
         }
     })
     /// 今のボタンの行と＋のメニューへの振り分け。ボタンの行の幅が決まるたびに決め直す。まだ一度も振り分けていなければnil。
@@ -551,6 +555,19 @@ final class InlineComposeController: NSObject {
                 action.subtitle = "添付も閲覧注意にします"
             }
             return action
+        case .linkTitle:
+            let actions = linkTitleActions()
+            guard !actions.isEmpty else {
+                // URLがなくても項目を消さず、押せない形で出す。押そうとしている間に、メニューの並びがずれないようにするため。
+                return UIAction(title: item.title, subtitle: "本文にURLがありません", image: UIImage(systemName: item.symbolName), attributes: .disabled) { _ in }
+            }
+            // VoiceOverでは、光るURLを探して押すのが難しいため、URLをサブメニューで選ばせる。
+            if UIAccessibility.isVoiceOverRunning {
+                return UIMenu(title: item.title, image: UIImage(systemName: item.symbolName), children: actions)
+            }
+            return UIAction(title: item.title, image: UIImage(systemName: item.symbolName), state: linkTitleEffects.isSelecting ? .on : .off) { [weak self] _ in
+                self?.toggleLinkSelection()
+            }
         }
     }
 
@@ -568,6 +585,118 @@ final class InlineComposeController: NSObject {
         setSpoilerShown(!model.showsSpoiler)
     }
 
+    // MARK: - リンクにタイトルを付ける
+
+    /// 本文のURLを、出てくる順に1つずつ選ぶ項目。URLがなければ空。VoiceOverで使う。選んだURLは、最初の1か所を置き換える。
+    private func linkTitleActions() -> [UIMenuElement] {
+        LinkTitling.urls(in: textView.text).map { url in
+            UIAction(title: url) { [weak self] _ in
+                guard let self, let occurrence = LinkTitling.occurrence(of: url, nearestTo: nil, in: textView.text) else { return }
+                addLinkTitle(to: occurrence)
+            }
+        }
+    }
+
+    private lazy var linkTitleEffects: LinkTitleEffects = {
+        let effects = LinkTitleEffects(textView: textView, tuning: tuning)
+        effects.onSelect = { [weak self] occurrence in
+            self?.linkTitleEffects.endSelecting(reason: "selected")
+            self?.addLinkTitle(to: occurrence)
+        }
+        return effects
+    }()
+
+    /// 本文のURLを光らせて選ばせる。光らせている間に押したら、やめる。URLが1つだけなら、選ばせずに読み始める。
+    private func toggleLinkSelection() {
+        guard !linkTitleEffects.isSelecting else {
+            linkTitleEffects.endSelecting(reason: "toggled")
+            return
+        }
+        let occurrences = LinkTitling.occurrences(in: textView.text)
+        if occurrences.count == 1, let occurrence = occurrences.first {
+            addLinkTitle(to: occurrence)
+        } else {
+            linkTitleEffects.beginSelecting(occurrences)
+        }
+    }
+
+    /// 自分で本文を置き換えている間。入力欄の知らせを、使う人が書き換えたものと取り違えないようにする。
+    private var isReplacingLink = false
+
+    /// タイトルを読んでいる途中のURLの数。
+    private var linkTitleLoadCount = 0
+
+    /// リンクに付けるタイトルを、どれか読んでいる途中か。
+    var isLoadingLinkTitle: Bool { linkTitleLoadCount > 0 }
+
+    /// `occurrence`のリンク先のタイトルを読み、本文のそのURLの前にタイトルを入れる。読んでいる間はURLの上にきらめきを流し、打つのは止めない。
+    private func addLinkTitle(to occurrence: LinkOccurrence) {
+        guard let target = URL(string: occurrence.url) else { return }
+        logger.info("compose: link title requested")
+        linkTitleLoadCount += 1
+        onLinkTitleLoadingChange()
+        let loadingID = linkTitleEffects.beginLoading(occurrence)
+        let loader = PageTitleLoader()
+        Task { [weak self] in
+            let title: String?
+            do {
+                title = try await loader.title(of: target)
+            } catch {
+                _ = self?.linkTitleEffects.endLoading(loadingID)
+                self?.linkTitleLoadCount -= 1
+                self?.logger.error("compose: link title failed: \(String(describing: error), privacy: .public)")
+                self?.onLinkTitleFailed(.unreadable(error))
+                return
+            }
+            guard let self else { return }
+            let current = linkTitleEffects.endLoading(loadingID) ?? occurrence
+            linkTitleLoadCount -= 1
+            guard let title = LinkTitling.normalizedTitle(title) else {
+                logger.info("compose: link title missing")
+                onLinkTitleFailed(.noTitle)
+                return
+            }
+            replaceLink(current, title: title)
+            onLinkTitleLoadingChange()
+        }
+    }
+
+    /// 読み終えた時点の本文で同じURLを探し直し、押した場所にいちばん近いものを置き換える。読んでいる間にURLが消されたか、投稿を送り始めていれば何もしない。
+    /// 入力欄の`replace`で入れ、取り消し（シェイクや⌘Z）で戻せるようにする。カーソルは、置き換えた範囲より後ろにあれば増えた分だけずらす。
+    private func replaceLink(_ occurrence: LinkOccurrence, title: String) {
+        guard !model.isPosting,
+              let replacement = LinkTitling.replacement(of: occurrence.url, title: title, in: textView.text, nearestTo: occurrence.range.lowerBound)
+        else {
+            logger.info("compose: link title not applied (posting=\(self.model.isPosting))")
+            return
+        }
+        linkTitleEffects.morph(replacement) { [weak self] in
+            self?.applyLinkReplacement(replacement)
+        }
+    }
+
+    private func applyLinkReplacement(_ replacement: LinkTitleReplacement) {
+        isReplacingLink = true
+        defer { isReplacingLink = false }
+        let begin = textView.beginningOfDocument
+        guard let start = textView.position(from: begin, offset: replacement.range.lowerBound),
+              let end = textView.position(from: begin, offset: replacement.range.upperBound),
+              let range = textView.textRange(from: start, to: end)
+        else { return }
+        let selection = textView.selectedRange
+        let delta = replacement.text.utf16.count - replacement.range.count
+        textView.replace(range, withText: replacement.text)
+        if selection.location >= replacement.range.upperBound {
+            textView.selectedRange = NSRange(location: selection.location + delta, length: selection.length)
+        } else if selection.location + selection.length <= replacement.range.lowerBound {
+            textView.selectedRange = selection
+        }
+        logger.info("compose: link title applied")
+        // 入力欄の知らせが来なくても、下書きを入力欄に合わせる。
+        model.text = textView.text
+        textDidChange()
+    }
+
     // MARK: - ボタンの行に出す部品のボタン
 
     /// 添付、注意書き、カスタマイズのボタン。公開範囲と展開は、＋を置く前からあるボタンをそのまま使う。
@@ -577,9 +706,23 @@ final class InlineComposeController: NSObject {
             case .media: self?.toggleMediaPicker()
             case .spoiler: self?.toggleSpoiler()
             case .customize: self?.presentToolLayoutSettings()
+            case .linkTitle: self?.toggleLinkSelection()
             case .visibility, .expand: break
             }
         })
+        if item == .linkTitle {
+            // VoiceOverでは、押した時点の本文のURLをメニューで選ばせる。URLがなければ、ないことだけを押せない形で出す。
+            button.showsMenuAsPrimaryAction = UIAccessibility.isVoiceOverRunning
+            button.menu = UIMenu(title: item.title, children: [UIDeferredMenuElement.uncached { [weak self] completion in
+                let actions = self?.linkTitleActions() ?? []
+                completion(actions.isEmpty ? [UIAction(title: "本文にURLがありません", attributes: .disabled) { _ in }] : actions)
+            }])
+            Task { [weak button] in
+                for await _ in NotificationCenter.default.notifications(named: UIAccessibility.voiceOverStatusDidChangeNotification) {
+                    button?.showsMenuAsPrimaryAction = UIAccessibility.isVoiceOverRunning
+                }
+            }
+        }
         button.configuration?.image = UIImage(systemName: item.symbolName)
         button.configuration?.baseForegroundColor = .label
         button.configuration?.imagePadding = 4
@@ -1758,12 +1901,18 @@ final class InlineComposeController: NSObject {
         }
         textView.onSubmit = { [weak self] in self?.submit() }
         // 回転やウィンドウの幅の変化で折り返す行の数が変わると、広げている間の本文の高さが合わなくなるため、測り直す。
-        textView.onWidthChange = { [weak self] in self?.textDidChange() }
+        // 折り返し直されるので、光らせたURLの枠やきらめきも並べ直す。
+        textView.onWidthChange = { [weak self] in
+            self?.textDidChange()
+            self?.linkTitleEffects.layoutDidChange()
+        }
         // 文字の大きさが変わっても、行の高さが変わって広げている間の本文の高さが合わなくなるため、測り直す。
         textView.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { [weak self] (_: UITextView, _) in
             self?.textDidChange()
+            self?.linkTitleEffects.layoutDidChange()
         }
         textView.completionKeys = completionKeys()
+        textView.overlayControl = { [weak self] point in self?.linkTitleEffects.highlight(at: point) }
         textView.accessibilityLabel = "本文"
         // 広げて上端に届いたときや、行が収まらない高さでは、本文から縮める。
         textView.setContentHuggingPriority(.defaultLow - 1, for: .vertical)
@@ -1875,18 +2024,28 @@ extension InlineComposeController: UITextViewDelegate {
 
     func textViewDidChange(_ textView: UITextView) {
         model.text = textView.text
+        if !isReplacingLink {
+            linkTitleEffects.textDidChange(textView.text)
+        }
         textDidChange()
         completionTextDidChange(in: textView)
     }
 
     func textViewDidChangeSelection(_ textView: UITextView) {
+        // 光らせている間に、光っていない場所を押してカーソルを動かしたら、光らせるのをやめる。
+        if !isReplacingLink {
+            linkTitleEffects.endSelecting(reason: "selection")
+        }
         completionSelectionDidChange(in: textView)
     }
 
     /// 送っている間は、送っている下書きと食い違わないよう打った文字を受け付けない。
     /// 入力欄を止める（`isEditable`を外す）とキーボードが外れて書き終えたことになり、失敗したときに書いていたところへ戻れないため、フォーカスは残す。
     func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText text: String) -> Bool {
-        !model.isPosting
+        guard !model.isPosting else { return false }
+        // 変形の途中に打たれたら、打つ前に終わりの形にする。透明にしていた文字の色を、打った文字の位置がずれる前に戻すため。
+        linkTitleEffects.finishMorph()
+        return true
     }
 
     func textViewShouldBeginEditing(_ textView: UITextView) -> Bool {
@@ -1899,6 +2058,7 @@ extension InlineComposeController: UITextViewDelegate {
     }
 
     func textViewDidEndEditing(_ textView: UITextView) {
+        linkTitleEffects.editingDidEnd()
         endCompletion(in: textView)
         inputDidEndEditing()
     }
@@ -2054,11 +2214,25 @@ private final class ComposeTextView: GlyphLanguageTextView {
         }
     }
     var completionKeys = CompletionKeys()
+    /// 入力欄の中の座標にある、入力欄の上に重ねて押させている部品（光らせたURLなど）。
+    var overlayControl: (CGPoint) -> UIView? = { _ in nil }
     /// クリップボードのメディアを添付できるか。
     var canPasteMedia: () -> Bool = { false }
 
     /// クリップボードにメディアしかなくても、「ペースト」を出す。UITextViewは、`pasteConfiguration`に画像と動画を足しても、
     /// 文字のないときは「ペースト」を出さない（シミュレーターで確かめた）。押したあとは、標準のペーストが`pasteDelegate`に項目を渡す。
+    /// 重ねた部品を、文字を描くビューより先に押させる。入力欄は文字を描くビューを子のビューの前へ並べ直すため、重ねた部品の上を押しても、文字を描くビューが受け取っていた。
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        overlayControl(point) ?? super.hitTest(point, with: event)
+    }
+
+    /// 重ねた部品の上では、カーソルを動かすなどの入力欄のジェスチャーを始めさせない。始めさせると、部品より先に押した操作を受け取り、部品が押されなかった。
+    /// スクロールは止めない。光らせたURLが欄を埋めていても、欄の外のURLへスクロールして選べるようにするため。
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard gestureRecognizer === panGestureRecognizer || overlayControl(gestureRecognizer.location(in: self)) == nil else { return false }
+        return super.gestureRecognizerShouldBegin(gestureRecognizer)
+    }
+
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
         let canPerform = super.canPerformAction(action, withSender: sender)
         guard action == #selector(paste(_:)), !canPerform else { return canPerform }
