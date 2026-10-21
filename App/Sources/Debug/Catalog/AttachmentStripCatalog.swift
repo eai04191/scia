@@ -84,7 +84,7 @@ enum AttachmentStripCatalog {
     /// - Parameters:
     ///   - kind: nilなら、端末からまだ読み込んでいない添付にする。サムネイルもない。
     ///   - label: サムネイルの中央に描く文字。並べ替えを試す列で見分けるために付ける。ほかの列では、動画の再生の印と重ならないよう付けない。
-    private static func item(
+    fileprivate static func item(
         _ kind: MediaAttachment.Kind?,
         color: UIColor,
         label: String = "",
@@ -108,6 +108,61 @@ enum AttachmentStripCatalog {
             thumbnail: kind.map { _ in DummyMedia.image(size: CGSize(width: 192, height: 192), color: color, label: label) }
         )
         return ComposeAttachmentStrip.Item(attachment: DraftAttachment(id: id, state: state, description: description), local: local, status: status, progress: status == .uploading || status == .exporting ? progress : nil, isSensitive: isSensitive)
+    }
+}
+
+/// 書いていないときの投稿欄のカプセルの1行（`ComposeRestContent`）の状態。札のアイコン、重ねた写真、本文の組み合わせと、失敗の印を並べる。
+enum ComposeCapsuleCatalog {
+    private static let reply = "arrowshape.turn.up.left.fill"
+    private static let edit = "pencil"
+    private static let longText = "週末に行った展示の写真をまとめて載せます。思ったより人が多くて、ゆっくり見られなかったのが少し残念でした"
+
+    @MainActor
+    static func states() -> [CatalogState] {
+        [
+            CatalogState(title: "本文だけ") { capsule(text: "来週は…") },
+            CatalogState(title: "空の本文と画像1枚") { capsule(attachments: [.systemRed]) },
+            CatalogState(title: "画像2枚") { capsule(attachments: [.systemRed, .systemBlue], text: "来週は…") },
+            CatalogState(title: "画像3枚（3枚目は1枚目の左上からのぞく）") { capsule(attachments: [.systemRed, .systemBlue, .systemOrange], text: "来週は…") },
+            CatalogState(title: "画像4枚（重ねるのは3枚まで）") { capsule(attachments: [.systemRed, .systemBlue, .systemOrange, .systemPurple], text: "来週は…") },
+            CatalogState(title: "動画1枚") { capsule(attachments: [.systemTeal], kind: .video, text: "来週は…") },
+            CatalogState(title: "アップロードできなかった添付がある") { capsule(attachments: [.systemRed, .systemBlue], failedIndex: 1, text: "来週は…") },
+            CatalogState(title: "返信と画像2枚と長い本文") { capsule(symbol: reply, attachments: [.systemRed, .systemBlue], text: longText) },
+            CatalogState(title: "返信と空の本文") { capsule(symbol: reply) },
+            CatalogState(title: "編集と画像1枚と失敗") { capsule(symbol: edit, attachments: [.systemGreen], failedIndex: 0, text: longText) },
+        ]
+    }
+
+    /// カプセルと同じく、ガラスの細いカプセルに載せる。高さと上下の余白は、書いていないときの投稿欄の既定に合わせる。
+    @MainActor
+    private static func capsule(symbol: String? = nil, attachments colors: [UIColor] = [], kind: MediaAttachment.Kind = .image, failedIndex: Int? = nil, text: String = "") -> UIView {
+        let content = ComposeRestContent()
+        let items = colors.enumerated().map { index, color in
+            AttachmentStripCatalog.item(kind, color: color, status: index == failedIndex ? .failed : .ready)
+        }
+        let font = UIFont.preferredFont(forTextStyle: .body)
+        let attributed = text.isEmpty
+            ? NSAttributedString(string: "いまどうしてる？", attributes: [.font: font, .foregroundColor: UIColor.placeholderText])
+            : NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: UIColor.label])
+        content.configure(symbolName: symbol, attachments: items, text: attributed)
+        let glass = UIVisualEffectView(effect: UIGlassEffect())
+        glass.cornerConfiguration = .capsule(maximumRadius: 24)
+        content.translatesAutoresizingMaskIntoConstraints = false
+        glass.contentView.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor, constant: 16),
+            content.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor, constant: -16),
+            content.centerYAnchor.constraint(equalTo: glass.contentView.centerYAnchor),
+            glass.heightAnchor.constraint(equalToConstant: 40),
+        ])
+        return CatalogBackdrop.image(glass) { backdrop, glass in
+            [
+                glass.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor, constant: 20),
+                glass.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor, constant: -20),
+                glass.topAnchor.constraint(equalTo: backdrop.topAnchor, constant: 12),
+                glass.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor, constant: -12),
+            ]
+        }
     }
 }
 #endif

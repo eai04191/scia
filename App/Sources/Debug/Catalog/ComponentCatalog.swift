@@ -14,6 +14,7 @@ import UIKit
 /// - ログイン画面のエラー（`LoginView`）: `isLoggingIn`が`private(set)`で、ログイン中を出すには実際の認可を待たせる必要がある
 enum CatalogComponent: String, CaseIterable {
     case attachmentStrip = "attachment-strip"
+    case composeCapsule = "compose-capsule"
     case completionList = "completion-list"
     case altTextEditor = "alt-text-editor"
     case caption
@@ -37,6 +38,7 @@ enum CatalogComponent: String, CaseIterable {
     var title: String {
         switch self {
         case .attachmentStrip: "投稿欄の添付のサムネイル"
+        case .composeCapsule: "書いていないときの投稿欄"
         case .completionList: "投稿欄の補完の候補"
         case .altTextEditor: "代替テキストの入力欄"
         case .caption: "ビューアの説明"
@@ -63,6 +65,7 @@ enum CatalogComponent: String, CaseIterable {
     func makeStates() -> [CatalogState] {
         switch self {
         case .attachmentStrip: AttachmentStripCatalog.states()
+        case .composeCapsule: ComposeCapsuleCatalog.states()
         case .completionList: CompletionListCatalog.states()
         case .altTextEditor: AltTextEditorCatalog.states()
         case .caption: CaptionCatalog.states()
