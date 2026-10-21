@@ -64,6 +64,9 @@ enum DebugURL: Equatable {
     /// `scia-debug://inject/<home|notifications>?file=<ファイル名>`。アプリのDocuments/DebugInjectに置いたJSONを読み、ストリーミングの新着と同じ経路で一覧に流す。
     /// ホームは`Status`の配列、通知は`Notification`の配列で、APIの応答と同じ形で書く。実データにない投稿や通知の見え方を、ログインした端末のまま確かめるため。
     case inject(Tab, file: String)
+    /// `scia-debug://compose?text=<本文>`。インライン投稿欄で書き始め、本文を渡した文に置き換える。
+    /// シミュレーターのクリップボードが使えないときにも、URLを含む本文などを打たずに用意するため。
+    case composeText(String)
     /// `scia-debug://ticker-loop/on`で、ステータスバーの通知を、出る、出ている、消えるを繰り返して出し続ける。`scia-debug://ticker-loop/off`で止める。
     case statusBarTickerLoop(Bool)
 
@@ -115,6 +118,7 @@ enum DebugURL: Equatable {
         case "media-limits": Self.mediaLimits(url)
         case "viewer": Self.viewer(url)
         case "inject": Self.inject(url)
+        case "compose": Self.query("text", in: url).map { .composeText($0) }
         default: nil
         }
         guard let parsed else { return nil }

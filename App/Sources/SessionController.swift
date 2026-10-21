@@ -1264,6 +1264,9 @@ final class SessionController {
             statusBarTicker.setLooping(isOn, items: DummyNotifications.samples)
         case .inject(let tab, let file):
             inject(file, into: tab)
+        case .composeText(let text):
+            composer.beginEditing()
+            composer.model.text = text
         case .holdArrivals(let isOn):
             DebugFaults.setHoldingArrivals(isOn)
             if !isOn {
