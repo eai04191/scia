@@ -186,6 +186,9 @@ final class InlineComposeController: NSObject {
     /// 添付の長押しのメニューを出したときのキーボードの高さ。メニューの間はiOSがソフトウェアキーボードを隠すため、
     /// キーボードがこの高さまで戻るまでバーを今の位置に留める。留めていなければnil。
     private var keyboardHeightBeforeContextMenu: CGFloat?
+    /// メニューを出してから、キーボードが隠れた知らせを受けたか。メディアを選ぶシートを閉じたあとは、メニューを出すとすぐ、
+    /// iOSが高さの変わらないキーボードの枠を知らせてくる。隠れる前のこの知らせを、キーボードが戻ったと受け取らないために使う。
+    private var didKeyboardHideForContextMenu = false
     /// 1回のペーストで届いたメディア。項目ごとに届くので、まとめて添付に足し、上限を超えた分の知らせを1回にする。
     /// ファイルのURLの項目は、指す先を調べ終えるまでnilで場所を取り、ペーストした順に並べる。
     private var pendingPastedMedia: [PastedMedia?] = []
@@ -939,8 +942,12 @@ final class InlineComposeController: NSObject {
             applyBarPlacement()
         }
         updateSinkingWithKeyboard(keyboardHeight: height)
-        if let before = keyboardHeightBeforeContextMenu, currentKeyboardHeight >= before {
-            releaseBarHeldForContextMenu()
+        if let before = keyboardHeightBeforeContextMenu {
+            if currentKeyboardHeight < before {
+                didKeyboardHideForContextMenu = true
+            } else if didKeyboardHideForContextMenu {
+                releaseBarHeldForContextMenu()
+            }
         }
         if isWaitingForKeyboardAfterViewer {
             isWaitingForKeyboardAfterViewer = false
@@ -959,6 +966,7 @@ final class InlineComposeController: NSObject {
         guard let host, isInputFocused, mediaPicker == nil, !isShowingMediaViewer else { return }
         logger.info("attachment context menu: holding bar (keyboardHeight=\(self.currentKeyboardHeight))")
         keyboardHeightBeforeContextMenu = currentKeyboardHeight
+        didKeyboardHideForContextMenu = false
         setHoldAboveKeyboard(height: host.view.bounds.maxY - bar.frame.maxY - barSpacing)
     }
 

@@ -155,6 +155,19 @@ struct InlineComposeControllerTests {
         #expect(!composer.isBarHeld, "キーボードが戻っても、バーを留めたままです\n\(composer.stateDump())")
     }
 
+    /// メディアを選ぶシートを閉じたあとは、メニューを出すとすぐ、iOSが高さの変わらないキーボードの枠を知らせてくる。
+    /// それをキーボードが戻ったと受け取ると、メニューを出したとたんにバーを外し、隠れるキーボードについて下げてしまう。
+    @Test func contextMenuKeepsBarHeldWhenKeyboardFrameRepeats() async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        try await Task.sleep(for: .milliseconds(500))
+        postKeyboardFrame(height: 336)
+
+        showContextMenu()
+        postKeyboardFrame(height: 336)
+        #expect(composer.isBarHeld, "キーボードが隠れる前に、バーを外しました\n\(composer.stateDump())")
+    }
+
     /// ハードウェアキーボードのようにキーボードが隠れなければ、メニューを閉じた時点でバーを外す。
     @Test func contextMenuReleasesBarWhenKeyboardStayed() async throws {
         defer { window.isHidden = true }
