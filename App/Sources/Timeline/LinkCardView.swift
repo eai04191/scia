@@ -32,6 +32,8 @@ final class LinkCardView: UIButton {
 
     private let store: MediaImageStore
     private let thumbnailView = LinkCardThumbnailView()
+    /// 画像を長押ししたときのメディアのメニュー。カードはボタンで、一覧の行の長押しのメニューが届かないため、画像が自分で受ける。
+    private var imageMenuInteraction: MediaMenuInteraction?
     /// サムネイルの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     /// 画像を読み込み終えたカードでだけ受け付け、それ以外の場所や画像のないカードのタップは、リンクを開く。
     var onOpenImage: ((LinkCardThumbnailView) -> Void)?
@@ -70,6 +72,12 @@ final class LinkCardView: UIButton {
         thumbnailView.layer.cornerRadius = MediaGridView.cornerRadius
         thumbnailView.layer.cornerCurve = .continuous
         thumbnailView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openImage)))
+        imageMenuInteraction = MediaMenuInteraction(on: thumbnailView, wholeImage: { [weak self] in self?.thumbnailView.loadedThumbnail }, open: { [weak self] in
+            self?.openImageFromMenu()
+        }, sharperImage: { [weak self] maxPixelSize in
+            guard let self, let url = self.thumbnailView.imageURL else { return nil }
+            return try? await self.store.image(for: url, maxPixelSize: maxPixelSize)
+        }, offersMenu: { [weak self] _ in self?.menuImage != nil })
         thumbnailView.contentMode = .scaleAspectFill
         thumbnailView.clipsToBounds = true
         coverView.frame = thumbnailView.bounds
@@ -205,6 +213,19 @@ final class LinkCardView: UIButton {
                 return true
             }]
             : []
+    }
+
+    /// 長押しでメディアのメニューを出す画像。画像を開ける状態のときだけ返し、覆っている間と読み込む前はnil。
+    var menuImage: (attachment: MediaAttachment, thumbnail: LinkCardThumbnailView)? {
+        guard !isCoveringImage, thumbnailView.isUserInteractionEnabled, let content, case .card(let card) = content.card,
+              let attachment = card.imageAttachment
+        else { return nil }
+        return (attachment, thumbnailView)
+    }
+
+    /// メディアのメニューの「開く」。タップしたときと同じく開く。
+    func openImageFromMenu() {
+        openImage()
     }
 
     /// 閲覧注意で覆っている画像がある。

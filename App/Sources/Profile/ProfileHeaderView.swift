@@ -28,6 +28,10 @@ final class ProfileHeaderView: UIView {
     var onOpenOriginal: (() -> Void)?
     /// アイコンかヘッダー画像がタップされた。画像を読み込み終えていなければ呼ばない。
     var onOpenImage: ((ProfileImage) -> Void)?
+    /// アイコンかヘッダー画像を長押ししたときの、メディアのメニュー。画像を読み込み終えていなければ呼ばない。nilを返せばメニューを出さない。
+    var menuForImage: ((ProfileImage) -> UIMenu?)?
+    /// アイコンとヘッダー画像の、メディアのメニューの長押し。決まりはdocs/menus.mdの「メディアのメニュー」にある。
+    private var imageMenuInteractions: [MediaMenuInteraction] = []
     /// 関係が届いて、フォローのボタンの場所取りから本物の文字に変わるときのフェードの時間。0なら切り替える。
     var followRevealDuration: TimeInterval = 0
     /// 自己紹介か補足情報の値のリンクがタップされたときと、メンションの長押しのメニューでプロフィールを選んだときに、その行き先を渡して呼ぶ。
@@ -159,6 +163,9 @@ final class ProfileHeaderView: UIView {
         // 伸ばしたぼかしを描くビューがヘッダー画像の手前に重なり、タップを受けるため、伸ばす部品の側でタップを受ける。ぼかした部分をタップしても開く。
         bannerView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openHeader)))
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAvatar)))
+        imageMenuInteractions = [(bannerView, ProfileImage.header), (avatarView, ProfileImage.avatar)].map { view, image in
+            imageMenuInteraction(on: view, for: image)
+        }
         for (view, label) in [(bannerView, "ヘッダー画像"), (avatarView, "アイコン")] as [(UIView, String)] {
             view.isUserInteractionEnabled = true
             view.isAccessibilityElement = true
@@ -402,6 +409,34 @@ final class ProfileHeaderView: UIView {
     private func open(_ image: ProfileImage) {
         guard viewerSource(for: image) != nil else { return }
         onOpenImage?(image)
+    }
+
+    /// 長押しで持ち上げ、持ち上げた画像をタップすると、タップしたときと同じく開く。
+    /// ヘッダー画像は切り抜いているので、画像の全体を持ち上げる。アイコンは切り抜いておらず、形も見た目の一部なので、そのまま持ち上げる。
+    private func imageMenuInteraction(on view: UIView, for image: ProfileImage) -> MediaMenuInteraction {
+        let wholeImage: (@MainActor () -> UIImage?)? = switch image {
+        case .header: { [weak self] in self?.viewerSource(for: image)?.loadedThumbnail }
+        case .avatar: nil
+        }
+        let sharperImage: (@MainActor (Int) async -> UIImage?)? = switch image {
+        case .header: { [weak self] maxPixelSize in
+            guard let self, let url = self.bannerURL else { return nil }
+            return try? await self.mediaImages.image(for: url, maxPixelSize: maxPixelSize)
+        }
+        case .avatar: nil
+        }
+        // ビューアで開くときと同じく、持ち上げている間はヘッダー画像の場所にぼかしの覆いを出し、抜けて見えないようにする。
+        let onLiftChange: (@MainActor (Bool) -> Void)? = switch image {
+        case .header: { [weak self] isLifted in self?.bannerView.isConcealedForViewer = isLifted }
+        case .avatar: nil
+        }
+        return MediaMenuInteraction(on: view, wholeImage: wholeImage, open: { [weak self] in
+            self?.open(image)
+        }, menu: { [weak self] in
+            self?.menuForImage?(image)
+        }, sharperImage: sharperImage, onLiftChange: onLiftChange, offersMenu: { [weak self] _ in
+            self?.viewerSource(for: image) != nil
+        })
     }
 
     /// ビューアを開閉する起点。画像を読み込み終えていなければ、大きくして見るものがないのでnil。

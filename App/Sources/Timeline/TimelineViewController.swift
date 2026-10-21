@@ -1312,7 +1312,8 @@ extension TimelineViewController: UICollectionViewDelegate {
         animator.addCompletion { [weak self] in self?.menuDidHide() }
     }
 
-    /// 長押しで投稿への操作のメニューを出す。
+    /// 長押しで投稿への操作のメニューを出す。添付ファイルのサムネイルとリンクカードの画像はボタンで、ここへは届かないため、
+    /// それぞれが`MediaMenuHost`に問い合わせてメディアのメニューを出す。
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
         guard indexPaths.count == 1, let indexPath = indexPaths.first, let id = dataSource.itemIdentifier(for: indexPath), let entry = entry(for: id),
               let menu = contextMenu(for: entry, id: id)
@@ -1486,5 +1487,29 @@ extension TimelineViewController: NoticeScreen {
 final class TimelineCollectionView: UICollectionView {
     override func touchesShouldCancel(in view: UIView) -> Bool {
         view is LinkHitArea || super.touchesShouldCancel(in: view)
+    }
+}
+
+extension TimelineViewController: MediaMenuHost {
+    /// サムネイルかリンクカードの画像を長押しした。行の要素を探して、メディアのメニューを組む。投稿のメニューは、その「投稿」に入れる。
+    func mediaMenu(from view: UIView, at location: CGPoint) -> UIMenu? {
+        var cellView = view.superview
+        while let current = cellView, !(current is UICollectionViewCell) {
+            cellView = current.superview
+        }
+        guard let cell = cellView as? UICollectionViewCell, let indexPath = collectionView.indexPath(for: cell),
+              let id = dataSource.itemIdentifier(for: indexPath), let entry = entry(for: id),
+              let target = mediaMenuTarget(at: view.convert(location, to: collectionView), in: cell)
+        else { return nil }
+        return mediaMenu(for: target, entry: entry, id: id)
+    }
+
+    func mediaMenuWillShow() {
+        UserAction.openMenu(screen: texts.dumpName).record()
+        menuWillShow()
+    }
+
+    func mediaMenuDidHide() {
+        menuDidHide()
     }
 }

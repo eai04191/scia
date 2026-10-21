@@ -8,7 +8,8 @@ import UIKit
 final class MediaShareSheetItem: NSObject, UIActivityItemSource {
     /// 元のファイルのコピー。拡張子は中身の形式に合わせてある。
     private let file: URL
-    private let preview: UIImage
+    /// 共有シートの見出しに添える画像。
+    let preview: UIImage
 
     init(file: URL, preview: UIImage) {
         self.file = file

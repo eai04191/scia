@@ -18,11 +18,18 @@ final class MediaTransferCenter {
     private let tuning: TuningStore
     /// 開いているビューア。Macではビューアを別々のウィンドウで開くため、いくつも開いていることがある。
     private let openViewers = NSHashTable<MediaViewerController>.weakObjects()
-    /// 落としているものごとの、最後にその操作を始めたビューア。開いている間は、共有のシートと理由のアラートをそのビューアに出す。
-    private var requesters: [MediaTransfers.Transfer.ID: WeakViewer] = [:]
+    /// 落としているものごとの、最後にその操作を始めたビューアか、一覧のメニューを出したサムネイル。
+    /// ビューアが開いている間は、共有のシートと理由のアラートをそのビューアに出す。サムネイルなら、共有のシートをそこから出す。
+    private var requesters: [MediaTransfers.Transfer.ID: Requester] = [:]
 
-    private struct WeakViewer {
+    private struct Requester {
         weak var viewer: MediaViewerController?
+        /// 一覧のメニューから始めた。起点のサムネイルが先に解放されても、ビューアのものと取り違えずに共有のシートを出すため、起点とは別に持つ。
+        var isFromMenu = false
+        weak var source: (any MediaViewerSource)?
+        /// 一覧のメニューから共有を始めたときに、サムネイルが描いていた画像。落としている間にセルが別の投稿に使い回されても、
+        /// 共有シートには始めたときの画像を添え、別の画像を出しているサムネイルを起点にしないために持つ。
+        var preview: UIImage?
     }
     /// 落としている途中のチップを押して出した、止めるかの確認と、その対象。対象が済むか止まったら閉じる。
     private weak var stopConfirmation: UIAlertController?
@@ -68,7 +75,15 @@ final class MediaTransferCenter {
         // 開き終える前に始めてすぐ済んでも、届け先を失わないよう、始めたビューアは開いているものとして扱う。
         openViewers.add(viewer)
         let id = transfers.start(purpose, target)
-        requesters[id] = WeakViewer(viewer: viewer)
+        requesters[id] = Requester(viewer: viewer)
+    }
+
+    /// 一覧のメディアのメニューから始めた。ビューアを開いていないので、共有のシートは前に出ている画面から、`source`を起点に出す。
+    /// ビューアと違い、閉じて共有をやめる操作がないため、共有のためのものも済むまで続ける。
+    func start(_ purpose: MediaTransfers.Purpose, _ target: MediaTransfers.Target, from source: any MediaViewerSource) {
+        logger.info("start media transfer from menu purpose=\(String(describing: purpose), privacy: .public) kind=\(String(describing: target.kind), privacy: .public)")
+        let id = transfers.start(purpose, target)
+        requesters[id] = Requester(isFromMenu: true, source: source, preview: source.loadedThumbnail)
     }
 
     /// `transfer`を始めたビューア。閉じていればnil。
@@ -170,6 +185,13 @@ final class MediaTransferCenter {
         case .saved(let transfer):
             didSave(transfer)
         case .shareReady(let transfer, let file):
+            if let requester = requesters[transfer.id], requester.isFromMenu {
+                let preview = requester.preview
+                afterClosingStopConfirmation(of: transfer.id) { [weak self, weak source = requester.source] in
+                    self?.presentShareSheet(for: file, from: source, startedWith: preview)
+                }
+                return
+            }
             afterClosingStopConfirmation(of: transfer.id) { [weak viewer = viewer(of: transfer)] in
                 viewer?.presentShareSheet(for: file, of: transfer.target.url)
             }
@@ -234,6 +256,36 @@ final class MediaTransferCenter {
         })
         alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         return alert
+    }
+
+    /// 一覧のメニューから共有するファイルの、共有のシート。見出しのプレビューに、共有を始めたときのサムネイルの画像を添える。
+    /// 起点にできるサムネイルがなければ、出す画面の真ん中を起点にする。iPadとMacではポップオーバーで出て、起点がないと例外になるため。
+    private func presentShareSheet(for file: URL, from source: (any MediaViewerSource)?, startedWith preview: UIImage?) {
+        let content = Self.menuShareSheet(file: file, startedWith: preview, source: source)
+        let activity = UIActivityViewController(activityItems: [content.item], applicationActivities: nil)
+        // 添付ファイルの画像を連絡先の写真にすることはまずないため、出さない。ビューアと同じ。
+        activity.excludedActivityTypes = [.assignToContact]
+        guard let presenter = notices.presenter?.frontmostPresented else { return }
+        if let popover = activity.popoverPresentationController {
+            if let anchor = content.anchor {
+                popover.sourceItem = anchor
+            } else {
+                popover.sourceView = presenter.view
+                popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
+        }
+        presenter.present(activity, animated: true)
+    }
+
+    /// 一覧のメニューから共有するときの、共有シートに渡すものと、ポップオーバーの起点。起点にできなければnil。
+    /// 落としている間に行が流れて画面から外れたり、セルが別の投稿に使い回されて別の画像を描いていたりすれば、サムネイルを起点にしない。
+    /// 使い回されたかは、始めたときと同じ画像を描いているかで見分ける。
+    /// - Parameter preview: 共有を始めたときにサムネイルが描いていた画像。共有シートの見出しにはこれを添える。
+    static func menuShareSheet(file: URL, startedWith preview: UIImage?, source: (any MediaViewerSource)?) -> (item: Any, anchor: (any MediaViewerSource)?) {
+        let item: Any = preview.map { MediaShareSheetItem(file: file, preview: $0) } ?? file
+        guard let preview, let source, source.window != nil, source.loadedThumbnail === preview else { return (item, nil) }
+        return (item, source)
     }
 
     /// `viewer`が開いていればそこから、閉じていればいちばん手前の画面から出す。

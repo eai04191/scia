@@ -99,6 +99,7 @@ final class ProfileController {
             UIApplication.shared.open(url)
         }
         header.onOpenImage = { [weak self] image in self?.openImage(image) }
+        header.menuForImage = { [weak self] image in self?.imageMenu(image) }
         header.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination) }
         viewController.onScroll = { [weak self] scrollView in self?.updateBars(scrollView) }
         header.onChangeBannerLayout = { [weak self] in self?.viewController?.headerDidChangeSize() }
@@ -304,6 +305,15 @@ final class ProfileController {
         viewController?.openMedia([attachment], at: 0, subject: nil) { [weak header] _ in
             header?.viewerSource(for: image)
         }
+    }
+
+    /// アイコンかヘッダー画像のメディアのメニュー。投稿がないため「投稿」は出さない。
+    private func imageMenu(_ image: ProfileImage) -> UIMenu? {
+        guard let attachment = store.account.attachment(of: image), let source = header.viewerSource(for: image) else { return nil }
+        let target = TimelineViewController.MediaMenuTarget(attachment: attachment, source: source) { [weak self] in
+            self?.openImage(image)
+        }
+        return viewController?.mediaMenu(for: target, subject: nil, statusMenu: nil)
     }
 
     // MARK: - 読み込み

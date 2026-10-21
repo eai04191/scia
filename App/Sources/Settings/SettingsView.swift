@@ -167,10 +167,13 @@ struct SettingsView: View {
                     NavigationLink("ハッシュタグのメニュー") {
                         MenuLayoutSettingsView(title: "ハッシュタグのメニュー", layout: $settings.hashtagMenuLayout)
                     }
+                    NavigationLink("メディアのメニュー") {
+                        MenuLayoutSettingsView(title: "メディアのメニュー", layout: $settings.mediaMenuLayout)
+                    }
                 } header: {
                     Text("長押しのメニュー")
                 } footer: {
-                    Text("投稿や通知、本文のリンクやハッシュタグを長押ししたときのメニューに出す項目と、その並びを選びます。ユーザーのメニューは、投稿のメニューの中に、投稿したユーザーなどのサブメニューとして出るほか、本文のメンションを長押ししたときにも出ます。")
+                    Text("投稿や通知、本文のリンクやハッシュタグ、メディアを長押ししたときのメニューに出す項目と、その並びを選びます。ユーザーのメニューは、投稿のメニューの中に、投稿したユーザーなどのサブメニューとして出るほか、本文のメンションを長押ししたときにも出ます。メディアのメニューは、サムネイルやプロフィールの画像を長押ししたときと、ビューアのメニューに出ます。")
                 }
                 Section {
                     Toggle("書いていないときは隠す", isOn: $settings.hidesEmptyComposeBar)

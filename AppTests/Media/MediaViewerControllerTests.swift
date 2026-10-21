@@ -98,7 +98,20 @@ struct MediaViewerControllerTests {
     }
 
     private func menuAction(_ title: String, in viewer: MediaViewerController) -> UIAction? {
-        viewer.menuElements().lazy.compactMap { $0 as? UIAction }.first { $0.title == title }
+        topLevelActions(of: viewer).first { $0.title == title }
+    }
+
+    /// メニューの最初の階層に並ぶ項目。区切り線で分けたまとまりの中も含め、「その他」などのサブメニューの中は含めない。
+    private func topLevelActions(of viewer: MediaViewerController) -> [UIAction] {
+        viewer.menuElements().flatMap { element -> [UIAction] in
+            if let action = element as? UIAction { return [action] }
+            guard let group = element as? UIMenu, group.options.contains(.displayInline) else { return [] }
+            return group.children.compactMap { $0 as? UIAction }
+        }
+    }
+
+    private func topLevelTitles(of viewer: MediaViewerController) -> [String] {
+        topLevelActions(of: viewer).map(\.title)
     }
 
     /// 画像は、元のファイルが届いてからメニューで共有と保存ができる。届く前にURLを共有しないよう、それまでは選べない。
@@ -109,7 +122,7 @@ struct MediaViewerControllerTests {
         let viewer = presentLoadingViewer(on: harness, data: data)
         defer { viewer.dismiss(animated: false) }
 
-        #expect(viewer.menuElements().compactMap { ($0 as? UIAction)?.title } == ["共有", "写真に保存"])
+        #expect(topLevelTitles(of: viewer) == ["共有", "写真に保存", "リンクをコピー"])
         #expect(try #require(menuAction("共有", in: viewer)).attributes.contains(.disabled))
         #expect(try #require(menuAction("写真に保存", in: viewer)).attributes.contains(.disabled))
 
@@ -735,7 +748,7 @@ struct MediaViewerControllerTests {
         let saved = SavedFiles()
         let viewer = presentVideoViewer(on: harness, photoSaver: PhotoLibrarySaver { saved.files.append($0) }, download: Self.slowDownload(data))
         defer { viewer.dismiss(animated: false) }
-        #expect(viewer.menuElements().compactMap { ($0 as? UIAction)?.title } == ["共有", "写真に保存", "ループ再生"])
+        #expect(topLevelTitles(of: viewer) == ["共有", "写真に保存", "リンクをコピー", "ループ再生"])
         #expect(try #require(menuAction("写真に保存", in: viewer)).attributes.isEmpty)
 
         viewer.saveToPhotos()
@@ -1088,7 +1101,7 @@ struct MediaViewerControllerTests {
         let viewer = presentVideoViewer(on: harness, type: .audio, download: Self.slowDownload(Data()))
         defer { viewer.dismiss(animated: false) }
 
-        #expect(viewer.menuElements().compactMap { ($0 as? UIAction)?.title } == ["共有", "ループ再生"])
+        #expect(topLevelTitles(of: viewer) == ["共有", "リンクをコピー", "ループ再生"])
         #expect(try #require(menuAction("共有", in: viewer)).attributes.isEmpty)
     }
 
@@ -1110,7 +1123,7 @@ struct MediaViewerControllerTests {
     @Test func menuDisablesShareWhenThereIsNothingToShare() throws {
         let processing = makeViewer(attachments: [image("2", url: nil)])
 
-        let unavailable = try #require(processing.menuElements().first as? UIAction)
+        let unavailable = try #require(topLevelActions(of: processing).first)
         #expect(unavailable.attributes.contains(.disabled))
     }
 

@@ -266,4 +266,38 @@ struct TimelineMediaTests {
         #expect(tall.cgImage?.height == 32)
         #expect(store.placeholder(for: "壊れた文字列", aspectRatio: 1) == nil)
     }
+
+    private func tiles(in view: UIView) -> [MediaTileView] {
+        view.subviews.flatMap { subview in (subview as? MediaTileView).map { [$0] } ?? tiles(in: subview) }
+    }
+
+    /// 長押ししたサムネイルの、メディアのメニュー。メニューを出さなければnil。
+    private func mediaMenu(at tile: MediaTileView, in harness: TimelineHarness, of id: Status.ID) throws -> UIMenu? {
+        let vc = harness.viewController
+        let cell = try #require(harness.visibleCell(of: .status(id)))
+        let entry = try #require(vc.entry(for: .status(id)))
+        let point = tile.convert(CGPoint(x: tile.bounds.midX, y: tile.bounds.midY), to: vc.collectionView)
+        return vc.mediaMenuTarget(at: point, in: cell).flatMap { vc.mediaMenu(for: $0, entry: entry, id: .status(id)) }
+    }
+
+    /// 覆っていないサムネイルを長押しすると、見出しのないメディアのメニューを出し、投稿のメニューを「投稿」に入れる。
+    /// 閲覧注意で覆っている間は、中身を見ないまま保存や共有をしないよう出さない。
+    @Test func longPressOnTileOffersMediaMenuOnlyWhenUncovered() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        let shown = withMedia(statuses[0], [image("1", width: 300, height: 200), image("2", width: 300, height: 200)])
+        let sensitive = withMedia(statuses[1], [image("3", width: 300, height: 200)], sensitive: true)
+        harness.setStatuses([shown, sensitive] + statuses.dropFirst(2))
+
+        let tile = try #require(mediaGrid(in: harness, of: shown.id)?.tile(for: "2"))
+        let menu = try #require(try mediaMenu(at: tile, in: harness, of: shown.id))
+        #expect(menu.title.isEmpty)
+        #expect(menu.children.contains { ($0 as? UIMenu)?.children.contains { $0.title == "投稿" } == true })
+
+        let coveredGrid = try #require(mediaGrid(in: harness, of: sensitive.id))
+        let covered = try #require(tiles(in: coveredGrid).first)
+        #expect(try mediaMenu(at: covered, in: harness, of: sensitive.id) == nil)
+        #expect(covered.menuAttachment == nil)
+    }
 }

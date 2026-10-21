@@ -55,6 +55,10 @@ final class MediaViewerController: UIViewController {
     private var dismissPanAnchor: CGPoint = .zero
     /// 閉じ終わったときに呼ぶ。複製がサムネイルへ戻る動きは、このあとも続く。
     var onDismiss: (() -> Void)?
+    /// メニューの開く項目で、ファイルのURLを開く。ビューアを閉じ終えてから呼ぶ。nilなら開く項目を出さない（Macの別のウィンドウや、編集履歴から開いたとき）。
+    var onOpenURL: (@MainActor (URL, LinkBrowser) -> Void)?
+    /// 閉じ終えたら開くURL。アプリ内のSafariのシートがビューアの下に隠れないよう、閉じてから開く。
+    private var urlToOpenAfterDismiss: (url: URL, browser: LinkBrowser)?
     /// 複製がサムネイルへ戻る動きを終えたときに呼ぶ。投稿欄は、ここで入力欄にキーボードを戻す。
     var onCloseFinish: (() -> Void)?
     /// 黒い下地。画像だけを動かし、下地はその場で濃くしたり薄くしたりする。
@@ -247,6 +251,10 @@ final class MediaViewerController: UIViewController {
             transfers?.viewerDidClose(self)
             showHiddenTile()
             onDismiss?()
+            if let pending = urlToOpenAfterDismiss {
+                urlToOpenAfterDismiss = nil
+                onOpenURL?(pending.url, pending.browser)
+            }
         }
     }
 
@@ -580,44 +588,52 @@ final class MediaViewerController: UIViewController {
         pageController.viewControllers?.first as? MediaPageController
     }
 
-    /// メニューの項目。画像の共有や保存は、元のファイルが届くまで選べなくする。動画などは選んでから落とす。
+    /// メニューの項目。並びは設定のメディアのメニューに従い、ループ再生は設定の並びの後ろに置く。決まりはdocs/menus.mdの「メディアのメニュー」にある。
+    /// 画像の共有や保存は、元のファイルが届くまで選べなくする。動画などは選んでから落とす。
     /// 保存は写真に入る画像、動画、GIFだけ、翻訳は画像から文字を読み取れたときだけ、代替テキストは付いているときだけ出す。
     func menuElements() -> [UIMenuElement] {
         if let editing = draftEditing {
             return editingMenuElements(editing)
         }
-        var elements: [UIMenuElement] = [
-            UIAction(
-                title: "共有",
-                image: UIImage(systemName: "square.and.arrow.up"),
-                attributes: (currentFileURL == nil || transfers == nil) && currentUnsupportedURL == nil ? .disabled : []
-            ) { [weak self] _ in
-                self?.share()
-            },
-        ]
-        if [.image, .video, .gifv].contains(currentItem.kind) {
-            elements.append(UIAction(
-                title: "写真に保存",
-                image: UIImage(systemName: "square.and.arrow.down"),
-                attributes: currentFileURL == nil || transfers == nil ? .disabled : []
-            ) { [weak self] _ in
-                self?.saveToPhotos()
-            })
-        }
+        let attachment = currentItem.serverAttachment
+        var menu = MediaMenu(kind: currentItem.kind, attachment: attachment)
+        let canTransfer = currentFileURL != nil && transfers != nil
+        menu.share = MediaMenu.Command(isEnabled: canTransfer || currentUnsupportedURL != nil) { [weak self] in self?.share() }
+        menu.saveToPhotos = MediaMenu.Command(isEnabled: canTransfer) { [weak self] in self?.saveToPhotos() }
         if let text = (pages[currentIndex] as? ImagePageController)?.recognizedText, !text.isEmpty {
-            elements.append(UIAction(title: "画像の文字を翻訳", image: UIImage(systemName: "translate")) { [weak self] _ in
-                self?.translation.present(text)
-            })
+            menu.translateText = MediaMenu.Command { [weak self] in self?.translation.present(text) }
         }
-        if let description = currentItem.description, !description.isEmpty {
-            elements.append(UIAction(title: "代替テキスト", image: UIImage(systemName: "text.below.photo")) { [weak self] _ in
-                self?.showAltText()
-            })
+        menu.showAltText = MediaMenu.Command { [weak self] in self?.showAltText() }
+        menu.fileURL = attachment.flatMap { $0.url ?? $0.remoteUrl }
+        menu.details = pages[currentIndex]?.fileDetails
+        // リンクのコピーは、開く先がなくても出す。
+        menu.opensURLs = onOpenURL != nil
+        menu.urlHandlers = URLMenuHandlers(
+            linkBrowser: settings.linkBrowser,
+            copy: { [weak self] url in
+                UIPasteboard.general.url = url
+                self?.showCopiedNotice(.linkCopied)
+            },
+            share: { [weak self] url in self?.presentShareSheet(url) },
+            open: { [weak self] url, browser in
+                self?.urlToOpenAfterDismiss = (url, browser)
+                self?.close()
+            }
+        )
+        menu.copyValue = { [weak self] value in
+            UIPasteboard.general.string = value
+            self?.showCopiedNotice(.textCopied)
         }
+        var elements = menu.elements(layout: settings.mediaMenuLayout)
         if let loop = (pages[currentIndex] as? PlayerPageController)?.loopMenuAction() {
-            elements.append(loop)
+            elements.append(UIMenu(options: .displayInline, children: [loop]))
         }
         return elements
+    }
+
+    /// コピーしたことを、このウインドウのチップの列に数秒出す。
+    private func showCopiedNotice(_ notice: Notice) {
+        overlay?.showTransient({ _ in notice }, duration: timing.savedChipDuration, replacing: nil)
     }
 
     /// 代替テキストの全文をシートで出す。
@@ -1352,7 +1368,8 @@ extension MediaViewerController {
         transfers: MediaTransferCenter? = nil,
         subject: OperationStatus.Subject? = nil,
         sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?,
-        onDismiss: @escaping @MainActor () -> Void
+        onDismiss: @escaping @MainActor () -> Void,
+        openURL: (@MainActor (URL, LinkBrowser) -> Void)? = nil
     ) {
         let viewer = MediaViewerController(
             attachments: attachments,
@@ -1365,6 +1382,7 @@ extension MediaViewerController {
             sourceTile: sourceTile
         )
         viewer.onDismiss = onDismiss
+        viewer.onOpenURL = openURL
         // 開く動きはビューアの中で描く。
         presenter.present(viewer, animated: false)
     }
@@ -1379,6 +1397,8 @@ class MediaPageController: UIViewController {
     var onImageChange: (() -> Void)?
     /// 長押しで出すメニューの項目。右上のメニューボタンと同じものを返す。
     var menuElements: (() -> [UIMenuElement])?
+    /// ファイルの中身から読んだ、メディアの情報に出す詳しい値。読み終えるまでと、読めなかったときはnil。
+    var fileDetails: MediaFileDetails?
 
     init(item: MediaViewerItem) {
         self.item = item
@@ -1486,7 +1506,12 @@ final class ImagePageController: MediaPageController {
     /// 余白は画面上のポイントで指定する。画像を拡大していても、拡大率で割り戻さない。
     private lazy var baseLiveTextInsets = liveText.supplementaryInterfaceContentInsets
     /// 元のファイルをキャッシュに置き終えていれば、そのURL。共有や保存はこのURLでキャッシュからコピーを取る。
-    private(set) var originalURL: URL?
+    private(set) var originalURL: URL? {
+        didSet {
+            if originalURL != oldValue { readFileDetails() }
+        }
+    }
+    private var detailsTask: Task<Void, Never>?
     /// 一覧で読み込んだサムネイル。
     private let preview: UIImage?
     /// 出している画像の出どころ。違和感レポートに残す。
@@ -1645,6 +1670,19 @@ final class ImagePageController: MediaPageController {
             } else {
                 self.failureLabel.isHidden = hasPreview
             }
+        }
+    }
+
+    /// キャッシュに置いた元のファイルから、メディアの情報に出す詳しい値を読む。
+    private func readFileDetails() {
+        detailsTask?.cancel()
+        fileDetails = nil
+        guard let url = originalURL else { return }
+        detailsTask = Task { [weak self, store] in
+            guard let file = await store.originalFile(for: url) else { return }
+            let details = await MediaFileDetails.image(at: file)
+            guard let self, !Task.isCancelled else { return }
+            self.fileDetails = details
         }
     }
 
@@ -1902,6 +1940,13 @@ final class PlayerPageController: MediaPageController {
                   let transform = try? await track.load(.preferredTransform)
             else { return }
             self?.frameOrientation = Self.orientation(of: transform)
+        }
+        // メディアの情報に出す、コーデックなどの詳しい値。再生と同じく、ストリーミングで読む。
+        if let asset = playerItem.asset as? AVURLAsset {
+            Task { [weak self] in
+                let details = await MediaFileDetails.movie(asset)
+                self?.fileDetails = details
+            }
         }
     }
 

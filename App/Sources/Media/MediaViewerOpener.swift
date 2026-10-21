@@ -17,13 +17,15 @@ struct MediaViewerOpener {
     ///   - presenter: ビューアを重ねる画面。手前に重ねている画面（アプリ内のSafariのシートなど）があれば、その上に重ねる。
     ///   - sourceTile: 開閉の起点にするビューを返す。見つからなければnilを返し、画像を動かさずに薄くして開閉する。
     ///   - onDismiss: 同じウィンドウで開いたビューアを閉じ終えたときに呼ぶ。Macの別のウィンドウでは呼ばない。
+    ///   - openURL: メニューの開く項目で、ファイルのURLを開く。ビューアを閉じ終えてから呼ぶ。Macの別のウィンドウでは使わず、開く項目を出さない。
     func open(
         _ attachments: [MediaAttachment],
         at index: Int,
         subject: OperationStatus.Subject?,
         from presenter: UIViewController,
         sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?,
-        onDismiss: @escaping @MainActor () -> Void = {}
+        onDismiss: @escaping @MainActor () -> Void = {},
+        openURL: (@MainActor (URL, LinkBrowser) -> Void)? = nil
     ) {
         UserAction.openViewer(count: attachments.count, index: index).record()
         SciaLog.logger(category: "media").info("open viewer count=\(attachments.count, privacy: .public) index=\(index, privacy: .public)")
@@ -53,7 +55,8 @@ struct MediaViewerOpener {
             transfers: transfers,
             subject: subject,
             sourceTile: sourceTile,
-            onDismiss: onDismiss
+            onDismiss: onDismiss,
+            openURL: openURL
         )
     }
 }

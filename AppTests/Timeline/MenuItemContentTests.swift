@@ -18,6 +18,7 @@ struct MenuItemContentTests {
         #expect(mismatches(UserMenuItem.self).isEmpty)
         #expect(mismatches(LinkMenuItem.self).isEmpty)
         #expect(mismatches(HashtagMenuItem.self).isEmpty)
+        #expect(mismatches(MediaMenuItem.self).isEmpty)
     }
 
     /// リンクとハッシュタグのメニューは、独自の項目を組む処理を持たない。独自の項目を足すと、メニューに出ないまま気づけないため、すべて共通の項目にする。

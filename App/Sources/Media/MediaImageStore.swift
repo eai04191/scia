@@ -112,6 +112,11 @@ final class MediaImageStore {
         }
     }
 
+    /// キャッシュに置いた元のファイルの場所。置いていなければnil。メディアの情報で、ファイルの中身を読むのに使う。
+    func originalFile(for url: URL) async -> URL? {
+        await files.file(for: url)
+    }
+
     /// 元のファイルをキャッシュに置いてあるか。`keepsOriginal`を付けて読み込み終えるまでと、整理で消えたあとはfalse。
     func hasOriginal(for url: URL) async -> Bool {
         await files.contains(url)

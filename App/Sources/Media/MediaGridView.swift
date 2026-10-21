@@ -216,6 +216,8 @@ final class MediaTileView: UIButton, MediaViewerSource {
     private let moreLabel = UILabel()
     private var loadTask: Task<Void, Never>?
     private var attachment: MediaAttachment?
+    /// 長押しのメディアのメニュー。サムネイルはボタンで、一覧の行の長押しのメニューが届かないため、自分で受ける。
+    private var menuInteraction: MediaMenuInteraction?
     private var isCovered = false
     private var policy: MediaThumbnailPolicy?
     /// いま描いている画像の出どころ。同じなら描き直さない。
@@ -261,6 +263,13 @@ final class MediaTileView: UIButton, MediaViewerSource {
             self.setNeedsLayout()
         }
         followDynamicRanges()
+        menuInteraction = MediaMenuInteraction(on: self, wholeImage: { [weak self] in self?.loadedThumbnail }, open: { [weak self] in
+            self?.sendActions(for: .primaryActionTriggered)
+        }, sharperImage: { [weak self] maxPixelSize in
+            // 動画とGIFのサムネイルはコマの画像で、元のファイルは画像として読めないため、読み直さない。
+            guard let self, let attachment = self.menuAttachment, attachment.type == .image, let url = attachment.url ?? attachment.remoteUrl else { return nil }
+            return try? await self.store.image(for: url, maxPixelSize: maxPixelSize)
+        }, offersMenu: { [weak self] _ in self?.menuAttachment != nil })
     }
 
     /// HDRの札を出す明るさの組み合わせかを、設定から決め続ける。選び直すと、出ている札にもすぐ効かせる。
@@ -389,6 +398,11 @@ final class MediaTileView: UIButton, MediaViewerSource {
     /// 閲覧注意で覆っている間は画像を読まず、blurhashのぼかしだけを描く。覆いを外さない投稿で通信しないようにする。
     /// 覆っていなければ、読み込むまでblurhashを下地にし、届いたら差し替える。
     /// どの画像を読むかは枠の大きさで決まるため、大きさが決まる`layoutSubviews`で選ぶ。
+    /// 長押しでメディアのメニューを出す添付ファイル。覆っている間と、何も出していないときはnil。
+    var menuAttachment: MediaAttachment? {
+        isCovered || isHidden ? nil : attachment
+    }
+
     func apply(_ attachment: MediaAttachment?, hiddenCount: Int, isCovered: Bool, policy: MediaThumbnailPolicy) {
         self.attachment = attachment
         self.isCovered = isCovered
