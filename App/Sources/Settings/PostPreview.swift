@@ -4,7 +4,6 @@ import UIKit
 
 /// 設定画面に置く見本の投稿。一覧と同じビューで描き、表示の設定を変えるとその場で描き直す。
 struct PostPreview: UIViewRepresentable {
-    let account: Account
     /// 相対時刻の見本として、少し前の時刻にする。
     let createdAt: Date
     // 下の値は描き直しのきっかけに使う。見た目は、ビルダーがAppSettingsとチューニングから直接読む。
@@ -19,6 +18,8 @@ struct PostPreview: UIViewRepresentable {
     var showsReactions = false
     var drawsReactionGlowInHDR = true
     let builder: PostContentBuilder
+    /// リンクカードの見本の灰色を、外観に合わせて選ぶ。
+    @Environment(\.colorScheme) private var colorScheme
 
     private var status: Status {
         if showsReactions {
@@ -37,17 +38,35 @@ struct PostPreview: UIViewRepresentable {
             id: "preview",
             createdAt: createdAt,
             account: account,
-            content: #"<p>設定を変えると、タイムラインの投稿がこのように表示されます🎉 <a href="https://joinmastodon.org/">joinmastodon.org</a></p>"#,
+            content: #"<p>設定を変えると、タイムラインの投稿がこのように表示されます🎉 <a href="https://github.com/eai04191/scia">github.com/eai04191/scia</a></p>"#,
             spoilerText: "",
             url: nil,
             card: previewCard
         )
     }
 
-    /// リンクカードの見本。画像は、通信を増やさないよう、読み込み済みのアカウントのアイコンを使う。
+    /// 見本の投稿を書いたアカウント。ログイン中のアカウントを読まずにすぐ出せるよう、アプリのアイコンを使うSciaのアカウントにする。
+    private static let account = Account(
+        id: "preview-scia",
+        username: "scia",
+        acct: "scia",
+        displayName: "Scia",
+        avatar: PreviewImages.avatarURL()
+    )
+
+    private var account: Account { Self.account }
+
+    /// リンクカードの見本。Sciaのリポジトリを指し、画像は、通信しないよう、灰色の地にアプリのアイコンを置いた画像を使う。
     private var previewCard: PreviewCard? {
-        URL(string: "https://joinmastodon.org/").map {
-            PreviewCard(url: $0, title: "リンクカードの見本", description: "画像の位置を選べます。", type: .link, providerName: "joinmastodon.org", image: account.avatarStatic)
+        URL(string: "https://github.com/eai04191/scia").map {
+            PreviewCard(
+                url: $0,
+                title: "eai04191/scia",
+                description: "ストリーミングAPIに対応した、手触りの良いiOS向けMastodonクライアント",
+                type: .link,
+                providerName: "GitHub",
+                image: PreviewImages.cardURL(for: colorScheme == .dark ? .dark : .light)
+            )
         }
     }
 

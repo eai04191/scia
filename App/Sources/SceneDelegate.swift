@@ -189,7 +189,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let settings = UIAction(title: "設定", image: UIImage(systemName: "gearshape")) { [weak self] _ in
             guard let session = self?.session else { return }
             self?.window?.rootViewController?.frontmostPresented.presentSettings(
-                loadPreviewAccount: { try await session.myAccount() },
                 instance: session.credential.instance,
                 diagnostics: session.diagnostics
             )

@@ -1222,10 +1222,6 @@ final class SessionController {
         case .settings:
             // 直前のresetで閉じている途中の画面には重ねられないため、閉じる途中の画面を飛ばして重ねる。
             rootViewController.frontmostPresented.presentSettings(
-                loadPreviewAccount: { [weak self] in
-                    guard let self else { throw CancellationError() }
-                    return try await self.myAccount()
-                },
                 instance: credential.instance,
                 diagnostics: diagnostics
             )

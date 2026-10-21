@@ -5,14 +5,10 @@ import UIKit
 /// 使う人が選ぶ設定の画面。
 struct SettingsView: View {
     @Bindable var settings: AppSettings
-    /// 見本の投稿に使う、ログイン中のアカウントを読む。
-    let loadPreviewAccount: () async throws -> Account
     /// ログイン中のアカウントのサーバー。
     let instance: URL
     let diagnostics: ConnectionDiagnostics
     @Environment(\.dismiss) private var dismiss
-    @State private var previewAccount: Account?
-    @State private var previewError: String?
     @State private var previewDate = Date.now.addingTimeInterval(-180)
     @State private var copiedBuildInfo = false
     @State private var appIconError: String?
@@ -37,34 +33,25 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    if let previewAccount {
-                        PostPreview(
-                            account: previewAccount,
-                            createdAt: previewDate,
-                            nameStyle: settings.statusNameStyle,
-                            timeStyle: settings.statusTimeStyle,
-                            avatarShape: settings.avatarShape,
-                            animatesAvatars: settings.animatesAvatars,
-                            linkCardThumbnailSide: settings.linkCardThumbnailSide,
-                            glyphLanguage: settings.glyphLanguage,
-                            emojiStyle: settings.emojiStyle,
-                            builder: PostContentBuilder(
-                                tuning: AppDependencies.tuning,
-                                settings: settings,
-                                emojiImages: AppDependencies.emojiImages,
-                                mediaImages: AppDependencies.mediaImages,
-                                avatarImages: AppDependencies.avatarImages
-                            )
+                    PostPreview(
+                        createdAt: previewDate,
+                        nameStyle: settings.statusNameStyle,
+                        timeStyle: settings.statusTimeStyle,
+                        avatarShape: settings.avatarShape,
+                        animatesAvatars: settings.animatesAvatars,
+                        linkCardThumbnailSide: settings.linkCardThumbnailSide,
+                        glyphLanguage: settings.glyphLanguage,
+                        emojiStyle: settings.emojiStyle,
+                        builder: PostContentBuilder(
+                            tuning: AppDependencies.tuning,
+                            settings: settings,
+                            emojiImages: AppDependencies.emojiImages,
+                            mediaImages: AppDependencies.mediaImages,
+                            avatarImages: AppDependencies.avatarImages
                         )
-                        // 余白は投稿のセルと同じものを、見本の中で取る。
-                        .listRowInsets(EdgeInsets())
-                    } else if let previewError {
-                        Text("見本の投稿を読み込めませんでした。\(previewError)")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ProgressView()
-                            .frame(maxWidth: .infinity)
-                    }
+                    )
+                    // 余白は投稿のセルと同じものを、見本の中で取る。
+                    .listRowInsets(EdgeInsets())
                 } header: {
                     Text("プレビュー")
                 }
@@ -105,31 +92,28 @@ struct SettingsView: View {
                     Text("相対時刻では、1週間より前の投稿は日付で表示します。\n漢字の字形は、言語の付いていない投稿や名前で使います。投稿に日本語・中国語・韓国語の言語が付いていれば、その言語の字形で表示します。「自動」では、iPhoneの言語の一覧で最初の日本語・中国語・韓国語に従い、どれもなければ日本語にします。")
                 }
                 Section {
-                    if let previewAccount {
-                        PostPreview(
-                            account: previewAccount,
-                            createdAt: previewDate,
-                            nameStyle: settings.statusNameStyle,
-                            timeStyle: settings.statusTimeStyle,
-                            avatarShape: settings.avatarShape,
-                            animatesAvatars: settings.animatesAvatars,
-                            linkCardThumbnailSide: settings.linkCardThumbnailSide,
-                            glyphLanguage: settings.glyphLanguage,
-                            emojiStyle: settings.emojiStyle,
-                            showsReactions: true,
-                            drawsReactionGlowInHDR: settings.drawsReactionGlowInHDR,
-                            builder: PostContentBuilder(
-                                tuning: AppDependencies.tuning,
-                                settings: settings,
-                                emojiImages: AppDependencies.emojiImages,
-                                mediaImages: AppDependencies.mediaImages,
-                                avatarImages: AppDependencies.avatarImages
-                            )
+                    PostPreview(
+                        createdAt: previewDate,
+                        nameStyle: settings.statusNameStyle,
+                        timeStyle: settings.statusTimeStyle,
+                        avatarShape: settings.avatarShape,
+                        animatesAvatars: settings.animatesAvatars,
+                        linkCardThumbnailSide: settings.linkCardThumbnailSide,
+                        glyphLanguage: settings.glyphLanguage,
+                        emojiStyle: settings.emojiStyle,
+                        showsReactions: true,
+                        drawsReactionGlowInHDR: settings.drawsReactionGlowInHDR,
+                        builder: PostContentBuilder(
+                            tuning: AppDependencies.tuning,
+                            settings: settings,
+                            emojiImages: AppDependencies.emojiImages,
+                            mediaImages: AppDependencies.mediaImages,
+                            avatarImages: AppDependencies.avatarImages
                         )
-                        .listRowInsets(EdgeInsets())
-                        // タイムラインと同じく、光の下の端を区切りにする。区切り線が光に重なると、光が灰色に濁って見えるため。
-                        .listRowSeparator(.hidden, edges: .bottom)
-                    }
+                    )
+                    .listRowInsets(EdgeInsets())
+                    // タイムラインと同じく、光の下の端を区切りにする。区切り線が光に重なると、光が灰色に濁って見えるため。
+                    .listRowSeparator(.hidden, edges: .bottom)
                     Toggle("HDRで光らせる", isOn: $settings.drawsReactionGlowInHDR)
                 } header: {
                     Text("お気に入りとブーストの光")
@@ -293,13 +277,6 @@ struct SettingsView: View {
                 }
             }
             .topEdgeEffectHiddenOnMac()
-            .task {
-                do {
-                    previewAccount = try await loadPreviewAccount()
-                } catch {
-                    previewError = ErrorPresentation(error).text
-                }
-            }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -357,11 +334,10 @@ private struct AppIconChoiceRow: View {
 
 extension UIViewController {
     /// - Parameters:
-    ///   - loadPreviewAccount: 見本の投稿に使う、ログイン中のアカウントを読む。
     ///   - instance: ログイン中のアカウントのサーバー。
     ///   - diagnostics: 「接続の状態」画面に出す、ログイン中のアカウントの接続の状態。
-    func presentSettings(loadPreviewAccount: @escaping () async throws -> Account, instance: URL, diagnostics: ConnectionDiagnostics) {
-        let view = SettingsView(settings: AppDependencies.settings, loadPreviewAccount: loadPreviewAccount, instance: instance, diagnostics: diagnostics)
+    func presentSettings(instance: URL, diagnostics: ConnectionDiagnostics) {
+        let view = SettingsView(settings: AppDependencies.settings, instance: instance, diagnostics: diagnostics)
         present(UIHostingController(rootView: view), animated: true)
     }
 }
