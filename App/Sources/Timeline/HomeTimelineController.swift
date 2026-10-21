@@ -588,6 +588,8 @@ extension HomeTimelineController {
             streamDummyXPost()
         case .filtered:
             streamDummyFiltered()
+        case .animatedEmojis:
+            streamDummyAnimatedEmojis()
         case .notifications:
             onDummyNotifications?()
         }
@@ -727,6 +729,31 @@ extension HomeTimelineController {
         }
     }
 
+    /// 動くカスタム絵文字の多いダミーの投稿を、新着と同じ経路で流す。動く絵文字を描く負荷を、実機でも同じ条件で比べるため。
+    private func streamDummyAnimatedEmojis() {
+        let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
+        let statuses = (0..<DummyAnimatedEmojis.postCount).map { number in
+            let base = Self.dummyStatus(number: number + 1, avatar: avatar)
+            let content = DummyAnimatedEmojis.content(number: number)
+            return Status(
+                id: base.id,
+                createdAt: base.createdAt,
+                account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー（動く絵文字）", avatar: avatar),
+                content: content.html,
+                spoilerText: "",
+                url: nil,
+                emojis: content.emojis
+            )
+        }
+        run { controller in
+            for status in statuses {
+                guard !controller.isStopped else { return }
+                controller.store.debugLocalOnlyIDs.insert(status.id)
+                controller.receive(.update(status))
+            }
+        }
+    }
+
     /// ビューアを確かめるための、画像付きのダミーの投稿を、新着と同じ経路で1件流す。
     /// 画像は端末で描くため、通信せず、実際の投稿を探さずに確かめられる。
     /// - Parameter attachments: 投稿のIDを受け取り、添付ファイルを返す。
@@ -817,6 +844,7 @@ enum DebugDummyPost: String, CaseIterable {
     case linkCardSensitive = "link-card-sensitive"
     case xPost = "x-post"
     case filtered
+    case animatedEmojis = "animated-emojis"
     case notifications
 
     var title: String {
@@ -832,6 +860,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .linkCardSensitive: "後から届くリンクカード（閲覧注意）"
         case .xPost: "後から届くXの投稿（画像4枚）"
         case .filtered: "フィルターに一致した投稿（警告、ぼかし、隠す）"
+        case .animatedEmojis: "動く絵文字の多い投稿（40件）"
         case .notifications: "ステータスバーに流す通知（連続）"
         }
     }
@@ -847,6 +876,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .linkCard, .linkCardImage, .linkCardSensitive: "link"
         case .xPost: "quote.bubble"
         case .filtered: "line.3.horizontal.decrease.circle"
+        case .animatedEmojis: "face.smiling"
         case .notifications: "bell.badge"
         }
     }
