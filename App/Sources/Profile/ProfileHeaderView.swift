@@ -14,6 +14,8 @@ final class ProfileHeaderView: UIView {
         let postsFilter: ProfilePostsFilter
         let avatarShape: AvatarShape
         let animatesAvatar: Bool
+        /// 名前、自己紹介、補足情報のアニメーションするカスタム絵文字を動かす。
+        let animatesCustomEmojis: Bool
         /// 名前や自己紹介に付ける言語。言語が分からないため、設定から決める。
         let glyphLanguage: String
         /// 自分のサーバーのアカウントではない。投稿や数が実際と合わないことを知らせる。
@@ -126,7 +128,7 @@ final class ProfileHeaderView: UIView {
     /// 再試行のボタンには下地がなく、枠の下端で揃えると、見えている文字は枠の上下の余白の分だけ上に浮くため。
     /// 文言はどちらも日本語で、字はベースラインより下へはみ出さないので、ベースラインが見えている字の下端になる。
     private var relationshipFailureBaseline: NSLayoutConstraint?
-    private let nameLabel = UILabel()
+    private let nameLabel = EmojiLabel()
     private let acctLabel = UILabel()
     /// ヘッダー画像の右下に重ねる「フォローされています」。関係が届いてから出るため、縦に並ぶ情報の中に置くと、出たときに下が動く。
     /// ヘッダー画像の上なら場所を取らない。添付ファイルのALTの札と同じ見た目にする。
@@ -470,16 +472,19 @@ final class ProfileHeaderView: UIView {
 
         let title = UIFont.preferredFont(forTextStyle: .title2)
         let boldTitle = title.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? title
+        let animatedEmojis = content.animatesCustomEmojis ? emojiImages : nil
+        nameLabel.emojiImages = animatedEmojis
         nameLabel.attributedText = RichTextRenderer(font: boldTitle, textColor: .label, emojiImages: emojiImages, language: content.glyphLanguage)
             .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
         acctLabel.attributedText = acctText(of: account)
 
         let body = UIFont.preferredFont(forTextStyle: .body)
         let note = RichTextRenderer(font: body, textColor: .label, paragraphSpacing: 6, emojiImages: emojiImages, language: content.glyphLanguage).render(.html(account.note, emojis: account.emojis))
+        noteLabel.emojiImages = animatedEmojis
         noteLabel.attributedText = note
         noteLabel.accessibilityCustomActions = linkAccessibilityActions(in: note)
         noteLabel.isHidden = note.length == 0
-        applyFields(account, language: content.glyphLanguage)
+        applyFields(account, language: content.glyphLanguage, animatedEmojis: animatedEmojis)
         countsLabel.attributedText = Self.countsText(of: account)
         remoteStack.isHidden = !content.isRemote
         // サーバーがプロフィールのURLを返さなかったら、開く先がないのでボタンを出さない。
@@ -516,18 +521,21 @@ final class ProfileHeaderView: UIView {
         return text
     }
 
-    private func applyFields(_ account: Account, language: String) {
+    /// - Parameter animatedEmojis: アニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+    private func applyFields(_ account: Account, language: String, animatedEmojis: EmojiImageStore?) {
         fieldsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         fieldsStack.isHidden = account.fields.isEmpty
         let nameFont = UIFont.preferredFont(forTextStyle: .footnote)
         let valueFont = UIFont.preferredFont(forTextStyle: .subheadline)
         for field in account.fields {
-            let nameLabel = UILabel()
+            let nameLabel = EmojiLabel()
             nameLabel.numberOfLines = 0
+            nameLabel.emojiImages = animatedEmojis
             nameLabel.attributedText = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, emojiImages: emojiImages, language: language)
                 .render(.plain(field.name, emojis: account.emojis))
             let valueLabel = LinkLabel()
             valueLabel.numberOfLines = 0
+            valueLabel.emojiImages = animatedEmojis
             valueLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
             let value = NSMutableAttributedString(attributedString: RichTextRenderer(font: valueFont, textColor: .label, emojiImages: emojiImages, language: language)
                 .render(.html(field.value, emojis: account.emojis)))
