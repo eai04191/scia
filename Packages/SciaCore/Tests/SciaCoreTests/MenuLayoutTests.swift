@@ -231,6 +231,29 @@ struct MenuLayoutTests {
         #expect(restored.groups.main.map(\.items).first?.first == .share)
     }
 
+    /// メディアのメニューは、開く・共有・保存、読む、持ち出す、投稿の順にまとまりを分け、メディアの情報は「その他」に入れる。
+    @Test func mediaMenuDefaultGroupsItemsByPurpose() {
+        let groups = MediaMenuItem.defaultLayout.groups
+
+        #expect(groups.main.map(\.items) == [
+            [.open, .share, .saveToPhotos],
+            [.altText, .translateText],
+            [.copyLink, .openInBrowser],
+            [.status],
+        ])
+        #expect(groups.more.map(\.items) == [[.info]])
+    }
+
+    @Test func appSettingsPersistsMediaMenuLayout() throws {
+        let defaults = try makeDefaults()
+        #expect(AppSettings(defaults: defaults).mediaMenuLayout == MediaMenuItem.defaultLayout)
+
+        let media = MenuLayout<MediaMenuItem>(elements: [.item(.saveToPhotos, isVisible: true), .more, .item(.open, isVisible: false)])
+        AppSettings(defaults: defaults).mediaMenuLayout = media
+
+        #expect(AppSettings(defaults: defaults).mediaMenuLayout == media)
+    }
+
     @Test func appSettingsPersistsLinkAndHashtagMenuLayouts() throws {
         let defaults = try makeDefaults()
         #expect(AppSettings(defaults: defaults).linkMenuLayout == LinkMenuItem.defaultLayout)

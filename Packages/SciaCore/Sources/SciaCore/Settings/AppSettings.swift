@@ -99,6 +99,11 @@ public final class AppSettings {
         didSet { defaults.set(hashtagMenuLayout.tokens, forKey: Keys.hashtagMenuLayout) }
     }
 
+    /// メディアを長押ししたときと、ビューアのメニューの並び。
+    public var mediaMenuLayout: MenuLayout<MediaMenuItem> {
+        didSet { defaults.set(mediaMenuLayout.tokens, forKey: Keys.mediaMenuLayout) }
+    }
+
     /// 投稿欄の部品を足す項目の並び。どれをボタンの行に常に出し、どれを＋のメニューに入れるか。
     public var composeToolLayout: MenuLayout<ComposeToolItem> {
         didSet { defaults.set(composeToolLayout.tokens, forKey: Keys.composeToolLayout) }
@@ -156,6 +161,7 @@ public final class AppSettings {
         static let userMenuLayout = "settings.userMenuLayout"
         static let linkMenuLayout = "settings.linkMenuLayout"
         static let hashtagMenuLayout = "settings.hashtagMenuLayout"
+        static let mediaMenuLayout = "settings.mediaMenuLayout"
         static let composeToolLayout = "settings.composeToolLayout"
         static let hidesEmptyComposeBar = "settings.hidesEmptyComposeBar"
         static let imageUploadSize = "settings.imageUploadSize"
@@ -184,6 +190,7 @@ public final class AppSettings {
         userMenuLayout = defaults.stringArray(forKey: Keys.userMenuLayout).map(MenuLayout.init(tokens:)) ?? UserMenuItem.defaultLayout
         linkMenuLayout = defaults.stringArray(forKey: Keys.linkMenuLayout).map(MenuLayout.init(tokens:)) ?? LinkMenuItem.defaultLayout
         hashtagMenuLayout = defaults.stringArray(forKey: Keys.hashtagMenuLayout).map(MenuLayout.init(tokens:)) ?? HashtagMenuItem.defaultLayout
+        mediaMenuLayout = defaults.stringArray(forKey: Keys.mediaMenuLayout).map(MenuLayout.init(tokens:)) ?? MediaMenuItem.defaultLayout
         composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout
         hidesEmptyComposeBar = defaults.object(forKey: Keys.hidesEmptyComposeBar) as? Bool ?? false
         // iPhoneの標準の写真（4032×3024）と動画（1080p）はそのまま送られ、それより大きな写真と4Kの動画だけが縮む。

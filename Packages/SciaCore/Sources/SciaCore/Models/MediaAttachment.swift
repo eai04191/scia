@@ -124,14 +124,33 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
         }
     }
 
-    /// 音声には幅と高さがない。
+    /// 音声には幅と高さがない。フレームレート、長さ、ビットレートは、動画、GIF、音声の`original`にだけ付く。
     public struct Size: Codable, Hashable, Sendable {
         public let width: Int?
         public let height: Int?
+        /// `"6159375/249269"`のような分数か、整数の文字列。
+        public let frameRate: String?
+        /// 秒数。
+        public let duration: Double?
+        /// ビット毎秒。
+        public let bitrate: Int?
 
-        public init(width: Int?, height: Int?) {
+        public init(width: Int?, height: Int?, frameRate: String? = nil, duration: Double? = nil, bitrate: Int? = nil) {
             self.width = width
             self.height = height
+            self.frameRate = frameRate
+            self.duration = duration
+            self.bitrate = bitrate
+        }
+
+        /// フレームレート、長さ、ビットレートは、メディアのメニューで情報として見せるだけなので、型が違っていても添付ファイルごと読めなくせず、nilにする。
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            width = try container.decodeIfPresent(Int.self, forKey: .width)
+            height = try container.decodeIfPresent(Int.self, forKey: .height)
+            frameRate = try? container.decodeIfPresent(String.self, forKey: .frameRate)
+            duration = try? container.decodeIfPresent(Double.self, forKey: .duration)
+            bitrate = try? container.decodeIfPresent(Int.self, forKey: .bitrate)
         }
     }
 }

@@ -293,3 +293,52 @@ public enum HashtagMenuItem: String, MenuItemKind {
         .more,
     ])
 }
+
+/// 一覧のサムネイル、リンクカードの画像、プロフィールの画像を長押ししたときと、ビューアのメニューの項目。決まりはdocs/menus.mdの「メディアのメニュー」にある。
+public enum MediaMenuItem: String, MenuItemKind {
+    /// ビューアで開く。ビューアでは出ない。
+    case open
+    /// ファイルを共有する。
+    case share
+    /// 写真に保存する。写真に入る画像、動画、GIFでだけ出る。
+    case saveToPhotos
+    /// 代替テキストの全文を見せる。代替テキストが付いているときだけ出る。
+    case altText
+    /// 画像から読み取った文字を、システムの翻訳シートで訳す。ビューアで文字を読み取れたときだけ出る。
+    case translateText
+    /// ファイルのURLをコピーする。
+    case copyLink
+    /// 開く場所の設定に従って、ファイルのURLを開く。
+    case openInBrowser
+    /// 開く場所の設定にかかわらず、既定のブラウザで開く。
+    case openInDefaultBrowser
+    /// 開く場所の設定にかかわらず、アプリ内のSafariで開く。
+    case openInAppSafari
+    /// メディアの投稿の、投稿のメニュー。ビューアとプロフィールの画像では出ない。
+    case status
+    /// 解像度や形式などを並べるサブメニュー。
+    case info
+
+    /// - 開く・共有・写真に保存
+    /// - 読む: 代替テキスト、画像の文字を翻訳
+    /// - 持ち出す: リンクのコピー、ブラウザで開く。開く場所を選んで開く2つは、ほかのメニューと同じく隠す
+    /// - 投稿
+    /// - 「その他」: メディアの情報
+    public static let defaultLayout = MenuLayout<MediaMenuItem>(defaultElements: [
+        .item(.open, isVisible: true),
+        .item(.share, isVisible: true),
+        .item(.saveToPhotos, isVisible: true),
+        .separator,
+        .item(.altText, isVisible: true),
+        .item(.translateText, isVisible: true),
+        .separator,
+        .item(.copyLink, isVisible: true),
+        .item(.openInBrowser, isVisible: true),
+        .item(.openInDefaultBrowser, isVisible: false),
+        .item(.openInAppSafari, isVisible: false),
+        .separator,
+        .item(.status, isVisible: true),
+        .more,
+        .item(.info, isVisible: true),
+    ])
+}
