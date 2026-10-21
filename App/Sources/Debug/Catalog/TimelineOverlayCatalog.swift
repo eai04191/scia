@@ -16,12 +16,16 @@ enum TimelineOverlayCatalog {
             state("新着がある") { timeline, _ in timeline.setUnreadCount(12) },
             state("新着が読み込んだ分より多い") { timeline, _ in timeline.setUnreadCount(40, isLowerBound: true) },
             state("ログインし直しを促す") { _, column in column.setReauthentication(NoticeCatalog.reauthentication(handle), animated: false) },
-            state("ログインし直しを促す（新着のボタンの下）") { timeline, column in
+            state("ログインし直しを促す（新着のボタンに重ねる）") { timeline, column in
                 timeline.setUnreadCount(12)
                 column.setReauthentication(NoticeCatalog.reauthentication(handle), animated: false)
             },
+            state("リンクをコピーしましたを新着のボタンと並べる") { timeline, column in
+                timeline.setUnreadCount(12)
+                column.stack.showTransient(.linkCopied, duration: 3600)
+            },
             state("お気に入りの失敗（押すと理由）") { _, column in showFailure("お気に入りを変更できませんでした", on: column) },
-            state("ブーストの失敗を新着のボタンの下に出す") { timeline, column in
+            state("ブーストの失敗を新着のボタンに重ねる") { timeline, column in
                 timeline.setUnreadCount(12)
                 showFailure("ブーストを変更できませんでした", on: column)
             },
