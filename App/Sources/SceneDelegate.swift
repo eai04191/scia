@@ -103,16 +103,24 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     #endif
 
     #if DEBUG
-    /// ログインせずに、ダミーのデータでホームと通知の画面に入る。Keychainのアカウントとは結び付けない。
-    /// ログイン済みのときは入らない。表示だけダミーになると、アカウントのメニューの切り替えやログアウトが、保存してあるアカウントに効いてしまうため。
+    /// ダミーのセッションを選んでいるか。選んでいるアカウントと同じく、シーンをまたいで1つ。
+    /// Keychainにも`AccountRegistry`にも入れないので、起動し直すと保存してあるアカウントかログイン画面に戻る。
+    private static var showsDummySession = false
+
+    /// ダミーのデータでホームと通知の画面に入る。ログイン済みでも入れ、アカウントのメニューで本物のアカウントを選ぶと戻る。
     private func openDummySession() {
-        guard session == nil else {
-            logger.error("dummy session ignored: already logged in")
-            return
-        }
-        showTimeline(for: DummyServer.credential)
+        Self.showsDummySession = true
+        logger.info("dummy session selected")
+        Self.syncAllScenes()
     }
     #endif
+
+    /// 本物のアカウントを選んだり加えたりしたときに、ダミーのセッションから抜ける。
+    private static func leaveDummySession() {
+        #if DEBUG
+        showsDummySession = false
+        #endif
+    }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
         logger.info("scene didBecomeActive")
@@ -131,7 +139,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     /// Keychainに保存したアカウントのタイムラインを出す。なければログイン画面を出す。
+    /// ダミーを選んでいる間に開いたシーンは、ほかのシーンに揃えてダミーにする。
     private func showSavedAccount() {
+        #if DEBUG
+        if Self.showsDummySession {
+            showTimeline(for: DummyServer.credential)
+            return
+        }
+        #endif
         switch AppDependencies.accounts {
         case .success(let accounts):
             if let credential = accounts.current {
@@ -178,11 +193,20 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// アカウントの一覧、追加、ログアウトのメニュー。開くたびに今のアカウントで組み立て直す。
     private func makeAccountMenu() -> UIMenu {
         guard let accounts else { return UIMenu() }
+        #if DEBUG
+        let isDummy = Self.showsDummySession
+        let dummy = [UIAction(title: DummyServer.credential.handle, subtitle: "ダミーのデータ", state: isDummy ? .on : .off) { [weak self] _ in
+            self?.openDummySession()
+        }]
+        #else
+        let isDummy = false
+        let dummy: [UIAction] = []
+        #endif
         let switching = accounts.accounts.map { account in
-            UIAction(title: account.handle, state: account.id == accounts.current?.id ? .on : .off) { [weak self] _ in
+            UIAction(title: account.handle, state: !isDummy && account.id == accounts.current?.id ? .on : .off) { [weak self] _ in
                 self?.switchAccount(to: account.id)
             }
-        }
+        } + dummy
         let add = UIAction(title: "アカウントを追加", image: UIImage(systemName: "person.badge.plus")) { [weak self] _ in
             self?.presentAddAccount()
         }
@@ -196,16 +220,19 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let logOut = UIAction(title: "ログアウト", image: UIImage(systemName: "rectangle.portrait.and.arrow.right"), attributes: .destructive) { [weak self] _ in
             self?.confirmLogOut()
         }
+        // ダミーを選んでいる間は、ログアウトを出さない。ダミーではなく、裏で選んだままの本物のアカウントが消えるため。
         return UIMenu(children: [
             UIMenu(options: .displayInline, children: switching),
             add,
             UIMenu(options: .displayInline, children: [settings]),
-            UIMenu(options: .displayInline, children: [logOut]),
+            UIMenu(options: .displayInline, children: isDummy ? [] : [logOut]),
         ])
     }
 
+    /// ダミーを選んでいる間は、裏で選んだままのアカウントを選んでも、ダミーから抜けてそのアカウントに戻る。
     private func switchAccount(to id: Credential.ID) {
-        guard let accounts, accounts.current?.id != id else { return }
+        guard let accounts else { return }
+        Self.leaveDummySession()
         accounts.select(id)
         logger.info("account switched")
         Self.syncAllScenes()
@@ -222,6 +249,13 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// 選んでいるアカウントの画面にする。すでにそのアカウントの画面なら何もしない。アカウントがなければログイン画面にする。
     /// ログインし直してトークンが変わったときは、同じアカウントでも作り直す。
     private func showCurrentAccount() {
+        #if DEBUG
+        if Self.showsDummySession {
+            guard session?.credential != DummyServer.credential else { return }
+            showTimeline(for: DummyServer.credential)
+            return
+        }
+        #endif
         guard let current = accounts?.current else {
             // すでにログイン画面なら作り直さない。出しているエラーの文言を消さないため。
             guard session != nil else { return }
@@ -275,6 +309,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let model = LoginModel(accountDomains: accountDomains) { [weak self] credential in
             guard !attempt.isCancelled else { return }
             try self?.accounts?.add(credential)
+            Self.leaveDummySession()
             sheet?.dismiss(animated: true)
             Self.syncAllScenes()
         }
@@ -334,6 +369,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                 throw AccountsUnavailable()
             }
             try accounts.add(credential)
+            Self.leaveDummySession()
             Self.syncAllScenes()
         }
         #if DEBUG

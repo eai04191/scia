@@ -19,7 +19,7 @@ enum DebugURL: Equatable {
     case scenario(String)
     /// `scia-debug://unauthorized`。以後のREST APIに401を返させ、トークンが無効になった状態にする。
     case unauthorized
-    /// `scia-debug://dummy-session`で、ログインせずに、通信しないダミーのデータでホームと通知の画面に入る（`DummyServer`）。ログイン画面でも受け付ける。
+    /// `scia-debug://dummy-session`で、通信しないダミーのデータでホームと通知の画面に入る（`DummyServer`）。ログイン画面でも、ログイン済みでも受け付ける。
     case dummySession
     /// `scia-debug://unreadable`。以後のホームと通知の応答の一部を読めない形に壊し、読み込み直す。
     case unreadable
