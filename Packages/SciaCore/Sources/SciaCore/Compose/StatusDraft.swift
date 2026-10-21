@@ -102,29 +102,14 @@ public enum StatusLength {
         spoilerText.count + countable(text, charactersReservedPerURL: charactersReservedPerURL).count
     }
 
-    // パターンは固定の文字列で、組み立てに失敗するのは書き間違えたときだけなので、起動時に止める。
-    private static let urlPattern = regex(#"https?://[^\s<>"]+"#)
     /// MastodonのAccount::MENTION_REと同じ形。
     private static let mentionPattern = regex(#"(?<![=/\w])@([a-z0-9_]+(?:[a-z0-9_.-]+[a-z0-9_]+)?)(?:@[\w.-]+\w+)?"#, options: [.caseInsensitive])
-
-    private static func regex(_ pattern: String, options: NSRegularExpression.Options = []) -> NSRegularExpression {
-        do {
-            return try NSRegularExpression(pattern: pattern, options: options)
-        } catch {
-            preconditionFailure("正規表現が不正です: \(pattern)")
-        }
-    }
 
     private static func countable(_ text: String, charactersReservedPerURL: Int) -> String {
         let placeholder = String(repeating: "x", count: charactersReservedPerURL)
         var result = text
-        for match in urlPattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
-            guard let range = Range(match.range, in: result) else { continue }
-            let url = result[range]
-            // 文末の句読点はURLに含めない。
-            let trailing = url.reversed().prefix { ".,:;!?".contains($0) }.count
-            let urlEnd = result.index(range.upperBound, offsetBy: -trailing)
-            result.replaceSubrange(range.lowerBound..<urlEnd, with: placeholder)
+        for range in StatusURLs.ranges(in: text).reversed() {
+            result.replaceSubrange(range, with: placeholder)
         }
         let mentions = mentionPattern.matches(in: result, range: NSRange(result.startIndex..., in: result))
         for match in mentions.reversed() {
@@ -132,5 +117,28 @@ public enum StatusLength {
             result.replaceSubrange(range, with: "@" + result[username])
         }
         return result
+    }
+}
+
+/// 本文の中のURL。サーバーはtwitter-textでURLを抜き出すが、`StatusLength`と同じ理由で正規表現で近似する。
+public enum StatusURLs {
+    private static let pattern = regex(#"https?://[^\s<>"]+"#)
+
+    /// 本文に出てくる順の、URLの範囲。文末の句読点はURLに含めない。
+    public static func ranges(in text: String) -> [Range<String.Index>] {
+        pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+            guard let range = Range(match.range, in: text) else { return nil }
+            let trailing = text[range].reversed().prefix { ".,:;!?".contains($0) }.count
+            return range.lowerBound..<text.index(range.upperBound, offsetBy: -trailing)
+        }
+    }
+}
+
+// パターンは固定の文字列で、組み立てに失敗するのは書き間違えたときだけなので、起動時に止める。
+private func regex(_ pattern: String, options: NSRegularExpression.Options = []) -> NSRegularExpression {
+    do {
+        return try NSRegularExpression(pattern: pattern, options: options)
+    } catch {
+        preconditionFailure("正規表現が不正です: \(pattern)")
     }
 }
