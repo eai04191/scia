@@ -142,15 +142,21 @@ final class SessionController {
             UITab(title: "ホーム", image: UIImage(systemName: "house"), identifier: "home") { _ in homeNavigation },
             notificationsTab,
         ])
-        tabBarDelegate = TabReselectionDelegate { navigation in
+        let scrollToTop = { (navigation: UINavigationController) -> Void in
             (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
-        } didSelect: { tabBarController in
+        }
+        tabBarDelegate = TabReselectionDelegate(scrollToTop: scrollToTop) { tabBarController in
             // タブの切り替えには画面の移り変わりの動きがないため、チップだけを短く動かす。
             tabBarController.noticeOverlay?.follow(nil)
         }
         tabBarController.delegate = tabBarDelegate
         for navigation in [homeNavigation, notificationsNavigation] {
             navigation.delegate = navigationDelegate
+            // 奥の画面を開いているときは、その画面の上のバーなので、一覧は動かさない。
+            navigation.onEmptyBarClickOnMac = { [weak navigation] in
+                guard let navigation, navigation.viewControllers.count == 1 else { return }
+                scrollToTop(navigation)
+            }
         }
         // トークンの失効は、どのAPIで分かっても同じくログインし直しを促す。
         let reportIfUnauthorized = { (error: any Error) in
