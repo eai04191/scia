@@ -6,8 +6,9 @@ import UIKit
 /// TextKit 2の行の位置は、UILabelが描いた位置と一致することを確かめている。
 /// ラベルは文字の高さに合わせて置くため、UILabelが余った高さで文字を縦に中央へ寄せる分はずれとして扱わない。
 ///
-/// 行数を限ったラベルでは、最後の行の末尾をUILabelが「…」に置き換えることがあり、置き換えた絵文字の位置はTextKit 2の並びからは分からない。
-/// 動く層だけが「…」の上に残らないよう、最後の行の絵文字は動かさず、文字の中の静止画のまま描く。切られていないときも動かないが、試作では許す。
+/// 動かすのは、ラベルの中に収まっている絵文字だけにする。切られて見えない行にある絵文字と、行末で切られてはみ出す絵文字は、文字の中の静止画のまま描く。
+/// 「…」で切るラベルが実際に切られているときは、最後の行の絵文字も静止画にする。UILabelが末尾を「…」に置き換えた位置は、TextKit 2の並びからは分からず、
+/// 動く層だけが「…」の上に残るおそれがあるため。
 class EmojiLabel: UILabel {
     /// アニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら、絵文字は静止画のまま描く。
     var emojiImages: EmojiImageStore? {
@@ -29,6 +30,7 @@ class EmojiLabel: UILabel {
     override var attributedText: NSAttributedString? {
         didSet {
             layoutCache = nil
+            truncationCache = nil
             sourceText = attributedText
             hasCustomEmoji = attributedText.map(Self.containsCustomEmoji) ?? false
             showsReplacedText = false
@@ -40,6 +42,7 @@ class EmojiLabel: UILabel {
     override var text: String? {
         didSet {
             layoutCache = nil
+            truncationCache = nil
             sourceText = nil
             hasCustomEmoji = false
             showsReplacedText = false
@@ -51,12 +54,16 @@ class EmojiLabel: UILabel {
     override var numberOfLines: Int {
         didSet {
             layoutCache = nil
+            truncationCache = nil
+            setNeedsLayout()
         }
     }
 
     override var lineBreakMode: NSLineBreakMode {
         didSet {
             layoutCache = nil
+            truncationCache = nil
+            setNeedsLayout()
         }
     }
 
@@ -71,6 +78,8 @@ class EmojiLabel: UILabel {
     private var animatedEmojis: AnimatedEmojiOverlay?
     /// 並べ直した結果。リンクを探すたびや、並べ直すたびに作らないよう、文字列と幅が変わるまで使い回す。
     private var layoutCache: TextLayout?
+    /// 「…」で切られているかを、調べたときの幅とともに持つ。
+    private var truncationCache: (width: CGFloat, isTruncated: Bool)?
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -107,11 +116,7 @@ class EmojiLabel: UILabel {
             applyAnimatedEmojis()
             return
         }
-        let frames = animatedEmojis.entries.map { entry -> CGRect? in
-            guard let frame = attachmentFrame(at: entry.index, in: layout), frame.maxY <= bounds.maxY + 1 else { return nil }
-            return frame
-        }
-        animatedEmojis.layout(in: layer, frames: frames)
+        animatedEmojis.layout(in: layer, frames: animatedEmojis.entries.map { attachmentFrame(at: $0.index, in: layout) })
     }
 
     private static func containsCustomEmoji(_ text: NSAttributedString) -> Bool {
@@ -125,22 +130,73 @@ class EmojiLabel: UILabel {
         return found
     }
 
-    /// 動かさない絵文字の位置。行数を限ったラベルの、見える最後の行と、それより下にある絵文字。
+    /// 動かさない絵文字の位置。ラベルに収まらない絵文字と、「…」で切られているときの最後の行の絵文字。
     private func stillEmojiIndices(in layout: TextLayout) -> Set<Int> {
-        guard numberOfLines > 0, let sourceText, let lastLineMinY = lastVisibleLineMinY(in: layout) else { return [] }
+        guard let sourceText else { return [] }
+        let visible = bounds.insetBy(dx: -1, dy: -1)
+        let lastLineMinY = isTruncatedWithEllipsis() ? lastVisibleLineMinY(in: layout) : nil
         var indices: Set<Int> = []
         sourceText.enumerateAttribute(.customEmoji, in: NSRange(location: 0, length: sourceText.length)) { value, range, _ in
             guard value != nil else { return }
             for index in range.location..<NSMaxRange(range) {
-                guard let frame = attachmentFrame(at: index, in: layout) else {
-                    // 並べた範囲の外（切られて見えない行）にある。
+                guard let frame = attachmentFrame(at: index, in: layout), visible.contains(frame) else {
                     indices.insert(index)
                     continue
                 }
-                if frame.midY >= lastLineMinY { indices.insert(index) }
+                if let lastLineMinY, frame.midY >= lastLineMinY {
+                    indices.insert(index)
+                }
             }
         }
         return indices
+    }
+
+    /// 行数を限っていて、文字列がその行数に収まらず、末尾を「…」で切っているか。
+    private func isTruncatedWithEllipsis() -> Bool {
+        guard numberOfLines > 0, let sourceText, usesEllipsis(sourceText) else { return false }
+        if let truncationCache, truncationCache.width == bounds.width {
+            return truncationCache.isTruncated
+        }
+        let isTruncated = lineCount(of: sourceText) > numberOfLines
+        truncationCache = (bounds.width, isTruncated)
+        return isTruncated
+    }
+
+    /// ラベルか文字列の段落が、はみ出す分を「…」で切る。
+    private func usesEllipsis(_ text: NSAttributedString) -> Bool {
+        let truncating: [NSLineBreakMode] = [.byTruncatingTail, .byTruncatingHead, .byTruncatingMiddle]
+        if truncating.contains(lineBreakMode) { return true }
+        var found = false
+        text.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: text.length)) { value, _, stop in
+            if let style = value as? NSParagraphStyle, truncating.contains(style.lineBreakMode) {
+                found = true
+                stop.pointee = true
+            }
+        }
+        return found
+    }
+
+    /// 行数を限らずに、ラベルの幅で並べたときの行数。段落の「…」で切る設定は、行数を数えるために単語で折り返す設定に替える。
+    private func lineCount(of text: NSAttributedString) -> Int {
+        let wrapping = NSMutableAttributedString(attributedString: text)
+        wrapping.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: wrapping.length)) { value, range, _ in
+            guard let style = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle else { return }
+            style.lineBreakMode = .byWordWrapping
+            wrapping.addAttribute(.paragraphStyle, value: style, range: range)
+        }
+        let contentStorage = NSTextContentStorage()
+        let layoutManager = NSTextLayoutManager()
+        contentStorage.addTextLayoutManager(layoutManager)
+        let container = NSTextContainer(size: CGSize(width: bounds.width, height: 0))
+        container.lineFragmentPadding = 0
+        layoutManager.textContainer = container
+        contentStorage.attributedString = wrapping
+        var count = 0
+        layoutManager.enumerateTextLayoutFragments(from: layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
+            count += fragment.textLineFragments.count
+            return true
+        }
+        return count
     }
 
     /// `index`の文字に埋め込んだ画像を描く枠。ラベルの座標で返す。並べた範囲の外ならnil。

@@ -44,7 +44,9 @@ struct AnimatedEmojiTests {
     }
 
     /// 静止画とアニメーション版が届くまで待ってから、`text`を描いたラベル。
-    private func label(_ text: RichText, store: EmojiImageStore, numberOfLines: Int = 0, width: CGFloat = 300) async throws -> LinkLabel {
+    /// - Parameter lineBreakMode: はみ出す分の扱い。本物の本文や名前と同じく、文字列の段落に入れる。UILabelは文字列を入れたときに、
+    ///   段落の設定で自分の`lineBreakMode`を上書きするため、ラベルに入れても効かない。
+    private func label(_ text: RichText, store: EmojiImageStore, numberOfLines: Int = 0, lineBreakMode: NSLineBreakMode = .byWordWrapping, width: CGFloat = 300) async throws -> LinkLabel {
         let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja")
         let emojis = text.blocks.flatMap(\.inlines).compactMap { inline -> CustomEmoji? in
             if case .emoji(let emoji) = inline { emoji } else { nil }
@@ -64,7 +66,13 @@ struct AnimatedEmojiTests {
         let label = LinkLabel()
         label.numberOfLines = numberOfLines
         label.emojiImages = store
-        label.attributedText = renderer.render(text)
+        let rendered = NSMutableAttributedString(attributedString: renderer.render(text))
+        rendered.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: rendered.length)) { value, range, _ in
+            let style = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
+            style.lineBreakMode = lineBreakMode
+            rendered.addAttribute(.paragraphStyle, value: style, range: range)
+        }
+        label.attributedText = rendered
         let size = label.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
         label.frame = CGRect(origin: .zero, size: CGSize(width: width, height: size.height))
         label.layoutIfNeeded()
@@ -165,19 +173,40 @@ struct AnimatedEmojiTests {
         #expect(animatedLayers(of: label).isEmpty)
     }
 
-    /// 行数を限ったラベルの最後の行の絵文字は、UILabelが「…」に置き換えるかもしれないため動かさず、文字の中の静止画のまま描く。
-    /// 最後より前の行の絵文字は動かす。
+    /// 「…」で切られているラベルの最後の行の絵文字は、UILabelが「…」に置き換えるかもしれないため動かさず、文字の中の静止画のまま描く。
+    /// 最後より前の行の絵文字は動かし、切られて見えない行の絵文字には層を置かない。
     @Test func lastLineOfTruncatedLabelKeepsStillImage() async throws {
         let crab = try emoji("crab")
-        let text = RichText(blocks: [.init(inlines: [.text("上 ", []), .emoji(crab), .lineBreak, .text("下 ", []), .emoji(crab)])])
-        let label = try await label(text, store: store(), numberOfLines: 2)
+        let text = RichText(blocks: [.init(inlines: [.text("上 ", []), .emoji(crab), .lineBreak, .text("下 ", []), .emoji(crab), .lineBreak, .text("隠れる ", []), .emoji(crab)])])
+        let label = try await label(text, store: store(), numberOfLines: 2, lineBreakMode: .byTruncatingTail)
 
         let layers = animatedLayers(of: label)
         #expect(layers.count == 1)
         #expect(layers.first.map { $0.frame.midY < label.bounds.midY } == true, "上の行の絵文字だけを動かす")
         let string = label.attributedText?.string as NSString?
-        let last = string?.range(of: "\u{FFFC}", options: .backwards).location ?? NSNotFound
-        #expect(attachment(at: last, of: label)?.image?.size != CGSize(width: 1, height: 1), "最後の行の絵文字は静止画を残す")
+        let first = string?.range(of: "\u{FFFC}").location ?? NSNotFound
+        let second = string?.range(of: "\u{FFFC}", range: NSRange(location: first + 1, length: (string?.length ?? 0) - first - 1)).location ?? NSNotFound
+        #expect(attachment(at: second, of: label)?.image?.size != CGSize(width: 1, height: 1), "最後の行の絵文字は静止画を残す")
+    }
+
+    /// 「…」で切るラベルでも、切られていなければ、最後の行の絵文字も動かす。
+    @Test func lastLineOfUntruncatedLabelIsAnimated() async throws {
+        let crab = try emoji("crab")
+        let text = RichText(blocks: [.init(inlines: [.text("上 ", []), .emoji(crab), .lineBreak, .text("下 ", []), .emoji(crab)])])
+        let label = try await label(text, store: store(), numberOfLines: 2, lineBreakMode: .byTruncatingTail)
+
+        #expect(animatedLayers(of: label).count == 2)
+    }
+
+    /// 行末で切ってぼかすラベル（表示名）では、収まっている絵文字は動かし、行末ではみ出す絵文字は静止画のまま描く。
+    @Test func clippedEmojiAtLineEndKeepsStillImage() async throws {
+        let crab = try emoji("crab")
+        let text = RichText.plain("カニ :crab: とても長い名前がここに続いて行末からはみ出す :crab:", emojis: [crab])
+        let label = try await label(text, store: store(), numberOfLines: 1, lineBreakMode: .byClipping, width: 120)
+
+        let layers = animatedLayers(of: label)
+        #expect(layers.count == 1)
+        #expect(layers.allSatisfy { label.bounds.contains($0.frame) })
     }
 
     /// 置き場を渡していないラベルでは、絵文字は静止画のまま描く。
