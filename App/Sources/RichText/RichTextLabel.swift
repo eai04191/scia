@@ -6,16 +6,19 @@ import UIKit
 struct RichTextLabel: UIViewRepresentable {
     let numberOfLines: Int
     let emojiImages: EmojiImageStore
+    /// アニメーションするカスタム絵文字を動かすか。
+    let animatesEmojis: Bool
     let render: @MainActor () -> NSAttributedString
 
-    init(numberOfLines: Int = 0, emojiImages: EmojiImageStore = AppDependencies.emojiImages, render: @escaping @MainActor () -> NSAttributedString) {
+    init(numberOfLines: Int = 0, emojiImages: EmojiImageStore = AppDependencies.emojiImages, animatesEmojis: Bool = false, render: @escaping @MainActor () -> NSAttributedString) {
         self.numberOfLines = numberOfLines
         self.emojiImages = emojiImages
+        self.animatesEmojis = animatesEmojis
         self.render = render
     }
 
-    func makeUIView(context: Context) -> UILabel {
-        let label = UILabel()
+    func makeUIView(context: Context) -> EmojiLabel {
+        let label = EmojiLabel()
         label.numberOfLines = numberOfLines
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -28,13 +31,14 @@ struct RichTextLabel: UIViewRepresentable {
         return label
     }
 
-    func updateUIView(_ label: UILabel, context: Context) {
+    func updateUIView(_ label: EmojiLabel, context: Context) {
         context.coordinator.render = render
         label.numberOfLines = numberOfLines
+        label.emojiImages = animatesEmojis ? emojiImages : nil
         label.attributedText = render()
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView label: UILabel, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView label: EmojiLabel, context: Context) -> CGSize? {
         let width = proposal.width ?? .greatestFiniteMagnitude
         let size = label.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
         return CGSize(width: proposal.width ?? size.width, height: size.height)

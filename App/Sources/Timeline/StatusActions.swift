@@ -231,13 +231,14 @@ extension TimelineViewController {
     private func emojiElement(for emoji: CustomEmoji, subject: OperationStatus.Subject?) -> UIMenuElement? {
         let attachment = emoji.attachment
         let image = emojiImages.image(for: emoji.staticUrl)
+        let animation = settings.animatesCustomEmojis && !UIAccessibility.isReduceMotionEnabled ? emojiImages.animation(for: emoji.url) : nil
         let target = MediaMenuTarget(attachment: attachment, source: nil, preview: image) { [weak self] in
             self?.openMedia([attachment], at: 0, subject: subject) { _ in nil }
         }
         guard let children = mediaMenu(for: target, subject: subject, statusMenu: nil)?.children else { return nil }
         return UIMenu(
             title: ":\(emoji.shortcode):",
-            image: image.map(Self.menuIcon) ?? StatusMenuItem.customEmojis.image,
+            image: animation.flatMap { Self.animatedMenuIcon($0.image) } ?? image.map(Self.menuIcon) ?? StatusMenuItem.customEmojis.image,
             children: children
         )
     }
@@ -256,6 +257,37 @@ extension TimelineViewController {
         return UIGraphicsImageRenderer(size: canvas, format: format).image { _ in
             image.draw(in: CGRect(origin: CGPoint(x: (side - size.width) / 2, y: (side - size.height) / 2), size: size))
         }.withRenderingMode(.alwaysOriginal)
+    }
+
+    /// 動く絵文字を、メニューの印の大きさの、動く画像にする。
+    /// `UIImage.animatedImage`はどのコマも同じ長さで送るため、1周を同じ長さの刻みに分け、刻みごとに、その時刻に出ているコマを置く。
+    /// 刻みはいちばん短いコマの長さにし、刻みの数が300を超えるなら、刻みを長くして300に収める。そのときは短いコマが間引かれるが、1周の長さは変わらない。
+    static func animatedMenuIcon(_ animation: AnimatedImage) -> UIImage? {
+        let total = animation.duration
+        guard total > 0 else { return nil }
+        let shortest = max(animation.durations.min() ?? 0.1, 0.02)
+        let count = min(300, max(1, Int((total / shortest).rounded())))
+        let step = total / Double(count)
+        let scale = UITraitCollection.current.displayScale
+        var icons: [Int: UIImage] = [:]
+        var frames: [UIImage] = []
+        var frameIndex = 0
+        var frameEnd = animation.durations[0]
+        for slot in 0..<count {
+            let time = (Double(slot) + 0.5) * step
+            while time >= frameEnd, frameIndex + 1 < animation.frameCount {
+                frameIndex += 1
+                frameEnd += animation.durations[frameIndex]
+            }
+            if icons[frameIndex] == nil {
+                guard let cgImage = animation.frameImage(at: frameIndex) else { return nil }
+                icons[frameIndex] = menuIcon(UIImage(cgImage: cgImage, scale: scale, orientation: .up))
+            }
+            if let icon = icons[frameIndex] {
+                frames.append(icon)
+            }
+        }
+        return UIImage.animatedImage(with: frames, duration: total)?.withRenderingMode(.alwaysOriginal)
     }
 
     /// ユーザーのメニューを`@acct`のサブメニューにする。中身が1つで「その他」が空なら、サブメニューにせず直接並べる。

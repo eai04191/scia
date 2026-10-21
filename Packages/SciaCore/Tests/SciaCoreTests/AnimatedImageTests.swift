@@ -55,6 +55,10 @@ struct AnimatedImageTests {
         #expect(pixel(x: 17, y: 17).gray > pixel(x: 5, y: 17).gray, "5コマ目は4コマ目より明るい")
         #expect(pixel(x: 10, y: 5).alpha == 0 && pixel(x: 5, y: 10).alpha == 0, "コマのあいだは透明")
         #expect(pixel(x: 29, y: 17).alpha == 0, "6コマ目の場所は空いている")
+        // 切り出したコマは、並べた画像の同じ場所と同じ明るさになる。
+        let fifth = try rgba(try #require(image.frameImage(at: 4)))
+        #expect(fifth.count == 10 * 10 * 4)
+        #expect(fifth[(5 * 10 + 5) * 4] == pixel(x: 17, y: 17).gray)
     }
 
     /// `image`を、上の行から並べたRGBAのバイト列にする。

@@ -21,7 +21,8 @@ struct AnimatedEmojiTests {
     }
 
     /// `frames`コマの、幅が高さの2倍の画像のデータ。`type`がGIFなら動く画像、PNGで1コマなら静止画になる。
-    private func imageData(_ type: UTType, frames: Int) throws -> Data {
+    /// - Parameter delays: コマごとの秒数。省くとどのコマも0.1秒。
+    private func imageData(_ type: UTType, frames: Int, delays: [Double]? = nil) throws -> Data {
         let data = NSMutableData()
         let destination = try #require(CGImageDestinationCreateWithData(data, type.identifier as CFString, frames, nil))
         for index in 0..<frames {
@@ -29,7 +30,8 @@ struct AnimatedEmojiTests {
                 UIColor(white: CGFloat(index) / CGFloat(frames), alpha: 1).setFill()
                 context.fill(CGRect(x: 0, y: 0, width: 40, height: 20))
             }
-            let properties = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 0.1]] as CFDictionary
+            let delay = delays?[index] ?? 0.1
+            let properties = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: delay, kCGImagePropertyGIFUnclampedDelayTime: delay]] as CFDictionary
             CGImageDestinationAddImage(destination, try #require(image.cgImage), properties)
         }
         #expect(CGImageDestinationFinalize(destination))
@@ -139,6 +141,24 @@ struct AnimatedEmojiTests {
         let after = animatedLayers(of: label)
         #expect(after.count == 1)
         #expect(after.first !== before.first)
+    }
+
+    /// メニューの動く印は、いちばん短いコマを刻みにして、長いコマはその分だけ繰り返し、1周の長さを保つ。
+    @Test func menuIconKeepsFrameDurations() throws {
+        let animation = try #require(AnimatedImage.decode(imageData(.gif, frames: 2, delays: [0.1, 0.3]), maxPixelSize: 96))
+        let icon = try #require(TimelineViewController.animatedMenuIcon(animation))
+
+        #expect(icon.images?.count == 4)
+        #expect(abs(icon.duration - 0.4) < 0.001)
+    }
+
+    /// コマが多い絵文字でも、メニューの印の画像は300枚に収め、1周の長さは変えない。
+    @Test func menuIconLimitsImagesWithoutSlowingDown() throws {
+        let animation = try #require(AnimatedImage.decode(imageData(.gif, frames: 400), maxPixelSize: 96))
+        let icon = try #require(TimelineViewController.animatedMenuIcon(animation))
+
+        #expect(icon.images?.count == 300)
+        #expect(abs(icon.duration - 40) < 0.001)
     }
 
     /// 同じ絵文字が続いても、1つずつ層を重ねる。

@@ -124,16 +124,22 @@ final class AnimatedEmojiOverlay {
         removeLayers()
         let scale = host.contentsScale
         layers = entries.map { entry in
-            let layer = CALayer()
-            layer.contentsGravity = .resizeAspect
-            layer.contentsScale = scale
-            layer.contents = entry.animation.image.sheet
-            layer.contentsRect = entry.animation.image.contentsRect(ofFrame: 0)
-            layer.add(Self.frameAnimation(of: entry.animation.image), forKey: "frames")
+            let layer = Self.makeLayer(entry.animation.image, scale: scale)
             host.addSublayer(layer)
             return layer
         }
         layersGeneration = entriesGeneration
+    }
+
+    /// `image`のコマを送る層。枠いっぱいに、縦横比を保って描く。
+    static func makeLayer(_ image: AnimatedImage, scale: CGFloat) -> CALayer {
+        let layer = CALayer()
+        layer.contentsGravity = .resizeAspect
+        layer.contentsScale = scale
+        layer.contents = image.sheet
+        layer.contentsRect = image.contentsRect(ofFrame: 0)
+        layer.add(frameAnimation(of: image), forKey: "frames")
+        return layer
     }
 
     /// コマを送るアニメーション。並べた画像の中の、表示する範囲を切り替える。

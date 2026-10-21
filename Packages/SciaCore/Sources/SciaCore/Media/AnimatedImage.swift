@@ -31,6 +31,13 @@ public struct AnimatedImage: Sendable {
         sheet.bytesPerRow * sheet.height
     }
 
+    /// `index`番目のコマを切り出した画像。メニューの印のように、画像を1枚ずつ渡す場所で使う。
+    public func frameImage(at index: Int) -> CGImage? {
+        let x = (index % columns) * (frameWidth + Self.gutter)
+        let y = (index / columns) * (frameHeight + Self.gutter)
+        return sheet.cropping(to: CGRect(x: x, y: y, width: frameWidth, height: frameHeight))
+    }
+
     /// コマとコマのあいだに空ける、透明なすき間のピクセル数。
     /// 縮めて描くときは、表示する範囲のすぐ外の画素まで混ぜるため、隣のコマに接していると、その端が線や欠片になって見えた。
     public static let gutter = 2

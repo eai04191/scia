@@ -230,7 +230,7 @@ private struct CompletionRowView: View {
             RowLayout {
                 AvatarImage(url: account.avatarStatic ?? account.avatar, shape: model.settings.avatarShape)
             } title: {
-                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages) { [model] in
+                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis) { [model] in
                     Self.truncatingTail(
                         RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
                             .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
@@ -270,7 +270,7 @@ private struct CompletionRowView: View {
             .accessibilityLabel("ハッシュタグ \(hashtag.name)、\(note)")
         case .emoji(let emoji):
             RowLayout {
-                EmojiImage(url: emoji.staticUrl, store: model.emojiImages)
+                EmojiImage(url: emoji.staticUrl, animationURL: model.settings.animatesCustomEmojis ? emoji.url : nil, store: model.emojiImages)
             } title: {
                 Text(":\(emoji.shortcode):")
             }
@@ -378,25 +378,34 @@ private struct AvatarImage: UIViewRepresentable {
 /// カスタム絵文字の画像。届いたら描き直す。
 private struct EmojiImage: UIViewRepresentable {
     let url: URL
+    /// 元の画像。アニメーション版を読むのに使う。nilなら動かさない。
+    let animationURL: URL?
     let store: EmojiImageStore
 
-    func makeUIView(context: Context) -> UIImageView {
-        let view = UIImageView()
-        view.contentMode = .scaleAspectFit
-        store.addListener(owner: view) { [weak view] loaded in
-            guard let view, let url = context.coordinator.url, loaded.contains(url) else { return }
-            view.image = store.image(for: url)
+    func makeUIView(context: Context) -> EmojiImageView {
+        let view = EmojiImageView(frame: .zero)
+        let coordinator = context.coordinator
+        store.addListener(owner: view) { [weak view, weak coordinator] loaded in
+            guard let view, let coordinator, let url = coordinator.url else { return }
+            if loaded.contains(url) {
+                view.stillImage = store.image(for: url)
+            }
+            if let animationURL = coordinator.animationURL, loaded.contains(animationURL) {
+                view.animation = store.animation(for: animationURL)
+            }
         }
         return view
     }
 
-    func updateUIView(_ view: UIImageView, context: Context) {
+    func updateUIView(_ view: EmojiImageView, context: Context) {
         context.coordinator.url = url
-        view.image = store.image(for: url)
+        context.coordinator.animationURL = animationURL
+        view.stillImage = store.image(for: url)
+        view.animation = animationURL.flatMap(store.animation(for:))
     }
 
     /// アイコンと同じく、画像で大きさの希望が変わらないよう、決まった大きさにする。
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UIImageView, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: EmojiImageView, context: Context) -> CGSize? {
         CGSize(width: proposal.width ?? 30, height: proposal.height ?? 30)
     }
 
@@ -407,5 +416,6 @@ private struct EmojiImage: UIViewRepresentable {
     @MainActor
     final class Coordinator {
         var url: URL?
+        var animationURL: URL?
     }
 }
