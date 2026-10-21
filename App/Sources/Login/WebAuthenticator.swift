@@ -13,7 +13,8 @@ final class WebAuthenticator: NSObject, ASWebAuthenticationPresentationContextPr
     }
 
     /// ユーザーが認可画面を閉じた場合は`CancellationError`を投げる。
-    func authenticate(url: URL, callbackScheme: String) async throws -> URL {
+    /// - Parameter isPrivate: Safariのcookieを読まず、ログインで入ったcookieもSafariに残さない。Safariで使っているアカウントとは別のアカウントでログインするときに使う。
+    func authenticate(url: URL, callbackScheme: String, isPrivate: Bool) async throws -> URL {
         try await withCheckedThrowingContinuation { continuation in
             pending = continuation
             let session = ASWebAuthenticationSession(url: url, callback: .customScheme(callbackScheme)) { [weak self] callbackURL, error in
@@ -30,6 +31,7 @@ final class WebAuthenticator: NSObject, ASWebAuthenticationPresentationContextPr
                 Task { @MainActor in self?.finish(result) }
             }
             session.presentationContextProvider = self
+            session.prefersEphemeralWebBrowserSession = isPrivate
             self.session = session
             // 開始に失敗したとき、completionHandlerにもエラーが届くかはドキュメントに書かれていない。
             // どちらの経路が先に来ても一度だけ再開するよう、finishで受け付けを一本化する。

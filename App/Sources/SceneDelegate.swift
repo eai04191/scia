@@ -276,7 +276,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let authenticator = WebAuthenticator(anchor: window)
         do {
             let renewed = try await AppDependencies.oauth.login(instance: credential.instance) { url in
-                try await authenticator.authenticate(url: url, callbackScheme: AppDependencies.oauthCallbackScheme)
+                try await authenticator.authenticate(url: url, callbackScheme: AppDependencies.oauthCallbackScheme, isPrivate: false)
             }
             guard renewed.id == credential.id else {
                 throw DifferentAccountLoggedIn(expected: credential.handle, actual: renewed.handle)

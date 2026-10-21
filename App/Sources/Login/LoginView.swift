@@ -37,7 +37,8 @@ final class LoginModel {
         errorMessage = message
     }
 
-    func login(authenticator: WebAuthenticator) async {
+    /// - Parameter isPrivate: Safariのcookieを使わずに認可画面を開く。
+    func login(authenticator: WebAuthenticator, isPrivate: Bool) async {
         errorMessage = nil
         let instance: URL
         do {
@@ -51,7 +52,7 @@ final class LoginModel {
         defer { isLoggingIn = false }
         do {
             let credential = try await AppDependencies.oauth.login(instance: instance) { url in
-                try await authenticator.authenticate(url: url, callbackScheme: AppDependencies.oauthCallbackScheme)
+                try await authenticator.authenticate(url: url, callbackScheme: AppDependencies.oauthCallbackScheme, isPrivate: isPrivate)
             }
             logger.info("login succeeded instance=\(instance.absoluteString, privacy: .public)")
             try onLogin(credential)
@@ -140,7 +141,15 @@ struct LoginView: View {
             // ログインボタンは一覧の外の下端に固定する。候補がいくつ並んでも押し出されず、キーボードが出ればその上に乗る。
             // 一覧を最後までスクロールしたときに、末尾のクレジットがボタンに詰まらないよう、間をあける。
             .safeAreaBar(edge: .bottom, spacing: 16) {
-                Button(action: login) {
+                // 長押しで、Safariのログイン状態を使わないプライベートのログインを選べる。iOSの戻るボタンの長押しと同じ作り。
+                Menu {
+                    // メニューの幅が狭く「プライベートでログイン」は途中で折り返すため、名前を短くして説明をサブタイトルに回す。
+                    Button { login(isPrivate: true) } label: {
+                        Image(systemName: "hand.raised")
+                        Text("プライベート")
+                        Text("Safariのログイン状態を使わない")
+                    }
+                } label: {
                     ZStack {
                         Text("ログイン")
                             .opacity(model.isLoggingIn ? 0 : 1)
@@ -149,6 +158,8 @@ struct LoginView: View {
                         }
                     }
                     .frame(maxWidth: .infinity)
+                } primaryAction: {
+                    login()
                 }
                 .buttonStyle(.glassProminent)
                 .controlSize(.large)
@@ -172,8 +183,12 @@ struct LoginView: View {
     }
 
     private func login() {
+        login(isPrivate: false)
+    }
+
+    private func login(isPrivate: Bool) {
         guard let authenticator = makeAuthenticator() else { return }
-        Task { await model.login(authenticator: authenticator) }
+        Task { await model.login(authenticator: authenticator, isPrivate: isPrivate) }
     }
 }
 
