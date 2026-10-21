@@ -27,7 +27,7 @@ final class NoticeOverlay: UIView {
     enum Movement {
         /// 呼んだ側のアニメーションに任せる。アニメーションの中でなければ、すぐ置く。毎フレーム置き直すとき（引っぱる、ビューアを払う）に使う。
         case inherited
-        /// この時間をかけて動かす。新着のボタンの出入りやタブの切り替え。
+        /// この時間をかけて動かす。タブの切り替え。
         case animated(TimeInterval)
     }
 

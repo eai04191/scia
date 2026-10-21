@@ -243,12 +243,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // タブバーの上の投稿欄で書いている間も、読み進めるだけならキーボードを閉じない。キーボードまで引き下ろしたら閉じる。
         collectionView.keyboardDismissMode = .interactive
         view.addSubview(collectionView)
-        // 新着のボタンは、この一覧の部品として画面と一緒に流れる。チップの列はウインドウに重ね、このボタンの下に置く。
+        // 新着のボタンは、この一覧の部品として画面と一緒に流れる。一番上の投稿の名前や本文を隠さないよう、時刻のある右上に置く。
+        // チップの列はウインドウに重ね、このボタンが出ていてもずらさずに上に重ねる。
         view.addSubview(newArrivalsButton)
         NSLayoutConstraint.activate([
             newArrivalsButton.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
-            newArrivalsButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
-            newArrivalsButton.leadingAnchor.constraint(greaterThanOrEqualTo: view.layoutMarginsGuide.leadingAnchor),
+            newArrivalsButton.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
         ])
         AppDependencies.stateDumps.register(texts.dumpName, owner: self) { $0.stateDump() }
         emojiImages.addListener(owner: self) { [weak self] urls in self?.emojiImagesDidLoad(urls) }
@@ -624,7 +624,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     func setUnreadCount(_ count: Int, isLowerBound: Bool = false) {
         unreadCount = count
         updateNewArrivalsButtonVisibility()
-        newArrivalsButton.configuration?.title = isLowerBound ? "\(count)件以上の新着" : "\(count)件の新着"
+        // 通知のタブのバッジと同じく、読み込んでいない分があるときは「+」を付ける。
+        newArrivalsButton.configuration?.title = isLowerBound ? "\(count)+" : "\(count)"
+        newArrivalsButton.accessibilityLabel = isLowerBound ? "\(count)件以上の新着" : "\(count)件の新着"
     }
 
     /// 最上部へ動かしている間は隠す。新着を足して最上部へ動かすときに、新着が画面に入るまでの間だけ出てしまうため。
@@ -632,8 +634,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let isHidden = unreadCount == 0 || isScrollingToTop
         guard newArrivalsButton.isHidden != isHidden else { return }
         newArrivalsButton.isHidden = isHidden
-        // ボタンの出入りそのものは動かさずに切り替わるため、チップの列だけを前の位置から動かす。
-        noticeOverlay?.update(.animated(tuning.value(of: TuningCatalog.noticeAnimationDuration)))
     }
 
     // MARK: アプリ内通知
@@ -765,7 +765,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         var configuration = UIButton.Configuration.borderedProminent()
         configuration.cornerStyle = .capsule
         configuration.image = UIImage(systemName: "arrow.up")
-        configuration.imagePadding = 6
+        // ボタンが件数の文字に合わせて決める矢印の大きさを、一段小さくする。既定のままでは件数より大きく見えるため。
+        configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(scale: .small)
+        configuration.imagePadding = 1
         configuration.buttonSize = .small
         let button = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in
             guard let self else { return }
@@ -1468,13 +1470,11 @@ extension TimelineViewController {
 }
 
 extension TimelineViewController: NoticeScreen {
-    /// チップの列の上端。この画面の座標。ナビゲーションバーの下に置く。新着のボタンが出ていれば、その下。一番上から引っぱっても下げない。
+    /// チップの列の上端。この画面の座標。ナビゲーションバーの下に置く。一番上から引っぱっても下げない。
+    /// 新着のボタンが出ていてもずらさず、上に重ねる。ボタンは件数の目安で、隠れてもステータスバーやタブから最上部へ戻れるが、
+    /// 出たままのチップは、押そうとしている間にボタンの出入りで動くと押せなくなるため。
     var noticeTop: CGFloat {
-        var top = view.safeAreaInsets.top + 8
-        if !newArrivalsButton.isHidden {
-            top += newArrivalsButton.intrinsicContentSize.height + 8
-        }
-        return top
+        view.safeAreaInsets.top + 8
     }
 
     func noticePlacement(below: CGFloat) -> NoticePlacement {

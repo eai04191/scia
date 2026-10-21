@@ -25,22 +25,21 @@ struct TimelineNoticeTests {
         #expect(try abs(chipMinY(in: harness) - (barBottom + 8)) < 1)
     }
 
-    /// 新着のボタンが出たら、その下へ動き、消えたら戻る。
-    @Test func chipFollowsNewArrivalsButton() throws {
+    /// 新着のボタンが出入りしても動かさず、ボタンの上に重ねる。出たままのチップを押そうとしている間に、位置が変わらないようにするため。
+    @Test func chipStaysWhenNewArrivalsButtonAppears() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         harness.viewController.showNotice(failure)
         let alone = try chipMinY(in: harness)
 
         harness.viewController.setUnreadCount(5)
-        let belowButton = try chipMinY(in: harness)
-        #expect(belowButton > alone + 20)
+        #expect(try chipMinY(in: harness) == alone)
 
         harness.viewController.setUnreadCount(0)
         #expect(try chipMinY(in: harness) == alone)
     }
 
-    /// 指が触れている間（VoiceOverの読み上げ位置が乗っている間も）は、新着のボタンが出ても動かさず、離したら動かす。
+    /// 指が触れている間（VoiceOverの読み上げ位置が乗っている間も）は、画面を移っても動かさず、離したら動かす。
     @Test func heldChipStaysUntilReleased() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -49,14 +48,14 @@ struct TimelineNoticeTests {
         let chip = try #require(harness.overlay.column.stack.chips.first)
 
         chip.accessibilityElementDidBecomeFocused()
-        harness.viewController.setUnreadCount(5)
+        try pushLowerScreen(on: harness, below: before)
         #expect(try chipMinY(in: harness) == before)
 
         chip.accessibilityElementDidLoseFocus()
         #expect(try chipMinY(in: harness) > before + 20)
     }
 
-    /// 新着のボタンが出て動いている途中に触れたら、その場で止めて留める。
+    /// 画面を移って動いている途中に触れたら、その場で止めて留める。
     @Test func chipStopsWhereItIsWhenHeldWhileMoving() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -66,7 +65,7 @@ struct TimelineNoticeTests {
         let start = try chipMinY(in: harness)
         let chip = try #require(column.stack.chips.first)
 
-        harness.viewController.setUnreadCount(5)
+        try pushLowerScreen(on: harness, below: start)
         let end = try chipMinY(in: harness)
         try await Task.sleep(for: .milliseconds(200))
         let shown = try #require(column.layer.presentation()?.position.y)
@@ -253,23 +252,61 @@ struct TimelineNoticeTests {
     @Test func chipMovesToPushedScreenAndBack() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
+        harness.viewController.showNotice(failure)
+        let onTimeline = try chipMinY(in: harness)
+
+        let pushed = try pushLowerScreen(on: harness, below: onTimeline)
+        #expect(try abs(chipMinY(in: harness) - pushed.top) < 1)
+        #expect(harness.overlay.column.stack.chips.count == 1)
+
+        pushed.navigationController?.popViewController(animated: false)
+        harness.window.layoutIfNeeded()
+        #expect(try chipMinY(in: harness) == onTimeline)
+    }
+
+    /// 位置を決めない画面では、上の安全領域のすぐ下に置く。
+    @Test func chipSitsBelowSafeAreaOnPlainScreen() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
         let navigation = try #require(harness.viewController.navigationController)
         let delegate = NoticeNavigationDelegate()
         navigation.delegate = delegate
-        harness.viewController.setUnreadCount(5)
         harness.viewController.showNotice(failure)
-        let onTimeline = try chipMinY(in: harness)
 
         let pushed = UIViewController()
         navigation.pushViewController(pushed, animated: false)
         harness.window.layoutIfNeeded()
-        let onPushed = try chipMinY(in: harness)
-        #expect(onPushed < onTimeline - 20)
-        #expect(abs(onPushed - (pushed.view.safeAreaInsets.top + 8)) < 1)
-        #expect(harness.overlay.column.stack.chips.count == 1)
+        #expect(try abs(chipMinY(in: harness) - (pushed.view.safeAreaInsets.top + 8)) < 1)
+    }
 
-        navigation.popViewController(animated: false)
+    /// 一覧より100pt下にチップを置く画面を、動きなしで重ねる。チップを動かすきっかけに使う。
+    @discardableResult
+    private func pushLowerScreen(on harness: TimelineHarness, below top: CGFloat) throws -> LowerNoticeScreen {
+        let navigation = try #require(harness.viewController.navigationController)
+        let delegate = NoticeNavigationDelegate()
+        navigation.delegate = delegate
+        let screen = LowerNoticeScreen(top: top + 100)
+        screen.navigationDelegate = delegate
+        navigation.pushViewController(screen, animated: false)
         harness.window.layoutIfNeeded()
-        #expect(try chipMinY(in: harness) == onTimeline)
+        return screen
+    }
+}
+
+/// チップの列を、決まった位置（ウインドウの座標）に置く画面。
+private final class LowerNoticeScreen: UIViewController, NoticeScreen {
+    let top: CGFloat
+    /// ナビゲーションのdelegateは弱く持たれるため、画面が生きている間ここで持つ。
+    var navigationDelegate: NoticeNavigationDelegate?
+
+    init(top: CGFloat) {
+        self.top = top
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { nil }
+
+    func noticePlacement(below: CGFloat) -> NoticePlacement {
+        NoticePlacement(top: top)
     }
 }
