@@ -2013,6 +2013,12 @@ final class InlineComposeController: NSObject {
 
 extension InlineComposeController: UITextViewDelegate {
     /// 入力バーを引いても中身は動かさない。入力欄も同じ通知を受けるため、バーのスクロールビューだけを止める。
+    /// 変形の途中に本文をスクロールし始めたら、終わりの形にする。変形で動かしている写しは、置き換える前に見えていた範囲しかないため。
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        guard scrollView === textView else { return }
+        linkTitleEffects.finishMorph()
+    }
+
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
         // 広げている間に本文をスクロールしたら、打っている行に付けた一覧も動かす。
         if scrollView === textView {

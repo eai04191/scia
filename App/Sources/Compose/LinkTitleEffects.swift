@@ -163,8 +163,15 @@ final class LinkTitleEffects {
             didReplace(replacement)
             return
         }
-        // 置き換える前のURLの、行ごとの枠と文字の範囲、文字の境目の位置を測っておく。
+        // 置き換える前のURLと後ろに続く文の、行ごとの枠と文字の範囲、文字の境目の位置を測っておく。
+        // 後ろの文も、URLと同じく新しい位置へ動かす。本物の文字のままだと、変形が始まった瞬間に一度に移って見えたため。
+        // 動かすのは、置き換える前に見えている範囲にある文字までにする。写しは見えている範囲しか描き取れず、その外の文字は写しがないため。
+        // 長い投稿で測る手間が増えすぎないよう、測るのは後ろの`maxTailLength`文字まで。それより後ろは動かさず、一度に移す。
         let oldLines = lines(of: replacement.range)
+        let visible = textView.bounds
+        let measuredTail = lines(of: replacement.range.upperBound ..< replacement.range.upperBound + min(textView.textStorage.length - replacement.range.upperBound, Self.maxTailLength))
+        let oldTailLines = measuredTail.prefix { $0.rect.minY < visible.maxY }
+        let tailLength = oldTailLines.last?.characters.upperBound ?? 0
         // 置き換えも、行が増えて欄が伸びるのも、変形と同じ時間の動きの中で行う。置き換えると、カーソルを戻すところで入力欄がその場で配置を済ませるため、
         // 置き換えてから動かすと、中身はゆっくり動くのに欄だけが急に広がって見えた。後ろに続く文も、同じ動きで新しい位置へ動く。
         // 動きを始めた時点で、欄の大きさと文字の配置は置き換えたあとの値になるので、このあとの測る処理は、置き換えたあとの形で行う。
@@ -178,10 +185,12 @@ final class LinkTitleEffects {
         }
         didReplace(replacement)
         let newLines = lines(of: replacement.urlRange)
+        let tail = replacement.urlRange.upperBound ..< replacement.urlRange.upperBound + tailLength
+        let newTailLines = lines(of: tail)
         let titleRects = rects(for: replacement.titleRange)
-        // 先にURLを透明にしてからタイトルを描く。タイトルの行の枠に、すぐ下のURLの文字の頭が入り込み、浮かび上がるタイトルの下に跡が見えたため。
+        // 先にURLと後ろの文を透明にしてからタイトルを描く。タイトルの行の枠に、すぐ下の行の文字の頭が入り込み、浮かび上がるタイトルの下に跡が見えたため。
         // タイトルは画面から描き取らず、文字の配置から描く。画面は欄が伸びる途中なので、描き取ると伸びる前の高さで切れたため。
-        let hiddenColor = hideText(in: replacement.urlRange)
+        let hiddenColor = hideText(in: replacement.urlRange.lowerBound ..< tail.upperBound)
         layOutText()
         guard let after = Picture(textOf: textView, covering: rects(for: replacement.titleRange)) else {
             showText(hiddenColor)
@@ -189,14 +198,7 @@ final class LinkTitleEffects {
         }
         // 置き換える前と後のどちらの行の境目でも切り分け、切れ端ごとに、前の場所から後の場所へ動かす。
         // 前は1行だった文字が後で2行にまたがっても、行の外にはみ出さないようにするため。
-        let pieces = oldLines.flatMap { old in
-            newLines.compactMap { new -> (view: UIView, target: CGRect)? in
-                let characters = old.characters.clamped(to: new.characters)
-                guard !characters.isEmpty else { return nil }
-                let source = old.rect(of: characters)
-                return (before.view(of: source), new.rect(of: characters))
-            }
-        }
+        let pieces = Self.pieces(from: oldLines, to: newLines, picture: before) + Self.pieces(from: Array(oldTailLines), to: newTailLines, picture: before)
         let title = titleRects.map { after.view(of: $0) }
         _ = hideText(in: replacement.titleRange)
         pieces.forEach { textView.addSubview($0.view) }
@@ -210,7 +212,7 @@ final class LinkTitleEffects {
             textView.addSubview(view)
             return view
         }
-        logger.info("compose: link title morph (url pieces=\(pieces.count) title lines=\(titleRects.count))")
+        logger.info("compose: link title morph (pieces=\(pieces.count) title lines=\(titleRects.count) tail=\(tailLength))")
         let animator = UIViewPropertyAnimator(duration: duration, dampingRatio: 0.85) {
             for piece in pieces {
                 piece.view.frame = piece.target
@@ -230,6 +232,20 @@ final class LinkTitleEffects {
         }
         morph = animator
         animator.startAnimation()
+    }
+
+    /// 後ろに続く文のうち、変形で動かす文字の数（UTF-16）。
+    private static let maxTailLength = 300
+
+    /// 置き換える前と後の行を、どちらの行の境目でも切り分けた切れ端。前の場所の写しと、動かす先の枠。
+    private static func pieces(from oldLines: [Line], to newLines: [Line], picture: Picture) -> [(view: UIView, target: CGRect)] {
+        oldLines.flatMap { old in
+            newLines.compactMap { new -> (view: UIView, target: CGRect)? in
+                let characters = old.characters.clamped(to: new.characters)
+                guard !characters.isEmpty, let source = old.rect(of: characters), let target = new.rect(of: characters) else { return nil }
+                return (picture.view(of: source), target)
+            }
+        }
     }
 
     /// 変形の途中なら、すぐ終わりの形にする。
@@ -287,24 +303,36 @@ final class LinkTitleEffects {
     }
 
     /// 本文の`range`を行ごとに分けたもの。文字の範囲は`range`の頭から数える。
+    /// 文字は、絵文字のようにUTF-16の2単位以上で1文字のものを途中で切らないよう、合成された文字の並びごとに測る。
+    /// 改行のように枠のない文字では、行を区切る。
     private func lines(of range: Range<Int>) -> [Line] {
+        guard let text = textView?.text as NSString? else { return [] }
         var lines: [Line] = []
-        var lineStart = 0
         var lineRect: CGRect?
-        var edges: [CGFloat] = []
-        // 文字ごとに、その文字の前の境目の位置を測り、行が変わったところで区切る。
-        for offset in 0 ... range.count {
-            let rect = offset < range.count ? rects(for: range.lowerBound + offset ..< range.lowerBound + offset + 1).first : nil
-            if let current = lineRect, rect.map({ abs($0.midY - current.midY) > current.height / 2 }) ?? true {
-                lines.append(Line(rect: current, start: lineStart, edges: edges + [current.maxX]))
-                lineStart = offset
-                lineRect = nil
-                edges = []
-            }
-            guard let rect else { continue }
-            lineRect = lineRect.map { $0.union(rect) } ?? rect
-            edges.append(rect.minX)
+        var characters: [Int: CGRect] = [:]
+        var lineEnd = 0
+        func close() {
+            guard let current = lineRect else { return }
+            lines.append(Line(rect: current, characterRects: characters, end: lineEnd))
+            lineRect = nil
+            characters = [:]
         }
+        var offset = range.lowerBound
+        while offset < range.upperBound {
+            let character = text.rangeOfComposedCharacterSequence(at: offset)
+            let end = min(character.location + character.length, range.upperBound)
+            let rect = rects(for: offset ..< end).first
+            if let current = lineRect, rect.map({ abs($0.midY - current.midY) > current.height / 2 }) ?? true {
+                close()
+            }
+            if let rect {
+                lineRect = lineRect.map { $0.union(rect) } ?? rect
+                characters[offset - range.lowerBound] = rect
+                lineEnd = end - range.lowerBound
+            }
+            offset = max(end, offset + 1)
+        }
+        close()
         return lines
     }
 
@@ -322,21 +350,24 @@ final class LinkTitleEffects {
     }
 }
 
-/// URLの1行。
+/// 測った範囲の1行。
 private struct Line {
     let rect: CGRect
-    /// この行の最初の文字の、URLの頭から数えた位置。
-    let start: Int
-    /// この行の文字の境目の横の位置。文字の数より1つ多く、最後は行の右端。
-    let edges: [CGFloat]
+    /// この行の文字ごとの、範囲の頭から数えた位置（UTF-16）と枠。
+    let characterRects: [Int: CGRect]
+    /// この行の最後の文字の後ろの位置。
+    let end: Int
 
-    var characters: Range<Int> { start ..< start + edges.count - 1 }
+    var characters: Range<Int> { (characterRects.keys.min() ?? end) ..< end }
 
-    /// この行の中の`characters`の枠。
-    func rect(of characters: Range<Int>) -> CGRect {
-        let minX = edges[characters.lowerBound - start]
-        let maxX = edges[characters.upperBound - start]
-        return CGRect(x: minX, y: rect.minY, width: maxX - minX, height: rect.height)
+    /// この行の中の`characters`の枠。文字ごとの枠を合わせて作る。右から左に書く文では、論理の順と画面の左右が逆になり、
+    /// 境目の位置だけでは枠を決められないため。左右の書き方が混ざった行では、間に挟まった別の切れ端の文字まで入ることがあるが、
+    /// 動いている短い間に重なって見えるだけなので、書き方ごとに分けて測る手間はかけない。
+    func rect(of characters: Range<Int>) -> CGRect? {
+        let rects = characterRects.filter { characters.contains($0.key) }.map(\.value)
+        guard let first = rects.first else { return nil }
+        let union = rects.dropFirst().reduce(first) { $0.union($1) }
+        return CGRect(x: union.minX, y: rect.minY, width: union.width, height: rect.height)
     }
 }
 
