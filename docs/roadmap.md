@@ -155,6 +155,7 @@ A4に入れていない、Mastodonのクライアントとしてできること�
 - [x] インライン投稿欄に＋ボタンを置き、添付などの部品を足すボタンをその中にまとめる
 - [x] インライン投稿欄の＋から、注意書き（CW）を書けるようにする
 - [x] 設定で、書いていないときの空のインライン投稿欄を隠し、一覧の右上のボタンで出せるようにする
+- [x] 書いていないときのインライン投稿欄のカプセルに、返信や編集の札のアイコンと、添付を写真のように重ねたサムネイルを出し、開閉で書いているときの札と列の位置とのあいだを動かす: 決まりは[compose.md](compose.md)の「書いていないときの1行」
 - [ ] Mac（Designed for iPad）で、投稿やチューニングのシートが出始めるまで遅いのを直す: 押してから何も出ずにもたつき、そのあとパッと出る。iPhoneでは起きない。AeroSpaceを終了しても、Releaseビルドでも変わらなかった。Time Profilerでは、シートを出す直前のSwiftUIの最初のレイアウト（`UISheetPresentationController _transitionWillBegin` → `_UIHostingView.layoutSubviews`）に120〜190msかかっていたが、それだけで説明できるかは分かっていない。次はInstrumentsのAnimation HitchesやSwiftUIのテンプレートで、押してから出始めるまでを測る
 - [ ] インライン投稿欄の添付で、処理中の動画の回る表示と再生の印が重なるのを直す: 部品カタログ（`scia-debug://catalog/attachment-strip`）で見られる
 - [ ] 一覧の添付ファイルで、読み込めなかったことが読み込み中と見分けられるかを確かめる: 部品カタログ（`scia-debug://catalog/media-grid`）では同じ見た目に見える。実物ではまだ確かめていない
