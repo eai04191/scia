@@ -762,7 +762,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     private func makeNewArrivalsButton() -> UIButton {
-        var configuration = UIButton.Configuration.borderedProminent()
+        var configuration = UIButton.Configuration.prominentGlass()
         configuration.cornerStyle = .capsule
         configuration.image = UIImage(systemName: "arrow.up")
         // ボタンが件数の文字に合わせて決める矢印の大きさを、一段小さくする。既定のままでは件数より大きく見えるため。
