@@ -18,6 +18,8 @@ final class EditHistoryEntryView: UIView {
         /// 投票の選択肢。投票のない版ではnil。
         var pollOptions: [Text]?
         var spacing: CGFloat
+        /// アニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+        var animatedEmojis: EmojiImageStore?
     }
 
     /// 差分を重ねた文字と、その読み上げ。
@@ -49,6 +51,8 @@ final class EditHistoryEntryView: UIView {
     }
 
     private let mediaImages: MediaImageStore
+    /// いま当てている中身の、動く絵文字の置き場。文字のラベルを作るときに渡す。
+    private var animatedEmojis: EmojiImageStore?
     private let stack = UIStackView()
     private var mediaGrids: [MediaPlace: MediaGridView] = [:]
 
@@ -74,6 +78,7 @@ final class EditHistoryEntryView: UIView {
 
     /// 中身を並べ直す。版ごとに並ぶものが違うため、部品を作り直す。
     func apply(_ content: Content) {
+        animatedEmojis = content.animatedEmojis
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         mediaGrids = [:]
         stack.spacing = content.spacing
@@ -89,6 +94,7 @@ final class EditHistoryEntryView: UIView {
         if let body = content.body {
             let label = LinkLabel()
             label.numberOfLines = 0
+            label.emojiImages = animatedEmojis
             label.attributedText = body.attributed
             label.accessibilityLabel = body.accessibilityText
             label.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
@@ -125,6 +131,7 @@ final class EditHistoryEntryView: UIView {
     /// 注意書きは、一覧の注意書きと同じく箱に入れ、本文と見分ける。
     private func spoilerView(_ spoiler: Text) -> UIView {
         let label = Self.label(font: .preferredFont(forTextStyle: .subheadline), color: .label)
+        label.emojiImages = animatedEmojis
         label.attributedText = spoiler.attributed
         label.accessibilityLabel = "注意書き、\(spoiler.accessibilityText)"
         let box = UIView()
@@ -175,6 +182,7 @@ final class EditHistoryEntryView: UIView {
             thumbnail.heightAnchor.constraint(equalToConstant: side),
         ])
         let label = Self.label(font: .preferredFont(forTextStyle: .footnote), color: .label)
+        label.emojiImages = animatedEmojis
         label.attributedText = change.text.attributed
         label.accessibilityLabel = change.text.accessibilityText
         let row = UIStackView(arrangedSubviews: [thumbnail, label])
@@ -191,6 +199,7 @@ final class EditHistoryEntryView: UIView {
         column.spacing = 4
         for option in options {
             let label = Self.label(font: .preferredFont(forTextStyle: .subheadline), color: .label)
+            label.emojiImages = animatedEmojis
             label.attributedText = option.attributed
             label.accessibilityLabel = option.accessibilityText
             column.addArrangedSubview(label)
@@ -198,8 +207,8 @@ final class EditHistoryEntryView: UIView {
         return column
     }
 
-    private static func label(font: UIFont, color: UIColor) -> UILabel {
-        let label = UILabel()
+    private static func label(font: UIFont, color: UIColor) -> EmojiLabel {
+        let label = EmojiLabel()
         label.font = font
         label.textColor = color
         label.numberOfLines = 0

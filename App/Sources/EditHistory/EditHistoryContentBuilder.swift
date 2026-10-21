@@ -105,7 +105,8 @@ struct EditHistoryContentBuilder {
                 return mediaChange(for: change, renderer: small) { media([$0], cover: thumbnailCover) }
             },
             pollOptions: pollOptions(of: entry, renderer: renderer),
-            spacing: tuning.value(of: TuningCatalog.bodyMediaSpacing)
+            spacing: tuning.value(of: TuningCatalog.bodyMediaSpacing),
+            animatedEmojis: settings.animatesCustomEmojis ? emojiImages : nil
         )
     }
 

@@ -806,6 +806,9 @@ final class StatusBarTickerView: UIView {
             let fadeWidth = AppDependencies.tuning.value(of: TuningCatalog.statusBarTickerFadeWidth)
             nameLabel.fadeWidth = fadeWidth
             subjectLabel.fadeWidth = fadeWidth
+            let animatedEmojis = settings.animatesCustomEmojis ? AppDependencies.emojiImages : nil
+            nameLabel.emojiImages = animatedEmojis
+            subjectLabel.emojiImages = animatedEmojis
             let font = UIFont.systemFont(ofSize: metrics.fontSize, weight: .semibold)
             let nameRenderer = RichTextRenderer(font: font, textColor: .label, emojiImages: AppDependencies.emojiImages, language: settings.glyphLanguageIdentifier())
             nameLabel.attributedText = nameRenderer.render(.plain(item.account.displayNameOrUsername, emojis: item.account.emojis))
