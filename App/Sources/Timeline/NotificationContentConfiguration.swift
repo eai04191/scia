@@ -16,7 +16,7 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     var reactionGlow: ReactionGlow?
     let mediaImages: MediaImageStore
     let avatarImages: AvatarImageStore
-    /// 本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+    /// 見出し、注意書き、本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
     var emojiImages: EmojiImageStore?
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
@@ -53,7 +53,7 @@ struct NotificationContentConfiguration: UIContentConfiguration {
 final class NotificationContentView: UIView, UIContentView {
 
     private let symbolView = UIImageView()
-    private let headerLabel = UILabel()
+    private let headerLabel = EmojiLabel()
     private let bodyView: PostBodyView
     private let reactionGlowView = ReactionGlowView()
     private var current: NotificationContentConfiguration
@@ -108,6 +108,7 @@ final class NotificationContentView: UIView, UIContentView {
         // ベースラインの位置を読むため、大きさの設定を画像そのものに当てておく。
         symbolView.image = UIImage(systemName: configuration.symbolName, withConfiguration: UIImage.SymbolConfiguration(font: metrics.headerFont))
         symbolView.tintColor = configuration.symbolColor
+        headerLabel.emojiImages = configuration.emojiImages
         headerLabel.attributedText = configuration.header
         bodyView.emojiImages = configuration.emojiImages
         bodyView.apply(configuration.body)

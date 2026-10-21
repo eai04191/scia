@@ -12,7 +12,7 @@ final class SpoilerView: UIControl {
         var padding: CGFloat
     }
 
-    private let textLabel = UILabel()
+    private let textLabel = EmojiLabel()
     private let toggleLabel = UILabel()
     private var paddingConstraints: [NSLayoutConstraint] = []
 
@@ -42,6 +42,12 @@ final class SpoilerView: UIControl {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    /// 注意書きのアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+    var emojiImages: EmojiImageStore? {
+        get { textLabel.emojiImages }
+        set { textLabel.emojiImages = newValue }
     }
 
     func apply(_ content: Content) {

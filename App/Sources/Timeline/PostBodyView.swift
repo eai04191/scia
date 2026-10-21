@@ -102,10 +102,13 @@ final class PostBodyView: UIView {
         [spoilerView, textLabel].filter { !$0.isHidden }.map(\.frame).reduce(CGRect.null) { $0.union($1) }
     }
 
-    /// 本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+    /// 注意書きと本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
     var emojiImages: EmojiImageStore? {
         get { textLabel.emojiImages }
-        set { textLabel.emojiImages = newValue }
+        set {
+            textLabel.emojiImages = newValue
+            spoilerView.emojiImages = newValue
+        }
     }
 
     init(mediaImages: MediaImageStore, avatarImages: AvatarImageStore) {

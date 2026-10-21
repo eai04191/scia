@@ -48,7 +48,7 @@ struct PostContentConfiguration: UIContentConfiguration {
     var reactionGlow: ReactionGlow?
     let mediaImages: MediaImageStore
     let avatarImages: AvatarImageStore
-    /// 本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+    /// 名前、ブーストした人の行、注意書き、本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
     var emojiImages: EmojiImageStore?
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
@@ -243,6 +243,7 @@ final class PostContentView: UIView, UIContentView {
         contextAvatarView.isHidden = context?.avatar == nil
         contextLabel.isHidden = context == nil
         contextAvatarView.apply(context?.avatar)
+        contextLabel.emojiImages = configuration.emojiImages
         contextLabel.attributedText = context?.text
         contextLabel.fadeWidth = metrics.nameFadeWidth
         let symbolConfiguration = if context?.isNotificationSymbol == true {
@@ -256,6 +257,7 @@ final class PostContentView: UIView, UIContentView {
 
         for (index, label) in nameLabels.enumerated() {
             let text = configuration.nameParts.indices.contains(index) ? configuration.nameParts[index] : nil
+            label.emojiImages = configuration.emojiImages
             label.attributedText = text
             label.isHidden = text == nil
             label.fadeWidth = metrics.nameFadeWidth

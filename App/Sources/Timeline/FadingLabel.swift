@@ -1,7 +1,8 @@
 import UIKit
 
 /// 1行に入りきらないときに、「…」で切らず、行末を透明へ向けてぼかすラベル。入りきるときは何もかけない。
-final class FadingLabel: UILabel {
+/// 行末のぼかしはラベルの層のマスクでかけるので、重ねた動くカスタム絵文字の層も一緒にぼける。
+final class FadingLabel: EmojiLabel {
     /// 行末をぼかす幅。
     var fadeWidth: CGFloat = 20 {
         didSet { setNeedsLayout() }
