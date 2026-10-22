@@ -14,10 +14,12 @@ final class AnimatedEmojiOverlay {
         let index: Int
         /// 層が使っている間、置き場が同じものを返せるよう、箱ごと持つ。
         let animation: EmojiAnimation
+        /// 動く層の上に重ねる色。編集履歴で足した絵文字の印。
+        let tint: UIColor?
 
-        /// 同じ位置に同じアニメーションを描く。
+        /// 同じ位置に同じアニメーションを同じ色で描く。
         func isSame(as other: Entry) -> Bool {
-            index == other.index && animation === other.animation
+            index == other.index && animation === other.animation && tint == other.tint
         }
     }
 
@@ -89,7 +91,7 @@ final class AnimatedEmojiOverlay {
                 let mutable = result ?? NSMutableAttributedString(attributedString: text)
                 mutable.addAttribute(.attachment, value: placeholder, range: NSRange(location: index, length: 1))
                 result = mutable
-                entries.append(Entry(index: index, animation: animation))
+                entries.append(Entry(index: index, animation: animation, tint: text.attribute(.emojiTint, at: index, effectiveRange: nil) as? UIColor))
             }
         }
         return result ?? text
@@ -105,6 +107,10 @@ final class AnimatedEmojiOverlay {
         for (layer, frame) in zip(layers, frames) {
             if let frame {
                 layer.frame = frame
+                layer.sublayers?.forEach { tint in
+                    tint.frame = layer.bounds
+                    tint.mask?.frame = tint.bounds
+                }
                 layer.isHidden = false
             } else {
                 layer.isHidden = true
@@ -125,6 +131,16 @@ final class AnimatedEmojiOverlay {
         let scale = host.contentsScale
         layers = entries.map { entry in
             let layer = Self.makeLayer(entry.animation.image, scale: scale)
+            if let tint = entry.tint {
+                let tintLayer = CALayer()
+                // 層はラベルを並べる途中で作るので、`current`はラベルの見た目の設定になる。作ったあとにライトとダークを切り替えても、同じ絵文字なら層を使い続けるため色は前のままになるが、
+                // 足した部分の緑は両方でほぼ同じ色なので、そのために作り直さない。
+                tintLayer.backgroundColor = tint.resolvedColor(with: UITraitCollection.current).cgColor
+                // 絵文字の描かれている画素にだけ重ねる。透明な部分にも重ねると、ラベルが塗った下地と重なって、そこだけ色が濃くなるため。
+                // マスクも同じ時刻で始めるので、絵文字と同じコマを送る。
+                tintLayer.mask = Self.makeLayer(entry.animation.image, scale: scale)
+                layer.addSublayer(tintLayer)
+            }
             host.addSublayer(layer)
             return layer
         }

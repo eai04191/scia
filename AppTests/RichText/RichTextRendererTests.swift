@@ -151,6 +151,62 @@ struct RichTextRendererTests {
         #expect(abs(bounds.width - bounds.height * 2) < 0.01, "画像の縦横比で並べる")
     }
 
+    /// 編集履歴で消したり足したりした絵文字は、背景まで塗った不透明な画像でも見分けられるようにする。
+    /// 赤や緑の地と取り消し線は絵文字の画像の下に描かれるので、消した絵文字は薄く描いて透かして動かさず、足した絵文字は画像に緑を重ね、動く層にも重ねる色を渡す。
+    @Test func changedEmojiInDiffStaysVisiblyMarked() async throws {
+        let gone = try emoji("gone")
+        let added = try emoji("added")
+        let kept = try emoji("kept")
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 20, height: 20)).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 20, height: 20))
+        }.pngData())
+        let store = EmojiImageStore { _ in png }
+        let emojis = [gone, added, kept]
+        _ = renderer(store).render(RichText.plain(":gone: :added: :kept:", emojis: emojis))
+        for _ in 0..<100 where emojis.contains(where: { store.image(for: $0.staticUrl) == nil }) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        let diff = RichTextDiff(
+            old: RichText.plain("前 :gone: 中 :kept: 後", emojis: emojis),
+            new: RichText.plain("前 :added: 中 :kept: 後", emojis: emojis),
+            minimumUnchangedRatio: 0
+        )
+
+        let rendered = renderer(store).render(diff)
+        let images = try attachments(in: rendered).map { try #require($0.image) }
+        try #require(images.count == 3)
+        let removed = try centerPixel(of: images[0])
+        let inserted = try centerPixel(of: images[1])
+        let unchanged = try centerPixel(of: images[2])
+        #expect(removed.alpha < 128, "消した絵文字は、下の赤い地と取り消し線が透けるよう薄く描く")
+        #expect(inserted.green > inserted.red && inserted.alpha == 255, "足した絵文字は、画像に緑を重ねる")
+        #expect(unchanged.red == 255 && unchanged.green == 255, "変わっていない絵文字はそのまま")
+        var animated: [Int] = []
+        rendered.enumerateAttribute(.customEmoji, in: NSRange(location: 0, length: rendered.length)) { value, range, _ in
+            if value != nil { animated.append(contentsOf: range.location..<NSMaxRange(range)) }
+        }
+        var tinted: [Int] = []
+        rendered.enumerateAttribute(.emojiTint, in: NSRange(location: 0, length: rendered.length)) { value, range, _ in
+            if value != nil { tinted.append(contentsOf: range.location..<NSMaxRange(range)) }
+        }
+        #expect(animated.count == 2, "消した絵文字だけは動かさない")
+        #expect(tinted.count == 1 && animated.contains(tinted[0]), "足した絵文字は、動かして緑を重ねる")
+    }
+
+    /// `image`の中央の画素の、色と不透明さ。
+    private func centerPixel(of image: UIImage) throws -> (red: UInt8, green: UInt8, alpha: UInt8) {
+        var pixel = [UInt8](repeating: 0, count: 4)
+        let space = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+        let context = try #require(CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        let cgImage = try #require(image.cgImage)
+        context.draw(cgImage, in: CGRect(x: -CGFloat(cgImage.width) / 2 + 0.5, y: -CGFloat(cgImage.height) / 2 + 0.5, width: CGFloat(cgImage.width), height: CGFloat(cgImage.height)))
+        // 乗算済みのアルファなので、色は不透明さで割り戻す。
+        let alpha = pixel[3]
+        func unpremultiplied(_ value: UInt8) -> UInt8 { alpha == 0 ? 0 : UInt8(min(255, Int(value) * 255 / Int(alpha))) }
+        return (unpremultiplied(pixel[0]), unpremultiplied(pixel[1]), alpha)
+    }
+
     @Test func failedEmojiFallsBackToShortcode() async throws {
         let blobcat = try emoji("blobcat")
         let store = EmojiImageStore.offline

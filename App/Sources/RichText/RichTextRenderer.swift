@@ -40,6 +40,7 @@ struct RichTextRenderer {
 
     /// 編集履歴の、前の版との違いを重ねた本文。足した部分は緑の地、消した部分は赤の地で描く。
     /// 色だけに頼らないよう、消した部分には取り消し線も引く。
+    /// 地と取り消し線は絵文字の画像の下に描かれ、背景まで塗った不透明な絵文字では隠れるため、足したり消したりした絵文字は、画像そのものに印を付ける。
     /// 文字を変えずに段落を分けた編集は、ほかに見分ける手がかりがないため、分けた位置に足した改行の印を置く。
     func render(_ diff: RichTextDiff) -> NSAttributedString {
         let result = NSMutableAttributedString()
@@ -66,6 +67,9 @@ struct RichTextRenderer {
             for piece in diffBlock.pieces {
                 let rendered = NSMutableAttributedString(attributedString: render(piece.inline, block: block))
                 rendered.addAttributes(Self.attributes(for: piece.change), range: NSRange(location: 0, length: rendered.length))
+                if case .emoji = piece.inline, piece.change != .unchanged {
+                    Self.markChangedEmoji(in: rendered, change: piece.change)
+                }
                 result.append(rendered)
             }
             result.addAttribute(.paragraphStyle, value: paragraphStyle(for: block), range: NSRange(location: start, length: result.length - start))
@@ -75,18 +79,49 @@ struct RichTextRenderer {
         return result
     }
 
+    /// 足した部分の地の色。
+    private static let insertedTint = UIColor.systemGreen.withAlphaComponent(0.25)
+
     /// 差分の変わり方ごとに、文字に重ねる見た目。
     static func attributes(for change: DiffChange) -> [NSAttributedString.Key: Any] {
         switch change {
         case .unchanged:
             [:]
         case .inserted:
-            [.backgroundColor: UIColor.systemGreen.withAlphaComponent(0.25)]
+            [.backgroundColor: insertedTint]
         case .removed:
             [
                 .backgroundColor: UIColor.systemRed.withAlphaComponent(0.2),
                 .strikethroughStyle: NSUnderlineStyle.single.rawValue,
             ]
+        }
+    }
+
+    /// 足したり消したりした絵文字の画像に、変わり方の印を付ける。
+    /// 消した絵文字は薄く描いて、下の赤い地と取り消し線を透かし、動かさない。今の版にない絵文字なので、動かす意味がないため。
+    /// 足した絵文字は、地と同じ緑を画像に重ねる。動かすときは、動く層の上にも同じ緑を重ねる（`emojiTint`）。
+    private static func markChangedEmoji(in string: NSMutableAttributedString, change: DiffChange) {
+        let whole = NSRange(location: 0, length: string.length)
+        switch change {
+        case .removed: string.removeAttribute(.customEmoji, range: whole)
+        case .inserted: string.addAttribute(.emojiTint, value: insertedTint, range: whole)
+        case .unchanged: break
+        }
+        string.enumerateAttribute(.attachment, in: whole) { value, _, _ in
+            guard let attachment = value as? NSTextAttachment, let image = attachment.image, image !== placeholder else { return }
+            attachment.image = UIGraphicsImageRenderer(size: image.size, format: UIGraphicsImageRendererFormat(for: UITraitCollection(displayScale: image.scale))).image { context in
+                let rect = CGRect(origin: .zero, size: image.size)
+                switch change {
+                case .removed:
+                    image.draw(in: rect, blendMode: .normal, alpha: 0.35)
+                case .inserted:
+                    image.draw(in: rect)
+                    insertedTint.setFill()
+                    context.fill(rect, blendMode: .sourceAtop)
+                case .unchanged:
+                    image.draw(in: rect)
+                }
+            }
         }
     }
 
@@ -237,4 +272,6 @@ extension NSAttributedString.Key {
     static let linkDestination = NSAttributedString.Key("net.mizle.scia.linkDestination")
     /// 画像を埋め込んだカスタム絵文字（`CustomEmoji`）。`LinkLabel`が、アニメーションする絵文字を動かすのに読む。
     static let customEmoji = NSAttributedString.Key("net.mizle.scia.customEmoji")
+    /// カスタム絵文字を動かすときに、動く層の上に重ねる色（`UIColor`）。編集履歴で足した絵文字の印に使う。
+    static let emojiTint = NSAttributedString.Key("net.mizle.scia.emojiTint")
 }

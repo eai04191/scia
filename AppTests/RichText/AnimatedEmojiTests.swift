@@ -161,6 +161,27 @@ struct AnimatedEmojiTests {
         #expect(abs(icon.duration - 40) < 0.001)
     }
 
+    /// 重ねる色の付いた絵文字（編集履歴で足した絵文字）は、動く層の上に、その色の層を重ねる。
+    @Test func tintedEmojiGetsTintLayerOverAnimation() async throws {
+        let crab = try emoji("crab")
+        let label = try await label(RichText.plain(":crab: :crab:", emojis: [crab]), store: store())
+        // 1つ目の絵文字にだけ色を付けた文字列を入れ直す。
+        let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: try #require(label.emojiImages), language: "ja")
+        let source = NSMutableAttributedString(attributedString: renderer.render(RichText.plain(":crab: :crab:", emojis: [crab])))
+        source.addAttribute(.emojiTint, value: UIColor.green, range: (source.string as NSString).range(of: "\u{FFFC}"))
+        label.attributedText = source
+        label.layoutIfNeeded()
+
+        let layers = animatedLayers(of: label)
+        #expect(layers.count == 2)
+        #expect(layers.filter { !($0.sublayers ?? []).isEmpty }.count == 1)
+        let tinted = try #require(layers.first { !($0.sublayers ?? []).isEmpty })
+        let tintLayer = try #require(tinted.sublayers?.first)
+        #expect(tintLayer.frame == tinted.bounds, "色の層は絵文字の枠に重ねる")
+        #expect(tintLayer.mask?.animation(forKey: "frames") != nil, "色は、絵文字と同じコマを送るマスクで、描かれている画素にだけかける")
+        #expect(tintLayer.mask?.frame == tintLayer.bounds)
+    }
+
     /// 同じ絵文字が続いても、1つずつ層を重ねる。
     @Test func repeatedEmojiGetsLayerEach() async throws {
         let crab = try emoji("crab")
