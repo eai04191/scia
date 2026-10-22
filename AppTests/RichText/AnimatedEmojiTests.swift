@@ -193,12 +193,26 @@ struct AnimatedEmojiTests {
         #expect(animatedLayers(of: label).isEmpty)
     }
 
-    /// 「…」で切られているラベルの最後の行の絵文字は、UILabelが「…」に置き換えるかもしれないため動かさず、文字の中の静止画のまま描く。
-    /// 最後より前の行の絵文字は動かし、切られて見えない行の絵文字には層を置かない。
-    @Test func lastLineOfTruncatedLabelKeepsStillImage() async throws {
+    /// 「…」で切られているラベルでも、最後の行の、「…」の幅を足しても行に収まる絵文字は動かす。
+    /// 切られて見えない行の絵文字には層を置かない。
+    @Test func emojiBeforeEllipsisOnLastLineIsAnimated() async throws {
         let crab = try emoji("crab")
         let text = RichText(blocks: [.init(inlines: [.text("上 ", []), .emoji(crab), .lineBreak, .text("下 ", []), .emoji(crab), .lineBreak, .text("隠れる ", []), .emoji(crab)])])
         let label = try await label(text, store: store(), numberOfLines: 2, lineBreakMode: .byTruncatingTail)
+
+        let layers = animatedLayers(of: label)
+        #expect(layers.count == 2)
+        #expect(layers.allSatisfy { label.bounds.contains($0.frame) })
+    }
+
+    /// 「…」で切られているラベルの最後の行で、行末に近く「…」に置き換わるかもしれない絵文字は、動かさず、文字の中の静止画のまま描く。
+    @Test func emojiNearEllipsisOnLastLineKeepsStillImage() async throws {
+        let crab = try emoji("crab")
+        let text = RichText(blocks: [.init(inlines: [.text("上 ", []), .emoji(crab), .lineBreak, .text("下 ", []), .emoji(crab), .lineBreak, .text("隠れる ", []), .emoji(crab)])])
+        // 広いラベルで最後の行の絵文字の右端を測り、そこに「…」が入らない幅にする。
+        let wide = try await label(text, store: store(), numberOfLines: 2, lineBreakMode: .byTruncatingTail)
+        let lastLineEmoji = try #require(animatedLayers(of: wide).max { $0.frame.midY < $1.frame.midY })
+        let label = try await label(text, store: store(), numberOfLines: 2, lineBreakMode: .byTruncatingTail, width: lastLineEmoji.frame.maxX + 2)
 
         let layers = animatedLayers(of: label)
         #expect(layers.count == 1)
@@ -206,7 +220,28 @@ struct AnimatedEmojiTests {
         let string = label.attributedText?.string as NSString?
         let first = string?.range(of: "\u{FFFC}").location ?? NSNotFound
         let second = string?.range(of: "\u{FFFC}", range: NSRange(location: first + 1, length: (string?.length ?? 0) - first - 1)).location ?? NSNotFound
-        #expect(attachment(at: second, of: label)?.image?.size != CGSize(width: 1, height: 1), "最後の行の絵文字は静止画を残す")
+        #expect(attachment(at: second, of: label)?.image?.size != CGSize(width: 1, height: 1), "最後の行の行末の絵文字は静止画を残す")
+    }
+
+    /// 1つの段落が折り返して「…」で切られるときも、最後の行の前のほうの絵文字は、UILabelが描く位置に重ねて動かす。
+    /// TextKit 2は「…」で切る段落を折り返さずに1行に並べるため、そのままでは2行目より後の絵文字の位置が取れなかった。
+    @Test func emojiOnLastLineOfWrappedTruncatedParagraphIsAnimated() async throws {
+        let crab = try emoji("crab")
+        let text = RichText.plain("1行目の文章がここにありますので、続けて書いていきます。2行目もまだまだ続いていく長めの文章です。3行目 :crab: そしてまだまだ長い文章が続くので、この行は最後に「…」で切られるはずです。", emojis: [crab])
+        let label = try await label(text, store: store(), numberOfLines: 3, lineBreakMode: .byTruncatingTail)
+
+        let layers = animatedLayers(of: label)
+        #expect(layers.count == 1)
+        #expect(layers.first.map { $0.frame.midY > label.bounds.height * 2 / 3 } == true, "3行目に重ねる")
+    }
+
+    /// 画面が左から右でも、右から左に書く段落の最後の行は、「…」が左の端に入るので、絵文字を動かさない。
+    @Test func emojiOnLastLineOfRightToLeftParagraphKeepsStillImage() async throws {
+        let crab = try emoji("crab")
+        let text = RichText.plain("مرحبا :crab: هذا نص طويل جدا يستمر ويستمر حتى يتم قطعه في نهاية السطر الأخير من التسمية", emojis: [crab])
+        let label = try await label(text, store: store(), numberOfLines: 1, lineBreakMode: .byTruncatingTail)
+
+        #expect(animatedLayers(of: label).isEmpty)
     }
 
     /// 「…」で切るラベルでも、切られていなければ、最後の行の絵文字も動かす。

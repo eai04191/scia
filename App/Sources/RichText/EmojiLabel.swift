@@ -1,3 +1,4 @@
+import CoreText
 import SciaCore
 import UIKit
 
@@ -7,8 +8,10 @@ import UIKit
 /// ラベルは文字の高さに合わせて置くため、UILabelが余った高さで文字を縦に中央へ寄せる分はずれとして扱わない。
 ///
 /// 動かすのは、ラベルの中に収まっている絵文字だけにする。切られて見えない行にある絵文字と、行末で切られてはみ出す絵文字は、文字の中の静止画のまま描く。
-/// 「…」で切るラベルが実際に切られているときは、最後の行の絵文字も静止画にする。UILabelが末尾を「…」に置き換えた位置は、TextKit 2の並びからは分からず、
-/// 動く層だけが「…」の上に残るおそれがあるため。
+/// 「…」で切るラベルが実際に切られているときは、最後の行のうち、「…」に置き換わるかもしれない絵文字も静止画にする。UILabelが末尾を「…」に置き換えた位置は、
+/// TextKit 2の並びからは分からず、動く層だけが「…」の上に残るおそれがあるため。UILabelは折り返したあとで最後の行の末尾だけを置き換えるので、
+/// 末尾で切るときは、絵文字の右端に「…」の幅を足しても行に収まる絵文字は、並べた位置のまま残る。それより行末に近い絵文字だけを止める。
+/// 先頭や中ほどで切るとき、右から左に書く文字を含む段落、左寄せでないときは、置き換えで行の中の位置が動くので、最後の行の絵文字をすべて止める。
 class EmojiLabel: UILabel {
     /// アニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら、絵文字は静止画のまま描く。
     var emojiImages: EmojiImageStore? {
@@ -130,7 +133,7 @@ class EmojiLabel: UILabel {
         return found
     }
 
-    /// 動かさない絵文字の位置。ラベルに収まらない絵文字と、「…」で切られているときの最後の行の絵文字。
+    /// 動かさない絵文字の位置。ラベルに収まらない絵文字と、「…」で切られているときに、最後の行で「…」に置き換わるかもしれない絵文字。
     private func stillEmojiIndices(in layout: TextLayout) -> Set<Int> {
         guard let sourceText else { return [] }
         let visible = bounds.insetBy(dx: -1, dy: -1)
@@ -143,12 +146,40 @@ class EmojiLabel: UILabel {
                     indices.insert(index)
                     continue
                 }
-                if let lastLineMinY, frame.midY >= lastLineMinY {
+                if let lastLineMinY, frame.midY >= lastLineMinY, !staysBeforeEllipsis(frame, at: index, in: sourceText) {
                     indices.insert(index)
                 }
             }
         }
         return indices
+    }
+
+    /// 最後の行の`index`の絵文字が、末尾を「…」に置き換えても、並べた位置のまま残るか。
+    /// 末尾で切る左寄せの左から右へ書く行で、絵文字の右端に「…」の幅を足しても行に収まるとき。
+    private func staysBeforeEllipsis(_ frame: CGRect, at index: Int, in text: NSAttributedString) -> Bool {
+        guard effectiveUserInterfaceLayoutDirection == .leftToRight, !Self.containsRightToLeft(paragraphAt: index, in: text) else { return false }
+        let style = text.attribute(.paragraphStyle, at: index, effectiveRange: nil) as? NSParagraphStyle
+        let mode = style?.lineBreakMode ?? lineBreakMode
+        let alignment = style?.alignment ?? textAlignment
+        guard mode == .byTruncatingTail, alignment == .left || alignment == .natural else { return false }
+        return frame.maxX + ellipsisWidth(in: text) <= bounds.width
+    }
+
+    /// `index`を含む段落に、右から左へ書く文字があるか。画面が左から右でも、アラビア語やヘブライ語の段落は右から左に並び、「…」は左の端に入る。
+    private static func containsRightToLeft(paragraphAt index: Int, in text: NSAttributedString) -> Bool {
+        let range = (text.string as NSString).paragraphRange(for: NSRange(location: index, length: 0))
+        let line = CTLineCreateWithAttributedString(text.attributedSubstring(from: range))
+        let runs = CTLineGetGlyphRuns(line) as? [CTRun] ?? []
+        return runs.contains { CTRunGetStatus($0).contains(.rightToLeft) }
+    }
+
+    /// 「…」の幅。UILabelは「…」を、置き換えた位置の文字の大きさで描くが、その位置は分からないので、文字列の中でいちばん大きい文字で測る。
+    private func ellipsisWidth(in text: NSAttributedString) -> CGFloat {
+        var fonts = [font].compactMap { $0 }
+        text.enumerateAttribute(.font, in: NSRange(location: 0, length: text.length)) { value, _, _ in
+            if let font = value as? UIFont { fonts.append(font) }
+        }
+        return fonts.map { ("…" as NSString).size(withAttributes: [.font: $0]).width }.max() ?? 0
     }
 
     /// 行数を限っていて、文字列がその行数に収まらず、末尾を「…」で切っているか。
