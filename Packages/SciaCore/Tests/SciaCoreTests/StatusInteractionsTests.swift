@@ -67,11 +67,69 @@ struct StatusInteractionsTests {
     @Test func revertsWhenServerFails() async throws {
         let shown = Shown(try status(favourites: 3))
         let interactions = StatusInteractions(operations: operations { _ in throw Failure() }) { shown.update($0, $1) }
+        var settled: [Status] = []
+        interactions.onSettle = { _, status in settled.append(status) }
 
         await #expect(throws: Failure.self) { try await interactions.toggle(.favourite, on: shown.status) }
 
         #expect(shown.history.map(\.favourited) == [true, false])
         #expect(shown.status.favouritesCount == 3)
+        #expect(settled.isEmpty)
+    }
+
+    /// サーバーが受け付けたら、結果を反映した元の投稿を知らせる。お気に入りの一覧に入れるのに使う。
+    @Test func reportsSettledOriginalStatus() async throws {
+        let original = try status(favourites: 3)
+        let boost = Status(id: "99", createdAt: original.createdAt, account: original.account, content: "", spoilerText: "", url: nil, reblog: original)
+        let fromServer = try status(favourited: true, favourites: 5)
+        let interactions = StatusInteractions(operations: operations { _ in fromServer }) { _, _ in }
+        var settled: [(StatusInteractions.Action, Status)] = []
+        interactions.onSettle = { settled.append(($0, $1)) }
+
+        #expect(try await interactions.toggle(.favourite, on: boost))
+
+        #expect(settled.map(\.0) == [.favourite])
+        #expect(settled.map(\.1.id) == ["10"])
+        #expect(settled.map(\.1.favourited) == [true])
+        #expect(settled.map(\.1.favouritesCount) == [5])
+    }
+
+    /// お気に入りの結果を待っている間にブックマークしたら、お気に入りを受け付けたときに知らせる投稿にも、ブックマークを含める。
+    /// 押したときの古い状態で、お気に入りの一覧にブックマークしていない行として入れないため。
+    @Test func settledStatusIncludesActionPressedWhileWaiting() async throws {
+        let shown = Shown(try status())
+        let gate = FetchGate()
+        let favourited = try status(favourited: true, favourites: 1)
+        let bookmarked = try status().settingBookmarked(true)
+        let operations = StatusInteractions.Operations(
+            favourite: { _ in
+                await gate.wait()
+                return favourited
+            },
+            unfavourite: { _ in throw Failure() },
+            reblog: { _, _ in throw Failure() },
+            unreblog: { _ in throw Failure() },
+            bookmark: { _ in bookmarked },
+            unbookmark: { _ in throw Failure() },
+            muteConversation: { _ in throw Failure() },
+            unmuteConversation: { _ in throw Failure() },
+            pin: { _ in throw Failure() },
+            unpin: { _ in throw Failure() }
+        )
+        let interactions = StatusInteractions(operations: operations) { shown.update($0, $1) }
+        var settled: [(StatusInteractions.Action, Status)] = []
+        interactions.onSettle = { settled.append(($0, $1)) }
+        let original = shown.status
+
+        let favourite = Task { try await interactions.toggle(.favourite, on: original) }
+        await gate.waitUntilWaiting()
+        #expect(try await interactions.toggle(.bookmark, on: shown.status))
+        await gate.open()
+        #expect(try await favourite.value)
+
+        #expect(settled.map(\.0) == [.bookmark, .favourite])
+        #expect(settled.map(\.1.bookmarked) == [true, true])
+        #expect(settled.map(\.1.favourited) == [true, true])
     }
 
     @Test func ignoresSameActionWhileWaiting() async throws {

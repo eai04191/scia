@@ -5,6 +5,8 @@ public enum TabItem: String, MenuItemKind {
     case local
     case federated
     case notifications
+    case bookmarks
+    case favourites
 
     public init(_ feed: TimelineFeed) {
         switch feed {
@@ -14,13 +16,23 @@ public enum TabItem: String, MenuItemKind {
         }
     }
 
-    /// 既定は、切り替えタブを使わず4つを直接並べる。
+    public init(_ kind: SavedStatusesKind) {
+        switch kind {
+        case .bookmarks: self = .bookmarks
+        case .favourites: self = .favourites
+        }
+    }
+
+    /// 既定は、切り替えタブを使わず4つを直接並べる。ブックマークとお気に入りは無効にして、切り替えタブの側に置く。
+    /// 有効にすると切り替えタブに入る。たまに見る一覧なので、ふだん並べる4つを押しのけないため。
     public static let defaultLayout = MenuLayout<TabItem>(defaultElements: [
         .item(.home, isVisible: true),
         .item(.local, isVisible: true),
         .item(.federated, isVisible: true),
         .item(.notifications, isVisible: true),
         .more,
+        .item(.bookmarks, isVisible: false),
+        .item(.favourites, isVisible: false),
     ])
 }
 

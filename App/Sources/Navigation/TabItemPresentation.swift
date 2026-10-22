@@ -8,6 +8,8 @@ extension TabItem: MenuItemPresentable {
         case .local: "ローカル"
         case .federated: "連合"
         case .notifications: "通知"
+        case .bookmarks: "ブックマーク"
+        case .favourites: "お気に入り"
         }
     }
 
@@ -19,6 +21,8 @@ extension TabItem: MenuItemPresentable {
         case .local: "person.2"
         case .federated: "globe"
         case .notifications: "bell"
+        case .bookmarks: "bookmark"
+        case .favourites: "star"
         }
     }
 

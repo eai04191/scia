@@ -513,6 +513,29 @@ public struct MastodonClient: Sendable {
         return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: false)
     }
 
+    /// ブックマークした投稿を、ブックマークした新しい順に返す。1回に読める件数の上限は40件。
+    /// - Parameter maxID: 前のページの`SavedStatusesPage.nextMaxID`。nilなら最新のページ。
+    /// https://docs.joinmastodon.org/methods/bookmarks/#get
+    public func bookmarks(maxID: String?, limit: Int) async throws -> SavedStatusesPage {
+        try await savedStatuses(path: "api/v1/bookmarks", maxID: maxID, limit: limit)
+    }
+
+    /// お気に入りした投稿を、お気に入りした新しい順に返す。1回に読める件数の上限は40件。
+    /// - Parameter maxID: 前のページの`SavedStatusesPage.nextMaxID`。nilなら最新のページ。
+    /// https://docs.joinmastodon.org/methods/favourites/#get
+    public func favourites(maxID: String?, limit: Int) async throws -> SavedStatusesPage {
+        try await savedStatuses(path: "api/v1/favourites", maxID: maxID, limit: limit)
+    }
+
+    /// `max_id`は投稿のIDではない内部のIDで、`Link`ヘッダーの`next`のURLにだけ書かれている。
+    /// URLをそのまま開かず`max_id`だけを取り出すのは、トークンを付けて送る先を、ログインしたサーバーの決まったパスに限るため。
+    private func savedStatuses(path: String, maxID: String?, limit: Int) async throws -> SavedStatusesPage {
+        let query = [URLQueryItem(name: "limit", value: String(limit))] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
+        let (list, response) = try await get(ElementList<Status>.self, path: path, query: query)
+        let link = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)
+        return SavedStatusesPage(statuses: list.elements, unreadable: list.unreadable, nextMaxID: link?.queryValue("max_id", of: "next"))
+    }
+
     /// `user@domain`の形のacctか、プロフィールのURLからアカウントを探す。自分のサーバーが知らないアカウントも、相手のサーバーに問い合わせて探す。
     /// 見つからなければnil。
     /// https://docs.joinmastodon.org/methods/search/#v2
@@ -915,6 +938,22 @@ public struct TimelinePage: Sendable, Equatable {
     var ids: [String] { statuses.map(\.id) + unreadable.map(\.id) }
     var count: Int { statuses.count + unreadable.count }
     var isEmpty: Bool { statuses.isEmpty && unreadable.isEmpty }
+}
+
+/// ブックマークやお気に入りの1ページ分。
+public struct SavedStatusesPage: Sendable, Equatable {
+    /// ブックマークした順、お気に入りした順の新しい順。投稿のIDの順とは限らない。
+    public let statuses: [Status]
+    /// 読めなかった投稿。応答の中の位置は分からないため、読めた投稿の後ろに並べる。
+    public let unreadable: [UnreadableItem]
+    /// 続きのページを読むときの`max_id`。`Link`ヘッダーに`next`がなければnilで、これより古いものはない。
+    public let nextMaxID: String?
+
+    public init(statuses: [Status], unreadable: [UnreadableItem] = [], nextMaxID: String?) {
+        self.statuses = statuses
+        self.unreadable = unreadable
+        self.nextMaxID = nextMaxID
+    }
 }
 
 /// 通知の1ページ分。

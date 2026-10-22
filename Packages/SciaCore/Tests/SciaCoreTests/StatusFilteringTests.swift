@@ -28,6 +28,13 @@ struct StatusFilteringTests {
         #expect(verdict.isHidden)
     }
 
+    /// ブックマークやお気に入りの一覧では、「隠す」に一致しても隠さず、警告で畳む。公式のWebクライアントの`warnInsteadOfHide`と同じ。
+    @Test func warnsInsteadOfHidingWhenAsked() {
+        let saved = StatusFiltering(context: .home, myAccountID: me.id, hidesMatches: false)
+        let verdict = saved.verdict(for: status("10", filtered: [filter("a", .warn), filter("b", .hide), filter("c", .blur)]), now: now)
+        #expect(verdict == FilterVerdict(isHidden: false, warningTitles: ["a", "b"], mediaTitles: ["c"], ownMatchTitles: []))
+    }
+
     @Test func warnsWithTitlesAndBlursMediaSeparately() {
         let verdict = home.verdict(for: status("10", filtered: [filter("a", .warn), filter("b", .blur), filter("a", .warn)]), now: now)
         #expect(verdict == FilterVerdict(isHidden: false, warningTitles: ["a"], mediaTitles: ["b"], ownMatchTitles: []))

@@ -12,10 +12,14 @@ public struct StatusFiltering: Sendable, Equatable {
     public let context: FilterResult.Context
     /// 自分のアカウントのID。
     public let myAccountID: String?
+    /// 「隠す」のフィルターに一致した投稿を隠すか。falseなら隠さずに警告で畳む。
+    /// ブックマークやお気に入りのように、自分で残した投稿を並べる一覧で使う。公式のWebクライアントと同じ（`warnInsteadOfHide`）。
+    public let hidesMatches: Bool
 
-    public init(context: FilterResult.Context, myAccountID: String?) {
+    public init(context: FilterResult.Context, myAccountID: String?, hidesMatches: Bool = true) {
         self.context = context
         self.myAccountID = myAccountID
+        self.hidesMatches = hidesMatches
     }
 
     /// `now`の時点で、`status`をどう出すか。ブーストなら元の投稿で決める。
@@ -29,7 +33,7 @@ public struct StatusFiltering: Sendable, Equatable {
         if shown.account.id == myAccountID {
             return FilterVerdict(isHidden: false, warningTitles: [], mediaTitles: [], ownMatchTitles: Self.titles(of: filters))
         }
-        if filters.contains(where: { $0.filterAction == .hide }) {
+        if hidesMatches, filters.contains(where: { $0.filterAction == .hide }) {
             return FilterVerdict(isHidden: true, warningTitles: [], mediaTitles: [], ownMatchTitles: [])
         }
         return FilterVerdict(

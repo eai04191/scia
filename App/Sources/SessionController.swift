@@ -13,8 +13,12 @@ final class SessionController {
     private let local: FeedTimelineController
     private let federated: FeedTimelineController
     private let notifications: NotificationsController
+    private let bookmarks: SavedStatusesController
+    private let favourites: SavedStatusesController
     /// 投稿の一覧のタブ。ホーム、ローカル、連合。
     private var feeds: [FeedTimelineController] { [home, local, federated] }
+    /// 自分で残した投稿の一覧のタブ。ブックマーク、お気に入り。
+    private var savedLists: [SavedStatusesController] { [bookmarks, favourites] }
     /// 各タブで共有する、ストリーミングの接続。
     private let streamingHub: StreamingHub
     private let client: MastodonClient
@@ -121,6 +125,10 @@ final class SessionController {
         let local = FeedTimelineController(feed: .local, client: client, streamingHub: streamingHub) { forward() }
         let federated = FeedTimelineController(feed: .federated, client: client, streamingHub: streamingHub) { forward() }
         let notifications = NotificationsController(client: client, streamingHub: streamingHub) { forward() }
+        let bookmarks = SavedStatusesController(kind: .bookmarks, client: client) { forward() }
+        let favourites = SavedStatusesController(kind: .favourites, client: client) { forward() }
+        self.bookmarks = bookmarks
+        self.favourites = favourites
         self.home = home
         self.local = local
         self.federated = federated
@@ -155,19 +163,28 @@ final class SessionController {
             local.updateStatus(id, transform)
             federated.updateStatus(id, transform)
             notifications.updateStatus(id, transform)
+            bookmarks.updateStatus(id, transform)
+            favourites.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
             threads.updateStatus(id, transform)
+        }
+        // 付けた投稿は、サーバーが受け付けたところでブックマークやお気に入りの一覧の先頭に入れる。外したときは行を残す。
+        interactions.onSettle = { action, status in
+            bookmarks.statusDidSettle(action, status)
+            favourites.statusDidSettle(action, status)
         }
         polls = PollVoting(operations: Self.pollOperations(client: client)) { id, transform in
             home.updateStatus(id, transform)
             local.updateStatus(id, transform)
             federated.updateStatus(id, transform)
             notifications.updateStatus(id, transform)
+            bookmarks.updateStatus(id, transform)
+            favourites.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
             threads.updateStatus(id, transform)
         }
         linkCards = LinkCardRefresher(client: client) { refetched in
-            for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, profiles.updateStatus, threads.updateStatus] {
+            for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, profiles.updateStatus, threads.updateStatus] {
                 update(refetched.id) { $0.adoptingCard(of: refetched) }
             }
         }
@@ -176,8 +193,17 @@ final class SessionController {
         let localNavigation = ContentNavigationController(rootViewController: local.viewController)
         let federatedNavigation = ContentNavigationController(rootViewController: federated.viewController)
         let notificationsNavigation = ContentNavigationController(rootViewController: notifications.viewController)
+        let bookmarksNavigation = ContentNavigationController(rootViewController: bookmarks.viewController)
+        let favouritesNavigation = ContentNavigationController(rootViewController: favourites.viewController)
         let tabs = TabArrangement(
-            navigations: [.home: homeNavigation, .local: localNavigation, .federated: federatedNavigation, .notifications: notificationsNavigation],
+            navigations: [
+                .home: homeNavigation,
+                .local: localNavigation,
+                .federated: federatedNavigation,
+                .notifications: notificationsNavigation,
+                .bookmarks: bookmarksNavigation,
+                .favourites: favouritesNavigation,
+            ],
             placement: TabPlacement(layout: AppDependencies.settings.tabLayout(for: credential.handle)),
             restoring: AppDependencies.settings.switchTabItem(for: credential.handle)
         )
@@ -197,7 +223,7 @@ final class SessionController {
             tabBarController.noticeOverlay?.follow(nil)
         }
         tabBarController.delegate = tabBarDelegate
-        for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation] {
+        for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation, bookmarksNavigation, favouritesNavigation] {
             navigation.delegate = navigationDelegate
             // 奥の画面を開いているときは、その画面の上のバーなので、一覧は動かさない。
             navigation.onEmptyBarClickOnMac = { [weak navigation] in
@@ -304,7 +330,7 @@ final class SessionController {
                     if let editing = draft.editing {
                         // ストリーミングの編集の知らせを待たずに、どの一覧にも編集したあとの投稿を出す。切れている間も直るようにするため。
                         let edited = try await client.editStatus(editing, to: draft)
-                        for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, profiles.updateStatus, threads.updateStatus] {
+                        for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, profiles.updateStatus, threads.updateStatus] {
                             update(edited.id) { _ in edited }
                         }
                     } else {
@@ -336,7 +362,7 @@ final class SessionController {
             guard state == .invalid else { return }
             self?.credentialsDidBecomeInvalid()
         }
-        for viewController in [home.viewController, local.viewController, federated.viewController, notifications.viewController] {
+        for viewController in [home.viewController, local.viewController, federated.viewController, notifications.viewController, bookmarks.viewController, favourites.viewController] {
             viewController.navigationItem.leftBarButtonItem = Self.accountButton(for: credential) { [weak self, weak viewController] in
                 let myProfile = UIAction(title: "自分のプロフィール", image: UIImage(systemName: "person.crop.circle")) { _ in
                     guard let viewController else { return }
@@ -428,12 +454,22 @@ final class SessionController {
             feed.setEnabled(placement.location(of: TabItem(feed.feed)) != .disabled)
         }
         notifications.setEnabled(placement.location(of: .notifications) != .disabled)
+        // 見せていた一覧を無効にしたら、UIKitが選んだ先頭のタブへ移り、見せなくなる。
+        applyShownSavedLists()
         guard hasStarted else { return }
         if placement.location(of: .home) != .disabled {
             home.startIfNeeded()
         }
         if placement.location(of: .notifications) != .disabled {
             notifications.startIfNeeded()
+        }
+    }
+
+    /// ブックマークとお気に入りの一覧に、タブで見せているかを伝える。見せ始めたら最新の分を読み、見せなくなったら外した行を消す。
+    /// 上にスレッドやビューアを重ねても、タブで見せていることは変わらないので、消さない。
+    private func applyShownSavedLists() {
+        for list in savedLists {
+            list.setShown(tabs.isShowing(TabItem(list.kind)))
         }
     }
 
@@ -457,9 +493,15 @@ final class SessionController {
             tabs?.show(.notifications)
             ticker?.clear()
         }
-        tabs.onShownItemChange = { ticker.reevaluate() }
+        tabs.onShownItemChange = { [weak self] in
+            ticker.reevaluate()
+            self?.applyShownSavedLists()
+        }
         notifications.onArrival = { notification, verdict in ticker.receive(notification, verdict: verdict) }
-        tabBarDelegate.onSelect = { ticker.reevaluate() }
+        tabBarDelegate.onSelect = { [weak self] in
+            ticker.reevaluate()
+            self?.applyShownSavedLists()
+        }
         observeStatusBarTickerSetting()
         #if DEBUG
         for feed in feeds {
@@ -1026,6 +1068,9 @@ final class SessionController {
             feed.setAccount(relationship.id, excluded: relationship.blocking || relationship.muting)
         }
         notifications.setAccount(relationship.id, excluded: relationship.blocking || (relationship.muting && relationship.mutingNotifications))
+        for list in savedLists {
+            list.setAccount(relationship.id, excluded: relationship.blocking || relationship.muting)
+        }
     }
 
     /// 期間を決めたミュートは、期限が来たら関係を読み直し、ミュートが明けていれば、一覧から除くのをやめる。
@@ -1150,6 +1195,9 @@ final class SessionController {
                     feed.removeStatus(target.id)
                 }
                 notifications.removeStatus(target.id)
+                for list in savedLists {
+                    list.removeStatus(target.id)
+                }
                 profiles.removeStatus(target.id)
                 threads.removeStatus(target.id)
                 if composer.model.editedStatus?.id == target.id {
@@ -1481,6 +1529,9 @@ final class SessionController {
             feed.recover()
         }
         notifications.recover()
+        for list in savedLists {
+            list.recover()
+        }
     }
 
     // MARK: - ログインし直し
@@ -1498,6 +1549,9 @@ final class SessionController {
             feed.stop()
         }
         notifications.stop()
+        for list in savedLists {
+            list.stop()
+        }
         // どの画面にいても見えるよう、チップの列の一番上に段を出す。
         notices.reauthentication = NoticeCenter.Reauthentication(handle: credential.handle, isInProgress: isReauthenticating) { [weak self] in
             self?.reauthenticate()
@@ -1541,6 +1595,9 @@ final class SessionController {
             feed.stop()
         }
         notifications.stop()
+        for list in savedLists {
+            list.stop()
+        }
         recoveryTasks.forEach { $0.cancel() }
         recoveryTasks.removeAll()
     }
@@ -1776,16 +1833,19 @@ final class SessionController {
         case .unreadable:
             DebugFaults.corruptListElements()
             feeds.forEach { $0.reloadIfStarted() }
+            savedLists.forEach { $0.reloadIfStarted() }
             notifications.start()
         case .status(let statusCode, let retryAfter):
             DebugFaults.fail(withStatus: statusCode, retryAfter: retryAfter)
             feeds.forEach { $0.reloadIfStarted() }
+            savedLists.forEach { $0.reloadIfStarted() }
             notifications.start()
         case .statusCleared:
             DebugFaults.fail(withStatus: nil)
         case .unsupported(let feature):
             DebugFaults.makeUnsupported(feature)
             feeds.forEach { $0.reloadIfStarted() }
+            savedLists.forEach { $0.reloadIfStarted() }
             notifications.start()
         case .regenerating(let isOn):
             DebugFaults.setRegeneratingHome(isOn)
@@ -1876,6 +1936,9 @@ final class SessionController {
             feed.enterForeground()
         }
         notifications.enterForeground()
+        for list in savedLists {
+            list.enterForeground()
+        }
         threads.enterForeground()
     }
 

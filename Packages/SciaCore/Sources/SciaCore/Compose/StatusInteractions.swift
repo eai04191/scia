@@ -77,6 +77,14 @@ public final class StatusInteractions {
         public let action: Action
     }
 
+    /// サーバーが操作を受け付けたとき。操作と、結果を反映した投稿（ブーストなら元の投稿）を渡す。
+    /// ブックマークやお気に入りの一覧に、付けた投稿を入れるのに使う。失敗して戻したときは呼ばない。
+    /// 同じ投稿へのほかの操作の結果を待っている間に押した操作の状態も、渡す投稿に含める。
+    public var onSettle: (@MainActor (Action, Status) -> Void)?
+    /// 結果を待っている操作がある投稿の、いちばん新しい状態。あとから押した操作には、先に押した操作の見込みの状態が入っているため、押したときの投稿で置き換え、受け付けた結果と戻した状態を重ねる。
+    /// `onSettle`に、先に押した操作の、押したときの古い状態を渡さないため。
+    private var latest: [Status.ID: Status] = [:]
+
     public init(operations: Operations, update: @escaping Update) {
         self.operations = operations
         self.update = update
@@ -90,16 +98,26 @@ public final class StatusInteractions {
         let target = status.displayed
         let key = Key(statusID: target.id, action: action)
         guard inFlight.insert(key).inserted else { return false }
-        defer { inFlight.remove(key) }
+        defer {
+            inFlight.remove(key)
+            if !inFlight.contains(where: { $0.statusID == target.id }) {
+                latest[target.id] = nil
+            }
+        }
 
         let turningOn = !Self.isOn(action, in: target)
+        latest[target.id] = Self.setting(action, turningOn, on: target)
         update(target.id) { Self.setting(action, turningOn, on: $0) }
         do {
             let result = try await call(action, turningOn, target.id, reblogVisibility: reblogVisibility)
             // 投稿全体を置き換えると、待っている間に届いた編集や、並行して成功した別の操作を古い内容で戻すため、この操作の結果だけを反映する。
             update(target.id) { Self.adopting(action, of: result, on: $0) }
+            let settled = Self.adopting(action, of: result, on: latest[target.id] ?? target)
+            latest[target.id] = settled
+            onSettle?(action, settled)
         } catch {
             update(target.id) { Self.setting(action, !turningOn, on: $0) }
+            latest[target.id] = latest[target.id].map { Self.setting(action, !turningOn, on: $0) }
             throw error
         }
         return true

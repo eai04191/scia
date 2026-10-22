@@ -10,6 +10,16 @@ struct TabPlacementTests {
         #expect(placement.switchable.isEmpty)
     }
 
+    /// ブックマークとお気に入りは既定で無効にし、有効にすると切り替えタブに入る。保存済みの並びにも同じ位置で差し込む。
+    @Test func savedListsStartDisabledBelowBoundary() {
+        let saved = MenuLayout<TabItem>(tokens: ["item:home", "item:notifications", "more", "item:local", "item:federated"])
+        #expect(saved.tokens == ["item:home", "item:notifications", "more", "hidden:bookmarks", "hidden:favourites", "item:local", "item:federated"])
+        #expect(TabPlacement(layout: saved).location(of: .bookmarks) == .disabled)
+
+        let enabled = MenuLayout<TabItem>(tokens: ["item:home", "more", "item:bookmarks"])
+        #expect(TabPlacement(layout: enabled).location(of: .bookmarks) == .switchTab)
+    }
+
     @Test func itemsBelowBoundaryGoToSwitchTabInOrder() {
         let layout = MenuLayout<TabItem>(elements: [
             .item(.home, isVisible: true),
