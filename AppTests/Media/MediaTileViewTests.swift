@@ -15,7 +15,7 @@ struct MediaTileViewTests {
 
         let copy = tile.makeDecorationCopy()
 
-        let symbols = copy.subviews.compactMap { ($0 as? UIImageView)?.image }.filter(\.isSymbolImage)
+        let symbols = Self.images(in: copy).filter(\.isSymbolImage)
         #expect(symbols.count == 1, "再生マークを複製に載せていません")
     }
 
@@ -28,7 +28,7 @@ struct MediaTileViewTests {
 
         let copy = tile.makeDecorationCopy()
 
-        #expect(copy.subviews.compactMap { ($0 as? UIImageView)?.image }.allSatisfy { !$0.isSymbolImage })
+        #expect(Self.images(in: copy).allSatisfy { !$0.isSymbolImage })
     }
 
     /// 動画とGIFでは、サムネイルも複製に載せる。複製はビューアで再生していたコマを描くため、載せないと閉じる着地でサムネイルの絵に急に切り替わる。
@@ -83,5 +83,12 @@ struct MediaTileViewTests {
             meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900), focus: focus),
             blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
         )
+    }
+
+    /// 複製の中の画像を、入れ子のビューまで含めて集める。再生マークは丸のビューの中に三角を入れて載せるため。
+    private static func images(in view: UIView) -> [UIImage] {
+        view.subviews.flatMap { subview in
+            [(subview as? UIImageView)?.image].compactMap(\.self) + images(in: subview)
+        }
     }
 }

@@ -213,6 +213,9 @@ final class MediaTileView: UIButton, MediaViewerSource {
     private let tuning: TuningStore
     private let thumbnailView = FocusCroppedImageView()
     private let symbolView = UIImageView()
+    /// 動画の再生の印。札と同じ下地の丸に三角を載せ、一覧の札とも、ビューアの丸い再生ボタンとも揃える。
+    private let playView = UIView()
+    private let playGlyphView = UIImageView(image: UIImage(systemName: "play.fill"))
     private let badge = MediaBadgeView()
     private let moreLabel = UILabel()
     private var loadTask: Task<Void, Never>?
@@ -251,11 +254,16 @@ final class MediaTileView: UIButton, MediaViewerSource {
         symbolView.layer.shadowColor = UIColor.black.cgColor
         symbolView.layer.shadowRadius = 4
         symbolView.layer.shadowOffset = .zero
+        playView.backgroundColor = MediaBadgeView.backgroundColor
+        playView.isHidden = true
+        playGlyphView.tintColor = .white
+        playGlyphView.contentMode = .center
+        playView.addSubview(playGlyphView)
         moreLabel.font = .preferredFont(forTextStyle: .title1).bold
         moreLabel.textColor = .white
         moreLabel.textAlignment = .center
         moreLabel.backgroundColor = UIColor.black.withAlphaComponent(0.45)
-        for view in [thumbnailView, symbolView, moreLabel, badge] {
+        for view in [thumbnailView, symbolView, playView, moreLabel, badge] {
             view.isUserInteractionEnabled = false
             addSubview(view)
         }
@@ -350,6 +358,20 @@ final class MediaTileView: UIButton, MediaViewerSource {
             copy.autoresizingMask = [.flexibleRightMargin, .flexibleTopMargin]
             container.addSubview(copy)
         }
+        // 札と違って画像に描かず、丸と三角をそのまま載せる。複製はビューアの大きさまで広がるため、画像にすると三角がぼける。
+        if !playView.isHidden {
+            let copy = UIView(frame: playView.frame)
+            copy.backgroundColor = playView.backgroundColor
+            copy.layer.cornerRadius = playView.layer.cornerRadius
+            copy.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
+            let glyph = UIImageView(image: playGlyphView.image)
+            glyph.frame = playGlyphView.frame
+            glyph.contentMode = playGlyphView.contentMode
+            glyph.preferredSymbolConfiguration = playGlyphView.preferredSymbolConfiguration
+            glyph.tintColor = playGlyphView.tintColor
+            copy.addSubview(glyph)
+            container.addSubview(copy)
+        }
         if let symbol = symbolView.image {
             let copy = UIImageView(image: symbol)
             copy.frame = bounds
@@ -438,6 +460,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         let isOverImage = (!isCovered && Self.hasThumbnail(attachment)) || attachment.blurhash != nil
         symbolView.tintColor = isOverImage ? .white : .secondaryLabel
         symbolView.layer.shadowOpacity = isOverImage ? 0.4 : 0
+        playView.isHidden = attachment.type != .video
         marks = MediaBadgeView.marks(hasDescription: !(attachment.description?.isEmpty ?? true), kind: attachment.type)
         moreLabel.isHidden = hiddenCount == 0
         moreLabel.text = "+\(hiddenCount)"
@@ -461,6 +484,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         symbolView.image = kind.flatMap(Self.symbolName(of:)).flatMap { UIImage(systemName: $0) }
         symbolView.tintColor = .white
         symbolView.layer.shadowOpacity = 0.4
+        playView.isHidden = kind != .video
         marks = MediaBadgeView.marks(hasDescription: !description.isEmpty, kind: kind)
         moreLabel.isHidden = true
         accessibilityParts = (kind.map(Self.kindName(of:)) ?? "メディア", description)
@@ -527,13 +551,24 @@ final class MediaTileView: UIButton, MediaViewerSource {
         if symbolPointSize != pointSize {
             symbolPointSize = pointSize
             symbolView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: pointSize)
+            playGlyphView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: (pointSize * Self.playGlyphRatio).rounded())
         }
+        playView.bounds.size = CGSize(width: pointSize, height: pointSize)
+        playView.center = CGPoint(x: bounds.midX, y: bounds.midY)
+        playView.layer.cornerRadius = pointSize / 2
+        // 三角は重心が左に寄って見えるため、丸の中で少し右へずらす。
+        playGlyphView.frame = playView.bounds.offsetBy(dx: pointSize * Self.playGlyphOffsetRatio, dy: 0)
         moreLabel.frame = bounds
         // 札をタイルの端から離す余白。狭いタイルでもすべての印を出せるよう、タイルの短い辺に合わせて6ptから2ptまで縮める。
         let inset = min(max(min(bounds.width, bounds.height) / 10, 2), 6).rounded()
         let badgeSize = badge.sizeThatFits(CGSize(width: max(bounds.width - inset * 2, 0), height: bounds.height))
         badge.frame = CGRect(x: inset, y: bounds.maxY - inset - badgeSize.height, width: badgeSize.width, height: badgeSize.height)
     }
+
+    /// 再生の印の丸の直径に対する、三角の大きさの比。
+    private static let playGlyphRatio: CGFloat = 0.45
+    /// 再生の印の三角を右へずらす量の、丸の直径に対する比。
+    private static let playGlyphOffsetRatio: CGFloat = 0.04
 
     /// 一覧に画像を出せるか。音声と種類の分からないファイルは、プレビューのURLが画像とは限らないため読まない。
     private static func hasThumbnail(_ attachment: MediaAttachment) -> Bool {
@@ -546,8 +581,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
 
     private static func symbolName(of kind: MediaAttachment.Kind) -> String? {
         switch kind {
-        case .image, .gifv: nil
-        case .video: "play.circle.fill"
+        case .image, .gifv, .video: nil
         case .audio: "waveform"
         case .unknown: "doc"
         }
