@@ -1,5 +1,5 @@
 /// タブバーに置ける項目。並びは長押しのメニューと同じ`MenuLayout`で持ち、「その他」の境目より下の項目は切り替えタブにまとめる。
-/// 決まりはdocs/vision.mdの「タブ」にある。`rawValue`は設定に保存するため、一度使った値は変えない。
+/// 決まりはdocs/tabs.mdにある。`rawValue`は設定に保存するため、一度使った値は変えない。
 public enum TabItem: String, MenuItemKind {
     case home
     case local

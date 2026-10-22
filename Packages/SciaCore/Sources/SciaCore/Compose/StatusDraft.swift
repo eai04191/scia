@@ -6,7 +6,7 @@ public struct StatusDraft: Sendable, Equatable {
     /// 空なら注意書きなしで投稿する。
     public var spoilerText: String
     /// 注意書きの欄を出している。注意書きが空でも、添付があれば添付を閲覧注意にする。注意書きがあれば、falseでも出しているものとして扱う。
-    /// Mastodonのweb UIと同じく、閲覧注意を注意書きの欄で兼ねるため。決まりはdocs/vision.mdの「投稿欄」にある。
+    /// Mastodonのweb UIと同じく、閲覧注意を注意書きの欄で兼ねるため。決まりはdocs/compose.mdの「閲覧注意」にある。
     public var hasSpoiler: Bool
     public var visibility: Status.Visibility
     public let inReplyToID: String?

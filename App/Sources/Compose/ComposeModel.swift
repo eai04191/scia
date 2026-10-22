@@ -122,7 +122,7 @@ final class ComposeModel {
     }
 
     /// 投票の欄を足せる。添付があるときは、Mastodonが一緒に付けられないため足せない。
-    /// 編集では足せない。投票の付いた投稿の編集は、元の投票をそのまま送り直す。決まりはdocs/vision.mdの「投稿欄」にある。
+    /// 編集では足せない。投票の付いた投稿の編集は、元の投票をそのまま送り直す。決まりはdocs/compose.mdの「自分の投稿の編集」にある。
     var canAddPoll: Bool {
         !isPosting && attachments.isEmpty && editedStatus == nil
     }
