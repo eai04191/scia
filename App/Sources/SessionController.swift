@@ -1593,14 +1593,14 @@ final class SessionController {
     private static let sharedTextWhilePostingMessage = "投稿を送っている間は書き始められません。送り終えてから、もう一度共有してください。"
 
     /// 書き始めて、本文の後ろに足す。下書きがなくても置き換えずに足すのは、返信の宛先のように自動で入れた本文を残すため。
+    /// 足した本文が上限の行数に収まらなければ、投稿欄を広げる。
     private func appendSharedText(_ text: String) {
         // 下書きがあるかを聞いている間に、送り始めていることがある。
         guard !composer.model.isPosting else {
             presentAlert(title: Self.sharedTextFailureTitle, message: Self.sharedTextWhilePostingMessage)
             return
         }
-        composer.beginEditing()
-        composer.model.text = SharedQuote.appending(text, to: composer.model.text)
+        composer.beginEditing(appendingShared: text)
     }
 
     /// 共有拡張が受け取ったメディアを、投稿欄に添付して書き始める。書きかけの下書きがあれば、足すか、捨てて新しく書くかを聞く。

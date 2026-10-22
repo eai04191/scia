@@ -442,6 +442,21 @@ final class InlineComposeController: NSObject {
         return true
     }
 
+    /// 共有された本文を後ろに足して書き始める。本文が上限の行数に収まらなければ広げる。
+    /// 共有した本文は自分で打ったものではないので、送る前に全体を見て確かめられるようにするため。
+    /// 本文の上限は打っている途中にタイムラインを隠さないためのもので、別のアプリから戻ってきたところでは当てはまらない。
+    func beginEditing(appendingShared shared: String) {
+        model.text = SharedQuote.appending(shared, to: model.text)
+        // モデルの変更が画面に届くのは少しあとなので、本文の高さを測る前に、本文をここで入れておく。
+        update()
+        beginEditing()
+        guard !isExpanded, textView.bounds.width > 0 else { return }
+        let fitting = textView.sizeThatFits(CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)).height
+        if fitting > maxTextHeight {
+            toggleExpanded(byUser: false)
+        }
+    }
+
     /// 返信先を付けて書き始める。
     func reply(to status: Status) {
         model.setReplyTarget(status)
@@ -452,9 +467,10 @@ final class InlineComposeController: NSObject {
 
     /// 本文の5行の上限を外して、本文に合わせた高さまで広げる。広げていれば、本文の5行の上限がある高さに戻す。
     /// 本文がチューニングの最低の行数より短ければ、その行数の高さまで広げ、書き足す行の場所を先に取る。
-    private func toggleExpanded() {
+    /// - Parameter byUser: 使う人が押して広げたか。違和感レポートに残す操作の記録には、自動で広げたときを入れない。
+    private func toggleExpanded(byUser: Bool = true) {
         isExpanded.toggle()
-        if isExpanded {
+        if isExpanded, byUser {
             UserAction.expandCompose.record()
         }
         logger.info("compose: \(self.isExpanded ? "expand" : "collapse", privacy: .public)")
