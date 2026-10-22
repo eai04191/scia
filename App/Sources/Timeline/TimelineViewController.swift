@@ -116,6 +116,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private(set) lazy var collectionView: UICollectionView = TimelineCollectionView(frame: .zero, collectionViewLayout: makeLayout())
     private lazy var dataSource = makeDataSource()
     private var entries: [ItemID: TimelineEntry] = [:]
+    /// 隣の行とアイコン同士を線でつなぐ行。並びが変わるたびに決め直す。
+    private var replyConnections: [ItemID: ReplyConnection] = [:]
+    /// すぐ上の行が返信先なら、返信の札を出さない。スレッドのように古い順に並べる一覧で、線で返信先が分かるため。
+    /// 新しい順に並べる一覧では、返信先は下の行になるため使わない。
+    var hidesReplyLabelBelowParent = false
     private var loadingGapIDs: Set<String> = []
     /// 直近の読み込みに失敗したギャップと、その理由。行の中で読めなかったことを知らせる。
     private var gapFailures: [String: ErrorPresentation] = [:]
@@ -327,6 +332,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = tuning.value(of: TuningCatalog.contextSymbolSpacing)
             _ = tuning.value(of: TuningCatalog.avatarSpacing)
             _ = tuning.value(of: TuningCatalog.contextSpacing)
+            _ = tuning.value(of: TuningCatalog.replyLineWidth)
+            _ = tuning.value(of: TuningCatalog.replyLineGap)
             _ = tuning.value(of: TuningCatalog.nameBodySpacing)
             _ = tuning.value(of: TuningCatalog.bodyMediaSpacing)
             _ = tuning.value(of: TuningCatalog.nameMediaSpacing)
@@ -487,7 +494,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         snapshot.appendItems(newEntries.map(\.id))
         // 差分はIDで取られるため、同じIDのまま内容が変わった要素は明示的にセルを再構成する。
         let changedIDs = newEntries.filter { entry in previous[entry.id].map { $0 != entry } ?? false }.map(\.id)
-        snapshot.reconfigureItems(Array(Set(changedIDs)))
+        // 隣の行が変わって線のつながりだけが変わった行も描き直す。線は行の高さを変えないため、消す動きを止める理由にはしない。
+        let previousConnections = replyConnections
+        replyConnections = ReplyConnection.connections(in: newEntries)
+        let reconnectedIDs = newEntries.map(\.id).filter { id in
+            previous[id] != nil && previousConnections[id] != replyConnections[id]
+        }
+        snapshot.reconfigureItems(Array(Set(changedIDs + reconnectedIDs)))
         if animatesRemoval, changedIDs.isEmpty, canAnimateRemoval(leaving: newEntries.map(\.id)) {
             dataSource.apply(snapshot, animatingDifferences: true)
             logger.info("setEntries count=\(newEntries.count, privacy: .public) animatesRemoval=true")
@@ -1018,10 +1031,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // ヘッダー画像をナビゲーションバーのすぐ下から置く。
         configuration.headerTopPadding = 0
         // お気に入りやブーストで下の端が光っている行は、光の線を区切りにする。区切り線が光の線に重なると、光源が灰色に濁って見えるため。
+        // 線で下の行とつながっている行も、区切り線を出さない。つながった行を1つの会話として見せるため。
         configuration.itemSeparatorHandler = { [weak self] indexPath, separator in
             var separator = separator
-            if let self, let id = self.dataSource.itemIdentifier(for: indexPath), let shown = self.status(for: id)?.displayed,
-               shown.favourited || shown.reblogged {
+            guard let self, let id = self.dataSource.itemIdentifier(for: indexPath) else { return separator }
+            if let shown = self.status(for: id)?.displayed, shown.favourited || shown.reblogged {
+                separator.bottomSeparatorVisibility = .hidden
+            }
+            if self.replyConnections[id]?.below == true {
                 separator.bottomSeparatorVisibility = .hidden
             }
             return separator
@@ -1132,7 +1149,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     ///   - itemID: この中身を置く行。注意書きを開閉したときに、この行の画面上の位置を保つ。
     func contentConfiguration(for status: Status, isPinned: Bool = false, itemID: ItemID? = nil, base: UIListContentConfiguration) -> PostContentConfiguration {
         let shown = status.displayed
-        var configuration = postContentBuilder.configuration(for: status, isPinned: isPinned, base: base)
+        let connection = itemID.flatMap { replyConnections[$0] } ?? ReplyConnection()
+        let replyLabel = hidesReplyLabelBelowParent && connection.parentIsAbove ? nil : ReplyLabel(status: shown, myAccountID: myAccountID)
+        var configuration = postContentBuilder.configuration(for: status, isPinned: isPinned, replyLabel: replyLabel, base: base)
+        configuration.replyConnection = connection
         configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(shown.account) }
         configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
         if status.reblog != nil, !isPinned {

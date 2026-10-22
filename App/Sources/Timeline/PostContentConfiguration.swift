@@ -2,7 +2,8 @@ import SciaCore
 import UIKit
 
 /// 投稿のセルの中身。左にアイコン、右に名前の行、本文、添付ファイルのサムネイルを並べる。
-/// ブーストや固定された投稿なら、名前の上に、そのことを示す行を足す。
+/// ブーストや固定された投稿、返信なら、名前の上に、そのことを示す行を足す。
+/// 返信と返信先が隣り合う行では、アイコン同士を縦の線でつなぐ。
 ///
 /// 名前の行の右端に時刻を置くため、`UIListContentConfiguration`の文字の枠を使わずに組む。
 struct PostContentConfiguration: UIContentConfiguration {
@@ -18,9 +19,13 @@ struct PostContentConfiguration: UIContentConfiguration {
         let avatar: AvatarView.Content?
         let text: NSAttributedString
         let accessibilityText: String
+        /// 押すと`onOpenContextAccount`を呼ぶ。返信の札は押せる見た目にせず、押下を行に渡してスレッドを開かせるため、受けない。
+        var opensAccount = true
     }
 
     var context: Context?
+    /// 隣の行とアイコン同士を線でつなぐか。
+    var replyConnection = ReplyConnection()
     var avatar: AvatarView.Content
     /// 名前の行に並べる文字。先頭を目立たせ、2つ目は控えめに描く。
     var nameParts: [NSAttributedString]
@@ -79,6 +84,10 @@ struct PostContentConfiguration: UIContentConfiguration {
         var avatarSpacing: CGFloat
         /// 名前の上の行と名前の行のあいだ。
         var contextSpacing: CGFloat
+        /// 返信をつなぐ線の太さ。
+        var replyLineWidth: CGFloat
+        /// 返信をつなぐ線と、アイコンのあいだのすき間。
+        var replyLineGap: CGFloat
         /// 名前の行と本文のあいだ。
         var nameBodySpacing: CGFloat
         /// 本文と添付ファイルのあいだ。
@@ -140,6 +149,9 @@ final class PostContentView: UIView, UIContentView {
     private let bodyView: PostBodyView
     private let textGuide = UILayoutGuide()
     private let reactionGlowView = ReactionGlowView()
+    /// アイコンから上の行へ伸ばす線と、下の行へ伸ばす線。高さに影響しないよう、制約を使わず並べるたびに枠を決める。
+    private let replyLineAbove = UIView()
+    private let replyLineBelow = UIView()
     private var current: PostContentConfiguration
 
     /// 大きさや有無で変わる制約。適用のたびに作り直す。
@@ -230,6 +242,11 @@ final class PostContentView: UIView, UIContentView {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
+        for line in [replyLineAbove, replyLineBelow] {
+            line.backgroundColor = .tertiaryLabel
+            line.isUserInteractionEnabled = false
+            insertSubview(line, at: 0)
+        }
         reactionGlowView.install(in: self)
     }
 
@@ -242,6 +259,8 @@ final class PostContentView: UIView, UIContentView {
         contextIcon.isHidden = context == nil
         contextAvatarView.isHidden = context?.avatar == nil
         contextLabel.isHidden = context == nil
+        contextLabel.isUserInteractionEnabled = context?.opensAccount ?? false
+        contextAvatarView.isUserInteractionEnabled = context?.opensAccount ?? false
         contextAvatarView.apply(context?.avatar)
         contextLabel.emojiImages = configuration.emojiImages
         contextLabel.attributedText = context?.text
@@ -283,6 +302,9 @@ final class PostContentView: UIView, UIContentView {
             filterNoteSpacing: metrics.bodyLinkCardSpacing
         ))
         reactionGlowView.apply(configuration.reactionGlow)
+        replyLineAbove.isHidden = !configuration.replyConnection.above
+        replyLineBelow.isHidden = !configuration.replyConnection.below
+        setNeedsLayout()
         updateConstraints(for: configuration)
         updateAccessibility(for: configuration)
     }
@@ -416,10 +438,25 @@ final class PostContentView: UIView, UIContentView {
     override func layoutSubviews() {
         super.layoutSubviews()
         reactionGlowView.layout(in: bounds, bottomMargin: current.metrics.margins.bottom)
+        layoutReplyLines()
         // 本文の枠は中身の部品の中で決まるため、先に並べておく。
         bodyView.layoutIfNeeded()
         let bodyTextFrame = bodyView.convert(bodyView.textFrame, to: self)
         let textFrame = [contextLabel, nameRow].filter { !$0.isHidden }.map(\.frame).reduce(bodyTextFrame) { $0.union($1) }
         textAccessibilityElement.accessibilityFrameInContainerSpace = textFrame.union(avatarView.frame)
+    }
+
+    /// 線はアイコンの中心の縦に、行の上端からアイコンの上まで、アイコンの下から行の下端まで引く。アイコンとのあいだは少し空ける。
+    private func layoutReplyLines() {
+        let metrics = current.metrics
+        let avatar = avatarView.frame
+        let x = avatar.midX - metrics.replyLineWidth / 2
+        let aboveBottom = max(avatar.minY - metrics.replyLineGap, 0)
+        replyLineAbove.frame = CGRect(x: x, y: 0, width: metrics.replyLineWidth, height: aboveBottom)
+        let belowTop = min(avatar.maxY + metrics.replyLineGap, bounds.maxY)
+        replyLineBelow.frame = CGRect(x: x, y: belowTop, width: metrics.replyLineWidth, height: bounds.maxY - belowTop)
+        for line in [replyLineAbove, replyLineBelow] {
+            line.layer.cornerRadius = metrics.replyLineWidth / 2
+        }
     }
 }

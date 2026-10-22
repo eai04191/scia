@@ -87,6 +87,24 @@ public enum TuningCatalog {
         defaultValue: 16
     )
 
+    /// 返信と返信先の行のアイコン同士をつなぐ線の太さ。
+    public static let replyLineWidth = NumberTuning(
+        id: "timeline.replyLineWidth",
+        title: "返信をつなぐ線の太さ（pt）",
+        range: 0.5...6,
+        step: 0.5,
+        defaultValue: 2
+    )
+
+    /// 返信をつなぐ線と、アイコンのあいだのすき間。
+    public static let replyLineGap = NumberTuning(
+        id: "timeline.replyLineGap",
+        title: "返信をつなぐ線とアイコンのすき間（pt）",
+        range: 0...12,
+        step: 1,
+        defaultValue: 4
+    )
+
     /// 投稿と通知の行で、左のアイコンの列と、右の文字の列のあいだ。
     public static let avatarSpacing = NumberTuning(
         id: "timeline.avatarSpacing",
@@ -1334,6 +1352,8 @@ public enum TuningCatalog {
             .number(contextSymbolSpacing),
             .number(avatarSpacing),
             .number(contextSpacing),
+            .number(replyLineWidth),
+            .number(replyLineGap),
             .number(nameBodySpacing),
             .number(bodyMediaSpacing),
             .number(nameMediaSpacing),

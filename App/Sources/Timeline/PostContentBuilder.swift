@@ -12,7 +12,8 @@ struct PostContentBuilder {
 
     /// タップしたときの処理と添付ファイルは含めない。一覧では呼び出し側が足す。
     /// - Parameter isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。
-    func configuration(for status: Status, isPinned: Bool = false, base: UIListContentConfiguration) -> PostContentConfiguration {
+    /// - Parameter replyLabel: 名前の上に出す返信の札。固定された投稿とブーストでは、そのことを示す行を優先し、札は出さない。
+    func configuration(for status: Status, isPinned: Bool = false, replyLabel: ReplyLabel? = nil, base: UIListContentConfiguration) -> PostContentConfiguration {
         let shown = status.displayed
         let secondaryFont = base.secondaryTextProperties.font
         let metrics = PostContentConfiguration.Metrics(
@@ -23,6 +24,8 @@ struct PostContentBuilder {
             contextSymbolSpacing: tuning.value(of: TuningCatalog.contextSymbolSpacing),
             avatarSpacing: tuning.value(of: TuningCatalog.avatarSpacing),
             contextSpacing: tuning.value(of: TuningCatalog.contextSpacing),
+            replyLineWidth: tuning.value(of: TuningCatalog.replyLineWidth),
+            replyLineGap: tuning.value(of: TuningCatalog.replyLineGap),
             nameBodySpacing: tuning.value(of: TuningCatalog.nameBodySpacing),
             bodyMediaSpacing: tuning.value(of: TuningCatalog.bodyMediaSpacing),
             nameMediaSpacing: tuning.value(of: TuningCatalog.nameMediaSpacing),
@@ -55,6 +58,8 @@ struct PostContentBuilder {
                 text: secondaryRenderer.render(.plain(status.account.displayNameOrUsername, emojis: status.account.emojis)),
                 accessibilityText: "\(status.account.displayNameOrUsername)がブースト"
             )
+        } else if let replyLabel {
+            replyContext(replyLabel, font: secondaryFont, language: language)
         } else {
             nil
         }
@@ -82,6 +87,26 @@ struct PostContentBuilder {
     /// `shown`は表示している投稿。ブーストなら、ブーストされた投稿。
     func reactionGlow(for shown: Status) -> ReactionGlow {
         ReactionGlow(statusID: shown.id, isReblogged: shown.reblogged, isFavourited: shown.favourited, style: ReactionGlow.Style(tuning: tuning, settings: settings))
+    }
+
+    /// 返信の札。自分への返信は、一覧の中で気づけるよう、記号と文字をアプリの色で描く。
+    private func replyContext(_ label: ReplyLabel, font: UIFont, language: String) -> PostContentConfiguration.Context {
+        let text = switch label {
+        case .continuation: "続き"
+        case .toMe: "自分への返信"
+        case .toAccount(let acct): "@\(acct)への返信"
+        case .unknownAccount: "返信"
+        }
+        let color: UIColor = label == .toMe ? .tintColor : .secondaryLabel
+        let renderer = RichTextRenderer(font: font, textColor: color, emojiImages: emojiImages, language: language)
+        return PostContentConfiguration.Context(
+            symbolName: "arrowshape.turn.up.left",
+            symbolColor: color,
+            avatar: nil,
+            text: renderer.render(.plain(text, emojis: [])),
+            accessibilityText: text,
+            opensAccount: false
+        )
     }
 
     func avatarContent(of account: Account) -> AvatarView.Content {
