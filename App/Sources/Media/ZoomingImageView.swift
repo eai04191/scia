@@ -1,9 +1,17 @@
 import UIKit
 
-/// 画像を画面に収めて出し、ピンチとダブルタップで拡大する。
+/// 画像を画面に収めて出し、ピンチとダブルタップで拡大する。画面より小さい画像は、引き伸ばさずに等倍で出す。
 final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
     /// ダブルタップで拡大するとき、画面に収めた大きさの何倍にするか。
     private static let doubleTapZoomScale: CGFloat = 2.5
+    /// 等倍が画面に収めた大きさのこの割合以上なら、等倍ではなく画面に収める。端にわずかな隙間だけが残る見た目を避けるため。
+    private static let nearFitRatio: CGFloat = 0.9
+    /// ピンチを終えた倍率が、画面に収める倍率とこの割合以内の差なら、画面に収める倍率へ寄せる。
+    private static let fitSnapTolerance: CGFloat = 0.15
+
+    /// 等倍で出したときの大きさ。画像の1ピクセルを1ポイントにする。分からなければnilにし、画面に収める。
+    /// サムネイルを出している間も元の画像の大きさで決めるよう、出している画像とは別に、`image`より先に設定する。
+    var naturalSize: CGSize?
 
     private let imageView = UIImageView()
     var onSingleTap: (() -> Void)?
@@ -11,11 +19,11 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
     var image: UIImage? {
         get { imageView.image }
         set {
-            let wasZoomedIn = isZoomedIn
+            let wasAtRest = isAtRest
             imageView.image = newValue
             imageView.isHidden = newValue == nil
-            // サムネイルから元の画像へ差し替えたときは、見ている位置を保つため、拡大していれば倍率を変えない。
-            updateZoomScales(resetting: !wasZoomedIn)
+            // サムネイルから元の画像へ差し替えたときは、見ている位置を保つため、倍率を変えていれば見た目の大きさを変えない。
+            updateZoomScales(resetting: wasAtRest)
         }
     }
 
@@ -30,9 +38,18 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         set { imageView.accessibilityLabel = newValue }
     }
 
+    /// 画面に収める大きさより拡大している。
     var isZoomedIn: Bool {
-        zoomScale > minimumZoomScale + 0.01
+        zoomScale > fitScale + 0.01
     }
+
+    /// 開いたときの倍率のまま。
+    private var isAtRest: Bool {
+        zoomScale <= minimumZoomScale + 0.01
+    }
+
+    /// 画面に収める倍率。
+    private var fitScale: CGFloat = 1
 
     /// 画像を描いている枠。自身の座標。
     var imageFrame: CGRect? {
@@ -73,13 +90,11 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         centerImage()
     }
 
-    /// 画像の大きさを1倍として、画面に収まる倍率を最小にする。
+    /// 画像の大きさを1倍として、画面に収まる倍率と等倍のうち小さいほうを最小にする。
     private func updateZoomScales(resetting: Bool) {
         guard let size = imageView.image?.size, size.width > 0, size.height > 0, bounds.width > 0, bounds.height > 0 else { return }
-        let previousMinimum = minimumZoomScale
         fittedBoundsSize = bounds.size
         let fit = min(bounds.width / size.width, bounds.height / size.height)
-        let previousScale = zoomScale
         let previousImageWidth = imageView.frame.width
         let previousCenter = normalizedVisibleCenter()
         // 倍率の範囲が前の画像のままだと、1への切り替えが範囲へ切り上げられ、拡大した状態の`imageView`に大きさを設定してしまう。
@@ -88,14 +103,14 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         zoomScale = 1
         imageView.frame = CGRect(origin: .zero, size: size)
         contentSize = size
-        minimumZoomScale = fit
+        fitScale = fit
+        minimumZoomScale = fit * naturalRatio()
         maximumZoomScale = max(fit * 4, 1)
         if resetting || previousImageWidth == 0 {
-            zoomScale = fit
+            zoomScale = minimumZoomScale
         } else {
             // 差し替える前と同じ見た目の大きさにする。
-            let ratio = previousScale / previousMinimum
-            zoomScale = min(max(fit * ratio, minimumZoomScale), maximumZoomScale)
+            zoomScale = min(max(previousImageWidth / size.width, minimumZoomScale), maximumZoomScale)
             centerImage()
             if let previousCenter {
                 restoreVisibleCenter(previousCenter)
@@ -105,13 +120,21 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         centerImage()
     }
 
+    /// 等倍で出したときの大きさの、画面に収めた大きさに対する割合。1を超えない。等倍が分からないか、ほぼ画面に収まるなら1。
+    private func naturalRatio() -> CGFloat {
+        guard let naturalSize, naturalSize.width > 0, naturalSize.height > 0 else { return 1 }
+        let ratio = 1 / min(bounds.width / naturalSize.width, bounds.height / naturalSize.height)
+        return ratio >= Self.nearFitRatio ? 1 : ratio
+    }
+
     /// 違和感レポートに残す、倍率と大きさの状態。
     func stateDump() -> String {
         """
         bounds: \(bounds.size)
         fittedBoundsSize: \(fittedBoundsSize)
         imageSize: \(imageView.image.map { "\($0.size) scale=\($0.scale)" } ?? "nil")
-        zoomScale: \(zoomScale) min=\(minimumZoomScale) max=\(maximumZoomScale)
+        naturalSize: \(naturalSize.map { "\($0)" } ?? "nil")
+        zoomScale: \(zoomScale) min=\(minimumZoomScale) fit=\(fitScale) max=\(maximumZoomScale)
         contentSize: \(contentSize)
         contentInset: \(contentInset)
         contentOffset: \(contentOffset)
@@ -148,11 +171,16 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
     }
 
     @objc private func doubleTapped(_ recognizer: UITapGestureRecognizer) {
-        if isZoomedIn {
+        if !isAtRest {
             setZoomScale(minimumZoomScale, animated: true)
             return
         }
-        let scale = min(minimumZoomScale * Self.doubleTapZoomScale, maximumZoomScale)
+        // 等倍で出している小さい画像は、まず画面に収める。
+        if fitScale > minimumZoomScale + 0.01 {
+            setZoomScale(fitScale, animated: true)
+            return
+        }
+        let scale = min(fitScale * Self.doubleTapZoomScale, maximumZoomScale)
         let point = recognizer.location(in: imageView)
         let size = CGSize(width: bounds.width / scale, height: bounds.height / scale)
         zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height), animated: true)
@@ -168,5 +196,12 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         centerImage()
+    }
+
+    /// 等倍で出している小さい画像を、画面に収める倍率の近くまでピンチしたら、画面に収める。
+    /// 等倍へ戻したときは寄せない。等倍が画面に収める倍率に近い画像で、ダブルタップで等倍へ戻せなくなるため。
+    func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+        guard fitScale > minimumZoomScale + 0.01, scale > minimumZoomScale + 0.01, abs(scale - fitScale) > 0.001, abs(scale - fitScale) <= fitScale * Self.fitSnapTolerance else { return }
+        setZoomScale(fitScale, animated: true)
     }
 }

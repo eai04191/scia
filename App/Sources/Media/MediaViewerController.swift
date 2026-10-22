@@ -1617,6 +1617,9 @@ final class ImagePageController: MediaPageController {
         let attachment = item.serverAttachment
         let placeholder = preview == nil ? attachment?.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment?.aspectRatio) } : nil
         imageSource = preview != nil ? "thumbnail" : placeholder != nil ? "blurhash" : "none"
+        if let width = attachment?.meta?.original?.width, let height = attachment?.meta?.original?.height {
+            zoomView.naturalSize = CGSize(width: width, height: height)
+        }
         zoomView.image = preview ?? placeholder
         onImageChange?()
         load(hasPreview: preview != nil)
@@ -1664,6 +1667,7 @@ final class ImagePageController: MediaPageController {
             self.spinner.stopAnimating()
             if let image {
                 self.imageSource = "local"
+                self.zoomView.naturalSize = image.size
                 self.zoomView.image = image
                 self.onImageChange?()
                 self.analyze(image)
@@ -1706,6 +1710,10 @@ final class ImagePageController: MediaPageController {
             if let image {
                 self.originalURL = await store.hasOriginal(for: url) ? url : nil
                 self.imageSource = "full"
+                // サーバーが元の大きさを返さなければ、届いた画像の大きさを等倍にする。サムネイルを出していた間は画面に収めていたため、ここで大きさが変わる。
+                if self.zoomView.naturalSize == nil {
+                    self.zoomView.naturalSize = image.size
+                }
                 self.zoomView.image = image
                 self.onImageChange?()
                 self.analyze(image)
