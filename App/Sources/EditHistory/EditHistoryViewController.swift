@@ -15,6 +15,8 @@ final class EditHistoryViewController: UIViewController {
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// 本文のリンクの長押しのメニューの開く項目で、開く場所を決めてURLを開く。
     var onOpenURL: ((URL, LinkBrowser) -> Void)?
+    /// メンションの長押しのメニューの、メンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
+    var userMenuActions: UserMenuActions?
     /// 添付ファイルを覆うか。今の投稿の版は、一覧と同じく、使う人が開いた・隠した選択に従う。セッションがほかの画面とそろえる。
     var mediaCovers = MediaCovers()
     /// 添付ファイルをぼかすフィルターのうち、開いた一覧で一致したものの名前。一覧と同じく、全部の版の添付ファイルを覆う。
@@ -246,6 +248,10 @@ extension EditHistoryViewController: LinkMenuHost {
 
     func showLinkCopiedNotice() {
         notices?.showTransient(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+    }
+
+    func showHandleCopiedNotice() {
+        notices?.showTransient(.handleCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
 
     func openURL(_ url: URL, in browser: LinkBrowser) {

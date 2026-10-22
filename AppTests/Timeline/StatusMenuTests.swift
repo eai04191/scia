@@ -13,9 +13,11 @@ struct StatusMenuTests {
     }
 
     /// - Parameter myAccountID: 自分のアカウントのID。自分の投稿でだけ出る項目を試すときに渡す。
-    private func menu(for entry: TimelineEntry, settings: AppSettings? = nil, myAccountID: String? = nil) throws -> UIMenu? {
+    /// - Parameter userMenuActions: ユーザーのメニューのメンションとハンドルをコピーを組むもの。渡さなければ2つは出ない。
+    private func menu(for entry: TimelineEntry, settings: AppSettings? = nil, myAccountID: String? = nil, userMenuActions: UserMenuActions? = nil) throws -> UIMenu? {
         let viewController = TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: try settings ?? makeSettings())
         viewController.myAccountID = myAccountID
+        viewController.userMenuActions = userMenuActions
         return viewController.contextMenu(for: entry, id: entry.id)
     }
 
@@ -64,7 +66,7 @@ struct StatusMenuTests {
             ["ブックマーク"],
             ["リンクをコピー", "テキストをコピー", "共有", "ブラウザで開く"],
             ["翻訳"],
-            ["@alice[プロフィール,リンクをコピー,共有]"],
+            ["@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"],
         ])
     }
 
@@ -85,7 +87,7 @@ struct StatusMenuTests {
         let links = actions(menu).filter { ["リンクをコピー", "共有", "ブラウザで開く"].contains($0.title) }
         #expect(links.count == 3)
         #expect(links.allSatisfy { !$0.attributes.contains(.disabled) })
-        #expect(outline(menu).last == ["@bob(remote.example)[プロフィール,リンクをコピー,共有]", "@alice[プロフィール,リンクをコピー,共有]"])
+        #expect(outline(menu).last == ["@bob(remote.example)[プロフィール,リンクをコピー,共有,ブラウザで開く]", "@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"])
     }
 
     /// urlはAPIでnullを取りうる。ないときは押せないまま並べ、uriで代わりにしない。
@@ -101,14 +103,14 @@ struct StatusMenuTests {
         let original = try status(url: nil)
         let menu = try menu(for: .status(status(url: nil, reblog: original)))
 
-        #expect(outline(menu).last == ["@alice[プロフィール,リンクをコピー,共有]"])
+        #expect(outline(menu).last == ["@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"])
     }
 
     /// 投稿のない通知では、通知したユーザーと、投稿を必要としない通知の削除だけを出す。
     @Test func followNotificationShowsOnlyNotifyingUserAndDismiss() throws {
         let notification = MastodonNotification(id: "1", type: .follow, createdAt: .now, account: try account("2", "bob"))
 
-        #expect(try outline(menu(for: .notification(notification))) == [["@bob[プロフィール,リンクをコピー,共有]"], ["その他[通知を削除]"]])
+        #expect(try outline(menu(for: .notification(notification))) == [["@bob[プロフィール,リンクをコピー,共有,ブラウザで開く]"], ["その他[通知を削除]"]])
     }
 
     /// 通知したユーザーは、対象の投稿を書いた人より先に出る。
@@ -116,7 +118,7 @@ struct StatusMenuTests {
         let notification = MastodonNotification(id: "1", type: .favourite, createdAt: .now, account: try account("2", "bob"), status: try status(url: nil))
 
         // 最後のまとまりは、通知の削除を入れた「その他」。
-        #expect(try outline(menu(for: .notification(notification))).dropLast().last == ["@bob[プロフィール,リンクをコピー,共有]", "@alice[プロフィール,リンクをコピー,共有]"])
+        #expect(try outline(menu(for: .notification(notification))).dropLast().last == ["@bob[プロフィール,リンクをコピー,共有,ブラウザで開く]", "@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"])
     }
 
     /// 「その他」より下の項目はサブメニューに入る。非表示の項目は出さず、区切り線で分けたまとまりに従う。
@@ -138,7 +140,7 @@ struct StatusMenuTests {
         // 並びに書かなかった項目は、既定で直前にある項目の後ろに差し込まれる。ブラウザで開くと翻訳は共有の後ろに、ユーザーの項目はその後ろに、テキストのコピーはリンクのコピーの後ろに、ブックマークはブーストの後ろに入る。
         #expect(outline == [
             ["返信"],
-            ["共有", "ブラウザで開く", "翻訳", "@alice[プロフィール,リンクをコピー,共有]"],
+            ["共有", "ブラウザで開く", "翻訳", "@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"],
             ["その他[リンクをコピー,テキストをコピー,ブースト,ブックマーク]"],
         ])
     }
@@ -146,11 +148,38 @@ struct StatusMenuTests {
     /// ユーザーのメニューの中身が1つで「その他」が空なら、サブメニューにせず直接並べる。
     @Test func singleUserMenuItemIsListedDirectly() throws {
         let settings = try makeSettings()
-        settings.userMenuLayout = MenuLayout(elements: [.item(.profile, isVisible: true), .item(.copyLink, isVisible: false), .item(.share, isVisible: false), .more])
+        settings.userMenuLayout = MenuLayout(elements: [.item(.profile, isVisible: true), .item(.mention, isVisible: false), .item(.copyHandle, isVisible: false), .item(.copyLink, isVisible: false), .item(.share, isVisible: false), .item(.openInBrowser, isVisible: false), .more])
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings))
 
         #expect(outline.last == ["@aliceのプロフィール"])
+    }
+
+    /// 既定のユーザーのメニューは、開く・書く操作と持ち出す操作でまとまりを分ける。開く場所を選んで開く2つは隠れている。
+    @Test func defaultUserMenuHasMentionAndCopyUsername() throws {
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in })
+
+        let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
+
+        #expect(outline.last == ["@alice[プロフィール,メンション,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く]"])
+    }
+
+    /// メンションとハンドルをコピーを組むものを渡されていない画面では、2つを出さない。
+    @Test func userMenuOmitsMentionAndCopyUsernameWithoutActions() throws {
+        let outline = try outline(menu(for: .status(status(url: nil))))
+
+        #expect(outline.last == ["@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"])
+    }
+
+    /// サブメニューにせず直接並べるときは、メンションの名前に相手を入れる。
+    @Test func singleMentionItemIsListedDirectlyWithAcct() throws {
+        let settings = try makeSettings()
+        settings.userMenuLayout = MenuLayout(elements: [.item(.profile, isVisible: false), .item(.mention, isVisible: true), .item(.copyHandle, isVisible: false), .item(.copyLink, isVisible: false), .item(.share, isVisible: false), .item(.openInBrowser, isVisible: false), .more])
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in })
+
+        let outline = try outline(menu(for: .status(status(url: nil)), settings: settings, userMenuActions: actions))
+
+        #expect(outline.last == ["@aliceにメンション"])
     }
 
     /// ユーザーのメニューの中身が2つ以上か、「その他」に何かあれば、@acctのサブメニューにする。
@@ -160,13 +189,13 @@ struct StatusMenuTests {
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings))
 
-        #expect(outline.last == ["@alice[その他[プロフィール,リンクをコピー,共有]]"])
+        #expect(outline.last == ["@alice[その他[プロフィール,リンクをコピー,共有,ブラウザで開く]]"])
     }
 
     /// ユーザーのメニューに出す項目がなければ、ユーザーの項目を出さない。
     @Test func emptyUserMenuHidesUserItems() throws {
         let settings = try makeSettings()
-        settings.userMenuLayout = MenuLayout(elements: [.item(.profile, isVisible: false), .item(.copyLink, isVisible: false), .item(.share, isVisible: false), .more])
+        settings.userMenuLayout = MenuLayout(elements: [.item(.profile, isVisible: false), .item(.mention, isVisible: false), .item(.copyHandle, isVisible: false), .item(.copyLink, isVisible: false), .item(.share, isVisible: false), .item(.openInBrowser, isVisible: false), .more])
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings))
 
@@ -177,14 +206,14 @@ struct StatusMenuTests {
     @Test func mentionedUsersAreHiddenByDefaultAndListedWhenShown() throws {
         let mentions = [Mention(id: "3", username: "carol", url: nil, acct: "carol"), Mention(id: "4", username: "dave", url: nil, acct: "dave@remote.example")]
         let post = try status(url: nil, mentions: mentions)
-        #expect(try !outline(menu(for: .status(post))).joined().contains("@carol[プロフィール,リンクをコピー,共有]"))
+        #expect(try !outline(menu(for: .status(post))).joined().contains("@carol[プロフィール,リンクをコピー,共有,ブラウザで開く]"))
 
         let settings = try makeSettings()
         settings.statusMenuLayout = MenuLayout(elements: StatusMenuItem.defaultLayout.elements.map { element in
             element == .item(.mentionedUsers, isVisible: false) ? .item(.mentionedUsers, isVisible: true) : element
         })
 
-        #expect(try outline(menu(for: .status(post), settings: settings)).last == ["@alice[プロフィール,リンクをコピー,共有]", "@carol[プロフィール,リンクをコピー,共有]", "@dave(remote.example)[プロフィール,リンクをコピー,共有]"])
+        #expect(try outline(menu(for: .status(post), settings: settings)).last == ["@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]", "@carol[プロフィール,リンクをコピー,共有,ブラウザで開く]", "@dave(remote.example)[プロフィール,リンクをコピー,共有,ブラウザで開く]"])
     }
 
     /// カスタム絵文字は「その他」に、絵文字ごとの`:shortcode:`のサブメニューで並び、中に絵文字の画像のメディアのメニューを出す。

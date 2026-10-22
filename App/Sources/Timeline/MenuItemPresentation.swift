@@ -104,9 +104,14 @@ extension StatusMenuItem: MenuItemContentProviding {
 extension UserMenuItem: MenuItemContentProviding {
     var content: MenuItemContent {
         switch self {
-        case .profile: .own(title: "プロフィール", symbolName: "person.crop.circle")
+        case .profile: .own(title: "プロフィール", symbolName: "person.crop.circle", note: "プロフィール画面では出ません")
+        case .mention: .own(title: "メンション", symbolName: "square.and.pencil", note: "投稿欄のカーソルの位置に入れます")
+        case .copyHandle: .own(title: "ハンドルをコピー", symbolName: "at", note: "サーバー名を付けた形でコピーします")
         case .copyLink: .url(.copyLink)
         case .share: .url(.share)
+        case .openInBrowser: .url(.openInBrowser)
+        case .openInDefaultBrowser: .url(.openInDefaultBrowser)
+        case .openInAppSafari: .url(.openInAppSafari)
         }
     }
 }
@@ -160,6 +165,43 @@ enum MenuUser {
         switch self {
         case .account(let account): account.url
         case .mention(let mention): mention.url
+        }
+    }
+}
+
+/// ユーザーのメニューのメンションとハンドルをコピーで使う相手。
+enum UserMenuTarget {
+    /// APIの`Account`や`mentions`から取った`acct`。そのまま使える。
+    case acct(String)
+    /// 本文や自己紹介のメンションのリンク。APIの`mentions`にないリンクでは、パーサーはリンクの文字列を`acct`の代わりにするが、
+    /// Mastodonはほかのサーバーのユーザーでもリンクの文字列からサーバー名を省くため、そのままでは別のユーザーを指す。プロフィールのURLでアカウントを引いて`acct`を決める。
+    /// - Parameter shownAcct: 見つからなかったときの知らせに出す、リンクの文字列から取った名前。
+    case profileURL(URL, shownAcct: String)
+}
+
+/// ユーザーのメニューの、投稿欄とログイン中のサーバーに頼る項目（メンション、ハンドルをコピー）を組むもの。
+/// 画面を組み立てる側が渡す。渡されていない画面では、2つの項目を出さない。
+struct UserMenuActions {
+    /// 投稿欄で、カーソルの位置に`@acct`を入れる。
+    let mention: @MainActor (UserMenuTarget) -> Void
+    /// サーバー名を付けた`@username@domain`の形でコピーし、コピーできたら`notify`を呼ぶ。
+    let copyHandle: @MainActor (UserMenuTarget, _ notify: @escaping @MainActor () -> Void) -> Void
+
+    /// メンションとハンドルをコピーの項目。ほかの項目ではnil。
+    /// - Parameters:
+    ///   - title: 項目の名前の代わりに出す名前。投稿のメニューで、ユーザーの項目をサブメニューにせず並べるときに使う。
+    ///   - host: コピーしたことを知らせる画面。
+    @MainActor
+    func action(_ item: UserMenuItem, target: UserMenuTarget, title: String? = nil, notifying host: (any LinkMenuHost)?) -> UIAction? {
+        switch item {
+        case .mention:
+            return UIAction(title: title ?? item.title, image: item.image) { _ in mention(target) }
+        case .copyHandle:
+            return UIAction(title: title ?? item.title, image: item.image) { [weak host] _ in
+                copyHandle(target) { host?.showHandleCopiedNotice() }
+            }
+        case .profile, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
+            return nil
         }
     }
 }

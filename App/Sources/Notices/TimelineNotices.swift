@@ -11,6 +11,9 @@ extension Notice {
     /// 投稿のリンクをコピーした。コピーは画面の変化で見えないため知らせる。
     static let linkCopied = Notice(id: "timeline.linkCopied", kind: .success, title: "リンクをコピーしました")
 
+    /// ユーザーのメニューで、サーバー名を付けたハンドルをコピーした。
+    static let handleCopied = Notice(id: "timeline.handleCopied", kind: .success, title: "ハンドルをコピーしました")
+
     /// 投稿の本文をコピーした。
     static let textCopied = Notice(id: "timeline.textCopied", kind: .success, title: "テキストをコピーしました")
 }

@@ -294,10 +294,11 @@ extension TimelineViewController {
     /// 見出しはユーザー名だけにし、ほかのサーバーのユーザーならサーバー名をサブタイトルに出す。
     private func userElement(for user: MenuUser, id: ItemID) -> UIMenuElement? {
         let groups = settings.userMenuLayout.groups
+        let handlers = urlHandlers(id: id)
         if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first?.items, only.count == 1 {
-            return userAction(only[0], for: user, id: id, inSubmenu: false)
+            return userAction(only[0], for: user, handlers: handlers, inSubmenu: false)
         }
-        let children = groups.menuElements { item in userAction(item, for: user, id: id, inSubmenu: true).map { [$0] } ?? [] }
+        let children = groups.menuElements { item in userAction(item, for: user, handlers: handlers, inSubmenu: true).map { [$0] } ?? [] }
         guard !children.isEmpty else { return nil }
         let parts = user.acct.split(separator: "@", maxSplits: 1)
         return UIMenu(
@@ -308,9 +309,29 @@ extension TimelineViewController {
         )
     }
 
-    private func userAction(_ item: UserMenuItem, for user: MenuUser, id: ItemID, inSubmenu: Bool) -> UIAction? {
+    /// プロフィール画面のナビゲーションバーに出す、そのユーザーのユーザーのメニュー。開いているプロフィールを開く「プロフィール」は出さない。
+    /// 出す項目がなければnil。
+    /// - Parameter barButtonItem: 共有のシートを出す起点。
+    func profileUserMenu(for account: Account, from barButtonItem: UIBarButtonItem) -> UIMenu? {
+        let handlers = URLMenuHandlers(
+            linkBrowser: settings.linkBrowser,
+            copy: { [weak self] url in URLSharing.copy(url, notifying: self) },
+            share: { [weak self, weak barButtonItem] url in
+                guard let self else { return }
+                URLSharing.presentShareSheet(for: url, from: self) { $0.sourceItem = barButtonItem }
+            },
+            open: { [weak self] url, browser in self?.openURL(url, in: browser) }
+        )
+        let children = settings.userMenuLayout.groups.menuElements { item in
+            guard item != .profile else { return [] }
+            return userAction(item, for: .account(account), handlers: handlers, inSubmenu: true).map { [$0] } ?? []
+        }
+        return children.isEmpty ? nil : UIMenu(children: children)
+    }
+
+    private func userAction(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, inSubmenu: Bool) -> UIAction? {
         if let action = item.urlAction {
-            return action.action(title: inSubmenu ? nil : Self.inlineTitle(of: action, for: user), url: user.url, handlers: urlHandlers(id: id))
+            return action.action(title: inSubmenu ? nil : Self.inlineTitle(of: action, for: user), url: user.url, handlers: handlers)
         }
         switch item {
         case .profile:
@@ -320,7 +341,11 @@ extension TimelineViewController {
                 case .mention(let mention): self?.onOpenProfileID?(mention.id)
                 }
             }
-        case .copyLink, .share:
+        case .mention:
+            return userMenuActions?.action(item, target: .acct(user.acct), title: inSubmenu ? nil : "@\(user.acct)にメンション", notifying: self)
+        case .copyHandle:
+            return userMenuActions?.action(item, target: .acct(user.acct), title: inSubmenu ? nil : "@\(user.acct)のハンドルをコピー", notifying: self)
+        case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
             // 共通の項目は、上で中身から組んだ。
             return nil
         }

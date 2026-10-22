@@ -474,6 +474,7 @@ final class SessionController {
             self?.open(destination, in: status, from: viewController)
         }
         viewController.onOpenURL = { [weak self] url, browser in self?.open(url, in: browser) }
+        viewController.userMenuActions = userMenuActions
         viewController.onVisibleLinkOnlyCardsChange = { [weak self, weak viewController] statuses in
             guard let self, let viewController else { return }
             #if DEBUG
@@ -709,6 +710,7 @@ final class SessionController {
         viewController.notices = notices
         viewController.mediaTransfers = mediaTransfers
         viewController.onOpenURL = { [weak self] url, browser in self?.open(url, in: browser) }
+        viewController.userMenuActions = userMenuActions
         viewController.onOpenLink = { [weak self, weak viewController] destination in
             guard let self, let viewController else { return }
             // 編集で消したメンションは、今の投稿のメンションの一覧にないため、一覧と同じ引き方ではIDが分からない。プロフィールのURLから探す。
@@ -719,6 +721,48 @@ final class SessionController {
             }
         }
         source?.navigationController?.pushViewController(viewController, animated: true)
+    }
+
+    /// ユーザーのメニューのメンションとハンドルをコピー。メンションは、編集の途中でも編集中の本文に入れる。
+    private var userMenuActions: UserMenuActions {
+        UserMenuActions(
+            mention: { [weak self] target in
+                self?.resolveAcct(of: target, failureTitle: "メンションできませんでした") { acct in
+                    UserAction.mention.record()
+                    self?.composer.mention(acct)
+                }
+            },
+            copyHandle: { [weak self] target, notify in
+                self?.resolveAcct(of: target, failureTitle: "ハンドルをコピーできませんでした") { acct in
+                    guard let self else { return }
+                    UIPasteboard.general.string = self.credential.handle(ofAcct: acct)
+                    notify()
+                }
+            }
+        )
+    }
+
+    /// ユーザーのメニューの相手の`acct`を決めて`proceed`に渡す。リンクから選んだ相手は、プロフィールのURLで引く。引けなければ知らせて、`proceed`を呼ばない。
+    private func resolveAcct(of target: UserMenuTarget, failureTitle: String, proceed: @escaping @MainActor (String) -> Void) {
+        switch target {
+        case .acct(let acct):
+            proceed(acct)
+        case .profileURL(let url, let shownAcct):
+            let client = client
+            Task {
+                do {
+                    guard let account = try await client.resolveAccount(url.absoluteString) else {
+                        logger.error("user menu target not found url=\(url.absoluteString, privacy: .public)")
+                        handle(ProfileNotFound(acct: shownAcct), title: failureTitle)
+                        return
+                    }
+                    proceed(account.acct)
+                } catch {
+                    logger.error("user menu target resolve failed: \(SciaLog.describe(error), privacy: .public)")
+                    handle(error, title: failureTitle)
+                }
+            }
+        }
     }
 
     /// 編集している途中で返信を選んだら、編集をやめてよいか聞いてから返信を始める。編集でなければすぐ始める。

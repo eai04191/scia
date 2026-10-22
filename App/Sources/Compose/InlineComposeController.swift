@@ -688,6 +688,29 @@ final class InlineComposeController: NSObject {
         }
     }
 
+    /// ユーザーのメニューの「メンション」。書き始めて、カーソルの位置に`@acct`を入れる。下書きと返信先はそのまま残す。
+    /// 送っている間は本文を変えられないため、何もしない。
+    func mention(_ acct: String) {
+        guard !model.isPosting else {
+            logger.info("compose: mention not inserted while posting")
+            return
+        }
+        beginEditing()
+        let selection = textView.selectedRange
+        let insertion = MentionInsertion.insertion(of: acct, in: textView.text, replacing: selection.location ..< selection.location + selection.length)
+        let begin = textView.beginningOfDocument
+        guard let start = textView.position(from: begin, offset: insertion.range.lowerBound),
+              let end = textView.position(from: begin, offset: insertion.range.upperBound),
+              let range = textView.textRange(from: start, to: end)
+        else { return }
+        textView.replace(range, withText: insertion.text)
+        textView.selectedRange = NSRange(location: insertion.cursor, length: 0)
+        logger.info("compose: mention inserted")
+        // 入力欄の知らせが来なくても、下書きを入力欄に合わせる。
+        model.text = textView.text
+        textDidChange()
+    }
+
     private func applyLinkReplacement(_ replacement: LinkTitleReplacement) {
         isReplacingLink = true
         defer { isReplacingLink = false }

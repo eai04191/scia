@@ -127,6 +127,10 @@ protocol LinkMenuHost: AnyObject {
     func linkMenuDidHide()
     /// 「リンクをコピー」を選んだ。
     func showLinkCopiedNotice()
+    /// ユーザーのメニューの「ハンドルをコピー」を選んだ。
+    func showHandleCopiedNotice()
+    /// ユーザーのメニューのメンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
+    var userMenuActions: UserMenuActions? { get }
     /// 開く項目を選んだ。`browser`は選んだ項目と開く場所の設定から決めた、実際に開く場所。
     func openURL(_ url: URL, in browser: LinkBrowser)
 }
@@ -239,14 +243,16 @@ final class LinkHitArea: UIControl {
             }
         case .mention(let acct, let url):
             title = "@\(acct)"
+            let host = nearest((any LinkMenuHost).self)
             children = settings.userMenuLayout.groups.menuElements { item in
                 if let action = item.urlAction {
                     return [action.action(url: url, handlers: handlers)]
                 }
                 switch item {
                 case .profile: return [profileAction(item.title, image: item.image, destination)]
+                case .mention, .copyHandle: return host?.userMenuActions?.action(item, target: .profileURL(url, shownAcct: acct), notifying: host).map { [$0] } ?? []
                 // 共通の項目は、上で中身から組んだ。
-                case .copyLink, .share: return []
+                case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari: return []
                 }
             }
         case .hashtag(let name, let url):

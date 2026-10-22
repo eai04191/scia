@@ -107,6 +107,7 @@ final class ProfileController {
             guard let scrollView = self?.viewController?.collectionView else { return }
             self?.updateBars(scrollView)
         }
+        viewController.screenBarItems = [makeUserMenuItem()]
         observeHeaderContent()
         // ヘッダー画像をバーの下に見せる間はタイトルを出さない。最初に出してから消すと、開いた直後にちらつくため、最初から決める。
         viewController.navigationItem.title = header.extendsUnderBars ? nil : "@\(account.acct)"
@@ -298,6 +299,21 @@ final class ProfileController {
     private var revealDuration: TimeInterval {
         guard let viewController else { return 0 }
         return viewController.tuning.value(of: TuningCatalog.profileRevealDuration)
+    }
+
+    /// 開いているユーザーのユーザーのメニューを出すボタン。並びの設定を開いている間に変えても反映するよう、押すたびに組む。
+    /// 設定ですべての項目を隠していると、空のメニューが出る。ボタンを消すには設定の変化を見張る必要があり、すべて隠すことはまずないため、そのままにする。
+    private func makeUserMenuItem() -> UIBarButtonItem {
+        let item = UIBarButtonItem(image: UIImage(systemName: "ellipsis"))
+        item.accessibilityLabel = "ユーザーのメニュー"
+        item.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self, weak item] completion in
+            guard let self, let item, let menu = self.viewController?.profileUserMenu(for: self.store.account, from: item) else {
+                completion([])
+                return
+            }
+            completion(menu.children)
+        }])
+        return item
     }
 
     /// アイコンかヘッダー画像を、添付ファイルと同じビューアで開く。1枚だけを開き、左右に切り替えない。

@@ -85,6 +85,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onOpenLink: ((RichText.LinkDestination, Status) -> Void)?
     /// 長押しのメニューの開く項目で、開く場所を決めてURLを開く。
     var onOpenURL: ((URL, LinkBrowser) -> Void)?
+    /// ユーザーのメニューのメンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
+    var userMenuActions: UserMenuActions?
     /// この画面が表示されている間、生かしておくもの。画面を組み立てたコントローラーを、ナビゲーションから外されるまで残すのに使う。
     var lifetimeOwner: AnyObject?
     /// 一覧の頭に置き、一緒にスクロールするビュー。プロフィールのヘッダーに使う。表示より前に設定する。
@@ -209,6 +211,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 画面を読み込んだときに並べた右上のボタン。投稿欄で書き始めるボタンは、出すときにこの先頭に足す。
     private var baseBarItems: [UIBarButtonItem] = []
+    /// 画面を組み立てる側が足す右上のボタン。投稿欄で書き始めるボタンの左に並ぶ。表示より前に設定する。
+    var screenBarItems: [UIBarButtonItem] = []
 
     /// 右上に投稿欄で書き始めるボタンを出すかを決める。画面を読み込む前は値だけ覚える。
     func setShowsFocusInlineCompose(_ shows: Bool) {
@@ -219,7 +223,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// `rightBarButtonItems`は右から並ぶため、先頭に足したボタンがいちばん右に来る。
     private func applyBarItems() {
-        navigationItem.rightBarButtonItems = (showsFocusInlineCompose && onFocusInlineCompose != nil ? [focusInlineComposeItem] : []) + baseBarItems
+        navigationItem.rightBarButtonItems = (showsFocusInlineCompose && onFocusInlineCompose != nil ? [focusInlineComposeItem] : []) + screenBarItems + baseBarItems
     }
 
     override func viewDidLoad() {
@@ -1213,6 +1217,10 @@ extension TimelineViewController: LinkMenuHost {
 
     func showLinkCopiedNotice() {
         showNotice(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+    }
+
+    func showHandleCopiedNotice() {
+        showNotice(.handleCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
 
     func openURL(_ url: URL, in browser: LinkBrowser) {

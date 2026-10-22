@@ -239,18 +239,35 @@ public enum StatusMenuItem: String, MenuItemKind {
     ])
 }
 
-/// ユーザーのメニューの項目。投稿のメニューの中で、ユーザーごとのサブメニューとして出る。本文のメンションを長押ししたときも、このメニューを出す。
+/// ユーザーのメニューの項目。投稿のメニューの中で、ユーザーごとのサブメニューとして出る。本文のメンションを長押ししたときと、プロフィール画面でも、このメニューを出す。
+/// 開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
 public enum UserMenuItem: String, MenuItemKind {
     case profile
+    /// 投稿欄で、カーソルの位置に`@acct`を入れる。
+    case mention
+    /// サーバー名を付けた`@username@domain`の形でコピーする。
+    case copyHandle
     /// プロフィールのページのURLをコピーする。
     case copyLink
     /// プロフィールのページのURLを共有する。
     case share
+    /// プロフィールのページを、開く場所の設定に従って開く。
+    case openInBrowser
+    /// 開く場所の設定にかかわらず、既定のブラウザで開く。
+    case openInDefaultBrowser
+    /// 開く場所の設定にかかわらず、アプリ内のSafariで開く。
+    case openInAppSafari
 
     public static let defaultLayout = MenuLayout<UserMenuItem>(defaultElements: [
         .item(.profile, isVisible: true),
+        .item(.mention, isVisible: true),
+        .separator,
+        .item(.copyHandle, isVisible: true),
         .item(.copyLink, isVisible: true),
         .item(.share, isVisible: true),
+        .item(.openInBrowser, isVisible: true),
+        .item(.openInDefaultBrowser, isVisible: false),
+        .item(.openInAppSafari, isVisible: false),
         .more,
     ])
 }

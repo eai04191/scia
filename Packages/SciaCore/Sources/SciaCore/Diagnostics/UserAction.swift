@@ -19,6 +19,8 @@ public enum UserAction: Sendable, Equatable {
     case closeViewer(ViewerClose)
     case openProfile
     case reply
+    /// ユーザーのメニューで、投稿欄にメンションを入れた。
+    case mention
     case toggleFavourite
     case toggleReblog
     case dismissNotification
@@ -54,6 +56,7 @@ public enum UserAction: Sendable, Equatable {
         case .closeViewer(let method): "viewer.close \(method.rawValue)"
         case .openProfile: "profile.open"
         case .reply: "status.reply"
+        case .mention: "user.mention"
         case .toggleFavourite: "status.favourite"
         case .toggleReblog: "status.reblog"
         case .dismissNotification: "notification.dismiss"
@@ -104,6 +107,7 @@ public enum UserAction: Sendable, Equatable {
             self = .closeViewer(method)
         case ("profile.open", 0): self = .openProfile
         case ("status.reply", 0): self = .reply
+        case ("user.mention", 0): self = .mention
         case ("status.favourite", 0): self = .toggleFavourite
         case ("status.reblog", 0): self = .toggleReblog
         case ("notification.dismiss", 0): self = .dismissNotification
@@ -141,6 +145,7 @@ public enum UserAction: Sendable, Equatable {
         case .closeViewer(.button): "ビューアを閉じた"
         case .openProfile: "プロフィールを開いた"
         case .reply: "投稿への返信を書き始めた"
+        case .mention: "投稿欄にメンションを入れた"
         // 投稿への操作と投稿は通信の前に記録するため、失敗した場合や応答を待つ間もあるので、成功したとは書かない。
         case .toggleFavourite: "投稿のお気に入りを押した"
         case .toggleReblog: "投稿のブーストを押した"

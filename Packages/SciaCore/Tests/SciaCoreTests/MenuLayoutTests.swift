@@ -173,7 +173,22 @@ struct MenuLayoutTests {
         ])
         #expect(groups.more.map(\.items) == [[.editHistory, .hideMedia, .customEmojis], [.muteConversation, .pin], [.dismissNotification, .delete]])
         #expect(StatusMenuItem.defaultLayout.elements.contains(.item(.reblogWithVisibility, isVisible: false)))
-        #expect(UserMenuItem.defaultLayout.groups.main.map(\.items) == [[.profile, .copyLink, .share]])
+    }
+
+    /// ユーザーのメニューは、開く・書く操作と持ち出す操作でまとまりを分ける。開く場所を選んで開く2つは隠しておく。
+    @Test func userMenuDefaultGroupsItemsByPurpose() {
+        let layout = UserMenuItem.defaultLayout
+
+        #expect(layout.groups.main.map(\.items) == [[.profile, .mention], [.copyHandle, .copyLink, .share, .openInBrowser]])
+        #expect(layout.groups.more.isEmpty)
+        #expect([UserMenuItem.openInDefaultBrowser, .openInAppSafari].allSatisfy { layout.elements.contains(.item($0, isVisible: false)) })
+    }
+
+    /// メンションとハンドルをコピーを足す前に保存したユーザーのメニューでも、2つはプロフィールの後ろに出る。
+    @Test func savedUserMenuGainsMentionAndCopyUsernameAfterProfile() {
+        let saved = MenuLayout<UserMenuItem>(tokens: ["item:profile", "item:copyLink", "item:share", "more"])
+
+        #expect(saved.groups.main.map(\.items) == [[.profile, .mention, .copyHandle, .copyLink, .share, .openInBrowser]])
     }
 
     /// 開く場所を選んで開く2つを足す前に保存した投稿のメニューでも、2つはブラウザで開くのすぐ後ろに、隠れて入る。
@@ -198,7 +213,7 @@ struct MenuLayoutTests {
         let saved = MenuLayout<UserMenuItem>(tokens: ["more", "item:profile"])
 
         #expect(saved.groups.main.map(\.items).isEmpty)
-        #expect(saved.groups.more.map(\.items) == [[.profile, .copyLink, .share]])
+        #expect(saved.groups.more.map(\.items) == [[.profile, .mention, .copyHandle, .copyLink, .share, .openInBrowser]])
     }
 
     /// ブックマークを足す前に保存した投稿のメニューでも、ブックマークは編集の後ろに、表示されて入る。

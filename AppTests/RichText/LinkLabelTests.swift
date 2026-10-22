@@ -233,7 +233,7 @@ struct LinkLabelTests {
 
         #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: ブラウザで開く,リンクをコピー,共有")
         #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: ブラウザで開く,リンクをコピー,共有")
-        #expect(try menuOutline(of: .mention(acct: "bob@example.social", url: profile), settings: settings) == "@bob@example.social: プロフィール,リンクをコピー,共有")
+        #expect(try menuOutline(of: .mention(acct: "bob@example.social", url: profile), settings: settings) == "@bob@example.social: プロフィール|リンクをコピー,共有,ブラウザで開く")
     }
 
     /// 並べ替え、隠した項目、区切り線、「その他」の境目を、投稿のメニューと同じ決まりで反映する。

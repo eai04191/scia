@@ -17,6 +17,7 @@ struct UserActionTests {
         .closeViewer(.button),
         .openProfile,
         .reply,
+        .mention,
         .toggleFavourite,
         .toggleReblog,
         .dismissNotification,
