@@ -649,6 +649,8 @@ extension FeedTimelineController {
             streamDummyFiltered()
         case .animatedEmojis:
             streamDummyAnimatedEmojis()
+        case .polls:
+            streamDummyPolls()
         case .notifications:
             onDummyNotifications?()
         }
@@ -680,6 +682,49 @@ extension FeedTimelineController {
                     url: nil,
                     mediaAttachments: post.media ? DummyMedia.attachments(idPrefix: base.id) : [],
                     filtered: post.filtered
+                )
+                controller.store.debugLocalOnlyIDs.insert(dummy.id)
+                controller.receive(.update(dummy))
+            }
+        }
+    }
+
+    /// 投票の付いたダミーの投稿を、新着と同じ経路で流す。複数選べない投票、複数選べる投票、締め切るまで票数を隠す投票、締め切った投票の4件。
+    /// 投票と読み直しは通信せず、`DummyPolls`が答える。
+    private func streamDummyPolls() {
+        let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
+        func poll(_ key: String, multiple: Bool = false, expiresIn: TimeInterval = 86_400, options: [(String, Int?)], votesCount: Int? = nil, votersCount: Int? = nil) -> Poll {
+            Poll(
+                id: DummyPolls.idPrefix + key + "-\(UInt64(Date.now.timeIntervalSince1970 * 1000))",
+                expiresAt: .now.addingTimeInterval(expiresIn),
+                expired: expiresIn < 0,
+                multiple: multiple,
+                votesCount: votesCount ?? options.compactMap(\.1).reduce(0, +),
+                votersCount: multiple ? votersCount : nil,
+                options: options.map { Poll.Option(title: $0.0, votesCount: $0.1) }
+            )
+        }
+        let posts: [(content: String, poll: Poll)] = [
+            ("複数選べない投票のダミー", poll("single", options: [("はい", 12), ("いいえ", 5), ("選択肢の文字が長く、何行にもわたるときの折り返しと、結果の棒の高さを確かめるための選択肢", 3)])),
+            ("複数選べる投票のダミー", poll("multiple", multiple: true, expiresIn: 3_600 * 5, options: [("朝", 4), ("昼", 7), ("夜", 7), ("深夜", 0)], votersCount: 10)),
+            ("締め切るまで票数を隠す投票のダミー", poll("hidden", expiresIn: 60 * 30, options: [("A", nil), ("B", nil)], votesCount: 7)),
+            ("締め切った投票のダミー", poll("expired", expiresIn: -60, options: [("勝った選択肢", 30), ("負けた選択肢", 10)])),
+        ]
+        for post in posts {
+            DummyPolls.register(post.poll)
+        }
+        run { controller in
+            for (index, post) in posts.enumerated() {
+                guard !controller.isStopped else { return }
+                let base = Self.dummyStatus(number: index + 1, avatar: avatar)
+                let dummy = Status(
+                    id: base.id,
+                    createdAt: base.createdAt,
+                    account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー（投票）", avatar: avatar),
+                    content: "<p>\(post.content)</p>",
+                    spoilerText: "",
+                    url: nil,
+                    poll: post.poll
                 )
                 controller.store.debugLocalOnlyIDs.insert(dummy.id)
                 controller.receive(.update(dummy))
@@ -905,6 +950,7 @@ enum DebugDummyPost: String, CaseIterable {
     case xPost = "x-post"
     case filtered
     case animatedEmojis = "animated-emojis"
+    case polls
     case notifications
 
     var title: String {
@@ -922,6 +968,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .xPost: "後から届くXの投稿（画像4枚）"
         case .filtered: "フィルターに一致した投稿（警告、ぼかし、隠す）"
         case .animatedEmojis: "動く絵文字の多い投稿（40件）"
+        case .polls: "投票の付いた投稿（4件）"
         case .notifications: "ステータスバーに流す通知（連続）"
         }
     }
@@ -939,6 +986,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .xPost: "quote.bubble"
         case .filtered: "line.3.horizontal.decrease.circle"
         case .animatedEmojis: "face.smiling"
+        case .polls: "chart.bar.horizontal.page"
         case .notifications: "bell.badge"
         }
     }

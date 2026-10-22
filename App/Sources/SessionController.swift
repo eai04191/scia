@@ -158,7 +158,7 @@ final class SessionController {
             profiles.updateStatus(id, transform)
             threads.updateStatus(id, transform)
         }
-        polls = PollVoting(operations: .init(client: client)) { id, transform in
+        polls = PollVoting(operations: Self.pollOperations(client: client)) { id, transform in
             home.updateStatus(id, transform)
             local.updateStatus(id, transform)
             federated.updateStatus(id, transform)
@@ -1277,6 +1277,22 @@ final class SessionController {
                 })
             }
         }
+    }
+
+    /// 投票の通信の口。デバッグビルドでは、ダミー投稿の投票だけ、通信せずに`DummyPolls`が答える。
+    private static func pollOperations(client: MastodonClient) -> PollVoting.Operations {
+        #if DEBUG
+        PollVoting.Operations(
+            vote: { id, choices in
+                DummyPolls.isDummy(id) ? try await DummyPolls.vote(id, choices: choices) : try await client.vote(id, choices: choices)
+            },
+            poll: { id in
+                DummyPolls.isDummy(id) ? try await DummyPolls.poll(id) : try await client.poll(id)
+            }
+        )
+        #else
+        PollVoting.Operations(client: client)
+        #endif
     }
 
     /// 投票する。投票は取り消せないため、サーバーの結果を待ってから、すべての一覧に反映する。
