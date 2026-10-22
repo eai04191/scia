@@ -366,3 +366,78 @@ struct StatusPollTests {
         #expect(status(poll: withEmoji).emojisInRow.map(\.shortcode) == ["blobcat"])
     }
 }
+
+struct PollDraftTests {
+    private let limits = PollLimits.mastodonDefault
+
+    @Test func needsTwoFilledOptions() {
+        #expect(!PollDraft(options: ["朝", ""]).isValid(limits: limits))
+        #expect(!PollDraft(options: ["朝", "   "]).isValid(limits: limits))
+        #expect(PollDraft(options: ["朝", "", "夜"]).isValid(limits: limits))
+    }
+
+    /// Mastodonと同じく、前後の空白を除いてから、同じ選択肢がないかと文字数を見る。
+    @Test func rejectsDuplicatesAndLongOptions() {
+        #expect(!PollDraft(options: ["朝", " 朝 "]).isValid(limits: limits))
+        #expect(!PollDraft(options: ["朝", String(repeating: "あ", count: 51)]).isValid(limits: limits))
+        #expect(PollDraft(options: ["朝", " " + String(repeating: "あ", count: 50) + " "]).isValid(limits: limits))
+    }
+
+    @Test func rejectsTooManyOptionsAndOutOfRangeExpiry() {
+        #expect(!PollDraft(options: ["1", "2", "3", "4", "5"]).isValid(limits: limits))
+        #expect(!PollDraft(options: ["朝", "夜"], expiresIn: 60).isValid(limits: limits))
+    }
+
+    /// 最後の欄に書くと、上限まで後ろに空の欄を1つ足す。
+    @Test func writingLastOptionAddsEmptyField() {
+        var poll = PollDraft()
+        poll.setOption("朝", at: 0, limits: limits)
+        #expect(poll.options == ["朝", ""])
+        poll.setOption("昼", at: 1, limits: limits)
+        #expect(poll.options == ["朝", "昼", ""])
+        poll.setOption("夜", at: 2, limits: limits)
+        poll.setOption("深夜", at: 3, limits: limits)
+        #expect(poll.options == ["朝", "昼", "夜", "深夜"])
+    }
+
+    /// 後ろに空の欄が並んだら1つに詰め、2つより減らさない。途中の空の欄は詰めない。
+    @Test func clearingTrimsTrailingEmptyFields() {
+        var poll = PollDraft(options: ["朝", "昼", ""])
+        poll.setOption("", at: 1, limits: limits)
+        #expect(poll.options == ["朝", ""])
+        poll.setOption("", at: 0, limits: limits)
+        #expect(poll.options == ["", ""])
+
+        var middle = PollDraft(options: ["朝", "昼", "夜", ""])
+        middle.setOption("", at: 1, limits: limits)
+        #expect(middle.options == ["朝", "", "夜", ""])
+    }
+
+    /// 空白だけの欄は空として扱う。
+    @Test func whitespaceOnlyCountsAsEmpty() {
+        var poll = PollDraft(options: ["朝", ""])
+        poll.setOption(" ", at: 1, limits: limits)
+        #expect(poll.options == ["朝", " "])
+    }
+
+
+    @Test func expiryTitles() {
+        #expect(PollDraft.expiryChoices.map(PollDraft.expiryTitle) == ["5分", "30分", "1時間", "6時間", "12時間", "1日", "3日", "7日"])
+        #expect(PollDraft.expiryTitle(5_400) == "90分")
+    }
+
+    @Test func expiryChoicesStayWithinServerLimits() {
+        let limits = PollLimits(maxOptions: 4, maxCharactersPerOption: 50, expirationRange: 600...86_400)
+        #expect(PollDraft.expiryChoices(within: limits) == [1_800, 3_600, 21_600, 43_200, 86_400])
+    }
+
+    /// 投票は、本文がなければ送れず、添付とは一緒に送れない。
+    @Test func canPostNeedsTextAndNoAttachments() {
+        let poll = PollDraft(options: ["朝", "夜"])
+        #expect(StatusDraft(text: "どっち", poll: poll).canPost(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4))
+        #expect(!StatusDraft(text: " ", poll: poll).canPost(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4))
+        #expect(!StatusDraft(text: "どっち", poll: PollDraft()).canPost(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4))
+        let attachment = DraftAttachment(state: .uploaded(MediaAttachment(id: "m1", type: .image, url: URL(string: "https://example.social/m1.png"), previewUrl: nil)))
+        #expect(!StatusDraft(text: "どっち", attachments: [attachment], poll: poll).canPost(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4))
+    }
+}

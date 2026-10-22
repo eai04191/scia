@@ -90,6 +90,8 @@ final class InlineComposeController: NSObject {
     /// 注意書きの欄を閉じるボタン。閲覧注意も一緒に外れる。
     private let spoilerClearButton = UIButton(type: .system)
     private let textView = ComposeTextView()
+    /// 投票の欄。＋のメニューから足したときだけ、本文の下に出す。
+    private let pollEditor = ComposePollEditor()
     /// 最後にキーボードを出していた入力欄。シートやビューアを閉じたら、ここへキーボードを戻す。
     private weak var lastFocusedInput: UIView?
     /// 本文と注意書きの間でフォーカスを移している最中。移す前の入力欄の編集が終わっても、書き終えたとして扱わない。
@@ -170,7 +172,7 @@ final class InlineComposeController: NSObject {
         switch item {
         case .visibility: (item, visibilityButton)
         case .expand: (item, expandButton)
-        case .media, .spoiler, .linkTitle, .customEmoji, .customize: (item, makeToolButton(item))
+        case .media, .spoiler, .poll, .linkTitle, .customEmoji, .customize: (item, makeToolButton(item))
         }
     })
     /// 今のボタンの行と＋のメニューへの振り分け。ボタンの行の幅が決まるたびに決め直す。まだ一度も振り分けていなければnil。
@@ -351,18 +353,24 @@ final class InlineComposeController: NSObject {
         resignInput()
     }
 
-    /// 本文か注意書きの入力欄が、キーボードを出している。
-    private var isInputFocused: Bool { textView.isFirstResponder || spoilerField.isFirstResponder }
+    /// 投稿欄の入力欄。本文、注意書き、投票の選択肢。
+    private var inputs: [UIResponder] { [textView, spoilerField] + pollEditor.fields }
+
+    /// 本文か注意書きか投票の選択肢の入力欄が、キーボードを出している。
+    private var isInputFocused: Bool { inputs.contains(where: \.isFirstResponder) }
 
     private func resignInput() {
-        textView.resignFirstResponder()
-        spoilerField.resignFirstResponder()
+        for input in inputs {
+            input.resignFirstResponder()
+        }
     }
 
-    /// 最後に書いていた入力欄にキーボードを戻す。注意書きの欄を外していれば本文に戻す。
+    /// 最後に書いていた入力欄にキーボードを戻す。注意書きの欄や投票の欄を外していれば本文に戻す。
     private func focusLastInput() {
         if lastFocusedInput === spoilerField, model.showsSpoiler {
             spoilerField.becomeFirstResponder()
+        } else if let field = lastFocusedInput as? ComposeLineField, model.poll != nil, pollEditor.fields.contains(where: { $0 === field }) {
+            field.becomeFirstResponder()
         } else {
             textView.becomeFirstResponder()
         }
@@ -374,7 +382,7 @@ final class InlineComposeController: NSObject {
     /// 違和感レポートに残す状態。行が重なっていれば、どの行かも書く。
     func stateDump() -> String {
         """
-        editing: \(isEditing) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : "none") spoiler: \(model.showsSpoiler) sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil")
+        editing: \(isEditing) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : pollEditor.fields.firstIndex(where: \.isFirstResponder).map { "poll\($0 + 1)" } ?? "none") spoiler: \(model.showsSpoiler) poll: \(model.poll.map { "options=\($0.options.count) multiple=\($0.multiple) hidesTotals=\($0.hidesTotals) expiresIn=\($0.expiresIn)" } ?? "nil") sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil")
         mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
         tools: row=\(toolPlacement.map { "\($0.row.map(\.rawValue))" } ?? "nil") menu=\(toolPlacement.map { "\($0.menu.map { $0.map(\.rawValue) })" } ?? "nil")
@@ -387,7 +395,7 @@ final class InlineComposeController: NSObject {
     }
 
     private var rowStates: [(name: String, view: UIView)] {
-        [("rest", restRow), ("reply", replyRow), ("spoiler", spoilerRow), ("attachments", attachmentStrip), ("text", textView), ("tools", tools)]
+        [("rest", restRow), ("reply", replyRow), ("spoiler", spoilerRow), ("attachments", attachmentStrip), ("text", textView), ("poll", pollEditor), ("tools", tools)]
     }
 
     /// 表示しているのに高さを確保できていない行と、縦に重なっている行の組み。
@@ -487,7 +495,7 @@ final class InlineComposeController: NSObject {
 
     /// 広げている間は、本文に合わせて上の安全領域の上端まで伸ばし、超えたら中でスクロールする。
     private func applyExpandedLayout() {
-        expandedTop?.isActive = isExpanded
+        expandedTop?.isActive = isExpanded || limitsBarTopForPoll
         expandButton.configuration?.image = UIImage(systemName: isExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
         expandButton.accessibilityLabel = isExpanded ? "元の大きさに戻す" : "広げて書く"
         expandButton.largeContentTitle = expandButton.accessibilityLabel
@@ -571,6 +579,18 @@ final class InlineComposeController: NSObject {
                 : UIAction(title: "キーボードに戻る", image: UIImage(systemName: "keyboard")) { [weak self] _ in self?.toggleMediaPicker() }
             if mediaPicker == nil, !model.canAttachMedia {
                 action.attributes = .disabled
+                if model.poll != nil {
+                    action.subtitle = "投票とは一緒に付けられません"
+                }
+            }
+            return action
+        case .poll:
+            let action = UIAction(title: item.title, image: UIImage(systemName: item.symbolName), state: model.poll != nil ? .on : .off) { [weak self] _ in
+                self?.togglePoll()
+            }
+            if model.poll == nil, !model.canAddPoll {
+                action.attributes = .disabled
+                action.subtitle = model.editedStatus != nil ? "編集では付けられません" : "メディアとは一緒に付けられません"
             }
             return action
         case .spoiler:
@@ -614,6 +634,89 @@ final class InlineComposeController: NSObject {
 
     private func toggleSpoiler() {
         setSpoilerShown(!model.showsSpoiler)
+    }
+
+    /// 投票の欄を出して最初の選択肢を書き始めるか、外して本文に戻る。外すと書いた選択肢も捨てる。
+    private func togglePoll() {
+        guard model.poll == nil else {
+            logger.info("compose: poll removed")
+            model.removePoll()
+            update()
+            return
+        }
+        guard model.canAddPoll else { return }
+        logger.info("compose: poll added")
+        model.addPoll()
+        // モデルの変更が画面に届くのは少しあとなので、欄を出してからフォーカスを移す。
+        update()
+        guard let first = pollEditor.fields.first else { return }
+        lastFocusedInput = first
+        if let bottomSheet {
+            bottomSheet.close(notifiesWillClose: true)
+        } else {
+            first.becomeFirstResponder()
+        }
+    }
+
+    /// 選択肢を書き換える。書くと欄が増えたり、後ろの空の欄が詰められたりする。
+    /// 詰められる欄にフォーカスがあると、欄が画面から外れた時点で書き終えたとして投稿欄が閉じるため、詰める前に、残る最後の欄へフォーカスを移す。
+    /// 絵文字のシートを出している間は欄がフォーカスを持たないが、シートで入れる先は最後に書いていた欄なので、それも残る最後の欄へ移す。
+    /// 移さないと、詰めた欄がなくなったとして、入れる先が本文に替わる。
+    private func setPollOption(_ text: String, at index: Int) {
+        guard model.poll != nil else { return }
+        model.setPollOption(text, at: index)
+        let fields = pollEditor.fields
+        let count = model.poll?.options.count ?? 0
+        if count > 0 {
+            if let focused = fields.firstIndex(where: \.isFirstResponder), focused >= count {
+                fields[count - 1].becomeFirstResponder()
+            }
+            if let remembered = fields.firstIndex(where: { $0 === lastFocusedInput }), remembered >= count {
+                lastFocusedInput = fields[count - 1]
+            }
+        }
+        // フォーカスを移してから、画面の更新を待たずに欄の数を合わせる。待つと、書いてすぐReturnを押したときに次の欄がまだなく、本文へ移ってしまった。
+        applyPollEditorContent()
+    }
+
+    /// 投票の欄を、下書きの投票に合わせる。投票がなければ何もしない。
+    private func applyPollEditorContent() {
+        guard let poll = model.poll else { return }
+        pollEditor.apply(ComposePollEditor.Content(
+            poll: poll,
+            expiryChoices: PollDraft.expiryChoices(within: model.pollLimits)
+        ))
+    }
+
+    /// 投票の欄の入力欄とボタンを、下書きにつなぐ。入力欄は本文や注意書きと同じく、フォーカスと補完をここで扱う。
+    private func configurePollEditor() {
+        pollEditor.onMakeField = { [weak self] field in
+            guard let self else { return }
+            // 本文と同じく、自分の文で言語が分からないため、設定の字形で描く。
+            field.followGlyphLanguage(of: settings)
+            field.delegate = self
+            field.onSubmit = { [weak self] in self?.submit() }
+            field.completionKeys = completionKeys()
+            field.addAction(UIAction { [weak self, weak field] _ in
+                guard let self, let field, let index = pollEditor.fields.firstIndex(where: { $0 === field }) else { return }
+                setPollOption(field.text ?? "", at: index)
+                textCompletion.textDidChange(in: field)
+            }, for: .editingChanged)
+        }
+        // 送っている間は、送った下書きと食い違わないよう、文字と同じく設定も変えない。
+        pollEditor.onSetExpiry = { [weak self] seconds in
+            guard let self, !model.isPosting else { return }
+            model.poll?.expiresIn = seconds
+        }
+        pollEditor.onSetMultiple = { [weak self] multiple in
+            guard let self, !model.isPosting else { return }
+            model.poll?.multiple = multiple
+        }
+        pollEditor.onSetHidesTotals = { [weak self] hides in
+            guard let self, !model.isPosting else { return }
+            model.poll?.hidesTotals = hides
+        }
+        pollEditor.onRemovePoll = { [weak self] in self?.togglePoll() }
     }
 
     // MARK: - リンクにタイトルを付ける
@@ -760,6 +863,7 @@ final class InlineComposeController: NSObject {
             switch item {
             case .media: self?.toggleMediaPicker()
             case .spoiler: self?.toggleSpoiler()
+            case .poll: self?.togglePoll()
             case .customize: self?.presentToolLayoutSettings()
             case .linkTitle: self?.toggleLinkSelection()
             case .customEmoji: self?.toggleEmojiPalette()
@@ -811,6 +915,11 @@ final class InlineComposeController: NSObject {
             spoiler.configuration?.baseForegroundColor = model.showsSpoiler ? .tintColor : .label
             spoiler.accessibilityTraits = model.showsSpoiler ? [.button, .selected] : .button
             spoiler.accessibilityValue = model.isSensitive ? "添付も閲覧注意" : nil
+        }
+        if let poll = toolButtons[.poll] {
+            poll.configuration?.baseForegroundColor = model.poll != nil ? .tintColor : .label
+            poll.accessibilityTraits = model.poll != nil ? [.button, .selected] : .button
+            poll.isEnabled = model.poll != nil || model.canAddPoll
         }
     }
 
@@ -999,10 +1108,18 @@ final class InlineComposeController: NSObject {
         textCompletion.updatePalette(emojiPalette, recentKeys: paletteRecentKeys)
     }
 
-    /// パレットで選んだ絵文字を入れる入力欄。最後に書いていたのが注意書きの欄ならそちら、それ以外は本文。
-    /// シートを出している間は、どちらの入力欄もフォーカスを持たないので、最後に書いていた入力欄で決める。
+    /// パレットで選んだ絵文字を入れる入力欄。最後に書いていたのが注意書きの欄か投票の選択肢ならそちら、それ以外は本文。
+    /// シートを出している間は、どの入力欄もフォーカスを持たないので、最後に書いていた入力欄で決める。
     private var paletteInput: any UITextInput & UIView {
-        lastFocusedInput === spoilerField && model.showsSpoiler ? spoilerField : textView
+        if lastFocusedInput === spoilerField, model.showsSpoiler { return spoilerField }
+        if let index = pollFieldIndex(of: lastFocusedInput) { return pollEditor.fields[index] }
+        return textView
+    }
+
+    /// 出している投票の選択肢の入力欄なら、その位置。
+    private func pollFieldIndex(of input: AnyObject?) -> Int? {
+        guard let input, model.poll != nil else { return nil }
+        return pollEditor.fields.firstIndex { $0 === input }
     }
 
     // MARK: - 注意書き
@@ -1380,6 +1497,10 @@ final class InlineComposeController: NSObject {
         let showsAttachments = isEditing && !model.attachments.isEmpty
         setRowHidden(attachmentStrip, !showsAttachments)
         attachmentStrip.alpha = showsAttachments ? 1 : 0
+        let showsPoll = isEditing && model.poll != nil
+        setRowHidden(pollEditor, !showsPoll)
+        pollEditor.alpha = showsPoll ? 1 : 0
+        applyPollTopLimit()
         stackTop.constant = isEditing ? 10 : restInset
         stackBottom.constant = isEditing ? -10 : -restInset
     }
@@ -1465,7 +1586,24 @@ final class InlineComposeController: NSObject {
         followKeyboard?.isActive = followsKeyboardDown
         hiddenTop?.isActive = offScreen
         // 広げたまま隠すときは、上端を安全領域より下に留める制約を外し、下げている間の高さは`offScreenHeight`で保つ。画面の外で、広げる前の形に戻す。
-        expandedTop?.isActive = isExpanded && !offScreen
+        expandedTop?.isActive = (isExpanded || limitsBarTopForPoll) && !offScreen
+    }
+
+    /// 投票の欄を出して書いている。欄の分だけ投稿欄が高くなり、iPhone SEのような小さい画面では、本文が5行まで伸びると上にはみ出したため、
+    /// 広げているときと同じく上端を安全領域で止め、足りない分は本文を縮めて中でスクロールさせる。
+    private var limitsBarTopForPoll: Bool {
+        isEditing && model.poll != nil && !isExpanded
+    }
+
+    /// 最後に当てた`limitsBarTopForPoll`。変わったときだけ、上端の制約と本文の高さを当て直す。
+    private var appliedPollTopLimit = false
+
+    private func applyPollTopLimit() {
+        let limits = limitsBarTopForPoll
+        guard limits != appliedPollTopLimit else { return }
+        appliedPollTopLimit = limits
+        applyBarPlacement()
+        textDidChange()
     }
 
     /// キーボードが出入りする間は、キーボードと同じ時間と曲線で動かす。ハードウェアキーボードや、書いていないときに設定や下書きが変わったときは、決まった時間で動かす。
@@ -1571,6 +1709,18 @@ final class InlineComposeController: NSObject {
         attachmentStrip.update(attachmentItems)
         mediaViewer?.update(items: viewerItems())
         setRowShown(attachmentStrip, isEditing && !model.attachments.isEmpty)
+
+        applyPollEditorContent()
+        // 投票の欄を外したときや、選択肢を消したときは、隠れた入力欄にキーボードを残さず本文へ移す。
+        let pollFields = model.poll == nil ? [] : pollEditor.fields
+        if let field = lastFocusedInput as? ComposeLineField, field !== spoilerField, !pollFields.contains(where: { $0 === field }) {
+            if field.isFirstResponder {
+                textView.becomeFirstResponder()
+            }
+            lastFocusedInput = textView
+        }
+        setRowShown(pollEditor, isEditing && model.poll != nil)
+        applyPollTopLimit()
 
         let option = VisibilityOption(model.visibility)
         visibilityButton.configuration?.image = UIImage(systemName: option.symbolName)
@@ -1847,17 +1997,30 @@ final class InlineComposeController: NSObject {
         if isCollapsingFromExpanded {
             // 戻す動きの途中でスクロールを止めると、バーが動きを待たずにほぼ戻した高さまで縮んで見えた（スクロールを止めると、UIKitが入力欄の高さを動きの外で決め直すためと見ている）。
             // 動き終わるまではスクロールできるまま、高さの制約で本文に合わせる。
-            expandedTextHeight.isActive = false
+            // 投票の欄を出しているときは、上端を止めたままなので、戻す途中も本文から縮むよう弱い制約にする。強い制約だと、選択肢やボタンの行が先に潰れる。
+            let usesWeakHeight = limitsBarTopForPoll
+            expandedTextHeight.constant = min(fitting, maxTextHeight)
+            expandedTextHeight.isActive = usesWeakHeight
             textHeightLimit.constant = min(fitting, maxTextHeight)
-            textHeightLimit.isActive = true
+            textHeightLimit.isActive = !usesWeakHeight
             return
         }
-        // 上端に届くかどうかで切り替えずに済むよう、広げている間は常にスクロールできるようにしておく。
-        expandedTextHeight.constant = max(fitting, minExpandedTextHeight)
-        expandedTextHeight.isActive = isExpanded
-        textHeightLimit.constant = maxTextHeight
-        textHeightLimit.isActive = !isExpanded && fitting > maxTextHeight
-        let scrolls = isExpanded || fitting > maxTextHeight
+        let scrolls: Bool
+        if limitsBarTopForPoll {
+            // 投票の欄を出している間は、本文の高さを、ほかの行より弱い制約で本文に合わせる（上限は広げていないときと同じ）。
+            // 上端に届いたら、選択肢やボタンの行より先に本文が縮み、中でスクロールする。
+            expandedTextHeight.constant = min(fitting, maxTextHeight)
+            expandedTextHeight.isActive = true
+            textHeightLimit.isActive = false
+            scrolls = true
+        } else {
+            // 上端に届くかどうかで切り替えずに済むよう、広げている間は常にスクロールできるようにしておく。
+            expandedTextHeight.constant = max(fitting, minExpandedTextHeight)
+            expandedTextHeight.isActive = isExpanded
+            textHeightLimit.constant = maxTextHeight
+            textHeightLimit.isActive = !isExpanded && fitting > maxTextHeight
+            scrolls = isExpanded || fitting > maxTextHeight
+        }
         if textView.isScrollEnabled != scrolls {
             textView.isScrollEnabled = scrolls
             // スクロールを止めても、入力欄は本来の高さを測り直さない。測り直させないと、5行から4行に減らしたときに入力欄が潰れ、下のボタンの行に重なった。
@@ -1907,6 +2070,8 @@ final class InlineComposeController: NSObject {
                 textDidChange()
             } else if input === spoilerField {
                 model.spoilerText = spoilerField.text ?? ""
+            } else if let index = pollFieldIndex(of: input) {
+                setPollOption(pollEditor.fields[index].text ?? "", at: index)
             }
         }
     }
@@ -2213,7 +2378,8 @@ final class InlineComposeController: NSObject {
         attachmentStrip.onRemove = { [weak self] id in self?.removeAttachment(id) }
         attachmentStrip.onContextMenuWillShow = { [weak self] in self?.holdBarForContextMenu() }
         attachmentStrip.onContextMenuWillEnd = { [weak self] in self?.contextMenuWillEnd() }
-        for view in [restRow, replyRow, spoilerRow, attachmentStrip, textView, tools] {
+        configurePollEditor()
+        for view in [restRow, replyRow, spoilerRow, attachmentStrip, textView, pollEditor, tools] {
             stack.addArrangedSubview(view)
         }
         stack.axis = .vertical
@@ -2290,7 +2456,7 @@ extension InlineComposeController: UITextViewDelegate {
     }
 
     func textViewShouldBeginEditing(_ textView: UITextView) -> Bool {
-        inputWillBeginEditing(from: [spoilerField])
+        inputWillBeginEditing(from: inputs.filter { $0 !== textView })
         return true
     }
 
@@ -2412,13 +2578,18 @@ extension InlineComposeController: UITextPasteDelegate {
 
 extension InlineComposeController: UITextFieldDelegate {
     func textFieldShouldBeginEditing(_ textField: UITextField) -> Bool {
-        inputWillBeginEditing(from: [textView])
+        inputWillBeginEditing(from: inputs.filter { $0 !== textField })
         return true
     }
 
     /// 本文と同じく、送っている間はフォーカスを残したまま、打った文字を受け付けない。
+    /// 投票の選択肢は、サーバーの文字数の上限を超えて打てないようにする。変換中の文字は確定するまで数えない。
     func textField(_ textField: UITextField, shouldChangeCharactersIn range: NSRange, replacementString string: String) -> Bool {
-        !model.isPosting
+        guard !model.isPosting else { return false }
+        guard textField !== spoilerField, textField.markedTextRange == nil,
+              let current = textField.text, let swapped = Range(range, in: current) else { return true }
+        let result = current.replacingCharacters(in: swapped, with: string)
+        return result.count <= model.pollLimits.maxCharactersPerOption || result.count < current.count
     }
 
     func textFieldDidBeginEditing(_ textField: UITextField) {
@@ -2434,9 +2605,14 @@ extension InlineComposeController: UITextFieldDelegate {
         textCompletion.selectionDidChange(in: textField)
     }
 
-    /// 注意書きを書き終えたら、Returnで本文へ移る。
+    /// 注意書きを書き終えたら、Returnで本文へ移る。投票の選択肢では次の選択肢へ移り、最後の選択肢なら本文へ戻る。
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-        textView.becomeFirstResponder()
+        let fields = pollEditor.fields
+        if let index = fields.firstIndex(where: { $0 === textField }), index + 1 < fields.count {
+            fields[index + 1].becomeFirstResponder()
+        } else {
+            textView.becomeFirstResponder()
+        }
         return false
     }
 }

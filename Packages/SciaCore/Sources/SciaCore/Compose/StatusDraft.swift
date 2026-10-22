@@ -12,6 +12,8 @@ public struct StatusDraft: Sendable, Equatable {
     public let inReplyToID: String?
     /// 添付するメディア。この順番で投稿に並ぶ。
     public var attachments: [DraftAttachment]
+    /// 付ける投票。付けなければnil。Mastodonは投票と添付を一緒に付けられない。
+    public var poll: PollDraft?
     /// 送り直しても二重に投稿されないよう、下書きごとに決めてサーバーに渡す。
     public let idempotencyKey: String
     /// 自分の投稿の編集なら、元の投稿から引き継ぐもの。新しい投稿ならnil。
@@ -24,6 +26,7 @@ public struct StatusDraft: Sendable, Equatable {
         visibility: Status.Visibility = .public,
         inReplyToID: String? = nil,
         attachments: [DraftAttachment] = [],
+        poll: PollDraft? = nil,
         idempotencyKey: String = UUID().uuidString,
         editing: StatusEditTarget? = nil
     ) {
@@ -33,6 +36,7 @@ public struct StatusDraft: Sendable, Equatable {
         self.visibility = visibility
         self.inReplyToID = inReplyToID
         self.attachments = attachments
+        self.poll = poll
         self.idempotencyKey = idempotencyKey
         self.editing = editing
     }
@@ -80,13 +84,15 @@ public struct StatusDraft: Sendable, Equatable {
     }
 
     /// 送れる内容になっている。
-    /// 本文が空白だけでも、メディアを添付していれば送れる（Mastodonは`media_ids`があれば`status`を省ける）。
+    /// 本文が空白だけでも、メディアを添付していれば送れる（Mastodonは`media_ids`があれば`status`を省ける）。投票では省けない。
     /// 添付ファイルは、上限の数以内で、全部のアップロードと代替テキストの送信が済むまで送れない。
-    public func canPost(maxCharacters: Int, charactersReservedPerURL: Int, maxMediaAttachments: Int) -> Bool {
+    /// 投票は、サーバーが受け付ける内容で、添付と一緒でないときだけ送れる。
+    public func canPost(maxCharacters: Int, charactersReservedPerURL: Int, maxMediaAttachments: Int, pollLimits: PollLimits = .mastodonDefault) -> Bool {
         (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty)
             && length(charactersReservedPerURL: charactersReservedPerURL) <= maxCharacters
             && attachments.count <= maxMediaAttachments
             && mediaIDs != nil
+            && poll.map { $0.isValid(limits: pollLimits) && attachments.isEmpty } ?? true
     }
 }
 

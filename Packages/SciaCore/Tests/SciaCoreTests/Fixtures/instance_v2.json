@@ -6,6 +6,7 @@
   "description": "",
   "usage": { "users": { "active_month": 1 } },
   "configuration": {
+    "polls": {"max_options": 5, "max_characters_per_option": 100, "min_expiration": 600, "max_expiration": 2629746},
     "urls": {
       "streaming": "wss://streaming.example.social",
       "status": null

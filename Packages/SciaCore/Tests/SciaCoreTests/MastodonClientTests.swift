@@ -288,6 +288,24 @@ struct MastodonClientTests {
         ])
     }
 
+    @Test func postStatusSendsPoll() async throws {
+        let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
+        let poll = PollDraft(options: [" 朝 ", "", "夜"], multiple: true, hidesTotals: true, expiresIn: 3_600)
+
+        _ = try await makeClient(transport).postStatus(StatusDraft(text: "どっち", poll: poll, idempotencyKey: "key-1"))
+
+        let request = try #require(await transport.requests.first)
+        var components = URLComponents()
+        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
+        #expect(components.queryItems?.filter { $0.name.hasPrefix("poll") } == [
+            URLQueryItem(name: "poll[options][]", value: "朝"),
+            URLQueryItem(name: "poll[options][]", value: "夜"),
+            URLQueryItem(name: "poll[expires_in]", value: "3600"),
+            URLQueryItem(name: "poll[multiple]", value: "true"),
+            URLQueryItem(name: "poll[hide_totals]", value: "true"),
+        ])
+    }
+
     @Test func postStatusSendsMediaIDsInOrder() async throws {
         let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
         let attachments = ["113000000000000102", "113000000000000100"].map { id in
@@ -377,6 +395,7 @@ struct MastodonClientTests {
             videoMatrixLimit: 8_294_400,
             videoFrameRateLimit: 120
         ))
+        #expect(configuration.pollLimits == PollLimits(maxOptions: 5, maxCharactersPerOption: 100, expirationRange: 600...2_629_746))
     }
 
     @Test func instanceConfigurationFallsBackWithoutStatusLimits() async throws {
@@ -390,6 +409,14 @@ struct MastodonClientTests {
         #expect(configuration.supportedMediaTypes == nil)
         // 上限を返さないサーバーでは、Mastodonの既定値で補わず、分からないままにする。
         #expect(configuration.mediaLimits == MediaLimits(imageSizeLimit: nil, imageMatrixLimit: nil, videoSizeLimit: nil, videoMatrixLimit: nil, videoFrameRateLimit: nil))
+        // 投票の上限は、Mastodonの既定値で補う。Mastodonは投票の上限を定数で持ち、運営者が変えられないため。
+        #expect(configuration.pollLimits == .mastodonDefault)
+    }
+
+    /// 下限が上限を超えるような読めない値なら、既定値にする。
+    @Test func pollLimitsFallBackOnInvertedExpiration() {
+        #expect(MastodonClient.pollLimits((maxOptions: 6, maxCharactersPerOption: nil, minExpiration: 9_000, maxExpiration: 300)).expirationRange == PollLimits.mastodonDefault.expirationRange)
+        #expect(MastodonClient.pollLimits((maxOptions: 6, maxCharactersPerOption: nil, minExpiration: nil, maxExpiration: nil)).maxOptions == 6)
     }
 
     @Test func instanceConfigurationReadsProfileLimits() async throws {

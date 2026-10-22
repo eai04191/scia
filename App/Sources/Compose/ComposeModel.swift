@@ -31,6 +31,10 @@ final class ComposeModel {
     var errorMessage: String?
     /// 添付したメディア。この順で投稿に並ぶ。
     private(set) var attachments: [DraftAttachment] = []
+    /// 付ける投票。投票の欄を出していなければnil。添付とは一緒に付けられないため、添付があるときは足せない。
+    var poll: PollDraft?
+    /// サーバーが受け付ける投票の上限。読めるまではMastodonの既定値にする。
+    private(set) var pollLimits = PollLimits.mastodonDefault
     /// 添付したメディアごとの、端末の側だけで持つもの。
     private(set) var localMedia: [DraftAttachment.ID: LocalMedia] = [:]
 
@@ -86,6 +90,7 @@ final class ComposeModel {
         draft.hasSpoiler = showsSpoiler
         draft.visibility = visibility
         draft.attachments = attachments
+        draft.poll = poll
         return draft
     }
 
@@ -99,19 +104,47 @@ final class ComposeModel {
     }
 
     var canPost: Bool {
-        !isPosting && descriptionTasks.isEmpty && (hasResolvedDefaults || hasChosenVisibility || editedStatus != nil) && draftToPost.canPost(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL, maxMediaAttachments: maxMediaAttachments)
+        !isPosting && descriptionTasks.isEmpty && (hasResolvedDefaults || hasChosenVisibility || editedStatus != nil) && draftToPost.canPost(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL, maxMediaAttachments: maxMediaAttachments, pollLimits: pollLimits)
     }
 
     /// メディアを選べる。枚数の上限をサーバーの値で読むまでは、ピッカーを開かない。
     /// 読めなかったときは、次に書き始めたときに読み直す。
     /// 編集している投稿の添付で上限まで埋まっていても開かない。ピッカーの上限の0は、選べないではなく上限なしを意味するため。
+    /// 投票の欄を出している間も開かない。Mastodonは投票と添付を一緒に付けられないため。
     var canAttachMedia: Bool {
-        !isPosting && hasLoadedConfiguration && pickerSelectionLimit > 0
+        !isPosting && hasLoadedConfiguration && pickerSelectionLimit > 0 && poll == nil
     }
 
     /// メディアをペーストできる。ピッカーと違い、上限まで埋まっていても受け付け、入りきらない分を知らせる。
+    /// 投票の欄を出している間は受け付けない。
     var canPasteMedia: Bool {
-        !isPosting && hasLoadedConfiguration
+        !isPosting && hasLoadedConfiguration && poll == nil
+    }
+
+    /// 投票の欄を足せる。添付があるときは、Mastodonが一緒に付けられないため足せない。
+    /// 編集では足せない。投票の付いた投稿の編集は、元の投票をそのまま送り直す。決まりはdocs/vision.mdの「投稿欄」にある。
+    var canAddPoll: Bool {
+        !isPosting && attachments.isEmpty && editedStatus == nil
+    }
+
+    /// 投票の欄を出す。足せないときは何もしない。
+    func addPoll() {
+        guard poll == nil, canAddPoll else { return }
+        // 締め切りは1日にする。サーバーの上限の外なら、選べるもののうち最初のもの。
+        let choices = PollDraft.expiryChoices(within: pollLimits)
+        poll = PollDraft(expiresIn: choices.contains(86_400) ? 86_400 : choices.first ?? pollLimits.expirationRange.lowerBound)
+    }
+
+    /// 選択肢を書き換える。最後の欄に書くと上限まで空の欄が増え、後ろに空の欄が並ぶと詰める。決まりは`PollDraft.setOption`にある。
+    func setPollOption(_ text: String, at index: Int) {
+        guard !isPosting else { return }
+        poll?.setOption(text, at: index, limits: pollLimits)
+    }
+
+    /// 投票の欄を外す。書いた選択肢も捨てる。
+    func removePoll() {
+        guard !isPosting else { return }
+        poll = nil
     }
 
     /// 返信先と既定値から決まる公開範囲。
@@ -130,6 +163,7 @@ final class ComposeModel {
             maxMediaAttachments = configuration.maxMediaAttachments
             mediaDescriptionLimit = configuration.mediaDescriptionLimit
             mediaLimits = configuration.mediaLimits
+            pollLimits = configuration.pollLimits
             supportedMediaTypes = configuration.supportedMediaTypes
             hasLoadedConfiguration = true
         }
@@ -202,6 +236,7 @@ final class ComposeModel {
             || !typedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !attachments.isEmpty
             || (!spoilerText.isEmpty && spoilerText != initialDraft.spoilerText)
+            || !(poll?.filledOptions.isEmpty ?? true)
     }
 
     /// 自分の投稿の編集を始める。今の下書きは捨てる。送っている間は始めずfalseを返す。
@@ -219,6 +254,7 @@ final class ComposeModel {
         showsSpoiler = draft.hasSpoiler
         visibility = draft.visibility
         attachments = draft.attachments
+        poll = nil
         lastSubmitted = nil
         hasChosenVisibility = false
         return true
@@ -232,6 +268,7 @@ final class ComposeModel {
         text = ""
         spoilerText = ""
         showsSpoiler = false
+        poll = nil
         removeAllAttachments()
         lastSubmitted = nil
         hasChosenVisibility = false
@@ -242,10 +279,10 @@ final class ComposeModel {
     private func submission(of draft: StatusDraft) -> StatusDraft {
         guard draft.editing == nil, let lastSubmitted else { return draft }
         if lastSubmitted.text == draft.text, lastSubmitted.spoilerText == draft.spoilerText, lastSubmitted.sensitive == draft.sensitive,
-           lastSubmitted.visibility == draft.visibility, lastSubmitted.mediaIDs == draft.mediaIDs {
+           lastSubmitted.visibility == draft.visibility, lastSubmitted.mediaIDs == draft.mediaIDs, lastSubmitted.poll == draft.poll {
             return lastSubmitted
         }
-        return StatusDraft(text: draft.text, spoilerText: draft.spoilerText, hasSpoiler: draft.hasSpoiler, visibility: draft.visibility, inReplyToID: draft.inReplyToID, attachments: draft.attachments)
+        return StatusDraft(text: draft.text, spoilerText: draft.spoilerText, hasSpoiler: draft.hasSpoiler, visibility: draft.visibility, inReplyToID: draft.inReplyToID, attachments: draft.attachments, poll: draft.poll)
     }
 
     /// 投稿し、成功したら下書きを空に戻す。失敗したら下書きを残し、同じ下書きで送り直せるようにする。

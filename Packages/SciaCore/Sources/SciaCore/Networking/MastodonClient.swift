@@ -129,6 +129,12 @@ public struct MastodonClient: Sendable {
                     let profileFieldNameLimit: Int?
                     let profileFieldValueLimit: Int?
                 }
+                struct Polls: Decodable {
+                    let maxOptions: Int?
+                    let maxCharactersPerOption: Int?
+                    let minExpiration: Int?
+                    let maxExpiration: Int?
+                }
                 struct MediaAttachments: Decodable {
                     let supportedMimeTypes: [String]?
                     let descriptionLimit: Int?
@@ -142,6 +148,7 @@ public struct MastodonClient: Sendable {
                 let accounts: Accounts?
                 let statuses: Statuses?
                 let mediaAttachments: MediaAttachments?
+                let polls: Polls?
             }
             let configuration: Configuration
         }
@@ -162,6 +169,7 @@ public struct MastodonClient: Sendable {
                 fieldName: configuration.accounts?.profileFieldNameLimit ?? ProfileLimits.beforeMastodon46.fieldName,
                 fieldValue: configuration.accounts?.profileFieldValueLimit ?? ProfileLimits.beforeMastodon46.fieldValue
             ),
+            pollLimits: Self.pollLimits(configuration.polls.map { ($0.maxOptions, $0.maxCharactersPerOption, $0.minExpiration, $0.maxExpiration) }),
             // 上限はサーバーごとに変えられていることが多いので、返さない項目をMastodonの既定値で補わない。
             mediaLimits: MediaLimits(
                 imageSizeLimit: configuration.mediaAttachments?.imageSizeLimit,
@@ -170,6 +178,18 @@ public struct MastodonClient: Sendable {
                 videoMatrixLimit: configuration.mediaAttachments?.videoMatrixLimit,
                 videoFrameRateLimit: configuration.mediaAttachments?.videoFrameRateLimit
             )
+        )
+    }
+
+    /// 投票の上限。返さない項目はMastodonの既定値で補う。下限が上限を超える値は読めないものとして、既定値にする。
+    static func pollLimits(_ polls: (maxOptions: Int?, maxCharactersPerOption: Int?, minExpiration: Int?, maxExpiration: Int?)?) -> PollLimits {
+        let fallback = PollLimits.mastodonDefault
+        let minExpiration = polls?.minExpiration ?? fallback.expirationRange.lowerBound
+        let maxExpiration = polls?.maxExpiration ?? fallback.expirationRange.upperBound
+        return PollLimits(
+            maxOptions: max(polls?.maxOptions ?? fallback.maxOptions, 2),
+            maxCharactersPerOption: polls?.maxCharactersPerOption ?? fallback.maxCharactersPerOption,
+            expirationRange: minExpiration <= maxExpiration ? minExpiration...maxExpiration : fallback.expirationRange
         )
     }
 
@@ -297,6 +317,9 @@ public struct MastodonClient: Sendable {
             form.append(URLQueryItem(name: "in_reply_to_id", value: inReplyToID))
         }
         form += mediaIDs.map { URLQueryItem(name: "media_ids[]", value: $0) }
+        if let poll = draft.poll {
+            form += poll.formItems
+        }
         return try await post(Status.self, path: "api/v1/statuses", form: form, headers: ["Idempotency-Key": draft.idempotencyKey]).0
     }
 
@@ -761,6 +784,8 @@ public struct InstanceConfiguration: Sendable, Equatable {
     public let profileLimits: ProfileLimits
     /// アップロードできるメディアの大きさの上限。
     public let mediaLimits: MediaLimits
+    /// 投票の上限。
+    public let pollLimits: PollLimits
 
     public init(
         streamingURL: URL,
@@ -770,6 +795,7 @@ public struct InstanceConfiguration: Sendable, Equatable {
         mediaDescriptionLimit: Int,
         supportedMediaTypes: [String]?,
         profileLimits: ProfileLimits = .beforeMastodon46,
+        pollLimits: PollLimits = .mastodonDefault,
         mediaLimits: MediaLimits
     ) {
         self.streamingURL = streamingURL
@@ -779,6 +805,7 @@ public struct InstanceConfiguration: Sendable, Equatable {
         self.mediaDescriptionLimit = mediaDescriptionLimit
         self.supportedMediaTypes = supportedMediaTypes
         self.profileLimits = profileLimits
+        self.pollLimits = pollLimits
         self.mediaLimits = mediaLimits
     }
 }
