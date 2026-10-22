@@ -99,6 +99,7 @@ enum DebugFaults {
             maxMediaAttachments: configuration.maxMediaAttachments,
             mediaDescriptionLimit: configuration.mediaDescriptionLimit,
             supportedMediaTypes: configuration.supportedMediaTypes,
+            pollLimits: configuration.pollLimits,
             mediaLimits: MediaLimits(
                 imageSizeLimit: override.imageSizeLimit ?? server.imageSizeLimit,
                 imageMatrixLimit: override.imageMatrixLimit ?? server.imageMatrixLimit,
