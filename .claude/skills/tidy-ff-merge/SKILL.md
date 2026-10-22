@@ -42,23 +42,26 @@ description: 作業branchのcommit履歴を整理してから、ローカルのd
 
 ## 5. checkとtestを通す
 
-作業branchのworktreeで、整理したあとのHEADに対して、`make check`のあとに`make test SIM='<使う端末>'`を走らせる。同じworktreeで同時に走らせるとDerivedDataを取り合うので、順に走らせる。
+作業branchのworktreeで`Tools/check-stamp.sh missing HEAD`を実行し、出たもの（`make check`、`make test`）だけを、出た順に走らせる。何も出なければ、同じ中身で通っているので飛ばす。整理やrebaseで中身が変わらなければ、前に通した結果がそのまま使われる。同じworktreeで同時に走らせるとDerivedDataを取り合うので、順に走らせる。
 
-- 端末は、このthreadで使うよう指示された端末にする。指示がなければ、ユーザーに聞く
+- `make test`の端末は、このthreadで使うよう指示された端末にする。指示がなければ、ユーザーに聞く
 - 走らせる前に、作業ツリーに未commitの変更がないことを確かめる。走らせている間も、ファイルを変えない
-- どちらかが失敗したら、mergeせずに、失敗したテストと出力を報告する。このskillの中では直さない
+- 落ちたら、落ちたテストと作業branchの変更を読んで、原因を決める
+  - 作業branchの変更が原因なら、作業branchで直してcommitし、手順2からやり直す
+  - 作業branchの変更が触れていないテストなら、一度だけ走らせ直す。通れば続け、たまに落ちるテストとして報告に書く。また落ちたら、mergeせずに報告する。`Tools/check-stamp.sh missing <targetのSHA>`で、targetの中身では通っていたかも添える
+  - 直すのに、仕様や挙動の判断が要るなら、mergeせずに報告する
 
 ## 6. fast-forward mergeする
 
 - targetがworktreeでcheckoutされている場合: `git -C <そのworktree> merge --ff-only <作業branch>`
 - checkoutされていない場合: `git fetch . <作業branch>:<target>`(fast-forwardでなければ失敗する)
 
-`make hooks`のhookが入っていれば、`make check`が通っていない中身はここで拒否される。拒否されたら、手順5のあとに中身が変わっていないかを確かめて報告する。
+`make hooks`のhookが入っていれば、`make check`と`make test`の両方が通っていない中身は、ここで拒否される。拒否されたら、手順5のあとに中身が変わっていないかを確かめて報告する。
 
 ## 7. 報告する
 
 - pr-readinessの判定
-- `make check`と`make test`の結果と、使った端末
+- `make check`と`make test`の結果（走らせたか、前の結果を使ったか）と、使った端末。走らせ直して通ったテストと、直したもの
 - どのcommitをどれにまとめたか。まとめなかった場合はその旨
 - mergeしたcommitの一覧(`git log --oneline <mergeの前のtarget>..<target>`)
 - 整理前後で差分がないこと

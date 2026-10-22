@@ -27,11 +27,15 @@ warnings: build
 
 ## シミュレーター上でschemeのテストを実行する。SIMに端末の名前を指定する
 ## テストはハードウェアキーボードがつながった状態を前提にしているので、先につなぐ。sim-keyboardで外したままだと、投稿欄のテストが落ちる
+## 通ったら、確かめた作業ツリーの中身を覚える。make hooksを入れたcheckoutでは、make checkとmake testの両方が通った中身のcommitしかmainに入れられない
 ## 例: make test SIM='Scia 1'
+TEST_TREE := $(DERIVED_DATA)/test-tree
 test: generate
 	@test -n '$(SIM)' || { echo "SIM='<端末の名前>'を指定する" >&2; exit 1; }
+	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(TEST_TREE)
 	swift Tools/sim-keyboard.swift '$(SIM)' hardware
 	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(DERIVED_DATA) -collect-test-diagnostics never test
+	@Tools/check-stamp.sh record test "$$(cat $(TEST_TREE))"
 
 ## シミュレーターのハードウェアキーボードを外してソフトウェアキーボードを出す（KEYBOARD=hardwareでつなぎ直す）
 ## 例: make sim-keyboard SIM='Scia 1'
@@ -64,18 +68,18 @@ update-known-servers:
 	Tools/update-known-servers.sh
 
 ## 変更を報告する前に通すべき検証
-## 通ったら、確かめた作業ツリーの中身を覚える。make hooksを入れたcheckoutでは、覚えた中身のcommitしかmainに入れられない
+## 通ったら、確かめた作業ツリーの中身を覚える。make hooksを入れたcheckoutでは、make checkとmake testの両方が通った中身のcommitしかmainに入れられない
 ## $(MAKE)を含む行はmake -nでも走るので、覚える処理はその行に入れない。入れると、何も確かめないmake -n checkで中身を覚えてしまう
 ## make -i checkは失敗を無視して最後まで進むので、通っていない中身も覚えてしまう。失敗の無視はわざと保証を外す操作で、ふだんの手順では使わないので止めない
 CHECK_TREE := $(DERIVED_DATA)/check-tree
 check:
 	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(CHECK_TREE)
 	@$(MAKE) --no-print-directory check-steps
-	@Tools/check-stamp.sh record "$$(cat $(CHECK_TREE))"
+	@Tools/check-stamp.sh record check "$$(cat $(CHECK_TREE))"
 
 check-steps: lint test-core build warnings
 
-## ローカルのmainを、make checkが通った中身のcommitにしか動かさないhookを入れる。worktreeにも効く
+## ローカルのmainを、make checkとmake testの両方が通った中身のcommitにしか動かさないhookを入れる。worktreeにも効く
 hooks:
 	ln -sfn ../../Tools/git-hooks/reference-transaction "$$(git rev-parse --git-common-dir)/hooks/reference-transaction"
 
