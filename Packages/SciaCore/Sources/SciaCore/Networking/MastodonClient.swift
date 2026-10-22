@@ -219,6 +219,18 @@ public struct MastodonClient: Sendable {
         try await post(Status.self, path: "api/v1/statuses/\(statusID)/unfavourite", form: []).0
     }
 
+    /// 投票する。複数選べない投票でも、選んだ選択肢を配列で送る。投票し直しはできず、サーバーは2度目の投票や自分の投票への投票を422で断る。
+    /// https://docs.joinmastodon.org/methods/polls/#vote
+    public func vote(_ pollID: Poll.ID, choices: [Int]) async throws -> Poll {
+        let form = choices.map { URLQueryItem(name: "choices[]", value: String($0)) }
+        return try await post(Poll.self, path: "api/v1/polls/\(pollID)/votes", form: form).0
+    }
+
+    /// https://docs.joinmastodon.org/methods/polls/#get
+    public func poll(_ pollID: Poll.ID) async throws -> Poll {
+        try await get(Poll.self, path: "api/v1/polls/\(pollID)", query: []).0
+    }
+
     /// https://docs.joinmastodon.org/methods/statuses/#bookmark
     public func bookmark(_ statusID: String) async throws -> Status {
         try await post(Status.self, path: "api/v1/statuses/\(statusID)/bookmark", form: []).0

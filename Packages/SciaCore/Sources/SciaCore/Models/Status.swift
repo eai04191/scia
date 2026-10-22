@@ -22,7 +22,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public let inReplyToId: String?
     /// 返信先の投稿を書いた人のID。
     public let inReplyToAccountId: String?
-    public let poll: Poll?
+    /// 投票。投票したときと読み直したときに、サーバーの結果で差し替える。
+    public private(set) var poll: Poll?
     /// 本文のリンク先から作ったカード。サーバーは投稿を配信してからカードを付けるため、後から取り直して差し替えることがある。
     public private(set) var card: PreviewCard?
     /// 引用。引用していなければnil。
@@ -214,6 +215,16 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         guard refetched.id == id, refetched.editedAt == editedAt else { return self }
         var status = self
         status.card = refetched.card
+        return status
+    }
+
+    /// 投票を、投票したときや読み直したときのサーバーの結果に差し替えたもの。
+    /// 待っている間に編集で投票が作り直されたり、選択肢が変わったりしていたら、結果は編集の前の投票のものなので、差し替えずにそのまま返す。
+    /// Mastodonは、編集で選択肢を変えても投票のIDを変えないため、IDだけでは見分けられない。
+    public func adoptingPoll(_ result: Poll) -> Status {
+        guard let poll, poll.id == result.id, poll.hasSameChoices(as: result) else { return self }
+        var status = self
+        status.poll = result
         return status
     }
 

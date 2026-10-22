@@ -1,0 +1,17 @@
+{
+  "id": "34830",
+  "expires_at": "2026-10-25T03:21:45.000Z",
+  "expired": false,
+  "multiple": true,
+  "votes_count": 10,
+  "voters_count": 6,
+  "options": [
+    {"title": "accept", "votes_count": 6},
+    {"title": "deny :blobcat:", "votes_count": 4}
+  ],
+  "emojis": [
+    {"shortcode": "blobcat", "url": "https://example.social/emoji/blobcat.png", "static_url": "https://example.social/emoji/blobcat.png", "visible_in_picker": true}
+  ],
+  "voted": true,
+  "own_votes": [0, 1]
+}

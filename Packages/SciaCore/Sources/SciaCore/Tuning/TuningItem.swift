@@ -150,6 +150,42 @@ public enum TuningCatalog {
         defaultValue: 10
     )
 
+    /// 本文と投票のあいだ。
+    public static let bodyPollSpacing = NumberTuning(
+        id: "timeline.bodyPollSpacing",
+        title: "本文と投票のあいだ（pt）",
+        range: 0...24,
+        step: 1,
+        defaultValue: 10
+    )
+
+    /// 投票の選択肢どうしのあいだ。
+    public static let pollOptionSpacing = NumberTuning(
+        id: "timeline.pollOptionSpacing",
+        title: "投票の選択肢のあいだ（pt）",
+        range: 0...16,
+        step: 1,
+        defaultValue: 6
+    )
+
+    /// 投票の選択肢の、文字の上下の余白。
+    public static let pollOptionPadding = NumberTuning(
+        id: "timeline.pollOptionPadding",
+        title: "投票の選択肢の上下の余白（pt）",
+        range: 2...16,
+        step: 1,
+        defaultValue: 8
+    )
+
+    /// 投票したときに、結果の棒が伸びるスプリングの時間。0なら動かさない。
+    public static let pollBarDuration = NumberTuning(
+        id: "timeline.pollBarDuration",
+        title: "投票の結果の棒が伸びる時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.5
+    )
+
     /// リンクカードの文字の、枠とサムネイルからの余白。
     public static let linkCardPadding = NumberTuning(
         id: "timeline.linkCardPadding",
@@ -1431,6 +1467,10 @@ public enum TuningCatalog {
             .number(bodyMediaSpacing),
             .number(nameMediaSpacing),
             .number(bodyLinkCardSpacing),
+            .number(bodyPollSpacing),
+            .number(pollOptionSpacing),
+            .number(pollOptionPadding),
+            .number(pollBarDuration),
             .number(linkCardPadding),
             .number(linkCardTransitionDuration),
             .toggle(xPostEmbeds),

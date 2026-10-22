@@ -29,6 +29,8 @@ public enum UserAction: Sendable, Equatable {
     case togglePin
     case toggleConversationMute
     case toggleBookmark
+    case vote
+    case refreshPoll
     case openEditHistory
     case editStatus
     case deleteStatus
@@ -66,6 +68,8 @@ public enum UserAction: Sendable, Equatable {
         case .togglePin: "status.pin"
         case .toggleConversationMute: "status.muteConversation"
         case .toggleBookmark: "status.bookmark"
+        case .vote: "poll.vote"
+        case .refreshPoll: "poll.refresh"
         case .openEditHistory: "status.editHistory"
         case .editStatus: "status.edit"
         case .deleteStatus: "status.delete"
@@ -118,6 +122,8 @@ public enum UserAction: Sendable, Equatable {
         case ("status.pin", 0): self = .togglePin
         case ("status.muteConversation", 0): self = .toggleConversationMute
         case ("status.bookmark", 0): self = .toggleBookmark
+        case ("poll.vote", 0): self = .vote
+        case ("poll.refresh", 0): self = .refreshPoll
         case ("status.editHistory", 0): self = .openEditHistory
         case ("status.edit", 0): self = .editStatus
         case ("status.delete", 0): self = .deleteStatus
@@ -158,6 +164,8 @@ public enum UserAction: Sendable, Equatable {
         case .togglePin: "投稿のプロフィールへの固定を押した"
         case .toggleConversationMute: "投稿の会話のミュートを押した"
         case .toggleBookmark: "投稿のブックマークを押した"
+        case .vote: "投票の「投票」を押した"
+        case .refreshPoll: "投票の「更新」を押した"
         case .openEditHistory: "投稿の編集履歴を開いた"
         case .editStatus: "自分の投稿の編集を選んだ"
         case .deleteStatus: "自分の投稿の削除を決めた"

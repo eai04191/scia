@@ -30,6 +30,7 @@ struct PostContentBuilder {
             bodyMediaSpacing: tuning.value(of: TuningCatalog.bodyMediaSpacing),
             nameMediaSpacing: tuning.value(of: TuningCatalog.nameMediaSpacing),
             bodyLinkCardSpacing: tuning.value(of: TuningCatalog.bodyLinkCardSpacing),
+            bodyPollSpacing: tuning.value(of: TuningCatalog.bodyPollSpacing),
             nameFont: Self.boldFont(base.textProperties.font),
             secondaryFont: secondaryFont,
             notificationSymbolFont: base.textProperties.font

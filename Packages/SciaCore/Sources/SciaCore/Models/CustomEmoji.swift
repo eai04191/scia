@@ -27,7 +27,7 @@ extension Status {
     public var emojisInRow: [CustomEmoji] {
         var seen: Set<URL> = []
         let booster = reblog == nil ? [] : account.displayNameEmojis
-        return (displayed.emojis + displayed.account.displayNameEmojis + booster).filter { seen.insert($0.url).inserted }
+        return (displayed.emojis + (displayed.poll?.emojis ?? []) + displayed.account.displayNameEmojis + booster).filter { seen.insert($0.url).inserted }
     }
 }
 

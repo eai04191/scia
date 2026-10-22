@@ -25,6 +25,8 @@ struct UserActionTests {
         .togglePin,
         .toggleConversationMute,
         .toggleBookmark,
+        .vote,
+        .refreshPoll,
         .openEditHistory,
         .editStatus,
         .deleteStatus,

@@ -195,6 +195,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var xPosts: XPostStore?
     /// この一覧で当てるサーバーのフィルターと、警告で畳んだ投稿のうち開いたもの。一覧を持つ側が、一覧の場所に合わせて入れる。
     var filterWarnings = FilterWarnings()
+    /// 投票する前に選んでいる選択肢と、結果を見ると選んだ投票、送っている途中の投票。
+    var pollChoices = PollChoices()
+    /// 投票の「投票」が押されたときに、選んだ選択肢と、押した投稿（ブーストならブーストした投稿）を渡して呼ぶ。
+    /// 送り終えたら、呼ばれた側が`finishVoting(_:succeeded:)`を呼ぶ。
+    var onVote: ((Set<Int>, Status) -> Void)?
+    /// 投票の「更新」が押されたときに、押した投稿を渡して呼ぶ。読み終えたら、呼ばれた側が`finishRefreshingPoll(_:)`を呼ぶ。
+    var onRefreshPoll: ((Status) -> Void)?
     /// 注意書きのある投稿の本文を開いているか。サーバーの設定が読めたら、セッションが既定を入れる。
     var spoilerExpansion = SpoilerExpansion() {
         didSet {
@@ -331,11 +338,26 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     private func refreshVisibleTimes() {
-        guard settings.statusTimeStyle == .relative else { return }
         let now = Date.now
+        refreshVisiblePolls(now: now)
+        guard settings.statusTimeStyle == .relative else { return }
         for cell in collectionView.visibleCells {
             (cell.contentView as? PostContentView)?.refreshTime(now: now)
         }
+    }
+
+    /// 表示中の投票のうち、残り時間や締め切りで見え方が変わったものだけを描き直す。表示したまま締め切りを迎えた投票を、投票できる形のまま残さないため。
+    /// 投票の行の高さは形や残り時間で変わらないため、描き直しても並びは動かない。
+    private func refreshVisiblePolls(now: Date) {
+        var stale: Set<ItemID> = []
+        for indexPath in collectionView.indexPathsForVisibleItems {
+            guard let id = dataSource.itemIdentifier(for: indexPath),
+                  let poll = status(for: id)?.displayed.poll,
+                  let drawn = (collectionView.cellForItem(at: indexPath)?.contentView as? PostContentView)?.pollDisplay,
+                  PollDisplay(poll: poll, choices: pollChoices, now: now) != drawn else { continue }
+            stale.insert(id)
+        }
+        reconfigure(stale)
     }
 
     /// チューニングの値、回線の状態、設定が変わったら、表示中の投稿を描き直す。
@@ -429,7 +451,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     private static func emojiURLs(of status: Status) -> Set<URL> {
         let shown = status.displayed
-        return Set((shown.emojis + shown.account.emojis + status.account.emojis).map(\.staticUrl))
+        return Set((shown.emojis + (shown.poll?.emojis ?? []) + shown.account.emojis + status.account.emojis).map(\.staticUrl))
     }
 
     private static func emojiURLs(of notification: MastodonNotification) -> Set<URL> {
@@ -1204,6 +1226,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.onRevealMedia = { [weak self] in
             self?.revealMedia(of: shown)
         }
+        configuration.poll = pollContent(for: shown, base: base)
+        configuration.onPollAction = { [weak self] action in self?.handlePollAction(action, on: status, keeping: itemID) }
         configuration.card?.coversImage = mediaCovers.linkCardImageCover(for: shown) != nil
         if let xPost = xPostContent(for: shown, base: base) {
             configuration.xPost = xPost.content

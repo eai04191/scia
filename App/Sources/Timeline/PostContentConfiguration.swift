@@ -41,6 +41,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var metrics: Metrics
     /// 添付ファイルがなければnil。
     var media: MediaGridView.Content?
+    /// 投票がなければnil。
+    var poll: PollView.Content?
     /// リンクカードを出さなければnil。
     var card: LinkCardView.Content?
     /// Xの投稿の囲み。あれば、リンクカードの代わりに出す。
@@ -70,6 +72,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
     /// Xの投稿の囲みのサムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectXPostMedia: ((Int, MediaGridView) -> Void)?
+    /// 投票の選択肢やボタンが押されたときに呼ぶ。
+    var onPollAction: ((PollView.Action) -> Void)?
 
     /// 大きさと文字の見た目。
     struct Metrics {
@@ -96,6 +100,8 @@ struct PostContentConfiguration: UIContentConfiguration {
         var nameMediaSpacing: CGFloat
         /// 本文か添付ファイルと、リンクカードのあいだ。
         var bodyLinkCardSpacing: CGFloat
+        /// 本文と投票のあいだ。
+        var bodyPollSpacing: CGFloat
         var nameFont: UIFont
         var secondaryFont: UIFont
         /// 通知の種類を示す記号の大きさを決める文字。誰が何をしたかの行を主役にする通知の記号と同じ大きさに揃えるため、
@@ -170,6 +176,11 @@ final class PostContentView: UIView, UIContentView {
         bodyView.mediaGrid
     }
 
+    /// 描いている投票の見え方。投票がなければnil。
+    var pollDisplay: PollDisplay? {
+        current.poll?.display
+    }
+
     /// 表示中の、Xの投稿の囲みのサムネイル。
     var xPostMediaGrid: MediaGridView? {
         bodyView.xPost?.mediaGrid
@@ -189,6 +200,7 @@ final class PostContentView: UIView, UIContentView {
         bodyView.onOpenLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
         bodyView.onOpenLinkCardImage = { [weak self] thumbnail in self?.current.onOpenLinkCardImage?(thumbnail) }
         bodyView.onSelectXPostMedia = { [weak self] index, grid in self?.current.onSelectXPostMedia?(index, grid) }
+        bodyView.onPollAction = { [weak self] action in self?.current.onPollAction?(action) }
         for view in [avatarView, nameRow] as [UIView] {
             view.isUserInteractionEnabled = true
             view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAccount)))
@@ -293,6 +305,8 @@ final class PostContentView: UIView, UIContentView {
             text: configuration.body,
             media: configuration.media,
             mediaSpacing: metrics.bodyMediaSpacing,
+            poll: configuration.poll,
+            pollSpacing: metrics.bodyPollSpacing,
             card: configuration.card,
             cardSpacing: metrics.bodyLinkCardSpacing,
             xPost: configuration.xPost,
@@ -415,7 +429,7 @@ final class PostContentView: UIView, UIContentView {
         (image.baselineOffsetFromBottom ?? 0) - image.alignmentRectInsets.bottom
     }
 
-    /// 読み上げでは、名前の上の行、名前、時刻、本文の順に1つの要素として読む。サムネイルとリンクカードは別の要素のまま残す。
+    /// 読み上げでは、名前の上の行、名前、時刻、本文の順に1つの要素として読む。投票、サムネイル、リンクカードは別の要素のまま残す。
     private func updateAccessibility(for configuration: PostContentConfiguration) {
         var parts: [String] = []
         if let context = configuration.context {
@@ -430,7 +444,7 @@ final class PostContentView: UIView, UIContentView {
         // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
         setNeedsLayout()
-        accessibilityElements = [textAccessibilityElement] + [bodyView.mediaGrid, bodyView.linkCard, bodyView.xPost, bodyView.filterNote].compactMap(\.self)
+        accessibilityElements = [textAccessibilityElement] + (bodyView.poll?.accessibilityParts ?? []) + [bodyView.mediaGrid, bodyView.linkCard, bodyView.xPost, bodyView.filterNote].compactMap(\.self)
     }
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)

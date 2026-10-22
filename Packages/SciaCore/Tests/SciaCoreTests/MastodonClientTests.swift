@@ -170,6 +170,32 @@ struct MastodonClientTests {
         #expect(status.visibility == .unlisted)
     }
 
+    @Test func votePostsChoicesAndDecodesPoll() async throws {
+        let transport = StubTransport([try .fixture("poll_voted")])
+
+        let poll = try await makeClient(transport).vote("34830", choices: [0, 1])
+
+        let request = try #require(await transport.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path() == "/api/v1/polls/34830/votes")
+        #expect(request.httpBody.map { String(decoding: $0, as: UTF8.self) } == "choices%5B%5D=0&choices%5B%5D=1")
+        #expect(poll.voted)
+        #expect(poll.ownVotes == [0, 1])
+        #expect(poll.votersCount == 6)
+        #expect(poll.emojis.map(\.shortcode) == ["blobcat"])
+    }
+
+    @Test func pollGetsItsPath() async throws {
+        let transport = StubTransport([try .fixture("poll_voted")])
+
+        let poll = try await makeClient(transport).poll("34830")
+
+        let request = try #require(await transport.requests.first)
+        #expect(request.httpMethod == "GET")
+        #expect(request.url?.path() == "/api/v1/polls/34830")
+        #expect(poll.options.map(\.votesCount) == [6, 4])
+    }
+
     @Test func bookmarkAndUnbookmarkPostToTheirPaths() async throws {
         let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200), .json(Self.interactedStatus, statusCode: 200)])
         let client = try makeClient(transport)

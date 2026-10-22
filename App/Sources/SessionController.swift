@@ -37,6 +37,7 @@ final class SessionController {
     /// 電波が戻ったときと、レート制限が明けたときに、読み込みをやり直す。
     private var recoveryTasks: [Task<Void, Never>] = []
     private let interactions: StatusInteractions
+    private let polls: PollVoting
     /// カードが付く前に受け取った投稿を、見えている間に取り直す。
     private let linkCards: LinkCardRefresher
     /// 「操作の状況」の一覧に並べる、処理の途中と最近の失敗。
@@ -150,6 +151,14 @@ final class SessionController {
         self.threads = threads
         // 同じ投稿がいくつものタブと開いているプロフィールやスレッドにあることがあるため、どれにも反映する。
         interactions = StatusInteractions(operations: .init(client: client)) { id, transform in
+            home.updateStatus(id, transform)
+            local.updateStatus(id, transform)
+            federated.updateStatus(id, transform)
+            notifications.updateStatus(id, transform)
+            profiles.updateStatus(id, transform)
+            threads.updateStatus(id, transform)
+        }
+        polls = PollVoting(operations: .init(client: client)) { id, transform in
             home.updateStatus(id, transform)
             local.updateStatus(id, transform)
             federated.updateStatus(id, transform)
@@ -539,6 +548,14 @@ final class SessionController {
         }
         viewController.onStatusAction = { [weak self, weak viewController] action, status in self?.perform(action, on: status, from: viewController) }
         viewController.onFollowRequestDecision = { [weak self] decision, request in self?.answerFollowRequest(decision, to: request) }
+        viewController.onVote = { [weak self, weak viewController] choices, status in
+            guard let viewController else { return }
+            self?.vote(choices, on: status, from: viewController)
+        }
+        viewController.onRefreshPoll = { [weak self, weak viewController] status in
+            guard let viewController else { return }
+            self?.refreshPoll(of: status, from: viewController)
+        }
         viewController.onDismissNotification = { [weak self] notification in self?.dismissNotification(notification) }
         viewController.mediaTransfers = mediaTransfers
         viewController.onOpenProfile = { [weak self, weak viewController] account in
@@ -1257,6 +1274,54 @@ final class SessionController {
                 operationStatus.recordFailure(title: failureTitle, reason: reason, subject: OperationStatus.Subject(status))
                 showFailureNotice(.interactionFailure(title: failureTitle) { [weak self] in
                     self?.presentAlert(title: failureTitle, message: reason.text)
+                })
+            }
+        }
+    }
+
+    /// 投票する。投票は取り消せないため、サーバーの結果を待ってから、すべての一覧に反映する。
+    /// 失敗したら、選んだ選択肢を残したまま、お気に入りの失敗と同じチップで知らせる。
+    private func vote(_ choices: Set<Int>, on status: Status, from timeline: TimelineViewController) {
+        guard let pollID = status.displayed.poll?.id else { return }
+        UserAction.vote.record()
+        let polls = polls
+        let title = "投票できませんでした"
+        Task { [weak self, weak timeline] in
+            do {
+                // ほかの一覧から送った同じ投票の結果を待っているときは送らない。その結果は、送った側がすべての一覧に反映する。
+                let sent = try await polls.vote(choices, on: status)
+                timeline?.finishVoting(pollID, succeeded: sent)
+            } catch {
+                timeline?.finishVoting(pollID, succeeded: false)
+                guard let self else { return }
+                logger.error("vote failed: \(SciaLog.describe(error), privacy: .public)")
+                let reason = await failureReason(for: error)
+                operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
+                showFailureNotice(.interactionFailure(title: title) { [weak self] in
+                    self?.presentAlert(title: title, message: reason.text)
+                })
+            }
+        }
+    }
+
+    /// 投票の結果を読み直し、すべての一覧に反映する。
+    private func refreshPoll(of status: Status, from timeline: TimelineViewController) {
+        guard let pollID = status.displayed.poll?.id else { return }
+        UserAction.refreshPoll.record()
+        let polls = polls
+        let title = "投票の結果を読み直せませんでした"
+        Task { [weak self, weak timeline] in
+            do {
+                try await polls.refresh(status)
+                timeline?.finishRefreshingPoll(pollID)
+            } catch {
+                timeline?.finishRefreshingPoll(pollID)
+                guard let self else { return }
+                logger.error("poll refresh failed: \(SciaLog.describe(error), privacy: .public)")
+                let reason = await failureReason(for: error)
+                operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
+                showFailureNotice(.interactionFailure(title: title) { [weak self] in
+                    self?.presentAlert(title: title, message: reason.text)
                 })
             }
         }

@@ -3,7 +3,7 @@ import UIKit
 
 /// 投稿の中身。投稿のセルと通知のセルで同じ部品を使い、どの部品をどう出すかは置く側が決める。
 ///
-/// 上から、注意書き、本文、添付ファイル、リンクカードの順に並べる。投票、引用、編集済みの印は、部品ができたらここに足す。
+/// 上から、注意書き、本文、投票、添付ファイル、リンクカードの順に並べる。引用は、部品ができたらここに足す。
 /// 注意書きで畳んでいる間は、注意書きだけを出す。
 /// 本文が空なら、本文と添付ファイルのあいだの余白も取らず、添付ファイルを上端から置く。上の行との間隔は置く側が`startsWithMedia`を見て決める。
 struct PostBodyContent {
@@ -34,6 +34,10 @@ struct PostBodyContent {
     var media: MediaGridView.Content?
     /// 本文と添付ファイルのあいだの余白。本文がなければ取らない。
     var mediaSpacing: CGFloat
+    /// 投票がなければnil。
+    var poll: PollView.Content?
+    /// 本文と投票のあいだの余白。本文がなければ取らない。
+    var pollSpacing: CGFloat = 0
     /// リンクカードを出さなければnil。
     var card: LinkCardView.Content?
     /// 本文か添付ファイルと、リンクカードのあいだの余白。
@@ -61,6 +65,8 @@ final class PostBodyView: UIView {
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
     /// Xの投稿の囲みのサムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectXPostMedia: ((Int, MediaGridView) -> Void)?
+    /// 投票の選択肢やボタンが押されたときに呼ぶ。選んだ状態を持つのは置く側で、適用し直すまで見た目は変わらない。
+    var onPollAction: ((PollView.Action) -> Void)?
 
     private let mediaImages: MediaImageStore
     private let avatarImages: AvatarImageStore
@@ -68,6 +74,7 @@ final class PostBodyView: UIView {
     // 本文のほかの部品は、その中身が初めて来たときに作り、そのあとは隠して持っておく。
     // どれも持たない投稿が多いのに、行を作るたびに全部を作ると、まとめて行を作る画面の最初の表示でメインスレッドが止まるため。
     private var spoilerView: SpoilerView?
+    private var pollView: PollView?
     private var mediaView: MediaGridView?
     private var cardView: LinkCardView?
     private var xPostView: XPostView?
@@ -91,6 +98,11 @@ final class PostBodyView: UIView {
         Self.shown(xPostView)
     }
 
+    /// 表示中の投票。読み上げの要素に加える。
+    var poll: PollView? {
+        Self.shown(pollView)
+    }
+
     /// 表示中のフィルターの印。添付ファイルやリンクカードより下にあるため、読み上げでは本文と分け、それらの後の要素にする。
     var filterNote: UILabel? {
         Self.shown(filterNoteLabel)
@@ -112,6 +124,7 @@ final class PostBodyView: UIView {
         set {
             textLabel.emojiImages = newValue
             spoilerView?.emojiImages = newValue
+            pollView?.emojiImages = newValue
         }
     }
 
@@ -146,6 +159,16 @@ final class PostBodyView: UIView {
         view.topAnchor.constraint(equalTo: topAnchor).isActive = true
         view.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?() }, for: .touchUpInside)
         spoilerView = view
+        return view
+    }
+
+    private func loadedPollView() -> PollView {
+        if let pollView { return pollView }
+        let view = PollView()
+        view.emojiImages = textLabel.emojiImages
+        install(view)
+        view.onAction = { [weak self] action in self?.onPollAction?(action) }
+        pollView = view
         return view
     }
 
@@ -214,10 +237,11 @@ final class PostBodyView: UIView {
         variableConstraints = []
         let shownSpoiler = applySpoiler(content.spoiler)
         let isCollapsed = content.spoiler?.isCollapsed ?? false
+        let poll = isCollapsed ? nil : content.poll
         let media = isCollapsed ? nil : content.media.flatMap { $0.aspectRatio == nil ? nil : $0 }
         let xPost = isCollapsed ? nil : content.xPost
         let card = isCollapsed || xPost != nil ? nil : content.card
-        textLabel.isHidden = isCollapsed || (content.text.length == 0 && (media != nil || card != nil || xPost != nil || content.spoiler != nil))
+        textLabel.isHidden = isCollapsed || (content.text.length == 0 && (poll != nil || media != nil || card != nil || xPost != nil || content.spoiler != nil))
         // 本文と添付ファイルは、注意書きがあればその下から並べる。
         let placement = Placement(
             contentTop: shownSpoiler?.bottomAnchor ?? topAnchor,
@@ -227,10 +251,11 @@ final class PostBodyView: UIView {
         if !textLabel.isHidden {
             variableConstraints.append(textLabel.firstBaselineAnchor.constraint(equalTo: placement.contentTop, constant: placement.contentTopSpacing + Self.textTopInset(of: content.text)))
         }
-        let shownMedia = applyMedia(media, spacing: content.mediaSpacing, placement: placement)
-        let shownCard = applyCard(card, below: shownMedia, spacing: content.cardSpacing, placement: placement)
+        let shownPoll = applyPoll(poll, spacing: content.pollSpacing, placement: placement)
+        let shownMedia = applyMedia(media, below: shownPoll, spacing: content.mediaSpacing, placement: placement)
+        let shownCard = applyCard(card, below: shownMedia ?? shownPoll, spacing: content.cardSpacing, placement: placement)
         let replacesCard = previous?.xPost == nil && previous?.card != nil && content.statusID != nil && previous?.statusID == content.statusID
-        let shownXPost = applyXPost(xPost, replacesCard: replacesCard, below: shownMedia, spacing: content.cardSpacing, placement: placement)
+        let shownXPost = applyXPost(xPost, replacesCard: replacesCard, below: shownMedia ?? shownPoll, spacing: content.cardSpacing, placement: placement)
         // 添付ファイルもリンクカードもないのに本文を隠すのは、注意書きがあるときだけ。
         let last: UIView = if let shownXPost {
             shownXPost
@@ -238,6 +263,8 @@ final class PostBodyView: UIView {
             shownCard
         } else if let shownMedia {
             shownMedia
+        } else if let shownPoll {
+            shownPoll
         } else if textLabel.isHidden, let shownSpoiler {
             shownSpoiler
         } else {
@@ -280,8 +307,21 @@ final class PostBodyView: UIView {
         return spoilerView
     }
 
+    /// 出した投票を返す。
+    private func applyPoll(_ poll: PollView.Content?, spacing: CGFloat, placement: Placement) -> PollView? {
+        guard let poll else {
+            pollView?.isHidden = true
+            return nil
+        }
+        let pollView = loadedPollView()
+        pollView.isHidden = false
+        pollView.apply(poll)
+        variableConstraints.append(placement.top(of: pollView, below: nil, spacing: spacing))
+        return pollView
+    }
+
     /// 出した添付ファイルの欄を返す。
-    private func applyMedia(_ media: MediaGridView.Content?, spacing: CGFloat, placement: Placement) -> MediaGridView? {
+    private func applyMedia(_ media: MediaGridView.Content?, below shownAbove: UIView?, spacing: CGFloat, placement: Placement) -> MediaGridView? {
         guard let media, let aspectRatio = media.aspectRatio else {
             mediaView?.isHidden = true
             return nil
@@ -294,7 +334,7 @@ final class PostBodyView: UIView {
         case .strip(let side): mediaView.heightAnchor.constraint(equalToConstant: side)
         }
         variableConstraints += [
-            placement.top(of: mediaView, below: nil, spacing: spacing),
+            placement.top(of: mediaView, below: shownAbove, spacing: spacing),
             height,
         ]
         return mediaView

@@ -9,10 +9,9 @@ extension TimelineViewController {
         case .post:
             guard let status = notification.status else { return headerOnlyConfiguration(for: notification, base: base) }
             return postConfiguration(for: notification, status: status, itemID: itemID, base: base)
-        case .quoted:
-            // 投票の終了の通知（showsPollResults）では、投票の部品ができたら、ここで投票を結果の形で足す。
+        case .quoted(let showsPollResults):
             guard let status = notification.status else { return headerOnlyConfiguration(for: notification, base: base) }
-            return quotedConfiguration(for: notification, status: status, itemID: itemID, base: base)
+            return quotedConfiguration(for: notification, status: status, showsPollResults: showsPollResults, itemID: itemID, base: base)
         case .headerOnly:
             return headerOnlyConfiguration(for: notification, base: base)
         }
@@ -49,7 +48,8 @@ extension TimelineViewController {
 
     /// お気に入りやブーストなど、自分の投稿の再掲になる通知。誰が何をしたかの行を目立たせ、本文は控えめな色で短く切り、
     /// 添付ファイルは小さなサムネイルを1列だけ並べる。
-    private func quotedConfiguration(for notification: MastodonNotification, status: Status, itemID: ItemID?, base: UIListContentConfiguration) -> NotificationContentConfiguration {
+    /// - Parameter showsPollResults: 投票を結果の形で足す。投票はできない形にし、選択肢は押下を受けない。
+    private func quotedConfiguration(for notification: MastodonNotification, status: Status, showsPollResults: Bool, itemID: ItemID?, base: UIListContentConfiguration) -> NotificationContentConfiguration {
         let shown = status.displayed
         var media = mediaContent(for: status)
         media?.arrangement = .strip(side: tuning.value(of: TuningCatalog.notificationQuotedThumbnailSize))
@@ -60,7 +60,9 @@ extension TimelineViewController {
                 text: body(of: shown, base: base, color: .secondaryLabel),
                 maximumLines: Int(tuning.value(of: TuningCatalog.notificationQuotedBodyLines)),
                 media: media,
-                mediaSpacing: tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing)
+                mediaSpacing: tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing),
+                poll: showsPollResults ? pollContent(for: shown, allowsVoting: false, base: base) : nil,
+                pollSpacing: tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing)
             ),
             bodySpacing: tuning.value(of: TuningCatalog.notificationQuotedSpacing),
             base: base
