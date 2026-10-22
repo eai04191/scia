@@ -1,11 +1,11 @@
 ---
-name: tidy-ff-merge
-description: 作業branchのcommit履歴を整理してから、ローカルのdefault branchへfast-forward mergeする。「整理してmainにff mergeして」「rebaseして整理してマージして」「まとめてからmainに入れて」と頼まれたときに使う。pushとGitHub上のPRのmergeには使わない。Use when the user asks to tidy (squash/rebase) the current branch's commits and fast-forward the local default branch to it.
+name: merge-to-main
+description: sciaの作業branchを、ローカルのmainへ安全に入れる。履歴を整理し、まだ通っていないmake checkとmake testだけを走らせ、作業branchの変更で落ちたら直してから、fast-forwardで入れる。「mainにマージして」「mainに入れて」「整理してmainにff mergeして」など、mainへ入れる依頼のすべてで使う。pushとGitHub上のPRのmergeには使わない。Use for every request to merge or land a branch into the local main in scia.
 ---
 
-# Tidy FF Merge
+# Merge to Main
 
-作業branchの履歴を、変更目的ごとの論理単位に整理してから、ローカルのdefault branch(以下target)へfast-forward mergeする。pushはしない。
+作業branchを、ローカルのdefault branch(以下target)へ安全に入れる。履歴を変更目的ごとの論理単位に整理し、中身で`make check`と`make test`が通っていることを確かめてから、fast-forward mergeする。pushはしない。
 
 ## 1. 対象を確定する
 
