@@ -803,6 +803,8 @@ struct MediaViewerControllerTests {
         }, operationStatus: recent)
         let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
         defer { viewer.dismiss(animated: false) }
+        // 進み具合の文言は始めた直後から出ているため、下の待ちは譲らずに抜けることがある。出し終える前に押すと、UIKitが確認を出さずに捨てる。
+        try await waitUntil { !viewer.isBeingPresented }
 
         viewer.saveToPhotos()
         try await waitUntil { viewer.downloadProgressText != nil }
