@@ -210,6 +210,7 @@ final class RowContentScrollView: UIScrollView {}
 final class MediaTileView: UIButton, MediaViewerSource {
     private let store: MediaImageStore
     private let settings: AppSettings
+    private let tuning: TuningStore
     private let thumbnailView = FocusCroppedImageView()
     private let symbolView = UIImageView()
     private let badge = MediaBadgeView()
@@ -234,9 +235,10 @@ final class MediaTileView: UIButton, MediaViewerSource {
         let aspectRatio: Double?
     }
 
-    init(store: MediaImageStore, settings: AppSettings = AppDependencies.settings) {
+    init(store: MediaImageStore, settings: AppSettings = AppDependencies.settings, tuning: TuningStore = AppDependencies.tuning) {
         self.store = store
         self.settings = settings
+        self.tuning = tuning
         super.init(frame: .zero)
         backgroundColor = .secondarySystemFill
         layer.cornerRadius = MediaGridView.cornerRadius
@@ -246,7 +248,6 @@ final class MediaTileView: UIButton, MediaViewerSource {
         accessibilityTraits = [.button, .image]
 
         symbolView.contentMode = .center
-        symbolView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 36)
         symbolView.layer.shadowColor = UIColor.black.cgColor
         symbolView.layer.shadowRadius = 4
         symbolView.layer.shadowOffset = .zero
@@ -263,6 +264,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
             self.setNeedsLayout()
         }
         followDynamicRanges()
+        followSymbolSizing()
         menuInteraction = MediaMenuInteraction(on: self, wholeImage: { [weak self] in self?.loadedThumbnail }, open: { [weak self] in
             self?.sendActions(for: .primaryActionTriggered)
         }, sharperImage: { [weak self] maxPixelSize in
@@ -288,9 +290,24 @@ final class MediaTileView: UIButton, MediaViewerSource {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 動画の再生などの印の大きさ。投稿欄のカプセルのように小さな枠では小さくする。
-    var symbolPointSize: CGFloat = 36 {
-        didSet { symbolView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: symbolPointSize) }
+    /// 動画の再生などの印の大きさを決める、チューニングの値。
+    private var symbolSizing = (ratio: 0.0, range: 0.0...0.0)
+    /// いま印に当てている大きさ。同じなら設定し直さない。
+    private var symbolPointSize: CGFloat?
+
+    /// 印の大きさのチューニングを読み続ける。変えたら、出ているタイルの印も描き直す。
+    private func followSymbolSizing() {
+        withObservationTracking {
+            symbolSizing = (
+                ratio: tuning.value(of: TuningCatalog.mediaSymbolRatio),
+                range: tuning.value(of: TuningCatalog.mediaSymbolMinSize)...tuning.value(of: TuningCatalog.mediaSymbolMaxSize)
+            )
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.followSymbolSizing()
+                self?.setNeedsLayout()
+            }
+        }
     }
 
     /// 描いているサムネイル。ビューアの開閉で、まだ画像を描いていないページの代わりに動かす。
@@ -506,6 +523,11 @@ final class MediaTileView: UIButton, MediaViewerSource {
         updateSource()
         thumbnailView.frame = bounds
         symbolView.frame = bounds
+        let pointSize = MediaTileSymbol.pointSize(tileSize: bounds.size, ratio: symbolSizing.ratio, range: symbolSizing.range)
+        if symbolPointSize != pointSize {
+            symbolPointSize = pointSize
+            symbolView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: pointSize)
+        }
         moreLabel.frame = bounds
         // 札をタイルの端から離す余白。狭いタイルでもすべての印を出せるよう、タイルの短い辺に合わせて6ptから2ptまで縮める。
         let inset = min(max(min(bounds.width, bounds.height) / 10, 2), 6).rounded()

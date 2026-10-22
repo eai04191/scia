@@ -213,6 +213,34 @@ public enum TuningCatalog {
         defaultValue: 4
     )
 
+    /// サムネイルの中央に置く印（動画の再生など）の大きさの、タイルの短い辺に対する比。
+    public static let mediaSymbolRatio = NumberTuning(
+        id: "timeline.mediaSymbolRatio",
+        title: "サムネイルの再生の印の大きさ（短い辺に対する比）",
+        range: 0.1...0.9,
+        step: 0.05,
+        defaultValue: 0.4
+    )
+
+    /// サムネイルの中央に置く印の大きさの下限。通知や投稿欄の小さなサムネイルで効く。
+    /// 範囲を上限の範囲と重ねないことで、下限が上限を超えないようにする。
+    public static let mediaSymbolMinSize = NumberTuning(
+        id: "timeline.mediaSymbolMinSize",
+        title: "サムネイルの再生の印の最小（pt）",
+        range: 4...16,
+        step: 1,
+        defaultValue: 10
+    )
+
+    /// サムネイルの中央に置く印の大きさの上限。一覧の大きなサムネイルで効く。
+    public static let mediaSymbolMaxSize = NumberTuning(
+        id: "timeline.mediaSymbolMaxSize",
+        title: "サムネイルの再生の印の最大（pt）",
+        range: 16...80,
+        step: 2,
+        defaultValue: 36
+    )
+
     /// 名前の上の行（ブースト、固定、通知の種類）の記号と、その右の文字やアイコンとのすき間。
     /// 記号はアイコンの列の右端に揃えず、文字の列からこの幅だけ離して置く。記号どうしの縦の揃いは保たれる。
     public static let contextSymbolSpacing = NumberTuning(
@@ -1308,6 +1336,9 @@ public enum TuningCatalog {
             .number(spoilerPadding),
             .number(spoilerBodySpacing),
             .number(mediaTileSpacing),
+            .number(mediaSymbolRatio),
+            .number(mediaSymbolMinSize),
+            .number(mediaSymbolMaxSize),
             .number(nameFadeWidth),
             .number(mediaTallestAspectRatio),
             .number(mediaThumbnailUpscaleTolerance),

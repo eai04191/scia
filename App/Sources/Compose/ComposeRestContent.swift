@@ -364,7 +364,6 @@ final class ComposeRestPhoto: UIView {
         tile.isAccessibilityElement = false
         // 小さな枠では、ALTやGIFの札は読めないうえ、カプセルに文字を増やすため出さない。
         tile.hidesBadge = true
-        tile.symbolPointSize = 10
         tile.layer.cornerRadius = Self.cornerRadius - Self.border / 2
         // 回して置くので、縁がギザギザにならないよう、紙と中の画像の縁をなめらかに描く。
         layer.allowsEdgeAntialiasing = true
