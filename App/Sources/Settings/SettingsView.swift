@@ -57,10 +57,10 @@ struct SettingsView: View {
                 }
                 Section {
                     Picker("名前の表記", selection: $settings.statusNameStyle) {
-                        Text("名前、@acct").tag(StatusNameStyle.nameAndAcct)
+                        Text("名前、ハンドル").tag(StatusNameStyle.nameAndAcct)
                         Text("名前").tag(StatusNameStyle.nameOnly)
-                        Text("@acct").tag(StatusNameStyle.acctOnly)
-                        Text("@acct、名前").tag(StatusNameStyle.acctAndName)
+                        Text("ハンドル").tag(StatusNameStyle.acctOnly)
+                        Text("ハンドル、名前").tag(StatusNameStyle.acctAndName)
                     }
                     Picker("時刻の表記", selection: $settings.statusTimeStyle) {
                         Text("相対時刻").tag(StatusTimeStyle.relative)
