@@ -222,6 +222,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             guard let session = self?.session else { return }
             self?.window?.rootViewController?.frontmostPresented.presentSettings(
                 instance: session.credential.instance,
+                account: session.credential.handle,
                 diagnostics: session.diagnostics
             )
         }

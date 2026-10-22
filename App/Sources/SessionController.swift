@@ -53,6 +53,10 @@ final class SessionController {
     /// ログインし直しの途中。続けて押されても、認可画面を重ねて出さない。
     private var isReauthenticating = false
     private let tabBarDelegate: TabReselectionDelegate
+    /// タブバーと切り替えタブ。設定のタブの並びから組む。
+    private let tabs: TabArrangement
+    /// `start()`を呼んだ。それより前に並びが変わっても、ホームと通知を読み始めない。
+    private var hasStarted = false
     /// 画面を移る動きに、チップの列を相乗りさせる。
     private let navigationDelegate = NoticeNavigationDelegate()
     /// 開いているプロフィール画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
@@ -120,9 +124,11 @@ final class SessionController {
         self.local = local
         self.federated = federated
         // ローカルと連合は、起動のたびの通信と購読を増やさないよう、初めて開いたときに読み始める。
-        for feed in [local, federated] {
+        // ホームと通知も、無効にしていて起動のときに始めなかったら、開いたときに始める。
+        for feed in [home, local, federated] {
             feed.viewController.onAppearing = { [weak feed] in feed?.startIfNeeded() }
         }
+        notifications.viewController.onAppearing = { [weak notifications] in notifications?.startIfNeeded() }
         self.notifications = notifications
         let mediaFormats = UnprocessableMediaFormats(defaults: .standard, instance: credential.instance)
         let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog, mediaFormats: mediaFormats)
@@ -161,20 +167,23 @@ final class SessionController {
         let localNavigation = ContentNavigationController(rootViewController: local.viewController)
         let federatedNavigation = ContentNavigationController(rootViewController: federated.viewController)
         let notificationsNavigation = ContentNavigationController(rootViewController: notifications.viewController)
-        let notificationsTab = UITab(title: "通知", image: UIImage(systemName: "bell"), identifier: "notifications") { _ in notificationsNavigation }
-        notifications.onUnreadCountChange = { count, isLowerBound in
-            notificationsTab.badgeValue = count == 0 ? nil : isLowerBound ? "\(count)+" : "\(count)"
+        let tabs = TabArrangement(
+            navigations: [.home: homeNavigation, .local: localNavigation, .federated: federatedNavigation, .notifications: notificationsNavigation],
+            placement: TabPlacement(layout: AppDependencies.settings.tabLayout(for: credential.handle)),
+            restoring: AppDependencies.settings.switchTabItem(for: credential.handle)
+        )
+        tabs.onSwitchSelectionChange = { [handle = credential.handle] item in
+            AppDependencies.settings.setSwitchTabItem(item, for: handle)
         }
-        let tabBarController = UITabBarController(tabs: [
-            UITab(title: "ホーム", image: UIImage(systemName: "house"), identifier: "home") { _ in homeNavigation },
-            UITab(title: "ローカル", image: UIImage(systemName: "person.2"), identifier: "local") { _ in localNavigation },
-            UITab(title: "連合", image: UIImage(systemName: "globe"), identifier: "federated") { _ in federatedNavigation },
-            notificationsTab,
-        ])
+        self.tabs = tabs
+        let tabBarController = tabs.tabBarController
+        notifications.onUnreadCountChange = { [weak tabs] count, isLowerBound in
+            tabs?.setNotificationsBadge(count == 0 ? nil : isLowerBound ? "\(count)+" : "\(count)")
+        }
         let scrollToTop = { (navigation: UINavigationController) -> Void in
             (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
         }
-        tabBarDelegate = TabReselectionDelegate(scrollToTop: scrollToTop) { tabBarController in
+        tabBarDelegate = TabReselectionDelegate(scrollToTop: scrollToTop, navigation: { [weak tabs] in tabs?.navigation(for: $0) }) { tabBarController in
             // タブの切り替えには画面の移り変わりの動きがないため、チップだけを短く動かす。
             tabBarController.noticeOverlay?.follow(nil)
         }
@@ -346,9 +355,9 @@ final class SessionController {
             let top = tabBarController.frontmostPresented
             return top === tabBarController || top is SFSafariViewController ? top : nil
         }
-        composer.onShowReplyTarget = { [weak tabBarController] status in
+        composer.onShowReplyTarget = { [weak tabs] status in
             // 今見えている一覧（ホーム、通知、開いているプロフィール）に返信先があれば、そこへ戻る。なければ動かさない。
-            let navigation = tabBarController?.selectedTab?.viewController as? UINavigationController
+            let navigation = tabs?.selectedNavigation
             (navigation?.topViewController as? TimelineViewController)?.scrollToStatus(status.id, displayedID: status.displayed.id)
         }
         composer.onObscuredHeightChange = { [weak self] height in
@@ -376,6 +385,9 @@ final class SessionController {
             }
         }
         configureStatusBarTicker(tabBarController: tabBarController)
+        tabs.onPlacementChange = { [weak self] in self?.applyEnabledItems($0) }
+        applyEnabledItems(tabs.placement)
+        observeTabLayout()
         observeHidesEmptyComposeBar()
         // 投稿欄を置くとタブバーの画面を読み込むため、各一覧の設定を終えてから置く。
         composer.install(in: tabBarController)
@@ -383,13 +395,46 @@ final class SessionController {
 
     /// 設定でオフにしている間、この機種で使えない間、通知タブを見ている間、ビューアのように画面全体を覆う画面を出している間は流さない。
     /// 押すと通知タブを開く。投稿を1件だけ開く画面がまだないため。
+    /// 設定でタブの並びを変えたら、タブバーを組み直し、無効にした項目の購読をやめ、有効にした項目の購読を戻す。
+    private func observeTabLayout() {
+        let handle = credential.handle
+        withObservationTracking {
+            _ = AppDependencies.settings.tabLayout(for: handle)
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let placement = TabPlacement(layout: AppDependencies.settings.tabLayout(for: handle))
+                if placement != tabs.placement {
+                    tabs.apply(placement)
+                }
+                observeTabLayout()
+            }
+        }
+    }
+
+    /// 並びに合わせて、無効にした項目の購読をやめ、有効にした項目の購読を戻す。
+    /// 起動のあとに有効にしたホームと通知は、ここで読み始める。ローカルと連合は、開いたときに読み始める。
+    private func applyEnabledItems(_ placement: TabPlacement) {
+        for feed in feeds {
+            feed.setEnabled(placement.location(of: TabItem(feed.feed)) != .disabled)
+        }
+        notifications.setEnabled(placement.location(of: .notifications) != .disabled)
+        guard hasStarted else { return }
+        if placement.location(of: .home) != .disabled {
+            home.startIfNeeded()
+        }
+        if placement.location(of: .notifications) != .disabled {
+            notifications.startIfNeeded()
+        }
+    }
+
     private func configureStatusBarTicker(tabBarController: UITabBarController) {
         let ticker = statusBarTicker
         ticker.scene = { [weak tabBarController] in tabBarController?.view.window?.windowScene }
         ticker.rootController = { [weak tabBarController] in tabBarController }
-        ticker.canShow = { [weak tabBarController] in
+        ticker.canShow = { [weak tabBarController, weak tabs] in
             guard AppDependencies.settings.showsStatusBarTicker, StatusBarCutout.isAvailable else { return false }
-            guard let tabBarController, tabBarController.selectedTab?.identifier != "notifications" else { return false }
+            guard let tabBarController, let tabs, !tabs.isShowing(.notifications) else { return false }
             // ビューアの上に代替テキストのシートを重ねたときのように、手前がシートでも奥に画面全体を覆う画面があれば流さない。
             var presented = tabBarController.presentedViewController
             while let current = presented {
@@ -398,11 +443,12 @@ final class SessionController {
             }
             return true
         }
-        ticker.onTap = { [weak tabBarController, weak ticker] in
+        ticker.onTap = { [weak tabs, weak ticker] in
             UserAction.selectTab("notifications").record()
-            tabBarController?.selectedTab = tabBarController?.tabs.first { $0.identifier == "notifications" }
+            tabs?.show(.notifications)
             ticker?.clear()
         }
+        tabs.onShownItemChange = { ticker.reevaluate() }
         notifications.onArrival = { notification, verdict in ticker.receive(notification, verdict: verdict) }
         tabBarDelegate.onSelect = { ticker.reevaluate() }
         observeStatusBarTickerSetting()
@@ -727,8 +773,7 @@ final class SessionController {
 
     /// 投稿の詳細の画面はまだないため、今見えている一覧（ホーム、通知、開いているプロフィール）にあればそこへ動かし、なければ投稿のページを開く。
     private func open(_ subject: OperationStatus.Subject) {
-        let navigation = (rootViewController as? UITabBarController)?.selectedTab?.viewController as? UINavigationController
-        if let timeline = navigation?.topViewController as? TimelineViewController,
+        if let timeline = tabs.selectedNavigation?.topViewController as? TimelineViewController,
            timeline.scrollToStatus(subject.statusID, displayedID: subject.displayedID, at: .centeredVertically) {
             return
         }
@@ -1299,8 +1344,14 @@ final class SessionController {
     }
 
     func start() {
-        home.start()
-        notifications.start()
+        hasStarted = true
+        // 無効にしている項目は、有効にしたときか開いたときに始める。
+        if tabs.placement.location(of: .home) != .disabled {
+            home.start()
+        }
+        if tabs.placement.location(of: .notifications) != .disabled {
+            notifications.start()
+        }
         observeRecoveries()
         loadServerVersion()
         RequestOrigin.$current.withValue(.automatic) {
@@ -1531,8 +1582,12 @@ final class SessionController {
                     handle(ProfileNotFound(acct: acct), title: "プロフィールを開けませんでした")
                     return
                 }
-                (rootViewController as? UITabBarController)?.selectedIndex = 0
-                openProfile(account, from: home.viewController)
+                // ホームを無効にしていれば、今見ているタブに開く。
+                if tabs.placement.location(of: .home) != .disabled {
+                    tabs.show(.home)
+                }
+                guard let root = tabs.selectedNavigation?.viewControllers.first else { return }
+                openProfile(account, from: root)
             } catch {
                 handle(error, title: "プロフィールを開けませんでした")
             }
@@ -1619,16 +1674,15 @@ final class SessionController {
             AgentScreenDump.write(scene: rootViewController.view.window?.windowScene)
         case .reset:
             rootViewController.dismiss(animated: false)
-            let tabs = rootViewController as? UITabBarController
-            // UITabで組んだタブバーでは`viewControllers`がnilを返すため、各タブの画面はUITabから取る。
-            for case let navigation as UINavigationController in tabs?.tabs.map(\.viewController) ?? [] {
+            for navigation in tabs.allNavigations {
                 navigation.popToRootViewController(animated: false)
             }
-            tabs?.selectedIndex = 0
+            tabs.tabBarController.selectedIndex = 0
         case .settings:
             // 直前のresetで閉じている途中の画面には重ねられないため、閉じる途中の画面を飛ばして重ねる。
             rootViewController.frontmostPresented.presentSettings(
                 instance: credential.instance,
+                account: credential.handle,
                 diagnostics: diagnostics
             )
         case .tuning:
@@ -1639,9 +1693,9 @@ final class SessionController {
             // 書いている途中のキーボードから開いたときの動きも見るため、投稿欄は閉じない。高さはメディアを選ぶシートの決めた高さと同じにする。
             SheetKeyboardExperiment.present(from: rootViewController.frontmostPresented, lowHeight: AppDependencies.tuning.value(of: TuningCatalog.composePickerHeight) - (rootViewController.view.window?.safeAreaInsets.bottom ?? 0))
         case .tab(let tab):
-            let tabs = rootViewController as? UITabBarController
-            tabs?.selectedTab = tabs?.tabs.first { $0.identifier == tab.rawValue }
-            statusBarTicker.reevaluate()
+            if let item = TabItem(rawValue: tab.rawValue) {
+                tabs.show(item)
+            }
         case .viewer(let index):
             openTopmostMedia(at: index)
         case .statusBarTickerLoop(let isOn):
@@ -1824,12 +1878,15 @@ private final class ProfileRegistry {
 @MainActor
 private final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate {
     private let scrollToTop: (UINavigationController) -> Void
+    /// タブで前に出ているナビゲーション。切り替えタブなら、開いている項目のもの。
+    private let navigation: (UITab) -> UINavigationController?
     private let didSelect: (UITabBarController) -> Void
     /// 別のタブを選び終えたとき。ステータスバーの通知を流してよいかを見直す。
     var onSelect: (() -> Void)?
 
-    init(scrollToTop: @escaping (UINavigationController) -> Void, didSelect: @escaping (UITabBarController) -> Void) {
+    init(scrollToTop: @escaping (UINavigationController) -> Void, navigation: @escaping (UITab) -> UINavigationController?, didSelect: @escaping (UITabBarController) -> Void) {
         self.scrollToTop = scrollToTop
+        self.navigation = navigation
         self.didSelect = didSelect
     }
 
@@ -1844,7 +1901,7 @@ private final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate
             UserAction.selectTab(tab.identifier).record()
             return true
         }
-        guard let navigation = tab.viewController as? UINavigationController,
+        guard let navigation = navigation(tab),
               navigation.viewControllers.count == 1
         else {
             UserAction.reselectTab(tab.identifier).record()

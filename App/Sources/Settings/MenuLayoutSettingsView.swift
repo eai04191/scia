@@ -12,8 +12,12 @@ protocol MenuItemPresentable {
     static var moreBoundaryTitle: String { get }
     static var moreBoundaryNote: String { get }
     static var moreBoundarySymbolName: String { get }
+    /// 区切り線を足せるか。
+    static var supportsSeparators: Bool { get }
     /// 横並びの区切り線を足せるか。
     static var supportsRowSeparators: Bool { get }
+    /// 表示する項目を1つは残すか。残すなら、最後の1つのスイッチを切れなくする。
+    static var requiresVisibleItem: Bool { get }
 }
 
 /// 長押しのメニューでは、境目より下の項目は「その他」のサブメニューに入る。
@@ -21,7 +25,9 @@ extension MenuItemPresentable {
     static var moreBoundaryTitle: String { "その他" }
     static var moreBoundaryNote: String { "これより下の項目は、メニューの「その他」の中に入ります" }
     static var moreBoundarySymbolName: String { "ellipsis.circle" }
+    static var supportsSeparators: Bool { true }
     static var supportsRowSeparators: Bool { true }
+    static var requiresVisibleItem: Bool { false }
 }
 
 /// 長押しのメニューや投稿欄の＋の並びを変える画面。項目、区切り線、「その他」の境目を1本のリストで並べ替え、項目ごとに表示を切り替える。決まりはdocs/menus.mdにある。
@@ -164,9 +170,13 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         ) { footer, _, indexPath in
             var content = UIListContentConfiguration.footer()
             if indexPath.section == 0 {
-                content.text = Item.supportsRowSeparators
-                    ? "右のつまみをドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。横並びの区切り線より下のまとまりは、メニューの中で横に並びます。"
-                    : "右のつまみをドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。"
+                content.text = if !Item.supportsSeparators {
+                    "右のつまみをドラッグすると並べ替えられます。"
+                } else if Item.supportsRowSeparators {
+                    "右のつまみをドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。横並びの区切り線より下のまとまりは、メニューの中で横に並びます。"
+                } else {
+                    "右のつまみをドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。"
+                }
             }
             footer.contentConfiguration = content
         }
@@ -210,6 +220,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             cell.contentConfiguration = content
             let toggle = UISwitch()
             toggle.isOn = isVisible
+            toggle.isEnabled = !(Item.requiresVisibleItem && isVisible && visibleItemCount == 1)
             toggle.addAction(UIAction { [weak self, id = row.id] action in
                 guard let toggle = action.sender as? UISwitch else { return }
                 self?.setVisible(toggle.isOn, id: id)
@@ -240,7 +251,14 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         var snapshot = NSDiffableDataSourceSnapshot<Section, Cell>()
         snapshot.appendSections([.rows, .actions])
         snapshot.appendItems(rows.map { .row($0.id) }, toSection: .rows)
-        snapshot.appendItems(Item.supportsRowSeparators ? [.addSeparator, .addRowSeparator, .reset] : [.addSeparator, .reset], toSection: .actions)
+        let actions: [Cell] = if !Item.supportsSeparators {
+            [.reset]
+        } else if Item.supportsRowSeparators {
+            [.addSeparator, .addRowSeparator, .reset]
+        } else {
+            [.addSeparator, .reset]
+        }
+        snapshot.appendItems(actions, toSection: .actions)
         dataSource?.apply(snapshot, animatingDifferences: animated) { [weak self] in self?.refreshRowSeparatorNotes() }
     }
 
@@ -285,6 +303,25 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         rows[index].element = .item(item, isVisible: isVisible)
         save()
         refreshRowSeparatorNotes()
+        if Item.requiresVisibleItem {
+            refreshItemSwitches()
+        }
+    }
+
+    /// 表示する項目の数。
+    private var visibleItemCount: Int {
+        rows.count { if case .item(_, true) = $0.element { true } else { false } }
+    }
+
+    /// 最後の1つのスイッチを切れなくするため、表示の切り替えのたびに、見えている項目の行を描き直す。
+    /// `refreshRowSeparatorNotes`と同じく、data sourceへの`apply`ではなく見えているセルを直接描き直す。
+    private func refreshItemSwitches() {
+        for row in rows {
+            guard case .item = row.element,
+                  let indexPath = dataSource?.indexPath(for: .row(row.id)),
+                  let cell = collectionView.cellForItem(at: indexPath) as? UICollectionViewListCell else { continue }
+            configure(cell, for: row)
+        }
     }
 
     private func removeRow(id: UUID) {

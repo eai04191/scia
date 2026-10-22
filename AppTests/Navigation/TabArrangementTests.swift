@@ -1,0 +1,119 @@
+import SciaCore
+import Testing
+import UIKit
+@testable import Scia
+
+@MainActor
+struct TabArrangementTests {
+    @MainActor
+    private struct Harness {
+        let arrangement: TabArrangement
+        let navigations: [TabItem: UINavigationController]
+        let window: UIWindow
+
+        init(_ layout: MenuLayout<TabItem>, restoring: TabItem? = nil) throws {
+            var navigations: [TabItem: UINavigationController] = [:]
+            for item in TabItem.allCases {
+                let root = UIViewController()
+                root.title = item.title
+                navigations[item] = UINavigationController(rootViewController: root)
+            }
+            self.navigations = navigations
+            arrangement = TabArrangement(navigations: navigations, placement: TabPlacement(layout: layout), restoring: restoring)
+            let scene = try #require(
+                UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
+                "テストのホストアプリにウィンドウシーンがありません"
+            )
+            window = UIWindow(windowScene: scene)
+            window.frame = CGRect(x: 0, y: 0, width: 402, height: 874)
+            window.rootViewController = arrangement.tabBarController
+            window.makeKeyAndVisible()
+        }
+
+        func apply(_ layout: MenuLayout<TabItem>) {
+            arrangement.apply(TabPlacement(layout: layout))
+            window.layoutIfNeeded()
+        }
+
+        var tabIdentifiers: [String] { arrangement.tabBarController.tabs.map(\.identifier) }
+        var switchTitle: String? { arrangement.tabBarController.tabs.first { $0.identifier == TabArrangement.switchIdentifier }?.title }
+    }
+
+    /// 並びに書かなかった項目は、`MenuLayout`が既定の位置に表示する状態で差し込む。
+    private static func layout(tabs: [TabItem], switchable: [TabItem], disabled: Set<TabItem> = []) -> MenuLayout<TabItem> {
+        MenuLayout(elements: tabs.map { .item($0, isVisible: !disabled.contains($0)) } + [.more] + switchable.map { .item($0, isVisible: !disabled.contains($0)) })
+    }
+
+    @Test func switchTabShowsFirstItemAndFollowsSelection() throws {
+        let harness = try Harness(Self.layout(tabs: [.home], switchable: [.local, .federated, .notifications]))
+        #expect(harness.tabIdentifiers == ["home", TabArrangement.switchIdentifier])
+        #expect(harness.switchTitle == "ローカル")
+
+        harness.arrangement.show(.notifications)
+        #expect(harness.arrangement.isShowing(.notifications))
+        #expect(harness.arrangement.selectedNavigation === harness.navigations[.notifications])
+        #expect(harness.switchTitle == "通知")
+    }
+
+    /// 起動し直したときは、前に切り替えタブで開いていた項目から開く。もう切り替えタブになければ先頭から開く。
+    @Test func restoresSwitchSelection() throws {
+        let restored = try Harness(Self.layout(tabs: [.home], switchable: [.local, .federated, .notifications]), restoring: .notifications)
+        #expect(restored.switchTitle == "通知")
+        #expect(restored.arrangement.switchSelection == .notifications)
+
+        let moved = try Harness(Self.layout(tabs: [.home, .notifications], switchable: [.local, .federated]), restoring: .notifications)
+        #expect(moved.switchTitle == "ローカル")
+    }
+
+    /// 切り替えタブで開いていた項目を無効にしたら、残った先頭に切り替える。切り替えタブを作り直しても落ちない。
+    @Test func disablingShownItemInSwitchTabMovesToNextItem() throws {
+        let harness = try Harness(Self.layout(tabs: [.home], switchable: [.local, .notifications]))
+        harness.arrangement.show(.notifications)
+
+        harness.apply(Self.layout(tabs: [.home], switchable: [.local, .notifications], disabled: [.notifications]))
+
+        #expect(harness.switchTitle == "ローカル")
+        #expect(harness.arrangement.switchSelection == .local)
+    }
+
+    /// 項目をタブと切り替えタブの間で行き来させても、同じナビゲーションのまま開ける。
+    @Test func movingItemsBetweenTabAndSwitchTabKeepsTheirNavigation() throws {
+        let harness = try Harness(Self.layout(tabs: [.home], switchable: [.local, .federated]))
+        harness.arrangement.show(.local)
+
+        harness.apply(Self.layout(tabs: [.home, .local], switchable: [.federated]))
+        #expect(harness.tabIdentifiers == ["home", "local", TabArrangement.switchIdentifier])
+        #expect(harness.arrangement.isShowing(.local))
+        #expect(harness.arrangement.selectedNavigation === harness.navigations[.local])
+
+        harness.apply(Self.layout(tabs: [.home], switchable: [.local, .federated]))
+        #expect(harness.arrangement.isShowing(.local))
+        #expect(harness.arrangement.selectedNavigation === harness.navigations[.local])
+
+        harness.apply(Self.layout(tabs: [.home, .local, .federated], switchable: [.notifications], disabled: [.notifications]))
+        #expect(harness.tabIdentifiers == ["home", "local", "federated"])
+        #expect(harness.arrangement.selectedNavigation === harness.navigations[.local])
+    }
+
+    /// 通知の未読の数は、通知を置いた場所のタブに出す。
+    @Test func notificationsBadgeFollowsNotifications() throws {
+        let harness = try Harness(Self.layout(tabs: [.home, .notifications], switchable: [.local]))
+        harness.arrangement.setNotificationsBadge("3")
+        #expect(harness.arrangement.tabBarController.tabs.first { $0.identifier == "notifications" }?.badgeValue == "3")
+
+        harness.apply(Self.layout(tabs: [.home], switchable: [.local, .notifications]))
+        let switchTab = harness.arrangement.tabBarController.tabs.first { $0.identifier == TabArrangement.switchIdentifier }
+        #expect(switchTab?.badgeValue == "3")
+    }
+
+    /// 切り替えタブの中で開く項目を変えても、通知の未読の数は切り替えタブに出したままにする。
+    @Test func switchTabKeepsNotificationsBadgeWhenSwitching() throws {
+        let harness = try Harness(Self.layout(tabs: [.home], switchable: [.local, .federated, .notifications]))
+        harness.arrangement.setNotificationsBadge("2")
+
+        harness.arrangement.show(.federated)
+
+        let switchTab = harness.arrangement.tabBarController.tabs.first { $0.identifier == TabArrangement.switchIdentifier }
+        #expect(switchTab?.badgeValue == "2")
+    }
+}

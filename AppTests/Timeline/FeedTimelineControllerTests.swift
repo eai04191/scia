@@ -61,6 +61,37 @@ struct FeedTimelineControllerTests {
         #expect(controller.viewController.contentState == .regenerating)
     }
 
+    /// 作り直し中の読み直しを予約したあとに無効にしたら、読み直しをやめる。使わない一覧に通信し続けないため。
+    @Test func disablingStopsRegeneratingRetries() async throws {
+        let homeRequests = Mutex(0)
+        let transport = ScriptedTransport { request in
+            switch request.url?.path() {
+            case "/api/v1/timelines/home":
+                homeRequests.withLock { $0 += 1 }
+                return (206, Data("[]".utf8))
+            case "/api/v2/instance":
+                return (200, Data(#"{"configuration":{"urls":{"streaming":"wss://example.social"}}}"#.utf8))
+            default:
+                return (200, Data("{}".utf8))
+            }
+        }
+        let connector = MessageQueueConnector()
+        let tuning = TuningStore(defaults: nil)
+        // チューニングで選べるいちばん短い間隔。
+        tuning.setValue(5, for: TuningCatalog.regeneratingRetryInterval)
+        let controller = try makeController(transport: transport, connector: connector, tuning: tuning)
+        defer { controller.stop() }
+
+        controller.start()
+        // 最初の読み込みと、つながったときの補完。補完も206なので、読み直しを予約する。
+        try await waitUntil { homeRequests.withLock { $0 } >= 2 }
+        controller.setEnabled(false)
+        let countWhenDisabled = homeRequests.withLock { $0 }
+        try await Task.sleep(for: .seconds(6))
+
+        #expect(homeRequests.withLock { $0 } == countWhenDisabled)
+    }
+
     @Test func stoppedControllerDoesNotReportUnauthorized() async throws {
         let gate = ResponseGate()
         let transport = ScriptedTransport { _ in

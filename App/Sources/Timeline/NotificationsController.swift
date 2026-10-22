@@ -25,6 +25,8 @@ final class NotificationsController {
     private let logger = SciaLog.logger(category: "notifications")
     private var tasks: [Task<Void, Never>] = []
     private var isStopped = false
+    /// 設定で無効にしている。購読せず、有効に戻したらつなぎ直して、無効だった間を補う。
+    private var isDisabled = false
     /// `user`ストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
     private var streamingSubscription: StreamingHub.Subscription?
     /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態。
@@ -65,8 +67,28 @@ final class NotificationsController {
     /// - Parameter origin: 電波の回復などでやり直すときは`.automatic`。レート制限で止められている間は送らない。
     func start(origin: RequestOrigin = .user) {
         guard !isStopped else { return }
+        hasStarted = true
         viewController.setContentState(.loading)
         run(origin) { await $0.loadInitial() }
+    }
+
+    private var hasStarted = false
+
+    /// まだ始めていなければ始める。無効にしていて起動のときに始めなかった通知を、有効にしたときに始めるのに使う。
+    func startIfNeeded() {
+        guard !hasStarted else { return }
+        start()
+    }
+
+    /// 設定で有効か無効かを切り替える。無効にしたら購読をやめ、有効に戻したら、読み込み済みならつなぎ直す。
+    func setEnabled(_ isEnabled: Bool) {
+        guard isDisabled == isEnabled else { return }
+        isDisabled = !isEnabled
+        if isDisabled {
+            stopStreaming()
+        } else if hasLoadedInitial {
+            startStreaming()
+        }
     }
 
     /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときに呼ぶ。
@@ -150,7 +172,7 @@ final class NotificationsController {
     // MARK: - ストリーミング
 
     private func startStreaming() {
-        guard !isStopped, isInForeground, streamingSubscription == nil else { return }
+        guard !isStopped, !isDisabled, isInForeground, streamingSubscription == nil else { return }
         streamingSubscription = streamingHub.subscribe(.user) { [weak self] activity in
             self?.streamingDidChange(activity)
         }
@@ -160,7 +182,7 @@ final class NotificationsController {
     func recover() {
         guard !isStopped, isInForeground else { return }
         // 切れていれば、セッションがつなぎ直させ、つながったところで切れていた間を補う。
-        if hasLoadedInitial, streamingHub.isConnected {
+        if hasLoadedInitial, !isDisabled, streamingHub.isConnected {
             // つながったときの補完が、止められている間や電波のない間に失敗していることがある。
             fillFromLatest()
         }

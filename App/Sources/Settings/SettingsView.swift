@@ -7,6 +7,8 @@ struct SettingsView: View {
     @Bindable var settings: AppSettings
     /// ログイン中のアカウントのサーバー。
     let instance: URL
+    /// ログイン中のアカウントのハンドル。タブの並びはアカウントごとに持つ。
+    let account: String
     let diagnostics: ConnectionDiagnostics
     @Environment(\.dismiss) private var dismiss
     @State private var previewDate = Date.now.addingTimeInterval(-180)
@@ -26,6 +28,14 @@ struct SettingsView: View {
                     appIconError = ErrorPresentation(error).text
                 }
             }
+        }
+    }
+
+    private var tabLayoutBinding: Binding<MenuLayout<TabItem>> {
+        Binding {
+            settings.tabLayout(for: account)
+        } set: { layout in
+            settings.setTabLayout(layout, for: account)
         }
     }
 
@@ -154,6 +164,15 @@ struct SettingsView: View {
                     Text("ブースト")
                 } footer: {
                     Text("メニューの「ブースト」でブーストするときの公開範囲です。「アカウントの既定」では、サーバーで設定した投稿の公開範囲でブーストします。フォロワーのみの自分の投稿は、この設定にかかわらずフォロワーのみでブーストします。ほかの公開範囲でブーストするときは、メニューの「公開範囲を選んでブースト」を使います。")
+                }
+                Section {
+                    NavigationLink("タブ") {
+                        MenuLayoutSettingsView(title: "タブ", layout: tabLayoutBinding)
+                    }
+                } header: {
+                    Text("タブ")
+                } footer: {
+                    Text("タブバーに並べるタイムラインと、その並びを選びます。「切り替えタブ」より下に置いたものは、タブバーの最後のタブにまとめ、見出しのメニューで切り替えます。並びは\(account)のものです。")
                 }
                 Section {
                     NavigationLink("投稿のメニュー") {
@@ -340,8 +359,8 @@ extension UIViewController {
     /// - Parameters:
     ///   - instance: ログイン中のアカウントのサーバー。
     ///   - diagnostics: 「接続の状態」画面に出す、ログイン中のアカウントの接続の状態。
-    func presentSettings(instance: URL, diagnostics: ConnectionDiagnostics) {
-        let view = SettingsView(settings: AppDependencies.settings, instance: instance, diagnostics: diagnostics)
+    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics) {
+        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics)
         present(UIHostingController(rootView: view), animated: true)
     }
 }

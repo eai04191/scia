@@ -104,6 +104,7 @@ final class NoticeOverlay: UIView {
         switch viewController {
         case let navigation as UINavigationController: navigation.topViewController
         case let tabs as UITabBarController: tabs.selectedViewController
+        case let switchTab as SwitchTabViewController: switchTab.current
         default: nil
         }
     }

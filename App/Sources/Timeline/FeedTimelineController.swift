@@ -20,6 +20,8 @@ final class FeedTimelineController {
     private let logger = SciaLog.logger(category: "timeline")
     private var tasks: [Task<Void, Never>] = []
     private var isStopped = false
+    /// 設定で無効にしている。購読せず、有効に戻したらつなぎ直して、無効だった間を補う。
+    private var isDisabled = false
     private var hasStarted = false
     /// 一覧のストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
     private var streamingSubscription: StreamingHub.Subscription?
@@ -109,6 +111,19 @@ final class FeedTimelineController {
     }
     #endif
 
+    /// 設定で有効か無効かを切り替える。無効にしたら購読をやめ、有効に戻したら、読み込み済みならつなぎ直す。
+    func setEnabled(_ isEnabled: Bool) {
+        guard isDisabled == isEnabled else { return }
+        isDisabled = !isEnabled
+        if isDisabled {
+            stopStreaming()
+            // 作り直し中の読み直しも、使わない一覧への通信なのでやめる。有効に戻したら、つないだところで補完する。
+            cancelRegeneratingRetry()
+        } else if hasLoadedInitial {
+            startStreaming()
+        }
+    }
+
     /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときに呼ぶ。
     func stop() {
         isStopped = true
@@ -144,7 +159,7 @@ final class FeedTimelineController {
         guard !isStopped, isInForeground else { return }
         autoLoadFailedGapIDs.removeAll()
         // 切れていれば、セッションがつなぎ直させ、つながったところで切れていた間を補う。
-        if hasLoadedInitial, streamingHub.isConnected {
+        if hasLoadedInitial, !isDisabled, streamingHub.isConnected {
             // つながったときの補完が、止められている間や電波のない間に失敗していることがある。
             fillFromLatest()
         }
@@ -233,7 +248,7 @@ final class FeedTimelineController {
     // MARK: - ストリーミング
 
     private func startStreaming() {
-        guard !isStopped, isInForeground, streamingSubscription == nil else { return }
+        guard !isStopped, !isDisabled, isInForeground, streamingSubscription == nil else { return }
         streamingSubscription = streamingHub.subscribe(feed.subscription) { [weak self] activity in
             self?.streamingDidChange(activity)
         }
@@ -296,14 +311,14 @@ final class FeedTimelineController {
     /// サーバーがホームを作り直している最中で結果が揃っていなかったので、時間をおいて補完を読み直す。
     /// つながりが安定していると、次に補完するきっかけが来ず、作り直しの後に揃った投稿が届かないため。
     private func scheduleRegeneratingRetry() {
-        guard regeneratingRetryTask == nil, !isStopped, isInForeground else { return }
+        guard regeneratingRetryTask == nil, !isStopped, !isDisabled, isInForeground else { return }
         let interval = tuning.value(of: TuningCatalog.regeneratingRetryInterval)
         logger.info("\(self.feed.rawValue, privacy: .public) regenerating retry scheduled after=\(interval, privacy: .public)")
         regeneratingRetryTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(interval))
             guard !Task.isCancelled, let self else { return }
             regeneratingRetryTask = nil
-            guard !isStopped, isInForeground else { return }
+            guard !isStopped, !isDisabled, isInForeground else { return }
             fillFromLatest()
         }
     }
