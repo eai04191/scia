@@ -2,6 +2,8 @@ PROJECT := Scia.xcodeproj
 SCHEME := Scia
 DERIVED_DATA := DerivedData
 SIM_DESTINATION ?= generic/platform=iOS Simulator
+# 端末を決めないビルドは、既定ではシミュレーターの全アーキテクチャ（arm64とx86_64）を作る。このMacで動く分だけにして、コンパイルを半分にする
+SIM_ARCH ?= $(shell uname -m)
 
 .PHONY: generate lint test-core build warnings test sim-keyboard promo readme-icons update-known-servers check check-steps hooks clean
 
@@ -19,11 +21,11 @@ test-core:
 
 ## アプリをシミュレーター向けにビルドする
 build: generate
-	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(SIM_DESTINATION)' -derivedDataPath $(DERIVED_DATA) build
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination '$(SIM_DESTINATION)' -derivedDataPath $(DERIVED_DATA) ARCHS=$(SIM_ARCH) build
 
 ## make buildのあとに残ったアプリのSwiftの警告を、差分ビルドで作り直さなかったファイルの分も含めて検出する
 warnings: build
-	Tools/check-warnings.sh $(DERIVED_DATA)
+	Tools/check-warnings.sh $(DERIVED_DATA) $(SIM_ARCH)
 
 ## シミュレーター上でschemeのテストを実行する。SIMに端末の名前を指定する
 ## テストはハードウェアキーボードがつながった状態を前提にしているので、先につなぐ。sim-keyboardで外したままだと、投稿欄のテストが落ちる
@@ -77,7 +79,9 @@ check:
 	@$(MAKE) --no-print-directory check-steps
 	@Tools/check-stamp.sh record check "$$(cat $(CHECK_TREE))"
 
-check-steps: lint test-core build warnings
+## SciaCoreのテストとアプリのビルドは互いを待たないので、並べて走らせる。両方の出力が混ざるので、失敗はmakeが最後に出すターゲット名から追う
+check-steps: lint
+	@$(MAKE) --no-print-directory -j2 test-core warnings
 
 ## ローカルのmainを、make checkとmake testの両方が通った中身のcommitにしか動かさないhookを入れる。worktreeにも効く
 hooks:
