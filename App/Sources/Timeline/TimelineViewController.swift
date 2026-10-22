@@ -78,7 +78,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onGapSelect: ((String, TimelineStore.GapDirection) -> Void)?
     /// 読み込み中でないギャップが表示領域に近づいたときに、どちらの端から読むかを添えて呼ぶ。スクロールするたびに呼ぶことがある。
     var onGapApproach: ((String, TimelineStore.GapDirection) -> Void)?
-    /// 投稿の行の、中の部品が受けなかった押下で呼ぶ。押した投稿と、行のウインドウ上の枠を渡す。スレッドを開く。nilなら投稿の行を押せない。
+    /// 投稿の行か、投稿を含む通知の行の、中の部品が受けなかった押下で呼ぶ。押した投稿（通知なら通知の投稿）と、行のウインドウ上の枠を渡す。スレッドを開く。nilなら押せない。
     var onOpenThread: ((Status, CGRect) -> Void)?
     /// スレッドの画面で押した投稿。押してもスレッドを開き直さない。
     var threadFocusID: Status.ID?
@@ -1400,7 +1400,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         return UITargetedPreview(view: anchor, parameters: parameters, target: UIPreviewTarget(container: collectionView, center: point))
     }
 
-    /// 選べるのはギャップと、ブラウザで開ける読めなかった要素と、スレッドを開ける投稿にする。
+    /// 選べるのはギャップと、ブラウザで開ける読めなかった要素と、スレッドを開ける投稿と、投稿を含む通知にする。
     /// 本文のリンクや添付ファイルなど、行の中の部品が押下を先に受けるため、投稿の行を選ぶのは、どの部品も受けなかったときだけになる。
     func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
@@ -1408,6 +1408,8 @@ extension TimelineViewController: UICollectionViewDelegate {
         case (.gap, _): true
         case (_, .unreadable(let item)): item.url != nil
         case (_, .status(let status)), (_, .pinned(let status)): onOpenThread != nil && status.displayed.id != threadFocusID
+        // 投稿を含む通知は、その投稿のスレッドを開く。フォローなど投稿のない通知は押せない。
+        case (_, .notification(let notification)): onOpenThread != nil && notification.status != nil
         default: false
         }
     }
