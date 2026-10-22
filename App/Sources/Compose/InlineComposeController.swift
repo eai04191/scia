@@ -85,7 +85,7 @@ final class InlineComposeController: NSObject {
     /// 添付したメディアのサムネイルの列。書いていて、添付があるときだけ出す。
     let attachmentStrip = ComposeAttachmentStrip()
     /// 注意書きの入力欄。＋のメニューから足したときと、注意書きの付いた投稿へ返信したときだけ、本文の上に出す。
-    private let spoilerField = ComposeSpoilerField()
+    private let spoilerField = ComposeLineField()
     private lazy var spoilerRow = makeSpoilerRow()
     /// 注意書きの欄を閉じるボタン。閲覧注意も一緒に外れる。
     private let spoilerClearButton = UIButton(type: .system)
@@ -2516,7 +2516,8 @@ private final class ComposeToolsView: UIStackView {
 }
 
 /// 注意書きの入力欄。本文と同じく、ハードウェアキーボードの⌘Returnで送信し、補完の候補を出している間はキーで選べる。
-private final class ComposeSpoilerField: GlyphLanguageTextField {
+/// 投稿欄の1行の入力欄（注意書き、投票の選択肢）。本文と同じく、⌘Returnで投稿し、補完の候補をキーボードで選べる。
+final class ComposeLineField: GlyphLanguageTextField {
     var onSubmit: () -> Void = {}
     var completionKeys = CompletionKeys()
 
