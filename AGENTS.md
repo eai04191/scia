@@ -23,7 +23,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make build`: シミュレーター向けにビルドする
 - `make test SIM='<使う端末>'`: シミュレーターでテストする。先に端末のハードウェアキーボードをつなぐ。通ると、確かめた作業ツリーの中身を覚える
 - `make check`: 変更を報告する前に必ず通す。通ると、確かめた作業ツリーの中身（commitしていない変更も含む）を覚える
-- `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く
+- `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く。通った中身との違いがMarkdown（`*.md`）だけなら、走らせ直さずに通ったものとして扱う
 
 ## シミュレーター
 

@@ -14,11 +14,13 @@ set -euo pipefail
 # 古い版が新しい置き場所を読めず拒否するので、その1回だけ、古い置き場所にも同じ記録を置いてから入れる
 
 stamp="$(git rev-parse --path-format=absolute --git-common-dir)/../Tools/check-stamp.sh"
+# 今のmainの中身で通っていて、違いがMarkdownだけなら、通ったものとして扱う（Tools/check-stamp.shのmissing）
+main=$(git rev-parse -q --verify refs/heads/main || true)
 
 checked() {
     local missing
     # 調べられなかったときに、出力が空なのを通ったものと取り違えないよう、失敗したら拒否する
-    missing=$("$stamp" missing "$1") || reject "$stamp で、$(git log -1 --format='%h' "$1")の中身が検証済みかを調べられなかったので、mainに入れません"
+    missing=$("$stamp" missing "$1" ${main:+"$main"}) || reject "$stamp で、$(git log -1 --format='%h' "$1")の中身が検証済みかを調べられなかったので、mainに入れません"
     [[ -z "$missing" ]]
 }
 
@@ -30,7 +32,7 @@ reject() {
 not_checked_message() {
     local steps
     # macOSのpasteは1バイトの区切りしか使えず、日本語でつなぐと文字が壊れるので、awkでつなぐ
-    steps=$("$stamp" missing "$1" | awk 'NR > 1 { printf "と" } { printf "%s", $0 }')
+    steps=$("$stamp" missing "$1" ${main:+"$main"} | awk 'NR > 1 { printf "と" } { printf "%s", $0 }')
     echo "$(git log -1 --format='%h %s' "$1") の中身は、${steps}が通っていないので、mainに入れません。このcommitをcheckoutしたworktreeで${steps}を通してから、入れ直してください"
 }
 
@@ -51,8 +53,6 @@ merge_targets() {
             ;;
     esac
 }
-
-main=$(git rev-parse -q --verify refs/heads/main || true)
 
 while read -r _old new ref; do
     case "$ref" in

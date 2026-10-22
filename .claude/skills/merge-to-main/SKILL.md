@@ -41,7 +41,7 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
 
 ## 3. checkとtestを通す
 
-作業branchのworktreeで`Tools/check-stamp.sh missing HEAD`を実行し、出たもの（`make check`、`make test`）だけを、出た順に走らせる。何も出なければ、同じ中身で通っているので飛ばす。整理やrebaseで中身が変わらなければ、前に通した結果がそのまま使われる。同じworktreeで同時に走らせるとDerivedDataを取り合うので、順に走らせる。
+作業branchのworktreeで`Tools/check-stamp.sh missing HEAD <targetのSHA>`を実行し、出たもの（`make check`、`make test`）だけを、出た順に走らせる。何も出なければ飛ばす。同じ中身で通っていれば、整理やrebaseのあとも前の結果がそのまま使われる。targetで通っていて、targetとの違いがMarkdownだけなら、走らせずに通ったものとして扱われる。同じworktreeで同時に走らせるとDerivedDataを取り合うので、順に走らせる。
 
 - `make test`の端末は、このthreadで使うよう指示された端末にする。指示がなければ、ユーザーに聞く
 - 走らせる前に、作業ツリーに未commitの変更がないことを確かめる。走らせている間も、ファイルを変えない
