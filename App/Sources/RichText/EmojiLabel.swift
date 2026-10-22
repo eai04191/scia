@@ -164,11 +164,10 @@ class EmojiLabel: UILabel {
 
     /// ラベルか文字列の段落が、はみ出す分を「…」で切る。
     private func usesEllipsis(_ text: NSAttributedString) -> Bool {
-        let truncating: [NSLineBreakMode] = [.byTruncatingTail, .byTruncatingHead, .byTruncatingMiddle]
-        if truncating.contains(lineBreakMode) { return true }
+        if Self.truncatingModes.contains(lineBreakMode) { return true }
         var found = false
         text.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: text.length)) { value, _, stop in
-            if let style = value as? NSParagraphStyle, truncating.contains(style.lineBreakMode) {
+            if let style = value as? NSParagraphStyle, Self.truncatingModes.contains(style.lineBreakMode) {
                 found = true
                 stop.pointee = true
             }
@@ -176,21 +175,15 @@ class EmojiLabel: UILabel {
         return found
     }
 
-    /// 行数を限らずに、ラベルの幅で並べたときの行数。段落の「…」で切る設定は、行数を数えるために単語で折り返す設定に替える。
+    /// 行数を限らずに、ラベルの幅で並べたときの行数。
     private func lineCount(of text: NSAttributedString) -> Int {
-        let wrapping = NSMutableAttributedString(attributedString: text)
-        wrapping.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: wrapping.length)) { value, range, _ in
-            guard let style = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle else { return }
-            style.lineBreakMode = .byWordWrapping
-            wrapping.addAttribute(.paragraphStyle, value: style, range: range)
-        }
         let contentStorage = NSTextContentStorage()
         let layoutManager = NSTextLayoutManager()
         contentStorage.addTextLayoutManager(layoutManager)
         let container = NSTextContainer(size: CGSize(width: bounds.width, height: 0))
         container.lineFragmentPadding = 0
         layoutManager.textContainer = container
-        contentStorage.attributedString = wrapping
+        contentStorage.attributedString = Self.wrappingInsteadOfTruncating(text)
         var count = 0
         layoutManager.enumerateTextLayoutFragments(from: layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
             count += fragment.textLineFragments.count
@@ -237,13 +230,28 @@ class EmojiLabel: UILabel {
         let container = NSTextContainer(size: CGSize(width: bounds.width, height: 0))
         container.lineFragmentPadding = 0
         container.maximumNumberOfLines = numberOfLines
-        container.lineBreakMode = lineBreakMode
+        container.lineBreakMode = Self.truncatingModes.contains(lineBreakMode) ? .byWordWrapping : lineBreakMode
         layoutManager.textContainer = container
-        contentStorage.attributedString = alignedLikeLabel(attributedText)
+        contentStorage.attributedString = Self.wrappingInsteadOfTruncating(alignedLikeLabel(attributedText))
         layoutManager.ensureLayout(for: layoutManager.documentRange)
         let layout = TextLayout(width: bounds.width, direction: direction, contentStorage: contentStorage, layoutManager: layoutManager)
         layoutCache = layout
         return layout
+    }
+
+    private static let truncatingModes: [NSLineBreakMode] = [.byTruncatingTail, .byTruncatingHead, .byTruncatingMiddle]
+
+    /// 段落の「…」で切る設定を、単語で折り返す設定に替えた文字列。
+    /// UILabelは、行数を限ったときも折り返してから最後の行だけを「…」で切るが、TextKit 2は「…」で切る段落を折り返さずに1行に並べる。
+    /// そのまま並べると、2行目より後の文字の位置がUILabelの描画と合わないため、折り返して並べる。最後の行で「…」より前の文字は、この並びの位置に描かれる。
+    private static func wrappingInsteadOfTruncating(_ text: NSAttributedString) -> NSAttributedString {
+        let result = NSMutableAttributedString(attributedString: text)
+        result.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: result.length)) { value, range, _ in
+            guard let style = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle, truncatingModes.contains(style.lineBreakMode) else { return }
+            style.lineBreakMode = .byWordWrapping
+            result.addAttribute(.paragraphStyle, value: style, range: range)
+        }
+        return result
     }
 
     /// 行の寄せ方を、UILabelが描くのと同じにした文字列。

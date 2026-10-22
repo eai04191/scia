@@ -43,6 +43,36 @@ struct LinkLabelTests {
         #expect(label.link(at: try center(of: "見て", in: label)) == nil)
     }
 
+    /// 行数を限って末尾を「…」で切る本文でも、2行目より後のリンクを、UILabelが描いた位置で押せる。ここでは「…」で切られる3行目のリンクを押す。
+    /// UILabelは折り返してから最後の行だけを切るが、TextKit 2は「…」で切る段落を1行に並べるため、折り返して並べ直す。
+    @Test func findsLinkInTruncatedParagraph() throws {
+        let url = try #require(URL(string: "https://example.com/a"))
+        let text = RichText(blocks: [
+            .init(inlines: [
+                .text("1行目の文章がここにありますので、続けて書いていきます。2行目にリンク ", []),
+                .link("example.com/a", .url(url), []),
+                .text(" があり、そのあとも長い文章がまだまだ続くので、最後の行は「…」で切られるはずです。", []),
+            ]),
+        ])
+        // 折り返して並べたときの位置を、切らずに全部を描いたラベルで測る。
+        let whole = label(for: text)
+        let point = try center(of: "example.com/a", in: whole)
+        let truncated = label(for: text)
+        let attributed = NSMutableAttributedString(attributedString: try #require(truncated.attributedText))
+        attributed.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: attributed.length)) { value, range, _ in
+            let style = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
+            style.lineBreakMode = .byTruncatingTail
+            attributed.addAttribute(.paragraphStyle, value: style, range: range)
+        }
+        truncated.numberOfLines = 3
+        truncated.attributedText = attributed
+        let size = truncated.sizeThatFits(CGSize(width: 300, height: CGFloat.greatestFiniteMagnitude))
+        truncated.frame = CGRect(origin: .zero, size: CGSize(width: 300, height: size.height))
+
+        #expect(point.y > size.height * 2 / 3, "リンクは、見えている最後の行にある")
+        #expect(truncated.link(at: point) == .url(url))
+    }
+
     /// 行末より右を押しても、近くのリンクを押したことにしない。
     @Test func ignoresPointPastLineEnd() throws {
         let url = try #require(URL(string: "https://example.com/a"))
