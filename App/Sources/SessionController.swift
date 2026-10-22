@@ -53,6 +53,8 @@ final class SessionController {
     private let navigationDelegate = NoticeNavigationDelegate()
     /// 開いているプロフィール画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
     private let profiles: ProfileRegistry
+    /// 開いているスレッドの画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
+    private let threads: ThreadRegistry
     private var cachedMyAccount: Account?
     /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
     private let composer: InlineComposeController
@@ -122,14 +124,17 @@ final class SessionController {
         self.client = client
         let profiles = ProfileRegistry()
         self.profiles = profiles
-        // 同じ投稿が両方のタブと開いているプロフィールにあることがあるため、どれにも反映する。
+        let threads = ThreadRegistry()
+        self.threads = threads
+        // 同じ投稿が両方のタブと開いているプロフィールやスレッドにあることがあるため、どれにも反映する。
         interactions = StatusInteractions(operations: .init(client: client)) { id, transform in
             home.updateStatus(id, transform)
             notifications.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
+            threads.updateStatus(id, transform)
         }
         linkCards = LinkCardRefresher(client: client) { refetched in
-            for update in [home.updateStatus, notifications.updateStatus, profiles.updateStatus] {
+            for update in [home.updateStatus, notifications.updateStatus, profiles.updateStatus, threads.updateStatus] {
                 update(refetched.id) { $0.adoptingCard(of: refetched) }
             }
         }
@@ -259,12 +264,14 @@ final class SessionController {
                     if let editing = draft.editing {
                         // ストリーミングの編集の知らせを待たずに、どの一覧にも編集したあとの投稿を出す。切れている間も直るようにするため。
                         let edited = try await client.editStatus(editing, to: draft)
-                        for update in [home.updateStatus, notifications.updateStatus, profiles.updateStatus] {
+                        for update in [home.updateStatus, notifications.updateStatus, profiles.updateStatus, threads.updateStatus] {
                             update(edited.id) { _ in edited }
                         }
                     } else {
-                        // ストリーミングで届くまで数秒かかることがあるため、応答の投稿をすぐホームに出す。
-                        home.receivePosted(try await client.postStatus(draft))
+                        // ストリーミングで届くまで数秒かかることがあるため、応答の投稿をすぐホームと、返信先を開いているスレッドに出す。
+                        let posted = try await client.postStatus(draft)
+                        home.receivePosted(posted)
+                        threads.receivePosted(posted)
                     }
                 } catch {
                     reportIfUnauthorized(error)
@@ -476,6 +483,10 @@ final class SessionController {
             self?.open(destination, in: status, from: viewController)
         }
         viewController.onOpenURL = { [weak self] url, browser in self?.open(url, in: browser) }
+        viewController.onOpenThread = { [weak self, weak viewController] status, rowFrame in
+            guard let viewController else { return }
+            self?.openThread(of: status, rowFrame: rowFrame, from: viewController)
+        }
         viewController.userMenuActions = userMenuActions
         viewController.onVisibleLinkOnlyCardsChange = { [weak self, weak viewController] statuses in
             guard let self, let viewController else { return }
@@ -584,6 +595,23 @@ final class SessionController {
         profiles.add(controller)
         source.navigationController?.pushViewController(viewController, animated: true)
         controller.start()
+    }
+
+    // MARK: - スレッド
+
+    /// 押した投稿のスレッドを開く。ブーストを押したときは、ブーストされた投稿のスレッドにする。
+    /// - Parameter rowFrame: 押した行のウインドウ上の枠。スレッドでも、押した投稿をこの位置に置いて開く。
+    private func openThread(of status: Status, rowFrame: CGRect, from source: UIViewController) {
+        let focus = status.displayed
+        let (controller, viewController) = ThreadController.make(focus: focus, client: client, streamingHub: streamingHub) { [weak self] in
+            self?.reportUnauthorized()
+        }
+        configure(viewController)
+        threads.add(controller)
+        controller.start()
+        viewController.placeOnAppearing(.status(focus.id), atWindowY: rowFrame.minY)
+        guard let navigation = source.navigationController else { return }
+        ThreadPushDelegate.push(viewController, on: navigation, duration: viewController.tuning.value(of: TuningCatalog.threadOpenDuration))
     }
 
     /// ログイン中のアカウント。手元にはCredentialしかないため、一度読んだら使い回す。
@@ -998,6 +1026,7 @@ final class SessionController {
                 home.removeStatus(target.id)
                 notifications.removeStatus(target.id)
                 profiles.removeStatus(target.id)
+                threads.removeStatus(target.id)
                 if composer.model.editedStatus?.id == target.id {
                     composer.cancelStatusEdit()
                 }
@@ -1583,12 +1612,14 @@ final class SessionController {
     func enterForeground() {
         home.enterForeground()
         notifications.enterForeground()
+        threads.enterForeground()
     }
 
     func enterBackground() {
         statusBarTicker.clear()
         home.enterBackground()
         notifications.enterBackground()
+        threads.enterBackground()
     }
 }
 
@@ -1596,6 +1627,56 @@ private struct ProfileNotFound: LocalizedError {
     let acct: String
 
     var errorDescription: String? { "@\(acct)が見つかりませんでした。" }
+}
+
+/// 開いているスレッドの画面を弱く持つ。
+@MainActor
+private final class ThreadRegistry {
+    private struct Entry {
+        weak var controller: ThreadController?
+    }
+
+    private var entries: [Entry] = []
+
+    func add(_ controller: ThreadController) {
+        entries.removeAll { $0.controller == nil }
+        entries.append(Entry(controller: controller))
+    }
+
+    private var controllers: [ThreadController] {
+        entries.removeAll { $0.controller == nil }
+        return entries.compactMap(\.controller)
+    }
+
+    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
+        for controller in controllers {
+            controller.updateStatus(id, transform)
+        }
+    }
+
+    func removeStatus(_ id: Status.ID) {
+        for controller in controllers {
+            controller.removeStatus(id)
+        }
+    }
+
+    func receivePosted(_ status: Status) {
+        for controller in controllers {
+            controller.receivePosted(status)
+        }
+    }
+
+    func enterForeground() {
+        for controller in controllers {
+            controller.enterForeground()
+        }
+    }
+
+    func enterBackground() {
+        for controller in controllers {
+            controller.enterBackground()
+        }
+    }
 }
 
 /// 開いているプロフィール画面を弱く持つ。

@@ -270,6 +270,18 @@ public struct MastodonClient: Sendable {
         try await get(StatusSource.self, path: "api/v1/statuses/\(statusID)/source", query: []).0
     }
 
+    /// 投稿を1件読む。スレッドを読み直すときに、押した投稿の編集を取り込むのに使う。
+    /// https://docs.joinmastodon.org/methods/statuses/#get
+    public func status(_ statusID: Status.ID) async throws -> Status {
+        try await get(Status.self, path: "api/v1/statuses/\(statusID)", query: []).0
+    }
+
+    /// 投稿の前後の会話。スレッドの画面に使う。
+    /// https://docs.joinmastodon.org/methods/statuses/#context
+    public func statusContext(_ statusID: Status.ID) async throws -> StatusContext {
+        try await get(StatusContext.self, path: "api/v1/statuses/\(statusID)/context", query: []).0
+    }
+
     /// 投稿の編集履歴。最初の投稿から今の投稿までの版を、古い順に返す。
     /// https://docs.joinmastodon.org/methods/statuses/#history
     public func statusHistory(_ statusID: Status.ID) async throws -> [StatusRevision] {

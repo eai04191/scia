@@ -334,6 +334,23 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
+    /// スレッドを開くとき、一覧の上に重ねて薄く出していく時間。押した行は一覧で見えていた位置に置くので、ほかの行だけが入れ替わって見える。
+    public static let threadOpenDuration = NumberTuning(
+        id: "thread.openDuration",
+        title: "開くときのフェード（秒）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.25
+    )
+
+    /// 読み込んだとき、押した投稿の下の返信が画面の外にあれば、押した投稿を上端まで動かして返信を見せる。
+    /// オフなら、押した投稿を押した位置から動かさない。
+    public static let threadRaisesFocusedPost = ToggleTuning(
+        id: "thread.raisesFocusedPost",
+        title: "返信が画面の外なら押した投稿を上へ寄せる",
+        defaultValue: false
+    )
+
     /// プロフィールのヘッダー画像を上へ折り返して伸ばす部分の、ぼかしの強さ（pt）。
     public static let profileBannerReflectionBlur = NumberTuning(
         id: "profile.bannerReflectionBlur",
@@ -1412,6 +1429,10 @@ public enum TuningCatalog {
             .number(profileBannerReflectionBlur),
             .number(profileBannerReflectionDim),
             .number(profileBannerReflectionSeam),
+        ]),
+        TuningSection(id: "thread", title: "スレッド", items: [
+            .number(threadOpenDuration),
+            .toggle(threadRaisesFocusedPost),
         ]),
         TuningSection(id: "editHistory", title: "編集履歴", items: [
             .number(editHistoryMinimumUnchangedRatio),

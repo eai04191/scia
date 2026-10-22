@@ -17,7 +17,14 @@ final class TimelineHarness {
     let window: UIWindow
 
     /// - Parameter headerView: プロフィールのように、一覧の頭に置くビュー。
-    init(size: CGSize = CGSize(width: 393, height: 852), mediaImages: MediaImageStore = .offline, headerView: UIView? = nil, notices: NoticeCenter = NoticeCenter()) throws {
+    /// - Parameter prepare: ウィンドウに載せる前に一覧へ行う準備。スレッドのように、画面に出るときに位置を決める一覧に使う。
+    init(
+        size: CGSize = CGSize(width: 393, height: 852),
+        mediaImages: MediaImageStore = .offline,
+        headerView: UIView? = nil,
+        notices: NoticeCenter = NoticeCenter(),
+        prepare: ((TimelineViewController) -> Void)? = nil
+    ) throws {
         let suite = "TimelineHarness.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
@@ -30,6 +37,7 @@ final class TimelineHarness {
             UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
             "テストのホストアプリにウィンドウシーンがありません"
         )
+        prepare?(viewController)
         window = UIWindow(windowScene: scene)
         window.frame = CGRect(origin: .zero, size: size)
         window.rootViewController = UINavigationController(rootViewController: viewController)

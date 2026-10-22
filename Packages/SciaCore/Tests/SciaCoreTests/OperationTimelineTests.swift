@@ -16,6 +16,7 @@ struct UserActionTests {
         .closeViewer(.drag),
         .closeViewer(.button),
         .openProfile,
+        .openThread(screen: "timeline"),
         .reply,
         .mention,
         .toggleFavourite,

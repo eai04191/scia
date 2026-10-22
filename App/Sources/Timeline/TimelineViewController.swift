@@ -24,6 +24,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         static let home = Texts(dumpName: "timeline", title: "ホーム", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
         static let notifications = Texts(dumpName: "notifications", title: "通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
         static let profile = Texts(dumpName: "profile", title: "", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
+        static let thread = Texts(dumpName: "thread", title: "スレッド", empty: "投稿がありません", reachedEnd: "", unreadable: "表示できない投稿")
     }
 
     /// 一覧全体の状態。投稿がないときの表示に使う。
@@ -77,6 +78,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onGapSelect: ((String, TimelineStore.GapDirection) -> Void)?
     /// 読み込み中でないギャップが表示領域に近づいたときに、どちらの端から読むかを添えて呼ぶ。スクロールするたびに呼ぶことがある。
     var onGapApproach: ((String, TimelineStore.GapDirection) -> Void)?
+    /// 投稿の行の、中の部品が受けなかった押下で呼ぶ。押した投稿と、行のウインドウ上の枠を渡す。スレッドを開く。nilなら投稿の行を押せない。
+    var onOpenThread: ((Status, CGRect) -> Void)?
+    /// スレッドの画面で押した投稿。押してもスレッドを開き直さない。
+    var threadFocusID: Status.ID?
+    /// スレッドを開くときに、押した行を一覧で見えていた位置に置くため、上の余白に足している高さ。
+    private var openingInset: CGFloat = 0
+    /// 画面に出るときに、この行の上端をウインドウのこの高さに置く。
+    private var pendingOpening: (id: ItemID, windowY: CGFloat)?
     /// 投稿のアイコンや名前がタップされたとき、または長押しのメニューで選ばれたときに、そのアカウントを渡して呼ぶ。
     var onOpenProfile: ((Account) -> Void)?
     /// アカウントの全体を持たない相手（メンション）のプロフィールを、IDで開く。
@@ -119,7 +128,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 隣の行とアイコン同士を線でつなぐ行。並びが変わるたびに決め直す。
     private var replyConnections: [ItemID: ReplyConnection] = [:]
     /// すぐ上の行が返信先なら、返信の札を出さない。スレッドのように古い順に並べる一覧で、線で返信先が分かるため。
-    /// 新しい順に並べる一覧では、返信先は下の行になるため使わない。
+    /// ただし、スレッドで押した投稿（`threadFocusID`）には札を残す。新しい順に並べる一覧では、返信先は下の行になるため使わない。
     var hidesReplyLabelBelowParent = false
     private var loadingGapIDs: Set<String> = []
     /// 直近の読み込みに失敗したギャップと、その理由。行の中で読めなかったことを知らせる。
@@ -276,6 +285,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 他のタブにいる間に表示が変わっても既読にしないため、画面に出たときに改めて報告する。
+    override func viewIsAppearing(_ animated: Bool) {
+        super.viewIsAppearing(animated)
+        applyPendingOpening()
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         reportVisibleItems()
@@ -541,6 +555,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         } else {
             let anchor = applyPreservingAnchor(snapshot, keeping: anchorID)
             logger.info("setEntries count=\(newEntries.count, privacy: .public) anchor=\(anchor.map { Self.label($0.id) } ?? "nil", privacy: .public)")
+        }
+        if threadFocusID != nil {
+            updateObscuredBottomInset()
         }
         setNeedsUpdateContentUnavailableConfiguration()
         reportVisibleItems()
@@ -855,13 +872,24 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// タブバーや投稿欄のアクセサリーの分はsafe areaに入っているため、それを超えて覆っている分だけ足す。
     /// 画面を読み込む前は値だけを覚え、読み込んだあとのsafe areaの変化で反映する。ここで読み込むと、画面を組み立てる前に置くボタンなどの設定より先に読み込まれてしまう。
+    /// スレッドでは、押した投稿を表示領域の上端まで上げられるだけの余白も、一覧の下に足す。
     private func updateObscuredBottomInset() {
         guard isViewLoaded else { return }
         let inset = max(0, obscuredBottomHeight - view.safeAreaInsets.bottom)
-        guard collectionView.contentInset.bottom != inset else { return }
-        collectionView.contentInset.bottom = inset
+        let total = inset + threadFocusBottomFill(obscuredInset: inset)
+        guard collectionView.contentInset.bottom != total || collectionView.verticalScrollIndicatorInsets.bottom != inset else { return }
+        collectionView.contentInset.bottom = total
         collectionView.verticalScrollIndicatorInsets.bottom = inset
         reportVisibleItems()
+    }
+
+    /// 押した投稿から下の行が表示領域の高さに足りない分。足りないと、押した投稿を押した位置に置いたままにできず、一覧が端まで戻ってしまうため。
+    private func threadFocusBottomFill(obscuredInset: CGFloat) -> CGFloat {
+        guard let threadFocusID, let indexPath = dataSource.indexPath(for: .status(threadFocusID)) else { return 0 }
+        collectionView.layoutIfNeeded()
+        guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return 0 }
+        let visibleHeight = collectionView.bounds.height - collectionView.adjustedContentInset.top - view.safeAreaInsets.bottom - obscuredInset
+        return max(visibleHeight - (collectionView.contentSize.height - frame.minY), 0)
     }
 
     override func viewSafeAreaInsetsDidChange() {
@@ -1150,7 +1178,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     func contentConfiguration(for status: Status, isPinned: Bool = false, itemID: ItemID? = nil, base: UIListContentConfiguration) -> PostContentConfiguration {
         let shown = status.displayed
         let connection = itemID.flatMap { replyConnections[$0] } ?? ReplyConnection()
-        let replyLabel = hidesReplyLabelBelowParent && connection.parentIsAbove ? nil : ReplyLabel(status: shown, myAccountID: myAccountID)
+        // スレッドで押した投稿は、開いた時点では返信先がまだ並んでおらず札を出しているため、返信先が並んでも札を残す。
+        // 消すと、読み終えた瞬間に名前と本文が札の1行分だけ上へ跳ねる。
+        let hidesReplyLabel = hidesReplyLabelBelowParent && connection.parentIsAbove && shown.id != threadFocusID
+        let replyLabel = hidesReplyLabel ? nil : ReplyLabel(status: shown, myAccountID: myAccountID)
         var configuration = postContentBuilder.configuration(for: status, isPinned: isPinned, replyLabel: replyLabel, base: base)
         configuration.replyConnection = connection
         configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(shown.account) }
@@ -1369,12 +1400,14 @@ extension TimelineViewController: UICollectionViewDelegate {
         return UITargetedPreview(view: anchor, parameters: parameters, target: UIPreviewTarget(container: collectionView, center: point))
     }
 
-    /// 選べるのはギャップと、ブラウザで開ける読めなかった要素だけにする。投稿にはまだ開く画面がなく、タップすると選んだ状態の背景が残ったままになるため。
+    /// 選べるのはギャップと、ブラウザで開ける読めなかった要素と、スレッドを開ける投稿にする。
+    /// 本文のリンクや添付ファイルなど、行の中の部品が押下を先に受けるため、投稿の行を選ぶのは、どの部品も受けなかったときだけになる。
     func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
         return switch (id, entries[id]) {
         case (.gap, _): true
         case (_, .unreadable(let item)): item.url != nil
+        case (_, .status(let status)), (_, .pinned(let status)): onOpenThread != nil && status.displayed.id != threadFocusID
         default: false
         }
     }
@@ -1386,6 +1419,12 @@ extension TimelineViewController: UICollectionViewDelegate {
     /// ギャップは、画面の上半分にあれば下から遡ってきたとみなして古い側から、下半分にあれば新しい側から読む。
     /// どちらも、いま読んでいる側に続く投稿から埋まる。
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        if let id = dataSource.itemIdentifier(for: indexPath), let status = status(for: id), let cell = collectionView.cellForItem(at: indexPath) {
+            collectionView.deselectItem(at: indexPath, animated: true)
+            UserAction.openThread(screen: texts.dumpName).record()
+            onOpenThread?(status, cell.convert(cell.bounds, to: nil))
+            return
+        }
         if let id = dataSource.itemIdentifier(for: indexPath), case .unreadable(let item) = entries[id], let url = item.url {
             collectionView.deselectItem(at: indexPath, animated: true)
             UIApplication.shared.open(url)
@@ -1467,6 +1506,69 @@ extension TimelineViewController {
         } else {
             collectionView.layoutIfNeeded()
         }
+    }
+
+    /// 画面に出るときに、`id`の行の上端を、ウインドウの`windowY`の高さに置く。スレッドを、押した行を一覧で見えていた位置に置いて開くのに使う。
+    /// 画面に出るまでは、安全領域とバーの高さが分からないため、出るときに置く。
+    func placeOnAppearing(_ id: ItemID, atWindowY windowY: CGFloat) {
+        pendingOpening = (id, windowY)
+    }
+
+    /// 開いた時点では押した行の上に並ぶ行がないため、上の余白を足して、押した行を押した位置まで下げる。
+    private func applyPendingOpening() {
+        guard let opening = pendingOpening, let window = view.window else { return }
+        pendingOpening = nil
+        collectionView.layoutIfNeeded()
+        guard let indexPath = dataSource.indexPath(for: opening.id),
+              let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
+        else { return }
+        let rowTopInView = frame.minY - collectionView.contentOffset.y
+        let targetInView = collectionView.convert(CGPoint(x: 0, y: opening.windowY), from: window).y - collectionView.contentOffset.y
+        // 押した行の上端がバーの下に隠れていたときは、余白は足さず、同じだけ隠れた位置に置く。
+        let extra = max(targetInView - rowTopInView, 0)
+        isRestoringAnchor = true
+        defer { isRestoringAnchor = false }
+        openingInset = extra
+        collectionView.contentInset.top += extra
+        updateObscuredBottomInset()
+        // 余白を足すと、最上部にいる一覧はUIKitが位置を合わせ直すため、ずらす量ではなく位置そのものを置く。
+        collectionView.contentOffset.y = frame.minY - targetInView
+    }
+
+    /// 開くときに足した上の余白を、上に並んだ行で置き換える。上に並んだ行が余白より低いときは、最上部までばねで動かして詰める。
+    func releaseOpeningInset() {
+        guard openingInset > 0 else { return }
+        let offset = collectionView.contentOffset.y
+        isRestoringAnchor = true
+        // 余白を変えると、UIKitが位置を合わせ直すことがあるため、変える前の位置に置き直す。
+        collectionView.contentInset.top -= openingInset
+        openingInset = 0
+        updateObscuredBottomInset()
+        collectionView.contentOffset.y = offset
+        isRestoringAnchor = false
+        if offset < topOffset {
+            scrollToTop(
+                duration: tuning.value(of: TuningCatalog.insertionScrollDuration),
+                bounce: tuning.value(of: TuningCatalog.insertionScrollBounce)
+            )
+        }
+    }
+
+    /// `id`の行のすぐ下の行が表示領域の下端より下にあれば、`id`の行を表示領域の上端まで動かし、下の行を見せる。
+    func raiseIfNextRowHidden(_ id: ItemID) {
+        collectionView.layoutIfNeeded()
+        guard let indexPath = dataSource.indexPath(for: id),
+              let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
+        else { return }
+        let next = IndexPath(item: indexPath.item + 1, section: indexPath.section)
+        guard next.item < collectionView.numberOfItems(inSection: indexPath.section),
+              let nextFrame = collectionView.layoutAttributesForItem(at: next)?.frame
+        else { return }
+        let inset = collectionView.adjustedContentInset
+        let visibleBottom = collectionView.contentOffset.y + collectionView.bounds.height - inset.bottom
+        guard nextFrame.minY >= visibleBottom else { return }
+        let maxOffset = max(collectionView.contentSize.height + inset.bottom - collectionView.bounds.height, -inset.top)
+        collectionView.setContentOffset(CGPoint(x: collectionView.contentOffset.x, y: min(frame.minY - inset.top, maxOffset)), animated: true)
     }
 
     /// 要素のセル上端を表示領域の上端に合わせる。下に十分な要素がなければ、末尾までスクロールしたところで止める。

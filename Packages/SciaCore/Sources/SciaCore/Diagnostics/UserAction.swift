@@ -18,6 +18,8 @@ public enum UserAction: Sendable, Equatable {
     case openViewer(count: Int, index: Int)
     case closeViewer(ViewerClose)
     case openProfile
+    /// 投稿の行を押して、スレッドを開いた。
+    case openThread(screen: String)
     case reply
     /// ユーザーのメニューで、投稿欄にメンションを入れた。
     case mention
@@ -55,6 +57,7 @@ public enum UserAction: Sendable, Equatable {
         case .openViewer(let count, let index): "viewer.open \(count) \(index)"
         case .closeViewer(let method): "viewer.close \(method.rawValue)"
         case .openProfile: "profile.open"
+        case .openThread(let screen): "thread.open \(screen)"
         case .reply: "status.reply"
         case .mention: "user.mention"
         case .toggleFavourite: "status.favourite"
@@ -106,6 +109,7 @@ public enum UserAction: Sendable, Equatable {
             guard let method = ViewerClose(rawValue: args[0]) else { return nil }
             self = .closeViewer(method)
         case ("profile.open", 0): self = .openProfile
+        case ("thread.open", 1): self = .openThread(screen: args[0])
         case ("status.reply", 0): self = .reply
         case ("user.mention", 0): self = .mention
         case ("status.favourite", 0): self = .toggleFavourite
@@ -144,6 +148,7 @@ public enum UserAction: Sendable, Equatable {
         case .closeViewer(.drag): "ビューアをドラッグして閉じた"
         case .closeViewer(.button): "ビューアを閉じた"
         case .openProfile: "プロフィールを開いた"
+        case .openThread(let screen): "\(Self.screenName(screen))で投稿を押してスレッドを開いた"
         case .reply: "投稿への返信を書き始めた"
         case .mention: "投稿欄にメンションを入れた"
         // 投稿への操作と投稿は通信の前に記録するため、失敗した場合や応答を待つ間もあるので、成功したとは書かない。
@@ -182,6 +187,7 @@ public enum UserAction: Sendable, Equatable {
         case "home", "timeline": "ホーム"
         case "notifications": "通知"
         case "profile": "プロフィール"
+        case "thread": "スレッド"
         default: id
         }
     }
