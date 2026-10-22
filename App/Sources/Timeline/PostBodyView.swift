@@ -62,44 +62,48 @@ final class PostBodyView: UIView {
     /// Xの投稿の囲みのサムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectXPostMedia: ((Int, MediaGridView) -> Void)?
 
-    private let spoilerView = SpoilerView()
+    private let mediaImages: MediaImageStore
+    private let avatarImages: AvatarImageStore
     private let textLabel = LinkLabel()
-    private let mediaView: MediaGridView
-    private let cardView: LinkCardView
-    private let xPostView: XPostView
-    private let filterNoteLabel = UILabel()
+    // 本文のほかの部品は、その中身が初めて来たときに作り、そのあとは隠して持っておく。
+    // どれも持たない投稿が多いのに、行を作るたびに全部を作ると、まとめて行を作る画面の最初の表示でメインスレッドが止まるため。
+    private var spoilerView: SpoilerView?
+    private var mediaView: MediaGridView?
+    private var cardView: LinkCardView?
+    private var xPostView: XPostView?
+    private var filterNoteLabel: UILabel?
     private(set) var content: PostBodyContent?
     /// 添付ファイルの有無と並べ方で変わる制約。適用のたびに作り直す。
     private var variableConstraints: [NSLayoutConstraint] = []
 
     /// 表示中のサムネイル。ビューアの拡大と縮小の起点を探すときに使う。
     var mediaGrid: MediaGridView? {
-        mediaView.isHidden ? nil : mediaView
+        Self.shown(mediaView)
     }
 
     /// 表示中のリンクカード。読み上げの要素に加える。
     var linkCard: LinkCardView? {
-        cardView.isHidden ? nil : cardView
+        Self.shown(cardView)
     }
 
     /// 表示中のXの投稿の囲み。読み上げの要素に加え、ビューアの拡大と縮小の起点を探すときにも使う。
     var xPost: XPostView? {
-        xPostView.isHidden ? nil : xPostView
+        Self.shown(xPostView)
     }
 
     /// 表示中のフィルターの印。添付ファイルやリンクカードより下にあるため、読み上げでは本文と分け、それらの後の要素にする。
     var filterNote: UILabel? {
-        filterNoteLabel.isHidden ? nil : filterNoteLabel
+        Self.shown(filterNoteLabel)
     }
 
     /// 注意書きも本文もなく、添付ファイルが上端から始まる。
     var startsWithMedia: Bool {
-        spoilerView.isHidden && textLabel.isHidden && !mediaView.isHidden
+        Self.shown(spoilerView) == nil && textLabel.isHidden && mediaGrid != nil
     }
 
     /// 注意書きと本文の枠。読み上げの要素の範囲を決めるときに使う。
     var textFrame: CGRect {
-        [spoilerView, textLabel].filter { !$0.isHidden }.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+        [Self.shown(spoilerView), Self.shown(textLabel)].compactMap(\.self).map(\.frame).reduce(CGRect.null) { $0.union($1) }
     }
 
     /// 注意書きと本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
@@ -107,48 +111,93 @@ final class PostBodyView: UIView {
         get { textLabel.emojiImages }
         set {
             textLabel.emojiImages = newValue
-            spoilerView.emojiImages = newValue
+            spoilerView?.emojiImages = newValue
         }
     }
 
     init(mediaImages: MediaImageStore, avatarImages: AvatarImageStore) {
-        mediaView = MediaGridView(store: mediaImages)
-        cardView = LinkCardView(store: mediaImages)
-        xPostView = XPostView(store: mediaImages, avatarImages: avatarImages)
+        self.mediaImages = mediaImages
+        self.avatarImages = avatarImages
         super.init(frame: .zero)
         textLabel.numberOfLines = 0
-        filterNoteLabel.numberOfLines = 0
-        for view in [spoilerView, textLabel, mediaView, cardView, xPostView, filterNoteLabel] as [UIView] {
-            view.translatesAutoresizingMaskIntoConstraints = false
-            addSubview(view)
-        }
-        NSLayoutConstraint.activate([
-            spoilerView.topAnchor.constraint(equalTo: topAnchor),
-            spoilerView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            spoilerView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            textLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
-            textLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
-        ])
-        mediaView.onSelect = { [weak self] index in
-            guard let self else { return }
-            self.onSelectMedia?(index, self.mediaView)
-        }
-        mediaView.onReveal = { [weak self] in self?.onRevealMedia?() }
-        spoilerView.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?() }, for: .touchUpInside)
+        install(textLabel)
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
-        cardView.onOpenImage = { [weak self] thumbnail in self?.onOpenLinkCardImage?(thumbnail) }
-        cardView.onRevealImage = { [weak self] in self?.onRevealMedia?() }
-        cardView.addAction(UIAction { [weak self] _ in
-            guard let self, let url = self.cardView.content?.card.url else { return }
+    }
+
+    private static func shown<View: UIView>(_ view: View?) -> View? {
+        view?.isHidden == false ? view : nil
+    }
+
+    /// 左右の端を自分に揃えて載せる。縦の位置は、適用のたびに決める。
+    private func install(_ view: UIView) {
+        view.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(view)
+        NSLayoutConstraint.activate([
+            view.leadingAnchor.constraint(equalTo: leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: trailingAnchor),
+        ])
+    }
+
+    private func loadedSpoilerView() -> SpoilerView {
+        if let spoilerView { return spoilerView }
+        let view = SpoilerView()
+        view.emojiImages = textLabel.emojiImages
+        install(view)
+        view.topAnchor.constraint(equalTo: topAnchor).isActive = true
+        view.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?() }, for: .touchUpInside)
+        spoilerView = view
+        return view
+    }
+
+    private func loadedMediaView() -> MediaGridView {
+        if let mediaView { return mediaView }
+        let view = MediaGridView(store: mediaImages)
+        install(view)
+        view.onSelect = { [weak self] index in
+            guard let self, let mediaView = self.mediaView else { return }
+            self.onSelectMedia?(index, mediaView)
+        }
+        view.onReveal = { [weak self] in self?.onRevealMedia?() }
+        mediaView = view
+        return view
+    }
+
+    private func loadedCardView() -> LinkCardView {
+        if let cardView { return cardView }
+        let view = LinkCardView(store: mediaImages)
+        install(view)
+        view.onOpenImage = { [weak self] thumbnail in self?.onOpenLinkCardImage?(thumbnail) }
+        view.onRevealImage = { [weak self] in self?.onRevealMedia?() }
+        view.addAction(UIAction { [weak self] _ in
+            guard let self, let url = self.cardView?.content?.card.url else { return }
             self.onOpenLink?(.url(url))
         }, for: .primaryActionTriggered)
-        xPostView.onSelectMedia = { [weak self] index, grid in self?.onSelectXPostMedia?(index, grid) }
-        xPostView.onRevealMedia = { [weak self] in self?.onRevealMedia?() }
-        xPostView.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination) }
-        xPostView.addAction(UIAction { [weak self] _ in
-            guard let self, let url = self.xPostView.content?.post.url else { return }
+        cardView = view
+        return view
+    }
+
+    private func loadedXPostView() -> XPostView {
+        if let xPostView { return xPostView }
+        let view = XPostView(store: mediaImages, avatarImages: avatarImages)
+        install(view)
+        view.onSelectMedia = { [weak self] index, grid in self?.onSelectXPostMedia?(index, grid) }
+        view.onRevealMedia = { [weak self] in self?.onRevealMedia?() }
+        view.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination) }
+        view.addAction(UIAction { [weak self] _ in
+            guard let self, let url = self.xPostView?.content?.post.url else { return }
             self.onOpenLink?(.url(url))
         }, for: .primaryActionTriggered)
+        xPostView = view
+        return view
+    }
+
+    private func loadedFilterNoteLabel() -> UILabel {
+        if let filterNoteLabel { return filterNoteLabel }
+        let label = UILabel()
+        label.numberOfLines = 0
+        install(label)
+        filterNoteLabel = label
+        return label
     }
 
     @available(*, unavailable)
@@ -163,11 +212,14 @@ final class PostBodyView: UIView {
         textLabel.numberOfLines = content.maximumLines
         NSLayoutConstraint.deactivate(variableConstraints)
         variableConstraints = []
+        var shownSpoiler: SpoilerView?
         if let spoiler = content.spoiler {
+            let spoilerView = loadedSpoilerView()
             spoilerView.isHidden = false
             spoilerView.apply(SpoilerView.Content(text: spoiler.text, isCollapsed: spoiler.isCollapsed, kind: spoiler.kind, padding: spoiler.padding))
+            shownSpoiler = spoilerView
         } else {
-            spoilerView.isHidden = true
+            spoilerView?.isHidden = true
         }
         let isCollapsed = content.spoiler?.isCollapsed ?? false
         let media = isCollapsed ? nil : content.media.flatMap { $0.aspectRatio == nil ? nil : $0 }
@@ -175,93 +227,93 @@ final class PostBodyView: UIView {
         let card = isCollapsed || xPost != nil ? nil : content.card
         textLabel.isHidden = isCollapsed || (content.text.length == 0 && (media != nil || card != nil || xPost != nil || content.spoiler != nil))
         // 本文と添付ファイルは、注意書きがあればその下から並べる。
-        let contentTop = content.spoiler.map { (anchor: spoilerView.bottomAnchor, spacing: $0.bodySpacing) } ?? (anchor: topAnchor, spacing: 0)
+        let contentTop = if let shownSpoiler, let spoiler = content.spoiler {
+            (anchor: shownSpoiler.bottomAnchor, spacing: spoiler.bodySpacing)
+        } else {
+            (anchor: topAnchor, spacing: CGFloat(0))
+        }
         if !textLabel.isHidden {
             variableConstraints.append(textLabel.firstBaselineAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing + Self.textTopInset(of: content.text)))
         }
+        // 上の部品の下端から、次の部品を置く位置。本文の下なら、字面の下端から測る。
+        func topConstraint(of view: UIView, below shownAbove: UIView?, spacing: CGFloat) -> NSLayoutConstraint {
+            if let shownAbove {
+                view.topAnchor.constraint(equalTo: shownAbove.bottomAnchor, constant: spacing)
+            } else if !textLabel.isHidden {
+                view.topAnchor.constraint(equalTo: textLabel.lastBaselineAnchor, constant: spacing + Self.textBottomInset(of: content.text))
+            } else {
+                view.topAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing)
+            }
+        }
+        var shownMedia: MediaGridView?
         if let media, let aspectRatio = media.aspectRatio {
+            let mediaView = loadedMediaView()
             mediaView.isHidden = false
             mediaView.apply(media)
-            let mediaTop = textLabel.isHidden
-                ? mediaView.topAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing)
-                : mediaView.topAnchor.constraint(equalTo: textLabel.lastBaselineAnchor, constant: content.mediaSpacing + Self.textBottomInset(of: content.text))
-            variableConstraints += [
-                mediaTop,
-                mediaView.leadingAnchor.constraint(equalTo: leadingAnchor),
-                mediaView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            ]
             let height = switch media.arrangement {
             case .grid: mediaView.heightAnchor.constraint(equalTo: mediaView.widthAnchor, multiplier: 1 / aspectRatio)
             case .strip(let side): mediaView.heightAnchor.constraint(equalToConstant: side)
             }
-            variableConstraints.append(height)
+            variableConstraints += [
+                topConstraint(of: mediaView, below: nil, spacing: content.mediaSpacing),
+                height,
+            ]
+            shownMedia = mediaView
         } else {
-            mediaView.isHidden = true
+            mediaView?.isHidden = true
         }
+        var shownCard: LinkCardView?
         if let card {
+            let cardView = loadedCardView()
             cardView.isHidden = false
             cardView.apply(card)
-            let cardTop = if !mediaView.isHidden {
-                cardView.topAnchor.constraint(equalTo: mediaView.bottomAnchor, constant: content.cardSpacing)
-            } else if !textLabel.isHidden {
-                cardView.topAnchor.constraint(equalTo: textLabel.lastBaselineAnchor, constant: content.cardSpacing + Self.textBottomInset(of: content.text))
-            } else {
-                cardView.topAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing)
-            }
-            variableConstraints += [
-                cardTop,
-                cardView.leadingAnchor.constraint(equalTo: leadingAnchor),
-                cardView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            ]
+            variableConstraints.append(topConstraint(of: cardView, below: shownMedia, spacing: content.cardSpacing))
+            shownCard = cardView
         } else {
-            cardView.isHidden = true
+            cardView?.isHidden = true
         }
+        var shownXPost: XPostView?
         if let xPost {
             // 同じ投稿のリンクカードから替わったときだけ、囲みを浮かび上がらせる。行が伸びる動きは一覧が付ける。
             // 使い回された行で別の投稿に替わったときは、動かさずに出す。
             let replacesCard = previous?.xPost == nil && previous?.card != nil && content.statusID != nil && previous?.statusID == content.statusID
             let fadesIn = replacesCard && window != nil && xPost.transitionDuration > 0 && !UIAccessibility.isReduceMotionEnabled
+            let xPostView = loadedXPostView()
             xPostView.isHidden = false
             xPostView.apply(xPost)
             xPostView.alpha = fadesIn ? 0 : 1
             if fadesIn {
                 // 一覧は動きを止めて描き直すことがあり、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
                 DispatchQueue.main.async { [weak self] in
-                    guard let self, self.content?.xPost == xPost else {
-                        self?.xPostView.alpha = 1
+                    guard let self, let xPostView = self.xPostView else { return }
+                    guard self.content?.xPost == xPost else {
+                        xPostView.alpha = 1
                         return
                     }
                     UIView.animate(withDuration: xPost.transitionDuration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]) {
-                        self.xPostView.alpha = 1
+                        xPostView.alpha = 1
                     }
                 }
             }
-            let xPostTop = if !mediaView.isHidden {
-                xPostView.topAnchor.constraint(equalTo: mediaView.bottomAnchor, constant: content.cardSpacing)
-            } else if !textLabel.isHidden {
-                xPostView.topAnchor.constraint(equalTo: textLabel.lastBaselineAnchor, constant: content.cardSpacing + Self.textBottomInset(of: content.text))
-            } else {
-                xPostView.topAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing)
-            }
-            variableConstraints += [
-                xPostTop,
-                xPostView.leadingAnchor.constraint(equalTo: leadingAnchor),
-                xPostView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            ]
+            variableConstraints.append(topConstraint(of: xPostView, below: shownMedia, spacing: content.cardSpacing))
+            shownXPost = xPostView
         } else {
-            xPostView.isHidden = true
+            xPostView?.isHidden = true
         }
         // 添付ファイルもリンクカードもないのに本文を隠すのは、注意書きがあるときだけ。
-        let last: UIView = if !xPostView.isHidden {
-            xPostView
-        } else if !cardView.isHidden {
-            cardView
-        } else if !mediaView.isHidden {
-            mediaView
+        let last: UIView = if let shownXPost {
+            shownXPost
+        } else if let shownCard {
+            shownCard
+        } else if let shownMedia {
+            shownMedia
+        } else if textLabel.isHidden, let shownSpoiler {
+            shownSpoiler
         } else {
-            textLabel.isHidden ? spoilerView : textLabel
+            textLabel
         }
         if let note = content.filterNote {
+            let filterNoteLabel = loadedFilterNoteLabel()
             filterNoteLabel.isHidden = false
             filterNoteLabel.attributedText = note
             // 先頭の記号は画像の文字なので、読み上げでは除く。
@@ -272,12 +324,10 @@ final class PostBodyView: UIView {
                 : (anchor: last.bottomAnchor, inset: 0)
             variableConstraints += [
                 filterNoteLabel.firstBaselineAnchor.constraint(equalTo: lastBottom.anchor, constant: lastBottom.inset + content.filterNoteSpacing + Self.textTopInset(of: note)),
-                filterNoteLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
-                filterNoteLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
                 bottomAnchor.constraint(equalTo: filterNoteLabel.lastBaselineAnchor, constant: Self.textBottomInset(of: note)),
             ]
         } else {
-            filterNoteLabel.isHidden = true
+            filterNoteLabel?.isHidden = true
             variableConstraints.append(bottomAnchor.constraint(equalTo: last.bottomAnchor))
         }
         NSLayoutConstraint.activate(variableConstraints)

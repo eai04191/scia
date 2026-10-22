@@ -39,7 +39,8 @@ final class LinkCardView: UIButton {
     var onOpenImage: ((LinkCardThumbnailView) -> Void)?
     /// 閲覧注意で覆った画像がタップされたときに呼ぶ。覆いを外すのは置く側で、適用し直すまで見た目は変わらない。リンクは開かない。
     var onRevealImage: (() -> Void)?
-    private let coverView = LinkCardView.makeCover()
+    /// 閲覧注意の覆い。ぼかしの素材を作るのは重く、一覧の行はどれもリンクカードを持つため、初めて覆うときに作る。
+    private var coverView: UIView?
     private let symbolView = UIImageView(image: UIImage(systemName: "link"))
     private let siteLabel = UILabel()
     private let headlineLabel = UILabel()
@@ -80,10 +81,6 @@ final class LinkCardView: UIButton {
         }, offersMenu: { [weak self] _ in self?.menuImage != nil })
         thumbnailView.contentMode = .scaleAspectFill
         thumbnailView.clipsToBounds = true
-        coverView.frame = thumbnailView.bounds
-        coverView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
-        coverView.isHidden = true
-        thumbnailView.addSubview(coverView)
         symbolView.contentMode = .center
         symbolView.tintColor = .secondaryLabel
         siteLabel.textColor = .secondaryLabel
@@ -242,6 +239,16 @@ final class LinkCardView: UIButton {
         }
     }
 
+    private func loadedCoverView() -> UIView {
+        if let coverView { return coverView }
+        let cover = Self.makeCover()
+        cover.frame = thumbnailView.bounds
+        cover.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        thumbnailView.addSubview(cover)
+        coverView = cover
+        return cover
+    }
+
     /// 閲覧注意の覆い。下のサムネイルは画像を読まずにblurhashで描くため、添付ファイルの覆いと同じく、色が透けて見える薄い素材にする。
     /// サムネイルには文字が入りきらないため、添付ファイルを1列に並べるときと同じく、記号だけを出す。押されたらサムネイルが受ける。
     private static func makeCover() -> UIView {
@@ -390,7 +397,11 @@ final class LinkCardView: UIButton {
         let card: PreviewCard? = if case .card(let card) = content?.card { card } else { nil }
         let scale = traitCollection.displayScale
         let covers = isCoveringImage
-        coverView.isHidden = !covers
+        if covers {
+            loadedCoverView().isHidden = false
+        } else {
+            coverView?.isHidden = true
+        }
         let request: Request? = if let image = card?.image, bounds.height > 0, scale > 0 {
             Request(url: image, maxPixelSize: Int(ceil(max(bounds.height, thumbnailWidth) * scale)), isCovered: covers)
         } else {

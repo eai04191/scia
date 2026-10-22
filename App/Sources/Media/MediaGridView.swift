@@ -59,7 +59,8 @@ final class MediaGridView: UIView {
     /// サムネイルと覆いを載せる。1列に並べるときだけ横にスクロールでき、ほかでは自分と同じ大きさで動かない。
     private let tileContainer = RowContentScrollView()
     private var tiles: [MediaTileView] = []
-    private lazy var cover = makeCover()
+    /// 閲覧注意の覆い。ぼかしの素材と設定付きのボタンを作るのは重く、一覧の行はどれも添付ファイルの欄を持つため、初めて覆うときに作る。
+    private var cover: UIView?
     private var coverButton: UIButton?
     private(set) var content: Content?
 
@@ -73,7 +74,6 @@ final class MediaGridView: UIView {
         // ステータスバーのタップで先頭へ戻る対象は一覧だけにする。画面に対象が複数あると、UIKitはどれも動かさない。
         tileContainer.scrollsToTop = false
         addSubview(tileContainer)
-        tileContainer.addSubview(cover)
     }
 
     @available(*, unavailable)
@@ -93,7 +93,11 @@ final class MediaGridView: UIView {
             let tile = MediaTileView(store: store)
             let index = tiles.count
             tile.addAction(UIAction { [weak self] _ in self?.onSelect?(index) }, for: .primaryActionTriggered)
-            tileContainer.insertSubview(tile, belowSubview: cover)
+            if let cover {
+                tileContainer.insertSubview(tile, belowSubview: cover)
+            } else {
+                tileContainer.addSubview(tile)
+            }
             tiles.append(tile)
         }
         for (index, tile) in tiles.enumerated() {
@@ -111,8 +115,12 @@ final class MediaGridView: UIView {
                 policy: content.thumbnailPolicy
             )
         }
-        cover.isHidden = !content.isCovered
-        updateCoverButton(for: content)
+        if content.isCovered {
+            loadedCover().isHidden = false
+            updateCoverButton(for: content)
+        } else {
+            cover?.isHidden = true
+        }
         // 覆っている間は、中のサムネイルを読み上げない。
         tiles.forEach { $0.accessibilityElementsHidden = content.isCovered }
         setNeedsLayout()
@@ -145,13 +153,13 @@ final class MediaGridView: UIView {
         case .grid:
             tileContainer.isScrollEnabled = false
             tileContainer.contentSize = bounds.size
-            cover.frame = bounds
+            cover?.frame = bounds
         case .strip:
             // 1列に並べるときは、行の幅いっぱいではなく、並べたサムネイルだけを覆う。
             let tilesFrame = layout.frames.reduce(CGRect.null) { $0.union($1) }
             tileContainer.isScrollEnabled = tilesFrame.width > bounds.width
             tileContainer.contentSize = CGSize(width: max(tilesFrame.maxX, bounds.width), height: bounds.height)
-            cover.frame = tilesFrame
+            cover?.frame = tilesFrame
         }
     }
 
@@ -175,6 +183,14 @@ final class MediaGridView: UIView {
         }
         coverButton.configuration = configuration
         coverButton.accessibilityLabel = "\(title)、タップして表示"
+    }
+
+    private func loadedCover() -> UIView {
+        if let cover { return cover }
+        let view = makeCover()
+        tileContainer.addSubview(view)
+        cover = view
+        return view
     }
 
     private func makeCover() -> UIView {
