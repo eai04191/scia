@@ -1984,6 +1984,10 @@ final class SessionController {
             }
         case .viewer(let index):
             openTopmostMedia(at: index)
+        case .createList(let title):
+            changeListsForDebug("create") { _ = try await $0.createList(title: title) }
+        case .deleteList(let id):
+            changeListsForDebug("delete") { try await $0.deleteList(id) }
         case .statusBarTickerLoop(let isOn):
             statusBarTicker.setLooping(isOn, items: DummyNotifications.samples)
         case .inject(let tab, let file):
@@ -2001,6 +2005,20 @@ final class SessionController {
                     feed.releaseHeldArrivals()
                 }
                 notifications.releaseHeldArrivals()
+            }
+        }
+    }
+
+    /// `scia-debug://lists/...`で、サーバーのリストを変えてから読み直し、タブの並びに反映する。
+    private func changeListsForDebug(_ operation: String, _ change: @escaping @Sendable (MastodonClient) async throws -> Void) {
+        let client = client
+        Task { [weak self] in
+            do {
+                try await change(client)
+                self?.logger.info("debug lists \(operation, privacy: .public) done")
+                self?.loadLists()
+            } catch {
+                self?.logger.error("debug lists \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }
     }

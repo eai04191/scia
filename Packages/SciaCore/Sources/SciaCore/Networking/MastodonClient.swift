@@ -519,6 +519,20 @@ public struct MastodonClient: Sendable {
         try await get([MastodonList].self, path: "api/v1/lists", query: []).0
     }
 
+    /// リストを作る。
+    /// https://docs.joinmastodon.org/methods/lists/#create
+    public func createList(title: String) async throws -> MastodonList {
+        try await post(MastodonList.self, path: "api/v1/lists", form: [URLQueryItem(name: "title", value: title)]).0
+    }
+
+    /// リストを消す。
+    /// https://docs.joinmastodon.org/methods/lists/#delete
+    public func deleteList(_ listID: String) async throws {
+        var request = URLRequest(url: credential.instance.appending(path: "api/v1/lists/\(listID)"))
+        request.httpMethod = "DELETE"
+        _ = try await send(request)
+    }
+
     /// リストのタイムラインを新しい順に返す。
     /// https://docs.joinmastodon.org/methods/timelines/#list
     public func listTimeline(_ listID: String, _ query: TimelineQuery) async throws -> TimelinePage {

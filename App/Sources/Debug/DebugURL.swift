@@ -77,6 +77,11 @@ enum DebugURL: Equatable {
     /// `scia-debug://ticker-loop/on`で、ステータスバーの通知を、出る、出ている、消えるを繰り返して出し続ける。`scia-debug://ticker-loop/off`で止める。
     case statusBarTickerLoop(Bool)
 
+    /// `scia-debug://lists/create?title=<名前>`でリストを作り、`scia-debug://lists/delete?id=<ID>`で消して、リストを読み直す。
+    /// リストの作成と管理の画面がまだないため、リストのタブを実物で確かめるのに使う。サーバーのリストを書き換える。
+    case createList(title: String)
+    case deleteList(id: String)
+
     enum Tab: String {
         case home
         case local
@@ -130,6 +135,7 @@ enum DebugURL: Equatable {
         case "media-limits": Self.mediaLimits(url)
         case "viewer": Self.viewer(url)
         case "inject": Self.inject(url)
+        case "lists": Self.lists(url)
         case "compose": Self.compose(url)
         case "profile-edit": .profileEdit(note: Self.query("note", in: url), field: Self.query("field", in: url))
         default: nil
@@ -145,6 +151,14 @@ enum DebugURL: Equatable {
     private static func status(_ url: URL) -> DebugURL? {
         guard let statusCode = Int(url.lastPathComponent), (100..<600).contains(statusCode) else { return nil }
         return .status(statusCode, retryAfter: query("retry-after", in: url).flatMap { Int($0) })
+    }
+
+    private static func lists(_ url: URL) -> DebugURL? {
+        switch url.lastPathComponent {
+        case "create": query("title", in: url).flatMap { $0.isEmpty ? nil : .createList(title: $0) }
+        case "delete": query("id", in: url).flatMap { $0.isEmpty ? nil : .deleteList(id: $0) }
+        default: nil
+        }
     }
 
     private static func slowDownload(_ url: URL) -> DebugURL? {
