@@ -81,6 +81,9 @@ struct DiscomfortReportStoreTests {
     }
 }
 
+// macOSでは、OSLogStoreをプロセスで初めて読むときにMac全体のログを走査し、1回に10秒以上かかる。
+// 2件で`make test-core`の時間の半分を占めるため、iOSシミュレーター（`make test`）でだけ走らせる。
+#if os(iOS)
 struct RecentLogReaderTests {
     /// iOSシミュレーターでは、ログを書いてからOSLogStoreで読めるまでに1秒以上かかることがある。
     /// マーカーまで読めるのを待つことで、確保した瞬間の直前のログまで含める。
@@ -109,3 +112,4 @@ struct RecentLogReaderTests {
         }
     }
 }
+#endif
