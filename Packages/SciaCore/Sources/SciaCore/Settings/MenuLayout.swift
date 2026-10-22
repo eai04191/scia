@@ -257,10 +257,22 @@ public enum UserMenuItem: String, MenuItemKind {
     case openInDefaultBrowser
     /// 開く場所の設定にかかわらず、アプリ内のSafariで開く。
     case openInAppSafari
+    /// フォローしていなければフォローし、フォロー中なら外し、リクエスト中なら取り消す。以下の関係の項目は、メニューを開いてから関係を読んで出す。自分には出さない。
+    case follow
+    /// フォローしている相手のブーストを、ホームに流すかを切り替える。
+    case showReblogs
+    /// フォローしている相手が投稿したら通知するかを切り替える。
+    case notify
+    /// ミュートしていなければ、期間を選んでミュートする。ミュート中なら解除する。
+    case mute
+    /// ブロックしていなければブロックし、ブロック中なら解除する。
+    case block
 
     public static let defaultLayout = MenuLayout<UserMenuItem>(defaultElements: [
         .item(.profile, isVisible: true),
         .item(.mention, isVisible: true),
+        .separator,
+        .item(.follow, isVisible: true),
         .separator,
         .item(.copyHandle, isVisible: true),
         .item(.copyLink, isVisible: true),
@@ -269,6 +281,11 @@ public enum UserMenuItem: String, MenuItemKind {
         .item(.openInDefaultBrowser, isVisible: false),
         .item(.openInAppSafari, isVisible: false),
         .more,
+        .item(.showReblogs, isVisible: true),
+        .item(.notify, isVisible: true),
+        .separator,
+        .item(.mute, isVisible: true),
+        .item(.block, isVisible: true),
     ])
 }
 

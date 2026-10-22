@@ -314,6 +314,18 @@ final class NotificationsController {
         showEntries(animatesRemoval: true)
     }
 
+    /// 通知を隠すミュートか、ブロックをした相手からの通知を除き、あとから届いても足さない。使う人の操作の結果なので、閉じる動きで消す。
+    /// 解除したら、また足すようにする。除いた通知は、読み込み直すまで戻さない。
+    func setAccount(_ id: String, excluded: Bool) {
+        guard !isStopped else { return }
+        guard excluded else {
+            store.includeAccount(id)
+            return
+        }
+        guard store.excludeAccount(id) else { return }
+        showEntries(animatesRemoval: true)
+    }
+
     /// 使う人が削除した通知を除く。
     func removeNotification(_ id: MastodonNotification.ID) {
         guard !isStopped, store.removeNotification(id) else { return }

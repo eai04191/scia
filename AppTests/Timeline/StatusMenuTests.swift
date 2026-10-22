@@ -39,7 +39,9 @@ struct StatusMenuTests {
         }
     }
 
+    /// 関係の項目は開いてから読むため、`…`で表す。
     private func describe(_ element: UIMenuElement) -> String {
+        if element is UIDeferredMenuElement { return "…" }
         guard let menu = element as? UIMenu else { return element.title }
         let children = menu.children.flatMap { child in (child as? UIMenu)?.options.contains(.displayInline) == true ? (child as? UIMenu)?.children ?? [] : [child] }
         let subtitle = menu.subtitle.map { "(\($0))" } ?? ""
@@ -148,34 +150,46 @@ struct StatusMenuTests {
     /// ユーザーのメニューの中身が1つで「その他」が空なら、サブメニューにせず直接並べる。
     @Test func singleUserMenuItemIsListedDirectly() throws {
         let settings = try makeSettings()
-        settings.userMenuLayout = MenuLayout(elements: [.item(.profile, isVisible: true), .item(.mention, isVisible: false), .item(.copyHandle, isVisible: false), .item(.copyLink, isVisible: false), .item(.share, isVisible: false), .item(.openInBrowser, isVisible: false), .more])
+        settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .profile) } + [.more])
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings))
 
         #expect(outline.last == ["@aliceのプロフィール"])
     }
 
-    /// 既定のユーザーのメニューは、開く・書く操作と持ち出す操作でまとまりを分ける。開く場所を選んで開く2つは隠れている。
+    /// 既定のユーザーのメニューは、開く・書く操作、フォロー、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
+    /// 関係の項目は、開いてから読む。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() throws {
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in })
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in })
 
         let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
 
-        #expect(outline.last == ["@alice[プロフィール,メンション,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く]"])
+        #expect(outline.last == ["@alice[プロフィール,メンション,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…]]"])
     }
 
-    /// メンションとハンドルをコピーを組むものを渡されていない画面では、2つを出さない。
+    /// メンション、ハンドルをコピー、関係の項目を組むものを渡されていない画面では、これらを出さない。
     @Test func userMenuOmitsMentionAndCopyUsernameWithoutActions() throws {
         let outline = try outline(menu(for: .status(status(url: nil))))
 
         #expect(outline.last == ["@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"])
     }
 
+    /// 関係の項目は、1つだけでもサブメニューにする。読んでから中身が決まり、名前に相手を入れられないため。
+    @Test func singleRelationItemStaysInSubmenu() throws {
+        let settings = try makeSettings()
+        settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .follow) } + [.more])
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in })
+
+        let outline = try outline(menu(for: .status(status(url: nil)), settings: settings, userMenuActions: actions))
+
+        #expect(outline.last == ["@alice[…]"])
+    }
+
     /// サブメニューにせず直接並べるときは、メンションの名前に相手を入れる。
     @Test func singleMentionItemIsListedDirectlyWithAcct() throws {
         let settings = try makeSettings()
-        settings.userMenuLayout = MenuLayout(elements: [.item(.profile, isVisible: false), .item(.mention, isVisible: true), .item(.copyHandle, isVisible: false), .item(.copyLink, isVisible: false), .item(.share, isVisible: false), .item(.openInBrowser, isVisible: false), .more])
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in })
+        settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .mention) } + [.more])
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in })
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings, userMenuActions: actions))
 
@@ -195,7 +209,7 @@ struct StatusMenuTests {
     /// ユーザーのメニューに出す項目がなければ、ユーザーの項目を出さない。
     @Test func emptyUserMenuHidesUserItems() throws {
         let settings = try makeSettings()
-        settings.userMenuLayout = MenuLayout(elements: [.item(.profile, isVisible: false), .item(.mention, isVisible: false), .item(.copyHandle, isVisible: false), .item(.copyLink, isVisible: false), .item(.share, isVisible: false), .item(.openInBrowser, isVisible: false), .more])
+        settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: false) } + [.more])
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings))
 

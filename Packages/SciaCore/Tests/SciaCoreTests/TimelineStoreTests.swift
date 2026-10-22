@@ -217,6 +217,79 @@ struct TimelineStoreTests {
         #expect(store.receive(.delete(statusID: "999")) == .none)
     }
 
+    /// ミュートかブロックした相手の投稿、その人のブースト、その人の投稿のブーストを除き、ほかの投稿は残す。
+    /// 除いたあとに届いた投稿も足さず、解除したら、また足す。
+    @Test func excludeAccountRemovesItsStatusesAndBoostsUntilIncluded() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/bob.png"))
+        let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: avatar)
+        func bobs(_ id: Int, reblog: Status? = nil) throws -> Status {
+            Status(id: String(id), createdAt: Date(timeIntervalSince1970: TimeInterval(id)), account: bob, content: "", spoilerText: "", url: nil, reblog: reblog)
+        }
+        let store = makeStore(PageQueue([.success(TimelinePage(
+            statuses: [try bobs(30), try status(29, reblog: try bobs(5)), try bobs(28, reblog: try status(6)), try status(27)],
+            isRegenerating: false
+        ))]))
+        _ = try await store.loadInitial()
+        _ = store.receive(.update(try bobs(31)))
+
+        #expect(store.excludeAccount("2"))
+        #expect(store.statuses.map(\.id) == ["27"])
+        #expect(store.pending.isEmpty)
+        #expect(!store.excludeAccount("2"))
+
+        _ = store.receive(.update(try bobs(32)))
+        #expect(store.flushPending().isEmpty)
+
+        store.includeAccount("2")
+        _ = store.receive(.update(try bobs(33)))
+        #expect(store.flushPending().map(\.id) == ["33"])
+    }
+
+    /// 除いている間に届いた投稿は、届いた時点で捨てる。保留したまま解除すると、隠したはずの投稿が出てしまうため。
+    @Test func includeAccountDoesNotRestoreStatusesReceivedWhileExcluded() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/bob.png"))
+        let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: avatar)
+        let store = try await loadedStore([30])
+        store.excludeAccount("2")
+
+        _ = store.receive(.update(Status(id: "31", createdAt: .now, account: bob, content: "", spoilerText: "", url: nil)))
+        #expect(store.pending.isEmpty)
+        store.includeAccount("2")
+
+        #expect(store.flushPending().isEmpty)
+    }
+
+    /// 古いページを読んでいる間にミュートかブロックをして、届いたページが全部その人の投稿でも、ページの一番古い投稿の先から続きを読む。
+    @Test func olderPageOfExcludedAccountStillAdvances() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/bob.png"))
+        let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: avatar)
+        let bobs = [29, 28, 27].map { Status(id: String($0), createdAt: Date(timeIntervalSince1970: TimeInterval($0)), account: bob, content: "", spoilerText: "", url: nil) }
+        let gate = PageGate(TimelinePage(statuses: bobs, isRegenerating: false))
+        let queries = Mutex<[String?]>([])
+        let initial = try statuses([30])
+        let older = try statuses([26])
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            queries.withLock { $0.append(query.maxID) }
+            switch query.maxID {
+            case nil: return TimelinePage(statuses: initial, isRegenerating: false)
+            case "30": return await gate.fetch()
+            case "27": return TimelinePage(statuses: older, isRegenerating: false)
+            default: return TimelinePage(statuses: [], isRegenerating: false)
+            }
+        }
+        _ = try await store.loadInitial()
+        await gate.hold()
+        let read = Task { try await store.loadOlder() }
+        await gate.waitForRequest()
+
+        store.excludeAccount("2")
+        await gate.release()
+        _ = try await read.value
+
+        #expect(store.statuses.map(\.id) == ["30", "26"])
+        #expect(queries.withLock { $0 } == [nil, "30", "27"])
+    }
+
     @Test func statusUpdateReplacesStatusAndBoostedOriginal() async throws {
         let original = try status(10)
         let store = makeStore(PageQueue([.success(TimelinePage(

@@ -244,13 +244,20 @@ final class LinkHitArea: UIControl {
         case .mention(let acct, let url):
             title = "@\(acct)"
             let host = nearest((any LinkMenuHost).self)
+            let target = UserMenuTarget.profileURL(url, shownAcct: acct)
+            let actions = host?.userMenuActions
+            let load = actions.map { actions in UserRelationLoad { try await actions.loadRelation(target) } }
+            let firstRelationItem = settings.userMenuLayout.groups.firstRelationItem
             children = settings.userMenuLayout.groups.menuElements { item in
                 if let action = item.urlAction {
                     return [action.action(url: url, handlers: handlers)]
                 }
                 switch item {
                 case .profile: return [profileAction(item.title, image: item.image, destination)]
-                case .mention, .copyHandle: return host?.userMenuActions?.action(item, target: .profileURL(url, shownAcct: acct), notifying: host).map { [$0] } ?? []
+                case .mention, .copyHandle: return actions?.action(item, target: target, notifying: host).map { [$0] } ?? []
+                case .follow, .showReblogs, .notify, .mute, .block:
+                    guard let actions, let load else { return [] }
+                    return [actions.relationElement(item, load: load, showsFailure: item == firstRelationItem)]
                 // 共通の項目は、上で中身から組んだ。
                 case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari: return []
                 }

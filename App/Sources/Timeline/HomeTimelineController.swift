@@ -470,6 +470,18 @@ final class HomeTimelineController {
         showEntries(animatesRemoval: true)
     }
 
+    /// ミュートかブロックした相手の投稿とブーストを除き、あとから届いても足さない。使う人の操作の結果なので、閉じる動きで消す。
+    /// 解除したら、また足すようにする。除いた投稿は、読み込み直すまで戻さない。
+    func setAccount(_ id: String, excluded: Bool) {
+        guard !isStopped else { return }
+        guard excluded else {
+            store.includeAccount(id)
+            return
+        }
+        guard store.excludeAccount(id) else { return }
+        showEntries(animatesRemoval: true)
+    }
+
     private func insertPending() {
         guard !isStopped else { return }
         #if DEBUG

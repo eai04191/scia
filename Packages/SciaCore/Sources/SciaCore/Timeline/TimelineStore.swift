@@ -33,6 +33,8 @@ public final class TimelineStore {
     private var refillSinceID: String?
     /// 削除のイベントで消した投稿のID。削除の前に読み始めたRESTの結果に含まれていても、表示に戻さない。
     private var deletedIDs: Set<String> = []
+    /// ミュートかブロックした相手のアカウントのID。その人の投稿とブーストを除き、あとから届いても足さない。
+    private var excludedAccountIDs: Set<String> = []
     /// 読めなかった投稿。同じIDの投稿が読めたら外す。
     private var unreadableItems: [UnreadableItem] = []
     /// フィルターで出さない投稿。一覧には並べないが、読めなかった投稿と同じく、続きを読む位置には使う。
@@ -170,8 +172,10 @@ public final class TimelineStore {
             if page.isEmpty && !page.isRegenerating {
                 reachedEnd = true
             }
-            // 削除済みの投稿しかなかったときなど、続きを読む位置が進まなければ、同じページを読み続けないよう止める。
-            guard added.isEmpty, !page.isEmpty, page.unreadable.isEmpty, !page.isRegenerating, let next = itemIDs.last, next != maxID else {
+            // 削除済みの投稿やミュートかブロックした相手の投稿しかなかったときは、一覧に残らないため、ページの一番古い投稿の先へ進む。
+            // それでも続きを読む位置が進まなければ、同じページを読み続けないよう止める。
+            let pageOldestID = (page.statuses.map(\.id) + page.unreadable.map(\.id)).reduce(itemIDs.last) { oldest, id in oldest.map { Self.older($0, id) } ?? id }
+            guard added.isEmpty, !page.isEmpty, page.unreadable.isEmpty, !page.isRegenerating, let next = pageOldestID, next != maxID else {
                 return added
             }
             maxID = next
@@ -363,7 +367,8 @@ public final class TimelineStore {
         switch event {
         case .update(let status):
             unconfirmedPostedIDs.remove(status.id)
-            guard !allStatuses.contains(where: { $0.id == status.id }), !pending.contains(where: { $0.id == status.id }) else {
+            // ミュートかブロックした相手の投稿は、届いた時点で捨てる。保留したまま解除すると、合流させるときに除けなくなるため。
+            guard !isDeleted(status), !allStatuses.contains(where: { $0.id == status.id }), !pending.contains(where: { $0.id == status.id }) else {
                 return .none
             }
             pending.append(status)
@@ -418,6 +423,29 @@ public final class TimelineStore {
         guard remaining.count != entries.count else { return false }
         entries = remaining
         return true
+    }
+
+    /// ミュートかブロックした相手の投稿、その人のブースト、その人の投稿のブーストを除く。あとから届いても足さない。表示に関わる変化があればtrueを返す。
+    /// サーバーはミュートやブロックを応答の後でタイムラインに当てることがあり、Mastodonのドキュメントは、届いたものもクライアントで除くよう求めている。
+    @discardableResult
+    public func excludeAccount(_ id: String) -> Bool {
+        excludedAccountIDs.insert(id)
+        pending.removeAll(where: isFromExcludedAccount)
+        hiddenStatuses.removeAll(where: isFromExcludedAccount)
+        let remaining = entries.filter { entry in
+            switch entry {
+            case .status(let status), .pinned(let status): !isFromExcludedAccount(status)
+            case .unreadable, .gap, .notification: true
+            }
+        }
+        guard remaining.count != entries.count else { return false }
+        entries = remaining
+        return true
+    }
+
+    /// ミュートやブロックを解除した相手の投稿を、また足すようにする。除いた投稿は戻さず、読み込み直したときに戻る。
+    public func includeAccount(_ id: String) {
+        excludedAccountIDs.remove(id)
     }
 
     /// 同じIDの投稿と、それをブーストした投稿の中身を差し替える。編集や、お気に入りなどの操作の結果を反映する。
@@ -594,7 +622,12 @@ public final class TimelineStore {
     }
 
     private func isDeleted(_ status: Status) -> Bool {
-        deletedIDs.contains(status.id) || status.reblog.map { deletedIDs.contains($0.id) } ?? false
+        deletedIDs.contains(status.id) || status.reblog.map { deletedIDs.contains($0.id) } ?? false || isFromExcludedAccount(status)
+    }
+
+    /// ミュートかブロックした相手の投稿か、その人のブーストか、その人の投稿のブースト。
+    private func isFromExcludedAccount(_ status: Status) -> Bool {
+        excludedAccountIDs.contains(status.account.id) || status.reblog.map { excludedAccountIDs.contains($0.account.id) } ?? false
     }
 
     private static func older(_ lhs: String, _ rhs: String) -> String {

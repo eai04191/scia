@@ -112,6 +112,11 @@ extension UserMenuItem: MenuItemContentProviding {
         case .openInBrowser: .url(.openInBrowser)
         case .openInDefaultBrowser: .url(.openInDefaultBrowser)
         case .openInAppSafari: .url(.openInAppSafari)
+        case .follow: .own(title: "フォロー", symbolName: "person.badge.plus", note: "フォロー中なら外し、リクエスト中なら取り消します。自分には出ません")
+        case .showReblogs: .own(title: "ブーストを表示", symbolName: "arrow.2.squarepath", note: "フォローしている相手でだけ出ます")
+        case .notify: .own(title: "投稿を通知", symbolName: "bell", note: "フォローしている相手でだけ出ます")
+        case .mute: .own(title: "ミュート", symbolName: "speaker.slash", note: "期間を選んでミュートします。ミュート中なら解除します")
+        case .block: .own(title: "ブロック", symbolName: "hand.raised", note: "ブロック中なら解除します")
         }
     }
 }
@@ -169,23 +174,27 @@ enum MenuUser {
     }
 }
 
-/// ユーザーのメニューのメンションとハンドルをコピーで使う相手。
+/// ユーザーのメニューの、メンション、ハンドルをコピー、関係の項目で使う相手。
 enum UserMenuTarget {
-    /// APIの`Account`や`mentions`から取った`acct`。そのまま使える。
-    case acct(String)
+    /// APIの`Account`や`mentions`から取ったIDと`acct`。そのまま使える。
+    case account(id: String, acct: String)
     /// 本文や自己紹介のメンションのリンク。APIの`mentions`にないリンクでは、パーサーはリンクの文字列を`acct`の代わりにするが、
     /// Mastodonはほかのサーバーのユーザーでもリンクの文字列からサーバー名を省くため、そのままでは別のユーザーを指す。プロフィールのURLでアカウントを引いて`acct`を決める。
     /// - Parameter shownAcct: 見つからなかったときの知らせに出す、リンクの文字列から取った名前。
     case profileURL(URL, shownAcct: String)
 }
 
-/// ユーザーのメニューの、投稿欄とログイン中のサーバーに頼る項目（メンション、ハンドルをコピー）を組むもの。
-/// 画面を組み立てる側が渡す。渡されていない画面では、2つの項目を出さない。
+/// ユーザーのメニューの、投稿欄とログイン中のサーバーに頼る項目（メンション、ハンドルをコピー、関係の項目）を組むもの。
+/// 画面を組み立てる側が渡す。渡されていない画面では、これらの項目を出さない。
 struct UserMenuActions {
     /// 投稿欄で、カーソルの位置に`@acct`を入れる。
     let mention: @MainActor (UserMenuTarget) -> Void
     /// サーバー名を付けた`@username@domain`の形でコピーし、コピーできたら`notify`を呼ぶ。
     let copyHandle: @MainActor (UserMenuTarget, _ notify: @escaping @MainActor () -> Void) -> Void
+    /// 相手と自分の関係を読む。自分ならnil。
+    let loadRelation: @MainActor (UserMenuTarget) async throws -> UserRelation?
+    /// 関係の項目で選んだ変更を送る。取り消しにくい変更は、確かめてから送る。
+    let changeRelation: @MainActor (UserRelationChange, UserRelation) -> Void
 
     /// メンションとハンドルをコピーの項目。ほかの項目ではnil。
     /// - Parameters:
@@ -200,7 +209,7 @@ struct UserMenuActions {
             return UIAction(title: title ?? item.title, image: item.image) { [weak host] _ in
                 copyHandle(target) { host?.showHandleCopiedNotice() }
             }
-        case .profile, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
+        case .profile, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .follow, .showReblogs, .notify, .mute, .block:
             return nil
         }
     }

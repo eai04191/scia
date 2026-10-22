@@ -200,6 +200,19 @@ final class ProfileController {
         showEntries(animatesRemoval: true)
     }
 
+    /// ユーザーのメニューで変えた関係を反映する。フォローを変えたら、フォロワー数のためにアカウントを読み直す。
+    func apply(_ relationship: Relationship, reloadsAccount: Bool) {
+        store.apply(relationship)
+        guard reloadsAccount else { return }
+        run { controller in
+            do {
+                try await controller.store.reloadAccount()
+            } catch {
+                controller.logger.error("account reload after relation change failed: \(SciaLog.describe(error), privacy: .public)")
+            }
+        }
+    }
+
     /// 開いているプロフィールのアカウントのID。
     var accountID: String { store.account.id }
 

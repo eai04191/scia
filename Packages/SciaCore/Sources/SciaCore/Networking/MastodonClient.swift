@@ -461,15 +461,43 @@ public struct MastodonClient: Sendable {
     }
 
     /// 鍵のかかったアカウントには、フォローのリクエストを送る。
+    /// フォローしている相手にもう一度送ると、ブーストを流すかと投稿の通知の設定だけを変えられる。nilの設定は送らず、サーバーの既定（新しいフォローなら流す・通知しない、フォロー済みなら今のまま）に任せる。
     /// https://docs.joinmastodon.org/methods/accounts/#follow
-    public func follow(_ id: String) async throws -> Relationship {
-        try await post(Relationship.self, path: "api/v1/accounts/\(id)/follow", form: []).0
+    public func follow(_ id: String, reblogs: Bool? = nil, notify: Bool? = nil) async throws -> Relationship {
+        var form: [URLQueryItem] = []
+        if let reblogs { form.append(URLQueryItem(name: "reblogs", value: reblogs ? "true" : "false")) }
+        if let notify { form.append(URLQueryItem(name: "notify", value: notify ? "true" : "false")) }
+        return try await post(Relationship.self, path: "api/v1/accounts/\(id)/follow", form: form).0
     }
 
     /// フォローを外す。承認を待っているリクエストも取り消す。
     /// https://docs.joinmastodon.org/methods/accounts/#unfollow
     public func unfollow(_ id: String) async throws -> Relationship {
         try await post(Relationship.self, path: "api/v1/accounts/\(id)/unfollow", form: []).0
+    }
+
+    /// 相手の投稿と、相手からの通知を隠す。通知を隠すかの`notifications`はサーバーの既定（隠す）に任せる。
+    /// - Parameter duration: ミュートを続ける時間。nilなら解除するまで続ける。
+    /// https://docs.joinmastodon.org/methods/accounts/#mute
+    public func mute(_ id: String, duration: Duration?) async throws -> Relationship {
+        let form = duration.map { [URLQueryItem(name: "duration", value: "\($0.components.seconds)")] } ?? []
+        return try await post(Relationship.self, path: "api/v1/accounts/\(id)/mute", form: form).0
+    }
+
+    /// https://docs.joinmastodon.org/methods/accounts/#unmute
+    public func unmute(_ id: String) async throws -> Relationship {
+        try await post(Relationship.self, path: "api/v1/accounts/\(id)/unmute", form: []).0
+    }
+
+    /// ブロックすると、サーバーはお互いのフォローを外す。
+    /// https://docs.joinmastodon.org/methods/accounts/#block
+    public func block(_ id: String) async throws -> Relationship {
+        try await post(Relationship.self, path: "api/v1/accounts/\(id)/block", form: []).0
+    }
+
+    /// https://docs.joinmastodon.org/methods/accounts/#unblock
+    public func unblock(_ id: String) async throws -> Relationship {
+        try await post(Relationship.self, path: "api/v1/accounts/\(id)/unblock", form: []).0
     }
 
     /// 通知を1件削除する。応答の中身は使わない。

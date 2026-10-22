@@ -289,6 +289,56 @@ struct NotificationStoreTests {
         #expect(!store.removeStatus("100"))
     }
 
+    /// ミュートかブロックした相手からの通知を除き、あとから届いても足さない。解除したら、また足す。
+    @Test func excludeAccountRemovesItsNotificationsUntilIncluded() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/carol.png"))
+        let carol = Account(id: "9", username: "carol", acct: "carol", displayName: "Carol", avatar: avatar)
+        func carols(_ id: Int) -> MastodonNotification {
+            MastodonNotification(id: String(id), type: .follow, createdAt: Date(timeIntervalSince1970: TimeInterval(id)), account: carol, status: nil)
+        }
+        let queue = PageQueue([.success([carols(30)] + (try notifications([29])))])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        #expect(store.excludeAccount("9"))
+        #expect(ids(store) == ["29"])
+        #expect(!store.receive(carols(31)))
+
+        store.includeAccount("9")
+        #expect(store.receive(carols(32)))
+    }
+
+    /// 古いページを読んでいる間にミュートかブロックをして、届いたページが全部その人の通知でも、ページの一番古い通知の先から続きを読む。
+    @Test func olderPageOfExcludedAccountStillAdvances() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/carol.png"))
+        let carol = Account(id: "9", username: "carol", acct: "carol", displayName: "Carol", avatar: avatar)
+        let carols = [29, 28, 27].map { MastodonNotification(id: String($0), type: .follow, createdAt: Date(timeIntervalSince1970: TimeInterval($0)), account: carol, status: nil) }
+        let gate = PageGate(NotificationPage(notifications: carols))
+        let queries = Mutex<[String?]>([])
+        let initial = try notifications([30])
+        let older = try notifications([26])
+        let store = NotificationStore(pageSize: Self.pageSize) { query in
+            queries.withLock { $0.append(query.maxID) }
+            switch query.maxID {
+            case nil: return NotificationPage(notifications: initial)
+            case "30": return await gate.fetch()
+            case "27": return NotificationPage(notifications: older)
+            default: return NotificationPage(notifications: [])
+            }
+        }
+        _ = try await store.loadInitial()
+        await gate.hold()
+        let read = Task { try await store.loadOlder() }
+        await gate.waitForRequest()
+
+        store.excludeAccount("9")
+        await gate.release()
+        _ = try await read.value
+
+        #expect(ids(store) == ["30", "26"])
+        #expect(queries.withLock { $0 } == [nil, "30", "27"])
+    }
+
     /// 削除の前に読み始めたページや、遅れて届いた通知で、削除した投稿についての通知を戻さない。
     @Test func deletedStatusNotificationsDoNotReturn() async throws {
         let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
@@ -314,8 +364,13 @@ struct NotificationStoreTests {
         let older = MastodonNotification(id: "200", type: .favourite, createdAt: .now, account: account, status: target)
         let newer = MastodonNotification(id: "300", type: .favourite, createdAt: .now, account: account, status: target)
         let gate = PageGate(NotificationPage(notifications: [older]))
+        // 届いたページの通知が全部除かれても、その先を読みに行く。その先は空にして、読み終える。
         let store = NotificationStore(pageSize: 40) { query in
-            query.maxID == nil ? NotificationPage(notifications: [newer]) : await gate.fetch()
+            switch query.maxID {
+            case nil: NotificationPage(notifications: [newer])
+            case "300": await gate.fetch()
+            default: NotificationPage(notifications: [])
+            }
         }
         _ = try await store.loadInitial()
         await gate.hold()

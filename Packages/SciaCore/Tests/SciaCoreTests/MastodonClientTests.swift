@@ -434,11 +434,11 @@ struct MastodonClientTests {
         let url = try #require(await transport.requests.first?.url)
         #expect(url.path() == "/api/v1/accounts/relationships")
         #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems == [URLQueryItem(name: "id[]", value: "2")])
-        #expect(relationship == Relationship(id: "2", followedBy: true, requested: true))
+        #expect(relationship == Relationship(id: "2", showingReblogs: false, followedBy: true, requested: true))
     }
 
     @Test func followAndUnfollowPostToAccount() async throws {
-        let relationship = #"{"id":"2","following":true,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false}"#
+        let relationship = #"{"id":"2","following":true,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false}"#
         let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
         let client = try makeClient(transport)
 
@@ -450,8 +450,42 @@ struct MastodonClientTests {
         #expect(requests.map { $0.url?.path() } == ["/api/v1/accounts/2/follow", "/api/v1/accounts/2/unfollow"])
     }
 
+    /// フォローの設定は渡したものだけを送り、渡さなければサーバーの既定に任せる。
+    @Test func followSendsOnlyGivenSettings() async throws {
+        let relationship = #"{"id":"2","following":true,"showing_reblogs":false,"notifying":true,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false}"#
+        let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
+        let client = try makeClient(transport)
+
+        let changed = try await client.follow("2", reblogs: false, notify: true)
+        _ = try await client.follow("2", notify: false)
+        _ = try await client.follow("2")
+
+        #expect(!changed.showingReblogs)
+        #expect(changed.notifying)
+        let bodies = await transport.requests.map { $0.httpBody.map { String(decoding: $0, as: UTF8.self) } ?? "" }
+        #expect(bodies == ["reblogs=false&notify=true", "notify=false", ""])
+    }
+
+    /// ミュートの時間は秒で送り、無期限なら送らない（サーバーの既定の0が無期限）。ミュート、ブロックと解除は、それぞれのパスにPOSTする。
+    @Test func muteBlockAndTheirUndoPostToAccount() async throws {
+        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":true,"muting_notifications":true}"#
+        let transport = StubTransport(Array(repeating: .json(relationship, statusCode: 200), count: 5))
+        let client = try makeClient(transport)
+
+        #expect(try await client.mute("2", duration: .seconds(3_600)).mutingNotifications)
+        _ = try await client.mute("2", duration: nil)
+        _ = try await client.unmute("2")
+        _ = try await client.block("2")
+        _ = try await client.unblock("2")
+
+        let requests = await transport.requests
+        #expect(requests.map(\.httpMethod) == Array(repeating: "POST", count: 5))
+        #expect(requests.map { $0.url?.path() } == ["/api/v1/accounts/2/mute", "/api/v1/accounts/2/mute", "/api/v1/accounts/2/unmute", "/api/v1/accounts/2/block", "/api/v1/accounts/2/unblock"])
+        #expect(requests.map { $0.httpBody.map { String(decoding: $0, as: UTF8.self) } ?? "" } == ["duration=3600", "", "", "", ""])
+    }
+
     @Test func authorizeAndRejectFollowRequestPostToFollowRequests() async throws {
-        let relationship = #"{"id":"2","following":false,"followed_by":true,"requested":false,"blocking":false,"blocked_by":false,"muting":false}"#
+        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":true,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false}"#
         let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
         let client = try makeClient(transport)
 

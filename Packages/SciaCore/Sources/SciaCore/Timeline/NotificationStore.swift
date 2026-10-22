@@ -24,6 +24,8 @@ public final class NotificationStore {
 
     /// 削除した投稿のID。削除の前に読み始めたページや、遅れて届いた通知で、その投稿についての通知を戻さない。
     private var deletedStatusIDs: Set<Status.ID> = []
+    /// 通知を隠すミュートか、ブロックをした相手のアカウントのID。その人からの通知を除き、あとから届いても足さない。
+    private var excludedAccountIDs: Set<String> = []
     /// 使う人の操作で一覧から除いた通知のID（承認か却下で片づけたフォローリクエストなど）。サーバーは除いた通知を消すが、その前に読み始めたページで戻さない。
     /// 同じ通知がそのページで読めなかったときも、読めなかった行として戻さない。
     private var removedNotificationIDs: Set<MastodonNotification.ID> = []
@@ -115,8 +117,10 @@ public final class NotificationStore {
                 reachedEnd = true
             }
             let added = merge(page)
-            // 削除済みの投稿についての通知しかなかったときなど、続きを読む位置が進まなければ、同じページを読み続けないよう止める。
-            guard added.isEmpty, !page.isEmpty, page.unreadable.isEmpty, let next = itemIDs.last, next != maxID else {
+            // 削除済みの投稿についての通知や、ミュートかブロックした相手の通知しかなかったときは、一覧に残らないため、ページの一番古い通知の先へ進む。
+            // それでも続きを読む位置が進まなければ、同じページを読み続けないよう止める。
+            let pageOldestID = (page.notifications.map(\.id) + page.unreadable.map(\.id)).reduce(itemIDs.last) { oldest, id in oldest.map { Self.older($0, id) } ?? id }
+            guard added.isEmpty, !page.isEmpty, page.unreadable.isEmpty, let next = pageOldestID, next != maxID else {
                 return added
             }
             maxID = next
@@ -257,6 +261,22 @@ public final class NotificationStore {
         return true
     }
 
+    /// 通知を隠すミュートか、ブロックをした相手からの通知を除く。あとから届いても足さない。表示に関わる変化があればtrueを返す。
+    @discardableResult
+    public func excludeAccount(_ id: String) -> Bool {
+        excludedAccountIDs.insert(id)
+        pending.removeAll(where: isDiscarded)
+        let remaining = notifications.filter { !isDiscarded($0) }
+        guard remaining.count != notifications.count else { return false }
+        notifications = remaining
+        return true
+    }
+
+    /// ミュートやブロックを解除した相手からの通知を、また足すようにする。除いた通知は戻さず、読み込み直したときに戻る。
+    public func includeAccount(_ id: String) {
+        excludedAccountIDs.remove(id)
+    }
+
     /// 承認か却下で片づけたフォローリクエストの通知と、同じユーザーからのほかのフォローリクエストの通知を除く。表示に関わる変化があればtrueを返す。
     /// 片づけた通知は、応答を待つ間に補完で一覧から外れていても、IDを覚えて戻さない。
     @discardableResult
@@ -370,7 +390,7 @@ public final class NotificationStore {
     /// まだない通知と読めなかった通知を足し、足した通知を新しい順に返す。読めなかった通知と同じIDの通知は、読めなかった行と置き換える。
     /// 削除した投稿についての通知か、片づけたフォローリクエストの通知。
     private func isDiscarded(_ notification: MastodonNotification) -> Bool {
-        removedNotificationIDs.contains(notification.id) || isAboutDeletedStatus(notification)
+        removedNotificationIDs.contains(notification.id) || isAboutDeletedStatus(notification) || excludedAccountIDs.contains(notification.account.id)
     }
 
     private func isAboutDeletedStatus(_ notification: MastodonNotification) -> Bool {

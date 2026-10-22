@@ -269,9 +269,21 @@ public final class ProfileStore {
         }
         isChangingFollow = true
         defer { isChangingFollow = false }
-        relationship = try await follows ? api.follow(account.id) : api.unfollow(account.id)
+        let followChangesAtRequest = followChanges
+        let changed = try await follows ? api.follow(account.id) : api.unfollow(account.id)
+        // 応答を待つ間に、ユーザーのメニューで関係を変えていたら（`apply`）、そちらが新しいので戻さない。
+        guard followChanges == followChangesAtRequest else { return true }
+        relationship = changed
         followChanges += 1
         return true
+    }
+
+    /// ユーザーのメニューなど、ほかの画面で変えた関係を反映する。前に頼んだ読み直しの応答が後から届いても、古い関係として捨てる。
+    public func apply(_ relationship: Relationship) {
+        guard !isMyself, relationship.id == account.id else { return }
+        self.relationship = relationship
+        relationshipFailed = false
+        followChanges += 1
     }
 
     /// アカウントだけを読み直す。

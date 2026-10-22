@@ -204,6 +204,61 @@ struct ProfileStoreTests {
         #expect(cache[known.id]?.following == true)
     }
 
+    /// ユーザーのメニューで変えた関係を反映して覚え、変える前に頼んだ関係の読み込みが後から届いても戻さない。
+    @Test func appliedRelationshipWinsOverEarlierLoad() async throws {
+        let known = try account()
+        let cache = RelationshipCache()
+        let gate = Gate()
+        let api = ProfileStore.API(
+            account: { _ in known },
+            relationship: { id in
+                await gate.enter()
+                return Relationship(id: id)
+            },
+            statuses: { _, _, _ in TimelinePage(statuses: [], isRegenerating: false) },
+            follow: { id in Relationship(id: id, following: true) },
+            unfollow: { id in Relationship(id: id) }
+        )
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: api)
+
+        let load = Task { await store.loadProfile() }
+        await gate.waitUntilEntered()
+        store.apply(Relationship(id: "2", blocking: true))
+        await gate.open()
+        _ = await load.value
+
+        #expect(store.followState == .blocked)
+        #expect(cache[known.id]?.blocking == true)
+    }
+
+    /// フォローのボタンの応答を待つ間に、ユーザーのメニューで関係を変えたら、遅れて届いたフォローの応答で戻さない。
+    @Test func appliedRelationshipWinsOverEarlierFollowResponse() async throws {
+        let known = try account()
+        let cache = RelationshipCache()
+        cache[known.id] = Relationship(id: "2")
+        let gate = Gate()
+        let api = ProfileStore.API(
+            account: { _ in known },
+            relationship: { id in Relationship(id: id) },
+            statuses: { _, _, _ in TimelinePage(statuses: [], isRegenerating: false) },
+            follow: { id in
+                await gate.enter()
+                return Relationship(id: id, following: true)
+            },
+            unfollow: { id in Relationship(id: id) }
+        )
+        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: api)
+
+        let follow = Task { try await store.toggleFollow() }
+        await gate.waitUntilEntered()
+        store.apply(Relationship(id: "2", blocking: true))
+        await gate.open()
+        _ = try await follow.value
+
+        #expect(store.followState == .blocked)
+        #expect(cache[known.id]?.blocking == true)
+    }
+
     /// 読み直しに失敗しても、前に読んだ関係があれば、読めなかった表示にせずそのまま出す。
     @Test func cachedRelationshipStaysWhenReloadFails() async throws {
         let known = try account()

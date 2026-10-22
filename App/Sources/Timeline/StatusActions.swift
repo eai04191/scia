@@ -295,10 +295,12 @@ extension TimelineViewController {
     private func userElement(for user: MenuUser, id: ItemID) -> UIMenuElement? {
         let groups = settings.userMenuLayout.groups
         let handlers = urlHandlers(id: id)
-        if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first?.items, only.count == 1 {
-            return userAction(only[0], for: user, handlers: handlers, inSubmenu: false)
+        let load = relationLoad(for: user)
+        // 関係の項目は読んでから中身が決まり、名前に相手を入れられないため、1つだけでもサブメニューにする。
+        if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first?.items, only.count == 1, !only[0].isRelation {
+            return userElement(only[0], for: user, handlers: handlers, load: load, inSubmenu: false)
         }
-        let children = groups.menuElements { item in userAction(item, for: user, handlers: handlers, inSubmenu: true).map { [$0] } ?? [] }
+        let children = groups.menuElements { item in userElement(item, for: user, handlers: handlers, load: load, inSubmenu: true).map { [$0] } ?? [] }
         guard !children.isEmpty else { return nil }
         let parts = user.acct.split(separator: "@", maxSplits: 1)
         return UIMenu(
@@ -322,11 +324,26 @@ extension TimelineViewController {
             },
             open: { [weak self] url, browser in self?.openURL(url, in: browser) }
         )
+        let user = MenuUser.account(account)
+        let load = relationLoad(for: user)
         let children = settings.userMenuLayout.groups.menuElements { item in
             guard item != .profile else { return [] }
-            return userAction(item, for: .account(account), handlers: handlers, inSubmenu: true).map { [$0] } ?? []
+            return userElement(item, for: user, handlers: handlers, load: load, inSubmenu: true).map { [$0] } ?? []
         }
         return children.isEmpty ? nil : UIMenu(children: children)
+    }
+
+    /// メニューを1回開く間、関係の項目で分け合う関係の読み込み。
+    private func relationLoad(for user: MenuUser) -> UserRelationLoad? {
+        guard let userMenuActions else { return nil }
+        let target = UserMenuTarget.account(id: user.id, acct: user.acct)
+        return UserRelationLoad { try await userMenuActions.loadRelation(target) }
+    }
+
+    private func userElement(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, load: UserRelationLoad?, inSubmenu: Bool) -> UIMenuElement? {
+        guard item.isRelation else { return userAction(item, for: user, handlers: handlers, inSubmenu: inSubmenu) }
+        guard let userMenuActions, let load else { return nil }
+        return userMenuActions.relationElement(item, load: load, showsFailure: item == settings.userMenuLayout.groups.firstRelationItem)
     }
 
     private func userAction(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, inSubmenu: Bool) -> UIAction? {
@@ -342,10 +359,10 @@ extension TimelineViewController {
                 }
             }
         case .mention:
-            return userMenuActions?.action(item, target: .acct(user.acct), title: inSubmenu ? nil : "@\(user.acct)にメンション", notifying: self)
+            return userMenuActions?.action(item, target: .account(id: user.id, acct: user.acct), title: inSubmenu ? nil : "@\(user.acct)にメンション", notifying: self)
         case .copyHandle:
-            return userMenuActions?.action(item, target: .acct(user.acct), title: inSubmenu ? nil : "@\(user.acct)のハンドルをコピー", notifying: self)
-        case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
+            return userMenuActions?.action(item, target: .account(id: user.id, acct: user.acct), title: inSubmenu ? nil : "@\(user.acct)のハンドルをコピー", notifying: self)
+        case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .follow, .showReblogs, .notify, .mute, .block:
             // 共通の項目は、上で中身から組んだ。
             return nil
         }

@@ -723,44 +723,152 @@ final class SessionController {
         source?.navigationController?.pushViewController(viewController, animated: true)
     }
 
-    /// ユーザーのメニューのメンションとハンドルをコピー。メンションは、編集の途中でも編集中の本文に入れる。
+    /// ユーザーのメニューのメンション、ハンドルをコピー、関係の項目。メンションは、編集の途中でも編集中の本文に入れる。
     private var userMenuActions: UserMenuActions {
         UserMenuActions(
             mention: { [weak self] target in
-                self?.resolveAcct(of: target, failureTitle: "メンションできませんでした") { acct in
+                self?.resolveIdentity(of: target, failureTitle: "メンションできませんでした") { _, acct in
                     UserAction.mention.record()
                     self?.composer.mention(acct)
                 }
             },
             copyHandle: { [weak self] target, notify in
-                self?.resolveAcct(of: target, failureTitle: "ハンドルをコピーできませんでした") { acct in
+                self?.resolveIdentity(of: target, failureTitle: "ハンドルをコピーできませんでした") { _, acct in
                     guard let self else { return }
                     UIPasteboard.general.string = self.credential.handle(ofAcct: acct)
                     notify()
                 }
+            },
+            loadRelation: { [weak self] target in
+                try await self?.relation(of: target)
+            },
+            changeRelation: { [weak self] change, relation in
+                self?.confirmChanging(change, of: relation)
             }
         )
     }
 
-    /// ユーザーのメニューの相手の`acct`を決めて`proceed`に渡す。リンクから選んだ相手は、プロフィールのURLで引く。引けなければ知らせて、`proceed`を呼ばない。
-    private func resolveAcct(of target: UserMenuTarget, failureTitle: String, proceed: @escaping @MainActor (String) -> Void) {
+    /// ユーザーのメニューの相手のIDと`acct`。リンクから選んだ相手は、プロフィールのURLで引く。見つからなければ`ProfileNotFound`を投げる。
+    private func identity(of target: UserMenuTarget) async throws -> (id: String, acct: String) {
         switch target {
-        case .acct(let acct):
-            proceed(acct)
+        case .account(let id, let acct):
+            return (id, acct)
         case .profileURL(let url, let shownAcct):
-            let client = client
-            Task {
-                do {
-                    guard let account = try await client.resolveAccount(url.absoluteString) else {
-                        logger.error("user menu target not found url=\(url.absoluteString, privacy: .public)")
-                        handle(ProfileNotFound(acct: shownAcct), title: failureTitle)
-                        return
-                    }
-                    proceed(account.acct)
-                } catch {
-                    logger.error("user menu target resolve failed: \(SciaLog.describe(error), privacy: .public)")
-                    handle(error, title: failureTitle)
+            guard let account = try await client.resolveAccount(url.absoluteString) else {
+                logger.error("user menu target not found url=\(url.absoluteString, privacy: .public)")
+                throw ProfileNotFound(acct: shownAcct)
+            }
+            return (account.id, account.acct)
+        }
+    }
+
+    /// 相手のIDと`acct`を決めて`proceed`に渡す。決められなければ知らせて、`proceed`を呼ばない。
+    private func resolveIdentity(of target: UserMenuTarget, failureTitle: String, proceed: @escaping @MainActor (String, String) -> Void) {
+        if case .account(let id, let acct) = target {
+            proceed(id, acct)
+            return
+        }
+        Task {
+            do {
+                let identity = try await identity(of: target)
+                proceed(identity.id, identity.acct)
+            } catch {
+                logger.error("user menu target resolve failed: \(SciaLog.describe(error), privacy: .public)")
+                handle(error, title: failureTitle)
+            }
+        }
+    }
+
+    /// ユーザーのメニューの関係の項目のために、相手との関係を読む。自分ならnil。開き直したプロフィールが同じ関係から始まるよう、読んだ関係を覚える。
+    private func relation(of target: UserMenuTarget) async throws -> UserRelation? {
+        let identity = try await identity(of: target)
+        guard identity.id != credential.accountID else { return nil }
+        guard let relationship = try await client.relationship(with: identity.id) else {
+            throw ProfileNotFound(acct: identity.acct)
+        }
+        profiles.relationships[identity.id] = relationship
+        return UserRelation(accountID: identity.id, acct: identity.acct, relationship: relationship)
+    }
+
+    /// フォローを外す、リクエストを取り消す、ブロックは、押し間違えに備えて確かめてから送る。プロフィール画面のフォローのボタンと同じく、フォローとミュートは確かめずに送る。
+    private func confirmChanging(_ change: UserRelationChange, of relation: UserRelation) {
+        let confirmation: (title: String, message: String?, action: String)
+        switch change {
+        case .unfollow:
+            confirmation = ("@\(relation.acct)のフォローを外しますか？", nil, "フォローを外す")
+        case .cancelFollowRequest:
+            confirmation = ("@\(relation.acct)へのフォローのリクエストを取り消しますか？", nil, "リクエストを取り消す")
+        case .block:
+            confirmation = ("@\(relation.acct)をブロックしますか？", "相手の投稿と通知が表示されなくなり、お互いのフォローが外れます。", "ブロック")
+        case .follow, .showReblogs, .notify, .mute, .unmute, .unblock:
+            send(change, to: relation)
+            return
+        }
+        let alert = UIAlertController(title: confirmation.title, message: confirmation.message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        alert.addAction(UIAlertAction(title: confirmation.action, style: .destructive) { [weak self] _ in
+            self?.send(change, to: relation)
+        })
+        topViewController.present(alert, animated: true)
+    }
+
+    /// 関係の変更を送り、結果を開いているプロフィールに反映する。ミュートとブロックは、Mastodonのドキュメントに従い、ホームと通知の一覧からも相手を除く。
+    private func send(_ change: UserRelationChange, to relation: UserRelation) {
+        let client = client
+        let id = relation.accountID
+        logger.info("user relation change: \(String(describing: change), privacy: .public)")
+        Task {
+            do {
+                let relationship = switch change {
+                case .follow: try await client.follow(id)
+                case .unfollow, .cancelFollowRequest: try await client.unfollow(id)
+                case .showReblogs(let shows): try await client.follow(id, reblogs: shows)
+                case .notify(let notifies): try await client.follow(id, notify: notifies)
+                case .mute(let duration): try await client.mute(id, duration: duration)
+                case .unmute: try await client.unmute(id)
+                case .block: try await client.block(id)
+                case .unblock: try await client.unblock(id)
                 }
+                apply(relationship, after: change)
+            } catch {
+                logger.error("user relation change failed: \(SciaLog.describe(error), privacy: .public)")
+                handle(error, title: change.failureTitle)
+            }
+        }
+    }
+
+    private func apply(_ relationship: Relationship, after change: UserRelationChange) {
+        profiles.apply(relationship, reloadsAccount: change.changesFollow)
+        switch change {
+        case .mute, .unmute, .block, .unblock:
+            excludeInLists(relationship)
+            if case .mute(let duration?) = change {
+                includeAfterMuteExpires(relationship.id, duration: duration)
+            }
+        case .follow, .unfollow, .cancelFollowRequest, .showReblogs, .notify:
+            break
+        }
+        notices.showTransient(Notice(id: "user.relationChanged", kind: .success, title: change.doneTitle(relationship)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+    }
+
+    /// ミュートかブロックしている相手を、ホームと通知の一覧から除く。どちらでもなくなったら、また足すようにする。
+    private func excludeInLists(_ relationship: Relationship) {
+        home.setAccount(relationship.id, excluded: relationship.blocking || relationship.muting)
+        notifications.setAccount(relationship.id, excluded: relationship.blocking || (relationship.muting && relationship.mutingNotifications))
+    }
+
+    /// 期間を決めたミュートは、期限が来たら関係を読み直し、ミュートが明けていれば、一覧から除くのをやめる。
+    /// 読み直すのは、その間にブロックしたり、期間を選び直したりしていることがあるため。読めなければ、起動し直すまで除いたままにする。
+    /// Mastodonは期限の時刻に予約したジョブ（`DeleteMuteWorker`）でミュートを消すため、ちょうどの時刻ではまだ残っていることがある。1分おいてから読む。
+    private func includeAfterMuteExpires(_ accountID: String, duration: Duration) {
+        let client = client
+        Task { [weak self] in
+            try? await Task.sleep(for: duration + .seconds(60))
+            do {
+                guard let relationship = try await client.relationship(with: accountID), !relationship.muting else { return }
+                self?.excludeInLists(relationship)
+            } catch {
+                self?.logger.error("relationship reload after mute expired failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }
     }
@@ -1397,6 +1505,16 @@ private final class ProfileRegistry {
         entries.removeAll { $0.controller == nil }
         for entry in entries {
             entry.controller?.removeStatus(id)
+        }
+    }
+
+    /// ユーザーのメニューで変えた関係を、開いている相手のプロフィールに反映して覚える。
+    /// - Parameter reloadsAccount: フォローを変えた。フォローのAPIは関係だけを返し、フォロワー数は古いままなので、アカウントを読み直す。
+    func apply(_ relationship: Relationship, reloadsAccount: Bool) {
+        relationships[relationship.id] = relationship
+        entries.removeAll { $0.controller == nil }
+        for entry in entries where entry.controller?.accountID == relationship.id {
+            entry.controller?.apply(relationship, reloadsAccount: reloadsAccount)
         }
     }
 
