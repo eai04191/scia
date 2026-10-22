@@ -73,6 +73,82 @@ struct LinkLabelTests {
         #expect(truncated.link(at: point) == .url(url))
     }
 
+    /// 「…」で切った最後の行で、「…」に置き換わって描かれていないリンクは、押しても当たりにしない。
+    @Test func ignoresLinkReplacedByEllipsis() throws {
+        let url = try #require(URL(string: "https://example.com/a"))
+        // 区切りのない長い英字は文字ごとに折り返すので、3行目の行末まで文字が詰まる。
+        let text = RichText(blocks: [
+            .init(inlines: [.text("1行目の文章です。", []), .link(String(repeating: "a", count: 300), .url(url), [])]),
+        ])
+        let whole = label(for: text)
+        let truncated = truncatedLabel(text, lines: 3)
+        // 切らずに描いたラベルで、3行目の行末の位置を測る。
+        let layout = whole.textLayout(of: try #require(whole.attributedText))
+        var lineEnds: [(minY: CGFloat, maxX: CGFloat)] = []
+        layout.layoutManager.enumerateTextLayoutFragments(from: layout.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
+            for line in fragment.textLineFragments {
+                lineEnds.append((fragment.layoutFragmentFrame.minY + line.typographicBounds.minY, line.typographicBounds.maxX))
+            }
+            return true
+        }
+        let third = try #require(lineEnds.dropFirst(2).first)
+        let ellipsisWidth = ("…" as NSString).size(withAttributes: [.font: UIFont.preferredFont(forTextStyle: .body)]).width
+        #expect(third.maxX > truncated.bounds.width - ellipsisWidth, "3行目の行末の文字は「…」に置き換わる")
+        let lineY = third.minY + 8
+        let lineEnd = CGPoint(x: third.maxX - 1, y: lineY)
+
+        #expect(whole.link(at: lineEnd) == .url(url), "切らなければ押せる位置")
+        #expect(truncated.link(at: lineEnd) == nil)
+        #expect(truncated.link(at: CGPoint(x: 20, y: lineY)) == .url(url), "「…」より前のリンクは押せる")
+    }
+
+    /// 最後の行に入りきらない単語のリンクも、UILabelは「…」の前まで途中を描くので、見えている部分を押せる。
+    /// 段落を折り返しにして並べ直すと、単語ごと次の行に送られて、見えている部分が並ばない。
+    @Test func findsPartlyShownLinkOnLastLine() throws {
+        let url = try #require(URL(string: "https://example.com/a"))
+        let prefix = "3行目にある長めの文章 "
+        let text = RichText(blocks: [
+            .init(inlines: [
+                .text("1行目", []), .lineBreak, .text("2行目", []), .lineBreak,
+                .text(prefix, []), .link("abcdefghijklmnopqrst", .url(url), []), .text(" そのあとの文章", []),
+            ]),
+        ])
+        let truncated = truncatedLabel(text, lines: 3)
+        let prefixWidth = (prefix as NSString).size(withAttributes: [.font: UIFont.preferredFont(forTextStyle: .body)]).width
+
+        #expect(truncated.link(at: CGPoint(x: prefixWidth + 15, y: truncated.bounds.height - 8)) == .url(url))
+    }
+
+    /// 右から左に書く文字を含む段落でも、「…」で切った最後の行の、見えているリンクは押せる。
+    @Test func findsLinkOnLastLineOfParagraphWithRightToLeftText() throws {
+        let url = try #require(URL(string: "https://example.com/a"))
+        let text = RichText(blocks: [
+            .init(inlines: [
+                .text("1行目", []), .lineBreak, .text("2行目", []), .lineBreak,
+                .link("example", .url(url), []), .text(" の次に שלום עולם と書いた、とても長い文章がまだまだ続いていきます", []),
+            ]),
+        ])
+        let truncated = truncatedLabel(text, lines: 3)
+
+        #expect(truncated.link(at: CGPoint(x: 20, y: truncated.bounds.height - 8)) == .url(url))
+    }
+
+    /// `text`を、段落を末尾で「…」で切る設定にして、`lines`行に限ったラベル。
+    private func truncatedLabel(_ text: RichText, lines: Int) -> LinkLabel {
+        let label = label(for: text)
+        let attributed = NSMutableAttributedString(attributedString: label.attributedText ?? NSAttributedString())
+        attributed.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: attributed.length)) { value, range, _ in
+            let style = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
+            style.lineBreakMode = .byTruncatingTail
+            attributed.addAttribute(.paragraphStyle, value: style, range: range)
+        }
+        label.numberOfLines = lines
+        label.attributedText = attributed
+        let size = label.sizeThatFits(CGSize(width: 300, height: CGFloat.greatestFiniteMagnitude))
+        label.frame = CGRect(origin: .zero, size: CGSize(width: 300, height: size.height))
+        return label
+    }
+
     /// 行末より右を押しても、近くのリンクを押したことにしない。
     @Test func ignoresPointPastLineEnd() throws {
         let url = try #require(URL(string: "https://example.com/a"))

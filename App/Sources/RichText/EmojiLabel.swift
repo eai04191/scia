@@ -137,7 +137,6 @@ class EmojiLabel: UILabel {
     private func stillEmojiIndices(in layout: TextLayout) -> Set<Int> {
         guard let sourceText else { return [] }
         let visible = bounds.insetBy(dx: -1, dy: -1)
-        let lastLineMinY = isTruncatedWithEllipsis() ? lastVisibleLineMinY(in: layout) : nil
         var indices: Set<Int> = []
         sourceText.enumerateAttribute(.customEmoji, in: NSRange(location: 0, length: sourceText.length)) { value, range, _ in
             guard value != nil else { return }
@@ -146,7 +145,7 @@ class EmojiLabel: UILabel {
                     indices.insert(index)
                     continue
                 }
-                if let lastLineMinY, frame.midY >= lastLineMinY, !staysBeforeEllipsis(frame, at: index, in: sourceText) {
+                if mayBeReplacedByEllipsis(frame, at: index, in: layout) {
                     indices.insert(index)
                 }
             }
@@ -154,8 +153,17 @@ class EmojiLabel: UILabel {
         return indices
     }
 
-    /// 最後の行の`index`の絵文字が、末尾を「…」に置き換えても、並べた位置のまま残るか。
-    /// 末尾で切る左寄せの左から右へ書く行で、絵文字の右端に「…」の幅を足しても行に収まるとき。
+    /// `index`の文字（並べた枠は`frame`）が、UILabelが末尾を「…」に置き換えた部分に入るかもしれないか。
+    /// 「…」で切られていないときと、見える最後の行より上の文字はfalse。置き換えた部分の文字は描かれないので、動かす層を重ねない。
+    /// 並べ直しでも最後の行を「…」で切るので、置き換わった文字はふつう並びから外れるが、絵文字の層が「…」の上に残ると目立つため、位置の分からない行はまとめて止める。
+    /// リンクの当たり判定には使わない。位置の分からない行で、見えているリンクまで押せなくなるため。
+    private func mayBeReplacedByEllipsis(_ frame: CGRect, at index: Int, in layout: TextLayout) -> Bool {
+        guard let attributedText, isTruncatedWithEllipsis(), let lastLineMinY = lastVisibleLineMinY(in: layout), frame.midY >= lastLineMinY else { return false }
+        return !staysBeforeEllipsis(frame, at: index, in: attributedText)
+    }
+
+    /// 最後の行の`index`の文字が、末尾を「…」に置き換えても、並べた位置のまま残るか。
+    /// 末尾で切る左寄せの左から右へ書く行で、文字の右端に「…」の幅を足しても行に収まるとき。
     private func staysBeforeEllipsis(_ frame: CGRect, at index: Int, in text: NSAttributedString) -> Bool {
         guard effectiveUserInterfaceLayoutDirection == .leftToRight, !Self.containsRightToLeft(paragraphAt: index, in: text) else { return false }
         let style = text.attribute(.paragraphStyle, at: index, effectiveRange: nil) as? NSParagraphStyle
@@ -261,7 +269,8 @@ class EmojiLabel: UILabel {
         let container = NSTextContainer(size: CGSize(width: bounds.width, height: 0))
         container.lineFragmentPadding = 0
         container.maximumNumberOfLines = numberOfLines
-        container.lineBreakMode = Self.truncatingModes.contains(lineBreakMode) ? .byWordWrapping : lineBreakMode
+        // 段落は折り返しにして、コンテナで最後の行だけを「…」で切る。最後の行に入りきらない単語も、UILabelと同じく「…」の前まで途中を並べる。
+        container.lineBreakMode = truncationMode(of: attributedText) ?? lineBreakMode
         layoutManager.textContainer = container
         contentStorage.attributedString = Self.wrappingInsteadOfTruncating(alignedLikeLabel(attributedText))
         layoutManager.ensureLayout(for: layoutManager.documentRange)
@@ -274,7 +283,19 @@ class EmojiLabel: UILabel {
 
     /// 段落の「…」で切る設定を、単語で折り返す設定に替えた文字列。
     /// UILabelは、行数を限ったときも折り返してから最後の行だけを「…」で切るが、TextKit 2は「…」で切る段落を折り返さずに1行に並べる。
-    /// そのまま並べると、2行目より後の文字の位置がUILabelの描画と合わないため、折り返して並べる。最後の行で「…」より前の文字は、この並びの位置に描かれる。
+    /// そのまま並べると、2行目より後の文字の位置がUILabelの描画と合わないため、段落は折り返して並べ、最後の行はコンテナの設定で「…」で切る。
+    /// ラベルか段落の「…」で切る設定。UILabelは文字列を入れると段落の設定で自分の`lineBreakMode`を上書きするので、段落の設定を先に見る。
+    private func truncationMode(of text: NSAttributedString) -> NSLineBreakMode? {
+        var mode: NSLineBreakMode?
+        text.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: text.length)) { value, _, stop in
+            if let style = value as? NSParagraphStyle, Self.truncatingModes.contains(style.lineBreakMode) {
+                mode = style.lineBreakMode
+                stop.pointee = true
+            }
+        }
+        return mode ?? (Self.truncatingModes.contains(lineBreakMode) ? lineBreakMode : nil)
+    }
+
     private static func wrappingInsteadOfTruncating(_ text: NSAttributedString) -> NSAttributedString {
         let result = NSMutableAttributedString(attributedString: text)
         result.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: result.length)) { value, range, _ in
