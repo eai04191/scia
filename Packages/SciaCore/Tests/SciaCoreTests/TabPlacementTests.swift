@@ -138,7 +138,6 @@ struct TabLayoutSettingsTests {
         #expect(synced.tokens.filter { $0.contains("list:") } == ["item:list:1:新名", "hidden:list:3:新しいリスト"])
         #expect(synced.tokens.firstIndex(of: "item:list:1:新名") == 1)
         #expect(synced.tokens.last == "hidden:list:3:新しいリスト")
-        #expect(synced.listIDs == ["1", "3"])
     }
 
     /// 切り替えタブで前に開いていた項目は、保存しておいた古い名前ではなく、並びの中の今の名前で返す。
@@ -149,13 +148,15 @@ struct TabLayoutSettingsTests {
     }
 
     /// 足りないリストだけを無効で足し、並びにあるリストは外しも書き換えもしない。
-    @Test func addingMissingListsOnlyAppends() {
-        let layout = MenuLayout<TabItem>(tokens: ["item:home", "more", "item:list:1:旧名", "item:list:9:ほかのウインドウで読んだリスト"])
+    @Test func addingMissingOnlyAppends() {
+        let layout = MenuLayout<TabItem>(tokens: ["item:home", "more", "item:list:1:旧名", "item:list:9:ほかのウインドウで読んだリスト", "item:hashtag:Scia"])
 
-        let added = layout.addingMissingLists([MastodonList(id: "1", title: "新名"), MastodonList(id: "2", title: "足りないリスト")])
+        let added = layout.addingMissing([.list(id: "1", title: "新名"), .list(id: "2", title: "足りないリスト"), .hashtag(name: "scia"), .hashtag(name: "mastodon")])
 
-        #expect(added.tokens.filter { $0.contains("list:") } == ["item:list:1:旧名", "item:list:9:ほかのウインドウで読んだリスト", "hidden:list:2:足りないリスト"])
-        #expect(added.addingMissingLists([MastodonList(id: "2", title: "足りないリスト")]).tokens == added.tokens)
+        #expect(added.tokens.filter { $0.contains("list:") || $0.contains("hashtag:") } == [
+            "item:list:1:旧名", "item:list:9:ほかのウインドウで読んだリスト", "item:hashtag:Scia", "hidden:list:2:足りないリスト", "hidden:hashtag:mastodon",
+        ])
+        #expect(added.addingMissing([.list(id: "2", title: "足りないリスト")]).tokens == added.tokens)
     }
 
     /// 名前だけが変わった並びは、項目どうしでは同じでも、保存の形では違う。設定画面は保存の形で並びの変化を見分ける。
@@ -164,5 +165,29 @@ struct TabLayoutSettingsTests {
         let after = before.syncingLists([MastodonList(id: "1", title: "新名")])
         #expect(after.elements == before.elements)
         #expect(after.tokens != before.tokens)
+    }
+
+    /// ハッシュタグは、サーバーと同じ決まりでそろえた名前で同じ項目かを見る。保存した名前はそのまま読み戻す。
+    @Test func hashtagItemIsIdentifiedByNormalizedName() {
+        let item = TabItem.hashtag(name: "Scia")
+        #expect(item.rawValue == "hashtag:Scia")
+        #expect(TabItem(rawValue: "hashtag:Scia")?.rawValue == "hashtag:Scia")
+        #expect(item == .hashtag(name: "scia"))
+        #expect(item == .hashtag(name: "ＳＣＩＡ"))
+        #expect(item != .hashtag(name: "mastodon"))
+        #expect(item != .list(id: "Scia", title: ""))
+        #expect(TabItem(rawValue: "hashtag:") == nil)
+        #expect(TabItem(.hashtag(name: "scia")) == item)
+    }
+
+    /// フォローしているハッシュタグを並びに反映する。リストには触れない。
+    @Test func syncingHashtagsAddsAndRemovesOnlyHashtags() {
+        let layout = MenuLayout<TabItem>(tokens: ["item:home", "item:hashtag:Scia", "more", "item:list:1:友だち", "hidden:hashtag:やめたタグ"])
+
+        let synced = layout.syncingHashtags([Hashtag(name: "scia"), Hashtag(name: "mastodon")])
+
+        #expect(synced.tokens.filter { $0.contains("list:") || $0.contains("hashtag:") } == ["item:hashtag:scia", "item:list:1:友だち", "hidden:hashtag:mastodon"])
+        // 並びに書かなかった決まった項目は既定の位置に差し込まれるため、境目より上に残ることで、元の場所を保ったと見る。
+        #expect(TabPlacement(layout: synced).tabs.contains(.hashtag(name: "scia")))
     }
 }

@@ -7,6 +7,8 @@ public enum TimelineFeed: Hashable, Sendable {
     case federated
     /// 自分のリスト。
     case list(id: String)
+    /// ハッシュタグ。`name`は`#`を除いた名前。
+    case hashtag(name: String)
 
     /// ログに残す名前。
     public var name: String {
@@ -15,6 +17,7 @@ public enum TimelineFeed: Hashable, Sendable {
         case .local: "local"
         case .federated: "federated"
         case .list(let id): "list:\(id)"
+        case .hashtag(let name): "hashtag:\(name)"
         }
     }
 
@@ -25,15 +28,16 @@ public enum TimelineFeed: Hashable, Sendable {
         case .local: StreamingSubscription(stream: "public:local")
         case .federated: StreamingSubscription(stream: "public")
         case .list(let id): .list(id)
+        case .hashtag(let name): .hashtag(name)
         }
     }
 
     /// https://docs.joinmastodon.org/entities/Filter/#context
-    /// `home`の文脈は、ホームとリストに当てる。
+    /// `home`の文脈は、ホームとリストに当てる。ハッシュタグは、公式のWebクライアントと同じく`public`の文脈で当てる。
     public var filterContext: FilterResult.Context {
         switch self {
         case .home, .list: .home
-        case .local, .federated: .public
+        case .local, .federated, .hashtag: .public
         }
     }
 
@@ -41,7 +45,7 @@ public enum TimelineFeed: Hashable, Sendable {
     public var marker: MarkerTimeline? {
         switch self {
         case .home: .home
-        case .local, .federated, .list: nil
+        case .local, .federated, .list, .hashtag: nil
         }
     }
 
@@ -51,6 +55,7 @@ public enum TimelineFeed: Hashable, Sendable {
         case .local: try await client.publicTimeline(query, localOnly: true)
         case .federated: try await client.publicTimeline(query, localOnly: false)
         case .list(let id): try await client.listTimeline(id, query)
+        case .hashtag(let name): try await client.hashtagTimeline(name, query)
         }
     }
 }

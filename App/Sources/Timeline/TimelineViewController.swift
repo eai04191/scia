@@ -29,6 +29,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         static func list(title: String) -> Texts {
             Texts(dumpName: "list", title: title, empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
         }
+        static func hashtag(name: String) -> Texts {
+            Texts(dumpName: "hashtag", title: "#\(name)", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
+        }
         static let notifications = Texts(dumpName: "notifications", title: "通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
         static let profile = Texts(dumpName: "profile", title: "", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
         static let thread = Texts(dumpName: "thread", title: "スレッド", empty: "投稿がありません", reachedEnd: "", unreadable: "表示できない投稿")

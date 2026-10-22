@@ -10,11 +10,16 @@ public enum TabItem: MenuItemKind {
     /// 自分のリスト。`title`は、リストの一覧を読む前からタブの名前を出せるよう、並びと一緒に保存する。
     /// 同じ項目かどうかはIDだけで見る。名前が変わっても、並びの中の同じ場所の同じリストとして扱うため。
     case list(id: String, title: String)
+    /// フォローしているハッシュタグ。`name`は`#`を除いた名前。
+    /// 同じ項目かどうかは、サーバーと同じ決まりでそろえた名前（`Hashtag.normalizedName`）で見る。サーバーは大文字と小文字などを区別しないため。
+    case hashtag(name: String)
 
     /// リストの項目の`rawValue`の頭。`list:<ID>:<名前>`の形で保存する。リストのIDは`:`を含まないため、2つ目の`:`より後ろは名前として読む。
     private static let listPrefix = "list:"
+    /// ハッシュタグの項目の`rawValue`の頭。`hashtag:<名前>`の形で保存する。
+    private static let hashtagPrefix = "hashtag:"
 
-    /// 決まった項目。リストは使う人ごとに違うため含まない。既定の並びと、保存した並びに足りない項目を差し込むのに使う。
+    /// 決まった項目。リストとハッシュタグは使う人ごとに違うため含まない。既定の並びと、保存した並びに足りない項目を差し込むのに使う。
     public static let allCases: [TabItem] = [.home, .local, .federated, .notifications, .bookmarks, .favourites]
 
     public init?(rawValue: String) {
@@ -22,6 +27,12 @@ public enum TabItem: MenuItemKind {
             let parts = rawValue.dropFirst(Self.listPrefix.count).split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
             guard let id = parts.first, !id.isEmpty else { return nil }
             self = .list(id: String(id), title: parts.count > 1 ? String(parts[1]) : "")
+            return
+        }
+        if rawValue.hasPrefix(Self.hashtagPrefix) {
+            let name = rawValue.dropFirst(Self.hashtagPrefix.count)
+            guard !name.isEmpty else { return nil }
+            self = .hashtag(name: String(name))
             return
         }
         guard let item = Self.allCases.first(where: { $0.rawValue == rawValue }) else { return nil }
@@ -37,12 +48,17 @@ public enum TabItem: MenuItemKind {
         case .bookmarks: "bookmarks"
         case .favourites: "favourites"
         case .list(let id, let title): "\(Self.listPrefix)\(id):\(title)"
+        case .hashtag(let name): "\(Self.hashtagPrefix)\(name)"
         }
     }
 
-    /// 同じ項目かどうかを見る値。リストは名前を含めない。
+    /// 同じ項目かどうかを見る値。リストは名前を含めず、ハッシュタグはそろえた名前で見る。
     private var identity: String {
-        if case .list(let id, _) = self { "\(Self.listPrefix)\(id)" } else { rawValue }
+        switch self {
+        case .list(let id, _): "\(Self.listPrefix)\(id)"
+        case .hashtag(let name): "\(Self.hashtagPrefix)\(Hashtag.normalizedName(name))"
+        default: rawValue
+        }
     }
 
     public static func == (lhs: TabItem, rhs: TabItem) -> Bool {
@@ -53,9 +69,12 @@ public enum TabItem: MenuItemKind {
         hasher.combine(identity)
     }
 
-    /// リストの名前を差し替える。タブを作り直さずに、名前の変更を並びに書き残すため。
-    public func renamed(_ title: String) -> TabItem {
-        if case .list(let id, _) = self { .list(id: id, title: title) } else { self }
+    public var isList: Bool {
+        if case .list = self { true } else { false }
+    }
+
+    public var isHashtag: Bool {
+        if case .hashtag = self { true } else { false }
     }
 
     public init(_ feed: TimelineFeed) {
@@ -65,6 +84,7 @@ public enum TabItem: MenuItemKind {
         case .federated: self = .federated
         // 同じ項目かどうかはIDだけで見るので、並びの中の場所を探すのに名前は要らない。
         case .list(let id): self = .list(id: id, title: "")
+        case .hashtag(let name): self = .hashtag(name: name)
         }
     }
 
@@ -92,35 +112,42 @@ extension MenuLayout where Item == TabItem {
     /// サーバーのリストの一覧を並びに反映する。決まりはdocs/tabs.mdの「リスト」にある。
     /// まだないリストは無効にして末尾に足し、もうないリストは外し、名前が変わったリストは名前を書き換える。ほかの項目の並びと表示は変えない。
     public func syncingLists(_ lists: [MastodonList]) -> MenuLayout<TabItem> {
-        let titles = Dictionary(lists.map { ($0.id, $0.title) }, uniquingKeysWith: { first, _ in first })
-        var known: Set<String> = []
+        syncing(lists.map { .list(id: $0.id, title: $0.title) }, where: \.isList)
+    }
+
+    /// フォローしているハッシュタグの一覧を並びに反映する。決まりはdocs/tabs.mdの「フォローしているハッシュタグ」にある。
+    /// まだないハッシュタグは無効にして末尾に足し、フォローをやめたハッシュタグは外す。ほかの項目の並びと表示は変えない。
+    public func syncingHashtags(_ hashtags: [Hashtag]) -> MenuLayout<TabItem> {
+        syncing(hashtags.map { .hashtag(name: $0.name) }, where: \.isHashtag)
+    }
+
+    /// 並びにない項目だけを、無効にして末尾に足す。並びにある項目は、外すことも名前を書き換えることもしない。
+    /// 最初の並びに戻したときに、リストやハッシュタグを足し直すのに使う。同じアカウントをいくつものウインドウで開いていると、ウインドウごとに読んだ一覧が違うことがあり、
+    /// 並びが変わるたびに外したり書き換えたりすると、ほかのウインドウの書き換えを打ち消し合い続けるため。
+    public func addingMissing(_ items: [TabItem]) -> MenuLayout<TabItem> {
+        let known = Set(elements.compactMap { element -> TabItem? in
+            if case .item(let item, _) = element { item } else { nil }
+        })
+        var seen: Set<TabItem> = []
+        let missing = items.filter { !known.contains($0) && seen.insert($0).inserted }
+        guard !missing.isEmpty else { return self }
+        return MenuLayout(elements: elements + missing.map { .item($0, isVisible: false) })
+    }
+
+    /// `belongs`に当てはまる項目を、サーバーから読んだ`fetched`にそろえる。並びにある項目は、読んだ項目で置き換えて名前を新しくし、表示はそのまま残す。
+    private func syncing(_ fetched: [TabItem], where belongs: (TabItem) -> Bool) -> MenuLayout<TabItem> {
+        let latest = Dictionary(fetched.map { ($0, $0) }, uniquingKeysWith: { first, _ in first })
+        var known: Set<TabItem> = []
         var elements = self.elements.compactMap { element -> Element? in
-            guard case .item(.list(let id, _), let isVisible) = element else { return element }
-            guard let title = titles[id] else { return nil }
-            known.insert(id)
-            return .item(.list(id: id, title: title), isVisible: isVisible)
+            guard case .item(let item, let isVisible) = element, belongs(item) else { return element }
+            guard let current = latest[item] else { return nil }
+            known.insert(item)
+            return .item(current, isVisible: isVisible)
         }
-        for list in lists where known.insert(list.id).inserted {
-            elements.append(.item(.list(id: list.id, title: list.title), isVisible: false))
+        for item in fetched where known.insert(item).inserted {
+            elements.append(.item(item, isVisible: false))
         }
         return MenuLayout(elements: elements)
-    }
-
-    /// 並びにないリストだけを、無効にして末尾に足す。並びにあるリストは、外すことも名前を書き換えることもしない。
-    /// 最初の並びに戻したときに、リストを足し直すのに使う。同じアカウントをいくつものウインドウで開いていると、ウインドウごとに読んだリストが違うことがあり、
-    /// 並びが変わるたびに外したり書き換えたりすると、ほかのウインドウの書き換えを打ち消し合い続けるため。
-    public func addingMissingLists(_ lists: [MastodonList]) -> MenuLayout<TabItem> {
-        let known = Set(listIDs)
-        let missing = lists.filter { !known.contains($0.id) }
-        guard !missing.isEmpty else { return self }
-        return MenuLayout(elements: elements + missing.map { .item(.list(id: $0.id, title: $0.title), isVisible: false) })
-    }
-
-    /// 並びにあるリストのID。
-    public var listIDs: [String] {
-        elements.compactMap { element in
-            if case .item(.list(let id, _), _) = element { id } else { nil }
-        }
     }
 }
 

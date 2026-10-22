@@ -9,23 +9,32 @@ struct TabArrangementTests {
     private static let friends = TabItem.list(id: "1", title: "友だち")
 
     /// 項目ごとのナビゲーション。作るように頼まれた項目を記録する。
+    /// 項目ごとのナビゲーション。リストは、アプリと同じく頼まれるたびに新しく作る。作るように頼まれた項目を記録する。
     @MainActor
     private final class Navigations {
-        let all: [TabItem: UINavigationController]
+        /// 項目ごとの、いちばん新しく作ったナビゲーション。
+        private(set) var all: [TabItem: UINavigationController]
         private(set) var made: [TabItem] = []
 
         init() {
             var all: [TabItem: UINavigationController] = [:]
-            for item in TabItem.allCases + [TabArrangementTests.friends] {
-                let root = UIViewController()
-                root.title = item.title
-                all[item] = UINavigationController(rootViewController: root)
+            for item in TabItem.allCases {
+                all[item] = Self.navigation(for: item)
             }
             self.all = all
         }
 
+        private static func navigation(for item: TabItem) -> UINavigationController {
+            let root = UIViewController()
+            root.title = item.title
+            return UINavigationController(rootViewController: root)
+        }
+
         func make(_ item: TabItem) -> UINavigationController? {
             made.append(item)
+            if item == TabArrangementTests.friends {
+                all[item] = Self.navigation(for: item)
+            }
             return all[item]
         }
     }
@@ -154,5 +163,37 @@ struct TabArrangementTests {
         #expect(harness.arrangement.selectedNavigation === harness.navigations[Self.friends])
         #expect(harness.switchTitle == "友だち")
         #expect(harness.made.made.filter { $0 == Self.friends }.count == 1)
+    }
+
+    /// サーバーから消えた項目は、並びから外れたら作ったナビゲーションを捨てる。同じ項目がまた並びに出たら作り直し、止めた一覧を使い回さない。
+    @Test func forgottenItemIsMadeAgainWhenPlacedAgain() throws {
+        let harness = try Harness(Self.layout(tabs: [.home, Self.friends], switchable: [.local]))
+        #expect(harness.made.made.filter { $0 == Self.friends }.count == 1)
+
+        harness.arrangement.forget([Self.friends])
+        harness.apply(Self.layout(tabs: [.home], switchable: [.local], disabled: []).withoutItem(Self.friends))
+        harness.apply(Self.layout(tabs: [.home, Self.friends], switchable: [.local]))
+
+        #expect(harness.made.made.filter { $0 == Self.friends }.count == 2)
+    }
+
+    /// まだ並びにある項目は、忘れるよう頼まれても、並びから外れるまで捨てない。
+    @Test func forgottenItemStaysWhilePlaced() throws {
+        let harness = try Harness(Self.layout(tabs: [.home, Self.friends], switchable: [.local]))
+
+        harness.arrangement.forget([Self.friends])
+        harness.arrangement.show(Self.friends)
+
+        #expect(harness.arrangement.isShowing(Self.friends))
+        #expect(harness.made.made.filter { $0 == Self.friends }.count == 1)
+    }
+}
+
+private extension MenuLayout where Item == TabItem {
+    /// 並びから項目を外す。リストやハッシュタグは既定の並びにないため、外すと並びに戻らない。
+    func withoutItem(_ item: TabItem) -> MenuLayout<TabItem> {
+        MenuLayout(elements: elements.filter { element in
+            if case .item(let candidate, _) = element { candidate != item } else { true }
+        })
     }
 }

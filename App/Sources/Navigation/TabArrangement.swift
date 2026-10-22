@@ -30,6 +30,9 @@ final class TabArrangement {
     /// 切り替えタブで開いている項目。
     private(set) var switchSelection: TabItem?
     private var notificationsBadge: String?
+    /// サーバーから消えた項目（消したリスト、フォローをやめたハッシュタグ）。並びから外れたら、作ったナビゲーションとタブを捨てる。
+    /// 同じ項目がまた並びに出たとき（同じハッシュタグをフォローし直したときなど）に、止めた一覧を使い回さず、作り直すため。
+    private var forgotten: Set<TabItem> = []
     /// 最初の`apply`で、切り替えタブで開く項目を決めるのに使う。
     private var restoredSwitchSelection: TabItem?
 
@@ -48,6 +51,20 @@ final class TabArrangement {
 
     /// 作ったすべての項目のナビゲーション。並びから外した項目のものも含む。
     var allNavigations: [UINavigationController] { Array(navigations.values) }
+
+    /// サーバーから消えた項目の、作ったナビゲーションとタブを捨てる。まだ並びにあれば、並びから外れたときに捨てる。
+    func forget(_ items: some Sequence<TabItem>) {
+        forgotten.formUnion(items)
+        discardForgotten()
+    }
+
+    private func discardForgotten() {
+        for item in forgotten where placement.location(of: item) == .disabled && switchSelection != item {
+            navigations[item] = nil
+            itemTabs[item] = nil
+            forgotten.remove(item)
+        }
+    }
 
     /// 項目のナビゲーション。まだなければ作る。
     private func navigation(for item: TabItem) -> UINavigationController? {
@@ -135,6 +152,7 @@ final class TabArrangement {
         if let shown, placement.location(of: shown) != .disabled {
             show(shown)
         }
+        discardForgotten()
         onPlacementChange?(placement)
     }
 

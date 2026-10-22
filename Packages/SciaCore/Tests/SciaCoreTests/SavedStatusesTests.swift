@@ -65,6 +65,30 @@ struct SavedStatusesClientTests {
         #expect(queries[1] == [URLQueryItem(name: "limit", value: "40"), URLQueryItem(name: "max_id", value: "900")])
     }
 
+    /// フォローしているハッシュタグは、`Link`ヘッダーで続きを読み切ってから返す。
+    @Test func followedTagsReadAllPages() async throws {
+        let link = #"<https://example.social/api/v1/followed_tags?limit=200&max_id=7>; rel="next""#
+        let transport = StubTransport([
+            .json(#"[{"id":"9","name":"scia","url":"https://example.social/tags/scia","history":[]}]"#, statusCode: 200, headers: ["Link": link]),
+            .json(#"[{"id":"7","name":"Mastodon","url":"https://example.social/tags/mastodon","history":[]}]"#, statusCode: 200),
+        ])
+
+        let tags = try await makeClient(transport).followedTags()
+
+        #expect(tags.map(\.name) == ["scia", "Mastodon"])
+        let queries = await transport.requests.compactMap(\.url).map { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems ?? [] }
+        #expect(queries == [[URLQueryItem(name: "limit", value: "200")], [URLQueryItem(name: "limit", value: "200"), URLQueryItem(name: "max_id", value: "7")]])
+    }
+
+    /// 読めない要素があれば、捨てずに投げる。欠けた一覧で並びを書き換えると、読めなかったハッシュタグを並びから外してしまうため。
+    @Test func followedTagsFailOnUnreadableTag() async throws {
+        let transport = StubTransport([
+            .json(#"[{"id":"9","name":"scia","url":"https://example.social/tags/scia","history":[{"day":"1668556800","accounts":"1","uses":"2"}]},{"id":"8","url":"https://example.social/tags/broken"}]"#, statusCode: 200),
+        ])
+
+        await #expect(throws: (any Error).self) { try await makeClient(transport).followedTags() }
+    }
+
     @Test func favouritesUseFavouritesPath() async throws {
         let transport = StubTransport([.json("[]", statusCode: 200)])
 

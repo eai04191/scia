@@ -97,6 +97,7 @@ final class FeedTimelineController {
         case .federated: .federated
         // リストの名前は、作る側が`texts`で渡す。
         case .list: .list(title: "")
+        case .hashtag(let name): .hashtag(name: name)
         }
     }
 

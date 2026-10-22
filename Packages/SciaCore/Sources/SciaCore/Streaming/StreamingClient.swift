@@ -32,24 +32,34 @@ public struct StreamingSubscription: Sendable, Hashable {
         StreamingSubscription(stream: "list", list: id)
     }
 
+    /// ハッシュタグのタイムライン。`name`は`#`を除いた名前。
+    public static func hashtag(_ name: String) -> StreamingSubscription {
+        StreamingSubscription(stream: "hashtag", tag: name)
+    }
+
     /// `subscribe`で送るストリームの名前。
     public let stream: String
     /// `list`ストリームで購読するリストのID。
     public let list: String?
+    /// `hashtag`ストリームで購読するハッシュタグの名前。
+    public let tag: String?
 
-    public init(stream: String, list: String? = nil) {
+    public init(stream: String, list: String? = nil, tag: String? = nil) {
         self.stream = stream
         self.list = list
+        self.tag = tag
     }
 
-    /// 届いたイベントの`stream`欄。リストなら`["list", "<id>"]`のように引数が続く。
-    var streamPath: [String] { [stream] + (list.map { [$0] } ?? []) }
+    /// 届いたイベントの`stream`欄。リストなら`["list", "<id>"]`、ハッシュタグなら`["hashtag", "<名前>"]`のように、送った引数が続く。
+    /// Mastodonのストリーミングサーバーは、`streamNameFromChannelName`で、送られた引数をそのまま返す。
+    var streamPath: [String] { [stream] + [list, tag].compactMap(\.self) }
 
     func message(_ type: String) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
         var fields = ["type": type, "stream": stream]
         fields["list"] = list
+        fields["tag"] = tag
         return String(decoding: try encoder.encode(fields), as: UTF8.self)
     }
 }

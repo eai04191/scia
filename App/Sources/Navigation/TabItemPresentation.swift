@@ -11,6 +11,7 @@ extension TabItem: MenuItemPresentable {
         case .bookmarks: "ブックマーク"
         case .favourites: "お気に入り"
         case .list(_, let title): title
+        case .hashtag(let name): "#\(name)"
         }
     }
 
@@ -25,6 +26,7 @@ extension TabItem: MenuItemPresentable {
         case .bookmarks: "bookmark"
         case .favourites: "star"
         case .list: "list.bullet"
+        case .hashtag: "number"
         }
     }
 

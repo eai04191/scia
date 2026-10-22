@@ -540,6 +540,31 @@ public struct MastodonClient: Sendable {
         return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: false)
     }
 
+    /// ハッシュタグのタイムラインを新しい順に返す。`name`は`#`を除いた名前。
+    /// https://docs.joinmastodon.org/methods/timelines/#tag
+    public func hashtagTimeline(_ name: String, _ query: TimelineQuery) async throws -> TimelinePage {
+        let list = try await get(ElementList<Status>.self, path: "api/v1/timelines/tag/\(name)", query: query.queryItems).0
+        return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: false)
+    }
+
+    /// フォローしているハッシュタグをすべて返す。続きを`Link`ヘッダーで読み、最後まで読み切ってから返す。途中で読めなければ投げる。
+    /// 読めない要素を捨てずに投げるのは、欠けた一覧で並びを書き換えると、読めなかったハッシュタグを並びから外してしまうため。
+    /// 1回に読める件数の上限は200件。
+    /// https://docs.joinmastodon.org/methods/followed_tags/#get
+    public func followedTags() async throws -> [Hashtag] {
+        var tags: [Hashtag] = []
+        var maxID: String?
+        repeat {
+            let query = [URLQueryItem(name: "limit", value: "200")] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
+            let (page, response) = try await get([Hashtag].self, path: "api/v1/followed_tags", query: query)
+            tags += page
+            let next = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)?.queryValue("max_id", of: "next")
+            // 同じ位置を返し続けるサーバーで、同じページを読み続けないよう止める。
+            maxID = next == maxID || page.isEmpty ? nil : next
+        } while maxID != nil
+        return tags
+    }
+
     /// ブックマークした投稿を、ブックマークした新しい順に返す。1回に読める件数の上限は40件。
     /// - Parameter maxID: 前のページの`SavedStatusesPage.nextMaxID`。nilなら最新のページ。
     /// https://docs.joinmastodon.org/methods/bookmarks/#get

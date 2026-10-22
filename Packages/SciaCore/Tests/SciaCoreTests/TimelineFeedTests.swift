@@ -86,4 +86,24 @@ struct TimelineFeedTests {
         #expect(TimelineFeed.list(id: "1").filterContext == .home)
         #expect(TimelineFeed.list(id: "1").marker == nil)
     }
+
+    @Test func hashtagReadsTagTimeline() async throws {
+        let (path, query) = try await requestedQuery(.hashtag(name: "scia"))
+        #expect(path == "/api/v1/timelines/tag/scia")
+        #expect(query.contains(URLQueryItem(name: "max_id", value: "113000000000000002")))
+    }
+
+    /// ハッシュタグは`tag`引数を付けて購読し、届いたイベントの`stream`欄は`["hashtag", "<名前>"]`で見分ける。
+    /// Mastodonのストリーミングサーバーは、`streamNameFromChannelName`で、送った名前をそのまま返す。
+    @Test func hashtagSubscribesWithTagArgument() throws {
+        let subscription = TimelineFeed.hashtag(name: "scia").subscription
+        #expect(try subscription.message("subscribe") == #"{"stream":"hashtag","tag":"scia","type":"subscribe"}"#)
+        #expect(subscription.streamPath == ["hashtag", "scia"])
+    }
+
+    /// ハッシュタグは、公式のWebクライアントと同じく`public`の文脈で当てる。既読位置はない。
+    @Test func hashtagUsesPublicFilterContextAndNoMarker() {
+        #expect(TimelineFeed.hashtag(name: "scia").filterContext == .public)
+        #expect(TimelineFeed.hashtag(name: "scia").marker == nil)
+    }
 }

@@ -15,14 +15,16 @@ final class SessionController {
     private let notifications: NotificationsController
     private let bookmarks: SavedStatusesController
     private let favourites: SavedStatusesController
-    /// リストのタイムラインのタブ。並びに出たときに作る。
-    private let lists: ListFeedRegistry
-    /// 投稿の一覧のタブ。ホーム、ローカル、連合と、作ったリスト。
-    private var feeds: [FeedTimelineController] { [home, local, federated] + lists.controllers }
+    /// リストとハッシュタグのタイムラインのタブ。並びに出たときに作る。
+    private let serverFeeds: ServerFeedRegistry
+    /// 投稿の一覧のタブ。ホーム、ローカル、連合と、作ったリストとハッシュタグ。
+    private var feeds: [FeedTimelineController] { [home, local, federated] + serverFeeds.controllers }
     /// 直近に読んだ自分のリスト。並びを最初の並びに戻したときに、リストを足し直すのに使う。
     private var loadedLists: [MastodonList]?
-    /// リストを読んでいる。起動したときは、始めたときと前面に出たときの両方で読みに来るため、重ねて読まない。
-    private var isLoadingLists = false
+    /// 直近に読んだ、フォローしているハッシュタグ。並びを最初の並びに戻したときに、足し直すのに使う。
+    private var loadedHashtags: [Hashtag]?
+    /// 読んでいる一覧（`lists`、`followedTags`）。起動したときは、始めたときと前面に出たときの両方で読みに来るため、重ねて読まない。
+    private var loadingTabSources: Set<String> = []
     /// アカウントの切り替えなどのメニュー。開くたびに呼んで組み立て直す。
     private let accountMenu: @MainActor () -> UIMenu
     /// 自分で残した投稿の一覧のタブ。ブックマーク、お気に入り。
@@ -136,10 +138,17 @@ final class SessionController {
         let notifications = NotificationsController(client: client, streamingHub: streamingHub) { forward() }
         let bookmarks = SavedStatusesController(kind: .bookmarks, client: client) { forward() }
         let favourites = SavedStatusesController(kind: .favourites, client: client) { forward() }
-        let lists = ListFeedRegistry { id, title in
-            FeedTimelineController(feed: .list(id: id), texts: .list(title: title), client: client, streamingHub: streamingHub) { forward() }
+        let serverFeeds = ServerFeedRegistry { item in
+            switch item {
+            case .list(let id, let title):
+                FeedTimelineController(feed: .list(id: id), texts: .list(title: title), client: client, streamingHub: streamingHub) { forward() }
+            case .hashtag(let name):
+                FeedTimelineController(feed: .hashtag(name: name), texts: .hashtag(name: name), client: client, streamingHub: streamingHub) { forward() }
+            case .home, .local, .federated, .notifications, .bookmarks, .favourites:
+                nil
+            }
         }
-        self.lists = lists
+        self.serverFeeds = serverFeeds
         self.bookmarks = bookmarks
         self.favourites = favourites
         self.home = home
@@ -156,10 +165,10 @@ final class SessionController {
         let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog, mediaFormats: mediaFormats)
         self.diagnostics = diagnostics
         // コントローラーはHubを持っているので、弱く持って循環させない。
-        streamingHub.onChange = { [weak streamingHub, weak home, weak local, weak federated, weak notifications, weak lists] in
+        streamingHub.onChange = { [weak streamingHub, weak home, weak local, weak federated, weak notifications, weak serverFeeds] in
             guard let streamingHub else { return }
             diagnostics.setStreaming(streamingHub.state, subscriptions: streamingHub.subscriptions)
-            for feed in [home, local, federated] + (lists?.controllers ?? []) {
+            for feed in [home, local, federated] + (serverFeeds?.controllers ?? []) {
                 feed?.showStreamingState(streamingHub.state)
             }
             notifications?.showStreamingState(streamingHub.state)
@@ -178,7 +187,7 @@ final class SessionController {
             notifications.updateStatus(id, transform)
             bookmarks.updateStatus(id, transform)
             favourites.updateStatus(id, transform)
-            lists.updateStatus(id, transform)
+            serverFeeds.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
             threads.updateStatus(id, transform)
         }
@@ -194,12 +203,12 @@ final class SessionController {
             notifications.updateStatus(id, transform)
             bookmarks.updateStatus(id, transform)
             favourites.updateStatus(id, transform)
-            lists.updateStatus(id, transform)
+            serverFeeds.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
             threads.updateStatus(id, transform)
         }
         linkCards = LinkCardRefresher(client: client) { refetched in
-            for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, lists.updateStatus, profiles.updateStatus, threads.updateStatus] {
+            for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, profiles.updateStatus, threads.updateStatus] {
                 update(refetched.id) { $0.adoptingCard(of: refetched) }
             }
         }
@@ -219,7 +228,7 @@ final class SessionController {
                 case .notifications: notificationsNavigation
                 case .bookmarks: bookmarksNavigation
                 case .favourites: favouritesNavigation
-                case .list(let id, let title): lists.navigation(id: id, title: title)
+                case .list, .hashtag: serverFeeds.navigation(for: item)
                 }
             },
             placement: TabPlacement(layout: AppDependencies.settings.tabLayout(for: credential.handle)),
@@ -343,7 +352,7 @@ final class SessionController {
                     if let editing = draft.editing {
                         // ストリーミングの編集の知らせを待たずに、どの一覧にも編集したあとの投稿を出す。切れている間も直るようにするため。
                         let edited = try await client.editStatus(editing, to: draft)
-                        for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, lists.updateStatus, profiles.updateStatus, threads.updateStatus] {
+                        for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, profiles.updateStatus, threads.updateStatus] {
                             update(edited.id) { _ in edited }
                         }
                     } else {
@@ -378,9 +387,9 @@ final class SessionController {
         for viewController in [home.viewController, local.viewController, federated.viewController, notifications.viewController, bookmarks.viewController, favourites.viewController] {
             configureTabRoot(viewController)
         }
-        // 並びにあるリストは、タブを組んだときに作ってある。それ以後に作るリストも、ここで同じように整える。
-        lists.onCreate = { [weak self] controller, navigation in
-            self?.configureList(controller, in: navigation)
+        // 並びにあるリストとハッシュタグは、タブを組んだときに作ってある。それ以後に作るものも、ここで同じように整える。
+        serverFeeds.onCreate = { [weak self] controller, navigation in
+            self?.configureServerFeed(controller, in: navigation)
         }
         composer.onBeginEditing = { [weak self] in
             self?.applyComposeDefaults()
@@ -443,7 +452,7 @@ final class SessionController {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 // 最初の並びに戻したら、リストが消えるので足し直す。足し直した変更は、もう一度ここへ来て反映する。
-                addMissingListsToTabLayout()
+                addMissingServerItemsToTabLayout()
                 let placement = TabPlacement(layout: AppDependencies.settings.tabLayout(for: handle))
                 if placement != tabs.placement {
                     tabs.apply(placement)
@@ -605,8 +614,8 @@ final class SessionController {
         }
     }
 
-    /// 並びに出たリストの一覧を、ホームやローカルと同じように整える。ローカルと同じく、初めて開いたときに読み始める。
-    private func configureList(_ controller: FeedTimelineController, in navigation: ContentNavigationController) {
+    /// 並びに出たリストやハッシュタグの一覧を、ホームやローカルと同じように整える。ローカルと同じく、初めて開いたときに読み始める。
+    private func configureServerFeed(_ controller: FeedTimelineController, in navigation: ContentNavigationController) {
         configureTabRoot(controller.viewController)
         Self.configure(navigation, delegate: navigationDelegate) { navigation in
             (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
@@ -616,19 +625,29 @@ final class SessionController {
         controller.setEnabled(tabs.placement.location(of: TabItem(controller.feed)) != .disabled)
     }
 
-    /// 自分のリストを読み、タブの並びに反映する。決まりはdocs/tabs.mdの「リスト」にある。読めなければ、並びを変えない。
-    private func loadLists() {
-        guard !isLoadingLists else { return }
-        isLoadingLists = true
+    /// 自分のリストとフォローしているハッシュタグを読み、タブの並びに反映する。決まりはdocs/tabs.mdの「リスト」と「フォローしているハッシュタグ」にある。
+    /// 読めなかった一覧は、並びを変えない。
+    private func loadTabSources() {
+        loadTabSource("lists", fetch: { try await $0.lists() }, apply: { $0.apply(lists: $1) })
+        loadTabSource("followedTags", fetch: { try await $0.followedTags() }, apply: { $0.apply(hashtags: $1) })
+    }
+
+    private func loadTabSource<Value: Sendable>(
+        _ name: String,
+        fetch: @escaping @Sendable (MastodonClient) async throws -> Value,
+        apply: @escaping @MainActor (SessionController, Value) -> Void
+    ) {
+        guard loadingTabSources.insert(name).inserted else { return }
         let client = client
         RequestOrigin.$current.withValue(.automatic) {
             Task { [weak self] in
-                defer { self?.isLoadingLists = false }
+                defer { self?.loadingTabSources.remove(name) }
                 do {
-                    let lists = try await client.lists()
-                    self?.apply(lists)
+                    let value = try await fetch(client)
+                    guard let self else { return }
+                    apply(self, value)
                 } catch {
-                    self?.logger.error("lists load failed: \(SciaLog.describe(error), privacy: .public)")
+                    self?.logger.error("\(name, privacy: .public) load failed: \(SciaLog.describe(error), privacy: .public)")
                     if let error = error as? MastodonAPIError, error.isUnauthorized {
                         self?.reportUnauthorized()
                     }
@@ -638,23 +657,25 @@ final class SessionController {
     }
 
     /// 読んだリストを並びに反映し、もうないリストの一覧を止める。
-    private func apply(_ lists: [MastodonList]) {
+    private func apply(lists: [MastodonList]) {
         loadedLists = lists
         logger.info("lists loaded count=\(lists.count, privacy: .public)")
-        syncListsInTabLayout()
-        self.lists.removeAll(except: Set(lists.map(\.id)))
+        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).syncingLists(lists))
+        tabs.forget(serverFeeds.removeAll(where: \.isList, except: Set(lists.map { TabItem.list(id: $0.id, title: $0.title) })))
     }
 
-    /// 並びのリストを、直近に読んだリストにそろえる。
-    private func syncListsInTabLayout() {
-        guard let loadedLists else { return }
-        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).syncingLists(loadedLists))
+    /// 読んだハッシュタグを並びに反映し、フォローをやめたハッシュタグの一覧を止める。
+    private func apply(hashtags: [Hashtag]) {
+        loadedHashtags = hashtags
+        logger.info("followed tags loaded count=\(hashtags.count, privacy: .public)")
+        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).syncingHashtags(hashtags))
+        tabs.forget(serverFeeds.removeAll(where: \.isHashtag, except: Set(hashtags.map { TabItem.hashtag(name: $0.name) })))
     }
 
-    /// 最初の並びに戻したときに、直近に読んだリストを無効のまま足し直す。並びにあるリストは外しも書き換えもしない。
-    private func addMissingListsToTabLayout() {
-        guard let loadedLists else { return }
-        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).addingMissingLists(loadedLists))
+    /// 最初の並びに戻したときに、直近に読んだリストとハッシュタグを無効のまま足し直す。並びにあるものは外しも書き換えもしない。
+    private func addMissingServerItemsToTabLayout() {
+        let items = (loadedLists ?? []).map { TabItem.list(id: $0.id, title: $0.title) } + (loadedHashtags ?? []).map { TabItem.hashtag(name: $0.name) }
+        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).addingMissing(items))
     }
 
     /// 並びが変わったときだけ保存する。保存すると並びの変化の知らせが来るため、同じ並びを書き続けないようにする。
@@ -1576,7 +1597,7 @@ final class SessionController {
         }
         observeRecoveries()
         loadServerVersion()
-        loadLists()
+        loadTabSources()
         RequestOrigin.$current.withValue(.automatic) {
             Task { [weak self] in await self?.loadPreferences() }
         }
@@ -2016,7 +2037,7 @@ final class SessionController {
             do {
                 try await change(client)
                 self?.logger.info("debug lists \(operation, privacy: .public) done")
-                self?.loadLists()
+                self?.loadTabSources()
             } catch {
                 self?.logger.error("debug lists \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
             }
@@ -2055,9 +2076,9 @@ final class SessionController {
             list.enterForeground()
         }
         threads.enterForeground()
-        // ほかの端末で作ったり消したりしたリストを、戻ったときに並びへ反映する。
+        // ほかの端末で作ったり消したりしたリストや、フォローしたハッシュタグを、戻ったときに並びへ反映する。
         if hasStarted {
-            loadLists()
+            loadTabSources()
         }
     }
 
@@ -2077,11 +2098,11 @@ private struct ProfileNotFound: LocalizedError {
     var errorDescription: String? { "@\(acct)が見つかりませんでした。" }
 }
 
-/// リストのタイムラインの一覧と、そのナビゲーション。リストは使う人ごとに数が違うため、タブの並びに出たときに作る。
+/// リストとハッシュタグのタイムラインの一覧と、そのナビゲーション。使う人ごとに数が違うため、タブの並びに出たときに作る。
 @MainActor
-private final class ListFeedRegistry {
-    private let make: (_ id: String, _ title: String) -> FeedTimelineController
-    private var entries: [String: (controller: FeedTimelineController, navigation: ContentNavigationController)] = [:]
+private final class ServerFeedRegistry {
+    private let make: (TabItem) -> FeedTimelineController?
+    private var entries: [TabItem: (controller: FeedTimelineController, navigation: ContentNavigationController)] = [:]
     /// 作ったとき。設定するまでに作ったものは、設定したときにまとめて渡す。セッションを作り終える前に、タブを組むときに作るため。
     var onCreate: ((FeedTimelineController, ContentNavigationController) -> Void)? {
         didSet {
@@ -2091,18 +2112,18 @@ private final class ListFeedRegistry {
         }
     }
 
-    init(make: @escaping (_ id: String, _ title: String) -> FeedTimelineController) {
+    init(make: @escaping (TabItem) -> FeedTimelineController?) {
         self.make = make
     }
 
     var controllers: [FeedTimelineController] { entries.values.map(\.controller) }
 
-    /// リストのナビゲーション。まだなければ作る。
-    func navigation(id: String, title: String) -> ContentNavigationController {
-        if let entry = entries[id] { return entry.navigation }
-        let controller = make(id, title)
+    /// 項目のナビゲーション。まだなければ作る。リストやハッシュタグでなければnil。
+    func navigation(for item: TabItem) -> ContentNavigationController? {
+        if let entry = entries[item] { return entry.navigation }
+        guard let controller = make(item) else { return nil }
         let navigation = ContentNavigationController(rootViewController: controller.viewController)
-        entries[id] = (controller, navigation)
+        entries[item] = (controller, navigation)
         onCreate?(controller, navigation)
         return navigation
     }
@@ -2113,12 +2134,16 @@ private final class ListFeedRegistry {
         }
     }
 
-    /// サーバーにもうないリストの一覧を止めて捨てる。
-    func removeAll(except ids: Set<String>) {
-        for (id, entry) in entries where !ids.contains(id) {
+    /// `belongs`に当てはまる項目のうち、`items`にないもの（サーバーにもうないリスト、フォローをやめたハッシュタグ）の一覧を止めて捨て、捨てた項目を返す。
+    @discardableResult
+    func removeAll(where belongs: (TabItem) -> Bool, except items: Set<TabItem>) -> [TabItem] {
+        var removed: [TabItem] = []
+        for (item, entry) in entries where belongs(item) && !items.contains(item) {
             entry.controller.stop()
-            entries[id] = nil
+            entries[item] = nil
+            removed.append(item)
         }
+        return removed
     }
 }
 
