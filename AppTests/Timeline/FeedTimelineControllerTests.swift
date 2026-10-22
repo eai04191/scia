@@ -6,7 +6,7 @@ import Testing
 
 @MainActor
 @Suite(.serialized)
-struct HomeTimelineControllerTests {
+struct FeedTimelineControllerTests {
     private func makeCredential() throws -> Credential {
         Credential(
             instance: try #require(URL(string: "https://example.social")),
@@ -23,7 +23,7 @@ struct HomeTimelineControllerTests {
         connector: some WebSocketConnector = MessageQueueConnector(),
         tuning: TuningStore = TuningStore(defaults: nil),
         onUnauthorized: @escaping () -> Void = {}
-    ) throws -> HomeTimelineController {
+    ) throws -> FeedTimelineController {
         let credential = try makeCredential()
         let client = MastodonClient(credential: credential, transport: transport)
         let streaming = StreamingClient(credential: credential, connector: connector)
@@ -31,7 +31,8 @@ struct HomeTimelineControllerTests {
         let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: tuning) }) {
             streaming.open(baseURL: try await streamingEndpoint.url())
         }
-        return HomeTimelineController(
+        return FeedTimelineController(
+            feed: .home,
             client: client,
             streamingHub: streamingHub,
             tuning: tuning,

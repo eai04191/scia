@@ -3,13 +3,14 @@ import os
 import SciaCore
 import UIKit
 
-/// ホームタイムラインの読み込みとストリーミングを、TimelineViewControllerの表示へつなぐ。
+/// ホームや公開タイムラインの読み込みとストリーミングを、TimelineViewControllerの表示へつなぐ。
 @MainActor
-final class HomeTimelineController {
+final class FeedTimelineController {
     /// 1回に読む件数。APIの上限が40件。
     private static let pageSize = 40
 
     let viewController = TimelineViewController()
+    let feed: TimelineFeed
     private let store: TimelineStore
     private let client: MastodonClient
     private let streamingHub: StreamingHub
@@ -19,7 +20,7 @@ final class HomeTimelineController {
     private let logger = SciaLog.logger(category: "timeline")
     private var tasks: [Task<Void, Never>] = []
     private var isStopped = false
-    /// `user`ストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
+    /// 一覧のストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
     private var streamingSubscription: StreamingHub.Subscription?
     /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態。
     private let streamingStatusView = StreamingStatusPullView()
@@ -48,15 +49,17 @@ final class HomeTimelineController {
     private var regeneratingRetryTask: Task<Void, Never>?
 
     init(
+        feed: TimelineFeed,
         client: MastodonClient,
         streamingHub: StreamingHub,
         tuning: TuningStore = AppDependencies.tuning,
         onUnauthorized: @escaping () -> Void
     ) {
-        let filtering = StatusFiltering(context: .home, myAccountID: client.credential.accountID)
+        let filtering = StatusFiltering(context: feed.filterContext, myAccountID: client.credential.accountID)
         store = TimelineStore(pageSize: Self.pageSize, filtering: filtering) { query in
-            try await client.homeTimeline(query)
+            try await feed.page(query, from: client)
         }
+        self.feed = feed
         self.client = client
         self.streamingHub = streamingHub
         self.tuning = tuning
@@ -139,7 +142,7 @@ final class HomeTimelineController {
 
     private func stopStreaming() {
         guard let streamingSubscription else { return }
-        logger.info("home streaming unsubscribe")
+        logger.info("\(self.feed.rawValue, privacy: .public) streaming unsubscribe")
         streamingSubscription.cancel()
         self.streamingSubscription = nil
         // 購読をやめた後は知らせが届かないので、出していた表示を消す。
@@ -147,7 +150,7 @@ final class HomeTimelineController {
     }
 
     /// - Parameter origin: 自動の読み込みなら`.automatic`。レート制限で止められている間は送らずに失敗させる。
-    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (HomeTimelineController) async -> Void) {
+    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (FeedTimelineController) async -> Void) {
         tasks.removeAll { $0.isCancelled }
         // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
         let task = RequestOrigin.$current.withValue(origin) {
@@ -168,7 +171,7 @@ final class HomeTimelineController {
     }
 
     private func loadInitial() async {
-        logger.info("home loadInitial start")
+        logger.info("\(self.feed.rawValue, privacy: .public) loadInitial start")
         do {
             let markerID = try await loadMarker()
             guard let statuses = try await store.loadInitial(around: markerID), !isStopped else { return }
@@ -179,7 +182,7 @@ final class HomeTimelineController {
             hasLoadedInitial = true
             viewController.setContentState(store.isEmpty && store.isRegenerating ? .regenerating : .loaded)
             viewController.setFooterState(store.reachedEnd ? .reachedEnd : .idle)
-            logger.info("home loadInitial done count=\(statuses.count, privacy: .public) regenerating=\(self.store.isRegenerating, privacy: .public)")
+            logger.info("\(self.feed.rawValue, privacy: .public) loadInitial done count=\(statuses.count, privacy: .public) regenerating=\(self.store.isRegenerating, privacy: .public)")
             startStreaming()
         } catch {
             handle(error, during: "loadInitial") { viewController.setContentState(.failed($0)) }
@@ -190,12 +193,12 @@ final class HomeTimelineController {
         guard !isStopped, !store.isLoading, !store.reachedEnd, !store.isEmpty else { return }
         viewController.setFooterState(.loading)
         run(origin) { controller in
-            controller.logger.info("home loadOlder start")
+            controller.logger.info("\(controller.feed.rawValue, privacy: .public) loadOlder start")
             do {
                 guard let added = try await controller.store.loadOlder(), !controller.isStopped else { return }
                 controller.viewController.setEntries(controller.store.entries)
                 controller.viewController.setFooterState(controller.store.reachedEnd ? .reachedEnd : .idle)
-                controller.logger.info("home loadOlder done added=\(added.count, privacy: .public) reachedEnd=\(controller.store.reachedEnd, privacy: .public)")
+                controller.logger.info("\(controller.feed.rawValue, privacy: .public) loadOlder done added=\(added.count, privacy: .public) reachedEnd=\(controller.store.reachedEnd, privacy: .public)")
             } catch {
                 controller.handle(error, during: "loadOlder") { controller.viewController.setFooterState(.failed($0)) }
             }
@@ -206,7 +209,7 @@ final class HomeTimelineController {
 
     private func startStreaming() {
         guard !isStopped, isInForeground, streamingSubscription == nil else { return }
-        streamingSubscription = streamingHub.subscribe(.user) { [weak self] activity in
+        streamingSubscription = streamingHub.subscribe(feed.subscription) { [weak self] activity in
             self?.streamingDidChange(activity)
         }
     }
@@ -215,12 +218,12 @@ final class HomeTimelineController {
         guard !isStopped else { return }
         switch activity {
         case .connected:
-            logger.info("home streaming connected")
+            logger.info("\(self.feed.rawValue, privacy: .public) streaming connected")
             fillFromLatest()
         case .event(let event):
             receive(event)
         case .poll:
-            logger.info("home poll")
+            logger.info("\(self.feed.rawValue, privacy: .public) poll")
             fillFromLatest()
         case .outage(let isOngoing):
             viewController.setOutageNotice(isOngoing)
@@ -234,7 +237,7 @@ final class HomeTimelineController {
         // 保留を送る前に始まった補完は止めない。その結果は、保留中でも一覧に入る。
         if DebugFaults.isHoldingArrivals {
             isFillHeld = true
-            logger.info("home fill held")
+            logger.info("\(self.feed.rawValue, privacy: .public) fill held")
             return
         }
         #endif
@@ -243,7 +246,7 @@ final class HomeTimelineController {
                 let before = controller.store.entries
                 let maxPages = Int(controller.tuning.value(of: TuningCatalog.fillPageLimit))
                 guard let added = try await controller.store.fillFromLatest(maxPages: maxPages), !controller.isStopped else { return }
-                controller.logger.info("home fill done added=\(added.count, privacy: .public) gaps=\(controller.store.gaps.count, privacy: .public) regenerating=\(controller.store.isRegenerating, privacy: .public)")
+                controller.logger.info("\(controller.feed.rawValue, privacy: .public) fill done added=\(added.count, privacy: .public) gaps=\(controller.store.gaps.count, privacy: .public) regenerating=\(controller.store.isRegenerating, privacy: .public)")
                 if controller.store.isRegenerating {
                     controller.scheduleRegeneratingRetry()
                 }
@@ -270,7 +273,7 @@ final class HomeTimelineController {
     private func scheduleRegeneratingRetry() {
         guard regeneratingRetryTask == nil, !isStopped, isInForeground else { return }
         let interval = tuning.value(of: TuningCatalog.regeneratingRetryInterval)
-        logger.info("home regenerating retry scheduled after=\(interval, privacy: .public)")
+        logger.info("\(self.feed.rawValue, privacy: .public) regenerating retry scheduled after=\(interval, privacy: .public)")
         regeneratingRetryTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(interval))
             guard !Task.isCancelled, let self else { return }
@@ -299,7 +302,7 @@ final class HomeTimelineController {
         viewController.setGapStates(loading: store.loadingGapIDs.union([id]), failures: store.gapFailures.filter { $0.key != id })
         let gapBefore = store.gaps.first { $0.id == id }
         run(isAutomatic ? .automatic : .user) { controller in
-            controller.logger.info("home loadGap start id=\(id, privacy: .public) direction=\(String(describing: direction), privacy: .public) automatic=\(isAutomatic, privacy: .public)")
+            controller.logger.info("\(controller.feed.rawValue, privacy: .public) loadGap start id=\(id, privacy: .public) direction=\(String(describing: direction), privacy: .public) automatic=\(isAutomatic, privacy: .public)")
             do {
                 let added = try await controller.store.loadGap(id, from: direction)
                 guard !controller.isStopped else { return }
@@ -312,7 +315,7 @@ final class HomeTimelineController {
                 guard let added else { return }
                 controller.viewController.setEntries(controller.store.entries, keeping: anchorID)
                 controller.updateUnreadCount()
-                controller.logger.info("home loadGap done added=\(added.count, privacy: .public)")
+                controller.logger.info("\(controller.feed.rawValue, privacy: .public) loadGap done added=\(added.count, privacy: .public)")
             } catch {
                 if isAutomatic {
                     controller.autoLoadFailedGapIDs.insert(id)
@@ -326,7 +329,7 @@ final class HomeTimelineController {
     /// 投稿の応答で返った自分の投稿を、ストリーミングで届くのを待たずに新着と同じ経路で流す。
     func receivePosted(_ status: Status) {
         guard !isStopped else { return }
-        logger.info("home posted status=\(status.id, privacy: .public)")
+        logger.info("\(self.feed.rawValue, privacy: .public) posted status=\(status.id, privacy: .public)")
         apply(store.receivePosted(status))
     }
 
@@ -393,25 +396,27 @@ final class HomeTimelineController {
 
     /// 既読位置はタイムラインを読む助けで、読めなくてもタイムラインは表示できるため、トークンの失効以外の失敗では位置なしで進める。
     private func loadMarker() async throws -> String? {
+        guard let marker = feed.marker else { return nil }
         do {
-            return try await client.marker(for: .home)
+            return try await client.marker(for: marker)
         } catch let error as MastodonAPIError where error.isUnauthorized {
             throw error
         } catch is FeatureUnavailable {
             return nil
         } catch {
-            logger.error("home marker load failed: \(SciaLog.describe(error), privacy: .public)")
+            logger.error("\(self.feed.rawValue, privacy: .public) marker load failed: \(SciaLog.describe(error), privacy: .public)")
             return nil
         }
     }
 
     private func syncReadPosition() {
+        guard let marker = feed.marker else { return }
         run(.automatic) { controller in
             do {
-                guard let markerID = try await controller.client.marker(for: .home), !controller.isStopped else { return }
+                guard let markerID = try await controller.client.marker(for: marker), !controller.isStopped else { return }
                 controller.store.applySavedMarker(markerID)
                 controller.updateUnreadCount()
-                controller.logger.info("home marker synced id=\(markerID, privacy: .public)")
+                controller.logger.info("\(controller.feed.rawValue, privacy: .public) marker synced id=\(markerID, privacy: .public)")
             } catch {
                 controller.handle(error, during: "marker sync") { _ in }
             }
@@ -421,10 +426,10 @@ final class HomeTimelineController {
     /// 既読位置が保存済みより進んでいれば保存する。保存している間に読み進めた分も、続けて保存する。
     /// 競合などで失敗したら、次にスクロールが止まったときに保存し直す。
     private func saveReadPosition(inBackground: Bool) {
-        guard !isStopped, store.readIDToSave != nil || isSavingReadPosition else { return }
+        guard !isStopped, let marker = feed.marker, store.readIDToSave != nil || isSavingReadPosition else { return }
         if inBackground, readPositionBackgroundTask == .invalid {
             // バックグラウンドに入るときは、保存し終えるまでアプリを止めないよう頼んでおく。保存中の分も含める。
-            readPositionBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "save home marker") { [weak self] in
+            readPositionBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "save \(marker.rawValue) marker") { [weak self] in
                 self?.endReadPositionBackgroundTask()
             }
         }
@@ -436,9 +441,9 @@ final class HomeTimelineController {
             Task { [weak self] in
                 while let self, !self.isStopped, let id = self.store.readIDToSave {
                     do {
-                        try await client.saveMarker(for: .home, lastReadID: id)
+                        try await client.saveMarker(for: marker, lastReadID: id)
                         self.store.markSaved(id)
-                        self.logger.info("home marker saved id=\(id, privacy: .public)")
+                        self.logger.info("\(self.feed.rawValue, privacy: .public) marker saved id=\(id, privacy: .public)")
                     } catch {
                         self.handle(error, during: "marker save") { _ in }
                         break
@@ -487,13 +492,13 @@ final class HomeTimelineController {
         #if DEBUG
         // 保留を解いたときに、releaseHeldArrivalsから挿入する。
         guard !DebugFaults.isHoldingArrivals else {
-            logger.info("home insert pending held")
+            logger.info("\(self.feed.rawValue, privacy: .public) insert pending held")
             return
         }
         #endif
         let before = store.entries
         let added = store.flushPending()
-        logger.info("home insert pending added=\(added.count, privacy: .public)")
+        logger.info("\(self.feed.rawValue, privacy: .public) insert pending added=\(added.count, privacy: .public)")
         // フィルターで隠す投稿は足さないが、同じIDの読めなかった行は消えるため、並びの変化で見る。
         guard store.entries != before else { return }
         showEntries()
@@ -525,7 +530,7 @@ final class HomeTimelineController {
         guard !isStopped, !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
         // 既読位置の保存など、このサーバーでは使えないと分かって止めた機能。止めたことは記録してあり、使う人に見せることもない。
         guard !(error is FeatureUnavailable) else { return }
-        logger.error("home \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
+        logger.error("\(self.feed.rawValue, privacy: .public) \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
         if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
             onUnauthorized()
         }
@@ -536,7 +541,7 @@ final class HomeTimelineController {
 #if DEBUG
 // MARK: - 検証用
 
-extension HomeTimelineController {
+extension FeedTimelineController {
     /// 投稿しなくても、新着の挿入やギャップの表示をシミュレーターで確かめるための操作。
     fileprivate func makeDebugActions() -> [UIMenuElement] {
         [
@@ -614,7 +619,7 @@ extension HomeTimelineController {
     private func streamDummyFiltered() {
         let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
         func filter(_ title: String, _ action: FilterResult.Action) -> [FilterResult] {
-            [FilterResult(filter: FilterResult.Filter(id: "dummy-\(title)", title: title, context: [.home], filterAction: action), keywordMatches: [title])]
+            [FilterResult(filter: FilterResult.Filter(id: "dummy-\(title)", title: title, context: [feed.filterContext], filterAction: action), keywordMatches: [title])]
         }
         let posts: [(content: String, spoilerText: String, filtered: [FilterResult], media: Bool)] = [
             ("警告のフィルターに一致したダミーの投稿", "", filter("ダミーの警告", .warn), false),

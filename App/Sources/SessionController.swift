@@ -9,7 +9,7 @@ final class SessionController {
     let rootViewController: UIViewController
     /// このセッションで使っているアカウント。
     let credential: Credential
-    private let home: HomeTimelineController
+    private let home: FeedTimelineController
     private let notifications: NotificationsController
     /// ホームと通知で共有する、ストリーミングの接続。
     private let streamingHub: StreamingHub
@@ -108,7 +108,7 @@ final class SessionController {
             streaming.open(baseURL: try await streamingEndpoint.url())
         }
         self.streamingHub = streamingHub
-        let home = HomeTimelineController(client: client, streamingHub: streamingHub) { forward() }
+        let home = FeedTimelineController(feed: .home, client: client, streamingHub: streamingHub) { forward() }
         let notifications = NotificationsController(client: client, streamingHub: streamingHub) { forward() }
         self.home = home
         self.notifications = notifications

@@ -39,6 +39,15 @@ public struct MastodonClient: Sendable {
         return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: response.statusCode == 206)
     }
 
+    /// 公開タイムライン。
+    /// - Parameter localOnly: このサーバーの投稿だけを返す（ローカルタイムライン）。falseなら、このサーバーが知っている公開の投稿をすべて返す（連合タイムライン）。
+    /// https://docs.joinmastodon.org/methods/timelines/#public
+    public func publicTimeline(_ query: TimelineQuery, localOnly: Bool) async throws -> TimelinePage {
+        let items = query.queryItems + (localOnly ? [URLQueryItem(name: "local", value: "true")] : [])
+        let list = try await get(ElementList<Status>.self, path: "api/v1/timelines/public", query: items).0
+        return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: false)
+    }
+
     /// 通知を新しい順に返す。1回に読める件数の上限は80件。
     /// https://docs.joinmastodon.org/methods/notifications/#get
     public func notifications(_ query: TimelineQuery) async throws -> NotificationPage {
