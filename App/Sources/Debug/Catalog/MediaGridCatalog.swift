@@ -36,6 +36,9 @@ enum MediaGridCatalog {
                     Fixtures.attachment("d", type: .unknown("unknown"), width: 0, height: 0, hasPreview: false),
                 ])
             },
+            CatalogState(title: "再生の印（幅160pt、投稿欄の64pt、編集履歴の44pt、通知の再掲の既定の40ptと最小の24ptの正方形。短い辺に比例させ、チューニングの上限と下限で止める）") {
+                tiles(Fixtures.attachment("a", type: .video, width: 1_280, height: 720, color: .systemTeal), widths: [160, 64, 44, 40, 24], square: true)
+            },
             CatalogState(title: "札（ALTとGIF。幅160pt、投稿欄の64pt、通知の再掲の既定の40ptと最小の24ptのタイル。入らなければ頭の1文字にし、余白、文字の順に詰める）") {
                 tiles(Fixtures.attachment("a", type: .gifv, width: 1_200, height: 900, color: .systemIndigo, description: "動くGIF"))
             },
@@ -75,9 +78,11 @@ enum MediaGridCatalog {
     }
 
     /// 同じ添付ファイルのタイルを、幅を変えて並べる。一覧の並べ方では狭いタイルが出にくいため、札が幅に入らないときの形を直接見る。
-    /// - Parameter contentSize: 文字の大きさの設定。nilなら端末の設定に従う。
+    /// - Parameters:
+    ///   - contentSize: 文字の大きさの設定。nilなら端末の設定に従う。
+    ///   - square: 高さを幅と同じにする。falseなら高さは64pt。
     @MainActor
-    private static func tiles(_ attachment: MediaAttachment, widths: [CGFloat] = [160, 64, 40, 24], contentSize: UIContentSizeCategory? = nil) -> UIView {
+    private static func tiles(_ attachment: MediaAttachment, widths: [CGFloat] = [160, 64, 40, 24], square: Bool = false, contentSize: UIContentSizeCategory? = nil) -> UIView {
         let row = UIStackView()
         row.axis = .horizontal
         row.alignment = .bottom
@@ -89,7 +94,7 @@ enum MediaGridCatalog {
             let tile = MediaTileView(store: AppDependencies.mediaImages)
             tile.apply(attachment, hiddenCount: 0, isCovered: false, policy: MediaThumbnailPolicy(allowsOriginal: true, upscaleTolerance: 2))
             tile.widthAnchor.constraint(equalToConstant: width).isActive = true
-            tile.heightAnchor.constraint(equalToConstant: 64).isActive = true
+            tile.heightAnchor.constraint(equalToConstant: square ? width : 64).isActive = true
             row.addArrangedSubview(tile)
         }
         let container = UIView()
