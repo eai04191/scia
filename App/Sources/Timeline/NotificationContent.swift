@@ -127,7 +127,7 @@ extension TimelineViewController {
             ),
             mediaImages: mediaImages,
             avatarImages: avatarImages,
-            emojiImages: emojiImages
+            emojiImages: settings.animatesCustomEmojis ? emojiImages : nil
         )
         if appearance.phrase.includesName {
             configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(notification.account) }

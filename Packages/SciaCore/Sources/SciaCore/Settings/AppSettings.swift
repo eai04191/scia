@@ -56,6 +56,11 @@ public final class AppSettings {
         didSet { defaults.set(animatesAvatars, forKey: Keys.animatesAvatars) }
     }
 
+    /// GIFやAPNGのアニメーションするカスタム絵文字を動かす。オフなら最初のコマで止めた版を描く。
+    public var animatesCustomEmojis: Bool {
+        didSet { defaults.set(animatesCustomEmojis, forKey: Keys.animatesCustomEmojis) }
+    }
+
     /// 最上部で新着に追従しているとき、新着を足してから最上部へ動かして見せるか。最上部より下で読んでいるときは、読んでいる位置を保つため動かさない。
     public var insertionMotion: InsertionMotion {
         didSet { defaults.set(insertionMotion.rawValue, forKey: Keys.insertionMotion) }
@@ -151,6 +156,7 @@ public final class AppSettings {
         static let emojiStyle = "settings.emojiStyle"
         static let avatarShape = "settings.avatarShape"
         static let animatesAvatars = "settings.animatesAvatars"
+        static let animatesCustomEmojis = "settings.animatesCustomEmojis"
         static let linkCardThumbnailSide = "settings.linkCardThumbnailSide"
         static let insertionMotion = "settings.insertionMotion"
         static let profileShowsReplies = "settings.profileShowsReplies"
@@ -182,6 +188,7 @@ public final class AppSettings {
         emojiStyle = defaults.string(forKey: Keys.emojiStyle).flatMap(EmojiStyle.init(rawValue:)) ?? .system
         avatarShape = defaults.string(forKey: Keys.avatarShape).flatMap(AvatarShape.init(rawValue:)) ?? .roundedSquare
         animatesAvatars = defaults.object(forKey: Keys.animatesAvatars) as? Bool ?? false
+        animatesCustomEmojis = defaults.object(forKey: Keys.animatesCustomEmojis) as? Bool ?? false
         linkCardThumbnailSide = defaults.string(forKey: Keys.linkCardThumbnailSide).flatMap(LinkCardThumbnailSide.init(rawValue:)) ?? .left
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
         linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .external

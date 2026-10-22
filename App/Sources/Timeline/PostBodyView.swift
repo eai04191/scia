@@ -102,14 +102,18 @@ final class PostBodyView: UIView {
         [spoilerView, textLabel].filter { !$0.isHidden }.map(\.frame).reduce(CGRect.null) { $0.union($1) }
     }
 
-    /// - Parameter emojiImages: 本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
-    init(mediaImages: MediaImageStore, avatarImages: AvatarImageStore, emojiImages: EmojiImageStore? = nil) {
+    /// 本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+    var emojiImages: EmojiImageStore? {
+        get { textLabel.emojiImages }
+        set { textLabel.emojiImages = newValue }
+    }
+
+    init(mediaImages: MediaImageStore, avatarImages: AvatarImageStore) {
         mediaView = MediaGridView(store: mediaImages)
         cardView = LinkCardView(store: mediaImages)
         xPostView = XPostView(store: mediaImages, avatarImages: avatarImages)
         super.init(frame: .zero)
         textLabel.numberOfLines = 0
-        textLabel.emojiImages = emojiImages
         filterNoteLabel.numberOfLines = 0
         for view in [spoilerView, textLabel, mediaView, cardView, xPostView, filterNoteLabel] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false

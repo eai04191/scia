@@ -362,6 +362,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = settings.statusTimeStyle
             _ = settings.avatarShape
             _ = settings.animatesAvatars
+            _ = settings.animatesCustomEmojis
             _ = settings.linkCardThumbnailSide
             _ = settings.glyphLanguage
             _ = settings.emojiStyle

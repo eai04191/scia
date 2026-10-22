@@ -75,7 +75,7 @@ final class NotificationContentView: UIView, UIContentView {
 
     init(configuration: NotificationContentConfiguration) {
         current = configuration
-        bodyView = PostBodyView(mediaImages: configuration.mediaImages, avatarImages: configuration.avatarImages, emojiImages: configuration.emojiImages)
+        bodyView = PostBodyView(mediaImages: configuration.mediaImages, avatarImages: configuration.avatarImages)
         super.init(frame: .zero)
         symbolView.contentMode = .scaleAspectFit
         headerLabel.numberOfLines = 0
@@ -109,6 +109,7 @@ final class NotificationContentView: UIView, UIContentView {
         symbolView.image = UIImage(systemName: configuration.symbolName, withConfiguration: UIImage.SymbolConfiguration(font: metrics.headerFont))
         symbolView.tintColor = configuration.symbolColor
         headerLabel.attributedText = configuration.header
+        bodyView.emojiImages = configuration.emojiImages
         bodyView.apply(configuration.body)
         reactionGlowView.apply(configuration.reactionGlow)
 

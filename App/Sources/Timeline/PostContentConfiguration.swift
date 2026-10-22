@@ -167,7 +167,7 @@ final class PostContentView: UIView, UIContentView {
         current = configuration
         avatarView = AvatarView(store: configuration.avatarImages)
         contextAvatarView = AvatarView(store: configuration.avatarImages)
-        bodyView = PostBodyView(mediaImages: configuration.mediaImages, avatarImages: configuration.avatarImages, emojiImages: configuration.emojiImages)
+        bodyView = PostBodyView(mediaImages: configuration.mediaImages, avatarImages: configuration.avatarImages)
         super.init(frame: .zero)
         addLayoutGuide(textGuide)
         configureSubviews()
@@ -266,6 +266,7 @@ final class PostContentView: UIView, UIContentView {
         timeText = configuration.timeText(now: .now)
         timeLabel.attributedText = timeAttributedText(timeText, for: configuration)
 
+        bodyView.emojiImages = configuration.emojiImages
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,
             text: configuration.body,

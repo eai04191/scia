@@ -73,7 +73,7 @@ struct PostContentBuilder {
             statusID: shown.id,
             mediaImages: mediaImages,
             avatarImages: avatarImages,
-            emojiImages: emojiImages
+            emojiImages: settings.animatesCustomEmojis ? emojiImages : nil
         )
         configuration.reactionGlow = reactionGlow(for: shown)
         return configuration

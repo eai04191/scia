@@ -71,6 +71,7 @@ struct SettingsView: View {
                         Text("角丸の四角").tag(AvatarShape.roundedSquare)
                     }
                     Toggle("アイコンのアニメーションを再生する", isOn: $settings.animatesAvatars)
+                    Toggle("カスタム絵文字のアニメーションを再生する", isOn: $settings.animatesCustomEmojis)
                     Picker("リンクカードの画像の位置", selection: $settings.linkCardThumbnailSide) {
                         Text("左").tag(LinkCardThumbnailSide.left)
                         Text("右").tag(LinkCardThumbnailSide.right)
