@@ -1812,6 +1812,9 @@ final class SessionController {
             case .local: local.inject(try decoder.decode([Status].self, from: data))
             case .federated: federated.inject(try decoder.decode([Status].self, from: data))
             case .notifications: notifications.inject(try decoder.decode([MastodonNotification].self, from: data))
+            case .bookmarks, .favourites:
+                // ストリームのない一覧なので、新着と同じ経路がない。
+                logger.error("debug inject unsupported tab=\(tab.rawValue, privacy: .public)")
             }
         } catch {
             logger.error("debug inject failed file=\(file, privacy: .public): \(String(describing: error), privacy: .public)")

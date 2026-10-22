@@ -53,7 +53,7 @@ enum DebugURL: Equatable {
     case settings
     /// `scia-debug://tuning`。チューニングパネルを開く。
     case tuning
-    /// `scia-debug://tab/<home|local|federated|notifications>`。タブを切り替える。
+    /// `scia-debug://tab/<home|local|federated|notifications|bookmarks|favourites>`。タブを切り替える。無効にしている項目では何もしない。
     case tab(Tab)
     /// `scia-debug://viewer?index=<n>`。選んでいるタブの、画面のいちばん上に見えている添付ファイル付きの投稿を、n番目（0から）の添付ファイルでビューアに開く。
     /// サムネイルをタップしたのと同じ経路で開く。
@@ -82,6 +82,8 @@ enum DebugURL: Equatable {
         case local
         case federated
         case notifications
+        case bookmarks
+        case favourites
     }
 
     /// 引数を持たないURL。`host`か`host/path`で引く。
