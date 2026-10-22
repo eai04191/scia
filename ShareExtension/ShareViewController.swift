@@ -9,6 +9,23 @@ final class ShareViewController: UIViewController {
     private let logger = Logger(subsystem: "net.mizle.scia", category: "shareExtension")
     private var isReceiving = false
 
+    // 受け取ってSciaを開くまで、共有シートの上に空のシートを出さないよう、透明な全画面で出してもらう。
+    // 共有シートを出したアプリは、拡張の画面のmodalPresentationStyleに合わせて出す。
+    override init(nibName nibNameOrNil: String?, bundle nibBundleOrNil: Bundle?) {
+        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
+        modalPresentationStyle = .overFullScreen
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        modalPresentationStyle = .overFullScreen
+    }
+
+    override func loadView() {
+        view = UIView()
+        view.backgroundColor = .clear
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         // 画面を出し直されても、受け取りは1回だけにする。
