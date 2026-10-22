@@ -16,6 +16,8 @@ final class InlineComposeController: NSObject {
     /// 本文と注意書きの補完。本文ではメンション、ハッシュタグ、カスタム絵文字を、注意書きではカスタム絵文字だけを補完する。
     /// サーバーは注意書きのメンションとハッシュタグを読まないため。
     let completion: ComposeCompletion
+    /// 最近使ったカスタム絵文字。パレットの先頭に出す。なければ出さず、覚えない。
+    private let recentEmojis: RecentEmojis?
     /// 編集を始めるときに呼ぶ。既定の公開範囲などをまだ読めていなければ読む。
     var onBeginEditing: () -> Void = {}
     /// 書き終えてバーを細いカプセルに戻したときに呼ぶ。メディアを選ぶシートやビューアのためにキーボードを閉じたときは、書いている途中なので呼ばない。
@@ -169,7 +171,7 @@ final class InlineComposeController: NSObject {
         switch item {
         case .visibility: (item, visibilityButton)
         case .expand: (item, expandButton)
-        case .media, .spoiler, .linkTitle, .customize: (item, makeToolButton(item))
+        case .media, .spoiler, .linkTitle, .customEmoji, .customize: (item, makeToolButton(item))
         }
     })
     /// 今のボタンの行と＋のメニューへの振り分け。ボタンの行の幅が決まるたびに決め直す。まだ一度も振り分けていなければnil。
@@ -251,9 +253,10 @@ final class InlineComposeController: NSObject {
         UIFont.preferredFont(forTextStyle: .body).lineHeight * lines + textView.textContainerInset.top + textView.textContainerInset.bottom
     }
 
-    init(model: ComposeModel, completion: ComposeCompletion? = nil, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, keyboardNotifications: NotificationCenter = .default) {
+    init(model: ComposeModel, completion: ComposeCompletion? = nil, recentEmojis: RecentEmojis? = nil, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, keyboardNotifications: NotificationCenter = .default) {
         self.model = model
         self.completion = completion ?? ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning))
+        self.recentEmojis = recentEmojis
         self.tuning = tuning
         self.settings = settings
         self.keyboardNotifications = keyboardNotifications
@@ -262,11 +265,11 @@ final class InlineComposeController: NSObject {
             // シートの上に見えている投稿ボタンから送ったときは、入力欄はもうキーボードを出していないので、シートを閉じて書き終える。
             // 添付したメディアは、下書きと一緒にモデルが空にしている。
             guard let self else { return }
-            mediaPicker?.close(notifiesWillClose: false)
+            bottomSheet?.close(notifiesWillClose: false)
             resignInput()
             // 送っている間に添付のビューアを開いていると、入力欄はもうキーボードを出しておらず、書き終えたことにならない。
             // ビューアを閉じるのを待たずにここで書き終え、閉じたあとに空になった本文へキーボードを戻さないようにする。
-            if isEditing, mediaPicker == nil {
+            if isEditing, bottomSheet == nil {
                 releaseHoldAboveKeyboard()
                 setEditing(false)
                 onEndEditing()
@@ -402,7 +405,7 @@ final class InlineComposeController: NSObject {
     @discardableResult
     func edit(_ status: Status, source: StatusSource) -> Bool {
         guard !model.isPosting, status.canBeEdited(now: Date()) else { return false }
-        mediaPicker?.close(notifiesWillClose: true)
+        bottomSheet?.close(notifiesWillClose: true)
         guard model.beginEditing(status, source: source) else { return false }
         update()
         beginEditing()
@@ -590,6 +593,10 @@ final class InlineComposeController: NSObject {
             return UIAction(title: item.title, image: UIImage(systemName: item.symbolName), state: linkTitleEffects.isSelecting ? .on : .off) { [weak self] _ in
                 self?.toggleLinkSelection()
             }
+        case .customEmoji:
+            return emojiSheet != nil
+                ? UIAction(title: "キーボードに戻る", image: UIImage(systemName: "keyboard")) { [weak self] _ in self?.toggleEmojiPalette() }
+                : UIAction(title: item.title, image: UIImage(systemName: item.symbolName)) { [weak self] _ in self?.toggleEmojiPalette() }
         }
     }
 
@@ -753,6 +760,7 @@ final class InlineComposeController: NSObject {
             case .spoiler: self?.toggleSpoiler()
             case .customize: self?.presentToolLayoutSettings()
             case .linkTitle: self?.toggleLinkSelection()
+            case .customEmoji: self?.toggleEmojiPalette()
             case .visibility, .expand: break
             }
         })
@@ -858,6 +866,207 @@ final class InlineComposeController: NSObject {
         }
     }
 
+    // MARK: - 絵文字のパレット
+
+    /// シートに載せるカスタム絵文字のパレット。最初に出すときに作り、出すたびに同じものを載せる。
+    private lazy var emojiPalette: EmojiPaletteView = {
+        let palette = EmojiPaletteView(emojiImages: AppDependencies.emojiImages)
+        palette.onSelect = { [weak self] emoji in self?.insertFromPalette(emoji) }
+        palette.onDelete = { [weak self] in self?.deleteFromPalette() }
+        palette.onRetry = { [weak self] in self?.completion.loadEmojisIfNeeded() }
+        palette.onQueryChange = { [weak self] in self?.updateEmojiPalette() }
+        palette.onSearchSubmit = { [weak self] in
+            guard let self else { return }
+            emojiPalette.clearQuery()
+            updateEmojiPalette()
+            emojiSheet?.endSearch()
+        }
+        return palette
+    }()
+    /// パレットを載せたシート。出している間だけある。
+    private var emojiSheet: EmojiPaletteSheet?
+    private var isObservingEmojiPalette = false
+    /// パレットを出したときの、最近使った絵文字。出している間に選んでも並びを変えない。押そうとしている絵文字が指の下から動かないようにするため。
+    /// システムの絵文字キーボードも、閉じて開き直すまで最近使った絵文字を並べ替えない。
+    private var paletteRecentKeys: [String] = []
+    /// 片方のシートを出している間にもう片方のボタンを押したとき、出しているシートが閉じ終わったら出すシート。
+    /// UIKitは前のシートが閉じ終わるまで次のシートを出せないため、閉じ終わりを待つ。待つ間も、投稿欄のバーは留めたままにする。
+    private enum PendingSheet { case media, emoji }
+    private var pendingSheet: PendingSheet?
+    /// 出しているシート。メディアを選ぶシートか、絵文字のパレットのシート。どちらも出している間は、投稿欄のバーをシートの上端に留め、書いている状態を保つ。
+    private var bottomSheet: (any ComposeBottomSheet)? {
+        mediaPicker ?? emojiSheet
+    }
+
+    /// 出していなければシートを出し、出していれば閉じてキーボードに戻る。
+    private func toggleEmojiPalette() {
+        if let emojiSheet {
+            guard !emojiSheet.isClosing else { return }
+            logger.info("emoji palette sheet: closing from compose button")
+            emojiSheet.close(notifiesWillClose: true)
+            return
+        }
+        // メディアを選ぶシートを出している間は、閉じ終わってから出す。
+        if let mediaPicker {
+            logger.info("emoji palette sheet: closing media picker first")
+            pendingSheet = .emoji
+            mediaPicker.close(notifiesWillClose: false)
+            return
+        }
+        presentEmojiPalette()
+    }
+
+    /// メディアを選ぶシートと同じ高さのシートを出し、バーをその上端に留めたまま、書いている状態を保つ。
+    private func presentEmojiPalette() {
+        guard let host else { return }
+        if !isEditing {
+            expandForEditing()
+        }
+        paletteRecentKeys = recentEmojis?.keys ?? []
+        completion.loadEmojisIfNeeded()
+        emojiPalette.clearQuery()
+        updateEmojiPalette()
+        observeEmojiPalette()
+        let height = bottomSheetHeight
+        setHoldAboveKeyboard(height: height)
+        // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
+        let sheet = EmojiPaletteSheet(palette: emojiPalette, lowHeight: height - host.view.safeAreaInsets.bottom)
+        sheet.onWillClose = { [weak self] in self?.focusLastInput() }
+        sheet.onDidClose = { [weak self] in self?.emojiPaletteDidClose() }
+        emojiSheet = sheet
+        updateToolButtons()
+        logger.info("emoji palette sheet: presenting (height=\(height), keyboardHeight=\(self.lastKeyboardHeight ?? -1))")
+        resignInput()
+        sheet.present(from: presenterAboveInlineCompose?() ?? host)
+    }
+
+    /// キーボードに戻らずに閉じたとき（シートの上の投稿ボタンから送ったときなど）は、書き終えたときと同じくバーを細いカプセルに戻す。
+    private func emojiPaletteDidClose() {
+        logger.info("emoji palette sheet: did close (firstResponder=\(self.isInputFocused))")
+        emojiSheet = nil
+        updateToolButtons()
+        guard !presentPendingSheet() else { return }
+        let returnedToKeyboard = isInputFocused
+        // ハードウェアキーボードではキーボードが上がらず、上がりきった知らせも来ないので、待たずにバーをシートの上端から外す。
+        if returnedToKeyboard, currentKeyboardHeight <= Self.softwareKeyboardMinimumHeight {
+            releaseHoldAboveKeyboard()
+        }
+        presentErrorIfNeeded()
+        guard !returnedToKeyboard else { return }
+        releaseHoldAboveKeyboard()
+        setEditing(false)
+    }
+
+    /// 閉じ終わるのを待っていたシートを出す。出したらtrueを返す。出せなかったら（メディアを添付できなくなったなど）、最後に書いていた入力欄にキーボードを戻し、閉じたあとのふつうの扱いにさせる。
+    private func presentPendingSheet() -> Bool {
+        guard let pending = pendingSheet else { return false }
+        pendingSheet = nil
+        switch pending {
+        case .emoji:
+            presentEmojiPalette()
+        case .media:
+            presentMediaPicker()
+        }
+        guard bottomSheet == nil else { return true }
+        logger.info("compose: pending sheet could not be presented, returning to keyboard")
+        focusLastInput()
+        return false
+    }
+
+    private func observeEmojiPalette() {
+        guard !isObservingEmojiPalette else { return }
+        isObservingEmojiPalette = true
+        withObservationTracking {
+            updateEmojiPalette()
+        } onChange: { [weak self] in
+            Task { @MainActor in
+                self?.isObservingEmojiPalette = false
+                guard self?.emojiSheet != nil else { return }
+                self?.observeEmojiPalette()
+            }
+        }
+    }
+
+    /// 検索語があれば、補完と同じ順で並べた結果を出す。なければまとまりごとに並べる。
+    private func updateEmojiPalette() {
+        emojiPalette.cellSize = tuning.value(of: TuningCatalog.composeEmojiPaletteCellSize)
+        emojiPalette.hardEdgeEffect = tuning.value(of: TuningCatalog.composeEmojiPaletteHardEdgeEffect)
+        emojiPalette.barHeight = tuning.value(of: TuningCatalog.composeEmojiPaletteBarHeight)
+        emojiPalette.barBottomInset = tuning.value(of: TuningCatalog.composeEmojiPaletteBarBottomInset)
+        emojiPalette.animatesEmojis = settings.animatesCustomEmojis
+        emojiPalette.emojiStyle = settings.emojiStyle
+        let query = emojiPalette.query
+        let standardGroups = StandardEmojiAvailability.groups(for: settings.emojiStyle)
+        // カスタム絵文字の一覧がまだないか読めなかったときも、Unicodeの絵文字は通信なしで並べられるので出し、カスタム絵文字の場所に状態を出す。
+        let emojis = completion.emojis ?? []
+        let customStatus: EmojiPaletteView.CustomEmojiStatus? = if completion.emojis != nil {
+            nil
+        } else if let message = completion.emojiFailureMessage {
+            .failed(message)
+        } else {
+            .loading
+        }
+        if query.isEmpty {
+            let recentLimit = Int(tuning.value(of: TuningCatalog.composeEmojiPaletteRecentLimit))
+            emojiPalette.setContent(.sections(EmojiPalette.sections(emojis: emojis, standardGroups: standardGroups, recentKeys: paletteRecentKeys, recentLimit: recentLimit), customStatus: customStatus))
+        } else {
+            emojiPalette.setContent(.searchResults(EmojiPalette.searchResults(matching: query, emojis: emojis, standardGroups: standardGroups, limit: 200), customStatus: customStatus))
+        }
+    }
+
+    /// パレットで選んだ絵文字を入れる入力欄。最後に書いていたのが注意書きの欄ならそちら、それ以外は本文。
+    /// シートを出している間は、どちらの入力欄もフォーカスを持たないので、最後に書いていた入力欄で決める。
+    private var paletteInput: any UITextInput & UIView {
+        lastFocusedInput === spoilerField && model.showsSpoiler ? spoilerField : textView
+    }
+
+    /// 入力欄の今の文字と、選んでいる範囲（UTF-16）。
+    private func textAndSelection(of input: any UITextInput) -> (String, Range<Int>)? {
+        let text = (input as? UITextView)?.text ?? (input as? UITextField)?.text ?? ""
+        guard let selection = input.selectedTextRange else { return nil }
+        let begin = input.beginningOfDocument
+        let start = input.offset(from: begin, to: selection.start)
+        let end = input.offset(from: begin, to: selection.end)
+        return (text, start ..< max(start, end))
+    }
+
+    private func insertFromPalette(_ emoji: PaletteEmoji) {
+        guard !model.isPosting else { return }
+        let input = paletteInput
+        if input.markedTextRange != nil {
+            input.unmarkText()
+        }
+        guard let (text, selection) = textAndSelection(of: input) else { return }
+        let insertion = switch emoji {
+        case .custom(let custom):
+            CompletionTokenizer.insertion(of: ":\(custom.shortcode):", at: selection, in: text)
+        case .standard(let standard):
+            // Unicodeの絵文字は文字そのものなので、サーバーが読むための空白は要らない。選んでいる範囲と置き換える。
+            CompletionInsertion(range: selection, text: standard.emoji, cursor: selection.lowerBound + standard.emoji.utf16.count)
+        }
+        guard apply(insertion, to: input) else { return }
+        recentEmojis?.record(emoji.recentKey)
+    }
+
+    /// カーソルの直前が絵文字なら、絵文字をまとめて消す。範囲を選んでいればそれを、それ以外は1文字消す。
+    private func deleteFromPalette() {
+        guard !model.isPosting else { return }
+        let input = paletteInput
+        guard let (text, selection) = textAndSelection(of: input) else { return }
+        // パレットを出している間は入力欄がフォーカスを持たないので、`deleteBackward`に頼らず、消す範囲を求めて置き換える。
+        let range: Range<Int>
+        if let emoji = CompletionTokenizer.emojiDeletionRange(before: selection, in: text) {
+            range = emoji
+        } else if !selection.isEmpty {
+            range = selection
+        } else {
+            let before = String(decoding: Array(text.utf16).prefix(selection.lowerBound), as: UTF16.self)
+            guard let last = before.last else { return }
+            range = selection.lowerBound - String(last).utf16.count ..< selection.lowerBound
+        }
+        apply(CompletionInsertion(range: range, text: "", cursor: range.lowerBound), to: input)
+    }
+
     // MARK: - 注意書き
 
     /// 注意書きの欄を出して書き始めるか、外して本文に戻る。外しても書いた注意書きは残し、もう一度足すと戻る。投稿には付けない。
@@ -869,10 +1078,10 @@ final class InlineComposeController: NSObject {
             update()
             // シートを出している間は、シートを閉じてから注意書きの欄にキーボードを出す。
             lastFocusedInput = spoilerField
-            if mediaPicker == nil {
-                spoilerField.becomeFirstResponder()
+            if let bottomSheet {
+                bottomSheet.close(notifiesWillClose: true)
             } else {
-                mediaPicker?.close(notifiesWillClose: true)
+                spoilerField.becomeFirstResponder()
             }
         } else {
             model.showsSpoiler = false
@@ -896,15 +1105,28 @@ final class InlineComposeController: NSObject {
             mediaPicker.close(notifiesWillClose: true)
             return
         }
+        // 絵文字のパレットのシートを出している間は、閉じ終わってから出す。
+        if let emojiSheet {
+            logger.info("media picker: closing emoji palette sheet first")
+            pendingSheet = .media
+            emojiSheet.close(notifiesWillClose: false)
+            return
+        }
         presentMediaPicker()
+    }
+
+    /// メディアを選ぶシートと絵文字のパレットのシートの、低いときの画面の下端からの高さ。最後に出ていたキーボードの高さにそろえる。
+    /// 2つのシートを入れ替えたり、キーボードと切り替えたりしても、投稿欄のバーが上下に動かないようにするため。
+    private var bottomSheetHeight: CGFloat {
+        let fixedHeight = tuning.value(of: TuningCatalog.composePickerHeight)
+        let matchesKeyboard = tuning.value(of: TuningCatalog.composePickerMatchesKeyboard)
+        return matchesKeyboard ? (lastKeyboardHeight ?? fixedHeight) : fixedHeight
     }
 
     /// キーボードと同じ高さのシートを出し、バーをその上端に留めたまま、書いている状態を保つ。
     private func presentMediaPicker() {
         guard let host, isEditing, model.canAttachMedia else { return }
-        let fixedHeight = tuning.value(of: TuningCatalog.composePickerHeight)
-        let matchesKeyboard = tuning.value(of: TuningCatalog.composePickerMatchesKeyboard)
-        let height = matchesKeyboard ? (lastKeyboardHeight ?? fixedHeight) : fixedHeight
+        let height = bottomSheetHeight
         setHoldAboveKeyboard(height: height)
         // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
         let picker = MediaPickerSheet(
@@ -930,6 +1152,7 @@ final class InlineComposeController: NSObject {
         logger.info("media picker: did close (firstResponder=\(self.isInputFocused))")
         mediaPicker = nil
         model.mediaPickerDidClose()
+        guard !presentPendingSheet() else { return }
         // シートを出している間に投稿に失敗していたら、ここで知らせる。知らせはキーボードに戻った入力欄を一度閉じるので、戻ったかは知らせる前に見る。
         let returnedToKeyboard = isInputFocused
         // ハードウェアキーボードではキーボードが上がらず、上がりきった知らせも来ないので、待たずにバーをシートの上端から外す。
@@ -998,14 +1221,17 @@ final class InlineComposeController: NSObject {
                 releaseHoldAboveKeyboard()
             }
         }
-        guard height > Self.softwareKeyboardMinimumHeight else { return }
+        // 絵文字のパレットのシートで検索している間は、シートの中の入力欄のキーボードなので、メディアを選ぶシートの高さに使わないよう覚えない。
+        // シートが残っているかでは見分けない。閉じ始めに本文へ戻したキーボードは、シートが閉じ終わる前に上がるので、それまで捨てると、
+        // 検索中にキーボードを切り替えて閉じたとき、本文のキーボードと違う高さでシートを出し直し、バーが上下に動いた。
+        guard height > Self.softwareKeyboardMinimumHeight, !emojiPalette.searchField.isFirstResponder else { return }
         lastKeyboardHeight = height
     }
 
     /// 添付の長押しのメニューを出すと、iOSは入力欄のフォーカスを残したままソフトウェアキーボードを隠す。
     /// バーがキーボードについてタブバーの上まで下がり、メニューを閉じるかドラッグに移ると上がり直すため、メニューの間は今の位置に留める。
     private func holdBarForContextMenu() {
-        guard let host, isInputFocused, mediaPicker == nil, !isShowingMediaViewer else { return }
+        guard let host, isInputFocused, bottomSheet == nil, !isShowingMediaViewer else { return }
         logger.info("attachment context menu: holding bar (keyboardHeight=\(self.currentKeyboardHeight))")
         keyboardHeightBeforeContextMenu = currentKeyboardHeight
         keyboardGuideHeightBeforeContextMenu = measureKeyboardGuideHeight(host.view)
@@ -1039,7 +1265,7 @@ final class InlineComposeController: NSObject {
     /// 書いている途中でバーを留めるので下げない。下げている途中でキーボードが戻ったら、バーも戻す。
     private func updateSinkingWithKeyboard(keyboardHeight height: CGFloat) {
         let sinks = height <= Self.softwareKeyboardMinimumHeight && isSoftwareKeyboardShown && sinksWhenDone && isEditing
-            && !isBarHeld && mediaPicker == nil && !isShowingMediaViewer && !isPresentingError && !isShowingToolLayoutSettings && !isMovingFocus
+            && !isBarHeld && bottomSheet == nil && !isShowingMediaViewer && !isPresentingError && !isShowingToolLayoutSettings && !isMovingFocus
         guard sinks != isSinkingWithKeyboard else { return }
         isSinkingWithKeyboard = sinks
         logger.info("compose: bar \(sinks ? "sinking with" : "returning with", privacy: .public) keyboard")
@@ -1518,7 +1744,7 @@ final class InlineComposeController: NSObject {
         guard let message = model.errorMessage, !isPresentingError, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
         isPresentingError = true
         logger.info("compose: presenting post error (focused=\(self.isInputFocused) editing=\(self.isEditing) picker=\(self.mediaPicker != nil))")
-        if mediaPicker == nil, isInputFocused {
+        if bottomSheet == nil, isInputFocused {
             // ハードウェアキーボードでは、閉じたあとに上がりきった知らせが来ず、留めると外れなくなる。ソフトウェアキーボードが出ているときだけ留める。
             if currentKeyboardHeight > Self.softwareKeyboardMinimumHeight {
                 setHoldAboveKeyboard(height: currentKeyboardHeight)
@@ -1530,7 +1756,7 @@ final class InlineComposeController: NSObject {
             guard let self else { return }
             isPresentingError = false
             model.errorMessage = nil
-            guard mediaPicker == nil, isEditing else { return }
+            guard bottomSheet == nil, isEditing else { return }
             focusLastInput()
         })
         presenter.present(alert, animated: true)
@@ -1555,7 +1781,7 @@ final class InlineComposeController: NSObject {
         isShowingMediaViewer = true
         // 前のビューアを閉じた直後に開き直したら、閉じたあとのキーボードの知らせはもう待たない。待ったままだと、開き直すときに入力欄を閉じた知らせで、ビューアを出している間にバーを外してしまう。
         isWaitingForKeyboardAfterViewer = false
-        if mediaPicker == nil, isInputFocused {
+        if bottomSheet == nil, isInputFocused {
             // ハードウェアキーボードでは、閉じたあとに上がりきった知らせが来ず、留めると外れなくなる。ソフトウェアキーボードが出ているときだけ留める。
             if currentKeyboardHeight > Self.softwareKeyboardMinimumHeight {
                 setHoldAboveKeyboard(height: currentKeyboardHeight)
@@ -1602,7 +1828,7 @@ final class InlineComposeController: NSObject {
         guard generation == mediaViewerGeneration else { return }
         logger.info("attachment viewer did finish closing (picker=\(self.mediaPicker != nil))")
         isShowingMediaViewer = false
-        guard mediaPicker == nil, isEditing else { return }
+        guard bottomSheet == nil, isEditing else { return }
         focusLastInput()
         // 開いている間にハードウェアキーボードに替わると、キーボードは上がらず、上がりきった知らせも来ないので、留めたバーが外れなくなる。
         // 入力欄に戻した時点ではどちらのキーボードかの知らせがまだ届いていないため、次に届いた高さで決める。
@@ -1802,6 +2028,9 @@ final class InlineComposeController: NSObject {
         let insertion = CompletionTokenizer.insertion(of: candidate.completion, replacing: token, in: text)
         logger.info("completion: selected \(token.kind.rawValue, privacy: .public) leadingSpace=\(token.needsLeadingSpace)")
         guard apply(insertion, to: input) else { return }
+        if case .emoji(let emoji) = candidate {
+            recentEmojis?.record(emoji.shortcode)
+        }
         completion.didComplete()
     }
 
@@ -2224,7 +2453,7 @@ extension InlineComposeController: UITextViewDelegate {
     }
 
     func textViewShouldBeginEditing(_ textView: UITextView) -> Bool {
-        inputWillBeginEditing(from: spoilerField)
+        inputWillBeginEditing(from: [spoilerField])
         return true
     }
 
@@ -2240,8 +2469,8 @@ extension InlineComposeController: UITextViewDelegate {
 
     /// 入力欄がキーボードを出す前に呼ぶ。UIKitは、次の入力欄に出してよいかを聞いてから、前の入力欄の編集を終える。
     /// 前の入力欄がキーボードを出していれば、フォーカスを移す途中として、前の入力欄の編集が終わっても書き終えたことにしない。
-    private func inputWillBeginEditing(from other: UIResponder) {
-        if other.isFirstResponder {
+    private func inputWillBeginEditing(from others: [UIResponder]) {
+        if others.contains(where: \.isFirstResponder) {
             isMovingFocus = true
         }
     }
@@ -2260,9 +2489,11 @@ extension InlineComposeController: UITextViewDelegate {
             completion.textDidChange(nil)
             self.completionInput = nil
         }
-        guard let mediaPicker, !mediaPicker.isClosing else { return }
-        logger.info("media picker: closing because an input began editing")
-        mediaPicker.close(notifiesWillClose: false)
+        // シートを入れ替える途中なら、次のシートは出さない。閉じ終わってから出すと、戻したフォーカスがまた外れるため。
+        pendingSheet = nil
+        guard let bottomSheet, !bottomSheet.isClosing else { return }
+        logger.info("compose: closing bottom sheet because an input began editing")
+        bottomSheet.close(notifiesWillClose: false)
     }
 
     private func inputDidEndEditing() {
@@ -2270,7 +2501,7 @@ extension InlineComposeController: UITextViewDelegate {
         // メディアを選ぶシートを出すためにキーボードを閉じたときも同じ。
         // 添付のビューアや、投稿の失敗の知らせを開くためにキーボードを閉じたときも同じ。閉じ終わったら入力欄にキーボードを戻す。
         // シートを閉じたあとに書き終えたときは、キーボードが上がりきった知らせが来ずにバーを留めたままでも、カプセルに戻す。
-        guard !isMovingFocus, mediaPicker == nil, !isShowingMediaViewer, !isShowingToolLayoutSettings, !isPresentingError else { return }
+        guard !isMovingFocus, bottomSheet == nil, !isShowingMediaViewer, !isShowingToolLayoutSettings, !isPresentingError else { return }
         releaseHoldAboveKeyboard()
         setEditing(false)
         onEndEditing()
@@ -2345,7 +2576,7 @@ extension InlineComposeController: UITextPasteDelegate {
 
 extension InlineComposeController: UITextFieldDelegate {
     func textFieldShouldBeginEditing(_ textField: UITextField) -> Bool {
-        inputWillBeginEditing(from: textView)
+        inputWillBeginEditing(from: [textView])
         return true
     }
 

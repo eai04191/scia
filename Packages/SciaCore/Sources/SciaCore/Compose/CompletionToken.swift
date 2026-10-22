@@ -33,6 +33,12 @@ public struct CompletionInsertion: Equatable, Sendable {
     public let text: String
     /// 入れたあとのカーソルの位置（UTF-16）。
     public let cursor: Int
+
+    public init(range: Range<Int>, text: String, cursor: Int) {
+        self.range = range
+        self.text = text
+        self.cursor = cursor
+    }
 }
 
 /// 本文のカーソルの位置から、補完の対象にする語を切り出す。
@@ -84,6 +90,34 @@ public enum CompletionTokenizer {
         }
         let inserted = replacement + " "
         return CompletionInsertion(range: token.range, text: inserted, cursor: start + inserted.utf16.count)
+    }
+
+    /// 絵文字のパレットで選んだ絵文字を、選んでいる範囲と置き換えて入れるもの。語を打っていないので、前後の文字だけを見て空白を足す。
+    /// 直前がサーバーが絵文字として読まない文字（英数字、日本語、`:`）なら前に空白を入れる。後ろは補完と同じく、空白がなければ足す。
+    /// 続けて選んでも`:a: :b:`になり、`:a::b:`のようにサーバーが読まない並びにならない。
+    public static func insertion(of completion: String, at selection: Range<Int>, in text: String) -> CompletionInsertion {
+        let utf16 = Array(text.utf16)
+        let lower = min(max(selection.lowerBound, 0), utf16.count)
+        let upper = min(max(selection.upperBound, lower), utf16.count)
+        let before = String(decoding: utf16.prefix(lower), as: UTF16.self)
+        let needsLeadingSpace = !serverAccepts(.emoji, after: before.last)
+        return insertion(
+            of: completion,
+            replacing: CompletionToken(kind: .emoji, range: lower ..< upper, query: "", needsLeadingSpace: needsLeadingSpace),
+            in: text
+        )
+    }
+
+    /// 絵文字のパレットの削除キーで消す範囲。カーソルの直前が`:shortcode:`（パレットが足した後ろの空白を含む）なら、まとめて消す。
+    /// 1文字ずつ消すと、絵文字1つに何度も押すことになるため。それ以外と、範囲を選んでいるときはnilを返し、ふつうに1文字消す。
+    public static func emojiDeletionRange(before selection: Range<Int>, in text: String) -> Range<Int>? {
+        guard selection.isEmpty else { return nil }
+        let utf16 = Array(text.utf16)
+        guard selection.lowerBound <= utf16.count else { return nil }
+        let before = String(decoding: utf16.prefix(selection.lowerBound), as: UTF16.self)
+        guard let match = before.firstMatch(of: /:[A-Za-z0-9_]{2,}: ?$/) else { return nil }
+        let length = before[match.range].utf16.count
+        return selection.lowerBound - length ..< selection.lowerBound
     }
 
     private static func kind(ofTrigger character: Character) -> CompletionKind? {

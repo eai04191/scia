@@ -22,6 +22,14 @@ struct LicensesView: View {
             licenseURL: URL(string: "https://creativecommons.org/licenses/by/4.0/")
         ),
         LicenseItem(
+            name: "Unicode絵文字データ、CLDR",
+            license: "Unicode License v3",
+            copyright: "Copyright © 1991-2026 Unicode, Inc.",
+            usage: "投稿欄の絵文字のシートに並べるUnicodeの絵文字の一覧とまとまり（emoji-test.txt）と、検索に使う日本語と英語の名前と言葉（CLDRの絵文字の注釈）。",
+            source: URL(string: "https://www.unicode.org/emoji/"),
+            licenseURL: URL(string: "https://www.unicode.org/license.txt")
+        ),
+        LicenseItem(
             name: "FediDB",
             license: "CC BY 4.0",
             copyright: "FediDB",

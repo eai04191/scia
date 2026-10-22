@@ -169,8 +169,10 @@ public final class ComposeCompletion {
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var emojiTask: Task<Void, Never>?
-    /// 一覧に出す絵文字。読み終えるまではnil。
-    @ObservationIgnored private var emojis: [ServerEmoji]?
+    /// 一覧に出す絵文字。読み終えるまではnil。絵文字のパレットも、この一覧を並べる。
+    public private(set) var emojis: [ServerEmoji]?
+    /// 絵文字の一覧を読めなかった理由の文言。パレットに出す。読み直し始めたらnilに戻す。
+    public private(set) var emojiFailureMessage: String?
     /// プロフィールに載せているタグと最近使ったタグ。読めるまではnilで、次に書き始めたときに読み直す。
     @ObservationIgnored private var featuredTags: [FeaturedTag]?
     @ObservationIgnored private var recentTags: [Hashtag]?
@@ -380,8 +382,15 @@ public final class ComposeCompletion {
         return ErrorPresentation(error).text
     }
 
+    /// 絵文字のパレットを開いたときに呼ぶ。まだ読めていなければ読む。失敗していたら読み直す。
+    public func loadEmojisIfNeeded() {
+        guard emojis == nil else { return }
+        loadEmojis()
+    }
+
     private func loadEmojis() {
         guard emojiTask == nil else { return }
+        emojiFailureMessage = nil
         emojiTask = Task { [weak self, sources] in
             do {
                 let emojis = try await RequestOrigin.$current.withValue(.automatic) {
@@ -405,6 +414,7 @@ public final class ComposeCompletion {
     private func didFailEmojis(_ error: any Error) {
         emojiTask = nil
         logger.info("completion: custom emojis failed: \(ErrorPresentation(error).code ?? "unknown", privacy: .public)")
+        emojiFailureMessage = Self.failureMessage(for: error)
         guard token?.kind == .emoji else { return }
         candidates = []
         isLoading = false

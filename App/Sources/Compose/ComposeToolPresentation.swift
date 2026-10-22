@@ -9,6 +9,7 @@ extension ComposeToolItem: MenuItemPresentable {
         case .expand: "広げて書く"
         case .spoiler: "注意書き"
         case .linkTitle: "リンクにタイトルを付ける"
+        case .customEmoji: "カスタム絵文字"
         case .customize: "カスタマイズ"
         }
     }
@@ -17,6 +18,7 @@ extension ComposeToolItem: MenuItemPresentable {
         switch self {
         case .spoiler: "添付があれば、添付も閲覧注意にします。注意書きを空にすると、閲覧注意だけを付けます"
         case .linkTitle: "本文のURLを選ぶと、リンク先のページのタイトルを読み、URLの前に入れます。URLが行の頭にあれば、タイトルを1行にします"
+        case .customEmoji: "サーバーのカスタム絵文字を並べたシートを出します。もう一度押すとキーボードに戻ります"
         case .customize: "この並びを変える画面を開きます。隠しても、設定の「投稿欄のボタン」から変えられます"
         default: nil
         }
@@ -29,6 +31,7 @@ extension ComposeToolItem: MenuItemPresentable {
         case .expand: "arrow.up.left.and.arrow.down.right"
         case .spoiler: "exclamationmark.triangle"
         case .linkTitle: "link.badge.plus"
+        case .customEmoji: "face.smiling"
         case .customize: "slider.horizontal.3"
         }
     }

@@ -1037,22 +1037,69 @@ public enum TuningCatalog {
         defaultValue: 5
     )
 
-    /// メディアを選ぶシートの低いときの高さを、最後に出したキーボードの高さに合わせる。
+    /// メディアを選ぶシートと絵文字のパレットのシートの低いときの高さを、最後に出したキーボードの高さに合わせる。
     /// 切ると、キーボードを一度も出していないときと同じく、決めた高さで出す。
     public static let composePickerMatchesKeyboard = ToggleTuning(
         id: "compose.pickerMatchesKeyboard",
-        title: "メディアを選ぶシートをキーボードの高さに合わせる",
+        title: "メディアと絵文字のシートをキーボードの高さに合わせる",
         defaultValue: true
     )
 
-    /// メディアを選ぶシートの低いときの、画面の下端からの高さ（pt）。キーボードの高さが分からないときや、合わせないときに使う。
+    /// メディアを選ぶシートと絵文字のパレットのシートの、低いときの画面の下端からの高さ（pt）。キーボードの高さが分からないときや、合わせないときに使う。
+    /// 2つのシートは同じ高さにする。入れ替えても投稿欄のバーが上下に動かないようにするため。
     /// キーボードの高さは日本語入力の候補の段や他社のキーボードで変わり、ハードウェアキーボードでは0になる。
     public static let composePickerHeight = NumberTuning(
         id: "compose.pickerHeight",
-        title: "メディアを選ぶシートの決めた高さ（pt）",
+        title: "メディアと絵文字のシートの決めた高さ（pt）",
         range: 200...500,
         step: 2,
         defaultValue: 336
+    )
+
+    /// 絵文字のシートの一覧の上下の端の効果を、検索欄の下端と下の段の上端ではっきり区切る（`.hard`）。切ると、やわらかくぼかす（`.soft`）。
+    /// 実機で見比べて、既定は`.soft`にした。
+    public static let composeEmojiPaletteHardEdgeEffect = ToggleTuning(
+        id: "compose.emojiPalette.hardEdgeEffect",
+        title: "絵文字のシートの一覧の上下の端をはっきり区切る",
+        defaultValue: false
+    )
+
+    /// 絵文字のシートの下の段（まとまりのボタンと削除キー）の高さ（pt）。HIGの勧める44ptに届かなくても、押せなくて困る操作ではないため、絵文字の一覧の広さと見比べて選ぶ。
+    public static let composeEmojiPaletteBarHeight = NumberTuning(
+        id: "compose.emojiPalette.barHeight",
+        title: "絵文字のシートの下の段の高さ（pt）",
+        range: 28...50,
+        step: 1,
+        defaultValue: 38
+    )
+
+    /// 絵文字のシートの下の段と、シートの下端との間（pt）。キーボードを出しているときは、キーボードの上端との間。
+    /// 小さいほどiOSのキーボードの地球儀の段のように、ホームインジケーターの場所まで下がる。
+    /// 下げすぎると、まとまりのボタンを横に払う指がホームインジケーターの操作に取られ、横にスクロールできなかった。
+    public static let composeEmojiPaletteBarBottomInset = NumberTuning(
+        id: "compose.emojiPalette.barBottomInset",
+        title: "絵文字のシートの下の段の下の余白（pt）",
+        range: 0...40,
+        step: 1,
+        defaultValue: 12
+    )
+
+    /// 絵文字のパレットの、絵文字1つの枠の大きさ（pt）。
+    public static let composeEmojiPaletteCellSize = NumberTuning(
+        id: "compose.emojiPalette.cellSize",
+        title: "絵文字のパレットの絵文字の枠（pt）",
+        range: 32...72,
+        step: 2,
+        defaultValue: 48
+    )
+
+    /// 絵文字のパレットの先頭に出す、最近使った絵文字の数。
+    public static let composeEmojiPaletteRecentLimit = NumberTuning(
+        id: "compose.emojiPalette.recentLimit",
+        title: "絵文字のパレットの最近使った絵文字の数",
+        range: 0...60,
+        step: 1,
+        defaultValue: 24
     )
 
     /// 送る前に縮めるとき、JPEGとHEICで作り直す品質。
@@ -1480,6 +1527,11 @@ public enum TuningCatalog {
             .number(linkTitleShimmerPeriod),
             .toggle(composePickerMatchesKeyboard),
             .number(composePickerHeight),
+            .toggle(composeEmojiPaletteHardEdgeEffect),
+            .number(composeEmojiPaletteBarHeight),
+            .number(composeEmojiPaletteBarBottomInset),
+            .number(composeEmojiPaletteCellSize),
+            .number(composeEmojiPaletteRecentLimit),
             .number(completionDebounce),
             .number(completionLimit),
             .number(completionMinimumQuery),

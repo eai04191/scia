@@ -278,7 +278,8 @@ final class SessionController {
                     throw error
                 }
             },
-            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning))
+            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
+            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
         )
         rootViewController = tabBarController
         forward = { [weak self] in self?.reportUnauthorized() }
