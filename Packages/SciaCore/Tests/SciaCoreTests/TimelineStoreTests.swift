@@ -170,7 +170,8 @@ struct TimelineStoreTests {
         #expect(store.receive(.update(try status(33))) == .pendingStarted)
     }
 
-    @Test func flushMergesByIDOrderAndDropsDuplicates() async throws {
+    /// 一番上の投稿より古いIDの投稿が遅れて届いても、読み終えた行の間に入れず、届いた順に一番上へ積む。
+    @Test func flushStacksArrivalsInArrivalOrderAndDropsDuplicates() async throws {
         let store = try await loadedStore([30, 28])
 
         _ = store.receive(.update(try status(31)))
@@ -178,8 +179,12 @@ struct TimelineStoreTests {
         _ = store.receive(.update(try status(31)))
         _ = store.receive(.update(try status(30)))
 
-        #expect(store.flushPending().map(\.id) == ["31", "29"])
-        #expect(store.statuses.map(\.id) == ["31", "30", "29", "28"])
+        #expect(store.flushPending().map(\.id) == ["29", "31"])
+        #expect(store.statuses.map(\.id) == ["29", "31", "30", "28"])
+
+        _ = store.receive(.update(try status(32)))
+        _ = store.flushPending()
+        #expect(store.statuses.map(\.id) == ["32", "29", "31", "30", "28"])
     }
 
     @Test func comparesIDsByLengthBeforeText() async throws {
@@ -322,6 +327,49 @@ struct TimelineStoreTests {
 
         store.markRead(["31"])
         #expect(store.unreadCount == 0)
+    }
+
+    /// 遅れて届いて一番上に積んだ投稿は、IDが既読の位置より古くても未読に数える。サーバーに保存する既読位置は戻さない。
+    @Test func lateArrivalOnTopCountsAsUnread() async throws {
+        let store = try await loadedStore([30, 28])
+        store.markRead(["30"])
+
+        _ = store.receive(.update(try status(29)))
+        _ = store.flushPending()
+        #expect(store.unreadCount == 1)
+
+        store.markRead(["29"])
+        #expect(store.unreadCount == 0)
+        #expect(store.lastReadID == "30")
+    }
+
+    /// 積んだときの一番上の投稿が消えても、次に遅れて届いた投稿は、積んである投稿よりさらに上に積む。
+    @Test func lateArrivalStaysOnTopAfterAnchorIsDeleted() async throws {
+        let store = try await loadedStore([30, 20])
+        _ = store.receive(.update(try status(25)))
+        _ = store.flushPending()
+        store.markRead(["25"])
+        _ = store.receive(.delete(statusID: "30"))
+
+        _ = store.receive(.update(try status(24)))
+        _ = store.flushPending()
+
+        #expect(store.statuses.map(\.id) == ["24", "25", "20"])
+        #expect(store.unreadCount == 1)
+    }
+
+    /// サーバーの既読位置はIDで取り込む。同じIDの投稿が遅れて届いて一番上に積んであっても、その下の投稿まで既読にしない。
+    @Test func savedMarkerMatchingLateArrivalDoesNotReadStatusesBelowIt() async throws {
+        let store = try await loadedStore([30, 20])
+        store.applySavedMarker("20")
+        _ = store.receive(.update(try status(25)))
+        _ = store.flushPending()
+        #expect(store.unreadCount == 2)
+
+        store.applySavedMarker("25")
+
+        #expect(store.unreadCount == 2)
+        #expect(store.lastReadID == "25")
     }
 }
 

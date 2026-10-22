@@ -555,11 +555,10 @@ struct TimelineGapTests {
         let gap = try #require(store.gaps.first)
         #expect((gap.newerID, gap.olderID) == ("18", "10"))
 
-        _ = store.receive(.update(server.status(15)))
-        _ = store.flushPending()
-        store.markRead(["15"])
+        _ = try await store.loadGap(gap.id, from: .fromOlder)
+        store.markRead(["13"])
 
-        #expect(store.hasUnloadedUnread, "16と17を読み込んでいないのに未読なしになりました")
+        #expect(store.hasUnloadedUnread, "14から17を読み込んでいないのに未読なしになりました")
         store.markRead(["18"])
         #expect(!store.hasUnloadedUnread)
     }
@@ -988,6 +987,43 @@ struct TimelineGapTests {
         let shown = itemIDs(store)
         let oldest = try #require(shown.last)
         #expect(shown == server.ids.filter { $0 >= oldest }.sorted(by: >), "漏れがあります")
+    }
+
+    // MARK: - 遅れて届いた投稿
+
+    /// 遅れて届いて一番上に積んだ投稿があっても、補完と古いページの読み込みは、IDで最も新しい投稿と最も古い投稿を境に読む。
+    @Test func lateArrivalOnTopDoesNotShiftPagingBaselines() async throws {
+        let server = FakeHomeServer(ids: Array(1...7) + [10, 12, 14])
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        server.post(11...11)
+        _ = store.receive(.update(server.status(11)))
+        _ = store.flushPending()
+        #expect(ids(store) == [11, 14, 12, 10])
+
+        server.post(15...15)
+        _ = try await store.fillFromLatest()
+        #expect(server.queries.last?.sinceID == "14")
+        #expect(ids(store) == [15, 11, 14, 12, 10])
+
+        _ = try await store.loadOlder()
+        #expect(server.queries.last?.maxID == "10")
+        #expect(ids(store) == [15, 11, 14, 12, 10, 7, 6, 5])
+    }
+
+    /// ギャップの範囲のIDの投稿が遅れて届いても一番上に積み、ギャップは新しい側の端の投稿のすぐ下に残す。
+    @Test func lateArrivalInsideGapRangeStacksOnTopAndKeepsGap() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        server.post(11...20)
+        _ = try await store.fillFromLatest()
+        let gap = try #require(store.gaps.first)
+
+        _ = store.receive(.update(server.status(15)))
+        _ = store.flushPending()
+
+        #expect(store.entries.map(\.debugLabel) == ["15", "20", "19", "18", TimelineEntry.gap(gap).debugLabel, "10", "9", "8"])
     }
 
     private func makeStore(_ server: FakeHomeServer) -> TimelineStore {

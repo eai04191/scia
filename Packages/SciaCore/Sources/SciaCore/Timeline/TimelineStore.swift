@@ -4,6 +4,9 @@ import os
 /// タイムラインの投稿を新しい順に持つ。RESTで読んだページと、ストリーミングで届いたイベントを合わせる。
 ///
 /// 投稿はIDの順に並べる。RESTのページングがIDを境に読むため、表示の順もIDに揃えておくと、境目で読み飛ばしや重複が起きない。
+/// ただし、ストリーミングで届いた投稿のうち、一覧で最も新しい投稿よりIDが古いものは、届いた順に一番上へ積む。
+/// ほかのサーバーの投稿は名乗る日時でIDが付くため、配送が遅れた投稿をIDの順に入れると、読み終えた行の間に入って読み逃すため。
+/// 補完や古いページを読む境目は、表示の順ではなくIDで決める。
 @MainActor
 public final class TimelineStore {
     public typealias Fetch = @Sendable (TimelineQuery) async throws -> TimelinePage
@@ -17,8 +20,11 @@ public final class TimelineStore {
     public private(set) var isRegenerating = false
     /// ストリーミングで届き、まだ挿入していない投稿。届いた順。
     public private(set) var pending: [Status] = []
-    /// 見た中で最も新しい投稿のID。これより新しい投稿を未読として数える。
+    /// 見た中で最も新しい投稿のID。サーバーに保存する既読位置に使う。
     public private(set) var lastReadID: String?
+    /// 見た中で一覧の最も上にある位置。これより上の投稿を未読として数える。
+    /// 遅れて届いて一番上に積んだ投稿は、IDが`lastReadID`より古くても上にあるため、IDとは別に持つ。
+    private var lastReadPosition: DisplayPosition?
     /// サーバーのmarkerに保存されている既読位置。
     public private(set) var savedReadID: String?
     /// 読み込み中のギャップのID。
@@ -40,6 +46,10 @@ public final class TimelineStore {
     /// フィルターで出さない投稿。一覧には並べないが、読めなかった投稿と同じく、続きを読む位置には使う。
     /// 1ページの全部が隠れても、その先へ進めるようにするため。編集でフィルターに一致しなくなれば、一覧に戻す。
     private var hiddenStatuses: [Status] = []
+    /// 遅れて届いて一番上に積んだ投稿の位置。ここにない投稿は、IDの位置に並べる。
+    private var lateArrivalPositions: [String: DisplayPosition] = [:]
+    /// 遅れて届いた投稿に振った番号の最後。後に届いた投稿ほど大きい。
+    private var lateArrivalSequence = 0
     /// 投稿の応答で入れ、まだストリーミングでも補完でも届いていない自分の投稿のID。
     private var unconfirmedPostedIDs: Set<String> = []
     private let pageSize: Int
@@ -63,7 +73,7 @@ public final class TimelineStore {
     /// 読めた投稿も読めなかった投稿もない。読めなかった投稿しかなくても、続きは読めるため空ではない。
     public var isEmpty: Bool { itemIDs.isEmpty }
 
-    /// 読めた投稿と読めなかった投稿のID。新しい順。続きを読む位置に使う。
+    /// 読めた投稿と読めなかった投稿のID。IDの新しい順で、遅れて届いて一番上に積んだ投稿もIDの位置に置く。続きを読む位置に使う。
     /// 読めなかった投稿も含めるのは、1ページの全部が読めなかったときにも、その先へ進めるようにするため。
     /// フィルターで出さない投稿も含める。
     private var itemIDs: [String] {
@@ -74,7 +84,7 @@ public final class TimelineStore {
             case .gap, .notification, .pinned: nil
             }
         }
-        guard !hiddenStatuses.isEmpty else { return shown }
+        guard !hiddenStatuses.isEmpty || !lateArrivalPositions.isEmpty else { return shown }
         return (shown + hiddenStatuses.map(\.id)).sorted { StatusID.isNewer($0, than: $1) }
     }
 
@@ -127,6 +137,8 @@ public final class TimelineStore {
         }
         let unique = Dictionary(loaded.flatMap(\.statuses).filter { !isDeleted($0) }.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         unreadableItems = Self.unique(loaded.flatMap(\.unreadable).filter { !deletedIDs.contains($0.id) })
+        // 読み直した一覧はIDの順に並べる。
+        lateArrivalPositions = [:]
         rebuild(statuses: Array(unique.values), gaps: loadedGaps)
         // 前の一覧で埋まらなかった基準は、読み直した一覧の範囲の外にあり、そこから読むと読み込み済みの区間にギャップを置いてしまう。
         unfilledSinceID = nil
@@ -393,8 +405,7 @@ public final class TimelineStore {
     ///
     /// ストリーミングで届くか、補完で読めるまでは、補完の基準にしない。サーバーは投稿を配信の順に流すので、
     /// 自分の投稿より少し前に他の人が投稿し、まだ届いていない投稿がありうる。届く前に切れて補完すると、それを読み飛ばすため。
-    /// 既読位置には、ほかの投稿と同じく使う。見ているうちに、自分の投稿より古い投稿があとから下に届くと、未読に数えない。
-    /// そのとき一番上を見ていれば、下に入るところも見えているので、数えなくても見落とさないため。
+    /// 既読位置には、ほかの投稿と同じく使う。自分の投稿より古い投稿があとから届いたら、ほかの遅れた投稿と同じく上に積み、未読に数える。
     ///
     /// 補完の基準にできる投稿が1件もない一覧（最初の読み込みの前や失敗した後、空のホーム）には入れず、ストリーミングを待つ。
     /// 入れると一覧が空でなくなり、読み込み直す代わりに続きを読むようになって、最新のページと応答の投稿の間を読まなくなるため。
@@ -472,16 +483,30 @@ public final class TimelineStore {
         return entries != before
     }
 
-    /// 保留していた投稿をIDの順に合流させ、新たに加わった投稿を新しい順に返す。
+    /// 保留していた投稿を届いた順に一番上へ合流させ、新たに加わった投稿を並べた順に返す。
     ///
+    /// 一覧で最も新しい投稿よりIDが新しい投稿は、そのままIDの位置に入るので一番上になる。古い投稿は、その時点で一番上の投稿の上に積む。
+    /// 一番上の基準には、積んだ投稿と既読位置の基準のIDも含める。積んだときに一番上だった投稿が消えても、次に届いた投稿を積んである投稿や既読位置より下に入れないため。
     /// 読み込んだ末尾より古い投稿は捨てる。末尾に足すと、次に古いページを読むときの`max_id`がずれて、間の投稿を読み飛ばすため。
-    /// 読めなかった投稿と同じIDの投稿は、末尾にあっても置き換える。並びの位置は変わらないため。
+    /// 読めなかった投稿と同じIDの投稿は、末尾にあっても置き換え、上に積まずにその位置に入れる。読めなかった行を見て、そこにあると分かっているため。
     public func flushPending() -> [Status] {
         defer { pending.removeAll() }
         var arrivals = pending
+        let unreadableIDs = Set(unreadableItems.map(\.id))
         if !reachedEnd, let oldestID = itemIDs.last {
-            let unreadableIDs = Set(unreadableItems.map(\.id))
             arrivals = arrivals.filter { StatusID.isNewer($0.id, than: oldestID) || unreadableIDs.contains($0.id) }
+        }
+        let known = Set(allStatuses.map(\.id))
+        var topID = ([itemIDs.first, lastReadPosition?.anchorID] + lateArrivalPositions.values.map(\.anchorID))
+            .compactMap(\.self)
+            .max { StatusID.isNewer($1, than: $0) }
+        for arrival in arrivals where !known.contains(arrival.id) && !unreadableIDs.contains(arrival.id) {
+            if let top = topID, !StatusID.isNewer(arrival.id, than: top) {
+                lateArrivalSequence += 1
+                lateArrivalPositions[arrival.id] = DisplayPosition(anchorID: top, sequence: lateArrivalSequence)
+            } else {
+                topID = arrival.id
+            }
         }
         return merge(arrivals)
     }
@@ -491,7 +516,14 @@ public final class TimelineStore {
     /// 画面に表示された投稿を既読にする。既読の位置は新しい方へだけ進む。
     public func markRead(_ ids: some Sequence<String>) {
         let ids = Array(ids)
+        advanceRead(to: ids, positions: ids.map(position(of:)))
+    }
+
+    private func advanceRead(to ids: [String], positions: [DisplayPosition]) {
         lastReadID = Self.advanced(lastReadID, to: ids)
+        if let top = positions.max(by: { $1.isAbove($0) }), lastReadPosition.map({ top.isAbove($0) }) ?? true {
+            lastReadPosition = top
+        }
         #if DEBUG
         lastSavableReadID = Self.advanced(lastSavableReadID, to: ids.filter { !debugLocalOnlyIDs.contains($0) })
         #endif
@@ -513,8 +545,9 @@ public final class TimelineStore {
     #endif
 
     /// サーバーに保存された既読位置を取り込む。他の端末で読み進めていれば、未読がその分減る。
+    /// 既読位置はIDの位置として取り込む。同じIDの投稿が遅れて届いて一番上に積んであっても、その位置にすると、下にある未読まで既読になるため。
     public func applySavedMarker(_ id: String) {
-        markRead([id])
+        advanceRead(to: [id], positions: [DisplayPosition(anchorID: id, sequence: 0)])
         markSaved(id)
     }
 
@@ -536,23 +569,23 @@ public final class TimelineStore {
         savedReadID = id
     }
 
-    /// 既読の位置より新しい、読み込み済みの投稿の数。既読の位置が決まっていなければ0。
+    /// 既読の位置より上にある、読み込み済みの投稿の数。既読の位置が決まっていなければ0。
     public var unreadCount: Int {
-        guard let lastReadID else { return 0 }
-        return statuses.prefix { StatusID.isNewer($0.id, than: lastReadID) }.count
+        guard let lastReadPosition else { return 0 }
+        return statuses.prefix { position(of: $0.id).isAbove(lastReadPosition) }.count
     }
 
-    /// 既読の位置より新しい区間にギャップがあり、未読は`unreadCount`より多い。
-    /// ギャップの中に届いた投稿を既読にしても、新しい側の端との間は読み込んでいないため、新しい側の端と比べる。
+    /// 既読の位置より上にギャップがあり、未読は`unreadCount`より多い。
+    /// ギャップは新しい側の端の投稿と、その上に積んだ投稿のすぐ下に並ぶため、新しい側の端と既読の位置の基準のIDを比べる。
     public var hasUnloadedUnread: Bool {
-        guard let lastReadID else { return false }
-        return gaps.contains { StatusID.isNewer($0.newerID, than: lastReadID) }
+        guard let lastReadPosition else { return false }
+        return gaps.contains { StatusID.isNewer($0.newerID, than: lastReadPosition.anchorID) }
     }
 
     #if DEBUG
     /// 新しい方から`count`件の投稿と、その間のギャップを忘れる。切断している間に投稿を取りこぼした状態を、実データで再現する検証用。
     public func debugForgetNewest(_ count: Int) {
-        let remaining = Array(statuses.dropFirst(count))
+        let remaining = Array(statuses.sorted { StatusID.isNewer($0.id, than: $1.id) }.dropFirst(count))
         let newestKept = remaining.first?.id
         unreadableItems.removeAll { item in newestKept.map { StatusID.isNewer(item.id, than: $0) } ?? true }
         let hiddenKept = hiddenStatuses.filter { status in newestKept.map { !StatusID.isNewer(status.id, than: $0) } ?? false }
@@ -576,19 +609,19 @@ public final class TimelineStore {
         return added
     }
 
-    /// まだない投稿を足し、足した投稿のうち一覧に並べたものを新しい順に返す。
+    /// まだない投稿を足し、足した投稿のうち一覧に並べたものを並べた順に返す。
     private func merge(_ incoming: [Status]) -> [Status] {
         let all = allStatuses
         let known = Set(all.map(\.id))
         let added = Dictionary(incoming.filter { !known.contains($0.id) && !isDeleted($0) }.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
             .values
-            .sorted { StatusID.isNewer($0.id, than: $1.id) }
+            .sorted { position(of: $0.id).isAbove(position(of: $1.id)) }
         guard !added.isEmpty else { return [] }
         rebuild(statuses: all + added, gaps: gaps)
         return added.filter { !isFilteredOut($0) }
     }
 
-    /// 投稿と読めなかった投稿をIDの新しい順に並べ、ギャップを新しい側の端の投稿のすぐ下に置く。
+    /// 投稿と読めなかった投稿をIDの新しい順に並べ、遅れて届いた投稿を積んだ位置に置き、ギャップを新しい側の端の投稿と、その上に積んだ投稿のすぐ下に置く。
     /// 画面は要素をIDで区別するため、同じIDのギャップは1つにする。同じ基準で補完が重なると、同じ範囲のギャップができる。
     /// 読めなかった投稿は、同じIDの投稿が読めていれば外す。フィルターで出さない投稿は並べず、別に持つ。
     private func rebuild(statuses: [Status], gaps: [TimelineGap]) {
@@ -597,8 +630,8 @@ public final class TimelineStore {
         let now = Date()
         hiddenStatuses = statuses.filter { isFilteredOut($0, now: now) }
         let shown = hiddenStatuses.isEmpty ? statuses : statuses.filter { !isFilteredOut($0, now: now) }
-        let items = (shown.map { ($0.id, TimelineEntry.status($0)) } + unreadableItems.map { ($0.id, TimelineEntry.unreadable($0)) })
-            .sorted { StatusID.isNewer($0.0, than: $1.0) }
+        let items = (shown.map { (position(of: $0.id), TimelineEntry.status($0)) } + unreadableItems.map { (position(of: $0.id), TimelineEntry.unreadable($0)) })
+            .sorted { $0.0.isAbove($1.0) }
         var seenGapIDs: Set<String> = []
         let sortedGaps = gaps
             .filter { seenGapIDs.insert($0.id).inserted }
@@ -606,8 +639,8 @@ public final class TimelineStore {
         var result: [TimelineEntry] = []
         result.reserveCapacity(items.count + sortedGaps.count)
         var gapIndex = sortedGaps.startIndex
-        for (id, item) in items {
-            while gapIndex < sortedGaps.endIndex, StatusID.isNewer(sortedGaps[gapIndex].newerID, than: id) {
+        for (position, item) in items {
+            while gapIndex < sortedGaps.endIndex, StatusID.isNewer(sortedGaps[gapIndex].newerID, than: position.anchorID) {
                 result.append(.gap(sortedGaps[gapIndex]))
                 gapIndex += 1
             }
@@ -615,6 +648,10 @@ public final class TimelineStore {
         }
         result.append(contentsOf: sortedGaps[gapIndex...].map(TimelineEntry.gap))
         entries = result
+    }
+
+    private func position(of id: String) -> DisplayPosition {
+        lateArrivalPositions[id] ?? DisplayPosition(anchorID: id, sequence: 0)
     }
 
     private func isFilteredOut(_ status: Status, now: Date = Date()) -> Bool {
@@ -652,6 +689,17 @@ public final class TimelineStore {
     private static func unique(_ items: [UnreadableItem]) -> [UnreadableItem] {
         var seen: Set<String> = []
         return items.filter { seen.insert($0.id).inserted }
+    }
+
+    /// 一覧の中の位置。IDの位置に並べる投稿は、自分のIDと0。遅れて届いて積んだ投稿は、積んだときに一番上だった投稿のIDと、届いた順の番号。
+    /// 同じIDの上では、番号の大きいものほど上に並ぶ。
+    private struct DisplayPosition {
+        let anchorID: String
+        let sequence: Int
+
+        func isAbove(_ other: DisplayPosition) -> Bool {
+            anchorID == other.anchorID ? sequence > other.sequence : StatusID.isNewer(anchorID, than: other.anchorID)
+        }
     }
 
     /// - Parameter adoptsFilterResults: ブーストを書き換えるときに、フィルターの結果も元の投稿の結果にそろえる。`Status.replacingReblog(with:adoptsFilterResults:)`を参照。
