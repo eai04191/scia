@@ -310,12 +310,11 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         collectionView.deselectItem(at: indexPath, animated: true)
         switch dataSource?.itemIdentifier(for: indexPath) {
+        // 足した区切り線は、押したボタンのすぐ上に出るよう、並びのいちばん下に置く。ほかの場所に置くと、画面の外に入って、どこに足されたか分からないことがある。
         case .addSeparator:
-            // 足した区切り線が見つけやすいよう、「その他」のすぐ上に置く。
-            insert(.separator, at: rows.firstIndex { $0.element == .more } ?? rows.endIndex)
+            insert(.separator, at: rows.endIndex)
         case .addRowSeparator:
-            // 返信やお気に入りのようなよく使う項目を、メニューのいちばん上に横に並べることが多いため、先頭に置く。
-            insert(.rowSeparator, at: rows.startIndex)
+            insert(.rowSeparator, at: rows.endIndex)
         case .reset:
             rows = Item.defaultLayout.elements.map { Row(element: $0) }
             save()
