@@ -27,6 +27,10 @@ struct InlineComposeControllerTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
         settings = AppSettings(defaults: defaults)
+        // 動きの終わりを待つだけのテストが、実際の長さの動きを待たずに済むよう、形を変える動きを短くする。
+        // 動きの途中で状態を見るテストや次の操作を送るテストは、間合いを実際の長さに合わせて決めているので、useDefaultAnimationDurations()で戻す。
+        tuning.setValue(0.05, for: TuningCatalog.composeMorphDuration)
+        tuning.setValue(0.05, for: TuningCatalog.composeExpandDuration)
         composer = InlineComposeController(model: ComposeModel(myAccountID: "1") { _ in }, tuning: tuning, settings: settings)
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
@@ -48,12 +52,12 @@ struct InlineComposeControllerTests {
         defer { window.isHidden = true }
         for round in 0..<4 {
             composer.reply(to: try status(id: "\(10 + round)"))
-            try await Task.sleep(for: .milliseconds(700))
+            try await waitUntilSettled()
             window.layoutIfNeeded()
             #expect(composer.overlappingRows.isEmpty, "\(round)回目に返信を始めたとき、行が重なりました\n\(composer.stateDump())")
 
             composer.endEditing()
-            try await Task.sleep(for: .milliseconds(700))
+            try await waitUntilSettled()
             window.layoutIfNeeded()
             #expect(composer.overlappingRows.isEmpty, "\(round)回目に閉じたとき、行が重なりました\n\(composer.stateDump())")
         }
@@ -64,6 +68,7 @@ struct InlineComposeControllerTests {
     @Test(arguments: [0, 30, 120, 250])
     func replyRowKeepsItsSpaceWhenInterrupted(waitMilliseconds: Int) async throws {
         defer { window.isHidden = true }
+        useDefaultAnimationDurations()
         let wait = Duration.milliseconds(waitMilliseconds)
         composer.reply(to: try status(id: "10"))
         try await Task.sleep(for: wait)
@@ -76,7 +81,7 @@ struct InlineComposeControllerTests {
         composer.model.setReplyTarget(nil)
         try await Task.sleep(for: wait)
         composer.reply(to: try status(id: "13"))
-        try await Task.sleep(for: .milliseconds(800))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
 
         #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
@@ -90,9 +95,9 @@ struct InlineComposeControllerTests {
         let boost = Status(id: "20", createdAt: .now, account: booster, content: "", spoilerText: "", url: nil, reblog: original)
 
         composer.reply(to: original)
-        try await Task.sleep(for: .milliseconds(700))
+        try await waitUntilSettled()
         composer.reply(to: boost)
-        try await Task.sleep(for: .milliseconds(300))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
 
         let button = try #require(buttons(in: window).first { $0.configuration?.title?.hasSuffix("への返信") == true })
@@ -103,8 +108,9 @@ struct InlineComposeControllerTests {
     /// 札を外すと、行は薄くなりながら縮み、外し終えたら隠れる。消えていく途中も札の文字は残る。
     @Test func clearingReplyFadesOutRow() async throws {
         defer { window.isHidden = true }
+        useDefaultAnimationDurations()
         composer.reply(to: try status(id: "10"))
-        try await Task.sleep(for: .milliseconds(700))
+        try await waitUntilSettled()
         let button = try #require(buttons(in: window).first { $0.configuration?.title?.hasSuffix("への返信") == true })
 
         composer.model.setReplyTarget(nil)
@@ -113,7 +119,7 @@ struct InlineComposeControllerTests {
         #expect(presentation.opacity > 0 && presentation.opacity < 1, "札がパッと消えました: opacity=\(presentation.opacity)")
         #expect(button.configuration?.title?.hasSuffix("への返信") == true, "消えていく途中で札の文字が消えました")
 
-        try await Task.sleep(for: .milliseconds(700))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
         #expect(button.superview?.isHidden == true)
         #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
@@ -122,13 +128,14 @@ struct InlineComposeControllerTests {
     /// 札が消えていく途中に別の投稿の返信を選んでも、札は出たままで崩れない。
     @Test func replyingWhileReplyRowFadesOut() async throws {
         defer { window.isHidden = true }
+        useDefaultAnimationDurations()
         composer.reply(to: try status(id: "10"))
-        try await Task.sleep(for: .milliseconds(700))
+        try await waitUntilSettled()
 
         composer.model.setReplyTarget(nil)
         try await Task.sleep(for: .milliseconds(100))
         composer.reply(to: try status(id: "11"))
-        try await Task.sleep(for: .milliseconds(700))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
 
         let button = try #require(buttons(in: window).first { $0.configuration?.title?.hasSuffix("への返信") == true })
@@ -245,13 +252,13 @@ struct InlineComposeControllerTests {
     func textViewKeepsHeightWhenShrinkingBelowScrollLimit(lines: Int) async throws {
         defer { window.isHidden = true }
         composer.beginEditing()
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         composer.model.text = (1...lines).map { "\($0)" }.joined(separator: "\n")
-        try await Task.sleep(for: .milliseconds(100))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
 
         composer.model.text = (1...4).map { "\($0)" }.joined(separator: "\n")
-        try await Task.sleep(for: .milliseconds(100))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
 
         let textView = try #require(textViews(in: window).first)
@@ -265,14 +272,15 @@ struct InlineComposeControllerTests {
     @Test(arguments: [0, 30, 120, 250])
     func spoilerRowKeepsItsSpaceWhenToggledDuringAnimation(waitMilliseconds: Int) async throws {
         defer { window.isHidden = true }
+        useDefaultAnimationDurations()
         let wait = Duration.milliseconds(waitMilliseconds)
         composer.beginEditing()
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         for shows in [true, false, true, false, true] {
             composer.model.showsSpoiler = shows
             try await Task.sleep(for: wait)
         }
-        try await Task.sleep(for: .milliseconds(800))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
 
         let row = try #require(textFields(in: window).first?.superview?.superview)
@@ -285,23 +293,23 @@ struct InlineComposeControllerTests {
         defer { window.isHidden = true }
         composer.beginEditing()
         composer.model.showsSpoiler = true
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         let field = try #require(textFields(in: window).first)
         let textView = try #require(textViews(in: window).first)
         #expect(textView.isFirstResponder)
 
         field.becomeFirstResponder()
-        try await Task.sleep(for: .milliseconds(100))
+        try await waitUntilSettled()
         #expect(field.isFirstResponder)
         #expect(composer.stateDump().contains("editing: true"), "注意書きへ移ると、書き終えたことになりました\n\(composer.stateDump())")
 
         textView.becomeFirstResponder()
-        try await Task.sleep(for: .milliseconds(100))
+        try await waitUntilSettled()
         #expect(textView.isFirstResponder)
         #expect(composer.stateDump().contains("editing: true"), "本文へ戻ると、書き終えたことになりました\n\(composer.stateDump())")
 
         composer.endEditing()
-        try await Task.sleep(for: .milliseconds(100))
+        try await waitUntilSettled()
         #expect(composer.stateDump().contains("editing: false"), "閉じても書いている状態のままです\n\(composer.stateDump())")
     }
 
@@ -310,14 +318,14 @@ struct InlineComposeControllerTests {
     @Test func focusRestoredBySystemResumesEditing() async throws {
         defer { window.isHidden = true }
         composer.beginEditing()
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         let textView = try #require(textViews(in: window).first)
         #expect(textView.isFirstResponder)
 
         textView.resignFirstResponder()
         try await Task.sleep(for: .milliseconds(100))
         textView.becomeFirstResponder()
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
 
         #expect(textView.isFirstResponder)
@@ -339,15 +347,15 @@ struct InlineComposeControllerTests {
             url: nil
         )
         composer.reply(to: target)
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         let field = try #require(textFields(in: window).first)
         let textView = try #require(textViews(in: window).first)
         #expect(field.text == "ネタバレ")
         field.becomeFirstResponder()
-        try await Task.sleep(for: .milliseconds(100))
+        try await waitUntilSettled()
 
         composer.model.setReplyTarget(nil)
-        try await Task.sleep(for: .milliseconds(700))
+        try await waitUntilSettled()
         #expect(!composer.model.showsSpoiler)
         #expect(!field.isFirstResponder, "隠れた注意書きの欄にキーボードが残っています\n\(composer.stateDump())")
         #expect(textView.isFirstResponder)
@@ -358,7 +366,7 @@ struct InlineComposeControllerTests {
     @Test func toolButtonsFollowLayoutChangedWhileEditing() async throws {
         defer { window.isHidden = true }
         composer.beginEditing()
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         let add = try #require(buttons(in: window).first { $0.accessibilityLabel == "追加" })
         let media = try #require(buttons(in: window).first { $0.accessibilityLabel == "メディアを添付" })
         let spoiler = try #require(buttons(in: window).first { $0.accessibilityLabel == "注意書き" })
@@ -366,12 +374,12 @@ struct InlineComposeControllerTests {
 
         // カスタマイズとリンクにタイトルを付けるは、並びに書かなければ既定どおり＋の中に差し込まれるので、隠して＋を空にする。
         settings.composeToolLayout = MenuLayout(elements: [.item(.customize, isVisible: false), .item(.linkTitle, isVisible: false), .more, .item(.visibility, isVisible: true), .item(.media, isVisible: true), .item(.expand, isVisible: true), .item(.spoiler, isVisible: true)])
-        try await Task.sleep(for: .milliseconds(300))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
         expectShown([media, spoiler], hidden: [add])
 
         settings.composeToolLayout = ComposeToolItem.defaultLayout
-        try await Task.sleep(for: .milliseconds(300))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
         expectShown([add, media], hidden: [spoiler])
     }
@@ -381,7 +389,7 @@ struct InlineComposeControllerTests {
         defer { window.isHidden = true }
         settings.composeToolLayout = MenuLayout(elements: [.item(.visibility, isVisible: true), .item(.expand, isVisible: true), .item(.spoiler, isVisible: true), .more, .item(.media, isVisible: true)])
         composer.beginEditing()
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
         let add = try #require(buttons(in: window).first { $0.accessibilityLabel == "追加" })
         let media = try #require(buttons(in: window).first { $0.accessibilityLabel == "メディアを添付" })
@@ -395,7 +403,7 @@ struct InlineComposeControllerTests {
         defer { window.isHidden = true }
         settings.composeToolLayout = MenuLayout(elements: ComposeToolItem.allCases.map { .item($0, isVisible: false) } + [.more])
         composer.beginEditing()
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
         let labels = ["追加", "公開範囲", "メディアを添付", "広げて書く", "注意書き"]
         let hidden = try labels.map { label in try #require(buttons(in: window).first { $0.accessibilityLabel == label }) }
@@ -407,11 +415,11 @@ struct InlineComposeControllerTests {
         defer { window.isHidden = true }
         settings.composeToolLayout = MenuLayout(elements: [.more, .item(.customize, isVisible: true)])
         composer.beginEditing()
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
         let customize = try #require(buttons(in: window).first { $0.accessibilityLabel == "カスタマイズ" })
         customize.sendActions(for: .primaryActionTriggered)
-        try await Task.sleep(for: .milliseconds(800))
+        try await waitUntilSettled()
         let sheet = try #require(window.rootViewController?.presentedViewController as? ComposeToolLayoutSheet)
         #expect(composer.stateDump().contains("editing: true"), "開くと書き終えたことになりました\n\(composer.stateDump())")
 
@@ -430,7 +438,7 @@ struct InlineComposeControllerTests {
         defer { window.isHidden = true }
         settings.composeToolLayout = MenuLayout(elements: [.more, .item(.customize, isVisible: true)])
         composer.beginEditing()
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
         let host = try #require(window.rootViewController)
         host.present(UIViewController(), animated: false)
@@ -439,11 +447,11 @@ struct InlineComposeControllerTests {
 
         let customize = try #require(buttons(in: window).first { $0.accessibilityLabel == "カスタマイズ" })
         customize.sendActions(for: .primaryActionTriggered)
-        try await Task.sleep(for: .milliseconds(800))
+        try await waitUntilSettled()
         #expect(!(host.presentedViewController is ComposeToolLayoutSheet))
 
         composer.endEditing()
-        try await Task.sleep(for: .milliseconds(200))
+        try await waitUntilSettled()
         #expect(composer.stateDump().contains("editing: false"), "キーボードを閉じても書いている状態のままです\n\(composer.stateDump())")
     }
 
@@ -471,17 +479,17 @@ struct InlineComposeControllerTests {
         composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         composer.beginEditing()
         composer.model.showsSpoiler = true
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         let field = try #require(textFields(in: window).first)
         let textView = try #require(textViews(in: window).first)
         let input: UIResponder = fromSpoiler ? field : textView
         input.becomeFirstResponder()
         composer.model.text = "本文"
         composer.model.spoilerText = "注意書き"
-        try await Task.sleep(for: .milliseconds(100))
+        try await waitUntilSettled()
 
         let posting = Task { await composer.model.submit() }
-        try await Task.sleep(for: .milliseconds(300))
+        try await waitUntilSettled()
         #expect(composer.model.isPosting)
         #expect(input.isFirstResponder, "送っている間にキーボードが外れました\n\(composer.stateDump())")
         #expect(composer.stateDump().contains("editing: true"), "送っている間に書き終えたことになりました\n\(composer.stateDump())")
@@ -490,7 +498,7 @@ struct InlineComposeControllerTests {
 
         gate.open()
         await posting.value
-        try await Task.sleep(for: .milliseconds(300))
+        try await waitUntilSettled()
         #expect(!input.isFirstResponder)
         #expect(composer.stateDump().contains("editing: false"), "投稿したのに書いている状態のままです\n\(composer.stateDump())")
     }
@@ -509,7 +517,7 @@ struct InlineComposeControllerTests {
         postKeyboardFrame(height: 300)
 
         await composer.model.submit()
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         #expect(window.rootViewController?.presentedViewController is UIAlertController)
         #expect(composer.stateDump().contains("editing: true"), "失敗の知らせを出すと書き終えたことになりました\n\(composer.stateDump())")
         #expect(composer.isBarHeld, "失敗の知らせを出すとバーがキーボードの高さから外れました\n\(composer.stateDump())")
@@ -540,19 +548,19 @@ struct InlineComposeControllerTests {
         for _ in 0..<100 where !composer.model.canPost {
             try await Task.sleep(for: .milliseconds(20))
         }
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         let id = try #require(composer.model.attachments.first?.id)
         let strip = try #require(attachmentStrips(in: window).first)
 
         let posting = Task { await composer.model.submit() }
-        try await Task.sleep(for: .milliseconds(100))
+        try await waitUntilSettled()
         strip.onSelect(id)
-        try await Task.sleep(for: .milliseconds(300))
+        try await waitUntilSettled()
         #expect(window.rootViewController?.presentedViewController != nil, "添付のビューアが開きませんでした")
 
         gate.open()
         await posting.value
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         #expect(composer.stateDump().contains("editing: false"), "ビューアを開いたまま投稿すると、書いている状態のままです\n\(composer.stateDump())")
         #expect(!composer.isBarHeld, "ビューアを開いたまま投稿すると、バーがキーボードの高さに留まったままです\n\(composer.stateDump())")
     }
@@ -581,13 +589,13 @@ struct InlineComposeControllerTests {
         composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         composer.beginEditing()
         composer.model.applyPickerSelection([try pickedImage()])
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         postKeyboardFrame(height: 300, to: keyboard)
         let id = try #require(composer.model.attachments.first?.id)
         let strip = try #require(attachmentStrips(in: window).first)
 
         strip.onSelect(id)
-        try await Task.sleep(for: .milliseconds(300))
+        try await waitUntilSettled()
         let viewer = try #require(window.rootViewController?.presentedViewController as? MediaViewerController, "添付のビューアが開きませんでした")
         #expect(composer.isBarHeld, "ビューアを開いても、バーをキーボードの高さに留めていません\n\(composer.stateDump())")
         postKeyboardFrame(height: 0, to: keyboard)
@@ -610,7 +618,7 @@ struct InlineComposeControllerTests {
             #expect(!composer.isBarHeld, "キーボードが上がらないのに、バーをキーボードの高さに留めたままです\n\(composer.stateDump())")
         case .reopenBeforeKeyboard:
             strip.onSelect(id)
-            try await Task.sleep(for: .milliseconds(300))
+            try await waitUntilSettled()
             #expect(window.rootViewController?.presentedViewController is MediaViewerController, "添付のビューアを開き直せませんでした")
             // 開き直すときに入力欄を閉じた知らせ。
             postKeyboardFrame(height: 0, to: keyboard)
@@ -639,7 +647,7 @@ struct InlineComposeControllerTests {
     private func installComposer(media: ComposeMediaService = .unavailable, keyboardNotifications: NotificationCenter = .default, post: @escaping (StatusDraft) async throws -> Void) throws -> InlineComposeController {
         let tabBarController = UITabBarController(tabs: [UITab(title: "ホーム", image: nil, identifier: "home") { _ in UIViewController() }])
         window.rootViewController = tabBarController
-        let composer = InlineComposeController(model: ComposeModel(myAccountID: "1", media: media, post: post), tuning: TuningStore(defaults: nil), settings: settings, keyboardNotifications: keyboardNotifications)
+        let composer = InlineComposeController(model: ComposeModel(myAccountID: "1", media: media, post: post), tuning: tuning, settings: settings, keyboardNotifications: keyboardNotifications)
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
         return composer
@@ -697,6 +705,7 @@ struct InlineComposeControllerTests {
     /// 設定で隠すと、空の投稿欄は書いていない間だけ隠れ、一覧の下の余白にも数えない。書き始めると出て、空のまま閉じるとまた隠れる。
     @Test func hidesEmptyBarOnlyWhileNotEditing() async throws {
         defer { window.isHidden = true }
+        useDefaultAnimationDurations()
         var obscured: CGFloat = -1
         composer.onObscuredHeightChange = { obscured = $0 }
         settings.hidesEmptyComposeBar = true
@@ -715,7 +724,7 @@ struct InlineComposeControllerTests {
         let bar = try composerBar()
         let moving = try #require(bar.layer.presentation()).frame
         #expect(moving.minY < window.bounds.maxY, "投稿欄が下がらずに消えました: \(moving)")
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
         #expect(bar.frame.minY >= window.bounds.maxY, "隠したのに、投稿欄が画面の外に出ていません: \(bar.frame)")
         #expect(bar.frame.height >= 30, "画面の外に出すときに、投稿欄が縮められました: \(bar.frame)")
@@ -770,20 +779,20 @@ struct InlineComposeControllerTests {
         composer.beginEditing()
         try await Task.sleep(for: .milliseconds(100))
         postKeyboardFrame(height: 336)
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
         let bar = try composerBar()
         // テストで送るキーボードの知らせでは`keyboardLayoutGuide`が動かないので、キーボードの上にあるかではなく、画面の中にあるかを見る。
         #expect(bar.frame.maxY <= window.bounds.maxY, "書き始めても、投稿欄が画面の中にありません: \(bar.frame)")
 
         postKeyboardFrame(height: 0)
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
         #expect(composer.stateDump().contains("editing: true"))
         #expect(bar.frame.minY >= window.bounds.maxY, "キーボードが下がっても、投稿欄が画面の外に出ていません: \(bar.frame)")
 
         postKeyboardFrame(height: 336)
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
         #expect(bar.frame.maxY <= window.bounds.maxY, "キーボードが戻っても、投稿欄が画面の中に戻りません: \(bar.frame)")
     }
@@ -791,9 +800,10 @@ struct InlineComposeControllerTests {
     /// 出てくる途中で閉じても、出す動きの終わりで、下がっている途中のバーを書いていないときの形に変えない。画面の外に出てから変える。
     @Test func interruptedShowKeepsEditingShapeWhileSlidingOut() async throws {
         defer { window.isHidden = true }
+        useDefaultAnimationDurations()
         tuning.setValue(1.0, for: TuningCatalog.composeMorphDuration)
         settings.hidesEmptyComposeBar = true
-        try await Task.sleep(for: .milliseconds(100))
+        try await waitUntilSettled()
         composer.beginEditing()
         try await Task.sleep(for: .milliseconds(300))
         composer.endEditing()
@@ -806,19 +816,20 @@ struct InlineComposeControllerTests {
             #expect(moving.isEmpty && bar.frame.minY >= window.bounds.maxY, "下がっている途中で、書いていないときの形に変えました: \(moving) \(bar.frame)\n\(composer.stateDump())")
             break
         }
-        try await Task.sleep(for: .milliseconds(500))
+        try await waitUntilSettled()
         #expect(composer.stateDump().contains("rest hidden=false"), "画面の外に出ても、書いていないときの形に戻していません\n\(composer.stateDump())")
     }
 
     /// 広げたまま閉じても、画面の外に出るまでは広げた形のまま下げる。
     @Test func expandedBarKeepsHeightWhileSlidingOut() async throws {
         defer { window.isHidden = true }
+        useDefaultAnimationDurations()
         settings.hidesEmptyComposeBar = true
         composer.beginEditing()
-        try await Task.sleep(for: .milliseconds(100))
+        try await waitUntilSettled()
         let expand = try #require(buttons(in: window).first { $0.accessibilityLabel == "広げて書く" })
         expand.sendActions(for: .primaryActionTriggered)
-        try await Task.sleep(for: .milliseconds(800))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
         let bar = try composerBar()
         let expandedHeight = bar.bounds.height
@@ -827,10 +838,52 @@ struct InlineComposeControllerTests {
         try await Task.sleep(for: .milliseconds(50))
         window.layoutIfNeeded()
         #expect(abs(bar.bounds.height - expandedHeight) < 1, "下げ始めたときに、広げた高さを保っていません: \(bar.bounds.height) / \(expandedHeight)")
-        try await Task.sleep(for: .milliseconds(800))
+        try await waitUntilSettled()
         window.layoutIfNeeded()
         #expect(bar.frame.minY >= window.bounds.maxY)
         #expect(bar.bounds.height < expandedHeight, "画面の外に出ても、広げる前の形に戻していません\n\(composer.stateDump())")
+    }
+
+    /// 形を変える動きと広げる動きを、アプリの既定の長さに戻す。
+    private func useDefaultAnimationDurations() {
+        tuning.reset(.number(TuningCatalog.composeMorphDuration))
+        tuning.reset(.number(TuningCatalog.composeExpandDuration))
+    }
+
+    /// ウィンドウの中の動きがなくなり、そのまま`quiet`の間続くまで待つ。動きの終わりを待つだけの所で、固定の時間の代わりに使う。
+    /// 動きが終わると、完了の処理がすぐ次の動きを始めることがある（形を変え終えてから行を薄くするなど）ので、止まった瞬間ではなく、止まったままの間を見る。
+    private func waitUntilSettled(quiet: Duration = .milliseconds(100), timeout: Duration = .seconds(3)) async throws {
+        let clock = ContinuousClock()
+        let deadline = clock.now + timeout
+        var quietSince: ContinuousClock.Instant?
+        while true {
+            let moving = movingAnimations(in: window.layer)
+            if moving.isEmpty {
+                let since = quietSince ?? clock.now
+                quietSince = since
+                if clock.now - since >= quiet { return }
+            } else {
+                quietSince = nil
+            }
+            guard clock.now < deadline else {
+                Issue.record("動きが止まらないまま時間切れになりました: \(moving)\n\(composer.stateDump())")
+                return
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
+    /// 終わりのある動きの名前を返す。止まらない動きは待っても終わらないので含めない。
+    /// 入力欄のカーソルの点滅（`repeatCount`が`greatestFiniteMagnitude`）、Liquid Glassがほかの層に合わせ続ける動き（`duration`が無限）、
+    /// 送信中のくるくる（`UIActivityIndicatorView`の中の絵の差し替え）がそれに当たる。
+    private func movingAnimations(in layer: CALayer) -> [String] {
+        if layer.delegate is UIActivityIndicatorView { return [] }
+        let owner = layer.delegate.map { String(describing: type(of: $0)) } ?? String(describing: type(of: layer))
+        let own = (layer.animationKeys() ?? []).filter { key in
+            guard let animation = layer.animation(forKey: key) else { return false }
+            return animation.duration.isFinite && animation.repeatCount < .greatestFiniteMagnitude && animation.repeatDuration.isFinite
+        }
+        return own.map { "\(owner).\($0)" } + (layer.sublayers ?? []).flatMap(movingAnimations(in:))
     }
 
     private func composerBar() throws -> UIView {
