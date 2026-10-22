@@ -48,6 +48,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var reactionGlow: ReactionGlow?
     let mediaImages: MediaImageStore
     let avatarImages: AvatarImageStore
+    /// 本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+    var emojiImages: EmojiImageStore?
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     /// 添付ファイルか、リンクカードの画像の、閲覧注意の覆いが押されたときに呼ぶ。覆いを外すのは置く側で、適用し直すまで見た目は変わらない。
@@ -165,7 +167,7 @@ final class PostContentView: UIView, UIContentView {
         current = configuration
         avatarView = AvatarView(store: configuration.avatarImages)
         contextAvatarView = AvatarView(store: configuration.avatarImages)
-        bodyView = PostBodyView(mediaImages: configuration.mediaImages, avatarImages: configuration.avatarImages)
+        bodyView = PostBodyView(mediaImages: configuration.mediaImages, avatarImages: configuration.avatarImages, emojiImages: configuration.emojiImages)
         super.init(frame: .zero)
         addLayoutGuide(textGuide)
         configureSubviews()

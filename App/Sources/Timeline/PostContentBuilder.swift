@@ -72,7 +72,8 @@ struct PostContentBuilder {
             card: linkCard(of: shown),
             statusID: shown.id,
             mediaImages: mediaImages,
-            avatarImages: avatarImages
+            avatarImages: avatarImages,
+            emojiImages: emojiImages
         )
         configuration.reactionGlow = reactionGlow(for: shown)
         return configuration

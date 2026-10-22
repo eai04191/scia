@@ -4,7 +4,8 @@ import SciaCore
 import UIKit
 
 /// カスタム絵文字の画像を読み込み、メモリに持つ。
-/// 1つのタイムラインで使う絵文字は数百件程度で1枚も小さいため、上限を設けずに持ち続ける。
+/// 静止画は、1つのタイムラインで使う絵文字は数百件程度で1枚も小さいため、上限を設けずに持ち続ける。
+/// アニメーション版はコマの数だけメモリを使うため、上限を設けて、あふれたら古いものから捨て、また要るときに読み直す。
 @MainActor
 final class EmojiImageStore {
     typealias Fetch = @Sendable (URL) async throws -> Data
@@ -20,8 +21,32 @@ final class EmojiImageStore {
         let onLoad: @MainActor (Set<URL>) -> Void
     }
 
+    /// アニメーション版の読み込みの状態。コマそのものは`animations`に持つ。
+    private enum AnimationState {
+        case loading
+        /// 2コマ以上ある。`animations`から捨てられていれば読み直す。
+        case animated
+        /// 1コマしかないか、大きすぎて動かさない。静止画で描く。
+        case still
+        case failed
+    }
+
+
+    /// コマを展開する長い辺のピクセル数。本文の文字の大きさの絵文字（行の高さで20〜30pt）を、3倍の画面でぼけずに描ける大きさ。
+    nonisolated static let animationPixelSize = 96
+
     private let fetch: Fetch
     private var states: [URL: State] = [:]
+    private var animationStates: [URL: AnimationState] = [:]
+    /// 描いている層がつかんでいるアニメーション。`animations`から捨てても、層が使っている間はコマが解放されないため、
+    /// 読み直さずにこれを返す。読み直すと、捨てられた分をまた入れて別のものを押し出し、画面に出ているもの同士で読み直しを繰り返すため。
+    private let liveAnimations = NSMapTable<NSURL, EmojiAnimation>.strongToWeakObjects()
+    private let animations: NSCache<NSURL, EmojiAnimation> = {
+        let cache = NSCache<NSURL, EmojiAnimation>()
+        // 96pxのコマで、40コマの絵文字なら40個ほど。画面に一度に出る絵文字はそれより少ないため、スクロールして戻っても読み直しはまれ。
+        cache.totalCostLimit = 64 * 1024 * 1024
+        return cache
+    }()
     private var listeners: [Listener] = []
     private var pendingNotification: Set<URL> = []
     private let logger = SciaLog.logger(category: "emoji")
@@ -39,6 +64,24 @@ final class EmojiImageStore {
             return nil
         case nil:
             load(url)
+            return nil
+        }
+    }
+
+    /// アニメーションする絵文字の、コマに分けた画像。`url`は絵文字の元の画像（`CustomEmoji.url`）を渡す。
+    /// まだなら読み込みを始めてnilを返し、読み終えたら`addListener`で登録した処理に`url`を知らせる。1コマしかない画像や読めなかった画像でもnil。
+    func animation(for url: URL) -> EmojiAnimation? {
+        switch animationStates[url] {
+        case .animated:
+            if let animation = animations.object(forKey: url as NSURL) ?? liveAnimations.object(forKey: url as NSURL) {
+                return animation
+            }
+            loadAnimation(url)
+            return nil
+        case .loading, .still, .failed:
+            return nil
+        case nil:
+            loadAnimation(url)
             return nil
         }
     }
@@ -74,6 +117,34 @@ final class EmojiImageStore {
         }
     }
 
+    private func loadAnimation(_ url: URL) {
+        animationStates[url] = .loading
+        Task {
+            let state: AnimationState
+            do {
+                let data = try await fetch(url)
+                let image = await Task.detached(priority: .utility) {
+                    AnimatedImage.decode(data, maxPixelSize: Self.animationPixelSize)
+                }.value
+                if let image {
+                    let animation = EmojiAnimation(image)
+                    animations.setObject(animation, forKey: url as NSURL, cost: image.byteCount)
+                    liveAnimations.setObject(animation, forKey: url as NSURL)
+                    state = .animated
+                } else {
+                    state = .still
+                }
+            } catch {
+                logger.error("emoji animation load failed url=\(url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                state = .failed
+            }
+            animationStates[url] = state
+            if case .animated = state {
+                notify(url)
+            }
+        }
+    }
+
     /// 同じ時期に届いた画像をまとめて知らせ、セルの再構成を減らす。
     private func notify(_ url: URL) {
         let isFirst = pendingNotification.isEmpty
@@ -87,5 +158,14 @@ final class EmojiImageStore {
                 listener.onLoad(urls)
             }
         }
+    }
+}
+
+/// コマに分けたアニメーションする絵文字。描いている層が持っている間は、置き場から捨てても同じものを使い回す。
+final class EmojiAnimation: Sendable {
+    let image: AnimatedImage
+
+    init(_ image: AnimatedImage) {
+        self.image = image
     }
 }

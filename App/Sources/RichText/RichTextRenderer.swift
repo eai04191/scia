@@ -172,6 +172,8 @@ struct RichTextRenderer {
         }
         let string = NSMutableAttributedString(attachment: attachment)
         string.addAttributes(attributes(style: [], block: block), range: NSRange(location: 0, length: string.length))
+        // アニメーションする絵文字を、描く部品が動かせるよう、どの絵文字かを残す。
+        string.addAttribute(.customEmoji, value: emoji, range: NSRange(location: 0, length: string.length))
         return string
     }
 
@@ -233,4 +235,6 @@ extension NSAttributedString.Key {
     /// リンクの行き先（`RichText.LinkDestination`）。`.link`はUILabelが特別に扱い、再利用したラベルで前の内容の色のまま次の本文を描くことがあるため、
     /// UILabelが関知しない独自の名前で持つ。押されたリンクは`LinkLabel`がこの属性から読む。
     static let linkDestination = NSAttributedString.Key("net.mizle.scia.linkDestination")
+    /// 画像を埋め込んだカスタム絵文字（`CustomEmoji`）。`LinkLabel`が、アニメーションする絵文字を動かすのに読む。
+    static let customEmoji = NSAttributedString.Key("net.mizle.scia.customEmoji")
 }

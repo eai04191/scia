@@ -9,13 +9,50 @@ final class LinkLabel: UILabel {
     /// リンクがタップされたときと、メンションの長押しのメニューでプロフィールを選んだときに、その行き先を渡して呼ぶ。
     var onTapLink: ((RichText.LinkDestination) -> Void)?
 
+    /// アニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら、絵文字は静止画のまま描く。
+    var emojiImages: EmojiImageStore? {
+        didSet {
+            guard emojiImages !== oldValue else { return }
+            animatedEmojis?.removeLayers()
+            animatedEmojis = emojiImages.map { store in
+                AnimatedEmojiOverlay(store: store) { [weak self] in self?.applyAnimatedEmojis() }
+            }
+            if animatedEmojis == nil, showsReplacedText {
+                super.attributedText = sourceText
+                layoutCache = nil
+                showsReplacedText = false
+            }
+            applyAnimatedEmojis()
+        }
+    }
+
     override var attributedText: NSAttributedString? {
-        didSet { layoutCache = nil }
+        didSet {
+            layoutCache = nil
+            sourceText = attributedText
+            showsReplacedText = false
+            stillEmojiIndices = []
+            applyAnimatedEmojis()
+        }
     }
 
     override var text: String? {
-        didSet { layoutCache = nil }
+        didSet {
+            layoutCache = nil
+            sourceText = nil
+            showsReplacedText = false
+            stillEmojiIndices = []
+            applyAnimatedEmojis()
+        }
     }
+
+    /// 置く側が渡した文字列。アニメーションする絵文字を透明な画像に差し替える前のもの。
+    private var sourceText: NSAttributedString?
+    /// 描いているのが、絵文字を差し替えた文字列。
+    private var showsReplacedText = false
+    /// 動かさず、文字の中の静止画のまま描く絵文字の位置。行数を限ったラベルの、最後の行の絵文字。並べてみるまで分からないため、`layoutSubviews`で決める。
+    private var stillEmojiIndices: Set<Int> = []
+    private var animatedEmojis: AnimatedEmojiOverlay?
 
     override var numberOfLines: Int {
         didSet { layoutCache = nil }
@@ -45,6 +82,93 @@ final class LinkLabel: UILabel {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        layoutAnimatedEmojis()
+    }
+
+    /// 置く側が渡した文字列から、アニメーション版が届いている絵文字を透明な画像に差し替えて描き直す。
+    /// 差し替えた画像は元と同じ大きさなので、ラベルの大きさは変わらない。
+    private func applyAnimatedEmojis() {
+        guard let animatedEmojis else { return }
+        let shown = animatedEmojis.prepare(sourceText, keepingStill: stillEmojiIndices)
+        let replaces = shown !== sourceText
+        // 差し替えないときは、置く側が渡した文字列をすでに描いている。前に差し替えていたら、元に戻す。
+        if replaces || showsReplacedText {
+            super.attributedText = shown
+            layoutCache = nil
+        }
+        showsReplacedText = replaces
+        setNeedsLayout()
+    }
+
+    /// 動かす絵文字の層を、文字の中の絵文字の位置に合わせる。
+    private func layoutAnimatedEmojis() {
+        guard let animatedEmojis else { return }
+        guard let attributedText, !animatedEmojis.entries.isEmpty, bounds.width > 0 else {
+            animatedEmojis.layout(in: layer, frames: [])
+            return
+        }
+        let layout = textLayout(of: attributedText)
+        // 行数を限ったラベルでは、最後の行の末尾をUILabelが「…」に置き換えることがあり、置き換えた絵文字の位置はTextKit 2の並びからは分からない。
+        // 動く層だけが「…」の上に残らないよう、最後の行の絵文字は動かさず、文字の中の静止画のまま描く。切られていないときも動かないが、試作では許す。
+        // 差し替える前の文字列のすべての絵文字で決めるので、決めた結果で差し替え直しても変わらず、行き来しない。
+        let stillIndices = numberOfLines > 0 ? lastLineEmojiIndices(in: layout) : []
+        if stillIndices != stillEmojiIndices {
+            stillEmojiIndices = stillIndices
+            applyAnimatedEmojis()
+            return
+        }
+        let frames = animatedEmojis.entries.map { entry -> CGRect? in
+            guard let frame = attachmentFrame(at: entry.index, in: layout), frame.maxY <= bounds.maxY + 1 else { return nil }
+            return frame
+        }
+        animatedEmojis.layout(in: layer, frames: frames)
+    }
+
+    /// `index`の文字に埋め込んだ画像を描く枠。ラベルの座標で返す。並べた範囲の外ならnil。
+    private func attachmentFrame(at index: Int, in layout: TextLayout) -> CGRect? {
+        let contentStorage = layout.contentStorage
+        guard let location = contentStorage.location(contentStorage.documentRange.location, offsetBy: index),
+              let fragment = layout.layoutManager.textLayoutFragment(for: location)
+        else { return nil }
+        let frame = fragment.frameForTextAttachment(at: location)
+        guard !frame.isEmpty else { return nil }
+        return frame.offsetBy(dx: fragment.layoutFragmentFrame.minX, dy: fragment.layoutFragmentFrame.minY)
+    }
+
+    /// 見える最後の行と、それより下にある絵文字の位置。
+    private func lastLineEmojiIndices(in layout: TextLayout) -> Set<Int> {
+        guard let sourceText, let lastLineMinY = lastVisibleLineMinY(in: layout) else { return [] }
+        var indices: Set<Int> = []
+        sourceText.enumerateAttribute(.customEmoji, in: NSRange(location: 0, length: sourceText.length)) { value, range, _ in
+            guard value != nil else { return }
+            for index in range.location..<NSMaxRange(range) {
+                guard let frame = attachmentFrame(at: index, in: layout) else {
+                    // 並べた範囲の外（切られて見えない行）にある。
+                    indices.insert(index)
+                    continue
+                }
+                if frame.midY >= lastLineMinY { indices.insert(index) }
+            }
+        }
+        return indices
+    }
+
+    /// ラベルの中に見える最後の行の上端。ラベルの座標で返す。
+    private func lastVisibleLineMinY(in layout: TextLayout) -> CGFloat? {
+        var result: CGFloat?
+        layout.layoutManager.enumerateTextLayoutFragments(from: layout.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
+            for line in fragment.textLineFragments {
+                let minY = fragment.layoutFragmentFrame.minY + line.typographicBounds.minY
+                guard minY < bounds.maxY else { return false }
+                result = minY
+            }
+            return true
+        }
+        return result
     }
 
     /// リンクの外では当たりにならず、押下は後ろのビューに渡る。リンクの上では、重ねた`hitArea`が当たりになる。

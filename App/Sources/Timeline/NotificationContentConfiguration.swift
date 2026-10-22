@@ -16,6 +16,8 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     var reactionGlow: ReactionGlow?
     let mediaImages: MediaImageStore
     let avatarImages: AvatarImageStore
+    /// 本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+    var emojiImages: EmojiImageStore?
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     var onRevealMedia: (() -> Void)?
@@ -73,7 +75,7 @@ final class NotificationContentView: UIView, UIContentView {
 
     init(configuration: NotificationContentConfiguration) {
         current = configuration
-        bodyView = PostBodyView(mediaImages: configuration.mediaImages, avatarImages: configuration.avatarImages)
+        bodyView = PostBodyView(mediaImages: configuration.mediaImages, avatarImages: configuration.avatarImages, emojiImages: configuration.emojiImages)
         super.init(frame: .zero)
         symbolView.contentMode = .scaleAspectFit
         headerLabel.numberOfLines = 0

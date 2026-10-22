@@ -1,0 +1,196 @@
+import Foundation
+import ImageIO
+import SciaCore
+import Testing
+import UIKit
+import UniformTypeIdentifiers
+@testable import Scia
+
+/// `LinkLabel`の、アニメーションするカスタム絵文字。
+@MainActor
+struct AnimatedEmojiTests {
+    private let font = UIFont.preferredFont(forTextStyle: .body)
+
+    /// 元の画像を`.gif`、静止画を`.png`のURLにした絵文字。
+    private func emoji(_ shortcode: String) throws -> CustomEmoji {
+        CustomEmoji(
+            shortcode: shortcode,
+            url: try #require(URL(string: "https://example.social/emoji/\(shortcode).gif")),
+            staticUrl: try #require(URL(string: "https://example.social/emoji/\(shortcode).png"))
+        )
+    }
+
+    /// `frames`コマの、幅が高さの2倍の画像のデータ。`type`がGIFなら動く画像、PNGで1コマなら静止画になる。
+    private func imageData(_ type: UTType, frames: Int) throws -> Data {
+        let data = NSMutableData()
+        let destination = try #require(CGImageDestinationCreateWithData(data, type.identifier as CFString, frames, nil))
+        for index in 0..<frames {
+            let image = UIGraphicsImageRenderer(size: CGSize(width: 40, height: 20)).image { context in
+                UIColor(white: CGFloat(index) / CGFloat(frames), alpha: 1).setFill()
+                context.fill(CGRect(x: 0, y: 0, width: 40, height: 20))
+            }
+            let properties = [kCGImagePropertyGIFDictionary: [kCGImagePropertyGIFDelayTime: 0.1]] as CFDictionary
+            CGImageDestinationAddImage(destination, try #require(image.cgImage), properties)
+        }
+        #expect(CGImageDestinationFinalize(destination))
+        return data as Data
+    }
+
+    /// `.gif`のURLには`gifFrames`コマのGIF、`.png`のURLには静止画を返す置き場。
+    private func store(gifFrames: Int = 3) throws -> EmojiImageStore {
+        let gif = try imageData(.gif, frames: gifFrames)
+        let png = try imageData(.png, frames: 1)
+        return EmojiImageStore { url in url.pathExtension == "gif" ? gif : png }
+    }
+
+    /// 静止画とアニメーション版が届くまで待ってから、`text`を描いたラベル。
+    private func label(_ text: RichText, store: EmojiImageStore, numberOfLines: Int = 0, width: CGFloat = 300) async throws -> LinkLabel {
+        let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja")
+        let emojis = text.blocks.flatMap(\.inlines).compactMap { inline -> CustomEmoji? in
+            if case .emoji(let emoji) = inline { emoji } else { nil }
+        }
+        // 1回目で読み込みを始め、届くまで待つ。
+        _ = renderer.render(text)
+        for emoji in emojis {
+            _ = store.animation(for: emoji.url)
+        }
+        for _ in 0..<200 where emojis.contains(where: { store.image(for: $0.staticUrl) == nil }) {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        for _ in 0..<50 {
+            try await Task.sleep(for: .milliseconds(10))
+            _ = emojis.map { store.animation(for: $0.url) }
+        }
+        let label = LinkLabel()
+        label.numberOfLines = numberOfLines
+        label.emojiImages = store
+        label.attributedText = renderer.render(text)
+        let size = label.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        label.frame = CGRect(origin: .zero, size: CGSize(width: width, height: size.height))
+        label.layoutIfNeeded()
+        return label
+    }
+
+    /// コマを送るアニメーションを付けた層。
+    private func animatedLayers(of label: LinkLabel) -> [CALayer] {
+        (label.layer.sublayers ?? []).filter { $0.animation(forKey: "frames") != nil && !$0.isHidden }
+    }
+
+    private func attachment(at index: Int, of label: LinkLabel) -> NSTextAttachment? {
+        label.attributedText?.attribute(.attachment, at: index, effectiveRange: nil) as? NSTextAttachment
+    }
+
+    /// 動く絵文字は、文字の中では同じ大きさの透明な画像で場所だけを取り、その位置に同じ大きさの、コマを送る層を重ねる。
+    @Test func animatedEmojiIsDrawnByLayerOverAttachment() async throws {
+        let crab = try emoji("crab")
+        let store = try store()
+        let label = try await label(RichText.plain("カニ :crab: です", emojis: [crab]), store: store)
+
+        let layers = animatedLayers(of: label)
+        #expect(layers.count == 1)
+        let index = (label.attributedText?.string as NSString?)?.range(of: "\u{FFFC}").location ?? NSNotFound
+        let placeholder = try #require(attachment(at: index, of: label))
+        #expect(placeholder.image?.size == CGSize(width: 1, height: 1), "文字の中の画像は透明な場所取りに替える")
+        let layer = try #require(layers.first)
+        #expect(abs(layer.frame.width - placeholder.bounds.width) < 0.5)
+        #expect(abs(layer.frame.height - placeholder.bounds.height) < 0.5)
+        #expect(abs(layer.frame.height - font.lineHeight) < 0.5)
+        #expect(layer.frame.minX > 0, "前の文字の後ろに置く")
+        let animation = try #require(layer.animation(forKey: "frames") as? CAKeyframeAnimation)
+        #expect(animation.values?.count == 3)
+        #expect(animation.keyTimes?.count == 4)
+    }
+
+    /// セルを描き直して同じ文字列を渡し直しても、層を作り直さない。作り直すと、描き直すたびに層とアニメーションを作る手間がかかるため。
+    @Test func sameTextKeepsLayers() async throws {
+        let crab = try emoji("crab")
+        let store = try store()
+        let text = RichText.plain("カニ :crab:", emojis: [crab])
+        let label = try await label(text, store: store)
+        let before = animatedLayers(of: label)
+        #expect(before.count == 1)
+
+        label.attributedText = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja").render(text)
+        label.layoutIfNeeded()
+
+        let after = animatedLayers(of: label)
+        #expect(after.count == 1)
+        #expect(after.first === before.first)
+    }
+
+    /// 裏から戻ったら、同じ文字列でも層を作り直す。裏に回っている間に、描画のサーバーがアニメーションを外していることがあるため。
+    @Test func returningToForegroundRebuildsLayers() async throws {
+        let crab = try emoji("crab")
+        let label = try await label(RichText.plain("カニ :crab:", emojis: [crab]), store: store())
+        let before = animatedLayers(of: label)
+        #expect(before.count == 1)
+
+        NotificationCenter.default.post(name: UIApplication.willEnterForegroundNotification, object: nil)
+        label.layoutIfNeeded()
+
+        let after = animatedLayers(of: label)
+        #expect(after.count == 1)
+        #expect(after.first !== before.first)
+    }
+
+    /// 同じ絵文字が続いても、1つずつ層を重ねる。
+    @Test func repeatedEmojiGetsLayerEach() async throws {
+        let crab = try emoji("crab")
+        let label = try await label(RichText.plain(":crab::crab:", emojis: [crab]), store: store())
+
+        let frames = animatedLayers(of: label).map(\.frame).sorted { $0.minX < $1.minX }
+        #expect(frames.count == 2)
+        #expect(frames.count == 2 && frames[0].maxX <= frames[1].minX + 0.5)
+    }
+
+    /// 1コマしかない画像は動かさず、文字の中の静止画のまま描く。
+    @Test func stillEmojiKeepsImageInText() async throws {
+        let still = try emoji("still")
+        let label = try await label(RichText.plain("a :still: b", emojis: [still]), store: store(gifFrames: 1))
+
+        #expect(animatedLayers(of: label).isEmpty)
+        let index = (label.attributedText?.string as NSString?)?.range(of: "\u{FFFC}").location ?? NSNotFound
+        #expect(attachment(at: index, of: label)?.image?.size != CGSize(width: 1, height: 1))
+    }
+
+    /// 文字列を替えたら、前の絵文字の層を外す。セルを使い回したときに、前の投稿の絵文字が残らないようにするため。
+    @Test func replacingTextRemovesLayers() async throws {
+        let crab = try emoji("crab")
+        let label = try await label(RichText.plain("カニ :crab:", emojis: [crab]), store: store())
+        #expect(animatedLayers(of: label).count == 1)
+
+        label.attributedText = NSAttributedString(string: "絵文字なし")
+        label.layoutIfNeeded()
+
+        #expect(animatedLayers(of: label).isEmpty)
+    }
+
+    /// 行数を限ったラベルの最後の行の絵文字は、UILabelが「…」に置き換えるかもしれないため動かさず、文字の中の静止画のまま描く。
+    /// 最後より前の行の絵文字は動かす。
+    @Test func lastLineOfTruncatedLabelKeepsStillImage() async throws {
+        let crab = try emoji("crab")
+        let text = RichText(blocks: [.init(inlines: [.text("上 ", []), .emoji(crab), .lineBreak, .text("下 ", []), .emoji(crab)])])
+        let label = try await label(text, store: store(), numberOfLines: 2)
+
+        let layers = animatedLayers(of: label)
+        #expect(layers.count == 1)
+        #expect(layers.first.map { $0.frame.midY < label.bounds.midY } == true, "上の行の絵文字だけを動かす")
+        let string = label.attributedText?.string as NSString?
+        let last = string?.range(of: "\u{FFFC}", options: .backwards).location ?? NSNotFound
+        #expect(attachment(at: last, of: label)?.image?.size != CGSize(width: 1, height: 1), "最後の行の絵文字は静止画を残す")
+    }
+
+    /// 置き場を渡していないラベルでは、絵文字は静止画のまま描く。
+    @Test func labelWithoutStoreKeepsStillImage() async throws {
+        let crab = try emoji("crab")
+        let store = try store()
+        let animated = try await label(RichText.plain(":crab:", emojis: [crab]), store: store)
+        #expect(animatedLayers(of: animated).count == 1)
+
+        animated.emojiImages = nil
+        animated.attributedText = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja").render(RichText.plain(":crab:", emojis: [crab]))
+        animated.layoutIfNeeded()
+
+        #expect(animatedLayers(of: animated).isEmpty)
+    }
+}
