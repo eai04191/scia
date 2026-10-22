@@ -1318,7 +1318,26 @@ extension TimelineViewController: UICollectionViewDelegate {
         guard indexPaths.count == 1, let indexPath = indexPaths.first, let id = dataSource.itemIdentifier(for: indexPath), let entry = entry(for: id),
               let menu = contextMenu(for: entry, id: id)
         else { return nil }
-        return UIContextMenuConfiguration(actionProvider: { _ in menu })
+        // 指の位置にメニューを出せるよう、押した場所をidentifierに持たせる。
+        return UIContextMenuConfiguration(identifier: NSValue(cgPoint: point), previewProvider: nil) { _ in menu }
+    }
+
+    /// 行を持ち上げず、指の位置の見えない目印をプレビューにして、メニューだけを指の位置に出す。
+    /// 行を持ち上げると、閉じるときにガラスのメニューが行の大きさまで広がって吸い込まれ、行の真ん中の文字が波紋のようにゆがむため。
+    func collectionView(_ collectionView: UICollectionView, contextMenuConfiguration configuration: UIContextMenuConfiguration, highlightPreviewForItemAt indexPath: IndexPath) -> UITargetedPreview? {
+        anchorPreview(for: configuration)
+    }
+
+    func collectionView(_ collectionView: UICollectionView, contextMenuConfiguration configuration: UIContextMenuConfiguration, dismissalPreviewForItemAt indexPath: IndexPath) -> UITargetedPreview? {
+        anchorPreview(for: configuration)
+    }
+
+    private func anchorPreview(for configuration: UIContextMenuConfiguration) -> UITargetedPreview? {
+        guard let point = (configuration.identifier as? NSValue)?.cgPointValue else { return nil }
+        let parameters = UIPreviewParameters()
+        parameters.backgroundColor = .clear
+        let anchor = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+        return UITargetedPreview(view: anchor, parameters: parameters, target: UIPreviewTarget(container: collectionView, center: point))
     }
 
     /// 選べるのはギャップと、ブラウザで開ける読めなかった要素だけにする。投稿にはまだ開く画面がなく、タップすると選んだ状態の背景が残ったままになるため。
