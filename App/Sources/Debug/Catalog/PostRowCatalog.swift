@@ -22,16 +22,21 @@ enum PostRowCatalog {
         // カタログのアカウントを自分として組む一覧。自分の投稿は、フィルターに一致しても畳まずに印を出す。
         let mine = TimelineViewController(texts: .home)
         mine.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: author.id))
+        mine.myAccountID = author.id
         /// - Parameters:
         ///   - expandsSpoiler: 注意書きを開く。フィルターの警告で畳んでいれば、警告を開く。
         ///   - isMine: カタログのアカウントを自分として組む。
-        func post(_ title: String, _ status: Status, isPinned: Bool = false, expandsSpoiler: Bool = false, isMine: Bool = false) -> CatalogState {
+        ///   - connection: 隣の行と線でつながっている形にする。
+        func post(_ title: String, _ status: Status, isPinned: Bool = false, expandsSpoiler: Bool = false, isMine: Bool = false, connection: ReplyConnection = ReplyConnection()) -> CatalogState {
             CatalogState(title: title) {
                 let timeline = isMine ? mine : home
                 if expandsSpoiler { timeline.toggleSpoiler(of: status) }
-                return CatalogFrame.bordered(PostContentView(configuration: timeline.contentConfiguration(for: status, isPinned: isPinned, base: .cell())))
+                var configuration = timeline.contentConfiguration(for: status, isPinned: isPinned, base: .cell())
+                configuration.replyConnection = connection
+                return CatalogFrame.bordered(PostContentView(configuration: configuration))
             }
         }
+        let longHandleAccount = Fixtures.account(displayName: "長いハンドルの人", acct: "a-very-long-account-name-for-replies@subdomain.example.com")
         let longSpoiler = String(repeating: "注意書きが長く、何行にもわたるときの折り返しを確かめる。", count: 4)
         return [
             post("短い本文", status(content: "<p>短い本文。</p>")),
@@ -39,6 +44,14 @@ enum PostRowCatalog {
             post("長い本文", status(content: "<p>" + String(repeating: "長い本文が何行にもわたるときの折り返しと、行の高さを確かめるための文。", count: 5) + "</p>")),
             post("ブーストされた投稿", status(content: "<p>ブーストされた投稿。</p>", rebloggedBy: booster)),
             post("固定された投稿", status(content: "<p>プロフィールの上に固定された投稿。</p>"), isPinned: true),
+            post("ほかの人への返信", status(content: "<p>返信の本文。</p>", account: booster, replyingTo: author)),
+            post("ほかの人への返信（ハンドルが長い）", status(content: "<p>返信の本文。</p>", replyingTo: longHandleAccount)),
+            post("投稿した人が続けて書いた投稿", status(content: "<p>続けて書いた本文。</p>", replyingTo: author)),
+            post("自分への返信", status(content: "<p>自分への返信の本文。</p>", account: booster, replyingTo: author), isMine: true),
+            post("返信先のハンドルが分からない返信（メンションを消した）", status(content: "<p>メンションのない返信。</p>", account: booster, replyingTo: author, mentionsReplyTarget: false)),
+            post("返信をブーストした投稿（ブーストの行を出し、札は出さない）", status(content: "<p>ブーストされた返信。</p>", rebloggedBy: booster, replyingTo: author)),
+            post("上と下の行と線でつながった返信", status(content: "<p>線でつながった返信。</p>", replyingTo: author), connection: ReplyConnection(above: true, below: true)),
+            post("下の行とだけ線でつながった、本文の長い返信", status(content: "<p>" + String(repeating: "本文が長く、線がアイコンの下から行の下端まで伸びることを確かめる文。", count: 3) + "</p>", account: booster, replyingTo: author), connection: ReplyConnection(below: true)),
             post("お気に入り済み", status(content: "<p>お気に入りした投稿。</p>", favourited: true)),
             post("ブースト済み", status(content: "<p>ブーストした投稿。</p>", reblogged: true)),
             post("お気に入りとブースト済み（真ん中で色が変わる）", status(content: "<p>お気に入りもブーストもした投稿。</p>", favourited: true, reblogged: true)),
@@ -275,8 +288,11 @@ enum PostRowCatalog {
         filtered: [FilterResult] = [],
         favourited: Bool = false,
         reblogged: Bool = false,
-        rebloggedBy: Account? = nil
+        rebloggedBy: Account? = nil,
+        replyingTo replyTarget: Account? = nil,
+        mentionsReplyTarget: Bool = true
     ) -> Status {
+        let mentions = replyTarget.map { [Mention(id: $0.id, username: $0.username, url: nil, acct: $0.acct)] } ?? []
         let original = Status(
             id: UUID().uuidString,
             createdAt: .now.addingTimeInterval(-3_600),
@@ -284,9 +300,12 @@ enum PostRowCatalog {
             content: content,
             spoilerText: spoilerText,
             url: nil,
+            mentions: mentionsReplyTarget ? mentions : [],
             mediaAttachments: media,
             sensitive: sensitive,
             visibility: visibility,
+            inReplyToId: replyTarget.map { _ in UUID().uuidString },
+            inReplyToAccountId: replyTarget?.id,
             card: card,
             filtered: filtered,
             editedAt: editedAt,
