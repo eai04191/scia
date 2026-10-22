@@ -13,11 +13,10 @@ import UniformTypeIdentifiers
 @MainActor
 final class InlineComposeController: NSObject {
     let model: ComposeModel
-    /// 本文と注意書きの補完。本文ではメンション、ハッシュタグ、カスタム絵文字を、注意書きではカスタム絵文字だけを補完する。
+    /// 本文と注意書きの補完とパレット。本文ではメンション、ハッシュタグ、カスタム絵文字を、注意書きではカスタム絵文字だけを補完する。
     /// サーバーは注意書きのメンションとハッシュタグを読まないため。
-    let completion: ComposeCompletion
-    /// 最近使ったカスタム絵文字。パレットの先頭に出す。なければ出さず、覚えない。
-    private let recentEmojis: RecentEmojis?
+    private let textCompletion: TextInputCompletion
+    var completion: ComposeCompletion { textCompletion.completion }
     /// 編集を始めるときに呼ぶ。既定の公開範囲などをまだ読めていなければ読む。
     var onBeginEditing: () -> Void = {}
     /// 書き終えてバーを細いカプセルに戻したときに呼ぶ。メディアを選ぶシートやビューアのためにキーボードを閉じたときは、書いている途中なので呼ばない。
@@ -226,9 +225,7 @@ final class InlineComposeController: NSObject {
     /// 一覧を出している（消える動きの途中はfalse）。
     private var isCompletionListShown = false
     /// 補完している入力欄。本文か注意書き。
-    private weak var completionInput: (any UITextInput)?
-    /// 補完している入力欄に、最後に本文が変わったとき変換中の文字があった。
-    private var completionInputHadMarkedText = false
+    private var completionInput: (any UITextInput)? { textCompletion.input }
     /// 一覧と欄や打っている行との間。
     private let completionListSpacing: CGFloat = 6
 
@@ -255,12 +252,17 @@ final class InlineComposeController: NSObject {
 
     init(model: ComposeModel, completion: ComposeCompletion? = nil, recentEmojis: RecentEmojis? = nil, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, keyboardNotifications: NotificationCenter = .default) {
         self.model = model
-        self.completion = completion ?? ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning))
-        self.recentEmojis = recentEmojis
+        textCompletion = TextInputCompletion(
+            completion: completion ?? ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)),
+            recentEmojis: recentEmojis,
+            tuning: tuning,
+            settings: settings
+        )
         self.tuning = tuning
         self.settings = settings
         self.keyboardNotifications = keyboardNotifications
         super.init()
+        configureTextCompletion()
         model.onPosted = { [weak self] in
             // シートの上に見えている投稿ボタンから送ったときは、入力欄はもうキーボードを出していないので、シートを閉じて書き終える。
             // 添付したメディアは、下書きと一緒にモデルが空にしている。
@@ -379,7 +381,7 @@ final class InlineComposeController: NSObject {
         bar.frame: \(bar.frame)
         rows: \(rowStates.map { "\($0.name) hidden=\($0.view.isHidden) frame=\($0.view.frame)" }.joined(separator: ", "))
         overlaps: \(overlappingRows.isEmpty ? "none" : overlappingRows.joined(separator: ", "))
-        completion: input=\(completionInput === textView ? "text" : completionInput === spoilerField ? "spoiler" : "none") kind=\(completion.token?.kind.rawValue ?? "nil") content=\(completionContentSummary) shown=\(isCompletionListShown) list.frame=\(completionList.frame)
+        completion: input=\(completionInput === textView ? "text" : completionInput === spoilerField ? "spoiler" : "none") kind=\(completion.token?.kind.rawValue ?? "nil") content=\(textCompletion.contentSummary) shown=\(isCompletionListShown) list.frame=\(completionList.frame)
         replyChip: title=\(replyButton.configuration?.title ?? "nil") frame=\(replyButton.frame) label=\(replyButton.titleLabel.map { "text=\($0.text ?? "nil") frame=\($0.frame) alpha=\($0.alpha) hidden=\($0.isHidden)" } ?? "nil")
         """
     }
@@ -871,8 +873,14 @@ final class InlineComposeController: NSObject {
     /// シートに載せるカスタム絵文字のパレット。最初に出すときに作り、出すたびに同じものを載せる。
     private lazy var emojiPalette: EmojiPaletteView = {
         let palette = EmojiPaletteView(emojiImages: AppDependencies.emojiImages)
-        palette.onSelect = { [weak self] emoji in self?.insertFromPalette(emoji) }
-        palette.onDelete = { [weak self] in self?.deleteFromPalette() }
+        palette.onSelect = { [weak self] emoji in
+            guard let self else { return }
+            textCompletion.insert(emoji, into: paletteInput)
+        }
+        palette.onDelete = { [weak self] in
+            guard let self else { return }
+            textCompletion.deleteBackward(in: paletteInput)
+        }
         palette.onRetry = { [weak self] in self?.completion.loadEmojisIfNeeded() }
         palette.onQueryChange = { [weak self] in self?.updateEmojiPalette() }
         palette.onSearchSubmit = { [weak self] in
@@ -922,7 +930,7 @@ final class InlineComposeController: NSObject {
         if !isEditing {
             expandForEditing()
         }
-        paletteRecentKeys = recentEmojis?.keys ?? []
+        paletteRecentKeys = textCompletion.recentKeys
         completion.loadEmojisIfNeeded()
         emojiPalette.clearQuery()
         updateEmojiPalette()
@@ -987,84 +995,14 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 検索語があれば、補完と同じ順で並べた結果を出す。なければまとまりごとに並べる。
     private func updateEmojiPalette() {
-        emojiPalette.cellSize = tuning.value(of: TuningCatalog.composeEmojiPaletteCellSize)
-        emojiPalette.hardEdgeEffect = tuning.value(of: TuningCatalog.composeEmojiPaletteHardEdgeEffect)
-        emojiPalette.barHeight = tuning.value(of: TuningCatalog.composeEmojiPaletteBarHeight)
-        emojiPalette.barBottomInset = tuning.value(of: TuningCatalog.composeEmojiPaletteBarBottomInset)
-        emojiPalette.animatesEmojis = settings.animatesCustomEmojis
-        emojiPalette.emojiStyle = settings.emojiStyle
-        let query = emojiPalette.query
-        let standardGroups = StandardEmojiAvailability.groups(for: settings.emojiStyle)
-        // カスタム絵文字の一覧がまだないか読めなかったときも、Unicodeの絵文字は通信なしで並べられるので出し、カスタム絵文字の場所に状態を出す。
-        let emojis = completion.emojis ?? []
-        let customStatus: EmojiPaletteView.CustomEmojiStatus? = if completion.emojis != nil {
-            nil
-        } else if let message = completion.emojiFailureMessage {
-            .failed(message)
-        } else {
-            .loading
-        }
-        if query.isEmpty {
-            let recentLimit = Int(tuning.value(of: TuningCatalog.composeEmojiPaletteRecentLimit))
-            emojiPalette.setContent(.sections(EmojiPalette.sections(emojis: emojis, standardGroups: standardGroups, recentKeys: paletteRecentKeys, recentLimit: recentLimit), customStatus: customStatus))
-        } else {
-            emojiPalette.setContent(.searchResults(EmojiPalette.searchResults(matching: query, emojis: emojis, standardGroups: standardGroups, limit: 200), customStatus: customStatus))
-        }
+        textCompletion.updatePalette(emojiPalette, recentKeys: paletteRecentKeys)
     }
 
     /// パレットで選んだ絵文字を入れる入力欄。最後に書いていたのが注意書きの欄ならそちら、それ以外は本文。
     /// シートを出している間は、どちらの入力欄もフォーカスを持たないので、最後に書いていた入力欄で決める。
     private var paletteInput: any UITextInput & UIView {
         lastFocusedInput === spoilerField && model.showsSpoiler ? spoilerField : textView
-    }
-
-    /// 入力欄の今の文字と、選んでいる範囲（UTF-16）。
-    private func textAndSelection(of input: any UITextInput) -> (String, Range<Int>)? {
-        let text = (input as? UITextView)?.text ?? (input as? UITextField)?.text ?? ""
-        guard let selection = input.selectedTextRange else { return nil }
-        let begin = input.beginningOfDocument
-        let start = input.offset(from: begin, to: selection.start)
-        let end = input.offset(from: begin, to: selection.end)
-        return (text, start ..< max(start, end))
-    }
-
-    private func insertFromPalette(_ emoji: PaletteEmoji) {
-        guard !model.isPosting else { return }
-        let input = paletteInput
-        if input.markedTextRange != nil {
-            input.unmarkText()
-        }
-        guard let (text, selection) = textAndSelection(of: input) else { return }
-        let insertion = switch emoji {
-        case .custom(let custom):
-            CompletionTokenizer.insertion(of: ":\(custom.shortcode):", at: selection, in: text)
-        case .standard(let standard):
-            // Unicodeの絵文字は文字そのものなので、サーバーが読むための空白は要らない。選んでいる範囲と置き換える。
-            CompletionInsertion(range: selection, text: standard.emoji, cursor: selection.lowerBound + standard.emoji.utf16.count)
-        }
-        guard apply(insertion, to: input) else { return }
-        recentEmojis?.record(emoji.recentKey)
-    }
-
-    /// カーソルの直前が絵文字なら、絵文字をまとめて消す。範囲を選んでいればそれを、それ以外は1文字消す。
-    private func deleteFromPalette() {
-        guard !model.isPosting else { return }
-        let input = paletteInput
-        guard let (text, selection) = textAndSelection(of: input) else { return }
-        // パレットを出している間は入力欄がフォーカスを持たないので、`deleteBackward`に頼らず、消す範囲を求めて置き換える。
-        let range: Range<Int>
-        if let emoji = CompletionTokenizer.emojiDeletionRange(before: selection, in: text) {
-            range = emoji
-        } else if !selection.isEmpty {
-            range = selection
-        } else {
-            let before = String(decoding: Array(text.utf16).prefix(selection.lowerBound), as: UTF16.self)
-            guard let last = before.last else { return }
-            range = selection.lowerBound - String(last).utf16.count ..< selection.lowerBound
-        }
-        apply(CompletionInsertion(range: range, text: "", cursor: range.lowerBound), to: input)
     }
 
     // MARK: - 注意書き
@@ -1589,16 +1527,12 @@ final class InlineComposeController: NSObject {
             textView.text = model.text
             textDidChange()
             // 投稿して空に戻したときや返信先を替えたときは、補完していた語がなくなる。
-            if completionInput === textView {
-                completion.textDidChange(nil)
-            }
+            textCompletion.textWasReplaced(in: textView)
         }
         placeholderLabel.isHidden = !model.text.isEmpty
         if spoilerField.text != model.spoilerText {
             spoilerField.text = model.spoilerText
-            if completionInput === spoilerField {
-                completion.textDidChange(nil)
-            }
+            textCompletion.textWasReplaced(in: spoilerField)
         }
         // 返信先を外して引き継いだ注意書きが消えたときなども含め、欄を隠すときは、隠れた欄にキーボードを残さず本文へ移す。
         if !model.showsSpoiler {
@@ -1937,7 +1871,7 @@ final class InlineComposeController: NSObject {
         completionList.translatesAutoresizingMaskIntoConstraints = false
         completionList.alpha = 0
         completionList.isHidden = true
-        completionList.onSelect = { [weak self] candidate in self?.complete(with: candidate) }
+        completionList.onSelect = { [weak self] candidate in self?.textCompletion.complete(with: candidate) }
         completionList.onRetry = { [weak self] in self?.completion.retry() }
         // 投稿欄より手前に置く。広げて欄の上に場所がないときは、欄の中の本文に重ねるため。
         host.view.insertSubview(completionList, aboveSubview: bar)
@@ -1962,114 +1896,25 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 違和感レポートに残す、補完の状態。打った語は残さない。
-    private var completionContentSummary: String {
-        switch completion.content {
-        case nil: "nil"
-        case .candidates(let candidates): "candidates(\(candidates.count)) selected=\(completion.selectedIndex)"
-        case .loading: "loading"
-        case .empty: "empty"
-        case .failed: "failed"
-        case .candidatesWithFailure(let candidates, _): "candidates(\(candidates.count))+failed selected=\(completion.selectedIndex)"
-        }
-    }
-
-    /// 入力欄のカーソルの位置の語。本文ではメンション、タグ、絵文字を、注意書きでは絵文字だけを補完する。
-    /// - Parameter appliesMinimumLength: 候補を出すのに要る文字数を見るか。選んだときに範囲を決め直すだけなら見ない。
-    private func completionToken(in input: any UITextInput, appliesMinimumLength: Bool = true) -> CompletionToken? {
-        let text = (input as? UITextView)?.text ?? (input as? UITextField)?.text ?? ""
-        guard let selection = input.selectedTextRange else { return nil }
-        let begin = input.beginningOfDocument
-        let start = input.offset(from: begin, to: selection.start)
-        let end = input.offset(from: begin, to: selection.end)
-        let marked = input.markedTextRange.map { input.offset(from: begin, to: $0.start) ..< input.offset(from: begin, to: $0.end) }
-        return CompletionTokenizer.token(
-            in: text,
-            selection: start ..< max(start, end),
-            markedRange: marked,
-            kinds: input === textView ? Set(CompletionKind.allCases) : [.emoji],
-            minimumQueryLength: appliesMinimumLength ? TuningCatalog.completionMinimumQueryLength(in: tuning) : [:]
-        )
-    }
-
-    private func completionTextDidChange(in input: any UITextInput) {
-        completionInput = input
-        completionInputHadMarkedText = input.markedTextRange != nil
-        completion.settings = TuningCatalog.completionSettings(in: tuning)
-        completion.textDidChange(completionToken(in: input))
-    }
-
-    private func completionSelectionDidChange(in input: any UITextInput) {
-        guard completionInput === input else { return }
-        // 変換を確定しただけでは本文が変わったことにならないことがあるため、確定したらここで語を読み直す。
-        if completionInputHadMarkedText, input.markedTextRange == nil {
-            completionTextDidChange(in: input)
-            return
-        }
-        completion.selectionDidChange(completionToken(in: input))
-    }
-
-    /// 入力欄の編集が終わったら閉じる。メディアを選ぶシートやビューアを出すためにキーボードを閉じたときも閉じ、戻ったら打ち直すまで出さない。
-    private func endCompletion(in input: any UITextInput) {
-        guard completionInput === input else { return }
-        completion.textDidChange(nil)
-        completionInput = nil
-    }
-
-    /// 候補を本文に入れる。日本語の直後なら前に空白を、後ろに空白がなければ後ろにも空白を入れる。
-    /// 入力欄の`replace`で入れ、取り消し（シェイクや⌘Z）で戻せるようにする。
-    private func complete(with candidate: CompletionCandidate) {
-        guard let input = completionInput, let shown = completion.token, !model.isPosting else { return }
-        // 候補を出したあとにカーソルだけを語の中で動かしていれば、置き換える範囲はいまのカーソルで決め直す。
-        // ハッシュタグはカーソルより後ろを語に含めないため、出したときの範囲のままだと後ろの文まで消してしまう。
-        let current = completionToken(in: input, appliesMinimumLength: false)
-        let token = current.flatMap { $0.kind == shown.kind && $0.range.lowerBound == shown.range.lowerBound ? $0 : nil } ?? shown
-        let text = (input as? UITextView)?.text ?? (input as? UITextField)?.text ?? ""
-        let insertion = CompletionTokenizer.insertion(of: candidate.completion, replacing: token, in: text)
-        logger.info("completion: selected \(token.kind.rawValue, privacy: .public) leadingSpace=\(token.needsLeadingSpace)")
-        guard apply(insertion, to: input) else { return }
-        if case .emoji(let emoji) = candidate {
-            recentEmojis?.record(emoji.shortcode)
-        }
-        completion.didComplete()
-    }
-
-    /// 本文か注意書きの範囲を置き換え、カーソルを置き、下書きを入力欄に合わせる。範囲が入力欄の外なら何もせずfalseを返す。
-    @discardableResult
-    private func apply(_ insertion: CompletionInsertion, to input: any UITextInput) -> Bool {
-        let begin = input.beginningOfDocument
-        guard let start = input.position(from: begin, offset: insertion.range.lowerBound),
-              let end = input.position(from: begin, offset: insertion.range.upperBound),
-              let range = input.textRange(from: start, to: end)
-        else { return false }
-        input.replace(range, withText: insertion.text)
-        if let cursor = input.position(from: begin, offset: insertion.cursor) {
-            input.selectedTextRange = input.textRange(from: cursor, to: cursor)
-        }
+    private func configureTextCompletion() {
+        textCompletion.kinds = { [weak self] input in input === self?.textView ? Set(CompletionKind.allCases) : [.emoji] }
+        textCompletion.isLocked = { [weak self] in self?.model.isPosting ?? true }
         // 入力欄の知らせが来なくても、下書きを入力欄に合わせる。
-        if input === textView {
-            model.text = textView.text
-            textDidChange()
-        } else if input === spoilerField {
-            model.spoilerText = spoilerField.text ?? ""
+        textCompletion.onApply = { [weak self] input in
+            guard let self else { return }
+            if input === textView {
+                model.text = textView.text
+                textDidChange()
+            } else if input === spoilerField {
+                model.spoilerText = spoilerField.text ?? ""
+            }
         }
-        return true
     }
 
     private func completionKeys() -> CompletionKeys {
-        CompletionKeys(
-            hasCandidate: { [weak self] in self?.isCompletionListShown == true && self?.completion.selectedCandidate != nil },
+        textCompletion.keys(
             isShown: { [weak self] in self?.isCompletionListShown == true },
-            // ↑↓は見た目の向きに動かす。下から積んでいるときは、↑で優先度の低い候補へ移る。
-            move: { [weak self] offset in
-                guard let self else { return }
-                completion.moveSelection(by: completionList.growsUpward ? -offset : offset)
-            },
-            confirm: { [weak self] in
-                guard let self, let candidate = completion.selectedCandidate else { return }
-                complete(with: candidate)
-            },
-            dismiss: { [weak self] in self?.completion.dismiss() }
+            growsUpward: { [weak self] in self?.completionList.growsUpward == true }
         )
     }
 
@@ -2101,7 +1946,7 @@ final class InlineComposeController: NSObject {
         // 広げていないときは、場所が足りなくても欄の上に2行ぶん出し、上の安全領域に重ねる。広げていると欄が上端まで伸びて上に場所がないことがあるので、そのときだけ本文に重ねる。
         let fitsAboveBar = available >= min(wanted, ComposeCompletionList.rowHeight * 2)
         var height: CGFloat
-        if isExpanded, !fitsAboveBar, let caret = completionCaretRect(in: host.view) {
+        if isExpanded, !fitsAboveBar, let caret = textCompletion.caretRect(in: host.view) {
             let lower = tools.convert(tools.bounds, to: host.view).minY - completionListSpacing
             let upper = bar.frame.minY + completionListSpacing
             let below = lower - (caret.maxY + completionListSpacing)
@@ -2133,14 +1978,6 @@ final class InlineComposeController: NSObject {
     private func setConstant(_ constraint: NSLayoutConstraint, _ value: CGFloat) {
         guard abs(constraint.constant - value) > 0.5 else { return }
         constraint.constant = value
-    }
-
-    /// 打っている行の、`view`の座標での位置。
-    private func completionCaretRect(in view: UIView) -> CGRect? {
-        guard let input = completionInput as? any UIView & UITextInput, let selection = input.selectedTextRange else { return nil }
-        let caret = input.caretRect(for: selection.end)
-        guard !caret.isNull, !caret.isInfinite else { return nil }
-        return input.convert(caret, to: view)
     }
 
     /// 出し入れは薄くするだけにする。動きの途中でも、一覧を押せるようにする。
@@ -2223,7 +2060,7 @@ final class InlineComposeController: NSObject {
         spoilerField.addAction(UIAction { [weak self] _ in
             guard let self else { return }
             model.spoilerText = spoilerField.text ?? ""
-            completionTextDidChange(in: spoilerField)
+            textCompletion.textDidChange(in: spoilerField)
         }, for: .editingChanged)
         spoilerField.completionKeys = completionKeys()
 
@@ -2432,7 +2269,7 @@ extension InlineComposeController: UITextViewDelegate {
             linkTitleEffects.textDidChange(textView.text)
         }
         textDidChange()
-        completionTextDidChange(in: textView)
+        textCompletion.textDidChange(in: textView)
     }
 
     func textViewDidChangeSelection(_ textView: UITextView) {
@@ -2440,7 +2277,7 @@ extension InlineComposeController: UITextViewDelegate {
         if !isReplacingLink {
             linkTitleEffects.endSelecting(reason: "selection")
         }
-        completionSelectionDidChange(in: textView)
+        textCompletion.selectionDidChange(in: textView)
     }
 
     /// 送っている間は、送っている下書きと食い違わないよう打った文字を受け付けない。
@@ -2463,7 +2300,7 @@ extension InlineComposeController: UITextViewDelegate {
 
     func textViewDidEndEditing(_ textView: UITextView) {
         linkTitleEffects.editingDidEnd()
-        endCompletion(in: textView)
+        textCompletion.endEditing(in: textView)
         inputDidEndEditing()
     }
 
@@ -2485,9 +2322,8 @@ extension InlineComposeController: UITextViewDelegate {
             logger.info("compose: input began editing while collapsed, expanding")
             expandForEditing()
         }
-        if let completionInput, completionInput !== input {
-            completion.textDidChange(nil)
-            self.completionInput = nil
+        if let input = input as? any UITextInput {
+            textCompletion.inputDidBeginEditing(input)
         }
         // シートを入れ替える途中なら、次のシートは出さない。閉じ終わってから出すと、戻したフォーカスがまた外れるため。
         pendingSheet = nil
@@ -2590,12 +2426,12 @@ extension InlineComposeController: UITextFieldDelegate {
     }
 
     func textFieldDidEndEditing(_ textField: UITextField) {
-        endCompletion(in: textField)
+        textCompletion.endEditing(in: textField)
         inputDidEndEditing()
     }
 
     func textFieldDidChangeSelection(_ textField: UITextField) {
-        completionSelectionDidChange(in: textField)
+        textCompletion.selectionDidChange(in: textField)
     }
 
     /// 注意書きを書き終えたら、Returnで本文へ移る。
