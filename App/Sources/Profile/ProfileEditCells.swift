@@ -189,6 +189,13 @@ final class ProfileEditFieldCell: UITableViewCell, UITextFieldDelegate {
         nameField.becomeFirstResponder()
     }
 
+    /// 内容の欄にキーボードを出し、その欄を返す。
+    @discardableResult
+    func focusValue() -> ProfileEditTextField {
+        valueField.becomeFirstResponder()
+        return valueField
+    }
+
     /// 入力欄の文字を下書きに入れる。
     func reportChange(of field: ProfileEditTextField) {
         guard let fieldID else { return }

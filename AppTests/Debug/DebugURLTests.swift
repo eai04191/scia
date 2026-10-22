@@ -44,6 +44,12 @@ struct DebugURLTests {
         #expect(DebugURL(try #require(URL(string: "scia-debug://viewer?index=2"))) == .viewer(index: 2))
     }
 
+    @Test func readsProfileEdit() throws {
+        #expect(DebugURL(try #require(URL(string: "scia-debug://profile-edit"))) == .profileEdit(note: nil, field: nil))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://profile-edit?note=%3Ablob"))) == .profileEdit(note: ":blob", field: nil))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://profile-edit?field=%40bob"))) == .profileEdit(note: nil, field: "@bob"))
+    }
+
     @Test func readsArrivalHold() throws {
         #expect(DebugURL(try #require(URL(string: "scia-debug://arrivals/hold"))) == .holdArrivals(true))
         #expect(DebugURL(try #require(URL(string: "scia-debug://arrivals/release"))) == .holdArrivals(false))

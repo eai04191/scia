@@ -619,7 +619,10 @@ final class SessionController {
     }
 
     /// 自分のプロフィールの編集をシートで開く。保存したら、開いている自分のプロフィールに反映する。
-    private func presentProfileEditor() {
+    /// - Parameters:
+    ///   - debugNote: デバッグURLで渡した、読み込んだあとに置き換える自己紹介。
+    ///   - debugField: デバッグURLで渡した、読み込んだあとに足す補足情報の内容。
+    private func presentProfileEditor(debugNote: String? = nil, debugField: String? = nil) {
         let client = client
         let editor = ProfileEditor(api: ProfileEditor.API(
             source: { try await client.profileSource() },
@@ -641,6 +644,10 @@ final class SessionController {
             self?.profiles.apply(edited: saved.account)
         }
         controller.onError = { [weak self] error, title in self?.handle(error, title: title) }
+        #if DEBUG
+        controller.debugNote = debugNote
+        controller.debugField = debugField
+        #endif
         rootViewController.frontmostPresented.present(controller.wrappedInNavigation(), animated: true)
     }
 
@@ -1592,6 +1599,8 @@ final class SessionController {
             )
         case .tuning:
             rootViewController.frontmostPresented.presentTuningPanel()
+        case .profileEdit(let note, let field):
+            presentProfileEditor(debugNote: note, debugField: field)
         case .sheetKeyboard:
             // 書いている途中のキーボードから開いたときの動きも見るため、投稿欄は閉じない。高さはメディアを選ぶシートの決めた高さと同じにする。
             SheetKeyboardExperiment.present(from: rootViewController.frontmostPresented, lowHeight: AppDependencies.tuning.value(of: TuningCatalog.composePickerHeight) - (rootViewController.view.window?.safeAreaInsets.bottom ?? 0))

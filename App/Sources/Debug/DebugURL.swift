@@ -68,6 +68,10 @@ enum DebugURL: Equatable {
     /// どちらも省ける。シミュレーターのクリップボードが使えないときにも、URLを含む本文などを打たずに用意し、ピッカーを操作せずに添付を用意するため。
     /// 画像はペーストと同じ経路で足すので、サーバーに送る。
     case compose(text: String?, mediaCount: Int)
+    /// `scia-debug://profile-edit?note=<自己紹介>&field=<補足情報の内容>`。自分のプロフィールの編集を開く。`note`を渡すと、読み込んだあとに自己紹介をその文に置き換えて、
+    /// 末尾にキーボードを出す。`field`を渡すと、その内容の補足情報を足して、内容の欄の末尾にキーボードを出す。どちらも、打ったときと同じく末尾の語の補完を出す。
+    /// シミュレーターの日本語のキーボードでは半角の`:`や`@`を打てないため、補完を確かめるときに語の頭を用意する。
+    case profileEdit(note: String?, field: String?)
     /// `scia-debug://sheet-keyboard`。低い段のシートの中で入力欄にキーボードを出したときの動きを確かめる試作を開く（`SheetKeyboardExperiment`）。
     case sheetKeyboard
     /// `scia-debug://ticker-loop/on`で、ステータスバーの通知を、出る、出ている、消えるを繰り返して出し続ける。`scia-debug://ticker-loop/off`で止める。
@@ -123,6 +127,7 @@ enum DebugURL: Equatable {
         case "viewer": Self.viewer(url)
         case "inject": Self.inject(url)
         case "compose": Self.compose(url)
+        case "profile-edit": .profileEdit(note: Self.query("note", in: url), field: Self.query("field", in: url))
         default: nil
         }
         guard let parsed else { return nil }

@@ -61,6 +61,12 @@ final class ProfileEditViewController: UIViewController {
     private var isTableLoaded = false
     /// 絵文字のシートが閉じ終わったら行う操作。シートを出している間は、編集画面に別の画面を重ねられず、閉じることもできないため。
     private var afterEmojiSheetCloses: (() -> Void)?
+    #if DEBUG
+    /// `scia-debug://profile-edit?note=`で渡した、読み込んだあとに置き換える自己紹介。
+    var debugNote: String?
+    /// `scia-debug://profile-edit?field=`で渡した、読み込んだあとに足す補足情報の内容。
+    var debugField: String?
+    #endif
 
     private enum Section: Int, CaseIterable {
         case images
@@ -121,6 +127,30 @@ final class ProfileEditViewController: UIViewController {
     private func load() async {
         await editor.load()
         showDraft()
+        #if DEBUG
+        // 読み込めなかったときは入れず、再試行で読めたときに入れる。
+        guard editor.draft != nil else { return }
+        if let debugNote {
+            self.debugNote = nil
+            noteView.text = debugNote
+            noteView.updatePlaceholder()
+            editor.draft?.note = debugNote
+            noteView.becomeFirstResponder()
+            // 打ったときと同じく、カーソルの位置の語を補完に渡す。
+            textCompletion.textDidChange(in: noteView)
+        }
+        if let debugField, canAddField {
+            self.debugField = nil
+            editor.draft?.fields.append(ProfileFieldDraft(name: "", value: debugField))
+            showDraft()
+            let row = (editor.draft?.fields.count ?? 1) - 1
+            let path = IndexPath(row: row, section: Section.fields.rawValue)
+            tableView.scrollToRow(at: path, at: .middle, animated: false)
+            if let input = (tableView.cellForRow(at: path) as? ProfileEditFieldCell)?.focusValue() {
+                textCompletion.textDidChange(in: input)
+            }
+        }
+        #endif
     }
 
     /// 下書きを入力欄と表に映す。読み込んだあとと、カタログで下書きを外から変えたあとに呼ぶ。
