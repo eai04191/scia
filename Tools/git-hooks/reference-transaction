@@ -16,7 +16,10 @@ set -euo pipefail
 stamp="$(git rev-parse --path-format=absolute --git-common-dir)/../Tools/check-stamp.sh"
 
 checked() {
-    [[ -z "$("$stamp" missing "$1")" ]]
+    local missing
+    # 調べられなかったときに、出力が空なのを通ったものと取り違えないよう、失敗したら拒否する
+    missing=$("$stamp" missing "$1") || reject "$stamp で、$(git log -1 --format='%h' "$1")の中身が検証済みかを調べられなかったので、mainに入れません"
+    [[ -z "$missing" ]]
 }
 
 reject() {
