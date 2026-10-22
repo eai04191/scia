@@ -1800,12 +1800,19 @@ final class InlineComposeController: NSObject {
         let token = current.flatMap { $0.kind == shown.kind && $0.range.lowerBound == shown.range.lowerBound ? $0 : nil } ?? shown
         let text = (input as? UITextView)?.text ?? (input as? UITextField)?.text ?? ""
         let insertion = CompletionTokenizer.insertion(of: candidate.completion, replacing: token, in: text)
+        logger.info("completion: selected \(token.kind.rawValue, privacy: .public) leadingSpace=\(token.needsLeadingSpace)")
+        guard apply(insertion, to: input) else { return }
+        completion.didComplete()
+    }
+
+    /// 本文か注意書きの範囲を置き換え、カーソルを置き、下書きを入力欄に合わせる。範囲が入力欄の外なら何もせずfalseを返す。
+    @discardableResult
+    private func apply(_ insertion: CompletionInsertion, to input: any UITextInput) -> Bool {
         let begin = input.beginningOfDocument
         guard let start = input.position(from: begin, offset: insertion.range.lowerBound),
               let end = input.position(from: begin, offset: insertion.range.upperBound),
               let range = input.textRange(from: start, to: end)
-        else { return }
-        logger.info("completion: selected \(token.kind.rawValue, privacy: .public) leadingSpace=\(token.needsLeadingSpace)")
+        else { return false }
         input.replace(range, withText: insertion.text)
         if let cursor = input.position(from: begin, offset: insertion.cursor) {
             input.selectedTextRange = input.textRange(from: cursor, to: cursor)
@@ -1817,7 +1824,7 @@ final class InlineComposeController: NSObject {
         } else if input === spoilerField {
             model.spoilerText = spoilerField.text ?? ""
         }
-        completion.didComplete()
+        return true
     }
 
     private func completionKeys() -> CompletionKeys {
