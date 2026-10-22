@@ -65,4 +65,25 @@ struct TimelineFeedTests {
             #expect(feed.marker == nil)
         }
     }
+
+    @Test func listReadsListTimeline() async throws {
+        let (path, query) = try await requestedQuery(.list(id: "12249"))
+        #expect(path == "/api/v1/timelines/list/12249")
+        #expect(query.contains(URLQueryItem(name: "max_id", value: "113000000000000002")))
+    }
+
+    /// リストは`list`引数を付けて購読し、届いたイベントの`stream`欄は`["list", "<ID>"]`で見分ける。
+    /// Mastodonのストリーミングサーバーは、`streamNameFromChannelName`で`[channelName, params.list]`を返す。
+    @Test func listSubscribesWithListArgument() throws {
+        let subscription = TimelineFeed.list(id: "12249").subscription
+        #expect(try subscription.message("subscribe") == #"{"list":"12249","stream":"list","type":"subscribe"}"#)
+        #expect(subscription.streamPath == ["list", "12249"])
+        #expect(subscription != TimelineFeed.list(id: "13585").subscription)
+    }
+
+    /// `home`の文脈はホームとリストに当てる。既読位置はホームと通知にしかない。
+    @Test func listUsesHomeFilterContextAndNoMarker() {
+        #expect(TimelineFeed.list(id: "1").filterContext == .home)
+        #expect(TimelineFeed.list(id: "1").marker == nil)
+    }
 }

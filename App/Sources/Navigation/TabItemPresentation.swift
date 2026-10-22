@@ -10,6 +10,7 @@ extension TabItem: MenuItemPresentable {
         case .notifications: "通知"
         case .bookmarks: "ブックマーク"
         case .favourites: "お気に入り"
+        case .list(_, let title): title
         }
     }
 
@@ -23,6 +24,7 @@ extension TabItem: MenuItemPresentable {
         case .notifications: "bell"
         case .bookmarks: "bookmark"
         case .favourites: "star"
+        case .list: "list.bullet"
         }
     }
 

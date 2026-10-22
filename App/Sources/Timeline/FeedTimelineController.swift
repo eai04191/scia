@@ -53,6 +53,7 @@ final class FeedTimelineController {
 
     init(
         feed: TimelineFeed,
+        texts: TimelineViewController.Texts? = nil,
         client: MastodonClient,
         streamingHub: StreamingHub,
         tuning: TuningStore = AppDependencies.tuning,
@@ -63,7 +64,7 @@ final class FeedTimelineController {
             try await feed.page(query, from: client)
         }
         self.feed = feed
-        viewController = TimelineViewController(texts: Self.texts(for: feed))
+        viewController = TimelineViewController(texts: texts ?? Self.texts(for: feed))
         self.client = client
         self.streamingHub = streamingHub
         self.tuning = tuning
@@ -94,6 +95,8 @@ final class FeedTimelineController {
         case .home: .home
         case .local: .local
         case .federated: .federated
+        // リストの名前は、作る側が`texts`で渡す。
+        case .list: .list(title: "")
         }
     }
 
@@ -182,7 +185,7 @@ final class FeedTimelineController {
 
     private func stopStreaming() {
         guard let streamingSubscription else { return }
-        logger.info("\(self.feed.rawValue, privacy: .public) streaming unsubscribe")
+        logger.info("\(self.feed.name, privacy: .public) streaming unsubscribe")
         streamingSubscription.cancel()
         self.streamingSubscription = nil
         // 購読をやめた後は知らせが届かないので、出していた表示を消す。
@@ -211,7 +214,7 @@ final class FeedTimelineController {
     }
 
     private func loadInitial() async {
-        logger.info("\(self.feed.rawValue, privacy: .public) loadInitial start")
+        logger.info("\(self.feed.name, privacy: .public) loadInitial start")
         do {
             let markerID = try await loadMarker()
             guard let statuses = try await store.loadInitial(around: markerID), !isStopped else { return }
@@ -222,7 +225,7 @@ final class FeedTimelineController {
             hasLoadedInitial = true
             viewController.setContentState(store.isEmpty && store.isRegenerating ? .regenerating : .loaded)
             viewController.setFooterState(store.reachedEnd ? .reachedEnd : .idle)
-            logger.info("\(self.feed.rawValue, privacy: .public) loadInitial done count=\(statuses.count, privacy: .public) regenerating=\(self.store.isRegenerating, privacy: .public)")
+            logger.info("\(self.feed.name, privacy: .public) loadInitial done count=\(statuses.count, privacy: .public) regenerating=\(self.store.isRegenerating, privacy: .public)")
             startStreaming()
         } catch {
             handle(error, during: "loadInitial") { viewController.setContentState(.failed($0)) }
@@ -233,12 +236,12 @@ final class FeedTimelineController {
         guard !isStopped, !store.isLoading, !store.reachedEnd, !store.isEmpty else { return }
         viewController.setFooterState(.loading)
         run(origin) { controller in
-            controller.logger.info("\(controller.feed.rawValue, privacy: .public) loadOlder start")
+            controller.logger.info("\(controller.feed.name, privacy: .public) loadOlder start")
             do {
                 guard let added = try await controller.store.loadOlder(), !controller.isStopped else { return }
                 controller.viewController.setEntries(controller.store.entries)
                 controller.viewController.setFooterState(controller.store.reachedEnd ? .reachedEnd : .idle)
-                controller.logger.info("\(controller.feed.rawValue, privacy: .public) loadOlder done added=\(added.count, privacy: .public) reachedEnd=\(controller.store.reachedEnd, privacy: .public)")
+                controller.logger.info("\(controller.feed.name, privacy: .public) loadOlder done added=\(added.count, privacy: .public) reachedEnd=\(controller.store.reachedEnd, privacy: .public)")
             } catch {
                 controller.handle(error, during: "loadOlder") { controller.viewController.setFooterState(.failed($0)) }
             }
@@ -258,12 +261,12 @@ final class FeedTimelineController {
         guard !isStopped else { return }
         switch activity {
         case .connected:
-            logger.info("\(self.feed.rawValue, privacy: .public) streaming connected")
+            logger.info("\(self.feed.name, privacy: .public) streaming connected")
             fillFromLatest()
         case .event(let event):
             receive(event)
         case .poll:
-            logger.info("\(self.feed.rawValue, privacy: .public) poll")
+            logger.info("\(self.feed.name, privacy: .public) poll")
             fillFromLatest()
         case .outage(let isOngoing):
             viewController.setOutageNotice(isOngoing)
@@ -277,7 +280,7 @@ final class FeedTimelineController {
         // 保留を送る前に始まった補完は止めない。その結果は、保留中でも一覧に入る。
         if DebugFaults.isHoldingArrivals {
             isFillHeld = true
-            logger.info("\(self.feed.rawValue, privacy: .public) fill held")
+            logger.info("\(self.feed.name, privacy: .public) fill held")
             return
         }
         #endif
@@ -286,7 +289,7 @@ final class FeedTimelineController {
                 let before = controller.store.entries
                 let maxPages = Int(controller.tuning.value(of: TuningCatalog.fillPageLimit))
                 guard let added = try await controller.store.fillFromLatest(maxPages: maxPages), !controller.isStopped else { return }
-                controller.logger.info("\(controller.feed.rawValue, privacy: .public) fill done added=\(added.count, privacy: .public) gaps=\(controller.store.gaps.count, privacy: .public) regenerating=\(controller.store.isRegenerating, privacy: .public)")
+                controller.logger.info("\(controller.feed.name, privacy: .public) fill done added=\(added.count, privacy: .public) gaps=\(controller.store.gaps.count, privacy: .public) regenerating=\(controller.store.isRegenerating, privacy: .public)")
                 if controller.store.isRegenerating {
                     controller.scheduleRegeneratingRetry()
                 }
@@ -313,7 +316,7 @@ final class FeedTimelineController {
     private func scheduleRegeneratingRetry() {
         guard regeneratingRetryTask == nil, !isStopped, !isDisabled, isInForeground else { return }
         let interval = tuning.value(of: TuningCatalog.regeneratingRetryInterval)
-        logger.info("\(self.feed.rawValue, privacy: .public) regenerating retry scheduled after=\(interval, privacy: .public)")
+        logger.info("\(self.feed.name, privacy: .public) regenerating retry scheduled after=\(interval, privacy: .public)")
         regeneratingRetryTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(interval))
             guard !Task.isCancelled, let self else { return }
@@ -342,7 +345,7 @@ final class FeedTimelineController {
         viewController.setGapStates(loading: store.loadingGapIDs.union([id]), failures: store.gapFailures.filter { $0.key != id })
         let gapBefore = store.gaps.first { $0.id == id }
         run(isAutomatic ? .automatic : .user) { controller in
-            controller.logger.info("\(controller.feed.rawValue, privacy: .public) loadGap start id=\(id, privacy: .public) direction=\(String(describing: direction), privacy: .public) automatic=\(isAutomatic, privacy: .public)")
+            controller.logger.info("\(controller.feed.name, privacy: .public) loadGap start id=\(id, privacy: .public) direction=\(String(describing: direction), privacy: .public) automatic=\(isAutomatic, privacy: .public)")
             do {
                 let added = try await controller.store.loadGap(id, from: direction)
                 guard !controller.isStopped else { return }
@@ -355,7 +358,7 @@ final class FeedTimelineController {
                 guard let added else { return }
                 controller.viewController.setEntries(controller.store.entries, keeping: anchorID)
                 controller.updateUnreadCount()
-                controller.logger.info("\(controller.feed.rawValue, privacy: .public) loadGap done added=\(added.count, privacy: .public)")
+                controller.logger.info("\(controller.feed.name, privacy: .public) loadGap done added=\(added.count, privacy: .public)")
             } catch {
                 if isAutomatic {
                     controller.autoLoadFailedGapIDs.insert(id)
@@ -369,7 +372,7 @@ final class FeedTimelineController {
     /// 投稿の応答で返った自分の投稿を、ストリーミングで届くのを待たずに新着と同じ経路で流す。
     func receivePosted(_ status: Status) {
         guard !isStopped else { return }
-        logger.info("\(self.feed.rawValue, privacy: .public) posted status=\(status.id, privacy: .public)")
+        logger.info("\(self.feed.name, privacy: .public) posted status=\(status.id, privacy: .public)")
         apply(store.receivePosted(status))
     }
 
@@ -444,7 +447,7 @@ final class FeedTimelineController {
         } catch is FeatureUnavailable {
             return nil
         } catch {
-            logger.error("\(self.feed.rawValue, privacy: .public) marker load failed: \(SciaLog.describe(error), privacy: .public)")
+            logger.error("\(self.feed.name, privacy: .public) marker load failed: \(SciaLog.describe(error), privacy: .public)")
             return nil
         }
     }
@@ -456,7 +459,7 @@ final class FeedTimelineController {
                 guard let markerID = try await controller.client.marker(for: marker), !controller.isStopped else { return }
                 controller.store.applySavedMarker(markerID)
                 controller.updateUnreadCount()
-                controller.logger.info("\(controller.feed.rawValue, privacy: .public) marker synced id=\(markerID, privacy: .public)")
+                controller.logger.info("\(controller.feed.name, privacy: .public) marker synced id=\(markerID, privacy: .public)")
             } catch {
                 controller.handle(error, during: "marker sync") { _ in }
             }
@@ -483,7 +486,7 @@ final class FeedTimelineController {
                     do {
                         try await client.saveMarker(for: marker, lastReadID: id)
                         self.store.markSaved(id)
-                        self.logger.info("\(self.feed.rawValue, privacy: .public) marker saved id=\(id, privacy: .public)")
+                        self.logger.info("\(self.feed.name, privacy: .public) marker saved id=\(id, privacy: .public)")
                     } catch {
                         self.handle(error, during: "marker save") { _ in }
                         break
@@ -532,13 +535,13 @@ final class FeedTimelineController {
         #if DEBUG
         // 保留を解いたときに、releaseHeldArrivalsから挿入する。
         guard !DebugFaults.isHoldingArrivals else {
-            logger.info("\(self.feed.rawValue, privacy: .public) insert pending held")
+            logger.info("\(self.feed.name, privacy: .public) insert pending held")
             return
         }
         #endif
         let before = store.entries
         let added = store.flushPending()
-        logger.info("\(self.feed.rawValue, privacy: .public) insert pending added=\(added.count, privacy: .public)")
+        logger.info("\(self.feed.name, privacy: .public) insert pending added=\(added.count, privacy: .public)")
         // フィルターで隠す投稿は足さないが、同じIDの読めなかった行は消えるため、並びの変化で見る。
         guard store.entries != before else { return }
         showEntries()
@@ -570,7 +573,7 @@ final class FeedTimelineController {
         guard !isStopped, !(error is CancellationError), (error as? URLError)?.code != .cancelled else { return }
         // 既読位置の保存など、このサーバーでは使えないと分かって止めた機能。止めたことは記録してあり、使う人に見せることもない。
         guard !(error is FeatureUnavailable) else { return }
-        logger.error("\(self.feed.rawValue, privacy: .public) \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
+        logger.error("\(self.feed.name, privacy: .public) \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
         if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
             onUnauthorized()
         }

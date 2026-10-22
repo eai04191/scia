@@ -5,21 +5,43 @@ import UIKit
 
 @MainActor
 struct TabArrangementTests {
+    /// 確かめに使うリスト。
+    private static let friends = TabItem.list(id: "1", title: "友だち")
+
+    /// 項目ごとのナビゲーション。作るように頼まれた項目を記録する。
+    @MainActor
+    private final class Navigations {
+        let all: [TabItem: UINavigationController]
+        private(set) var made: [TabItem] = []
+
+        init() {
+            var all: [TabItem: UINavigationController] = [:]
+            for item in TabItem.allCases + [TabArrangementTests.friends] {
+                let root = UIViewController()
+                root.title = item.title
+                all[item] = UINavigationController(rootViewController: root)
+            }
+            self.all = all
+        }
+
+        func make(_ item: TabItem) -> UINavigationController? {
+            made.append(item)
+            return all[item]
+        }
+    }
+
     @MainActor
     private struct Harness {
         let arrangement: TabArrangement
-        let navigations: [TabItem: UINavigationController]
+        let made: Navigations
         let window: UIWindow
 
+        var navigations: [TabItem: UINavigationController] { made.all }
+
         init(_ layout: MenuLayout<TabItem>, restoring: TabItem? = nil) throws {
-            var navigations: [TabItem: UINavigationController] = [:]
-            for item in TabItem.allCases {
-                let root = UIViewController()
-                root.title = item.title
-                navigations[item] = UINavigationController(rootViewController: root)
-            }
-            self.navigations = navigations
-            arrangement = TabArrangement(navigations: navigations, placement: TabPlacement(layout: layout), restoring: restoring)
+            let made = Navigations()
+            self.made = made
+            arrangement = TabArrangement(navigation: made.make, placement: TabPlacement(layout: layout), restoring: restoring)
             let scene = try #require(
                 UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
                 "テストのホストアプリにウィンドウシーンがありません"
@@ -115,5 +137,22 @@ struct TabArrangementTests {
 
         let switchTab = harness.arrangement.tabBarController.tabs.first { $0.identifier == TabArrangement.switchIdentifier }
         #expect(switchTab?.badgeValue == "2")
+    }
+
+    /// リストのように数の決まらない項目は、並びに出たときにナビゲーションを作り、タブと切り替えタブを行き来しても作り直さない。
+    /// 無効にしている項目は作らない。
+    @Test func listNavigationIsMadeOnceWhenPlaced() throws {
+        let harness = try Harness(Self.layout(tabs: [.home], switchable: [.local, Self.friends], disabled: [Self.friends]))
+        #expect(!harness.made.made.contains(Self.friends))
+
+        harness.apply(Self.layout(tabs: [.home, Self.friends], switchable: [.local]))
+        #expect(harness.tabIdentifiers == ["home", "list:1:友だち", TabArrangement.switchIdentifier])
+
+        harness.apply(Self.layout(tabs: [.home], switchable: [Self.friends, .local]))
+        harness.arrangement.show(Self.friends)
+        #expect(harness.arrangement.isShowing(Self.friends))
+        #expect(harness.arrangement.selectedNavigation === harness.navigations[Self.friends])
+        #expect(harness.switchTitle == "友だち")
+        #expect(harness.made.made.filter { $0 == Self.friends }.count == 1)
     }
 }

@@ -15,8 +15,16 @@ final class SessionController {
     private let notifications: NotificationsController
     private let bookmarks: SavedStatusesController
     private let favourites: SavedStatusesController
-    /// 投稿の一覧のタブ。ホーム、ローカル、連合。
-    private var feeds: [FeedTimelineController] { [home, local, federated] }
+    /// リストのタイムラインのタブ。並びに出たときに作る。
+    private let lists: ListFeedRegistry
+    /// 投稿の一覧のタブ。ホーム、ローカル、連合と、作ったリスト。
+    private var feeds: [FeedTimelineController] { [home, local, federated] + lists.controllers }
+    /// 直近に読んだ自分のリスト。並びを最初の並びに戻したときに、リストを足し直すのに使う。
+    private var loadedLists: [MastodonList]?
+    /// リストを読んでいる。起動したときは、始めたときと前面に出たときの両方で読みに来るため、重ねて読まない。
+    private var isLoadingLists = false
+    /// アカウントの切り替えなどのメニュー。開くたびに呼んで組み立て直す。
+    private let accountMenu: @MainActor () -> UIMenu
     /// 自分で残した投稿の一覧のタブ。ブックマーク、お気に入り。
     private var savedLists: [SavedStatusesController] { [bookmarks, favourites] }
     /// 各タブで共有する、ストリーミングの接続。
@@ -102,6 +110,7 @@ final class SessionController {
     init(credential: Credential, accountMenu: @escaping @MainActor () -> UIMenu, onReauthenticate: @escaping (SessionController) async -> Void) {
         self.credential = credential
         self.onReauthenticate = onReauthenticate
+        self.accountMenu = accountMenu
         #if DEBUG
         let client = MastodonClient(credential: credential, transport: FaultInjectingTransport(base: ScenarioMode.server?.transport ?? URLSessionTransport()), rateLimit: rateLimit, features: features, requestLog: requestLog)
         #else
@@ -127,6 +136,10 @@ final class SessionController {
         let notifications = NotificationsController(client: client, streamingHub: streamingHub) { forward() }
         let bookmarks = SavedStatusesController(kind: .bookmarks, client: client) { forward() }
         let favourites = SavedStatusesController(kind: .favourites, client: client) { forward() }
+        let lists = ListFeedRegistry { id, title in
+            FeedTimelineController(feed: .list(id: id), texts: .list(title: title), client: client, streamingHub: streamingHub) { forward() }
+        }
+        self.lists = lists
         self.bookmarks = bookmarks
         self.favourites = favourites
         self.home = home
@@ -143,10 +156,10 @@ final class SessionController {
         let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog, mediaFormats: mediaFormats)
         self.diagnostics = diagnostics
         // コントローラーはHubを持っているので、弱く持って循環させない。
-        streamingHub.onChange = { [weak streamingHub, weak home, weak local, weak federated, weak notifications] in
+        streamingHub.onChange = { [weak streamingHub, weak home, weak local, weak federated, weak notifications, weak lists] in
             guard let streamingHub else { return }
             diagnostics.setStreaming(streamingHub.state, subscriptions: streamingHub.subscriptions)
-            for feed in [home, local, federated] {
+            for feed in [home, local, federated] + (lists?.controllers ?? []) {
                 feed?.showStreamingState(streamingHub.state)
             }
             notifications?.showStreamingState(streamingHub.state)
@@ -165,6 +178,7 @@ final class SessionController {
             notifications.updateStatus(id, transform)
             bookmarks.updateStatus(id, transform)
             favourites.updateStatus(id, transform)
+            lists.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
             threads.updateStatus(id, transform)
         }
@@ -180,11 +194,12 @@ final class SessionController {
             notifications.updateStatus(id, transform)
             bookmarks.updateStatus(id, transform)
             favourites.updateStatus(id, transform)
+            lists.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
             threads.updateStatus(id, transform)
         }
         linkCards = LinkCardRefresher(client: client) { refetched in
-            for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, profiles.updateStatus, threads.updateStatus] {
+            for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, lists.updateStatus, profiles.updateStatus, threads.updateStatus] {
                 update(refetched.id) { $0.adoptingCard(of: refetched) }
             }
         }
@@ -196,14 +211,17 @@ final class SessionController {
         let bookmarksNavigation = ContentNavigationController(rootViewController: bookmarks.viewController)
         let favouritesNavigation = ContentNavigationController(rootViewController: favourites.viewController)
         let tabs = TabArrangement(
-            navigations: [
-                .home: homeNavigation,
-                .local: localNavigation,
-                .federated: federatedNavigation,
-                .notifications: notificationsNavigation,
-                .bookmarks: bookmarksNavigation,
-                .favourites: favouritesNavigation,
-            ],
+            navigation: { item in
+                switch item {
+                case .home: homeNavigation
+                case .local: localNavigation
+                case .federated: federatedNavigation
+                case .notifications: notificationsNavigation
+                case .bookmarks: bookmarksNavigation
+                case .favourites: favouritesNavigation
+                case .list(let id, let title): lists.navigation(id: id, title: title)
+                }
+            },
             placement: TabPlacement(layout: AppDependencies.settings.tabLayout(for: credential.handle)),
             restoring: AppDependencies.settings.switchTabItem(for: credential.handle)
         )
@@ -224,12 +242,7 @@ final class SessionController {
         }
         tabBarController.delegate = tabBarDelegate
         for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation, bookmarksNavigation, favouritesNavigation] {
-            navigation.delegate = navigationDelegate
-            // 奥の画面を開いているときは、その画面の上のバーなので、一覧は動かさない。
-            navigation.onEmptyBarClickOnMac = { [weak navigation] in
-                guard let navigation, navigation.viewControllers.count == 1 else { return }
-                scrollToTop(navigation)
-            }
+            Self.configure(navigation, delegate: navigationDelegate, scrollToTop: scrollToTop)
         }
         // トークンの失効は、どのAPIで分かっても同じくログインし直しを促す。
         let reportIfUnauthorized = { (error: any Error) in
@@ -330,7 +343,7 @@ final class SessionController {
                     if let editing = draft.editing {
                         // ストリーミングの編集の知らせを待たずに、どの一覧にも編集したあとの投稿を出す。切れている間も直るようにするため。
                         let edited = try await client.editStatus(editing, to: draft)
-                        for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, profiles.updateStatus, threads.updateStatus] {
+                        for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, lists.updateStatus, profiles.updateStatus, threads.updateStatus] {
                             update(edited.id) { _ in edited }
                         }
                     } else {
@@ -363,20 +376,11 @@ final class SessionController {
             self?.credentialsDidBecomeInvalid()
         }
         for viewController in [home.viewController, local.viewController, federated.viewController, notifications.viewController, bookmarks.viewController, favourites.viewController] {
-            viewController.navigationItem.leftBarButtonItem = Self.accountButton(for: credential) { [weak self, weak viewController] in
-                let myProfile = UIAction(title: "自分のプロフィール", image: UIImage(systemName: "person.crop.circle")) { _ in
-                    guard let viewController else { return }
-                    self?.openMyProfile(from: viewController)
-                }
-                let recent = UIAction(title: "操作の状況", image: UIImage(systemName: "list.bullet.clipboard")) { _ in
-                    self?.showOperationStatus()
-                }
-                return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile, recent])] + accountMenu().children)
-            }
-            #if DEBUG
-            viewController.onDebugURL = { [weak self] url in self?.handle(url) }
-            #endif
-            configure(viewController)
+            configureTabRoot(viewController)
+        }
+        // 並びにあるリストは、タブを組んだときに作ってある。それ以後に作るリストも、ここで同じように整える。
+        lists.onCreate = { [weak self] controller, navigation in
+            self?.configureList(controller, in: navigation)
         }
         composer.onBeginEditing = { [weak self] in
             self?.applyComposeDefaults()
@@ -438,6 +442,8 @@ final class SessionController {
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                // 最初の並びに戻したら、リストが消えるので足し直す。足し直した変更は、もう一度ここへ来て反映する。
+                addMissingListsToTabLayout()
                 let placement = TabPlacement(layout: AppDependencies.settings.tabLayout(for: handle))
                 if placement != tabs.placement {
                     tabs.apply(placement)
@@ -568,6 +574,93 @@ final class SessionController {
         for timeline in timelines.allObjects {
             timeline.setObscuredBottomHeight(obscuredBottomHeight)
         }
+    }
+
+    /// タブの一番下の画面の一覧に、アカウントのボタンを置き、投稿への操作とプロフィールを開けるようにする。
+    private func configureTabRoot(_ viewController: TimelineViewController) {
+        let accountMenu = accountMenu
+        viewController.navigationItem.leftBarButtonItem = Self.accountButton(for: credential) { [weak self, weak viewController] in
+            let myProfile = UIAction(title: "自分のプロフィール", image: UIImage(systemName: "person.crop.circle")) { _ in
+                guard let viewController else { return }
+                self?.openMyProfile(from: viewController)
+            }
+            let recent = UIAction(title: "操作の状況", image: UIImage(systemName: "list.bullet.clipboard")) { _ in
+                self?.showOperationStatus()
+            }
+            return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile, recent])] + accountMenu().children)
+        }
+        #if DEBUG
+        viewController.onDebugURL = { [weak self] url in self?.handle(url) }
+        #endif
+        configure(viewController)
+    }
+
+    /// タブのナビゲーションで、チップの列を画面の移り変わりに合わせ、Macでバーの空いたところを押したら一覧を最上部へ動かす。
+    private static func configure(_ navigation: ContentNavigationController, delegate: NoticeNavigationDelegate, scrollToTop: @escaping (UINavigationController) -> Void) {
+        navigation.delegate = delegate
+        // 奥の画面を開いているときは、その画面の上のバーなので、一覧は動かさない。
+        navigation.onEmptyBarClickOnMac = { [weak navigation] in
+            guard let navigation, navigation.viewControllers.count == 1 else { return }
+            scrollToTop(navigation)
+        }
+    }
+
+    /// 並びに出たリストの一覧を、ホームやローカルと同じように整える。ローカルと同じく、初めて開いたときに読み始める。
+    private func configureList(_ controller: FeedTimelineController, in navigation: ContentNavigationController) {
+        configureTabRoot(controller.viewController)
+        Self.configure(navigation, delegate: navigationDelegate) { navigation in
+            (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
+        }
+        controller.viewController.onAppearing = { [weak controller] in controller?.startIfNeeded() }
+        controller.showStreamingState(streamingHub.state)
+        controller.setEnabled(tabs.placement.location(of: TabItem(controller.feed)) != .disabled)
+    }
+
+    /// 自分のリストを読み、タブの並びに反映する。決まりはdocs/tabs.mdの「リスト」にある。読めなければ、並びを変えない。
+    private func loadLists() {
+        guard !isLoadingLists else { return }
+        isLoadingLists = true
+        let client = client
+        RequestOrigin.$current.withValue(.automatic) {
+            Task { [weak self] in
+                defer { self?.isLoadingLists = false }
+                do {
+                    let lists = try await client.lists()
+                    self?.apply(lists)
+                } catch {
+                    self?.logger.error("lists load failed: \(SciaLog.describe(error), privacy: .public)")
+                    if let error = error as? MastodonAPIError, error.isUnauthorized {
+                        self?.reportUnauthorized()
+                    }
+                }
+            }
+        }
+    }
+
+    /// 読んだリストを並びに反映し、もうないリストの一覧を止める。
+    private func apply(_ lists: [MastodonList]) {
+        loadedLists = lists
+        logger.info("lists loaded count=\(lists.count, privacy: .public)")
+        syncListsInTabLayout()
+        self.lists.removeAll(except: Set(lists.map(\.id)))
+    }
+
+    /// 並びのリストを、直近に読んだリストにそろえる。
+    private func syncListsInTabLayout() {
+        guard let loadedLists else { return }
+        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).syncingLists(loadedLists))
+    }
+
+    /// 最初の並びに戻したときに、直近に読んだリストを無効のまま足し直す。並びにあるリストは外しも書き換えもしない。
+    private func addMissingListsToTabLayout() {
+        guard let loadedLists else { return }
+        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).addingMissingLists(loadedLists))
+    }
+
+    /// 並びが変わったときだけ保存する。保存すると並びの変化の知らせが来るため、同じ並びを書き続けないようにする。
+    private func setTabLayout(_ layout: MenuLayout<TabItem>) {
+        guard layout.tokens != AppDependencies.settings.tabLayout(for: credential.handle).tokens else { return }
+        AppDependencies.settings.setTabLayout(layout, for: credential.handle)
     }
 
     /// 一覧から投稿への操作とプロフィールを開けるようにする。プロフィール画面の一覧にも使う。
@@ -1483,6 +1576,7 @@ final class SessionController {
         }
         observeRecoveries()
         loadServerVersion()
+        loadLists()
         RequestOrigin.$current.withValue(.automatic) {
             Task { [weak self] in await self?.loadPreferences() }
         }
@@ -1943,6 +2037,10 @@ final class SessionController {
             list.enterForeground()
         }
         threads.enterForeground()
+        // ほかの端末で作ったり消したりしたリストを、戻ったときに並びへ反映する。
+        if hasStarted {
+            loadLists()
+        }
     }
 
     func enterBackground() {
@@ -1959,6 +2057,51 @@ private struct ProfileNotFound: LocalizedError {
     let acct: String
 
     var errorDescription: String? { "@\(acct)が見つかりませんでした。" }
+}
+
+/// リストのタイムラインの一覧と、そのナビゲーション。リストは使う人ごとに数が違うため、タブの並びに出たときに作る。
+@MainActor
+private final class ListFeedRegistry {
+    private let make: (_ id: String, _ title: String) -> FeedTimelineController
+    private var entries: [String: (controller: FeedTimelineController, navigation: ContentNavigationController)] = [:]
+    /// 作ったとき。設定するまでに作ったものは、設定したときにまとめて渡す。セッションを作り終える前に、タブを組むときに作るため。
+    var onCreate: ((FeedTimelineController, ContentNavigationController) -> Void)? {
+        didSet {
+            for entry in entries.values {
+                onCreate?(entry.controller, entry.navigation)
+            }
+        }
+    }
+
+    init(make: @escaping (_ id: String, _ title: String) -> FeedTimelineController) {
+        self.make = make
+    }
+
+    var controllers: [FeedTimelineController] { entries.values.map(\.controller) }
+
+    /// リストのナビゲーション。まだなければ作る。
+    func navigation(id: String, title: String) -> ContentNavigationController {
+        if let entry = entries[id] { return entry.navigation }
+        let controller = make(id, title)
+        let navigation = ContentNavigationController(rootViewController: controller.viewController)
+        entries[id] = (controller, navigation)
+        onCreate?(controller, navigation)
+        return navigation
+    }
+
+    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
+        for controller in controllers {
+            controller.updateStatus(id, transform)
+        }
+    }
+
+    /// サーバーにもうないリストの一覧を止めて捨てる。
+    func removeAll(except ids: Set<String>) {
+        for (id, entry) in entries where !ids.contains(id) {
+            entry.controller.stop()
+            entries[id] = nil
+        }
+    }
 }
 
 /// 開いているスレッドの画面を弱く持つ。

@@ -111,7 +111,8 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
 
     /// 別のウィンドウで同じ設定を変えたら、行も作り直す。古い行のまま保存すると、そちらの変更を上書きしてしまうため。
     func update(_ layout: MenuLayout<Item>) {
-        guard layout.elements != rows.map(\.element) else { return }
+        // 項目どうしの比べ方は、リストのように名前を含めないことがあるため、名前まで含む保存の形で比べる。
+        guard layout.tokens != MenuLayout(defaultElements: rows.map(\.element)).tokens else { return }
         rows = layout.elements.map { Row(element: $0) }
         applySnapshot(animated: false)
     }

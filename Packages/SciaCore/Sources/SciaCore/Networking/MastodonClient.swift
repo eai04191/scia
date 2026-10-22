@@ -513,6 +513,19 @@ public struct MastodonClient: Sendable {
         return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: false)
     }
 
+    /// 自分のリストをすべて返す。ページに分けずに返る。
+    /// https://docs.joinmastodon.org/methods/lists/#get
+    public func lists() async throws -> [MastodonList] {
+        try await get([MastodonList].self, path: "api/v1/lists", query: []).0
+    }
+
+    /// リストのタイムラインを新しい順に返す。
+    /// https://docs.joinmastodon.org/methods/timelines/#list
+    public func listTimeline(_ listID: String, _ query: TimelineQuery) async throws -> TimelinePage {
+        let list = try await get(ElementList<Status>.self, path: "api/v1/timelines/list/\(listID)", query: query.queryItems).0
+        return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: false)
+    }
+
     /// ブックマークした投稿を、ブックマークした新しい順に返す。1回に読める件数の上限は40件。
     /// - Parameter maxID: 前のページの`SavedStatusesPage.nextMaxID`。nilなら最新のページ。
     /// https://docs.joinmastodon.org/methods/bookmarks/#get

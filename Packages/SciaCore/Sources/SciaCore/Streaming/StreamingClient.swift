@@ -27,16 +27,30 @@ public struct StreamingSubscription: Sendable, Hashable {
     /// ホームタイムラインと通知。
     public static let user = StreamingSubscription(stream: "user")
 
+    /// リストのタイムライン。
+    public static func list(_ id: String) -> StreamingSubscription {
+        StreamingSubscription(stream: "list", list: id)
+    }
+
     /// `subscribe`で送るストリームの名前。
     public let stream: String
+    /// `list`ストリームで購読するリストのID。
+    public let list: String?
 
-    /// 届いたイベントの`stream`欄。リストなら`["list", "<id>"]`のように引数が続くが、今は引数のないストリームだけを扱う。
-    var streamPath: [String] { [stream] }
+    public init(stream: String, list: String? = nil) {
+        self.stream = stream
+        self.list = list
+    }
+
+    /// 届いたイベントの`stream`欄。リストなら`["list", "<id>"]`のように引数が続く。
+    var streamPath: [String] { [stream] + (list.map { [$0] } ?? []) }
 
     func message(_ type: String) throws -> String {
         let encoder = JSONEncoder()
         encoder.outputFormatting = .sortedKeys
-        return String(decoding: try encoder.encode(["type": type, "stream": stream]), as: UTF8.self)
+        var fields = ["type": type, "stream": stream]
+        fields["list"] = list
+        return String(decoding: try encoder.encode(fields), as: UTF8.self)
     }
 }
 

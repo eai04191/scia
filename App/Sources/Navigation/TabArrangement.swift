@@ -5,6 +5,7 @@ import UIKit
 ///
 /// 項目ごとのナビゲーションは1つずつ作って持ち続け、タブに並べても切り替えタブに入れても同じものを使う。
 /// 切り替えても、読み込んだ投稿、スクロール位置、奥に開いた画面がそのまま残る。
+/// リストのように数の決まらない項目があるため、ナビゲーションは並びに初めて出たときに作る。
 @MainActor
 final class TabArrangement {
     let tabBarController: UITabBarController
@@ -16,8 +17,12 @@ final class TabArrangement {
     var onSwitchSelectionChange: ((TabItem) -> Void)?
 
     private(set) var placement: TabPlacement
-    private let navigations: [TabItem: UINavigationController]
+    /// 作った項目ごとのナビゲーション。
+    private var navigations: [TabItem: UINavigationController] = [:]
+    /// 項目のナビゲーションを作る。作れない項目ならnil。
+    private let makeNavigation: (TabItem) -> UINavigationController?
     /// 項目ごとのタブ。一度作ったものを使い続け、並びに合わせて出し入れする。
+    /// リストの名前が変わっても作り直さないため、タブの名前は起動し直すまで前の名前のまま残る。docs/tabs.mdの「リスト」を参照。
     private var itemTabs: [TabItem: UITab] = [:]
     /// 切り替えタブの中身と、そのタブ。作り直すときは2つ一緒に作り直す。UIKitは、1つの画面を2つのタブに渡すとアサーションで落ちるため。
     private var switchContainer = SwitchTabViewController()
@@ -30,21 +35,43 @@ final class TabArrangement {
 
     static let switchIdentifier = "switch"
 
+    /// - Parameter navigation: 項目のナビゲーションを作る。項目ごとに1回だけ呼ぶ。
     /// - Parameter restoring: 前に切り替えタブで開いていた項目。まだ切り替えタブにあれば、そこから開く。
-    init(navigations: [TabItem: UINavigationController], placement: TabPlacement, restoring: TabItem? = nil) {
-        self.navigations = navigations
+    init(navigation: @escaping (TabItem) -> UINavigationController?, placement: TabPlacement, restoring: TabItem? = nil) {
+        makeNavigation = navigation
         self.placement = placement
         tabBarController = UITabBarController(tabs: [])
         switchTab = Self.makeSwitchTab(for: .home, container: switchContainer)
         restoredSwitchSelection = restoring
-        for (item, navigation) in navigations {
-            itemTabs[item] = UITab(title: item.title, image: UIImage(systemName: item.symbolName), identifier: item.rawValue) { _ in navigation }
-        }
         apply(placement)
     }
 
-    /// すべての項目のナビゲーション。並びにない項目も含む。
+    /// 作ったすべての項目のナビゲーション。並びから外した項目のものも含む。
     var allNavigations: [UINavigationController] { Array(navigations.values) }
+
+    /// 項目のナビゲーション。まだなければ作る。
+    private func navigation(for item: TabItem) -> UINavigationController? {
+        if let navigation = navigations[item] { return navigation }
+        guard let navigation = makeNavigation(item) else { return nil }
+        navigations[item] = navigation
+        return navigation
+    }
+
+    /// 項目のタブ。まだなければ作る。
+    private func tab(for item: TabItem) -> UITab? {
+        if let tab = itemTabs[item] { return tab }
+        guard let navigation = navigation(for: item) else { return nil }
+        let tab = UITab(title: item.title, image: UIImage(systemName: item.symbolName), identifier: item.rawValue) { _ in navigation }
+        itemTabs[item] = tab
+        return tab
+    }
+
+    /// 開いて見せている項目。切り替えタブなら、開いている項目。
+    private var shownItem: TabItem? {
+        guard let selected = tabBarController.selectedTab else { return nil }
+        if selected === switchTab { return switchSelection }
+        return itemTabs.first { $0.value === selected }?.key
+    }
 
     /// 選んでいるタブで前に出ているナビゲーション。切り替えタブなら、開いている項目のもの。
     var selectedNavigation: UINavigationController? {
@@ -65,7 +92,7 @@ final class TabArrangement {
     func show(_ item: TabItem) {
         switch placement.location(of: item) {
         case .tab:
-            tabBarController.selectedTab = itemTabs[item]
+            tabBarController.selectedTab = tab(for: item)
         case .switchTab:
             selectInSwitchTab(item)
             tabBarController.selectedTab = switchTab
@@ -81,15 +108,15 @@ final class TabArrangement {
     }
 
     func apply(_ placement: TabPlacement) {
-        let shown = TabItem.allCases.first(where: isShowing)
+        let shown = shownItem
         self.placement = placement
         let selection = placement.switchSelection(previous: switchSelection ?? restoredSwitchSelection)
         restoredSwitchSelection = nil
         // 切り替えタブからタブへ移るナビゲーションは、タブに渡す前に入れ物から外す。
-        if switchContainer.current !== selection.flatMap({ navigations[$0] }) {
+        if switchContainer.current !== selection.flatMap(navigation(for:)) {
             switchContainer.show(nil)
         }
-        var tabs = placement.tabs.compactMap { itemTabs[$0] }
+        var tabs = placement.tabs.compactMap(tab(for:))
         if let selection {
             if selection != switchSelection {
                 renewSwitchTab(for: selection)
@@ -136,7 +163,7 @@ final class TabArrangement {
     }
 
     private func showInSwitchContainer(_ item: TabItem) {
-        guard let navigation = navigations[item] else { return }
+        guard let navigation = navigation(for: item) else { return }
         switchContainer.show(navigation)
         if switchSelection != item {
             switchSelection = item
