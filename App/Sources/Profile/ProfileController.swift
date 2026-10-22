@@ -22,6 +22,8 @@ final class ProfileController {
     private let logger = SciaLog.logger(category: "profile")
     /// 自己紹介か補足情報のリンクを開く。開き方はセッションが決める。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
+    /// 自分のプロフィールで「プロフィールを編集」を押した。
+    var onEditProfile: (() -> Void)?
     private var tasks: [Task<Void, Never>] = []
     /// 表示している一覧と、その一覧のタブ。切り替えた一覧が届くまでは、前の一覧を出し続ける。
     private var shownTimeline: TimelineStore
@@ -92,6 +94,7 @@ final class ProfileController {
         viewController.onRetry = { [weak self] in self?.retry() }
         header.onToggleFollow = { [weak self] source in self?.confirmToggleFollow(from: source) }
         header.onRetryRelationship = { [weak self] in self?.reloadRelationship() }
+        header.onEditProfile = { [weak self] in self?.onEditProfile?() }
         header.onSelectTab = { [weak self] tab in self?.select(tab) }
         header.onChangePostsFilter = { [weak self] filter in self?.changePostsFilter(filter) }
         header.onOpenOriginal = { [weak self] in
@@ -211,6 +214,11 @@ final class ProfileController {
                 controller.logger.error("account reload after relation change failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }
+    }
+
+    /// 編集して保存した自分のプロフィールを反映する。
+    func apply(edited account: Account) {
+        store.apply(edited: account)
     }
 
     /// 開いているプロフィールのアカウントのID。

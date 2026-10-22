@@ -23,6 +23,8 @@ final class ProfileHeaderView: UIView {
     }
 
     var onToggleFollow: ((UIView) -> Void)?
+    /// 自分のプロフィールで、フォローのボタンの場所に出す「プロフィールを編集」を押した。
+    var onEditProfile: (() -> Void)?
     /// フォローの関係を読めなかったときに、フォローのボタンの場所に出す再試行が押された。
     var onRetryRelationship: (() -> Void)?
     var onSelectTab: ((ProfileTab) -> Void)?
@@ -184,7 +186,11 @@ final class ProfileHeaderView: UIView {
 
         followButton.addAction(UIAction { [weak self] _ in
             guard let self else { return }
-            self.onToggleFollow?(self.followButton)
+            if content?.followState == .myself {
+                onEditProfile?()
+            } else {
+                onToggleFollow?(followButton)
+            }
         }, for: .primaryActionTriggered)
         followButton.setContentCompressionResistancePriority(.required, for: .horizontal)
 
@@ -586,7 +592,10 @@ final class ProfileHeaderView: UIView {
         // 幅は、一番多い「フォローする」に合わせる。
         let isPlaceholder = content.followState == .unknown
         switch content.followState {
-        case .myself, .loadFailed, .blocked:
+        case .myself:
+            title = "プロフィールを編集"
+            configuration = .gray()
+        case .loadFailed, .blocked:
             title = nil
             configuration = .filled()
         case .unknown:

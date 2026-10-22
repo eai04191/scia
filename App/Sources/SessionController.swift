@@ -56,6 +56,8 @@ final class SessionController {
     /// 開いているスレッドの画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
     private let threads: ThreadRegistry
     private var cachedMyAccount: Account?
+    /// 補完の候補を読む口。投稿欄とプロフィールの編集で使う。
+    private let completionSources: ComposeCompletion.Sources
     /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
     private let composer: InlineComposeController
     /// 書き始めたときに始めた、サーバーの上限と既定の公開範囲などの読み込み。共有されたメディアを、読み終えてから足すのに使う。
@@ -216,7 +218,7 @@ final class SessionController {
             guard let error = error as? MastodonAPIError, error.isUnauthorized else { return }
             _ = await authorization.reportUnauthorized()
         }
-        let completionSources = ComposeCompletion.Sources(
+        completionSources = ComposeCompletion.Sources(
             searchAccounts: { query, limit in
                 do {
                     return try await client.searchAccountsForCompletion(query, limit: limit)
@@ -589,6 +591,7 @@ final class SessionController {
         }
         UserAction.openProfile.record()
         configure(viewController)
+        controller.onEditProfile = { [weak self] in self?.presentProfileEditor() }
         controller.onOpenLink = { [weak self, weak viewController] destination in
             guard let viewController else { return }
             self?.open(destination, inProfileFrom: viewController)
@@ -613,6 +616,32 @@ final class SessionController {
         viewController.placeOnAppearing(.status(focus.id), atWindowY: rowFrame.minY)
         guard let navigation = source.navigationController else { return }
         ThreadPushDelegate.push(viewController, on: navigation, duration: viewController.tuning.value(of: TuningCatalog.threadOpenDuration))
+    }
+
+    /// 自分のプロフィールの編集をシートで開く。保存したら、開いている自分のプロフィールに反映する。
+    private func presentProfileEditor() {
+        let client = client
+        let editor = ProfileEditor(api: ProfileEditor.API(
+            source: { try await client.profileSource() },
+            save: { draft in try await client.updateProfile(draft) }
+        ))
+        // 上限を読めなければ、4.6.0より前のMastodonの値のまま使う。超えた分はサーバーが拒む。
+        Task { [weak self] in
+            guard let configuration = await self?.loadInstanceConfiguration() else { return }
+            editor.limits = configuration.profileLimits
+            editor.charactersReservedPerURL = configuration.charactersReservedPerURL
+        }
+        let completion = TextInputCompletion(
+            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
+            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
+        )
+        let controller = ProfileEditViewController(editor: editor, completion: completion)
+        controller.onSaved = { [weak self] saved in
+            self?.cachedMyAccount = saved.account
+            self?.profiles.apply(edited: saved.account)
+        }
+        controller.onError = { [weak self] error, title in self?.handle(error, title: title) }
+        rootViewController.frontmostPresented.present(controller.wrappedInNavigation(), animated: true)
     }
 
     /// ログイン中のアカウント。手元にはCredentialしかないため、一度読んだら使い回す。
@@ -1720,6 +1749,14 @@ private final class ProfileRegistry {
         entries.removeAll { $0.controller == nil }
         for entry in entries where entry.controller?.accountID == relationship.id {
             entry.controller?.apply(relationship, reloadsAccount: reloadsAccount)
+        }
+    }
+
+    /// 編集して保存した自分のプロフィールを、開いている自分のプロフィールに反映する。
+    func apply(edited account: Account) {
+        entries.removeAll { $0.controller == nil }
+        for entry in entries where entry.controller?.accountID == account.id {
+            entry.controller?.apply(edited: account)
         }
     }
 
