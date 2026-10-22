@@ -15,6 +15,10 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
 
     private let imageView = UIImageView()
     var onSingleTap: (() -> Void)?
+    /// ダブルタップして拡大するときと、戻すときの時間。UIScrollViewの`animated`の拡大は時間を変えられないため、自前で動かす。
+    var doubleTapZoomDuration: TimeInterval = 0.2
+    /// ダブルタップの拡大か縮小が動いている。
+    private var isAnimatingZoom = false
 
     var image: UIImage? {
         get { imageView.image }
@@ -171,19 +175,46 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
     }
 
     @objc private func doubleTapped(_ recognizer: UITapGestureRecognizer) {
+        stopZoomAnimation()
         if !isAtRest {
-            setZoomScale(minimumZoomScale, animated: true)
+            animateZoom { $0.setZoomScale($0.minimumZoomScale, animated: false) }
             return
         }
         // 等倍で出している小さい画像は、まず画面に収める。
         if fitScale > minimumZoomScale + 0.01 {
-            setZoomScale(fitScale, animated: true)
+            animateZoom { $0.setZoomScale($0.fitScale, animated: false) }
             return
         }
         let scale = min(fitScale * Self.doubleTapZoomScale, maximumZoomScale)
         let point = recognizer.location(in: imageView)
         let size = CGSize(width: bounds.width / scale, height: bounds.height / scale)
-        zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height), animated: true)
+        let rect = CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height)
+        animateZoom { $0.zoom(to: rect, animated: false) }
+    }
+
+    private func animateZoom(_ changes: @escaping (ZoomingImageView) -> Void) {
+        isAnimatingZoom = true
+        UIView.animate(springDuration: doubleTapZoomDuration, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            changes(self)
+        } completion: { [weak self] finished in
+            if finished { self?.isAnimatingZoom = false }
+        }
+    }
+
+    /// 動いている拡大か縮小を、いま見えている倍率と位置で止める。動いている途中にピンチやスクロールを始めたとき、行き先の倍率から始まって画像が跳ばないようにする。
+    private func stopZoomAnimation() {
+        guard isAnimatingZoom else { return }
+        isAnimatingZoom = false
+        let presentedScale = imageView.layer.presentation()?.transform.m11
+        let presentedOrigin = layer.presentation()?.bounds.origin
+        imageView.layer.removeAllAnimations()
+        layer.removeAllAnimations()
+        if let presentedScale, presentedScale > 0 {
+            setZoomScale(presentedScale, animated: false)
+        }
+        if let presentedOrigin {
+            contentOffset = presentedOrigin
+        }
     }
 
     @objc private func singleTapped() {
@@ -192,6 +223,14 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
 
     func viewForZooming(in scrollView: UIScrollView) -> UIView? {
         imageView
+    }
+
+    func scrollViewWillBeginZooming(_ scrollView: UIScrollView, with view: UIView?) {
+        stopZoomAnimation()
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        stopZoomAnimation()
     }
 
     func scrollViewDidZoom(_ scrollView: UIScrollView) {

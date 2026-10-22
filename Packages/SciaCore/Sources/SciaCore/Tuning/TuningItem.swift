@@ -590,6 +590,15 @@ public enum TuningCatalog {
         defaultValue: 0.1
     )
 
+    /// ビューアで画像をダブルタップして拡大するときと、元の大きさへ戻すときの時間。
+    public static let mediaDoubleTapZoomDuration = NumberTuning(
+        id: "media.doubleTapZoomDuration",
+        title: "ダブルタップで拡大・縮小する時間（秒）",
+        range: 0.1...1,
+        step: 0.05,
+        defaultValue: 0.2
+    )
+
     /// ビューアを開閉するとき、画像のうちバーにかかる部分を、バーの奥にも描く。
     /// オフなら、開くときは複製をバーの手前にだけ描き、閉じるときはバーにかかる部分を着地へ近づくにつれて切り落とすだけにする。
     /// 開き始めにバーの下のサムネイルがバーの手前へ急に出て、閉じる着地の瞬間にバー越しのサムネイルが急に現れる。
@@ -1503,6 +1512,9 @@ public enum TuningCatalog {
             .number(mediaOpenDuration),
             .number(mediaCloseDuration),
             .number(mediaDragCloseBounce),
+        ]),
+        TuningSection(id: "media.zoom", title: "ビューア：拡大", items: [
+            .number(mediaDoubleTapZoomDuration),
         ]),
         TuningSection(id: "media.bars", title: "ビューア：バーとの重なり", items: [
             .toggle(mediaCloseDrawsUnderBars),

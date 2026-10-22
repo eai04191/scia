@@ -110,6 +110,8 @@ final class MediaViewerController: UIViewController {
         let videoControlsHideDelay: TimeInterval
         /// ダブルタップで10秒戻ったか進んだことを知らせる表示を、出しておく時間。
         let videoSkipEffectDuration: TimeInterval
+        /// 画像をダブルタップして拡大するときと、戻すときの時間。
+        let doubleTapZoomDuration: TimeInterval
     }
 
     /// 投稿欄で選んだメディアを開いたときの操作。ビューアは投稿欄を知らず、メニューと代替テキストの書き終わりをここから渡す。
@@ -506,6 +508,9 @@ final class MediaViewerController: UIViewController {
         page.setChromeHidden(isChromeHidden, animated: false)
         page.bottomCoveredHeight = captionCoveredHeight
         page.isEditingDescription = isEditingDescription
+        if let image = page as? ImagePageController {
+            image.doubleTapZoomDuration = timing.doubleTapZoomDuration
+        }
         if let player = page as? PlayerPageController {
             player.controlsHideDelay = timing.videoControlsHideDelay
             player.skipEffectDuration = timing.videoSkipEffectDuration
@@ -1536,6 +1541,12 @@ final class ImagePageController: MediaPageController {
         analysisTask?.cancel()
     }
 
+    /// ダブルタップして拡大するときと、戻すときの時間。
+    var doubleTapZoomDuration: TimeInterval {
+        get { zoomView.doubleTapZoomDuration }
+        set { zoomView.doubleTapZoomDuration = newValue }
+    }
+
     override var allowsInteractiveDismiss: Bool { !zoomView.isZoomedIn }
 
     /// 画像から読み取った文字の全文。解析し終えるまでと、文字のない画像ではnil。
@@ -2420,7 +2431,8 @@ extension MediaViewerController.Timing {
             barOverlapFadeEnd: tuning.value(of: TuningCatalog.mediaCloseBarOverlapFadeEnd),
             savedChipDuration: tuning.value(of: TuningCatalog.mediaSavedChipDuration),
             videoControlsHideDelay: tuning.value(of: TuningCatalog.mediaVideoControlsHideDelay),
-            videoSkipEffectDuration: tuning.value(of: TuningCatalog.mediaVideoSkipEffectDuration)
+            videoSkipEffectDuration: tuning.value(of: TuningCatalog.mediaVideoSkipEffectDuration),
+            doubleTapZoomDuration: tuning.value(of: TuningCatalog.mediaDoubleTapZoomDuration)
         )
     }
 }
