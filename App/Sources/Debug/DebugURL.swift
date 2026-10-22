@@ -81,6 +81,10 @@ enum DebugURL: Equatable {
     /// リストの作成と管理の画面がまだないため、リストのタブを実物で確かめるのに使う。サーバーのリストを書き換える。
     case createList(title: String)
     case deleteList(id: String)
+    /// `scia-debug://tags/follow?name=<名前>`でハッシュタグをフォローし、`scia-debug://tags/unfollow?name=<名前>`でやめて、フォローしているハッシュタグを読み直す。
+    /// ハッシュタグをフォローする操作がまだないため、ハッシュタグのタブを実物で確かめるのに使う。サーバーのフォローを書き換える。
+    case followTag(name: String)
+    case unfollowTag(name: String)
 
     enum Tab: String {
         case home
@@ -136,6 +140,7 @@ enum DebugURL: Equatable {
         case "viewer": Self.viewer(url)
         case "inject": Self.inject(url)
         case "lists": Self.lists(url)
+        case "tags": Self.tags(url)
         case "compose": Self.compose(url)
         case "profile-edit": .profileEdit(note: Self.query("note", in: url), field: Self.query("field", in: url))
         default: nil
@@ -158,6 +163,15 @@ enum DebugURL: Equatable {
         case "create": query("title", in: url).flatMap { $0.isEmpty ? nil : .createList(title: $0) }
         case "delete": query("id", in: url).flatMap { $0.isEmpty ? nil : .deleteList(id: $0) }
         default: nil
+        }
+    }
+
+    private static func tags(_ url: URL) -> DebugURL? {
+        guard let name = query("name", in: url), !name.isEmpty else { return nil }
+        switch url.lastPathComponent {
+        case "follow": return .followTag(name: name)
+        case "unfollow": return .unfollowTag(name: name)
+        default: return nil
         }
     }
 

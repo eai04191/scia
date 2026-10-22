@@ -540,6 +540,18 @@ public struct MastodonClient: Sendable {
         return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: false)
     }
 
+    /// ハッシュタグをフォローする。フォロー済みでも成功する。
+    /// https://docs.joinmastodon.org/methods/tags/#follow
+    public func followTag(_ name: String) async throws {
+        _ = try await post(Hashtag.self, path: "api/v1/tags/\(name)/follow", form: [])
+    }
+
+    /// ハッシュタグのフォローをやめる。フォローしていなくても成功する。
+    /// https://docs.joinmastodon.org/methods/tags/#unfollow
+    public func unfollowTag(_ name: String) async throws {
+        _ = try await post(Hashtag.self, path: "api/v1/tags/\(name)/unfollow", form: [])
+    }
+
     /// ハッシュタグのタイムラインを新しい順に返す。`name`は`#`を除いた名前。
     /// https://docs.joinmastodon.org/methods/timelines/#tag
     public func hashtagTimeline(_ name: String, _ query: TimelineQuery) async throws -> TimelinePage {

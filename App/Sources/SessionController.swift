@@ -2006,9 +2006,13 @@ final class SessionController {
         case .viewer(let index):
             openTopmostMedia(at: index)
         case .createList(let title):
-            changeListsForDebug("create") { _ = try await $0.createList(title: title) }
+            changeTabSourcesForDebug("create") { _ = try await $0.createList(title: title) }
         case .deleteList(let id):
-            changeListsForDebug("delete") { try await $0.deleteList(id) }
+            changeTabSourcesForDebug("delete") { try await $0.deleteList(id) }
+        case .followTag(let name):
+            changeTabSourcesForDebug("follow tag") { try await $0.followTag(name) }
+        case .unfollowTag(let name):
+            changeTabSourcesForDebug("unfollow tag") { try await $0.unfollowTag(name) }
         case .statusBarTickerLoop(let isOn):
             statusBarTicker.setLooping(isOn, items: DummyNotifications.samples)
         case .inject(let tab, let file):
@@ -2030,16 +2034,16 @@ final class SessionController {
         }
     }
 
-    /// `scia-debug://lists/...`で、サーバーのリストを変えてから読み直し、タブの並びに反映する。
-    private func changeListsForDebug(_ operation: String, _ change: @escaping @Sendable (MastodonClient) async throws -> Void) {
+    /// `scia-debug://lists/...`と`scia-debug://tags/...`で、サーバーのリストやハッシュタグのフォローを変えてから読み直し、タブの並びに反映する。
+    private func changeTabSourcesForDebug(_ operation: String, _ change: @escaping @Sendable (MastodonClient) async throws -> Void) {
         let client = client
         Task { [weak self] in
             do {
                 try await change(client)
-                self?.logger.info("debug lists \(operation, privacy: .public) done")
+                self?.logger.info("debug \(operation, privacy: .public) done")
                 self?.loadTabSources()
             } catch {
-                self?.logger.error("debug lists \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
+                self?.logger.error("debug \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }
     }
