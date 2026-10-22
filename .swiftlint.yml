@@ -8,6 +8,7 @@ included:
   - App
   - AppTests
   - AppUITests
+  - ShareExtension
   - Packages/SciaCore/Sources
   - Packages/SciaCore/Tests
 

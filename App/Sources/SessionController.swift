@@ -56,6 +56,8 @@ final class SessionController {
     private var cachedMyAccount: Account?
     /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
     private let composer: InlineComposeController
+    /// 書き始めたときに始めた、サーバーの上限と既定の公開範囲などの読み込み。共有されたメディアを、読み終えてから足すのに使う。
+    private var composeDefaultsTask: Task<Void, Never>?
     /// 投稿欄が覆っている高さを伝える一覧。ホームと通知に加え、開いているプロフィールの一覧も入る。閉じたものは自然に消える。
     private let timelines = NSHashTable<TimelineViewController>.weakObjects()
     /// 開いている編集履歴。添付ファイルを開いた・隠した選択を一覧とそろえるために持つ。閉じたものは自然に消える。
@@ -1166,7 +1168,7 @@ final class SessionController {
 
     /// 既定の公開範囲などを読めたら、投稿欄に反映する。読めなかったら、次に書き始めたときに読み直す。
     private func applyComposeDefaults() {
-        Task { [weak self] in
+        composeDefaultsTask = Task { [weak self] in
             guard let self else { return }
             async let configuration = self.loadInstanceConfiguration()
             async let preferences = self.loadPreferences()
@@ -1318,6 +1320,106 @@ final class SessionController {
         switch url {
         case .profile(let acct):
             openProfile(acct: acct)
+        case .share(let id, let unreadableCount):
+            receiveSharedMedia(id: id, unreadableCount: unreadableCount)
+        }
+    }
+
+    /// 共有拡張が受け取ったメディアを、投稿欄に添付して書き始める。書きかけの下書きがあれば、足すか、捨てて新しく書くかを聞く。
+    /// 一覧の上に別の画面（設定やビューアなど）を重ねていても、閉じずにその上で聞き、投稿欄は重ねた画面の下で開く。
+    /// 重ねた画面を閉じると、その画面で書いていたものや見ていた位置を、使う人が選ばずに失うため。
+    /// - Parameter unreadableCount: 共有拡張が受け取れなかった件数。1件も受け取れなかったときは、受け渡しのフォルダーを作らずに開かれる。
+    private func receiveSharedMedia(id: UUID, unreadableCount: Int) {
+        guard let inbox = SharedMediaInbox.app else {
+            logger.error("shared media ignored without app group")
+            return
+        }
+        let files: [URL]
+        do {
+            files = try inbox.files(id: id)
+        } catch where unreadableCount > 0 {
+            files = []
+        } catch {
+            // 同じURLを開き直したときなど、受け取ったファイルをもう消したあと。
+            logger.error("shared media not found id=\(id, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
+            presentAlert(title: Self.sharedMediaFailureTitle, message: "もう一度共有してください。")
+            return
+        }
+        let media = files.compactMap(LocalMediaLoader.startCopyingFile)
+        logger.info("shared media received count=\(media.count, privacy: .public) of \(files.count, privacy: .public) unreadable=\(unreadableCount, privacy: .public)")
+        // 選んだうちの一部が欠けたことは、添付した列を見ても分からないので知らせる。画像か動画でないファイルは、拡張が画像か動画の表現を選んで置くので、普通は届かない。
+        let missingCount = unreadableCount + files.count - media.count
+        if missingCount > 0 {
+            notices.showTransient(.sharedMediaUnreadable(count: missingCount), duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))
+        }
+        // 投稿欄の一時ディレクトリへコピーし終えたら、受け渡しのフォルダーから消す。コピーに失敗したものは、添付の失敗として投稿欄に出る。
+        Task {
+            for item in media {
+                _ = try? await item.load()
+            }
+            inbox.remove(id: id)
+        }
+        guard !media.isEmpty else { return }
+        // 送っている間に足すと、送り終えて下書きを空に戻すときに一緒に消える。
+        guard !composer.model.isPosting else {
+            discardSharedMedia(media)
+            presentAlert(title: Self.sharedMediaFailureTitle, message: Self.sharedMediaWhilePostingMessage)
+            return
+        }
+        guard composer.model.hasWrittenContent else {
+            attachSharedMedia(media)
+            return
+        }
+        let noun = media.allSatisfy { $0.kind == .image } ? "画像" : "メディア"
+        let isEditing = composer.model.editedStatus != nil
+        let alert = UIAlertController(
+            title: isEditing ? "編集中の投稿があります" : "書きかけの下書きがあります",
+            message: "共有された\(noun)を、\(isEditing ? "編集中の投稿" : "下書き")に足すか、\(isEditing ? "編集をやめて" : "下書きを捨てて")新しく書くかを選んでください。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: isEditing ? "編集中の投稿に足す" : "下書きに足す", style: .default) { [weak self] _ in
+            self?.attachSharedMedia(media)
+        })
+        alert.addAction(UIAlertAction(title: isEditing ? "編集をやめて新しく書く" : "下書きを捨てて新しく書く", style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            // 聞いている間に送り始めていたら、捨てずに、受け取ったものを足さない。
+            guard composer.discardDraft() else {
+                discardSharedMedia(media)
+                return
+            }
+            attachSharedMedia(media)
+        })
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel) { [weak self] _ in
+            self?.discardSharedMedia(media)
+        })
+        topViewController.present(alert, animated: true)
+    }
+
+    private static let sharedMediaFailureTitle = "共有されたメディアを添付できませんでした"
+    private static let sharedMediaWhilePostingMessage = "投稿を送っている間は添付できません。送り終えてから、もう一度共有してください。"
+
+    /// 書き始めて、サーバーの上限と既定の閲覧注意を読み終えてから足す。先に足すと、上限に合わせて縮めずに送り始め、既定の閲覧注意も付かないため。
+    /// ペーストが読み終えるまで受け付けない（`ComposeModel.canPasteMedia`）のと同じく、読めなかったら足さない。
+    private func attachSharedMedia(_ media: [PastedMedia]) {
+        composer.beginEditing()
+        let loadingDefaults = composeDefaultsTask
+        Task { [weak self] in
+            await loadingDefaults?.value
+            guard let self else { return }
+            guard composer.model.canPasteMedia else {
+                discardSharedMedia(media)
+                logger.error("shared media dropped posting=\(self.composer.model.isPosting, privacy: .public)")
+                let message = composer.model.isPosting ? Self.sharedMediaWhilePostingMessage : "サーバーの設定を読み込めませんでした。もう一度共有してください。"
+                presentAlert(title: Self.sharedMediaFailureTitle, message: message)
+                return
+            }
+            composer.model.addPastedMedia(media)
+        }
+    }
+
+    private func discardSharedMedia(_ media: [PastedMedia]) {
+        for item in media {
+            item.discard()
         }
     }
 

@@ -53,6 +53,8 @@ enum NoticeCatalog {
             CatalogState(title: "ペーストした動画を含むメディアが上限を超えた、件数が2桁（数秒で消える）") {
                 stack(transient: .pastedMediaSkipped([.video] + Array(repeating: .image, count: 11)))
             },
+            CatalogState(title: "共有されたメディアの一部を受け取れなかった（数秒で消える）") { stack(transient: .sharedMediaUnreadable(count: 1)) },
+            CatalogState(title: "共有されたメディアを受け取れなかった、件数が2桁（数秒で消える）") { stack(transient: .sharedMediaUnreadable(count: 12)) },
             CatalogState(title: "リンクのタイトルを読み込めなかった（数秒で消える、押すと理由）") { stack(transient: .linkTitleFailed(.unreadable(URLError(.timedOut))) {}) },
             CatalogState(title: "リンク先にタイトルがなかった（数秒で消える）") { stack(transient: .linkTitleFailed(.noTitle) {}) },
             CatalogState(title: "サーバーで処理中") { stack(persistent: draft(.processing)) },

@@ -46,8 +46,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         #endif
         // 閉じていたアプリをURLで開いたとき。プロフィールは最初の読み込みを待たずに開ける。
         for context in connectionOptions.urlContexts {
-            guard let url = AppURL(context.url), let session = self.session else { continue }
-            session.open(url)
+            guard let url = AppURL(context.url) else { continue }
+            open(url, from: context.url)
         }
         #if DEBUG
         // ダミーのセッションは、閉じていたアプリをURLで開いたときも入る。
@@ -61,16 +61,24 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         open(URLContexts)
     }
 
+    private func open(_ url: AppURL, from rawURL: URL) {
+        guard let session else {
+            logger.error("url ignored without session: \(rawURL.absoluteString, privacy: .public)")
+            // 共有拡張が置いたファイルは、受け取らないなら残さない。
+            if case .share(let id, _) = url {
+                SharedMediaInbox.app?.remove(id: id)
+            }
+            return
+        }
+        logger.info("open url: \(rawURL.absoluteString, privacy: .public)")
+        session.open(url)
+    }
+
     /// 他のアプリから開かれたURLを処理する。ログインしていなければ何もしない。
     private func open(_ URLContexts: Set<UIOpenURLContext>) {
         for context in URLContexts {
             guard let url = AppURL(context.url) else { continue }
-            guard let session else {
-                logger.error("url ignored without session: \(context.url.absoluteString, privacy: .public)")
-                continue
-            }
-            logger.info("open url: \(context.url.absoluteString, privacy: .public)")
-            session.open(url)
+            open(url, from: context.url)
         }
         #if DEBUG
         openDebug(URLContexts)

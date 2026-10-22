@@ -50,6 +50,12 @@ extension Notice {
         return Notice(id: "compose.pastedMediaSkipped", kind: .info, title: "上限を超えたため、\(noun)\(kinds.count)件を添付しませんでした")
     }
 
+    /// 共有されたメディアのうち、共有拡張が受け取れなかったもの（iCloudから取得できなかった動画など）。受け取れた分は投稿欄の列に見えるので、欠けた分だけを知らせる。
+    /// 受け取れなかったものは種類が分からないので「メディア」と書く。共有した直後に出るので、チップの幅に収まるよう「共有された」を省く。
+    static func sharedMediaUnreadable(count: Int) -> Notice {
+        Notice(id: "compose.sharedMediaUnreadable", kind: .info, title: "メディア\(count)件を受け取れませんでした")
+    }
+
     private static func byteText(_ count: Int) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(count), countStyle: .file)
     }

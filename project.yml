@@ -23,6 +23,8 @@ settings:
     SCIA_DISPLAY_NAME: Scia
     SCIA_URL_SCHEME: scia
     SCIA_DEBUG_URL_SCHEME: scia-debug
+    # 共有拡張が受け取ったメディアをアプリへ渡すためのApp Group（Packages/SciaCore/Sources/SciaCore/Compose/SharedMediaInbox.swift）
+    SCIA_APP_GROUP: group.$(SCIA_BUNDLE_ID)
 packages:
   SciaCore:
     path: Packages/SciaCore
@@ -35,6 +37,7 @@ targets:
       - App/Resources
     dependencies:
       - package: SciaCore
+      - target: SciaShareExtension
     postBuildScripts:
       - name: Embed Build Info
         script: '"$SRCROOT/Tools/embed-build-info.sh"'
@@ -73,6 +76,11 @@ targets:
         # ビューアの共有から画像を写真に保存するため
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: 添付ファイルのメディアを写真に保存します。
         CODE_SIGN_STYLE: Automatic
+    entitlements:
+      path: App/Scia.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(SCIA_APP_GROUP)
     info:
       path: App/Info.plist
       properties:
@@ -101,9 +109,44 @@ targets:
         # アプリがURLを読むときに、自分のスキームを知るため
         SciaURLScheme: $(SCIA_URL_SCHEME)
         SciaDebugURLScheme: $(SCIA_DEBUG_URL_SCHEME)
+        SciaAppGroup: $(SCIA_APP_GROUP)
         # 違和感レポートをファイルアプリから取り出せるようにする
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
+  # 写真アプリなどの共有から投稿欄を開く共有拡張（ShareExtension/ShareViewController.swift）
+  SciaShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ShareExtension
+    dependencies:
+      - package: SciaCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(SCIA_BUNDLE_ID).share
+        MARKETING_VERSION: "0.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: $(SCIA_DISPLAY_NAME)
+        CODE_SIGN_STYLE: Automatic
+    entitlements:
+      path: ShareExtension/SciaShareExtension.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - $(SCIA_APP_GROUP)
+    info:
+      path: ShareExtension/Info.plist
+      properties:
+        SciaURLScheme: $(SCIA_URL_SCHEME)
+        SciaAppGroup: $(SCIA_APP_GROUP)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsImageWithMaxCount: 4
+              NSExtensionActivationSupportsMovieWithMaxCount: 4
   SciaTests:
     type: bundle.unit-test
     platform: iOS

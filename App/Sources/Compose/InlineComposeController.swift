@@ -419,6 +419,16 @@ final class InlineComposeController: NSObject {
         return true
     }
 
+    /// 下書きを捨てて、空の投稿欄に戻す。送っている間は捨てず、falseを返す。失敗したときに送り直せるよう、下書きを残すため。
+    /// 開いているピッカーは、`edit(_:source:)`と同じ理由で閉じる。
+    @discardableResult
+    func discardDraft() -> Bool {
+        guard !model.isPosting else { return false }
+        mediaPicker?.close(notifiesWillClose: true)
+        model.reset()
+        return true
+    }
+
     /// 返信先を付けて書き始める。
     func reply(to status: Status) {
         model.setReplyTarget(status)

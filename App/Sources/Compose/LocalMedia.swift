@@ -24,7 +24,7 @@ struct PickedMedia {
     let load: @MainActor (_ avoiding: Set<String>) async throws -> LocalMediaFile
 }
 
-/// 投稿欄にペーストしたメディア1つ。ピッカーで選んだものと違い、あとから読み直せない。
+/// 投稿欄にペーストしたか、共有で受け取ったメディア1つ。ピッカーで選んだものと違い、あとから読み直せない。
 struct PastedMedia {
     /// 上限を超えて足さなかったときに、知らせる文言を選ぶのに使う。
     let kind: MediaAttachment.Kind
@@ -137,10 +137,15 @@ enum LocalMediaLoader {
     /// ペーストした項目のURLが画像か動画のファイルを指すなら、そのファイルのコピーを始める。それ以外のファイルならnil。
     @MainActor
     static func startLoadingPastedFile(from provider: NSItemProvider) async -> PastedMedia? {
-        guard let url = await fileURL(in: provider),
-              let type = UTType(filenameExtension: url.pathExtension),
-              mediaTypes.contains(where: { type.conforms(to: $0) })
-        else { return nil }
+        guard let url = await fileURL(in: provider) else { return nil }
+        return startCopyingFile(url)
+    }
+
+    /// 画像か動画のファイルなら、一時ディレクトリへのコピーを始める。それ以外のファイルならnil。
+    /// ペーストしたファイルと、共有拡張から受け取ったファイル（`SharedMediaInbox`）に使う。
+    @MainActor
+    static func startCopyingFile(_ url: URL) -> PastedMedia? {
+        guard let type = UTType(filenameExtension: url.pathExtension), mediaTypes.contains(where: { type.conforms(to: $0) }) else { return nil }
         let kind = kind(of: type)
         let mimeType = type.preferredMIMEType ?? (kind == .video ? "video/mp4" : "image/jpeg")
         let loading = Task.immediate { try await copyPastedFile(url, mimeType: mimeType, kind: kind) }

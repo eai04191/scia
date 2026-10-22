@@ -2,6 +2,9 @@
 # XcodeGenで生成するためコミットしない
 *.xcodeproj
 App/Info.plist
+ShareExtension/Info.plist
+App/Scia.entitlements
+ShareExtension/SciaShareExtension.entitlements
 xcuserdata/
 DerivedData/
 .build/
