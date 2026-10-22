@@ -212,94 +212,25 @@ final class PostBodyView: UIView {
         textLabel.numberOfLines = content.maximumLines
         NSLayoutConstraint.deactivate(variableConstraints)
         variableConstraints = []
-        var shownSpoiler: SpoilerView?
-        if let spoiler = content.spoiler {
-            let spoilerView = loadedSpoilerView()
-            spoilerView.isHidden = false
-            spoilerView.apply(SpoilerView.Content(text: spoiler.text, isCollapsed: spoiler.isCollapsed, kind: spoiler.kind, padding: spoiler.padding))
-            shownSpoiler = spoilerView
-        } else {
-            spoilerView?.isHidden = true
-        }
+        let shownSpoiler = applySpoiler(content.spoiler)
         let isCollapsed = content.spoiler?.isCollapsed ?? false
         let media = isCollapsed ? nil : content.media.flatMap { $0.aspectRatio == nil ? nil : $0 }
         let xPost = isCollapsed ? nil : content.xPost
         let card = isCollapsed || xPost != nil ? nil : content.card
         textLabel.isHidden = isCollapsed || (content.text.length == 0 && (media != nil || card != nil || xPost != nil || content.spoiler != nil))
         // 本文と添付ファイルは、注意書きがあればその下から並べる。
-        let contentTop = if let shownSpoiler, let spoiler = content.spoiler {
-            (anchor: shownSpoiler.bottomAnchor, spacing: spoiler.bodySpacing)
-        } else {
-            (anchor: topAnchor, spacing: CGFloat(0))
-        }
+        let placement = Placement(
+            contentTop: shownSpoiler?.bottomAnchor ?? topAnchor,
+            contentTopSpacing: shownSpoiler == nil ? 0 : content.spoiler?.bodySpacing ?? 0,
+            text: textLabel.isHidden ? nil : (label: textLabel, bottomInset: Self.textBottomInset(of: content.text))
+        )
         if !textLabel.isHidden {
-            variableConstraints.append(textLabel.firstBaselineAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing + Self.textTopInset(of: content.text)))
+            variableConstraints.append(textLabel.firstBaselineAnchor.constraint(equalTo: placement.contentTop, constant: placement.contentTopSpacing + Self.textTopInset(of: content.text)))
         }
-        // 上の部品の下端から、次の部品を置く位置。本文の下なら、字面の下端から測る。
-        func topConstraint(of view: UIView, below shownAbove: UIView?, spacing: CGFloat) -> NSLayoutConstraint {
-            if let shownAbove {
-                view.topAnchor.constraint(equalTo: shownAbove.bottomAnchor, constant: spacing)
-            } else if !textLabel.isHidden {
-                view.topAnchor.constraint(equalTo: textLabel.lastBaselineAnchor, constant: spacing + Self.textBottomInset(of: content.text))
-            } else {
-                view.topAnchor.constraint(equalTo: contentTop.anchor, constant: contentTop.spacing)
-            }
-        }
-        var shownMedia: MediaGridView?
-        if let media, let aspectRatio = media.aspectRatio {
-            let mediaView = loadedMediaView()
-            mediaView.isHidden = false
-            mediaView.apply(media)
-            let height = switch media.arrangement {
-            case .grid: mediaView.heightAnchor.constraint(equalTo: mediaView.widthAnchor, multiplier: 1 / aspectRatio)
-            case .strip(let side): mediaView.heightAnchor.constraint(equalToConstant: side)
-            }
-            variableConstraints += [
-                topConstraint(of: mediaView, below: nil, spacing: content.mediaSpacing),
-                height,
-            ]
-            shownMedia = mediaView
-        } else {
-            mediaView?.isHidden = true
-        }
-        var shownCard: LinkCardView?
-        if let card {
-            let cardView = loadedCardView()
-            cardView.isHidden = false
-            cardView.apply(card)
-            variableConstraints.append(topConstraint(of: cardView, below: shownMedia, spacing: content.cardSpacing))
-            shownCard = cardView
-        } else {
-            cardView?.isHidden = true
-        }
-        var shownXPost: XPostView?
-        if let xPost {
-            // 同じ投稿のリンクカードから替わったときだけ、囲みを浮かび上がらせる。行が伸びる動きは一覧が付ける。
-            // 使い回された行で別の投稿に替わったときは、動かさずに出す。
-            let replacesCard = previous?.xPost == nil && previous?.card != nil && content.statusID != nil && previous?.statusID == content.statusID
-            let fadesIn = replacesCard && window != nil && xPost.transitionDuration > 0 && !UIAccessibility.isReduceMotionEnabled
-            let xPostView = loadedXPostView()
-            xPostView.isHidden = false
-            xPostView.apply(xPost)
-            xPostView.alpha = fadesIn ? 0 : 1
-            if fadesIn {
-                // 一覧は動きを止めて描き直すことがあり、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
-                DispatchQueue.main.async { [weak self] in
-                    guard let self, let xPostView = self.xPostView else { return }
-                    guard self.content?.xPost == xPost else {
-                        xPostView.alpha = 1
-                        return
-                    }
-                    UIView.animate(withDuration: xPost.transitionDuration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]) {
-                        xPostView.alpha = 1
-                    }
-                }
-            }
-            variableConstraints.append(topConstraint(of: xPostView, below: shownMedia, spacing: content.cardSpacing))
-            shownXPost = xPostView
-        } else {
-            xPostView?.isHidden = true
-        }
+        let shownMedia = applyMedia(media, spacing: content.mediaSpacing, placement: placement)
+        let shownCard = applyCard(card, below: shownMedia, spacing: content.cardSpacing, placement: placement)
+        let replacesCard = previous?.xPost == nil && previous?.card != nil && content.statusID != nil && previous?.statusID == content.statusID
+        let shownXPost = applyXPost(xPost, replacesCard: replacesCard, below: shownMedia, spacing: content.cardSpacing, placement: placement)
         // 添付ファイルもリンクカードもないのに本文を隠すのは、注意書きがあるときだけ。
         let last: UIView = if let shownXPost {
             shownXPost
@@ -312,25 +243,127 @@ final class PostBodyView: UIView {
         } else {
             textLabel
         }
-        if let note = content.filterNote {
-            let filterNoteLabel = loadedFilterNoteLabel()
-            filterNoteLabel.isHidden = false
-            filterNoteLabel.attributedText = note
-            // 先頭の記号は画像の文字なので、読み上げでは除く。
-            filterNoteLabel.accessibilityLabel = note.string.trimmingCharacters(in: CharacterSet(charactersIn: "\u{FFFC}").union(.whitespaces))
-            // 本文の下なら、ほかの部品と同じく字面の下端から測る。
-            let lastBottom = last === textLabel
-                ? (anchor: textLabel.lastBaselineAnchor, inset: Self.textBottomInset(of: content.text))
-                : (anchor: last.bottomAnchor, inset: 0)
-            variableConstraints += [
-                filterNoteLabel.firstBaselineAnchor.constraint(equalTo: lastBottom.anchor, constant: lastBottom.inset + content.filterNoteSpacing + Self.textTopInset(of: note)),
-                bottomAnchor.constraint(equalTo: filterNoteLabel.lastBaselineAnchor, constant: Self.textBottomInset(of: note)),
-            ]
-        } else {
+        applyFilterNote(content.filterNote, below: last, spacing: content.filterNoteSpacing, textBottomInset: Self.textBottomInset(of: content.text))
+        NSLayoutConstraint.activate(variableConstraints)
+    }
+
+    /// 本文の下の部品を縦に並べるときの、上端の決め方。
+    @MainActor
+    private struct Placement {
+        /// 本文と添付ファイルを並べ始める位置。注意書きがあればその下。
+        let contentTop: NSLayoutYAxisAnchor
+        let contentTopSpacing: CGFloat
+        /// 出している本文と、その最後の文字の、ベースラインから字面の下端まで。本文を出していなければnil。
+        let text: (label: UILabel, bottomInset: CGFloat)?
+
+        /// 上の部品の下端から、次の部品を置く位置。本文の下なら、字面の下端から測る。
+        func top(of view: UIView, below shownAbove: UIView?, spacing: CGFloat) -> NSLayoutConstraint {
+            if let shownAbove {
+                view.topAnchor.constraint(equalTo: shownAbove.bottomAnchor, constant: spacing)
+            } else if let text {
+                view.topAnchor.constraint(equalTo: text.label.lastBaselineAnchor, constant: spacing + text.bottomInset)
+            } else {
+                view.topAnchor.constraint(equalTo: contentTop, constant: contentTopSpacing)
+            }
+        }
+    }
+
+    /// 出した注意書きの箱を返す。
+    private func applySpoiler(_ spoiler: PostBodyContent.Spoiler?) -> SpoilerView? {
+        guard let spoiler else {
+            spoilerView?.isHidden = true
+            return nil
+        }
+        let spoilerView = loadedSpoilerView()
+        spoilerView.isHidden = false
+        spoilerView.apply(SpoilerView.Content(text: spoiler.text, isCollapsed: spoiler.isCollapsed, kind: spoiler.kind, padding: spoiler.padding))
+        return spoilerView
+    }
+
+    /// 出した添付ファイルの欄を返す。
+    private func applyMedia(_ media: MediaGridView.Content?, spacing: CGFloat, placement: Placement) -> MediaGridView? {
+        guard let media, let aspectRatio = media.aspectRatio else {
+            mediaView?.isHidden = true
+            return nil
+        }
+        let mediaView = loadedMediaView()
+        mediaView.isHidden = false
+        mediaView.apply(media)
+        let height = switch media.arrangement {
+        case .grid: mediaView.heightAnchor.constraint(equalTo: mediaView.widthAnchor, multiplier: 1 / aspectRatio)
+        case .strip(let side): mediaView.heightAnchor.constraint(equalToConstant: side)
+        }
+        variableConstraints += [
+            placement.top(of: mediaView, below: nil, spacing: spacing),
+            height,
+        ]
+        return mediaView
+    }
+
+    /// 出したリンクカードを返す。
+    private func applyCard(_ card: LinkCardView.Content?, below shownAbove: UIView?, spacing: CGFloat, placement: Placement) -> LinkCardView? {
+        guard let card else {
+            cardView?.isHidden = true
+            return nil
+        }
+        let cardView = loadedCardView()
+        cardView.isHidden = false
+        cardView.apply(card)
+        variableConstraints.append(placement.top(of: cardView, below: shownAbove, spacing: spacing))
+        return cardView
+    }
+
+    /// 出したXの投稿の囲みを返す。
+    /// - Parameter replacesCard: 同じ投稿のリンクカードから替わった。このときだけ、囲みを浮かび上がらせる。行が伸びる動きは一覧が付ける。
+    ///   使い回された行で別の投稿に替わったときは、動かさずに出す。
+    private func applyXPost(_ xPost: XPostView.Content?, replacesCard: Bool, below shownAbove: UIView?, spacing: CGFloat, placement: Placement) -> XPostView? {
+        guard let xPost else {
+            xPostView?.isHidden = true
+            return nil
+        }
+        let fadesIn = replacesCard && window != nil && xPost.transitionDuration > 0 && !UIAccessibility.isReduceMotionEnabled
+        let xPostView = loadedXPostView()
+        xPostView.isHidden = false
+        xPostView.apply(xPost)
+        xPostView.alpha = fadesIn ? 0 : 1
+        if fadesIn {
+            // 一覧は動きを止めて描き直すことがあり、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let xPostView = self.xPostView else { return }
+                guard self.content?.xPost == xPost else {
+                    xPostView.alpha = 1
+                    return
+                }
+                UIView.animate(withDuration: xPost.transitionDuration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]) {
+                    xPostView.alpha = 1
+                }
+            }
+        }
+        variableConstraints.append(placement.top(of: xPostView, below: shownAbove, spacing: spacing))
+        return xPostView
+    }
+
+    /// フィルターの印を一番下の部品の下に置き、自分の下端を決める。
+    /// - Parameter textBottomInset: 一番下が本文のときの、最後の文字のベースラインから字面の下端まで。
+    private func applyFilterNote(_ note: NSAttributedString?, below last: UIView, spacing: CGFloat, textBottomInset: CGFloat) {
+        guard let note else {
             filterNoteLabel?.isHidden = true
             variableConstraints.append(bottomAnchor.constraint(equalTo: last.bottomAnchor))
+            return
         }
-        NSLayoutConstraint.activate(variableConstraints)
+        let filterNoteLabel = loadedFilterNoteLabel()
+        filterNoteLabel.isHidden = false
+        filterNoteLabel.attributedText = note
+        // 先頭の記号は画像の文字なので、読み上げでは除く。
+        filterNoteLabel.accessibilityLabel = note.string.trimmingCharacters(in: CharacterSet(charactersIn: "\u{FFFC}").union(.whitespaces))
+        // 本文の下なら、ほかの部品と同じく字面の下端から測る。
+        let lastBottom = last === textLabel
+            ? (anchor: textLabel.lastBaselineAnchor, inset: textBottomInset)
+            : (anchor: last.bottomAnchor, inset: 0)
+        variableConstraints += [
+            filterNoteLabel.firstBaselineAnchor.constraint(equalTo: lastBottom.anchor, constant: lastBottom.inset + spacing + Self.textTopInset(of: note)),
+            bottomAnchor.constraint(equalTo: filterNoteLabel.lastBaselineAnchor, constant: Self.textBottomInset(of: note)),
+        ]
     }
 
     /// 和文の字面の枠（em枠）の、ベースラインから上端と下端までの距離。日本語の字面はcapHeightより上に出るため、em枠で測る。
