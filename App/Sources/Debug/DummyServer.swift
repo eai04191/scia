@@ -35,7 +35,8 @@ enum DummyServer {
         // 最初のページ以外（古い方と新しい方を読むとき）は空にする。
         let isFirstPage = !query.contains { ["max_id", "min_id", "since_id"].contains($0.name) }
         let body: Data? = switch (request.httpMethod ?? "GET", path) {
-        case ("GET", "/api/v1/timelines/home"): isFirstPage ? Content.home : Data("[]".utf8)
+        // ローカルと連合も、タブを開いたときに空振りしないよう、ホームと同じ投稿を返す。
+        case ("GET", "/api/v1/timelines/home"), ("GET", "/api/v1/timelines/public"): isFirstPage ? Content.home : Data("[]".utf8)
         case ("GET", "/api/v1/notifications"): isFirstPage ? Content.notifications : Data("[]".utf8)
         case (_, "/api/v1/markers"), ("GET", "/api/v1/preferences"): Data("{}".utf8)
         case ("GET", "/api/v1/custom_emojis"), ("GET", "/api/v2/filters"): Data("[]".utf8)
