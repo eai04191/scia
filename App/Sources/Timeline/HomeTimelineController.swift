@@ -584,6 +584,8 @@ extension HomeTimelineController {
             streamDummyMediaStatus(content: "ビューアの確認用に4枚の画像を添付", attachments: DummyMedia.attachments)
         case .tall:
             streamDummyMediaStatus(content: "ビューアの確認用に縦長の画像を1枚添付", attachments: DummyMedia.singleTallAttachment)
+        case .small:
+            streamDummyMediaStatus(content: "ビューアの確認用に画面より小さい画像を3枚添付", attachments: DummyMedia.smallAttachments)
         case .transparent:
             streamDummyMediaStatus(content: "ビューアの確認用に透明な部分のある画像を1枚添付", attachments: DummyMedia.singleTransparentAttachment)
         case .video:
@@ -848,6 +850,7 @@ enum DebugDummyPost: String, CaseIterable {
     case arrivals
     case images
     case tall
+    case small
     case transparent
     case video
     case longVideo = "long-video"
@@ -864,6 +867,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .arrivals: "新着10件"
         case .images: "画像4枚"
         case .tall: "縦長の画像1枚"
+        case .small: "小さい画像3枚"
         case .transparent: "透過画像1枚"
         case .video: "動画とGIF"
         case .longVideo: "音声付きの長い動画"
@@ -882,6 +886,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .arrivals: "text.badge.plus"
         case .images: "photo.badge.plus"
         case .tall: "rectangle.portrait"
+        case .small: "photo"
         case .transparent: "circle.dashed"
         case .video: "play.rectangle"
         case .longVideo: "speaker.wave.2"

@@ -14,6 +14,8 @@ enum DummyMedia {
         let description: String?
         /// 背景を透明にし、色の部分を半透明の円にする。PNGで渡す。
         var transparent = false
+        /// 添付ファイルに元の大きさを付ける。外すと、元の大きさを返さないサーバーの添付ファイルになる。
+        var hasSize = true
     }
 
     /// 形の違う4枚。一覧の並べ方と、ビューアでの開閉や拡大を、縦長・横長・正方形・細長で比べられるようにする。
@@ -42,6 +44,15 @@ enum DummyMedia {
         attachments([Spec(size: CGSize(width: 900, height: 1_600), color: .systemPink, label: "5 透過", description: "透明な部分のある画像", transparent: true)], idPrefix: idPrefix)
     }
 
+    /// 画面より小さい3枚。ビューアで引き伸ばさずに等倍で出すことを確かめる。絵文字ほどの正方形、横長、元の大きさの分からない正方形。
+    static func smallAttachments(idPrefix: String) -> [MediaAttachment] {
+        attachments([
+            Spec(size: CGSize(width: 128, height: 128), color: .systemTeal, label: "6", description: "絵文字ほどの小さい画像"),
+            Spec(size: CGSize(width: 300, height: 160), color: .systemIndigo, label: "7 小", description: "画面より小さい横長の画像"),
+            Spec(size: CGSize(width: 200, height: 200), color: .systemBrown, label: "8", description: "元の大きさの分からない小さい画像", hasSize: false),
+        ], idPrefix: idPrefix)
+    }
+
     /// 縦長の1枚。1枚だけの投稿はサムネイルが一覧の幅いっぱいに大きく出るため、バーの下へ戻る開閉を確かめやすい。
     static func singleTallAttachment(idPrefix: String) -> [MediaAttachment] {
         attachments([specs[0]], idPrefix: idPrefix)
@@ -57,7 +68,7 @@ enum DummyMedia {
                 url: url,
                 previewUrl: url,
                 description: spec.description,
-                meta: MediaAttachment.Meta(original: size)
+                meta: spec.hasSize ? MediaAttachment.Meta(original: size) : nil
             )
         }
     }
