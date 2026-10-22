@@ -160,11 +160,11 @@ struct StatusMenuTests {
     /// 既定のユーザーのメニューは、開く・書く操作、フォロー、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
     /// 関係の項目は、開いてから読む。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() throws {
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in })
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in })
 
         let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
 
-        #expect(outline.last == ["@alice[プロフィール,メンション,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…]]"])
+        #expect(outline.last == ["@alice[プロフィール,メンション,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,…]]"])
     }
 
     /// メンション、ハンドルをコピー、関係の項目を組むものを渡されていない画面では、これらを出さない。
@@ -178,7 +178,7 @@ struct StatusMenuTests {
     @Test func singleRelationItemStaysInSubmenu() throws {
         let settings = try makeSettings()
         settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .follow) } + [.more])
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in })
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in })
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings, userMenuActions: actions))
 
@@ -189,7 +189,7 @@ struct StatusMenuTests {
     @Test func singleMentionItemIsListedDirectlyWithAcct() throws {
         let settings = try makeSettings()
         settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .mention) } + [.more])
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in })
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in })
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings, userMenuActions: actions))
 

@@ -5,7 +5,7 @@ import UIKit
 extension UserMenuItem {
     var isRelation: Bool {
         switch self {
-        case .follow, .showReblogs, .notify, .mute, .block: true
+        case .follow, .showReblogs, .notify, .mute, .block, .report: true
         case .profile, .mention, .copyHandle, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari: false
         }
     }
@@ -101,8 +101,10 @@ final class UserRelationLoad {
 extension UserMenuActions {
     /// 関係の項目。メニューを開いてから関係を読んで中身を決めるため、読む間はUIKitの読み込み中の行を出す。
     /// 自分には出さない。読めなかったら、`showsFailure`の項目にだけ押せない行で知らせ、ほかの項目は何も出さない。項目ごとに同じ知らせが並ばないようにするため。
+    /// 通報は関係で中身が変わらないが、自分に出さないために、読んでから出す。
+    /// - Parameter reportableStatusID: 通報に添えられる投稿。Mastodonは通報する相手の投稿しか添えられないため、相手が書いた投稿のときだけ渡す。
     @MainActor
-    func relationElement(_ item: UserMenuItem, load: UserRelationLoad, showsFailure: Bool) -> UIMenuElement {
+    func relationElement(_ item: UserMenuItem, load: UserRelationLoad, showsFailure: Bool, reportableStatusID: String? = nil) -> UIMenuElement {
         UIDeferredMenuElement.uncached { completion in
             Task { @MainActor in
                 do {
@@ -112,6 +114,8 @@ extension UserMenuActions {
                     }
                     completion(Self.relationElements(item, relationship: relation.relationship) { change in
                         changeRelation(change, relation)
+                    } report: {
+                        report(relation, reportableStatusID)
                     })
                 } catch {
                     completion(showsFailure ? [UIAction(title: "関係を読み込めませんでした", image: UIImage(systemName: "exclamationmark.triangle"), attributes: .disabled) { _ in }] : [])
@@ -123,7 +127,7 @@ extension UserMenuActions {
     /// 関係に合わせた項目。出さないときは空。
     /// ブロックしているか、されているときは、フォローもフォローの設定もできないため出さない。フォローの設定は、フォロー中かリクエスト中の相手にだけ出す。
     @MainActor
-    static func relationElements(_ item: UserMenuItem, relationship: Relationship, perform: @escaping @MainActor (UserRelationChange) -> Void) -> [UIMenuElement] {
+    static func relationElements(_ item: UserMenuItem, relationship: Relationship, perform: @escaping @MainActor (UserRelationChange) -> Void, report: @escaping @MainActor () -> Void) -> [UIMenuElement] {
         func action(_ title: String, _ symbolName: String?, attributes: UIMenuElement.Attributes = [], state: UIMenuElement.State = .off, _ change: UserRelationChange) -> UIAction {
             UIAction(title: title, image: symbolName.flatMap { UIImage(systemName: $0) }, attributes: attributes, state: state) { _ in perform(change) }
         }
@@ -149,6 +153,8 @@ extension UserMenuActions {
         case .block:
             if relationship.blocking { return [action("ブロックを解除", "hand.raised.slash", .unblock)] }
             return [action(item.title, "hand.raised", attributes: .destructive, .block)]
+        case .report:
+            return [UIAction(title: item.title, image: item.image) { _ in report() }]
         case .profile, .mention, .copyHandle, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
             return []
         }

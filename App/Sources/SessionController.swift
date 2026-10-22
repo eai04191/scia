@@ -744,6 +744,9 @@ final class SessionController {
             },
             changeRelation: { [weak self] change, relation in
                 self?.confirmChanging(change, of: relation)
+            },
+            report: { [weak self] relation, statusID in
+                self?.presentReport(relation, statusID: statusID)
             }
         )
     }
@@ -849,6 +852,21 @@ final class SessionController {
             break
         }
         notices.showTransient(Notice(id: "user.relationChanged", kind: .success, title: change.doneTitle(relationship)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+    }
+
+    /// 通報のシートを開く。送れたら、シートを閉じて知らせる。
+    private func presentReport(_ relation: UserRelation, statusID: String?) {
+        let client = client
+        let draft = ReportDraft(accountID: relation.accountID, acct: relation.acct, statusID: statusID, api: ReportDraft.API(
+            rules: { try await client.instanceRules() },
+            submit: { try await client.report($0) }
+        ))
+        logger.info("report sheet opened (status: \(statusID != nil, privacy: .public))")
+        let sheet = ReportView.sheet(draft: draft) { [weak self] in
+            self?.logger.info("report submitted")
+            self?.notices.showTransient(Notice(id: "user.reported", kind: .success, title: "通報しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+        }
+        topViewController.present(sheet, animated: true)
     }
 
     /// ミュートかブロックしている相手を、ホームと通知の一覧から除く。どちらでもなくなったら、また足すようにする。

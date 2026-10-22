@@ -484,6 +484,51 @@ struct MastodonClientTests {
         #expect(requests.map { $0.httpBody.map { String(decoding: $0, as: UTF8.self) } ?? "" } == ["duration=3600", "", "", "", ""])
     }
 
+    /// 通報は、添える投稿とルールを配列で送る。ルールは違反のときだけ送る。
+    @Test func reportPostsFormToReports() async throws {
+        let transport = StubTransport([.json("{}", statusCode: 200), .json("{}", statusCode: 200)])
+        let client = try makeClient(transport)
+
+        try await client.report(ReportRequest(accountID: "2", statusIDs: ["100"], comment: "理由", forward: true, category: .violation, ruleIDs: ["1", "3"]))
+        try await client.report(ReportRequest(accountID: "2", category: .spam, ruleIDs: ["1"]))
+
+        let requests = await transport.requests
+        #expect(requests.map { $0.url?.path() } == ["/api/v1/reports", "/api/v1/reports"])
+        let forms = try requests.map { request in
+            var components = URLComponents()
+            components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
+            return components.queryItems ?? []
+        }
+        #expect(forms[0] == [
+            URLQueryItem(name: "account_id", value: "2"),
+            URLQueryItem(name: "comment", value: "理由"),
+            URLQueryItem(name: "forward", value: "true"),
+            URLQueryItem(name: "category", value: "violation"),
+            URLQueryItem(name: "status_ids[]", value: "100"),
+            URLQueryItem(name: "rule_ids[]", value: "1"),
+            URLQueryItem(name: "rule_ids[]", value: "3"),
+        ])
+        #expect(!forms[1].contains { $0.name == "rule_ids[]" })
+    }
+
+    /// 通報は二重に届かないよう、一時的な失敗でも送り直さない。
+    @Test func reportIsNotRetried() async throws {
+        let transport = StubTransport([.json("", statusCode: 503), .json("{}", statusCode: 200)])
+        let client = try makeClient(transport)
+
+        await #expect(throws: (any Error).self) { try await client.report(ReportRequest(accountID: "2", category: .other)) }
+        #expect(await transport.requests.count == 1)
+    }
+
+    @Test func instanceRulesReadsRules() async throws {
+        let transport = StubTransport([.json(#"[{"id":"1","text":"スパム禁止","hint":""},{"id":"2","text":"差別禁止"}]"#, statusCode: 200)])
+
+        let rules = try await makeClient(transport).instanceRules()
+
+        #expect(await transport.requests.first?.url?.path() == "/api/v1/instance/rules")
+        #expect(rules == [InstanceRule(id: "1", text: "スパム禁止", hint: ""), InstanceRule(id: "2", text: "差別禁止")])
+    }
+
     @Test func authorizeAndRejectFollowRequestPostToFollowRequests() async throws {
         let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":true,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false}"#
         let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])

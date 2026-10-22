@@ -500,6 +500,28 @@ public struct MastodonClient: Sendable {
         try await post(Relationship.self, path: "api/v1/accounts/\(id)/unblock", form: []).0
     }
 
+    /// アカウントを通報する。応答の中身は使わない。`Idempotency-Key`を受け付けないため、二重に届かないよう送り直さない。
+    /// https://docs.joinmastodon.org/methods/reports/#post
+    public func report(_ request: ReportRequest) async throws {
+        var form = [
+            URLQueryItem(name: "account_id", value: request.accountID),
+            URLQueryItem(name: "comment", value: request.comment),
+            URLQueryItem(name: "forward", value: request.forward ? "true" : "false"),
+            URLQueryItem(name: "category", value: request.category.rawValue),
+        ]
+        form += request.statusIDs.map { URLQueryItem(name: "status_ids[]", value: $0) }
+        if request.category == .violation {
+            form += request.ruleIDs.map { URLQueryItem(name: "rule_ids[]", value: $0) }
+        }
+        _ = try await send(formRequest(method: "POST", path: "api/v1/reports", form: form))
+    }
+
+    /// サーバーのルール。通報でルールへの違反を選ぶときに出す。
+    /// https://docs.joinmastodon.org/methods/instance/#rules
+    public func instanceRules() async throws -> [InstanceRule] {
+        try await get(ElementList<InstanceRule>.self, path: "api/v1/instance/rules", query: []).0.elements
+    }
+
     /// 通知を1件削除する。応答の中身は使わない。
     /// https://docs.joinmastodon.org/methods/notifications/#dismiss
     public func dismissNotification(_ notificationID: MastodonNotification.ID) async throws {

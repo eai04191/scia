@@ -176,22 +176,22 @@ struct MenuLayoutTests {
     }
 
     /// ユーザーのメニューは、開く・書く操作、フォロー、持ち出す操作でまとまりを分ける。開く場所を選んで開く2つは隠しておく。
-    /// たまにしか使わないフォローの設定と、ミュート、ブロックは「その他」に入れる。
+    /// たまにしか使わないフォローの設定と、ミュート、ブロック、通報は「その他」に入れる。
     @Test func userMenuDefaultGroupsItemsByPurpose() {
         let layout = UserMenuItem.defaultLayout
 
         #expect(layout.groups.main.map(\.items) == [[.profile, .mention], [.follow], [.copyHandle, .copyLink, .share, .openInBrowser]])
-        #expect(layout.groups.more.map(\.items) == [[.showReblogs, .notify], [.mute, .block]])
+        #expect(layout.groups.more.map(\.items) == [[.showReblogs, .notify], [.mute, .block, .report]])
         #expect([UserMenuItem.openInDefaultBrowser, .openInAppSafari].allSatisfy { layout.elements.contains(.item($0, isVisible: false)) })
     }
 
     /// メンション、フォロー、ハンドルをコピーを足す前に保存したユーザーのメニューでも、3つはプロフィールの後ろに出る。
-    /// 既定で「その他」の先頭にあるフォローの設定、ミュート、ブロックは、「その他」に入る。
+    /// 既定で「その他」の先頭にあるフォローの設定、ミュート、ブロック、通報は、「その他」に入る。
     @Test func savedUserMenuGainsNewItemsAfterProfile() {
         let saved = MenuLayout<UserMenuItem>(tokens: ["item:profile", "item:copyLink", "item:share", "more"])
 
         #expect(saved.groups.main.map(\.items) == [[.profile, .mention, .follow, .copyHandle, .copyLink, .share, .openInBrowser]])
-        #expect(saved.groups.more.map(\.items) == [[.showReblogs, .notify, .mute, .block]])
+        #expect(saved.groups.more.map(\.items) == [[.showReblogs, .notify, .mute, .block, .report]])
     }
 
     /// 開く場所を選んで開く2つを足す前に保存した投稿のメニューでも、2つはブラウザで開くのすぐ後ろに、隠れて入る。
@@ -216,7 +216,7 @@ struct MenuLayoutTests {
         let saved = MenuLayout<UserMenuItem>(tokens: ["more", "item:profile"])
 
         #expect(saved.groups.main.map(\.items).isEmpty)
-        #expect(saved.groups.more.map(\.items) == [[.showReblogs, .notify, .mute, .block, .profile, .mention, .follow, .copyHandle, .copyLink, .share, .openInBrowser]])
+        #expect(saved.groups.more.map(\.items) == [[.showReblogs, .notify, .mute, .block, .report, .profile, .mention, .follow, .copyHandle, .copyLink, .share, .openInBrowser]])
     }
 
     /// ブックマークを足す前に保存した投稿のメニューでも、ブックマークは編集の後ろに、表示されて入る。

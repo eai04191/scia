@@ -296,11 +296,16 @@ extension TimelineViewController {
         let groups = settings.userMenuLayout.groups
         let handlers = urlHandlers(id: id)
         let load = relationLoad(for: user)
+        // Mastodonは通報する相手の投稿しか添えられないため、長押しした投稿をその人が書いたときだけ添える。
+        let shown = status(for: id)?.displayed
+        let reportableStatusID = shown?.account.id == user.id ? shown?.id : nil
         // 関係の項目は読んでから中身が決まり、名前に相手を入れられないため、1つだけでもサブメニューにする。
         if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first?.items, only.count == 1, !only[0].isRelation {
-            return userElement(only[0], for: user, handlers: handlers, load: load, inSubmenu: false)
+            return userElement(only[0], for: user, handlers: handlers, load: load, reportableStatusID: reportableStatusID, inSubmenu: false)
         }
-        let children = groups.menuElements { item in userElement(item, for: user, handlers: handlers, load: load, inSubmenu: true).map { [$0] } ?? [] }
+        let children = groups.menuElements { item in
+            userElement(item, for: user, handlers: handlers, load: load, reportableStatusID: reportableStatusID, inSubmenu: true).map { [$0] } ?? []
+        }
         guard !children.isEmpty else { return nil }
         let parts = user.acct.split(separator: "@", maxSplits: 1)
         return UIMenu(
@@ -328,7 +333,7 @@ extension TimelineViewController {
         let load = relationLoad(for: user)
         let children = settings.userMenuLayout.groups.menuElements { item in
             guard item != .profile else { return [] }
-            return userElement(item, for: user, handlers: handlers, load: load, inSubmenu: true).map { [$0] } ?? []
+            return userElement(item, for: user, handlers: handlers, load: load, reportableStatusID: nil, inSubmenu: true).map { [$0] } ?? []
         }
         return children.isEmpty ? nil : UIMenu(children: children)
     }
@@ -340,10 +345,10 @@ extension TimelineViewController {
         return UserRelationLoad { try await userMenuActions.loadRelation(target) }
     }
 
-    private func userElement(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, load: UserRelationLoad?, inSubmenu: Bool) -> UIMenuElement? {
+    private func userElement(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, load: UserRelationLoad?, reportableStatusID: String?, inSubmenu: Bool) -> UIMenuElement? {
         guard item.isRelation else { return userAction(item, for: user, handlers: handlers, inSubmenu: inSubmenu) }
         guard let userMenuActions, let load else { return nil }
-        return userMenuActions.relationElement(item, load: load, showsFailure: item == settings.userMenuLayout.groups.firstRelationItem)
+        return userMenuActions.relationElement(item, load: load, showsFailure: item == settings.userMenuLayout.groups.firstRelationItem, reportableStatusID: reportableStatusID)
     }
 
     private func userAction(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, inSubmenu: Bool) -> UIAction? {
@@ -362,7 +367,7 @@ extension TimelineViewController {
             return userMenuActions?.action(item, target: .account(id: user.id, acct: user.acct), title: inSubmenu ? nil : "@\(user.acct)にメンション", notifying: self)
         case .copyHandle:
             return userMenuActions?.action(item, target: .account(id: user.id, acct: user.acct), title: inSubmenu ? nil : "@\(user.acct)のハンドルをコピー", notifying: self)
-        case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .follow, .showReblogs, .notify, .mute, .block:
+        case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .follow, .showReblogs, .notify, .mute, .block, .report:
             // 共通の項目は、上で中身から組んだ。
             return nil
         }

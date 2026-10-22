@@ -267,6 +267,8 @@ public enum UserMenuItem: String, MenuItemKind {
     case mute
     /// ブロックしていなければブロックし、ブロック中なら解除する。
     case block
+    /// 通報のシートを開く。
+    case report
 
     public static let defaultLayout = MenuLayout<UserMenuItem>(defaultElements: [
         .item(.profile, isVisible: true),
@@ -286,6 +288,7 @@ public enum UserMenuItem: String, MenuItemKind {
         .separator,
         .item(.mute, isVisible: true),
         .item(.block, isVisible: true),
+        .item(.report, isVisible: true),
     ])
 }
 
