@@ -113,7 +113,7 @@ targets:
         # 違和感レポートをファイルアプリから取り出せるようにする
         UIFileSharingEnabled: true
         LSSupportsOpeningDocumentsInPlace: true
-  # 写真アプリなどの共有から投稿欄を開く共有拡張（ShareExtension/ShareViewController.swift）
+  # 写真アプリやSafariなどの共有から投稿欄を開く共有拡張（ShareExtension/ShareViewController.swift）
   SciaShareExtension:
     type: app-extension
     platform: iOS
@@ -147,6 +147,11 @@ targets:
             NSExtensionActivationRule:
               NSExtensionActivationSupportsImageWithMaxCount: 4
               NSExtensionActivationSupportsMovieWithMaxCount: 4
+              # Safariのページと、選んだ文のメニューの「共有」。選んだ文を引用して書き始める
+              NSExtensionActivationSupportsWebPageWithMaxCount: 1
+              NSExtensionActivationSupportsText: true
+            # Safariの共有ボタンから共有するとき、ページの中で選んでいる文とURLを読む
+            NSExtensionJavaScriptPreprocessingFile: SharePreprocessing
   SciaTests:
     type: bundle.unit-test
     platform: iOS

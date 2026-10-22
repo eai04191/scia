@@ -138,6 +138,7 @@ A4に入れていない、Mastodonのクライアントとしてできること�
 - [x] 画像と動画を、設定で選んだ大きさまで端末で縮めてから送る（通信量の節約、アップロードの高速化）
 - [x] 添付に対応しているメディアをコピーしているとき、インライン投稿欄に、ペーストして添付できるようにする: 決まりは[media-attachment.md](media-attachment.md)の「ペーストで添付する」
 - [x] 写真アプリなどの共有からSciaを開き、インライン投稿欄に添付する: 決まりは[media-attachment.md](media-attachment.md)の「共有で添付する」
+- [x] Safariで選んだ文を共有から引用し、ページのタイトルとURLを添えて書き始める: 決まりは[compose.md](compose.md)の「共有で引用する」
 - [x] 実機デバッグ用に、`scia-debug://`相当の設定をアプリ内からできるようにする
 - [x] アニメーションカスタム絵文字の対応(apng, gif): 決まりは[animated-custom-emoji.md](animated-custom-emoji.md)
 - [x] 投稿の翻訳（システム）

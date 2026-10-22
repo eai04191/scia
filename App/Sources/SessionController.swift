@@ -1552,7 +1552,55 @@ final class SessionController {
             openProfile(acct: acct)
         case .share(let id, let unreadableCount):
             receiveSharedMedia(id: id, unreadableCount: unreadableCount)
+        case .compose(let text):
+            receiveSharedText(text)
         }
+    }
+
+    /// 共有拡張が作った本文（Safariのページのタイトル、URL、選んだ文の引用）で書き始める。書きかけの下書きがあれば、後ろに足すか、捨てて新しく書くかを聞く。
+    /// 重ねた画面を閉じないのは、`receiveSharedMedia(id:unreadableCount:)`と同じ理由。
+    private func receiveSharedText(_ text: String) {
+        logger.info("shared text received length=\(text.count, privacy: .public)")
+        // 送っている間に足すと、送り終えて下書きを空に戻すときに一緒に消える。
+        guard !composer.model.isPosting else {
+            presentAlert(title: Self.sharedTextFailureTitle, message: Self.sharedTextWhilePostingMessage)
+            return
+        }
+        guard composer.model.hasWrittenContent else {
+            appendSharedText(text)
+            return
+        }
+        let isEditing = composer.model.editedStatus != nil
+        let alert = UIAlertController(
+            title: isEditing ? "編集中の投稿があります" : "書きかけの下書きがあります",
+            message: "共有された文を、\(isEditing ? "編集中の投稿" : "下書き")の後ろに足すか、\(isEditing ? "編集をやめて" : "下書きを捨てて")新しく書くかを選んでください。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: isEditing ? "編集中の投稿に足す" : "下書きに足す", style: .default) { [weak self] _ in
+            self?.appendSharedText(text)
+        })
+        alert.addAction(UIAlertAction(title: isEditing ? "編集をやめて新しく書く" : "下書きを捨てて新しく書く", style: .destructive) { [weak self] _ in
+            guard let self else { return }
+            // 聞いている間に送り始めていたら、捨てずに、受け取った文を足さない。
+            guard composer.discardDraft() else { return }
+            appendSharedText(text)
+        })
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        topViewController.present(alert, animated: true)
+    }
+
+    private static let sharedTextFailureTitle = "共有された文で書き始められませんでした"
+    private static let sharedTextWhilePostingMessage = "投稿を送っている間は書き始められません。送り終えてから、もう一度共有してください。"
+
+    /// 書き始めて、本文の後ろに足す。下書きがなくても置き換えずに足すのは、返信の宛先のように自動で入れた本文を残すため。
+    private func appendSharedText(_ text: String) {
+        // 下書きがあるかを聞いている間に、送り始めていることがある。
+        guard !composer.model.isPosting else {
+            presentAlert(title: Self.sharedTextFailureTitle, message: Self.sharedTextWhilePostingMessage)
+            return
+        }
+        composer.beginEditing()
+        composer.model.text = SharedQuote.appending(text, to: composer.model.text)
     }
 
     /// 共有拡張が受け取ったメディアを、投稿欄に添付して書き始める。書きかけの下書きがあれば、足すか、捨てて新しく書くかを聞く。

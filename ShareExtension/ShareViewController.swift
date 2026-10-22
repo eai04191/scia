@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 /// 写真アプリなどの共有から、Sciaの投稿欄を開く共有拡張。拡張の中では投稿せず、受け取ったメディアをApp Groupのフォルダーに置き、
 /// Sciaを開いて閉じる。投稿欄を拡張とアプリの2つに持たないため。
+/// Safariのページや選んだ文は、ページのタイトルとURLと選んだ文の引用を並べた本文にして、URLでSciaに渡す。
 final class ShareViewController: UIViewController {
     private let logger = Logger(subsystem: "net.mizle.scia", category: "shareExtension")
     private var isReceiving = false
@@ -43,8 +44,18 @@ final class ShareViewController: UIViewController {
             fail()
             return
         }
-        let id = UUID()
         let providers = (extensionContext?.inputItems as? [NSExtensionItem] ?? []).flatMap { $0.attachments ?? [] }
+        logger.info("received types: \(providers.map(\.registeredTypeIdentifiers), privacy: .public)")
+        if Self.isQuoteShare(providers) {
+            guard let quote = await quote(from: providers) else {
+                logger.error("nothing to quote")
+                fail()
+                return
+            }
+            openCompose(quote, scheme: scheme)
+            return
+        }
+        let id = UUID()
         var count = 0
         for provider in providers {
             do {
@@ -65,6 +76,49 @@ final class ShareViewController: UIViewController {
         openContainingApp(url) { [weak self] opened in
             guard opened else {
                 inbox.remove(id: id)
+                self?.fail()
+                return
+            }
+            self?.extensionContext?.completeRequest(returningItems: nil)
+        }
+    }
+
+    /// Safariのページか選んだ文の共有。画像や動画が1つでも入っていれば、メディアの共有として添付する。
+    private static func isQuoteShare(_ providers: [NSItemProvider]) -> Bool {
+        let types = providers.flatMap(\.registeredTypeIdentifiers).compactMap { UTType($0) }
+        return !types.contains { $0.conforms(to: .image) || $0.conforms(to: .movie) }
+            && types.contains { $0.conforms(to: .propertyList) || $0.conforms(to: .plainText) }
+    }
+
+    /// Safariのページや選んだ文から、投稿欄の本文を作る。どれもなければnil。
+    /// Safariの共有ボタンからは、前処理のJS（SharePreprocessing.js）が読んだページのタイトルとURLと選んだ文が届く。
+    /// 選んだ文のメニューの「共有」からは、選んだ文がテキストで届く。
+    private func quote(from providers: [NSItemProvider]) async -> String? {
+        if let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.propertyList.identifier) }) {
+            let results = try? await provider.loadItem(forTypeIdentifier: UTType.propertyList.identifier) as? [String: Any]
+            let page = results?[NSExtensionJavaScriptPreprocessingResultsKey] as? [String: Any]
+            return SharedQuote.body(title: page?["title"] as? String, url: page?["url"] as? String, selection: page?["selection"] as? String)
+        }
+        guard let provider = providers.first(where: { $0.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) }) else { return nil }
+        // Safariは文字列で渡すが、アプリによってはUTF-8のデータで渡す。
+        let item = try? await provider.loadItem(forTypeIdentifier: UTType.plainText.identifier)
+        let text = (item as? String) ?? (item as? Data).flatMap { String(data: $0, encoding: .utf8) }
+        let url = try? await providers.first { $0.hasItemConformingToTypeIdentifier(UTType.url.identifier) }?
+            .loadItem(forTypeIdentifier: UTType.url.identifier) as? URL
+        return SharedQuote.body(title: nil, url: url?.absoluteString, selection: text)
+    }
+
+    private func openCompose(_ text: String, scheme: String) {
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = "compose"
+        components.queryItems = [URLQueryItem(name: "text", value: text)]
+        guard let url = components.url else {
+            fail()
+            return
+        }
+        openContainingApp(url) { [weak self] opened in
+            guard opened else {
                 self?.fail()
                 return
             }
