@@ -11,7 +11,7 @@ import os
 public final class StreamingHub {
     /// 申し込んだ相手に届くもの。
     public enum Activity: Sendable, Equatable {
-        /// 接続が成立した。申し込んだ時点でつながっていれば、すぐ届く。切れていた間をRESTで補う。
+        /// 接続が成立した。申し込んだ時点でつながっていれば、すぐ届く。新しいストリームなら、購読を送り終えてから届く。切れていた間をRESTで補う。
         case connected
         /// 申し込んだストリームのイベント。
         case event(StreamingEvent)
@@ -64,6 +64,18 @@ public final class StreamingHub {
     private var generation = 0
     /// 今の接続。購読の変更を送る。切れたらnilにし、次の接続でまとめて購読し直す。
     private var connection: StreamingConnection?
+    /// 接続を受け取るたびに増やす。同じ`generation`の中のつなぎ直しも見分け、前の接続で予約した知らせを捨てる。
+    private var connectionNumber = 0
+    /// 受け取った`connected`の数。ストリームの流れでは、どの接続でも`connected`がその接続のイベントより先に来るため、
+    /// 届いたイベントがどの`connected`の後のものかを、これで見分ける。`connectionNumber`は次の接続を受け取った時点で進み、
+    /// 前の接続のイベントを配り終える前のことがあるので、ここには使わない。
+    private var connectedCount = 0
+    /// 相手ごとに、届けた`connected`の`connectedCount`。
+    private var reportedConnections: [Int: Int] = [:]
+    /// `connected`を届ける前に届いたイベント。相手ごとに届いた順に溜め、`connected`の直後に渡す。
+    /// 受け取った側は`connected`で補完を始めるので、先に新着を一覧に入れると補完の基準が進み、その手前を読み飛ばすため。
+    /// 待っている間に切れても捨てず、つなぎ直した`connected`の後に渡す。削除や編集は、補完では読み直せないため。
+    private var heldEvents: [Int: [StreamingEvent]] = [:]
     /// 購読と解除を、申し込みの順に1つずつ送る。
     private var sending: Task<Void, Never>?
     private var isOutageNoticed = false
@@ -85,12 +97,14 @@ public final class StreamingHub {
     }
 
     /// ストリームの購読を申し込む。最初の申し込みでつなぎ始める。同じストリームの申し込みは、1つの購読にまとめる。
-    /// - Parameter handler: 届いた順に呼ぶ。つながっている間に申し込むと、返る前に`connected`で呼ぶ。
+    /// - Parameter handler: 届いた順に呼ぶ。つながっている間に申し込むと、すでに購読しているストリームなら返る前に、
+    ///   新しいストリームなら購読を送り終えてから、`connected`で呼ぶ。
     public func subscribe(_ subscription: StreamingSubscription, _ handler: @escaping (Activity) -> Void) -> Subscription {
         nextConsumerID += 1
         let id = nextConsumerID
         consumers.append(Consumer(id: id, subscription: subscription, handler: handler))
-        if !subscriptions.contains(subscription) {
+        let isNewStream = !subscriptions.contains(subscription)
+        if isNewStream {
             subscriptions.append(subscription)
             send { try await $0.subscribe(subscription) }
         }
@@ -98,7 +112,12 @@ public final class StreamingHub {
             start()
         } else {
             if isConnected {
-                handler(.connected)
+                if isNewStream {
+                    // 受け取った側は`connected`で補完を始める。購読より先に補完が終わると、その間の新着をどちらでも受け取れない。
+                    reportConnectedAfterSending(to: id)
+                } else {
+                    reportConnected(to: id, handler)
+                }
             }
             if isOutageNoticed {
                 handler(.outage(isOngoing: true))
@@ -132,6 +151,8 @@ public final class StreamingHub {
     private func remove(_ id: Int) {
         guard let index = consumers.firstIndex(where: { $0.id == id }) else { return }
         let subscription = consumers.remove(at: index).subscription
+        reportedConnections[id] = nil
+        heldEvents[id] = nil
         if !consumers.contains(where: { $0.subscription == subscription }) {
             subscriptions.removeAll { $0 == subscription }
             send { try await $0.unsubscribe(subscription) }
@@ -180,6 +201,7 @@ public final class StreamingHub {
         self.runTask = nil
         connection = nil
         sending = nil
+        reportedConnections.removeAll()
         isConnected = false
         isOutageNoticed = false
     }
@@ -189,6 +211,7 @@ public final class StreamingHub {
     private func attach(_ connection: StreamingConnection, generation: Int) -> Task<Void, any Error> {
         guard generation == self.generation, runTask != nil else { return Task {} }
         self.connection = connection
+        connectionNumber += 1
         let subscriptions = subscriptions
         let initial = Task {
             for subscription in subscriptions {
@@ -215,13 +238,37 @@ public final class StreamingHub {
         }
     }
 
+    /// 今までに積んだ送信が終わってから、まだ同じ接続で申し込んでいる相手に`connected`を届ける。
+    /// その前に切れたら届けない。つなぎ直したときに、全員へ届くため。
+    private func reportConnectedAfterSending(to id: Int) {
+        let sent = sending
+        let connectionNumber = connectionNumber
+        Task { [weak self] in
+            await sent?.value
+            guard let self, connectionNumber == self.connectionNumber, isConnected, let consumer = consumers.first(where: { $0.id == id }) else { return }
+            reportConnected(to: id, consumer.handler)
+        }
+    }
+
+    /// `connected`を届け、それまでに溜めたイベントを続けて渡す。
+    private func reportConnected(to id: Int, _ handler: (Activity) -> Void) {
+        reportedConnections[id] = connectedCount
+        handler(.connected)
+        for event in heldEvents.removeValue(forKey: id) ?? [] where isSubscribed(id) {
+            handler(.event(event))
+        }
+    }
+
     private func receive(_ activity: LiveUpdates.Activity, generation: Int) {
         guard generation == self.generation, runTask != nil else { return }
         switch activity {
         case .stream(.connected):
             isConnected = true
+            connectedCount += 1
             logger.info("streaming connected")
-            broadcast(.connected)
+            for consumer in consumers where isSubscribed(consumer.id) {
+                reportConnected(to: consumer.id, consumer.handler)
+            }
         case .stream(.event(let message)):
             deliver(message)
         case .stream(.unauthorized):
@@ -250,7 +297,11 @@ public final class StreamingHub {
             return
         }
         for target in targets where isSubscribed(target.id) {
-            target.handler(.event(message.event))
+            if reportedConnections[target.id] == connectedCount {
+                target.handler(.event(message.event))
+            } else {
+                heldEvents[target.id, default: []].append(message.event)
+            }
         }
     }
 

@@ -188,6 +188,10 @@ final class ScriptedConnector: WebSocketConnector {
         var answeredPings = Int.max
         /// 送ったメッセージが記録されるまでの遅れ。送信がpingより遅れる経路を再現する。
         var sendDelay: Duration = .zero
+        /// 最初のメッセージを届けるまでの遅れ。つながったあとの操作の途中にメッセージが届く経路を再現する。
+        var firstMessageDelay: Duration = .zero
+        /// `afterMessages`が`.drop`のとき、メッセージを届け終えてから切れるまでの遅れ。切れる前に、届いたメッセージに応じた送信を始めさせる。
+        var dropDelay: Duration = .zero
     }
 
     private let state: Mutex<(scripts: [Script], connectCount: Int, closedCount: Int, sent: [[String]])>
@@ -218,6 +222,7 @@ final class ScriptedConnector: WebSocketConnector {
 private final class ScriptedConnection: WebSocketConnection {
     private struct State {
         var script: ScriptedConnector.Script
+        var hasDeliveredMessage = false
         var pings = 0
         var isClosed = false
         var waiters: [CheckedContinuation<Void, any Error>] = []
@@ -243,19 +248,31 @@ private final class ScriptedConnection: WebSocketConnection {
     }
 
     func receive() async throws -> String {
-        enum Next { case message(String), fail(any Error), wait }
+        enum Next { case message(String, after: Duration), fail(any Error), drop(after: Duration), wait }
         let next: Next = state.withLock { state in
             if state.isClosed { return .fail(URLError(.cancelled)) }
             if case .fail(let error) = state.script.handshake { return .fail(error) }
-            if !state.script.messages.isEmpty { return .message(state.script.messages.removeFirst()) }
-            if case .drop = state.script.afterMessages { return .fail(URLError(.networkConnectionLost)) }
+            if !state.script.messages.isEmpty {
+                let delay = state.hasDeliveredMessage ? .zero : state.script.firstMessageDelay
+                state.hasDeliveredMessage = true
+                return .message(state.script.messages.removeFirst(), after: delay)
+            }
+            if case .drop = state.script.afterMessages { return .drop(after: state.script.dropDelay) }
             return .wait
         }
         switch next {
-        case .message(let message):
+        case .message(let message, let delay):
+            if delay > .zero {
+                try await Task.sleep(for: delay)
+            }
             return message
         case .fail(let error):
             throw error
+        case .drop(let delay):
+            if delay > .zero {
+                try await Task.sleep(for: delay)
+            }
+            throw URLError(.networkConnectionLost)
         case .wait:
             try await waitUntilClosed()
             throw URLError(.cancelled)

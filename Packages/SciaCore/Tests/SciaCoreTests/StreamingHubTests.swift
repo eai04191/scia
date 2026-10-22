@@ -105,6 +105,100 @@ struct StreamingHubTests {
         notificationsSubscription.cancel()
     }
 
+    /// つながっている間に新しいストリームを申し込んだら、購読を送り終えてから`connected`を届ける。
+    /// 先に届けると、受け取った側の補完が購読より先に終わり、その間の新着をどちらでも受け取れないため。
+    @Test func joiningNewStreamWhileConnectedReportsConnectedAfterSubscribing() async throws {
+        let connector = ScriptedConnector([.init(sendDelay: .milliseconds(50))])
+        let hub = makeHub(connector)
+        let homeSubscription = hub.subscribe(.user) { _ in }
+        try await waitUntil { hub.isConnected }
+
+        var sentWhenConnected: [[String]]?
+        let localSubscription = hub.subscribe(TimelineFeed.local.subscription) { activity in
+            if activity == .connected {
+                sentWhenConnected = connector.sent
+            }
+        }
+        try await waitUntil { sentWhenConnected != nil }
+
+        #expect(sentWhenConnected == [[Self.subscribeUser, #"{"stream":"public:local","type":"subscribe"}"#]])
+        homeSubscription.cancel()
+        localSubscription.cancel()
+    }
+
+    /// `connected`を待っている間に届いたイベントは、`connected`の後に渡す。
+    /// 受け取った側は`connected`で補完を始めるので、先に新着を一覧に入れると補完の基準が進み、その手前を読み飛ばすため。
+    @Test func eventsArrivingBeforeDelayedConnectedFollowIt() async throws {
+        let connector = ScriptedConnector([
+            .init(messages: [Self.delete("1", stream: #"["public:local"]"#)], sendDelay: .milliseconds(200), firstMessageDelay: .milliseconds(50)),
+        ])
+        let hub = makeHub(connector)
+        let local = Recorder()
+        var localSubscription: StreamingHub.Subscription?
+        let homeSubscription = hub.subscribe(.user) { activity in
+            if activity == .connected, localSubscription == nil {
+                localSubscription = hub.subscribe(TimelineFeed.local.subscription, local.record)
+            }
+        }
+        try await waitUntil { local.labels.count == 2 }
+
+        #expect(local.labels == ["connected", "delete 1"])
+        homeSubscription.cancel()
+        localSubscription?.cancel()
+    }
+
+    /// `connected`を待っている間に届いたイベントは、その間に切れてつなぎ直しても捨てず、つなぎ直した`connected`の後に渡す。
+    /// 削除や編集は、つなぎ直したあとの補完では読み直せないため。
+    @Test func eventsHeldBeforeDelayedConnectedSurviveReconnecting() async throws {
+        let connector = ScriptedConnector([
+            .init(
+                messages: [Self.delete("29", stream: #"["public:local"]"#)],
+                afterMessages: .drop,
+                sendDelay: .milliseconds(300),
+                firstMessageDelay: .milliseconds(50),
+                dropDelay: .milliseconds(100)
+            ),
+            .init(),
+        ])
+        let hub = makeHub(connector)
+        let local = Recorder()
+        var localSubscription: StreamingHub.Subscription?
+        let homeSubscription = hub.subscribe(.user) { activity in
+            if activity == .connected, localSubscription == nil {
+                localSubscription = hub.subscribe(TimelineFeed.local.subscription, local.record)
+            }
+        }
+        try await waitUntil { connector.connectCount == 2 && local.labels.count == 2 }
+
+        #expect(local.labels == ["connected", "delete 29"])
+        homeSubscription.cancel()
+        localSubscription?.cancel()
+    }
+
+    /// 購読を送っている間に切れてつなぎ直したら、つなぎ直したときの`connected`だけを届ける。
+    /// 切れる前の送信が後から終わっても、もう一度届けると、受け取った側が補完を余分に繰り返すため。
+    @Test func connectedAfterSendingIsDroppedWhenReconnectedMeanwhile() async throws {
+        let connector = ScriptedConnector([
+            .init(messages: [Self.delete("1")], afterMessages: .drop, sendDelay: .milliseconds(300), dropDelay: .milliseconds(50)),
+            .init(),
+        ])
+        let hub = makeHub(connector)
+        let local = Recorder()
+        var localSubscription: StreamingHub.Subscription?
+        let homeSubscription = hub.subscribe(.user) { activity in
+            // 最初の接続でイベントが届いた時点、つまり切れる直前に、新しいストリームを申し込む。
+            if case .event = activity, localSubscription == nil {
+                localSubscription = hub.subscribe(TimelineFeed.local.subscription, local.record)
+            }
+        }
+        try await waitUntil { connector.connectCount == 2 && hub.isConnected }
+        try await Task.sleep(for: .milliseconds(500))
+
+        #expect(local.labels == ["connected"])
+        homeSubscription.cancel()
+        localSubscription?.cancel()
+    }
+
     @Test func unsubscribesWhenLastOfStreamLeavesAndClosesWhenNoneLeft() async throws {
         let connector = ScriptedConnector([.init()])
         let hub = makeHub(connector)
