@@ -588,7 +588,7 @@ final class MediaViewerController: UIViewController {
         pageController.viewControllers?.first as? MediaPageController
     }
 
-    /// メニューの項目。並びは設定のメディアのメニューに従い、ループ再生は設定の並びの後ろに置く。決まりはdocs/menus.mdの「メディアのメニュー」にある。
+    /// メニューの項目。並びは設定のメディアのメニューに従い、ループ再生と画像の文字の選択は設定の並びの後ろに置く。決まりはdocs/menus.mdの「メディアのメニュー」にある。
     /// 画像の共有や保存は、元のファイルが届くまで選べなくする。動画などは選んでから落とす。
     /// 保存は写真に入る画像、動画、GIFだけ、翻訳は画像から文字を読み取れたときだけ、代替テキストは付いているときだけ出す。
     func menuElements() -> [UIMenuElement] {
@@ -627,6 +627,9 @@ final class MediaViewerController: UIViewController {
         var elements = menu.elements(layout: settings.mediaMenuLayout)
         if let loop = (pages[currentIndex] as? PlayerPageController)?.loopMenuAction() {
             elements.append(UIMenu(options: .displayInline, children: [loop]))
+        }
+        if let liveText = currentImagePage?.liveTextMenuAction() {
+            elements.append(UIMenu(options: .displayInline, children: [liveText]))
         }
         return elements
     }
@@ -671,7 +674,8 @@ final class MediaViewerController: UIViewController {
             self?.beginEditingDescription()
         }
         let loop = (pages[currentIndex] as? PlayerPageController)?.loopMenuAction()
-        return [edit] + [loop].compactMap(\.self) + editing.menuElements(currentItem.id)
+        let liveText = currentImagePage?.liveTextMenuAction()
+        return [edit] + [loop, liveText].compactMap(\.self) + editing.menuElements(currentItem.id)
     }
 
     /// 代替テキストの入力欄をキーボードのすぐ上に出して書き始める。
@@ -1502,9 +1506,6 @@ final class ImagePageController: MediaPageController {
     private var analysisTask: Task<Void, Never>?
     /// 元の画像の解析を終えた。文字が見つからなかったときや、解析に失敗したときも含む。対応していない端末では変わらない。
     private(set) var hasFinishedAnalysis = false
-    /// Live Textのボタンの、システムが決めた既定の余白。`supplementaryInterfaceContentInsets`を上書きすると既定の余白が消えるため、説明に重なる分はこれに足す。
-    /// 余白は画面上のポイントで指定する。画像を拡大していても、拡大率で割り戻さない。
-    private lazy var baseLiveTextInsets = liveText.supplementaryInterfaceContentInsets
     /// 元のファイルをキャッシュに置き終えていれば、そのURL。共有や保存はこのURLでキャッシュからコピーを取る。
     private(set) var originalURL: URL? {
         didSet {
@@ -1543,30 +1544,14 @@ final class ImagePageController: MediaPageController {
         return transcript
     }
 
-    /// 画像だけにしたときは、Live Textのボタンも隠す。
-    override func setChromeHidden(_ hidden: Bool, animated: Bool) {
-        liveText.setSupplementaryInterfaceHidden(hidden, animated: animated)
-    }
-
-    override var bottomCoveredHeight: CGFloat {
-        didSet { updateLiveTextInsets() }
-    }
-
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        updateLiveTextInsets()
-    }
-
-    /// 画面の下端まで届く画像では、Live Textのボタンが画像の右下に出て説明に重なるため、重なる分だけ上へずらす。
-    /// ボタンは安全領域をもとから避けているため、説明のうち安全領域に入っている分は数えない。
-    private func updateLiveTextInsets() {
-        guard let imageView = liveText.view, imageView.bounds.height > 0 else { return }
-        let imageFrame = imageView.convert(imageView.bounds, to: view)
-        let overlap = max(imageFrame.maxY - (view.bounds.maxY - bottomCoveredHeight), 0)
-        let extra = max(min(overlap, bottomCoveredHeight - view.safeAreaInsets.bottom), 0)
-        var insets = baseLiveTextInsets
-        insets.bottom += extra
-        liveText.supplementaryInterfaceContentInsets = insets
+    /// 読み取った文字やコードを光らせて、どこにあるかを見せる状態を切り替える。読み取れるものがなければnil。
+    /// Live Textのボタンは画像に重なって見る邪魔になるため出さず、この項目で代える。光らせなくても、文字やコードは長押しで選べる。
+    func liveTextMenuAction() -> UIAction? {
+        guard liveText.analysis?.hasResults(for: [.text, .machineReadableCode]) == true else { return nil }
+        return UIAction(title: "画像の文字を選択", image: UIImage(systemName: "text.viewfinder"), state: liveText.selectableItemsHighlighted ? .on : .off) { [weak self] _ in
+            guard let self else { return }
+            self.liveText.selectableItemsHighlighted.toggle()
+        }
     }
 
     /// 長押しした位置に文字やリンクがあれば、メニューを出さずにLive Textの選択に任せる。
@@ -1599,6 +1584,7 @@ final class ImagePageController: MediaPageController {
         zoomView.imageAccessibilityLabel = item.description
         view.addSubview(zoomView)
         liveText.preferredInteractionTypes = [.textSelection, .dataDetectors]
+        liveText.isSupplementaryInterfaceHidden = true
         zoomView.addImageInteraction(liveText)
         addLongPressMenu(to: zoomView)
         spinner.color = .white
