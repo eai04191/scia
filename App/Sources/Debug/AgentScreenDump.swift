@@ -171,6 +171,13 @@ enum AgentScreenDump {
     }
 
     private static func appendNavigation(_ controller: UIViewController, to chain: inout [String]) {
+        if let switchTab = controller as? SwitchTabViewController {
+            chain.append(name(of: switchTab))
+            if let current = switchTab.current {
+                appendNavigation(current, to: &chain)
+            }
+            return
+        }
         guard let navigation = controller as? UINavigationController else { return }
         chain.append(contentsOf: navigation.viewControllers.map(name(of:)))
     }
