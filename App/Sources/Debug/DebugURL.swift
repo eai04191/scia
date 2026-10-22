@@ -68,6 +68,8 @@ enum DebugURL: Equatable {
     /// どちらも省ける。シミュレーターのクリップボードが使えないときにも、URLを含む本文などを打たずに用意し、ピッカーを操作せずに添付を用意するため。
     /// 画像はペーストと同じ経路で足すので、サーバーに送る。
     case compose(text: String?, mediaCount: Int)
+    /// `scia-debug://sheet-keyboard`。低い段のシートの中で入力欄にキーボードを出したときの動きを確かめる試作を開く（`SheetKeyboardExperiment`）。
+    case sheetKeyboard
     /// `scia-debug://ticker-loop/on`で、ステータスバーの通知を、出る、出ている、消えるを繰り返して出し続ける。`scia-debug://ticker-loop/off`で止める。
     case statusBarTickerLoop(Bool)
 
@@ -93,6 +95,7 @@ enum DebugURL: Equatable {
         "reset": .reset,
         "settings": .settings,
         "tuning": .tuning,
+        "sheet-keyboard": .sheetKeyboard,
         "ticker-loop/on": .statusBarTickerLoop(true),
         "ticker-loop/off": .statusBarTickerLoop(false),
         "arrivals/hold": .holdArrivals(true),

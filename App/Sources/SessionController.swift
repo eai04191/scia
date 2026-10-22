@@ -1563,6 +1563,9 @@ final class SessionController {
             )
         case .tuning:
             rootViewController.frontmostPresented.presentTuningPanel()
+        case .sheetKeyboard:
+            // 書いている途中のキーボードから開いたときの動きも見るため、投稿欄は閉じない。高さはメディアを選ぶシートの決めた高さと同じにする。
+            SheetKeyboardExperiment.present(from: rootViewController.frontmostPresented, lowHeight: AppDependencies.tuning.value(of: TuningCatalog.composePickerHeight) - (rootViewController.view.window?.safeAreaInsets.bottom ?? 0))
         case .tab(let tab):
             (rootViewController as? UITabBarController)?.selectedIndex = tab == .home ? 0 : 1
             statusBarTicker.reevaluate()

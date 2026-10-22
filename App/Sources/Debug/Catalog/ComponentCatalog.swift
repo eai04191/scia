@@ -16,6 +16,7 @@ enum CatalogComponent: String, CaseIterable {
     case attachmentStrip = "attachment-strip"
     case composeCapsule = "compose-capsule"
     case completionList = "completion-list"
+    case emojiPalette = "emoji-palette"
     case altTextEditor = "alt-text-editor"
     case caption
     case notices
@@ -41,6 +42,7 @@ enum CatalogComponent: String, CaseIterable {
         case .attachmentStrip: "投稿欄の添付のサムネイル"
         case .composeCapsule: "書いていないときの投稿欄"
         case .completionList: "投稿欄の補完の候補"
+        case .emojiPalette: "投稿欄のカスタム絵文字のパレット"
         case .altTextEditor: "代替テキストの入力欄"
         case .caption: "ビューアの説明"
         case .notices: "アプリ内通知のチップの列"
@@ -69,6 +71,7 @@ enum CatalogComponent: String, CaseIterable {
         case .attachmentStrip: AttachmentStripCatalog.states()
         case .composeCapsule: ComposeCapsuleCatalog.states()
         case .completionList: CompletionListCatalog.states()
+        case .emojiPalette: EmojiPaletteCatalog.states()
         case .altTextEditor: AltTextEditorCatalog.states()
         case .caption: CaptionCatalog.states()
         case .notices: NoticeCatalog.states()
