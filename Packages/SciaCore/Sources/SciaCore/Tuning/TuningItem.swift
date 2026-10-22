@@ -967,6 +967,15 @@ public enum TuningCatalog {
         defaultValue: 1.2
     )
 
+    /// メニューの並びの設定で、横並びの区切り線の知らせが出たり消えたりして、行が伸び縮みする時間。
+    public static let menuLayoutNoteDuration = NumberTuning(
+        id: "settings.menuLayoutNoteDuration",
+        title: "メニューの並びの設定で、横並びの知らせが出入りする時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.25
+    )
+
     public static let composeExpandDuration = NumberTuning(
         id: "compose.expandDuration",
         title: "投稿欄を広げる・戻す時間（秒）",
@@ -1426,6 +1435,9 @@ public enum TuningCatalog {
             .number(completionMinimumQuery),
             .number(completionEmojiMinimumQuery),
             .number(completionFadeDuration),
+        ]),
+        TuningSection(id: "settings", title: "設定画面", items: [
+            .number(menuLayoutNoteDuration),
         ]),
         TuningSection(id: "compose.media", title: "投稿欄：送る前に縮める", items: [
             .number(mediaImageQuality),

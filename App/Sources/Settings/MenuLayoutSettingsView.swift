@@ -1,5 +1,6 @@
 import SciaCore
 import SwiftUI
+import UIKit
 
 /// 並びの設定画面に出す、項目の名前と印。
 protocol MenuItemPresentable {
@@ -24,34 +25,251 @@ extension MenuItemPresentable {
 }
 
 /// 長押しのメニューや投稿欄の＋の並びを変える画面。項目、区切り線、「その他」の境目を1本のリストで並べ替え、項目ごとに表示を切り替える。決まりはdocs/menus.mdにある。
+/// 中身は`MenuLayoutViewController`で、UIKitのリストで作る。SwiftUIの`List`では、つまみは編集モードでしか出ず、編集モードでは行のスイッチが押せなくなるため、
+/// スイッチを押せたまま、つまみをつかんですぐ並べ替えられる形にできない。
 struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     let title: String
     @Binding var layout: MenuLayout<Item>
-    /// 区切り線は同じ値が並ぶため、リストで見分けるIDを行ごとに振る。
-    @State private var rows: [Row]
-    /// 行の中での、項目の名前の左端の位置。行どうしの線をここから引き、リストの標準の線と同じ位置に揃える。
-    @State private var lineLeading: CGFloat = 0
-    /// リストの標準の行と同じ余白。リストの上下の余白を0にして、同じ量を行の中身に持たせ、中身の下端を行の下端に揃える。
-    private let rowInsets = EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16)
 
-    private struct Row: Identifiable, Equatable {
+    var body: some View {
+        MenuLayoutList(layout: $layout)
+            .ignoresSafeArea()
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct MenuLayoutList<Item: MenuItemKind & MenuItemPresentable>: UIViewControllerRepresentable {
+    @Binding var layout: MenuLayout<Item>
+
+    func makeUIViewController(context: Context) -> MenuLayoutViewController<Item> {
+        MenuLayoutViewController(layout: layout) { layout = $0 }
+    }
+
+    func updateUIViewController(_ controller: MenuLayoutViewController<Item>, context: Context) {
+        controller.onChange = { layout = $0 }
+        controller.update(layout)
+    }
+}
+
+/// 汎用のクラスは、拡張でObjective-Cのプロトコルに準拠できないため、delegateのメソッドも本体に置く。
+final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: UIViewController, UICollectionViewDelegate {
+    var onChange: (MenuLayout<Item>) -> Void
+
+    /// 区切り線は同じ値が並ぶため、リストで見分けるIDを行ごとに振る。
+    private struct Row: Identifiable {
         let id = UUID()
         var element: MenuLayout<Item>.Element
     }
 
-    /// 項目どうしの間だけに線を引く。区切り線の行は自分が線なので、その上下には引かない。いちばん下の行にも引かない。
-    private var rowsWithBottomLine: Set<Row.ID> {
-        Set(zip(rows, rows.dropFirst()).compactMap { row, next in
-            !row.element.isSeparator && !next.element.isSeparator ? row.id : nil
-        })
+    private enum Section {
+        case rows
+        case actions
     }
+
+    private enum Cell: Hashable {
+        case row(UUID)
+        case addSeparator
+        case addRowSeparator
+        case reset
+    }
+
+    private var rows: [Row]
+    private var dataSource: UICollectionViewDiffableDataSource<Section, Cell>?
+    private lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: makeLayout())
 
     /// メニューで横に並ぶ項目の数。これを超えた項目は、横並びの下にふだんの行として続く。
     private let rowCapacity = 3
 
+    init(layout: MenuLayout<Item>, onChange: @escaping (MenuLayout<Item>) -> Void) {
+        rows = layout.elements.map { Row(element: $0) }
+        self.onChange = onChange
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        collectionView.frame = view.bounds
+        collectionView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        collectionView.delegate = self
+        collectionView.hidesTopEdgeEffectOnMac()
+        view.addSubview(collectionView)
+        dataSource = makeDataSource()
+        applySnapshot(animated: false)
+    }
+
+    /// 別のウィンドウで同じ設定を変えたら、行も作り直す。古い行のまま保存すると、そちらの変更を上書きしてしまうため。
+    func update(_ layout: MenuLayout<Item>) {
+        guard layout.elements != rows.map(\.element) else { return }
+        rows = layout.elements.map { Row(element: $0) }
+        applySnapshot(animated: false)
+    }
+
+    private func makeLayout() -> UICollectionViewLayout {
+        var configuration = UICollectionLayoutListConfiguration(appearance: .insetGrouped)
+        configuration.footerMode = .supplementary
+        // 項目どうしの間だけに線を引く。区切り線の行は自分が線なので、その上下には引かない。
+        configuration.itemSeparatorHandler = { [weak self] indexPath, separator in
+            var separator = separator
+            guard let self, indexPath.section == 0 else { return separator }
+            let isSeparator = { (index: Int) in self.rows.indices.contains(index) && self.rows[index].element.isSeparator }
+            if isSeparator(indexPath.item) || isSeparator(indexPath.item - 1) {
+                separator.topSeparatorVisibility = .hidden
+            }
+            if isSeparator(indexPath.item) || isSeparator(indexPath.item + 1) {
+                separator.bottomSeparatorVisibility = .hidden
+            }
+            return separator
+        }
+        configuration.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
+            guard let self, indexPath.section == 0, rows.indices.contains(indexPath.item), rows[indexPath.item].element.isSeparator else { return nil }
+            let delete = UIContextualAction(style: .destructive, title: "削除") { [weak self, id = rows[indexPath.item].id] _, _, completion in
+                self?.removeRow(id: id)
+                completion(true)
+            }
+            return UISwipeActionsConfiguration(actions: [delete])
+        }
+        return UICollectionViewCompositionalLayout.list(using: configuration)
+    }
+
+    private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, Cell> {
+        let rowRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, UUID> { [weak self] cell, _, id in
+            guard let self, let row = rows.first(where: { $0.id == id }) else { return }
+            configure(cell, for: row)
+        }
+        let actionRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, Cell> { cell, _, item in
+            var content = UIListContentConfiguration.cell()
+            switch item {
+            case .addSeparator:
+                content.text = "区切り線を足す"
+                content.textProperties.color = .tintColor
+            case .addRowSeparator:
+                content.text = "横並びの区切り線を足す"
+                content.textProperties.color = .tintColor
+            case .reset:
+                content.text = "最初の並びに戻す"
+                content.textProperties.color = .systemRed
+            case .row:
+                break
+            }
+            cell.contentConfiguration = content
+        }
+        let footerRegistration = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
+            elementKind: UICollectionView.elementKindSectionFooter
+        ) { footer, _, indexPath in
+            var content = UIListContentConfiguration.footer()
+            if indexPath.section == 0 {
+                content.text = Item.supportsRowSeparators
+                    ? "右のつまみをドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。横並びの区切り線より下のまとまりは、メニューの中で横に並びます。"
+                    : "右のつまみをドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。"
+            }
+            footer.contentConfiguration = content
+        }
+
+        let dataSource = UICollectionViewDiffableDataSource<Section, Cell>(collectionView: collectionView) { collectionView, indexPath, item in
+            switch item {
+            case .row(let id):
+                collectionView.dequeueConfiguredReusableCell(using: rowRegistration, for: indexPath, item: id)
+            case .addSeparator, .addRowSeparator, .reset:
+                collectionView.dequeueConfiguredReusableCell(using: actionRegistration, for: indexPath, item: item)
+            }
+        }
+        dataSource.supplementaryViewProvider = { collectionView, _, indexPath in
+            collectionView.dequeueConfiguredReusableSupplementary(using: footerRegistration, for: indexPath)
+        }
+        dataSource.reorderingHandlers.canReorderItem = { item in
+            if case .row = item { true } else { false }
+        }
+        dataSource.reorderingHandlers.didReorder = { [weak self] transaction in
+            guard let self else { return }
+            let rowsByID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
+            rows = transaction.finalSnapshot.itemIdentifiers(inSection: .rows).compactMap { cell in
+                if case .row(let id) = cell { rowsByID[id] } else { nil }
+            }
+            save()
+            refreshDependentRows()
+        }
+        return dataSource
+    }
+
+    private func configure(_ cell: UICollectionViewListCell, for row: Row) {
+        let reorder = UICellAccessory.reorder(displayed: .always, options: .init(showsVerticalSeparator: false))
+        switch row.element {
+        case .item(let item, let isVisible):
+            var content = UIListContentConfiguration.subtitleCell()
+            content.text = item.title
+            content.secondaryText = item.note
+            content.secondaryTextProperties.color = .secondaryLabel
+            content.secondaryTextProperties.font = .preferredFont(forTextStyle: .footnote)
+            content.image = UIImage(systemName: item.symbolName)
+            cell.contentConfiguration = content
+            let toggle = UISwitch()
+            toggle.isOn = isVisible
+            toggle.addAction(UIAction { [weak self, id = row.id] action in
+                guard let toggle = action.sender as? UISwitch else { return }
+                self?.setVisible(toggle.isOn, id: id)
+            }, for: .valueChanged)
+            cell.accessories = [.customView(configuration: .init(customView: toggle, placement: .trailing())), reorder]
+        case .separator:
+            cell.contentConfiguration = UIHostingConfiguration { SeparatorRow() }
+            cell.accessories = [reorder]
+        case .rowSeparator:
+            let count = visibleItemCount(after: row.id)
+            cell.contentConfiguration = UIHostingConfiguration { RowSeparatorRow(count: count, capacity: rowCapacity) }
+            cell.accessories = [reorder]
+        case .more:
+            var content = UIListContentConfiguration.subtitleCell()
+            content.text = Item.moreBoundaryTitle
+            content.secondaryText = Item.moreBoundaryNote
+            content.secondaryTextProperties.color = .secondaryLabel
+            content.secondaryTextProperties.font = .preferredFont(forTextStyle: .footnote)
+            content.image = UIImage(systemName: Item.moreBoundarySymbolName)
+            cell.contentConfiguration = content
+            cell.accessories = [reorder]
+        }
+    }
+
+    /// 横並びの知らせは、まとまりの項目の数で出たり消えたりして行の高さが変わるため、行を足したり消したりし終わってから描き直す。
+    /// 同じ`apply`で描き直すと、足したり消したりする行が動かずに一度に入れ替わる。
+    private func applySnapshot(animated: Bool) {
+        var snapshot = NSDiffableDataSourceSnapshot<Section, Cell>()
+        snapshot.appendSections([.rows, .actions])
+        snapshot.appendItems(rows.map { .row($0.id) }, toSection: .rows)
+        snapshot.appendItems(Item.supportsRowSeparators ? [.addSeparator, .addRowSeparator, .reset] : [.addSeparator, .reset], toSection: .actions)
+        dataSource?.apply(snapshot, animatingDifferences: animated) { [weak self] in self?.refreshRowSeparatorNotes() }
+    }
+
+    /// 横並びの知らせと行どうしの線は、ほかの行の並びや表示で変わるため、並びが変わるたびに描き直す。
+    private func refreshDependentRows() {
+        refreshRowSeparatorNotes()
+        collectionView.collectionViewLayout.invalidateLayout()
+    }
+
+    /// 横並びの知らせは、まとまりの項目の表示を切り替えても変わる。
+    /// data sourceへの`apply`で描き直すと、ほかの行のスイッチまで以後のタップに反応しなくなったため、見えているセルを直接描き直す。
+    /// 見えていない行は、出てくるときに今の行から作られる。
+    /// 知らせが出たり消えたりすると行の高さが変わるため、下の行が一度に跳ねないよう、伸び縮みを動かす。
+    private func refreshRowSeparatorNotes() {
+        // 視差効果を減らす設定では動かさない（docs/vision.mdの「一覧の動き」）。
+        let duration = UIAccessibility.isReduceMotionEnabled ? 0 : AppDependencies.tuning.value(of: TuningCatalog.menuLayoutNoteDuration)
+        UIView.animate(withDuration: duration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) { [self] in
+            for row in rows where row.element == .rowSeparator {
+                guard let indexPath = dataSource?.indexPath(for: .row(row.id)),
+                      let cell = collectionView.cellForItem(at: indexPath) as? UICollectionViewListCell else { continue }
+                configure(cell, for: row)
+            }
+            collectionView.layoutIfNeeded()
+        }
+    }
+
     /// 横並びの区切り線から、次の区切り線か「その他」の境目までにある、表示する項目の数。
-    private func visibleItemCount(after row: Row) -> Int {
-        guard let index = rows.firstIndex(where: { $0.id == row.id }) else { return 0 }
+    private func visibleItemCount(after id: UUID) -> Int {
+        guard let index = rows.firstIndex(where: { $0.id == id }) else { return 0 }
         var count = 0
         for next in rows[(index + 1)...] {
             switch next.element {
@@ -62,172 +280,111 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
         return count
     }
 
-    init(title: String, layout: Binding<MenuLayout<Item>>) {
-        self.title = title
-        _layout = layout
-        _rows = State(initialValue: layout.wrappedValue.elements.map { Row(element: $0) })
+    private func setVisible(_ isVisible: Bool, id: UUID) {
+        guard let index = rows.firstIndex(where: { $0.id == id }), case .item(let item, _) = rows[index].element else { return }
+        rows[index].element = .item(item, isVisible: isVisible)
+        save()
+        refreshRowSeparatorNotes()
     }
 
-    var body: some View {
-        List {
-            Section {
-                ForEach(rows) { row in
-                    rowView(binding(for: row))
-                        // スイッチのない行（「その他」の境目）も横いっぱいに広げ、線の右端を揃える。
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .coordinateSpace(.named(Self.rowSpace))
-                        .padding(.vertical, rowInsets.top)
-                        .overlay(alignment: .bottomLeading) {
-                            if rowsWithBottomLine.contains(row.id) {
-                                line.padding(.leading, lineLeading)
-                            }
-                        }
-                        // 行どうしの線は、リストの線を使わずに、行の中身の下端に自分で引く。
-                        // リストの線や行の背景（listRowBackground）は、リストが行ごとの設定として持っていて、並べ替えや削除のあとに隣の行の設定を組み直さないことがあり、
-                        // 出ないはずの線が残ったり、出るはずの線が消えたりした。行を作り直して組み直させると、項目がちらついた。
-                        // 画面での位置を測って境目に引く形も、削除や並べ替えでリストが行を動かしたときに位置が測り直されず、線がずれて隠れた。
-                        // 中身の下端を行の下端に揃えれば、位置を測らずに済み、線は行と一緒に動く。
-                        .listRowInsets(EdgeInsets(top: 0, leading: rowInsets.leading, bottom: 0, trailing: rowInsets.trailing))
-                        .listRowSeparator(.hidden)
-                        .deleteDisabled(!row.element.isSeparator)
-                }
-                .onMove { source, destination in
-                    rows.move(fromOffsets: source, toOffset: destination)
-                    save()
-                }
-                .onDelete { offsets in
-                    rows.remove(atOffsets: offsets)
-                    save()
-                }
-            } footer: {
-                Text(Item.supportsRowSeparators
-                    ? "長押ししてドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。横並びの区切り線より下のまとまりは、メニューの中で横に並びます。"
-                    : "長押ししてドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。")
-            }
-            Section {
-                Button("区切り線を足す") {
-                    // 足した区切り線が見つけやすいよう、「その他」のすぐ上に置く。
-                    let index = rows.firstIndex { $0.element == .more } ?? rows.endIndex
-                    rows.insert(Row(element: .separator), at: index)
-                    save()
-                }
-                if Item.supportsRowSeparators {
-                    Button("横並びの区切り線を足す") {
-                        // 返信やお気に入りのようなよく使う項目を、メニューのいちばん上に横に並べることが多いため、先頭に置く。
-                        rows.insert(Row(element: .rowSeparator), at: rows.startIndex)
-                        save()
-                    }
-                }
-                Button("最初の並びに戻す", role: .destructive) {
-                    rows = Item.defaultLayout.elements.map { Row(element: $0) }
-                    save()
-                }
-            }
-        }
-        .topEdgeEffectHiddenOnMac()
-        // 別のウィンドウで同じ設定を変えたら、行も作り直す。古い行のまま保存すると、そちらの変更を上書きしてしまうため。
-        .onChange(of: layout) { _, newValue in
-            guard newValue.elements != rows.map(\.element) else { return }
-            rows = newValue.elements.map { Row(element: $0) }
-        }
-        // 編集モードにはしない。編集モードのリストでは行のスイッチが押せなくなるため。並べ替えは長押しのドラッグで、区切り線の削除はスワイプでできる。
-        .navigationTitle(title)
-        .navigationBarTitleDisplayMode(.inline)
+    private func removeRow(id: UUID) {
+        rows.removeAll { $0.id == id }
+        save()
+        applySnapshot(animated: !UIAccessibility.isReduceMotionEnabled)
     }
 
-    @ViewBuilder
-    private func rowView(_ row: Binding<Row>) -> some View {
-        switch row.wrappedValue.element {
-        case .item(let item, let isVisible):
-            Toggle(isOn: Binding {
-                isVisible
-            } set: { newValue in
-                row.wrappedValue.element = .item(item, isVisible: newValue)
-                save()
-            }) {
-                Label {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.title)
-                        if let note = item.note {
-                            Text(note)
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .onGeometryChange(for: CGFloat.self) { $0.frame(in: .named(Self.rowSpace)).minX } action: { lineLeading = $0 }
-                } icon: {
-                    Image(systemName: item.symbolName)
-                }
-            }
-        case .separator:
-            HStack(spacing: 12) {
-                line
-                Text("区切り線")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .fixedSize()
-                line
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("区切り線")
-        case .rowSeparator:
-            let count = visibleItemCount(after: row.wrappedValue)
-            VStack(spacing: 4) {
-                HStack(spacing: 12) {
-                    line
-                    Label("横並び", systemImage: "rectangle.split.3x1")
-                        // リストの行の中では、指定しないとアイコンだけになる。
-                        .labelStyle(.titleAndIcon)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .fixedSize()
-                    line
-                }
-                if count > rowCapacity {
-                    Text("横に並ぶのは\(rowCapacity)個までです。\(rowCapacity + 1)個目からは、その下にふだんの行で出ます")
-                        .font(.footnote)
-                        .foregroundStyle(.orange)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(count > rowCapacity ? "横並びの区切り線。横に並ぶのは\(rowCapacity)個までです" : "横並びの区切り線")
-        case .more:
-            Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(Item.moreBoundaryTitle)
-                    Text(Item.moreBoundaryNote)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-            } icon: {
-                Image(systemName: Item.moreBoundarySymbolName)
-            }
-        }
-    }
-
-    /// 行のスイッチから`rows`の同じ行を書き換える。並べ替えたあとも、IDで行を探す。
-    private func binding(for row: Row) -> Binding<Row> {
-        Binding {
-            rows.first { $0.id == row.id } ?? row
-        } set: { newValue in
-            guard let index = rows.firstIndex(where: { $0.id == row.id }) else { return }
-            rows[index] = newValue
-        }
-    }
-
-    private nonisolated static var rowSpace: String { "row" }
-
-    private let lineThickness: CGFloat = 1
-
-    private var line: some View {
-        Rectangle()
-            .fill(Color(uiColor: .separator))
-            .frame(height: lineThickness)
+    private func insert(_ element: MenuLayout<Item>.Element, at index: Int) {
+        rows.insert(Row(element: element), at: index)
+        save()
+        applySnapshot(animated: !UIAccessibility.isReduceMotionEnabled)
     }
 
     private func save() {
-        layout = MenuLayout(elements: rows.map(\.element))
+        onChange(MenuLayout(elements: rows.map(\.element)))
+    }
+
+    func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        indexPath.section == 1
+    }
+
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        collectionView.deselectItem(at: indexPath, animated: true)
+        switch dataSource?.itemIdentifier(for: indexPath) {
+        case .addSeparator:
+            // 足した区切り線が見つけやすいよう、「その他」のすぐ上に置く。
+            insert(.separator, at: rows.firstIndex { $0.element == .more } ?? rows.endIndex)
+        case .addRowSeparator:
+            // 返信やお気に入りのようなよく使う項目を、メニューのいちばん上に横に並べることが多いため、先頭に置く。
+            insert(.rowSeparator, at: rows.startIndex)
+        case .reset:
+            rows = Item.defaultLayout.elements.map { Row(element: $0) }
+            save()
+            applySnapshot(animated: !UIAccessibility.isReduceMotionEnabled)
+        case .row, nil:
+            break
+        }
+    }
+
+    /// 並べ替えは並びの中だけで行い、下のボタンの間には入れない。
+    func collectionView(
+        _ collectionView: UICollectionView,
+        targetIndexPathForMoveOfItemFromOriginalIndexPath originalIndexPath: IndexPath,
+        atCurrentIndexPath currentIndexPath: IndexPath,
+        toProposedIndexPath proposedIndexPath: IndexPath
+    ) -> IndexPath {
+        guard proposedIndexPath.section != 0 else { return proposedIndexPath }
+        return IndexPath(item: rows.count - 1, section: 0)
+    }
+}
+
+private struct SeparatorRow: View {
+    var body: some View {
+        HStack(spacing: 12) {
+            SeparatorLine()
+            Text("区切り線")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .fixedSize()
+            SeparatorLine()
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("区切り線")
+    }
+}
+
+private struct RowSeparatorRow: View {
+    let count: Int
+    let capacity: Int
+
+    var body: some View {
+        VStack(spacing: 4) {
+            HStack(spacing: 12) {
+                SeparatorLine()
+                Label("横並び", systemImage: "rectangle.split.3x1")
+                    // リストの行の中では、指定しないとアイコンだけになる。
+                    .labelStyle(.titleAndIcon)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                SeparatorLine()
+            }
+            if count > capacity {
+                Text("横に並ぶのは\(capacity)個までです。\(capacity + 1)個目からは、その下にふだんの行で出ます")
+                    .font(.footnote)
+                    .foregroundStyle(.orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(count > capacity ? "横並びの区切り線。横に並ぶのは\(capacity)個までです" : "横並びの区切り線")
+    }
+}
+
+private struct SeparatorLine: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color(uiColor: .separator))
+            .frame(height: 1)
     }
 }
 
