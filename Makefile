@@ -3,7 +3,7 @@ SCHEME := Scia
 DERIVED_DATA := DerivedData
 SIM_DESTINATION ?= generic/platform=iOS Simulator
 
-.PHONY: generate lint test-core build warnings test sim-keyboard promo readme-icons update-known-servers check clean
+.PHONY: generate lint test-core build warnings test sim-keyboard promo readme-icons update-known-servers check check-steps hooks clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -64,7 +64,15 @@ update-known-servers:
 	Tools/update-known-servers.sh
 
 ## 変更を報告する前に通すべき検証
-check: lint test-core build warnings
+## 通ったら、確かめた作業ツリーの中身を覚える。make hooksを入れたcheckoutでは、覚えた中身のcommitしかmainに入れられない
+check:
+	@tree=$$(Tools/check-stamp.sh tree) && $(MAKE) --no-print-directory check-steps && Tools/check-stamp.sh record "$$tree"
+
+check-steps: lint test-core build warnings
+
+## ローカルのmainを、make checkが通った中身のcommitにしか動かさないhookを入れる。worktreeにも効く
+hooks:
+	ln -sfn ../../Tools/git-hooks/reference-transaction "$$(git rev-parse --git-common-dir)/hooks/reference-transaction"
 
 clean:
 	rm -rf $(DERIVED_DATA) $(PROJECT) Packages/SciaCore/.build

@@ -1,0 +1,65 @@
+#!/bin/bash
+# ローカルのmainを、`make check`が通った中身（Tools/check-stamp.shが覚えたtree）のcommitにしか動かさない。`make hooks`で入れる。
+# mainにあったcommitへ戻すのと、mainを消すのは止めない。
+# fast-forwardのmergeは、作業ツリーとindexを書き換えてからmainを動かすので、mainを動かす時点で止めると、入れようとした中身が作業ツリーに残る。
+# そのため、mergeとpullは、作業ツリーに触る前に更新するORIG_HEADの時点で、相手のcommitを調べて止める。
+# 相手は、reflogに残すために渡されるGIT_REFLOG_ACTION（`merge <branch>`、`pull ...`）から読む。読めないとき（`git merge`だけで上流を取り込むときなど）は、mainを動かす時点で止まり、作業ツリーに中身が残る。
+# 新しいtreeになるmerge commitは、誰もmake checkを通していないので止める。mainへはbranchをmainへrebaseしてからfast-forwardで入れる。
+set -euo pipefail
+
+[[ "${1:-}" == prepared ]] || exit 0
+
+dir="$(git rev-parse --git-common-dir)/scia-check"
+
+checked() {
+    [[ -e "$dir/$(git rev-parse "$1^{tree}")" ]]
+}
+
+reject() {
+    echo "error: $1" >&2
+    exit 1
+}
+
+not_checked_message() {
+    echo "$(git log -1 --format='%h %s' "$1") の中身は、make checkが通っていないので、mainに入れません。このcommitをcheckoutしたworktreeでmake checkを通してから、入れ直してください"
+}
+
+# mergeとpullで取り込もうとしている相手のcommitを出す
+merge_targets() {
+    local action=${GIT_REFLOG_ACTION:-}
+    case "$action" in
+        "merge "*)
+            local arg
+            for arg in ${action#merge }; do
+                [[ "$arg" == -* ]] && continue
+                # `-m <メッセージ>`のように、commitを指さない引数は飛ばす
+                git rev-parse -q --verify "$arg^{commit}" || true
+            done
+            ;;
+        "pull "* | pull)
+            git rev-parse -q --verify "FETCH_HEAD^{commit}" || true
+            ;;
+    esac
+}
+
+main=$(git rev-parse -q --verify refs/heads/main || true)
+
+while read -r _old new ref; do
+    case "$ref" in
+        ORIG_HEAD)
+            [[ "$(git symbolic-ref -q HEAD || true)" == refs/heads/main ]] || continue
+            for target in $(merge_targets); do
+                # 取り込み済みのcommitなら、mainは動かない
+                git merge-base --is-ancestor "$target" HEAD && continue
+                git merge-base --is-ancestor HEAD "$target" ||
+                    reject "mainへはfast-forwardでだけ入れます。$(git log -1 --format='%h' "$target")をmainへrebaseし、make checkを通してから入れ直してください"
+                checked "$target" || reject "$(not_checked_message "$target")"
+            done
+            ;;
+        refs/heads/main)
+            [[ "$new" =~ ^0+$ ]] && continue
+            [[ -n "$main" ]] && git merge-base --is-ancestor "$new" "$main" && continue
+            checked "$new" || reject "$(not_checked_message "$new")"
+            ;;
+    esac
+done

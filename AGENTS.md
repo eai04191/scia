@@ -22,7 +22,8 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make test-core`: SciaCoreのテスト（macOS上、シミュレーター不要）
 - `make build`: シミュレーター向けにビルドする
 - `make test SIM='<使う端末>'`: シミュレーターでテストする。先に端末のハードウェアキーボードをつなぐ
-- `make check`: 変更を報告する前に必ず通す
+- `make check`: 変更を報告する前に必ず通す。通ると、確かめた作業ツリーの中身（commitしていない変更も含む）を覚える
+- `make hooks`: ローカルのmainを、`make check`が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く
 
 ## シミュレーター
 
@@ -110,4 +111,5 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 開発のための変更（チューニングパネル、違和感レポート、検証ハーネス、ビルドやlintの設定など）を`feat`・`fix`・`perf`で書くときは、`feat(dev):`、`fix(dev):`のようにdev scopeを付けてリリースノートから外す
 - 使う人向けの変更と開発のための変更は別のcommitに分ける
 - pushはユーザーが行う。agentはcommitまでで止め、pushやpush承認の依頼はしない
+- mainへは、branchをmainへrebaseし、そのworktreeで`make check`を通してから、fast-forwardで入れる。通したあとにファイルを変えたり、rebaseで中身が変わったりしたら、通し直す。`make hooks`のhookは、通っていない中身のcommitとmerge commitをmainに入れず、作業ツリーに触る前に止める
 - worktreeの中では、fixup commitを作ることも、`rebase --autosquash`で元のcommitへまとめることも、確認なしで行ってよい。後ろに載ったユーザーのcommitのhashが作り直されても構わない
