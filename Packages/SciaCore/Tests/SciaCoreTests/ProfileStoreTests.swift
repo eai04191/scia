@@ -103,6 +103,19 @@ struct ProfileStoreTests {
         #expect(store.followState == .unknown)
     }
 
+    @Test func editedAccountReplacesOnlySameAccount() throws {
+        let known = try account()
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, api: makeAPI(account: known))
+        let edited = Account(id: "2", username: "bob", acct: "bob", displayName: "編集したBob", avatar: known.avatar)
+        let other = Account(id: "3", username: "carol", acct: "carol", displayName: "Carol", avatar: known.avatar)
+
+        store.apply(edited: other)
+        #expect(store.account == known)
+
+        store.apply(edited: edited)
+        #expect(store.account == edited)
+    }
+
     @Test func loadProfileReplacesAccountRelationshipAndPinned() async throws {
         let fresh = try account(statusesCount: 42)
         let pinned = try pinnedStatus()

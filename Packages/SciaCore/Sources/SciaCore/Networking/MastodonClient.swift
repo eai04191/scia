@@ -113,6 +113,13 @@ public struct MastodonClient: Sendable {
                     let maxMediaAttachments: Int?
                     let charactersReservedPerUrl: Int?
                 }
+                struct Accounts: Decodable {
+                    let maxDisplayNameLength: Int?
+                    let maxNoteLength: Int?
+                    let maxProfileFields: Int?
+                    let profileFieldNameLimit: Int?
+                    let profileFieldValueLimit: Int?
+                }
                 struct MediaAttachments: Decodable {
                     let supportedMimeTypes: [String]?
                     let descriptionLimit: Int?
@@ -123,6 +130,7 @@ public struct MastodonClient: Sendable {
                     let videoFrameRateLimit: Int?
                 }
                 let urls: URLs
+                let accounts: Accounts?
                 let statuses: Statuses?
                 let mediaAttachments: MediaAttachments?
             }
@@ -138,6 +146,13 @@ public struct MastodonClient: Sendable {
             maxMediaAttachments: configuration.statuses?.maxMediaAttachments ?? 4,
             mediaDescriptionLimit: configuration.mediaAttachments?.descriptionLimit ?? 1500,
             supportedMediaTypes: configuration.mediaAttachments?.supportedMimeTypes,
+            profileLimits: ProfileLimits(
+                displayName: configuration.accounts?.maxDisplayNameLength ?? ProfileLimits.beforeMastodon46.displayName,
+                note: configuration.accounts?.maxNoteLength ?? ProfileLimits.beforeMastodon46.note,
+                fields: configuration.accounts?.maxProfileFields ?? ProfileLimits.beforeMastodon46.fields,
+                fieldName: configuration.accounts?.profileFieldNameLimit ?? ProfileLimits.beforeMastodon46.fieldName,
+                fieldValue: configuration.accounts?.profileFieldValueLimit ?? ProfileLimits.beforeMastodon46.fieldValue
+            ),
             // 上限はサーバーごとに変えられていることが多いので、返さない項目をMastodonの既定値で補わない。
             mediaLimits: MediaLimits(
                 imageSizeLimit: configuration.mediaAttachments?.imageSizeLimit,
@@ -388,6 +403,52 @@ public struct MastodonClient: Sendable {
             let id: String
         }
         _ = try await get(Verified.self, path: "api/v1/accounts/verify_credentials", query: [])
+    }
+
+    // MARK: - プロフィールの編集
+
+    /// 自分のプロフィールを、編集できる平文と一緒に読む。
+    /// https://docs.joinmastodon.org/methods/accounts/#verify_credentials
+    public func profileSource() async throws -> ProfileSource {
+        try await get(ProfileSource.self, path: "api/v1/accounts/verify_credentials", query: []).0
+    }
+
+    /// プロフィールを保存し、保存したあとのプロフィールを返す。画像を消すときは、ほかの項目を保存してから消す。
+    /// 消すのは別のAPIで、保存と1度には送れないため。
+    /// https://docs.joinmastodon.org/methods/accounts/#update_credentials
+    public func updateProfile(_ draft: ProfileDraft) async throws -> ProfileSource {
+        var form = MultipartFormData()
+        form.append(name: "display_name", value: draft.displayName)
+        form.append(name: "note", value: draft.note)
+        form.append(name: "locked", value: draft.locked ? "true" : "false")
+        form.append(name: "bot", value: draft.bot ? "true" : "false")
+        // 補足情報は送った並びで置き換わる。送らないと変わらないので、全部消すときは空の行を1つ送る。空の行はサーバーが捨てる。
+        let fields = draft.sentFields.isEmpty ? [ProfileSource.Field(name: "", value: "")] : draft.sentFields
+        for (index, field) in fields.enumerated() {
+            form.append(name: "fields_attributes[\(index)][name]", value: field.name)
+            form.append(name: "fields_attributes[\(index)][value]", value: field.value)
+        }
+        for (name, change) in [("avatar", draft.avatar), ("header", draft.header)] {
+            guard case .replace(let upload) = change else { continue }
+            form.append(name: name, filename: upload.filename, mimeType: upload.mimeType, data: upload.data)
+        }
+        var request = URLRequest(url: credential.instance.appending(path: "api/v1/accounts/update_credentials"))
+        request.httpMethod = "PATCH"
+        request.setValue(form.contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = form.finalized()
+        var saved = try await send(request, decoding: ProfileSource.self).0
+        for (image, change) in [(ProfileImage.avatar, draft.avatar), (.header, draft.header)] where change == .remove {
+            saved = try await deleteProfileImage(image)
+        }
+        return saved
+    }
+
+    /// https://docs.joinmastodon.org/methods/profile/#delete-profile-avatar
+    /// https://docs.joinmastodon.org/methods/profile/#delete-profile-header
+    private func deleteProfileImage(_ image: ProfileImage) async throws -> ProfileSource {
+        var request = URLRequest(url: credential.instance.appending(path: "api/v1/profile/\(image.rawValue)"))
+        request.httpMethod = "DELETE"
+        return try await send(request, decoding: ProfileSource.self).0
     }
 
     /// https://docs.joinmastodon.org/methods/accounts/#get
@@ -675,6 +736,8 @@ public struct InstanceConfiguration: Sendable, Equatable {
     public let mediaDescriptionLimit: Int
     /// アップロードできるファイルのMIMEタイプ。返さないサーバーではnilで、送ってみるまで分からない。
     public let supportedMediaTypes: [String]?
+    /// プロフィールの各項目の上限。
+    public let profileLimits: ProfileLimits
     /// アップロードできるメディアの大きさの上限。
     public let mediaLimits: MediaLimits
 
@@ -685,6 +748,7 @@ public struct InstanceConfiguration: Sendable, Equatable {
         maxMediaAttachments: Int,
         mediaDescriptionLimit: Int,
         supportedMediaTypes: [String]?,
+        profileLimits: ProfileLimits = .beforeMastodon46,
         mediaLimits: MediaLimits
     ) {
         self.streamingURL = streamingURL
@@ -693,6 +757,7 @@ public struct InstanceConfiguration: Sendable, Equatable {
         self.maxMediaAttachments = maxMediaAttachments
         self.mediaDescriptionLimit = mediaDescriptionLimit
         self.supportedMediaTypes = supportedMediaTypes
+        self.profileLimits = profileLimits
         self.mediaLimits = mediaLimits
     }
 }

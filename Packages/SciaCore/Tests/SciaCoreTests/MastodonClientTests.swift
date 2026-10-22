@@ -366,6 +366,26 @@ struct MastodonClientTests {
         #expect(configuration.mediaLimits == MediaLimits(imageSizeLimit: nil, imageMatrixLimit: nil, videoSizeLimit: nil, videoMatrixLimit: nil, videoFrameRateLimit: nil))
     }
 
+    @Test func instanceConfigurationReadsProfileLimits() async throws {
+        let json = #"""
+        {"configuration":{"urls":{"streaming":"wss://example.social"},"accounts":{"max_display_name_length":40,"max_note_length":1000,"max_profile_fields":6,"profile_field_name_limit":100,"profile_field_value_limit":2000}}}
+        """#
+        let transport = StubTransport([.json(json, statusCode: 200)])
+
+        let configuration = try await makeClient(transport).instanceConfiguration()
+
+        #expect(configuration.profileLimits == ProfileLimits(displayName: 40, note: 1000, fields: 6, fieldName: 100, fieldValue: 2000))
+    }
+
+    /// 4.6.0より前のMastodonは上限を返さないが、決まった値で検証している。
+    @Test func instanceConfigurationUsesFixedProfileLimitsBeforeMastodon46() async throws {
+        let transport = StubTransport([try .fixture("instance_v2")])
+
+        let configuration = try await makeClient(transport).instanceConfiguration()
+
+        #expect(configuration.profileLimits == ProfileLimits(displayName: 30, note: 500, fields: 4, fieldName: 255, fieldValue: 255))
+    }
+
     @Test func homeMarkerReadsLastReadID() async throws {
         let transport = StubTransport([.json(#"{"home":{"last_read_id":"113000000000000002","version":3,"updated_at":"2026-10-13T03:21:45.123Z"}}"#, statusCode: 200)])
 

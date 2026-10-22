@@ -286,6 +286,12 @@ public final class ProfileStore {
         followChanges += 1
     }
 
+    /// 編集して保存した自分のプロフィールを反映する。ほかのアカウントのものなら何もしない。
+    public func apply(edited account: Account) {
+        guard account.id == self.account.id else { return }
+        self.account = account
+    }
+
     /// アカウントだけを読み直す。
     public func reloadAccount() async throws {
         account = try await api.account(account.id)
