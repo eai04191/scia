@@ -10,8 +10,12 @@ final class SessionController {
     /// このセッションで使っているアカウント。
     let credential: Credential
     private let home: FeedTimelineController
+    private let local: FeedTimelineController
+    private let federated: FeedTimelineController
     private let notifications: NotificationsController
-    /// ホームと通知で共有する、ストリーミングの接続。
+    /// 投稿の一覧のタブ。ホーム、ローカル、連合。
+    private var feeds: [FeedTimelineController] { [home, local, federated] }
+    /// 各タブで共有する、ストリーミングの接続。
     private let streamingHub: StreamingHub
     private let client: MastodonClient
     /// 429や503で止められたときに、自動の通信を控える。このセッションの通信で共有する。
@@ -109,17 +113,27 @@ final class SessionController {
         }
         self.streamingHub = streamingHub
         let home = FeedTimelineController(feed: .home, client: client, streamingHub: streamingHub) { forward() }
+        let local = FeedTimelineController(feed: .local, client: client, streamingHub: streamingHub) { forward() }
+        let federated = FeedTimelineController(feed: .federated, client: client, streamingHub: streamingHub) { forward() }
         let notifications = NotificationsController(client: client, streamingHub: streamingHub) { forward() }
         self.home = home
+        self.local = local
+        self.federated = federated
+        // ローカルと連合は、起動のたびの通信と購読を増やさないよう、初めて開いたときに読み始める。
+        for feed in [local, federated] {
+            feed.viewController.onAppearing = { [weak feed] in feed?.startIfNeeded() }
+        }
         self.notifications = notifications
         let mediaFormats = UnprocessableMediaFormats(defaults: .standard, instance: credential.instance)
         let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog, mediaFormats: mediaFormats)
         self.diagnostics = diagnostics
         // コントローラーはHubを持っているので、弱く持って循環させない。
-        streamingHub.onChange = { [weak streamingHub, weak home, weak notifications] in
+        streamingHub.onChange = { [weak streamingHub, weak home, weak local, weak federated, weak notifications] in
             guard let streamingHub else { return }
             diagnostics.setStreaming(streamingHub.state, subscriptions: streamingHub.subscriptions)
-            home?.showStreamingState(streamingHub.state)
+            for feed in [home, local, federated] {
+                feed?.showStreamingState(streamingHub.state)
+            }
             notifications?.showStreamingState(streamingHub.state)
         }
         streamingHub.onUnauthorized = { forward() }
@@ -128,20 +142,24 @@ final class SessionController {
         self.profiles = profiles
         let threads = ThreadRegistry()
         self.threads = threads
-        // 同じ投稿が両方のタブと開いているプロフィールやスレッドにあることがあるため、どれにも反映する。
+        // 同じ投稿がいくつものタブと開いているプロフィールやスレッドにあることがあるため、どれにも反映する。
         interactions = StatusInteractions(operations: .init(client: client)) { id, transform in
             home.updateStatus(id, transform)
+            local.updateStatus(id, transform)
+            federated.updateStatus(id, transform)
             notifications.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
             threads.updateStatus(id, transform)
         }
         linkCards = LinkCardRefresher(client: client) { refetched in
-            for update in [home.updateStatus, notifications.updateStatus, profiles.updateStatus, threads.updateStatus] {
+            for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, profiles.updateStatus, threads.updateStatus] {
                 update(refetched.id) { $0.adoptingCard(of: refetched) }
             }
         }
 
         let homeNavigation = ContentNavigationController(rootViewController: home.viewController)
+        let localNavigation = ContentNavigationController(rootViewController: local.viewController)
+        let federatedNavigation = ContentNavigationController(rootViewController: federated.viewController)
         let notificationsNavigation = ContentNavigationController(rootViewController: notifications.viewController)
         let notificationsTab = UITab(title: "通知", image: UIImage(systemName: "bell"), identifier: "notifications") { _ in notificationsNavigation }
         notifications.onUnreadCountChange = { count, isLowerBound in
@@ -149,6 +167,8 @@ final class SessionController {
         }
         let tabBarController = UITabBarController(tabs: [
             UITab(title: "ホーム", image: UIImage(systemName: "house"), identifier: "home") { _ in homeNavigation },
+            UITab(title: "ローカル", image: UIImage(systemName: "person.2"), identifier: "local") { _ in localNavigation },
+            UITab(title: "連合", image: UIImage(systemName: "globe"), identifier: "federated") { _ in federatedNavigation },
             notificationsTab,
         ])
         let scrollToTop = { (navigation: UINavigationController) -> Void in
@@ -159,7 +179,7 @@ final class SessionController {
             tabBarController.noticeOverlay?.follow(nil)
         }
         tabBarController.delegate = tabBarDelegate
-        for navigation in [homeNavigation, notificationsNavigation] {
+        for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation] {
             navigation.delegate = navigationDelegate
             // 奥の画面を開いているときは、その画面の上のバーなので、一覧は動かさない。
             navigation.onEmptyBarClickOnMac = { [weak navigation] in
@@ -266,7 +286,7 @@ final class SessionController {
                     if let editing = draft.editing {
                         // ストリーミングの編集の知らせを待たずに、どの一覧にも編集したあとの投稿を出す。切れている間も直るようにするため。
                         let edited = try await client.editStatus(editing, to: draft)
-                        for update in [home.updateStatus, notifications.updateStatus, profiles.updateStatus, threads.updateStatus] {
+                        for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, profiles.updateStatus, threads.updateStatus] {
                             update(edited.id) { _ in edited }
                         }
                     } else {
@@ -298,7 +318,7 @@ final class SessionController {
             guard state == .invalid else { return }
             self?.credentialsDidBecomeInvalid()
         }
-        for viewController in [home.viewController, notifications.viewController] {
+        for viewController in [home.viewController, local.viewController, federated.viewController, notifications.viewController] {
             viewController.navigationItem.leftBarButtonItem = Self.accountButton(for: credential) { [weak self, weak viewController] in
                 let myProfile = UIAction(title: "自分のプロフィール", image: UIImage(systemName: "person.crop.circle")) { _ in
                     guard let viewController else { return }
@@ -387,9 +407,11 @@ final class SessionController {
         tabBarDelegate.onSelect = { ticker.reevaluate() }
         observeStatusBarTickerSetting()
         #if DEBUG
-        home.onDummyNotifications = { DummyNotifications.stream(into: ticker) }
-        home.onSetStatusBarTickerLooping = { [weak ticker] isOn in ticker?.setLooping(isOn, items: DummyNotifications.samples) }
-        home.isStatusBarTickerLooping = { [weak ticker] in ticker?.isLooping ?? false }
+        for feed in feeds {
+            feed.onDummyNotifications = { DummyNotifications.stream(into: ticker) }
+            feed.onSetStatusBarTickerLooping = { [weak ticker] isOn in ticker?.setLooping(isOn, items: DummyNotifications.samples) }
+            feed.isStatusBarTickerLooping = { [weak ticker] in ticker?.isLooping ?? false }
+        }
         #endif
     }
 
@@ -495,7 +517,7 @@ final class SessionController {
             guard let self, let viewController else { return }
             #if DEBUG
             // ダミー投稿はサーバーにないため、取り直さない。カードはダミーを流した側が届ける。
-            let statuses = statuses.filter { !self.home.isDebugLocalOnly($0.id) }
+            let statuses = statuses.filter { status in !self.feeds.contains { $0.isDebugLocalOnly(status.id) } }
             #endif
             self.linkCards.setVisible(statuses, from: viewController)
         }
@@ -936,9 +958,11 @@ final class SessionController {
         topViewController.present(sheet, animated: true)
     }
 
-    /// ミュートかブロックしている相手を、ホームと通知の一覧から除く。どちらでもなくなったら、また足すようにする。
+    /// ミュートかブロックしている相手を、投稿と通知の一覧から除く。どちらでもなくなったら、また足すようにする。
     private func excludeInLists(_ relationship: Relationship) {
-        home.setAccount(relationship.id, excluded: relationship.blocking || relationship.muting)
+        for feed in feeds {
+            feed.setAccount(relationship.id, excluded: relationship.blocking || relationship.muting)
+        }
         notifications.setAccount(relationship.id, excluded: relationship.blocking || (relationship.muting && relationship.mutingNotifications))
     }
 
@@ -1060,7 +1084,9 @@ final class SessionController {
             do {
                 try await client.deleteStatus(target.id)
                 guard let self else { return }
-                home.removeStatus(target.id)
+                for feed in feeds {
+                    feed.removeStatus(target.id)
+                }
                 notifications.removeStatus(target.id)
                 profiles.removeStatus(target.id)
                 threads.removeStatus(target.id)
@@ -1319,7 +1345,9 @@ final class SessionController {
         logger.info("recover reason=\(reason, privacy: .public)")
         // つながっていなければ、待っている間隔を飛ばしてつなぎ直す。
         streamingHub.recover()
-        home.recover()
+        for feed in feeds {
+            feed.recover()
+        }
         notifications.recover()
     }
 
@@ -1334,7 +1362,9 @@ final class SessionController {
     private func credentialsDidBecomeInvalid() {
         logger.info("credentials invalid")
         streamingHub.stopUntilLogin()
-        home.stop()
+        for feed in feeds {
+            feed.stop()
+        }
         notifications.stop()
         // どの画面にいても見えるよう、チップの列の一番上に段を出す。
         notices.reauthentication = NoticeCenter.Reauthentication(handle: credential.handle, isInProgress: isReauthenticating) { [weak self] in
@@ -1375,7 +1405,9 @@ final class SessionController {
     /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときに呼ぶ。
     func stop() {
         statusBarTicker.clear()
-        home.stop()
+        for feed in feeds {
+            feed.stop()
+        }
         notifications.stop()
         recoveryTasks.forEach { $0.cancel() }
         recoveryTasks.removeAll()
@@ -1536,6 +1568,8 @@ final class SessionController {
             let decoder = MastodonDecoder.make()
             switch tab {
             case .home: home.inject(try decoder.decode([Status].self, from: data))
+            case .local: local.inject(try decoder.decode([Status].self, from: data))
+            case .federated: federated.inject(try decoder.decode([Status].self, from: data))
             case .notifications: notifications.inject(try decoder.decode([MastodonNotification].self, from: data))
             }
         } catch {
@@ -1557,17 +1591,17 @@ final class SessionController {
             reportUnauthorized()
         case .unreadable:
             DebugFaults.corruptListElements()
-            home.start()
+            feeds.forEach { $0.reloadIfStarted() }
             notifications.start()
         case .status(let statusCode, let retryAfter):
             DebugFaults.fail(withStatus: statusCode, retryAfter: retryAfter)
-            home.start()
+            feeds.forEach { $0.reloadIfStarted() }
             notifications.start()
         case .statusCleared:
             DebugFaults.fail(withStatus: nil)
         case .unsupported(let feature):
             DebugFaults.makeUnsupported(feature)
-            home.start()
+            feeds.forEach { $0.reloadIfStarted() }
             notifications.start()
         case .regenerating(let isOn):
             DebugFaults.setRegeneratingHome(isOn)
@@ -1605,7 +1639,8 @@ final class SessionController {
             // 書いている途中のキーボードから開いたときの動きも見るため、投稿欄は閉じない。高さはメディアを選ぶシートの決めた高さと同じにする。
             SheetKeyboardExperiment.present(from: rootViewController.frontmostPresented, lowHeight: AppDependencies.tuning.value(of: TuningCatalog.composePickerHeight) - (rootViewController.view.window?.safeAreaInsets.bottom ?? 0))
         case .tab(let tab):
-            (rootViewController as? UITabBarController)?.selectedIndex = tab == .home ? 0 : 1
+            let tabs = rootViewController as? UITabBarController
+            tabs?.selectedTab = tabs?.tabs.first { $0.identifier == tab.rawValue }
             statusBarTicker.reevaluate()
         case .viewer(let index):
             openTopmostMedia(at: index)
@@ -1622,7 +1657,9 @@ final class SessionController {
         case .holdArrivals(let isOn):
             DebugFaults.setHoldingArrivals(isOn)
             if !isOn {
-                home.releaseHeldArrivals()
+                for feed in feeds {
+                    feed.releaseHeldArrivals()
+                }
                 notifications.releaseHeldArrivals()
             }
         }
@@ -1652,14 +1689,18 @@ final class SessionController {
     #endif
 
     func enterForeground() {
-        home.enterForeground()
+        for feed in feeds {
+            feed.enterForeground()
+        }
         notifications.enterForeground()
         threads.enterForeground()
     }
 
     func enterBackground() {
         statusBarTicker.clear()
-        home.enterBackground()
+        for feed in feeds {
+            feed.enterBackground()
+        }
         notifications.enterBackground()
         threads.enterBackground()
     }

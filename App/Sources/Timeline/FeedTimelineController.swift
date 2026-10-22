@@ -9,7 +9,7 @@ final class FeedTimelineController {
     /// 1回に読む件数。APIの上限が40件。
     private static let pageSize = 40
 
-    let viewController = TimelineViewController()
+    let viewController: TimelineViewController
     let feed: TimelineFeed
     private let store: TimelineStore
     private let client: MastodonClient
@@ -20,6 +20,7 @@ final class FeedTimelineController {
     private let logger = SciaLog.logger(category: "timeline")
     private var tasks: [Task<Void, Never>] = []
     private var isStopped = false
+    private var hasStarted = false
     /// 一覧のストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
     private var streamingSubscription: StreamingHub.Subscription?
     /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態。
@@ -60,6 +61,7 @@ final class FeedTimelineController {
             try await feed.page(query, from: client)
         }
         self.feed = feed
+        viewController = TimelineViewController(texts: Self.texts(for: feed))
         self.client = client
         self.streamingHub = streamingHub
         self.tuning = tuning
@@ -80,9 +82,32 @@ final class FeedTimelineController {
     /// - Parameter origin: 電波の回復などでやり直すときは`.automatic`。レート制限で止められている間は送らない。
     func start(origin: RequestOrigin = .user) {
         guard !isStopped else { return }
+        hasStarted = true
         viewController.setContentState(.loading)
         run(origin) { await $0.loadInitial() }
     }
+
+    private static func texts(for feed: TimelineFeed) -> TimelineViewController.Texts {
+        switch feed {
+        case .home: .home
+        case .local: .local
+        case .federated: .federated
+        }
+    }
+
+    /// まだ始めていなければ始める。開くまで読まない一覧を、初めて開いたときに始めるのに使う。
+    func startIfNeeded() {
+        guard !hasStarted else { return }
+        start()
+    }
+
+    #if DEBUG
+    /// 始めている一覧だけ読み込み直す。障害を起こすデバッグURLで、開いたことのない一覧まで読み始めないようにする。
+    func reloadIfStarted() {
+        guard hasStarted else { return }
+        start()
+    }
+    #endif
 
     /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときに呼ぶ。
     func stop() {

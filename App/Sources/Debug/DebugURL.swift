@@ -53,7 +53,7 @@ enum DebugURL: Equatable {
     case settings
     /// `scia-debug://tuning`。チューニングパネルを開く。
     case tuning
-    /// `scia-debug://tab/<home|notifications>`。タブを切り替える。
+    /// `scia-debug://tab/<home|local|federated|notifications>`。タブを切り替える。
     case tab(Tab)
     /// `scia-debug://viewer?index=<n>`。選んでいるタブの、画面のいちばん上に見えている添付ファイル付きの投稿を、n番目（0から）の添付ファイルでビューアに開く。
     /// サムネイルをタップしたのと同じ経路で開く。
@@ -61,8 +61,8 @@ enum DebugURL: Equatable {
     /// `scia-debug://arrivals/hold`で、以後に届いた新着を一覧に挿入せずに溜める。`scia-debug://arrivals/release`で、溜まった新着をまとめて挿入する。
     /// ストリーミングはつないだままなので、切断の知らせやポーリングで一覧が動かない。
     case holdArrivals(Bool)
-    /// `scia-debug://inject/<home|notifications>?file=<ファイル名>`。アプリのDocuments/DebugInjectに置いたJSONを読み、ストリーミングの新着と同じ経路で一覧に流す。
-    /// ホームは`Status`の配列、通知は`Notification`の配列で、APIの応答と同じ形で書く。実データにない投稿や通知の見え方を、ログインした端末のまま確かめるため。
+    /// `scia-debug://inject/<home|local|federated|notifications>?file=<ファイル名>`。アプリのDocuments/DebugInjectに置いたJSONを読み、ストリーミングの新着と同じ経路で一覧に流す。
+    /// ホーム、ローカル、連合は`Status`の配列、通知は`Notification`の配列で、APIの応答と同じ形で書く。実データにない投稿や通知の見え方を、ログインした端末のまま確かめるため。
     case inject(Tab, file: String)
     /// `scia-debug://compose?text=<本文>&media=<枚数>`。インライン投稿欄で書き始め、本文を渡した文に置き換え、番号を描いた色違いの画像を添付に足す。
     /// どちらも省ける。シミュレーターのクリップボードが使えないときにも、URLを含む本文などを打たずに用意し、ピッカーを操作せずに添付を用意するため。
@@ -79,6 +79,8 @@ enum DebugURL: Equatable {
 
     enum Tab: String {
         case home
+        case local
+        case federated
         case notifications
     }
 

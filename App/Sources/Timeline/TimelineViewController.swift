@@ -22,6 +22,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let unreadable: String
 
         static let home = Texts(dumpName: "timeline", title: "ホーム", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
+        static let local = Texts(dumpName: "local", title: "ローカル", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
+        static let federated = Texts(dumpName: "federated", title: "連合", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
         static let notifications = Texts(dumpName: "notifications", title: "通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
         static let profile = Texts(dumpName: "profile", title: "", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
         static let thread = Texts(dumpName: "thread", title: "スレッド", empty: "投稿がありません", reachedEnd: "", unreadable: "表示できない投稿")
@@ -101,6 +103,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 一覧の頭に置き、一緒にスクロールするビュー。プロフィールのヘッダーに使う。表示より前に設定する。
     /// 置くと、投稿がないときの全面の表示は出さず、読み込みの状態はフッターだけで示す。ヘッダーを覆わないようにするため。
     var headerView: UIView?
+    /// 画面に出るたびに呼ぶ。開くまで読まない一覧が、初めて開いたときに読み始めるのに使う。
+    var onAppearing: (() -> Void)?
     /// 一覧がスクロールしたときと、安全領域やバーの高さが変わったときに呼ぶ。ヘッダーを置いた画面が、ヘッダーやバーの見た目を位置に合わせるのに使う。
     var onScroll: ((UIScrollView) -> Void)?
     /// ステータスバーの文字の色。ヘッダーを置いた画面が、ステータスバーの下に見えているものに合わせて変える。
@@ -287,6 +291,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 他のタブにいる間に表示が変わっても既読にしないため、画面に出たときに改めて報告する。
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
+        onAppearing?()
         applyPendingOpening()
     }
 

@@ -19,6 +19,7 @@ struct FeedTimelineControllerTests {
     }
 
     private func makeController(
+        feed: TimelineFeed = .home,
         transport: some HTTPTransport,
         connector: some WebSocketConnector = MessageQueueConnector(),
         tuning: TuningStore = TuningStore(defaults: nil),
@@ -32,7 +33,7 @@ struct FeedTimelineControllerTests {
             streaming.open(baseURL: try await streamingEndpoint.url())
         }
         return FeedTimelineController(
-            feed: .home,
+            feed: feed,
             client: client,
             streamingHub: streamingHub,
             tuning: tuning,
@@ -41,12 +42,12 @@ struct FeedTimelineControllerTests {
     }
 
     /// 投稿を、ストリーミングの`update`イベントのテキストにする。
-    private func updateMessage(_ status: Status) throws -> String {
+    private func updateMessage(_ status: Status, stream: [String] = ["user"]) throws -> String {
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
         encoder.dateEncodingStrategy = .iso8601
         let payload = String(decoding: try encoder.encode(status), as: UTF8.self)
-        let envelope = try JSONSerialization.data(withJSONObject: ["stream": ["user"], "event": "update", "payload": payload])
+        let envelope = try JSONSerialization.data(withJSONObject: ["stream": stream, "event": "update", "payload": payload])
         return String(decoding: envelope, as: UTF8.self)
     }
 
@@ -98,6 +99,29 @@ struct FeedTimelineControllerTests {
 
         try await waitUntil { controller.viewController.displayedStatusIDs.count == 4 }
         #expect(controller.viewController.displayedStatusIDs == (arriving + existing).map(\.id))
+    }
+
+    /// ローカルは公開タイムラインを読み、`public:local`の新着を挿入する。markerはホームと通知にしかないため、既読位置は読まず保存もしない。
+    @Test func localFeedReadsPublicTimelineAndSkipsMarkers() async throws {
+        let existing = StatusFactory.make(count: 3, startingAt: 100)
+        let arriving = StatusFactory.make(count: 1, startingAt: 200)
+        let transport = try HomeTransport(home: existing, servesMarkers: false)
+        let connector = MessageQueueConnector()
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(0.2, for: TuningCatalog.insertionInterval)
+        let controller = try makeController(feed: .local, transport: transport, connector: connector, tuning: tuning)
+        defer { controller.stop() }
+
+        controller.start()
+        try await waitUntil { connector.isConnected }
+        #expect(controller.viewController.displayedStatusIDs == existing.map(\.id))
+        connector.send(try updateMessage(try #require(arriving.first), stream: ["public:local"]))
+        try await waitUntil { controller.viewController.displayedStatusIDs.count == 4 }
+        controller.enterBackground()
+
+        #expect(controller.viewController.displayedStatusIDs == (arriving + existing).map(\.id))
+        #expect(transport.publicQueries.allSatisfy { $0.contains(URLQueryItem(name: "local", value: "true")) })
+        #expect(!transport.publicQueries.isEmpty)
     }
 
     @Test func savedMarkerSetsUnreadCount() async throws {
@@ -215,11 +239,18 @@ private actor ResponseGate {
 }
 
 /// ホームタイムラインには決まった投稿を、インスタンス情報にはストリーミングの接続先を返すHTTPTransport。
-private struct HomeTransport: HTTPTransport {
+private final class HomeTransport: HTTPTransport {
     let homeBody: Data
     let markerBody: Data
+    /// falseなら、markerを読み書きしたときにテストを失敗させる。markerのない一覧のテストに使う。
+    let servesMarkers: Bool
+    private let recordedPublicQueries = Mutex<[[URLQueryItem]]>([])
+    /// 公開タイムラインを読んだときのクエリ。
+    var publicQueries: [[URLQueryItem]] { recordedPublicQueries.withLock { $0 } }
 
-    init(home: [Status], markerID: String? = nil) throws {
+    /// - Parameter home: ホームと公開タイムラインの最初のページ。
+    init(home: [Status], markerID: String? = nil, servesMarkers: Bool = true) throws {
+        self.servesMarkers = servesMarkers
         markerBody = Data((markerID.map { #"{"home":{"last_read_id":"\#($0)","version":1,"updated_at":"2026-10-13T03:21:45.123Z"}}"# } ?? "{}").utf8)
         let encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -233,7 +264,14 @@ private struct HomeTransport: HTTPTransport {
         switch url.path() {
         case "/api/v1/timelines/home":
             body = homeBody
+        case "/api/v1/timelines/public":
+            let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+            recordedPublicQueries.withLock { $0.append(query) }
+            body = homeBody
         case "/api/v1/markers":
+            if !servesMarkers {
+                Issue.record("markerのない一覧でmarkerを読み書きしました: \(url)")
+            }
             body = markerBody
         case "/api/v2/instance":
             body = Data(#"{"configuration":{"urls":{"streaming":"wss://example.social"}}}"#.utf8)
