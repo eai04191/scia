@@ -174,6 +174,10 @@ public enum StatusMenuItem: String, MenuItemKind {
     case openInAppSafari
     /// 投稿の編集履歴を開く。編集された投稿でだけ出る。
     case editHistory
+    /// 投稿をお気に入りした人の一覧を開く。お気に入りされた投稿でだけ出る。
+    case favouritedBy
+    /// 投稿をブーストした人の一覧を開く。ブーストされた投稿でだけ出る。
+    case rebloggedBy
     /// 自分の投稿を投稿欄で編集する。自分の投稿でだけ出る。
     case edit
     /// 自分の投稿を削除する。自分の投稿でだけ出る。
@@ -202,7 +206,7 @@ public enum StatusMenuItem: String, MenuItemKind {
     /// - 持ち出す: リンクとテキストのコピー、共有、ブラウザで開く。開く場所を選んで開く2つは、開く場所の設定と重なるため隠す
     /// - 読む: 翻訳
     /// - 関係するユーザー: メンションされたユーザーは、何人もいるとメニューが長くなるため隠す
-    /// - 「その他」: たまにしか使わない編集履歴、メディアを隠す、カスタム絵文字、会話のミュート、固定と、取り消せない通知の削除、投稿の削除
+    /// - 「その他」: たまにしか使わない編集履歴、お気に入りした人、ブーストした人、メディアを隠す、カスタム絵文字、会話のミュート、固定と、取り消せない通知の削除、投稿の削除
     public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
         .rowSeparator,
         .item(.reply, isVisible: true),
@@ -228,6 +232,8 @@ public enum StatusMenuItem: String, MenuItemKind {
         .item(.mentionedUsers, isVisible: false),
         .more,
         .item(.editHistory, isVisible: true),
+        .item(.favouritedBy, isVisible: true),
+        .item(.rebloggedBy, isVisible: true),
         .item(.hideMedia, isVisible: true),
         .item(.customEmojis, isVisible: true),
         .separator,

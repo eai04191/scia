@@ -1080,6 +1080,12 @@ final class SessionController {
             // フィルターの結果はブーストの外側にだけ付くことがあるため、判定にはブーストごと渡す。
             let filterTitles = timeline?.filterWarnings.verdict(for: status).mediaTitles ?? []
             openEditHistory(of: status.displayed, filterTitles: filterTitles, from: timeline)
+        case .openFavouritedBy:
+            guard let timeline else { return }
+            openAccountList(.favouritedBy(status.displayed.id), from: timeline)
+        case .openRebloggedBy:
+            guard let timeline else { return }
+            openAccountList(.rebloggedBy(status.displayed.id), from: timeline)
         case .edit:
             UserAction.editStatus.record()
             startEditing(status)

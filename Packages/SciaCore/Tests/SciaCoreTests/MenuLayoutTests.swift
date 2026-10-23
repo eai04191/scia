@@ -171,7 +171,7 @@ struct MenuLayoutTests {
             [.systemTranslate],
             [.notifyingUser, .author, .booster],
         ])
-        #expect(groups.more.map(\.items) == [[.editHistory, .hideMedia, .customEmojis], [.muteConversation, .pin], [.dismissNotification, .delete]])
+        #expect(groups.more.map(\.items) == [[.editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .customEmojis], [.muteConversation, .pin], [.dismissNotification, .delete]])
         #expect(StatusMenuItem.defaultLayout.elements.contains(.item(.reblogWithVisibility, isVisible: false)))
     }
 
@@ -244,7 +244,7 @@ struct MenuLayoutTests {
         #expect(saved.groups.main.map(\.items).first == [.reblog, .edit, .bookmark, .reply, .favourite])
         // 編集履歴は既定で「その他」の先頭にあるため、保存した並びでも「その他」の先頭に入り、削除までの項目がその後ろに続く。
         // 共有を「その他」に入れた並びなので、共有の後ろに来るブラウザで開くなども、その後ろに続く。
-        #expect(saved.groups.more.map(\.items).first.map { Array($0.prefix(7)) } == [.editHistory, .hideMedia, .customEmojis, .muteConversation, .pin, .dismissNotification, .delete])
+        #expect(saved.groups.more.map(\.items).first.map { Array($0.prefix(9)) } == [.editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .customEmojis, .muteConversation, .pin, .dismissNotification, .delete])
     }
 
     @Test func appSettingsPersistsMenuLayouts() throws {

@@ -87,6 +87,8 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .openInDefaultBrowser: .url(.openInDefaultBrowser)
         case .openInAppSafari: .url(.openInAppSafari)
         case .editHistory: .own(title: "編集履歴", symbolName: "clock.arrow.circlepath", note: "編集された投稿でだけ出ます")
+        case .favouritedBy: .own(title: "お気に入りした人", symbolName: "star.circle", note: "お気に入りされた投稿でだけ出ます")
+        case .rebloggedBy: .own(title: "ブーストした人", symbolName: "arrow.2.squarepath.circle", note: "ブーストされた投稿でだけ出ます")
         case .edit: .own(title: "編集", symbolName: "pencil", note: "自分の投稿でだけ出ます")
         case .delete: .own(title: "削除", symbolName: "trash", note: "自分の投稿でだけ出ます")
         case .dismissNotification: .own(title: "通知を削除", symbolName: "xmark.bin", note: "通知でだけ出ます")

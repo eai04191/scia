@@ -12,6 +12,10 @@ enum StatusAction {
     case muteConversation
     case pin
     case editHistory
+    /// 投稿をお気に入りした人の一覧を開く。
+    case openFavouritedBy
+    /// 投稿をブーストした人の一覧を開く。
+    case openRebloggedBy
     case edit
     case delete
 }
@@ -98,7 +102,7 @@ extension TimelineViewController {
             let emojis = notification?.emojisInRow ?? status?.emojisInRow ?? []
             let subject = status.map { OperationStatus.Subject($0.displayed) }
             return emojis.compactMap { emojiElement(for: $0, subject: subject) }
-        case .reply, .favourite, .reblog, .bookmark, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .hideMedia, .systemTranslate, .edit, .delete:
+        case .reply, .favourite, .reblog, .bookmark, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .edit, .delete:
             guard let status else { return [] }
             return statusAction(item, on: status, isNotification: notification != nil, id: id).map { [$0] } ?? []
         }
@@ -168,6 +172,17 @@ extension TimelineViewController {
             guard shown.editedAt != nil else { return nil }
             return UIAction(title: item.title, image: item.image) { [weak self] _ in
                 self?.onStatusAction?(.editHistory, status)
+            }
+        case .favouritedBy:
+            // サーバーの数は、このサーバーが知っている分で、一覧もこのサーバーが知っている人だけを返すため、数が0なら出さない。
+            guard shown.favouritesCount > 0 else { return nil }
+            return UIAction(title: item.title, subtitle: "\(shown.favouritesCount.formatted())人", image: item.image) { [weak self] _ in
+                self?.onStatusAction?(.openFavouritedBy, status)
+            }
+        case .rebloggedBy:
+            guard shown.reblogsCount > 0 else { return nil }
+            return UIAction(title: item.title, subtitle: "\(shown.reblogsCount.formatted())人", image: item.image) { [weak self] _ in
+                self?.onStatusAction?(.openRebloggedBy, status)
             }
         case .edit:
             guard let myAccountID, status.isAuthored(by: myAccountID) else { return nil }
