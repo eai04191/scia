@@ -17,6 +17,14 @@ enum CompletionListCatalog {
             )),
             .account(CatalogFixtures.account(displayName: "", acct: "no_display_name@example.com", avatar: nil)),
         ]
+        let localMentions: [CompletionCandidate] = [
+            .localAccount(LocalMention(account: CatalogFixtures.account(displayName: "返信先の投稿者", acct: "author")), .reply),
+            .localAccount(LocalMention(mention: Mention(id: "catalog-mentioned", username: "mentioned", url: nil, acct: "mentioned@example.com")), .reply),
+            .localAccount(LocalMention(account: CatalogFixtures.account(
+                displayName: "前にメンションした長い表示名のアカウント",
+                acct: "a_very_long_username_for_checking_truncation@an.extremely.long.domain.example"
+            )), .recent),
+        ]
         let hashtags: [CompletionCandidate] = [
             .ownHashtag(OwnHashtag(name: "猫写真", source: .featured(statusesCount: 12_345))),
             .ownHashtag(OwnHashtag(name: "猫鍋", source: .recent)),
@@ -29,6 +37,7 @@ enum CompletionListCatalog {
         ]
         return [
             CatalogState(title: "メンションの候補（長い名前、表示名なし、アイコンなし）") { list(.candidates(accounts), kind: .mention) },
+            CatalogState(title: "手元のメンションの候補（返信先、アイコンのないメンションされた人、前にメンションした長いハンドル）") { list(.candidates(localMentions), kind: .mention) },
             CatalogState(title: "ハードウェアキーボードで2つ目を選んでいる") { list(.candidates(accounts), kind: .mention, selected: 1) },
             CatalogState(title: "広げて打っている行の下に出すとき（一番上が最優先）") { list(.candidates(accounts), kind: .mention, growsUpward: false) },
             CatalogState(title: "ハッシュタグの候補（プロフィールのタグ、最近使ったタグ、最近の投稿の件数、長い名前）") { list(.candidates(hashtags), kind: .hashtag) },
