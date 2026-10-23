@@ -129,17 +129,32 @@ struct StreamingHubTests {
     /// `connected`を待っている間に届いたイベントは、`connected`の後に渡す。
     /// 受け取った側は`connected`で補完を始めるので、先に新着を一覧に入れると補完の基準が進み、その手前を読み飛ばすため。
     @Test func eventsArrivingBeforeDelayedConnectedFollowIt() async throws {
+        let messageGate = ScriptedConnector.Gate()
+        let sendGate = ScriptedConnector.Gate()
+        // ホームのイベントは、手前のローカルのイベントをハブが受け取り終えた印に使う。
         let connector = ScriptedConnector([
-            .init(messages: [Self.delete("1", stream: #"["public:local"]"#)], sendDelay: .milliseconds(200), firstMessageDelay: .milliseconds(50)),
+            .init(
+                messages: [Self.delete("1", stream: #"["public:local"]"#), Self.delete("2")],
+                firstMessageGate: messageGate,
+                sendGates: [#"{"stream":"public:local","type":"subscribe"}"#: sendGate]
+            ),
         ])
         let hub = makeHub(connector)
+        let home = Recorder()
         let local = Recorder()
         var localSubscription: StreamingHub.Subscription?
         let homeSubscription = hub.subscribe(.user) { activity in
+            home.record(activity)
             if activity == .connected, localSubscription == nil {
                 localSubscription = hub.subscribe(TimelineFeed.local.subscription, local.record)
+                // ローカルの購読を送っている途中に、ローカルのイベントを届ける。
+                messageGate.open()
             }
         }
+        try await waitUntil { home.labels.contains("delete 2") }
+        #expect(local.labels.isEmpty, "購読を送り終える前に、ローカルへ渡しました")
+
+        sendGate.open()
         try await waitUntil { local.labels.count == 2 }
 
         #expect(local.labels == ["connected", "delete 1"])
@@ -325,8 +340,10 @@ struct StreamingHubTests {
         }
     }
 
+    /// 締め切りは、条件がそろわないときに失敗を報告するための上限で、順序を作るためのものではない。
+    /// 全テストを並べて走らせると、ふだん数十ミリ秒でつながる台本の接続が、8秒近くかかったことがあるため、長めにとる。
     private func waitUntil(_ condition: () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        let deadline = ContinuousClock.now.advanced(by: .seconds(30))
         while !condition() {
             guard ContinuousClock.now < deadline else {
                 Issue.record("時間内に条件を満たしませんでした", sourceLocation: sourceLocation)

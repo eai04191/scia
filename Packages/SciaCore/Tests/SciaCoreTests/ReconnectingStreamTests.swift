@@ -192,6 +192,36 @@ final class ScriptedConnector: WebSocketConnector {
         var firstMessageDelay: Duration = .zero
         /// `afterMessages`が`.drop`のとき、メッセージを届け終えてから切れるまでの遅れ。切れる前に、届いたメッセージに応じた送信を始めさせる。
         var dropDelay: Duration = .zero
+        /// 開くまで、最初のメッセージを届けない。遅れの長さではなく、テストが条件を確かめてから届ける。
+        var firstMessageGate: Gate?
+        /// 送るメッセージごとに、開くまで送り終えない。遅れの長さではなく、テストが条件を確かめてから送り終える。
+        var sendGates: [String: Gate] = [:]
+    }
+
+    /// 開くまで、待っている相手を止めておく。開いた後に待つ相手は止めない。
+    final class Gate: Sendable {
+        private let state = Mutex<(isOpen: Bool, waiters: [CheckedContinuation<Void, Never>])>((false, []))
+
+        func open() {
+            let waiters = state.withLock { state in
+                state.isOpen = true
+                defer { state.waiters.removeAll() }
+                return state.waiters
+            }
+            waiters.forEach { $0.resume() }
+        }
+
+        func wait() async {
+            await withCheckedContinuation { continuation in
+                let isOpen = state.withLock { state in
+                    if !state.isOpen { state.waiters.append(continuation) }
+                    return state.isOpen
+                }
+                if isOpen {
+                    continuation.resume()
+                }
+            }
+        }
     }
 
     private let state: Mutex<(scripts: [Script], connectCount: Int, closedCount: Int, sent: [[String]])>
@@ -239,32 +269,35 @@ private final class ScriptedConnection: WebSocketConnection {
     }
 
     func send(_ text: String) async throws {
-        let (isClosed, delay) = state.withLock { ($0.isClosed, $0.script.sendDelay) }
+        let (isClosed, delay, gate) = state.withLock { ($0.isClosed, $0.script.sendDelay, $0.script.sendGates[text]) }
         if isClosed { throw URLError(.cancelled) }
         if delay > .zero {
             try await Task.sleep(for: delay)
         }
+        await gate?.wait()
         onSend(text)
     }
 
     func receive() async throws -> String {
-        enum Next { case message(String, after: Duration), fail(any Error), drop(after: Duration), wait }
+        enum Next { case message(String, after: Duration, gate: ScriptedConnector.Gate?), fail(any Error), drop(after: Duration), wait }
         let next: Next = state.withLock { state in
             if state.isClosed { return .fail(URLError(.cancelled)) }
             if case .fail(let error) = state.script.handshake { return .fail(error) }
             if !state.script.messages.isEmpty {
                 let delay = state.hasDeliveredMessage ? .zero : state.script.firstMessageDelay
+                let gate = state.hasDeliveredMessage ? nil : state.script.firstMessageGate
                 state.hasDeliveredMessage = true
-                return .message(state.script.messages.removeFirst(), after: delay)
+                return .message(state.script.messages.removeFirst(), after: delay, gate: gate)
             }
             if case .drop = state.script.afterMessages { return .drop(after: state.script.dropDelay) }
             return .wait
         }
         switch next {
-        case .message(let message, let delay):
+        case .message(let message, let delay, let gate):
             if delay > .zero {
                 try await Task.sleep(for: delay)
             }
+            await gate?.wait()
             return message
         case .fail(let error):
             throw error
