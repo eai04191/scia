@@ -79,6 +79,8 @@ final class SessionController {
     /// 開いているスレッドの画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
     private let threads: ThreadRegistry
     private var cachedMyAccount: Account?
+    /// ユーザーのメニューの印のために読んだ、メンションされたユーザーのアカウント。
+    private var menuAccounts: [String: Account] = [:]
     /// 補完の候補を読む口。投稿欄とプロフィールの編集で使う。
     private let completionSources: ComposeCompletion.Sources
     /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
@@ -1054,8 +1056,23 @@ final class SessionController {
             },
             report: { [weak self] relation, statusID in
                 self?.presentReport(relation, statusID: statusID)
+            },
+            cachedAccount: { [weak self] id in
+                self?.menuAccounts[id]
+            },
+            loadAccount: { [weak self] id in
+                guard let self else { throw CancellationError() }
+                return try await menuAccount(id)
             }
         )
+    }
+
+    /// ユーザーのメニューの印のために読んだアカウント。読んだものは、メニューを開き直したときにすぐ使う。
+    private func menuAccount(_ id: String) async throws -> Account {
+        if let account = menuAccounts[id] { return account }
+        let account = try await client.account(id)
+        menuAccounts[id] = account
+        return account
     }
 
     /// ユーザーのメニューの相手のIDと`acct`。リンクから選んだ相手は、プロフィールのURLで引く。見つからなければ`ProfileNotFound`を投げる。

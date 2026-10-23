@@ -160,7 +160,7 @@ struct StatusMenuTests {
     /// 既定のユーザーのメニューは、開く・書く操作、フォロー、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
     /// 関係の項目は、開いてから読む。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() throws {
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in })
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in }, cachedAccount: { _ in nil }, loadAccount: { _ in throw CancellationError() })
 
         let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
 
@@ -178,7 +178,7 @@ struct StatusMenuTests {
     @Test func singleRelationItemStaysInSubmenu() throws {
         let settings = try makeSettings()
         settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .follow) } + [.more])
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in })
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in }, cachedAccount: { _ in nil }, loadAccount: { _ in throw CancellationError() })
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings, userMenuActions: actions))
 
@@ -189,7 +189,7 @@ struct StatusMenuTests {
     @Test func singleMentionItemIsListedDirectlyWithAcct() throws {
         let settings = try makeSettings()
         settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .mention) } + [.more])
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in })
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in }, cachedAccount: { _ in nil }, loadAccount: { _ in throw CancellationError() })
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings, userMenuActions: actions))
 
@@ -214,6 +214,17 @@ struct StatusMenuTests {
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings))
 
         #expect(!outline.joined().contains { $0.contains("@alice") })
+    }
+
+    /// メンションされたユーザーのアイコンは、一覧のほかの行にいるその人のアカウントから取る。ブーストされた投稿を書いた人と、通知した人からも探す。
+    @Test func mentionedAccountIsFoundInOtherRows() throws {
+        let boost = try status(url: nil, reblog: try status(url: nil, account: try account("3", "carol")))
+        let notification = MastodonNotification(id: "1", type: .follow, createdAt: .now, account: try account("4", "dave"))
+        let entries: [TimelineEntry] = [.status(boost), .notification(notification)]
+
+        #expect(TimelineViewController.account(withID: "3", in: entries)?.acct == "carol")
+        #expect(TimelineViewController.account(withID: "4", in: entries)?.acct == "dave")
+        #expect(TimelineViewController.account(withID: "5", in: entries) == nil)
     }
 
     /// メンションされたユーザーは既定で隠す。出すと、メンションされた人ごとに並ぶ。

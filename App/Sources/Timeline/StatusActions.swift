@@ -247,7 +247,7 @@ extension TimelineViewController {
     /// メニューは並べるときは印の枠に縮めるが、開いたサブメニューの見出しでは画像を元の大きさのまま置き、メニューの外まではみ出したため。
     /// 印の大きさは、本文の文字の大きさの設定に合わせる。
     private static func menuIcon(_ image: UIImage) -> UIImage {
-        let side = UIFontMetrics(forTextStyle: .body).scaledValue(for: 22)
+        let side = menuIconSide
         guard image.size.width > 0, image.size.height > 0 else { return image }
         let scale = min(side / image.size.width, side / image.size.height)
         let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
@@ -257,6 +257,11 @@ extension TimelineViewController {
         return UIGraphicsImageRenderer(size: canvas, format: format).image { _ in
             image.draw(in: CGRect(origin: CGPoint(x: (side - size.width) / 2, y: (side - size.height) / 2), size: size))
         }.withRenderingMode(.alwaysOriginal)
+    }
+
+    /// メニューの印の一辺。本文の文字の大きさの設定に合わせる。
+    private static var menuIconSide: CGFloat {
+        UIFontMetrics(forTextStyle: .body).scaledValue(for: 22)
     }
 
     /// 動く絵文字を、メニューの印の大きさの、動く画像にする。
@@ -308,12 +313,87 @@ extension TimelineViewController {
         }
         guard !children.isEmpty else { return nil }
         let parts = user.acct.split(separator: "@", maxSplits: 1)
+        // 読み終えたアイコンに差し替えるとき、このサブメニューを見つけるための名前。投稿のメニューでは同じ人を1度だけ出す。
+        let menuID = UIMenu.Identifier("net.mizle.scia.user-menu.\(user.id)")
         return UIMenu(
             title: "@\(parts.first ?? Substring(user.acct))",
             subtitle: parts.count == 2 ? String(parts[1]) : nil,
-            image: UIImage(systemName: "person.crop.circle"),
+            image: userMenuIcon(for: user, id: id, menuID: menuID) ?? UIImage(systemName: "person.crop.circle"),
+            identifier: menuID,
             children: children
         )
+    }
+
+    /// ユーザーのメニューの印にする、その人のアイコン。読み込み済みの画像を、一覧と同じ形に切り抜く。
+    /// メンションされたユーザーは、APIの`Mention`にアイコンのURLがないため、一覧の行か前に読んだアカウントから探す。
+    /// まだアイコンを出せなければnilを返して記号を出し、アカウントとアイコンを読み終えたら、開いているメニューの印を差し替える。
+    private func userMenuIcon(for user: MenuUser, id: ItemID, menuID: UIMenu.Identifier) -> UIImage? {
+        let account: Account? = switch user {
+        case .account(let account): account
+        case .mention(let mention): account(withID: mention.id) ?? userMenuActions?.cachedAccount(mention.id)
+        }
+        if let account, let image = cachedAvatar(of: account, id: id) {
+            return Self.userMenuIcon(image, shape: settings.avatarShape)
+        }
+        loadUserMenuIcon(for: user, account: account, menuID: menuID)
+        return nil
+    }
+
+    /// 行に描いた大きさか、メニューの印の大きさで読み込み済みのアイコン。
+    private func cachedAvatar(of account: Account, id: ItemID) -> UIImage? {
+        let urls = Set([account.avatar, account.avatarStatic].compactMap(\.self))
+        let rowKeys = entry(for: id).map { avatarKeys(for: [$0]) } ?? []
+        let rowImage = rowKeys.filter { urls.contains($0.url) }.lazy.compactMap { self.avatarImages.cachedImage(for: $0) }.first
+        return rowImage ?? userMenuIconKey(of: account).flatMap { avatarImages.cachedImage(for: $0) }
+    }
+
+    /// メニューの印の大きさで読む、止まったアイコン。
+    private func userMenuIconKey(of account: Account) -> AvatarImageStore.Key? {
+        account.avatarStatic.map { AvatarView.key(url: $0, animates: false, side: Self.menuIconSide, scale: traitCollection.displayScale) }
+    }
+
+    /// アカウントが分からなければ読み、アイコンを読んでから、開いているメニューの`menuID`のサブメニューの印を差し替える。
+    /// 読み終える前にメニューを閉じていたら、差し替えるものがないので何もしない。次に開いたときは読み込み済みのアイコンを出す。
+    private func loadUserMenuIcon(for user: MenuUser, account: Account?, menuID: UIMenu.Identifier) {
+        Task { [weak self] in
+            guard let self else { return }
+            var resolved = account
+            if resolved == nil, case .mention(let mention) = user {
+                resolved = try? await userMenuActions?.loadAccount(mention.id)
+            }
+            guard let resolved, let key = userMenuIconKey(of: resolved), let image = try? await avatarImages.image(for: key),
+                  let icon = Self.userMenuIcon(image, shape: settings.avatarShape) else { return }
+            replaceContextMenuIcon(icon, ofMenu: menuID)
+        }
+    }
+
+    /// `identifier`のサブメニューの印を`image`にしたメニュー。ほかの項目はそのまま残す。
+    static func replacingImage(_ image: UIImage, ofMenu identifier: UIMenu.Identifier, in menu: UIMenu) -> UIMenu {
+        let replaced = menu.replacingChildren(menu.children.map { element in
+            (element as? UIMenu).map { replacingImage(image, ofMenu: identifier, in: $0) } ?? element
+        })
+        guard menu.identifier == identifier else { return replaced }
+        return UIMenu(title: replaced.title, subtitle: replaced.subtitle, image: image, identifier: identifier, options: replaced.options, children: replaced.children)
+    }
+
+    /// アイコンを、メニューの印の大きさで一覧と同じ形に切り抜き、元の色のまま描く。動くアイコンは先頭のコマで止める。
+    private static func userMenuIcon(_ avatar: UIImage, shape: AvatarShape) -> UIImage? {
+        let image = avatar.images?.first ?? avatar
+        guard image.size.width > 0, image.size.height > 0 else { return nil }
+        let side = menuIconSide
+        let bounds = CGRect(x: 0, y: 0, width: side, height: side)
+        let clip = switch shape {
+        case .roundedSquare: UIBezierPath(roundedRect: bounds, cornerRadius: side * 0.2)
+        case .circle: UIBezierPath(ovalIn: bounds)
+        }
+        let scale = max(side / image.size.width, side / image.size.height)
+        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
+        let format = UIGraphicsImageRendererFormat.preferred()
+        format.opaque = false
+        return UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in
+            clip.addClip()
+            image.draw(in: CGRect(x: (side - size.width) / 2, y: (side - size.height) / 2, width: size.width, height: size.height))
+        }.withRenderingMode(.alwaysOriginal)
     }
 
     /// プロフィール画面のナビゲーションバーに出す、そのユーザーのユーザーのメニュー。開いているプロフィールを開く「プロフィール」は出さない。

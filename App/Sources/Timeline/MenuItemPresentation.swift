@@ -198,6 +198,10 @@ struct UserMenuActions {
     let changeRelation: @MainActor (UserRelationChange, UserRelation) -> Void
     /// 通報のシートを開く。投稿のメニューから開いたときは、添えられる相手の投稿のIDを渡す。
     let report: @MainActor (UserRelation, _ statusID: String?) -> Void
+    /// 前に`loadAccount`で読んだアカウント。読んでいなければnil。
+    let cachedAccount: @MainActor (String) -> Account?
+    /// アカウントをIDで読む。メンションされたユーザーのように、アイコンのURLが手元にない相手のアイコンを出すのに使う。
+    let loadAccount: @MainActor (String) async throws -> Account
 
     /// メンションとハンドルをコピーの項目。ほかの項目ではnil。
     /// - Parameters:

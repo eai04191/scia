@@ -137,6 +137,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private(set) lazy var collectionView: UICollectionView = TimelineCollectionView(frame: .zero, collectionViewLayout: makeLayout())
     private lazy var dataSource = makeDataSource()
     private var entries: [ItemID: TimelineEntry] = [:]
+    /// 長押しのメニューで、読み終えて差し替えるサブメニューの印。メニューは長押しを始めたときに組むため、出きる前に読み終えたものは、出たところで差し替える。
+    private var pendingContextMenuIcons: [UIMenu.Identifier: UIImage] = [:]
+    /// 長押しのメニューが出きっていて、`updateVisibleMenu`で中身を差し替えられる。
+    private var isContextMenuVisible = false
     /// 前回`setEntries`で並べた配列。次に渡された`keepingRowContentsOf`と同じ配列かを、中身を比べずに確かめるために持つ。
     private var appliedEntries: [TimelineEntry] = []
     /// 隣の行とアイコン同士を線でつなぐ行。並びが変わるたびに決め直す。
@@ -843,6 +847,26 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         entries[id]
     }
 
+    /// 一覧の行にいる、そのIDのアカウント。いなければnil。
+    func account(withID id: String) -> Account? {
+        Self.account(withID: id, in: entries.values)
+    }
+
+    /// 行の投稿した人、ブーストした人、通知した人から、そのIDのアカウントを探す。
+    static func account(withID id: String, in entries: some Sequence<TimelineEntry>) -> Account? {
+        for entry in entries {
+            let accounts: [Account] = switch entry {
+            case .status(let status), .pinned(let status): [status.account, status.reblog?.account].compactMap(\.self)
+            case .notification(let notification): [notification.account, notification.status?.account, notification.status?.reblog?.account].compactMap(\.self)
+            case .gap, .unreadable: []
+            }
+            if let account = accounts.first(where: { $0.id == id }) {
+                return account
+            }
+        }
+        return nil
+    }
+
     /// 要素の行。画面の外にあればnil。
     func cell(for id: ItemID) -> UICollectionViewCell? {
         dataSource.indexPath(for: id).flatMap(collectionView.cellForItem(at:))
@@ -1415,10 +1439,37 @@ extension TimelineViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplayContextMenu configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
         UserAction.openMenu(screen: texts.dumpName).record()
         menuWillShow()
+        guard let animator else {
+            contextMenuDidAppear()
+            return
+        }
+        animator.addCompletion { [weak self] in self?.contextMenuDidAppear() }
+    }
+
+    private func contextMenuDidAppear() {
+        isContextMenuVisible = true
+        applyPendingContextMenuIcons()
+    }
+
+    /// 開いている長押しのメニューの、`identifier`のサブメニューの印を差し替える。メニューが出きる前なら、出たところで差し替える。
+    func replaceContextMenuIcon(_ image: UIImage, ofMenu identifier: UIMenu.Identifier) {
+        pendingContextMenuIcons[identifier] = image
+        guard isContextMenuVisible else { return }
+        applyPendingContextMenuIcons()
+    }
+
+    private func applyPendingContextMenuIcons() {
+        let icons = pendingContextMenuIcons
+        guard !icons.isEmpty else { return }
+        collectionView.contextMenuInteraction?.updateVisibleMenu { menu in
+            icons.reduce(menu) { menu, icon in Self.replacingImage(icon.value, ofMenu: icon.key, in: menu) }
+        }
     }
 
     /// メニューが閉じるアニメーションの間も行を動かさない。
     func collectionView(_ collectionView: UICollectionView, willEndContextMenuInteraction configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
+        isContextMenuVisible = false
+        pendingContextMenuIcons = [:]
         guard let animator else {
             menuDidHide()
             return
