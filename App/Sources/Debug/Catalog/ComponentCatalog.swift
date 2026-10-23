@@ -57,7 +57,7 @@ enum CatalogComponent: String, CaseIterable {
         case .timelineFooter: "タイムラインの末尾"
         case .timelineRows: "読めない行とギャップの行"
         case .timelineOverlays: "一覧の上に重ねる表示"
-        case .streamingStatus: "引っぱると見えるストリーミングの状態"
+        case .streamingStatus: "引っぱると見える新着の経路"
         case .mediaGrid: "一覧の添付ファイルのサムネイル"
         case .profileHeader: "プロフィールのヘッダー"
         case .posts: "一覧の投稿"
