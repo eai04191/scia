@@ -37,7 +37,10 @@ enum DummyServer {
         let body: Data? = switch (request.httpMethod ?? "GET", path) {
         // ローカルと連合も、タブを開いたときに空振りしないよう、ホームと同じ投稿を返す。
         case ("GET", "/api/v1/timelines/home"), ("GET", "/api/v1/timelines/public"): isFirstPage ? Content.home : Data("[]".utf8)
-        case ("GET", "/api/v1/notifications"): isFirstPage ? Content.notifications : Data("[]".utf8)
+        case ("GET", "/api/v2/notifications"): isFirstPage ? Content.notifications : Data(#"{"accounts":[],"statuses":[],"notification_groups":[]}"#.utf8)
+        // まとめた通知の「ほか3人」から開く人の一覧。どれも同じ人を返し、続きはない。
+        case ("GET", let path) where path.hasSuffix("/favourited_by") || path.hasSuffix("/reblogged_by") || path == "/api/v1/accounts/\(me.id)/followers":
+            Content.people
         case (_, "/api/v1/markers"), ("GET", "/api/v1/preferences"): Data("{}".utf8)
         case ("GET", "/api/v1/custom_emojis"), ("GET", "/api/v2/filters"): Data("[]".utf8)
         case ("GET", "/api/v1/accounts/verify_credentials"), ("GET", "/api/v1/accounts/\(me.id)"): Content.me
@@ -76,7 +79,8 @@ enum DummyServer {
     @MainActor
     private enum Content {
         static let home = encode(statuses)
-        static let notifications = encode(notificationList)
+        static let notifications = encode(notificationGroups)
+        static let people = encode([alice, bob, carol, dave])
         static let me = encode(DummyServer.me)
     }
 
@@ -133,20 +137,56 @@ enum DummyServer {
         }
     }
 
-    private static var notificationList: [MastodonNotification] {
+    /// `GET /api/v2/notifications`の応答と同じ形。まとめた通知と、まとめない通知を混ぜる。
+    private struct GroupedNotifications: Encodable {
+        struct Group: Encodable {
+            let groupKey: String
+            let notificationsCount: Int
+            let type: String
+            let mostRecentNotificationId: String
+            let pageMinId: String
+            let pageMaxId: String
+            let latestPageNotificationAt: Date
+            let sampleAccountIds: [String]
+            let statusId: String?
+        }
+
+        let accounts: [Account]
+        let statuses: [Status]
+        let notificationGroups: [Group]
+    }
+
+    private static var notificationGroups: GroupedNotifications {
         let mine = status(3, me, "<p>自分の投稿。ダミーのセッションでは、投稿への操作はサーバーに届かない。</p>")
         let mention = status(40, carol, #"<p><span class="h-card"><a href="https://\#(host)/@me" class="u-url mention">@<span>me</span></a></span> ダミーの返信です</p>"#)
-        let items: [(MastodonNotification.Kind, Account, Status?)] = [
-            (.favourite, alice, mine),
-            (.reblog, bob, mine),
-            (.mention, carol, mention),
-            (.follow, dave, nil),
-            (.favourite, dave, mine),
-            (.follow, bob, nil),
+        let items: [(MastodonNotification.Kind, [Account], Int, Status?)] = [
+            (.favourite, [alice, dave, bob], 5, mine),
+            (.reblog, [bob], 1, mine),
+            (.mention, [carol], 1, mention),
+            (.follow, [dave, bob, carol], 3, nil),
+            (.favourite, [dave], 1, mention),
+            (.follow, [bob], 1, nil),
         ]
-        return items.enumerated().map { index, item in
-            MastodonNotification(id: "dummy-notification-\(items.count - index)", type: item.0, createdAt: date(index), account: item.1, status: item.2)
+        let groups = items.enumerated().map { index, item in
+            let id = "dummy-notification-\(items.count - index)"
+            let key = switch item.0 {
+            case .favourite, .reblog: "\(item.0.rawValue)-\(item.3?.id ?? "")-\(index)"
+            case .follow: "follow-\(index)"
+            default: "ungrouped-\(id)"
+            }
+            return GroupedNotifications.Group(
+                groupKey: key,
+                notificationsCount: item.2,
+                type: item.0.rawValue,
+                mostRecentNotificationId: id,
+                pageMinId: id,
+                pageMaxId: id,
+                latestPageNotificationAt: date(index),
+                sampleAccountIds: item.1.map(\.id),
+                statusId: item.3?.id
+            )
         }
+        return GroupedNotifications(accounts: [alice, bob, carol, dave], statuses: [mine, mention], notificationGroups: groups)
     }
 
     private static func encode(_ value: some Encodable) -> Data {

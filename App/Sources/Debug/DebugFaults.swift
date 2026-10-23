@@ -145,8 +145,17 @@ enum DebugFaults {
     }
 
     /// 配列の3件に1件の`created_at`を、日時として読めない値に変える。IDとURLは残すので、読めなかった行として並ぶ。
+    /// 通知のまとまりの応答では、まとまりの3件に1件の`latest_page_notification_at`を変える。
     static func corrupt(_ data: Data) -> Data {
-        guard var elements = (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] else { return data }
+        let object = try? JSONSerialization.jsonObject(with: data)
+        if var results = object as? [String: Any], var groups = results["notification_groups"] as? [[String: Any]] {
+            for index in groups.indices where index % 3 == 1 {
+                groups[index]["latest_page_notification_at"] = "壊れた日時"
+            }
+            results["notification_groups"] = groups
+            return (try? JSONSerialization.data(withJSONObject: results)) ?? data
+        }
+        guard var elements = object as? [[String: Any]] else { return data }
         for index in elements.indices where index % 3 == 1 {
             elements[index]["created_at"] = "壊れた日時"
         }
@@ -187,7 +196,7 @@ struct FaultInjectingTransport: HTTPTransport {
         var (data, response) = try await base.send(request)
         let path = request.url?.path() ?? ""
         // 本文の破損とステータスの変更は、同時に入れても両方効かせる。
-        if DebugFaults.isCorruptingListElements, path.hasSuffix("api/v1/timelines/home") || path.hasSuffix("api/v1/notifications") {
+        if DebugFaults.isCorruptingListElements, path.hasSuffix("api/v1/timelines/home") || path.hasSuffix("api/v2/notifications") {
             data = DebugFaults.corrupt(data)
         }
         if DebugFaults.isRegeneratingHome, path.hasSuffix("api/v1/timelines/home"), response.statusCode == 200,
