@@ -212,7 +212,9 @@ public final class TimelineStore {
     /// 満杯のページなら、手元の投稿とつながるまで`maxPages`ページまで続けて読み、ギャップを残さないようにする。
     /// 満杯でないページなら、`maxPages`によらずギャップを1回は読み、間が空なのを確かめて閉じる。
     /// 2ページ目以降の読み込みに失敗したら、そこで止めて残りをギャップとして残す。1ページ目の結果はもう反映しているため。
-    public func fillFromLatest(maxPages: Int = 1) async throws -> [Status]? {
+    ///
+    /// - Parameter progress: 1ページ読むたびに、この補完で新たに加わった投稿の数を渡す。補完の最中に呼ばれてnilを返すときは呼ばない。
+    public func fillFromLatest(maxPages: Int = 1, progress: ((Int) -> Void)? = nil) async throws -> [Status]? {
         guard !isFilling else {
             if let newest = fillBaseID {
                 refillSinceID = refillSinceID.map { Self.older($0, newest) } ?? newest
@@ -227,6 +229,7 @@ public final class TimelineStore {
             isRegenerating = page.isRegenerating
             let added = merge(page)
             reachedEnd = page.isEmpty && !page.isRegenerating
+            progress?(added.count)
             return added
         }
         var added: [Status] = []
@@ -249,11 +252,13 @@ public final class TimelineStore {
             let gapNewerID = page.isRegenerating ? Self.newestID(of: page) : Self.oldestID(of: page)
             unfilledSinceID = page.isRegenerating ? gapNewerID ?? sinceID : nil
             added += merge(page)
+            progress?(added.count)
             if let gapNewerID {
                 let gap = TimelineGap(newerID: gapNewerID, olderID: sinceID)
                 rebuild(statuses: allStatuses, gaps: gaps + [gap])
                 let isFull = page.count >= pageSize
-                added += await fillGap(gap.id, pages: isFull ? maxPages - 1 : max(maxPages - 1, 1))
+                let addedBeforeGap = added.count
+                added += await fillGap(gap.id, pages: isFull ? maxPages - 1 : max(maxPages - 1, 1)) { progress?(addedBeforeGap + $0) }
             }
             next = refillSinceID.map { refillSinceID in
                 if let unfilledSinceID {
@@ -284,7 +289,8 @@ public final class TimelineStore {
     /// ギャップを閉じるのは0件が返ったときだけにする。求めた件数より少なく返すサーバーでは、満杯でないページの先にも投稿が残っているため。
     /// 満杯のページなら、続きは次の読み込みに任せる。満杯でないページなら、その場でもう1回だけ読み、0件ならギャップを閉じる。
     /// 間が空のギャップを、もう一度読み込むまで残さないため。
-    public func loadGap(_ id: String, from direction: GapDirection) async throws -> [Status]? {
+    /// - Parameter progress: 読んだページで投稿が加わるたびに、ここで加わった投稿の数を渡す。満杯でないページの後の、確かめるための読み込みを待たずに渡すため。
+    public func loadGap(_ id: String, from direction: GapDirection, progress: (Int) -> Void = { _ in }) async throws -> [Status]? {
         guard gaps.contains(where: { $0.id == id }), !loadingGapIDs.contains(id) else { return nil }
         loadingGapIDs.insert(id)
         failedGaps[id] = nil
@@ -307,7 +313,11 @@ public final class TimelineStore {
                 logger.error("gap confirmation failed: \(SciaLog.describe(error), privacy: .public)")
                 break
             }
-            added += merge(page)
+            let merged = merge(page)
+            added += merged
+            if !merged.isEmpty {
+                progress(added.count)
+            }
             guard shrink(id, by: page, from: direction), page.count < pageSize, !page.isRegenerating else { break }
         }
         return added.sorted { StatusID.isNewer($0.id, than: $1.id) }
@@ -347,12 +357,14 @@ public final class TimelineStore {
     }
 
     /// ギャップを新しい側から最大`pages`ページ読み、加わった投稿を返す。失敗したらそこで止め、ギャップを残す。
-    private func fillGap(_ id: String, pages: Int) async -> [Status] {
+    /// - Parameter progress: 1ページ読むたびに、ここで加わった投稿の数を渡す。
+    private func fillGap(_ id: String, pages: Int, progress: (Int) -> Void) async -> [Status] {
         var added: [Status] = []
         for _ in 0..<max(pages, 0) {
             guard gaps.contains(where: { $0.id == id }) else { break }
             do {
-                guard let page = try await loadGap(id, from: .fromNewer) else { break }
+                let addedBefore = added.count
+                guard let page = try await loadGap(id, from: .fromNewer, progress: { progress(addedBefore + $0) }) else { break }
                 added += page
             } catch {
                 logger.error("fill gap failed: \(SciaLog.describe(error), privacy: .public)")

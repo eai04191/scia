@@ -32,6 +32,11 @@ public struct MastodonClient: Sendable {
         self.requestLog = requestLog
     }
 
+    /// 429や503で止められ、自動の通信を控えている間の再開の時刻。控えていなければnil。
+    public func automaticRequestsPausedUntil() async -> Date? {
+        await rateLimit.pausedUntil
+    }
+
     /// https://docs.joinmastodon.org/methods/timelines/#home
     public func homeTimeline(_ query: TimelineQuery) async throws -> TimelinePage {
         let (list, response) = try await get(ElementList<Status>.self, path: "api/v1/timelines/home", query: query.queryItems)

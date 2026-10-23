@@ -27,6 +27,10 @@ final class FeedTimelineController {
     private var streamingSubscription: StreamingHub.Subscription?
     /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態。
     private let streamingStatusView = StreamingStatusPullView()
+    /// 切れていた間の投稿を読む補完の状態。ストリーミングの状態と並べて、引っぱったときに見せる。
+    private var catchUp = CatchUpStatus()
+    /// ストリーミングで届いた新着の流れの速さ。引っぱったときに見せる。
+    private var arrivalRate = ArrivalRate()
     /// 最初の読み込みが済んだ。空のホームでも、済んでいればつなぐ。
     private var hasLoadedInitial = false
     /// バックグラウンドでは接続しない。最初の読み込みの途中でバックグラウンドへ入っても、読み込み後につながないようにする。
@@ -184,6 +188,20 @@ final class FeedTimelineController {
         streamingStatusView.setState(state)
     }
 
+    /// 補完で429や503を受けて止められていたら、待機中と出す。補完の終わりの反映を待たせないよう、別に確かめる。
+    private func showPauseAfterFill() {
+        let attempt = catchUp.attempt
+        run(.automatic) { controller in
+            guard let until = await controller.client.automaticRequestsPausedUntil() else { return }
+            controller.updateCatchUp { $0.pause(after: attempt, until: until) }
+        }
+    }
+
+    private func updateCatchUp(_ change: (inout CatchUpStatus) -> Void) {
+        change(&catchUp)
+        streamingStatusView.setCatchUp(catchUp)
+    }
+
     private func stopStreaming() {
         guard let streamingSubscription else { return }
         logger.info("\(self.feed.name, privacy: .public) streaming unsubscribe")
@@ -224,6 +242,7 @@ final class FeedTimelineController {
             viewController.setEntries(store.entries, placingAtTop: topID)
             updateUnreadCount()
             hasLoadedInitial = true
+            updateCatchUp { $0.finish(at: Date(), isRegenerating: store.isRegenerating) }
             viewController.setContentState(store.isEmpty && store.isRegenerating ? .regenerating : .loaded)
             viewController.setFooterState(store.reachedEnd ? .reachedEnd : .idle)
             logger.info("\(self.feed.name, privacy: .public) loadInitial done count=\(statuses.count, privacy: .public) regenerating=\(self.store.isRegenerating, privacy: .public)")
@@ -289,7 +308,18 @@ final class FeedTimelineController {
             do {
                 let before = controller.store.entries
                 let maxPages = Int(controller.tuning.value(of: TuningCatalog.fillPageLimit))
-                guard let added = try await controller.store.fillFromLatest(maxPages: maxPages), !controller.isStopped else { return }
+                // 呼んだ時点ではなく読み始める直前に変える。呼んでから読み始めるまでに前の補完が終わると、その終わりで戻ってしまうため。
+                // 補完の最中ならストアはnilを返し、今の補完が続けて読むので、その終わりで状態を戻す。
+                controller.updateCatchUp { $0.begin() }
+                guard let added = try await controller.store.fillFromLatest(maxPages: maxPages, progress: { count in
+                    controller.updateCatchUp { $0.progress(readCount: count) }
+                }), !controller.isStopped else { return }
+                // 作り直し中かは、下の読み直しの予約と同じくストアの直近の読み込みで見る。補完が206を受けて残りを読んでいる間に、
+                // 末尾の読み込みが200で終わると、補完の結果は揃っていないのに作り直し中でないことになり、読み直しを予約せず、時刻も進む。
+                // 起きるのは、作り直し中に補完と末尾の読み込みが重なったときだけ。補完ごとの結果を返すようストアを変える必要があり、この表示の範囲を超えるので直していない。
+                // 表示を予約と食い違わせないよう、同じ値を使う。
+                controller.updateCatchUp { $0.finish(at: Date(), isRegenerating: controller.store.isRegenerating) }
+                controller.showPauseAfterFill()
                 controller.logger.info("\(controller.feed.name, privacy: .public) fill done added=\(added.count, privacy: .public) gaps=\(controller.store.gaps.count, privacy: .public) regenerating=\(controller.store.isRegenerating, privacy: .public)")
                 if controller.store.isRegenerating {
                     controller.scheduleRegeneratingRetry()
@@ -303,6 +333,8 @@ final class FeedTimelineController {
                 }
             } catch {
                 // 失敗しても、次につながったときに同じ基準から読み直す。
+                controller.updateCatchUp { $0.fail(error) }
+                controller.showPauseAfterFill()
                 controller.handle(error, during: "fill") { _ in }
                 // 作り直し中の読み直しが失敗したら、つながったままでは次のきっかけが来ないので、読み直しを続ける。
                 if controller.store.isRegenerating {
@@ -379,6 +411,10 @@ final class FeedTimelineController {
 
     private func receive(_ event: StreamingEvent) {
         guard !isStopped else { return }
+        if case .update = event {
+            arrivalRate.record(at: Date())
+            streamingStatusView.setArrivalRate(arrivalRate)
+        }
         apply(store.receive(event))
     }
 

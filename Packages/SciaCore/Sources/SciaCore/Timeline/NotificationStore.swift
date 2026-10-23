@@ -135,7 +135,10 @@ public final class NotificationStore {
     ///
     /// 失敗したときは何も反映せず、次の呼び出しも同じ基準から読む。補完の最中に呼ばれたら、
     /// そのときの基準を覚えて、今の補完が終わった後に続けて読む。
-    public func fillFromLatest(maxPages: Int) async throws -> [MastodonNotification]? {
+    ///
+    /// - Parameter progress: 1ページ読むたびに、この補完で読んだ通知の数を渡す。手元の通知と重なる分も数える。
+    ///   新たに加わる通知は、つながったかが分かるまで並べないため。補完の最中に呼ばれてnilを返すときは呼ばない。
+    public func fillFromLatest(maxPages: Int, progress: ((Int) -> Void)? = nil) async throws -> [MastodonNotification]? {
         guard !isFilling else {
             if let newest = newestFillBaseID {
                 refillSinceID = refillSinceID.map { Self.older($0, newest) } ?? newest
@@ -146,14 +149,19 @@ public final class NotificationStore {
         defer { isFilling = false }
 
         var added: [MastodonNotification] = []
+        var readCount = 0
         var next = unfilledSinceID ?? newestFillBaseID
         repeat {
             let sinceID = next
             unfilledSinceID = sinceID
             let fetched: NotificationPage
             let isConnected: Bool
+            let readBefore = readCount
             do {
-                (fetched, isConnected) = try await fetchNewer(than: sinceID, maxPages: maxPages)
+                (fetched, isConnected) = try await fetchNewer(than: sinceID, maxPages: maxPages) { count in
+                    readCount = readBefore + count
+                    progress?(readCount)
+                }
             } catch {
                 if let sinceID, let refillSinceID {
                     unfilledSinceID = Self.older(sinceID, refillSinceID)
@@ -189,9 +197,12 @@ public final class NotificationStore {
     ///
     /// 満杯でないページだけでは、つながったと判断しない。求めた件数より少なく返すサーバーでは、その下にも通知が残っているため。
     /// 上限のページを読んだ時点でそのページが満杯でなければ、0件かを確かめるために1回だけ多く読む。
-    private func fetchNewer(than sinceID: String?, maxPages: Int) async throws -> (NotificationPage, isConnected: Bool) {
+    /// - Parameter progress: 1ページ読むたびに、ここで読んだ通知の数を渡す。
+    private func fetchNewer(than sinceID: String?, maxPages: Int, progress: (Int) -> Void) async throws -> (NotificationPage, isConnected: Bool) {
         guard let sinceID else {
-            return (try await fetch(TimelineQuery(limit: pageSize)), true)
+            let page = try await fetch(TimelineQuery(limit: pageSize))
+            progress(page.count)
+            return (page, true)
         }
         var fetched = NotificationPage(notifications: [])
         var maxID: String?
@@ -203,6 +214,7 @@ public final class NotificationStore {
                 return (fetched, true)
             }
             fetched = NotificationPage(notifications: fetched.notifications + page.notifications, unreadable: fetched.unreadable + page.unreadable)
+            progress(fetched.count)
             maxID = oldest
             remainingPages -= 1
             guard remainingPages == 0 else { continue }

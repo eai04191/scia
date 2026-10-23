@@ -31,6 +31,10 @@ final class NotificationsController {
     private var streamingSubscription: StreamingHub.Subscription?
     /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態。
     private let streamingStatusView = StreamingStatusPullView()
+    /// 切れていた間の通知を読む補完の状態。ストリーミングの状態と並べて、引っぱったときに見せる。
+    private var catchUp = CatchUpStatus()
+    /// ストリーミングで届いた通知の流れの速さ。引っぱったときに見せる。
+    private var arrivalRate = ArrivalRate()
     private var hasLoadedInitial = false
     private var isInForeground = true
     private var isSavingReadPosition = false
@@ -145,6 +149,7 @@ final class NotificationsController {
             guard let notifications = try await store.loadInitial(markerID: markerID), !isStopped else { return }
             showEntries()
             hasLoadedInitial = true
+            updateCatchUp { $0.finish(at: Date()) }
             viewController.setContentState(.loaded)
             viewController.setFooterState(store.reachedEnd ? .reachedEnd : .idle)
             logger.info("notifications loadInitial done count=\(notifications.count, privacy: .public)")
@@ -203,6 +208,20 @@ final class NotificationsController {
         streamingStatusView.setState(state)
     }
 
+    /// 補完で429や503を受けて止められていたら、待機中と出す。補完の終わりの反映を待たせないよう、別に確かめる。
+    private func showPauseAfterFill() {
+        let attempt = catchUp.attempt
+        run(.automatic) { controller in
+            guard let until = await controller.client.automaticRequestsPausedUntil() else { return }
+            controller.updateCatchUp { $0.pause(after: attempt, until: until) }
+        }
+    }
+
+    private func updateCatchUp(_ change: (inout CatchUpStatus) -> Void) {
+        change(&catchUp)
+        streamingStatusView.setCatchUp(catchUp)
+    }
+
     private func stopStreaming() {
         guard let streamingSubscription else { return }
         logger.info("notifications streaming unsubscribe")
@@ -231,6 +250,8 @@ final class NotificationsController {
     }
 
     private func receive(_ notification: MastodonNotification) {
+        arrivalRate.record(at: Date())
+        streamingStatusView.setArrivalRate(arrivalRate)
         // receiveの戻り値は、保留が空から1件になったかで、受け取ったかではない。挿入を待つ間に続けて届いた通知も流すよう、保留が増えたかで見る。
         let pendingCount = store.pending.count
         if store.receive(notification) {
@@ -270,7 +291,14 @@ final class NotificationsController {
             do {
                 let before = controller.store.entries
                 let maxPages = Int(controller.tuning.value(of: TuningCatalog.fillPageLimit))
-                guard let added = try await controller.store.fillFromLatest(maxPages: maxPages), !controller.isStopped else { return }
+                // 呼んだ時点ではなく読み始める直前に変える。呼んでから読み始めるまでに前の補完が終わると、その終わりで戻ってしまうため。
+                // 補完の最中ならストアはnilを返し、今の補完が続けて読むので、その終わりで状態を戻す。
+                controller.updateCatchUp { $0.begin() }
+                guard let added = try await controller.store.fillFromLatest(maxPages: maxPages, progress: { count in
+                    controller.updateCatchUp { $0.progress(readCount: count) }
+                }), !controller.isStopped else { return }
+                controller.updateCatchUp { $0.finish(at: Date()) }
+                controller.showPauseAfterFill()
                 controller.logger.info("notifications fill done added=\(added.count, privacy: .public)")
                 // 待っている間に同じ通知がストリーミングで挿入されていても、古い側を捨てていることがある。
                 // 読めなかった通知だけが増えたときも描き直すよう、表示する並びで比べる。
@@ -279,6 +307,8 @@ final class NotificationsController {
                 controller.viewController.setFooterState(controller.store.reachedEnd ? .reachedEnd : .idle)
             } catch {
                 // 失敗しても、次につながったときに同じ基準から読み直す。
+                controller.updateCatchUp { $0.fail(error) }
+                controller.showPauseAfterFill()
                 controller.handle(error, during: "fill") { _ in }
             }
         }

@@ -168,6 +168,39 @@ struct TimelineGapTests {
         #expect(ids(store) == Array((8...17).reversed()))
     }
 
+    /// 読み込み中の表示に使う。何ページで終わるかは分からないので、1ページ読むたびに、加わった投稿の数を積み上げて渡す。
+    @Test func fillReportsAddedCountPerPage() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let store = makeStore(server)
+        _ = try await store.loadInitial()
+        server.post(11...17)
+        var reported: [Int] = []
+
+        _ = try await store.fillFromLatest(maxPages: 3) { reported.append($0) }
+
+        #expect(reported == [3, 6, 7])
+    }
+
+    /// 満杯でないページを取り込んだら、間が空なのを確かめる読み込みを待たずに件数を渡す。確かめるのが遅れても、読んだ分は表示に出す。
+    @Test func fillReportsGapPageBeforeConfirming() async throws {
+        let server = FakeHomeServer(ids: 1...10)
+        let reported = Mutex<[Int]>([])
+        let reportedAtConfirmation = Mutex<[Int]?>(nil)
+        let store = TimelineStore(pageSize: Self.pageSize) { query in
+            let page = server.page(query)
+            if query.maxID != nil, query.sinceID != nil, page.isEmpty {
+                reportedAtConfirmation.withLock { $0 = reported.withLock { $0 } }
+            }
+            return page
+        }
+        _ = try await store.loadInitial()
+        server.post(11...17)
+
+        _ = try await store.fillFromLatest(maxPages: 3) { count in reported.withLock { $0.append(count) } }
+
+        #expect(reportedAtConfirmation.withLock { $0 } == [3, 6, 7])
+    }
+
     @Test func fillLeavesGapBeyondPageLimit() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)

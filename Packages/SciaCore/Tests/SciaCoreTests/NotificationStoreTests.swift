@@ -183,6 +183,18 @@ struct NotificationStoreTests {
         #expect(queue.queries.dropFirst().allSatisfy { $0.sinceID == "30" })
     }
 
+    /// 読み込み中の表示に使う。つながったかが分かるまで並べないので、読んだ通知の数を1ページごとに積み上げて渡す。
+    @Test func fillReportsReadCountPerPage() async throws {
+        let queue = PageQueue([try page([30, 29, 28]), try page([36, 35, 34]), try page([33, 32, 31]), try page([])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+        var reported: [Int] = []
+
+        _ = try await store.fillFromLatest(maxPages: 3) { reported.append($0) }
+
+        #expect(reported == [3, 6])
+    }
+
     /// 上限まで読んでもつながらなければ、間を欠いたまま並べず、読んだ範囲より古い手元の通知を捨てる。
     @Test func fillDropsOlderNotificationsWhenNotConnected() async throws {
         let queue = PageQueue([try page([30, 29, 28]), try page([27, 26, 25]), try page([40, 39, 38]), try page([37, 36, 35])])
