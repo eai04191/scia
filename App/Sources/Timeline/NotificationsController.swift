@@ -291,6 +291,7 @@ final class NotificationsController {
             do {
                 let before = controller.store.entries
                 let maxPages = Int(controller.tuning.value(of: TuningCatalog.fillPageLimit))
+                controller.logger.info("notifications fill start")
                 // 呼んだ時点ではなく読み始める直前に変える。呼んでから読み始めるまでに前の補完が終わると、その終わりで戻ってしまうため。
                 // 補完の最中ならストアはnilを返し、今の補完が続けて読むので、その終わりで状態を戻す。
                 controller.updateCatchUp { $0.begin() }
