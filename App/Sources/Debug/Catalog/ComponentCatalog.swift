@@ -35,6 +35,7 @@ enum CatalogComponent: String, CaseIterable {
     case linkCards = "link-cards"
     case polls
     case notifications
+    case accounts
     case editHistory = "edit-history"
     case hdrEmoji = "hdr-emoji"
     case reportSheet = "report-sheet"
@@ -64,6 +65,7 @@ enum CatalogComponent: String, CaseIterable {
         case .linkCards: "リンクカード"
         case .polls: "投稿の投票"
         case .notifications: "通知の種類"
+        case .accounts: "人の一覧の行"
         case .editHistory: "編集履歴の版"
         case .hdrEmoji: "HDRのカスタム絵文字"
         case .reportSheet: "通報のシート"
@@ -96,6 +98,7 @@ enum CatalogComponent: String, CaseIterable {
         case .linkCards: PostRowCatalog.linkCardStates()
         case .polls: PollCatalog.states()
         case .notifications: PostRowCatalog.notificationStates()
+        case .accounts: PostRowCatalog.accountStates()
         case .editHistory: EditHistoryCatalog.states()
         case .hdrEmoji: HDREmojiCatalog.states()
         case .reportSheet: ReportSheetCatalog.states()

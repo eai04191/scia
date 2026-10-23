@@ -201,9 +201,14 @@ enum PostRowCatalog {
         // メンションなどの投稿は通知を送った人が書き、お気に入りなどで再掲する投稿は自分が書いたもの。
         let mentioned = status(content: "<p>@me 通知の元になった投稿。</p>", account: booster)
         let mine = status(content: "<p>お気に入りやブーストをされた自分の投稿。</p>")
-        func row(_ title: String, _ type: MastodonNotification.Kind, status: Status? = mentioned, account: Account = booster, expandsSpoiler: Bool = false) -> CatalogState {
+        /// - Parameter group: まとめた通知にするなら、並べる人（先頭がいちばん新しい人）と、まとまりの人数。
+        func row(_ title: String, _ type: MastodonNotification.Kind, status: Status? = mentioned, account: Account = booster, group: (accounts: [Account], count: Int)? = nil, expandsSpoiler: Bool = false) -> CatalogState {
             CatalogState(title: title) {
-                let notification = MastodonNotification(id: UUID().uuidString, type: type, createdAt: .now.addingTimeInterval(-300), account: account, status: status)
+                let id = UUID().uuidString
+                let notification = MastodonNotification(
+                    id: id, type: type, createdAt: .now.addingTimeInterval(-300), account: group?.accounts.first ?? account, status: status,
+                    groupKey: "\(type.rawValue)-\(id)", notificationsCount: group?.count ?? 1, sampleAccounts: group?.accounts
+                )
                 if expandsSpoiler, let status { notifications.toggleSpoiler(of: status) }
                 @MainActor func configuration() -> any UIContentConfiguration {
                     notifications.contentConfiguration(for: notification, base: .cell())
@@ -217,6 +222,11 @@ enum PostRowCatalog {
             }
         }
         let longBody = "<p>" + String(repeating: "お気に入りに登録された自分の投稿が長いときに、再掲する本文を何行で切るかを確かめるための文。", count: 4) + "</p>"
+        let colors: [UIColor] = [.systemPink, .systemGreen, .systemPurple, .systemTeal, .systemOrange, .systemBlue, .systemRed, .systemIndigo]
+        let people = colors.enumerated().map { index, color in
+            Fixtures.account(displayName: "人\(index + 1)", acct: "person\(index + 1)@example.com", avatar: Fixtures.imageURL(width: 200, height: 200, color: color))
+        }
+        let longNamed = Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com")
         return [
             row("メンション", .mention),
             row("メンション（画像つき）", .mention, status: status(content: "<p>@me 画像つきのメンション。</p>", account: booster, media: [
@@ -271,8 +281,32 @@ enum PostRowCatalog {
                 displayName: String(repeating: "とても長い名前", count: 4),
                 acct: "a-very-long-account-name@subdomain.example.com"
             )),
+            row("まとめたお気に入り（2人）", .favourite, status: mine, group: (Array(people.prefix(2)), 2)),
+            row("まとめたお気に入り（並べた人より多い）", .favourite, status: mine, group: (Array(people.prefix(3)), 12)),
+            row("まとめたブースト（8人を並べ、人数が大きい）", .reblog, status: mine, group: (people, 1_234)),
+            row("まとめたお気に入り（名前が長い）", .favourite, status: mine, group: ([longNamed] + people.prefix(2), 3)),
+            row("まとめたフォロー", .follow, status: nil, group: (Array(people.prefix(4)), 4)),
             row("フォローリクエスト", .followRequest, status: nil),
             row("知らない種類", .other("admin.sign_up"), status: nil),
+        ]
+    }
+
+    /// お気に入りした人などの一覧の行。名前とハンドルの長さで崩れないかを見る。
+    @MainActor
+    static func accountStates() -> [CatalogState] {
+        let list = TimelineViewController(texts: .accountList(.favouritedBy("catalog")))
+        func row(_ title: String, _ account: Account) -> CatalogState {
+            CatalogState(title: title) {
+                CatalogFrame.bordered(list.accountConfiguration(for: account, base: .cell()).makeContentView())
+            }
+        }
+        return [
+            row("ふつう", booster),
+            row("名前とハンドルが長い", Fixtures.account(
+                displayName: String(repeating: "とても長い名前", count: 4),
+                acct: "a-very-long-account-name@subdomain.example.com"
+            )),
+            row("表示名がない（ユーザー名を出す）", Fixtures.account(displayName: "", acct: "noname@example.com")),
         ]
     }
 
