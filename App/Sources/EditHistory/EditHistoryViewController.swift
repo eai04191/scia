@@ -15,6 +15,8 @@ final class EditHistoryViewController: UIViewController {
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// 本文のリンクの長押しのメニューの開く項目で、開く場所を決めてURLを開く。
     var onOpenURL: ((URL, LinkBrowser) -> Void)?
+    /// リンクのメニューの「プロフィールとして開く」で、リンク先をプロフィールとして探して開く。
+    var onOpenProfileURL: ((URL) -> Void)?
     /// メンションの長押しのメニューの、メンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
     var userMenuActions: UserMenuActions?
     /// 添付ファイルを覆うか。今の投稿の版は、一覧と同じく、使う人が開いた・隠した選択に従う。セッションがほかの画面とそろえる。
@@ -256,5 +258,9 @@ extension EditHistoryViewController: LinkMenuHost {
 
     func openURL(_ url: URL, in browser: LinkBrowser) {
         onOpenURL?(url, browser)
+    }
+
+    func openProfile(resolving url: URL) {
+        onOpenProfileURL?(url)
     }
 }

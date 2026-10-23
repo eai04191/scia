@@ -9,6 +9,8 @@ struct PersistentNotices {
         case screen
         /// 共有や保存のために落としている途中。ビューアを閉じても続くため、アプリ全体のもの。
         case download
+        /// リンクのメニューの「プロフィールとして開く」で、リンク先を探している途中。見つかると別の画面に移るため、アプリ全体のもの。
+        case profileLookup
         #if DEBUG
         /// `scia-debug://notice/progress`で出す、確かめるための処理中。アプリ全体のもの。
         case debug

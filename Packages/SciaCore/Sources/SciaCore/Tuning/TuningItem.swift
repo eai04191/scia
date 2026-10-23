@@ -729,6 +729,15 @@ public enum TuningCatalog {
         defaultValue: 4
     )
 
+    /// リンクのメニューの「プロフィールとして開く」で、探し始めてから「取得中」のチップを出すまでの時間。すぐ見つかったときに、チップが一瞬だけ出入りしないようにする。
+    public static let profileLookupChipDelay = NumberTuning(
+        id: "notice.profileLookupChipDelay",
+        title: "プロフィールの取得中のチップを出すまでの時間（秒）",
+        range: 0...2,
+        step: 0.1,
+        defaultValue: 0.3
+    )
+
     /// ステータスバーの場所に流す通知を、待っている通知がないときに出しておく時間。
     public static let statusBarTickerDuration = NumberTuning(
         id: "statusBarTicker.duration",
@@ -1621,6 +1630,7 @@ public enum TuningCatalog {
         TuningSection(id: "notice", title: "知らせ", items: [
             .number(noticeAnimationDuration),
             .number(noticeFailureChipDuration),
+            .number(profileLookupChipDelay),
             .number(noticeDismissDistance),
             .number(noticeDismissVelocity),
         ]),

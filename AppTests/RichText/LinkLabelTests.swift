@@ -231,7 +231,7 @@ struct LinkLabelTests {
         let profile = try #require(URL(string: "https://example.social/@bob"))
         let settings = try settings()
 
-        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: ブラウザで開く,リンクをコピー,共有")
+        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: ブラウザで開く,プロフィールとして開く,リンクをコピー,共有")
         #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: ブラウザで開く,リンクをコピー,共有")
         #expect(try menuOutline(of: .mention(acct: "bob@example.social", url: profile), settings: settings) == "@bob@example.social: プロフィール|リンクをコピー,共有,ブラウザで開く")
     }
@@ -241,21 +241,21 @@ struct LinkLabelTests {
         let url = try #require(URL(string: "https://example.com/a"))
         let tag = try #require(URL(string: "https://example.social/tags/cat"))
         let settings = try settings()
-        settings.linkMenuLayout = MenuLayout(elements: [.item(.share, isVisible: true), .separator, .item(.openInAppSafari, isVisible: true), .item(.openInBrowser, isVisible: false), .more, .item(.copyLink, isVisible: true)])
+        settings.linkMenuLayout = MenuLayout(elements: [.item(.share, isVisible: true), .separator, .item(.openInAppSafari, isVisible: true), .item(.openInBrowser, isVisible: false), .item(.openAsProfile, isVisible: false), .more, .item(.copyLink, isVisible: true)])
         settings.hashtagMenuLayout = MenuLayout(elements: [.item(.copyLink, isVisible: true), .item(.openInBrowser, isVisible: false), .item(.share, isVisible: false), .more])
 
         #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: 共有|アプリ内のSafariで開く|その他[リンクをコピー]")
         #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: リンクをコピー")
     }
 
-    /// アプリ内のSafariはhttpとhttps以外のURLを開けないため、そのリンクでは押せない。ほかの開く項目は押せる。
-    @Test func appSafariIsDisabledForNonWebLinks() throws {
+    /// アプリ内のSafariはhttpとhttps以外のURLを開けず、サーバーもそのURLをプロフィールとして探さないため、そのリンクでは2つを押せない。ほかの開く項目は押せる。
+    @Test func appSafariAndOpenAsProfileAreDisabledForNonWebLinks() throws {
         let magnet = try #require(URL(string: "magnet:?xt=urn:btih:0"))
         let web = try #require(URL(string: "https://example.com/a"))
         let settings = try settings()
-        settings.linkMenuLayout = MenuLayout(elements: [.item(.openInBrowser, isVisible: true), .item(.openInDefaultBrowser, isVisible: true), .item(.openInAppSafari, isVisible: true), .more])
+        settings.linkMenuLayout = MenuLayout(elements: [.item(.openInBrowser, isVisible: true), .item(.openInDefaultBrowser, isVisible: true), .item(.openInAppSafari, isVisible: true), .item(.openAsProfile, isVisible: true), .more])
 
-        #expect(try disabledTitles(of: .url(magnet), settings: settings) == ["アプリ内のSafariで開く"])
+        #expect(try disabledTitles(of: .url(magnet), settings: settings) == ["アプリ内のSafariで開く", "プロフィールとして開く"])
         #expect(try disabledTitles(of: .url(web), settings: settings).isEmpty)
     }
 

@@ -632,6 +632,17 @@ struct MastodonClientTests {
         #expect(resolved?.acct == "bob@remote.example")
     }
 
+    /// Mastodonはスキームが小文字のhttpかhttpsのときだけ、検索の語をURLとして相手のサーバーに問い合わせる。大文字のスキームのリンクも、小文字にして送る。
+    @Test func resolveAccountAtURLLowercasesTheScheme() async throws {
+        let transport = StubTransport([.json(#"{"accounts":[],"statuses":[],"hashtags":[]}"#, statusCode: 200)])
+        let url = try #require(URL(string: "HTTPS://Pixelfed.example/Bob"))
+
+        _ = try await makeClient(transport).resolveAccount(at: url)
+
+        let sent = try #require(await transport.requests.first?.url)
+        #expect(URLComponents(url: sent, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "q" }?.value == "https://Pixelfed.example/Bob")
+    }
+
     // MARK: - 補完
 
     @Test func searchAccountsForCompletionDoesNotResolveRemoteAccounts() async throws {

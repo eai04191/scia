@@ -129,6 +129,7 @@ extension LinkMenuItem: MenuItemContentProviding {
         case .openInDefaultBrowser: .url(.openInDefaultBrowser)
         // 投稿とハッシュタグのURLはMastodonのhttpsのページだが、本文のリンクはほかのスキームもありうる。
         case .openInAppSafari: .url(.openInAppSafari, noteSuffix: "httpとhttpsのリンクでだけ押せます")
+        case .openAsProfile: .own(title: "プロフィールとして開く", symbolName: "person.crop.circle", note: "リンク先のプロフィールをサーバーで探して開きます。httpとhttpsのリンクでだけ押せます")
         case .copyLink: .url(.copyLink)
         case .share: .url(.share)
         }

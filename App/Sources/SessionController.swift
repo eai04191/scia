@@ -46,6 +46,8 @@ final class SessionController {
     /// `scia-debug://notice/progress`で出している、確かめるための処理中のチップを進める。
     private var debugProgressTask: Task<Void, Never>?
     #endif
+    /// リンクのメニューの「プロフィールとして開く」で、リンク先を探している途中のもの。選び直したら、前のものは止める。
+    private var profileLookup: (id: UUID, task: Task<Void, Never>)?
     /// 「接続の状態」画面に出す、このセッションの接続の状態。
     let diagnostics: ConnectionDiagnostics
     /// 電波が戻ったときと、レート制限が明けたときに、読み込みをやり直す。
@@ -729,6 +731,10 @@ final class SessionController {
             self?.open(destination, in: status, from: viewController)
         }
         viewController.onOpenURL = { [weak self] url, browser in self?.open(url, in: browser) }
+        viewController.onOpenProfileURL = { [weak self, weak viewController] url in
+            guard let viewController else { return }
+            self?.openProfile(resolvingLink: url, from: viewController)
+        }
         viewController.onOpenThread = { [weak self, weak viewController] status, rowFrame in
             guard let viewController else { return }
             self?.openThread(of: status, rowFrame: rowFrame, from: viewController)
@@ -812,7 +818,7 @@ final class SessionController {
         let client = client
         Task {
             do {
-                guard let account = try await client.resolveAccount(url.absoluteString) else {
+                guard let account = try await client.resolveAccount(at: url) else {
                     logger.error("profile not found url=\(url.absoluteString, privacy: .public)")
                     handle(ProfileNotFound(acct: acct), title: "プロフィールを開けませんでした")
                     return
@@ -822,6 +828,59 @@ final class SessionController {
                 handle(error, title: "プロフィールを開けませんでした")
             }
         }
+    }
+
+    /// リンクのメニューの「プロフィールとして開く」。リンク先をプロフィールとして探し、見つかれば開く。
+    /// 探すにはサーバーが相手のページを取りに行くため、時間がかかれば「取得中」のチップを出す。すぐ見つかったときにチップが一瞬だけ出入りしないよう、出すのは少し待ってから。
+    /// 探している途中にほかのリンクで選び直したら、前のものは止めて結果を使わない。待っている間も、ほかの操作は止めない。
+    private func openProfile(resolvingLink url: URL, from source: UIViewController) {
+        profileLookup?.task.cancel()
+        let id = UUID()
+        let client = client
+        let chipDelay = AppDependencies.tuning.value(of: TuningCatalog.profileLookupChipDelay)
+        let task = Task { [weak self] in
+            let chip = Task { [weak self] in
+                try? await Task.sleep(for: .seconds(chipDelay))
+                guard !Task.isCancelled else { return }
+                self?.showProfileLookupProgress()
+            }
+            defer {
+                chip.cancel()
+                self?.endProfileLookup(id)
+            }
+            do {
+                let account = try await client.resolveAccount(at: url)
+                guard !Task.isCancelled, let self else { return }
+                guard let account else {
+                    logger.info("profile not found for link url=\(url.absoluteString, privacy: .public)")
+                    handle(LinkProfileNotFound(), title: "プロフィールを開けませんでした")
+                    return
+                }
+                openProfile(account, from: source)
+            } catch {
+                guard !Task.isCancelled, let self else { return }
+                handle(error, title: "プロフィールを開けませんでした")
+            }
+        }
+        profileLookup = (id, task)
+    }
+
+    private static let profileLookupActivityID = "profile.lookup"
+
+    private func showProfileLookupProgress() {
+        // 「操作の状況」の行から止めたら、見つかってもプロフィールを開かない。
+        operationStatus.update(OperationStatus.Activity(id: Self.profileLookupActivityID, title: Notice.profileLookup.title)) { [weak self] in
+            self?.profileLookup?.task.cancel()
+        }
+        notices.setPersistent({ _ in .profileLookup }, in: .profileLookup)
+    }
+
+    /// `id`の探す処理が済んだ。選び直した新しいものが探している途中なら、そのチップは残す。
+    private func endProfileLookup(_ id: UUID) {
+        guard profileLookup?.id == id else { return }
+        profileLookup = nil
+        operationStatus.end(Self.profileLookupActivityID)
+        notices.setPersistent(nil, in: .profileLookup)
     }
 
     // MARK: - プロフィール
@@ -1019,6 +1078,10 @@ final class SessionController {
         viewController.notices = notices
         viewController.mediaTransfers = mediaTransfers
         viewController.onOpenURL = { [weak self] url, browser in self?.open(url, in: browser) }
+        viewController.onOpenProfileURL = { [weak self, weak viewController] url in
+            guard let viewController else { return }
+            self?.openProfile(resolvingLink: url, from: viewController)
+        }
         viewController.userMenuActions = userMenuActions
         viewController.onOpenLink = { [weak self, weak viewController] destination in
             guard let self, let viewController else { return }
@@ -1081,7 +1144,7 @@ final class SessionController {
         case .account(let id, let acct):
             return (id, acct)
         case .profileURL(let url, let shownAcct):
-            guard let account = try await client.resolveAccount(url.absoluteString) else {
+            guard let account = try await client.resolveAccount(at: url) else {
                 logger.error("user menu target not found url=\(url.absoluteString, privacy: .public)")
                 throw ProfileNotFound(acct: shownAcct)
             }
@@ -2117,6 +2180,11 @@ private struct ProfileNotFound: LocalizedError {
     let acct: String
 
     var errorDescription: String? { "@\(acct)が見つかりませんでした。" }
+}
+
+/// リンクのメニューの「プロフィールとして開く」で、リンク先がプロフィールとして見つからなかった。プロフィールでないページのリンクでも起きる。
+private struct LinkProfileNotFound: LocalizedError {
+    var errorDescription: String? { "リンク先のプロフィールが見つかりませんでした。" }
 }
 
 /// リストとハッシュタグのタイムラインの一覧と、そのナビゲーション。使う人ごとに数が違うため、タブの並びに出たときに作る。

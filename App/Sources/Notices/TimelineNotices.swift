@@ -8,6 +8,9 @@ extension Notice {
         Notice(id: "timeline.interactionFailure", kind: .failure, title: title, action: .disclosure(hint: "理由を見られます。", handler: showReason))
     }
 
+    /// リンクのメニューの「プロフィールとして開く」で、リンク先を探している途中。サーバーが相手のページを取りに行くため、時間がかかることがある。
+    static let profileLookup = Notice(id: "timeline.profileLookup", kind: .progress, title: "取得中")
+
     /// 投稿のリンクをコピーした。コピーは画面の変化で見えないため知らせる。
     static let linkCopied = Notice(id: "timeline.linkCopied", kind: .success, title: "リンクをコピーしました")
 

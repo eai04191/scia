@@ -104,6 +104,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onOpenLink: ((RichText.LinkDestination, Status) -> Void)?
     /// 長押しのメニューの開く項目で、開く場所を決めてURLを開く。
     var onOpenURL: ((URL, LinkBrowser) -> Void)?
+    /// リンクのメニューの「プロフィールとして開く」で、リンク先をプロフィールとして探して開く。
+    var onOpenProfileURL: ((URL) -> Void)?
     /// ユーザーのメニューのメンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
     var userMenuActions: UserMenuActions?
     /// この画面が表示されている間、生かしておくもの。画面を組み立てたコントローラーを、ナビゲーションから外されるまで残すのに使う。
@@ -1354,6 +1356,10 @@ extension TimelineViewController: LinkMenuHost {
 
     func openURL(_ url: URL, in browser: LinkBrowser) {
         onOpenURL?(url, browser)
+    }
+
+    func openProfile(resolving url: URL) {
+        onOpenProfileURL?(url)
     }
 }
 

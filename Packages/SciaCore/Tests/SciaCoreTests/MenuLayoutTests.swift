@@ -204,11 +204,21 @@ struct MenuLayoutTests {
     }
 
     /// 本文のリンクとハッシュタグのメニューは、設定を足す前の決め打ちのメニューと同じ並びにする。開く場所を選んで開く2つは隠しておく。
+    /// リンクのメニューには、あとから足した「プロフィールとして開く」が「ブラウザで開く」の下に入る。
     @Test func linkAndHashtagMenuDefaultsMatchMenuBeforeCustomization() {
-        #expect(LinkMenuItem.defaultLayout.groups.main.map(\.items) == [[.openInBrowser, .copyLink, .share]])
+        #expect(LinkMenuItem.defaultLayout.groups.main.map(\.items) == [[.openInBrowser, .openAsProfile, .copyLink, .share]])
         #expect(LinkMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
         #expect(HashtagMenuItem.defaultLayout.groups.main.map(\.items) == [[.openInBrowser, .copyLink, .share]])
         #expect(HashtagMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
+    }
+
+    /// 「プロフィールとして開く」を足す前に保存したリンクのメニューでも、「ブラウザで開く」の下に出る。
+    @Test func savedLinkMenuGainsOpenAsProfileAfterOpenInBrowser() {
+        let saved = MenuLayout<LinkMenuItem>(tokens: [
+            "item:openInBrowser", "hidden:openInDefaultBrowser", "hidden:openInAppSafari", "item:copyLink", "item:share", "more",
+        ])
+
+        #expect(saved.groups.main.map(\.items) == [[.openInBrowser, .openAsProfile, .copyLink, .share]])
     }
 
     /// リンクをコピーと共有を足す前に保存したユーザーのメニューでも、2つはプロフィールの後ろに出る。

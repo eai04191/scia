@@ -300,11 +300,16 @@ public enum LinkMenuItem: String, MenuItemKind {
     case openInDefaultBrowser
     /// 開く場所の設定にかかわらず、アプリ内のSafariで開く。httpとhttps以外のリンクでは押せない。
     case openInAppSafari
+    /// リンク先をプロフィールとして探し、見つかればプロフィールを開く。
+    /// `@`の付かないURL（Pixelfedなど）もあり、URLの形や本文のHTMLやリンクのカードからはプロフィールか見分けられないため、使う人に選んでもらう。
+    /// 探すにはサーバーが相手のページを取りに行くので、選んだときだけ探す。
+    case openAsProfile
     case copyLink
     case share
 
     public static let defaultLayout = MenuLayout<LinkMenuItem>(defaultElements: [
         .item(.openInBrowser, isVisible: true),
+        .item(.openAsProfile, isVisible: true),
         .item(.openInDefaultBrowser, isVisible: false),
         .item(.openInAppSafari, isVisible: false),
         .item(.copyLink, isVisible: true),

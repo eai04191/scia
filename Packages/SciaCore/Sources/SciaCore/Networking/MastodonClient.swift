@@ -605,6 +605,14 @@ public struct MastodonClient: Sendable {
         return SavedStatusesPage(statuses: list.elements, unreadable: list.unreadable, nextMaxID: link?.queryValue("max_id", of: "next"))
     }
 
+    /// プロフィールのURLからアカウントを探す。自分のサーバーが知らないアカウントも、相手のサーバーに問い合わせて探す。見つからなければnil。
+    /// Mastodonは、検索の語がスキームの小文字の`http://`か`https://`で始まるときだけURLとして問い合わせ、ほかは文字列で検索するため、スキームを小文字にして送る。
+    public func resolveAccount(at url: URL) async throws -> Account? {
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.scheme = url.scheme?.lowercased()
+        return try await resolveAccount(components?.string ?? url.absoluteString)
+    }
+
     /// `user@domain`の形のacctか、プロフィールのURLからアカウントを探す。自分のサーバーが知らないアカウントも、相手のサーバーに問い合わせて探す。
     /// 見つからなければnil。
     /// https://docs.joinmastodon.org/methods/search/#v2

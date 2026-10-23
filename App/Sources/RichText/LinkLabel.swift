@@ -133,6 +133,8 @@ protocol LinkMenuHost: AnyObject {
     var userMenuActions: UserMenuActions? { get }
     /// 開く項目を選んだ。`browser`は選んだ項目と開く場所の設定から決めた、実際に開く場所。
     func openURL(_ url: URL, in browser: LinkBrowser)
+    /// リンクのメニューの「プロフィールとして開く」を選んだ。
+    func openProfile(resolving url: URL)
 }
 
 /// `LinkLabel`の上に重ねる、リンクの上だけを当たりにする部品。リンクの外では当たりにならず、押下はラベルの後ろのセルへ渡る。
@@ -235,10 +237,13 @@ final class LinkHitArea: UIControl {
         case .url(let url):
             title = url.absoluteString
             children = settings.linkMenuLayout.groups.menuElements { item in
-                switch item.content {
-                case .url(let action, _): [action.action(url: url, handlers: handlers)]
-                // リンクのメニューの項目は、どれも共通の項目。
-                case .own: []
+                if let action = item.urlAction {
+                    return [action.action(url: url, handlers: handlers)]
+                }
+                switch item {
+                case .openAsProfile: return [openAsProfileAction(item.title, image: item.image, url: url)]
+                // 共通の項目は、上で中身から組んだ。
+                case .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share: return []
                 }
             }
         case .mention(let acct, let url):
@@ -277,6 +282,14 @@ final class LinkHitArea: UIControl {
 
     private func profileAction(_ title: String, image: UIImage?, _ destination: RichText.LinkDestination) -> UIAction {
         UIAction(title: title, image: image) { [weak self] _ in self?.label?.open(destination) }
+    }
+
+    /// サーバーはhttpとhttps以外をURLとして探さず、ふつうの文字列の検索になるため、そのリンクでは押せないようにする。
+    private func openAsProfileAction(_ title: String, image: UIImage?, url: URL) -> UIAction {
+        let isWeb = ["http", "https"].contains(url.scheme?.lowercased())
+        return UIAction(title: title, image: image, attributes: isWeb ? [] : .disabled) { [weak self] _ in
+            self?.nearest((any LinkMenuHost).self)?.openProfile(resolving: url)
+        }
     }
 
     /// コピーと開くは、メニューを出した画面に頼む。共有のシートは、押したリンクから出す。
