@@ -193,8 +193,15 @@ struct StreamingHubTests {
     /// 購読を送っている間に切れてつなぎ直したら、つなぎ直したときの`connected`だけを届ける。
     /// 切れる前の送信が後から終わっても、もう一度届けると、受け取った側が補完を余分に繰り返すため。
     @Test func connectedAfterSendingIsDroppedWhenReconnectedMeanwhile() async throws {
+        let sendGate = ScriptedConnector.Gate()
+        let dropGate = ScriptedConnector.Gate()
         let connector = ScriptedConnector([
-            .init(messages: [Self.delete("1")], afterMessages: .drop, sendDelay: .milliseconds(300), dropDelay: .milliseconds(50)),
+            .init(
+                messages: [Self.delete("1")],
+                afterMessages: .drop,
+                dropGate: dropGate,
+                sendGates: [#"{"stream":"public:local","type":"subscribe"}"#: sendGate]
+            ),
             .init(),
         ])
         let hub = makeHub(connector)
@@ -206,8 +213,14 @@ struct StreamingHubTests {
                 localSubscription = hub.subscribe(TimelineFeed.local.subscription, local.record)
             }
         }
-        try await waitUntil { connector.connectCount == 2 && hub.isConnected }
-        try await Task.sleep(for: .milliseconds(500))
+        // 購読を送り始めてから切る。
+        try await waitUntil { sendGate.hasWaiters }
+        dropGate.open()
+        try await waitUntil { connector.connectCount == 2 && hub.isConnected && local.labels == ["connected"] }
+
+        // 切れる前の送信を、つなぎ直した後に送り終えさせ、届けるか捨てるかが決まるまで待つ。
+        sendGate.open()
+        await hub.lastConnectedReportAfterSending?.value
 
         #expect(local.labels == ["connected"])
         homeSubscription.cancel()

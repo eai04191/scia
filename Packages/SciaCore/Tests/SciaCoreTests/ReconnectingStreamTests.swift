@@ -201,6 +201,8 @@ final class ScriptedConnector: WebSocketConnector {
         var firstMessageDelay: Duration = .zero
         /// `afterMessages`が`.drop`のとき、メッセージを届け終えてから切れるまでの遅れ。切れる前に、届いたメッセージに応じた送信を始めさせる。
         var dropDelay: Duration = .zero
+        /// `afterMessages`が`.drop`のとき、開くまで切らない。遅れの長さではなく、テストが条件を確かめてから切る。
+        var dropGate: Gate?
         /// 開くまで、最初のメッセージを届けない。遅れの長さではなく、テストが条件を確かめてから届ける。
         var firstMessageGate: Gate?
         /// 送るメッセージごとに、開くまで送り終えない。遅れの長さではなく、テストが条件を確かめてから送り終える。
@@ -219,6 +221,9 @@ final class ScriptedConnector: WebSocketConnector {
             }
             waiters.forEach { $0.resume() }
         }
+
+        /// 止められている相手がいる。
+        var hasWaiters: Bool { state.withLock { !$0.waiters.isEmpty } }
 
         func wait() async {
             await withCheckedContinuation { continuation in
@@ -300,7 +305,7 @@ private final class ScriptedConnection: WebSocketConnection {
     }
 
     func receive() async throws -> String {
-        enum Next { case message(String, after: Duration, gate: ScriptedConnector.Gate?), fail(any Error), drop(after: Duration), wait }
+        enum Next { case message(String, after: Duration, gate: ScriptedConnector.Gate?), fail(any Error), drop(after: Duration, gate: ScriptedConnector.Gate?), wait }
         let next: Next = state.withLock { state in
             if state.isClosed { return .fail(URLError(.cancelled)) }
             if case .fail(let error) = state.script.handshake { return .fail(error) }
@@ -310,7 +315,7 @@ private final class ScriptedConnection: WebSocketConnection {
                 state.hasDeliveredMessage = true
                 return .message(state.script.messages.removeFirst(), after: delay, gate: gate)
             }
-            if case .drop = state.script.afterMessages { return .drop(after: state.script.dropDelay) }
+            if case .drop = state.script.afterMessages { return .drop(after: state.script.dropDelay, gate: state.script.dropGate) }
             return .wait
         }
         switch next {
@@ -322,10 +327,11 @@ private final class ScriptedConnection: WebSocketConnection {
             return message
         case .fail(let error):
             throw error
-        case .drop(let delay):
+        case .drop(let delay, let gate):
             if delay > .zero {
                 try await Task.sleep(for: delay)
             }
+            await gate?.wait()
             throw URLError(.networkConnectionLost)
         case .wait:
             try await waitUntilClosed()

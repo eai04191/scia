@@ -78,6 +78,8 @@ public final class StreamingHub {
     private var heldEvents: [Int: [StreamingEvent]] = [:]
     /// 購読と解除を、申し込みの順に1つずつ送る。
     private var sending: Task<Void, Never>?
+    /// 送り終えてから`connected`を届けるTaskの、最後に始めたもの。テストで、届けるか捨てるかが決まるまで待つ。
+    private(set) var lastConnectedReportAfterSending: Task<Void, Never>?
     private var isOutageNoticed = false
     private var isLoginRequired = false
     /// 最後に`onChange`で知らせた購読。変わったときだけ知らせる。
@@ -243,7 +245,7 @@ public final class StreamingHub {
     private func reportConnectedAfterSending(to id: Int) {
         let sent = sending
         let connectionNumber = connectionNumber
-        Task { [weak self] in
+        lastConnectedReportAfterSending = Task { [weak self] in
             await sent?.value
             guard let self, connectionNumber == self.connectionNumber, isConnected, let consumer = consumers.first(where: { $0.id == id }) else { return }
             reportConnected(to: id, consumer.handler)
