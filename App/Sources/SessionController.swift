@@ -900,7 +900,7 @@ final class SessionController {
         controller.onEditProfile = { [weak self] in self?.presentProfileEditor() }
         controller.onOpenAccountList = { [weak self, weak viewController] kind in
             guard let viewController else { return }
-            self?.openAccountList(kind, from: viewController)
+            self?.openAccountList(kind, ownerAcct: account.acct, from: viewController)
         }
         controller.onOpenLink = { [weak self, weak viewController] destination in
             guard let viewController else { return }
@@ -923,13 +923,15 @@ final class SessionController {
         default: nil
         }
         guard let kind else { return }
-        openAccountList(kind, from: source)
+        openAccountList(kind, ownerAcct: notification.type == .follow ? credential.username : nil, from: source)
     }
 
-    private func openAccountList(_ kind: AccountListKind, from source: UIViewController) {
+    /// - Parameter ownerAcct: フォローとフォロワーの一覧なら、誰の一覧かを示すハンドル。見出しの下に出す。
+    private func openAccountList(_ kind: AccountListKind, ownerAcct: String? = nil, from source: UIViewController) {
         let (controller, viewController) = AccountListController.make(kind: kind, client: client) { [weak self] in
             self?.reportUnauthorized()
         }
+        viewController.navigationItem.subtitle = ownerAcct.map { "@\($0)" }
         UserAction.openAccountList.record()
         configure(viewController)
         source.navigationController?.pushViewController(viewController, animated: true)
