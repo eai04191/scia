@@ -153,6 +153,29 @@ struct ScrollAnchorTests {
         #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
     }
 
+    /// 表示領域の上端にかかっている行が消え、別の行が先頭に入っても（まとめた通知が新着で一番上へ移るときなど）、
+    /// 消えた行のすぐ下の行の位置を保つ。消えた行を基準にすると、基準がなくなって読んでいる行が流れる。
+    @Test(arguments: [0.4, 1.0])
+    func removingTopEdgeRowKeepsTheRowBelow(scrollFraction: CGFloat) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.tuning.setValue(false, for: TuningCatalog.followsNewArrivalsAtTop)
+        let existing = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(existing)
+        harness.scroll(toFraction: scrollFraction)
+        let edge = try #require(harness.viewController.currentAnchor())
+        let edgeIndex = try #require(existing.firstIndex { TimelineViewController.ItemID.status($0.id) == edge.id })
+        let below = TimelineViewController.ItemID.status(existing[edgeIndex + 1].id)
+        let before = try #require(harness.windowMinY(of: below))
+
+        var moved = existing
+        moved.remove(at: edgeIndex)
+        harness.setStatuses(StatusFactory.make(count: 1, startingAt: 1_001) + moved)
+
+        let after = try #require(harness.windowMinY(of: below), "消えた行の下の行が画面外へ出ました")
+        #expect(abs(after - before) <= tolerance, "消えた行の下の行が\(after - before)pt動きました")
+    }
+
     @Test func visibleStatusesAreReportedAfterInsertion() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

@@ -1583,12 +1583,14 @@ extension TimelineViewController {
     }
 
     /// 表示領域の上端にかかっている、最も上の投稿を基準にする。
-    func currentAnchor() -> ScrollAnchor? {
+    /// - Parameter candidates: 基準にしてよい行。nilなら、見えている行のどれでもよい。
+    func currentAnchor(among candidates: Set<ItemID>? = nil) -> ScrollAnchor? {
         collectionView.layoutIfNeeded()
         let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
         let topmost = collectionView.indexPathsForVisibleItems
             .compactMap { indexPath -> (ItemID, CGRect)? in
                 guard let id = dataSource.itemIdentifier(for: indexPath),
+                      candidates?.contains(id) ?? true,
                       let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
                 else { return nil }
                 return (id, frame)
@@ -1710,7 +1712,9 @@ extension TimelineViewController {
     private func applyPreservingAnchor(_ snapshot: NSDiffableDataSourceSnapshot<Section, ItemID>, keeping anchorID: ItemID? = nil) -> ScrollAnchor? {
         isRestoringAnchor = true
         defer { isRestoringAnchor = false }
-        let anchor = anchorID.flatMap(anchor(of:)) ?? currentAnchor()
+        // 表示領域の上端にかかっている行が消えるときは、残る行のうち一番上に見えている行を基準にする。
+        // 消える行を基準にすると、当て直したあとに位置を合わせる行がなく、読んでいる行が流れるため。
+        let anchor = anchorID.flatMap(anchor(of:)) ?? currentAnchor(among: Set(snapshot.itemIdentifiers))
         dataSource.apply(snapshot, animatingDifferences: false)
         if let anchor {
             restore(anchor)
