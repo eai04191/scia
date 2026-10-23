@@ -314,7 +314,7 @@ struct TimelineStoreTests {
         let store = try await loadedStore([30, 29, 28])
         #expect(store.unreadCount == 0)
 
-        store.markRead(["29", "28"])
+        #expect(store.markRead(["29", "28"]))
         #expect(store.lastReadID == "29")
         #expect(store.unreadCount == 1)
 
@@ -322,10 +322,10 @@ struct TimelineStoreTests {
         _ = store.flushPending()
         #expect(store.unreadCount == 2)
 
-        store.markRead(["28"])
+        #expect(!store.markRead(["28"]), "既読の位置より下の投稿を見ても、未読の数は変わりません")
         #expect(store.lastReadID == "29")
 
-        store.markRead(["31"])
+        #expect(store.markRead(["31"]))
         #expect(store.unreadCount == 0)
     }
 
@@ -338,7 +338,7 @@ struct TimelineStoreTests {
         _ = store.flushPending()
         #expect(store.unreadCount == 1)
 
-        store.markRead(["29"])
+        #expect(store.markRead(["29"]), "IDが既読より古くても、上に積んだ投稿を見れば既読の位置は進みます")
         #expect(store.unreadCount == 0)
         #expect(store.lastReadID == "30")
     }

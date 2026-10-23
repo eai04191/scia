@@ -553,19 +553,22 @@ public final class TimelineStore {
     // MARK: - 未読
 
     /// 画面に表示された投稿を既読にする。既読の位置は新しい方へだけ進む。
-    public func markRead(_ ids: some Sequence<String>) {
+    /// - Returns: 一覧の既読の位置が進んだ。進まなければ、未読の数も変わらない。
+    @discardableResult
+    public func markRead(_ ids: some Sequence<String>) -> Bool {
         let ids = Array(ids)
-        advanceRead(to: ids, positions: ids.map(position(of:)))
+        return advanceRead(to: ids, positions: ids.map(position(of:)))
     }
 
-    private func advanceRead(to ids: [String], positions: [DisplayPosition]) {
+    @discardableResult
+    private func advanceRead(to ids: [String], positions: [DisplayPosition]) -> Bool {
         lastReadID = Self.advanced(lastReadID, to: ids)
-        if let top = positions.max(by: { $1.isAbove($0) }), lastReadPosition.map({ top.isAbove($0) }) ?? true {
-            lastReadPosition = top
-        }
         #if DEBUG
         lastSavableReadID = Self.advanced(lastSavableReadID, to: ids.filter { !debugLocalOnlyIDs.contains($0) })
         #endif
+        guard let top = positions.max(by: { $1.isAbove($0) }), lastReadPosition.map({ top.isAbove($0) }) ?? true else { return false }
+        lastReadPosition = top
+        return true
     }
 
     private static func advanced(_ current: String?, to ids: [String]) -> String? {

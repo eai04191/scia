@@ -260,6 +260,8 @@ final class FeedTimelineController {
             do {
                 guard let added = try await controller.store.loadOlder(), !controller.isStopped else { return }
                 controller.viewController.setEntries(controller.store.entries)
+                // 並べ直すとフィルターの期限が切れた投稿が戻り、未読の数が変わることがある。既読の報告は位置が進まないと数え直さない。
+                controller.updateUnreadCount()
                 controller.viewController.setFooterState(controller.store.reachedEnd ? .reachedEnd : .idle)
                 controller.logger.info("\(controller.feed.name, privacy: .public) loadOlder done added=\(added.count, privacy: .public) reachedEnd=\(controller.store.reachedEnd, privacy: .public)")
             } catch {
@@ -597,8 +599,9 @@ final class FeedTimelineController {
         viewController.setGapStates(loading: store.loadingGapIDs, failures: store.gapFailures)
     }
 
+    /// スクロールの毎コマで呼ばれるため、既読の位置が進んだときだけ未読を数え直す。
     private func markRead(_ ids: [Status.ID]) {
-        store.markRead(ids)
+        guard store.markRead(ids) else { return }
         updateUnreadCount()
     }
 
