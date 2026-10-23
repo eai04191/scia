@@ -97,7 +97,7 @@ A4に入れていない、Mastodonのクライアントとしてできること�
 - [ ] 投稿の翻訳
 - [x] 通知の削除
 - [ ] 通知のフィルター: 知らない人からの通知を保留し、承認する
-- [ ] 通知をまとめて表示する: 決まりは[notification-display.md](notification-display.md)の「まとめて表示する」。先に人の一覧を作る
+- [x] 通知をまとめて表示する: 決まりは[notification-display.md](notification-display.md)の「まとめて表示する」
 - [x] 投票を作って投稿する: 決まりは[poll.md](poll.md)の「投票を作る」
 - [ ] サーバーのお知らせを見る、リアクションする
 - [ ] 投稿の言語を選ぶ
