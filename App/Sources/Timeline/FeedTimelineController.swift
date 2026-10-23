@@ -584,14 +584,16 @@ final class FeedTimelineController {
         logger.info("\(self.feed.name, privacy: .public) insert pending added=\(added.count, privacy: .public)")
         // フィルターで隠す投稿は足さないが、同じIDの読めなかった行は消えるため、並びの変化で見る。
         guard store.entries != before else { return }
-        showEntries()
+        // 挿入は行を足すか除くだけで、残る行の中身は変えない。
+        showEntries(keepingRowContentsOf: before)
     }
 
     /// 自動の補完の中でギャップを読めなかったときも、並びと一緒に読めなかった表示にする。
     /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。
-    private func showEntries(animatesRemoval: Bool = false) {
+    /// - Parameter base: 一覧はこの並びに行を足すか除くかしただけで、残る行の中身を変えていない。
+    private func showEntries(animatesRemoval: Bool = false, keepingRowContentsOf base: [TimelineEntry]? = nil) {
         showGapStates()
-        viewController.setEntries(store.entries, animatesRemoval: animatesRemoval)
+        viewController.setEntries(store.entries, animatesRemoval: animatesRemoval, keepingRowContentsOf: base)
         updateUnreadCount()
     }
 

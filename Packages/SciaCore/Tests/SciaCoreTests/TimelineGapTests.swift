@@ -958,7 +958,9 @@ struct TimelineGapTests {
         for id in [22, 10, 4, 12] {
             _ = store.receive(.update(server.status(id)))
         }
+        let before = Dictionary(uniqueKeysWithValues: store.entries.map { ($0.id, $0) })
         _ = store.flushPending()
+        #expect(store.entries.allSatisfy { entry in before[entry.id].map { $0 == entry } ?? true }, "残る行の中身は変わりません")
         let inserted = store.entries.map(\.debugLabel)
         #expect(inserted == ["12", "10", "22", "20", "19", "18", "gap(18...8)", "8", "7", "6", "5", "4", "3"])
 

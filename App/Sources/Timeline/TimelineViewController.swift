@@ -137,6 +137,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private(set) lazy var collectionView: UICollectionView = TimelineCollectionView(frame: .zero, collectionViewLayout: makeLayout())
     private lazy var dataSource = makeDataSource()
     private var entries: [ItemID: TimelineEntry] = [:]
+    /// 前回`setEntries`で並べた配列。次に渡された`keepingRowContentsOf`と同じ配列かを、中身を比べずに確かめるために持つ。
+    private var appliedEntries: [TimelineEntry] = []
     /// 隣の行とアイコン同士を線でつなぐ行。並びが変わるたびに決め直す。
     private var replyConnections: [ItemID: ReplyConnection] = [:]
     /// すぐ上の行が返信先なら、返信の札を出さない。スレッドのように古い順に並べる一覧で、線で返信先が分かるため。
@@ -519,7 +521,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     ///   新しい一覧が短くていまの位置までスクロールできなければ、末尾までスクロールしたところで止める。
     /// - Parameter animatesRemoval: 使う人の操作（フォローリクエストの承認、投稿の削除など）で行を消す。
     ///   操作の結果が分かるよう、消える行を閉じ、下の行を詰める動きで消す。消せないときは、ほかの更新と同じく動かさずに位置を保つ。
-    func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil, keepsOffset: Bool = false, animatesRemoval: Bool = false) {
+    /// - Parameter base: `newEntries`は、この並びに行を足すか除くかしただけで、残る行の中身を変えていない。
+    ///   前回並べた配列と同じものなら、描き直す行を探すために行の中身を比べるのを省く。一覧が長いと、比べるだけで重くなるため。
+    func setEntries(_ newEntries: [TimelineEntry], keeping anchorID: ItemID? = nil, placingAtTop topID: ItemID? = nil, keepsOffset: Bool = false, animatesRemoval: Bool = false, keepingRowContentsOf base: [TimelineEntry]? = nil) {
         guard !isShowingMenu else {
             // 後の呼び出しの並びが新しい。基準は、メニューが閉じたときに最後に指定されたものを使う。
             heldEntries = HeldEntries(
@@ -533,24 +537,28 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             return
         }
         let previous = entries
+        let keepsRowContents = base.map { Self.sharesStorage($0, appliedEntries) } ?? false
+        appliedEntries = newEntries
         let followsTop = anchorID == nil && topID == nil && isAtTop && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
-        entries = Dictionary(newEntries.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+        let newIDs = newEntries.map(\.id)
+        entries = Dictionary(zip(newIDs, newEntries), uniquingKeysWith: { _, new in new })
         gapIDs = newEntries.compactMap { entry in
             if case .gap(let gap) = entry { gap.id } else { nil }
         }
         var snapshot = NSDiffableDataSourceSnapshot<Section, ItemID>()
         snapshot.appendSections([.main])
-        snapshot.appendItems(newEntries.map(\.id))
+        snapshot.appendItems(newIDs)
         // 差分はIDで取られるため、同じIDのまま内容が変わった要素は明示的にセルを再構成する。
-        let changedIDs = newEntries.filter { entry in previous[entry.id].map { $0 != entry } ?? false }.map(\.id)
+        let changedIDs = keepsRowContents ? [] : newEntries.filter { entry in previous[entry.id].map { $0 != entry } ?? false }.map(\.id)
         // 隣の行が変わって線のつながりだけが変わった行も描き直す。線は行の高さを変えないため、消す動きを止める理由にはしない。
+        // 線のない行は前後とも線がないので、線のあった行と、ある行だけを比べる。
         let previousConnections = replyConnections
         replyConnections = ReplyConnection.connections(in: newEntries)
-        let reconnectedIDs = newEntries.map(\.id).filter { id in
-            previous[id] != nil && previousConnections[id] != replyConnections[id]
+        let reconnectedIDs = Set(previousConnections.keys).union(replyConnections.keys).filter { id in
+            previous[id] != nil && entries[id] != nil && previousConnections[id] != replyConnections[id]
         }
-        snapshot.reconfigureItems(Array(Set(changedIDs + reconnectedIDs)))
-        if animatesRemoval, changedIDs.isEmpty, canAnimateRemoval(leaving: newEntries.map(\.id)) {
+        snapshot.reconfigureItems(Array(reconnectedIDs.union(changedIDs)))
+        if animatesRemoval, changedIDs.isEmpty, canAnimateRemoval(leaving: newIDs) {
             dataSource.apply(snapshot, animatingDifferences: true)
             logger.info("setEntries count=\(newEntries.count, privacy: .public) animatesRemoval=true")
         } else if let topID {
@@ -659,6 +667,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// スクロールしている、または長押しのメニューを出している。新着を挿入するのは、これが終わってからにする。
     var isUserInteracting: Bool {
         isUserScrolling || isShowingMenu
+    }
+
+    /// 2つの配列が同じ記憶域を指している。指していれば、中身も同じ。
+    /// 前回並べた配列をここで持っているので、渡した側が並びを書き換えると、書き換えた側の配列は別の記憶域へコピーされる。
+    /// 同じ中身でも記憶域が違えばfalseになり、そのときは行の中身を比べる。
+    private static func sharesStorage(_ lhs: [TimelineEntry], _ rhs: [TimelineEntry]) -> Bool {
+        lhs.count == rhs.count && lhs.withUnsafeBufferPointer { lhs in
+            rhs.withUnsafeBufferPointer { rhs in lhs.baseAddress == rhs.baseAddress }
+        }
     }
 
     private struct HeldEntries {
