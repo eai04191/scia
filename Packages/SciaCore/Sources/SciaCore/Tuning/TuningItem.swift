@@ -1259,11 +1259,11 @@ public enum TuningCatalog {
         defaultValue: 5
     )
 
-    /// メンションとハッシュタグで、印のあとに何文字打ったら候補を出すか。
+    /// メンションとハッシュタグで、印のあとに何文字打ったらサーバーで探すか。届くまでは、手元の候補（自分のタグ、返信先の人、補完で選んだ人）だけを出す。
     /// web UIと同じく2文字にする。1文字で問い合わせると、stellaria.networkのアカウント検索は500を返した（2026年10月）。
     public static let completionMinimumQuery = NumberTuning(
         id: "compose.completion.minimumQuery",
-        title: "補完：メンションとタグを出す文字数",
+        title: "補完：メンションとタグをサーバーで探す文字数",
         range: 1...4,
         step: 1,
         defaultValue: 2
@@ -1292,14 +1292,15 @@ public enum TuningCatalog {
     public static func completionSettings(in store: TuningStore) -> ComposeCompletion.Settings {
         ComposeCompletion.Settings(
             debounce: .milliseconds(Int(store.value(of: completionDebounce) * 1000)),
-            limit: Int(store.value(of: completionLimit))
+            limit: Int(store.value(of: completionLimit)),
+            minimumSearchQueryLength: Int(store.value(of: completionMinimumQuery))
         )
     }
 
+    /// 語にする文字数。メンションとハッシュタグは印だけでも語にし、サーバーで探すかは`ComposeCompletion`が決める。
     @MainActor
     public static func completionMinimumQueryLength(in store: TuningStore) -> [CompletionKind: Int] {
-        let mentionAndTag = Int(store.value(of: completionMinimumQuery))
-        return [.mention: mentionAndTag, .hashtag: mentionAndTag, .emoji: Int(store.value(of: completionEmojiMinimumQuery))]
+        [.mention: 0, .hashtag: 0, .emoji: Int(store.value(of: completionEmojiMinimumQuery))]
     }
 
     /// ストリーミングにつながらない間の、ポーリングと知らせるまでの時間。

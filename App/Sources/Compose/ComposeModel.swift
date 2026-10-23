@@ -52,7 +52,7 @@ final class ComposeModel {
     /// 最後に送った内容。同じ内容を送り直すときだけ同じIdempotency-Keyを使い、変えたら別の投稿として新しいキーにする。
     /// 応答だけが失われていた場合に、変えた内容が投稿されないまま成功扱いにならないようにするため。
     @ObservationIgnored private var lastSubmitted: StatusDraft?
-    @ObservationIgnored private let myAccountID: String
+    @ObservationIgnored let myAccountID: String
     @ObservationIgnored private let post: (StatusDraft) async throws -> Void
     @ObservationIgnored private let media: ComposeMediaService
     @ObservationIgnored private var uploadTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]

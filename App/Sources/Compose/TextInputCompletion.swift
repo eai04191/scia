@@ -46,7 +46,8 @@ final class TextInputCompletion {
     }
 
     /// 入力欄のカーソルの位置の語。
-    /// - Parameter appliesMinimumLength: 候補を出すのに要る文字数を見るか。選んだときに範囲を決め直すだけなら見ない。
+    /// - Parameter appliesMinimumLength: 候補を出すのに要る文字数を見るか。選んだときに範囲を決め直すだけなら見ず、印だけの語も読む。
+    ///   印の直後へカーソルを戻して選んだときに語を読めないと、出したときの範囲で置き換え、カーソルより後ろのタグの文字まで消すため。
     private func token(in input: any UITextInput, appliesMinimumLength: Bool = true) -> CompletionToken? {
         guard let (text, selection) = Self.textAndSelection(of: input) else { return nil }
         let begin = input.beginningOfDocument
@@ -56,7 +57,7 @@ final class TextInputCompletion {
             selection: selection,
             markedRange: marked,
             kinds: kinds(input),
-            minimumQueryLength: appliesMinimumLength ? TuningCatalog.completionMinimumQueryLength(in: tuning) : [:]
+            minimumQueryLength: appliesMinimumLength ? TuningCatalog.completionMinimumQueryLength(in: tuning) : Dictionary(uniqueKeysWithValues: CompletionKind.allCases.map { ($0, 0) })
         )
     }
 
@@ -111,7 +112,18 @@ final class TextInputCompletion {
         if case .emoji(let emoji) = candidate {
             recentEmojis?.record(emoji.shortcode)
         }
-        completion.didComplete()
+        completion.didComplete(candidate)
+    }
+
+    /// 投稿欄の＋で選んだ`@`か`#`を、カーソルの位置に入れて補完を出す。サーバーが読まない文字の直後なら、前に空白を入れる。
+    func insertMark(_ kind: CompletionKind, into input: any UITextInput) {
+        guard !isLocked() else { return }
+        if input.markedTextRange != nil {
+            input.unmarkText()
+        }
+        guard let (text, selection) = Self.textAndSelection(of: input) else { return }
+        guard apply(CompletionTokenizer.insertion(ofMark: kind, at: selection, in: text), to: input) else { return }
+        textDidChange(in: input)
     }
 
     /// ハードウェアキーボードで候補を選ぶ操作。

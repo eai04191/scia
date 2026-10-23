@@ -12,7 +12,7 @@ public enum OptionalFeature: String, Sendable, CaseIterable {
     /// 複数の投稿をまとめて読む。Mastodon 4.3から。カードが付く前に受け取った投稿のカードを取り直すのに使う。
     /// https://docs.joinmastodon.org/methods/statuses/#index
     case multipleStatuses
-    /// 複数のアカウントをまとめて読む。Mastodon 4.3から。メニューに、メンションされたユーザーのアイコンを出すのに使う。
+    /// 複数のアカウントをまとめて読む。Mastodon 4.3から。メニューと投稿欄の補完に、メンションされたユーザーのアイコンを出すのに使う。
     /// https://docs.joinmastodon.org/methods/accounts/#index
     case multipleAccounts
 }

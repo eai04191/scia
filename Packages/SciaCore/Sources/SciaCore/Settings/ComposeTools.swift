@@ -13,15 +13,22 @@ public enum ComposeToolItem: String, MenuItemKind {
     case customEmoji
     /// この並びを変える画面を開く。ほかの項目と同じく、置き場所を選べ、使わなければ隠せる。
     case customize
+    /// 本文のカーソルの位置に半角の`@`を入れ、補完を出す。日本語のキーボードでは半角の`@`を打ちにくいため。
+    case mention
+    /// 本文のカーソルの位置に半角の`#`を入れ、補完を出す。
+    case hashtag
 
-    /// ＋の中は、上からカスタマイズ、区切り線、リンクにタイトルを付ける、注意書き、投票にし、ボタンの行は「＋ 公開範囲 添付 絵文字 展開」にする。
-    /// ＋のメニューはボタンの上に開き、下ほど指が届きやすいので、使う頻度の低いカスタマイズをいちばん上に置く。
+    /// ＋の中は、上からカスタマイズ、区切り線、リンクにタイトルを付ける、注意書き、投票、区切り線、メンション、ハッシュタグにし、ボタンの行は「＋ 公開範囲 添付 絵文字 展開」にする。
+    /// ＋のメニューはボタンの上に開き、下ほど指が届きやすいので、使う頻度の低いカスタマイズをいちばん上に、書きながら何度も使う記号をいちばん下に置く。
     public static let defaultLayout = MenuLayout<ComposeToolItem>(defaultElements: [
         .item(.customize, isVisible: true),
         .separator,
         .item(.linkTitle, isVisible: true),
         .item(.spoiler, isVisible: true),
         .item(.poll, isVisible: true),
+        .separator,
+        .item(.mention, isVisible: true),
+        .item(.hashtag, isVisible: true),
         .more,
         .item(.visibility, isVisible: true),
         .item(.media, isVisible: true),

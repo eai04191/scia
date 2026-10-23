@@ -54,7 +54,7 @@ public enum CompletionTokenizer {
     ///   - selection: 選んでいる範囲（UTF-16）。空でなければ補完しない。
     ///   - markedRange: 変換中の未確定の文字の範囲（UTF-16）。あれば補完しない。確定してから語を読み直す。
     ///   - kinds: 補完する種類。注意書きの欄では絵文字だけにする。
-    ///   - minimumQueryLength: 印のあとに何文字打ったら候補を出すか。英数字以外は1文字を2文字と数える。ない種類は1文字。
+    ///   - minimumQueryLength: 印のあとに何文字打ったら語にするか。英数字以外は1文字を2文字と数える。ない種類は1文字。0なら印だけでも語にする。
     public static func token(
         in text: String,
         selection: Range<Int>,
@@ -106,6 +106,22 @@ public enum CompletionTokenizer {
             replacing: CompletionToken(kind: .emoji, range: lower ..< upper, query: "", needsLeadingSpace: needsLeadingSpace),
             in: text
         )
+    }
+
+    /// 投稿欄の＋で選んだ`@`か`#`を、選んでいる範囲と置き換えて入れるもの。続けて名前を打つので、後ろに空白は足さない。
+    /// 直前の文字のままではサーバーがメンションやタグとして読まないなら、前に空白を入れる。英数字の直後でも、空白を入れれば補完が出る。
+    public static func insertion(ofMark kind: CompletionKind, at selection: Range<Int>, in text: String) -> CompletionInsertion {
+        let utf16 = Array(text.utf16)
+        let lower = min(max(selection.lowerBound, 0), utf16.count)
+        let upper = min(max(selection.upperBound, lower), utf16.count)
+        let before = String(decoding: utf16.prefix(lower), as: UTF16.self)
+        let mark = switch kind {
+        case .mention: "@"
+        case .hashtag: "#"
+        case .emoji: ":"
+        }
+        let inserted = (serverAccepts(kind, after: before.last) ? "" : " ") + mark
+        return CompletionInsertion(range: lower ..< upper, text: inserted, cursor: lower + inserted.utf16.count)
     }
 
     /// 絵文字のパレットの削除キーで消す範囲。カーソルの直前が`:shortcode:`（パレットが足した後ろの空白を含む）なら、まとめて消す。
@@ -170,7 +186,8 @@ public enum CompletionTokenizer {
             end -= 1
         }
         let query = characters.string(trigger + 1 ..< end)
-        guard let first = query.first, isUsernameStart(first) else { return nil }
+        // 印だけなら空の語にする。文字数の下限で出すかを決める。
+        if let first = query.first, !isUsernameStart(first) { return nil }
         return makeToken(kind: .mention, trigger: trigger, end: end, query: query, in: characters, minimumQueryLength: minimumQueryLength)
     }
 
@@ -206,7 +223,7 @@ public enum CompletionTokenizer {
 
     /// 打った文字数。英数字は1文字、日本語などは2文字と数える。漢字1文字（`#猫`）でも意味のあるタグになり、
     /// 英数字の2文字と同じくらい候補を絞れるため。
-    private static func queryLength(_ query: String) -> Int {
+    static func queryLength(_ query: String) -> Int {
         query.reduce(0) { $0 + ($1.isASCII ? 1 : 2) }
     }
 

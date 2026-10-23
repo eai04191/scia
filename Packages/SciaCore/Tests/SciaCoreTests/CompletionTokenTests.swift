@@ -56,6 +56,19 @@ struct CompletionTokenTests {
         #expect(token("@bo|", minimum: [.mention: 2]) != nil)
     }
 
+    /// 文字数を0にすると、印だけでも語にする。投稿欄では、記号だけの時点から手元の候補を出すため。
+    @Test func markAloneWithZeroMinimum() throws {
+        let mention = try #require(token("@|", minimum: [.mention: 0]))
+        #expect(mention.query == "")
+        #expect(mention.range == 0 ..< 1)
+        let hashtag = try #require(token("猫 #|", minimum: [.hashtag: 0]))
+        #expect(hashtag.query == "")
+        #expect(!hashtag.needsLeadingSpace)
+        #expect(try #require(token("猫@|", minimum: [.mention: 0])).needsLeadingSpace)
+        #expect(token("mail@|", minimum: [.mention: 0]) == nil)
+        #expect(token("@.|", minimum: [.mention: 0]) == nil)
+    }
+
     /// 語の途中にカーソルがあれば、語の終わりまでを置き換える。
     @Test func cursorInsideWordCoversWholeWord() throws {
         let token = try #require(token("@bo|b hello"))
@@ -185,7 +198,6 @@ struct CompletionTokenTests {
         #expect(token.query == "")
         #expect(token.needsLeadingSpace)
         #expect(self.token(":blob:|", minimum: [.emoji: 0]) == nil)
-        #expect(self.token("@|", minimum: [.mention: 0]) == nil)
     }
 
     @Test func emojiNeedsShortcodeCharacters() {
@@ -223,6 +235,20 @@ struct CompletionTokenTests {
     }
 
     // MARK: - 置き換え
+
+    /// ＋で入れる記号は、サーバーが読む位置になるよう、必要なときだけ前に空白を入れ、後ろには足さない。
+    @Test func markInsertion() {
+        #expect(CompletionTokenizer.insertion(ofMark: .hashtag, at: 0 ..< 0, in: "") == CompletionInsertion(range: 0 ..< 0, text: "#", cursor: 1))
+        #expect(CompletionTokenizer.insertion(ofMark: .hashtag, at: 2 ..< 2, in: "猫 ") == CompletionInsertion(range: 2 ..< 2, text: "#", cursor: 3))
+        #expect(CompletionTokenizer.insertion(ofMark: .hashtag, at: 1 ..< 1, in: "猫") == CompletionInsertion(range: 1 ..< 1, text: " #", cursor: 3))
+        #expect(CompletionTokenizer.insertion(ofMark: .hashtag, at: 2 ..< 2, in: "猫。") == CompletionInsertion(range: 2 ..< 2, text: " #", cursor: 4))
+        #expect(CompletionTokenizer.insertion(ofMark: .mention, at: 2 ..< 2, in: "猫。") == CompletionInsertion(range: 2 ..< 2, text: "@", cursor: 3))
+        #expect(CompletionTokenizer.insertion(ofMark: .mention, at: 3 ..< 3, in: "abc") == CompletionInsertion(range: 3 ..< 3, text: " @", cursor: 5))
+        // 選んでいる範囲は、打ったときと同じく記号に置き換える。
+        #expect(CompletionTokenizer.insertion(ofMark: .mention, at: 2 ..< 5, in: "a bcd") == CompletionInsertion(range: 2 ..< 5, text: "@", cursor: 3))
+        let afterInsertion = "猫 #"
+        #expect(CompletionTokenizer.token(in: afterInsertion, selection: 3 ..< 3, minimumQueryLength: [.hashtag: 0]) != nil)
+    }
 
     @Test func insertionAddsTrailingSpace() throws {
         let (text, _) = split("hello @bo|")

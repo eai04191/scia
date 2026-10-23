@@ -176,7 +176,7 @@ final class InlineComposeController: NSObject {
         switch item {
         case .visibility: (item, visibilityButton)
         case .expand: (item, expandButton)
-        case .media, .spoiler, .poll, .linkTitle, .customEmoji, .customize: (item, makeToolButton(item))
+        case .media, .spoiler, .poll, .linkTitle, .customEmoji, .customize, .mention, .hashtag: (item, makeToolButton(item))
         }
     })
     /// 今のボタンの行と＋のメニューへの振り分け。ボタンの行の幅が決まるたびに決め直す。まだ一度も振り分けていなければnil。
@@ -636,6 +636,10 @@ final class InlineComposeController: NSObject {
             return UIAction(title: item.title, image: UIImage(systemName: item.symbolName), state: linkTitleEffects.isSelecting ? .on : .off) { [weak self] _ in
                 self?.toggleLinkSelection()
             }
+        case .mention, .hashtag:
+            return UIAction(title: item.title, image: UIImage(systemName: item.symbolName)) { [weak self] _ in
+                self?.insertMark(item)
+            }
         case .customEmoji:
             return emojiSheet != nil
                 ? UIAction(title: "キーボードに戻る", image: UIImage(systemName: "keyboard")) { [weak self] _ in self?.toggleEmojiPalette() }
@@ -888,6 +892,7 @@ final class InlineComposeController: NSObject {
             case .customize: self?.presentToolLayoutSettings()
             case .linkTitle: self?.toggleLinkSelection()
             case .customEmoji: self?.toggleEmojiPalette()
+            case .mention, .hashtag: self?.insertMark(item)
             case .visibility, .expand: break
             }
         })
@@ -1052,6 +1057,18 @@ final class InlineComposeController: NSObject {
             return
         }
         presentEmojiPalette()
+    }
+
+    /// ＋の「メンション」「ハッシュタグ」。本文のカーソルの位置に半角の記号を入れ、本文にキーボードを戻して補完を出す。
+    /// 注意書きの欄や投票の選択肢を書いていても、サーバーがメンションとタグを読むのは本文だけなので、本文に入れる。
+    private func insertMark(_ item: ComposeToolItem) {
+        let kind: CompletionKind = item == .mention ? .mention : .hashtag
+        logger.info("compose: insert mark \(kind.rawValue, privacy: .public)")
+        if !isEditing {
+            expandForEditing()
+        }
+        textView.becomeFirstResponder()
+        textCompletion.insertMark(kind, into: textView)
     }
 
     /// メディアを選ぶシートと同じ高さのシートを出し、バーをその上端に留めたまま、書いている状態を保つ。
@@ -2083,6 +2100,10 @@ final class InlineComposeController: NSObject {
     private func configureTextCompletion() {
         textCompletion.kinds = { [weak self] input in input === self?.textView ? Set(CompletionKind.allCases) : [.emoji] }
         textCompletion.isLocked = { [weak self] in self?.model.isPosting ?? true }
+        completion.replyParticipants = { [weak self] in
+            guard let self, let replyTo = model.replyTo else { return [] }
+            return LocalMention.replyParticipants(of: replyTo, myAccountID: model.myAccountID)
+        }
         // 入力欄の知らせが来なくても、下書きを入力欄に合わせる。
         textCompletion.onApply = { [weak self] input in
             guard let self else { return }

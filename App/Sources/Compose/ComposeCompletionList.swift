@@ -241,6 +241,30 @@ private struct CompletionRowView: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(account.displayNameOrUsername)、@\(account.acct)")
+        case .localAccount(let mention, let source):
+            // 検索の結果より上に出る理由が分かるよう、どこから出した人かを添える。
+            let note = switch source {
+            case .reply: "返信先"
+            case .recent: "前にメンションした人"
+            }
+            RowLayout {
+                AvatarImage(url: mention.avatar, shape: model.settings.avatarShape)
+            } title: {
+                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis) { [model] in
+                    Self.truncatingTail(
+                        RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
+                            .render(.plain(mention.displayNameOrUsername, emojis: mention.emojis))
+                    )
+                }
+            } subtitle: {
+                // 長いハンドルでも、どこから出した人かは切らずに見せる。
+                HStack(spacing: 0) {
+                    Text("@\(mention.acct)")
+                    Text("・\(note)").layoutPriority(1)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(mention.displayNameOrUsername)、@\(mention.acct)、\(note)")
         case .hashtag(let hashtag):
             RowLayout {
                 Image(systemName: "number").foregroundStyle(.secondary)

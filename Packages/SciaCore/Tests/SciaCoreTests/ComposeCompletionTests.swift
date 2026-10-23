@@ -66,6 +66,13 @@ struct ComposeCompletionTests {
             return (1 ... 3).map { Account.stub(id: "\(query)-\($0)", acct: "\(query)\($0)") }
         }
 
+        private(set) var accountRequests: [[String]] = []
+
+        func accounts(_ ids: [String]) -> [Account] {
+            accountRequests.append(ids)
+            return ids.map { Account(id: $0, username: $0, acct: $0, displayName: "\($0)の表示名", avatar: URL(string: "https://example.social/\($0).png")) }
+        }
+
         func emojis() throws -> [ServerEmoji] {
             emojiRequests += 1
             if failsEmojis {
@@ -86,6 +93,8 @@ struct ComposeCompletionTests {
     /// 待つ長さを確かめないテストでは、打ち止めを待たずに問い合わせる。続けて打った語は、問い合わせる前に取り消されるので、最後の語だけを問い合わせる。
     private func makeCompletion(
         limit: Int = 5,
+        minimumSearch: Int = 1,
+        recentMentions: RecentMentions? = nil,
         sleep: @escaping @Sendable (Duration) async throws -> Void = { _ in try Task.checkCancellation() }
     ) -> ComposeCompletion {
         let server = server
@@ -95,9 +104,11 @@ struct ComposeCompletionTests {
                 searchHashtags: { query, _ in try await server.hashtags(query) },
                 customEmojis: { try await server.emojis() },
                 featuredTags: { try await server.featured() },
-                recentTags: { await server.recent() }
+                recentTags: { await server.recent() },
+                accounts: { await server.accounts($0) }
             ),
-            settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: limit),
+            settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: limit, minimumSearchQueryLength: minimumSearch),
+            recentMentions: recentMentions,
             sleep: sleep
         )
     }
@@ -393,6 +404,129 @@ struct ComposeCompletionTests {
         completion.textDidChange(mention("猫"))
         try await waitUntil { !completion.isLoading }
         #expect(accts(completion.content) == ["@猫1", "@猫2", "@猫3"])
+    }
+
+    // MARK: - 手元の候補
+
+    private func makeRecentMentions() throws -> RecentMentions {
+        let suite = "ComposeCompletionTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        return RecentMentions(defaults: defaults, credentialID: "https://example.social#me")
+    }
+
+    /// 印だけの時点では、問い合わせずに自分のタグを全部並べる。
+    @Test func markAloneShowsOwnHashtags() async throws {
+        let completion = makeCompletion(minimumSearch: 2)
+        completion.prefetch()
+        try await waitUntil { !completion.isLoadingOwnTags }
+        completion.textDidChange(hashtag(""))
+        #expect(accts(completion.content) == ["#今日の猫", "#猫写真", "#猫", "#犬"])
+        // 問い合わせるときは、語を受け取ったその場で読み込み中になる。
+        #expect(!completion.isLoading)
+    }
+
+    /// 印だけの時点では、返信先の人、補完で選んだことのある人の順に並べ、同じ人は一度だけ出す。
+    @Test func markAloneShowsReplyParticipantsThenRecent() async throws {
+        let recent = try makeRecentMentions()
+        recent.record(LocalMention(account: .stub(id: "2", acct: "bob")))
+        recent.record(LocalMention(account: .stub(id: "3", acct: "carol@remote.example")))
+        let completion = makeCompletion(minimumSearch: 2, recentMentions: recent)
+        completion.replyParticipants = { [LocalMention(account: .stub(id: "1", acct: "alice")), LocalMention(mention: Mention(id: "2", username: "bob", url: nil, acct: "bob"))] }
+        completion.textDidChange(mention(""))
+        #expect(accts(completion.content) == ["@alice", "@bob", "@carol@remote.example"])
+        #expect(!completion.isLoading)
+    }
+
+    /// 手元に候補がなければ、印だけの時点では何も出さない。
+    @Test func markAloneWithoutLocalCandidatesShowsNothing() async throws {
+        let completion = makeCompletion(minimumSearch: 2, recentMentions: try makeRecentMentions())
+        completion.textDidChange(mention(""))
+        #expect(completion.content == nil)
+        #expect(!completion.isLoading)
+    }
+
+    /// サーバーで探す文字数に届くまでは手元の候補を絞って出し、届いたら検索の結果を手元の候補の後ろに続ける。
+    @Test func filtersLocalMentionsUntilSearchLength() async throws {
+        let recent = try makeRecentMentions()
+        recent.record(LocalMention(account: .stub(id: "9", acct: "zed")))
+        recent.record(LocalMention(account: .stub(id: "1", acct: "bob")))
+        let completion = makeCompletion(minimumSearch: 2, recentMentions: recent)
+        completion.textDidChange(mention("b"))
+        #expect(accts(completion.content) == ["@bob"])
+        #expect(!completion.isLoading)
+        completion.textDidChange(mention("bo"))
+        try await waitUntil { !completion.isLoading }
+        #expect(await server.queries == ["bo"])
+        #expect(accts(completion.content) == ["@bob", "@bo1", "@bo2", "@bo3"])
+    }
+
+    /// 返信先でメンションされた人は表示名とアイコンを持たないので、覚えている同じ人の情報で出し、表示名でも探せるようにする。
+    /// 返信先として出すことは変えない。
+    @Test func replyParticipantUsesRememberedProfile() async throws {
+        let recent = try makeRecentMentions()
+        let alice = Account(id: "alice-id", username: "alice", acct: "alice", displayName: "Zoe", avatar: URL(string: "https://example.social/alice.png"))
+        recent.record(LocalMention(account: alice))
+        let completion = makeCompletion(minimumSearch: 2, recentMentions: recent)
+        completion.replyParticipants = { [LocalMention(mention: Mention(id: "alice-id", username: "alice", url: nil, acct: "alice"))] }
+        completion.textDidChange(mention("z"))
+        #expect(completion.candidates == [.localAccount(LocalMention(account: alice), .reply)])
+    }
+
+    /// 表示名とアイコンを持たない返信先の人を選んでも、覚えている同じ人の情報を消さない。
+    @Test func recordingMentionWithoutProfileKeepsRememberedProfile() throws {
+        let recent = try makeRecentMentions()
+        let alice = Account(id: "alice-id", username: "alice", acct: "alice", displayName: "Zoe", avatar: URL(string: "https://example.social/alice.png"))
+        recent.record(LocalMention(account: alice))
+        recent.record(LocalMention(account: .stub(id: "bob", acct: "bob")))
+        recent.record(LocalMention(mention: Mention(id: "alice-id", username: "alice", url: nil, acct: "alice")))
+        #expect(recent.mentions == [LocalMention(account: alice), LocalMention(account: .stub(id: "bob", acct: "bob"))])
+    }
+
+    /// 返信先でメンションされた人は、アカウントをまとめて読んでアイコンと表示名を出す。読むのは一度だけで、届いたら出している候補を描き直す。
+    @Test func loadsMentionedReplyParticipants() async throws {
+        let completion = makeCompletion(minimumSearch: 2, recentMentions: try makeRecentMentions())
+        completion.replyParticipants = {
+            [
+                LocalMention(account: .stub(id: "author", acct: "author")),
+                LocalMention(mention: Mention(id: "bob", username: "bob", url: nil, acct: "bob")),
+                LocalMention(mention: Mention(id: "carol", username: "carol", url: nil, acct: "carol")),
+            ]
+        }
+        completion.prefetch()
+        completion.textDidChange(mention(""))
+        try await waitUntil {
+            completion.candidates.contains(.localAccount(LocalMention(account: Account(id: "bob", username: "bob", acct: "bob", displayName: "bobの表示名", avatar: URL(string: "https://example.social/bob.png"))), .reply))
+        }
+        completion.textDidChange(mention("b"))
+        completion.prefetch()
+        #expect(completion.replyParticipantLoadCount == 1)
+        #expect(await server.accountRequests == [["bob", "carol"]])
+        #expect(accts(completion.content) == ["@bob"])
+    }
+
+    /// 補完で選んだアカウントを、新しい順に覚える。
+    @Test func recordsSelectedMention() async throws {
+        let recent = try makeRecentMentions()
+        let completion = makeCompletion(recentMentions: recent)
+        completion.textDidChange(mention("bob"))
+        try await waitUntil { !completion.isLoading }
+        completion.didComplete(.account(.stub(id: "bob-2", acct: "bob2")))
+        completion.textDidChange(mention("al"))
+        completion.didComplete(.hashtag(Hashtag(name: "猫")))
+        #expect(recent.mentions.map(\.acct) == ["bob2"])
+        recent.record(LocalMention(account: .stub(id: "x", acct: "x")))
+        recent.record(LocalMention(account: .stub(id: "bob-2", acct: "bob2")))
+        #expect(recent.mentions.map(\.acct) == ["bob2", "x"])
+    }
+
+    /// 返信先の人は、投稿した人とメンションされた人から自分を除き、同じ人を一度だけ並べる。
+    @Test func replyParticipantsExcludeMe() {
+        let status = Status(
+            id: "100", createdAt: Date(timeIntervalSince1970: 0), account: .stub(id: "1", acct: "alice"), content: "", spoilerText: "", url: nil,
+            mentions: [Mention(id: "me", username: "me", url: nil, acct: "me"), Mention(id: "1", username: "alice", url: nil, acct: "alice"), Mention(id: "2", username: "bob", url: nil, acct: "bob@remote.example")]
+        )
+        #expect(LocalMention.replyParticipants(of: status, myAccountID: "me").map(\.acct) == ["alice", "bob@remote.example"])
     }
 
     @Test func didCompleteCloses() async throws {

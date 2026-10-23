@@ -65,10 +65,10 @@ public struct OwnHashtag: Hashable, Sendable {
     }
 
     /// 打った語で始まるものを先に、語を含むものを後に並べる。サーバーと同じく、大文字小文字や全角半角、アクセント記号の違いは見ない。
-    /// それぞれの中は`tags`の順（プロフィールのタグが先）のまま。
+    /// それぞれの中は`tags`の順（プロフィールのタグが先）のまま。語が空なら全部を返す。
     public static func matching(_ query: String, in tags: [OwnHashtag]) -> [OwnHashtag] {
         let query = Hashtag.normalizedName(query)
-        guard !query.isEmpty else { return [] }
+        guard !query.isEmpty else { return tags }
         let names = tags.map { Hashtag.normalizedName($0.name) }
         let prefixed = zip(tags, names).filter { $0.1.hasPrefix(query) }.map(\.0)
         let contained = zip(tags, names).filter { !$0.1.hasPrefix(query) && $0.1.contains(query) }.map(\.0)

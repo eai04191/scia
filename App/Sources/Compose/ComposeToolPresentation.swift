@@ -12,6 +12,8 @@ extension ComposeToolItem: MenuItemPresentable {
         case .linkTitle: "リンクにタイトルを付ける"
         case .customEmoji: "カスタム絵文字"
         case .customize: "カスタマイズ"
+        case .mention: "メンション"
+        case .hashtag: "ハッシュタグ"
         }
     }
 
@@ -22,6 +24,8 @@ extension ComposeToolItem: MenuItemPresentable {
         case .linkTitle: "本文のURLを選ぶと、リンク先のページのタイトルを読み、URLの前に入れます。URLが行の頭にあれば、タイトルを1行にします"
         case .customEmoji: "サーバーのカスタム絵文字を並べたシートを出します。もう一度押すとキーボードに戻ります"
         case .customize: "この並びを変える画面を開きます。隠しても、設定の「投稿欄のボタン」から変えられます"
+        case .mention: "本文のカーソルの位置に半角の@を入れ、返信先の人や前にメンションした人を候補に出します"
+        case .hashtag: "本文のカーソルの位置に半角の#を入れ、プロフィールのタグや最近使ったタグを候補に出します"
         default: nil
         }
     }
@@ -36,6 +40,8 @@ extension ComposeToolItem: MenuItemPresentable {
         case .linkTitle: "link.badge.plus"
         case .customEmoji: "face.smiling"
         case .customize: "slider.horizontal.3"
+        case .mention: "at"
+        case .hashtag: "number"
         }
     }
 

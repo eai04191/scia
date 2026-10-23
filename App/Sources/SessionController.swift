@@ -89,8 +89,9 @@ final class SessionController {
     /// 開いているスレッドの画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
     private let threads: ThreadRegistry
     private var cachedMyAccount: Account?
-    /// セッションで読んだアカウント。メニューに、メンションされたユーザーのアイコンを出すのに使う。
-    private lazy var accounts = AccountCache { [client] ids in try await client.accounts(ids) }
+    /// セッションで読んだアカウント。メニューと投稿欄の補完に、メンションされたユーザーのアイコンを出すのに使う。
+    /// 補完の口は`init`の中で`self`より先に作るので、それより前に作る。
+    private let accounts: AccountCache
     /// 補完の候補を読む口。投稿欄とプロフィールの編集で使う。
     private let completionSources: ComposeCompletion.Sources
     /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
@@ -322,6 +323,8 @@ final class SessionController {
             guard let error = error as? MastodonAPIError, error.isUnauthorized else { return }
             _ = await authorization.reportUnauthorized()
         }
+        let accounts = AccountCache { [client] ids in try await client.accounts(ids) }
+        self.accounts = accounts
         completionSources = ComposeCompletion.Sources(
             searchAccounts: { query, limit in
                 do {
@@ -362,7 +365,9 @@ final class SessionController {
                     await reportCompletionFailure(error)
                     throw error
                 }
-            }
+            },
+            // 読めなかった人は返らないだけで、失敗はAccountCacheがログに残す。
+            accounts: { ids in await Array(accounts.load(ids).values) }
         )
         composer = InlineComposeController(
             model: ComposeModel(myAccountID: credential.accountID, media: media) { draft in
@@ -384,7 +389,7 @@ final class SessionController {
                     throw error
                 }
             },
-            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
+            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, credentialID: credential.id)),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
         )
         rootViewController = tabBarController
@@ -1084,7 +1089,7 @@ final class SessionController {
             editor.charactersReservedPerURL = configuration.charactersReservedPerURL
         }
         let completion = TextInputCompletion(
-            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning)),
+            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, credentialID: credential.id)),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
         )
         let controller = ProfileEditViewController(editor: editor, completion: completion)
