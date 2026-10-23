@@ -25,6 +25,8 @@ final class ProfileHeaderView: UIView {
     var onToggleFollow: ((UIView) -> Void)?
     /// 自分のプロフィールで、フォローのボタンの場所に出す「プロフィールを編集」を押した。
     var onEditProfile: (() -> Void)?
+    /// フォローかフォロワーの数が押されたときに、どちらの一覧かを渡して呼ぶ。
+    var onOpenCountList: ((ProfileCountList) -> Void)?
     /// フォローの関係を読めなかったときに、フォローのボタンの場所に出す再試行が押された。
     var onRetryRelationship: (() -> Void)?
     var onSelectTab: ((ProfileTab) -> Void)?
@@ -137,7 +139,8 @@ final class ProfileHeaderView: UIView {
     private let followedByBadge = PaddedLabel()
     private let noteLabel = LinkLabel()
     private let fieldsStack = UIStackView()
-    private let countsLabel = UILabel()
+    /// フォローとフォロワーの数は、押すとその一覧を開く。押した文字で見分けるため、文字の位置を探せるラベルにする。
+    private let countsLabel = EmojiLabel()
     private let remoteStack = UIStackView()
     private let openOriginalButton = UIButton(configuration: .plain())
     private let tabControl = UISegmentedControl(items: ["投稿", "メディア"])
@@ -232,6 +235,14 @@ final class ProfileHeaderView: UIView {
         fieldsStack.axis = .vertical
         fieldsStack.spacing = 8
         countsLabel.numberOfLines = 0
+        countsLabel.isUserInteractionEnabled = true
+        countsLabel.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(countsTapped)))
+        countsLabel.accessibilityCustomActions = ProfileCountList.allCases.map { list in
+            UIAccessibilityCustomAction(name: list.accessibilityName) { [weak self] _ in
+                self?.onOpenCountList?(list)
+                return true
+            }
+        }
 
         let remoteLabel = UILabel()
         remoteLabel.numberOfLines = 0
@@ -571,18 +582,34 @@ final class ProfileHeaderView: UIView {
         }
     }
 
+    /// 投稿、フォロー、フォロワーの数。フォローとフォロワーは、数と名前に、押すと開く一覧を付ける。
     static func countsText(of account: Account) -> NSAttributedString {
         let font = UIFont.preferredFont(forTextStyle: .subheadline)
         let bold = font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
         let text = NSMutableAttributedString()
-        for (index, (count, label)) in [(account.statusesCount, "投稿"), (account.followingCount, "フォロー"), (account.followersCount, "フォロワー")].enumerated() {
+        let counts: [(Int, String, ProfileCountList?)] = [(account.statusesCount, "投稿", nil), (account.followingCount, "フォロー", .following), (account.followersCount, "フォロワー", .followers)]
+        for (index, (count, label, list)) in counts.enumerated() {
             if index > 0 {
                 text.append(NSAttributedString(string: "　", attributes: [.font: font]))
             }
-            text.append(NSAttributedString(string: count.formatted(), attributes: [.font: bold, .foregroundColor: UIColor.label]))
-            text.append(NSAttributedString(string: " \(label)", attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel]))
+            var countAttributes: [NSAttributedString.Key: Any] = [.font: bold, .foregroundColor: UIColor.label]
+            var labelAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
+            if let list {
+                countAttributes[.profileCountList] = list.rawValue
+                labelAttributes[.profileCountList] = list.rawValue
+            }
+            text.append(NSAttributedString(string: count.formatted(), attributes: countAttributes))
+            text.append(NSAttributedString(string: " \(label)", attributes: labelAttributes))
         }
         return text
+    }
+
+    @objc private func countsTapped(_ gesture: UITapGestureRecognizer) {
+        guard let index = countsLabel.characterIndex(at: gesture.location(in: countsLabel)),
+              let rawValue = countsLabel.attributedText?.attribute(.profileCountList, at: index, effectiveRange: nil) as? String,
+              let list = ProfileCountList(rawValue: rawValue)
+        else { return }
+        onOpenCountList?(list)
     }
 
     private func applyFollowButton(_ content: Content) {
@@ -785,4 +812,22 @@ private final class PaddedLabel: UILabel {
         let size = super.intrinsicContentSize
         return CGSize(width: size.width + insets.left + insets.right, height: size.height + insets.top + insets.bottom)
     }
+}
+
+/// プロフィールの数から開く人の一覧。
+enum ProfileCountList: String, CaseIterable {
+    case following
+    case followers
+
+    var accessibilityName: String {
+        switch self {
+        case .following: "フォローしている人の一覧"
+        case .followers: "フォロワーの一覧"
+        }
+    }
+}
+
+extension NSAttributedString.Key {
+    /// プロフィールの数の文字で、押すと開く人の一覧（`ProfileCountList`の`rawValue`）。
+    static let profileCountList = NSAttributedString.Key("net.mizle.scia.profileCountList")
 }

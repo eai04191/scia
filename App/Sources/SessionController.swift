@@ -898,6 +898,10 @@ final class SessionController {
         UserAction.openProfile.record()
         configure(viewController)
         controller.onEditProfile = { [weak self] in self?.presentProfileEditor() }
+        controller.onOpenAccountList = { [weak self, weak viewController] kind in
+            guard let viewController else { return }
+            self?.openAccountList(kind, from: viewController)
+        }
         controller.onOpenLink = { [weak self, weak viewController] destination in
             guard let viewController else { return }
             self?.open(destination, inProfileFrom: viewController)

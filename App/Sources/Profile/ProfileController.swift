@@ -24,6 +24,8 @@ final class ProfileController {
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// 自分のプロフィールで「プロフィールを編集」を押した。
     var onEditProfile: (() -> Void)?
+    /// フォローかフォロワーの数が押されたときに、開く人の一覧を渡して呼ぶ。
+    var onOpenAccountList: ((AccountListKind) -> Void)?
     private var tasks: [Task<Void, Never>] = []
     /// 表示している一覧と、その一覧のタブ。切り替えた一覧が届くまでは、前の一覧を出し続ける。
     private var shownTimeline: TimelineStore
@@ -95,6 +97,11 @@ final class ProfileController {
         header.onToggleFollow = { [weak self] source in self?.confirmToggleFollow(from: source) }
         header.onRetryRelationship = { [weak self] in self?.reloadRelationship() }
         header.onEditProfile = { [weak self] in self?.onEditProfile?() }
+        header.onOpenCountList = { [weak self] list in
+            guard let self else { return }
+            let accountID = store.account.id
+            onOpenAccountList?(list == .following ? .following(accountID: accountID) : .followers(accountID: accountID))
+        }
         header.onSelectTab = { [weak self] tab in self?.select(tab) }
         header.onChangePostsFilter = { [weak self] filter in self?.changePostsFilter(filter) }
         header.onOpenOriginal = { [weak self] in

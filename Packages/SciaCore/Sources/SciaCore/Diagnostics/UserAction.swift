@@ -18,7 +18,7 @@ public enum UserAction: Sendable, Equatable {
     case openViewer(count: Int, index: Int)
     case closeViewer(ViewerClose)
     case openProfile
-    /// まとめた通知の「ほか3人」から、人の一覧を開いた。
+    /// 人の一覧（お気に入りした人、ブーストした人、フォロー、フォロワー）を開いた。
     case openAccountList
     /// 投稿の行を押して、スレッドを開いた。
     case openThread(screen: String)
