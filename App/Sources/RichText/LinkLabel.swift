@@ -89,32 +89,6 @@ final class LinkLabel: EmojiLabel {
         return frames
     }
 
-    /// ラベルの座標`point`にある文字の位置。文字の上でなければnil。
-    private func characterIndex(at point: CGPoint) -> Int? {
-        guard let attributedText, attributedText.length > 0, bounds.contains(point) else { return nil }
-        let layout = textLayout(of: attributedText)
-        let contentStorage = layout.contentStorage
-        let layoutManager = layout.layoutManager
-
-        guard let fragment = layoutManager.textLayoutFragment(for: point),
-              let paragraphStart = fragment.textElement?.elementRange?.location
-        else { return nil }
-        let pointInFragment = CGPoint(x: point.x - fragment.layoutFragmentFrame.minX, y: point.y - fragment.layoutFragmentFrame.minY)
-        // 行末より右や最終行より下を押しても、いちばん近い文字が返るため、文字の枠の中かを確かめる。
-        guard let line = fragment.textLineFragments.first(where: { $0.typographicBounds.contains(pointInFragment) }),
-              pointInFragment.x <= line.typographicBounds.minX + line.typographicBounds.width
-        else { return nil }
-        let pointInLine = CGPoint(x: pointInFragment.x - line.typographicBounds.minX, y: pointInFragment.y - line.typographicBounds.minY)
-        let indexInLine = line.characterIndex(for: pointInLine)
-        guard indexInLine != NSNotFound,
-              let boundary = contentStorage.location(paragraphStart, offsetBy: indexInLine)
-        else { return nil }
-        let boundaryIndex = contentStorage.offset(from: contentStorage.documentRange.location, to: boundary)
-        // 返るのは文字と文字の境目で、押した文字の前か後ろかは書く向きで変わる。境目の前後の文字のうち、描かれた枠に押した点が入るほうを選ぶ。
-        let candidates = [boundaryIndex, boundaryIndex - 1].filter { 0 <= $0 && $0 < attributedText.length }
-        return candidates.first { characterFrame(at: $0, in: contentStorage, layoutManager: layoutManager)?.contains(point) ?? false }
-    }
-
 }
 
 
