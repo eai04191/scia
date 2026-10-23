@@ -53,9 +53,21 @@ public struct ReconnectingStream: Sendable {
 
     private let connect: @Sendable () async throws -> StreamingConnection
     private let policy: Policy
+    private let waitForPingTimeout: @Sendable (Duration) async throws -> Void
 
     public init(policy: Policy = .standard, connect: @escaping @Sendable () async throws -> StreamingConnection) {
+        self.init(policy: policy, waitForPingTimeout: { try await Task.sleep(for: $0) }, connect: connect)
+    }
+
+    /// - Parameter waitForPingTimeout: pingの応答を待つ時間を数える。返ったら時間切れにする。応答が先に返ったら取り消す。
+    ///   テストで、時間切れにするpingを時間の長さではなく順番で決める。
+    init(
+        policy: Policy,
+        waitForPingTimeout: @escaping @Sendable (Duration) async throws -> Void,
+        connect: @escaping @Sendable () async throws -> StreamingConnection
+    ) {
         self.policy = policy
+        self.waitForPingTimeout = waitForPingTimeout
         self.connect = connect
     }
 
@@ -101,6 +113,7 @@ public struct ReconnectingStream: Sendable {
         let (activities, continuation) = AsyncThrowingStream<Activity, any Error>.makeStream()
         let queue = ActivityQueue(continuation)
         let policy = policy
+        let waitForPingTimeout = waitForPingTimeout
         let receiving = Task {
             do {
                 while true {
@@ -112,11 +125,11 @@ public struct ReconnectingStream: Sendable {
         }
         let pinging = Task {
             do {
-                try await Self.ping(connection, timeout: policy.pingTimeout)
+                try await Self.ping(connection, timeout: policy.pingTimeout, wait: waitForPingTimeout)
                 queue.connected()
                 while true {
                     try await Task.sleep(for: policy.pingInterval)
-                    try await Self.ping(connection, timeout: policy.pingTimeout)
+                    try await Self.ping(connection, timeout: policy.pingTimeout, wait: waitForPingTimeout)
                 }
             } catch {
                 queue.finish(throwing: error)
@@ -135,11 +148,15 @@ public struct ReconnectingStream: Sendable {
     ///
     /// URLSessionWebSocketTaskのpingは取り消しに応じないため、応答を待つ処理は切り離して動かし、時間切れでは待つのだけをやめる。
     /// 呼び出し側がその後に接続を閉じるので、応答を待っていた処理もそこで終わる。
-    private static func ping(_ connection: StreamingConnection, timeout: Duration) async throws {
+    private static func ping(
+        _ connection: StreamingConnection,
+        timeout: Duration,
+        wait: @escaping @Sendable (Duration) async throws -> Void
+    ) async throws {
         let once = OnceFlag()
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
             let timer = Task {
-                try await Task.sleep(for: timeout)
+                try await wait(timeout)
                 guard once.claim() else { return }
                 continuation.resume(throwing: PingTimeout())
             }

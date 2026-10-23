@@ -72,8 +72,13 @@ struct ReconnectingStreamTests {
         let log = ActivityLog()
         var policy = Self.fastPolicy
         policy.pingInterval = .milliseconds(20)
-        policy.pingTimeout = .milliseconds(50)
-        let stream = makeStream(connector, policy: policy)
+        let stream = makeStream(connector, policy: policy) { _ in
+            // 応答しないpingが待っているときだけ時間切れにする。応答するpingの時間切れは、応答すると取り消される。
+            // 時間の長さや呼ばれた順で決めると、混んでいるときに応答するpingまで時間切れになる。
+            while connector.unansweredPings == 0 {
+                try await Task.sleep(for: .milliseconds(5))
+            }
+        }
 
         let task = Task { try await stream.run { await log.append($0) } }
         await log.waitUntil(count: 3)
@@ -111,7 +116,11 @@ struct ReconnectingStreamTests {
         #expect(connector.closedCount == 1)
     }
 
-    private func makeStream(_ connector: ScriptedConnector, policy: ReconnectingStream.Policy) -> ReconnectingStream {
+    private func makeStream(
+        _ connector: ScriptedConnector,
+        policy: ReconnectingStream.Policy,
+        waitForPingTimeout: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+    ) -> ReconnectingStream {
         let client = StreamingClient(
             credential: Credential(
                 instance: URL(filePath: "/"),
@@ -123,7 +132,7 @@ struct ReconnectingStreamTests {
             ),
             connector: connector
         )
-        return ReconnectingStream(policy: policy) {
+        return ReconnectingStream(policy: policy, waitForPingTimeout: waitForPingTimeout) {
             client.open(baseURL: URL(filePath: "/"))
         }
     }
@@ -224,16 +233,18 @@ final class ScriptedConnector: WebSocketConnector {
         }
     }
 
-    private let state: Mutex<(scripts: [Script], connectCount: Int, closedCount: Int, sent: [[String]])>
+    private let state: Mutex<(scripts: [Script], connectCount: Int, closedCount: Int, sent: [[String]], unansweredPings: Int)>
 
     init(_ scripts: [Script]) {
-        state = Mutex((scripts, 0, 0, []))
+        state = Mutex((scripts, 0, 0, [], 0))
     }
 
     var connectCount: Int { state.withLock { $0.connectCount } }
     var closedCount: Int { state.withLock { $0.closedCount } }
     /// 接続ごとに、送られたメッセージ。
     var sent: [[String]] { state.withLock { $0.sent } }
+    /// 応答しないまま、接続が閉じるのを待っているpingの数。閉じたら、その接続の分を同時に減らす。
+    var unansweredPings: Int { state.withLock { $0.unansweredPings } }
 
     func connect(_ request: URLRequest) -> any WebSocketConnection {
         let (script, index) = state.withLock { state in
@@ -245,6 +256,8 @@ final class ScriptedConnector: WebSocketConnector {
             self?.state.withLock { $0.closedCount += 1 }
         } onSend: { [weak self] text in
             self?.state.withLock { $0.sent[index].append(text) }
+        } onUnansweredPings: { [weak self] change in
+            self?.state.withLock { $0.unansweredPings += change }
         }
     }
 }
@@ -254,6 +267,7 @@ private final class ScriptedConnection: WebSocketConnection {
         var script: ScriptedConnector.Script
         var hasDeliveredMessage = false
         var pings = 0
+        var unansweredPings = 0
         var isClosed = false
         var waiters: [CheckedContinuation<Void, any Error>] = []
     }
@@ -261,11 +275,18 @@ private final class ScriptedConnection: WebSocketConnection {
     private let state: Mutex<State>
     private let onClose: @Sendable () -> Void
     private let onSend: @Sendable (String) -> Void
+    private let onUnansweredPings: @Sendable (Int) -> Void
 
-    init(script: ScriptedConnector.Script, onClose: @escaping @Sendable () -> Void, onSend: @escaping @Sendable (String) -> Void) {
+    init(
+        script: ScriptedConnector.Script,
+        onClose: @escaping @Sendable () -> Void,
+        onSend: @escaping @Sendable (String) -> Void,
+        onUnansweredPings: @escaping @Sendable (Int) -> Void
+    ) {
         state = Mutex(State(script: script))
         self.onClose = onClose
         self.onSend = onSend
+        self.onUnansweredPings = onUnansweredPings
     }
 
     func send(_ text: String) async throws {
@@ -317,7 +338,13 @@ private final class ScriptedConnection: WebSocketConnection {
             if state.isClosed { return .failure(URLError(.cancelled)) }
             if case .fail(let error) = state.script.handshake { return .failure(error) }
             state.pings += 1
-            return .success(state.pings <= state.script.answeredPings)
+            let answers = state.pings <= state.script.answeredPings
+            if !answers {
+                // 閉じるときの減らし方と順序がずれないよう、接続の状態と同じ鍵の中で数える。
+                state.unansweredPings += 1
+                onUnansweredPings(1)
+            }
+            return .success(answers)
         }
         if try answers.get() { return }
         try await waitUntilClosed()
@@ -328,6 +355,8 @@ private final class ScriptedConnection: WebSocketConnection {
         let waiters = state.withLock { state -> [CheckedContinuation<Void, any Error>]? in
             guard !state.isClosed else { return nil }
             state.isClosed = true
+            onUnansweredPings(-state.unansweredPings)
+            state.unansweredPings = 0
             defer { state.waiters.removeAll() }
             return state.waiters
         }
