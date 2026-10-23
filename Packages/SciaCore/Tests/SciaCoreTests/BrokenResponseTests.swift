@@ -53,7 +53,7 @@ struct BrokenResponseTests {
 
     /// 知らない種類の通知は読み、読めない通知は「表示できない」行にする。
     @Test func notificationsFromOtherServerKeepWhatCanBeShown() async throws {
-        let client = try makeClient(StubTransport([try .fixture("notifications_broken")]))
+        let client = try makeClient(StubTransport([try .fixture("grouped_notifications_broken")]))
 
         let page = try await client.notifications(TimelineQuery(limit: 40))
 

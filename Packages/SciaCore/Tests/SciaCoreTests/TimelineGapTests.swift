@@ -1094,7 +1094,7 @@ struct TimelineGapTests {
             switch entry {
             case .status(let status): Int(status.id)
             case .unreadable(let item): Int(item.id)
-            case .gap, .notification, .pinned: nil
+            case .gap, .notification, .pinned, .account: nil
             }
         }
     }
@@ -1174,6 +1174,7 @@ extension TimelineEntry {
         case .notification(let notification): "notification(\(notification.id))"
         case .pinned(let status): "pinned(\(status.id))"
         case .unreadable(let item): "unreadable(\(item.id))"
+        case .account(let account): "account(\(account.id))"
         }
     }
 }

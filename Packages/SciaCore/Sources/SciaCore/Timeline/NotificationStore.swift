@@ -2,6 +2,9 @@ import Foundation
 
 /// 通知を新しい順に持つ。RESTで読んだページと、ストリーミングで届いた通知を合わせる。
 ///
+/// サーバーがまとめた通知は、まとまりを1件として持つ。同じまとまりは、`groupKey`で1つにする。
+/// ストリーミングで届いた通知は、同じまとまりが手元にあれば、そこへ足して一番上へ移す。
+///
 /// ホームと違い、ギャップは置かない。通知は上から読むもので、切れていた間に読み切れないほど溜まったら、
 /// 古い側を捨てて最新の側から読み直せば足りるため。
 @MainActor
@@ -29,6 +32,16 @@ public final class NotificationStore {
     /// 使う人の操作で一覧から除いた通知のID（承認か却下で片づけたフォローリクエストなど）。サーバーは除いた通知を消すが、その前に読み始めたページで戻さない。
     /// 同じ通知がそのページで読めなかったときも、読めなかった行として戻さない。
     private var removedNotificationIDs: Set<MastodonNotification.ID> = []
+    /// 使う人が削除したまとまりのキーと、削除したときのまとまりの最も新しい通知のID、削除した順番（`removalCount`の値）。
+    /// 削除より前に読み始めたページでは、IDによらず、まとまりを戻さない。読み始めたあとに届いた通知も、サーバーは削除で消しているため。
+    /// ストリーミングで削除した後に届いた通知は、同じキーでも、削除したときのIDより新しければ新しいまとまりとして足す。サーバーは、削除した後の通知を消さないため。
+    private var removedGroups: [String: (id: MastodonNotification.ID, order: Int)] = [:]
+    /// まとまりを削除した回数。ページを読み始めたときの値と比べ、そのページが削除より前に読み始めたものかを見分ける。
+    private var removalCount = 0
+    /// ストリーミングで届いて、まとまりへ足した通知。まとまりのキーごとに届いた順。
+    /// 補完の応答を待つ間に新着を足すと、手元のまとまりが応答より新しくなる。応答の人数はまだ届いていない分を含むため、手元の値を残すと、その分が欠ける。
+    /// 応答の値に、応答より後に届いた分を足し直すのに使う。応答がそれより新しくなったら捨てる。
+    private var streamedArrivals: [String: [MastodonNotification]] = [:]
     /// 補完を始めたが、まだ成功していない基準のID。失敗した後に新着が挿入されて最新のIDが進んでも、次の補完はここから読む。
     private var unfilledSinceID: String?
     private var isFilling = false
@@ -60,8 +73,10 @@ public final class NotificationStore {
 
     /// 読めた通知と読めなかった通知のID。新しい順。続きを読む位置に使う。
     /// 読めなかった通知も含めるのは、1ページの全部が読めなかったときにも、その先へ進めるようにするため。
+    /// まとまりは、読んだ範囲の最も古い通知のIDも含める。続きは、まとまりの中の最も古い通知より古い側から読むため。
     private var itemIDs: [String] {
-        (notifications.map(\.id) + unreadable.map(\.id)).sorted { StatusID.isNewer($0, than: $1) }
+        (notifications.flatMap { [$0.id, $0.pageMinID] } + unreadable.flatMap { [$0.id] + ($0.pageMinID.map { [$0] } ?? []) })
+            .sorted { StatusID.isNewer($0, than: $1) }
     }
 
     /// 最新のページで置き換える。読み込み中なら何もせずnilを返す。`markerID`を渡すと、そこを既読位置にする。
@@ -70,8 +85,9 @@ public final class NotificationStore {
         isLoading = true
         defer { isLoading = false }
 
+        let removals = removalCount
         let page = try await fetch(TimelineQuery(limit: pageSize))
-        notifications = Self.sorted(page.notifications.filter { !isDiscarded($0) })
+        notifications = Self.sorted(page.notifications.compactMap { admitted($0, fetchedAfter: removals) })
         unreadable = Self.sorted(page.unreadable.filter { !removedNotificationIDs.contains($0.id) }, excluding: notifications)
         reachedEnd = page.isEmpty
         // 読んだ通知が全部フィルターで隠れて行が1つもないと、続きを読むきっかけがないため、並べる通知が出るまで古い方を読む。
@@ -111,15 +127,16 @@ public final class NotificationStore {
     private func fetchOlder(than oldestID: String, generation: Int) async throws -> [MastodonNotification] {
         var maxID = oldestID
         while true {
+            let removals = removalCount
             let page = try await fetch(TimelineQuery(maxID: maxID, limit: pageSize))
             guard generation == rangeGeneration else { return [] }
             if page.isEmpty {
                 reachedEnd = true
             }
-            let added = merge(page)
+            let added = merge(page, fetchedAfter: removals)
             // 削除済みの投稿についての通知や、ミュートかブロックした相手の通知しかなかったときは、一覧に残らないため、ページの一番古い通知の先へ進む。
             // それでも続きを読む位置が進まなければ、同じページを読み続けないよう止める。
-            let pageOldestID = (page.notifications.map(\.id) + page.unreadable.map(\.id)).reduce(itemIDs.last) { oldest, id in oldest.map { Self.older($0, id) } ?? id }
+            let pageOldestID = page.ids.reduce(itemIDs.last) { oldest, id in oldest.map { Self.older($0, id) } ?? id }
             guard added.isEmpty, !page.isEmpty, page.unreadable.isEmpty, let next = pageOldestID, next != maxID else {
                 return added
             }
@@ -157,6 +174,7 @@ public final class NotificationStore {
             let fetched: NotificationPage
             let isConnected: Bool
             let readBefore = readCount
+            let removals = removalCount
             do {
                 (fetched, isConnected) = try await fetchNewer(than: sinceID, maxPages: maxPages) { count in
                     readCount = readBefore + count
@@ -176,12 +194,16 @@ public final class NotificationStore {
                 reachedEnd = fetched.isEmpty
             }
             if isConnected {
-                added += merge(fetched)
+                added += merge(fetched, fetchedAfter: removals)
             } else if let oldestFetched = fetched.ids.min(by: { StatusID.isNewer($1, than: $0) }) {
-                let known = Set(notifications.map(\.id))
-                let kept = fetched.notifications.filter { !isDiscarded($0) }
-                added += kept.filter { !known.contains($0.id) }
-                notifications = Self.sorted(notifications.filter { StatusID.isNewer($0.id, than: oldestFetched) } + kept)
+                let known = Dictionary(notifications.map { ($0.groupKey, $0.id) }, uniquingKeysWith: { first, _ in first })
+                let (kept, replayedKeys) = replayingArrivals(onto: fetched.notifications.compactMap { admitted($0, fetchedAfter: removals) }, keepsLocalPage: false)
+                added += kept.filter { notification in known[notification.groupKey].map { StatusID.isNewer(notification.id, than: $0) } ?? true }
+                // 残す手元の行は、捨てた範囲の続きの位置を引き継がない。引き継ぐと、続きの読み込みがまだ読んでいない範囲を飛び越える。
+                let local = notifications
+                    .filter { StatusID.isNewer($0.id, than: oldestFetched) && !replayedKeys.contains($0.groupKey) }
+                    .map { $0.clampingPage(notOlderThan: oldestFetched) }
+                notifications = Self.sorted(kept + local)
                 unreadable = Self.sorted(unreadable.filter { StatusID.isNewer($0.id, than: oldestFetched) } + fetched.unreadable.filter { !removedNotificationIDs.contains($0.id) }, excluding: notifications)
                 reachedEnd = false
                 rangeGeneration += 1
@@ -238,18 +260,40 @@ public final class NotificationStore {
         return pending.count == 1
     }
 
-    /// 保留していた通知をIDの順に合流させ、新たに加わった通知を新しい順に返す。
+    /// 保留していた通知をIDの順に合流させ、新たに加わったか一番上へ移った通知を新しい順に返す。
     ///
+    /// まとめる種類の通知は、同じまとまりが手元にあれば、そこへ足して一番上へ移す。すでに並べている人の通知は足さず、移さない。
     /// 読み込んだ末尾より古い通知は捨てる。末尾に足すと、次に古いページを読むときの`max_id`がずれて、間の通知を読み飛ばすため。
     /// 読めなかった通知と同じIDの通知は、末尾にあっても置き換える。並びの位置は変わらないため。
     public func flushPending() -> [MastodonNotification] {
         defer { pending.removeAll() }
-        var arrivals = pending
+        var arrivals = pending.sorted { StatusID.isNewer($1.id, than: $0.id) }
         if !reachedEnd, let oldestID = itemIDs.last {
             let unreadableIDs = Set(unreadable.map(\.id))
             arrivals = arrivals.filter { StatusID.isNewer($0.id, than: oldestID) || unreadableIDs.contains($0.id) }
         }
-        return merge(NotificationPage(notifications: arrivals))
+        var current = Dictionary(notifications.map { ($0.groupKey, $0) }, uniquingKeysWith: { first, _ in first })
+        let knownIDs = Set(notifications.map(\.id))
+        var changed: [String: MastodonNotification] = [:]
+        for arrival in arrivals.compactMap({ admitted($0) }) where !knownIDs.contains(arrival.id) {
+            if let existing = current[arrival.groupKey] {
+                // まとまりの最も新しい通知より古い通知は、補完で読んだまとまりにもう数えられている。
+                guard StatusID.isNewer(arrival.id, than: existing.id), let grown = existing.adding(arrival) else { continue }
+                current[arrival.groupKey] = grown
+                changed[arrival.groupKey] = grown
+            } else {
+                current[arrival.groupKey] = arrival
+                changed[arrival.groupKey] = arrival
+            }
+            if arrival.type.isGrouped {
+                streamedArrivals[arrival.groupKey, default: []].append(arrival)
+            }
+        }
+        notifications = Self.sorted(Array(current.values))
+        unreadable = Self.sorted(unreadable, excluding: notifications)
+        // 一覧から外れたまとまりの分は、足し直す先がないので捨てる。
+        streamedArrivals = streamedArrivals.filter { current[$0.key] != nil }
+        return Self.sorted(Array(changed.values)).filter { !isFilteredOut($0) }
     }
 
     /// 通知の対象の投稿を`transform`で変える。お気に入りなどの操作の結果を反映する。表示に関わる変化があればtrueを返す。
@@ -266,20 +310,22 @@ public final class NotificationStore {
     @discardableResult
     public func removeStatus(_ id: Status.ID) -> Bool {
         deletedStatusIDs.insert(id)
-        pending.removeAll(where: isDiscarded)
-        let remaining = notifications.filter { !isDiscarded($0) }
-        guard remaining.count != notifications.count else { return false }
-        notifications = remaining
-        return true
+        return readmit()
     }
 
     /// 通知を隠すミュートか、ブロックをした相手からの通知を除く。あとから届いても足さない。表示に関わる変化があればtrueを返す。
+    /// まとまりからは、その人だけを外す。ほかの人が残れば、まとまりは残る。
     @discardableResult
     public func excludeAccount(_ id: String) -> Bool {
         excludedAccountIDs.insert(id)
+        return readmit()
+    }
+
+    /// 保留と手元の通知を、除く決まりに当て直す。表示に関わる変化があればtrueを返す。
+    private func readmit() -> Bool {
         pending.removeAll(where: isDiscarded)
-        let remaining = notifications.filter { !isDiscarded($0) }
-        guard remaining.count != notifications.count else { return false }
+        let remaining = notifications.compactMap { admitted($0) }
+        guard remaining != notifications else { return false }
         notifications = remaining
         return true
     }
@@ -306,11 +352,21 @@ public final class NotificationStore {
     /// 使う人が削除した通知を除く。表示に関わる変化があればtrueを返す。
     /// 削除した通知は、応答を待つ間に補完で一覧から外れていても、IDを覚えて戻さない。
     /// 応答を待つ間に読んだページで、同じ通知が読めなかった行として入っていれば、それも除く。
+    /// - Parameter groupKey: 削除したまとまりのキー。メニューを開いてから応答が届くまでに新着が足されて、まとまりのIDが変わっていても、キーで除く。
     @discardableResult
-    public func removeNotification(_ id: MastodonNotification.ID) -> Bool {
+    public func removeNotification(_ id: MastodonNotification.ID, groupKey: String? = nil) -> Bool {
         removedNotificationIDs.insert(id)
-        pending.removeAll { $0.id == id }
-        let remaining = notifications.filter { $0.id != id }
+        let key = groupKey ?? notifications.first(where: { $0.id == id })?.groupKey
+        if let key {
+            let newestID = notifications.first { $0.groupKey == key }.map { StatusID.isNewer($0.id, than: id) ? $0.id : id } ?? id
+            removalCount += 1
+            removedGroups[key] = (newestID, removalCount)
+        }
+        pending.removeAll { $0.id == id || ($0.groupKey == key && key != nil) }
+        if let key {
+            streamedArrivals[key] = nil
+        }
+        let remaining = notifications.filter { $0.id != id && $0.groupKey != key }
         let remainingUnreadable = unreadable.filter { $0.id != id }
         guard remaining.count != notifications.count || remainingUnreadable.count != unreadable.count else { return false }
         notifications = remaining
@@ -322,7 +378,7 @@ public final class NotificationStore {
         guard let status = notification.status else { return notification }
         let replaced = TimelineStore.updating(id, in: status, transform)
         guard replaced != status else { return notification }
-        return MastodonNotification(id: notification.id, type: notification.type, createdAt: notification.createdAt, account: notification.account, status: replaced)
+        return notification.replacing(status: replaced)
     }
 
     // MARK: - 未読
@@ -399,10 +455,20 @@ public final class NotificationStore {
 
     // MARK: - 並べ替え
 
-    /// まだない通知と読めなかった通知を足し、足した通知を新しい順に返す。読めなかった通知と同じIDの通知は、読めなかった行と置き換える。
-    /// 削除した投稿についての通知か、片づけたフォローリクエストの通知。
+    /// 削除した投稿についての通知か、片づけたフォローリクエストか、削除した通知か、除いた人だけの通知。
     private func isDiscarded(_ notification: MastodonNotification) -> Bool {
-        removedNotificationIDs.contains(notification.id) || isAboutDeletedStatus(notification) || excludedAccountIDs.contains(notification.account.id)
+        admitted(notification) == nil
+    }
+
+    /// 一覧に入れる形にする。除く通知ならnil。まとまりからは、除いた人だけを外す。
+    /// - Parameter removals: ページから読んだ通知なら、ページを読み始めたときの`removalCount`。それより後に削除したまとまりは、IDによらず戻さない。
+    private func admitted(_ notification: MastodonNotification, fetchedAfter removals: Int? = nil) -> MastodonNotification? {
+        guard !removedNotificationIDs.contains(notification.id), !isAboutDeletedStatus(notification) else { return nil }
+        if let removed = removedGroups[notification.groupKey] {
+            if let removals, removed.order > removals { return nil }
+            if !StatusID.isNewer(notification.id, than: removed.id) { return nil }
+        }
+        return notification.removingAccounts(excludedAccountIDs)
     }
 
     private func isAboutDeletedStatus(_ notification: MastodonNotification) -> Bool {
@@ -410,14 +476,41 @@ public final class NotificationStore {
         return deletedStatusIDs.contains(status.id) || status.reblog.map { deletedStatusIDs.contains($0.id) } ?? false
     }
 
-    /// 足した通知のうち、一覧に並べたものを返す。
-    private func merge(_ page: NotificationPage) -> [MastodonNotification] {
-        let readIDs = Set(notifications.map(\.id))
-        let added = Self.sorted(page.notifications.filter { !readIDs.contains($0.id) && !isDiscarded($0) })
-        notifications = Self.sorted(notifications + added)
-        let known = Set(itemIDs)
-        unreadable = Self.sorted(unreadable + page.unreadable.filter { !known.contains($0.id) && !removedNotificationIDs.contains($0.id) }, excluding: notifications)
+    /// まだない通知と読めなかった通知を足し、足した通知のうち一覧に並べたものを新しい順に返す。読めなかった通知と同じIDの通知は、読めなかった行と置き換える。
+    /// 手元と同じまとまりは、最も新しい通知が新しいほうの値を使い、新しくなったものを足した通知として返す。
+    /// サーバーは、読んだ範囲の上限より古い、そのまとまりの通知を全部数えて返すため、新しいほうの値が古いほうを含む。
+    /// - Parameter removals: ページを読み始めたときの`removalCount`。
+    private func merge(_ page: NotificationPage, fetchedAfter removals: Int) -> [MastodonNotification] {
+        let known = Dictionary(notifications.map { ($0.groupKey, $0.id) }, uniquingKeysWith: { first, _ in first })
+        let (incoming, replayedKeys) = replayingArrivals(onto: page.notifications.compactMap { admitted($0, fetchedAfter: removals) }, keepsLocalPage: true)
+        let added = Self.sorted(incoming.filter { notification in known[notification.groupKey].map { StatusID.isNewer(notification.id, than: $0) } ?? true })
+        // 同じIDなら、手元を残す。操作の結果を反映した手元の投稿を、読み始めたときのページで戻さないため。
+        notifications = Self.sorted(incoming + notifications.filter { !replayedKeys.contains($0.groupKey) })
+        let knownIDs = Set(itemIDs)
+        unreadable = Self.sorted(unreadable + page.unreadable.filter { !knownIDs.contains($0.id) && !removedNotificationIDs.contains($0.id) }, excluding: notifications)
         return added.filter { !isFilteredOut($0) }
+    }
+
+    /// ページで読んだまとまりのうち、手元のほうが新しいもの（応答を待つ間にストリーミングで新着を足した）に、応答より後に届いた通知を足し直す。
+    /// 足し直したまとまりは手元の行の位置（最も新しい通知）と投稿を引き継ぐので、行は動かない。足し直したまとまりのキーも返す。
+    /// 応答より新しい通知が手元に届いていないキーは、覚えておく必要がないので捨てる。
+    /// - Parameter keepsLocalPage: 手元の続きの位置を引き継ぐ。補完が古い側を捨てて読み直すときは引き継がない。
+    private func replayingArrivals(onto incoming: [MastodonNotification], keepsLocalPage: Bool) -> ([MastodonNotification], Set<String>) {
+        let local = Dictionary(notifications.map { ($0.groupKey, $0) }, uniquingKeysWith: { first, _ in first })
+        var replayedKeys: Set<String> = []
+        let result = incoming.map { snapshot -> MastodonNotification in
+            let later = streamedArrivals[snapshot.groupKey]?.filter { StatusID.isNewer($0.id, than: snapshot.id) } ?? []
+            streamedArrivals[snapshot.groupKey] = later.isEmpty ? nil : later
+            guard let current = local[snapshot.groupKey], StatusID.isNewer(current.id, than: snapshot.id), !later.isEmpty else { return snapshot }
+            replayedKeys.insert(snapshot.groupKey)
+            let grown = later.reduce(snapshot) { $0.adding($1) ?? $0 }
+            let page = keepsLocalPage && StatusID.isNewer(grown.pageMinID, than: current.pageMinID) ? current.pageMinID : grown.pageMinID
+            return MastodonNotification(
+                id: current.id, type: grown.type, createdAt: current.createdAt, account: grown.account, status: current.status, groupKey: grown.groupKey,
+                notificationsCount: grown.notificationsCount, sampleAccounts: grown.sampleAccounts, pageMinID: page
+            )
+        }
+        return (result, replayedKeys)
     }
 
     private func isFilteredOut(_ notification: MastodonNotification, now: Date = Date()) -> Bool {
@@ -425,11 +518,14 @@ public final class NotificationStore {
         return filtering.verdict(for: status, now: now).isHidden
     }
 
-    /// IDの新しい順に並べ、同じIDは1つにする。
+    /// IDの新しい順に並べ、同じまとまりは1つにする。最も新しい通知が新しいほうを残し、同じなら後ろのほうを残す。
+    /// 続きを読む位置は、どちらか古いほうにする。
     private static func sorted(_ notifications: [MastodonNotification]) -> [MastodonNotification] {
-        Dictionary(notifications.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
-            .values
-            .sorted { StatusID.isNewer($0.id, than: $1.id) }
+        Dictionary(notifications.map { ($0.groupKey, $0) }, uniquingKeysWith: { old, new in
+            StatusID.isNewer(old.id, than: new.id) ? old.extendingPage(to: new.pageMinID) : new.extendingPage(to: old.pageMinID)
+        })
+        .values
+        .sorted { StatusID.isNewer($0.id, than: $1.id) }
     }
 
     /// IDの新しい順に並べ、同じIDは1つにする。同じIDの通知が読めていれば外す。

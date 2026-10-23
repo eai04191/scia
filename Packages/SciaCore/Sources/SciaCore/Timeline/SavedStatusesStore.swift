@@ -245,7 +245,7 @@ public final class SavedStatusesStore {
                 guard !deletedIDs.contains(status.id), !isExcluded(status) else { return false }
             case .unreadable(let item):
                 guard !deletedIDs.contains(item.id) else { return false }
-            case .gap, .notification, .pinned:
+            case .gap, .notification, .pinned, .account:
                 return false
             }
             return seen.insert(entry.id).inserted

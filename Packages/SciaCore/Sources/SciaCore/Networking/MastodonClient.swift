@@ -53,11 +53,12 @@ public struct MastodonClient: Sendable {
         return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: false)
     }
 
-    /// 通知を新しい順に返す。1回に読める件数の上限は80件。
-    /// https://docs.joinmastodon.org/methods/notifications/#get
+    /// 通知を、サーバーがまとめた形で新しい順に返す。まとめるのは`MastodonNotification.Kind.grouped`の種類だけにする。
+    /// 1回に読めるまとまりの数の上限は80。
+    /// https://docs.joinmastodon.org/methods/grouped_notifications/#get-grouped
     public func notifications(_ query: TimelineQuery) async throws -> NotificationPage {
-        let list = try await get(ElementList<MastodonNotification>.self, path: "api/v1/notifications", query: query.queryItems).0
-        return NotificationPage(notifications: list.elements, unreadable: list.unreadable)
+        let grouping = MastodonNotification.Kind.grouped.map { URLQueryItem(name: "grouped_types[]", value: $0.rawValue) }
+        return try await get(GroupedNotificationsResults.self, path: "api/v2/notifications", query: query.queryItems + grouping).0.page
     }
 
     /// 既読位置。まだ保存されていなければnil。
@@ -596,6 +597,25 @@ public struct MastodonClient: Sendable {
         try await savedStatuses(path: "api/v1/favourites", maxID: maxID, limit: limit)
     }
 
+    /// 人の一覧を、サーバーが返す順に返す。1回に読める件数の上限は80件。
+    /// - Parameter maxID: 前のページの`AccountListPage.nextMaxID`。nilなら最初のページ。
+    /// https://docs.joinmastodon.org/methods/statuses/#favourited_by
+    /// https://docs.joinmastodon.org/methods/statuses/#reblogged_by
+    /// https://docs.joinmastodon.org/methods/accounts/#followers
+    /// https://docs.joinmastodon.org/methods/accounts/#following
+    public func accounts(in list: AccountListKind, maxID: String?, limit: Int) async throws -> AccountListPage {
+        let path = switch list {
+        case .favouritedBy(let statusID): "api/v1/statuses/\(statusID)/favourited_by"
+        case .rebloggedBy(let statusID): "api/v1/statuses/\(statusID)/reblogged_by"
+        case .followers(let accountID): "api/v1/accounts/\(accountID)/followers"
+        case .following(let accountID): "api/v1/accounts/\(accountID)/following"
+        }
+        let query = [URLQueryItem(name: "limit", value: String(limit))] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
+        let (accounts, response) = try await get(ElementList<Account>.self, path: path, query: query)
+        let link = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)
+        return AccountListPage(accounts: accounts.elements, nextMaxID: link?.queryValue("max_id", of: "next"))
+    }
+
     /// `max_id`は投稿のIDではない内部のIDで、`Link`ヘッダーの`next`のURLにだけ書かれている。
     /// URLをそのまま開かず`max_id`だけを取り出すのは、トークンを付けて送る先を、ログインしたサーバーの決まったパスに限るため。
     private func savedStatuses(path: String, maxID: String?, limit: Int) async throws -> SavedStatusesPage {
@@ -739,10 +759,11 @@ public struct MastodonClient: Sendable {
         try await get(ElementList<InstanceRule>.self, path: "api/v1/instance/rules", query: []).0.elements
     }
 
-    /// 通知を1件削除する。応答の中身は使わない。
-    /// https://docs.joinmastodon.org/methods/notifications/#dismiss
-    public func dismissNotification(_ notificationID: MastodonNotification.ID) async throws {
-        _ = try await send(formRequest(method: "POST", path: "api/v1/notifications/\(notificationID)/dismiss", form: []))
+    /// 通知のまとまりを削除する。まとめない通知は、`ungrouped-<通知のID>`のキーで1件だけ消える。応答の中身は使わない。
+    /// https://docs.joinmastodon.org/methods/grouped_notifications/#dismiss-group
+    public func dismissNotificationGroup(_ groupKey: String) async throws {
+        let key = groupKey.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? groupKey
+        _ = try await send(formRequest(method: "POST", path: "api/v2/notifications/\(key)/dismiss", form: []))
     }
 
     /// 自分へのフォローリクエストを承認する。サーバーはリクエストの通知を消し、代わりにフォローの通知を作る。
@@ -996,6 +1017,31 @@ public struct TimelineQuery: Sendable, Equatable {
     }
 }
 
+/// 人の一覧の種類。
+public enum AccountListKind: Hashable, Sendable {
+    /// 投稿をお気に入りした人。
+    case favouritedBy(Status.ID)
+    /// 投稿をブーストした人。
+    case rebloggedBy(Status.ID)
+    /// アカウントのフォロワー。
+    case followers(accountID: String)
+    /// アカウントがフォローしている人。
+    case following(accountID: String)
+}
+
+/// 人の一覧の1ページ分。
+public struct AccountListPage: Sendable, Equatable {
+    /// サーバーが返す順。
+    public let accounts: [Account]
+    /// 続きのページを読むときの`max_id`。`Link`ヘッダーに`next`がなければnilで、これより後ろはない。
+    public let nextMaxID: String?
+
+    public init(accounts: [Account], nextMaxID: String?) {
+        self.accounts = accounts
+        self.nextMaxID = nextMaxID
+    }
+}
+
 /// タイムラインの1ページ分。
 public struct TimelinePage: Sendable, Equatable {
     /// 新しい順。
@@ -1044,8 +1090,8 @@ public struct NotificationPage: Sendable, Equatable {
         self.unreadable = unreadable
     }
 
-    /// 読めたものと読めなかったものを合わせたID。
-    var ids: [String] { notifications.map(\.id) + unreadable.map(\.id) }
+    /// 読めたものと読めなかったものを合わせたID。まとまりは、読んだ範囲の最も古い通知のIDも含める。続きを読む位置に使うため。
+    var ids: [String] { notifications.flatMap { [$0.id, $0.pageMinID] } + unreadable.flatMap { [$0.id] + ($0.pageMinID.map { [$0] } ?? []) } }
     var count: Int { notifications.count + unreadable.count }
     var isEmpty: Bool { notifications.isEmpty && unreadable.isEmpty }
 }

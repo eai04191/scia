@@ -15,6 +15,11 @@ extension TimelineViewController {
                 keys.formUnion(avatarKeys(for: status))
             case .notification(let notification):
                 keys.formUnion(avatarKeys(for: notification))
+            case .account(let account):
+                let content = avatarContent(of: account)
+                if let url = content.url {
+                    keys.insert(AvatarView.key(url: url, animates: content.animates, side: tuning.value(of: TuningCatalog.avatarSize), scale: traitCollection.displayScale))
+                }
             case .gap, .unreadable:
                 break
             }

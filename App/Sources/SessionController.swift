@@ -717,6 +717,10 @@ final class SessionController {
             self?.refreshPoll(of: status, from: viewController)
         }
         viewController.onDismissNotification = { [weak self] notification in self?.dismissNotification(notification) }
+        viewController.onOpenGroupAccounts = { [weak self, weak viewController] notification in
+            guard let viewController else { return }
+            self?.openAccountList(of: notification, from: viewController)
+        }
         viewController.mediaTransfers = mediaTransfers
         viewController.onOpenProfile = { [weak self, weak viewController] account in
             guard let viewController else { return }
@@ -899,6 +903,31 @@ final class SessionController {
             self?.open(destination, inProfileFrom: viewController)
         }
         profiles.add(controller)
+        source.navigationController?.pushViewController(viewController, animated: true)
+        controller.start()
+    }
+
+    // MARK: - 人の一覧
+
+    /// まとめた通知を送った人の一覧を開く。お気に入りとブーストは対象の投稿の、フォローは自分のフォロワーの全員の一覧にする。
+    /// まとまりに入った人だけの一覧ではない。Mastodonのwebと同じ。
+    private func openAccountList(of notification: MastodonNotification, from source: UIViewController) {
+        let kind: AccountListKind? = switch notification.type {
+        case .favourite: notification.status.map { .favouritedBy($0.id) }
+        case .reblog: notification.status.map { .rebloggedBy($0.id) }
+        case .follow: .followers(accountID: credential.accountID)
+        default: nil
+        }
+        guard let kind else { return }
+        openAccountList(kind, from: source)
+    }
+
+    private func openAccountList(_ kind: AccountListKind, from source: UIViewController) {
+        let (controller, viewController) = AccountListController.make(kind: kind, client: client) { [weak self] in
+            self?.reportUnauthorized()
+        }
+        UserAction.openAccountList.record()
+        configure(viewController)
         source.navigationController?.pushViewController(viewController, animated: true)
         controller.start()
     }
@@ -1450,12 +1479,12 @@ final class SessionController {
         let client = client
         Task { [weak self] in
             do {
-                try await client.dismissNotification(notification.id)
-                self?.notifications.removeNotification(notification.id)
+                try await client.dismissNotificationGroup(notification.groupKey)
+                self?.notifications.removeNotification(notification)
             } catch let error as MastodonAPIError where error.statusCode == 404 {
                 guard let self else { return }
                 logger.info("dismissed notification not found")
-                notifications.removeNotification(notification.id)
+                notifications.removeNotification(notification)
             } catch {
                 guard let self else { return }
                 let title = "通知を削除できませんでした"

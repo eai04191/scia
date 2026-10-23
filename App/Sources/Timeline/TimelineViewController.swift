@@ -35,6 +35,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         static let notifications = Texts(dumpName: "notifications", title: "通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
         static let profile = Texts(dumpName: "profile", title: "", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
         static let thread = Texts(dumpName: "thread", title: "スレッド", empty: "投稿がありません", reachedEnd: "", unreadable: "表示できない投稿")
+        static func accountList(_ kind: AccountListKind) -> Texts {
+            let (title, empty) = switch kind {
+            case .favouritedBy: ("お気に入りした人", "お気に入りした人はいません")
+            case .rebloggedBy: ("ブーストした人", "ブーストした人はいません")
+            case .followers: ("フォロワー", "フォロワーはいません")
+            case .following: ("フォロー", "フォローしている人はいません")
+            }
+            return Texts(dumpName: "accountList", title: title, empty: empty, reachedEnd: "", unreadable: "表示できないアカウント")
+        }
     }
 
     /// 一覧全体の状態。投稿がないときの表示に使う。
@@ -71,6 +80,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onFollowRequestDecision: ((FollowRequestDecision, MastodonNotification) -> Void)?
     /// 通知のメニューで、通知の削除が選ばれたときに、その通知を渡して呼ぶ。
     var onDismissNotification: ((MastodonNotification) -> Void)?
+    /// まとめた通知の「ほか3人」が押されたときに呼ぶ。通知を送った人の一覧を開く。
+    var onOpenGroupAccounts: ((MastodonNotification) -> Void)?
     /// 右上に出す、投稿欄で書き始めるボタンが押されたときに呼ぶ。
     /// アプリ内のSafariのシートの裏に隠れているときや、設定で空の投稿欄を隠しているときに、投稿欄に触れられないため、その入口にする。
     var onFocusInlineCompose: (() -> Void)?
@@ -406,6 +417,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = tuning.value(of: TuningCatalog.notificationQuotedSpacing)
             _ = tuning.value(of: TuningCatalog.notificationQuotedBodyLines)
             _ = tuning.value(of: TuningCatalog.notificationQuotedThumbnailSize)
+            _ = tuning.value(of: TuningCatalog.notificationGroupAvatarSize)
+            _ = tuning.value(of: TuningCatalog.notificationGroupAvatarSpacing)
+            _ = tuning.value(of: TuningCatalog.notificationGroupAvatarHeaderSpacing)
             _ = tuning.value(of: TuningCatalog.reactionGlowHeight)
             _ = tuning.value(of: TuningCatalog.reactionGlowLightSDRHeight)
             _ = tuning.value(of: TuningCatalog.reactionGlowDarkOpacity)
@@ -450,6 +464,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             switch entries[id] {
             case .status(let status), .pinned(let status): !Self.emojiURLs(of: status).isDisjoint(with: urls)
             case .notification(let notification): !Self.emojiURLs(of: notification).isDisjoint(with: urls)
+            case .account(let account): !Set(account.emojis.map(\.staticUrl)).isDisjoint(with: urls)
             case .gap, .unreadable, nil: false
             }
         }
@@ -826,6 +841,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         case .notification(let id): "notification-\(id)"
         case .pinned(let id): "pinned-\(id)"
         case .unreadable(let id): "unreadable-\(id)"
+        case .account(let id): "account-\(id)"
         }
     }
 
@@ -854,12 +870,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         Self.account(withID: id, in: entries.values)
     }
 
-    /// 行の投稿した人、ブーストした人、通知した人から、そのIDのアカウントを探す。
+    /// 行の投稿した人、ブーストした人、通知した人（まとめた通知なら並べた人）、人の一覧の人から、そのIDのアカウントを探す。
     static func account(withID id: String, in entries: some Sequence<TimelineEntry>) -> Account? {
         for entry in entries {
             let accounts: [Account] = switch entry {
             case .status(let status), .pinned(let status): [status.account, status.reblog?.account].compactMap(\.self)
-            case .notification(let notification): [notification.account, notification.status?.account, notification.status?.reblog?.account].compactMap(\.self)
+            case .notification(let notification): notification.sampleAccounts + [notification.status?.account, notification.status?.reblog?.account].compactMap(\.self)
+            case .account(let account): [account]
             case .gap, .unreadable: []
             }
             if let account = accounts.first(where: { $0.id == id }) {
@@ -905,14 +922,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             // 固定投稿は、同じ投稿が下の一覧にも並ぶことがあり、IDでは見分けられない。上にある固定投稿の方へ移る。
             case .status(let status), .pinned(let status): status.id == statusID
             case .notification(let notification): notification.status?.id == statusID
-            case .gap, .unreadable, nil: false
+            case .gap, .unreadable, .account, nil: false
             }
         }
         let found = chosen ?? ids.first { id in
             switch entries[id] {
             case .status(let status), .pinned(let status): status.displayed.id == displayedID
             case .notification(let notification): notification.status?.displayed.id == displayedID
-            case .gap, .unreadable, nil: false
+            case .gap, .unreadable, .account, nil: false
             }
         }
         guard let found, let indexPath = dataSource.indexPath(for: found) else { return false }
@@ -1177,6 +1194,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 cell.contentConfiguration = self.contentConfiguration(for: notification, itemID: id, base: cell.defaultContentConfiguration())
             case .unreadable(let item):
                 cell.contentConfiguration = self.unreadableContentConfiguration(for: item, base: cell.defaultContentConfiguration())
+            case .account(let account):
+                cell.contentConfiguration = self.accountConfiguration(for: account, base: cell.defaultContentConfiguration())
             }
         }
         let footerRegistration = UICollectionView.SupplementaryRegistration<TimelineFooterView>(
@@ -1511,7 +1530,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         return UITargetedPreview(view: anchor, parameters: parameters, target: UIPreviewTarget(container: collectionView, center: point))
     }
 
-    /// 選べるのはギャップと、ブラウザで開ける読めなかった要素と、スレッドを開ける投稿と、投稿を含む通知にする。
+    /// 選べるのはギャップと、ブラウザで開ける読めなかった要素と、スレッドを開ける投稿と、投稿を含む通知と、人の一覧の人にする。
     /// 本文のリンクや添付ファイルなど、行の中の部品が押下を先に受けるため、投稿の行を選ぶのは、どの部品も受けなかったときだけになる。
     func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
@@ -1521,6 +1540,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         case (_, .status(let status)), (_, .pinned(let status)): onOpenThread != nil && status.displayed.id != threadFocusID
         // 投稿を含む通知は、その投稿のスレッドを開く。フォローなど投稿のない通知は押せない。
         case (_, .notification(let notification)): onOpenThread != nil && notification.status != nil
+        case (_, .account): onOpenProfile != nil
         default: false
         }
     }
@@ -1536,6 +1556,11 @@ extension TimelineViewController: UICollectionViewDelegate {
             collectionView.deselectItem(at: indexPath, animated: true)
             UserAction.openThread(screen: texts.dumpName).record()
             onOpenThread?(status, cell.convert(cell.bounds, to: nil))
+            return
+        }
+        if let id = dataSource.itemIdentifier(for: indexPath), case .account(let account) = entries[id] {
+            collectionView.deselectItem(at: indexPath, animated: true)
+            onOpenProfile?(account)
             return
         }
         if let id = dataSource.itemIdentifier(for: indexPath), case .unreadable(let item) = entries[id], let url = item.url {

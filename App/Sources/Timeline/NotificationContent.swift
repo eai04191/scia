@@ -83,7 +83,11 @@ extension TimelineViewController {
 
     /// フォローなど、誰が何をしたかの行だけの通知。誰からかが分かるよう、名前の下にアカウントを添える。
     /// アカウントは誰が何をしたかの行の続きなので、再掲する投稿より詰めて置く。
+    /// まとめた行では、並べたアイコンで誰からかが分かるため、アカウントを添えない。
     private func headerOnlyConfiguration(for notification: MastodonNotification, base: UIListContentConfiguration) -> NotificationContentConfiguration {
+        if notification.isGroup {
+            return headerConfiguration(for: notification, body: PostBodyContent(text: NSAttributedString(), mediaSpacing: 0), bodySpacing: 0, base: base)
+        }
         let acct = NSAttributedString(string: "@\(notification.account.acct)", attributes: [
             .font: base.secondaryTextProperties.font,
             .foregroundColor: UIColor.secondaryLabel,
@@ -110,8 +114,18 @@ extension TimelineViewController {
         let phraseAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
         let header = NSMutableAttributedString(string: appearance.phrase.before, attributes: phraseAttributes)
         if appearance.phrase.includesName {
-            header.append(avatarAttachment(of: notification.account, font: font))
+            // まとめた行では、名前の前にアイコンを差し込まず、行の上にアイコンを並べる。
+            if !notification.isGroup {
+                header.append(avatarAttachment(of: notification.account, font: font))
+            }
             header.append(nameRenderer.render(.plain(notification.account.displayNameOrUsername, emojis: notification.account.emojis)))
+            if notification.isGroup {
+                header.append(NSAttributedString(string: "と", attributes: phraseAttributes))
+                var linkAttributes = phraseAttributes
+                linkAttributes[.foregroundColor] = UIColor.tintColor
+                linkAttributes[.groupAccountsLink] = true
+                header.append(NSAttributedString(string: "ほか\((notification.notificationsCount - 1).formatted())人", attributes: linkAttributes))
+            }
         }
         header.append(NSAttributedString(string: appearance.phrase.after, attributes: phraseAttributes))
         var configuration = NotificationContentConfiguration(
@@ -125,7 +139,10 @@ extension TimelineViewController {
                 headerFont: font,
                 bodySpacing: bodySpacing,
                 symbolSpacing: tuning.value(of: TuningCatalog.contextSymbolSpacing),
-                avatarSpacing: tuning.value(of: TuningCatalog.avatarSpacing)
+                avatarSpacing: tuning.value(of: TuningCatalog.avatarSpacing),
+                groupAvatarSize: tuning.value(of: TuningCatalog.notificationGroupAvatarSize),
+                groupAvatarSpacing: tuning.value(of: TuningCatalog.notificationGroupAvatarSpacing),
+                groupAvatarHeaderSpacing: tuning.value(of: TuningCatalog.notificationGroupAvatarHeaderSpacing)
             ),
             mediaImages: mediaImages,
             avatarImages: avatarImages,
@@ -133,6 +150,15 @@ extension TimelineViewController {
         )
         if appearance.phrase.includesName {
             configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(notification.account) }
+        }
+        if notification.isGroup {
+            let accounts = notification.sampleAccounts
+            configuration.groupAvatars = accounts.map(avatarContent(of:))
+            configuration.onOpenGroupAccount = { [weak self] index in
+                guard accounts.indices.contains(index) else { return }
+                self?.onOpenProfile?(accounts[index])
+            }
+            configuration.onOpenGroupAccounts = { [weak self] in self?.onOpenGroupAccounts?(notification) }
         }
         return configuration
     }
@@ -161,6 +187,13 @@ extension TimelineViewController {
             return avatarKeys(for: status)
         }
         guard NotificationAppearance(notification.type).phrase.includesName else { return [] }
+        if notification.isGroup {
+            let side = tuning.value(of: TuningCatalog.notificationGroupAvatarSize)
+            return notification.sampleAccounts.compactMap { account in
+                let content = avatarContent(of: account)
+                return content.url.map { AvatarView.key(url: $0, animates: content.animates, side: side, scale: traitCollection.displayScale) }
+            }
+        }
         // 行の中身は、セルの`defaultContentConfiguration()`の文字の大きさで組む。一覧のセルはどれも`cell()`の見た目になる。
         let font = UIListContentConfiguration.cell().textProperties.font
         return notificationAvatarKey(of: notification.account, font: font).map { [$0] } ?? []

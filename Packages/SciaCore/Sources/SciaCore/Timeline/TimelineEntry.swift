@@ -11,6 +11,8 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
     case pinned(Status)
     /// 読めなかった投稿や通知。
     case unreadable(UnreadableItem)
+    /// 人の一覧に並ぶアカウント。
+    case account(Account)
 
     public enum ID: Hashable, Sendable {
         case status(Status.ID)
@@ -18,6 +20,7 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
         case notification(MastodonNotification.ID)
         case pinned(Status.ID)
         case unreadable(String)
+        case account(String)
     }
 
     public var id: ID {
@@ -27,6 +30,7 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
         case .notification(let notification): .notification(notification.id)
         case .pinned(let status): .pinned(status.id)
         case .unreadable(let item): .unreadable(item.id)
+        case .account(let account): .account(account.id)
         }
     }
 
@@ -42,10 +46,13 @@ public struct UnreadableItem: Hashable, Sendable, Identifiable {
     public let id: String
     /// ブラウザで開くページ。投稿ならその投稿、通知なら対象の投稿。読めなければnil。
     public let url: URL?
+    /// 読めなかった通知のまとまりの、読んだ範囲の最も古い通知のID。続きを読む位置に使う。まとまりでなければnil。
+    public let pageMinID: String?
 
-    public init(id: String, url: URL?) {
+    public init(id: String, url: URL?, pageMinID: String? = nil) {
         self.id = id
         self.url = url
+        self.pageMinID = pageMinID
     }
 }
 

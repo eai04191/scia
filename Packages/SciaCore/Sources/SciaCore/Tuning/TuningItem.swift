@@ -361,6 +361,33 @@ public enum TuningCatalog {
         defaultValue: 40
     )
 
+    /// まとめた通知で、誰が何をしたかの行の上に並べるアイコンの一辺。
+    public static let notificationGroupAvatarSize = NumberTuning(
+        id: "notification.groupAvatarSize",
+        title: "まとめた通知のアイコンの大きさ（pt）",
+        range: 16...48,
+        step: 1,
+        defaultValue: 28
+    )
+
+    /// まとめた通知で、並べるアイコン同士のすき間。
+    public static let notificationGroupAvatarSpacing = NumberTuning(
+        id: "notification.groupAvatarSpacing",
+        title: "まとめた通知のアイコンのすき間（pt）",
+        range: 0...16,
+        step: 1,
+        defaultValue: 4
+    )
+
+    /// まとめた通知で、並べたアイコンと、誰が何をしたかの行のあいだ。
+    public static let notificationGroupAvatarHeaderSpacing = NumberTuning(
+        id: "notification.groupAvatarHeaderSpacing",
+        title: "まとめた通知のアイコンと行のあいだ（pt）",
+        range: 0...16,
+        step: 1,
+        defaultValue: 6
+    )
+
     /// プロフィールを開いたあと、フォローのボタンの文字と最初の投稿の一覧を、読み込みが届いたときにフェードで入れる時間。0なら切り替える。
     public static let profileRevealDuration = NumberTuning(
         id: "profile.revealDuration",
@@ -1521,6 +1548,9 @@ public enum TuningCatalog {
             .number(notificationHeaderDetailSpacing),
             .number(notificationQuotedBodyLines),
             .number(notificationQuotedThumbnailSize),
+            .number(notificationGroupAvatarSize),
+            .number(notificationGroupAvatarSpacing),
+            .number(notificationGroupAvatarHeaderSpacing),
         ]),
         TuningSection(id: "timeline.motion", title: "タイムラインの動き", items: [
             .number(scrollToTopDuration),

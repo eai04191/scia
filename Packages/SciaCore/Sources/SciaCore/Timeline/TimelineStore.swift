@@ -100,7 +100,7 @@ public final class TimelineStore {
             switch entry {
             case .status(let status): status.id
             case .unreadable(let item): item.id
-            case .gap, .notification, .pinned: nil
+            case .gap, .notification, .pinned, .account: nil
             }
         }
         let ids = hiddenStatuses.isEmpty && lateArrivalPositions.isEmpty
@@ -467,7 +467,7 @@ public final class TimelineStore {
             switch entry {
             case .status(let status), .pinned(let status): status.id != id && status.reblog?.id != id
             case .unreadable(let item): item.id != id
-            case .gap, .notification: true
+            case .gap, .notification, .account: true
             }
         }
         guard remaining.count != entries.count else { return false }
@@ -485,7 +485,7 @@ public final class TimelineStore {
         let remaining = entries.filter { entry in
             switch entry {
             case .status(let status), .pinned(let status): !isFromExcludedAccount(status)
-            case .unreadable, .gap, .notification: true
+            case .unreadable, .gap, .notification, .account: true
             }
         }
         guard remaining.count != entries.count else { return false }
@@ -714,7 +714,7 @@ public final class TimelineStore {
         case .status(let status): position.isAbove(self.position(of: status.id))
         case .unreadable(let item): position.isAbove(self.position(of: item.id))
         case .gap(let gap): !StatusID.isNewer(gap.newerID, than: position.anchorID)
-        case .notification, .pinned: false
+        case .notification, .pinned, .account: false
         }
     }
 

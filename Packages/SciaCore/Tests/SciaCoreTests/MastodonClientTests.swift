@@ -56,15 +56,23 @@ struct MastodonClientTests {
         ])
     }
 
-    /// 読めない通知は、対象の投稿のURLを開けるように残す。
+    /// 読めない通知は、対象の投稿のURLを開けるように残す。まとまりそのものが読めなくても、最も新しい通知のIDが読めれば残す。
     @Test func notificationsKeepUnreadableNotificationsApart() async throws {
-        let body = #"[{"id":"9","type":"mention","status":{"url":"https://example.social/@alice/1"}}]"#
+        let body = #"""
+        {"accounts":[],"statuses":[{"id":"1","url":"https://example.social/@alice/1"}],"notification_groups":[
+          {"group_key":"ungrouped-9","notifications_count":1,"type":"mention","most_recent_notification_id":9,"page_min_id":"9","page_max_id":"9","latest_page_notification_at":"2026-10-13T03:25:00.000Z","sample_account_ids":["2"],"status_id":"1"},
+          {"group_key":"favourite-1-489000","most_recent_notification_id":8}
+        ]}
+        """#
         let transport = StubTransport([.json(body, statusCode: 200)])
 
         let page = try await makeClient(transport).notifications(TimelineQuery(limit: 40))
 
         #expect(page.notifications.isEmpty)
-        #expect(page.unreadable == [UnreadableItem(id: "9", url: URL(string: "https://example.social/@alice/1"))])
+        #expect(page.unreadable == [
+            UnreadableItem(id: "9", url: URL(string: "https://example.social/@alice/1"), pageMinID: "9"),
+            UnreadableItem(id: "8", url: nil),
+        ])
     }
 
     @Test func homeTimelineSendsPagingQueryAndToken() async throws {
@@ -121,7 +129,7 @@ struct MastodonClientTests {
     }
 
     @Test func notificationsDecodeKnownAndUnknownTypes() async throws {
-        let transport = StubTransport([try .fixture("notifications")])
+        let transport = StubTransport([try .fixture("grouped_notifications")])
 
         let notifications = try await makeClient(transport).notifications(TimelineQuery(maxID: "34975870", limit: 40)).notifications
 
@@ -133,10 +141,26 @@ struct MastodonClientTests {
         #expect(notifications[2].account.emojis.map(\.shortcode) == ["blobcat"])
         #expect(notifications[3].status?.id == "113000000000000001")
         let url = try #require(await transport.requests.first?.url)
-        #expect(url.path() == "/api/v1/notifications")
+        #expect(url.path() == "/api/v2/notifications")
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         #expect(query.contains(URLQueryItem(name: "max_id", value: "34975870")))
         #expect(query.contains(URLQueryItem(name: "limit", value: "40")))
+        #expect(query.filter { $0.name == "grouped_types[]" }.map(\.value) == ["favourite", "reblog", "follow"])
+    }
+
+    /// まとまりは、最も新しい人と対象の投稿を引いて組み立て、人数と並べる人を添える。
+    /// `most_recent_notification_id`はMastodonが数値で返すが、並びには`page_max_id`を使う。
+    @Test func groupedNotificationsCarryCountAndSampleAccounts() async throws {
+        let transport = StubTransport([try .fixture("grouped_notifications")])
+
+        let favourite = try #require(try await makeClient(transport).notifications(TimelineQuery(limit: 40)).notifications.last)
+
+        #expect(favourite.groupKey == "favourite-113000000000000001-489000")
+        #expect(favourite.notificationsCount == 5)
+        #expect(favourite.isGroup)
+        #expect(favourite.sampleAccounts.map(\.id) == ["2", "3", "4"])
+        #expect(favourite.account.id == "2")
+        #expect(favourite.pageMinID == "34975801")
     }
 
     @Test func notificationsMarkerUsesNotificationsTimeline() async throws {
@@ -234,14 +258,43 @@ struct MastodonClientTests {
         #expect(requests.map { $0.url?.path() } == ["/api/v1/statuses/113000000000000001/pin", "/api/v1/statuses/113000000000000001/unpin"])
     }
 
-    @Test func dismissNotificationPostsToItsPath() async throws {
+    @Test func dismissNotificationGroupPostsToItsPath() async throws {
         let transport = StubTransport([.json("{}", statusCode: 200)])
 
-        try await makeClient(transport).dismissNotification("34975861")
+        try await makeClient(transport).dismissNotificationGroup("favourite-113000000000000001-489000")
 
         let request = try #require(await transport.requests.first)
         #expect(request.httpMethod == "POST")
-        #expect(request.url?.path() == "/api/v1/notifications/34975861/dismiss")
+        #expect(request.url?.path() == "/api/v2/notifications/favourite-113000000000000001-489000/dismiss")
+    }
+
+    /// 人の一覧は、種類ごとのパスで読み、続きを`Link`ヘッダーの`max_id`で読む。
+    @Test func accountListsUseTheirPathsAndLinkHeader() async throws {
+        let account = #"{"id":"3","username":"carol","acct":"carol@remote.example","display_name":"Carol","avatar":"https://example.social/avatars/carol.png","avatar_static":"https://example.social/avatars/carol.png","header":"https://example.social/headers/original/missing.png","header_static":"https://example.social/headers/original/missing.png","note":"","url":"https://remote.example/@carol","fields":[],"locked":false,"bot":false,"followers_count":0,"following_count":0,"statuses_count":0,"emojis":[]}"#
+        let transport = StubTransport([
+            .json("[\(account)]", statusCode: 200, headers: ["Link": #"<https://example.social/api/v1/statuses/1/favourited_by?max_id=777>; rel="next", <https://example.social/api/v1/statuses/1/favourited_by?since_id=900>; rel="prev""#]),
+            .json("[]", statusCode: 200),
+            .json("[]", statusCode: 200),
+            .json("[]", statusCode: 200),
+        ])
+        let client = try makeClient(transport)
+
+        let page = try await client.accounts(in: .favouritedBy("1"), maxID: nil, limit: 40)
+        let last = try await client.accounts(in: .rebloggedBy("1"), maxID: "777", limit: 40)
+        _ = try await client.accounts(in: .followers(accountID: "9"), maxID: nil, limit: 40)
+        _ = try await client.accounts(in: .following(accountID: "9"), maxID: nil, limit: 40)
+
+        #expect(page.accounts.map(\.acct) == ["carol@remote.example"])
+        #expect(page.nextMaxID == "777")
+        #expect(last.nextMaxID == nil)
+        let requests = await transport.requests
+        #expect(requests.map { $0.url?.path() } == [
+            "/api/v1/statuses/1/favourited_by",
+            "/api/v1/statuses/1/reblogged_by",
+            "/api/v1/accounts/9/followers",
+            "/api/v1/accounts/9/following",
+        ])
+        #expect(requests[1].url?.query()?.contains("max_id=777") == true)
     }
 
     /// 公開範囲を選んだときだけ`visibility`を送る。選ばなければ、サーバーがアカウントの既定の公開範囲でブーストする。

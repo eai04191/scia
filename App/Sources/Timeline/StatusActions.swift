@@ -32,7 +32,7 @@ extension TimelineViewController {
         switch entry {
         case .status(let status), .pinned(let status): status
         case .notification(let notification): notification.status
-        case .gap, .unreadable: nil
+        case .gap, .unreadable, .account: nil
         }
     }
 
@@ -41,6 +41,10 @@ extension TimelineViewController {
     /// 出す項目がなければnil。
     /// - Parameter id: メニューを出した要素。共有のシートを、その行から出す。
     func contextMenu(for entry: TimelineEntry, id: ItemID) -> UIMenu? {
+        // 人の一覧の行では、その人へのユーザーのメニューを、そのまま出す。
+        if case .account(let account) = entry {
+            return userElement(for: .account(account), id: id).map { UIMenu(children: [$0]) }
+        }
         let status = Self.status(of: entry)
         let notification: MastodonNotification? = if case .notification(let notification) = entry { notification } else { nil }
         var shownUserIDs: Set<String> = []
@@ -72,7 +76,8 @@ extension TimelineViewController {
         }
         switch item {
         case .notifyingUser:
-            return users(notification.map { [.account($0.account)] } ?? [])
+            // まとめた通知では、並べた人をみな出す。
+            return users(notification.map { $0.sampleAccounts.map(MenuUser.account) } ?? [])
         case .reblogWithVisibility:
             guard let status else { return [] }
             return reblogWithVisibilityMenu(for: status, item: item).map { [$0] } ?? []

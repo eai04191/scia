@@ -379,9 +379,9 @@ final class NotificationsController {
         showEntries(animatesRemoval: true)
     }
 
-    /// 使う人が削除した通知を除く。
-    func removeNotification(_ id: MastodonNotification.ID) {
-        guard !isStopped, store.removeNotification(id) else { return }
+    /// 使う人が削除した通知を除く。まとまりなら、キーでまとまりごと除く。
+    func removeNotification(_ notification: MastodonNotification) {
+        guard !isStopped, store.removeNotification(notification.id, groupKey: notification.groupKey) else { return }
         showEntries(animatesRemoval: true)
     }
 

@@ -567,4 +567,298 @@ struct NotificationStoreTests {
         #expect(queue.queries.dropFirst().first?.sinceID == "30")
     }
     #endif
+
+    // MARK: - まとめて表示する
+
+    private func account(_ id: String) throws -> Account {
+        Account(id: id, username: "user\(id)", acct: "user\(id)", displayName: "User \(id)", avatar: URL(string: "https://example.social/avatars/\(id).png"))
+    }
+
+    /// サーバーがまとめたお気に入りのまとまり。`accounts`は新しい人から並べる。
+    private func favourites(_ id: Int, key: String = "favourite-1-489000", count: Int, accounts: [String], pageMinID: Int? = nil) throws -> MastodonNotification {
+        let samples = try accounts.map(account)
+        return MastodonNotification(
+            id: String(id), type: .favourite, createdAt: Date(timeIntervalSince1970: TimeInterval(id)), account: samples[0],
+            groupKey: key, notificationsCount: count, sampleAccounts: samples, pageMinID: pageMinID.map(String.init)
+        )
+    }
+
+    /// ストリーミングで届いた1件のお気に入り。
+    private func favourite(_ id: Int, key: String = "favourite-1-489000", from accountID: String) throws -> MastodonNotification {
+        MastodonNotification(id: String(id), type: .favourite, createdAt: Date(timeIntervalSince1970: TimeInterval(id)), account: try account(accountID), groupKey: key)
+    }
+
+    @Test func arrivalJoinsItsGroupAndMovesItToTheTop() async throws {
+        let queue = PageQueue([.success([try notifications([30])[0], try favourites(29, count: 3, accounts: ["5", "6"], pageMinID: 20)])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        #expect(store.receive(try favourite(31, from: "7")))
+        let added = store.flushPending()
+
+        #expect(added.map(\.id) == ["31"])
+        #expect(ids(store) == ["31", "30"])
+        let group = try #require(store.notifications.first)
+        #expect(group.groupKey == "favourite-1-489000")
+        #expect(group.notificationsCount == 4)
+        #expect(group.sampleAccounts.map(\.id) == ["7", "5", "6"])
+        #expect(group.pageMinID == "20", "続きを読む位置は、まとまりの古い側のまま")
+    }
+
+    /// お気に入りを外して付け直したときなど、すでに並べている人の通知は数えず、行も動かさない。
+    @Test func arrivalFromSomeoneAlreadyInTheGroupIsIgnored() async throws {
+        let queue = PageQueue([.success([try notifications([30])[0], try favourites(29, count: 2, accounts: ["5", "6"])])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        _ = store.receive(try favourite(31, from: "6"))
+
+        #expect(store.flushPending().isEmpty)
+        #expect(ids(store) == ["30", "29"])
+        #expect(store.notifications.last?.notificationsCount == 2)
+    }
+
+    /// まとまりの最も新しい通知より古い通知は、補完で読んだまとまりにもう数えられているので、足さない。
+    @Test func arrivalOlderThanItsGroupIsAlreadyCounted() async throws {
+        let queue = PageQueue([.success([try favourites(30, count: 2, accounts: ["5", "6"], pageMinID: 20)])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        _ = store.receive(try favourite(25, from: "7"))
+
+        #expect(store.flushPending().isEmpty)
+        #expect(store.notifications.first?.notificationsCount == 2)
+    }
+
+    /// 同じまとまりへ続けて届いた通知は、届いた順に1つのまとまりへ足す。
+    @Test func arrivalsForTheSameNewGroupBecomeOneRow() async throws {
+        let queue = PageQueue([try page([30])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        _ = store.receive(try favourite(31, from: "5"))
+        _ = store.receive(try favourite(32, from: "6"))
+        _ = store.flushPending()
+
+        #expect(ids(store) == ["32", "30"])
+        #expect(store.notifications.first?.sampleAccounts.map(\.id) == ["6", "5"])
+        #expect(store.notifications.first?.notificationsCount == 2)
+    }
+
+    /// まとめない種類の通知は、届いたキーを使わず、RESTと同じ`ungrouped-<通知のID>`にする。
+    /// ストリーミングでは、まとめない種類にもまとめるためのキーが付くため。
+    @Test func ungroupedKindsIgnoreTheReceivedGroupKey() throws {
+        let mention = MastodonNotification(id: "31", type: .mention, createdAt: Date(timeIntervalSince1970: 31), account: try account("5"), groupKey: "mention-1-489000")
+        let signUp = MastodonNotification(id: "32", type: .other("admin.sign_up"), createdAt: Date(timeIntervalSince1970: 32), account: try account("5"), groupKey: "admin.sign_up-489000")
+
+        #expect(mention.groupKey == "ungrouped-31")
+        #expect(signUp.groupKey == "ungrouped-32")
+        #expect(try favourite(33, from: "5").groupKey == "favourite-1-489000")
+    }
+
+    /// 補完で同じまとまりが届いたら、人数を足し合わせず、新しいほうの値を使って一番上へ移す。
+    @Test func fillReplacesTheGroupWithTheNewerCount() async throws {
+        let queue = PageQueue([
+            .success([try notifications([30])[0], try favourites(29, count: 5, accounts: ["5", "6"], pageMinID: 20)]),
+            .success([try favourites(32, count: 6, accounts: ["7", "5", "6"], pageMinID: 32)]),
+            .success([]),
+        ])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        #expect(try await store.fillFromLatest(maxPages: 2)?.map(\.id) == ["32"])
+
+        #expect(ids(store) == ["32", "30"])
+        #expect(store.notifications.first?.notificationsCount == 6)
+        #expect(store.notifications.first?.pageMinID == "20")
+    }
+
+    /// 続きのページに同じまとまりの古い側が入っていても、新しい値を戻さず、続きを読む位置だけを古い側へ進める。
+    @Test func olderPageKeepsTheNewerGroupAndAdvancesFromItsOldestNotification() async throws {
+        let queue = PageQueue([
+            .success([try notifications([30])[0], try favourites(29, count: 5, accounts: ["5", "6"], pageMinID: 27)]),
+            .success([try favourites(26, count: 2, accounts: ["6", "8"], pageMinID: 24), try notifications([23])[0]]),
+            .success([]),
+        ])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        #expect(try await store.loadOlder()?.map(\.id) == ["23"])
+        _ = try await store.loadOlder()
+
+        #expect(ids(store) == ["30", "29", "23"])
+        #expect(store.notifications[1].notificationsCount == 5)
+        #expect(queue.queries.map(\.maxID) == [nil, "27", "23"], "まとまりの中の最も古い通知より古い側から読みます")
+    }
+
+    /// 削除したまとまりは、その前に読み始めたページで戻さない。削除した後に届いた通知は、新しいまとまりとして足す。
+    @Test func removedGroupStaysRemovedUntilANewerNotificationArrives() async throws {
+        let queue = PageQueue([
+            .success([try favourites(30, count: 3, accounts: ["5", "6"]), try notifications([29])[0]]),
+            .success([try favourites(30, count: 3, accounts: ["5", "6"])]),
+            .success([]),
+        ])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        #expect(store.removeNotification("30"))
+        _ = try await store.fillFromLatest(maxPages: 1)
+        #expect(ids(store) == ["29"])
+
+        _ = store.receive(try favourite(31, from: "7"))
+        _ = store.flushPending()
+        #expect(ids(store) == ["31", "29"])
+        #expect(store.notifications.first?.notificationsCount == 1)
+    }
+
+    /// 削除の応答を待つ間に新着が足されて、まとまりのIDが変わっていても、キーでまとまりごと除く。
+    @Test func removingByGroupKeyRemovesTheGroupEvenAfterItGrew() async throws {
+        let queue = PageQueue([.success([try favourites(30, count: 3, accounts: ["5", "6"]), try notifications([29])[0]])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+        _ = store.receive(try favourite(31, from: "7"))
+        _ = store.flushPending()
+
+        #expect(store.removeNotification("30", groupKey: "favourite-1-489000"))
+
+        #expect(ids(store) == ["29"])
+    }
+
+    /// 削除より前に読み始めたページは、削除したまとまりを、手元より新しい通知を含んでいても戻さない。
+    /// そのページを読み始めたあとにサーバーに届いた通知も、削除で消えているため。
+    @Test func pageStartedBeforeRemovalDoesNotRestoreTheGroup() async throws {
+        let initial = NotificationPage(notifications: [try favourites(30, count: 3, accounts: ["5", "6"]), try notifications([29])[0]])
+        let gate = PageGate(NotificationPage(notifications: [try favourites(32, count: 4, accounts: ["7", "5", "6"])]))
+        let store = NotificationStore(pageSize: Self.pageSize) { query in
+            // 補完は満杯でないページのあと、つながったかを確かめるために古い側をもう1回読む。そこは空にする。
+            if query.sinceID == nil { return initial }
+            if query.maxID != nil { return NotificationPage(notifications: []) }
+            return await gate.fetch()
+        }
+        _ = try await store.loadInitial()
+        await gate.hold()
+
+        let fill = Task { try await store.fillFromLatest(maxPages: 1) }
+        await gate.waitForRequest()
+        #expect(store.removeNotification("30", groupKey: "favourite-1-489000"))
+        await gate.release()
+        _ = try await fill.value
+
+        #expect(ids(store) == ["29"])
+    }
+
+    /// 補完の応答を待つ間に同じまとまりへ新着を足しても、応答の人数（まだ届いていなかった分を含む）に、応答より後に届いた分を足す。
+    /// 手元の値を残すと、届かなかった分が欠ける。行は手元の位置のまま動かさない。
+    @Test func fillAddsArrivalsAfterItsSnapshotToTheGroup() async throws {
+        let initial = NotificationPage(notifications: [try favourites(100, count: 2, accounts: ["5", "6"], pageMinID: 90)])
+        let gate = PageGate(NotificationPage(notifications: [try favourites(110, count: 5, accounts: ["9", "8", "7", "5", "6"], pageMinID: 101)]))
+        let store = NotificationStore(pageSize: Self.pageSize) { query in
+            if query.sinceID == nil { return initial }
+            if query.maxID != nil { return NotificationPage(notifications: []) }
+            return await gate.fetch()
+        }
+        _ = try await store.loadInitial()
+        await gate.hold()
+
+        let fill = Task { try await store.fillFromLatest(maxPages: 1) }
+        await gate.waitForRequest()
+        _ = store.receive(try favourite(111, from: "4"))
+        _ = store.flushPending()
+        await gate.release()
+        _ = try await fill.value
+
+        #expect(ids(store) == ["111"])
+        let group = try #require(store.notifications.first)
+        #expect(group.notificationsCount == 6)
+        #expect(group.sampleAccounts.map(\.id) == ["4", "9", "8", "7", "5", "6"])
+        #expect(group.pageMinID == "90")
+    }
+
+    /// 補完が手元とつながらずに古い側を捨てるとき、残した手元のまとまりから、捨てた範囲の続きの位置を引き継がない。
+    /// 引き継ぐと、続きの読み込みがまだ読んでいない範囲を飛び越える。
+    @Test func truncatedFillDoesNotKeepTheDiscardedPageBoundary() async throws {
+        let initial = NotificationPage(notifications: [try favourites(100, count: 2, accounts: ["5", "6"], pageMinID: 10), try notifications([9])[0]])
+        let gate = PageGate(NotificationPage(notifications: [try favourites(200, count: 5, accounts: ["9", "8", "7", "5", "6"], pageMinID: 195), try notifications([190])[0]]))
+        let older = try notifications([180])
+        let store = NotificationStore(pageSize: 2) { query in
+            if query.sinceID == nil, query.maxID == nil { return initial }
+            if query.sinceID == nil { return NotificationPage(notifications: older) }
+            return await gate.fetch()
+        }
+        _ = try await store.loadInitial()
+        await gate.hold()
+
+        let fill = Task { try await store.fillFromLatest(maxPages: 1) }
+        await gate.waitForRequest()
+        _ = store.receive(try favourite(201, from: "4"))
+        _ = store.flushPending()
+        await gate.release()
+        _ = try await fill.value
+
+        #expect(ids(store) == ["201", "190"])
+        #expect(store.notifications.first?.pageMinID == "195")
+        #expect(try await store.loadOlder()?.map(\.id) == ["180"])
+    }
+
+    /// 読めなかったまとまりも、まとまりの最も古い通知より古い側から続きを読む。最も新しい通知から読むと、同じまとまりの古い側を読み直して、読めない行が重なる。
+    @Test func unreadableGroupContinuesFromItsOldestNotification() async throws {
+        func response(id: String) -> String {
+            #"{"accounts":[],"statuses":[],"notification_groups":[{"group_key":"follow-489000","notifications_count":3,"type":"follow","most_recent_notification_id":\#(id),"page_max_id":"\#(id)","page_min_id":"10","latest_page_notification_at":"壊れた日時","sample_account_ids":["5"]}]}"#
+        }
+        let transport = StubTransport([.json(response(id: "100"), statusCode: 200), .json(#"{"accounts":[],"statuses":[],"notification_groups":[]}"#, statusCode: 200)])
+        let client = MastodonClient(
+            credential: Credential(instance: try #require(URL(string: "https://example.social")), accessToken: "token", clientID: "client", clientSecret: "secret", accountID: "me", username: "me"),
+            transport: transport
+        )
+        let store = NotificationStore(pageSize: 40) { try await client.notifications($0) }
+        _ = try await store.loadInitial()
+        _ = try await store.loadOlder()
+
+        let url = try #require(await transport.requests.last?.url)
+        #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "max_id" }?.value == "10")
+        #expect(store.entries.count == 1)
+    }
+
+    /// 通知を隠すミュートかブロックをした人は、まとまりからその人だけを外す。並べる人が残らなければ、行ごと除く。
+    @Test func excludedAccountLeavesTheGroupAndTheGroupGoesWhenNobodyIsLeft() async throws {
+        let queue = PageQueue([.success([try favourites(30, count: 4, accounts: ["5", "6"]), try favourites(29, key: "favourite-2-489000", count: 1, accounts: ["5"])])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        #expect(store.excludeAccount("5"))
+
+        #expect(ids(store) == ["30"])
+        let group = try #require(store.notifications.first)
+        #expect(group.sampleAccounts.map(\.id) == ["6"])
+        #expect(group.account.id == "6")
+        #expect(group.notificationsCount == 3)
+    }
+
+    /// 未読は、まとまりを1件として数える。
+    @Test func unreadCountsGroupsAsOne() async throws {
+        let queue = PageQueue([.success([try favourites(30, count: 5, accounts: ["5", "6"]), try notifications([29])[0], try notifications([28])[0]])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial(markerID: "28")
+
+        #expect(store.unreadCount == 2)
+    }
+
+    /// 対象の投稿を変えても、まとまりの人数と並べる人は変わらない。
+    @Test func updatingTheStatusKeepsTheGroup() async throws {
+        let status = Status(id: "1", createdAt: Date(timeIntervalSince1970: 1), account: try account("1"), content: "", spoilerText: "", url: nil)
+        let group = MastodonNotification(
+            id: "30", type: .favourite, createdAt: Date(timeIntervalSince1970: 30), account: try account("5"), status: status,
+            groupKey: "favourite-1-489000", notificationsCount: 3, sampleAccounts: [try account("5"), try account("6")], pageMinID: "20"
+        )
+        let store = makeStore(PageQueue([.success([group])]))
+        _ = try await store.loadInitial()
+
+        #expect(store.updateStatus("1") { $0.settingFavourited(true) })
+
+        let updated = try #require(store.notifications.first)
+        #expect(updated.status?.favourited == true)
+        #expect(updated.notificationsCount == 3)
+        #expect(updated.sampleAccounts.map(\.id) == ["5", "6"])
+        #expect(updated.pageMinID == "20")
+    }
 }

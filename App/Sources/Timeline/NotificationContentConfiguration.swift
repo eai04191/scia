@@ -5,11 +5,14 @@ import UIKit
 /// あれば対象の投稿の中身を並べる。
 ///
 /// 投稿の中身は投稿のセルと同じ部品で描き、どの部品をどう出すかは組み立てる側が決める。
+/// 2人以上の通知をまとめた行では、誰が何をしたかの行の上に、通知を送った人のアイコンを並べる。
 struct NotificationContentConfiguration: UIContentConfiguration {
     var symbolName: String
     var symbolColor: UIColor
     /// 誰が何をしたかの行。名前の前に、文字と同じ高さのアイコンを差し込んである。
     var header: NSAttributedString
+    /// まとめた行で、誰が何をしたかの行の上に並べるアイコン。新しい人から。まとめない行では空。
+    var groupAvatars: [AvatarView.Content] = []
     var body: PostBodyContent
     var metrics: Metrics
     /// 再掲した投稿に、お気に入りやブーストをしたことを示す、行の下の端の光。
@@ -24,6 +27,10 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     var onToggleSpoiler: (() -> Void)?
     /// 誰が何をしたかの行がタップされたときに呼ぶ。通知のもとになる操作をした人のプロフィールを開く。
     var onOpenAccount: (() -> Void)?
+    /// まとめた行で、並べたアイコンがタップされたときに、何番目かを渡して呼ぶ。その人のプロフィールを開く。
+    var onOpenGroupAccount: ((Int) -> Void)?
+    /// まとめた行で、誰が何をしたかの行の`groupAccountsLink`の文字（「ほか3人」）がタップされたときに呼ぶ。人の一覧を開く。
+    var onOpenGroupAccounts: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
 
@@ -39,6 +46,12 @@ struct NotificationContentConfiguration: UIContentConfiguration {
         var symbolSpacing: CGFloat
         /// アイコンの列と、文字の列のあいだ。
         var avatarSpacing: CGFloat
+        /// まとめた行で並べるアイコンの一辺。
+        var groupAvatarSize: CGFloat = 0
+        /// まとめた行で並べるアイコン同士のすき間。
+        var groupAvatarSpacing: CGFloat = 0
+        /// まとめた行で、並べたアイコンと、誰が何をしたかの行のあいだ。
+        var groupAvatarHeaderSpacing: CGFloat = 0
     }
 
     func makeContentView() -> any UIView & UIContentView {
@@ -50,9 +63,17 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     }
 }
 
+extension NSAttributedString.Key {
+    /// まとめた通知の、誰が何をしたかの行で、押すと人の一覧を開く文字（「ほか3人」）。
+    static let groupAccountsLink = NSAttributedString.Key("net.mizle.scia.groupAccountsLink")
+}
+
 final class NotificationContentView: UIView, UIContentView {
 
     private let symbolView = UIImageView()
+    /// まとめた行で、誰が何をしたかの行の上に並べるアイコン。
+    private let groupAvatarStack = UIStackView()
+    private var groupAvatarViews: [AvatarView] = []
     private let headerLabel = EmojiLabel()
     private let bodyView: PostBodyView
     private let reactionGlowView = ReactionGlowView()
@@ -79,7 +100,9 @@ final class NotificationContentView: UIView, UIContentView {
         super.init(frame: .zero)
         symbolView.contentMode = .scaleAspectFit
         headerLabel.numberOfLines = 0
-        for view in [symbolView, headerLabel, bodyView] as [UIView] {
+        groupAvatarStack.axis = .horizontal
+        groupAvatarStack.alignment = .center
+        for view in [symbolView, groupAvatarStack, headerLabel, bodyView] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -89,7 +112,7 @@ final class NotificationContentView: UIView, UIContentView {
         bodyView.onToggleSpoiler = { [weak self] in self?.current.onToggleSpoiler?() }
         bodyView.onOpenLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
         headerLabel.isUserInteractionEnabled = true
-        headerLabel.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAccount)))
+        headerLabel.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(headerTapped)))
         apply(configuration)
     }
 
@@ -98,8 +121,39 @@ final class NotificationContentView: UIView, UIContentView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    @objc private func openAccount() {
-        current.onOpenAccount?()
+    /// 「ほか3人」の文字なら人の一覧を、ほかの場所なら通知のもとになる操作をした人のプロフィールを開く。
+    @objc private func headerTapped(_ gesture: UITapGestureRecognizer) {
+        if let index = headerLabel.characterIndex(at: gesture.location(in: headerLabel)),
+           headerLabel.attributedText?.attribute(.groupAccountsLink, at: index, effectiveRange: nil) != nil {
+            current.onOpenGroupAccounts?()
+        } else {
+            current.onOpenAccount?()
+        }
+    }
+
+    @objc private func groupAvatarTapped(_ gesture: UITapGestureRecognizer) {
+        guard let view = gesture.view as? AvatarView, let index = groupAvatarViews.firstIndex(of: view) else { return }
+        current.onOpenGroupAccount?(index)
+    }
+
+    /// 並べるアイコンの数に合わせてビューを足し引きし、中身を当てる。
+    private func applyGroupAvatars(_ contents: [AvatarView.Content], metrics: NotificationContentConfiguration.Metrics) {
+        while groupAvatarViews.count < contents.count {
+            let view = AvatarView(store: current.avatarImages)
+            view.translatesAutoresizingMaskIntoConstraints = false
+            view.isUserInteractionEnabled = true
+            view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(groupAvatarTapped)))
+            groupAvatarViews.append(view)
+            groupAvatarStack.addArrangedSubview(view)
+        }
+        while groupAvatarViews.count > contents.count {
+            groupAvatarViews.removeLast().removeFromSuperview()
+        }
+        groupAvatarStack.spacing = metrics.groupAvatarSpacing
+        for (view, content) in zip(groupAvatarViews, contents) {
+            view.apply(content)
+        }
+        groupAvatarStack.isHidden = contents.isEmpty
     }
 
     private func apply(_ configuration: NotificationContentConfiguration) {
@@ -110,6 +164,7 @@ final class NotificationContentView: UIView, UIContentView {
         symbolView.tintColor = configuration.symbolColor
         headerLabel.emojiImages = configuration.emojiImages
         headerLabel.attributedText = configuration.header
+        applyGroupAvatars(configuration.groupAvatars, metrics: metrics)
         bodyView.emojiImages = configuration.emojiImages
         bodyView.apply(configuration.body)
         reactionGlowView.apply(configuration.reactionGlow)
@@ -121,12 +176,22 @@ final class NotificationContentView: UIView, UIContentView {
         // ラベルから削ると、UILabelは収まらない行を描かないため、2行の本文が1行で切れる。
         let bottom = bottomAnchor.constraint(equalTo: bodyView.bottomAnchor, constant: margins.bottom)
         bottom.priority = UILayoutPriority(UILayoutPriority.defaultHigh.rawValue - 1)
-        variableConstraints = [
+        // まとめた行では、アイコンを並べた下に誰が何をしたかの行を置く。
+        let headerTop = configuration.groupAvatars.isEmpty
+            ? headerLabel.topAnchor.constraint(equalTo: topAnchor, constant: margins.top)
+            : headerLabel.topAnchor.constraint(equalTo: groupAvatarStack.bottomAnchor, constant: metrics.groupAvatarHeaderSpacing)
+        let groupAvatarSizes = groupAvatarViews.flatMap { view in
+            [view.widthAnchor.constraint(equalToConstant: metrics.groupAvatarSize), view.heightAnchor.constraint(equalToConstant: metrics.groupAvatarSize)]
+        }
+        variableConstraints = groupAvatarSizes + [
+            groupAvatarStack.topAnchor.constraint(equalTo: topAnchor, constant: margins.top),
+            groupAvatarStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: textLeading),
+            groupAvatarStack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -margins.trailing),
             // 記号は、投稿のセルの名前の上の行と同じく、文字の列から決まった幅だけ離して置く。
             symbolView.trailingAnchor.constraint(equalTo: leadingAnchor, constant: textLeading - metrics.symbolSpacing),
             // 記号は、メンションなどの名前の上の行の記号と同じく、文字の1行目のベースラインに乗せる。
             PostContentView.symbolVerticalConstraint(symbolView, beside: headerLabel, onBaseline: true),
-            headerLabel.topAnchor.constraint(equalTo: topAnchor, constant: margins.top),
+            headerTop,
             headerLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: textLeading),
             headerLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.trailing),
             // 間隔は、誰が何をしたかの行の字面の下端から測る。
@@ -146,7 +211,14 @@ final class NotificationContentView: UIView, UIContentView {
             .map { $0.replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: "、")
-        textAccessibilityElement.accessibilityCustomActions = [bodyView.spoilerAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
+        // まとめた行の「ほか3人」は文字の中にあり、読み上げでは押せないため、操作として足す。
+        let groupAccountsAction = configuration.onOpenGroupAccounts.map { open in
+            UIAccessibilityCustomAction(name: "通知を送った人の一覧") { _ in
+                open()
+                return true
+            }
+        }
+        textAccessibilityElement.accessibilityCustomActions = [groupAccountsAction, bodyView.spoilerAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
         // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
         setNeedsLayout()
