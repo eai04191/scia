@@ -42,11 +42,12 @@ public struct EmojiPaletteSection: Equatable, Sendable, Identifiable {
 
 /// パレットに並べるものを決める。
 public enum EmojiPalette {
-    /// 最近使ったもの、カテゴリーのないもの、カテゴリーごと（名前の順）、Unicodeの絵文字のまとまりの順に分ける。中はサーバーやデータの順のまま。
+    /// 最近使ったもの、カテゴリーのないもの、カテゴリーごと（名前の順）、Unicodeの絵文字のまとまりの順に分ける。
+    /// 最近使ったものは新しい順、カスタム絵文字のまとまりの中はショートコードを小文字にそろえて比べた順、Unicodeの絵文字はデータの順。
     /// 一覧に出さないカスタム絵文字は除く。最近使ったもののうち、サーバーの一覧やUnicodeの絵文字の一覧にないものも除く。空のまとまりは作らない。
-    /// カスタム絵文字を先に置くのは、サーバーにしかない絵文字を探しに来ることが多いため。カテゴリーのないものを先にするのは、Mastodonのweb UIと同じ。
+    /// カスタム絵文字を先に置くのは、サーバーにしかない絵文字を探しに来ることが多いため。カテゴリーのないものを先にすることと、まとまりの中の順は、Mastodonのweb UIと同じ。
     public static func sections(emojis: [ServerEmoji], standardGroups: [StandardEmojiGroup], recentKeys: [String], recentLimit: Int) -> [EmojiPaletteSection] {
-        let visible = emojis.filter(\.visibleInPicker)
+        let visible = emojis.filter(\.visibleInPicker).sorted { $0.shortcode.lowercased() < $1.shortcode.lowercased() }
         var byKey: [String: PaletteEmoji] = [:]
         for group in standardGroups {
             for emoji in group.emojis {

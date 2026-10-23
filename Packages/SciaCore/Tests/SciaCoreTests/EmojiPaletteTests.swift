@@ -18,18 +18,19 @@ struct EmojiPaletteTests {
 
     // MARK: - まとまり
 
-    /// 最近使ったもの、カテゴリーのないもの、カテゴリーの名前の順に並べ、中はサーバーの順のまま。
+    /// 最近使ったもの、カテゴリーのないもの、カテゴリーの名前の順に並べる。最近使ったもの以外の中は、Mastodonのweb UIと同じく、ショートコードを小文字にそろえて比べた順。
     @Test func ordersSections() throws {
         let emojis = [
             try emoji("zebra", category: "animals"),
             try emoji("blobcat"),
             try emoji("apple", category: "Food"),
-            try emoji("ant", category: "animals"),
+            try emoji("Ant", category: "animals"),
             try emoji("aaa"),
+            try emoji("Blob"),
         ]
-        let sections = EmojiPalette.sections(emojis: emojis, standardGroups: [], recentKeys: ["apple"], recentLimit: 10)
+        let sections = EmojiPalette.sections(emojis: emojis, standardGroups: [], recentKeys: ["blobcat", "apple"], recentLimit: 10)
         #expect(sections.map(\.kind) == [.recent, .uncategorized, .category("animals"), .category("Food")])
-        #expect(sections.map { $0.emojis.map(\.recentKey) } == [["apple"], ["blobcat", "aaa"], ["zebra", "ant"], ["apple"]])
+        #expect(sections.map { $0.emojis.map(\.recentKey) } == [["blobcat", "apple"], ["aaa", "Blob", "blobcat"], ["Ant", "zebra"], ["apple"]])
     }
 
     /// 一覧に出さない絵文字と、サーバーからなくなった最近の絵文字は出さない。空のまとまりは作らない。
