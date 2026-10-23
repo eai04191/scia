@@ -17,7 +17,7 @@ struct LiveUpdatesTests {
         let updates = makeUpdates(connector)
 
         let task = Task { try await updates.run { await log.append($0) } }
-        await log.waitUntil { $0.filter { $0 == "poll" }.count >= 3 && $0.contains("outage started") }
+        try await log.waitUntil { $0.filter { $0 == "poll" }.count >= 3 && $0.contains("outage started") }
         task.cancel()
         _ = await task.result
 
@@ -33,7 +33,7 @@ struct LiveUpdatesTests {
         let updates = makeUpdates(connector)
 
         let task = Task { try await updates.run { await log.append($0) } }
-        await log.waitUntil { $0.contains("outage ended") }
+        try await log.waitUntil { $0.contains("outage ended") }
         try await Task.sleep(for: .milliseconds(100))
         task.cancel()
         _ = await task.result
@@ -53,7 +53,7 @@ struct LiveUpdatesTests {
 
         let task = Task { try await updates.run { await log.append($0) } }
         // 決まった時間だけ待つと、ほかのテストが重いときにつなぎ終える前に見てしまうので、つないだと知らせるまで待ってから、静かなままかを見る。
-        await log.waitUntil { $0.contains("connected") }
+        try await log.waitUntil { $0.contains("connected") }
         try await Task.sleep(for: .milliseconds(150))
         task.cancel()
         _ = await task.result
@@ -76,7 +76,7 @@ struct LiveUpdatesTests {
         let updates = makeUpdates(connector, policy: LiveUpdates.Policy(pollingInterval: .milliseconds(80), outageNoticeDelay: .milliseconds(80)))
 
         let task = Task { try await updates.run { await log.append($0) } }
-        await log.waitUntil { $0.filter { $0 == "connected" }.count == 2 }
+        try await log.waitUntil { $0.filter { $0 == "connected" }.count == 2 }
         try await Task.sleep(for: .milliseconds(100))
         task.cancel()
         _ = await task.result
@@ -91,7 +91,7 @@ struct LiveUpdatesTests {
 
         let task = Task { try await updates.run { await log.append($0) } }
         // つなぎ終えるまでがポーリングの間隔より長いと、つながる前にもポーリングと知らせが届くので、切れた後のものを待つ。
-        await log.waitUntil { labels in
+        try await log.waitUntil { labels in
             guard let disconnected = labels.firstIndex(of: "disconnected") else { return false }
             return labels[disconnected...].contains("poll") && labels[disconnected...].contains("outage started")
         }
@@ -110,7 +110,7 @@ struct LiveUpdatesTests {
         let updates = makeUpdates(connector)
 
         let task = Task { try await updates.run { await log.append($0) } }
-        await log.waitUntil { !$0.isEmpty }
+        try await log.waitUntil { !$0.isEmpty }
         task.cancel()
 
         await #expect(throws: CancellationError.self) { try await task.value }
@@ -139,19 +139,22 @@ struct LiveUpdatesTests {
 /// 届いた活動を記録し、条件を満たすまで待てるようにする。
 private actor LiveLog {
     private(set) var labels: [String] = []
-    private var waiters: [(condition: @Sendable ([String]) -> Bool, continuation: CheckedContinuation<Void, Never>)] = []
 
     func append(_ activity: LiveUpdates.Activity) {
         labels.append(Self.label(activity))
-        let labels = labels
-        let ready = waiters.filter { $0.condition(labels) }
-        waiters.removeAll { $0.condition(labels) }
-        ready.forEach { $0.continuation.resume() }
     }
 
-    func waitUntil(_ condition: @escaping @Sendable ([String]) -> Bool) async {
-        if condition(labels) { return }
-        await withCheckedContinuation { waiters.append((condition, $0)) }
+    /// 締め切りは、条件がそろわないときに失敗を報告して先へ進むための上限で、順序を作るためのものではない。
+    /// 全テストを並べて走らせると、ふだん数十ミリ秒で済む接続が8秒近くかかったことがあるため、長めにとる。
+    func waitUntil(_ condition: @Sendable ([String]) -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+        while !condition(labels) {
+            guard ContinuousClock.now < deadline else {
+                Issue.record("時間内に条件を満たしませんでした", sourceLocation: sourceLocation)
+                return
+            }
+            try await Task.sleep(for: .milliseconds(5))
+        }
     }
 
     private static func label(_ activity: LiveUpdates.Activity) -> String {
