@@ -25,7 +25,7 @@ struct ReconnectingStreamTests {
         let stream = makeStream(connector, policy: Self.fastPolicy)
 
         let task = Task { try await stream.run { await log.append($0) } }
-        await log.waitUntil(count: 6)
+        try await log.waitUntil(count: 6)
         task.cancel()
         _ = await task.result
 
@@ -57,7 +57,7 @@ struct ReconnectingStreamTests {
         let stream = makeStream(connector, policy: Self.fastPolicy)
 
         let task = Task { try await stream.run { await log.append($0) } }
-        await log.waitUntil(count: 4)
+        try await log.waitUntil(count: 4)
         task.cancel()
         _ = await task.result
 
@@ -81,7 +81,7 @@ struct ReconnectingStreamTests {
         }
 
         let task = Task { try await stream.run { await log.append($0) } }
-        await log.waitUntil(count: 3)
+        try await log.waitUntil(count: 3)
         task.cancel()
         _ = await task.result
 
@@ -96,7 +96,7 @@ struct ReconnectingStreamTests {
         let stream = makeStream(connector, policy: Self.fastPolicy)
 
         let task = Task { try await stream.run { await log.append($0) } }
-        await log.waitUntil(count: 2)
+        try await log.waitUntil(count: 2)
         task.cancel()
         _ = await task.result
 
@@ -109,7 +109,7 @@ struct ReconnectingStreamTests {
         let stream = makeStream(connector, policy: Self.fastPolicy)
 
         let task = Task { try await stream.run { await log.append($0) } }
-        await log.waitUntil(count: 1)
+        try await log.waitUntil(count: 1)
         task.cancel()
 
         await #expect(throws: CancellationError.self) { try await task.value }
@@ -141,18 +141,22 @@ struct ReconnectingStreamTests {
 /// 届いた活動を記録し、決まった数に達するまで待てるようにする。
 private actor ActivityLog {
     private var activities: [ReconnectingStream.Activity] = []
-    private var waiters: [(count: Int, continuation: CheckedContinuation<Void, Never>)] = []
 
     func append(_ activity: ReconnectingStream.Activity) {
         activities.append(activity)
-        let ready = waiters.filter { $0.count <= activities.count }
-        waiters.removeAll { $0.count <= activities.count }
-        ready.forEach { $0.continuation.resume() }
     }
 
-    func waitUntil(count: Int) async {
-        if activities.count >= count { return }
-        await withCheckedContinuation { waiters.append((count, $0)) }
+    /// 締め切りは、数がそろわないときに失敗を報告して先へ進むための上限で、順序を作るためのものではない。
+    /// 全テストを並べて走らせると、ふだん数十ミリ秒で済む接続が8秒近くかかったことがあるため、長めにとる。
+    func waitUntil(count: Int, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+        let deadline = ContinuousClock.now.advanced(by: .seconds(30))
+        while activities.count < count {
+            guard ContinuousClock.now < deadline else {
+                Issue.record("時間内に\(count)件そろいませんでした", sourceLocation: sourceLocation)
+                return
+            }
+            try await Task.sleep(for: .milliseconds(5))
+        }
     }
 
     var labels: [String] {
