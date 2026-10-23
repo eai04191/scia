@@ -12,7 +12,9 @@ public final class TimelineStore {
     public typealias Fetch = @Sendable (TimelineQuery) async throws -> TimelinePage
 
     /// 新しい順。
-    public private(set) var entries: [TimelineEntry] = []
+    public private(set) var entries: [TimelineEntry] = [] {
+        didSet { forgetDerivedIDs() }
+    }
     /// これより古い投稿はない。
     public private(set) var reachedEnd = false
     public private(set) var isLoading = false
@@ -45,9 +47,16 @@ public final class TimelineStore {
     private var unreadableItems: [UnreadableItem] = []
     /// フィルターで出さない投稿。一覧には並べないが、読めなかった投稿と同じく、続きを読む位置には使う。
     /// 1ページの全部が隠れても、その先へ進めるようにするため。編集でフィルターに一致しなくなれば、一覧に戻す。
-    private var hiddenStatuses: [Status] = []
+    private var hiddenStatuses: [Status] = [] {
+        didSet { forgetDerivedIDs() }
+    }
     /// 遅れて届いて一番上に積んだ投稿の位置。ここにない投稿は、IDの位置に並べる。
-    private var lateArrivalPositions: [String: DisplayPosition] = [:]
+    private var lateArrivalPositions: [String: DisplayPosition] = [:] {
+        didSet { forgetDerivedIDs() }
+    }
+    /// `loadedIDs`と`itemIDs`を、並びが変わるまで使い回す。流れの速い一覧では、届くたびに全件から作り直すと重くなるため。
+    private var cachedLoadedIDs: Set<String>?
+    private var cachedItemIDs: [String]?
     /// 遅れて届いた投稿に振った番号の最後。後に届いた投稿ほど大きい。
     private var lateArrivalSequence = 0
     /// 投稿の応答で入れ、まだストリーミングでも補完でも届いていない自分の投稿のID。
@@ -70,6 +79,15 @@ public final class TimelineStore {
     /// フィルターで出さない投稿も含めた、読み込んだ投稿。
     private var allStatuses: [Status] { statuses + hiddenStatuses }
 
+    /// `allStatuses`のID。
+    private var loadedIDs: Set<String> {
+        if let cachedLoadedIDs { return cachedLoadedIDs }
+        var ids = Set(entries.lazy.compactMap(\.status?.id))
+        ids.formUnion(hiddenStatuses.lazy.map(\.id))
+        cachedLoadedIDs = ids
+        return ids
+    }
+
     /// 読めた投稿も読めなかった投稿もない。読めなかった投稿しかなくても、続きは読めるため空ではない。
     public var isEmpty: Bool { itemIDs.isEmpty }
 
@@ -77,6 +95,7 @@ public final class TimelineStore {
     /// 読めなかった投稿も含めるのは、1ページの全部が読めなかったときにも、その先へ進めるようにするため。
     /// フィルターで出さない投稿も含める。
     private var itemIDs: [String] {
+        if let cachedItemIDs { return cachedItemIDs }
         let shown = entries.compactMap { entry -> String? in
             switch entry {
             case .status(let status): status.id
@@ -84,8 +103,16 @@ public final class TimelineStore {
             case .gap, .notification, .pinned: nil
             }
         }
-        guard !hiddenStatuses.isEmpty || !lateArrivalPositions.isEmpty else { return shown }
-        return (shown + hiddenStatuses.map(\.id)).sorted { StatusID.isNewer($0, than: $1) }
+        let ids = hiddenStatuses.isEmpty && lateArrivalPositions.isEmpty
+            ? shown
+            : (shown + hiddenStatuses.map(\.id)).sorted { StatusID.isNewer($0, than: $1) }
+        cachedItemIDs = ids
+        return ids
+    }
+
+    private func forgetDerivedIDs() {
+        cachedLoadedIDs = nil
+        cachedItemIDs = nil
     }
 
     /// 補完で、これより新しい投稿を読む基準。投稿の応答で入れた自分の投稿は、届いたと確かめるまで使わない。
@@ -392,7 +419,7 @@ public final class TimelineStore {
         case .update(let status):
             unconfirmedPostedIDs.remove(status.id)
             // ミュートかブロックした相手の投稿は、届いた時点で捨てる。保留したまま解除すると、合流させるときに除けなくなるため。
-            guard !isDeleted(status), !allStatuses.contains(where: { $0.id == status.id }), !pending.contains(where: { $0.id == status.id }) else {
+            guard !isDeleted(status), !loadedIDs.contains(status.id), !pending.contains(where: { $0.id == status.id }) else {
                 return .none
             }
             pending.append(status)
@@ -508,7 +535,7 @@ public final class TimelineStore {
         if !reachedEnd, let oldestID = itemIDs.last {
             arrivals = arrivals.filter { StatusID.isNewer($0.id, than: oldestID) || unreadableIDs.contains($0.id) }
         }
-        let known = Set(allStatuses.map(\.id))
+        let known = loadedIDs
         var topID = ([itemIDs.first, lastReadPosition?.anchorID] + lateArrivalPositions.values.map(\.anchorID))
             .compactMap(\.self)
             .max { StatusID.isNewer($1, than: $0) }
@@ -520,7 +547,7 @@ public final class TimelineStore {
                 topID = arrival.id
             }
         }
-        return merge(arrivals)
+        return merge(arrivals, insertsIntoEntries: true)
     }
 
     // MARK: - 未読
@@ -584,14 +611,17 @@ public final class TimelineStore {
     /// 既読の位置より上にある、読み込み済みの投稿の数。既読の位置が決まっていなければ0。
     public var unreadCount: Int {
         guard let lastReadPosition else { return 0 }
-        return statuses.prefix { position(of: $0.id).isAbove(lastReadPosition) }.count
+        return entries.lazy.compactMap(\.status).prefix { self.position(of: $0.id).isAbove(lastReadPosition) }.count
     }
 
     /// 既読の位置より上にギャップがあり、未読は`unreadCount`より多い。
     /// ギャップは新しい側の端の投稿と、その上に積んだ投稿のすぐ下に並ぶため、新しい側の端と既読の位置の基準のIDを比べる。
     public var hasUnloadedUnread: Bool {
         guard let lastReadPosition else { return false }
-        return gaps.contains { StatusID.isNewer($0.newerID, than: lastReadPosition.anchorID) }
+        return entries.contains { entry in
+            guard case .gap(let gap) = entry else { return false }
+            return StatusID.isNewer(gap.newerID, than: lastReadPosition.anchorID)
+        }
     }
 
     #if DEBUG
@@ -622,15 +652,66 @@ public final class TimelineStore {
     }
 
     /// まだない投稿を足し、足した投稿のうち一覧に並べたものを並べた順に返す。
-    private func merge(_ incoming: [Status]) -> [Status] {
-        let all = allStatuses
-        let known = Set(all.map(\.id))
+    /// - Parameter insertsIntoEntries: 今の並びに差し込む。並べ直す前に、読めなかった投稿やギャップを変えていないときだけ使える。
+    private func merge(_ incoming: [Status], insertsIntoEntries: Bool = false) -> [Status] {
+        let known = loadedIDs
         let added = Dictionary(incoming.filter { !known.contains($0.id) && !isDeleted($0) }.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
             .values
             .sorted { position(of: $0.id).isAbove(position(of: $1.id)) }
         guard !added.isEmpty else { return [] }
-        rebuild(statuses: all + added, gaps: gaps)
+        if !insertsIntoEntries || !insert(added) {
+            rebuild(statuses: allStatuses + added, gaps: gaps)
+        }
         return added.filter { !isFilteredOut($0) }
+    }
+
+    /// `rebuild`と同じ並びになるよう、並べた順の`added`を今の並びに差し込む。差し込めなければfalseを返す。
+    /// 流れの速い一覧で、挿入のたびに全件を並べ直すと重くなるため。
+    /// 今の並びは、`rebuild`で並べたあと行を除くことしかしていないので、`rebuild`の並びのままになっている。
+    /// フィルターで出さない投稿は、フィルターの期限が切れると一覧に戻る。`rebuild`は並べ直すたびにフィルターを当て直すので、
+    /// 戻る投稿があれば全件を並べ直す。出していた投稿が、あとからフィルターに一致するようになることはない。
+    private func insert(_ added: [Status]) -> Bool {
+        let now = Date()
+        guard !hiddenStatuses.contains(where: { !isFilteredOut($0, now: now) }) else { return false }
+        let addedIDs = Set(added.map(\.id))
+        // 全件から作り直さず、足した投稿のIDを加えて使い回す。手放してから加え、集合のコピーを避ける。
+        var loadedIDs = self.loadedIDs
+        cachedLoadedIDs = nil
+        loadedIDs.formUnion(addedIDs)
+        var items: [(position: DisplayPosition, entry: TimelineEntry)] = []
+        for status in added {
+            if isFilteredOut(status, now: now) {
+                hiddenStatuses.append(status)
+            } else {
+                items.append((position(of: status.id), .status(status)))
+            }
+        }
+        unreadableItems.removeAll { addedIDs.contains($0.id) }
+        var result: [TimelineEntry] = []
+        result.reserveCapacity(entries.count + items.count)
+        var itemIndex = items.startIndex
+        for entry in entries {
+            if case .unreadable(let item) = entry, addedIDs.contains(item.id) { continue }
+            while itemIndex < items.endIndex, isPlaced(items[itemIndex].position, above: entry) {
+                result.append(items[itemIndex].entry)
+                itemIndex += 1
+            }
+            result.append(entry)
+        }
+        result.append(contentsOf: items[itemIndex...].map(\.entry))
+        entries = result
+        cachedLoadedIDs = loadedIDs
+        return true
+    }
+
+    /// `rebuild`の並びで、`position`の投稿が`entry`より上に来る。ギャップは、新しい側の端のIDより古い投稿の上に置く。
+    private func isPlaced(_ position: DisplayPosition, above entry: TimelineEntry) -> Bool {
+        switch entry {
+        case .status(let status): position.isAbove(self.position(of: status.id))
+        case .unreadable(let item): position.isAbove(self.position(of: item.id))
+        case .gap(let gap): !StatusID.isNewer(gap.newerID, than: position.anchorID)
+        case .notification, .pinned: false
+        }
     }
 
     /// 投稿と読めなかった投稿をIDの新しい順に並べ、遅れて届いた投稿を積んだ位置に置き、ギャップを新しい側の端の投稿と、その上に積んだ投稿のすぐ下に置く。

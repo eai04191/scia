@@ -948,6 +948,25 @@ struct TimelineGapTests {
         #expect(!store.hasUnloadedUnread)
     }
 
+    /// 新着は今の並びに差し込むが、全件を並べ直したときと同じ並びになる。ギャップの上下、遅れて届いて積んだ投稿、読めなかった行の置き換えを含めて確かめる。
+    @Test func insertedArrivalsMatchFullReorder() async throws {
+        let server = FakeHomeServer(ids: 1...20, unreadableIDs: [4])
+        let store = makeStore(server)
+        _ = try await store.loadInitial(around: "5")
+        #expect(store.entries.map(\.debugLabel) == ["20", "19", "18", "gap(18...8)", "8", "7", "6", "5", "unreadable(4)", "3"])
+
+        for id in [22, 10, 4, 12] {
+            _ = store.receive(.update(server.status(id)))
+        }
+        _ = store.flushPending()
+        let inserted = store.entries.map(\.debugLabel)
+        #expect(inserted == ["12", "10", "22", "20", "19", "18", "gap(18...8)", "8", "7", "6", "5", "4", "3"])
+
+        let edited = Status(id: "19", createdAt: Date(timeIntervalSince1970: 19), account: server.status(19).account, content: "<p>edited</p>", spoilerText: "", url: nil)
+        #expect(store.receive(.statusUpdate(edited)) == .entriesChanged)
+        #expect(store.entries.map(\.debugLabel) == inserted)
+    }
+
     @Test func markerJustBelowLatestPageLeavesNoGap() async throws {
         let server = FakeHomeServer(ids: 1...10)
         let store = makeStore(server)

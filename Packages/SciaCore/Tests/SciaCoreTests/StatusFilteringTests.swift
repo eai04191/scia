@@ -173,6 +173,21 @@ struct FilteredTimelineTests {
         #expect(store.pending.isEmpty)
     }
 
+    /// 隠していた投稿は、フィルターの期限が切れたら、次に新着を挿入したときに一覧に戻る。
+    @Test func hiddenStatusReturnsOnInsertionAfterFilterExpires() async throws {
+        // 並列で走るテストに待たされても、読み込むまでに期限が切れないよう、長めに取る。
+        let expiresAt = Date().addingTimeInterval(1)
+        let (store, _) = store(pages: [[status("30"), status("29", filtered: [filter("x", .hide, expiresAt: expiresAt)])]])
+        _ = try await store.loadInitial()
+        #expect(store.statuses.map(\.id) == ["30"])
+
+        try await Task.sleep(for: .seconds(expiresAt.timeIntervalSinceNow + 0.1))
+        _ = store.receive(.update(status("31")))
+        _ = store.flushPending()
+
+        #expect(store.statuses.map(\.id) == ["31", "30", "29"])
+    }
+
     /// 最新のページが全部隠れると一覧に行がなく、続きを読むきっかけがない。並べる投稿が出るまで古いページを続けて読む。
     @Test func initialPageOfOnlyHiddenStatusesReadsOn() async throws {
         let hide = [filter("x", .hide)]
