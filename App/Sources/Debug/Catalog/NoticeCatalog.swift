@@ -34,6 +34,7 @@ enum NoticeCatalog {
                 stack(persistent: .download(of: url, fraction: 0.42) {}, transient: .transferFailure(title: Notice.transferFailureTitle(of: .gifv, purpose: .share)) {})
             },
             CatalogState(title: "共有を止めました（数秒で消える）") { stack(transient: .shareStopped) },
+            CatalogState(title: "リンク先のプロフィールを取得中") { stack(persistent: .profileLookup) },
             CatalogState(title: "書き出し中（23%）") { stack(persistent: Notice.draftStatus(.exporting, progress: 0.23) {}) },
             CatalogState(title: "アップロード中") { stack(persistent: draft(.uploading)) },
             CatalogState(title: "アップロード中（67%）") { stack(persistent: Notice.draftStatus(.uploading, progress: 0.67) {}) },
