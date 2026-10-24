@@ -20,6 +20,14 @@ enum StatusAction {
     case delete
 }
 
+/// メニューに仮の印を出し、アイコンを読んでから描き替える人。
+struct PendingMenuIcon {
+    let user: MenuUser
+    /// 分かっているアカウント。メンションされた人で、一覧にも読み込み済みのものにもいなければnil。
+    let account: Account?
+    let placeholder: UIImage
+}
+
 /// フォローリクエストへの返事。
 enum FollowRequestDecision {
     case authorize
@@ -45,6 +53,8 @@ extension TimelineViewController {
     /// 出す項目がなければnil。
     /// - Parameter id: メニューを出した要素。共有のシートを、その行から出す。
     func contextMenu(for entry: TimelineEntry, id: ItemID) -> UIMenu? {
+        // 組みながら集めた、アイコンのまだない人をまとめて読む。
+        defer { loadPendingMenuIcons() }
         // 人の一覧の行では、その人へのユーザーのメニューを、そのまま出す。
         if case .account(let account) = entry {
             return userElement(for: .account(account), id: id).map { UIMenu(children: [$0]) }
@@ -371,13 +381,13 @@ extension TimelineViewController {
     private func userMenuIcon(for user: MenuUser, id: ItemID) -> UIImage {
         let account: Account? = switch user {
         case .account(let account): account
-        case .mention(let mention): account(withID: mention.id) ?? userMenuActions?.cachedAccount(mention.id)
+        case .mention(let mention): account(withID: mention.id) ?? userMenuActions?.accounts.account(mention.id)
         }
         if let account, let image = cachedAvatar(of: account, id: id), let icon = Self.userMenuIcon(image, shape: settings.avatarShape) {
             return icon
         }
         let placeholder = contextMenuIcons.placeholder(symbolName: "person.crop.circle", side: Self.menuIconSide, traitCollection: traitCollection)
-        loadUserMenuIcon(for: user, account: account, replacing: placeholder)
+        pendingMenuIcons.append(PendingMenuIcon(user: user, account: account, placeholder: placeholder))
         return placeholder
     }
 
@@ -394,9 +404,13 @@ extension TimelineViewController {
         account.avatarStatic.map { AvatarView.key(url: $0, animates: false, side: Self.menuIconSide, scale: traitCollection.displayScale) }
     }
 
-    /// アカウントが分からなければ読み、アイコンを読んでから、開いているメニューの`placeholder`を描き替える。
+    /// メニューを組みながら集めた人のアイコンを読み、開いているメニューの仮の印を描き替える。
+    /// アカウントが分からないメンションされた人は、相手ごとに送らず、まとめて1回で読む。
     /// 読み終える前にメニューを閉じていたら、描き替えるものがないので何もしない。次に開いたときは読み込み済みのアイコンを出す。
-    private func loadUserMenuIcon(for user: MenuUser, account: Account?, replacing placeholder: UIImage) {
+    private func loadPendingMenuIcons() {
+        let pending = pendingMenuIcons
+        pendingMenuIcons = []
+        guard !pending.isEmpty else { return }
         Task { [weak self] in
             #if DEBUG
             if let delay = DebugFaults.slowMenuIconDelay {
@@ -404,11 +418,28 @@ extension TimelineViewController {
             }
             #endif
             guard let self else { return }
-            var resolved = account
-            if resolved == nil, case .mention(let mention) = user {
-                resolved = try? await userMenuActions?.loadAccount(mention.id)
+            // アカウントの分かっている人は、まとめ読みを待たずに画像を読み始める。
+            for icon in pending {
+                if let account = icon.account {
+                    loadMenuIcon(of: account, replacing: icon.placeholder)
+                }
             }
-            guard let resolved, let key = userMenuIconKey(of: resolved), let image = try? await avatarImages.image(for: key),
+            let unresolved = pending.filter { $0.account == nil }
+            guard !unresolved.isEmpty, let accounts = userMenuActions?.accounts else { return }
+            let loaded = await accounts.load(unresolved.map(\.user.id))
+            for icon in unresolved {
+                if let account = loaded[icon.user.id] {
+                    loadMenuIcon(of: account, replacing: icon.placeholder)
+                }
+            }
+        }
+    }
+
+    /// `account`のアイコンを読み、開いているメニューの`placeholder`を描き替える。
+    private func loadMenuIcon(of account: Account, replacing placeholder: UIImage) {
+        guard let key = userMenuIconKey(of: account) else { return }
+        Task { [weak self] in
+            guard let self, let image = try? await avatarImages.image(for: key),
                   let icon = Self.userMenuIcon(image, shape: settings.avatarShape) else { return }
             contextMenuIcons.setIcon(icon, for: placeholder)
         }

@@ -734,6 +734,28 @@ struct MastodonClientTests {
         #expect(await transport.requests.count == 1)
     }
 
+    /// アカウントはIDを並べて1回で読む。メニューを閉じれば要らなくなるため、一時的な失敗でも送り直さない。
+    @Test func multipleAccountsAreReadAtOnceWithoutRetry() async throws {
+        let url = try #require(Bundle.module.url(forResource: "account", withExtension: "json", subdirectory: "Fixtures"))
+        let account = try String(contentsOf: url, encoding: .utf8)
+        let transport = StubTransport([.json("[\(account)]", statusCode: 200), try .fixture("error_502", withExtension: "html", statusCode: 502)])
+        let client = try makeClient(transport)
+
+        let accounts = try await client.accounts(["1", "2"])
+
+        let requested = try #require(await transport.requests.first?.url)
+        #expect(requested.path() == "/api/v1/accounts")
+        #expect(URLComponents(url: requested, resolvingAgainstBaseURL: false)?.queryItems == [
+            URLQueryItem(name: "id[]", value: "1"),
+            URLQueryItem(name: "id[]", value: "2"),
+        ])
+        #expect(accounts.count == 1)
+        await #expect(throws: MastodonAPIError.self) {
+            try await client.accounts(["3"])
+        }
+        #expect(await transport.requests.count == 2)
+    }
+
     @Test func searchHashtagsForCompletion() async throws {
         let transport = StubTransport([try .fixture("search_hashtags")])
 

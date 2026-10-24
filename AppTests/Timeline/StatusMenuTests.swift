@@ -1,4 +1,5 @@
 import SciaCore
+import SciaTesting
 import Testing
 import UIKit
 @testable import Scia
@@ -160,7 +161,7 @@ struct StatusMenuTests {
     /// 既定のユーザーのメニューは、開く・書く操作、フォロー、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
     /// 関係の項目は、開いてから読む。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() throws {
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in }, cachedAccount: { _ in nil }, loadAccount: { _ in throw CancellationError() })
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in }, accounts: AccountCache { _ in [] })
 
         let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
 
@@ -178,7 +179,7 @@ struct StatusMenuTests {
     @Test func singleRelationItemStaysInSubmenu() throws {
         let settings = try makeSettings()
         settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .follow) } + [.more])
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in }, cachedAccount: { _ in nil }, loadAccount: { _ in throw CancellationError() })
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in }, accounts: AccountCache { _ in [] })
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings, userMenuActions: actions))
 
@@ -189,7 +190,7 @@ struct StatusMenuTests {
     @Test func singleMentionItemIsListedDirectlyWithAcct() throws {
         let settings = try makeSettings()
         settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .mention) } + [.more])
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in }, cachedAccount: { _ in nil }, loadAccount: { _ in throw CancellationError() })
+        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in }, accounts: AccountCache { _ in [] })
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings, userMenuActions: actions))
 
@@ -225,6 +226,66 @@ struct StatusMenuTests {
         #expect(TimelineViewController.account(withID: "3", in: entries)?.acct == "carol")
         #expect(TimelineViewController.account(withID: "4", in: entries)?.acct == "dave")
         #expect(TimelineViewController.account(withID: "5", in: entries) == nil)
+    }
+
+    /// アイコンの画像とアカウントのまとめ読みを記録し、まとめ読みは`releaseAccounts()`まで返さない。
+    private actor Recorder {
+        private(set) var avatarRequests: [URL] = []
+        private(set) var accountRequests: [[String]] = []
+        private var heldAccounts: [CheckedContinuation<Void, Never>] = []
+
+        func avatar(_ url: URL) {
+            avatarRequests.append(url)
+        }
+
+        /// アカウントのまとめ読みを記録し、`releaseAccounts()`まで返さない。
+        func accounts(_ ids: [String]) async -> [Account] {
+            await withCheckedContinuation { continuation in
+                accountRequests.append(ids)
+                heldAccounts.append(continuation)
+            }
+            return []
+        }
+
+        func releaseAccounts() {
+            heldAccounts.forEach { $0.resume() }
+            heldAccounts = []
+        }
+
+        func waitUntil(_ condition: @Sendable (_ avatars: [URL], _ accounts: [[String]]) -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+            try await SciaTesting.waitUntil({ condition(avatarRequests, accountRequests) }, sourceLocation: sourceLocation)
+        }
+    }
+
+    /// アカウントの分かっている人のアイコンは、メンションされた人のアカウントのまとめ読みを待たずに読み始める。
+    /// まとめ読みが遅れても、投稿した人のアイコンまで記号のまま待たされないようにする。
+    @Test func knownAccountIconsDoNotWaitForAccountBatch() async throws {
+        let recorder = Recorder()
+        let settings = try makeSettings()
+        settings.statusMenuLayout = MenuLayout(elements: StatusMenuItem.defaultLayout.elements.map { element in
+            element == .item(.mentionedUsers, isVisible: false) ? .item(.mentionedUsers, isVisible: true) : element
+        })
+        let viewController = TimelineViewController(
+            tuning: TuningStore(defaults: nil),
+            emojiImages: .offline,
+            avatarImages: AvatarImageStore { url in
+                await recorder.avatar(url)
+                throw URLError(.notConnectedToInternet)
+            },
+            settings: settings
+        )
+        viewController.userMenuActions = UserMenuActions(
+            mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in },
+            accounts: AccountCache { ids in await recorder.accounts(ids) }
+        )
+        let author = try account("2", "alice")
+        let post = try status(url: nil, account: author, mentions: [Mention(id: "3", username: "carol", url: nil, acct: "carol")])
+
+        _ = viewController.contextMenu(for: .status(post), id: TimelineEntry.status(post).id)
+
+        try await recorder.waitUntil { avatars, accounts in accounts == [["3"]] && !avatars.isEmpty }
+        #expect(await recorder.avatarRequests.map(\.absoluteString) == [author.avatarStatic?.absoluteString].compactMap(\.self))
+        await recorder.releaseAccounts()
     }
 
     /// メンションされたユーザーは既定で隠す。出すと、メンションされた人ごとに並ぶ。

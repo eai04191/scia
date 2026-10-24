@@ -501,6 +501,17 @@ public struct MastodonClient: Sendable {
         return try await send(request, decoding: ProfileSource.self).0
     }
 
+    /// 一度に読めるアカウントの数。Mastodonは、これより多く求めると422を返す（`Api::BaseController::DEFAULT_ACCOUNTS_LIMIT`）。
+    public static let multipleAccountsLimit = 40
+
+    /// アカウントをまとめて読む。見つからないアカウントと、承認されていないアカウントは返らない。
+    /// メニューを開いたときに使い、メニューを閉じれば要らなくなるため、一時的な失敗でも送り直さない。
+    /// https://docs.joinmastodon.org/methods/accounts/#index
+    public func accounts(_ ids: [String]) async throws -> [Account] {
+        let query = ids.map { URLQueryItem(name: "id[]", value: $0) }
+        return try await get(ElementList<Account>.self, path: "api/v1/accounts", query: query, feature: .multipleAccounts, retries: false).0.elements
+    }
+
     /// https://docs.joinmastodon.org/methods/accounts/#get
     public func account(_ id: String) async throws -> Account {
         try await get(Account.self, path: "api/v1/accounts/\(id)", query: []).0
