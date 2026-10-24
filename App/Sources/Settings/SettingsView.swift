@@ -11,9 +11,28 @@ struct SettingsView: View {
     let account: String
     let diagnostics: ConnectionDiagnostics
     @Environment(\.dismiss) private var dismiss
-    @State private var previewDate = Date.now.addingTimeInterval(-180)
+    /// 時刻の表記の見本に使う、3分前の日時。
+    @State private var previewDate: Date
+    /// コピーしたことを知らせる表示を戻すまでの時計。
+    private let clock: any Clock<Duration>
     @State private var copiedBuildInfo = false
     @State private var appIconError: String?
+
+    init(
+        settings: AppSettings,
+        instance: URL,
+        account: String,
+        diagnostics: ConnectionDiagnostics,
+        now: () -> Date = AppDependencies.now,
+        clock: any Clock<Duration> = AppDependencies.clock
+    ) {
+        self.settings = settings
+        self.instance = instance
+        self.account = account
+        self.diagnostics = diagnostics
+        _previewDate = State(initialValue: now().addingTimeInterval(-180))
+        self.clock = clock
+    }
 
     /// 選択の表示は共有のAppIconSelectionから読む。設定を複数のウィンドウで開いていても、どれも同じ選択を表示する。
     private var appIconBinding: Binding<AppIconChoice> {
@@ -294,7 +313,7 @@ struct SettingsView: View {
                     .accessibilityHint(copiedBuildInfo ? "コピーしました" : "タップでコピーします")
                     .task(id: copiedBuildInfo) {
                         guard copiedBuildInfo else { return }
-                        try? await Task.sleep(for: .seconds(1.5))
+                        try? await clock.sleep(for: .seconds(1.5))
                         copiedBuildInfo = false
                     }
                 }

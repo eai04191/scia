@@ -4,6 +4,8 @@ import SciaCore
 /// ばねの進み具合を、画面を描き換えるたびに渡す。複製の位置と、マスクのようにUIKitのアニメーションで動かせない見た目を、同じフレームでそろえるために使う。
 @MainActor
 final class SpringDriver: NSObject {
+    /// 画面の描き換えと同じ時間。テストでは差し替える。
+    var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
     private let spring: SpringCurve
     private let update: @MainActor (CGFloat) -> Void
     private let completion: @MainActor () -> Void
@@ -21,7 +23,7 @@ final class SpringDriver: NSObject {
 
     /// 最初の進み具合をすぐに渡してから動かし始める。
     func start() {
-        startTime = CACurrentMediaTime()
+        startTime = mediaTime()
         let link = CADisplayLink(target: self, selector: #selector(step(_:)))
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
         link.add(to: .main, forMode: .common)

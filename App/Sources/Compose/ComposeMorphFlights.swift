@@ -11,6 +11,8 @@ import UIKit
 /// 入れ物の影として、動いている途中の形のまま描く。写真同士の影は、動いている間は描かない。
 @MainActor
 final class ComposeMorphFlights {
+    /// 画面の描き換えと同じ時間。テストでは差し替える。
+    var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
     enum Key: Hashable {
         case chip
         case attachment(DraftAttachment.ID)
@@ -136,7 +138,7 @@ final class ComposeMorphFlights {
             let delay = delays[key] ?? 0
             flight.ends.append(target)
             flight.destination = destination
-            flight.startTime = CACurrentMediaTime() + delay
+            flight.startTime = mediaTime() + delay
             flights[key] = flight
             let copy = flight.copy
             let move = {
@@ -158,7 +160,7 @@ final class ComposeMorphFlights {
     /// `animations`には、渡した遅れの時間だけ待ってから、渡した変更を残りの時間で動かすアニメーションを返す。遅らせて動かしている複製は、まだ動き始めていなければ、残りの遅れを守る。
     func retarget(on targets: [Key: End], generation: Int, animations: (TimeInterval, @escaping () -> Void) -> Void) {
         guard generation == self.generation else { return }
-        let now = CACurrentMediaTime()
+        let now = mediaTime()
         var moved: [(FlightCopy, FlightCopy.Geometry, TimeInterval)] = []
         for (key, var flight) in flights {
             guard let target = targets[key], let previous = flight.destination else { continue }

@@ -243,7 +243,7 @@ final class ComposeModel {
     /// 投票を送り直せない投稿（締め切りまで5分を切った）でも、下書きを変えずにfalseを返す。
     /// 本文と注意書きは、HTMLの`content`ではなく、書いたときのソースから入れる。
     @discardableResult
-    func beginEditing(_ status: Status, source: StatusSource, now: Date = Date()) -> Bool {
+    func beginEditing(_ status: Status, source: StatusSource, now: Date = AppDependencies.now()) -> Bool {
         guard !isPosting, let draft = StatusDraft.edit(of: status, source: source, now: now) else { return false }
         removeAllAttachments()
         initialDraft = draft

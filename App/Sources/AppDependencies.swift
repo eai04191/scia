@@ -1,4 +1,5 @@
 import Foundation
+import QuartzCore
 import SciaCore
 
 /// シーンをまたいで共有する依存。
@@ -14,6 +15,20 @@ enum AppDependencies {
     }()
 
     static let stateDumps = StateDumpRegistry()
+
+    /// 時間をおく処理に渡す、実際の時計。テストでは手で進める時計に差し替える。
+    nonisolated static var clock: any Clock<Duration> { SystemTime.clock }
+
+    /// 今の日付。テストでは決まった日付に差し替える。
+    nonisolated static func now() -> Date {
+        SystemTime.now()
+    }
+
+    /// 画面の描き換えと同じ時間（Core Animationの時間）。動きの始まりや経過を、描かれる時刻とそろえて測るのに使う。
+    /// 実際の時間に触れてよいのは、こことSciaCoreの`SystemTime`だけにする（`make lint`の`direct_time_access`で止める）。
+    nonisolated static func mediaTime() -> CFTimeInterval {
+        CACurrentMediaTime()
+    }
 
     static let emojiImages = EmojiImageStore { url in
         try await URLSession.shared.data(from: url).0

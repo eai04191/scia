@@ -144,6 +144,8 @@ struct PostContentConfiguration: UIContentConfiguration {
 }
 
 final class PostContentView: UIView, UIContentView {
+    /// 今の日付。テストでは決まった日付に差し替える。
+    var now: () -> Date = AppDependencies.now
 
     private let avatarView: AvatarView
     private let contextIcon = UIImageView()
@@ -298,7 +300,7 @@ final class PostContentView: UIView, UIContentView {
         // 2つ目がないときは、1つ目が余りの幅を受け持つ。
         nameLabels[0].setContentHuggingPriority(configuration.nameParts.count > 1 ? .required : .defaultLow, for: .horizontal)
         timeLabel.font = metrics.secondaryFont
-        timeText = configuration.timeText(now: .now)
+        timeText = configuration.timeText(now: now())
         timeLabel.attributedText = timeAttributedText(timeText, for: configuration)
 
         bodyView.emojiImages = configuration.emojiImages
@@ -439,7 +441,7 @@ final class PostContentView: UIView, UIContentView {
             parts.append(context.accessibilityText)
         }
         parts += configuration.nameParts.map(\.string)
-        parts.append(configuration.timeAccessibilityText(now: .now))
+        parts.append(configuration.timeAccessibilityText(now: now()))
         parts.append(bodyView.accessibilityText)
         parts += [configuration.reactionGlow?.accessibilityText].compactMap(\.self)
         textAccessibilityElement.accessibilityLabel = parts.filter { !$0.isEmpty }.joined(separator: "、")

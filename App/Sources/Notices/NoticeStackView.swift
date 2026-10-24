@@ -18,7 +18,7 @@ final class NoticeStackView: UIView {
     /// 数秒で消えるチップの時計を動かし始めてから経った長さ。止めている間はnil。
     private var transientElapsed: (@Sendable () -> Duration)?
     /// 数秒で消えるチップの時計。テストでは手で進める時計に替える。
-    var clock: any Clock<Duration> = ContinuousClock()
+    var clock: any Clock<Duration> = AppDependencies.clock
     private var hideTask: Task<Void, Never>?
     private var isChromeHidden = false
     /// 出たままのチップが、前に出ている画面の中だけのものか。画面と一緒に薄くするため。

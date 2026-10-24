@@ -5,7 +5,8 @@ import UIKit
 @MainActor
 enum DiscomfortReportPresenter {
     /// 状態ダンプはシートを出す前、違和感を覚えた瞬間の状態を書き出す。
-    static func present(in window: UIWindow) {
+    /// - Parameter now: レポートを取った日時として残す今の日付。
+    static func present(in window: UIWindow, now: Date = AppDependencies.now()) {
         guard var top = window.rootViewController else { return }
         while let presented = top.presentedViewController {
             top = presented
@@ -13,7 +14,7 @@ enum DiscomfortReportPresenter {
         guard !(top is DiscomfortReportHostingController) else { return }
 
         let draft = DiscomfortReportDraft(
-            capturedAt: Date(),
+            capturedAt: now,
             logMarker: RecentLogReader.writeMarker(),
             stateDumps: [StateDump(name: "build", text: BuildInfo.current.text)] + AppDependencies.stateDumps.dumpAll()
         )

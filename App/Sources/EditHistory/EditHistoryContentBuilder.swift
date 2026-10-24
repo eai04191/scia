@@ -25,7 +25,7 @@ struct EditHistoryContentBuilder {
         isHidden: Bool,
         filterTitles: [String],
         revealedEditNumbers: Set<Int>,
-        now: Date = .now
+        now: Date = AppDependencies.now()
     ) -> [EditHistoryEntryView.Content] {
         history.entries.enumerated().map { index, entry in
             content(

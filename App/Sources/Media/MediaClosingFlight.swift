@@ -14,6 +14,8 @@ import UIKit
 /// 一覧の中の複製がないときは、見せる範囲を画面全体から一覧のバーに隠れない範囲へ、着地へ近づくにつれて絞る。
 @MainActor
 final class MediaClosingFlight: NSObject {
+    /// 画面の描き換えと同じ時間。テストでは差し替える。
+    var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
     struct Parts {
         /// 複製や下地を載せる、操作を素通しする層。終わったら外す。
         let overlay: UIView
@@ -86,7 +88,7 @@ final class MediaClosingFlight: NSObject {
     }
 
     func start() {
-        startTime = CACurrentMediaTime()
+        startTime = mediaTime()
         let link = CADisplayLink(target: self, selector: #selector(step(_:)))
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
         link.add(to: .main, forMode: .common)

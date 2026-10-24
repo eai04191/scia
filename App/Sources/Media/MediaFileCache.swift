@@ -34,7 +34,7 @@ actor MediaFileCache {
         directory: URL = .cachesDirectory.appending(path: "MediaFiles"),
         sharingDirectory: URL = .temporaryDirectory.appending(path: "MediaSharing"),
         sizeLimit: Int = 150 * 1_024 * 1_024,
-        now: @escaping @Sendable () -> Date = { Date() }
+        now: @escaping @Sendable () -> Date = AppDependencies.now
     ) {
         self.directory = directory
         self.sharingDirectory = sharingDirectory

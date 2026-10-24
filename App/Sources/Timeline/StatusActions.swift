@@ -200,7 +200,7 @@ extension TimelineViewController {
         case .edit:
             guard let myAccountID, status.isAuthored(by: myAccountID) else { return nil }
             // 投票の締め切りが近い投稿は、送り直すとサーバーが拒むので、押せないまま理由を添える。
-            let canEdit = status.canBeEdited(now: Date())
+            let canEdit = status.canBeEdited(now: now())
             return UIAction(
                 title: item.title,
                 subtitle: canEdit ? nil : "締め切りまで5分を切った投票は編集できません",
@@ -419,10 +419,10 @@ extension TimelineViewController {
         let pending = pendingMenuIcons
         pendingMenuIcons = []
         guard !pending.isEmpty else { return }
-        Task { [weak self] in
+        Task { [weak self, clock] in
             #if DEBUG
             if let delay = DebugFaults.slowMenuIconDelay {
-                try? await Task.sleep(for: delay)
+                try? await clock.sleep(for: delay)
             }
             #endif
             guard let self else { return }

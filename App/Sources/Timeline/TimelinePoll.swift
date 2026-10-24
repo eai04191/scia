@@ -11,7 +11,7 @@ extension TimelineViewController {
         let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier(for: shown.language))
         return PollView.Content(
             pollID: poll.id,
-            display: PollDisplay(poll: poll, choices: pollChoices, now: .now, allowsVoting: allowsVoting),
+            display: PollDisplay(poll: poll, choices: pollChoices, now: now(), allowsVoting: allowsVoting),
             titles: poll.options.map { renderer.render(.plain($0.title, emojis: poll.emojis)) },
             titleFont: font,
             optionSpacing: tuning.value(of: TuningCatalog.pollOptionSpacing),

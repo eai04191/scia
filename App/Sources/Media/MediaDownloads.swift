@@ -65,7 +65,7 @@ final class MediaDownloads {
         if let delay = DebugFaults.slowDownloadDelay {
             let steps = 20
             for step in 1...steps {
-                try await Task.sleep(for: delay / steps)
+                try await AppDependencies.clock.sleep(for: delay / steps)
                 onProgress(Double(step) / Double(steps) * 0.99)
             }
         }

@@ -10,6 +10,8 @@ import UIKit
 /// 引っぱって離したときの読み直しは一覧の更新コントロールが受け持ち、読んでいる間はこの表示を出さない。
 /// 更新コントロールは読んでいる間、一覧のすぐ上に止まり、位置を変えられないため、この表示を間に挟めない。
 final class StreamingStatusPullView: UIView {
+    /// 今の日付。テストでは決まった日付に差し替える。
+    var now: () -> Date = AppDependencies.now
     private let streamingColumn = Column(title: "ストリーミング")
     private let restColumn = Column(title: "REST")
     /// 補完が止まっている理由。列に収まらない長さになるため、2列の下に出す。
@@ -74,7 +76,7 @@ final class StreamingStatusPullView: UIView {
     }
 
     private func updateText() {
-        let now = Date()
+        let now = now()
         let streaming = Self.streamingContent(for: streamingState, rate: arrivalRate, now: now)
         let rest = Self.restContent(for: catchUp, now: now)
         streamingColumn.show(streaming)

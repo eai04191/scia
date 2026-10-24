@@ -48,12 +48,21 @@ final class NotificationsController {
     private var activeFills = 0
     private var fillWaiters: [CheckedContinuation<Void, Never>] = []
 
+    /// 新着をまとめて挿入する間隔を待つ時計。テストでは手で進める時計に替える。
+    private let clock: any Clock<Duration>
+    /// 補完を終えた日時と、通知の届いた日時に使う今の日付。
+    private let now: () -> Date
+
     init(
         client: MastodonClient,
         streamingHub: StreamingHub,
         tuning: TuningStore = AppDependencies.tuning,
+        clock: any Clock<Duration> = AppDependencies.clock,
+        now: @escaping () -> Date = AppDependencies.now,
         onUnauthorized: @escaping () -> Void
     ) {
+        self.clock = clock
+        self.now = now
         let filtering = StatusFiltering(context: .notifications, myAccountID: client.credential.accountID)
         self.filtering = filtering
         store = NotificationStore(pageSize: Self.pageSize, filtering: filtering) { query in
@@ -183,7 +192,7 @@ final class NotificationsController {
             guard let notifications = try await store.loadInitial(markerID: markerID), !isStopped else { return }
             showEntries()
             hasLoadedInitial = true
-            updateCatchUp { $0.finish(at: Date()) }
+            updateCatchUp { $0.finish(at: now()) }
             viewController.setContentState(.loaded)
             viewController.setFooterState(store.reachedEnd ? .reachedEnd : .idle)
             logger.info("notifications loadInitial done count=\(notifications.count, privacy: .public)")
@@ -284,7 +293,7 @@ final class NotificationsController {
     }
 
     private func receive(_ notification: MastodonNotification) {
-        arrivalRate.record(at: Date())
+        arrivalRate.record(at: now())
         streamingStatusView.setArrivalRate(arrivalRate)
         // receiveの戻り値は、保留が空から1件になったかで、受け取ったかではない。挿入を待つ間に続けて届いた通知も流すよう、保留が増えたかで見る。
         let pendingCount = store.pending.count
@@ -335,7 +344,7 @@ final class NotificationsController {
                 guard let added = try await controller.store.fillFromLatest(maxPages: maxPages, progress: { count in
                     controller.updateCatchUp { $0.progress(readCount: count) }
                 }), !controller.isStopped else { return }
-                controller.updateCatchUp { $0.finish(at: Date()) }
+                controller.updateCatchUp { $0.finish(at: controller.now()) }
                 controller.showPauseAfterFill()
                 controller.logger.info("notifications fill done added=\(added.count, privacy: .public)")
                 // 待っている間に同じ通知がストリーミングで挿入されていても、古い側を捨てていることがある。
@@ -357,7 +366,7 @@ final class NotificationsController {
     private func scheduleInsertion() {
         let interval = tuning.value(of: TuningCatalog.insertionInterval)
         run { controller in
-            try? await Task.sleep(for: .seconds(interval))
+            try? await controller.clock.sleep(for: .seconds(interval))
             guard !Task.isCancelled else { return }
             let wait = Duration.seconds(controller.tuning.value(of: TuningCatalog.arrivalAvatarWait))
             await controller.viewController.waitForAvatars(of: { controller.store.pending.map(TimelineEntry.notification) }, within: wait)

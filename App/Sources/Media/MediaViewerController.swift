@@ -1806,6 +1806,8 @@ final class PlayerPageController: MediaPageController {
     /// このページで、一度でもボタンと部品を隠したか。隠すまでは、再生を始めたらすぐ隠し、映像だけを見せて始める。
     /// 開く途中など、ビューアが隠す頼みを捨てたときは、動き終えたところで頼み直す。
     private var hasHiddenChrome = false
+    /// 時間をおく処理の時計。テストでは手で進める時計に差し替える。
+    var clock: any Clock<Duration> = AppDependencies.clock
     private var hideTask: Task<Void, Never>?
     /// シークしている行き先の秒数。シークし終えたらnil。
     private var pendingSeek: Double?
@@ -2184,8 +2186,8 @@ final class PlayerPageController: MediaPageController {
                   isVoiceOverRunning: UIAccessibility.isVoiceOverRunning
               )
         else { return }
-        hideTask = Task { [weak self, delay = hasHiddenChrome ? controlsHideDelay : 0] in
-            try? await Task.sleep(for: .seconds(delay))
+        hideTask = Task { [weak self, clock, delay = hasHiddenChrome ? controlsHideDelay : 0] in
+            try? await clock.sleep(for: .seconds(delay))
             guard let self, !Task.isCancelled else { return }
             self.onRequestChromeHidden?(true)
         }

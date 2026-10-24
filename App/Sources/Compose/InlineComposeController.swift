@@ -12,6 +12,10 @@ import UniformTypeIdentifiers
 /// キーボードにも隠れるため使わない。
 @MainActor
 final class InlineComposeController: NSObject {
+    /// 画面の描き換えと同じ時間。テストでは差し替える。
+    var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
+    /// 編集できるかを決める今の日付。テストでは決まった日付に差し替える。
+    var now: () -> Date = AppDependencies.now
     let model: ComposeModel
     /// 本文と注意書きの補完とパレット。本文ではメンション、ハッシュタグ、カスタム絵文字を、注意書きではカスタム絵文字だけを補完する。
     /// サーバーは注意書きのメンションとハッシュタグを読まないため。
@@ -414,9 +418,10 @@ final class InlineComposeController: NSObject {
     /// メディアのピッカーを開いていれば閉じる。開いたままだと、捨てた下書きの選択がピッカーに残り、次に選んだときに足し直されるため。
     @discardableResult
     func edit(_ status: Status, source: StatusSource) -> Bool {
-        guard !model.isPosting, status.canBeEdited(now: Date()) else { return false }
+        let now = now()
+        guard !model.isPosting, status.canBeEdited(now: now) else { return false }
         bottomSheet?.close(notifiesWillClose: true)
-        guard model.beginEditing(status, source: source) else { return false }
+        guard model.beginEditing(status, source: source, now: now) else { return false }
         update()
         beginEditing()
         return true
@@ -1378,7 +1383,7 @@ final class InlineComposeController: NSObject {
         if !editing {
             // バーを勢いよく下げて閉じたときだけ、カプセルの写真を散らばらせる。キーボードが下がりきるまで待つので、離してから少し間がある。
             // ほかの閉じ方（タップや投稿）では、正解の形に戻す。
-            let fling = barFling.flatMap { CACurrentMediaTime() - $0.time < 1.5 ? $0.velocity : nil } ?? 0
+            let fling = barFling.flatMap { mediaTime() - $0.time < 1.5 ? $0.velocity : nil } ?? 0
             barFling = nil
             logger.info("compose: end editing fling=\(Int(fling), privacy: .public)")
             restContent.thumbnails.scatter(velocity: Double(fling))
@@ -1415,7 +1420,7 @@ final class InlineComposeController: NSObject {
         }
         var flightGeneration: Int?
         let morphDuration = tuning.value(of: TuningCatalog.composeMorphDuration)
-        let morphEnd = CACurrentMediaTime() + morphDuration
+        let morphEnd = mediaTime() + morphDuration
         UIView.animate(withDuration: morphDuration, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
             if collapses {
                 self.applyExpandedLayout()
@@ -1451,7 +1456,7 @@ final class InlineComposeController: NSObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 morphFlights.retarget(on: morphEnds(editing: editing), generation: flightGeneration) { delay, animations in
-                    UIView.animate(withDuration: max(morphEnd - CACurrentMediaTime() - delay, 0.05), delay: delay, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState], animations: animations)
+                    UIView.animate(withDuration: max(morphEnd - mediaTime() - delay, 0.05), delay: delay, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState], animations: animations)
                 }
             }
         }
@@ -2442,7 +2447,7 @@ extension InlineComposeController: UITextViewDelegate {
     /// バーを下へ引いて離したときの速さを覚えておく。キーボードが下がりきって書き終えたときに、カプセルの写真を散らばらせる強さに使う。
     func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
         guard scrollView === dragArea else { return }
-        barFling = (velocity: scrollView.panGestureRecognizer.velocity(in: scrollView).y, time: CACurrentMediaTime())
+        barFling = (velocity: scrollView.panGestureRecognizer.velocity(in: scrollView).y, time: mediaTime())
     }
 
     func textViewDidChange(_ textView: UITextView) {

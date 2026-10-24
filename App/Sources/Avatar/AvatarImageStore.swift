@@ -27,7 +27,7 @@ final class AvatarImageStore {
     /// 読み込みを待つ期限の時計。テストでは手で進める時計に替える。
     let clock: any Clock<Duration>
 
-    init(clock: any Clock<Duration> = ContinuousClock(), fetch: @escaping Fetch) {
+    init(clock: any Clock<Duration> = AppDependencies.clock, fetch: @escaping Fetch) {
         self.clock = clock
         self.fetch = fetch
         // 120ピクセル四方の止まった画像なら500枚ほど入る大きさ。

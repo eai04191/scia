@@ -506,6 +506,8 @@ private final class SkipEffect: UIView {
     private let background = UIButton(configuration: .clearGlass())
     private let glyph: SkipGlyphView
     private var hideTask: Task<Void, Never>?
+    /// 時間をおく処理の時計。テストでは手で進める時計に差し替える。
+    var clock: any Clock<Duration> = AppDependencies.clock
 
     init(forward: Bool) {
         glyph = SkipGlyphView(forward: forward)
@@ -548,8 +550,8 @@ private final class SkipEffect: UIView {
             self.transform = .identity
         }
         glyph.spin(duration: duration)
-        hideTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(duration))
+        hideTask = Task { [weak self, clock] in
+            try? await clock.sleep(for: .seconds(duration))
             guard let self, !Task.isCancelled else { return }
             UIView.animate(withDuration: 0.15, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]) {
                 self.alpha = 0

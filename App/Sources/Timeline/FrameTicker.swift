@@ -77,7 +77,7 @@ final class DisplayLinkFrameSource: FrameSource {
 private final class DisplayLinkTarget: NSObject {
     let ticker: FrameTicker
     var link: CADisplayLink?
-    private var lastTimestamp = CACurrentMediaTime()
+    private var lastTimestamp = AppDependencies.mediaTime()
 
     init(ticker: FrameTicker) {
         self.ticker = ticker

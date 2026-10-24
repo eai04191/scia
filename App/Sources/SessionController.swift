@@ -36,6 +36,10 @@ final class SessionController {
     /// 各タブで共有する、ストリーミングの接続。
     private let streamingHub: StreamingHub
     private let client: MastodonClient
+    /// 時間をおく処理の時計。テストでは手で進める時計に差し替える。
+    var clock: any Clock<Duration> = AppDependencies.clock
+    /// 編集できるかやミュートの期限を決める今の日付。テストでは決まった日付に差し替える。
+    var now: () -> Date = AppDependencies.now
     /// 429や503で止められたときに、自動の通信を控える。このセッションの通信で共有する。
     private let rateLimit = RateLimitGate()
     /// 使えないと分かった機能を、このセッションの間だけ止める。次の起動では作り直し、もう一度試す。
@@ -949,9 +953,10 @@ final class SessionController {
         let id = UUID()
         let client = client
         let chipDelay = AppDependencies.tuning.value(of: TuningCatalog.profileLookupChipDelay)
+        let clock = clock
         let task = Task { [weak self] in
             let chip = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(chipDelay))
+                try? await clock.sleep(for: .seconds(chipDelay))
                 guard !Task.isCancelled else { return }
                 self?.showProfileLookupProgress()
             }
@@ -1251,8 +1256,9 @@ final class SessionController {
     /// ハッシュタグのメニューのミュート。メニューを開くたびに、自分のフィルターを読んでミュートしているかを決める。
     private var hashtagMuteActions: HashtagMuteActions {
         let client = client
+        let now = now
         return HashtagMuteActions(
-            load: { name in HashtagMute.find(name, in: try await client.filters(), now: Date()) },
+            load: { name in HashtagMute.find(name, in: try await client.filters(), now: now()) },
             mute: { [weak self] name, duration in self?.muteHashtag(name, duration: duration) },
             unmute: { [weak self] name, muted in self?.unmuteHashtag(name, muted) }
         )
@@ -1304,10 +1310,10 @@ final class SessionController {
     /// 期限を付けたハッシュタグのミュートが切れたら、フィルターを読み直し、もうミュートしていなければ、また足すようにする。ユーザーのミュートと同じく、少し余裕を見てから読む。
     private func includeAfterHashtagMuteExpires(_ name: String, duration: Duration) {
         let client = client
-        Task { [weak self] in
-            try? await Task.sleep(for: duration + .seconds(60))
+        Task { [weak self, clock, now] in
+            try? await clock.sleep(for: duration + .seconds(60))
             do {
-                guard HashtagMute.find(name, in: try await client.filters(), now: Date()) == nil else { return }
+                guard HashtagMute.find(name, in: try await client.filters(), now: now()) == nil else { return }
                 self?.excludeInLists(tag: name, excluded: false)
             } catch {
                 self?.logger.error("filters reload after hashtag mute expired failed: \(SciaLog.describe(error), privacy: .public)")
@@ -1479,8 +1485,8 @@ final class SessionController {
     /// Mastodonは期限の時刻に予約したジョブ（`DeleteMuteWorker`）でミュートを消すため、ちょうどの時刻ではまだ残っていることがある。1分おいてから読む。
     private func includeAfterMuteExpires(_ accountID: String, duration: Duration) {
         let client = client
-        Task { [weak self] in
-            try? await Task.sleep(for: duration + .seconds(60))
+        Task { [weak self, clock] in
+            try? await clock.sleep(for: duration + .seconds(60))
             do {
                 guard let relationship = try await client.relationship(with: accountID), !relationship.muting else { return }
                 self?.excludeInLists(relationship)
@@ -1536,7 +1542,7 @@ final class SessionController {
     /// 書きかけの下書きがあれば捨ててよいかを、投票の付いた投稿なら締め切りがずれることを、聞いてから編集を始める。どちらもなければすぐ始める。
     /// 本文を読んでから聞く。先に聞くと、読んでいる間に書いたものを、聞かずに捨ててしまうため。
     private func confirmEditing(_ status: Status, source: StatusSource) {
-        guard status.canBeEdited(now: Date()) else {
+        guard status.canBeEdited(now: now()) else {
             presentPollTooCloseAlert()
             return
         }
@@ -1558,7 +1564,7 @@ final class SessionController {
         alert.addAction(UIAlertAction(title: discards ? "捨てて編集" : "編集", style: discards ? .destructive : .default) { [weak self] _ in
             guard let self else { return }
             // 聞いている間に締め切りが近づいたら、投票なしで送って投票を消さないよう、編集を始めない。
-            if !status.canBeEdited(now: Date()) {
+            if !status.canBeEdited(now: now()) {
                 presentPollTooCloseAlert()
             } else {
                 composer.edit(status, source: source)
@@ -2190,17 +2196,18 @@ final class SessionController {
     /// 確かめるための処理中のチップを、進み具合を刻みながら`duration`のあいだ出し、済んだら消す。出している途中に呼び直したら、初めから数え直す。
     private func showDebugProgress(for duration: Duration) {
         debugProgressTask?.cancel()
-        let start = ContinuousClock.now
+        let elapsed = stopwatch(on: clock)
+        let clock = clock
         // 出し直すたびに別のアプリ内通知にする。しまったあとに出し直しても、出てくるようにするため。
         let id = "debug.progress.\(UUID().uuidString)"
         debugProgressTask = Task { [weak self] in
             while !Task.isCancelled {
-                let fraction = min((ContinuousClock.now - start) / duration, 1)
+                let fraction = min(elapsed() / duration, 1)
                 self?.notices.setPersistent({ _ in
                     Notice(id: id, kind: .progress, title: "確かめるための処理中", value: Notice.percentText(of: fraction), valueIsProgress: true)
                 }, in: .debug)
                 guard fraction < 1 else { break }
-                try? await Task.sleep(for: .milliseconds(500))
+                try? await clock.sleep(for: .milliseconds(500))
             }
             guard !Task.isCancelled else { return }
             self?.notices.setPersistent(nil, in: .debug)

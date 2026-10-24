@@ -202,6 +202,8 @@ enum DeviceModel {
 /// 切り欠きのない画面では、黒い帯を張らず、ステータスバーの文字を入れ替えたように、地を透かしてふだんの文字の色で描く。
 /// 次の通知へは、文字を上へ送って入れ替える。
 final class StatusBarTickerView: UIView {
+    /// 画面の描き換えと同じ時間。テストでは差し替える。
+    var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
     /// 押されたとき。
     var onTap: (() -> Void)?
     /// 出入りの時間。
@@ -451,7 +453,7 @@ final class StatusBarTickerView: UIView {
         let spring = UIKitSpring.make(duration: animationDuration, dampingRatio: dampingRatio)
         let motion = Motion(
             id: UUID(),
-            startTime: CACurrentMediaTime(),
+            startTime: mediaTime(),
             spring: spring,
             fromFrame: fromFrame,
             toFrame: target,
@@ -495,7 +497,7 @@ final class StatusBarTickerView: UIView {
 
     /// 中身を、`motion`の残りの時間、背景の端から余白だけ内側に沿わせる。動き終わったときの位置を、中身の置き場所にする。
     private func follow(_ content: ContentViews, along motion: Motion) {
-        let elapsed = max(CACurrentMediaTime() - motion.startTime, 0)
+        let elapsed = max(mediaTime() - motion.startTime, 0)
         guard elapsed < motion.spring.duration else { return }
         let times = keyframeTimes(from: elapsed, to: motion.spring.duration)
         let placements = times.map { edgeFrames(content, visible: motion.frame(at: CGFloat(motion.spring.progress(at: $0)))) }
@@ -680,7 +682,7 @@ final class StatusBarTickerView: UIView {
             let rects = contentRects(content, in: frame)
             target = String(format: "target L=%.2f R=%.2f y=%.2f", rects.left.minX + frame.minX, rects.right.maxX + frame.minX, rects.left.midY + frame.minY)
         }
-        let line = String(format: "trace t=%.4f bg=%.2f..%.2f y=%.2f..%.2f ", CACurrentMediaTime(), visible.minX, visible.maxX, visible.minY, visible.maxY) + parts.joined(separator: " ") + " " + target
+        let line = String(format: "trace t=%.4f bg=%.2f..%.2f y=%.2f..%.2f ", mediaTime(), visible.minX, visible.maxX, visible.minY, visible.maxY) + parts.joined(separator: " ") + " " + target
         Self.traceLogger.debug("\(line, privacy: .public)")
         return true
     }

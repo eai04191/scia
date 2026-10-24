@@ -14,6 +14,8 @@ import UIKit
 /// 作りが変わって見つからなくなっても、仮の印のまま残るだけで、メニューの操作は変わらない。
 @MainActor
 final class ContextMenuIconSwapper: NSObject {
+    /// 画面の描き換えと同じ時間。テストでは差し替える。
+    var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
     /// 仮の印の資産ごとの、描き替える画像。
     private var icons: [ObjectIdentifier: Entry] = [:]
     private weak var window: UIWindow?
@@ -67,7 +69,7 @@ final class ContextMenuIconSwapper: NSObject {
 
     @objc private func swapVisibleIcons() {
         guard let window, icons.values.contains(where: { $0.icon != nil }) else { return }
-        let start = CACurrentMediaTime()
+        let start = mediaTime()
         var visited = 0
         // メニューはアプリの画面（タブとその中の一覧）の外に重ねて出すため、アプリの画面を包むビューはたどらず、毎コマの手間を減らす。
         let root = window.rootViewController?.view
@@ -77,7 +79,7 @@ final class ContextMenuIconSwapper: NSObject {
         for key in icons.keys where icons[key]?.icon != nil {
             icons[key]?.hasArrived = true
         }
-        let elapsed = CACurrentMediaTime() - start
+        let elapsed = mediaTime() - start
         stats.frames += 1
         stats.totalSeconds += elapsed
         stats.maxSeconds = max(stats.maxSeconds, elapsed)

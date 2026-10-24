@@ -160,7 +160,8 @@ final class AnimatedEmojiOverlay {
 
     /// コマを送るアニメーション。並べた画像の中の、表示する範囲を切り替える。
     /// 始める位置を今の時刻を1周の長さで割った余りにして、同じ長さのアニメーションを揃える。
-    static func frameAnimation(of image: AnimatedImage) -> CAKeyframeAnimation {
+    /// - Parameter mediaTime: 画面の描き換えと同じ時間の、今の時刻。
+    static func frameAnimation(of image: AnimatedImage, mediaTime: CFTimeInterval = AppDependencies.mediaTime()) -> CAKeyframeAnimation {
         let total = image.duration
         var keyTimes: [NSNumber] = [0]
         var elapsed = 0.0
@@ -176,7 +177,7 @@ final class AnimatedEmojiOverlay {
         animation.duration = total
         animation.repeatCount = .infinity
         animation.isRemovedOnCompletion = false
-        animation.timeOffset = CACurrentMediaTime().truncatingRemainder(dividingBy: total)
+        animation.timeOffset = mediaTime.truncatingRemainder(dividingBy: total)
         return animation
     }
 

@@ -26,12 +26,16 @@ final class StatusBarTicker {
     private let tuning: TuningStore
     private var queue: StatusBarTickerQueue<StatusBarTickerItem>
     private var window: TickerWindow?
-    private var shownAt: ContinuousClock.Instant?
+    /// 出し始めてから経った長さ。出していなければnil。
+    private var sinceShown: (@Sendable () -> Duration)?
+    /// 出している長さと、デバッグで出し続ける間合いを数える時計。
+    private let clock: any Clock<Duration>
     private var advanceTask: Task<Void, Never>?
     private let logger = SciaLog.logger(category: "statusBarTicker")
 
-    init(tuning: TuningStore = AppDependencies.tuning) {
+    init(tuning: TuningStore = AppDependencies.tuning, clock: any Clock<Duration> = AppDependencies.clock) {
         self.tuning = tuning
+        self.clock = clock
         queue = StatusBarTickerQueue(timing: TuningCatalog.statusBarTickerTiming(in: tuning))
     }
 
@@ -44,7 +48,7 @@ final class StatusBarTicker {
         guard canShowNow() else { return }
         queue.timing = TuningCatalog.statusBarTickerTiming(in: tuning)
         queue.enqueue(item)
-        if shownAt == nil {
+        if sinceShown == nil {
             advance()
         } else {
             // 出している間に届いたら、待っている数で、今の1件を出しておく時間を測り直す。
@@ -54,7 +58,7 @@ final class StatusBarTicker {
 
     /// 流してよいかが変わったかもしれないとき（タブを切り替えたときなど）に呼ぶ。流してはいけなくなっていたら、待っている通知ごと消す。
     func reevaluate() {
-        guard shownAt != nil, !canShowNow() else { return }
+        guard sinceShown != nil, !canShowNow() else { return }
         clear()
     }
 
@@ -68,7 +72,7 @@ final class StatusBarTicker {
     private func currentCutout() -> StatusBarCutout? {
         // iPadとMacでは、帯をステータスバーの高さで測るが、iPadでは出している間は自分でステータスバーを隠していて高さが0になるため、出し始めに測った形を使う。
         // 出している間にiPadのウィンドウを縮めても、待っている通知を流し終えるまでは同じ形で出す。次に出し始めるときに測り直す。
-        if shownAt != nil, let window, window.traitCollection.userInterfaceIdiom != .phone {
+        if sinceShown != nil, let window, window.traitCollection.userInterfaceIdiom != .phone {
             return window.ticker.cutout
         }
         guard let scene = scene(), let reference = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first else { return nil }
@@ -93,8 +97,8 @@ final class StatusBarTicker {
             return
         }
         logger.info("show kind=\(next.kind.rawValue, privacy: .public) waiting=\(self.queue.waiting.count, privacy: .public)")
-        let wasShowing = shownAt != nil
-        shownAt = .now
+        let wasShowing = sinceShown != nil
+        sinceShown = stopwatch(on: clock)
         window.ticker.animationDuration = tuning.value(of: TuningCatalog.statusBarTickerAnimationDuration)
         if !wasShowing {
             window.isHidden = false
@@ -112,13 +116,14 @@ final class StatusBarTicker {
     }
 
     private func scheduleAdvance() {
-        guard let shownAt else { return }
+        guard let sinceShown else { return }
         advanceTask?.cancel()
-        let deadline = shownAt + .seconds(queue.displayDuration)
+        let duration = Duration.seconds(queue.displayDuration)
+        let clock = clock
         advanceTask = Task { [weak self] in
             // 出している間にビューアを開いたときなど、流してはいけなくなったらすぐ消す。画面を出す口は多く、どれにも知らせを足すより、出している間だけ見張るほうが漏れないため。
-            while ContinuousClock.now < deadline {
-                try? await Task.sleep(for: min(.milliseconds(200), deadline - .now))
+            while sinceShown() < duration {
+                try? await clock.sleep(for: min(.milliseconds(200), duration - sinceShown()))
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
                 if !self.canShowNow() {
@@ -142,18 +147,18 @@ final class StatusBarTicker {
     }
 
     private func dismiss() {
-        guard shownAt != nil, let window else {
-            shownAt = nil
+        guard sinceShown != nil, let window else {
+            sinceShown = nil
             return
         }
-        shownAt = nil
+        sinceShown = nil
         if hidesSystemStatusBar {
             keepSafeArea(whileHiding: false, window: window)
             window.host.hidesStatusBar = false
         }
         window.ticker.hide(animated: true) { [weak self, weak window] in
             // 消している間に次の通知が来て出し直していたら、ウィンドウは隠さない。
-            guard let self, let window, self.shownAt == nil else { return }
+            guard let self, let window, self.sinceShown == nil else { return }
             window.isHidden = true
         }
         if hidesSystemStatusBar {
@@ -175,13 +180,14 @@ final class StatusBarTicker {
         loopTask?.cancel()
         loopTask = nil
         guard isOn, !items.isEmpty else { return }
+        let clock = clock
         loopTask = Task { [weak self] in
             var index = 0
             while !Task.isCancelled {
-                while let self, !Task.isCancelled, self.shownAt != nil || self.window?.isHidden == false {
-                    try? await Task.sleep(for: .milliseconds(50))
+                while let self, !Task.isCancelled, self.sinceShown != nil || self.window?.isHidden == false {
+                    try? await clock.sleep(for: .milliseconds(50))
                 }
-                try? await Task.sleep(for: .seconds(0.8))
+                try? await clock.sleep(for: .seconds(0.8))
                 guard !Task.isCancelled, let self else { return }
                 // バックグラウンドでは出さない。実物の通知はストリーミングを止めるので届かないが、見本は止まらずに出そうとするため。
                 guard self.scene()?.activationState == .foregroundActive else { continue }
@@ -189,7 +195,7 @@ final class StatusBarTicker {
                 index += 1
                 self.receive(StatusBarTickerItem(id: "loop-\(index)", kind: item.kind, account: item.account, subject: item.subject))
                 // 出し始めて、出ている扱いになるのを待つ。通知タブを見ているなどで出せなかったときも、ここで間をおく。
-                try? await Task.sleep(for: .milliseconds(200))
+                try? await clock.sleep(for: .milliseconds(200))
             }
         }
     }

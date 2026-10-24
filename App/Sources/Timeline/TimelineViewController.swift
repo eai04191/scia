@@ -224,7 +224,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var notices: NoticeCenter?
     /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても続けるため、セッションで持つ。
     var mediaTransfers: MediaTransferCenter?
-    private var timeRefreshTimer: Timer?
+    private var timeRefreshTask: Task<Void, Never>?
+    /// 今の日付。テストでは決まった日付に差し替える。
+    var now: () -> Date = AppDependencies.now
+    /// 画面の描き換えと同じ時間。テストでは差し替える。
+    var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
+    /// 時間をおく処理の時計。テストでは手で進める時計に差し替える。
+    var clock: any Clock<Duration> = AppDependencies.clock
     private let texts: Texts
     /// 一覧を一番上から引っぱって離したときに、最新の状態を読む。読み終えるまで更新コントロールを出し続ける。
     /// どの一覧でも同じ操作で読み直せるよう、一覧を持つ側に必ず決めさせる。
@@ -398,25 +404,26 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
-        timeRefreshTimer?.invalidate()
-        timeRefreshTimer = nil
+        timeRefreshTask?.cancel()
+        timeRefreshTask = nil
         onVisibleLinkOnlyCardsChange?([])
         onVisibilityChange?(false)
     }
 
     /// 相対表記の時刻を、表示中の行だけ1秒ごとに書き直す。行の高さは変わらないため、並びは描き直さない。
     private func startRefreshingTimes() {
-        timeRefreshTimer?.invalidate()
-        let timer = Timer(timeInterval: 1, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshVisibleTimes() }
+        timeRefreshTask?.cancel()
+        let clock = clock
+        timeRefreshTask = Task { [weak self] in
+            while (try? await clock.sleep(for: .seconds(1), tolerance: .milliseconds(200))) != nil {
+                guard let self else { return }
+                refreshVisibleTimes()
+            }
         }
-        timer.tolerance = 0.2
-        RunLoop.main.add(timer, forMode: .common)
-        timeRefreshTimer = timer
     }
 
     private func refreshVisibleTimes() {
-        let now = Date.now
+        let now = now()
         refreshVisiblePolls(now: now)
         guard settings.statusTimeStyle == .relative else { return }
         for cell in collectionView.visibleCells {
@@ -1509,7 +1516,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         stopScrollingToTop()
         // 慣性で動いている途中で触れると、前のスクロールは止まりの通知を受けずに終わるため、ここで記録する。
         recordScroll()
-        scrollStart = (scrollView.contentOffset.y, CACurrentMediaTime())
+        scrollStart = (scrollView.contentOffset.y, mediaTime())
         scrollHitches.start()
     }
 
@@ -1523,7 +1530,7 @@ extension TimelineViewController: UICollectionViewDelegate {
             startOffset: start.offset,
             endOffset: collectionView.contentOffset.y,
             viewportHeight: collectionView.bounds.inset(by: collectionView.adjustedContentInset).height,
-            duration: CACurrentMediaTime() - start.time,
+            duration: mediaTime() - start.time,
             hitches: hitches
         )).record()
     }

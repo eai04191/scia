@@ -6,6 +6,8 @@ struct ConnectionStatusView: View {
     let instance: URL
     let diagnostics: ConnectionDiagnostics
     @State private var status: ConnectionDiagnostics.Status?
+    /// 読み直す間隔を数える時計。
+    var clock: any Clock<Duration> = AppDependencies.clock
 
     var body: some View {
         List {
@@ -75,7 +77,7 @@ struct ConnectionStatusView: View {
             // 開いている間も状態は変わるため、読み直し続ける。
             while !Task.isCancelled {
                 status = await diagnostics.status()
-                try? await Task.sleep(for: .seconds(1))
+                try? await clock.sleep(for: .seconds(1))
             }
         }
     }

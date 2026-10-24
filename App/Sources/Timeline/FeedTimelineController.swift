@@ -24,6 +24,8 @@ final class FeedTimelineController {
     private(set) var runningTaskCount = 0
     /// 新着をまとめて挿入する間隔、ポーリング、作り直しの読み直しを待つ時計。テストでは手で進める時計に替える。
     private let clock: any Clock<Duration>
+    /// 補完を終えた日時、新着の届いた日時、ダミーの投稿の日時に使う今の日付。テストでは決まった日付に替える。
+    private let now: () -> Date
     private var isStopped = false
     /// 設定で無効にしている。購読せず、有効に戻したらつなぎ直して、無効だった間を補う。
     private var isDisabled = false
@@ -77,10 +79,12 @@ final class FeedTimelineController {
         client: MastodonClient,
         streamingHub: StreamingHub,
         tuning: TuningStore = AppDependencies.tuning,
-        clock: any Clock<Duration> = ContinuousClock(),
+        clock: any Clock<Duration> = AppDependencies.clock,
+        now: @escaping () -> Date = AppDependencies.now,
         onUnauthorized: @escaping () -> Void
     ) {
         self.clock = clock
+        self.now = now
         let filtering = StatusFiltering(context: feed.filterContext, myAccountID: client.credential.accountID)
         store = TimelineStore(pageSize: Self.pageSize, filtering: filtering) { query in
             try await feed.page(query, from: client)
@@ -350,7 +354,7 @@ final class FeedTimelineController {
             viewController.setEntries(store.entries, placingAtTop: topID)
             updateUnreadCount()
             hasLoadedInitial = true
-            updateCatchUp { $0.finish(at: Date(), isRegenerating: store.isRegenerating) }
+            updateCatchUp { $0.finish(at: now(), isRegenerating: store.isRegenerating) }
             viewController.setContentState(store.isEmpty && store.isRegenerating ? .regenerating : .loaded)
             viewController.setFooterState(store.reachedEnd ? .reachedEnd : .idle)
             logger.info("\(self.feed.name, privacy: .public) loadInitial done count=\(statuses.count, privacy: .public) regenerating=\(self.store.isRegenerating, privacy: .public)")
@@ -432,7 +436,7 @@ final class FeedTimelineController {
                 // 末尾の読み込みが200で終わると、補完の結果は揃っていないのに作り直し中でないことになり、読み直しを予約せず、時刻も進む。
                 // 起きるのは、作り直し中に補完と末尾の読み込みが重なったときだけ。補完ごとの結果を返すようストアを変える必要があり、この表示の範囲を超えるので直していない。
                 // 表示を予約と食い違わせないよう、同じ値を使う。
-                controller.updateCatchUp { $0.finish(at: Date(), isRegenerating: controller.store.isRegenerating) }
+                controller.updateCatchUp { $0.finish(at: controller.now(), isRegenerating: controller.store.isRegenerating) }
                 controller.showPauseAfterFill()
                 controller.logger.info("\(controller.feed.name, privacy: .public) fill done added=\(added.count, privacy: .public) gaps=\(controller.store.gaps.count, privacy: .public) regenerating=\(controller.store.isRegenerating, privacy: .public)")
                 if controller.store.isRegenerating {
@@ -543,7 +547,7 @@ final class FeedTimelineController {
             }
         }
         if case .update = event {
-            arrivalRate.record(at: Date())
+            arrivalRate.record(at: now())
             streamingStatusView.setArrivalRate(arrivalRate)
         }
         apply(store.receive(event))
@@ -857,7 +861,7 @@ extension FeedTimelineController {
         run { controller in
             for (index, post) in posts.enumerated() {
                 guard !controller.isStopped else { return }
-                let base = Self.dummyStatus(number: index + 1, avatar: avatar)
+                let base = Self.dummyStatus(number: index + 1, avatar: avatar, now: controller.now())
                 let dummy = Status(
                     id: base.id,
                     createdAt: base.createdAt,
@@ -880,8 +884,8 @@ extension FeedTimelineController {
         let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
         func poll(_ key: String, multiple: Bool = false, expiresIn: TimeInterval = 86_400, options: [(String, Int?)], votesCount: Int? = nil, votersCount: Int? = nil) -> Poll {
             Poll(
-                id: DummyPolls.idPrefix + key + "-\(UInt64(Date.now.timeIntervalSince1970 * 1000))",
-                expiresAt: .now.addingTimeInterval(expiresIn),
+                id: DummyPolls.idPrefix + key + "-\(UInt64(now().timeIntervalSince1970 * 1000))",
+                expiresAt: now().addingTimeInterval(expiresIn),
                 expired: expiresIn < 0,
                 multiple: multiple,
                 votesCount: votesCount ?? options.compactMap(\.1).reduce(0, +),
@@ -901,7 +905,7 @@ extension FeedTimelineController {
         run { controller in
             for (index, post) in posts.enumerated() {
                 guard !controller.isStopped else { return }
-                let base = Self.dummyStatus(number: index + 1, avatar: avatar)
+                let base = Self.dummyStatus(number: index + 1, avatar: avatar, now: controller.now())
                 let dummy = Status(
                     id: base.id,
                     createdAt: base.createdAt,
@@ -925,7 +929,7 @@ extension FeedTimelineController {
     /// - Parameter sensitive: 閲覧注意の投稿にする。届いたカードの画像を覆うところを確かめる。
     private func streamDummyLinkCard(withImage: Bool, sensitive: Bool = false) {
         let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
-        let base = Self.dummyStatus(number: 1, avatar: avatar)
+        let base = Self.dummyStatus(number: 1, avatar: avatar, now: now())
         guard let link = URL(string: "https://news.example/articles/\(base.id)") else { return }
         let dummy = Status(
             id: base.id,
@@ -961,7 +965,7 @@ extension FeedTimelineController {
         run { controller in
             controller.store.debugLocalOnlyIDs.insert(dummy.id)
             controller.receive(.update(dummy))
-            guard (try? await Task.sleep(for: Self.dummyLinkCardDelay)) != nil, !controller.isStopped else { return }
+            guard (try? await controller.clock.sleep(for: Self.dummyLinkCardDelay)) != nil, !controller.isStopped else { return }
             controller.updateStatus(dummy.id) { $0.adoptingCard(of: carded) }
         }
     }
@@ -970,7 +974,7 @@ extension FeedTimelineController {
     /// リンクカードから囲みに替わるときの動きを、何度でも同じ条件で確かめるため。囲みは、チューニングで出すようにしているときだけ出る。
     private func streamDummyXPost() {
         let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
-        let base = Self.dummyStatus(number: 1, avatar: avatar)
+        let base = Self.dummyStatus(number: 1, avatar: avatar, now: now())
         guard let link = URL(string: "https://x.com/dummy/status/\(base.id)") else { return }
         let dummy = Status(
             id: base.id,
@@ -987,7 +991,7 @@ extension FeedTimelineController {
             authorScreenName: "dummy",
             authorAvatar: avatar,
             text: .plain("5秒後に届いたダミーのXの投稿。4枚の画像を添付している。", emojis: []),
-            createdAt: .now,
+            createdAt: now(),
             media: DummyMedia.attachments(idPrefix: "x-\(base.id)")
         )
         let xPosts = viewController.xPosts
@@ -996,7 +1000,7 @@ extension FeedTimelineController {
         run { controller in
             controller.store.debugLocalOnlyIDs.insert(dummy.id)
             controller.receive(.update(dummy))
-            guard (try? await Task.sleep(for: Self.dummyLinkCardDelay)) != nil, !controller.isStopped else { return }
+            guard (try? await controller.clock.sleep(for: Self.dummyLinkCardDelay)) != nil, !controller.isStopped else { return }
             xPosts?.deliver(post)
         }
     }
@@ -1010,10 +1014,10 @@ extension FeedTimelineController {
         run { controller in
             for number in 1...count {
                 guard !controller.isStopped else { return }
-                let dummy = Self.dummyStatus(number: number, avatar: avatar)
+                let dummy = Self.dummyStatus(number: number, avatar: avatar, now: controller.now())
                 controller.store.debugLocalOnlyIDs.insert(dummy.id)
                 controller.receive(.update(dummy))
-                try? await Task.sleep(for: .milliseconds(300))
+                try? await controller.clock.sleep(for: .milliseconds(300))
             }
         }
     }
@@ -1022,7 +1026,7 @@ extension FeedTimelineController {
     private func streamDummyAnimatedEmojis() {
         let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
         let statuses = (0..<DummyAnimatedEmojis.postCount).map { number in
-            let base = Self.dummyStatus(number: number + 1, avatar: avatar)
+            let base = Self.dummyStatus(number: number + 1, avatar: avatar, now: now())
             let content = DummyAnimatedEmojis.content(number: number)
             return Status(
                 id: base.id,
@@ -1048,7 +1052,7 @@ extension FeedTimelineController {
     /// - Parameter attachments: 投稿のIDを受け取り、添付ファイルを返す。
     private func streamDummyMediaStatus(content: String, attachments: (String) -> [MediaAttachment]) {
         let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
-        let base = Self.dummyStatus(number: 1, avatar: avatar)
+        let base = Self.dummyStatus(number: 1, avatar: avatar, now: now())
         let dummy = Status(
             id: base.id,
             createdAt: base.createdAt,
@@ -1106,12 +1110,12 @@ extension FeedTimelineController {
         "<p>段落が分かれたダミーの新着。</p><p>" + String(repeating: "ストリーミングで新着が流れてきても、読んでいる位置が動かないことを確かめる。", count: 4) + "</p>",
     ]
 
-    private static func dummyStatus(number: Int, avatar: URL) -> Status {
+    private static func dummyStatus(number: Int, avatar: URL, now: Date) -> Status {
         // Mastodonの投稿IDと同じく、ミリ秒の時刻を16ビット左へずらし、下位に連番を入れる。
-        let milliseconds = UInt64(Date.now.timeIntervalSince1970 * 1000)
+        let milliseconds = UInt64(now.timeIntervalSince1970 * 1000)
         return Status(
             id: String(milliseconds << 16 | UInt64(number & 0xFFFF)),
-            createdAt: .now,
+            createdAt: now,
             account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー #\(number)", avatar: avatar),
             content: dummyBodies[number % dummyBodies.count],
             spoilerText: "",
