@@ -4,11 +4,11 @@ import UIKit
 /// 投稿の中身。投稿のセルと通知のセルで同じ部品を使い、どの部品をどう出すかは置く側が決める。
 ///
 /// 上から、注意書き、本文、投票、添付ファイル、リンクカードの順に並べる。引用は、部品ができたらここに足す。
-/// 注意書きで畳んでいる間は、注意書きだけを出す。
+/// 注意書きで折りたたんでいる間は、注意書きだけを出す。
 /// 本文が空なら、本文と添付ファイルのあいだの余白も取らず、添付ファイルを上端から置く。上の行との間隔は置く側が`startsWithMedia`を見て決める。
 struct PostBodyContent {
     struct Spoiler {
-        /// 箱に入れて本文を畳むもの。
+        /// 箱に入れて本文を折りたたむもの。
         enum Kind {
             /// 投稿した人が付けた注意書き。開閉できる。
             case contentWarning
@@ -435,7 +435,7 @@ final class PostBodyView: UIView {
         }
     }
 
-    /// 読み上げる文。注意書きがあれば先に読み、畳んでいる間は本文を読まない。フィルターの注記は別の要素なので含めない。
+    /// 読み上げる文。注意書きがあれば先に読み、折りたたんでいる間は本文を読まない。フィルターの注記は別の要素なので含めない。
     var accessibilityText: String {
         guard let content else { return "" }
         guard let spoiler = content.spoiler else { return content.text.string }

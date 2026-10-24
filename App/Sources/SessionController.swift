@@ -1867,7 +1867,7 @@ final class SessionController {
     }
 
     /// アカウントの設定を読み、注意書きを最初から開いておくかを一覧に反映する。
-    /// 読めなければnilを返す。一覧は注意書きを畳んだままにし、次に投稿欄で書き始めたときに読み直す。
+    /// 読めなければnilを返す。一覧は注意書きを折りたたんだままにし、次に投稿欄で書き始めたときに読み直す。
     @discardableResult
     private func loadPreferences() async -> ServerPreferences? {
         if let preferences { return preferences }

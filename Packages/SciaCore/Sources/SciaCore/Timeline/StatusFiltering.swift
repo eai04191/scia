@@ -12,7 +12,7 @@ public struct StatusFiltering: Sendable, Equatable {
     public let context: FilterResult.Context
     /// 自分のアカウントのID。
     public let myAccountID: String?
-    /// 「隠す」のフィルターに一致した投稿を隠すか。falseなら隠さずに警告で畳む。
+    /// 「隠す」のフィルターに一致した投稿を隠すか。falseなら隠さずに警告で折りたたむ。
     /// ブックマークやお気に入りのように、自分で残した投稿を並べる一覧で使う。公式のWebクライアントと同じ（`warnInsteadOfHide`）。
     public let hidesMatches: Bool
 
@@ -56,7 +56,7 @@ public struct StatusFiltering: Sendable, Equatable {
 public struct FilterVerdict: Sendable, Equatable {
     /// 一覧に出さない。
     public let isHidden: Bool
-    /// 警告で投稿を畳むフィルターの名前。畳まなければ空。
+    /// 警告で投稿を折りたたむフィルターの名前。折りたたまなければ空。
     public let warningTitles: [String]
     /// 添付ファイルをぼかすフィルターの名前。ぼかさなければ空。
     public let mediaTitles: [String]
@@ -66,7 +66,7 @@ public struct FilterVerdict: Sendable, Equatable {
     public static let none = FilterVerdict(isHidden: false, warningTitles: [], mediaTitles: [], ownMatchTitles: [])
 }
 
-/// 一覧で、フィルターの警告で畳んだ投稿のうち、開いたもの。
+/// 一覧で、フィルターの警告で折りたたんだ投稿のうち、開いたもの。
 ///
 /// 開いたら閉じ直さない。公式のWebクライアントと同じく、警告は本文を読むかを一度だけ尋ねるもので、
 /// 注意書き（CW）のように読み返すたびに開閉するものではないため。
@@ -80,7 +80,7 @@ public struct FilterWarnings: Sendable, Equatable {
         self.filtering = filtering
     }
 
-    /// `status`をどう出すか。警告で畳んだ投稿を開いていれば、警告の名前を空にして返す。
+    /// `status`をどう出すか。警告で折りたたんだ投稿を開いていれば、警告の名前を空にして返す。
     public func verdict(for status: Status, now: Date = SystemTime.now()) -> FilterVerdict {
         guard let filtering else { return .none }
         let verdict = filtering.verdict(for: status, now: now)

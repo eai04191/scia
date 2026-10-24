@@ -101,7 +101,7 @@ struct LinkTitlingTests {
         #expect(replacement.range == 3 ..< 21)
     }
 
-    /// 光らせて押した2つ目を置き換える。読んでいる間に前で打たれてずれても、いちばん近いものを選ぶ。
+    /// ハイライトして押した2つ目を置き換える。読んでいる間に前で打たれてずれても、いちばん近いものを選ぶ。
     @Test func replacesOccurrenceNearestToPressedLocation() throws {
         let text = "前に足した https://a.example/ と https://a.example/"
         let replacement = try #require(LinkTitling.replacement(of: "https://a.example/", title: "A", in: text, nearestTo: 20))

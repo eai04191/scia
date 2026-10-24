@@ -41,7 +41,7 @@ struct PostContentViewTests {
     }
 
     /// 本文が1行でアイコンの方が下まで届くときも、本文の文字を引き伸ばさず、余りは行の下の余白に回す。
-    /// UILabelは伸ばされた枠の上下中央に文字を描くため、伸ばすと本文が名前の行から下にずれる。畳んだ注意書きの文字も同じ。
+    /// UILabelは伸ばされた枠の上下中央に文字を描くため、伸ばすと本文が名前の行から下にずれる。折りたたんだ注意書きの文字も同じ。
     @Test(arguments: [false, true])
     func shortBodyIsNotStretchedToAvatarHeight(spoiler: Bool) throws {
         let base = try status(content: "<p>短い本文。Body text</p>")
@@ -253,7 +253,7 @@ struct PostContentViewTests {
         return Status(id: base.id, createdAt: base.createdAt, account: base.account, content: content, spoilerText: "ネタバレ", url: nil)
     }
 
-    /// 畳んでいる間は注意書きだけを出し、開くと本文の分だけ高くなる。
+    /// 折りたたんでいる間は注意書きだけを出し、開くと本文の分だけ高くなる。
     @Test func collapsedSpoilerHidesBody() throws {
         let controller = makeViewController()
         let status = try spoilerStatus()
@@ -266,7 +266,7 @@ struct PostContentViewTests {
         #expect(fittingHeight(of: expanded) > fittingHeight(of: collapsed))
     }
 
-    /// 読み上げでは、畳んでいる間は本文を読まず、本文のリンクも出さない。開閉は要素の操作から行う。
+    /// 読み上げでは、折りたたんでいる間は本文を読まず、本文のリンクも出さない。開閉は要素の操作から行う。
     @Test func collapsedSpoilerReadsOnlyWarning() throws {
         let controller = makeViewController()
         let status = try spoilerStatus()

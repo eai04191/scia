@@ -394,7 +394,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         for section in sections {
             snapshot.appendSections([section.kind])
             if section.kind == .customEmojiStatus {
-                // 読み込み中と失敗で鍵を変え、状態が変わったら描き直させる。
+                // 読み込み中と失敗でキーを変え、状態が変わったら描き直させる。
                 let key = switch customStatus { case .failed(let message): "failed:\(message)"; case .loading, nil: "loading" }
                 snapshot.appendItems([Item(section: section.kind, key: key)], toSection: section.kind)
                 continue

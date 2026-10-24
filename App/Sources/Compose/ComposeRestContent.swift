@@ -63,12 +63,12 @@ final class ComposeRestContent: UIView {
 /// アイコンのように見えないよう、白いフチを付けた紙焼きの写真に見立て、2枚目は1枚目の下に重ねる。
 /// 手で置いた写真らしく、1枚目も真っすぐにはせず、2枚目と逆の向きにわずかに回す。
 /// 3枚目は、2枚だけが置かれて見える不自然さをなくすためのもので、いちばん下に置き、1枚目の左上側から、2枚目と逆の向きに回してのぞかせる。
-/// 2枚目と同じ右側からのぞかせると、縁がほぼ平行に並んでずれて見え、束の形も右へ偏るため。
+/// 2枚目と同じ右側からのぞかせると、縁がほぼ平行に並んでずれて見え、スタックの形も右へ偏るため。
 /// 4枚目より後ろは3枚目の下に隠れているものとし、枚数のバッジは付けない。添付がないか、1枚か、それより多いかが分かれば足りるため。
 /// 送れなかった添付があるときだけ、エラーのアイコンを付ける。
 /// 角度と影の濃さは好みで決まるので、チューニングの値で決める。
 ///
-/// 影は、写真の束がカプセルの面に落とす影と、上の写真が下の写真に落とす影の2つに分ける。写真ごとに影を付けると、
+/// 影は、写真のスタックがカプセルの面に落とす影と、上の写真が下の写真に落とす影の2つに分ける。写真ごとに影を付けると、
 /// 重なったところで影が二重に濃くなり、写真の上に落ちる影もカプセルの面に落ちる影と同じ広さになるため。
 @MainActor
 final class ComposeRestThumbnails: UIView {
@@ -95,7 +95,7 @@ final class ComposeRestThumbnails: UIView {
         }
     }
 
-    /// 写真の束がカプセルの面に落とす影。重ねた写真の輪郭を合わせた形で、影を1つだけ落とす。
+    /// 写真のスタックがカプセルの面に落とす影。重ねた写真の輪郭を合わせた形で、影を1つだけ落とす。
     private let stackShadow = UIView()
     /// 手前の1枚。1枚目の添付。
     let front = ComposeRestPhoto()
@@ -198,7 +198,7 @@ final class ComposeRestThumbnails: UIView {
         setNeedsLayout()
     }
 
-    /// 写真の束がカプセルの面に落とす影の濃さ。開閉で動かす複製の影も、カプセルに着くときにこの濃さにする。
+    /// 写真のスタックがカプセルの面に落とす影の濃さ。開閉で動かす複製の影も、カプセルに着くときにこの濃さにする。
     static func stackShadowOpacity(in tuning: TuningStore) -> Float {
         Float(tuning.value(of: TuningCatalog.composeStackShadowOpacity))
     }
@@ -232,7 +232,7 @@ final class ComposeRestThumbnails: UIView {
         return nil
     }
 
-    /// 開閉で写真を隠している間は、束の影も隠す。動かす複製がまとめて影を落とすため。
+    /// 開閉で写真を隠している間は、スタックの影も隠す。動かす複製がまとめて影を落とすため。
     func setStackShadowConcealed(_ concealed: Bool) {
         stackShadow.alpha = concealed ? 0 : 1
     }
@@ -244,7 +244,7 @@ final class ComposeRestThumbnails: UIView {
         }
     }
 
-    /// 見えている写真の、1枚目の中心から見た左右の端。回した写真の角も含める。束の幅はこの間にし、1枚目を左端からこの分だけ右に置く。
+    /// 見えている写真の、1枚目の中心から見た左右の端。回した写真の角も含める。スタックの幅はこの間にし、1枚目を左端からこの分だけ右に置く。
     private var horizontalExtent: (minX: CGFloat, maxX: CGFloat) {
         let half = photoSide / 2
         var placements = [(offset: CGFloat(0), rotation: frontRotation)]
@@ -280,7 +280,7 @@ final class ComposeRestThumbnails: UIView {
         layoutShadows()
     }
 
-    /// 束の影は見えている写真の輪郭を合わせた形で、写真同士の影は、下の写真の中に、それより上の写真の輪郭で落とす。
+    /// スタックの影は見えている写真の輪郭を合わせた形で、写真同士の影は、下の写真の中に、それより上の写真の輪郭で落とす。
     private func layoutShadows() {
         let stacked = [front, back, third].filter { !$0.isHidden }
         stackShadow.frame = bounds
@@ -299,7 +299,7 @@ final class ComposeRestThumbnails: UIView {
             for upper in above {
                 outline.append(self.outline(of: upper))
             }
-            // 束の中の位置から、下の写真の中の位置へ移す。
+            // スタックの中の位置から、下の写真の中の位置へ移す。
             let toPhoto = CGAffineTransform(translationX: -photo.center.x, y: -photo.center.y)
                 .concatenating(photo.transform.inverted())
                 .concatenating(CGAffineTransform(translationX: photo.bounds.width / 2, y: photo.bounds.height / 2))
@@ -308,7 +308,7 @@ final class ComposeRestThumbnails: UIView {
         }
     }
 
-    /// 写真の輪郭を、束の中の位置で返す。
+    /// 写真の輪郭を、スタックの中の位置で返す。
     private func outline(of photo: UIView) -> UIBezierPath {
         let size = photo.bounds.size
         let path = UIBezierPath(roundedRect: CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height), cornerRadius: ComposeRestPhoto.cornerRadius)
@@ -318,9 +318,9 @@ final class ComposeRestThumbnails: UIView {
     }
 }
 
-/// カプセルに重ねた写真の影の形。写真は薄いので、写真同士の影は、束がカプセルの面に落とす影より近く、ぼかしも小さい。
+/// カプセルに重ねた写真の影の形。写真は薄いので、写真同士の影は、スタックがカプセルの面に落とす影より近く、ぼかしも小さい。
 enum ComposeRestShadow {
-    /// 写真の束がカプセルの面に落とす影。
+    /// 写真のスタックがカプセルの面に落とす影。
     static func castStack(on layer: CALayer, opacity: Float) {
         layer.shadowColor = UIColor.black.cgColor
         layer.shadowOpacity = opacity

@@ -3,12 +3,12 @@ import SciaCore
 import UIKit
 
 /// 投稿欄でリンクにタイトルを付けるときに、本文の上に重ねる見た目。決まりはdocs/compose.mdの「リンクにタイトルを付ける」にある。
-/// 選ばせる間はURLを光らせ、読んでいる間はURLの上にきらめきを流し、置き換えるときはURLを動かしてタイトルを浮かび上がらせる。
+/// 選ばせる間はURLをハイライトし、読んでいる間はURLの上にきらめきを流し、置き換えるときはURLを動かしてタイトルを浮かび上がらせる。
 ///
 /// 重ねるビューは入力欄の子にし、中身と一緒にスクロールさせる。変形の間は、本文の文字色を一時的に透明にして、本物の文字を隠す。
 @MainActor
 final class LinkTitleEffects {
-    /// 光っているURLを押した。
+    /// ハイライトしているURLを押した。
     var onSelect: (LinkOccurrence) -> Void = { _ in }
 
     private weak var textView: UITextView?
@@ -16,7 +16,7 @@ final class LinkTitleEffects {
     private let logger = SciaLog.logger(category: "compose")
     /// 選ばせているURL。幅が変わったときに、枠を並べ直すために持つ。
     private var selecting: [LinkOccurrence] = []
-    /// 選ばせている間に光らせている枠。URLが折り返していれば、1つのURLに行の数だけある。
+    /// 選ばせている間にハイライトしている枠。URLが折り返していれば、1つのURLに行の数だけある。
     private var highlights: [UIView] = []
     private var loadings: [UUID: Loading] = [:]
     private var morph: UIViewPropertyAnimator?
@@ -33,7 +33,7 @@ final class LinkTitleEffects {
 
     var isSelecting: Bool { !highlights.isEmpty }
 
-    /// 入力欄の中の座標`point`にある、光らせているURLの枠。
+    /// 入力欄の中の座標`point`にある、ハイライトしているURLの枠。
     func highlight(at point: CGPoint) -> UIView? {
         highlights.first { $0.isUserInteractionEnabled && $0.frame.contains(point) }
     }
@@ -118,7 +118,7 @@ final class LinkTitleEffects {
 
     // MARK: - 本文や欄が変わったとき
 
-    /// 使う人が打つなどして本文が変わった。光らせるのをやめ、変形をすぐ終わりの形にし、読んでいるURLのきらめきを今の場所へ移す。
+    /// 使う人が打つなどして本文が変わった。ハイライトするのをやめ、変形をすぐ終わりの形にし、読んでいるURLのきらめきを今の場所へ移す。
     func textDidChange(_ text: String) {
         endSelecting(reason: "text")
         finishMorph()

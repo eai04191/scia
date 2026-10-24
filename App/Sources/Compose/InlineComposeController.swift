@@ -765,7 +765,7 @@ final class InlineComposeController: NSObject {
         return effects
     }()
 
-    /// 本文のURLを光らせて選ばせる。光らせている間に押したら、やめる。URLが1つだけなら、選ばせずに読み始める。
+    /// 本文のURLをハイライトして選ばせる。ハイライトしている間に押したら、やめる。URLが1つだけなら、選ばせずに読み始める。
     private func toggleLinkSelection() {
         guard !linkTitleEffects.isSelecting else {
             linkTitleEffects.endSelecting(reason: "toggled")
@@ -1431,7 +1431,7 @@ final class InlineComposeController: NSObject {
         if animatesFlights {
             // カプセルで重ねているとおり、後ろの添付ほど下に、1枚目をその上に、ラベルのアイコンをいちばん上に重ねて動かす。
             let order = model.attachments.reversed().map { ComposeMorphFlights.Key.attachment($0.id) } + [.chip]
-            // 開くときはカプセルの写真の束の影から、閉じるときは影のない列の写真から動き始める。
+            // 開くときはカプセルの写真のスタックの影から、閉じるときは影のない列の写真から動き始める。
             let stackShadow = editing ? ComposeRestThumbnails.stackShadowOpacity(in: tuning) : 0
             morphFlights.takeOff(from: morphEnds(editing: !editing), stackingOrder: order, stackShadowOpacity: stackShadow)
         }
@@ -2337,7 +2337,7 @@ final class InlineComposeController: NSObject {
         }
         textView.onSubmit = { [weak self] in self?.submit() }
         // 回転やウィンドウの幅の変化で折り返す行の数が変わると、広げている間の本文の高さが合わなくなるため、測り直す。
-        // 折り返し直されるので、光らせたURLの枠やきらめきも並べ直す。
+        // 折り返し直されるので、ハイライトしたURLの枠やきらめきも並べ直す。
         textView.onWidthChange = { [weak self] in
             self?.textDidChange()
             self?.linkTitleEffects.layoutDidChange()
@@ -2481,7 +2481,7 @@ extension InlineComposeController: UITextViewDelegate {
     }
 
     func textViewDidChangeSelection(_ textView: UITextView) {
-        // 光らせている間に、光っていない場所を押してカーソルを動かしたら、光らせるのをやめる。
+        // ハイライトしている間に、ハイライトしていない場所を押してカーソルを動かしたら、ハイライトするのをやめる。
         if !isReplacingLink {
             linkTitleEffects.endSelecting(reason: "selection")
         }
@@ -2674,7 +2674,7 @@ private final class ComposeTextView: GlyphLanguageTextView {
         }
     }
     var completionKeys = CompletionKeys()
-    /// 入力欄の中の座標にある、入力欄の上に重ねて押させている部品（光らせたURLなど）。
+    /// 入力欄の中の座標にある、入力欄の上に重ねて押させている部品（ハイライトしたURLなど）。
     var overlayControl: (CGPoint) -> UIView? = { _ in nil }
     /// クリップボードのメディアを添付できるか。
     var canPasteMedia: () -> Bool = { false }
@@ -2687,7 +2687,7 @@ private final class ComposeTextView: GlyphLanguageTextView {
     }
 
     /// 重ねた部品の上では、カーソルを動かすなどの入力欄のジェスチャーを始めさせない。始めさせると、部品より先に押した操作を受け取り、部品が押されなかった。
-    /// スクロールは止めない。光らせたURLが欄を埋めていても、欄の外のURLへスクロールして選べるようにするため。
+    /// スクロールは止めない。ハイライトしたURLが欄を埋めていても、欄の外のURLへスクロールして選べるようにするため。
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard gestureRecognizer === panGestureRecognizer || overlayControl(gestureRecognizer.location(in: self)) == nil else { return false }
         return super.gestureRecognizerShouldBegin(gestureRecognizer)

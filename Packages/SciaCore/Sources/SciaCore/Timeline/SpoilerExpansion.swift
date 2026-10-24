@@ -11,7 +11,7 @@ public struct SpoilerExpansion: Sendable, Equatable {
         self.expandsByDefault = expandsByDefault
     }
 
-    /// 本文を畳んでいるか。注意書きのない投稿は畳まない。ブーストなら元の投稿で決める。
+    /// 本文を折りたたんでいるか。注意書きのない投稿は折りたたまない。ブーストなら元の投稿で決める。
     public func isCollapsed(_ status: Status) -> Bool {
         let shown = status.displayed
         guard !shown.spoilerText.isEmpty else { return false }

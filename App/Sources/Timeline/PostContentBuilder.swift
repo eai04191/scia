@@ -123,7 +123,7 @@ struct PostContentBuilder {
         font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
     }
 
-    /// 投稿の本文。注意書きがあっても本文を返し、畳むかどうかは`spoiler(of:base:color:)`で決める。
+    /// 投稿の本文。注意書きがあっても本文を返し、折りたたむかどうかは`spoiler(of:base:color:)`で決める。
     /// 文字の大きさは標準のリストの2行目の文字に揃え、色は読むものなのでいちばん濃い色を既定にする。
     /// 引用ブロックは、RichTextRendererがこれより一段薄く描く。
     func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> NSAttributedString {
@@ -166,7 +166,7 @@ struct PostContentBuilder {
         )
     }
 
-    /// 投稿の注意書き。注意書きがなければnil。開いているかは一覧が覚えているため、ここでは畳んだ形で返す。
+    /// 投稿の注意書き。注意書きがなければnil。開いているかは一覧が覚えているため、ここでは折りたたんだ形で返す。
     func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> PostBodyContent.Spoiler? {
         guard !status.spoilerText.isEmpty else { return nil }
         return PostBodyContent.Spoiler(
@@ -192,7 +192,7 @@ struct PostContentBuilder {
         )
     }
 
-    /// 自分の投稿が、自分のフィルターに一致していることを示す1行。投稿は畳まないので、目立たせず、本文より小さく控えめな色で描く。
+    /// 自分の投稿が、自分のフィルターに一致していることを示す1行。投稿は折りたたまないので、目立たせず、本文より小さく控えめな色で描く。
     func ownFilterNote(titles: [String]) -> NSAttributedString {
         let font = UIFont.preferredFont(forTextStyle: .footnote)
         let text = NSMutableAttributedString()

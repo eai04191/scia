@@ -8,7 +8,7 @@ public enum LinkTitling {
         return StatusURLs.ranges(in: text).map { String(text[$0]) }.filter { seen.insert(Array($0.utf8)).inserted }
     }
 
-    /// 本文に出てくるURLの1つ1つ。同じURLが2回あれば、2つとも並べる。光らせて選ばせるときに、押した場所を置き換えるため。
+    /// 本文に出てくるURLの1つ1つ。同じURLが2回あれば、2つとも並べる。ハイライトして選ばせるときに、押した場所を置き換えるため。
     public static func occurrences(in text: String) -> [LinkOccurrence] {
         StatusURLs.ranges(in: text).map { range in
             let start = text.utf16.distance(from: text.startIndex, to: range.lowerBound)

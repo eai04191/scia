@@ -976,7 +976,7 @@ public enum TuningCatalog {
         defaultValue: 1
     )
 
-    /// カプセルに重ねた写真のうち、1枚目の左上側からのぞかせる3枚目を回す角度（度）。正の値で右回り。2枚目と逆の向きにして、束の左右の釣り合いを取る。
+    /// カプセルに重ねた写真のうち、1枚目の左上側からのぞかせる3枚目を回す角度（度）。正の値で右回り。2枚目と逆の向きにして、スタックの左右の釣り合いを取る。
     public static let composeStackThirdRotation = NumberTuning(
         id: "compose.stackThirdAngle",
         title: "カプセルの3枚目の写真の角度（度）",
@@ -1046,10 +1046,10 @@ public enum TuningCatalog {
         defaultValue: 2500
     )
 
-    /// カプセルに重ねた写真の束が、カプセルの面に落とす影の濃さ。
+    /// カプセルに重ねた写真のスタックが、カプセルの面に落とす影の濃さ。
     public static let composeStackShadowOpacity = NumberTuning(
         id: "compose.stackShadowOpacity",
-        title: "カプセルの写真の束が背景に落とす影の濃さ",
+        title: "カプセルの写真のスタックが背景に落とす影の濃さ",
         range: 0...0.6,
         step: 0.01,
         defaultValue: 0.15

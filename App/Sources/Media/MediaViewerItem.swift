@@ -6,7 +6,7 @@ import UIKit
 /// 手元のメディアを、手元のファイルのURLで作った偽の`MediaAttachment`にしない。IDがサーバーのものと混ざり、
 /// `MediaImageStore`が手元のファイルをキャッシュにコピーし、共有と保存が一時ファイルに効いてしまうため。
 struct MediaViewerItem {
-    /// 開閉の起点のサムネイルを探す鍵。投稿の添付ファイルはそのID、手元のメディアは下書きの添付のID。
+    /// 開閉の起点のサムネイルを探すキー。投稿の添付ファイルはそのID、手元のメディアは下書きの添付のID。
     let id: String
     let kind: MediaAttachment.Kind
     /// 幅を高さで割った値。分からなければnil。

@@ -312,7 +312,7 @@ private final class ScriptedConnection: WebSocketConnection {
             state.pings += 1
             let answers = state.pings <= state.script.answeredPings
             if !answers {
-                // 閉じるときの減らし方と順序がずれないよう、接続の状態と同じ鍵の中で数える。
+                // 閉じるときの減らし方と順序がずれないよう、接続の状態と同じロックの中で数える。
                 state.unansweredPings += 1
                 onUnansweredPings(1)
             }

@@ -249,7 +249,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onChangeMediaCovers: ((MediaCovers, Status) -> Void)?
     /// fxtwitterから読んだXの投稿。セッションの中で1つを共有する。
     var xPosts: XPostStore?
-    /// この一覧で当てるサーバーのフィルターと、警告で畳んだ投稿のうち開いたもの。一覧を持つ側が、一覧の場所に合わせて入れる。
+    /// この一覧で当てるサーバーのフィルターと、警告で折りたたんだ投稿のうち開いたもの。一覧を持つ側が、一覧の場所に合わせて入れる。
     var filterWarnings = FilterWarnings()
     /// 投票する前に選んでいる選択肢と、結果を見ると選んだ投票、送っている途中の投票。
     var pollChoices = PollChoices()
@@ -1402,7 +1402,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return configuration
     }
 
-    /// 注意書きの本文を開閉する。フィルターの警告で畳んでいれば、注意書きの代わりに警告を開く。同じ投稿をブーストした行と通知の行もまとめて描き直す。
+    /// 注意書きの本文を開閉する。フィルターの警告で折りたたんでいれば、注意書きの代わりに警告を開く。同じ投稿をブーストした行と通知の行もまとめて描き直す。
     /// 行の高さが変わるため、押した行の画面上の位置を保つ。同じ投稿の行が上にも並んでいると、その行も伸び縮みするため、
     /// 表示領域の上端の行を基準にすると、押した行がずれる。
     /// - Parameter anchorID: 押した行。なければ、表示領域の上端にかかっている行を基準にする。
@@ -1427,7 +1427,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 注意書き。開いているかは、この一覧で覚えている状態を当てる。ブーストなら元の投稿の注意書きにする。
-    /// フィルターの警告で畳んでいれば、注意書きの代わりに警告を出す。警告を開くと、注意書きのある投稿は注意書きで畳んだ形に戻る。
+    /// フィルターの警告で折りたたんでいれば、注意書きの代わりに警告を出す。警告を開くと、注意書きのある投稿は注意書きで折りたたんだ形に戻る。
     func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> PostBodyContent.Spoiler? {
         let warningTitles = filterWarnings.verdict(for: status).warningTitles
         guard warningTitles.isEmpty else { return postContentBuilder.filterWarning(titles: warningTitles, base: base) }

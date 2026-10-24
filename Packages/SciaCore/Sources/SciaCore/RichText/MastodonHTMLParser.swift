@@ -247,7 +247,7 @@ private struct Builder {
         }
     }
 
-    /// HTMLで折り畳む空白。全角スペースなどはここに含めず、そのまま残す。
+    /// HTMLで1つにまとめる空白。全角スペースなどはここに含めず、そのまま残す。
     private static let collapsibleWhitespace: Set<Character> = [" ", "\t", "\n", "\r", "\r\n", "\u{0C}"]
 
     /// ブラウザと同じく、<pre>の外では連続する空白と改行を1つの空白にまとめる。

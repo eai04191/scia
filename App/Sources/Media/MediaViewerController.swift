@@ -1582,8 +1582,8 @@ final class ImagePageController: MediaPageController {
         return transcript
     }
 
-    /// 読み取った文字やコードを光らせて、どこにあるかを見せる状態を切り替える。読み取れるものがなければnil。
-    /// Live Textのボタンは画像に重なって見る邪魔になるため出さず、この項目で代える。光らせなくても、文字やコードは長押しで選べる。
+    /// 読み取った文字やコードをハイライトして、どこにあるかを見せる状態を切り替える。読み取れるものがなければnil。
+    /// Live Textのボタンは画像に重なって見る邪魔になるため出さず、この項目で代える。ハイライトしなくても、文字やコードは長押しで選べる。
     func liveTextMenuAction() -> UIAction? {
         guard liveText.analysis?.hasResults(for: [.text, .machineReadableCode]) == true else { return nil }
         return UIAction(title: "画像の文字を選択", image: UIImage(systemName: "text.viewfinder"), state: liveText.selectableItemsHighlighted ? .on : .off) { [weak self] _ in

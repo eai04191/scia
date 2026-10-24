@@ -19,12 +19,12 @@ enum PostRowCatalog {
     static func postStates() -> [CatalogState] {
         let home = TimelineViewController(texts: .home, refresh: {})
         home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
-        // カタログのアカウントを自分として組む一覧。自分の投稿は、フィルターに一致しても畳まずに注記を出す。
+        // カタログのアカウントを自分として組む一覧。自分の投稿は、フィルターに一致しても折りたたまずに注記を出す。
         let mine = TimelineViewController(texts: .home, refresh: {})
         mine.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: author.id))
         mine.myAccountID = author.id
         /// - Parameters:
-        ///   - expandsSpoiler: 注意書きを開く。フィルターの警告で畳んでいれば、警告を開く。
+        ///   - expandsSpoiler: 注意書きを開く。フィルターの警告で折りたたんでいれば、警告を開く。
         ///   - isMine: カタログのアカウントを自分として組む。
         ///   - connection: 隣の行と線でつながっている形にする。
         func post(_ title: String, _ status: Status, isPinned: Bool = false, expandsSpoiler: Bool = false, isMine: Bool = false, connection: ReplyConnection = ReplyConnection()) -> CatalogState {
@@ -73,23 +73,23 @@ enum PostRowCatalog {
                 Fixtures.attachment("a", width: 1_600, height: 900, color: .systemTeal),
             ], sensitive: true), expandsSpoiler: true),
             post("ブーストされた注意書き（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", rebloggedBy: booster)),
-            post("フィルターの警告", status(content: "<p>警告で畳んだ本文。</p>", filtered: [filter("ネタバレ", .warn)])),
-            post("フィルターの警告（名前が長い、2つに一致した）", status(content: "<p>警告で畳んだ本文。</p>", filtered: [filter(longFilterTitle, .warn), filter("ネタバレ", .warn)])),
+            post("フィルターの警告", status(content: "<p>警告で折りたたんだ本文。</p>", filtered: [filter("ネタバレ", .warn)])),
+            post("フィルターの警告（名前が長い、2つに一致した）", status(content: "<p>警告で折りたたんだ本文。</p>", filtered: [filter(longFilterTitle, .warn), filter("ネタバレ", .warn)])),
             post("フィルターの警告と画像とリンクカード（どれも出さない）", status(
-                content: #"<p>警告で畳んだ本文。<a href="https://news.example/articles/1">news.example/articles/1</a></p>"#,
+                content: #"<p>警告で折りたたんだ本文。<a href="https://news.example/articles/1">news.example/articles/1</a></p>"#,
                 media: [Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange)],
                 filtered: [filter("ネタバレ", .warn)]
             )),
             post("フィルターの警告と注意書き（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)])),
             post("フィルターの警告と注意書き（警告を開いた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", filtered: [filter("ネタバレ", .warn)]), expandsSpoiler: true),
-            post("ブーストされたフィルターの警告", status(content: "<p>警告で畳んだ本文。</p>", filtered: [filter("ネタバレ", .warn)], rebloggedBy: booster)),
+            post("ブーストされたフィルターの警告", status(content: "<p>警告で折りたたんだ本文。</p>", filtered: [filter("ネタバレ", .warn)], rebloggedBy: booster)),
             post("フィルターで画像をぼかす", status(content: "<p>フィルターで画像をぼかした投稿。</p>", media: [
                 Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
             ], filtered: [filter("ネタバレ", .blur)])),
             post("フィルターで画像をぼかす（閲覧注意も付いた、名前が長い）", status(content: "<p>フィルターで画像をぼかした投稿。</p>", media: [
                 Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
             ], sensitive: true, filtered: [filter(longFilterTitle, .blur)])),
-            post("自分の投稿がフィルターに一致した（畳まずに注記を出す）", status(content: "<p>フィルターした話題に自分で触れた投稿。</p>", filtered: [filter("ネタバレ", .hide)]), isMine: true),
+            post("自分の投稿がフィルターに一致した（折りたたまずに注記を出す）", status(content: "<p>フィルターした話題に自分で触れた投稿。</p>", filtered: [filter("ネタバレ", .hide)]), isMine: true),
             post("自分の投稿が複数のフィルターに一致した（名前が長い、画像つき）", status(content: "<p>フィルターした話題に自分で触れた投稿。</p>", media: [
                 Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
             ], filtered: [filter(longFilterTitle, .warn), filter("画像", .blur)]), isMine: true),
@@ -251,7 +251,7 @@ enum PostRowCatalog {
             row("お気に入り（注意書き、閉じた）", .favourite, status: status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ")),
             row("お気に入り（注意書き、開いた）", .favourite, status: status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ"), expandsSpoiler: true),
             row("メンション（注意書き、閉じた）", .mention, status: status(content: "<p>@me 注意書きの下の本文。</p>", account: booster, spoilerText: "ネタバレ")),
-            row("メンション（フィルターの警告）", .mention, status: status(content: "<p>@me 警告で畳んだ本文。</p>", account: booster, filtered: [filter("ネタバレ", .warn, context: [.notifications])])),
+            row("メンション（フィルターの警告）", .mention, status: status(content: "<p>@me 警告で折りたたんだ本文。</p>", account: booster, filtered: [filter("ネタバレ", .warn, context: [.notifications])])),
             row("投稿の通知（フィルターで画像をぼかす）", .status, status: status(content: "<p>フィルターで画像をぼかした投稿。</p>", account: booster, media: [
                 Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
             ], filtered: [filter("ネタバレ", .blur, context: [.notifications])])),

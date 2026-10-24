@@ -84,7 +84,7 @@ public final class AppSettings {
         didSet { defaults.set(reblogVisibility.rawValue, forKey: Keys.reblogVisibility) }
     }
 
-    /// アカウントごとのタブの並び。鍵はアカウントのハンドル。保存していないアカウントは既定の並びを使う。
+    /// アカウントごとのタブの並び。キーはアカウントのハンドル。保存していないアカウントは既定の並びを使う。
     public private(set) var tabLayouts: [String: MenuLayout<TabItem>] {
         didSet { defaults.set(tabLayouts.mapValues(\.tokens), forKey: Keys.tabLayouts) }
     }
@@ -98,7 +98,7 @@ public final class AppSettings {
         tabLayouts[account] = layout
     }
 
-    /// アカウントごとの、切り替えタブで最後に開いた項目。鍵はアカウントのハンドル。
+    /// アカウントごとの、切り替えタブで最後に開いた項目。キーはアカウントのハンドル。
     /// 開くたびに書くので、ほかの設定と違って変更を購読させない。
     @ObservationIgnored private var switchTabItems: [String: TabItem] {
         didSet { defaults.set(switchTabItems.mapValues(\.rawValue), forKey: Keys.switchTabItems) }

@@ -5,7 +5,7 @@ public enum PaletteEmoji: Hashable, Sendable {
     case custom(ServerEmoji)
     case standard(StandardEmoji)
 
-    /// 最近使った絵文字として覚えるときの鍵。カスタム絵文字はショートコード、Unicodeの絵文字は絵文字そのもの。
+    /// 最近使った絵文字として覚えるときのキー。カスタム絵文字はショートコード、Unicodeの絵文字は絵文字そのもの。
     /// ショートコードは英数字と`_`だけなので、絵文字と取り違えない。
     public var recentKey: String {
         switch self {
@@ -101,7 +101,7 @@ public final class RecentEmojis {
         key = "compose.recentEmojis.\(instance.host() ?? instance.absoluteString)"
     }
 
-    /// 新しい順の鍵。
+    /// 新しい順のキー。
     public var keys: [String] {
         defaults.stringArray(forKey: key) ?? []
     }

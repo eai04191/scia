@@ -7,7 +7,7 @@ import UIKit
 /// 両方の端の本物を隠し、バーの上に重ねた複製を、行を入れ替えるのと同じアニメーションの中で動かす。
 /// 複製はバーの中に置くので、キーボードに乗ってバーごと動いても、バーの中の位置だけを動かせばよい。
 /// カプセルの写真は白いフチが付いて回っているので、複製も大きさ、回転、フチの幅、角の丸みを一緒に移す。
-/// カプセルの写真の束は、輪郭を合わせた形で影を1つだけ落とす。動いている複製は束の形が崩れていくので、写真の複製をまとめて1つの入れ物に入れ、
+/// カプセルの写真のスタックは、輪郭を合わせた形で影を1つだけ落とす。動いている複製はスタックの形が崩れていくので、写真の複製をまとめて1つの入れ物に入れ、
 /// 入れ物の影として、動いている途中の形のまま描く。写真同士の影は、動いている間は描かない。
 @MainActor
 final class ComposeMorphFlights {
@@ -45,7 +45,7 @@ final class ComposeMorphFlights {
     }
 
     private let container: UIView
-    /// 写真の複製をまとめる入れ物。中の複製を合わせた形で、カプセルの写真の束と同じ影を落とす。
+    /// 写真の複製をまとめる入れ物。中の複製を合わせた形で、カプセルの写真のスタックと同じ影を落とす。
     /// 動いている間は画面の外で描き直すことになるので、動いていないときは影を消す。
     private lazy var shadowGroup: UIView = {
         let group = UIView(frame: container.bounds)
@@ -65,7 +65,7 @@ final class ComposeMorphFlights {
 
     /// 起点の本物を隠し、同じ位置に複製を置く。動かしている途中の複製があれば、そのとき見えている位置から向かい直す。
     /// 行を入れ替える前に呼ぶ。複製は`order`の順に、後ろのものほど手前に重ねる。
-    /// `stackShadowOpacity`は、起点で写真の束が落としている影の濃さ。動いている途中なら、見えている濃さから向かい直す。
+    /// `stackShadowOpacity`は、起点で写真のスタックが落としている影の濃さ。動いている途中なら、見えている濃さから向かい直す。
     func takeOff(from sources: [Key: End], stackingOrder order: [Key], stackShadowOpacity: Float) {
         let groupLayer = shadowGroup.layer
         if flights.isEmpty {
@@ -107,7 +107,7 @@ final class ComposeMorphFlights {
     /// 複製を行き先の本物の位置へ動かし、行き先の本物を隠す。行き先のない複製は、薄くして消す。
     /// 行を入れ替えて並べ直したあと、同じアニメーションの中で呼ぶ。返した値を`finish`に渡す。
     /// `delays`にある複製は、その時間だけ遅らせて、`delayedAnimation`が返すアニメーションで動かす。遅らせた複製も、ほかと同じ時刻に着かせる。
-    /// 写真の束の影は、`duration`の間に`stackShadowOpacity`（カプセルに着くなら束の影の濃さ、列に着くなら0）へ向かわせる。
+    /// 写真のスタックの影は、`duration`の間に`stackShadowOpacity`（カプセルに着くならスタックの影の濃さ、列に着くなら0）へ向かわせる。
     func land(on targets: [Key: End], delays: [Key: TimeInterval], stackShadowOpacity: Float, duration: TimeInterval, delayedAnimation: (TimeInterval, @escaping () -> Void) -> Void) -> Int {
         generation += 1
         // 影の濃さはUIKitのアニメーションで動かないので、Core Animationで動かす。

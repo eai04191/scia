@@ -28,7 +28,7 @@ struct StatusFilteringTests {
         #expect(verdict.isHidden)
     }
 
-    /// ブックマークやお気に入りの一覧では、「隠す」に一致しても隠さず、警告で畳む。公式のWebクライアントの`warnInsteadOfHide`と同じ。
+    /// ブックマークやお気に入りの一覧では、「隠す」に一致しても隠さず、警告で折りたたむ。公式のWebクライアントの`warnInsteadOfHide`と同じ。
     @Test func warnsInsteadOfHidingWhenAsked() {
         let saved = StatusFiltering(context: .home, myAccountID: me.id, hidesMatches: false)
         let verdict = saved.verdict(for: status("10", filtered: [filter("a", .warn), filter("b", .hide), filter("c", .blur)]), now: now)
@@ -69,7 +69,7 @@ struct StatusFilteringTests {
         #expect(!home.verdict(for: status("21", filtered: [filter("a", .hide)], reblog: mine), now: now).isHidden)
     }
 
-    /// 自分の投稿は畳まずに、一致したフィルターの名前を扱いによらず返す。場所と期限では、ほかの投稿と同じく絞る。
+    /// 自分の投稿は折りたたまずに、一致したフィルターの名前を扱いによらず返す。場所と期限では、ほかの投稿と同じく絞る。
     @Test func reportsFiltersMatchedByOwnStatuses() {
         let filters = [
             filter("a", .hide), filter("b", .warn), filter("c", .blur),

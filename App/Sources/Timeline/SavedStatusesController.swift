@@ -33,7 +33,7 @@ final class SavedStatusesController {
         }
         self.kind = kind
         self.onUnauthorized = onUnauthorized
-        // 公式のWebクライアントと同じく、ホームの文脈のフィルターを当て、「隠す」に一致した投稿も隠さずに警告で畳む。自分で残した投稿だから。
+        // 公式のWebクライアントと同じく、ホームの文脈のフィルターを当て、「隠す」に一致した投稿も隠さずに警告で折りたたむ。自分で残した投稿だから。
         viewController.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: client.credential.accountID, hidesMatches: false))
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder(origin: .automatic) }
         viewController.onRetry = { [weak self] in self?.retry() }
