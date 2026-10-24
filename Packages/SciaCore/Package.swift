@@ -13,6 +13,8 @@ let package = Package(
     platforms: [.iOS(.v26), .macOS(.v26)],
     products: [
         .library(name: "SciaCore", targets: ["SciaCore"]),
+        // テストだけが使う、時間の長さに頼らずに順を作る道具。SciaCoreのテストとアプリのテストで共有する
+        .library(name: "SciaTesting", targets: ["SciaTesting"]),
     ],
     targets: [
         .target(
@@ -20,9 +22,13 @@ let package = Package(
             resources: [.copy("Auth/Resources/known-servers.txt"), .copy("Compose/Resources/standard-emoji.json")],
             swiftSettings: swiftSettings
         ),
+        .target(
+            name: "SciaTesting",
+            swiftSettings: swiftSettings
+        ),
         .testTarget(
             name: "SciaCoreTests",
-            dependencies: ["SciaCore"],
+            dependencies: ["SciaCore", "SciaTesting"],
             resources: [.copy("Fixtures")],
             swiftSettings: swiftSettings
         ),

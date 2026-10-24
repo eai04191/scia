@@ -160,6 +160,8 @@ targets:
     dependencies:
       - target: Scia
       - package: SciaCore
+      - package: SciaCore
+        product: SciaTesting
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.mizle.scia.tests
