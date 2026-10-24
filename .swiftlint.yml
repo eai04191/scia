@@ -5,6 +5,7 @@ only_rules:
   - implicitly_unwrapped_optional
   - present_without_waiting
   - time_dependent_test
+  - direct_time_access
 
 included:
   - App
@@ -30,12 +31,26 @@ custom_rules:
   # 待つ処理には手で進める時計（SciaTestingのTestClock）を渡し、ほかの処理を待つときは門（Gate）か条件（waitUntil）で待つ。日時は決まった値で作る
   time_dependent_test:
     included: "(AppTests|Packages/SciaCore/Tests)/.*\\.swift"
-    regex: "\\b(Task\\.sleep|Thread\\.sleep|usleep|DispatchTime\\.now|CACurrentMediaTime|CFAbsoluteTimeGetCurrent|ContinuousClock|SuspendingClock|Timer\\.scheduledTimer|asyncAfter)\\b|\\bDate\\(\\)|\\bDate\\.now\\b|\\bDate\\(timeIntervalSinceNow|(?<![\\w.)\\]])\\.now\\b|\\bsystemUptime\\b"
+    regex: "\\b(Task\\.sleep|Thread\\.sleep|usleep|DispatchTime\\.now|CACurrentMediaTime|CFAbsoluteTimeGetCurrent|ContinuousClock|SuspendingClock|asyncAfter)\\b|\\bTimer(\\(|\\.scheduledTimer\\b|\\.publish\\b)|\\bDate\\(\\)|\\bDate\\.now\\b|\\bDate\\(timeIntervalSinceNow|(?<![\\w.)\\]])\\.now\\b|\\bsystemUptime\\b"
     excluded_match_kinds:
       - comment
       - doccomment
       - string
     message: "テストを実際の時間や今の時刻に頼らせない。待つ処理にはTestClockを渡し、ほかの処理はGateかwaitUntilで待ち、日時は決まった値で作る"
+    severity: error
+
+  # 実際の時間に、ロジックの中から直接触れない。時間をおく処理はClockで、今の日付は日付を返す関数で、Core Animationの時間は時間を返す関数で受け取り、
+  # 既定値はSciaCoreのSystemTimeかアプリのAppDependenciesを参照する。実物を作ってよいのはその2つのファイルだけにする。
+  # デバッグ用のコード（ダミーのサーバーや部品カタログ）は、人が見るためにわざと遅らせるもので、テストで確かめるロジックではないため対象外にする
+  direct_time_access:
+    included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"
+    excluded: "(App/Sources/Debug/|App/Sources/AppDependencies\\.swift|Packages/SciaCore/Sources/SciaCore/SystemTime\\.swift)"
+    regex: "\\b(Task\\.sleep|Thread\\.sleep|usleep|DispatchTime\\.now|CACurrentMediaTime|CFAbsoluteTimeGetCurrent|ContinuousClock|SuspendingClock|asyncAfter)\\b|\\bTimer(\\(|\\.scheduledTimer\\b|\\.publish\\b)|\\bDate\\(\\)|\\bDate\\.now\\b|\\bDate\\(timeIntervalSinceNow|(?<![\\w.)\\]])\\.now\\b|\\bsystemUptime\\b"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "実際の時間に直接触れない。時間をおく処理はClockで、今の日付は日付を返す関数で受け取り、既定値はSystemTimeかAppDependenciesを参照する"
     severity: error
 
 strict: true

@@ -50,7 +50,8 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 
 - ロジックはできるだけSciaCoreに置き、`swift test`で検証できる形にする。アプリ側はSciaCoreの状態を描画するだけの薄い層に保つ
 - 非決定的な外部依存（今の時刻、時間の経過、乱数、UUID、通信、ファイル、OSの状態など）は、ロジックの内部で直接生成・取得せず、テストで差し替え可能な境界に集約する
-- 時間をおく処理は、標準の`Clock`（`any Clock<Duration>`、既定は`ContinuousClock()`）で受け取る。待つ関数や独自の時計の型で受け取らない。期限や残りの長さは`stopwatch(on:)`で測る。日付としての今が要るときは、今の日付を返す関数を受け取る
+- 時間をおく処理は、標準の`Clock`（`any Clock<Duration>`）で受け取る。待つ関数や独自の時計の型で受け取らない。期限や残りの長さは`stopwatch(on:)`で測る。日付としての今が要るときは今の日付を返す関数を、Core Animationの時間が要るときはその時間を返す関数を受け取る
+- 実物の時計、今の日付、Core Animationの時間を作るのは、SciaCoreの`SystemTime`とアプリの`AppDependencies`だけにし、ほかは既定値としてそこを参照する（`make lint`の`direct_time_access`で止める）。デバッグ用のコード（`App/Sources/Debug`）は対象外
 - タイムラインはUICollectionViewとdiffable data sourceで組む。スクロール位置を細かく制御する必要があるため、SwiftUIのListやScrollViewにはしない
 - 独自のアニメーションやジェスチャーを足す前に、UIKit標準の部品と挙動で実現できないか検討する
 - 画面の骨格、スクロール位置の制御、入力（入力欄、変換、キー操作、フォーカス）、ジェスチャーはUIKitで作る。中に入力もスクロール位置の精密な制御も持たない表示の部品は、SwiftUIで作れないかを先に考え、UIKitの画面に`UIHostingController`で載せる。Liquid Glassの組み方（`glassEffect`、`ConcentricRectangle`、`.containerShape`）をそのまま使えるため。補完の候補の一覧では、UIKitの`containerConcentric`がスクロールに追従しなかったが、SwiftUIでは追従した
