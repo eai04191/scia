@@ -1,3 +1,4 @@
+import SciaCore
 import UIKit
 
 /// アプリ内通知のチップを、出たままのものを上に1枚、数秒で消えるものをその下に1枚、縦に並べる。1枚だけなら上に詰める。
@@ -14,7 +15,10 @@ final class NoticeStackView: UIView {
     private var removingChips: [NoticeChip] = []
     /// 数秒で消えるチップを消すまでの残りの時間。時計を止めている間だけ使う。
     private var transientRemaining: Duration = .zero
-    private var transientDeadline: ContinuousClock.Instant?
+    /// 数秒で消えるチップの時計を動かし始めてから経った長さ。止めている間はnil。
+    private var transientElapsed: (@Sendable () -> Duration)?
+    /// 数秒で消えるチップの時計。テストでは手で進める時計に替える。
+    var clock: any Clock<Duration> = ContinuousClock()
     private var hideTask: Task<Void, Never>?
     private var isChromeHidden = false
     /// 出たままのチップが、前に出ている画面の中だけのものか。画面と一緒に薄くするため。
@@ -115,7 +119,7 @@ final class NoticeStackView: UIView {
         updateChromeVisibility(animated: true)
         hideTask?.cancel()
         transientRemaining = .seconds(duration)
-        transientDeadline = nil
+        transientElapsed = nil
         resumeTransientClock()
     }
 
@@ -196,7 +200,7 @@ final class NoticeStackView: UIView {
     private func removeTransient() {
         guard let chip = transientChip else { return }
         transientChip = nil
-        transientDeadline = nil
+        transientElapsed = nil
         remove(chip)
         relayout()
     }
@@ -254,7 +258,7 @@ final class NoticeStackView: UIView {
     private func dismiss(_ chip: NoticeChip) -> Bool {
         if chip === transientChip {
             transientChip = nil
-            transientDeadline = nil
+            transientElapsed = nil
             hideTask?.cancel()
             hideTask = nil
         } else if chip === persistentChip {
@@ -294,22 +298,23 @@ final class NoticeStackView: UIView {
     }
 
     private func resumeTransientClock() {
-        guard transientChip != nil, transientDeadline == nil, !isTransientClockPaused else { return }
+        guard transientChip != nil, transientElapsed == nil, !isTransientClockPaused else { return }
         let remaining = transientRemaining
-        transientDeadline = ContinuousClock.now + remaining
+        let clock = clock
+        transientElapsed = stopwatch(on: clock)
         hideTask = Task { [weak self] in
-            try? await Task.sleep(for: remaining)
+            try? await clock.sleep(for: remaining)
             guard let self, !Task.isCancelled else { return }
             self.removeTransient()
         }
     }
 
     private func pauseTransientClock() {
-        guard let deadline = transientDeadline else { return }
+        guard let elapsed = transientElapsed else { return }
         hideTask?.cancel()
         hideTask = nil
-        transientRemaining = max(.zero, deadline - ContinuousClock.now)
-        transientDeadline = nil
+        transientRemaining = max(.zero, transientRemaining - elapsed())
+        transientElapsed = nil
     }
 
     private func holdDidChange(_ chip: NoticeChip) {

@@ -50,15 +50,16 @@ extension TimelineViewController {
     }
 
     /// `entries`が返す行のアイコンを読み込み終えるまで待つ。待っている間に`entries`の返す行が増えたら、増えた行のアイコンも待つ。
-    /// `deadline`を過ぎたら、読み込み終えていなくても戻る。読めなかったアイコンは、読み直して待つことはしない。
+    /// `timeout`を過ぎたら、読み込み終えていなくても戻る。読めなかったアイコンは、読み直して待つことはしない。
     /// 先読みで前に読めなかったアイコンも待たない。
-    func waitForAvatars(of entries: () -> [TimelineEntry], until deadline: ContinuousClock.Instant) async {
+    func waitForAvatars(of entries: () -> [TimelineEntry], within timeout: Duration) async {
+        let elapsed = stopwatch(on: avatarImages.clock)
         var requested = Set<AvatarImageStore.Key>()
-        while ContinuousClock.now < deadline {
+        while elapsed() < timeout {
             let keys = avatarKeys(for: entries()).subtracting(requested)
             guard !keys.isEmpty else { return }
             requested.formUnion(keys)
-            await avatarImages.load(keys, until: deadline)
+            await avatarImages.load(keys, within: timeout - elapsed())
         }
     }
 }

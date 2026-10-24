@@ -1,3 +1,4 @@
+import SciaTesting
 import Testing
 import UIKit
 @testable import Scia
@@ -5,25 +6,16 @@ import UIKit
 /// 知らせのチップの並べ方と、消えるまでの時計。決まりはdocs/notices.mdの「チップ」にある。
 @MainActor
 struct NoticeStackViewTests {
-    private func makeStack() -> NoticeStackView {
+    /// - Parameter clock: 数秒で消えるチップの時計。消えるまでを確かめるテストは、手で進める。
+    private func makeStack(clock: TestClock = TestClock()) -> NoticeStackView {
         let stack = NoticeStackView(frame: CGRect(x: 0, y: 0, width: 320, height: 200))
         stack.animationDuration = 0
+        stack.clock = clock
         return stack
     }
 
     private let progress = Notice(id: "download", kind: .progress, title: "ダウンロード中", value: "42%")
     private let saved = Notice(id: "saved", kind: .success, title: "写真に保存しました")
-
-    private func waitUntil(_ condition: () -> Bool) async throws {
-        let deadline = ContinuousClock.now + .seconds(3)
-        while !condition() {
-            guard ContinuousClock.now < deadline else {
-                Issue.record("条件を満たさないまま時間切れになりました")
-                return
-            }
-            try await Task.sleep(for: .milliseconds(20))
-        }
-    }
 
     /// 1枚だけなら、数秒で消えるチップでも上に詰める。
     @Test func singleChipSitsAtTop() throws {
@@ -178,7 +170,8 @@ struct NoticeStackViewTests {
 
     /// 数秒で消えるチップは、新しいものが来たら同じチップで差し替え、時間が来たら消す。
     @Test func transientIsReplacedAndExpires() async throws {
-        let stack = makeStack()
+        let clock = TestClock()
+        let stack = makeStack(clock: clock)
         stack.showTransient(saved, duration: 60)
         let chip = try #require(stack.chips.first)
 
@@ -186,21 +179,33 @@ struct NoticeStackViewTests {
 
         #expect(stack.chips.first === chip)
         #expect(stack.transientNotice?.id == "other")
+        // 入れ替えると、前のチップの時計は止め、入れ替えたチップの長さで数え直す。
+        try await waitUntil { clock.sleeperCount == 1 }
+        clock.advance(by: .milliseconds(99))
+        // 進めただけでは、起きた処理はまだ走っていない。早く消さないことは、消すまでの待ちが残っていることで確かめる。
+        #expect(clock.sleeperCount == 1, "長さより早く消そうとしました")
+        clock.advance(by: .milliseconds(1))
         try await waitUntil { stack.transientNotice == nil }
     }
 
     /// 押せる数秒で消えるチップは、VoiceOverの読み上げ位置が乗っている間は消さない。
     @Test func actionableTransientWaitsWhileFocused() async throws {
-        let stack = makeStack()
+        let clock = TestClock()
+        let stack = makeStack(clock: clock)
         let failure = Notice(id: "favourite", kind: .failure, title: "お気に入りにできませんでした", action: .disclosure(hint: "理由を見られます。", handler: {}))
         stack.showTransient(failure, duration: 0.1)
         let chip = try #require(stack.chips.first)
+        try await waitUntil { clock.sleeperCount == 1 }
 
         chip.accessibilityElementDidBecomeFocused()
-        try await Task.sleep(for: .milliseconds(300))
+        #expect(clock.sleeperCount == 0, "読み上げ位置が乗っても、時計を止めていません")
+        clock.advance(by: .milliseconds(300))
+        #expect(clock.sleeperCount == 0)
         #expect(stack.transientNotice?.id == "favourite")
 
         chip.accessibilityElementDidLoseFocus()
+        try await waitUntil { clock.sleeperCount == 1 }
+        clock.advance(by: .milliseconds(100))
         try await waitUntil { stack.transientNotice == nil }
     }
 

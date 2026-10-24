@@ -24,8 +24,11 @@ final class AvatarImageStore {
     private var failedKeys: Set<Key> = []
     private var listeners: [Listener] = []
     private let logger = SciaLog.logger(category: "avatar")
+    /// 読み込みを待つ期限の時計。テストでは手で進める時計に替える。
+    let clock: any Clock<Duration>
 
-    init(fetch: @escaping Fetch) {
+    init(clock: any Clock<Duration> = ContinuousClock(), fetch: @escaping Fetch) {
+        self.clock = clock
         self.fetch = fetch
         // 120ピクセル四方の止まった画像なら500枚ほど入る大きさ。
         cache.totalCostLimit = 32 * 1_024 * 1_024
@@ -66,18 +69,24 @@ final class AvatarImageStore {
         }
     }
 
-    /// 画像を読み込み終える（読めなかった場合も含む）か、`deadline`になるまで待つ。まだ読み込んでいなければ読み込みを始める。
-    /// 前に読めなかった画像は、読み直さず待たない。`deadline`で戻っても、読み込みは止めずにキャッシュへ入れる。
-    func load(_ keys: Set<Key>, until deadline: ContinuousClock.Instant) async {
+    /// 画像を読み込み終える（読めなかった場合も含む）か、`timeout`が過ぎるまで待つ。まだ読み込んでいなければ読み込みを始める。
+    /// 前に読めなかった画像は、読み直さず待たない。`timeout`で戻っても、読み込みは止めずにキャッシュへ入れる。
+    func load(_ keys: Set<Key>, within timeout: Duration) async {
         let missing = keys.filter { cachedImage(for: $0) == nil && !failedKeys.contains($0) }
-        guard !missing.isEmpty, ContinuousClock.now < deadline else { return }
+        guard !missing.isEmpty, timeout > .zero else { return }
+        let clock = clock
+        // 待つ処理が動き出すまでに遅れても、呼ばれた時点から`timeout`で戻るよう、呼ばれた時点から測る。
+        let elapsed = stopwatch(on: clock)
         let loads = missing.map { key in Task { _ = try? await image(for: key) } }
         // 読み込みのTaskの結果を待つ（`value`）と、待っている側を取り消しても読み込みが終わるまで戻らないため、
         // 先に終わった方が続きを再開させる。
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             let resumer = Resumer(continuation)
             let timer = Task {
-                try? await Task.sleep(until: deadline, clock: .continuous)
+                let remaining = timeout - elapsed()
+                if remaining > .zero {
+                    try? await clock.sleep(for: remaining)
+                }
                 resumer.resume()
             }
             Task {

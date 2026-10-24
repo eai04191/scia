@@ -1,5 +1,6 @@
 import Foundation
 import SciaCore
+import SciaTesting
 import Synchronization
 import Testing
 @testable import Scia
@@ -23,6 +24,7 @@ struct FeedTimelineControllerTests {
         transport: some HTTPTransport,
         connector: some WebSocketConnector = MessageQueueConnector(),
         tuning: TuningStore = TuningStore(defaults: nil),
+        clock: TestClock = TestClock(),
         onUnauthorized: @escaping () -> Void = {}
     ) throws -> FeedTimelineController {
         let credential = try makeCredential()
@@ -37,6 +39,7 @@ struct FeedTimelineControllerTests {
             client: client,
             streamingHub: streamingHub,
             tuning: tuning,
+            clock: clock,
             onUnauthorized: onUnauthorized
         )
     }
@@ -79,16 +82,19 @@ struct FeedTimelineControllerTests {
         let tuning = TuningStore(defaults: nil)
         // チューニングで選べるいちばん短い間隔。
         tuning.setValue(5, for: TuningCatalog.regeneratingRetryInterval)
-        let controller = try makeController(transport: transport, connector: connector, tuning: tuning)
+        let clock = TestClock()
+        let controller = try makeController(transport: transport, connector: connector, tuning: tuning, clock: clock)
         defer { controller.stop() }
 
         controller.start()
         // 最初の読み込みと、つながったときの補完。補完も206なので、読み直しを予約する。
-        try await waitUntil { homeRequests.withLock { $0 } >= 2 }
+        try await waitUntil { homeRequests.withLock { $0 } >= 2 && clock.sleeperCount == 1 }
         controller.setEnabled(false)
         let countWhenDisabled = homeRequests.withLock { $0 }
-        try await Task.sleep(for: .seconds(6))
+        #expect(clock.sleeperCount == 0, "無効にしても、読み直しの予約が残っています")
+        clock.advance(by: .seconds(6))
 
+        try await waitUntil { controller.runningTaskCount == 0 }
         #expect(homeRequests.withLock { $0 } == countWhenDisabled)
     }
 
@@ -107,7 +113,8 @@ struct FeedTimelineControllerTests {
         await gate.waitUntilWaiting()
         controller.stop()
         await gate.open()
-        try await Task.sleep(for: .milliseconds(100))
+        // 止めた読み込みが、取り消しを受けて戻り切るまで待つ。
+        try await waitUntil { controller.runningTaskCount == 0 }
 
         #expect(!reported.value)
     }
@@ -119,14 +126,20 @@ struct FeedTimelineControllerTests {
         let connector = MessageQueueConnector()
         let tuning = TuningStore(defaults: nil)
         tuning.setValue(0.2, for: TuningCatalog.insertionInterval)
-        let controller = try makeController(transport: transport, connector: connector, tuning: tuning)
+        let clock = TestClock()
+        let controller = try makeController(transport: transport, connector: connector, tuning: tuning, clock: clock)
         defer { controller.stop() }
 
         controller.start()
         try await waitUntil { connector.isConnected }
         connector.send(try updateMessage(try #require(arriving.first)))
-        try await Task.sleep(for: .milliseconds(50))
+        // 届いた新着は、間隔をおいてから挿入する。
+        try await waitUntil { clock.sleeperCount == 1 }
         #expect(controller.viewController.displayedStatusIDs == existing.map(\.id), "間隔を待たずに挿入されました")
+        clock.advance(by: .milliseconds(199))
+        // 進めただけでは、起きた処理はまだ走っていない。早く起きていないことは、間隔の待ちが残っていることで確かめる。
+        #expect(clock.sleeperCount == 1, "間隔を待たずに挿入を始めました")
+        clock.advance(by: .milliseconds(1))
 
         try await waitUntil { controller.viewController.displayedStatusIDs.count == 4 }
         #expect(controller.viewController.displayedStatusIDs == (arriving + existing).map(\.id))
@@ -140,13 +153,16 @@ struct FeedTimelineControllerTests {
         let connector = MessageQueueConnector()
         let tuning = TuningStore(defaults: nil)
         tuning.setValue(0.2, for: TuningCatalog.insertionInterval)
-        let controller = try makeController(feed: .local, transport: transport, connector: connector, tuning: tuning)
+        let clock = TestClock()
+        let controller = try makeController(feed: .local, transport: transport, connector: connector, tuning: tuning, clock: clock)
         defer { controller.stop() }
 
         controller.start()
         try await waitUntil { connector.isConnected }
         #expect(controller.viewController.displayedStatusIDs == existing.map(\.id))
         connector.send(try updateMessage(try #require(arriving.first), stream: ["public:local"]))
+        try await waitUntil { clock.sleeperCount == 1 }
+        clock.advance(by: .milliseconds(200))
         try await waitUntil { controller.viewController.displayedStatusIDs.count == 4 }
         controller.enterBackground()
 
@@ -202,19 +218,12 @@ struct FeedTimelineControllerTests {
         await gate.waitUntilWaiting()
         controller.enterBackground()
         await gate.open()
-        try await waitUntil { controller.viewController.contentState == .loaded }
-        try await Task.sleep(for: .milliseconds(100))
+        try await waitUntil { controller.viewController.contentState == .loaded && controller.runningTaskCount == 0 }
+        #expect(!controller.isSubscribedToStreaming, "バックグラウンドのまま購読しました")
         #expect(connector.connectionCount == 0, "バックグラウンドのまま接続しました")
 
         controller.enterForeground()
         try await waitUntil { connector.connectionCount == 1 }
-    }
-
-    private func waitUntil(_ condition: () -> Bool) async throws {
-        for _ in 0..<100 where !condition() {
-            try await Task.sleep(for: .milliseconds(20))
-        }
-        #expect(condition(), "条件が満たされませんでした")
     }
 }
 

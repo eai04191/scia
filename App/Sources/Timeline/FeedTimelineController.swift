@@ -19,12 +19,18 @@ final class FeedTimelineController {
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "timeline")
     private var tasks: [Task<Void, Never>] = []
+    /// 走り終えていない読み込みなどの処理の数。止めたものも、取り消しを受けて戻り切るまで数える。止めたあとに何も起きないことを、テストが確かめるのに使う。
+    private(set) var runningTaskCount = 0
+    /// 新着をまとめて挿入する間隔、ポーリング、作り直しの読み直しを待つ時計。テストでは手で進める時計に替える。
+    private let clock: any Clock<Duration>
     private var isStopped = false
     /// 設定で無効にしている。購読せず、有効に戻したらつなぎ直して、無効だった間を補う。
     private var isDisabled = false
     private var hasStarted = false
     /// 一覧のストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
     private var streamingSubscription: StreamingHub.Subscription?
+    /// 一覧のストリームを購読している。
+    var isSubscribedToStreaming: Bool { streamingSubscription != nil }
     /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態。
     private let streamingStatusView = StreamingStatusPullView()
     /// 切れていた間の投稿を読む補完の状態。ストリーミングの状態と並べて、引っぱったときに見せる。
@@ -65,8 +71,10 @@ final class FeedTimelineController {
         client: MastodonClient,
         streamingHub: StreamingHub,
         tuning: TuningStore = AppDependencies.tuning,
+        clock: any Clock<Duration> = ContinuousClock(),
         onUnauthorized: @escaping () -> Void
     ) {
+        self.clock = clock
         let filtering = StatusFiltering(context: feed.filterContext, myAccountID: client.credential.accountID)
         store = TimelineStore(pageSize: Self.pageSize, filtering: filtering) { query in
             try await feed.page(query, from: client)
@@ -213,9 +221,9 @@ final class FeedTimelineController {
 
     private func startPolling() {
         guard isShown, !isStopped, !isDisabled, isInForeground, pollingTask == nil else { return }
-        pollingTask = Task { [weak self] in
+        pollingTask = Task { [weak self, clock] in
             while let interval = self?.tuning.value(of: TuningCatalog.accountHashtagPollingInterval) {
-                try? await Task.sleep(for: .seconds(interval))
+                try? await clock.sleep(for: .seconds(interval))
                 guard !Task.isCancelled, let self else { return }
                 guard self.hasLoadedInitial else { continue }
                 self.logger.info("\(self.feed.name, privacy: .public) poll while shown")
@@ -284,10 +292,12 @@ final class FeedTimelineController {
     private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (FeedTimelineController) async -> Void) {
         tasks.removeAll { $0.isCancelled }
         // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
+        runningTaskCount += 1
         let task = RequestOrigin.$current.withValue(origin) {
             Task { [weak self] in
                 guard let self else { return }
                 await operation(self)
+                runningTaskCount -= 1
             }
         }
         tasks.append(task)
@@ -422,8 +432,8 @@ final class FeedTimelineController {
         guard regeneratingRetryTask == nil, !isStopped, !isDisabled, isInForeground else { return }
         let interval = tuning.value(of: TuningCatalog.regeneratingRetryInterval)
         logger.info("\(self.feed.name, privacy: .public) regenerating retry scheduled after=\(interval, privacy: .public)")
-        regeneratingRetryTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(interval))
+        regeneratingRetryTask = Task { [weak self, clock] in
+            try? await clock.sleep(for: .seconds(interval))
             guard !Task.isCancelled, let self else { return }
             regeneratingRetryTask = nil
             guard !isStopped, !isDisabled, isInForeground else { return }
@@ -517,10 +527,10 @@ final class FeedTimelineController {
     private func scheduleInsertion() {
         let interval = tuning.value(of: TuningCatalog.insertionInterval)
         run { controller in
-            try? await Task.sleep(for: .seconds(interval))
+            try? await controller.clock.sleep(for: .seconds(interval))
             guard !Task.isCancelled else { return }
-            let deadline = ContinuousClock.now + .seconds(controller.tuning.value(of: TuningCatalog.arrivalAvatarWait))
-            await controller.viewController.waitForAvatars(of: { controller.store.pending.map(TimelineEntry.status) }, until: deadline)
+            let wait = Duration.seconds(controller.tuning.value(of: TuningCatalog.arrivalAvatarWait))
+            await controller.viewController.waitForAvatars(of: { controller.store.pending.map(TimelineEntry.status) }, within: wait)
             guard !Task.isCancelled else { return }
             if controller.viewController.isUserInteracting {
                 // 指の動きと関係なく画面が動かないよう、スクロールや長押しのメニューなどの操作が終わってから挿入する。

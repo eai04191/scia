@@ -300,8 +300,8 @@ final class ProfileController {
         run { controller in
             guard let viewController = controller.viewController else { return }
             // 1画面に収まる行の数より多めに待つ。全部を待つと、画面の外の行のアイコンまで待たされる。
-            let deadline = ContinuousClock.now + .seconds(viewController.tuning.value(of: TuningCatalog.profileAvatarWait))
-            await viewController.waitForAvatars(of: { Array(controller.shownEntries().prefix(12)) }, until: deadline)
+            let wait = Duration.seconds(viewController.tuning.value(of: TuningCatalog.profileAvatarWait))
+            await viewController.waitForAvatars(of: { Array(controller.shownEntries().prefix(12)) }, within: wait)
             controller.afterTransition { controller in
                 // 待つ間に「メディア」から「投稿」へ切り替えていたら、固定された投稿がまだのことがある。届いたら、待ち直す。
                 guard controller.isReadyToRevealList else {

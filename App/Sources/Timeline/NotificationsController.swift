@@ -322,8 +322,8 @@ final class NotificationsController {
         run { controller in
             try? await Task.sleep(for: .seconds(interval))
             guard !Task.isCancelled else { return }
-            let deadline = ContinuousClock.now + .seconds(controller.tuning.value(of: TuningCatalog.arrivalAvatarWait))
-            await controller.viewController.waitForAvatars(of: { controller.store.pending.map(TimelineEntry.notification) }, until: deadline)
+            let wait = Duration.seconds(controller.tuning.value(of: TuningCatalog.arrivalAvatarWait))
+            await controller.viewController.waitForAvatars(of: { controller.store.pending.map(TimelineEntry.notification) }, within: wait)
             guard !Task.isCancelled else { return }
             if controller.viewController.isUserInteracting {
                 controller.isWaitingForInteractionToSettle = true
