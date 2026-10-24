@@ -14,6 +14,13 @@ extension UIViewController {
         try await waitUntil({ viewController.presentingViewController != nil && !viewController.isBeingPresented }, sourceLocation: sourceLocation)
     }
 
+    /// 動きの時間を止めたウィンドウで、画面を動かさずに出し、`clock`を進めて出し終えるまで待つ。止めた時間のままでは出し終わらない。
+    func presentForTesting(_ viewController: UIViewController, advancing clock: LayerClock, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+        // swiftlint:disable:next present_without_waiting
+        present(viewController, animated: false)
+        try await clock.advance(until: { viewController.presentingViewController != nil && !viewController.isBeingPresented }, sourceLocation: sourceLocation)
+    }
+
     /// テストで、この画面を動かさずに閉じ、閉じ終えるまで待つ。
     ///
     /// 動かさずに閉じても、閉じ終えるのは次の描画の後になる。閉じる途中の画面を出している画面には、ほかの画面を出せずにUIKitが捨てる。
