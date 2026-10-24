@@ -46,8 +46,8 @@ final class TextInputCompletion {
     }
 
     /// 入力欄のカーソルの位置の語。
-    /// - Parameter appliesMinimumLength: 候補を出すのに要る文字数を見るか。選んだときに範囲を決め直すだけなら見ず、印だけの語も読む。
-    ///   印の直後へカーソルを戻して選んだときに語を読めないと、出したときの範囲で置き換え、カーソルより後ろのタグの文字まで消すため。
+    /// - Parameter appliesMinimumLength: 候補を出すのに要る文字数を見るか。選んだときに範囲を決め直すだけなら見ず、記号だけの語も読む。
+    ///   記号の直後へカーソルを戻して選んだときに語を読めないと、出したときの範囲で置き換え、カーソルより後ろのタグの文字まで消すため。
     private func token(in input: any UITextInput, appliesMinimumLength: Bool = true) -> CompletionToken? {
         guard let (text, selection) = Self.textAndSelection(of: input) else { return nil }
         let begin = input.beginningOfDocument

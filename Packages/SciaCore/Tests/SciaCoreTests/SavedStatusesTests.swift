@@ -390,7 +390,7 @@ struct SavedStatusesStoreTests {
         #expect(ids(store) == [.status("8"), .status("5")])
     }
 
-    /// 外した行は残し、外すのをサーバーが受け付けたあとに離れたら消す。お気に入りの一覧はお気に入りの印で見る。
+    /// 外した行は残し、外すのをサーバーが受け付けたあとに離れたら消す。お気に入りの一覧はお気に入りにしているかで見る。
     @Test func unsavedRowsStayUntilPruned() async throws {
         let store = makeStore(Pages([SavedStatusesPage(statuses: [Self.status("5", bookmarked: false, favourited: true), Self.status("4", bookmarked: false, favourited: true)], nextMaxID: nil)]), kind: .favourites)
         try await store.loadInitial()
@@ -405,7 +405,7 @@ struct SavedStatusesStoreTests {
         #expect(!store.pruneUnsaved())
     }
 
-    /// 外す操作の結果を待っている間は、印が外れていても消さない。外すのに失敗して印を戻したら、行もそのまま残る。
+    /// 外す操作の結果を待っている間は、外れていても消さない。外すのに失敗して元に戻したら、行もそのまま残る。
     @Test func unsavedRowAwaitingResultIsNotPruned() async throws {
         let store = makeStore(Pages([Self.page(["5", "4"], next: nil)]))
         try await store.loadInitial()

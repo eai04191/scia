@@ -19,7 +19,7 @@ enum PostRowCatalog {
     static func postStates() -> [CatalogState] {
         let home = TimelineViewController(texts: .home, refresh: {})
         home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
-        // カタログのアカウントを自分として組む一覧。自分の投稿は、フィルターに一致しても畳まずに印を出す。
+        // カタログのアカウントを自分として組む一覧。自分の投稿は、フィルターに一致しても畳まずに注記を出す。
         let mine = TimelineViewController(texts: .home, refresh: {})
         mine.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: author.id))
         mine.myAccountID = author.id
@@ -89,7 +89,7 @@ enum PostRowCatalog {
             post("フィルターで画像をぼかす（閲覧注意も付いた、名前が長い）", status(content: "<p>フィルターで画像をぼかした投稿。</p>", media: [
                 Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
             ], sensitive: true, filtered: [filter(longFilterTitle, .blur)])),
-            post("自分の投稿がフィルターに一致した（畳まずに印を出す）", status(content: "<p>フィルターした話題に自分で触れた投稿。</p>", filtered: [filter("ネタバレ", .hide)]), isMine: true),
+            post("自分の投稿がフィルターに一致した（畳まずに注記を出す）", status(content: "<p>フィルターした話題に自分で触れた投稿。</p>", filtered: [filter("ネタバレ", .hide)]), isMine: true),
             post("自分の投稿が複数のフィルターに一致した（名前が長い、画像つき）", status(content: "<p>フィルターした話題に自分で触れた投稿。</p>", media: [
                 Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
             ], filtered: [filter(longFilterTitle, .warn), filter("画像", .blur)]), isMine: true),
@@ -110,7 +110,7 @@ enum PostRowCatalog {
             )),
             post("編集された投稿", status(content: "<p>投稿したあとに編集した投稿。</p>", editedAt: .now.addingTimeInterval(-60))),
             post("編集された投稿で名前が長い", status(
-                content: "<p>名前が1行に収まらず、編集済みの印も付く投稿。</p>",
+                content: "<p>名前が1行に収まらず、編集済みのアイコンも付く投稿。</p>",
                 account: Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com"),
                 editedAt: .now.addingTimeInterval(-60)
             )),
@@ -118,7 +118,7 @@ enum PostRowCatalog {
             post("フォロワーのみ", status(content: "<p>フォロワーのみの投稿。</p>", visibility: .private)),
             post("メンションした相手のみ", status(content: "<p>メンションした相手のみの投稿。</p>", visibility: .direct)),
             post("フォロワーのみで編集され、名前が長い", status(
-                content: "<p>名前が1行に収まらず、公開範囲の記号と編集済みの印も付く投稿。</p>",
+                content: "<p>名前が1行に収まらず、公開範囲の記号と編集済みのアイコンも付く投稿。</p>",
                 account: Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com"),
                 editedAt: .now.addingTimeInterval(-60),
                 visibility: .private

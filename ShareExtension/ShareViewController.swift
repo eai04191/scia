@@ -154,7 +154,7 @@ final class ShareViewController: UIViewController {
 
     /// 共有拡張からアプリを開く公式のAPIはない（`NSExtensionContext.open(_:)`はウィジェットなどでしか効かない）。
     /// responder chainをたどって`UIApplication`を探し、その`open(_:options:completionHandler:)`で開く。
-    /// このメソッドは拡張では使えない印が付いていてコンパイルできないため、セレクターで実装を取り出して呼ぶ。
+    /// このメソッドは拡張では使えない指定が付いていてコンパイルできないため、セレクターで実装を取り出して呼ぶ。
     private func openContainingApp(_ url: URL, completion: @escaping @MainActor @Sendable (Bool) -> Void) {
         typealias OpenURL = @convention(c) (
             UIApplication, Selector, URL, [UIApplication.OpenExternalURLOptionsKey: Any], (@MainActor @Sendable (Bool) -> Void)?

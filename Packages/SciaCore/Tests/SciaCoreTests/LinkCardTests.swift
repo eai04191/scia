@@ -50,7 +50,7 @@ struct LinkCardTests {
         #expect(LinkCard(status: target) == .link(try url("https://news.example/")))
     }
 
-    /// サーバーと同じく、`mention`の印がなくても、`u-url`や`h-card`の印のリンクと、メンションの相手のURLへのリンクには付けない。
+    /// サーバーと同じく、`mention`のクラスがなくても、`u-url`や`h-card`のクラスのリンクと、メンションの相手のURLへのリンクには付けない。
     @Test func skipsMicroformatAndMentionedAccountLinks() throws {
         let content = #"<p><a href="https://remote.example/users/bob" class="u-url">bob</a> "#
             + #"<span class="h-card"><a href="https://remote.example/@carol" class="h-card">carol</a></span> "#

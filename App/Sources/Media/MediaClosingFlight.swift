@@ -18,11 +18,11 @@ final class MediaClosingFlight {
         /// 複製や下地を載せる、操作を素通しする層。終わったら外す。
         let overlay: UIView
         let morph: FocusCroppedImageView
-        /// 複製に載せた、サムネイルの印の複製。
+        /// 複製に載せた、サムネイルに重ねた表示の複製。
         let decoration: UIView?
-        /// 複製のさらに手前に置いた、サムネイルに重なっているビューの複製。印と同じ濃さで出し入れする。
+        /// 複製のさらに手前に置いた、サムネイルに重なっているビューの複製。重ねた表示と同じ濃さで出し入れする。
         let overlap: MediaSourceOverlap?
-        /// 複製に敷く、サムネイルの背景の色。印と同じ濃さで出し入れする。
+        /// 複製に敷く、サムネイルの背景の色。重ねた表示と同じ濃さで出し入れする。
         let placeholderColor: UIColor?
         /// 一覧を暗くする下地。`fadingViews`にも含め、閉じながら薄くする。
         let backdrop: UIView

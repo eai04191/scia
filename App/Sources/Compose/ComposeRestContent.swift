@@ -65,7 +65,7 @@ final class ComposeRestContent: UIView {
 /// 3枚目は、2枚だけが置かれて見える不自然さをなくすためのもので、いちばん下に置き、1枚目の左上側から、2枚目と逆の向きに回してのぞかせる。
 /// 2枚目と同じ右側からのぞかせると、縁がほぼ平行に並んでずれて見え、束の形も右へ偏るため。
 /// 4枚目より後ろは3枚目の下に隠れているものとし、枚数の札は付けない。添付がないか、1枚か、それより多いかが分かれば足りるため。
-/// 送れなかった添付があるときだけ、失敗の印を付ける。
+/// 送れなかった添付があるときだけ、エラーのアイコンを付ける。
 /// 角度と影の濃さは好みで決まるので、チューニングの値で決める。
 ///
 /// 影は、写真の束がカプセルの面に落とす影と、上の写真が下の写真に落とす影の2つに分ける。写真ごとに影を付けると、
@@ -218,7 +218,7 @@ final class ComposeRestThumbnails: UIView {
         if items.count > 2 {
             third.apply(items[2])
         }
-        // 印は手前の写真に載せ、開閉では写真と一緒に隠して動かす。カプセルに残すと、写真が着く前に印だけが現れるため。
+        // エラーのアイコンは手前の写真に載せ、開閉では写真と一緒に隠して動かす。カプセルに残すと、写真が着く前にアイコンだけが現れるため。
         front.showsFailure = items.contains { $0.status == .failed || $0.status == .descriptionFailed }
         invalidateIntrinsicContentSize()
         setNeedsLayout()
@@ -349,7 +349,7 @@ final class ComposeRestPhoto: UIView {
     private let betweenShadow = CALayer()
     private let failureMark = UIImageView(image: UIImage(systemName: "exclamationmark.circle.fill"))
 
-    /// 送れなかった添付があることを、右下の角に印で出す。
+    /// 送れなかった添付があることを、右下の角にアイコンで出す。
     var showsFailure = false {
         didSet { failureMark.isHidden = !showsFailure }
     }
@@ -375,7 +375,7 @@ final class ComposeRestPhoto: UIView {
         betweenShadowClip.layer.cornerCurve = .continuous
         betweenShadowClip.layer.addSublayer(betweenShadow)
         addSubview(betweenShadowClip)
-        // 感嘆符を白、円を赤で描き、どんなサムネイルの上でも見分けられるようにする。列の失敗の印と同じ。
+        // 感嘆符を白、円を赤で描き、どんなサムネイルの上でも見分けられるようにする。列のエラーのアイコンと同じ。
         failureMark.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 12).applying(UIImage.SymbolConfiguration(paletteColors: [.white, .systemRed]))
         failureMark.isHidden = true
         addSubview(failureMark)

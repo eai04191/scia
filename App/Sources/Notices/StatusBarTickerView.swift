@@ -900,7 +900,7 @@ final class StatusBarTickerView: UIView {
             ])
             let store = AppDependencies.mediaImages
             if isSensitive {
-                // 閲覧注意の画像は、一覧と同じく中身を見せず、ぼかしの下地に目の印を重ねる。
+                // 閲覧注意の画像は、一覧と同じく中身を見せず、ぼかしの下地に目のアイコンを重ねる。
                 imageView.image = attachment.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: 1) }
                 let eye = UIImageView(image: UIImage(systemName: "eye.slash.fill", withConfiguration: UIImage.SymbolConfiguration(pointSize: side * 0.4, weight: .semibold)))
                 eye.tintColor = .white

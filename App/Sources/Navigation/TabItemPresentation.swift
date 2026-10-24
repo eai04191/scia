@@ -1,6 +1,6 @@
 import SciaCore
 
-/// タブバーと、タブの並びの設定画面に出す名前と印。
+/// タブバーと、タブの並びの設定画面に出す名前とアイコン。
 extension TabItem: MenuItemPresentable {
     var title: String {
         switch self {

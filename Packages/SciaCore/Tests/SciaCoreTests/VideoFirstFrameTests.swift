@@ -147,7 +147,7 @@ struct VideoFirstFrameTests {
         Data([UInt8(value >> 24 & 0xFF), UInt8(value >> 16 & 0xFF), UInt8(value >> 8 & 0xFF), UInt8(value & 0xFF)])
     }
 
-    /// 版と印（4バイト）、項目の数に続く表。
+    /// バージョンとフラグ（4バイト）、項目の数に続く表。
     private func table(_ type: String, _ rows: [[Int]]) -> Data {
         box(type, Data(count: 4) + uint32(rows.count) + rows.flatMap { $0 }.reduce(Data()) { $0 + uint32($1) })
     }

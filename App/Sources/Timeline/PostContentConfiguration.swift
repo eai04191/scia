@@ -30,9 +30,9 @@ struct PostContentConfiguration: UIContentConfiguration {
     /// 名前の行に並べる文字。先頭を目立たせ、2つ目は控えめに描く。
     var nameParts: [NSAttributedString]
     var createdAt: Date
-    /// 投稿が編集されていれば、時刻の前に印を付ける。時刻は編集した時刻ではなく、投稿した時刻のまま。
+    /// 投稿が編集されていれば、時刻の前にアイコンを付ける。時刻は編集した時刻ではなく、投稿した時刻のまま。
     var isEdited = false
-    /// 公開以外なら、時刻と編集済みの印の前に、投稿欄で選ぶときと同じ記号を付ける。
+    /// 公開以外なら、時刻と編集済みのアイコンの前に、投稿欄で選ぶときと同じ記号を付ける。
     var visibility: Status.Visibility = .public
     var timeStyle: StatusTimeStyle
     var body: NSAttributedString
@@ -130,7 +130,7 @@ struct PostContentConfiguration: UIContentConfiguration {
         visibility == .public ? nil : VisibilityOption(visibility).symbolName
     }
 
-    /// 読み上げる時刻。印の記号は読まず、言葉にする。
+    /// 読み上げる時刻。アイコンは読まず、言葉にする。
     func timeAccessibilityText(now: Date) -> String {
         var text = StatusTimestamp.text(for: createdAt, now: now, style: timeStyle)
         if isEdited {

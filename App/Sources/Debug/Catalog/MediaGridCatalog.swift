@@ -28,7 +28,7 @@ enum MediaGridCatalog {
                     Fixtures.attachment("b", width: 1_200, height: 1_200, color: .systemOrange, description: "Screenshot"),
                 ])
             },
-            CatalogState(title: "種類の印（動画、GIF、音声、表示できないファイル）") {
+            CatalogState(title: "種類のアイコン（動画、GIF、音声、表示できないファイル）") {
                 grid([
                     Fixtures.attachment("a", type: .video, width: 1_280, height: 720, color: .systemTeal),
                     Fixtures.attachment("b", type: .gifv, width: 720, height: 720, color: .systemIndigo),
@@ -36,7 +36,7 @@ enum MediaGridCatalog {
                     Fixtures.attachment("d", type: .unknown("unknown"), width: 0, height: 0, hasPreview: false),
                 ])
             },
-            CatalogState(title: "再生の印（幅160pt、投稿欄の64pt、編集履歴の44pt、通知の再掲の既定の40ptと最小の24ptの正方形。短い辺に比例させ、チューニングの上限と下限で止める）") {
+            CatalogState(title: "再生アイコン（幅160pt、投稿欄の64pt、編集履歴の44pt、通知の再掲の既定の40ptと最小の24ptの正方形。短い辺に比例させ、チューニングの上限と下限で止める）") {
                 tiles(Fixtures.attachment("a", type: .video, width: 1_280, height: 720, color: .systemTeal), widths: [160, 64, 44, 40, 24], square: true)
             },
             CatalogState(title: "札（ALTとGIF。幅160pt、投稿欄の64pt、通知の再掲の既定の40ptと最小の24ptのタイル。入らなければ頭の1文字にし、余白、文字の順に詰める）") {

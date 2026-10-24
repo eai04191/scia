@@ -381,7 +381,7 @@ final class ProfileEditImagesCell: UITableViewCell {
         return min(max(image.size.height / image.size.width, wide), standard)
     }
 
-    /// 押せることを示す、鉛筆の印。
+    /// 押せることを示す、鉛筆のアイコン。
     private static func makeBadge() -> UIView {
         let badge = UIImageView(image: UIImage(systemName: "pencil.circle.fill"))
         badge.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 26).applying(UIImage.SymbolConfiguration(paletteColors: [.white, .tintColor]))

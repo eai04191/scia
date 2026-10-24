@@ -55,7 +55,7 @@ enum PollCatalog {
                 choices.beginSubmitting(id)
             },
             post("結果を見ると選んだ（投票に戻れる）", open) { $0.reveal($1) },
-            post("投票済み（自分の票に印）", poll(options: [("はい", 13), ("いいえ", 5), ("どちらでもない", 3)], voted: true, ownVotes: [0])),
+            post("投票済み（自分の票にチェックマーク）", poll(options: [("はい", 13), ("いいえ", 5), ("どちらでもない", 3)], voted: true, ownVotes: [0])),
             post("投票済みで、結果を読み直している途中", poll(options: [("はい", 13), ("いいえ", 5)], voted: true, ownVotes: [1])) { $0.beginRefreshing($1) },
             post("複数選べる投票に投票済み（割合は投票した人の数に対する）", poll(multiple: true, expiresIn: 3_600 * 5, options: [("朝", 5), ("昼", 8), ("夜", 7), ("深夜", 0)], votersCount: 11, voted: true, ownVotes: [0, 1])),
             post("締め切るまで票数を隠す投票に投票済み", poll(expiresIn: 60 * 30, options: [("A", nil), ("B", nil)], votesCount: 8, voted: true, ownVotes: [1])),

@@ -253,7 +253,7 @@ public enum VideoFirstFrame {
             children(in: range)?.first { $0.type == type }?.payload
         }
 
-        /// 版と印（4バイト）、項目の数（4バイト）に続く表。`width`バイトの数が、1行に`columns`個並ぶ。
+        /// バージョンとフラグ（4バイト）、項目の数（4バイト）に続く表。`width`バイトの数が、1行に`columns`個並ぶ。
         func table(in payload: Range<Int>, columns: Int, width: Int = 4) -> [[Int]]? {
             guard let count = uint32(at: payload.lowerBound + 4) else { return nil }
             let rowLength = columns * width

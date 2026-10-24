@@ -40,8 +40,8 @@ struct RichTextRenderer {
 
     /// 編集履歴の、前の版との違いを重ねた本文。足した部分は緑の地、消した部分は赤の地で描く。
     /// 色だけに頼らないよう、消した部分には取り消し線も引く。
-    /// 地と取り消し線は絵文字の画像の下に描かれ、背景まで塗った不透明な絵文字では隠れるため、足したり消したりした絵文字は、画像そのものに印を付ける。
-    /// 文字を変えずに段落を分けた編集は、ほかに見分ける手がかりがないため、分けた位置に足した改行の印を置く。
+    /// 地と取り消し線は絵文字の画像の下に描かれ、背景まで塗った不透明な絵文字では隠れるため、足したり消したりした絵文字は、画像そのものの描き方を変える。
+    /// 文字を変えずに段落を分けた編集は、ほかに見分ける手がかりがないため、分けた位置に足した改行の記号を置く。
     func render(_ diff: RichTextDiff) -> NSAttributedString {
         let result = NSMutableAttributedString()
         for (index, diffBlock) in diff.blocks.enumerated() {
@@ -97,7 +97,7 @@ struct RichTextRenderer {
         }
     }
 
-    /// 足したり消したりした絵文字の画像に、変わり方の印を付ける。
+    /// 足したり消したりした絵文字の画像に、変わり方に合わせて描き方を変える。
     /// 消した絵文字は薄く描いて、下の赤い地と取り消し線を透かし、動かさない。今の版にない絵文字なので、動かす意味がないため。
     /// 足した絵文字は、地と同じ緑を画像に重ねる。動かすときは、動く層の上にも同じ緑を重ねる（`emojiTint`）。
     private static func markChangedEmoji(in string: NSMutableAttributedString, change: DiffChange) {
@@ -139,7 +139,7 @@ struct RichTextRenderer {
         }
         for (index, block) in diff.blocks.enumerated() {
             if index > 0 {
-                // 文字を変えずに段落を分けた位置は、画面の改行の印と同じく、言葉で示す。
+                // 文字を変えずに段落を分けた位置は、画面の改行の記号と同じく、言葉で示す。
                 if block.breakChange == .inserted, block.pieces.first?.change != .inserted {
                     close()
                     run = nil
@@ -272,6 +272,6 @@ extension NSAttributedString.Key {
     static let linkDestination = NSAttributedString.Key("net.mizle.scia.linkDestination")
     /// 画像を埋め込んだカスタム絵文字（`CustomEmoji`）。`LinkLabel`が、アニメーションする絵文字を動かすのに読む。
     static let customEmoji = NSAttributedString.Key("net.mizle.scia.customEmoji")
-    /// カスタム絵文字を動かすときに、動く層の上に重ねる色（`UIColor`）。編集履歴で足した絵文字の印に使う。
+    /// カスタム絵文字を動かすときに、動く層の上に重ねる色（`UIColor`）。編集履歴で足した絵文字を示すのに使う。
     static let emojiTint = NSAttributedString.Key("net.mizle.scia.emojiTint")
 }

@@ -647,7 +647,7 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 編集では公開範囲を変えられないため、今の範囲に印を付けたまま、どれも押せないようにする。
+    /// 編集では公開範囲を変えられないため、今の範囲にチェックマークを付けたまま、どれも押せないようにする。
     private func visibilityActions() -> [UIAction] {
         let attributes: UIMenuElement.Attributes = model.editedStatus == nil ? [] : .disabled
         return VisibilityOption.choices.map { choice in
@@ -2246,7 +2246,7 @@ final class InlineComposeController: NSObject {
         return row
     }
 
-    /// 注意書きの行。印、入力欄、外すボタンを並べ、下に線を引いて本文と分ける。
+    /// 注意書きの行。アイコン、入力欄、外すボタンを並べ、下に線を引いて本文と分ける。
     private func makeSpoilerRow() -> UIView {
         let icon = UIImageView(image: UIImage(systemName: "exclamationmark.triangle"))
         icon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .footnote)

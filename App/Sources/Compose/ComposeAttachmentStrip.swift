@@ -251,7 +251,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
     private let failureView = UIImageView(image: UIImage(systemName: "exclamationmark.circle.fill"))
     /// 代替テキストの送信中に、ALTの札の位置に出す小さな回る表示。
     private let descriptionSpinner = UIActivityIndicatorView(style: .medium)
-    /// 代替テキストを送れなかったときに、ALTの札の位置に出す印。
+    /// 代替テキストを送れなかったときに、ALTの札の位置に出すエラーのアイコン。
     private let descriptionFailureView = UIImageView(image: UIImage(systemName: "exclamationmark.circle.fill"))
     /// 閲覧注意にして投稿するときに、右上に出す札。画像は隠さず、並べ替えや代替テキストを書くときに、どの添付か見分けられるようにする。
     private let sensitiveBadge = ComposeAttachmentCell.makeSensitiveBadge()
@@ -359,7 +359,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         }
     }
 
-    /// ALTの札と同じ黒い下地に、タイムラインの閲覧注意の覆いと同じ印を描く。
+    /// ALTの札と同じ黒い下地に、タイムラインの閲覧注意の覆いと同じアイコンを描く。
     private static func makeSensitiveBadge() -> UIView {
         let image = UIImageView(image: UIImage(systemName: "eye.slash"))
         image.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption2, scale: .small).applying(UIImage.SymbolConfiguration(weight: .bold))

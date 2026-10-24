@@ -181,7 +181,7 @@ final class ProfileHeaderView: UIView {
         }
 
         // アイコンと「フォローされています」はヘッダー画像に重なるため、ヘッダー画像を開閉する間も手前に見せる。
-        // 「フォローされています」はアカウントについての印で、画像の印ではないため、画像と一緒には動かさない。
+        // 「フォローされています」はアカウントについての表示で、画像に重ねた表示ではないため、画像と一緒には動かさない。
         bannerView.overlappingViews = [avatarRingView, avatarView, followedByBadge]
 
         avatarRingView.backgroundColor = .systemBackground
@@ -560,7 +560,7 @@ final class ProfileHeaderView: UIView {
                 .render(.html(field.value, emojis: account.emojis)))
             if field.verifiedAt != nil,
                let check = UIImage(systemName: "checkmark.seal.fill", withConfiguration: UIImage.SymbolConfiguration(font: valueFont, scale: .small)) {
-                // リンク先にこのアカウントへのリンクがあると確かめられた値に付く印。
+                // リンク先にこのアカウントへのリンクがあると確かめられた値に付くチェックマーク。
                 value.append(NSAttributedString(string: " "))
                 value.append(NSAttributedString(attachment: NSTextAttachment(image: check.withTintColor(.systemGreen, renderingMode: .alwaysOriginal))))
                 valueLabel.accessibilityValue = "確認済み"

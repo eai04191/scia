@@ -3,8 +3,8 @@ import UIKit
 
 /// 投稿の投票。選択肢を縦に並べ、その下に人数と締め切り、ボタンを1行で置く。決まりは`docs/poll.md`。
 ///
-/// 投票する形では、選択肢を押して選び、「投票」で送る。結果の形では、選択肢の後ろに割合の棒を敷き、先頭に割合、末尾に自分が票を入れた印を出す。
-/// 投票すると形が替わるが、行の高さは変えない。先頭の記号と割合、末尾の印の場所はどちらの形でも同じ幅を取り、選択肢の文字の折り返しをそろえる。
+/// 投票する形では、選択肢を押して選び、「投票」で送る。結果の形では、選択肢の後ろに割合の棒を敷き、先頭に割合、末尾に自分が票を入れたチェックマークを出す。
+/// 投票すると形が替わるが、行の高さは変えない。先頭の記号と割合、末尾のチェックマークの場所はどちらの形でも同じ幅を取り、選択肢の文字の折り返しをそろえる。
 /// 下の行の高さも、「投票」のボタンの高さに固定する。
 /// 結果の形の選択肢は押下を受けず、行の押下（スレッドを開く）に渡す。
 final class PollView: UIView {
@@ -136,7 +136,7 @@ final class PollView: UIView {
             optionsStack.addArrangedSubview(option)
         }
         // 同じ投票で割合が変わったときだけ、棒を前の長さから伸ばす。使い回された行で別の投票に替わったときは、動かさずに出す。
-        // 同じ投票で割合も形も変わらない描き直し（送っている途中の印を外すときなど）では、伸ばしている途中の棒をそのままにする。
+        // 同じ投票で割合も形も変わらない描き直し（送っている途中のインジケーターを外すときなど）では、伸ばしている途中の棒をそのままにする。
         let samePoll = previous?.pollID == content.pollID
         let keepsBars = samePoll && previous?.display.mode == display.mode && previous?.display.options.map(\.fraction) == display.options.map(\.fraction)
         let animatesBars = samePoll && !keepsBars && display.mode == .results

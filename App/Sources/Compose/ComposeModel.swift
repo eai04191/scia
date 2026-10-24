@@ -298,7 +298,7 @@ final class ComposeModel {
             reset()
             onPosted()
         } catch {
-            // 編集は応答だけを失っても、代替テキストはサーバーに届いていることがある。元の値に戻して送り直しても届くよう、送った添付に印を付ける。
+            // 編集は応答だけを失っても、代替テキストはサーバーに届いていることがある。元の値に戻して送り直しても届くよう、送った添付に目印を付ける。
             let sentIDs = Set(draft.changedAttachedDescriptions.map(\.id))
             for index in attachments.indices where attachments[index].serverID.map(sentIDs.contains) ?? false {
                 attachments[index].hasUnconfirmedDescription = true

@@ -13,7 +13,7 @@ protocol MediaViewerSource: UIView {
     var thumbnailFocus: MediaFocus? { get }
     /// 画像の奥に敷いている背景の色。透明な部分のある画像では、この色が透けて見える。
     var placeholderColor: UIColor? { get }
-    /// 画像の上に重ねている印の複製。ビューアが動かす画像の複製に載せて、このビューとのあいだを一緒に動かす。印がなければ空のビューを返す。
+    /// 画像の上に重ねている表示の複製。ビューアが動かす画像の複製に載せて、このビューとのあいだを一緒に動かす。重ねた表示がなければ空のビューを返す。
     func makeDecorationCopy() -> UIView
     /// ビューアがこのビューとのあいだで画像を動かしている間、見えなくする。
     /// 透明にすると触れても反応しなくなり、閉じる途中にタップし直しても開けないため、空のマスクで隠す。
@@ -27,7 +27,7 @@ extension MediaViewerSource {
     var thumbnailFocus: MediaFocus? { nil }
 }
 
-/// 画像を1枚描くだけのビュー。プロフィールのアイコンやヘッダー画像のように、上に重ねる印がない。
+/// 画像を1枚描くだけのビュー。プロフィールのアイコンやヘッダー画像のように、上に重ねる表示がない。
 extension MediaViewerSource where Self: UIImageView {
     var thumbnailImage: UIImage? { image }
     var loadedThumbnail: UIImage? { image }

@@ -70,7 +70,7 @@ struct GlyphLanguageTests {
         #expect(runs == 1)
     }
 
-    /// 記号の印でランを分けても、異体字セレクターで選んだ見た目は変えない。
+    /// 記号の属性でランを分けても、異体字セレクターで選んだ見た目は変えない。
     /// セレクターの手前でランを分けると、「葛󠄀」は選んだ字形でなくなっていた。macOSでは、「㊗️」「〰️」もカラー絵文字でなくヒラギノの記号になる。
     @Test(arguments: ["㊗️", "〰️", "葛\u{E0100}"])
     func variationSequenceKeepsItsGlyph(_ sequence: String) throws {

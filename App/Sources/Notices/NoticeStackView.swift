@@ -50,7 +50,7 @@ final class NoticeStackView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        // 処理中の印は、ほかの印より背が高い。
+        // 処理中のインジケーターは、ほかのアイコンより背が高い。
         sizingChip.apply(Notice(id: "sizing", kind: .progress, title: "あ"))
         // 文字の大きさの設定が変われば、高さを測り直す。
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in

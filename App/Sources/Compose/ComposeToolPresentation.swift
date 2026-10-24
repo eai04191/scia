@@ -1,6 +1,6 @@
 import SciaCore
 
-/// 投稿欄のボタンと＋のメニュー、並びの設定画面に出す、項目の名前と印。
+/// 投稿欄のボタンと＋のメニュー、並びの設定画面に出す、項目の名前とアイコン。
 extension ComposeToolItem: MenuItemPresentable {
     var title: String {
         switch self {

@@ -112,7 +112,7 @@ struct ReportView: View {
                 }
                 Spacer(minLength: 8)
                 if draft.category == category {
-                    // 行の文字を普通の色にするため、ボタンのtintを変えている。印はアプリのアクセントの色で描く。
+                    // 行の文字を普通の色にするため、ボタンのtintを変えている。チェックマークはアプリのアクセントの色で描く。
                     Image(systemName: "checkmark")
                         .foregroundStyle(Color.accentColor)
                 }

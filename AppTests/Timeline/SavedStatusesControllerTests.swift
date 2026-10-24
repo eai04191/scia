@@ -12,7 +12,7 @@ import UIKit
 struct SavedStatusesControllerTests {
     private var tolerance: CGFloat { 1 / max(UITraitCollection.current.displayScale, 1) }
 
-    /// 一覧に載せる60件。ブックマークした印を付ける。
+    /// 一覧に載せる60件。ブックマークした状態にする。
     private static let saved = StatusFactory.make(count: 60, startingAt: 1_000).map { $0.settingBookmarked(true) }
 
     /// サーバーに加わった、一覧の先頭に入る投稿。
@@ -109,7 +109,7 @@ struct SavedStatusesControllerTests {
         let first = Self.saved[0].settingBookmarked(false)
         let second = Self.saved[1].settingBookmarked(false)
 
-        // 押したときに印を外し、サーバーが受け付けたら知らせる。StatusInteractionsと同じ順に送る。
+        // 押したときにブックマークを外し、サーバーが受け付けたら知らせる。StatusInteractionsと同じ順に送る。
         controller.updateStatus(first.id) { $0.settingBookmarked(false) }
         controller.statusDidSettle(.bookmark, first)
         #expect(controller.viewController.displayedItemIDs.contains(.status(first.id)))

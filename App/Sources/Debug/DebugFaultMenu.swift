@@ -3,7 +3,7 @@ import SciaCore
 import UIKit
 
 /// `scia-debug://`で起こす障害を、デバッグメニューから起こす。URLを開けない実機で確かめるため。
-/// 開くたびに`DebugFaults`の今の状態を読んで組み立て、起こしている障害に印を付ける。
+/// 開くたびに`DebugFaults`の今の状態を読んで組み立て、起こしている障害にチェックマークを付ける。
 @MainActor
 enum DebugFaultMenu {
     /// - Parameter handle: 選んだ操作を、URLで届いたときと同じ処理に渡す。
@@ -38,7 +38,7 @@ enum DebugFaultMenu {
         ]
     }
 
-    /// 戻す操作がなく、起動し直すまで続く障害。起こした後は印を付けて押せなくする。
+    /// 戻す操作がなく、起動し直すまで続く障害。起こした後はチェックマークを付けて押せなくする。
     private static func untilRestart(_ title: String, image: String?, isOn: Bool, action: @escaping @MainActor () -> Void) -> UIAction {
         UIAction(
             title: title,

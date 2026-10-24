@@ -20,7 +20,7 @@ enum StatusAction {
     case delete
 }
 
-/// メニューに仮の印を出し、アイコンを読んでから描き替える人。
+/// メニューにプレースホルダーのアイコンを出し、アイコンを読んでから描き替える人。
 struct PendingMenuIcon {
     let user: MenuUser
     /// 分かっているアカウント。メンションされた人で、一覧にも読み込み済みのものにもいなければnil。
@@ -281,7 +281,7 @@ extension TimelineViewController {
     }
 
     /// カスタム絵文字の画像のメディアのメニューを、絵文字の画像と`:shortcode:`のサブメニューにする。「投稿」はこのメニューの中なので出さない。
-    /// 画像は行に描いているアニメーションしない版を、メニューに文字色で塗られないよう元の色のまま置く。まだ届いていなければ、項目の印を置く。
+    /// 画像は行に描いているアニメーションしない版を、メニューに文字色で塗られないよう元の色のまま置く。まだ届いていなければ、項目のアイコンを置く。
     private func emojiElement(for emoji: CustomEmoji, subject: OperationStatus.Subject?) -> UIMenuElement? {
         let attachment = emoji.attachment
         let image = emojiImages.image(for: emoji.staticUrl)
@@ -297,9 +297,9 @@ extension TimelineViewController {
         )
     }
 
-    /// 絵文字の画像を、メニューの印の大きさの正方形に収め、元の色のまま描く。
-    /// メニューは並べるときは印の枠に縮めるが、開いたサブメニューの見出しでは画像を元の大きさのまま置き、メニューの外まではみ出したため。
-    /// 印の大きさは、本文の文字の大きさの設定に合わせる。
+    /// 絵文字の画像を、メニューのアイコンの大きさの正方形に収め、元の色のまま描く。
+    /// メニューは並べるときはアイコンの枠に縮めるが、開いたサブメニューの見出しでは画像を元の大きさのまま置き、メニューの外まではみ出したため。
+    /// アイコンの大きさは、本文の文字の大きさの設定に合わせる。
     private static func menuIcon(_ image: UIImage) -> UIImage {
         let side = menuIconSide
         guard image.size.width > 0, image.size.height > 0 else { return image }
@@ -313,12 +313,12 @@ extension TimelineViewController {
         }.withRenderingMode(.alwaysOriginal)
     }
 
-    /// メニューの印の一辺。本文の文字の大きさの設定に合わせる。
+    /// メニューのアイコンの一辺。本文の文字の大きさの設定に合わせる。
     private static var menuIconSide: CGFloat {
         UIFontMetrics(forTextStyle: .body).scaledValue(for: 22)
     }
 
-    /// 動く絵文字を、メニューの印の大きさの、動く画像にする。
+    /// 動く絵文字を、メニューのアイコンの大きさの、動く画像にする。
     /// `UIImage.animatedImage`はどのコマも同じ長さで送るため、1周を同じ長さの刻みに分け、刻みごとに、その時刻に出ているコマを置く。
     /// 刻みはいちばん短いコマの長さにし、刻みの数が300を超えるなら、刻みを長くして300に収める。そのときは短いコマが間引かれるが、1周の長さは変わらない。
     static func animatedMenuIcon(_ animation: AnimatedImage) -> UIImage? {
@@ -375,9 +375,9 @@ extension TimelineViewController {
         )
     }
 
-    /// ユーザーのメニューの印にする、その人のアイコン。読み込み済みの画像を、一覧と同じ形に切り抜く。
+    /// ユーザーのメニューのアイコンにする、その人のアイコン。読み込み済みの画像を、一覧と同じ形に切り抜く。
     /// メンションされたユーザーは、APIの`Mention`にアイコンのURLがないため、一覧の行か前に読んだアカウントから探す。
-    /// まだアイコンを出せなければ記号の仮の印を返し、アカウントとアイコンを読み終えたら、開いているメニューの仮の印を描き替える。
+    /// まだアイコンを出せなければ記号のプレースホルダーを返し、アカウントとアイコンを読み終えたら、開いているメニューのプレースホルダーを描き替える。
     /// - Parameter id: メニューを出した行。行に描いた大きさのアイコンも探す。本文のメンションのメニューのように、行が決まらなければnil。
     private func userMenuIcon(for user: MenuUser, id: ItemID?) -> UIImage {
         let account: Account? = switch user {
@@ -392,14 +392,14 @@ extension TimelineViewController {
         return placeholder
     }
 
-    /// 本文のメンションのメニューの「プロフィール」の印。一覧の投稿のメンションから誰かを引き、投稿のメニューのユーザーの項目と同じアイコンを出す。
+    /// 本文のメンションのメニューの「プロフィール」のアイコン。一覧の投稿のメンションから誰かを引き、投稿のメニューのユーザーの項目と同じアイコンを出す。
     func mentionMenuIcon(for url: URL) -> UIImage? {
         guard let mention = mention(withURL: url) else { return nil }
         defer { loadPendingMenuIcons() }
         return userMenuIcon(for: .mention(mention), id: nil)
     }
 
-    /// 行に描いた大きさか、メニューの印の大きさで読み込み済みのアイコン。
+    /// 行に描いた大きさか、メニューのアイコンの大きさで読み込み済みのアイコン。
     private func cachedAvatar(of account: Account, id: ItemID?) -> UIImage? {
         let urls = Set([account.avatar, account.avatarStatic].compactMap(\.self))
         let rowKeys = id.flatMap(entry(for:)).map { avatarKeys(for: [$0]) } ?? []
@@ -407,12 +407,12 @@ extension TimelineViewController {
         return rowImage ?? userMenuIconKey(of: account).flatMap { avatarImages.cachedImage(for: $0) }
     }
 
-    /// メニューの印の大きさで読む、止まったアイコン。
+    /// メニューのアイコンの大きさで読む、止まったアイコン。
     private func userMenuIconKey(of account: Account) -> AvatarImageStore.Key? {
         account.avatarStatic.map { AvatarView.key(url: $0, animates: false, side: Self.menuIconSide, scale: traitCollection.displayScale) }
     }
 
-    /// メニューを組みながら集めた人のアイコンを読み、開いているメニューの仮の印を描き替える。
+    /// メニューを組みながら集めた人のアイコンを読み、開いているメニューのプレースホルダーのアイコンを描き替える。
     /// アカウントが分からないメンションされた人は、相手ごとに送らず、まとめて1回で読む。
     /// 読み終える前にメニューを閉じていたら、描き替えるものがないので何もしない。次に開いたときは読み込み済みのアイコンを出す。
     private func loadPendingMenuIcons() {
@@ -453,7 +453,7 @@ extension TimelineViewController {
         }
     }
 
-    /// アイコンを、メニューの印の大きさで一覧と同じ形に切り抜き、元の色のまま描く。動くアイコンは先頭のコマで止める。
+    /// アイコンを、メニューのアイコンの大きさで一覧と同じ形に切り抜き、元の色のまま描く。動くアイコンは先頭のコマで止める。
     private static func userMenuIcon(_ avatar: UIImage, shape: AvatarShape) -> UIImage? {
         let image = avatar.images?.first ?? avatar
         guard image.size.width > 0, image.size.height > 0 else { return nil }

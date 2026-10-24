@@ -78,7 +78,7 @@ enum NoticeCatalog {
                 stack(transient: Notice(id: "long", kind: .success, title: "長い文言のときに幅がどこまで広がるかを確かめるための文"))
             },
             CatalogState(title: "長い文言でも件数と「›」を残す") {
-                stack(persistent: Notice(id: "long", kind: .failure, title: "長い文言のときに件数と印が残るかを確かめるための文", additionalCount: 12, action: disclosure))
+                stack(persistent: Notice(id: "long", kind: .failure, title: "長い文言のときに件数と「›」が残るかを確かめるための文", additionalCount: 12, action: disclosure))
             },
             CatalogState(title: "出たままと数秒で消えるものを並べる") {
                 stack(persistent: .download(of: url, fraction: 0.42) {}, transient: .savedToPhotos)

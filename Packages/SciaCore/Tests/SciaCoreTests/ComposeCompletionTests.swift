@@ -415,7 +415,7 @@ struct ComposeCompletionTests {
         return RecentMentions(defaults: defaults, credentialID: "https://example.social#me")
     }
 
-    /// 印だけの時点では、問い合わせずに自分のタグを全部並べる。
+    /// 記号だけの時点では、問い合わせずに自分のタグを全部並べる。
     @Test func markAloneShowsOwnHashtags() async throws {
         let completion = makeCompletion(minimumSearch: 2)
         completion.prefetch()
@@ -426,7 +426,7 @@ struct ComposeCompletionTests {
         #expect(!completion.isLoading)
     }
 
-    /// 印だけの時点では、返信先の人、補完で選んだことのある人の順に並べ、同じ人は一度だけ出す。
+    /// 記号だけの時点では、返信先の人、補完で選んだことのある人の順に並べ、同じ人は一度だけ出す。
     @Test func markAloneShowsReplyParticipantsThenRecent() async throws {
         let recent = try makeRecentMentions()
         recent.record(LocalMention(account: .stub(id: "2", acct: "bob")))
@@ -438,7 +438,7 @@ struct ComposeCompletionTests {
         #expect(!completion.isLoading)
     }
 
-    /// 手元に候補がなければ、印だけの時点では何も出さない。
+    /// 手元に候補がなければ、記号だけの時点では何も出さない。
     @Test func markAloneWithoutLocalCandidatesShowsNothing() async throws {
         let completion = makeCompletion(minimumSearch: 2, recentMentions: try makeRecentMentions())
         completion.textDidChange(mention(""))

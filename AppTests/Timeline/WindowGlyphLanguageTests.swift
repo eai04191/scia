@@ -106,7 +106,7 @@ struct WindowGlyphLanguageTests {
     }
 
     /// 標準の書体にない文字のあとに打ったかなも、ヒラギノで描く。理由は`GlyphLanguageTests.kanaAfterFallbackSymbolUsesJapaneseFont`と同じ。
-    /// 打った文字は、手前の文字の属性を引き継いで入る。「𝕏」のあとに打ったかなが「𝕏」の印を引き継ぐと、ランがつながってSTIXで描かれるため、「𝕏」のあとにかなを打つ場合も確かめる。
+    /// 打った文字は、手前の文字の属性を引き継いで入る。「𝕏」のあとに打ったかなが「𝕏」の属性を引き継ぐと、ランがつながってSTIXで描かれるため、「𝕏」のあとにかなを打つ場合も確かめる。
     @Test func textViewKanaAfterFallbackSymbolUsesJapaneseFont() throws {
         let textView = GlyphLanguageTextView()
         textView.font = .systemFont(ofSize: 17)
@@ -128,7 +128,7 @@ struct WindowGlyphLanguageTests {
 
     /// 1行の入力欄でも、標準の書体にない文字のあとのかなをヒラギノで描く。
     /// 1行の入力欄は、付け直すと変換が切れるため、変換を確定してから付け直す。確定するまでの間は確かめない。
-    /// 「𝕏」のあとに打ったかなが印を引き継ぐ場合と、自動修正のように打つ文字の属性を使わずに置き換わる場合も確かめる。
+    /// 「𝕏」のあとに打ったかなが属性を引き継ぐ場合と、自動修正のように打つ文字の属性を使わずに置き換わる場合も確かめる。
     @Test func textFieldKanaAfterFallbackSymbolUsesJapaneseFont() throws {
         let window = try window()
         window.isHidden = false

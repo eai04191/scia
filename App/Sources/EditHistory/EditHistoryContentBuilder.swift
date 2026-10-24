@@ -110,7 +110,7 @@ struct EditHistoryContentBuilder {
         )
     }
 
-    /// 先頭の段落の形（引用かどうかなど）だけを変えた。2つ目からの段落は、区切りに足した改行の印で示せるが、先頭には印を置く場所がないため、文字で知らせる。
+    /// 先頭の段落の形（引用かどうかなど）だけを変えた。2つ目からの段落は、区切りに足した改行の記号で示せるが、先頭には記号を置く場所がないため、文字で知らせる。
     private static func changesFirstBlockLayout(_ body: RichTextDiff) -> Bool {
         guard let first = body.blocks.first else { return false }
         return first.breakChange == .inserted && first.pieces.first?.change != .inserted

@@ -3,27 +3,27 @@ import QuartzCore
 import SciaCore
 import UIKit
 
-/// 長押しのメニューを開いている間に届いた印を、メニューを組み直さずに描き替える。
+/// 長押しのメニューを開いている間に届いたアイコンを、メニューを組み直さずに描き替える。
 ///
-/// UIKitには、表示中のメニューの項目の印を替える手段がない。`updateVisibleMenu`でメニューを取り替えると、メニューのスクロール位置が先頭に戻り、
-/// 表示中の`UIAction`の`image`を書き換えても描き直されない。そこで、仮の印にそれだけの`UIImageAsset`を持たせ、
-/// メニューを描いている`UIImageView`のうち、その資産の画像を持つものの画像を直接替える。
+/// UIKitには、表示中のメニューの項目のアイコンを替える手段がない。`updateVisibleMenu`でメニューを取り替えると、メニューのスクロール位置が先頭に戻り、
+/// 表示中の`UIAction`の`image`を書き換えても描き直されない。そこで、プレースホルダーのアイコンにそれだけの`UIImageAsset`を持たせ、
+/// メニューを描いている`UIImageView`のうち、そのアセットの画像を持つものの画像を直接替える。
 /// メニューの行はスクロールやサブメニューを開いたときに作り直されるため、開いている間は毎コマ探し直す。
 ///
-/// UIKitが項目の印を`UIImageView`で描き、渡した画像（か、それから作った同じ資産の画像）を持つという、公開されていない作りに頼っている。
-/// 作りが変わって見つからなくなっても、仮の印のまま残るだけで、メニューの操作は変わらない。
+/// UIKitが項目のアイコンを`UIImageView`で描き、渡した画像（か、それから作った同じアセットの画像）を持つという、公開されていない作りに頼っている。
+/// 作りが変わって見つからなくなっても、プレースホルダーのアイコンのまま残るだけで、メニューの操作は変わらない。
 @MainActor
 final class ContextMenuIconSwapper: NSObject {
     /// 画面の描き換えと同じ時間。テストでは差し替える。
     var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
-    /// 仮の印の資産ごとの、描き替える画像。
+    /// プレースホルダーのアセットごとの、描き替える画像。
     private var icons: [ObjectIdentifier: Entry] = [:]
     private weak var window: UIWindow?
     private var displayLink: CADisplayLink?
     private var stats = Stats()
     private let logger = SciaLog.logger(category: "contextMenuIcon")
 
-    /// 描き替えの目印にする仮の印。`symbolName`の記号を`side`ポイント四方に描き、メニューの文字色で塗られるようにする。
+    /// 描き替えの目印にするプレースホルダーのアイコン。`symbolName`の記号を`side`ポイント四方に描き、メニューの文字色で塗られるようにする。
     func placeholder(symbolName: String, side: CGFloat, traitCollection: UITraitCollection) -> UIImage {
         let symbol = UIImage(systemName: symbolName, withConfiguration: UIImage.SymbolConfiguration(textStyle: .body))
         let format = UIGraphicsImageRendererFormat.preferred()
@@ -38,7 +38,7 @@ final class ContextMenuIconSwapper: NSObject {
         return asset.image(with: traitCollection)
     }
 
-    /// `placeholder`で作った仮の印を、`icon`に描き替える。メニューを開いていれば、次のコマで替える。
+    /// `placeholder`で作ったプレースホルダーのアイコンを、`icon`に描き替える。メニューを開いていれば、次のコマで替える。
     func setIcon(_ icon: UIImage, for placeholder: UIImage) {
         guard let asset = placeholder.imageAsset, icons[ObjectIdentifier(asset)] != nil else {
             logger.debug("icon arrived for unknown placeholder")
@@ -57,7 +57,7 @@ final class ContextMenuIconSwapper: NSObject {
         stats = Stats()
     }
 
-    /// メニューが閉じ始めたら止め、仮の印を忘れる。閉じる動きの間は、描き替えた画像のまま残る。
+    /// メニューが閉じ始めたら止め、プレースホルダーのアイコンを忘れる。閉じる動きの間は、描き替えた画像のまま残る。
     func menuWillEnd() {
         displayLink?.invalidate()
         displayLink = nil
@@ -110,7 +110,7 @@ final class ContextMenuIconSwapper: NSObject {
         let asset: UIImageAsset
         /// 描き替える画像。まだ届いていなければnil。
         var icon: UIImage?
-        /// 届いてから1コマ以上たった。浮かび上がらせるのは、届いた次のコマに描いている印だけにする。
+        /// 届いてから1コマ以上たった。浮かび上がらせるのは、届いた次のコマに描いているアイコンだけにする。
         var hasArrived = false
     }
 

@@ -229,7 +229,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
     private let tuning: TuningStore
     private let thumbnailView = FocusCroppedImageView()
     private let symbolView = UIImageView()
-    /// 動画の再生の印。札と同じ下地の丸に三角を載せ、一覧の札とも、ビューアの丸い再生ボタンとも揃える。
+    /// 動画の再生アイコン。札と同じ下地の丸に三角を載せ、一覧の札とも、ビューアの丸い再生ボタンとも揃える。
     private let playView = UIView()
     private let playGlyphView = UIImageView(image: UIImage(systemName: "play.fill"))
     private let badge = MediaBadgeView()
@@ -316,12 +316,12 @@ final class MediaTileView: UIButton, MediaViewerSource {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 動画の再生などの印の大きさを決める、チューニングの値。
+    /// 動画の再生などのアイコンの大きさを決める、チューニングの値。
     private var symbolSizing = (ratio: 0.0, range: 0.0...0.0)
-    /// いま印に当てている大きさ。同じなら設定し直さない。
+    /// いまアイコンに当てている大きさ。同じなら設定し直さない。
     private var symbolPointSize: CGFloat?
 
-    /// 印の大きさのチューニングを読み続ける。変えたら、出ているタイルの印も描き直す。
+    /// アイコンの大きさのチューニングを読み続ける。変えたら、出ているタイルのアイコンも描き直す。
     private func followSymbolSizing() {
         withObservationTracking {
             symbolSizing = (
@@ -351,8 +351,8 @@ final class MediaTileView: UIButton, MediaViewerSource {
         backgroundColor?.resolvedColor(with: traitCollection)
     }
 
-    /// 画像の上に重ねている印（ALTやGIFの札、動画の再生マーク、残りの枚数）の複製。ビューアが動かす画像の複製に載せて、サムネイルとのあいだを一緒に動かす。
-    /// 動画とGIFではサムネイルの画像も含める。ビューアの複製は再生していたコマを描くため、印と一緒にサムネイルへ近づくほど濃くし、着地で絵が切り替わらないようにする。
+    /// 画像の上に重ねている表示（ALTやGIFの札、動画の再生マーク、残りの枚数）の複製。ビューアが動かす画像の複製に載せて、サムネイルとのあいだを一緒に動かす。
+    /// 動画とGIFではサムネイルの画像も含める。ビューアの複製は再生していたコマを描くため、重ねた表示と一緒にサムネイルへ近づくほど濃くし、着地で絵が切り替わらないようにする。
     /// 画像では含めない。複製とサムネイルが同じ絵で、重ねると透明な部分が濃く見えるため。
     /// 複製の大きさが変わっても、サムネイルと同じ角からの位置を保つ。ラベルは画像にし、全体を覆う残りの枚数と中央の再生マークは、伸び縮みしないよう作り直す。
     func makeDecorationCopy() -> UIView {
@@ -416,7 +416,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         return container
     }
 
-    /// 札に出す印。
+    /// 札に出すラベル。
     private var marks: [MediaBadgeView.Mark] = [] {
         didSet { updateBadge() }
     }
@@ -434,7 +434,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
     /// 読み上げに使う、添付ファイルの種類と代替テキスト。
     private var accessibilityParts: (kind: String, description: String?) = ("", nil)
 
-    /// サムネイルはサーバーが作るので、サーバーがHDRの印を消したメディアでは、HDRでもfalseになる。
+    /// サムネイルはサーバーが作るので、サーバーがHDRの情報を消したメディアでは、HDRでもfalseになる。
     private var isHDRThumbnail: Bool { loadedThumbnail?.isHighDynamicRange ?? false }
 
     private func updateBadge() {
@@ -577,15 +577,15 @@ final class MediaTileView: UIButton, MediaViewerSource {
         // 三角は重心が左に寄って見えるため、丸の中で少し右へずらす。
         playGlyphView.frame = playView.bounds.offsetBy(dx: pointSize * Self.playGlyphOffsetRatio, dy: 0)
         moreLabel.frame = bounds
-        // 札をタイルの端から離す余白。狭いタイルでもすべての印を出せるよう、タイルの短い辺に合わせて6ptから2ptまで縮める。
+        // 札をタイルの端から離す余白。狭いタイルでもすべてのラベルを出せるよう、タイルの短い辺に合わせて6ptから2ptまで縮める。
         let inset = min(max(min(bounds.width, bounds.height) / 10, 2), 6).rounded()
         let badgeSize = badge.sizeThatFits(CGSize(width: max(bounds.width - inset * 2, 0), height: bounds.height))
         badge.frame = CGRect(x: inset, y: bounds.maxY - inset - badgeSize.height, width: badgeSize.width, height: badgeSize.height)
     }
 
-    /// 再生の印の丸の直径に対する、三角の大きさの比。
+    /// 再生アイコンの丸の直径に対する、三角の大きさの比。
     private static let playGlyphRatio: CGFloat = 0.45
-    /// 再生の印の三角を右へずらす量の、丸の直径に対する比。
+    /// 再生アイコンの三角を右へずらす量の、丸の直径に対する比。
     private static let playGlyphOffsetRatio: CGFloat = 0.04
 
     /// 一覧に画像を出せるか。音声と種類の分からないファイルは、プレビューのURLが画像とは限らないため読まない。
@@ -616,9 +616,9 @@ final class MediaTileView: UIButton, MediaViewerSource {
     }
 }
 
-/// 添付ファイルの印（ALT、GIF、HDR）を1つにまとめた札。タイルの左下に置く。
-/// タイルの大きさは並べ方で変わり、印ごとに札を置くと狭いタイルに入らないため、1つにまとめ、幅に入らなければ頭の1文字にする。
-/// 印ごとの下地を細い隙間で離してつなげ、つなぎ目の角は立て、外側の角だけを丸める。区切りに線を描くより、1枚の札が区切られて見えるため。
+/// 添付ファイルのラベル（ALT、GIF、HDR）を1つにまとめた札。タイルの左下に置く。
+/// タイルの大きさは並べ方で変わり、ラベルごとに札を置くと狭いタイルに入らないため、1つにまとめ、幅に入らなければ頭の1文字にする。
+/// ラベルごとの下地を細い隙間で離してつなげ、つなぎ目の角は立て、外側の角だけを丸める。区切りに線を描くより、1枚の札が区切られて見えるため。
 final class MediaBadgeView: UIView {
     enum Mark: CaseIterable {
         case alt
@@ -639,17 +639,17 @@ final class MediaBadgeView: UIView {
     /// 札の文字の大きさの上限。文字の大きさの設定に合わせて大きくするが、いちばん狭いタイルでも1文字の札が入るよう、ここで止める。
     static let maximumContentSizeCategory = UIContentSizeCategory.extraExtraLarge
     private static let padding = UIEdgeInsets(top: 2, left: 5, bottom: 2, right: 5)
-    /// 頭の1文字にしたときの左右の余白の範囲。狭いタイルでもすべての印を出せるよう、入るまで最大から最小へ詰める。
+    /// 頭の1文字にしたときの左右の余白の範囲。狭いタイルでもすべてのラベルを出せるよう、入るまで最大から最小へ詰める。
     private static let shortHorizontalPaddings: ClosedRange<CGFloat> = 1...3
     /// 余白を詰めても入らないとき、文字を小さくする下限。これより小さくすると読めないので、入らない分は切れる。
     private static let minimumFontSize: CGFloat = 6
-    /// 印と印のあいだの隙間。
+    /// ラベルとラベルのあいだの隙間。
     private static let gap: CGFloat = 1
     static let cornerRadius: CGFloat = 4
     /// 札の下地。画像の明るさによらず白い文字が読めるよう、黒を透かす。
     static let backgroundColor = UIColor.black.withAlphaComponent(0.6)
 
-    /// 出す印。空なら札を隠す。
+    /// 出すラベル。空なら札を隠す。
     var marks: [Mark] = [] {
         didSet {
             isHidden = marks.isEmpty
@@ -659,7 +659,7 @@ final class MediaBadgeView: UIView {
     }
 
     private var segments: [UILabel] = []
-    /// いまの幅に入れるために選んだ、印の書き方と左右の余白と文字。
+    /// いまの幅に入れるために選んだ、ラベルの書き方と左右の余白と文字。
     private var fit = Fit(shortened: false, horizontalPadding: padding.left, font: .preferredFont(forTextStyle: .caption2))
 
     private struct Fit {
@@ -679,7 +679,7 @@ final class MediaBadgeView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 当てはまる印を、ALT、GIFの順に並べる。
+    /// 当てはまるラベルを、ALT、GIFの順に並べる。
     static func marks(hasDescription: Bool, kind: MediaAttachment.Kind?) -> [Mark] {
         var marks: [Mark] = []
         if hasDescription {
@@ -691,8 +691,8 @@ final class MediaBadgeView: UIView {
         return marks
     }
 
-    /// `size.width`に入る形を選んで大きさを返し、その形に描き替える。できるだけすべての印を出すため、次の順に詰める。
-    /// 1. 印の名前で並べる
+    /// `size.width`に入る形を選んで大きさを返し、その形に描き替える。できるだけすべてのラベルを出すため、次の順に詰める。
+    /// 1. ラベルの名前で並べる
     /// 2. 頭の1文字にし、左右の余白を最大から最小へ詰める
     /// 3. 最小の余白でも入らなければ、文字を下限まで小さくする。下限でも入らない分は切れる
     override func sizeThatFits(_ size: CGSize) -> CGSize {

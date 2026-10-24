@@ -220,7 +220,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let dummy = [UIAction(title: DummyServer.credential.handle, subtitle: "ダミーのデータ", state: isDummy ? .on : .off) { [weak self] _ in
             self?.openDummySession()
         }]
-        // ダミーを選んでいる間は、裏で選んだままの本物のアカウントに印を付けず、ログアウトも出さない。ログアウトすると、ダミーではなくその本物のアカウントが消えるため。
+        // ダミーを選んでいる間は、裏で選んだままの本物のアカウントにチェックマークを付けず、ログアウトも出さない。ログアウトすると、ダミーではなくその本物のアカウントが消えるため。
         let checkedID = isDummy ? nil : accounts.current?.id
         let logOutItems = isDummy ? [] : [logOut]
         #else

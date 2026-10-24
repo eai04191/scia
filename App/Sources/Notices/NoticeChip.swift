@@ -2,7 +2,7 @@ import UIKit
 
 /// 知らせを1件描くガラスのカプセル。並べ方と消えるまでの時計は`NoticeStackView`が持つ。
 ///
-/// UIButtonの構成では、先頭の処理中の印と末尾の「›」を両方置けず、文言が切れたときに件数と「›」を残せないため、自前で組む。
+/// UIButtonの構成では、先頭の処理中のインジケーターと末尾の「›」を両方置けず、文言が切れたときに件数と「›」を残せないため、自前で組む。
 final class NoticeChip: UIControl {
     /// 押せる範囲の最小の大きさ。見た目より小さければ、外側まで広げる。
     static let minimumHitSize: CGFloat = 44
@@ -99,7 +99,7 @@ final class NoticeChip: UIControl {
             iconView.isHidden = false
             iconView.image = UIImage(systemName: notice.kind == .success ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
         case .info:
-            // 成功でも失敗でもないため、どちらの印とも取り違えないよう印を付けず、文言だけで伝える。
+            // 成功でも失敗でもないため、どちらのアイコンとも取り違えないようアイコンを付けず、文言だけで伝える。
             spinner.stopAnimating()
             spinner.isHidden = true
             iconView.isHidden = true

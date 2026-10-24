@@ -38,7 +38,7 @@ final class ComposePollEditor: UIView {
     private let removeButton = UIButton(configuration: .plain())
     private(set) var content: Content?
 
-    /// 選択肢の1行。角の丸い箱に、選び方の印と入力欄を並べる。
+    /// 選択肢の1行。角の丸い箱に、選び方のマークと入力欄を並べる。
     private struct OptionRow {
         let view: UIView
         let indicator: UIImageView
@@ -148,7 +148,7 @@ final class ComposePollEditor: UIView {
                 self?.onSetExpiry(seconds)
             }
         })
-        // チェックが1つだけの印と、2つとも付いた印で、1つだけ選べるか、いくつも選べるかを表す。
+        // チェックが1つだけのアイコンと、2つとも付いたアイコンで、1つだけ選べるか、いくつも選べるかを表す。
         Self.setValue(multipleButton, title: poll.multiple ? "複数選ぶ" : "1つ選ぶ", symbolName: poll.multiple ? "checklist.checked" : "checklist")
         Self.setValue(hidesTotalsButton, title: poll.hidesTotals ? "結果を隠す" : "結果を見せる", symbolName: poll.hidesTotals ? "eye.slash" : "eye")
         // 押すとラベルの長さが変わり、右隣のボタンがずれるため、2つの値の長いほうに幅を合わせる。
@@ -191,7 +191,7 @@ final class ComposePollEditor: UIView {
         indicator.tintColor = .tertiaryLabel
         indicator.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .subheadline)
         indicator.setContentHuggingPriority(.required, for: .horizontal)
-        // 選択肢の文字が長いと、入力欄に押されて印が潰れたため、印は縮めない。
+        // 選択肢の文字が長いと、入力欄に押されてマークが潰れたため、マークは縮めない。
         indicator.setContentCompressionResistancePriority(.required, for: .horizontal)
         indicator.isAccessibilityElement = false
 

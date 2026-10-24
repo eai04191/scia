@@ -26,7 +26,7 @@ final class MediaBarLayering {
     }
 
     private let morph: FocusCroppedImageView
-    /// 最前面の複製に載せた、サムネイルの印の複製。
+    /// 最前面の複製に載せた、サムネイルに重ねた表示の複製。
     private let decoration: UIView?
     private let backdrop: UIView
     /// nilなら、最前面の複製の見せる範囲を絞るだけにする。

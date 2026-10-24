@@ -11,11 +11,11 @@ public enum CompletionKind: String, Sendable, Hashable, CaseIterable {
 /// 補完の対象にする語。位置はUTF-16で数える（`UITextView`の`NSRange`と同じ）。
 public struct CompletionToken: Equatable, Hashable, Sendable {
     public let kind: CompletionKind
-    /// 置き換える範囲。`@`などの印から、語の終わりまで（ハッシュタグはカーソルまで）。絵文字で閉じの`:`まで打ってあれば、それも含む。
+    /// 置き換える範囲。`@`などの記号から、語の終わりまで（ハッシュタグはカーソルまで）。絵文字で閉じの`:`まで打ってあれば、それも含む。
     public let range: Range<Int>
-    /// 印を除いた語。メンションと絵文字は、カーソルより後ろに続く部分も含む。
+    /// 記号を除いた語。メンションと絵文字は、カーソルより後ろに続く部分も含む。
     public let query: String
-    /// 印の直前が、サーバーがメンション・タグ・絵文字として読まない文字（日本語の文字など）。選んだら前に空白を入れる。
+    /// 記号の直前が、サーバーがメンション・タグ・絵文字として読まない文字（日本語の文字など）。選んだら前に空白を入れる。
     public let needsLeadingSpace: Bool
 
     public init(kind: CompletionKind, range: Range<Int>, query: String, needsLeadingSpace: Bool) {
@@ -44,8 +44,8 @@ public struct CompletionInsertion: Equatable, Sendable {
 /// 本文のカーソルの位置から、補完の対象にする語を切り出す。
 ///
 /// どこからを語とみなすかは、サーバーが本文からメンション・タグ・絵文字を読む規則（Mastodonの`Account::MENTION_RE`、`Tag::HASHTAG_RE`、
-/// `CustomEmoji::SCAN_RE`）に合わせる。ただし日本語の文字のすぐ後に打った印は、サーバーは読まないが、空白を入れれば読むので候補を出す。
-/// 英数字や`/`の後の印は、メールアドレス、URL、時刻（`12:30`）の一部なので候補を出さない。
+/// `CustomEmoji::SCAN_RE`）に合わせる。ただし日本語の文字のすぐ後に打った記号は、サーバーは読まないが、空白を入れれば読むので候補を出す。
+/// 英数字や`/`の後の記号は、メールアドレス、URL、時刻（`12:30`）の一部なので候補を出さない。
 public enum CompletionTokenizer {
     /// 左へたどる文字数の上限。長い本文で、カーソルを動かすたびに先頭まで見ないようにする。
     private static let maxScanLength = 300
@@ -54,7 +54,7 @@ public enum CompletionTokenizer {
     ///   - selection: 選んでいる範囲（UTF-16）。空でなければ補完しない。
     ///   - markedRange: 変換中の未確定の文字の範囲（UTF-16）。あれば補完しない。確定してから語を読み直す。
     ///   - kinds: 補完する種類。注意書きの欄では絵文字だけにする。
-    ///   - minimumQueryLength: 印のあとに何文字打ったら語にするか。英数字以外は1文字を2文字と数える。ない種類は1文字。0なら印だけでも語にする。
+    ///   - minimumQueryLength: 記号のあとに何文字打ったら語にするか。英数字以外は1文字を2文字と数える。ない種類は1文字。0なら記号だけでも語にする。
     public static func token(
         in text: String,
         selection: Range<Int>,
@@ -154,10 +154,10 @@ public enum CompletionTokenizer {
         }
     }
 
-    /// `@user`か`@user@domain`。ドメインの`@`の上にカーソルがあるときは、その前の`@`を印にする。
+    /// `@user`か`@user@domain`。ドメインの`@`の上にカーソルがあるときは、その前の`@`を先頭の記号にする。
     private static func mentionToken(triggerAt at: Int, cursor: Int, in characters: IndexedCharacters, minimumQueryLength: Int) -> CompletionToken? {
         var trigger = at
-        // `@user@dom`の2つ目の`@`から左に、ユーザー名と1つ目の`@`が続いていれば、1つ目を印にする。
+        // `@user@dom`の2つ目の`@`から左に、ユーザー名と1つ目の`@`が続いていれば、1つ目を先頭の記号にする。
         var start = at - 1
         while start >= 0, isUsernameCharacter(characters[start]) {
             start -= 1
@@ -186,7 +186,7 @@ public enum CompletionTokenizer {
             end -= 1
         }
         let query = characters.string(trigger + 1 ..< end)
-        // 印だけなら空の語にする。文字数の下限で出すかを決める。
+        // 記号だけなら空の語にする。文字数の下限で出すかを決める。
         if let first = query.first, !isUsernameStart(first) { return nil }
         return makeToken(kind: .mention, trigger: trigger, end: end, query: query, in: characters, minimumQueryLength: minimumQueryLength)
     }
@@ -227,7 +227,7 @@ public enum CompletionTokenizer {
         query.reduce(0) { $0 + ($1.isASCII ? 1 : 2) }
     }
 
-    /// 印の直前の文字のままで、サーバーがメンション・タグ・絵文字として読むか。
+    /// 記号の直前の文字のままで、サーバーがメンション・タグ・絵文字として読むか。
     private static func serverAccepts(_ kind: CompletionKind, after previous: Character?) -> Bool {
         guard let previous else { return true }
         switch kind {
@@ -243,7 +243,7 @@ public enum CompletionTokenizer {
         }
     }
 
-    /// 英数字や`/`の後の印は、メールアドレス、URL、時刻の一部とみなし、空白を入れて補完することもしない。
+    /// 英数字や`/`の後の記号は、メールアドレス、URL、時刻の一部とみなし、空白を入れて補完することもしない。
     private static func suppressesCompletion(after previous: Character?) -> Bool {
         guard let previous, previous.isASCII else { return false }
         return previous.isLetter || previous.isNumber || previous == "_" || previous == "/" || previous == "="

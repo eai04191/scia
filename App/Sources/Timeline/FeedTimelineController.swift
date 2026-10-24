@@ -56,7 +56,7 @@ final class FeedTimelineController {
     var onDummyNotifications: (() -> Void)?
     /// デバッグメニューの「ステータスバーの通知を出し続ける」を切り替えたとき。渡す値は切り替えたあとの状態。
     var onSetStatusBarTickerLooping: ((Bool) -> Void)?
-    /// ステータスバーの通知を出し続けているか。デバッグメニューの印に使う。
+    /// ステータスバーの通知を出し続けているか。デバッグメニューのチェックマークに使う。
     var isStatusBarTickerLooping: (() -> Bool)?
     /// 新着の挿入を保留している間に、補完を見送った。保留を解いたときに補完する。
     private var isFillHeld = false
@@ -782,7 +782,7 @@ extension FeedTimelineController {
             UIAction(title: "直近の投稿を取りこぼして再接続", image: UIImage(systemName: "bolt.horizontal")) { [weak self] _ in
                 self?.simulateMissedWhileDisconnected()
             },
-            // オンとオフの印を、開くたびに今の状態で出す。
+            // オンとオフのチェックマークを、開くたびに今の状態で出す。
             UIDeferredMenuElement.uncached { [weak self] completion in
                 let isOn = self?.isStatusBarTickerLooping?() ?? false
                 completion([

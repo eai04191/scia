@@ -267,29 +267,29 @@ public enum TuningCatalog {
         defaultValue: 4
     )
 
-    /// サムネイルの中央に置く印（動画の再生など）の大きさの、タイルの短い辺に対する比。
+    /// サムネイルの中央に置くアイコン（動画の再生など）の大きさの、タイルの短い辺に対する比。
     public static let mediaSymbolRatio = NumberTuning(
         id: "timeline.mediaSymbolRatio",
-        title: "サムネイルの再生の印の大きさ（短い辺に対する比）",
+        title: "サムネイルの再生アイコンの大きさ（短い辺に対する比）",
         range: 0.1...0.9,
         step: 0.05,
         defaultValue: 0.4
     )
 
-    /// サムネイルの中央に置く印の大きさの下限。通知や投稿欄の小さなサムネイルで効く。
+    /// サムネイルの中央に置くアイコンの大きさの下限。通知や投稿欄の小さなサムネイルで効く。
     /// 範囲を上限の範囲と重ねないことで、下限が上限を超えないようにする。
     public static let mediaSymbolMinSize = NumberTuning(
         id: "timeline.mediaSymbolMinSize",
-        title: "サムネイルの再生の印の最小（pt）",
+        title: "サムネイルの再生アイコンの最小（pt）",
         range: 4...16,
         step: 1,
         defaultValue: 10
     )
 
-    /// サムネイルの中央に置く印の大きさの上限。一覧の大きなサムネイルで効く。
+    /// サムネイルの中央に置くアイコンの大きさの上限。一覧の大きなサムネイルで効く。
     public static let mediaSymbolMaxSize = NumberTuning(
         id: "timeline.mediaSymbolMaxSize",
-        title: "サムネイルの再生の印の最大（pt）",
+        title: "サムネイルの再生アイコンの最大（pt）",
         range: 16...80,
         step: 2,
         defaultValue: 36
@@ -1259,7 +1259,7 @@ public enum TuningCatalog {
         defaultValue: 5
     )
 
-    /// メンションとハッシュタグで、印のあとに何文字打ったらサーバーで探すか。届くまでは、手元の候補（自分のタグ、返信先の人、補完で選んだ人）だけを出す。
+    /// メンションとハッシュタグで、記号のあとに何文字打ったらサーバーで探すか。届くまでは、手元の候補（自分のタグ、返信先の人、補完で選んだ人）だけを出す。
     /// web UIと同じく2文字にする。1文字で問い合わせると、stellaria.networkのアカウント検索は500を返した（2026年10月）。
     public static let completionMinimumQuery = NumberTuning(
         id: "compose.completion.minimumQuery",
@@ -1297,7 +1297,7 @@ public enum TuningCatalog {
         )
     }
 
-    /// 語にする文字数。メンションとハッシュタグは印だけでも語にし、サーバーで探すかは`ComposeCompletion`が決める。
+    /// 語にする文字数。メンションとハッシュタグは記号だけでも語にし、サーバーで探すかは`ComposeCompletion`が決める。
     @MainActor
     public static func completionMinimumQueryLength(in store: TuningStore) -> [CompletionKind: Int] {
         [.mention: 0, .hashtag: 0, .emoji: Int(store.value(of: completionEmojiMinimumQuery))]

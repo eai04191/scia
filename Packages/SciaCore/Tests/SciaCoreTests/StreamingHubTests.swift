@@ -146,7 +146,7 @@ struct StreamingHubTests {
     @Test func eventsArrivingBeforeDelayedConnectedFollowIt() async throws {
         let messageGate = Gate()
         let sendGate = Gate()
-        // ホームのイベントは、手前のローカルのイベントをハブが受け取り終えた印に使う。
+        // ホームのイベントは、手前のローカルのイベントをハブが受け取り終えた目印に使う。
         let connector = ScriptedConnector([
             .init(
                 messages: [Self.delete("1", stream: #"["public:local"]"#), Self.delete("2")],
@@ -183,7 +183,7 @@ struct StreamingHubTests {
         let messageGate = Gate()
         let sendGate = Gate()
         let dropGate = Gate()
-        // ホームのイベントは、手前のローカルのイベントをハブが受け取り終えた印に使う。
+        // ホームのイベントは、手前のローカルのイベントをハブが受け取り終えた目印に使う。
         let connector = ScriptedConnector([
             .init(
                 messages: [Self.delete("29", stream: #"["public:local"]"#), Self.delete("30")],

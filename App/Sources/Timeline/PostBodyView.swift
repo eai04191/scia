@@ -50,7 +50,7 @@ struct PostBodyContent {
     var hashtagAccount: Account?
     /// 自分の投稿が自分のフィルターに一致していることを示す1行。一番下に置く。一致していなければnil。
     var filterNote: NSAttributedString?
-    /// 上の部品と、フィルターの印のあいだ。
+    /// 上の部品と、フィルターの注記のあいだ。
     var filterNoteSpacing: CGFloat = 0
 }
 
@@ -105,7 +105,7 @@ final class PostBodyView: UIView {
         Self.shown(pollView)
     }
 
-    /// 表示中のフィルターの印。添付ファイルやリンクカードより下にあるため、読み上げでは本文と分け、それらの後の要素にする。
+    /// 表示中のフィルターの注記。添付ファイルやリンクカードより下にあるため、読み上げでは本文と分け、それらの後の要素にする。
     var filterNote: UILabel? {
         Self.shown(filterNoteLabel)
     }
@@ -386,7 +386,7 @@ final class PostBodyView: UIView {
         return xPostView
     }
 
-    /// フィルターの印を一番下の部品の下に置き、自分の下端を決める。
+    /// フィルターの注記を一番下の部品の下に置き、自分の下端を決める。
     /// - Parameter textBottomInset: 一番下が本文のときの、最後の文字のベースラインから字面の下端まで。
     private func applyFilterNote(_ note: NSAttributedString?, below last: UIView, spacing: CGFloat, textBottomInset: CGFloat) {
         guard let note else {
@@ -435,7 +435,7 @@ final class PostBodyView: UIView {
         }
     }
 
-    /// 読み上げる文。注意書きがあれば先に読み、畳んでいる間は本文を読まない。フィルターの印は別の要素なので含めない。
+    /// 読み上げる文。注意書きがあれば先に読み、畳んでいる間は本文を読まない。フィルターの注記は別の要素なので含めない。
     var accessibilityText: String {
         guard let content else { return "" }
         guard let spoiler = content.spoiler else { return content.text.string }

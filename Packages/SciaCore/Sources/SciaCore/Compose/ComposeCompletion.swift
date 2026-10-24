@@ -72,7 +72,7 @@ public enum EmojiCompletion {
 /// ハッシュタグは、プロフィールに載せているタグと最近使ったタグも一度だけ取り、打った語に合うものを検索結果より上に出す。
 /// メンションは、返信先の人と補完で選んだことのある人を、同じく検索結果より上に出す。
 /// サーバーの検索は自分が使ったかを見ず、名前の短い順やサーバー全体の人気で並べるため、よく使うタグや人が候補から押し出されることがある。
-/// 打った文字数がサーバーで探す文字数に届くまでは、問い合わせずに、この手元の候補だけを出す。印だけの時点から出せるようにするため。
+/// 打った文字数がサーバーで探す文字数に届くまでは、問い合わせずに、この手元の候補だけを出す。記号だけの時点から出せるようにするため。
 /// 失敗しても、打つのは止めない。候補の場所で知らせ、押すと問い合わせ直す。
 @MainActor
 @Observable
@@ -126,7 +126,7 @@ public final class ComposeCompletion {
         public var debounce: Duration
         /// 出す候補の数。
         public var limit: Int
-        /// メンションとハッシュタグで、印のあとに何文字打ったらサーバーで探すか。英数字以外は1文字を2文字と数える。
+        /// メンションとハッシュタグで、記号のあとに何文字打ったらサーバーで探すか。英数字以外は1文字を2文字と数える。
         /// 届くまでは手元の候補だけを出す。
         public var minimumSearchQueryLength: Int
 
@@ -164,7 +164,7 @@ public final class ComposeCompletion {
     /// 出すもの。出さないならnil。
     public var content: Content? {
         guard let token, !isDismissed else { return nil }
-        // 手元の候補だけを出す間は、合うものがなければ何も出さない。「一致しない」と出すと、印を打つたびに一覧が出るため。
+        // 手元の候補だけを出す間は、合うものがなければ何も出さない。「一致しない」と出すと、記号を打つたびに一覧が出るため。
         if !searchesServer(token), candidates.isEmpty { return nil }
         if let failureMessage {
             return candidates.isEmpty ? .failed(failureMessage) : .candidatesWithFailure(candidates, failureMessage)

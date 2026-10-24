@@ -435,8 +435,8 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 
     // MARK: - まとまりのボタン
 
-    /// まとまりのボタン。最近使ったものは時計、検索の結果は虫めがね、カテゴリーはその先頭の絵文字の画像を印にする。
-    /// 名前の文字にすると、一覧の端の効果（`.soft`）でぼけた絵文字の上に重なって読みにくかった。iOSの絵文字キーボードの下の段も印で並べる。
+    /// まとまりのボタン。最近使ったものは時計、検索の結果は虫めがね、カテゴリーはその先頭の絵文字の画像をアイコンにする。
+    /// 名前の文字にすると、一覧の端の効果（`.soft`）でぼけた絵文字の上に重なって読みにくかった。iOSの絵文字キーボードの下の段もアイコンで並べる。
     /// 名前は、VoiceOverと、長押しの拡大表示で出す。
     private func rebuildSectionButtons() {
         sectionButtons.forEach { $0.removeFromSuperview() }
@@ -460,9 +460,9 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         updateSelectedSection()
     }
 
-    /// まとまりのボタンの幅。印の大きさにかかわらず揃える。
+    /// まとまりのボタンの幅。アイコンの大きさにかかわらず揃える。
     private static let sectionButtonWidth: CGFloat = 40
-    /// まとまりのボタンの絵文字の印の大きさ。
+    /// まとまりのボタンの絵文字のアイコンの大きさ。
     private static let sectionIconSize: CGFloat = 22
 
     private func sectionIcon(for section: EmojiPaletteSection) -> UIImage? {
@@ -478,12 +478,12 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             guard case .custom(let emoji) = section.emojis.first, let image = emojiImages.image(for: emoji.staticUrl) else { return nil }
             return Self.icon(from: image)
         case .standard(let title):
-            // Unicodeの絵文字のまとまりは、iOSの絵文字キーボードと同じく、記号の印にする。時計や虫めがねと同じ色で並ぶ。
+            // Unicodeの絵文字のまとまりは、iOSの絵文字キーボードと同じく、記号のアイコンにする。時計や虫めがねと同じ色で並ぶ。
             return UIImage(systemName: Self.standardGroupSymbols[title] ?? "square.grid.2x2")
         }
     }
 
-    /// Unicodeの絵文字のまとまりの名前（`Tools/build-emoji-data.py`の`GROUP_TITLES`）と、まとまりのボタンの印。
+    /// Unicodeの絵文字のまとまりの名前（`Tools/build-emoji-data.py`の`GROUP_TITLES`）と、まとまりのボタンのアイコン。
     private static let standardGroupSymbols: [String: String] = [
         "顔と感情": "face.smiling",
         "人と体": "hand.raised",
@@ -496,7 +496,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         "旗": "flag",
     ]
 
-    /// 縦横比を保って、印の大きさの枠に収める。絵文字の色のまま描く。
+    /// 縦横比を保って、アイコンの大きさの枠に収める。絵文字の色のまま描く。
     private static func icon(from image: UIImage) -> UIImage {
         let size = image.size
         let scale = sectionIconSize / max(size.width, size.height, 1)
@@ -507,7 +507,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         }.withRenderingMode(.alwaysOriginal)
     }
 
-    /// 印の画像が届いたまとまりのボタンに、印を入れる。
+    /// アイコンの画像が届いたまとまりのボタンに、アイコンを入れる。
     private func updateSectionIcons(matching urls: Set<URL>?) {
         for (index, button) in sectionButtons.enumerated() where sections.indices.contains(index) {
             let section = sections[index]
@@ -547,7 +547,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private func setSelectedSection(_ index: Int?) {
         guard index != selectedSectionIndex else { return }
         selectedSectionIndex = index
-        // 選んでいるまとまりは、印の後ろを薄く塗って示す。絵文字の印は色を変えられないため。
+        // 選んでいるまとまりは、アイコンの後ろを薄く塗って示す。絵文字のアイコンは色を変えられないため。
         for (buttonIndex, button) in sectionButtons.enumerated() {
             let selected = buttonIndex == index
             button.configuration?.baseForegroundColor = selected ? .tintColor : .secondaryLabel
@@ -693,7 +693,7 @@ private final class EmojiPaletteStatusCell: UICollectionViewCell {
         label.textAlignment = .center
         retryButton.configuration?.title = "読み直す"
         retryButton.addAction(UIAction { [weak self] _ in self?.onRetry() }, for: .primaryActionTriggered)
-        // 読み込み中は印と文言を横に、失敗は文言の下に読み直すボタンを置く。カスタム絵文字の中身の代わりに出すので、一覧が空のときやタイムラインの失敗と同じく中央にそろえる。
+        // 読み込み中はインジケーターと文言を横に、失敗は文言の下に読み直すボタンを置く。カスタム絵文字の中身の代わりに出すので、一覧が空のときやタイムラインの失敗と同じく中央にそろえる。
         let message = UIStackView(arrangedSubviews: [spinner, label])
         message.alignment = .center
         message.spacing = 8

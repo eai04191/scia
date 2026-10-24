@@ -115,7 +115,7 @@ protocol LinkMenuHost: AnyObject {
     /// ハッシュタグのメニューの「ユーザーの投稿」を選んだ。`name`は`#`を除いた名前。
     func openHashtag(_ name: String, of account: Account)
     /// 本文のメンションのメニューの「プロフィール」に出す、その人のアイコン。`url`はメンションのリンク先。
-    /// 誰か分からなければnilで、項目の記号のままにする。アイコンがまだなければ仮の印を返し、届いたら開いているメニューで描き替える。
+    /// 誰か分からなければnilで、項目の記号のままにする。アイコンがまだなければプレースホルダーのアイコンを返し、届いたら開いているメニューで描き替える。
     func mentionMenuIcon(for url: URL) -> UIImage?
 }
 

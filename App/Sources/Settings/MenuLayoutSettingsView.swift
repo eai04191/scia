@@ -2,13 +2,13 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 並びの設定画面に出す、項目の名前と印。
+/// 並びの設定画面に出す、項目の名前とアイコン。
 protocol MenuItemPresentable {
     var title: String { get }
     /// 名前の下に添える説明。
     var note: String? { get }
     var symbolName: String { get }
-    /// 「その他」の境目の行の名前と説明と印。境目より下の項目をどこへ入れるかは、項目の種類ごとに違う。
+    /// 「その他」の境目の行の名前と説明とアイコン。境目より下の項目をどこへ入れるかは、項目の種類ごとに違う。
     static var moreBoundaryTitle: String { get }
     static var moreBoundaryNote: String { get }
     static var moreBoundarySymbolName: String { get }

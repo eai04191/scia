@@ -610,7 +610,7 @@ struct MediaViewerControllerTests {
         #expect(current - backward >= Double.pi)
     }
 
-    /// ループ再生は、その動画を見ている間だけ切り替える。最初は切っていて、入れたらメニューに印を付け、最後まで再生したら先頭から続ける。
+    /// ループ再生は、その動画を見ている間だけ切り替える。最初は切っていて、入れたらメニューにチェックマークを付け、最後まで再生したら先頭から続ける。
     @Test func loopPlaybackTogglesPerVideo() throws {
         let file = LocalMediaFile(url: URL(filePath: "/tmp/v.mov"), mimeType: "video/quicktime", kind: .video)
         let page = PlayerPageController(item: MediaViewerItem(id: "v", kind: .video, description: "", file: file, thumbnail: nil, status: .ready))
@@ -725,7 +725,7 @@ struct MediaViewerControllerTests {
         }
     }
 
-    /// 取り消されるまで落とし続ける。取り消されたら`stopped`に印を付ける。
+    /// 取り消されるまで落とし続ける。取り消されたら`stopped`を立てる。
     private static func endlessDownload(stopped: Flag) -> MediaDownloads.Download {
         { _, _, onProgress in
             onProgress(0.5)
@@ -1371,7 +1371,7 @@ private final class SavedFiles {
     var files: [URL] = []
 }
 
-/// 落とす処理とテストの間で受け渡す印。
+/// 落とす処理とテストの間で受け渡すフラグ。
 private final class Flag: Sendable {
     private let value = Mutex(false)
 

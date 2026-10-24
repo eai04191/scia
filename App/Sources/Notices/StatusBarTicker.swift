@@ -171,7 +171,7 @@ final class StatusBarTicker {
     #if DEBUG
     private var loopTask: Task<Void, Never>?
 
-    /// 通知を出し続けているか。デバッグメニューの印に使う。
+    /// 通知を出し続けているか。デバッグメニューのチェックマークに使う。
     var isLooping: Bool { loopTask != nil }
 
     /// デバッグメニューの「ステータスバーの通知を出し続ける」。オンの間、`items`を順に1件ずつ、出る、出ている、消えるを繰り返す。

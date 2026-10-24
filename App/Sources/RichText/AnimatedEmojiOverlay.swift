@@ -14,7 +14,7 @@ final class AnimatedEmojiOverlay {
         let index: Int
         /// 層が使っている間、置き場が同じものを返せるよう、箱ごと持つ。
         let animation: EmojiAnimation
-        /// 動く層の上に重ねる色。編集履歴で足した絵文字の印。
+        /// 動く層の上に重ねる色。編集履歴で足した絵文字を示す。
         let tint: UIColor?
 
         /// 同じ位置に同じアニメーションを同じ色で描く。

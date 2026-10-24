@@ -22,16 +22,16 @@ extension MenuLayout.Groups {
     }
 }
 
-/// 長押しのメニューの項目の中身。名前、印、説明はここから決める。
+/// 長押しのメニューの項目の中身。名前、アイコン、説明はここから決める。
 enum MenuItemContent {
-    /// URLに対する共通の項目。名前、印、説明、押したときの動きは共通の項目のものを使う。
+    /// URLに対する共通の項目。名前、アイコン、説明、押したときの動きは共通の項目のものを使う。
     /// - Parameter noteSuffix: このメニューに固有の決まり。共通の説明の後ろに書き足す。
     case url(URLMenuAction, noteSuffix: String? = nil)
     /// このメニューだけの項目。押したときの動きは、メニューを組む側で決める。
     case own(title: String, symbolName: String, note: String? = nil)
 }
 
-/// 中身から名前、印、説明を決める項目。項目の種類ごとに、`content`の分岐を1つだけ書く。
+/// 中身から名前、アイコン、説明を決める項目。項目の種類ごとに、`content`の分岐を1つだけ書く。
 /// 分岐に`default`を書かない。項目を足したときに、共通の項目につなぐか、独自の項目にするかをコンパイラに確かめさせるため。
 protocol MenuItemContentProviding: MenuItemPresentable {
     var content: MenuItemContent { get }

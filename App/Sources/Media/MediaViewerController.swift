@@ -68,11 +68,11 @@ final class MediaViewerController: UIViewController {
     /// 開閉とドラッグで動かす画像の複製。縦横比を保って枠を埋めるように切り抜くため、枠の形をサムネイルとビューアの画像のあいだで変えるだけで、
     /// サムネイルと同じ切り抜き方へ移る。
     private let morph = FocusCroppedImageView()
-    /// 複製に載せる、サムネイルの印（ALT、GIF、残りの枚数）の複製。サムネイルに近いほど濃くし、ビューアの画像の大きさでは見せない。
+    /// 複製に載せる、サムネイルに重ねた表示（ALT、GIF、残りの枚数）の複製。サムネイルに近いほど濃くし、ビューアの画像の大きさでは見せない。
     private var morphDecoration: UIView?
-    /// 複製のさらに手前に置く、サムネイルに重なっているビューの複製。印と同じ濃さで出し入れする。
+    /// 複製のさらに手前に置く、サムネイルに重なっているビューの複製。重ねた表示と同じ濃さで出し入れする。
     private var morphOverlap: MediaSourceOverlap?
-    /// 複製に敷く、サムネイルの背景の色。印と同じ濃さで出し入れし、透明な部分のある画像でサムネイルとの見え方をそろえる。
+    /// 複製に敷く、サムネイルの背景の色。重ねた表示と同じ濃さで出し入れし、透明な部分のある画像でサムネイルとの見え方をそろえる。
     private var morphPlaceholderColor: UIColor?
     /// 複製の画像を、ページが描いている画像に合わせ続けるか。元の画像が届いたら、動いている途中でも差し替える。
     private var morphFollowsPage = false
@@ -953,7 +953,7 @@ extension MediaViewerController {
     /// 複製を見せ、ページの画像と一覧のサムネイルを隠す。複製の画像は、ページが描いている画像か、まだ描いていなければサムネイルの画像。
     /// どちらもなければ（アプリで表示できないファイルなど）、ページを描き写した画像を使う。
     /// 画像を描くページなら、最初に画像がなくても、届いた時点で複製を差し替える。
-    /// - Parameter decorationAlpha: サムネイルの印の濃さ。サムネイルの位置から始めるなら1、ビューアの画像の位置から始めるなら0。
+    /// - Parameter decorationAlpha: サムネイルに重ねた表示の濃さ。サムネイルの位置から始めるなら1、ビューアの画像の位置から始めるなら0。
     static let allCorners: CACornerMask = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
 
     private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: (any MediaViewerSource)?, decorationAlpha: CGFloat) {
@@ -972,7 +972,7 @@ extension MediaViewerController {
         hide(tile)
     }
 
-    /// サムネイルの印の複製を、複製に載せ直す。サムネイルを隠す前に描き写す必要がある。
+    /// サムネイルに重ねた表示の複製を、複製に載せ直す。サムネイルを隠す前に描き写す必要がある。
     /// 切り抜く位置も、サムネイルの焦点に合わせ直す。
     /// 複製の大きさが変わっても角からの位置を保つよう、複製いっぱいに広げて自動で位置を合わせる。
     private func attachDecoration(from tile: (any MediaViewerSource)?, alpha: CGFloat) {
@@ -995,7 +995,7 @@ extension MediaViewerController {
         setDecorationAlpha(alpha)
     }
 
-    /// サムネイルの印と背景の濃さ。サムネイルの大きさで1、ビューアの画像の大きさで0。
+    /// サムネイルに重ねた表示と背景の濃さ。サムネイルの大きさで1、ビューアの画像の大きさで0。
     private func setDecorationAlpha(_ alpha: CGFloat) {
         morphDecoration?.alpha = alpha
         morphOverlap?.view.alpha = alpha
@@ -1255,7 +1255,7 @@ extension MediaViewerController {
             showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: tile, decorationAlpha: 0)
         } else {
             if tile !== hiddenTile {
-                // 左右の切り替えで戻り先が変わっていたら、印をその戻り先のものに載せ直す。
+                // 左右の切り替えで戻り先が変わっていたら、重ねた表示をその戻り先のものに載せ直す。
                 attachDecoration(from: tile, alpha: morphDecoration?.alpha ?? 0)
             }
             hide(tile)
@@ -1342,7 +1342,7 @@ extension MediaViewerController {
         flight.start()
     }
 
-    /// バーの奥に描く複製。複製と同じ画像と切り抜き方で、サムネイルの印も載せる。
+    /// バーの奥に描く複製。複製と同じ画像と切り抜き方で、サムネイルに重ねた表示も載せる。
     private func makeUnderlay(decoratedLike tile: (any MediaViewerSource)?) -> MediaBarLayering.Underlay {
         let image = FocusCroppedImageView()
         image.image = morph.image

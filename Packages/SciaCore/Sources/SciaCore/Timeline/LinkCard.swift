@@ -33,7 +33,7 @@ public enum LinkCard: Equatable, Sendable {
     /// 投稿のメンションの相手のURLと同じものと、表示でハッシュタグとメンションに分けている、`class`に`hashtag`か`mention`があるもの。
     /// サーバーは整える前の本文を見るが、APIで返る他のサーバーの投稿の本文は、`rel`が`nofollow noopener`に書き換えられて`tag`が残らないため、
     /// `class`でも除く。Misskeyの投稿のように`class`もないハッシュタグは、リンクの文字列が投稿のタグの名前に`#`を付けたものかで除く。
-    /// 本文のHTMLのリンクを直接見るのは、`u-url`や`h-card`のように、表示の分類にない印も見るため。
+    /// 本文のHTMLのリンクを直接見るのは、`u-url`や`h-card`のように、表示の分類にないクラスも見るため。
     ///
     /// Mastodonは、自分のサーバーへのリンクも除く。ここでは除かないため、自分のサーバーの投稿へのリンクには、
     /// サーバーがカードを付けないまま、リンク先だけのカードが出る。見せ方の決まりで、カードが付かなかったときも
@@ -61,7 +61,7 @@ public enum LinkCard: Equatable, Sendable {
         return candidate?.url
     }
 
-    /// `a`の属性から、httpかhttpsのリンクで、メンションとハッシュタグの印がないもののURLを返す。
+    /// `a`の属性から、httpかhttpsのリンクで、メンションとハッシュタグのクラスがないもののURLを返す。
     private static func markedLinkURL(_ attributes: [String: String], mentionURLs: Set<URL>) -> URL? {
         guard let href = attributes["href"], let url = URL(string: href),
               let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https",

@@ -83,7 +83,7 @@ enum AttachmentStripCatalog {
 
     /// - Parameters:
     ///   - kind: nilなら、端末からまだ読み込んでいない添付にする。サムネイルもない。
-    ///   - label: サムネイルの中央に描く文字。並べ替えを試す列で見分けるために付ける。ほかの列では、動画の再生の印と重ならないよう付けない。
+    ///   - label: サムネイルの中央に描く文字。並べ替えを試す列で見分けるために付ける。ほかの列では、動画の再生アイコンと重ならないよう付けない。
     fileprivate static func item(
         _ kind: MediaAttachment.Kind?,
         color: UIColor,
@@ -111,7 +111,7 @@ enum AttachmentStripCatalog {
     }
 }
 
-/// 書いていないときの投稿欄のカプセルの1行（`ComposeRestContent`）の状態。札のアイコン、重ねた写真、本文の組み合わせと、失敗の印を並べる。
+/// 書いていないときの投稿欄のカプセルの1行（`ComposeRestContent`）の状態。札のアイコン、重ねた写真、本文の組み合わせと、エラーのアイコンを並べる。
 enum ComposeCapsuleCatalog {
     private static let reply = "arrowshape.turn.up.left.fill"
     private static let edit = "pencil"

@@ -41,7 +41,7 @@ public struct Hashtag: Decodable, Hashable, Sendable {
     }
 
     /// リンクの文字列が、投稿のタグのどれかの名前に`#`を付けたものか。
-    /// Misskeyの投稿のハッシュタグは、`class`がなく、`rel`も`nofollow noopener`に書き換わって届くため、リンクの印では見分けられない。
+    /// Misskeyの投稿のハッシュタグは、`class`がなく、`rel`も`nofollow noopener`に書き換わって届くため、リンクの属性では見分けられない。
     /// `normalizedNames`は`normalizedNames(of:)`でそろえたもの。`text`は文字参照を戻したものを渡す。
     static func isTagText(_ text: String, normalizedNames: Set<String>) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -6,7 +6,7 @@ import UIKit
 /// UITextFieldは`defaultTextAttributes`の言語を文字に付けずに捨てる。前後の文字の言語も引き継がず、`typingAttributes`は書き始めたときと文字が入るたびに消す。
 /// キーボードで打った文字はこの入力欄の`insertText`を通らないため、書き始めたときと文字が変わったときに、次に入る文字の言語を入れ直す。
 /// 自動修正で置き換わった文字は`typingAttributes`を使わずに入るため、文字が変わったあとに言語のない文字が残っていれば、全体を付け直す。
-/// 標準の書体にない記号の印（`separateFallbackSymbols`）も、文字に付けた属性と同じく捨てられたり引き継がれたりするため、言語と合わせて確かめ、付け直す。
+/// 標準の書体にない記号の属性（`separateFallbackSymbols`）も、文字に付けた属性と同じく捨てられたり引き継がれたりするため、言語と合わせて確かめ、付け直す。
 class GlyphLanguageTextField: UITextField {
     private var language: String?
 
@@ -79,7 +79,7 @@ class GlyphLanguageTextField: UITextField {
         }
     }
 
-    /// 言語と、標準の書体にない記号の印を付けた文字列。
+    /// 言語と、標準の書体にない記号の属性を付けた文字列。
     private static func labeled(_ text: NSAttributedString, language: String) -> NSAttributedString {
         let labeled = NSMutableAttributedString(attributedString: text)
         let range = NSRange(location: 0, length: labeled.length)

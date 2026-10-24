@@ -440,7 +440,7 @@ final class ReactionGlowView: UIView {
     /// アイコンと、行の下の端とのすき間。
     private static let iconBottomGap: CGFloat = 1
 
-    /// - Parameter exposure: SDRの白の何倍の明るさにするか。1を超えると、明るさの余地（headroom）の印が付いたHDRの色になる。
+    /// - Parameter exposure: SDRの白の何倍の明るさにするか。1を超えると、明るさの余地（headroom）を使うHDRの色になる。
     ///   HDRの色の成分は0...1で渡す決まりなので、広い色域で外に出た成分は丸める。
     private static func cgColor(_ color: ExposedColor, alpha: Double) -> CGColor {
         cgColor(color.color, alpha: alpha, exposure: color.exposure)

@@ -217,7 +217,7 @@ private final class ActivityQueue: Sendable {
     }
 }
 
-/// 複数の経路のうち、最初の1つだけが続きを行うための印。
+/// 複数の経路のうち、最初の1つだけが続きを行うためのフラグ。
 private final class OnceFlag: Sendable {
     private let isClaimed = Mutex(false)
 

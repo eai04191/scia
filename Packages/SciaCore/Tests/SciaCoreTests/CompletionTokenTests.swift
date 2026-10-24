@@ -49,14 +49,14 @@ struct CompletionTokenTests {
         #expect(token.query == "bob")
     }
 
-    /// 印だけでは出さない。打った文字数がチューニングの値に満たなければ出さない。
+    /// 記号だけでは出さない。打った文字数がチューニングの値に満たなければ出さない。
     @Test func requiresMinimumQueryLength() {
         #expect(token("@|") == nil)
         #expect(token("@b|", minimum: [.mention: 2]) == nil)
         #expect(token("@bo|", minimum: [.mention: 2]) != nil)
     }
 
-    /// 文字数を0にすると、印だけでも語にする。投稿欄では、記号だけの時点から手元の候補を出すため。
+    /// 文字数を0にすると、記号だけでも語にする。投稿欄では、記号だけの時点から手元の候補を出すため。
     @Test func markAloneWithZeroMinimum() throws {
         let mention = try #require(token("@|", minimum: [.mention: 0]))
         #expect(mention.query == "")

@@ -240,7 +240,7 @@ final class SavedStatusesController {
         }
     }
 
-    /// 投稿の中身を変える。印を外しても行は残し、外すのをサーバーが受け付けて一覧から離れたときに消す。
+    /// 投稿の中身を変える。ブックマークやお気に入りを外しても行は残し、外すのをサーバーが受け付けて一覧から離れたときに消す。
     func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
         guard !isStopped, store.updateStatus(id, transform) else { return }
         showEntries()

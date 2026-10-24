@@ -181,7 +181,7 @@ final class VideoControlsView: UIView {
             self?.onMuteToggle?()
             self?.onInteraction?()
         }, for: .primaryActionTriggered)
-        // 開くたびに、今の速さに印を付け直す。
+        // 開くたびに、今の速さにチェックマークを付け直す。
         speedButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
             completion(self?.speedMenuElements?() ?? [])
         }])

@@ -5,7 +5,7 @@ public enum SavedStatusesKind: String, Sendable, CaseIterable {
     case bookmarks
     case favourites
 
-    /// この一覧に入っている印が付いているか。
+    /// この一覧に入る状態（ブックマークやお気に入り）か。
     public func isSaved(_ status: Status) -> Bool {
         switch self {
         case .bookmarks: status.bookmarked
@@ -54,7 +54,7 @@ public final class SavedStatusesStore {
     /// アプリの中で先頭に入れた行で探すと、ほかの端末でその前に付けた行が、その行の下にあっても読み落とすため。
     private var fromServerIDs: Set<TimelineEntry.ID> = []
     /// 外すのをサーバーが受け付けた投稿。外したまま残した行を消すのは、この投稿だけにする。
-    /// 結果を待っている間に消すと、外すのに失敗して印を戻しても、行が戻らないため。
+    /// 結果を待っている間に消すと、外すのに失敗して元に戻しても、行が戻らないため。
     private var settledUnsavedIDs: Set<Status.ID> = []
     /// 読み込み中のギャップのID。
     public private(set) var loadingGapIDs: Set<String> = []
@@ -225,7 +225,7 @@ public final class SavedStatusesStore {
         return insertAtTop(target)
     }
 
-    /// 印が付いていて、削除も除きもしていない投稿を、まだなければ先頭に入れる。入れたらtrueを返す。
+    /// この一覧に入る状態で、削除も除きもしていない投稿を、まだなければ先頭に入れる。入れたらtrueを返す。
     @discardableResult
     private func insertAtTop(_ status: Status) -> Bool {
         guard kind.isSaved(status), !deletedIDs.contains(status.id), !isExcluded(status), !entries.contains(where: { $0.id == .status(status.id) }) else { return false }
@@ -252,7 +252,7 @@ public final class SavedStatusesStore {
         return true
     }
 
-    /// 同じIDの投稿の中身を`transform`で変える。印を外しても行は残す。表示に関わる変化があればtrueを返す。
+    /// 同じIDの投稿の中身を`transform`で変える。ブックマークやお気に入りを外しても行は残す。表示に関わる変化があればtrueを返す。
     @discardableResult
     public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) -> Bool {
         let updated = entries.map { entry in
