@@ -441,8 +441,7 @@ struct InlineComposeControllerTests {
         try await waitUntilSettled()
         window.layoutIfNeeded()
         let host = try #require(window.rootViewController)
-        host.present(UIViewController(), animated: false)
-        try await Task.sleep(for: .milliseconds(100))
+        try await host.presentForTesting(UIViewController())
         host.dismiss(animated: true)
 
         let customize = try #require(buttons(in: window).first { $0.accessibilityLabel == "カスタマイズ" })

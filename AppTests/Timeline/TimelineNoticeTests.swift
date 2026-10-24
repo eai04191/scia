@@ -130,7 +130,7 @@ struct TimelineNoticeTests {
     }
 
     /// チップを押して出すものは、押した時点のウインドウのいちばん手前の画面に出す。出した時点の画面が閉じていても出せるようにするため。
-    @Test func noticePresenterIsResolvedWhenTapped() throws {
+    @Test func noticePresenterIsResolvedWhenTapped() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         let context = NoticeContext(viewer: nil, window: harness.window)
@@ -138,7 +138,7 @@ struct TimelineNoticeTests {
         #expect(context.presenter === navigation)
 
         let sheet = UIViewController()
-        harness.viewController.present(sheet, animated: false)
+        try await harness.viewController.presentForTesting(sheet)
         defer { sheet.dismiss(animated: false) }
         #expect(context.presenter === sheet)
     }

@@ -35,11 +35,11 @@ struct MediaViewerControllerTests {
     }
 
     /// 開いている間は、違和感レポートに表示中の画像の倍率と出どころが残る。画像が極端に小さく出る不具合の調べに使う。
-    @Test func stateDumpIncludesZoomOfCurrentImage() throws {
+    @Test func stateDumpIncludesZoomOfCurrentImage() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = makeViewer(attachments: [image("1", url: URL(string: "https://x.example/1.png"))])
-        harness.viewController.present(viewer, animated: false)
+        try await harness.viewController.presentForTesting(viewer)
         defer { viewer.dismiss(animated: false) }
 
         let dump = try #require(AppDependencies.stateDumps.dumpAll().first { $0.name == "mediaViewer" }?.text)
@@ -52,7 +52,7 @@ struct MediaViewerControllerTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let viewer = makeViewer(attachments: [image("1", url: URL(string: "https://x.example/1.png"))])
-        harness.viewController.present(viewer, animated: false)
+        try await harness.viewController.presentForTesting(viewer)
         #expect(harness.viewController.presentedViewController === viewer)
 
         #expect(viewer.accessibilityPerformEscape())
@@ -93,6 +93,9 @@ struct MediaViewerControllerTests {
         let transfers = makeTransfers(downloads: makeDownloads(files: files, download: download), photoSaver: photoSaver)
         let attachment = MediaAttachment(id: "1", type: .image, url: URL(string: "https://x.example/original/1"), previewUrl: nil, description: description)
         let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: store, dragToDismiss: drag, timing: timing, transfers: transfers, sourceTile: { _ in nil })
+        // 画像が届く前のメニューを、間に待ちを挟まずに確かめるテストがあるため、出し終わりを待たない。負荷のかかった実行では、出し終える前に画像が届くことがある。
+        // 上に確認やアラートを出すテストは、出し終えるのを自分で待つ。
+        // swiftlint:disable:next present_without_waiting
         harness.viewController.present(viewer, animated: false)
         return viewer
     }
@@ -144,7 +147,7 @@ struct MediaViewerControllerTests {
         let attachment = MediaAttachment(id: "1", type: .image, url: url, previewUrl: nil)
         let transfers = makeTransfers(downloads: makeDownloads(files: files) { _, _, _ in throw URLError(.notConnectedToInternet) })
         let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: store, dragToDismiss: drag, timing: timing, transfers: transfers, sourceTile: { _ in nil })
-        harness.viewController.present(viewer, animated: false)
+        try await harness.viewController.presentForTesting(viewer)
         defer { viewer.dismiss(animated: false) }
 
         try await waitUntil { menuAction("共有", in: viewer)?.attributes.contains(.disabled) == false }
@@ -208,7 +211,7 @@ struct MediaViewerControllerTests {
         let chip = try #require(column.stack.chips.first)
 
         let viewer = makeViewer(attachments: [image("1", url: nil)])
-        harness.viewController.present(viewer, animated: false)
+        try await harness.viewController.presentForTesting(viewer)
         try await waitUntil { !viewer.isMoving }
         #expect(abs(column.frame.minY - viewer.noticePlacement(below: onList).top) < 1)
         #expect(harness.window.subviews.last === harness.overlay)
@@ -225,12 +228,10 @@ struct MediaViewerControllerTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let sheet = UIViewController()
-        harness.viewController.present(sheet, animated: false)
+        try await harness.viewController.presentForTesting(sheet)
         defer { sheet.dismiss(animated: false) }
-        try await waitUntil { sheet.view.window != nil }
         let viewer = makeViewer(attachments: [image("1", url: nil)])
-        sheet.present(viewer, animated: false)
-        try await waitUntil { viewer.viewIfLoaded?.window != nil }
+        try await sheet.presentForTesting(viewer)
         try await waitUntil { !viewer.isMoving }
         #expect(harness.window.subviews.last === harness.overlay)
 
@@ -249,6 +250,8 @@ struct MediaViewerControllerTests {
         defer { harness.tearDown() }
         let viewer = presentLoadingViewer(on: harness, data: try pngData(), photoSaver: PhotoLibrarySaver { _ in throw PhotoLibrarySaver.NotAuthorized() })
         defer { viewer.dismiss(animated: false) }
+        // 出し終える前にアラートを出すと、UIKitが出さずに捨てる。
+        try await waitUntil { !viewer.isBeingPresented }
         try await waitUntil { menuAction("写真に保存", in: viewer)?.attributes.isEmpty == true }
 
         viewer.saveToPhotos()
@@ -282,9 +285,9 @@ struct MediaViewerControllerTests {
         MediaViewerItem(id: id, kind: .image, description: description, file: nil, thumbnail: nil, status: status)
     }
 
-    private func presentDraftViewer(on harness: TimelineHarness, items: [MediaViewerItem], actions: DraftActions) -> MediaViewerController {
+    private func presentDraftViewer(on harness: TimelineHarness, items: [MediaViewerItem], actions: DraftActions) async throws -> MediaViewerController {
         let viewer = MediaViewerController(items: items, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, editing: actions.editing, sourceTile: { _ in nil })
-        harness.viewController.present(viewer, animated: false)
+        try await harness.viewController.presentForTesting(viewer)
         viewer.view.layoutIfNeeded()
         return viewer
     }
@@ -295,7 +298,7 @@ struct MediaViewerControllerTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let actions = DraftActions()
-        let viewer = presentDraftViewer(on: harness, items: [draftItem("a")], actions: actions)
+        let viewer = try await presentDraftViewer(on: harness, items: [draftItem("a")], actions: actions)
         defer { viewer.dismiss(animated: false) }
 
         #expect(!viewer.captionView.isHidden)
@@ -315,10 +318,10 @@ struct MediaViewerControllerTests {
     }
 
     /// 残りの文字数を出し始める数と入力欄の最大の行数は、投稿欄から渡した値を使う。
-    @Test func draftEditingUsesGivenEditorTuning() throws {
+    @Test func draftEditingUsesGivenEditorTuning() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
-        let viewer = presentDraftViewer(on: harness, items: [draftItem("a")], actions: DraftActions())
+        let viewer = try await presentDraftViewer(on: harness, items: [draftItem("a")], actions: DraftActions())
         defer { viewer.dismiss(animated: false) }
 
         #expect(viewer.descriptionEditor.remainingThreshold == 5)
@@ -326,21 +329,21 @@ struct MediaViewerControllerTests {
     }
 
     /// 投稿欄から開いたときのメニューは、代替テキストの編集に、投稿欄から渡した項目を続ける。共有や保存は出さない。
-    @Test func draftMenuOffersEditingAndGivenItems() throws {
+    @Test func draftMenuOffersEditingAndGivenItems() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
-        let viewer = presentDraftViewer(on: harness, items: [draftItem("a")], actions: DraftActions())
+        let viewer = try await presentDraftViewer(on: harness, items: [draftItem("a")], actions: DraftActions())
         defer { viewer.dismiss(animated: false) }
 
         #expect(viewer.menuElements().compactMap { ($0 as? UIAction)?.title } == ["代替テキストを編集", "削除"])
     }
 
     /// 書いている途中に左右へ切り替え始めたら、その時点の内容で、切り替える前の添付の代替テキストを確定する。
-    @Test func switchingPageWhileEditingCommitsDescription() throws {
+    @Test func switchingPageWhileEditingCommitsDescription() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let actions = DraftActions()
-        let viewer = presentDraftViewer(on: harness, items: [draftItem("a"), draftItem("b")], actions: actions)
+        let viewer = try await presentDraftViewer(on: harness, items: [draftItem("a"), draftItem("b")], actions: actions)
         defer { viewer.dismiss(animated: false) }
         viewer.beginEditingDescription()
         viewer.descriptionEditor.text = "猫"
@@ -353,11 +356,11 @@ struct MediaViewerControllerTests {
     }
 
     /// 入力欄の右端のボタンを押したら、その時点の内容で書き終える。
-    @Test func doneButtonCommitsDescription() throws {
+    @Test func doneButtonCommitsDescription() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let actions = DraftActions()
-        let viewer = presentDraftViewer(on: harness, items: [draftItem("a")], actions: actions)
+        let viewer = try await presentDraftViewer(on: harness, items: [draftItem("a")], actions: actions)
         defer { viewer.dismiss(animated: false) }
         viewer.beginEditingDescription()
         viewer.descriptionEditor.text = "猫"
@@ -373,7 +376,7 @@ struct MediaViewerControllerTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let actions = DraftActions()
-        let viewer = presentDraftViewer(on: harness, items: [draftItem("a", description: "猫")], actions: actions)
+        let viewer = try await presentDraftViewer(on: harness, items: [draftItem("a", description: "猫")], actions: actions)
         viewer.beginEditingDescription()
         viewer.descriptionEditor.text = "三毛猫"
 
@@ -388,7 +391,7 @@ struct MediaViewerControllerTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let actions = DraftActions()
-        let viewer = presentDraftViewer(on: harness, items: [draftItem("a", status: .uploading)], actions: actions)
+        let viewer = try await presentDraftViewer(on: harness, items: [draftItem("a", status: .uploading)], actions: actions)
         defer { viewer.dismiss(animated: false) }
 
         // この画面だけのチップは、ビューアが画面に載ってからチップの列に差し出す。
@@ -448,10 +451,10 @@ struct MediaViewerControllerTests {
     }
 
     /// 読み込む前は種類が分からず画像として開くため、読み込んで動画と分かったら、表示中のページを動画のページに作り直す。
-    @Test func pageIsRebuiltWhenLoadedMediaTurnsOutToBeVideo() throws {
+    @Test func pageIsRebuiltWhenLoadedMediaTurnsOutToBeVideo() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
-        let viewer = presentDraftViewer(on: harness, items: [draftItem("a", status: .uploading)], actions: DraftActions())
+        let viewer = try await presentDraftViewer(on: harness, items: [draftItem("a", status: .uploading)], actions: DraftActions())
         defer { viewer.dismiss(animated: false) }
         #expect(viewer.currentImagePage != nil)
 
@@ -463,10 +466,10 @@ struct MediaViewerControllerTests {
     }
 
     /// 横にスワイプしている途中で切り替え先が動画と分かったら、切り替えを終えた時点で、残っていた画像のページを動画のページに差し替える。
-    @Test func pendingPageIsRebuiltAfterTransitionWhenLoadedMediaTurnsOutToBeVideo() throws {
+    @Test func pendingPageIsRebuiltAfterTransitionWhenLoadedMediaTurnsOutToBeVideo() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
-        let viewer = presentDraftViewer(on: harness, items: [draftItem("a"), draftItem("b", status: .uploading)], actions: DraftActions())
+        let viewer = try await presentDraftViewer(on: harness, items: [draftItem("a"), draftItem("b", status: .uploading)], actions: DraftActions())
         defer { viewer.dismiss(animated: false) }
         let swiping = UIPageViewController()
         let current = try #require(viewer.displayedPage)
@@ -706,11 +709,11 @@ struct MediaViewerControllerTests {
         photoSaver: PhotoLibrarySaver = PhotoLibrarySaver { _ in },
         transfers: MediaTransferCenter? = nil,
         download: @escaping MediaDownloads.Download
-    ) -> MediaViewerController {
+    ) async throws -> MediaViewerController {
         let transfers = transfers ?? makeTransfers(downloads: makeDownloads(download: download), photoSaver: photoSaver)
         let attachment = MediaAttachment(id: "1", type: type, url: URL(string: "https://x.example/original/1.mp4"), previewUrl: nil)
         let viewer = MediaViewerController(attachments: [attachment], startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, transfers: transfers, sourceTile: { _ in nil })
-        harness.viewController.present(viewer, animated: false)
+        try await harness.viewController.presentForTesting(viewer)
         return viewer
     }
 
@@ -746,7 +749,7 @@ struct MediaViewerControllerTests {
         defer { harness.tearDown() }
         let data = Data("movie".utf8)
         let saved = SavedFiles()
-        let viewer = presentVideoViewer(on: harness, photoSaver: PhotoLibrarySaver { saved.files.append($0) }, download: Self.slowDownload(data))
+        let viewer = try await presentVideoViewer(on: harness, photoSaver: PhotoLibrarySaver { saved.files.append($0) }, download: Self.slowDownload(data))
         defer { viewer.dismiss(animated: false) }
         #expect(topLevelTitles(of: viewer) == ["共有", "写真に保存", "リンクをコピー", "ループ再生"])
         #expect(try #require(menuAction("写真に保存", in: viewer)).attributes.isEmpty)
@@ -767,7 +770,7 @@ struct MediaViewerControllerTests {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let saved = SavedFiles()
-        let viewer = presentVideoViewer(on: harness, photoSaver: PhotoLibrarySaver { saved.files.append($0) }, download: Self.slowDownload(Data("movie".utf8), duration: .seconds(2)))
+        let viewer = try await presentVideoViewer(on: harness, photoSaver: PhotoLibrarySaver { saved.files.append($0) }, download: Self.slowDownload(Data("movie".utf8), duration: .seconds(2)))
         defer { viewer.dismiss(animated: false) }
 
         viewer.saveToPhotos()
@@ -801,10 +804,8 @@ struct MediaViewerControllerTests {
             try await Task.sleep(for: .milliseconds(150))
             throw URLError(.networkConnectionLost)
         }, operationStatus: recent)
-        let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
+        let viewer = try await presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
         defer { viewer.dismiss(animated: false) }
-        // 進み具合の文言は始めた直後から出ているため、下の待ちは譲らずに抜けることがある。出し終える前に押すと、UIKitが確認を出さずに捨てる。
-        try await waitUntil { !viewer.isBeingPresented }
 
         viewer.saveToPhotos()
         try await waitUntil { viewer.downloadProgressText != nil }
@@ -826,7 +827,7 @@ struct MediaViewerControllerTests {
         let stopped = Flag()
         let recent = OperationStatus()
         let transfers = makeTransfers(downloads: makeDownloads(download: Self.endlessDownload(stopped: stopped)), photoSaver: PhotoLibrarySaver { saved.files.append($0) }, operationStatus: recent)
-        let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
+        let viewer = try await presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
         defer { viewer.dismiss(animated: false) }
 
         viewer.saveToPhotos()
@@ -862,7 +863,7 @@ struct MediaViewerControllerTests {
             throw URLError(.timedOut)
         }
         let transfers = makeTransfers(downloads: makeDownloads(download: download), photoSaver: PhotoLibrarySaver { _ in }, operationStatus: recent)
-        let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
+        let viewer = try await presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
         defer { viewer.dismiss(animated: false) }
 
         viewer.saveToPhotos()
@@ -892,7 +893,7 @@ struct MediaViewerControllerTests {
         gated: Set<String> = ["slow.mp4"],
         transfers: (MediaDownloads) -> MediaTransferCenter,
         release: Flag
-    ) -> MediaViewerController {
+    ) async throws -> MediaViewerController {
         let downloads = makeDownloads { url, folder, onProgress in
             onProgress(0.25)
             if gated.contains(url.lastPathComponent) {
@@ -907,7 +908,7 @@ struct MediaViewerControllerTests {
         }
         let attachments = ["slow", "fast"].map { MediaAttachment(id: $0, type: .video, url: URL(string: "https://x.example/original/\($0).mp4"), previewUrl: nil) }
         let viewer = MediaViewerController(attachments: attachments, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, transfers: transfers(downloads), sourceTile: { _ in nil })
-        harness.viewController.present(viewer, animated: false)
+        try await harness.viewController.presentForTesting(viewer)
         return viewer
     }
 
@@ -917,7 +918,7 @@ struct MediaViewerControllerTests {
         defer { harness.tearDown() }
         let saved = SavedFiles()
         let release = Flag()
-        let viewer = makeTwoVideoViewer(on: harness, transfers: { makeTransfers(downloads: $0, photoSaver: PhotoLibrarySaver { saved.files.append($0) }) }, release: release)
+        let viewer = try await makeTwoVideoViewer(on: harness, transfers: { makeTransfers(downloads: $0, photoSaver: PhotoLibrarySaver { saved.files.append($0) }) }, release: release)
         defer { viewer.dismiss(animated: false) }
 
         viewer.saveToPhotos()
@@ -946,7 +947,7 @@ struct MediaViewerControllerTests {
         let release = Flag()
         defer { release.set() }
         let opened = OpenedLists()
-        let viewer = makeTwoVideoViewer(on: harness, gated: ["slow.mp4", "fast.mp4"], transfers: { downloads in
+        let viewer = try await makeTwoVideoViewer(on: harness, gated: ["slow.mp4", "fast.mp4"], transfers: { downloads in
             let center = makeTransfers(downloads: downloads)
             center.notices.showOperationStatus = { opened.presenters.append($0) }
             return center
@@ -973,7 +974,7 @@ struct MediaViewerControllerTests {
         let saved = SavedFiles()
         let stack = harness.overlay.column.stack
         let transfers = makeTransfers(downloads: makeDownloads(download: Self.slowDownload(Data("movie".utf8), duration: .milliseconds(500))), photoSaver: PhotoLibrarySaver { saved.files.append($0) })
-        let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
+        let viewer = try await presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
 
         viewer.saveToPhotos()
         try await waitUntil { stack.persistentNotice?.text == "ダウンロード中 50%" }
@@ -996,7 +997,7 @@ struct MediaViewerControllerTests {
         let stopped = Flag()
         let stack = harness.overlay.column.stack
         let transfers = makeTransfers(downloads: makeDownloads(download: Self.endlessDownload(stopped: stopped)))
-        let viewer = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
+        let viewer = try await presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
 
         try #require(menuAction("共有", in: viewer)).performWithSender(nil, target: nil)
         try await waitUntil { viewer.downloadProgressText != nil }
@@ -1030,12 +1031,12 @@ struct MediaViewerControllerTests {
             try Data("movie".utf8).write(to: file)
             return file
         })
-        let first = presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
+        let first = try await presentVideoViewer(on: harness, transfers: transfers) { _, _, _ in throw URLError(.unknown) }
         try #require(menuAction("共有", in: first)).performWithSender(nil, target: nil)
         try await waitUntil { first.downloadProgressText != nil }
 
         let second = MediaViewerController(attachments: [MediaAttachment(id: "2", type: .video, url: URL(string: "https://x.example/original/2.mp4"), previewUrl: nil)], startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, transfers: transfers, sourceTile: { _ in nil })
-        first.present(second, animated: false)
+        try await first.presentForTesting(second)
         // ほかのビューアでは、見ている添付ファイルのものではないため件数だけを出す。
         try await waitUntil { second.downloadProgressText == "ダウンロード中 1件" }
         second.dismiss(animated: false)
@@ -1066,7 +1067,7 @@ struct MediaViewerControllerTests {
             MediaAttachment(id: "video", type: .video, url: URL(string: "https://x.example/original/b.mp4"), previewUrl: nil),
         ]
         let viewer = MediaViewerController(attachments: attachments, startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, transfers: makeTransfers(downloads: downloads), sourceTile: { _ in nil })
-        harness.viewController.present(viewer, animated: false)
+        try await harness.viewController.presentForTesting(viewer)
         defer { viewer.dismiss(animated: false) }
 
         try #require(menuAction("共有", in: viewer)).performWithSender(nil, target: nil)
@@ -1083,7 +1084,7 @@ struct MediaViewerControllerTests {
     @Test func downloadFailureIsShown() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
-        let viewer = presentVideoViewer(on: harness) { _, _, _ in throw URLError(.notConnectedToInternet) }
+        let viewer = try await presentVideoViewer(on: harness) { _, _, _ in throw URLError(.notConnectedToInternet) }
         defer { viewer.dismiss(animated: false) }
 
         viewer.saveToPhotos()
@@ -1097,10 +1098,10 @@ struct MediaViewerControllerTests {
     }
 
     /// 音声は写真に入らないため、保存は出さない。
-    @Test func audioOffersOnlySharing() throws {
+    @Test func audioOffersOnlySharing() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
-        let viewer = presentVideoViewer(on: harness, type: .audio, download: Self.slowDownload(Data()))
+        let viewer = try await presentVideoViewer(on: harness, type: .audio, download: Self.slowDownload(Data()))
         defer { viewer.dismiss(animated: false) }
 
         #expect(topLevelTitles(of: viewer) == ["共有", "リンクをコピー", "ループ再生"])
