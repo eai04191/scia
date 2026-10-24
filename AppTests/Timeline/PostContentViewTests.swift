@@ -156,7 +156,7 @@ struct PostContentViewTests {
         view.layoutIfNeeded()
         #expect(element.accessibilityFrameInContainerSpace == laidOut)
 
-        try #require(view as? PostContentView).refreshTime(now: .now.addingTimeInterval(60 * 60 * 24 * 400))
+        try #require(view as? PostContentView).refreshTime(now: try status(content: "<p>短い</p>").createdAt.addingTimeInterval(60 * 60 * 24 * 400))
         view.layoutIfNeeded()
         #expect(element.accessibilityFrameInContainerSpace == laidOut)
     }

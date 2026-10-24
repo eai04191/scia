@@ -110,14 +110,14 @@ struct StatusMenuTests {
 
     /// 投稿のない通知では、通知したユーザーと、投稿を必要としない通知の削除だけを出す。
     @Test func followNotificationShowsOnlyNotifyingUserAndDismiss() throws {
-        let notification = MastodonNotification(id: "1", type: .follow, createdAt: .now, account: try account("2", "bob"))
+        let notification = MastodonNotification(id: "1", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: try account("2", "bob"))
 
         #expect(try outline(menu(for: .notification(notification))) == [["@bob[プロフィール,リンクをコピー,共有,ブラウザで開く]"], ["その他[通知を削除]"]])
     }
 
     /// 通知したユーザーは、対象の投稿を書いた人より先に出る。
     @Test func notificationListsNotifyingUserBeforeAuthor() throws {
-        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: .now, account: try account("2", "bob"), status: try status(url: nil))
+        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: try account("2", "bob"), status: try status(url: nil))
 
         // 最後のまとまりは、通知の削除を入れた「その他」。
         #expect(try outline(menu(for: .notification(notification))).dropLast().last == ["@bob[プロフィール,リンクをコピー,共有,ブラウザで開く]", "@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"])
@@ -219,7 +219,7 @@ struct StatusMenuTests {
     /// メンションされたユーザーのアイコンは、一覧のほかの行にいるその人のアカウントから取る。ブーストされた投稿を書いた人と、通知した人からも探す。
     @Test func mentionedAccountIsFoundInOtherRows() throws {
         let boost = try status(url: nil, reblog: try status(url: nil, account: try account("3", "carol")))
-        let notification = MastodonNotification(id: "1", type: .follow, createdAt: .now, account: try account("4", "dave"))
+        let notification = MastodonNotification(id: "1", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: try account("4", "dave"))
         let entries: [TimelineEntry] = [.status(boost), .notification(notification)]
 
         #expect(TimelineViewController.account(withID: "3", in: entries)?.acct == "carol")
@@ -320,7 +320,7 @@ struct StatusMenuTests {
         #expect(try !titles(.status(others)).contains("会話をミュート"))
         #expect(try titles(.status(mine)).contains("会話をミュート"))
         #expect(try titles(.status(mentioningMe)).contains("会話をミュート"))
-        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: .now, account: try account("2", "bob"), status: others)
+        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: try account("2", "bob"), status: others)
         #expect(try titles(.notification(notification)).contains("会話をミュート"))
     }
 

@@ -38,7 +38,7 @@ struct NotificationContentViewTests {
             mediaAttachments: withMedia ? [image("1")] : []
         )
         let actor = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: base.account.avatar)
-        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: .now, account: actor, status: status)
+        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: actor, status: status)
         let view = vc.contentConfiguration(for: notification, base: .cell()).makeContentView()
         let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
         view.frame = CGRect(x: 0, y: 0, width: size.width, height: size.height - 0.3)

@@ -19,7 +19,7 @@ struct GlyphLanguageTests {
     }
 
     private func status(_ content: String, language: String?, spoiler: String = "") -> Status {
-        Status(id: "1", createdAt: .now, account: account, content: "<p>\(content)</p>", spoilerText: spoiler, language: language, url: nil)
+        Status(id: "1", createdAt: Date(timeIntervalSince1970: 0), account: account, content: "<p>\(content)</p>", spoilerText: spoiler, language: language, url: nil)
     }
 
     /// 漢字とかなを描くときに選ばれた書体の名前。英字や記号、画像の置き場の文字は、どの言語でも同じ書体で描かれるため除く。
@@ -110,12 +110,12 @@ struct GlyphLanguageTests {
         let toggle = SpoilerView.toggleText(isCollapsed: true, kind: .contentWarning, font: .preferredFont(forTextStyle: .footnote))
         #expect(languages(in: toggle, of: "本文を表示") == [nil])
 
-        let follow = MastodonNotification(id: "1", type: .follow, createdAt: .now, account: account)
+        let follow = MastodonNotification(id: "1", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: account)
         let header = try #require(controller.contentConfiguration(for: follow, base: .cell()) as? NotificationContentConfiguration).header
         #expect(languages(in: header, of: "日本語の名前") == ["zh-Hans"])
         #expect(languages(in: header, of: "にフォローされました") == [nil])
 
-        let mention = MastodonNotification(id: "2", type: .mention, createdAt: .now, account: account, status: status("本文", language: nil))
+        let mention = MastodonNotification(id: "2", type: .mention, createdAt: Date(timeIntervalSince1970: 0), account: account, status: status("本文", language: nil))
         let context = try #require((controller.contentConfiguration(for: mention, base: .cell()) as? PostContentConfiguration)?.context?.text)
         #expect(languages(in: context, of: "日本語の名前") == ["zh-Hans"])
         #expect(languages(in: context, of: "からのメンション") == [nil])

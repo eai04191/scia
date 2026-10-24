@@ -28,7 +28,7 @@ struct TimelineContentTests {
     @Test func favouriteNotificationShowsActorAndTargetStatus() throws {
         let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let actor = Account(id: "2", username: "bob", acct: "bob@remote.example", displayName: "Bob", avatar: status.account.avatar)
-        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: .now, account: actor, status: status)
+        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: actor, status: status)
 
         let content = try #require(makeViewController().contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
 
@@ -41,7 +41,7 @@ struct TimelineContentTests {
     @Test func notificationAccessibilityFrameSurvivesRedrawWithoutLayout() throws {
         let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let actor = Account(id: "2", username: "bob", acct: "bob@remote.example", displayName: "Bob", avatar: status.account.avatar)
-        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: .now, account: actor, status: status)
+        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: actor, status: status)
         let content = try #require(makeViewController().contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
         let view = content.makeContentView()
         let size = view.systemLayoutSizeFitting(CGSize(width: 360, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
@@ -59,7 +59,7 @@ struct TimelineContentTests {
     /// メンションはホームの投稿と同じ見た目にし、名前の上に誰が何をしたかの行を足す。
     @Test func mentionLooksLikePostWithContext() throws {
         let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
-        let notification = MastodonNotification(id: "1", type: .mention, createdAt: .now, account: status.account, status: status)
+        let notification = MastodonNotification(id: "1", type: .mention, createdAt: Date(timeIntervalSince1970: 0), account: status.account, status: status)
 
         let content = try #require(makeViewController().contentConfiguration(for: notification, base: .cell()) as? PostContentConfiguration)
 
@@ -71,7 +71,7 @@ struct TimelineContentTests {
     /// 再掲する本文は、チューニングの行数で切る。
     @Test func quotedBodyIsTruncatedByTuning() throws {
         let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
-        let notification = MastodonNotification(id: "1", type: .reblog, createdAt: .now, account: status.account, status: status)
+        let notification = MastodonNotification(id: "1", type: .reblog, createdAt: Date(timeIntervalSince1970: 0), account: status.account, status: status)
         let tuning = TuningStore(defaults: nil)
         tuning.setValue(5, for: TuningCatalog.notificationQuotedBodyLines)
         let vc = TimelineViewController(tuning: tuning, emojiImages: .offline, avatarImages: .offline)
@@ -84,7 +84,7 @@ struct TimelineContentTests {
     @Test func followNotificationShowsAccountAddress() throws {
         let avatar = try #require(StatusFactory.make(count: 1, startingAt: 100).first?.account.avatar)
         let actor = Account(id: "2", username: "bob", acct: "bob@remote.example", displayName: "", avatar: avatar)
-        let notification = MastodonNotification(id: "1", type: .follow, createdAt: .now, account: actor)
+        let notification = MastodonNotification(id: "1", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: actor)
 
         let content = try #require(makeViewController().contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
 
@@ -96,7 +96,7 @@ struct TimelineContentTests {
     @Test func unknownNotificationTypeStillShowsActor() throws {
         let avatar = try #require(StatusFactory.make(count: 1, startingAt: 100).first?.account.avatar)
         let actor = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: avatar)
-        let notification = MastodonNotification(id: "1", type: .other("admin.sign_up"), createdAt: .now, account: actor)
+        let notification = MastodonNotification(id: "1", type: .other("admin.sign_up"), createdAt: Date(timeIntervalSince1970: 0), account: actor)
 
         let content = try #require(makeViewController().contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
 
@@ -200,7 +200,7 @@ struct TimelineContentTests {
     ])
     func notificationBodyColorDependsOnKind(_ kind: MastodonNotification.Kind, expected: UIColor) throws {
         let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
-        let notification = MastodonNotification(id: "1", type: kind, createdAt: .now, account: status.account, status: status)
+        let notification = MastodonNotification(id: "1", type: kind, createdAt: Date(timeIntervalSince1970: 0), account: status.account, status: status)
 
         let content = makeViewController().contentConfiguration(for: notification, base: .cell())
         let body = (content as? PostContentConfiguration)?.body ?? (content as? NotificationContentConfiguration)?.body.text

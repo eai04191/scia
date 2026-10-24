@@ -12,7 +12,7 @@ struct ComposeModelTests {
     private func status(visibility: Status.Visibility, spoilerText: String = "") throws -> Status {
         Status(
             id: "10",
-            createdAt: .now,
+            createdAt: Date(timeIntervalSince1970: 0),
             account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://example.social/a.png")),
             content: "",
             spoilerText: spoilerText,
@@ -239,7 +239,7 @@ struct ComposeModelTests {
     /// 送信を待つ間に返信先を変えても、送っている下書きと食い違わないよう、変えさせない。
     @Test func replyTargetIsKeptWhilePosting() async throws {
         let original = try status(visibility: .public)
-        let other = Status(id: "20", createdAt: .now, account: original.account, content: "", spoilerText: "", url: nil)
+        let other = Status(id: "20", createdAt: Date(timeIntervalSince1970: 0), account: original.account, content: "", spoilerText: "", url: nil)
         var replyToDuringPost: Status.ID?
         var model: ComposeModel?
         let posting = ComposeModel(replyTo: original, myAccountID: "1") { _ in
@@ -279,7 +279,7 @@ struct ComposeModelTests {
     /// 同じ投稿を、元の投稿とブーストのように別の場所から選び直すと、下書きは保ったまま、札が指す先が選んだ方になる。
     @Test func reselectingSameStatusFromBoostPointsToBoost() throws {
         let original = try status(visibility: .public)
-        let boost = Status(id: "30", createdAt: .now, account: original.account, content: "", spoilerText: "", url: nil, reblog: original)
+        let boost = Status(id: "30", createdAt: Date(timeIntervalSince1970: 0), account: original.account, content: "", spoilerText: "", url: nil, reblog: original)
         let model = ComposeModel(myAccountID: "1") { _ in }
         model.setReplyTarget(original)
         model.text += "了解"
