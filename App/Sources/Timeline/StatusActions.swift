@@ -398,6 +398,11 @@ extension TimelineViewController {
     /// 読み終える前にメニューを閉じていたら、描き替えるものがないので何もしない。次に開いたときは読み込み済みのアイコンを出す。
     private func loadUserMenuIcon(for user: MenuUser, account: Account?, replacing placeholder: UIImage) {
         Task { [weak self] in
+            #if DEBUG
+            if let delay = DebugFaults.slowMenuIconDelay {
+                try? await Task.sleep(for: delay)
+            }
+            #endif
             guard let self else { return }
             var resolved = account
             if resolved == nil, case .mention(let mention) = user {

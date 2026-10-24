@@ -80,6 +80,17 @@ enum DebugFaults {
         downloadDelay.withLock { $0 = delay }
     }
 
+    /// 決めると、以後の投稿のメニューで、まだ読んでいないユーザーのアイコンを、その時間だけ遅らせてから読む。
+    /// 一度読んだ画像は端末に残って読み込みがすぐ終わるため、開いている間に記号からアイコンへ替わるところを確かめるのに使う。
+    private static let menuIconDelay = Mutex<Duration?>(nil)
+
+    static var slowMenuIconDelay: Duration? { menuIconDelay.withLock { $0 } }
+
+    /// - Parameter delay: nilなら戻す。
+    static func slowMenuIcons(by delay: Duration?) {
+        menuIconDelay.withLock { $0 = delay }
+    }
+
     /// 決めると、投稿欄が使うサーバーのメディアの上限のうち、決めた項目だけを差し替える。送る前に縮める流れを、大きなメディアなしで確かめるため。
     private static let mediaLimitsOverride = Mutex<MediaLimits?>(nil)
 

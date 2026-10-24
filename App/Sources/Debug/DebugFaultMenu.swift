@@ -32,6 +32,9 @@ enum DebugFaultMenu {
             toggle("ダウンロードを30秒遅らせる", image: "tortoise", isOn: DebugFaults.slowDownloadDelay != nil) { isOn in
                 handle(.slowDownload(seconds: isOn ? 30 : nil))
             },
+            toggle("メニューのアイコンを3秒遅らせる", image: "person.crop.circle.badge.clock", isOn: DebugFaults.slowMenuIconDelay != nil) { isOn in
+                handle(.slowMenuIcons(seconds: isOn ? 3 : nil))
+            },
         ]
     }
 

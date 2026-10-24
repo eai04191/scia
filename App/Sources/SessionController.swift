@@ -2272,6 +2272,8 @@ final class SessionController {
             DebugFaults.setStreamingOnline(isOnline)
         case .slowDownload(let seconds):
             DebugFaults.slowDownloads(by: seconds.map { .seconds($0) })
+        case .slowMenuIcons(let seconds):
+            DebugFaults.slowMenuIcons(by: seconds.map { .seconds($0) })
         case .progressNotice(let seconds):
             showDebugProgress(for: .seconds(seconds))
         case .mediaLimits(let limits):
