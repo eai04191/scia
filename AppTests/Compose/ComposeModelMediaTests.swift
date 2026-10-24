@@ -1,6 +1,7 @@
 import Foundation
 import ImageIO
 import SciaCore
+import SciaTesting
 import UniformTypeIdentifiers
 import Testing
 import UIKit
@@ -106,16 +107,12 @@ struct ComposeModelMediaTests {
 
     /// 画像を作り直すような、別のスレッドで時間のかかる処理が済むまで待つ。
     private func settleSlowly(until condition: () -> Bool) async throws {
-        for _ in 0..<500 where !condition() {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await waitUntil(condition)
     }
 
     /// 非同期のアップロードが進むまで待つ。
-    private func settle(until condition: () -> Bool) async {
-        for _ in 0..<1000 where !condition() {
-            await Task.yield()
-        }
+    private func settle(until condition: () -> Bool) async throws {
+        try await waitUntil(condition)
     }
 
     private func isSettled(_ model: ComposeModel) -> Bool {
@@ -282,7 +279,7 @@ struct ComposeModelMediaTests {
         let model = makeModel(server) { sent.append($0) }
 
         model.applyPickerSelection([try picked("b"), try picked("a")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         await model.submit()
 
         #expect(sent.first?.mediaIDs == ["m-b.jpg", "m-a.jpg"])
@@ -298,14 +295,14 @@ struct ComposeModelMediaTests {
         #expect(!model.isSensitive)
 
         model.applyPickerSelection([try picked("a")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         #expect(model.isSensitive)
         await model.submit()
         #expect(sent.last?.sensitive == true)
         #expect(sent.last?.spoilerText == "")
 
         model.applyPickerSelection([try picked("b")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         #expect(!model.isSensitive)
         await model.submit()
         #expect(sent.last?.sensitive == false)
@@ -335,15 +332,15 @@ struct ComposeModelMediaTests {
         model.text = "見て"
 
         model.applyPickerSelection([try picked("a"), try picked("b")])
-        await settle { server.pendingCount == 2 }
+        try await settle { server.pendingCount == 2 }
         #expect(!model.canPost)
 
         server.finishNextUpload(with: .success(Self.attachment(id: "1", processed: true)))
-        await settle { model.attachments.first?.serverID == "1" }
+        try await settle { model.attachments.first?.serverID == "1" }
         #expect(!model.canPost)
 
         server.finishNextUpload(with: .success(Self.attachment(id: "2", processed: true)))
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         #expect(model.canPost)
     }
 
@@ -354,7 +351,7 @@ struct ComposeModelMediaTests {
         let model = makeModel(server)
 
         model.applyPickerSelection([try picked("a")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
 
         #expect(server.waits == ["v1"])
         #expect(model.attachments.first?.isReady == true)
@@ -367,7 +364,7 @@ struct ComposeModelMediaTests {
         let b = try picked("b")
 
         model.applyPickerSelection([a, b])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         let file = try #require(model.attachments.first.flatMap { model.localMedia[$0.id]?.file })
         model.applyPickerSelection([b])
 
@@ -382,7 +379,7 @@ struct ComposeModelMediaTests {
         let a = try picked("a")
 
         model.applyPickerSelection([a])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         try model.removeAttachment(#require(model.attachments.first).id, pickerIsOpen: true)
         model.applyPickerSelection([a, try picked("b")])
 
@@ -397,7 +394,7 @@ struct ComposeModelMediaTests {
 
         model.applyPickerSelection([try picked("a")])
         model.addPastedMedia([try pasted("p")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         await model.submit()
 
         #expect(sent.first?.mediaIDs == ["m-a.jpg", "m-p.jpg"])
@@ -412,7 +409,7 @@ struct ComposeModelMediaTests {
         #expect(model.pickerSelectionLimit == 3)
         model.applyPickerSelection([try picked("a")])
         model.applyPickerSelection([])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
 
         #expect(model.attachments.count == 1)
         #expect(model.attachedAssetIdentifiers.isEmpty)
@@ -424,7 +421,7 @@ struct ComposeModelMediaTests {
         let model = makeModel(server)
 
         model.addPastedMedia([try pasted("p")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         let id = try #require(model.attachments.first?.id)
         let file = try #require(model.localMedia[id]?.file)
         model.removeAttachment(id, pickerIsOpen: false)
@@ -463,7 +460,7 @@ struct ComposeModelMediaTests {
 
         model.applyPickerSelection([try picked("a"), try picked("b"), try picked("c")])
         model.addPastedMedia([try discardable("p"), try discardable("q", kind: .video), try discardable("r")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
 
         #expect(model.attachments.count == 4)
         #expect(server.uploads.map(\.filename).sorted() == ["a.jpg", "b.jpg", "c.jpg", "p.jpg"])
@@ -536,7 +533,7 @@ struct ComposeModelMediaTests {
         model.text = "見て"
 
         model.applyPickerSelection([try picked("a")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         let id = try #require(model.attachments.first?.id)
         #expect(model.attachments.first?.state == .failed(serverID: nil))
         #expect(model.localMedia[id]?.failure != nil)
@@ -544,7 +541,7 @@ struct ComposeModelMediaTests {
 
         server.uploadResult = { _ in Self.attachment(id: "1", processed: true) }
         model.retryAttachment(id)
-        await settle { isSettled(model) && model.attachments.first?.serverID == "1" }
+        try await settle { isSettled(model) && model.attachments.first?.serverID == "1" }
 
         #expect(server.uploads.count == 2)
         #expect(model.localMedia[id]?.failure == nil)
@@ -559,13 +556,13 @@ struct ComposeModelMediaTests {
         let model = makeModel(server)
 
         model.applyPickerSelection([try picked("a")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         let id = try #require(model.attachments.first?.id)
         #expect(model.attachments.first?.state == .failed(serverID: "v1"))
 
         server.waitResult = { id in Self.attachment(id: id, processed: true) }
         model.retryAttachment(id)
-        await settle { model.attachments.first?.isReady == true }
+        try await settle { model.attachments.first?.isReady == true }
 
         #expect(server.uploads.count == 1)
         #expect(server.waits == ["v1", "v1"])
@@ -582,10 +579,10 @@ struct ComposeModelMediaTests {
         let a = try picked("a")
         let b = try picked("b")
         model.applyPickerSelection([a, b])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
 
         let posting = Task { await model.submit() }
-        await settle { release != nil }
+        try await settle { release != nil }
         model.applyPickerSelection([b])
         release?.resume()
         await posting.value
@@ -603,11 +600,11 @@ struct ComposeModelMediaTests {
         }
 
         model.applyPickerSelection([try picked("a")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         await model.submit()
         await model.submit()
         model.applyPickerSelection([try picked("a"), try picked("b")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         await model.submit()
 
         #expect(model.attachments.count == 2)
@@ -625,9 +622,9 @@ struct ComposeModelMediaTests {
         model.applyPickerSelection([try picked("a")])
         let id = try #require(model.attachments.first?.id)
         model.setDescription("猫", of: id)
-        await settle { server.pendingCount == 1 }
+        try await settle { server.pendingCount == 1 }
         server.finishNextUpload(with: .success(Self.attachment(id: "1", processed: true, description: "猫")))
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
 
         #expect(server.uploads.first?.description == "猫")
         #expect(server.descriptionUpdates.isEmpty)
@@ -640,12 +637,12 @@ struct ComposeModelMediaTests {
         server.completesImmediately = false
         let model = makeModel(server)
         model.applyPickerSelection([try picked("a")])
-        await settle { server.pendingCount == 1 }
+        try await settle { server.pendingCount == 1 }
         let id = try #require(model.attachments.first?.id)
 
         model.setDescription("猫", of: id)
         server.finishNextUpload(with: .success(Self.attachment(id: "1", processed: true)))
-        await settle { model.attachments.first?.isReady == true }
+        try await settle { model.attachments.first?.isReady == true }
 
         #expect(server.uploads.first?.description == "")
         #expect(server.descriptionUpdates.map(\.description) == ["猫"])
@@ -656,13 +653,13 @@ struct ComposeModelMediaTests {
         let server = FakeServer()
         let model = makeModel(server)
         model.applyPickerSelection([try picked("a")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         let id = try #require(model.attachments.first?.id)
 
         model.setDescription("猫", of: id)
         #expect(!model.canPost)
         #expect(model.attachmentStatus(of: id) == .sendingDescription)
-        await settle { model.attachments.first?.isReady == true }
+        try await settle { model.attachments.first?.isReady == true }
 
         #expect(server.descriptionUpdates.map(\.id) == ["m-a.jpg"])
         #expect(model.attachmentStatus(of: id) == .ready)
@@ -675,17 +672,17 @@ struct ComposeModelMediaTests {
         server.descriptionResult = { _, _ in throw MastodonAPIError(statusCode: 500, message: "") }
         let model = makeModel(server)
         model.applyPickerSelection([try picked("a")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         let id = try #require(model.attachments.first?.id)
 
         model.setDescription("猫", of: id)
-        await settle { model.attachmentStatus(of: id) == .descriptionFailed }
+        try await settle { model.attachmentStatus(of: id) == .descriptionFailed }
         #expect(model.localMedia[id]?.descriptionFailure != nil)
         #expect(!model.canPost)
 
         server.descriptionResult = { id, description in Self.attachment(id: id, processed: true, description: description) }
         model.retryAttachment(id)
-        await settle { model.attachments.first?.isReady == true }
+        try await settle { model.attachments.first?.isReady == true }
 
         #expect(server.uploads.count == 1)
         #expect(server.descriptionUpdates.count == 2)
@@ -697,12 +694,12 @@ struct ComposeModelMediaTests {
         let server = FakeServer()
         let model = makeModel(server)
         model.applyPickerSelection([try picked("a")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         let id = try #require(model.attachments.first?.id)
 
         model.setDescription("猫", of: id)
         model.setDescription("黒猫", of: id)
-        await settle { model.attachments.first?.isReady == true }
+        try await settle { model.attachments.first?.isReady == true }
 
         #expect(server.descriptionUpdates.last?.description == "黒猫")
         #expect(model.attachments.first?.description == "黒猫")
@@ -716,20 +713,20 @@ struct ComposeModelMediaTests {
         model.applyPickerSelection([try picked("a")])
         let id = try #require(model.attachments.first?.id)
         model.setDescription("猫", of: id)
-        await settle { model.attachments.first?.isReady == true }
+        try await settle { model.attachments.first?.isReady == true }
         server.holdsDescriptionUpdates = true
 
         model.setDescription("黒猫", of: id)
-        await settle { server.pendingDescriptionCount == 1 }
+        try await settle { server.pendingDescriptionCount == 1 }
         model.setDescription("猫", of: id)
 
         #expect(model.attachmentStatus(of: id) == .sendingDescription)
         #expect(!model.canPost)
 
         server.finishNextDescriptionUpdate()
-        await settle { server.pendingDescriptionCount == 1 }
+        try await settle { server.pendingDescriptionCount == 1 }
         server.finishNextDescriptionUpdate()
-        await settle { model.attachmentStatus(of: id) == .ready }
+        try await settle { model.attachmentStatus(of: id) == .ready }
 
         #expect(server.descriptionUpdates.map(\.description) == ["黒猫", "猫"])
         #expect(model.canPost)
@@ -743,11 +740,11 @@ struct ComposeModelMediaTests {
         }
         let model = makeModel(server)
         model.applyPickerSelection([try picked("a")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
         let id = try #require(model.attachments.first?.id)
 
         model.setDescription("猫 ", of: id)
-        await settle { model.attachments.first?.isReady == true }
+        try await settle { model.attachments.first?.isReady == true }
 
         #expect(server.descriptionUpdates.count == 1)
         #expect(model.attachments.first?.description == "猫")
@@ -759,7 +756,7 @@ struct ComposeModelMediaTests {
         var sent: [StatusDraft] = []
         let model = makeModel(server) { sent.append($0) }
         model.applyPickerSelection([try picked("a"), try picked("b"), try picked("c")])
-        await settle { isSettled(model) }
+        try await settle { isSettled(model) }
 
         try model.moveAttachment(#require(model.attachments.last).id, to: 0)
         try model.moveAttachment(#require(model.attachments.last).id, to: 1)

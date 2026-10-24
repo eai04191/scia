@@ -70,6 +70,14 @@ final class EmojiImageStore {
         }
     }
 
+    /// `url`のアニメーションを読み終えたか。動かすか静止画で描くかが決まっていればtrue。読み始めていなければfalse。
+    func hasFinishedLoadingAnimation(for url: URL) -> Bool {
+        switch animationStates[url] {
+        case .animated, .still, .failed: true
+        case .loading, nil: false
+        }
+    }
+
     /// アニメーションする絵文字の、コマに分けた画像。`url`は絵文字の元の画像（`CustomEmoji.url`）を渡す。
     /// まだなら読み込みを始めてnilを返し、読み終えたら`addListener`で登録した処理に`url`を知らせる。1コマしかない画像や読めなかった画像でもnil。
     func animation(for url: URL) -> EmojiAnimation? {

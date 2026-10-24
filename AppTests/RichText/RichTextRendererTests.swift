@@ -1,6 +1,7 @@
 import CoreText
 import Foundation
 import SciaCore
+import SciaTesting
 import Testing
 import UIKit
 @testable import Scia
@@ -141,9 +142,7 @@ struct RichTextRendererTests {
         #expect(first.count == 1)
         #expect(first.first?.bounds.width == first.first?.bounds.height, "読み込み中は正方形の場所を取る")
 
-        for _ in 0..<100 where loaded.urls.isEmpty {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await waitUntil { !loaded.urls.isEmpty }
         #expect(loaded.urls == [blobcat.staticUrl])
 
         let second = try #require(attachments(in: renderer(store).render(text)).first)
@@ -164,9 +163,7 @@ struct RichTextRendererTests {
         let store = EmojiImageStore { _ in png }
         let emojis = [gone, added, kept]
         _ = renderer(store).render(RichText.plain(":gone: :added: :kept:", emojis: emojis))
-        for _ in 0..<100 where emojis.contains(where: { store.image(for: $0.staticUrl) == nil }) {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await waitUntil { emojis.allSatisfy { store.image(for: $0.staticUrl) != nil } }
         let diff = RichTextDiff(
             old: RichText.plain("前 :gone: 中 :kept: 後", emojis: emojis),
             new: RichText.plain("前 :added: 中 :kept: 後", emojis: emojis),
@@ -215,9 +212,7 @@ struct RichTextRendererTests {
         let text = RichText.plain("a:blobcat:", emojis: [blobcat])
 
         _ = renderer(store).render(text)
-        for _ in 0..<100 where loaded.urls.isEmpty {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await waitUntil { !loaded.urls.isEmpty }
 
         #expect(renderer(store).render(text).string == "a:blobcat:")
     }

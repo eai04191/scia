@@ -1,5 +1,6 @@
 import Foundation
 import SciaCore
+import SciaTesting
 import Synchronization
 import Testing
 import UIKit
@@ -73,7 +74,7 @@ struct SavedStatusesControllerTests {
 
         #expect(controller.viewController.displayedItemIDs.first == .status(Self.newest[0].id))
         // 最上部での追従は、足した直後は位置を保ち、そのあと最上部へ動かすため、動き終わるまで待ってから測る。
-        try await Task.sleep(for: .seconds(1))
+        try await waitUntil { !controller.viewController.isScrollingToTop }
         let after = try windowMinY(of: top, in: controller, window: window)
         #expect(abs(after - before) <= tolerance, "読んでいた行が\(after - before)pt動きました")
     }
@@ -91,7 +92,7 @@ struct SavedStatusesControllerTests {
 
         #expect(controller.viewController.displayedItemIDs.first == .status(Self.newest[0].id))
         // 最上部での追従は、足した直後は位置を保ち、そのあと最上部へ動かすため、動き終わるまで待ってから測る。
-        try await Task.sleep(for: .seconds(1))
+        try await waitUntil { !controller.viewController.isScrollingToTop }
         let after = try windowMinY(of: top, in: controller, window: window)
         #expect(abs(after - before) <= tolerance, "読んでいた行が\(after - before)pt動きました")
     }
@@ -116,13 +117,6 @@ struct SavedStatusesControllerTests {
         controller.updateStatus(second.id) { $0.settingBookmarked(false) }
         controller.statusDidSettle(.bookmark, second)
         #expect(!controller.viewController.displayedItemIDs.contains(.status(second.id)))
-    }
-
-    private func waitUntil(_ condition: () -> Bool) async throws {
-        for _ in 0..<150 where !condition() {
-            try await Task.sleep(for: .milliseconds(20))
-        }
-        #expect(condition(), "条件が満たされませんでした")
     }
 }
 

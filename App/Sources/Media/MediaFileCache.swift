@@ -22,19 +22,24 @@ actor MediaFileCache {
     nonisolated let sharingDirectory: URL
     /// 合計の大きさの上限（バイト）。
     let sizeLimit: Int
+    /// 引いたときや置いたときに、最後に使った日時として書く今の日時。
+    private let now: @Sendable () -> Date
     private let logger = SciaLog.logger(category: "media")
 
     /// - Parameters:
     ///   - sharingDirectory: 共有や保存に渡すコピーを置く場所。共有先が読み終えたことを知るすべがないため、作るときに前回の起動で残したコピーを消す。
     ///   - sizeLimit: 合計の大きさの上限（バイト）。既定はNukeのディスクキャッシュの既定値と同じ150MB。
+    ///   - now: 最後に使った日時として書く今の日時。テストでは、使った順を実際の時間に頼らずに決めるため、手で進める時計を渡す。
     init(
         directory: URL = .cachesDirectory.appending(path: "MediaFiles"),
         sharingDirectory: URL = .temporaryDirectory.appending(path: "MediaSharing"),
-        sizeLimit: Int = 150 * 1_024 * 1_024
+        sizeLimit: Int = 150 * 1_024 * 1_024,
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.directory = directory
         self.sharingDirectory = sharingDirectory
         self.sizeLimit = sizeLimit
+        self.now = now
         try? FileManager.default.removeItem(at: sharingDirectory)
     }
 
@@ -47,7 +52,7 @@ actor MediaFileCache {
     /// `url`のファイルが置いてあれば、その場所。引いたものは最後に使った日時を更新し、整理で後回しにする。
     func file(for url: URL) -> URL? {
         guard let file = Self.storedFile(in: folder(for: url)) else { return nil }
-        Self.touch(file)
+        touch(file)
         return file
     }
 
@@ -130,7 +135,7 @@ actor MediaFileCache {
         }
         let file = folder.appending(path: name)
         try FileManager.default.moveItem(at: source, to: file)
-        Self.touch(file)
+        touch(file)
         trim()
         return file
     }
@@ -145,9 +150,9 @@ actor MediaFileCache {
         storedFiles(in: folder).first
     }
 
-    private static func touch(_ file: URL) {
+    private func touch(_ file: URL) {
         var values = URLResourceValues()
-        values.contentAccessDate = Date()
+        values.contentAccessDate = now()
         var file = file
         try? file.setResourceValues(values)
     }

@@ -1,4 +1,5 @@
 import SciaCore
+import SciaTesting
 import Testing
 import UIKit
 @testable import Scia
@@ -60,14 +61,16 @@ struct TimelineNoticeTests {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         harness.tuning.setValue(1, for: TuningCatalog.noticeAnimationDuration)
+        let clock = LayerClock(freezing: harness.window.layer)
         let column = harness.overlay.column
         harness.viewController.showNotice(failure)
+        try await clock.runUntilIdle()
         let start = try chipMinY(in: harness)
         let chip = try #require(column.stack.chips.first)
 
         try pushLowerScreen(on: harness, below: start)
         let end = try chipMinY(in: harness)
-        try await Task.sleep(for: .milliseconds(200))
+        try await clock.advance(by: 0.2)
         let shown = try #require(column.layer.presentation()?.position.y)
         chip.accessibilityElementDidBecomeFocused()
 

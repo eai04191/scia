@@ -1,4 +1,5 @@
 import SciaCore
+import SciaTesting
 import Synchronization
 import Testing
 import UIKit
@@ -168,12 +169,12 @@ struct TimelineMediaTests {
         let actor = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: base.account.avatar)
         let side = tuning.value(of: TuningCatalog.notificationQuotedThumbnailSize)
 
-        let mention = MastodonNotification(id: "1", type: .mention, createdAt: .now, account: actor, status: status)
+        let mention = MastodonNotification(id: "1", type: .mention, createdAt: Date(timeIntervalSince1970: 0), account: actor, status: status)
         let post = try #require(vc.contentConfiguration(for: mention, base: .cell()) as? PostContentConfiguration)
         #expect(post.media?.arrangement == .grid)
 
         for kind in [MastodonNotification.Kind.favourite, .reblog] {
-            let notification = MastodonNotification(id: "1", type: kind, createdAt: .now, account: actor, status: status)
+            let notification = MastodonNotification(id: "1", type: kind, createdAt: Date(timeIntervalSince1970: 0), account: actor, status: status)
             let quoted = try #require(vc.contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
             #expect(quoted.body.media?.arrangement == .strip(side: side), "\(kind)")
         }
@@ -237,17 +238,15 @@ struct TimelineMediaTests {
         let attachment = image("1", width: 400, height: 300)
         let sensitive = withMedia(statuses[0], [attachment], sensitive: true)
         harness.setStatuses([sensitive] + statuses.dropFirst())
-        _ = harness.visibleCell(of: .status(sensitive.id))
-        try await Task.sleep(for: .milliseconds(200))
-
+        let cell = try #require(harness.visibleCell(of: .status(sensitive.id)))
+        // 読みに行くかは、レイアウトでタイルの大きさが決まったときに決める。覆っていれば出どころを選ばず、読みに行く処理を始めない。
+        let tile = try #require(cell.descendants(of: MediaTileView.self).first)
+        #expect(!tile.requestsThumbnail)
         #expect(log.fetched.isEmpty)
 
         harness.viewController.revealMedia(of: sensitive)
         _ = harness.visibleCell(of: .status(sensitive.id))
-        let deadline = ContinuousClock.now + .seconds(2)
-        while log.fetched.isEmpty, ContinuousClock.now < deadline {
-            try await Task.sleep(for: .milliseconds(20))
-        }
+        try await waitUntil { !log.fetched.isEmpty }
 
         // プレビュー画像と元の画像のどちらを読むかは、枠の大きさや回線で変わる。選び方はMediaThumbnailSelectionTestsで確かめる。
         #expect(log.fetched.count == 1)

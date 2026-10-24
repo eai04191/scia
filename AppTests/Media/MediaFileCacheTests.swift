@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Testing
 @testable import Scia
 
@@ -8,8 +9,9 @@ struct MediaFileCacheTests {
         var cache: URL { root.appending(path: "cache") }
         var sharing: URL { root.appending(path: "sharing") }
 
-        func makeCache(sizeLimit: Int = 1_024 * 1_024) -> MediaFileCache {
-            MediaFileCache(directory: cache, sharingDirectory: sharing, sizeLimit: sizeLimit)
+        /// - Parameter clock: 最後に使った日時を決める時計。使った順を決めるテストは、使うたびに進める。
+        func makeCache(sizeLimit: Int = 1_024 * 1_024, clock: TestClock = TestClock()) -> MediaFileCache {
+            MediaFileCache(directory: cache, sharingDirectory: sharing, sizeLimit: sizeLimit) { clock.date }
         }
 
         func remove() {
@@ -55,14 +57,15 @@ struct MediaFileCacheTests {
         defer { directories.remove() }
         // 割り当ての単位（4KB）で大きさが丸められないよう、十分に大きいファイルで測る。
         let size = 100 * 1_024
-        let cache = directories.makeCache(sizeLimit: size * 3 + size / 2)
+        let clock = TestClock()
+        let cache = directories.makeCache(sizeLimit: size * 3 + size / 2, clock: clock)
         for name in ["a", "b", "c"] {
             _ = try await cache.store(Data(count: size), named: name, for: try url(name))
-            try await Task.sleep(for: .milliseconds(20))
+            clock.advance(by: .seconds(1))
         }
         // aを引いて、bをいちばん古くする。
         _ = await cache.file(for: try url("a"))
-        try await Task.sleep(for: .milliseconds(20))
+        clock.advance(by: .seconds(1))
 
         _ = try await cache.store(Data(count: size), named: "d", for: try url("d"))
 

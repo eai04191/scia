@@ -1,6 +1,7 @@
 import Foundation
 import ImageIO
 import SciaCore
+import SciaTesting
 import Testing
 import UIKit
 import UniformTypeIdentifiers
@@ -58,13 +59,7 @@ struct AnimatedEmojiTests {
         for emoji in emojis {
             _ = store.animation(for: emoji.url)
         }
-        for _ in 0..<200 where emojis.contains(where: { store.image(for: $0.staticUrl) == nil }) {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        for _ in 0..<50 {
-            try await Task.sleep(for: .milliseconds(10))
-            _ = emojis.map { store.animation(for: $0.url) }
-        }
+        try await waitUntil { emojis.allSatisfy { store.image(for: $0.staticUrl) != nil && store.hasFinishedLoadingAnimation(for: $0.url) } }
         let label = LinkLabel()
         label.numberOfLines = numberOfLines
         label.emojiImages = store
