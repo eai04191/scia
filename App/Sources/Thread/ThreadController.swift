@@ -18,7 +18,7 @@ final class ThreadController {
     private var isInForeground = true
     /// 会話を一度読み終えた。読み直しでは、押した投稿も読み直して編集を取り込む。
     private var hasLoaded = false
-    private var loadTask: Task<Void, Never>?
+    private(set) var loadTask: Task<Void, Never>?
     /// 会話を読んでいる途中。つないだときやポーリングで、読み込みを重ねない。
     private var isLoading = false
     /// 読み込みが401で失敗したときに呼ぶ。
@@ -83,7 +83,10 @@ final class ThreadController {
         let reloadsFocus = hasLoaded
         loadTask = Task { [weak self] in
             guard let self else { return }
-            defer { isLoading = false }
+            // 止められた読み込みは、止めた側が始めた読み込みの途中に終わるため、読み込み中を下ろさない。
+            defer {
+                if !Task.isCancelled { isLoading = false }
+            }
             do {
                 // 読み直しでは、切れている間の押した投稿の編集も取り込む。会話の応答には押した投稿が含まれないため。
                 async let focus = reloadsFocus ? client.status(store.focusID) : nil
