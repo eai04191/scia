@@ -31,7 +31,7 @@ custom_rules:
   # 待つ処理には手で進める時計（SciaTestingのTestClock）を渡し、ほかの処理を待つときは門（Gate）か条件（waitUntil）で待つ。日時は決まった値で作る
   time_dependent_test:
     included: "(AppTests|Packages/SciaCore/Tests)/.*\\.swift"
-    regex: "\\b(Task\\.sleep|Thread\\.sleep|usleep|DispatchTime\\.now|CACurrentMediaTime|CFAbsoluteTimeGetCurrent|ContinuousClock|SuspendingClock|asyncAfter)\\b|\\bTimer(\\(|\\.scheduledTimer\\b|\\.publish\\b)|\\bDate\\(\\)|\\bDate\\.now\\b|\\bDate\\(timeIntervalSinceNow|(?<![\\w.)\\]])\\.now\\b|\\bsystemUptime\\b"
+    regex: "\\b(Task\\.sleep|Thread\\.sleep|usleep|DispatchTime\\.now|CACurrentMediaTime|CFAbsoluteTimeGetCurrent|ContinuousClock|SuspendingClock|asyncAfter)\\b|\\bTimer(\\(|\\.scheduledTimer\\b|\\.publish\\b)|\\bDate\\(\\)|\\bDate\\.init\\b(?!\\([^)])|\\bDate\\.now\\b|\\bDate\\(timeIntervalSinceNow|(?<![\\w.)\\]])\\.now\\b|\\bsystemUptime\\b"
     excluded_match_kinds:
       - comment
       - doccomment
@@ -45,7 +45,7 @@ custom_rules:
   direct_time_access:
     included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"
     excluded: "(App/Sources/Debug/|App/Sources/AppDependencies\\.swift|Packages/SciaCore/Sources/SciaCore/SystemTime\\.swift)"
-    regex: "\\b(Task\\.sleep|Thread\\.sleep|usleep|DispatchTime\\.now|CACurrentMediaTime|CFAbsoluteTimeGetCurrent|ContinuousClock|SuspendingClock|asyncAfter)\\b|\\bTimer(\\(|\\.scheduledTimer\\b|\\.publish\\b)|\\bDate\\(\\)|\\bDate\\.now\\b|\\bDate\\(timeIntervalSinceNow|(?<![\\w.)\\]])\\.now\\b|\\bsystemUptime\\b"
+    regex: "\\b(Task\\.sleep|Thread\\.sleep|usleep|DispatchTime\\.now|CACurrentMediaTime|CFAbsoluteTimeGetCurrent|ContinuousClock|SuspendingClock|asyncAfter)\\b|\\bTimer(\\(|\\.scheduledTimer\\b|\\.publish\\b)|\\bDate\\(\\)|\\bDate\\.init\\b(?!\\([^)])|\\bDate\\.now\\b|\\bDate\\(timeIntervalSinceNow|(?<![\\w.)\\]])\\.now\\b|\\bsystemUptime\\b"
     excluded_match_kinds:
       - comment
       - doccomment

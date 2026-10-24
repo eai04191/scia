@@ -100,7 +100,7 @@ public final class OperationStatus {
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private var stopHandlers: [Activity.ID: @MainActor () -> Void] = [:]
 
-    public init(now: @escaping () -> Date = Date.init) {
+    public init(now: @escaping () -> Date = SystemTime.now) {
         self.now = now
     }
 
