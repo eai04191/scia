@@ -2,7 +2,7 @@ import Testing
 @testable import SciaCore
 
 struct MediaDynamicRangeTests {
-    /// HDRの札は、開くと一覧より明るくなるときだけ出す。
+    /// HDRのバッジは、開くと一覧より明るくなるときだけ出す。
     @Test(arguments: [
         (MediaDynamicRange.standard, MediaDynamicRange.constrainedHigh, true),
         (.standard, .high, true),

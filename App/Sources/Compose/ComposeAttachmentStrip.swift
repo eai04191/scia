@@ -249,11 +249,11 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
     /// 送っている間の進み具合。満ちたら、サーバーの変換待ちの回る表示に替わる。
     private let progressRing = ProgressRingView()
     private let failureView = UIImageView(image: UIImage(systemName: "exclamationmark.circle.fill"))
-    /// 代替テキストの送信中に、ALTの札の位置に出す小さな回る表示。
+    /// 代替テキストの送信中に、ALTのバッジの位置に出す小さな回る表示。
     private let descriptionSpinner = UIActivityIndicatorView(style: .medium)
-    /// 代替テキストを送れなかったときに、ALTの札の位置に出すエラーのアイコン。
+    /// 代替テキストを送れなかったときに、ALTのバッジの位置に出すエラーのアイコン。
     private let descriptionFailureView = UIImageView(image: UIImage(systemName: "exclamationmark.circle.fill"))
-    /// 閲覧注意にして投稿するときに、右上に出す札。画像は隠さず、並べ替えや代替テキストを書くときに、どの添付か見分けられるようにする。
+    /// 閲覧注意にして投稿するときに、右上に出すバッジ。画像は隠さず、並べ替えや代替テキストを書くときに、どの添付か見分けられるようにする。
     private let sensitiveBadge = ComposeAttachmentCell.makeSensitiveBadge()
 
     override init(frame: CGRect) {
@@ -300,12 +300,12 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
             progressRing.heightAnchor.constraint(equalToConstant: 24),
             failureView.centerXAnchor.constraint(equalTo: overlay.centerXAnchor),
             failureView.centerYAnchor.constraint(equalTo: overlay.centerYAnchor),
-            // ALTの札と同じ左下に置く。
+            // ALTのバッジと同じ左下に置く。
             descriptionSpinner.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 2),
             descriptionSpinner.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -2),
             descriptionFailureView.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 5),
             descriptionFailureView.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -5),
-            // ALTやGIFの札と同じく、枠から6pt離す。
+            // ALTやGIFのバッジと同じく、枠から6pt離す。
             sensitiveBadge.trailingAnchor.constraint(equalTo: overlay.trailingAnchor, constant: -6),
             sensitiveBadge.topAnchor.constraint(equalTo: overlay.topAnchor, constant: 6),
         ])
@@ -320,10 +320,10 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
     func configure(_ item: ComposeAttachmentStrip.Item, actions: [AttachmentAction]) {
         let description = item.attachment.description
         let showsDescriptionState = item.status == .sendingDescription || item.status == .descriptionFailed
-        // 代替テキストの送信中と失敗は、札の位置（左下）に状態を出すため、札を出さない。
+        // 代替テキストの送信中と失敗は、バッジの位置（左下）に状態を出すため、バッジを出さない。
         tile.hidesBadge = showsDescriptionState
         if let attached = item.attachedMedia {
-            // 編集している投稿に付いている添付は、手元にファイルがないので、サーバーのプレビュー画像を描く。ALTの札は書き換えた代替テキストで決める。
+            // 編集している投稿に付いている添付は、手元にファイルがないので、サーバーのプレビュー画像を描く。ALTのバッジは書き換えた代替テキストで決める。
             tile.apply(attached.replacingDescription(description), hiddenCount: 0, isCovered: false, policy: ComposeAttachmentStrip.attachedThumbnailPolicy)
         } else {
             tile.applyLocal(thumbnail: item.local?.thumbnail, kind: item.local?.file?.kind, description: showsDescriptionState ? "" : description)
@@ -359,7 +359,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         }
     }
 
-    /// ALTの札と同じ黒い下地に、タイムラインの閲覧注意の覆いと同じアイコンを描く。
+    /// ALTのバッジと同じ黒い下地に、タイムラインの閲覧注意の覆いと同じアイコンを描く。
     private static func makeSensitiveBadge() -> UIView {
         let image = UIImageView(image: UIImage(systemName: "eye.slash"))
         image.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption2, scale: .small).applying(UIImage.SymbolConfiguration(weight: .bold))

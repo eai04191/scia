@@ -1,4 +1,4 @@
-/// 返信の投稿の本文の上に出す、返信先を示す札。行の高さを受け取った時点で決めるため、返信先の投稿は読まず、投稿に含まれる情報だけで決める。
+/// 返信の投稿の本文の上に出す、返信先を示すラベル。行の高さを受け取った時点で決めるため、返信先の投稿は読まず、投稿に含まれる情報だけで決める。
 public enum ReplyLabel: Hashable, Sendable {
     /// 投稿した人が、自分の投稿に続けて書いた。
     case continuation
@@ -31,7 +31,7 @@ public struct ReplyConnection: Hashable, Sendable {
     public var above = false
     /// すぐ下の行とつながる。
     public var below = false
-    /// すぐ上の行が、この行の返信先。スレッドでは、線で返信先が分かるため札を出さない。
+    /// すぐ上の行が、この行の返信先。スレッドでは、線で返信先が分かるためラベルを出さない。
     public var parentIsAbove = false
 
     public init(above: Bool = false, below: Bool = false, parentIsAbove: Bool = false) {

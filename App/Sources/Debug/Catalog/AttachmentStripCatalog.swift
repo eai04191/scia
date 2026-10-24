@@ -111,7 +111,7 @@ enum AttachmentStripCatalog {
     }
 }
 
-/// 書いていないときの投稿欄のカプセルの1行（`ComposeRestContent`）の状態。札のアイコン、重ねた写真、本文の組み合わせと、エラーのアイコンを並べる。
+/// 書いていないときの投稿欄のカプセルの1行（`ComposeRestContent`）の状態。ラベルのアイコン、重ねた写真、本文の組み合わせと、エラーのアイコンを並べる。
 enum ComposeCapsuleCatalog {
     private static let reply = "arrowshape.turn.up.left.fill"
     private static let edit = "pencil"

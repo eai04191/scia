@@ -174,8 +174,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var appliedEntries: [TimelineEntry] = []
     /// 隣の行とアイコン同士を線でつなぐ行。並びが変わるたびに決め直す。
     private var replyConnections: [ItemID: ReplyConnection] = [:]
-    /// すぐ上の行が返信先なら、返信の札を出さない。スレッドのように古い順に並べる一覧で、線で返信先が分かるため。
-    /// ただし、スレッドで押した投稿（`threadFocusID`）には札を残す。新しい順に並べる一覧では、返信先は下の行になるため使わない。
+    /// すぐ上の行が返信先なら、返信のラベルを出さない。スレッドのように古い順に並べる一覧で、線で返信先が分かるため。
+    /// ただし、スレッドで押した投稿（`threadFocusID`）にはラベルを残す。新しい順に並べる一覧では、返信先は下の行になるため使わない。
     var hidesReplyLabelBelowParent = false
     private var loadingGapIDs: Set<String> = []
     /// 直近の読み込みに失敗したギャップと、その理由。行の中で読めなかったことを知らせる。
@@ -992,7 +992,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return button
     }
 
-    /// 投稿が一覧にあれば、覆われていない表示領域の下端に来るまでスクロールする。返信先の札から、書いている入力欄のすぐ上に返信先を出すために使う。
+    /// 投稿が一覧にあれば、覆われていない表示領域の下端に来るまでスクロールする。返信先のラベルから、書いている入力欄のすぐ上に返信先を出すために使う。
     /// 同じ投稿が元の投稿とブースト、通知などで何か所にも並ぶことがあるため、まず返信を選んだ要素そのもの（ブーストならブーストのID）を探し、
     /// なければ中身が同じ投稿（`displayedID`、ブーストなら元の投稿のID）を探す。一覧になければ動かさずにfalseを返す。
     @discardableResult
@@ -1357,8 +1357,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     func contentConfiguration(for status: Status, isPinned: Bool = false, itemID: ItemID? = nil, base: UIListContentConfiguration) -> PostContentConfiguration {
         let shown = status.displayed
         let connection = itemID.flatMap { replyConnections[$0] } ?? ReplyConnection()
-        // スレッドで押した投稿は、開いた時点では返信先がまだ並んでおらず札を出しているため、返信先が並んでも札を残す。
-        // 消すと、読み終えた瞬間に名前と本文が札の1行分だけ上へ跳ねる。
+        // スレッドで押した投稿は、開いた時点では返信先がまだ並んでおらずラベルを出しているため、返信先が並んでもラベルを残す。
+        // 消すと、読み終えた瞬間に名前と本文がラベルの1行分だけ上へ跳ねる。
         let hidesReplyLabel = hidesReplyLabelBelowParent && connection.parentIsAbove && shown.id != threadFocusID
         let replyLabel = hidesReplyLabel ? nil : ReplyLabel(status: shown, myAccountID: myAccountID)
         var configuration = postContentBuilder.configuration(for: status, isPinned: isPinned, replyLabel: replyLabel, base: base)

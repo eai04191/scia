@@ -19,7 +19,7 @@ struct PostContentConfiguration: UIContentConfiguration {
         let avatar: AvatarView.Content?
         let text: NSAttributedString
         let accessibilityText: String
-        /// 押すと`onOpenContextAccount`を呼ぶ。返信の札は押せる見た目にせず、押下を行に渡してスレッドを開かせるため、受けない。
+        /// 押すと`onOpenContextAccount`を呼ぶ。返信のラベルは押せる見た目にせず、押下を行に渡してスレッドを開かせるため、受けない。
         var opensAccount = true
     }
 

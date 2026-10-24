@@ -241,7 +241,7 @@ struct ScrollAnchorTests {
         #expect(reported.count < uncovered.count, "覆われた投稿も表示中として報告しました")
     }
 
-    /// 返信先の札から、一覧にある返信先の投稿を、入力欄のすぐ上に出す。
+    /// 返信先のラベルから、一覧にある返信先の投稿を、入力欄のすぐ上に出す。
     @Test func scrollingToStatusShowsItAboveCoveredBottom() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -259,7 +259,7 @@ struct ScrollAnchorTests {
         #expect(abs(frame.maxY - visibleBottom) <= 1, "返信先の投稿の下端が、覆われていない領域の下端から\(frame.maxY - visibleBottom)pt離れています")
     }
 
-    /// 最上部へ動かしている途中で返信先の札を押したら、返信先で止まり、最上部へ動かし直さない。
+    /// 最上部へ動かしている途中で返信先のラベルを押したら、返信先で止まり、最上部へ動かし直さない。
     @Test func scrollingToStatusCancelsScrollingToNewest() async throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

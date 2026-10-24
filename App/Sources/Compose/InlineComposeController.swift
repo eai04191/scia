@@ -34,7 +34,7 @@ final class InlineComposeController: NSObject {
         guard let host, host.presentedViewController == nil else { return nil }
         return host
     }
-    /// 返信先の札を押したときに呼ぶ。返信先の投稿を見せる。編集の札なら、編集している投稿を見せる。
+    /// 返信先のラベルを押したときに呼ぶ。返信先の投稿を見せる。編集のラベルなら、編集している投稿を見せる。
     var onShowReplyTarget: (Status) -> Void = { _ in }
     /// 投稿できたあとに呼ぶ。
     var onPosted: () -> Void = {}
@@ -56,7 +56,7 @@ final class InlineComposeController: NSObject {
     private let restContent = ComposeRestContent()
     /// 最後にバーを下へ引いて離したときの、指の速さ（pt/秒、下向きが正）と時刻。
     private var barFling: (velocity: CGFloat, time: CFTimeInterval)?
-    /// 開閉で、カプセルの札のアイコンとサムネイルを、書いているときの同じものの位置へ動かす。
+    /// 開閉で、カプセルのラベルのアイコンとサムネイルを、書いているときの同じものの位置へ動かす。
     private lazy var morphFlights = ComposeMorphFlights(container: bar.contentView)
     /// 書き始めて行を隠すと、スタックビューが高さ0の制約を付ける。それと競合しないよう、必須より1つ下げる。
     private lazy var restRowHeight: NSLayoutConstraint = {
@@ -65,13 +65,13 @@ final class InlineComposeController: NSObject {
         return constraint
     }()
     private let bar = ComposeBarView(effect: InlineComposeController.interactiveGlass())
-    /// 背景の付いた札にする。背景のない文字だけのボタンは、ガラスの上で単色に描かれることがあり、色合いの青が消えた。
+    /// 背景の付いたラベルにする。背景のない文字だけのボタンは、ガラスの上で単色に描かれることがあり、色合いの青が消えた。
     private lazy var replyButton = UIButton(configuration: .tinted(), primaryAction: UIAction { [weak self] _ in
         guard let target = self?.model.editedStatus ?? self?.model.replyTo else { return }
         self?.onShowReplyTarget(target)
     })
     private lazy var replyRow = makeReplyRow()
-    /// 札の右の×。返信なら返信先を外して書いた本文を残し、編集なら編集をやめて空の投稿欄に戻す。
+    /// ラベルの右の×。返信なら返信先を外して書いた本文を残し、編集なら編集をやめて空の投稿欄に戻す。
     private lazy var replyClearButton: UIButton = {
         var configuration = UIButton.Configuration.plain()
         configuration.image = UIImage(systemName: "xmark.circle.fill")
@@ -465,7 +465,7 @@ final class InlineComposeController: NSObject {
     /// 返信先を付けて書き始める。
     func reply(to status: Status) {
         model.setReplyTarget(status)
-        // モデルの変更が画面に届くのは少しあとなので、札の行を出す前に、札の文字をここで入れておく。
+        // モデルの変更が画面に届くのは少しあとなので、ラベルの行を出す前に、ラベルの文字をここで入れておく。
         update()
         beginEditing()
     }
@@ -1426,10 +1426,10 @@ final class InlineComposeController: NSObject {
             isExpanded = false
             generation = beginExpansionChange()
         }
-        // 視差効果を減らす設定では、写真と札を飛ばさず、行を薄くしながら入れ替えるだけにする。
+        // 視差効果を減らす設定では、写真とラベルを飛ばさず、行を薄くしながら入れ替えるだけにする。
         let animatesFlights = bar.window != nil && !UIAccessibility.isReduceMotionEnabled
         if animatesFlights {
-            // カプセルで重ねているとおり、後ろの添付ほど下に、1枚目をその上に、札のアイコンをいちばん上に重ねて動かす。
+            // カプセルで重ねているとおり、後ろの添付ほど下に、1枚目をその上に、ラベルのアイコンをいちばん上に重ねて動かす。
             let order = model.attachments.reversed().map { ComposeMorphFlights.Key.attachment($0.id) } + [.chip]
             // 開くときはカプセルの写真の束の影から、閉じるときは影のない列の写真から動き始める。
             let stackShadow = editing ? ComposeRestThumbnails.stackShadowOpacity(in: tuning) : 0
@@ -1479,7 +1479,7 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 開閉で動かす札のアイコンとサムネイルの、カプセルか書いているときの行の本物。行を出していなければ空にする。
+    /// 開閉で動かすラベルのアイコンとサムネイルの、カプセルか書いているときの行の本物。行を出していなければ空にする。
     /// 列の1枚目から3枚目は、カプセルで重ねている同じ添付の写真と行き来する。4枚目より後ろは、カプセルでは3枚目の下に隠れて重なっているものとして、3枚目の写真の位置と行き来する。
     /// 出したばかりの行は中身がまだ並んでいないことがあるので、位置を読む前に並べる。
     /// 動かしている間は、本物を透明にして隠す。空のマスクで隠すと、ガラスのバーの上に、隠した部品の形の灰色の跡が残り、複製とは別に見えたため。
@@ -1544,7 +1544,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// スタックビューの行は、値が変わるときだけ隠したり出したりする。同じ値を、特にアニメーションの途中に代入し直すと、
-    /// スタックビューが行を隠したものとして高さ0で並べたまま、行は見えている状態になり、返信先の札が入力欄に重なって描かれた。
+    /// スタックビューが行を隠したものとして高さ0で並べたまま、行は見えている状態になり、返信先のラベルが入力欄に重なって描かれた。
     private func setRowHidden(_ view: UIView, _ hidden: Bool) {
         guard view.isHidden != hidden else { return }
         view.isHidden = hidden
@@ -1725,8 +1725,8 @@ final class InlineComposeController: NSObject {
         spoilerClearButton.accessibilityLabel = model.isSensitive ? "注意書きと閲覧注意を外す" : "注意書きを外す"
 
         let chip = chip
-        // 札を消すときは、薄くなる間も文字が残るよう、前の文字のままにする。
-        // 返信先から引き継いだ注意書きは、注意書きの欄に見えているので、札には書かない。
+        // ラベルを消すときは、薄くなる間も文字が残るよう、前の文字のままにする。
+        // 返信先から引き継いだ注意書きは、注意書きの欄に見えているので、ラベルには書かない。
         if let chip {
             setReplyTitle(chip.title)
             replyButton.configuration?.image = UIImage(systemName: chip.symbolName)
@@ -1782,7 +1782,7 @@ final class InlineComposeController: NSObject {
         logOverlappingRows(after: "update")
     }
 
-    /// 書いている間に札やサムネイルの列を出したり消したりするときは、パッと切り替えず、行を薄くしながら縮める（広げる）。
+    /// 書いている間にラベルやサムネイルの列を出したり消したりするときは、パッと切り替えず、行を薄くしながら縮める（広げる）。
     /// パッと切り替えると、バーの高さが一瞬で変わり、上端とタイムラインの下の余白が飛んで見える。
     /// 書いていないときは、バーの形を変える動きの中で行を出し入れするので、ここでは動かさない。
     private func setRowShown(_ row: UIView, _ shown: Bool) {
@@ -1802,8 +1802,8 @@ final class InlineComposeController: NSObject {
         }
     }
 
-    /// 札の文字を入れ、札の大きさを測り直させる。
-    /// 札は文字のないアイコンだけの大きさで並べられたあと、文字を入れても大きさが変わらず、文字がカプセルの外に切れて見えなくなったことがある
+    /// ラベルの文字を入れ、ラベルの大きさを測り直させる。
+    /// ラベルは文字のないアイコンだけの大きさで並べられたあと、文字を入れても大きさが変わらず、文字がカプセルの外に切れて見えなくなったことがある
     /// （投稿に返信したあと、同じ投稿のブーストを返信に選び直したとき、実機で起きた）。
     private func setReplyTitle(_ title: String?) {
         if replyButton.configuration?.title != title {
@@ -1813,8 +1813,8 @@ final class InlineComposeController: NSObject {
         replyRow.setNeedsLayout()
     }
 
-    /// 本文の上の札。返信なら返信先、編集なら編集していること（返信の編集なら返信先も）を書く。
-    /// 編集では返信先を変えられないので、返信先の札は出さず、編集の札にまとめる。返信と編集で1つの行を使い、行を増やさない。
+    /// 本文の上のラベル。返信なら返信先、編集なら編集していること（返信の編集なら返信先も）を書く。
+    /// 編集では返信先を変えられないので、返信先のラベルは出さず、編集のラベルにまとめる。返信と編集で1つの行を使い、行を増やさない。
     private struct Chip {
         let title: String
         let symbolName: String
@@ -1831,7 +1831,7 @@ final class InlineComposeController: NSObject {
         return Chip(title: "\(acct)への返信", symbolName: "arrowshape.turn.up.left.fill", hint: "タイムラインの返信先の投稿を表示します", clearLabel: "返信をやめる")
     }
 
-    /// 書いていないときの1行に、札のアイコンとサムネイルに続けて出す、自分で書いた本文。何も書いていなければ書き出しを促す。
+    /// 書いていないときの1行に、ラベルのアイコンとサムネイルに続けて出す、自分で書いた本文。何も書いていなければ書き出しを促す。
     private func restText() -> NSAttributedString {
         let font = UIFont.preferredFont(forTextStyle: .body)
         let body = model.typedText.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
@@ -1841,7 +1841,7 @@ final class InlineComposeController: NSObject {
         return NSAttributedString(string: body, attributes: [.font: font, .foregroundColor: UIColor.label, .languageIdentifier: settings.glyphLanguageIdentifier()])
     }
 
-    /// 書いていないときの1行の読み上げ。札とサムネイルは文字を出さないので、書いているときの札と同じ文と、添付の数を読む。
+    /// 書いていないときの1行の読み上げ。ラベルとサムネイルは文字を出さないので、書いているときのラベルと同じ文と、添付の数を読む。
     private func restAccessibilityValue(chip: Chip?, attachments: [ComposeAttachmentStrip.Item]) -> String {
         var parts: [String] = []
         if let chip {
@@ -2236,7 +2236,7 @@ final class InlineComposeController: NSObject {
         replyButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let clear = replyClearButton
         clear.setContentHuggingPriority(.required, for: .horizontal)
-        // 札は宛先の長さに合わせ、余った幅は札と×の間に空ける。
+        // ラベルは宛先の長さに合わせ、余った幅はラベルと×の間に空ける。
         replyButton.setContentHuggingPriority(.required, for: .horizontal)
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)

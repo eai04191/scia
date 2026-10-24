@@ -49,7 +49,7 @@ enum PostRowCatalog {
             post("投稿した人が続けて書いた投稿", status(content: "<p>続けて書いた本文。</p>", replyingTo: author)),
             post("自分への返信", status(content: "<p>自分への返信の本文。</p>", account: booster, replyingTo: author), isMine: true),
             post("返信先のハンドルが分からない返信（メンションを消した）", status(content: "<p>メンションのない返信。</p>", account: booster, replyingTo: author, mentionsReplyTarget: false)),
-            post("返信をブーストした投稿（ブーストの行を出し、札は出さない）", status(content: "<p>ブーストされた返信。</p>", rebloggedBy: booster, replyingTo: author)),
+            post("返信をブーストした投稿（ブーストの行を出し、ラベルは出さない）", status(content: "<p>ブーストされた返信。</p>", rebloggedBy: booster, replyingTo: author)),
             post("上と下の行と線でつながった返信", status(content: "<p>線でつながった返信。</p>", replyingTo: author), connection: ReplyConnection(above: true, below: true)),
             post("下の行とだけ線でつながった、本文の長い返信", status(content: "<p>" + String(repeating: "本文が長く、線がアイコンの下から行の下端まで伸びることを確かめる文。", count: 3) + "</p>", account: booster, replyingTo: author), connection: ReplyConnection(below: true)),
             post("お気に入り済み", status(content: "<p>お気に入りした投稿。</p>", favourited: true)),

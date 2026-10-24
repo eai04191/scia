@@ -153,7 +153,7 @@ public final class ThreadStore {
         for orphan in orphans {
             appendSubtree(orphan)
         }
-        // 隠す投稿を除くと、その投稿への返信は返信先が離れた行になり、札で返信先を示す。
+        // 隠す投稿を除くと、その投稿への返信は返信先が離れた行になり、ラベルで返信先を示す。
         entries = ordered
             .filter { $0.id == focusID || !(filtering?.verdict(for: $0).isHidden ?? false) }
             .map(TimelineEntry.status)

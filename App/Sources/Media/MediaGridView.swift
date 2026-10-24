@@ -229,7 +229,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
     private let tuning: TuningStore
     private let thumbnailView = FocusCroppedImageView()
     private let symbolView = UIImageView()
-    /// 動画の再生アイコン。札と同じ下地の丸に三角を載せ、一覧の札とも、ビューアの丸い再生ボタンとも揃える。
+    /// 動画の再生アイコン。バッジと同じ下地の丸に三角を載せ、一覧のバッジとも、ビューアの丸い再生ボタンとも揃える。
     private let playView = UIView()
     private let playGlyphView = UIImageView(image: UIImage(systemName: "play.fill"))
     private let badge = MediaBadgeView()
@@ -285,7 +285,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
             view.isUserInteractionEnabled = false
             addSubview(view)
         }
-        // 読む画像の大きさは画面の倍率で決まるため、別の画面へ移ったら選び直す。札は文字の大きさで幅が変わるため、並べ直す。
+        // 読む画像の大きさは画面の倍率で決まるため、別の画面へ移ったら選び直す。バッジは文字の大きさで幅が変わるため、並べ直す。
         registerForTraitChanges([UITraitDisplayScale.self, UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.setNeedsLayout()
         }
@@ -300,7 +300,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         }, offersMenu: { [weak self] _ in self?.menuAttachment != nil })
     }
 
-    /// HDRの札を出す明るさの組み合わせかを、設定から決め続ける。選び直すと、出ている札にもすぐ効かせる。
+    /// HDRのバッジを出す明るさの組み合わせかを、設定から決め続ける。選び直すと、出ているバッジにもすぐ効かせる。
     private func followDynamicRanges() {
         withObservationTracking {
             marksHDR = MediaDynamicRange.marksHDR(list: settings.mediaDynamicRange, viewer: settings.viewerMediaDynamicRange)
@@ -351,7 +351,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         backgroundColor?.resolvedColor(with: traitCollection)
     }
 
-    /// 画像の上に重ねている表示（ALTやGIFの札、動画の再生マーク、残りの枚数）の複製。ビューアが動かす画像の複製に載せて、サムネイルとのあいだを一緒に動かす。
+    /// 画像の上に重ねている表示（ALTやGIFのバッジ、動画の再生マーク、残りの枚数）の複製。ビューアが動かす画像の複製に載せて、サムネイルとのあいだを一緒に動かす。
     /// 動画とGIFではサムネイルの画像も含める。ビューアの複製は再生していたコマを描くため、重ねた表示と一緒にサムネイルへ近づくほど濃くし、着地で絵が切り替わらないようにする。
     /// 画像では含めない。複製とサムネイルが同じ絵で、重ねると透明な部分が濃く見えるため。
     /// 複製の大きさが変わっても、サムネイルと同じ角からの位置を保つ。ラベルは画像にし、全体を覆う残りの枚数と中央の再生マークは、伸び縮みしないよう作り直す。
@@ -376,7 +376,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
             copy.autoresizingMask = [.flexibleRightMargin, .flexibleTopMargin]
             container.addSubview(copy)
         }
-        // 札と違って画像に描かず、丸と三角をそのまま載せる。複製はビューアの大きさまで広がるため、画像にすると三角がぼける。
+        // バッジと違って画像に描かず、丸と三角をそのまま載せる。複製はビューアの大きさまで広がるため、画像にすると三角がぼける。
         if !playView.isHidden {
             let copy = UIView(frame: playView.frame)
             copy.backgroundColor = playView.backgroundColor
@@ -416,17 +416,17 @@ final class MediaTileView: UIButton, MediaViewerSource {
         return container
     }
 
-    /// 札に出すラベル。
+    /// バッジに出すラベル。
     private var marks: [MediaBadgeView.Mark] = [] {
         didSet { updateBadge() }
     }
 
-    /// 札を出さない。投稿欄で、札の位置に代替テキストの送信の状態を出している間に使う。
+    /// バッジを出さない。投稿欄で、バッジの位置に代替テキストの送信の状態を出している間に使う。
     var hidesBadge = false {
         didSet { updateBadge() }
     }
 
-    /// 開くと一覧より明るくなる設定か。サムネイルがHDRなら、HDRの札を出す。
+    /// 開くと一覧より明るくなる設定か。サムネイルがHDRなら、HDRのバッジを出す。
     private var marksHDR = false {
         didSet { updateBadge() }
     }
@@ -577,7 +577,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         // 三角は重心が左に寄って見えるため、丸の中で少し右へずらす。
         playGlyphView.frame = playView.bounds.offsetBy(dx: pointSize * Self.playGlyphOffsetRatio, dy: 0)
         moreLabel.frame = bounds
-        // 札をタイルの端から離す余白。狭いタイルでもすべてのラベルを出せるよう、タイルの短い辺に合わせて6ptから2ptまで縮める。
+        // バッジをタイルの端から離す余白。狭いタイルでもすべてのラベルを出せるよう、タイルの短い辺に合わせて6ptから2ptまで縮める。
         let inset = min(max(min(bounds.width, bounds.height) / 10, 2), 6).rounded()
         let badgeSize = badge.sizeThatFits(CGSize(width: max(bounds.width - inset * 2, 0), height: bounds.height))
         badge.frame = CGRect(x: inset, y: bounds.maxY - inset - badgeSize.height, width: badgeSize.width, height: badgeSize.height)
@@ -616,9 +616,9 @@ final class MediaTileView: UIButton, MediaViewerSource {
     }
 }
 
-/// 添付ファイルのラベル（ALT、GIF、HDR）を1つにまとめた札。タイルの左下に置く。
-/// タイルの大きさは並べ方で変わり、ラベルごとに札を置くと狭いタイルに入らないため、1つにまとめ、幅に入らなければ頭の1文字にする。
-/// ラベルごとの下地を細い隙間で離してつなげ、つなぎ目の角は立て、外側の角だけを丸める。区切りに線を描くより、1枚の札が区切られて見えるため。
+/// 添付ファイルのラベル（ALT、GIF、HDR）を1つにまとめたバッジ。タイルの左下に置く。
+/// タイルの大きさは並べ方で変わり、ラベルごとにバッジを置くと狭いタイルに入らないため、1つにまとめ、幅に入らなければ頭の1文字にする。
+/// ラベルごとの下地を細い隙間で離してつなげ、つなぎ目の角は立て、外側の角だけを丸める。区切りに線を描くより、1つのバッジが区切られて見えるため。
 final class MediaBadgeView: UIView {
     enum Mark: CaseIterable {
         case alt
@@ -636,7 +636,7 @@ final class MediaBadgeView: UIView {
         var shortTitle: String { String(title.prefix(1)) }
     }
 
-    /// 札の文字の大きさの上限。文字の大きさの設定に合わせて大きくするが、いちばん狭いタイルでも1文字の札が入るよう、ここで止める。
+    /// バッジの文字の大きさの上限。文字の大きさの設定に合わせて大きくするが、いちばん狭いタイルでも1文字のバッジが入るよう、ここで止める。
     static let maximumContentSizeCategory = UIContentSizeCategory.extraExtraLarge
     private static let padding = UIEdgeInsets(top: 2, left: 5, bottom: 2, right: 5)
     /// 頭の1文字にしたときの左右の余白の範囲。狭いタイルでもすべてのラベルを出せるよう、入るまで最大から最小へ詰める。
@@ -646,10 +646,10 @@ final class MediaBadgeView: UIView {
     /// ラベルとラベルのあいだの隙間。
     private static let gap: CGFloat = 1
     static let cornerRadius: CGFloat = 4
-    /// 札の下地。画像の明るさによらず白い文字が読めるよう、黒を透かす。
+    /// バッジの下地。画像の明るさによらず白い文字が読めるよう、黒を透かす。
     static let backgroundColor = UIColor.black.withAlphaComponent(0.6)
 
-    /// 出すラベル。空なら札を隠す。
+    /// 出すラベル。空ならバッジを隠す。
     var marks: [Mark] = [] {
         didSet {
             isHidden = marks.isEmpty

@@ -135,7 +135,7 @@ final class ProfileHeaderView: UIView {
     private let nameLabel = EmojiLabel()
     private let acctLabel = UILabel()
     /// ヘッダー画像の右下に重ねる「フォローされています」。関係が届いてから出るため、縦に並ぶ情報の中に置くと、出たときに下が動く。
-    /// ヘッダー画像の上なら場所を取らない。添付ファイルのALTの札と同じ見た目にする。
+    /// ヘッダー画像の上なら場所を取らない。添付ファイルのALTのバッジと同じ見た目にする。
     private let followedByBadge = PaddedLabel()
     private let noteLabel = LinkLabel()
     private let fieldsStack = UIStackView()
@@ -325,7 +325,7 @@ final class ProfileHeaderView: UIView {
             bannerCover.trailingAnchor.constraint(equalTo: bannerView.trailingAnchor),
             bannerCover.bottomAnchor.constraint(equalTo: bannerView.bottomAnchor),
 
-            // 添付ファイルのタイルの札と同じく、端から6pt離す。
+            // 添付ファイルのタイルのバッジと同じく、端から6pt離す。
             followedByBadge.trailingAnchor.constraint(equalTo: bannerView.trailingAnchor, constant: -6),
             followedByBadge.bottomAnchor.constraint(equalTo: bannerView.bottomAnchor, constant: -6),
 
@@ -803,7 +803,7 @@ private final class ProfileBannerView: UIImageView, MediaViewerSource {
 
 /// 背景色の内側に余白を取るラベル。
 private final class PaddedLabel: UILabel {
-    /// 添付ファイルの札（`MediaBadgeView`）と同じ余白。
+    /// 添付ファイルのバッジ（`MediaBadgeView`）と同じ余白。
     private let insets = UIEdgeInsets(top: 2, left: 5, bottom: 2, right: 5)
 
     override func drawText(in rect: CGRect) {

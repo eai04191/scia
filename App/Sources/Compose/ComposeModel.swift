@@ -190,7 +190,7 @@ final class ComposeModel {
         return text.hasPrefix(initialDraft.text) ? String(text.dropFirst(initialDraft.text.count)) : text
     }
 
-    /// 編集の札の文字。返信の編集なら、誰への返信かも書く。返信先はメンションの中から探し、見つからなければ相手を書かない。
+    /// 編集のラベルの文字。返信の編集なら、誰への返信かも書く。返信先はメンションの中から探し、見つからなければ相手を書かない。
     var editChipTitle: String? {
         guard let editedStatus else { return nil }
         guard editedStatus.inReplyToId != nil else { return "投稿を編集中" }
@@ -209,7 +209,7 @@ final class ComposeModel {
     /// 同じ投稿を選び直したときも変えない。失敗した投稿を同じIdempotency-Keyで送り直せるようにするため。
     func setReplyTarget(_ status: Status?) {
         guard !isPosting else { return }
-        // 同じ投稿を元の投稿とブーストのように別の場所から選び直したときは、下書きを保ったまま、札が指す先だけを選んだ方にする。
+        // 同じ投稿を元の投稿とブーストのように別の場所から選び直したときは、下書きを保ったまま、ラベルが指す先だけを選んだ方にする。
         if let status, status.displayed.id == replyTo?.displayed.id {
             replyTo = status
             return

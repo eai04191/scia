@@ -2,8 +2,8 @@ import Observation
 import SciaCore
 import UIKit
 
-/// 書いていないときのカプセルの1行。返信や編集の札のアイコン、添付のサムネイル、自分で書いた本文を、この順に並べる。
-/// 札は文字を出さずアイコンだけにする。開閉では、札のアイコンとサムネイルを、書いているときの札と列の同じものとのあいだで動かすため、それぞれを外から読めるようにする。
+/// 書いていないときのカプセルの1行。返信や編集のラベルのアイコン、添付のサムネイル、自分で書いた本文を、この順に並べる。
+/// ラベルは文字を出さずアイコンだけにする。開閉では、ラベルのアイコンとサムネイルを、書いているときのラベルと列の同じものとのあいだで動かすため、それぞれを外から読めるようにする。
 @MainActor
 final class ComposeRestContent: UIView {
     let chipIcon = UIImageView()
@@ -43,7 +43,7 @@ final class ComposeRestContent: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// - Parameter symbolName: 札のアイコン。返信も編集もしていなければnil。
+    /// - Parameter symbolName: ラベルのアイコン。返信も編集もしていなければnil。
     func configure(symbolName: String?, attachments: [ComposeAttachmentStrip.Item], text: NSAttributedString) {
         chipIcon.image = symbolName.flatMap { UIImage(systemName: $0) }
         setHidden(chipIcon, symbolName == nil)
@@ -64,7 +64,7 @@ final class ComposeRestContent: UIView {
 /// 手で置いた写真らしく、1枚目も真っすぐにはせず、2枚目と逆の向きにわずかに回す。
 /// 3枚目は、2枚だけが置かれて見える不自然さをなくすためのもので、いちばん下に置き、1枚目の左上側から、2枚目と逆の向きに回してのぞかせる。
 /// 2枚目と同じ右側からのぞかせると、縁がほぼ平行に並んでずれて見え、束の形も右へ偏るため。
-/// 4枚目より後ろは3枚目の下に隠れているものとし、枚数の札は付けない。添付がないか、1枚か、それより多いかが分かれば足りるため。
+/// 4枚目より後ろは3枚目の下に隠れているものとし、枚数のバッジは付けない。添付がないか、1枚か、それより多いかが分かれば足りるため。
 /// 送れなかった添付があるときだけ、エラーのアイコンを付ける。
 /// 角度と影の濃さは好みで決まるので、チューニングの値で決める。
 ///
@@ -362,7 +362,7 @@ final class ComposeRestPhoto: UIView {
         layer.cornerCurve = .continuous
         tile.isUserInteractionEnabled = false
         tile.isAccessibilityElement = false
-        // 小さな枠では、ALTやGIFの札は読めないうえ、カプセルに文字を増やすため出さない。
+        // 小さな枠では、ALTやGIFのバッジは読めないうえ、カプセルに文字を増やすため出さない。
         tile.hidesBadge = true
         tile.layer.cornerRadius = Self.cornerRadius - Self.border / 2
         // 回して置くので、縁がギザギザにならないよう、紙と中の画像の縁をなめらかに描く。

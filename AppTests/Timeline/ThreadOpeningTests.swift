@@ -58,8 +58,8 @@ struct ThreadOpeningTests {
         #expect(abs(harness.collectionView.contentOffset.y + inset) <= tolerance)
     }
 
-    /// 押した投稿が返信なら、開いた時点では返信先がまだ並んでおらず札を出している。返信先がすぐ上に並んでも札を残し、行の高さを変えない。
-    /// 札を消すと、読み終えた瞬間に名前と本文が札の1行分だけ上へ跳ねるため。押した投稿でない返信は、すぐ上が返信先なら札を出さない。
+    /// 押した投稿が返信なら、開いた時点では返信先がまだ並んでおらずラベルを出している。返信先がすぐ上に並んでもラベルを残し、行の高さを変えない。
+    /// ラベルを消すと、読み終えた瞬間に名前と本文がラベルの1行分だけ上へ跳ねるため。押した投稿でない返信は、すぐ上が返信先ならラベルを出さない。
     @Test func focusKeepsReplyLabelWhenParentLoadsAbove() throws {
         let parent = StatusFactory.make(count: 1, startingAt: 900)[0]
         let reply = Status(
@@ -98,9 +98,9 @@ struct ThreadOpeningTests {
         harness.collectionView.layoutIfNeeded()
 
         let loaded = try #require(harness.visibleCell(of: focusID))
-        #expect((loaded.contentConfiguration as? PostContentConfiguration)?.context != nil, "押した投稿の札が消えました")
+        #expect((loaded.contentConfiguration as? PostContentConfiguration)?.context != nil, "押した投稿のラベルが消えました")
         #expect(abs(loaded.bounds.height - openedHeight) <= tolerance, "押した投稿の行の高さが\(loaded.bounds.height - openedHeight)pt変わりました")
         let other = try #require(harness.visibleCell(of: .status(replyToFocus.id)))
-        #expect((other.contentConfiguration as? PostContentConfiguration)?.context == nil, "押した投稿でない返信に札が出ました")
+        #expect((other.contentConfiguration as? PostContentConfiguration)?.context == nil, "押した投稿でない返信にラベルが出ました")
     }
 }

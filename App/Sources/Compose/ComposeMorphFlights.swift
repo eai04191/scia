@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 投稿欄の開閉で、カプセルの札のアイコンと写真を、書いているときの札とサムネイルの列の同じものの位置へ動かす。
+/// 投稿欄の開閉で、カプセルのラベルのアイコンと写真を、書いているときのラベルとサムネイルの列の同じものの位置へ動かす。
 ///
 /// カプセルの行と書いているときの行は、スタックビューの中で入れ替えるので、行の中身を行の外へは動かせない。
 /// 両方の端の本物を隠し、バーの上に重ねた複製を、行を入れ替えるのと同じアニメーションの中で動かす。
@@ -86,7 +86,7 @@ final class ComposeMorphFlights {
         }
         for (key, source) in sources where flights[key] == nil {
             let copy = FlightCopy(content: source.content)
-            // 写真の複製だけを影の入れ物に入れる。札のアイコンは影を落とさない。
+            // 写真の複製だけを影の入れ物に入れる。ラベルのアイコンは影を落とさない。
             if case .thumbnail = source.content {
                 shadowGroup.addSubview(copy)
             } else {

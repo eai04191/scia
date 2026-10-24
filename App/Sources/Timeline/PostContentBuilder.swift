@@ -12,7 +12,7 @@ struct PostContentBuilder {
 
     /// タップしたときの処理と添付ファイルは含めない。一覧では呼び出し側が足す。
     /// - Parameter isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。
-    /// - Parameter replyLabel: 名前の上に出す返信の札。固定された投稿とブーストでは、そのことを示す行を優先し、札は出さない。
+    /// - Parameter replyLabel: 名前の上に出す返信のラベル。固定された投稿とブーストでは、そのことを示す行を優先し、ラベルは出さない。
     func configuration(for status: Status, isPinned: Bool = false, replyLabel: ReplyLabel? = nil, base: UIListContentConfiguration) -> PostContentConfiguration {
         let shown = status.displayed
         let secondaryFont = base.secondaryTextProperties.font
@@ -91,7 +91,7 @@ struct PostContentBuilder {
         ReactionGlow(statusID: shown.id, isReblogged: shown.reblogged, isFavourited: shown.favourited, style: ReactionGlow.Style(tuning: tuning, settings: settings))
     }
 
-    /// 返信の札。自分への返信は、一覧の中で気づけるよう、記号と文字をアプリの色で描く。
+    /// 返信のラベル。自分への返信は、一覧の中で気づけるよう、記号と文字をアプリの色で描く。
     private func replyContext(_ label: ReplyLabel, font: UIFont, language: String) -> PostContentConfiguration.Context {
         let text = switch label {
         case .continuation: "続き"

@@ -39,13 +39,13 @@ enum MediaGridCatalog {
             CatalogState(title: "再生アイコン（幅160pt、投稿欄の64pt、編集履歴の44pt、通知の再掲の既定の40ptと最小の24ptの正方形。短い辺に比例させ、チューニングの上限と下限で止める）") {
                 tiles(Fixtures.attachment("a", type: .video, width: 1_280, height: 720, color: .systemTeal), widths: [160, 64, 44, 40, 24], square: true)
             },
-            CatalogState(title: "札（ALTとGIF。幅160pt、投稿欄の64pt、通知の再掲の既定の40ptと最小の24ptのタイル。入らなければ頭の1文字にし、余白、文字の順に詰める）") {
+            CatalogState(title: "バッジ（ALTとGIF。幅160pt、投稿欄の64pt、通知の再掲の既定の40ptと最小の24ptのタイル。入らなければ頭の1文字にし、余白、文字の順に詰める）") {
                 tiles(Fixtures.attachment("a", type: .gifv, width: 1_200, height: 900, color: .systemIndigo, description: "動くGIF"))
             },
-            CatalogState(title: "札（ALTとGIFとHDR。HDRは、ビューアの設定がビューア以外より明るいときだけ出る）") {
+            CatalogState(title: "バッジ（ALTとGIFとHDR。HDRは、ビューアの設定がビューア以外より明るいときだけ出る）") {
                 tiles(Fixtures.attachment("a", type: .gifv, width: 1_200, height: 900, color: .systemIndigo, description: "動くGIF", hdr: true))
             },
-            CatalogState(title: "札（文字の大きさを最大にしたとき。札の文字は上限で止まる）") {
+            CatalogState(title: "バッジ（文字の大きさを最大にしたとき。バッジの文字は上限で止まる）") {
                 tiles(Fixtures.attachment("a", type: .gifv, width: 1_200, height: 900, color: .systemIndigo, description: "動くGIF", hdr: true), contentSize: .accessibilityExtraExtraExtraLarge)
             },
             CatalogState(title: "読み込み中（ぼかしの下地あり、なし）") {
@@ -77,7 +77,7 @@ enum MediaGridCatalog {
         }
     }
 
-    /// 同じ添付ファイルのタイルを、幅を変えて並べる。一覧の並べ方では狭いタイルが出にくいため、札が幅に入らないときの形を直接見る。
+    /// 同じ添付ファイルのタイルを、幅を変えて並べる。一覧の並べ方では狭いタイルが出にくいため、バッジが幅に入らないときの形を直接見る。
     /// - Parameters:
     ///   - contentSize: 文字の大きさの設定。nilなら端末の設定に従う。
     ///   - square: 高さを幅と同じにする。falseなら高さは64pt。

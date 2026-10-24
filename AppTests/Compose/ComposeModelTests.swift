@@ -276,7 +276,7 @@ struct ComposeModelTests {
         #expect(sent[0].idempotencyKey == sent[1].idempotencyKey)
     }
 
-    /// 同じ投稿を、元の投稿とブーストのように別の場所から選び直すと、下書きは保ったまま、札が指す先が選んだ方になる。
+    /// 同じ投稿を、元の投稿とブーストのように別の場所から選び直すと、下書きは保ったまま、ラベルが指す先が選んだ方になる。
     @Test func reselectingSameStatusFromBoostPointsToBoost() throws {
         let original = try status(visibility: .public)
         let boost = Status(id: "30", createdAt: Date(timeIntervalSince1970: 0), account: original.account, content: "", spoilerText: "", url: nil, reblog: original)

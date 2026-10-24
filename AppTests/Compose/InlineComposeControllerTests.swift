@@ -51,7 +51,7 @@ struct InlineComposeControllerTests {
         )
     }
 
-    /// 開閉のアニメーションの途中で、返信先の変更が反映されても、返信先の札の行と入力欄が重ならない。
+    /// 開閉のアニメーションの途中で、返信先の変更が反映されても、返信先のラベルの行と入力欄が重ならない。
     @Test func replyRowKeepsItsSpaceAcrossRepeatedReplies() async throws {
         defer { window.isHidden = true }
         for round in 0..<4 {
@@ -67,7 +67,7 @@ struct InlineComposeControllerTests {
         }
     }
 
-    /// 書いている途中で別の投稿へ返信し直したり、閉じる途中や札を外した直後に返信を始めたりしても、行が重ならない。
+    /// 書いている途中で別の投稿へ返信し直したり、閉じる途中やラベルを外した直後に返信を始めたりしても、行が重ならない。
     /// 待ち時間を変えて、アニメーションのいろいろな途中に次の操作を送る。
     @Test(arguments: [0, 30, 120, 250])
     func replyRowKeepsItsSpaceWhenInterrupted(waitMilliseconds: Int) async throws {
@@ -91,7 +91,7 @@ struct InlineComposeControllerTests {
         #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
     }
 
-    /// 投稿へ返信したあと、同じ投稿のブーストを返信に選び直しても、札が縮まず宛先の文字を収める。
+    /// 投稿へ返信したあと、同じ投稿のブーストを返信に選び直しても、ラベルが縮まず宛先の文字を収める。
     @Test func replyChipKeepsWidthWhenReselectingBoostOfSameStatus() async throws {
         defer { window.isHidden = true }
         let original = try status(id: "10")
@@ -109,7 +109,7 @@ struct InlineComposeControllerTests {
         expectChipFitsTitle(button)
     }
 
-    /// 札を外すと、行は薄くなりながら縮み、外し終えたら隠れる。消えていく途中も札の文字は残る。
+    /// ラベルを外すと、行は薄くなりながら縮み、外し終えたら隠れる。消えていく途中もラベルの文字は残る。
     @Test func clearingReplyFadesOutRow() async throws {
         defer { window.isHidden = true }
         useDefaultAnimationDurations()
@@ -120,8 +120,8 @@ struct InlineComposeControllerTests {
         composer.model.setReplyTarget(nil)
         try await clock.advance(by: 0.08)
         let presentation = try #require(button.superview?.layer.presentation())
-        #expect(presentation.opacity > 0 && presentation.opacity < 1, "札がパッと消えました: opacity=\(presentation.opacity)")
-        #expect(button.configuration?.title?.hasSuffix("への返信") == true, "消えていく途中で札の文字が消えました")
+        #expect(presentation.opacity > 0 && presentation.opacity < 1, "ラベルがパッと消えました: opacity=\(presentation.opacity)")
+        #expect(button.configuration?.title?.hasSuffix("への返信") == true, "消えていく途中でラベルの文字が消えました")
 
         try await waitUntilSettled()
         window.layoutIfNeeded()
@@ -129,7 +129,7 @@ struct InlineComposeControllerTests {
         #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
     }
 
-    /// 札が消えていく途中に別の投稿の返信を選んでも、札は出たままで崩れない。
+    /// ラベルが消えていく途中に別の投稿の返信を選んでも、ラベルは出たままで崩れない。
     @Test func replyingWhileReplyRowFadesOut() async throws {
         defer { window.isHidden = true }
         useDefaultAnimationDurations()
@@ -144,12 +144,12 @@ struct InlineComposeControllerTests {
 
         let button = try #require(buttons(in: window).first { $0.configuration?.title?.hasSuffix("への返信") == true })
         let row = try #require(button.superview)
-        #expect(!row.isHidden && row.alpha == 1, "札が出ていません: hidden=\(row.isHidden) alpha=\(row.alpha)")
+        #expect(!row.isHidden && row.alpha == 1, "ラベルが出ていません: hidden=\(row.isHidden) alpha=\(row.alpha)")
         expectChipFitsTitle(button)
         #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
     }
 
-    /// 札の文字が省略も切り取りもされずに収まっている。文字ラベルが本来の幅を確保し、札がその文字を囲んでいる。
+    /// ラベルの文字が省略も切り取りもされずに収まっている。UILabelが本来の幅を確保し、ボタンがその文字を囲んでいる。
     /// 添付の長押しでメニューを出すと、iOSがソフトウェアキーボードを隠す。その間もバーを今の位置に留め、キーボードが戻ったら外す。
     @Test func contextMenuHoldsBarUntilKeyboardReturns() async throws {
         defer { window.isHidden = true }
@@ -692,11 +692,11 @@ struct InlineComposeControllerTests {
 
     private func expectChipFitsTitle(_ button: UIButton, sourceLocation: SourceLocation = #_sourceLocation) {
         guard let label = button.titleLabel else {
-            Issue.record("札に文字ラベルがありません", sourceLocation: sourceLocation)
+            Issue.record("ラベルのボタンにUILabelがありません", sourceLocation: sourceLocation)
             return
         }
-        #expect(label.bounds.width >= label.intrinsicContentSize.width - 0.5, "札の文字が縮んでいます: \(label.bounds.width) / \(label.intrinsicContentSize.width)\n\(composer.stateDump())", sourceLocation: sourceLocation)
-        #expect(button.bounds.width >= label.frame.maxX, "札が文字より狭くなりました\n\(composer.stateDump())", sourceLocation: sourceLocation)
+        #expect(label.bounds.width >= label.intrinsicContentSize.width - 0.5, "ラベルの文字が縮んでいます: \(label.bounds.width) / \(label.intrinsicContentSize.width)\n\(composer.stateDump())", sourceLocation: sourceLocation)
+        #expect(button.bounds.width >= label.frame.maxX, "ラベルが文字より狭くなりました\n\(composer.stateDump())", sourceLocation: sourceLocation)
     }
 
     /// 設定で隠すと、空の投稿欄は書いていない間だけ隠れ、一覧の下の余白にも数えない。書き始めると出て、空のまま閉じるとまた隠れる。

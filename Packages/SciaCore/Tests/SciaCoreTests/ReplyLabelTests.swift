@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import SciaCore
 
-/// 返信の札を投稿の情報だけで決められることと、隣り合う返信の行を線でつなぐ判定を確かめる。
+/// 返信のラベルを投稿の情報だけで決められることと、隣り合う返信の行を線でつなぐ判定を確かめる。
 struct ReplyLabelTests {
     private let alice = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: nil)
     private let bob = Account(id: "2", username: "bob", acct: "bob@remote.example", displayName: "Bob", avatar: nil)
