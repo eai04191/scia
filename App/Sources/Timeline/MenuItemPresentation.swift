@@ -141,6 +141,8 @@ extension LinkMenuItem: MenuItemContentProviding {
 extension HashtagMenuItem: MenuItemContentProviding {
     var content: MenuItemContent {
         switch self {
+        case .timeline: .own(title: "すべての投稿", symbolName: "number", note: "ハッシュタグのタイムラインを開きます。ハッシュタグをタップしたときと同じです")
+        case .accountStatuses: .own(title: "投稿したユーザーの投稿", symbolName: "person.crop.square", note: "このハッシュタグの付いた、投稿したユーザーの投稿を開きます。プロフィールではその人の投稿です。メニューでは「@名前の投稿」と出ます")
         case .openInBrowser: .url(.openInBrowser)
         case .openInDefaultBrowser: .url(.openInDefaultBrowser)
         case .openInAppSafari: .url(.openInAppSafari)

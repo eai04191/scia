@@ -46,6 +46,8 @@ struct PostBodyContent {
     var xPost: XPostView.Content?
     /// 表示している投稿。リンクカードから囲みに替わったのが同じ投稿の行かを見分ける。同じXの投稿へのリンクは、別の投稿にもありうるため。
     var statusID: Status.ID?
+    /// 本文のハッシュタグのメニューの「ユーザーの投稿」で開くユーザー。投稿した人。nilなら項目を出さない。
+    var hashtagAccount: Account?
     /// 自分の投稿が自分のフィルターに一致していることを示す1行。一番下に置く。一致していなければnil。
     var filterNote: NSAttributedString?
     /// 上の部品と、フィルターの印のあいだ。
@@ -232,6 +234,7 @@ final class PostBodyView: UIView {
         let previous = self.content
         self.content = content
         textLabel.attributedText = Self.truncatingTail(content.text, when: content.maximumLines > 0)
+        textLabel.hashtagAccount = content.hashtagAccount
         textLabel.numberOfLines = content.maximumLines
         NSLayoutConstraint.deactivate(variableConstraints)
         variableConstraints = []
@@ -458,7 +461,7 @@ final class PostBodyView: UIView {
         return result
     }
 
-    /// 読み上げで、本文のリンクを開く操作。押しても何もしないハッシュタグは除く。
+    /// 読み上げで、本文のリンクを開く操作。
     func linkAccessibilityActions() -> [UIAccessibilityCustomAction] {
         guard let text = content?.text, content?.spoiler?.isCollapsed != true else { return [] }
         return LinkLabel.links(in: text).map { text, destination in

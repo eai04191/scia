@@ -499,6 +499,7 @@ final class ProfileHeaderView: UIView {
         let note = RichTextRenderer(font: body, textColor: .label, paragraphSpacing: 6, emojiImages: emojiImages, language: content.glyphLanguage).render(.html(account.note, emojis: account.emojis))
         noteLabel.emojiImages = animatedEmojis
         noteLabel.attributedText = note
+        noteLabel.hashtagAccount = account
         noteLabel.accessibilityCustomActions = linkAccessibilityActions(in: note)
         noteLabel.isHidden = note.length == 0
         applyFields(account, language: content.glyphLanguage, animatedEmojis: animatedEmojis)
@@ -554,6 +555,7 @@ final class ProfileHeaderView: UIView {
             valueLabel.numberOfLines = 0
             valueLabel.emojiImages = animatedEmojis
             valueLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
+            valueLabel.hashtagAccount = account
             let value = NSMutableAttributedString(attributedString: RichTextRenderer(font: valueFont, textColor: .label, emojiImages: emojiImages, language: language)
                 .render(.html(field.value, emojis: account.emojis)))
             if field.verifiedAt != nil,
@@ -572,7 +574,7 @@ final class ProfileHeaderView: UIView {
         }
     }
 
-    /// 読み上げで、リンクを開く操作。押しても何もしないハッシュタグは除く。
+    /// 読み上げで、リンクを開く操作。
     private func linkAccessibilityActions(in text: NSAttributedString) -> [UIAccessibilityCustomAction] {
         LinkLabel.links(in: text).map { text, destination in
             UIAccessibilityCustomAction(name: text) { [weak self] _ in

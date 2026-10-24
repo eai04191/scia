@@ -62,7 +62,8 @@ extension TimelineViewController {
                 media: media,
                 mediaSpacing: tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing),
                 poll: showsPollResults ? pollContent(for: shown, allowsVoting: false, base: base) : nil,
-                pollSpacing: tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing)
+                pollSpacing: tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing),
+                hashtagAccount: shown.account
             ),
             bodySpacing: tuning.value(of: TuningCatalog.notificationQuotedSpacing),
             base: base

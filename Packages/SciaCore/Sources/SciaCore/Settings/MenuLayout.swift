@@ -324,8 +324,12 @@ public enum LinkMenuItem: String, MenuItemKind {
     ])
 }
 
-/// 本文のハッシュタグを長押ししたときのメニューの項目。アプリにはハッシュタグを開く画面がまだないため、開く項目はサーバーのハッシュタグのページをブラウザで開くものだけ。
+/// 本文のハッシュタグを長押ししたときのメニューの項目。
 public enum HashtagMenuItem: String, MenuItemKind {
+    /// ハッシュタグのタイムラインを開く。ハッシュタグをタップしたときと同じ。
+    case timeline
+    /// 投稿の本文なら投稿した人、プロフィールならその人の、このハッシュタグの付いた投稿を開く。
+    case accountStatuses
     /// 開く場所の設定に従って開く。
     case openInBrowser
     /// 開く場所の設定にかかわらず、既定のブラウザで開く。
@@ -336,6 +340,9 @@ public enum HashtagMenuItem: String, MenuItemKind {
     case share
 
     public static let defaultLayout = MenuLayout<HashtagMenuItem>(defaultElements: [
+        .item(.timeline, isVisible: true),
+        .item(.accountStatuses, isVisible: true),
+        .separator,
         .item(.openInBrowser, isVisible: true),
         .item(.openInDefaultBrowser, isVisible: false),
         .item(.openInAppSafari, isVisible: false),

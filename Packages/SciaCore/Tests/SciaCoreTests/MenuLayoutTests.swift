@@ -203,12 +203,12 @@ struct MenuLayoutTests {
         #expect(saved.groups == StatusMenuItem.defaultLayout.groups)
     }
 
-    /// 本文のリンクとハッシュタグのメニューは、設定を足す前の決め打ちのメニューと同じ並びにする。開く場所を選んで開く2つは隠しておく。
+    /// 本文のリンクのメニューは、設定を足す前の決め打ちのメニューと同じ並びにする。ハッシュタグのメニューは、その前にアプリで開く2つを置く。開く場所を選んで開く2つは隠しておく。
     /// リンクのメニューには、あとから足した「プロフィールとして開く」が「ブラウザで開く」の下に入る。
     @Test func linkAndHashtagMenuDefaultsMatchMenuBeforeCustomization() {
         #expect(LinkMenuItem.defaultLayout.groups.main.map(\.items) == [[.openInBrowser, .openAsProfile, .copyLink, .share]])
         #expect(LinkMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
-        #expect(HashtagMenuItem.defaultLayout.groups.main.map(\.items) == [[.openInBrowser, .copyLink, .share]])
+        #expect(HashtagMenuItem.defaultLayout.groups.main.map(\.items) == [[.timeline, .accountStatuses], [.openInBrowser, .copyLink, .share]])
         #expect(HashtagMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
     }
 
@@ -219,6 +219,12 @@ struct MenuLayoutTests {
         ])
 
         #expect(saved.groups.main.map(\.items) == [[.openInBrowser, .openAsProfile, .copyLink, .share]])
+    }
+
+    /// タイムラインを開く2つを足す前に保存したハッシュタグのメニューでも、2つは先頭に出る。
+    @Test func savedHashtagMenuGainsTimelineItemsAtTop() {
+        let saved = MenuLayout<HashtagMenuItem>(tokens: ["item:openInBrowser", "hidden:openInDefaultBrowser", "hidden:openInAppSafari", "item:copyLink", "item:share", "more"])
+        #expect(saved.groups.main.flatMap(\.items).prefix(2) == [.timeline, .accountStatuses])
     }
 
     /// リンクをコピーと共有を足す前に保存したユーザーのメニューでも、2つはプロフィールの後ろに出る。

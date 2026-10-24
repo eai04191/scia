@@ -77,7 +77,8 @@ public enum TabItem: MenuItemKind {
         if case .hashtag = self { true } else { false }
     }
 
-    public init(_ feed: TimelineFeed) {
+    /// タブに置かない一覧（アカウントのハッシュタグ）ではnil。
+    public init?(_ feed: TimelineFeed) {
         switch feed {
         case .home: self = .home
         case .local: self = .local
@@ -85,6 +86,7 @@ public enum TabItem: MenuItemKind {
         // 同じ項目かどうかはIDだけで見るので、並びの中の場所を探すのに名前は要らない。
         case .list(let id): self = .list(id: id, title: "")
         case .hashtag(let name): self = .hashtag(name: name)
+        case .accountHashtag: return nil
         }
     }
 

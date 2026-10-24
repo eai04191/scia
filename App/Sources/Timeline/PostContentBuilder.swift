@@ -82,6 +82,7 @@ struct PostContentBuilder {
             emojiImages: settings.animatesCustomEmojis ? emojiImages : nil
         )
         configuration.reactionGlow = reactionGlow(for: shown)
+        configuration.hashtagAccount = shown.account
         return configuration
     }
 

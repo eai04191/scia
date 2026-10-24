@@ -17,8 +17,12 @@ final class SessionController {
     private let favourites: SavedStatusesController
     /// リストとハッシュタグのタイムラインのタブ。並びに出たときに作る。
     private let serverFeeds: ServerFeedRegistry
+    /// ハッシュタグのメニューやタップで、開いた一覧に積んだハッシュタグの一覧。
+    private let pushedFeeds: PushedFeedRegistry
     /// 投稿の一覧のタブ。ホーム、ローカル、連合と、作ったリストとハッシュタグ。
-    private var feeds: [FeedTimelineController] { [home, local, federated] + serverFeeds.controllers }
+    private var tabFeeds: [FeedTimelineController] { [home, local, federated] + serverFeeds.controllers }
+    /// タブの一覧と、積んで開いているハッシュタグの一覧。
+    private var feeds: [FeedTimelineController] { tabFeeds + pushedFeeds.controllers }
     /// 直近に読んだ自分のリスト。並びを最初の並びに戻したときに、リストを足し直すのに使う。
     private var loadedLists: [MastodonList]?
     /// 直近に読んだ、フォローしているハッシュタグ。並びを最初の並びに戻したときに、足し直すのに使う。
@@ -169,10 +173,12 @@ final class SessionController {
         let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog, mediaFormats: mediaFormats)
         self.diagnostics = diagnostics
         // コントローラーはHubを持っているので、弱く持って循環させない。
-        streamingHub.onChange = { [weak streamingHub, weak home, weak local, weak federated, weak notifications, weak serverFeeds] in
+        let pushedFeeds = PushedFeedRegistry()
+        self.pushedFeeds = pushedFeeds
+        streamingHub.onChange = { [weak streamingHub, weak home, weak local, weak federated, weak notifications, weak serverFeeds, weak pushedFeeds] in
             guard let streamingHub else { return }
             diagnostics.setStreaming(streamingHub.state, subscriptions: streamingHub.subscriptions)
-            for feed in [home, local, federated] + (serverFeeds?.controllers ?? []) {
+            for feed in [home, local, federated] + (serverFeeds?.controllers ?? []) + (pushedFeeds?.controllers ?? []) {
                 feed?.showStreamingState(streamingHub.state)
             }
             notifications?.showStreamingState(streamingHub.state)
@@ -192,6 +198,7 @@ final class SessionController {
             bookmarks.updateStatus(id, transform)
             favourites.updateStatus(id, transform)
             serverFeeds.updateStatus(id, transform)
+            pushedFeeds.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
             threads.updateStatus(id, transform)
         }
@@ -208,11 +215,12 @@ final class SessionController {
             bookmarks.updateStatus(id, transform)
             favourites.updateStatus(id, transform)
             serverFeeds.updateStatus(id, transform)
+            pushedFeeds.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
             threads.updateStatus(id, transform)
         }
         linkCards = LinkCardRefresher(client: client) { refetched in
-            for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, profiles.updateStatus, threads.updateStatus] {
+            for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, pushedFeeds.updateStatus, profiles.updateStatus, threads.updateStatus] {
                 update(refetched.id) { $0.adoptingCard(of: refetched) }
             }
         }
@@ -356,7 +364,7 @@ final class SessionController {
                     if let editing = draft.editing {
                         // ストリーミングの編集の知らせを待たずに、どの一覧にも編集したあとの投稿を出す。切れている間も直るようにするため。
                         let edited = try await client.editStatus(editing, to: draft)
-                        for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, profiles.updateStatus, threads.updateStatus] {
+                        for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, pushedFeeds.updateStatus, profiles.updateStatus, threads.updateStatus] {
                             update(edited.id) { _ in edited }
                         }
                     } else {
@@ -469,8 +477,8 @@ final class SessionController {
     /// 並びに合わせて、無効にした項目の購読をやめ、有効にした項目の購読を戻す。
     /// 起動のあとに有効にしたホームと通知は、ここで読み始める。ローカルと連合は、開いたときに読み始める。
     private func applyEnabledItems(_ placement: TabPlacement) {
-        for feed in feeds {
-            feed.setEnabled(placement.location(of: TabItem(feed.feed)) != .disabled)
+        for feed in tabFeeds {
+            feed.setEnabled(TabItem(feed.feed).map(placement.location(of:)) != .disabled)
         }
         notifications.setEnabled(placement.location(of: .notifications) != .disabled)
         // 見せていた一覧を無効にしたら、UIKitが選んだ先頭のタブへ移り、見せなくなる。
@@ -626,7 +634,7 @@ final class SessionController {
         }
         controller.viewController.onAppearing = { [weak controller] in controller?.startIfNeeded() }
         controller.showStreamingState(streamingHub.state)
-        controller.setEnabled(tabs.placement.location(of: TabItem(controller.feed)) != .disabled)
+        controller.setEnabled(TabItem(controller.feed).map(tabs.placement.location(of:)) != .disabled)
     }
 
     /// 自分のリストとフォローしているハッシュタグを読み、タブの並びに反映する。決まりはdocs/tabs.mdの「リスト」と「フォローしているハッシュタグ」にある。
@@ -739,6 +747,10 @@ final class SessionController {
             guard let viewController else { return }
             self?.openProfile(resolvingLink: url, from: viewController)
         }
+        viewController.onOpenAccountHashtag = { [weak self, weak viewController] name, account in
+            guard let viewController else { return }
+            self?.openAccountHashtag(name, of: account, from: viewController)
+        }
         viewController.onOpenThread = { [weak self, weak viewController] status, rowFrame in
             guard let viewController else { return }
             self?.openThread(of: status, rowFrame: rowFrame, from: viewController)
@@ -765,8 +777,7 @@ final class SessionController {
         }
     }
 
-    /// 本文のリンクを開く。URLは設定に応じて既定のブラウザかアプリ内のSafariで、メンションはその人のプロフィールを開いた一覧に積む。
-    /// ハッシュタグはまだハッシュタグのタイムラインがないため、押しても何もしない。ブラウザで開くと、タイムラインを足したときに挙動が変わってしまう。
+    /// 本文のリンクを開く。URLは設定に応じて既定のブラウザかアプリ内のSafariで、メンションはその人のプロフィールを、ハッシュタグはそのタイムラインを、開いた一覧に積む。
     private func open(_ destination: RichText.LinkDestination, in status: Status, from source: UIViewController) {
         switch destination {
         case .url(let url):
@@ -779,12 +790,12 @@ final class SessionController {
                 return
             }
             openProfile(accountID: mention.id, from: source)
-        case .hashtag:
-            break
+        case .hashtag(let name, _):
+            openFeed(.hashtag(name: name), from: source)
         }
     }
 
-    /// プロフィールの自己紹介や補足情報のリンクを開く。投稿の本文と同じく、ハッシュタグは押しても何もしない。
+    /// プロフィールの自己紹介や補足情報のリンクを開く。ハッシュタグは、投稿の本文と同じくそのタイムラインを開く。
     /// 自己紹介には投稿のようなメンションの一覧がなく、IDが分からないため、メンションはプロフィールのURLから探す。
     private func open(_ destination: RichText.LinkDestination, inProfileFrom source: UIViewController) {
         switch destination {
@@ -792,9 +803,33 @@ final class SessionController {
             open(url, in: AppDependencies.settings.linkBrowser.browser(for: url))
         case .mention(let acct, let url):
             openProfile(resolving: url, acct: acct, from: source)
-        case .hashtag:
-            break
+        case .hashtag(let name, _):
+            openFeed(.hashtag(name: name), from: source)
         }
+    }
+
+    // MARK: - ハッシュタグ
+
+    /// ハッシュタグのメニューの「ユーザーの投稿」で、`account`の投稿のうち、ハッシュタグ`name`の付いたものを開いた一覧に積む。
+    private func openAccountHashtag(_ name: String, of account: Account, from source: UIViewController) {
+        openFeed(.accountHashtag(accountID: account.id, name: name), texts: .accountHashtag(name: name, acct: account.acct), from: source)
+    }
+
+    /// 一覧を開いた画面に積み、すぐ読み始めてストリームを購読する。ナビゲーションから外されたら止める。
+    private func openFeed(_ feed: TimelineFeed, texts: TimelineViewController.Texts? = nil, from source: UIViewController) {
+        guard let navigation = source.navigationController else { return }
+        let controller = FeedTimelineController(feed: feed, texts: texts, client: client, streamingHub: streamingHub) { [weak self] in
+            self?.reportUnauthorized()
+        }
+        let viewController = controller.viewController
+        configure(viewController)
+        // 画面が積まれている間だけ生かす。コントローラーは画面を強く持つので互いに持ち合うが、外されたときと、ログアウトなどで止めるときに、`stop()`が持ち合いを解く。
+        viewController.lifetimeOwner = controller
+        viewController.onRemovedFromParent = { [weak controller] in controller?.stop() }
+        controller.showStreamingState(streamingHub.state)
+        pushedFeeds.add(controller)
+        navigation.pushViewController(viewController, animated: true)
+        controller.start()
     }
 
     /// `url`を`browser`で開く。アプリ内のSafariはhttpとhttps以外のURLで例外を出して落ちるため、呼ぶ側が`LinkBrowser.browser(for:)`などで確かめてから渡す。
@@ -1123,6 +1158,10 @@ final class SessionController {
             guard let viewController else { return }
             self?.openProfile(resolvingLink: url, from: viewController)
         }
+        viewController.onOpenAccountHashtag = { [weak self, weak viewController] name, account in
+            guard let viewController else { return }
+            self?.openAccountHashtag(name, of: account, from: viewController)
+        }
         viewController.userMenuActions = userMenuActions
         viewController.onOpenLink = { [weak self, weak viewController] destination in
             guard let self, let viewController else { return }
@@ -1299,7 +1338,8 @@ final class SessionController {
 
     /// ミュートかブロックしている相手を、投稿と通知の一覧から除く。どちらでもなくなったら、また足すようにする。
     private func excludeInLists(_ relationship: Relationship) {
-        for feed in feeds {
+        // ユーザーのハッシュタグの一覧は、その人の投稿だけを並べるため、プロフィール画面の一覧と同じく除かない。
+        for feed in feeds where !feed.feed.isAccountHashtag {
             feed.setAccount(relationship.id, excluded: relationship.blocking || relationship.muting)
         }
         notifications.setAccount(relationship.id, excluded: relationship.blocking || (relationship.muting && relationship.mutingNotifications))
@@ -2274,6 +2314,32 @@ private final class ServerFeedRegistry {
             removed.append(item)
         }
         return removed
+    }
+}
+
+/// 開いた一覧に積んだハッシュタグの一覧を弱く持つ。一覧は、積んだ画面が生かしている。
+@MainActor
+private final class PushedFeedRegistry {
+    private struct Entry {
+        weak var controller: FeedTimelineController?
+    }
+
+    private var entries: [Entry] = []
+
+    func add(_ controller: FeedTimelineController) {
+        entries.removeAll { $0.controller == nil }
+        entries.append(Entry(controller: controller))
+    }
+
+    var controllers: [FeedTimelineController] {
+        entries.removeAll { $0.controller == nil }
+        return entries.compactMap(\.controller)
+    }
+
+    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
+        for controller in controllers {
+            controller.updateStatus(id, transform)
+        }
     }
 }
 

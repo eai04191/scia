@@ -33,8 +33,11 @@ public struct StreamingSubscription: Sendable, Hashable {
     }
 
     /// ハッシュタグのタイムライン。`name`は`#`を除いた名前。
+    /// Mastodonのストリーミングサーバーは、`normalizeHashtag`でそろえた名前のチャンネルで購読をまとめ、イベントの`stream`欄には最初に送った名前を返す。
+    /// 表記の違う同じタグ（フォローしている`scia`と本文の`#Scia`）を別に申し込むと、後のほうにはイベントが届かず、後のほうをやめるとサーバーでは両方の購読が外れる。
+    /// そのため、サーバーと同じ決まりでそろえた名前で申し込み、同じタグの購読を1つにする。
     public static func hashtag(_ name: String) -> StreamingSubscription {
-        StreamingSubscription(stream: "hashtag", tag: name)
+        StreamingSubscription(stream: "hashtag", tag: Hashtag.normalizedName(name))
     }
 
     /// `subscribe`で送るストリームの名前。

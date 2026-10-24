@@ -14,6 +14,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         /// 違和感レポートの状態ダンプに使う名前。
         let dumpName: String
         let title: String
+        /// 題の下に添える文字。ストリーミングの切断を知らせるときは、その前に並べる。
+        var subtitle: String?
         /// 1件もないとき。
         let empty: String
         /// これより古いものがないとき。
@@ -31,6 +33,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         static func hashtag(name: String) -> Texts {
             Texts(dumpName: "hashtag", title: "#\(name)", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
+        }
+        /// `acct`のユーザーの、ハッシュタグの付いた投稿。題に入り切るよう、ハンドルは題の下に出す。
+        static func accountHashtag(name: String, acct: String) -> Texts {
+            Texts(dumpName: "accountHashtag", title: "#\(name)", subtitle: "@\(acct)", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
         }
         static let notifications = Texts(dumpName: "notifications", title: "通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
         static let profile = Texts(dumpName: "profile", title: "", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
@@ -117,6 +123,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onOpenURL: ((URL, LinkBrowser) -> Void)?
     /// リンクのメニューの「プロフィールとして開く」で、リンク先をプロフィールとして探して開く。
     var onOpenProfileURL: ((URL) -> Void)?
+    /// ハッシュタグのメニューの「ユーザーの投稿」で、そのユーザーのハッシュタグの付いた投稿を開く。
+    var onOpenAccountHashtag: ((String, Account) -> Void)?
+    /// ナビゲーションから外された。積んで開いた一覧が、読み込みと購読をやめるのに使う。
+    var onRemovedFromParent: (() -> Void)?
     /// ユーザーのメニューのメンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
     var userMenuActions: UserMenuActions?
     /// この画面が表示されている間、生かしておくもの。画面を組み立てたコントローラーを、ナビゲーションから外されるまで残すのに使う。
@@ -280,6 +290,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        // 画面を組み立てる側が先に入れたサブタイトル（人の一覧のハンドル）を消さないよう、文言にあるときだけ入れる。
+        if let subtitle = texts.subtitle {
+            navigationItem.subtitle = subtitle
+        }
         if !texts.title.isEmpty {
             title = texts.title
         }
@@ -344,6 +358,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     @objc private func focusInlineComposeFromKeyboard() {
         onFocusInlineCompose?()
+    }
+
+    override func didMove(toParent parent: UIViewController?) {
+        super.didMove(toParent: parent)
+        if parent == nil { onRemovedFromParent?() }
     }
 
     override func viewDidDisappear(_ animated: Bool) {
@@ -756,9 +775,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         notices?.showTransient(notice, duration: duration)
     }
 
-    /// ストリーミングにつながらない状態が続いていることを、タイトルの下に控えめに出す。
+    /// ストリーミングにつながらない状態が続いていることを、タイトルの下に控えめに出す。題の下に添える文字があれば、その後ろに並べる。
     func setOutageNotice(_ isShown: Bool) {
-        navigationItem.subtitle = isShown ? "ストリーミング切断中" : nil
+        let parts = [texts.subtitle, isShown ? "ストリーミング切断中" : nil].compactMap(\.self)
+        navigationItem.subtitle = parts.isEmpty ? nil : parts.joined(separator: "・")
     }
 
     func setContentState(_ state: ContentState) {
@@ -1379,6 +1399,10 @@ extension TimelineViewController: LinkMenuHost {
 
     func openProfile(resolving url: URL) {
         onOpenProfileURL?(url)
+    }
+
+    func openHashtag(_ name: String, of account: Account) {
+        onOpenAccountHashtag?(name, account)
     }
 }
 

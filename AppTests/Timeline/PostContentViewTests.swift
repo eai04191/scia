@@ -161,7 +161,7 @@ struct PostContentViewTests {
         #expect(element.accessibilityFrameInContainerSpace == laidOut)
     }
 
-    /// VoiceOverでは本文を1つの要素で読むため、リンクは要素の操作から開く。押しても何もしないハッシュタグは出さない。
+    /// VoiceOverでは本文を1つの要素で読むため、リンクは要素の操作から開く。ハッシュタグも、タップと同じくタイムラインを開く操作として出す。
     @Test func exposesLinksAsAccessibilityActions() throws {
         let content = #"<p>見て <a href="https://example.com/a"><span class="invisible">https://</span>example.com/a</a> <a href="https://example.social/tags/scia" class="mention hashtag" rel="tag">#<span>scia</span></a></p>"#
         var configuration = makeViewController().contentConfiguration(for: try status(content: content), base: .cell())
@@ -171,7 +171,7 @@ struct PostContentViewTests {
 
         let element = try #require(view.accessibilityElements?.first as? UIAccessibilityElement)
         let actions = element.accessibilityCustomActions ?? []
-        #expect(actions.map(\.name) == ["example.com/a"])
+        #expect(actions.map(\.name) == ["example.com/a", "#scia"])
         _ = actions.first?.actionHandler?(try #require(actions.first))
         #expect(opened == [.url(try #require(URL(string: "https://example.com/a")))])
     }

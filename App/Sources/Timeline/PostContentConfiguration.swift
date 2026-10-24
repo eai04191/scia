@@ -49,6 +49,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var xPost: XPostView.Content?
     /// 表示している投稿。ブーストなら、ブーストされた投稿。
     var statusID: Status.ID?
+    /// 本文のハッシュタグのメニューの「ユーザーの投稿」で開くユーザー。表示している投稿を投稿した人。
+    var hashtagAccount: Account?
     /// 自分の投稿が自分のフィルターに一致していることを示す1行。一致していなければnil。
     var filterNote: NSAttributedString?
     /// お気に入りとブーストをしたことを示す、行の下の端の光。
@@ -311,6 +313,7 @@ final class PostContentView: UIView, UIContentView {
             cardSpacing: metrics.bodyLinkCardSpacing,
             xPost: configuration.xPost,
             statusID: configuration.statusID,
+            hashtagAccount: configuration.hashtagAccount,
             filterNote: configuration.filterNote,
             // リンクカードと同じく、本文から少し離した補足として置く。
             filterNoteSpacing: metrics.bodyLinkCardSpacing

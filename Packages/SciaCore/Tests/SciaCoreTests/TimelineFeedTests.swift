@@ -93,6 +93,19 @@ struct TimelineFeedTests {
         #expect(query.contains(URLQueryItem(name: "max_id", value: "113000000000000002")))
     }
 
+    /// 名前は本文のリンクの文字列から取ることがあるため、`/`や`..`を含んでも、ほかのAPIを指さずに1つの区切りとして送る。
+    @Test func hashtagNameStaysInOnePathSegment() async throws {
+        let transport = StubTransport([.json("[]", statusCode: 200)])
+        _ = try await TimelineFeed.hashtag(name: "../../accounts/1").page(TimelineQuery(limit: 40), from: makeClient(transport))
+        let url = try #require(await transport.requests.first?.url)
+        #expect(url.path(percentEncoded: true) == "/api/v1/timelines/tag/..%2F..%2Faccounts%2F1")
+    }
+
+    @Test func hashtagNameKeepsNonASCIICharacters() async throws {
+        let (path, _) = try await requestedQuery(.hashtag(name: "猫"))
+        #expect(path == "/api/v1/timelines/tag/%E7%8C%AB")
+    }
+
     /// ハッシュタグは`tag`引数を付けて購読し、届いたイベントの`stream`欄は`["hashtag", "<名前>"]`で見分ける。
     /// Mastodonのストリーミングサーバーは、`streamNameFromChannelName`で、送った名前をそのまま返す。
     @Test func hashtagSubscribesWithTagArgument() throws {
@@ -101,9 +114,44 @@ struct TimelineFeedTests {
         #expect(subscription.streamPath == ["hashtag", "scia"])
     }
 
+    /// Mastodonのストリーミングサーバーは同じタグの購読を正規化した名前でまとめるため、表記の違う同じタグは1つの購読にする。
+    @Test func differentlySpelledHashtagsShareOneSubscription() throws {
+        #expect(TimelineFeed.hashtag(name: "Scia").subscription == TimelineFeed.hashtag(name: "scia").subscription)
+        #expect(TimelineFeed.accountHashtag(accountID: "109", name: "ＳＣＩＡ").subscription == TimelineFeed.hashtag(name: "scia").subscription)
+        #expect(try TimelineFeed.hashtag(name: "Scia").subscription.message("subscribe") == #"{"stream":"hashtag","tag":"scia","type":"subscribe"}"#)
+    }
+
     /// ハッシュタグは、公式のWebクライアントと同じく`public`の文脈で当てる。既読位置はない。
     @Test func hashtagUsesPublicFilterContextAndNoMarker() {
         #expect(TimelineFeed.hashtag(name: "scia").filterContext == .public)
         #expect(TimelineFeed.hashtag(name: "scia").marker == nil)
+    }
+
+    @Test func accountHashtagReadsAccountStatusesTagged() async throws {
+        let (path, query) = try await requestedQuery(.accountHashtag(accountID: "109", name: "scia"))
+        #expect(path == "/api/v1/accounts/109/statuses")
+        #expect(query.contains(URLQueryItem(name: "tagged", value: "scia")))
+        #expect(query.contains(URLQueryItem(name: "max_id", value: "113000000000000002")))
+    }
+
+    /// アカウントの投稿のストリームはないため、ハッシュタグのストリームを購読し、届いた投稿をそのアカウントのものに絞る。
+    /// ストリームには公開の投稿しか来ないため、そのアカウントの投稿が届いたら、入れずに最新から補う。
+    @Test func accountHashtagSubscribesToHashtagStreamAndFetchesOnThatAccountsPosts() {
+        let feed = TimelineFeed.accountHashtag(accountID: "109", name: "scia")
+        #expect(feed.subscription == TimelineFeed.hashtag(name: "scia").subscription)
+        func status(by accountID: String) -> Status {
+            Status(id: "1", createdAt: Date(), account: Account(id: accountID, username: "u", acct: "u", displayName: "", avatar: nil), content: "", spoilerText: "", url: nil)
+        }
+        #expect(feed.handling(ofStreamed: status(by: "109")) == .fetchLatest)
+        #expect(feed.handling(ofStreamed: status(by: "110")) == .ignore)
+        #expect(TimelineFeed.hashtag(name: "scia").handling(ofStreamed: status(by: "110")) == .insert)
+    }
+
+    /// アカウントのハッシュタグは、公式のWebクライアントと同じくプロフィールと同じ`account`の文脈で当てる。既読位置はなく、タブにも置かない。
+    @Test func accountHashtagUsesAccountFilterContextAndIsNotATab() {
+        let feed = TimelineFeed.accountHashtag(accountID: "109", name: "scia")
+        #expect(feed.filterContext == .account)
+        #expect(feed.marker == nil)
+        #expect(TabItem(feed) == nil)
     }
 }

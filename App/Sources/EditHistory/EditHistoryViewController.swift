@@ -17,6 +17,8 @@ final class EditHistoryViewController: UIViewController {
     var onOpenURL: ((URL, LinkBrowser) -> Void)?
     /// リンクのメニューの「プロフィールとして開く」で、リンク先をプロフィールとして探して開く。
     var onOpenProfileURL: ((URL) -> Void)?
+    /// ハッシュタグのメニューの「ユーザーの投稿」で、そのユーザーのハッシュタグの付いた投稿を開く。
+    var onOpenAccountHashtag: ((String, Account) -> Void)?
     /// メンションの長押しのメニューの、メンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
     var userMenuActions: UserMenuActions?
     /// 添付ファイルを覆うか。今の投稿の版は、一覧と同じく、使う人が開いた・隠した選択に従う。セッションがほかの画面とそろえる。
@@ -146,6 +148,7 @@ final class EditHistoryViewController: UIViewController {
             }
             let entryView = EditHistoryEntryView(mediaImages: mediaImages)
             entryView.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 16, leading: 20, bottom: 16, trailing: 20)
+            entryView.hashtagAccount = status.account
             entryView.apply(content)
             entryView.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination) }
             let editNumber = entry.editNumber
@@ -262,5 +265,9 @@ extension EditHistoryViewController: LinkMenuHost {
 
     func openProfile(resolving url: URL) {
         onOpenProfileURL?(url)
+    }
+
+    func openHashtag(_ name: String, of account: Account) {
+        onOpenAccountHashtag?(name, account)
     }
 }

@@ -21,11 +21,10 @@ struct MenuItemContentTests {
         #expect(mismatches(MediaMenuItem.self).isEmpty)
     }
 
-    /// ハッシュタグのメニューは、独自の項目を組む処理を持たない。独自の項目を足すと、メニューに出ないまま気づけないため、すべて共通の項目にする。
     /// リンクのメニューの独自の項目は、組む処理を持つ「プロフィールとして開く」だけにする。ほかを足したら、組む処理を足してからここに加える。
-    @Test func linkAndHashtagMenusHaveOnlyHandledOwnItems() {
+    /// ハッシュタグのメニューは、独自の項目を`default`のない分岐で組むので、足し忘れはコンパイラが止める。
+    @Test func linkMenuHasOnlyHandledOwnItems() {
         #expect(LinkMenuItem.allCases.filter { $0.urlAction == nil } == [.openAsProfile])
-        #expect(HashtagMenuItem.allCases.allSatisfy { $0.urlAction != nil })
     }
 
     /// 共通の項目の名前と説明はどのメニューでも同じで、メニューに固有の決まりだけを書き足す。

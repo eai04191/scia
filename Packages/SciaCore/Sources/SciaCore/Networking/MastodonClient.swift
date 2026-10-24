@@ -549,20 +549,27 @@ public struct MastodonClient: Sendable {
     /// ハッシュタグをフォローする。フォロー済みでも成功する。
     /// https://docs.joinmastodon.org/methods/tags/#follow
     public func followTag(_ name: String) async throws {
-        _ = try await post(Hashtag.self, path: "api/v1/tags/\(name)/follow", form: [])
+        _ = try await post(Hashtag.self, url: tagURL("api/v1/tags", name, "follow"), form: [])
     }
 
     /// ハッシュタグのフォローをやめる。フォローしていなくても成功する。
     /// https://docs.joinmastodon.org/methods/tags/#unfollow
     public func unfollowTag(_ name: String) async throws {
-        _ = try await post(Hashtag.self, path: "api/v1/tags/\(name)/unfollow", form: [])
+        _ = try await post(Hashtag.self, url: tagURL("api/v1/tags", name, "unfollow"), form: [])
     }
 
     /// ハッシュタグのタイムラインを新しい順に返す。`name`は`#`を除いた名前。
     /// https://docs.joinmastodon.org/methods/timelines/#tag
     public func hashtagTimeline(_ name: String, _ query: TimelineQuery) async throws -> TimelinePage {
-        let list = try await get(ElementList<Status>.self, path: "api/v1/timelines/tag/\(name)", query: query.queryItems).0
+        let list = try await get(ElementList<Status>.self, url: tagURL("api/v1/timelines/tag", name), query: query.queryItems).0
         return TimelinePage(statuses: list.elements, unreadable: list.unreadable, isRegenerating: false)
+    }
+
+    /// ハッシュタグのAPIのURL。名前は本文のリンクの文字列から取ることがあり、`/`や`..`を含みうるため、1つの区切りとして符号化して足す。
+    /// パスの文字列に埋めると、`../`がそのまま残り、自分のサーバーのほかのAPIへトークンを付けて送ってしまう。
+    private func tagURL(_ prefix: String, _ name: String, _ suffix: String? = nil) -> URL {
+        let url = credential.instance.appending(path: prefix).appending(component: name)
+        return suffix.map { url.appending(path: $0) } ?? url
     }
 
     /// フォローしているハッシュタグをすべて返す。続きを`Link`ヘッダーで読み、最後まで読み切ってから返す。途中で読めなければ投げる。
@@ -783,8 +790,11 @@ public struct MastodonClient: Sendable {
     /// - Parameter feature: なくても使える機能のAPIなら、その機能。使えないと分かったら、セッションの間は送らない。
     /// - Parameter retries: 一時的な失敗で送り直すか。
     private func get<T: Decodable>(_ type: T.Type, path: String, query: [URLQueryItem], feature: OptionalFeature? = nil, retries: Bool = true) async throws -> (T, HTTPURLResponse) {
-        let url = credential.instance.appending(path: path)
-        return try await send(URLRequest(url: query.isEmpty ? url : url.appending(queryItems: query)), decoding: type, feature: feature, retries: retries)
+        try await get(type, url: credential.instance.appending(path: path), query: query, feature: feature, retries: retries)
+    }
+
+    private func get<T: Decodable>(_ type: T.Type, url: URL, query: [URLQueryItem], feature: OptionalFeature? = nil, retries: Bool = true) async throws -> (T, HTTPURLResponse) {
+        try await send(URLRequest(url: query.isEmpty ? url : url.appending(queryItems: query)), decoding: type, feature: feature, retries: retries)
     }
 
     private func post<T: Decodable>(
@@ -794,11 +804,25 @@ public struct MastodonClient: Sendable {
         headers: [String: String] = [:],
         feature: OptionalFeature? = nil
     ) async throws -> (T, HTTPURLResponse) {
-        try await send(formRequest(method: "POST", path: path, form: form, headers: headers), decoding: type, feature: feature)
+        try await post(type, url: credential.instance.appending(path: path), form: form, headers: headers, feature: feature)
+    }
+
+    private func post<T: Decodable>(
+        _ type: T.Type,
+        url: URL,
+        form: [URLQueryItem],
+        headers: [String: String] = [:],
+        feature: OptionalFeature? = nil
+    ) async throws -> (T, HTTPURLResponse) {
+        try await send(formRequest(method: "POST", url: url, form: form, headers: headers), decoding: type, feature: feature)
     }
 
     private func formRequest(method: String, path: String, form: [URLQueryItem], headers: [String: String] = [:]) -> URLRequest {
-        var request = URLRequest(url: credential.instance.appending(path: path))
+        formRequest(method: method, url: credential.instance.appending(path: path), form: form, headers: headers)
+    }
+
+    private func formRequest(method: String, url: URL, form: [URLQueryItem], headers: [String: String] = [:]) -> URLRequest {
+        var request = URLRequest(url: url)
         request.httpMethod = method
         for (field, value) in headers {
             request.setValue(value, forHTTPHeaderField: field)
@@ -974,21 +998,25 @@ public struct AccountStatusFilter: Sendable, Equatable {
     public var onlyMedia: Bool
     /// 固定された投稿だけを返す。
     public var pinned: Bool
+    /// このハッシュタグの付いた投稿だけを返す。`#`を除いた名前。nilなら絞らない。
+    public var tagged: String?
 
-    public init(excludesReplies: Bool = false, excludesReblogs: Bool = false, onlyMedia: Bool = false, pinned: Bool = false) {
+    public init(excludesReplies: Bool = false, excludesReblogs: Bool = false, onlyMedia: Bool = false, pinned: Bool = false, tagged: String? = nil) {
         self.excludesReplies = excludesReplies
         self.excludesReblogs = excludesReblogs
         self.onlyMedia = onlyMedia
         self.pinned = pinned
+        self.tagged = tagged
     }
 
     var queryItems: [URLQueryItem] {
-        [
+        let flags = [
             ("exclude_replies", excludesReplies),
             ("exclude_reblogs", excludesReblogs),
             ("only_media", onlyMedia),
             ("pinned", pinned),
         ].filter(\.1).map { URLQueryItem(name: $0.0, value: "true") }
+        return flags + (tagged.map { [URLQueryItem(name: "tagged", value: $0)] } ?? [])
     }
 }
 

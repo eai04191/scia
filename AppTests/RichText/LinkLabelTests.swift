@@ -211,9 +211,10 @@ struct LinkLabelTests {
     }
 
     /// 本文のリンクの長押しのメニューの、見出しと項目の名前。区切り線のまとまりは`|`で、サブメニューは`名前[中身]`で表す。
-    private func menuOutline(of destination: RichText.LinkDestination, settings: AppSettings) throws -> String? {
+    private func menuOutline(of destination: RichText.LinkDestination, settings: AppSettings, hashtagAccount: Account? = nil) throws -> String? {
         let label = label(for: RichText(blocks: [.init(inlines: [.link("x", destination, [])])]))
         label.settings = settings
+        label.hashtagAccount = hashtagAccount
         let hitArea = try #require(label.subviews.compactMap { $0 as? LinkHitArea }.first)
         guard let menu = hitArea.menu(for: destination, at: .zero) else { return nil }
         func describe(_ element: UIMenuElement) -> String {
@@ -232,8 +233,26 @@ struct LinkLabelTests {
         let settings = try settings()
 
         #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: ブラウザで開く,プロフィールとして開く,リンクをコピー,共有")
-        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: ブラウザで開く,リンクをコピー,共有")
+        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: すべての投稿|ブラウザで開く,リンクをコピー,共有")
         #expect(try menuOutline(of: .mention(acct: "bob@example.social", url: profile), settings: settings) == "@bob@example.social: プロフィール|リンクをコピー,共有,ブラウザで開く")
+    }
+
+    /// ハッシュタグのメニューの「投稿したユーザーの投稿」は、開くユーザーが分かるときだけ「@名前の投稿」で出し、ほかのサーバーのユーザーならサーバー名をサブタイトルに出す。
+    @Test func hashtagMenuShowsAccountStatusesOnlyWithAccount() throws {
+        let tag = try #require(URL(string: "https://example.social/tags/cat"))
+        let settings = try settings()
+        let local = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
+        let remote = Account(id: "3", username: "carol", acct: "carol@remote.example", displayName: "Carol", avatar: nil)
+
+        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings, hashtagAccount: local) == "#cat: すべての投稿,@bobの投稿|ブラウザで開く,リンクをコピー,共有")
+        let label = label(for: RichText(blocks: [.init(inlines: [.link("x", .hashtag(name: "cat", url: tag), [])])]))
+        label.settings = settings
+        label.hashtagAccount = remote
+        let hitArea = try #require(label.subviews.compactMap { $0 as? LinkHitArea }.first)
+        let menu = try #require(hitArea.menu(for: .hashtag(name: "cat", url: tag), at: .zero))
+        let item = try #require((menu.children.first as? UIMenu)?.children.last as? UIAction)
+        #expect(item.title == "@carolの投稿")
+        #expect(item.subtitle == "remote.example")
     }
 
     /// 並べ替え、隠した項目、区切り線、「その他」の境目を、投稿のメニューと同じ決まりで反映する。
@@ -242,7 +261,7 @@ struct LinkLabelTests {
         let tag = try #require(URL(string: "https://example.social/tags/cat"))
         let settings = try settings()
         settings.linkMenuLayout = MenuLayout(elements: [.item(.share, isVisible: true), .separator, .item(.openInAppSafari, isVisible: true), .item(.openInBrowser, isVisible: false), .item(.openAsProfile, isVisible: false), .more, .item(.copyLink, isVisible: true)])
-        settings.hashtagMenuLayout = MenuLayout(elements: [.item(.copyLink, isVisible: true), .item(.openInBrowser, isVisible: false), .item(.share, isVisible: false), .more])
+        settings.hashtagMenuLayout = MenuLayout(elements: [.item(.copyLink, isVisible: true), .item(.timeline, isVisible: false), .item(.accountStatuses, isVisible: false), .item(.openInBrowser, isVisible: false), .item(.share, isVisible: false), .more])
 
         #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: 共有|アプリ内のSafariで開く|その他[リンクをコピー]")
         #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: リンクをコピー")
@@ -288,7 +307,7 @@ struct LinkLabelTests {
     @Test func hidingEveryItemShowsNoMenu() throws {
         let tag = try #require(URL(string: "https://example.social/tags/cat"))
         let settings = try settings()
-        settings.hashtagMenuLayout = MenuLayout(elements: [.item(.openInBrowser, isVisible: false), .item(.copyLink, isVisible: false), .item(.share, isVisible: false), .more])
+        settings.hashtagMenuLayout = MenuLayout(elements: [.item(.timeline, isVisible: false), .item(.accountStatuses, isVisible: false), .item(.openInBrowser, isVisible: false), .item(.copyLink, isVisible: false), .item(.share, isVisible: false), .more])
 
         #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == nil)
     }

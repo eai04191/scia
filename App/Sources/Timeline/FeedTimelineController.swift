@@ -3,7 +3,7 @@ import os
 import SciaCore
 import UIKit
 
-/// ホームや公開タイムラインの読み込みとストリーミングを、TimelineViewControllerの表示へつなぐ。
+/// ホームや公開タイムラインの読み込みとストリーミングを、TimelineViewControllerの表示へつなぐ。タブの一覧のほか、開いた一覧に積むハッシュタグの一覧にも使う。
 @MainActor
 final class FeedTimelineController {
     /// 1回に読む件数。APIの上限が40件。
@@ -102,6 +102,8 @@ final class FeedTimelineController {
         // リストの名前は、作る側が`texts`で渡す。
         case .list: .list(title: "")
         case .hashtag(let name): .hashtag(name: name)
+        // ユーザーの名前は、作る側が`texts`で渡す。
+        case .accountHashtag(_, let name): .accountHashtag(name: name, acct: "")
         }
     }
 
@@ -132,13 +134,15 @@ final class FeedTimelineController {
         }
     }
 
-    /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときに呼ぶ。
+    /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときと、積んで開いた一覧がナビゲーションから外されたときに呼ぶ。
     func stop() {
         isStopped = true
         stopStreaming()
         cancelRegeneratingRetry()
         tasks.forEach { $0.cancel() }
         tasks.removeAll()
+        // 積んで開いた一覧は、画面がこのコントローラーを生かしているため、持ち合いを解いて捨てられるようにする。
+        viewController.lifetimeOwner = nil
     }
 
     /// バックグラウンドに入るときに呼ぶ。バックグラウンドでは接続が止められるため自分から切り、既読位置を保存する。
@@ -414,6 +418,15 @@ final class FeedTimelineController {
 
     private func receive(_ event: StreamingEvent) {
         guard !isStopped else { return }
+        if case .update(let status) = event {
+            switch feed.handling(ofStreamed: status) {
+            case .insert: break
+            case .ignore: return
+            case .fetchLatest:
+                fillFromLatest()
+                return
+            }
+        }
         if case .update = event {
             arrivalRate.record(at: Date())
             streamingStatusView.setArrivalRate(arrivalRate)
