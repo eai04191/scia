@@ -160,6 +160,8 @@ final class InlineComposeController: NSObject {
     private var offScreenHeight: NSLayoutConstraint?
     /// バーを出し入れするたびに増やす。前の動きの終わりで、あとから始まった動きの途中にバーの形を変えないようにする。
     private var barSlideGeneration = 0
+    /// URLのタイトルのボタンを、VoiceOverのオンとオフに合わせる。
+    private var linkTitleVoiceOverObservation: Task<Void, Never>?
     /// 最後に届いたキーボードの動きの時間と曲線。バーを出し入れする動きを、キーボードの動きに揃える。
     private var keyboardAnimation = (duration: 0.25, curve: UIView.AnimationCurve(rawValue: 7) ?? .easeInOut)
     /// 中身の上下の余白。書いていないときは細くするため詰める。
@@ -254,6 +256,10 @@ final class InlineComposeController: NSObject {
 
     private func textHeight(lines: Double) -> CGFloat {
         UIFont.preferredFont(forTextStyle: .body).lineHeight * lines + textView.textContainerInset.top + textView.textContainerInset.bottom
+    }
+
+    isolated deinit {
+        linkTitleVoiceOverObservation?.cancel()
     }
 
     init(model: ComposeModel, completion: ComposeCompletion? = nil, recentEmojis: RecentEmojis? = nil, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, keyboardNotifications: NotificationCenter = .default) {
@@ -903,7 +909,9 @@ final class InlineComposeController: NSObject {
                 let actions = self?.linkTitleActions() ?? []
                 completion(actions.isEmpty ? [UIAction(title: "本文にURLがありません", attributes: .disabled) { _ in }] : actions)
             }])
-            Task { [weak button] in
+            // 通知の列は終わらないため、投稿欄がなくなったら止める。止めないと、セッションを作り直すたびに待ち続けるTaskが残る。
+            linkTitleVoiceOverObservation?.cancel()
+            linkTitleVoiceOverObservation = Task { [weak button] in
                 for await _ in NotificationCenter.default.notifications(named: UIAccessibility.voiceOverStatusDidChangeNotification) {
                     button?.showsMenuAsPrimaryAction = UIAccessibility.isVoiceOverRunning
                 }
