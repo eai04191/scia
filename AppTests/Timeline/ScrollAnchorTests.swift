@@ -195,7 +195,7 @@ struct ScrollAnchorTests {
     }
 
     /// 投稿欄のキーボードで下端を覆ったり外したりしても、読んでいる位置は動かない。
-    /// 一覧の末尾までスクロールしているときは、覆いを外すと末尾が下端に合わせて下がるため、ここでは確かめない。
+    /// 一覧の末尾までスクロールしているときは、下端を覆うものがなくなると末尾が下端に合わせて下がるため、ここでは確かめない。
     @Test(arguments: [0.0, 0.4])
     func coveringBottomKeepsAnchorPosition(scrollFraction: CGFloat) throws {
         let harness = try TimelineHarness()

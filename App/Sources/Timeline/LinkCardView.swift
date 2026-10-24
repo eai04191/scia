@@ -7,7 +7,7 @@ import UIKit
 ///
 /// 高さは文字の大きさだけで決め、中身によらない。サーバーのカードが後から届いて、リンク先だけのカードから描き直しても、行の高さを変えないため。
 /// 届いたカードに画像がなければ、枠を縮めて消し、文字を左へ寄せる動きでつなぐ。
-/// 閲覧注意の投稿では、添付ファイルと同じく、画像を読まずにblurhashで描いて覆い、押されたら覆いを外すよう置く側に知らせる。
+/// 閲覧注意の投稿では、添付ファイルと同じく、画像を読まずにblurhashで描いてぼかし、押されたらぼかしを外すよう置く側に知らせる。
 /// タップ、キーボード、ポインタのどれで選ばれても`.primaryActionTriggered`で受けられるよう、`UIButton`にする。
 final class LinkCardView: UIButton {
     struct Content: Equatable {
@@ -18,7 +18,7 @@ final class LinkCardView: UIButton {
         var transitionDuration: TimeInterval
         /// サムネイルを置く端。
         var thumbnailSide: LinkCardThumbnailSide
-        /// 画像を閲覧注意で覆う。画像のないカードとリンク先だけのカードでは、覆う画像がないため使わない。
+        /// 画像を閲覧注意でぼかす。画像のないカードとリンク先だけのカードでは、ぼかす画像がないため使わない。
         var coversImage = false
 
         /// サムネイルの枠を出す。画像のあるカードと、まだカードの届いていないリンク先だけのカード。
@@ -37,9 +37,9 @@ final class LinkCardView: UIButton {
     /// サムネイルの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     /// 画像を読み込み終えたカードでだけ受け付け、それ以外の場所や画像のないカードのタップは、リンクを開く。
     var onOpenImage: ((LinkCardThumbnailView) -> Void)?
-    /// 閲覧注意で覆った画像がタップされたときに呼ぶ。覆いを外すのは置く側で、適用し直すまで見た目は変わらない。リンクは開かない。
+    /// 閲覧注意でぼかした画像がタップされたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。リンクは開かない。
     var onRevealImage: (() -> Void)?
-    /// 閲覧注意の覆い。ぼかしの素材を作るのは重く、一覧の行はどれもリンクカードを持つため、初めて覆うときに作る。
+    /// 閲覧注意のぼかし。ぼかしの素材を作るのは重く、一覧の行はどれもリンクカードを持つため、初めてぼかすときに作る。
     private var coverView: UIView?
     private let symbolView = UIImageView(image: UIImage(systemName: "link"))
     private let siteLabel = UILabel()
@@ -55,7 +55,7 @@ final class LinkCardView: UIButton {
     private struct Request: Equatable {
         let url: URL
         let maxPixelSize: Int
-        /// 閲覧注意で覆っている。覆っている間は読まず、blurhashのぼかしだけを描く。
+        /// 閲覧注意でぼかしている。ぼかしている間は読まず、blurhashのぼかしだけを描く。
         let isCovered: Bool
     }
 
@@ -191,7 +191,7 @@ final class LinkCardView: UIButton {
         transitionSnapshots.removeAll { removing.contains($0) }
     }
 
-    /// 閲覧注意で覆った画像を押すと、覆いを外す。
+    /// 閲覧注意でぼかした画像を押すと、ぼかしを外す。
     /// サムネイルの画像を開けるのは、読み込み終えた画像を出しているとき。ぼかしの下地のうちは、大きくして見るものがないため、リンクを開く。
     private func updateImageInteraction() {
         if isCoveringImage {
@@ -212,7 +212,7 @@ final class LinkCardView: UIButton {
             : []
     }
 
-    /// 長押しでメディアのメニューを出す画像。画像を開ける状態のときだけ返し、覆っている間と読み込む前はnil。
+    /// 長押しでメディアのメニューを出す画像。画像を開ける状態のときだけ返し、ぼかしている間と読み込む前はnil。
     var menuImage: (attachment: MediaAttachment, thumbnail: LinkCardThumbnailView)? {
         guard !isCoveringImage, thumbnailView.isUserInteractionEnabled, let content, case .card(let card) = content.card,
               let attachment = card.imageAttachment
@@ -225,7 +225,7 @@ final class LinkCardView: UIButton {
         openImage()
     }
 
-    /// 閲覧注意で覆っている画像がある。
+    /// 閲覧注意でぼかしている画像がある。
     private var isCoveringImage: Bool {
         guard let content, content.coversImage, case .card(let card) = content.card else { return false }
         return card.image != nil
@@ -249,7 +249,7 @@ final class LinkCardView: UIButton {
         return cover
     }
 
-    /// 閲覧注意の覆い。下のサムネイルは画像を読まずにblurhashで描くため、添付ファイルの覆いと同じく、色が透けて見える薄い素材にする。
+    /// 閲覧注意のぼかし。下のサムネイルは画像を読まずにblurhashで描くため、添付ファイルのぼかしと同じく、色が透けて見える薄い素材にする。
     /// サムネイルには文字が入りきらないため、添付ファイルを1列に並べるときと同じく、記号だけを出す。押されたらサムネイルが受ける。
     private static func makeCover() -> UIView {
         let effect = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
@@ -412,7 +412,7 @@ final class LinkCardView: UIButton {
             updateImageInteraction()
             return
         }
-        // 覆いを掛けるときも外すときも、読み込んだ画像を残さず、ぼかしから描き直す。
+        // ぼかしを掛けるときも外すときも、読み込んだ画像を残さず、ぼかしから描き直す。
         let keepsImage = request != nil && request?.url == self.request?.url && request?.isCovered == false && self.request?.isCovered == false
         self.request = request
         loadTask?.cancel()
@@ -421,7 +421,7 @@ final class LinkCardView: UIButton {
             thumbnailView.showPlaceholder(card?.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: bounds.height > 0 ? thumbnailWidth / bounds.height : 1) })
         }
         updateImageInteraction()
-        // 覆っている間は画像を読まない。覆いを外さない投稿で通信しないようにする。
+        // ぼかしている間は画像を読まない。ぼかしを外さない投稿で通信しないようにする。
         guard let request, !request.isCovered else { return }
         if let cached = store.cachedImage(for: request.url, maxPixelSize: request.maxPixelSize) {
             thumbnailView.showLoaded(cached, from: request.url)

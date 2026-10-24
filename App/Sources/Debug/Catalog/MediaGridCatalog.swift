@@ -4,7 +4,7 @@ import SciaCore
 import UIKit
 
 /// 一覧の行に並べる添付ファイルのサムネイル（`MediaGridView`）の状態。
-/// 並べ方と覆いは、一覧と同じく`TimelineViewController.mediaContent(for:)`で投稿から組み立てる。説明にならない代替テキストを除くかは、アプリの設定に従う。
+/// 並べ方とぼかしは、一覧と同じく`TimelineViewController.mediaContent(for:)`で投稿から組み立てる。説明にならない代替テキストを除くかは、アプリの設定に従う。
 enum MediaGridCatalog {
     private typealias Fixtures = CatalogFixtures
 
@@ -18,10 +18,10 @@ enum MediaGridCatalog {
             CatalogState(title: "3枚") { grid(images(3)) },
             CatalogState(title: "4枚") { grid(images(4)) },
             CatalogState(title: "6枚（4枚目に残りの数）") { grid(images(6)) },
-            CatalogState(title: "閲覧注意で覆う") { grid(images(2), sensitive: true) },
+            CatalogState(title: "閲覧注意でぼかす") { grid(images(2), sensitive: true) },
             CatalogState(title: "メニューから隠した") { grid(images(2), hidden: true) },
-            CatalogState(title: "フィルターで覆う") { grid(images(2), filterTitle: "ネタバレ") },
-            CatalogState(title: "フィルターで覆う（名前が長い）") { grid(images(2), filterTitle: String(repeating: "長いフィルターの名前", count: 4)) },
+            CatalogState(title: "フィルターでぼかす") { grid(images(2), filterTitle: "ネタバレ") },
+            CatalogState(title: "フィルターでぼかす（名前が長い）") { grid(images(2), filterTitle: String(repeating: "長いフィルターの名前", count: 4)) },
             CatalogState(title: "代替テキスト（ALTあり、説明にならない「Screenshot」。設定で無視していれば右にALTは出ない）") {
                 grid([
                     Fixtures.attachment("a", width: 1_200, height: 1_200, color: .systemGreen, description: "緑の地に白い格子"),
@@ -133,7 +133,7 @@ enum MediaGridCatalog {
         }
         guard let content = timeline.mediaContent(for: status), let aspectRatio = content.aspectRatio else { return grid }
         grid.apply(content)
-        // 覆いを押したら外す。一覧と同じく、覆いと中身は同じ大きさのため高さは変わらない。
+        // ぼかしを押したら外す。一覧と同じく、ぼかしと中身は同じ大きさのため高さは変わらない。
         grid.onReveal = { [weak grid] in
             grid?.apply(MediaGridView.Content(
                 attachments: content.attachments,

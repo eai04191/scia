@@ -39,7 +39,7 @@ struct MediaCoversTests {
         #expect(covers.cover(for: plain, filterTitles: []) == nil)
     }
 
-    /// 開いたあとに隠した閲覧注意の投稿は、開く前と同じ覆いに戻す。
+    /// 開いたあとに隠した閲覧注意の投稿は、開く前と同じぼかしに戻す。
     @Test func hidingRevealedSensitiveStatusCoversItAsSensitive() {
         var covers = MediaCovers()
         let sensitive = status(sensitive: true)
@@ -64,7 +64,7 @@ struct MediaCoversTests {
         #expect(covers.cover(forStatusID: plain.id, isSensitive: false, filterTitles: []) == .hidden)
     }
 
-    /// 隠したかどうかだけを引く。開いた選択と、選んでいない投稿は隠していない扱い。編集履歴で、隠した投稿の過去の版も覆うために使う。
+    /// 隠したかどうかだけを引く。開いた選択と、選んでいない投稿は隠していない扱い。編集履歴で、隠した投稿の過去の版もぼかすために使う。
     @Test func remembersOnlyHidingAsHidden() {
         var covers = MediaCovers()
         let sensitive = status(id: "1", sensitive: true)
@@ -101,14 +101,14 @@ struct MediaCoversTests {
         #expect(covers.linkCardImageCover(for: spoiler) == .sensitive)
     }
 
-    /// 覆う画像がないカードと、カードのない投稿には、覆いを出さない。
+    /// ぼかす画像がないカードと、カードのない投稿には、ぼかしを出さない。
     @Test func doesNotCoverLinkCardWithoutImage() {
         let covers = MediaCovers()
         #expect(covers.linkCardImageCover(for: status(sensitive: true, card: card(image: nil))) == nil)
         #expect(covers.linkCardImageCover(for: status(sensitive: true)) == nil)
     }
 
-    /// ブーストした行は、ブーストされた投稿のカードと閲覧注意で決め、覆いを外したこともそろえる。
+    /// ブーストした行は、ブーストされた投稿のカードと閲覧注意で決め、ぼかしを外したこともそろえる。
     @Test func linkCardImageCoverFollowsBoostedStatus() {
         var covers = MediaCovers()
         let original = status(id: "10", sensitive: true, card: card())
@@ -120,7 +120,7 @@ struct MediaCoversTests {
     }
 
     /// カードの付いた投稿に、本文を変えずに添付ファイルを足して編集すると、Mastodonはカードを残す（UpdateStatusServiceは本文が変わったときだけカードを作り直す）。
-    /// そのとき添付ファイルを「メディアを隠す」で覆っても、カードの画像は覆わない。閲覧注意の投稿で外したあとに隠しても、覆い直さない。
+    /// そのとき添付ファイルを「メディアを隠す」でぼかしても、カードの画像はぼかさない。閲覧注意の投稿で外したあとに隠しても、ぼかし直さない。
     @Test func hidingAttachmentsDoesNotCoverLinkCardImage() {
         var covers = MediaCovers()
         let plain = status(id: "1", card: card())

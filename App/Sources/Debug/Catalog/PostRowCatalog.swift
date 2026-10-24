@@ -66,7 +66,7 @@ enum PostRowCatalog {
             post("注意書きと閲覧注意の画像（閉じた）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", media: [
                 Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
             ], sensitive: true)),
-            post("注意書きと閲覧注意の画像（開いた、画像は覆ったまま）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", media: [
+            post("注意書きと閲覧注意の画像（開いた、画像はぼかしたまま）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", media: [
                 Fixtures.attachment("a", width: 1_600, height: 900, color: .systemOrange),
             ], sensitive: true), expandsSpoiler: true),
             post("注意書きと画像だけで本文がない（開いた）", status(content: "", spoilerText: "ネタバレ", media: [
@@ -182,14 +182,14 @@ enum PostRowCatalog {
             post("見出しのないカード（URLを出す）", status(content: content, card: card(title: "", description: "", providerName: ""))),
             post("見出しと要約が長い", status(content: content, card: card(title: longText, description: longText, providerName: String(repeating: "長いサイトの名前", count: 4)))),
             post("ブーストされた投稿のカード", status(content: content, card: card(), rebloggedBy: booster)),
-            post("閲覧注意のカード（覆った）", status(content: content, sensitive: true, card: card())),
+            post("閲覧注意のカード（ぼかした）", status(content: content, sensitive: true, card: card())),
             post("閲覧注意のカード（表示した）", status(content: content, sensitive: true, card: card()), revealsMedia: true),
-            cardOnly("閲覧注意のカード（覆った、画像は右）", card().map(LinkCard.card), side: .right, coversImage: true),
+            cardOnly("閲覧注意のカード（ぼかした、画像は右）", card().map(LinkCard.card), side: .right, coversImage: true),
             post("閲覧注意のカード（ぼかしの下地がない）", status(content: content, sensitive: true, card: card().map {
                 PreviewCard(url: $0.url, title: $0.title, description: $0.description, type: $0.type, providerName: $0.providerName, image: $0.image, width: $0.width, height: $0.height)
             })),
-            post("注意書きと閲覧注意のカード（開いた、画像は覆ったまま）", status(content: content, spoilerText: "ネタバレ", sensitive: true, card: card()), expandsSpoiler: true),
-            post("閲覧注意の投稿の画像のないカード（覆わない）", status(content: content, sensitive: true, card: card(image: nil))),
+            post("注意書きと閲覧注意のカード（開いた、画像はぼかしたまま）", status(content: content, spoilerText: "ネタバレ", sensitive: true, card: card()), expandsSpoiler: true),
+            post("閲覧注意の投稿の画像のないカード（ぼかさない）", status(content: content, sensitive: true, card: card(image: nil))),
             CatalogState(title: "サムネイルの読み込み中（ぼかし）") { CatalogFrame.bordered(pendingCard) },
         ]
     }

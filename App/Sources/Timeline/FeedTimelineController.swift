@@ -926,7 +926,7 @@ extension FeedTimelineController {
 
     /// リンクだけのダミーの投稿を新着と同じ経路で流し、`dummyLinkCardDelay`のあとに、通信せずにカードを届ける。
     /// カードが届いたときの動きを、サーバーがカードを付ける時機によらず、何度でも同じ条件で確かめるため。
-    /// - Parameter sensitive: 閲覧注意の投稿にする。届いたカードの画像を覆うところを確かめる。
+    /// - Parameter sensitive: 閲覧注意の投稿にする。届いたカードの画像をぼかすところを確かめる。
     private func streamDummyLinkCard(withImage: Bool, sensitive: Bool = false) {
         let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
         let base = Self.dummyStatus(number: 1, avatar: avatar, now: now())

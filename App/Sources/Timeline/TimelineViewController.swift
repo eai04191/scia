@@ -243,7 +243,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     let avatarImages: AvatarImageStore
     let network: NetworkConditionsMonitor
     let settings: AppSettings
-    /// 添付ファイルを覆うか。閲覧注意の覆いを外した投稿と、メニューから隠した投稿を覚える。セッションがほかの画面とそろえる。
+    /// 添付ファイルをぼかすか。閲覧注意のぼかしを外した投稿と、メニューから隠した投稿を覚える。セッションがほかの画面とそろえる。
     var mediaCovers = MediaCovers()
     /// この画面で開いたり隠したりしたときに、変えたあとの状態と、変えた投稿を渡して呼ぶ。
     var onChangeMediaCovers: ((MediaCovers, Status) -> Void)?
@@ -1041,7 +1041,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 下端の覆われた部分を一覧の表示領域から外し、そこに隠れた要素を表示中として報告しないようにする。
     /// 下側の余白を変えるだけなので、上端を基準にした読んでいる位置は動かない。ただし一覧の末尾までスクロールしていると、
-    /// 覆いを外したときに末尾が下端に合わせて下がる。末尾は古い投稿を読み込む途中で留まる場所ではなく、そこで書き始めることはまれなため、補正しない。
+    /// 下端を覆うものがなくなったときに末尾が下端に合わせて下がる。末尾は古い投稿を読み込む途中で留まる場所ではなく、そこで書き始めることはまれなため、補正しない。
     func setObscuredBottomHeight(_ height: CGFloat) {
         obscuredBottomHeight = height
         updateObscuredBottomInset()

@@ -39,7 +39,7 @@ struct CellStateTests {
         #expect(reported.isEmpty, "全画面のSafariで覆っている間に報告しました: \(reported.prefix(3))")
 
         harness.viewController.setCoveredByInAppBrowser(false)
-        #expect(reported.contains(statuses[0].id), "覆いが外れたのに報告しませんでした")
+        #expect(reported.contains(statuses[0].id), "覆われなくなったのに報告しませんでした")
     }
 
     /// 投稿にはまだ開く画面がないため、タップしても選んだ状態にしない。

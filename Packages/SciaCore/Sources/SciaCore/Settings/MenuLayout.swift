@@ -184,7 +184,7 @@ public enum StatusMenuItem: String, MenuItemKind {
     case delete
     /// 通知を削除する。通知でだけ出る。
     case dismissNotification
-    /// 一覧で添付ファイルを覆う。添付ファイルがあり、覆っていない投稿でだけ出る。開くときは覆いをタップする。
+    /// 一覧で添付ファイルをぼかす。添付ファイルがあり、ぼかしていない投稿でだけ出る。開くときはぼかしをタップする。
     case hideMedia
     /// 本文をプレーンテキストにして、システムの翻訳シートで訳す。本文のある投稿でだけ出る。MastodonのAPIで訳す翻訳とは別の項目。
     case systemTranslate

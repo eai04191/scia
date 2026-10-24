@@ -359,7 +359,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         }
     }
 
-    /// ALTのバッジと同じ黒い下地に、タイムラインの閲覧注意の覆いと同じアイコンを描く。
+    /// ALTのバッジと同じ黒い下地に、タイムラインの閲覧注意のぼかしと同じアイコンを描く。
     private static func makeSensitiveBadge() -> UIView {
         let image = UIImageView(image: UIImage(systemName: "eye.slash"))
         image.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .caption2, scale: .small).applying(UIImage.SymbolConfiguration(weight: .bold))

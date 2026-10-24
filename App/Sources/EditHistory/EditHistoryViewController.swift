@@ -23,11 +23,11 @@ final class EditHistoryViewController: UIViewController {
     var userMenuActions: UserMenuActions?
     /// ハッシュタグのメニューのミュートを組むもの。nilなら項目を出さない。
     var hashtagMuteActions: HashtagMuteActions?
-    /// 添付ファイルを覆うか。今の投稿の版は、一覧と同じく、使う人が開いた・隠した選択に従う。セッションがほかの画面とそろえる。
+    /// 添付ファイルをぼかすか。今の投稿の版は、一覧と同じく、使う人が開いた・隠した選択に従う。セッションがほかの画面とそろえる。
     var mediaCovers = MediaCovers()
-    /// 添付ファイルをぼかすフィルターのうち、開いた一覧で一致したものの名前。一覧と同じく、全部の版の添付ファイルを覆う。
+    /// 添付ファイルをぼかすフィルターのうち、開いた一覧で一致したものの名前。一覧と同じく、全部の版の添付ファイルをぼかす。
     var filterTitles: [String] = []
-    /// 今の投稿の版の覆いを外したときに、変えたあとの状態と、変えた投稿を渡して呼ぶ。
+    /// 今の投稿の版のぼかしを外したときに、変えたあとの状態と、変えた投稿を渡して呼ぶ。
     var onChangeMediaCovers: ((MediaCovers, Status) -> Void)?
     /// アプリ全体のアプリ内通知。Macのビューアのウィンドウにもチップの列を重ねる。
     var notices: NoticeCenter?
@@ -43,7 +43,7 @@ final class EditHistoryViewController: UIViewController {
     private let scrollView: UIScrollView = EditHistoryScrollView()
     private let stack = UIStackView()
     private var state = State.loading
-    /// 覆いを外した版。過去の版の添付ファイルと、外した添付ファイルの覆いに使う。
+    /// ぼかしを外した版。過去の版の添付ファイルと、外した添付ファイルのぼかしに使う。
     private var revealedEditNumbers: Set<Int> = []
     /// 並べている版。ビューアを閉じるときに、押したサムネイルを探す。描き直すと入れ替わる。
     private var entryViews: [Int: EditHistoryEntryView] = [:]
@@ -164,14 +164,14 @@ final class EditHistoryViewController: UIViewController {
         }
     }
 
-    /// 今の投稿の版の覆い。一覧を読んだあとに閲覧注意を付ける編集がされていることがあるため、手元の投稿ではなく、読んだ最新の版の閲覧注意で決める。
+    /// 今の投稿の版のぼかし。一覧を読んだあとに閲覧注意を付ける編集がされていることがあるため、手元の投稿ではなく、読んだ最新の版の閲覧注意で決める。
     private func latestCover(of history: StatusEditHistory) -> MediaCover? {
         guard let latest = history.entries.first?.revision else { return nil }
         return mediaCovers.cover(forStatusID: status.id, isSensitive: latest.sensitive || !latest.spoilerText.isEmpty, filterTitles: filterTitles)
     }
 
-    /// 覆いを外す。今の投稿の版なら、一覧の同じ投稿の行もそろえるよう、セッションに知らせる。
-    /// 1つの版の覆いは、どれを押してもまとめて外す。
+    /// ぼかしを外す。今の投稿の版なら、一覧の同じ投稿の行もそろえるよう、セッションに知らせる。
+    /// 1つの版のぼかしは、どれを押してもまとめて外す。
     private func revealMedia(of editNumber: Int, isLatest: Bool) {
         revealedEditNumbers.insert(editNumber)
         if isLatest {
@@ -185,7 +185,7 @@ final class EditHistoryViewController: UIViewController {
     func applyMediaCovers(_ covers: MediaCovers, changed status: Status) {
         mediaCovers = covers
         guard status.displayed.id == self.status.id else { return }
-        // 隠したら、この画面で外した覆いも戻す。隠す選択は過去の版にも当てるため、前に外した版を見えたままにしない。
+        // 隠したら、この画面で外したぼかしも戻す。隠す選択は過去の版にも当てるため、前に外した版を見えたままにしない。
         if covers.isHidden(statusID: self.status.id) {
             revealedEditNumbers = []
         }

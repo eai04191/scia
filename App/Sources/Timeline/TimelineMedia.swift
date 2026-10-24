@@ -2,14 +2,14 @@ import SciaCore
 import UIKit
 
 extension TimelineViewController {
-    /// 閲覧注意の投稿と、注意書きのある投稿と、添付ファイルをぼかすフィルターに一致した投稿は、タップするまで添付ファイルを覆う。
-    /// メニューから隠した投稿も覆う。ブーストなら元の投稿の添付ファイルを並べる。
+    /// 閲覧注意の投稿と、注意書きのある投稿と、添付ファイルをぼかすフィルターに一致した投稿は、タップするまで添付ファイルをぼかす。
+    /// メニューから隠した投稿もぼかす。ブーストなら元の投稿の添付ファイルを並べる。
     /// 説明にならない代替テキストは、ALTの目印にもビューアにも読み上げにも出さないよう、ここで除いておく。
     func mediaContent(for status: Status) -> MediaGridView.Content? {
         mediaContent(of: status.displayed.mediaAttachments, cover: mediaCover(for: status))
     }
 
-    /// 添付ファイルを覆う理由。覆わなければnil。
+    /// 添付ファイルをぼかす理由。ぼかさなければnil。
     func mediaCover(for status: Status) -> MediaCover? {
         mediaCovers.cover(for: status, filterTitles: filterWarnings.verdict(for: status).mediaTitles)
     }
@@ -19,7 +19,7 @@ extension TimelineViewController {
         MediaGridView.Content.make(of: attachments, cover: cover, settings: settings, tuning: tuning, network: network)
     }
 
-    /// 覆いを外す。同じ投稿をブーストした行と通知の行もまとめて描き直す。覆いと中身は同じ大きさのため、行の高さは変わらない。
+    /// ぼかしを外す。同じ投稿をブーストした行と通知の行もまとめて描き直す。ぼかしと中身は同じ大きさのため、行の高さは変わらない。
     /// ほかの画面にもそろえるよう、セッションに知らせる。
     func revealMedia(of status: Status) {
         mediaCovers.reveal(status)
@@ -27,7 +27,7 @@ extension TimelineViewController {
         onChangeMediaCovers?(mediaCovers, status)
     }
 
-    /// 覆う。開くときと同じく、同じ投稿の行をまとめて描き直し、行の高さは変わらない。ほかの画面にもそろえる。
+    /// ぼかす。開くときと同じく、同じ投稿の行をまとめて描き直し、行の高さは変わらない。ほかの画面にもそろえる。
     func hideMedia(of status: Status) {
         mediaCovers.hide(status)
         reconfigureRows(showing: status)
@@ -59,7 +59,7 @@ extension TimelineViewController {
             xPosts.request(id: id)
             return nil
         }
-        // 投稿した人が閲覧注意を付けていれば、Xの添付ファイルも覆う。覆いを外すと、投稿の添付ファイルと同じくそろって外れる。
+        // 投稿した人が閲覧注意を付けていれば、Xの添付ファイルもぼかす。ぼかしを外すと、投稿の添付ファイルと同じくそろって外れる。
         let media = mediaContent(of: post.media, cover: mediaCover(for: status))
         return (postContentBuilder.xPost(post, media: media, base: base), media?.attachments ?? [])
     }

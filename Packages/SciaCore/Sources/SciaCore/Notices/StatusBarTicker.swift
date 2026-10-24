@@ -13,7 +13,7 @@ public struct StatusBarTickerItem: Sendable, Equatable, Identifiable {
     public enum Subject: Sendable, Equatable {
         /// 投稿の文頭。1段落にしてある。注意書きつきの投稿は、本文を見せないよう注意書きにする。
         case text(RichText)
-        /// 文字のない投稿の、最初の添付ファイル。閲覧注意なら、サムネイルを覆う。
+        /// 文字のない投稿の、最初の添付ファイル。閲覧注意なら、サムネイルをぼかす。
         /// `isImageOnly`は、投稿の添付ファイルがすべて画像か。読み上げで、動画・GIF・音声を含む投稿を「画像」と言わないため。
         case media(MediaAttachment, isSensitive: Bool, isImageOnly: Bool)
         /// 対象の投稿がない通知（フォローなど）で、操作した人のアカウント名。`@`を付けてある。
@@ -29,7 +29,7 @@ public struct StatusBarTickerItem: Sendable, Equatable, Identifiable {
     }
 
     /// 種類を知らない通知は、何をされたかを出せないため流さない。
-    /// - Parameter verdict: 通知の投稿に当てたサーバーのフィルターの判定。通知の一覧と同じく、警告なら本文を見せずにフィルターの名前を出し、ぼかしならサムネイルを覆う。
+    /// - Parameter verdict: 通知の投稿に当てたサーバーのフィルターの判定。通知の一覧と同じく、警告なら本文を見せずにフィルターの名前を出し、ぼかしならサムネイルをぼかす。
     public init?(_ notification: MastodonNotification, verdict: FilterVerdict = .none) {
         if case .other = notification.type { return nil }
         self.init(id: notification.id, kind: notification.type, account: notification.account, subject: Self.subject(of: notification, verdict: verdict))

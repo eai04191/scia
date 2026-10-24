@@ -15,7 +15,7 @@ final class MediaGridView: UIView {
 
     struct Content: Equatable {
         let attachments: [MediaAttachment]
-        /// 覆っていればその理由。
+        /// ぼかしていればその理由。
         let cover: MediaCover?
         let tallestAspectRatio: Double
         let thumbnailPolicy: MediaThumbnailPolicy
@@ -52,14 +52,14 @@ final class MediaGridView: UIView {
 
     /// サムネイルがタップされたときに、何番目の添付ファイルかを渡して呼ぶ。
     var onSelect: ((Int) -> Void)?
-    /// 覆いがタップされたときに呼ぶ。
+    /// ぼかしがタップされたときに呼ぶ。
     var onReveal: (() -> Void)?
 
     private let store: MediaImageStore
-    /// サムネイルと覆いを載せる。1列に並べるときだけ横にスクロールでき、ほかでは自分と同じ大きさで動かない。
+    /// サムネイルとぼかしを載せる。1列に並べるときだけ横にスクロールでき、ほかでは自分と同じ大きさで動かない。
     private let tileContainer = RowContentScrollView()
     private var tiles: [MediaTileView] = []
-    /// 閲覧注意の覆い。ぼかしの素材と設定付きのボタンを作るのは重く、一覧の行はどれも添付ファイルの欄を持つため、初めて覆うときに作る。
+    /// 閲覧注意のぼかし。ぼかしの素材と設定付きのボタンを作るのは重く、一覧の行はどれも添付ファイルの欄を持つため、初めてぼかすときに作る。
     private var cover: UIView?
     private var coverButton: UIButton?
     private(set) var content: Content?
@@ -83,7 +83,7 @@ final class MediaGridView: UIView {
 
     func apply(_ content: Content) {
         guard content != self.content else { return }
-        // 別の投稿のサムネイルに入れ替わったら、横のスクロールを先頭に戻す。覆いを外しただけなら、見ている位置を保つ。
+        // 別の投稿のサムネイルに入れ替わったら、横のスクロールを先頭に戻す。ぼかしを外しただけなら、見ている位置を保つ。
         if content.attachments.map(\.id) != self.content?.attachments.map(\.id) {
             tileContainer.contentOffset = .zero
         }
@@ -121,7 +121,7 @@ final class MediaGridView: UIView {
         } else {
             cover?.isHidden = true
         }
-        // 覆っている間は、中のサムネイルを読み上げない。
+        // ぼかしている間は、中のサムネイルを読み上げない。
         tiles.forEach { $0.accessibilityElementsHidden = content.isCovered }
         setNeedsLayout()
     }
@@ -155,7 +155,7 @@ final class MediaGridView: UIView {
             tileContainer.contentSize = bounds.size
             cover?.frame = bounds
         case .strip:
-            // 1列に並べるときは、行の幅いっぱいではなく、並べたサムネイルだけを覆う。
+            // 1列に並べるときは、行の幅いっぱいではなく、並べたサムネイルだけをぼかす。
             let tilesFrame = layout.frames.reduce(CGRect.null) { $0.union($1) }
             tileContainer.isScrollEnabled = tilesFrame.width > bounds.width
             tileContainer.contentSize = CGSize(width: max(tilesFrame.maxX, bounds.width), height: bounds.height)
@@ -167,7 +167,7 @@ final class MediaGridView: UIView {
     private func updateCoverButton(for content: Content) {
         guard let coverButton, var configuration = coverButton.configuration else { return }
         // 使う人が隠した投稿に「閲覧注意」と出すと、投稿者が付けたように読めるため、文言を分ける。
-        // フィルターで覆った投稿は、どのフィルターに一致したかを出す。
+        // フィルターでぼかした投稿は、どのフィルターに一致したかを出す。
         let title = switch content.cover {
         case .hidden: "非表示"
         case .filtered(let titles): "フィルター: \(titles.joined(separator: "、"))"
@@ -194,7 +194,7 @@ final class MediaGridView: UIView {
     }
 
     private func makeCover() -> UIView {
-        // 下のサムネイルは、覆っている間は画像を読まずにblurhashで描くため、色が透けて見える薄い素材にする。
+        // 下のサムネイルは、ぼかしている間は画像を読まずにblurhashで描くため、色が透けて見える薄い素材にする。
         let effect = UIVisualEffectView(effect: UIBlurEffect(style: .systemUltraThinMaterial))
         effect.layer.cornerRadius = Self.cornerRadius
         effect.layer.cornerCurve = .continuous
@@ -242,14 +242,14 @@ final class MediaTileView: UIButton, MediaViewerSource {
     private var policy: MediaThumbnailPolicy?
     /// いま描いている画像の出どころ。同じなら描き直さない。
     private var source: Source?
-    /// 画像を読みに行く出どころを選んでいるか。閲覧注意で覆っている間は選ばず、読みに行かない。
+    /// 画像を読みに行く出どころを選んでいるか。閲覧注意でぼかしている間は選ばず、読みに行かない。
     var requestsThumbnail: Bool { source?.request != nil }
     /// 動画やGIFのように、ビューアではサムネイルと違うコマを描く添付ファイル。
     private var showsMovingImage = false
 
     private struct Source: Equatable {
         let attachmentID: MediaAttachment.ID
-        /// 読み込む画像。閲覧注意で覆っている間と、枠の大きさが決まる前はnilにし、通信しない。
+        /// 読み込む画像。閲覧注意でぼかしている間と、枠の大きさが決まる前はnilにし、通信しない。
         let request: MediaThumbnailRequest?
         let blurhash: String?
         /// blurhashを展開する縦横比。同じblurhashでも、比が違えば描き直す。
@@ -457,10 +457,10 @@ final class MediaTileView: UIButton, MediaViewerSource {
         didSet { alpha = isHighlighted ? 0.7 : 1 }
     }
 
-    /// 閲覧注意で覆っている間は画像を読まず、blurhashのぼかしだけを描く。覆いを外さない投稿で通信しないようにする。
-    /// 覆っていなければ、読み込むまでblurhashを下地にし、届いたら差し替える。
+    /// 閲覧注意でぼかしている間は画像を読まず、blurhashのぼかしだけを描く。ぼかしを外さない投稿で通信しないようにする。
+    /// ぼかしていなければ、読み込むまでblurhashを下地にし、届いたら差し替える。
     /// どの画像を読むかは枠の大きさで決まるため、大きさが決まる`layoutSubviews`で選ぶ。
-    /// 長押しでメディアのメニューを出す添付ファイル。覆っている間と、何も出していないときはnil。
+    /// 長押しでメディアのメニューを出す添付ファイル。ぼかしている間と、何も出していないときはnil。
     var menuAttachment: MediaAttachment? {
         isCovered || isHidden ? nil : attachment
     }

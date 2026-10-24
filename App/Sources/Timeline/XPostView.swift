@@ -26,7 +26,7 @@ final class XPostView: UIButton {
 
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
-    /// 閲覧注意の覆いが押されたときに呼ぶ。
+    /// 閲覧注意のぼかしが押されたときに呼ぶ。
     var onRevealMedia: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?

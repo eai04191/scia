@@ -111,7 +111,7 @@ final class ProfileHeaderView: UIView {
     private var measuredWidth: CGFloat = 0
     /// 制約に入れた、ヘッダー画像を置く場所。
     private var bannerLayout = ProfileBannerLayout(top: 0, height: 0)
-    /// ビューアで開いている間、ヘッダー画像を隠す覆い。周りは画像をぼかして伸ばした部分なので、画面の背景の色で隠すと塗り残しのように見えるため、
+    /// ビューアで開いている間、ヘッダー画像を隠すビュー。周りは画像をぼかして伸ばした部分なので、画面の背景の色で隠すと塗り残しのように見えるため、
     /// ぼかしたヘッダー画像で埋める。
     private let bannerCover = UIImageView()
     private var hasBannerImage = false {
@@ -288,7 +288,7 @@ final class ProfileHeaderView: UIView {
         bannerReflection.translatesAutoresizingMaskIntoConstraints = false
         bannerReflectionClip.addSubview(bannerReflection)
         bannerCover.backgroundColor = .systemBackground
-        // 覆いの画像は、枠に見えている範囲から作るので、枠に合わせて伸ばす。
+        // 隠すビューの画像は、枠に見えている範囲から作るので、枠に合わせて伸ばす。
         bannerCover.contentMode = .scaleToFill
         bannerCover.isHidden = true
         // 閉じる途中にタップし直しても開けるよう、タップは下に通す。
@@ -444,7 +444,7 @@ final class ProfileHeaderView: UIView {
         }
         case .avatar: nil
         }
-        // ビューアで開くときと同じく、持ち上げている間はヘッダー画像の場所にぼかしの覆いを出し、抜けて見えないようにする。
+        // ビューアで開くときと同じく、持ち上げている間はヘッダー画像の場所にぼかしたビューを出し、抜けて見えないようにする。
         let onLiftChange: (@MainActor (Bool) -> Void)? = switch image {
         case .header: { [weak self] isLifted in self?.bannerView.isConcealedForViewer = isLifted }
         case .avatar: nil
@@ -739,12 +739,12 @@ final class ProfileHeaderView: UIView {
         applyBannerBlur(width: bounds.width)
     }
 
-    /// 覆いを出している間は、覆いとつながる一様なぼかしにする。
+    /// 隠すビューを出している間は、それとつながる一様なぼかしにする。
     private func applyReflectionImage() {
         bannerReflection.image = bannerView.isConcealedForViewer ? bannerBlur?.uniformReflection : bannerBlur?.reflection
     }
 
-    /// 伸ばす部分と覆いの画像を、今の枠の縦横比とぼかし方で作る。同じ条件で作ってあれば作り直さない。
+    /// 伸ばす部分と隠すビューの画像を、今の枠の縦横比とぼかし方で作る。同じ条件で作ってあれば作り直さない。
     private func applyBannerBlur(width: CGFloat) {
         guard let bannerSource, width > 0, bannerLayout.height > 0 else {
             bannerBlur = nil
@@ -785,10 +785,10 @@ final class ProfileHeaderView: UIView {
 /// ヘッダー画像。タップすると、ビューアで大きく見る。
 private final class ProfileBannerView: UIImageView, MediaViewerSource {
     var overlappingViews: [UIView] = []
-    /// ビューアが画像を動かしている間、ヘッダー画像に重ねて隠す覆い。
-    /// ヘッダー画像そのものを隠すと、上へ伸ばしたぼかしも消え、隠すのをやめてからも数コマ遅れて出るため、画像は隠さずに覆う。
+    /// ビューアが画像を動かしている間、ヘッダー画像に重ねて隠すビュー。
+    /// ヘッダー画像そのものを隠すと、上へ伸ばしたぼかしも消え、隠すのをやめてからも数コマ遅れて出るため、画像は隠さずに上に重ねる。
     weak var cover: UIView?
-    /// 覆いを出したり外したりしたときに呼ぶ。
+    /// 隠すビューを出したり外したりしたときに呼ぶ。
     var onChangeConcealment: (() -> Void)?
 
     var isConcealedForViewer: Bool {

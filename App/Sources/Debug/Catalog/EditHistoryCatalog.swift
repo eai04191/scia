@@ -21,23 +21,23 @@ enum EditHistoryCatalog {
                 revision("<p>明日の勉強会は14時からです。場所は会議室Bです</p>"),
                 revision("<p>明日の勉強会は15時からです。場所はいつもの会議室Bです</p>"),
             ]),
-            state("注意書きと閲覧注意を付けた（添付は覆う）", [
+            state("注意書きと閲覧注意を付けた（添付はぼかす）", [
                 revision("<p>写真を撮った</p>", media: [blue]),
                 revision("<p>写真を撮った</p>", spoiler: "食べ物", sensitive: true, media: [blue]),
             ]),
-            state("閲覧注意の画像を外し、閲覧注意も外した（外した画像は覆ったまま）", [
+            state("閲覧注意の画像を外し、閲覧注意も外した（外した画像はぼかしたまま）", [
                 revision("<p>写真</p>", sensitive: true, media: [blue, green]),
                 revision("<p>写真</p>", media: [green]),
             ]),
-            state("今の投稿を一覧で開いた（今の版だけ外れ、過去の版は閲覧注意で覆う）", choice: .revealed, [
+            state("今の投稿を一覧で開いた（今の版だけ外れ、過去の版は閲覧注意でぼかす）", choice: .revealed, [
                 revision("<p>写真を撮った</p>", sensitive: true, media: [blue]),
                 revision("<p>写真を撮った。もう1枚</p>", sensitive: true, media: [blue, green]),
             ]),
-            state("今の投稿を一覧で隠した（閲覧注意のない過去の版と外した画像も覆う）", choice: .hidden, [
+            state("今の投稿を一覧で隠した（閲覧注意のない過去の版と外した画像もぼかす）", choice: .hidden, [
                 revision("<p>写真を撮った</p>", media: [blue, green]),
                 revision("<p>写真を撮った。1枚にした</p>", media: [blue]),
             ]),
-            state("フィルターに一致した（過去の版と外した画像もフィルターで覆う）", filterTitles: ["ネタバレ"], [
+            state("フィルターに一致した（過去の版と外した画像もフィルターでぼかす）", filterTitles: ["ネタバレ"], [
                 revision("<p>映画を観た</p>", sensitive: true, media: [blue, green]),
                 revision("<p>映画を観た。最後が良かった</p>", media: [blue]),
             ]),
@@ -101,7 +101,7 @@ enum EditHistoryCatalog {
                 emojiImages: AppDependencies.emojiImages,
                 network: AppDependencies.network
             )
-            // 画面と同じく、今の投稿の覆いは一覧の選択で決める。
+            // 画面と同じく、今の投稿のぼかしは一覧の選択で決める。
             var covers = MediaCovers()
             let latest = latestStatus(of: revisions)
             switch choice {
@@ -121,7 +121,7 @@ enum EditHistoryCatalog {
         }
     }
 
-    /// 今の投稿。覆うかを決めるところだけを、最後の版に合わせる。
+    /// 今の投稿。ぼかすかを決めるところだけを、最後の版に合わせる。
     private static func latestStatus(of revisions: [StatusRevision]) -> Status {
         let last = revisions.last
         return Status(

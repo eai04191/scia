@@ -148,8 +148,8 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     /// サムネイルは表示の大きさに合わせて縮めて読んでいるため、画面の幅に引き伸ばすとぼやける。届いたらプレビューの中で差し替える。
     private let sharperImage: (@MainActor (_ maxPixelSize: Int) async -> UIImage?)?
     /// 持ち上げ始めたときにtrue、メニューを閉じ終えたときにfalseで呼ぶ。UIKitは持ち上げる間、元の場所からビューを隠すため、
-    /// その場所が抜けて見えないよう、覆いを出したり外したりする（プロフィールのヘッダー画像）。
-    /// 持ち上げた画像をタップしてビューアを開いたときは、ビューアが覆いの出し入れを受け持つため、falseでは呼ばない。
+    /// その場所が抜けて見えないよう、隠すビューを出したり外したりする（プロフィールのヘッダー画像）。
+    /// 持ち上げた画像をタップしてビューアを開いたときは、ビューアが隠すビューの出し入れを受け持つため、falseでは呼ばない。
     private let onLiftChange: (@MainActor (Bool) -> Void)?
     /// 持ち上げた画像をタップして、ビューアを開いた。閉じ終えても`onLiftChange`を呼ばない。
     private var isOpeningViewer = false

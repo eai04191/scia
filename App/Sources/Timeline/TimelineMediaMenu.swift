@@ -22,7 +22,7 @@ extension TimelineViewController {
         }
     }
 
-    /// `point`（一覧の座標）にある、覆っていないサムネイルかリンクカードの画像。なければnil。
+    /// `point`（一覧の座標）にある、ぼかしていないサムネイルかリンクカードの画像。なければnil。
     /// リンクカードの画像は、開ける状態のときだけ触れられるため、触れたビューをたどった中に画像があるときだけ返す。
     func mediaMenuTarget(at point: CGPoint, in cell: UICollectionViewCell) -> MediaMenuTarget? {
         var view = cell.hitTest(collectionView.convert(point, to: cell), with: nil)

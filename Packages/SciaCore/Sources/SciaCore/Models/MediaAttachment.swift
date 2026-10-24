@@ -17,7 +17,7 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
     /// 代替テキスト。
     public let description: String?
     public let meta: Meta?
-    /// ぼかした下地を描くための文字列。読み込む前や、閲覧注意で覆っている間に使う。
+    /// ぼかした下地を描くための文字列。読み込む前や、閲覧注意でぼかしている間に使う。
     public let blurhash: String?
 
     public init(

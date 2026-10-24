@@ -39,7 +39,7 @@ final class EditHistoryEntryView: UIView {
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// 本文のハッシュタグのメニューの「ユーザーの投稿」で開くユーザー。投稿した人。適用より前に設定する。
     var hashtagAccount: Account?
-    /// 閲覧注意の覆いが押されたときに呼ぶ。覆いを外すのは置く側で、適用し直すまで見た目は変わらない。
+    /// 閲覧注意のぼかしが押されたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。
     var onRevealMedia: (() -> Void)?
     /// サムネイルが押されたときに、並んでいる添付ファイルと何番目かと、押されたサムネイルの置き場所を渡して呼ぶ。
     var onSelectMedia: (([MediaAttachment], Int, MediaPlace) -> Void)?

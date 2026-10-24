@@ -5,7 +5,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 添付ファイルのサムネイルの並べ方と、閲覧注意の覆いを確かめる。
+/// 添付ファイルのサムネイルの並べ方と、閲覧注意のぼかしを確かめる。
 @MainActor
 @Suite(.serialized)
 struct TimelineMediaTests {
@@ -68,7 +68,7 @@ struct TimelineMediaTests {
         #expect(mediaGrid(in: harness, of: statuses[1].id) == nil)
     }
 
-    /// 閲覧注意の投稿と、注意書きのある投稿は覆う。覆いを外しても行の高さは変わらない。
+    /// 閲覧注意の投稿と、注意書きのある投稿はぼかす。ぼかしを外しても行の高さは変わらない。
     @Test func sensitiveMediaIsCoveredUntilRevealedWithoutChangingHeight() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -80,7 +80,7 @@ struct TimelineMediaTests {
 
         #expect(vc.mediaContent(for: sensitive)?.isCovered == true)
         #expect(vc.mediaContent(for: spoiler)?.isCovered == true)
-        // 覆いを外す投稿のすぐ下の投稿。
+        // ぼかしを外す投稿のすぐ下の投稿。
         let below = spoiler.id
         let belowY = try #require(harness.windowMinY(of: .status(below)))
         let grid = try #require(mediaGrid(in: harness, of: sensitive.id))
@@ -93,7 +93,7 @@ struct TimelineMediaTests {
         #expect(harness.windowMinY(of: .status(below)) == belowY)
     }
 
-    /// 閲覧注意のない投稿も、メニューから隠すと覆う。覆っても行の高さは変わらず、覆いをタップすれば開く。
+    /// 閲覧注意のない投稿も、メニューから隠すとぼかす。ぼかしても行の高さは変わらず、ぼかしをタップすれば開く。
     @Test func hidingPlainMediaCoversItWithoutChangingHeight() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -116,7 +116,7 @@ struct TimelineMediaTests {
         #expect(harness.windowMinY(of: .status(below)) == belowY)
     }
 
-    /// ほかの画面で隠した結果を受け取ると、その投稿の行を覆い直す。隠した画面は、変えたあとの状態をセッションに渡す。
+    /// ほかの画面で隠した結果を受け取ると、その投稿の行をぼかし直す。隠した画面は、変えたあとの状態をセッションに渡す。
     @Test func mediaCoversChangedElsewhereAreApplied() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
@@ -229,7 +229,7 @@ struct TimelineMediaTests {
         #expect(!view.startsWithMedia)
     }
 
-    /// 閲覧注意で覆っている間は画像を読みに行かず、覆いを外したら読む。覆いを外さない投稿で通信しないため。
+    /// 閲覧注意でぼかしている間は画像を読みに行かず、ぼかしを外したら読む。ぼかしを外さない投稿で通信しないため。
     @Test func coveredMediaIsNotFetchedUntilRevealed() async throws {
         let log = FetchLog()
         let harness = try TimelineHarness(mediaImages: log.makeStore())
@@ -239,7 +239,7 @@ struct TimelineMediaTests {
         let sensitive = withMedia(statuses[0], [attachment], sensitive: true)
         harness.setStatuses([sensitive] + statuses.dropFirst())
         let cell = try #require(harness.visibleCell(of: .status(sensitive.id)))
-        // 読みに行くかは、レイアウトでタイルの大きさが決まったときに決める。覆っていれば出どころを選ばず、読みに行く処理を始めない。
+        // 読みに行くかは、レイアウトでタイルの大きさが決まったときに決める。ぼかしていれば出どころを選ばず、読みに行く処理を始めない。
         let tile = try #require(cell.descendants(of: MediaTileView.self).first)
         #expect(!tile.requestsThumbnail)
         #expect(log.fetched.isEmpty)
@@ -279,8 +279,8 @@ struct TimelineMediaTests {
         return vc.mediaMenuTarget(at: point, in: cell).flatMap { vc.mediaMenu(for: $0, entry: entry, id: .status(id)) }
     }
 
-    /// 覆っていないサムネイルを長押しすると、見出しのないメディアのメニューを出し、投稿のメニューを「投稿」に入れる。
-    /// 閲覧注意で覆っている間は、中身を見ないまま保存や共有をしないよう出さない。
+    /// ぼかしていないサムネイルを長押しすると、見出しのないメディアのメニューを出し、投稿のメニューを「投稿」に入れる。
+    /// 閲覧注意でぼかしている間は、中身を見ないまま保存や共有をしないよう出さない。
     @Test func longPressOnTileOffersMediaMenuOnlyWhenUncovered() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
