@@ -524,6 +524,16 @@ public enum TuningCatalog {
         defaultValue: 5
     )
 
+    /// ユーザーのハッシュタグの一覧を前に出している間、新着をRESTで読む間隔。決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
+    /// ハッシュタグのストリームは公開の投稿しか運ばず、フォロワーのみなどの投稿は読まないと分からないため。
+    public static let accountHashtagPollingInterval = NumberTuning(
+        id: "streaming.accountHashtagPollingInterval",
+        title: "ユーザーのハッシュタグを見ている間に新着を読む間隔（秒）",
+        range: 15...300,
+        step: 15,
+        defaultValue: 30
+    )
+
     /// ストリーミングにつながらない間、切れていた間の新着をRESTで読む間隔。つなぎ直しはその間も続ける。
     public static let pollingInterval = NumberTuning(
         id: "streaming.pollingInterval",
@@ -1579,6 +1589,7 @@ public enum TuningCatalog {
             .number(fillPageLimit),
             .number(gapAutoLoadDistance),
             .number(pollingInterval),
+            .number(accountHashtagPollingInterval),
             .number(regeneratingRetryInterval),
             .number(outageNoticeDelay),
         ]),

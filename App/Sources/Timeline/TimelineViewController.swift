@@ -129,6 +129,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onOpenHashtag: ((String) -> Void)?
     /// ナビゲーションから外された。積んで開いた一覧が、読み込みと購読をやめるのに使う。
     var onRemovedFromParent: (() -> Void)?
+    /// 画面に出始めたとき（true）と、見えなくなったとき（false）。前に出ている間だけ新着を読む一覧が使う。
+    var onVisibilityChange: ((Bool) -> Void)?
     /// ユーザーのメニューのメンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
     var userMenuActions: UserMenuActions?
     /// ハッシュタグのメニューのミュートを組むもの。nilなら項目を出さない。
@@ -344,6 +346,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
         onAppearing?()
+        onVisibilityChange?(true)
         applyPendingOpening()
     }
 
@@ -374,6 +377,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         timeRefreshTimer?.invalidate()
         timeRefreshTimer = nil
         onVisibleLinkOnlyCardsChange?([])
+        onVisibilityChange?(false)
     }
 
     /// 相対表記の時刻を、表示中の行だけ1秒ごとに書き直す。行の高さは変わらないため、並びは描き直さない。

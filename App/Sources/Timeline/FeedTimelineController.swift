@@ -54,6 +54,10 @@ final class FeedTimelineController {
     #endif
     /// サーバーがホームを作り直している最中だったので、時間をおいて補完を読み直す。読み直すまで次は予約しない。
     private var regeneratingRetryTask: Task<Void, Never>?
+    /// 画面が前に出ている。ストリームでは足りない一覧は、前に出ている間だけ新着を読み直す。
+    private var isShown = false
+    /// 前に出ている間に新着を読み直す繰り返し。
+    private var pollingTask: Task<Void, Never>?
 
     init(
         feed: TimelineFeed,
@@ -81,6 +85,9 @@ final class FeedTimelineController {
         streamingStatusView.install(in: viewController.collectionView)
         viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction, isAutomatic: false) }
         viewController.onGapApproach = { [weak self] id, direction in self?.loadGap(id, from: direction, isAutomatic: true) }
+        if feed.isAccountHashtag {
+            viewController.onVisibilityChange = { [weak self] isShown in self?.setShown(isShown) }
+        }
         #if DEBUG
         viewController.debugActions = makeDebugActions()
         #endif
@@ -129,8 +136,10 @@ final class FeedTimelineController {
             stopStreaming()
             // 作り直し中の読み直しも、使わない一覧への通信なのでやめる。有効に戻したら、つないだところで補完する。
             cancelRegeneratingRetry()
+            stopPolling()
         } else if hasLoadedInitial {
             startStreaming()
+            startPolling()
         }
     }
 
@@ -139,6 +148,7 @@ final class FeedTimelineController {
         isStopped = true
         stopStreaming()
         cancelRegeneratingRetry()
+        stopPolling()
         tasks.forEach { $0.cancel() }
         tasks.removeAll()
         // 積んで開いた一覧は、画面がこのコントローラーを生かしているため、持ち合いを解いて捨てられるようにする。
@@ -151,6 +161,7 @@ final class FeedTimelineController {
         stopStreaming()
         // 戻ったときは、つなぎ直したところで補完する。
         cancelRegeneratingRetry()
+        stopPolling()
         saveReadPosition(inBackground: true)
     }
 
@@ -163,7 +174,59 @@ final class FeedTimelineController {
         retryFailedLoads()
         guard hasLoadedInitial else { return }
         startStreaming()
+        // ストリームにつながらない環境でも、見ている一覧はすぐ読む。つながったときの補完と重なれば、ストアが1つにまとめる。
+        if feed.isAccountHashtag, isShown, !isDisabled {
+            fillFromLatest()
+        }
+        startPolling()
         syncReadPosition()
+    }
+
+    // MARK: - 前に出ている間の読み直し
+
+    /// 画面が前に出たら、見ていなかった間の新着を読み、前に出ている間は間隔をおいて読み直す。見えなくなったらやめる。
+    /// ユーザーのハッシュタグの一覧で使う。ハッシュタグのストリームは公開の投稿しか運ばず、フォロワーのみなどの投稿は読まないと分からないため。
+    /// 見ていない間は読まず、通信を前に出ている1つの一覧の分に抑える。決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
+    private func setShown(_ isShown: Bool) {
+        guard self.isShown != isShown else { return }
+        self.isShown = isShown
+        guard isShown else {
+            stopPolling()
+            return
+        }
+        if !isStopped, !isDisabled, isInForeground {
+            // 見ていない間に見送った、失敗した読み込みのやり直し。
+            retryFailedLoads()
+            if hasLoadedInitial {
+                fillFromLatest()
+            }
+        }
+        startPolling()
+    }
+
+    /// ストリームから来る補完のきっかけ（つながったとき、切れている間のポーリング、届いた投稿）で読む。
+    /// ユーザーのハッシュタグは、見ていない間は読まない。見えたときに`setShown`で読むので、見ていない間の新着は取りこぼさない。
+    private func fillFromLatestIfShownWhenNeeded() {
+        guard !feed.isAccountHashtag || isShown else { return }
+        fillFromLatest()
+    }
+
+    private func startPolling() {
+        guard isShown, !isStopped, !isDisabled, isInForeground, pollingTask == nil else { return }
+        pollingTask = Task { [weak self] in
+            while let interval = self?.tuning.value(of: TuningCatalog.accountHashtagPollingInterval) {
+                try? await Task.sleep(for: .seconds(interval))
+                guard !Task.isCancelled, let self else { return }
+                guard self.hasLoadedInitial else { continue }
+                self.logger.info("\(self.feed.name, privacy: .public) poll while shown")
+                self.fillFromLatest()
+            }
+        }
+    }
+
+    private func stopPolling() {
+        pollingTask?.cancel()
+        pollingTask = nil
     }
 
     /// 電波が戻ったときや、レート制限が明けたときに呼ぶ。失敗したままの読み込みと、切れているストリーミングをすぐやり直す。
@@ -173,13 +236,15 @@ final class FeedTimelineController {
         // 切れていれば、セッションがつなぎ直させ、つながったところで切れていた間を補う。
         if hasLoadedInitial, !isDisabled, streamingHub.isConnected {
             // つながったときの補完が、止められている間や電波のない間に失敗していることがある。
-            fillFromLatest()
+            fillFromLatestIfShownWhenNeeded()
         }
         retryFailedLoads()
     }
 
     /// 失敗したままの最初の読み込みか、末尾の読み込みをやり直す。最初の読み込みが済めば、そこでつなぐ。
+    /// ユーザーのハッシュタグは、見ていない間は読まない。見えたときに`setShown`でやり直す。
     private func retryFailedLoads() {
+        guard !feed.isAccountHashtag || isShown else { return }
         if case .failed = viewController.contentState {
             start(origin: .automatic)
         } else if case .failed = viewController.footerState {
@@ -288,12 +353,12 @@ final class FeedTimelineController {
         switch activity {
         case .connected:
             logger.info("\(self.feed.name, privacy: .public) streaming connected")
-            fillFromLatest()
+            fillFromLatestIfShownWhenNeeded()
         case .event(let event):
             receive(event)
         case .poll:
             logger.info("\(self.feed.name, privacy: .public) poll")
-            fillFromLatest()
+            fillFromLatestIfShownWhenNeeded()
         case .outage(let isOngoing):
             viewController.setOutageNotice(isOngoing)
         }
@@ -423,7 +488,7 @@ final class FeedTimelineController {
             case .insert: break
             case .ignore: return
             case .fetchLatest:
-                fillFromLatest()
+                fillFromLatestIfShownWhenNeeded()
                 return
             }
         }

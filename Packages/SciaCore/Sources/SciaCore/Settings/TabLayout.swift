@@ -13,16 +13,27 @@ public enum TabItem: MenuItemKind {
     /// フォローしているハッシュタグ。`name`は`#`を除いた名前。
     /// 同じ項目かどうかは、サーバーと同じ決まりでそろえた名前（`Hashtag.normalizedName`）で見る。サーバーは大文字と小文字などを区別しないため。
     case hashtag(name: String)
+    /// あるユーザーの、ハッシュタグの付いた投稿。サーバーには覚える仕組みがないため、使う人がこの端末の並びに足す。`name`は`#`を除いた名前。
+    /// `acct`は、タブと一覧の見出しにハンドルを出すため、並びと一緒に保存する。同じ項目かどうかは、アカウントのIDと、ハッシュタグのそろえた名前で見る。
+    case accountHashtag(accountID: String, acct: String, name: String)
 
     /// リストの項目の`rawValue`の頭。`list:<ID>:<名前>`の形で保存する。リストのIDは`:`を含まないため、2つ目の`:`より後ろは名前として読む。
     private static let listPrefix = "list:"
     /// ハッシュタグの項目の`rawValue`の頭。`hashtag:<名前>`の形で保存する。
     private static let hashtagPrefix = "hashtag:"
+    /// ユーザーのハッシュタグの項目の`rawValue`の頭。`accountHashtag:<ID>:<acct>:<名前>`の形で保存する。IDと`acct`は`:`を含まないため、3つ目の`:`より後ろは名前として読む。
+    private static let accountHashtagPrefix = "accountHashtag:"
 
     /// 決まった項目。リストとハッシュタグは使う人ごとに違うため含まない。既定の並びと、保存した並びに足りない項目を差し込むのに使う。
     public static let allCases: [TabItem] = [.home, .local, .federated, .notifications, .bookmarks, .favourites]
 
     public init?(rawValue: String) {
+        if rawValue.hasPrefix(Self.accountHashtagPrefix) {
+            let parts = rawValue.dropFirst(Self.accountHashtagPrefix.count).split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
+            guard parts.count == 3, !parts[0].isEmpty, !parts[2].isEmpty else { return nil }
+            self = .accountHashtag(accountID: String(parts[0]), acct: String(parts[1]), name: String(parts[2]))
+            return
+        }
         if rawValue.hasPrefix(Self.listPrefix) {
             let parts = rawValue.dropFirst(Self.listPrefix.count).split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
             guard let id = parts.first, !id.isEmpty else { return nil }
@@ -49,6 +60,7 @@ public enum TabItem: MenuItemKind {
         case .favourites: "favourites"
         case .list(let id, let title): "\(Self.listPrefix)\(id):\(title)"
         case .hashtag(let name): "\(Self.hashtagPrefix)\(name)"
+        case .accountHashtag(let accountID, let acct, let name): "\(Self.accountHashtagPrefix)\(accountID):\(acct):\(name)"
         }
     }
 
@@ -57,6 +69,7 @@ public enum TabItem: MenuItemKind {
         switch self {
         case .list(let id, _): "\(Self.listPrefix)\(id)"
         case .hashtag(let name): "\(Self.hashtagPrefix)\(Hashtag.normalizedName(name))"
+        case .accountHashtag(let accountID, _, let name): "\(Self.accountHashtagPrefix)\(accountID):\(Hashtag.normalizedName(name))"
         default: rawValue
         }
     }
@@ -77,8 +90,11 @@ public enum TabItem: MenuItemKind {
         if case .hashtag = self { true } else { false }
     }
 
-    /// タブに置かない一覧（アカウントのハッシュタグ）ではnil。
-    public init?(_ feed: TimelineFeed) {
+    public var isAccountHashtag: Bool {
+        if case .accountHashtag = self { true } else { false }
+    }
+
+    public init(_ feed: TimelineFeed) {
         switch feed {
         case .home: self = .home
         case .local: self = .local
@@ -86,7 +102,8 @@ public enum TabItem: MenuItemKind {
         // 同じ項目かどうかはIDだけで見るので、並びの中の場所を探すのに名前は要らない。
         case .list(let id): self = .list(id: id, title: "")
         case .hashtag(let name): self = .hashtag(name: name)
-        case .accountHashtag: return nil
+        // 同じ項目かどうかはIDと名前で見るので、並びの中の場所を探すのにハンドルは要らない。
+        case .accountHashtag(let accountID, let name): self = .accountHashtag(accountID: accountID, acct: "", name: name)
         }
     }
 
@@ -121,6 +138,35 @@ extension MenuLayout where Item == TabItem {
     /// まだないハッシュタグは無効にして末尾に足し、フォローをやめたハッシュタグは外す。ほかの項目の並びと表示は変えない。
     public func syncingHashtags(_ hashtags: [Hashtag]) -> MenuLayout<TabItem> {
         syncing(hashtags.map { .hashtag(name: $0.name) }, where: \.isHashtag)
+    }
+
+    /// 使う人が足した項目を、有効にして切り替えタブの末尾に入れる。ブックマークやお気に入りを有効にしたときと同じく、ふだん並べているタブを押しのけないため。
+    /// 並びにすでにあれば、そのまま返す。
+    public func adding(_ item: TabItem) -> MenuLayout<TabItem> {
+        guard !contains(item) else { return self }
+        return MenuLayout(elements: elements + [.item(item, isVisible: true)])
+    }
+
+    /// 項目を並びから外す。
+    public func removing(_ item: TabItem) -> MenuLayout<TabItem> {
+        MenuLayout(elements: elements.filter { element in
+            if case .item(let current, _) = element { current != item } else { true }
+        })
+    }
+
+    public func contains(_ item: TabItem) -> Bool {
+        elements.contains { element in
+            if case .item(let current, _) = element { current == item } else { false }
+        }
+    }
+
+    /// `previous`にあったユーザーのハッシュタグのうち、この並びにないものを、無効にして末尾に足す。
+    /// 設定の並びの画面では項目を消せず、ユーザーのハッシュタグが並びから消えるのは最初の並びに戻したときだけなので、そのときに残すのに使う。
+    /// サーバーから読んで足し直せないため。
+    public func keepingAccountHashtags(of previous: MenuLayout<TabItem>) -> MenuLayout<TabItem> {
+        addingMissing(previous.elements.compactMap { element in
+            if case .item(let item, _) = element, item.isAccountHashtag { item } else { nil }
+        })
     }
 
     /// 並びにない項目だけを、無効にして末尾に足す。並びにある項目は、外すことも名前を書き換えることもしない。

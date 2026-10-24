@@ -152,6 +152,8 @@ final class SessionController {
                 FeedTimelineController(feed: .list(id: id), texts: .list(title: title), client: client, streamingHub: streamingHub) { forward() }
             case .hashtag(let name):
                 FeedTimelineController(feed: .hashtag(name: name), texts: .hashtag(name: name), client: client, streamingHub: streamingHub) { forward() }
+            case .accountHashtag(let accountID, let acct, let name):
+                FeedTimelineController(feed: .accountHashtag(accountID: accountID, name: name), texts: .accountHashtag(name: name, acct: acct), client: client, streamingHub: streamingHub) { forward() }
             case .home, .local, .federated, .notifications, .bookmarks, .favourites:
                 nil
             }
@@ -240,7 +242,7 @@ final class SessionController {
                 case .notifications: notificationsNavigation
                 case .bookmarks: bookmarksNavigation
                 case .favourites: favouritesNavigation
-                case .list, .hashtag: serverFeeds.navigation(for: item)
+                case .list, .hashtag, .accountHashtag: serverFeeds.navigation(for: item)
                 }
             },
             placement: TabPlacement(layout: AppDependencies.settings.tabLayout(for: credential.handle)),
@@ -400,8 +402,8 @@ final class SessionController {
             configureTabRoot(viewController)
         }
         // 並びにあるリストとハッシュタグは、タブを組んだときに作ってある。それ以後に作るものも、ここで同じように整える。
-        serverFeeds.onCreate = { [weak self] controller, navigation in
-            self?.configureServerFeed(controller, in: navigation)
+        serverFeeds.onCreate = { [weak self] item, controller, navigation in
+            self?.configureServerFeed(controller, for: item, in: navigation)
         }
         composer.onBeginEditing = { [weak self] in
             self?.applyComposeDefaults()
@@ -465,7 +467,10 @@ final class SessionController {
                 guard let self else { return }
                 // 最初の並びに戻したら、リストが消えるので足し直す。足し直した変更は、もう一度ここへ来て反映する。
                 addMissingServerItemsToTabLayout()
-                let placement = TabPlacement(layout: AppDependencies.settings.tabLayout(for: handle))
+                let layout = AppDependencies.settings.tabLayout(for: handle)
+                // ユーザーのハッシュタグは、「タブから外す」で並びから外したら、一覧を止めて捨てる。
+                tabs.forget(serverFeeds.removeAll(where: \.isAccountHashtag, except: Set(Self.accountHashtags(in: layout))))
+                let placement = TabPlacement(layout: layout)
                 if placement != tabs.placement {
                     tabs.apply(placement)
                 }
@@ -478,7 +483,7 @@ final class SessionController {
     /// 起動のあとに有効にしたホームと通知は、ここで読み始める。ローカルと連合は、開いたときに読み始める。
     private func applyEnabledItems(_ placement: TabPlacement) {
         for feed in tabFeeds {
-            feed.setEnabled(TabItem(feed.feed).map(placement.location(of:)) != .disabled)
+            feed.setEnabled(placement.location(of: TabItem(feed.feed)) != .disabled)
         }
         notifications.setEnabled(placement.location(of: .notifications) != .disabled)
         // 見せていた一覧を無効にしたら、UIKitが選んだ先頭のタブへ移り、見せなくなる。
@@ -627,14 +632,17 @@ final class SessionController {
     }
 
     /// 並びに出たリストやハッシュタグの一覧を、ホームやローカルと同じように整える。ローカルと同じく、初めて開いたときに読み始める。
-    private func configureServerFeed(_ controller: FeedTimelineController, in navigation: ContentNavigationController) {
+    private func configureServerFeed(_ controller: FeedTimelineController, for item: TabItem, in navigation: ContentNavigationController) {
         configureTabRoot(controller.viewController)
+        if item.isAccountHashtag {
+            controller.viewController.screenBarItems = [tabToggleItem(for: item)]
+        }
         Self.configure(navigation, delegate: navigationDelegate) { navigation in
             (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
         }
         controller.viewController.onAppearing = { [weak controller] in controller?.startIfNeeded() }
         controller.showStreamingState(streamingHub.state)
-        controller.setEnabled(TabItem(controller.feed).map(tabs.placement.location(of:)) != .disabled)
+        controller.setEnabled(tabs.placement.location(of: TabItem(controller.feed)) != .disabled)
     }
 
     /// 自分のリストとフォローしているハッシュタグを読み、タブの並びに反映する。決まりはdocs/tabs.mdの「リスト」と「フォローしているハッシュタグ」にある。
@@ -685,9 +693,16 @@ final class SessionController {
     }
 
     /// 最初の並びに戻したときに、直近に読んだリストとハッシュタグを無効のまま足し直す。並びにあるものは外しも書き換えもしない。
+    /// ユーザーのハッシュタグは、設定の画面が最初の並びを書くときに残す（`keepingAccountHashtags`）。
     private func addMissingServerItemsToTabLayout() {
         let items = (loadedLists ?? []).map { TabItem.list(id: $0.id, title: $0.title) } + (loadedHashtags ?? []).map { TabItem.hashtag(name: $0.name) }
         setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).addingMissing(items))
+    }
+
+    private static func accountHashtags(in layout: MenuLayout<TabItem>) -> [TabItem] {
+        layout.elements.compactMap { element in
+            if case .item(let item, _) = element, item.isAccountHashtag { item } else { nil }
+        }
     }
 
     /// 並びが変わったときだけ保存する。保存すると並びの変化の知らせが来るため、同じ並びを書き続けないようにする。
@@ -817,17 +832,45 @@ final class SessionController {
 
     /// ハッシュタグのメニューの「ユーザーの投稿」で、`account`の投稿のうち、ハッシュタグ`name`の付いたものを開いた一覧に積む。
     private func openAccountHashtag(_ name: String, of account: Account, from source: UIViewController) {
-        openFeed(.accountHashtag(accountID: account.id, name: name), texts: .accountHashtag(name: name, acct: account.acct), from: source)
+        let item = TabItem.accountHashtag(accountID: account.id, acct: account.acct, name: name)
+        openFeed(.accountHashtag(accountID: account.id, name: name), texts: .accountHashtag(name: name, acct: account.acct), barItems: [tabToggleItem(for: item)], from: source)
+    }
+
+    /// ユーザーのハッシュタグの一覧の右上に置く、タブの並びに足すか外すボタン。並びは開いている間にも変わるので、メニューを開くたびに並びを見て中身を決める。
+    /// 決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
+    private func tabToggleItem(for item: TabItem) -> UIBarButtonItem {
+        let handle = credential.handle
+        let menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
+            let layout = AppDependencies.settings.tabLayout(for: handle)
+            if layout.contains(item) {
+                completion([UIAction(title: "タブから外す", image: UIImage(systemName: "rectangle.stack.badge.minus"), attributes: .destructive) { [weak self] _ in
+                    self?.setTabLayout(AppDependencies.settings.tabLayout(for: handle).removing(item))
+                    self?.showTabLayoutNotice("タブから外しました")
+                }])
+            } else {
+                completion([UIAction(title: "タブに追加", subtitle: "切り替えタブに入ります", image: UIImage(systemName: "rectangle.stack.badge.plus")) { [weak self] _ in
+                    self?.setTabLayout(AppDependencies.settings.tabLayout(for: handle).adding(item))
+                    self?.showTabLayoutNotice("タブに追加しました")
+                }])
+            }
+        }])
+        // 右上に入り切らず「さらに表示」にまとめられたときも、何のボタンか分かるよう名前を付ける。
+        return UIBarButtonItem(title: "タブ", image: UIImage(systemName: "rectangle.stack"), menu: menu)
+    }
+
+    private func showTabLayoutNotice(_ title: String) {
+        notices.showTransient(Notice(id: "tabs.layoutChanged", kind: .success, title: title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
 
     /// 一覧を開いた画面に積み、すぐ読み始めてストリームを購読する。ナビゲーションから外されたら止める。
-    private func openFeed(_ feed: TimelineFeed, texts: TimelineViewController.Texts? = nil, from source: UIViewController) {
+    private func openFeed(_ feed: TimelineFeed, texts: TimelineViewController.Texts? = nil, barItems: [UIBarButtonItem] = [], from source: UIViewController) {
         guard let navigation = source.navigationController else { return }
         let controller = FeedTimelineController(feed: feed, texts: texts, client: client, streamingHub: streamingHub) { [weak self] in
             self?.reportUnauthorized()
         }
         let viewController = controller.viewController
         configure(viewController)
+        viewController.screenBarItems = barItems
         // 画面が積まれている間だけ生かす。コントローラーは画面を強く持つので互いに持ち合うが、外されたときと、ログアウトなどで止めるときに、`stop()`が持ち合いを解く。
         viewController.lifetimeOwner = controller
         viewController.onRemovedFromParent = { [weak controller] in controller?.stop() }
@@ -2347,10 +2390,10 @@ private final class ServerFeedRegistry {
     private let make: (TabItem) -> FeedTimelineController?
     private var entries: [TabItem: (controller: FeedTimelineController, navigation: ContentNavigationController)] = [:]
     /// 作ったとき。設定するまでに作ったものは、設定したときにまとめて渡す。セッションを作り終える前に、タブを組むときに作るため。
-    var onCreate: ((FeedTimelineController, ContentNavigationController) -> Void)? {
+    var onCreate: ((TabItem, FeedTimelineController, ContentNavigationController) -> Void)? {
         didSet {
-            for entry in entries.values {
-                onCreate?(entry.controller, entry.navigation)
+            for (item, entry) in entries {
+                onCreate?(item, entry.controller, entry.navigation)
             }
         }
     }
@@ -2367,7 +2410,7 @@ private final class ServerFeedRegistry {
         guard let controller = make(item) else { return nil }
         let navigation = ContentNavigationController(rootViewController: controller.viewController)
         entries[item] = (controller, navigation)
-        onCreate?(controller, navigation)
+        onCreate?(item, controller, navigation)
         return navigation
     }
 

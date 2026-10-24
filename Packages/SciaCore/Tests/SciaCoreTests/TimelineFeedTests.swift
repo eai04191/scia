@@ -147,11 +147,12 @@ struct TimelineFeedTests {
         #expect(TimelineFeed.hashtag(name: "scia").handling(ofStreamed: status(by: "110")) == .insert)
     }
 
-    /// アカウントのハッシュタグは、公式のWebクライアントと同じくプロフィールと同じ`account`の文脈で当てる。既読位置はなく、タブにも置かない。
-    @Test func accountHashtagUsesAccountFilterContextAndIsNotATab() {
+    /// アカウントのハッシュタグは、公式のWebクライアントと同じくプロフィールと同じ`account`の文脈で当てる。既読位置はない。
+    /// タブの並びの中の項目は、アカウントのIDとそろえた名前で見つける。
+    @Test func accountHashtagUsesAccountFilterContextAndFindsItsTab() {
         let feed = TimelineFeed.accountHashtag(accountID: "109", name: "scia")
         #expect(feed.filterContext == .account)
         #expect(feed.marker == nil)
-        #expect(TabItem(feed) == nil)
+        #expect(TabItem(feed) == .accountHashtag(accountID: "109", acct: "bob@remote.example", name: "Scia"))
     }
 }

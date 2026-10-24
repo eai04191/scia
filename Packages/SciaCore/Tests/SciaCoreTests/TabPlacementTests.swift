@@ -190,4 +190,30 @@ struct TabLayoutSettingsTests {
         // 並びに書かなかった決まった項目は既定の位置に差し込まれるため、境目より上に残ることで、元の場所を保ったと見る。
         #expect(TabPlacement(layout: synced).tabs.contains(.hashtag(name: "scia")))
     }
+
+    /// ユーザーのハッシュタグは、IDとハンドルと名前を並びに残し、同じ項目かはIDとそろえた名前で見る。
+    @Test func accountHashtagItemRoundTripsAndMatchesByIDAndNormalizedName() {
+        let item = TabItem.accountHashtag(accountID: "109", acct: "bob@remote.example", name: "Scia")
+        #expect(TabItem(rawValue: item.rawValue) == item)
+        if case .accountHashtag(let id, let acct, let name) = TabItem(rawValue: item.rawValue) {
+            #expect([id, acct, name] == ["109", "bob@remote.example", "Scia"])
+        } else {
+            Issue.record("ユーザーのハッシュタグとして読めませんでした")
+        }
+        #expect(item == .accountHashtag(accountID: "109", acct: "", name: "scia"))
+        #expect(item != .accountHashtag(accountID: "110", acct: "bob@remote.example", name: "Scia"))
+        #expect(item != .hashtag(name: "Scia"))
+    }
+
+    /// 使う人が足したユーザーのハッシュタグは、有効にして切り替えタブの末尾に入り、外せる。同じ項目は2つ足さない。
+    @Test func addingAccountHashtagPutsItInSwitchTabAndRemovingDropsIt() {
+        let item = TabItem.accountHashtag(accountID: "109", acct: "bob", name: "scia")
+        let added = TabItem.defaultLayout.adding(item)
+
+        #expect(TabPlacement(layout: added).location(of: item) == .switchTab)
+        #expect(TabPlacement(layout: added).tabs == TabPlacement(layout: TabItem.defaultLayout).tabs)
+        #expect(added.adding(item).tokens == added.tokens)
+        #expect(added.removing(item).tokens == TabItem.defaultLayout.tokens)
+        #expect(!added.removing(item).contains(item))
+    }
 }

@@ -11,11 +11,14 @@ extension TabItem: MenuItemPresentable {
         case .bookmarks: "ブックマーク"
         case .favourites: "お気に入り"
         case .list(_, let title): title
-        case .hashtag(let name): "#\(name)"
+        case .hashtag(let name), .accountHashtag(_, _, let name): "#\(name)"
         }
     }
 
-    var note: String? { nil }
+    /// ユーザーのハッシュタグは、同じハッシュタグの項目と見分けられるよう、誰の投稿かを添える。
+    var note: String? {
+        if case .accountHashtag(_, let acct, _) = self { "@\(acct)の投稿" } else { nil }
+    }
 
     var symbolName: String {
         switch self {
@@ -27,6 +30,7 @@ extension TabItem: MenuItemPresentable {
         case .favourites: "star"
         case .list: "list.bullet"
         case .hashtag: "number"
+        case .accountHashtag: "number.square"
         }
     }
 
