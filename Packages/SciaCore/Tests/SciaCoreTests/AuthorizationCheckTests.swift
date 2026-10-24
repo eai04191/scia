@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Synchronization
 import Testing
 @testable import SciaCore
@@ -35,14 +36,19 @@ struct AuthorizationCheckTests {
         #expect(await check.reportUnauthorized() == .valid)
     }
 
-    @Test func concurrentReportsShareOneVerification() async {
-        let verifier = ScriptedVerifier([.failure(MastodonAPIError(statusCode: 401, message: ""))], delay: .milliseconds(20))
+    @Test func concurrentReportsShareOneVerification() async throws {
+        let gate = Gate()
+        let verifier = ScriptedVerifier([.failure(MastodonAPIError(statusCode: 401, message: ""))], gate: gate)
         let check = AuthorizationCheck(verify: verifier.verify)
 
-        async let first = check.reportUnauthorized()
-        async let second = check.reportUnauthorized()
+        let first = Task { await check.reportUnauthorized() }
+        try await waitUntil { gate.waiterCount == 1 }
+        // 2つ目の報告は、確かめている途中で待ち始めるまで同じアクターの上で進むので、門はそれより後に開く。
+        Task { gate.open() }
+        let second = await check.reportUnauthorized()
 
-        #expect(await [first, second] == [.invalid, .invalid])
+        #expect(await first.value == .invalid)
+        #expect(second == .invalid)
         #expect(verifier.callCount == 1)
     }
 
@@ -101,11 +107,12 @@ struct AuthorizationCheckTests {
 private final class ScriptedVerifier: Sendable {
     private let results: Mutex<[Result<Void, any Error>]>
     private let calls = Mutex(0)
-    private let delay: Duration
+    /// 開くまで、確かめ終えない。
+    private let gate: Gate?
 
-    init(_ results: [Result<Void, any Error>], delay: Duration = .zero) {
+    init(_ results: [Result<Void, any Error>], gate: Gate? = nil) {
         self.results = Mutex(results)
-        self.delay = delay
+        self.gate = gate
     }
 
     var callCount: Int { calls.withLock { $0 } }
@@ -113,7 +120,7 @@ private final class ScriptedVerifier: Sendable {
     var verify: @Sendable () async throws -> Void {
         { [self] in
             calls.withLock { $0 += 1 }
-            try await Task.sleep(for: delay)
+            try await gate?.wait()
             let result = results.withLock { $0.isEmpty ? nil : $0.removeFirst() }
             guard let result else {
                 Issue.record("想定より多く確かめました")

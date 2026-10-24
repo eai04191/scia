@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -98,13 +99,6 @@ struct MediaTransfersTests {
     /// 落とす処理が始まるのを待つ。
     private func waitUntilFetching(_ names: String...) async throws {
         try await waitUntil { names.allSatisfy { network.pending[url($0)] != nil } }
-    }
-
-    private func waitUntil(_ condition: @MainActor () -> Bool) async throws {
-        for _ in 0..<200 where !condition() {
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        #expect(condition())
     }
 
     @Test func savesDownloadInParallelAndReportInCompletionOrder() async throws {

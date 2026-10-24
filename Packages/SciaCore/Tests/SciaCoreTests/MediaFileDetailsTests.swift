@@ -2,6 +2,7 @@ import AVFoundation
 import CoreGraphics
 import Foundation
 import ImageIO
+import SciaTesting
 import Testing
 import UniformTypeIdentifiers
 import VideoToolbox
@@ -205,9 +206,7 @@ struct MediaFileDetailsTests {
         #expect(writer.startWriting())
         writer.startSession(atSourceTime: .zero)
         for frame in 0..<3 {
-            while !input.isReadyForMoreMediaData {
-                try await Task.sleep(for: .milliseconds(5))
-            }
+            try await waitUntil { input.isReadyForMoreMediaData }
             var buffer: CVPixelBuffer?
             CVPixelBufferCreate(nil, width, height, hlg ? kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange : kCVPixelFormatType_32BGRA, nil, &buffer)
             let pixelBuffer = try #require(buffer)

@@ -1,6 +1,7 @@
 import AVFoundation
 import Foundation
 import ImageIO
+import SciaTesting
 import Synchronization
 import Testing
 import UniformTypeIdentifiers
@@ -220,9 +221,7 @@ struct MediaReencoderTests {
         #expect(writer.startWriting())
         writer.startSession(atSourceTime: .zero)
         for frame in 0..<frameRate {
-            while !input.isReadyForMoreMediaData {
-                try await Task.sleep(for: .milliseconds(5))
-            }
+            try await waitUntil { input.isReadyForMoreMediaData }
             var buffer: CVPixelBuffer?
             CVPixelBufferCreate(nil, width, height, kCVPixelFormatType_32BGRA, nil, &buffer)
             let pixelBuffer = try #require(buffer)
@@ -331,9 +330,7 @@ struct MediaReencoderTests {
         #expect(writer.startWriting())
         writer.startSession(atSourceTime: .zero)
         for frame in 0..<10 {
-            while !input.isReadyForMoreMediaData {
-                try await Task.sleep(for: .milliseconds(5))
-            }
+            try await waitUntil { input.isReadyForMoreMediaData }
             var buffer: CVPixelBuffer?
             CVPixelBufferCreate(nil, width, height, kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange, nil, &buffer)
             let pixelBuffer = try #require(buffer)
