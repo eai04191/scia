@@ -873,6 +873,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         contentOffset.y: \(collectionView.contentOffset.y)
         contentSize.height: \(collectionView.contentSize.height)
         adjustedContentInset.top: \(collectionView.adjustedContentInset.top)
+        contentInset.top: \(collectionView.contentInset.top) refreshing: \(refreshControl.isRefreshing) refreshFrame: \(refreshControl.frame)
         visibleItems: \(visibleIDs.joined(separator: ", "))
         anchor: \(anchor.map { "\(Self.label($0.id)) distanceFromVisibleTop=\($0.distanceFromVisibleTop)" } ?? "nil")
         lastScrollDirection: \(lastScrollDirection.map { "\($0)" } ?? "nil")
