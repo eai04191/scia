@@ -18,7 +18,8 @@ struct SavedStatusesControllerTests {
     /// サーバーに加わった、一覧の先頭に入る投稿。
     private static let newest = StatusFactory.make(count: 1, startingAt: 2_000).map { $0.settingBookmarked(true) }
 
-    private func makeController(pages: [[Status]]) throws -> SavedStatusesController {
+    /// - Parameter next: ページごとの、`Link`ヘッダーの`next`に入れる`max_id`。足りない分と`nil`は、続きがないことにする。
+    private func makeController(pages: [[Status]], next: [String?] = []) throws -> SavedStatusesController {
         let credential = Credential(
             instance: try #require(URL(string: "https://example.social")),
             accessToken: "token",
@@ -35,7 +36,9 @@ struct SavedStatusesControllerTests {
         let transport = PagedTransport { _ in
             index.withLock { index in
                 defer { index += 1 }
-                return bodies[min(index, bodies.count - 1)]
+                let page = min(index, bodies.count - 1)
+                let link = next.indices.contains(page) ? next[page].map { #"<https://example.social/api/v1/bookmarks?max_id=\#($0)>; rel="next""# } : nil
+                return (bodies[page], link)
             }
         }
         return SavedStatusesController(kind: .bookmarks, client: MastodonClient(credential: credential, transport: transport)) {}
@@ -118,19 +121,58 @@ struct SavedStatusesControllerTests {
         controller.statusDidSettle(.bookmark, second)
         #expect(!controller.viewController.displayedItemIDs.contains(.status(second.id)))
     }
+
+    /// ほかの端末で付けた分が多くて手元とつながらなければ、手元の行を残してギャップを置く。
+    /// ギャップを押して読んだ行を足しても、押した位置の側で読んでいた行は動かない。上半分で押したら下の行、下半分で押したら上の行を保つ。
+    @Test(arguments: [TimelineStore.GapDirection.fromOlder, .fromNewer])
+    func loadingGapKeepsReadingRow(direction: TimelineStore.GapDirection) async throws {
+        let others = StatusFactory.make(count: 40, startingAt: 3_000).map { $0.settingBookmarked(true) }
+        let inGap = StatusFactory.make(count: 10, startingAt: 2_500).map { $0.settingBookmarked(true) }
+        let controller = try makeController(pages: [Self.saved, others, inGap + Self.saved], next: ["s", "o", "g"])
+        let window = try await show(controller)
+        defer { window.isHidden = true }
+
+        controller.setShown(true)
+        try await waitUntil { controller.viewController.displayedItemIDs.count == Self.saved.count + others.count + 1 }
+        try await waitUntil { !controller.viewController.isScrollingToTop }
+        let ids = controller.viewController.displayedItemIDs
+        let gapIndex = try #require(ids.firstIndex { if case .gap = $0 { true } else { false } })
+        #expect(ids[gapIndex - 1] == .status(others[others.count - 1].id))
+        #expect(ids[gapIndex + 1] == .status(Self.saved[0].id), "手元の行を捨てました")
+
+        let collectionView = controller.viewController.collectionView
+        collectionView.scrollToItem(at: IndexPath(item: gapIndex, section: 0), at: .centeredVertically, animated: false)
+        collectionView.layoutIfNeeded()
+        let kept = direction == .fromOlder ? ids[gapIndex + 1] : ids[gapIndex - 1]
+        let before = try windowMinY(of: kept, in: controller, window: window)
+
+        controller.viewController.onGapSelect?(try #require(ids[gapIndex].gapID), direction)
+        try await waitUntil { controller.viewController.displayedItemIDs.count == Self.saved.count + others.count + inGap.count }
+
+        let after = try windowMinY(of: kept, in: controller, window: window)
+        #expect(abs(after - before) <= tolerance, "読んでいた行が\(after - before)pt動きました")
+        #expect(controller.viewController.displayedItemIDs == (others + inGap + Self.saved).map { .status($0.id) })
+    }
 }
 
-/// 呼ばれるたびに、渡した本文を200で返す。
-private struct PagedTransport: HTTPTransport {
-    let body: @Sendable (URLRequest) -> Data
+private extension TimelineEntry.ID {
+    var gapID: String? {
+        if case .gap(let id) = self { id } else { nil }
+    }
+}
 
-    init(_ body: @escaping @Sendable (URLRequest) -> Data) {
+/// 呼ばれるたびに、渡した本文と`Link`ヘッダーを200で返す。
+private struct PagedTransport: HTTPTransport {
+    let body: @Sendable (URLRequest) -> (Data, link: String?)
+
+    init(_ body: @escaping @Sendable (URLRequest) -> (Data, link: String?)) {
         self.body = body
     }
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let url = try #require(request.url)
-        let response = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
-        return (body(request), response)
+        let (data, link) = body(request)
+        let response = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: link.map { ["Link": $0] }))
+        return (data, response)
     }
 }

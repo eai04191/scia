@@ -157,8 +157,8 @@ struct NotificationStoreTests {
 
         #expect(try await store.fillFromLatest(maxPages: 1)?.map(\.id) == ["36", "35", "34", "33"])
 
-        #expect(ids(store) == ["36", "35", "34", "33"], "間を欠いたまま古い通知を残しました")
-        #expect(!store.reachedEnd)
+        #expect(ids(store) == ["36", "35", "34", "33", "30", "29", "28"])
+        #expect(store.gaps == [TimelineGap(newerID: "33", olderID: "30")], "間を欠いたまま、ギャップを置かずに古い通知と並べました")
     }
 
     @Test func fillFromEmptyWithShortPageKeepsOlderLoadable() async throws {
@@ -195,8 +195,8 @@ struct NotificationStoreTests {
         #expect(reported == [3, 6])
     }
 
-    /// 上限まで読んでもつながらなければ、間を欠いたまま並べず、読んだ範囲より古い手元の通知を捨てる。
-    @Test func fillDropsOlderNotificationsWhenNotConnected() async throws {
+    /// 上限まで読んでもつながらなければ、手元の通知を捨てずに残し、読んだ範囲との間にギャップを置く。
+    @Test func fillKeepsOlderNotificationsBehindGapWhenNotConnected() async throws {
         let queue = PageQueue([try page([30, 29, 28]), try page([27, 26, 25]), try page([40, 39, 38]), try page([37, 36, 35])])
         let store = makeStore(queue)
         _ = try await store.loadInitial()
@@ -204,8 +204,103 @@ struct NotificationStoreTests {
 
         #expect(try await store.fillFromLatest(maxPages: 2)?.map(\.id) == ["40", "39", "38", "37", "36", "35"])
 
-        #expect(ids(store) == ["40", "39", "38", "37", "36", "35"])
+        let gap = TimelineGap(newerID: "35", olderID: "30")
+        #expect(store.entries.map(\.id) == ["40", "39", "38", "37", "36", "35"].map { .notification($0) } + [.gap(gap.id)] + ["30", "29", "28", "27", "26", "25"].map { .notification($0) })
+        #expect(store.gaps == [gap])
         #expect(!store.reachedEnd)
+    }
+
+    /// 補完の最中に求めた補完は、今の補完で読み終えた範囲より新しいところから読む。同じ範囲を読み直すと、同じギャップがもう1つできるため。
+    @Test func queuedFillReadsAboveFinishedRangeWithoutDuplicatingGap() async throws {
+        let queue = PageQueue([try page([30, 29, 28]), try page([40, 39, 38]), try page([])])
+        let gate = FetchGate()
+        let fills = Mutex(0)
+        let store = NotificationStore(pageSize: Self.pageSize) { query in
+            let page = try queue.next(query)
+            if query.sinceID != nil, fills.withLock({ $0 += 1; return $0 }) == 1 {
+                await gate.wait()
+            }
+            return NotificationPage(notifications: page)
+        }
+        _ = try await store.loadInitial()
+
+        let first = Task { try await store.fillFromLatest(maxPages: 1) }
+        await gate.waitUntilWaiting()
+        #expect(try await store.fillFromLatest(maxPages: 1) == nil)
+        await gate.open()
+        _ = try await first.value
+
+        #expect(queue.queries.map(\.sinceID) == [nil, "30", "40"])
+        #expect(store.gaps == [TimelineGap(newerID: "38", olderID: "30")])
+        #expect(Set(store.entries.map(\.id)).count == store.entries.count)
+    }
+
+    /// ギャップを新しい側から読むと、読んだ分だけ縮め、満杯でないページの後に0件が返ったら閉じる。
+    @Test func loadingGapFromNewerShrinksThenCloses() async throws {
+        let queue = PageQueue([try page([30, 29, 28]), try page([40, 39, 38]), try page([37, 36, 35]), try page([34, 33]), try page([])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+        _ = try await store.fillFromLatest(maxPages: 1)
+        let gap = try #require(store.gaps.first)
+
+        #expect(try await store.loadGap(gap.id, from: .fromNewer)?.map(\.id) == ["37", "36", "35"])
+        #expect(store.gaps.map(\.newerID) == ["35"])
+        #expect(store.gaps.map(\.id) == [gap.id])
+
+        #expect(try await store.loadGap(gap.id, from: .fromNewer)?.map(\.id) == ["34", "33"])
+        #expect(store.gaps.isEmpty)
+        #expect(store.entries.map(\.id) == ["40", "39", "38", "37", "36", "35", "34", "33", "30", "29", "28"].map { .notification($0) })
+        #expect(Array(queue.queries.suffix(3)) == [
+            TimelineQuery(maxID: "38", sinceID: "30", limit: Self.pageSize),
+            TimelineQuery(maxID: "35", sinceID: "30", limit: Self.pageSize),
+            TimelineQuery(maxID: "33", sinceID: "30", limit: Self.pageSize),
+        ])
+    }
+
+    /// ギャップを古い側から読むと、`min_id`で手元のすぐ上から読み、古い側の端を縮める。
+    @Test func loadingGapFromOlderShrinksOlderEdge() async throws {
+        let queue = PageQueue([try page([30, 29, 28]), try page([40, 39, 38]), try page([33, 32, 31])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+        _ = try await store.fillFromLatest(maxPages: 1)
+        let gap = try #require(store.gaps.first)
+
+        #expect(try await store.loadGap(gap.id, from: .fromOlder)?.map(\.id) == ["33", "32", "31"])
+
+        #expect(store.gaps.map { [$0.newerID, $0.olderID] } == [["38", "33"]])
+        #expect(queue.queries.last == TimelineQuery(maxID: "38", minID: "30", limit: Self.pageSize))
+        #expect(store.entries.map(\.id) == ["40", "39", "38"].map { .notification($0) } + [.gap(gap.id)] + ["33", "32", "31", "30", "29", "28"].map { .notification($0) })
+    }
+
+    /// ギャップの読み込みに失敗したら、ギャップを残して、読めなかったことを行に出せるようにする。読み直し始めたら外す。
+    @Test func failedGapLoadKeepsGapAndReportsFailure() async throws {
+        let queue = PageQueue([try page([30, 29, 28]), try page([40, 39, 38]), .failure(Failure()), try page([])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+        _ = try await store.fillFromLatest(maxPages: 1)
+        let gap = try #require(store.gaps.first)
+
+        await #expect(throws: Failure.self) { try await store.loadGap(gap.id, from: .fromNewer) }
+        #expect(store.gaps == [gap])
+        #expect(store.gapFailures.keys.sorted() == [gap.id])
+
+        _ = try await store.loadGap(gap.id, from: .fromNewer)
+        #expect(store.gaps.isEmpty)
+        #expect(store.gapFailures.isEmpty)
+    }
+
+    /// 既読の位置より新しい区間にギャップが残っていたら、未読はもっと多いかもしれない。
+    @Test func unreadIsLowerBoundWhileGapIsNewerThanMarker() async throws {
+        let queue = PageQueue([try page([30, 29, 28]), try page([40, 39, 38]), try page([])])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial(markerID: "30")
+        #expect(!store.hasUnloadedUnread)
+
+        _ = try await store.fillFromLatest(maxPages: 1)
+        #expect(store.hasUnloadedUnread)
+
+        _ = try await store.loadGap(try #require(store.gaps.first).id, from: .fromNewer)
+        #expect(!store.hasUnloadedUnread)
     }
 
     /// 補完が失敗した後に新着が挿入されても、次の補完は失敗したときの基準から読む。
@@ -220,13 +315,13 @@ struct NotificationStoreTests {
         _ = try await store.fillFromLatest(maxPages: 1)
 
         #expect(queue.queries.map(\.sinceID) == [nil, "30", "30"])
-        // 1ページでつながらないため、読んだ範囲より古い手元の通知を捨てる。
-        #expect(ids(store) == ["40", "33", "32"])
+        // 1ページでつながらないため、読んだ範囲と手元の間にギャップを置く。
+        #expect(ids(store) == ["40", "33", "32", "30", "29", "28"])
+        #expect(store.gaps == [TimelineGap(newerID: "32", olderID: "30")])
     }
 
-    /// 古いページを読んでいる間に、補完が古い側を捨てて読み込む範囲を変えたら、捨てる前の末尾から読んだページは合流させない。
-    /// 合流させると、補完で読んだ範囲との間が欠けたまま並び、次の`max_id`もその先へ進んで読み直せなくなるため。
-    @Test func discardsOlderPageLoadedAcrossTruncatingFill() async throws {
+    /// 古いページを読んでいる間に、補完がつながらずにギャップを置いても、古いページは末尾に足す。手元の通知を捨てないので、末尾の続きのままのため。
+    @Test func olderPageLoadedAcrossUnconnectedFillJoinsTheEnd() async throws {
         let queue = PageQueue([try page([30, 29, 28]), try page([27, 26, 25]), try page([40, 39, 38])])
         let gate = FetchGate()
         let store = NotificationStore(pageSize: Self.pageSize) { query in
@@ -243,9 +338,9 @@ struct NotificationStoreTests {
         _ = try await store.fillFromLatest(maxPages: 1)
         await gate.open()
 
-        #expect(try await older.value?.isEmpty == true)
-        #expect(ids(store) == ["40", "39", "38"])
-        #expect(!store.reachedEnd)
+        #expect(try await older.value?.map(\.id) == ["27", "26", "25"])
+        #expect(ids(store) == ["40", "39", "38", "30", "29", "28", "27", "26", "25"])
+        #expect(store.gaps == [TimelineGap(newerID: "38", olderID: "30")])
     }
 
     /// 1件もない状態から補完して満杯のページが返ったら、さらに古い通知があるかもしれないため、続きを読めるようにする。
@@ -470,54 +565,15 @@ struct NotificationStoreTests {
         #expect(ids(store) == ["30", "28"])
     }
 
-    /// 削除の応答を待つ間に、補完で一覧から外れた通知が、古いページで読めなかった行として入っても、削除できたら除く。
+    /// 削除した通知が、手元で読めなかった行として並んでいても、削除できたら除く。
     @Test func removedNotificationAlsoRemovesItsUnreadableRow() async throws {
-        let pages = [
-            NotificationPage(notifications: try notifications([30, 29, 28])),
-            NotificationPage(notifications: try notifications([40, 39, 38])),
-            NotificationPage(notifications: try notifications([37, 36]), unreadable: [UnreadableItem(id: "29", url: nil)]),
-        ]
-        let count = Mutex(0)
-        let store = NotificationStore(pageSize: Self.pageSize) { _ in
-            count.withLock { count in
-                count += 1
-                return pages[count - 1]
-            }
-        }
+        let page = NotificationPage(notifications: try notifications([30, 28]), unreadable: [UnreadableItem(id: "29", url: nil)])
+        let store = NotificationStore(pageSize: Self.pageSize) { _ in page }
         _ = try await store.loadInitial()
-        _ = try await store.fillFromLatest(maxPages: 1)
-        _ = try await store.loadOlder()
         #expect(store.unreadable.map(\.id) == ["29"])
 
         #expect(store.removeNotification("29"))
         #expect(store.unreadable.isEmpty)
-    }
-
-    /// 応答を待つ間に補完が古い側を捨てて、片づけた通知が一覧から外れていても、そのあと読んだ古いページで戻さない。
-    @Test func resolvedFollowRequestDoesNotReturnAfterTruncatingFill() async throws {
-        let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
-        let alice = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
-        let request = MastodonNotification(id: "30", type: .followRequest, createdAt: Date(timeIntervalSince1970: 0), account: alice)
-        let initial = NotificationPage(notifications: [request] + (try notifications([29, 28])))
-        let latest = NotificationPage(notifications: try notifications([40, 39, 38]))
-        let older = PageGate(NotificationPage(notifications: try notifications([37, 36]) + [request]))
-        let store = NotificationStore(pageSize: Self.pageSize) { query in
-            if query.sinceID != nil { return latest }
-            if query.maxID != nil { return await older.fetch() }
-            return initial
-        }
-        _ = try await store.loadInitial()
-        _ = try await store.fillFromLatest(maxPages: 1)
-        #expect(ids(store) == ["40", "39", "38"])
-        await older.hold()
-        let read = Task { try await store.loadOlder() }
-        await older.waitForRequest()
-
-        store.removeFollowRequests(answering: request)
-        await older.release()
-        _ = try await read.value
-
-        #expect(ids(store) == ["40", "39", "38", "37", "36"])
     }
 
     /// 片づけたフォローリクエストの通知が、あとのページで読めなかったときも、読めなかった行として戻さない。
@@ -809,32 +865,6 @@ struct NotificationStoreTests {
         #expect(group.notificationsCount == 6)
         #expect(group.sampleAccounts.map(\.id) == ["4", "9", "8", "7", "5", "6"])
         #expect(group.pageMinID == "90")
-    }
-
-    /// 補完が手元とつながらずに古い側を捨てるとき、残した手元のまとまりから、捨てた範囲の続きの位置を引き継がない。
-    /// 引き継ぐと、続きの読み込みがまだ読んでいない範囲を飛び越える。
-    @Test func truncatedFillDoesNotKeepTheDiscardedPageBoundary() async throws {
-        let initial = NotificationPage(notifications: [try favourites(100, count: 2, accounts: ["5", "6"], pageMinID: 10), try notifications([9])[0]])
-        let gate = PageGate(NotificationPage(notifications: [try favourites(200, count: 5, accounts: ["9", "8", "7", "5", "6"], pageMinID: 195), try notifications([190])[0]]))
-        let older = try notifications([180])
-        let store = NotificationStore(pageSize: 2) { query in
-            if query.sinceID == nil, query.maxID == nil { return initial }
-            if query.sinceID == nil { return NotificationPage(notifications: older) }
-            return await gate.fetch()
-        }
-        _ = try await store.loadInitial()
-        await gate.hold()
-
-        let fill = Task { try await store.fillFromLatest(maxPages: 1) }
-        await gate.waitForRequest()
-        _ = store.receive(try favourite(201, from: "4"))
-        _ = store.flushPending()
-        await gate.release()
-        _ = try await fill.value
-
-        #expect(ids(store) == ["201", "190"])
-        #expect(store.notifications.first?.pageMinID == "195")
-        #expect(try await store.loadOlder()?.map(\.id) == ["180"])
     }
 
     /// 読めなかったまとまりも、まとまりの最も古い通知より古い側から続きを読む。最も新しい通知から読むと、同じまとまりの古い側を読み直して、読めない行が重なる。

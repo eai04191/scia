@@ -37,6 +37,7 @@ final class SavedStatusesController {
         viewController.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: client.credential.accountID, hidesMatches: false))
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder(origin: .automatic) }
         viewController.onRetry = { [weak self] in self?.retry() }
+        viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction) }
         // 開くまで読まない。開いたことのない一覧のために、起動のたびに通信しないため。
         viewController.onAppearing = { [weak self] in self?.startIfNeeded() }
     }
@@ -197,6 +198,32 @@ final class SavedStatusesController {
         }
     }
 
+    /// 押したギャップを1ページ分読む。押した位置の側に続く行を基準にして、その位置を保つ。
+    /// 間は上からしか読めないため、押した位置で変えるのは、位置を保つ行だけにする。
+    private func loadGap(_ id: String, from direction: TimelineStore.GapDirection) {
+        guard !isStopped, !store.loadingGapIDs.contains(id), let index = store.entries.firstIndex(where: { $0.id == .gap(id) }) else { return }
+        let neighborIndex = direction == .fromOlder ? store.entries.index(after: index) : store.entries.index(before: index)
+        let anchorID = store.entries.indices.contains(neighborIndex) ? store.entries[neighborIndex].id : nil
+        viewController.setGapStates(loading: store.loadingGapIDs.union([id]), failures: store.gapFailures.filter { $0.key != id })
+        run { controller in
+            do {
+                let changed = try await controller.store.loadGap(id)
+                guard !controller.isStopped else { return }
+                controller.showGapStates()
+                guard changed != nil else { return }
+                controller.viewController.setEntries(controller.store.entries, keeping: anchorID)
+                controller.logger.info("\(controller.name, privacy: .public) loadGap done count=\(controller.store.entries.count, privacy: .public)")
+            } catch {
+                controller.showGapStates()
+                controller.handle(error, during: "loadGap") { _ in }
+            }
+        }
+    }
+
+    private func showGapStates() {
+        viewController.setGapStates(loading: store.loadingGapIDs, failures: store.gapFailures)
+    }
+
     /// アプリの中で付け外しした操作を、サーバーが受け付けたときに呼ぶ。付けた投稿は先頭に入れる。
     /// 外した投稿は、見ている間は付け直せるよう残し、見ていなければすぐ消す。ほかのタブで外した行を、次に開いたときに残さないため。
     func statusDidSettle(_ action: StatusInteractions.Action, _ status: Status) {
@@ -242,6 +269,7 @@ final class SavedStatusesController {
     /// 付けた投稿や、ほかの端末で付けた投稿は、読んでいる行を動かしてまで見せるものではないため。
     /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。
     private func showEntries(animatesRemoval: Bool = false) {
+        showGapStates()
         if animatesRemoval {
             viewController.setEntries(store.entries, animatesRemoval: true)
         } else {

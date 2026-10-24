@@ -75,6 +75,7 @@ final class NotificationsController {
         viewController.filterWarnings = FilterWarnings(filtering: filtering)
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder(origin: .automatic) }
         viewController.onRetry = { [weak self] in self?.retry() }
+        viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction) }
         viewController.onVisibleNotificationsChange = { [weak self] ids in self?.markRead(ids) }
         viewController.onInteractionSettle = { [weak self] in self?.interactionDidSettle() }
         streamingStatusView.install(in: viewController.collectionView)
@@ -217,6 +218,34 @@ final class NotificationsController {
         }
     }
 
+    /// 押したギャップを1ページ分読む。読んでいる側に続く行を基準にして、その位置を保つ。
+    private func loadGap(_ id: String, from direction: TimelineStore.GapDirection) {
+        guard !isStopped, !store.loadingGapIDs.contains(id) else { return }
+        let entries = store.entries
+        guard let index = entries.firstIndex(where: { $0.id == .gap(id) }) else { return }
+        let neighborIndex = direction == .fromOlder ? entries.index(after: index) : entries.index(before: index)
+        let anchorID = entries.indices.contains(neighborIndex) ? entries[neighborIndex].id : nil
+        viewController.setGapStates(loading: store.loadingGapIDs.union([id]), failures: store.gapFailures.filter { $0.key != id })
+        run { controller in
+            do {
+                let added = try await controller.store.loadGap(id, from: direction)
+                guard !controller.isStopped else { return }
+                controller.showGapStates()
+                guard let added else { return }
+                controller.viewController.setEntries(controller.store.entries, keeping: anchorID)
+                controller.updateUnreadCount()
+                controller.logger.info("notifications loadGap done added=\(added.count, privacy: .public)")
+            } catch {
+                controller.showGapStates()
+                controller.handle(error, during: "loadGap") { _ in }
+            }
+        }
+    }
+
+    private func showGapStates() {
+        viewController.setGapStates(loading: store.loadingGapIDs, failures: store.gapFailures)
+    }
+
     // MARK: - ストリーミング
 
     private func startStreaming() {
@@ -347,7 +376,7 @@ final class NotificationsController {
                 controller.updateCatchUp { $0.finish(at: controller.now()) }
                 controller.showPauseAfterFill()
                 controller.logger.info("notifications fill done added=\(added.count, privacy: .public)")
-                // 待っている間に同じ通知がストリーミングで挿入されていても、古い側を捨てていることがある。
+                // 待っている間に同じ通知がストリーミングで挿入されていても、ギャップを置いていることがある。
                 // 読めなかった通知だけが増えたときも描き直すよう、表示する並びで比べる。
                 guard controller.store.entries != before else { return }
                 controller.showEntries()
@@ -539,6 +568,7 @@ final class NotificationsController {
 
     /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。
     private func showEntries(animatesRemoval: Bool = false) {
+        showGapStates()
         viewController.setEntries(store.entries, animatesRemoval: animatesRemoval)
         updateUnreadCount()
     }

@@ -207,17 +207,123 @@ struct SavedStatusesStoreTests {
         #expect(ids(store) == [.status("6"), .status("5"), .status("4")])
     }
 
-    /// 手元の行が最新のページに1つもなければ、間が埋まらないので、読んだページで置き換える。
-    @Test func refreshReplacesWhenNoOverlap() async throws {
-        let pages = Pages([Self.page(["5", "4"], next: "c1"), Self.page(["9", "8"], next: "c8"), Self.page(["7"], next: nil)])
+    /// 手元の行が最新のページに1つもなく、ページの先があれば、手元の行を捨てずに残し、読んだページとの間にギャップを置く。
+    /// 末尾の続きは、手元の行の続きの位置から読む。
+    @Test func refreshKeepsLocalRowsBehindGapWhenNoOverlap() async throws {
+        let pages = Pages([Self.page(["5", "4"], next: "c1"), Self.page(["9", "8"], next: "c8"), Self.page(["3"], next: nil)])
         let store = makeStore(pages)
 
         try await store.loadInitial()
-        try await store.refreshNewest()
-        #expect(ids(store) == [.status("9"), .status("8")])
+        #expect(try await store.refreshNewest())
+
+        let gap = try #require(store.gaps.first)
+        #expect(gap.newerID == "c8")
+        #expect(ids(store) == [.status("9"), .status("8"), .gap(gap.id), .status("5"), .status("4")])
 
         try await store.loadOlder()
-        #expect(pages.maxIDs == [nil, nil, "c8"])
+        #expect(pages.maxIDs == [nil, nil, "c1"])
+        #expect(ids(store).last == .status("3"))
+    }
+
+    /// 最新のページの先がなければ、手元の行はもうサーバーの一覧にないので、読んだページで置き換える。
+    @Test func refreshReplacesWhenNoOverlapAndNoMore() async throws {
+        let store = makeStore(Pages([Self.page(["5", "4"], next: "c1"), Self.page(["9", "8"], next: nil)]))
+
+        try await store.loadInitial()
+        try await store.refreshNewest()
+
+        #expect(ids(store) == [.status("9"), .status("8")])
+        #expect(store.gaps.isEmpty)
+        #expect(store.reachedEnd)
+    }
+
+    /// ギャップは、手元の行に重なるまで上から読み、重なったら閉じる。重なった行より下は動かさない。
+    @Test func loadingGapReadsUntilOverlapThenCloses() async throws {
+        let pages = Pages([
+            Self.page(["5", "4"], next: "c1"),
+            Self.page(["9", "8"], next: "c8"),
+            Self.page(["7"], next: "c7"),
+            Self.page(["6", "5", "4"], next: "c4"),
+        ])
+        let store = makeStore(pages)
+        try await store.loadInitial()
+        try await store.refreshNewest()
+        let gap = try #require(store.gaps.first)
+
+        #expect(try await store.loadGap(gap.id) == true)
+        #expect(ids(store) == [.status("9"), .status("8"), .status("7"), .gap(gap.id), .status("5"), .status("4")])
+        #expect(store.gaps.map(\.newerID) == ["c7"])
+
+        #expect(try await store.loadGap(gap.id) == true)
+        #expect(ids(store) == ["9", "8", "7", "6", "5", "4"].map { .status($0) })
+        #expect(store.gaps.isEmpty)
+        #expect(pages.maxIDs == [nil, nil, "c8", "c7"])
+    }
+
+    /// ギャップの下にある、アプリの中で先頭に入れた行は、ギャップを読んだときにサーバーの順の位置へ移す。
+    @Test func loadingGapMovesLocallyInsertedRowToServerPosition() async throws {
+        let store = makeStore(Pages([Self.page(["5"], next: "c1"), Self.page(["9"], next: "c9"), Self.page(["7", "8", "5"], next: "c5")]))
+        try await store.loadInitial()
+        #expect(store.insertSaved(Self.status("8")))
+        try await store.refreshNewest()
+        let gap = try #require(store.gaps.first)
+        #expect(ids(store) == [.status("9"), .gap(gap.id), .status("8"), .status("5")])
+
+        try await store.loadGap(gap.id)
+
+        #expect(ids(store) == ["9", "7", "8", "5"].map { .status($0) })
+    }
+
+    /// ギャップの先がなくなったら、下の行に重ならなくても閉じる。
+    @Test func loadingGapClosesAtServerEnd() async throws {
+        let store = makeStore(Pages([Self.page(["5"], next: "c1"), Self.page(["9"], next: "c9"), Self.page(["7"], next: nil)]))
+        try await store.loadInitial()
+        try await store.refreshNewest()
+
+        #expect(try await store.loadGap(try #require(store.gaps.first).id) == true)
+
+        #expect(ids(store) == [.status("9"), .status("7"), .status("5")])
+        #expect(store.gaps.isEmpty)
+    }
+
+    /// ギャップの読み込みに失敗したら、ギャップを残して、読めなかったことを行に出せるようにする。
+    @Test func failedGapLoadKeepsGapAndReportsFailure() async throws {
+        let store = makeStore(Pages([Self.page(["5"], next: "c1"), Self.page(["9"], next: "c9")]))
+        try await store.loadInitial()
+        try await store.refreshNewest()
+        let gap = try #require(store.gaps.first)
+
+        await #expect(throws: URLError.self) { try await store.loadGap(gap.id) }
+
+        #expect(store.gaps == [gap])
+        #expect(store.gapFailures.keys.sorted() == [gap.id])
+    }
+
+    /// 最新のページが全部除いた相手の投稿で、上に並べる行がなければ、先頭に残っていたギャップは新しいギャップに含めて1つにする。
+    /// 読み直すたびに同じギャップを重ねないため。
+    @Test func refreshOfExcludedPageDoesNotStackGaps() async throws {
+        let latest = SavedStatusesPage(statuses: ["9", "8"].map { Self.status($0, accountID: "muted") }, nextMaxID: "c8")
+        let store = makeStore(Pages([Self.page(["5"], next: nil), latest, latest]))
+        try await store.loadInitial()
+        store.excludeAccount("muted")
+
+        try await store.refreshNewest()
+        try await store.refreshNewest()
+
+        let gap = try #require(store.gaps.first)
+        #expect(ids(store) == [.gap(gap.id), .status("5")])
+    }
+
+    /// ギャップの上にある、最新のページで読んだ行に重なれば、ギャップを残したまま先頭に足す。
+    @Test func refreshAboveGapPrependsWithoutNewGap() async throws {
+        let store = makeStore(Pages([Self.page(["5"], next: "c1"), Self.page(["9"], next: "c9"), Self.page(["10", "9"], next: "c9")]))
+        try await store.loadInitial()
+        try await store.refreshNewest()
+        let gap = try #require(store.gaps.first)
+
+        try await store.refreshNewest()
+
+        #expect(ids(store) == [.status("10"), .status("9"), .gap(gap.id), .status("5")])
     }
 
     /// 重なりがなくて置き換えるときも、見ている間に外して残した行は、読んだページの下に残す。

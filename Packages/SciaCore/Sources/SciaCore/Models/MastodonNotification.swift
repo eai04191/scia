@@ -188,15 +188,6 @@ extension MastodonNotification {
         )
     }
 
-    /// 続きを読む位置を、`id`より古い側へは広げない。補完が古い側を捨てて読み直すとき、捨てた範囲の位置を引き継がないため。
-    func clampingPage(notOlderThan id: String) -> MastodonNotification {
-        guard StatusID.isNewer(id, than: pageMinID) else { return self }
-        return MastodonNotification(
-            id: self.id, type: type, createdAt: createdAt, account: account, status: status, groupKey: groupKey,
-            notificationsCount: notificationsCount, sampleAccounts: sampleAccounts, pageMinID: id
-        )
-    }
-
     /// `accountIDs`の人を、並べるアカウントから外す。外した人の数だけ人数を減らす。並べる人が残らなければnil。
     /// まとまりの人数には並べていない人も入っているため、並べている人を外しても、ほかの人が残ることがある。
     func removingAccounts(_ accountIDs: Set<String>) -> MastodonNotification? {

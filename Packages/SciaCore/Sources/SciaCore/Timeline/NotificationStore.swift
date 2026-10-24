@@ -5,8 +5,7 @@ public import Foundation
 /// サーバーがまとめた通知は、まとまりを1件として持つ。同じまとまりは、`groupKey`で1つにする。
 /// ストリーミングで届いた通知は、同じまとまりが手元にあれば、そこへ足して一番上へ移す。
 ///
-/// ホームと違い、ギャップは置かない。通知は上から読むもので、切れていた間に読み切れないほど溜まったら、
-/// 古い側を捨てて最新の側から読み直せば足りるため。
+/// 切れていた間に読み切れないほど溜まったら、ホームと同じく、読んだ範囲と手元の間にギャップを置く。手元の通知を捨てると、下まで読んでいた位置を失うため。
 @MainActor
 public final class NotificationStore {
     public typealias Fetch = @Sendable (TimelineQuery) async throws -> NotificationPage
@@ -24,6 +23,12 @@ public final class NotificationStore {
     public private(set) var lastReadID: String?
     /// サーバーのmarkerに保存されている既読位置。
     public private(set) var savedReadID: String?
+    /// 読み込んだ通知の間で、まだ読み込んでいない区間。
+    public private(set) var gaps: [TimelineGap] = []
+    /// 読み込み中のギャップのID。
+    public private(set) var loadingGapIDs: Set<String> = []
+    /// 直近の読み込みに失敗したギャップと、その理由。読み直し始めたら外す。
+    private var failedGaps: [String: ErrorPresentation] = [:]
 
     /// 削除した投稿のID。削除の前に読み始めたページや、遅れて届いた通知で、その投稿についての通知を戻さない。
     private var deletedStatusIDs: Set<Status.ID> = []
@@ -49,8 +54,6 @@ public final class NotificationStore {
     private var isFilling = false
     /// 補完の最中に再び補完を求められたときの基準のID。今の補完が終わったら、ここからもう一度読む。
     private var refillSinceID: String?
-    /// 補完が古い側を捨てて、読み込む範囲を変えるたびに増やす。変わる前に読み始めた古いページを合流させないために使う。
-    private var rangeGeneration = 0
     private let pageSize: Int
     private let filtering: StatusFiltering?
     private let fetch: Fetch
@@ -66,12 +69,22 @@ public final class NotificationStore {
         self.fetch = fetch
     }
 
-    /// 一覧に並べる通知と読めなかった通知。新しい順。フィルターで出さない投稿についての通知は含まない。
+    /// 一覧に並べる通知と読めなかった通知とギャップ。新しい順。フィルターで出さない投稿についての通知は含まない。
+    /// ギャップは、新しい側の端と同じIDの通知の下に置く。
     public var entries: [TimelineEntry] {
         let now = now()
-        return (notifications.filter { !isFilteredOut($0, now: now) }.map { ($0.id, TimelineEntry.notification($0)) } + unreadable.map { ($0.id, TimelineEntry.unreadable($0)) })
-            .sorted { StatusID.isNewer($0.0, than: $1.0) }
-            .map(\.1)
+        let items = notifications.filter { !isFilteredOut($0, now: now) }.map { ($0.id, false, TimelineEntry.notification($0)) }
+            + unreadable.map { ($0.id, false, TimelineEntry.unreadable($0)) }
+            + gaps.map { ($0.newerID, true, TimelineEntry.gap($0)) }
+        return items
+            .sorted { $0.0 == $1.0 ? !$0.1 && $1.1 : StatusID.isNewer($0.0, than: $1.0) }
+            .map(\.2)
+    }
+
+    /// 直近の読み込みに失敗したギャップと、その理由。行の中で読めなかったことを知らせるのに使う。閉じたギャップは含めない。
+    public var gapFailures: [String: ErrorPresentation] {
+        let ids = Set(gaps.map(\.id))
+        return failedGaps.filter { ids.contains($0.key) }
     }
 
     /// 読めた通知も読めなかった通知もない。読めなかった通知しかなくても、続きは読めるため空ではない。
@@ -95,12 +108,13 @@ public final class NotificationStore {
         let page = try await fetch(TimelineQuery(limit: pageSize))
         notifications = Self.sorted(page.notifications.compactMap { admitted($0, fetchedAfter: removals) })
         unreadable = Self.sorted(page.unreadable.filter { !removedNotificationIDs.contains($0.id) }, excluding: notifications)
+        gaps = []
         reachedEnd = page.isEmpty
         // 読んだ通知が全部フィルターで隠れて行が1つもないと、続きを読むきっかけがないため、並べる通知が出るまで古い方を読む。
         // 続きの読み込みに失敗したら空に戻す。隠した通知だけが残ると空でない扱いになり、読み込み直しが最初の読み込みからやり直さなくなるため。
         if entries.isEmpty, !reachedEnd, let oldestID = itemIDs.last {
             do {
-                _ = try await fetchOlder(than: oldestID, generation: rangeGeneration)
+                _ = try await fetchOlder(than: oldestID)
             } catch {
                 notifications = []
                 unreadable = []
@@ -116,26 +130,22 @@ public final class NotificationStore {
 
     /// 末尾より古いページを読み、新たに足した通知を返す。
     /// 読み込み中、終端に達している、まだ1件もない場合は何もせずnilを返す。
-    ///
-    /// 読んでいる間に補完が古い側を捨てたら、読んだページは捨てた範囲の続きなので合流させず、空を返す。
     public func loadOlder() async throws -> [MastodonNotification]? {
         guard !isLoading, !reachedEnd, let oldestID = itemIDs.last else { return nil }
         isLoading = true
         defer { isLoading = false }
 
-        return try await fetchOlder(than: oldestID, generation: rangeGeneration)
+        return try await fetchOlder(than: oldestID)
     }
 
     /// `oldestID`より古いページを読み、足した通知のうち一覧に並べたものを返す。
     /// 読んだ通知が全部フィルターで隠れたら、並べる通知か読めなかった通知が出るか、終わりに着くまで続けて読む。
     /// 一覧の末尾の行が画面に出ることが続きを読むきっかけなので、行が増えないと、そこで止まってしまうため。
-    /// - Parameter generation: 読み始めたときの読み込む範囲。読んでいる間に補完が古い側を捨てたら、読んだページは捨てた範囲の続きなので合流させず、空を返す。
-    private func fetchOlder(than oldestID: String, generation: Int) async throws -> [MastodonNotification] {
+    private func fetchOlder(than oldestID: String) async throws -> [MastodonNotification] {
         var maxID = oldestID
         while true {
             let removals = removalCount
             let page = try await fetch(TimelineQuery(maxID: maxID, limit: pageSize))
-            guard generation == rangeGeneration else { return [] }
             if page.isEmpty {
                 reachedEnd = true
             }
@@ -153,11 +163,11 @@ public final class NotificationStore {
     /// ストリーミングが切れていた間の通知を読み、新たに加わった通知を新しい順に返す。補完の最中ならnilを返す。
     ///
     /// 手元で最も新しい通知より新しいものを、最新の側から手元とつながるまで`maxPages`ページまで読む。
-    /// つながらなければ、読んだ中で最も古い通知より古い手元の通知を捨て、そこから古い方は`loadOlder()`で読み直す。
-    /// 間を欠いたまま並べないため。
+    /// つながらなければ、読んだ中で最も古い通知と手元の間にギャップを置き、`loadGap(_:from:)`で読めるようにする。
     ///
     /// 失敗したときは何も反映せず、次の呼び出しも同じ基準から読む。補完の最中に呼ばれたら、
-    /// そのときの基準を覚えて、今の補完が終わった後に続けて読む。
+    /// そのときの基準を覚えて、今の補完が終わった後に続けて読む。続けて読むときは、今の補完で読み終えた範囲より新しいところから読む。
+    /// 読み終えた範囲を読み直すと、つながらなかったときに、同じ範囲にギャップがもう1つできるため。
     ///
     /// - Parameter progress: 1ページ読むたびに、この補完で読んだ通知の数を渡す。手元の通知と重なる分も数える。
     ///   新たに加わる通知は、つながったかが分かるまで並べないため。補完の最中に呼ばれてnilを返すときは呼ばない。
@@ -199,22 +209,12 @@ public final class NotificationStore {
                 // 満杯かどうかでは判断しない。求めた件数より少なく返すサーバーがあるため。
                 reachedEnd = fetched.isEmpty
             }
-            if isConnected {
-                added += merge(fetched, fetchedAfter: removals)
-            } else if let oldestFetched = fetched.ids.min(by: { StatusID.isNewer($1, than: $0) }) {
-                let known = Dictionary(notifications.map { ($0.groupKey, $0.id) }, uniquingKeysWith: { first, _ in first })
-                let (kept, replayedKeys) = replayingArrivals(onto: fetched.notifications.compactMap { admitted($0, fetchedAfter: removals) }, keepsLocalPage: false)
-                added += kept.filter { notification in known[notification.groupKey].map { StatusID.isNewer(notification.id, than: $0) } ?? true }
-                // 残す手元の行は、捨てた範囲の続きの位置を引き継がない。引き継ぐと、続きの読み込みがまだ読んでいない範囲を飛び越える。
-                let local = notifications
-                    .filter { StatusID.isNewer($0.id, than: oldestFetched) && !replayedKeys.contains($0.groupKey) }
-                    .map { $0.clampingPage(notOlderThan: oldestFetched) }
-                notifications = Self.sorted(kept + local)
-                unreadable = Self.sorted(unreadable.filter { StatusID.isNewer($0.id, than: oldestFetched) } + fetched.unreadable.filter { !removedNotificationIDs.contains($0.id) }, excluding: notifications)
-                reachedEnd = false
-                rangeGeneration += 1
+            added += merge(fetched, fetchedAfter: removals)
+            if !isConnected, let sinceID, let oldestFetched = fetched.ids.min(by: { StatusID.isNewer($1, than: $0) }), StatusID.isNewer(oldestFetched, than: sinceID) {
+                gaps.append(TimelineGap(newerID: oldestFetched, olderID: sinceID))
             }
-            next = refillSinceID
+            let newestFetched = fetched.ids.max { StatusID.isNewer($1, than: $0) } ?? sinceID
+            next = refillSinceID.map { refillSinceID in newestFetched.map { Self.newer(refillSinceID, $0) } ?? refillSinceID }
             refillSinceID = nil
         } while next != nil
         return Self.sorted(added)
@@ -252,6 +252,69 @@ public final class NotificationStore {
             canConfirm = false
             remainingPages = 1
         }
+    }
+
+    // MARK: - ギャップ
+
+    /// ギャップを読み、新たに加わった通知を新しい順に返す。読み切れなかった分はギャップとして残す。
+    /// そのギャップがない、または読み込み中なら何もせずnilを返す。
+    ///
+    /// ホームと同じく、ギャップを閉じるのは0件が返ったときだけにする。求めた件数より少なく返すサーバーでは、満杯でないページの先にも通知が残っているため。
+    /// 満杯でないページなら、その場でもう1回だけ読み、0件ならギャップを閉じる。
+    public func loadGap(_ id: String, from direction: TimelineStore.GapDirection) async throws -> [MastodonNotification]? {
+        guard gaps.contains(where: { $0.id == id }), !loadingGapIDs.contains(id) else { return nil }
+        loadingGapIDs.insert(id)
+        failedGaps[id] = nil
+        defer { loadingGapIDs.remove(id) }
+
+        var added: [MastodonNotification] = []
+        for attempt in 0..<2 {
+            guard let gap = gaps.first(where: { $0.id == id }) else { break }
+            let removals = removalCount
+            let page: NotificationPage
+            do {
+                page = try await fetch(Self.query(for: gap, from: direction, limit: pageSize))
+            } catch {
+                // 取り消しは失敗ではないので、読めなかったことにしない。
+                if !(error is CancellationError), (error as? URLError)?.code != .cancelled {
+                    failedGaps[id] = ErrorPresentation(error)
+                }
+                // 確かめるための2回目が失敗しても、1回目で読めた分は反映済みなので、ギャップを残して返す。
+                guard attempt > 0 else { throw error }
+                break
+            }
+            added += merge(page, fetchedAfter: removals)
+            guard shrink(id, by: page, from: direction), page.count < pageSize else { break }
+        }
+        return Self.sorted(added)
+    }
+
+    private static func query(for gap: TimelineGap, from direction: TimelineStore.GapDirection, limit: Int) -> TimelineQuery {
+        switch direction {
+        case .fromNewer: TimelineQuery(maxID: gap.newerID, sinceID: gap.olderID, limit: limit)
+        case .fromOlder: TimelineQuery(maxID: gap.newerID, minID: gap.olderID, limit: limit)
+        }
+    }
+
+    /// 読んだページの分だけギャップを縮める。0件なら閉じる。ギャップが残っていればtrueを返す。
+    private func shrink(_ id: String, by page: NotificationPage, from direction: TimelineStore.GapDirection) -> Bool {
+        guard let index = gaps.firstIndex(where: { $0.id == id }) else { return false }
+        let ids = page.ids
+        let edge = switch direction {
+        case .fromNewer: ids.min { StatusID.isNewer($1, than: $0) }
+        case .fromOlder: ids.max { StatusID.isNewer($1, than: $0) }
+        }
+        let gap = gaps[index]
+        // 読んだ通知が区間の端に届いたら、区間の中にはもう読む通知がない。
+        guard let edge, StatusID.isNewer(gap.newerID, than: edge), StatusID.isNewer(edge, than: gap.olderID) else {
+            gaps.remove(at: index)
+            return false
+        }
+        gaps[index] = switch direction {
+        case .fromNewer: gap.narrowed(newerID: edge)
+        case .fromOlder: gap.narrowed(olderID: edge)
+        }
+        return true
     }
 
     // MARK: - ストリーミング
@@ -468,9 +531,11 @@ public final class NotificationStore {
         return notifications.prefix { StatusID.isNewer($0.id, than: lastReadID) }.count { !isFilteredOut($0, now: now) }
     }
 
-    /// 既読の位置より古い通知をまだ読み込んでおらず、未読は`unreadCount`より多いかもしれない。
+    /// 既読の位置より新しい通知を、末尾の先かギャップの中にまだ読み込んでおらず、未読は`unreadCount`より多いかもしれない。
     public var hasUnloadedUnread: Bool {
-        guard let lastReadID, !reachedEnd, let oldestID = itemIDs.last else { return false }
+        guard let lastReadID else { return false }
+        if gaps.contains(where: { StatusID.isNewer($0.newerID, than: lastReadID) }) { return true }
+        guard !reachedEnd, let oldestID = itemIDs.last else { return false }
         return StatusID.isNewer(oldestID, than: lastReadID)
     }
 
@@ -509,7 +574,7 @@ public final class NotificationStore {
     /// - Parameter removals: ページを読み始めたときの`removalCount`。
     private func merge(_ page: NotificationPage, fetchedAfter removals: Int) -> [MastodonNotification] {
         let known = Dictionary(notifications.map { ($0.groupKey, $0.id) }, uniquingKeysWith: { first, _ in first })
-        let (incoming, replayedKeys) = replayingArrivals(onto: page.notifications.compactMap { admitted($0, fetchedAfter: removals) }, keepsLocalPage: true)
+        let (incoming, replayedKeys) = replayingArrivals(onto: page.notifications.compactMap { admitted($0, fetchedAfter: removals) })
         let added = Self.sorted(incoming.filter { notification in known[notification.groupKey].map { StatusID.isNewer(notification.id, than: $0) } ?? true })
         // 同じIDなら、手元を残す。操作の結果を反映した手元の投稿を、読み始めたときのページで戻さないため。
         notifications = Self.sorted(incoming + notifications.filter { !replayedKeys.contains($0.groupKey) })
@@ -521,8 +586,7 @@ public final class NotificationStore {
     /// ページで読んだまとまりのうち、手元のほうが新しいもの（応答を待つ間にストリーミングで新着を足した）に、応答より後に届いた通知を足し直す。
     /// 足し直したまとまりは手元の行の位置（最も新しい通知）と投稿を引き継ぐので、行は動かない。足し直したまとまりのキーも返す。
     /// 応答より新しい通知が手元に届いていないキーは、覚えておく必要がないので捨てる。
-    /// - Parameter keepsLocalPage: 手元の続きの位置を引き継ぐ。補完が古い側を捨てて読み直すときは引き継がない。
-    private func replayingArrivals(onto incoming: [MastodonNotification], keepsLocalPage: Bool) -> ([MastodonNotification], Set<String>) {
+    private func replayingArrivals(onto incoming: [MastodonNotification]) -> ([MastodonNotification], Set<String>) {
         let local = Dictionary(notifications.map { ($0.groupKey, $0) }, uniquingKeysWith: { first, _ in first })
         var replayedKeys: Set<String> = []
         let result = incoming.map { snapshot -> MastodonNotification in
@@ -531,7 +595,7 @@ public final class NotificationStore {
             guard let current = local[snapshot.groupKey], StatusID.isNewer(current.id, than: snapshot.id), !later.isEmpty else { return snapshot }
             replayedKeys.insert(snapshot.groupKey)
             let grown = later.reduce(snapshot) { $0.adding($1) ?? $0 }
-            let page = keepsLocalPage && StatusID.isNewer(grown.pageMinID, than: current.pageMinID) ? current.pageMinID : grown.pageMinID
+            let page = StatusID.isNewer(grown.pageMinID, than: current.pageMinID) ? current.pageMinID : grown.pageMinID
             return MastodonNotification(
                 id: current.id, type: grown.type, createdAt: current.createdAt, account: grown.account, status: current.status, groupKey: grown.groupKey,
                 notificationsCount: grown.notificationsCount, sampleAccounts: grown.sampleAccounts, pageMinID: page
@@ -567,5 +631,9 @@ public final class NotificationStore {
 
     private static func older(_ lhs: String, _ rhs: String) -> String {
         StatusID.isNewer(lhs, than: rhs) ? rhs : lhs
+    }
+
+    private static func newer(_ lhs: String, _ rhs: String) -> String {
+        StatusID.isNewer(lhs, than: rhs) ? lhs : rhs
     }
 }
