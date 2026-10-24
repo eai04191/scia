@@ -201,20 +201,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// アカウントの一覧、追加、ログアウトのメニュー。開くたびに今のアカウントで組み立て直す。
     private func makeAccountMenu() -> UIMenu {
         guard let accounts else { return UIMenu() }
-        #if DEBUG
-        let isDummy = Self.showsDummySession
-        let dummy = [UIAction(title: DummyServer.credential.handle, subtitle: "ダミーのデータ", state: isDummy ? .on : .off) { [weak self] _ in
-            self?.openDummySession()
-        }]
-        #else
-        let isDummy = false
-        let dummy: [UIAction] = []
-        #endif
-        let switching = accounts.accounts.map { account in
-            UIAction(title: account.handle, state: !isDummy && account.id == accounts.current?.id ? .on : .off) { [weak self] _ in
-                self?.switchAccount(to: account.id)
-            }
-        } + dummy
         let add = UIAction(title: "アカウントを追加", image: UIImage(systemName: "person.badge.plus")) { [weak self] _ in
             self?.presentAddAccount()
         }
@@ -229,12 +215,29 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let logOut = UIAction(title: "ログアウト", image: UIImage(systemName: "rectangle.portrait.and.arrow.right"), attributes: .destructive) { [weak self] _ in
             self?.confirmLogOut()
         }
-        // ダミーを選んでいる間は、ログアウトを出さない。ダミーではなく、裏で選んだままの本物のアカウントが消えるため。
+        #if DEBUG
+        let isDummy = Self.showsDummySession
+        let dummy = [UIAction(title: DummyServer.credential.handle, subtitle: "ダミーのデータ", state: isDummy ? .on : .off) { [weak self] _ in
+            self?.openDummySession()
+        }]
+        // ダミーを選んでいる間は、裏で選んだままの本物のアカウントに印を付けず、ログアウトも出さない。ログアウトすると、ダミーではなくその本物のアカウントが消えるため。
+        let checkedID = isDummy ? nil : accounts.current?.id
+        let logOutItems = isDummy ? [] : [logOut]
+        #else
+        let dummy: [UIAction] = []
+        let checkedID = accounts.current?.id
+        let logOutItems = [logOut]
+        #endif
+        let switching = accounts.accounts.map { account in
+            UIAction(title: account.handle, state: account.id == checkedID ? .on : .off) { [weak self] _ in
+                self?.switchAccount(to: account.id)
+            }
+        } + dummy
         return UIMenu(children: [
             UIMenu(options: .displayInline, children: switching),
             add,
             UIMenu(options: .displayInline, children: [settings]),
-            UIMenu(options: .displayInline, children: isDummy ? [] : [logOut]),
+            UIMenu(options: .displayInline, children: logOutItems),
         ])
     }
 
