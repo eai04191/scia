@@ -900,6 +900,28 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         Self.account(withID: id, in: entries.values)
     }
 
+    /// 一覧の投稿のメンションのうち、リンク先が`url`の人。本文のメンションのリンクにはIDがないため、投稿のメンションの一覧から引く。
+    func mention(withURL url: URL) -> Mention? {
+        Self.mention(withURL: url, in: entries.values)
+    }
+
+    /// 行の投稿（ブーストなら元の投稿も、通知なら対象の投稿も）のメンションから、リンク先が`url`の人を探す。
+    static func mention(withURL url: URL, in entries: some Sequence<TimelineEntry>) -> Mention? {
+        for entry in entries {
+            let statuses: [Status] = switch entry {
+            case .status(let status), .pinned(let status): [status, status.reblog].compactMap(\.self)
+            case .notification(let notification): [notification.status, notification.status?.reblog].compactMap(\.self)
+            case .account, .gap, .unreadable: []
+            }
+            for status in statuses {
+                if let mention = status.mentions.first(where: { $0.url == url }) {
+                    return mention
+                }
+            }
+        }
+        return nil
+    }
+
     /// 行の投稿した人、ブーストした人、通知した人（まとめた通知なら並べた人）、人の一覧の人から、そのIDのアカウントを探す。
     static func account(withID id: String, in entries: some Sequence<TimelineEntry>) -> Account? {
         for entry in entries {
@@ -1389,9 +1411,11 @@ extension TimelineViewController: LinkMenuHost {
     func linkMenuWillShow() {
         UserAction.openMenu(screen: texts.dumpName).record()
         menuWillShow()
+        contextMenuIcons.menuWillAppear(in: view.window)
     }
 
     func linkMenuDidHide() {
+        contextMenuIcons.menuWillEnd()
         menuDidHide()
     }
 

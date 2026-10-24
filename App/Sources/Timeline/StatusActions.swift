@@ -378,7 +378,8 @@ extension TimelineViewController {
     /// ユーザーのメニューの印にする、その人のアイコン。読み込み済みの画像を、一覧と同じ形に切り抜く。
     /// メンションされたユーザーは、APIの`Mention`にアイコンのURLがないため、一覧の行か前に読んだアカウントから探す。
     /// まだアイコンを出せなければ記号の仮の印を返し、アカウントとアイコンを読み終えたら、開いているメニューの仮の印を描き替える。
-    private func userMenuIcon(for user: MenuUser, id: ItemID) -> UIImage {
+    /// - Parameter id: メニューを出した行。行に描いた大きさのアイコンも探す。本文のメンションのメニューのように、行が決まらなければnil。
+    private func userMenuIcon(for user: MenuUser, id: ItemID?) -> UIImage {
         let account: Account? = switch user {
         case .account(let account): account
         case .mention(let mention): account(withID: mention.id) ?? userMenuActions?.accounts.account(mention.id)
@@ -391,10 +392,17 @@ extension TimelineViewController {
         return placeholder
     }
 
+    /// 本文のメンションのメニューの「プロフィール」の印。一覧の投稿のメンションから誰かを引き、投稿のメニューのユーザーの項目と同じアイコンを出す。
+    func mentionMenuIcon(for url: URL) -> UIImage? {
+        guard let mention = mention(withURL: url) else { return nil }
+        defer { loadPendingMenuIcons() }
+        return userMenuIcon(for: .mention(mention), id: nil)
+    }
+
     /// 行に描いた大きさか、メニューの印の大きさで読み込み済みのアイコン。
-    private func cachedAvatar(of account: Account, id: ItemID) -> UIImage? {
+    private func cachedAvatar(of account: Account, id: ItemID?) -> UIImage? {
         let urls = Set([account.avatar, account.avatarStatic].compactMap(\.self))
-        let rowKeys = entry(for: id).map { avatarKeys(for: [$0]) } ?? []
+        let rowKeys = id.flatMap(entry(for:)).map { avatarKeys(for: [$0]) } ?? []
         let rowImage = rowKeys.filter { urls.contains($0.url) }.lazy.compactMap { self.avatarImages.cachedImage(for: $0) }.first
         return rowImage ?? userMenuIconKey(of: account).flatMap { avatarImages.cachedImage(for: $0) }
     }

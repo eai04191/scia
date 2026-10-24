@@ -114,6 +114,9 @@ protocol LinkMenuHost: AnyObject {
     func openProfile(resolving url: URL)
     /// ハッシュタグのメニューの「ユーザーの投稿」を選んだ。`name`は`#`を除いた名前。
     func openHashtag(_ name: String, of account: Account)
+    /// 本文のメンションのメニューの「プロフィール」に出す、その人のアイコン。`url`はメンションのリンク先。
+    /// 誰か分からなければnilで、項目の記号のままにする。アイコンがまだなければ仮の印を返し、届いたら開いているメニューで描き替える。
+    func mentionMenuIcon(for url: URL) -> UIImage?
 }
 
 /// `LinkLabel`の上に重ねる、リンクの上だけを当たりにする部品。リンクの外では当たりにならず、押下はラベルの後ろのセルへ渡る。
@@ -237,7 +240,7 @@ final class LinkHitArea: UIControl {
                     return [action.action(url: url, handlers: handlers)]
                 }
                 switch item {
-                case .profile: return [profileAction(item.title, image: item.image, destination)]
+                case .profile: return [profileAction(item.title, image: host?.mentionMenuIcon(for: url) ?? item.image, destination)]
                 case .mention, .copyHandle: return actions?.action(item, target: target, notifying: host).map { [$0] } ?? []
                 case .follow, .showReblogs, .notify, .mute, .block, .report:
                     guard let actions, let load else { return [] }

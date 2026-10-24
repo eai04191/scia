@@ -253,6 +253,9 @@ extension EditHistoryViewController: LinkMenuHost {
 
     func linkMenuDidHide() {}
 
+    /// 編集履歴では、メンションのメニューにアイコンを出さない。編集履歴の版のメンションは、一覧の投稿のメンションと結び付けていないため。
+    func mentionMenuIcon(for url: URL) -> UIImage? { nil }
+
     func showLinkCopiedNotice() {
         notices?.showTransient(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }

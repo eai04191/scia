@@ -228,6 +228,19 @@ struct StatusMenuTests {
         #expect(TimelineViewController.account(withID: "5", in: entries) == nil)
     }
 
+    /// 本文のメンションのリンクにはIDがないため、一覧の投稿のメンションからリンク先で引く。ブーストされた投稿と、通知の対象の投稿からも探す。
+    @Test func mentionIsFoundByURLInRows() throws {
+        let carol = Mention(id: "3", username: "carol", url: URL(string: "https://example.social/@carol"), acct: "carol")
+        let dave = Mention(id: "4", username: "dave", url: URL(string: "https://remote.example/@dave"), acct: "dave@remote.example")
+        let boost = try status(url: nil, reblog: try status(url: nil, mentions: [carol]))
+        let notification = MastodonNotification(id: "1", type: .mention, createdAt: Date(timeIntervalSince1970: 0), account: try account("2", "bob"), status: try status(url: nil, mentions: [dave]))
+        let entries: [TimelineEntry] = [.status(boost), .notification(notification)]
+
+        #expect(TimelineViewController.mention(withURL: try #require(URL(string: "https://example.social/@carol")), in: entries)?.id == "3")
+        #expect(TimelineViewController.mention(withURL: try #require(URL(string: "https://remote.example/@dave")), in: entries)?.id == "4")
+        #expect(TimelineViewController.mention(withURL: try #require(URL(string: "https://example.social/@erin")), in: entries) == nil)
+    }
+
     /// アイコンの画像とアカウントのまとめ読みを記録し、まとめ読みは`releaseAccounts()`まで返さない。
     private actor Recorder {
         private(set) var avatarRequests: [URL] = []
