@@ -60,6 +60,8 @@ final class SessionController {
     let diagnostics: ConnectionDiagnostics
     /// 電波が戻ったときと、レート制限が明けたときに、読み込みをやり直す。
     private var recoveryTasks: [Task<Void, Never>] = []
+    /// 期限を付けたミュートが明けるのを待つTask。キーは`scheduleMuteExpiry`で決める。
+    private var muteExpiryTasks: [String: Task<Void, Never>] = [:]
     private let interactions: StatusInteractions
     private let polls: PollVoting
     /// カードが付く前に受け取った投稿を、見えている間に取り直す。
@@ -1315,15 +1317,18 @@ final class SessionController {
     /// 期限を付けたハッシュタグのミュートが切れたら、フィルターを読み直し、もうミュートしていなければ、また足すようにする。ユーザーのミュートと同じく、少し余裕を見てから読む。
     private func includeAfterHashtagMuteExpires(_ name: String, duration: Duration) {
         let client = client
-        Task { [weak self, clock, now] in
-            try? await clock.sleep(for: duration + .seconds(60))
+        scheduleMuteExpiry("tag:\(name)", Task { [weak self, clock, now] in
+            defer { self?.finishMuteExpiry("tag:\(name)") }
             do {
+                try await clock.sleep(for: duration + .seconds(60))
                 guard HashtagMute.find(name, in: try await client.filters(), now: now()) == nil else { return }
                 self?.excludeInLists(tag: name, excluded: false)
+            } catch is CancellationError {
+                // セッションを止めたか、同じハッシュタグをミュートし直した。
             } catch {
                 self?.logger.error("filters reload after hashtag mute expired failed: \(SciaLog.describe(error), privacy: .public)")
             }
-        }
+        })
     }
 
     /// ユーザーのメニューのメンション、ハンドルをコピー、関係の項目。メンションは、編集の途中でも編集中の本文に入れる。
@@ -1490,15 +1495,31 @@ final class SessionController {
     /// Mastodonは期限の時刻に予約したジョブ（`DeleteMuteWorker`）でミュートを消すため、ちょうどの時刻ではまだ残っていることがある。1分おいてから読む。
     private func includeAfterMuteExpires(_ accountID: String, duration: Duration) {
         let client = client
-        Task { [weak self, clock] in
-            try? await clock.sleep(for: duration + .seconds(60))
+        scheduleMuteExpiry("account:\(accountID)", Task { [weak self, clock] in
+            defer { self?.finishMuteExpiry("account:\(accountID)") }
             do {
+                try await clock.sleep(for: duration + .seconds(60))
                 guard let relationship = try await client.relationship(with: accountID), !relationship.muting else { return }
                 self?.excludeInLists(relationship)
+            } catch is CancellationError {
+                // セッションを止めたか、同じ相手をミュートし直した。
             } catch {
                 self?.logger.error("relationship reload after mute expired failed: \(SciaLog.describe(error), privacy: .public)")
             }
-        }
+        })
+    }
+
+    /// ミュートの期限を待つTaskを、対象ごとに1つだけ持つ。ミュートし直したら前の待ちを止め、セッションを止めたらすべて止める。
+    /// 止めないと、ログアウトやアカウントの切り替えのあとに、前のアカウントのトークンで読み直しを送る。
+    private func scheduleMuteExpiry(_ key: String, _ task: Task<Void, Never>) {
+        muteExpiryTasks.updateValue(task, forKey: key)?.cancel()
+    }
+
+    /// 期限を待つTaskが終わったら外す。ミュートし直して止められたTaskは、もう新しいTaskに入れ替わっているので外さない。
+    /// Taskはメインアクターで動くため、止められずに終わったTaskは、終わる時点で入っている今のTaskである。
+    private func finishMuteExpiry(_ key: String) {
+        guard !Task.isCancelled else { return }
+        muteExpiryTasks[key] = nil
     }
 
     /// 編集している途中で返信を選んだら、編集をやめてよいか聞いてから返信を始める。編集でなければすぐ始める。
@@ -2013,6 +2034,8 @@ final class SessionController {
         }
         recoveryTasks.forEach { $0.cancel() }
         recoveryTasks.removeAll()
+        muteExpiryTasks.values.forEach { $0.cancel() }
+        muteExpiryTasks.removeAll()
     }
 
     /// 他のアプリから開かれたURLの画面を出す。
