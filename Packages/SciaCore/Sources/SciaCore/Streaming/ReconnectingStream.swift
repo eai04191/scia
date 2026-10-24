@@ -53,20 +53,28 @@ public struct ReconnectingStream: Sendable {
 
     private let connect: @Sendable () async throws -> StreamingConnection
     private let policy: Policy
+    private let clock: any Clock<Duration>
     private let waitForPingTimeout: @Sendable (Duration) async throws -> Void
 
-    public init(policy: Policy = .standard, connect: @escaping @Sendable () async throws -> StreamingConnection) {
-        self.init(policy: policy, waitForPingTimeout: { try await Task.sleep(for: $0) }, connect: connect)
+    /// - Parameter clock: つなぎ直すまでと、次のpingまでと、pingの応答を待つ時間を数える。テストでは手で進める時計を渡す。
+    public init(
+        policy: Policy = .standard,
+        clock: any Clock<Duration> = ContinuousClock(),
+        connect: @escaping @Sendable () async throws -> StreamingConnection
+    ) {
+        self.init(policy: policy, clock: clock, waitForPingTimeout: { try await clock.sleep(for: $0) }, connect: connect)
     }
 
     /// - Parameter waitForPingTimeout: pingの応答を待つ時間を数える。返ったら時間切れにする。応答が先に返ったら取り消す。
     ///   テストで、時間切れにするpingを時間の長さではなく順番で決める。
     init(
         policy: Policy,
+        clock: any Clock<Duration>,
         waitForPingTimeout: @escaping @Sendable (Duration) async throws -> Void,
         connect: @escaping @Sendable () async throws -> StreamingConnection
     ) {
         self.policy = policy
+        self.clock = clock
         self.waitForPingTimeout = waitForPingTimeout
         self.connect = connect
     }
@@ -100,7 +108,7 @@ public struct ReconnectingStream: Sendable {
                 failures += 1
                 let delay = policy.retryDelay(afterFailures: failures)
                 await handle(.disconnected(reason: SciaLog.describe(error), retryAfter: delay))
-                try await Task.sleep(for: delay)
+                try await clock.sleep(for: delay)
             }
         }
     }
@@ -114,6 +122,7 @@ public struct ReconnectingStream: Sendable {
         let queue = ActivityQueue(continuation)
         let policy = policy
         let waitForPingTimeout = waitForPingTimeout
+        let clock = clock
         let receiving = Task {
             do {
                 while true {
@@ -128,7 +137,7 @@ public struct ReconnectingStream: Sendable {
                 try await Self.ping(connection, timeout: policy.pingTimeout, wait: waitForPingTimeout)
                 queue.connected()
                 while true {
-                    try await Task.sleep(for: policy.pingInterval)
+                    try await clock.sleep(for: policy.pingInterval)
                     try await Self.ping(connection, timeout: policy.pingTimeout, wait: waitForPingTimeout)
                 }
             } catch {

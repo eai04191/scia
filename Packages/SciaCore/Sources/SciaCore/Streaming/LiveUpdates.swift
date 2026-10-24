@@ -26,10 +26,13 @@ public struct LiveUpdates: Sendable {
 
     private let stream: ReconnectingStream
     private let policy: Policy
+    private let clock: any Clock<Duration>
 
-    public init(stream: ReconnectingStream, policy: Policy) {
+    /// - Parameter clock: ポーリングと知らせまでの時間を数える。テストでは手で進める時計を渡す。
+    public init(stream: ReconnectingStream, policy: Policy, clock: any Clock<Duration> = ContinuousClock()) {
         self.stream = stream
         self.policy = policy
+        self.clock = clock
     }
 
     /// 内側の出来事。タイマーは切れるたびに数える世代を持ち、つながった後に届いた古いタイマーを捨てる。
@@ -44,6 +47,7 @@ public struct LiveUpdates: Sendable {
         let (signals, continuation) = AsyncStream<Signal>.makeStream()
         let stream = stream
         let policy = policy
+        let clock = clock
         let streaming = Task {
             defer { continuation.finish() }
             try await stream.run { continuation.yield(.stream($0)) }
@@ -63,11 +67,11 @@ public struct LiveUpdates: Sendable {
             timer = Task {
                 await withDiscardingTaskGroup { group in
                     group.addTask {
-                        guard (try? await Task.sleep(for: policy.outageNoticeDelay)) != nil else { return }
+                        guard (try? await clock.sleep(for: policy.outageNoticeDelay)) != nil else { return }
                         continuation.yield(.noticeDue(outage: current))
                     }
                     group.addTask {
-                        while (try? await Task.sleep(for: policy.pollingInterval)) != nil {
+                        while (try? await clock.sleep(for: policy.pollingInterval)) != nil {
                             continuation.yield(.pollDue(outage: current))
                         }
                     }

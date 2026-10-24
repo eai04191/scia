@@ -56,6 +56,7 @@ public final class StreamingHub {
     private let open: @Sendable () async throws -> StreamingConnection
     private let reconnectPolicy: ReconnectingStream.Policy
     private let livePolicy: () -> LiveUpdates.Policy
+    private let clock: any Clock<Duration>
     private let logger = SciaLog.logger(category: "streaming")
     private var consumers: [Consumer] = []
     private var nextConsumerID = 0
@@ -76,8 +77,8 @@ public final class StreamingHub {
     /// 受け取った側は`connected`で補完を始めるので、先に新着を一覧に入れると補完の基準が進み、その手前を読み飛ばすため。
     /// 待っている間に切れても捨てず、つなぎ直した`connected`の後に渡す。削除や編集は、補完では読み直せないため。
     private var heldEvents: [Int: [StreamingEvent]] = [:]
-    /// 購読と解除を、申し込みの順に1つずつ送る。
-    private var sending: Task<Void, Never>?
+    /// 購読と解除を、申し込みの順に1つずつ送る。テストで、積んだ送信が終わるまで待つ。
+    private(set) var sending: Task<Void, Never>?
     /// 送り終えてから`connected`を届けるTaskの、最後に始めたもの。テストで、届けるか捨てるかが決まるまで待つ。
     private(set) var lastConnectedReportAfterSending: Task<Void, Never>?
     private var isOutageNoticed = false
@@ -87,14 +88,17 @@ public final class StreamingHub {
 
     /// - Parameters:
     ///   - livePolicy: つなぎ始めるたびに読む。チューニングの値を、次の接続から効かせる。
+    ///   - clock: つなぎ直し、ping、ポーリング、知らせまでの時間を数える。テストでは手で進める時計を渡す。
     ///   - open: 購読を指定せずに接続を開く。
     public init(
         reconnectPolicy: ReconnectingStream.Policy = .standard,
         livePolicy: @escaping () -> LiveUpdates.Policy,
+        clock: any Clock<Duration> = ContinuousClock(),
         open: @escaping @Sendable () async throws -> StreamingConnection
     ) {
         self.reconnectPolicy = reconnectPolicy
         self.livePolicy = livePolicy
+        self.clock = clock
         self.open = open
     }
 
@@ -170,14 +174,14 @@ public final class StreamingHub {
         generation += 1
         let generation = generation
         let open = open
-        let stream = ReconnectingStream(policy: reconnectPolicy) { [weak self] in
+        let stream = ReconnectingStream(policy: reconnectPolicy, clock: clock) { [weak self] in
             let connection = try await open()
             // 購読を送り終えてから返す。返した後のpingの応答で成立とみなし、補完を始めるため、
             // 先に返すと、補完の後から購読が効くまでの新着を取りこぼす。送れなければ、つながらなかったものとしてつなぎ直す。
             try await self?.attach(connection, generation: generation).value
             return connection
         }
-        let updates = LiveUpdates(stream: stream, policy: livePolicy())
+        let updates = LiveUpdates(stream: stream, policy: livePolicy(), clock: clock)
         let logger = logger
         logger.info("streaming start")
         // 接続先を調べる通信も、自動の通信として扱う。
