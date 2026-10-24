@@ -15,7 +15,7 @@ struct GlyphLanguageTests {
         let defaults = try #require(UserDefaults(suiteName: "GlyphLanguageTests.\(UUID().uuidString)"))
         let settings = AppSettings(defaults: defaults)
         settings.glyphLanguage = glyphLanguage
-        return TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
+        return TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
     }
 
     private func status(_ content: String, language: String?, spoiler: String = "") -> Status {

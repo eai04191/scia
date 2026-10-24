@@ -6,7 +6,7 @@ import UIKit
 @MainActor
 struct PostContentViewTests {
     private func makeViewController() -> TimelineViewController {
-        TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
+        TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline)
     }
 
     /// 一覧のセルと同じく、大きな高さを目安に、高さを譲れる優先度で測る。

@@ -31,9 +31,12 @@ final class ThreadController {
         streamingHub: StreamingHub,
         onUnauthorized: @escaping () -> Void
     ) -> (ThreadController, TimelineViewController) {
-        let viewController = TimelineViewController(texts: .thread)
+        // 画面を作る時点ではコントローラーがまだないため、作ったあとに入れる。
+        weak var owner: ThreadController?
+        let viewController = TimelineViewController(texts: .thread) { await owner?.refresh() }
         let controller = ThreadController(focus: focus, client: client, streamingHub: streamingHub, viewController: viewController, onUnauthorized: onUnauthorized)
         viewController.lifetimeOwner = controller
+        owner = controller
         return (controller, viewController)
     }
 
@@ -62,6 +65,13 @@ final class ThreadController {
         viewController?.setEntries(store.entries)
         load()
         startStreaming()
+    }
+
+    /// 一覧を引っぱって離したときに、会話と押した投稿を読み直す。スレッドは上に新しい投稿が来る並びではないため、全体を読み直す。
+    private func refresh() async {
+        logger.info("thread refresh")
+        load()
+        await loadTask?.value
     }
 
     /// 会話を読む。読んだ結果は、押した投稿の位置を保って並べる。

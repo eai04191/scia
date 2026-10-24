@@ -17,10 +17,10 @@ enum PostRowCatalog {
 
     @MainActor
     static func postStates() -> [CatalogState] {
-        let home = TimelineViewController(texts: .home)
+        let home = TimelineViewController(texts: .home, refresh: {})
         home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
         // カタログのアカウントを自分として組む一覧。自分の投稿は、フィルターに一致しても畳まずに印を出す。
-        let mine = TimelineViewController(texts: .home)
+        let mine = TimelineViewController(texts: .home, refresh: {})
         mine.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: author.id))
         mine.myAccountID = author.id
         /// - Parameters:
@@ -130,7 +130,7 @@ enum PostRowCatalog {
     /// リンクカードの付いた投稿。サーバーのカードが後から届いても行の高さが変わらないことを、カードとリンク先だけのカードを並べて見比べる。
     @MainActor
     static func linkCardStates() -> [CatalogState] {
-        let home = TimelineViewController(texts: .home)
+        let home = TimelineViewController(texts: .home, refresh: {})
         func post(_ title: String, _ status: Status, revealsMedia: Bool = false, expandsSpoiler: Bool = false) -> CatalogState {
             CatalogState(title: title) {
                 if revealsMedia { home.mediaCovers.reveal(status) }
@@ -196,7 +196,7 @@ enum PostRowCatalog {
 
     @MainActor
     static func notificationStates() -> [CatalogState] {
-        let notifications = TimelineViewController(texts: .notifications)
+        let notifications = TimelineViewController(texts: .notifications, refresh: {})
         notifications.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .notifications, myAccountID: nil))
         // メンションなどの投稿は通知を送った人が書き、お気に入りなどで再掲する投稿は自分が書いたもの。
         let mentioned = status(content: "<p>@me 通知の元になった投稿。</p>", account: booster)
@@ -294,7 +294,7 @@ enum PostRowCatalog {
     /// お気に入りした人などの一覧の行。名前とハンドルの長さで崩れないかを見る。
     @MainActor
     static func accountStates() -> [CatalogState] {
-        let list = TimelineViewController(texts: .accountList(.favouritedBy("catalog")))
+        let list = TimelineViewController(texts: .accountList(.favouritedBy("catalog")), refresh: {})
         func row(_ title: String, _ account: Account) -> CatalogState {
             CatalogState(title: title) {
                 CatalogFrame.bordered(list.accountConfiguration(for: account, base: .cell()).makeContentView())

@@ -9,7 +9,7 @@ final class NotificationsController {
     /// 1回に読む件数。ホームと揃える。
     private static let pageSize = 40
 
-    let viewController = TimelineViewController(texts: .notifications)
+    private(set) lazy var viewController = TimelineViewController(texts: .notifications) { [weak self] in await self?.refresh() }
     /// 未読の数が変わったときに呼ぶ。タブのバッジに出す。2つめの値は、実際はもっと多いかもしれないこと。
     var onUnreadCountChange: ((Int, Bool) -> Void)?
     /// ストリーミングで新しい通知が届いたときに呼ぶ。ステータスバーに流す。2つめの値は、通知の投稿に当てたサーバーのフィルターの判定。
@@ -44,6 +44,9 @@ final class NotificationsController {
     /// 新着の挿入を保留している間に、補完を見送った。保留を解いたときに補完する。
     private var isFillHeld = false
     #endif
+    /// 走っている補完の数と、すべて終わるのを待っている引っぱった読み直し。
+    private var activeFills = 0
+    private var fillWaiters: [CheckedContinuation<Void, Never>] = []
 
     init(
         client: MastodonClient,
@@ -122,7 +125,8 @@ final class NotificationsController {
     }
 
     /// - Parameter origin: 自動の読み込みなら`.automatic`。レート制限で止められている間は送らずに失敗させる。
-    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (NotificationsController) async -> Void) {
+    @discardableResult
+    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (NotificationsController) async -> Void) -> Task<Void, Never> {
         tasks.removeAll { $0.isCancelled }
         // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
         let task = RequestOrigin.$current.withValue(origin) {
@@ -132,6 +136,36 @@ final class NotificationsController {
             }
         }
         tasks.append(task)
+        return task
+    }
+
+    /// 一覧を引っぱって離したときに、最新の通知を読んで上に足す。足すのは一番新しい通知より新しいものだけで、読んでいる位置は動かさない。
+    /// 最初の読み込みに失敗したままなら、それをやり直す。溜めている新着は、間隔を待たずに入れる。
+    private func refresh() async {
+        guard !isStopped, hasStarted, !isDisabled else { return }
+        logger.info("notifications refresh")
+        if !hasLoadedInitial {
+            if case .failed = viewController.contentState {
+                viewController.setContentState(.loading)
+                await run { await $0.loadInitial() }.value
+            }
+            return
+        }
+        // 補完の最中なら、ストアはその補完の後に続けて読む。続きを読み終えるまで閉じないよう、走っている補完もすべて待つ。
+        fillFromLatest(origin: .user)
+        if activeFills > 0 {
+            await withCheckedContinuation { fillWaiters.append($0) }
+        }
+        guard !isStopped else { return }
+        insertPending()
+    }
+
+    private func endFill() {
+        activeFills -= 1
+        guard activeFills == 0 else { return }
+        let waiters = fillWaiters
+        fillWaiters.removeAll()
+        waiters.forEach { $0.resume() }
     }
 
     private func retry() {
@@ -277,7 +311,7 @@ final class NotificationsController {
     #endif
 
     /// つながるたびと、つながらない間のポーリングで、切れていた間の通知を読む。
-    private func fillFromLatest() {
+    private func fillFromLatest(origin: RequestOrigin = .automatic) {
         #if DEBUG
         // 補完で読んだ新着はストアへ直接合流し、insertPendingの保留を通らないため、保留中は補完を始めない。
         // 保留を送る前に始まった補完は止めない。その結果は、保留中でも一覧に入る。
@@ -287,7 +321,10 @@ final class NotificationsController {
             return
         }
         #endif
-        run(.automatic) { controller in
+        // 読み始める前に数える。走り始める前に引っぱった読み直しが待ち始めても、この補完を待つため。
+        activeFills += 1
+        run(origin) { controller in
+            defer { controller.endFill() }
             do {
                 let before = controller.store.entries
                 let maxPages = Int(controller.tuning.value(of: TuningCatalog.fillPageLimit))

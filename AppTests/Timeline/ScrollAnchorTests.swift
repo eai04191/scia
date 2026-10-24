@@ -217,7 +217,7 @@ struct ScrollAnchorTests {
     /// 画面を読み込む前に覆う高さを渡しても、画面は読み込まない。読み込むと、投稿ボタンなどを付ける設定より先に画面ができてしまう。
     /// 渡した高さは、画面を読み込んだあとに反映する。
     @Test func coveringBeforeViewLoadsDoesNotLoadView() throws {
-        let viewController = TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline)
+        let viewController = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline)
 
         viewController.setObscuredBottomHeight(400)
 

@@ -11,7 +11,7 @@ final class SavedStatusesController {
     /// 1回に読む件数。APIの上限が40件。
     private static let pageSize = 40
 
-    let viewController: TimelineViewController
+    private(set) lazy var viewController = TimelineViewController(texts: Self.texts(for: kind)) { [weak self] in await self?.refresh() }
     let kind: SavedStatusesKind
     private let store: SavedStatusesStore
     /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
@@ -33,7 +33,6 @@ final class SavedStatusesController {
         }
         self.kind = kind
         self.onUnauthorized = onUnauthorized
-        viewController = TimelineViewController(texts: Self.texts(for: kind))
         // 公式のWebクライアントと同じく、ホームの文脈のフィルターを当て、「隠す」に一致した投稿も隠さずに警告で畳む。自分で残した投稿だから。
         viewController.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: client.credential.accountID, hidesMatches: false))
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder(origin: .automatic) }
@@ -57,11 +56,12 @@ final class SavedStatusesController {
     }
 
     /// - Parameter origin: 電波の回復などでやり直すときは`.automatic`。レート制限で止められている間は送らない。
-    private func start(origin: RequestOrigin = .user) {
-        guard !isStopped else { return }
+    @discardableResult
+    private func start(origin: RequestOrigin = .user) -> Task<Void, Never>? {
+        guard !isStopped else { return nil }
         hasStarted = true
         viewController.setContentState(.loading)
-        run(origin) { controller in
+        return run(origin) { controller in
             controller.logger.info("\(controller.name, privacy: .public) loadInitial start")
             do {
                 guard try await controller.store.loadInitial(), !controller.isStopped else { return }
@@ -127,7 +127,8 @@ final class SavedStatusesController {
         tasks.removeAll()
     }
 
-    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (SavedStatusesController) async -> Void) {
+    @discardableResult
+    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (SavedStatusesController) async -> Void) -> Task<Void, Never> {
         tasks.removeAll { $0.isCancelled }
         // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
         let task = RequestOrigin.$current.withValue(origin) {
@@ -137,6 +138,23 @@ final class SavedStatusesController {
             }
         }
         tasks.append(task)
+        return task
+    }
+
+    /// 一覧を引っぱって離したときに、最新のページを読んで、一番上の投稿より後に付けた分を上に足す。
+    /// 最初の読み込みに失敗したままなら、それをやり直す。
+    private func refresh() async {
+        guard !isStopped, hasStarted else { return }
+        logger.info("\(self.name, privacy: .public) refresh")
+        if case .failed = viewController.contentState {
+            await start()?.value
+            return
+        }
+        // タブを開いたときなどの読み込みの最中なら、ストアは重ねて読まないため、終わってから読む。
+        for task in tasks {
+            await task.value
+        }
+        await refreshNewest(origin: .user)?.value
     }
 
     private func retry() {
@@ -164,9 +182,10 @@ final class SavedStatusesController {
     }
 
     /// 最新のページを読み、手元より新しい分を先頭に足す。失敗しても、一覧はそのまま見せ、次に開いたときに読み直す。
-    private func refreshNewest() {
-        guard !isStopped, store.isLoaded, !store.isLoading else { return }
-        run(.automatic) { controller in
+    @discardableResult
+    private func refreshNewest(origin: RequestOrigin = .automatic) -> Task<Void, Never>? {
+        guard !isStopped, store.isLoaded, !store.isLoading else { return nil }
+        return run(origin) { controller in
             do {
                 guard try await controller.store.refreshNewest(), !controller.isStopped else { return }
                 controller.viewController.setFooterState(controller.store.reachedEnd ? .reachedEnd : .idle)

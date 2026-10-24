@@ -52,7 +52,9 @@ final class ProfileController {
         onError: @escaping (any Error, String) -> Void,
         onUnauthorized: @escaping () -> Void
     ) -> (ProfileController, TimelineViewController) {
-        let viewController = TimelineViewController(texts: .profile)
+        // 画面を作る時点ではコントローラーがまだないため、作ったあとに入れる。
+        weak var owner: ProfileController?
+        let viewController = TimelineViewController(texts: .profile) { await owner?.refresh() }
         let controller = ProfileController(
             account: account,
             client: client,
@@ -63,6 +65,7 @@ final class ProfileController {
             onUnauthorized: onUnauthorized
         )
         viewController.lifetimeOwner = controller
+        owner = controller
         return (controller, viewController)
     }
 
@@ -94,6 +97,8 @@ final class ProfileController {
         viewController.myAccountID = client.credential.accountID
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder() }
         viewController.onRetry = { [weak self] in self?.retry() }
+        // 引っぱって読み直した投稿が多く、手元の投稿との間が残ったときだけギャップの行が出る。読み直しの続きなので、押されたときだけ読む。
+        viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction) }
         header.onToggleFollow = { [weak self] source in self?.confirmToggleFollow(from: source) }
         header.onRetryRelationship = { [weak self] in self?.reloadRelationship() }
         header.onEditProfile = { [weak self] in self?.onEditProfile?() }
@@ -245,12 +250,15 @@ final class ProfileController {
         }
     }
 
-    private func run(_ operation: @escaping @MainActor (ProfileController) async -> Void) {
+    @discardableResult
+    private func run(_ operation: @escaping @MainActor (ProfileController) async -> Void) -> Task<Void, Never> {
         tasks.removeAll { $0.isCancelled }
-        tasks.append(Task { [weak self] in
+        let task = Task { [weak self] in
             guard let self else { return }
             await operation(self)
-        })
+        }
+        tasks.append(task)
+        return task
     }
 
     private func updateHeader() {
@@ -387,10 +395,11 @@ final class ProfileController {
         }
     }
 
-    private func loadInitial() {
+    @discardableResult
+    private func loadInitial() -> Task<Void, Never> {
         let timeline = store.timeline
         viewController?.setFooterState(.loading)
-        run { controller in
+        return run { controller in
             do {
                 guard try await timeline.loadInitial() != nil, timeline === controller.store.timeline else { return }
                 controller.afterTransition { controller in
@@ -429,6 +438,76 @@ final class ProfileController {
                 controller.showListFailure(error)
             }
         }
+    }
+
+    /// 一覧を引っぱって離したときに、アカウントと固定された投稿を読み直し、一番新しい投稿より後の投稿を上に足す。
+    /// 一覧をまだ読めていなければ、最初の読み込みをやり直す。読めた一覧が空なら、最新のページを読む。
+    private func refresh() async {
+        guard let viewController else { return }
+        logger.info("profile refresh")
+        let timeline = store.timeline
+        if timeline.isEmpty, case .failed = viewController.footerState {
+            // 最初の一覧を読めていないと、一覧を出す前なので、ほかは読み直さずに最初の読み込みをやり直す。
+            await loadInitial().value
+            return
+        }
+        // 最初の一覧を出している途中は、その読み込みに任せる。
+        guard listReveal == .revealed else { return }
+        async let profile: Void = refreshProfile()
+        let wasEmpty = timeline.isEmpty
+        do {
+            let maxPages = Int(viewController.tuning.value(of: TuningCatalog.fillPageLimit))
+            if let added = try await timeline.fillFromLatest(maxPages: maxPages), timeline === store.timeline {
+                logger.info("profile refresh done added=\(added.count, privacy: .public) gaps=\(timeline.gaps.count, privacy: .public)")
+                if wasEmpty {
+                    viewController.setFooterState(timeline.reachedEnd ? .reachedEnd : .idle)
+                }
+            }
+        } catch {
+            // 読めなかったことは、一覧の上の読み直しなので画面に出さない。前の一覧のまま残す。
+            logger.error("profile refresh failed: \(SciaLog.describe(error), privacy: .public)")
+            handleUnauthorized(error)
+        }
+        await profile
+        showGapStates()
+        showEntries()
+    }
+
+    private func refreshProfile() async {
+        let failures = await store.loadProfile()
+        for (part, error) in [("account", failures.account), ("relationship", failures.relationship), ("pinned", failures.pinned)] {
+            guard let error else { continue }
+            logger.error("profile refresh \(part, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
+            handleUnauthorized(error)
+        }
+    }
+
+    private func loadGap(_ id: String, from direction: TimelineStore.GapDirection) {
+        let timeline = store.timeline
+        guard timeline === shownTimeline, !timeline.loadingGapIDs.contains(id) else { return }
+        let entries = shownEntries()
+        guard let index = entries.firstIndex(where: { $0.id == .gap(id) }) else { return }
+        let neighborIndex = direction == .fromOlder ? entries.index(after: index) : entries.index(before: index)
+        let anchorID = entries.indices.contains(neighborIndex) ? entries[neighborIndex].id : nil
+        viewController?.setGapStates(loading: timeline.loadingGapIDs.union([id]), failures: timeline.gapFailures.filter { $0.key != id })
+        run { controller in
+            do {
+                let added = try await timeline.loadGap(id, from: direction)
+                guard timeline === controller.store.timeline else { return }
+                controller.showGapStates()
+                guard added != nil else { return }
+                controller.viewController?.setEntries(controller.shownEntries(), keeping: anchorID)
+            } catch {
+                guard timeline === controller.store.timeline else { return }
+                controller.logger.error("profile gap failed: \(SciaLog.describe(error), privacy: .public)")
+                controller.handleUnauthorized(error)
+                controller.showGapStates()
+            }
+        }
+    }
+
+    private func showGapStates() {
+        viewController?.setGapStates(loading: shownTimeline.loadingGapIDs, failures: shownTimeline.gapFailures)
     }
 
     private func showListFailure(_ error: any Error) {

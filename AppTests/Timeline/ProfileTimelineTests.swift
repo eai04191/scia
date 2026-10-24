@@ -19,7 +19,7 @@ struct ProfileTimelineTests {
         let before = try #require(harness.windowMinY(of: anchor.id))
         let navigation = try #require(harness.viewController.navigationController)
 
-        let profile = TimelineViewController(texts: .profile, tuning: harness.tuning, emojiImages: .offline, mediaImages: .offline, avatarImages: .offline)
+        let profile = TimelineViewController(texts: .profile, refresh: {}, tuning: harness.tuning, emojiImages: .offline, mediaImages: .offline, avatarImages: .offline)
         profile.headerView = UIView()
         navigation.pushViewController(profile, animated: false)
         navigation.view.layoutIfNeeded()

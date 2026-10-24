@@ -88,8 +88,7 @@ final class StreamingStatusPullView: UIView {
     /// 一覧の内容の上端の上に置き、引っぱった分だけ見えるようにする。
     func install(in scrollView: UIScrollView) {
         scrollView.addSubview(self)
-        // 一覧が画面の高さに満たないときも、引っぱって状態を確かめられるようにする。
-        scrollView.alwaysBounceVertical = true
+        // 一覧が画面の高さに満たないときも引っぱれるよう、一覧の側で縦に弾むようにしてある。
         // ナビゲーションバーの後ろが透けるため、引っぱっていないときは見えないよう、引っぱった量で濃さを変える。
         observations = [
             scrollView.observe(\.contentOffset) { [weak self] _, _ in

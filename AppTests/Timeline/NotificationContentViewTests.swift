@@ -26,7 +26,7 @@ struct NotificationContentViewTests {
     /// 足りない分は行の下の余白で吸い、文字のラベルは求める高さを保つ。
     @Test(arguments: [false, true])
     func labelsKeepTheirHeightWhenRowIsSlightlyShort(withMedia: Bool) throws {
-        let vc = TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline)
+        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline)
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let status = Status(
             id: base.id,

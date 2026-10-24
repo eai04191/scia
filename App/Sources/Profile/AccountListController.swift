@@ -17,9 +17,12 @@ final class AccountListController {
     private var tasks: [Task<Void, Never>] = []
 
     static func make(kind: AccountListKind, client: MastodonClient, onUnauthorized: @escaping () -> Void) -> (AccountListController, TimelineViewController) {
-        let viewController = TimelineViewController(texts: .accountList(kind))
+        // 画面を作る時点ではコントローラーがまだないため、作ったあとに入れる。
+        weak var owner: AccountListController?
+        let viewController = TimelineViewController(texts: .accountList(kind)) { await owner?.refresh() }
         let controller = AccountListController(kind: kind, client: client, viewController: viewController, onUnauthorized: onUnauthorized)
         viewController.lifetimeOwner = controller
+        owner = controller
         return (controller, viewController)
     }
 
@@ -39,9 +42,10 @@ final class AccountListController {
     }
 
     /// - Parameter origin: 電波の回復などでやり直すときは`.automatic`。レート制限で止められている間は送らない。
-    func start(origin: RequestOrigin = .user) {
+    @discardableResult
+    func start(origin: RequestOrigin = .user) -> Task<Void, Never> {
         viewController?.setContentState(.loading)
-        run(origin) { controller in
+        return run(origin) { controller in
             do {
                 guard let accounts = try await controller.store.loadInitial() else { return }
                 controller.showEntries()
@@ -51,6 +55,24 @@ final class AccountListController {
             } catch {
                 controller.handle(error, during: "loadInitial") { controller.viewController?.setContentState(.failed($0)) }
             }
+        }
+    }
+
+    /// 一覧を引っぱって離したときに、最初のページから読み直して置き換える。人の一覧は新しい人が上に来るとは限らず、上に足せないため。
+    /// 読めなかったら、前の一覧のまま残す。最初の読み込みに失敗したままなら、それをやり直す。
+    private func refresh() async {
+        logger.info("accountList refresh")
+        if case .failed = viewController?.contentState {
+            await start().value
+            return
+        }
+        do {
+            guard let accounts = try await store.loadInitial() else { return }
+            showEntries()
+            viewController?.setFooterState(store.reachedEnd ? .reachedEnd : .idle)
+            logger.info("accountList refresh done count=\(accounts.count, privacy: .public)")
+        } catch {
+            handle(error, during: "refresh") { _ in }
         }
     }
 
@@ -77,7 +99,8 @@ final class AccountListController {
         }
     }
 
-    private func run(_ origin: RequestOrigin, _ operation: @escaping @MainActor (AccountListController) async -> Void) {
+    @discardableResult
+    private func run(_ origin: RequestOrigin, _ operation: @escaping @MainActor (AccountListController) async -> Void) -> Task<Void, Never> {
         tasks.removeAll { $0.isCancelled }
         // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
         let task = RequestOrigin.$current.withValue(origin) {
@@ -87,6 +110,7 @@ final class AccountListController {
             }
         }
         tasks.append(task)
+        return task
     }
 
     private func showEntries() {

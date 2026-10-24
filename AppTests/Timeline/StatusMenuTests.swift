@@ -16,7 +16,7 @@ struct StatusMenuTests {
     /// - Parameter myAccountID: 自分のアカウントのID。自分の投稿でだけ出る項目を試すときに渡す。
     /// - Parameter userMenuActions: ユーザーのメニューのメンションとハンドルをコピーを組むもの。渡さなければ2つは出ない。
     private func menu(for entry: TimelineEntry, settings: AppSettings? = nil, myAccountID: String? = nil, userMenuActions: UserMenuActions? = nil) throws -> UIMenu? {
-        let viewController = TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: try settings ?? makeSettings())
+        let viewController = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: try settings ?? makeSettings())
         viewController.myAccountID = myAccountID
         viewController.userMenuActions = userMenuActions
         return viewController.contextMenu(for: entry, id: entry.id)
@@ -279,6 +279,7 @@ struct StatusMenuTests {
             element == .item(.mentionedUsers, isVisible: false) ? .item(.mentionedUsers, isVisible: true) : element
         })
         let viewController = TimelineViewController(
+            refresh: {},
             tuning: TuningStore(defaults: nil),
             emojiImages: .offline,
             avatarImages: AvatarImageStore { url in

@@ -226,6 +226,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var mediaTransfers: MediaTransferCenter?
     private var timeRefreshTimer: Timer?
     private let texts: Texts
+    /// 一覧を一番上から引っぱって離したときに、最新の状態を読む。読み終えるまで更新コントロールを出し続ける。
+    /// どの一覧でも同じ操作で読み直せるよう、一覧を持つ側に必ず決めさせる。
+    private let refresh: @MainActor () async -> Void
+    private let refreshControl = UIRefreshControl()
+    private var refreshTask: Task<Void, Never>?
     let tuning: TuningStore
     let emojiImages: EmojiImageStore
     let mediaImages: MediaImageStore
@@ -257,6 +262,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     init(
         texts: Texts = .home,
+        refresh: @escaping @MainActor () async -> Void,
         tuning: TuningStore = AppDependencies.tuning,
         emojiImages: EmojiImageStore = AppDependencies.emojiImages,
         mediaImages: MediaImageStore = AppDependencies.mediaImages,
@@ -265,6 +271,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         settings: AppSettings = AppDependencies.settings
     ) {
         self.texts = texts
+        self.refresh = refresh
         self.tuning = tuning
         self.emojiImages = emojiImages
         self.mediaImages = mediaImages
@@ -320,6 +327,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.addGestureRecognizer(scrollToTopInterruption)
         // タブバーの上の投稿欄で書いている間も、読み進めるだけならキーボードを閉じない。キーボードまで引き下ろしたら閉じる。
         collectionView.keyboardDismissMode = .interactive
+        refreshControl.addAction(UIAction { [weak self] _ in self?.beginRefresh() }, for: .valueChanged)
+        collectionView.refreshControl = refreshControl
+        // 一覧が画面の高さに満たないときも、引っぱって読み直せるようにする。
+        collectionView.alwaysBounceVertical = true
         view.addSubview(collectionView)
         // 新着のボタンは、この一覧の部品として画面と一緒に流れる。一番上の投稿の名前や本文を隠さないよう、時刻のある右上に置く。
         // チップの列はウインドウに重ね、このボタンが出ていてもずらさずに上に重ねる。
@@ -350,6 +361,17 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         onAppearing?()
         onVisibilityChange?(true)
         applyPendingOpening()
+    }
+
+    /// 読んでいる途中にもう一度引っぱっても、読み込みは重ねず、今の読み込みが終わったところで閉じる。
+    private func beginRefresh() {
+        guard refreshTask == nil else { return }
+        refreshTask = Task { [weak self] in
+            guard let self else { return }
+            await refresh()
+            refreshTask = nil
+            refreshControl.endRefreshing()
+        }
     }
 
     override func viewDidAppear(_ animated: Bool) {

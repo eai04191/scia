@@ -31,7 +31,7 @@ final class TimelineHarness {
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
         settings = AppSettings(defaults: defaults)
-        viewController = TimelineViewController(tuning: tuning, emojiImages: .offline, mediaImages: mediaImages, avatarImages: .offline, settings: settings)
+        viewController = TimelineViewController(refresh: {}, tuning: tuning, emojiImages: .offline, mediaImages: mediaImages, avatarImages: .offline, settings: settings)
         viewController.headerView = headerView
         viewController.notices = notices
         viewController.frameSource = frames

@@ -9,7 +9,8 @@ final class FeedTimelineController {
     /// 1回に読む件数。APIの上限が40件。
     private static let pageSize = 40
 
-    let viewController: TimelineViewController
+    private(set) lazy var viewController = TimelineViewController(texts: texts) { [weak self] in await self?.refresh() }
+    private let texts: TimelineViewController.Texts
     let feed: TimelineFeed
     private let store: TimelineStore
     private let client: MastodonClient
@@ -64,6 +65,9 @@ final class FeedTimelineController {
     private var isShown = false
     /// 前に出ている間に新着を読み直す繰り返し。
     private var pollingTask: Task<Void, Never>?
+    /// 走っている補完の数と、すべて終わるのを待っている引っぱった読み直し。
+    private var activeFills = 0
+    private var fillWaiters: [CheckedContinuation<Void, Never>] = []
 
     init(
         feed: TimelineFeed,
@@ -80,7 +84,7 @@ final class FeedTimelineController {
             try await feed.page(query, from: client)
         }
         self.feed = feed
-        viewController = TimelineViewController(texts: texts ?? Self.texts(for: feed))
+        self.texts = texts ?? Self.texts(for: feed)
         self.client = client
         self.streamingHub = streamingHub
         self.tuning = tuning
@@ -289,7 +293,8 @@ final class FeedTimelineController {
     }
 
     /// - Parameter origin: 自動の読み込みなら`.automatic`。レート制限で止められている間は送らずに失敗させる。
-    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (FeedTimelineController) async -> Void) {
+    @discardableResult
+    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (FeedTimelineController) async -> Void) -> Task<Void, Never> {
         tasks.removeAll { $0.isCancelled }
         // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
         runningTaskCount += 1
@@ -301,6 +306,28 @@ final class FeedTimelineController {
             }
         }
         tasks.append(task)
+        return task
+    }
+
+    /// 一覧を引っぱって離したときに、最新の投稿を読んで上に足す。足すのは一番新しい投稿より新しいものだけで、読んでいる位置は動かさない。
+    /// 最初の読み込みに失敗したままなら、それをやり直す。溜めている新着は、間隔を待たずに入れる。
+    private func refresh() async {
+        guard !isStopped, hasStarted, !isDisabled else { return }
+        logger.info("\(self.feed.name, privacy: .public) refresh")
+        if !hasLoadedInitial {
+            if case .failed = viewController.contentState {
+                viewController.setContentState(.loading)
+                await run { await $0.loadInitial() }.value
+            }
+            return
+        }
+        // 補完の最中なら、ストアはその補完の後に続けて読む。続きを読み終えるまで閉じないよう、走っている補完もすべて待つ。
+        fillFromLatest(origin: .user)
+        if activeFills > 0 {
+            await withCheckedContinuation { fillWaiters.append($0) }
+        }
+        guard !isStopped else { return }
+        insertPending()
     }
 
     private func retry() {
@@ -375,7 +402,7 @@ final class FeedTimelineController {
     }
 
     /// つながるたびと、つながらない間のポーリングで、切れていた間の投稿を読む。1ページに収まらなければギャップを置く。
-    private func fillFromLatest() {
+    private func fillFromLatest(origin: RequestOrigin = .automatic) {
         #if DEBUG
         // 補完で読んだ新着はストアへ直接合流し、insertPendingの保留を通らないため、保留中は補完を始めない。
         // 保留を送る前に始まった補完は止めない。その結果は、保留中でも一覧に入る。
@@ -385,7 +412,10 @@ final class FeedTimelineController {
             return
         }
         #endif
-        run(.automatic) { controller in
+        // 読み始める前に数える。走り始める前に引っぱった読み直しが待ち始めても、この補完を待つため。
+        activeFills += 1
+        run(origin) { controller in
+            defer { controller.endFill() }
             do {
                 let before = controller.store.entries
                 let maxPages = Int(controller.tuning.value(of: TuningCatalog.fillPageLimit))
@@ -424,6 +454,14 @@ final class FeedTimelineController {
                 }
             }
         }
+    }
+
+    private func endFill() {
+        activeFills -= 1
+        guard activeFills == 0 else { return }
+        let waiters = fillWaiters
+        fillWaiters.removeAll()
+        waiters.forEach { $0.resume() }
     }
 
     /// サーバーがホームを作り直している最中で結果が揃っていなかったので、時間をおいて補完を読み直す。

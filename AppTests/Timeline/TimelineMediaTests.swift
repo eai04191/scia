@@ -163,7 +163,7 @@ struct TimelineMediaTests {
     /// メンションでは投稿と同じく行の幅いっぱいに並べ、自分の投稿へのお気に入りやブーストの通知では、小さなサムネイルを1列に並べる。
     @Test func notificationMediaArrangementDependsOnKind() throws {
         let tuning = TuningStore(defaults: nil)
-        let vc = TimelineViewController(tuning: tuning, emojiImages: .offline, mediaImages: .offline)
+        let vc = TimelineViewController(refresh: {}, tuning: tuning, emojiImages: .offline, mediaImages: .offline)
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let status = withMedia(base, [image("1", width: 100, height: 100)])
         let actor = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: base.account.avatar)
@@ -214,7 +214,7 @@ struct TimelineMediaTests {
 
     /// 本文のない投稿は、本文の場所と本文の下の余白を取らず、添付ファイルを上端から置く。上の行との間隔は置く側が決める。
     @Test func mediaStartsAtTopWithoutText() throws {
-        let vc = TimelineViewController(tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline)
+        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline)
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let media = try #require(vc.mediaContent(for: withMedia(base, [image("1", width: 100, height: 100)])))
         let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
