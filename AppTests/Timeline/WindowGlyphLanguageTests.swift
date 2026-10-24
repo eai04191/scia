@@ -1,5 +1,6 @@
 import CoreText
 import SciaCore
+import SciaTesting
 import SwiftUI
 import Testing
 import UIKit
@@ -99,10 +100,9 @@ struct WindowGlyphLanguageTests {
         #expect(textView.text == "直骨関直")
         #expect(languages(of: textView) == ["zh-Hant"])
 
+        // 選び直しは、設定の変化を見ている入力欄が次のメインスレッドの番で付け直す。
         settings.glyphLanguage = .japanese
-        await Task.yield()
-
-        #expect(languages(of: textView) == ["ja"])
+        try await waitUntil { languages(of: textView) == ["ja"] }
     }
 
     /// 標準の書体にない文字のあとに打ったかなも、ヒラギノで描く。理由は`GlyphLanguageTests.kanaAfterFallbackSymbolUsesJapaneseFont`と同じ。
@@ -243,9 +243,7 @@ struct WindowGlyphLanguageTests {
         let middle = try #require(field.position(from: field.beginningOfDocument, offset: 1))
         field.selectedTextRange = field.textRange(from: middle, to: middle)
         settings.glyphLanguage = .japanese
-        await Task.yield()
-
-        #expect(languages(of: field) == ["ja"])
+        try await waitUntil { languages(of: field) == ["ja"] }
         #expect(field.offset(from: field.beginningOfDocument, to: try #require(field.selectedTextRange).start) == 1)
         type("関")
         #expect(field.text == "直関骨")
