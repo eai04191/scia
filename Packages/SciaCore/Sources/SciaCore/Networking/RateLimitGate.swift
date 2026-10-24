@@ -11,11 +11,17 @@ public actor RateLimitGate {
     public nonisolated let resumptions: AsyncStream<Void>
     private let continuation: AsyncStream<Void>.Continuation
     private let now: @Sendable () -> Date
+    private let clock: any Clock<Duration>
     private var timer: Task<Void, Never>?
 
-    public init(now: @escaping @Sendable () -> Date = { Date() }) {
+    /// `now`は今の時刻を返し、`clock`で再開の時刻まで待つ。テストでは手で進める時計を渡す。
+    public init(
+        now: @escaping @Sendable () -> Date = { Date() },
+        clock: any Clock<Duration> = ContinuousClock()
+    ) {
         (resumptions, continuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
         self.now = now
+        self.clock = clock
     }
 
     deinit {
@@ -29,8 +35,9 @@ public actor RateLimitGate {
         pausedUntil = date
         timer?.cancel()
         let delay = max(date.timeIntervalSince(now()), 0)
+        let clock = clock
         timer = Task { [weak self] in
-            guard (try? await Task.sleep(for: .seconds(delay))) != nil else { return }
+            guard (try? await clock.sleep(for: .seconds(delay))) != nil else { return }
             await self?.resume(pausedUntil: date)
         }
     }
