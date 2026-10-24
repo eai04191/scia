@@ -177,6 +177,10 @@ public final class ComposeCompletion {
     @ObservationIgnored private var featuredTags: [FeaturedTag]?
     @ObservationIgnored private var recentTags: [Hashtag]?
     @ObservationIgnored private var ownTagsTask: Task<Void, Never>?
+    /// 自分のタグを読んでいる間はtrue。テストで、読み終えて候補に混ぜ直すまで待つ。
+    var isLoadingOwnTags: Bool { ownTagsTask != nil }
+    /// 始めた検索のうち、取り消されたものも含めて終えた数。テストで、取り消した検索が終わるまで待つ。
+    @ObservationIgnored private(set) var finishedSearchCount = 0
     @ObservationIgnored private var cache: [SearchKey: [CompletionCandidate]] = [:]
     @ObservationIgnored private let logger = SciaLog.logger(category: "compose")
     /// 覚えておく語の数。超えたら全部忘れる。
@@ -306,6 +310,7 @@ public final class ComposeCompletion {
             showWhileLoading(ownCandidates())
             isLoading = true
             searchTask = Task { [weak self, sources, sleep, settings] in
+                defer { self?.finishedSearchCount += 1 }
                 do {
                     try await sleep(settings.debounce)
                     let candidates = try await RequestOrigin.$current.withValue(.automatic) {
