@@ -7,7 +7,8 @@ import UIKit
 /// 切れているときにタイトルの下へ出す表示とは別に、いつでも見られる場所に置く。
 ///
 /// 一覧の内容の上端より上（引っぱると現れる余白）に置く。`contentInset`や内容の大きさは変えないため、スクロール位置を保つ処理に関わらない。
-/// 引っぱって離しても、読み直しなどはしない。
+/// 引っぱって離したときの読み直しは一覧の更新コントロールが受け持ち、読んでいる間はこの表示を出さない。
+/// 更新コントロールは読んでいる間、一覧のすぐ上に止まり、位置を変えられないため、この表示を間に挟めない。
 final class StreamingStatusPullView: UIView {
     private let streamingColumn = Column(title: "ストリーミング")
     private let restColumn = Column(title: "REST")
