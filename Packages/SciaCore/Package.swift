@@ -2,7 +2,8 @@
 import PackageDescription
 
 let swiftSettings: [SwiftSetting] = [
-    .treatAllWarnings(as: .error),
+    // アプリと同じく、警告を止めるのはDebugのビルドの役目にする（project.ymlのReleaseの設定を参照）
+    .treatAllWarnings(as: .error, .when(configuration: .debug)),
     .enableUpcomingFeature("ExistentialAny"),
     .enableUpcomingFeature("MemberImportVisibility"),
     .enableUpcomingFeature("InternalImportsByDefault"),

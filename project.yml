@@ -25,6 +25,11 @@ settings:
     SCIA_DEBUG_URL_SCHEME: scia-debug
     # 共有拡張が受け取ったメディアをアプリへ渡すためのApp Group（Packages/SciaCore/Sources/SciaCore/Compose/SharedMediaInbox.swift）
     SCIA_APP_GROUP: group.$(SCIA_BUNDLE_ID)
+  configs:
+    # 警告を止めるのは、make checkで通すDebugのビルドの役目にする。Releaseはmake checkでもhookでも通らないため、
+    # Releaseにしかない書き方の警告や、Xcodeを上げて増えた警告で、出すときに初めてビルドが止まるのを避ける
+    Release:
+      SWIFT_TREAT_WARNINGS_AS_ERRORS: NO
 packages:
   SciaCore:
     path: Packages/SciaCore
