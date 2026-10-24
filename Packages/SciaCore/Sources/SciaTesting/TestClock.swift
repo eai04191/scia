@@ -52,6 +52,14 @@ public final class TestClock: Clock, Sendable {
     /// 時計が進むのを待っている処理の数。待ち始めたかを、テストが確かめてから時計を進めるのに使う。
     public var sleeperCount: Int { state.withLock { $0.sleepers.count } }
 
+    /// 今から`duration`以内に締め切りの来る待ちの数。長い待ち（pingの時間切れなど）と分けて、次に起こしたい待ちが揃ったかを確かめる。
+    public func sleeperCount(dueWithin duration: Duration) -> Int {
+        state.withLock { state in
+            let limit = state.now.advanced(by: duration)
+            return state.sleepers.values.filter { $0.deadline <= limit }.count
+        }
+    }
+
     public func sleep(until deadline: Instant, tolerance: Duration? = nil) async throws {
         let id = state.withLock { state in
             defer { state.nextID += 1 }
