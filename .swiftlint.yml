@@ -4,6 +4,7 @@ only_rules:
   - force_try
   - implicitly_unwrapped_optional
   - present_without_waiting
+  - time_dependent_test
 
 included:
   - App
@@ -23,6 +24,18 @@ custom_rules:
       - doccomment
       - string
     message: "テストで画面を出すときは、presentForTestingで出し終えるまで待つ。出る途中を確かめるときだけ、理由を書いてこの規則を外す"
+    severity: error
+
+  # 時間の長さで順を作ったり、今の時刻で結果が変わったりするテストは、負荷や実行の時刻によってときどきだけ落ちる。
+  # 待つ処理には手で進める時計（SciaTestingのTestClock）を渡し、ほかの処理を待つときは門（Gate）か条件（waitUntil）で待つ。日時は決まった値で作る
+  time_dependent_test:
+    included: "(AppTests|Packages/SciaCore/Tests)/.*\\.swift"
+    regex: "\\b(Task\\.sleep|Thread\\.sleep|usleep|DispatchTime\\.now|CACurrentMediaTime|CFAbsoluteTimeGetCurrent|ContinuousClock|SuspendingClock|Timer\\.scheduledTimer|asyncAfter)\\b|\\bDate\\(\\)|\\bDate\\.now\\b|\\bDate\\(timeIntervalSinceNow|(?<![\\w.)\\]])\\.now\\b|\\bsystemUptime\\b"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "テストを実際の時間や今の時刻に頼らせない。待つ処理にはTestClockを渡し、ほかの処理はGateかwaitUntilで待ち、日時は決まった値で作る"
     severity: error
 
 strict: true
