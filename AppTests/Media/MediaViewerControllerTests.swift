@@ -1,4 +1,5 @@
 import SciaCore
+import SciaTesting
 import Synchronization
 import Testing
 import UIKit
@@ -21,17 +22,6 @@ struct MediaViewerControllerTests {
 
     private func image(_ id: String, url: URL?) -> MediaAttachment {
         MediaAttachment(id: id, type: .image, url: url, previewUrl: nil)
-    }
-
-    private func waitUntil(_ condition: () -> Bool) async throws {
-        let deadline = ContinuousClock.now + .seconds(3)
-        while !condition() {
-            guard ContinuousClock.now < deadline else {
-                Issue.record("条件を満たさないまま時間切れになりました")
-                return
-            }
-            try await Task.sleep(for: .milliseconds(20))
-        }
     }
 
     /// 開いている間は、違和感レポートに表示中の画像の倍率と出どころが残る。画像が極端に小さく出る不具合の調べに使う。
@@ -1013,19 +1003,11 @@ struct MediaViewerControllerTests {
     @Test func sharingBelongsToViewerThatStartedIt() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
-        let release = Flag()
-        let stopped = Flag()
+        let release = Gate()
         let stack = harness.overlay.column.stack
         let transfers = makeTransfers(downloads: makeDownloads { url, folder, onProgress in
             onProgress(0.5)
-            do {
-                while !release.isSet {
-                    try await Task.sleep(for: .milliseconds(20))
-                }
-            } catch {
-                stopped.set()
-                throw error
-            }
+            try await release.wait()
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let file = folder.appending(path: url.lastPathComponent)
             try Data("movie".utf8).write(to: file)
@@ -1039,12 +1021,13 @@ struct MediaViewerControllerTests {
         try await first.presentForTesting(second)
         // ほかのビューアでは、見ている添付ファイルのものではないため件数だけを出す。
         try await waitUntil { second.downloadProgressText == "ダウンロード中 1件" }
-        second.dismiss(animated: false)
-        try await Task.sleep(for: .milliseconds(100))
-        #expect(!stopped.isSet)
+        // 閉じ終えるまで待つ。閉じる途中に落とし終えると、閉じる途中の画面を出している最初のビューアの上には共有のシートを出せず、UIKitが捨てる。
+        try await second.dismissForTesting()
+        // 閉じたビューアで始めたものではないため、止めずに続ける。止めるなら、閉じる処理の中で落としている途中のものから外れている。
+        #expect(first.downloadProgressText != nil)
         #expect(stack.transientNotice == nil)
 
-        release.set()
+        release.open()
         try await waitUntil { first.presentedViewController is UIActivityViewController }
         first.presentedViewController?.dismiss(animated: false)
         first.dismiss(animated: false)
