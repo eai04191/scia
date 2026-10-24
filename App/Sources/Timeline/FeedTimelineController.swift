@@ -68,6 +68,8 @@ final class FeedTimelineController {
     /// 走っている補完の数と、すべて終わるのを待っている引っぱった読み直し。
     private var activeFills = 0
     private var fillWaiters: [CheckedContinuation<Void, Never>] = []
+    /// 走っている補完が終わるのを待っている、引っぱった読み直しの数。テストで、待ち始めたことを時間を待たずに確かめる。
+    var fillWaiterCount: Int { fillWaiters.count }
 
     init(
         feed: TimelineFeed,

@@ -3,6 +3,7 @@ import SciaCore
 import SciaTesting
 import Synchronization
 import Testing
+import UIKit
 @testable import Scia
 
 @MainActor
@@ -225,6 +226,95 @@ struct FeedTimelineControllerTests {
         controller.enterForeground()
         try await waitUntil { connector.connectionCount == 1 }
     }
+
+    /// 更新コントロールは、ウインドウに載っていないと読んでいる状態にならないため、一覧を載せる。
+    private func show(_ controller: FeedTimelineController) throws -> UIWindow {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 393, height: 852)
+        window.rootViewController = UINavigationController(rootViewController: controller.viewController)
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+        return window
+    }
+
+    /// 一番新しい投稿より新しいものを返し、ギャップを読むときは空を返すホーム。`servesNewer`がfalseの間は、新しい投稿もないことにする。
+    private func newerTransport(existing: [Status], newer: [Status], servesNewer: Switch, gate: ResponseGate? = nil) throws -> ScriptedTransport {
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        encoder.dateEncodingStrategy = .iso8601
+        let existingBody = try encoder.encode(existing)
+        let newerBody = try encoder.encode(newer)
+        let gated = Mutex(gate != nil)
+        return ScriptedTransport { request in
+            let url = request.url
+            let query = url.flatMap { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems } ?? []
+            switch url?.path() {
+            case "/api/v1/timelines/home":
+                if query.contains(where: { $0.name == "max_id" }) {
+                    return (200, Data("[]".utf8))
+                }
+                guard query.contains(where: { $0.name == "since_id" }) else { return (200, existingBody) }
+                // 最初の補完だけを門で止める。
+                if gated.withLock({ let first = $0; $0 = false; return first }) {
+                    await gate?.wait()
+                }
+                return (200, servesNewer.isOn ? newerBody : Data("[]".utf8))
+            case "/api/v2/instance":
+                return (200, Data(#"{"configuration":{"urls":{"streaming":"wss://example.social"}}}"#.utf8))
+            default:
+                return (200, Data("{}".utf8))
+            }
+        }
+    }
+
+    /// 引っぱって離すと、一番新しい投稿より新しいものを読んで上に足し、読み終えたら更新コントロールを閉じる。
+    @Test func pullToRefreshAddsNewerStatusesAndEndsRefreshing() async throws {
+        let existing = StatusFactory.make(count: 3, startingAt: 100)
+        let newer = StatusFactory.make(count: 1, startingAt: 200)
+        let servesNewer = Switch(false)
+        let connector = MessageQueueConnector()
+        let controller = try makeController(transport: newerTransport(existing: existing, newer: newer, servesNewer: servesNewer), connector: connector)
+        defer { controller.stop() }
+        let window = try show(controller)
+        defer { window.isHidden = true }
+        let refreshControl = try #require(controller.viewController.collectionView.refreshControl)
+
+        controller.start()
+        try await waitUntil { connector.isConnected && controller.viewController.contentState == TimelineViewController.ContentState.loaded }
+        servesNewer.isOn = true
+        refreshControl.beginRefreshing()
+        refreshControl.sendActions(for: .valueChanged)
+        #expect(refreshControl.isRefreshing)
+        try await waitUntil { !refreshControl.isRefreshing }
+
+        #expect(controller.viewController.displayedStatusIDs == (newer + existing).map(\.id))
+    }
+
+    /// つながったときの補完の最中に引っぱったら、その補完と続きの読み込みが終わるまで、更新コントロールを閉じない。
+    @Test func pullToRefreshDuringFillWaitsForTheFill() async throws {
+        let existing = StatusFactory.make(count: 3, startingAt: 100)
+        let newer = StatusFactory.make(count: 1, startingAt: 200)
+        let servesNewer = Switch(true)
+        let gate = ResponseGate()
+        let controller = try makeController(transport: newerTransport(existing: existing, newer: newer, servesNewer: servesNewer, gate: gate))
+        defer { controller.stop() }
+        let window = try show(controller)
+        defer { window.isHidden = true }
+        let refreshControl = try #require(controller.viewController.collectionView.refreshControl)
+
+        controller.start()
+        await gate.waitUntilWaiting()
+        refreshControl.beginRefreshing()
+        refreshControl.sendActions(for: .valueChanged)
+        try await waitUntil { controller.fillWaiterCount == 1 }
+        #expect(refreshControl.isRefreshing, "補完が終わる前に閉じました")
+
+        await gate.open()
+        try await waitUntil { !refreshControl.isRefreshing }
+        #expect(controller.viewController.displayedStatusIDs == (newer + existing).map(\.id))
+    }
+
 }
 
 @MainActor
@@ -249,6 +339,20 @@ private struct ScriptedTransport: HTTPTransport {
         let url = try #require(request.url)
         let response = try #require(HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: nil))
         return (body, response)
+    }
+}
+
+/// テストの途中で切り替える、応答の出し分け。
+private final class Switch: Sendable {
+    private let state: Mutex<Bool>
+
+    init(_ isOn: Bool) {
+        state = Mutex(isOn)
+    }
+
+    var isOn: Bool {
+        get { state.withLock { $0 } }
+        set { state.withLock { $0 = newValue } }
     }
 }
 
