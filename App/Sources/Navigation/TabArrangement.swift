@@ -127,6 +127,15 @@ final class TabArrangement {
     func apply(_ placement: TabPlacement) {
         let shown = shownItem
         self.placement = placement
+        // 使う人が名前を変えたユーザーのハッシュタグは、作ってあるタブを、新しい名前で作り直す。無効にしている間に変えた名前も、有効に戻したときに出す。
+        // 同じタブの`title`を変えると、タブバーの読み上げの名前が前の名前のまま残ることがあるため、作り直して差し替える。
+        for item in placement.tabs where item.isAccountHashtag && itemTabs[item].map({ $0.title != item.title }) == true {
+            itemTabs[item] = nil
+        }
+        if let current = switchSelection, let item = placement.switchable.first(where: { $0 == current }), item.isAccountHashtag, item.title != switchTab.title {
+            switchSelection = item
+            renewSwitchTab(for: item)
+        }
         let selection = placement.switchSelection(previous: switchSelection ?? restoredSwitchSelection)
         restoredSwitchSelection = nil
         // 切り替えタブからタブへ移るナビゲーションは、タブに渡す前に入れ物から外す。

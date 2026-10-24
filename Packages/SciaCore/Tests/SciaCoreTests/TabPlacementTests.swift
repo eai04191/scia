@@ -191,12 +191,12 @@ struct TabLayoutSettingsTests {
         #expect(TabPlacement(layout: synced).tabs.contains(.hashtag(name: "scia")))
     }
 
-    /// ユーザーのハッシュタグは、IDとハンドルと名前を並びに残し、同じ項目かはIDとそろえた名前で見る。
+    /// ユーザーのハッシュタグは、IDとハンドルと名前と付けた名前を並びに残し、同じ項目かはIDとそろえた名前で見る。付けた名前は`:`を含んでもよい。
     @Test func accountHashtagItemRoundTripsAndMatchesByIDAndNormalizedName() {
-        let item = TabItem.accountHashtag(accountID: "109", acct: "bob@remote.example", name: "Scia")
+        let item = TabItem.accountHashtag(accountID: "109", acct: "bob@remote.example", name: "Scia", title: "ボブ: Scia")
         #expect(TabItem(rawValue: item.rawValue) == item)
-        if case .accountHashtag(let id, let acct, let name) = TabItem(rawValue: item.rawValue) {
-            #expect([id, acct, name] == ["109", "bob@remote.example", "Scia"])
+        if case .accountHashtag(let id, let acct, let name, let title) = TabItem(rawValue: item.rawValue) {
+            #expect([id, acct, name, title] == ["109", "bob@remote.example", "Scia", "ボブ: Scia"])
         } else {
             Issue.record("ユーザーのハッシュタグとして読めませんでした")
         }
@@ -215,5 +215,38 @@ struct TabLayoutSettingsTests {
         #expect(added.adding(item).tokens == added.tokens)
         #expect(added.removing(item).tokens == TabItem.defaultLayout.tokens)
         #expect(!added.removing(item).contains(item))
+    }
+
+    /// 名前を変えた項目は、同じ場所と表示のまま置き換わる。
+    @Test func replacingKeepsPositionAndVisibility() {
+        let item = TabItem.accountHashtag(accountID: "109", acct: "bob", name: "scia")
+        let renamed = TabItem.accountHashtag(accountID: "109", acct: "bob", name: "scia", title: "ボブ")
+        let layout = TabItem.defaultLayout.adding(item).adding(.hashtag(name: "cat"))
+
+        let replaced = layout.replacing(renamed)
+
+        #expect(replaced.tokens == layout.tokens.map { $0 == "item:\(item.rawValue)" ? "item:\(renamed.rawValue)" : $0 })
+        if case .accountHashtag(_, _, _, let title) = replaced.item(matching: item) {
+            #expect(title == "ボブ")
+        } else {
+            Issue.record("置き換えた項目が見つかりませんでした")
+        }
+    }
+
+    /// 最初の並びに戻しても、戻す前の並びにあったユーザーのハッシュタグは、無効にして残す。サーバーから読んで足し直せないため。
+    @Test func resetKeepsAccountHashtagsDisabled() {
+        let item = TabItem.accountHashtag(accountID: "109", acct: "bob", name: "scia", title: "ボブ")
+        let previous = TabItem.defaultLayout.adding(item).adding(.list(id: "1", title: "友だち"))
+
+        let reset = TabItem.defaultLayout.keepingAccountHashtags(of: previous)
+
+        #expect(reset.elements.contains(.item(item, isVisible: false)))
+        #expect(!reset.contains(.list(id: "1", title: "")))
+        if case .accountHashtag(_, _, _, let title) = reset.item(matching: item) {
+            #expect(title == "ボブ")
+        } else {
+            Issue.record("ユーザーのハッシュタグが残っていません")
+        }
+        #expect(previous.keepingAccountHashtags(of: previous).tokens == previous.tokens)
     }
 }

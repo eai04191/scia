@@ -14,14 +14,16 @@ public enum TabItem: MenuItemKind {
     /// 同じ項目かどうかは、サーバーと同じ決まりでそろえた名前（`Hashtag.normalizedName`）で見る。サーバーは大文字と小文字などを区別しないため。
     case hashtag(name: String)
     /// あるユーザーの、ハッシュタグの付いた投稿。サーバーには覚える仕組みがないため、使う人がこの端末の並びに足す。`name`は`#`を除いた名前。
-    /// `acct`は、タブと一覧の見出しにハンドルを出すため、並びと一緒に保存する。同じ項目かどうかは、アカウントのIDと、ハッシュタグのそろえた名前で見る。
-    case accountHashtag(accountID: String, acct: String, name: String)
+    /// `acct`は、タブと一覧の見出しにハンドルを出すため、並びと一緒に保存する。`title`は使う人が付けたタブの名前で、空なら`#名前`を出す。
+    /// 同じ項目かどうかは、アカウントのIDと、ハッシュタグのそろえた名前で見る。
+    case accountHashtag(accountID: String, acct: String, name: String, title: String = "")
 
     /// リストの項目の`rawValue`の頭。`list:<ID>:<名前>`の形で保存する。リストのIDは`:`を含まないため、2つ目の`:`より後ろは名前として読む。
     private static let listPrefix = "list:"
     /// ハッシュタグの項目の`rawValue`の頭。`hashtag:<名前>`の形で保存する。
     private static let hashtagPrefix = "hashtag:"
-    /// ユーザーのハッシュタグの項目の`rawValue`の頭。`accountHashtag:<ID>:<acct>:<名前>`の形で保存する。IDと`acct`は`:`を含まないため、3つ目の`:`より後ろは名前として読む。
+    /// ユーザーのハッシュタグの項目の`rawValue`の頭。`accountHashtag:<ID>:<acct>:<名前>:<付けた名前>`の形で保存する。
+    /// ID、`acct`、ハッシュタグの名前は`:`を含まないため、4つ目の`:`より後ろは付けた名前として読む。付けた名前は`:`を含みうるので最後に置く。
     private static let accountHashtagPrefix = "accountHashtag:"
 
     /// 決まった項目。リストとハッシュタグは使う人ごとに違うため含まない。既定の並びと、保存した並びに足りない項目を差し込むのに使う。
@@ -29,9 +31,9 @@ public enum TabItem: MenuItemKind {
 
     public init?(rawValue: String) {
         if rawValue.hasPrefix(Self.accountHashtagPrefix) {
-            let parts = rawValue.dropFirst(Self.accountHashtagPrefix.count).split(separator: ":", maxSplits: 2, omittingEmptySubsequences: false)
-            guard parts.count == 3, !parts[0].isEmpty, !parts[2].isEmpty else { return nil }
-            self = .accountHashtag(accountID: String(parts[0]), acct: String(parts[1]), name: String(parts[2]))
+            let parts = rawValue.dropFirst(Self.accountHashtagPrefix.count).split(separator: ":", maxSplits: 3, omittingEmptySubsequences: false)
+            guard parts.count == 4, !parts[0].isEmpty, !parts[2].isEmpty else { return nil }
+            self = .accountHashtag(accountID: String(parts[0]), acct: String(parts[1]), name: String(parts[2]), title: String(parts[3]))
             return
         }
         if rawValue.hasPrefix(Self.listPrefix) {
@@ -60,7 +62,7 @@ public enum TabItem: MenuItemKind {
         case .favourites: "favourites"
         case .list(let id, let title): "\(Self.listPrefix)\(id):\(title)"
         case .hashtag(let name): "\(Self.hashtagPrefix)\(name)"
-        case .accountHashtag(let accountID, let acct, let name): "\(Self.accountHashtagPrefix)\(accountID):\(acct):\(name)"
+        case .accountHashtag(let accountID, let acct, let name, let title): "\(Self.accountHashtagPrefix)\(accountID):\(acct):\(name):\(title)"
         }
     }
 
@@ -69,7 +71,7 @@ public enum TabItem: MenuItemKind {
         switch self {
         case .list(let id, _): "\(Self.listPrefix)\(id)"
         case .hashtag(let name): "\(Self.hashtagPrefix)\(Hashtag.normalizedName(name))"
-        case .accountHashtag(let accountID, _, let name): "\(Self.accountHashtagPrefix)\(accountID):\(Hashtag.normalizedName(name))"
+        case .accountHashtag(let accountID, _, let name, _): "\(Self.accountHashtagPrefix)\(accountID):\(Hashtag.normalizedName(name))"
         default: rawValue
         }
     }
@@ -152,6 +154,20 @@ extension MenuLayout where Item == TabItem {
         MenuLayout(elements: elements.filter { element in
             if case .item(let current, _) = element { current != item } else { true }
         })
+    }
+
+    /// 並びにある同じ項目を、`item`で置き換える。表示と場所はそのまま残す。使う人がタブの名前を変えたときに使う。
+    public func replacing(_ item: TabItem) -> MenuLayout<TabItem> {
+        MenuLayout(elements: elements.map { element in
+            if case .item(let current, let isVisible) = element, current == item { .item(item, isVisible: isVisible) } else { element }
+        })
+    }
+
+    /// 並びにある、`item`と同じ項目。名前など、同じ項目かどうかに関わらない値は、並びにある方のもの。
+    public func item(matching item: TabItem) -> TabItem? {
+        elements.lazy.compactMap { element -> TabItem? in
+            if case .item(let current, _) = element, current == item { current } else { nil }
+        }.first
     }
 
     public func contains(_ item: TabItem) -> Bool {

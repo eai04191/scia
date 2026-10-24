@@ -152,7 +152,7 @@ final class SessionController {
                 FeedTimelineController(feed: .list(id: id), texts: .list(title: title), client: client, streamingHub: streamingHub) { forward() }
             case .hashtag(let name):
                 FeedTimelineController(feed: .hashtag(name: name), texts: .hashtag(name: name), client: client, streamingHub: streamingHub) { forward() }
-            case .accountHashtag(let accountID, let acct, let name):
+            case .accountHashtag(let accountID, let acct, let name, _):
                 FeedTimelineController(feed: .accountHashtag(accountID: accountID, name: name), texts: .accountHashtag(name: name, acct: acct), client: client, streamingHub: streamingHub) { forward() }
             case .home, .local, .federated, .notifications, .bookmarks, .favourites:
                 nil
@@ -471,7 +471,10 @@ final class SessionController {
                 // ユーザーのハッシュタグは、「タブから外す」で並びから外したら、一覧を止めて捨てる。
                 tabs.forget(serverFeeds.removeAll(where: \.isAccountHashtag, except: Set(Self.accountHashtags(in: layout))))
                 let placement = TabPlacement(layout: layout)
-                if placement != tabs.placement {
+                // 名前を変えたユーザーのハッシュタグは、同じ項目のままなので並びの変化にならない。リストの名前の変更と違い、使う人が変えたものなので、すぐタブに出す。
+                // タブを作り直すかは、並べるときに名前を比べて決める（`TabArrangement`）。
+                let isRenamed = (placement.tabs + placement.switchable).map(\.rawValue) != (tabs.placement.tabs + tabs.placement.switchable).map(\.rawValue)
+                if placement != tabs.placement || isRenamed {
                     tabs.apply(placement)
                 }
                 observeTabLayout()
@@ -842,8 +845,10 @@ final class SessionController {
         let handle = credential.handle
         let menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
             let layout = AppDependencies.settings.tabLayout(for: handle)
-            if layout.contains(item) {
-                completion([UIAction(title: "タブから外す", image: UIImage(systemName: "rectangle.stack.badge.minus"), attributes: .destructive) { [weak self] _ in
+            if let current = layout.item(matching: item) {
+                completion([UIAction(title: "名前を変える", image: UIImage(systemName: "pencil")) { [weak self] _ in
+                    self?.presentTabRename(current)
+                }, UIAction(title: "タブから外す", image: UIImage(systemName: "rectangle.stack.badge.minus"), attributes: .destructive) { [weak self] _ in
                     self?.setTabLayout(AppDependencies.settings.tabLayout(for: handle).removing(item))
                     self?.showTabLayoutNotice("タブから外しました")
                 }])
@@ -856,6 +861,25 @@ final class SessionController {
         }])
         // 右上に入り切らず「さらに表示」にまとめられたときも、何のボタンか分かるよう名前を付ける。
         return UIBarButtonItem(title: "タブ", image: UIImage(systemName: "rectangle.stack"), menu: menu)
+    }
+
+    /// ユーザーのハッシュタグのタブの名前を変える。空にすると`#名前`に戻す。
+    private func presentTabRename(_ item: TabItem) {
+        guard case .accountHashtag(let accountID, let acct, let name, let title) = item else { return }
+        let handle = credential.handle
+        let alert = UIAlertController(title: "タブの名前", message: "空にすると「#\(name)」に戻ります", preferredStyle: .alert)
+        alert.addTextField { field in
+            field.text = title
+            field.placeholder = "#\(name)"
+            field.clearButtonMode = .whileEditing
+        }
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        alert.addAction(UIAlertAction(title: "保存", style: .default) { [weak self, weak alert] _ in
+            guard let text = alert?.textFields?.first?.text else { return }
+            let renamed = TabItem.accountHashtag(accountID: accountID, acct: acct, name: name, title: text.trimmingCharacters(in: .whitespacesAndNewlines))
+            self?.setTabLayout(AppDependencies.settings.tabLayout(for: handle).replacing(renamed))
+        })
+        topViewController.present(alert, animated: true)
     }
 
     private func showTabLayoutNotice(_ title: String) {
