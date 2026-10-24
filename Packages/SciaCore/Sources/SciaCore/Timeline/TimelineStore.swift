@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 import os
 
 /// タイムラインの投稿を新しい順に持つ。RESTで読んだページと、ストリーミングで届いたイベントを合わせる。
@@ -63,13 +63,18 @@ public final class TimelineStore {
     private var unconfirmedPostedIDs: Set<String> = []
     private let pageSize: Int
     private let filtering: StatusFiltering?
+    /// フィルターの期限が切れたかを決める、今の時刻。
+    private let now: @MainActor () -> Date
     private let fetch: Fetch
     private let logger = SciaLog.logger(category: "timeline")
 
-    /// - Parameter filtering: この一覧で当てるサーバーのフィルター。nilなら当てない。
-    public init(pageSize: Int, filtering: StatusFiltering? = nil, fetch: @escaping Fetch) {
+    /// - Parameters:
+    ///   - filtering: この一覧で当てるサーバーのフィルター。nilなら当てない。
+    ///   - now: 今の時刻を返す。フィルターの期限が切れたかを決めるのに使う。
+    public init(pageSize: Int, filtering: StatusFiltering? = nil, now: @escaping @MainActor () -> Date = { Date() }, fetch: @escaping Fetch) {
         self.pageSize = pageSize
         self.filtering = filtering
+        self.now = now
         self.fetch = fetch
     }
 
@@ -666,7 +671,8 @@ public final class TimelineStore {
         if !insertsIntoEntries || !insert(added) {
             rebuild(statuses: allStatuses + added, gaps: gaps)
         }
-        return added.filter { !isFilteredOut($0) }
+        let now = self.now()
+        return added.filter { !isFilteredOut($0, now: now) }
     }
 
     /// `rebuild`と同じ並びになるよう、並べた順の`added`を今の並びに差し込む。差し込めなければfalseを返す。
@@ -675,7 +681,7 @@ public final class TimelineStore {
     /// フィルターで出さない投稿は、フィルターの期限が切れると一覧に戻る。`rebuild`は並べ直すたびにフィルターを当て直すので、
     /// 戻る投稿があれば全件を並べ直す。出していた投稿が、あとからフィルターに一致するようになることはない。
     private func insert(_ added: [Status]) -> Bool {
-        let now = Date()
+        let now = self.now()
         guard !hiddenStatuses.contains(where: { !isFilteredOut($0, now: now) }) else { return false }
         let addedIDs = Set(added.map(\.id))
         // 全件から作り直さず、足した投稿のIDを加えて使い回す。手放してから加え、集合のコピーを避ける。
@@ -724,7 +730,7 @@ public final class TimelineStore {
     private func rebuild(statuses: [Status], gaps: [TimelineGap]) {
         let statusIDs = Set(statuses.map(\.id))
         unreadableItems.removeAll { statusIDs.contains($0.id) }
-        let now = Date()
+        let now = self.now()
         hiddenStatuses = statuses.filter { isFilteredOut($0, now: now) }
         let shown = hiddenStatuses.isEmpty ? statuses : statuses.filter { !isFilteredOut($0, now: now) }
         let items = (shown.map { (position(of: $0.id), TimelineEntry.status($0)) } + unreadableItems.map { (position(of: $0.id), TimelineEntry.unreadable($0)) })
@@ -751,7 +757,7 @@ public final class TimelineStore {
         lateArrivalPositions[id] ?? DisplayPosition(anchorID: id, sequence: 0)
     }
 
-    private func isFilteredOut(_ status: Status, now: Date = Date()) -> Bool {
+    private func isFilteredOut(_ status: Status, now: Date) -> Bool {
         filtering?.verdict(for: status, now: now).isHidden ?? false
     }
 

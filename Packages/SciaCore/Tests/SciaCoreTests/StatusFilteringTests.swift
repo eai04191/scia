@@ -123,9 +123,9 @@ struct FilteredMediaCoverTests {
 struct FilteredTimelineTests {
     private let filtering = StatusFiltering(context: .home, myAccountID: me.id)
 
-    private func store(pages: [[Status]]) -> (TimelineStore, @Sendable () -> [TimelineQuery]) {
+    private func store(pages: [[Status]], now: @escaping @MainActor () -> Date = { Date() }) -> (TimelineStore, @Sendable () -> [TimelineQuery]) {
         let recorder = QueryRecorder(pages: pages)
-        let store = TimelineStore(pageSize: 3, filtering: filtering) { query in try recorder.next(query) }
+        let store = TimelineStore(pageSize: 3, filtering: filtering, now: now) { query in try recorder.next(query) }
         return (store, { recorder.queries })
     }
 
@@ -175,13 +175,13 @@ struct FilteredTimelineTests {
 
     /// 隠していた投稿は、フィルターの期限が切れたら、次に新着を挿入したときに一覧に戻る。
     @Test func hiddenStatusReturnsOnInsertionAfterFilterExpires() async throws {
-        // 並列で走るテストに待たされても、読み込むまでに期限が切れないよう、長めに取る。
-        let expiresAt = Date().addingTimeInterval(1)
-        let (store, _) = store(pages: [[status("30"), status("29", filtered: [filter("x", .hide, expiresAt: expiresAt)])]])
+        let clock = FakeClock(now: now)
+        let expiresAt = now.addingTimeInterval(60)
+        let (store, _) = store(pages: [[status("30"), status("29", filtered: [filter("x", .hide, expiresAt: expiresAt)])]], now: { clock.now })
         _ = try await store.loadInitial()
         #expect(store.statuses.map(\.id) == ["30"])
 
-        try await Task.sleep(for: .seconds(expiresAt.timeIntervalSinceNow + 0.1))
+        clock.now = expiresAt.addingTimeInterval(1)
         _ = store.receive(.update(status("31")))
         _ = store.flushPending()
 
@@ -386,4 +386,14 @@ private final class NotificationRecorder: Sendable {
     }
 
     var queries: [TimelineQuery] { state.withLock { $0.queries } }
+}
+
+/// 実際の時刻の代わりに、テストで進める時計。
+@MainActor
+private final class FakeClock {
+    var now: Date
+
+    init(now: Date) {
+        self.now = now
+    }
 }
