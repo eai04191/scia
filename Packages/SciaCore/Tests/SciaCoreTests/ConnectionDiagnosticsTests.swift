@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -12,11 +13,12 @@ struct ConnectionDiagnosticsTests {
     }
 
     @Test func statusGathersSessionState() async throws {
-        let rateLimit = RateLimitGate()
+        let clock = TestClock()
+        let rateLimit = RateLimitGate(now: { clock.date }, clock: clock)
         let features = FeatureAvailability()
         let requestLog = RequestLog(includesBody: false)
         let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog, mediaFormats: try makeMediaFormats())
-        let until = Date().addingTimeInterval(600)
+        let until = clock.date.addingTimeInterval(600)
         await rateLimit.pause(until: until)
         await features.disable(.markers, statusCode: 404)
         requestLog.record(URLRequest(url: try #require(URL(string: "https://example.social/api/v1/timelines/home"))), statusCode: 502, error: MastodonAPIError(statusCode: 502, message: ""), body: nil)

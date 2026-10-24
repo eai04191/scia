@@ -1,5 +1,5 @@
 import Foundation
-import Synchronization
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -92,21 +92,24 @@ struct RateLimitTests {
     }
 
     @Test func automaticRequestsResumeAfterResumeDate() async throws {
-        let clock = TestClock(Self.now)
-        let gate = RateLimitGate(now: { clock.now })
+        let clock = TestClock(origin: Self.now)
+        let gate = RateLimitGate(now: { clock.date }, clock: clock)
         await gate.pause(until: Self.now.addingTimeInterval(60))
         let transport = StubTransport([try .fixture("home_timeline")])
         let client = try makeClient(transport, gate: gate)
 
-        clock.now = Self.now.addingTimeInterval(61)
+        clock.advance(by: .seconds(61))
 
         _ = try await RequestOrigin.$current.withValue(.automatic) { try await client.homeTimeline(TimelineQuery(limit: 40)) }
     }
 
     /// 止めた時刻が過ぎたら、失敗していた読み込みをやり直せるよう知らせる。
     @Test func gateAnnouncesResumption() async throws {
-        let gate = RateLimitGate()
-        await gate.pause(until: Date().addingTimeInterval(0.05))
+        let clock = TestClock(origin: Self.now)
+        let gate = RateLimitGate(now: { clock.date }, clock: clock)
+        await gate.pause(until: Self.now.addingTimeInterval(60))
+        try await waitUntil { clock.sleeperCount == 1 }
+        clock.advance(by: .seconds(60))
 
         var iterator = gate.resumptions.makeAsyncIterator()
         let resumed: Void? = await iterator.next()
@@ -133,19 +136,5 @@ struct RateLimitTests {
         #expect(await gate.pausedUntil == Self.now.addingTimeInterval(60))
         await gate.pause(until: Self.now.addingTimeInterval(90))
         #expect(await gate.pausedUntil == Self.now.addingTimeInterval(90))
-    }
-}
-
-/// テストから進められる時計。
-private final class TestClock: Sendable {
-    private let value: Mutex<Date>
-
-    init(_ now: Date) {
-        value = Mutex(now)
-    }
-
-    var now: Date {
-        get { value.withLock { $0 } }
-        set { value.withLock { $0 = newValue } }
     }
 }

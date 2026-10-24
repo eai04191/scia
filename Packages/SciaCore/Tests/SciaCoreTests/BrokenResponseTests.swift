@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -80,13 +81,14 @@ struct BrokenResponseTests {
 
     /// Mastodonの429は、X-RateLimit-Resetの時刻まで自動の通信を止める。使う人の操作は止めない。
     @Test func mastodonRateLimitPausesAutomaticRequests() async throws {
-        let reset = Date().addingTimeInterval(300)
+        let clock = TestClock()
+        let reset = clock.date.addingTimeInterval(300)
         let headers = [
             "X-RateLimit-Limit": "300",
             "X-RateLimit-Remaining": "0",
             "X-RateLimit-Reset": reset.formatted(.iso8601.year().month().day().time(includingFractionalSeconds: true)),
         ]
-        let rateLimit = RateLimitGate()
+        let rateLimit = RateLimitGate(now: { clock.date }, clock: clock)
         let transport = StubTransport([try .fixture("rate_limited", statusCode: 429, headers: headers), try .fixture("home_timeline")])
         let client = try makeClient(transport, rateLimit: rateLimit)
 
