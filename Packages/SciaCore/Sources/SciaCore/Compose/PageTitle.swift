@@ -18,8 +18,14 @@ public enum PageTitle {
     static let tagWindow = 4096
 
     public static func title(in data: Data, contentType: String?) -> String? {
+        var scanned = 0
+        return title(in: data, contentType: contentType, scanned: &scanned)
+    }
+
+    /// - Parameter scanned: 探すのに見たバイトの数を足す。テストで、手間がページの大きさに比例して収まることを、時間を測らずに確かめる。
+    static func title(in data: Data, contentType: String?, scanned: inout Int) -> String? {
         let encoding = encoding(of: data, contentType: contentType)
-        return ogTitle(in: data, encoding: encoding) ?? titleElement(in: data, encoding: encoding)
+        return ogTitle(in: data, encoding: encoding, scanned: &scanned) ?? titleElement(in: data, encoding: encoding, scanned: &scanned)
     }
 
     /// 空でないog:titleのmetaを、閉じの`>`まで読んだか。読み終えていれば、残りを読まずに止めてよい。
@@ -27,18 +33,24 @@ public enum PageTitle {
     /// - Parameter offset: ここより前は前回までに調べ済み。調べ済みの分を読み直さないよう、ここから探す。
     ///   前回の終わりで切れていたタグも見つけられるよう、渡す側はタグの幅の分だけ手前にずらして渡す。
     public static func hasOGTitle(in data: Data, contentType: String?, searchingFrom offset: Int = 0) -> Bool {
-        ogTitle(in: data, encoding: encoding(of: data, contentType: contentType), from: offset) != nil
+        var scanned = 0
+        return hasOGTitle(in: data, contentType: contentType, searchingFrom: offset, scanned: &scanned)
     }
 
-    private static func ogTitle(in data: Data, encoding: String.Encoding, from offset: Int = 0) -> String? {
+    /// - Parameter scanned: 探すのに見たバイトの数を足す。
+    static func hasOGTitle(in data: Data, contentType: String?, searchingFrom offset: Int = 0, scanned: inout Int) -> Bool {
+        ogTitle(in: data, encoding: encoding(of: data, contentType: contentType), from: offset, scanned: &scanned) != nil
+    }
+
+    private static func ogTitle(in data: Data, encoding: String.Encoding, from offset: Int = 0, scanned: inout Int) -> String? {
         let tags: [Range<Int>] = data.withUnsafeBytes { bytes in
             var tags: [Range<Int>] = []
             var from = max(0, offset)
             for _ in 0..<maxOGTitleCandidates {
-                guard let found = find("og:title", in: bytes, from: from, to: bytes.count) else { break }
+                guard let found = find("og:title", in: bytes, from: from, to: bytes.count, scanned: &scanned) else { break }
                 from = found + 1
-                guard let start = findLast("<meta", in: bytes, from: max(0, found - metaLookBehind), to: found),
-                      let end = tagEnd(in: bytes, from: start)
+                guard let start = findLast("<meta", in: bytes, from: max(0, found - metaLookBehind), to: found, scanned: &scanned),
+                      let end = tagEnd(in: bytes, from: start, scanned: &scanned)
                 else { continue }
                 tags.append(start..<end)
             }
@@ -55,17 +67,17 @@ public enum PageTitle {
     }
 
     /// 中身が閉じの`</title>`まで幅に収まる、最初の`<title>`の中身。`<title>`の中身は文字だけなので、`<`を含んでも閉じのタグまでを中身にする。
-    private static func titleElement(in data: Data, encoding: String.Encoding) -> String? {
+    private static func titleElement(in data: Data, encoding: String.Encoding, scanned: inout Int) -> String? {
         let inner: Range<Int>? = data.withUnsafeBytes { bytes in
             var from = 0
             for _ in 0..<maxTitleCandidates {
-                guard let found = find("<title", in: bytes, from: from, to: bytes.count) else { return nil }
+                guard let found = find("<title", in: bytes, from: from, to: bytes.count, scanned: &scanned) else { return nil }
                 from = found + 1
                 // `<titlex`のような別の名前のタグを除く。
                 let next = found + 6
                 guard next < bytes.count, bytes[next] == UInt8(ascii: ">") || isSpace(bytes[next]),
-                      let open = tagEnd(in: bytes, from: found),
-                      let close = find("</title", in: bytes, from: open, to: min(bytes.count, open + tagWindow))
+                      let open = tagEnd(in: bytes, from: found, scanned: &scanned),
+                      let close = find("</title", in: bytes, from: open, to: min(bytes.count, open + tagWindow), scanned: &scanned)
                 else { continue }
                 return open..<close
             }
@@ -77,27 +89,33 @@ public enum PageTitle {
     }
 
     /// `start`の`<`から始まるタグの、閉じの`>`の次の位置。属性の値の中の`>`でタグを切らないよう、引用符の中は読み飛ばす。幅に収まらなければnil。
-    private static func tagEnd(in bytes: UnsafeRawBufferPointer, from start: Int) -> Int? {
+    private static func tagEnd(in bytes: UnsafeRawBufferPointer, from start: Int, scanned: inout Int) -> Int? {
         var quote: UInt8?
-        for index in start..<min(bytes.count, start + tagWindow) {
+        let end = min(bytes.count, start + tagWindow)
+        for index in start..<end {
             let byte = bytes[index]
             if let open = quote {
                 if byte == open { quote = nil }
             } else if byte == UInt8(ascii: "\"") || byte == UInt8(ascii: "'") {
                 quote = byte
             } else if byte == UInt8(ascii: ">") {
+                scanned += index + 1 - start
                 return index + 1
             }
         }
+        scanned += end - start
         return nil
     }
 
     /// `from`から`to`の間で`needle`を探す。1バイトずつ比べると遅いため、バイト列の検索で探す。
     /// 大文字と小文字の違いは、すべての組み合わせではなく、HTMLでよく見る書き方（小文字、大文字、先頭の英字だけ大文字）だけを探す。
-    private static func find(_ needle: String, in bytes: UnsafeRawBufferPointer, from: Int, to: Int) -> Int? {
+    private static func find(_ needle: String, in bytes: UnsafeRawBufferPointer, from: Int, to: Int, scanned: inout Int) -> Int? {
         guard to - from >= needle.utf8.count, let base = bytes.baseAddress else { return nil }
         let haystack = Data(bytesNoCopy: UnsafeMutableRawPointer(mutating: base + from), count: to - from, deallocator: .none)
-        return spellings(of: needle).compactMap { haystack.range(of: $0)?.lowerBound }.min().map { $0 + from }
+        let found = spellings(of: needle).map { haystack.range(of: $0) }
+        // 見つからなかった書き方は、末尾まで見ている。
+        scanned += found.reduce(0) { $0 + ($1?.upperBound ?? haystack.count) }
+        return found.compactMap { $0?.lowerBound }.min().map { $0 + from }
     }
 
     private static func spellings(of needle: String) -> [Data] {
@@ -109,10 +127,12 @@ public enum PageTitle {
         return [Data(lower.utf8), Data(needle.uppercased().utf8), Data(capitalized)]
     }
 
-    private static func findLast(_ needle: String, in bytes: UnsafeRawBufferPointer, from: Int, to: Int) -> Int? {
+    private static func findLast(_ needle: String, in bytes: UnsafeRawBufferPointer, from: Int, to: Int, scanned: inout Int) -> Int? {
         let needle = Array(needle.utf8)
         guard to - from >= needle.count else { return nil }
-        return (from...(to - needle.count)).reversed().first { matches(needle, in: bytes, at: $0) }
+        let found = (from...(to - needle.count)).reversed().first { matches(needle, in: bytes, at: $0) }
+        scanned += to - (found ?? from)
+        return found
     }
 
     private static func matches(_ needle: [UInt8], in bytes: UnsafeRawBufferPointer, at index: Int) -> Bool {
