@@ -1,4 +1,5 @@
 import SciaCore
+import SciaTesting
 import Testing
 import UIKit
 @testable import Scia
@@ -14,6 +15,8 @@ final class TimelineHarness {
     /// アプリ全体のアプリ内通知と、ウインドウに重ねたチップの列。
     let notices: NoticeCenter
     let overlay: NoticeOverlay
+    /// 数秒で消えるチップの時計。実際の時間では進まないので、負荷で確かめる前にチップが消えることはない。消えるところを確かめるテストが進める。
+    let noticeClock = TestClock()
     let window: UIWindow
     /// 最上部へスプリングで動かすときのコマ。実際の時間では進まず、テストが送った分だけ進む。
     let frames = ManualFrameSource()
@@ -46,6 +49,7 @@ final class TimelineHarness {
         window.rootViewController = UINavigationController(rootViewController: viewController)
         window.makeKeyAndVisible()
         overlay = NoticeOverlay.install(in: window, center: notices, tuning: tuning)
+        overlay.column.stack.clock = noticeClock
         window.layoutIfNeeded()
         frames.afterEachFrame = { [weak window] in window?.layoutIfNeeded() }
     }
