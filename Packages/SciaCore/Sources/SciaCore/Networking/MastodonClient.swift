@@ -728,6 +728,44 @@ public struct MastodonClient: Sendable {
         return try await post(Relationship.self, path: "api/v1/accounts/\(id)/mute", form: form).0
     }
 
+    /// 自分のフィルターをすべて返す。ページに分けずに返る。
+    /// https://docs.joinmastodon.org/methods/filters/#get
+    public func filters() async throws -> [ServerFilter] {
+        try await get([ServerFilter].self, path: "api/v2/filters", query: []).0
+    }
+
+    /// フィルターを作る。
+    /// - Parameter expiresIn: 期限までの時間。nilなら期限を付けない。
+    /// https://docs.joinmastodon.org/methods/filters/#create
+    public func createFilter(title: String, context: [FilterResult.Context], action: FilterResult.Action, expiresIn: Duration?, keywords: [ServerFilter.KeywordDraft]) async throws -> ServerFilter {
+        var form = [URLQueryItem(name: "title", value: title), URLQueryItem(name: "filter_action", value: action.rawValue)]
+        form += context.map { URLQueryItem(name: "context[]", value: $0.rawValue) }
+        if let expiresIn {
+            form.append(URLQueryItem(name: "expires_in", value: "\(expiresIn.components.seconds)"))
+        }
+        for keyword in keywords {
+            form.append(URLQueryItem(name: "keywords_attributes[][keyword]", value: keyword.keyword))
+            form.append(URLQueryItem(name: "keywords_attributes[][whole_word]", value: keyword.wholeWord ? "true" : "false"))
+        }
+        return try await post(ServerFilter.self, path: "api/v2/filters", form: form).0
+    }
+
+    /// フィルターを消す。
+    /// https://docs.joinmastodon.org/methods/filters/#delete
+    public func deleteFilter(_ id: String) async throws {
+        var request = URLRequest(url: credential.instance.appending(path: "api/v2/filters/\(id)"))
+        request.httpMethod = "DELETE"
+        _ = try await send(request)
+    }
+
+    /// フィルターのキーワードを1つ消す。フィルターのほかのキーワードは残る。
+    /// https://docs.joinmastodon.org/methods/filters/#keywords-delete
+    public func deleteFilterKeyword(_ id: String) async throws {
+        var request = URLRequest(url: credential.instance.appending(path: "api/v2/filters/keywords/\(id)"))
+        request.httpMethod = "DELETE"
+        _ = try await send(request)
+    }
+
     /// https://docs.joinmastodon.org/methods/accounts/#unmute
     public func unmute(_ id: String) async throws -> Relationship {
         try await post(Relationship.self, path: "api/v1/accounts/\(id)/unmute", form: []).0

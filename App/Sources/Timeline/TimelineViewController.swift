@@ -131,6 +131,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onRemovedFromParent: (() -> Void)?
     /// ユーザーのメニューのメンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
     var userMenuActions: UserMenuActions?
+    /// ハッシュタグのメニューのミュートを組むもの。nilなら項目を出さない。
+    var hashtagMuteActions: HashtagMuteActions?
     /// この画面が表示されている間、生かしておくもの。画面を組み立てたコントローラーを、ナビゲーションから外されるまで残すのに使う。
     var lifetimeOwner: AnyObject?
     /// 一覧の頭に置き、一緒にスクロールするビュー。プロフィールのヘッダーに使う。表示より前に設定する。

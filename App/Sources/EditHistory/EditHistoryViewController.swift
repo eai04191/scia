@@ -21,6 +21,8 @@ final class EditHistoryViewController: UIViewController {
     var onOpenAccountHashtag: ((String, Account) -> Void)?
     /// メンションの長押しのメニューの、メンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
     var userMenuActions: UserMenuActions?
+    /// ハッシュタグのメニューのミュートを組むもの。nilなら項目を出さない。
+    var hashtagMuteActions: HashtagMuteActions?
     /// 添付ファイルを覆うか。今の投稿の版は、一覧と同じく、使う人が開いた・隠した選択に従う。セッションがほかの画面とそろえる。
     var mediaCovers = MediaCovers()
     /// 添付ファイルをぼかすフィルターのうち、開いた一覧で一致したものの名前。一覧と同じく、全部の版の添付ファイルを覆う。

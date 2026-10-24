@@ -250,6 +250,50 @@ struct TimelineStoreTests {
         #expect(store.flushPending().map(\.id) == ["33"])
     }
 
+    /// ミュートしたハッシュタグの付いた投稿とそのブーストを、保留中のものも含めて出さず、あとから届いても出さない。解除したら、次に並べ直したときに戻る。
+    /// 同じタグかは、サーバーのフィルターと同じく、大文字と小文字だけをそろえて見る。全角の表記は別のタグとして扱う。
+    @Test func excludeTagRemovesTaggedStatusesAndBoostsUntilIncluded() async throws {
+        func tagged(_ id: Int, _ name: String) throws -> Status {
+            let base = try status(id)
+            return Status(id: base.id, createdAt: base.createdAt, account: base.account, content: "", spoilerText: "", url: nil, tags: [Tag(name: name, url: nil)])
+        }
+        let store = makeStore(PageQueue([.success(TimelinePage(
+            statuses: [try tagged(30, "Cat"), try status(29, reblog: try tagged(5, "cat")), try tagged(28, "dog"), try status(27)],
+            isRegenerating: false
+        ))]))
+        _ = try await store.loadInitial()
+        _ = store.receive(.update(try tagged(31, "CAT")))
+        _ = store.receive(.update(try tagged(32, "ｃａｔ")))
+
+        #expect(store.excludeTag("cat"))
+        #expect(store.statuses.map(\.id) == ["28", "27"])
+        #expect(!store.excludeTag("cat"))
+        // ミュートの前に始まった読み込みの結果のように、フィルターの結果の付いていない投稿があとから届いても出さない。全角の表記はサーバーも隠さない。
+        #expect(store.flushPending().map(\.id) == ["32"])
+
+        store.includeTag("Cat")
+        _ = store.receive(.update(try tagged(33, "cat")))
+        #expect(store.flushPending().map(\.id) == ["33"])
+        #expect(store.statuses.map(\.id) == ["33", "32", "31", "30", "29", "28", "27"])
+    }
+
+    /// 最初のページの全部がミュートしたハッシュタグの投稿でも、その先の古い投稿を読める。出さない投稿も続きを読む位置に数え、
+    /// フィルターで隠れたページと同じく、最初の読み込みが続きを読むため。
+    @Test func pageOfMutedTagStillReachesOlderStatuses() async throws {
+        func tagged(_ id: Int) throws -> Status {
+            let base = try status(id)
+            return Status(id: base.id, createdAt: base.createdAt, account: base.account, content: "", spoilerText: "", url: nil, tags: [Tag(name: "cat", url: nil)])
+        }
+        let queue = PageQueue([.success(TimelinePage(statuses: [try tagged(32), try tagged(31)], isRegenerating: false)), try page([30])])
+        let store = makeStore(queue)
+        store.excludeTag("cat")
+
+        _ = try await store.loadInitial()
+
+        #expect(store.statuses.map(\.id) == ["30"])
+        #expect(queue.queries.last?.maxID == "31")
+    }
+
     /// 除いている間に届いた投稿は、届いた時点で捨てる。保留したまま解除すると、隠したはずの投稿が出てしまうため。
     @Test func includeAccountDoesNotRestoreStatusesReceivedWhileExcluded() async throws {
         let avatar = try #require(URL(string: "https://example.social/avatars/bob.png"))

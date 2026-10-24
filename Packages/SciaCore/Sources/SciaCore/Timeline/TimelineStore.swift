@@ -43,6 +43,8 @@ public final class TimelineStore {
     private var deletedIDs: Set<String> = []
     /// ミュートかブロックした相手のアカウントのID。その人の投稿とブーストを除き、あとから届いても足さない。
     private var excludedAccountIDs: Set<String> = []
+    /// ミュートしたハッシュタグの、`HashtagMute.matchingKey(for:)`の値。
+    private var excludedTagKeys: Set<String> = []
     /// 読めなかった投稿。同じIDの投稿が読めたら外す。
     private var unreadableItems: [UnreadableItem] = []
     /// フィルターで出さない投稿。一覧には並べないが、読めなかった投稿と同じく、続きを読む位置には使う。
@@ -480,6 +482,23 @@ public final class TimelineStore {
         return true
     }
 
+    /// ミュートしたハッシュタグの付いた投稿と、そのブーストを出さないようにする。あとから届いても出さない。表示に関わる変化があればtrueを返す。
+    /// ミュートの後に読む投稿にはサーバーがフィルターの結果を付けるが、ミュートの前に始まった読み込みの結果や、別のフィルターで隠して残している投稿には付いていないため、
+    /// 出さないタグを覚えておく。捨てずにフィルターで出さない投稿と同じく別に持ち、続きを読む位置には数える。
+    /// 1ページの全部がそのタグの投稿でも、その先の古い投稿を読めるようにするため。解除したら、フィルターの期限が切れたときと同じく、次に並べ直したときに戻る。
+    @discardableResult
+    public func excludeTag(_ name: String) -> Bool {
+        excludedTagKeys.insert(HashtagMute.matchingKey(for: name))
+        let before = entries
+        rebuild(statuses: allStatuses, gaps: gaps)
+        return entries != before
+    }
+
+    /// ミュートを解除したか、期限が切れたハッシュタグの投稿を、また出すようにする。
+    public func includeTag(_ name: String) {
+        excludedTagKeys.remove(HashtagMute.matchingKey(for: name))
+    }
+
     /// ミュートかブロックした相手の投稿、その人のブースト、その人の投稿のブーストを除く。あとから届いても足さない。表示に関わる変化があればtrueを返す。
     /// サーバーはミュートやブロックを応答の後でタイムラインに当てることがあり、Mastodonのドキュメントは、届いたものもクライアントで除くよう求めている。
     @discardableResult
@@ -757,12 +776,18 @@ public final class TimelineStore {
         lateArrivalPositions[id] ?? DisplayPosition(anchorID: id, sequence: 0)
     }
 
+    /// フィルターの「隠す」に一致した投稿か、ミュートしたハッシュタグの付いた投稿。
     private func isFilteredOut(_ status: Status, now: Date) -> Bool {
-        filtering?.verdict(for: status, now: now).isHidden ?? false
+        hasExcludedTag(status) || filtering?.verdict(for: status, now: now).isHidden ?? false
     }
 
     private func isDeleted(_ status: Status) -> Bool {
         deletedIDs.contains(status.id) || status.reblog.map { deletedIDs.contains($0.id) } ?? false || isFromExcludedAccount(status)
+    }
+
+    /// ミュートしたハッシュタグの付いた投稿か、そのブースト。
+    private func hasExcludedTag(_ status: Status) -> Bool {
+        !excludedTagKeys.isEmpty && excludedTagKeys.contains { status.hasTag(matching: $0) }
     }
 
     /// ミュートかブロックした相手の投稿か、その人のブーストか、その人の投稿のブースト。

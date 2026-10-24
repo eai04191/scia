@@ -143,6 +143,7 @@ extension HashtagMenuItem: MenuItemContentProviding {
     var content: MenuItemContent {
         switch self {
         case .timeline: .own(title: "すべての投稿", symbolName: "number", note: "ハッシュタグのタイムラインを開きます。ハッシュタグをタップしたときと同じです")
+        case .mute: .own(title: "ミュート", symbolName: "speaker.slash", note: "このハッシュタグの付いた投稿を、サーバーのフィルターで隠します。ミュート中なら解除します")
         case .accountStatuses: .own(title: "投稿したユーザーの投稿", symbolName: "person.crop.square", note: "このハッシュタグの付いた、投稿したユーザーの投稿を開きます。プロフィールではその人の投稿です。メニューでは「@名前の投稿」と出ます")
         case .openInBrowser: .url(.openInBrowser)
         case .openInDefaultBrowser: .url(.openInDefaultBrowser)
@@ -158,6 +159,7 @@ extension HashtagMenuItem {
     /// - Parameters:
     ///   - url: サーバーのハッシュタグのページ。分からなければ、URLの項目を押せないまま並べる。
     ///   - account: 「投稿したユーザーの投稿」で開くユーザー。nilなら項目を出さない。
+    ///   - muteActions: ミュートを読んで変えるもの。nilなら「ミュート」を出さない。
     @MainActor
     static func menuElements(
         name: String,
@@ -165,6 +167,7 @@ extension HashtagMenuItem {
         account: Account?,
         layout: MenuLayout<HashtagMenuItem>,
         handlers: URLMenuHandlers,
+        muteActions: HashtagMuteActions?,
         openTimeline: @escaping () -> Void,
         openAccountStatuses: @escaping (Account) -> Void
     ) -> [UIMenuElement] {
@@ -180,9 +183,41 @@ extension HashtagMenuItem {
                 // ほかのサーバーのユーザーなら、ユーザーのサブメニューの見出しと同じく、サーバー名をサブタイトルに出す。
                 let domain = account.acct.split(separator: "@", maxSplits: 1).dropFirst().first.map(String.init)
                 return [UIAction(title: "@\(account.username)の投稿", subtitle: domain, image: item.image) { _ in openAccountStatuses(account) }]
+            case .mute:
+                return muteActions.map { [$0.element(for: name, item: item)] } ?? []
             // 共通の項目は、上で中身から組んだ。
             case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
                 return []
+            }
+        }
+    }
+}
+
+/// ハッシュタグのメニューの「ミュート」で、ミュートしているかを読み、変える。決まりはdocs/menus.mdの「ハッシュタグのメニュー」にある。
+struct HashtagMuteActions {
+    /// `#`を除いた名前のタグのミュート。ミュートしていなければnil。
+    let load: @MainActor (String) async throws -> HashtagMute?
+    /// ミュートする。nilなら解除するまで続ける。
+    let mute: @MainActor (String, Duration?) -> Void
+    let unmute: @MainActor (String, HashtagMute) -> Void
+
+    /// メニューを開いてからフィルターを読んで中身を決めるため、読む間はUIKitの読み込み中の行を出す。
+    /// ミュートしていなければ、ユーザーのミュートと同じ期間をサブメニューで選び、ミュート中なら「ミュートを解除」にする。読めなければ、押せない行で知らせる。
+    @MainActor
+    func element(for name: String, item: HashtagMenuItem) -> UIMenuElement {
+        UIDeferredMenuElement.uncached { completion in
+            Task { @MainActor in
+                do {
+                    if let muted = try await load(name) {
+                        completion([UIAction(title: "ミュートを解除", image: UIImage(systemName: "speaker.wave.2")) { _ in unmute(name, muted) }])
+                        return
+                    }
+                    completion([UIMenu(title: item.title, image: item.image, children: UserRelationChange.muteDurations.map { choice in
+                        UIAction(title: choice.title) { _ in mute(name, choice.duration) }
+                    })])
+                } catch {
+                    completion([UIAction(title: "ミュートを読み込めませんでした", image: UIImage(systemName: "exclamationmark.triangle"), attributes: .disabled) { _ in }])
+                }
             }
         }
     }

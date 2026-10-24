@@ -29,6 +29,8 @@ public final class NotificationStore {
     private var deletedStatusIDs: Set<Status.ID> = []
     /// 通知を隠すミュートか、ブロックをした相手のアカウントのID。その人からの通知を除き、あとから届いても足さない。
     private var excludedAccountIDs: Set<String> = []
+    /// ミュートしたハッシュタグの、`HashtagMute.matchingKey(for:)`の値。
+    private var excludedTagKeys: Set<String> = []
     /// 使う人の操作で一覧から除いた通知のID（承認か却下で片づけたフォローリクエストなど）。サーバーは除いた通知を消すが、その前に読み始めたページで戻さない。
     /// 同じ通知がそのページで読めなかったときも、読めなかった行として戻さない。
     private var removedNotificationIDs: Set<MastodonNotification.ID> = []
@@ -313,6 +315,21 @@ public final class NotificationStore {
         return readmit()
     }
 
+    /// ミュートしたハッシュタグの付いた投稿の通知を出さないようにする。あとから届いても出さない。表示に関わる変化があればtrueを返す。
+    /// ミュートの前に始まった読み込みの結果には、サーバーがフィルターの結果を付けていないため、出さないタグを覚えておく。
+    /// 捨てずにフィルターで出さない通知と同じく手元に残し、続きを読む位置には数える。1ページの全部がそのタグの通知でも、その先を読めるようにするため。
+    @discardableResult
+    public func excludeTag(_ name: String) -> Bool {
+        let before = entries
+        excludedTagKeys.insert(HashtagMute.matchingKey(for: name))
+        return entries != before
+    }
+
+    /// ミュートを解除したか、期限が切れたハッシュタグの投稿の通知を、また出すようにする。手元に残している通知は、すぐ戻る。
+    public func includeTag(_ name: String) {
+        excludedTagKeys.remove(HashtagMute.matchingKey(for: name))
+    }
+
     /// 通知を隠すミュートか、ブロックをした相手からの通知を除く。あとから届いても足さない。表示に関わる変化があればtrueを返す。
     /// まとまりからは、その人だけを外す。ほかの人が残れば、まとまりは残る。
     @discardableResult
@@ -471,6 +488,12 @@ public final class NotificationStore {
         return notification.removingAccounts(excludedAccountIDs)
     }
 
+    /// ミュートしたハッシュタグの付いた投稿の通知か。
+    private func hasExcludedTag(_ notification: MastodonNotification) -> Bool {
+        guard let status = notification.status, !excludedTagKeys.isEmpty else { return false }
+        return excludedTagKeys.contains { status.hasTag(matching: $0) }
+    }
+
     private func isAboutDeletedStatus(_ notification: MastodonNotification) -> Bool {
         guard let status = notification.status else { return false }
         return deletedStatusIDs.contains(status.id) || status.reblog.map { deletedStatusIDs.contains($0.id) } ?? false
@@ -513,7 +536,9 @@ public final class NotificationStore {
         return (result, replayedKeys)
     }
 
+    /// 投稿がフィルターの「隠す」に一致したか、ミュートしたハッシュタグの付いた投稿の通知。
     private func isFilteredOut(_ notification: MastodonNotification, now: Date = Date()) -> Bool {
+        if hasExcludedTag(notification) { return true }
         guard let filtering, let status = notification.status else { return false }
         return filtering.verdict(for: status, now: now).isHidden
     }

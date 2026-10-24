@@ -760,6 +760,7 @@ final class SessionController {
             self?.openThread(of: status, rowFrame: rowFrame, from: viewController)
         }
         viewController.userMenuActions = userMenuActions
+        viewController.hashtagMuteActions = hashtagMuteActions
         viewController.onVisibleLinkOnlyCardsChange = { [weak self, weak viewController] statuses in
             guard let self, let viewController else { return }
             #if DEBUG
@@ -1167,6 +1168,7 @@ final class SessionController {
             self?.openAccountHashtag(name, of: account, from: viewController)
         }
         viewController.userMenuActions = userMenuActions
+        viewController.hashtagMuteActions = hashtagMuteActions
         viewController.onOpenLink = { [weak self, weak viewController] destination in
             guard let self, let viewController else { return }
             // 編集で消したメンションは、今の投稿のメンションの一覧にないため、一覧と同じ引き方ではIDが分からない。プロフィールのURLから探す。
@@ -1177,6 +1179,73 @@ final class SessionController {
             }
         }
         source?.navigationController?.pushViewController(viewController, animated: true)
+    }
+
+    /// ハッシュタグのメニューのミュート。メニューを開くたびに、自分のフィルターを読んでミュートしているかを決める。
+    private var hashtagMuteActions: HashtagMuteActions {
+        let client = client
+        return HashtagMuteActions(
+            load: { name in HashtagMute.find(name, in: try await client.filters(), now: Date()) },
+            mute: { [weak self] name, duration in self?.muteHashtag(name, duration: duration) },
+            unmute: { [weak self] name, muted in self?.unmuteHashtag(name, muted) }
+        )
+    }
+
+    /// ハッシュタグをミュートするフィルターを作り、タイムラインと通知から、そのタグの付いた投稿を閉じる動きで除いて、あとから届いても足さない。
+    /// 開いているプロフィールとスレッドからは除かない。期限を付けたら、期限が来たときにまた足す。
+    private func muteHashtag(_ name: String, duration: Duration?) {
+        let client = client
+        logger.info("hashtag mute")
+        Task {
+            do {
+                try await HashtagMute.mute(name, duration: duration, client: client)
+                excludeInLists(tag: name, excluded: true)
+                if let duration {
+                    includeAfterHashtagMuteExpires(name, duration: duration)
+                }
+                notices.showTransient(Notice(id: "hashtag.muteChanged", kind: .success, title: "#\(name)をミュートしました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            } catch {
+                logger.error("hashtag mute failed: \(SciaLog.describe(error), privacy: .public)")
+                handle(error, title: "ミュートを変更できませんでした")
+            }
+        }
+    }
+
+    /// ハッシュタグのミュートを解除する。除いた投稿は戻さず、読み込み直したときに戻る。ユーザーのミュートの解除と同じ。
+    private func unmuteHashtag(_ name: String, _ muted: HashtagMute) {
+        let client = client
+        logger.info("hashtag unmute")
+        Task {
+            do {
+                try await muted.unmute(client: client)
+                excludeInLists(tag: name, excluded: false)
+                notices.showTransient(Notice(id: "hashtag.muteChanged", kind: .success, title: "#\(name)のミュートを解除しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            } catch {
+                logger.error("hashtag unmute failed: \(SciaLog.describe(error), privacy: .public)")
+                handle(error, title: "ミュートを変更できませんでした")
+            }
+        }
+    }
+
+    private func excludeInLists(tag name: String, excluded: Bool) {
+        for feed in feeds {
+            feed.setTag(name, excluded: excluded)
+        }
+        notifications.setTag(name, excluded: excluded)
+    }
+
+    /// 期限を付けたハッシュタグのミュートが切れたら、フィルターを読み直し、もうミュートしていなければ、また足すようにする。ユーザーのミュートと同じく、少し余裕を見てから読む。
+    private func includeAfterHashtagMuteExpires(_ name: String, duration: Duration) {
+        let client = client
+        Task { [weak self] in
+            try? await Task.sleep(for: duration + .seconds(60))
+            do {
+                guard HashtagMute.find(name, in: try await client.filters(), now: Date()) == nil else { return }
+                self?.excludeInLists(tag: name, excluded: false)
+            } catch {
+                self?.logger.error("filters reload after hashtag mute expired failed: \(SciaLog.describe(error), privacy: .public)")
+            }
+        }
     }
 
     /// ユーザーのメニューのメンション、ハンドルをコピー、関係の項目。メンションは、編集の途中でも編集中の本文に入れる。

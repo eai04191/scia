@@ -240,6 +240,7 @@ extension TimelineViewController {
                 account: shown.account,
                 layout: settings.hashtagMenuLayout,
                 handlers: handlers,
+                muteActions: hashtagMuteActions,
                 openTimeline: { [weak self] in self?.onOpenHashtag?(tag.name) },
                 openAccountStatuses: { [weak self] account in self?.onOpenAccountHashtag?(tag.name, account) }
             )

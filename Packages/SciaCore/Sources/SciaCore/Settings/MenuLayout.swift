@@ -333,6 +333,8 @@ public enum HashtagMenuItem: String, MenuItemKind {
     case timeline
     /// 投稿の本文なら投稿した人、プロフィールならその人の、このハッシュタグの付いた投稿を開く。
     case accountStatuses
+    /// このハッシュタグの付いた投稿を、サーバーのフィルターで隠す。ミュート中なら解除する。
+    case mute
     /// 開く場所の設定に従って開く。
     case openInBrowser
     /// 開く場所の設定にかかわらず、既定のブラウザで開く。
@@ -345,6 +347,8 @@ public enum HashtagMenuItem: String, MenuItemKind {
     public static let defaultLayout = MenuLayout<HashtagMenuItem>(defaultElements: [
         .item(.timeline, isVisible: true),
         .item(.accountStatuses, isVisible: true),
+        .separator,
+        .item(.mute, isVisible: true),
         .separator,
         .item(.openInBrowser, isVisible: true),
         .item(.openInDefaultBrowser, isVisible: false),

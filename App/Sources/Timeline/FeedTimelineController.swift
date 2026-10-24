@@ -571,6 +571,17 @@ final class FeedTimelineController {
         showEntries(animatesRemoval: true)
     }
 
+    /// ミュートしたハッシュタグの付いた投稿とブーストを除き、あとから届いても足さない。使う人の操作の結果なので、閉じる動きで消す。
+    func setTag(_ name: String, excluded: Bool) {
+        guard !isStopped else { return }
+        guard excluded else {
+            store.includeTag(name)
+            return
+        }
+        guard store.excludeTag(name) else { return }
+        showEntries(animatesRemoval: true)
+    }
+
     /// ミュートかブロックした相手の投稿とブーストを除き、あとから届いても足さない。使う人の操作の結果なので、閉じる動きで消す。
     /// 解除したら、また足すようにする。除いた投稿は、読み込み直すまで戻さない。
     func setAccount(_ id: String, excluded: Bool) {

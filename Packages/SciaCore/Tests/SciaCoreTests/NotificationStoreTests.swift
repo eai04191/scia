@@ -301,6 +301,43 @@ struct NotificationStoreTests {
         #expect(!store.removeStatus("100"))
     }
 
+    /// ミュートしたハッシュタグの付いた投稿の通知を出さず、あとから届いても足さない。投稿のない通知は残す。解除したら、手元に残している通知も戻る。
+    @Test func excludeTagRemovesNotificationsAboutTaggedStatusesUntilIncluded() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/carol.png"))
+        let carol = Account(id: "9", username: "carol", acct: "carol", displayName: "Carol", avatar: avatar)
+        let post = Status(id: "100", createdAt: Date(timeIntervalSince1970: 100), account: carol, content: "", spoilerText: "", url: nil, tags: [Tag(name: "Cat", url: nil)])
+        let mention = MastodonNotification(id: "30", type: .mention, createdAt: Date(timeIntervalSince1970: 30), account: carol, status: post)
+        let queue = PageQueue([.success([mention] + (try notifications([29])))])
+        let store = makeStore(queue)
+        _ = try await store.loadInitial()
+
+        #expect(store.excludeTag("cat"))
+        #expect(store.entries.count == 1)
+        #expect(!store.excludeTag("cat"))
+        #expect(!store.receive(MastodonNotification(id: "31", type: .mention, createdAt: Date(timeIntervalSince1970: 31), account: carol, status: post)))
+
+        store.includeTag("cat")
+        #expect(store.entries.count == 2)
+        #expect(store.receive(MastodonNotification(id: "32", type: .mention, createdAt: Date(timeIntervalSince1970: 32), account: carol, status: post)))
+    }
+
+    /// 1ページの全部がミュートしたハッシュタグの投稿の通知でも、その先の通知を読める。出さない通知も手元に残し、続きを読む位置に数え、
+    /// フィルターで隠れたページと同じく、最初の読み込みが続きを読むため。
+    @Test func pageOfMutedTagStillReachesOlderNotifications() async throws {
+        let avatar = try #require(URL(string: "https://example.social/avatars/carol.png"))
+        let carol = Account(id: "9", username: "carol", acct: "carol", displayName: "Carol", avatar: avatar)
+        let post = Status(id: "100", createdAt: Date(timeIntervalSince1970: 100), account: carol, content: "", spoilerText: "", url: nil, tags: [Tag(name: "cat", url: nil)])
+        let mentions = [32, 31, 30].map { MastodonNotification(id: String($0), type: .mention, createdAt: Date(timeIntervalSince1970: TimeInterval($0)), account: carol, status: post) }
+        let queue = PageQueue([.success(mentions), .success(try notifications([29]))])
+        let store = makeStore(queue)
+        store.excludeTag("cat")
+
+        _ = try await store.loadInitial()
+
+        #expect(store.entries.count == 1)
+        #expect(queue.queries.last?.maxID == "30")
+    }
+
     /// ミュートかブロックした相手からの通知を除き、あとから届いても足さない。解除したら、また足す。
     @Test func excludeAccountRemovesItsNotificationsUntilIncluded() async throws {
         let avatar = try #require(URL(string: "https://example.social/avatars/carol.png"))
