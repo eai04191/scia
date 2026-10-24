@@ -75,6 +75,8 @@ public final class MediaTransfers {
     private let fetch: Fetch
     private let saveToPhotos: SaveToPhotos
     private var tasks: [Transfer.ID: Task<Void, Never>] = [:]
+    /// 走り終えていない処理の数。止めたものも、取り消しを受けて戻り切るまで数える。止めたあとに何も起きないことを、テストが確かめるのに使う。
+    public private(set) var runningCount = 0
 
     public init(fetch: @escaping Fetch, saveToPhotos: @escaping SaveToPhotos) {
         self.fetch = fetch
@@ -100,7 +102,11 @@ public final class MediaTransfers {
         } else {
             let transfer = Transfer(id: UUID(), target: target, purposes: [purpose])
             transfers.append(transfer)
-            tasks[transfer.id] = Task { [weak self] in await self?.run(transfer.id) }
+            runningCount += 1
+            tasks[transfer.id] = Task { [weak self] in
+                await self?.run(transfer.id)
+                self?.runningCount -= 1
+            }
             id = transfer.id
         }
         onChange?()

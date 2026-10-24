@@ -8,9 +8,12 @@ public final class Gate: Sendable {
         var waiters: [Int: CheckedContinuation<Void, any Error>] = [:]
     }
 
-    private let state = Mutex(State())
+    private let state: Mutex<State>
 
-    public init() {}
+    /// - Parameter isOpen: 開いた状態で作るか。待たせないときにも同じ形で渡すために使う。
+    public init(isOpen: Bool = false) {
+        state = Mutex(State(isOpen: isOpen))
+    }
 
     public var isOpen: Bool { state.withLock { $0.isOpen } }
 
