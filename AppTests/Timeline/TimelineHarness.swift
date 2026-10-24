@@ -15,7 +15,7 @@ final class TimelineHarness {
     let notices: NoticeCenter
     let overlay: NoticeOverlay
     let window: UIWindow
-    /// 最上部へばねで動かすときのコマ。実際の時間では進まず、テストが送った分だけ進む。
+    /// 最上部へスプリングで動かすときのコマ。実際の時間では進まず、テストが送った分だけ進む。
     let frames = ManualFrameSource()
 
     /// - Parameter headerView: プロフィールのように、一覧の頭に置くビュー。
@@ -88,7 +88,7 @@ final class TimelineHarness {
         (visibleCell(of: .status(id))?.contentConfiguration as? PostContentConfiguration)?.body.string
     }
 
-    /// 最上部へばねで動かしているのが終わるまで待つ。
+    /// 最上部へスプリングで動かしているのが終わるまで待つ。
     func waitUntilScrollingToTopEnds(sourceLocation: SourceLocation = #_sourceLocation) async throws {
         frames.runUntilStopped(sourceLocation: sourceLocation)
         #expect(!viewController.isScrollingToTop, "最上部へ動かすのが終わりません", sourceLocation: sourceLocation)

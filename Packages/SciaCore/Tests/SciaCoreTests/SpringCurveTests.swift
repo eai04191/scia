@@ -11,7 +11,7 @@ struct SpringCurveTests {
         #expect(!spring.isSettled(at: 0.2))
     }
 
-    /// 弾まないばねは行き過ぎず、進み具合が戻らない。
+    /// バウンスしないスプリングは行き過ぎず、進み具合が戻らない。
     @Test func withoutBounceIncreasesMonotonicallyWithoutOvershoot() {
         let spring = SpringCurve(duration: 0.4, bounce: 0)
         var previous = 0.0
@@ -49,7 +49,7 @@ struct SpringCurveTests {
         #expect(abs(thrown.value(at: 0.4 * 4) - 1) < 0.001)
     }
 
-    /// 弾まないばねは、抑えた上限の速さで動き始めても行き先を越えない。
+    /// バウンスしないスプリングは、抑えた上限の速さで動き始めても行き先を越えない。
     @Test func initialVelocityAtLimitDoesNotOvershootWithoutBounce() {
         let limit = SpringCurve.initialVelocity(releaseVelocity: (0, 1_000_000), from: (0, 0), to: (0, 100), duration: 0.4)
         let spring = SpringCurve(duration: 0.4, bounce: 0, initialVelocity: limit)

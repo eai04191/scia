@@ -95,8 +95,8 @@ final class MediaViewerController: UIViewController {
         let openDuration: TimeInterval
         /// サムネイルへ縮めて戻すまでの時間。
         let closeDuration: TimeInterval
-        /// 下へスワイプして閉じるときの弾み。0で弾まずに止まり、大きいほど行き過ぎてから戻る。
-        /// 指で力を加えたときだけ弾ませ、タップで開くときや、ボタンで閉じるときは弾ませない。
+        /// 下へスワイプして閉じるときのバウンス。0でバウンスせずに止まり、大きいほど行き過ぎてから戻る。
+        /// 指で力を加えたときだけバウンスさせ、タップで開くときや、ボタンで閉じるときはバウンスさせない。
         let dragCloseBounce: CGFloat
         /// 開閉するとき、画像のうちバーにかかる部分を、一覧の中に置いた複製でバーの奥に描く。
         let drawsUnderBars: Bool
@@ -1064,7 +1064,7 @@ extension MediaViewerController {
     }
 
     /// 複製をサムネイルの位置からビューアの画像の位置へ広げる。バーの奥と手前の描き分けを複製の位置と同じフレームで描くため、
-    /// UIKitのアニメーションではなく、ばねを毎フレーム進めて動かす。
+    /// UIKitのアニメーションではなく、スプリングを毎フレーム進めて動かす。
     private func beginOpening() {
         view.layoutIfNeeded()
         let update: @MainActor (CGFloat) -> Void
@@ -1229,7 +1229,7 @@ extension MediaViewerController {
     /// 閉じると決めたら、すぐにビューアを閉じ、複製と下地とボタンの複製を、操作を素通しする最前面の層へ移してサムネイルへ縮める。
     /// ビューアを残したまま動かすと、残った画面が触れたものを吸い、閉じた直後に別の画像をタップしても開けない。
     /// サムネイルが見つからなければ、その場で薄くする。
-    /// - Parameter releaseVelocity: 下へスワイプして閉じたときの、指を離したときの速さ。スワイプして閉じるときだけ、この速さを引き継いで弾ませる。
+    /// - Parameter releaseVelocity: 下へスワイプして閉じたときの、指を離したときの速さ。スワイプして閉じるときだけ、この速さを引き継いでバウンスさせる。
     private func beginClosing(releaseVelocity: CGPoint? = nil) {
         if isEditingDescription {
             endEditingDescription()

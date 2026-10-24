@@ -1,7 +1,7 @@
 import QuartzCore
 import SciaCore
 
-/// ばねの進み具合を、画面を描き換えるたびに渡す。複製の位置と、マスクのようにUIKitのアニメーションで動かせない見た目を、同じフレームでそろえるために使う。
+/// スプリングの進み具合を、画面を描き換えるたびに渡す。複製の位置と、マスクのようにUIKitのアニメーションで動かせない見た目を、同じフレームでそろえるために使う。
 @MainActor
 final class SpringDriver {
     private let spring: SpringCurve
@@ -14,7 +14,7 @@ final class SpringDriver {
 
     /// - Parameters:
     ///   - source: 経過時間を送る元。テストでは、実際の時間に頼らずに動きを進めるため、手で送る元を渡す。
-    ///   - update: 進み具合を受け取る。0から始まり1に落ち着く。弾む場合は1を超えることがある。
+    ///   - update: 進み具合を受け取る。0から始まり1に落ち着く。バウンスする場合は1を超えることがある。
     ///   - completion: 落ち着いたら呼ぶ。`stop`で止めたときは呼ばない。
     init(
         spring: SpringCurve,
@@ -32,7 +32,7 @@ final class SpringDriver {
     func start() {
         ticker?.stop()
         time = 0
-        // ばねは決まった時間で落ち着くため、ひっかかりで間が空いても経過時間を削らず、描かれる時刻とそろえる。
+        // スプリングは決まった時間で落ち着くため、ひっかかりで間が空いても経過時間を削らず、描かれる時刻とそろえる。
         // 持ち主が手放しても、落ち着くか止めるまで動かし続けるよう、動いている間は自分を強く持つ。止めると`ticker`を手放して解く。
         let ticker = FrameTicker(source: source, longestElapsed: nil) { elapsed in
             self.step(elapsed: elapsed)

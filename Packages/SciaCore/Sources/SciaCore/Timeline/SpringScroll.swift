@@ -1,13 +1,13 @@
 public import Foundation
 
-/// スクロール位置を、ばねで目標へ寄せる。毎フレーム、今の位置と目標と経過時間を受け取り、次に置く位置を返す。
+/// スクロール位置を、スプリングで目標へ寄せる。毎フレーム、今の位置と目標と経過時間を受け取り、次に置く位置を返す。
 ///
-/// 位置と速さを持つばねとして進めるため、動いている途中に、上のセルが見積もりから実寸へ変わって位置が補正されたり、
+/// 位置と速さを持つスプリングとして進めるため、動いている途中に、上のセルが見積もりから実寸へ変わって位置が補正されたり、
 /// 新着を足して目標までの距離が伸びたりしても、速さを持ち越したまま今の位置から目標へ向かう。
 /// 進み具合を時間だけで決める動き（`SpringCurve`）で距離を縮め直すと、終わりぎわに距離が伸びたときに急に速くなり、
 /// 動き直すと一度止まってしまう。
 ///
-/// 時間と弾みは`SpringCurve`と同じ定義で、止まった状態から動かせば`SpringCurve`と同じ道筋をたどる。
+/// 時間とバウンスは`SpringCurve`と同じ定義で、止まった状態から動かせば`SpringCurve`と同じ道筋をたどる。
 public struct SpringScroll: Sendable {
     /// 止まっているとみなす、目標からのずれ（pt）と速さ（pt/秒）。
     private static let settledDistance = 0.5
@@ -25,12 +25,12 @@ public struct SpringScroll: Sendable {
     private var lastPosition: Double?
 
     /// - Parameters:
-    ///   - duration: 弾まない場合に、おおむね行き着くまでの時間。
-    ///   - bounce: 0で弾まずに止まり、大きいほど行き過ぎてから戻る。
+    ///   - duration: バウンスしない場合に、おおむね行き着くまでの時間。
+    ///   - bounce: 0でバウンスせずに止まり、大きいほど行き過ぎてから戻る。
     ///   - velocity: 動き始めの速さ。
     public init(duration: TimeInterval, bounce: Double, velocity: Double = 0) {
-        precondition(duration > 0, "ばねの時間は正の値にします")
-        precondition((0..<1).contains(bounce), "弾みは0以上1未満にします")
+        precondition(duration > 0, "スプリングの時間は正の値にします")
+        precondition((0..<1).contains(bounce), "bounceは0以上1未満にします")
         angularFrequency = 2 * Double.pi / duration
         dampingRatio = 1 - bounce
         self.velocity = velocity

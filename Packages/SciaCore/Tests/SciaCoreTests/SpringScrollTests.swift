@@ -26,7 +26,7 @@ struct SpringScrollTests {
         zip(positions, positions.dropFirst()).map { abs($1 - $0) }.max() ?? 0
     }
 
-    /// 止まった状態から動かすと、同じ時間と弾みの`SpringCurve`と同じ道筋をたどる。
+    /// 止まった状態から動かすと、同じ時間とバウンスの`SpringCurve`と同じ道筋をたどる。
     @Test(arguments: [0.0, 0.3])
     func matchesSpringCurveFromRest(bounce: Double) {
         let curve = SpringCurve(duration: 0.4, bounce: bounce)
@@ -99,7 +99,7 @@ struct SpringScrollTests {
         #expect(settled, "落ち着きませんでした: \(position)")
     }
 
-    /// 弾むばねは目標を一度行き過ぎてから戻る。
+    /// バウンスするスプリングは目標を一度行き過ぎてから戻る。
     @Test func bounceOvershootsTarget() {
         var scroll = SpringScroll(duration: 0.4, bounce: 0.3)
 

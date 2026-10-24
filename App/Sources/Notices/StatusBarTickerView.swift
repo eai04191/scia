@@ -212,10 +212,10 @@ final class StatusBarTickerView: UIView {
     private(set) var cutout: StatusBarCutout
     private let capsule = UIView()
     private var content: ContentViews?
-    /// 背景を広げたり縮めたりしている動き。背景の枠と丸み、中身の位置と濃さを、UIKitと同じばねの進み具合から前もって計算し、
+    /// 背景を広げたり縮めたりしている動き。背景の枠と丸み、中身の位置と濃さを、UIKitと同じスプリングの進み具合から前もって計算し、
     /// 同じ時刻表のキーフレームのアニメーションにして描画に任せる。
     /// 中身は背景の子なので、背景をUIKitのアニメーションで動かして毎コマ中身を合わせると、置いた位置が画面に出るときには背景がもう1コマ動いていて、
-    /// その分だけ中身が横にも縦にもずれる。毎コマ自分で動かすと、メインスレッドが重いときにコマが落ち、UIKitのばねとも曲線が変わる。
+    /// その分だけ中身が横にも縦にもずれる。毎コマ自分で動かすと、メインスレッドが重いときにコマが落ち、UIKitのスプリングとも曲線が変わる。
     private var motion: Motion?
     /// 背景の端に合わせて置く中身。広げている途中に次の通知が来ると、入れ替わる2つの中身が並ぶ。
     private var trackedContents: [ContentViews] = []
@@ -439,11 +439,11 @@ final class StatusBarTickerView: UIView {
         }
     }
 
-    /// キーフレームの間隔。線でつないでも、120Hzの画面でばねの曲線と見分けがつかない細かさにする。
+    /// キーフレームの間隔。線でつないでも、120Hzの画面でスプリングの曲線と見分けがつかない細かさにする。
     private static let keyframeInterval: TimeInterval = 1.0 / 240
     private static let animationKeyPrefix = "statusBarTicker."
 
-    /// 背景を、今の見た目の枠から`target`へ、UIKitと同じばねで動かす。中身も同じ時刻表で背景の端に沿わせ、背景と一緒に出入りする中身の濃さも同じ進み具合で決める。
+    /// 背景を、今の見た目の枠から`target`へ、UIKitと同じスプリングで動かす。中身も同じ時刻表で背景の端に沿わせ、背景と一緒に出入りする中身の濃さも同じ進み具合で決める。
     private func animateCapsule(to target: CGRect, dampingRatio: CGFloat, contentAlpha: @escaping (CGFloat) -> CGFloat, completion: @escaping () -> Void) {
         // 動いている途中なら、今の見た目で止めてから動かし直す。
         let presentation = capsule.layer.presentation()

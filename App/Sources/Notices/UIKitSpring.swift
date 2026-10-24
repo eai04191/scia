@@ -1,17 +1,17 @@
 import QuartzCore
 import UIKit
 
-/// UIKitの`UIView.animate(withDuration:delay:usingSpringWithDamping:initialSpringVelocity:)`が使うばね。
+/// UIKitの`UIView.animate(withDuration:delay:usingSpringWithDamping:initialSpringVelocity:)`が使うスプリング。
 /// 係数（質量・硬さ・減衰）は、UIKit自身に一度アニメーションを作らせて読む。UIKitが時間と減衰比から係数を決める式は公開されていないため。
-/// 同じ係数の進み具合を自分で計算し、キーフレームのアニメーションにして、UIKitのばねと同じ動きを、UIKitで動かせない値（背景に合わせた中身の位置など）にも当てる。
+/// 同じ係数の進み具合を自分で計算し、キーフレームのアニメーションにして、UIKitのスプリングと同じ動きを、UIKitで動かせない値（背景に合わせた中身の位置など）にも当てる。
 struct UIKitSpring: Equatable {
     let mass: Double
     let stiffness: Double
     let damping: Double
-    /// UIKitがアニメーションにする時間。ばねはこの時間でほぼ止まる。
+    /// UIKitがアニメーションにする時間。スプリングはこの時間でほぼ止まる。
     let duration: TimeInterval
 
-    /// `duration`と`dampingRatio`でUIKitが作るばね。読めなかったら止める。UIKitの作りが変わって読めなくなったことに、すぐ気づけるようにするため。
+    /// `duration`と`dampingRatio`でUIKitが作るスプリング。読めなかったら止める。UIKitの作りが変わって読めなくなったことに、すぐ気づけるようにするため。
     @MainActor
     static func make(duration: TimeInterval, dampingRatio: CGFloat) -> UIKitSpring {
         let key = Key(duration: duration, dampingRatio: dampingRatio)
@@ -21,7 +21,7 @@ struct UIKitSpring: Equatable {
             probe.alpha = 0.5
         }
         guard let animation = probe.layer.animation(forKey: "opacity") as? CASpringAnimation else {
-            preconditionFailure("UIKitのばねのアニメーションを読めません")
+            preconditionFailure("UIKitのスプリングのアニメーションを読めません")
         }
         let spring = UIKitSpring(mass: animation.mass, stiffness: animation.stiffness, damping: animation.damping, duration: animation.duration)
         probe.layer.removeAllAnimations()
@@ -36,7 +36,7 @@ struct UIKitSpring: Equatable {
 
     @MainActor private static var cache: [Key: UIKitSpring] = [:]
 
-    /// 経過時間`time`での進み具合。0から始まり1に落ち着く。弾む場合は1を超えることがある。
+    /// 経過時間`time`での進み具合。0から始まり1に落ち着く。バウンスする場合は1を超えることがある。
     /// 初速0で、残りの割合を1から0へ向かう減衰振動として解く（`CASpringAnimation`と同じ運動方程式）。
     func progress(at time: TimeInterval) -> Double {
         guard time > 0 else { return 0 }

@@ -487,10 +487,10 @@ public enum TuningCatalog {
         defaultValue: 0.1
     )
 
-    /// 新着を挿入して最上部へ動かすときの弾み。0で行き過ぎずに止まる。
+    /// 新着を挿入して最上部へ動かすときのバウンス。0で行き過ぎずに止まる。
     public static let insertionScrollBounce = NumberTuning(
         id: "timeline.insertionScrollBounce",
-        title: "新着を挿入して最上部へ動かす弾み",
+        title: "新着を挿入して最上部へ動かすバウンス",
         range: 0...0.4,
         step: 0.05,
         defaultValue: 0
@@ -505,10 +505,10 @@ public enum TuningCatalog {
         defaultValue: 0.25
     )
 
-    /// 最上部へ戻るときの弾み。0で行き過ぎずに止まる。
+    /// 最上部へ戻るときのバウンス。0で行き過ぎずに止まる。
     public static let scrollToTopBounce = NumberTuning(
         id: "timeline.scrollToTopBounce",
-        title: "最上部へ戻る弾み",
+        title: "最上部へ戻るバウンス",
         range: 0...0.4,
         step: 0.05,
         defaultValue: 0
@@ -653,11 +653,11 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
-    /// ビューアを下へスワイプして閉じるときの弾み。0で行き過ぎずに止まる。
-    /// 指で力を加えたときだけ弾ませ、タップで開くときや、ボタンで閉じるときは弾ませない。
+    /// ビューアを下へスワイプして閉じるときのバウンス。0で行き過ぎずに止まる。
+    /// 指で力を加えたときだけバウンスさせ、タップで開くときや、ボタンで閉じるときはバウンスさせない。
     public static let mediaDragCloseBounce = NumberTuning(
         id: "media.dragCloseBounce",
-        title: "ビューアをスワイプして閉じるときの弾み",
+        title: "ビューアをスワイプして閉じるときのバウンス",
         range: 0...0.4,
         step: 0.05,
         defaultValue: 0.1

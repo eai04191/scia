@@ -42,7 +42,7 @@ struct MediaBarSwapTests {
         #expect(middle == MediaBarSwap(handoff: 0, overlapOpacity: 0))
     }
 
-    /// 弾んで1を超えても、手前に見せたままにする。
+    /// バウンスして1を超えても、手前に見せたままにする。
     @Test func openingStaysInFrontWhileOvershooting() {
         #expect(MediaBarSwap.opening(progress: 1.05, handoffEnd: 0.3, overlapFadeStart: 0.7) == .front)
     }

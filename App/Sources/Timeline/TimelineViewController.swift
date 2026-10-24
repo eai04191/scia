@@ -203,11 +203,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private(set) var unreadCount = 0
     /// スクロール位置を補正している間は、途中の表示を既読として報告しない。
     private var isRestoringAnchor = false
-    /// 最上部へばねで動かしている間、毎フレーム経過時間を渡すもの。
+    /// 最上部へスプリングで動かしている間、毎フレーム経過時間を渡すもの。
     private var topScrollTicker: FrameTicker?
-    /// 最上部へばねで動かすときに、毎フレームの経過時間を送る元。テストでは手で送る元に替える。
+    /// 最上部へスプリングで動かすときに、毎フレームの経過時間を送る元。テストでは手で送る元に替える。
     var frameSource: any FrameSource = DisplayLinkFrameSource.shared
-    /// 最上部へ動かしている間の、ばねの位置の進め方と今の速さ。
+    /// 最上部へ動かしている間の、スプリングの位置の進め方と今の速さ。
     private var topScroll: SpringScroll?
     /// 最上部へ動かしている間だけ有効にし、指が触れた時点で止める。触れたタッチは中身に渡さない。
     /// UIKitのスクロールと同じく、動いている一覧に触れて止めたつもりで、指の下の画像やリンクが開かないようにするため。
@@ -1084,11 +1084,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         )
     }
 
-    /// 最上部へばねで動かす。UIKitのスクロールのアニメーションは時間も曲線も変えられないため、毎フレーム位置を置く。
+    /// 最上部へスプリングで動かす。UIKitのスクロールのアニメーションは時間も曲線も変えられないため、毎フレーム位置を置く。
     ///
     /// 上のセルは表示されたときに見積もりから実寸へ変わり、UICollectionViewがそのぶん位置を補正する。
     /// 動いている途中に新着を足したときも、読んでいる位置を保つためにずらす。どちらも、ずれた位置から速さを持ち越して
-    /// 最上部へ向かうため、中身は飛ばず、止まり直しもしない。すでに動かしていれば、速さを持ち越して時間と弾みだけ替える。
+    /// 最上部へ向かうため、中身は飛ばず、止まり直しもしない。すでに動かしていれば、速さを持ち越して時間とバウンスだけ替える。
     /// 動いている途中に指が触れたら止め、指の操作に任せる。
     private func scrollToTop(duration: TimeInterval, bounce: Double) {
         topScroll = SpringScroll(duration: duration, bounce: bounce, velocity: topScroll?.velocity ?? 0)
@@ -1149,7 +1149,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         scrollToTopInterruption.isEnabled = false
     }
 
-    /// 最上部へばねで動かしている。
+    /// 最上部へスプリングで動かしている。
     var isScrollingToTop: Bool {
         topScrollTicker != nil
     }
@@ -1738,7 +1738,7 @@ extension TimelineViewController {
         collectionView.contentOffset.y = frame.minY - targetInView
     }
 
-    /// 開くときに足した上の余白を、上に並んだ行で置き換える。上に並んだ行が余白より低いときは、最上部までばねで動かして詰める。
+    /// 開くときに足した上の余白を、上に並んだ行で置き換える。上に並んだ行が余白より低いときは、最上部までスプリングで動かして詰める。
     func releaseOpeningInset() {
         guard openingInset > 0 else { return }
         let offset = collectionView.contentOffset.y
