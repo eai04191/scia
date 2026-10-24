@@ -1,8 +1,9 @@
-# スタイルはagentが書くため検査しない。コンパイラが拾わない実行時クラッシュの原因だけを禁止する
+# スタイルはagentが書くため検査しない。コンパイラが拾わない実行時クラッシュの原因と、負荷によってときどき落ちるテストの書き方だけを禁止する
 only_rules:
   - force_unwrapping
   - force_try
   - implicitly_unwrapped_optional
+  - present_without_waiting
 
 included:
   - App
@@ -11,5 +12,17 @@ included:
   - ShareExtension
   - Packages/SciaCore/Sources
   - Packages/SciaCore/Tests
+
+custom_rules:
+  # 出る途中の画面の上に確認やシートを出すと、UIKitは出さずに捨てる。出した直後の待ちは負荷のかかった実行では出し終える前に抜けるため、ときどきだけ落ちる
+  present_without_waiting:
+    included: "AppTests/.*\\.swift"
+    regex: "(?<!func )\\bpresent\\([^\\n]*animated:"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "テストで画面を出すときは、presentForTestingで出し終えるまで待つ。出る途中を確かめるときだけ、理由を書いてこの規則を外す"
+    severity: error
 
 strict: true
