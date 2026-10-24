@@ -13,9 +13,7 @@ import UIKit
 /// 着地の手前からは最前面の複製全体を薄くして、一覧の中の複製へ受け渡す。
 /// 一覧の中の複製がないときは、見せる範囲を画面全体から一覧のバーに隠れない範囲へ、着地へ近づくにつれて絞る。
 @MainActor
-final class MediaClosingFlight: NSObject {
-    /// 画面の描き換えと同じ時間。テストでは差し替える。
-    var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
+final class MediaClosingFlight {
     struct Parts {
         /// 複製や下地を載せる、操作を素通しする層。終わったら外す。
         let overlay: UIView
@@ -50,8 +48,10 @@ final class MediaClosingFlight: NSObject {
     private let startFadingAlphas: [CGFloat]
     private var concealedTile: (any MediaViewerSource)?
     private var lastTarget: (frame: CGRect, radius: CGFloat)?
-    private var startTime: CFTimeInterval = 0
-    private var displayLink: CADisplayLink?
+    private let source: any FrameSource
+    /// 戻り始めてからの時間。
+    private var time: CFTimeInterval = 0
+    private var ticker: FrameTicker?
     /// 戻り終えたときに呼ぶ。
     var onFinish: (() -> Void)?
 
@@ -61,6 +61,7 @@ final class MediaClosingFlight: NSObject {
     ///   - barOverlapFadeEnd: 閉じ始めにバーと重なっていた部分を、一覧の中の複製へ入れ替え終える進み具合。一覧の中の複製がなければ使わない。
     ///   - startOverlapOpacity: 閉じ始めに、バーと重なっていた部分を手前に見せていた濃さ。開く途中から閉じるときは1未満になる。
     ///   - movesImage: falseなら複製を動かさず、その場で薄くする。
+    ///   - source: 経過時間を送る元。テストでは、実際の時間に頼らずに動きを進めるため、手で送る元を渡す。
     init(
         parts: Parts,
         window: UIWindow,
@@ -70,6 +71,7 @@ final class MediaClosingFlight: NSObject {
         startOverlapOpacity: CGFloat,
         movesImage: Bool,
         concealedTile: (any MediaViewerSource)?,
+        source: any FrameSource = DisplayLinkFrameSource.shared,
         findTile: @escaping @MainActor () -> (any MediaViewerSource)?
     ) {
         self.parts = parts
@@ -80,6 +82,7 @@ final class MediaClosingFlight: NSObject {
         self.startOverlapOpacity = startOverlapOpacity
         self.movesImage = movesImage
         self.concealedTile = concealedTile
+        self.source = source
         self.findTile = findTile
         startFrame = parts.morph.frame
         startRadius = parts.morph.layer.cornerRadius
@@ -88,20 +91,22 @@ final class MediaClosingFlight: NSObject {
     }
 
     func start() {
-        startTime = mediaTime()
-        let link = CADisplayLink(target: self, selector: #selector(step(_:)))
-        link.preferredFrameRateRange = CAFrameRateRange(minimum: 80, maximum: 120, preferred: 120)
-        link.add(to: .main, forMode: .common)
-        displayLink = link
+        // ばねは決まった時間で落ち着くため、ひっかかりで間が空いても経過時間を削らず、描かれる時刻とそろえる。
+        // 閉じたビューアはこれを持たないため、戻り終えるまで自分を強く持つ。戻り終えると`ticker`を手放して解く。
+        let ticker = FrameTicker(source: source, longestElapsed: nil) { elapsed in
+            self.step(elapsed: elapsed)
+        }
+        self.ticker = ticker
+        ticker.start()
         update(time: 0)
     }
 
-    @objc private func step(_ link: CADisplayLink) {
-        let time = link.targetTimestamp - startTime
+    private func step(elapsed: CFTimeInterval) -> Bool {
+        time += elapsed
         update(time: time)
-        if spring.isSettled(at: time) {
-            finish()
-        }
+        guard spring.isSettled(at: time) else { return true }
+        finish()
+        return false
     }
 
     private func update(time: CFTimeInterval) {
@@ -159,8 +164,8 @@ final class MediaClosingFlight: NSObject {
     }
 
     private func finish() {
-        displayLink?.invalidate()
-        displayLink = nil
+        ticker?.stop()
+        ticker = nil
         parts.overlay.removeFromSuperview()
         parts.layering.tearDown()
         concealedTile?.isConcealedForViewer = false

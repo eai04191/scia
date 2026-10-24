@@ -203,8 +203,10 @@ struct MediaViewerControllerTests {
         let chip = try #require(column.stack.chips.first)
 
         let viewer = makeViewer(attachments: [image("1", url: nil)])
+        viewer.frameSource = harness.frames
         try await harness.viewController.presentForTesting(viewer)
-        try await waitUntil { !viewer.isMoving }
+        harness.frames.runUntilStopped()
+        #expect(!viewer.isMoving)
         #expect(abs(column.frame.minY - viewer.noticePlacement(below: onList).top) < 1)
         #expect(harness.window.subviews.last === harness.overlay)
         #expect(column.stack.chips.first === chip)
@@ -213,6 +215,7 @@ struct MediaViewerControllerTests {
         try await waitUntil { harness.viewController.presentedViewController == nil }
         #expect(column.frame.minY == onList)
         #expect(column.stack.chips.first === chip)
+        harness.frames.runUntilStopped()
     }
 
     /// シートの上でビューアを開いて閉じたら、チップの列を根の画面のすぐ上に戻し、残ったシートが列を覆うようにする。
@@ -223,17 +226,18 @@ struct MediaViewerControllerTests {
         try await harness.viewController.presentForTesting(sheet)
         defer { sheet.dismiss(animated: false) }
         let viewer = makeViewer(attachments: [image("1", url: nil)])
+        viewer.frameSource = harness.frames
         try await sheet.presentForTesting(viewer)
-        try await waitUntil { !viewer.isMoving }
+        harness.frames.runUntilStopped()
+        #expect(!viewer.isMoving)
         #expect(harness.window.subviews.last === harness.overlay)
 
         #expect(viewer.accessibilityPerformEscape())
         try await waitUntil { sheet.presentedViewController == nil }
         let sheetContainer = try #require(harness.window.subviews.first { sheet.view.isDescendant(of: $0) })
-        try await waitUntil {
-            let order = harness.window.subviews
-            return (order.firstIndex(of: harness.overlay) ?? 0) < (order.firstIndex(of: sheetContainer) ?? 0)
-        }
+        harness.frames.runUntilStopped()
+        let order = harness.window.subviews
+        #expect((order.firstIndex(of: harness.overlay) ?? 0) < (order.firstIndex(of: sheetContainer) ?? 0))
     }
 
     /// 写真への追加が許可されていなければ、知らせる表示ではなくアラートで理由を出し、設定へ案内する。
@@ -1174,13 +1178,15 @@ struct MediaViewerControllerTests {
             timing: timing,
             from: harness.viewController,
             sourceTile: { _ in tile },
-            onDismiss: {}
+            onDismiss: {},
+            frameSource: harness.frames
         )
         let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
         // 開く動きは画面に入るときに始まるため、複製が出るのを待つ。複製を出さなければ時間切れで失敗する。
         try await waitUntil { viewer.isContentHiddenForTransition }
         #expect(tile.isConcealedForViewer, "開いている間にサムネイルを隠していません")
-        try await waitUntil { !viewer.isMoving }
+        harness.frames.runUntilStopped()
+        #expect(!viewer.isMoving)
 
         #expect(!tile.isConcealedForViewer)
         #expect(!viewer.isContentHiddenForTransition)
@@ -1197,7 +1203,8 @@ struct MediaViewerControllerTests {
         #expect(hit === tile || hit?.isDescendant(of: tile) == true, "閉じる動きの間、サムネイルをタップしても届きません: \(String(describing: hit))")
         #expect(tile.isConcealedForViewer, "戻り終える前にサムネイルを見せています")
 
-        try await waitUntil { !tile.isConcealedForViewer }
+        harness.frames.runUntilStopped()
+        #expect(!tile.isConcealedForViewer)
         #expect(viewer.view.superview == nil)
     }
 
@@ -1232,13 +1239,15 @@ struct MediaViewerControllerTests {
             timing: timing,
             from: harness.viewController,
             sourceTile: { _ in tile },
-            onDismiss: {}
+            onDismiss: {},
+            frameSource: harness.frames
         )
         let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
         try await waitUntil { viewer.isContentHiddenForTransition }
         #expect(row.subviews.contains { $0 !== tile }, "開く途中に一覧の行の中へ複製を置いていません")
 
-        try await waitUntil { !viewer.isMoving }
+        harness.frames.runUntilStopped()
+        #expect(!viewer.isMoving)
         #expect(row.subviews.allSatisfy { $0 === tile }, "開ききったあとも一覧の行の中に複製が残っています")
         viewer.dismiss(animated: false)
     }
@@ -1284,11 +1293,12 @@ struct MediaViewerControllerTests {
             startIndex: 0,
             store: store,
             dragToDismiss: drag,
-            // 開く途中に届いたことを確かめるため、テストの間に開き終わらない長さにする。
-            timing: MediaViewerController.Timing(openDuration: 3_600, closeDuration: 1, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3, doubleTapZoomDuration: 0.2),
+            timing: timing,
             from: harness.viewController,
             sourceTile: { _ in tile },
-            onDismiss: {}
+            onDismiss: {},
+            // 開く途中に届いたことを確かめるため、コマを送らずに開く途中のまま止めておく。
+            frameSource: harness.frames
         )
         let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
         try await waitUntil { viewer.isContentHiddenForTransition }
@@ -1296,9 +1306,10 @@ struct MediaViewerControllerTests {
 
         try await waitUntil { viewer.morphImage?.size == arriving.size }
         #expect(viewer.isMoving, "複製を差し替える前に開き終わりました")
-        // 動かさずに閉じると、開き終わらない長さにした開く動きが残るので、開く動きを止める閉じ方で閉じる。
+        // 動かさずに閉じると、止めておいた開く動きが残るので、開く動きを止める閉じ方で閉じる。
         viewer.close()
         try await waitUntil { harness.viewController.presentedViewController == nil }
+        harness.frames.runUntilStopped()
     }
 
     /// ビューアは一覧を残したまま上に重ねるため、開いている間も閉じたあとも、一覧の読んでいる位置を動かさない。
@@ -1331,18 +1342,22 @@ struct MediaViewerControllerTests {
             timing: timing,
             from: harness.viewController,
             sourceTile: { _ in tile },
-            onDismiss: { harness.viewController.reportVisibleItems() }
+            onDismiss: { harness.viewController.reportVisibleItems() },
+            frameSource: harness.frames
         )
         let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
         try await waitUntil { viewer.isContentHiddenForTransition }
-        try await waitUntil { !viewer.isMoving }
+        harness.frames.runUntilStopped()
+        #expect(!viewer.isMoving)
         harness.viewController.view.window?.layoutIfNeeded()
 
         #expect(harness.collectionView.contentOffset == offset, "開いている間に一覧が動きました")
         #expect(harness.windowMinY(of: anchor) == anchorY)
 
         viewer.close()
-        try await waitUntil { harness.viewController.presentedViewController == nil && !tile.isConcealedForViewer }
+        try await waitUntil { harness.viewController.presentedViewController == nil }
+        harness.frames.runUntilStopped()
+        #expect(!tile.isConcealedForViewer)
         harness.viewController.view.window?.layoutIfNeeded()
 
         #expect(harness.collectionView.contentOffset == offset, "閉じたあとに一覧が動きました")

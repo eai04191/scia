@@ -8,13 +8,21 @@ import QuartzCore
 final class FrameTicker {
     private let tick: @MainActor (CFTimeInterval) -> Bool
     private let source: any FrameSource
+    private let longestElapsed: CFTimeInterval?
     private(set) var isRunning = false
 
     /// - Parameters:
     ///   - source: 経過時間を送る元。テストでは、実際の時間に頼らずに動きを進めるため、手で送る元を渡す。
+    ///   - longestElapsed: 1回に渡す経過時間の上限。ひっかかりで間が空いたときに、一度に大きく進めて飛んだように見えないようにする。
+    ///     決まった時間で終える動きのように、経過時間を実際の時間とそろえたいときはnilにする。
     ///   - tick: 経過時間を受け取り、次のフレームも続けるかを返す。持ち主がいなくなっていたらfalseを返す。
-    init(source: any FrameSource = DisplayLinkFrameSource.shared, tick: @escaping @MainActor (CFTimeInterval) -> Bool) {
+    init(
+        source: any FrameSource = DisplayLinkFrameSource.shared,
+        longestElapsed: CFTimeInterval? = FrameTicker.defaultLongestElapsed,
+        tick: @escaping @MainActor (CFTimeInterval) -> Bool
+    ) {
         self.source = source
+        self.longestElapsed = longestElapsed
         self.tick = tick
     }
 
@@ -30,18 +38,17 @@ final class FrameTicker {
         source.stop(self)
     }
 
-    /// 送る元から、前のフレームからの経過時間を受け取る。
-    ///
-    /// ひっかかりで間が空いたときは、一度に大きく進めて飛んだように見えないよう、`longestElapsed`までにする。
+    /// 送る元から、前のフレームからの経過時間を受け取る。`longestElapsed`があれば、それまでにする。
     func receive(elapsed: CFTimeInterval) {
         guard isRunning else { return }
-        if !tick(min(max(elapsed, 0), Self.longestElapsed)) {
+        let positive = max(elapsed, 0)
+        if !tick(longestElapsed.map { min(positive, $0) } ?? positive) {
             stop()
         }
     }
 
-    /// 1回に渡す経過時間の上限。30fpsの1フレーム分。
-    private static let longestElapsed: CFTimeInterval = 1.0 / 30
+    /// 既定の、1回に渡す経過時間の上限。30fpsの1フレーム分。
+    static let defaultLongestElapsed: CFTimeInterval = 1.0 / 30
 }
 
 /// `FrameTicker`に、毎フレームの経過時間を送る元。

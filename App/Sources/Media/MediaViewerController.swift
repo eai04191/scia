@@ -87,6 +87,8 @@ final class MediaViewerController: UIViewController {
     private var barSwap = MediaBarSwap.front
     /// 開く途中でつかんだあと、複製をすべてバーの手前へ寄せる動き。
     private var barConvergence: SpringDriver?
+    /// 開閉の動きに、毎フレームの経過時間を送る元。テストでは、実際の時間に頼らずに動きを進めるため、手で送る元を渡す。
+    var frameSource: any FrameSource = DisplayLinkFrameSource.shared
 
     struct Timing {
         /// サムネイルから広げて、ビューアで表示し終えるまでの時間。
@@ -1082,7 +1084,7 @@ extension MediaViewerController {
                 self?.setVisibility(clamped)
             }
         }
-        let driver = SpringDriver(spring: SpringCurve(duration: timing.openDuration, bounce: 0), update: update) { [weak self] in
+        let driver = SpringDriver(spring: SpringCurve(duration: timing.openDuration, bounce: 0), source: frameSource, update: update) { [weak self] in
             self?.finishOpen()
         }
         motion = .opening(driver)
@@ -1135,7 +1137,7 @@ extension MediaViewerController {
     private func convergeBarLayeringToFront() {
         guard barLayering != nil else { return }
         let from = barSwap
-        let driver = SpringDriver(spring: SpringCurve(duration: Self.barConvergenceDuration, bounce: 0)) { [weak self] progress in
+        let driver = SpringDriver(spring: SpringCurve(duration: Self.barConvergenceDuration, bounce: 0), source: frameSource) { [weak self] progress in
             self?.barSwap = from.converging(toFront: progress)
             self?.applyBarLayering()
         } completion: { [weak self] in
@@ -1329,6 +1331,7 @@ extension MediaViewerController {
             // 戻り先が最初から見つからなければ、その場で薄くする。
             movesImage: moves,
             concealedTile: closingTile,
+            source: frameSource,
             findTile: { sourceTile(attachmentID) }
         )
         let onCloseFinish = onCloseFinish
@@ -1400,7 +1403,8 @@ extension MediaViewerController {
         subject: OperationStatus.Subject? = nil,
         sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?,
         onDismiss: @escaping @MainActor () -> Void,
-        openURL: (@MainActor (URL, LinkBrowser) -> Void)? = nil
+        openURL: (@MainActor (URL, LinkBrowser) -> Void)? = nil,
+        frameSource: any FrameSource = DisplayLinkFrameSource.shared
     ) {
         let viewer = MediaViewerController(
             attachments: attachments,
@@ -1414,6 +1418,7 @@ extension MediaViewerController {
         )
         viewer.onDismiss = onDismiss
         viewer.onOpenURL = openURL
+        viewer.frameSource = frameSource
         // 開く動きはビューアの中で描く。
         presenter.present(viewer, animated: false)
     }
