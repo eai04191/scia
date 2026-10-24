@@ -20,7 +20,7 @@ enum StatusAction {
     case delete
 }
 
-/// メニューにプレースホルダーのアイコンを出し、アイコンを読んでから描き替える人。
+/// メニューにプレースホルダーのアイコンを出し、アイコンを読んでから差し替える人。
 struct PendingMenuIcon {
     let user: MenuUser
     /// 分かっているアカウント。メンションされた人で、一覧にも読み込み済みのものにもいなければnil。
@@ -377,7 +377,7 @@ extension TimelineViewController {
 
     /// ユーザーのメニューのアイコンにする、その人のアイコン。読み込み済みの画像を、一覧と同じ形に切り抜く。
     /// メンションされたユーザーは、APIの`Mention`にアイコンのURLがないため、一覧の行か前に読んだアカウントから探す。
-    /// まだアイコンを出せなければ記号のプレースホルダーを返し、アカウントとアイコンを読み終えたら、開いているメニューのプレースホルダーを描き替える。
+    /// まだアイコンを出せなければ記号のプレースホルダーを返し、アカウントとアイコンを読み終えたら、開いているメニューのプレースホルダーを差し替える。
     /// - Parameter id: メニューを出した行。行に描いた大きさのアイコンも探す。本文のメンションのメニューのように、行が決まらなければnil。
     private func userMenuIcon(for user: MenuUser, id: ItemID?) -> UIImage {
         let account: Account? = switch user {
@@ -412,9 +412,9 @@ extension TimelineViewController {
         account.avatarStatic.map { AvatarView.key(url: $0, animates: false, side: Self.menuIconSide, scale: traitCollection.displayScale) }
     }
 
-    /// メニューを組みながら集めた人のアイコンを読み、開いているメニューのプレースホルダーのアイコンを描き替える。
+    /// メニューを組みながら集めた人のアイコンを読み、開いているメニューのプレースホルダーのアイコンを差し替える。
     /// アカウントが分からないメンションされた人は、相手ごとに送らず、まとめて1回で読む。
-    /// 読み終える前にメニューを閉じていたら、描き替えるものがないので何もしない。次に開いたときは読み込み済みのアイコンを出す。
+    /// 読み終える前にメニューを閉じていたら、差し替えるものがないので何もしない。次に開いたときは読み込み済みのアイコンを出す。
     private func loadPendingMenuIcons() {
         let pending = pendingMenuIcons
         pendingMenuIcons = []
@@ -443,7 +443,7 @@ extension TimelineViewController {
         }
     }
 
-    /// `account`のアイコンを読み、開いているメニューの`placeholder`を描き替える。
+    /// `account`のアイコンを読み、開いているメニューの`placeholder`を差し替える。
     private func loadMenuIcon(of account: Account, replacing placeholder: UIImage) {
         guard let key = userMenuIconKey(of: account) else { return }
         Task { [weak self] in

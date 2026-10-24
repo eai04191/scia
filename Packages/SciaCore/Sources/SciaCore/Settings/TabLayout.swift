@@ -178,7 +178,7 @@ extension MenuLayout where Item == TabItem {
 
     /// `previous`にあったユーザーのハッシュタグのうち、この並びにないものを、無効にして末尾に足す。
     /// 設定の並びの画面では項目を消せず、ユーザーのハッシュタグが並びから消えるのは最初の並びに戻したときだけなので、そのときに残すのに使う。
-    /// サーバーから読んで足し直せないため。
+    /// サーバーから取得して足し直せないため。
     public func keepingAccountHashtags(of previous: MenuLayout<TabItem>) -> MenuLayout<TabItem> {
         addingMissing(previous.elements.compactMap { element in
             if case .item(let item, _) = element, item.isAccountHashtag { item } else { nil }
@@ -198,7 +198,7 @@ extension MenuLayout where Item == TabItem {
         return MenuLayout(elements: elements + missing.map { .item($0, isVisible: false) })
     }
 
-    /// `belongs`に当てはまる項目を、サーバーから読んだ`fetched`にそろえる。並びにある項目は、読んだ項目で置き換えて名前を新しくし、表示はそのまま残す。
+    /// `belongs`に当てはまる項目を、サーバーから取得した`fetched`にそろえる。並びにある項目は、読んだ項目で置き換えて名前を新しくし、表示はそのまま残す。
     private func syncing(_ fetched: [TabItem], where belongs: (TabItem) -> Bool) -> MenuLayout<TabItem> {
         let latest = Dictionary(fetched.map { ($0, $0) }, uniquingKeysWith: { first, _ in first })
         var known: Set<TabItem> = []

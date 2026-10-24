@@ -14,7 +14,7 @@ final class LinkCardView: UIButton {
         var card: LinkCard
         /// 文字の、枠とサムネイルからの余白。
         var padding: CGFloat
-        /// リンク先だけのカードに、サーバーのカードが届いたときの、描き替えの時間。
+        /// リンク先だけのカードに、サーバーのカードが届いたときの、差し替えの時間。
         var transitionDuration: TimeInterval
         /// サムネイルを置く端。
         var thumbnailSide: LinkCardThumbnailSide

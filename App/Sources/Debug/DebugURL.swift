@@ -33,13 +33,13 @@ enum DebugURL: Equatable {
     case unsupported(OptionalFeature)
     /// `scia-debug://streaming/offline`で今のストリーミングの接続を切り、以後の接続を失敗させる。`scia-debug://streaming/online`で戻す。
     case streaming(isOnline: Bool)
-    /// `scia-debug://download/slow`で、以後の共有や保存のためのダウンロードを、進み具合を刻みながら10秒遅らせる。
+    /// `scia-debug://download/slow`で、以後の共有や保存のためのダウンロードを、進み具合を少しずつ進めながら10秒遅らせる。
     /// `?seconds=<秒>`で遅らせる時間を変える。`scia-debug://download/normal`で戻す。
     case slowDownload(seconds: Double?)
     /// `scia-debug://menu-icons/slow`で、以後の投稿のメニューで、まだ読んでいないユーザーのアイコンを3秒遅らせてから読む。
     /// `?seconds=<秒>`で遅らせる時間を変える。`scia-debug://menu-icons/normal`で戻す。
     case slowMenuIcons(seconds: Double?)
-    /// `scia-debug://notice/progress`で、出たままの「処理中」のチップを、進み具合を刻みながら60秒出す。`?seconds=<秒>`で長さを変える。
+    /// `scia-debug://notice/progress`で、出たままの「処理中」のチップを、進み具合を少しずつ進めながら60秒出す。`?seconds=<秒>`で長さを変える。
     /// アプリ全体のアプリ内通知として出すため、画面を移る途中や引っぱる途中のチップの列の動きを、ダウンロードを用意せずに確かめられる。
     case progressNotice(seconds: Double)
     /// `scia-debug://media-limits?image-size=<バイト>&image-matrix=<画素>&video-size=<バイト>&video-matrix=<画素>&video-frame-rate=<fps>`。

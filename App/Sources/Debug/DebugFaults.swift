@@ -71,7 +71,7 @@ enum DebugFaults {
         corruptsListElements.withLock { $0 = true }
     }
 
-    /// 決めると、以後の共有や保存のためのダウンロードを、進み具合を刻みながらその時間だけ遅らせる。ダウンロード中の知らせを、大きなファイルを用意せずに確かめる。
+    /// 決めると、以後の共有や保存のためのダウンロードを、進み具合を少しずつ進めながらその時間だけ遅らせる。ダウンロード中の知らせを、大きなファイルを用意せずに確かめる。
     private static let downloadDelay = Mutex<Duration?>(nil)
 
     static var slowDownloadDelay: Duration? { downloadDelay.withLock { $0 } }

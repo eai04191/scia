@@ -3,7 +3,7 @@ import UIKit
 
 /// 投稿の編集履歴。今の投稿の版から最初の投稿まで、版ごとに1つ前の版との違いを重ねて縦に並べる。
 ///
-/// 開くたびにサーバーから読む。編集は少ないうえ、開いている間に編集されることもまれなため、手元に残さない。
+/// 開くたびにサーバーから取得する。編集は少ないうえ、開いている間に編集されることもまれなため、手元に残さない。
 final class EditHistoryViewController: UIViewController {
     private enum State {
         case loading

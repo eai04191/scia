@@ -487,7 +487,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         accessibilityValue = hiddenCount > 0 ? "ほか\(hiddenCount)件" : nil
     }
 
-    /// 投稿欄で選んだ手元のメディアを描く。サーバーから読まず、投稿欄で作ったサムネイルをそのまま出す。
+    /// 投稿欄で選んだ手元のメディアを描く。サーバーから取得せず、投稿欄で作ったサムネイルをそのまま出す。
     /// 手元のGIFはビューアでも最初のコマを画像として見せるため、動画だけをサムネイルと違うコマを描くものとして扱う。
     /// - Parameter kind: 種類。ファイルを読み込む前で分からなければnilで、読み上げでは「メディア」にする。
     func applyLocal(thumbnail: UIImage?, kind: MediaAttachment.Kind?, description: String) {
@@ -691,7 +691,7 @@ final class MediaBadgeView: UIView {
         return marks
     }
 
-    /// `size.width`に入る形を選んで大きさを返し、その形に描き替える。できるだけすべてのラベルを出すため、次の順に詰める。
+    /// `size.width`に入る形を選んで大きさを返し、その形で描き直す。できるだけすべてのラベルを出すため、次の順に詰める。
     /// 1. ラベルの名前で並べる
     /// 2. 頭の1文字にし、左右の余白を最大から最小へ詰める
     /// 3. 最小の余白でも入らなければ、文字を下限まで小さくする。下限でも入らない分は切れる

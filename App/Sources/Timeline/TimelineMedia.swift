@@ -43,7 +43,7 @@ extension TimelineViewController {
     }
 
     /// Xの投稿を読み終えた。その投稿へのリンクを出している行を描き直し、リンクカードを囲みに替える。
-    /// 行が伸びる分は、リンクカードが届いたときの描き替えと同じ時間で動きでつなぐ。
+    /// 行が伸びる分は、リンクカードが届いたときの差し替えと同じ時間で動きでつなぐ。
     func applyXPost(id: String) {
         guard isViewLoaded, tuning.value(of: TuningCatalog.xPostEmbeds) else { return }
         let ids = displayedItemIDs.filter { itemID in

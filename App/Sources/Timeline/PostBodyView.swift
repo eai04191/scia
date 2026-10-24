@@ -120,7 +120,7 @@ final class PostBodyView: UIView {
         [Self.shown(spoilerView), Self.shown(textLabel)].compactMap(\.self).map(\.frame).reduce(CGRect.null) { $0.union($1) }
     }
 
-    /// 注意書きと本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+    /// 注意書きと本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
     var emojiImages: EmojiImageStore? {
         get { textLabel.emojiImages }
         set {

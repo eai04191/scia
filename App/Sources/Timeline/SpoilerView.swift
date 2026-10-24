@@ -44,7 +44,7 @@ final class SpoilerView: UIControl {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 注意書きのアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+    /// 注意書きのアニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
     var emojiImages: EmojiImageStore? {
         get { textLabel.emojiImages }
         set { textLabel.emojiImages = newValue }

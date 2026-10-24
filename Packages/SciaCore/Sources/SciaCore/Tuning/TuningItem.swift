@@ -195,10 +195,10 @@ public enum TuningCatalog {
         defaultValue: 10
     )
 
-    /// リンク先だけのカードに、サーバーのカードが届いたときの、描き替えのスプリングの時間。画像のないカードでは、サムネイルの枠を縮めて消す。
+    /// リンク先だけのカードに、サーバーのカードが届いたときの、差し替えのスプリングの時間。画像のないカードでは、サムネイルの枠を縮めて消す。
     public static let linkCardTransitionDuration = NumberTuning(
         id: "timeline.linkCardTransitionDuration",
-        title: "リンクカードが届いたときの描き替えの時間（秒）",
+        title: "リンクカードが届いたときの差し替えの時間（秒）",
         range: 0...1.5,
         step: 0.05,
         defaultValue: 0.4

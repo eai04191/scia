@@ -166,9 +166,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private(set) lazy var collectionView: UICollectionView = TimelineCollectionView(frame: .zero, collectionViewLayout: makeLayout())
     private lazy var dataSource = makeDataSource()
     private var entries: [ItemID: TimelineEntry] = [:]
-    /// 長押しのメニューを開いている間に届いたアイコンを、メニューを組み直さずに描き替える。
+    /// 長押しのメニューを開いている間に届いたアイコンを、メニューを組み直さずに差し替える。
     let contextMenuIcons = ContextMenuIconSwapper()
-    /// 組んでいるメニューで、アイコンを読んでから描き替える人。メニューを組み終えたら、まとめて読み始める。
+    /// 組んでいるメニューで、アイコンを読んでから差し替える人。メニューを組み終えたら、まとめて読み始める。
     var pendingMenuIcons: [PendingMenuIcon] = []
     /// 前回`setEntries`で並べた配列。次に渡された`keepingRowContentsOf`と同じ配列かを、中身を比べずに確かめるために持つ。
     private var appliedEntries: [TimelineEntry] = []

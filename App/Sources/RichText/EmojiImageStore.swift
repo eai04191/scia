@@ -171,7 +171,7 @@ final class EmojiImageStore {
     }
 }
 
-/// コマに分けたアニメーションする絵文字。描いている層が持っている間は、置き場から捨てても同じものを使い回す。
+/// コマに分けたアニメーションする絵文字。描いている層が持っている間は、ストアから捨てても同じものを使い回す。
 final class EmojiAnimation: Sendable {
     let image: AnimatedImage
 

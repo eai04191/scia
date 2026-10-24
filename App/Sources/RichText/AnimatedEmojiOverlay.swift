@@ -66,7 +66,7 @@ final class AnimatedEmojiOverlay {
     /// まだ届いていない絵文字は読み込みを始め、届いたら`onChange`を呼ぶ。
     /// - Parameter stillIndices: 動かさず、文字の中の静止画のまま描く絵文字の位置。
     func prepare(_ text: NSAttributedString?, keepingStill stillIndices: Set<Int> = []) -> NSAttributedString? {
-        // 組み終えるまで前の`entries`を持っておく。先に手放すと、置き場から捨てられたアニメーションの最後の参照が切れ、読み直すことになるため。
+        // 組み終えるまで前の`entries`を持っておく。先に手放すと、ストアから捨てられたアニメーションの最後の参照が切れ、読み直すことになるため。
         var entries: [Entry] = []
         defer {
             // セルを描き直すたびに層を作り直さないよう、同じ絵文字を同じ位置に描くなら今の層を使い続ける。

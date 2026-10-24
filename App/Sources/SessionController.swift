@@ -1518,7 +1518,7 @@ final class SessionController {
         topViewController.present(alert, animated: true)
     }
 
-    /// 編集の元にする本文をサーバーから読み、読めたら投稿欄で編集を始める。同じ投稿を編集している途中なら、読み直さずに投稿欄を開く。
+    /// 編集の元にする本文をサーバーから取得し、取得できたら投稿欄で編集を始める。同じ投稿を編集している途中なら、読み直さずに投稿欄を開く。
     /// 読めなかったら、お気に入りの失敗と同じく、チップの列に出す。
     private func startEditing(_ status: Status) {
         let target = status.displayed
@@ -2198,7 +2198,7 @@ final class SessionController {
     }
 
     #if DEBUG
-    /// 確かめるための処理中のチップを、進み具合を刻みながら`duration`のあいだ出し、済んだら消す。出している途中に呼び直したら、初めから数え直す。
+    /// 確かめるための処理中のチップを、進み具合を少しずつ進めながら`duration`のあいだ出し、済んだら消す。出している途中に呼び直したら、初めから数え直す。
     private func showDebugProgress(for duration: Duration) {
         debugProgressTask?.cancel()
         let elapsed = stopwatch(on: clock)
@@ -2545,7 +2545,7 @@ private final class ProfileRegistry {
     }
 
     private var entries: [Entry] = []
-    /// 開き直したプロフィールで、前に読んだ関係から始めるための置き場。
+    /// 開き直したプロフィールで、前に読んだ関係から始めるためのキャッシュ。
     let relationships = RelationshipCache()
 
     func add(_ controller: ProfileController) {

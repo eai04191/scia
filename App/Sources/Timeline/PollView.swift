@@ -31,7 +31,7 @@ final class PollView: UIView {
     }
 
     var onAction: ((Action) -> Void)?
-    /// 選択肢のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+    /// 選択肢のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
     var emojiImages: EmojiImageStore? {
         didSet {
             for option in optionViews {

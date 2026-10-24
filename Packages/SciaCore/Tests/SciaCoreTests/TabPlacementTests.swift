@@ -233,7 +233,7 @@ struct TabLayoutSettingsTests {
         }
     }
 
-    /// 最初の並びに戻しても、戻す前の並びにあったユーザーのハッシュタグは、無効にして残す。サーバーから読んで足し直せないため。
+    /// 最初の並びに戻しても、戻す前の並びにあったユーザーのハッシュタグは、無効にして残す。サーバーから取得して足し直せないため。
     @Test func resetKeepsAccountHashtagsDisabled() {
         let item = TabItem.accountHashtag(accountID: "109", acct: "bob", name: "scia", title: "ボブ")
         let previous = TabItem.defaultLayout.adding(item).adding(.list(id: "1", title: "友だち"))

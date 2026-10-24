@@ -39,7 +39,7 @@ struct AnimatedEmojiTests {
         return data as Data
     }
 
-    /// `.gif`のURLには`gifFrames`コマのGIF、`.png`のURLには静止画を返す置き場。
+    /// `.gif`のURLには`gifFrames`コマのGIF、`.png`のURLには静止画を返すストア。
     private func store(gifFrames: Int = 3) throws -> EmojiImageStore {
         let gif = try imageData(.gif, frames: gifFrames)
         let png = try imageData(.png, frames: 1)
@@ -280,7 +280,7 @@ struct AnimatedEmojiTests {
         #expect(layers.allSatisfy { label.bounds.contains($0.frame) })
     }
 
-    /// 置き場を渡していないラベルでは、絵文字は静止画のまま描く。
+    /// ストアを渡していないラベルでは、絵文字は静止画のまま描く。
     @Test func labelWithoutStoreKeepsStillImage() async throws {
         let crab = try emoji("crab")
         let store = try store()

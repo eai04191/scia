@@ -13,7 +13,7 @@ struct AccountRowConfiguration: UIContentConfiguration {
     /// 名前が入りきらないときに、行末をぼかす幅。投稿のセルの名前と同じ。
     var nameFadeWidth: CGFloat
     let avatarImages: AvatarImageStore
-    /// 名前のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+    /// 名前のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
     var emojiImages: EmojiImageStore?
 
     func makeContentView() -> any UIView & UIContentView {

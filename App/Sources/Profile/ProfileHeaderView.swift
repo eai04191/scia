@@ -539,7 +539,7 @@ final class ProfileHeaderView: UIView {
         return text
     }
 
-    /// - Parameter animatedEmojis: アニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+    /// - Parameter animatedEmojis: アニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
     private func applyFields(_ account: Account, language: String, animatedEmojis: EmojiImageStore?) {
         fieldsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         fieldsStack.isHidden = account.fields.isEmpty

@@ -18,7 +18,7 @@ enum ScenarioMode {
         return ScenarioServer(script: script)
     }()
 
-    /// 撮影モードの設定とチューニングの置き場。起動のたびに空にし、端末に残った値を使わずに既定値で撮る。
+    /// 撮影モードの設定とチューニングの保存先。起動のたびに空にし、端末に残った値を使わずに既定値で撮る。
     static let defaults: UserDefaults? = {
         guard server != nil else { return nil }
         let suiteName = "net.mizle.scia.scenario"

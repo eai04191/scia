@@ -22,7 +22,7 @@ struct GlyphLanguageTests {
         Status(id: "1", createdAt: Date(timeIntervalSince1970: 0), account: account, content: "<p>\(content)</p>", spoilerText: spoiler, language: language, url: nil)
     }
 
-    /// 漢字とかなを描くときに選ばれた書体の名前。英字や記号、画像の置き場の文字は、どの言語でも同じ書体で描かれるため除く。
+    /// 漢字とかなを描くときに選ばれた書体の名前。英字や記号、画像を置くための文字は、どの言語でも同じ書体で描かれるため除く。
     private func fontNames(of string: NSAttributedString) -> Set<String> {
         let runs = CTLineGetGlyphRuns(CTLineCreateWithAttributedString(string)) as? [CTRun] ?? []
         return Set(runs.compactMap { run in

@@ -18,7 +18,7 @@ final class EditHistoryEntryView: UIView {
         /// 投票の選択肢。投票のない版ではnil。
         var pollOptions: [Text]?
         var spacing: CGFloat
-        /// アニメーションするカスタム絵文字を動かすときに、アニメーション版を読む置き場。nilなら動かさない。
+        /// アニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
         var animatedEmojis: EmojiImageStore?
     }
 
@@ -53,7 +53,7 @@ final class EditHistoryEntryView: UIView {
     }
 
     private let mediaImages: MediaImageStore
-    /// いま当てている中身の、動く絵文字の置き場。文字のラベルを作るときに渡す。
+    /// いま当てている中身の、動く絵文字のストア。文字のラベルを作るときに渡す。
     private var animatedEmojis: EmojiImageStore?
     private let stack = UIStackView()
     private var mediaGrids: [MediaPlace: MediaGridView] = [:]
