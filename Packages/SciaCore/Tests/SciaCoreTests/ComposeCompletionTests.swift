@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -82,7 +83,11 @@ struct ComposeCompletionTests {
 
     private let server = Server()
 
-    private func makeCompletion(limit: Int = 5) -> ComposeCompletion {
+    /// 待つ長さを確かめないテストでは、打ち止めを待たずに問い合わせる。続けて打った語は、問い合わせる前に取り消されるので、最後の語だけを問い合わせる。
+    private func makeCompletion(
+        limit: Int = 5,
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { _ in try Task.checkCancellation() }
+    ) -> ComposeCompletion {
         let server = server
         return ComposeCompletion(
             sources: ComposeCompletion.Sources(
@@ -92,7 +97,8 @@ struct ComposeCompletionTests {
                 featuredTags: { try await server.featured() },
                 recentTags: { await server.recent() }
             ),
-            settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: limit)
+            settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: limit),
+            sleep: sleep
         )
     }
 
@@ -104,14 +110,6 @@ struct ComposeCompletionTests {
         CompletionToken(kind: .emoji, range: 0 ..< 1 + query.utf16.count, query: query, needsLeadingSpace: false)
     }
 
-    private func waitUntil(_ condition: () async -> Bool) async throws {
-        for _ in 0 ..< 400 {
-            if await condition() { return }
-            try await Task.sleep(for: .milliseconds(5))
-        }
-        Issue.record("待っている状態になりませんでした")
-    }
-
     private func accts(_ content: ComposeCompletion.Content?) -> [String] {
         guard case .candidates(let candidates) = content else { return [] }
         return candidates.map(\.completion)
@@ -119,11 +117,17 @@ struct ComposeCompletionTests {
 
     /// 続けて打った間は問い合わせず、止まってから最後の語だけを問い合わせる。
     @Test func debouncesWhileTyping() async throws {
-        let completion = makeCompletion()
+        let clock = TestClock()
+        let completion = makeCompletion(sleep: clock.sleep)
         for query in ["b", "bo", "bob"] {
             completion.textDidChange(mention(query))
+            try await waitUntil { clock.sleeperCount == 1 }
         }
         #expect(completion.content == .loading)
+        clock.advance(by: .milliseconds(29))
+        #expect(clock.sleeperCount == 1)
+        #expect(await server.queries.isEmpty)
+        clock.advance(by: .milliseconds(1))
         try await waitUntil { !completion.isLoading }
         #expect(await server.queries == ["bob"])
         #expect(accts(completion.content) == ["@bob1", "@bob2", "@bob3"])
@@ -138,7 +142,7 @@ struct ComposeCompletionTests {
         completion.textDidChange(mention("bob"))
         try await waitUntil { !completion.isLoading }
         await server.release("bo")
-        try await Task.sleep(for: .milliseconds(50))
+        try await waitUntil { completion.finishedSearchCount == 2 }
         #expect(accts(completion.content) == ["@bob1", "@bob2", "@bob3"])
     }
 
@@ -189,8 +193,8 @@ struct ComposeCompletionTests {
     @Test func filtersEmojisLocally() async throws {
         let completion = makeCompletion()
         completion.prefetch()
-        try await waitUntil { await server.emojiRequests == 1 }
-        try await Task.sleep(for: .milliseconds(20))
+        try await waitUntil { completion.emojis != nil }
+        #expect(await server.emojiRequests == 1)
         completion.textDidChange(emoji("blob"))
         #expect(accts(completion.content) == [":blobcat:", ":blobcat_heart:", ":ablob:"])
         completion.textDidChange(emoji("taiy"))
@@ -270,7 +274,7 @@ struct ComposeCompletionTests {
 
     /// 止められている間は、補完では自動で読み込み直さないので、押せば読み込めると伝える。
     @Test func pausedMessageSaysTapToRetry() {
-        let message = ComposeCompletion.failureMessage(for: AutomaticRequestsPaused(until: Date(timeIntervalSinceNow: 300)))
+        let message = ComposeCompletion.failureMessage(for: AutomaticRequestsPaused(until: Date(timeIntervalSince1970: 1_800_000_000)))
         #expect(message.contains("押すと読み込み直せます"))
         #expect(!message.contains("自動で"))
     }
@@ -294,8 +298,8 @@ struct ComposeCompletionTests {
     @Test func showsOwnHashtagsFirst() async throws {
         let completion = makeCompletion()
         completion.prefetch()
-        try await waitUntil { await server.ownTagRequests == 1 }
-        try await Task.sleep(for: .milliseconds(20))
+        try await waitUntil { !completion.isLoadingOwnTags }
+        #expect(await server.ownTagRequests == 1)
         completion.textDidChange(hashtag("猫"))
         #expect(completion.isLoading)
         #expect(accts(completion.content) == ["#猫写真", "#猫", "#今日の猫"])
@@ -315,8 +319,8 @@ struct ComposeCompletionTests {
         try await waitUntil { !completion.isLoading }
         #expect(accts(completion.content) == ["#犬", "#犬写真", "#犬2"])
         completion.prefetch()
-        try await waitUntil { await server.ownTagRequests == 1 }
-        try await Task.sleep(for: .milliseconds(20))
+        try await waitUntil { !completion.isLoadingOwnTags }
+        #expect(await server.ownTagRequests == 1)
         guard case .candidates(let candidates) = completion.content, case .ownHashtag = candidates[0] else {
             Issue.record("自分のタグを混ぜ直していません")
             return
@@ -329,8 +333,8 @@ struct ComposeCompletionTests {
         let completion = makeCompletion()
         await server.setFailsOwnTags(true)
         completion.prefetch()
-        try await waitUntil { await server.ownTagRequests == 1 }
-        try await Task.sleep(for: .milliseconds(20))
+        try await waitUntil { !completion.isLoadingOwnTags }
+        #expect(await server.ownTagRequests == 1)
         completion.textDidChange(hashtag("猫"))
         try await waitUntil { !completion.isLoading }
         #expect(accts(completion.content) == ["#猫", "#猫写真", "#猫2"])
@@ -349,8 +353,7 @@ struct ComposeCompletionTests {
         completion.moveSelection(by: 2)
         #expect(completion.selectedIndex == 2)
         completion.prefetch()
-        try await waitUntil { await server.ownTagRequests == 1 }
-        try await Task.sleep(for: .milliseconds(5))
+        try await waitUntil { !completion.isLoadingOwnTags }
         #expect(completion.selectedCandidate != nil)
         await server.release("今日")
     }
@@ -368,8 +371,8 @@ struct ComposeCompletionTests {
     @Test func searchFailureKeepsOwnHashtags() async throws {
         let completion = makeCompletion()
         completion.prefetch()
-        try await waitUntil { await server.ownTagRequests == 1 }
-        try await Task.sleep(for: .milliseconds(20))
+        try await waitUntil { !completion.isLoadingOwnTags }
+        #expect(await server.ownTagRequests == 1)
         await server.setFailingHashtags(["猫"])
         completion.textDidChange(hashtag("猫"))
         try await waitUntil { !completion.isLoading }
@@ -385,19 +388,22 @@ struct ComposeCompletionTests {
     @Test func ownHashtagsOnlyForHashtags() async throws {
         let completion = makeCompletion()
         completion.prefetch()
-        try await waitUntil { await server.ownTagRequests == 1 }
-        try await Task.sleep(for: .milliseconds(20))
+        try await waitUntil { !completion.isLoadingOwnTags }
+        #expect(await server.ownTagRequests == 1)
         completion.textDidChange(mention("猫"))
         try await waitUntil { !completion.isLoading }
         #expect(accts(completion.content) == ["@猫1", "@猫2", "@猫3"])
     }
 
     @Test func didCompleteCloses() async throws {
-        let completion = makeCompletion()
+        let clock = TestClock()
+        let completion = makeCompletion(sleep: clock.sleep)
         completion.textDidChange(mention("bob"))
+        try await waitUntil { clock.sleeperCount == 1 }
         completion.didComplete()
         #expect(completion.content == nil)
-        try await Task.sleep(for: .milliseconds(60))
+        try await waitUntil { completion.finishedSearchCount == 1 }
+        clock.advance(by: .milliseconds(30))
         #expect(await server.queries.isEmpty)
     }
 }
