@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -14,10 +15,15 @@ struct LiveUpdatesTests {
     @Test func pollsAndNoticesOutageWhileNeverConnected() async throws {
         let connector = ScriptedConnector(Array(repeating: .init(handshake: .fail(URLError(.cannotConnectToHost))), count: 100))
         let log = LiveLog()
-        let updates = makeUpdates(connector)
+        let clock = TestClock()
+        let updates = makeUpdates(connector, clock: clock)
 
         let task = Task { try await updates.run { await log.append($0) } }
-        try await log.waitUntil { $0.filter { $0 == "poll" }.count >= 3 && $0.contains("outage started") }
+        // 数だけを確かめるので、順は問わずに時計を進める。
+        try await waitUntil(advancing: clock, by: .milliseconds(5)) {
+            let labels = await log.labels
+            return labels.filter { $0 == "poll" }.count >= 3 && labels.contains("outage started")
+        }
         task.cancel()
         _ = await task.result
 
@@ -30,11 +36,20 @@ struct LiveUpdatesTests {
         // 10+20+40+40msの失敗の後につながる。知らせるまでの30msとポーリングの15msは、その間に過ぎる。
         let connector = ScriptedConnector(Array(repeating: .init(handshake: .fail(URLError(.cannotConnectToHost))), count: 4) + [.init()])
         let log = LiveLog()
-        let updates = makeUpdates(connector)
+        let clock = TestClock()
+        let updates = makeUpdates(connector, clock: clock)
 
         let task = Task { try await updates.run { await log.append($0) } }
-        try await log.waitUntil { $0.contains("outage ended") }
-        try await Task.sleep(for: .milliseconds(100))
+        // つなぎ直し（10ms後）、ポーリング（15ms後）、知らせ（30ms後）を待ち始めてから、30msまで進める。
+        try await waitUntil { await log.labels == ["disconnected"] && clock.sleeperCount(dueWithin: .milliseconds(30)) == 3 }
+        clock.advance(by: .milliseconds(10))
+        try await waitUntil { await log.labels.count == 2 && clock.sleeperCount(dueWithin: .milliseconds(20)) == 3 }
+        clock.advance(by: .milliseconds(20))
+        // つながるのは、まだ進めていない4回目のつなぎ直しの後なので、ポーリングと知らせは必ずその前に届く。
+        try await log.waitUntil { $0.contains("poll") && $0.contains("outage started") && $0.filter { $0 == "disconnected" }.count == 3 }
+        try await waitUntil(advancing: clock, by: .milliseconds(10)) { await log.labels.contains("outage ended") }
+        // つながったら、ポーリングと知らせの待ちを取り消している。
+        #expect(clock.sleeperCount(dueWithin: .seconds(1)) == 0)
         task.cancel()
         _ = await task.result
 
@@ -49,20 +64,17 @@ struct LiveUpdatesTests {
     @Test func staysQuietWhileConnected() async throws {
         let connector = ScriptedConnector([.init()])
         let log = LiveLog()
-        let updates = makeUpdates(connector)
+        let clock = TestClock()
+        let updates = makeUpdates(connector, clock: clock)
 
         let task = Task { try await updates.run { await log.append($0) } }
-        // 決まった時間だけ待つと、ほかのテストが重いときにつなぎ終える前に見てしまうので、つないだと知らせるまで待ってから、静かなままかを見る。
-        try await log.waitUntil { $0.contains("connected") }
-        try await Task.sleep(for: .milliseconds(150))
+        // つないだと知らせ、ポーリングと知らせの待ちを取り消してから、時計を進めて静かなままかを見る。
+        try await waitUntil { await log.labels.contains("connected") && clock.sleeperCount(dueWithin: .seconds(1)) == 0 }
+        clock.advance(by: .milliseconds(150))
         task.cancel()
         _ = await task.result
 
-        // 起動直後などでつなぎ終えるまでがポーリングの間隔より長いと、つながる前のポーリングや知らせは正しく届く。見るのはつながった後だけにする。
-        let labels = await log.labels
-        let connected = try #require(labels.firstIndex(of: "connected"))
-        let expected = labels[..<connected].contains("outage started") ? ["connected", "outage ended"] : ["connected"]
-        #expect(Array(labels[connected...]) == expected, "\(labels)")
+        #expect(await log.labels == ["connected"])
     }
 
     /// 短く切れてすぐつながったときは、知らせず、ポーリングもしない。
@@ -72,12 +84,17 @@ struct LiveUpdatesTests {
             .init(),
         ])
         let log = LiveLog()
+        let clock = TestClock()
         // つなぎ直しの10msより十分長くする。
-        let updates = makeUpdates(connector, policy: LiveUpdates.Policy(pollingInterval: .milliseconds(80), outageNoticeDelay: .milliseconds(80)))
+        let updates = makeUpdates(connector, policy: LiveUpdates.Policy(pollingInterval: .milliseconds(80), outageNoticeDelay: .milliseconds(80)), clock: clock)
 
         let task = Task { try await updates.run { await log.append($0) } }
-        try await log.waitUntil { $0.filter { $0 == "connected" }.count == 2 }
-        try await Task.sleep(for: .milliseconds(100))
+        // 切れてつなぎ直しを待ち始めたら、つなぎ直す10msだけ進める。
+        try await waitUntil { await log.labels.count == 3 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        clock.advance(by: .milliseconds(10))
+        // つなぎ直して、ポーリングと知らせの待ちを取り消してから、その締め切りより先まで進める。
+        try await waitUntil { await log.labels.filter { $0 == "connected" }.count == 2 && clock.sleeperCount(dueWithin: .seconds(1)) == 0 }
+        clock.advance(by: .milliseconds(100))
         task.cancel()
         _ = await task.result
 
@@ -87,21 +104,20 @@ struct LiveUpdatesTests {
     @Test func disconnectionAfterConnectingStartsPollingAgain() async throws {
         let connector = ScriptedConnector([.init(messages: [#"{"stream":["user"],"event":"delete","payload":"1"}"#], afterMessages: .drop)] + Array(repeating: .init(handshake: .fail(URLError(.cannotConnectToHost))), count: 100))
         let log = LiveLog()
-        let updates = makeUpdates(connector)
+        let clock = TestClock()
+        let updates = makeUpdates(connector, clock: clock)
 
         let task = Task { try await updates.run { await log.append($0) } }
-        // つなぎ終えるまでがポーリングの間隔より長いと、つながる前にもポーリングと知らせが届くので、切れた後のものを待つ。
-        try await log.waitUntil { labels in
-            guard let disconnected = labels.firstIndex(of: "disconnected") else { return false }
-            return labels[disconnected...].contains("poll") && labels[disconnected...].contains("outage started")
+        // 切れるまでは時計を進めないので、つながる前のポーリングや知らせは届かない。切れてから、順は問わずに進める。
+        try await log.waitUntil { $0.contains("disconnected") }
+        try await waitUntil(advancing: clock, by: .milliseconds(5)) {
+            let labels = await log.labels
+            return labels.contains("poll") && labels.contains("outage started")
         }
         task.cancel()
         _ = await task.result
 
-        let labels = await log.labels
-        let connected = try #require(labels.firstIndex(of: "connected"))
-        let expected = labels[..<connected].contains("outage started") ? ["connected", "outage ended", "event", "disconnected"] : ["connected", "event", "disconnected"]
-        #expect(Array(labels[connected...].prefix(expected.count)) == expected, "\(labels)")
+        #expect(Array(await log.labels.prefix(3)) == ["connected", "event", "disconnected"])
     }
 
     @Test func cancellationEndsRun() async throws {
@@ -117,7 +133,8 @@ struct LiveUpdatesTests {
         #expect(connector.closedCount == 1)
     }
 
-    private func makeUpdates(_ connector: ScriptedConnector, policy: LiveUpdates.Policy = Self.policy) -> LiveUpdates {
+    /// 待つ時間はすべて`clock`で数える。進めなければ、つなぎ直しもポーリングも知らせも起きない。
+    private func makeUpdates(_ connector: ScriptedConnector, policy: LiveUpdates.Policy = Self.policy, clock: TestClock = TestClock()) -> LiveUpdates {
         let client = StreamingClient(
             credential: Credential(
                 instance: URL(filePath: "/"),
@@ -129,10 +146,10 @@ struct LiveUpdatesTests {
             ),
             connector: connector
         )
-        let stream = ReconnectingStream(policy: Self.reconnect) {
+        let stream = ReconnectingStream(policy: Self.reconnect, clock: clock) {
             client.open(baseURL: URL(filePath: "/"))
         }
-        return LiveUpdates(stream: stream, policy: policy)
+        return LiveUpdates(stream: stream, policy: policy, clock: clock)
     }
 }
 
@@ -144,17 +161,8 @@ private actor LiveLog {
         labels.append(Self.label(activity))
     }
 
-    /// 締め切りは、条件がそろわないときに失敗を報告して先へ進むための上限で、順序を作るためのものではない。
-    /// 全テストを並べて走らせると、ふだん数十ミリ秒で済む接続が8秒近くかかったことがあるため、長めにとる。
     func waitUntil(_ condition: @Sendable ([String]) -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(30))
-        while !condition(labels) {
-            guard ContinuousClock.now < deadline else {
-                Issue.record("時間内に条件を満たしませんでした", sourceLocation: sourceLocation)
-                return
-            }
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await SciaTesting.waitUntil({ condition(labels) }, sourceLocation: sourceLocation)
     }
 
     private static func label(_ activity: LiveUpdates.Activity) -> String {

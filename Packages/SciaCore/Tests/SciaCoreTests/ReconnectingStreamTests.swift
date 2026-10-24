@@ -1,10 +1,11 @@
 import Foundation
+import SciaTesting
 import Synchronization
 import Testing
 @testable import SciaCore
 
 struct ReconnectingStreamTests {
-    /// 待ち時間を短くして、テストが実時間で終わるようにする。
+    /// 待ち時間は手で進める時計で数えるので、長さは結果の確かめやすさで決める。
     private static let fastPolicy = ReconnectingStream.Policy(
         initialRetryDelay: .milliseconds(10),
         maxRetryDelay: .milliseconds(40),
@@ -22,9 +23,15 @@ struct ReconnectingStreamTests {
             .init(messages: [Self.deleteTwo]),
         ])
         let log = ActivityLog()
-        let stream = makeStream(connector, policy: Self.fastPolicy)
+        let clock = TestClock()
+        let stream = makeStream(connector, policy: Self.fastPolicy, clock: clock)
 
         let task = Task { try await stream.run { await log.append($0) } }
+        // 切れたと知らせてから、つなぎ直すまで時計で待ち始めたのを確かめて、その分だけ進める。
+        try await waitUntil { await log.count == 3 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        clock.advance(by: .milliseconds(10))
+        try await waitUntil { await log.count == 4 && clock.sleeperCount(dueWithin: .milliseconds(20)) == 1 }
+        clock.advance(by: .milliseconds(20))
         try await log.waitUntil(count: 6)
         task.cancel()
         _ = await task.result
@@ -54,9 +61,12 @@ struct ReconnectingStreamTests {
             .init(messages: [Self.deleteOne]),
         ])
         let log = ActivityLog()
-        let stream = makeStream(connector, policy: Self.fastPolicy)
+        let clock = TestClock()
+        let stream = makeStream(connector, policy: Self.fastPolicy, clock: clock)
 
         let task = Task { try await stream.run { await log.append($0) } }
+        try await waitUntil { await log.count == 2 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        clock.advance(by: .milliseconds(10))
         try await log.waitUntil(count: 4)
         task.cancel()
         _ = await task.result
@@ -70,17 +80,20 @@ struct ReconnectingStreamTests {
             .init(),
         ])
         let log = ActivityLog()
+        let clock = TestClock()
         var policy = Self.fastPolicy
         policy.pingInterval = .milliseconds(20)
-        let stream = makeStream(connector, policy: policy) { _ in
-            // 応答しないpingが待っているときだけ時間切れにする。応答するpingの時間切れは、応答すると取り消される。
-            // 時間の長さや呼ばれた順で決めると、混んでいるときに応答するpingまで時間切れになる。
-            while connector.unansweredPings == 0 {
-                try await Task.sleep(for: .milliseconds(5))
-            }
-        }
+        let stream = makeStream(connector, policy: policy, clock: clock)
 
         let task = Task { try await stream.run { await log.append($0) } }
+        // つながって次のpingを待ち始めたら、次のpingまで進める。
+        try await waitUntil { await log.count == 1 && clock.sleeperCount(dueWithin: .milliseconds(20)) == 1 }
+        clock.advance(by: .milliseconds(20))
+        // 応答しないpingが時間切れを待ち始めたら、時間切れまで進める。応答するpingの時間切れは、応答すると取り消される。
+        try await waitUntil { connector.unansweredPings == 1 && clock.sleeperCount(dueWithin: policy.pingTimeout) == 1 }
+        clock.advance(by: policy.pingTimeout)
+        try await waitUntil { await log.count == 2 && clock.sleeperCount(dueWithin: .milliseconds(10)) == 1 }
+        clock.advance(by: .milliseconds(10))
         try await log.waitUntil(count: 3)
         task.cancel()
         _ = await task.result
@@ -116,10 +129,11 @@ struct ReconnectingStreamTests {
         #expect(connector.closedCount == 1)
     }
 
+    /// 待つ時間はすべて`clock`で数える。進めなければ、つなぎ直しもpingの時間切れも起きない。
     private func makeStream(
         _ connector: ScriptedConnector,
         policy: ReconnectingStream.Policy,
-        waitForPingTimeout: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        clock: TestClock = TestClock()
     ) -> ReconnectingStream {
         let client = StreamingClient(
             credential: Credential(
@@ -132,7 +146,7 @@ struct ReconnectingStreamTests {
             ),
             connector: connector
         )
-        return ReconnectingStream(policy: policy, waitForPingTimeout: waitForPingTimeout) {
+        return ReconnectingStream(policy: policy, clock: clock) {
             client.open(baseURL: URL(filePath: "/"))
         }
     }
@@ -146,17 +160,10 @@ private actor ActivityLog {
         activities.append(activity)
     }
 
-    /// 締め切りは、数がそろわないときに失敗を報告して先へ進むための上限で、順序を作るためのものではない。
-    /// 全テストを並べて走らせると、ふだん数十ミリ秒で済む接続が8秒近くかかったことがあるため、長めにとる。
+    var count: Int { activities.count }
+
     func waitUntil(count: Int, sourceLocation: SourceLocation = #_sourceLocation) async throws {
-        let deadline = ContinuousClock.now.advanced(by: .seconds(30))
-        while activities.count < count {
-            guard ContinuousClock.now < deadline else {
-                Issue.record("時間内に\(count)件そろいませんでした", sourceLocation: sourceLocation)
-                return
-            }
-            try await Task.sleep(for: .milliseconds(5))
-        }
+        try await SciaTesting.waitUntil({ activities.count >= count }, sourceLocation: sourceLocation)
     }
 
     var labels: [String] {
@@ -199,47 +206,12 @@ final class ScriptedConnector: WebSocketConnector {
         var afterMessages: AfterMessages = .stay
         /// これを超えたpingには応答しない。ハンドシェイクの確認のpingも数える。
         var answeredPings = Int.max
-        /// 送ったメッセージが記録されるまでの遅れ。送信がpingより遅れる経路を再現する。
-        var sendDelay: Duration = .zero
-        /// 最初のメッセージを届けるまでの遅れ。つながったあとの操作の途中にメッセージが届く経路を再現する。
-        var firstMessageDelay: Duration = .zero
-        /// `afterMessages`が`.drop`のとき、メッセージを届け終えてから切れるまでの遅れ。切れる前に、届いたメッセージに応じた送信を始めさせる。
-        var dropDelay: Duration = .zero
         /// `afterMessages`が`.drop`のとき、開くまで切らない。遅れの長さではなく、テストが条件を確かめてから切る。
         var dropGate: Gate?
         /// 開くまで、最初のメッセージを届けない。遅れの長さではなく、テストが条件を確かめてから届ける。
         var firstMessageGate: Gate?
         /// 送るメッセージごとに、開くまで送り終えない。遅れの長さではなく、テストが条件を確かめてから送り終える。
         var sendGates: [String: Gate] = [:]
-    }
-
-    /// 開くまで、待っている相手を止めておく。開いた後に待つ相手は止めない。
-    final class Gate: Sendable {
-        private let state = Mutex<(isOpen: Bool, waiters: [CheckedContinuation<Void, Never>])>((false, []))
-
-        func open() {
-            let waiters = state.withLock { state in
-                state.isOpen = true
-                defer { state.waiters.removeAll() }
-                return state.waiters
-            }
-            waiters.forEach { $0.resume() }
-        }
-
-        /// 止められている相手がいる。
-        var hasWaiters: Bool { state.withLock { !$0.waiters.isEmpty } }
-
-        func wait() async {
-            await withCheckedContinuation { continuation in
-                let isOpen = state.withLock { state in
-                    if !state.isOpen { state.waiters.append(continuation) }
-                    return state.isOpen
-                }
-                if isOpen {
-                    continuation.resume()
-                }
-            }
-        }
     }
 
     private let state: Mutex<(scripts: [Script], connectCount: Int, closedCount: Int, sent: [[String]], unansweredPings: Int)>
@@ -299,43 +271,33 @@ private final class ScriptedConnection: WebSocketConnection {
     }
 
     func send(_ text: String) async throws {
-        let (isClosed, delay, gate) = state.withLock { ($0.isClosed, $0.script.sendDelay, $0.script.sendGates[text]) }
+        let (isClosed, gate) = state.withLock { ($0.isClosed, $0.script.sendGates[text]) }
         if isClosed { throw URLError(.cancelled) }
-        if delay > .zero {
-            try await Task.sleep(for: delay)
-        }
-        await gate?.wait()
+        try await gate?.wait()
         onSend(text)
     }
 
     func receive() async throws -> String {
-        enum Next { case message(String, after: Duration, gate: ScriptedConnector.Gate?), fail(any Error), drop(after: Duration, gate: ScriptedConnector.Gate?), wait }
+        enum Next { case message(String, gate: Gate?), fail(any Error), drop(gate: Gate?), wait }
         let next: Next = state.withLock { state in
             if state.isClosed { return .fail(URLError(.cancelled)) }
             if case .fail(let error) = state.script.handshake { return .fail(error) }
             if !state.script.messages.isEmpty {
-                let delay = state.hasDeliveredMessage ? .zero : state.script.firstMessageDelay
                 let gate = state.hasDeliveredMessage ? nil : state.script.firstMessageGate
                 state.hasDeliveredMessage = true
-                return .message(state.script.messages.removeFirst(), after: delay, gate: gate)
+                return .message(state.script.messages.removeFirst(), gate: gate)
             }
-            if case .drop = state.script.afterMessages { return .drop(after: state.script.dropDelay, gate: state.script.dropGate) }
+            if case .drop = state.script.afterMessages { return .drop(gate: state.script.dropGate) }
             return .wait
         }
         switch next {
-        case .message(let message, let delay, let gate):
-            if delay > .zero {
-                try await Task.sleep(for: delay)
-            }
-            await gate?.wait()
+        case .message(let message, let gate):
+            try await gate?.wait()
             return message
         case .fail(let error):
             throw error
-        case .drop(let delay, let gate):
-            if delay > .zero {
-                try await Task.sleep(for: delay)
-            }
-            await gate?.wait()
+        case .drop(let gate):
+            try await gate?.wait()
             throw URLError(.networkConnectionLost)
         case .wait:
             try await waitUntilClosed()
