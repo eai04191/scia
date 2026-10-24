@@ -203,6 +203,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var isRestoringAnchor = false
     /// 最上部へばねで動かしている間、毎フレーム経過時間を渡すもの。
     private var topScrollTicker: FrameTicker?
+    /// 最上部へばねで動かすときに、毎フレームの経過時間を送る元。テストでは手で送る元に替える。
+    var frameSource: any FrameSource = DisplayLinkFrameSource.shared
     /// 最上部へ動かしている間の、ばねの位置の進め方と今の速さ。
     private var topScroll: SpringScroll?
     /// 最上部へ動かしている間だけ有効にし、指が触れた時点で止める。触れたタッチは中身に渡さない。
@@ -1040,7 +1042,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // 慣性で動いている途中なら止める。止めないと、慣性で動かす位置と取り合う。
         collectionView.setContentOffset(collectionView.contentOffset, animated: false)
         // 動いている途中にこの画面が閉じられて解放されたら、続けないと返して止めさせる。
-        let ticker = FrameTicker { [weak self] elapsed in
+        let ticker = FrameTicker(source: frameSource) { [weak self] elapsed in
             guard let self else { return false }
             stepScrollingToTop(elapsed: elapsed)
             return isScrollingToTop

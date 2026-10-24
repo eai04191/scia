@@ -1,4 +1,5 @@
 import SciaCore
+import SciaTesting
 import Testing
 import UIKit
 @testable import Scia
@@ -104,7 +105,7 @@ struct ScrollAnchorTests {
         // 見えている間の、それまで最上部にあった投稿の画面上の位置で、最上部へ向かって下がり続けることを確かめる。
         var previousY = start
         while harness.viewController.isScrollingToTop {
-            try await Task.sleep(for: .milliseconds(10))
+            harness.frames.step()
             guard let y = harness.windowMinY(of: .status(previousTop.id)) else { break }
             #expect(y >= previousY - tolerance, "最上部へ向かう途中で上へ戻りました: \(previousY) → \(y)")
             previousY = y
@@ -125,10 +126,10 @@ struct ScrollAnchorTests {
         let start = harness.collectionView.contentOffset.y
 
         harness.viewController.scrollToNewest()
-        try await Task.sleep(for: .milliseconds(200))
+        harness.frames.advance(by: 0.2)
         harness.viewController.scrollViewWillBeginDragging(harness.collectionView)
         let stopped = harness.collectionView.contentOffset.y
-        try await Task.sleep(for: .milliseconds(300))
+        harness.frames.advance(by: 0.3)
 
         #expect(stopped < start, "触れる前に動いていません")
         #expect(!harness.viewController.isScrollingToTop)
@@ -268,9 +269,11 @@ struct ScrollAnchorTests {
         let target = statuses[30]
 
         harness.viewController.scrollToNewest()
-        try await Task.sleep(for: .milliseconds(50))
+        harness.frames.advance(by: 0.05)
         #expect(harness.viewController.scrollToStatus(target.id))
-        try await Task.sleep(for: .milliseconds(1_500))
+        // 最上部へ動かすのをやめていれば、コマを送っても最上部へ戻らない。返信先へは、UIKitのスクロールのアニメーションで動く。
+        harness.frames.advance(by: 1.5)
+        try await waitUntil { harness.visibleCell(of: .status(target.id)) != nil }
 
         #expect(!harness.viewController.isAtTop, "返信先へ動いたあとで最上部へ戻りました")
         #expect(harness.visibleCell(of: .status(target.id)) != nil, "返信先の投稿が表示されていません")
@@ -458,9 +461,7 @@ struct ScrollAnchorTests {
         let heightBefore = harness.collectionView.contentSize.height
 
         harness.tuning.setValue(24, for: TuningCatalog.paragraphSpacing)
-        for _ in 0..<100 where harness.collectionView.contentSize.height == heightBefore {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await waitUntil { harness.collectionView.contentSize.height != heightBefore }
 
         #expect(harness.collectionView.contentSize.height > heightBefore, "段落間隔の変更が反映されていません")
         let after = try #require(harness.windowMinY(of: anchor.id), "描き直し後に基準の投稿が画面外へ出ました")

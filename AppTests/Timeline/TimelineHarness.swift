@@ -15,6 +15,8 @@ final class TimelineHarness {
     let notices: NoticeCenter
     let overlay: NoticeOverlay
     let window: UIWindow
+    /// 最上部へばねで動かすときのコマ。実際の時間では進まず、テストが送った分だけ進む。
+    let frames = ManualFrameSource()
 
     /// - Parameter headerView: プロフィールのように、一覧の頭に置くビュー。
     /// - Parameter prepare: ウィンドウに載せる前に一覧へ行う準備。スレッドのように、画面に出るときに位置を決める一覧に使う。
@@ -32,6 +34,7 @@ final class TimelineHarness {
         viewController = TimelineViewController(tuning: tuning, emojiImages: .offline, mediaImages: mediaImages, avatarImages: .offline, settings: settings)
         viewController.headerView = headerView
         viewController.notices = notices
+        viewController.frameSource = frames
         self.notices = notices
         let scene = try #require(
             UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
@@ -44,6 +47,7 @@ final class TimelineHarness {
         window.makeKeyAndVisible()
         overlay = NoticeOverlay.install(in: window, center: notices, tuning: tuning)
         window.layoutIfNeeded()
+        frames.afterEachFrame = { [weak window] in window?.layoutIfNeeded() }
     }
 
     func tearDown() {
@@ -85,11 +89,9 @@ final class TimelineHarness {
     }
 
     /// 最上部へばねで動かしているのが終わるまで待つ。
-    func waitUntilScrollingToTopEnds() async throws {
-        for _ in 0..<300 where viewController.isScrollingToTop {
-            try await Task.sleep(for: .milliseconds(10))
-        }
-        #expect(!viewController.isScrollingToTop, "最上部へ動かすのが終わりません")
+    func waitUntilScrollingToTopEnds(sourceLocation: SourceLocation = #_sourceLocation) async throws {
+        frames.runUntilStopped(sourceLocation: sourceLocation)
+        #expect(!viewController.isScrollingToTop, "最上部へ動かすのが終わりません", sourceLocation: sourceLocation)
     }
 
     func visibleCell(of id: TimelineViewController.ItemID) -> UICollectionViewCell? {

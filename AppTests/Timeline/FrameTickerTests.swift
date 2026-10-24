@@ -1,4 +1,5 @@
 import QuartzCore
+import SciaTesting
 import Testing
 @testable import Scia
 
@@ -10,9 +11,7 @@ struct FrameTickerTests {
     }
 
     private func waitUntilStopped(_ ticker: FrameTicker) async throws {
-        for _ in 0..<100 where ticker.isRunning {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        try await waitUntil { !ticker.isRunning }
     }
 
     @Test func stopsWhenTickAsksToStop() async throws {
@@ -39,7 +38,8 @@ struct FrameTickerTests {
             return true
         }
         ticker.start()
-        try await Task.sleep(for: .milliseconds(50))
+        // 持ち主がいる間は、毎フレーム呼ばれ続ける。
+        try await waitUntil { (owner?.count ?? 0) >= 2 }
         #expect(ticker.isRunning)
 
         owner = nil
