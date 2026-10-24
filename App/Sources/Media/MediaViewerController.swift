@@ -2263,6 +2263,9 @@ final class PlayerPageController: MediaPageController {
         }
     }
 
+    /// 閉じる動きを始めるときに、メインスレッドでコマを描き出すためのもの。作るのが重いため、閉じるたびに作らず使い回す。
+    private static let frameContext = CIContext()
+
     /// 再生しているコマ。つかんだり閉じたりしたときに、複製を最初のコマ（サムネイル）へ戻さず、その場の絵から動かすために使う。
     /// まだコマを描いていなければnilで、サムネイルを使う。
     override var transitionImage: UIImage? {
@@ -2271,7 +2274,7 @@ final class PlayerPageController: MediaPageController {
               let buffer = output.copyPixelBuffer(forItemTime: item.currentTime(), itemTimeForDisplay: nil)
         else { return nil }
         let image = CIImage(cvPixelBuffer: buffer)
-        guard let cgImage = CIContext().createCGImage(image, from: image.extent) else { return nil }
+        guard let cgImage = Self.frameContext.createCGImage(image, from: image.extent) else { return nil }
         // 取り出した画素は回転情報を反映していないため、再生の表示と同じ向きにする。
         return UIImage(cgImage: cgImage, scale: 1, orientation: frameOrientation)
     }
