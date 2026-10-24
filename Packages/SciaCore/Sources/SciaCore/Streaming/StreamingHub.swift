@@ -5,7 +5,7 @@ import os
 ///
 /// Mastodonは1本のWebSocketで複数のストリームを購読できるため、タイムラインごとに接続を増やさない。
 /// 申し込みがある間だけつなぎ、なくなったら切る。つなぐたびに、申し込まれているストリームを購読し直す。
-/// つながらない間のポーリングの合図も、ここから全員に配る。合図を受けて何をRESTで読むかは、受け取った側が決める。
+/// つながらない間のポーリングのきっかけも、ここから全員に配る。きっかけを受けて何をRESTで読むかは、受け取った側が決める。
 /// https://docs.joinmastodon.org/methods/streaming/#websocket
 @MainActor
 public final class StreamingHub {

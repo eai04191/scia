@@ -3,7 +3,7 @@ import Foundation
 import SciaCore
 import UIKit
 
-/// デモの台本「流れても、動かない」。ストリーミングで新着が流れてきても、読んでいる位置が動かないことを見せる。
+/// デモのシナリオ「流れても、動かない」。ストリーミングで新着が流れてきても、読んでいる位置が動かないことを見せる。
 /// 流れはdocs/promo-video.mdにある。起動の引数`-scenario streaming`で選ぶ。
 enum StreamingDemoScenario {
     private typealias Person = ScenarioFixtures.Person
@@ -78,7 +78,7 @@ enum StreamingDemoScenario {
             "configuration": ["urls": ["streaming": "wss://\(ScenarioFixtures.domain)"]],
         ]
         let account = ScenarioFixtures.json(ScenarioFixtures.account(me))
-        guard let instanceURL = URL(string: "https://\(ScenarioFixtures.domain)") else { preconditionFailure("台本のサーバーのURLが不正") }
+        guard let instanceURL = URL(string: "https://\(ScenarioFixtures.domain)") else { preconditionFailure("シナリオのサーバーのURLが不正") }
         return ScenarioScript(
             credential: Credential(
                 instance: instanceURL,
@@ -120,7 +120,7 @@ enum StreamingDemoScenario {
     }
 
     private static func item(_ object: [String: Any]) -> ScenarioScript.Item {
-        guard let id = object["id"] as? String else { preconditionFailure("台本の要素にIDがない") }
+        guard let id = object["id"] as? String else { preconditionFailure("シナリオの要素にIDがない") }
         return ScenarioScript.Item(id: id, json: ScenarioFixtures.json(object))
     }
 

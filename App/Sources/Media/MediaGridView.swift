@@ -240,9 +240,9 @@ final class MediaTileView: UIButton, MediaViewerSource {
     private var menuInteraction: MediaMenuInteraction?
     private var isCovered = false
     private var policy: MediaThumbnailPolicy?
-    /// いま描いている画像の出どころ。同じなら描き直さない。
+    /// いま描いている画像の取得元。同じなら描き直さない。
     private var source: Source?
-    /// 画像を読みに行く出どころを選んでいるか。閲覧注意でぼかしている間は選ばず、読みに行かない。
+    /// 画像を読みに行く取得元を選んでいるか。閲覧注意でぼかしている間は選ばず、読みに行かない。
     var requestsThumbnail: Bool { source?.request != nil }
     /// 動画やGIFのように、ビューアではサムネイルと違うコマを描く添付ファイル。
     private var showsMovingImage = false

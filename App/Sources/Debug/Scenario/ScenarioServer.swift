@@ -4,7 +4,7 @@ import os
 import SciaCore
 import Synchronization
 
-/// 撮影モードの台本。サーバーが返す一覧と、URLで起こすイベントを持つ。
+/// 撮影モードのシナリオ。サーバーが返す一覧と、URLで起こすイベントを持つ。
 struct ScenarioScript: Sendable {
     /// ページを分けて返す一覧の1件。IDの新しい順に並べる。
     struct Item: Sendable {
@@ -22,7 +22,7 @@ struct ScenarioScript: Sendable {
     let interval: Duration
 }
 
-/// 撮影モードで、Mastodonのサーバーの代わりに台本どおりに答える。
+/// 撮影モードで、Mastodonのサーバーの代わりにシナリオどおりに答える。
 final class ScenarioServer: Sendable {
     let script: ScenarioScript
     private let mailbox = Mutex<ScenarioMailbox?>(nil)
@@ -43,7 +43,7 @@ final class ScenarioServer: Sendable {
         return ScenarioWebSocketConnection(mailbox: mailbox)
     }
 
-    /// 台本のイベントを、ストリーミングで流す。
+    /// シナリオのイベントを、ストリーミングで流す。
     func emit(_ name: String) {
         guard let make = script.events[name] else {
             logger.error("scenario unknown event: \(name, privacy: .public)")
@@ -67,7 +67,7 @@ final class ScenarioServer: Sendable {
     }
 }
 
-/// 台本の`responses`と`lists`を返すHTTPTransport。台本にないAPIには404を返し、ログに残す。
+/// シナリオの`responses`と`lists`を返すHTTPTransport。シナリオにないAPIには404を返し、ログに残す。
 private struct ScenarioTransport: HTTPTransport {
     let script: ScenarioScript
     private let logger = SciaLog.logger(category: "scenario")
@@ -128,7 +128,7 @@ private struct ScenarioWebSocketConnection: WebSocketConnection {
         try await mailbox.next()
     }
 
-    /// 購読の申し込み。台本はどの購読にもイベントを流すので、受け取るだけにする。
+    /// 購読の申し込み。シナリオはどの購読にもイベントを流すので、受け取るだけにする。
     func send(_ text: String) async throws {}
 
     func ping() async throws {}

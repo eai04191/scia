@@ -64,7 +64,7 @@ public enum VideoFirstFrame {
         let bytes = Bytes(Array(prefix))
         var offset = 0
         while true {
-            // 箱の頭は8バイトで、大きさが4GB以上の箱だけ16バイトになる。
+            // ボックスの頭は8バイトで、大きさが4GB以上のボックスだけ16バイトになる。
             if offset + 8 > bytes.count || (bytes.uint32(at: offset) == 1 && offset + 16 > bytes.count) {
                 return .needsBytes(offset + 16)
             }
@@ -202,7 +202,7 @@ public enum VideoFirstFrame {
         return overflow ? nil : result
     }
 
-    /// MP4の箱（box、QuickTimeではatom）の並びを読む。
+    /// MP4のボックス（box、QuickTimeではatom）の並びを読む。
     struct Bytes {
         private let storage: [UInt8]
 
@@ -216,13 +216,13 @@ public enum VideoFirstFrame {
             let type: String
             let start: Int
             let headerLength: Int
-            /// 箱の終わり。ファイルの終わりまで続く箱（大きさが0）ではnil。
+            /// ボックスの終わり。ファイルの終わりまで続くボックス（大きさが0）ではnil。
             let end: Int?
 
             func payload(upTo end: Int) -> Range<Int> { (start + headerLength)..<end }
         }
 
-        /// `offset`から始まる箱の頭。頭が読んだ部分に収まっていない、または大きさが頭より小さければnil。
+        /// `offset`から始まるボックスの頭。頭が読んだ部分に収まっていない、または大きさが頭より小さければnil。
         func boxHeader(at offset: Int) -> BoxHeader? {
             guard let size32 = uint32(at: offset), let type = string(at: offset + 4, length: 4) else { return nil }
             switch size32 {
@@ -237,7 +237,7 @@ public enum VideoFirstFrame {
             }
         }
 
-        /// `range`の中に並ぶ箱。はみ出す箱や読めない箱があればnil。
+        /// `range`の中に並ぶボックス。はみ出すボックスや読めないボックスがあればnil。
         func children(in range: Range<Int>) -> [(type: String, payload: Range<Int>)]? {
             var result: [(type: String, payload: Range<Int>)] = []
             var offset = range.lowerBound

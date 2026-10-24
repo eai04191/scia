@@ -15,7 +15,7 @@ enum DebugURL: Equatable {
 
     /// `scia-debug://dummy/<DebugDummyPost.rawValue>`
     case dummy(DebugDummyPost)
-    /// `scia-debug://scenario/<イベント>`。撮影モード（`ScenarioMode`）の台本のイベントを、ストリーミングで流す。
+    /// `scia-debug://scenario/<イベント>`。撮影モード（`ScenarioMode`）のシナリオのイベントを、ストリーミングで流す。
     case scenario(String)
     /// `scia-debug://unauthorized`。以後のREST APIに401を返させ、トークンが無効になった状態にする。
     case unauthorized

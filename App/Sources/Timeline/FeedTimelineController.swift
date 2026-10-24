@@ -49,7 +49,7 @@ final class FeedTimelineController {
     private var isSavingReadPosition = false
     /// バックグラウンドで既読位置の保存を終えるまで、アプリを止めないよう頼んでいる。
     private var readPositionBackgroundTask = UIBackgroundTaskIdentifier.invalid
-    /// 新着を挿入する時機が来たが、スクロールや長押しのメニューなどの操作中なので、終わるのを待っている。
+    /// 新着を挿入するタイミングが来たが、スクロールや長押しのメニューなどの操作中なので、終わるのを待っている。
     private var isWaitingForInteractionToSettle = false
     #if DEBUG
     /// ダミー投稿の「ステータスバーの通知」が選ばれたとき。通知はホームの一覧ではなく、ステータスバーに流す。
@@ -925,7 +925,7 @@ extension FeedTimelineController {
     static let dummyLinkCardDelay: Duration = .seconds(5)
 
     /// リンクだけのダミーの投稿を新着と同じ経路で流し、`dummyLinkCardDelay`のあとに、通信せずにカードを届ける。
-    /// カードが届いたときの動きを、サーバーがカードを付ける時機によらず、何度でも同じ条件で確かめるため。
+    /// カードが届いたときの動きを、サーバーがカードを付けるタイミングによらず、何度でも同じ条件で確かめるため。
     /// - Parameter sensitive: 閲覧注意の投稿にする。届いたカードの画像をぼかすところを確かめる。
     private func streamDummyLinkCard(withImage: Bool, sensitive: Bool = false) {
         let avatar = store.statuses.first?.account.avatar ?? client.credential.instance

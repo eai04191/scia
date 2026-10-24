@@ -46,7 +46,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public private(set) var favouritesCount: Int
     public private(set) var reblogsCount: Int
     public let repliesCount: Int
-    /// ブーストの場合、ブーストされた元の投稿。構造体は自分自身を直接持てないため、参照型の箱に入れる。
+    /// ブーストの場合、ブーストされた元の投稿。構造体は自分自身を直接持てないため、参照型の`StatusBox`に入れる。
     private var reblogBox: StatusBox?
 
     public init(

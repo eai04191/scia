@@ -47,7 +47,7 @@ final class LinkCardView: UIButton {
     private let descriptionLabel = UILabel()
     private(set) var content: Content?
     private var loadTask: Task<Void, Never>?
-    /// いま描いているサムネイルの出どころ。同じなら読み直さない。
+    /// いま描いているサムネイルの取得元。同じなら読み直さない。
     private var request: Request?
     /// 並べ方で、サムネイルの枠を出すか。枠を縮めて消す動きを始めるまでは、中身と食い違う。
     private var laysOutThumbnail = false

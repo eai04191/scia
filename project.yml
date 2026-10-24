@@ -171,7 +171,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: net.mizle.scia.tests
         GENERATE_INFOPLIST_FILE: YES
-  # プロモーション動画の素材を撮る台本（docs/promo-video.md）。撮影モードで起動し、操作とイベントを順に送る
+  # プロモーション動画の素材を撮るシナリオ（docs/promo-video.md）。撮影モードで起動し、操作とイベントを順に送る
   SciaUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -185,7 +185,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: Scia
 schemes:
-  # 台本は録画と合わせて走らせるため、make testで走る`Scia`のテストに混ぜない
+  # シナリオは録画と合わせて走らせるため、make testで走る`Scia`のテストに混ぜない
   SciaPromo:
     build:
       targets:

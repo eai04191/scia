@@ -3,7 +3,7 @@ import SciaCore
 /// チップの列に出たままになっているアプリ内通知を、出た順に持つ。チップは1枚にするため、`chipNotice`で1件を選んで出す。
 /// 決まりはdocs/notices.mdの「チップ」にある。
 struct PersistentNotices {
-    /// アプリ内通知の出どころ。出どころごとに1件だけ持つ。
+    /// アプリ内通知の発生元。発生元ごとに1件だけ持つ。
     enum Slot: CaseIterable {
         /// 前に出ている画面の中だけで意味のあるもの。投稿欄から開いたビューアの、アップロードや代替テキストの送信の状態など。
         case screen
@@ -42,7 +42,7 @@ struct PersistentNotices {
         }
     }
 
-    /// チップに出す1件の出どころ。なければnil。
+    /// チップに出す1件の発生元。なければnil。
     var chosenSlot: Slot? {
         guard let (chosen, _) = PersistentNoticeChoice.choose(entries.map(\.notice), isFailure: { $0.kind == .failure }) else { return nil }
         return entries.first { $0.notice.id == chosen.id }?.slot

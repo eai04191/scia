@@ -6,8 +6,8 @@ import SciaCore
 import UIKit
 
 /// 撮影モードで、アプリ自身の画面をReplayKitで録画する。実機で撮るため。
-/// 台本の`record-start`と`record-stop`で始めて止め、Documents/Promo/promo.mp4に書き出す。
-/// シミュレーターでもReplayKitは動くが、`simctl io recordVideo`で撮るので、台本は録画を始めない。ReplayKitが使えなければ`unavailable`にして何もしない。
+/// シナリオの`record-start`と`record-stop`で始めて止め、Documents/Promo/promo.mp4に書き出す。
+/// シミュレーターでもReplayKitは動くが、`simctl io recordVideo`で撮るので、シナリオは録画を始めない。ReplayKitが使えなければ`unavailable`にして何もしない。
 ///
 /// 録画の状態は、UIテストが読めるよう、ウインドウのaccessibilityIdentifierに`scenario-recorder:<状態>`の形で出す。
 /// 画面には何も描かないので、録画に映らない。UIテストは、録画が始まったことと、書き出し終えたことを確かめてから進む。

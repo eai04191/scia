@@ -231,16 +231,16 @@ public enum TuningCatalog {
         defaultValue: 20
     )
 
-    /// 注意書き（CW）の箱の内側の余白。
+    /// 注意書き（CW）のボックスの内側の余白。
     public static let spoilerPadding = NumberTuning(
         id: "timeline.spoilerPadding",
-        title: "注意書きの箱の内側の余白（pt）",
+        title: "注意書きのボックスの内側の余白（pt）",
         range: 0...20,
         step: 1,
         defaultValue: 9
     )
 
-    /// 注意書き（CW）の箱と、開いた本文のあいだ。
+    /// 注意書き（CW）のボックスと、開いた本文のあいだ。
     public static let spoilerBodySpacing = NumberTuning(
         id: "timeline.spoilerBodySpacing",
         title: "注意書きと本文のあいだ（pt）",

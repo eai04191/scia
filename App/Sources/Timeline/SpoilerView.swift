@@ -1,14 +1,14 @@
 import UIKit
 
-/// 注意書き（CW）。本文の上に置き、押すと本文を開閉する。フィルターの警告も、同じ箱で本文の代わりに出す。
+/// 注意書き（CW）。本文の上に置き、押すと本文を開閉する。フィルターの警告も、同じボックスで本文の代わりに出す。
 ///
-/// 注意書きはただの文字と見分けがつくよう、地の色を敷いた箱に入れ、押せることが分かるよう、開閉の文言と記号を添える。
+/// 注意書きはただの文字と見分けがつくよう、地の色を敷いたボックスに入れ、押せることが分かるよう、開閉の文言と記号を添える。
 final class SpoilerView: UIControl {
     struct Content {
         var text: NSAttributedString
         var isCollapsed: Bool
         var kind: PostBodyContent.Spoiler.Kind
-        /// 箱の内側の余白。
+        /// ボックスの内側の余白。
         var padding: CGFloat
     }
 

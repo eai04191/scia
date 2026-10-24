@@ -12,7 +12,7 @@ final class AnimatedEmojiOverlay {
     /// 動かす絵文字。`index`は文字列の中の位置。
     struct Entry {
         let index: Int
-        /// 層が使っている間、置き場が同じものを返せるよう、箱ごと持つ。
+        /// 層が使っている間、同じインスタンスを返せるよう、参照ごと持つ。
         let animation: EmojiAnimation
         /// 動く層の上に重ねる色。編集履歴で足した絵文字を示す。
         let tint: UIColor?

@@ -1,6 +1,6 @@
 import XCTest
 
-/// デモの台本「流れても、動かない」。docs/promo-video.mdの流れのとおりに、操作とイベントを送る。
+/// デモのシナリオ「流れても、動かない」。docs/promo-video.mdの流れのとおりに、操作とイベントを送る。
 /// 録画は`make promo`で撮る。素材にするのは、始めと終わりに画面に一瞬出す目印（`mark`）の間。
 final class StreamingDemoUITests: XCTestCase {
     @MainActor
@@ -21,7 +21,7 @@ final class StreamingDemoUITests: XCTestCase {
         }
         app.swipeDown(velocity: .fast)
         pause(2)
-        // 台本で下へ読み進めるときに出てくる行を、撮る前に一度出しておく。初めて出る行は、画像を読んで並べる分だけ、ドラッグの途中でコマが落ちる
+        // シナリオで下へ読み進めるときに出てくる行を、撮る前に一度出しておく。初めて出る行は、画像を読んで並べる分だけ、ドラッグの途中でコマが落ちる
         let screen = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
         screen.press(forDuration: 0.05, thenDragTo: screen.withOffset(CGVector(dx: 0, dy: -500)), withVelocity: .fast, thenHoldForDuration: 0.5)
         pause(1)
@@ -85,8 +85,8 @@ final class StreamingDemoUITests: XCTestCase {
     /// 録画を始める。
     /// シミュレーターでは`simctl io recordVideo`で撮っているので、素材の始めの目印を画面に出させる。シミュレーターでもアプリの中の録画（ReplayKit）は動くが、
     /// 二重に録画して描画を重くしないよう始めない。
-    /// 実機ではアプリがReplayKitで撮り始め、初回だけ出る収録の許可を押す。録画そのものが台本の区間なので、目印は出さない。
-    /// - Returns: アプリがReplayKitで撮っているか。撮り始められなかったら、台本を失敗させる。
+    /// 実機ではアプリがReplayKitで撮り始め、初回だけ出る収録の許可を押す。録画そのものがシナリオの区間なので、目印は出さない。
+    /// - Returns: アプリがReplayKitで撮っているか。撮り始められなかったら、シナリオを失敗させる。
     @MainActor
     private func startRecording(_ app: XCUIApplication) throws -> Bool {
         #if targetEnvironment(simulator)
@@ -131,21 +131,21 @@ final class StreamingDemoUITests: XCTestCase {
         return String(window.identifier.dropFirst("scenario-recorder:".count))
     }
 
-    /// 台本のイベントを、撮影モードのアプリに送る。
+    /// シナリオのイベントを、撮影モードのアプリに送る。
     @MainActor
     private func emit(_ event: String) throws {
         try signal("scenario/\(event)")
     }
 
     /// 画面のいちばん上に見えている写真付きの投稿の、1枚目の写真をビューアで開く。サムネイルをタップしたのと同じ経路で開く。
-    /// XCUITestでタップすると、タップのあとにXCUITestが画面の要素を読む間、メインスレッドで動かしている開く動きが飛ぶため、アプリに合図して開かせる。
+    /// XCUITestでタップすると、タップのあとにXCUITestが画面の要素を読む間、メインスレッドで動かしている開く動きが飛ぶため、アプリにシグナルを送って開かせる。
     @MainActor
     private func openViewer() throws {
         try signal("viewer?index=0")
     }
 
-    /// 撮影モードのアプリに、同じ端末の中のプロセス間の通知（Darwin通知）で合図する（アプリ側は`ScenarioSignals`）。
-    /// URLで合図すると、アプリが一度切り替わり、ステータスバーに「◀ Scia」が出て素材に写るため。
+    /// 撮影モードのアプリに、同じ端末の中のプロセス間の通知（Darwin通知）でシグナルを送る（アプリ側は`ScenarioSignals`）。
+    /// URLで送ると、アプリが一度切り替わり、ステータスバーに「◀ Scia」が出て素材に写るため。
     private func signal(_ path: String) throws {
         let name = CFNotificationName(("net.mizle.scia.scenario." + path) as CFString)
         CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), name, nil, nil, true)

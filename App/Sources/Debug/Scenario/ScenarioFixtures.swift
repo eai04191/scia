@@ -2,10 +2,10 @@
 import Foundation
 import UIKit
 
-/// 台本の投稿や通知を、Mastodon APIと同じ形のJSONで作る。
+/// シナリオの投稿や通知を、Mastodon APIと同じ形のJSONで作る。
 /// SciaCoreのモデルをエンコードせずに組み立てるのは、モデルのデコードが欠けた項目を補うため、エンコードし直した形がAPIと同じになる保証がないから。
 enum ScenarioFixtures {
-    /// 台本に出るアカウント。
+    /// シナリオに出るアカウント。
     struct Person: Sendable {
         let id: String
         let username: String
@@ -99,12 +99,12 @@ enum ScenarioFixtures {
         return String(decoding: json(["stream": ["user"], "event": event, "payload": payloadText]), as: UTF8.self)
     }
 
-    /// 台本はこのファイルの関数で組み立てるので、JSONにできないのは台本の誤り。
+    /// シナリオはこのファイルの関数で組み立てるので、JSONにできないのはシナリオの誤り。
     static func json(_ object: Any) -> Data {
         do {
             return try JSONSerialization.data(withJSONObject: object)
         } catch {
-            preconditionFailure("台本をJSONにできない: \(error)")
+            preconditionFailure("シナリオをJSONにできない: \(error)")
         }
     }
 
@@ -139,7 +139,7 @@ enum ScenarioFixtures {
     }
 }
 
-/// 台本のアイコンと写真を、通信せずに端末で描く。
+/// シナリオのアイコンと写真を、通信せずに端末で描く。
 enum ScenarioArtwork {
     /// 色の地に1文字を白く描いたアイコン。
     static func avatar(_ character: String, color: UIColor) -> String {
@@ -204,7 +204,7 @@ enum ScenarioArtwork {
 
     private static func dataURL(_ image: UIImage) -> String {
         guard let data = image.jpegData(compressionQuality: 0.85) else {
-            preconditionFailure("台本の画像をJPEGにできない")
+            preconditionFailure("シナリオの画像をJPEGにできない")
         }
         return "data:image/jpeg;base64,\(data.base64EncodedString())"
     }

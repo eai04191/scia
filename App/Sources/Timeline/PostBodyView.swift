@@ -8,20 +8,20 @@ import UIKit
 /// 本文が空なら、本文と添付ファイルのあいだの余白も取らず、添付ファイルを上端から置く。上の行との間隔は置く側が`startsWithMedia`を見て決める。
 struct PostBodyContent {
     struct Spoiler {
-        /// 箱に入れて本文を折りたたむもの。
+        /// ボックスに入れて本文を折りたたむもの。
         enum Kind {
             /// 投稿した人が付けた注意書き。開閉できる。
             case contentWarning
-            /// 使う人のフィルターに一致した警告。開いたら箱ごと消え、閉じ直さない。
+            /// 使う人のフィルターに一致した警告。開いたらボックスごと消え、閉じ直さない。
             case filter
         }
 
         var text: NSAttributedString
         var isCollapsed: Bool
         var kind: Kind = .contentWarning
-        /// 注意書きの箱の内側の余白。
+        /// 注意書きのボックスの内側の余白。
         var padding: CGFloat
-        /// 開いているときの、注意書きの箱と本文のあいだ。
+        /// 開いているときの、注意書きのボックスと本文のあいだ。
         var bodySpacing: CGFloat
     }
 
@@ -298,7 +298,7 @@ final class PostBodyView: UIView {
         }
     }
 
-    /// 出した注意書きの箱を返す。
+    /// 出した注意書きのボックスを返す。
     private func applySpoiler(_ spoiler: PostBodyContent.Spoiler?) -> SpoilerView? {
         guard let spoiler else {
             spoilerView?.isHidden = true
@@ -441,7 +441,7 @@ final class PostBodyView: UIView {
         guard let spoiler = content.spoiler else { return content.text.string }
         let label = switch spoiler.kind {
         case .contentWarning: "注意書き"
-        // 箱の文字が「フィルター: 名前」なので、重ねて読まない。
+        // ボックスの文字が「フィルター: 名前」なので、重ねて読まない。
         case .filter: ""
         }
         let parts = [label, spoiler.text.string] + (spoiler.isCollapsed ? [] : [content.text.string])

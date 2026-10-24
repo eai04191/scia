@@ -177,7 +177,7 @@ struct PostContentBuilder {
         )
     }
 
-    /// フィルターの警告。本文の代わりに注意書きの箱に入れて出し、開くまで本文も添付ファイルも出さない。
+    /// フィルターの警告。本文の代わりに注意書きのボックスに入れて出し、開くまで本文も添付ファイルも出さない。
     /// フィルターの名前は使う人が付けたものなので、投稿の言語ではなく、アプリの文字で描く。
     func filterWarning(titles: [String], base: UIListContentConfiguration) -> PostBodyContent.Spoiler {
         let font = base.secondaryTextProperties.font

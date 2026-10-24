@@ -318,7 +318,7 @@ final class SessionController {
                 )
             }
         )
-        // 補完の問い合わせ口は別のスレッドから呼ばれるため、ほかの口と同じ知らせ方を、隔離されたAuthorizationCheckに直接送る。
+        // 補完の検索は別のスレッドから呼ばれるため、ほかのAPIと同じ知らせ方を、隔離されたAuthorizationCheckに直接送る。
         let reportCompletionFailure: @Sendable (any Error) async -> Void = { [authorization] error in
             guard let error = error as? MastodonAPIError, error.isUnauthorized else { return }
             _ = await authorization.reportUnauthorized()

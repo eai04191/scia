@@ -133,7 +133,7 @@ struct VideoFirstFrameTests {
         #expect(VideoFirstFrame.step(prefix: box("ftyp", Data(count: 8)) + box("moov", audio)) == .unsupported)
     }
 
-    // MARK: - 箱を組み立てる
+    // MARK: - ボックスを組み立てる
 
     private func header(_ type: String, size: Int) -> Data {
         uint32(size) + Data(type.utf8)

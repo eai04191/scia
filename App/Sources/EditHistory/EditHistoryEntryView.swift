@@ -131,7 +131,7 @@ final class EditHistoryEntryView: UIView {
         return row
     }
 
-    /// 注意書きは、一覧の注意書きと同じく箱に入れ、本文と見分ける。
+    /// 注意書きは、一覧の注意書きと同じくボックスに入れ、本文と見分ける。
     private func spoilerView(_ spoiler: Text) -> UIView {
         let label = Self.label(font: .preferredFont(forTextStyle: .subheadline), color: .label)
         label.emojiImages = animatedEmojis

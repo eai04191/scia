@@ -239,7 +239,7 @@ struct TimelineMediaTests {
         let sensitive = withMedia(statuses[0], [attachment], sensitive: true)
         harness.setStatuses([sensitive] + statuses.dropFirst())
         let cell = try #require(harness.visibleCell(of: .status(sensitive.id)))
-        // 読みに行くかは、レイアウトでタイルの大きさが決まったときに決める。ぼかしていれば出どころを選ばず、読みに行く処理を始めない。
+        // 読みに行くかは、レイアウトでタイルの大きさが決まったときに決める。ぼかしていれば取得元を選ばず、読みに行く処理を始めない。
         let tile = try #require(cell.descendants(of: MediaTileView.self).first)
         #expect(!tile.requestsThumbnail)
         #expect(log.fetched.isEmpty)

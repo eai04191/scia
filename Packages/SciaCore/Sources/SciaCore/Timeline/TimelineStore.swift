@@ -414,7 +414,7 @@ public final class TimelineStore {
     public enum EventResult: Equatable, Sendable {
         /// 表示に関わる変化はない。
         case none
-        /// 保留が空のところへ新着が届いた。挿入の時機をはかり始める。
+        /// 保留が空のところへ新着が届いた。挿入のタイミングをはかり始める。
         case pendingStarted
         /// `entries`が変わった。
         case entriesChanged

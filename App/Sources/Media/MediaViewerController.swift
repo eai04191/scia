@@ -1547,7 +1547,7 @@ final class ImagePageController: MediaPageController {
     private var detailsTask: Task<Void, Never>?
     /// 一覧で読み込んだサムネイル。
     private let preview: UIImage?
-    /// 出している画像の出どころ。違和感レポートに残す。
+    /// 出している画像の取得元。違和感レポートに残す。
     private var imageSource = "none"
 
     /// 元の画像を読み始めた。手元のメディアでは、ファイルを読み込み終えるまで読み始められない。

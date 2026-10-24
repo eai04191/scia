@@ -1,10 +1,10 @@
 #!/bin/bash
-# プロモーション動画の素材を、台本のUIテストを走らせながら撮る（docs/promo-video.md）。
+# プロモーション動画の素材を、シナリオのUIテストを走らせながら撮る（docs/promo-video.md）。
 # 使い方:
-#   Tools/promo-record.sh '<端末の名前>' <台本のテスト> <出力の.mp4>
+#   Tools/promo-record.sh '<端末の名前>' <シナリオのテスト> <出力の.mp4>
 #     例: Tools/promo-record.sh 'Scia 1' StreamingDemoUITests/testStreamingDemo promo.mp4
-#     素材にするのは、台本が録画を始めてから止めるまでの間。Config/Promo.xcconfigで、いつものSciaとは別のアプリとしてビルドして入れる。
-#   シミュレーター: `simctl io recordVideo`で撮り、台本が画面に一瞬出す始めと終わりの目印で切り出す。
+#     素材にするのは、シナリオが録画を始めてから止めるまでの間。Config/Promo.xcconfigで、いつものSciaとは別のアプリとしてビルドして入れる。
+#   シミュレーター: `simctl io recordVideo`で撮り、シナリオが画面に一瞬出す始めと終わりの目印で切り出す。
 #     simctlは画面が変わったコマだけを、画面の更新どおりに書くので、動きが正確に残る。画面がしばらく変わらないとその間の時間が消えるので、
 #     撮影モードのアプリは画面の隅の1点を毎コマわずかに変え続ける（ScenarioHeartbeat）。
 #     sim-useの`record-video`は、画面の更新と別の間隔で取り込み、同じ絵を2回撮ったり1つ飛ばしたりして、スワイプした動きが不ぞろいになったので使わない。
@@ -19,7 +19,7 @@ fail() {
     exit 1
 }
 
-[ $# -eq 3 ] || fail "使い方: Tools/promo-record.sh '<端末の名前>' <台本のテスト> <出力の.mp4>"
+[ $# -eq 3 ] || fail "使い方: Tools/promo-record.sh '<端末の名前>' <シナリオのテスト> <出力の.mp4>"
 device=$1
 test_name=$2
 output=$3
@@ -33,10 +33,10 @@ run_test() {
     shift
     xcodebuild -project Scia.xcodeproj -scheme SciaPromo -xcconfig "$xcconfig" -destination "$destination" -derivedDataPath "$derived_data" "$@" \
         -collect-test-diagnostics never test-without-building -only-testing:"SciaUITests/$test_name" >"$test_log" 2>&1 \
-        || { tail -30 "$test_log" >&2; fail "台本が失敗した。全体は$test_log"; }
+        || { tail -30 "$test_log" >&2; fail "シナリオが失敗した。全体は$test_log"; }
 }
 
-# 録画の中から、台本が画面に一瞬出す目印（マゼンタ、ScenarioMarker）のコマを探し、
+# 録画の中から、シナリオが画面に一瞬出す目印（マゼンタ、ScenarioMarker）のコマを探し、
 # 1つ目の目印が消えた時刻と、2つ目の目印が出た時刻を「<始め> <終わり>」の形で出す。
 # 録画は画面がしばらく変わらないとその間の時間が消え、Macの時計と合わなくなることがあるので、時計ではなく録画の中の目印で決める。
 find_markers() {
@@ -122,4 +122,4 @@ else
     [ -n "$udid" ] || fail "端末が見つからない: $device"
     record_device "$udid"
 fi
-echo "素材: $output（台本の記録は$test_log）"
+echo "素材: $output（シナリオの記録は$test_log）"

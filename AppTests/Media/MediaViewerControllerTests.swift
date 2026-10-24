@@ -24,7 +24,7 @@ struct MediaViewerControllerTests {
         MediaAttachment(id: id, type: .image, url: url, previewUrl: nil)
     }
 
-    /// 開いている間は、違和感レポートに表示中の画像の倍率と出どころが残る。画像が極端に小さく出る不具合の調べに使う。
+    /// 開いている間は、違和感レポートに表示中の画像の倍率と取得元が残る。画像が極端に小さく出る不具合の調べに使う。
     @Test func stateDumpIncludesZoomOfCurrentImage() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }

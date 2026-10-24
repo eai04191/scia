@@ -46,7 +46,7 @@ KEYBOARD ?= software
 sim-keyboard:
 	swift Tools/sim-keyboard.swift '$(SIM)' $(KEYBOARD)
 
-## プロモーション動画の素材を、台本のUIテストを走らせながら撮る（docs/promo-video.md）。SIMにはシミュレーターか実機の名前を渡す
+## プロモーション動画の素材を、シナリオのUIテストを走らせながら撮る（docs/promo-video.md）。SIMにはシミュレーターか実機の名前を渡す
 ## 例: make promo SIM='Scia 1'
 SCENARIO ?= StreamingDemoUITests/testStreamingDemo
 OUT ?= $(DERIVED_DATA)/promo.mp4

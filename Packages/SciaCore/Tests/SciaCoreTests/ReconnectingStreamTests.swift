@@ -186,7 +186,7 @@ private actor ActivityLog {
 }
 
 /// 接続ごとに、ハンドシェイクの成否、届くメッセージ、その後の振る舞いを決めておけるWebSocketConnector。
-/// 台本を使い切った後の接続は、何も届かず黙ったままにする。
+/// シナリオを使い切った後の接続は、何も届かず黙ったままにする。
 final class ScriptedConnector: WebSocketConnector {
     struct Script: Sendable {
         enum Handshake: Sendable {

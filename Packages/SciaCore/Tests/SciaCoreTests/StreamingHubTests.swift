@@ -70,7 +70,7 @@ struct StreamingHubTests {
         clock.advance(by: .milliseconds(10))
         try await waitUntil { home.labels.contains("delete 2") }
 
-        // 台本の接続は購読しなくてもイベントを流し、最初の接続は購読を送り終える前に切れることがあるため、つなぎ直した方だけを見る。
+        // シナリオの接続は購読しなくてもイベントを流し、最初の接続は購読を送り終える前に切れることがあるため、つなぎ直した方だけを見る。
         #expect(connector.connectCount == 2)
         #expect(connector.sent.last == [Self.subscribeUser])
         #expect(home.labels == ["connected", "delete 1", "connected", "delete 2"])

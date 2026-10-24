@@ -3,7 +3,7 @@ import UIKit
 
 /// 投稿欄の投票の欄。本文の下に、選択肢の入力欄と、設定の1行を並べる。決まりは`docs/poll.md`の「投票を作る」。
 ///
-/// 選択肢の欄は、一覧の投票と同じく角の丸い箱に入れ、書くとどう見えるかを分かるようにする。欄の数は下書きが決め、最後の欄に書くと空の欄が増える。
+/// 選択肢の欄は、一覧の投票と同じく角丸のボックスに入れ、書くとどう見えるかを分かるようにする。欄の数は下書きが決め、最後の欄に書くと空の欄が増える。
 /// 空の欄は送らないので、選択肢を足すボタンも消すボタンも置かない。
 /// 設定（締め切り、選び方、結果を見せるか）は、今どうなっているかが見え、1回押せば変えられるよう、ボタンを1行に並べる。
 /// 1つのメニューにまとめても設定の行は残り、押す回数が増えるだけだったため。
@@ -38,7 +38,7 @@ final class ComposePollEditor: UIView {
     private let removeButton = UIButton(configuration: .plain())
     private(set) var content: Content?
 
-    /// 選択肢の1行。角の丸い箱に、選び方のマークと入力欄を並べる。
+    /// 選択肢の1行。角丸のボックスに、選び方のマークと入力欄を並べる。
     private struct OptionRow {
         let view: UIView
         let indicator: UIImageView
@@ -212,7 +212,7 @@ final class ComposePollEditor: UIView {
         content.alignment = .center
         content.spacing = 8
         content.translatesAutoresizingMaskIntoConstraints = false
-        // 一覧の投票の選択肢と同じ、角の丸い箱にする。箱のどこを押しても、その欄に書き始める。
+        // 一覧の投票の選択肢と同じ、角丸のボックスにする。ボックスのどこを押しても、その欄に書き始める。
         let box = UIView()
         box.backgroundColor = .tertiarySystemFill
         box.layer.cornerRadius = 8

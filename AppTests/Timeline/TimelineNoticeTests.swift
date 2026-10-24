@@ -205,7 +205,7 @@ struct TimelineNoticeTests {
         #expect(stack.persistentNotice?.value == "3件")
     }
 
-    /// 選ばれていない出どころに新しい出たままのアプリ内通知が出ても、しまったチップをまた出す。
+    /// 選ばれていない発生元に新しい出たままのアプリ内通知が出ても、しまったチップをまた出す。
     @Test func dismissedChipReturnsWhenAnotherPersistentNoticeArrives() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

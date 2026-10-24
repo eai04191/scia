@@ -319,7 +319,7 @@ public final class NotificationStore {
 
     // MARK: - ストリーミング
 
-    /// 届いた通知を保留に溜める。保留が空のところへ届いたらtrueを返す。挿入の時機をはかり始める合図にする。
+    /// 届いた通知を保留に溜める。保留が空のところへ届いたらtrueを返す。挿入のタイミングをはかり始めるきっかけにする。
     /// フィルターで出さない投稿についての通知は溜めない。挿入しても一覧が変わらないため。
     public func receive(_ notification: MastodonNotification) -> Bool {
         guard !isDiscarded(notification), !isFilteredOut(notification, now: now()), !notifications.contains(where: { $0.id == notification.id }), !pending.contains(where: { $0.id == notification.id }) else {
