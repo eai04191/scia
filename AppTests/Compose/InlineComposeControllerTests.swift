@@ -507,17 +507,23 @@ struct InlineComposeControllerTests {
     @Test func failedPostKeepsEditingWhileShowingError() async throws {
         defer { window.isHidden = true }
         struct Failure: Error {}
-        let composer = try installComposer { _ in throw Failure() }
+        // 書き始めたときに届く端末の本物のキーボードの知らせは、負荷が高いと送った知らせより後に届き、ソフトウェアキーボードが上がっていないことになるので、送った知らせだけを受けさせる。
+        let keyboard = NotificationCenter()
+        let composer = try installComposer(keyboardNotifications: keyboard) { _ in throw Failure() }
         composer.model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         composer.beginEditing()
         composer.model.text = "本文"
-        try await Task.sleep(for: .milliseconds(500))
-        // テストを動かす端末のキーボードの知らせが先に届き終わってから、ソフトウェアキーボードが上がった知らせを送る。
-        postKeyboardFrame(height: 300)
+        postKeyboardFrame(height: 300, to: keyboard)
 
         await composer.model.submit()
-        try await waitUntilSettled()
-        #expect(window.rootViewController?.presentedViewController is UIAlertController)
+        // ウィンドウ全体の動きが止まるのを待つと、アラートの中の多数の部品の動きとバーの動きの合計を待つことになり、負荷が高いと時間切れになる。
+        // 確かめる状態は知らせを出し終えるまでに決まるので、出し終えるのを待つ。
+        try await waitUntil {
+            guard let alert = window.rootViewController?.presentedViewController as? UIAlertController else { return false }
+            return !alert.isBeingPresented
+        }
+        // 知らせが最初の応答者になり、ソフトウェアキーボードが下がった知らせ。
+        postKeyboardFrame(height: 0, to: keyboard)
         #expect(composer.stateDump().contains("editing: true"), "失敗の知らせを出すと書き終えたことになりました\n\(composer.stateDump())")
         #expect(composer.isBarHeld, "失敗の知らせを出すとバーがキーボードの高さから外れました\n\(composer.stateDump())")
         window.rootViewController?.dismiss(animated: false)
@@ -847,6 +853,18 @@ struct InlineComposeControllerTests {
     private func useDefaultAnimationDurations() {
         tuning.reset(.number(TuningCatalog.composeMorphDuration))
         tuning.reset(.number(TuningCatalog.composeExpandDuration))
+    }
+
+    /// `condition`を満たすまで待つ。
+    private func waitUntil(timeout: Duration = .seconds(3), _ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + timeout
+        while !condition() {
+            guard ContinuousClock.now < deadline else {
+                Issue.record("条件を満たさないまま時間切れになりました")
+                return
+            }
+            try await Task.sleep(for: .milliseconds(10))
+        }
     }
 
     /// ウィンドウの中の動きがなくなり、そのまま`quiet`の間続くまで待つ。動きの終わりを待つだけの所で、固定の時間の代わりに使う。
