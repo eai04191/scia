@@ -99,9 +99,10 @@ public final class LayerClock {
 
     /// 終わりのある動きの名前。入力欄のカーソルの点滅（`repeatCount`が`greatestFiniteMagnitude`）、Liquid Glassがほかの層に合わせ続ける動き（`duration`が無限）、
     /// 送信中のくるくる（`UIActivityIndicatorView`の中の絵の差し替え）は、待っても終わらないので含めない。
+    /// 一覧の更新コントロール（`UIRefreshControl`）の中の印も、時間を止めている間は濃さの動きを掛け直し続けて終わらないので含めない。
     public static func finiteAnimations(in layer: CALayer) -> [String] {
         #if canImport(UIKit)
-        if layer.delegate is UIActivityIndicatorView { return [] }
+        if layer.delegate is UIActivityIndicatorView || layer.delegate is UIRefreshControl { return [] }
         #endif
         let owner = layer.delegate.map { String(describing: type(of: $0)) } ?? String(describing: type(of: layer))
         let own = (layer.animationKeys() ?? []).filter { key in
