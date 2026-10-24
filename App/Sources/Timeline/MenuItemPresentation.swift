@@ -99,6 +99,7 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .booster: .own(title: "ブーストしたユーザー", symbolName: "person.crop.circle.badge.plus", note: "ブーストでだけ出ます")
         case .mentionedUsers: .own(title: "メンションされたユーザー", symbolName: "at")
         case .customEmojis: .own(title: "カスタム絵文字", symbolName: "face.smiling", note: "行にカスタム絵文字があるときだけ出ます。絵文字ごとに、画像のメディアのメニューを出します")
+        case .hashtags: .own(title: "ハッシュタグ", symbolName: "number", note: "ハッシュタグのある投稿でだけ出ます。ハッシュタグごとに、ハッシュタグのメニューを出します")
         }
     }
 }
@@ -148,6 +149,41 @@ extension HashtagMenuItem: MenuItemContentProviding {
         case .openInAppSafari: .url(.openInAppSafari)
         case .copyLink: .url(.copyLink)
         case .share: .url(.share)
+        }
+    }
+}
+
+extension HashtagMenuItem {
+    /// ハッシュタグのメニューの中身。本文のハッシュタグを長押ししたときと、投稿のメニューの「ハッシュタグ」で、同じものを並べる。
+    /// - Parameters:
+    ///   - url: サーバーのハッシュタグのページ。分からなければ、URLの項目を押せないまま並べる。
+    ///   - account: 「投稿したユーザーの投稿」で開くユーザー。nilなら項目を出さない。
+    @MainActor
+    static func menuElements(
+        name: String,
+        url: URL?,
+        account: Account?,
+        layout: MenuLayout<HashtagMenuItem>,
+        handlers: URLMenuHandlers,
+        openTimeline: @escaping () -> Void,
+        openAccountStatuses: @escaping (Account) -> Void
+    ) -> [UIMenuElement] {
+        layout.groups.menuElements { item in
+            if let action = item.urlAction {
+                return [action.action(url: url, handlers: handlers)]
+            }
+            switch item {
+            case .timeline:
+                return [UIAction(title: item.title, image: item.image) { _ in openTimeline() }]
+            case .accountStatuses:
+                guard let account else { return [] }
+                // ほかのサーバーのユーザーなら、ユーザーのサブメニューの見出しと同じく、サーバー名をサブタイトルに出す。
+                let domain = account.acct.split(separator: "@", maxSplits: 1).dropFirst().first.map(String.init)
+                return [UIAction(title: "@\(account.username)の投稿", subtitle: domain, image: item.image) { _ in openAccountStatuses(account) }]
+            // 共通の項目は、上で中身から組んだ。
+            case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
+                return []
+            }
         }
     }
 }

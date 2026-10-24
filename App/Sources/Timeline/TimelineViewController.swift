@@ -123,8 +123,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onOpenURL: ((URL, LinkBrowser) -> Void)?
     /// リンクのメニューの「プロフィールとして開く」で、リンク先をプロフィールとして探して開く。
     var onOpenProfileURL: ((URL) -> Void)?
-    /// ハッシュタグのメニューの「ユーザーの投稿」で、そのユーザーのハッシュタグの付いた投稿を開く。
+    /// ハッシュタグのメニューの「投稿したユーザーの投稿」で、そのユーザーのハッシュタグの付いた投稿を開く。
     var onOpenAccountHashtag: ((String, Account) -> Void)?
+    /// 投稿のメニューの「ハッシュタグ」の「すべての投稿」で、ハッシュタグのタイムラインを開く。`#`を除いた名前を渡す。
+    var onOpenHashtag: ((String) -> Void)?
     /// ナビゲーションから外された。積んで開いた一覧が、読み込みと購読をやめるのに使う。
     var onRemovedFromParent: (() -> Void)?
     /// ユーザーのメニューのメンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。

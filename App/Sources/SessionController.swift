@@ -751,6 +751,10 @@ final class SessionController {
             guard let viewController else { return }
             self?.openAccountHashtag(name, of: account, from: viewController)
         }
+        viewController.onOpenHashtag = { [weak self, weak viewController] name in
+            guard let viewController else { return }
+            self?.openFeed(.hashtag(name: name), from: viewController)
+        }
         viewController.onOpenThread = { [weak self, weak viewController] status, rowFrame in
             guard let viewController else { return }
             self?.openThread(of: status, rowFrame: rowFrame, from: viewController)

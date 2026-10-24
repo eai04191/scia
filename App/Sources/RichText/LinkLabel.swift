@@ -235,7 +235,7 @@ final class LinkHitArea: UIControl {
                     return [action.action(url: url, handlers: handlers)]
                 }
                 switch item {
-                case .profile: return [openAction(item.title, image: item.image, destination)]
+                case .profile: return [profileAction(item.title, image: item.image, destination)]
                 case .mention, .copyHandle: return actions?.action(item, target: target, notifying: host).map { [$0] } ?? []
                 case .follow, .showReblogs, .notify, .mute, .block, .report:
                     guard let actions, let load else { return [] }
@@ -246,26 +246,20 @@ final class LinkHitArea: UIControl {
             }
         case .hashtag(let name, let url):
             title = "#\(name)"
-            let account = label.hashtagAccount
-            children = settings.hashtagMenuLayout.groups.menuElements { item in
-                if let action = item.urlAction {
-                    return [action.action(url: url, handlers: handlers)]
-                }
-                switch item {
-                case .timeline: return [openAction(item.title, image: item.image, destination)]
-                case .accountStatuses:
-                    guard let account else { return [] }
-                    return [accountHashtagAction(name, of: account, image: item.image)]
-                // 共通の項目は、上で中身から組んだ。
-                case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari: return []
-                }
-            }
+            children = HashtagMenuItem.menuElements(
+                name: name,
+                url: url,
+                account: label.hashtagAccount,
+                layout: settings.hashtagMenuLayout,
+                handlers: handlers,
+                openTimeline: { [weak self] in self?.label?.open(destination) },
+                openAccountStatuses: { [weak self] account in self?.nearest((any LinkMenuHost).self)?.openHashtag(name, of: account) }
+            )
         }
         return children.isEmpty ? nil : UIMenu(title: title, children: children)
     }
 
-    /// タップしたときと同じく、行き先を開く。
-    private func openAction(_ title: String, image: UIImage?, _ destination: RichText.LinkDestination) -> UIAction {
+    private func profileAction(_ title: String, image: UIImage?, _ destination: RichText.LinkDestination) -> UIAction {
         UIAction(title: title, image: image) { [weak self] _ in self?.label?.open(destination) }
     }
 
@@ -274,14 +268,6 @@ final class LinkHitArea: UIControl {
         let isWeb = ["http", "https"].contains(url.scheme?.lowercased())
         return UIAction(title: title, image: image, attributes: isWeb ? [] : .disabled) { [weak self] _ in
             self?.nearest((any LinkMenuHost).self)?.openProfile(resolving: url)
-        }
-    }
-
-    /// 名前は「@名前の投稿」にし、ほかのサーバーのユーザーなら、ユーザーのサブメニューの見出しと同じく、サーバー名をサブタイトルに出す。
-    private func accountHashtagAction(_ name: String, of account: Account, image: UIImage?) -> UIAction {
-        let domain = account.acct.split(separator: "@", maxSplits: 1).dropFirst().first.map(String.init)
-        return UIAction(title: "@\(account.username)の投稿", subtitle: domain, image: image) { [weak self] _ in
-            self?.nearest((any LinkMenuHost).self)?.openHashtag(name, of: account)
         }
     }
 

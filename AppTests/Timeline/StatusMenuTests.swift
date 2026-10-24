@@ -257,6 +257,36 @@ struct StatusMenuTests {
         #expect(describe(emoji) == ":blobcat:[開く,リンクをコピー,ブラウザで開く,その他[メディアの情報[PNG]]]")
     }
 
+    /// ハッシュタグは、関係するユーザーの後ろに「その他」に入れずに、タグごとの`#名前`のサブメニューで並び、中に本文のハッシュタグを長押ししたときと同じハッシュタグのメニューを出す。
+    /// サーバーと同じ決まりでそろえた名前が同じタグは、1度だけ出す。
+    @Test func hashtagsListHashtagMenuPerTagAfterUsers() throws {
+        let tagURL = try #require(URL(string: "https://example.social/tags/cat"))
+        let base = try status(url: nil)
+        let post = Status(
+            id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil,
+            tags: [Tag(name: "cat", url: tagURL), Tag(name: "Cat", url: tagURL), Tag(name: "dog", url: nil)]
+        )
+
+        let groups = try #require(menu(for: .status(post))?.children.compactMap { $0 as? UIMenu }.filter { $0.options.contains(.displayInline) })
+        let userGroup = try #require(groups.last)
+        #expect(userGroup.children.first?.title == "@\(post.account.username)")
+        let tags = userGroup.children.filter { $0.title.hasPrefix("#") }
+        #expect(tags.map(describe) == [
+            "#cat[すべての投稿,@\(post.account.username)の投稿,ブラウザで開く,リンクをコピー,共有]",
+            "#dog[すべての投稿,@\(post.account.username)の投稿,ブラウザで開く,リンクをコピー,共有]",
+        ])
+        // URLの分からないタグは、URLの項目を押せないまま並べる。
+        let dogLinks = try #require(tags.last as? UIMenu).children.flatMap { ($0 as? UIMenu)?.children ?? [$0] }.compactMap { $0 as? UIAction }.filter { $0.title != "すべての投稿" && !$0.title.hasPrefix("@") }
+        #expect(dogLinks.allSatisfy { $0.attributes.contains(.disabled) })
+    }
+
+    /// ハッシュタグのない投稿では、ハッシュタグの項目を出さない。
+    @Test func hashtagsAreHiddenWithoutTags() throws {
+        let titles = try outline(menu(for: .status(status(url: nil)))).joined()
+
+        #expect(!titles.contains { $0.hasPrefix("#") })
+    }
+
     /// カスタム絵文字のない投稿では、カスタム絵文字の項目を出さない。
     @Test func customEmojisAreHiddenWithoutEmojis() throws {
         let titles = try outline(menu(for: .status(status(url: nil)))).joined()

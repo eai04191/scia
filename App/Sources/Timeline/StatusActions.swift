@@ -102,6 +102,9 @@ extension TimelineViewController {
             let emojis = notification?.emojisInRow ?? status?.emojisInRow ?? []
             let subject = status.map { OperationStatus.Subject($0.displayed) }
             return emojis.compactMap { emojiElement(for: $0, subject: subject) }
+        case .hashtags:
+            guard let shown = status?.displayed else { return [] }
+            return hashtagElements(of: shown, id: id)
         case .reply, .favourite, .reblog, .bookmark, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .edit, .delete:
             guard let status else { return [] }
             return statusAction(item, on: status, isNotification: notification != nil, id: id).map { [$0] } ?? []
@@ -220,8 +223,28 @@ extension TimelineViewController {
             return UIAction(title: item.title, image: item.image) { [weak self] _ in
                 self?.translation.present(text)
             }
-        case .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .dismissNotification, .reblogWithVisibility:
+        case .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .hashtags, .dismissNotification, .reblogWithVisibility:
             return nil
+        }
+    }
+
+    /// 投稿のハッシュタグごとの、ハッシュタグのメニューのサブメニュー。中身は本文のハッシュタグを長押ししたときと同じ。
+    /// サーバーと同じ決まりでそろえた名前が同じタグは、1度だけ出す。
+    private func hashtagElements(of shown: Status, id: ItemID) -> [UIMenuElement] {
+        var seen: Set<String> = []
+        let handlers = urlHandlers(id: id)
+        return shown.tags.filter { seen.insert(Hashtag.normalizedName($0.name)).inserted }.compactMap { tag in
+            let children = HashtagMenuItem.menuElements(
+                name: tag.name,
+                url: tag.url,
+                account: shown.account,
+                layout: settings.hashtagMenuLayout,
+                handlers: handlers,
+                openTimeline: { [weak self] in self?.onOpenHashtag?(tag.name) },
+                openAccountStatuses: { [weak self] account in self?.onOpenAccountHashtag?(tag.name, account) }
+            )
+            guard !children.isEmpty else { return nil }
+            return UIMenu(title: "#\(tag.name)", image: StatusMenuItem.hashtags.image, children: children)
         }
     }
 

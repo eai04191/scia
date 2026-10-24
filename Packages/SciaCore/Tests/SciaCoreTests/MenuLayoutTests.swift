@@ -169,7 +169,7 @@ struct MenuLayoutTests {
             [.edit, .bookmark],
             [.copyLink, .copyText, .share, .openInBrowser],
             [.systemTranslate],
-            [.notifyingUser, .author, .booster],
+            [.notifyingUser, .author, .booster, .hashtags],
         ])
         #expect(groups.more.map(\.items) == [[.editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .customEmojis], [.muteConversation, .pin], [.dismissNotification, .delete]])
         #expect(StatusMenuItem.defaultLayout.elements.contains(.item(.reblogWithVisibility, isVisible: false)))

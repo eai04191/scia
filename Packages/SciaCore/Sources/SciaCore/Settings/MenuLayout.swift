@@ -198,6 +198,8 @@ public enum StatusMenuItem: String, MenuItemKind {
     case mentionedUsers
     /// 投稿の行に描くカスタム絵文字ごとの、絵文字の画像のメディアのメニュー。カスタム絵文字のある投稿でだけ出る。
     case customEmojis
+    /// 投稿のハッシュタグごとの、ハッシュタグのメニュー。ハッシュタグのある投稿でだけ出る。
+    case hashtags
 
     /// 既定は、よく押す項目だけをメニューに並べ、上ほどよく押すものを置いて、何のための操作かでまとまりを分ける。
     /// どの項目も設定を開かずに選べるよう、たまにしか使わない項目は隠さずに「その他」へ入れる。隠すのは、ほかの設定で代わりがきく項目と、メニューを長くしやすい項目だけにする。
@@ -205,7 +207,7 @@ public enum StatusMenuItem: String, MenuItemKind {
     /// - 反応のつづき: 編集（自分の投稿でだけ出る。自分の投稿では返信などより先に使う）、ブックマーク。公開範囲を選んでブーストは、ブーストの公開範囲の設定で代わりがきくため隠し、出したときにブーストの近くに来るようここに置く
     /// - 持ち出す: リンクとテキストのコピー、共有、ブラウザで開く。開く場所を選んで開く2つは、開く場所の設定と重なるため隠す
     /// - 読む: 翻訳
-    /// - 関係するユーザー: メンションされたユーザーは、何人もいるとメニューが長くなるため隠す
+    /// - 関係するユーザーとハッシュタグ: メンションされたユーザーは、何人もいるとメニューが長くなるため隠す。ハッシュタグは、ある投稿でしか出ないので、「その他」に入れずに出す
     /// - 「その他」: たまにしか使わない編集履歴、お気に入りした人、ブーストした人、メディアを隠す、カスタム絵文字、会話のミュート、固定と、取り消せない通知の削除、投稿の削除
     public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
         .rowSeparator,
@@ -230,6 +232,7 @@ public enum StatusMenuItem: String, MenuItemKind {
         .item(.author, isVisible: true),
         .item(.booster, isVisible: true),
         .item(.mentionedUsers, isVisible: false),
+        .item(.hashtags, isVisible: true),
         .more,
         .item(.editHistory, isVisible: true),
         .item(.favouritedBy, isVisible: true),
