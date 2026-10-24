@@ -945,7 +945,7 @@ extension ProfileEditViewController: UITextFieldDelegate, UITextViewDelegate {
 // MARK: - シート
 
 extension ProfileEditViewController: UIAdaptivePresentationControllerDelegate {
-    /// 変えたものがあるのに下へ払って閉じようとしたら、捨ててよいか確かめる。
+    /// 変えたものがあるのに下へスワイプして閉じようとしたら、捨ててよいか確かめる。
     func presentationControllerDidAttemptToDismiss(_ presentationController: UIPresentationController) {
         confirmDiscard()
     }

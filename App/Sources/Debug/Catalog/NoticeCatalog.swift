@@ -92,7 +92,7 @@ enum NoticeCatalog {
                 notices.set(draft(.uploading), in: .screen)
                 return stack(persistent: notices.chipNotice {}, belongsToScreen: notices.chosenSlot == .screen)
             },
-            CatalogState(title: "画面だけのチップを払って閉じる途中（背景に合わせて薄くし、アプリ全体のものは残す）") {
+            CatalogState(title: "画面だけのチップをスワイプして閉じる途中（背景に合わせて薄くし、アプリ全体のものは残す）") {
                 stack(persistent: draft(.failed), transient: .savedToPhotos, belongsToScreen: true, screenAlpha: 0.3)
             },
             CatalogState(title: "ログインし直し") { column(reauthentication: reauthentication(Self.shortHandle)) },

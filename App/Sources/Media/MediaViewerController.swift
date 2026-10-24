@@ -40,7 +40,7 @@ final class MediaViewerController: UIViewController {
     private var draftNotice: Notice?
     /// チップの列から見た、開いている度合い。0で下の画面の位置、1でメニューボタンの行のすぐ下に列を置く。
     private var noticePresence: CGFloat = 0
-    /// この画面だけのチップの濃さ。開閉では開いている度合いに、払って閉じる途中はボタン類と同じく背景に合わせる。
+    /// この画面だけのチップの濃さ。開閉では開いている度合いに、スワイプして閉じる途中はボタン類と同じく背景に合わせる。
     private var noticeScreenAlpha: CGFloat = 0
     /// 共有や保存のために落とす処理。ビューアを閉じても保存を続けるため、セッションで持つ。nilなら共有と保存を出さない（投稿欄から開いたとき）。
     private let transfers: MediaTransferCenter?

@@ -28,7 +28,7 @@ struct NoticePlacement {
     var viewer: NoticeContext.Viewer?
     /// その画面の中だけで意味のある、出たままのアプリ内通知。画面を閉じると、画面と一緒に薄くなって消える。
     var screenNotice: Notice?
-    /// 画面だけのチップの濃さ。払って閉じる途中は、背景に合わせて薄くする。
+    /// 画面だけのチップの濃さ。スワイプして閉じる途中は、背景に合わせて薄くする。
     var screenAlpha: CGFloat = 1
     /// ボタン類を隠している。使う人が対処するまで残るもの（出たままの失敗、ログインし直し）を、場所を空けたまま薄くする。
     var hidesChrome = false

@@ -131,7 +131,7 @@ struct NoticeStackViewTests {
         #expect(!chip.isUserInteractionEnabled)
     }
 
-    /// VoiceOverの「しまう」の操作で、払ったときと同じくしまう。数秒で消えるものはそのまま消し、出たままのものは置く側に知らせる。
+    /// VoiceOverの「しまう」の操作で、スワイプしたときと同じくしまう。数秒で消えるものはそのまま消し、出たままのものは置く側に知らせる。
     @Test func dismissActionRemovesChips() throws {
         let stack = makeStack()
         var dismissed: [String] = []
@@ -246,7 +246,7 @@ struct NoticeStackViewTests {
         #expect(stack.hitTest(CGPoint(x: 2, y: 150), with: nil) == nil)
     }
 
-    /// 押せないチップも、上へ払ってしまえるよう触れたものを受ける。押しても何も起きない。
+    /// 押せないチップも、上へスワイプしてしまえるよう触れたものを受ける。押しても何も起きない。
     @Test func nonActionableChipReceivesTouchesForDismissing() throws {
         let stack = makeStack()
         stack.setPersistent(progress)

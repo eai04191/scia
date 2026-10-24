@@ -19,13 +19,13 @@ final class NoticeOverlay: UIView {
     private var isFollowingTransition = false
     /// 最後に決めた列の上端。指を離したときに、ここへ動かす。
     private var placedTop: CGFloat?
-    /// 上へ払ってしまった出たままのアプリ内通知と、そのとき持っていた出たままのアプリ内通知のid。
+    /// 上へスワイプしてしまった出たままのアプリ内通知と、そのとき持っていた出たままのアプリ内通知のid。
     /// 文言や種類が変わるか、新しいアプリ内通知が出るまで、出さない。進み具合が変わっただけでは出さない。
     private var dismissedPersistent: (notice: Notice, ids: Set<String>)?
 
     /// 置き直しの動かし方。
     enum Movement {
-        /// 呼んだ側のアニメーションに任せる。アニメーションの中でなければ、すぐ置く。毎フレーム置き直すとき（引っぱる、ビューアを払う）に使う。
+        /// 呼んだ側のアニメーションに任せる。アニメーションの中でなければ、すぐ置く。毎フレーム置き直すとき（引っぱる、ビューアをスワイプする）に使う。
         case inherited
         /// この時間をかけて動かす。タブの切り替え。
         case animated(TimeInterval)

@@ -91,7 +91,7 @@ struct ReportView: View {
                     }
                 }
             }
-            // 書いたものを、下に払って閉じたときに失わないようにする。
+            // 書いたものを、下にスワイプして閉じたときに失わないようにする。
             .interactiveDismissDisabled(draft.isSubmitting || !draft.comment.isEmpty)
             .task {
                 await draft.loadRules()

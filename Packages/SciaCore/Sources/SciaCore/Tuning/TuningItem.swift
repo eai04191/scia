@@ -739,19 +739,19 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
-    /// チップを上へ払ってしまうとき、指を離した時点でこれより上へ動かしていたら、遅く離してもしまう。
+    /// チップを上へスワイプしてしまうとき、指を離した時点でこれより上へ動かしていたら、遅く離してもしまう。
     public static let noticeDismissDistance = NumberTuning(
         id: "notice.dismissDistance",
-        title: "チップをしまう払いの距離（pt）",
+        title: "チップをしまうスワイプの距離（pt）",
         range: 4...80,
         step: 2,
         defaultValue: 24
     )
 
-    /// チップを上へ払ってしまうとき、指を離した時点でこれより速く上へ動いていたら、距離が短くてもしまう。
+    /// チップを上へスワイプしてしまうとき、指を離した時点でこれより速く上へ動いていたら、距離が短くてもしまう。
     public static let noticeDismissVelocity = NumberTuning(
         id: "notice.dismissVelocity",
-        title: "チップをしまう払いの速さ（pt/秒）",
+        title: "チップをしまうスワイプの速さ（pt/秒）",
         range: 50...1500,
         step: 50,
         defaultValue: 300
@@ -1157,7 +1157,7 @@ public enum TuningCatalog {
 
     /// 絵文字のシートの下の段と、シートの下端との間（pt）。キーボードを出しているときは、キーボードの上端との間。
     /// 小さいほどiOSのキーボードの地球儀の段のように、ホームインジケーターの場所まで下がる。
-    /// 下げすぎると、まとまりのボタンを横に払う指がホームインジケーターの操作に取られ、横にスクロールできなかった。
+    /// 下げすぎると、まとまりのボタンを横にスワイプする指がホームインジケーターの操作に取られ、横にスクロールできなかった。
     public static let composeEmojiPaletteBarBottomInset = NumberTuning(
         id: "compose.emojiPalette.barBottomInset",
         title: "絵文字のシートの下の段の下の余白（pt）",

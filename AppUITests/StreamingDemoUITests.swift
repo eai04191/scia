@@ -38,8 +38,8 @@ final class StreamingDemoUITests: XCTestCase {
 
         // 下へ読み進め、4枚の写真の投稿で止まる
         let middle = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
-        // 人が読み進めるときのように、軽く払って指を離し、慣性で流して止める。
-        // 長くゆっくり払うと、指を離す直前に一瞬止まり、慣性が始まる前に4コマほど止まって見えたので、短く速く払う
+        // 人が読み進めるときのように、軽くスワイプして指を離し、慣性で流して止める。
+        // 長くゆっくりスワイプすると、指を離す直前に一瞬止まり、慣性が始まる前に4コマほど止まって見えたので、短く速くスワイプする
         middle.press(forDuration: 0.05, thenDragTo: middle.withOffset(CGVector(dx: 0, dy: -55)), withVelocity: XCUIGestureVelocity(700), thenHoldForDuration: 0)
         pause(2)
 
@@ -56,7 +56,7 @@ final class StreamingDemoUITests: XCTestCase {
         try emit("arrivals-viewer")
         pause(2)
 
-        // 下へ払って閉じると、元の位置に戻る
+        // 下へスワイプして閉じると、元の位置に戻る
         app.swipeDown(velocity: .fast)
         pause(2)
         XCTAssertEqual(photo.frame.minY, photoFrame.minY, accuracy: 0.5, "ビューアを閉じたあと、読んでいた投稿の位置が変わった")

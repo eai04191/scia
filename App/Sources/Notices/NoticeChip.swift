@@ -23,11 +23,11 @@ final class NoticeChip: UIControl {
     private var isAccessibilityFocused = false {
         didSet { updateHeld() }
     }
-    /// 上へ払ってしまう途中。指で動かしている間も、触れているものとして扱う。
+    /// 上へスワイプしてしまう途中。指で動かしている間も、触れているものとして扱う。
     var isPanning = false {
         didSet { updateHeld() }
     }
-    /// 払い始めたときに、チップを上下にずらして見せていた量。戻る途中につかみ直したら、見えている位置から指に合わせる。
+    /// スワイプし始めたときに、チップを上下にずらして見せていた量。戻る途中につかみ直したら、見えている位置から指に合わせる。
     var panStartOffset: CGFloat = 0
     /// `isHeld`が変わったときに呼ぶ。
     var onHoldChange: (() -> Void)?
@@ -180,7 +180,7 @@ final class NoticeChip: UIControl {
         isTouching = false
     }
 
-    /// 押せないチップも、上へ払ってしまえるよう触れたものは受ける。押したときに薄くするのは、押せるときだけ。
+    /// 押せないチップも、上へスワイプしてしまえるよう触れたものは受ける。押したときに薄くするのは、押せるときだけ。
     override var isHighlighted: Bool {
         didSet {
             guard isHighlighted != oldValue, notice?.isActionable == true || !isHighlighted else { return }

@@ -23,7 +23,7 @@ final class NoticeStackView: UIView {
     private var isChromeHidden = false
     /// 出たままのチップが、前に出ている画面の中だけのものか。画面と一緒に薄くするため。
     private var persistentBelongsToScreen = false
-    /// 画面だけのチップの濃さ。画面を払って閉じる途中は、背景に合わせて薄くする。呼んだ側のアニメーションに任せて変える。
+    /// 画面だけのチップの濃さ。画面をスワイプして閉じる途中は、背景に合わせて薄くする。呼んだ側のアニメーションに任せて変える。
     var screenAlpha: CGFloat = 1 {
         didSet {
             guard screenAlpha != oldValue, let chip = persistentChip, persistentBelongsToScreen else { return }
@@ -45,7 +45,7 @@ final class NoticeStackView: UIView {
     var dismissDistance: CGFloat = 24
     /// 指を離した時点でこれより速く上へ動いていたら、距離が短くてもチップをしまう。pt/秒。
     var dismissVelocity: CGFloat = 300
-    /// 出たままのチップを、上へ払ってしまった。しまったアプリ内通知を渡す。また出すかは置く側が決める。
+    /// 出たままのチップを、上へスワイプしてしまった。しまったアプリ内通知を渡す。また出すかは置く側が決める。
     var onDismissPersistent: ((Notice) -> Void)?
 
     override init(frame: CGRect) {
@@ -205,9 +205,9 @@ final class NoticeStackView: UIView {
         relayout()
     }
 
-    // MARK: 払ってしまう
+    // MARK: スワイプしてしまう
 
-    /// 指に合わせて上へ動かす。下へは、払えないことが分かるよう少しだけ動かす。上へ動かすほど薄くする。
+    /// 指に合わせて上へ動かす。下へは、スワイプできないことが分かるよう少しだけ動かす。上へ動かすほど薄くする。
     @objc private func handleDismissPan(_ pan: UIPanGestureRecognizer) {
         guard let chip = pan.view as? NoticeChip, chips.contains(where: { $0 === chip }) else { return }
         let translation = pan.translation(in: self).y
@@ -244,7 +244,7 @@ final class NoticeStackView: UIView {
         chip.alpha = targetAlpha(of: chip) * max(0.3, 1 + min(offset, 0) / 120)
     }
 
-    /// 払いきらずに離したら、元の位置へ戻す。
+    /// スワイプしきらずに離したら、元の位置へ戻す。
     private func settle(_ chip: NoticeChip) {
         UIView.animate(withDuration: animationDuration, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]) {
             chip.transform = .identity
@@ -272,7 +272,7 @@ final class NoticeStackView: UIView {
         removingChips.append(chip)
         chip.isUserInteractionEnabled = false
         chip.onHoldChange = nil
-        // 動かす前の位置から、列の上の外まで動かす。払って上へずらしていても、そこからさらに上へ動くようにする。
+        // 動かす前の位置から、列の上の外まで動かす。スワイプして上へずらしていても、そこからさらに上へ動くようにする。
         let restingTop = chip.center.y - chip.bounds.height / 2
         let offset = min(-(restingTop + chip.bounds.height + 16), chip.transform.ty - 16)
         UIView.animate(withDuration: animationDuration, delay: 0, options: [.beginFromCurrentState, .curveEaseOut]) {
@@ -429,7 +429,7 @@ final class NoticeStackView: UIView {
             }
         }
         for chip in chips {
-            // 押せないチップも、上へ払ってしまえるよう触れたものを受ける。
+            // 押せないチップも、上へスワイプしてしまえるよう触れたものを受ける。
             chip.isUserInteractionEnabled = !isHiddenWithChrome(chip)
         }
         if animated {
@@ -458,7 +458,7 @@ final class NoticeStackView: UIView {
 }
 
 extension NoticeStackView: UIGestureRecognizerDelegate {
-    /// 縦に動かし始めたときだけ、払う操作にする。
+    /// 縦に動かし始めたときだけ、スワイプの操作にする。
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let pan = gestureRecognizer as? UIPanGestureRecognizer, pan.view is NoticeChip else {
             return super.gestureRecognizerShouldBegin(gestureRecognizer)
