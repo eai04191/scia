@@ -176,6 +176,7 @@ final class MediaViewerController: UIViewController {
         timing: Timing,
         transfers: MediaTransferCenter? = nil,
         subject: OperationStatus.Subject? = nil,
+        settings: AppSettings = AppDependencies.settings,
         sourceTile: @escaping @MainActor (MediaAttachment.ID) -> (any MediaViewerSource)?
     ) {
         self.init(
@@ -186,6 +187,7 @@ final class MediaViewerController: UIViewController {
             timing: timing,
             transfers: transfers,
             subject: subject,
+            settings: settings,
             sourceTile: sourceTile
         )
     }
