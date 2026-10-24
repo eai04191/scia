@@ -301,7 +301,7 @@ struct TimelineStoreTests {
         let store = try await loadedStore([30])
         store.excludeAccount("2")
 
-        _ = store.receive(.update(Status(id: "31", createdAt: .now, account: bob, content: "", spoilerText: "", url: nil)))
+        _ = store.receive(.update(Status(id: "31", createdAt: Date(timeIntervalSince1970: 0), account: bob, content: "", spoilerText: "", url: nil)))
         #expect(store.pending.isEmpty)
         store.includeAccount("2")
 

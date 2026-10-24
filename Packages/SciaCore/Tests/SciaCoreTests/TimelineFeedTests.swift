@@ -140,7 +140,7 @@ struct TimelineFeedTests {
         let feed = TimelineFeed.accountHashtag(accountID: "109", name: "scia")
         #expect(feed.subscription == TimelineFeed.hashtag(name: "scia").subscription)
         func status(by accountID: String) -> Status {
-            Status(id: "1", createdAt: Date(), account: Account(id: accountID, username: "u", acct: "u", displayName: "", avatar: nil), content: "", spoilerText: "", url: nil)
+            Status(id: "1", createdAt: Date(timeIntervalSince1970: 0), account: Account(id: accountID, username: "u", acct: "u", displayName: "", avatar: nil), content: "", spoilerText: "", url: nil)
         }
         #expect(feed.handling(ofStreamed: status(by: "109")) == .fetchLatest)
         #expect(feed.handling(ofStreamed: status(by: "110")) == .ignore)

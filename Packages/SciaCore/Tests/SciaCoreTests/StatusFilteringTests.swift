@@ -123,7 +123,7 @@ struct FilteredMediaCoverTests {
 struct FilteredTimelineTests {
     private let filtering = StatusFiltering(context: .home, myAccountID: me.id)
 
-    private func store(pages: [[Status]], now: @escaping @MainActor () -> Date = { Date() }) -> (TimelineStore, @Sendable () -> [TimelineQuery]) {
+    private func store(pages: [[Status]], now: @escaping @MainActor () -> Date = { now }) -> (TimelineStore, @Sendable () -> [TimelineQuery]) {
         let recorder = QueryRecorder(pages: pages)
         let store = TimelineStore(pageSize: 3, filtering: filtering, now: now) { query in try recorder.next(query) }
         return (store, { recorder.queries })

@@ -12,7 +12,7 @@ struct CustomEmojiTests {
     }
 
     private func status(id: String, account: Account, emojis: [CustomEmoji] = [], reblog: Status? = nil) -> Status {
-        Status(id: id, createdAt: Date(), account: account, content: "", spoilerText: "", url: nil, emojis: emojis, reblog: reblog)
+        Status(id: id, createdAt: Date(timeIntervalSince1970: 0), account: account, content: "", spoilerText: "", url: nil, emojis: emojis, reblog: reblog)
     }
 
     /// 表示名には、渡した絵文字をすべて`:shortcode:`で書く。
@@ -45,7 +45,7 @@ struct CustomEmojiTests {
 
         #expect(post.emojisInRow.map(\.shortcode) == ["name"])
         #expect(status(id: "2", account: booster, reblog: post).emojisInRow.map(\.shortcode) == ["name"])
-        let favourite = MastodonNotification(id: "1", type: .favourite, createdAt: Date(), account: booster, status: post)
+        let favourite = MastodonNotification(id: "1", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: booster, status: post)
         #expect(favourite.emojisInRow.map(\.shortcode) == ["name"])
     }
 
@@ -70,8 +70,8 @@ struct CustomEmojiTests {
     /// 通知では、対象の投稿の絵文字に、通知した人の絵文字を続ける。投稿のない通知では、通知した人の絵文字だけ。
     @Test func emojisInRowOfNotificationFollowStatusWithNotifyingUser() {
         let post = status(id: "1", account: account(id: "1"), emojis: [emoji("body")])
-        let favourite = MastodonNotification(id: "1", type: .favourite, createdAt: Date(), account: account(id: "2", emojis: [emoji("fan")]), status: post)
-        let follow = MastodonNotification(id: "2", type: .follow, createdAt: Date(), account: account(id: "2", emojis: [emoji("fan")]))
+        let favourite = MastodonNotification(id: "1", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: account(id: "2", emojis: [emoji("fan")]), status: post)
+        let follow = MastodonNotification(id: "2", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: account(id: "2", emojis: [emoji("fan")]))
 
         #expect(favourite.emojisInRow.map(\.shortcode) == ["body", "fan"])
         #expect(follow.emojisInRow.map(\.shortcode) == ["fan"])

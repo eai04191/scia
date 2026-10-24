@@ -210,8 +210,8 @@ struct StatusEditHistoryTests {
         let first = MediaAttachment(id: "1", type: .image, url: nil, previewUrl: nil)
         let second = MediaAttachment(id: "2", type: .image, url: nil, previewUrl: nil)
         let revisions = [
-            StatusRevision(content: "<p>a</p>", createdAt: .now, account: account, mediaAttachments: [first, second]),
-            StatusRevision(content: "<p>a</p>", createdAt: .now, account: account, mediaAttachments: [second]),
+            StatusRevision(content: "<p>a</p>", createdAt: Date(timeIntervalSince1970: 0), account: account, mediaAttachments: [first, second]),
+            StatusRevision(content: "<p>a</p>", createdAt: Date(timeIntervalSince1970: 0), account: account, mediaAttachments: [second]),
         ]
 
         let entry = StatusEditHistory(revisions: revisions, mentions: [], tags: [], language: nil, minimumUnchangedRatio: 0.3).entries[0]
@@ -223,9 +223,9 @@ struct StatusEditHistoryTests {
     @Test func pollOptionChanges() throws {
         let account = try MastodonDecoder.make().decode(Account.self, from: Data(Self.account.utf8))
         let revisions = [
-            StatusRevision(content: "<p>どれ？</p>", createdAt: .now, account: account),
-            StatusRevision(content: "<p>どれ？</p>", createdAt: .now, account: account, pollOptions: ["猫", "犬"]),
-            StatusRevision(content: "<p>どれ？</p>", createdAt: .now, account: account, pollOptions: ["猫", "鳥"]),
+            StatusRevision(content: "<p>どれ？</p>", createdAt: Date(timeIntervalSince1970: 0), account: account),
+            StatusRevision(content: "<p>どれ？</p>", createdAt: Date(timeIntervalSince1970: 0), account: account, pollOptions: ["猫", "犬"]),
+            StatusRevision(content: "<p>どれ？</p>", createdAt: Date(timeIntervalSince1970: 0), account: account, pollOptions: ["猫", "鳥"]),
         ]
 
         let entries = StatusEditHistory(revisions: revisions, mentions: [], tags: [], language: nil, minimumUnchangedRatio: 0.3).entries

@@ -273,8 +273,8 @@ struct NotificationStoreTests {
     @Test func updatesTargetStatusOfNotifications() async throws {
         let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
         let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
-        let target = Status(id: "100", createdAt: .now, account: account, content: "", spoilerText: "", url: nil)
-        let favourite = MastodonNotification(id: "30", type: .favourite, createdAt: .now, account: account, status: target)
+        let target = Status(id: "100", createdAt: Date(timeIntervalSince1970: 0), account: account, content: "", spoilerText: "", url: nil)
+        let favourite = MastodonNotification(id: "30", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: account, status: target)
         let follow = try notifications([29])[0]
         let queue = PageQueue([.success([favourite, follow])])
         let store = makeStore(queue)
@@ -289,8 +289,8 @@ struct NotificationStoreTests {
     @Test func removesNotificationsAboutDeletedStatus() async throws {
         let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
         let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
-        let target = Status(id: "100", createdAt: .now, account: account, content: "", spoilerText: "", url: nil)
-        let favourite = MastodonNotification(id: "30", type: .favourite, createdAt: .now, account: account, status: target)
+        let target = Status(id: "100", createdAt: Date(timeIntervalSince1970: 0), account: account, content: "", spoilerText: "", url: nil)
+        let favourite = MastodonNotification(id: "30", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: account, status: target)
         let follow = try notifications([29])[0]
         let queue = PageQueue([.success([favourite, follow])])
         let store = makeStore(queue)
@@ -392,8 +392,8 @@ struct NotificationStoreTests {
     @Test func deletedStatusNotificationsDoNotReturn() async throws {
         let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
         let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
-        let target = Status(id: "100", createdAt: .now, account: account, content: "", spoilerText: "", url: nil)
-        let favourite = MastodonNotification(id: "31", type: .favourite, createdAt: .now, account: account, status: target)
+        let target = Status(id: "100", createdAt: Date(timeIntervalSince1970: 0), account: account, content: "", spoilerText: "", url: nil)
+        let favourite = MastodonNotification(id: "31", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: account, status: target)
         let queue = PageQueue([try page([29]), .success([favourite] + (try notifications([30]))), try page([])])
         let store = makeStore(queue)
         _ = try await store.loadInitial()
@@ -409,9 +409,9 @@ struct NotificationStoreTests {
     @Test func deletedStatusNotificationsDoNotReturnFromReadStartedBefore() async throws {
         let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
         let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
-        let target = Status(id: "100", createdAt: .now, account: account, content: "", spoilerText: "", url: nil)
-        let older = MastodonNotification(id: "200", type: .favourite, createdAt: .now, account: account, status: target)
-        let newer = MastodonNotification(id: "300", type: .favourite, createdAt: .now, account: account, status: target)
+        let target = Status(id: "100", createdAt: Date(timeIntervalSince1970: 0), account: account, content: "", spoilerText: "", url: nil)
+        let older = MastodonNotification(id: "200", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: account, status: target)
+        let newer = MastodonNotification(id: "300", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: account, status: target)
         let gate = PageGate(NotificationPage(notifications: [older]))
         // 届いたページの通知が全部除かれても、その先を読みに行く。その先は空にして、読み終える。
         let store = NotificationStore(pageSize: 40) { query in
@@ -438,9 +438,9 @@ struct NotificationStoreTests {
     @Test func removesResolvedFollowRequestsFromAccount() async throws {
         let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
         let alice = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
-        let request = MastodonNotification(id: "30", type: .followRequest, createdAt: .now, account: alice)
-        let otherRequest = MastodonNotification(id: "29", type: .followRequest, createdAt: .now, account: try notifications([29])[0].account)
-        let follow = MastodonNotification(id: "28", type: .follow, createdAt: .now, account: alice)
+        let request = MastodonNotification(id: "30", type: .followRequest, createdAt: Date(timeIntervalSince1970: 0), account: alice)
+        let otherRequest = MastodonNotification(id: "29", type: .followRequest, createdAt: Date(timeIntervalSince1970: 0), account: try notifications([29])[0].account)
+        let follow = MastodonNotification(id: "28", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: alice)
         let queue = PageQueue([.success([request, otherRequest, follow]), .success([request]), .success([])])
         let store = makeStore(queue)
         _ = try await store.loadInitial()
@@ -497,7 +497,7 @@ struct NotificationStoreTests {
     @Test func resolvedFollowRequestDoesNotReturnAfterTruncatingFill() async throws {
         let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
         let alice = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
-        let request = MastodonNotification(id: "30", type: .followRequest, createdAt: .now, account: alice)
+        let request = MastodonNotification(id: "30", type: .followRequest, createdAt: Date(timeIntervalSince1970: 0), account: alice)
         let initial = NotificationPage(notifications: [request] + (try notifications([29, 28])))
         let latest = NotificationPage(notifications: try notifications([40, 39, 38]))
         let older = PageGate(NotificationPage(notifications: try notifications([37, 36]) + [request]))
@@ -524,7 +524,7 @@ struct NotificationStoreTests {
     @Test func resolvedFollowRequestDoesNotReturnAsUnreadable() async throws {
         let avatar = try #require(URL(string: "https://example.social/avatars/alice.png"))
         let alice = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: avatar)
-        let request = MastodonNotification(id: "30", type: .followRequest, createdAt: .now, account: alice)
+        let request = MastodonNotification(id: "30", type: .followRequest, createdAt: Date(timeIntervalSince1970: 0), account: alice)
         let pages = [
             NotificationPage(notifications: [request] + (try notifications([29]))),
             NotificationPage(notifications: [], unreadable: [UnreadableItem(id: "30", url: nil)]),

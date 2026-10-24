@@ -6,8 +6,8 @@ struct NotificationLayoutTests {
     private let account = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: nil, avatarStatic: nil)
 
     private func notification(_ type: MastodonNotification.Kind, hasStatus: Bool = true) -> MastodonNotification {
-        let status = Status(id: "10", createdAt: .now, account: account, content: "<p>本文</p>", spoilerText: "", url: nil)
-        return MastodonNotification(id: "n", type: type, createdAt: .now, account: account, status: hasStatus ? status : nil)
+        let status = Status(id: "10", createdAt: Date(timeIntervalSince1970: 0), account: account, content: "<p>本文</p>", spoilerText: "", url: nil)
+        return MastodonNotification(id: "n", type: type, createdAt: Date(timeIntervalSince1970: 0), account: account, status: hasStatus ? status : nil)
     }
 
     @Test(arguments: [MastodonNotification.Kind.mention, .status, .quote])

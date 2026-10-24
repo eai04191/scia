@@ -56,7 +56,7 @@ struct StatusDraftTests {
     @Test func replyAddressesAuthorAndMentionsExceptMe() throws {
         let status = Status(
             id: "10",
-            createdAt: .now,
+            createdAt: Date(timeIntervalSince1970: 0),
             account: try account("2", "bob@remote.example"),
             content: "",
             spoilerText: "ネタバレ",
@@ -74,8 +74,8 @@ struct StatusDraftTests {
     }
 
     @Test func replyToBoostTargetsOriginalPost() throws {
-        let original = Status(id: "10", createdAt: .now, account: try account("2", "bob"), content: "", spoilerText: "", url: nil, visibility: .private)
-        let boost = Status(id: "20", createdAt: .now, account: try account("3", "carol"), content: "", spoilerText: "", url: nil, reblog: original)
+        let original = Status(id: "10", createdAt: Date(timeIntervalSince1970: 0), account: try account("2", "bob"), content: "", spoilerText: "", url: nil, visibility: .private)
+        let boost = Status(id: "20", createdAt: Date(timeIntervalSince1970: 0), account: try account("3", "carol"), content: "", spoilerText: "", url: nil, reblog: original)
 
         let draft = StatusDraft.reply(to: boost, myAccountID: "1")
 
@@ -85,7 +85,7 @@ struct StatusDraftTests {
     }
 
     @Test func replyToOwnPostHasNoRecipientAndServerSpecificVisibilityBecomesPrivate() throws {
-        let status = Status(id: "10", createdAt: .now, account: try account("1", "alice"), content: "", spoilerText: "", url: nil, visibility: .other("limited"))
+        let status = Status(id: "10", createdAt: Date(timeIntervalSince1970: 0), account: try account("1", "alice"), content: "", spoilerText: "", url: nil, visibility: .other("limited"))
 
         let draft = StatusDraft.reply(to: status, myAccountID: "1")
 
@@ -94,7 +94,7 @@ struct StatusDraftTests {
     }
 
     @Test func replyIsNarrowedToDefaultVisibility() throws {
-        let status = Status(id: "10", createdAt: .now, account: try account("2", "bob"), content: "", spoilerText: "", url: nil, visibility: .public)
+        let status = Status(id: "10", createdAt: Date(timeIntervalSince1970: 0), account: try account("2", "bob"), content: "", spoilerText: "", url: nil, visibility: .public)
 
         #expect(StatusDraft.reply(to: status, myAccountID: "1", defaultVisibility: .unlisted).visibility == .unlisted)
         #expect(StatusDraft.reply(to: status, myAccountID: "1", defaultVisibility: .public).visibility == .public)
@@ -102,7 +102,7 @@ struct StatusDraftTests {
 
     @Test func onlyPublicOrOwnFollowersOnlyPostsCanBeBoosted() throws {
         func status(_ visibility: Status.Visibility, by accountID: String) throws -> Status {
-            Status(id: "10", createdAt: .now, account: try account(accountID, "x"), content: "", spoilerText: "", url: nil, visibility: visibility)
+            Status(id: "10", createdAt: Date(timeIntervalSince1970: 0), account: try account(accountID, "x"), content: "", spoilerText: "", url: nil, visibility: visibility)
         }
 
         #expect(try status(.public, by: "2").canBeReblogged(by: "1"))
@@ -114,7 +114,7 @@ struct StatusDraftTests {
 
     @Test func onlyOwnPostsOtherThanDirectCanBePinned() throws {
         func status(_ visibility: Status.Visibility, by accountID: String) throws -> Status {
-            Status(id: "10", createdAt: .now, account: try account(accountID, "x"), content: "", spoilerText: "", url: nil, visibility: visibility)
+            Status(id: "10", createdAt: Date(timeIntervalSince1970: 0), account: try account(accountID, "x"), content: "", spoilerText: "", url: nil, visibility: visibility)
         }
 
         #expect(try status(.public, by: "1").canBePinned(by: "1"))
@@ -123,7 +123,7 @@ struct StatusDraftTests {
         #expect(try !status(.direct, by: "1").canBePinned(by: "1"))
         #expect(try !status(.public, by: "2").canBePinned(by: "1"))
         // 自分の投稿をほかの人がブーストしたものは、元の投稿で決める。
-        let boost = Status(id: "20", createdAt: .now, account: try account("2", "bob"), content: "", spoilerText: "", url: nil, reblog: try status(.public, by: "1"))
+        let boost = Status(id: "20", createdAt: Date(timeIntervalSince1970: 0), account: try account("2", "bob"), content: "", spoilerText: "", url: nil, reblog: try status(.public, by: "1"))
         #expect(boost.canBePinned(by: "1"))
     }
 

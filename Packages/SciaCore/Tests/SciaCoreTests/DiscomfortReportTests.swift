@@ -89,8 +89,9 @@ struct RecentLogReaderTests {
     /// マーカーまで読めるのを待つことで、確保した瞬間の直前のログまで含める。
     @Test func readsLogsUpToMarker() async throws {
         let subsystem = "net.mizle.scia.tests.\(UUID().uuidString)"
-        // ログに記録される時刻はDate()より数ミリ秒早くなることがあるため、開始時刻に余裕を持たせる。
-        let start = Date().addingTimeInterval(-1)
+        // subsystemはこのテストだけのものなので、プロセスの初めから読んでも、このテストで書いたログだけが読める。
+        // 今の時刻から始めると、ログに記録される時刻がそれより早くなることがあるため、時刻では区切らない。
+        let start = Date.distantPast
         let logger = Logger(subsystem: subsystem, category: "timeline")
         logger.notice("prepend \(3, privacy: .public)")
         Logger(subsystem: "net.mizle.scia.tests.other", category: "timeline").notice("other subsystem")
@@ -108,7 +109,8 @@ struct RecentLogReaderTests {
         let subsystem = "net.mizle.scia.tests.\(UUID().uuidString)"
 
         await #expect(throws: RecentLogReader.ReadError.markerNotFound) {
-            _ = try await RecentLogReader.read(subsystem: subsystem, from: Date(), untilMarker: "never", timeout: .milliseconds(300))
+            // 待つ長さを0にして、1回読んで見つからなければ失敗させる。
+            _ = try await RecentLogReader.read(subsystem: subsystem, from: .distantPast, untilMarker: "never", timeout: .zero)
         }
     }
 }

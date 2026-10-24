@@ -180,7 +180,7 @@ struct StatusInteractionsTests {
         await gate.waitUntilWaiting()
         _ = try await interactions.toggle(.reblog, on: shown.status)
         shown.update("10") { _ in
-            Status(id: "10", createdAt: .now, account: staleFromServer.account, content: "<p>編集後</p>", spoilerText: "", url: nil, favourited: true, reblogged: true, favouritesCount: 1, reblogsCount: 1)
+            Status(id: "10", createdAt: Date(timeIntervalSince1970: 0), account: staleFromServer.account, content: "<p>編集後</p>", spoilerText: "", url: nil, favourited: true, reblogged: true, favouritesCount: 1, reblogsCount: 1)
         }
         await gate.open()
         _ = try await favourite.value
@@ -192,7 +192,7 @@ struct StatusInteractionsTests {
 
     @Test func unboostsWhenAlreadyBoostedAndTargetsOriginalOfBoost() async throws {
         let original = try status(reblogged: true)
-        let boost = Status(id: "20", createdAt: .now, account: original.account, content: "", spoilerText: "", url: nil, reblog: original)
+        let boost = Status(id: "20", createdAt: Date(timeIntervalSince1970: 0), account: original.account, content: "", spoilerText: "", url: nil, reblog: original)
         let shown = Shown(original)
         let requested = Mutex<[String]>([])
         let interactions = StatusInteractions(operations: StatusInteractions.Operations(
@@ -260,7 +260,7 @@ struct StatusInteractionsTests {
 
     @Test func mutesConversationOfOriginalOfBoostAndAppliesResult() async throws {
         let original = try status()
-        let boost = Status(id: "20", createdAt: .now, account: original.account, content: "", spoilerText: "", url: nil, reblog: original)
+        let boost = Status(id: "20", createdAt: Date(timeIntervalSince1970: 0), account: original.account, content: "", spoilerText: "", url: nil, reblog: original)
         let shown = Shown(original)
         let requested = Mutex<[String]>([])
         let interactions = StatusInteractions(operations: StatusInteractions.Operations(
