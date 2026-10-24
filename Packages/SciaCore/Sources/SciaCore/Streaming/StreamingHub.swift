@@ -93,7 +93,7 @@ public final class StreamingHub {
     public init(
         reconnectPolicy: ReconnectingStream.Policy = .standard,
         livePolicy: @escaping () -> LiveUpdates.Policy,
-        clock: any Clock<Duration> = ContinuousClock(),
+        clock: any Clock<Duration> = SystemTime.clock,
         open: @escaping @Sendable () async throws -> StreamingConnection
     ) {
         self.reconnectPolicy = reconnectPolicy

@@ -199,7 +199,7 @@ public final class ComposeCompletion {
         }
     }
 
-    public init(sources: Sources, settings: Settings, sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }) {
+    public init(sources: Sources, settings: Settings, sleep: @escaping @Sendable (Duration) async throws -> Void = { try await SystemTime.clock.sleep(for: $0) }) {
         self.sources = sources
         self.settings = settings
         self.sleep = sleep

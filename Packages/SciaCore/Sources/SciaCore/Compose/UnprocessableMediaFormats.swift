@@ -35,7 +35,7 @@ public final class UnprocessableMediaFormats {
     }
 
     /// 形式を、今の版のサーバーでは使わないと覚える。前の版で覚えていたものは、版を改めて覚え直す。
-    public func record(_ mimeType: String, serverVersion: String?, date: Date = Date()) {
+    public func record(_ mimeType: String, serverVersion: String?, date: Date = SystemTime.now()) {
         let version = serverVersion ?? ""
         guard !entries.contains(where: { $0.mimeType == mimeType && $0.serverVersion == version }) else { return }
         entries.removeAll { $0.mimeType == mimeType }

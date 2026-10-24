@@ -16,8 +16,8 @@ public actor RateLimitGate {
 
     /// `now`は今の時刻を返し、`clock`で再開の時刻まで待つ。テストでは手で進める時計を渡す。
     public init(
-        now: @escaping @Sendable () -> Date = { Date() },
-        clock: any Clock<Duration> = ContinuousClock()
+        now: @escaping @Sendable () -> Date = SystemTime.now,
+        clock: any Clock<Duration> = SystemTime.clock
     ) {
         (resumptions, continuation) = AsyncStream.makeStream(bufferingPolicy: .bufferingNewest(1))
         self.now = now

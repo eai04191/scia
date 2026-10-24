@@ -27,17 +27,18 @@ public enum RecentLogReader {
         subsystem: String = SciaLog.subsystem,
         from start: Date,
         untilMarker marker: String,
-        timeout: Duration = .seconds(30)
+        timeout: Duration = .seconds(30),
+        clock: any Clock<Duration> = SystemTime.clock,
+        now: () -> Date = SystemTime.now
     ) async throws -> [LogLine] {
-        let clock = ContinuousClock()
-        let deadline = clock.now + timeout
+        let elapsed = stopwatch(on: clock)
         while true {
-            let lines = try read(subsystem: subsystem, from: start, to: Date())
+            let lines = try read(subsystem: subsystem, from: start, to: now())
             if let end = lines.firstIndex(where: { $0.message == marker }) {
                 return Array(lines[...end])
             }
-            guard clock.now < deadline else { throw ReadError.markerNotFound }
-            try await Task.sleep(for: .milliseconds(100))
+            guard elapsed() < timeout else { throw ReadError.markerNotFound }
+            try await clock.sleep(for: .milliseconds(100))
         }
     }
 

@@ -11,10 +11,13 @@ public final class RequestLog: Sendable {
     private let state = Mutex<(failures: [RequestFailure], nextID: Int)>(([], 0))
     private let includesBody: Bool
     private let capacity: Int
+    private let now: @Sendable () -> Date
     private let logger = SciaLog.logger(category: "network")
 
-    public init(includesBody: Bool, capacity: Int = 50) {
+    /// - Parameter now: 失敗した日時として残す今の日付。
+    public init(includesBody: Bool, capacity: Int = 50, now: @escaping @Sendable () -> Date = SystemTime.now) {
         self.includesBody = includesBody
+        self.now = now
         self.capacity = capacity
     }
 
@@ -36,7 +39,7 @@ public final class RequestLog: Sendable {
             defer { state.nextID += 1 }
             let failure = RequestFailure(
                 id: state.nextID,
-                date: Date(),
+                date: now(),
                 method: request.httpMethod ?? "GET",
                 path: request.url.map(Self.redactedPath) ?? "",
                 statusCode: statusCode,

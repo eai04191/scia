@@ -9,6 +9,8 @@ public struct MastodonClient: Sendable {
     private let features: FeatureAvailability
     private let retry: RetryPolicy
     private let requestLog: RequestLog
+    /// 再試行までと、メディアの処理が終わるまでの待ちを数える。テストでは手で進める時計を渡す。
+    private let clock: any Clock<Duration>
     private static let logger = SciaLog.logger(category: "network")
 
     /// - Parameters:
@@ -22,8 +24,10 @@ public struct MastodonClient: Sendable {
         rateLimit: RateLimitGate = RateLimitGate(),
         features: FeatureAvailability = FeatureAvailability(),
         retry: RetryPolicy = .standard,
-        requestLog: RequestLog = RequestLog(includesBody: false)
+        requestLog: RequestLog = RequestLog(includesBody: false),
+        clock: any Clock<Duration> = SystemTime.clock
     ) {
+        self.clock = clock
         self.credential = credential
         self.transport = transport
         self.rateLimit = rateLimit
@@ -356,7 +360,7 @@ public struct MastodonClient: Sendable {
     /// 自分の投稿を`draft`の内容に編集し、編集したあとの投稿を返す。`target`は`draft.editing`。
     /// 添付ファイルが済んでいなければ送らずに`StatusPostError.attachmentsNotReady`を投げる。
     /// https://docs.joinmastodon.org/methods/statuses/#edit
-    public func editStatus(_ target: StatusEditTarget, to draft: StatusDraft, now: Date = Date()) async throws -> Status {
+    public func editStatus(_ target: StatusEditTarget, to draft: StatusDraft, now: Date = SystemTime.now()) async throws -> Status {
         guard let form = draft.editForm(poll: target.poll, now: now) else { throw StatusPostError.attachmentsNotReady }
         return try await send(formRequest(method: "PUT", path: "api/v1/statuses/\(target.statusID)", form: form), decoding: Status.self).0
     }
@@ -422,16 +426,16 @@ public struct MastodonClient: Sendable {
         pollInterval: Duration = .seconds(1),
         timeout: Duration = .seconds(180)
     ) async throws -> MediaAttachment {
-        try await waitUntilProcessed(id, pollInterval: pollInterval, timeout: timeout, clock: ContinuousClock())
+        try await waitUntilProcessed(id, pollInterval: pollInterval, timeout: timeout, clock: clock)
     }
 
-    func waitUntilProcessed<C: Clock<Duration>>(_ id: String, pollInterval: Duration, timeout: Duration, clock: C) async throws -> MediaAttachment {
-        let deadline = clock.now.advanced(by: timeout)
+    func waitUntilProcessed(_ id: String, pollInterval: Duration, timeout: Duration, clock: any Clock<Duration>) async throws -> MediaAttachment {
+        let elapsed = stopwatch(on: clock)
         while true {
             if case .processed(let attachment) = try await mediaProcessingState(id) {
                 return attachment
             }
-            guard clock.now.advanced(by: pollInterval) <= deadline else { throw MediaUploadError.processingTimedOut(serverID: id) }
+            guard elapsed() + pollInterval <= timeout else { throw MediaUploadError.processingTimedOut(serverID: id) }
             try await clock.sleep(for: pollInterval)
         }
     }
@@ -956,7 +960,7 @@ public struct MastodonClient: Sendable {
             retries += 1
             // パスはIDを含むため残さない。
             Self.logger.info("request retry \(retries, privacy: .public) method=\(request.httpMethod ?? "GET", privacy: .public) reason=\(ErrorPresentation(failure).code ?? "unknown", privacy: .public)")
-            try await Task.sleep(for: retry.delay(beforeRetry: retries))
+            try await clock.sleep(for: retry.delay(beforeRetry: retries))
         }
     }
 }

@@ -49,6 +49,7 @@ public enum VideoReencoder {
         bitRate: Int,
         audioBitRate: Int,
         destination: URL,
+        clock: any Clock<Duration> = SystemTime.clock,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws {
         let asset = AVURLAsset(url: url)
@@ -148,7 +149,7 @@ public enum VideoReencoder {
                     didAppend = true
                 }
                 if !didAppend {
-                    try await Task.sleep(for: .milliseconds(5))
+                    try await clock.sleep(for: .milliseconds(5))
                 }
             }
         } catch {

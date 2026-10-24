@@ -59,7 +59,7 @@ public struct ReconnectingStream: Sendable {
     /// - Parameter clock: つなぎ直すまでと、次のpingまでと、pingの応答を待つ時間を数える。テストでは手で進める時計を渡す。
     public init(
         policy: Policy = .standard,
-        clock: any Clock<Duration> = ContinuousClock(),
+        clock: any Clock<Duration> = SystemTime.clock,
         connect: @escaping @Sendable () async throws -> StreamingConnection
     ) {
         self.init(policy: policy, clock: clock, waitForPingTimeout: { try await clock.sleep(for: $0) }, connect: connect)

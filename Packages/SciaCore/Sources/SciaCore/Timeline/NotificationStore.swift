@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 
 /// 通知を新しい順に持つ。RESTで読んだページと、ストリーミングで届いた通知を合わせる。
 ///
@@ -54,9 +54,13 @@ public final class NotificationStore {
     private let pageSize: Int
     private let filtering: StatusFiltering?
     private let fetch: Fetch
+    /// フィルターの期限と比べる今の日付。
+    private let now: @MainActor () -> Date
 
     /// - Parameter filtering: 通知の投稿に当てるサーバーのフィルター。nilなら当てない。
-    public init(pageSize: Int, filtering: StatusFiltering? = nil, fetch: @escaping Fetch) {
+    /// - Parameter now: フィルターの期限と比べる今の日付。
+    public init(pageSize: Int, filtering: StatusFiltering? = nil, now: @escaping @MainActor () -> Date = SystemTime.now, fetch: @escaping Fetch) {
+        self.now = now
         self.pageSize = pageSize
         self.filtering = filtering
         self.fetch = fetch
@@ -64,7 +68,7 @@ public final class NotificationStore {
 
     /// 一覧に並べる通知と読めなかった通知。新しい順。フィルターで出さない投稿についての通知は含まない。
     public var entries: [TimelineEntry] {
-        let now = Date()
+        let now = now()
         return (notifications.filter { !isFilteredOut($0, now: now) }.map { ($0.id, TimelineEntry.notification($0)) } + unreadable.map { ($0.id, TimelineEntry.unreadable($0)) })
             .sorted { StatusID.isNewer($0.0, than: $1.0) }
             .map(\.1)
@@ -255,7 +259,7 @@ public final class NotificationStore {
     /// 届いた通知を保留に溜める。保留が空のところへ届いたらtrueを返す。挿入の時機をはかり始める合図にする。
     /// フィルターで出さない投稿についての通知は溜めない。挿入しても一覧が変わらないため。
     public func receive(_ notification: MastodonNotification) -> Bool {
-        guard !isDiscarded(notification), !isFilteredOut(notification), !notifications.contains(where: { $0.id == notification.id }), !pending.contains(where: { $0.id == notification.id }) else {
+        guard !isDiscarded(notification), !isFilteredOut(notification, now: now()), !notifications.contains(where: { $0.id == notification.id }), !pending.contains(where: { $0.id == notification.id }) else {
             return false
         }
         pending.append(notification)
@@ -295,7 +299,7 @@ public final class NotificationStore {
         unreadable = Self.sorted(unreadable, excluding: notifications)
         // 一覧から外れたまとまりの分は、足し直す先がないので捨てる。
         streamedArrivals = streamedArrivals.filter { current[$0.key] != nil }
-        return Self.sorted(Array(changed.values)).filter { !isFilteredOut($0) }
+        return Self.sorted(Array(changed.values)).filter { !isFilteredOut($0, now: now()) }
     }
 
     /// 通知の対象の投稿を`transform`で変える。お気に入りなどの操作の結果を反映する。表示に関わる変化があればtrueを返す。
@@ -460,7 +464,7 @@ public final class NotificationStore {
     /// 既読の位置より新しい、読み込み済みの通知の数。既読の位置が決まっていなければ0。フィルターで出さない通知は数えない。
     public var unreadCount: Int {
         guard let lastReadID else { return 0 }
-        let now = Date()
+        let now = now()
         return notifications.prefix { StatusID.isNewer($0.id, than: lastReadID) }.count { !isFilteredOut($0, now: now) }
     }
 
@@ -511,7 +515,7 @@ public final class NotificationStore {
         notifications = Self.sorted(incoming + notifications.filter { !replayedKeys.contains($0.groupKey) })
         let knownIDs = Set(itemIDs)
         unreadable = Self.sorted(unreadable + page.unreadable.filter { !knownIDs.contains($0.id) && !removedNotificationIDs.contains($0.id) }, excluding: notifications)
-        return added.filter { !isFilteredOut($0) }
+        return added.filter { !isFilteredOut($0, now: now()) }
     }
 
     /// ページで読んだまとまりのうち、手元のほうが新しいもの（応答を待つ間にストリーミングで新着を足した）に、応答より後に届いた通知を足し直す。
@@ -537,7 +541,7 @@ public final class NotificationStore {
     }
 
     /// 投稿がフィルターの「隠す」に一致したか、ミュートしたハッシュタグの付いた投稿の通知。
-    private func isFilteredOut(_ notification: MastodonNotification, now: Date = Date()) -> Bool {
+    private func isFilteredOut(_ notification: MastodonNotification, now: Date) -> Bool {
         if hasExcludedTag(notification) { return true }
         guard let filtering, let status = notification.status else { return false }
         return filtering.verdict(for: status, now: now).isHidden

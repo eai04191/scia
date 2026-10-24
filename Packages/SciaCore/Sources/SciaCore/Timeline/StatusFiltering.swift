@@ -23,7 +23,7 @@ public struct StatusFiltering: Sendable, Equatable {
     }
 
     /// `now`の時点で、`status`をどう出すか。ブーストなら元の投稿で決める。
-    public func verdict(for status: Status, now: Date = Date()) -> FilterVerdict {
+    public func verdict(for status: Status, now: Date = SystemTime.now()) -> FilterVerdict {
         let shown = status.displayed
         // サーバーはブーストにも元の投稿にも同じ結果を付ける。公式のWebクライアントと同じく、元の投稿の結果を先に見る。
         let results = shown.filtered.isEmpty ? status.filtered : shown.filtered
@@ -81,7 +81,7 @@ public struct FilterWarnings: Sendable, Equatable {
     }
 
     /// `status`をどう出すか。警告で畳んだ投稿を開いていれば、警告の名前を空にして返す。
-    public func verdict(for status: Status, now: Date = Date()) -> FilterVerdict {
+    public func verdict(for status: Status, now: Date = SystemTime.now()) -> FilterVerdict {
         guard let filtering else { return .none }
         let verdict = filtering.verdict(for: status, now: now)
         guard !verdict.warningTitles.isEmpty, revealed.contains(status.displayed.id) else { return verdict }

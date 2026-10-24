@@ -73,7 +73,7 @@ public final class TimelineStore {
     /// - Parameters:
     ///   - filtering: この一覧で当てるサーバーのフィルター。nilなら当てない。
     ///   - now: 今の時刻を返す。フィルターの期限が切れたかを決めるのに使う。
-    public init(pageSize: Int, filtering: StatusFiltering? = nil, now: @escaping @MainActor () -> Date = { Date() }, fetch: @escaping Fetch) {
+    public init(pageSize: Int, filtering: StatusFiltering? = nil, now: @escaping @MainActor () -> Date = SystemTime.now, fetch: @escaping Fetch) {
         self.pageSize = pageSize
         self.filtering = filtering
         self.now = now

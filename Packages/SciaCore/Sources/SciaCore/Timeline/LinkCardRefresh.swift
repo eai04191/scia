@@ -155,8 +155,8 @@ public final class LinkCardRefresher {
     public init(
         fetch: @escaping Fetch,
         apply: @escaping Apply,
-        now: @escaping @MainActor () -> Date = { Date() },
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        now: @escaping @MainActor () -> Date = SystemTime.now,
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await SystemTime.clock.sleep(for: $0) }
     ) {
         self.fetch = fetch
         self.apply = apply

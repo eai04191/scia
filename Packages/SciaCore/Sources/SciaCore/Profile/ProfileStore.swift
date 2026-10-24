@@ -1,4 +1,4 @@
-import Foundation
+public import Foundation
 public import Observation
 
 /// プロフィール画面の一覧の切り替え。
@@ -93,7 +93,7 @@ public final class ProfileStore {
     }
     /// 固定された投稿。「投稿」の一覧の上に置く。フィルターで出さない投稿は除く。
     public var pinned: [Status] {
-        let now = Date()
+        let now = now()
         return loadedPinned.filter { !filtering.verdict(for: $0, now: now).isHidden }
     }
     /// 読んだ固定された投稿。編集でフィルターに一致しなくなったら出せるよう、隠す投稿も持つ。
@@ -124,6 +124,8 @@ public final class ProfileStore {
     private let api: API
     private let pageSize: Int
     @ObservationIgnored private let relationshipCache: RelationshipCache
+    /// フィルターの期限と比べる今の日付。
+    @ObservationIgnored private let now: @MainActor () -> Date
 
     public init(
         account: Account,
@@ -132,8 +134,10 @@ public final class ProfileStore {
         postsFilter: ProfilePostsFilter,
         pageSize: Int = 40,
         relationshipCache: RelationshipCache = RelationshipCache(),
+        now: @escaping @MainActor () -> Date = SystemTime.now,
         api: API
     ) {
+        self.now = now
         self.account = account
         isMyself = account.id == myAccountID
         self.relationshipCache = relationshipCache

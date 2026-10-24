@@ -17,7 +17,9 @@ public final class AuthorizationCheck {
     private let verify: @Sendable () async throws -> Void
     /// 確かめて有効だった後、この間は確かめ直さない。同じAPIが401を返し続けても、確かめる通信を繰り返さないため。
     private let revalidationInterval: Duration
-    private var lastValidated: ContinuousClock.Instant?
+    /// 確かめて有効だった時点から経った長さ。まだ有効と確かめていなければnil。
+    private var sinceValidated: (@Sendable () -> Duration)?
+    private let clock: any Clock<Duration>
     private var verifying: Task<Outcome, Never>?
 
     /// 確かめた結果。確かめられなかったときは有効として扱うが、有効と分かったわけではないので、次の401ですぐ確かめ直す。
@@ -29,9 +31,12 @@ public final class AuthorizationCheck {
         var state: State { self == .invalid ? .invalid : .valid }
     }
 
-    /// - Parameter verify: トークンが有効なら返り、無効なら401の`MastodonAPIError`を投げる。
-    public init(revalidationInterval: Duration = .seconds(60), verify: @escaping @Sendable () async throws -> Void) {
+    /// - Parameters:
+    ///   - clock: 確かめ直さない間を測る。テストでは手で進める時計を渡す。
+    ///   - verify: トークンが有効なら返り、無効なら401の`MastodonAPIError`を投げる。
+    public init(revalidationInterval: Duration = .seconds(60), clock: any Clock<Duration> = SystemTime.clock, verify: @escaping @Sendable () async throws -> Void) {
         self.revalidationInterval = revalidationInterval
+        self.clock = clock
         self.verify = verify
     }
 
@@ -39,7 +44,7 @@ public final class AuthorizationCheck {
     @discardableResult
     public func reportUnauthorized() async -> State {
         if state == .invalid { return .invalid }
-        if let lastValidated, ContinuousClock.now - lastValidated < revalidationInterval { return .valid }
+        if let sinceValidated, sinceValidated() < revalidationInterval { return .valid }
         if let verifying { return await verifying.value.state }
         let verify = verify
         let task = Task { () -> Outcome in
@@ -57,7 +62,7 @@ public final class AuthorizationCheck {
         let outcome = await task.value
         verifying = nil
         if outcome == .verified {
-            lastValidated = .now
+            sinceValidated = stopwatch(on: clock)
         }
         if outcome.state != state {
             state = outcome.state

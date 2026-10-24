@@ -29,7 +29,7 @@ public struct LiveUpdates: Sendable {
     private let clock: any Clock<Duration>
 
     /// - Parameter clock: ポーリングと知らせまでの時間を数える。テストでは手で進める時計を渡す。
-    public init(stream: ReconnectingStream, policy: Policy, clock: any Clock<Duration> = ContinuousClock()) {
+    public init(stream: ReconnectingStream, policy: Policy, clock: any Clock<Duration> = SystemTime.clock) {
         self.stream = stream
         self.policy = policy
         self.clock = clock

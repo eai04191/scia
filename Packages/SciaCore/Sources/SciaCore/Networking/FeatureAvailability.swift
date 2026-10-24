@@ -32,8 +32,12 @@ public actor FeatureAvailability {
     /// 止めた機能。止めた順。
     public private(set) var disabled: [Disabled] = []
     private let logger = SciaLog.logger(category: "network")
+    private let now: @Sendable () -> Date
 
-    public init() {}
+    /// - Parameter now: 止めた日時として残す今の日付。
+    public init(now: @escaping @Sendable () -> Date = SystemTime.now) {
+        self.now = now
+    }
 
     /// 機能がないことを表すステータスコード。404は、IDを含まないパスでは機能そのものがないことを表す。
     static func indicatesUnsupported(statusCode: Int) -> Bool {
@@ -47,7 +51,7 @@ public actor FeatureAvailability {
 
     func disable(_ feature: OptionalFeature, statusCode: Int) {
         guard !disabled.contains(where: { $0.feature == feature }) else { return }
-        disabled.append(Disabled(feature: feature, statusCode: statusCode, date: Date()))
+        disabled.append(Disabled(feature: feature, statusCode: statusCode, date: now()))
         logger.info("feature disabled for session feature=\(feature.rawValue, privacy: .public) status=\(statusCode, privacy: .public)")
     }
 }
