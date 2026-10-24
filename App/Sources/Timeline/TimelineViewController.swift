@@ -166,10 +166,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private(set) lazy var collectionView: UICollectionView = TimelineCollectionView(frame: .zero, collectionViewLayout: makeLayout())
     private lazy var dataSource = makeDataSource()
     private var entries: [ItemID: TimelineEntry] = [:]
-    /// 長押しのメニューで、読み終えて差し替えるサブメニューの印。メニューは長押しを始めたときに組むため、出きる前に読み終えたものは、出たところで差し替える。
-    private var pendingContextMenuIcons: [UIMenu.Identifier: UIImage] = [:]
-    /// 長押しのメニューが出きっていて、`updateVisibleMenu`で中身を差し替えられる。
-    private var isContextMenuVisible = false
+    /// 長押しのメニューを開いている間に届いたアイコンを、メニューを組み直さずに描き替える。
+    let contextMenuIcons = ContextMenuIconSwapper()
     /// 前回`setEntries`で並べた配列。次に渡された`keepingRowContentsOf`と同じ配列かを、中身を比べずに確かめるために持つ。
     private var appliedEntries: [TimelineEntry] = []
     /// 隣の行とアイコン同士を線でつなぐ行。並びが変わるたびに決め直す。
@@ -1496,37 +1494,12 @@ extension TimelineViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, willDisplayContextMenu configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
         UserAction.openMenu(screen: texts.dumpName).record()
         menuWillShow()
-        guard let animator else {
-            contextMenuDidAppear()
-            return
-        }
-        animator.addCompletion { [weak self] in self?.contextMenuDidAppear() }
-    }
-
-    private func contextMenuDidAppear() {
-        isContextMenuVisible = true
-        applyPendingContextMenuIcons()
-    }
-
-    /// 開いている長押しのメニューの、`identifier`のサブメニューの印を差し替える。メニューが出きる前なら、出たところで差し替える。
-    func replaceContextMenuIcon(_ image: UIImage, ofMenu identifier: UIMenu.Identifier) {
-        pendingContextMenuIcons[identifier] = image
-        guard isContextMenuVisible else { return }
-        applyPendingContextMenuIcons()
-    }
-
-    private func applyPendingContextMenuIcons() {
-        let icons = pendingContextMenuIcons
-        guard !icons.isEmpty else { return }
-        collectionView.contextMenuInteraction?.updateVisibleMenu { menu in
-            icons.reduce(menu) { menu, icon in Self.replacingImage(icon.value, ofMenu: icon.key, in: menu) }
-        }
+        contextMenuIcons.menuWillAppear(in: view.window)
     }
 
     /// メニューが閉じるアニメーションの間も行を動かさない。
     func collectionView(_ collectionView: UICollectionView, willEndContextMenuInteraction configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
-        isContextMenuVisible = false
-        pendingContextMenuIcons = [:]
+        contextMenuIcons.menuWillEnd()
         guard let animator else {
             menuDidHide()
             return

@@ -357,30 +357,28 @@ extension TimelineViewController {
         }
         guard !children.isEmpty else { return nil }
         let parts = user.acct.split(separator: "@", maxSplits: 1)
-        // 読み終えたアイコンに差し替えるとき、このサブメニューを見つけるための名前。投稿のメニューでは同じ人を1度だけ出す。
-        let menuID = UIMenu.Identifier("net.mizle.scia.user-menu.\(user.id)")
         return UIMenu(
             title: "@\(parts.first ?? Substring(user.acct))",
             subtitle: parts.count == 2 ? String(parts[1]) : nil,
-            image: userMenuIcon(for: user, id: id, menuID: menuID) ?? UIImage(systemName: "person.crop.circle"),
-            identifier: menuID,
+            image: userMenuIcon(for: user, id: id),
             children: children
         )
     }
 
     /// ユーザーのメニューの印にする、その人のアイコン。読み込み済みの画像を、一覧と同じ形に切り抜く。
     /// メンションされたユーザーは、APIの`Mention`にアイコンのURLがないため、一覧の行か前に読んだアカウントから探す。
-    /// まだアイコンを出せなければnilを返して記号を出し、アカウントとアイコンを読み終えたら、開いているメニューの印を差し替える。
-    private func userMenuIcon(for user: MenuUser, id: ItemID, menuID: UIMenu.Identifier) -> UIImage? {
+    /// まだアイコンを出せなければ記号の仮の印を返し、アカウントとアイコンを読み終えたら、開いているメニューの仮の印を描き替える。
+    private func userMenuIcon(for user: MenuUser, id: ItemID) -> UIImage {
         let account: Account? = switch user {
         case .account(let account): account
         case .mention(let mention): account(withID: mention.id) ?? userMenuActions?.cachedAccount(mention.id)
         }
-        if let account, let image = cachedAvatar(of: account, id: id) {
-            return Self.userMenuIcon(image, shape: settings.avatarShape)
+        if let account, let image = cachedAvatar(of: account, id: id), let icon = Self.userMenuIcon(image, shape: settings.avatarShape) {
+            return icon
         }
-        loadUserMenuIcon(for: user, account: account, menuID: menuID)
-        return nil
+        let placeholder = contextMenuIcons.placeholder(symbolName: "person.crop.circle", side: Self.menuIconSide, traitCollection: traitCollection)
+        loadUserMenuIcon(for: user, account: account, replacing: placeholder)
+        return placeholder
     }
 
     /// 行に描いた大きさか、メニューの印の大きさで読み込み済みのアイコン。
@@ -396,9 +394,9 @@ extension TimelineViewController {
         account.avatarStatic.map { AvatarView.key(url: $0, animates: false, side: Self.menuIconSide, scale: traitCollection.displayScale) }
     }
 
-    /// アカウントが分からなければ読み、アイコンを読んでから、開いているメニューの`menuID`のサブメニューの印を差し替える。
-    /// 読み終える前にメニューを閉じていたら、差し替えるものがないので何もしない。次に開いたときは読み込み済みのアイコンを出す。
-    private func loadUserMenuIcon(for user: MenuUser, account: Account?, menuID: UIMenu.Identifier) {
+    /// アカウントが分からなければ読み、アイコンを読んでから、開いているメニューの`placeholder`を描き替える。
+    /// 読み終える前にメニューを閉じていたら、描き替えるものがないので何もしない。次に開いたときは読み込み済みのアイコンを出す。
+    private func loadUserMenuIcon(for user: MenuUser, account: Account?, replacing placeholder: UIImage) {
         Task { [weak self] in
             guard let self else { return }
             var resolved = account
@@ -407,17 +405,8 @@ extension TimelineViewController {
             }
             guard let resolved, let key = userMenuIconKey(of: resolved), let image = try? await avatarImages.image(for: key),
                   let icon = Self.userMenuIcon(image, shape: settings.avatarShape) else { return }
-            replaceContextMenuIcon(icon, ofMenu: menuID)
+            contextMenuIcons.setIcon(icon, for: placeholder)
         }
-    }
-
-    /// `identifier`のサブメニューの印を`image`にしたメニュー。ほかの項目はそのまま残す。
-    static func replacingImage(_ image: UIImage, ofMenu identifier: UIMenu.Identifier, in menu: UIMenu) -> UIMenu {
-        let replaced = menu.replacingChildren(menu.children.map { element in
-            (element as? UIMenu).map { replacingImage(image, ofMenu: identifier, in: $0) } ?? element
-        })
-        guard menu.identifier == identifier else { return replaced }
-        return UIMenu(title: replaced.title, subtitle: replaced.subtitle, image: image, identifier: identifier, options: replaced.options, children: replaced.children)
     }
 
     /// アイコンを、メニューの印の大きさで一覧と同じ形に切り抜き、元の色のまま描く。動くアイコンは先頭のコマで止める。
