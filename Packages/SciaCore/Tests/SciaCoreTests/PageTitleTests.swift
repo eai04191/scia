@@ -92,16 +92,19 @@ struct PageTitleTests {
     // MARK: - 悪意のある形のページ
 
     /// `og:title`や閉じのない`<title`、`<meta "`を上限まで並べても、読み直しや探し直しで手間が2乗に増えない。
-    @Test func staysFastOnPagesFullOfCandidates() {
+    /// 時間ではなく、探すのに見たバイトの数で確かめる。探すのは候補の数の上限までで、1回の探しでページを書き方（小文字、大文字、先頭だけ大文字）の数だけ見通すので、
+    /// 見る量はページの大きさの決まった倍数と、候補ごとの決まった幅に収まる。
+    @Test func staysLinearOnPagesFullOfCandidates() {
         let size = PageTitleLoader.maxByteCount
+        // og:titleは、タイトルを読むときと、読み終えたかを確かめるときの2回探す。<titleは、開きと閉じを探す。
+        let finds = 2 * PageTitle.maxOGTitleCandidates + 2 * PageTitle.maxTitleCandidates
+        let windows = (2 * PageTitle.maxOGTitleCandidates + PageTitle.maxTitleCandidates) * (PageTitle.metaLookBehind + PageTitle.tagWindow)
         for unit in ["og:title", "<title ", #"<meta ""#] {
             let data = Data(String(repeating: unit, count: size / unit.utf8.count).utf8)
-            let clock = ContinuousClock()
-            let elapsed = clock.measure {
-                _ = PageTitle.title(in: data, contentType: nil)
-                _ = PageTitle.hasOGTitle(in: data, contentType: nil)
-            }
-            #expect(elapsed < .seconds(2), "\(unit): \(elapsed)")
+            var scanned = 0
+            _ = PageTitle.title(in: data, contentType: nil, scanned: &scanned)
+            _ = PageTitle.hasOGTitle(in: data, contentType: nil, scanned: &scanned)
+            #expect(scanned <= 3 * finds * data.count + windows, "\(unit): \(scanned)")
         }
     }
 
