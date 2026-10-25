@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -110,6 +111,7 @@ struct FeatureAvailabilityTests {
     /// ホームと通知は既読位置を並行して読む。片方が送り直しを待っている間にもう片方が止めたら、送り直さない。
     @Test func retryStopsWhenFeatureIsDisabledWhileWaiting() async throws {
         let features = FeatureAvailability()
+        let clock = TestClock()
         let transport = StubTransport([.json("<html>502</html>", statusCode: 502)])
         let client = MastodonClient(
             credential: Credential(
@@ -122,14 +124,15 @@ struct FeatureAvailabilityTests {
             ),
             transport: transport,
             features: features,
-            retry: RetryPolicy(maxRetries: 2, initialDelay: .milliseconds(100))
+            retry: RetryPolicy(maxRetries: 2, initialDelay: .milliseconds(100)),
+            clock: clock
         )
 
         let loading = Task { try await client.marker(for: .home) }
-        while await transport.requests.isEmpty {
-            await Task.yield()
-        }
+        // 実際の時間で待つと、止める前に待ちが明けて送り直すことがあるため、送り直しの待ちに入ったのを確かめてから止め、時計を進める。
+        try await waitUntil { clock.sleeperCount == 1 }
         await features.disable(.markers, statusCode: 404)
+        clock.advance(by: .milliseconds(100))
 
         await #expect(throws: FeatureUnavailable.self) { try await loading.value }
         #expect(await transport.requests.count == 1)
