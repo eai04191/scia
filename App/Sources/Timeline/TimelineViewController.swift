@@ -211,9 +211,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var springScroll: SpringScroll?
     /// スプリングで動かしている行き先。
     private var springScrollDestination = SpringScrollDestination.top
-    /// スプリングで動かしている間だけ有効にし、指が触れた時点で止める。触れたタッチは中身に渡さない。
+    /// スプリングで動かしている間だけ有効にし、指が触れた時点で止める。触れたタッチは、指が離れるまで中身に渡さない。
     /// UIKitのスクロールと同じく、動いている一覧に触れて止めたつもりで、指の下の画像やリンクが開かないようにするため。
-    private lazy var springScrollInterruption = makeSpringScrollInterruption()
+    private(set) lazy var springScrollInterruption = makeSpringScrollInterruption()
     /// 指で動かしているスクロールの始まり。止まったら違和感レポート用に記録する。
     private var scrollStart: (offset: CGFloat, time: CFTimeInterval)?
     private let scrollHitches = ScrollHitchMonitor()
@@ -1189,7 +1189,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         springScrollTicker?.stop()
         springScrollTicker = nil
         springScroll = nil
-        springScrollInterruption.isEnabled = false
+        // 触れて止めたときは、指が離れるまで有効のままにする。途中で無効にすると、止めた指のタッチが中身に渡る。
+        if !springScrollInterruption.isHolding {
+            springScrollInterruption.isEnabled = false
+        }
     }
 
     /// 最上部へスプリングで動かしている。
@@ -1197,17 +1200,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         springScrollTicker != nil && springScrollDestination == .top
     }
 
-    private func makeSpringScrollInterruption() -> UILongPressGestureRecognizer {
-        let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(interruptSpringScroll(_:)))
-        recognizer.minimumPressDuration = 0
+    private func makeSpringScrollInterruption() -> TouchHoldGestureRecognizer {
+        let recognizer = TouchHoldGestureRecognizer()
         recognizer.isEnabled = false
         recognizer.delegate = self
+        recognizer.onHold = { [weak self] in self?.stopSpringScroll() }
+        recognizer.onRelease = { [weak self] in
+            guard let self, springScrollTicker == nil else { return }
+            springScrollInterruption.isEnabled = false
+        }
         return recognizer
-    }
-
-    @objc private func interruptSpringScroll(_ recognizer: UILongPressGestureRecognizer) {
-        guard recognizer.state == .began else { return }
-        stopSpringScroll()
     }
 
     /// 表示領域から一定の距離に入ったギャップを報告する。指で動かしている間と慣性で動いている間は、上へ戻っているなら

@@ -137,6 +137,37 @@ struct ScrollAnchorTests {
         #expect(!harness.viewController.isAtTop)
     }
 
+    /// 最上部や投稿へ動かしている途中に触れて止めた指は、離すまで一覧が受け持つ。認識したままでいないと、
+    /// タッチが中身に渡り、止めたつもりの指で下の投稿や画像が開く。
+    @Test(arguments: [true, false])
+    func touchStoppingSpringScrollIsHeldUntilLifted(towardTop: Bool) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.tuning.setValue(1, for: TuningCatalog.scrollToTopDuration)
+        harness.tuning.setValue(1, for: TuningCatalog.scrollToStatusDuration)
+        let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        harness.scroll(toFraction: 0.4)
+        if towardTop {
+            harness.viewController.scrollToNewest()
+        } else {
+            _ = harness.viewController.scrollToStatus(statuses[55].id)
+        }
+        harness.frames.advance(by: 0.2)
+        let interruption = harness.viewController.springScrollInterruption
+        #expect(interruption.isEnabled, "動いている間に、触れて止めるジェスチャーが有効になっていません")
+
+        interruption.touchesBegan([], with: UIEvent())
+        let stopped = harness.collectionView.contentOffset.y
+        harness.frames.advance(by: 0.3)
+
+        #expect(harness.collectionView.contentOffset.y == stopped, "触れたあとも動きました")
+        #expect(interruption.isEnabled && interruption.state == .began, "止めた指を、離す前に手放しました")
+
+        interruption.touchesEnded([], with: UIEvent())
+        #expect(!interruption.isEnabled, "止まったあとも、触れて止めるジェスチャーが有効なままです")
+    }
+
     /// 最上部より下で読んでいるときは、アニメーションの設定によらず、読んでいる位置を保つ。
     @Test func prependBelowTopKeepsAnchorEvenWhenAnimationIsOn() throws {
         let harness = try TimelineHarness()
