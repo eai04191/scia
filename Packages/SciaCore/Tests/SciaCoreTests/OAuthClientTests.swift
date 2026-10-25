@@ -40,7 +40,7 @@ struct OAuthClientTests {
             try .fixture("token"),
             try .fixture("verify_credentials"),
         ])
-        let client = OAuthClient(configuration: try makeConfiguration(), transport: transport)
+        let client = OAuthClient(configuration: try makeConfiguration(), client: HTTPClient(transport: transport))
 
         let credential = try await client.login(instance: instance) { authorizeURL in
             let query = queryItems(authorizeURL)
@@ -95,7 +95,7 @@ struct OAuthClientTests {
             try .fixture("token"),
             try .fixture("verify_credentials"),
         ])
-        let client = OAuthClient(configuration: try makeConfiguration(), transport: transport)
+        let client = OAuthClient(configuration: try makeConfiguration(), client: HTTPClient(transport: transport))
         let challenge = Locked<String?>(nil)
 
         _ = try await client.login(instance: try makeInstance()) { authorizeURL in
@@ -110,7 +110,7 @@ struct OAuthClientTests {
     }
 
     @Test func rejectsCallbackWithDifferentState() throws {
-        let client = OAuthClient(configuration: try makeConfiguration(), transport: StubTransport([]))
+        let client = OAuthClient(configuration: try makeConfiguration(), client: HTTPClient(transport: StubTransport([])))
         let callback = try #require(URL(string: "net.mizle.scia://oauth?code=auth-code&state=other"))
 
         #expect(throws: OAuthClient.LoginError.stateMismatch) {
@@ -119,7 +119,7 @@ struct OAuthClientTests {
     }
 
     @Test func reportsDeniedAuthorization() throws {
-        let client = OAuthClient(configuration: try makeConfiguration(), transport: StubTransport([]))
+        let client = OAuthClient(configuration: try makeConfiguration(), client: HTTPClient(transport: StubTransport([])))
         let callback = try #require(URL(string: "net.mizle.scia://oauth?error=access_denied&error_description=denied&state=expected"))
 
         #expect(throws: OAuthClient.LoginError.authorizationDenied("access_denied: denied")) {
@@ -128,7 +128,7 @@ struct OAuthClientTests {
     }
 
     @Test func rejectsCallbackWithoutCode() throws {
-        let client = OAuthClient(configuration: try makeConfiguration(), transport: StubTransport([]))
+        let client = OAuthClient(configuration: try makeConfiguration(), client: HTTPClient(transport: StubTransport([])))
         let callback = try #require(URL(string: "net.mizle.scia://oauth?state=expected"))
 
         #expect(throws: OAuthClient.LoginError.missingCode) {
@@ -140,7 +140,7 @@ struct OAuthClientTests {
         let transport = StubTransport([
             .json(#"{"error":"Validation failed: Redirect URI must be an absolute URI."}"#, statusCode: 422),
         ])
-        let client = OAuthClient(configuration: try makeConfiguration(), transport: transport)
+        let client = OAuthClient(configuration: try makeConfiguration(), client: HTTPClient(transport: transport))
 
         let reason = "Validation failed: Redirect URI must be an absolute URI."
         await #expect(throws: MastodonAPIError(statusCode: 422, message: reason, serverMessage: reason)) {
@@ -153,7 +153,7 @@ struct OAuthClientTests {
 
     @Test func formEncodesPlusSign() async throws {
         let transport = StubTransport([try .fixture("token")])
-        let client = OAuthClient(configuration: try makeConfiguration(), transport: transport)
+        let client = OAuthClient(configuration: try makeConfiguration(), client: HTTPClient(transport: transport))
         let app = OAuthClient.RegisteredApp(clientId: "id", clientSecret: "a+b/c=")
 
         _ = try await client.exchangeToken(instance: try makeInstance(), app: app, code: "code", pkce: PKCE(verifier: "v"))

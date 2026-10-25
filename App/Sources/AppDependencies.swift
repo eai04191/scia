@@ -88,7 +88,7 @@ enum AppDependencies {
 
     static let oauth = OAuthClient(
         configuration: OAuthClient.Configuration(clientName: "Scia", redirectURI: oauthRedirectURI, scopes: "read write"),
-        transport: URLSessionTransport()
+        client: http
     )
 
     /// バンドルIDをスキームにして、他のアプリのURLスキームと衝突しないようにする。

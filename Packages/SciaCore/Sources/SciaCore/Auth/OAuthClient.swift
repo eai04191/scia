@@ -45,11 +45,12 @@ public struct OAuthClient: Sendable {
     }
 
     public let configuration: Configuration
-    private let transport: any HTTPTransport
+    /// 通信の入口。ログインは使う人の操作なので、自動の通信が止められている間も送る。
+    private let client: HTTPClient
 
-    public init(configuration: Configuration, transport: any HTTPTransport) {
+    public init(configuration: Configuration, client: HTTPClient) {
         self.configuration = configuration
-        self.transport = transport
+        self.client = client
     }
 
     /// ログインの全体。`authenticate`は認可画面のURLを開き、リダイレクト先のURLを返す。
@@ -155,7 +156,7 @@ public struct OAuthClient: Sendable {
     }
 
     private func decode<T: Decodable>(_ type: T.Type, from request: URLRequest) async throws -> T {
-        let (data, response) = try await transport.send(request)
+        let (data, response) = try await client.response(for: request, limit: ResponseLimit.api, scope: .host)
         guard (200..<300).contains(response.statusCode) else {
             throw MastodonAPIError.from(statusCode: response.statusCode, body: data)
         }
