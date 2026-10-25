@@ -9,6 +9,8 @@ final class EditHistoryEntryView: UIView {
     struct Content {
         var title: String
         var date: String
+        /// VoiceOverで読む日時。月を言葉で書く。
+        var spokenDate: String
         /// 閲覧注意を付けた、並びを変えた、のような、文字の行で知らせる変更。
         var notes: [String]
         var spoiler: Text?
@@ -84,7 +86,7 @@ final class EditHistoryEntryView: UIView {
         stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         mediaGrids = [:]
         stack.spacing = content.spacing
-        stack.addArrangedSubview(header(title: content.title, date: content.date))
+        stack.addArrangedSubview(header(title: content.title, date: content.date, spokenDate: content.spokenDate))
         if !content.notes.isEmpty {
             let label = Self.label(font: .preferredFont(forTextStyle: .footnote), color: .secondaryLabel)
             label.text = content.notes.joined(separator: "\n")
@@ -114,7 +116,7 @@ final class EditHistoryEntryView: UIView {
         }
     }
 
-    private func header(title: String, date: String) -> UIView {
+    private func header(title: String, date: String, spokenDate: String) -> UIView {
         let titleLabel = Self.label(font: .preferredFont(forTextStyle: .subheadline).bold, color: .label)
         titleLabel.text = title
         let dateLabel = Self.label(font: .preferredFont(forTextStyle: .subheadline), color: .secondaryLabel)
@@ -126,7 +128,7 @@ final class EditHistoryEntryView: UIView {
         row.spacing = 8
         row.alignment = .firstBaseline
         row.isAccessibilityElement = true
-        row.accessibilityLabel = "\(title)、\(date)"
+        row.accessibilityLabel = "\(title)、\(spokenDate)"
         row.accessibilityTraits = .header
         return row
     }

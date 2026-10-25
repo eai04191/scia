@@ -136,7 +136,7 @@ struct PostContentConfiguration: UIContentConfiguration {
 
     /// 読み上げる時刻。アイコンは読まず、言葉にする。
     func timeAccessibilityText(now: Date) -> String {
-        var text = StatusTimestamp.text(for: createdAt, now: now, style: timeStyle)
+        var text = StatusTimestamp.accessibilityText(for: createdAt, now: now, style: timeStyle)
         if isEdited {
             text = "編集済み、\(text)"
         }

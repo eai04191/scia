@@ -94,6 +94,7 @@ struct EditHistoryContentBuilder {
         return EditHistoryEntryView.Content(
             title: isLatest ? "いまの投稿（\(title)）" : title,
             date: StatusTimestamp.text(for: revision.createdAt, now: now, style: .absolute),
+            spokenDate: StatusTimestamp.accessibilityText(for: revision.createdAt, now: now, style: .absolute),
             notes: (Self.changesFirstBlockLayout(entry.body) ? ["段落の形を変えた"] : []) + entry.changes.compactMap { note(for: $0, in: revision) },
             spoiler: entry.spoiler.map { text($0, renderer: renderer) },
             body: entry.body.blocks.isEmpty ? nil : text(entry.body, renderer: renderer),

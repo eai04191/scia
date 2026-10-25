@@ -48,40 +48,82 @@ public enum StatusTimestamp {
     /// 相対表記で、日付に切り替えるまでの日数。
     static let relativeDays = 7
 
-    /// `now`の時点での、`date`の表記。日付と時刻は`calendar`のタイムゾーンで数える。
+    /// `now`の時点での、`date`の表記。日付と時刻は`calendar`のタイムゾーンと暦で数える。
+    /// 日付と時刻の並べ方は、端末の地域と12時間制の設定（`locale`）に従う。日本の地域の24時間制なら「12:34」「10/3 12:34」「2025/10/3 12:34」。
     /// 端末の時計が遅れていて`date`が未来になっても、0秒前として扱う。
-    public static func text(for date: Date, now: Date, style: StatusTimeStyle, calendar: Calendar = .current) -> String {
-        switch style {
-        case .relative: relativeText(for: date, now: now, calendar: calendar)
-        case .absolute: absoluteText(for: date, now: now, calendar: calendar)
+    public static func text(
+        for date: Date,
+        now: Date,
+        style: StatusTimeStyle,
+        calendar: Calendar = .current,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        format(date, now: now, style: style, calendar: calendar, locale: locale, month: .defaultDigits)
+    }
+
+    /// VoiceOverで読む表記。「10/3」を分数のように読まないよう、月を言葉で書く（「10月3日」）。ほかは`text`と同じ。
+    public static func accessibilityText(
+        for date: Date,
+        now: Date,
+        style: StatusTimeStyle,
+        calendar: Calendar = .current,
+        locale: Locale = .autoupdatingCurrent
+    ) -> String {
+        format(date, now: now, style: style, calendar: calendar, locale: locale, month: .wide)
+    }
+
+    private static func format(
+        _ date: Date,
+        now: Date,
+        style: StatusTimeStyle,
+        calendar: Calendar,
+        locale: Locale,
+        month: Date.FormatStyle.Symbol.Month
+    ) -> String {
+        let format = DateFormat(now: now, calendar: calendar, locale: locale, month: month)
+        return switch style {
+        case .relative: relativeText(for: date, now: now, format: format)
+        case .absolute: format.dateAndTime(date)
         }
     }
 
-    private static func relativeText(for date: Date, now: Date, calendar: Calendar) -> String {
+    private static func relativeText(for date: Date, now: Date, format: DateFormat) -> String {
         let seconds = max(Int(now.timeIntervalSince(date)), 0)
         switch seconds {
         case ..<60: return "\(seconds)秒"
         case ..<3_600: return "\(seconds / 60)分"
         case ..<86_400: return "\(seconds / 3_600)時間"
         case ..<(86_400 * relativeDays): return "\(seconds / 86_400)日"
-        default: return dateText(for: date, now: now, calendar: calendar)
+        default: return format.date(date)
         }
     }
 
-    private static func absoluteText(for date: Date, now: Date, calendar: Calendar) -> String {
-        let components = calendar.dateComponents([.hour, .minute], from: date)
-        let time = String(format: "%d:%02d", components.hour ?? 0, components.minute ?? 0)
-        if calendar.isDate(date, inSameDayAs: now) {
-            return time
-        }
-        return "\(dateText(for: date, now: now, calendar: calendar)) \(time)"
-    }
+    /// 端末の地域の並べ方で書く日付と時刻。今日なら時刻だけ、今年なら年を省く。
+    private struct DateFormat {
+        let now: Date
+        let calendar: Calendar
+        let style: Date.FormatStyle
+        let month: Date.FormatStyle.Symbol.Month
 
-    /// 今年なら年を省く。
-    private static func dateText(for date: Date, now: Date, calendar: Calendar) -> String {
-        let components = calendar.dateComponents([.year, .month, .day], from: date)
-        let monthDay = "\(components.month ?? 0)/\(components.day ?? 0)"
-        guard components.year != calendar.component(.year, from: now) else { return monthDay }
-        return "\(components.year ?? 0)/\(monthDay)"
+        init(now: Date, calendar: Calendar, locale: Locale, month: Date.FormatStyle.Symbol.Month) {
+            self.now = now
+            self.calendar = calendar
+            style = Date.FormatStyle(locale: locale, calendar: calendar, timeZone: calendar.timeZone)
+            self.month = month
+        }
+
+        func date(_ date: Date) -> String {
+            date.formatted(dayStyle(for: date))
+        }
+
+        func dateAndTime(_ date: Date) -> String {
+            guard !calendar.isDate(date, inSameDayAs: now) else { return date.formatted(style.hour().minute()) }
+            return date.formatted(dayStyle(for: date).hour().minute())
+        }
+
+        private func dayStyle(for date: Date) -> Date.FormatStyle {
+            let monthDay = style.month(month).day()
+            return calendar.isDate(date, equalTo: now, toGranularity: .year) ? monthDay : monthDay.year()
+        }
     }
 }
