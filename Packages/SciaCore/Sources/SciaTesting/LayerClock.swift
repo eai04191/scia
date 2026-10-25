@@ -76,10 +76,10 @@ public final class LayerClock {
         layer.timeOffset += seconds
         deliverEndedAnimations()
         // 終わりの処理と、メインスレッドに積まれた処理（キーボードの知らせ、レイアウトのあとの処理など）を流す。少なくとも1回はRunLoopを回す。
-        var spun = false
+        // 時間を置いて流れるのを待つと、1コマごとに実際の時間がかかるので、RunLoopが積まれた処理を流し終えるところまで回す。
         try await waitUntil {
-            defer { spun = true }
-            return spun && Self.endedAnimations(in: layer, at: now).isEmpty
+            await waitUntilMainRunLoopIsIdle()
+            return Self.endedAnimations(in: layer, at: now).isEmpty
         }
     }
 
