@@ -11,6 +11,7 @@ only_rules:
   - fixed_font_size
   - dimmed_white_text
   - session_task_outside_scope
+  - server_value_without_check
 
 included:
   - App
@@ -68,6 +69,18 @@ custom_rules:
       - doccomment
       - string
     message: "画像はImageDecoderで縮めて展開する。HDRかSDRかと縮める大きさを引数で選ぶ"
+    severity: error
+
+  # サーバーから来る件数とURLは、読むところで確かめる（ServerValues.swift）。件数はあふれないよう範囲に収め、URLは使い道ごとにスキームを確かめる。
+  # 整数やURLとして直接読むと、範囲の外の数で計算が落ちたり、file:などのURLで端末のファイルやほかのアプリを開いたりする
+  server_value_without_check:
+    included: "Packages/SciaCore/Sources/SciaCore/(Models|Networking|Streaming|XPosts)/.*\\.swift"
+    regex: "\\b(decode|decodeIfPresent)\\((Int|URL)\\.self"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "サーバーから来る値は、件数ならdecodeCount、上限ならServerLimit、URLならdecodeURLかdecodeRequiredURLで読む"
     severity: error
 
   # 実際の時間に、ロジックの中から直接触れない。時間をおく処理はClockで、今の日付は日付を返す関数で、Core Animationの時間は時間を返す関数で受け取り、
