@@ -2303,8 +2303,8 @@ final class SessionController {
             feeds.forEach { $0.reloadIfStarted() }
             savedLists.forEach { $0.reloadIfStarted() }
             notifications.start()
-        case .status(let statusCode, let retryAfter):
-            DebugFaults.fail(withStatus: statusCode, retryAfter: retryAfter)
+        case .status(let statusCode, let retryAfter, let target):
+            DebugFaults.fail(withStatus: statusCode, retryAfter: retryAfter, target: target)
             feeds.forEach { $0.reloadIfStarted() }
             savedLists.forEach { $0.reloadIfStarted() }
             notifications.start()

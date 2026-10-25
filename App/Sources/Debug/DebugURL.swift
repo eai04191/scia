@@ -24,8 +24,9 @@ enum DebugURL: Equatable {
     /// `scia-debug://unreadable`。以後のホームと通知の応答の一部を読めない形に壊し、読み込み直す。
     case unreadable
     /// `scia-debug://status/<ステータスコード>`。以後のREST APIにそのステータスのHTMLのエラーページを返させ、読み込み直す。
-    /// `?retry-after=<秒>`を付けると、`Retry-After`ヘッダーも返す。`scia-debug://status/ok`で戻す。
-    case status(Int, retryAfter: Int?)
+    /// `?retry-after=<秒>`を付けると、`Retry-After`ヘッダーも返す。`?target=<経路>`で、REST API（`api`、省略時）のほかの経路にも返させる（`DebugFaults.Target`）。
+    /// `scia-debug://status/ok`で戻す。
+    case status(Int, retryAfter: Int?, target: DebugFaults.Target)
     case statusCleared
     /// `scia-debug://regenerating/on`で、以後のホームの応答を206（サーバーがホームを作り直している最中）にする。`scia-debug://regenerating/off`で戻す。
     case regenerating(Bool)
@@ -165,7 +166,14 @@ enum DebugURL: Equatable {
 
     private static func status(_ url: URL) -> DebugURL? {
         guard let statusCode = Int(url.lastPathComponent), (100..<600).contains(statusCode) else { return nil }
-        return .status(statusCode, retryAfter: query("retry-after", in: url).flatMap { Int($0) })
+        let target: DebugFaults.Target
+        if let name = query("target", in: url) {
+            guard let named = DebugFaults.Target(rawValue: name) else { return nil }
+            target = named
+        } else {
+            target = .api
+        }
+        return .status(statusCode, retryAfter: query("retry-after", in: url).flatMap { Int($0) }, target: target)
     }
 
     private static func lists(_ url: URL) -> DebugURL? {

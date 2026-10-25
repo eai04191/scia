@@ -88,8 +88,10 @@ struct DebugURLTests {
     }
 
     @Test func readsStatus() throws {
-        #expect(DebugURL(try #require(URL(string: "scia-debug://status/502"))) == .status(502, retryAfter: nil))
-        #expect(DebugURL(try #require(URL(string: "scia-debug://status/429?retry-after=30"))) == .status(429, retryAfter: 30))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://status/502"))) == .status(502, retryAfter: nil, target: .api))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://status/429?retry-after=30"))) == .status(429, retryAfter: 30, target: .api))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://status/429?retry-after=30&target=media-proxy"))) == .status(429, retryAfter: 30, target: .mediaProxy))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://status/503?target=streaming"))) == .status(503, retryAfter: nil, target: .streaming))
     }
 
     @Test func readsMediaLimits() throws {
@@ -105,6 +107,7 @@ struct DebugURLTests {
 
     @Test(arguments: [
         "scia-debug://status/99",
+        "scia-debug://status/429?target=unknown",
         "scia-debug://status/600",
         "scia-debug://regenerating/unknown",
         "scia-debug://streaming/unknown",

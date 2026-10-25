@@ -62,8 +62,8 @@ enum DebugFaultMenu {
             UIAction(
                 title: "\(choice.statusCode)",
                 subtitle: choice.retryAfter.map { "Retry-After: \($0)秒" },
-                state: current?.statusCode == choice.statusCode && current?.retryAfter == choice.retryAfter ? .on : .off
-            ) { _ in handle(.status(choice.statusCode, retryAfter: choice.retryAfter)) }
+                state: current?.statusCode == choice.statusCode && current?.retryAfter == choice.retryAfter && current?.target == .api ? .on : .off
+            ) { _ in handle(.status(choice.statusCode, retryAfter: choice.retryAfter, target: .api)) }
         }
         let clear = UIAction(title: "戻す", image: UIImage(systemName: "arrow.uturn.backward"), attributes: current == nil ? .disabled : []) { _ in
             handle(.statusCleared)

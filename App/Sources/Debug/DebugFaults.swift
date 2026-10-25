@@ -15,15 +15,58 @@ enum DebugFaults {
         rejectsAsUnauthorized.withLock { $0 = true }
     }
 
-    /// 決めると、以後のREST APIのリクエストに、そのステータスコードとHTMLのエラーページを返す。プロキシやサーバーの障害を再現する。
-    private static let failingStatusCode = Mutex<(statusCode: Int, retryAfter: Int?)?>(nil)
+    /// 決めると、以後の`target`の通信に、そのステータスコードとHTMLのエラーページを返す。プロキシやサーバーの障害を再現する。
+    private static let failingStatusCode = Mutex<(statusCode: Int, retryAfter: Int?, target: Target)?>(nil)
 
-    static var failingStatus: (statusCode: Int, retryAfter: Int?)? { failingStatusCode.withLock { $0 } }
+    static var failingStatus: (statusCode: Int, retryAfter: Int?, target: Target)? { failingStatusCode.withLock { $0 } }
+
+    /// 障害を起こす通信の経路。429をどの経路でもシミュレーターで確かめられるよう、アプリの通信はすべて`FaultInjectingTransport`を通る。
+    enum Target: String, CaseIterable {
+        /// ログインしたサーバーのREST APIとログイン（`/api/`と`/oauth/`）。
+        case api
+        /// サーバーが中継するほかのサーバーの画像（`/media_proxy/`）。
+        case mediaProxy = "media-proxy"
+        /// そのほかの画像やファイル、リンク先のページ。
+        case files
+        /// fxtwitterのXの投稿。
+        case x
+        /// ストリーミングの接続。つなぐときの応答をそのステータスで断る。
+        case streaming
+        case all
+
+        /// リクエストがどの経路か。ストリーミングは`FaultInjectingWebSocketConnector`が受けるので、ここでは返さない。
+        init(of request: URLRequest) {
+            let path = request.url?.path() ?? ""
+            if request.url?.host() == "api.fxtwitter.com" {
+                self = .x
+            } else if path.hasPrefix("/media_proxy/") {
+                self = .mediaProxy
+            } else if path.hasPrefix("/api/") || path.hasPrefix("/oauth/") {
+                self = .api
+            } else {
+                self = .files
+            }
+        }
+
+        func covers(_ target: Target) -> Bool {
+            self == .all || self == target
+        }
+    }
 
     /// - Parameter statusCode: nilなら戻す。
     /// - Parameter retryAfter: `Retry-After`ヘッダーで返す秒数。
-    static func fail(withStatus statusCode: Int?, retryAfter: Int? = nil) {
-        failingStatusCode.withLock { $0 = statusCode.map { ($0, retryAfter) } }
+    /// - Parameter target: 障害を起こす経路。ストリーミングを含めたら、開いている接続を切り、つなぎ直しで断られるようにする。
+    static func fail(withStatus statusCode: Int?, retryAfter: Int? = nil, target: Target = .api) {
+        failingStatusCode.withLock { $0 = statusCode.map { ($0, retryAfter, target) } }
+        if statusCode != nil, target.covers(.streaming) {
+            streaming.withLock { Array($0.connections.values) }.forEach { $0.close() }
+        }
+    }
+
+    /// `target`の通信に返す、ステータスと`Retry-After`。障害を起こしていなければnil。
+    static func failingStatus(for target: Target) -> (statusCode: Int, retryAfter: Int?)? {
+        guard let failing = failingStatus, failing.target.covers(target) else { return nil }
+        return (failing.statusCode, failing.retryAfter)
     }
 
     /// 立てると、以後のホームの応答のステータスを206にする。中身はそのまま返すので、サーバーがホームを作り直している最中に一部だけ返した状態になる。
@@ -186,39 +229,89 @@ enum DebugFaults {
     }
 }
 
-/// `DebugFaults`に従って失敗を返すHTTPTransport。
+/// `DebugFaults`に従って失敗を返すHTTPTransport。アプリの通信はすべてこれを通る。
+/// ダミー投稿と部品カタログが渡す`data:`のURLと、端末の一時フォルダーに書き出したダミーの動画も、ここで返す。
+/// 本番の`URLSessionTransport`は、サーバーが返したURLで端末のファイルを読まないよう、httpとhttps以外を断るため。
 struct FaultInjectingTransport: HTTPTransport {
     let base: any HTTPTransport
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        if let response = try await injectedResponse(for: request) {
+            return response
+        }
+        return try await modified(base.send(request), for: request)
+    }
+
+    func open(_ request: URLRequest, limit: Int) async throws -> (HTTPResponseBody, HTTPURLResponse) {
+        if let (data, response) = try await injectedResponse(for: request) {
+            return (Self.body(data, limit: limit), response)
+        }
+        guard rewritesBody(of: request) else { return try await base.open(request, limit: limit) }
+        // 本文を書き換える障害は、上限まで受け取ってから書き換えて渡す。
+        let (body, response) = try await base.open(request, limit: limit)
+        var data = Data()
+        for try await chunk in body {
+            data.append(chunk)
+        }
+        let (modifiedData, modifiedResponse) = modified((data, response), for: request)
+        return (Self.body(modifiedData, limit: limit), modifiedResponse)
+    }
+
+    /// 本文を書き換える障害（壊す、206にする）が、このリクエストに効くか。
+    private func rewritesBody(of request: URLRequest) -> Bool {
+        let path = request.url?.path() ?? ""
+        return (DebugFaults.isCorruptingListElements && (path.hasSuffix("api/v1/timelines/home") || path.hasSuffix("api/v2/notifications")))
+            || (DebugFaults.isRegeneratingHome && path.hasSuffix("api/v1/timelines/home"))
+    }
+
+    private static func body(_ data: Data, limit: Int) -> HTTPResponseBody {
+        HTTPResponseBody { continuation in
+            continuation.yield(data)
+            continuation.finish(throwing: data.count > limit ? ResponseTooLarge(limit: limit) : nil)
+        }
+    }
+
+    func download(_ request: URLRequest, limit: Int, progress: @escaping @Sendable (Double) -> Void) async throws -> (URL, HTTPURLResponse) {
+        if let (data, response) = try await injectedResponse(for: request) {
+            let file = URL.temporaryDirectory.appending(fileName: SafeFileName("Download-\(UUID().uuidString)"))
+            try data.write(to: file)
+            progress(1)
+            return (file, response)
+        }
+        return try await base.download(request, limit: limit, progress: progress)
+    }
+
+    private typealias Target = DebugFaults.Target
+
+    /// 障害やダミーの応答。本物の通信に任せるときはnil。
+    private func injectedResponse(for request: URLRequest) async throws -> (Data, HTTPURLResponse)? {
         // ダミーのサーバーには通信しない。ほかの障害は重ねない。
         if DummyServer.handles(request.url) {
             return await DummyServer.response(for: request)
         }
-        if DebugFaults.isRejectingAsUnauthorized,
-           let url = request.url,
-           let response = HTTPURLResponse(url: url, statusCode: 401, httpVersion: nil, headerFields: nil) {
-            return (Data(#"{"error":"The access token is invalid"}"#.utf8), response)
+        guard let url = request.url else { return nil }
+        if url.scheme == "data" || (url.isFileURL && url.standardizedFileURL.path().hasPrefix(URL.temporaryDirectory.standardizedFileURL.path())) {
+            return (try Data(contentsOf: url), try Self.response(url, statusCode: 200))
         }
-        if let (statusCode, retryAfter) = DebugFaults.failingStatus,
-           let url = request.url,
-           let response = HTTPURLResponse(
-               url: url,
-               statusCode: statusCode,
-               httpVersion: nil,
-               headerFields: ["Content-Type": "text/html"].merging(retryAfter.map { ["Retry-After": String($0)] } ?? [:]) { first, _ in first }
-           ) {
-            return (Data("<html><body><h1>\(statusCode)</h1><p>nginx</p></body></html>".utf8), response)
+        let target = Target(of: request)
+        if target == .api, DebugFaults.isRejectingAsUnauthorized {
+            return (Data(#"{"error":"The access token is invalid"}"#.utf8), try Self.response(url, statusCode: 401))
         }
-        if DebugFaults.isUnsupported(request),
-           let url = request.url,
-           let response = HTTPURLResponse(url: url, statusCode: 404, httpVersion: nil, headerFields: ["Content-Type": "text/html"]) {
+        if let (statusCode, retryAfter) = DebugFaults.failingStatus(for: target) {
+            let headers = ["Content-Type": "text/html"].merging(retryAfter.map { ["Retry-After": String($0)] } ?? [:]) { first, _ in first }
+            return (Data("<html><body><h1>\(statusCode)</h1><p>nginx</p></body></html>".utf8), try Self.response(url, statusCode: statusCode, headers: headers))
+        }
+        if target == .api, DebugFaults.isUnsupported(request) {
             SciaLog.logger(category: "debug").info("debug unsupported \(url.path(), privacy: .public)")
-            return (Data("<html><body><h1>404 Not Found</h1></body></html>".utf8), response)
+            return (Data("<html><body><h1>404 Not Found</h1></body></html>".utf8), try Self.response(url, statusCode: 404, headers: ["Content-Type": "text/html"]))
         }
-        var (data, response) = try await base.send(request)
+        return nil
+    }
+
+    /// 本文の破損とステータスの変更は、同時に入れても両方効かせる。
+    private func modified(_ result: (Data, HTTPURLResponse), for request: URLRequest) -> (Data, HTTPURLResponse) {
+        var (data, response) = result
         let path = request.url?.path() ?? ""
-        // 本文の破損とステータスの変更は、同時に入れても両方効かせる。
         if DebugFaults.isCorruptingListElements, path.hasSuffix("api/v1/timelines/home") || path.hasSuffix("api/v2/notifications") {
             data = DebugFaults.corrupt(data)
         }
@@ -229,14 +322,26 @@ struct FaultInjectingTransport: HTTPTransport {
         }
         return (data, response)
     }
+
+    private static func response(_ url: URL, statusCode: Int, headers: [String: String]? = nil) throws -> HTTPURLResponse {
+        guard let response = HTTPURLResponse(url: url, statusCode: statusCode, httpVersion: nil, headerFields: headers) else {
+            throw URLError(.badServerResponse)
+        }
+        return response
+    }
 }
+
 /// `DebugFaults`に従って、ストリーミングの接続を失敗させるWebSocketConnector。
 struct FaultInjectingWebSocketConnector: WebSocketConnector {
     let base: any WebSocketConnector
 
     func connect(_ request: URLRequest) -> any WebSocketConnection {
         if DummyServer.handles(request.url) { return DummyWebSocketConnection() }
-        guard DebugFaults.isStreamingOnline else { return UnreachableWebSocketConnection() }
+        guard DebugFaults.isStreamingOnline else { return UnreachableWebSocketConnection(error: URLError(.cannotConnectToHost)) }
+        if let (statusCode, retryAfter) = DebugFaults.failingStatus(for: .streaming) {
+            let headers = retryAfter.map { ["Retry-After": String($0)] } ?? [:]
+            return UnreachableWebSocketConnection(error: WebSocketHandshakeRejected(statusCode: statusCode, headers: headers))
+        }
         return DebugFaults.track(base.connect(request))
     }
 }
@@ -266,16 +371,18 @@ private struct TrackedWebSocketConnection: WebSocketConnection {
 
 /// ハンドシェイクで失敗する接続。
 private struct UnreachableWebSocketConnection: WebSocketConnection {
+    let error: any Error
+
     func receive() async throws -> String {
-        throw URLError(.cannotConnectToHost)
+        throw error
     }
 
     func send(_ text: String) async throws {
-        throw URLError(.cannotConnectToHost)
+        throw error
     }
 
     func ping() async throws {
-        throw URLError(.cannotConnectToHost)
+        throw error
     }
 
     func close() {}

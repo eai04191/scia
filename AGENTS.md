@@ -94,7 +94,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 部品の見た目を変えた作業の報告には、カタログに足した状態か載せない理由と、どの状態を実物で見て、どの状態をカタログだけで見たかを書く
 - トークンが無効になったときの表示の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unauthorized'`で、以後のREST APIに401を返させる。資格情報は消えず、起動し直すと戻る
 - 読めなかった投稿や通知の行の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unreadable'`で、以後のホームと通知の応答の3件に1件を読めない形に壊して読み込み直す。起動し直すと戻る
-- サーバーやプロキシの障害の表示の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://status/502'`のように、以後のREST APIにそのステータスのHTMLのエラーページを返させて読み込み直す。`?retry-after=<秒>`を付けると`Retry-After`ヘッダーも返し、429や503で自動の通信を止めて明けたら読み込み直すところを確かめられる。`scia-debug://status/ok`か起動し直すと戻る
+- サーバーやプロキシの障害の表示の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://status/502'`のように、以後のREST APIにそのステータスのHTMLのエラーページを返させて読み込み直す。`?retry-after=<秒>`を付けると`Retry-After`ヘッダーも返し、429や503で自動の通信を止めて明けたら読み込み直すところを確かめられる。`&target=<経路>`を付けると、REST API（`api`、省略時）のほかの経路にも返させる。経路は`media-proxy`（サーバーが中継する画像）、`files`（そのほかの画像やファイル、リンク先のページ）、`x`（fxtwitter）、`streaming`（つなぐときの応答を断る。開いている接続も切る）、`all`。`scia-debug://status/ok`か起動し直すと戻る
 - サーバーにない機能を止める確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unsupported/markers'`のように、以後その機能のAPIに404を返させて読み込み直す。機能は`markers`、`preferences`、`instanceV2`、`multipleStatuses`。起動し直すと戻る
 - ストリーミングにつながらないときの表示とポーリングの確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://streaming/offline'`で、RESTは通したままストリーミングの接続を切り、以後の接続を失敗させる。`scia-debug://streaming/online`で戻す
 - サーバーがホームを作り直している最中の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://regenerating/on'`で、以後のホームの応答を中身はそのままステータスだけ206にする。補完は`scia-debug://streaming/offline`と`online`でつなぎ直して起こす。`scia-debug://regenerating/off`か起動し直すと戻る
