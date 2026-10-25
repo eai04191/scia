@@ -18,10 +18,11 @@ public struct SharedMediaInbox: Sendable {
 
     /// 受け取ったファイルを、`id`の共有の`index`番目としてコピーする。
     public func store(_ file: URL, id: UUID, index: Int) throws {
-        let folder = folder(of: id).appending(path: String(index), directoryHint: .isDirectory)
+        let folder = folder(of: id).appending(fileName: SafeFileName(String(index)), directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try excludeRootFromBackup()
-        try FileManager.default.copyItem(at: file, to: folder.appending(path: file.lastPathComponent))
+        // 名前はほかのアプリから受け取ったファイルのものなので、受け渡しのフォルダーの直下に収める。
+        try FileManager.default.copyItem(at: file, to: folder.appending(fileName: SafeFileName(file.lastPathComponent)))
     }
 
     /// `id`の共有のファイルを、受け取った順に返す。
@@ -60,6 +61,6 @@ public struct SharedMediaInbox: Sendable {
     }
 
     private func folder(of id: UUID) -> URL {
-        root.appending(path: id.uuidString, directoryHint: .isDirectory)
+        root.appending(fileName: SafeFileName(id.uuidString), directoryHint: .isDirectory)
     }
 }

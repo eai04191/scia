@@ -41,7 +41,7 @@ final class MediaDownloads {
         try Task.checkCancellation()
         let generation = await files.generation
         onProgress(0)
-        let folder = stagingDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let folder = stagingDirectory.appending(fileName: SafeFileName(UUID().uuidString), directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: folder) }
         do {
             let downloaded = try await download(url, folder) { fraction in
@@ -79,14 +79,15 @@ final class MediaDownloads {
             throw URLError(.badServerResponse)
         }
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let file = folder.appending(path: fileName(for: url, mimeType: response.mimeType))
+        let file = folder.appending(fileName: SafeFileName(fileName(for: url, mimeType: response.mimeType), fallback: "media"))
         try FileManager.default.moveItem(at: location, to: file)
         return file
     }
 
     /// 置くファイルの名前。URLの最後の部分を使い、拡張子がなければ`mimeType`から付ける。
+    /// URLの最後の部分はサーバーが決め、`%2F`で区切りを入れられるため、`SafeFileName`で落とすフォルダーの直下に収める。
     nonisolated static func fileName(for url: URL, mimeType: String?) -> String {
-        let name = url.lastPathComponent.isEmpty || url.lastPathComponent == "/" ? "media" : url.lastPathComponent
+        let name = SafeFileName(url.lastPathComponent, fallback: "media").value
         guard URL(filePath: name).pathExtension.isEmpty,
               let pathExtension = mimeType.flatMap({ UTType(mimeType: $0) })?.preferredFilenameExtension
         else { return name }

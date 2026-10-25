@@ -13,7 +13,7 @@ public struct DiscomfortReportStore: Sendable {
     @discardableResult
     public func save(_ report: DiscomfortReport) throws -> URL {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appending(path: Self.fileName(for: report.capturedAt))
+        let url = directory.appending(fileName: SafeFileName(Self.fileName(for: report.capturedAt)))
         // 書いている途中で落ちても、書きかけのファイルをレポートとして残さないよう、読む対象にならない名前に書き終えてから移す。
         // 移す先がすでにあれば移さずに失敗する（`moveItem`は上書きしない）。同じ時刻のレポートを消さないため。
         let partial = directory.appending(path: ".partial-\(UUID().uuidString)")

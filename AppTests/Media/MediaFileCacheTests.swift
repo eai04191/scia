@@ -53,6 +53,22 @@ struct MediaFileCacheTests {
         #expect(await cache.file(for: try url("b")) != nil)
     }
 
+    /// 名前はURLやサーバーの応答から作るため、区切りや`..`が入っていても、URLごとのフォルダーの外には置かない。
+    @Test func keepsFileInsideItsFolderWhateverTheName() async throws {
+        let directories = Directories()
+        defer { directories.remove() }
+        let cache = directories.makeCache()
+
+        for (index, name) in ["../../escaped.mp4", "..", ".", "", ".partial-x"].enumerated() {
+            let file = try await cache.store(Data("movie".utf8), named: name, for: try url("a\(index)"), generation: await cache.generation)
+
+            #expect(file.deletingLastPathComponent().deletingLastPathComponent().standardizedFileURL == directories.cache.standardizedFileURL, "\(name)を\(file.path)に置きました")
+            #expect(!file.lastPathComponent.hasPrefix("."))
+            #expect(await cache.file(for: try url("a\(index)")) == file)
+        }
+        #expect(!FileManager.default.fileExists(atPath: directories.root.appending(path: "escaped.mp4").path))
+    }
+
     /// ダウンロードした一時ファイルは、メモリに読み込まずに移して置く。
     @Test func storesByMovingFile() async throws {
         let directories = Directories()

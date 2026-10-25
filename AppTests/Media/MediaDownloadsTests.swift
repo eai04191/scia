@@ -119,6 +119,15 @@ struct MediaDownloadsTests {
         #expect(MediaDownloads.fileName(for: try #require(URL(string: url)), mimeType: mimeType) == expected)
     }
 
+    /// URLの最後の部分はサーバーが決め、`%2F`で区切りを入れられる。区切りや先頭の`.`を残すと、置く場所が落とすフォルダーの外へ出る。
+    @Test(arguments: ["https://x.example/media/..%2F..%2Fescaped.png", "https://x.example/media/..", "https://x.example/media/.hidden"])
+    func fileNameStaysInsideTheFolder(url: String) throws {
+        let name = MediaDownloads.fileName(for: try #require(URL(string: url)), mimeType: "image/png")
+
+        #expect(!name.contains("/"))
+        #expect(!name.hasPrefix("."))
+    }
+
     /// サーバーがエラーを返したら、その本文を添付ファイルとして残さず、失敗にする。残すと共有で壊れたファイルを渡し、
     /// サーバーが直っても落とし直せない。
     @Test func failsOnHTTPErrorWithoutKeepingBody() async throws {

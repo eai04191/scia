@@ -49,7 +49,7 @@ actor MediaFileCache {
     /// `url`のファイルを置くフォルダ。名前は共有先でファイル名として見えるため、URLごとにフォルダを分け、その中にURLのファイル名のまま置く。
     private func folder(for url: URL) -> URL {
         let digest = SHA256.hash(data: Data(url.absoluteString.utf8))
-        return directory.appending(path: digest.map { String(format: "%02x", $0) }.joined(), directoryHint: .isDirectory)
+        return directory.appending(fileName: SafeFileName(digest.map { String(format: "%02x", $0) }.joined()), directoryHint: .isDirectory)
     }
 
     /// `url`のファイルが置いてあれば、その場所。引いたものは最後に使った日時を更新し、整理で後回しにする。
@@ -98,9 +98,9 @@ actor MediaFileCache {
     /// APFSでは中身をコピーせずに複製するため、大きなファイルでもすぐに済み、元が残っている間は場所も取らない。
     func copyForSharing(for url: URL) throws -> URL? {
         guard let file = file(for: url) else { return nil }
-        let folder = sharingDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let folder = sharingDirectory.appending(fileName: SafeFileName(UUID().uuidString), directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let copy = folder.appending(path: file.lastPathComponent)
+        let copy = folder.appending(fileName: SafeFileName(file.lastPathComponent))
         try FileManager.default.copyItem(at: file, to: copy)
         return copy
     }
@@ -153,7 +153,8 @@ actor MediaFileCache {
         for old in Self.storedFiles(in: folder) {
             try? FileManager.default.removeItem(at: old)
         }
-        let file = folder.appending(path: name)
+        // 名前はURLやサーバーの応答から作るため、URLごとのフォルダーの直下に収める。先頭の`.`を外すので、書きかけの隠しファイルとも重ならない。
+        let file = folder.appending(fileName: SafeFileName(name))
         try FileManager.default.moveItem(at: source, to: file)
         touch(file)
         trim()

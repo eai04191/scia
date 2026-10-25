@@ -2266,7 +2266,7 @@ final class SessionController {
 
     /// Documents/DebugInjectの`file`をAPIの応答と同じ形のJSONとして読み、`tab`の一覧に新着として流す。読めなければ流さずにログに残す。
     private func inject(_ file: String, into tab: DebugURL.Tab) {
-        let url = URL.documentsDirectory.appending(path: "DebugInject").appending(path: file)
+        let url = URL.documentsDirectory.appending(path: "DebugInject").appending(fileName: SafeFileName(file))
         do {
             let data = try Data(contentsOf: url)
             let decoder = MastodonDecoder.make()

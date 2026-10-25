@@ -811,7 +811,7 @@ extension ComposeModel {
     /// - Parameter cropCount: 切り抜くなら、切り抜く範囲を変えた回数。
     private static func preparedURL(for file: LocalMediaFile, cropCount: Int? = nil) -> URL {
         let prefix = cropCount.map { "cropped-\($0)-" } ?? "prepared-"
-        return file.url.deletingLastPathComponent().appending(path: prefix + file.url.lastPathComponent)
+        return file.url.deletingLastPathComponent().appending(fileName: SafeFileName(prefix + file.url.lastPathComponent))
     }
 
     /// 書き出した割合を進み具合にする。送った割合と同じく、見た目の変わらない差では描き直さず、戻る向きには動かさない。

@@ -92,9 +92,10 @@ enum LocalMediaLoader {
     /// ファイルを一時ディレクトリにコピーし、コピーした先を返す。
     private static func copyToDirectory(_ url: URL) throws -> URL {
         // 元の名前のままサーバーに送れるよう、選ぶたびにディレクトリを分ける。
-        let folder = directory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let folder = directory.appending(fileName: SafeFileName(UUID().uuidString), directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-        let destination = folder.appending(path: url.lastPathComponent)
+        // 名前はほかのアプリから受け取ったファイルのものなので、選ぶたびのディレクトリの直下に収める。
+        let destination = folder.appending(fileName: SafeFileName(url.lastPathComponent))
         try FileManager.default.copyItem(at: url, to: destination)
         return destination
     }
