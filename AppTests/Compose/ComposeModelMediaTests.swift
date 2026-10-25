@@ -279,6 +279,136 @@ struct ComposeModelMediaTests {
         #expect(model.localMedia[id]?.reduction?.fromSize == PixelSize(width: 800, height: 600))
     }
 
+    /// 切り抜くと、送り終えた添付も、切り抜いた画像で代替テキストと一緒に送り直し、投稿には新しいメディアを付ける。元のファイルは残す。
+    @Test func croppingResendsCroppedImageWithDescription() async throws {
+        let server = FakeServer()
+        var uploadCount = 0
+        server.uploadResult = { upload in
+            uploadCount += 1
+            return Self.attachment(id: "m\(uploadCount)", processed: true, description: upload.description)
+        }
+        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: "photo.jpg")
+        try writePhoto(width: 400, height: 300, to: url)
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+        model.applyPickerSelection([PickedMedia(assetIdentifier: "a") { _ in LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image) }])
+        try await settleSlowly { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+        model.setDescription("猫", of: id)
+        try await settle { model.attachments.first?.isReady == true }
+        #expect(model.canCrop(id))
+
+        // 時計回りに1回回して、回したあとの上半分を残す。
+        model.setCrop(ImageCrop(quarterTurns: 1, rect: CGRect(x: 0, y: 0, width: 1, height: 0.5)), preview: nil, of: id)
+        #expect(model.attachmentStatus(of: id) == .uploading)
+        #expect(!model.canPost)
+        try await settleSlowly { isSettled(model) }
+        #expect(model.localMedia[id]?.file?.url == url)
+        await model.submit()
+
+        #expect(server.uploads.count == 2)
+        let upload = try #require(server.uploads.last)
+        #expect(upload.description == "猫")
+        let source = try #require(CGImageSourceCreateWithData(upload.data as CFData, nil))
+        let properties = try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])
+        #expect(properties[kCGImagePropertyPixelWidth] as? Int == 300)
+        #expect(properties[kCGImagePropertyPixelHeight] as? Int == 200)
+        #expect(sent.first?.mediaIDs == ["m2"])
+    }
+
+    /// 同じ範囲を選び直しても送り直さない。範囲を外すと、元のまま送り直す。
+    @Test func clearingCropResendsOriginal() async throws {
+        let server = FakeServer()
+        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: "photo.jpg")
+        try writePhoto(width: 40, height: 30, to: url)
+        let model = makeModel(server)
+        model.applyPickerSelection([PickedMedia(assetIdentifier: "a") { _ in LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image) }])
+        try await settleSlowly { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+        let crop = ImageCrop(quarterTurns: 0, rect: CGRect(x: 0, y: 0, width: 0.5, height: 1))
+
+        model.setCrop(crop, preview: nil, of: id)
+        try await settleSlowly { isSettled(model) && server.uploads.count == 2 }
+        model.setCrop(crop, preview: nil, of: id)
+        model.setCrop(nil, preview: nil, of: id)
+        try await settleSlowly { isSettled(model) && server.uploads.count == 3 }
+
+        let sizes = try server.uploads.map { upload in
+            let source = try #require(CGImageSourceCreateWithData(upload.data as CFData, nil))
+            return try #require(CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])[kCGImagePropertyPixelWidth] as? Int
+        }
+        #expect(sizes == [40, 20, 40])
+    }
+
+    /// 送っている間に切り抜くと、止めた前のアップロードに処理できない形式のエラーが届いても、JPEGで送り直さず、元のファイルを消さない。
+    /// 送り直す経路は、ピッカーから受け取り直す前に元のファイルを消すため、止めたことを確かめずに進むと、切り抜き直せなくなる。
+    @Test func cancelledUploadDoesNotDeleteOriginalWhenCropping() async throws {
+        let server = FakeServer()
+        server.completesImmediately = false
+        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: "photo.heic")
+        try writePhoto(width: 40, height: 30, to: url)
+        var loads = 0
+        let model = makeModel(server)
+        model.applyPickerSelection([PickedMedia(assetIdentifier: "a") { _ in
+            loads += 1
+            return LocalMediaFile(url: url, mimeType: "image/heic", kind: .image)
+        }])
+        try await settle { server.pendingCount == 1 }
+        let id = try #require(model.attachments.first?.id)
+
+        model.setCrop(ImageCrop(quarterTurns: 0, rect: CGRect(x: 0, y: 0, width: 0.5, height: 1)), preview: nil, of: id)
+        server.finishNextUpload(with: .failure(MediaUploadError.processingFailed(MastodonAPIError(statusCode: 500, message: "Error processing thumbnail for uploaded media"))))
+        try await settleSlowly { server.pendingCount == 1 }
+
+        #expect(loads == 1)
+        #expect(FileManager.default.fileExists(atPath: url.path))
+        #expect(model.canCrop(id))
+    }
+
+    /// 開き直して動かさずに完了したときのように、割合が丸めの誤差でずれても、同じ画素を選んでいれば送り直さない。
+    @Test func cropSelectingSamePixelsDoesNotResend() async throws {
+        let server = FakeServer()
+        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: "photo.jpg")
+        try writePhoto(width: 40, height: 30, to: url)
+        let model = makeModel(server)
+        model.applyPickerSelection([PickedMedia(assetIdentifier: "a") { _ in LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image) }])
+        try await settleSlowly { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+        model.setCrop(ImageCrop(quarterTurns: 0, rect: CGRect(x: 0, y: 0, width: 0.5, height: 1)), preview: nil, of: id)
+        try await settleSlowly { isSettled(model) && server.uploads.count == 2 }
+
+        model.setCrop(ImageCrop(quarterTurns: 0, rect: CGRect(x: 0.000_001, y: 0, width: 0.499_998, height: 0.999_999)), preview: nil, of: id)
+        // 全体を選んだ範囲は、切り抜かないのと同じ。
+        model.setCrop(nil, preview: nil, of: id)
+        try await settleSlowly { isSettled(model) && server.uploads.count == 3 }
+        model.setCrop(ImageCrop(quarterTurns: 0, rect: CGRect(x: 0.000_001, y: 0, width: 0.999_998, height: 1)), preview: nil, of: id)
+
+        #expect(model.attachmentStatus(of: id) == .ready)
+        #expect(server.uploads.count == 3)
+    }
+
+    /// 動画は切り抜かない。
+    @Test func cannotCropVideo() async throws {
+        let server = FakeServer()
+        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: "clip.mov")
+        try Data([0]).write(to: url)
+        server.completesImmediately = false
+        let model = makeModel(server)
+        model.applyPickerSelection([PickedMedia(assetIdentifier: "v") { _ in LocalMediaFile(url: url, mimeType: "video/quicktime", kind: .video) }])
+        try await settle { model.localMedia.values.first?.file != nil }
+        #expect(!model.canCrop(try #require(model.attachments.first?.id)))
+    }
+
     @Test func postsMediaIDsInPickerOrderWithEmptyText() async throws {
         let server = FakeServer()
         var sent: [StatusDraft] = []

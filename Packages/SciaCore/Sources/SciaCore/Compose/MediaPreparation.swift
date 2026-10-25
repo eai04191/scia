@@ -130,6 +130,8 @@ public struct ImagePlan: Sendable, Equatable {
     /// - Parameters:
     ///   - supportedMIMETypes: サーバーが受け付けると返した形式。返さないサーバーではnil。
     ///   - unprocessableMIMETypes: 受け付けると返しながら、処理できなかった形式。
+    ///   - cropping: 切り抜いて送る。中身が変わるので、収まっていても作り直す。`size`には切り抜いたあとの大きさを、`byteCount`には元の容量を渡す。
+    ///     切り抜いたあとの容量は作り直すまで分からないため、容量の上限は作り直しながら確かめ、`exceedsSizeLimit`にはしない。
     /// - Returns: 元のまま送るならnil。
     public static func make(
         size: PixelSize,
@@ -138,14 +140,15 @@ public struct ImagePlan: Sendable, Equatable {
         setting: ImageUploadSize,
         limits: MediaLimits,
         supportedMIMETypes: [String]?,
-        unprocessableMIMETypes: Set<String>
+        unprocessableMIMETypes: Set<String>,
+        cropping: Bool = false
     ) -> ImagePlan? {
         // アニメーションを保ったまま縮められないので、GIFは作り直さない。
         guard mimeType != "image/gif" else { return nil }
         let bySetting = setting.maxLongSide.map { size.scaled(by: Double($0) / Double(size.longSide)) } ?? size
         let target = bySetting.fitting(pixels: limits.imageMatrixLimit)
-        let exceedsSizeLimit = limits.imageSizeLimit.map { byteCount > $0 } ?? false
-        guard target != size || exceedsSizeLimit || unprocessableMIMETypes.contains(mimeType) else { return nil }
+        let exceedsSizeLimit = !cropping && (limits.imageSizeLimit.map { byteCount > $0 } ?? false)
+        guard cropping || target != size || exceedsSizeLimit || unprocessableMIMETypes.contains(mimeType) else { return nil }
         return ImagePlan(
             mimeType: outputMIMEType(for: mimeType, supported: supportedMIMETypes, unprocessable: unprocessableMIMETypes),
             size: target,

@@ -71,13 +71,15 @@ public enum ImageReencoder {
     ///
     /// 向きは画素に反映し、位置情報などのメタデータは書き出さない。色空間（Display P3など）は画像の色空間として残る。
     /// - Parameters:
-    ///   - originalSize: 元の大きさ。設定どおりに縮めたかを比べるのに使う。
+    ///   - crop: 切り抜く範囲。回して切り抜いてから、計画の大きさに縮める。
+    ///   - originalSize: 元の大きさ。切り抜くなら、切り抜いたあとの大きさ。設定どおりに縮めたかを比べるのに使う。
     ///   - quality: JPEGとHEICの品質。PNGでは使わない。
     ///   - destination: 書き出す先のファイル。拡張子は形式に合わせて付け替える。
     @concurrent
     public static func reencode(
         _ url: URL,
         plan: ImagePlan,
+        crop: ImageCrop? = nil,
         originalSize: PixelSize,
         sizeLimit: Int?,
         quality: Double,
@@ -91,7 +93,7 @@ public enum ImageReencoder {
         var size = plan.size
         while true {
             try Task.checkCancellation()
-            let written = try write(source, size: size, type: type, quality: plan.mimeType == "image/png" ? nil : quality, to: output)
+            let written = try write(source, crop: crop, size: size, type: type, quality: plan.mimeType == "image/png" ? nil : quality, to: output)
             let byteCount = byteCount(of: output)
             if sizeLimit.map({ byteCount <= $0 }) ?? true {
                 // 設定で選んだ大きさのとおりに縮めただけなら、使う人が選んだ変化なので知らせない。
@@ -119,14 +121,60 @@ public enum ImageReencoder {
     }
 
     /// - Returns: 書き出した大きさ。縮めるときの丸めで、`size`と1画素ずれることがある。
-    private static func write(_ source: CGImageSource, size: PixelSize, type: UTType, quality: Double?, to url: URL) throws -> PixelSize {
+    private static func write(_ source: CGImageSource, crop: ImageCrop?, size: PixelSize, type: UTType, quality: Double?, to url: URL) throws -> PixelSize {
         // 縮めた画像を作る関数で、向きを画素に反映して読む。メタデータは付いてこない。
-        guard let image = ImageDecoder.thumbnail(of: source, maxPixelSize: size.longSide, dynamicRange: .standard),
-              let destination = CGImageDestinationCreateWithURL(url as CFURL, type.identifier as CFString, 1, nil)
-        else { throw MediaReencodingError.imageFailed }
+        // 切り抜くときは、元の大きさで読んでから切り抜いて縮める。
+        let readLongSide = try crop == nil ? size.longSide : longSide(of: source)
+        guard let read = ImageDecoder.thumbnail(of: source, maxPixelSize: readLongSide, dynamicRange: .standard) else { throw MediaReencodingError.imageFailed }
+        let image = try crop.map { try cropped(read, crop: $0, size: size) } ?? read
+        guard let destination = CGImageDestinationCreateWithURL(url as CFURL, type.identifier as CFString, 1, nil) else { throw MediaReencodingError.imageFailed }
         let properties: [CFString: Any] = quality.map { [kCGImageDestinationLossyCompressionQuality: $0] } ?? [:]
         CGImageDestinationAddImage(destination, image, properties as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { throw MediaReencodingError.imageFailed }
         return PixelSize(width: image.width, height: image.height)
+    }
+
+    /// 元の画像の長い辺（画素）。
+    private static func longSide(of source: CGImageSource) throws -> Int {
+        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              let width = properties[kCGImagePropertyPixelWidth] as? Int,
+              let height = properties[kCGImagePropertyPixelHeight] as? Int
+        else { throw MediaReencodingError.imageFailed }
+        return max(width, height)
+    }
+
+    /// 向きを反映した画像を、切り抜いて回し、`size`に縮めて描く。
+    /// 色空間は元のものを使う。RGBでない色空間（グレースケールなど）は、同じ描き方で描けないためsRGBに描く。
+    private static func cropped(_ image: CGImage, crop: ImageCrop, size: PixelSize) throws -> CGImage {
+        let full = PixelSize(width: image.width, height: image.height)
+        guard let part = image.cropping(to: crop.sourceRect(in: full)) else { throw MediaReencodingError.imageFailed }
+        let colorSpace = image.colorSpace.flatMap { $0.model == .rgb ? $0 : nil } ?? CGColorSpace(name: CGColorSpace.sRGB)
+        guard let colorSpace,
+              let context = CGContext(
+                  data: nil, width: size.width, height: size.height, bitsPerComponent: 8, bytesPerRow: 0,
+                  space: colorSpace, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              )
+        else { throw MediaReencodingError.imageFailed }
+        context.interpolationQuality = .high
+        let width = CGFloat(size.width), height = CGFloat(size.height)
+        // Core Graphicsは下が原点なので、見た目で時計回りに回すには、負の角度で回す。
+        switch crop.quarterTurns {
+        case 1:
+            context.translateBy(x: 0, y: height)
+            context.rotate(by: -.pi / 2)
+            context.draw(part, in: CGRect(x: 0, y: 0, width: height, height: width))
+        case 2:
+            context.translateBy(x: width, y: height)
+            context.rotate(by: .pi)
+            context.draw(part, in: CGRect(x: 0, y: 0, width: width, height: height))
+        case 3:
+            context.translateBy(x: width, y: 0)
+            context.rotate(by: .pi / 2)
+            context.draw(part, in: CGRect(x: 0, y: 0, width: height, height: width))
+        default:
+            context.draw(part, in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        guard let drawn = context.makeImage() else { throw MediaReencodingError.imageFailed }
+        return drawn
     }
 }

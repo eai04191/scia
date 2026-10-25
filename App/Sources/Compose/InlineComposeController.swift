@@ -1965,10 +1965,15 @@ final class InlineComposeController: NSObject {
         isWaitingForKeyboardAfterViewer = isInputFocused && isBarHeld
     }
 
-    /// ビューアのメニューで、「代替テキストを編集」に続けて出す項目。失敗したものには「再試行」も出す。
+    /// ビューアのメニューで、「代替テキストを編集」に続けて出す項目。画像には「トリミング」を、失敗したものには「再試行」も出す。
     private func viewerMenuElements(for itemID: String) -> [UIMenuElement] {
         guard let id = UUID(uuidString: itemID), let status = model.attachmentStatus(of: id) else { return [] }
         var elements: [UIMenuElement] = []
+        if model.canCrop(id) {
+            elements.append(UIAction(title: "トリミング", image: UIImage(systemName: "crop")) { [weak self] _ in
+                self?.presentCrop(id)
+            })
+        }
         if status == .failed || status == .descriptionFailed {
             elements.append(UIAction(title: "再試行", image: UIImage(systemName: "arrow.clockwise")) { [weak self] _ in
                 self?.model.retryAttachment(id)
@@ -1978,6 +1983,17 @@ final class InlineComposeController: NSObject {
             self?.removeAttachment(id)
         })
         return elements
+    }
+
+    /// ビューアの上に、添付の画像を切り抜く画面を出す。前に切り抜いていれば、その範囲から始める。
+    private func presentCrop(_ id: DraftAttachment.ID) {
+        guard let host, let local = model.localMedia[id], let file = local.file, let size = ImageReencoder.size(of: file.url) else { return }
+        logger.info("present crop (cropped=\(local.crop != nil, privacy: .public))")
+        let crop = ImageCropViewController(file: file, originalSize: size, crop: local.crop)
+        crop.onFinish = { [weak self] result, preview in
+            self?.model.setCrop(result, preview: preview, of: id)
+        }
+        topPresenter(from: host).present(crop, animated: true)
     }
 
     /// 失敗の理由と、送り直すか外すかを、`presenter`の上に出す。
@@ -2016,7 +2032,8 @@ final class InlineComposeController: NSObject {
                 kind: local?.file?.kind ?? .image,
                 description: attachment.description,
                 // 縮めたら、投稿される中身を確かめられるよう、縮めたあとのファイルを出す。
-                file: local?.sending ?? local?.file,
+                // 切り抜いたら、送るファイルを作り終えるまでは元のファイルを出さず、切り抜いたサムネイルを出す。
+                file: local?.sending ?? (local?.crop == nil ? local?.file : nil),
                 thumbnail: local?.thumbnail,
                 status: status,
                 progress: model.attachmentProgress(of: attachment.id),

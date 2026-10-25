@@ -334,8 +334,12 @@ struct LocalMedia {
     var sending: LocalMediaFile?
     /// サーバーの上限のために縮めたときの前と後。
     var reduction: MediaReduction?
-    /// 送るファイルを、縮めるために作り直した。位置情報だけを除いて書き直したときは、元と同じ中身なのでfalse。
+    /// 送るファイルを、縮めるために作り直した。位置情報だけを除いて書き直したときは、元と同じ中身なのでfalse。切り抜いたときはtrue。
     var sendingIsReencoded = false
+    /// 送る前に切り抜く範囲。`file`は元のまま残し、送るファイルを作るときに当てる。切り抜かないならnil。
+    var crop: ImageCrop?
+    /// 切り抜く範囲を変えた回数。切り抜いたファイルの名前に入れる。
+    var cropCount = 0
 }
 
 /// 添付1つの、投稿欄とビューアで見せる状態。
@@ -500,6 +504,47 @@ extension ComposeModel {
         sendDescriptionIfNeeded(id)
     }
 
+    /// 切り抜ける添付。読み込み終えた画像で、編集している投稿にもう付いていないもの。GIFは動きを保ったまま切り抜けないので除く。
+    func canCrop(_ id: DraftAttachment.ID) -> Bool {
+        guard let attachment = attachments.first(where: { $0.id == id }), !attachment.isAttachedToStatus,
+              let file = localMedia[id]?.file
+        else { return false }
+        return file.kind == .image && file.mimeType != "image/gif"
+    }
+
+    /// 切り抜く範囲を変え、アップロードし直す。Mastodonには、アップロード済みのメディアのファイルを差し替えるAPIがないため。
+    /// 前のアップロードと代替テキストの送信は止め、前のメディアはどの投稿にも付かないまま残す。代替テキストはアップロードし直すときに一緒に送る。
+    /// - Parameters:
+    ///   - crop: 切り抜く範囲。切り抜かずに元のまま送るならnil。
+    ///   - preview: 切り抜いた画像。送るファイルを作り終えるまで、投稿欄のサムネイルとビューアに出す。
+    func setCrop(_ crop: ImageCrop?, preview: UIImage?, of id: DraftAttachment.ID) {
+        guard canCrop(id), let local = localMedia[id], let file = local.file, let size = ImageReencoder.size(of: file.url),
+              !ImageCrop.selectsSamePixels(local.crop, crop, in: size)
+        else { return }
+        // 全体を残す範囲は、切り抜かないのと同じなので、元のまま送る。
+        let crop = crop.flatMap { $0.isIdentity(in: size) ? nil : $0 }
+        logger.info("attachment crop changed turns=\(crop?.quarterTurns ?? 0, privacy: .public) rect=\(String(describing: crop?.rect), privacy: .public)")
+        uploadTasks.removeValue(forKey: id)?.cancel()
+        thumbnailTasks.removeValue(forKey: id)?.cancel()
+        descriptionTasks.removeValue(forKey: id)?.cancel()
+        // 作り直したファイルは、読み込んだファイルと同じディレクトリにあるので、添付を外せば一緒に消える。ここでは消さない。
+        // 止めたアップロードが、まだ読んでいることがあるため。
+        localMedia[id]?.crop = crop
+        localMedia[id]?.cropCount += 1
+        localMedia[id]?.sending = nil
+        localMedia[id]?.reduction = nil
+        localMedia[id]?.sendingIsReencoded = false
+        localMedia[id]?.failure = nil
+        localMedia[id]?.descriptionFailure = nil
+        localMedia[id]?.progress = 0
+        localMedia[id]?.exportProgress = nil
+        if let preview {
+            localMedia[id]?.thumbnail = preview
+        }
+        setState(.uploading, of: id)
+        startUpload(id)
+    }
+
     /// 添付を`index`の位置へ移す。投稿の`media_ids[]`はこの順になる。
     func moveAttachment(_ id: DraftAttachment.ID, to index: Int) {
         guard let from = attachments.firstIndex(where: { $0.id == id }) else { return }
@@ -579,6 +624,8 @@ extension ComposeModel {
             do {
                 accepted = try await send(sending, of: id, sentDescription: &sentDescription)
             } catch let error where UnprocessableMediaFormats.shouldReplaceWithJPEG(mimeType: sending.mimeType, error: error) {
+                // 切り抜き直して止めたアップロードには、止める前に届いたエラーがそのまま返る。送り直すと元のファイルを消すので、先に止まったかを確かめる。
+                try Task.checkCancellation()
                 // 対応形式として返しているのに処理できないサーバーがある（Mastodon 4.7.2と4.7.3のHEICなど）。
                 // 同じ写真のJPEGで1回だけ送り直し、このサーバーのこの版ではその形式を送らないと覚える。
                 logger.info("attachment format unprocessable, resending as jpeg mime=\(sending.mimeType, privacy: .public) reencoded=\(sending != file, privacy: .public)")
@@ -657,17 +704,21 @@ extension ComposeModel {
         var reencoded = false
         switch file.kind {
         case .image:
-            guard let size = ImageReencoder.size(of: file.url) else { throw MediaReencodingError.imageFailed }
+            guard let originalSize = ImageReencoder.size(of: file.url) else { throw MediaReencodingError.imageFailed }
+            let crop = localMedia[id]?.crop
+            // 切り抜くなら、切り抜いた大きさに設定とサーバーの上限を当てはめ、縮めるのと1回で作り直す。
+            let size = crop?.outputSize(of: originalSize) ?? originalSize
             let plan = ImagePlan.make(
                 size: size, byteCount: byteCount, mimeType: file.mimeType, setting: settings.imageSize, limits: mediaLimits,
                 supportedMIMETypes: supportedMediaTypes,
-                unprocessableMIMETypes: media.unprocessableImageTypes().union(forcingJPEG ? UnprocessableMediaFormats.replaceableMIMETypes : [])
+                unprocessableMIMETypes: media.unprocessableImageTypes().union(forcingJPEG ? UnprocessableMediaFormats.replaceableMIMETypes : []),
+                cropping: crop != nil
             )
             reencoded = plan != nil
             prepared = if let plan {
                 try await ImageReencoder.reencode(
-                    file.url, plan: plan, originalSize: size, sizeLimit: mediaLimits.imageSizeLimit, quality: settings.imageQuality,
-                    destination: Self.preparedURL(for: file)
+                    file.url, plan: plan, crop: crop, originalSize: size, sizeLimit: mediaLimits.imageSizeLimit, quality: settings.imageQuality,
+                    destination: Self.preparedURL(for: file, cropCount: crop != nil ? localMedia[id]?.cropCount : nil)
                 )
             } else {
                 try await LocationRemover.removingLocation(fromImage: file.url, destination: Self.preparedURL(for: file))
@@ -737,8 +788,11 @@ extension ComposeModel {
     }
 
     /// 作り直したファイルの置き場所。読み込んだファイルと同じディレクトリに、名前を変えて置く。
-    private static func preparedURL(for file: LocalMediaFile) -> URL {
-        file.url.deletingLastPathComponent().appending(path: "prepared-" + file.url.lastPathComponent)
+    /// 切り抜いたファイルは、切り抜くたびに名前を変える。切り抜き直して止めたアップロードが、同じファイルに書き続けていることがあるため。
+    /// - Parameter cropCount: 切り抜くなら、切り抜く範囲を変えた回数。
+    private static func preparedURL(for file: LocalMediaFile, cropCount: Int? = nil) -> URL {
+        let prefix = cropCount.map { "cropped-\($0)-" } ?? "prepared-"
+        return file.url.deletingLastPathComponent().appending(path: prefix + file.url.lastPathComponent)
     }
 
     /// 書き出した割合を進み具合にする。送った割合と同じく、見た目の変わらない差では描き直さず、戻る向きには動かさない。

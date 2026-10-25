@@ -1556,6 +1556,8 @@ final class ImagePageController: MediaPageController {
     private var hasStartedLoading = false
     /// 読み始めた手元のファイル。投稿欄で縮めて作り直したら替わる。
     private var loadedLocalURL: URL?
+    /// 送るファイルを作り終えるまで出している、投稿欄で切り抜いたサムネイル。
+    private var shownLocalThumbnail: UIImage?
 
     /// - Parameter preview: 一覧で読み込んだサムネイル。元の画像が届くまでの下地にする。
     init(item: MediaViewerItem, store: MediaImageStore, preview: UIImage?) {
@@ -1658,6 +1660,19 @@ final class ImagePageController: MediaPageController {
         } else if case .local(let file?, _) = item.source, file.url != loadedLocalURL {
             // 投稿欄で縮めて作り直したら、投稿される中身を確かめられるよう読み直す。読み終えるまで、前の画像を出したままにする。
             load(file, hasPreview: true)
+        } else if case .local(nil, let thumbnail?) = item.source, thumbnail !== shownLocalThumbnail {
+            // 投稿欄で切り抜いたら、送るファイルを作り終えるまで、切り抜いたサムネイルを出す。
+            loadTask?.cancel()
+            loadedLocalURL = nil
+            shownLocalThumbnail = thumbnail
+            imageSource = "local thumbnail"
+            zoomView.naturalSize = thumbnail.size
+            zoomView.image = thumbnail
+            onImageChange?()
+            // 前の画像の文字の位置が残らないよう、切り抜いた画像で解析し直す。
+            liveText.analysis = nil
+            hasFinishedAnalysis = false
+            analyze(thumbnail)
         }
     }
 
