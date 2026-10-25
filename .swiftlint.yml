@@ -13,6 +13,7 @@ only_rules:
   - session_task_outside_scope
   - server_value_without_check
   - unsafe_file_name
+  - log_private_value
 
 included:
   - App
@@ -148,6 +149,19 @@ custom_rules:
       - doccomment
       - string
     message: "セッションの持ち物で始める処理は、持ち主（TaskScope）のrunで始める。メインアクターへ戻るだけなら`Task { @MainActor`と書く"
+    severity: error
+
+  # ログに、ハンドル、本文、URL、応答の本文、サーバーの文言を公開扱いで出さない。info以上のログは違和感レポートに入り、ファイルアプリから取り出せる。
+  # privacyを書かない文字列も伏せられずに出るため、.privateか.sensitive以外はすべて止める。名前で見分けるので、決まり（docs/logging.md）で伏せるものの名前を使い始めたら足す。
+  # デバッグ用のコードはリリース版に入らないため対象外にする
+  log_private_value:
+    included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"
+    excluded: "App/Sources/Debug/"
+    regex: "(?<=\\.(?:debug|info|notice|error|fault|warning|trace|critical|log)\\(\"[^\\n]{0,400})\\\\\\((?!(?:[^()\\n]|\\((?:[^()\\n]|\\([^()\\n]*\\))*\\))*privacy: *\\.(?:private|sensitive))(?:(?:[^()\\n]|\\((?:[^()\\n]|\\([^()\\n]*\\))*\\))*?(?:\\b(?:localizedDescription|absoluteString|acct|username|displayName|serverMessage|blurhash|spoilerText)\\b|\\.(?:text|content|note|body)\\b(?!\\.(?:count|isEmpty))|\\bString\\(describing: *(?:\\w+\\.)*(?:error|failure)\\b|\\burl\\.(?:path|query|lastPathComponent|relativeString)\\b)|(?:[\\w]+\\.)*(?:error|failure|url|text|body|content|note)(?:, *privacy: *\\.public)?\\))"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+    message: "ハンドル、本文、URL、応答の本文、サーバーの文言、localizedDescriptionをログに公開扱いで出さない。失敗はSciaLog.describe、URLはSciaLog.host(of:)で書き、追いたい値は.private(mask: .hash)にする（docs/logging.md）"
     severity: error
 
 strict: true
