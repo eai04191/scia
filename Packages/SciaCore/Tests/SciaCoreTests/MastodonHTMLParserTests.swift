@@ -141,6 +141,17 @@ struct MastodonHTMLParserTests {
         ])
     }
 
+    /// 番号の上限や下限を越える`<ol>`は、Mastodonのサニタイズを通って届く。越えた先は端の番号のままにし、落ちない。
+    @Test func listNumbersSaturateAtIntegerBounds() {
+        let text = parse(#"<ol start="9223372036854775807"><li>一</li><li>二</li></ol><ol reversed start="-9223372036854775808"><li>三</li><li>四</li></ol><ol><li value="9223372036854775807">五</li><li>六</li></ol>"#)
+
+        #expect(text.blocks.map(\.listMarker) == [
+            "9223372036854775807. ", "9223372036854775807. ",
+            "-9223372036854775808. ", "-9223372036854775808. ",
+            "9223372036854775807. ", "9223372036854775807. ",
+        ])
+    }
+
     @Test func collapsesWhitespaceOutsidePre() {
         #expect(parse("<p>\n  a \n\n b  </p>").plainText == "a b")
     }

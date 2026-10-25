@@ -151,7 +151,9 @@ private struct Builder {
             if list.isOrdered {
                 let number = attributes["value"].flatMap { Int($0) } ?? list.next
                 listMarker = "\(number). "
-                list.next = number + (list.isReversed ? -1 : 1)
+                // 番号はほかのサーバーの利用者が書いた値で、Mastodonは範囲を確かめずに通す。端を越える先は端の番号のままにする。
+                let (next, overflowed) = number.addingReportingOverflow(list.isReversed ? -1 : 1)
+                list.next = overflowed ? number : next
             } else {
                 listMarker = "• "
             }
