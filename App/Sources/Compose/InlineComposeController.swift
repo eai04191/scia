@@ -920,7 +920,6 @@ final class InlineComposeController: NSObject {
         }
         button.configuration?.image = UIImage(systemName: item.symbolName)
         button.configuration?.baseForegroundColor = .label
-        button.configuration?.imagePadding = 4
         button.accessibilityLabel = item.title
         button.isHidden = true
         return button
@@ -930,7 +929,7 @@ final class InlineComposeController: NSObject {
         .monospacedDigitFont(forTextStyle: .footnote, compatibleWith: traits)
     }
 
-    /// 左右の余白をなくし、幅を`toolButtonWidth`以上にする。記号は中央に置く。添付の枚数のように文字を添えて44ptを超えるときは、その分だけ広がる。
+    /// 左右の余白をなくし、幅を`toolButtonWidth`以上にする。記号は中央に置く。
     /// 優先度は必須より下げる。行に入りきらずに隠したボタンには、スタックビューが必須の幅0の制約を付けるので、必須にするとぶつかり、幅0の制約のほうが外されて、隠したボタンが44ptのまま残った。
     private func fitToolButtonWidth(_ button: UIButton) {
         button.configuration?.contentInsets.leading = 0
@@ -940,10 +939,9 @@ final class InlineComposeController: NSObject {
         width.isActive = true
     }
 
-    /// ボタンの状態を下書きに合わせる。添付は枚数を添え、注意書きは付けている間だけ色を付ける。
+    /// ボタンの状態を下書きに合わせる。注意書きは付けている間だけ色を付ける。
     private func updateToolButtons() {
         if let media = toolButtons[.media] {
-            media.configuration?.title = model.attachments.isEmpty ? nil : "\(model.attachments.count)"
             media.isEnabled = model.canAttachMedia || mediaPicker != nil
         }
         if let spoiler = toolButtons[.spoiler] {
