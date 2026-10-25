@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -11,7 +12,7 @@ struct RemoteFetchTests {
 
     private func fetch(_ response: StubTransport.Response) -> RemoteFetch {
         let now = now
-        return RemoteFetch(transport: StubTransport([response]), now: { now })
+        return RemoteFetch(client: HTTPClient(transport: StubTransport([response]), retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock(), now: { now }))
     }
 
     @Test func returnsBodyOfSuccessfulResponse() async throws {
@@ -50,9 +51,18 @@ struct RemoteFetchTests {
         }
     }
 
-    /// デバッグのダミー投稿と部品カタログが渡す`data:`のURLは、HTTPの応答がないのでそのまま読む。
-    @Test func readsDataURLWithoutTransport() async throws {
-        let url = try #require(URL(string: "data:image/png;base64,iVBORw=="))
-        #expect(try await RemoteFetch(transport: StubTransport([])).data(from: url) == Data(base64Encoded: "iVBORw=="))
+    /// 画像の上限を超えた応答は、読まずに失敗にする。
+    @Test func refusesImageOverLimit() async throws {
+        let response = StubTransport.Response(statusCode: 200, body: Data(), headers: ["Content-Length": "\(ResponseLimit.image + 1)"])
+        await #expect(throws: ResponseTooLarge(limit: ResponseLimit.image)) { try await fetch(response).data(from: try url()) }
+    }
+
+    /// サーバーが返した`file:`や`data:`のURLで、端末のファイルを読んだり、通信の決まりの外で中身を作ったりしない。
+    @Test(arguments: ["file:///etc/hosts", "data:image/png;base64,iVBORw=="])
+    func refusesNonNetworkURL(_ string: String) async throws {
+        let url = try #require(URL(string: string))
+        await #expect(throws: URLError(.unsupportedURL)) {
+            try await RemoteFetch(client: HTTPClient(transport: URLSessionTransport())).data(from: url)
+        }
     }
 }

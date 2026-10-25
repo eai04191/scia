@@ -114,4 +114,21 @@ struct AvatarImageStoreTests {
         arrival.open()
         try await waitUntil { store.cachedImage(for: key) != nil }
     }
+
+    /// 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない。使う人がメニューを開いたときは、使う人の通信として送る。
+    @Test func loadsAreSentWithTheirOrigin() async throws {
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }.pngData())
+        let origins = Mutex<[RequestOrigin]>([])
+        let store = AvatarImageStore { _ in
+            origins.withLock { $0.append(RequestOrigin.current) }
+            return png
+        }
+        let first = AvatarImageStore.Key(url: try #require(URL(string: "https://example.social/1.png")), maxPixelSize: 8, animates: false)
+        let second = AvatarImageStore.Key(url: try #require(URL(string: "https://example.social/2.png")), maxPixelSize: 8, animates: false)
+
+        _ = try await store.image(for: first)
+        _ = try await store.image(for: second, retriesNow: true)
+
+        #expect(origins.withLock { $0 } == [.automatic, .user])
+    }
 }

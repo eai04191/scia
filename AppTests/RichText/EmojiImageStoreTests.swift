@@ -115,4 +115,21 @@ struct EmojiImageStoreTests {
         try await waitUntil { store.image(for: fresh) != nil }
         #expect(reads.withLock { $0 } == [limited, fresh])
     }
+
+    /// 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない。使う人が見に行った操作は、使う人の通信として送る。
+    @Test func loadsAreSentWithTheirOrigin() async throws {
+        let origins = Mutex<[RequestOrigin]>([])
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in }.pngData())
+        let store = EmojiImageStore(clock: clock, retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { _ in
+            origins.withLock { $0.append(RequestOrigin.current) }
+            return png
+        }
+
+        _ = store.image(for: url)
+        try await waitUntil { origins.withLock { $0.count } == 1 }
+        _ = store.image(for: URL(filePath: "/").appending(path: "other.png"), retriesNow: true)
+        try await waitUntil { origins.withLock { $0.count } == 2 }
+
+        #expect(origins.withLock { $0 } == [.automatic, .user])
+    }
 }

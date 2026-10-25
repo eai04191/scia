@@ -140,12 +140,15 @@ final class AvatarImageStore {
             throw ImageLoadDeferred()
         }
         let fetch = fetch
-        let task = Task<UIImage, any Error> {
-            let data = try await fetch(key.url)
-            guard let image = await Self.decode(data, maxPixelSize: key.maxPixelSize, animates: key.animates) else {
-                throw DecodeError()
+        // 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
+        let task = RequestOrigin.$current.withValue(retriesNow ? .user : .automatic) {
+            Task<UIImage, any Error> {
+                let data = try await fetch(key.url)
+                guard let image = await Self.decode(data, maxPixelSize: key.maxPixelSize, animates: key.animates) else {
+                    throw DecodeError()
+                }
+                return image
             }
-            return image
         }
         inFlight[key] = task
         defer { inFlight[key] = nil }

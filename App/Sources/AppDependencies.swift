@@ -30,8 +30,20 @@ enum AppDependencies {
         CACurrentMediaTime()
     }
 
+    /// アプリの通信の口。デバッグでは、障害の差し込みと、ダミー投稿の`data:`のURLを返す口を挟む。
+    nonisolated static let transport: any HTTPTransport = {
+        #if DEBUG
+        FaultInjectingTransport(base: URLSessionTransport())
+        #else
+        URLSessionTransport()
+        #endif
+    }()
+
+    /// APIの外の通信（画像、ファイル、fxtwitter、リンク先のページ）とログインの入口。ホストごとに止める門を、アプリで共有する。
+    nonisolated static let http = HTTPClient(transport: transport)
+
     /// 画像を、APIの外のURLから取得する。2xx以外の応答の本文を、画像として渡さない。
-    nonisolated static let remoteFetch = RemoteFetch()
+    nonisolated static let remoteFetch = RemoteFetch(client: http)
 
     static let emojiImages = EmojiImageStore { url in
         try await remoteFetch.data(from: url)

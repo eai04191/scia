@@ -77,7 +77,7 @@ final class EmojiImageStore {
         }
         // まだ読んでいない画像も、同じサーバーの`/media_proxy`が制限されている間は読まない（`RetrySchedule.rateLimitScope`）。
         if retriesNow || retry.allowsAutomaticLoad(of: url) {
-            load(url)
+            load(url, origin: retriesNow ? .user : .automatic)
         }
         return nil
     }
@@ -125,9 +125,10 @@ final class EmojiImageStore {
         listeners.append(Listener(owner: owner, onLoad: onLoad))
     }
 
-    private func load(_ url: URL) {
+    /// - Parameter origin: 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
+    private func load(_ url: URL, origin: RequestOrigin) {
         guard loading.insert(url).inserted else { return }
-        Task {
+        RequestOrigin.$current.withValue(origin) { Task {
             defer { loading.remove(url) }
             do {
                 let data = try await fetch(url)
@@ -141,7 +142,7 @@ final class EmojiImageStore {
                 retry.recordFailure(error, for: url)
             }
             notify(url)
-        }
+        } }
     }
 
     struct DecodeError: Error {}
@@ -158,9 +159,10 @@ final class EmojiImageStore {
         image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
     }
 
+    /// 動かすかは行に描くときに決めるため、いつも自動の通信として送る。
     private func loadAnimation(_ url: URL) {
         animationStates[url] = .loading
-        Task {
+        RequestOrigin.$current.withValue(.automatic) { Task {
             let state: AnimationState
             do {
                 let data = try await fetch(url)
@@ -185,7 +187,7 @@ final class EmojiImageStore {
             if case .animated = state {
                 notify(url)
             }
-        }
+        } }
     }
 
     /// 同じ時期に届いた画像をまとめて知らせ、セルの再構成を減らす。

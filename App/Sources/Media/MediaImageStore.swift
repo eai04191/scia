@@ -24,7 +24,7 @@ final class MediaImageStore {
     private var inFlight: [Key: Task<Loaded, any Error>] = [:]
     /// 元のファイルを置くディスクキャッシュ。共有や保存で縮めずに元の形式のまま渡すために残し、ビューアで開き直すときは通信せずにここから読む。
     private let files: MediaFileCache
-    /// 先頭から最初のフレームを作れなかった動画。サーバーのプレビューを出し、読み直さない。通信の失敗は、つながれば作れるため含めない。
+    /// 先頭から最初のフレームを作れなかった動画。サーバーのプレビューを出し、読み直さない。通信の失敗や429、5xxは、待てば作れるため含めない。
     private var failedVideoFrames: Set<URL> = []
     /// 読めなかった画像と動画の最初のフレームを、一覧に描いたときにいつ読み直すか。
     private var retry: RetrySchedule
@@ -88,11 +88,14 @@ final class MediaImageStore {
                     let frame = try await videoFrame(for: request.url, maxPixelSize: request.maxPixelSize)
                     retry.recordSuccess(for: request.url)
                     return frame
-                } catch let error as URLError {
-                    // 通信の失敗は、つながれば作れるため、間隔をおいて作り直す。
-                    retry.recordFailure(error, for: request.url)
                 } catch {
-                    failedVideoFrames.insert(request.url)
+                    // 通信の失敗やサーバーの一時的な障害は、待てば作れるため、間隔をおいて作り直す。
+                    // 範囲に応えないサーバーや、先頭から作れない動画は、作り直しても同じなので覚える。
+                    if HTTPFailure(error)?.isTemporary == true {
+                        retry.recordFailure(error, for: request.url)
+                    } else if HTTPFailure(error) != nil {
+                        failedVideoFrames.insert(request.url)
+                    }
                 }
             }
             return try await image(for: fallback, maxPixelSize: request.maxPixelSize)
@@ -109,9 +112,12 @@ final class MediaImageStore {
             return try await task.value.image
         }
         let fetch = fetch
-        let task = Task<Loaded, any Error> {
-            let prefix = try await VideoFirstFrame.readPrefix { range in try await fetch(url, range) }
-            return Loaded(image: try await Self.makeVideoFrame(from: prefix, maxPixelSize: maxPixelSize), keptOriginal: false)
+        // 一覧に描くための読み込みなので、自動の通信として送り、止められている間は送らない（docs/network.md）。
+        let task = RequestOrigin.$current.withValue(.automatic) {
+            Task<Loaded, any Error> {
+                let prefix = try await VideoFirstFrame.readPrefix { range in try await fetch(url, range) }
+                return Loaded(image: try await Self.makeVideoFrame(from: prefix, maxPixelSize: maxPixelSize), keptOriginal: false)
+            }
         }
         inFlight[key] = task
         defer { inFlight[key] = nil }
@@ -160,7 +166,8 @@ final class MediaImageStore {
         }
         let fetch = fetch
         let files = keepsOriginal ? files : nil
-        let task = Task<Loaded, any Error> {
+        // 一覧に描くための読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
+        let task = RequestOrigin.$current.withValue(retriesNow ? .user : .automatic) { Task<Loaded, any Error> {
             let generation = await files?.generation
             // ビューアで開く画像は、元のファイルがキャッシュにあれば通信せずに使う。壊れていて展開できなければ、通信で取り直して置き直す。
             if let files, let cached = await files.data(for: url), let image = await Self.decode(cached, maxPixelSize: maxPixelSize) {
@@ -176,7 +183,7 @@ final class MediaImageStore {
                 keptOriginal = (try? await files.store(data, named: name, for: url, generation: generation)) != nil
             }
             return Loaded(image: image, keptOriginal: keptOriginal)
-        }
+        } }
         inFlight[key] = task
         defer { inFlight[key] = nil }
         do {
@@ -271,21 +278,23 @@ final class MediaImageStore {
         }
         var request = URLRequest(url: url)
         request.setValue("bytes=\(range.lowerBound)-\(range.upperBound - 1)", forHTTPHeaderField: "Range")
-        let (bytes, response) = try await URLSession.shared.bytes(for: request)
-        // 範囲に応えないサーバーはファイル全体を返すため、読み始める前に止める。
-        guard (response as? HTTPURLResponse)?.statusCode == 206 else {
-            bytes.task.cancel()
+        // 2xx以外は、429や5xxを待てば作れる失敗として、`HTTPStatusError`で返る。
+        let (body, response) = try await AppDependencies.http.open(request, limit: range.count, scope: .host)
+        // 範囲に応えないサーバーはファイル全体を返すため、読み始める前に止める。本文を読まずに手放すと、通信も止まる。
+        guard response.statusCode == 206 else {
             throw RangeNotSupported()
         }
         var data = Data()
         data.reserveCapacity(range.count)
-        for try await byte in bytes {
-            data.append(byte)
+        for try await chunk in body {
+            data.append(chunk)
             if data.count >= range.count {
                 break
             }
         }
-        return data
+        // 取り消されると、列は失敗せずに終わる。途中までの先頭から、最初のフレームを作らない。
+        try Task.checkCancellation()
+        return Data(data.prefix(range.count))
     }
 
     /// 元のファイルの名前。共有先でファイル名として見えるため、URLの名前を残し、拡張子は中身の形式に合わせる。

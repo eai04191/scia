@@ -148,6 +148,44 @@ struct MediaImageStoreTests {
         #expect(rangeReads.withLock { $0 } == 2)
         #expect(store.cachedThumbnail(for: request) == nil)
     }
+
+    /// サーバーが混んでいるときの429や5xxは、待てば作れるため、プレビューを出したうえで間隔をおいてから作り直す。起動中ずっとプレビューのままにしない。
+    @Test(arguments: [429, 503])
+    func videoFrameIsRetriedAfterTemporaryStatus(statusCode: Int) async throws {
+        let png = try pngData()
+        let rangeReads = Mutex(0)
+        let clock = TestClock()
+        let store = MediaImageStore(files: .temporary(), clock: clock, retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { _, range in
+            guard range != nil else { return png }
+            rangeReads.withLock { $0 += 1 }
+            throw HTTPStatusError(statusCode: statusCode)
+        }
+        let video = try #require(URL(string: "https://files.example.social/original/abc.mp4"))
+        let preview = try #require(URL(string: "https://files.example.social/small/abc.png"))
+        let request = MediaThumbnailRequest(url: video, maxPixelSize: 1_024, source: .videoFrame(fallback: preview))
+
+        _ = try await store.thumbnail(for: request)
+        #expect(rangeReads.withLock { $0 } == 1)
+
+        clock.advance(by: .seconds(5))
+        _ = try await store.thumbnail(for: request)
+        #expect(rangeReads.withLock { $0 } == 2, "一時的な失敗のあとに作り直しませんでした")
+    }
+
+    /// 一覧に描くための読み込みは自動の通信として送り、止められている間は送らない。ビューアで開くときは、使う人の通信として送る。
+    @Test func loadsAreSentWithTheirOrigin() async throws {
+        let png = try pngData()
+        let origins = Mutex<[RequestOrigin]>([])
+        let store = MediaImageStore(files: .temporary()) { _, _ in
+            origins.withLock { $0.append(RequestOrigin.current) }
+            return png
+        }
+
+        _ = try await store.image(for: try #require(URL(string: "https://files.example.social/1.png")), maxPixelSize: 8)
+        _ = try await store.image(for: try #require(URL(string: "https://files.example.social/2.png")), maxPixelSize: 8, keepsOriginal: true, retriesNow: true)
+
+        #expect(origins.withLock { $0 } == [.automatic, .user])
+    }
 }
 
 /// 読めなかった画像は、一覧に描いたときは間隔をおいてから読み直し、ビューアを開いたときはすぐ読み直す。
