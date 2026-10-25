@@ -49,7 +49,7 @@ struct XPostTests {
 
     @Test func decodesPhoto() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_photo")])
-        let post = try await XPostClient(transport: transport).post(id: "2110205221557453003")
+        let post = try await XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock())).post(id: "2110205221557453003")
 
         #expect(post.authorName == "【公式】beatmania IIDX")
         #expect(post.authorScreenName == "IIDX_OFFICIAL")
@@ -77,7 +77,7 @@ struct XPostTests {
     /// 位置はUnicodeのスカラー値で数えるため、前にある絵文字（UTF-16で2つ）の分だけずれない。末尾の添付ファイルのt.coは見せない。
     @Test func linksFacets() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_facets")])
-        let post = try await XPostClient(transport: transport).post(id: "1899811117221761267")
+        let post = try await XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock())).post(id: "1899811117221761267")
 
         #expect(post.text.plainText == "🚀 Status pages now support 11 languages! 🌍\n\nLearn more in our latest announcement 👉 uptimerobot.com/blog/update-st… \n\n#UptimeRobot #StatusPages #uptimemonitoring")
         let links = links(of: post.text)
@@ -93,7 +93,7 @@ struct XPostTests {
     /// Xの本文は`<`などを文字参照のまま返し、位置も文字参照のまま数える。切り分けてから文字に戻す。
     @Test func decodesEntitiesAfterSlicing() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_escaped")])
-        let post = try await XPostClient(transport: transport).post(id: "1683920951807971329")
+        let post = try await XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock())).post(id: "1683920951807971329")
 
         #expect(post.text.plainText.contains("than the Twitter <iframe>\n"))
         #expect(post.text.plainText.hasSuffix("and more\n\nvercel.com/blog/introduci…"))
@@ -103,7 +103,7 @@ struct XPostTests {
     /// 長い投稿は、見せる範囲をUTF-16の長さで返すため、全文を見せる。本文にない位置を指す添付ファイルのfacetは使わない。メンションはXのページへのリンクにする。
     @Test func linksNoteTweet() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_note_tweet")])
-        let post = try await XPostClient(transport: transport).post(id: "2111375640717033777")
+        let post = try await XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock())).post(id: "2111375640717033777")
 
         #expect(post.text.plainText.hasPrefix("🚀 DeepSeek-V4.1-Flash-1017 is here!\n"))
         #expect(post.text.plainText.hasSuffix("with the new model.\n\n1/4"))
@@ -126,7 +126,7 @@ struct XPostTests {
 
     @Test func decodesVideoAndGIF() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_video"), try .fixture("fxtwitter_gif")])
-        let client = XPostClient(transport: transport)
+        let client = XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock()))
 
         let video = try #require(try await client.post(id: "2109995948407476369").media.first)
         #expect(video.type == .video)
@@ -141,19 +141,69 @@ struct XPostTests {
     @Test func failsWhenPostIsMissing() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_not_found", statusCode: 404)])
 
-        await #expect(throws: XPostClient.Unavailable(statusCode: 404)) {
-            try await XPostClient(transport: transport).post(id: "1")
+        await #expect(throws: HTTPStatusError(statusCode: 404)) {
+            try await XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock())).post(id: "1")
         }
     }
 
-    /// 同じ投稿を並べた行が続けて求めても、読むのは1回。読み終えたら知らせる。失敗した投稿は読み直さない。
+    private static let retryPolicy: @MainActor () -> RetrySchedule.Policy = { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }
+
+    /// fxtwitterが混んでいるときの429や5xx、通信の失敗は、待てば読めるため、行を描き直したときに間隔をおいて読み直す。
+    /// 再開の時刻が示されていれば、それより前には読み直さない。起動中ずっとサーバーのカードのままにしない。
+    @MainActor @Test(arguments: [
+        HTTPStatusError(statusCode: 429, retryAfter: .seconds(30)) as any Error & Sendable,
+        HTTPStatusError(statusCode: 503),
+        URLError(.notConnectedToInternet),
+    ])
+    func storeRetriesTemporaryFailureLater(error: any Error & Sendable) async throws {
+        let counter = FetchCounter()
+        let clock = TestClock()
+        let post = XPost(id: "1", url: try url("https://x.com/a/status/1"), authorName: "A", authorScreenName: "a", text: .plain("本文", emojis: []))
+        let store = XPostStore(clock: clock, retryPolicy: Self.retryPolicy) { id in
+            await counter.increment(id)
+            if await counter.count(id) == 1 { throw error }
+            return post
+        }
+        let wait = HTTPFailure(error).flatMap { failure -> Duration? in
+            if case .temporary(let retryAfter) = failure { max(retryAfter ?? .zero, .seconds(5)) } else { nil }
+        } ?? .seconds(5)
+
+        store.request(id: "1")
+        try await waitUntil { store.hasFailed(id: "1") }
+        clock.advance(by: wait - .seconds(1))
+        store.request(id: "1")
+        // 読み直すなら、あとから頼んだ投稿より先に読み始める。あとから頼んだ投稿を読み始めるまで待ってから、読み直していないことを確かめる。
+        store.request(id: "2")
+        try await waitUntil { await counter.count("2") == 1 }
+        #expect(await counter.count("1") == 1, "間隔の前に読み直しました")
+
+        clock.advance(by: .seconds(1))
+        store.request(id: "1")
+        try await waitUntil { store.post(id: "1") != nil }
+        #expect(await counter.count("1") == 2)
+    }
+
+    /// 行に描いたときの読み込みなので、自動の通信として送り、止められている間は送らない。
+    @MainActor @Test func storeFetchesAsAutomaticRequest() async throws {
+        let origins = FetchOrigins()
+        let post = XPost(id: "1", url: try url("https://x.com/a/status/1"), authorName: "A", authorScreenName: "a", text: .plain("本文", emojis: []))
+        let store = XPostStore(retryPolicy: Self.retryPolicy) { _ in
+            await origins.append(RequestOrigin.current)
+            return post
+        }
+        store.request(id: "1")
+        try await waitUntil { store.post(id: "1") != nil }
+        #expect(await origins.values == [.automatic])
+    }
+
+    /// 同じ投稿を並べた行が続けて求めても、読むのは1回。読み終えたら知らせる。待っても読めない失敗（404など）の投稿は読み直さない。
     @MainActor @Test func storeFetchesOncePerPost() async throws {
         let counter = FetchCounter()
         let post = XPost(id: "1", url: try url("https://x.com/a/status/1"), authorName: "A", authorScreenName: "a", text: .plain("本文", emojis: []))
-        let store = XPostStore { id in
+        let store = XPostStore(retryPolicy: Self.retryPolicy) { id in
             await counter.increment(id)
             if id == "1" { return post }
-            throw XPostClient.Unavailable(statusCode: 404)
+            throw HTTPStatusError(statusCode: 404)
         }
         var loaded: [String] = []
         try await confirmation { done in
@@ -182,7 +232,7 @@ struct XPostTests {
     @MainActor @Test func storeDeliversWithoutFetching() async throws {
         let counter = FetchCounter()
         let post = XPost(id: "1", url: try url("https://x.com/a/status/1"), authorName: "A", authorScreenName: "a", text: .plain("本文", emojis: []))
-        let store = XPostStore { id in
+        let store = XPostStore(retryPolicy: Self.retryPolicy) { id in
             await counter.increment(id)
             return post
         }
@@ -212,5 +262,13 @@ private actor FetchCounter {
 
     func count(_ id: String) -> Int {
         counts[id] ?? 0
+    }
+}
+
+private actor FetchOrigins {
+    private(set) var values: [RequestOrigin] = []
+
+    func append(_ origin: RequestOrigin) {
+        values.append(origin)
     }
 }
