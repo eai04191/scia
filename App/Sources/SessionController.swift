@@ -1111,6 +1111,8 @@ final class SessionController {
     func myAccount() async throws -> Account {
         if let cachedMyAccount { return cachedMyAccount }
         let account = try await client.account(client.credential.accountID)
+        // 読む間にプロフィールを保存していれば、保存した方が新しいので、読み始めた時点の応答で戻さない。
+        if let cachedMyAccount { return cachedMyAccount }
         cachedMyAccount = account
         return account
     }
