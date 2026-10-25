@@ -461,11 +461,12 @@ struct ComposeModelMediaTests {
         #expect(!model.isSensitive)
     }
 
-    /// ログアウトなどで投稿欄の持ち主を閉じたら、読み込みやアップロードの途中の添付も止める。
+    /// ログアウトなどで投稿欄の持ち主を閉じたら、読み込みやアップロードの途中の添付も止め、頼んだバックグラウンドの時間を返す。
     @Test func closingSessionCancelsUpload() async throws {
         let server = FakeServer()
+        let background = BackgroundTimeRecorder()
         let session = TaskScope()
-        let model = ComposeModel(tasks: session.child(), myAccountID: "1", media: server.service) { _ in }
+        let model = ComposeModel(tasks: session.child(), myAccountID: "1", media: server.service, backgroundTime: background.request) { _ in }
         model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         let photo = try picked("a")
         let loading = Gate()
@@ -476,12 +477,15 @@ struct ComposeModelMediaTests {
             },
         ])
         try await settle { loading.waiterCount == 1 }
+        #expect(background.requestedNames == ["upload attachment"])
+        #expect(background.heldCount == 1)
 
         session.close()
         try await settle { session.runningCount == 0 }
 
         #expect(loading.waiterCount == 0)
         #expect(server.uploads.isEmpty)
+        #expect(background.heldCount == 0)
     }
 
     @Test func cannotPostUntilEveryUploadFinishes() async throws {

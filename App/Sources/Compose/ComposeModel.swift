@@ -57,6 +57,8 @@ final class ComposeModel {
     @ObservationIgnored private let media: ComposeMediaService
     /// 下書きの送信とアップロードの持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで閉じると、送っている途中のものも止める。
     @ObservationIgnored let tasks: TaskScope
+    /// 送っている途中にバックグラウンドへ移っても、送り終えるまでアプリを止めないよう頼む。終えるときに呼ぶものを返す。
+    @ObservationIgnored private let backgroundTime: @MainActor (String) -> @MainActor () -> Void
     @ObservationIgnored private var uploadTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
     @ObservationIgnored private var thumbnailTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
     /// 代替テキストを送っている添付。送っている間は、書き戻してサーバーの値と同じになっても、送り終えるまで投稿させない。
@@ -76,9 +78,11 @@ final class ComposeModel {
         replyTo: Status? = nil,
         myAccountID: String,
         media: ComposeMediaService = .unavailable,
+        backgroundTime: @escaping @MainActor (String) -> @MainActor () -> Void = BackgroundTime.request,
         post: @escaping (StatusDraft) async throws -> Void
     ) {
         self.tasks = tasks
+        self.backgroundTime = backgroundTime
         let draft = replyTo.map { StatusDraft.reply(to: $0, myAccountID: myAccountID) } ?? StatusDraft()
         initialDraft = draft
         text = draft.text
@@ -299,7 +303,11 @@ final class ComposeModel {
         guard canPost else { return }
         UserAction.submitPost.record()
         isPosting = true
-        defer { isPosting = false }
+        let endBackgroundTime = backgroundTime("post status")
+        defer {
+            isPosting = false
+            endBackgroundTime()
+        }
         let draft = submission(of: draftToPost)
         lastSubmitted = draft
         do {
@@ -621,6 +629,8 @@ extension ComposeModel {
     /// ファイルを読み込み、アップロードし、サーバーでの変換が済むまで待つ。途中で添付から外されたら、何も書き戻さない。
     private func upload(_ id: DraftAttachment.ID) async {
         guard let local = localMedia[id], attachments.contains(where: { $0.id == id }) else { return }
+        let endBackgroundTime = backgroundTime("upload attachment")
+        defer { endBackgroundTime() }
         localMedia[id]?.failure = nil
         localMedia[id]?.descriptionFailure = nil
         var sentDescription: String?

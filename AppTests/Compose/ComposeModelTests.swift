@@ -58,11 +58,32 @@ struct ComposeModelTests {
         #expect(model.canPost)
     }
 
-    /// ログアウトなどで投稿欄の持ち主を閉じたら、送っている途中の投稿も止める。
+    /// 送っている途中にバックグラウンドへ移っても送り終えられるよう、送っている間だけバックグラウンドの時間を頼む。
+    @Test func holdsBackgroundTimeWhilePosting() async throws {
+        let background = BackgroundTimeRecorder()
+        let gate = Gate()
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1", backgroundTime: background.request) { _ in
+            try await gate.wait()
+        }
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        model.text = "こんにちは"
+
+        let posting = Task { await model.submit() }
+        try await waitUntil { gate.waiterCount == 1 }
+        #expect(background.heldCount == 1)
+        gate.open()
+        await posting.value
+
+        #expect(background.requestedNames == ["post status"])
+        #expect(background.heldCount == 0)
+    }
+
+    /// ログアウトなどで投稿欄の持ち主を閉じたら、送っている途中の投稿も止め、頼んだバックグラウンドの時間を返す。
     @Test func closingSessionCancelsPosting() async throws {
+        let background = BackgroundTimeRecorder()
         let gate = Gate()
         let session = TaskScope()
-        let model = ComposeModel(tasks: session.child(), myAccountID: "1") { _ in
+        let model = ComposeModel(tasks: session.child(), myAccountID: "1", backgroundTime: background.request) { _ in
             try await gate.wait()
         }
         model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
@@ -75,6 +96,7 @@ struct ComposeModelTests {
         try await waitUntil { session.runningCount == 0 }
         #expect(gate.waiterCount == 0)
         #expect(!model.isPosting)
+        #expect(background.heldCount == 0)
     }
 
     @Test func changedContentIsSentWithNewIdempotencyKey() async {
