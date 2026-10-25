@@ -51,6 +51,13 @@ targets:
           - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
         # ブランチの切り替えやcommitはXcodeの入力として追えないため、毎回走らせる
         basedOnDependencyAnalysis: false
+      - name: Strip Debug URL Scheme
+        script: '"$SRCROOT/Tools/strip-debug-url-scheme.sh"'
+        # 入力に指定しないと、Info.plistを作る処理より先に走り、消した登録が書き戻される
+        inputFiles:
+          - $(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)
+        # 消したかどうかはビルドの設定で決まり、Xcodeの入力として追えないため、毎回走らせる
+        basedOnDependencyAnalysis: false
       - name: Render App Icon Previews
         script: '"$SRCROOT/Tools/render-app-icon-previews.sh"'
         inputFiles:
@@ -101,7 +108,7 @@ targets:
         # iPhoneでは、これがないとCADisplayLinkやCAAnimationで指定したフレームレートが60Hzに抑えられる
         CADisableMinimumFrameDurationOnPhone: true
         # agentが`xcrun simctl openurl`でデバッグメニューの操作を呼ぶためのスキーム（App/Sources/Debug/DebugURL.swift）。
-        # Info.plistは構成ごとに分けていないためReleaseにも登録されるが、受け取る処理が#if DEBUGの中にあるので、Releaseでは開いても何もしない。
+        # Info.plistは構成ごとに分けられないため、DEBUGでコンパイルしないビルドでは、ビルドしたあとにTools/strip-debug-url-scheme.shで消す。
         CFBundleURLTypes:
           # 他のアプリやショートカットから画面を開くスキーム（App/Sources/Navigation/AppURL.swift）。
           # OAuthの戻り先のnet.mizle.sciaはASWebAuthenticationSessionが受け取るため、取り合わないよう別にする。
