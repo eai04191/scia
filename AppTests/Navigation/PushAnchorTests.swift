@@ -18,7 +18,7 @@ struct PushAnchorTests {
             }
             self.navigations = navigations
             let layout = MenuLayout<TabItem>(elements: [.item(.home, isVisible: true), .item(.notifications, isVisible: true), .more, .item(.local, isVisible: true), .item(.federated, isVisible: true)])
-            arrangement = TabArrangement(navigation: { navigations[$0] }, placement: TabPlacement(layout: layout), restoring: .home)
+            arrangement = TabArrangement(navigation: { navigations[$0] }, layout: layout, restoring: .home)
             let scene = try #require(
                 UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
                 "テストのホストアプリにウィンドウシーンがありません"

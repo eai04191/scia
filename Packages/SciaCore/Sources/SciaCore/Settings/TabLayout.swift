@@ -231,10 +231,21 @@ public struct TabPlacement: Equatable, Sendable {
     /// 切り替えタブにまとめる項目。並びの順。空なら切り替えタブを出さない。
     public let switchable: [TabItem]
 
-    public init(layout: MenuLayout<TabItem>) {
+    /// 横幅の狭いタブバーに、UIKitが「その他」を出さずに並べられるタブの数。
+    public static let compactTabBarCapacity = 5
+
+    /// - Parameter tabBarCapacity: タブバーに並べられるタブの数。切り替えタブも1つに数える。nilなら数を限らない。
+    ///   境目より上の項目が入りきらなければ、入りきらない分を、境目より下の項目の前に並べて切り替えタブにまとめる。
+    ///   UIKitの「その他」は、選んでいるタブ（`selectedTab`）を変えず、中の項目の画面を自分のナビゲーションへ移すため、タブを移れなくなるから。
+    public init(layout: MenuLayout<TabItem>, tabBarCapacity: Int?) {
         let groups = layout.groups
-        let tabs = groups.main.flatMap(\.items)
-        let switchable = groups.more.flatMap(\.items)
+        var tabs = groups.main.flatMap(\.items)
+        var switchable = groups.more.flatMap(\.items)
+        if let tabBarCapacity, tabs.count + (switchable.isEmpty ? 0 : 1) > tabBarCapacity {
+            let kept = tabBarCapacity - 1
+            switchable = Array(tabs[kept...]) + switchable
+            tabs = Array(tabs[..<kept])
+        }
         if tabs.isEmpty, switchable.isEmpty {
             // 設定画面では最後の1つを無効にできないので、保存した値を手で壊したときにしか起きない。
             // タブバーを空にはできないため、ホームだけを並べる。

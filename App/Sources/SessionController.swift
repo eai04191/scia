@@ -259,7 +259,7 @@ final class SessionController {
                 case .list, .hashtag, .accountHashtag: serverFeeds.navigation(for: item)
                 }
             },
-            placement: TabPlacement(layout: AppDependencies.settings.tabLayout(for: credential.handle)),
+            layout: AppDependencies.settings.tabLayout(for: credential.handle),
             restoring: AppDependencies.settings.switchTabItem(for: credential.handle)
         )
         tabs.onSwitchSelectionChange = { [handle = credential.handle] item in
@@ -488,13 +488,7 @@ final class SessionController {
                 let layout = AppDependencies.settings.tabLayout(for: handle)
                 // ユーザーのハッシュタグは、「タブから外す」で並びから外したら、一覧を止めて捨てる。
                 tabs.forget(serverFeeds.removeAll(where: \.isAccountHashtag, except: Set(Self.accountHashtags(in: layout))))
-                let placement = TabPlacement(layout: layout)
-                // 名前を変えたユーザーのハッシュタグは、同じ項目のままなので並びの変化にならない。リストの名前の変更と違い、使う人が変えたものなので、すぐタブに出す。
-                // タブを作り直すかは、並べるときに名前を比べて決める（`TabArrangement`）。
-                let isRenamed = (placement.tabs + placement.switchable).map(\.rawValue) != (tabs.placement.tabs + tabs.placement.switchable).map(\.rawValue)
-                if placement != tabs.placement || isRenamed {
-                    tabs.apply(placement)
-                }
+                tabs.apply(layout)
                 observeTabLayout()
             }
         }

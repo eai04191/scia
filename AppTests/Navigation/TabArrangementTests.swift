@@ -50,7 +50,7 @@ struct TabArrangementTests {
         init(_ layout: MenuLayout<TabItem>, restoring: TabItem? = nil) throws {
             let made = Navigations()
             self.made = made
-            arrangement = TabArrangement(navigation: made.make, placement: TabPlacement(layout: layout), restoring: restoring)
+            arrangement = TabArrangement(navigation: made.make, layout: layout, restoring: restoring)
             let scene = try #require(
                 UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first,
                 "テストのホストアプリにウィンドウシーンがありません"
@@ -62,7 +62,7 @@ struct TabArrangementTests {
         }
 
         func apply(_ layout: MenuLayout<TabItem>) {
-            arrangement.apply(TabPlacement(layout: layout))
+            arrangement.apply(layout)
             window.layoutIfNeeded()
         }
 
@@ -124,6 +124,39 @@ struct TabArrangementTests {
         harness.apply(Self.layout(tabs: [.home, .local, .federated], switchable: [.notifications], disabled: [.notifications]))
         #expect(harness.tabIdentifiers == ["home", "local", "federated"])
         #expect(harness.arrangement.selectedNavigation === harness.navigations[.local])
+    }
+
+    /// 横幅の狭いタブバーに入りきらない項目は、UIKitの「その他」に任せず切り替えタブに入れ、開いたあともほかのタブへ移れる。
+    @Test func overflowingTabsGoToSwitchTabInsteadOfMore() throws {
+        let harness = try Harness(Self.layout(tabs: [.home, .notifications, .local, .federated, .bookmarks, .favourites], switchable: []))
+        #expect(harness.tabIdentifiers == ["home", "notifications", "local", "federated", TabArrangement.switchIdentifier])
+        #expect(harness.switchTitle == "ブックマーク")
+
+        harness.arrangement.show(.favourites)
+        #expect(harness.arrangement.isShowing(.favourites))
+        #expect(harness.arrangement.selectedNavigation === harness.navigations[.favourites])
+
+        harness.arrangement.show(.home)
+        #expect(harness.arrangement.isShowing(.home))
+        #expect(harness.arrangement.tabBarController.selectedTab?.identifier == "home")
+    }
+
+    /// 横幅の広いiPadのタブバーになったら、数を限らず直接並べ直し、見ていた項目を開いたままにする。狭くなったら切り替えタブに戻す。
+    @Test func regularWidthPadPlacesEveryTabDirectly() throws {
+        let harness = try Harness(Self.layout(tabs: [.home, .notifications, .local, .federated, .bookmarks, .favourites], switchable: []))
+        harness.arrangement.show(.favourites)
+
+        harness.arrangement.tabBarController.traitOverrides.userInterfaceIdiom = .pad
+        harness.arrangement.tabBarController.traitOverrides.horizontalSizeClass = .regular
+        harness.window.layoutIfNeeded()
+        #expect(harness.tabIdentifiers == ["home", "notifications", "local", "federated", "bookmarks", "favourites"])
+        #expect(harness.arrangement.isShowing(.favourites))
+        #expect(harness.arrangement.selectedNavigation === harness.navigations[.favourites])
+
+        harness.arrangement.tabBarController.traitOverrides.horizontalSizeClass = .compact
+        harness.window.layoutIfNeeded()
+        #expect(harness.tabIdentifiers == ["home", "notifications", "local", "federated", TabArrangement.switchIdentifier])
+        #expect(harness.arrangement.isShowing(.favourites))
     }
 
     /// 通知の未読の数は、通知を置いた場所のタブに出す。

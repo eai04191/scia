@@ -17,6 +17,8 @@ final class TabArrangement {
     var onSwitchSelectionChange: ((TabItem) -> Void)?
 
     private(set) var placement: TabPlacement
+    /// 使う人が決めた並び。タブバーに並べられる数が変わったら、この並びから振り分け直す。
+    private var layout: MenuLayout<TabItem>
     /// 作った項目ごとのナビゲーション。
     private var navigations: [TabItem: UINavigationController] = [:]
     /// 項目のナビゲーションを作る。作れない項目ならnil。
@@ -40,13 +42,37 @@ final class TabArrangement {
 
     /// - Parameter navigation: 項目のナビゲーションを作る。項目ごとに1回だけ呼ぶ。
     /// - Parameter restoring: 前に切り替えタブで開いていた項目。まだ切り替えタブにあれば、そこから開く。
-    init(navigation: @escaping (TabItem) -> UINavigationController?, placement: TabPlacement, restoring: TabItem? = nil) {
+    init(navigation: @escaping (TabItem) -> UINavigationController?, layout: MenuLayout<TabItem>, restoring: TabItem? = nil) {
         makeNavigation = navigation
-        self.placement = placement
+        self.layout = layout
         tabBarController = UITabBarController(tabs: [])
+        placement = TabPlacement(layout: layout, tabBarCapacity: Self.tabBarCapacity(for: tabBarController.traitCollection))
         switchTab = Self.makeSwitchTab(for: .home, container: switchContainer)
         restoredSwitchSelection = restoring
         apply(placement)
+        // Macで窓の幅を変えたときなど、並べられる数が変わったら振り分け直す。
+        tabBarController.registerForTraitChanges([UITraitHorizontalSizeClass.self, UITraitUserInterfaceIdiom.self]) { [weak self] (_: UITabBarController, _: UITraitCollection) in
+            guard let self else { return }
+            apply(self.layout)
+        }
+    }
+
+    /// タブバーに並べられるタブの数。横幅の広いiPadのタブバーは、上に出て横にスクロールするので数を限らない。
+    /// ほかは、UIKitが「その他」を出さずに並べられる数にする。「その他」は、選んでいるタブを変えず、中の項目の画面を自分のナビゲーションへ移すため、Sciaの作りとぶつかる。
+    private static func tabBarCapacity(for traits: UITraitCollection) -> Int? {
+        traits.userInterfaceIdiom == .pad && traits.horizontalSizeClass == .regular ? nil : TabPlacement.compactTabBarCapacity
+    }
+
+    /// 並びを反映する。振り分けが変わらず、タブの名前も変わらなければ、タブバーに触らない。
+    func apply(_ layout: MenuLayout<TabItem>) {
+        self.layout = layout
+        let placement = TabPlacement(layout: layout, tabBarCapacity: Self.tabBarCapacity(for: tabBarController.traitCollection))
+        // 名前を変えたユーザーのハッシュタグは、同じ項目のままなので振り分けの変化にならない。リストの名前の変更と違い、使う人が変えたものなので、すぐタブに出す。
+        // タブを作り直すかは、並べるときに名前を比べて決める。
+        let isRenamed = (placement.tabs + placement.switchable).map(\.rawValue) != (self.placement.tabs + self.placement.switchable).map(\.rawValue)
+        if placement != self.placement || isRenamed {
+            apply(placement)
+        }
     }
 
     /// 作ったすべての項目のナビゲーション。並びから外した項目のものも含む。
@@ -124,7 +150,7 @@ final class TabArrangement {
         applyBadges()
     }
 
-    func apply(_ placement: TabPlacement) {
+    private func apply(_ placement: TabPlacement) {
         let shown = shownItem
         self.placement = placement
         // 使う人が名前を変えたユーザーのハッシュタグは、作ってあるタブを、新しい名前で作り直す。無効にしている間に変えた名前も、有効に戻したときに出す。
