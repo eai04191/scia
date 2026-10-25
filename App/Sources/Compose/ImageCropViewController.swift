@@ -52,6 +52,7 @@ final class ImageCropViewController: UIViewController {
     private let scrollView = UIScrollView()
     private let imageView = UIImageView()
     private let overlay = CropOverlayView()
+    private lazy var cropElement = CropAccessibilityElement(accessibilityContainer: canvas)
     private let spinner = UIActivityIndicatorView(style: .medium)
     private let cancelButton = UIButton(configuration: .glass())
     private let doneButton = UIButton(configuration: .prominentGlass())
@@ -138,6 +139,25 @@ final class ImageCropViewController: UIViewController {
         overlay.isHidden = true
         overlay.addGestureRecognizer(UIPanGestureRecognizer(target: self, action: #selector(handleResize(_:))))
         canvas.addSubview(overlay)
+        // 枠のハンドルと画像の位置は指でしか動かせないため、VoiceOverには、拡大縮小と範囲を動かす操作を持つ1つの要素として出す。
+        // 枠の形は縦横比のボタンで選ぶ。
+        cropElement.accessibilityLabel = "切り抜く範囲"
+        cropElement.frame = { [weak self] in self?.box ?? .zero }
+        cropElement.viewport = { [weak self] in
+            guard let self, !self.overlay.isHidden else { return nil }
+            return self.scrollView.cropViewport(box: self.box)
+        }
+        // 回転や、枠を真ん中へ戻す動きの途中なら、止めて見えている形にしてから範囲を読む。止める前の枠で計算すると、止めたあとの枠とずれる。
+        cropElement.willChange = { [weak self] in
+            self?.finishRotation()
+            self?.cancelRecenter()
+            self?.stopRecentering()
+        }
+        cropElement.apply = { [weak self] viewport in
+            self?.scrollView.apply(viewport)
+            self?.updateResetButton()
+        }
+        canvas.accessibilityElements = [cropElement]
         spinner.color = .white
         spinner.startAnimating()
         view.addSubview(spinner)

@@ -27,6 +27,7 @@ final class ProfileImageCropViewController: UIViewController {
     private let avatarShape: AvatarShape
     private let aspectControl = UISegmentedControl()
     private let touchArea = CropTouchArea()
+    private lazy var cropElement = CropAccessibilityElement(accessibilityContainer: touchArea)
     private let scrollView = UIScrollView()
     private let imageView = UIImageView()
     private let dimming = CAShapeLayer()
@@ -88,9 +89,15 @@ final class ProfileImageCropViewController: UIViewController {
         outline.lineWidth = 1
         touchArea.layer.addSublayer(dimming)
         touchArea.layer.addSublayer(outline)
-        touchArea.isAccessibilityElement = true
-        touchArea.accessibilityLabel = navigationItem.title
-        touchArea.accessibilityHint = "ピンチで拡大し、ドラッグで位置を選びます"
+        // ピンチとドラッグの代わりに、VoiceOverでは拡大縮小と範囲を動かす操作で選ぶ。
+        cropElement.accessibilityLabel = navigationItem.title
+        cropElement.frame = { [weak self] in self?.scrollView.frame ?? .zero }
+        cropElement.viewport = { [weak self] in
+            guard let self else { return nil }
+            return self.scrollView.cropViewport(box: CGRect(origin: .zero, size: self.scrollView.bounds.size))
+        }
+        cropElement.apply = { [weak self] viewport in self?.scrollView.apply(viewport) }
+        touchArea.accessibilityElements = [cropElement]
         if kind == .header {
             configureAspectControl()
         }
