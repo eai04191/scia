@@ -203,15 +203,17 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private(set) var unreadCount = 0
     /// スクロール位置を補正している間は、途中の表示を既読として報告しない。
     private var isRestoringAnchor = false
-    /// 最上部へスプリングで動かしている間、毎フレーム経過時間を渡すもの。
-    private var topScrollTicker: FrameTicker?
-    /// 最上部へスプリングで動かすときに、毎フレームの経過時間を送る元。テストでは手で送る元に替える。
+    /// 最上部や投稿へスプリングで動かしている間、毎フレーム経過時間を渡すもの。
+    private var springScrollTicker: FrameTicker?
+    /// 最上部や投稿へスプリングで動かすときに、毎フレームの経過時間を送る元。テストでは手で送る元に替える。
     var frameSource: any FrameSource = DisplayLinkFrameSource.shared
-    /// 最上部へ動かしている間の、スプリングの位置の進め方と今の速さ。
-    private var topScroll: SpringScroll?
-    /// 最上部へ動かしている間だけ有効にし、指が触れた時点で止める。触れたタッチは中身に渡さない。
+    /// スプリングで動かしている間の、スプリングの位置の進め方と今の速さ。
+    private var springScroll: SpringScroll?
+    /// スプリングで動かしている行き先。
+    private var springScrollDestination = SpringScrollDestination.top
+    /// スプリングで動かしている間だけ有効にし、指が触れた時点で止める。触れたタッチは中身に渡さない。
     /// UIKitのスクロールと同じく、動いている一覧に触れて止めたつもりで、指の下の画像やリンクが開かないようにするため。
-    private lazy var scrollToTopInterruption = makeScrollToTopInterruption()
+    private lazy var springScrollInterruption = makeSpringScrollInterruption()
     /// 指で動かしているスクロールの始まり。止まったら違和感レポート用に記録する。
     private var scrollStart: (offset: CGFloat, time: CFTimeInterval)?
     private let scrollHitches = ScrollHitchMonitor()
@@ -330,7 +332,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.hidesTopEdgeEffectOnMac()
         collectionView.delegate = self
         collectionView.prefetchDataSource = self
-        collectionView.addGestureRecognizer(scrollToTopInterruption)
+        collectionView.addGestureRecognizer(springScrollInterruption)
         // タブバーの上の投稿欄で書いている間も、読み進めるだけならキーボードを閉じない。キーボードまで引き下ろしたら閉じる。
         collectionView.keyboardDismissMode = .interactive
         refreshControl.addAction(UIAction { [weak self] _ in self?.beginRefresh() }, for: .valueChanged)
@@ -1015,9 +1017,18 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             }
         }
         guard let found, let indexPath = dataSource.indexPath(for: found) else { return false }
-        // 最上部へ動かしている途中なら、それをやめる。続けると、返信先へ動かす位置と取り合う。
-        stopScrollingToTop()
-        collectionView.scrollToItem(at: indexPath, at: position, animated: animated)
+        if animated {
+            // 最上部へ動かしている途中なら、速さを持ち越して行き先だけ替える。
+            startSpringScroll(
+                to: .item(found, position),
+                duration: tuning.value(of: TuningCatalog.scrollToStatusDuration),
+                bounce: tuning.value(of: TuningCatalog.scrollToStatusBounce)
+            )
+        } else {
+            // 最上部へ動かしている途中なら、それをやめる。続けると、投稿へ動かした位置と取り合う。
+            stopSpringScroll()
+            collectionView.scrollToItem(at: indexPath, at: position, animated: false)
+        }
         return true
     }
 
@@ -1084,26 +1095,41 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         )
     }
 
-    /// 最上部へスプリングで動かす。UIKitのスクロールのアニメーションは時間も曲線も変えられないため、毎フレーム位置を置く。
-    ///
-    /// 上のセルは表示されたときに見積もりから実寸へ変わり、UICollectionViewがそのぶん位置を補正する。
-    /// 動いている途中に新着を足したときも、読んでいる位置を保つためにずらす。どちらも、ずれた位置から速さを持ち越して
-    /// 最上部へ向かうため、中身は飛ばず、止まり直しもしない。すでに動かしていれば、速さを持ち越して時間とバウンスだけ替える。
-    /// 動いている途中に指が触れたら止め、指の操作に任せる。
+    /// スプリングで動かす行き先。
+    private enum SpringScrollDestination: Equatable {
+        case top
+        /// 行が表示領域の`position`に来る位置。
+        case item(ItemID, UICollectionView.ScrollPosition)
+    }
+
+    /// 最上部へスプリングで動かす。
     private func scrollToTop(duration: TimeInterval, bounce: Double) {
-        topScroll = SpringScroll(duration: duration, bounce: bounce, velocity: topScroll?.velocity ?? 0)
-        guard topScrollTicker == nil else { return }
-        // 慣性で動いている途中なら止める。止めないと、慣性で動かす位置と取り合う。
-        collectionView.setContentOffset(collectionView.contentOffset, animated: false)
-        // 動いている途中にこの画面が閉じられて解放されたら、続けないと返して止めさせる。
-        let ticker = FrameTicker(source: frameSource) { [weak self] elapsed in
-            guard let self else { return false }
-            stepScrollingToTop(elapsed: elapsed)
-            return isScrollingToTop
+        startSpringScroll(to: .top, duration: duration, bounce: bounce)
+    }
+
+    /// 行き先へスプリングで動かす。UIKitのスクロールのアニメーションは時間も曲線も変えられないため、毎フレーム位置を置く。
+    ///
+    /// まだ表示していないセルは見積もりの高さで並び、表示されたときに実寸へ変わる。上のセルが変わるとUICollectionViewがそのぶん位置を補正し、
+    /// 行き先の行の位置も変わる。動いている途中に新着を足したときも、読んでいる位置を保つためにずらす。
+    /// 毎フレーム行き先を測り直し、ずれた位置から速さを持ち越して向かうため、中身は飛ばず、止まり直しもしない。
+    /// UIKitのアニメーションは動き始めに見積もりで行き先を決めるため、途中でコマが飛ぶと、行き先の行が画面の外に残ることがある。
+    /// すでに動かしていれば、速さを持ち越して行き先と時間とバウンスだけ替える。動いている途中に指が触れたら止め、指の操作に任せる。
+    private func startSpringScroll(to destination: SpringScrollDestination, duration: TimeInterval, bounce: Double) {
+        springScrollDestination = destination
+        springScroll = SpringScroll(duration: duration, bounce: bounce, velocity: springScroll?.velocity ?? 0)
+        if springScrollTicker == nil {
+            // 慣性で動いている途中なら止める。止めないと、慣性で動かす位置と取り合う。
+            collectionView.setContentOffset(collectionView.contentOffset, animated: false)
+            // 動いている途中にこの画面が閉じられて解放されたら、続けないと返して止めさせる。
+            let ticker = FrameTicker(source: frameSource) { [weak self] elapsed in
+                guard let self else { return false }
+                stepSpringScroll(elapsed: elapsed)
+                return springScrollTicker != nil
+            }
+            springScrollTicker = ticker
+            springScrollInterruption.isEnabled = true
+            ticker.start()
         }
-        topScrollTicker = ticker
-        scrollToTopInterruption.isEnabled = true
-        ticker.start()
         updateNewArrivalsButtonVisibility()
     }
 
@@ -1112,59 +1138,76 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         -collectionView.adjustedContentInset.top
     }
 
-    private func stepScrollingToTop(elapsed: CFTimeInterval) {
+    private func stepSpringScroll(elapsed: CFTimeInterval) {
         // 指が触れた時点で止める。ドラッグが始まるのを待つと、触れてから指が動くまでの間も動き続け、指の下で中身がずれる。
-        guard !collectionView.isTracking, var scroll = topScroll else {
-            stopScrollingToTop()
+        // 行き先の行が一覧からなくなったときも止める。
+        guard !collectionView.isTracking, var scroll = springScroll, let target = springScrollTarget() else {
+            stopSpringScroll()
             return
         }
-        let target = topOffset
         let next = scroll.step(from: collectionView.contentOffset.y, toward: target, by: elapsed)
-        topScroll = scroll
+        springScroll = scroll
         guard !scroll.isSettled(at: next, target: target) else {
-            didFinishScrollingToTop()
+            didFinishSpringScroll(at: target)
             return
         }
         collectionView.contentOffset.y = next
     }
 
-    /// 落ち着いたら最上部にそろえる。新着ボタンは、見えた投稿を既読にしてから出し直す。先に出すと、既読になるまでの一瞬だけ出てしまう。
-    private func didFinishScrollingToTop() {
-        endScrollingToTop()
-        collectionView.contentOffset.y = topOffset
+    /// 行き先のスクロール位置。行き先の行がなければnil。セルが実寸へ変わると行の位置も変わるため、毎フレーム測り直す。
+    private func springScrollTarget() -> CGFloat? {
+        guard case .item(let id, let position) = springScrollDestination else { return topOffset }
+        guard let indexPath = dataSource.indexPath(for: id),
+              let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
+        else { return nil }
+        let inset = collectionView.adjustedContentInset
+        let visibleHeight = collectionView.bounds.height - inset.top - inset.bottom
+        let offset = switch position {
+        case .top: frame.minY - inset.top
+        case .centeredVertically: frame.midY - inset.top - visibleHeight / 2
+        default: frame.maxY - inset.top - visibleHeight
+        }
+        let maxOffset = max(collectionView.contentSize.height + inset.bottom - collectionView.bounds.height, topOffset)
+        return min(max(offset, topOffset), maxOffset)
+    }
+
+    /// 落ち着いたら行き先にそろえる。新着ボタンは、見えた投稿を既読にしてから出し直す。先に出すと、既読になるまでの一瞬だけ出てしまう。
+    private func didFinishSpringScroll(at target: CGFloat) {
+        endSpringScroll()
+        collectionView.contentOffset.y = target
         reportVisibleItemsAfterLayout()
         updateNewArrivalsButtonVisibility()
         onInteractionSettle?()
     }
 
-    private func stopScrollingToTop() {
-        endScrollingToTop()
+    private func stopSpringScroll() {
+        endSpringScroll()
         updateNewArrivalsButtonVisibility()
     }
 
-    private func endScrollingToTop() {
-        topScrollTicker?.stop()
-        topScrollTicker = nil
-        topScroll = nil
-        scrollToTopInterruption.isEnabled = false
+    private func endSpringScroll() {
+        springScrollTicker?.stop()
+        springScrollTicker = nil
+        springScroll = nil
+        springScrollInterruption.isEnabled = false
     }
 
     /// 最上部へスプリングで動かしている。
     var isScrollingToTop: Bool {
-        topScrollTicker != nil
+        springScrollTicker != nil && springScrollDestination == .top
     }
 
-    private func makeScrollToTopInterruption() -> UILongPressGestureRecognizer {
-        let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(interruptScrollingToTop(_:)))
+    private func makeSpringScrollInterruption() -> UILongPressGestureRecognizer {
+        let recognizer = UILongPressGestureRecognizer(target: self, action: #selector(interruptSpringScroll(_:)))
         recognizer.minimumPressDuration = 0
         recognizer.isEnabled = false
         recognizer.delegate = self
         return recognizer
     }
 
-    @objc private func interruptScrollingToTop(_ recognizer: UILongPressGestureRecognizer) {
+    @objc private func interruptSpringScroll(_ recognizer: UILongPressGestureRecognizer) {
         guard recognizer.state == .began else { return }
-        stopScrollingToTop()
+        stopSpringScroll()
     }
 
     /// 表示領域から一定の距離に入ったギャップを報告する。指で動かしている間と慣性で動いている間は、上へ戻っているなら
@@ -1513,7 +1556,7 @@ extension TimelineViewController: UICollectionViewDelegate {
 
     /// 最上部へ動かしている途中で指が触れたら、そこで止める。
     func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
-        stopScrollingToTop()
+        stopSpringScroll()
         // 慣性で動いている途中で触れると、前のスクロールは止まりの通知を受けずに終わるため、ここで記録する。
         recordScroll()
         scrollStart = (scrollView.contentOffset.y, mediaTime())
@@ -1657,7 +1700,7 @@ extension TimelineViewController: UICollectionViewDataSourcePrefetching {
 extension TimelineViewController: UIGestureRecognizerDelegate {
     /// 触れて止めたまま、指でスクロールし始められるようにする。
     func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-        gestureRecognizer === scrollToTopInterruption && otherGestureRecognizer === collectionView.panGestureRecognizer
+        gestureRecognizer === springScrollInterruption && otherGestureRecognizer === collectionView.panGestureRecognizer
     }
 }
 

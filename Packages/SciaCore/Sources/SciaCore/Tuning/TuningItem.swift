@@ -514,6 +514,24 @@ public enum TuningCatalog {
         defaultValue: 0
     )
 
+    /// 返信先のラベルや、アプリ内通知から、一覧の投稿へ動く時間。どれだけ離れていても、この時間で動く。
+    public static let scrollToStatusDuration = NumberTuning(
+        id: "timeline.scrollToStatusDuration",
+        title: "一覧の投稿へ動く時間（秒）",
+        range: 0.1...1.5,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
+    /// 一覧の投稿へ動くときのバウンス。0で行き過ぎずに止まる。
+    public static let scrollToStatusBounce = NumberTuning(
+        id: "timeline.scrollToStatusBounce",
+        title: "一覧の投稿へ動くバウンス",
+        range: 0...0.4,
+        step: 0.05,
+        defaultValue: 0
+    )
+
     /// つなぎ直したとき、切れていた間の投稿を手元とつながるまで続けて読むページ数の上限。1ページは40件。
     /// 超えた分はギャップとして残り、近づいたときに読む。
     public static let fillPageLimit = NumberTuning(
@@ -1593,6 +1611,8 @@ public enum TuningCatalog {
         TuningSection(id: "timeline.motion", title: "タイムラインの動き", items: [
             .number(scrollToTopDuration),
             .number(scrollToTopBounce),
+            .number(scrollToStatusDuration),
+            .number(scrollToStatusBounce),
             .number(insertionScrollDuration),
             .number(insertionScrollBounce),
         ]),

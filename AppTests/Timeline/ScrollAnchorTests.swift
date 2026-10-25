@@ -260,7 +260,7 @@ struct ScrollAnchorTests {
     }
 
     /// 最上部へ動かしている途中で返信先のラベルを押したら、返信先で止まり、最上部へ動かし直さない。
-    @Test func scrollingToStatusCancelsScrollingToNewest() async throws {
+    @Test func scrollingToStatusCancelsScrollingToNewest() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
@@ -271,12 +271,36 @@ struct ScrollAnchorTests {
         harness.viewController.scrollToNewest()
         harness.frames.advance(by: 0.05)
         #expect(harness.viewController.scrollToStatus(target.id))
-        // 最上部へ動かすのをやめていれば、コマを送っても最上部へ戻らない。返信先へは、UIKitのスクロールのアニメーションで動く。
-        harness.frames.advance(by: 1.5)
-        try await waitUntil { harness.visibleCell(of: .status(target.id)) != nil }
+        harness.frames.runUntilStopped()
 
         #expect(!harness.viewController.isAtTop, "返信先へ動いたあとで最上部へ戻りました")
         #expect(harness.visibleCell(of: .status(target.id)) != nil, "返信先の投稿が表示されていません")
+    }
+
+    /// 返信先へ動く途中で画面が固まってコマが飛んでも、返信先で止まる。まだ描いていない投稿は見積もりの高さで並ぶため、
+    /// 動き始めに決めた位置へ一気に進んだままにすると、実寸の投稿が並んだあとで返信先が画面の外に残る。
+    @Test(arguments: [UICollectionView.ScrollPosition.bottom, .centeredVertically])
+    func scrollingToStatusLandsOnTargetAfterSkippedFrames(position: UICollectionView.ScrollPosition) throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        harness.scroll(toFraction: 0)
+        harness.viewController.setObscuredBottomHeight(400)
+        let target = statuses[30]
+
+        #expect(harness.viewController.scrollToStatus(target.id, at: position))
+        harness.frames.step(1)
+        harness.frames.runUntilStopped()
+
+        let cell = try #require(harness.visibleCell(of: .status(target.id)), "返信先の投稿が表示されていません")
+        let frame = cell.convert(cell.bounds, to: harness.collectionView)
+        let inset = harness.collectionView.adjustedContentInset
+        let visibleTop = harness.collectionView.bounds.minY + inset.top
+        let visibleBottom = harness.collectionView.bounds.maxY - inset.bottom
+        let expected = position == .bottom ? visibleBottom : (visibleTop + visibleBottom) / 2
+        let actual = position == .bottom ? frame.maxY : frame.midY
+        #expect(abs(actual - expected) <= 1, "返信先の投稿が、止まるはずの位置から\(actual - expected)pt離れています")
     }
 
     /// 同じ投稿が、元の投稿とブーストの2か所に並んでいても、返信を選んだ方へ移る。
