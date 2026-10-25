@@ -239,16 +239,7 @@ final class MediaImageStore {
     /// どれくらいの明るさで描くかは、画面ごとのtraitで決める（`MediaDynamicRangeTraits`）。そのため、設定を選び直しても読み込み直さずに済む。
     @concurrent
     private static func decode(_ data: Data, maxPixelSize: Int) async -> UIImage? {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            kCGImageSourceDecodeRequest: kCGImageSourceDecodeToHDR,
-        ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        return UIImage(cgImage: image)
+        ImageDecoder.thumbnail(of: data, maxPixelSize: maxPixelSize, dynamicRange: .high).map { UIImage(cgImage: $0) }
     }
 
     /// 動画の先頭の部分から、0秒目のフレームを`maxPixelSize`まで縮めて作る。AVFoundationはファイルから読むため、一時ファイルに書く。

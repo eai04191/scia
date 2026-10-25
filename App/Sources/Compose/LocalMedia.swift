@@ -199,15 +199,7 @@ enum LocalMediaThumbnail {
             generator.maximumSize = CGSize(width: maxPixelSize, height: maxPixelSize)
             return try? await UIImage(cgImage: generator.image(at: .zero).image)
         }
-        guard let source = CGImageSourceCreateWithURL(file.url as CFURL, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            // HDRの写真はHDRのまま展開し、描く明るさは画面ごとのtraitで決める。`MediaImageStore`と同じ。
-            kCGImageSourceDecodeRequest: kCGImageSourceDecodeToHDR,
-        ]
-        return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary).map { UIImage(cgImage: $0) }
+        // HDRの写真はHDRのまま展開し、描く明るさは画面ごとのtraitで決める。`MediaImageStore`と同じ。
+        return ImageDecoder.thumbnail(ofFile: file.url, maxPixelSize: Int(maxPixelSize.rounded(.up)), dynamicRange: .high).map { UIImage(cgImage: $0) }
     }
 }

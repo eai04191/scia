@@ -171,28 +171,22 @@ final class AvatarImageStore {
     @concurrent
     private static func decode(_ data: Data, maxPixelSize: Int, animates: Bool) async -> UIImage? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            // HDRの画像はHDRのまま展開し、描く明るさは画面ごとのtraitで決める。`MediaImageStore`と同じ。
-            kCGImageSourceDecodeRequest: kCGImageSourceDecodeToHDR,
-        ]
+        // HDRの画像はHDRのまま展開し、描く明るさは画面ごとのtraitで決める。`MediaImageStore`と同じ。
+        let frame = { (index: Int) in ImageDecoder.thumbnail(of: source, at: index, maxPixelSize: maxPixelSize, dynamicRange: .high) }
         let count = CGImageSourceGetCount(source)
         guard animates, count > 1, count <= maxFrameCount else {
-            return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary).map { UIImage(cgImage: $0) }
+            return frame(0).map { UIImage(cgImage: $0) }
         }
         // UIImage.animatedImageはコマを均等な間隔で流すため、表示時間の最大公約数を1コマの長さにして、長いコマを繰り返して並べる。
         let centiseconds = (0..<count).map { max(Int((frameDuration(of: source, at: $0) * 100).rounded()), 1) }
         let unit = centiseconds.reduce(0, gcd)
         let repeats = centiseconds.map { $0 / unit }
         guard repeats.reduce(0, +) <= maxExpandedFrameCount else {
-            return CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary).map { UIImage(cgImage: $0) }
+            return frame(0).map { UIImage(cgImage: $0) }
         }
         var frames: [UIImage] = []
         for index in 0..<count {
-            guard let frame = CGImageSourceCreateThumbnailAtIndex(source, index, options as CFDictionary) else { return nil }
+            guard let frame = frame(index) else { return nil }
             frames += Array(repeating: UIImage(cgImage: frame), count: repeats[index])
         }
         return UIImage.animatedImage(with: frames, duration: TimeInterval(centiseconds.reduce(0, +)) / 100)

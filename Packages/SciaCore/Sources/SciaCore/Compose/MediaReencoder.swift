@@ -121,13 +121,7 @@ public enum ImageReencoder {
     /// - Returns: 書き出した大きさ。縮めるときの丸めで、`size`と1画素ずれることがある。
     private static func write(_ source: CGImageSource, size: PixelSize, type: UTType, quality: Double?, to url: URL) throws -> PixelSize {
         // 縮めた画像を作る関数で、向きを画素に反映して読む。メタデータは付いてこない。
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceThumbnailMaxPixelSize: size.longSide,
-        ]
-        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary),
+        guard let image = ImageDecoder.thumbnail(of: source, maxPixelSize: size.longSide, dynamicRange: .standard),
               let destination = CGImageDestinationCreateWithURL(url as CFURL, type.identifier as CFString, 1, nil)
         else { throw MediaReencodingError.imageFailed }
         let properties: [CFString: Any] = quality.map { [kCGImageDestinationLossyCompressionQuality: $0] } ?? [:]
