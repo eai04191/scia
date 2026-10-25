@@ -116,6 +116,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 
 ## Git
 
+- 作業branchが`claude/epic-feistel-987485`のようにランダムな名前なら、作業を始めたら最初に`git branch -m`で`claude/fix-profile-open-race`のような名前へrenameする。`claude/`は残し、その後ろを種別と中身の分かる名前にする。ランダムな名前のままだと、どのbranchに何が入っているかが名前から分からず、扱いにくいため
 - commit messageはConventional Commitsで書く。将来git-cliffでリリースノートを自動生成し、`feat:`、`fix:`、`perf:`だけを使う人向けの変更として載せる前提で種別を選ぶ
 - `feat:`は使う人に見える機能の追加、`fix:`は使う人が遭遇する不具合の修正、`perf:`は使う人が体感する性能の改善に使う
 - 開発のための変更（チューニングパネル、違和感レポート、検証ハーネス、ビルドやlintの設定など）を`feat`・`fix`・`perf`で書くときは、`feat(dev):`、`fix(dev):`のようにdev scopeを付けてリリースノートから外す
