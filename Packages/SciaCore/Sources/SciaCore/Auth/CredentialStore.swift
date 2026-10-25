@@ -1,4 +1,5 @@
 public import Foundation
+import os
 import Security
 
 /// ログインしたアカウントの認証情報を保存する口。テストではメモリ上の実装に差し替える。
@@ -23,6 +24,7 @@ public struct KeychainCredentialStore: CredentialStorage {
     }
 
     private let service: String
+    private let logger = SciaLog.logger(category: "credential")
     /// 1アカウントだけを保存していたころの項目の名前。読み出すときに、アカウントごとの項目へ移す。
     private static let legacyAccount = "current"
 
@@ -41,7 +43,16 @@ public struct KeychainCredentialStore: CredentialStorage {
         switch status {
         case errSecSuccess:
             guard let items = result as? [[String: Any]] else { throw KeychainError.unexpectedStatus(errSecDecode) }
-            return try items.compactMap { $0[kSecAttrAccount as String] as? String }.compactMap(load(account:))
+            // 中身を読めない項目が1件あっても、残りのアカウントで使えるよう、記録して飛ばす。消さずに残すので、読める形に直れば次に読める。
+            // Keychainそのものの失敗（ロック中など）は一時的なことがあるので、飛ばさずに投げ、呼び出し側が読み直せるようにする。
+            return try items.compactMap { $0[kSecAttrAccount as String] as? String }.compactMap { account in
+                do {
+                    return try load(account: account)
+                } catch is DecodingError {
+                    logger.error("credential item unreadable, skipped")
+                    return nil
+                }
+            }
         case errSecItemNotFound:
             return []
         default:
@@ -103,6 +114,25 @@ public struct KeychainCredentialStore: CredentialStorage {
         default:
             throw KeychainError.unexpectedStatus(status)
         }
+    }
+
+    /// 任意の中身で保存する。読めない項目のテストにだけ使う。
+    func saveRaw(_ data: Data, account: String) throws {
+        var attributes = itemQuery(account: account)
+        attributes[kSecValueData as String] = data
+        let status = SecItemAdd(attributes as CFDictionary, nil)
+        guard status == errSecSuccess else { throw KeychainError.unexpectedStatus(status) }
+    }
+
+    /// 保存した中身をそのまま読む。読めない項目を消していないことのテストにだけ使う。
+    func rawData(account: String) throws -> Data? {
+        var query = itemQuery(account: account)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess else { return nil }
+        return result as? Data
     }
 
     /// 移す前の形式で保存する。移行のテストにだけ使う。

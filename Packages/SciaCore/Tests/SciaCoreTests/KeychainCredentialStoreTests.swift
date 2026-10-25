@@ -37,6 +37,18 @@ struct KeychainCredentialStoreTests {
         try store.delete(id: bob.id)
     }
 
+    /// 読めない項目が1件あっても、残りのアカウントは読む。読めない項目は消さずに残し、直せば読めるようにする。
+    @Test func skipsUnreadableItemWithoutDeletingIt() throws {
+        let store = KeychainCredentialStore(service: "net.mizle.scia.tests.\(UUID().uuidString)")
+        defer { try? store.deleteAll() }
+        let alice = try makeCredential(token: "alice")
+        try store.save(alice)
+        try store.saveRaw(Data("壊れた".utf8), account: "broken")
+
+        #expect(try store.loadAll() == [alice])
+        #expect(try store.rawData(account: "broken") == Data("壊れた".utf8))
+    }
+
     /// 1アカウントだけを保存していたころの項目は、読み出すときにアカウントごとの項目へ移す。ログインし直さずに済むようにするため。
     @Test func migratesLegacySingleItem() throws {
         let store = KeychainCredentialStore(service: "net.mizle.scia.tests.\(UUID().uuidString)")

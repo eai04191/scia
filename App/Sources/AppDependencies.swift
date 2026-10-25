@@ -67,8 +67,10 @@ enum AppDependencies {
         directory: URL.documentsDirectory.appending(path: "DiscomfortReports")
     )
 
-    /// ログインしたアカウントの一覧。シーンをまたいで同じものを使う。Keychainを読めなかったときは、その失敗を持つ。
-    static let accounts = Result {
+    /// ログインしたアカウントの一覧。シーンをまたいで同じものを使う。Keychainを読めなかったときは、その失敗を返し、次に使うときに読み直す。
+    static var accounts: Result<AccountRegistry, any Error> { accountsLoad.get() }
+
+    private static let accountsLoad = LoadUntilSucceeded {
         try AccountRegistry(storage: KeychainCredentialStore(service: "net.mizle.scia.credential"), defaults: .standard)
     }
 

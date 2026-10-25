@@ -14,6 +14,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
     }
     private let logger = SciaLog.logger(category: "lifecycle")
+    /// 保存したアカウントを読めずにログイン画面を出している。端末のロック中など一時的なことがあるので、前面に戻ったら読み直す。
+    private var isShowingAccountsLoadFailure = false
 
     func scene(
         _ scene: UIScene,
@@ -155,6 +157,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneWillEnterForeground(_ scene: UIScene) {
         logger.info("scene willEnterForeground")
         UserAction.enterForeground.record()
+        if isShowingAccountsLoadFailure {
+            showSavedAccount()
+        }
         session?.enterForeground()
     }
 
@@ -189,10 +194,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         case .failure(let error):
             logger.error("credential load failed: \(error.localizedDescription, privacy: .public)")
             showLogin(errorMessage: error.localizedDescription)
+            isShowingAccountsLoadFailure = true
         }
     }
 
     func showTimeline(for credential: Credential) {
+        isShowingAccountsLoadFailure = false
         let session = SessionController(credential: credential, accountMenu: { [weak self] in
             self?.makeAccountMenu() ?? UIMenu()
         }, onReauthenticate: { [weak self] session in
@@ -406,6 +413,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func showLogin(errorMessage: String?) {
         // ログイン画面に替えたら、出していたアカウントの処理を止める。ログアウトに失敗してここへ来たときも同じ。
         session = nil
+        isShowingAccountsLoadFailure = false
         let model = LoginModel(accountDomains: accountDomains) { [weak self] credential in
             guard let accounts = self?.accounts else {
                 throw AccountsUnavailable()
