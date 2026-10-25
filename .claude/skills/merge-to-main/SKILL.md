@@ -1,13 +1,19 @@
 ---
 name: merge-to-main
-description: sciaの作業branchを、ローカルのmainへ安全に入れる。残タスクや同意を取っていない項目がないかを確かめ、mergeに適切な単位かを判断し、まだ通っていないmake checkとmake testだけを走らせてから、fast-forwardで入れ、archiveしてよいかを伝える。「mainにマージして」「mainに入れて」「整理してmainにff mergeして」など、mainへ入れる依頼のすべてで使う。pushとGitHub上のPRのmergeには使わない。Use for every request to merge or land a branch into the local main in scia.
+description: sciaの作業branchを、ほかのスレッドと1つずつ、ローカルのmainへ安全に入れる。残タスクや同意を取っていない項目がないかを確かめ、mergeに適切な単位かを判断してから、Tools/merge-queue.shの列に並べる。番が来たら最新のmainへrebaseし、まだ通っていないmake checkとmake testだけを走らせてfast-forwardで入れ、archiveしてよいかを伝える。ユーザーが/merge-to-mainで起動したときだけ使う。
+argument-hint: "[端末] [after:<セッションID>...]"
+disable-model-invocation: true
 ---
 
 # Merge to Main
 
 作業が落ち着いたところで、作業branchをローカルのdefault branch(以下target)へ入れるまでを、1回の依頼で済ませる。止まるのは、ユーザーに決めてもらうことがあるときと、安全に入れられないときだけにする。pushはしない。
 
+mainへ入れる処理（rebase、`make check`、`make test`、fast-forward）は、`Tools/merge-queue.sh`の列を通して、どのスレッドからでも1つずつ走らせる。順番は問わず、ユーザーが前提に指定したスレッドのbranchがmainに入るまでは、番を待つ。
+
 targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/HEAD`のbranch名(例: `main`)。比較にはremoteではなくローカルのtargetを使う。
+
+引数（`$ARGUMENTS`）には、`make test`に使う端末と、前提のスレッドのセッションID（`after:local_…`、複数可）が入る。
 
 ## 1. 残タスクと、同意を取っていない項目を確かめる
 
@@ -39,29 +45,31 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
    - commitには、上位指示または実行環境で指定された`Co-authored-by` trailerを`--trailer`で渡す
    - `git diff <元のHEAD> HEAD`が空であることを確かめる。差があれば`git reset --hard <元のHEAD>`で戻して報告する
 
-## 3. checkとtestを通す
+## 3. 列に並ぶ
 
-作業branchのworktreeで`Tools/check-stamp.sh missing HEAD <targetのSHA>`を実行し、出たもの（`make check`、`make test`）だけを、出た順に走らせる。何も出なければ飛ばす。同じ中身で通っていれば、整理やrebaseのあとも前の結果がそのまま使われる。targetで通っていて、targetとの違いがMarkdownだけなら、走らせずに通ったものとして扱われる。同じworktreeで同時に走らせるとDerivedDataを取り合うので、順に走らせる。
+- `make test`の端末は、引数にあればそれにする。なければ、このthreadで使うよう指示された端末にする。どちらもなければ、ユーザーに聞く
+- 引数の`after:`のセッションIDごとに、`mcp__ccd_session_mgmt__get_session`でそのスレッドのbranchを引く。引けなければ、並ばずに報告する
+- 作業ツリーに未commitの変更がないことを確かめてから、作業branchのworktreeで`Tools/merge-queue.sh run '<端末>' <前提のbranch>...`をBashの`run_in_background`で起動する。並んだことを伝えて、ターンを終える。待っている間と走っている間は、作業ツリーを変えない。列は`Tools/merge-queue.sh status`で見られる
 
-- `make test`の端末は、このthreadで使うよう指示された端末にする。指示がなければ、ユーザーに聞く
-- 走らせる前に、作業ツリーに未commitの変更がないことを確かめる。走らせている間も、ファイルを変えない
-- 落ちたら、落ちたテストと作業branchの変更を読んで、原因を決める
-  - 作業branchの変更が原因なら、作業branchで直してcommitし、手順2の5からやり直す
-  - 作業branchの変更が触れていないテストなら、一度だけ走らせ直す。通れば続け、たまに落ちるテストとして報告に書く。また落ちたら、mergeせずに報告する。`Tools/check-stamp.sh missing <targetのSHA>`で、targetの中身では通っていたかも添える
-  - 直すのに、仕様や挙動の判断が要るなら、mergeせずに報告する
+## 4. 終わったら
 
-## 4. fast-forward mergeする
+終了コードで分ける。どの場合も、出力の最後の部分を読んでから動く。
 
-- targetがworktreeでcheckoutされている場合: `git -C <そのworktree> merge --ff-only <作業branch>`
-- checkoutされていない場合: `git fetch . <作業branch>:<target>`(fast-forwardでなければ失敗する)
+- 0（入れた）: 下の報告をして、手順5へ進む
+- 2（未commitの変更がある）: 出力にあるworktreeの変更が何かを確かめて、報告する。片付けずに並び直さない
+- 3（rebaseがconflictした）: 手順2の2のとおり、最新のtargetへrebaseして解決し、手順2の5からやり直してから、手順3で並び直す。どちらを優先するか決める必要がある場合は、並び直さずに報告する
+- 4（`make check`か`make test`が落ちた）: 落ちたテストと作業branchの変更を読んで、原因を決める
+  - 作業branchの変更が原因なら、作業branchで直してcommitし、手順2の5からやり直して並び直す
+  - 作業branchの変更が触れていないテストなら、一度だけ並び直す。通れば、たまに落ちるテストとして報告に書く。また落ちたら報告する。`Tools/check-stamp.sh missing <targetのSHA>`で、targetの中身では通っていたかも添える
+  - 直すのに、仕様や挙動の判断が要るなら、報告する
+- 5（前提のbranchが、列にもmainにもないまま10分経った）: 前提のスレッドを`get_session`で引き、`isRunning`がtrueなら、まだ準備の途中なので並び直す。falseなら、並び直さずに、どのスレッドが入らないまま止まっているかを報告する
+- 1（それ以外）: 出力を報告する
 
-`make hooks`のhookが入っていれば、`make check`と`make test`の両方が通っていない中身は、ここで拒否される。拒否されたら、手順3のあとに中身が変わっていないかを確かめて報告する。
+入れたら、次を報告する。
 
-mergeしたら、次を報告する。
-
-- mergeしたcommitの一覧(`git log --oneline <mergeの前のtarget>..<target>`)
+- 入れたcommitの一覧（スクリプトの出力の最後にある）
 - pr-readinessの判定
-- `make check`と`make test`の結果（走らせたか、前の結果を使ったか）と、使った端末。走らせ直して通ったテストと、直したもの
+- `make check`と`make test`の結果と、使った端末。出力に「走らせます」とあったものが走らせたもの、なかったものは前の結果を使ったもの。並び直して通ったテストと、直したもの
 - どのcommitをどれにまとめたか。まとめなかった場合はその旨。整理前後で差分がないこと
 - conflictを解決した場合は、どのファイルをどう解決したか
 - 元のHEADのSHA。rebaseした場合はrebase前のHEADのSHAも
