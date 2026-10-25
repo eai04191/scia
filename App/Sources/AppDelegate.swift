@@ -1,3 +1,4 @@
+import SciaCore
 import UIKit
 
 @main
@@ -11,6 +12,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         MacNativeScale.installIfOnMac()
         #endif
         MacNavigationBarBackground.install()
+        // 受け取られないまま残った共有拡張のファイルを消す。開かれたばかりの共有は新しいので消さない。
+        SharedMediaInbox.app?.removeStale(now: AppDependencies.now())
         return true
     }
 

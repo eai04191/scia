@@ -20,6 +20,7 @@ public struct SharedMediaInbox: Sendable {
     public func store(_ file: URL, id: UUID, index: Int) throws {
         let folder = folder(of: id).appending(path: String(index), directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try excludeRootFromBackup()
         try FileManager.default.copyItem(at: file, to: folder.appending(path: file.lastPathComponent))
     }
 
@@ -33,8 +34,29 @@ public struct SharedMediaInbox: Sendable {
     }
 
     /// `id`の共有のファイルを消す。投稿欄の一時ディレクトリへコピーし終えたときと、受け取らなかったときに呼ぶ。
+    /// 受け取ってから`maximumAge`より経った共有を消す。アプリは共有を開かれたときにすぐ受け取って消すので、残っているのは、
+    /// 拡張が途中で終わったりアプリが開かれなかったりして、受け取られないままになったもの。アプリを起動したときに呼ぶ。
+    public func removeStale(now: Date, maximumAge: TimeInterval = 24 * 60 * 60) {
+        let fileManager = FileManager.default
+        guard let shares = try? fileManager.contentsOfDirectory(at: root, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+        for share in shares {
+            guard let modified = try? share.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate,
+                  now.timeIntervalSince(modified) > maximumAge
+            else { continue }
+            try? fileManager.removeItem(at: share)
+        }
+    }
+
     public func remove(id: UUID) {
         try? FileManager.default.removeItem(at: folder(of: id))
+    }
+
+    /// 受け渡しの途中のファイルは、端末のバックアップに入れない。App Groupのコンテナは、Cachesでない場所はバックアップに入るため。
+    private func excludeRootFromBackup() throws {
+        var values = URLResourceValues()
+        values.isExcludedFromBackup = true
+        var root = root
+        try root.setResourceValues(values)
     }
 
     private func folder(of id: UUID) -> URL {
