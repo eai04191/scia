@@ -20,7 +20,7 @@ public struct Mention: Codable, Hashable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         username = try container.decode(String.self, forKey: .username)
-        url = container.decodeDisplayURL(forKey: .url)
+        url = container.decodeURL(.destination, forKey: .url)
         acct = try container.decode(String.self, forKey: .acct)
     }
 }
@@ -40,6 +40,6 @@ public struct Tag: Codable, Hashable, Sendable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
-        url = container.decodeDisplayURL(forKey: .url)
+        url = container.decodeURL(.destination, forKey: .url)
     }
 }

@@ -26,8 +26,8 @@ public struct ServerEmoji: Decodable, Hashable, Sendable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         shortcode = try container.decode(String.self, forKey: .shortcode)
-        url = try container.decode(URL.self, forKey: .url)
-        staticUrl = try container.decode(URL.self, forKey: .staticUrl)
+        url = try container.decodeRequiredURL(.media, forKey: .url)
+        staticUrl = try container.decodeRequiredURL(.media, forKey: .staticUrl)
         visibleInPicker = (try? container.decodeIfPresent(Bool.self, forKey: .visibleInPicker)) ?? true
         category = try? container.decodeIfPresent(String.self, forKey: .category)
     }

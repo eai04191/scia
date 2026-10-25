@@ -21,10 +21,10 @@ public struct FeaturedTag: Decodable, Hashable, Sendable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
-        if let count = try? container.decode(Int.self, forKey: .statusesCount) {
+        if let count = try? container.decodeCount(forKey: .statusesCount) {
             statusesCount = count
         } else {
-            statusesCount = (try? container.decode(String.self, forKey: .statusesCount)).flatMap { Int($0) } ?? 0
+            statusesCount = (try? container.decode(String.self, forKey: .statusesCount)).flatMap { Int($0) }.map(ServerCount.clamped) ?? 0
         }
     }
 }

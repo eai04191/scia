@@ -52,8 +52,8 @@ public struct Poll: Codable, Hashable, Sendable, Identifiable {
         expiresAt = try container.decodeIfPresent(Date.self, forKey: .expiresAt)
         expired = try container.decode(Bool.self, forKey: .expired)
         multiple = try container.decode(Bool.self, forKey: .multiple)
-        votesCount = try container.decode(Int.self, forKey: .votesCount)
-        votersCount = try container.decodeIfPresent(Int.self, forKey: .votersCount)
+        votesCount = try container.decodeCount(forKey: .votesCount)
+        votersCount = try container.decodeCountIfPresent(forKey: .votersCount)
         options = try container.decode([Option].self, forKey: .options)
         emojis = try container.decodeLossyArray(CustomEmoji.self, forKey: .emojis)
         voted = try container.decodeIfPresent(Bool.self, forKey: .voted) ?? false
@@ -69,6 +69,12 @@ public struct Poll: Codable, Hashable, Sendable, Identifiable {
         public init(title: String, votesCount: Int?) {
             self.title = title
             self.votesCount = votesCount
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            title = try container.decode(String.self, forKey: .title)
+            votesCount = try container.decodeCountIfPresent(forKey: .votesCount)
         }
     }
 }

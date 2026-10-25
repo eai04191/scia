@@ -13,6 +13,14 @@ public struct CustomEmoji: Codable, Hashable, Sendable {
         self.staticUrl = staticUrl
     }
 
+    /// 画像のURLは、読み込む画像として受け付けるスキームでなければ、絵文字ごと読めないものとする。
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        shortcode = try container.decode(String.self, forKey: .shortcode)
+        url = try container.decodeRequiredURL(.media, forKey: .url)
+        staticUrl = try container.decodeRequiredURL(.media, forKey: .staticUrl)
+    }
+
     /// 絵文字の画像を、メディアのメニューとビューアで扱う添付ファイルとして表す。
     /// 元の画像はアニメーションすることがあるため、共有と保存ではそのまま渡し、アニメーションしない版を届くまでの下地にする。
     /// IDは添付ファイルのIDと混ざらないよう、画像のURLから作る。サーバーごとに同じショートコードで別の絵文字がありうるため、ショートコードでは作らない。

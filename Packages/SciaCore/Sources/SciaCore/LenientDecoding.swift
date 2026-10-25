@@ -5,12 +5,6 @@ import Synchronization
 /// 開発者が試していないサーバーが、表示のための項目を空や欠落で返しても、投稿やアカウントそのものは読めるようにする。
 /// 欠かせない項目（IDや本文など）には使わない。読めなければ、それを含むものごと読めないものとして扱う。
 extension KeyedDecodingContainer {
-    /// 表示のためのURLを読む。項目がない、null、空、URLとして読めない値はnilにする。
-    func decodeDisplayURL(forKey key: Key) -> URL? {
-        guard let string = try? decodeIfPresent(String.self, forKey: key), !string.isEmpty else { return nil }
-        return URL(string: string)
-    }
-
     /// 配列を要素ごとに読み、読めない要素は外して記録する。項目がない、またはnullなら空にする。
     /// 配列でない値が入っていたら投げる。
     func decodeLossyArray<Element: Decodable>(_ type: Element.Type, forKey key: Key) throws -> [Element] {
@@ -86,8 +80,8 @@ private enum ListElement<Element: Decodable>: Decodable {
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = try container.decode(String.self, forKey: .id)
-            url = container.decodeDisplayURL(forKey: .url)
-                ?? (try? container.nestedContainer(keyedBy: CodingKeys.self, forKey: .status))?.decodeDisplayURL(forKey: .url)
+            url = container.decodeURL(.destination, forKey: .url)
+                ?? (try? container.nestedContainer(keyedBy: CodingKeys.self, forKey: .status))?.decodeURL(.destination, forKey: .url)
         }
     }
 }

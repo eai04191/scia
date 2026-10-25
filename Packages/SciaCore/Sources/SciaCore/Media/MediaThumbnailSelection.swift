@@ -148,8 +148,9 @@ public enum MediaThumbnailSelection {
         return CGSize(width: width, height: width / aspectRatio)
     }
 
+    /// 縦横比はサーバーが返す幅と高さから決まり、極端に細長いと`length`が整数に収まらない。整数に直す前に上限で止める。
     private static func roundedPixelSize(_ length: CGFloat) -> Int {
-        let steps = max(Int((Double(length) / Double(pixelSizeStep)).rounded(.up)), 1)
+        let steps = max(Int((min(Double(length), Double(maxPixelSizeLimit)) / Double(pixelSizeStep)).rounded(.up)), 1)
         return min(steps * pixelSizeStep, maxPixelSizeLimit)
     }
 

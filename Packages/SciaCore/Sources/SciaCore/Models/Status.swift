@@ -122,7 +122,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         content = try container.decode(String.self, forKey: .content)
         spoilerText = try container.decode(String.self, forKey: .spoilerText)
         language = try container.decodeIfPresent(String.self, forKey: .language)
-        url = container.decodeDisplayURL(forKey: .url)
+        url = container.decodeURL(.destination, forKey: .url)
         mentions = try container.decodeLossyArray(Mention.self, forKey: .mentions)
         tags = try container.decodeLossyArray(Tag.self, forKey: .tags)
         emojis = try container.decodeLossyArray(CustomEmoji.self, forKey: .emojis)
@@ -141,9 +141,9 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         bookmarked = try container.decodeIfPresent(Bool.self, forKey: .bookmarked) ?? false
         muted = try container.decodeIfPresent(Bool.self, forKey: .muted) ?? false
         pinned = try container.decodeIfPresent(Bool.self, forKey: .pinned) ?? false
-        favouritesCount = try container.decodeIfPresent(Int.self, forKey: .favouritesCount) ?? 0
-        reblogsCount = try container.decodeIfPresent(Int.self, forKey: .reblogsCount) ?? 0
-        repliesCount = try container.decodeIfPresent(Int.self, forKey: .repliesCount) ?? 0
+        favouritesCount = try container.decodeCountIfPresent(forKey: .favouritesCount) ?? 0
+        reblogsCount = try container.decodeCountIfPresent(forKey: .reblogsCount) ?? 0
+        repliesCount = try container.decodeCountIfPresent(forKey: .repliesCount) ?? 0
         reblogBox = try container.decodeIfPresent(StatusBox.self, forKey: .reblogBox)
     }
 

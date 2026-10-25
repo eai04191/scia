@@ -64,7 +64,8 @@ public struct PollDisplay: Equatable, Sendable {
                 title: option.title,
                 isSelected: selection.contains(index),
                 isOwnVote: poll.ownVotes.contains(index),
-                fraction: option.votesCount.map { total > 0 ? Double($0) / Double(total) : 0 },
+                // 選択肢の票が合計より多い応答でも、バーが枠からはみ出さないよう0から1に収める。
+                fraction: option.votesCount.map { total > 0 ? min(Double($0) / Double(total), 1) : 0 },
                 isLeading: !hidesTotals && most > 0 && option.votesCount == most
             )
         }

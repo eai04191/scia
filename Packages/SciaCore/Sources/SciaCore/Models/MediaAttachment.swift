@@ -48,10 +48,10 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         type = try container.decode(Kind.self, forKey: .type)
-        url = container.decodeDisplayURL(forKey: .url)
-        previewUrl = container.decodeDisplayURL(forKey: .previewUrl)
-        remoteUrl = container.decodeDisplayURL(forKey: .remoteUrl)
-        previewRemoteUrl = container.decodeDisplayURL(forKey: .previewRemoteUrl)
+        url = container.decodeURL(.media, forKey: .url)
+        previewUrl = container.decodeURL(.media, forKey: .previewUrl)
+        remoteUrl = container.decodeURL(.media, forKey: .remoteUrl)
+        previewRemoteUrl = container.decodeURL(.media, forKey: .previewRemoteUrl)
         description = try container.decodeIfPresent(String.self, forKey: .description)
         meta = try container.decodeIfPresent(Meta.self, forKey: .meta)
         blurhash = try container.decodeIfPresent(String.self, forKey: .blurhash)
@@ -146,11 +146,11 @@ public struct MediaAttachment: Codable, Hashable, Sendable, Identifiable {
         /// フレームレート、長さ、ビットレートは、メディアのメニューで情報として見せるだけなので、型が違っていても添付ファイルごと読めなくせず、nilにする。
         public init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
-            width = try container.decodeIfPresent(Int.self, forKey: .width)
-            height = try container.decodeIfPresent(Int.self, forKey: .height)
+            width = try container.decodeCountIfPresent(forKey: .width)
+            height = try container.decodeCountIfPresent(forKey: .height)
             frameRate = try? container.decodeIfPresent(String.self, forKey: .frameRate)
             duration = try? container.decodeIfPresent(Double.self, forKey: .duration)
-            bitrate = try? container.decodeIfPresent(Int.self, forKey: .bitrate)
+            bitrate = try? container.decodeCountIfPresent(forKey: .bitrate)
         }
     }
 }

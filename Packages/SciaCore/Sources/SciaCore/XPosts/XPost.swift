@@ -132,7 +132,7 @@ extension XPost {
             url: tweet.url,
             authorName: tweet.author.name,
             authorScreenName: tweet.author.screenName,
-            authorAvatar: tweet.author.avatarUrl,
+            authorAvatar: tweet.author.avatarUrl.flatMap(ServerURLKind.media.accepting),
             text: RichText(xPost: tweet.rawText),
             createdAt: tweet.createdTimestamp.map { Date(timeIntervalSince1970: $0) },
             media: (tweet.media?.all ?? []).enumerated().compactMap { index, item in
@@ -146,6 +146,8 @@ extension MediaAttachment {
     /// fxtwitterの添付ファイル。知らない種類は出さない。
     /// IDは一覧とビューアの中で添付ファイルを見分けるのに使うため、Mastodonの添付ファイルと重ならないよう、`x:`を付ける。
     init?(_ item: FxTwitterResponse.Item, postID: String, index: Int) {
+        // fxtwitterの応答もサーバーから来る値なので、Mastodonの添付ファイルと同じく、読み込むURLのスキームを確かめる。
+        guard ServerURLKind.media.accepts(item.url) else { return nil }
         let kind: Kind
         let preview: URL?
         let size = Size(width: item.width, height: item.height)
@@ -158,11 +160,11 @@ extension MediaAttachment {
             previewSize = Self.smallPhotoSize(of: size)
         case "video":
             kind = .video
-            preview = item.thumbnailUrl
+            preview = item.thumbnailUrl.flatMap(ServerURLKind.media.accepting)
             previewSize = size
         case "gif":
             kind = .gifv
-            preview = item.thumbnailUrl
+            preview = item.thumbnailUrl.flatMap(ServerURLKind.media.accepting)
             previewSize = size
         default:
             return nil

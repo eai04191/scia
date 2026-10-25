@@ -26,6 +26,8 @@ public struct XPostClient: Sendable {
         decoder.keyDecodingStrategy = .convertFromSnakeCase
         let body = try decoder.decode(FxTwitterResponse.self, from: data)
         guard body.code == 200, let tweet = body.tweet else { throw Unavailable(statusCode: body.code) }
+        // 囲みを押すと開く先なので、投稿のURLと同じくhttpとhttpsだけを受け付ける。
+        guard ServerURLKind.destination.accepts(tweet.url) else { throw URLError(.badServerResponse) }
         return XPost(tweet)
     }
 }

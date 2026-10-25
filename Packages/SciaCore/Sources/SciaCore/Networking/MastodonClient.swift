@@ -128,31 +128,31 @@ public struct MastodonClient: Sendable {
                     let streaming: URL
                 }
                 struct Statuses: Decodable {
-                    let maxCharacters: Int?
-                    let maxMediaAttachments: Int?
-                    let charactersReservedPerUrl: Int?
+                    let maxCharacters: ServerLimit?
+                    let maxMediaAttachments: ServerLimit?
+                    let charactersReservedPerUrl: ServerLimit?
                 }
                 struct Accounts: Decodable {
-                    let maxDisplayNameLength: Int?
-                    let maxNoteLength: Int?
-                    let maxProfileFields: Int?
-                    let profileFieldNameLimit: Int?
-                    let profileFieldValueLimit: Int?
+                    let maxDisplayNameLength: ServerLimit?
+                    let maxNoteLength: ServerLimit?
+                    let maxProfileFields: ServerLimit?
+                    let profileFieldNameLimit: ServerLimit?
+                    let profileFieldValueLimit: ServerLimit?
                 }
                 struct Polls: Decodable {
-                    let maxOptions: Int?
-                    let maxCharactersPerOption: Int?
-                    let minExpiration: Int?
-                    let maxExpiration: Int?
+                    let maxOptions: ServerLimit?
+                    let maxCharactersPerOption: ServerLimit?
+                    let minExpiration: ServerLimit?
+                    let maxExpiration: ServerLimit?
                 }
                 struct MediaAttachments: Decodable {
                     let supportedMimeTypes: [String]?
-                    let descriptionLimit: Int?
-                    let imageSizeLimit: Int?
-                    let imageMatrixLimit: Int?
-                    let videoSizeLimit: Int?
-                    let videoMatrixLimit: Int?
-                    let videoFrameRateLimit: Int?
+                    let descriptionLimit: ServerLimit?
+                    let imageSizeLimit: ServerLimit?
+                    let imageMatrixLimit: ServerLimit?
+                    let videoSizeLimit: ServerLimit?
+                    let videoMatrixLimit: ServerLimit?
+                    let videoFrameRateLimit: ServerLimit?
                 }
                 let urls: URLs
                 let accounts: Accounts?
@@ -165,28 +165,31 @@ public struct MastodonClient: Sendable {
         let configuration = try await get(Instance.self, path: "api/v2/instance", query: [], feature: .instanceV2).0.configuration
         // 投稿の設定を返さないサーバーには、Mastodonの既定値を使う。
         // 代替テキストの上限は4.4.0から返るが、それより前のMastodonも1500文字で検証している。
+        let maxCharacters = configuration.statuses?.maxCharacters?.value ?? 500
+        // URLの予約文字数は、文字数を数えるたびにその長さの文字列を作る。投稿の上限より長い予約は、URLを1つ書くだけで送れなくなる意味のない設定なので、既定値にする。
+        let charactersReservedPerURL = configuration.statuses?.charactersReservedPerUrl?.value.flatMap { $0 <= maxCharacters ? $0 : nil } ?? 23
         return InstanceConfiguration(
             streamingURL: configuration.urls.streaming,
-            maxCharacters: configuration.statuses?.maxCharacters ?? 500,
-            charactersReservedPerURL: configuration.statuses?.charactersReservedPerUrl ?? 23,
-            maxMediaAttachments: configuration.statuses?.maxMediaAttachments ?? 4,
-            mediaDescriptionLimit: configuration.mediaAttachments?.descriptionLimit ?? 1500,
+            maxCharacters: maxCharacters,
+            charactersReservedPerURL: charactersReservedPerURL,
+            maxMediaAttachments: configuration.statuses?.maxMediaAttachments?.value ?? 4,
+            mediaDescriptionLimit: configuration.mediaAttachments?.descriptionLimit?.value ?? 1500,
             supportedMediaTypes: configuration.mediaAttachments?.supportedMimeTypes,
             profileLimits: ProfileLimits(
-                displayName: configuration.accounts?.maxDisplayNameLength ?? ProfileLimits.beforeMastodon46.displayName,
-                note: configuration.accounts?.maxNoteLength ?? ProfileLimits.beforeMastodon46.note,
-                fields: configuration.accounts?.maxProfileFields ?? ProfileLimits.beforeMastodon46.fields,
-                fieldName: configuration.accounts?.profileFieldNameLimit ?? ProfileLimits.beforeMastodon46.fieldName,
-                fieldValue: configuration.accounts?.profileFieldValueLimit ?? ProfileLimits.beforeMastodon46.fieldValue
+                displayName: configuration.accounts?.maxDisplayNameLength?.value ?? ProfileLimits.beforeMastodon46.displayName,
+                note: configuration.accounts?.maxNoteLength?.value ?? ProfileLimits.beforeMastodon46.note,
+                fields: configuration.accounts?.maxProfileFields?.value ?? ProfileLimits.beforeMastodon46.fields,
+                fieldName: configuration.accounts?.profileFieldNameLimit?.value ?? ProfileLimits.beforeMastodon46.fieldName,
+                fieldValue: configuration.accounts?.profileFieldValueLimit?.value ?? ProfileLimits.beforeMastodon46.fieldValue
             ),
-            pollLimits: Self.pollLimits(configuration.polls.map { ($0.maxOptions, $0.maxCharactersPerOption, $0.minExpiration, $0.maxExpiration) }),
+            pollLimits: Self.pollLimits(configuration.polls.map { ($0.maxOptions?.value, $0.maxCharactersPerOption?.value, $0.minExpiration?.value, $0.maxExpiration?.value) }),
             // 上限はサーバーごとに変えられていることが多いので、返さない項目をMastodonの既定値で補わない。
             mediaLimits: MediaLimits(
-                imageSizeLimit: configuration.mediaAttachments?.imageSizeLimit,
-                imageMatrixLimit: configuration.mediaAttachments?.imageMatrixLimit,
-                videoSizeLimit: configuration.mediaAttachments?.videoSizeLimit,
-                videoMatrixLimit: configuration.mediaAttachments?.videoMatrixLimit,
-                videoFrameRateLimit: configuration.mediaAttachments?.videoFrameRateLimit
+                imageSizeLimit: configuration.mediaAttachments?.imageSizeLimit?.value,
+                imageMatrixLimit: configuration.mediaAttachments?.imageMatrixLimit?.value,
+                videoSizeLimit: configuration.mediaAttachments?.videoSizeLimit?.value,
+                videoMatrixLimit: configuration.mediaAttachments?.videoMatrixLimit?.value,
+                videoFrameRateLimit: configuration.mediaAttachments?.videoFrameRateLimit?.value
             )
         )
     }
@@ -589,13 +592,15 @@ public struct MastodonClient: Sendable {
     public func followedTags() async throws -> [Hashtag] {
         var tags: [Hashtag] = []
         var maxID: String?
+        var readMaxIDs: Set<String> = []
         repeat {
             let query = [URLQueryItem(name: "limit", value: "200")] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
             let (page, response) = try await get([Hashtag].self, path: "api/v1/followed_tags", query: query)
             tags += page
             let next = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)?.queryValue("max_id", of: "next")
-            // 同じ位置を返し続けるサーバーで、同じページを読み続けないよう止める。
-            maxID = next == maxID || page.isEmpty ? nil : next
+            // 読んだ位置を返すサーバー（同じ位置を返し続ける、位置が循環する）で、同じページを読み続けないよう止める。
+            if let maxID { readMaxIDs.insert(maxID) }
+            maxID = next.flatMap { readMaxIDs.contains($0) || page.isEmpty ? nil : $0 }
         } while maxID != nil
         return tags
     }

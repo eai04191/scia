@@ -49,7 +49,7 @@ struct GroupedNotificationsResults: Decodable {
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             id = try container.decode(String.self, forKey: .id)
-            url = container.decodeDisplayURL(forKey: .url)
+            url = container.decodeURL(.destination, forKey: .url)
         }
     }
 
@@ -98,7 +98,7 @@ struct GroupedNotificationsResults: Decodable {
         init(from decoder: any Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             groupKey = try container.decode(String.self, forKey: .groupKey)
-            notificationsCount = try container.decode(Int.self, forKey: .notificationsCount)
+            notificationsCount = try container.decodeCount(forKey: .notificationsCount)
             type = try container.decode(MastodonNotification.Kind.self, forKey: .type)
             pageMaxID = try Self.decodeID(in: container)
             pageMinID = try container.decodeIfPresent(String.self, forKey: .pageMinId) ?? pageMaxID

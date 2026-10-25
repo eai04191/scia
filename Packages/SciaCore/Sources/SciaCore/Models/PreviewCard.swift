@@ -44,18 +44,18 @@ public struct PreviewCard: Codable, Hashable, Sendable {
         self.blurhash = blurhash
     }
 
-    /// リンク先のURLは、開く先がなければカードとして使えないため、読めなければカードごと読めないものとする。
+    /// リンク先のURLは、開く先がなければカードとして使えないため、読めなければ、またはhttpとhttps以外ならカードごと読めないものとする。
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        url = try container.decode(URL.self, forKey: .url)
+        url = try container.decodeRequiredURL(.destination, forKey: .url)
         title = try container.decode(String.self, forKey: .title)
         description = try container.decode(String.self, forKey: .description)
         type = try container.decode(Kind.self, forKey: .type)
         authorName = try container.decodeIfPresent(String.self, forKey: .authorName)
         providerName = try container.decode(String.self, forKey: .providerName)
-        image = container.decodeDisplayURL(forKey: .image)
-        width = try container.decode(Int.self, forKey: .width)
-        height = try container.decode(Int.self, forKey: .height)
+        image = container.decodeURL(.media, forKey: .image)
+        width = try container.decodeCount(forKey: .width)
+        height = try container.decodeCount(forKey: .height)
         blurhash = try container.decodeIfPresent(String.self, forKey: .blurhash)
     }
 

@@ -229,7 +229,8 @@ public enum VideoPlan: Sendable, Equatable {
         guard target != size || cappedFrameRate != nil || exceedsSizeLimit else { return .original }
         var bitRate = quality.bitRate(for: target)
         if let sizeLimit = limits.videoSizeLimit, duration > 0 {
-            let available = Int(Double(sizeLimit) * quality.sizeLimitMargin * 8 / duration) - (hasAudio ? quality.audioBitRate : 0)
+            // 容量の上限が大きく動画が短いと、整数に収まらない。どの画質のビットレートも上回る大きさ（Int32の上限、約2Gbps）で止める。
+            let available = Int(min(Double(sizeLimit) * quality.sizeLimitMargin * 8 / duration, Double(Int32.max))) - (hasAudio ? quality.audioBitRate : 0)
             while available < bitRate {
                 if available >= quality.minimumBitRate(for: target) {
                     bitRate = available

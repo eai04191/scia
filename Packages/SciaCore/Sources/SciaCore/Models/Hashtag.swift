@@ -65,7 +65,7 @@ public struct Hashtag: Decodable, Hashable, Sendable {
 
     /// 履歴にある日（Mastodonは直近の7日）に使われた投稿の数の合計。web UIの候補と同じく、人気の目安に出す。
     public var recentUses: Int {
-        history.reduce(0) { $0 + $1.uses }
+        ServerCount.sum(history.map(\.uses))
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -75,7 +75,7 @@ public struct Hashtag: Decodable, Hashable, Sendable {
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.decode(String.self, forKey: .name)
-        url = try? container.decodeIfPresent(URL.self, forKey: .url)
+        url = container.decodeURL(.destination, forKey: .url)
         // 履歴は人気の目安にしか使わないので、読めなくても名前だけで候補にする。
         history = (try? container.decodeIfPresent([History].self, forKey: .history)) ?? []
     }
@@ -94,7 +94,7 @@ extension Hashtag.History: Decodable {
     }
 
     private static func count(_ container: KeyedDecodingContainer<CodingKeys>, _ key: CodingKeys) -> Int {
-        if let text = try? container.decode(String.self, forKey: key) { return Int(text) ?? 0 }
-        return (try? container.decode(Int.self, forKey: key)) ?? 0
+        if let text = try? container.decode(String.self, forKey: key) { return Int(text).map(ServerCount.clamped) ?? 0 }
+        return (try? container.decodeCount(forKey: key)) ?? 0
     }
 }
