@@ -2,7 +2,7 @@ import SciaCore
 import UIKit
 
 /// カスタム絵文字の画像を1つ描くビュー。アニメーション版を渡すと、静止画の代わりにコマを送る層を描く。
-/// 投稿欄の補完の候補のように、文字の中ではなく、絵文字だけを並べる場所で使う。視差効果を減らす設定では動かさない。
+/// 投稿欄の補完の候補のように、文字の中ではなく、絵文字だけを並べる場所で使う。端末の設定が動く画像を許さなければ動かさない。
 final class EmojiImageView: UIImageView {
     /// 静止画。アニメーション版がないときと、動かさないときに描く。
     var stillImage: UIImage? {
@@ -26,8 +26,8 @@ final class EmojiImageView: UIImageView {
         super.init(frame: frame)
         contentMode = .scaleAspectFit
         let center = NotificationCenter.default
-        // 裏に回っている間に描画のサーバーがアニメーションを外していることがあるため、戻ったら作り直す。視差効果を減らす設定が変わったら、動かすかを決め直す。
-        observers = [UIApplication.willEnterForegroundNotification, UIAccessibility.reduceMotionStatusDidChangeNotification].map { name in
+        // 裏に回っている間に描画のサーバーがアニメーションを外していることがあるため、戻ったら作り直す。動く画像を許すかの設定が変わったら、動かすかを決め直す。
+        observers = ([UIApplication.willEnterForegroundNotification] + AnimatedImagePlayback.changeNotifications).map { name in
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     self?.animatedLayer?.removeFromSuperlayer()
@@ -56,7 +56,7 @@ final class EmojiImageView: UIImageView {
     }
 
     private func update() {
-        guard let animation, !UIAccessibility.isReduceMotionEnabled else {
+        guard let animation, AnimatedImagePlayback.isAllowed else {
             animatedLayer?.removeFromSuperlayer()
             animatedLayer = nil
             image = stillImage

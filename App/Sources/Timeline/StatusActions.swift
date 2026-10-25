@@ -286,7 +286,7 @@ extension TimelineViewController {
         let attachment = emoji.attachment
         // 使う人が開いたメニューなので、前に読めなかった画像も間隔を待たずに読み直す。
         let image = emojiImages.image(for: emoji.staticUrl, retriesNow: true)
-        let animation = settings.animatesCustomEmojis && !UIAccessibility.isReduceMotionEnabled ? emojiImages.animation(for: emoji.url) : nil
+        let animation = settings.animatesCustomEmojis && AnimatedImagePlayback.isAllowed ? emojiImages.animation(for: emoji.url) : nil
         let target = MediaMenuTarget(attachment: attachment, source: nil, preview: image) { [weak self] in
             self?.openMedia([attachment], at: 0, subject: subject) { _ in nil }
         }

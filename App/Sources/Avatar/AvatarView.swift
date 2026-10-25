@@ -16,13 +16,17 @@ final class AvatarView: UIView {
     }
 
     private let store: AvatarImageStore
+    private let playsAnimatedImages: () -> Bool
     private let imageView = UIImageView()
     private var content: Content?
-    private var loadingKey: AvatarImageStore.Key?
+    private(set) var loadingKey: AvatarImageStore.Key?
     private var loadTask: Task<Void, Never>?
+    private var observers: [any NSObjectProtocol] = []
 
-    init(store: AvatarImageStore) {
+    /// - Parameter playsAnimatedImages: 端末の設定が動く画像を許すか。`content.animates`でも、許さなければ静止画で描く。
+    init(store: AvatarImageStore, playsAnimatedImages: @escaping () -> Bool = { AnimatedImagePlayback.isAllowed }) {
         self.store = store
+        self.playsAnimatedImages = playsAnimatedImages
         super.init(frame: .zero)
         imageView.contentMode = .scaleAspectFill
         imageView.frame = bounds
@@ -39,6 +43,15 @@ final class AvatarView: UIView {
             view.layer.borderWidth = 1 / max(view.traitCollection.displayScale, 1)
             view.updateImage()
         }
+        observers = AnimatedImagePlayback.changeNotifications.map { name in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateImage() }
+            }
+        }
+    }
+
+    isolated deinit {
+        observers.forEach(NotificationCenter.default.removeObserver)
     }
 
     @available(*, unavailable)
@@ -71,7 +84,7 @@ final class AvatarView: UIView {
             show(nil)
             return
         }
-        let key = Self.key(url: url, animates: content.animates, side: bounds.width, scale: scale)
+        let key = Self.key(url: url, animates: content.animates, side: bounds.width, scale: scale, playsAnimatedImages: playsAnimatedImages())
         guard key != loadingKey else { return }
         cancelLoad()
         loadingKey = key
@@ -92,8 +105,15 @@ final class AvatarView: UIView {
     }
 
     /// `side`ポイント四方に描くときに読む画像。行を出す前に読み込んでおくときも、描くときと同じ画像を指すよう、これで決める。
-    static func key(url: URL, animates: Bool, side: CGFloat, scale: CGFloat) -> AvatarImageStore.Key {
-        AvatarImageStore.Key(url: url, maxPixelSize: Int((side * scale).rounded(.up)), animates: animates)
+    /// - Parameter playsAnimatedImages: 端末の設定が動く画像を許すか。許さなければ、`animates`でも静止画を読む。
+    static func key(
+        url: URL,
+        animates: Bool,
+        side: CGFloat,
+        scale: CGFloat,
+        playsAnimatedImages: Bool = AnimatedImagePlayback.isAllowed
+    ) -> AvatarImageStore.Key {
+        AvatarImageStore.Key(url: url, maxPixelSize: Int((side * scale).rounded(.up)), animates: animates && playsAnimatedImages)
     }
 
     /// 画像をすぐに描く。読み込み中のフェードの途中なら止める。

@@ -6,7 +6,7 @@ import UIKit
 /// その位置に、Core Animationでコマを送る層を重ねる。コマ送りは描画のサーバーが受け持つので、画面の外や裏に回ったラベルでは描かれない。
 /// 層には全コマを並べた1枚の画像を1度だけ渡し、表示する範囲（`contentsRect`）だけを切り替えてコマを送る。
 /// 同じ長さのアニメーションは、ラベルをまたいでも同じコマを出すよう、時刻で揃えて始める。
-/// 視差効果を減らす設定では動かさず、静止画のまま描く。
+/// 端末の設定が動く画像を許さなければ動かさず、静止画のまま描く。
 @MainActor
 final class AnimatedEmojiOverlay {
     /// 動かす絵文字。`index`は文字列の中の位置。
@@ -43,7 +43,7 @@ final class AnimatedEmojiOverlay {
             self.onChange()
         }
         let center = NotificationCenter.default
-        observers = [UIAccessibility.reduceMotionStatusDidChangeNotification, UIApplication.willEnterForegroundNotification].map { name in
+        observers = (AnimatedImagePlayback.changeNotifications + [UIApplication.willEnterForegroundNotification]).map { name in
             center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
                     // 裏から戻ったときは、裏に回っている間に描画のサーバーがアニメーションを外していることがあるため、層を外して作り直させる。
@@ -51,7 +51,7 @@ final class AnimatedEmojiOverlay {
                     if name == UIApplication.willEnterForegroundNotification {
                         self?.removeLayers()
                     }
-                    // 視差効果を減らす設定が変わったときは、動かすかどうかを決め直す。
+                    // 動く画像を許すかの設定が変わったときは、動かすかどうかを決め直す。
                     self?.onChange()
                 }
             }
@@ -76,7 +76,7 @@ final class AnimatedEmojiOverlay {
             self.entries = entries
         }
         emojiURLs = []
-        guard let text, text.length > 0, !UIAccessibility.isReduceMotionEnabled else { return text }
+        guard let text, text.length > 0, AnimatedImagePlayback.isAllowed else { return text }
         var result: NSMutableAttributedString?
         text.enumerateAttribute(.customEmoji, in: NSRange(location: 0, length: text.length)) { value, range, _ in
             guard let emoji = value as? CustomEmoji else { return }
