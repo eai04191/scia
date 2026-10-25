@@ -113,7 +113,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var openingInset: CGFloat = 0
     /// 画面に出るときに、この行の上端をウインドウのこの高さに置く。
     private var pendingOpening: (id: ItemID, windowY: CGFloat)?
-    /// 投稿のアイコンや名前がタップされたとき、または長押しのメニューで選ばれたときに、そのアカウントを渡して呼ぶ。
+    /// 投稿のアイコンやブーストした人の行がタップされたとき、または長押しのメニューで選ばれたときに、そのアカウントを渡して呼ぶ。
     var onOpenProfile: ((Account) -> Void)?
     /// アカウントの全体を持たない相手（メンション）のプロフィールを、IDで開く。
     var onOpenProfileID: ((String) -> Void)?

@@ -64,7 +64,7 @@ struct PostContentConfiguration: UIContentConfiguration {
     /// 添付ファイルか、リンクカードの画像の、閲覧注意のぼかしが押されたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。
     var onRevealMedia: (() -> Void)?
     var onToggleSpoiler: (() -> Void)?
-    /// アイコンか名前の行がタップされたときに呼ぶ。投稿した人のプロフィールを開く。
+    /// アイコンがタップされたときに呼ぶ。投稿した人のプロフィールを開く。
     var onOpenAccount: (() -> Void)?
     /// 名前の上の行がタップされたときに呼ぶ。ブーストした人や、通知のもとになる操作をした人のプロフィールを開く。
     var onOpenContextAccount: (() -> Void)?
@@ -205,10 +205,9 @@ final class PostContentView: UIView, UIContentView {
         bodyView.onOpenLinkCardImage = { [weak self] thumbnail in self?.current.onOpenLinkCardImage?(thumbnail) }
         bodyView.onSelectXPostMedia = { [weak self] index, grid in self?.current.onSelectXPostMedia?(index, grid) }
         bodyView.onPollAction = { [weak self] action in self?.current.onPollAction?(action) }
-        for view in [avatarView, nameRow] as [UIView] {
-            view.isUserInteractionEnabled = true
-            view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAccount)))
-        }
+        // 名前の行は押下を受けず、行全体の押下に渡す。受けると、1行の投稿では行を押せる場所が本文の1行ほどしか残らない。
+        avatarView.isUserInteractionEnabled = true
+        avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAccount)))
         for view in [contextAvatarView, contextLabel] as [UIView] {
             view.isUserInteractionEnabled = true
             view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openContextAccount)))

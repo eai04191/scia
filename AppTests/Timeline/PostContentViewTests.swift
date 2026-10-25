@@ -295,4 +295,41 @@ struct PostContentViewTests {
         #expect(element.accessibilityLabel?.contains("注意書きの下の本文") == true)
         #expect((element.accessibilityCustomActions ?? []).map(\.name) == ["本文を隠す", "example.com/a"])
     }
+
+    /// 押した場所の押下を受けるビュー。押したビューから上へたどり、タップのジェスチャーを持つ最初のビューを返す。なければ行全体の押下に渡る。
+    private func tapTarget(in view: UIView, at point: CGPoint) -> UIView? {
+        var target = view.hitTest(point, with: nil)
+        while let current = target, current !== view {
+            if (current.gestureRecognizers ?? []).contains(where: { $0 is UITapGestureRecognizer }) { return current }
+            target = current.superview
+        }
+        return nil
+    }
+
+    private func subviews<T: UIView>(of type: T.Type, in view: UIView) -> [T] {
+        view.subviews.flatMap { subview in [subview as? T].compactMap(\.self) + subviews(of: type, in: subview) }
+    }
+
+    /// 名前の行は押下を受けず、行全体の押下に渡す。投稿した人はアイコンで、ブーストした人は上の行のアイコンと名前で開く。
+    @Test func nameRowPassesTapToRow() throws {
+        let original = try status(content: "<p>短い</p>")
+        let booster = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: original.account.avatar)
+        let boost = Status(id: "200", createdAt: original.createdAt, account: booster, content: "", spoilerText: "", url: nil, reblog: original)
+        let configuration = makeViewController().contentConfiguration(for: boost, base: .cell())
+        let view = configuration.makeContentView()
+        let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        view.frame = CGRect(origin: .zero, size: size)
+        view.layoutIfNeeded()
+        let metrics = configuration.metrics
+        let avatar = try #require(subviews(of: AvatarView.self, in: view).first { $0.frame.width == metrics.avatarSize })
+        let contextLabel = try #require(subviews(of: FadingLabel.self, in: view).first { !$0.isHidden })
+
+        // 名前の行はアイコンの上端から始まる。左の名前と右端の時刻のどちらも受けない。
+        let nameY = avatar.frame.minY + 5
+        #expect(tapTarget(in: view, at: CGPoint(x: avatar.frame.maxX + 20, y: nameY)) == nil)
+        #expect(tapTarget(in: view, at: CGPoint(x: view.bounds.maxX - metrics.margins.trailing - 4, y: nameY)) == nil)
+        #expect(tapTarget(in: view, at: CGPoint(x: avatar.frame.midX, y: avatar.frame.midY)) === avatar)
+        let contextPoint = contextLabel.convert(CGPoint(x: contextLabel.bounds.midX, y: contextLabel.bounds.midY), to: view)
+        #expect(tapTarget(in: view, at: contextPoint) === contextLabel)
+    }
 }
