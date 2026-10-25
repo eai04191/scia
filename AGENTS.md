@@ -111,7 +111,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - テストはSwift Testing（`import Testing`）で書く
 - APIレスポンスのfixtureは`Packages/SciaCore/Tests/SciaCoreTests/Fixtures/`に置く。実サーバーのレスポンスを使う場合は、個人を特定できる情報を置き換える
 - バグ修正では、先に失敗するテストを書いてから直す
-- テストは実際の時間や今の時刻に頼らせない（`make lint`の`time_dependent_test`で止める）。時間をおく処理には`SciaTesting`の手で進める`Clock`（`TestClock`）を渡し、アニメーションは層の時計（`LayerClock`）、毎フレーム進める動きは手で送るコマ（`ManualFrameSource`）で進める。ほかの処理は門（`Gate`）か条件（`waitUntil`）で待ち、日時は決まった値で作る。止めたあとに何も起きないことは、時間を待たずに、走り終えていない処理の数や予約が残っていないことで確かめる
+- テストは実際の時間や今の時刻に頼らせない（`make lint`の`time_dependent_test`で止める）。時間をおく処理には`SciaTesting`の手で進める`Clock`（`TestClock`）を渡し、アニメーションは層の時計（`LayerClock`）、毎フレーム進める動きは手で送るコマ（`ManualFrameSource`）で進める。ほかの処理は門（`Gate`）か条件（`waitUntil`）で待ち（`Task.yield`で譲って待たない。`make lint`の`yield_based_waiting`で止める）、日時は決まった値で作る。止めたあとに何も起きないことは、時間を待たずに、走り終えていない処理の数や予約が残っていないことで確かめる
 
 ## Git
 

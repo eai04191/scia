@@ -5,6 +5,7 @@ only_rules:
   - implicitly_unwrapped_optional
   - present_without_waiting
   - time_dependent_test
+  - yield_based_waiting
   - direct_time_access
 
 included:
@@ -37,6 +38,19 @@ custom_rules:
       - doccomment
       - string
     message: "テストを実際の時間や今の時刻に頼らせない。待つ処理にはTestClockを渡し、ほかの処理はGateかwaitUntilで待ち、日時は決まった値で作る"
+    severity: error
+
+  # 譲る回数で待つテストは、相手がどこまで進んだかを実行の順の都合に任せる。1回譲っただけでは相手が走ったとは限らず、
+  # 「何も起きない」ことを確かめる前に、起きるはずの処理がまだ始まっていないことがある。譲り続ける待ちは、固まっても止まらない。
+  # 条件で待つ（waitUntil）か、止めた相手が着いたことを門（Gate）で確かめる
+  yield_based_waiting:
+    included: "(AppTests|Packages/SciaCore/Tests)/.*\\.swift"
+    regex: "\\bTask\\.yield\\b"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "テストをTask.yieldで待たせない。条件はwaitUntilで、止めた相手が着いたことはGateで確かめる"
     severity: error
 
   # 実際の時間に、ロジックの中から直接触れない。時間をおく処理はClockで、今の日付は日付を返す関数で、Core Animationの時間は時間を返す関数で受け取り、

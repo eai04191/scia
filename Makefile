@@ -11,7 +11,7 @@ SIM_ARCH ?= $(shell uname -m)
 generate:
 	xcodegen generate
 
-## 実行時クラッシュにつながる書き方（強制アンラップ、try!、IUO）と、テストで画面を出し終えるのを待たない書き方、テストで実際の時間や今の時刻に頼る書き方、本番のコードで実際の時間に直接触れる書き方を検出する。swiftlintはbrew install swiftlintで入れる
+## 実行時クラッシュにつながる書き方（強制アンラップ、try!、IUO）と、テストで画面を出し終えるのを待たない書き方、テストで実際の時間や今の時刻に頼る書き方、テストでTask.yieldで譲って待つ書き方、本番のコードで実際の時間に直接触れる書き方を検出する。swiftlintはbrew install swiftlintで入れる
 ## 設定を明示しないと、worktreeでは親のディレクトリにある元のcheckoutの.swiftlint.ymlも重ねて読み、そちらにない規則が外れる
 lint:
 	swiftlint lint --quiet --config .swiftlint.yml
