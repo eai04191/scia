@@ -92,6 +92,17 @@ enum DebugFaults {
         menuIconDelay.withLock { $0 = delay }
     }
 
+    /// 決めると、以後のプロフィールを開く操作と、ユーザーのメニューのメンションとハンドルのコピーで、相手を探すのをその時間だけ遅らせる。
+    /// 待っている途中に押し直す、タブを移る、「取得中」のチップが出るところを、遅いサーバーを用意せずに確かめるのに使う。
+    private static let lookupDelay = Mutex<Duration?>(nil)
+
+    static var slowLookupDelay: Duration? { lookupDelay.withLock { $0 } }
+
+    /// - Parameter delay: nilなら戻す。
+    static func slowLookups(by delay: Duration?) {
+        lookupDelay.withLock { $0 = delay }
+    }
+
     /// 決めると、投稿欄が使うサーバーのメディアの上限のうち、決めた項目だけを差し替える。送る前に縮める流れを、大きなメディアなしで確かめるため。
     private static let mediaLimitsOverride = Mutex<MediaLimits?>(nil)
 

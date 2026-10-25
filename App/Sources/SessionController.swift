@@ -966,7 +966,7 @@ final class SessionController {
     /// 待つ間にタブを移ったり、戻ったり、別の画面を開いたりしたら、見つかっても積まず、失敗も知らせない。
     private func openProfile(from source: UIViewController, failureTitle: String = "プロフィールを開けませんでした", finding find: @escaping @Sendable () async throws -> Account) {
         let anchor = PushAnchor(source)
-        profileOpening.start(find) { [logger] in
+        profileOpening.start(debugDelayed(find)) { [logger] in
             guard anchor.isStillShowing else {
                 logger.info("profile open dropped: screen changed while finding")
                 return false
@@ -981,6 +981,21 @@ final class SessionController {
                 handle(error, title: failureTitle)
             }
         }
+    }
+
+    /// デバッグ版で`scia-debug://lookup/slow`にしていれば、相手を探す前に待つ。待つ間に止められたら、探さない。
+    private func debugDelayed<Value: Sendable>(_ work: @escaping @Sendable () async throws -> Value) -> @Sendable () async throws -> Value {
+        #if DEBUG
+        let clock = clock
+        return {
+            if let delay = DebugFaults.slowLookupDelay {
+                try await clock.sleep(for: delay)
+            }
+            return try await work()
+        }
+        #else
+        return work
+        #endif
     }
 
     private static let profileLookupActivityID = "profile.lookup"
@@ -1384,7 +1399,7 @@ final class SessionController {
             proceed(id, acct)
             return
         }
-        identityLookup.start({ [weak self] in
+        identityLookup.start(debugDelayed { [weak self] in
             guard let self else { throw CancellationError() }
             return try await identity(of: target)
         }, isStillWanted: { true }) { [weak self] result in
@@ -2310,6 +2325,8 @@ final class SessionController {
             DebugFaults.slowDownloads(by: seconds.map { .seconds($0) })
         case .slowMenuIcons(let seconds):
             DebugFaults.slowMenuIcons(by: seconds.map { .seconds($0) })
+        case .slowLookups(let seconds):
+            DebugFaults.slowLookups(by: seconds.map { .seconds($0) })
         case .progressNotice(let seconds):
             showDebugProgress(for: .seconds(seconds))
         case .mediaLimits(let limits):

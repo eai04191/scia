@@ -28,6 +28,9 @@ struct DebugURLTests {
         #expect(DebugURL(try #require(URL(string: "scia-debug://menu-icons/slow"))) == .slowMenuIcons(seconds: 3))
         #expect(DebugURL(try #require(URL(string: "scia-debug://menu-icons/slow?seconds=10"))) == .slowMenuIcons(seconds: 10))
         #expect(DebugURL(try #require(URL(string: "scia-debug://menu-icons/normal"))) == .slowMenuIcons(seconds: nil))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://lookup/slow"))) == .slowLookups(seconds: 3))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://lookup/slow?seconds=10"))) == .slowLookups(seconds: 10))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://lookup/normal"))) == .slowLookups(seconds: nil))
     }
 
     @Test func readsProgressNotice() throws {
