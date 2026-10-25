@@ -595,15 +595,20 @@ struct MediaViewerControllerTests {
     }
 
     /// 投稿欄で動画を書き出し終えたら、開いているページも書き出したファイルに替え、投稿される中身を確かめられるようにする。
-    @Test func playerSwitchesToTheExportedFile() {
+    /// プレイヤーは作り直さず、再生する項目だけを替える。表示中に`AVPlayerViewController`のプレイヤーを作り直すと、映像を描かなくなるため。
+    /// GIFとして送る動画も、音声を除き終えたら同じく替える。
+    @Test(arguments: [MediaAttachment.Kind.video, .gifv])
+    func playerSwitchesToTheExportedFile(kind: MediaAttachment.Kind) throws {
         let original = LocalMediaFile(url: URL(filePath: "/tmp/original.mov"), mimeType: "video/quicktime", kind: .video)
         let exported = LocalMediaFile(url: URL(filePath: "/tmp/prepared-original.mp4"), mimeType: "video/mp4", kind: .video)
-        let page = PlayerPageController(item: MediaViewerItem(id: "v", kind: .video, description: "", file: original, thumbnail: nil, status: .exporting, progress: 0.3))
+        let page = PlayerPageController(item: MediaViewerItem(id: "v", kind: kind, description: "", file: original, thumbnail: nil, status: .exporting, progress: 0.3))
         page.loadViewIfNeeded()
         #expect(page.playingURL == original.url)
+        let player = try #require(page.player)
 
-        page.update(MediaViewerItem(id: "v", kind: .video, description: "", file: exported, thumbnail: nil, status: .uploading, progress: 0.6))
+        page.update(MediaViewerItem(id: "v", kind: kind, description: "", file: exported, thumbnail: nil, status: .uploading, progress: 0.6))
         #expect(page.playingURL == exported.url)
+        #expect(page.player === player)
     }
 
     /// 動画の長押しは2倍速に使うため、メニューを出さない。メニューは右上のボタンから開く。

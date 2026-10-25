@@ -1932,6 +1932,8 @@ final class PlayerPageController: MediaPageController {
     }
 
     /// 投稿欄で動画を書き出し終えたら、投稿される中身を確かめられるよう、書き出したファイルに替える。見ていた位置と再生の状態は保つ。
+    /// プレイヤーは作り直さず、再生する項目だけを替える。表示中の`AVPlayerViewController`のプレイヤーを新しいものに替えると、
+    /// 新しいプレイヤーは再生を進めても映像を描かなかった（シミュレーター、iOS 27。`isReadyForDisplay`がfalseのまま）。
     private func reloadPlayerIfFileChanged() {
         guard let player = playerController.player, let url = mediaURL, let playing = playingURL, playing != url else { return }
         let time = player.currentTime()
@@ -1947,12 +1949,16 @@ final class PlayerPageController: MediaPageController {
         timeObserver = nil
         statusObservation = nil
         player.pause()
-        playerController.player = nil
         setUpPlayer()
-        playerController.player?.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
         if wasPlaying {
-            playerController.player?.play()
+            player.play()
         }
+    }
+
+    /// 再生しているプレイヤー。作る前はnil。
+    var player: AVPlayer? {
+        playerController.player
     }
 
     /// 再生しているファイルやURL。プレイヤーを作る前はnil。
@@ -1967,14 +1973,21 @@ final class PlayerPageController: MediaPageController {
         }
     }
 
+    /// プレイヤーを作って再生を始められるようにする。プレイヤーがあれば、作り直さずに再生する項目を替える。
     private func setUpPlayer() {
         guard let url = mediaURL else { return }
         let playerItem = AVPlayerItem(url: url)
         // 再生しているコマを取り出せるようにする。AVPlayerLayerの絵は描き写せないため、映像の出口を別に付ける。
         // 画素は10bitで受け取る。実機（iPhone 16 Pro、iOS 27）では、8bitのRGBを求めると画面の再生までHDRを失い、HLGの動画が白飛びした。
         playerItem.add(AVPlayerItemVideoOutput(pixelBufferAttributes: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr10BiPlanarVideoRange]))
-        let player = AVPlayer(playerItem: playerItem)
-        playerController.player = player
+        let player: AVPlayer
+        if let current = playerController.player {
+            current.replaceCurrentItem(with: playerItem)
+            player = current
+        } else {
+            player = AVPlayer(playerItem: playerItem)
+            playerController.player = player
+        }
         if item.kind == .gifv {
             // `AVPlayerLooper`は使わず、同じ項目を最後で先頭へ戻してくり返す。
             // `AVPlayerLooper`は周ごとに再生する項目を替えるが、実機（iPhone 16 Pro、iOS 27.0.1）の`AVPlayerViewController`では、
