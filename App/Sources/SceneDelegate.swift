@@ -5,7 +5,14 @@ import UIKit
 
 final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
-    private var session: SessionController?
+    /// 窓に出しているアカウントの画面一式。替えたり外したりしたら、前のセッションで始めた処理を止める。
+    /// ログアウト、アカウントの切り替え、ログイン画面に戻す、窓を閉じるのどの経路でも、ここを通れば止まる。
+    private var session: SessionController? {
+        didSet {
+            guard oldValue !== session else { return }
+            oldValue?.stop()
+        }
+    }
     private let logger = SciaLog.logger(category: "lifecycle")
 
     func scene(
@@ -135,6 +142,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         #endif
     }
 
+    /// 窓を閉じたときや、OSが裏にいる窓を手放したとき。窓の画面一式を捨て、そのセッションで始めた処理を止める。
+    func sceneDidDisconnect(_ scene: UIScene) {
+        logger.info("scene didDisconnect")
+        session = nil
+    }
+
     func sceneDidBecomeActive(_ scene: UIScene) {
         logger.info("scene didBecomeActive")
     }
@@ -180,7 +193,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func showTimeline(for credential: Credential) {
-        session?.stop()
         let session = SessionController(credential: credential, accountMenu: { [weak self] in
             self?.makeAccountMenu() ?? UIMenu()
         }, onReauthenticate: { [weak self] session in
@@ -191,6 +203,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window?.rootViewController = session.rootViewController
         installNoticeOverlay()
         session.start()
+        // 裏にいる窓でアカウントを切り替えたときなど。始めた時点で裏なら、前に戻るまで接続しない。戻ったときに`sceneWillEnterForeground`で始め直す。
+        if window?.windowScene?.activationState == .background {
+            session.enterBackground()
+        }
     }
 
     /// アプリ内通知のチップの列を、根の画面のすぐ上に重ねる。根の画面を替えると、その上に新しい画面が載るため、重ね直す。
@@ -282,8 +298,6 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let current = accounts?.current else {
             // すでにログイン画面なら作り直さない。出しているエラーの文言を消さないため。
             guard session != nil else { return }
-            session?.stop()
-            session = nil
             showLogin(errorMessage: nil)
             return
         }
@@ -390,6 +404,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func showLogin(errorMessage: String?) {
+        // ログイン画面に替えたら、出していたアカウントの処理を止める。ログアウトに失敗してここへ来たときも同じ。
+        session = nil
         let model = LoginModel(accountDomains: accountDomains) { [weak self] credential in
             guard let accounts = self?.accounts else {
                 throw AccountsUnavailable()
