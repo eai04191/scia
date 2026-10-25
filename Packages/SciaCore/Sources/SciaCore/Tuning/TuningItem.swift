@@ -784,7 +784,7 @@ public enum TuningCatalog {
         defaultValue: 60
     )
 
-    /// リンクのメニューの「プロフィールとして開く」で、探し始めてから「取得中」のチップを出すまでの時間。すぐ見つかったときに、チップが一瞬だけ出入りしないようにする。
+    /// プロフィールを開くときに、探し始めてから「取得中」のチップを出すまでの時間。すぐ見つかったときに、チップが一瞬だけ出入りしないようにする。
     public static let profileLookupChipDelay = NumberTuning(
         id: "notice.profileLookupChipDelay",
         title: "プロフィールの取得中のチップを出すまでの時間（秒）",

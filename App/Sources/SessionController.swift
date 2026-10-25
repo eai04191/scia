@@ -54,8 +54,15 @@ final class SessionController {
     /// `scia-debug://notice/progress`で出している、確かめるための処理中のチップを進める。
     private var debugProgressTask: Task<Void, Never>?
     #endif
-    /// リンクのメニューの「プロフィールとして開く」で、リンク先を探している途中のもの。選び直したら、前のものは止める。
-    private var profileLookup: (id: UUID, task: Task<Void, Never>)?
+    /// プロフィールを開く操作の入口。メンション、リンク、自分のプロフィール、ほかのアプリからのURLのどれで開くときも通し、後から押したものだけを開く。
+    /// 探すのが長引いたら「取得中」のチップを出す。すぐ見つかったときにチップが一瞬だけ出入りしないよう、出すのは少し待ってから。
+    private lazy var profileOpening: LatestLookup = {
+        let lookup = LatestLookup(clock: clock) { .seconds(AppDependencies.tuning.value(of: TuningCatalog.profileLookupChipDelay)) }
+        lookup.onSlowChange = { [weak self] isSlow in self?.showProfileLookupProgress(isSlow) }
+        return lookup
+    }()
+    /// ユーザーのメニューのメンションとハンドルのコピーで、相手を探す操作の入口。後から選んだものだけを使う。
+    private lazy var identityLookup = LatestLookup(clock: clock) { nil }
     /// 「接続の状態」画面に出す、このセッションの接続の状態。
     let diagnostics: ConnectionDiagnostics
     /// 電波が戻ったときと、レート制限が明けたときに、読み込みをやり直す。
@@ -925,90 +932,82 @@ final class SessionController {
 
     private func openProfile(accountID: String, from source: UIViewController) {
         let client = client
-        Task {
-            do {
-                let account = try await client.account(accountID)
-                openProfile(account, from: source)
-            } catch {
-                handle(error, title: "プロフィールを開けませんでした")
-            }
-        }
+        openProfile(from: source) { try await client.account(accountID) }
     }
 
     /// プロフィールのURLでアカウントを探して開く。自分のサーバーが知らないアカウントも、相手のサーバーに問い合わせて探す。
     private func openProfile(resolving url: URL, acct: String, from source: UIViewController) {
         let client = client
-        Task {
-            do {
-                guard let account = try await client.resolveAccount(at: url) else {
-                    logger.error("profile not found url=\(url.absoluteString, privacy: .public)")
-                    handle(ProfileNotFound(acct: acct), title: "プロフィールを開けませんでした")
-                    return
-                }
-                openProfile(account, from: source)
-            } catch {
-                handle(error, title: "プロフィールを開けませんでした")
+        let logger = logger
+        openProfile(from: source) {
+            guard let account = try await client.resolveAccount(at: url) else {
+                logger.error("profile not found url=\(url.absoluteString, privacy: .public)")
+                throw ProfileNotFound(acct: acct)
             }
+            return account
         }
     }
 
-    /// リンクのメニューの「プロフィールとして開く」。リンク先をプロフィールとして探し、見つかれば開く。
-    /// 探すにはサーバーが相手のページを取りに行くため、時間がかかれば「取得中」のチップを出す。すぐ見つかったときにチップが一瞬だけ出入りしないよう、出すのは少し待ってから。
-    /// 探している途中にほかのリンクで選び直したら、前のものは止めて結果を使わない。待っている間も、ほかの操作は止めない。
+    /// リンクのメニューの「プロフィールとして開く」。リンク先をプロフィールとして探し、見つかれば開く。探すにはサーバーが相手のページを取りに行くため、時間がかかりやすい。
     private func openProfile(resolvingLink url: URL, from source: UIViewController) {
-        profileLookup?.task.cancel()
-        let id = UUID()
         let client = client
-        let chipDelay = AppDependencies.tuning.value(of: TuningCatalog.profileLookupChipDelay)
-        let clock = clock
-        let task = Task { [weak self] in
-            let chip = Task { [weak self] in
-                try? await clock.sleep(for: .seconds(chipDelay))
-                guard !Task.isCancelled else { return }
-                self?.showProfileLookupProgress()
+        let logger = logger
+        openProfile(from: source) {
+            guard let account = try await client.resolveAccount(at: url) else {
+                logger.info("profile not found for link url=\(url.absoluteString, privacy: .public)")
+                throw LinkProfileNotFound()
             }
-            defer {
-                chip.cancel()
-                self?.endProfileLookup(id)
+            return account
+        }
+    }
+
+    /// プロフィールを開く操作は、どの経路もここに通す。`find`で探したアカウントのプロフィールを、`source`の画面に積む。
+    /// 探している途中に別のプロフィールを開こうとしたら、前のものは止めて結果を使わない。待っている間も、ほかの操作は止めない。
+    /// 待つ間にタブを移ったり、戻ったり、別の画面を開いたりしたら、見つかっても積まず、失敗も知らせない。
+    private func openProfile(from source: UIViewController, failureTitle: String = "プロフィールを開けませんでした", finding find: @escaping @Sendable () async throws -> Account) {
+        let anchor = PushAnchor(source)
+        profileOpening.start(find) { [logger] in
+            guard anchor.isStillShowing else {
+                logger.info("profile open dropped: screen changed while finding")
+                return false
             }
-            do {
-                let account = try await client.resolveAccount(at: url)
-                guard !Task.isCancelled, let self else { return }
-                guard let account else {
-                    logger.info("profile not found for link url=\(url.absoluteString, privacy: .public)")
-                    handle(LinkProfileNotFound(), title: "プロフィールを開けませんでした")
-                    return
-                }
-                openProfile(account, from: source)
-            } catch {
-                guard !Task.isCancelled, let self else { return }
-                handle(error, title: "プロフィールを開けませんでした")
+            return true
+        } completion: { [weak self, weak source] result in
+            guard let self, let source else { return }
+            switch result {
+            case .success(let account):
+                pushProfile(account, from: source)
+            case .failure(let error):
+                handle(error, title: failureTitle)
             }
         }
-        profileLookup = (id, task)
     }
 
     private static let profileLookupActivityID = "profile.lookup"
 
-    private func showProfileLookupProgress() {
+    /// プロフィールを探すのが長引いている間、「取得中」のチップと「操作の状況」の行を出す。
+    private func showProfileLookupProgress(_ isSlow: Bool) {
+        guard isSlow else {
+            operationStatus.end(Self.profileLookupActivityID)
+            notices.setPersistent(nil, in: .profileLookup)
+            return
+        }
         // 「操作の状況」の行から止めたら、見つかってもプロフィールを開かない。
         operationStatus.update(OperationStatus.Activity(id: Self.profileLookupActivityID, title: Notice.profileLookup.title)) { [weak self] in
-            self?.profileLookup?.task.cancel()
+            self?.profileOpening.cancel()
         }
         notices.setPersistent({ _ in .profileLookup }, in: .profileLookup)
     }
 
-    /// `id`の探す処理が済んだ。選び直した新しいものが探している途中なら、そのチップは残す。
-    private func endProfileLookup(_ id: UUID) {
-        guard profileLookup?.id == id else { return }
-        profileLookup = nil
-        operationStatus.end(Self.profileLookupActivityID)
-        notices.setPersistent(nil, in: .profileLookup)
-    }
-
     // MARK: - プロフィール
 
+    /// アイコンや通知の送った人のように、探さずに開けるプロフィールを開く。後から押したものを勝たせるため、探している途中のプロフィールは止める。
     private func openProfile(_ account: Account, from source: UIViewController) {
+        profileOpening.cancel()
+        pushProfile(account, from: source)
+    }
+
+    private func pushProfile(_ account: Account, from source: UIViewController) {
         let (controller, viewController) = ProfileController.make(account: account, client: client, relationshipCache: profiles.relationships) { [weak self] error, title in
             self?.handle(error, title: title)
         } onUnauthorized: { [weak self] in
@@ -1118,13 +1117,14 @@ final class SessionController {
     }
 
     private func openMyProfile(from source: UIViewController) {
-        Task {
+        let logger = logger
+        openProfile(from: source, failureTitle: "プロフィールを読み込めませんでした") { [weak self] in
+            guard let self else { throw CancellationError() }
             do {
-                let account = try await myAccount()
-                openProfile(account, from: source)
+                return try await myAccount()
             } catch {
                 logger.error("my profile load failed: \(SciaLog.describe(error), privacy: .public)")
-                handle(error, title: "プロフィールを読み込めませんでした")
+                throw error
             }
         }
     }
@@ -1377,18 +1377,23 @@ final class SessionController {
     }
 
     /// 相手のIDと`acct`を決めて`proceed`に渡す。決められなければ知らせて、`proceed`を呼ばない。
+    /// 探している途中に選び直したら、前のものは止めて結果を使わない。投稿欄と文字のコピーは見ている画面によらないので、待つ間に画面を移っても使う。
     private func resolveIdentity(of target: UserMenuTarget, failureTitle: String, proceed: @escaping @MainActor (String, String) -> Void) {
         if case .account(let id, let acct) = target {
+            identityLookup.cancel()
             proceed(id, acct)
             return
         }
-        Task {
-            do {
-                let identity = try await identity(of: target)
+        identityLookup.start({ [weak self] in
+            guard let self else { throw CancellationError() }
+            return try await identity(of: target)
+        }, isStillWanted: { true }) { [weak self] result in
+            switch result {
+            case .success(let identity):
                 proceed(identity.id, identity.acct)
-            } catch {
-                logger.error("user menu target resolve failed: \(SciaLog.describe(error), privacy: .public)")
-                handle(error, title: failureTitle)
+            case .failure(let error):
+                self?.logger.error("user menu target resolve failed: \(SciaLog.describe(error), privacy: .public)")
+                self?.handle(error, title: failureTitle)
             }
         }
     }
@@ -2043,6 +2048,8 @@ final class SessionController {
         recoveryTasks.removeAll()
         muteExpiryTasks.values.forEach { $0.cancel() }
         muteExpiryTasks.removeAll()
+        profileOpening.cancel()
+        identityLookup.cancel()
     }
 
     /// 他のアプリから開かれたURLの画面を出す。
@@ -2205,25 +2212,22 @@ final class SessionController {
         }
     }
 
-    /// acctでアカウントを探して、ホームのタブにプロフィールを開く。ホームを選んでいなければホームに切り替える。
+    /// acctでアカウントを探して、ホームのタブにプロフィールを開く。ホームを選んでいなければ、探し始める前にホームに切り替える。
+    /// 探し終えてから切り替えると、待つ間にほかのタブへ移った人を、ホームへ戻してしまうため。
     private func openProfile(acct: String) {
+        // ホームを無効にしていれば、今見ているタブに開く。
+        if tabs.placement.location(of: .home) != .disabled {
+            tabs.show(.home)
+        }
+        guard let root = tabs.selectedNavigation?.viewControllers.first else { return }
         let client = client
-        Task {
-            do {
-                guard let account = try await client.resolveAccount(acct) else {
-                    logger.error("profile not found acct=\(acct, privacy: .public)")
-                    handle(ProfileNotFound(acct: acct), title: "プロフィールを開けませんでした")
-                    return
-                }
-                // ホームを無効にしていれば、今見ているタブに開く。
-                if tabs.placement.location(of: .home) != .disabled {
-                    tabs.show(.home)
-                }
-                guard let root = tabs.selectedNavigation?.viewControllers.first else { return }
-                openProfile(account, from: root)
-            } catch {
-                handle(error, title: "プロフィールを開けませんでした")
+        let logger = logger
+        openProfile(from: root) {
+            guard let account = try await client.resolveAccount(acct) else {
+                logger.error("profile not found acct=\(acct, privacy: .public)")
+                throw ProfileNotFound(acct: acct)
             }
+            return account
         }
     }
 
