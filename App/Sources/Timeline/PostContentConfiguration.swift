@@ -19,6 +19,8 @@ struct PostContentConfiguration: UIContentConfiguration {
         let avatar: AvatarView.Content?
         let text: NSAttributedString
         let accessibilityText: String
+        /// 押すと開くプロフィールの人の名前。VoiceOverの、プロフィールを開く操作の名前に使う。人を指さない行ではnil。
+        var accountName: String?
         /// 押すと`onOpenContextAccount`を呼ぶ。返信のラベルは押せる見た目にせず、押下を行に渡してスレッドを開かせるため、受けない。
         var opensAccount = true
     }
@@ -29,6 +31,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var avatar: AvatarView.Content
     /// 名前の行に並べる文字。先頭を目立たせ、2つ目は控えめに描く。
     var nameParts: [NSAttributedString]
+    /// 投稿した人の名前。名前の行の書き方によらず、VoiceOverの、プロフィールを開く操作の名前に使う。
+    var authorName: String
     var createdAt: Date
     /// 投稿が編集されていれば、時刻の前にアイコンを付ける。時刻は編集した時刻ではなく、投稿した時刻のまま。
     var isEdited = false
@@ -445,6 +449,7 @@ final class PostContentView: UIView, UIContentView {
         parts += [configuration.reactionGlow?.accessibilityText].compactMap(\.self)
         textAccessibilityElement.accessibilityLabel = parts.filter { !$0.isEmpty }.joined(separator: "、")
         textAccessibilityElement.accessibilityCustomActions = [bodyView.spoilerAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
+            + profileAccessibilityActions(for: configuration)
         // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
         setNeedsLayout()
@@ -452,6 +457,24 @@ final class PostContentView: UIView, UIContentView {
     }
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)
+
+    /// アイコンと名前の上の行のタップで開くプロフィールを、VoiceOverでは操作として開く。
+    private func profileAccessibilityActions(for configuration: PostContentConfiguration) -> [UIAccessibilityCustomAction] {
+        var actions: [UIAccessibilityCustomAction] = []
+        if configuration.onOpenAccount != nil {
+            actions.append(UIAccessibilityCustomAction(name: "\(configuration.authorName)のプロフィール") { [weak self] _ in
+                self?.openAccount()
+                return true
+            })
+        }
+        if let context = configuration.context, context.opensAccount, let name = context.accountName, configuration.onOpenContextAccount != nil {
+            actions.append(UIAccessibilityCustomAction(name: "\(name)のプロフィール") { [weak self] _ in
+                self?.openContextAccount()
+                return true
+            })
+        }
+        return actions
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()

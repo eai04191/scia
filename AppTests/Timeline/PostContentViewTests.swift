@@ -170,7 +170,8 @@ struct PostContentViewTests {
         let view = configuration.makeContentView()
 
         let element = try #require(view.accessibilityElements?.first as? UIAccessibilityElement)
-        let actions = element.accessibilityCustomActions ?? []
+        // プロフィールを開く操作は、本文の操作のあとに並ぶ。
+        let actions = (element.accessibilityCustomActions ?? []).filter { !$0.name.hasSuffix("のプロフィール") }
         #expect(actions.map(\.name) == ["example.com/a", "#scia"])
         _ = actions.first?.actionHandler?(try #require(actions.first))
         #expect(opened == [.url(try #require(URL(string: "https://example.com/a")))])
@@ -279,7 +280,7 @@ struct PostContentViewTests {
         let label = try #require(element.accessibilityLabel)
         #expect(label.contains("注意書き、ネタバレ"))
         #expect(!label.contains("本文"))
-        let actions = element.accessibilityCustomActions ?? []
+        let actions = (element.accessibilityCustomActions ?? []).filter { !$0.name.hasSuffix("のプロフィール") }
         #expect(actions.map(\.name) == ["本文を表示"])
         _ = actions.first?.actionHandler?(try #require(actions.first))
         #expect(toggled == 1)
@@ -293,7 +294,7 @@ struct PostContentViewTests {
 
         let element = try #require(view.accessibilityElements?.first as? UIAccessibilityElement)
         #expect(element.accessibilityLabel?.contains("注意書きの下の本文") == true)
-        #expect((element.accessibilityCustomActions ?? []).map(\.name) == ["本文を隠す", "example.com/a"])
+        #expect((element.accessibilityCustomActions ?? []).filter { !$0.name.hasSuffix("のプロフィール") }.map(\.name) == ["本文を隠す", "example.com/a"])
     }
 
     /// 押した場所の押下を受けるビュー。押したビューから上へたどり、タップのジェスチャーを持つ最初のビューを返す。なければ行全体の押下に渡る。
@@ -331,5 +332,40 @@ struct PostContentViewTests {
         #expect(tapTarget(in: view, at: CGPoint(x: avatar.frame.midX, y: avatar.frame.midY)) === avatar)
         let contextPoint = contextLabel.convert(CGPoint(x: contextLabel.bounds.midX, y: contextLabel.bounds.midY), to: view)
         #expect(tapTarget(in: view, at: contextPoint) === contextLabel)
+    }
+}
+
+extension PostContentViewTests {
+    /// アイコンと名前の上の行のタップで開くプロフィールは、VoiceOverでは投稿の要素の操作で開く。
+    @Test func profilesOpenFromVoiceOverActions() throws {
+        let original = try status(content: "<p>元の投稿</p>")
+        let base = try status(content: "")
+        let bob = Account(id: "booster", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
+        let boost = Status(id: base.id, createdAt: base.createdAt, account: bob, content: "", spoilerText: "", url: nil, reblog: original)
+        var configuration = makeViewController().contentConfiguration(for: boost, base: .cell())
+        var opened: [String] = []
+        configuration.onOpenAccount = { opened.append("author") }
+        configuration.onOpenContextAccount = { opened.append("booster") }
+        let view = configuration.makeContentView()
+        let element = try #require(view.accessibilityElements?.first as? UIAccessibilityElement)
+        let actions = element.accessibilityCustomActions ?? []
+
+        let author = try #require(actions.first { $0.name == "\(original.account.displayNameOrUsername)のプロフィール" })
+        let booster = try #require(actions.first { $0.name == "\(boost.account.displayNameOrUsername)のプロフィール" })
+        _ = author.actionHandler?(author)
+        _ = booster.actionHandler?(booster)
+
+        #expect(opened == ["author", "booster"])
+    }
+
+    /// 返信のラベルのように押せない名前の上の行には、プロフィールを開く操作を付けない。
+    @Test func contextWithoutAccountHasNoProfileAction() throws {
+        var configuration = makeViewController().contentConfiguration(for: try status(content: "<p>短い</p>"), base: .cell())
+        configuration.onOpenAccount = {}
+        configuration.onOpenContextAccount = {}
+        let view = configuration.makeContentView()
+        let element = try #require(view.accessibilityElements?.first as? UIAccessibilityElement)
+
+        #expect((element.accessibilityCustomActions ?? []).filter { $0.name.hasSuffix("のプロフィール") }.count == 1)
     }
 }

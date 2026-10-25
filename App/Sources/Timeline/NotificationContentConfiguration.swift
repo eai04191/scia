@@ -13,6 +13,10 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     var header: NSAttributedString
     /// まとめた行で、誰が何をしたかの行の上に並べるアイコン。新しい人から。まとめない行では空。
     var groupAvatars: [AvatarView.Content] = []
+    /// 通知のもとになる操作をした人の名前。VoiceOverの、プロフィールを開く操作の名前に使う。まとめた行では`groupAccountNames`を使う。
+    var accountName: String?
+    /// まとめた行で並べたアイコンの人の名前。`groupAvatars`と同じ順。
+    var groupAccountNames: [String] = []
     var body: PostBodyContent
     var metrics: Metrics
     /// 再掲した投稿に、お気に入りやブーストをしたことを示す、行の下の端の光。
@@ -219,6 +223,7 @@ final class NotificationContentView: UIView, UIContentView {
             }
         }
         textAccessibilityElement.accessibilityCustomActions = [groupAccountsAction, bodyView.spoilerAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
+            + profileAccessibilityActions(for: configuration)
         // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
         setNeedsLayout()
@@ -226,6 +231,24 @@ final class NotificationContentView: UIView, UIContentView {
     }
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)
+
+    /// 誰が何をしたかの行と、まとめた行のアイコンのタップで開くプロフィールを、VoiceOverでは操作として開く。
+    /// まとめた行では、並べたアイコンの人ごとに出す。行のタップで開く人は、アイコンの先頭の人と同じなので重ねない。
+    private func profileAccessibilityActions(for configuration: NotificationContentConfiguration) -> [UIAccessibilityCustomAction] {
+        if let open = configuration.onOpenGroupAccount, !configuration.groupAccountNames.isEmpty {
+            return configuration.groupAccountNames.enumerated().map { index, name in
+                UIAccessibilityCustomAction(name: "\(name)のプロフィール") { _ in
+                    open(index)
+                    return true
+                }
+            }
+        }
+        guard let open = configuration.onOpenAccount, let name = configuration.accountName else { return [] }
+        return [UIAccessibilityCustomAction(name: "\(name)のプロフィール") { _ in
+            open()
+            return true
+        }]
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()

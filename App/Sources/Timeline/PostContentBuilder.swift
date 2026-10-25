@@ -57,7 +57,8 @@ struct PostContentBuilder {
                 symbolName: "arrow.2.squarepath",
                 avatar: avatarContent(of: status.account),
                 text: secondaryRenderer.render(.plain(status.account.displayNameOrUsername, emojis: status.account.emojis)),
-                accessibilityText: "\(status.account.displayNameOrUsername)がブースト"
+                accessibilityText: "\(status.account.displayNameOrUsername)がブースト",
+                accountName: status.account.displayNameOrUsername
             )
         } else if let replyLabel {
             replyContext(replyLabel, font: secondaryFont, language: language)
@@ -68,6 +69,7 @@ struct PostContentBuilder {
             context: context,
             avatar: avatarContent(of: shown.account),
             nameParts: nameParts,
+            authorName: shown.account.displayNameOrUsername,
             createdAt: shown.createdAt,
             isEdited: shown.editedAt != nil,
             visibility: shown.visibility,

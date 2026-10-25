@@ -40,7 +40,8 @@ extension TimelineViewController {
             isNotificationSymbol: true,
             avatar: nil,
             text: text,
-            accessibilityText: text.string
+            accessibilityText: text.string,
+            accountName: notification.account.displayNameOrUsername
         )
         configuration.onOpenContextAccount = { [weak self] in self?.onOpenProfile?(notification.account) }
         return configuration
@@ -150,11 +151,13 @@ extension TimelineViewController {
             emojiImages: settings.animatesCustomEmojis ? emojiImages : nil
         )
         if appearance.phrase.includesName {
+            configuration.accountName = notification.account.displayNameOrUsername
             configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(notification.account) }
         }
         if notification.isGroup {
             let accounts = notification.sampleAccounts
             configuration.groupAvatars = accounts.map(avatarContent(of:))
+            configuration.groupAccountNames = accounts.map(\.displayNameOrUsername)
             configuration.onOpenGroupAccount = { [weak self] index in
                 guard accounts.indices.contains(index) else { return }
                 self?.onOpenProfile?(accounts[index])
