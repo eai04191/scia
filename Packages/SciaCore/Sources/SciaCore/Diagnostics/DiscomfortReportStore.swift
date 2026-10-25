@@ -1,4 +1,5 @@
 public import Foundation
+import os
 
 /// 違和感レポートをJSONファイルとして保存する。
 public struct DiscomfortReportStore: Sendable {
@@ -13,20 +14,38 @@ public struct DiscomfortReportStore: Sendable {
     public func save(_ report: DiscomfortReport) throws -> URL {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appending(path: Self.fileName(for: report.capturedAt))
-        try Self.encoder.encode(report).write(to: url, options: .withoutOverwriting)
+        // 書いている途中で落ちても、書きかけのファイルをレポートとして残さないよう、読む対象にならない名前に書き終えてから移す。
+        // 移す先がすでにあれば移さずに失敗する（`moveItem`は上書きしない）。同じ時刻のレポートを消さないため。
+        let partial = directory.appending(path: ".partial-\(UUID().uuidString)")
+        do {
+            try Self.encoder.encode(report).write(to: partial)
+            try FileManager.default.moveItem(at: partial, to: url)
+        } catch {
+            try? FileManager.default.removeItem(at: partial)
+            throw error
+        }
         return url
     }
 
-    /// 保存済みのレポートを、新しい順に返す。
+    /// 保存済みのレポートを、新しい順に返す。読めないファイルは、記録して飛ばす。1件のために残りを読めなくしないため。
     public func loadAll() throws -> [DiscomfortReport] {
         guard FileManager.default.fileExists(atPath: directory.path()) else { return [] }
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601WithFractionalSeconds
         return try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "json" }
-            .map { try decoder.decode(DiscomfortReport.self, from: Data(contentsOf: $0)) }
+            .compactMap { url in
+                do {
+                    return try decoder.decode(DiscomfortReport.self, from: Data(contentsOf: url))
+                } catch {
+                    Self.logger.error("discomfort report unreadable, skipped: \(SciaLog.describe(error), privacy: .public)")
+                    return nil
+                }
+            }
             .sorted { $0.capturedAt > $1.capturedAt }
     }
+
+    private static let logger = SciaLog.logger(category: "discomfort")
 
     private static let encoder: JSONEncoder = {
         let encoder = JSONEncoder()

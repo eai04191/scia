@@ -76,6 +76,16 @@ struct DiscomfortReportStoreTests {
         #expect(try store.loadAll().map(\.capturedAt) == [newer.capturedAt, older.capturedAt])
     }
 
+    /// 書きかけで落ちたなどで読めないレポートが1件あっても、残りは読む。
+    @Test func skipsUnreadableReport() throws {
+        let store = makeStore()
+        let report = makeReport(capturedAt: Date(timeIntervalSince1970: 1_791_861_705))
+        try store.save(report)
+        try Data("{\"capturedAt\":".utf8).write(to: store.directory.appending(path: "discomfort-broken.json"))
+
+        #expect(try store.loadAll().map(\.capturedAt) == [report.capturedAt])
+    }
+
     @Test func loadAllReturnsEmptyWhenNothingSaved() throws {
         #expect(try makeStore().loadAll().isEmpty)
     }
