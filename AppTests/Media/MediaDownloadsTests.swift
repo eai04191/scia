@@ -1,4 +1,5 @@
 import Foundation
+import SciaCore
 import SciaTesting
 import Synchronization
 import Testing
@@ -137,12 +138,13 @@ struct MediaDownloadsTests {
         let downloads = MediaDownloads(files: files, stagingDirectory: makeStaging())
         let url = try #require(URL(string: "https://\(NotFoundProtocol.host)/media/a.mp4"))
 
-        await #expect(throws: URLError.self) { try await downloads.fileForSharing(for: url) { _ in } }
+        await #expect(throws: HTTPStatusError(statusCode: 404)) { try await downloads.fileForSharing(for: url) { _ in } }
         #expect(await files.contains(url) == false)
     }
 
-    /// 端末のファイルのURLも落とせる。ダミー投稿の動画はファイルのURLで渡しているため。
-    @Test func downloadsFileURLWithURLSession() async throws {
+    /// 一時フォルダーのファイルのURLも落とせる。ダミー投稿の動画はファイルのURLで渡しているため。
+    /// 本番の通信は`file:`を開かないので、デバッグ用の差し込み（`FaultInjectingTransport`）が返す。
+    @Test func downloadsDummyFileURL() async throws {
         let directory = makeStaging()
         defer { try? FileManager.default.removeItem(at: directory) }
         let source = directory.appending(path: "source/a.mp4")

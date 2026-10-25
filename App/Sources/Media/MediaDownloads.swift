@@ -1,7 +1,6 @@
 import Foundation
 import os
 import SciaCore
-import Synchronization
 import UniformTypeIdentifiers
 
 /// 添付ファイルの元のファイルを、共有や保存に渡せるようにする。ディスクキャッシュになければ落として置く。
@@ -24,7 +23,7 @@ final class MediaDownloads {
     init(
         files: MediaFileCache,
         stagingDirectory: URL = .temporaryDirectory.appending(path: "MediaDownloads"),
-        download: @escaping Download = MediaDownloads.urlSession
+        download: @escaping Download = MediaDownloads.network
     ) {
         self.files = files
         self.stagingDirectory = stagingDirectory
@@ -60,8 +59,9 @@ final class MediaDownloads {
         }
     }
 
-    /// URLSessionで落とす。共有先でファイル名として見えるため、名前はURLのものを残し、拡張子がなければ応答の形式から付ける。
-    nonisolated static let urlSession: Download = { url, folder, onProgress in
+    /// 通信の入口（`HTTPClient`）で落とす。共有先でファイル名として見えるため、名前はURLのものを残し、拡張子がなければ応答の形式から付ける。
+    /// 使う人が押した操作なので、自動の通信が止められている間も送る。2xx以外の応答は、本文を添付ファイルとして残さずに`HTTPStatusError`で失敗させる。
+    nonisolated static let network: Download = { url, folder, onProgress in
         #if DEBUG
         if let delay = DebugFaults.slowDownloadDelay {
             let steps = 20
@@ -71,13 +71,7 @@ final class MediaDownloads {
             }
         }
         #endif
-        let reporter = ProgressReporter(onProgress: onProgress)
-        let (location, response) = try await URLSession.shared.download(from: url, delegate: reporter)
-        // エラーの応答でも本文が落ちてくるため、添付ファイルとして残さない。
-        if let response = response as? HTTPURLResponse, !(200..<300).contains(response.statusCode) {
-            try? FileManager.default.removeItem(at: location)
-            throw URLError(.badServerResponse)
-        }
+        let (location, response) = try await AppDependencies.http.download(URLRequest(url: url), limit: ResponseLimit.download, scope: .host, progress: onProgress)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let file = folder.appending(fileName: SafeFileName(fileName(for: url, mimeType: response.mimeType), fallback: "media"))
         try FileManager.default.moveItem(at: location, to: file)
@@ -92,23 +86,5 @@ final class MediaDownloads {
               let pathExtension = mimeType.flatMap({ UTType(mimeType: $0) })?.preferredFilenameExtension
         else { return name }
         return "\(name).\(pathExtension)"
-    }
-}
-
-/// 通信の進み具合を伝える。非同期の`download(from:delegate:)`では書き込みの通知が届かないため、タスクの`progress`を見張る。
-private final class ProgressReporter: NSObject, URLSessionTaskDelegate, Sendable {
-    private let onProgress: @Sendable (Double) -> Void
-    private let observation = Mutex<NSKeyValueObservation?>(nil)
-
-    init(onProgress: @escaping @Sendable (Double) -> Void) {
-        self.onProgress = onProgress
-    }
-
-    func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
-        let onProgress = onProgress
-        let observation = task.progress.observe(\.fractionCompleted, options: [.new]) { progress, _ in
-            onProgress(progress.fractionCompleted)
-        }
-        self.observation.withLock { $0 = observation }
     }
 }

@@ -104,4 +104,16 @@ struct ErrorPresentationTests {
         #expect(ErrorPresentation(message: "読み込めませんでした。", code: "HTTP 503").text == "読み込めませんでした。（HTTP 503）")
         #expect(ErrorPresentation(message: "読み込めませんでした。", code: nil).text == "読み込めませんでした。")
     }
+
+    /// API以外の通信（共有と保存のダウンロードなど）の2xx以外も、REST APIと同じ文言とステータスで見せる。
+    @Test func presentsStatusOfOtherRequests() {
+        let presentation = ErrorPresentation(HTTPStatusError(statusCode: 429))
+        #expect(presentation.message == "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。しばらく待ってからやり直してください。")
+        #expect(presentation.code == "HTTP 429")
+        #expect(ErrorPresentation(HTTPStatusError(statusCode: 503)).code == "HTTP 503")
+    }
+
+    @Test func presentsTooLargeResponse() {
+        #expect(ErrorPresentation(ResponseTooLarge(limit: 1)).message == "サーバーから届いた内容が大きすぎるため、読むのをやめました。")
+    }
 }

@@ -16,8 +16,10 @@ public struct ErrorPresentation: Equatable, Sendable {
 
     public init(_ error: any Error) {
         switch error {
-        case let error as MastodonAPIError:
-            self = Self.presentation(of: error)
+        case let error as any HTTPStatusFailure:
+            self = Self.presentation(statusCode: error.statusCode, serverMessage: (error as? MastodonAPIError)?.serverMessage)
+        case is ResponseTooLarge:
+            self.init(message: "サーバーから届いた内容が大きすぎるため、読むのをやめました。", code: nil)
         case let error as URLError:
             self = Self.presentation(of: error)
         case let error as AutomaticRequestsPaused:
@@ -35,17 +37,18 @@ public struct ErrorPresentation: Equatable, Sendable {
         code.map { "\(message)（\($0)）" } ?? message
     }
 
-    private static func presentation(of error: MastodonAPIError) -> Self {
-        let message = switch error.statusCode {
+    /// - Parameter serverMessage: REST APIがJSONで返した理由。API以外の通信ではnil。
+    private static func presentation(statusCode: Int, serverMessage: String?) -> Self {
+        let message = switch statusCode {
         case 401: "サーバーがログインを受け付けませんでした。"
         case 403: "サーバーがこの操作を許可しませんでした。"
         case 404, 410, 501: "見つからないか、このサーバーでは使えません。"
         case 429: "短い間にリクエストが多すぎたため、サーバーに一時的に止められています。しばらく待ってからやり直してください。"
         case 500..<600: "サーバーが一時的に応答できません。しばらく待ってからやり直してください。"
         // 文字数の超過など、理由がJSONで返る失敗は、その理由がいちばん役に立つ。
-        default: error.serverMessage ?? "サーバーがリクエストを受け付けませんでした。"
+        default: serverMessage ?? "サーバーがリクエストを受け付けませんでした。"
         }
-        return Self(message: message, code: "HTTP \(error.statusCode)")
+        return Self(message: message, code: "HTTP \(statusCode)")
     }
 
     private static func presentation(of error: URLError) -> Self {
