@@ -928,6 +928,33 @@ public enum TuningCatalog {
         defaultValue: 6
     )
 
+    /// トリミングで枠のハンドルを離してから、枠を画面の中央いっぱいへ戻し始めるまでの時間（秒）。すぐ戻すと、続けて同じハンドルをつかみ直しにくい。
+    public static let mediaCropRecenterDelay = NumberTuning(
+        id: "media.cropRecenterDelay",
+        title: "トリミングの枠を中央へ戻すまでの待ち（秒）",
+        range: 0...2,
+        step: 0.05,
+        defaultValue: 0.5
+    )
+
+    /// トリミングで、画像と枠を90度回す動きの時間（秒）。
+    public static let mediaCropRotateDuration = NumberTuning(
+        id: "media.cropRotateDuration",
+        title: "トリミングで回す時間（秒）",
+        range: 0.05...1.5,
+        step: 0.05,
+        defaultValue: 0.35
+    )
+
+    /// トリミングで、枠を画面の中央いっぱいへ戻す動きの時間（秒）。
+    public static let mediaCropRecenterDuration = NumberTuning(
+        id: "media.cropRecenterDuration",
+        title: "トリミングの枠を中央へ戻す時間（秒）",
+        range: 0.05...1.5,
+        step: 0.05,
+        defaultValue: 0.35
+    )
+
     /// 書いていないときの投稿欄の高さ（pt）。細いほど一覧の閲覧を邪魔しない。
     public static let composeRestingHeight = NumberTuning(
         id: "compose.restingHeight",
@@ -1743,6 +1770,11 @@ public enum TuningCatalog {
         TuningSection(id: "media.description", title: "ビューア：代替テキスト", items: [
             .number(mediaDescriptionRemainingThreshold),
             .number(mediaDescriptionMaxLines),
+        ]),
+        TuningSection(id: "media.crop", title: "ビューア：トリミング", items: [
+            .number(mediaCropRecenterDelay),
+            .number(mediaCropRecenterDuration),
+            .number(mediaCropRotateDuration),
         ]),
     ]
 }
