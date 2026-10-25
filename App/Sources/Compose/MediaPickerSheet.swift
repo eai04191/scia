@@ -37,7 +37,9 @@ final class MediaPickerSheet: NSObject {
         var configuration = PHPickerConfiguration(photoLibrary: .shared())
         configuration.filter = .any(of: [.images, .videos])
         configuration.selectionLimit = selectionLimit
-        configuration.selection = .continuousAndOrdered
+        // 選んだ順の番号は出さず、チェックマークにする。投稿される順はサムネイルの列の並びで、列での並べ替えやペーストした添付は
+        // ピッカーの番号に反映されないため、番号を出すと実際の順と食い違う。
+        configuration.selection = .continuous
         // 写真を元の形式のまま受け取る。既定（.automatic）では、HEICの写真が、解像度はそのままで元より大きなJPEGに変えられて届く。
         // サーバーが処理できない形式だったときは、同じ写真のJPEGを受け取り直す（`LocalMediaLoader.load(from:avoiding:)`）。
         configuration.preferredAssetRepresentationMode = .current
