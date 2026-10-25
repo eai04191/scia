@@ -12,12 +12,19 @@ enum CaptionCatalog {
             },
             CatalogState(title: "投稿欄から開いて、代替テキストがない") { caption("", isEditable: true) },
             CatalogState(title: "投稿欄から開いて、代替テキストがある") { caption("縦長の画像（9:16）", isEditable: true) },
+            CatalogState(title: "コントラストを上げる設定で、代替テキストがない（「代替テキストを追加」を濃く）") {
+                caption("", isEditable: true, contrast: .high)
+            },
         ]
     }
 
     @MainActor
-    private static func caption(_ text: String, isEditable: Bool = false) -> UIView {
+    /// - Parameter contrast: コントラストの設定。nilなら端末の設定に従う。
+    private static func caption(_ text: String, isEditable: Bool = false, contrast: UIAccessibilityContrast? = nil) -> UIView {
         let caption = CaptionView()
+        if let contrast {
+            caption.traitOverrides.accessibilityContrast = contrast
+        }
         caption.isEditable = isEditable
         caption.text = text
         return CatalogBackdrop.image(caption) { backdrop, _ in
