@@ -629,6 +629,8 @@ final class EmojiPaletteCell: UICollectionViewCell {
             imageView.animation = nil
             label.isHidden = false
             // 絵文字の文字の大きさは、枠いっぱいの画像と同じくらいに見えるよう、枠の高さの少し下にする。
+            // 文字ではなく、カスタム絵文字の画像と並べる絵として描くため、端末の文字の大きさではなく枠の大きさで決める。
+            // swiftlint:disable:next fixed_font_size
             label.font = EmojiFont.font(.systemFont(ofSize: max(bounds.width, 32) * 0.58), style: emojiStyle)
             label.text = standard.emoji
             accessibilityLabel = standard.name

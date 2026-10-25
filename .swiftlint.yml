@@ -8,6 +8,8 @@ only_rules:
   - yield_based_waiting
   - image_decoding_outside_decoder
   - direct_time_access
+  - fixed_font_size
+  - dimmed_white_text
 
 included:
   - App
@@ -79,6 +81,32 @@ custom_rules:
       - doccomment
       - string
     message: "実際の時間に直接触れない。時間をおく処理はClockで、今の日付は日付を返す関数で受け取り、既定値はSystemTimeかAppDependenciesを参照する"
+    severity: error
+
+  # 文字の大きさを数字で決め打ちすると、端末の文字の大きさに従わない。書式（preferredFont）か、UIFontMetricsで大きさを変える文字で作る。
+  # preferredFontのpointSizeから作った文字も、作った時点の大きさで止まるため、数字の幅を揃えるときはmonospacedDigitFont(forTextStyle:)で作る。
+  # 枠の大きさが決まっていて文字を大きくできない場所（ステータスバーのように）だけ、拡大表示（Large Content Viewer）を付け、理由を書いてこの規則を外す
+  fixed_font_size:
+    included: "(App/Sources|ShareExtension)/.*\\.swift"
+    excluded: "App/Sources/Debug/"
+    regex: "^(?![^\\n]*scaledFont\\(for:)[^\\n]*\\b(systemFont|boldSystemFont|italicSystemFont|monospacedSystemFont|monospacedDigitSystemFont)\\(ofSize:|^(?![^\\n]*scaledFont\\(for:)[^\\n]*\\.system\\(size:"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "文字の大きさを数字で決め打ちしない。書式で作るか、UIFontMetricsで大きさを変える。数字の幅を揃えるときはmonospacedDigitFont(forTextStyle:)で作る"
+    severity: error
+
+  # 白を透かして控えめにした文字は、明るい画像の上で読みにくくなる。コントラストを上げる設定に応えるよう、dimmedWhiteText(alpha:)で作る
+  dimmed_white_text:
+    included: "(App/Sources|ShareExtension)/.*\\.swift"
+    excluded: "App/Sources/Debug/"
+    regex: "(textColor|foregroundColor|\\.foregroundStyle)[^\\n]*\\bwhite\\b[^\\n]*(withAlphaComponent|opacity)\\("
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "半透明の白い文字はdimmedWhiteText(alpha:)で作り、コントラストを上げる設定で濃くする"
     severity: error
 
 strict: true

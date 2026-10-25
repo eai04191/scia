@@ -834,11 +834,14 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             let animatedEmojis = settings.animatesCustomEmojis ? AppDependencies.emojiImages : nil
             nameLabel.emojiImages = animatedEmojis
             subjectLabel.emojiImages = animatedEmojis
+            // 文字はステータスバーの高さに収めるため、大きさを決め打ちする。文字を大きくする設定では、拡大表示で読む。
+            // swiftlint:disable:next fixed_font_size
             let font = UIFont.systemFont(ofSize: metrics.fontSize, weight: .semibold)
             let nameRenderer = RichTextRenderer(font: font, textColor: .label, emojiImages: AppDependencies.emojiImages, language: settings.glyphLanguageIdentifier())
             nameLabel.attributedText = nameRenderer.render(.plain(item.account.displayNameOrUsername, emojis: item.account.emojis))
             let subjectColor = UIColor.secondaryLabel
             var renderer = RichTextRenderer(
+                // swiftlint:disable:next fixed_font_size
                 font: .systemFont(ofSize: metrics.fontSize),
                 textColor: subjectColor,
                 emojiImages: AppDependencies.emojiImages,
