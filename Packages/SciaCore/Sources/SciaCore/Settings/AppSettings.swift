@@ -28,6 +28,86 @@ public final class AppSettings {
         didSet { defaults.set(statusNameStyle.rawValue, forKey: Keys.statusNameStyle) }
     }
 
+    /// 名前の上の行で、ブーストした人の表示名とacctをどう並べるか。
+    public var contextNameStyle: StatusNameStyle {
+        didSet { defaults.set(contextNameStyle.rawValue, forKey: Keys.contextNameStyle) }
+    }
+
+    /// 時刻の前に、公開でない投稿の公開範囲の記号を出す。
+    public var showsVisibilitySymbol: Bool {
+        didSet { defaults.set(showsVisibilitySymbol, forKey: Keys.showsVisibilitySymbol) }
+    }
+
+    /// 編集された投稿の時刻の前に「*」を出す。
+    public var showsEditedMark: Bool {
+        didSet { defaults.set(showsEditedMark, forKey: Keys.showsEditedMark) }
+    }
+
+    /// 名前の上の行に、ブーストした人のアイコンを出す。
+    public var showsBoosterAvatar: Bool {
+        didSet { defaults.set(showsBoosterAvatar, forKey: Keys.showsBoosterAvatar) }
+    }
+
+    /// 返信の名前の上に、返信先を示すラベルを出す。
+    public var showsReplyLabel: Bool {
+        didSet { defaults.set(showsReplyLabel, forKey: Keys.showsReplyLabel) }
+    }
+
+    /// 返信と返信先の行のアイコンを、線でつなぐ。
+    public var showsReplyLines: Bool {
+        didSet { defaults.set(showsReplyLines, forKey: Keys.showsReplyLines) }
+    }
+
+    /// 名前の行の右端に、時刻を出す。
+    public var showsTime: Bool {
+        didSet { defaults.set(showsTime, forKey: Keys.showsTime) }
+    }
+
+    /// リンクカードに画像を出す。
+    public var showsLinkCardImage: Bool {
+        didSet { defaults.set(showsLinkCardImage, forKey: Keys.showsLinkCardImage) }
+    }
+
+    /// 名前の上の行の先頭に、ブーストや返信を示す記号を出す。
+    public var showsContextSymbol: Bool {
+        didSet { defaults.set(showsContextSymbol, forKey: Keys.showsContextSymbol) }
+    }
+
+    /// 名前の行の先頭の部分を太字にする。
+    public var boldsName: Bool {
+        didSet { defaults.set(boldsName, forKey: Keys.boldsName) }
+    }
+
+    /// アイコンの縁に細い線を引く。
+    public var showsAvatarBorder: Bool {
+        didSet { defaults.set(showsAvatarBorder, forKey: Keys.showsAvatarBorder) }
+    }
+
+    /// サムネイルに、代替テキストやGIFなどを示すバッジを出す。
+    public var showsMediaBadges: Bool {
+        didSet { defaults.set(showsMediaBadges, forKey: Keys.showsMediaBadges) }
+    }
+
+    /// 投稿にリンクカードを出す。
+    public var showsLinkCard: Bool {
+        didSet { defaults.set(showsLinkCard, forKey: Keys.showsLinkCard) }
+    }
+
+    /// リンクカードのタイトルを太字にする。
+    public var boldsLinkCardTitle: Bool {
+        didSet { defaults.set(boldsLinkCardTitle, forKey: Keys.boldsLinkCardTitle) }
+    }
+
+    /// 一覧の投稿と投稿のあいだに区切り線を引く。
+    public var showsSeparators: Bool {
+        didSet { defaults.set(showsSeparators, forKey: Keys.showsSeparators) }
+    }
+
+    /// リンクカードの一番上に、サイト名を出す。
+    public var showsLinkCardSite: Bool {
+        didSet { defaults.set(showsLinkCardSite, forKey: Keys.showsLinkCardSite) }
+    }
+
     public var statusTimeStyle: StatusTimeStyle {
         didSet { defaults.set(statusTimeStyle.rawValue, forKey: Keys.statusTimeStyle) }
     }
@@ -82,6 +162,69 @@ public final class AppSettings {
     /// メニューの「ブースト」でブーストするときの公開範囲。
     public var reblogVisibility: ReblogVisibility {
         didSet { defaults.set(reblogVisibility.rawValue, forKey: Keys.reblogVisibility) }
+    }
+
+    /// 「投稿の見た目」で変えた数値。キーは`AppearanceValue.id`。既定値のままの項目は持たない。
+    public private(set) var appearanceValues: [String: Double]
+
+    public func value(of item: AppearanceValue) -> Double {
+        appearanceValues[item.id] ?? item.defaultValue
+    }
+
+    /// 範囲外の値は範囲内に丸めて保存する。数でない値（NaNや無限）は、行数などを整数に直すところで落ちるため、保存しない。
+    public func setValue(_ value: Double, for item: AppearanceValue) {
+        guard value.isFinite else { return }
+        let clamped = min(max(value, item.range.lowerBound), item.range.upperBound)
+        appearanceValues[item.id] = clamped
+        defaults.set(clamped, forKey: Keys.appearance(item.id))
+    }
+
+    public func isModified(_ item: AppearanceValue) -> Bool {
+        value(of: item) != item.defaultValue
+    }
+
+    /// 「投稿の見た目」の数値か選択肢のどれかが、既定値から変わっているか。
+    public var isAppearanceModified: Bool {
+        typealias D = AppearanceDefaults
+        return AppearanceCatalog.values.contains(where: isModified) || statusNameStyle != D.statusNameStyle || statusTimeStyle != D.statusTimeStyle || contextNameStyle != D.contextNameStyle || glyphLanguage != D.glyphLanguage || emojiStyle != D.emojiStyle || avatarShape != D.avatarShape || linkCardThumbnailSide != D.linkCardThumbnailSide || showsVisibilitySymbol != D.showsVisibilitySymbol || showsEditedMark != D.showsEditedMark || showsLinkCardSite != D.showsLinkCardSite || showsContextSymbol != D.showsContextSymbol || boldsName != D.boldsName || showsAvatarBorder != D.showsAvatarBorder || showsMediaBadges != D.showsMediaBadges || showsLinkCard != D.showsLinkCard || boldsLinkCardTitle != D.boldsLinkCardTitle || showsSeparators != D.showsSeparators || showsBoosterAvatar != D.showsBoosterAvatar || showsReplyLabel != D.showsReplyLabel || showsReplyLines != D.showsReplyLines || showsTime != D.showsTime || showsLinkCardImage != D.showsLinkCardImage || animatesAvatars != D.animatesAvatars || animatesCustomEmojis != D.animatesCustomEmojis
+    }
+
+    /// 「投稿の見た目」の数値と選択肢を、すべて既定値へ戻す。
+    public func resetAppearance() {
+        typealias D = AppearanceDefaults
+        reset(AppearanceCatalog.values)
+        statusNameStyle = D.statusNameStyle
+        statusTimeStyle = D.statusTimeStyle
+        contextNameStyle = D.contextNameStyle
+        glyphLanguage = D.glyphLanguage
+        emojiStyle = D.emojiStyle
+        avatarShape = D.avatarShape
+        linkCardThumbnailSide = D.linkCardThumbnailSide
+        showsVisibilitySymbol = D.showsVisibilitySymbol
+        showsEditedMark = D.showsEditedMark
+        showsLinkCardSite = D.showsLinkCardSite
+        showsContextSymbol = D.showsContextSymbol
+        boldsName = D.boldsName
+        showsAvatarBorder = D.showsAvatarBorder
+        showsMediaBadges = D.showsMediaBadges
+        showsLinkCard = D.showsLinkCard
+        boldsLinkCardTitle = D.boldsLinkCardTitle
+        showsSeparators = D.showsSeparators
+        showsBoosterAvatar = D.showsBoosterAvatar
+        showsReplyLabel = D.showsReplyLabel
+        showsReplyLines = D.showsReplyLines
+        showsTime = D.showsTime
+        showsLinkCardImage = D.showsLinkCardImage
+        animatesAvatars = D.animatesAvatars
+        animatesCustomEmojis = D.animatesCustomEmojis
+    }
+
+    /// 項目を既定値へ戻す。
+    public func reset(_ items: [AppearanceValue]) {
+        for item in items {
+            appearanceValues[item.id] = nil
+            defaults.removeObject(forKey: Keys.appearance(item.id))
+        }
     }
 
     /// アカウントごとのタブの並び。キーはアカウントのハンドル。保存していないアカウントは既定の並びを使う。
@@ -186,6 +329,22 @@ public final class AppSettings {
         static let showsStatusBarTicker = "settings.showsStatusBarTicker"
         static let statusNameStyle = "settings.statusNameStyle"
         static let statusTimeStyle = "settings.statusTimeStyle"
+        static let contextNameStyle = "settings.contextNameStyle"
+        static let showsVisibilitySymbol = "settings.showsVisibilitySymbol"
+        static let showsEditedMark = "settings.showsEditedMark"
+        static let showsLinkCardSite = "settings.showsLinkCardSite"
+        static let showsContextSymbol = "settings.showsContextSymbol"
+        static let boldsName = "settings.boldsName"
+        static let showsAvatarBorder = "settings.showsAvatarBorder"
+        static let showsMediaBadges = "settings.showsMediaBadges"
+        static let showsLinkCard = "settings.showsLinkCard"
+        static let boldsLinkCardTitle = "settings.boldsLinkCardTitle"
+        static let showsSeparators = "settings.showsSeparators"
+        static let showsBoosterAvatar = "settings.showsBoosterAvatar"
+        static let showsReplyLabel = "settings.showsReplyLabel"
+        static let showsReplyLines = "settings.showsReplyLines"
+        static let showsTime = "settings.showsTime"
+        static let showsLinkCardImage = "settings.showsLinkCardImage"
         static let glyphLanguage = "settings.glyphLanguage"
         static let emojiStyle = "settings.emojiStyle"
         static let avatarShape = "settings.avatarShape"
@@ -212,6 +371,10 @@ public final class AppSettings {
         static let mediaDynamicRange = "settings.mediaDynamicRange"
         static let viewerMediaDynamicRange = "settings.viewerMediaDynamicRange"
         static let drawsReactionGlowInHDR = "settings.drawsReactionGlowInHDR"
+
+        static func appearance(_ id: String) -> String {
+            "settings.appearance.\(id)"
+        }
     }
 
     public init(defaults: UserDefaults) {
@@ -219,14 +382,30 @@ public final class AppSettings {
         usesOriginalThumbnailsOnExpensiveNetwork = defaults.object(forKey: Keys.usesOriginalThumbnailsOnExpensiveNetwork) as? Bool ?? true
         ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
         showsStatusBarTicker = defaults.object(forKey: Keys.showsStatusBarTicker) as? Bool ?? true
-        statusNameStyle = defaults.string(forKey: Keys.statusNameStyle).flatMap(StatusNameStyle.init(rawValue:)) ?? .nameAndAcct
-        statusTimeStyle = defaults.string(forKey: Keys.statusTimeStyle).flatMap(StatusTimeStyle.init(rawValue:)) ?? .relative
-        glyphLanguage = defaults.string(forKey: Keys.glyphLanguage).flatMap(GlyphLanguage.init(rawValue:)) ?? .automatic
-        emojiStyle = defaults.string(forKey: Keys.emojiStyle).flatMap(EmojiStyle.init(rawValue:)) ?? .system
-        avatarShape = defaults.string(forKey: Keys.avatarShape).flatMap(AvatarShape.init(rawValue:)) ?? .roundedSquare
-        animatesAvatars = defaults.object(forKey: Keys.animatesAvatars) as? Bool ?? false
-        animatesCustomEmojis = defaults.object(forKey: Keys.animatesCustomEmojis) as? Bool ?? false
-        linkCardThumbnailSide = defaults.string(forKey: Keys.linkCardThumbnailSide).flatMap(LinkCardThumbnailSide.init(rawValue:)) ?? .left
+        statusNameStyle = defaults.string(forKey: Keys.statusNameStyle).flatMap(StatusNameStyle.init(rawValue:)) ?? AppearanceDefaults.statusNameStyle
+        statusTimeStyle = defaults.string(forKey: Keys.statusTimeStyle).flatMap(StatusTimeStyle.init(rawValue:)) ?? AppearanceDefaults.statusTimeStyle
+        contextNameStyle = defaults.string(forKey: Keys.contextNameStyle).flatMap(StatusNameStyle.init(rawValue:)) ?? AppearanceDefaults.contextNameStyle
+        showsVisibilitySymbol = defaults.object(forKey: Keys.showsVisibilitySymbol) as? Bool ?? AppearanceDefaults.showsVisibilitySymbol
+        showsEditedMark = defaults.object(forKey: Keys.showsEditedMark) as? Bool ?? AppearanceDefaults.showsEditedMark
+        showsLinkCardSite = defaults.object(forKey: Keys.showsLinkCardSite) as? Bool ?? AppearanceDefaults.showsLinkCardSite
+        showsContextSymbol = defaults.object(forKey: Keys.showsContextSymbol) as? Bool ?? AppearanceDefaults.showsContextSymbol
+        boldsName = defaults.object(forKey: Keys.boldsName) as? Bool ?? AppearanceDefaults.boldsName
+        showsAvatarBorder = defaults.object(forKey: Keys.showsAvatarBorder) as? Bool ?? AppearanceDefaults.showsAvatarBorder
+        showsMediaBadges = defaults.object(forKey: Keys.showsMediaBadges) as? Bool ?? AppearanceDefaults.showsMediaBadges
+        showsLinkCard = defaults.object(forKey: Keys.showsLinkCard) as? Bool ?? AppearanceDefaults.showsLinkCard
+        boldsLinkCardTitle = defaults.object(forKey: Keys.boldsLinkCardTitle) as? Bool ?? AppearanceDefaults.boldsLinkCardTitle
+        showsSeparators = defaults.object(forKey: Keys.showsSeparators) as? Bool ?? AppearanceDefaults.showsSeparators
+        showsBoosterAvatar = defaults.object(forKey: Keys.showsBoosterAvatar) as? Bool ?? AppearanceDefaults.showsBoosterAvatar
+        showsReplyLabel = defaults.object(forKey: Keys.showsReplyLabel) as? Bool ?? AppearanceDefaults.showsReplyLabel
+        showsReplyLines = defaults.object(forKey: Keys.showsReplyLines) as? Bool ?? AppearanceDefaults.showsReplyLines
+        showsTime = defaults.object(forKey: Keys.showsTime) as? Bool ?? AppearanceDefaults.showsTime
+        showsLinkCardImage = defaults.object(forKey: Keys.showsLinkCardImage) as? Bool ?? AppearanceDefaults.showsLinkCardImage
+        glyphLanguage = defaults.string(forKey: Keys.glyphLanguage).flatMap(GlyphLanguage.init(rawValue:)) ?? AppearanceDefaults.glyphLanguage
+        emojiStyle = defaults.string(forKey: Keys.emojiStyle).flatMap(EmojiStyle.init(rawValue:)) ?? AppearanceDefaults.emojiStyle
+        avatarShape = defaults.string(forKey: Keys.avatarShape).flatMap(AvatarShape.init(rawValue:)) ?? AppearanceDefaults.avatarShape
+        animatesAvatars = defaults.object(forKey: Keys.animatesAvatars) as? Bool ?? AppearanceDefaults.animatesAvatars
+        animatesCustomEmojis = defaults.object(forKey: Keys.animatesCustomEmojis) as? Bool ?? AppearanceDefaults.animatesCustomEmojis
+        linkCardThumbnailSide = defaults.string(forKey: Keys.linkCardThumbnailSide).flatMap(LinkCardThumbnailSide.init(rawValue:)) ?? AppearanceDefaults.linkCardThumbnailSide
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
         linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .external
         reblogVisibility = defaults.string(forKey: Keys.reblogVisibility).flatMap(ReblogVisibility.init(rawValue:)) ?? .accountDefault
@@ -245,9 +424,44 @@ public final class AppSettings {
         mediaDynamicRange = defaults.string(forKey: Keys.mediaDynamicRange).flatMap(MediaDynamicRange.init(rawValue:)) ?? .standard
         viewerMediaDynamicRange = defaults.string(forKey: Keys.viewerMediaDynamicRange).flatMap(MediaDynamicRange.init(rawValue:)) ?? .constrainedHigh
         drawsReactionGlowInHDR = defaults.object(forKey: Keys.drawsReactionGlowInHDR) as? Bool ?? true
+        var appearanceValues: [String: Double] = [:]
+        for item in AppearanceCatalog.values {
+            if let stored = defaults.object(forKey: Keys.appearance(item.id)) as? Double, item.range.contains(stored) {
+                appearanceValues[item.id] = stored
+            }
+        }
+        self.appearanceValues = appearanceValues
         profilePostsFilter = ProfilePostsFilter(
             showsReplies: defaults.object(forKey: Keys.profileShowsReplies) as? Bool ?? ProfilePostsFilter.standard.showsReplies,
             showsBoosts: defaults.object(forKey: Keys.profileShowsBoosts) as? Bool ?? ProfilePostsFilter.standard.showsBoosts
         )
     }
+}
+
+/// 「投稿の見た目」の選択肢の既定値。読み込むときと、まとめて既定に戻すときで同じ値を使う。
+private enum AppearanceDefaults {
+    static let statusNameStyle: StatusNameStyle = .nameAndAcct
+    static let statusTimeStyle: StatusTimeStyle = .relative
+    static let contextNameStyle: StatusNameStyle = .nameOnly
+    static let glyphLanguage: GlyphLanguage = .automatic
+    static let emojiStyle: EmojiStyle = .system
+    static let avatarShape: AvatarShape = .roundedSquare
+    static let linkCardThumbnailSide: LinkCardThumbnailSide = .left
+    static let showsVisibilitySymbol = true
+    static let showsEditedMark = true
+    static let showsLinkCardSite = true
+    static let showsContextSymbol = true
+    static let boldsName = true
+    static let showsAvatarBorder = true
+    static let showsMediaBadges = true
+    static let showsLinkCard = true
+    static let boldsLinkCardTitle = true
+    static let showsSeparators = true
+    static let showsBoosterAvatar = true
+    static let showsReplyLabel = true
+    static let showsReplyLines = true
+    static let showsTime = true
+    static let showsLinkCardImage = true
+    static let animatesAvatars = false
+    static let animatesCustomEmojis = false
 }

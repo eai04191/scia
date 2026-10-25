@@ -14,10 +14,18 @@ final class PollView: UIView {
         /// 選択肢の文字。カスタム絵文字を描いたもの。
         var titles: [NSAttributedString]
         var titleFont: UIFont
+        /// 票数と締め切りと、その横のボタンの文字。投票のボタンは、目立たせるため選択肢と同じ大きさにする。
+        var footerFont: UIFont
+        /// 最後の選択肢と、票数と締め切りの行のあいだ。
+        var footerSpacing: CGFloat
         /// 選択肢どうしのあいだ。
         var optionSpacing: CGFloat
         /// 選択肢の文字の上下の余白。
         var optionPadding: CGFloat
+        /// 選択肢の枠と、記号や割合のあいだの左右の余白。
+        var optionHorizontalPadding: CGFloat = 10
+        /// 選択肢の枠の角の丸み。
+        var optionCornerRadius: CGFloat = 8
         /// 投票したときや読み直したときに、結果の棒が伸びる時間。
         var barDuration: TimeInterval
     }
@@ -48,20 +56,17 @@ final class PollView: UIView {
     private let secondaryButton = UIButton(configuration: .plain())
     private let voteButton = UIButton(configuration: .filled())
     private var secondaryTrailing: [NSLayoutConstraint] = []
+    private lazy var footerTop = footer.topAnchor.constraint(equalTo: optionsStack.bottomAnchor)
     private var secondaryAction: Action?
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         optionsStack.axis = .vertical
-        let footnote = UIFont.preferredFont(forTextStyle: .footnote)
-        summaryLabel.font = footnote
         summaryLabel.textColor = .secondaryLabel
-        summaryLabel.adjustsFontForContentSizeCategory = true
         summaryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         var secondary = UIButton.Configuration.plain()
         secondary.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8)
-        secondary.titleTextAttributesTransformer = Self.fontTransformer(footnote)
         secondaryButton.configuration = secondary
         secondaryButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         secondaryButton.addAction(UIAction { [weak self] _ in
@@ -73,7 +78,6 @@ final class PollView: UIView {
         vote.title = "投票"
         vote.cornerStyle = .capsule
         vote.contentInsets = NSDirectionalEdgeInsets(top: 6, leading: 14, bottom: 6, trailing: 14)
-        vote.titleTextAttributesTransformer = Self.fontTransformer(UIFont.preferredFont(forTextStyle: .subheadline).withWeight(.semibold))
         voteButton.configuration = vote
         voteButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         voteButton.addAction(UIAction { [weak self] _ in self?.onAction?(.submit) }, for: .primaryActionTriggered)
@@ -94,7 +98,7 @@ final class PollView: UIView {
             optionsStack.topAnchor.constraint(equalTo: topAnchor),
             optionsStack.leadingAnchor.constraint(equalTo: leadingAnchor),
             optionsStack.trailingAnchor.constraint(equalTo: trailingAnchor),
-            footer.topAnchor.constraint(equalTo: optionsStack.bottomAnchor, constant: 6),
+            footerTop,
             footer.leadingAnchor.constraint(equalTo: leadingAnchor),
             footer.trailingAnchor.constraint(equalTo: trailingAnchor),
             footer.bottomAnchor.constraint(equalTo: bottomAnchor),
@@ -127,6 +131,7 @@ final class PollView: UIView {
         self.content = content
         let display = content.display
         optionsStack.spacing = content.optionSpacing
+        footerTop.constant = content.footerSpacing
         while optionViews.count < display.options.count {
             let option = PollOptionView()
             let index = optionViews.count
@@ -161,6 +166,8 @@ final class PollView: UIView {
                 mode: display.mode,
                 multiple: display.multiple,
                 padding: content.optionPadding,
+                horizontalPadding: content.optionHorizontalPadding,
+                cornerRadius: content.optionCornerRadius,
                 barStart: start
             )
         }
@@ -177,6 +184,11 @@ final class PollView: UIView {
             }
         }
 
+        if content.footerFont != previous?.footerFont || content.titleFont != previous?.titleFont {
+            summaryLabel.font = content.footerFont
+            secondaryButton.configuration?.titleTextAttributesTransformer = Self.fontTransformer(content.footerFont)
+            voteButton.configuration?.titleTextAttributesTransformer = Self.fontTransformer(content.titleFont.withWeight(.semibold))
+        }
         summaryLabel.text = display.summary
         voteButton.isHidden = display.mode == .results
         voteButton.isEnabled = display.canSubmit
@@ -194,6 +206,29 @@ final class PollView: UIView {
         secondaryButton.isEnabled = secondary?.enabled ?? false
         NSLayoutConstraint.deactivate(secondaryTrailing)
         secondaryTrailing[voteButton.isHidden ? 1 : 0].isActive = true
+    }
+
+    /// 表示中の選択肢ごとの、枠と文字の枠。「投稿の見た目」のプレビューで、選択肢のあいだと上下の余白を示すときに使う。
+    func optionPreviewFrames(in space: UIView) -> [(option: CGRect, title: CGRect)] {
+        optionViews.compactMap { option in
+            guard let frame = option.previewFrame(in: space)?.first, let title = option.titleLabel.previewFrame(in: space)?.first else { return nil }
+            return (frame, title)
+        }
+    }
+
+    /// 票数と締め切りの文字の枠。
+    func summaryPreviewFrame(in space: UIView) -> [CGRect]? {
+        summaryLabel.previewFrame(in: space)
+    }
+
+    /// 選択肢を並べた枠。
+    func optionsPreviewFrame(in space: UIView) -> [CGRect]? {
+        optionsStack.previewFrame(in: space)
+    }
+
+    /// 票数と締め切りの行の枠。「投稿の見た目」のプレビューで場所を示すときに使う。
+    func footerPreviewFrame(in space: UIView) -> [CGRect]? {
+        footer.previewFrame(in: space)
     }
 
     /// 読み上げの要素。選択肢、人数と締め切り、ボタンの順。
@@ -259,7 +294,9 @@ final class PollOptionView: UIControl {
         case keep
     }
 
-    func apply(_ option: PollDisplay.Option, title: NSAttributedString, font: UIFont, mode: PollDisplay.Mode, multiple: Bool, padding: CGFloat, barStart: BarStart) {
+    func apply(_ option: PollDisplay.Option, title: NSAttributedString, font: UIFont, mode: PollDisplay.Mode, multiple: Bool, padding: CGFloat, horizontalPadding: CGFloat, cornerRadius: CGFloat, barStart: BarStart) {
+        layer.cornerRadius = cornerRadius
+        barView.layer.cornerRadius = cornerRadius
         titleLabel.attributedText = title
         let showsResults = mode == .results
         isUserInteractionEnabled = !showsResults
@@ -296,16 +333,16 @@ final class PollOptionView: UIControl {
         NSLayoutConstraint.deactivate(variableConstraints)
         variableConstraints = [
             // 記号は、割合より細いので、先頭の場所の中央に置く。端に寄せると、文字とのあいだが間延びして見えるため。
-            indicatorView.centerXAnchor.constraint(equalTo: leadingAnchor, constant: 10 + leadingWidth / 2),
+            indicatorView.centerXAnchor.constraint(equalTo: leadingAnchor, constant: horizontalPadding + leadingWidth / 2),
             indicatorView.centerYAnchor.constraint(equalTo: titleLabel.firstBaselineAnchor, constant: -font.capHeight / 2),
-            percentLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10),
+            percentLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: horizontalPadding),
             percentLabel.widthAnchor.constraint(equalToConstant: leadingWidth),
             percentLabel.firstBaselineAnchor.constraint(equalTo: titleLabel.firstBaselineAnchor),
-            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 10 + leadingWidth + 6),
-            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -(10 + trailingWidth + 4)),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: horizontalPadding + leadingWidth + 6),
+            titleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -(horizontalPadding + trailingWidth + 4)),
             titleLabel.topAnchor.constraint(equalTo: topAnchor, constant: padding),
             bottomAnchor.constraint(equalTo: titleLabel.bottomAnchor, constant: padding),
-            ownVoteView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -10),
+            ownVoteView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -horizontalPadding),
             ownVoteView.centerYAnchor.constraint(equalTo: titleLabel.firstBaselineAnchor, constant: -font.capHeight / 2),
         ]
         NSLayoutConstraint.activate(variableConstraints)

@@ -10,6 +10,12 @@ final class SpoilerView: UIControl {
         var kind: PostBodyContent.Spoiler.Kind
         /// ボックスの内側の余白。
         var padding: CGFloat
+        /// 開閉のボタンの文字。
+        var buttonFont: UIFont
+        /// 注意書きの文字と、開閉のボタンのあいだ。
+        var buttonSpacing: CGFloat
+        /// ボックスの角の丸み。
+        var cornerRadius: CGFloat
     }
 
     private let textLabel = EmojiLabel()
@@ -19,11 +25,8 @@ final class SpoilerView: UIControl {
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .tertiarySystemFill
-        layer.cornerRadius = 8
         layer.cornerCurve = .continuous
         textLabel.numberOfLines = 0
-        toggleLabel.font = .preferredFont(forTextStyle: .footnote).bold
-        toggleLabel.adjustsFontForContentSizeCategory = true
         toggleLabel.textColor = .tintColor
         for label in [textLabel, toggleLabel] {
             label.translatesAutoresizingMaskIntoConstraints = false
@@ -31,7 +34,6 @@ final class SpoilerView: UIControl {
             addSubview(label)
         }
         NSLayoutConstraint.activate([
-            toggleLabel.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: 4),
             toggleLabel.leadingAnchor.constraint(equalTo: textLabel.leadingAnchor),
             toggleLabel.trailingAnchor.constraint(lessThanOrEqualTo: textLabel.trailingAnchor),
         ])
@@ -52,15 +54,28 @@ final class SpoilerView: UIControl {
 
     func apply(_ content: Content) {
         textLabel.attributedText = content.text
+        layer.cornerRadius = content.cornerRadius
+        toggleLabel.font = content.buttonFont
         toggleLabel.attributedText = Self.toggleText(isCollapsed: content.isCollapsed, kind: content.kind, font: toggleLabel.font)
         NSLayoutConstraint.deactivate(paddingConstraints)
         paddingConstraints = [
             textLabel.firstBaselineAnchor.constraint(equalTo: topAnchor, constant: content.padding + PostBodyView.textTopInset(of: content.text)),
             textLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: content.padding),
+            toggleLabel.topAnchor.constraint(equalTo: textLabel.bottomAnchor, constant: content.buttonSpacing),
             textLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -content.padding),
             bottomAnchor.constraint(equalTo: toggleLabel.lastBaselineAnchor, constant: content.padding + toggleLabel.font.pointSize * PostBodyView.emBoxDescent),
         ]
         NSLayoutConstraint.activate(paddingConstraints)
+    }
+
+    /// 開閉のボタンの文字の枠。「投稿の見た目」のプレビューで場所を示すときに使う。
+    func buttonPreviewFrame(in space: UIView) -> [CGRect]? {
+        toggleLabel.previewFrame(in: space)
+    }
+
+    /// 注意書きの文字の枠。「投稿の見た目」のプレビューで、文字と開くボタンのあいだを示すときに使う。
+    func textPreviewFrame(in space: UIView) -> [CGRect]? {
+        textLabel.previewFrame(in: space)
     }
 
     static func toggleTitle(isCollapsed: Bool, kind: PostBodyContent.Spoiler.Kind) -> String {

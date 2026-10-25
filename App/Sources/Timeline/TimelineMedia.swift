@@ -132,7 +132,7 @@ extension MediaGridView.Content {
         return MediaGridView.Content(
             attachments: attachments.map { $0.filteringAltText(ignoresUseless: settings.ignoresUselessAltText) },
             cover: cover,
-            tallestAspectRatio: tuning.value(of: TuningCatalog.mediaTallestAspectRatio),
+            tallestAspectRatio: settings.value(of: AppearanceCatalog.mediaTallestAspectRatio),
             thumbnailPolicy: MediaThumbnailPolicy(
                 allowsOriginal: MediaThumbnailSelection.allowsOriginal(
                     on: network.conditions,
@@ -140,7 +140,9 @@ extension MediaGridView.Content {
                 ),
                 upscaleTolerance: tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
             ),
-            spacing: tuning.value(of: TuningCatalog.mediaTileSpacing)
+            spacing: settings.value(of: AppearanceCatalog.mediaTileSpacing),
+            widestAspectRatio: settings.value(of: AppearanceCatalog.mediaWidestAspectRatio),
+            showsBadges: settings.showsMediaBadges
         )
     }
 }

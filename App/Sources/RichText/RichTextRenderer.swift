@@ -9,14 +9,17 @@ struct RichTextRenderer {
     var secondaryColor: UIColor = .secondaryLabel
     var linkColor: UIColor = .tintColor
     var paragraphSpacing: CGFloat = 0
+    /// 行と行のあいだに足す余白。
+    var lineSpacing: CGFloat = 0
+    /// 引用とリストの1段あたりの字下げ。
+    var indentPerLevel: CGFloat = 16
+    /// カスタム絵文字の高さの、文字の行の高さに対する割合。
+    var emojiScale: CGFloat = 1
     let emojiImages: EmojiImageStore
     /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
     let language: String
     /// Unicodeの絵文字を描く絵。描く場所ごとに渡さず、設定から読む。
     var emojiStyle: EmojiStyle = AppDependencies.settings.emojiStyle
-
-    /// 引用とリストの1段あたりの字下げ。
-    private let indentPerLevel: CGFloat = 16
 
     func render(_ text: RichText) -> NSAttributedString {
         let result = NSMutableAttributedString()
@@ -197,15 +200,17 @@ struct RichTextRenderer {
         if image == nil, emojiImages.hasFailed(emoji.staticUrl) {
             return NSAttributedString(string: ":\(emoji.shortcode):", attributes: attributes(style: [], block: block))
         }
-        let height = font.lineHeight
+        let height = font.lineHeight * emojiScale
+        // 下端は文字の下端に揃え、大きくしたときは上へ伸ばす。ベースラインより下へはみ出すと、ラベルが見積もる高さと描く高さがずれ、本文が上の行に重なるため。
+        let y = font.descender
         let attachment = NSTextAttachment()
         if let image, image.size.height > 0 {
             attachment.image = image
-            attachment.bounds = CGRect(x: 0, y: font.descender, width: height * image.size.width / image.size.height, height: height)
+            attachment.bounds = CGRect(x: 0, y: y, width: height * image.size.width / image.size.height, height: height)
         } else {
             // 読み込み中は同じ高さの空白で場所を取っておく。
             attachment.image = Self.placeholder
-            attachment.bounds = CGRect(x: 0, y: font.descender, width: height, height: height)
+            attachment.bounds = CGRect(x: 0, y: y, width: height, height: height)
         }
         let string = NSMutableAttributedString(attachment: attachment)
         string.addAttributes(attributes(style: [], block: block), range: NSRange(location: 0, length: string.length))
@@ -257,6 +262,12 @@ struct RichTextRenderer {
     private func paragraphStyle(for block: RichText.Block) -> NSParagraphStyle {
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = paragraphSpacing
+        style.lineSpacing = lineSpacing
+        // カスタム絵文字を文字の行より大きくした段落は、行の高さを絵文字の高さ以上にする。
+        // 指定しないと、UILabelが見積もる高さより描く行が高くなり、ラベルが文字を縦の中央に寄せて、1行目が上の部品に重なる。
+        if emojiScale > 1, block.inlines.contains(where: { if case .emoji = $0 { true } else { false } }) {
+            style.minimumLineHeight = ceil(font.lineHeight * emojiScale)
+        }
         let indent = CGFloat(block.quoteLevel + max(0, block.listLevel - 1)) * indentPerLevel
         style.firstLineHeadIndent = indent
         style.headIndent = indent

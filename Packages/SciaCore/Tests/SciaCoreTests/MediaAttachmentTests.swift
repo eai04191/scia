@@ -113,4 +113,14 @@ struct MediaGridLayoutTests {
         #expect(grid.frames.count == 4)
         #expect(grid.hiddenCount == 2)
     }
+
+    /// すき間が並べる幅や高さより大きくても、タイルの大きさが負にならない。設定でアイコンとすき間を大きくすると起きる。
+    @Test(arguments: [2, 3, 4])
+    func spacingLargerThanTilesKeepsSizesNonNegative(count: Int) {
+        let layout = MediaGridLayout(aspectRatios: Array(repeating: 1, count: count), width: 168, spacing: 100, tallestAspectRatio: 0.75, widestAspectRatio: 3)
+        for frame in layout.frames {
+            #expect(frame.width >= 0 && frame.height >= 0)
+            #expect(frame.maxX <= 168 + 0.001 && frame.maxY <= layout.height + 0.001)
+        }
+    }
 }

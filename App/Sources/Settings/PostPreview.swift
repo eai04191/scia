@@ -14,6 +14,7 @@ struct PostPreview: UIViewRepresentable {
     let linkCardThumbnailSide: LinkCardThumbnailSide
     let glyphLanguage: GlyphLanguage
     let emojiStyle: EmojiStyle
+    var appearanceValues: [String: Double] = [:]
     /// お気に入りとブーストをした投稿の見本にする。下の端の光を見せるため。
     var showsReactions = false
     var drawsReactionGlowInHDR = true

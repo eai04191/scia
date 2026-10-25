@@ -71,64 +71,36 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    PostPreview(
-                        createdAt: previewDate,
-                        nameStyle: settings.statusNameStyle,
-                        timeStyle: settings.statusTimeStyle,
-                        avatarShape: settings.avatarShape,
-                        animatesAvatars: settings.animatesAvatars,
-                        linkCardThumbnailSide: settings.linkCardThumbnailSide,
-                        glyphLanguage: settings.glyphLanguage,
-                        emojiStyle: settings.emojiStyle,
-                        builder: PostContentBuilder(
-                            tuning: AppDependencies.tuning,
-                            settings: settings,
-                            emojiImages: AppDependencies.emojiImages,
-                            mediaImages: AppDependencies.mediaImages,
-                            avatarImages: AppDependencies.avatarImages
+                    NavigationLink {
+                        AppearanceEditorView(settings: settings)
+                    } label: {
+                        PostPreview(
+                            createdAt: previewDate,
+                            nameStyle: settings.statusNameStyle,
+                            timeStyle: settings.statusTimeStyle,
+                            avatarShape: settings.avatarShape,
+                            animatesAvatars: settings.animatesAvatars,
+                            linkCardThumbnailSide: settings.linkCardThumbnailSide,
+                            glyphLanguage: settings.glyphLanguage,
+                            emojiStyle: settings.emojiStyle,
+                            appearanceValues: settings.appearanceValues,
+                            builder: PostContentBuilder(
+                                tuning: AppDependencies.tuning,
+                                settings: settings,
+                                emojiImages: AppDependencies.emojiImages,
+                                mediaImages: AppDependencies.mediaImages,
+                                avatarImages: AppDependencies.avatarImages
+                            )
                         )
-                    )
-                    // 余白は投稿のセルと同じものを、見本の中で取る。
-                    .listRowInsets(EdgeInsets())
+                        // 見本は押しても動かさず、行全体で「投稿の見た目」を開く。
+                        .allowsHitTesting(false)
+                    }
+                    // 見本は一覧の行と同じ余白を自分で取るので、行の余白を重ねない。右は、開く印を置くぶんだけ空ける。
+                    .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 16))
                 } header: {
-                    Text("プレビュー")
-                }
-                Section {
-                    Picker("名前の表記", selection: $settings.statusNameStyle) {
-                        Text("名前、ハンドル").tag(StatusNameStyle.nameAndAcct)
-                        Text("名前").tag(StatusNameStyle.nameOnly)
-                        Text("ハンドル").tag(StatusNameStyle.acctOnly)
-                        Text("ハンドル、名前").tag(StatusNameStyle.acctAndName)
-                    }
-                    Picker("時刻の表記", selection: $settings.statusTimeStyle) {
-                        Text("相対時刻").tag(StatusTimeStyle.relative)
-                        Text("日時").tag(StatusTimeStyle.absolute)
-                    }
-                    Picker("アイコンの形", selection: $settings.avatarShape) {
-                        Text("円").tag(AvatarShape.circle)
-                        Text("角丸の四角").tag(AvatarShape.roundedSquare)
-                    }
-                    Toggle("アイコンのアニメーションを再生する", isOn: $settings.animatesAvatars)
-                    Toggle("カスタム絵文字のアニメーションを再生する", isOn: $settings.animatesCustomEmojis)
-                    Picker("リンクカードの画像の位置", selection: $settings.linkCardThumbnailSide) {
-                        Text("左").tag(LinkCardThumbnailSide.left)
-                        Text("右").tag(LinkCardThumbnailSide.right)
-                    }
-                    Picker("漢字の字形", selection: $settings.glyphLanguage) {
-                        Text("自動").tag(GlyphLanguage.automatic)
-                        Text("日本語").tag(GlyphLanguage.japanese)
-                        Text("簡体字中国語").tag(GlyphLanguage.simplifiedChinese)
-                        Text("繁体字中国語").tag(GlyphLanguage.traditionalChinese)
-                        Text("韓国語").tag(GlyphLanguage.korean)
-                    }
-                    Picker("絵文字", selection: $settings.emojiStyle) {
-                        Text("Apple").tag(EmojiStyle.system)
-                        Text("Twemoji").tag(EmojiStyle.twemoji)
-                    }
-                } header: {
-                    Text("投稿の表示")
+                    Text("投稿の見た目")
                 } footer: {
-                    Text("相対時刻では、1週間より前の投稿は日付で表示します。\n漢字の字形は、言語の付いていない投稿や名前で使います。投稿に日本語・中国語・韓国語の言語が付いていれば、その言語の字形で表示します。「自動」では、iPhoneの言語の一覧で最初の日本語・中国語・韓国語に従い、どれもなければ日本語にします。")
+                    Text("文字の大きさや余白、名前や時刻の表記を、プレビューを見ながら変えます。")
                 }
                 Section {
                     PostPreview(

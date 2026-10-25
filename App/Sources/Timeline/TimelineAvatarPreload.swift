@@ -18,7 +18,7 @@ extension TimelineViewController {
             case .account(let account):
                 let content = avatarContent(of: account)
                 if let url = content.url {
-                    keys.insert(AvatarView.key(url: url, animates: content.animates, side: tuning.value(of: TuningCatalog.avatarSize), scale: traitCollection.displayScale))
+                    keys.insert(AvatarView.key(url: url, animates: content.animates, side: settings.value(of: AppearanceCatalog.avatarSize), scale: traitCollection.displayScale))
                 }
             case .gap, .unreadable:
                 break
@@ -33,12 +33,13 @@ extension TimelineViewController {
         var keys: [AvatarImageStore.Key] = []
         let shown = avatarContent(of: status.displayed.account)
         if let url = shown.url {
-            keys.append(AvatarView.key(url: url, animates: shown.animates, side: tuning.value(of: TuningCatalog.avatarSize), scale: scale))
+            keys.append(AvatarView.key(url: url, animates: shown.animates, side: settings.value(of: AppearanceCatalog.avatarSize), scale: scale))
         }
-        if status.reblog != nil {
+        // ブーストした人のアイコンを出さない設定では読まない。新着の挿入は、ここで並べたアイコンを待つため。
+        if status.reblog != nil, settings.showsBoosterAvatar {
             let booster = avatarContent(of: status.account)
             if let url = booster.url {
-                keys.append(AvatarView.key(url: url, animates: booster.animates, side: tuning.value(of: TuningCatalog.boosterAvatarSize), scale: scale))
+                keys.append(AvatarView.key(url: url, animates: booster.animates, side: settings.value(of: AppearanceCatalog.boosterAvatarSize), scale: scale))
             }
         }
         return keys

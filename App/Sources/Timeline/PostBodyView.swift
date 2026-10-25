@@ -23,6 +23,12 @@ struct PostBodyContent {
         var padding: CGFloat
         /// 開いているときの、注意書きのボックスと本文のあいだ。
         var bodySpacing: CGFloat
+        /// 開閉のボタンの文字。
+        var buttonFont: UIFont
+        /// 注意書きの文字と、開閉のボタンのあいだ。
+        var buttonSpacing: CGFloat
+        /// ボックスの角の丸み。
+        var cornerRadius: CGFloat
     }
 
     /// 注意書きがなければnil。
@@ -44,6 +50,8 @@ struct PostBodyContent {
     var cardSpacing: CGFloat = 0
     /// Xの投稿の囲み。あれば、リンクカードの代わりに同じ位置に置く。
     var xPost: XPostView.Content?
+    /// 本文か添付ファイルと、Xの投稿の囲みのあいだ。
+    var xPostSpacing: CGFloat = 0
     /// 表示している投稿。リンクカードから囲みに替わったのが同じ投稿の行かを見分ける。同じXの投稿へのリンクは、別の投稿にもありうるため。
     var statusID: Status.ID?
     /// 本文のハッシュタグのメニューの「ユーザーの投稿」で開くユーザー。投稿した人。nilなら項目を出さない。
@@ -73,6 +81,11 @@ final class PostBodyView: UIView {
     private let mediaImages: MediaImageStore
     private let avatarImages: AvatarImageStore
     private let textLabel = LinkLabel()
+    /// 本文の最初と最後のベースラインの位置。本文の上下のすき間は字面から測るので、「投稿の見た目」のプレビューで字面の枠を求めるのに使う。
+    private let textFirstBaselineGuide = UILayoutGuide()
+    private let textLastBaselineGuide = UILayoutGuide()
+    /// フィルターの注記の最初のベースラインの位置。注記の上のすき間も字面から測るので、プレビューで字面の上端を求めるのに使う。
+    private let filterNoteBaselineGuide = UILayoutGuide()
     // 本文のほかの部品は、その中身が初めて来たときに作り、そのあとは隠して持っておく。
     // どれも持たない投稿が多いのに、行を作るたびに全部を作ると、まとめて行を作る画面の最初の表示でメインスレッドが止まるため。
     private var spoilerView: SpoilerView?
@@ -115,6 +128,109 @@ final class PostBodyView: UIView {
         Self.shown(spoilerView) == nil && textLabel.isHidden && mediaGrid != nil
     }
 
+    /// 「投稿の見た目」のプレビューで、部品の場所を示すための枠。`space`の座標で返す。
+    func previewFrames(in space: UIView) -> AppearancePreviewFrames {
+        var frames: AppearancePreviewFrames = [
+            .spoiler: Self.shown(spoilerView)?.previewFrame(in: space),
+            .spoilerButton: Self.shown(spoilerView)?.buttonPreviewFrame(in: space),
+            .spoilerText: Self.shown(spoilerView)?.textPreviewFrame(in: space),
+            .bodyText: textLabel.previewFrame(in: space),
+            .bodyGlyphs: textGlyphsFrame(in: space),
+            .media: mediaGrid?.previewFrame(in: space),
+            .card: linkCard?.previewFrame(in: space),
+            .poll: poll?.previewFrame(in: space),
+            .pollOptions: poll?.optionsPreviewFrame(in: space),
+            .filterNote: filterNoteGlyphsFrame(in: space),
+            .pollFooter: poll?.footerPreviewFrame(in: space),
+        ].compactMapValues(\.self)
+        if let card = linkCard {
+            frames.merge(card.textPreviewFrames(in: space)) { $1 }
+        }
+        if let xPost {
+            frames.merge(xPost.previewFrames(in: space)) { $1 }
+        }
+        frames.merge(textLinePreviewFrames(in: space)) { $1 }
+        if let spoiler = Self.shown(spoilerView)?.previewFrame(in: space)?.first, let content = content?.spoiler {
+            frames[.spoilerPaddingBands] = AppearanceHighlight.paddingBands(of: spoiler, padding: content.padding)
+            frames[.spoilerCorners] = AppearanceHighlight.cornerSquares(of: spoiler, radius: content.cornerRadius)
+        }
+        if let summary = poll?.summaryPreviewFrame(in: space) {
+            frames[.pollSummary] = summary
+        }
+        if let tiles = mediaGrid?.tilePreviewFrames(in: space) {
+            if tiles.count > 1 {
+                frames[.mediaTileGaps] = AppearanceHighlight.gaps(between: tiles)
+            } else if !tiles.isEmpty {
+                frames[.singleMedia] = tiles
+                if let ratio = content?.media?.attachments.first?.aspectRatio {
+                    frames[ratio < 1 ? .singleTallMedia : .singleWideMedia] = tiles
+                }
+            }
+        }
+        if let options = poll?.optionPreviewFrames(in: space), !options.isEmpty {
+            if options.count > 1 {
+                frames[.pollOptionGaps] = AppearanceHighlight.gaps(between: options.map(\.option))
+            }
+            let radius = content?.poll?.optionCornerRadius ?? 0
+            frames[.pollOptionCorners] = options.flatMap { AppearanceHighlight.cornerSquares(of: $0.option, radius: radius) }
+            let side = content?.poll?.optionHorizontalPadding ?? 0
+            frames[.pollOptionSidePadding] = options.flatMap { option, _ in
+                [
+                    CGRect(x: option.minX, y: option.minY, width: side, height: option.height),
+                    CGRect(x: option.maxX - side, y: option.minY, width: side, height: option.height),
+                ]
+            }
+            frames[.pollOptionPadding] = options.flatMap { option, title in
+                [
+                    CGRect(x: option.minX, y: option.minY, width: option.width, height: max(title.minY - option.minY, AppearanceHighlight.minimumGapThickness)),
+                    CGRect(x: option.minX, y: title.maxY, width: option.width, height: max(option.maxY - title.maxY, AppearanceHighlight.minimumGapThickness)),
+                ]
+            }
+        }
+        return frames
+    }
+
+    /// 本文の行間、段落のあいだ、字下げの枠。行の位置は、UILabelと同じ並べ方で求める。
+    private func textLinePreviewFrames(in space: UIView) -> AppearancePreviewFrames {
+        guard !textLabel.isHidden, let label = textLabel.previewFrame(in: space)?.first else { return [:] }
+        let lines = textLabel.previewLines().map { line in
+            (frame: textLabel.convert(line.frame, to: space), startsParagraph: line.startsParagraph, indent: line.indent)
+        }
+        var lineGaps: [CGRect] = []
+        var paragraphGaps: [CGRect] = []
+        for (above, below) in zip(lines, lines.dropFirst()) {
+            let gap = CGRect(x: label.minX, y: above.frame.maxY, width: label.width, height: max(below.frame.minY - above.frame.maxY, 0))
+            if below.startsParagraph {
+                paragraphGaps.append(gap)
+            } else {
+                lineGaps.append(gap)
+            }
+        }
+        let indents = lines.filter { $0.indent > 0 }.map { CGRect(x: label.minX, y: $0.frame.minY, width: $0.indent, height: $0.frame.height) }
+        var frames: AppearancePreviewFrames = [:]
+        frames[.bodyLineGaps] = lineGaps.isEmpty ? nil : lineGaps
+        frames[.bodyParagraphGaps] = paragraphGaps.isEmpty ? nil : paragraphGaps
+        frames[.quoteIndent] = indents.isEmpty ? nil : indents
+        let emojis = textLabel.previewCustomEmojiFrames().map { textLabel.convert($0, to: space) }
+        frames[.customEmojis] = emojis.isEmpty ? nil : emojis
+        return frames
+    }
+
+    /// 本文の字面の枠。上端は最初のベースラインから、下端は最後のベースラインから、em枠で測る。並びも同じ測り方で、すき間を取っている。
+    private func textGlyphsFrame(in space: UIView) -> [CGRect]? {
+        guard let label = textLabel.previewFrame(in: space)?.first, let text = textLabel.attributedText else { return nil }
+        let top = convert(CGPoint(x: 0, y: textFirstBaselineGuide.layoutFrame.minY - Self.textTopInset(of: text)), to: space).y
+        let bottom = convert(CGPoint(x: 0, y: textLastBaselineGuide.layoutFrame.minY + Self.textBottomInset(of: text)), to: space).y
+        return [CGRect(x: label.minX, y: top, width: label.width, height: max(bottom - top, 0))]
+    }
+
+    /// フィルターの注記の枠。上端は、最初のベースラインからem枠で測った字面の上端にする。
+    private func filterNoteGlyphsFrame(in space: UIView) -> [CGRect]? {
+        guard let note = filterNote, let frame = note.previewFrame(in: space)?.first, let text = note.attributedText else { return nil }
+        let top = convert(CGPoint(x: 0, y: filterNoteBaselineGuide.layoutFrame.minY - Self.textTopInset(of: text)), to: space).y
+        return [CGRect(x: frame.minX, y: top, width: frame.width, height: max(frame.maxY - top, 0))]
+    }
+
     /// 注意書きと本文の枠。読み上げの要素の範囲を決めるときに使う。
     var textFrame: CGRect {
         [Self.shown(spoilerView), Self.shown(textLabel)].compactMap(\.self).map(\.frame).reduce(CGRect.null) { $0.union($1) }
@@ -136,6 +252,15 @@ final class PostBodyView: UIView {
         super.init(frame: .zero)
         textLabel.numberOfLines = 0
         install(textLabel)
+        for guide in [textFirstBaselineGuide, textLastBaselineGuide] {
+            addLayoutGuide(guide)
+        }
+        NSLayoutConstraint.activate([
+            textFirstBaselineGuide.topAnchor.constraint(equalTo: textLabel.firstBaselineAnchor),
+            textFirstBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
+            textLastBaselineGuide.topAnchor.constraint(equalTo: textLabel.lastBaselineAnchor),
+            textLastBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
+        ])
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
     }
 
@@ -221,6 +346,11 @@ final class PostBodyView: UIView {
         let label = UILabel()
         label.numberOfLines = 0
         install(label)
+        addLayoutGuide(filterNoteBaselineGuide)
+        NSLayoutConstraint.activate([
+            filterNoteBaselineGuide.topAnchor.constraint(equalTo: label.firstBaselineAnchor),
+            filterNoteBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
+        ])
         filterNoteLabel = label
         return label
     }
@@ -258,7 +388,7 @@ final class PostBodyView: UIView {
         let shownMedia = applyMedia(media, below: shownPoll, spacing: content.mediaSpacing, placement: placement)
         let shownCard = applyCard(card, below: shownMedia ?? shownPoll, spacing: content.cardSpacing, placement: placement)
         let replacesCard = previous?.xPost == nil && previous?.card != nil && content.statusID != nil && previous?.statusID == content.statusID
-        let shownXPost = applyXPost(xPost, replacesCard: replacesCard, below: shownMedia ?? shownPoll, spacing: content.cardSpacing, placement: placement)
+        let shownXPost = applyXPost(xPost, replacesCard: replacesCard, below: shownMedia ?? shownPoll, spacing: content.xPostSpacing, placement: placement)
         // 添付ファイルもリンクカードもないのに本文を隠すのは、注意書きがあるときだけ。
         let last: UIView = if let shownXPost {
             shownXPost
@@ -306,7 +436,7 @@ final class PostBodyView: UIView {
         }
         let spoilerView = loadedSpoilerView()
         spoilerView.isHidden = false
-        spoilerView.apply(SpoilerView.Content(text: spoiler.text, isCollapsed: spoiler.isCollapsed, kind: spoiler.kind, padding: spoiler.padding))
+        spoilerView.apply(SpoilerView.Content(text: spoiler.text, isCollapsed: spoiler.isCollapsed, kind: spoiler.kind, padding: spoiler.padding, buttonFont: spoiler.buttonFont, buttonSpacing: spoiler.buttonSpacing, cornerRadius: spoiler.cornerRadius))
         return spoilerView
     }
 

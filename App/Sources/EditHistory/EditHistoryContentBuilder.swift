@@ -64,7 +64,7 @@ struct EditHistoryContentBuilder {
         let renderer = RichTextRenderer(
             font: base.secondaryTextProperties.font,
             textColor: .label,
-            paragraphSpacing: tuning.value(of: TuningCatalog.paragraphSpacing),
+            paragraphSpacing: settings.value(of: AppearanceCatalog.paragraphSpacing),
             emojiImages: emojiImages,
             language: settings.glyphLanguageIdentifier(for: language)
         )
@@ -106,7 +106,7 @@ struct EditHistoryContentBuilder {
                 return mediaChange(for: change, renderer: small) { media([$0], cover: thumbnailCover) }
             },
             pollOptions: pollOptions(of: entry, renderer: renderer),
-            spacing: tuning.value(of: TuningCatalog.bodyMediaSpacing),
+            spacing: settings.value(of: AppearanceCatalog.bodyMediaSpacing),
             animatedEmojis: settings.animatesCustomEmojis ? emojiImages : nil
         )
     }

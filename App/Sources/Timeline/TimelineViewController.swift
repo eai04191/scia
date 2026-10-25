@@ -472,27 +472,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// サムネイルは、低データモードを抜けたときなどに、表示中のものも読む画像を選び直す。
     private func observeTuning() {
         withObservationTracking {
-            _ = tuning.value(of: TuningCatalog.paragraphSpacing)
-            _ = tuning.value(of: TuningCatalog.mediaTallestAspectRatio)
+            _ = settings.appearanceValues
             _ = tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
-            _ = tuning.value(of: TuningCatalog.avatarSize)
-            _ = tuning.value(of: TuningCatalog.boosterAvatarSize)
-            _ = tuning.value(of: TuningCatalog.nameFadeWidth)
-            _ = tuning.value(of: TuningCatalog.contextSymbolSpacing)
-            _ = tuning.value(of: TuningCatalog.avatarSpacing)
-            _ = tuning.value(of: TuningCatalog.contextSpacing)
-            _ = tuning.value(of: TuningCatalog.replyLineWidth)
-            _ = tuning.value(of: TuningCatalog.replyLineGap)
-            _ = tuning.value(of: TuningCatalog.nameBodySpacing)
-            _ = tuning.value(of: TuningCatalog.bodyMediaSpacing)
-            _ = tuning.value(of: TuningCatalog.nameMediaSpacing)
-            _ = tuning.value(of: TuningCatalog.bodyLinkCardSpacing)
-            _ = tuning.value(of: TuningCatalog.linkCardPadding)
             _ = tuning.value(of: TuningCatalog.xPostEmbeds)
-            _ = tuning.value(of: TuningCatalog.xPostAvatarSize)
-            _ = tuning.value(of: TuningCatalog.spoilerPadding)
-            _ = tuning.value(of: TuningCatalog.spoilerBodySpacing)
-            _ = tuning.value(of: TuningCatalog.mediaTileSpacing)
             _ = tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing)
             _ = tuning.value(of: TuningCatalog.notificationHeaderDetailSpacing)
             _ = tuning.value(of: TuningCatalog.notificationQuotedSpacing)
@@ -522,6 +504,22 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = settings.usesOriginalThumbnailsOnExpensiveNetwork
             _ = settings.ignoresUselessAltText
             _ = settings.statusNameStyle
+            _ = settings.contextNameStyle
+            _ = settings.showsVisibilitySymbol
+            _ = settings.showsEditedMark
+            _ = settings.showsLinkCardSite
+            _ = settings.showsSeparators
+            _ = settings.showsContextSymbol
+            _ = settings.boldsName
+            _ = settings.showsAvatarBorder
+            _ = settings.showsMediaBadges
+            _ = settings.showsLinkCard
+            _ = settings.boldsLinkCardTitle
+            _ = settings.showsBoosterAvatar
+            _ = settings.showsReplyLabel
+            _ = settings.showsReplyLines
+            _ = settings.showsTime
+            _ = settings.showsLinkCardImage
             _ = settings.statusTimeStyle
             _ = settings.avatarShape
             _ = settings.animatesAvatars
@@ -534,6 +532,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             Task { @MainActor in
                 guard let self else { return }
                 self.reconfigure(Set(self.dataSource.snapshot().itemIdentifiers))
+                // 区切り線はリストのレイアウトが引くので、描き直しでは変わらない。引き直させる。
+                self.collectionView.collectionViewLayout.invalidateLayout()
                 self.observeTuning()
             }
         }
@@ -1320,6 +1320,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.itemSeparatorHandler = { [weak self] indexPath, separator in
             var separator = separator
             guard let self, let id = self.dataSource.itemIdentifier(for: indexPath) else { return separator }
+            guard self.settings.showsSeparators else {
+                separator.topSeparatorVisibility = .hidden
+                separator.bottomSeparatorVisibility = .hidden
+                return separator
+            }
             if let shown = self.status(for: id)?.displayed, shown.favourited || shown.reblogged {
                 separator.bottomSeparatorVisibility = .hidden
             }

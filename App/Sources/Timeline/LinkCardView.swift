@@ -18,12 +18,28 @@ final class LinkCardView: UIButton {
         var transitionDuration: TimeInterval
         /// サムネイルを置く端。
         var thumbnailSide: LinkCardThumbnailSide
+        var typography: PostTypography
+        /// 一番上にサイト名の行を出す。
+        var showsSite = true
+        /// 画像を出す。出さなければ、画像のあるカードも文字だけで描く。
+        var showsImage = true
+        /// 説明の行数。0なら説明を出さない。
+        var descriptionLines = 1
+        /// サイト名、タイトル、説明の行どうしのあいだ。
+        var lineSpacing: CGFloat = 2
+        /// タイトルの行数。
+        var titleLines = 1
+        /// タイトルを太字にする。URLを出しているときは、この設定にかかわらず太字にしない。
+        var boldsTitle = true
+        /// 画像の幅の上限の、カードの幅に対する割合。
+        var imageWidthRatio: CGFloat = 0.3
         /// 画像を閲覧注意でぼかす。画像のないカードとリンク先だけのカードでは、ぼかす画像がないため使わない。
         var coversImage = false
 
         /// サムネイルの枠を出す。画像のあるカードと、まだカードの届いていないリンク先だけのカード。
         var showsThumbnail: Bool {
-            switch card {
+            guard showsImage else { return false }
+            return switch card {
             case .card(let card): card.image != nil
             case .link: true
             }
@@ -114,7 +130,9 @@ final class LinkCardView: UIButton {
     func apply(_ content: Content) {
         guard content != self.content else { return }
         let previous = self.content
-        let paddingChanged = content.padding != previous?.padding
+        let paddingChanged = content.padding != previous?.padding || content.typography != previous?.typography
+            || content.showsSite != previous?.showsSite || content.showsImage != previous?.showsImage
+            || content.titleLines != previous?.titleLines || content.imageWidthRatio != previous?.imageWidthRatio || content.descriptionLines != previous?.descriptionLines || content.lineSpacing != previous?.lineSpacing
         self.content = content
         let animates = Self.isCardArrival(from: previous?.card, to: content.card) && window != nil && content.transitionDuration > 0
             && !UIAccessibility.isReduceMotionEnabled
@@ -227,7 +245,7 @@ final class LinkCardView: UIButton {
 
     /// 閲覧注意でぼかしている画像がある。
     private var isCoveringImage: Bool {
-        guard let content, content.coversImage, case .card(let card) = content.card else { return false }
+        guard let content, content.coversImage, content.showsImage, case .card(let card) = content.card else { return false }
         return card.image != nil
     }
 
@@ -324,16 +342,84 @@ final class LinkCardView: UIButton {
         return string
     }
 
-    private var siteFont: UIFont { .preferredFont(forTextStyle: .caption1, compatibleWith: traitCollection) }
+    /// カードを受け取る前は文字を描かないので、大きさは既定の文字で見積もる。
+    private var typography: PostTypography { content?.typography ?? .standard }
+    private var siteFont: UIFont { typography.font(.linkCardDetail, compatibleWith: traitCollection) }
     /// 見出しの行の高さを決める文字。見出しの代わりにURLを出すときは、太字にせず控えめにする。
-    private var titleFont: UIFont { .preferredFont(forTextStyle: .subheadline, compatibleWith: traitCollection) }
-    /// 文字の行どうしのあいだ。
-    private static let lineSpacing: CGFloat = 2
+    private var titleFont: UIFont { typography.font(.linkCardTitle, compatibleWith: traitCollection) }
+    /// 縦に並べる文字の行と、それぞれの文字と行数。出さない行は含めない。
+    private var textRows: [(label: UILabel, font: UIFont, lines: Int)] {
+        let descriptionLines = content?.descriptionLines ?? 1
+        return [
+            content?.showsSite == false ? nil : (siteLabel, siteFont, 1),
+            (headlineLabel, titleFont, max(content?.titleLines ?? 1, 1)),
+            descriptionLines > 0 ? (descriptionLabel, siteFont, descriptionLines) : nil,
+        ].compactMap(\.self)
+    }
+
+    /// 文字の行を並べた高さ。説明が短くて行数より少なくても、カードの高さを揃えるため、決めた行数ぶんを取る。
+    private var textHeight: CGFloat {
+        let rows = textRows
+        let spacing = content?.lineSpacing ?? 0
+        return rows.reduce(0) { $0 + Self.blockHeight(font: $1.font, lines: $1.lines) } + spacing * CGFloat(max(rows.count - 1, 0))
+    }
+
+    /// `lines`行ぶんの文字の高さ。1行は書体の行の高さで取る。
+    /// 2行以上は、日本語を含めて実際に折り返したときの高さで測る。日本語の代わりの書体は行が高く、書体の行の高さを行数倍した枠には1行しか入らないため。
+    private static func blockHeight(font: UIFont, lines: Int) -> CGFloat {
+        guard lines > 1 else { return font.lineHeight }
+        let sample = Array(repeating: "あA", count: lines).joined(separator: "\n") as NSString
+        return ceil(sample.boundingRect(with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude), options: .usesLineFragmentOrigin, attributes: [.font: font], context: nil).height)
+    }
+
+    /// テストで、説明が描く行を確かめるためのラベル。
+    var descriptionLabelForTesting: UILabel? {
+        descriptionLabel.isHidden ? nil : descriptionLabel
+    }
+
+    /// 見出しと、サイト名と説明の枠。「投稿の見た目」のプレビューで場所を示すときに使う。
+    func textPreviewFrames(in space: UIView) -> AppearancePreviewFrames {
+        var frames: AppearancePreviewFrames = [:]
+        frames[.cardTitle] = headlineLabel.previewFrame(in: space)
+        frames[.cardImage] = thumbnailWidth > 0 ? thumbnailView.previewFrame(in: space) : nil
+        frames[.cardDescription] = descriptionLabel.previewFrame(in: space)
+        frames[.cardSite] = siteLabel.previewFrame(in: space)
+        let detail = [siteLabel, descriptionLabel].compactMap { $0.previewFrame(in: space) }.flatMap(\.self)
+        if !detail.isEmpty {
+            frames[.cardDetail] = detail
+        }
+        let rows = textRows.compactMap { $0.label.previewFrame(in: space)?.first }
+        if rows.count > 1 {
+            frames[.cardLineGaps] = AppearanceHighlight.gaps(between: rows)
+        }
+        let thickness = AppearanceHighlight.minimumGapThickness
+        let card = convert(bounds, to: space)
+        let thumbnailOnRight = content?.thumbnailSide == .right
+        if thumbnailWidth > 0 {
+            frames[.cardImageSlot] = [convert(thumbnailView.frame, to: space)]
+        } else if content?.showsImage == false, case .card(let preview)? = content?.card, preview.image != nil {
+            // 画像を出さない設定では、画像があった端を示す。
+            frames[.cardImageSlot] = [CGRect(x: thumbnailOnRight ? card.maxX - thickness : card.minX, y: card.minY, width: thickness, height: card.height)]
+        }
+        if let site = siteLabel.previewFrame(in: space), !siteLabel.isHidden {
+            frames[.cardSiteSlot] = site
+        } else if content?.showsSite == false, let first = rows.first {
+            frames[.cardSiteSlot] = [CGRect(x: first.minX, y: first.minY - thickness, width: first.width, height: thickness)]
+        }
+        // 文字の側の、枠とサムネイルからの余白。
+        let textSide = CGRect(x: thumbnailOnRight ? card.minX : card.minX + thumbnailWidth, y: card.minY, width: card.width - thumbnailWidth, height: card.height)
+        frames[.cardPaddingBands] = AppearanceHighlight.paddingBands(of: textSide, padding: content?.padding ?? 0)
+        return frames
+    }
 
     private func updateFonts() {
+        siteLabel.isHidden = content?.showsSite == false
+        descriptionLabel.isHidden = (content?.descriptionLines ?? 1) == 0
+        descriptionLabel.numberOfLines = max(content?.descriptionLines ?? 1, 1)
+        headlineLabel.numberOfLines = max(content?.titleLines ?? 1, 1)
         siteLabel.font = siteFont
         let showsURL = content.map { Self.text(of: $0.card).titleIsURL } ?? false
-        headlineLabel.font = showsURL ? titleFont : titleFont.bold
+        headlineLabel.font = showsURL || content?.boldsTitle == false ? titleFont : titleFont.bold
         descriptionLabel.font = siteFont
     }
 
@@ -342,20 +428,17 @@ final class LinkCardView: UIButton {
         layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
     }
 
-    /// サムネイルの幅。カードの高さと同じ正方形にする。文字を大きくしてカードが高くなっても、文字の幅を残すため、カードの幅の`thumbnailMaxWidthRatio`までにする。
+    /// サムネイルの幅。カードの高さと同じ正方形にする。文字を大きくしてカードが高くなっても、文字の幅を残すため、カードの幅に対する設定の割合（`imageWidthRatio`）までにする。
     /// 枠を出さないカードでは0。
     private var thumbnailWidth: CGFloat {
         guard laysOutThumbnail else { return 0 }
-        return min(bounds.height, floor(bounds.width * Self.thumbnailMaxWidthRatio))
+        return min(bounds.height, floor(bounds.width * (content?.imageWidthRatio ?? 0.3)))
     }
-
-    private static let thumbnailMaxWidthRatio: CGFloat = 0.3
 
     /// 文字の3行と余白から決まる高さ。
     private var cardHeight: CGFloat {
         let padding = content?.padding ?? 0
-        let lines = siteFont.lineHeight * 2 + titleFont.lineHeight + Self.lineSpacing * 2
-        return ceil(padding * 2 + lines)
+        return ceil(padding * 2 + textHeight)
     }
 
     override var intrinsicContentSize: CGSize {
@@ -384,17 +467,21 @@ final class LinkCardView: UIButton {
         let padding = content?.padding ?? 0
         let textX = (thumbnailOnRight ? 0 : thumbnailWidth) + padding
         let textWidth = max(bounds.width - thumbnailWidth - padding * 2, 0)
-        var y = (bounds.height - (siteFont.lineHeight * 2 + titleFont.lineHeight + Self.lineSpacing * 2)) / 2
-        for (label, font) in [(siteLabel, siteFont), (headlineLabel, titleFont), (descriptionLabel, siteFont)] {
-            label.frame = CGRect(x: textX, y: y, width: textWidth, height: ceil(font.lineHeight))
-            y += font.lineHeight + Self.lineSpacing
+        var y = (bounds.height - textHeight) / 2
+        for (label, font, lines) in textRows {
+            // 行数より短い説明は、上に詰めて置く。UILabelは枠の上下中央に描くため、枠を文字の高さに合わせる。
+            let block = Self.blockHeight(font: font, lines: lines)
+            let fitted = label.textRect(forBounds: CGRect(x: 0, y: 0, width: textWidth, height: .greatestFiniteMagnitude), limitedToNumberOfLines: lines).height
+            label.frame = CGRect(x: textX, y: y, width: textWidth, height: ceil(max(min(block, fitted), font.lineHeight)))
+            y += block + (content?.lineSpacing ?? 0)
         }
         updateThumbnail()
     }
 
     /// サムネイルを、枠の大きさに合わせて読む。サムネイルのないカードとリンク先だけのカードには、リンクの記号を出す。
     private func updateThumbnail() {
-        let card: PreviewCard? = if case .card(let card) = content?.card { card } else { nil }
+        // 画像を出さない設定では、画像を読まず、画像を開く操作も置かない。
+        let card: PreviewCard? = if content?.showsImage != false, case .card(let card) = content?.card { card } else { nil }
         let scale = traitCollection.displayScale
         let covers = isCoveringImage
         if covers {

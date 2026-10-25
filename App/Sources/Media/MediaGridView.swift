@@ -22,6 +22,10 @@ final class MediaGridView: UIView {
         /// サムネイル同士のすき間。
         let spacing: CGFloat
         var arrangement: Arrangement = .grid
+        /// 1つだけ出すとき、これより横長なものは左右を切り落とす。
+        var widestAspectRatio = MediaGridView.widestAspectRatio
+        /// 代替テキストやGIFなどを示すバッジを出す。
+        var showsBadges = true
 
         var isCovered: Bool { cover != nil }
 
@@ -38,7 +42,7 @@ final class MediaGridView: UIView {
                     width: width,
                     spacing: spacing,
                     tallestAspectRatio: tallestAspectRatio,
-                    widestAspectRatio: MediaGridView.widestAspectRatio
+                    widestAspectRatio: widestAspectRatio
                 )
             case .strip(let side):
                 MediaGridLayout(stripOf: attachments.count, side: side, spacing: spacing)
@@ -107,6 +111,7 @@ final class MediaGridView: UIView {
                 continue
             }
             tile.isHidden = false
+            tile.hidesBadge = !content.showsBadges
             let isLast = index == layout.frames.count - 1
             tile.apply(
                 content.attachments[index],
@@ -139,6 +144,11 @@ final class MediaGridView: UIView {
             tileContainer.scrollRectToVisible(tile.frame, animated: false)
         }
         return tile
+    }
+
+    /// 表示中のサムネイルの枠。「投稿の見た目」のプレビューで、サムネイル同士のすき間を示すときに使う。
+    func tilePreviewFrames(in space: UIView) -> [CGRect] {
+        tiles.compactMap { $0.previewFrame(in: space) }.flatMap(\.self)
     }
 
     override func layoutSubviews() {

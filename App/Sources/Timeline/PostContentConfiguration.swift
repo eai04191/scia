@@ -18,6 +18,8 @@ struct PostContentConfiguration: UIContentConfiguration {
         /// ブーストした人のアイコン。
         let avatar: AvatarView.Content?
         let text: NSAttributedString
+        /// `text`のうち、名前の後ろに添える部分（ハンドルなど）。「投稿の見た目」のプレビューで、名前の部分と分けて場所を示すのに使う。
+        var secondaryRange: NSRange?
         let accessibilityText: String
         /// 押すと開くプロフィールの人の名前。VoiceOverの、プロフィールを開く操作の名前に使う。人を指さない行ではnil。
         var accountName: String?
@@ -28,6 +30,16 @@ struct PostContentConfiguration: UIContentConfiguration {
     var context: Context?
     /// 隣の行とアイコン同士を線でつなぐか。
     var replyConnection = ReplyConnection()
+    /// 返信をつなぐ線を描く。描かなくても、つながりは区切り線の有無などに使う。
+    var showsReplyLines = true
+    /// 名前の行の右端に時刻を出す。出さなくても、読み上げでは読む。
+    var showsTime = true
+    /// ブーストされた投稿。「投稿の見た目」のプレビューで、ブーストした人の行を探すのに使う。
+    var isBoost = false
+    /// 返信。返信のラベルを出さない設定でも立てる。「投稿の見た目」のプレビューで、ラベルの場所を探すのに使う。
+    var isReply = false
+    /// リンクカードを出さない設定で、出すはずだったリンクカードを出していない。「投稿の見た目」のプレビューで、カードの場所を示すのに使う。
+    var hasHiddenLinkCard = false
     var avatar: AvatarView.Content
     /// 名前の行に並べる文字。先頭を目立たせ、2つ目は控えめに描く。
     var nameParts: [NSAttributedString]
@@ -38,6 +50,9 @@ struct PostContentConfiguration: UIContentConfiguration {
     var isEdited = false
     /// 公開以外なら、時刻と編集済みのアイコンの前に、投稿欄で選ぶときと同じ記号を付ける。
     var visibility: Status.Visibility = .public
+    /// 公開範囲の記号と、編集済みの「*」を出すか。出さなくても、読み上げでは読む。
+    var showsVisibilitySymbol = true
+    var showsEditedMark = true
     var timeStyle: StatusTimeStyle
     var body: NSAttributedString
     /// 注意書きがなければnil。
@@ -90,6 +105,8 @@ struct PostContentConfiguration: UIContentConfiguration {
         var nameFadeWidth: CGFloat
         /// 名前の上の行の記号と、その右の文字やアイコンとのすき間。
         var contextSymbolSpacing: CGFloat
+        /// 名前の上の行の、ブーストした人のアイコンと文字のすき間。
+        var contextAvatarTextSpacing: CGFloat
         /// アイコンの列と、文字の列のあいだ。
         var avatarSpacing: CGFloat
         /// 名前の上の行と名前の行のあいだ。
@@ -108,11 +125,28 @@ struct PostContentConfiguration: UIContentConfiguration {
         var bodyLinkCardSpacing: CGFloat
         /// 本文と投票のあいだ。
         var bodyPollSpacing: CGFloat
+        /// 名前の行で、太字の部分と後ろに添える部分のすき間。
+        var namePartsSpacing: CGFloat
+        /// 名前と時刻の最小のすき間。
+        var nameTimeSpacing: CGFloat
+        /// 名前の行で、太字で描く前の部分の文字。
         var nameFont: UIFont
-        var secondaryFont: UIFont
+        var timeFont: UIFont
+        /// 名前の上の行の文字。記号の大きさもこれに合わせる。
+        var contextFont: UIFont
         /// 通知の種類を示す記号の大きさを決める文字。誰が何をしたかの行を主役にする通知の記号と同じ大きさに揃えるため、
         /// 名前の上の行の小さい文字ではなく、本文と同じ大きさの文字にする。
         var notificationSymbolFont: UIFont
+        /// 時刻の前の公開範囲の記号と、時刻のすき間。
+        var visibilitySymbolSpacing: CGFloat = 4
+        /// 時刻の前の編集済みの「*」と、時刻のすき間。
+        var editedMarkSpacing: CGFloat = 0
+        /// 本文などと、自分のフィルターに一致したことを示す注記のあいだ。
+        var filterNoteSpacing: CGFloat = 10
+        /// 名前の上の行の先頭に、ブーストや返信を示す記号を出す。
+        var showsContextSymbol = true
+        /// 本文か添付ファイルと、Xの投稿の囲みのあいだ。
+        var bodyXPostSpacing: CGFloat = 10
     }
 
     func makeContentView() -> any UIView & UIContentView {
@@ -126,12 +160,12 @@ struct PostContentConfiguration: UIContentConfiguration {
     /// `now`の時点での時刻の表記。
     func timeText(now: Date) -> String {
         let text = StatusTimestamp.text(for: createdAt, now: now, style: timeStyle)
-        return isEdited ? "*\(text)" : text
+        return isEdited && showsEditedMark ? "*\(text)" : text
     }
 
     /// 時刻の前に付ける公開範囲の記号。公開ならnil。
     var visibilitySymbolName: String? {
-        visibility == .public ? nil : VisibilityOption(visibility).symbolName
+        visibility == .public || !showsVisibilitySymbol ? nil : VisibilityOption(visibility).symbolName
     }
 
     /// 読み上げる時刻。アイコンは読まず、言葉にする。
@@ -162,6 +196,10 @@ final class PostContentView: UIView, UIContentView {
     private let nameRow = UIStackView()
     private let bodyView: PostBodyView
     private let textGuide = UILayoutGuide()
+    /// 名前の最後のベースラインの位置。名前の行の下のすき間は字面から測るので、「投稿の見た目」のプレビューで字面の下端を求めるのに使う。
+    private let nameBaselineGuide = UILayoutGuide()
+    /// 名前の上の行の高さ。文字とブーストした人のアイコンの高いほうにする。アイコンを大きくしても、名前の行に重ならないようにするため。
+    private let contextGuide = UILayoutGuide()
     private let reactionGlowView = ReactionGlowView()
     /// アイコンから上の行へ伸ばす線と、下の行へ伸ばす線。高さに影響しないよう、制約を使わず並べるたびに枠を決める。
     private let replyLineAbove = UIView()
@@ -201,6 +239,8 @@ final class PostContentView: UIView, UIContentView {
         bodyView = PostBodyView(mediaImages: configuration.mediaImages, avatarImages: configuration.avatarImages)
         super.init(frame: .zero)
         addLayoutGuide(textGuide)
+        addLayoutGuide(nameBaselineGuide)
+        addLayoutGuide(contextGuide)
         configureSubviews()
         bodyView.onSelectMedia = { [weak self] index, grid in self?.current.onSelectMedia?(index, grid) }
         bodyView.onRevealMedia = { [weak self] in self?.current.onRevealMedia?() }
@@ -248,9 +288,7 @@ final class PostContentView: UIView, UIContentView {
         nameRow.addArrangedSubview(timeLabel)
         nameRow.axis = .horizontal
         nameRow.alignment = .firstBaseline
-        nameRow.spacing = 4
-        // 時刻を右端に寄せるため、2つ目の名前が余りの幅を受け持つ。
-        nameRow.setCustomSpacing(8, after: nameLabels[1])
+        // すき間は、名前の表記と設定に合わせて、適用のたびに決める。時刻を右端に寄せるため、2つ目の名前が余りの幅を受け持つ。
         // ベースラインで揃えたスタックは、上下の端が中の文字より外にあればよいという制約になり、高さが決まらない。
         // セルは大きな高さを目安に測るため、何もしないと行がその高さまで伸びる。文字が収まる最小の高さに寄せる。
         let compactNameRow = nameRow.heightAnchor.constraint(equalToConstant: 0)
@@ -261,6 +299,10 @@ final class PostContentView: UIView, UIContentView {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
+        NSLayoutConstraint.activate([
+            nameBaselineGuide.topAnchor.constraint(equalTo: nameLabels[0].lastBaselineAnchor),
+            nameBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
+        ])
         for line in [replyLineAbove, replyLineBelow] {
             line.backgroundColor = .tertiaryLabel
             line.isUserInteractionEnabled = false
@@ -275,7 +317,7 @@ final class PostContentView: UIView, UIContentView {
 
         avatarView.apply(configuration.avatar)
         let context = configuration.context
-        contextIcon.isHidden = context == nil
+        contextIcon.isHidden = context == nil || !metrics.showsContextSymbol
         contextAvatarView.isHidden = context?.avatar == nil
         contextLabel.isHidden = context == nil
         contextLabel.isUserInteractionEnabled = context?.opensAccount ?? false
@@ -287,7 +329,7 @@ final class PostContentView: UIView, UIContentView {
         let symbolConfiguration = if context?.isNotificationSymbol == true {
             UIImage.SymbolConfiguration(font: metrics.notificationSymbolFont)
         } else {
-            UIImage.SymbolConfiguration(font: metrics.secondaryFont, scale: .small)
+            UIImage.SymbolConfiguration(font: metrics.contextFont, scale: .small)
         }
         // ベースラインの位置を読むため、大きさの設定を画像そのものに当てておく。
         contextIcon.image = context.flatMap { UIImage(systemName: $0.symbolName, withConfiguration: symbolConfiguration) }
@@ -302,9 +344,16 @@ final class PostContentView: UIView, UIContentView {
         }
         // 2つ目がないときは、1つ目が余りの幅を受け持つ。
         nameLabels[0].setContentHuggingPriority(configuration.nameParts.count > 1 ? .required : .defaultLow, for: .horizontal)
-        timeLabel.font = metrics.secondaryFont
+        // 時刻の前のすき間は、出している最後の名前のあとに取る。隠したラベルのあとのすき間は使われないため。
+        nameRow.spacing = metrics.namePartsSpacing
+        let lastName = nameLabels[min(max(configuration.nameParts.count, 1), nameLabels.count) - 1]
+        for label in nameLabels {
+            nameRow.setCustomSpacing(label === lastName ? metrics.nameTimeSpacing : metrics.namePartsSpacing, after: label)
+        }
+        timeLabel.font = metrics.timeFont
         timeText = configuration.timeText(now: now())
         timeLabel.attributedText = timeAttributedText(timeText, for: configuration)
+        timeLabel.isHidden = !configuration.showsTime
 
         bodyView.emojiImages = configuration.emojiImages
         bodyView.apply(PostBodyContent(
@@ -317,18 +366,184 @@ final class PostContentView: UIView, UIContentView {
             card: configuration.card,
             cardSpacing: metrics.bodyLinkCardSpacing,
             xPost: configuration.xPost,
+            xPostSpacing: metrics.bodyXPostSpacing,
             statusID: configuration.statusID,
             hashtagAccount: configuration.hashtagAccount,
             filterNote: configuration.filterNote,
             // リンクカードと同じく、本文から少し離した補足として置く。
-            filterNoteSpacing: metrics.bodyLinkCardSpacing
+            filterNoteSpacing: metrics.filterNoteSpacing
         ))
         reactionGlowView.apply(configuration.reactionGlow)
-        replyLineAbove.isHidden = !configuration.replyConnection.above
-        replyLineBelow.isHidden = !configuration.replyConnection.below
+        replyLineAbove.isHidden = !(configuration.replyConnection.above && configuration.showsReplyLines)
+        replyLineBelow.isHidden = !(configuration.replyConnection.below && configuration.showsReplyLines)
         setNeedsLayout()
         updateConstraints(for: configuration)
         updateAccessibility(for: configuration)
+    }
+
+    /// 「投稿の見た目」のプレビューで、部品の場所を示すための枠。このビューの座標で返す。
+    func previewFrames() -> AppearancePreviewFrames {
+        let margins = current.metrics.margins
+        var frames: AppearancePreviewFrames = [
+            .rowPaddingTop: [CGRect(x: 0, y: 0, width: bounds.width, height: margins.top)],
+            .rowPaddingBottom: [CGRect(x: 0, y: bounds.height - margins.bottom, width: bounds.width, height: margins.bottom)],
+            .rowPaddingLeading: [CGRect(x: 0, y: 0, width: margins.leading, height: bounds.height)],
+            .rowPaddingTrailing: [CGRect(x: bounds.width - margins.trailing, y: 0, width: margins.trailing, height: bounds.height)],
+            .contextSymbol: contextIcon.image == nil ? nil : contextIcon.previewFrame(in: self),
+            .contextAvatar: contextAvatarView.previewFrame(in: self),
+            .contextLine: textExtent(of: contextLabel),
+            .avatar: avatarView.previewFrame(in: self),
+            .replyLineBelow: replyLineBelow.previewFrame(in: self),
+            .nameRow: nameRow.previewFrame(in: self),
+            .nameGlyphs: nameGlyphsFrame(),
+            .namePrimary: textExtent(of: nameLabels[0]),
+            .nameSecondary: textExtent(of: nameLabels[1]),
+            .time: timeLabel.previewFrame(in: self),
+            .visibilityTime: current.visibility == .public ? nil : timeLabel.previewFrame(in: self),
+            .editedTime: current.isEdited ? timeLabel.previewFrame(in: self) : nil,
+            .boostLine: current.isBoost ? textExtent(of: contextLabel) : nil,
+            .replyLabel: current.isReply && current.context != nil ? textExtent(of: contextLabel) : nil,
+            .connectedAvatar: current.replyConnection.below ? avatarView.previewFrame(in: self) : nil,
+            .nameFade: nameFadeFrames(),
+            .nameTimeMinGap: nameTimeMinGapFrame(),
+        ].compactMapValues(\.self)
+        frames.merge(slotPreviewFrames()) { $1 }
+        frames.merge(timePreviewFrames()) { $1 }
+        if let avatar = avatarView.previewFrame(in: self)?.first {
+            let radius = current.avatar.shape == .circle ? avatar.width / 2 : avatar.width * current.avatar.cornerRatio
+            frames[.avatarCorners] = AppearanceHighlight.cornerSquares(of: avatar, radius: radius)
+        }
+        frames.merge(contextTextPreviewFrames()) { $1 }
+        frames.merge(bodyView.previewFrames(in: self)) { $1 }
+        return frames
+    }
+
+    /// ラベルの、文字のある部分の枠。名前の行のラベルは余った幅を受け持つので、枠には文字のない部分が含まれる。
+    private func textExtent(of label: UILabel) -> [CGRect]? {
+        guard var frame = label.previewFrame(in: self)?.first else { return nil }
+        frame.size.width = min(frame.width, ceil(label.intrinsicContentSize.width))
+        return [frame]
+    }
+
+    /// 名前が入りきらず時刻に詰まっているときの、最後の名前と時刻のすき間。名前が短ければ、最小のすき間より広く空くのでnil。
+    private func nameTimeMinGapFrame() -> [CGRect]? {
+        guard !timeLabel.isHidden,
+              // 押し縮められて幅0になったハンドルも、時刻との最小のすき間はそのラベルのあとに取るので、幅によらず最後のラベルから測る。
+              let last = nameLabels.last(where: { !$0.isHidden }),
+              nameLabels.contains(where: { !$0.isHidden && $0.intrinsicContentSize.width > $0.bounds.width + 0.5 })
+        else { return nil }
+        let name = last.convert(last.bounds, to: self)
+        let time = timeLabel.convert(timeLabel.bounds, to: self)
+        let minY = min(name.minY, time.minY)
+        return [CGRect(x: name.maxX, y: minY, width: max(time.minX - name.maxX, 0), height: max(name.maxY, time.maxY) - minY)]
+    }
+
+    /// 入りきらずに行末をぼかしている名前やブーストした人の行の、ぼかしている部分。
+    private func nameFadeFrames() -> [CGRect]? {
+        let fades = (nameLabels + [contextLabel]).compactMap { label -> CGRect? in
+            // 幅のないラベル（長い名前に押し出されたハンドルなど）は、ぼかしを描いていないので除く。
+            guard let frame = label.previewFrame(in: self)?.first, frame.width >= 1, label.intrinsicContentSize.width > frame.width + 0.5 else { return nil }
+            let width = min(label.fadeWidth, frame.width)
+            return CGRect(x: frame.maxX - width, y: frame.minY, width: width, height: frame.height)
+        }
+        return fades.isEmpty ? nil : fades
+    }
+
+    /// 消せる部品の場所。出ていればその部品の枠を、消していれば部品があった位置に細い枠を返す。消したときに、どこから消えたかを示すため。
+    private func slotPreviewFrames() -> AppearancePreviewFrames {
+        func line(x: CGFloat, y: CGFloat, height: CGFloat) -> [CGRect] {
+            [CGRect(x: x - AppearanceHighlight.minimumGapThickness / 2, y: y, width: AppearanceHighlight.minimumGapThickness, height: height)]
+        }
+        func bar(x: CGFloat, y: CGFloat, width: CGFloat) -> [CGRect] {
+            [CGRect(x: x, y: y - AppearanceHighlight.minimumGapThickness / 2, width: width, height: AppearanceHighlight.minimumGapThickness)]
+        }
+        var frames: AppearancePreviewFrames = [:]
+        let row = nameRow.frame
+        if current.context != nil {
+            // 記号は消しても、置く位置の制約は残っているので、枠は並べた位置のまま。
+            frames[.contextSymbolSlot] = [contextIcon.frame]
+        }
+        if current.isBoost {
+            frames[.boosterAvatarSlot] = contextAvatarView.isHidden ? line(x: contextLabel.frame.minX, y: contextLabel.frame.minY, height: contextLabel.frame.height) : [contextAvatarView.frame]
+        }
+        if current.isReply {
+            frames[.replyLabelSlot] = current.context == nil ? bar(x: row.minX, y: row.minY - 1, width: row.width) : textExtent(of: contextLabel)
+        }
+        frames[.timeSlot] = timeLabel.isHidden ? line(x: row.maxX, y: row.minY, height: row.height) : [timeLabel.convert(timeLabel.bounds, to: self)]
+        if current.replyConnection.below {
+            frames[.replyLineSlot] = replyLineBelow.isHidden ? line(x: avatarView.frame.midX, y: avatarView.frame.maxY, height: bounds.maxY - avatarView.frame.maxY) : [replyLineBelow.frame]
+        }
+        frames[.separatorLine] = bar(x: 0, y: bounds.maxY - 1, width: bounds.width)
+        if current.hasHiddenLinkCard {
+            frames[.cardSlot] = bar(x: bodyView.frame.minX, y: bodyView.frame.maxY, width: bodyView.frame.width)
+        }
+        return frames
+    }
+
+    /// 時刻の中の、公開範囲の記号と「*」と、それぞれと時刻のすき間。時刻のラベルは文字の幅に合わせて置くので、左端から測る。
+    /// すき間は設定の値ではなく、描く文字列の幅から測る。すき間が効いていなければ、それが帯の太さに出るようにするため。
+    private func timePreviewFrames() -> AppearancePreviewFrames {
+        guard !timeLabel.isHidden, let text = timeLabel.attributedText, text.length > 0 else { return [:] }
+        // 時刻のラベルは名前の行の中にあるので、この行の座標に直す。
+        let label = timeLabel.convert(timeLabel.bounds, to: self)
+        func width(upTo end: Int) -> CGFloat {
+            ceil(text.attributedSubstring(from: NSRange(location: 0, length: min(end, text.length))).size().width)
+        }
+        func band(from start: CGFloat, to end: CGFloat) -> [CGRect] {
+            [CGRect(x: label.minX + start, y: label.minY, width: max(end - start, 0), height: label.height)]
+        }
+        var frames: AppearancePreviewFrames = [:]
+        var index = 0
+        if current.visibility != .public {
+            if current.visibilitySymbolName != nil {
+                // 記号の画像、すき間を作る空白の順に並ぶ。
+                let symbolEnd = width(upTo: 1)
+                frames[.visibilitySymbol] = band(from: 0, to: symbolEnd)
+                frames[.visibilitySymbolGap] = band(from: symbolEnd, to: width(upTo: 2))
+                index = 2
+            } else {
+                frames[.visibilitySymbol] = [CGRect(x: label.minX - 1, y: label.minY, width: 2, height: label.height)]
+            }
+        }
+        if current.isEdited {
+            let start = width(upTo: index)
+            if current.showsEditedMark {
+                let markWidth = ceil(("*" as NSString).size(withAttributes: [.font: current.metrics.timeFont]).width)
+                frames[.editedMark] = band(from: start, to: start + markWidth)
+                frames[.editedMarkGap] = band(from: start + markWidth, to: width(upTo: index + 1))
+            } else {
+                frames[.editedMark] = [CGRect(x: label.minX + start - 1, y: label.minY, width: 2, height: label.height)]
+            }
+        }
+        return frames
+    }
+
+    /// 名前の字面の枠。上端と下端は、ベースラインからem枠で測る。並びも同じ測り方で、本文やメディアとのすき間を取っている。
+    private func nameGlyphsFrame() -> [CGRect]? {
+        guard let row = nameRow.previewFrame(in: self)?.first else { return nil }
+        let baseline = nameBaselineGuide.layoutFrame.minY
+        let size = Self.largestNamePointSize(of: current)
+        let top = baseline - size * PostBodyView.emBoxAscent
+        return [CGRect(x: row.minX, y: top, width: row.width, height: size * (PostBodyView.emBoxAscent + PostBodyView.emBoxDescent))]
+    }
+
+    /// 名前の上の行の文字を、名前の部分と添える部分に分けた枠。添える部分がなければ、全体を名前の部分とする。
+    private func contextTextPreviewFrames() -> AppearancePreviewFrames {
+        guard let line = contextLabel.previewFrame(in: self)?.first, let text = contextLabel.attributedText else { return [:] }
+        guard let range = current.context?.secondaryRange, range.location <= text.length else {
+            return [.contextText: [line]]
+        }
+        // 名前の部分の幅は、すき間の字送りを除いて測る。字送りは名前の最後の文字の後ろに付いている。
+        let primary = NSMutableAttributedString(attributedString: text.attributedSubstring(from: NSRange(location: 0, length: range.location)))
+        let spacing = primary.length > 0 ? (primary.attribute(.kern, at: primary.length - 1, effectiveRange: nil) as? CGFloat ?? 0) : 0
+        primary.removeAttribute(.kern, range: NSRange(location: 0, length: primary.length))
+        let primaryEnd = min(line.minX + ceil(primary.size().width), line.maxX)
+        let secondaryStart = min(primaryEnd + spacing, line.maxX)
+        let end = min(line.minX + ceil(text.size().width), line.maxX)
+        return [
+            .contextText: [CGRect(x: line.minX, y: line.minY, width: primaryEnd - line.minX, height: line.height)],
+            .contextSecondary: [CGRect(x: secondaryStart, y: line.minY, width: max(end - secondaryStart, 0), height: line.height)],
+        ]
     }
 
     /// 時刻の表記だけを今の時刻で書き直す。名前の行は1行で高さが決まっているため、行の高さは変わらない。
@@ -343,15 +558,22 @@ final class PostContentView: UIView, UIContentView {
 
     /// 時刻の表記に、公開範囲の記号を前置きする。記号は文字に添えるので、ベースラインに乗り、文字と同じ色で描かれる。
     private func timeAttributedText(_ text: String, for configuration: PostContentConfiguration) -> NSAttributedString {
-        let font = configuration.metrics.secondaryFont
+        let font = configuration.metrics.timeFont
         let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
         let result = NSMutableAttributedString()
+        // 記号や「*」と時刻のすき間は、空白ではなく、その後ろに足す字送りで取る。空白の幅は文字の大きさで変わり、すき間だけを決められないため。
         if let symbolName = configuration.visibilitySymbolName,
            let image = UIImage(systemName: symbolName, withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)) {
             result.append(NSAttributedString(attachment: NSTextAttachment(image: image)))
-            result.append(NSAttributedString(string: " "))
+            // 画像の添付の文字にも幅0の文字にも字送りが効かないので、後ろに空白を置き、空白の幅を差し引いた字送りで、すき間を設定の値にする。
+            let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width
+            result.append(NSAttributedString(string: " ", attributes: [.kern: configuration.metrics.visibilitySymbolSpacing - spaceWidth]))
         }
-        result.append(NSAttributedString(string: text))
+        let time = NSMutableAttributedString(string: text)
+        if configuration.isEdited, configuration.showsEditedMark, text.hasPrefix("*") {
+            time.addAttribute(.kern, value: configuration.metrics.editedMarkSpacing, range: NSRange(location: 0, length: 1))
+        }
+        result.append(time)
         result.addAttributes(attributes, range: NSRange(location: 0, length: result.length))
         return result
     }
@@ -369,10 +591,10 @@ final class PostContentView: UIView, UIContentView {
             textGuide.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.trailing),
             nameRow.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
             nameRow.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
-            // 間隔は、名前の字面の下端から測る。
+            // 間隔は、名前の行の字面の下端から測る。名前の行の部分はベースラインで揃っているので、いちばん大きい文字の字面の下端を使う。
             bodyView.topAnchor.constraint(
                 equalTo: nameLabels[0].lastBaselineAnchor,
-                constant: (bodyView.startsWithMedia ? metrics.nameMediaSpacing : metrics.nameBodySpacing) + metrics.nameFont.pointSize * PostBodyView.emBoxDescent
+                constant: (bodyView.startsWithMedia ? metrics.nameMediaSpacing : metrics.nameBodySpacing) + Self.largestNamePointSize(of: configuration) * PostBodyView.emBoxDescent
             ),
             bodyView.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
             bodyView.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
@@ -380,22 +602,33 @@ final class PostContentView: UIView, UIContentView {
             bottomAnchor.constraint(greaterThanOrEqualTo: avatarView.bottomAnchor, constant: margins.bottom),
         ]
         if let context = configuration.context {
+            // 下限だけでは高さが決まらないため、収まる最小の高さに寄せる。
+            let compactContext = contextGuide.heightAnchor.constraint(equalToConstant: 0)
+            compactContext.priority = .defaultLow
             constraints += [
-                contextLabel.topAnchor.constraint(equalTo: topAnchor, constant: margins.top),
+                contextGuide.topAnchor.constraint(equalTo: topAnchor, constant: margins.top),
+                contextGuide.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
+                contextGuide.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
+                contextLabel.topAnchor.constraint(greaterThanOrEqualTo: contextGuide.topAnchor),
+                contextLabel.bottomAnchor.constraint(lessThanOrEqualTo: contextGuide.bottomAnchor),
+                contextLabel.centerYAnchor.constraint(equalTo: contextGuide.centerYAnchor),
+                compactContext,
                 contextLabel.trailingAnchor.constraint(lessThanOrEqualTo: textGuide.trailingAnchor),
                 // 記号は本文の列から決まった幅だけ離して置き、ブーストした人のアイコンと名前は本文の列に揃える。
                 // アイコンの列の右端に揃えると、細い記号では文字とのあいだが間延びして見えるため。
                 contextIcon.trailingAnchor.constraint(equalTo: textGuide.leadingAnchor, constant: -metrics.contextSymbolSpacing),
                 Self.symbolVerticalConstraint(contextIcon, beside: contextLabel, onBaseline: context.isNotificationSymbol),
-                nameRow.topAnchor.constraint(equalTo: contextLabel.bottomAnchor, constant: metrics.contextSpacing),
+                nameRow.topAnchor.constraint(equalTo: contextGuide.bottomAnchor, constant: metrics.contextSpacing),
             ]
             if context.avatar != nil {
                 constraints += [
                     contextAvatarView.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
-                    contextAvatarView.centerYAnchor.constraint(equalTo: contextLabel.centerYAnchor),
+                    contextAvatarView.centerYAnchor.constraint(equalTo: contextGuide.centerYAnchor),
+                    contextAvatarView.topAnchor.constraint(greaterThanOrEqualTo: contextGuide.topAnchor),
+                    contextAvatarView.bottomAnchor.constraint(lessThanOrEqualTo: contextGuide.bottomAnchor),
                     contextAvatarView.widthAnchor.constraint(equalToConstant: metrics.boosterAvatarSize),
                     contextAvatarView.heightAnchor.constraint(equalToConstant: metrics.boosterAvatarSize),
-                    contextLabel.leadingAnchor.constraint(equalTo: contextAvatarView.trailingAnchor, constant: 4),
+                    contextLabel.leadingAnchor.constraint(equalTo: contextAvatarView.trailingAnchor, constant: metrics.contextAvatarTextSpacing),
                 ]
             } else {
                 constraints.append(contextLabel.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor))
@@ -419,6 +652,18 @@ final class PostContentView: UIView, UIContentView {
         ]
         variableConstraints = constraints
         NSLayoutConstraint.activate(constraints)
+    }
+
+    /// 名前の行に出す文字（名前、ハンドル、時刻）のうち、いちばん大きい文字の大きさ。
+    static func largestNamePointSize(of configuration: PostContentConfiguration) -> CGFloat {
+        var sizes = configuration.nameParts.compactMap { part in
+            part.length > 0 ? (part.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)?.pointSize : nil
+        }
+        sizes.append(configuration.metrics.nameFont.pointSize)
+        if configuration.showsTime {
+            sizes.append(configuration.metrics.timeFont.pointSize)
+        }
+        return sizes.max() ?? configuration.metrics.nameFont.pointSize
     }
 
     /// 記号を、右の文字の行に対して縦に置く制約。

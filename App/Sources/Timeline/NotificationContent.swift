@@ -136,12 +136,12 @@ extension TimelineViewController {
             header: header,
             body: body,
             metrics: NotificationContentConfiguration.Metrics(
-                margins: base.directionalLayoutMargins,
-                avatarSize: tuning.value(of: TuningCatalog.avatarSize),
+                margins: settings.rowMargins,
+                avatarSize: settings.value(of: AppearanceCatalog.avatarSize),
                 headerFont: font,
                 bodySpacing: bodySpacing,
-                symbolSpacing: tuning.value(of: TuningCatalog.contextSymbolSpacing),
-                avatarSpacing: tuning.value(of: TuningCatalog.avatarSpacing),
+                symbolSpacing: settings.value(of: AppearanceCatalog.contextSymbolSpacing),
+                avatarSpacing: settings.value(of: AppearanceCatalog.avatarSpacing),
                 groupAvatarSize: tuning.value(of: TuningCatalog.notificationGroupAvatarSize),
                 groupAvatarSpacing: tuning.value(of: TuningCatalog.notificationGroupAvatarSpacing),
                 groupAvatarHeaderSpacing: tuning.value(of: TuningCatalog.notificationGroupAvatarHeaderSpacing)

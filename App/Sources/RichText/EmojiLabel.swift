@@ -279,6 +279,39 @@ class EmojiLabel: UILabel {
         return layout
     }
 
+    /// カスタム絵文字を描く枠。ラベルの座標で返す。「投稿の見た目」のプレビューで、絵文字の場所を示すのに使う。
+    final func previewCustomEmojiFrames() -> [CGRect] {
+        guard let attributedText, attributedText.length > 0 else { return [] }
+        let layout = textLayout(of: attributedText)
+        var frames: [CGRect] = []
+        attributedText.enumerateAttribute(.customEmoji, in: NSRange(location: 0, length: attributedText.length)) { value, range, _ in
+            guard value != nil, let frame = attachmentFrame(at: range.location, in: layout) else { return }
+            frames.append(frame)
+        }
+        return frames
+    }
+
+    /// 並べた行ごとの、行の枠と、段落の最初の行か、行の字下げ。ラベルの座標で返す。
+    /// 「投稿の見た目」のプレビューで、行間、段落のあいだ、字下げの場所を示すのに使う。
+    final func previewLines() -> [(frame: CGRect, startsParagraph: Bool, indent: CGFloat)] {
+        guard let attributedText, attributedText.length > 0 else { return [] }
+        let layout = textLayout(of: attributedText)
+        var lines: [(frame: CGRect, startsParagraph: Bool, indent: CGFloat)] = []
+        layout.layoutManager.enumerateTextLayoutFragments(from: layout.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
+            let origin = fragment.layoutFragmentFrame.origin
+            for (index, line) in fragment.textLineFragments.enumerated() {
+                let style = line.attributedString.length > 0
+                    ? line.attributedString.attribute(.paragraphStyle, at: line.characterRange.location, effectiveRange: nil) as? NSParagraphStyle
+                    : nil
+                let indent = index == 0 ? style?.firstLineHeadIndent ?? 0 : style?.headIndent ?? 0
+                let bounds = line.typographicBounds.offsetBy(dx: origin.x, dy: origin.y)
+                lines.append((bounds, index == 0, indent))
+            }
+            return true
+        }
+        return lines
+    }
+
     private static let truncatingModes: [NSLineBreakMode] = [.byTruncatingTail, .byTruncatingHead, .byTruncatingMiddle]
 
     /// 段落の「…」で切る設定を、単語で折り返す設定に替えた文字列。

@@ -56,6 +56,8 @@ public struct MediaGridLayout: Equatable, Sendable {
         default:
             aspectRatio = Self.gridAspectRatio
             height = width / Self.gridAspectRatio
+            // すき間は設定で大きくできるので、並べる幅と高さに収める。収めないと、タイルの大きさが負になり、枠の外にはみ出す。
+            let spacing = min(max(spacing, 0), width, height)
             let half = (width - spacing) / 2
             let halfHeight = (height - spacing) / 2
             let right = half + spacing

@@ -13,6 +13,10 @@ final class AvatarView: UIView {
         let url: URL?
         let shape: AvatarShape
         let animates: Bool
+        /// 角丸の四角の、角の丸みの一辺に対する割合。
+        var cornerRatio: CGFloat = 0.2
+        /// 縁に細い線を引く。
+        var showsBorder = true
     }
 
     private let store: AvatarImageStore
@@ -40,7 +44,7 @@ final class AvatarView: UIView {
         layer.borderWidth = 1 / max(traitCollection.displayScale, 1)
         registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitDisplayScale.self]) { (view: AvatarView, _) in
             view.layer.borderColor = UIColor.separator.resolvedColor(with: view.traitCollection).cgColor
-            view.layer.borderWidth = 1 / max(view.traitCollection.displayScale, 1)
+            view.updateBorderWidth()
             view.updateImage()
         }
         observers = AnimatedImagePlayback.changeNotifications.map { name in
@@ -62,15 +66,20 @@ final class AvatarView: UIView {
     func apply(_ content: Content?) {
         guard content != self.content else { return }
         self.content = content
+        updateBorderWidth()
         setNeedsLayout()
         updateImage()
+    }
+
+    private func updateBorderWidth() {
+        layer.borderWidth = content?.showsBorder == false ? 0 : 1 / max(traitCollection.displayScale, 1)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         let side = min(bounds.width, bounds.height)
         layer.cornerRadius = switch content?.shape {
-        case .roundedSquare: side * 0.2
+        case .roundedSquare: side * (content?.cornerRatio ?? 0.2)
         case .circle, nil: side / 2
         }
         updateImage()

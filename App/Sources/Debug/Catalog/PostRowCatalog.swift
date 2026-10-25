@@ -148,14 +148,14 @@ enum PostRowCatalog {
         let longText = String(repeating: "見出しや要約が1行に収まらないときに末尾を省くことを確かめる文。", count: 3)
         let pendingCard = LinkCardView(store: Fixtures.pendingMediaImages)
         if let loading = card() {
-            pendingCard.apply(LinkCardView.Content(card: .card(loading), padding: home.tuning.value(of: TuningCatalog.linkCardPadding), transitionDuration: 0, thumbnailSide: .left))
+            pendingCard.apply(LinkCardView.Content(card: .card(loading), padding: home.settings.value(of: AppearanceCatalog.linkCardPadding), transitionDuration: 0, thumbnailSide: .left, typography: PostTypography(settings: home.settings)))
         }
         // 画像の位置の設定によらず、左右と文字の方向の組み合わせを並べるため、カードだけを置く。
         func cardOnly(_ title: String, _ linkCard: LinkCard?, side: LinkCardThumbnailSide, coversImage: Bool = false) -> CatalogState {
             CatalogState(title: title) {
                 let view = LinkCardView(store: AppDependencies.mediaImages)
                 if let linkCard {
-                    view.apply(LinkCardView.Content(card: linkCard, padding: home.tuning.value(of: TuningCatalog.linkCardPadding), transitionDuration: 0, thumbnailSide: side, coversImage: coversImage))
+                    view.apply(LinkCardView.Content(card: linkCard, padding: home.settings.value(of: AppearanceCatalog.linkCardPadding), transitionDuration: 0, thumbnailSide: side, typography: PostTypography(settings: home.settings), coversImage: coversImage))
                 }
                 let frame = UIView()
                 view.translatesAutoresizingMaskIntoConstraints = false

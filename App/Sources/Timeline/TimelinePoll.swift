@@ -6,7 +6,8 @@ extension TimelineViewController {
     /// - Parameter allowsVoting: 投票する形にしてよい。投票の終了の通知のように、結果を知るために出す場所ではfalseにする。
     func pollContent(for shown: Status, allowsVoting: Bool = true, base: UIListContentConfiguration) -> PollView.Content? {
         guard let poll = shown.poll else { return nil }
-        let font = base.secondaryTextProperties.font
+        let typography = PostTypography(settings: settings)
+        let font = typography.font(.body)
         // 選択肢は投稿した人が書いたものなので、本文と同じく投稿の言語で描く。
         let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier(for: shown.language))
         return PollView.Content(
@@ -14,8 +15,12 @@ extension TimelineViewController {
             display: PollDisplay(poll: poll, choices: pollChoices, now: now(), allowsVoting: allowsVoting),
             titles: poll.options.map { renderer.render(.plain($0.title, emojis: poll.emojis)) },
             titleFont: font,
-            optionSpacing: tuning.value(of: TuningCatalog.pollOptionSpacing),
-            optionPadding: tuning.value(of: TuningCatalog.pollOptionPadding),
+            footerFont: typography.font(.pollFooter),
+            footerSpacing: settings.value(of: AppearanceCatalog.pollFooterSpacing),
+            optionSpacing: settings.value(of: AppearanceCatalog.pollOptionSpacing),
+            optionPadding: settings.value(of: AppearanceCatalog.pollOptionPadding),
+            optionHorizontalPadding: settings.value(of: AppearanceCatalog.pollOptionHorizontalPadding),
+            optionCornerRadius: settings.value(of: AppearanceCatalog.pollOptionCornerRadius),
             barDuration: tuning.value(of: TuningCatalog.pollBarDuration)
         )
     }

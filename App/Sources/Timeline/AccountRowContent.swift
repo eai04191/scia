@@ -123,10 +123,10 @@ extension TimelineViewController {
             avatar: avatarContent(of: account),
             name: nameRenderer.render(.plain(account.displayNameOrUsername, emojis: account.emojis)),
             handle: handle,
-            margins: base.directionalLayoutMargins,
-            avatarSize: tuning.value(of: TuningCatalog.avatarSize),
-            avatarSpacing: tuning.value(of: TuningCatalog.avatarSpacing),
-            nameFadeWidth: tuning.value(of: TuningCatalog.nameFadeWidth),
+            margins: settings.rowMargins,
+            avatarSize: settings.value(of: AppearanceCatalog.avatarSize),
+            avatarSpacing: settings.value(of: AppearanceCatalog.avatarSpacing),
+            nameFadeWidth: settings.value(of: AppearanceCatalog.nameFadeWidth),
             avatarImages: avatarImages,
             emojiImages: settings.animatesCustomEmojis ? emojiImages : nil
         )

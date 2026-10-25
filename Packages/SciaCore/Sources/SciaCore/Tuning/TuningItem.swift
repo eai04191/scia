@@ -60,122 +60,6 @@ public struct ToggleTuning: Sendable, Identifiable {
 
 /// アプリで使うチューニング項目の一覧。値を足すときは、ここに定義を追加してTuningStoreから読む。
 public enum TuningCatalog {
-    /// 投稿本文の段落と段落のあいだの余白。
-    public static let paragraphSpacing = NumberTuning(
-        id: "timeline.paragraphSpacing",
-        title: "本文の段落間隔（pt）",
-        range: 0...24,
-        step: 1,
-        defaultValue: 6
-    )
-
-    /// 投稿の左に出すアイコンの一辺。
-    public static let avatarSize = NumberTuning(
-        id: "timeline.avatarSize",
-        title: "アイコンの大きさ（pt）",
-        range: 24...64,
-        step: 2,
-        defaultValue: 40
-    )
-
-    /// ブーストした人の行に出すアイコンの一辺。
-    public static let boosterAvatarSize = NumberTuning(
-        id: "timeline.boosterAvatarSize",
-        title: "ブーストした人のアイコンの大きさ（pt）",
-        range: 12...28,
-        step: 1,
-        defaultValue: 16
-    )
-
-    /// 返信と返信先の行のアイコン同士をつなぐ線の太さ。
-    public static let replyLineWidth = NumberTuning(
-        id: "timeline.replyLineWidth",
-        title: "返信をつなぐ線の太さ（pt）",
-        range: 0.5...6,
-        step: 0.5,
-        defaultValue: 2
-    )
-
-    /// 返信をつなぐ線と、アイコンのあいだのすき間。
-    public static let replyLineGap = NumberTuning(
-        id: "timeline.replyLineGap",
-        title: "返信をつなぐ線とアイコンのすき間（pt）",
-        range: 0...12,
-        step: 1,
-        defaultValue: 4
-    )
-
-    /// 投稿と通知の行で、左のアイコンの列と、右の文字の列のあいだ。
-    public static let avatarSpacing = NumberTuning(
-        id: "timeline.avatarSpacing",
-        title: "アイコンの列と文字のあいだ（pt）",
-        range: 0...24,
-        step: 1,
-        defaultValue: 10
-    )
-
-    /// ブーストや固定、通知の種類を示す名前の上の行と、名前の行のあいだ。
-    public static let contextSpacing = NumberTuning(
-        id: "timeline.contextSpacing",
-        title: "名前の上の行と名前の行のあいだ（pt）",
-        range: 0...16,
-        step: 1,
-        defaultValue: 4
-    )
-
-    /// 投稿の名前の行と本文のあいだ。
-    public static let nameBodySpacing = NumberTuning(
-        id: "timeline.nameBodySpacing",
-        title: "名前の行と本文のあいだ（pt）",
-        range: 0...16,
-        step: 1,
-        defaultValue: 5
-    )
-
-    /// 投稿の本文と、添付ファイルのサムネイルのあいだ。
-    public static let bodyMediaSpacing = NumberTuning(
-        id: "timeline.bodyMediaSpacing",
-        title: "本文とメディアのあいだ（pt）",
-        range: 0...24,
-        step: 1,
-        defaultValue: 10
-    )
-
-    /// 投稿の本文や添付ファイルと、リンクカードのあいだ。
-    public static let bodyLinkCardSpacing = NumberTuning(
-        id: "timeline.bodyLinkCardSpacing",
-        title: "本文とリンクカードのあいだ（pt）",
-        range: 0...24,
-        step: 1,
-        defaultValue: 10
-    )
-
-    /// 本文と投票のあいだ。
-    public static let bodyPollSpacing = NumberTuning(
-        id: "timeline.bodyPollSpacing",
-        title: "本文と投票のあいだ（pt）",
-        range: 0...24,
-        step: 1,
-        defaultValue: 10
-    )
-
-    /// 投票の選択肢どうしのあいだ。
-    public static let pollOptionSpacing = NumberTuning(
-        id: "timeline.pollOptionSpacing",
-        title: "投票の選択肢のあいだ（pt）",
-        range: 0...16,
-        step: 1,
-        defaultValue: 6
-    )
-
-    /// 投票の選択肢の、文字の上下の余白。
-    public static let pollOptionPadding = NumberTuning(
-        id: "timeline.pollOptionPadding",
-        title: "投票の選択肢の上下の余白（pt）",
-        range: 2...16,
-        step: 1,
-        defaultValue: 8
-    )
 
     /// 投票したときに、結果の棒が伸びるスプリングの時間。0なら動かさない。
     public static let pollBarDuration = NumberTuning(
@@ -184,15 +68,6 @@ public enum TuningCatalog {
         range: 0...1.5,
         step: 0.05,
         defaultValue: 0.5
-    )
-
-    /// リンクカードの文字の、枠とサムネイルからの余白。
-    public static let linkCardPadding = NumberTuning(
-        id: "timeline.linkCardPadding",
-        title: "リンクカードの内側の余白（pt）",
-        range: 0...20,
-        step: 1,
-        defaultValue: 10
     )
 
     /// リンク先だけのカードに、サーバーのカードが届いたときの、差し替えのスプリングの時間。画像のないカードでは、サムネイルの枠を縮めて消す。
@@ -222,51 +97,6 @@ public enum TuningCatalog {
         defaultValue: 0.3
     )
 
-    /// Xの投稿の囲みの、作者の行に出すアイコンの一辺。
-    public static let xPostAvatarSize = NumberTuning(
-        id: "timeline.xPostAvatarSize",
-        title: "Xの投稿の囲みのアイコンの大きさ（pt）",
-        range: 12...32,
-        step: 1,
-        defaultValue: 20
-    )
-
-    /// 注意書き（CW）のボックスの内側の余白。
-    public static let spoilerPadding = NumberTuning(
-        id: "timeline.spoilerPadding",
-        title: "注意書きのボックスの内側の余白（pt）",
-        range: 0...20,
-        step: 1,
-        defaultValue: 9
-    )
-
-    /// 注意書き（CW）のボックスと、開いた本文のあいだ。
-    public static let spoilerBodySpacing = NumberTuning(
-        id: "timeline.spoilerBodySpacing",
-        title: "注意書きと本文のあいだ（pt）",
-        range: 0...24,
-        step: 1,
-        defaultValue: 9
-    )
-
-    /// 本文のない投稿で、名前の行と、添付ファイルのサムネイルのあいだ。
-    public static let nameMediaSpacing = NumberTuning(
-        id: "timeline.nameMediaSpacing",
-        title: "名前の行とメディアのあいだ（本文なし）（pt）",
-        range: 0...24,
-        step: 1,
-        defaultValue: 12
-    )
-
-    /// 添付ファイルのサムネイルを並べるときの、サムネイル同士のすき間。
-    public static let mediaTileSpacing = NumberTuning(
-        id: "timeline.mediaTileSpacing",
-        title: "メディアのサムネイル同士のすき間（pt）",
-        range: 0...12,
-        step: 1,
-        defaultValue: 4
-    )
-
     /// サムネイルの中央に置くアイコン（動画の再生など）の大きさの、タイルの短い辺に対する比。
     public static let mediaSymbolRatio = NumberTuning(
         id: "timeline.mediaSymbolRatio",
@@ -293,25 +123,6 @@ public enum TuningCatalog {
         range: 16...80,
         step: 2,
         defaultValue: 36
-    )
-
-    /// 名前の上の行（ブースト、固定、通知の種類）の記号と、その右の文字やアイコンとのすき間。
-    /// 記号はアイコンの列の右端に揃えず、文字の列からこの幅だけ離して置く。記号どうしの縦の揃いは保たれる。
-    public static let contextSymbolSpacing = NumberTuning(
-        id: "timeline.contextSymbolSpacing",
-        title: "名前の上の行の記号と文字のすき間（pt）",
-        range: 0...12,
-        step: 1,
-        defaultValue: 4
-    )
-
-    /// 投稿の名前の行が入りきらないときに、行末をぼかす幅。
-    public static let nameFadeWidth = NumberTuning(
-        id: "timeline.nameFadeWidth",
-        title: "名前の行末をぼかす幅（pt）",
-        range: 4...60,
-        step: 2,
-        defaultValue: 20
     )
 
     /// お気に入りやブーストの通知で、再掲する本文と、1列に並べるサムネイルのあいだ。
@@ -587,15 +398,6 @@ public enum TuningCatalog {
         range: 0...3,
         step: 0.5,
         defaultValue: 1
-    )
-
-    /// 添付ファイルが1つの投稿で、縦長の画像をどこまで縦長のまま出すか（幅÷高さ）。これより縦長なものは上下を切り落とす。
-    public static let mediaTallestAspectRatio = NumberTuning(
-        id: "timeline.mediaTallestAspectRatio",
-        title: "1枚の画像の最も縦長な比率（幅÷高さ）",
-        range: 0.5...1.5,
-        step: 0.05,
-        defaultValue: 0.75
     )
 
     /// 一覧のサムネイルで、サーバーが縮めたプレビュー画像を何倍まで引き伸ばして出してよいか。超えるなら元の画像を読む。
@@ -1575,34 +1377,12 @@ public enum TuningCatalog {
 
     public static let sections: [TuningSection] = [
         TuningSection(id: "timeline", title: "タイムラインの見た目", items: [
-            .number(paragraphSpacing),
-            .number(avatarSize),
-            .number(boosterAvatarSize),
-            .number(contextSymbolSpacing),
-            .number(avatarSpacing),
-            .number(contextSpacing),
-            .number(replyLineWidth),
-            .number(replyLineGap),
-            .number(nameBodySpacing),
-            .number(bodyMediaSpacing),
-            .number(nameMediaSpacing),
-            .number(bodyLinkCardSpacing),
-            .number(bodyPollSpacing),
-            .number(pollOptionSpacing),
-            .number(pollOptionPadding),
             .number(pollBarDuration),
-            .number(linkCardPadding),
             .number(linkCardTransitionDuration),
             .toggle(xPostEmbeds),
-            .number(xPostAvatarSize),
-            .number(spoilerPadding),
-            .number(spoilerBodySpacing),
-            .number(mediaTileSpacing),
             .number(mediaSymbolRatio),
             .number(mediaSymbolMinSize),
             .number(mediaSymbolMaxSize),
-            .number(nameFadeWidth),
-            .number(mediaTallestAspectRatio),
             .number(mediaThumbnailUpscaleTolerance),
         ]),
         TuningSection(id: "timeline.reactionGlow", title: "お気に入りとブーストの光", items: [

@@ -190,4 +190,71 @@ struct AppSettingsTests {
         AppSettings(defaults: defaults).reblogVisibility = .private
         #expect(AppSettings(defaults: defaults).reblogVisibility == .private)
     }
+
+    /// 見た目の値は、変えるまで既定値を返し、変えた値は起動し直しても残る。範囲外は範囲に収める。
+    @Test func persistsAppearanceValues() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        let item = AppearanceCatalog.nameBodySpacing
+        #expect(settings.value(of: item) == item.defaultValue)
+        #expect(!settings.isModified(item))
+        settings.setValue(8, for: item)
+        settings.setValue(1_000, for: AppearanceCatalog.bodyText)
+        let relaunched = AppSettings(defaults: defaults)
+        #expect(relaunched.value(of: item) == 8)
+        #expect(relaunched.isModified(item))
+        #expect(relaunched.value(of: AppearanceCatalog.bodyText) == AppearanceCatalog.bodyText.range.upperBound)
+    }
+
+    @Test func resetsAppearanceValues() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.setValue(8, for: AppearanceCatalog.nameBodySpacing)
+        settings.setValue(4, for: AppearanceCatalog.bodyText)
+        settings.reset([AppearanceCatalog.nameBodySpacing])
+        let relaunched = AppSettings(defaults: defaults)
+        #expect(relaunched.value(of: AppearanceCatalog.nameBodySpacing) == AppearanceCatalog.nameBodySpacing.defaultValue)
+        #expect(relaunched.value(of: AppearanceCatalog.bodyText) == 4)
+    }
+
+    /// 保存のキーが重なると、別の項目の値を読んでしまう。
+    @Test func appearanceIDsAreUnique() {
+        let ids = AppearanceCatalog.values.map(\.id)
+        #expect(Set(ids).count == ids.count)
+    }
+
+    /// 名前の上の行は狭いので、ブーストした人は名前だけを既定にする。
+    @Test func contextNameStyleDefaultsToNameOnly() throws {
+        let defaults = try makeDefaults()
+        #expect(AppSettings(defaults: defaults).contextNameStyle == .nameOnly)
+        AppSettings(defaults: defaults).contextNameStyle = .acctOnly
+        #expect(AppSettings(defaults: defaults).contextNameStyle == .acctOnly)
+    }
+
+    /// 数でない値（NaNや無限）は保存しない。行数などを整数に直すところで落ちるため。
+    @Test func rejectsNonFiniteAppearanceValues() throws {
+        let settings = AppSettings(defaults: try makeDefaults())
+        let item = AppearanceCatalog.linkCardDescriptionLines
+        settings.setValue(2, for: item)
+        settings.setValue(.nan, for: item)
+        settings.setValue(.infinity, for: item)
+        #expect(settings.value(of: item) == 2)
+    }
+
+    /// 「投稿の見た目」をまとめて戻すと、数値だけでなく、名前の表記や出すかどうかのスイッチも既定に戻す。
+    @Test func resetAppearanceRestoresChoices() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        #expect(!settings.isAppearanceModified)
+        settings.showsTime = false
+        #expect(settings.isAppearanceModified)
+        settings.statusNameStyle = .acctOnly
+        settings.setValue(30, for: AppearanceCatalog.avatarSize)
+        settings.resetAppearance()
+        #expect(!settings.isAppearanceModified)
+        let relaunched = AppSettings(defaults: defaults)
+        #expect(relaunched.showsTime)
+        #expect(relaunched.statusNameStyle == .nameAndAcct)
+        #expect(relaunched.value(of: AppearanceCatalog.avatarSize) == AppearanceCatalog.avatarSize.defaultValue)
+    }
 }

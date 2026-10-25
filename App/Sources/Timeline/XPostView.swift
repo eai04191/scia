@@ -18,8 +18,12 @@ final class XPostView: UIButton {
         var media: MediaGridView.Content?
         /// 囲みの内側の余白。
         var padding: CGFloat
-        /// 作者の行と本文、本文と添付ファイルのあいだ。
-        var spacing: CGFloat
+        /// 作者のアイコンと名前のすき間。
+        var avatarNameSpacing: CGFloat
+        /// 作者の行と本文のあいだ。
+        var headerSpacing: CGFloat
+        /// 本文と添付ファイルのあいだ。
+        var mediaSpacing: CGFloat
         /// リンクカードから替わったときに、囲みを浮かび上がらせる時間。
         var transitionDuration: TimeInterval
     }
@@ -109,12 +113,12 @@ final class XPostView: UIButton {
             avatarView.centerYAnchor.constraint(equalTo: headerGuide.centerYAnchor),
             avatarView.widthAnchor.constraint(equalToConstant: content.avatarSize),
             avatarView.heightAnchor.constraint(equalToConstant: content.avatarSize),
-            nameLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: content.spacing),
+            nameLabel.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: content.avatarNameSpacing),
             nameLabel.trailingAnchor.constraint(equalTo: headerGuide.trailingAnchor),
             nameLabel.centerYAnchor.constraint(equalTo: headerGuide.centerYAnchor),
             textLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: padding),
             textLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -padding),
-            textLabel.topAnchor.constraint(equalTo: headerGuide.bottomAnchor, constant: content.spacing),
+            textLabel.topAnchor.constraint(equalTo: headerGuide.bottomAnchor, constant: content.headerSpacing),
         ]
         // 下限だけでは高さが決まらないため、収まる最小の高さに寄せる。
         let compactHeader = headerGuide.heightAnchor.constraint(equalToConstant: 0)
@@ -125,7 +129,7 @@ final class XPostView: UIButton {
             mediaView.isHidden = false
             mediaView.apply(media)
             constraints += [
-                mediaView.topAnchor.constraint(equalTo: last, constant: content.spacing),
+                mediaView.topAnchor.constraint(equalTo: last, constant: content.mediaSpacing),
                 mediaView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: padding),
                 mediaView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -padding),
                 mediaView.heightAnchor.constraint(equalTo: mediaView.widthAnchor, multiplier: 1 / aspectRatio),
@@ -141,6 +145,23 @@ final class XPostView: UIButton {
 
     override var isHighlighted: Bool {
         didSet { backgroundColor = isHighlighted ? .systemFill : nil }
+    }
+
+    /// 「投稿の見た目」のプレビューで、部品の場所を示すための枠。`space`の座標で返す。
+    func previewFrames(in space: UIView) -> AppearancePreviewFrames {
+        var frames: AppearancePreviewFrames = [
+            .xPost: previewFrame(in: space),
+            .xPostAvatar: avatarView.previewFrame(in: space),
+            // 作者の行のラベルは余った幅を受け持つので、文字のある幅だけを示す。
+            .xPostName: nameLabel.previewFrame(in: space)?.map { CGRect(x: $0.minX, y: $0.minY, width: min($0.width, ceil(nameLabel.intrinsicContentSize.width)), height: $0.height) },
+            .xPostBody: textLabel.previewFrame(in: space),
+            .xPostMedia: mediaGrid?.previewFrame(in: space),
+        ].compactMapValues(\.self)
+        frames[.xPostHeader] = [convert(headerGuide.layoutFrame, to: space)]
+        if let box = previewFrame(in: space)?.first {
+            frames[.xPostPaddingBands] = AppearanceHighlight.paddingBands(of: box, padding: content?.padding ?? 0)
+        }
+        return frames
     }
 
     private func updateBorderColor() {

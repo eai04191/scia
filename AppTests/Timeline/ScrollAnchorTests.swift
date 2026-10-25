@@ -515,7 +515,7 @@ struct ScrollAnchorTests {
         let before = try #require(harness.windowMinY(of: anchor.id))
         let heightBefore = harness.collectionView.contentSize.height
 
-        harness.tuning.setValue(24, for: TuningCatalog.paragraphSpacing)
+        harness.settings.setValue(24, for: AppearanceCatalog.paragraphSpacing)
         try await waitUntil { harness.collectionView.contentSize.height != heightBefore }
 
         #expect(harness.collectionView.contentSize.height > heightBefore, "段落間隔の変更が反映されていません")
