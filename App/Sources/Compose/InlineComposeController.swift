@@ -1857,7 +1857,7 @@ final class InlineComposeController: NSObject {
             parts.append(chip.title)
         }
         if !attachments.isEmpty {
-            let onlyImages = attachments.allSatisfy { ($0.local?.file?.kind ?? $0.attachedMedia?.type) == .image }
+            let onlyImages = attachments.allSatisfy { ($0.local?.displayKind ?? $0.attachedMedia?.type) == .image }
             parts.append(onlyImages ? "画像\(attachments.count)枚を添付" : "メディア\(attachments.count)件を添付")
             if attachments.contains(where: { $0.status == .failed || $0.status == .descriptionFailed }) {
                 parts.append("送信できなかった添付があります")
@@ -1966,13 +1966,20 @@ final class InlineComposeController: NSObject {
         isWaitingForKeyboardAfterViewer = isInputFocused && isBarHeld
     }
 
-    /// ビューアのメニューで、「代替テキストを編集」に続けて出す項目。画像には「トリミング」を、失敗したものには「再試行」も出す。
+    /// ビューアのメニューで、「代替テキストを編集」に続けて出す項目。画像には「トリミング」を、音声のある動画には「GIFとして送る」を、失敗したものには「再試行」も出す。
     private func viewerMenuElements(for itemID: String) -> [UIMenuElement] {
         guard let id = UUID(uuidString: itemID), let status = model.attachmentStatus(of: id) else { return [] }
         var elements: [UIMenuElement] = []
         if model.canCrop(id) {
             elements.append(UIAction(title: "トリミング", image: UIImage(systemName: "crop")) { [weak self] _ in
                 self?.presentCrop(id)
+            })
+        }
+        if let local = model.localMedia[id], local.hasAudio == true {
+            // Mastodonは音声のない動画をGIFとして扱うので、「音声を消す」ではなく、送ったあとの姿で書く。
+            let removesAudio = local.removesAudio
+            elements.append(UIAction(title: "GIFとして送る", image: UIImage(systemName: "speaker.slash"), state: removesAudio ? .on : .off) { [weak self] _ in
+                self?.model.setRemovesAudio(!removesAudio, of: id)
             })
         }
         if status == .failed || status == .descriptionFailed {
@@ -2030,7 +2037,7 @@ final class InlineComposeController: NSObject {
             let local = model.localMedia[attachment.id]
             return MediaViewerItem(
                 id: attachment.id.uuidString,
-                kind: local?.file?.kind ?? .image,
+                kind: local?.displayKind ?? .image,
                 description: attachment.description,
                 // 縮めたら、投稿される中身を確かめられるよう、縮めたあとのファイルを出す。
                 // 切り抜いたら、送るファイルを作り終えるまでは元のファイルを出さず、切り抜いたサムネイルを出す。

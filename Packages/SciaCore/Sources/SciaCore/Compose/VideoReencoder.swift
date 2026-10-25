@@ -34,7 +34,7 @@ public enum VideoReencoder {
         AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
     ]
 
-    /// H.264とAACのmp4で書き出す。動画の長さは保つ。
+    /// H.264とAACのmp4で書き出す。動画の長さは保つ。音声がないか`removesAudio`なら、音声を書かない。
     ///
     /// HDRの動画は、トーンマッピングしてSDRにする。H.264で書き出す以上、HDRは残せない。
     /// - Parameters:
@@ -48,13 +48,14 @@ public enum VideoReencoder {
         frameRate: Double?,
         bitRate: Int,
         audioBitRate: Int,
+        removesAudio: Bool = false,
         destination: URL,
         clock: any Clock<Duration> = SystemTime.clock,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws {
         let asset = AVURLAsset(url: url)
         guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else { throw MediaReencodingError.videoFailed }
-        let audioTrack = try await asset.loadTracks(withMediaType: .audio).first
+        let audioTrack = removesAudio ? nil : try await asset.loadTracks(withMediaType: .audio).first
         let duration = try await asset.load(.duration).seconds
 
         // 合成では向きだけを反映し、色は元のまま渡す。大きさは書き出す側で縮める。

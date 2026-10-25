@@ -531,6 +531,90 @@ struct ComposeModelMediaTests {
         #expect(model.attachments.first?.isReady == true)
     }
 
+    /// ピッカーで選んだ1秒の動画。
+    private func pickedVideo(_ id: String, withAudio: Bool) async throws -> PickedMedia {
+        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let url = folder.appending(path: "\(id).mov")
+        try await TestVideo.write(width: 64, height: 36, withAudio: withAudio, to: url)
+        return PickedMedia(assetIdentifier: id) { _ in LocalMediaFile(url: url, mimeType: "video/quicktime", kind: .video) }
+    }
+
+    /// 送った動画に音声があるか。
+    private func hasAudio(_ upload: MediaUpload) async throws -> Bool {
+        let url = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString).mov")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try upload.data.write(to: url)
+        return try #require(await VideoReencoder.info(of: url)).hasAudio
+    }
+
+    /// 音声のある動画をGIFとして送るよう切り替えると、送り終えたあとでも、音声を除いて送り直し、送り直した添付を投稿に付ける。
+    /// 戻すと、また音声付きで送り直す。
+    @Test func switchingVideoToGIFResendsWithoutAudio() async throws {
+        let server = FakeServer()
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+        model.applyPickerSelection([try await pickedVideo("a", withAudio: true)])
+        try await settleSlowly { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+        #expect(model.localMedia[id]?.hasAudio == true)
+        #expect(model.localMedia[id]?.displayKind == .video)
+        #expect(try await hasAudio(try #require(server.uploads.last)))
+
+        model.setRemovesAudio(true, of: id)
+        #expect(model.attachmentStatus(of: id) == .uploading)
+        #expect(model.localMedia[id]?.displayKind == .gifv)
+        try await settleSlowly { isSettled(model) && server.uploads.count == 2 }
+        #expect(try await !hasAudio(try #require(server.uploads.last)))
+        await model.submit()
+        #expect(sent.last?.mediaIDs == ["m-audio-1-a.mov"])
+
+        model.applyPickerSelection([try await pickedVideo("b", withAudio: true)])
+        try await settleSlowly { isSettled(model) && server.uploads.count == 3 }
+        let second = try #require(model.attachments.first?.id)
+        model.setRemovesAudio(true, of: second)
+        try await settleSlowly { isSettled(model) && server.uploads.count == 4 }
+        model.setRemovesAudio(false, of: second)
+        try await settleSlowly { isSettled(model) && server.uploads.count == 5 }
+        #expect(try await hasAudio(try #require(server.uploads.last)))
+        #expect(model.localMedia[second]?.displayKind == .video)
+    }
+
+    /// 送り終える前に続けて切り替えても、止めた前の書き出しと書き合わずに、最後に選んだほうで送る。
+    @Test func switchingRepeatedlySendsTheLastChoice() async throws {
+        let server = FakeServer()
+        let model = makeModel(server)
+        model.applyPickerSelection([try await pickedVideo("a", withAudio: true)])
+        try await settleSlowly { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+
+        model.setRemovesAudio(true, of: id)
+        model.setRemovesAudio(false, of: id)
+        model.setRemovesAudio(true, of: id)
+        try await settleSlowly { isSettled(model) && model.localMedia[id]?.sending != nil }
+
+        #expect(model.attachmentStatus(of: id) == .ready)
+        let upload = try #require(server.uploads.last)
+        #expect(upload.filename == "audio-3-a.mov")
+        #expect(try await !hasAudio(upload))
+    }
+
+    /// 音声のない動画は、もとからGIFとして扱われるので、切り替えても送り直さない。
+    @Test func videoWithoutAudioIsNotResent() async throws {
+        let server = FakeServer()
+        let model = makeModel(server)
+        model.applyPickerSelection([try await pickedVideo("a", withAudio: false)])
+        try await settleSlowly { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+
+        model.setRemovesAudio(true, of: id)
+
+        #expect(model.localMedia[id]?.hasAudio == false)
+        #expect(model.localMedia[id]?.removesAudio == false)
+        #expect(model.attachmentStatus(of: id) == .ready)
+        #expect(server.uploads.count == 1)
+    }
+
     @Test func deselectingInPickerRemovesAttachmentAndFile() async throws {
         let server = FakeServer()
         let model = makeModel(server)

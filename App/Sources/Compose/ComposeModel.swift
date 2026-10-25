@@ -357,6 +357,29 @@ struct LocalMedia {
     var crop: ImageCrop?
     /// 切り抜く範囲を変えた回数。切り抜いたファイルの名前に入れる。
     var cropCount = 0
+    /// 動画に音声がある。読み込んで調べる前と、動画でないときはnil。
+    var hasAudio: Bool?
+    /// 動画の音声を除いて、GIFとして送る。Mastodonは音声のない動画をGIF（`gifv`）として扱うため。
+    var removesAudio = false
+    /// GIFとして送るかを切り替えた回数。作り直したファイルの名前に入れる。
+    /// 止めた前のアップロードがまだ書いていることがあり、同じ名前だと切り替えるたびに書き合うため。
+    var audioSwitchCount = 0
+
+    /// GIFとして送るかと、切り替えた回数。
+    var audioChoice: AudioChoice {
+        AudioChoice(removesAudio: removesAudio, switchCount: audioSwitchCount)
+    }
+
+    /// 投稿欄とビューアで見せる種類。GIFとして送る動画はGIFにする。読み込む前はnil。
+    var displayKind: MediaAttachment.Kind? {
+        removesAudio ? .gifv : file?.kind
+    }
+}
+
+/// 動画をGIFとして送るか（音声を除くか）と、切り替えた回数。切り替えた回数は、作り直したファイルの名前に入れる。
+struct AudioChoice {
+    var removesAudio = false
+    var switchCount = 0
 }
 
 /// 添付1つの、投稿欄とビューアで見せる状態。
@@ -513,6 +536,28 @@ extension ComposeModel {
         }
     }
 
+    /// 動画をGIFとして送るか（音声を除くか）を切り替え、送り直す。送り終えていても、サーバーの添付は使わずに送り直す。
+    /// 音声のない動画は、もとからGIFとして扱われるので切り替えない。
+    func setRemovesAudio(_ removesAudio: Bool, of id: DraftAttachment.ID) {
+        guard let local = localMedia[id], local.hasAudio == true, local.removesAudio != removesAudio else { return }
+        logger.info("attachment removesAudio=\(removesAudio, privacy: .public)")
+        localMedia[id]?.removesAudio = removesAudio
+        localMedia[id]?.audioSwitchCount += 1
+        uploadTasks.removeValue(forKey: id)?.cancel()
+        descriptionTasks.removeValue(forKey: id)?.cancel()
+        // 作り直したファイルは、読み込んだファイルと同じディレクトリにあるので、添付を外せば一緒に消える。ここでは消さない。
+        // 止めたアップロードが、まだ読んでいることがあるため。
+        localMedia[id]?.sending = nil
+        localMedia[id]?.reduction = nil
+        localMedia[id]?.sendingIsReencoded = false
+        localMedia[id]?.exportProgress = nil
+        localMedia[id]?.progress = 0
+        localMedia[id]?.failure = nil
+        localMedia[id]?.descriptionFailure = nil
+        setState(.uploading, of: id)
+        startUpload(id)
+    }
+
     /// 代替テキストを書き換える。アップロードが済んでいればすぐ送り、済む前ならアップロードと一緒に（間に合わなければ済んでから）送る。
     func setDescription(_ description: String, of id: DraftAttachment.ID) {
         guard let index = attachments.firstIndex(where: { $0.id == id }), attachments[index].description != description else { return }
@@ -638,7 +683,8 @@ extension ComposeModel {
             let processed: MediaAttachment
             setState(.uploading, of: id)
             let file = try await loadFile(id, local: local)
-            let sending = try await prepare(file, of: id)
+            // GIFとして送るかは、始めた時点の値で決める。待っている間に切り替わると、止めたこの処理が新しい処理と同じファイルに書くため。
+            let sending = try await prepare(file, of: id, audio: local.audioChoice)
             let accepted: MediaAttachment
             do {
                 accepted = try await send(sending, of: id, sentDescription: &sentDescription)
@@ -715,7 +761,8 @@ extension ComposeModel {
     /// 収まらなければ作り直し、サーバーの上限のために設定より小さくしたら知らせる。送り直すときは、前に決めたファイルを使う。
     /// - Parameter forcingJPEG: JPEGで送り直すので、縮めて作り直すときもHEICなどにしない。覚えたのは処理できなかった形式（HEIFなど）だけで、
     ///   HEICは覚えていないことがあり、同じサーバーがHEICも処理できないことが多いため。
-    private func prepare(_ file: LocalMediaFile, of id: DraftAttachment.ID, forcingJPEG: Bool = false) async throws -> LocalMediaFile {
+    /// - Parameter audio: 動画をGIFとして送るかと、切り替えた回数。
+    private func prepare(_ file: LocalMediaFile, of id: DraftAttachment.ID, audio: AudioChoice = AudioChoice(), forcingJPEG: Bool = false) async throws -> LocalMediaFile {
         if let sending = localMedia[id]?.sending { return sending }
         let settings = media.preparation()
         let byteCount = ImageReencoder.byteCount(of: file.url)
@@ -744,7 +791,7 @@ extension ComposeModel {
                     .map { PreparedMedia(url: $0, mimeType: file.mimeType, size: size, reduction: nil) }
             }
         case .video:
-            (prepared, reencoded) = try await prepareVideo(file, of: id, byteCount: byteCount, settings: settings)
+            (prepared, reencoded) = try await prepareVideo(file, of: id, audio: audio, byteCount: byteCount, settings: settings)
         case .gifv, .audio, .unknown:
             prepared = nil
         }
@@ -771,30 +818,39 @@ extension ComposeModel {
     private func prepareVideo(
         _ file: LocalMediaFile,
         of id: DraftAttachment.ID,
+        audio: AudioChoice,
         byteCount: Int,
         settings: MediaPreparationSettings
     ) async throws -> (PreparedMedia?, reencoded: Bool) {
         guard let info = await VideoReencoder.info(of: file.url) else { throw MediaReencodingError.videoFailed }
+        localMedia[id]?.hasAudio = info.hasAudio
+        let removesAudio = info.hasAudio && audio.removesAudio
+        let preparedURL = Self.preparedURL(for: file, audioSwitchCount: audio.switchCount > 0 ? audio.switchCount : nil)
         let plan = VideoPlan.make(
-            size: info.size, duration: info.duration, frameRate: info.frameRate, hasAudio: info.hasAudio, byteCount: byteCount,
+            size: info.size, duration: info.duration, frameRate: info.frameRate, hasAudio: info.hasAudio && !removesAudio, byteCount: byteCount,
             setting: settings.videoSize, limits: mediaLimits, quality: settings.videoQuality
         )
         switch plan {
+        case .original where removesAudio:
+            // 組み直すとメタデータは付いてこないので、位置情報も一緒に除かれる。
+            let destination = preparedURL
+            try await AudioRemover.removingAudio(fromVideo: file.url, destination: destination)
+            return (PreparedMedia(url: destination, mimeType: file.mimeType, size: info.size, reduction: nil), false)
         case .original:
             // 書き出す動画には位置情報を書かないので、元のまま送るときだけ除く。
-            let cleaned = try await LocationRemover.removingLocation(fromVideo: file.url, destination: Self.preparedURL(for: file))
+            let cleaned = try await LocationRemover.removingLocation(fromVideo: file.url, destination: preparedURL)
             return (cleaned.map { PreparedMedia(url: $0, mimeType: file.mimeType, size: info.size, reduction: nil) }, false)
         case .tooLong:
             throw MediaReencodingError.videoTooLong
         case .export(let size, let frameRate, let bitRate, let reducedByServer):
             localMedia[id]?.exportProgress = 0
-            let destination = Self.preparedURL(for: file).deletingPathExtension().appendingPathExtension("mp4")
+            let destination = preparedURL.deletingPathExtension().appendingPathExtension("mp4")
             let report: @Sendable (Double) -> Void = { [weak self] fraction in
                 Task { @MainActor in self?.setExportProgress(fraction, of: id) }
             }
             try await VideoReencoder.export(
                 file.url, size: size, frameRate: frameRate, bitRate: bitRate, audioBitRate: settings.videoQuality.audioBitRate,
-                destination: destination, progress: report
+                removesAudio: removesAudio, destination: destination, progress: report
             )
             let exportedByteCount = ImageReencoder.byteCount(of: destination)
             if let limit = mediaLimits.videoSizeLimit, exportedByteCount > limit {
@@ -808,9 +864,11 @@ extension ComposeModel {
 
     /// 作り直したファイルの置き場所。読み込んだファイルと同じディレクトリに、名前を変えて置く。
     /// 切り抜いたファイルは、切り抜くたびに名前を変える。切り抜き直して止めたアップロードが、同じファイルに書き続けていることがあるため。
-    /// - Parameter cropCount: 切り抜くなら、切り抜く範囲を変えた回数。
-    private static func preparedURL(for file: LocalMediaFile, cropCount: Int? = nil) -> URL {
-        let prefix = cropCount.map { "cropped-\($0)-" } ?? "prepared-"
+    /// - Parameters:
+    ///   - cropCount: 切り抜くなら、切り抜く範囲を変えた回数。
+    ///   - audioSwitchCount: GIFとして送るかを切り替えた動画なら、切り替えた回数。
+    private static func preparedURL(for file: LocalMediaFile, cropCount: Int? = nil, audioSwitchCount: Int? = nil) -> URL {
+        let prefix = cropCount.map { "cropped-\($0)-" } ?? audioSwitchCount.map { "audio-\($0)-" } ?? "prepared-"
         return file.url.deletingLastPathComponent().appending(fileName: SafeFileName(prefix + file.url.lastPathComponent))
     }
 

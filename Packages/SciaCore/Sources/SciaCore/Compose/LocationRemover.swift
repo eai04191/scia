@@ -60,8 +60,15 @@ public enum LocationRemover {
         }
         let hasTimedMetadata = !(try await asset.loadTracks(withMediaType: .metadata)).isEmpty
         guard hasTimedMetadata || items.contains(where: isLocation) else { return nil }
+        try await recomposing(tracks, of: [.video, .audio], to: destination)
+        return destination
+    }
+
+    /// `mediaTypes`のトラックだけを、作り直さずに組み直して`destination`に書き出す。
+    /// 組み直すと、動画全体とトラックのメタデータと、時刻ごとのメタデータのトラックは付いてこない。
+    static func recomposing(_ tracks: [AVAssetTrack], of mediaTypes: Set<AVMediaType>, to destination: URL) async throws {
         let composition = AVMutableComposition()
-        for track in tracks where track.mediaType == .video || track.mediaType == .audio {
+        for track in tracks where mediaTypes.contains(track.mediaType) {
             let (timeRange, transform) = try await track.load(.timeRange, .preferredTransform)
             guard let copy = composition.addMutableTrack(withMediaType: track.mediaType, preferredTrackID: kCMPersistentTrackID_Invalid) else {
                 throw MediaReencodingError.videoFailed
@@ -69,11 +76,9 @@ public enum LocationRemover {
             try copy.insertTimeRange(timeRange, of: track, at: timeRange.start)
             copy.preferredTransform = transform
         }
-        // 組み直した動画には、動画全体のメタデータも付いてこない。
         guard let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetPassthrough) else { throw MediaReencodingError.videoFailed }
         try? FileManager.default.removeItem(at: destination)
         try await session.export(to: destination, as: destination.pathExtension.lowercased() == "mp4" ? .mp4 : .mov)
-        return destination
     }
 
     /// 場所を表すメタデータの項目。座標のほか、場所の名前（共通のキーを持たない）も含める。

@@ -562,7 +562,8 @@ final class MediaViewerController: UIViewController {
         switch item.kind {
         case .image: .image
         // 投稿欄で選んだGIFは動画ではなく画像のファイルで、AVPlayerでは再生できないため、最初のコマを画像として見せる。
-        case .gifv where item.serverAttachment == nil: .image
+        // GIFとして送る動画は動画のファイルなので、再生する。
+        case .gifv where item.serverAttachment == nil && item.localFile?.kind != .video: .image
         case .video, .gifv, .audio: .player
         case .unknown: .unsupported
         }
@@ -684,9 +685,11 @@ final class MediaViewerController: UIViewController {
         let updated = Dictionary(newItems.map { ($0.id, $0) }) { first, _ in first }
         for index in items.indices {
             guard let item = updated[items[index].id] else { continue }
+            let previousKind = items[index].kind
             items[index] = item
             guard let page = pages[index] else { continue }
-            if Self.pageKind(of: page) == Self.pageKind(of: item) {
+            // 動画をGIFとして送るよう切り替えたら、操作の部品を外してくり返す再生にするため、同じ再生のページでも作り直す。
+            if Self.pageKind(of: page) == Self.pageKind(of: item), previousKind == item.kind {
                 page.update(item)
             } else {
                 // 投稿欄で選んだメディアは、読み込むまで種類が分からず画像として開くため、動画と分かったらページを作り直す。

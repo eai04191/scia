@@ -390,7 +390,7 @@ final class ComposeRestPhoto: UIView {
         if let attached = item.attachedMedia {
             tile.apply(attached, hiddenCount: 0, isCovered: false, policy: ComposeAttachmentStrip.attachedThumbnailPolicy)
         } else {
-            tile.applyLocal(thumbnail: item.local?.thumbnail, kind: item.local?.file?.kind, description: "")
+            tile.applyLocal(thumbnail: item.local?.thumbnail, kind: item.local?.displayKind, description: "")
         }
     }
 

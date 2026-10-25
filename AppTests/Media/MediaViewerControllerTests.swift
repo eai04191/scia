@@ -470,6 +470,29 @@ struct MediaViewerControllerTests {
         #expect(viewer.currentItem.kind == .video)
     }
 
+    /// 投稿欄で動画をGIFとして送るよう切り替えたら、同じ再生のページでも作り直し、GIFのくり返す再生にする。戻したら動画のページに戻す。
+    @Test func pageIsRebuiltWhenVideoIsSwitchedToGIF() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let file = LocalMediaFile(url: URL(filePath: "/tmp/a.mov"), mimeType: "video/quicktime", kind: .video)
+        let video = MediaViewerItem(id: "a", kind: .video, description: "", file: file, thumbnail: nil, status: .ready)
+        let viewer = try await presentDraftViewer(on: harness, items: [video], actions: DraftActions())
+        defer { viewer.dismiss(animated: false) }
+        let videoPage = try #require(viewer.displayedPage as? PlayerPageController)
+        #expect(videoPage.loopMenuAction() != nil)
+
+        viewer.update(items: [MediaViewerItem(id: "a", kind: .gifv, description: "", file: file, thumbnail: nil, status: .uploading)])
+
+        let gifPage = try #require(viewer.displayedPage as? PlayerPageController)
+        #expect(gifPage !== videoPage)
+        // GIFはもとからくり返すので、ループ再生の項目を出さない。
+        #expect(gifPage.loopMenuAction() == nil)
+
+        viewer.update(items: [video])
+
+        #expect((viewer.displayedPage as? PlayerPageController)?.loopMenuAction() != nil)
+    }
+
     /// 横にスワイプしている途中で切り替え先が動画と分かったら、切り替えを終えた時点で、残っていた画像のページを動画のページに差し替える。
     @Test func pendingPageIsRebuiltAfterTransitionWhenLoadedMediaTurnsOutToBeVideo() async throws {
         let harness = try TimelineHarness(notices: notices)

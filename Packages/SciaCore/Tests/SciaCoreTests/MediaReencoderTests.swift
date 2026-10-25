@@ -283,6 +283,42 @@ struct MediaReencoderTests {
         #expect(ratio > 0.9 && ratio < 1.1)
     }
 
+    /// GIFとして送る動画から、映像を作り直さずに音声を除く。位置情報も残さない。
+    @Test func removesAudioFromVideoWithoutReencoding() async throws {
+        let directory = try makeDirectory()
+        let video = directory.appending(path: "video.mov")
+        try await writeVideo(width: 320, height: 180, location: .coordinates, to: video)
+        let source = directory.appending(path: "clip.mp4")
+        try await TestVideo.addingSilentAudio(to: video, destination: source)
+        #expect(try #require(await VideoReencoder.info(of: source)).hasAudio)
+
+        let output = directory.appending(path: "silent.mov")
+        try await AudioRemover.removingAudio(fromVideo: source, destination: output)
+
+        let info = try #require(await VideoReencoder.info(of: output))
+        #expect(!info.hasAudio)
+        #expect(info.size == PixelSize(width: 320, height: 180))
+        #expect(abs(info.duration - 1) < 0.1)
+        #expect(try await !hasLocation(output))
+    }
+
+    /// 縮めて書き出すときも、GIFとして送るなら音声を書かない。音声を残す指定なら、音声も書き出す。
+    @Test(arguments: [false, true])
+    func exportWritesAudioUnlessRemoved(removesAudio: Bool) async throws {
+        let directory = try makeDirectory()
+        let video = directory.appending(path: "video.mov")
+        try await writeVideo(width: 320, height: 180, to: video)
+        let source = directory.appending(path: "clip.mp4")
+        try await TestVideo.addingSilentAudio(to: video, destination: source)
+
+        let output = directory.appending(path: "small.mp4")
+        try await VideoReencoder.export(
+            source, size: PixelSize(width: 160, height: 90), frameRate: nil, bitRate: 200_000, audioBitRate: 128_000, removesAudio: removesAudio,
+            destination: output
+        ) { _ in }
+        #expect(try #require(await VideoReencoder.info(of: output)).hasAudio == !removesAudio)
+    }
+
     /// 縮めて書き出した動画には、位置情報を書かない。
     @Test func exportedVideoHasNoLocation() async throws {
         let directory = try makeDirectory()
