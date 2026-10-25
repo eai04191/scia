@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Synchronization
 import Testing
 import UIKit
@@ -33,6 +34,29 @@ struct MediaDownloadsTests {
         #expect(first.path.hasPrefix(files.sharingDirectory.path))
         #expect(count.withLock { $0 } == 1)
         #expect(await files.contains(url))
+    }
+
+    /// ログアウトでキャッシュを消したら、その前に落とし始めたファイルを、落とし終えても置き直さない。
+    @Test func doesNotStoreDownloadStartedBeforeRemoval() async throws {
+        let files = MediaFileCache.temporary()
+        let gate = Gate()
+        let downloads = MediaDownloads(files: files, stagingDirectory: makeStaging()) { url, folder, _ in
+            try await gate.wait()
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            let file = folder.appending(path: url.lastPathComponent)
+            try Data("movie".utf8).write(to: file)
+            return file
+        }
+        let url = try #require(URL(string: "https://files.example.social/original/a.mp4"))
+
+        let sharing = Task { try await downloads.fileForSharing(for: url) { _ in } }
+        try await waitUntil { gate.waiterCount == 1 }
+        await files.removeAll()
+        gate.open()
+
+        await #expect(throws: CancellationError.self) { try await sharing.value }
+        #expect(await !files.contains(url))
+        #expect(!FileManager.default.fileExists(atPath: files.sharingDirectory.path()))
     }
 
     /// キャッシュにあれば落とさないため、進み具合を出さない。落とすときは、始めた時点で0を伝える。

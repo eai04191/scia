@@ -161,6 +161,7 @@ final class MediaImageStore {
         let fetch = fetch
         let files = keepsOriginal ? files : nil
         let task = Task<Loaded, any Error> {
+            let generation = await files?.generation
             // ビューアで開く画像は、元のファイルがキャッシュにあれば通信せずに使う。壊れていて展開できなければ、通信で取り直して置き直す。
             if let files, let cached = await files.data(for: url), let image = await Self.decode(cached, maxPixelSize: maxPixelSize) {
                 return Loaded(image: image, keptOriginal: true)
@@ -171,8 +172,8 @@ final class MediaImageStore {
             }
             // 置けなくても画像は見せる。共有と保存だけが選べなくなる。
             var keptOriginal = false
-            if let files, let name = await Self.originalFileName(of: data, for: url) {
-                keptOriginal = (try? await files.store(data, named: name, for: url)) != nil
+            if let files, let generation, let name = await Self.originalFileName(of: data, for: url) {
+                keptOriginal = (try? await files.store(data, named: name, for: url, generation: generation)) != nil
             }
             return Loaded(image: image, keptOriginal: keptOriginal)
         }

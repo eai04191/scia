@@ -401,6 +401,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
         logger.info("account removed")
+        // そのアカウントのために覚えた値と、そのアカウントで見たメディアのキャッシュを消す。
+        AccountScopedDefaults.removeData(of: credential, remaining: accounts.accounts, defaults: .standard, settings: AppDependencies.settings)
+        Task { await AppDependencies.mediaFiles.removeAll() }
         showCurrentAccount()
         Self.syncAllScenes()
     }

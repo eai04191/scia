@@ -25,7 +25,7 @@ public final class UnprocessableMediaFormats {
 
     public init(defaults: UserDefaults, instance: URL) {
         self.defaults = defaults
-        key = "media.unprocessableFormats.\(instance.host() ?? instance.absoluteString)"
+        key = AccountScopedDefaults.key("unprocessableMediaFormats", server: instance)
         entries = defaults.data(forKey: key).flatMap { try? JSONDecoder().decode([Entry].self, from: $0) } ?? []
     }
 

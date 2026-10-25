@@ -410,7 +410,7 @@ final class SessionController {
                     throw error
                 }
             },
-            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, credentialID: credential.id)),
+            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle)),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
         )
         rootViewController = tabBarController
@@ -1113,7 +1113,7 @@ final class SessionController {
             editor.charactersReservedPerURL = configuration.charactersReservedPerURL
         }
         let completion = TextInputCompletion(
-            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, credentialID: credential.id)),
+            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle)),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
         )
         let controller = ProfileEditViewController(editor: editor, completion: completion)

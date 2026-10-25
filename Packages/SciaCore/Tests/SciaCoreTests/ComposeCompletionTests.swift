@@ -412,7 +412,7 @@ struct ComposeCompletionTests {
         let suite = "ComposeCompletionTests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
-        return RecentMentions(defaults: defaults, credentialID: "https://example.social#me")
+        return RecentMentions(defaults: defaults, account: "@me@example.social")
     }
 
     /// 記号だけの時点では、問い合わせずに自分のタグを全部並べる。

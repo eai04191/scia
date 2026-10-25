@@ -98,7 +98,7 @@ public final class RecentEmojis {
 
     public init(defaults: UserDefaults, instance: URL) {
         self.defaults = defaults
-        key = "compose.recentEmojis.\(instance.host() ?? instance.absoluteString)"
+        key = AccountScopedDefaults.key("recentEmojis", server: instance)
     }
 
     /// 新しい順のキー。

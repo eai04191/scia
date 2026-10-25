@@ -65,7 +65,7 @@ struct MediaImageStoreTests {
         let data = try pngData()
         let files = MediaFileCache.temporary()
         let url = try #require(URL(string: "https://files.example.social/original/abc.png"))
-        _ = try await files.store(data, named: "abc.png", for: url)
+        _ = try await files.store(data, named: "abc.png", for: url, generation: 0)
         let store = MediaImageStore(files: files) { _, _ in throw URLError(.notConnectedToInternet) }
 
         let image = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
@@ -78,7 +78,7 @@ struct MediaImageStoreTests {
         let data = try pngData()
         let files = MediaFileCache.temporary()
         let url = try #require(URL(string: "https://files.example.social/original/abc.png"))
-        _ = try await files.store(Data("broken".utf8), named: "abc.png", for: url)
+        _ = try await files.store(Data("broken".utf8), named: "abc.png", for: url, generation: 0)
         let store = MediaImageStore(files: files) { _, _ in data }
 
         _ = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
@@ -92,7 +92,7 @@ struct MediaImageStoreTests {
         let data = try pngData()
         let files = MediaFileCache.temporary()
         let url = try #require(URL(string: "https://files.example.social/original/abc.png"))
-        _ = try await files.store(data, named: "abc.png", for: url)
+        _ = try await files.store(data, named: "abc.png", for: url, generation: 0)
         let fetched = Mutex(0)
         let store = MediaImageStore(files: files) { _, _ in
             fetched.withLock { $0 += 1 }

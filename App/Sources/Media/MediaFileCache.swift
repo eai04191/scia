@@ -25,6 +25,9 @@ actor MediaFileCache {
     /// 引いたときや置いたときに、最後に使った日時として書く今の日時。
     private let now: @Sendable () -> Date
     private let logger = SciaLog.logger(category: "media")
+    /// `removeAll()`で全部消すたびに進める。置く側は読み始めたときの値を`store`に渡し、その間に消していたら置かない。
+    /// ログアウトの前に始めた読み込みが、消したあとにファイルを置き直さないため。
+    private(set) var generation = 0
 
     /// - Parameters:
     ///   - sharingDirectory: 共有や保存に渡すコピーを置く場所。共有先が読み終えたことを知るすべがないため、作るときに前回の起動で残したコピーを消す。
@@ -68,7 +71,9 @@ actor MediaFileCache {
 
     /// `data`を`url`のファイルとして`name`の名前で置き、置いた場所を返す。同じURLのファイルがあれば置き換える。
     /// 書き込みの途中で落ちても書きかけのファイルを置いたものとして扱わないよう、隠しファイルに書いてから名前を付け替える。
-    func store(_ data: Data, named name: String, for url: URL) throws -> URL {
+    /// - Parameter generation: 読み始めたときの`generation`。その後に`removeAll()`で消していたら、置かずに`CancellationError`を投げる。
+    func store(_ data: Data, named name: String, for url: URL, generation: Int) throws -> URL {
+        guard generation == self.generation else { throw CancellationError() }
         let folder = folder(for: url)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let partial = folder.appending(path: ".partial-\(UUID().uuidString)")
@@ -82,7 +87,8 @@ actor MediaFileCache {
     }
 
     /// `source`のファイルを`url`のファイルとして`name`の名前で置き（移す）、置いた場所を返す。大きな動画を一度にメモリへ読み込まないよう、ファイルのまま移す。
-    func store(movingFile source: URL, named name: String, for url: URL) throws -> URL {
+    func store(movingFile source: URL, named name: String, for url: URL, generation: Int) throws -> URL {
+        guard generation == self.generation else { throw CancellationError() }
         let folder = folder(for: url)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         return try publish(source, named: name, in: folder)
@@ -126,6 +132,20 @@ actor MediaFileCache {
             }
         }
         logger.info("media file cache trimmed total=\(total, privacy: .public) limit=\(self.sizeLimit, privacy: .public)")
+    }
+
+    /// 置いたファイルと共有用のコピーを全部消す。ログアウトで、そのアカウントで見た添付ファイルを残さないために呼ぶ。
+    func removeAll() {
+        generation += 1
+        for folder in [directory, sharingDirectory] {
+            do {
+                try FileManager.default.removeItem(at: folder)
+            } catch CocoaError.fileNoSuchFile {
+                continue
+            } catch {
+                logger.error("media file cache remove failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     /// 書き終えた`source`を、`folder`にあった前のファイルと入れ替えて`name`の名前で置き、整理する。

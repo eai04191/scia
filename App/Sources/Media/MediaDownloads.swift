@@ -39,6 +39,7 @@ final class MediaDownloads {
             return copy
         }
         try Task.checkCancellation()
+        let generation = await files.generation
         onProgress(0)
         let folder = stagingDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -47,7 +48,7 @@ final class MediaDownloads {
                 Task { @MainActor in onProgress(fraction) }
             }
             let name = await MediaImageStore.originalFileName(ofFileAt: downloaded, for: url) ?? downloaded.lastPathComponent
-            _ = try await files.store(movingFile: downloaded, named: name, for: url)
+            _ = try await files.store(movingFile: downloaded, named: name, for: url, generation: generation)
             // 置いたものは最後に使ったものとして整理で残るため、ここで見つからないのは置いた直後に消された異常な場合だけ。
             guard let copy = try await files.copyForSharing(for: url) else { throw CocoaError(.fileNoSuchFile) }
             return copy

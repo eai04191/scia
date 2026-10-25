@@ -28,13 +28,29 @@ struct MediaFileCacheTests {
         let directories = Directories()
         defer { directories.remove() }
         let data = Data("movie".utf8)
-        _ = try await directories.makeCache().store(data, named: "a.mp4", for: try url("a"))
+        _ = try await directories.makeCache().store(data, named: "a.mp4", for: try url("a"), generation: 0)
 
         let file = try #require(await directories.makeCache().file(for: try url("a")))
 
         #expect(file.lastPathComponent == "a.mp4")
         #expect(try Data(contentsOf: file) == data)
         #expect(await directories.makeCache().file(for: try url("b")) == nil)
+    }
+
+    /// ログアウトで、置いたファイルと共有用のコピーを全部消す。消したあとも、続けて置ける。
+    @Test func removesAllFilesAndSharingCopies() async throws {
+        let directories = Directories()
+        defer { directories.remove() }
+        let cache = directories.makeCache()
+        _ = try await cache.store(Data("photo".utf8), named: "a.jpg", for: try url("a"), generation: 0)
+        let copy = try #require(try await cache.copyForSharing(for: try url("a")))
+
+        await cache.removeAll()
+
+        #expect(await cache.file(for: try url("a")) == nil)
+        #expect(!FileManager.default.fileExists(atPath: copy.path()))
+        _ = try await cache.store(Data("next".utf8), named: "b.jpg", for: try url("b"), generation: await cache.generation)
+        #expect(await cache.file(for: try url("b")) != nil)
     }
 
     /// ダウンロードした一時ファイルは、メモリに読み込まずに移して置く。
@@ -45,7 +61,7 @@ struct MediaFileCacheTests {
         try FileManager.default.createDirectory(at: directories.root, withIntermediateDirectories: true)
         try Data("movie".utf8).write(to: source)
 
-        let file = try await directories.makeCache().store(movingFile: source, named: "a.mp4", for: try url("a"))
+        let file = try await directories.makeCache().store(movingFile: source, named: "a.mp4", for: try url("a"), generation: 0)
 
         #expect(!FileManager.default.fileExists(atPath: source.path))
         #expect(try Data(contentsOf: file) == Data("movie".utf8))
@@ -60,14 +76,14 @@ struct MediaFileCacheTests {
         let clock = TestClock()
         let cache = directories.makeCache(sizeLimit: size * 3 + size / 2, clock: clock)
         for name in ["a", "b", "c"] {
-            _ = try await cache.store(Data(count: size), named: name, for: try url(name))
+            _ = try await cache.store(Data(count: size), named: name, for: try url(name), generation: 0)
             clock.advance(by: .seconds(1))
         }
         // aを引いて、bをいちばん古くする。
         _ = await cache.file(for: try url("a"))
         clock.advance(by: .seconds(1))
 
-        _ = try await cache.store(Data(count: size), named: "d", for: try url("d"))
+        _ = try await cache.store(Data(count: size), named: "d", for: try url("d"), generation: 0)
 
         #expect(await cache.contains(try url("b")) == false)
         #expect(await cache.contains(try url("c")) == false)
@@ -81,7 +97,7 @@ struct MediaFileCacheTests {
         defer { directories.remove() }
         let cache = directories.makeCache(sizeLimit: 1_024)
 
-        _ = try await cache.store(Data(count: 100 * 1_024), named: "big.mp4", for: try url("big"))
+        _ = try await cache.store(Data(count: 100 * 1_024), named: "big.mp4", for: try url("big"), generation: 0)
 
         #expect(await cache.contains(try url("big")))
     }
@@ -92,7 +108,7 @@ struct MediaFileCacheTests {
         defer { directories.remove() }
         let cache = directories.makeCache()
         let data = Data("photo".utf8)
-        _ = try await cache.store(data, named: "a.png", for: try url("a"))
+        _ = try await cache.store(data, named: "a.png", for: try url("a"), generation: 0)
 
         let copy = try #require(try await cache.copyForSharing(for: try url("a")))
         try FileManager.default.removeItem(at: directories.cache)
@@ -106,7 +122,7 @@ struct MediaFileCacheTests {
     @Test func clearsSharingCopiesOnInit() async throws {
         let directories = Directories()
         defer { directories.remove() }
-        let file = try await directories.makeCache().store(Data("photo".utf8), named: "a.png", for: try url("a"))
+        let file = try await directories.makeCache().store(Data("photo".utf8), named: "a.png", for: try url("a"), generation: 0)
         let copy = try #require(try await directories.makeCache().copyForSharing(for: try url("a")))
 
         _ = directories.makeCache()
@@ -123,12 +139,12 @@ struct MediaFileCacheTests {
         let cache = directories.makeCache()
         let url = try url("a")
         let data = Data(count: 64 * 1_024)
-        _ = try await cache.store(data, named: "a.png", for: url)
+        _ = try await cache.store(data, named: "a.png", for: url, generation: 0)
 
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask {
                 for _ in 0..<100 {
-                    _ = try await cache.store(data, named: "a.png", for: url)
+                    _ = try await cache.store(data, named: "a.png", for: url, generation: 0)
                 }
             }
             group.addTask {
@@ -146,13 +162,13 @@ struct MediaFileCacheTests {
         let directories = Directories()
         defer { directories.remove() }
         let cache = directories.makeCache(sizeLimit: 1)
-        _ = try await cache.store(Data("a".utf8), named: "a.png", for: try url("a"))
+        _ = try await cache.store(Data("a".utf8), named: "a.png", for: try url("a"), generation: 0)
         let folder = try #require(try FileManager.default.contentsOfDirectory(at: directories.cache, includingPropertiesForKeys: nil).first)
         try FileManager.default.removeItem(at: folder.appending(path: "a.png"))
         try Data("half".utf8).write(to: folder.appending(path: ".partial-\(UUID().uuidString)"))
 
         #expect(await cache.contains(try url("a")) == false)
-        _ = try await cache.store(Data("b".utf8), named: "b.png", for: try url("b"))
+        _ = try await cache.store(Data("b".utf8), named: "b.png", for: try url("b"), generation: 0)
 
         #expect(!FileManager.default.fileExists(atPath: folder.path))
     }

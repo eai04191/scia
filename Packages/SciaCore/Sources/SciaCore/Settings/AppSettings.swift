@@ -85,9 +85,8 @@ public final class AppSettings {
     }
 
     /// アカウントごとのタブの並び。キーはアカウントのハンドル。保存していないアカウントは既定の並びを使う。
-    public private(set) var tabLayouts: [String: MenuLayout<TabItem>] {
-        didSet { defaults.set(tabLayouts.mapValues(\.tokens), forKey: Keys.tabLayouts) }
-    }
+    /// ログアウトで消せるよう、アカウントごとのキー（`AccountScopedDefaults`）に1つずつ保存する。
+    public private(set) var tabLayouts: [String: MenuLayout<TabItem>]
 
     /// - Parameter account: アカウントのハンドル（`Credential.handle`）。
     public func tabLayout(for account: String) -> MenuLayout<TabItem> {
@@ -96,13 +95,12 @@ public final class AppSettings {
 
     public func setTabLayout(_ layout: MenuLayout<TabItem>, for account: String) {
         tabLayouts[account] = layout
+        defaults.set(layout.tokens, forKey: AccountScopedDefaults.key(Keys.tabLayout, account: account))
     }
 
     /// アカウントごとの、切り替えタブで最後に開いた項目。キーはアカウントのハンドル。
     /// 開くたびに書くので、ほかの設定と違って変更を購読させない。
-    @ObservationIgnored private var switchTabItems: [String: TabItem] {
-        didSet { defaults.set(switchTabItems.mapValues(\.rawValue), forKey: Keys.switchTabItems) }
-    }
+    @ObservationIgnored private var switchTabItems: [String: TabItem]
 
     public func switchTabItem(for account: String) -> TabItem? {
         switchTabItems[account]
@@ -111,6 +109,13 @@ public final class AppSettings {
     public func setSwitchTabItem(_ item: TabItem, for account: String) {
         guard switchTabItems[account] != item else { return }
         switchTabItems[account] = item
+        defaults.set(item.rawValue, forKey: AccountScopedDefaults.key(Keys.switchTabItem, account: account))
+    }
+
+    /// ログアウトしたアカウントの並びと最後に開いた項目を忘れる。保存したキーは`AccountScopedDefaults.removeData`が消す。
+    func forgetAccount(_ account: String) {
+        tabLayouts[account] = nil
+        switchTabItems[account] = nil
     }
 
     /// 投稿を長押しして出すメニューの並び。通知のメニューもこれで組む。
@@ -198,8 +203,9 @@ public final class AppSettings {
         static let hashtagMenuLayout = "settings.hashtagMenuLayout"
         static let mediaMenuLayout = "settings.mediaMenuLayout"
         static let composeToolLayout = "settings.composeToolLayout"
-        static let tabLayouts = "settings.tabLayouts"
-        static let switchTabItems = "settings.switchTabItems"
+        /// `AccountScopedDefaults`で、アカウントごとのキーにする名前。
+        static let tabLayout = "tabLayout"
+        static let switchTabItem = "switchTabItem"
         static let hidesEmptyComposeBar = "settings.hidesEmptyComposeBar"
         static let imageUploadSize = "settings.imageUploadSize"
         static let videoUploadSize = "settings.videoUploadSize"
@@ -230,8 +236,8 @@ public final class AppSettings {
         hashtagMenuLayout = defaults.stringArray(forKey: Keys.hashtagMenuLayout).map(MenuLayout.init(tokens:)) ?? HashtagMenuItem.defaultLayout
         mediaMenuLayout = defaults.stringArray(forKey: Keys.mediaMenuLayout).map(MenuLayout.init(tokens:)) ?? MediaMenuItem.defaultLayout
         composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout
-        tabLayouts = (defaults.dictionary(forKey: Keys.tabLayouts) as? [String: [String]] ?? [:]).mapValues(MenuLayout.init(tokens:))
-        switchTabItems = (defaults.dictionary(forKey: Keys.switchTabItems) as? [String: String] ?? [:]).compactMapValues(TabItem.init(rawValue:))
+        tabLayouts = AccountScopedDefaults.accountValues(named: Keys.tabLayout, in: defaults).compactMapValues { ($0 as? [String]).map(MenuLayout.init(tokens:)) }
+        switchTabItems = AccountScopedDefaults.accountValues(named: Keys.switchTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
         hidesEmptyComposeBar = defaults.object(forKey: Keys.hidesEmptyComposeBar) as? Bool ?? false
         // iPhoneの標準の写真（4032×3024）と動画（1080p）はそのまま送られ、それより大きな写真と4Kの動画だけが縮む。
         imageUploadSize = defaults.string(forKey: Keys.imageUploadSize).flatMap(ImageUploadSize.init(rawValue:)) ?? .long4096

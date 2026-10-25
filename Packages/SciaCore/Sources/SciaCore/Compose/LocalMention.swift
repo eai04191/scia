@@ -68,9 +68,10 @@ public final class RecentMentions {
     /// 覚えておく人数。
     public static let capacity = 20
 
-    public init(defaults: UserDefaults, credentialID: String) {
+    /// - Parameter account: ログインしているアカウントのハンドル（`Credential.handle`）。
+    public init(defaults: UserDefaults, account: String) {
         self.defaults = defaults
-        key = "compose.recentMentions.\(credentialID)"
+        key = AccountScopedDefaults.key("recentMentions", account: account)
     }
 
     /// 新しい順。読めなければ空。

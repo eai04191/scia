@@ -141,7 +141,7 @@ struct MediaViewerControllerTests {
         defer { harness.tearDown() }
         let files = MediaFileCache.temporary()
         let url = try #require(URL(string: "https://x.example/original/1"))
-        _ = try await files.store(try pngData(), named: "1.png", for: url)
+        _ = try await files.store(try pngData(), named: "1.png", for: url, generation: 0)
         // 表示のための読み込みは、取り消されるまで届かない。
         let store = MediaImageStore(files: files) { _, _ in
             try await Gate().wait()
