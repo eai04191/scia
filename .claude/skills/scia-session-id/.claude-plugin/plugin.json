@@ -1,0 +1,1 @@
+{ "name": "scia-session-id", "version": "0.1.0", "description": "/session-idかボタンで、このスレッドのセッションID（local_…）をコピーする。/merge-to-mainのafter:に渡すため" }
