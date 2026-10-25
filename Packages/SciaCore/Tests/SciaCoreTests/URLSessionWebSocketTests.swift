@@ -5,7 +5,9 @@ import Testing
 @testable import SciaCore
 
 /// URLSessionWebSocketConnectorを、ローカルで立てたWebSocketサーバーに実際につないで確かめる。
-@Suite(.serialized)
+/// URLSessionのpingは、応答が来なければいつまでも終わらない。本番はReconnectingStreamが時間で打ち切るが、ここでは直接待つため、
+/// 応答が来ないまま固まったら、テストの実行を止めずに失敗させる。上限は待つ長さの見積もりではなく、固まったとみなす長さ。
+@Suite(.serialized, .timeLimit(.minutes(1)))
 struct URLSessionWebSocketTests {
     @Test func receivesTextMessagesAndSendsAuthorizationHeader() async throws {
         let server = try await LocalWebSocketServer(messages: ["first", "second"])
@@ -69,6 +71,7 @@ struct URLSessionWebSocketTests {
 /// 接続してきた相手に決まったテキストメッセージを送る、またはハンドシェイクをHTTPのエラーで断るWebSocketサーバー。
 private final class LocalWebSocketServer: Sendable {
     private let listener: NWListener
+    private let connections: ConnectionList
     private let authorization: ReceivedHeader
     let url: URL
 
@@ -92,6 +95,8 @@ private final class LocalWebSocketServer: Sendable {
                 let context = NWConnection.ContentContext(identifier: "text", metadata: [metadata])
                 connection.send(content: Data(message.utf8), contentContext: context, completion: .idempotent)
             }
+            // 届いたものを読み続ける。pingへの自動の応答は、届いたものを読むときに返すため、読まないと応答するかが内部の都合に左右される。
+            Self.receiveContinuously(on: connection)
         }
     }
 
@@ -105,6 +110,13 @@ private final class LocalWebSocketServer: Sendable {
         }
     }
 
+    private static func receiveContinuously(on connection: NWConnection) {
+        connection.receiveMessage { _, _, _, error in
+            guard error == nil else { return }
+            receiveContinuously(on: connection)
+        }
+    }
+
     private init(
         parameters: NWParameters,
         queue: DispatchQueue,
@@ -112,9 +124,13 @@ private final class LocalWebSocketServer: Sendable {
         handle: @escaping @Sendable (NWConnection) -> Void
     ) async throws {
         self.authorization = authorization
+        let connections = ConnectionList()
+        self.connections = connections
         let listener = try NWListener(using: parameters, on: .any)
         self.listener = listener
         listener.newConnectionHandler = { connection in
+            // 送り終えたあとも解放されて閉じないよう、止めるまで持つ。
+            connections.value.withLock { $0.append(connection) }
             connection.start(queue: queue)
             handle(connection)
         }
@@ -145,7 +161,15 @@ private final class LocalWebSocketServer: Sendable {
 
     func stop() {
         listener.cancel()
+        connections.value.withLock { connections in
+            connections.forEach { $0.cancel() }
+            connections.removeAll()
+        }
     }
+}
+
+private final class ConnectionList: Sendable {
+    let value = Mutex<[NWConnection]>([])
 }
 
 private final class ReceivedHeader: Sendable {
