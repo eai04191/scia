@@ -4,11 +4,12 @@ import os
 /// ログイン済みアカウントとしてMastodon APIを呼ぶ。
 public struct MastodonClient: Sendable {
     public let credential: Credential
-    private let transport: any HTTPTransport
+    private let http: HTTPClient
     private let rateLimit: RateLimitGate
     private let features: FeatureAvailability
-    private let retry: RetryPolicy
     private let requestLog: RequestLog
+    /// エラーの応答が示した再開の時刻を、待つ長さに直すための今の日付。
+    private let now: @Sendable () -> Date
     /// 再試行までと、メディアの処理が終わるまでの待ちを数える。テストでは手で進める時計を渡す。
     private let clock: any Clock<Duration>
     private static let logger = SciaLog.logger(category: "network")
@@ -25,15 +26,16 @@ public struct MastodonClient: Sendable {
         features: FeatureAvailability = FeatureAvailability(),
         retry: RetryPolicy = .standard,
         requestLog: RequestLog = RequestLog(includesBody: false),
-        clock: any Clock<Duration> = SystemTime.clock
+        clock: any Clock<Duration> = SystemTime.clock,
+        now: @escaping @Sendable () -> Date = SystemTime.now
     ) {
         self.clock = clock
         self.credential = credential
-        self.transport = transport
+        http = HTTPClient(transport: transport, retry: retry, clock: clock, now: now)
         self.rateLimit = rateLimit
         self.features = features
-        self.retry = retry
         self.requestLog = requestLog
+        self.now = now
     }
 
     /// 429や503で止められ、自動の通信を控えている間の再開の時刻。控えていなければnil。
@@ -916,52 +918,34 @@ public struct MastodonClient: Sendable {
     private func send(_ request: URLRequest, feature: OptionalFeature? = nil, retries allowsRetry: Bool = true) async throws -> (Data, HTTPURLResponse) {
         var request = request
         request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
-        let canRetry = allowsRetry && RetryPolicy.canRetry(request)
-        var retries = 0
-        while true {
-            // 送り直しを待っている間に、並行する別の呼び出しが止めていることがある。
-            if let feature {
-                try await features.check(feature)
-            }
-            if RequestOrigin.current == .automatic {
-                try await rateLimit.checkAutomaticRequest()
-            }
-            let isTemporary: Bool
-            let failure: any Error
-            var statusCode: Int?
-            var body: Data?
-            do {
-                let (data, response) = try await transport.send(request)
-                if (200..<300).contains(response.statusCode) {
-                    return (data, response)
+        let features = features
+        let data: Data
+        let response: HTTPURLResponse
+        do {
+            (data, response) = try await http.response(for: request, limit: ResponseLimit.api, scope: .account(rateLimit), retries: allowsRetry) {
+                if let feature {
+                    try await features.check(feature)
                 }
-                if let feature, FeatureAvailability.indicatesUnsupported(statusCode: response.statusCode) {
-                    // 止めると決めた呼び出しも、止めた機能として失敗させる。呼び出し側が、ほかの失敗と分けて扱えるようにする。
-                    requestLog.record(request, statusCode: response.statusCode, error: MastodonAPIError.from(statusCode: response.statusCode, body: data), body: data)
-                    await features.disable(feature, statusCode: response.statusCode)
-                    throw FeatureUnavailable(feature: feature)
-                }
-                var isPaused = false
-                if response.statusCode == 429 || response.statusCode == 503 {
-                    isPaused = await rateLimit.pause(respondingTo: response)
-                }
-                isTemporary = !isPaused && RetryPolicy.isTemporary(statusCode: response.statusCode)
-                statusCode = response.statusCode
-                body = data
-                failure = MastodonAPIError.from(statusCode: response.statusCode, body: data)
-            } catch let error as URLError {
-                isTemporary = RetryPolicy.isTemporary(error)
-                failure = error
             }
-            guard canRetry, isTemporary, retries < retry.maxRetries else {
-                requestLog.record(request, statusCode: statusCode, error: failure, body: body)
-                throw failure
-            }
-            retries += 1
-            // パスはIDを含むため残さない。
-            Self.logger.info("request retry \(retries, privacy: .public) method=\(request.httpMethod ?? "GET", privacy: .public) reason=\(ErrorPresentation(failure).code ?? "unknown", privacy: .public)")
-            try await clock.sleep(for: retry.delay(beforeRetry: retries))
+        } catch let error as URLError {
+            requestLog.record(request, statusCode: nil, error: error, body: nil)
+            throw error
+        } catch let error as ResponseTooLarge {
+            requestLog.record(request, statusCode: nil, error: error, body: nil)
+            throw error
         }
+        if (200..<300).contains(response.statusCode) {
+            return (data, response)
+        }
+        if let feature, FeatureAvailability.indicatesUnsupported(statusCode: response.statusCode) {
+            // 止めると決めた呼び出しも、止めた機能として失敗させる。呼び出し側が、ほかの失敗と分けて扱えるようにする。
+            requestLog.record(request, statusCode: response.statusCode, error: MastodonAPIError.from(statusCode: response.statusCode, body: data), body: data)
+            await features.disable(feature, statusCode: response.statusCode)
+            throw FeatureUnavailable(feature: feature)
+        }
+        let failure = MastodonAPIError.from(statusCode: response.statusCode, body: data, retryAfter: RateLimitGate.retryAfter(of: response, now: now()))
+        requestLog.record(request, statusCode: response.statusCode, error: failure, body: data)
+        throw failure
     }
 }
 

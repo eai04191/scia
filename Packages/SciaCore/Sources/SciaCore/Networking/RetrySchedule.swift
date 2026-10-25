@@ -88,8 +88,13 @@ public struct RetrySchedule {
     /// 1つが429を返したら、同じサーバーの`/media_proxy`をまとめて止める。止めないと、ほかの画像もそれぞれ429を受けに行く。
     /// サーバーが保存し直した画像のように、制限の掛からないURLはnilで、そのURLだけを止める。
     static func rateLimitScope(of url: URL) -> String? {
-        guard let host = url.host(), url.path().hasPrefix("/media_proxy/") else { return nil }
+        guard let host = url.host(), isMediaProxy(url) else { return nil }
         return "\(host)/media_proxy"
+    }
+
+    /// Mastodonが、ほかのサーバーの画像を中継するURL。
+    nonisolated static func isMediaProxy(_ url: URL) -> Bool {
+        url.path().hasPrefix("/media_proxy/")
     }
 }
 
