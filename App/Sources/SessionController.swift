@@ -1885,7 +1885,12 @@ final class SessionController {
     /// 読めなければ、既定のまま投稿欄を使えるようnilを返し、次に書き始めたときに読み直す。
     private func loadInstanceConfiguration() async -> InstanceConfiguration? {
         if let instanceConfiguration { return instanceConfiguration }
-        instanceConfiguration = try? await client.instanceConfiguration()
+        do {
+            instanceConfiguration = try await client.instanceConfiguration()
+        } catch {
+            // 読めないと添付とペーストが使えないため、違和感レポートで理由を追えるよう残す。
+            logger.info("instance configuration unavailable error=\(SciaLog.describe(error), privacy: .public)")
+        }
         return instanceConfiguration
     }
 
