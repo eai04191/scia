@@ -14,6 +14,7 @@ only_rules:
   - server_value_without_check
   - unsafe_file_name
   - log_private_value
+  - url_session_outside_network_layer
 
 included:
   - App
@@ -162,6 +163,20 @@ custom_rules:
       - comment
       - doccomment
     message: "ハンドル、本文、URL、応答の本文、サーバーの文言、localizedDescriptionをログに公開扱いで出さない。失敗はSciaLog.describe、URLはSciaLog.host(of:)で書き、追いたい値は.private(mask: .hash)にする（docs/logging.md）"
+    severity: error
+
+  # URLSessionは、通信の層のURLSessionTransport.swiftでだけ使う。ほかの場所で直接使うと、HTTPClientの決まり（再開の時刻で止める、送り直す、大きさの上限、httpとhttps以外を開かない）を通らない経路ができる。
+  # 429への対応をREST APIのクライアントにだけ作ったため、ストリーミングや動画の最初のコマやXの投稿が再開の時刻を守らなかった。通信はHTTPClient（APIの外はAppDependencies.http）を、WebSocketはStreamingClientを通す（docs/network.md）。
+  # 動画の再生（AVPlayerItem(url:)）はAVFoundationが範囲と先読みを自分で決めて読むため、層に載せない例外にしている
+  url_session_outside_network_layer:
+    included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"
+    excluded: "Packages/SciaCore/Sources/SciaCore/Networking/URLSessionTransport\\.swift"
+    regex: "\\bURLSession(Configuration|Task|DataTask|DownloadTask|UploadTask|WebSocketTask|TaskDelegate|DataDelegate|DownloadDelegate|WebSocketDelegate)?\\b"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "URLSessionはURLSessionTransport.swiftでだけ使う。通信はHTTPClient（APIの外はAppDependencies.http）を、WebSocketはStreamingClientを通す（docs/network.md）"
     severity: error
 
 strict: true
