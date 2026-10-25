@@ -766,6 +766,24 @@ public enum TuningCatalog {
         defaultValue: 4
     )
 
+    /// 絵文字、アイコン、添付ファイルの画像を、通信の失敗やサーバーの一時的な障害で読めなかったあと、行を描いたときに読み直すまでの最初の間隔。続けて失敗するたびに倍にする。
+    public static let imageRetryInitialDelay = NumberTuning(
+        id: "images.retryInitialDelay",
+        title: "読めなかった画像を読み直すまでの最初の間隔（秒）",
+        range: 1...30,
+        step: 1,
+        defaultValue: 5
+    )
+
+    /// 読めなかった画像を読み直す間隔の上限。ストリーミングのつなぎ直しの上限と揃える。
+    public static let imageRetryMaxDelay = NumberTuning(
+        id: "images.retryMaxDelay",
+        title: "読めなかった画像を読み直す間隔の上限（秒）",
+        range: 10...600,
+        step: 10,
+        defaultValue: 60
+    )
+
     /// リンクのメニューの「プロフィールとして開く」で、探し始めてから「取得中」のチップを出すまでの時間。すぐ見つかったときに、チップが一瞬だけ出入りしないようにする。
     public static let profileLookupChipDelay = NumberTuning(
         id: "notice.profileLookupChipDelay",
@@ -1303,6 +1321,15 @@ public enum TuningCatalog {
         [.mention: 0, .hashtag: 0, .emoji: Int(store.value(of: completionEmojiMinimumQuery))]
     }
 
+    /// 読めなかった画像を、行を描いたときに読み直す間隔。
+    @MainActor
+    public static func imageRetry(in store: TuningStore) -> ImageRetrySchedule.Policy {
+        ImageRetrySchedule.Policy(
+            initialDelay: .seconds(store.value(of: imageRetryInitialDelay)),
+            maxDelay: .seconds(store.value(of: imageRetryMaxDelay))
+        )
+    }
+
     /// ストリーミングにつながらない間の、ポーリングと知らせるまでの時間。
     @MainActor
     public static func liveUpdates(in store: TuningStore) -> LiveUpdates.Policy {
@@ -1593,6 +1620,8 @@ public enum TuningCatalog {
             .number(accountHashtagPollingInterval),
             .number(regeneratingRetryInterval),
             .number(outageNoticeDelay),
+            .number(imageRetryInitialDelay),
+            .number(imageRetryMaxDelay),
         ]),
         TuningSection(id: "compose", title: "投稿欄", items: [
             .number(composeRestingHeight),

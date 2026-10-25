@@ -26,11 +26,19 @@ final class MediaImageStore {
     private let files: MediaFileCache
     /// 先頭から最初のフレームを作れなかった動画。サーバーのプレビューを出し、読み直さない。通信の失敗は、つながれば作れるため含めない。
     private var failedVideoFrames: Set<URL> = []
+    /// 読めなかった画像と動画の最初のフレームを、一覧に描いたときにいつ読み直すか。
+    private var retry: ImageRetrySchedule
     private let logger = SciaLog.logger(category: "media")
 
-    init(files: MediaFileCache, fetch: @escaping Fetch) {
+    init(
+        files: MediaFileCache,
+        clock: any Clock<Duration> = AppDependencies.clock,
+        retryPolicy: @escaping @MainActor () -> ImageRetrySchedule.Policy = { TuningCatalog.imageRetry(in: AppDependencies.tuning) },
+        fetch: @escaping Fetch
+    ) {
         self.fetch = fetch
         self.files = files
+        retry = ImageRetrySchedule(policy: retryPolicy, clock: clock)
         // 4096px四方の画像が4枚ほど入る大きさ。
         cache.totalCostLimit = 256 * 1_024 * 1_024
     }
@@ -68,16 +76,21 @@ final class MediaImageStore {
     }
 
     /// 一覧のサムネイルを読み込む。動画の最初のフレームを作れなければ、サーバーのプレビューを読む。
+    /// 前に読めなかったものは、読み直してよくなるまで読まない（`image(for:maxPixelSize:keepsOriginal:retriesNow:)`）。
     func thumbnail(for request: MediaThumbnailRequest) async throws -> UIImage {
         switch request.source {
         case .image:
             return try await image(for: request.url, maxPixelSize: request.maxPixelSize)
         case .videoFrame(let fallback):
-            if !failedVideoFrames.contains(request.url) {
+            // 通信の失敗で作れなかった間は、読み直してよくなるまでサーバーのプレビューで描く。
+            if !failedVideoFrames.contains(request.url), retry.allowsAutomaticLoad(of: request.url) {
                 do {
-                    return try await videoFrame(for: request.url, maxPixelSize: request.maxPixelSize)
-                } catch is URLError {
-                    // 通信の失敗は、つながれば作れるため覚えない。
+                    let frame = try await videoFrame(for: request.url, maxPixelSize: request.maxPixelSize)
+                    retry.recordSuccess(for: request.url)
+                    return frame
+                } catch let error as URLError {
+                    // 通信の失敗は、つながれば作れるため、間隔をおいて作り直す。
+                    retry.recordFailure(error, for: request.url)
                 } catch {
                     failedVideoFrames.insert(request.url)
                 }
@@ -127,7 +140,9 @@ final class MediaImageStore {
     /// - Parameter keepsOriginal: 元のファイルをキャッシュに置き、`hasOriginal(for:)`で確かめられるようにする。
     ///   同じURLを残さずに読み込んでいる途中だった場合は、その結果を待つため残らない。元のファイルを求めるのはビューアだけで、
     ///   ビューアは常に残すよう求めるため、この組み合わせは起きない。
-    func image(for url: URL, maxPixelSize: Int, keepsOriginal: Bool = false) async throws -> UIImage {
+    /// 前に読めなかった画像は、読み直してよくなるまで`ImageLoadDeferred`を投げる。
+    /// - Parameter retriesNow: 使う人が自分で見に行った操作（ビューアを開く、長押しするなど）で、間隔を待たずに読み直す。
+    func image(for url: URL, maxPixelSize: Int, keepsOriginal: Bool = false, retriesNow: Bool = false) async throws -> UIImage {
         let key = Key(url: url, maxPixelSize: maxPixelSize)
         if let image = cache.object(forKey: key.cacheKey) {
             if !keepsOriginal {
@@ -139,6 +154,9 @@ final class MediaImageStore {
         }
         if let task = inFlight[key] {
             return try await task.value.image
+        }
+        guard retriesNow || retry.allowsAutomaticLoad(of: url) else {
+            throw ImageLoadDeferred()
         }
         let fetch = fetch
         let files = keepsOriginal ? files : nil
@@ -163,12 +181,14 @@ final class MediaImageStore {
         do {
             let loaded = try await task.value
             cache.setObject(loaded.image, forKey: key.cacheKey, cost: Self.cost(of: loaded.image))
+            retry.recordSuccess(for: url)
             if keepsOriginal, !loaded.keptOriginal {
                 logger.error("media original write failed url=\(url.absoluteString, privacy: .public)")
             }
             return loaded.image
         } catch {
-            logger.error("media load failed url=\(url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            logger.error("media load failed url=\(url.absoluteString, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
+            retry.recordFailure(error, for: url)
             throw error
         }
     }

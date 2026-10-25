@@ -11,8 +11,8 @@ final class EmojiImageStore {
     typealias Fetch = @Sendable (URL) async throws -> Data
 
     private enum State {
-        case loading
         case loaded(UIImage)
+        /// 読めなかった。読み直している途中も、読めるまでは`:shortcode:`の文字で描き続けるため、読んでいる途中とは分けて持つ。
         case failed
     }
 
@@ -39,6 +39,10 @@ final class EmojiImageStore {
 
     private let fetch: Fetch
     private var states: [URL: State] = [:]
+    /// 静止画を読んでいる途中のURL。
+    private var loading: Set<URL> = []
+    /// 読めなかった画像を、描いたときにいつ読み直すか。静止画とアニメーション版で共有する。URLが違うので混ざらない。
+    private var retry: ImageRetrySchedule
     private var animationStates: [URL: AnimationState] = [:]
     /// 描いている層がつかんでいるアニメーション。`animations`から捨てても、層が使っている間はコマが解放されないため、
     /// 読み直さずにこれを返す。読み直すと、捨てられた分をまた入れて別のものを押し出し、画面に出ているもの同士で読み直しを繰り返すため。
@@ -53,16 +57,26 @@ final class EmojiImageStore {
     private var pendingNotification: Set<URL> = []
     private let logger = SciaLog.logger(category: "emoji")
 
-    init(fetch: @escaping Fetch) {
+    init(
+        clock: any Clock<Duration> = AppDependencies.clock,
+        retryPolicy: @escaping @MainActor () -> ImageRetrySchedule.Policy = { TuningCatalog.imageRetry(in: AppDependencies.tuning) },
+        fetch: @escaping Fetch
+    ) {
         self.fetch = fetch
+        retry = ImageRetrySchedule(policy: retryPolicy, clock: clock)
     }
 
     /// 読み込み済みなら画像を返す。まだなら読み込みを始めてnilを返す。
-    func image(for url: URL) -> UIImage? {
+    /// 読めなかった画像は、間隔をおいてから読み直す。
+    /// - Parameter retriesNow: 使う人が自分で見に行った操作（投稿のメニューを開くなど）で、間隔を待たずに読み直す。
+    func image(for url: URL, retriesNow: Bool = false) -> UIImage? {
         switch states[url] {
         case .loaded(let image):
             return image
-        case .loading, .failed:
+        case .failed:
+            if retriesNow || retry.allowsAutomaticLoad(of: url) {
+                load(url)
+            }
             return nil
         case nil:
             load(url)
@@ -88,7 +102,13 @@ final class EmojiImageStore {
             }
             loadAnimation(url)
             return nil
-        case .loading, .still, .failed:
+        case .failed:
+            // 読めないうちは静止画で描き、間隔をおいてから読み直す。
+            if retry.allowsAutomaticLoad(of: url) {
+                loadAnimation(url)
+            }
+            return nil
+        case .loading, .still:
             return nil
         case nil:
             loadAnimation(url)
@@ -107,25 +127,24 @@ final class EmojiImageStore {
     }
 
     private func load(_ url: URL) {
-        states[url] = .loading
+        guard loading.insert(url).inserted else { return }
         Task {
-            let state: State
+            defer { loading.remove(url) }
             do {
                 let data = try await fetch(url)
-                if let image = UIImage(data: data) {
-                    state = .loaded(image)
-                } else {
-                    logger.error("emoji decode failed url=\(url.absoluteString, privacy: .public)")
-                    state = .failed
-                }
+                guard let image = UIImage(data: data) else { throw DecodeError() }
+                states[url] = .loaded(image)
+                retry.recordSuccess(for: url)
             } catch {
-                logger.error("emoji load failed url=\(url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
-                state = .failed
+                logger.error("emoji load failed url=\(url.absoluteString, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
+                states[url] = .failed
+                retry.recordFailure(error, for: url)
             }
-            states[url] = state
             notify(url)
         }
     }
+
+    struct DecodeError: Error {}
 
     private func loadAnimation(_ url: URL) {
         animationStates[url] = .loading
@@ -144,9 +163,11 @@ final class EmojiImageStore {
                 } else {
                     state = .still
                 }
+                retry.recordSuccess(for: url)
             } catch {
-                logger.error("emoji animation load failed url=\(url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                logger.error("emoji animation load failed url=\(url.absoluteString, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
                 state = .failed
+                retry.recordFailure(error, for: url)
             }
             animationStates[url] = state
             if case .animated = state {

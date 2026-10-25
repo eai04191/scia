@@ -1,6 +1,7 @@
 import Foundation
 import ImageIO
 import Synchronization
+import SciaCore
 import SciaTesting
 import Testing
 import UIKit
@@ -45,6 +46,34 @@ struct AvatarImageStoreTests {
         let image = try await store.image(for: AvatarImageStore.Key(url: url, maxPixelSize: 8, animates: false))
 
         #expect(image.images == nil)
+    }
+
+    /// 読めなかったアイコンは、行に描いたときは間隔をおいてから読み直し、使う人がメニューを開いたときはすぐ読み直す。
+    @Test func failedAvatarIsRetriedAfterTheDelayOrWhenTheUserAsks() async throws {
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }.pngData())
+        let reads = Mutex(0)
+        let clock = TestClock()
+        let store = AvatarImageStore(clock: clock, retryPolicy: { ImageRetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { _ in
+            let read = reads.withLock { reads in
+                defer { reads += 1 }
+                return reads
+            }
+            if read < 2 { throw URLError(.timedOut) }
+            return png
+        }
+        let key = AvatarImageStore.Key(url: try #require(URL(string: "https://example.social/avatar.png")), maxPixelSize: 8, animates: false)
+
+        await #expect(throws: URLError.self) { try await store.image(for: key) }
+        await #expect(throws: ImageLoadDeferred.self) { try await store.image(for: key) }
+        #expect(store.requestImage(for: key) == nil)
+        #expect(reads.withLock { $0 } == 1)
+
+        clock.advance(by: .seconds(5))
+        await #expect(throws: URLError.self) { try await store.image(for: key) }
+        #expect(reads.withLock { $0 } == 2)
+
+        _ = try await store.image(for: key, retriesNow: true)
+        #expect(reads.withLock { $0 } == 3)
     }
 
     /// 読めなかったアイコンは、新着の挿入前に待つたびに読み直さない。読めないアイコンのために通信が増え、挿入が上限まで遅れるため。

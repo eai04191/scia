@@ -2,6 +2,7 @@ import CoreText
 import Foundation
 import SciaCore
 import SciaTesting
+import Synchronization
 import Testing
 import UIKit
 @testable import Scia
@@ -17,6 +18,34 @@ struct RichTextRendererTests {
 
     private func renderer(_ store: EmojiImageStore, paragraphSpacing: CGFloat = 0) -> RichTextRenderer {
         RichTextRenderer(font: font, textColor: .label, paragraphSpacing: paragraphSpacing, emojiImages: store, language: "ja")
+    }
+
+    /// 本文の絵文字が通信の失敗で読めなかったら文字で描き、間隔が過ぎてから描き直すと、描くことで読み直しが始まり、読めたら画像で描く。
+    @Test func failedEmojiIsRetriedWhenTheTextIsDrawnAgain() async throws {
+        let clock = TestClock()
+        let reads = Mutex(0)
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }.pngData())
+        let store = EmojiImageStore(clock: clock, retryPolicy: { ImageRetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { _ in
+            let read = reads.withLock { reads in
+                defer { reads += 1 }
+                return reads
+            }
+            if read == 0 { throw URLError(.notConnectedToInternet) }
+            return png
+        }
+        let emoji = try emoji("ok")
+        let text = RichText(blocks: [.init(inlines: [.emoji(emoji)])])
+
+        _ = renderer(store).render(text)
+        try await waitUntil { store.hasFailed(emoji.staticUrl) }
+        #expect(renderer(store).render(text).string == ":ok:")
+        #expect(reads.withLock { $0 } == 1)
+
+        clock.advance(by: .seconds(5))
+        #expect(renderer(store).render(text).string == ":ok:", "読み直している間に文字で描かなくなりました")
+        try await waitUntil { !store.hasFailed(emoji.staticUrl) }
+        #expect(reads.withLock { $0 } == 2)
+        #expect(attachments(in: renderer(store).render(text)).count == 1)
     }
 
     private func attachments(in string: NSAttributedString) -> [NSTextAttachment] {

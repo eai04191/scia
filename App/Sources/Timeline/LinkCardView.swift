@@ -77,7 +77,7 @@ final class LinkCardView: UIButton {
             self?.openImageFromMenu()
         }, sharperImage: { [weak self] maxPixelSize in
             guard let self, let url = self.thumbnailView.imageURL else { return nil }
-            return try? await self.store.image(for: url, maxPixelSize: maxPixelSize)
+            return try? await self.store.image(for: url, maxPixelSize: maxPixelSize, retriesNow: true)
         }, offersMenu: { [weak self] _ in self?.menuImage != nil })
         thumbnailView.contentMode = .scaleAspectFill
         thumbnailView.clipsToBounds = true

@@ -20,16 +20,21 @@ final class AvatarImageStore {
     private let cache = NSCache<NSString, UIImage>()
     private var inFlight: [Key: Task<UIImage, any Error>] = [:]
     /// 読めなかった画像。先読みと新着の挿入前の待ちでは読み直さず、読めないアイコンのために通信を増やしたり挿入を遅らせたりしない。
-    /// 行に描くときは読み直し、読めたら外す。
-    private var failedKeys: Set<Key> = []
+    /// 行に描くときは、間隔をおいてから読み直す。読めたら忘れる。
+    private var retry: ImageRetrySchedule
     private var listeners: [Listener] = []
     private let logger = SciaLog.logger(category: "avatar")
     /// 読み込みを待つ期限の時計。テストでは手で進める時計に替える。
     let clock: any Clock<Duration>
 
-    init(clock: any Clock<Duration> = AppDependencies.clock, fetch: @escaping Fetch) {
+    init(
+        clock: any Clock<Duration> = AppDependencies.clock,
+        retryPolicy: @escaping @MainActor () -> ImageRetrySchedule.Policy = { TuningCatalog.imageRetry(in: AppDependencies.tuning) },
+        fetch: @escaping Fetch
+    ) {
         self.clock = clock
         self.fetch = fetch
+        retry = ImageRetrySchedule(policy: retryPolicy, clock: clock)
         // 120ピクセル四方の止まった画像なら500枚ほど入る大きさ。
         cache.totalCostLimit = 32 * 1_024 * 1_024
     }
@@ -58,13 +63,15 @@ final class AvatarImageStore {
         if let image = cachedImage(for: key) {
             return image
         }
-        Task { _ = try? await image(for: key) }
+        if retry.allowsAutomaticLoad(of: key.url) {
+            Task { _ = try? await image(for: key) }
+        }
         return nil
     }
 
     /// 行を出す前に読み込みを始める。読み込み済みと、前に読めなかった画像は読まない。
     func prefetch(_ keys: some Sequence<Key>) {
-        for key in keys where cachedImage(for: key) == nil && !failedKeys.contains(key) {
+        for key in keys where cachedImage(for: key) == nil && !retry.hasFailed(key.url) {
             Task { _ = try? await image(for: key) }
         }
     }
@@ -72,7 +79,7 @@ final class AvatarImageStore {
     /// 画像を読み込み終える（読めなかった場合も含む）か、`timeout`が過ぎるまで待つ。まだ読み込んでいなければ読み込みを始める。
     /// 前に読めなかった画像は、読み直さず待たない。`timeout`で戻っても、読み込みは止めずにキャッシュへ入れる。
     func load(_ keys: Set<Key>, within timeout: Duration) async {
-        let missing = keys.filter { cachedImage(for: $0) == nil && !failedKeys.contains($0) }
+        let missing = keys.filter { cachedImage(for: $0) == nil && !retry.hasFailed($0.url) }
         guard !missing.isEmpty, timeout > .zero else { return }
         let clock = clock
         // 待つ処理が動き出すまでに遅れても、呼ばれた時点から`timeout`で戻るよう、呼ばれた時点から測る。
@@ -120,12 +127,17 @@ final class AvatarImageStore {
 
     /// 画像を読み込む。同じ画像を読み込んでいる途中なら、その結果を待つ。
     /// 呼び出し側のタスクを取り消しても、読み込みは止めずにキャッシュへ入れる。同じアカウントの投稿が続けて並ぶことが多いため。
-    func image(for key: Key) async throws -> UIImage {
+    /// 前に読めなかった画像は、読み直してよくなるまで`ImageLoadDeferred`を投げる。
+    /// - Parameter retriesNow: 使う人が自分で見に行った操作（投稿のメニューを開くなど）で、間隔を待たずに読み直す。
+    func image(for key: Key, retriesNow: Bool = false) async throws -> UIImage {
         if let image = cache.object(forKey: key.cacheKey) {
             return image
         }
         if let task = inFlight[key] {
             return try await task.value
+        }
+        guard retriesNow || retry.allowsAutomaticLoad(of: key.url) else {
+            throw ImageLoadDeferred()
         }
         let fetch = fetch
         let task = Task<UIImage, any Error> {
@@ -140,7 +152,7 @@ final class AvatarImageStore {
         do {
             let image = try await task.value
             cache.setObject(image, forKey: key.cacheKey, cost: Self.cost(of: image))
-            failedKeys.remove(key)
+            retry.recordSuccess(for: key.url)
             listeners.removeAll { $0.owner == nil }
             for listener in listeners {
                 listener.onLoad(key)
@@ -148,7 +160,7 @@ final class AvatarImageStore {
             return image
         } catch {
             logger.error("avatar load failed url=\(key.url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
-            failedKeys.insert(key)
+            retry.recordFailure(error, for: key.url)
             throw error
         }
     }

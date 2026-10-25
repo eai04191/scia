@@ -192,12 +192,14 @@ struct RichTextRenderer {
 
     private func render(_ emoji: CustomEmoji, block: RichText.Block) -> NSAttributedString {
         let font = font(for: [], block: block)
-        if emojiImages.hasFailed(emoji.staticUrl) {
+        // 先に画像を求める。前に読めなかった画像も、間隔が過ぎていればここで読み直しが始まる。読めるまでは文字で描く。
+        let image = emojiImages.image(for: emoji.staticUrl)
+        if image == nil, emojiImages.hasFailed(emoji.staticUrl) {
             return NSAttributedString(string: ":\(emoji.shortcode):", attributes: attributes(style: [], block: block))
         }
         let height = font.lineHeight
         let attachment = NSTextAttachment()
-        if let image = emojiImages.image(for: emoji.staticUrl), image.size.height > 0 {
+        if let image, image.size.height > 0 {
             attachment.image = image
             attachment.bounds = CGRect(x: 0, y: font.descender, width: height * image.size.width / image.size.height, height: height)
         } else {

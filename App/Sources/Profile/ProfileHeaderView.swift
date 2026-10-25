@@ -440,7 +440,7 @@ final class ProfileHeaderView: UIView {
         let sharperImage: (@MainActor (Int) async -> UIImage?)? = switch image {
         case .header: { [weak self] maxPixelSize in
             guard let self, let url = self.bannerURL else { return nil }
-            return try? await self.mediaImages.image(for: url, maxPixelSize: maxPixelSize)
+            return try? await self.mediaImages.image(for: url, maxPixelSize: maxPixelSize, retriesNow: true)
         }
         case .avatar: nil
         }

@@ -1730,7 +1730,8 @@ final class ImagePageController: MediaPageController {
             self.originalURL = url
         }
         loadTask = Task { [weak self, store] in
-            let image = try? await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
+            // ビューアは使う人が開いたものなので、前に読めなかった画像も間隔を待たずに読み直す。
+            let image = try? await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true, retriesNow: true)
             guard let self, !Task.isCancelled else { return }
             self.spinner.stopAnimating()
             if let image {

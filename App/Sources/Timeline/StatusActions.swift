@@ -284,7 +284,8 @@ extension TimelineViewController {
     /// 画像は行に描いているアニメーションしない版を、メニューに文字色で塗られないよう元の色のまま置く。まだ届いていなければ、項目のアイコンを置く。
     private func emojiElement(for emoji: CustomEmoji, subject: OperationStatus.Subject?) -> UIMenuElement? {
         let attachment = emoji.attachment
-        let image = emojiImages.image(for: emoji.staticUrl)
+        // 使う人が開いたメニューなので、前に読めなかった画像も間隔を待たずに読み直す。
+        let image = emojiImages.image(for: emoji.staticUrl, retriesNow: true)
         let animation = settings.animatesCustomEmojis && !UIAccessibility.isReduceMotionEnabled ? emojiImages.animation(for: emoji.url) : nil
         let target = MediaMenuTarget(attachment: attachment, source: nil, preview: image) { [weak self] in
             self?.openMedia([attachment], at: 0, subject: subject) { _ in nil }
@@ -447,7 +448,8 @@ extension TimelineViewController {
     private func loadMenuIcon(of account: Account, replacing placeholder: UIImage) {
         guard let key = userMenuIconKey(of: account) else { return }
         Task { [weak self] in
-            guard let self, let image = try? await avatarImages.image(for: key),
+            // 使う人が開いたメニューなので、前に読めなかったアイコンも間隔を待たずに読み直す。
+            guard let self, let image = try? await avatarImages.image(for: key, retriesNow: true),
                   let icon = Self.userMenuIcon(image, shape: settings.avatarShape) else { return }
             contextMenuIcons.setIcon(icon, for: placeholder)
         }
