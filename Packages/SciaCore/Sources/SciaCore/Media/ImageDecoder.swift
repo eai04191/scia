@@ -32,6 +32,24 @@ public enum ImageDecoder {
         CGImageSourceCreateWithData(data as CFData, nil).flatMap { thumbnail(of: $0, maxPixelSize: maxPixelSize, dynamicRange: dynamicRange) }
     }
 
+    /// 高さを`height`ピクセルにそろえて縮めるときの、長い辺の上限（`maxPixelSize`に渡す値）。行の高さに合わせて描く絵文字に使う。
+    /// 長い辺で縮めると、横長の画像は高さが足りずにぼけるため、高さで決める。極端に横長な画像でメモリを使いすぎないよう、幅は高さの`maxAspectRatio`倍で止める。
+    /// 大きさを読めなければ`height`を返す。
+    public static func maxPixelSize(forHeight height: Int, of data: Data, maxAspectRatio: Double = 8) -> Int {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+              var width = properties[kCGImagePropertyPixelWidth] as? Int,
+              var sourceHeight = properties[kCGImagePropertyPixelHeight] as? Int,
+              width > 0, sourceHeight > 0
+        else { return height }
+        // 5から8の向きは90°回すので、描くときの縦横が入れ替わる。
+        if let orientation = properties[kCGImagePropertyOrientation] as? UInt32, orientation >= 5 {
+            swap(&width, &sourceHeight)
+        }
+        let aspectRatio = min(max(Double(width) / Double(sourceHeight), 1), maxAspectRatio)
+        return Int((Double(height) * aspectRatio).rounded(.up))
+    }
+
     public static func thumbnail(ofFile url: URL, maxPixelSize: Int, dynamicRange: DynamicRange) -> CGImage? {
         CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { thumbnail(of: $0, maxPixelSize: maxPixelSize, dynamicRange: dynamicRange) }
     }

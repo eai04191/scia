@@ -41,6 +41,16 @@ struct ImageDecoderTests {
         #expect(image.height == 40)
     }
 
+    /// 行の高さに合わせて描く絵文字は、高さで縮める大きさを決める。横長でも高さが足りるように長い辺を伸ばし、伸ばすのは高さの8倍まで。
+    @Test(arguments: [(400, 100, 384), (100, 400, 96), (50, 50, 96), (2000, 100, 768)])
+    func maxPixelSizeKeepsTheHeight(width: Int, height: Int, expected: Int) throws {
+        #expect(ImageDecoder.maxPixelSize(forHeight: 96, of: try png(width: width, height: height)) == expected)
+    }
+
+    @Test func maxPixelSizeFollowsOrientation() throws {
+        #expect(ImageDecoder.maxPixelSize(forHeight: 96, of: try png(width: 100, height: 400, orientation: .right)) == 384)
+    }
+
     @Test func returnsNilForDataThatIsNotAnImage() {
         #expect(ImageDecoder.thumbnail(of: Data("<html>503</html>".utf8), maxPixelSize: 96, dynamicRange: .high) == nil)
     }

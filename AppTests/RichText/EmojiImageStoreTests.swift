@@ -74,4 +74,45 @@ struct EmojiImageStoreTests {
         try await waitUntil { store.image(for: url) != nil }
         #expect(responses.fetchCount == 2)
     }
+
+    /// 静止画は、行の高さに合わせて描くので、横長でも高さを96pxにそろえて縮める。
+    @Test(arguments: [(400, 100, 384, 96), (100, 400, 24, 96), (40, 20, 40, 20)])
+    func stillImageIsShrunkToTheRowHeight(width: Int, height: Int, expectedWidth: Int, expectedHeight: Int) async throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).image { context in
+            UIColor.systemOrange.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        }.pngData())
+        let store = EmojiImageStore(clock: clock) { _ in png }
+
+        _ = store.image(for: url)
+        try await waitUntil { store.image(for: url) != nil }
+        let image = try #require(store.image(for: url)?.cgImage)
+        #expect(image.width == expectedWidth)
+        #expect(image.height == expectedHeight)
+    }
+
+    /// 同じサーバーの`/media_proxy`が429で止められている間は、まだ読んでいない絵文字も読まない。
+    @Test func freshEmojiWaitsWhileTheProxyIsRateLimited() async throws {
+        let limited = try #require(URL(string: "https://example.social/media_proxy/1/original"))
+        let fresh = try #require(URL(string: "https://example.social/media_proxy/2/original"))
+        let reads = Mutex<[URL]>([])
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in }.pngData())
+        let store = EmojiImageStore(clock: clock, retryPolicy: { ImageRetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { url in
+            reads.withLock { $0.append(url) }
+            if url == limited { throw RemoteFetchError(statusCode: 429, retryAfter: .seconds(120)) }
+            return png
+        }
+
+        _ = store.image(for: limited)
+        try await waitUntil { store.hasFailed(limited) }
+        #expect(store.image(for: fresh) == nil)
+        #expect(reads.withLock { $0 } == [limited])
+
+        clock.advance(by: .seconds(120))
+        _ = store.image(for: fresh)
+        try await waitUntil { store.image(for: fresh) != nil }
+        #expect(reads.withLock { $0 } == [limited, fresh])
+    }
 }

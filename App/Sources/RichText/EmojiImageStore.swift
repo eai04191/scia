@@ -4,17 +4,11 @@ import SciaCore
 import UIKit
 
 /// カスタム絵文字の画像を読み込み、メモリに持つ。
-/// 静止画は、1つのタイムラインで使う絵文字は数百件程度で1枚も小さいため、上限を設けずに持ち続ける。
-/// アニメーション版はコマの数だけメモリを使うため、上限を設けて、あふれたら古いものから捨て、また要るときに読み直す。
+/// 静止画もアニメーション版も、高さを`pixelHeight`にそろえて縮めて持ち、上限を設けて、あふれたら古いものから捨て、また要るときに読み直す。
+/// ストアはアプリ全体で1つで、タイムラインやアカウント、絵文字のパレットをまたいで溜まるため。
 @MainActor
 final class EmojiImageStore {
     typealias Fetch = @Sendable (URL) async throws -> Data
-
-    private enum State {
-        case loaded(UIImage)
-        /// 読めなかった。読み直している途中も、読めるまでは`:shortcode:`の文字で描き続けるため、読んでいる途中とは分けて持つ。
-        case failed
-    }
 
     private struct Listener {
         weak var owner: AnyObject?
@@ -32,13 +26,21 @@ final class EmojiImageStore {
     }
 
 
-    /// 動かすためにメモリに持つコマの画像の、長い辺のピクセル数。
+    /// メモリに持つ静止画とコマの画像の、高さのピクセル数。
     /// 文字の中の絵文字は行の高さ（ふつうの本文で20〜30pt）に合わせて描き、iPhoneの画面は1ptを3ピクセルで描くので、32ptまでは拡大せずに描けてぼけない。
+    /// 幅は縦横の比で決まるので、長い辺ではなく高さで縮める（`ImageDecoder.maxPixelSize(forHeight:of:)`）。
     /// 元の大きさのまま持つとメモリを使いすぎるため縮める。文字サイズの設定を大きくして行の高さが32ptを超えると、拡大して描くので少しぼける。
-    nonisolated static let animationPixelSize = 96
+    nonisolated static let pixelHeight = 96
 
     private let fetch: Fetch
-    private var states: [URL: State] = [:]
+    /// 縮めた静止画。96pxの高さで1枚40KBほどなので、正方形の絵文字なら800個ほど入る。
+    private let stills: NSCache<NSURL, UIImage> = {
+        let cache = NSCache<NSURL, UIImage>()
+        cache.totalCostLimit = 32 * 1024 * 1024
+        return cache
+    }()
+    /// 読めなかった静止画。読み直している途中も、読めるまでは`:shortcode:`の文字で描き続けるため、読んでいる途中とは分けて持つ。
+    private var failedStills: Set<URL> = []
     /// 静止画を読んでいる途中のURL。
     private var loading: Set<URL> = []
     /// 読めなかった画像を、描いたときにいつ読み直すか。静止画とアニメーション版で共有する。URLが違うので混ざらない。
@@ -70,18 +72,14 @@ final class EmojiImageStore {
     /// 読めなかった画像は、間隔をおいてから読み直す。
     /// - Parameter retriesNow: 使う人が自分で見に行った操作（投稿のメニューを開くなど）で、間隔を待たずに読み直す。
     func image(for url: URL, retriesNow: Bool = false) -> UIImage? {
-        switch states[url] {
-        case .loaded(let image):
+        if let image = stills.object(forKey: url as NSURL) {
             return image
-        case .failed:
-            if retriesNow || retry.allowsAutomaticLoad(of: url) {
-                load(url)
-            }
-            return nil
-        case nil:
-            load(url)
-            return nil
         }
+        // まだ読んでいない画像も、同じサーバーの`/media_proxy`が制限されている間は読まない（`ImageRetrySchedule.rateLimitScope`）。
+        if retriesNow || retry.allowsAutomaticLoad(of: url) {
+            load(url)
+        }
+        return nil
     }
 
     /// `url`のアニメーションを読み終えたか。動かすか静止画で描くかが決まっていればtrue。読み始めていなければfalse。
@@ -111,14 +109,15 @@ final class EmojiImageStore {
         case .loading, .still:
             return nil
         case nil:
-            loadAnimation(url)
+            if retry.allowsAutomaticLoad(of: url) {
+                loadAnimation(url)
+            }
             return nil
         }
     }
 
     func hasFailed(_ url: URL) -> Bool {
-        if case .failed = states[url] { return true }
-        return false
+        failedStills.contains(url)
     }
 
     /// 画像が届いたときに呼ぶ処理を登録する。`owner`が解放されると呼ばれなくなる。
@@ -132,12 +131,13 @@ final class EmojiImageStore {
             defer { loading.remove(url) }
             do {
                 let data = try await fetch(url)
-                guard let image = UIImage(data: data) else { throw DecodeError() }
-                states[url] = .loaded(image)
+                guard let image = await Self.decodeStill(data) else { throw DecodeError() }
+                stills.setObject(image, forKey: url as NSURL, cost: Self.cost(of: image))
+                failedStills.remove(url)
                 retry.recordSuccess(for: url)
             } catch {
                 logger.error("emoji load failed url=\(url.absoluteString, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
-                states[url] = .failed
+                failedStills.insert(url)
                 retry.recordFailure(error, for: url)
             }
             notify(url)
@@ -146,6 +146,18 @@ final class EmojiImageStore {
 
     struct DecodeError: Error {}
 
+    /// 高さを`pixelHeight`にそろえて縮め、描く前に展開しておく。描くたびにメインスレッドで原寸のまま展開しないため。
+    /// カスタム絵文字は文字と一緒にSDRで描く決まりなので（docs/hdr-display.md）、HDRを求めずに読む。
+    @concurrent
+    private static func decodeStill(_ data: Data) async -> UIImage? {
+        let maxPixelSize = ImageDecoder.maxPixelSize(forHeight: pixelHeight, of: data)
+        return ImageDecoder.thumbnail(of: data, maxPixelSize: maxPixelSize, dynamicRange: .standard).map { UIImage(cgImage: $0) }
+    }
+
+    private nonisolated static func cost(of image: UIImage) -> Int {
+        image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+    }
+
     private func loadAnimation(_ url: URL) {
         animationStates[url] = .loading
         Task {
@@ -153,7 +165,7 @@ final class EmojiImageStore {
             do {
                 let data = try await fetch(url)
                 let image = await Task.detached(priority: .utility) {
-                    AnimatedImage.decode(data, maxPixelSize: Self.animationPixelSize)
+                    AnimatedImage.decode(data, maxPixelSize: ImageDecoder.maxPixelSize(forHeight: Self.pixelHeight, of: data))
                 }.value
                 if let image {
                     let animation = EmojiAnimation(image)
