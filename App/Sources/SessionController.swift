@@ -1298,7 +1298,8 @@ final class SessionController {
     private func muteHashtag(_ name: String, duration: Duration?) {
         let client = client
         logger.info("hashtag mute")
-        tasks.run { [weak self] in
+        // 送り終える前にメニューを開き直して押しても、同じ要求を重ねて送らない。
+        tasks.run(key: "hashtagMute:\(name)", .skippingWhileRunning) { [weak self] in
             guard let self else { return }
             do {
                 try await HashtagMute.mute(name, duration: duration, client: client)
@@ -1318,7 +1319,7 @@ final class SessionController {
     private func unmuteHashtag(_ name: String, _ muted: HashtagMute) {
         let client = client
         logger.info("hashtag unmute")
-        tasks.run { [weak self] in
+        tasks.run(key: "hashtagMute:\(name)", .skippingWhileRunning) { [weak self] in
             guard let self else { return }
             do {
                 try await muted.unmute(client: client)
@@ -1458,7 +1459,8 @@ final class SessionController {
         let client = client
         let id = relation.accountID
         logger.info("user relation change: \(String(describing: change), privacy: .public)")
-        tasks.run { [weak self] in
+        // 送り終える前にメニューを開き直すと、サーバーからは前の関係が読めるため、同じ相手への変更は送り終えるまで重ねて送らない。
+        tasks.run(key: "relation:\(id)", .skippingWhileRunning) { [weak self] in
             guard let self else { return }
             do {
                 let relationship = switch change {
@@ -1636,7 +1638,8 @@ final class SessionController {
         UserAction.deleteStatus.record()
         let target = status.displayed
         let client = client
-        tasks.run { [weak self] in
+        // 送り終える前に確かめ直して押しても、同じ削除を重ねて送らない。
+        tasks.run(key: "delete:\(target.id)", .skippingWhileRunning) { [weak self] in
             do {
                 try await client.deleteStatus(target.id)
                 guard let self else { return }
