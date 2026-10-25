@@ -6,6 +6,7 @@ only_rules:
   - present_without_waiting
   - time_dependent_test
   - yield_based_waiting
+  - image_decoding_outside_decoder
   - direct_time_access
 
 included:
@@ -51,6 +52,19 @@ custom_rules:
       - doccomment
       - string
     message: "テストをTask.yieldで待たせない。条件はwaitUntilで、止めた相手が着いたことはGateで確かめる"
+    severity: error
+
+  # 画像の縮め方と展開の仕方を、ストアごとに書かない。コピーするうちに、HDRの指定や縮める大きさが場所ごとにずれ、
+  # 絵文字の静止画だけ原寸のまま描くたびにメインスレッドで展開する、ということが起きていた。ImageDecoderで読む
+  image_decoding_outside_decoder:
+    included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"
+    excluded: "(App/Sources/Debug/|Packages/SciaCore/Sources/SciaCore/Media/ImageDecoder\\.swift)"
+    regex: "\\bUIImage\\(data:|\\bCGImageSourceCreateThumbnailAtIndex\\b"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "画像はImageDecoderで縮めて展開する。HDRかSDRかと縮める大きさを引数で選ぶ"
     severity: error
 
   # 実際の時間に、ロジックの中から直接触れない。時間をおく処理はClockで、今の日付は日付を返す関数で、Core Animationの時間は時間を返す関数で受け取り、
