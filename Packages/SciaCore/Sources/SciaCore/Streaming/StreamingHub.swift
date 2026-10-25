@@ -83,6 +83,10 @@ public final class StreamingHub {
     private(set) var lastConnectedReportAfterSending: Task<Void, Never>?
     private var isOutageNoticed = false
     private var isLoginRequired = false
+    /// セッションを閉じた。以後は申し込まれてもつながない。
+    private var isShutDown = false
+    /// 接続を開いた直後の、申し込まれているストリームの購読。止めたら取り消す。
+    private var initialSubscribing: Task<Void, any Error>?
     /// 最後に`onChange`で知らせた購読。変わったときだけ知らせる。
     private var reportedSubscriptions: [StreamingSubscription] = []
 
@@ -133,6 +137,13 @@ public final class StreamingHub {
         return Subscription(hub: self, id: id)
     }
 
+    /// セッションを閉じるときに呼ぶ。申し込みが残っていても切り、以後は申し込まれてもつながない。
+    public func shutDown() {
+        isShutDown = true
+        stop()
+        notifyChange()
+    }
+
     /// 電波が戻ったときなどに呼ぶ。つながっていなければ、つなぎ直しの待ち時間を飛ばして、すぐつなぎ直す。
     public func recover() {
         guard runTask != nil, !isConnected else { return }
@@ -170,7 +181,7 @@ public final class StreamingHub {
     }
 
     private func start() {
-        guard !isLoginRequired, runTask == nil, !consumers.isEmpty else { return }
+        guard !isLoginRequired, !isShutDown, runTask == nil, !consumers.isEmpty else { return }
         generation += 1
         let generation = generation
         let open = open
@@ -178,7 +189,19 @@ public final class StreamingHub {
             let connection = try await open()
             // 購読を送り終えてから返す。返した後のpingの応答で成立とみなし、補完を始めるため、
             // 先に返すと、補完の後から購読が効くまでの新着を取りこぼす。送れなければ、つながらなかったものとしてつなぎ直す。
-            try await self?.attach(connection, generation: generation).value
+            // 返す前に止めたら、送るのをやめて接続を閉じる。返していない接続は、つなぎ直しの側では閉じないため。
+            do {
+                guard let initial = await self?.attach(connection, generation: generation) else { throw CancellationError() }
+                try await withTaskCancellationHandler {
+                    try await initial.value
+                } onCancel: {
+                    initial.cancel()
+                }
+                try Task.checkCancellation()
+            } catch {
+                connection.close()
+                throw error
+            }
             return connection
         }
         let updates = LiveUpdates(stream: stream, policy: livePolicy(), clock: clock)
@@ -206,7 +229,12 @@ public final class StreamingHub {
         runTask.cancel()
         self.runTask = nil
         connection = nil
+        // 積んだ送信と、送り終えてから知らせる待ちも止める。前の接続へ送り続けないため。
+        initialSubscribing?.cancel()
+        initialSubscribing = nil
+        sending?.cancel()
         sending = nil
+        lastConnectedReportAfterSending?.cancel()
         reportedConnections.removeAll()
         isConnected = false
         isOutageNoticed = false
@@ -221,9 +249,11 @@ public final class StreamingHub {
         let subscriptions = subscriptions
         let initial = Task {
             for subscription in subscriptions {
+                try Task.checkCancellation()
                 try await connection.subscribe(subscription)
             }
         }
+        initialSubscribing = initial
         sending = Task { _ = await initial.result }
         return initial
     }
@@ -234,7 +264,13 @@ public final class StreamingHub {
         let previous = sending
         let logger = logger
         sending = Task {
-            await previous?.value
+            // 止めたら、積んである前の送信もまとめて止める。
+            await withTaskCancellationHandler {
+                await previous?.value
+            } onCancel: {
+                previous?.cancel()
+            }
+            guard !Task.isCancelled else { return }
             do {
                 try await operation(connection)
             } catch {

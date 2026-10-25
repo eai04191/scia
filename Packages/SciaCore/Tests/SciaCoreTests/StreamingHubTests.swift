@@ -361,6 +361,38 @@ struct StreamingHubTests {
         again.cancel()
     }
 
+    /// 最初の購読を送っている途中で止めたら、送るのをやめ、まだ渡していない接続も閉じる。ログアウトしたあとに、前のアカウントの接続が残らないため。
+    @Test func stoppingWhileSubscribingCancelsSendAndClosesConnection() async throws {
+        let sendGate = Gate()
+        let connector = ScriptedConnector([.init(sendGates: [Self.subscribeUser: sendGate])])
+        let hub = makeHub(connector)
+        let subscription = hub.subscribe(.user) { _ in }
+        try await waitUntil { sendGate.waiterCount == 1 }
+
+        subscription.cancel()
+        try await waitUntil { sendGate.waiterCount == 0 && connector.closedCount == 1 }
+
+        #expect(connector.sent == [[]])
+        #expect(hub.sending == nil)
+    }
+
+    /// セッションを閉じたら、申し込みが残っていても切り、以後は申し込まれてもつながない。
+    @Test func shutDownStopsAndRefusesToReconnect() async throws {
+        let connector = ScriptedConnector([.init()])
+        let hub = makeHub(connector)
+        let home = hub.subscribe(.user) { _ in }
+        try await waitUntil { hub.isConnected }
+
+        hub.shutDown()
+        let again = hub.subscribe(.user) { _ in }
+        try await waitUntil { connector.closedCount == 1 }
+
+        #expect(hub.state == .stopped)
+        #expect(connector.connectCount == 1)
+        home.cancel()
+        again.cancel()
+    }
+
     @Test func forwardsUnauthorized() async throws {
         let connector = ScriptedConnector([.init(handshake: .fail(MastodonAPIError(statusCode: 401, message: "")))])
         let hub = makeHub(connector)
