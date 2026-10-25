@@ -116,6 +116,9 @@ public final class ProfileStore {
     private var followChanges = 0
     /// 固定された投稿を読み始めた回数。固定と解除を続けて押すと読み直しが重なるため、遅れて届いた古い応答を捨てる。
     private var pinnedLoads = 0
+    /// アカウントを読み始めたか、編集したものを反映した回数。フォローしたあとの読み直しや保存した編集より前に頼んだ読み込みが、
+    /// 遅れて届いても古い数や内容で戻さない。
+    private var accountChanges = 0
     /// 削除した投稿のID。削除の前に読み始めた固定された投稿の応答で、戻さないようにする。
     private var deletedIDs: Set<Status.ID> = []
     private let isMyself: Bool
@@ -176,6 +179,8 @@ public final class ProfileStore {
         let api = api
         let pageSize = pageSize
         let followChangesAtRequest = followChanges
+        accountChanges += 1
+        let accountChange = accountChanges
         pinnedLoads += 1
         let pinnedLoad = pinnedLoads
         return await withTaskGroup(of: (Part, Result<Loaded, any Error>).self) { group -> ProfileLoadFailures in
@@ -188,7 +193,9 @@ public final class ProfileStore {
             var failures = ProfileLoadFailures()
             for await (part, result) in group {
                 switch result {
-                case .success(.account(let account)): self.account = account
+                case .success(.account(let account)):
+                    guard accountChange == accountChanges else { continue }
+                    self.account = account
                 case .success(.relationship(let relationship)):
                     guard followChanges == followChangesAtRequest else { continue }
                     self.relationship = relationship
@@ -294,11 +301,17 @@ public final class ProfileStore {
     public func apply(edited account: Account) {
         guard account.id == self.account.id else { return }
         self.account = account
+        accountChanges += 1
     }
 
     /// アカウントだけを読み直す。
+    /// あとから読み直しを頼んだか、編集したものを反映したら、この応答は捨てる。
     public func reloadAccount() async throws {
-        account = try await api.account(account.id)
+        accountChanges += 1
+        let accountChange = accountChanges
+        let reloaded = try await api.account(account.id)
+        guard accountChange == accountChanges else { return }
+        account = reloaded
     }
 
     /// 固定された投稿と今の一覧の、IDが一致する投稿を書き換える。一覧のブーストは、中の元の投稿のIDでも一致させる。

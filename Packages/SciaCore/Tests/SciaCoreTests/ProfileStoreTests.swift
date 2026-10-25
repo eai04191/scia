@@ -168,6 +168,59 @@ struct ProfileStoreTests {
         #expect(cache[known.id]?.following == true)
     }
 
+    /// 読み込みのアカウントの応答を止め、読み直しのアカウントの応答はすぐ返すAPI。止めた方は、届いた時点で古い。
+    private func makeAPIWithGatedFirstAccount(old: Account, new: Account, gate: Gate) -> ProfileStore.API {
+        let calls = Mutex(0)
+        return ProfileStore.API(
+            account: { _ in
+                let call = calls.withLock { calls in
+                    defer { calls += 1 }
+                    return calls
+                }
+                guard call == 0 else { return new }
+                await gate.enter()
+                return old
+            },
+            relationship: { id in Relationship(id: id) },
+            statuses: { _, _, _ in TimelinePage(statuses: [], isRegenerating: false) },
+            follow: { id in Relationship(id: id, following: true) },
+            unfollow: { id in Relationship(id: id) }
+        )
+    }
+
+    /// フォローしたあとの読み直しのように、あとから頼んだアカウントの読み直しが先に届いたら、前に頼んだ読み込みの応答が後から届いても、古い数で戻さない。
+    @Test func accountRequestedEarlierDoesNotOverwriteLaterReload() async throws {
+        let old = try account(statusesCount: 1)
+        let new = try account(statusesCount: 2)
+        let gate = Gate()
+        let store = ProfileStore(account: old, myAccountID: "1", postsFilter: .standard, relationshipCache: RelationshipCache(), api: makeAPIWithGatedFirstAccount(old: old, new: new, gate: gate))
+
+        let load = Task { await store.loadProfile() }
+        try await waitUntil { await gate.isEntered }
+        try await store.reloadAccount()
+        #expect(store.account.statusesCount == 2)
+        await gate.open()
+        _ = await load.value
+
+        #expect(store.account.statusesCount == 2)
+    }
+
+    /// 編集して保存したプロフィールは、保存する前に頼んだ読み込みの応答が後から届いても、編集する前に戻さない。
+    @Test func editedAccountWinsOverEarlierLoad() async throws {
+        let old = try account(statusesCount: 1)
+        let edited = try account(statusesCount: 3)
+        let gate = Gate()
+        let store = ProfileStore(account: old, myAccountID: "1", postsFilter: .standard, relationshipCache: RelationshipCache(), api: makeAPIWithGatedFirstAccount(old: old, new: old, gate: gate))
+
+        let load = Task { await store.loadProfile() }
+        try await waitUntil { await gate.isEntered }
+        store.apply(edited: edited)
+        await gate.open()
+        _ = await load.value
+
+        #expect(store.account.statusesCount == 3)
+    }
+
     /// 応答を、開けるまで止める。
     private actor Gate {
         private var continuation: CheckedContinuation<Void, Never>?
