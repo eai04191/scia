@@ -1371,7 +1371,8 @@ public enum TuningCatalog {
     public static func imageRetry(in store: TuningStore) -> ImageRetrySchedule.Policy {
         ImageRetrySchedule.Policy(
             initialDelay: .seconds(store.value(of: imageRetryInitialDelay)),
-            maxDelay: .seconds(store.value(of: imageRetryMaxDelay))
+            maxDelay: .seconds(store.value(of: imageRetryMaxDelay)),
+            jitter: .standard
         )
     }
 

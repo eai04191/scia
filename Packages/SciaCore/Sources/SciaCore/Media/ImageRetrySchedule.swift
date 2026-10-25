@@ -10,18 +10,16 @@ public struct ImageRetrySchedule {
         /// 1回目の失敗のあとに待つ長さ。続けて失敗するたびに倍にする。
         public var initialDelay: Duration
         public var maxDelay: Duration
+        public var jitter: Jitter
 
-        public init(initialDelay: Duration, maxDelay: Duration) {
+        public init(initialDelay: Duration, maxDelay: Duration, jitter: Jitter = .none) {
             self.initialDelay = initialDelay
             self.maxDelay = maxDelay
+            self.jitter = jitter
         }
 
-        func delay(afterFailures failures: Int) -> Duration {
-            var delay = initialDelay
-            for _ in 1..<max(failures, 1) where delay < maxDelay {
-                delay *= 2
-            }
-            return min(delay, maxDelay)
+        func delay(afterFailures failures: Int, retryAfter: Duration?) -> Duration {
+            Backoff(initial: initialDelay, maximum: maxDelay, jitter: jitter).delay(afterFailures: failures, retryAfter: retryAfter)
         }
     }
 
@@ -75,8 +73,7 @@ public struct ImageRetrySchedule {
             } else {
                 failures = 1
             }
-            let backoff = policy().delay(afterFailures: failures)
-            records[url] = .temporary(failures: failures, retryAt: now + max(backoff, retryAfter ?? .zero))
+            records[url] = .temporary(failures: failures, retryAt: now + policy().delay(afterFailures: failures, retryAfter: retryAfter))
             if let retryAfter, let scope = Self.rateLimitScope(of: url) {
                 pausedScopes[scope] = max(pausedScopes[scope] ?? .zero, now + retryAfter)
             }

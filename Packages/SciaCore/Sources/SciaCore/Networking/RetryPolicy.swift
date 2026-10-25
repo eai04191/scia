@@ -9,21 +9,19 @@ public struct RetryPolicy: Sendable {
     public var maxRetries: Int
     /// 1回目の送り直しの前に待つ時間。送り直すたびに倍にする。
     public var initialDelay: Duration
+    public var jitter: Jitter
 
-    public init(maxRetries: Int, initialDelay: Duration) {
+    public init(maxRetries: Int, initialDelay: Duration, jitter: Jitter = .none) {
         self.maxRetries = maxRetries
         self.initialDelay = initialDelay
+        self.jitter = jitter
     }
 
-    public static let standard = RetryPolicy(maxRetries: 2, initialDelay: .seconds(1))
+    public static let standard = RetryPolicy(maxRetries: 2, initialDelay: .seconds(1), jitter: .standard)
 
     /// - Parameter retry: 何回目の送り直しか。1から数える。
     func delay(beforeRetry retry: Int) -> Duration {
-        var delay = initialDelay
-        for _ in 1..<max(retry, 1) {
-            delay *= 2
-        }
-        return delay
+        Backoff(initial: initialDelay, maximum: nil, jitter: jitter).delay(afterFailures: retry)
     }
 
     static func canRetry(_ request: URLRequest) -> Bool {

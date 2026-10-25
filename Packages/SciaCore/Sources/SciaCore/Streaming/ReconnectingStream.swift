@@ -22,27 +22,27 @@ public struct ReconnectingStream: Sendable {
         public var pingInterval: Duration
         /// pingの応答をこの時間待っても返らなければ、切れたものとみなす。
         public var pingTimeout: Duration
+        public var jitter: Jitter
 
-        public init(initialRetryDelay: Duration, maxRetryDelay: Duration, pingInterval: Duration, pingTimeout: Duration) {
+        public init(initialRetryDelay: Duration, maxRetryDelay: Duration, pingInterval: Duration, pingTimeout: Duration, jitter: Jitter = .none) {
             self.initialRetryDelay = initialRetryDelay
             self.maxRetryDelay = maxRetryDelay
             self.pingInterval = pingInterval
             self.pingTimeout = pingTimeout
+            self.jitter = jitter
         }
 
         public static let standard = Policy(
             initialRetryDelay: .seconds(1),
             maxRetryDelay: .seconds(60),
             pingInterval: .seconds(30),
-            pingTimeout: .seconds(10)
+            pingTimeout: .seconds(10),
+            jitter: .standard
         )
 
-        func retryDelay(afterFailures failures: Int) -> Duration {
-            var delay = initialRetryDelay
-            for _ in 1..<max(failures, 1) where delay < maxRetryDelay {
-                delay *= 2
-            }
-            return min(delay, maxRetryDelay)
+        /// - Parameter retryAfter: つなぐときの応答が示した、再開までの長さ。それより前にはつなぎ直さない。
+        func retryDelay(afterFailures failures: Int, retryAfter: Duration? = nil) -> Duration {
+            Backoff(initial: initialRetryDelay, maximum: maxRetryDelay, jitter: jitter).delay(afterFailures: failures, retryAfter: retryAfter)
         }
     }
 
