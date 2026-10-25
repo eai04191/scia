@@ -235,7 +235,7 @@ public final class LinkCardRefresher {
         } catch is FeatureUnavailable {
             isUnsupported = true
         } catch {
-            logger.error("link card refresh failed: \(error.localizedDescription, privacy: .public)")
+            logger.error("link card refresh failed: \(SciaLog.describe(error), privacy: .public)")
             logOutcomes(of: attempts, cardedIDs: [])
         }
     }

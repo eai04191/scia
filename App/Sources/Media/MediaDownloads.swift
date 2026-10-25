@@ -54,7 +54,7 @@ final class MediaDownloads {
             return copy
         } catch {
             if !Task.isCancelled {
-                logger.error("media download failed url=\(url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                logger.error("media download failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
             }
             throw error
         }

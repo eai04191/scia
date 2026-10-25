@@ -62,7 +62,7 @@ final class ShareViewController: UIViewController {
                 try await store(provider, in: inbox, id: id, index: count)
                 count += 1
             } catch {
-                logger.error("store failed: \(error.localizedDescription, privacy: .public)")
+                logger.error("store failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }
         // 受け取れなかったものがあれば、1件も受け取れなかったときも含めてSciaを開き、欠けた件数を知らせる。

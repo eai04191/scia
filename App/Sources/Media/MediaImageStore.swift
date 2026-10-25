@@ -120,7 +120,7 @@ final class MediaImageStore {
             cache.setObject(loaded.image, forKey: key.cacheKey, cost: Self.cost(of: loaded.image))
             return loaded.image
         } catch {
-            logger.info("video frame failed url=\(url.absoluteString, privacy: .public): \(String(describing: error), privacy: .public)")
+            logger.info("video frame failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
             throw error
         }
     }
@@ -184,11 +184,11 @@ final class MediaImageStore {
             cache.setObject(loaded.image, forKey: key.cacheKey, cost: Self.cost(of: loaded.image))
             retry.recordSuccess(for: url)
             if keepsOriginal, !loaded.keptOriginal {
-                logger.error("media original write failed url=\(url.absoluteString, privacy: .public)")
+                logger.error("media original write failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash))")
             }
             return loaded.image
         } catch {
-            logger.error("media load failed url=\(url.absoluteString, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
+            logger.error("media load failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
             retry.recordFailure(error, for: url)
             throw error
         }
@@ -206,7 +206,7 @@ final class MediaImageStore {
             return image
         }
         guard let image = BlurHash(blurhash).flatMap({ Self.makeImage(rgba: $0.rgba(width: width, height: height), width: width, height: height) }) else {
-            logger.error("blurhash decode failed hash=\(blurhash, privacy: .public)")
+            logger.error("blurhash decode failed hash=\(blurhash, privacy: .private(mask: .hash))")
             return nil
         }
         cache.setObject(image, forKey: key, cost: Self.cost(of: image))

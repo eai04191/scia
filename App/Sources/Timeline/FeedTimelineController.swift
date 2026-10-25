@@ -1077,7 +1077,7 @@ extension FeedTimelineController {
                 let attachments = try await make()
                 self?.streamDummyMediaStatus(content: content, attachments: attachments)
             } catch {
-                SciaLog.logger(category: "media").error("dummy video failed: \(error.localizedDescription, privacy: .public)")
+                SciaLog.logger(category: "media").error("dummy video failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }
     }

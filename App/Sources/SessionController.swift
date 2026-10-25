@@ -596,7 +596,7 @@ final class SessionController {
                 let account = try await myAccount()
                 statusBarTicker.receive(StatusBarTickerItem(id: "demo", kind: .favourite, account: account, subject: .text(RichText.plain("通知はここに流れます", emojis: []))))
             } catch {
-                logger.info("statusBarTicker demo skipped: \(ErrorPresentation(error).text, privacy: .public)")
+                logger.info("statusBarTicker demo skipped: \(SciaLog.describe(error), privacy: .public)")
             }
         }
     }
@@ -834,7 +834,7 @@ final class SessionController {
         case .mention(let acct, let url):
             // ローカルのacctはドメインを含まず、検索では完全一致にならないため、投稿のメンションの一覧にあるIDで引く。
             guard let mention = status.mentions.first(where: { $0.url == url || $0.acct == acct }) else {
-                logger.error("mention not in status acct=\(acct, privacy: .public)")
+                logger.error("mention not in status acct=\(acct, privacy: .private(mask: .hash))")
                 handle(ProfileNotFound(acct: acct), title: "プロフィールを開けませんでした")
                 return
             }
@@ -949,7 +949,7 @@ final class SessionController {
         let logger = logger
         openProfile(from: source) {
             guard let account = try await client.resolveAccount(at: url) else {
-                logger.error("profile not found url=\(url.absoluteString, privacy: .public)")
+                logger.error("profile not found host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash))")
                 throw ProfileNotFound(acct: acct)
             }
             return account
@@ -962,7 +962,7 @@ final class SessionController {
         let logger = logger
         openProfile(from: source) {
             guard let account = try await client.resolveAccount(at: url) else {
-                logger.info("profile not found for link url=\(url.absoluteString, privacy: .public)")
+                logger.info("profile not found for link host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash))")
                 throw LinkProfileNotFound()
             }
             return account
@@ -1395,7 +1395,7 @@ final class SessionController {
             return (id, acct)
         case .profileURL(let url, let shownAcct):
             guard let account = try await client.resolveAccount(at: url) else {
-                logger.error("user menu target not found url=\(url.absoluteString, privacy: .public)")
+                logger.error("user menu target not found host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash))")
                 throw ProfileNotFound(acct: shownAcct)
             }
             return (account.id, account.acct)
@@ -2235,7 +2235,7 @@ final class SessionController {
         let logger = logger
         openProfile(from: root) {
             guard let account = try await client.resolveAccount(acct) else {
-                logger.error("profile not found acct=\(acct, privacy: .public)")
+                logger.error("profile not found acct=\(acct, privacy: .private(mask: .hash))")
                 throw ProfileNotFound(acct: acct)
             }
             return account
@@ -2280,6 +2280,8 @@ final class SessionController {
                 logger.error("debug inject unsupported tab=\(tab.rawValue, privacy: .public)")
             }
         } catch {
+            // デバッグ版だけで流すファイルで、どこが読めなかったかを直すため、ログの決まり（docs/logging.md）から外して失敗を丸ごと残す。
+            // swiftlint:disable:next log_private_value
             logger.error("debug inject failed file=\(file, privacy: .public): \(String(describing: error), privacy: .public)")
         }
     }

@@ -335,7 +335,8 @@ public final class StreamingHub {
         let targets = consumers.filter { $0.subscription.streamPath == message.stream }
         guard !targets.isEmpty else {
             // 解除を送った後に、すでに送られていたイベントが届くことがある。
-            logger.info("streaming event for unsubscribed stream=\(message.stream, privacy: .public)")
+            // ストリームの名前の後ろには、リストのIDかハッシュタグの名前が続く。ハッシュタグの名前は出さない（docs/logging.md）。
+            logger.info("streaming event for unsubscribed stream=\(message.stream.first ?? "nil", privacy: .public)")
             return
         }
         for target in targets where isSubscribed(target.id) {

@@ -128,7 +128,7 @@ actor MediaFileCache {
                 try FileManager.default.removeItem(at: entry.folder)
                 total -= entry.size
             } catch {
-                logger.error("media file cache trim failed: \(error.localizedDescription, privacy: .public)")
+                logger.error("media file cache trim failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }
         logger.info("media file cache trimmed total=\(total, privacy: .public) limit=\(self.sizeLimit, privacy: .public)")
@@ -143,7 +143,7 @@ actor MediaFileCache {
             } catch CocoaError.fileNoSuchFile {
                 continue
             } catch {
-                logger.error("media file cache remove failed: \(error.localizedDescription, privacy: .public)")
+                logger.error("media file cache remove failed: \(SciaLog.describe(error), privacy: .public)")
             }
         }
     }

@@ -91,6 +91,22 @@ struct RequestLogTests {
         #expect(SciaLog.describe(FeatureUnavailable(feature: .markers)) == "FeatureUnavailable")
     }
 
+    /// ファイルやOSのフレームワークの失敗は、パスや説明の文を含めず、種類とコードだけを書く。
+    @Test func errorDescriptionForLogsOmitsFilePaths() {
+        let path = "/private/var/mobile/Documents/alice.png"
+        let cocoaError = CocoaError(.fileNoSuchFile, userInfo: [NSFilePathErrorKey: path])
+        #expect(SciaLog.describe(cocoaError) == "CocoaError 4")
+        let nsError = NSError(domain: "AVFoundationErrorDomain", code: -11800, userInfo: [NSLocalizedDescriptionKey: path])
+        #expect(SciaLog.describe(nsError) == "AVFoundationErrorDomain -11800")
+    }
+
+    /// ログに残すURLは、ユーザーやIDを含むパスとクエリを落とし、ホストだけにする。
+    @Test func urlForLogsKeepsOnlyHost() throws {
+        let url = try #require(URL(string: "https://files.example.social/accounts/avatars/alice.png?token=secret"))
+        #expect(SciaLog.host(of: url) == "files.example.social")
+        #expect(SciaLog.host(of: nil) == "nil")
+    }
+
     /// `convertFromSnakeCase`で読んだ項目も、応答のJSONのキーで探して形を書く。
     @Test func shapeFollowsSnakeCaseKeys() throws {
         let data = Data(#"{"account":{"display_name":1}}"#.utf8)

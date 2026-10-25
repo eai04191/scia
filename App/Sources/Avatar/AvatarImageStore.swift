@@ -159,7 +159,7 @@ final class AvatarImageStore {
             }
             return image
         } catch {
-            logger.error("avatar load failed url=\(key.url.absoluteString, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            logger.error("avatar load failed host=\(SciaLog.host(of: key.url), privacy: .public) url=\(key.url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
             retry.recordFailure(error, for: key.url)
             throw error
         }

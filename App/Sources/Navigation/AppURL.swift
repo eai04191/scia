@@ -19,9 +19,10 @@ enum AppURL: Equatable {
     case compose(text: String)
 
     /// ログに書く説明。書き始めの本文は、送る前の文やまだ公開していないページのURLを含むので、長さだけにする。
+    /// ハンドルは、誰のプロフィールを開いたかが分かるので、ドメインだけにする（docs/logging.md）。
     var logDescription: String {
         switch self {
-        case .profile(let acct): "profile acct=\(acct)"
+        case .profile(let acct): "profile domain=\(acct.split(separator: "@").dropFirst().first ?? "local")"
         case .share(let id, let unreadableCount): "share id=\(id) unreadable=\(unreadableCount)"
         case .compose(let text): "compose length=\(text.count)"
         }

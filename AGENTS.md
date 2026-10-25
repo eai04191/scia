@@ -60,6 +60,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - Mastodon APIの仕様は推測せず、公式ドキュメント（https://docs.joinmastodon.org/ ）で確認する。サーバー実装による差異（glitch-soc、Fedibird、GoToSocialなど）は、必要になった時点で個別に対応してテストに残す
 - サーバー（ほかのサーバーの利用者が書いた投稿や、fxtwitterの応答を含む）から来る件数、上限、URLは、読むところで確かめる。件数は`decodeCount`で範囲に収め、上限は`ServerLimit`で1以上だけを受け付け、URLは使い道（読み込む画像やメディアか、押して開く先か）ごとに`decodeURL`でスキームを確かめる（`make lint`の`server_value_without_check`で止める）。読んだあとの計算でも、サーバーの値から作った数（縦横比や割合）を整数に直す前に、範囲に収める
 - ファイルやフォルダーの名前は、文字列の決まった名前でなければ`SafeFileName`で作り、`appending(fileName:)`でつなげる。URLやサーバーの応答、ほかのアプリから受け取ったファイルの名前には、`/`や`..`が入りうるため（`make lint`の`unsafe_file_name`で止める）
+- ログに何を`privacy: .public`で出してよいかは[docs/logging.md](docs/logging.md)に従う。ハンドル、本文、URL、応答の本文、`localizedDescription`を公開扱いで出す書き方は、`make lint`の`log_private_value`で止める。違和感レポートの状態ダンプも同じ決まりで書く
 - Swift 6のstrict concurrencyを有効にしている。`@unchecked Sendable`や`nonisolated(unsafe)`で警告を消さず、設計で解決する
 
 ## 文言

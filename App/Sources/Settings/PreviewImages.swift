@@ -69,7 +69,7 @@ enum PreviewImages {
         do {
             try data.write(to: url, options: .atomic)
         } catch {
-            logger.error("preview image write failed name=\(name, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            logger.error("preview image write failed name=\(name, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
             return nil
         }
         return url

@@ -54,7 +54,7 @@ final class LoginModel {
             let credential = try await AppDependencies.oauth.login(instance: instance) { url in
                 try await authenticator.authenticate(url: url, callbackScheme: AppDependencies.oauthCallbackScheme, isPrivate: isPrivate)
             }
-            logger.info("login succeeded instance=\(instance.absoluteString, privacy: .public)")
+            logger.info("login succeeded instance=\(SciaLog.host(of: instance), privacy: .public)")
             try onLogin(credential)
         } catch is CancellationError {
             logger.info("login cancelled")

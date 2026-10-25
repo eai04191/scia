@@ -1788,7 +1788,7 @@ extension ImagePageController {
                 self.liveText.analysis = analysis
                 self.hasFinishedAnalysis = true
             } catch {
-                SciaLog.logger(category: "media").error("live text analysis failed: \(error.localizedDescription, privacy: .public)")
+                SciaLog.logger(category: "media").error("live text analysis failed: \(SciaLog.describe(error), privacy: .public)")
                 guard let self, !Task.isCancelled else { return }
                 self.hasFinishedAnalysis = true
             }

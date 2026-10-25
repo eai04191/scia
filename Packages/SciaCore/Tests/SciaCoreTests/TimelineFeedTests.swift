@@ -155,4 +155,11 @@ struct TimelineFeedTests {
         #expect(feed.marker == nil)
         #expect(TabItem(feed) == .accountHashtag(accountID: "109", acct: "bob@remote.example", name: "Scia"))
     }
+
+    /// ログに残す名前は、何に関心があるかが分かるハッシュタグの名前を含めない。
+    @Test func logNameOmitsHashtagName() {
+        #expect(TimelineFeed.hashtag(name: "猫").name == "hashtag")
+        #expect(TimelineFeed.accountHashtag(accountID: "42", name: "猫").name == "account:42:hashtag")
+        #expect(TimelineFeed.list(id: "7").name == "list:7")
+    }
 }

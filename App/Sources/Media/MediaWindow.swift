@@ -39,7 +39,7 @@ enum MediaWindow {
             for: UISceneSessionActivationRequest(role: .windowApplication, userActivity: activity, options: options)
         ) { error in
             pending[id] = nil
-            SciaLog.logger(category: "media").error("viewer window failed: \(error.localizedDescription, privacy: .public)")
+            SciaLog.logger(category: "media").error("viewer window failed: \(SciaLog.describe(error), privacy: .public)")
         }
     }
 

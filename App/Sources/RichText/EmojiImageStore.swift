@@ -136,7 +136,7 @@ final class EmojiImageStore {
                 failedStills.remove(url)
                 retry.recordSuccess(for: url)
             } catch {
-                logger.error("emoji load failed url=\(url.absoluteString, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
+                logger.error("emoji load failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
                 failedStills.insert(url)
                 retry.recordFailure(error, for: url)
             }
@@ -177,7 +177,7 @@ final class EmojiImageStore {
                 }
                 retry.recordSuccess(for: url)
             } catch {
-                logger.error("emoji animation load failed url=\(url.absoluteString, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
+                logger.error("emoji animation load failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
                 state = .failed
                 retry.recordFailure(error, for: url)
             }

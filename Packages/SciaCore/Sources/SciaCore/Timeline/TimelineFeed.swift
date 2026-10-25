@@ -13,15 +13,15 @@ public enum TimelineFeed: Hashable, Sendable {
     /// あるアカウントの、ハッシュタグの付いた投稿。`name`は`#`を除いた名前。タブには置かず、ハッシュタグのメニューから開く。
     case accountHashtag(accountID: String, name: String)
 
-    /// ログに残す名前。
+    /// ログに残す名前。ハッシュタグの名前は、何に関心があるかが分かるので含めない（docs/logging.md）。
     public var name: String {
         switch self {
         case .home: "home"
         case .local: "local"
         case .federated: "federated"
         case .list(let id): "list:\(id)"
-        case .hashtag(let name): "hashtag:\(name)"
-        case .accountHashtag(let accountID, let name): "account:\(accountID):hashtag:\(name)"
+        case .hashtag: "hashtag"
+        case .accountHashtag(let accountID, _): "account:\(accountID):hashtag"
         }
     }
 

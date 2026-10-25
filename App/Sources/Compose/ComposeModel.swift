@@ -684,7 +684,7 @@ extension ComposeModel {
             sendDescriptionIfNeeded(id)
         } catch {
             guard !Task.isCancelled, localMedia[id] != nil else { return }
-            logger.info("attachment upload failed error=\(String(describing: error), privacy: .public)")
+            logger.info("attachment upload failed error=\(SciaLog.describe(error), privacy: .public)")
             localMedia[id]?.failure = error
             setState(.failed(serverID: attachments.first { $0.id == id }?.serverID), of: id)
         }

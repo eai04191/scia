@@ -400,7 +400,7 @@ final class InlineComposeController: NSObject {
         rows: \(rowStates.map { "\($0.name) hidden=\($0.view.isHidden) frame=\($0.view.frame)" }.joined(separator: ", "))
         overlaps: \(overlappingRows.isEmpty ? "none" : overlappingRows.joined(separator: ", "))
         completion: input=\(completionInput === textView ? "text" : completionInput === spoilerField ? "spoiler" : "none") kind=\(completion.token?.kind.rawValue ?? "nil") content=\(textCompletion.contentSummary) shown=\(isCompletionListShown) list.frame=\(completionList.frame)
-        replyChip: title=\(replyButton.configuration?.title ?? "nil") frame=\(replyButton.frame) label=\(replyButton.titleLabel.map { "text=\($0.text ?? "nil") frame=\($0.frame) alpha=\($0.alpha) hidden=\($0.isHidden)" } ?? "nil")
+        replyChip: titleLength=\(replyButton.configuration?.title.map { "\($0.count)" } ?? "nil") frame=\(replyButton.frame) label=\(replyButton.titleLabel.map { "textLength=\($0.text.map { "\($0.count)" } ?? "nil") frame=\($0.frame) alpha=\($0.alpha) hidden=\($0.isHidden)" } ?? "nil")
         """
     }
 
