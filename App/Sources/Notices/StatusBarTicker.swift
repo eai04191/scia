@@ -122,8 +122,12 @@ final class StatusBarTicker {
         let clock = clock
         advanceTask = Task { [weak self] in
             // 出している間にビューアを開いたときなど、流してはいけなくなったらすぐ消す。画面を出す口は多く、どれにも知らせを足すより、出している間だけ見張るほうが漏れないため。
-            while sinceShown() < duration {
-                try? await clock.sleep(for: min(.milliseconds(200), duration - sinceShown()))
+            // 長押しの拡大表示で読んでいる間は、時間が過ぎても進めず、離すのを待つ。
+            while true {
+                let remaining = duration - sinceShown()
+                let isHeld = self?.window?.ticker.isHeldForLargeContent ?? false
+                if remaining <= .zero, !isHeld { break }
+                try? await clock.sleep(for: remaining > .zero ? min(.milliseconds(200), remaining) : .milliseconds(200))
                 guard !Task.isCancelled else { return }
                 guard let self else { return }
                 if !self.canShowNow() {

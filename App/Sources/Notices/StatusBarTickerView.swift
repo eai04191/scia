@@ -201,7 +201,7 @@ enum DeviceModel {
 /// カプセルの縦の真ん中の左右の端が収まるところまで広げる。左右の余白が上より狭いと、黒い板が画面の上に貼ってあるように見えたため。
 /// 切り欠きのない画面では、黒い帯を張らず、ステータスバーの文字を入れ替えたように、地を透かしてふだんの文字の色で描く。
 /// 次の通知へは、文字を上へ送って入れ替える。
-final class StatusBarTickerView: UIView {
+final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate {
     /// 画面の描き換えと同じ時間。テストでは差し替える。
     var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
     /// 押されたとき。
@@ -225,6 +225,8 @@ final class StatusBarTickerView: UIView {
     private var fadingContent: ContentViews?
     private(set) var item: StatusBarTickerItem?
     private(set) var isExpanded = false
+    /// 長押しの拡大表示で読んでいる間。次の通知へ進めず、消さない。
+    private(set) var isHeldForLargeContent = false
     /// 出している通知を読み上げる文。
     var accessibilityText: String? { capsule.accessibilityLabel }
 
@@ -239,6 +241,11 @@ final class StatusBarTickerView: UIView {
         capsule.accessibilityTraits = .button
         capsule.accessibilityHint = "通知タブを開きます"
         capsule.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(tapped)))
+        // 文字はステータスバーの高さに収めるため、端末の文字の大きさに合わせて大きくできない。タブバーと同じく、
+        // 文字を大きくする設定では、長押しで拡大表示（Large Content Viewer）に出し、指を離すと押したことにする。
+        capsule.showsLargeContentViewer = true
+        capsule.scalesLargeContentImage = true
+        addInteraction(UILargeContentViewerInteraction(delegate: self))
         addSubview(capsule)
         AppDependencies.emojiImages.addListener(owner: self) { [weak self] _ in
             self?.content?.render()
@@ -287,6 +294,8 @@ final class StatusBarTickerView: UIView {
         capsule.addSubview(incoming.left)
         capsule.addSubview(incoming.right)
         capsule.accessibilityLabel = incoming.accessibilityLabel
+        capsule.largeContentTitle = incoming.accessibilityLabel
+        capsule.largeContentImage = UIImage(systemName: NotificationAppearance(item.kind).symbolName)
         let outgoing = content
         content = incoming
         let wasExpanded = isExpanded
@@ -560,6 +569,20 @@ final class StatusBarTickerView: UIView {
     }
 
     @objc private func tapped() {
+        onTap?()
+    }
+
+    /// 拡大表示の対象かどうかの判定は、指を受けるかどうかと同じ`tapTarget(at:)`で決める。
+    /// 拡大表示を出している間は、読み終えるまで次の通知へ進めない。
+    func largeContentViewerInteraction(_ interaction: UILargeContentViewerInteraction, itemAt point: CGPoint) -> (any UILargeContentViewerItem)? {
+        let target = tapTarget(at: point)
+        isHeldForLargeContent = target != nil
+        return target
+    }
+
+    func largeContentViewerInteraction(_ interaction: UILargeContentViewerInteraction, didEndOn item: (any UILargeContentViewerItem)?, at point: CGPoint) {
+        isHeldForLargeContent = false
+        guard item != nil, tapTarget(at: point) != nil else { return }
         onTap?()
     }
 
