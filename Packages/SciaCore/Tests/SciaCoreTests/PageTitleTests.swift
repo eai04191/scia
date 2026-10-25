@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -87,6 +88,34 @@ struct PageTitleTests {
         #expect(PageTitleLoader.isHTML(nil))
         #expect(!PageTitleLoader.isHTML("image/png"))
         #expect(!PageTitleLoader.isHTML("application/pdf"))
+    }
+
+    // MARK: - 読み込み
+
+    private func loader(_ responses: [StubTransport.Response]) -> PageTitleLoader {
+        PageTitleLoader(client: HTTPClient(transport: StubTransport(responses), retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock()))
+    }
+
+    @Test func loadsTitleOfPage() async throws {
+        let page = StubTransport.Response(statusCode: 200, body: Data("<html><head><title>見出し</title></head></html>".utf8), headers: ["Content-Type": "text/html"])
+        #expect(try await loader([page]).title(of: try #require(URL(string: "https://example.com/"))) == "見出し")
+    }
+
+    /// サーバーが混んでいるときの429は、ほかの経路と同じく、再開までの長さを持つ失敗にする。
+    @Test func rateLimitedPageIsStatusError() async throws {
+        let busy = StubTransport.Response.json("", statusCode: 429, headers: ["Retry-After": "30"])
+        let error = await #expect(throws: HTTPStatusError.self) {
+            try await loader([busy]).title(of: try #require(URL(string: "https://example.com/")))
+        }
+        #expect(error?.statusCode == 429)
+        #expect(error?.retryAfter == .seconds(30))
+    }
+
+    /// 上限より長いページは、上限までで探す。上限の後ろにあるタイトルは読まない。
+    @Test func readsUpToMaxByteCount() async throws {
+        let filler = String(repeating: " ", count: PageTitleLoader.maxByteCount)
+        let page = StubTransport.Response(statusCode: 200, body: Data("<html>\(filler)<title>後ろ</title></html>".utf8), headers: ["Content-Type": "text/html"])
+        #expect(try await loader([page]).title(of: try #require(URL(string: "https://example.com/"))) == nil)
     }
 
     // MARK: - 悪意のある形のページ

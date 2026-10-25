@@ -1746,7 +1746,7 @@ final class SessionController {
         linkTitleActivityDidChange()
         let reason = switch failure {
         case .unreadable(let error as URLError): ErrorPresentation(error)
-        case .unreadable(PageTitleLoadError.status(let statusCode)): ErrorPresentation(message: "リンク先のページを読み込めませんでした。", code: "HTTP \(statusCode)")
+        case .unreadable(let error as HTTPStatusError): ErrorPresentation(message: "リンク先のページを読み込めませんでした。", code: "HTTP \(error.statusCode)")
         case .unreadable: ErrorPresentation(message: "リンク先のページを読み込めませんでした。", code: nil)
         case .noTitle: ErrorPresentation(message: "リンク先のページにタイトルがありませんでした。", code: nil)
         }

@@ -802,7 +802,7 @@ final class InlineComposeController: NSObject {
         linkTitleLoadCount += 1
         onLinkTitleLoadingChange()
         let loadingID = linkTitleEffects.beginLoading(occurrence)
-        let loader = PageTitleLoader()
+        let loader = PageTitleLoader(client: AppDependencies.http)
         model.tasks.run { [weak self] in
             let title: String?
             do {

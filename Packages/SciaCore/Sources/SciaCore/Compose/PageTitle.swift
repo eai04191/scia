@@ -202,30 +202,30 @@ public enum PageTitle {
 
 /// リンク先のページを読み、`PageTitle`でタイトルを読む。
 /// YouTubeはog:titleがHTMLの500KBを過ぎたあたりにあるため、og:titleのmetaを読み終えるまで、上限まで読み進める。
+/// 通信は`HTTPClient`を通し、ほかの経路と同じ決まり（再開の時刻でホストを止めるなど）に従う。2xx以外は`HTTPStatusError`で失敗させる。
 public struct PageTitleLoader: Sendable {
-    /// 読む量の上限。YouTubeの動画のページは全体で700KBほど。
-    public static let maxByteCount = 2_000_000
+    /// 読む量の上限。
+    public static let maxByteCount = ResponseLimit.pageTitle
     private static let checkInterval = 16_384
 
-    private let session: URLSession
+    private let client: HTTPClient
 
-    public init(session: URLSession = .shared) {
-        self.session = session
+    public init(client: HTTPClient) {
+        self.client = client
     }
 
     /// HTMLでないページ（画像やPDFなど）と、タイトルのないページはnil。
     public func title(of url: URL) async throws -> String? {
         var request = URLRequest(url: url, timeoutInterval: 15)
         request.setValue("text/html,application/xhtml+xml;q=0.9,*/*;q=0.1", forHTTPHeaderField: "Accept")
-        let (bytes, response) = try await session.bytes(for: request)
-        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
-        guard (200..<300).contains(http.statusCode) else { throw PageTitleLoadError.status(http.statusCode) }
-        let contentType = http.value(forHTTPHeaderField: "Content-Type")
+        // 上限で列が失敗で終わる前に、上限まで読んだところで探すのをやめる。
+        let (body, response) = try await client.open(request, limit: Self.maxByteCount, scope: .host)
+        let contentType = response.value(forHTTPHeaderField: "Content-Type")
         guard Self.isHTML(contentType) else { return nil }
         var data = Data()
         var checked = 0
-        for try await byte in bytes {
-            data.append(byte)
+        for try await chunk in body {
+            data.append(chunk)
             if data.count >= Self.maxByteCount { break }
             if data.count - checked >= Self.checkInterval {
                 let searchFrom = checked - PageTitle.metaLookBehind - PageTitle.tagWindow
@@ -233,7 +233,9 @@ public struct PageTitleLoader: Sendable {
                 if PageTitle.hasOGTitle(in: data, contentType: contentType, searchingFrom: searchFrom) { break }
             }
         }
-        return PageTitle.title(in: data, contentType: contentType)
+        // 取り消されると、列は失敗せずに終わる。途中までのページからタイトルを探さない。
+        try Task.checkCancellation()
+        return PageTitle.title(in: data.prefix(Self.maxByteCount), contentType: contentType)
     }
 
     /// ヘッダーがなければ、HTMLとみなして読んでみる。
@@ -241,10 +243,4 @@ public struct PageTitleLoader: Sendable {
         guard let mime = contentType?.split(separator: ";").first?.trimmingCharacters(in: .whitespaces).lowercased(), !mime.isEmpty else { return true }
         return mime == "text/html" || mime == "application/xhtml+xml"
     }
-}
-
-/// リンク先のページを読めなかった。
-public enum PageTitleLoadError: Error, Equatable {
-    /// 2xx以外のステータスが返った。
-    case status(Int)
 }
