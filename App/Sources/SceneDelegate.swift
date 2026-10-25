@@ -315,6 +315,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             Self.syncAllScenes()
         } catch is CancellationError {
             logger.info("reauthentication cancelled")
+        } catch where Task.isCancelled {
+            // 別の窓での切り替えなどで、ログインし直していたセッションを止めた。通信はURLErrorの取り消しで戻るので、失敗として知らせない。
+            logger.info("reauthentication cancelled with session")
         } catch {
             logger.error("reauthentication failed: \(SciaLog.describe(error), privacy: .public)")
             let alert = UIAlertController(title: "ログインし直せませんでした", message: ErrorPresentation(error).text, preferredStyle: .alert)

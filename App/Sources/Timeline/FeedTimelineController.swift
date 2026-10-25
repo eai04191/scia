@@ -19,14 +19,15 @@ final class FeedTimelineController {
     /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "timeline")
-    private var tasks: [Task<Void, Never>] = []
+    /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
+    private let tasks: TaskScope
     /// 走り終えていない読み込みなどの処理の数。止めたものも、取り消しを受けて戻り切るまで数える。止めたあとに何も起きないことを、テストが確かめるのに使う。
-    private(set) var runningTaskCount = 0
+    var runningTaskCount: Int { tasks.runningCount }
     /// 新着をまとめて挿入する間隔、ポーリング、作り直しの読み直しを待つ時計。テストでは手で進める時計に替える。
     private let clock: any Clock<Duration>
     /// 補完を終えた日時、新着の届いた日時、ダミーの投稿の日時に使う今の日付。テストでは決まった日付に替える。
     private let now: () -> Date
-    private var isStopped = false
+    private var isStopped: Bool { tasks.isClosed }
     /// 設定で無効にしている。購読せず、有効に戻したらつなぎ直して、無効だった間を補う。
     private var isDisabled = false
     private var hasStarted = false
@@ -81,8 +82,10 @@ final class FeedTimelineController {
         tuning: TuningStore = AppDependencies.tuning,
         clock: any Clock<Duration> = AppDependencies.clock,
         now: @escaping () -> Date = AppDependencies.now,
+        tasks: TaskScope,
         onUnauthorized: @escaping () -> Void
     ) {
+        self.tasks = tasks
         self.clock = clock
         self.now = now
         let filtering = StatusFiltering(context: feed.filterContext, myAccountID: client.credential.accountID)
@@ -109,6 +112,7 @@ final class FeedTimelineController {
         #if DEBUG
         viewController.debugActions = makeDebugActions()
         #endif
+        tasks.onClose { [weak self] in self?.didStop() }
     }
 
     /// - Parameter origin: 電波の回復などでやり直すときは`.automatic`。レート制限で止められている間は送らない。
@@ -162,13 +166,16 @@ final class FeedTimelineController {
     }
 
     /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときと、積んで開いた一覧がナビゲーションから外されたときに呼ぶ。
+    /// セッションを閉じたときは、呼ばなくても持ち主が閉じて止まる。
     func stop() {
-        isStopped = true
+        tasks.close()
+    }
+
+    /// 持ち主が閉じたときに呼ぶ。走っている処理は持ち主が取り消すので、ここではTaskでないものを止める。
+    private func didStop() {
         stopStreaming()
-        cancelRegeneratingRetry()
-        stopPolling()
-        tasks.forEach { $0.cancel() }
-        tasks.removeAll()
+        regeneratingRetryTask = nil
+        pollingTask = nil
         // 積んで開いた一覧は、画面がこのコントローラーを生かしているため、持ち合いを解いて捨てられるようにする。
         viewController.lifetimeOwner = nil
     }
@@ -231,7 +238,7 @@ final class FeedTimelineController {
 
     private func startPolling() {
         guard isShown, !isStopped, !isDisabled, isInForeground, pollingTask == nil else { return }
-        pollingTask = Task { [weak self, clock] in
+        pollingTask = tasks.run { [weak self, clock] in
             while let interval = self?.tuning.value(of: TuningCatalog.accountHashtagPollingInterval) {
                 try? await clock.sleep(for: .seconds(interval))
                 guard !Task.isCancelled, let self else { return }
@@ -300,19 +307,14 @@ final class FeedTimelineController {
 
     /// - Parameter origin: 自動の読み込みなら`.automatic`。レート制限で止められている間は送らずに失敗させる。
     @discardableResult
-    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (FeedTimelineController) async -> Void) -> Task<Void, Never> {
-        tasks.removeAll { $0.isCancelled }
+    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (FeedTimelineController) async -> Void) -> Task<Void, Never>? {
         // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
-        runningTaskCount += 1
-        let task = RequestOrigin.$current.withValue(origin) {
-            Task { [weak self] in
+        RequestOrigin.$current.withValue(origin) {
+            tasks.run { [weak self] in
                 guard let self else { return }
                 await operation(self)
-                runningTaskCount -= 1
             }
         }
-        tasks.append(task)
-        return task
     }
 
     /// 一覧を引っぱって離したときに、最新の投稿を読んで上に足す。足すのは一番新しい投稿より新しいものだけで、読んでいる位置は動かさない。
@@ -323,7 +325,7 @@ final class FeedTimelineController {
         if !hasLoadedInitial {
             if case .failed = viewController.contentState {
                 viewController.setContentState(.loading)
-                await run { await $0.loadInitial() }.value
+                await run { await $0.loadInitial() }?.value
             }
             return
         }
@@ -476,7 +478,7 @@ final class FeedTimelineController {
         guard regeneratingRetryTask == nil, !isStopped, !isDisabled, isInForeground else { return }
         let interval = tuning.value(of: TuningCatalog.regeneratingRetryInterval)
         logger.info("\(self.feed.name, privacy: .public) regenerating retry scheduled after=\(interval, privacy: .public)")
-        regeneratingRetryTask = Task { [weak self, clock] in
+        regeneratingRetryTask = tasks.run { [weak self, clock] in
             try? await clock.sleep(for: .seconds(interval))
             guard !Task.isCancelled, let self else { return }
             regeneratingRetryTask = nil
@@ -653,7 +655,7 @@ final class FeedTimelineController {
         let client = client
         // 既読位置の保存は、スクロールやバックグラウンドへの移行で自動で送る。
         RequestOrigin.$current.withValue(.automatic) {
-            Task { [weak self] in
+            tasks.run { [weak self] in
                 while let self, !self.isStopped, let id = self.store.readIDToSave {
                     do {
                         try await client.saveMarker(for: marker, lastReadID: id)
@@ -1070,10 +1072,10 @@ extension FeedTimelineController {
 
     /// 動画を付けたダミー投稿を流す。動画は初回だけ端末で書き出すため、少し遅れて流れる。
     private func streamDummyVideoStatus(content: String, make: @escaping () async throws -> (String) -> [MediaAttachment]) {
-        Task {
+        tasks.run { [weak self] in
             do {
                 let attachments = try await make()
-                streamDummyMediaStatus(content: content, attachments: attachments)
+                self?.streamDummyMediaStatus(content: content, attachments: attachments)
             } catch {
                 SciaLog.logger(category: "media").error("dummy video failed: \(error.localizedDescription, privacy: .public)")
             }

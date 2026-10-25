@@ -55,6 +55,8 @@ final class ComposeModel {
     @ObservationIgnored let myAccountID: String
     @ObservationIgnored private let post: (StatusDraft) async throws -> Void
     @ObservationIgnored private let media: ComposeMediaService
+    /// 下書きの送信とアップロードの持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで閉じると、送っている途中のものも止める。
+    @ObservationIgnored let tasks: TaskScope
     @ObservationIgnored private var uploadTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
     @ObservationIgnored private var thumbnailTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
     /// 代替テキストを送っている添付。送っている間は、書き戻してサーバーの値と同じになっても、送り終えるまで投稿させない。
@@ -69,7 +71,14 @@ final class ComposeModel {
     /// ペーストしたメディアのうち、添付の上限を超えて足さなかったものの種類。
     @ObservationIgnored var onPastedMediaSkipped: ([MediaAttachment.Kind]) -> Void = { _ in }
 
-    init(replyTo: Status? = nil, myAccountID: String, media: ComposeMediaService = .unavailable, post: @escaping (StatusDraft) async throws -> Void) {
+    init(
+        tasks: TaskScope,
+        replyTo: Status? = nil,
+        myAccountID: String,
+        media: ComposeMediaService = .unavailable,
+        post: @escaping (StatusDraft) async throws -> Void
+    ) {
+        self.tasks = tasks
         let draft = replyTo.map { StatusDraft.reply(to: $0, myAccountID: myAccountID) } ?? StatusDraft()
         initialDraft = draft
         text = draft.text
@@ -606,7 +615,7 @@ extension ComposeModel {
 
     private func startUpload(_ id: DraftAttachment.ID) {
         uploadTasks[id]?.cancel()
-        uploadTasks[id] = Task { [weak self] in await self?.upload(id) }
+        uploadTasks[id] = tasks.run { [weak self] in await self?.upload(id) }
     }
 
     /// ファイルを読み込み、アップロードし、サーバーでの変換が済むまで待つ。途中で添付から外されたら、何も書き戻さない。
@@ -824,7 +833,7 @@ extension ComposeModel {
             throw CancellationError()
         }
         localMedia[id]?.file = file
-        thumbnailTasks[id] = Task { [weak self, media] in
+        thumbnailTasks[id] = tasks.run { [weak self, media] in
             let thumbnail = await media.makeThumbnail(file)
             guard !Task.isCancelled else { return }
             self?.localMedia[id]?.thumbnail = thumbnail
@@ -839,7 +848,7 @@ extension ComposeModel {
               let serverID = attachment.serverID
         else { return }
         let description = attachment.description
-        descriptionTasks[id] = Task { [weak self, media] in
+        descriptionTasks[id] = tasks.run { [weak self, media] in
             do {
                 let updated = try await media.updateDescription(serverID, description)
                 guard let self, !Task.isCancelled else { return }

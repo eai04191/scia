@@ -106,7 +106,7 @@ struct ComposeModelMediaTests {
     }
 
     private func makeModel(_ server: FakeServer, post: @escaping (StatusDraft) async throws -> Void = { _ in }) -> ComposeModel {
-        let model = ComposeModel(myAccountID: "1", media: server.service, post: post)
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1", media: server.service, post: post)
         model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         return model
     }
@@ -255,7 +255,7 @@ struct ComposeModelMediaTests {
         let url = folder.appending(path: "large.jpg")
         try writePhoto(width: 800, height: 600, noise: true, to: url)
         let byteCount = try #require(try FileManager.default.attributesOfItem(atPath: url.path)[.size] as? Int)
-        let model = ComposeModel(myAccountID: "1", media: server.service) { _ in }
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1", media: server.service) { _ in }
         model.apply(
             configuration: InstanceConfiguration(
                 streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4,
@@ -459,6 +459,29 @@ struct ComposeModelMediaTests {
         model.applyPickerSelection([try picked("a"), try picked("b")])
         #expect(!model.showsSpoiler)
         #expect(!model.isSensitive)
+    }
+
+    /// ログアウトなどで投稿欄の持ち主を閉じたら、読み込みやアップロードの途中の添付も止める。
+    @Test func closingSessionCancelsUpload() async throws {
+        let server = FakeServer()
+        let session = TaskScope()
+        let model = ComposeModel(tasks: session.child(), myAccountID: "1", media: server.service) { _ in }
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        let photo = try picked("a")
+        let loading = Gate()
+        model.applyPickerSelection([
+            PickedMedia(assetIdentifier: photo.assetIdentifier) { avoiding in
+                try await loading.wait()
+                return try await photo.load(avoiding)
+            },
+        ])
+        try await settle { loading.waiterCount == 1 }
+
+        session.close()
+        try await settle { session.runningCount == 0 }
+
+        #expect(loading.waiterCount == 0)
+        #expect(server.uploads.isEmpty)
     }
 
     @Test func cannotPostUntilEveryUploadFinishes() async throws {
@@ -927,7 +950,7 @@ struct ComposeModelMediaTests {
 
     /// 枚数の上限を読めるまでは、メディアを選ばせない。読めなかったときも、既定の4枚で選ばせない。
     @Test func pickerUsesServerAttachmentLimit() throws {
-        let model = ComposeModel(myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
         #expect(!model.canAttachMedia)
         model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         #expect(!model.canAttachMedia)

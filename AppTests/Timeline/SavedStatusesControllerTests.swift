@@ -41,7 +41,7 @@ struct SavedStatusesControllerTests {
                 return (bodies[page], link)
             }
         }
-        return SavedStatusesController(kind: .bookmarks, client: MastodonClient(credential: credential, transport: transport)) {}
+        return SavedStatusesController(kind: .bookmarks, client: MastodonClient(credential: credential, transport: transport), tasks: TaskScope()) {}
     }
 
     /// 一覧をウィンドウに載せて読み込み、最上部にいる状態にする。

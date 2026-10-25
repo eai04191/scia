@@ -299,7 +299,7 @@ struct WindowGlyphLanguageTests {
         let window = try window()
         let host = UITabBarController(tabs: [UITab(title: "ホーム", image: nil, identifier: "home") { _ in UIViewController() }])
         window.rootViewController = host
-        let composer = InlineComposeController(model: ComposeModel(myAccountID: "1") { _ in }, tuning: TuningStore(defaults: nil), settings: try settings(.traditionalChinese))
+        let composer = InlineComposeController(model: ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }, tuning: TuningStore(defaults: nil), settings: try settings(.traditionalChinese))
         composer.install(in: host)
         let textView = try #require(host.view.descendants(of: UITextView.self).first { $0.accessibilityLabel == "本文" })
         textView.insertText("直骨")

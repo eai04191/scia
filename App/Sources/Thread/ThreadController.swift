@@ -24,23 +24,27 @@ final class ThreadController {
     /// 読み込みが401で失敗したときに呼ぶ。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "thread")
+    /// この画面が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じてこのコントローラーが捨てられたときに閉じる。
+    private let tasks: TaskScope
 
     static func make(
         focus: Status,
         client: MastodonClient,
         streamingHub: StreamingHub,
+        tasks: TaskScope,
         onUnauthorized: @escaping () -> Void
     ) -> (ThreadController, TimelineViewController) {
         // 画面を作る時点ではコントローラーがまだないため、作ったあとに入れる。
         weak var owner: ThreadController?
         let viewController = TimelineViewController(texts: .thread) { await owner?.refresh() }
-        let controller = ThreadController(focus: focus, client: client, streamingHub: streamingHub, viewController: viewController, onUnauthorized: onUnauthorized)
+        let controller = ThreadController(focus: focus, client: client, streamingHub: streamingHub, viewController: viewController, tasks: tasks, onUnauthorized: onUnauthorized)
         viewController.lifetimeOwner = controller
         owner = controller
         return (controller, viewController)
     }
 
-    private init(focus: Status, client: MastodonClient, streamingHub: StreamingHub, viewController: TimelineViewController, onUnauthorized: @escaping () -> Void) {
+    private init(focus: Status, client: MastodonClient, streamingHub: StreamingHub, viewController: TimelineViewController, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
+        self.tasks = tasks
         let filtering = StatusFiltering(context: .thread, myAccountID: client.credential.accountID)
         store = ThreadStore(focus: focus, filtering: filtering)
         self.client = client
@@ -51,12 +55,18 @@ final class ThreadController {
         viewController.threadFocusID = focus.id
         viewController.hidesReplyLabelBelowParent = true
         viewController.onRetry = { [weak self] in self?.load() }
+        tasks.onClose { [weak self] in
+            self?.streamingSubscription?.cancel()
+            self?.streamingSubscription = nil
+        }
     }
 
     isolated deinit {
-        loadTask?.cancel()
         streamingSubscription?.cancel()
     }
+
+    /// 走り終えていない処理の数。閉じたあとに何も起きないことを、テストが確かめるのに使う。
+    var runningTaskCount: Int { tasks.runningCount }
 
     var focusID: Status.ID { store.focusID }
 
@@ -76,12 +86,13 @@ final class ThreadController {
 
     /// 会話を読む。読んだ結果は、押した投稿の位置を保って並べる。
     private func load() {
+        guard !tasks.isClosed else { return }
         viewController?.setFooterState(.loading)
         loadTask?.cancel()
         store.beginLoading()
         isLoading = true
         let reloadsFocus = hasLoaded
-        loadTask = Task { [weak self] in
+        loadTask = tasks.run { [weak self] in
             guard let self else { return }
             // 止められた読み込みは、止めた側が始めた読み込みの途中に終わるため、読み込み中を下ろさない。
             defer {
@@ -169,7 +180,7 @@ final class ThreadController {
     }
 
     private func startStreaming() {
-        guard isInForeground, streamingSubscription == nil else { return }
+        guard isInForeground, !tasks.isClosed, streamingSubscription == nil else { return }
         streamingSubscription = streamingHub.subscribe(.user) { [weak self] activity in
             self?.streamingDidChange(activity)
         }

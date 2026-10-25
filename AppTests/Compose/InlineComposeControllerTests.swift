@@ -34,7 +34,7 @@ struct InlineComposeControllerTests {
         // 動きの途中で状態を見るテストや次の操作を送るテストは、間合いをアプリの既定の長さに合わせて決めているので、useDefaultAnimationDurations()で戻す。
         tuning.setValue(0.05, for: TuningCatalog.composeMorphDuration)
         tuning.setValue(0.05, for: TuningCatalog.composeExpandDuration)
-        composer = InlineComposeController(model: ComposeModel(myAccountID: "1") { _ in }, tuning: tuning, settings: settings)
+        composer = InlineComposeController(model: ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }, tuning: tuning, settings: settings)
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
         clock = LayerClock(freezing: window.layer)
@@ -644,7 +644,7 @@ struct InlineComposeControllerTests {
     private func installComposer(media: ComposeMediaService = .unavailable, keyboardNotifications: NotificationCenter = .default, post: @escaping (StatusDraft) async throws -> Void) throws -> InlineComposeController {
         let tabBarController = UITabBarController(tabs: [UITab(title: "ホーム", image: nil, identifier: "home") { _ in UIViewController() }])
         window.rootViewController = tabBarController
-        let composer = InlineComposeController(model: ComposeModel(myAccountID: "1", media: media, post: post), tuning: tuning, settings: settings, keyboardNotifications: keyboardNotifications)
+        let composer = InlineComposeController(model: ComposeModel(tasks: TaskScope(), myAccountID: "1", media: media, post: post), tuning: tuning, settings: settings, keyboardNotifications: keyboardNotifications)
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
         return composer

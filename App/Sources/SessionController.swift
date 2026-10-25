@@ -50,6 +50,9 @@ final class SessionController {
     #else
     private let requestLog = RequestLog(includesBody: false)
     #endif
+    /// このセッションで始めた処理の持ち主。各一覧、開いた画面、投稿欄は、この子の持ち主で処理を始める。
+    /// `stop()`で閉じると、開いている画面の数や種類によらず、どれも止まる。
+    private let tasks: TaskScope
     #if DEBUG
     /// `scia-debug://notice/progress`で出している、確かめるための処理中のチップを進める。
     private var debugProgressTask: Task<Void, Never>?
@@ -59,16 +62,17 @@ final class SessionController {
     private lazy var profileOpening: LatestLookup = {
         let lookup = LatestLookup(clock: clock) { .seconds(AppDependencies.tuning.value(of: TuningCatalog.profileLookupChipDelay)) }
         lookup.onSlowChange = { [weak self] isSlow in self?.showProfileLookupProgress(isSlow) }
+        tasks.onClose { [weak lookup] in lookup?.cancel() }
         return lookup
     }()
     /// ユーザーのメニューのメンションとハンドルのコピーで、相手を探す操作の入口。後から選んだものだけを使う。
-    private lazy var identityLookup = LatestLookup(clock: clock) { nil }
+    private lazy var identityLookup: LatestLookup = {
+        let lookup = LatestLookup(clock: clock) { nil }
+        tasks.onClose { [weak lookup] in lookup?.cancel() }
+        return lookup
+    }()
     /// 「接続の状態」画面に出す、このセッションの接続の状態。
     let diagnostics: ConnectionDiagnostics
-    /// 電波が戻ったときと、レート制限が明けたときに、読み込みをやり直す。
-    private var recoveryTasks: [Task<Void, Never>] = []
-    /// 期限を付けたミュートが明けるのを待つTask。キーは`scheduleMuteExpiry`で決める。
-    private var muteExpiryTasks: [String: Task<Void, Never>] = [:]
     private let interactions: StatusInteractions
     private let polls: PollVoting
     /// カードが付く前に受け取った投稿を、見えている間に取り直す。
@@ -135,6 +139,8 @@ final class SessionController {
         self.credential = credential
         self.onReauthenticate = onReauthenticate
         self.accountMenu = accountMenu
+        let tasks = TaskScope()
+        self.tasks = tasks
         #if DEBUG
         let client = MastodonClient(credential: credential, transport: FaultInjectingTransport(base: ScenarioMode.server?.transport ?? URLSessionTransport()), rateLimit: rateLimit, features: features, requestLog: requestLog)
         #else
@@ -154,20 +160,23 @@ final class SessionController {
             streaming.open(baseURL: try await streamingEndpoint.url())
         }
         self.streamingHub = streamingHub
-        let home = FeedTimelineController(feed: .home, client: client, streamingHub: streamingHub) { forward() }
-        let local = FeedTimelineController(feed: .local, client: client, streamingHub: streamingHub) { forward() }
-        let federated = FeedTimelineController(feed: .federated, client: client, streamingHub: streamingHub) { forward() }
-        let notifications = NotificationsController(client: client, streamingHub: streamingHub) { forward() }
-        let bookmarks = SavedStatusesController(kind: .bookmarks, client: client) { forward() }
-        let favourites = SavedStatusesController(kind: .favourites, client: client) { forward() }
-        let serverFeeds = ServerFeedRegistry { item in
-            switch item {
+        // セッションを閉じたら、申し込みが残っていても切る。開いているスレッドなどの購読を、閉じる順に頼らずに止めるため。
+        tasks.onClose { [weak streamingHub] in streamingHub?.shutDown() }
+        let home = FeedTimelineController(feed: .home, client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
+        let local = FeedTimelineController(feed: .local, client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
+        let federated = FeedTimelineController(feed: .federated, client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
+        let notifications = NotificationsController(client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
+        let bookmarks = SavedStatusesController(kind: .bookmarks, client: client, tasks: tasks.child()) { forward() }
+        let favourites = SavedStatusesController(kind: .favourites, client: client, tasks: tasks.child()) { forward() }
+        let serverFeeds = ServerFeedRegistry { [weak tasks] item in
+            guard let tasks else { return nil }
+            return switch item {
             case .list(let id, let title):
-                FeedTimelineController(feed: .list(id: id), texts: .list(title: title), client: client, streamingHub: streamingHub) { forward() }
+                FeedTimelineController(feed: .list(id: id), texts: .list(title: title), client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
             case .hashtag(let name):
-                FeedTimelineController(feed: .hashtag(name: name), texts: .hashtag(name: name), client: client, streamingHub: streamingHub) { forward() }
+                FeedTimelineController(feed: .hashtag(name: name), texts: .hashtag(name: name), client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
             case .accountHashtag(let accountID, let acct, let name, _):
-                FeedTimelineController(feed: .accountHashtag(accountID: accountID, name: name), texts: .accountHashtag(name: name, acct: acct), client: client, streamingHub: streamingHub) { forward() }
+                FeedTimelineController(feed: .accountHashtag(accountID: accountID, name: name), texts: .accountHashtag(name: name, acct: acct), client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
             case .home, .local, .federated, .notifications, .bookmarks, .favourites:
                 nil
             }
@@ -379,7 +388,7 @@ final class SessionController {
             accounts: { ids in await Array(accounts.load(ids).values) }
         )
         composer = InlineComposeController(
-            model: ComposeModel(myAccountID: credential.accountID, media: media) { draft in
+            model: ComposeModel(tasks: tasks.child(), myAccountID: credential.accountID, media: media) { draft in
                 do {
                     if let editing = draft.editing {
                         // ストリーミングの編集の知らせを待たずに、どの一覧にも編集したあとの投稿を出す。切れている間も直るようにするため。
@@ -482,7 +491,7 @@ final class SessionController {
             _ = AppDependencies.settings.tabLayout(for: handle)
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, !tasks.isClosed else { return }
                 // 最初の並びに戻したら、リストが消えるので足し直す。足し直した変更は、もう一度ここへ来て反映する。
                 addMissingServerItemsToTabLayout()
                 let layout = AppDependencies.settings.tabLayout(for: handle)
@@ -567,7 +576,7 @@ final class SessionController {
             _ = AppDependencies.settings.showsStatusBarTicker
         } onChange: { [weak self] in
             Task { @MainActor in
-                guard let self else { return }
+                guard let self, !self.tasks.isClosed else { return }
                 if !wasOn, AppDependencies.settings.showsStatusBarTicker {
                     self.showStatusBarTickerDemo()
                 }
@@ -578,7 +587,8 @@ final class SessionController {
 
     /// デモの通知。差出人は自分のアカウントにし、実物の通知と同じくアイコンと名前を出す。
     private func showStatusBarTickerDemo() {
-        Task {
+        tasks.run { [weak self] in
+            guard let self else { return }
             do {
                 let account = try await myAccount()
                 statusBarTicker.receive(StatusBarTickerItem(id: "demo", kind: .favourite, account: account, subject: .text(RichText.plain("通知はここに流れます", emojis: []))))
@@ -605,8 +615,9 @@ final class SessionController {
             _ = AppDependencies.settings.hidesEmptyComposeBar
         } onChange: { [weak self] in
             Task { @MainActor in
-                self?.applyShowsFocusInlineCompose()
-                self?.observeHidesEmptyComposeBar()
+                guard let self, !self.tasks.isClosed else { return }
+                self.applyShowsFocusInlineCompose()
+                self.observeHidesEmptyComposeBar()
             }
         }
     }
@@ -675,7 +686,7 @@ final class SessionController {
         guard loadingTabSources.insert(name).inserted else { return }
         let client = client
         RequestOrigin.$current.withValue(.automatic) {
-            Task { [weak self] in
+            tasks.run { [weak self] in
                 defer { self?.loadingTabSources.remove(name) }
                 do {
                     let value = try await fetch(client)
@@ -901,7 +912,7 @@ final class SessionController {
     /// 一覧を開いた画面に積み、すぐ読み始めてストリームを購読する。ナビゲーションから外されたら止める。
     private func openFeed(_ feed: TimelineFeed, texts: TimelineViewController.Texts? = nil, barItems: [UIBarButtonItem] = [], from source: UIViewController) {
         guard let navigation = source.navigationController else { return }
-        let controller = FeedTimelineController(feed: feed, texts: texts, client: client, streamingHub: streamingHub) { [weak self] in
+        let controller = FeedTimelineController(feed: feed, texts: texts, client: client, streamingHub: streamingHub, tasks: tasks.child()) { [weak self] in
             self?.reportUnauthorized()
         }
         let viewController = controller.viewController
@@ -1017,7 +1028,7 @@ final class SessionController {
     }
 
     private func pushProfile(_ account: Account, from source: UIViewController) {
-        let (controller, viewController) = ProfileController.make(account: account, client: client, relationshipCache: profiles.relationships) { [weak self] error, title in
+        let (controller, viewController) = ProfileController.make(account: account, client: client, relationshipCache: profiles.relationships, tasks: tasks.child()) { [weak self] error, title in
             self?.handle(error, title: title)
         } onUnauthorized: { [weak self] in
             self?.reportUnauthorized()
@@ -1055,7 +1066,7 @@ final class SessionController {
 
     /// - Parameter ownerAcct: フォローとフォロワーの一覧なら、誰の一覧かを示すハンドル。見出しの下に出す。
     private func openAccountList(_ kind: AccountListKind, ownerAcct: String? = nil, from source: UIViewController) {
-        let (controller, viewController) = AccountListController.make(kind: kind, client: client) { [weak self] in
+        let (controller, viewController) = AccountListController.make(kind: kind, client: client, tasks: tasks.child()) { [weak self] in
             self?.reportUnauthorized()
         }
         viewController.navigationItem.subtitle = ownerAcct.map { "@\($0)" }
@@ -1071,7 +1082,7 @@ final class SessionController {
     /// - Parameter rowFrame: 押した行のウインドウ上の枠。スレッドでも、押した投稿をこの位置に置いて開く。
     private func openThread(of status: Status, rowFrame: CGRect, from source: UIViewController) {
         let focus = status.displayed
-        let (controller, viewController) = ThreadController.make(focus: focus, client: client, streamingHub: streamingHub) { [weak self] in
+        let (controller, viewController) = ThreadController.make(focus: focus, client: client, streamingHub: streamingHub, tasks: tasks.child()) { [weak self] in
             self?.reportUnauthorized()
         }
         configure(viewController)
@@ -1093,7 +1104,7 @@ final class SessionController {
             save: { draft in try await client.updateProfile(draft) }
         ))
         // 上限を読めなければ、4.6.0より前のMastodonの値のまま使う。超えた分はサーバーが拒む。
-        Task { [weak self] in
+        tasks.run { [weak self] in
             guard let configuration = await self?.loadInstanceConfiguration() else { return }
             editor.limits = configuration.profileLimits
             editor.charactersReservedPerURL = configuration.charactersReservedPerURL
@@ -1287,7 +1298,8 @@ final class SessionController {
     private func muteHashtag(_ name: String, duration: Duration?) {
         let client = client
         logger.info("hashtag mute")
-        Task {
+        tasks.run { [weak self] in
+            guard let self else { return }
             do {
                 try await HashtagMute.mute(name, duration: duration, client: client)
                 excludeInLists(tag: name, excluded: true)
@@ -1306,7 +1318,8 @@ final class SessionController {
     private func unmuteHashtag(_ name: String, _ muted: HashtagMute) {
         let client = client
         logger.info("hashtag unmute")
-        Task {
+        tasks.run { [weak self] in
+            guard let self else { return }
             do {
                 try await muted.unmute(client: client)
                 excludeInLists(tag: name, excluded: false)
@@ -1328,8 +1341,8 @@ final class SessionController {
     /// 期限を付けたハッシュタグのミュートが切れたら、フィルターを読み直し、もうミュートしていなければ、また足すようにする。ユーザーのミュートと同じく、少し余裕を見てから読む。
     private func includeAfterHashtagMuteExpires(_ name: String, duration: Duration) {
         let client = client
-        scheduleMuteExpiry("tag:\(name)", Task { [weak self, clock, now] in
-            defer { self?.finishMuteExpiry("tag:\(name)") }
+        // ミュートし直したら、前の期限の待ちを止めて待ち直す。
+        tasks.run(key: "muteExpiry:tag:\(name)", .replacing) { [weak self, clock, now] in
             do {
                 try await clock.sleep(for: duration + .seconds(60))
                 guard HashtagMute.find(name, in: try await client.filters(), now: now()) == nil else { return }
@@ -1339,7 +1352,7 @@ final class SessionController {
             } catch {
                 self?.logger.error("filters reload after hashtag mute expired failed: \(SciaLog.describe(error), privacy: .public)")
             }
-        })
+        }
     }
 
     /// ユーザーのメニューのメンション、ハンドルをコピー、関係の項目。メンションは、編集の途中でも編集中の本文に入れる。
@@ -1445,7 +1458,8 @@ final class SessionController {
         let client = client
         let id = relation.accountID
         logger.info("user relation change: \(String(describing: change), privacy: .public)")
-        Task {
+        tasks.run { [weak self] in
+            guard let self else { return }
             do {
                 let relationship = switch change {
                 case .follow: try await client.follow(id)
@@ -1511,8 +1525,7 @@ final class SessionController {
     /// Mastodonは期限の時刻に予約したジョブ（`DeleteMuteWorker`）でミュートを消すため、ちょうどの時刻ではまだ残っていることがある。1分おいてから読む。
     private func includeAfterMuteExpires(_ accountID: String, duration: Duration) {
         let client = client
-        scheduleMuteExpiry("account:\(accountID)", Task { [weak self, clock] in
-            defer { self?.finishMuteExpiry("account:\(accountID)") }
+        tasks.run(key: "muteExpiry:account:\(accountID)", .replacing) { [weak self, clock] in
             do {
                 try await clock.sleep(for: duration + .seconds(60))
                 guard let relationship = try await client.relationship(with: accountID), !relationship.muting else { return }
@@ -1522,20 +1535,7 @@ final class SessionController {
             } catch {
                 self?.logger.error("relationship reload after mute expired failed: \(SciaLog.describe(error), privacy: .public)")
             }
-        })
-    }
-
-    /// ミュートの期限を待つTaskを、対象ごとに1つだけ持つ。ミュートし直したら前の待ちを止め、セッションを止めたらすべて止める。
-    /// 止めないと、ログアウトやアカウントの切り替えのあとに、前のアカウントのトークンで読み直しを送る。
-    private func scheduleMuteExpiry(_ key: String, _ task: Task<Void, Never>) {
-        muteExpiryTasks.updateValue(task, forKey: key)?.cancel()
-    }
-
-    /// 期限を待つTaskが終わったら外す。ミュートし直して止められたTaskは、もう新しいTaskに入れ替わっているので外さない。
-    /// Taskはメインアクターで動くため、止められずに終わったTaskは、終わる時点で入っている今のTaskである。
-    private func finishMuteExpiry(_ key: String) {
-        guard !Task.isCancelled else { return }
-        muteExpiryTasks[key] = nil
+        }
     }
 
     /// 編集している途中で返信を選んだら、編集をやめてよいか聞いてから返信を始める。編集でなければすぐ始める。
@@ -1564,7 +1564,7 @@ final class SessionController {
             return
         }
         let client = client
-        Task { [weak self] in
+        tasks.run { [weak self] in
             do {
                 let source = try await client.statusSource(target.id)
                 self?.confirmEditing(target, source: source)
@@ -1636,7 +1636,7 @@ final class SessionController {
         UserAction.deleteStatus.record()
         let target = status.displayed
         let client = client
-        Task { [weak self] in
+        tasks.run { [weak self] in
             do {
                 try await client.deleteStatus(target.id)
                 guard let self else { return }
@@ -1671,7 +1671,7 @@ final class SessionController {
     private func answerFollowRequest(_ decision: FollowRequestDecision, to request: MastodonNotification) {
         let account = request.account
         let client = client
-        Task { [weak self] in
+        tasks.run { [weak self] in
             do {
                 switch decision {
                 case .authorize: _ = try await client.authorizeFollowRequest(from: account.id)
@@ -1703,7 +1703,7 @@ final class SessionController {
     private func dismissNotification(_ notification: MastodonNotification) {
         UserAction.dismissNotification.record()
         let client = client
-        Task { [weak self] in
+        tasks.run { [weak self] in
             do {
                 try await client.dismissNotificationGroup(notification.groupKey)
                 self?.notifications.removeNotification(notification)
@@ -1760,7 +1760,7 @@ final class SessionController {
     /// - Parameter onSuccess: サーバーが受け付けたら呼ぶ。同じ操作の結果を待っている間に押されて送らなかったときは呼ばない。
     private func toggle(_ action: StatusInteractions.Action, on status: Status, reblogVisibility: ReblogVisibility = .accountDefault, failureTitle: String, onSuccess: (() -> Void)? = nil) {
         let interactions = interactions
-        Task { [weak self] in
+        tasks.run { [weak self] in
             do {
                 guard try await interactions.toggle(action, on: status, reblogVisibility: reblogVisibility) else { return }
                 onSuccess?()
@@ -1799,7 +1799,7 @@ final class SessionController {
         UserAction.vote.record()
         let polls = polls
         let title = "投票できませんでした"
-        Task { [weak self, weak timeline] in
+        tasks.run { [weak self, weak timeline] in
             do {
                 // ほかの一覧から送った同じ投票の結果を待っているときは送らない。その結果は、送った側がすべての一覧に反映する。
                 let sent = try await polls.vote(choices, on: status)
@@ -1823,7 +1823,7 @@ final class SessionController {
         UserAction.refreshPoll.record()
         let polls = polls
         let title = "投票の結果を読み直せませんでした"
-        Task { [weak self, weak timeline] in
+        tasks.run { [weak self, weak timeline] in
             do {
                 try await polls.refresh(status)
                 timeline?.finishRefreshingPoll(pollID)
@@ -1845,7 +1845,7 @@ final class SessionController {
             presentAlert(title: title, message: ErrorPresentation(error).text)
             return
         }
-        Task { [weak self] in
+        tasks.run { [weak self] in
             guard let self else { return }
             let reason = await self.failureReason(for: error)
             self.presentAlert(title: title, message: reason.text)
@@ -1883,7 +1883,7 @@ final class SessionController {
 
     /// 既定の公開範囲などを読めたら、投稿欄に反映する。読めなかったら、次に書き始めたときに読み直す。
     private func applyComposeDefaults() {
-        composeDefaultsTask = Task { [weak self] in
+        composeDefaultsTask = tasks.run { [weak self] in
             guard let self else { return }
             async let configuration = self.loadInstanceConfiguration()
             async let preferences = self.loadPreferences()
@@ -1939,7 +1939,7 @@ final class SessionController {
         loadServerVersion()
         loadTabSources()
         RequestOrigin.$current.withValue(.automatic) {
-            Task { [weak self] in await self?.loadPreferences() }
+            tasks.run { [weak self] in await self?.loadPreferences() }
         }
     }
 
@@ -1948,7 +1948,7 @@ final class SessionController {
         let client = client
         let instance = credential.instance.host() ?? credential.instance.absoluteString
         RequestOrigin.$current.withValue(.automatic) {
-            Task { [weak self] in
+            tasks.run { [weak self] in
                 do {
                     let version = try await client.serverVersion()
                     self?.logger.info("server instance=\(instance, privacy: .public) version=\(version, privacy: .public)")
@@ -1963,17 +1963,17 @@ final class SessionController {
     private func observeRecoveries() {
         let rateLimit = rateLimit
         let network = AppDependencies.network
-        recoveryTasks.append(Task { [weak self] in
+        tasks.run { [weak self] in
             for await _ in rateLimit.resumptions {
                 self?.recover(reason: "rate limit resumed")
             }
-        })
-        recoveryTasks.append(Task { [weak self] in
+        }
+        tasks.run { [weak self] in
             // 最初の値は今の回数なので飛ばす。
             for await _ in Observations({ network.recoveryCount }).dropFirst() {
                 self?.recover(reason: "network recovered")
             }
-        })
+        }
     }
 
     private func recover(reason: String) {
@@ -1992,7 +1992,8 @@ final class SessionController {
     // MARK: - ログインし直し
 
     private func reportUnauthorized() {
-        Task { await authorization.reportUnauthorized() }
+        let authorization = authorization
+        tasks.run { _ = await authorization.reportUnauthorized() }
     }
 
     /// トークンが無効だと確かめられたら、表示中の内容とアカウントのメニューは残したまま、自動の通信を止めてログインし直しを促す。
@@ -2032,7 +2033,8 @@ final class SessionController {
     private func reauthenticate() {
         guard !isReauthenticating else { return }
         setReauthenticating(true)
-        Task {
+        tasks.run { [weak self] in
+            guard let self else { return }
             await onReauthenticate(self)
             setReauthenticating(false)
         }
@@ -2043,23 +2045,15 @@ final class SessionController {
         notices.reauthentication?.isInProgress = isReauthenticating
     }
 
-    /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときに呼ぶ。
+    /// このセッションで始めた処理を全部止め、以後の結果を捨てる。ログアウト、アカウントの切り替え、窓を閉じたときなど、画面を捨てるときに呼ぶ。
+    /// 一覧、開いている画面、投稿欄の送信とアップロード、ストリーミングは、どれも持ち主の子で始めているので、ここで並べなくても止まる。
     func stop() {
         statusBarTicker.clear()
-        for feed in feeds {
-            feed.stop()
-        }
-        notifications.stop()
-        for list in savedLists {
-            list.stop()
-        }
-        recoveryTasks.forEach { $0.cancel() }
-        recoveryTasks.removeAll()
-        muteExpiryTasks.values.forEach { $0.cancel() }
-        muteExpiryTasks.removeAll()
-        profileOpening.cancel()
-        identityLookup.cancel()
+        tasks.close()
     }
+
+    /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
+    var runningTaskCount: Int { tasks.runningCount }
 
     /// 他のアプリから開かれたURLの画面を出す。
     func open(_ url: AppURL) {
@@ -2151,6 +2145,7 @@ final class SessionController {
             notices.showTransient(.sharedMediaUnreadable(count: missingCount), duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))
         }
         // 投稿欄の一時ディレクトリへコピーし終えたら、受け渡しのフォルダーから消す。コピーに失敗したものは、添付の失敗として投稿欄に出る。
+        // セッションを閉じても止めない。端末の中のコピーで通信せず、途中で止めると受け渡しのフォルダーが消されずに残るため。
         Task {
             for item in media {
                 _ = try? await item.load()
@@ -2201,7 +2196,7 @@ final class SessionController {
     private func attachSharedMedia(_ media: [PastedMedia]) {
         composer.beginEditing()
         let loadingDefaults = composeDefaultsTask
-        Task { [weak self] in
+        tasks.run { [weak self] in
             await loadingDefaults?.value
             guard let self else { return }
             guard composer.model.canPasteMedia else {
@@ -2248,7 +2243,7 @@ final class SessionController {
         let clock = clock
         // 出し直すたびに別のアプリ内通知にする。しまったあとに出し直しても、出てくるようにするため。
         let id = "debug.progress.\(UUID().uuidString)"
-        debugProgressTask = Task { [weak self] in
+        debugProgressTask = tasks.run { [weak self] in
             while !Task.isCancelled {
                 let fraction = min(elapsed() / duration, 1)
                 self?.notices.setPersistent({ _ in
@@ -2387,7 +2382,7 @@ final class SessionController {
     /// `scia-debug://lists/...`と`scia-debug://tags/...`で、サーバーのリストやハッシュタグのフォローを変えてから読み直し、タブの並びに反映する。
     private func changeTabSourcesForDebug(_ operation: String, _ change: @escaping @Sendable (MastodonClient) async throws -> Void) {
         let client = client
-        Task { [weak self] in
+        tasks.run { [weak self] in
             do {
                 try await change(client)
                 self?.logger.info("debug \(operation, privacy: .public) done")

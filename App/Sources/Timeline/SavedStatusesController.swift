@@ -17,13 +17,17 @@ final class SavedStatusesController {
     /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "timeline")
-    private var tasks: [Task<Void, Never>] = []
-    private var isStopped = false
+    /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
+    private let tasks: TaskScope
+    private var isStopped: Bool { tasks.isClosed }
+    /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
+    var runningTaskCount: Int { tasks.runningCount }
     private var hasStarted = false
     /// タブで開いて見せている。見せ始めたら最新のページを読み、見せなくなったら外した行を消す。
     private var isShown = false
 
-    init(kind: SavedStatusesKind, client: MastodonClient, onUnauthorized: @escaping () -> Void) {
+    init(kind: SavedStatusesKind, client: MastodonClient, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
+        self.tasks = tasks
         let pageSize = Self.pageSize
         store = SavedStatusesStore(kind: kind) { maxID in
             switch kind {
@@ -121,25 +125,20 @@ final class SavedStatusesController {
         }
     }
 
-    /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときに呼ぶ。
+    /// 読み込みを打ち切り、以後の結果を捨てる。セッションを閉じたときは、呼ばなくても持ち主が閉じて止まる。
     func stop() {
-        isStopped = true
-        tasks.forEach { $0.cancel() }
-        tasks.removeAll()
+        tasks.close()
     }
 
     @discardableResult
-    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (SavedStatusesController) async -> Void) -> Task<Void, Never> {
-        tasks.removeAll { $0.isCancelled }
+    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (SavedStatusesController) async -> Void) -> Task<Void, Never>? {
         // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
-        let task = RequestOrigin.$current.withValue(origin) {
-            Task { [weak self] in
+        RequestOrigin.$current.withValue(origin) {
+            tasks.run { [weak self] in
                 guard let self else { return }
                 await operation(self)
             }
         }
-        tasks.append(task)
-        return task
     }
 
     /// 一覧を引っぱって離したときに、最新のページを読んで、一番上の投稿より後に付けた分を上に足す。
@@ -152,9 +151,7 @@ final class SavedStatusesController {
             return
         }
         // タブを開いたときなどの読み込みの最中なら、ストアは重ねて読まないため、終わってから読む。
-        for task in tasks {
-            await task.value
-        }
+        await tasks.waitForRunning()
         await refreshNewest(origin: .user)?.value
     }
 

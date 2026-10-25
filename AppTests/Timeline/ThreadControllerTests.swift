@@ -29,7 +29,7 @@ struct ThreadControllerTests {
         let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: TuningStore(defaults: nil)) }) {
             streaming.open(baseURL: try await streamingEndpoint.url())
         }
-        let (controller, viewController) = ThreadController.make(focus: Self.focus, client: client, streamingHub: streamingHub) {}
+        let (controller, viewController) = ThreadController.make(focus: Self.focus, client: client, streamingHub: streamingHub, tasks: TaskScope()) {}
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)
         window.frame = CGRect(x: 0, y: 0, width: 393, height: 852)
@@ -62,6 +62,38 @@ struct ThreadControllerTests {
         transport.context.open()
         try await waitUntil { !refreshControl.isRefreshing }
         #expect(transport.contextRequests == 2)
+    }
+
+    /// ログアウトなどでセッションを閉じたら、開いているスレッドも、画面が積まれたままでも読み込みと購読をやめる。
+    /// セッションが開いている画面を並べて止めていたころは、スレッドを止め忘れ、前のアカウントで読み続けていた。
+    @Test func closingSessionStopsLoadAndSubscription() async throws {
+        let transport = ThreadTransport()
+        let credential = Credential(
+            instance: try #require(URL(string: "https://example.social")),
+            accessToken: "token",
+            clientID: "client-id",
+            clientSecret: "client-secret",
+            accountID: "1",
+            username: "alice"
+        )
+        let client = MastodonClient(credential: credential, transport: transport)
+        let streaming = StreamingClient(credential: credential, connector: MessageQueueConnector())
+        let streamingEndpoint = StreamingEndpoint(client: client)
+        let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: TuningStore(defaults: nil)) }) {
+            streaming.open(baseURL: try await streamingEndpoint.url())
+        }
+        let session = TaskScope()
+        let (controller, viewController) = ThreadController.make(focus: Self.focus, client: client, streamingHub: streamingHub, tasks: session.child()) {}
+
+        controller.start()
+        try await waitUntil { transport.context.waiterCount == 1 }
+        #expect(streamingHub.subscriptions == [.user])
+        session.close()
+
+        try await waitUntil { controller.runningTaskCount == 0 && transport.context.waiterCount == 0 }
+        #expect(streamingHub.subscriptions.isEmpty)
+        #expect(transport.contextRequests == 1)
+        _ = viewController
     }
 }
 

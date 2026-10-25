@@ -23,8 +23,11 @@ final class NotificationsController {
     /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "notifications")
-    private var tasks: [Task<Void, Never>] = []
-    private var isStopped = false
+    /// この一覧が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときにも閉じる。
+    private let tasks: TaskScope
+    private var isStopped: Bool { tasks.isClosed }
+    /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
+    var runningTaskCount: Int { tasks.runningCount }
     /// 設定で無効にしている。購読せず、有効に戻したらつなぎ直して、無効だった間を補う。
     private var isDisabled = false
     /// `user`ストリームの購読。読み込みが済んでから申し込み、止めるときやバックグラウンドではやめる。
@@ -59,8 +62,10 @@ final class NotificationsController {
         tuning: TuningStore = AppDependencies.tuning,
         clock: any Clock<Duration> = AppDependencies.clock,
         now: @escaping () -> Date = AppDependencies.now,
+        tasks: TaskScope,
         onUnauthorized: @escaping () -> Void
     ) {
+        self.tasks = tasks
         self.clock = clock
         self.now = now
         let filtering = StatusFiltering(context: .notifications, myAccountID: client.credential.accountID)
@@ -73,6 +78,7 @@ final class NotificationsController {
         self.tuning = tuning
         self.onUnauthorized = onUnauthorized
         viewController.filterWarnings = FilterWarnings(filtering: filtering)
+        tasks.onClose { [weak self] in self?.stopStreaming() }
         viewController.onApproachingEnd = { [weak self] in self?.loadOlder(origin: .automatic) }
         viewController.onRetry = { [weak self] in self?.retry() }
         viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction) }
@@ -108,12 +114,9 @@ final class NotificationsController {
         }
     }
 
-    /// 読み込みを打ち切り、以後の結果を捨てる。ログアウトなどで画面を捨てるときに呼ぶ。
+    /// 読み込みを打ち切り、以後の結果を捨てる。セッションを閉じたときは、呼ばなくても持ち主が閉じて止まる。
     func stop() {
-        isStopped = true
-        stopStreaming()
-        tasks.forEach { $0.cancel() }
-        tasks.removeAll()
+        tasks.close()
     }
 
     /// バックグラウンドに入るときに呼ぶ。接続を切り、既読位置を保存する。
@@ -136,17 +139,14 @@ final class NotificationsController {
 
     /// - Parameter origin: 自動の読み込みなら`.automatic`。レート制限で止められている間は送らずに失敗させる。
     @discardableResult
-    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (NotificationsController) async -> Void) -> Task<Void, Never> {
-        tasks.removeAll { $0.isCancelled }
+    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (NotificationsController) async -> Void) -> Task<Void, Never>? {
         // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
-        let task = RequestOrigin.$current.withValue(origin) {
-            Task { [weak self] in
+        RequestOrigin.$current.withValue(origin) {
+            tasks.run { [weak self] in
                 guard let self else { return }
                 await operation(self)
             }
         }
-        tasks.append(task)
-        return task
     }
 
     /// 一覧を引っぱって離したときに、最新の通知を読んで上に足す。足すのは一番新しい通知より新しいものだけで、読んでいる位置は動かさない。
@@ -157,7 +157,7 @@ final class NotificationsController {
         if !hasLoadedInitial {
             if case .failed = viewController.contentState {
                 viewController.setContentState(.loading)
-                await run { await $0.loadInitial() }.value
+                await run { await $0.loadInitial() }?.value
             }
             return
         }
@@ -533,7 +533,7 @@ final class NotificationsController {
         let client = client
         // 既読位置の保存は、スクロールやバックグラウンドへの移行で自動で送る。
         RequestOrigin.$current.withValue(.automatic) {
-            Task { [weak self] in
+            tasks.run { [weak self] in
                 while let self, !self.isStopped, let id = self.store.readIDToSave {
                     do {
                         try await client.saveMarker(for: .notifications, lastReadID: id)

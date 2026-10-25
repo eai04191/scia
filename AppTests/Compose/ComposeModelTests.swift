@@ -1,5 +1,6 @@
 import Foundation
 import SciaCore
+import SciaTesting
 import Testing
 @testable import Scia
 
@@ -22,7 +23,7 @@ struct ComposeModelTests {
     }
 
     @Test func defaultVisibilityAppliesUntilUserChooses() {
-        let model = ComposeModel(replyTo: nil, myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: TaskScope(), replyTo: nil, myAccountID: "1") { _ in }
 
         model.apply(configuration: nil, defaultVisibility: .unlisted, defaultSensitive: nil)
         #expect(model.visibility == .unlisted)
@@ -34,14 +35,14 @@ struct ComposeModelTests {
 
     /// 既定の公開範囲が分かるまでは、公開範囲を選んでいなければ投稿できない。既定より広い範囲で投稿してしまわないため。
     @Test func cannotPostUntilDefaultVisibilityIsKnownOrChosen() {
-        let model = ComposeModel(replyTo: nil, myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: TaskScope(), replyTo: nil, myAccountID: "1") { _ in }
         model.text = "こんにちは"
         #expect(!model.canPost)
 
         model.apply(configuration: nil, defaultVisibility: .private, defaultSensitive: nil)
         #expect(model.canPost)
 
-        let chosen = ComposeModel(replyTo: nil, myAccountID: "1") { _ in }
+        let chosen = ComposeModel(tasks: TaskScope(), replyTo: nil, myAccountID: "1") { _ in }
         chosen.text = "こんにちは"
         chosen.choose(.unlisted)
         #expect(chosen.canPost)
@@ -49,7 +50,7 @@ struct ComposeModelTests {
 
     /// 既定の公開範囲を読めなかったときも、投稿できないままにはしない。
     @Test func canPostAfterDefaultsFailedToLoad() {
-        let model = ComposeModel(replyTo: nil, myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: TaskScope(), replyTo: nil, myAccountID: "1") { _ in }
         model.text = "こんにちは"
 
         model.apply(configuration: nil, defaultVisibility: nil, defaultSensitive: nil)
@@ -57,9 +58,28 @@ struct ComposeModelTests {
         #expect(model.canPost)
     }
 
+    /// ログアウトなどで投稿欄の持ち主を閉じたら、送っている途中の投稿も止める。
+    @Test func closingSessionCancelsPosting() async throws {
+        let gate = Gate()
+        let session = TaskScope()
+        let model = ComposeModel(tasks: session.child(), myAccountID: "1") { _ in
+            try await gate.wait()
+        }
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        model.text = "こんにちは"
+
+        model.tasks.run { await model.submit() }
+        try await waitUntil { gate.waiterCount == 1 }
+        session.close()
+
+        try await waitUntil { session.runningCount == 0 }
+        #expect(gate.waiterCount == 0)
+        #expect(!model.isPosting)
+    }
+
     @Test func changedContentIsSentWithNewIdempotencyKey() async {
         var sent: [StatusDraft] = []
-        let model = ComposeModel(replyTo: nil, myAccountID: "1") { draft in
+        let model = ComposeModel(tasks: TaskScope(), replyTo: nil, myAccountID: "1") { draft in
             sent.append(draft)
             throw Failure()
         }
@@ -80,7 +100,7 @@ struct ComposeModelTests {
     }
 
     @Test func replyVisibilityIsNarrowedByDefault() throws {
-        let model = ComposeModel(replyTo: try status(visibility: .public), myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: TaskScope(), replyTo: try status(visibility: .public), myAccountID: "1") { _ in }
 
         model.apply(configuration: nil, defaultVisibility: .unlisted, defaultSensitive: nil)
 
@@ -89,7 +109,7 @@ struct ComposeModelTests {
     }
 
     @Test func appliesInstanceCharacterLimit() throws {
-        let model = ComposeModel(replyTo: nil, myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: TaskScope(), replyTo: nil, myAccountID: "1") { _ in }
         model.choose(.public)
         model.text = String(repeating: "あ", count: 600)
         #expect(!model.canPost)
@@ -104,7 +124,7 @@ struct ComposeModelTests {
         var sent: [StatusDraft] = []
         var posted = false
         var fails = true
-        let model = ComposeModel(replyTo: nil, myAccountID: "1") { draft in
+        let model = ComposeModel(tasks: TaskScope(), replyTo: nil, myAccountID: "1") { draft in
             sent.append(draft)
             if fails { throw Failure() }
         }
@@ -128,7 +148,7 @@ struct ComposeModelTests {
     }
 
     @Test func replyTargetSwapsMentionsAndKeepsTypedText() throws {
-        let model = ComposeModel(myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
         model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         model.text = "なるほど"
 
@@ -143,7 +163,7 @@ struct ComposeModelTests {
 
     /// 宛先を書き換えていたら、本文には手を付けず新しい宛先を前に足す。
     @Test func replyTargetKeepsEditedMentions() throws {
-        let model = ComposeModel(replyTo: try status(visibility: .public), myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: TaskScope(), replyTo: try status(visibility: .public), myAccountID: "1") { _ in }
         model.text = "@alice どうも"
 
         model.setReplyTarget(nil)
@@ -153,7 +173,7 @@ struct ComposeModelTests {
 
     /// 新しい投稿で選んだ公開範囲を、フォロワー限定の投稿への返信に持ち込まない。
     @Test func replyTargetResetsChosenVisibility() throws {
-        let model = ComposeModel(myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
         model.apply(configuration: nil, defaultVisibility: .unlisted, defaultSensitive: nil)
         model.choose(.public)
 
@@ -166,7 +186,7 @@ struct ComposeModelTests {
 
     @Test func replyTargetSwapsCopiedSpoilerButKeepsWrittenOne() throws {
         let target = try status(visibility: .public, spoilerText: "ネタバレ")
-        let model = ComposeModel(myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
 
         model.setReplyTarget(target)
         #expect(model.showsSpoiler)
@@ -184,7 +204,7 @@ struct ComposeModelTests {
     /// 自分で開いた空の注意書きの欄は、返信先を替えても残す。添付があれば、閲覧注意を付けたままにするため。
     @Test func replyTargetKeepsSpoilerFieldOpenedByUser() throws {
         let target = try status(visibility: .public)
-        let model = ComposeModel(myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
         model.setReplyTarget(target)
         model.showsSpoiler = true
 
@@ -198,7 +218,7 @@ struct ComposeModelTests {
     /// 添付のない投稿では、空の注意書きの欄を開け閉めしても送る内容は変わらないので、同じIdempotency-Keyで送り直す。
     @Test func togglingEmptySpoilerWithoutMediaKeepsIdempotencyKey() async {
         var sent: [StatusDraft] = []
-        let model = ComposeModel(replyTo: nil, myAccountID: "1") { draft in
+        let model = ComposeModel(tasks: TaskScope(), replyTo: nil, myAccountID: "1") { draft in
             sent.append(draft)
             throw Failure()
         }
@@ -216,7 +236,7 @@ struct ComposeModelTests {
     @Test func postingResetsDraftForNextPost() async throws {
         var sent: [StatusDraft] = []
         var posted = false
-        let model = ComposeModel(myAccountID: "1") { sent.append($0) }
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { sent.append($0) }
         model.onPosted = { posted = true }
         model.apply(configuration: nil, defaultVisibility: .unlisted, defaultSensitive: nil)
         model.setReplyTarget(try status(visibility: .private))
@@ -242,7 +262,7 @@ struct ComposeModelTests {
         let other = Status(id: "20", createdAt: Date(timeIntervalSince1970: 0), account: original.account, content: "", spoilerText: "", url: nil)
         var replyToDuringPost: Status.ID?
         var model: ComposeModel?
-        let posting = ComposeModel(replyTo: original, myAccountID: "1") { _ in
+        let posting = ComposeModel(tasks: TaskScope(), replyTo: original, myAccountID: "1") { _ in
             model?.setReplyTarget(other)
             replyToDuringPost = model?.replyTo?.id
         }
@@ -259,7 +279,7 @@ struct ComposeModelTests {
     @Test func reselectingSameReplyTargetKeepsIdempotencyKey() async throws {
         let target = try status(visibility: .public)
         var sent: [StatusDraft] = []
-        let model = ComposeModel(myAccountID: "1") { draft in
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { draft in
             sent.append(draft)
             throw Failure()
         }
@@ -280,7 +300,7 @@ struct ComposeModelTests {
     @Test func reselectingSameStatusFromBoostPointsToBoost() throws {
         let original = try status(visibility: .public)
         let boost = Status(id: "30", createdAt: Date(timeIntervalSince1970: 0), account: original.account, content: "", spoilerText: "", url: nil, reblog: original)
-        let model = ComposeModel(myAccountID: "1") { _ in }
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
         model.setReplyTarget(original)
         model.text += "了解"
 

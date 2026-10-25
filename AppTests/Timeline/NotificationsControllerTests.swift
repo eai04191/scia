@@ -35,7 +35,7 @@ struct NotificationsControllerTests {
         let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: tuning) }) {
             streaming.open(baseURL: try await streamingEndpoint.url())
         }
-        return NotificationsController(client: client, streamingHub: streamingHub, tuning: tuning, clock: TestClock()) {}
+        return NotificationsController(client: client, streamingHub: streamingHub, tuning: tuning, clock: TestClock(), tasks: TaskScope()) {}
     }
 
     private func windowMinY(of id: TimelineEntry.ID, in controller: NotificationsController, window: UIWindow) throws -> CGFloat {

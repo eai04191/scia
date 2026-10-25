@@ -14,19 +14,21 @@ final class AccountListController {
     /// APIが401を返したときに呼ぶ。トークンが無効かを確かめ、ログインし直しを促すのはセッションに任せる。
     private let onUnauthorized: () -> Void
     private let logger = SciaLog.logger(category: "accountList")
-    private var tasks: [Task<Void, Never>] = []
+    /// この画面が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じてこのコントローラーが捨てられたときに閉じる。
+    private let tasks: TaskScope
 
-    static func make(kind: AccountListKind, client: MastodonClient, onUnauthorized: @escaping () -> Void) -> (AccountListController, TimelineViewController) {
+    static func make(kind: AccountListKind, client: MastodonClient, tasks: TaskScope, onUnauthorized: @escaping () -> Void) -> (AccountListController, TimelineViewController) {
         // 画面を作る時点ではコントローラーがまだないため、作ったあとに入れる。
         weak var owner: AccountListController?
         let viewController = TimelineViewController(texts: .accountList(kind)) { await owner?.refresh() }
-        let controller = AccountListController(kind: kind, client: client, viewController: viewController, onUnauthorized: onUnauthorized)
+        let controller = AccountListController(kind: kind, client: client, viewController: viewController, tasks: tasks, onUnauthorized: onUnauthorized)
         viewController.lifetimeOwner = controller
         owner = controller
         return (controller, viewController)
     }
 
-    private init(kind: AccountListKind, client: MastodonClient, viewController: TimelineViewController, onUnauthorized: @escaping () -> Void) {
+    private init(kind: AccountListKind, client: MastodonClient, viewController: TimelineViewController, tasks: TaskScope, onUnauthorized: @escaping () -> Void) {
+        self.tasks = tasks
         let pageSize = Self.pageSize
         store = AccountListStore(kind: kind) { maxID in
             try await client.accounts(in: kind, maxID: maxID, limit: pageSize)
@@ -37,13 +39,9 @@ final class AccountListController {
         viewController.onRetry = { [weak self] in self?.retry() }
     }
 
-    isolated deinit {
-        tasks.forEach { $0.cancel() }
-    }
-
     /// - Parameter origin: 電波の回復などでやり直すときは`.automatic`。レート制限で止められている間は送らない。
     @discardableResult
-    func start(origin: RequestOrigin = .user) -> Task<Void, Never> {
+    func start(origin: RequestOrigin = .user) -> Task<Void, Never>? {
         viewController?.setContentState(.loading)
         return run(origin) { controller in
             do {
@@ -63,7 +61,7 @@ final class AccountListController {
     private func refresh() async {
         logger.info("accountList refresh")
         if case .failed = viewController?.contentState {
-            await start().value
+            await start()?.value
             return
         }
         do {
@@ -100,17 +98,14 @@ final class AccountListController {
     }
 
     @discardableResult
-    private func run(_ origin: RequestOrigin, _ operation: @escaping @MainActor (AccountListController) async -> Void) -> Task<Void, Never> {
-        tasks.removeAll { $0.isCancelled }
+    private func run(_ origin: RequestOrigin, _ operation: @escaping @MainActor (AccountListController) async -> Void) -> Task<Void, Never>? {
         // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
-        let task = RequestOrigin.$current.withValue(origin) {
-            Task { [weak self] in
+        RequestOrigin.$current.withValue(origin) {
+            tasks.run { [weak self] in
                 guard let self else { return }
                 await operation(self)
             }
         }
-        tasks.append(task)
-        return task
     }
 
     private func showEntries() {

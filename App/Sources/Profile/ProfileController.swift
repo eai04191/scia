@@ -26,7 +26,8 @@ final class ProfileController {
     var onEditProfile: (() -> Void)?
     /// フォローかフォロワーの数が押されたときに、開く人の一覧を渡して呼ぶ。
     var onOpenAccountList: ((AccountListKind) -> Void)?
-    private var tasks: [Task<Void, Never>] = []
+    /// この画面が始めた処理の持ち主。セッションの持ち主の子で、セッションを閉じたときと、画面を閉じてこのコントローラーが捨てられたときに閉じる。
+    private let tasks: TaskScope
     /// 表示している一覧と、その一覧のタブ。切り替えた一覧が届くまでは、前の一覧を出し続ける。
     private var shownTimeline: TimelineStore
     private var shownTab: ProfileTab
@@ -49,6 +50,7 @@ final class ProfileController {
         client: MastodonClient,
         relationshipCache: RelationshipCache,
         settings: AppSettings = AppDependencies.settings,
+        tasks: TaskScope,
         onError: @escaping (any Error, String) -> Void,
         onUnauthorized: @escaping () -> Void
     ) -> (ProfileController, TimelineViewController) {
@@ -61,6 +63,7 @@ final class ProfileController {
             relationshipCache: relationshipCache,
             settings: settings,
             viewController: viewController,
+            tasks: tasks,
             onError: onError,
             onUnauthorized: onUnauthorized
         )
@@ -75,9 +78,11 @@ final class ProfileController {
         relationshipCache: RelationshipCache,
         settings: AppSettings,
         viewController: TimelineViewController,
+        tasks: TaskScope,
         onError: @escaping (any Error, String) -> Void,
         onUnauthorized: @escaping () -> Void
     ) {
+        self.tasks = tasks
         store = ProfileStore(
             account: account,
             myAccountID: client.credential.accountID,
@@ -251,15 +256,15 @@ final class ProfileController {
     }
 
     @discardableResult
-    private func run(_ operation: @escaping @MainActor (ProfileController) async -> Void) -> Task<Void, Never> {
-        tasks.removeAll { $0.isCancelled }
-        let task = Task { [weak self] in
+    private func run(_ operation: @escaping @MainActor (ProfileController) async -> Void) -> Task<Void, Never>? {
+        tasks.run { [weak self] in
             guard let self else { return }
             await operation(self)
         }
-        tasks.append(task)
-        return task
     }
+
+    /// 走り終えていない処理の数。閉じたあとに何も起きないことを、テストが確かめるのに使う。
+    var runningTaskCount: Int { tasks.runningCount }
 
     private func updateHeader() {
         let account = store.account
@@ -396,7 +401,7 @@ final class ProfileController {
     }
 
     @discardableResult
-    private func loadInitial() -> Task<Void, Never> {
+    private func loadInitial() -> Task<Void, Never>? {
         let timeline = store.timeline
         viewController?.setFooterState(.loading)
         return run { controller in
@@ -448,7 +453,7 @@ final class ProfileController {
         let timeline = store.timeline
         if timeline.isEmpty, case .failed = viewController.footerState {
             // 最初の一覧を読めていないと、一覧を出す前なので、ほかは読み直さずに最初の読み込みをやり直す。
-            await loadInitial().value
+            await loadInitial()?.value
             return
         }
         // 最初の一覧を出している途中は、その読み込みに任せる。

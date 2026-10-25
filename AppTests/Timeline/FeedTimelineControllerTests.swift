@@ -26,6 +26,7 @@ struct FeedTimelineControllerTests {
         connector: some WebSocketConnector = MessageQueueConnector(),
         tuning: TuningStore = TuningStore(defaults: nil),
         clock: TestClock = TestClock(),
+        tasks: TaskScope = TaskScope(),
         onUnauthorized: @escaping () -> Void = {}
     ) throws -> FeedTimelineController {
         let credential = try makeCredential()
@@ -41,6 +42,7 @@ struct FeedTimelineControllerTests {
             streamingHub: streamingHub,
             tuning: tuning,
             clock: clock,
+            tasks: tasks,
             onUnauthorized: onUnauthorized
         )
     }
@@ -118,6 +120,31 @@ struct FeedTimelineControllerTests {
         try await waitUntil { controller.runningTaskCount == 0 }
 
         #expect(!reported.value)
+    }
+
+    /// ログアウトなどでセッションを閉じたら、一覧の`stop()`を呼ばなくても、走っている読み込みを止めて結果を使わない。
+    @Test func closingSessionStopsLoadsWithoutStop() async throws {
+        let gate = ResponseGate()
+        let transport = ScriptedTransport { _ in
+            await gate.wait()
+            return (401, Data(#"{"error":"The access token is invalid"}"#.utf8))
+        }
+        let reported = Box(false)
+        let session = TaskScope()
+        let controller = try makeController(transport: transport, tasks: session.child()) {
+            reported.value = true
+        }
+
+        controller.start()
+        await gate.waitUntilWaiting()
+        session.close()
+        await gate.open()
+        try await waitUntil { controller.runningTaskCount == 0 }
+
+        #expect(!reported.value)
+        // 閉じたあとは、始め直しても読まない。
+        controller.start()
+        #expect(controller.runningTaskCount == 0)
     }
 
     @Test func streamedUpdateIsInsertedAfterInterval() async throws {
