@@ -185,6 +185,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var heldEntries: HeldEntries?
     /// メニューを出している間に求められた描き直し。
     private var heldReconfigureIDs: Set<ItemID> = []
+    private var contentSizeObserver: (any NSObjectProtocol)?
+    /// 端末の文字の大きさが変わったときに、組み直す前に覚えた読んでいる位置。
+    private var contentSizeAnchor: ScrollAnchor?
     /// 表示中のギャップのID。スクロールのたびに全要素を調べないよう、別に持つ。
     private var gapIDs: [String] = []
     /// 指で最後に動かした向き。ギャップをどちらの端から読むかに使う。
@@ -351,7 +354,25 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         emojiImages.addListener(owner: self) { [weak self] urls in self?.emojiImagesDidLoad(urls) }
         avatarImages.addListener(owner: self) { [weak self] key in self?.avatarImageDidLoad(key) }
         observeTuning()
+        // 行の文字は、組むときのアプリの文字の大きさで決めるため、端末の文字の大きさが変わったら組み直す。
+        // アプリへの通知は、一覧に特性が伝わる前に届くので、そこで読んでいる位置を覚える。一覧に特性が伝わると、UIKitが画面の外の行の高さを
+        // 見積もりに戻して測り直し、読んでいる位置がずれるため、伝わったあとに組み直して、覚えた位置へ戻す。
+        contentSizeObserver = NotificationCenter.default.addObserver(forName: UIContentSizeCategory.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.contentSizeAnchor == nil, self.viewIfLoaded?.window != nil else { return }
+                self.contentSizeAnchor = self.currentAnchor()
+                // 戻し終えるまで、測り直しで一時的に見えた投稿を表示中として報告しない。報告すると、読んでいない投稿まで既読になり、戻らない。
+                self.isRestoringAnchor = true
+            }
+        }
+        collectionView.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { [weak self] (_: UICollectionView, _) in
+            self?.contentSizeDidChange()
+        }
         translation.install(in: self)
+    }
+
+    isolated deinit {
+        contentSizeObserver.map(NotificationCenter.default.removeObserver)
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { statusBarStyle }
@@ -547,6 +568,20 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     private static func emojiURLs(of notification: MastodonNotification) -> Set<URL> {
         Set(notification.account.emojis.map(\.staticUrl)).union(notification.status.map(emojiURLs(of:)) ?? [])
+    }
+
+    /// 端末の文字の大きさが変わったら、行をすべて組み直し、変わる前に読んでいた位置へ戻す。
+    private func contentSizeDidChange() {
+        let anchor = contentSizeAnchor ?? currentAnchor()
+        contentSizeAnchor = nil
+        isRestoringAnchor = true
+        defer { isRestoringAnchor = false }
+        var snapshot = dataSource.snapshot()
+        snapshot.reconfigureItems(snapshot.itemIdentifiers)
+        dataSource.apply(snapshot, animatingDifferences: false)
+        if let anchor {
+            restore(anchor)
+        }
     }
 
     /// 内容が変わってセルの高さが変わっても、読んでいる位置が動かないように描き直す。
