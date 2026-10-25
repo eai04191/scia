@@ -12,6 +12,7 @@ only_rules:
   - dimmed_white_text
   - session_task_outside_scope
   - server_value_without_check
+  - unsafe_file_name
 
 included:
   - App
@@ -81,6 +82,19 @@ custom_rules:
       - doccomment
       - string
     message: "サーバーから来る値は、件数ならdecodeCount、上限ならServerLimit、URLならdecodeURLかdecodeRequiredURLで読む"
+    severity: error
+
+  # ファイルやフォルダーの名前は、URLやサーバーの応答、ほかのアプリから受け取ったファイルから作ることが多く、そのままつなげると`/`や`..`で置く場所がフォルダーの外へ出る。
+  # 文字列の決まった名前でなければ、SafeFileNameで作ってappending(fileName:)でつなげる。通信のURLを組み立てる場所（Networking、Auth、Streaming、XPosts）は、ファイルを扱わないので対象外にする
+  unsafe_file_name:
+    included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"
+    excluded: "(App/Sources/Debug/|Packages/SciaCore/Sources/SciaCore/(Networking|Auth|Streaming|XPosts)/|Packages/SciaCore/Sources/SciaCore/SafeFileName\\.swift)"
+    regex: "\\.appending\\((path|component):(?!\\s*\")|\\.appendingPathComponent\\("
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "文字列の決まった名前でなければ、SafeFileNameで作ってappending(fileName:)でつなげる"
     severity: error
 
   # 実際の時間に、ロジックの中から直接触れない。時間をおく処理はClockで、今の日付は日付を返す関数で、Core Animationの時間は時間を返す関数で受け取り、
