@@ -150,6 +150,8 @@ public final class LinkCardRefresher {
     private var isFetching = false
     /// サーバーが複数の投稿をまとめて読めない。このセッションでは取り直さない。
     private var isUnsupported = false
+    /// セッションを止めた。以後は取り直さない。
+    private var isStopped = false
     private let logger = SciaLog.logger(category: "timeline")
 
     public init(
@@ -170,12 +172,18 @@ public final class LinkCardRefresher {
 
     /// `source`の一覧で見えていて、リンク先だけのカードを出している投稿を知らせる。画面から消えたら空で知らせる。
     public func setVisible(_ statuses: [Status], from source: AnyObject) {
-        guard !isUnsupported else { return }
+        guard !isUnsupported, !isStopped else { return }
         visible[ObjectIdentifier(source)] = statuses
         schedule.note(statuses, now: now())
         guard !isFetching else { return }
         loop?.cancel()
         loop = Task { [weak self] in await self?.run() }
+    }
+
+    /// セッションを止めるときに呼ぶ。取り直している途中なら止め、以後は取り直さない。
+    public func stop() {
+        isStopped = true
+        loop?.cancel()
     }
 
     /// 取り直しの予定がなくなるまで待つ。テストで使う。
@@ -191,7 +199,7 @@ public final class LinkCardRefresher {
     }
 
     private func run() async {
-        while !Task.isCancelled, !isUnsupported {
+        while !Task.isCancelled, !isUnsupported, !isStopped {
             let versions = visibleVersions
             let due = schedule.due(now: now(), visible: versions, limit: MastodonClient.multipleStatusesLimit)
             if !due.isEmpty {

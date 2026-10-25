@@ -244,11 +244,14 @@ final class SessionController {
             profiles.updateStatus(id, transform)
             threads.updateStatus(id, transform)
         }
-        linkCards = LinkCardRefresher(client: client) { refetched in
+        let linkCards = LinkCardRefresher(client: client) { refetched in
             for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, pushedFeeds.updateStatus, profiles.updateStatus, threads.updateStatus] {
                 update(refetched.id) { $0.adoptingCard(of: refetched) }
             }
         }
+        self.linkCards = linkCards
+        // セッションを閉じたら、取り直している途中でも止める。前のアカウントのトークンで取り直し続けないため。
+        tasks.onClose { [weak linkCards] in linkCards?.stop() }
 
         let homeNavigation = ContentNavigationController(rootViewController: home.viewController)
         let localNavigation = ContentNavigationController(rootViewController: local.viewController)

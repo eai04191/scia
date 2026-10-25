@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -186,6 +187,36 @@ struct LinkCardRefreshTests {
         let owner = NSObject()
 
         refresher.setVisible([Self.status("1")], from: owner)
+        await refresher.waitUntilIdle()
+
+        #expect(await fetches.values == [["1"]])
+    }
+
+    /// ログアウトなどでセッションを止めたら、取り直している途中でも止め、あとから見えた投稿も取り直さない。前のアカウントのトークンで送り続けないため。
+    @MainActor
+    @Test func stopsRefreshingWhenStopped() async throws {
+        let clock = FakeClock(now: Self.start)
+        let fetches = Recorder<[Status.ID]>()
+        let gate = Gate()
+        let refresher = LinkCardRefresher(
+            fetch: { ids in
+                await fetches.append(ids)
+                try await gate.wait()
+                return ids.map { Self.status($0) }
+            },
+            apply: { _ in },
+            now: { clock.now },
+            sleep: { await clock.advance($0) }
+        )
+        let owner = NSObject()
+
+        refresher.setVisible([Self.status("1")], from: owner)
+        try await waitUntil { gate.waiterCount == 1 }
+        refresher.stop()
+        // 止めずに取り直しを続けたら、届いた結果のあとも予定どおりに取り直す。
+        gate.open()
+        await refresher.waitUntilIdle()
+        refresher.setVisible([Self.status("2")], from: owner)
         await refresher.waitUntilIdle()
 
         #expect(await fetches.values == [["1"]])
