@@ -5,6 +5,8 @@ import SwiftUI
 struct ConnectionStatusView: View {
     let instance: URL
     let diagnostics: ConnectionDiagnostics
+    /// リストのIDから、タブの並びに保存したリストの名前を引く。並びにないリストは名前を出さない。
+    var listTitles: [String: String] = [:]
     @State private var status: ConnectionDiagnostics.Status?
     /// 読み直す間隔を数える時計。
     var clock: any Clock<Duration> = AppDependencies.clock
@@ -17,19 +19,15 @@ struct ConnectionStatusView: View {
             }
             Section("ストリーミング") {
                 LabeledContent("接続", value: Self.text(diagnostics.streaming))
-            }
-            Section {
-                if diagnostics.streamingSubscriptions.isEmpty {
-                    Text("ありません")
-                } else {
-                    ForEach(diagnostics.streamingSubscriptions, id: \.self) { subscription in
-                        LabeledContent(Self.name(of: subscription), value: subscription.stream)
+                ForEach(diagnostics.streamingSubscriptions, id: \.self) { subscription in
+                    // 報告に添えたときにサーバー側の購読と突き合わせられるよう、APIのストリームの名前を添える。
+                    VStack(alignment: .leading) {
+                        Text(name(of: subscription))
+                        Text(Self.identifier(of: subscription))
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
                     }
                 }
-            } header: {
-                Text("購読しているストリーム")
-            } footer: {
-                Text("1本の接続で、これらの更新をまとめて受け取ります。")
             }
             if let status {
                 Section("レート制限") {
@@ -93,11 +91,21 @@ struct ConnectionStatusView: View {
         }
     }
 
-    private static func name(of subscription: StreamingSubscription) -> String {
-        switch subscription {
-        case .user: "ホームと通知"
+    /// タブの名前にそろえる。
+    private func name(of subscription: StreamingSubscription) -> String {
+        switch subscription.stream {
+        case "user": "ホームと通知"
+        case "public:local": "ローカル"
+        case "public": "連合"
+        case "list": subscription.list.flatMap { listTitles[$0] }.map { "リスト「\($0)」" } ?? "リスト"
+        case "hashtag": subscription.tag.map { "#\($0)" } ?? "ハッシュタグ"
         default: subscription.stream
         }
+    }
+
+    /// `public:local`、`list:<ID>`、`hashtag:<名前>`のように、APIのストリームの名前に引数を続けたもの。
+    private static func identifier(of subscription: StreamingSubscription) -> String {
+        ([subscription.stream] + [subscription.list, subscription.tag].compactMap(\.self)).joined(separator: ":")
     }
 
     /// 今の版のサーバーでは送らないと覚えている形式。

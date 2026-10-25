@@ -58,6 +58,15 @@ struct SettingsView: View {
         }
     }
 
+    /// 接続の状態の画面で、購読しているリストに名前を出すためのもの。
+    private var listTitles: [String: String] {
+        var titles: [String: String] = [:]
+        for case .item(.list(let id, let title), _) in settings.tabLayout(for: account).elements {
+            titles[id] = title
+        }
+        return titles
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -284,7 +293,7 @@ struct SettingsView: View {
                 }
                 Section {
                     NavigationLink("接続の状態") {
-                        ConnectionStatusView(instance: instance, diagnostics: diagnostics)
+                        ConnectionStatusView(instance: instance, diagnostics: diagnostics, listTitles: listTitles)
                     }
                     NavigationLink("ライセンス") {
                         LicensesView()
