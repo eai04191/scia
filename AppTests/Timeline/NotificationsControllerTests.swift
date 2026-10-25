@@ -33,7 +33,7 @@ struct NotificationsControllerTests {
         let streaming = StreamingClient(credential: credential, connector: MessageQueueConnector())
         let streamingEndpoint = StreamingEndpoint(client: client)
         let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: tuning) }) {
-            streaming.open(baseURL: try await streamingEndpoint.url())
+            try await streaming.open(baseURL: try await streamingEndpoint.url())
         }
         return NotificationsController(client: client, streamingHub: streamingHub, tuning: tuning, clock: TestClock(), tasks: TaskScope()) {}
     }

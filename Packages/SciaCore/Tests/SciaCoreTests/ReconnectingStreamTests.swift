@@ -74,6 +74,31 @@ struct ReconnectingStreamTests {
         #expect(await log.labels == ["unauthorized", "disconnected after 10ms", "connected", "event delete 1"])
     }
 
+    /// つなぐときの応答が429や503で再開の時刻を示したら、自分の間隔より遅くても、その時刻まではつなぎ直さない。
+    @Test(arguments: [
+        MastodonAPIError(statusCode: 429, message: "Too Many Requests", retryAfter: .milliseconds(300)) as any Error & Sendable,
+        AutomaticRequestsPaused(until: Date(timeIntervalSince1970: 1_800_000_000), retryAfter: .milliseconds(300)),
+    ])
+    func waitsUntilServerSaysToResume(error: any Error & Sendable) async throws {
+        let connector = ScriptedConnector([
+            .init(handshake: .fail(error)),
+            .init(messages: [Self.deleteOne]),
+        ])
+        let log = ActivityLog()
+        let clock = TestClock()
+        let stream = makeStream(connector, policy: Self.fastPolicy, clock: clock)
+
+        let task = Task { try await stream.run { await log.append($0) } }
+        try await waitUntil { await log.count == 1 && clock.sleeperCount(dueWithin: .milliseconds(300)) == 1 }
+        #expect(clock.sleeperCount(dueWithin: .milliseconds(299)) == 0, "再開の時刻より前につなぎ直そうとしています")
+        clock.advance(by: .milliseconds(300))
+        try await log.waitUntil(count: 3)
+        task.cancel()
+        _ = await task.result
+
+        #expect(await log.labels == ["disconnected after 300ms", "connected", "event delete 1"])
+    }
+
     @Test func unansweredPingIsTreatedAsDisconnection() async throws {
         let connector = ScriptedConnector([
             .init(answeredPings: 1),
@@ -147,7 +172,7 @@ struct ReconnectingStreamTests {
             connector: connector
         )
         return ReconnectingStream(policy: policy, clock: clock) {
-            client.open(baseURL: URL(filePath: "/"))
+            try await client.open(baseURL: URL(filePath: "/"))
         }
     }
 }

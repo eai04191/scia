@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -103,7 +104,7 @@ struct StreamingClientTests {
         let connector = StubWebSocketConnector(messages: [])
         let client = StreamingClient(credential: try makeCredential(), connector: connector)
 
-        _ = client.open(baseURL: try #require(URL(string: "wss://streaming.example.social")))
+        _ = try await client.open(baseURL: try #require(URL(string: "wss://streaming.example.social")))
 
         let request = try #require(connector.requests.first)
         #expect(request.url?.absoluteString == "wss://streaming.example.social/api/v1/streaming")
@@ -112,7 +113,7 @@ struct StreamingClientTests {
 
     @Test func sendsSubscribeAndUnsubscribe() async throws {
         let connector = StubWebSocketConnector(messages: [])
-        let connection = StreamingClient(credential: try makeCredential(), connector: connector)
+        let connection = try await StreamingClient(credential: try makeCredential(), connector: connector)
             .open(baseURL: try #require(URL(string: "wss://streaming.example.social")))
 
         try await connection.subscribe(.user)
@@ -130,15 +131,58 @@ struct StreamingClientTests {
             #"{"stream":["user"],"event":"update","payload":"{\"broken\":true}"}"#,
             #"{"stream":["user"],"event":"delete","payload":"1"}"#,
         ])
-        let connection = StreamingClient(credential: try makeCredential(), connector: connector)
+        let connection = try await StreamingClient(credential: try makeCredential(), connector: connector)
             .open(baseURL: try #require(URL(string: "wss://streaming.example.social")))
 
         #expect(try await connection.next().event == .delete(statusID: "1"))
     }
 
+    /// つなぐときに429や503で断られたら、示された再開までの長さをREST APIと同じエラーで返し、アカウントの自動の通信も止める。
+    @Test func rejectedHandshakeCarriesResumeTimeAndPausesAccount() async throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let gate = RateLimitGate(now: { now }, clock: TestClock())
+        let connector = ScriptedConnector([.init(handshake: .fail(WebSocketHandshakeRejected(statusCode: 429, headers: ["retry-after": "30"])))])
+        let connection = try await StreamingClient(credential: try makeCredential(), connector: connector, rateLimit: gate, now: { now })
+            .open(baseURL: try #require(URL(string: "wss://streaming.example.social")))
+
+        let error = await #expect(throws: MastodonAPIError.self) { try await connection.next() }
+        #expect(error?.statusCode == 429)
+        #expect(error?.retryAfter == .seconds(30))
+        #expect(await gate.pausedUntil == now.addingTimeInterval(30))
+    }
+
+    /// トークンが無効なときは401で断られる。ログインし直しを促せるよう、REST APIと同じエラーにする。
+    @Test func unauthorizedHandshakeIsReportedAsAPIError() async throws {
+        let connector = ScriptedConnector([.init(handshake: .fail(WebSocketHandshakeRejected(statusCode: 401)))])
+        let connection = try await StreamingClient(credential: try makeCredential(), connector: connector)
+            .open(baseURL: try #require(URL(string: "wss://streaming.example.social")))
+
+        let error = await #expect(throws: MastodonAPIError.self) { try await connection.ping() }
+        #expect(error?.isUnauthorized == true)
+    }
+
+    /// 止められている間は、自動のつなぎ直しを送らない。使う人の操作でつなぐときは送る。
+    @Test func doesNotConnectAutomaticallyWhilePaused() async throws {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let gate = RateLimitGate(now: { now }, clock: TestClock())
+        await gate.pause(until: now.addingTimeInterval(60))
+        let connector = StubWebSocketConnector(messages: [])
+        let client = StreamingClient(credential: try makeCredential(), connector: connector, rateLimit: gate, now: { now })
+        let url = try #require(URL(string: "wss://streaming.example.social"))
+
+        let error = await #expect(throws: AutomaticRequestsPaused.self) {
+            try await RequestOrigin.$current.withValue(.automatic) { _ = try await client.open(baseURL: url) }
+        }
+        #expect(error?.retryAfter == .seconds(60))
+        #expect(connector.requests.isEmpty)
+
+        _ = try await client.open(baseURL: url)
+        #expect(connector.requests.count == 1)
+    }
+
     @Test func serverErrorEndsConnection() async throws {
         let connector = StubWebSocketConnector(messages: [#"{"error":"Unknown stream type","status":400}"#])
-        let connection = StreamingClient(credential: try makeCredential(), connector: connector)
+        let connection = try await StreamingClient(credential: try makeCredential(), connector: connector)
             .open(baseURL: try #require(URL(string: "wss://streaming.example.social")))
 
         await #expect(throws: StreamingServerError.self) { try await connection.next() }

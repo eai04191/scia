@@ -425,7 +425,7 @@ struct StreamingHubTests {
             connector: connector
         )
         return StreamingHub(reconnectPolicy: reconnect, livePolicy: { live }, clock: clock) {
-            client.open(baseURL: URL(filePath: "/"))
+            try await client.open(baseURL: URL(filePath: "/"))
         }
     }
 }

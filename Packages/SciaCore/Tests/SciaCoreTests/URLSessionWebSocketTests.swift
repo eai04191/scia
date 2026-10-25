@@ -45,26 +45,34 @@ struct URLSessionWebSocketTests {
         #expect(error?.code == .ENOTCONN)
     }
 
-    @Test func rejectedHandshakeIsReportedAsAPIErrorFromPing() async throws {
+    @Test func rejectedHandshakeIsReportedFromPing() async throws {
         let server = try await LocalWebSocketServer(rejectingWith: 401)
         defer { server.stop() }
 
         let connection = URLSessionWebSocketConnector().connect(URLRequest(url: server.url))
         defer { connection.close() }
 
-        let error = await #expect(throws: MastodonAPIError.self) { try await connection.ping() }
-        #expect(error?.isUnauthorized == true)
+        let error = await #expect(throws: WebSocketHandshakeRejected.self) { try await connection.ping() }
+        #expect(error?.statusCode == 401)
     }
 
-    @Test func rejectedHandshakeIsReportedAsAPIError() async throws {
-        let server = try await LocalWebSocketServer(rejectingWith: 401)
+    /// 再開の時刻を読めるよう、断った応答のヘッダーも渡す。
+    @Test func rejectedHandshakeCarriesHeaders() async throws {
+        let server = try await LocalWebSocketServer(rejectingWith: 429, headers: "Retry-After: 30\r\n")
         defer { server.stop() }
 
         let connection = URLSessionWebSocketConnector().connect(URLRequest(url: server.url))
         defer { connection.close() }
 
-        let error = await #expect(throws: MastodonAPIError.self) { _ = try await connection.receive() }
-        #expect(error?.isUnauthorized == true)
+        let error = await #expect(throws: WebSocketHandshakeRejected.self) { _ = try await connection.receive() }
+        #expect(error?.statusCode == 429)
+        #expect(error?.header("retry-after") == "30")
+    }
+
+    /// サーバーが返したURLで、端末のファイルなどを開かない。
+    @Test func refusesNonNetworkScheme() async throws {
+        let connection = URLSessionWebSocketConnector().connect(URLRequest(url: URL(filePath: "/etc/hosts")))
+        await #expect(throws: URLError(.unsupportedURL)) { _ = try await connection.receive() }
     }
 }
 
@@ -101,10 +109,10 @@ private final class LocalWebSocketServer: Sendable {
     }
 
     /// Network.frameworkのWebSocketは拒否してもHTTPの応答を返さないため、TCPのまま応答を書く。
-    convenience init(rejectingWith statusCode: Int) async throws {
+    convenience init(rejectingWith statusCode: Int, headers: String = "") async throws {
         try await self.init(parameters: .tcp, queue: DispatchQueue(label: "LocalWebSocketServer"), authorization: ReceivedHeader()) { connection in
             connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { _, _, _, _ in
-                let response = "HTTP/1.1 \(statusCode) Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                let response = "HTTP/1.1 \(statusCode) Error\r\n\(headers)Content-Length: 0\r\nConnection: close\r\n\r\n"
                 connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in connection.cancel() })
             }
         }

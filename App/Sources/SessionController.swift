@@ -147,9 +147,9 @@ final class SessionController {
         let client = MastodonClient(credential: credential, transport: URLSessionTransport(), rateLimit: rateLimit, features: features, requestLog: requestLog)
         #endif
         #if DEBUG
-        let streaming = StreamingClient(credential: credential, connector: FaultInjectingWebSocketConnector(base: ScenarioMode.server?.connector ?? URLSessionWebSocketConnector()))
+        let streaming = StreamingClient(credential: credential, connector: FaultInjectingWebSocketConnector(base: ScenarioMode.server?.connector ?? URLSessionWebSocketConnector()), rateLimit: rateLimit)
         #else
-        let streaming = StreamingClient(credential: credential, connector: URLSessionWebSocketConnector())
+        let streaming = StreamingClient(credential: credential, connector: URLSessionWebSocketConnector(), rateLimit: rateLimit)
         #endif
         authorization = AuthorizationCheck { try await client.verifyCredentials() }
         // selfを作り終える前に組み立てる部品から呼ぶため、後で中身を差し替える。
@@ -157,7 +157,7 @@ final class SessionController {
         let streamingEndpoint = StreamingEndpoint(client: client)
         let tuning = AppDependencies.tuning
         let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: tuning) }) {
-            streaming.open(baseURL: try await streamingEndpoint.url())
+            try await streaming.open(baseURL: try await streamingEndpoint.url())
         }
         self.streamingHub = streamingHub
         // セッションを閉じたら、申し込みが残っていても切る。開いているスレッドなどの購読を、閉じる順に頼らずに止めるため。

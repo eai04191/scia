@@ -34,7 +34,7 @@ struct FeedTimelineControllerTests {
         let streaming = StreamingClient(credential: credential, connector: connector)
         let streamingEndpoint = StreamingEndpoint(client: client)
         let streamingHub = StreamingHub(livePolicy: { TuningCatalog.liveUpdates(in: tuning) }) {
-            streaming.open(baseURL: try await streamingEndpoint.url())
+            try await streaming.open(baseURL: try await streamingEndpoint.url())
         }
         return FeedTimelineController(
             feed: feed,

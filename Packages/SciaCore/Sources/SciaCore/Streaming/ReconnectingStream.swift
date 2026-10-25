@@ -10,7 +10,7 @@ public struct ReconnectingStream: Sendable {
         case event(StreamingMessage)
         /// 接続が401で断られた。トークンが無効かは呼び出し側が確かめる。この後に`disconnected`が続き、つなぎ直しも続ける。
         case unauthorized
-        /// 接続が切れた、またはつながらなかった。`retryAfter`だけ待ってつなぎ直す。`reason`はログに書く説明で、応答の中身を含まない。
+        /// 接続が切れた、またはつながらなかった。`retryAfter`だけ待ってつなぎ直す。つなぐときの応答が再開の時刻を示していれば、それまで待つ。`reason`はログに書く説明で、応答の中身を含まない。
         case disconnected(reason: String, retryAfter: Duration)
     }
 
@@ -102,11 +102,17 @@ public struct ReconnectingStream: Sendable {
                 }
             } catch {
                 if Task.isCancelled { throw CancellationError() }
-                if let apiError = error as? MastodonAPIError, apiError.isUnauthorized {
+                let failure = HTTPFailure(error)
+                if failure == .unauthorized {
                     await handle(.unauthorized)
                 }
                 failures += 1
-                let delay = policy.retryDelay(afterFailures: failures)
+                // 429や503が再開の時刻を示していたら、それより前にはつなぎ直さない。
+                var retryAfter: Duration?
+                if case .temporary(let after)? = failure {
+                    retryAfter = after
+                }
+                let delay = policy.retryDelay(afterFailures: failures, retryAfter: retryAfter)
                 await handle(.disconnected(reason: SciaLog.describe(error), retryAfter: delay))
                 try await clock.sleep(for: delay)
             }

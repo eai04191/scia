@@ -212,3 +212,112 @@ private final class DownloadObserver: NSObject, URLSessionTaskDelegate, Sendable
         state.withLock { $0.observation = observation }
     }
 }
+
+/// URLSessionでWebSocketを開く。http、https、ws、wssだけを開く。
+public struct URLSessionWebSocketConnector: WebSocketConnector {
+    private let session: URLSession
+
+    public init() {
+        session = .shared
+    }
+
+    public func connect(_ request: URLRequest) -> any WebSocketConnection {
+        do {
+            try URLSessionTransport.checkScheme(of: request, allowing: ["http", "https", "ws", "wss"])
+        } catch {
+            return FailedWebSocketConnection(error: error)
+        }
+        let task = session.webSocketTask(with: request)
+        task.resume()
+        return URLSessionWebSocketConnection(task: task)
+    }
+}
+
+/// 開く前に断った接続。最初の受信やpingで、その失敗を投げる。
+private struct FailedWebSocketConnection: WebSocketConnection {
+    let error: any Error
+
+    func receive() async throws -> String { throw error }
+    func send(_ text: String) async throws { throw error }
+    func ping() async throws { throw error }
+    func close() {}
+}
+
+struct URLSessionWebSocketConnection: WebSocketConnection {
+    let task: URLSessionWebSocketTask
+
+    func receive() async throws -> String {
+        do {
+            switch try await task.receive() {
+            case .string(let text):
+                return text
+            case .data(let data):
+                // Mastodonはテキストフレームだけを送るが、念のためUTF-8として読む。
+                return String(decoding: data, as: UTF8.self)
+            @unknown default:
+                throw URLError(.cannotParseResponse)
+            }
+        } catch {
+            throw handshakeRejection() ?? error
+        }
+    }
+
+    func send(_ text: String) async throws {
+        do {
+            try await task.send(.string(text))
+        } catch {
+            throw handshakeRejection() ?? error
+        }
+    }
+
+    func ping() async throws {
+        do {
+            try await Self.awaitFirstCompletion(task.sendPing)
+        } catch {
+            throw handshakeRejection() ?? error
+        }
+    }
+
+    /// 完了ハンドラが最初に呼ばれるまで待つ。2回目以降の呼び出しは無視する。
+    ///
+    /// macOSのURLSessionWebSocketTaskは、pingの応答を待つ間に接続が切れると、`sendPing`の完了ハンドラを違うエラーで2回呼ぶことがある（Code 57のあとに53など）。そのまま続きを再開すると二重の再開でクラッシュする。
+    static func awaitFirstCompletion(_ send: (@escaping @Sendable ((any Error)?) -> Void) -> Void) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+            let pending = PendingContinuation(continuation)
+            send { error in
+                if let error {
+                    pending.take()?.resume(throwing: error)
+                } else {
+                    pending.take()?.resume()
+                }
+            }
+        }
+    }
+
+    func close() {
+        task.cancel(with: .normalClosure, reason: nil)
+    }
+
+    /// ハンドシェイクがHTTPのエラーで断られていたら、そのステータスとヘッダー。再開の時刻を読めるよう、ヘッダーも渡す。
+    private func handshakeRejection() -> WebSocketHandshakeRejected? {
+        guard let response = task.response as? HTTPURLResponse, response.statusCode != 101 else { return nil }
+        return WebSocketHandshakeRejected(response: response)
+    }
+}
+
+/// 続きを1回だけ取り出せるように持つ。
+private final class PendingContinuation: Sendable {
+    private let continuation: Mutex<CheckedContinuation<Void, any Error>?>
+
+    init(_ continuation: CheckedContinuation<Void, any Error>) {
+        self.continuation = Mutex(continuation)
+    }
+
+    /// 最初の呼び出しだけ続きを返す。
+    func take() -> CheckedContinuation<Void, any Error>? {
+        continuation.withLock { continuation in
+            defer { continuation = nil }
+            return continuation
+        }
+    }
+}
