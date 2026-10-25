@@ -45,7 +45,8 @@ public struct PollDisplay: Equatable, Sendable {
     public let summary: String
 
     /// - Parameter allowsVoting: 投票する形にしてよい。投票の終了の通知のように、結果を知るために出す場所ではfalseにする。
-    public init(poll: Poll, choices: PollChoices, now: Date, allowsVoting: Bool = true) {
+    /// - Parameter locale: 人数と票数の区切り方を決める、端末の地域。
+    public init(poll: Poll, choices: PollChoices, now: Date, allowsVoting: Bool = true, locale: Locale = .autoupdatingCurrent) {
         let isExpired = poll.isExpired(at: now)
         let showsResults = !allowsVoting || poll.voted || isExpired || choices.isRevealed(poll.id)
         mode = showsResults ? .results : .voting
@@ -71,7 +72,7 @@ public struct PollDisplay: Equatable, Sendable {
         canRevealResults = !showsResults && !hidesTotals
         canReturnToVoting = allowsVoting && showsResults && !poll.voted && !isExpired
         canRefresh = allowsVoting && showsResults && !poll.expired
-        var parts = [poll.votersCount.map { "\(Self.countText($0))人" } ?? "\(Self.countText(poll.votesCount))票"]
+        var parts = [poll.votersCount.map { "\(Self.countText($0, locale: locale))人" } ?? "\(Self.countText(poll.votesCount, locale: locale))票"]
         if let expiresAt = poll.expiresAt {
             parts.append(isExpired ? "終了" : Self.remainingText(until: expiresAt, now: now))
         }
@@ -81,9 +82,9 @@ public struct PollDisplay: Equatable, Sendable {
         summary = parts.joined(separator: "・")
     }
 
-    /// 人数と票数。桁が多くても読めるよう、3桁ごとに区切る。
-    static func countText(_ count: Int) -> String {
-        count.formatted(.number.locale(Locale(identifier: "ja_JP")))
+    /// 人数と票数。桁が多くても読めるよう、端末の地域の区切り方で区切る。
+    static func countText(_ count: Int, locale: Locale) -> String {
+        count.formatted(.number.locale(locale))
     }
 
     /// 締め切りまでの残り。投稿の相対時刻の表記と同じ区切りで、切り捨てて数える。

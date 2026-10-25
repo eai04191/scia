@@ -116,7 +116,7 @@ struct PollDisplayTests {
     }
 
     @Test func countsAreGroupedByThousands() {
-        #expect(PollDisplay(poll: poll(multiple: true, votes: [123_456, 2], votersCount: 120_000), choices: PollChoices(), now: now).summary == "120,000人・残り1日")
+        #expect(PollDisplay(poll: poll(multiple: true, votes: [123_456, 2], votersCount: 120_000), choices: PollChoices(), now: now, locale: Locale(identifier: "ja_JP")).summary == "120,000人・残り1日")
     }
 
     /// 票数を隠す投票では、結果を見ても割合が出ないため、投票せずに結果を見られないようにする。
@@ -440,4 +440,17 @@ struct PollDraftTests {
         let attachment = DraftAttachment(state: .uploaded(MediaAttachment(id: "m1", type: .image, url: URL(string: "https://example.social/m1.png"), previewUrl: nil)))
         #expect(!StatusDraft(text: "どっち", attachments: [attachment], poll: poll).canPost(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4))
     }
+}
+
+/// 人数と票数の区切りは、端末の地域に従う。
+@Test(arguments: [("ja_JP", "12,345人・終了"), ("ja_DE", "12.345人・終了")])
+func pollCountsFollowTheRegion(identifier: String, expected: String) {
+    let now = Date(timeIntervalSince1970: 1_792_033_200)
+    let display = PollDisplay(
+        poll: poll(expiresIn: -1, votes: [12_000, 345], votersCount: 12_345),
+        choices: PollChoices(),
+        now: now,
+        locale: Locale(identifier: identifier)
+    )
+    #expect(display.summary == expected)
 }
