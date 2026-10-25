@@ -30,12 +30,15 @@ enum AppDependencies {
         CACurrentMediaTime()
     }
 
+    /// 画像を、APIの外のURLから取得する。2xx以外の応答の本文を、画像として渡さない。
+    nonisolated static let remoteFetch = RemoteFetch()
+
     static let emojiImages = EmojiImageStore { url in
-        try await URLSession.shared.data(from: url).0
+        try await remoteFetch.data(from: url)
     }
 
     static let avatarImages = AvatarImageStore { url in
-        try await URLSession.shared.data(from: url).0
+        try await remoteFetch.data(from: url)
     }
 
     /// 添付ファイルの元のファイルを置くディスクキャッシュ。ビューアで開いた画像の元のファイルと、共有や保存のために落とした動画などを置く。

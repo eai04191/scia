@@ -255,7 +255,7 @@ final class MediaImageStore {
     @concurrent
     nonisolated static func download(_ url: URL, range: Range<Int>?) async throws -> Data {
         guard let range else {
-            return try await URLSession.shared.data(from: url).0
+            return try await AppDependencies.remoteFetch.data(from: url)
         }
         var request = URLRequest(url: url)
         request.setValue("bytes=\(range.lowerBound)-\(range.upperBound - 1)", forHTTPHeaderField: "Range")
