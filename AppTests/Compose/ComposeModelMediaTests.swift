@@ -17,7 +17,7 @@ struct ComposeModelMediaTests {
     private final class FakeServer {
         var uploads: [MediaUpload] = []
         var waits: [String] = []
-        private var pendingUploads: [CheckedContinuation<MediaAttachment, any Error>] = []
+        private var pendingUploads: [(filename: String, continuation: CheckedContinuation<MediaAttachment, any Error>)] = []
         /// trueなら、アップロードを止めずにすぐ済ませる。
         var completesImmediately = true
         var uploadResult: (MediaUpload) throws -> MediaAttachment = { upload in
@@ -39,7 +39,7 @@ struct ComposeModelMediaTests {
                 upload: { [self] upload in
                     uploads.append(upload)
                     if completesImmediately { return try uploadResult(upload) }
-                    return try await withCheckedThrowingContinuation { pendingUploads.append($0) }
+                    return try await withCheckedThrowingContinuation { pendingUploads.append((upload.filename, $0)) }
                 },
                 waitUntilProcessed: { [self] id in
                     waits.append(id)
@@ -60,7 +60,13 @@ struct ComposeModelMediaTests {
         }
 
         func finishNextUpload(with result: Result<MediaAttachment, any Error>) {
-            pendingUploads.removeFirst().resume(with: result)
+            pendingUploads.removeFirst().continuation.resume(with: result)
+        }
+
+        /// 止めていたアップロードのうち、そのファイル名のものを済ませる。2件を止めたときは届いた順が決まっていないので、こちらで選ぶ。
+        func finishUpload(named filename: String, with result: Result<MediaAttachment, any Error>) throws {
+            let index = try #require(pendingUploads.firstIndex { $0.filename == filename }, "\(filename)のアップロードが止まっていません")
+            pendingUploads.remove(at: index).continuation.resume(with: result)
         }
 
         var pendingCount: Int { pendingUploads.count }
@@ -106,13 +112,13 @@ struct ComposeModelMediaTests {
     }
 
     /// 画像を作り直すような、別のスレッドで時間のかかる処理が済むまで待つ。
-    private func settleSlowly(until condition: () -> Bool) async throws {
-        try await waitUntil(condition)
+    private func settleSlowly(until condition: () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+        try await waitUntil(condition, sourceLocation: sourceLocation)
     }
 
     /// 非同期のアップロードが進むまで待つ。
-    private func settle(until condition: () -> Bool) async throws {
-        try await waitUntil(condition)
+    private func settle(until condition: () -> Bool, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+        try await waitUntil(condition, sourceLocation: sourceLocation)
     }
 
     private func isSettled(_ model: ComposeModel) -> Bool {
@@ -331,15 +337,26 @@ struct ComposeModelMediaTests {
         let model = makeModel(server)
         model.text = "見て"
 
-        model.applyPickerSelection([try picked("a"), try picked("b")])
+        // 2枚は別々に読み込んで送るので、サーバーに届く順は決まっていない。後ろの1枚が先に届いても、選んだ1枚目の完了を待つ。
+        let first = try picked("a")
+        let arrivesLate = Gate()
+        model.applyPickerSelection([
+            PickedMedia(assetIdentifier: first.assetIdentifier) { avoiding in
+                try await arrivesLate.wait()
+                return try await first.load(avoiding)
+            },
+            try picked("b"),
+        ])
+        try await settle { server.pendingCount == 1 }
+        arrivesLate.open()
         try await settle { server.pendingCount == 2 }
         #expect(!model.canPost)
 
-        server.finishNextUpload(with: .success(Self.attachment(id: "1", processed: true)))
+        try server.finishUpload(named: "a.jpg", with: .success(Self.attachment(id: "1", processed: true)))
         try await settle { model.attachments.first?.serverID == "1" }
         #expect(!model.canPost)
 
-        server.finishNextUpload(with: .success(Self.attachment(id: "2", processed: true)))
+        try server.finishUpload(named: "b.jpg", with: .success(Self.attachment(id: "2", processed: true)))
         try await settle { isSettled(model) }
         #expect(model.canPost)
     }
