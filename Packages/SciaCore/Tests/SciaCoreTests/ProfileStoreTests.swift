@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -181,12 +182,6 @@ struct ProfileStoreTests {
             continuation?.resume()
             continuation = nil
         }
-
-        func waitUntilEntered() async {
-            while !isEntered {
-                await Task.yield()
-            }
-        }
     }
 
     /// 前に読んだ関係から始めると、読み直しが終わる前にフォローを送れる。フォローより前に頼んだ読み直しの応答が後から届いても、フォローの結果を古い関係で戻さない。
@@ -208,7 +203,7 @@ struct ProfileStoreTests {
         let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: api)
 
         let load = Task { await store.loadProfile() }
-        await gate.waitUntilEntered()
+        try await waitUntil { await gate.isEntered }
         try await store.toggleFollow()
         await gate.open()
         _ = await load.value
@@ -235,7 +230,7 @@ struct ProfileStoreTests {
         let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: api)
 
         let load = Task { await store.loadProfile() }
-        await gate.waitUntilEntered()
+        try await waitUntil { await gate.isEntered }
         store.apply(Relationship(id: "2", blocking: true))
         await gate.open()
         _ = await load.value
@@ -263,7 +258,7 @@ struct ProfileStoreTests {
         let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: cache, api: api)
 
         let follow = Task { try await store.toggleFollow() }
-        await gate.waitUntilEntered()
+        try await waitUntil { await gate.isEntered }
         store.apply(Relationship(id: "2", blocking: true))
         await gate.open()
         _ = try await follow.value

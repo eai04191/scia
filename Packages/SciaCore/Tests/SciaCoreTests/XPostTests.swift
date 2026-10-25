@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -155,7 +156,7 @@ struct XPostTests {
             throw XPostClient.Unavailable(statusCode: 404)
         }
         var loaded: [String] = []
-        await confirmation { done in
+        try await confirmation { done in
             store.onLoad = { id in
                 loaded.append(id)
                 done()
@@ -163,12 +164,12 @@ struct XPostTests {
             store.request(id: "1")
             store.request(id: "1")
             store.request(id: "2")
-            while await counter.count("2") == 0 || store.post(id: "1") == nil {
-                await Task.yield()
-            }
+            try await waitUntil { await counter.count("2") == 1 && store.post(id: "1") != nil }
         }
         store.request(id: "2")
-        await Task.yield()
+        // 読み直すなら、あとから頼んだ投稿より先に読み始める。あとから頼んだ投稿を読み始めるまで待ってから、読み直していないことを確かめる。
+        store.request(id: "3")
+        try await waitUntil { await counter.count("3") == 1 }
 
         #expect(loaded == ["1"])
         #expect(store.post(id: "1") == post)
@@ -190,12 +191,14 @@ struct XPostTests {
 
         store.reserve(id: "1")
         store.request(id: "1")
-        await Task.yield()
+        // 読みに行くなら、あとから頼んだ投稿より先に読み始める。あとから頼んだ投稿を読み終えるまで待ってから、読みに行っていないことを確かめる。
+        store.request(id: "2")
+        try await waitUntil { store.post(id: "2") != nil }
         #expect(store.post(id: "1") == nil)
 
         store.deliver(post)
         #expect(store.post(id: "1") == post)
-        #expect(loaded == ["1"])
+        #expect(loaded == ["2", "1"])
         #expect(await counter.count("1") == 0)
     }
 }
