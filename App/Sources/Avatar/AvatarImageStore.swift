@@ -21,7 +21,7 @@ final class AvatarImageStore {
     private var inFlight: [Key: Task<UIImage, any Error>] = [:]
     /// 読めなかった画像。先読みと新着の挿入前の待ちでは読み直さず、読めないアイコンのために通信を増やしたり挿入を遅らせたりしない。
     /// 行に描くときは、間隔をおいてから読み直す。読めたら忘れる。
-    private var retry: ImageRetrySchedule
+    private var retry: RetrySchedule
     private var listeners: [Listener] = []
     private let logger = SciaLog.logger(category: "avatar")
     /// 読み込みを待つ期限の時計。テストでは手で進める時計に替える。
@@ -29,12 +29,12 @@ final class AvatarImageStore {
 
     init(
         clock: any Clock<Duration> = AppDependencies.clock,
-        retryPolicy: @escaping @MainActor () -> ImageRetrySchedule.Policy = { TuningCatalog.imageRetry(in: AppDependencies.tuning) },
+        retryPolicy: @escaping @MainActor () -> RetrySchedule.Policy = { TuningCatalog.imageRetry(in: AppDependencies.tuning) },
         fetch: @escaping Fetch
     ) {
         self.clock = clock
         self.fetch = fetch
-        retry = ImageRetrySchedule(policy: retryPolicy, clock: clock)
+        retry = RetrySchedule(policy: retryPolicy, clock: clock)
         // 120ピクセル四方の止まった画像なら500枚ほど入る大きさ。
         cache.totalCostLimit = 32 * 1_024 * 1_024
     }

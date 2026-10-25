@@ -34,14 +34,14 @@ struct EmojiImageStoreTests {
     }
 
     private func makeStore(_ responses: Responses) -> EmojiImageStore {
-        EmojiImageStore(clock: clock, retryPolicy: { ImageRetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { url in
+        EmojiImageStore(clock: clock, retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { url in
             try responses.fetch(url)
         }
     }
 
     /// 通信の失敗やサーバーの一時的な障害で読めなかった絵文字は、間隔が過ぎてから描くと読み直し、読めたら画像で描く。
     /// 読み直している間も、文字で描き続ける。
-    @Test(arguments: [URLError(.notConnectedToInternet) as any Error & Sendable, RemoteFetchError(statusCode: 503)])
+    @Test(arguments: [URLError(.notConnectedToInternet) as any Error & Sendable, HTTPStatusError(statusCode: 503)])
     func temporaryFailureIsRetriedAfterTheDelay(error: any Error & Sendable) async throws {
         let responses = Responses(first: error)
         let store = makeStore(responses)
@@ -61,7 +61,7 @@ struct EmojiImageStoreTests {
 
     /// 消えた画像は、自動では読み直さない。使う人がメニューを開いたときは読み直す。
     @Test func missingImageIsRetriedOnlyWhenTheUserAsks() async throws {
-        let responses = Responses(first: RemoteFetchError(statusCode: 404))
+        let responses = Responses(first: HTTPStatusError(statusCode: 404))
         let store = makeStore(responses)
 
         _ = store.image(for: url)
@@ -99,9 +99,9 @@ struct EmojiImageStoreTests {
         let fresh = try #require(URL(string: "https://example.social/media_proxy/2/original"))
         let reads = Mutex<[URL]>([])
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in }.pngData())
-        let store = EmojiImageStore(clock: clock, retryPolicy: { ImageRetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { url in
+        let store = EmojiImageStore(clock: clock, retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { url in
             reads.withLock { $0.append(url) }
-            if url == limited { throw RemoteFetchError(statusCode: 429, retryAfter: .seconds(120)) }
+            if url == limited { throw HTTPStatusError(statusCode: 429, retryAfter: .seconds(120)) }
             return png
         }
 

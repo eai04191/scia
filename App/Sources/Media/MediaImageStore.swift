@@ -27,18 +27,18 @@ final class MediaImageStore {
     /// 先頭から最初のフレームを作れなかった動画。サーバーのプレビューを出し、読み直さない。通信の失敗は、つながれば作れるため含めない。
     private var failedVideoFrames: Set<URL> = []
     /// 読めなかった画像と動画の最初のフレームを、一覧に描いたときにいつ読み直すか。
-    private var retry: ImageRetrySchedule
+    private var retry: RetrySchedule
     private let logger = SciaLog.logger(category: "media")
 
     init(
         files: MediaFileCache,
         clock: any Clock<Duration> = AppDependencies.clock,
-        retryPolicy: @escaping @MainActor () -> ImageRetrySchedule.Policy = { TuningCatalog.imageRetry(in: AppDependencies.tuning) },
+        retryPolicy: @escaping @MainActor () -> RetrySchedule.Policy = { TuningCatalog.imageRetry(in: AppDependencies.tuning) },
         fetch: @escaping Fetch
     ) {
         self.fetch = fetch
         self.files = files
-        retry = ImageRetrySchedule(policy: retryPolicy, clock: clock)
+        retry = RetrySchedule(policy: retryPolicy, clock: clock)
         // 4096px四方の画像が4枚ほど入る大きさ。
         cache.totalCostLimit = 256 * 1_024 * 1_024
     }

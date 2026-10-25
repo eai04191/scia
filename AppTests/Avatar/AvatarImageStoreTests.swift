@@ -53,7 +53,7 @@ struct AvatarImageStoreTests {
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }.pngData())
         let reads = Mutex(0)
         let clock = TestClock()
-        let store = AvatarImageStore(clock: clock, retryPolicy: { ImageRetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { _ in
+        let store = AvatarImageStore(clock: clock, retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { _ in
             let read = reads.withLock { reads in
                 defer { reads += 1 }
                 return reads

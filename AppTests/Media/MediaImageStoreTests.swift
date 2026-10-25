@@ -130,7 +130,7 @@ struct MediaImageStoreTests {
         let png = try pngData()
         let rangeReads = Mutex(0)
         let clock = TestClock()
-        let store = MediaImageStore(files: .temporary(), clock: clock, retryPolicy: { ImageRetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { _, range in
+        let store = MediaImageStore(files: .temporary(), clock: clock, retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { _, range in
             guard range != nil else { return png }
             rangeReads.withLock { $0 += 1 }
             throw URLError(.notConnectedToInternet)
@@ -159,21 +159,21 @@ struct MediaImageStoreRetryTests {
     @Test func failedImageIsRetriedAfterTheDelayOrWhenTheUserOpensIt() async throws {
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }.pngData())
         let reads = Mutex(0)
-        let store = MediaImageStore(files: .temporary(), clock: clock, retryPolicy: { ImageRetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { _, _ in
+        let store = MediaImageStore(files: .temporary(), clock: clock, retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { _, _ in
             let read = reads.withLock { reads in
                 defer { reads += 1 }
                 return reads
             }
-            if read < 2 { throw RemoteFetchError(statusCode: 503) }
+            if read < 2 { throw HTTPStatusError(statusCode: 503) }
             return png
         }
 
-        await #expect(throws: RemoteFetchError.self) { try await store.image(for: url, maxPixelSize: 8) }
+        await #expect(throws: HTTPStatusError.self) { try await store.image(for: url, maxPixelSize: 8) }
         await #expect(throws: ImageLoadDeferred.self) { try await store.image(for: url, maxPixelSize: 8) }
         #expect(reads.withLock { $0 } == 1)
 
         clock.advance(by: .seconds(5))
-        await #expect(throws: RemoteFetchError.self) { try await store.image(for: url, maxPixelSize: 8) }
+        await #expect(throws: HTTPStatusError.self) { try await store.image(for: url, maxPixelSize: 8) }
         #expect(reads.withLock { $0 } == 2)
 
         _ = try await store.image(for: url, maxPixelSize: 8, retriesNow: true)

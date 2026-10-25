@@ -1368,8 +1368,8 @@ public enum TuningCatalog {
 
     /// 読めなかった画像を、行を描いたときに読み直す間隔。
     @MainActor
-    public static func imageRetry(in store: TuningStore) -> ImageRetrySchedule.Policy {
-        ImageRetrySchedule.Policy(
+    public static func imageRetry(in store: TuningStore) -> RetrySchedule.Policy {
+        RetrySchedule.Policy(
             initialDelay: .seconds(store.value(of: imageRetryInitialDelay)),
             maxDelay: .seconds(store.value(of: imageRetryMaxDelay)),
             jitter: .standard

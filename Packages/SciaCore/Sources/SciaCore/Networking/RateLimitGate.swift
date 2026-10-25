@@ -54,8 +54,9 @@ public actor RateLimitGate {
 
     /// 自動の通信を送ってよいか確かめる。控えている間なら投げる。
     func checkAutomaticRequest() throws(AutomaticRequestsPaused) {
-        guard let pausedUntil, now() < pausedUntil else { return }
-        throw AutomaticRequestsPaused(until: pausedUntil)
+        let now = now()
+        guard let pausedUntil, now < pausedUntil else { return }
+        throw AutomaticRequestsPaused(until: pausedUntil, retryAfter: .seconds(pausedUntil.timeIntervalSince(now)))
     }
 
     private func resume(pausedUntil date: Date) {
@@ -68,7 +69,17 @@ public actor RateLimitGate {
     /// https://www.rfc-editor.org/rfc/rfc9110.html#name-retry-after
     /// https://docs.joinmastodon.org/api/rate-limits/
     static func resumeDate(of response: HTTPURLResponse, now: Date) -> Date? {
-        if let retryAfter = response.value(forHTTPHeaderField: "Retry-After") {
+        resumeDate(header: { response.value(forHTTPHeaderField: $0) }, now: now)
+    }
+
+    /// 応答が示した、再開までの長さ。時刻が過ぎていれば`.zero`、示していなければnil。
+    static func retryAfter(of response: HTTPURLResponse, now: Date) -> Duration? {
+        resumeDate(of: response, now: now).map { .seconds(max($0.timeIntervalSince(now), 0)) }
+    }
+
+    /// - Parameter header: ヘッダーの名前から値を返す。WebSocketのハンドシェイクのように、応答の型を持たないものからも読めるようにする。
+    static func resumeDate(header: (String) -> String?, now: Date) -> Date? {
+        if let retryAfter = header("Retry-After") {
             if let seconds = Int(retryAfter), seconds >= 0 {
                 return now.addingTimeInterval(TimeInterval(seconds))
             }
@@ -76,7 +87,7 @@ public actor RateLimitGate {
                 return date
             }
         }
-        if let reset = response.value(forHTTPHeaderField: "X-RateLimit-Reset") {
+        if let reset = header("X-RateLimit-Reset") {
             return (try? Date(reset, strategy: .iso8601.year().month().day().time(includingFractionalSeconds: true)))
                 ?? (try? Date(reset, strategy: .iso8601))
         }
@@ -96,8 +107,11 @@ public actor RateLimitGate {
 public struct AutomaticRequestsPaused: Error, Equatable {
     /// 再開の時刻。
     public let until: Date
+    /// 控え始めたときの、再開までの長さ。時計で待つ処理（つなぎ直しなど）が、日付を読まずに待てるようにする。
+    public let retryAfter: Duration?
 
-    public init(until: Date) {
+    public init(until: Date, retryAfter: Duration? = nil) {
         self.until = until
+        self.retryAfter = retryAfter
     }
 }

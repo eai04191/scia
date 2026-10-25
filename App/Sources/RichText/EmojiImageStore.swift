@@ -44,7 +44,7 @@ final class EmojiImageStore {
     /// 静止画を読んでいる途中のURL。
     private var loading: Set<URL> = []
     /// 読めなかった画像を、描いたときにいつ読み直すか。静止画とアニメーション版で共有する。URLが違うので混ざらない。
-    private var retry: ImageRetrySchedule
+    private var retry: RetrySchedule
     private var animationStates: [URL: AnimationState] = [:]
     /// 描いている層がつかんでいるアニメーション。`animations`から捨てても、層が使っている間はコマが解放されないため、
     /// 読み直さずにこれを返す。読み直すと、捨てられた分をまた入れて別のものを押し出し、画面に出ているもの同士で読み直しを繰り返すため。
@@ -61,11 +61,11 @@ final class EmojiImageStore {
 
     init(
         clock: any Clock<Duration> = AppDependencies.clock,
-        retryPolicy: @escaping @MainActor () -> ImageRetrySchedule.Policy = { TuningCatalog.imageRetry(in: AppDependencies.tuning) },
+        retryPolicy: @escaping @MainActor () -> RetrySchedule.Policy = { TuningCatalog.imageRetry(in: AppDependencies.tuning) },
         fetch: @escaping Fetch
     ) {
         self.fetch = fetch
-        retry = ImageRetrySchedule(policy: retryPolicy, clock: clock)
+        retry = RetrySchedule(policy: retryPolicy, clock: clock)
     }
 
     /// 読み込み済みなら画像を返す。まだなら読み込みを始めてnilを返す。
@@ -75,7 +75,7 @@ final class EmojiImageStore {
         if let image = stills.object(forKey: url as NSURL) {
             return image
         }
-        // まだ読んでいない画像も、同じサーバーの`/media_proxy`が制限されている間は読まない（`ImageRetrySchedule.rateLimitScope`）。
+        // まだ読んでいない画像も、同じサーバーの`/media_proxy`が制限されている間は読まない（`RetrySchedule.rateLimitScope`）。
         if retriesNow || retry.allowsAutomaticLoad(of: url) {
             load(url)
         }

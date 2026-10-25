@@ -22,26 +22,26 @@ struct RemoteFetchTests {
     /// サーバーの障害のページは、画像として読めないデータではなく、応答の失敗として返す。
     @Test(arguments: [404, 503])
     func errorPageIsNotReturnedAsData(statusCode: Int) async throws {
-        let error = await #expect(throws: RemoteFetchError.self) {
+        let error = await #expect(throws: HTTPStatusError.self) {
             try await fetch(.json("<html>\(statusCode)</html>", statusCode: statusCode)).data(from: try url())
         }
-        #expect(error == RemoteFetchError(statusCode: statusCode))
+        #expect(error == HTTPStatusError(statusCode: statusCode))
     }
 
     /// Mastodonが`/media_proxy`を制限したときの429は、`X-RateLimit-Reset`で再開の時刻を示す。
     @Test func readsResetTimeOfRateLimit() async throws {
         let reset = ISO8601DateFormatter().string(from: now.addingTimeInterval(120))
-        let error = await #expect(throws: RemoteFetchError.self) {
+        let error = await #expect(throws: HTTPStatusError.self) {
             try await fetch(.json(#"{"error":"Too many requests"}"#, statusCode: 429, headers: ["X-RateLimit-Reset": reset])).data(from: try url())
         }
-        #expect(error == RemoteFetchError(statusCode: 429, retryAfter: .seconds(120)))
+        #expect(error == HTTPStatusError(statusCode: 429, retryAfter: .seconds(120)))
     }
 
     @Test func readsRetryAfter() async throws {
-        let error = await #expect(throws: RemoteFetchError.self) {
+        let error = await #expect(throws: HTTPStatusError.self) {
             try await fetch(.json("", statusCode: 503, headers: ["Retry-After": "30"])).data(from: try url())
         }
-        #expect(error == RemoteFetchError(statusCode: 503, retryAfter: .seconds(30)))
+        #expect(error == HTTPStatusError(statusCode: 503, retryAfter: .seconds(30)))
     }
 
     @Test func passesThroughNetworkFailure() async throws {

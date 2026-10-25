@@ -5,7 +5,7 @@ public import Foundation
 /// 待っても直らない失敗（そのほかの4xx、画像として読めないデータ）は、自動では読み直さない。
 /// 使う人が自分で見に行った操作（ビューアを開くなど）は、これに聞かずに読む。読めたら`recordSuccess`で忘れる。
 @MainActor
-public struct ImageRetrySchedule {
+public struct RetrySchedule {
     public struct Policy: Sendable {
         /// 1回目の失敗のあとに待つ長さ。続けて失敗するたびに倍にする。
         public var initialDelay: Duration
@@ -60,10 +60,10 @@ public struct ImageRetrySchedule {
 
     /// 読めなかったことを覚える。取り消しは失敗ではないので覚えない。
     public mutating func recordFailure(_ error: any Error, for url: URL) {
-        switch Failure(error) {
+        switch HTTPFailure(error) {
         case nil:
             return
-        case .permanent:
+        case .permanent, .unauthorized:
             records[url] = .permanent
         case .temporary(let retryAfter):
             let now = elapsed()
@@ -82,31 +82,6 @@ public struct ImageRetrySchedule {
 
     public mutating func recordSuccess(for url: URL) {
         records[url] = nil
-    }
-
-    enum Failure: Equatable {
-        case temporary(retryAfter: Duration?)
-        case permanent
-
-        /// 取り消しはnil。
-        init?(_ error: any Error) {
-            if error is CancellationError { return nil }
-            if let error = error as? URLError {
-                // 通信の失敗は、つながれば読める。
-                guard error.code != .cancelled else { return nil }
-                self = .temporary(retryAfter: nil)
-                return
-            }
-            if let error = error as? RemoteFetchError {
-                switch error.statusCode {
-                case 408, 429, 500...599: self = .temporary(retryAfter: error.retryAfter)
-                default: self = .permanent
-                }
-                return
-            }
-            // 画像として読めないデータなど。
-            self = .permanent
-        }
     }
 
     /// 応答の制限が掛かる単位。Mastodonは`/media_proxy`への読み込みをIPごとにまとめて制限するため（`config/initializers/rack_attack.rb`の`throttle_media_proxy`）、
