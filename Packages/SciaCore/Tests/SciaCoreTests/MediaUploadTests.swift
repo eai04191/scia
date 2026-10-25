@@ -42,22 +42,6 @@ struct MediaUploadTests {
                 state.now = max(state.now, deadline)
             }
         }
-
-        func advance(by duration: Duration) {
-            state.withLock { $0.now = $0.now.advanced(by: duration) }
-        }
-    }
-
-    /// 応答を返す前に時計を進め、時間のかかる通信を再現する。
-    private struct SlowTransport: HTTPTransport {
-        let base: StubTransport
-        let clock: ManualClock
-        let latency: Duration
-
-        func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-            clock.advance(by: latency)
-            return try await base.send(request)
-        }
     }
 
     @Test func uploadSendsMultipartFileAndDescription() async throws {
@@ -165,7 +149,7 @@ struct MediaUploadTests {
         ])
         let clock = ManualClock()
 
-        let attachment = try await makeClient(transport).waitUntilProcessed("113000000000000100", pollInterval: .seconds(1), timeout: .seconds(180), clock: clock)
+        let attachment = try await makeClient(transport).waitUntilProcessed("113000000000000100", clock: clock)
 
         #expect(attachment.url != nil)
         #expect(clock.sleeps == [.seconds(1), .seconds(1)])
@@ -181,30 +165,29 @@ struct MediaUploadTests {
         ])
 
         await #expect(throws: MediaUploadError.processingFailed(MastodonAPIError(statusCode: 422, message: "Error processing thumbnail for uploaded media", serverMessage: "Error processing thumbnail for uploaded media"))) {
-            _ = try await makeClient(transport).waitUntilProcessed("113000000000000101", pollInterval: .seconds(1), timeout: .seconds(180), clock: ManualClock())
+            _ = try await makeClient(transport).waitUntilProcessed("113000000000000101", clock: ManualClock())
         }
     }
 
-    @Test func waitGivesUpAfterTimeout() async throws {
-        // 3秒待つ間に、最初と1秒ごとの4回問い合わせる。
-        let transport = StubTransport(Array(repeating: .json("", statusCode: 206), count: 4))
-
-        await #expect(throws: MediaUploadError.processingTimedOut(serverID: "113000000000000101")) {
-            _ = try await makeClient(transport).waitUntilProcessed("113000000000000101", pollInterval: .seconds(1), timeout: .seconds(3), clock: ManualClock())
-        }
-        #expect(await transport.requests.count == 4)
-    }
-
-    @Test func timeoutCountsTimeSpentOnRequests() async throws {
-        // 問い合わせに2秒かかると、1秒の間隔と合わせて3秒ごとになり、6秒の間に3回で諦める。
-        let stub = StubTransport(Array(repeating: .json("", statusCode: 206), count: 3))
+    @Test func waitLengthensIntervalLikeWebUI() async throws {
+        // Mastodonのweb UIと同じく、n回目の問い合わせのあとは、log2(n)秒（1秒未満なら1秒）おく。
+        let transport = StubTransport(Array(repeating: .json("", statusCode: 206), count: 4) + [try .fixture("media_attachment")])
         let clock = ManualClock()
-        let client = MastodonClient(credential: try makeClient(stub).credential, transport: SlowTransport(base: stub, clock: clock, latency: .seconds(2)))
 
-        await #expect(throws: MediaUploadError.processingTimedOut(serverID: "113000000000000101")) {
-            _ = try await client.waitUntilProcessed("113000000000000101", pollInterval: .seconds(1), timeout: .seconds(6), clock: clock)
-        }
-        #expect(await stub.requests.count == 3)
+        _ = try await makeClient(transport).waitUntilProcessed("113000000000000101", clock: clock)
+
+        #expect(clock.sleeps == [.seconds(1), .seconds(1), .seconds(log2(3.0)), .seconds(2)])
+    }
+
+    @Test func waitKeepsPollingWithoutTimeLimit() async throws {
+        // 長い動画や混んだサーバーでは、変換に数分かかる。何分かかっても諦めず、終わるまで待つ。
+        let transport = StubTransport(Array(repeating: .json("", statusCode: 206), count: 150) + [try .fixture("media_attachment")])
+        let clock = ManualClock()
+
+        let attachment = try await makeClient(transport).waitUntilProcessed("113000000000000101", clock: clock)
+
+        #expect(attachment.url != nil)
+        #expect(clock.sleeps.reduce(.zero, +) > .seconds(10 * 60))
     }
 
     @Test func updateDescriptionSendsPutForm() async throws {

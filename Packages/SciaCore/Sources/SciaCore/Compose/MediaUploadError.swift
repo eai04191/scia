@@ -11,14 +11,11 @@ public enum MediaUploadError: Error, Equatable, Sendable, LocalizedError {
     case rejected(MastodonAPIError)
     /// サーバーでの変換に失敗した。アップロードでは500、処理の完了を待っている間は422が返る。
     case processingFailed(MastodonAPIError)
-    /// 決めた時間を過ぎても、サーバーでの処理が終わらなかった。サーバーには添付ファイルが残っていて、待ち直せる。
-    case processingTimedOut(serverID: String)
 
     public var errorDescription: String? {
         switch self {
         case .rejected(let error): error.serverMessage ?? "サーバーがメディアを受け付けませんでした。"
         case .processingFailed(let error): error.serverMessage ?? "サーバーでメディアを変換できませんでした。"
-        case .processingTimedOut: "サーバーでのメディアの処理が終わりませんでした。"
         }
     }
 }

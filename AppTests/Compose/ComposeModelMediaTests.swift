@@ -565,24 +565,23 @@ struct ComposeModelMediaTests {
         #expect(model.canPost)
     }
 
-    /// 処理の待ち時間切れは、送り直さずに同じIDで待ち直す。
-    @Test func retryAfterTimeoutWaitsAgainWithoutUploading() async throws {
+    /// サーバーが変換に失敗したら、同じ添付ファイルを待ち直しても終わらないので、再試行では送り直す。
+    @Test func retryAfterProcessingFailureUploadsAgain() async throws {
         let server = FakeServer()
         server.uploadResult = { _ in Self.attachment(id: "v1", processed: false) }
-        server.waitResult = { id in throw MediaUploadError.processingTimedOut(serverID: id) }
+        server.waitResult = { _ in throw MediaUploadError.processingFailed(MastodonAPIError(statusCode: 422, message: "Error processing", serverMessage: "Error processing")) }
         let model = makeModel(server)
 
         model.applyPickerSelection([try picked("a")])
         try await settle { isSettled(model) }
         let id = try #require(model.attachments.first?.id)
-        #expect(model.attachments.first?.state == .failed(serverID: "v1"))
 
-        server.waitResult = { id in Self.attachment(id: id, processed: true) }
+        server.uploadResult = { _ in Self.attachment(id: "v2", processed: true) }
         model.retryAttachment(id)
         try await settle { model.attachments.first?.isReady == true }
 
-        #expect(server.uploads.count == 1)
-        #expect(server.waits == ["v1", "v1"])
+        #expect(server.uploads.count == 2)
+        #expect(server.waits == ["v1"])
     }
 
     /// 投稿を待つ間にピッカーで外したものは、投稿に失敗した後の下書きからも外れている。

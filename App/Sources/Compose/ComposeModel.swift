@@ -322,7 +322,7 @@ struct LocalMedia {
     /// 読み込んだファイル。読み込む前と、読み込みに失敗したときはnil。
     var file: LocalMediaFile?
     var thumbnail: UIImage?
-    /// 失敗の理由。`DraftAttachment.State.failed`は理由を持たないため、ここに持つ。再試行が待ち直しか送り直しかも、これで決める。
+    /// 失敗の理由。`DraftAttachment.State.failed`は理由を持たないため、ここに持つ。
     var failure: (any Error)?
     /// 代替テキストを送れなかった理由。送れないと`needsDescriptionUpdate`のまま止まるため、送り直す操作と表示に使う。
     var descriptionFailure: (any Error)?
@@ -572,48 +572,43 @@ extension ComposeModel {
         var sentDescription: String?
         do {
             let processed: MediaAttachment
-            if case .processingTimedOut(let serverID) = local.failure as? MediaUploadError {
-                setState(.processing(serverID: serverID), of: id)
-                processed = try await media.waitUntilProcessed(serverID)
-            } else {
-                setState(.uploading, of: id)
-                let file = try await loadFile(id, local: local)
-                let sending = try await prepare(file, of: id)
-                let accepted: MediaAttachment
-                do {
-                    accepted = try await send(sending, of: id, sentDescription: &sentDescription)
-                } catch let error where UnprocessableMediaFormats.shouldReplaceWithJPEG(mimeType: sending.mimeType, error: error) {
-                    // 対応形式として返しているのに処理できないサーバーがある（Mastodon 4.7.2と4.7.3のHEICなど）。
-                    // 同じ写真のJPEGで1回だけ送り直し、このサーバーのこの版ではその形式を送らないと覚える。
-                    logger.info("attachment format unprocessable, resending as jpeg mime=\(sending.mimeType, privacy: .public) reencoded=\(sending != file, privacy: .public)")
-                    media.recordUnprocessableImageType(sending.mimeType)
-                    let replacement: LocalMediaFile
-                    if localMedia[id]?.sendingIsReencoded == true {
-                        // 縮めるために作り直したファイルなら、元から作り直す。JPEGに決めて作り直す。
+            setState(.uploading, of: id)
+            let file = try await loadFile(id, local: local)
+            let sending = try await prepare(file, of: id)
+            let accepted: MediaAttachment
+            do {
+                accepted = try await send(sending, of: id, sentDescription: &sentDescription)
+            } catch let error where UnprocessableMediaFormats.shouldReplaceWithJPEG(mimeType: sending.mimeType, error: error) {
+                // 対応形式として返しているのに処理できないサーバーがある（Mastodon 4.7.2と4.7.3のHEICなど）。
+                // 同じ写真のJPEGで1回だけ送り直し、このサーバーのこの版ではその形式を送らないと覚える。
+                logger.info("attachment format unprocessable, resending as jpeg mime=\(sending.mimeType, privacy: .public) reencoded=\(sending != file, privacy: .public)")
+                media.recordUnprocessableImageType(sending.mimeType)
+                let replacement: LocalMediaFile
+                if localMedia[id]?.sendingIsReencoded == true {
+                    // 縮めるために作り直したファイルなら、元から作り直す。JPEGに決めて作り直す。
+                    try? FileManager.default.removeItem(at: sending.url)
+                    localMedia[id]?.sending = nil
+                    replacement = try await prepare(file, of: id, forcingJPEG: true)
+                } else if local.assetIdentifier == nil {
+                    // ペーストしたものは、クリップボードの中身が変わっているかもしれず読み直せないので、読み込んだファイルからJPEGを作る。
+                    // 位置情報だけを除いて書き直したファイルは、作り直すファイルと同じ場所を使うので、先に消す。
+                    if sending != file {
                         try? FileManager.default.removeItem(at: sending.url)
-                        localMedia[id]?.sending = nil
-                        replacement = try await prepare(file, of: id, forcingJPEG: true)
-                    } else if local.assetIdentifier == nil {
-                        // ペーストしたものは、クリップボードの中身が変わっているかもしれず読み直せないので、読み込んだファイルからJPEGを作る。
-                        // 位置情報だけを除いて書き直したファイルは、作り直すファイルと同じ場所を使うので、先に消す。
-                        if sending != file {
-                            try? FileManager.default.removeItem(at: sending.url)
-                        }
-                        localMedia[id]?.sending = nil
-                        replacement = try await prepare(file, of: id, forcingJPEG: true)
-                    } else {
-                        // 元のまま、または位置情報だけを除いて送ったファイルなら、ピッカーから同じ写真のJPEGを受け取り直す。
-                        replacement = try await prepare(try await reloadFile(id, local: local, avoiding: file), of: id, forcingJPEG: true)
                     }
-                    accepted = try await send(replacement, of: id, sentDescription: &sentDescription)
-                }
-                try Task.checkCancellation()
-                if accepted.url == nil {
-                    setState(.processing(serverID: accepted.id), of: id)
-                    processed = try await media.waitUntilProcessed(accepted.id)
+                    localMedia[id]?.sending = nil
+                    replacement = try await prepare(file, of: id, forcingJPEG: true)
                 } else {
-                    processed = accepted
+                    // 元のまま、または位置情報だけを除いて送ったファイルなら、ピッカーから同じ写真のJPEGを受け取り直す。
+                    replacement = try await prepare(try await reloadFile(id, local: local, avoiding: file), of: id, forcingJPEG: true)
                 }
+                accepted = try await send(replacement, of: id, sentDescription: &sentDescription)
+            }
+            try Task.checkCancellation()
+            if accepted.url == nil {
+                setState(.processing(serverID: accepted.id), of: id)
+                processed = try await media.waitUntilProcessed(accepted.id)
+            } else {
+                processed = accepted
             }
             try Task.checkCancellation()
             setState(.uploaded(processed), of: id)

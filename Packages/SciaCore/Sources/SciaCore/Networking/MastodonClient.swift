@@ -417,26 +417,21 @@ public struct MastodonClient: Sendable {
         return attachment.url == nil ? .processing : .processed(attachment)
     }
 
-    /// 変換が済むまで、`pollInterval`ごとに状態を問い合わせて待つ。
-    /// 待ち始めてから`timeout`を過ぎたら`MediaUploadError.processingTimedOut`を投げる。問い合わせにかかった時間も含めて数える。
-    /// 問い合わせ1回の長さは通信の設定のタイムアウトに任せるので、最後の問い合わせの分だけ`timeout`を超えることがある。
-    /// サーバーの添付ファイルは残るので、同じIDで待ち直せる。
-    public func waitUntilProcessed(
-        _ id: String,
-        pollInterval: Duration = .seconds(1),
-        timeout: Duration = .seconds(180)
-    ) async throws -> MediaAttachment {
-        try await waitUntilProcessed(id, pollInterval: pollInterval, timeout: timeout, clock: clock)
+    /// 変換が済むまで、状態を問い合わせて待つ。時間で諦めず、止めるのは呼んだタスクのキャンセルだけにする。
+    /// 長い動画や混んだサーバーでは変換に数分かかり、待つのをやめてもサーバーは変換を続けるため。
+    /// 問い合わせの間隔は、Mastodonのweb UIと同じく、n回目のあとにlog2(n)秒（1秒未満なら1秒）おき、待つほど少しずつ延ばす。
+    public func waitUntilProcessed(_ id: String) async throws -> MediaAttachment {
+        try await waitUntilProcessed(id, clock: clock)
     }
 
-    func waitUntilProcessed(_ id: String, pollInterval: Duration, timeout: Duration, clock: any Clock<Duration>) async throws -> MediaAttachment {
-        let elapsed = stopwatch(on: clock)
+    func waitUntilProcessed(_ id: String, clock: any Clock<Duration>) async throws -> MediaAttachment {
+        var count = 1
         while true {
             if case .processed(let attachment) = try await mediaProcessingState(id) {
                 return attachment
             }
-            guard elapsed() + pollInterval <= timeout else { throw MediaUploadError.processingTimedOut(serverID: id) }
-            try await clock.sleep(for: pollInterval)
+            try await clock.sleep(for: .seconds(max(log2(Double(count)), 1)))
+            count += 1
         }
     }
 
