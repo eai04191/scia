@@ -10,6 +10,7 @@ only_rules:
   - direct_time_access
   - fixed_font_size
   - dimmed_white_text
+  - session_task_outside_scope
 
 included:
   - App
@@ -107,6 +108,19 @@ custom_rules:
       - doccomment
       - string
     message: "半透明の白い文字はdimmedWhiteText(alpha:)で作り、コントラストを上げる設定で濃くする"
+    severity: error
+
+  # セッションの持ち物（各一覧、開いた画面、投稿欄）で始める処理は、持ち主（TaskScope）を通す。持ち主を通さないTaskは、ログアウト、アカウントの切り替え、
+  # 窓を閉じたときに止まらず、前のアカウントのトークンで送り続けたり、終わった処理が溜まり続けたりしていた。止める処理の一覧を手で並べて保たずに済むよう、ここで止める。
+  # 変化の知らせを受けてメインアクターへ戻るだけの乗り換え（`Task { @MainActor`）は、通信を持たないので対象外にする
+  session_task_outside_scope:
+    included: "App/Sources/(SessionController|Timeline/(FeedTimelineController|NotificationsController|SavedStatusesController)|Profile/(ProfileController|AccountListController)|Thread/ThreadController|Compose/(ComposeModel|InlineComposeController))\\.swift"
+    regex: "\\bTask(\\.detached)?\\s*(\\{(?!\\s*@MainActor)|\\()"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "セッションの持ち物で始める処理は、持ち主（TaskScope）のrunで始める。メインアクターへ戻るだけなら`Task { @MainActor`と書く"
     severity: error
 
 strict: true

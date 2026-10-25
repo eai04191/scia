@@ -2149,6 +2149,7 @@ final class SessionController {
         }
         // 投稿欄の一時ディレクトリへコピーし終えたら、受け渡しのフォルダーから消す。コピーに失敗したものは、添付の失敗として投稿欄に出る。
         // セッションを閉じても止めない。端末の中のコピーで通信せず、途中で止めると受け渡しのフォルダーが消されずに残るため。
+        // swiftlint:disable:next session_task_outside_scope
         Task {
             for item in media {
                 _ = try? await item.load()
