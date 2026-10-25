@@ -219,7 +219,7 @@ final class StreamingStatusPullView: UIView {
             stateLabel.font = .preferredFont(forTextStyle: .footnote)
             stateLabel.textColor = .label
             stateLabel.numberOfLines = 0
-            detailLabel.font = UIFont.monospacedDigitSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .caption1).pointSize, weight: .regular)
+            detailLabel.font = .monospacedDigitFont(forTextStyle: .caption1)
             detailLabel.textColor = .secondaryLabel
             detailLabel.numberOfLines = 0
             for label in [titleLabel, stateLabel, detailLabel] {

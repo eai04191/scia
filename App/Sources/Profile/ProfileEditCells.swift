@@ -269,7 +269,7 @@ final class ProfileEditFooter: UITableViewHeaderFooterView {
     func setText(_ text: String, isProblem: Bool) {
         label.text = text
         label.textColor = isProblem ? .systemRed : .secondaryLabel
-        label.font = UIFont.monospacedDigitSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote).pointSize, weight: .regular)
+        label.font = .monospacedDigitFont(forTextStyle: .footnote)
     }
 }
 

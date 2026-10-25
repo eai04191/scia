@@ -926,7 +926,7 @@ final class InlineComposeController: NSObject {
     }
 
     private static func remainingFont(for traits: UITraitCollection) -> UIFont {
-        .monospacedDigitSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote, compatibleWith: traits).pointSize, weight: .regular)
+        .monospacedDigitFont(forTextStyle: .footnote, compatibleWith: traits)
     }
 
     /// 左右の余白をなくし、幅を`toolButtonWidth`以上にする。記号は中央に置く。添付の枚数のように文字を添えて44ptを超えるときは、その分だけ広がる。

@@ -56,7 +56,8 @@ final class AltTextEditorView: UIView {
         placeholderLabel.adjustsFontForContentSizeCategory = true
         placeholderLabel.textColor = .dimmedWhiteText(alpha: 0.5)
         placeholderLabel.isAccessibilityElement = false
-        remainingLabel.font = .monospacedDigitSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote).pointSize, weight: .regular)
+        remainingLabel.font = .monospacedDigitFont(forTextStyle: .footnote)
+        remainingLabel.adjustsFontForContentSizeCategory = true
         remainingLabel.textAlignment = .right
         doneButton.configuration?.image = UIImage(systemName: "keyboard.chevron.compact.down")
         doneButton.configuration?.baseForegroundColor = .white
