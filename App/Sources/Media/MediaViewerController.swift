@@ -2412,7 +2412,7 @@ final class CaptionView: UIView {
             // 人が書いた代替テキストは言語が分からないため、設定の字形で描く。書き始めを促す文言は、ウィンドウに付けたアプリの言語で描く。
             label.attributedText = NSAttributedString(string: text, attributes: [.languageIdentifier: settings.glyphLanguageIdentifier()])
         }
-        label.textColor = isPlaceholder ? UIColor.white.withAlphaComponent(0.6) : .white
+        label.textColor = isPlaceholder ? .dimmedWhiteText(alpha: 0.6) : .white
         accessibilityLabel = isPlaceholder ? "代替テキストを追加" : text
         accessibilityHint = isEditable ? "代替テキストを編集します。" : "全文を表示します。"
     }

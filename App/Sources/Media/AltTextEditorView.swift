@@ -54,7 +54,7 @@ final class AltTextEditorView: UIView {
         placeholderLabel.text = "代替テキストを追加"
         placeholderLabel.font = .preferredFont(forTextStyle: .body)
         placeholderLabel.adjustsFontForContentSizeCategory = true
-        placeholderLabel.textColor = UIColor.white.withAlphaComponent(0.5)
+        placeholderLabel.textColor = .dimmedWhiteText(alpha: 0.5)
         placeholderLabel.isAccessibilityElement = false
         remainingLabel.font = .monospacedDigitSystemFont(ofSize: UIFont.preferredFont(forTextStyle: .footnote).pointSize, weight: .regular)
         remainingLabel.textAlignment = .right
@@ -148,7 +148,7 @@ final class AltTextEditorView: UIView {
         let remaining = remaining
         remainingLabel.isHidden = remaining > remainingThreshold
         remainingLabel.text = "\(remaining)"
-        remainingLabel.textColor = remaining < 0 ? .systemRed : UIColor.white.withAlphaComponent(0.7)
+        remainingLabel.textColor = remaining < 0 ? .systemRed : .dimmedWhiteText(alpha: 0.7)
         remainingLabel.accessibilityLabel = "残り\(remaining)文字"
     }
 }
