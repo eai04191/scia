@@ -1245,6 +1245,100 @@ struct MediaViewerControllerTests {
         #expect(viewer.view.superview == nil)
     }
 
+    /// 一覧で重ねた写真のように回して置いた起点からは、同じ角度と大きさから回しながら開き、開ききったらまっすぐにする。
+    /// 閉じるときは、起点の角度と大きさまで回しながら戻す。外側に接する四角へ戻すと、閉じ終わりにまっすぐな四角から回した写真へ切り替わって見えるため。
+    @Test func transitionFollowsRotationOfSource() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let rotation = 10 * CGFloat.pi / 180
+        let photo = UIView(frame: CGRect(x: 100, y: 200, width: 120, height: 120))
+        photo.transform = CGAffineTransform(rotationAngle: rotation)
+        harness.viewController.view.addSubview(photo)
+        let tile = MediaTileView(store: .offline)
+        tile.frame = CGRect(x: 10, y: 10, width: 100, height: 100)
+        photo.addSubview(tile)
+        let attachment = MediaAttachment(
+            id: "1",
+            type: .image,
+            url: nil,
+            previewUrl: nil,
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900)),
+            blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+        )
+        tile.apply(attachment, hiddenCount: 0, isCovered: false, policy: .offline)
+        MediaViewerController.present(
+            attachments: [attachment],
+            startIndex: 0,
+            store: .offline,
+            dragToDismiss: drag,
+            timing: timing,
+            from: harness.viewController,
+            sourceTile: { _ in tile },
+            onDismiss: {},
+            frameSource: harness.frames
+        )
+        let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
+        try await waitUntil { viewer.isContentHiddenForTransition }
+        let window = try #require(tile.window)
+        let source = tile.unrotatedFrame(in: window)
+        let opening = viewer.morphPlacement
+        // 開く間の複製は、ビューアの画面に載せている。
+        let openingFrame = viewer.view.convert(opening.unrotatedFrame, to: window)
+        #expect(abs(opening.rotation - rotation) < 0.001, "開き始めの角度が起点と違います: \(opening.rotation)")
+        #expect(abs(openingFrame.width - source.width) < 0.5 && abs(openingFrame.midX - source.midX) < 0.5 && abs(openingFrame.midY - source.midY) < 0.5, "開き始めの枠が起点と違います: \(openingFrame) \(source)")
+        harness.frames.runUntilStopped()
+        #expect(abs(viewer.morphPlacement.rotation) < 0.001, "開ききってもまっすぐになっていません")
+
+        viewer.close()
+        try await waitUntil { harness.viewController.presentedViewController == nil }
+        harness.frames.runUntilStopped()
+        let closed = viewer.morphPlacement
+        #expect(abs(closed.rotation - rotation) < 0.001, "閉じ終わりの角度が起点と違います: \(closed.rotation)")
+        #expect(abs(closed.unrotatedFrame.width - source.width) < 0.5 && abs(closed.unrotatedFrame.midX - source.midX) < 0.5 && abs(closed.unrotatedFrame.midY - source.midY) < 0.5, "閉じ終わりの枠が起点と違います: \(closed.unrotatedFrame) \(source)")
+    }
+
+    /// 起点がほかの添付ファイルを描いていても（一覧で重ねた3枚目の写真が4枚目の起点になるとき）、起点の上に重なっている写真は複製の手前に重ねる。
+    /// 画像を使わないことと、重なっているビューを重ねないことは別で、重ねないと戻る画像が手前の写真を覆う。
+    @Test func sourceOverlapIsKeptWhenSourceShowsOtherAttachment() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let tile = MediaTileView(store: .offline)
+        tile.frame = CGRect(x: 20, y: 200, width: 100, height: 100)
+        harness.viewController.view.addSubview(tile)
+        let above = UIView(frame: CGRect(x: 60, y: 240, width: 100, height: 100))
+        above.backgroundColor = .white
+        harness.viewController.view.addSubview(above)
+        let attachments = ["3", "4"].map { id in
+            MediaAttachment(
+                id: id,
+                type: .image,
+                url: nil,
+                previewUrl: nil,
+                meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900)),
+                blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+            )
+        }
+        tile.apply(attachments[0], hiddenCount: 0, isCovered: false, policy: .offline)
+        tile.standsInForOtherAttachments = true
+        tile.overlappingViews = [above]
+        MediaViewerController.present(
+            attachments: attachments,
+            startIndex: 1,
+            store: .offline,
+            dragToDismiss: drag,
+            timing: timing,
+            from: harness.viewController,
+            sourceTile: { _ in tile },
+            onDismiss: {},
+            frameSource: harness.frames
+        )
+        let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
+        try await waitUntil { viewer.isContentHiddenForTransition }
+        #expect(viewer.showsSourceOverlap, "起点の上に重なっている写真を重ねていません")
+        harness.frames.runUntilStopped()
+        viewer.dismiss(animated: false)
+    }
+
     /// 開く途中は、バーの下のサムネイルと同じ見え方から始めるため、サムネイルを含む一覧の行の中にも複製を置く。開ききったら外し、最前面の複製のマスクも外す。
     @Test func openingDrawsUnderBarsUntilOpened() async throws {
         let harness = try TimelineHarness(notices: notices)

@@ -280,6 +280,16 @@ final class MediaViewerController: UIViewController {
         morph.image
     }
 
+    /// 起点の上に重なっているビューの複製を、画像の複製の手前に重ねている。
+    var showsSourceOverlap: Bool {
+        morphOverlap != nil
+    }
+
+    /// 複製の角度（ラジアン）と、回転を戻したときの枠（複製を載せている層の座標。閉じる動きではウィンドウと同じ）。
+    var morphPlacement: (rotation: CGFloat, unrotatedFrame: CGRect) {
+        (morph.transformRotation, morph.unrotatedFrame)
+    }
+
     override var keyCommands: [UIKeyCommand]? {
         [UIKeyCommand(title: "閉じる", action: #selector(close), input: UIKeyCommand.inputEscape)]
     }
@@ -868,7 +878,8 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
         case .changed:
             guard case .dragging(let start, let visibility) = motion else { return }
             let scale = dragToDismiss.scale(translation: translation.y, height: height)
-            morph.frame = Self.scaled(start, by: scale, around: dismissPanAnchor).offsetBy(dx: translation.x, dy: translation.y)
+            // 開く途中でつかんだときの回転は、ドラッグの間は変えない。
+            morph.setUnrotatedFrame(Self.scaled(start, by: scale, around: dismissPanAnchor).offsetBy(dx: translation.x, dy: translation.y))
             applyBarLayering()
             let backgroundAlpha = visibility * dragToDismiss.backgroundAlpha(translation: translation.y, height: height)
             backdrop.alpha = backgroundAlpha
@@ -957,8 +968,9 @@ extension MediaViewerController {
         sourceTile(id).flatMap { $0.showsAttachment(id) ? $0 : nil }
     }
 
+    /// 回転を戻したときの起点の枠。一覧で重ねた写真のように回した起点では、`rotation(in:)`の角度から回しながら動かす。
     private func tileFrame(of tile: any MediaViewerSource) -> CGRect {
-        tile.convert(tile.bounds, to: view)
+        tile.unrotatedFrame(in: view)
     }
 
     /// 複製を見せ、ページの画像と一覧のサムネイルを隠す。複製の画像は、ページが描いている画像か、まだ描いていなければサムネイルの画像。
@@ -967,13 +979,14 @@ extension MediaViewerController {
     /// - Parameter decorationAlpha: サムネイルに重ねた表示の濃さ。サムネイルの位置から始めるなら1、ビューアの画像の位置から始めるなら0。
     static let allCorners: CACornerMask = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
 
-    private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: (any MediaViewerSource)?, decorationAlpha: CGFloat) {
+    /// - Parameter rotation: 複製を回す角度（ラジアン）。回した起点から始めるときに、その角度を渡す。
+    private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: (any MediaViewerSource)?, decorationAlpha: CGFloat, rotation: CGFloat = 0) {
         let page = pages[currentIndex]
         let tileImage = tile.flatMap { $0.showsAttachment(currentItem.id) ? $0.thumbnailImage : nil }
         morph.image = page?.transitionImage ?? tileImage ?? page.map(Self.snapshot)
         attachDecoration(from: tile, alpha: decorationAlpha)
         morphFollowsPage = page?.drawsImage ?? false
-        morph.frame = frame
+        morph.place(unrotatedFrame: frame, rotation: rotation)
         morph.layer.cornerRadius = cornerRadius
         morph.layer.cornerCurve = tile?.layer.cornerCurve ?? .continuous
         // リンクカードのサムネイルのように、外側の角だけを丸めたサムネイルもあるため、丸める角も合わせる。
@@ -988,6 +1001,7 @@ extension MediaViewerController {
     /// 切り抜く位置も、サムネイルの焦点に合わせ直す。
     /// 複製の大きさが変わっても角からの位置を保つよう、複製いっぱいに広げて自動で位置を合わせる。
     /// 起点が別の添付ファイルを描いていれば、その焦点、背景の色、重ねた表示は使わない。
+    /// 起点の上に重なっているビューは、起点が何を描いていても同じ場所にあるので、重ねる。
     private func attachDecoration(from source: (any MediaViewerSource)?, alpha: CGFloat) {
         let tile = source.flatMap { $0.showsAttachment(currentItem.id) ? $0 : nil }
         morphDecoration?.removeFromSuperview()
@@ -1001,7 +1015,7 @@ extension MediaViewerController {
             return decoration
         }
         morphOverlap?.view.removeFromSuperview()
-        morphOverlap = tile.flatMap { tile in view.window.flatMap { MediaSourceOverlap(source: tile, in: $0) } }
+        morphOverlap = source.flatMap { source in view.window.flatMap { MediaSourceOverlap(source: source, in: $0) } }
         if let overlap = morphOverlap {
             overlap.move(to: view)
             view.insertSubview(overlap.view, aboveSubview: morph)
@@ -1085,11 +1099,12 @@ extension MediaViewerController {
         if movesImage, let tile = currentTile {
             let start = tileFrame(of: tile)
             let startRadius = tile.layer.cornerRadius
-            showMorph(frame: start, cornerRadius: startRadius, tile: tile, decorationAlpha: 1)
+            let startRotation = tile.rotation(in: view)
+            showMorph(frame: start, cornerRadius: startRadius, tile: tile, decorationAlpha: 1, rotation: startRotation)
             barLayering = makeBarLayering(tile: tile)
             let target = contentFrame(in: view)
             update = { [weak self] progress in
-                self?.updateOpening(progress: progress, from: start, radius: startRadius, to: target)
+                self?.updateOpening(progress: progress, from: start, radius: startRadius, rotation: startRotation, to: target)
             }
         } else {
             update = { [weak self] progress in
@@ -1105,13 +1120,17 @@ extension MediaViewerController {
         driver.start()
     }
 
-    private func updateOpening(progress: CGFloat, from start: CGRect, radius startRadius: CGFloat, to target: CGRect) {
+    /// - Parameter startRotation: 起点の角度。ビューアの画像の位置へ向かうにつれて、まっすぐに戻す。
+    private func updateOpening(progress: CGFloat, from start: CGRect, radius startRadius: CGFloat, rotation startRotation: CGFloat, to target: CGRect) {
         let clamped = min(max(progress, 0), 1)
-        morph.frame = CGRect(
-            x: start.minX + (target.minX - start.minX) * progress,
-            y: start.minY + (target.minY - start.minY) * progress,
-            width: start.width + (target.width - start.width) * progress,
-            height: start.height + (target.height - start.height) * progress
+        morph.place(
+            unrotatedFrame: CGRect(
+                x: start.minX + (target.minX - start.minX) * progress,
+                y: start.minY + (target.minY - start.minY) * progress,
+                width: start.width + (target.width - start.width) * progress,
+                height: start.height + (target.height - start.height) * progress
+            ),
+            rotation: startRotation * (1 - progress)
         )
         morph.layer.cornerRadius = startRadius * (1 - clamped)
         setDecorationAlpha(1 - clamped)
@@ -1203,7 +1222,7 @@ extension MediaViewerController {
         }
         dismissPanAnchor = location
         pageController.view.isUserInteractionEnabled = false
-        motion = .dragging(start: morph.frame, visibility: backdrop.alpha)
+        motion = .dragging(start: morph.unrotatedFrame, visibility: backdrop.alpha)
     }
 
     /// 開いている途中や戻している途中に止めた複製をつかむ。
@@ -1225,7 +1244,8 @@ extension MediaViewerController {
         let animator = makeAnimator(duration: dragToDismiss.restoreDuration, bounce: 0)
         let target = contentFrame(in: view)
         animator.addAnimations {
-            self.morph.frame = target
+            // 開く途中でつかんで回っていたら、まっすぐに戻す。
+            self.morph.place(unrotatedFrame: target, rotation: 0)
             self.morph.layoutIfNeeded()
             self.morph.layer.cornerRadius = 0
             self.setDecorationAlpha(0)
@@ -1290,7 +1310,7 @@ extension MediaViewerController {
             overlay.addSubview(snapshot)
             return snapshot
         }
-        morph.frame = view.convert(morph.frame, to: window)
+        morph.setUnrotatedFrame(view.convert(morph.unrotatedFrame, to: window))
         overlay.addSubview(morph)
         morphOverlap?.move(to: overlay)
         window.addSubview(overlay)
@@ -1310,10 +1330,10 @@ extension MediaViewerController {
         let attachmentID = currentItem.id
         let sourceTile = sourceTile
         // スワイプした速さで縮み始めるよう、サムネイルへ向かう向きの速さを引き継ぐ。止まった状態から縮み始めると、離した瞬間に一度止まって見える。
-        let initialVelocity: Double = if moves, let releaseVelocity, let target = sourceTile(attachmentID).map({ $0.convert($0.bounds, to: window) }) {
+        let initialVelocity: Double = if moves, let releaseVelocity, let target = sourceTile(attachmentID).map({ $0.unrotatedFrame(in: window) }) {
             SpringCurve.initialVelocity(
                 releaseVelocity: (releaseVelocity.x, releaseVelocity.y),
-                from: (morph.frame.midX, morph.frame.midY),
+                from: (morph.center.x, morph.center.y),
                 to: (target.midX, target.midY),
                 duration: timing.closeDuration
             )

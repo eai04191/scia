@@ -23,8 +23,11 @@ final class MediaSourceOverlap {
             guard overlapping.window === window, !overlapping.isHidden, overlapping.alpha > 0,
                   let snapshot = overlapping.snapshotView(afterScreenUpdates: false)
             else { return nil }
-            let frame = overlapping.convert(overlapping.bounds, to: window)
-            snapshot.frame = frame.offsetBy(dx: -visibleRect.minX, dy: -visibleRect.minY)
+            // 回したビュー（一覧で重ねた写真）も同じ形に重なるよう、回転を戻した枠に置いてから同じ角度に回す。
+            let frame = overlapping.unrotatedFrame(in: window)
+            snapshot.bounds.size = frame.size
+            snapshot.center = CGPoint(x: frame.midX - visibleRect.minX, y: frame.midY - visibleRect.minY)
+            snapshot.transform = CGAffineTransform(rotationAngle: overlapping.rotation(in: window))
             return snapshot
         }
         guard !snapshots.isEmpty else { return nil }

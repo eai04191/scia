@@ -42,12 +42,19 @@ final class MediaClosingFlight {
     /// 戻り先を見失ってから薄くしている度合い。1で不透明。
     private var visibility: CGFloat = 1
     private let findTile: @MainActor () -> (any MediaViewerSource)?
+    /// 回転を戻したときの、閉じ始めの複製の枠。
     private let startFrame: CGRect
+    /// 閉じ始めの複製が画面で占めていた範囲。回っていれば、回した角まで含む外側の四角。
+    /// 閉じ始めにバーと重なっていた部分を、手前に見せたまま薄くするのに使う。回転を戻した枠では、はみ出た角がすぐにバーの奥へ切り替わるため。
+    private let startCoveredFrame: CGRect
+    /// 閉じ始めの複製の角度。開く途中から閉じるときは、回した起点から始めていれば0でないことがある。
+    private let startRotation: CGFloat
     private let startRadius: CGFloat
     private let startDecorationAlpha: CGFloat
     private let startFadingAlphas: [CGFloat]
     private var concealedTile: (any MediaViewerSource)?
-    private var lastTarget: (frame: CGRect, radius: CGFloat)?
+    /// 戻り先の、回転を戻したときの枠、角度、角の丸み。回した起点（一覧で重ねた写真）へは、その角度まで回しながら戻す。
+    private var lastTarget: (frame: CGRect, rotation: CGFloat, radius: CGFloat)?
     private let source: any FrameSource
     /// 戻り始めてからの時間。
     private var time: CFTimeInterval = 0
@@ -84,7 +91,9 @@ final class MediaClosingFlight {
         self.concealedTile = concealedTile
         self.source = source
         self.findTile = findTile
-        startFrame = parts.morph.frame
+        startFrame = parts.morph.unrotatedFrame
+        startCoveredFrame = parts.morph.frame
+        startRotation = parts.morph.transformRotation
         startRadius = parts.morph.layer.cornerRadius
         startDecorationAlpha = parts.decoration?.alpha ?? 0
         startFadingAlphas = parts.fadingViews.map(\.alpha)
@@ -121,13 +130,13 @@ final class MediaClosingFlight {
             concealedTile = tileToConceal
         }
         if let tile {
-            lastTarget = (tile.convert(tile.bounds, to: window), tile.layer.cornerRadius)
+            lastTarget = (tile.unrotatedFrame(in: window), tile.rotation(in: window), tile.layer.cornerRadius)
             parts.morph.layer.maskedCorners = tile.layer.maskedCorners
             parts.layering.track(tile)
             parts.overlap?.follow(tile)
         }
         if movesImage, let target = lastTarget {
-            parts.morph.frame = Self.interpolate(startFrame, target.frame, progress)
+            parts.morph.place(unrotatedFrame: Self.interpolate(startFrame, target.frame, progress), rotation: startRotation + (target.rotation - startRotation) * progress)
             parts.morph.layer.cornerRadius = startRadius + (target.radius - startRadius) * clamped
             let decorationAlpha = startDecorationAlpha + (1 - startDecorationAlpha) * clamped
             parts.decoration?.alpha = decorationAlpha
@@ -152,7 +161,7 @@ final class MediaClosingFlight {
                 startOverlapOpacity: startOverlapOpacity
             )
             parts.morph.alpha = visibility * (1 - swap.handoff)
-            layering.apply(clipRect: layering.visibleRect, overlapRect: startFrame, swap: swap, visibility: visibility)
+            layering.apply(clipRect: layering.visibleRect, overlapRect: startCoveredFrame, swap: swap, visibility: visibility)
         } else {
             parts.morph.alpha = visibility
             let clipRect = Self.interpolate(window.bounds, layering.visibleRect, clamped)

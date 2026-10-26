@@ -43,7 +43,7 @@ final class MediaBarLayering {
     /// 一覧の中の複製のマスク。最前面の複製を不透明に見せている範囲の外は不透明、内は受け渡しの度合いで濃くする。
     private let underlayMask = CALayer()
     private let underlayOutsideMask = CAShapeLayer()
-    private let underlayInsideMask = CALayer()
+    private let underlayInsideMask = CAShapeLayer()
     /// 下地のマスク。一覧の中の複製を描くとき、複製の枠に穴を開ける。
     private let backdropMask = CALayer()
     private let backdropOutsideMask = CAShapeLayer()
@@ -67,7 +67,7 @@ final class MediaBarLayering {
         guard let underlay else { return }
         underlayOutsideMask.fillColor = UIColor.black.cgColor
         underlayOutsideMask.fillRule = .evenOdd
-        underlayInsideMask.backgroundColor = UIColor.black.cgColor
+        underlayInsideMask.fillColor = UIColor.black.cgColor
         underlayMask.addSublayer(underlayOutsideMask)
         underlayMask.addSublayer(underlayInsideMask)
         underlay.image.layer.mask = underlayMask
@@ -108,16 +108,31 @@ final class MediaBarLayering {
     ///   - overlapRect: `clipRect`のほかに、最前面の複製を`swap.overlapOpacity`の濃さで見せる枠。ウィンドウ座標。
     ///   - visibility: 複製の濃さ。戻り先を見失って薄くするときに1未満にする。
     func apply(clipRect: CGRect, overlapRect: CGRect, swap: MediaBarSwap, visibility: CGFloat) {
-        guard let container = morph.superview else { return }
-        let morphFrame = container.convert(morph.frame, to: window)
+        guard morph.superview != nil else { return }
+        // 一覧で重ねた写真のように回した起点とのあいだでは複製も回すため、枠は回転を戻して測り、角度は別に持つ。
+        let morphFrame = morph.unrotatedFrame(in: window)
+        let rotation = morph.rotation(in: window)
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        clipMask.frame = clipRect.offsetBy(dx: -morphFrame.minX, dy: -morphFrame.minY)
-        overlapMask.frame = overlapRect.intersection(window.bounds).offsetBy(dx: -morphFrame.minX, dy: -morphFrame.minY)
+        place(clipMask, at: clipRect, in: morph)
+        place(overlapMask, at: overlapRect.intersection(window.bounds), in: morph)
         overlapMask.opacity = Float(swap.overlapOpacity)
         CATransaction.commit()
-        updateUnderlay(morphFrame: morphFrame, clipRect: clipRect, handoff: swap.handoff, visibility: visibility)
-        updateBackdropHole(morphFrame: morphFrame)
+        updateUnderlay(morphFrame: morphFrame, rotation: rotation, clipRect: clipRect, handoff: swap.handoff, visibility: visibility)
+        updateBackdropHole(morphFrame: morphFrame, rotation: rotation)
+    }
+
+    /// `view`のマスクの中で、ウィンドウ座標の`rect`を覆うよう`layer`を置く。`view`が回っていれば、逆に回して画面の上下左右にそろえる。
+    private func place(_ layer: CALayer, at rect: CGRect, in view: UIView) {
+        guard !rect.isNull else {
+            layer.setAffineTransform(.identity)
+            layer.frame = .zero
+            return
+        }
+        layer.setAffineTransform(.identity)
+        layer.bounds = CGRect(origin: .zero, size: rect.size)
+        layer.position = view.convert(CGPoint(x: rect.midX, y: rect.midY), from: window)
+        layer.setAffineTransform(CGAffineTransform(rotationAngle: -view.rotation(in: window)))
     }
 
     /// マスクと一覧の中の複製を外し、最前面の複製をどこでも見せる状態に戻す。
@@ -139,7 +154,7 @@ final class MediaBarLayering {
     /// 受け渡しの間は2枚を重ねる。不透明な画像は、下の複製を不透明にしないと重ねた結果が薄くなる（上を1-h、下をhの濃さにすると1-h+h²）。
     /// そのため下の複製は受け渡しの度合いが小さいうちに不透明にし、不透明な画像が薄く見えるのを数%に抑える。
     /// 代わりに半透明の画像では、受け渡しの間（既定で開閉の時間の3割）だけ半透明の部分が濃く見える。添付の多くは不透明な写真なので、こちらを受け入れる。
-    private func updateUnderlay(morphFrame: CGRect, clipRect: CGRect, handoff: CGFloat, visibility: CGFloat) {
+    private func updateUnderlay(morphFrame: CGRect, rotation: CGFloat, clipRect: CGRect, handoff: CGFloat, visibility: CGFloat) {
         guard let underlay, let host = underlayHost else { return }
         if let list = host.superview, list.subviews.last !== host {
             list.bringSubviewToFront(host)
@@ -154,24 +169,26 @@ final class MediaBarLayering {
             image.image = morph.image
         }
         image.focus = morph.focus
-        image.frame = host.convert(morphFrame, from: window)
+        image.place(unrotatedFrame: host.convert(morphFrame, from: window), rotation: rotation - host.rotation(in: window))
         image.layer.cornerRadius = morph.layer.cornerRadius
         image.layer.maskedCorners = morph.layer.maskedCorners
         image.alpha = visibility
         underlay.decoration?.alpha = decoration?.alpha ?? 0
         image.backgroundColor = morph.backgroundColor
         let bounds = image.bounds
-        let inside = image.convert(clipRect, from: window).intersection(bounds)
+        // 複製が回っていると、画面の上下左右にそろった範囲は複製の中では回った四角になるため、角を移して形を作る。
+        let inside = Self.polygon(of: clipRect, from: window, in: image)
         let outside = UIBezierPath(rect: bounds)
-        if !inside.isNull {
-            outside.append(UIBezierPath(rect: inside))
+        if let inside {
+            outside.append(inside)
         }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         underlayMask.frame = bounds
         underlayOutsideMask.frame = bounds
         underlayOutsideMask.path = outside.cgPath
-        underlayInsideMask.frame = inside.isNull ? .zero : inside
+        underlayInsideMask.frame = bounds
+        underlayInsideMask.path = inside?.cgPath
         underlayInsideMask.opacity = Float(min(handoff / Self.underlayFadeInPortion, 1))
         CATransaction.commit()
     }
@@ -183,12 +200,15 @@ final class MediaBarLayering {
     /// 透明な部分には複製の背景の色（サムネイルの背景）も敷いている。最前面の複製では背景の色が下地の手前に、一覧の中の複製では奥にあるため、
     /// 残す下地を背景の色の濃さの分だけ薄くし、下地による暗さを2枚の複製でそろえる。背景の色そのものの明るさには
     /// 下地の濃さと背景の色の濃さの積ほどの差が残るが、背景の色は薄く、下地は開閉しながら濃さが変わるため、受け入れる。
-    private func updateBackdropHole(morphFrame: CGRect) {
+    private func updateBackdropHole(morphFrame: CGRect, rotation: CGFloat) {
         guard underlay != nil else { return }
         let hole = backdrop.convert(morphFrame, from: window)
+        let holeRotation = rotation - backdrop.rotation(in: window)
         let radius = morph.layer.cornerRadius
         let path = UIBezierPath(rect: backdrop.bounds)
-        path.append(UIBezierPath(roundedRect: hole, byRoundingCorners: Self.rectCorners(of: morph.layer.maskedCorners), cornerRadii: CGSize(width: radius, height: radius)))
+        let holePath = UIBezierPath(roundedRect: hole, byRoundingCorners: Self.rectCorners(of: morph.layer.maskedCorners), cornerRadii: CGSize(width: radius, height: radius))
+        holePath.apply(CGAffineTransform(translationX: -hole.midX, y: -hole.midY).concatenating(CGAffineTransform(rotationAngle: holeRotation)).concatenating(CGAffineTransform(translationX: hole.midX, y: hole.midY)))
+        path.append(holePath)
         if morph.image !== holeFillSource {
             holeFillSource = morph.image
             backdropHoleFill.contents = morph.image.flatMap(Self.inverseAlphaImage)
@@ -198,13 +218,31 @@ final class MediaBarLayering {
         backdropMask.frame = backdrop.bounds
         backdropOutsideMask.frame = backdrop.bounds
         backdropOutsideMask.path = path.cgPath
+        backdropHoleFill.setAffineTransform(.identity)
         backdropHoleFill.frame = hole
+        backdropHoleFill.setAffineTransform(CGAffineTransform(rotationAngle: holeRotation))
         backdropHoleFill.contentsRect = morph.image.map { MediaFocus.contentsRect(imageSize: $0.size, boundsSize: hole.size, focus: morph.focus) } ?? CGRect(x: 0, y: 0, width: 1, height: 1)
         backdropHoleFill.cornerRadius = radius
         backdropHoleFill.cornerCurve = morph.layer.cornerCurve
         backdropHoleFill.maskedCorners = morph.layer.maskedCorners
         backdropHoleFill.opacity = Float(1 - (morph.backgroundColor?.cgColor.alpha ?? 0))
         CATransaction.commit()
+    }
+
+    /// ウィンドウ座標の`rect`を、`view`の座標に移した形。`view`が回っていれば回った四角になる。`rect`が空ならnil。
+    private static func polygon(of rect: CGRect, from window: UIWindow, in view: UIView) -> UIBezierPath? {
+        guard !rect.isNull, !rect.isEmpty else { return nil }
+        let corners = [
+            CGPoint(x: rect.minX, y: rect.minY),
+            CGPoint(x: rect.maxX, y: rect.minY),
+            CGPoint(x: rect.maxX, y: rect.maxY),
+            CGPoint(x: rect.minX, y: rect.maxY),
+        ].map { view.convert($0, from: window) }
+        let path = UIBezierPath()
+        path.move(to: corners[0])
+        corners.dropFirst().forEach(path.addLine(to:))
+        path.close()
+        return path
     }
 
     /// レイヤーの丸める角を、パスの丸める角に置き換える。どちらも左上を原点にした座標で、Yの小さい側が上になる。

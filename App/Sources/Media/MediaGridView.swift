@@ -153,11 +153,11 @@ final class MediaGridView: UIView {
     /// 添付ファイルのサムネイル。ビューアを開くときと閉じるときに、拡大と縮小の起点にする。表示していなければnil。
     /// 1列に並べていて、横のスクロールで行の外に出ているときは、見える位置までスクロールしてから返す。
     /// ビューアでめくった先の画像へ閉じるとき、行の外へ縮んで消えないようにするため。
-    /// 重ねているときは、何番目でも手前の写真を返す。奥の写真はほとんど隠れていて、そこへ戻しても行き先が見えないため。
+    /// 重ねているときは、その添付ファイルの写真を返す。4枚目より後ろは、3枚目の写真の位置にあるものとして、3枚目の写真を返す。
     func tile(for attachmentID: MediaAttachment.ID) -> MediaTileView? {
         if let content, content.isStacked {
-            guard !content.isCovered, content.attachments.contains(where: { $0.id == attachmentID }), window != nil else { return nil }
-            return photoStack?.frontTile
+            guard !content.isCovered, let index = content.attachments.firstIndex(where: { $0.id == attachmentID }), window != nil else { return nil }
+            return photoStack?.tile(at: index)
         }
         guard let content, !content.isCovered, let index = content.attachments.firstIndex(where: { $0.id == attachmentID }),
               index < tiles.count, !tiles[index].isHidden, window != nil
@@ -528,14 +528,23 @@ final class MediaTileView: UIButton, MediaViewerSource {
     /// ビューアがこのサムネイルとのあいだで画像を動かしている間、見えなくする。
     /// 透明にすると触れても反応しなくなり、閉じる途中にタップし直しても開けないため、空のマスクで隠す。
     var isConcealedForViewer = false {
-        didSet { layer.mask = isConcealedForViewer ? CALayer() : nil }
+        didSet {
+            layer.mask = isConcealedForViewer ? CALayer() : nil
+            onConcealedForViewerChange?(isConcealedForViewer)
+        }
     }
+
+    /// 隠したときと出したときに呼ぶ。一覧で重ねた写真が、サムネイルだけでなく写真のフチごと隠すのに使う。
+    var onConcealedForViewerChange: ((Bool) -> Void)?
+
+    /// 上に重なっているビュー。一覧で重ねた奥の写真では、それより手前の写真。
+    var overlappingViews: [UIView] = []
 
     override var isHighlighted: Bool {
         didSet { alpha = isHighlighted ? 0.7 : 1 }
     }
 
-    /// 一覧で重ねた写真の手前のサムネイルのように、ほかの添付ファイルを開いたときも開閉の起点にする。
+    /// 一覧で重ねた写真の3枚目のサムネイルのように、ほかの添付ファイルを開いたときも開閉の起点にする。
     /// そのときだけ、描いている添付ファイルかを確かめる。ほかでは、ビューアが探すID（投稿欄では下書きの添付のID）と描いている添付ファイルのIDが一致しないことがあり、いつもその添付ファイルを描いている。
     var standsInForOtherAttachments = false
 

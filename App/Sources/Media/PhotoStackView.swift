@@ -152,7 +152,8 @@ class PhotoStackView: UIView {
 
     /// スタックの影は見えている写真の輪郭を合わせた形で、写真同士の影は、下の写真の中に、それより上の写真の輪郭で落とす。
     private func layoutShadows() {
-        let stacked = [front, back, third].filter { !$0.isHidden }
+        // ビューアのために隠している写真は、影も落とさない。
+        let stacked = [front, back, third].filter { !$0.isHidden && !$0.isConcealed }
         stackShadow.frame = bounds
         let union = UIBezierPath()
         for photo in stacked {
@@ -233,6 +234,16 @@ final class StackedPhotoView: UIView {
 
     var photoBorder: CGFloat { Self.border * scale }
     var photoCornerRadius: CGFloat { Self.cornerRadius * scale }
+
+    /// フチごと隠している。ビューアが一覧の写真とのあいだで画像を動かしている間に使う。
+    /// 透明にすると触れても反応しなくなるため、サムネイルと同じく空のマスクで隠す。
+    var isConcealed = false {
+        didSet {
+            guard isConcealed != oldValue else { return }
+            layer.mask = isConcealed ? CALayer() : nil
+            superview?.setNeedsLayout()
+        }
+    }
 
     /// 送れなかった添付があることを、右下の角にアイコンで出す。
     var showsFailure = false {

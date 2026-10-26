@@ -52,6 +52,37 @@ struct TimelineMediaTests {
         (harness.visibleCell(of: .status(id))?.contentView as? PostContentView)?.mediaGrid
     }
 
+    /// 本文の右に重ねた写真では、見ていた添付ファイルの写真へ閉じる。4枚目より後ろは3枚目の写真の位置にあるものとし、
+    /// 3枚目の写真の画像は4枚目より後ろの下地に使わせない。奥の写真へ戻るときは、手前の写真を複製のさらに手前に重ねさせ、
+    /// ビューアが画像を動かす間は写真のフチごと隠す。
+    @Test func stackedPhotosAreSourcesOfTheirOwnAttachments() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let attachments = (1...5).map { image("\($0)", width: 400, height: 300) }
+        let grid = MediaGridView(store: .offline)
+        grid.frame = CGRect(x: 20, y: 200, width: 64, height: 64)
+        harness.viewController.view.addSubview(grid)
+        var content = MediaGridView.Content(attachments: attachments, cover: nil, tallestAspectRatio: 0.75, thumbnailPolicy: .offline, spacing: 4)
+        content.arrangement = .stack(side: 64)
+        grid.apply(content)
+        grid.layoutIfNeeded()
+
+        let first = try #require(grid.tile(for: "1"))
+        let second = try #require(grid.tile(for: "2"))
+        let third = try #require(grid.tile(for: "3"))
+        #expect(first !== second && second !== third && first !== third)
+        #expect(grid.tile(for: "4") === third && grid.tile(for: "5") === third, "4枚目より後ろを3枚目の写真へ戻していません")
+        #expect(first.showsAttachment("1") && second.showsAttachment("2") && third.showsAttachment("3"))
+        #expect(!third.showsAttachment("4"), "3枚目の写真の画像を4枚目の下地に使わせています")
+        #expect(second.overlappingViews.contains { first.isDescendant(of: $0) }, "2枚目へ戻るとき、手前の写真を重ねていません")
+
+        let photo = try #require(first.superview)
+        first.isConcealedForViewer = true
+        #expect(photo.layer.mask != nil, "写真のフチを残しています")
+        first.isConcealedForViewer = false
+        #expect(photo.layer.mask == nil)
+    }
+
     /// サムネイルの高さは添付ファイルの縦横比で決まり、画像が届く前から確定している。
     @Test func gridHeightFollowsAttachmentAspectRatio() throws {
         let harness = try TimelineHarness()

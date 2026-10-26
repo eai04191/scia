@@ -28,8 +28,14 @@ final class MediaPhotoStackView: PhotoStackView {
     /// ぼかしを押されたときに呼ぶ。読み上げで押されたときも呼ぶ。
     var onReveal: (() -> Void)?
 
-    /// 手前の1枚のサムネイル。押したときの処理を受け、ビューアを開閉する起点にする。
+    /// 手前の1枚のサムネイル。押したときの処理を受ける。
     var frontTile: MediaTileView { front.tile }
+
+    /// `index`番目の添付ファイルを開閉する起点のサムネイル。4枚目より後ろは3枚目の写真のもの。写真を出していなければnil。
+    func tile(at index: Int) -> MediaTileView? {
+        let photo = [front, back, third][min(index, 2)]
+        return photo.isHidden ? nil : photo.tile
+    }
 
     init(store: MediaImageStore, tuning: TuningStore = AppDependencies.tuning) {
         self.tuning = tuning
@@ -37,7 +43,15 @@ final class MediaPhotoStackView: PhotoStackView {
         front.isUserInteractionEnabled = true
         front.tile.isUserInteractionEnabled = true
         front.tile.isAccessibilityElement = true
-        front.tile.standsInForOtherAttachments = true
+        // 4枚目より後ろは、3枚目の写真の位置にあるものとして、3枚目の写真を開閉の起点にする。
+        third.tile.standsInForOtherAttachments = true
+        // ビューアが奥の写真とのあいだで画像を動かすとき、手前の写真を画像のさらに手前に重ねる。手前にあるものほど後ろに並べる。
+        back.tile.overlappingViews = [front]
+        third.tile.overlappingViews = [back, front]
+        // ビューアが画像を動かしている間は、サムネイルだけでなく写真のフチごと隠す。白い枠を一覧に残さないため。
+        for photo in [front, back, third] {
+            photo.tile.onConcealedForViewerChange = { [weak photo] concealed in photo?.isConcealed = concealed }
+        }
         accessibilityTraits = .button
         followTuning()
     }

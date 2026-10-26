@@ -32,6 +32,45 @@ extension MediaViewerSource {
     func showsAttachment(_ id: MediaAttachment.ID) -> Bool { true }
 }
 
+extension UIView {
+    /// `space`から見た、このビューの回転の角度（ラジアン）。祖先のビューの回転も含める。拡大や縮小はしていないものとする。
+    /// 一覧で重ねた写真のように回して置いた起点から、ビューアが画像を回しながら動かすときに使う。
+    func rotation(in space: UIView) -> CGFloat {
+        let origin = convert(CGPoint.zero, to: space)
+        let unitX = convert(CGPoint(x: 1, y: 0), to: space)
+        return atan2(unitX.y - origin.y, unitX.x - origin.x)
+    }
+
+    /// `space`の座標で、回転を戻したときの枠。中心はこのビューの中心のまま、大きさは`bounds`の大きさ。
+    /// 回したビューを`convert(bounds, to:)`で移すと、外側に接する大きめの四角になるため。
+    func unrotatedFrame(in space: UIView) -> CGRect {
+        let center = convert(CGPoint(x: bounds.midX, y: bounds.midY), to: space)
+        return CGRect(x: center.x - bounds.width / 2, y: center.y - bounds.height / 2, width: bounds.width, height: bounds.height)
+    }
+
+    /// 親ビューの座標で、回転を戻したときの枠。回したビューの`frame`は外側に接する四角になり、置き直しにも使えないため、中心と大きさから求める。
+    var unrotatedFrame: CGRect {
+        CGRect(x: center.x - bounds.width / 2, y: center.y - bounds.height / 2, width: bounds.width, height: bounds.height)
+    }
+
+    /// 今の回転を保ったまま、回転を戻したときの枠が`frame`（親ビューの座標）になるよう置く。
+    func setUnrotatedFrame(_ frame: CGRect) {
+        bounds.size = frame.size
+        center = CGPoint(x: frame.midX, y: frame.midY)
+    }
+
+    /// 回転を戻したときの枠を`frame`（親ビューの座標）にし、`rotation`（ラジアン）だけ回して置く。
+    func place(unrotatedFrame frame: CGRect, rotation: CGFloat) {
+        setUnrotatedFrame(frame)
+        transform = rotation == 0 ? .identity : CGAffineTransform(rotationAngle: rotation)
+    }
+
+    /// 自分の`transform`の回転の角度（ラジアン）。
+    var transformRotation: CGFloat {
+        atan2(transform.b, transform.a)
+    }
+}
+
 /// 画像を1枚描くだけのビュー。プロフィールのアイコンやヘッダー画像のように、上に重ねる表示がない。
 extension MediaViewerSource where Self: UIImageView {
     var thumbnailImage: UIImage? { image }
