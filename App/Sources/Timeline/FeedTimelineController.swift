@@ -775,23 +775,31 @@ final class FeedTimelineController {
 extension FeedTimelineController {
     /// 投稿しなくても、新着の挿入やギャップの表示をシミュレーターで確かめるための操作。
     fileprivate func makeDebugActions() -> [UIMenuElement] {
-        [
-            UIMenu(title: "ダミー投稿を流す", image: UIImage(systemName: "square.stack"), children: DebugDummyPost.allCases.map { post in
+        let dummyPosts = DebugDummyPost.MenuGroup.allCases.map { group in
+            UIMenu(title: group.title, options: .displayInline, children: DebugDummyPost.allCases.filter { $0.menuGroup == group }.map { post in
                 UIAction(title: post.title, image: UIImage(systemName: post.systemImage)) { [weak self] _ in
                     self?.streamDummy(post)
                 }
-            }),
+            })
+        }
+        return [
+            UIMenu(title: "ダミー投稿を流す", image: UIImage(systemName: "square.stack"), children: dummyPosts),
+            UIMenu(title: "ステータスバーの通知", image: UIImage(systemName: "bell.badge"), children: [
+                UIAction(title: "続けざまに流す", image: UIImage(systemName: "bell.badge")) { [weak self] _ in
+                    self?.streamDummy(.notifications)
+                },
+                // オンとオフのチェックマークを、開くたびに今の状態で出す。
+                UIDeferredMenuElement.uncached { [weak self] completion in
+                    let isOn = self?.isStatusBarTickerLooping?() ?? false
+                    completion([
+                        UIAction(title: "出し続ける", image: UIImage(systemName: "repeat"), state: isOn ? .on : .off) { [weak self] _ in
+                            self?.onSetStatusBarTickerLooping?(!isOn)
+                        },
+                    ])
+                },
+            ]),
             UIAction(title: "直近の投稿を取りこぼして再接続", image: UIImage(systemName: "bolt.horizontal")) { [weak self] _ in
                 self?.simulateMissedWhileDisconnected()
-            },
-            // オンとオフのチェックマークを、開くたびに今の状態で出す。
-            UIDeferredMenuElement.uncached { [weak self] completion in
-                let isOn = self?.isStatusBarTickerLooping?() ?? false
-                completion([
-                    UIAction(title: "ステータスバーの通知を出し続ける", image: UIImage(systemName: "repeat"), state: isOn ? .on : .off) { [weak self] _ in
-                        self?.onSetStatusBarTickerLooping?(!isOn)
-                    },
-                ])
             },
         ]
     }
@@ -1161,6 +1169,33 @@ enum DebugDummyPost: String, CaseIterable {
         case .animatedEmojis: "動く絵文字の多い投稿（40件）"
         case .polls: "投票の付いた投稿（4件）"
         case .notifications: "ステータスバーに流す通知（連続）"
+        }
+    }
+
+    /// デバッグメニューで区切る分類。ステータスバーの通知は、出し続ける項目と並べるため、ダミー投稿の一覧には出さない。
+    enum MenuGroup: CaseIterable {
+        case timeline
+        case media
+        case delayed
+        case content
+
+        var title: String {
+            switch self {
+            case .timeline: "一覧"
+            case .media: "添付ファイル"
+            case .delayed: "後から届く"
+            case .content: "投稿の中身"
+            }
+        }
+    }
+
+    var menuGroup: MenuGroup? {
+        switch self {
+        case .arrivals, .animatedEmojis: .timeline
+        case .images, .tall, .small, .transparent, .video, .longVideo: .media
+        case .linkCard, .linkCardImage, .linkCardSensitive, .xPost: .delayed
+        case .filtered, .polls: .content
+        case .notifications: nil
         }
     }
 

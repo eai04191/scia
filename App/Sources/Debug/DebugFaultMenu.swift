@@ -15,26 +15,33 @@ enum DebugFaultMenu {
         ])
     }
 
+    /// 戻し方と障害の種類で区切って並べる。
     private static func items(handle: @escaping @MainActor (DebugURL) -> Void) -> [UIMenuElement] {
         [
-            untilRestart("トークンを無効にする", image: "key.slash", isOn: DebugFaults.isRejectingAsUnauthorized) { handle(.unauthorized) },
-            untilRestart("投稿と通知の一部を読めなくする", image: "doc.questionmark", isOn: DebugFaults.isCorruptingListElements) { handle(.unreadable) },
-            statusMenu(handle: handle),
-            UIMenu(title: "ない機能にする", image: UIImage(systemName: "nosign"), children: OptionalFeature.allCases.map { feature in
-                untilRestart(feature.rawValue, image: nil, isOn: DebugFaults.isUnsupported(feature)) { handle(.unsupported(feature)) }
-            }),
-            toggle("ホームを作り直し中にする", image: "hammer", isOn: DebugFaults.isRegeneratingHome) { isOn in
-                handle(.regenerating(isOn))
-            },
-            toggle("ストリーミングを切る", image: "antenna.radiowaves.left.and.right.slash", isOn: !DebugFaults.isStreamingOnline) { isOn in
-                handle(.streaming(isOnline: !isOn))
-            },
-            toggle("ダウンロードを30秒遅らせる", image: "tortoise", isOn: DebugFaults.slowDownloadDelay != nil) { isOn in
-                handle(.slowDownload(seconds: isOn ? 30 : nil))
-            },
-            toggle("メニューのアイコンを3秒遅らせる", image: "person.crop.circle.badge.clock", isOn: DebugFaults.slowMenuIconDelay != nil) { isOn in
-                handle(.slowMenuIcons(seconds: isOn ? 3 : nil))
-            },
+            UIMenu(title: "起動し直すまで続く", options: .displayInline, children: [
+                untilRestart("トークンを無効にする", image: "key.slash", isOn: DebugFaults.isRejectingAsUnauthorized) { handle(.unauthorized) },
+                untilRestart("投稿と通知の一部を読めなくする", image: "doc.questionmark", isOn: DebugFaults.isCorruptingListElements) { handle(.unreadable) },
+                UIMenu(title: "ない機能にする", image: UIImage(systemName: "nosign"), children: OptionalFeature.allCases.map { feature in
+                    untilRestart(feature.rawValue, image: nil, isOn: DebugFaults.isUnsupported(feature)) { handle(.unsupported(feature)) }
+                }),
+            ]),
+            UIMenu(title: "サーバーとストリーミング", options: .displayInline, children: [
+                statusMenu(handle: handle),
+                toggle("ホームを作り直し中にする", image: "hammer", isOn: DebugFaults.isRegeneratingHome) { isOn in
+                    handle(.regenerating(isOn))
+                },
+                toggle("ストリーミングを切る", image: "antenna.radiowaves.left.and.right.slash", isOn: !DebugFaults.isStreamingOnline) { isOn in
+                    handle(.streaming(isOnline: !isOn))
+                },
+            ]),
+            UIMenu(title: "遅らせる", options: .displayInline, children: [
+                toggle("ダウンロードを30秒遅らせる", image: "tortoise", isOn: DebugFaults.slowDownloadDelay != nil) { isOn in
+                    handle(.slowDownload(seconds: isOn ? 30 : nil))
+                },
+                toggle("メニューのアイコンを3秒遅らせる", image: "person.crop.circle.badge.clock", isOn: DebugFaults.slowMenuIconDelay != nil) { isOn in
+                    handle(.slowMenuIcons(seconds: isOn ? 3 : nil))
+                },
+            ]),
         ]
     }
 
