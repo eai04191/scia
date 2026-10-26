@@ -260,6 +260,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var filterWarnings = FilterWarnings()
     /// ブロックかミュートしている人の引用元のうち、押して開いたもの。
     var quoteReveals = QuoteReveals()
+    /// 引用元の、受け取ったあとの変化。セッションがほかの画面とそろえる。
+    var quoteSourceChanges = QuoteSourceChanges()
     /// 投票する前に選んでいる選択肢と、結果を見ると選んだ投票、送っている途中の投票。
     var pollChoices = PollChoices()
     /// 投票の「投票」が押されたときに、選んだ選択肢と、押した投稿（ブーストならブーストした投稿）を渡して呼ぶ。
@@ -539,8 +541,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private func emojiImagesDidLoad(_ urls: Set<URL>) {
         let ids = dataSource.snapshot().itemIdentifiers.filter { id in
             switch entries[id] {
-            case .status(let status), .pinned(let status): !Self.emojiURLs(of: status).isDisjoint(with: urls)
-            case .notification(let notification): !Self.emojiURLs(of: notification).isDisjoint(with: urls)
+            case .status(let status), .pinned(let status): !Self.emojiURLs(of: status, quoteSources: quoteSourceChanges).isDisjoint(with: urls)
+            case .notification(let notification): !Self.emojiURLs(of: notification, quoteSources: quoteSourceChanges).isDisjoint(with: urls)
             case .account(let account): !Set(account.emojis.map(\.staticUrl)).isDisjoint(with: urls)
             case .gap, .unreadable, nil: false
             }
@@ -557,15 +559,15 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         reconfigure(Set(ids))
     }
 
-    /// 引用の囲みに出す引用元の本文、注意書き、作者の名前の絵文字も含める。
-    static func emojiURLs(of status: Status) -> Set<URL> {
+    /// 引用の囲みに出す引用元の本文、注意書き、作者の名前の絵文字も含める。引用元は、囲みと同じく受け取ったあとの変化を当てた版から集める。
+    static func emojiURLs(of status: Status, quoteSources: QuoteSourceChanges) -> Set<URL> {
         let shown = status.displayed
-        let quoted = shown.quote?.quotedStatus.map { $0.emojis + $0.account.emojis } ?? []
+        let quoted = quoteSources.applying(to: shown).quote?.quotedStatus.map { $0.emojis + $0.account.emojis } ?? []
         return Set((shown.emojis + (shown.poll?.emojis ?? []) + shown.account.emojis + status.account.emojis + quoted).map(\.staticUrl))
     }
 
-    private static func emojiURLs(of notification: MastodonNotification) -> Set<URL> {
-        Set(notification.account.emojis.map(\.staticUrl)).union(notification.status.map(emojiURLs(of:)) ?? [])
+    private static func emojiURLs(of notification: MastodonNotification, quoteSources: QuoteSourceChanges) -> Set<URL> {
+        Set(notification.account.emojis.map(\.staticUrl)).union(notification.status.map { emojiURLs(of: $0, quoteSources: quoteSources) } ?? [])
     }
 
     /// 端末の文字の大きさが変わったら、行をすべて組み直し、変わる前に読んでいた位置へ戻す。

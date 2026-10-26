@@ -58,6 +58,26 @@ struct StreamingHubTests {
         publicSubscription.cancel()
     }
 
+    /// どのストリームのイベントも、ストリームによらず`onEvent`で受け取れる。引用元の編集や削除をセッションで覚えるため。
+    @Test func reportsEventsOfEveryStream() async throws {
+        let connector = ScriptedConnector([.init(messages: [Self.delete("1"), Self.delete("2", stream: #"["public"]"#)])])
+        let hub = makeHub(connector)
+        var deleted: [String] = []
+        hub.onEvent = { event in
+            if case .delete(let id) = event { deleted.append(id) }
+        }
+        let user = Recorder()
+        let publicTimeline = Recorder()
+
+        let userSubscription = hub.subscribe(.user, user.record)
+        let publicSubscription = hub.subscribe(Self.publicStream, publicTimeline.record)
+        try await waitUntil { deleted.count == 2 }
+
+        #expect(deleted == ["1", "2"])
+        userSubscription.cancel()
+        publicSubscription.cancel()
+    }
+
     @Test func resubscribesAfterReconnecting() async throws {
         let connector = ScriptedConnector([.init(messages: [Self.delete("1")], afterMessages: .drop), .init(messages: [Self.delete("2")])])
         let clock = TestClock()

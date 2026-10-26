@@ -52,6 +52,9 @@ public final class StreamingHub {
     public var onChange: (() -> Void)?
     /// 接続が401で断られたときに呼ぶ。トークンが無効かは呼び出し側が確かめる。断られても、つなぎ直しは続ける。
     public var onUnauthorized: (() -> Void)?
+    /// 申し込んだどれかのストリームのイベントが届いたときに、ストリームによらず呼ぶ。同じ投稿の編集や削除は、ストリームごとに何度か届く。
+    /// 引用の囲みのように、どの一覧にも並ぶとは限らない投稿の変化を、セッションで受け取るために使う。
+    public var onEvent: ((StreamingEvent) -> Void)?
 
     private let open: @Sendable () async throws -> StreamingConnection
     private let reconnectPolicy: ReconnectingStream.Policy
@@ -339,6 +342,7 @@ public final class StreamingHub {
             logger.info("streaming event for unsubscribed stream=\(message.stream.first ?? "nil", privacy: .public)")
             return
         }
+        onEvent?(message.event)
         for target in targets where isSubscribed(target.id) {
             if reportedConnections[target.id] == connectedCount {
                 target.handler(.event(message.event))

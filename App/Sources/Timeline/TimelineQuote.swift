@@ -6,7 +6,7 @@ extension TimelineViewController {
     /// 引用元の注意書き、フィルターの警告、ぼかしは、引用元の投稿のIDで覚えている状態を当てる。
     /// - Parameter itemID: この中身を置く行。注意書きを開閉したり、ブロックした人の引用元を開いたりしたときに、この行の画面上の位置を保つ。
     func quoteEmbed(for status: Status, itemID: ItemID?, base: UIListContentConfiguration) -> (content: EmbeddedPostView.Content, actions: EmbedActions)? {
-        let shown = status.displayed
+        let shown = quoteSourceChanges.applying(to: status.displayed)
         let filterWarnings = filterWarnings
         guard let display = QuoteDisplay(quoting: shown, isRevealed: quoteReveals.isRevealed(shown), verdict: { filterWarnings.verdict(for: $0) }) else { return nil }
         switch display {
@@ -64,4 +64,28 @@ extension TimelineViewController {
         let ids = displayedItemIDs.filter { self.status(for: $0)?.displayed.id == shownID }
         reconfigure(Set(ids), keeping: anchorID)
     }
+
+    /// 引用元の、受け取ったあとの変化を受け取り、その引用元を出している行を描き直す。
+    /// 使う人の操作によらない変化でも、見えている行の高さは下の行ごと動かしてつなぐ（docs/quote.md）。
+    func applyQuoteSourceChanges(_ changes: QuoteSourceChanges, affecting change: QuoteSourceChange) {
+        quoteSourceChanges = changes
+        // まだ開いていない画面は、開いたときにこの状態で描く。描き直しのために画面を読み込ませない。
+        guard isViewLoaded else { return }
+        let ids = displayedItemIDs.filter { id in
+            guard let quoted = self.status(for: id)?.displayed.quote?.quotedStatus else { return false }
+            return switch change {
+            case .status(let statusID): quoted.id == statusID || quoted.quote?.quotedStatusID == statusID
+            case .account(let accountID): quoted.account.id == accountID
+            }
+        }
+        reconfigureAnimatingHeight(Set(ids), duration: tuning.value(of: TuningCatalog.linkCardTransitionDuration))
+    }
+}
+
+/// 引用元の変化の対象。
+enum QuoteSourceChange {
+    /// 投稿が編集されたか、削除された。
+    case status(Status.ID)
+    /// アカウントをミュートかブロックしたか、解除した。
+    case account(String)
 }

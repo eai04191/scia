@@ -26,6 +26,21 @@ public struct Quote: Codable, Hashable, Sendable {
         /// 引用元の人をミュートしている。
         case mutedAccount
 
+        /// 届くときの`state`の文字列。知らない値から読んだものは`unauthorized`になる。
+        public var rawValue: String {
+            switch self {
+            case .pending: "pending"
+            case .accepted: "accepted"
+            case .rejected: "rejected"
+            case .revoked: "revoked"
+            case .deleted: "deleted"
+            case .unauthorized: "unauthorized"
+            case .blockedAccount: "blocked_account"
+            case .blockedDomain: "blocked_domain"
+            case .mutedAccount: "muted_account"
+            }
+        }
+
         init(rawValue: String) {
             self = switch rawValue {
             case "pending": .pending

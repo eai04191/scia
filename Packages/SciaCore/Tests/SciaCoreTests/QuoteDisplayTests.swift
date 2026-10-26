@@ -6,8 +6,8 @@ import Testing
 struct QuoteDisplayTests {
     private let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: URL(string: "https://example.social/a.png"))
 
-    private func status(_ id: String, content: String = "<p>本文</p>", quote: Quote? = nil, filtered: [FilterResult] = [], reblog: Status? = nil) -> Status {
-        Status(id: id, createdAt: Date(timeIntervalSince1970: 0), account: bob, content: content, spoilerText: "", url: nil, quote: quote, filtered: filtered, reblog: reblog)
+    private func status(_ id: String, content: String = "<p>本文</p>", quote: Quote? = nil, filtered: [FilterResult] = [], editedAt: Date? = nil, reblog: Status? = nil) -> Status {
+        Status(id: id, createdAt: Date(timeIntervalSince1970: 0), account: bob, content: content, spoilerText: "", url: nil, quote: quote, filtered: filtered, editedAt: editedAt, reblog: reblog)
     }
 
     private func display(_ status: Status, isRevealed: Bool = false, verdict: (Status) -> FilterVerdict = { _ in .none }) -> QuoteDisplay? {
@@ -126,5 +126,65 @@ struct QuoteDisplayTests {
 
         #expect(reveals.isRevealed(status("2", reblog: original)))
         #expect(!reveals.isRevealed(status("3")))
+    }
+
+    /// 引用元の編集は、囲みに出す引用元を新しい中身に替える。
+    @Test func sourceChangesApplyEdits() {
+        var changes = QuoteSourceChanges()
+        let status = status("1", quote: Quote(state: "accepted", quotedStatus: status("10", content: "<p>前</p>")))
+        changes.edit(self.status("10", content: "<p>後</p>", editedAt: Date(timeIntervalSince1970: 10)))
+
+        #expect(changes.applying(to: status).quote?.quotedStatus?.content == "<p>後</p>")
+        #expect(changes.applying(to: self.status("2")).quote == nil)
+    }
+
+    /// 引用元の削除は、出せないときの削除の1行にする。引用元の中の引用が消えたら、入れ子の1行も削除にする。
+    @Test func sourceChangesApplyDeletes() {
+        var changes = QuoteSourceChanges()
+        let nested = status("10", quote: Quote(state: "accepted", quotedStatusID: "5"))
+        changes.delete("5")
+        #expect(NestedQuote(changes.applying(to: status("1", quote: Quote(state: "accepted", quotedStatus: nested))).quote?.quotedStatus?.quote) == .unavailable(.deleted))
+
+        changes.delete("10")
+        let applied = changes.applying(to: status("1", quote: Quote(state: "accepted", quotedStatus: nested)))
+        #expect(display(applied) == .unavailable(.deleted))
+    }
+
+    /// 読み込んだあとでミュートかブロックした人の引用元は、押して開くまで隠し、解除したら戻す。
+    @Test func sourceChangesConcealMutedAccountsUntilUnmuted() {
+        var changes = QuoteSourceChanges()
+        let quoted = status("10")
+        let quoting = status("1", quote: Quote(state: "accepted", quotedStatus: quoted))
+
+        changes.setAccount(bob.id, concealedAs: .mutedAccount)
+        #expect(display(changes.applying(to: quoting)) == .concealed(.mutedAccount, quoted))
+        #expect(display(changes.applying(to: quoting), isRevealed: true) == .post(quoted))
+        changes.setAccount(bob.id, concealedAs: .blockedAccount)
+        #expect(display(changes.applying(to: quoting)) == .concealed(.blockedAccount, quoted))
+
+        changes.setAccount(bob.id, concealedAs: nil)
+        #expect(display(changes.applying(to: quoting)) == .post(quoted))
+    }
+
+    /// 届いた編集より新しい版を読み直した引用元は、読み直した版のまま出す。
+    @Test func sourceChangesKeepNewerFetchedVersion() {
+        var changes = QuoteSourceChanges()
+        changes.edit(status("10", content: "<p>1回目の編集</p>", editedAt: Date(timeIntervalSince1970: 10)))
+        let refetched = status("10", content: "<p>2回目の編集</p>", editedAt: Date(timeIntervalSince1970: 20))
+
+        #expect(changes.applying(to: status("1", quote: Quote(state: "accepted", quotedStatus: refetched))).quote?.quotedStatus?.content == "<p>2回目の編集</p>")
+    }
+
+    /// ミュートしている間に読んだ引用は、サーバーが`muted_account`で返す。解除したら、その引用も出す。
+    @Test func sourceChangesRevealServerConcealedQuoteAfterUnmuting() {
+        var changes = QuoteSourceChanges()
+        let quoted = status("10")
+        let quoting = status("1", quote: Quote(state: "muted_account", quotedStatus: quoted))
+        #expect(display(changes.applying(to: quoting)) == .concealed(.mutedAccount, quoted))
+
+        changes.setAccount(bob.id, concealedAs: .blockedAccount)
+        #expect(display(changes.applying(to: quoting)) == .concealed(.blockedAccount, quoted))
+        changes.setAccount(bob.id, concealedAs: nil)
+        #expect(display(changes.applying(to: quoting)) == .post(quoted))
     }
 }

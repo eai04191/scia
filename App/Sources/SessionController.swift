@@ -125,6 +125,8 @@ final class SessionController {
     private let editHistories = NSHashTable<EditHistoryViewController>.weakObjects()
     /// 添付ファイルを覆うか。ホームと通知とプロフィールでそろえ、閉じて開き直したプロフィールにも引き継ぐ。
     private var mediaCovers = MediaCovers()
+    /// 引用元の、受け取ったあとの編集、削除、ミュート、ブロック。どの一覧の囲みにも当て、開き直した画面にも引き継ぐ。
+    private var quoteSources = QuoteSourceChanges()
     /// fxtwitterから読んだXの投稿。ホームと通知とプロフィールで同じ投稿を1回だけ読む。
     private let xPosts = XPostStore(client: XPostClient(client: AppDependencies.http), retryPolicy: { TuningCatalog.imageRetry(in: AppDependencies.tuning) })
     private var composerObscuredHeight: CGFloat = 0
@@ -405,6 +407,8 @@ final class SessionController {
             // 読めなかった人は返らないだけで、失敗はAccountCacheがログに残す。
             accounts: { ids in await Array(accounts.load(ids).values) }
         )
+        // 投稿欄は初期化の途中で作るため、編集した投稿を引用の囲みに当てる先は、初期化を終えてからつなぐ。
+        let editedStatuses = SessionReference()
         composer = InlineComposeController(
             model: ComposeModel(tasks: tasks.child(), myAccountID: credential.accountID, media: media) { draft in
                 do {
@@ -414,6 +418,7 @@ final class SessionController {
                         for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, pushedFeeds.updateStatus, profiles.updateStatus, threads.updateStatus] {
                             update(edited.id) { _ in edited }
                         }
+                        editedStatuses.session?.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
                     } else {
                         // ストリーミングで届くまで数秒かかることがあるため、応答の投稿をすぐホームと、返信先を開いているスレッドに出す。
                         let posted = try await client.postStatus(draft)
@@ -486,6 +491,14 @@ final class SessionController {
             }
         }
         notices.showOperationStatus = { [weak self] presenter in self?.showOperationStatus(from: presenter) }
+        editedStatuses.session = self
+        streamingHub.onEvent = { [weak self] event in
+            switch event {
+            case .statusUpdate(let edited): self?.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
+            case .delete(let id): self?.changeQuoteSources(.status(id)) { $0.delete(id) }
+            case .update, .notification, .filtersChanged, .unhandled: break
+            }
+        }
         xPosts.onLoad = { [weak self] id in
             for timeline in self?.timelines.allObjects ?? [] {
                 timeline.applyXPost(id: id)
@@ -769,6 +782,7 @@ final class SessionController {
         viewController.myAccountID = credential.accountID
         viewController.spoilerExpansion.expandsByDefault = preferences?.expandsSpoilers ?? false
         viewController.mediaCovers = mediaCovers
+        viewController.quoteSourceChanges = quoteSources
         viewController.xPosts = xPosts
         viewController.onChangeMediaCovers = { [weak self, weak viewController] covers, status in
             self?.shareMediaCovers(covers, changed: status, from: viewController)
@@ -842,6 +856,17 @@ final class SessionController {
         }
         for history in editHistories.allObjects where history !== source {
             history.applyMediaCovers(covers, changed: status)
+        }
+    }
+
+    /// 引用元の変化を覚え、変わったときだけ、開いている一覧に配る。
+    private func changeQuoteSources(_ change: QuoteSourceChange, _ apply: (inout QuoteSourceChanges) -> Void) {
+        var changed = quoteSources
+        apply(&changed)
+        guard changed != quoteSources else { return }
+        quoteSources = changed
+        for timeline in timelines.allObjects {
+            timeline.applyQuoteSourceChanges(changed, affecting: change)
         }
     }
 
@@ -1589,6 +1614,9 @@ final class SessionController {
 
     /// ミュートかブロックしている相手を、投稿と通知の一覧から除く。どちらでもなくなったら、また足すようにする。
     private func excludeInLists(_ relationship: Relationship) {
+        // 引用元は一覧から除かず、届いたときからミュートかブロックしていたのと同じく、押して開くまで隠す。
+        let concealedAs: Quote.State? = relationship.blocking ? .blockedAccount : relationship.muting ? .mutedAccount : nil
+        changeQuoteSources(.account(relationship.id)) { $0.setAccount(relationship.id, concealedAs: concealedAs) }
         // ユーザーのハッシュタグの一覧は、その人の投稿だけを並べるため、プロフィール画面の一覧と同じく除かない。
         for feed in feeds where !feed.feed.isAccountHashtag {
             feed.setAccount(relationship.id, excluded: relationship.blocking || relationship.muting)
@@ -1731,6 +1759,7 @@ final class SessionController {
                 }
                 profiles.removeStatus(target.id)
                 threads.removeStatus(target.id)
+                changeQuoteSources(.status(target.id)) { $0.delete(target.id) }
                 if composer.model.editedStatus?.id == target.id {
                     composer.cancelStatusEdit()
                 }
@@ -2671,6 +2700,12 @@ private final class ThreadRegistry {
             controller.enterBackground()
         }
     }
+}
+
+/// 初期化の途中で作る処理から、初期化を終えたセッションを呼ぶための入れ物。
+@MainActor
+private final class SessionReference {
+    weak var session: SessionController?
 }
 
 /// 開いているプロフィール画面を弱く持つ。

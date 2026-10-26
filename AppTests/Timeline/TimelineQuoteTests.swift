@@ -151,6 +151,37 @@ struct TimelineQuoteTests {
         let source = Status(id: "q1", createdAt: Date(timeIntervalSince1970: 0), account: quotedAccount, content: "<p>:q:</p>", spoilerText: "", url: nil, emojis: [emoji])
         let status = quoting(StatusFactory.make(count: 1, startingAt: 1_000)[0], Quote(state: "accepted", quotedStatus: source))
 
-        #expect(TimelineViewController.emojiURLs(of: status).contains(emoji.staticUrl))
+        #expect(TimelineViewController.emojiURLs(of: status, quoteSources: QuoteSourceChanges()).contains(emoji.staticUrl))
+        // 引用元の編集で足された絵文字も含める。
+        let added = CustomEmoji(shortcode: "a", url: try #require(URL(string: "https://remote.example/a.png")), staticUrl: try #require(URL(string: "https://remote.example/a-static.png")))
+        var changes = QuoteSourceChanges()
+        changes.edit(Status(id: "q1", createdAt: source.createdAt, account: quotedAccount, content: "<p>:a:</p>", spoilerText: "", url: nil, emojis: [added], editedAt: Date(timeIntervalSince1970: 10)))
+        #expect(TimelineViewController.emojiURLs(of: status, quoteSources: changes).contains(added.staticUrl))
+    }
+
+    /// 引用元の編集と削除、読み込んだあとのミュートを受け取ると、引用している行の囲みを描き直す。
+    @Test func sourceChangesRedrawQuotingRows() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 10, startingAt: 1_000)
+        let source = quoted("q1")
+        let status = quoting(statuses[0], Quote(state: "accepted", quotedStatus: source))
+        harness.setStatuses([status] + statuses.dropFirst())
+        let vc = harness.viewController
+        var changes = QuoteSourceChanges()
+
+        changes.edit(Status(id: "q1", createdAt: source.createdAt, account: quotedAccount, content: "<p>直した本文</p>", spoilerText: "", url: nil, editedAt: Date(timeIntervalSince1970: 10)))
+        vc.applyQuoteSourceChanges(changes, affecting: .status("q1"))
+        #expect(configuration(in: harness, of: status.id)?.embed?.text.string == "直した本文")
+
+        changes.setAccount(quotedAccount.id, concealedAs: .mutedAccount)
+        vc.applyQuoteSourceChanges(changes, affecting: .account(quotedAccount.id))
+        #expect(configuration(in: harness, of: status.id)?.embed?.text.string.hasPrefix("ミュートしている人の投稿です") == true)
+
+        changes.delete("q1")
+        vc.applyQuoteSourceChanges(changes, affecting: .status("q1"))
+        #expect(configuration(in: harness, of: status.id)?.embed?.text.string == "引用元の投稿は削除されました")
+        // 引用している投稿は残す。
+        #expect(configuration(in: harness, of: status.id)?.body.string == "引用した本文")
     }
 }

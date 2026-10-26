@@ -27,7 +27,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     /// 本文のリンク先から作ったカード。サーバーは投稿を配信してからカードを付けるため、後から取り直して差し替えることがある。
     public private(set) var card: PreviewCard?
     /// 引用。引用していなければnil。
-    public let quote: Quote?
+    public private(set) var quote: Quote?
     /// 一致した自分のフィルター。ログインせずに読んだときや、Mastodon 4.0より前のサーバーでは返らないため、無ければ空にする。
     /// ブーストでは、サーバーは元の投稿と同じ結果をブーストにも付ける。
     public private(set) var filtered: [FilterResult]
@@ -162,6 +162,13 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         if adoptsFilterResults {
             status.filtered = reblog.filtered
         }
+        return status
+    }
+
+    /// 引用を差し替えたもの。引用元の、受け取ったあとの変化を当てるときに使う。
+    public func replacingQuote(_ quote: Quote) -> Status {
+        var status = self
+        status.quote = quote
         return status
     }
 

@@ -102,3 +102,68 @@ public struct QuoteReveals: Sendable, Equatable {
         revealed.insert(status.displayed.id)
     }
 }
+
+/// 引用元の、受け取ったあとの変化。編集と削除の知らせ、読み込んだあとのミュートとブロックを、どの一覧の囲みにも当てるためにセッションで1つ持つ。
+/// 一覧が持つ投稿の中の引用元は書き換えず、囲みを出すときに当てる。ミュートやブロックを解除したときに、元の引用元に戻せるようにするため。
+/// 覚えるのはアプリを起動している間だけ。
+public struct QuoteSourceChanges: Sendable, Equatable {
+    /// 編集の知らせで届いた投稿。どの投稿が引用されているかは知らせからは分からないため、届いた編集をすべて覚える。編集の知らせは少ないので、捨てない。
+    private var edited: [Status.ID: Status] = [:]
+    private var deletedIDs: Set<Status.ID> = []
+    /// 読み込んだあとにミュートかブロックしたアカウントと、その引用元を隠す`state`。nilは、どちらも解除したこと。
+    /// 解除も覚えるのは、ミュートやブロックをしている間に読んだ引用は、サーバーが`state`を`muted_account`などにして返すため。
+    private var accountStates: [String: Quote.State?] = [:]
+
+    public init() {}
+
+    /// 投稿の編集が届いた。
+    public mutating func edit(_ status: Status) {
+        edited[status.id] = status
+    }
+
+    /// 投稿が削除された。
+    public mutating func delete(_ id: Status.ID) {
+        deletedIDs.insert(id)
+        edited[id] = nil
+    }
+
+    /// アカウントをミュートかブロックした（`state`は`.mutedAccount`か`.blockedAccount`）か、どちらでもなくなった（nil）。
+    public mutating func setAccount(_ id: String, concealedAs state: Quote.State?) {
+        accountStates[id] = .some(state)
+    }
+
+    /// 変化を当てた、表示する投稿。ブーストなら、ブーストされた投稿を渡す。引用がなければそのまま返す。
+    public func applying(to status: Status) -> Status {
+        guard let quote = status.quote else { return status }
+        return status.replacingQuote(applying(to: quote))
+    }
+
+    private func applying(to quote: Quote) -> Quote {
+        guard let id = quote.quotedStatusID ?? quote.quotedStatus?.id else { return quote }
+        if deletedIDs.contains(id) {
+            return Quote(state: "deleted")
+        }
+        guard let quoted = quote.quotedStatus else { return quote }
+        // 届いた編集より新しい版を読み直していれば、読み直した版を使う。切れている間の編集を取りこぼした知らせで、新しい版を戻さないため。
+        var source = edited[id].flatMap { Self.isNewer($0, than: quoted) ? $0 : nil } ?? quoted
+        // 引用元の中の引用はIDだけで届くため、削除だけを当てる。
+        if let nested = source.quote, let nestedID = nested.quotedStatusID, deletedIDs.contains(nestedID) {
+            source = source.replacingQuote(Quote(state: "deleted"))
+        }
+        switch (quote.state, accountStates[source.account.id]) {
+        case (.accepted, .some(.some(let state))), (.mutedAccount, .some(.some(let state))), (.blockedAccount, .some(.some(let state))):
+            return Quote(state: state.rawValue, quotedStatus: source)
+        case (.mutedAccount, .some(nil)), (.blockedAccount, .some(nil)):
+            return Quote(state: Quote.State.accepted.rawValue, quotedStatus: source)
+        default:
+            return Quote(state: quote.rawState, quotedStatus: source)
+        }
+    }
+
+    /// `edited`が`other`より新しい版か。編集されていない版は、どの編集よりも古い。
+    private static func isNewer(_ edited: Status, than other: Status) -> Bool {
+        guard let editedAt = edited.editedAt else { return false }
+        guard let otherEditedAt = other.editedAt else { return true }
+        return editedAt > otherEditedAt
+    }
+}
