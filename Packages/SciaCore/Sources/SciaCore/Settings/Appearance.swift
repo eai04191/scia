@@ -72,9 +72,9 @@ public enum AppearanceCatalog {
 
     /// 自分の投稿が自分のフィルターに一致したことを示す、本文の下の注記の文字。
     public static let filterNoteText = AppearanceValue(id: "text.filterNote", title: "注記の文字", range: -40...40, step: 1, defaultValue: -2, unit: .textOffset)
-    /// Xの投稿の囲みの、作者の行の文字。名前は太字で、ハンドルは控えめに描く。
+    /// 引用とXの投稿の囲みの、作者の行の文字。名前は太字で、ハンドルは控えめに描く。
     public static let xPostNameText = AppearanceValue(id: "text.xPostName", title: "作者の行の文字", range: -40...40, step: 1, defaultValue: 0, unit: .textOffset)
-    /// Xの投稿の囲みの、本文の文字。
+    /// 引用とXの投稿の囲みの、本文の文字。
     public static let xPostBodyText = AppearanceValue(id: "text.xPostBody", title: "本文の文字", range: -40...40, step: 1, defaultValue: 0, unit: .textOffset)
     /// 名前の上の行の、返信先と固定された投稿を示すラベルの文字。
     public static let contextLabelText = AppearanceValue(id: "text.contextLabel", title: "返信と固定のラベルの文字", range: -40...40, step: 1, defaultValue: 0, unit: .textOffset)
@@ -168,17 +168,17 @@ public enum AppearanceCatalog {
     public static let bodyLinkCardSpacing = AppearanceValue(id: "timeline.bodyLinkCardSpacing", title: "本文とのあいだ", range: 0...100, step: 1, defaultValue: 10)
     /// リンクカードの文字の、枠とサムネイルからの余白。
     public static let linkCardPadding = AppearanceValue(id: "timeline.linkCardPadding", title: "内側の余白", range: 0...100, step: 1, defaultValue: 10)
-    /// 投稿の本文や添付ファイルと、Xの投稿の囲みのあいだ。
+    /// 投稿の本文や添付ファイルと、引用とXの投稿の囲みのあいだ。
     public static let bodyXPostSpacing = AppearanceValue(id: "timeline.bodyXPostSpacing", title: "投稿の本文とのあいだ", range: 0...100, step: 1, defaultValue: 10)
-    /// Xの投稿の囲みの内側の余白。
+    /// 引用とXの投稿の囲みの内側の余白。
     public static let xPostPadding = AppearanceValue(id: "timeline.xPostPadding", title: "内側の余白", range: 0...100, step: 1, defaultValue: 10)
-    /// Xの投稿の囲みの、作者のアイコンと名前のすき間。
+    /// 引用とXの投稿の囲みの、作者のアイコンと名前のすき間。
     public static let xPostAvatarNameSpacing = AppearanceValue(id: "timeline.xPostAvatarNameSpacing", title: "アイコンと名前のすき間", range: 0...100, step: 1, defaultValue: 10)
-    /// Xの投稿の囲みの、作者の行と本文のあいだ。
+    /// 引用とXの投稿の囲みの、作者の行と本文のあいだ。
     public static let xPostHeaderSpacing = AppearanceValue(id: "timeline.xPostHeaderSpacing", title: "作者の行と本文のあいだ", range: 0...100, step: 1, defaultValue: 10)
-    /// Xの投稿の囲みの、本文とメディアのあいだ。
+    /// 引用とXの投稿の囲みの、本文とメディアのあいだ。
     public static let xPostMediaSpacing = AppearanceValue(id: "timeline.xPostMediaSpacing", title: "本文とメディアのあいだ", range: 0...100, step: 1, defaultValue: 10)
-    /// Xの投稿の囲みの、作者の行に出すアイコンの一辺。
+    /// 引用とXの投稿の囲みの、作者の行に出すアイコンの一辺。
     public static let xPostAvatarSize = AppearanceValue(id: "timeline.xPostAvatarSize", title: "アイコンの大きさ", range: 0...200, step: 1, defaultValue: 20)
     /// 本文と投票のあいだ。
     public static let bodyPollSpacing = AppearanceValue(id: "timeline.bodyPollSpacing", title: "本文とのあいだ", range: 0...100, step: 1, defaultValue: 10)
@@ -211,7 +211,7 @@ public enum AppearanceCatalog {
         AppearanceGroup(id: "spoiler", title: "注意書き", values: [spoilerButtonText, spoilerButtonSpacing, spoilerPadding, spoilerCornerRadius, spoilerBodySpacing]),
         AppearanceGroup(id: "media", title: "メディア", values: [bodyMediaSpacing, mediaTileSpacing, mediaTallestAspectRatio, mediaWidestAspectRatio]),
         AppearanceGroup(id: "linkCard", title: "リンクカード", values: [linkCardTitleText, linkCardDetailText, linkCardTitleLines, linkCardDescriptionLines, linkCardLineSpacing, linkCardImageWidthRatio, bodyLinkCardSpacing, linkCardPadding]),
-        AppearanceGroup(id: Self.xPostGroupID, title: "Xの投稿", values: [xPostNameText, xPostBodyText, xPostAvatarSize, xPostAvatarNameSpacing, xPostHeaderSpacing, xPostMediaSpacing, xPostPadding, bodyXPostSpacing]),
+        AppearanceGroup(id: Self.xPostGroupID, title: "引用とXの投稿", values: [xPostNameText, xPostBodyText, xPostAvatarSize, xPostAvatarNameSpacing, xPostHeaderSpacing, xPostMediaSpacing, xPostPadding, bodyXPostSpacing]),
         AppearanceGroup(id: "poll", title: "投票", values: [pollFooterText, bodyPollSpacing, pollOptionSpacing, pollOptionPadding, pollOptionHorizontalPadding, pollOptionCornerRadius, pollFooterSpacing]),
         AppearanceGroup(id: "reactionGlow", title: "お気に入りとブーストの光", values: [reactionGlowHeight, reactionGlowDarkOpacity, reactionGlowLightOpacity, reactionGlowBlendWidth, reactionGlowIconSize, reactionGlowIconOpacity]),
     ]

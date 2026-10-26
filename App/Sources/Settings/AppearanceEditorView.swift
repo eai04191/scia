@@ -122,17 +122,14 @@ struct AppearanceEditorView: View {
         focused?.colorScheme ?? colorScheme
     }
 
-    /// Xの投稿を出すのは試作で、チューニングで出すようにしているときだけ、その区画と見本を並べる。
+    /// Xの投稿を出すのは試作で、チューニングで出すようにしているときだけ、その見本を並べる。
+    /// 囲みの区画は、引用の見本で場所を示せるため、いつも並べる。
     private var showsXPost: Bool {
         tuning.value(of: TuningCatalog.xPostEmbeds)
     }
 
     private var groups: [AppearanceGroup] {
-        Self.groups(showsXPost: showsXPost)
-    }
-
-    static func groups(showsXPost: Bool) -> [AppearanceGroup] {
-        AppearanceCatalog.groups.filter { $0.id != AppearanceCatalog.xPostGroupID || showsXPost }
+        AppearanceCatalog.groups
     }
 
     /// プレビューを描き直すきっかけ。見本の組み立ては設定を直接読むので、読んだ値が変わったら描き直すよう、ここで読んでおく。
@@ -569,6 +566,7 @@ struct AppearanceSamples {
         }
     }
 
+    /// 引用の囲みを出した投稿は、いつも最後に並べる。
     /// - Parameters:
     ///   - includesXPost: Xの投稿の囲みを出した投稿を足す。
     ///   - revision: 描き直しのきっかけ。中身は使わない。
@@ -579,7 +577,41 @@ struct AppearanceSamples {
             configuration.replyConnection = post.connection
             return configuration
         }
-        return includesXPost ? configurations + [xPostConfiguration(image: cardImage)] : configurations
+        let quote = quoteConfiguration(image: cardImage)
+        return includesXPost ? configurations + [xPostConfiguration(image: cardImage), quote] : configurations + [quote]
+    }
+
+    /// 投稿を引用した投稿。引用元には、囲みの中の部品が出るよう、本文と画像を付ける。
+    private func quoteConfiguration(image: URL?) -> PostContentConfiguration {
+        let avatar = PreviewImages.avatarURL()
+        let friend = Account(id: "preview-friend", username: "friend", acct: "friend@example.com", displayName: "ともだち", avatar: avatar)
+        let scia = Account(id: Self.myAccountID, username: "scia", acct: "scia", displayName: "Scia", avatar: avatar)
+        let attachment = MediaAttachment(
+            id: "preview-quote-image",
+            type: .image,
+            url: image,
+            previewUrl: image,
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_200, height: 900))
+        )
+        let quoted = Status(
+            id: "preview-quoted",
+            createdAt: now.addingTimeInterval(-3_600),
+            account: scia,
+            content: "<p>引用された投稿の本文です。</p>",
+            spoilerText: "",
+            url: nil,
+            mediaAttachments: [attachment]
+        )
+        let status = Status(
+            id: "preview-quote",
+            createdAt: now.addingTimeInterval(-60),
+            account: friend,
+            content: "<p>投稿を引用した投稿です。</p>",
+            spoilerText: "",
+            url: nil,
+            quote: Quote(state: "accepted", quotedStatus: quoted)
+        )
+        return timeline.contentConfiguration(for: status, base: .cell())
     }
 
     /// Xの投稿へのリンクを、読み終えたXの投稿の囲みで出した投稿。囲みは通信せずに、見本の投稿から組む。

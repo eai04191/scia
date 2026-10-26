@@ -100,7 +100,7 @@ struct AppearanceEditorTests {
         #expect(found?.rects == [CGRect(x: 60, y: 30, width: 300, height: 12)])
     }
 
-    /// プレビューの見本だけで、どの項目も場所を示せる。Xの投稿の区画は、Xの投稿を出すようにしているときに見本へ足すXの投稿で示す。
+    /// プレビューの見本だけで、どの項目も場所を示せる。引用とXの投稿の区画は、いつも見本へ足す引用の囲みで示す。
     @Test func samplesShowEveryItem() throws {
         let settings = try makeSettings()
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 2_000))
@@ -297,10 +297,12 @@ struct AppearanceEditorTests {
         }
     }
 
-    /// Xの投稿の区画は、Xの投稿を出すようにしているときだけ並べる。
-    @Test func xPostGroupFollowsTuning() {
-        #expect(!AppearanceEditorView.groups(showsXPost: false).contains { $0.id == AppearanceCatalog.xPostGroupID })
-        #expect(AppearanceEditorView.groups(showsXPost: true).contains { $0.id == AppearanceCatalog.xPostGroupID })
+    /// 引用とXの投稿の区画は、Xの投稿を出さないときも、引用の見本の囲みで場所を示せる。
+    @Test func embedGroupHasSampleWithoutXPost() throws {
+        let samples = AppearanceSamples(settings: try makeSettings(), tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
+        let configurations = samples.configurations(colorScheme: .light, includesXPost: false, revision: 0)
+
+        #expect(configurations.contains { $0.embed?.id.hasPrefix("quote:") == true })
     }
 
     /// 割合の項目の説明は項目ごとに決まり、縦長の比率の説明がほかの割合の項目に出ない。
