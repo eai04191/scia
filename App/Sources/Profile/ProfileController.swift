@@ -282,6 +282,7 @@ final class ProfileController {
                 seam: tuning.value(of: TuningCatalog.profileBannerReflectionSeam)
             )
             header.countsSpacing = tuning.value(of: TuningCatalog.profileCountsSpacing)
+            header.noteFadeWidth = tuning.value(of: TuningCatalog.profileNoteFadeWidth)
         }
         header.apply(ProfileHeaderView.Content(
             account: account,

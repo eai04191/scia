@@ -261,6 +261,15 @@ public enum TuningCatalog {
         defaultValue: 14
     )
 
+    /// プロフィールの自己紹介を切っているときに、最後の行の右端に重ねる「さらに表示」の手前で、文字をぼかす幅。
+    public static let profileNoteFadeWidth = NumberTuning(
+        id: "profile.noteFadeWidth",
+        title: "自己紹介の「さらに表示」の手前をぼかす幅（pt）",
+        range: 0...80,
+        step: 4,
+        defaultValue: 32
+    )
+
     /// プロフィールの最初の投稿の一覧を出す前に、行のアイコンが読み込み終わるのを待つ上限。読み込み終われば上限を待たずに出す。0なら待たない。
     public static let profileAvatarWait = NumberTuning(
         id: "profile.avatarWait",
@@ -1333,6 +1342,7 @@ public enum TuningCatalog {
             .number(profileBannerReflectionDim),
             .number(profileBannerReflectionSeam),
             .number(profileCountsSpacing),
+            .number(profileNoteFadeWidth),
         ]),
         TuningSection(id: "thread", title: "スレッド", items: [
             .number(threadOpenDuration),

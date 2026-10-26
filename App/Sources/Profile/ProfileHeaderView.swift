@@ -162,10 +162,16 @@ final class ProfileHeaderView: UIView {
             applyCountsSpacing()
         }
     }
+    /// 自己紹介を切っているときに、「さらに表示」の手前で文字をぼかす幅。
+    var noteFadeWidth: CGFloat {
+        get { noteView.fadeWidth }
+        set { noteView.fadeWidth = newValue }
+    }
     /// 補足情報、数、ほかのサーバーのアカウントであることをまとめたカード。
     private let aboutBox = UIStackView()
-    /// 自己紹介を3行で切っているときに、その場で全文に広げるボタン。
+    /// 自己紹介を3行で切っているときに、その場で全文に広げるボタン。最後の行の右端に重ねる。
     private let moreButton = UIButton(configuration: .plain())
+    private lazy var noteView = ProfileNoteView(label: noteLabel, button: moreButton)
     /// 自己紹介を全文に広げた。別のアカウントを出したら切った状態に戻す。
     private var isNoteExpanded = false
     /// 自己紹介を切るときの行数。
@@ -278,7 +284,6 @@ final class ProfileHeaderView: UIView {
 
         moreButton.configuration?.title = "さらに表示"
         moreButton.configuration?.contentInsets = .zero
-        moreButton.contentHorizontalAlignment = .trailing
         moreButton.isHidden = true
         moreButton.addAction(UIAction { [weak self] _ in self?.expandNote() }, for: .primaryActionTriggered)
 
@@ -335,7 +340,7 @@ final class ProfileHeaderView: UIView {
         let identity = inset([nameLabel, acctLabel], spacing: 2)
 
         // 自己紹介はカードにせず、名前の下にそのまま置く。
-        let note = inset([noteLabel, moreButton], spacing: 2)
+        let note = inset([noteView])
         // 補足情報は、数とほかのサーバーのアカウントであることと一緒に、角の丸いカードにまとめる。
         // 補足情報と数の間にも、補足情報の行どうしと同じ区切り線を引く。
         fieldsDivider.backgroundColor = .separator
@@ -846,13 +851,17 @@ final class ProfileHeaderView: UIView {
         isNoteExpanded = true
         noteLabel.numberOfLines = 0
         moreButton.isHidden = true
+        noteView.setNeedsLayout()
         onChangeBannerLayout?()
     }
 
     /// 自己紹介が切った行数に収まらないときだけ、「さらに表示」を出す。測る幅は、一覧がヘッダーを測る幅から、左右の余白を引いたもの。
     private func updateMoreButton(width: CGFloat) {
         guard !isNoteExpanded, !noteLabel.isHidden, width > 0 else {
-            moreButton.isHidden = true
+            if !moreButton.isHidden {
+                moreButton.isHidden = true
+                noteView.setNeedsLayout()
+            }
             return
         }
         let textWidth = width - 16 * 2
@@ -860,7 +869,11 @@ final class ProfileHeaderView: UIView {
         let bounds = CGRect(x: 0, y: 0, width: textWidth, height: .greatestFiniteMagnitude)
         let full = noteLabel.textRect(forBounds: bounds, limitedToNumberOfLines: 0).height
         let limited = noteLabel.textRect(forBounds: bounds, limitedToNumberOfLines: Self.collapsedNoteLines).height
-        moreButton.isHidden = full <= limited + 1
+        let isHidden = full <= limited + 1
+        if moreButton.isHidden != isHidden {
+            moreButton.isHidden = isHidden
+            noteView.setNeedsLayout()
+        }
     }
 
     /// 固定された投稿の棚に並べる投稿を変える。空なら棚を見出しごと隠す。中身が変わって高さが変わりうるならtrue。
