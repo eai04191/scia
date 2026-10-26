@@ -51,7 +51,7 @@ final class ComposeMorphFlights {
         let group = UIView(frame: container.bounds)
         group.autoresizingMask = [.flexibleWidth, .flexibleHeight]
         group.isUserInteractionEnabled = false
-        ComposeRestShadow.castStack(on: group.layer, opacity: 0)
+        PhotoStackShadow.castStack(on: group.layer, opacity: 0)
         container.addSubview(group)
         return group
     }()

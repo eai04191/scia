@@ -1542,7 +1542,7 @@ final class InlineComposeController: NSObject {
                 let content: ComposeMorphFlights.Content = index < 3
                     ? .thumbnail(photo.tile.thumbnailImage, photo.tile.thumbnailFocus)
                     : .thumbnail(model.localMedia[id]?.thumbnail, nil)
-                ends[.attachment(id)] = .init(view: photo, content: content, cornerRadius: ComposeRestPhoto.cornerRadius, border: ComposeRestPhoto.border) { concealed in
+                ends[.attachment(id)] = .init(view: photo, content: content, cornerRadius: StackedPhotoView.cornerRadius, border: StackedPhotoView.border) { concealed in
                     photo.alpha = concealed ? 0 : 1
                     thumbnails.setStackShadowConcealed(concealed)
                 }
