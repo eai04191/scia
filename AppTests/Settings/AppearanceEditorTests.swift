@@ -1,3 +1,4 @@
+import ImageIO
 import SciaCore
 import SwiftUI
 import Testing
@@ -146,6 +147,17 @@ struct AppearanceEditorTests {
             #expect(media.contains(badge))
             #expect(badge.width < media.width && badge.height < media.height)
         }
+    }
+
+    /// 見本のアイコンと絵文字には、静止画と別に、何コマもあるアニメーション版がある。アニメーションを再生する設定の違いを、プレビューで見せるため。
+    /// アニメーション版も、ほかの見本の画像と同じく、通信の層を通さずに読む。
+    @Test func samplesHaveAnimatedAvatar() async throws {
+        let still = try #require(PreviewImages.avatarURL())
+        let animated = try #require(PreviewImages.animatedAvatarURL())
+        #expect(animated != still)
+        let data = try await AppDependencies.imageData(from: animated)
+        let source = try #require(CGImageSourceCreateWithData(data as CFData, nil))
+        #expect(CGImageSourceGetCount(source) > 1)
     }
 
     /// プレビューのどの部品をタップしても、何かの項目が開く。

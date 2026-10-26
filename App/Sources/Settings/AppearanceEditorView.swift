@@ -584,12 +584,14 @@ struct AppearanceSamples {
 
     private static func posts(now: Date, cardImage: URL?) -> [(status: Status, connection: ReplyConnection)] {
         let avatar = PreviewImages.avatarURL()
-        let scia = Account(id: myAccountID, username: "scia", acct: "scia", displayName: "Scia", avatar: avatar)
+        // アニメーションを再生する設定の違いを見せるため、アイコンと絵文字には色相の回るアニメーション版を付ける。
+        let animated = PreviewImages.animatedAvatarURL() ?? avatar
+        let scia = Account(id: myAccountID, username: "scia", acct: "scia", displayName: "Scia", avatar: animated, avatarStatic: avatar)
         // カスタム絵文字の大きさを見せるため、アプリのアイコンを絵文字にする。
-        let emojis = avatar.map { [CustomEmoji(shortcode: "scia", url: $0, staticUrl: $0)] } ?? []
-        let friend = Account(id: "preview-friend", username: "friend", acct: "friend@example.com", displayName: "ともだち", avatar: avatar)
+        let emojis = avatar.map { [CustomEmoji(shortcode: "scia", url: animated ?? $0, staticUrl: $0)] } ?? []
+        let friend = Account(id: "preview-friend", username: "friend", acct: "friend@example.com", displayName: "ともだち", avatar: animated, avatarStatic: avatar)
         // 入りきらない名前の行末のぼかしを見せるため、名前の長いアカウントも用意する。
-        let longNamed = Account(id: "preview-long", username: "long", acct: "long@example.com", displayName: "とても長い名前のアカウントで、名前の行に入りきりません", avatar: avatar)
+        let longNamed = Account(id: "preview-long", username: "long", acct: "long@example.com", displayName: "とても長い名前のアカウントで、名前の行に入りきりません", avatar: animated, avatarStatic: avatar)
         let image = MediaAttachment(
             id: "preview-image",
             type: .image,
