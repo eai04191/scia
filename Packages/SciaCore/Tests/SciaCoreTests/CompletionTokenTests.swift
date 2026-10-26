@@ -200,8 +200,56 @@ struct CompletionTokenTests {
         #expect(self.token(":blob:|", minimum: [.emoji: 0]) == nil)
     }
 
-    @Test func emojiNeedsShortcodeCharacters() {
-        #expect(token(":ねこ|") == nil)
+    /// Unicodeの絵文字の短縮名の`+1`と`-1`は読む。顔文字の`:-)`や`:-D`、符号だけでは出さない。
+    @Test func emojiWithSignedShortcode() throws {
+        let plus = try #require(token("いいね :+1|"))
+        #expect(plus.query == "+1")
+        #expect(!plus.mayBeProse)
+        #expect(try #require(token(":-1|")).query == "-1")
+        #expect(token(":+|") == nil)
+        #expect(token(":-|") == nil)
+        #expect(token(":-)|") == nil)
+        #expect(token(":-D|") == nil)
+        #expect(token(":a+1|") == nil)
+    }
+
+    /// 短縮名の途中の`-`は語に含める。カーソルの後ろに続く分も含める。
+    @Test func emojiWithHyphenatedShortcode() throws {
+        #expect(try #require(token(":t-rex|")).query == "t-rex")
+        let token = try #require(token(":t-|rex: がおー"))
+        #expect(token.query == "t-rex")
+        #expect(token.range == 0 ..< 7)
+    }
+
+    /// 実際の一覧の短縮名は、どれも打って語にできる。
+    @Test func bundledShortcodesAreTokenizable() {
+        let shortcodes = StandardEmojiCatalog.groups.flatMap(\.emojis).flatMap(\.shortcodes)
+        #expect(!shortcodes.isEmpty)
+        let failing = shortcodes.filter { token(":\($0)|")?.query != $0 }
+        #expect(failing.isEmpty)
+    }
+
+    /// 日本語の語も読む。文が続くことがあるので、カーソルの後ろは語に含めない。日本語の文の`：`かもしれない語として扱う。
+    @Test func emojiWithJapaneseQuery() throws {
+        let token = try #require(token("かわいい:ね|こです"))
+        #expect(token.query == "ね")
+        #expect(token.range == 4 ..< 6)
+        #expect(token.mayBeProse)
+        #expect(token.needsLeadingSpace)
+        #expect(self.token(":ねこ！|") == nil)
+    }
+
+    /// 全角の`：`でも読む。日本語の文でもふつうに使うので、記号だけでは、0文字から出す設定でも出さない。
+    @Test func emojiAfterFullwidthColon() throws {
+        let japanese = try #require(token("場所：東京|"))
+        #expect(japanese.query == "東京")
+        #expect(japanese.mayBeProse)
+        let shortcode = try #require(token("：blo|b"))
+        #expect(shortcode.query == "blob")
+        #expect(shortcode.range == 0 ..< 5)
+        #expect(shortcode.mayBeProse)
+        #expect(token("例：|", minimum: [.emoji: 0]) == nil)
+        #expect(token("12：30|") == nil)
     }
 
     // MARK: - 種類と変換中の文字

@@ -4,7 +4,7 @@ public enum CompletionKind: String, Sendable, Hashable, CaseIterable {
     case mention
     /// `#`か`＃`で始まるハッシュタグ。
     case hashtag
-    /// `:`で始まるカスタム絵文字。
+    /// `:`か`：`で始まる、カスタム絵文字かUnicodeの絵文字。
     case emoji
 }
 
@@ -17,12 +17,15 @@ public struct CompletionToken: Equatable, Hashable, Sendable {
     public let query: String
     /// 記号の直前が、サーバーがメンション・タグ・絵文字として読まない文字（日本語の文字など）。選んだら前に空白を入れる。
     public let needsLeadingSpace: Bool
+    /// 全角の`：`で始まるか、日本語の語の絵文字。日本語の文の「場所：東京」のような`：`と見分けられないので、合う候補がなければ何も出さない。
+    public let mayBeProse: Bool
 
-    public init(kind: CompletionKind, range: Range<Int>, query: String, needsLeadingSpace: Bool) {
+    public init(kind: CompletionKind, range: Range<Int>, query: String, needsLeadingSpace: Bool, mayBeProse: Bool = false) {
         self.kind = kind
         self.range = range
         self.query = query
         self.needsLeadingSpace = needsLeadingSpace
+        self.mayBeProse = mayBeProse
     }
 }
 
@@ -140,7 +143,7 @@ public enum CompletionTokenizer {
         switch character {
         case "@", "＠": .mention
         case "#", "＃": .hashtag
-        case ":": .emoji
+        case ":", "：": .emoji
         default: nil
         }
     }
@@ -149,8 +152,10 @@ public enum CompletionTokenizer {
         switch kind {
         case .mention:
             mentionToken(triggerAt: trigger, cursor: cursor, in: characters, minimumQueryLength: minimumQueryLength)
-        case .hashtag, .emoji:
+        case .hashtag:
             simpleToken(kind: kind, triggerAt: trigger, cursor: cursor, in: characters, minimumQueryLength: minimumQueryLength)
+        case .emoji:
+            emojiToken(triggerAt: trigger, cursor: cursor, in: characters, minimumQueryLength: minimumQueryLength)
         }
     }
 
@@ -191,24 +196,54 @@ public enum CompletionTokenizer {
         return makeToken(kind: .mention, trigger: trigger, end: end, query: query, in: characters, minimumQueryLength: minimumQueryLength)
     }
 
+    /// ハッシュタグ。日本語の文が空白なしで続くことがあり、語の終わりが分からないので、カーソルの後ろは語に含めない。
+    /// 含めると、タグの途中で選んだときに、後ろに続く文まで置き換えて消してしまう。
     private static func simpleToken(kind: CompletionKind, triggerAt trigger: Int, cursor: Int, in characters: IndexedCharacters, minimumQueryLength: Int) -> CompletionToken? {
-        let isQueryCharacter = { (character: Character) in kind == .hashtag ? isHashtagCharacter(character) : isShortcodeCharacter(character) }
-        guard characters.string(trigger + 1 ..< cursor).allSatisfy(isQueryCharacter) else { return nil }
+        let query = characters.string(trigger + 1 ..< cursor)
+        guard query.allSatisfy(isHashtagCharacter) else { return nil }
+        return makeToken(kind: kind, trigger: trigger, end: cursor, query: query, in: characters, minimumQueryLength: minimumQueryLength)
+    }
+
+    /// 絵文字。ショートコードの文字（`:blob`）か、Unicodeの絵文字の短縮名の`+1`・`-1`・`t-rex`の形（`:+1`）か、日本語の語（`:ねこ`）。
+    /// 語の頭の符号は数字が続いたときだけ認める。`:-)`や`:-D`のような顔文字を打つ途中で候補を出さないため。語の途中の`-`は、短縮名のために認める。
+    /// ショートコードは、カーソルの後ろに続く文字と閉じの`:`まで語に含める。日本語の語は、ハッシュタグと同じく文が続くので、カーソルまでにする。
+    /// 全角の`：`は、日本語のキーボードで打てる`:`。日本語の文でもふつうに使うので、記号だけでは語にしない。
+    private static func emojiToken(triggerAt trigger: Int, cursor: Int, in characters: IndexedCharacters, minimumQueryLength: Int) -> CompletionToken? {
+        let typed = characters.string(trigger + 1 ..< cursor)
+        let isFullwidth = characters[trigger] == "："
+        if isJapaneseEmojiQuery(typed) {
+            return makeToken(kind: .emoji, trigger: trigger, end: cursor, query: typed, in: characters, minimumQueryLength: max(minimumQueryLength, 1), mayBeProse: true)
+        }
+        guard isShortcodeQuery(typed) else { return nil }
         var end = cursor
-        // ハッシュタグは日本語の文が空白なしで続くことがあり、語の終わりが分からないので、カーソルの後ろは語に含めない。
-        // 含めると、タグの途中で選んだときに、後ろに続く文まで置き換えて消してしまう。
-        while kind == .emoji, end < characters.count, isQueryCharacter(characters[end]) {
+        while end < characters.count, isShortcodeCharacter(characters[end]) || characters[end] == "-" {
             end += 1
         }
         let query = characters.string(trigger + 1 ..< end)
         // 閉じの`:`まで打ってあれば、置き換える範囲に含めて二重にしない。
-        if kind == .emoji, end < characters.count, characters[end] == ":" {
+        if end < characters.count, characters[end] == ":" {
             end += 1
         }
-        return makeToken(kind: kind, trigger: trigger, end: end, query: query, in: characters, minimumQueryLength: minimumQueryLength)
+        return makeToken(
+            kind: .emoji, trigger: trigger, end: end, query: query, in: characters,
+            minimumQueryLength: isFullwidth ? max(minimumQueryLength, 1) : minimumQueryLength, mayBeProse: isFullwidth
+        )
     }
 
-    private static func makeToken(kind: CompletionKind, trigger: Int, end: Int, query: String, in characters: IndexedCharacters, minimumQueryLength: Int) -> CompletionToken? {
+    /// `blob`、`+1`、`-1`、`t-rex`。頭の符号のあとは数字で始まる。
+    private static func isShortcodeQuery(_ typed: String) -> Bool {
+        let isQueryCharacter = { (character: Character) in isShortcodeCharacter(character) || character == "-" }
+        guard let first = typed.first, first == "+" || first == "-" else { return typed.allSatisfy(isQueryCharacter) }
+        let rest = typed.dropFirst()
+        return rest.first?.isASCII == true && rest.first?.isNumber == true && rest.allSatisfy(isQueryCharacter)
+    }
+
+    /// 日本語などの英数字以外の文字を含む語。文字と数字（`ー`も文字）だけでできている。
+    private static func isJapaneseEmojiQuery(_ typed: String) -> Bool {
+        !typed.allSatisfy(\.isASCII) && typed.allSatisfy { $0.isLetter || $0.isNumber || $0 == "_" }
+    }
+
+    private static func makeToken(kind: CompletionKind, trigger: Int, end: Int, query: String, in characters: IndexedCharacters, minimumQueryLength: Int, mayBeProse: Bool = false) -> CompletionToken? {
         guard queryLength(query) >= minimumQueryLength else { return nil }
         let previous = trigger > 0 ? characters[trigger - 1] : nil
         guard !suppressesCompletion(after: previous) else { return nil }
@@ -217,7 +252,8 @@ public enum CompletionTokenizer {
             kind: kind,
             range: characters.utf16Offset(of: trigger) ..< characters.utf16Offset(of: end),
             query: query,
-            needsLeadingSpace: !accepts
+            needsLeadingSpace: !accepts,
+            mayBeProse: mayBeProse
         )
     }
 

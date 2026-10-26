@@ -6,6 +6,8 @@
 並びとまとまりは、Unicodeの絵文字の一覧（emoji-test.txt）の順にする。iOSの絵文字キーボードとほぼ同じ並び。
 検索に使う名前と言葉は、CLDRの絵文字の注釈（日本語と英語）から取る。本体の注釈にない並び（肌の色や旗など）は、派生の注釈から取る。
 注釈はU+FE0Fを除いた並びで引く。どちらにもなければ、emoji-test.txtの英語の名前だけを使う。
+英語の名前（emoji-test.txtの名前）は、補完で名前と一致するものを先に並べるために、言葉とは別にも持つ。
+補完で`:+1`や`:thumbsup`のように打てるよう、GitHubやSlackで使われる短縮名をgemojiから取る。
 
 入れないもの:
 - 完全な形でない並び（minimally-qualified、unqualified）。同じ絵文字の完全な形が別にあるため
@@ -23,6 +25,7 @@ from pathlib import Path
 
 UNICODE_EMOJI_VERSION = "17.0"
 CLDR_VERSION = "48.2.3"
+GEMOJI_VERSION = "v4.1.0"
 OUTPUT = Path("Packages/SciaCore/Sources/SciaCore/Compose/Resources/standard-emoji.json")
 
 # emoji-test.txtのまとまりの名前を、iOSの絵文字キーボードに近い日本語の名前にする。
@@ -59,9 +62,15 @@ def lookup(table: dict[str, dict], emoji: str) -> dict | None:
     return table.get(emoji) or table.get(emoji.replace(VS16, ""))
 
 
+def shortcodes() -> dict[str, list[str]]:
+    entries = json.loads(fetch(f"https://raw.githubusercontent.com/github/gemoji/{GEMOJI_VERSION}/db/emoji.json"))
+    return {entry["emoji"].replace(VS16, ""): entry["aliases"] for entry in entries}
+
+
 def main() -> None:
     ja = annotations("ja")
     en = annotations("en")
+    aliases = shortcodes()
     text = fetch(f"https://www.unicode.org/Public/{UNICODE_EMOJI_VERSION}.0/emoji/emoji-test.txt").decode()
     groups: list[dict] = []
     current: dict | None = None
@@ -91,9 +100,12 @@ def main() -> None:
             missing += 1
         name = (ja_entry or {}).get("tts", [english_name])[0]
         keywords = sorted(set((ja_entry or {}).get("default", [])) | set((en_entry or {}).get("default", [])) | {english_name})
-        current["emojis"].append({"e": emoji, "n": name, "k": keywords, "v": version.removeprefix("E")})
+        entry = {"e": emoji, "n": name, "en": english_name, "k": keywords, "v": version.removeprefix("E")}
+        if emoji_aliases := aliases.get(emoji.replace(VS16, "")):
+            entry["s"] = emoji_aliases
+        current["emojis"].append(entry)
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(json.dumps({"unicode": UNICODE_EMOJI_VERSION, "cldr": CLDR_VERSION, "groups": groups}, ensure_ascii=False, separators=(",", ":")) + "\n")
+    OUTPUT.write_text(json.dumps({"unicode": UNICODE_EMOJI_VERSION, "cldr": CLDR_VERSION, "gemoji": GEMOJI_VERSION, "groups": groups}, ensure_ascii=False, separators=(",", ":")) + "\n")
     count = sum(len(g["emojis"]) for g in groups)
     print(f"{OUTPUT}: {count} emoji in {len(groups)} groups, {missing} without Japanese annotations")
 

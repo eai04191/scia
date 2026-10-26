@@ -29,6 +29,7 @@ final class TextInputCompletion {
         self.recentEmojis = recentEmojis
         self.tuning = tuning
         self.settings = settings
+        completion.standardEmojiGroups = { [settings] in StandardEmojiAvailability.groups(for: settings.emojiStyle) }
     }
 
     // MARK: - 補完
@@ -106,11 +107,13 @@ final class TextInputCompletion {
         // ハッシュタグはカーソルより後ろを語に含めないため、出したときの範囲のままだと後ろの文まで消してしまう。
         let current = token(in: input, appliesMinimumLength: false)
         let token = current.flatMap { $0.kind == shown.kind && $0.range.lowerBound == shown.range.lowerBound ? $0 : nil } ?? shown
-        let insertion = CompletionTokenizer.insertion(of: candidate.completion, replacing: token, in: Self.text(of: input))
+        let insertion = candidate.insertion(replacing: token, in: Self.text(of: input))
         logger.info("completion: selected \(token.kind.rawValue, privacy: .public) leadingSpace=\(token.needsLeadingSpace)")
         guard apply(insertion, to: input) else { return }
-        if case .emoji(let emoji) = candidate {
-            recentEmojis?.record(emoji.shortcode)
+        switch candidate {
+        case .emoji(let emoji): recentEmojis?.record(PaletteEmoji.custom(emoji).recentKey)
+        case .standardEmoji(let emoji): recentEmojis?.record(PaletteEmoji.standard(emoji).recentKey)
+        case .account, .localAccount, .hashtag, .ownHashtag: break
         }
         completion.didComplete(candidate)
     }

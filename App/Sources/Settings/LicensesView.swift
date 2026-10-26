@@ -30,6 +30,14 @@ struct LicensesView: View {
             licenseURL: URL(string: "https://www.unicode.org/license.txt")
         ),
         LicenseItem(
+            name: "gemoji",
+            license: "MIT",
+            copyright: "Copyright (c) 2019 GitHub, Inc.",
+            usage: "投稿欄の補完で、Unicodeの絵文字を「:+1」や「:thumbsup」のように打って探すための短縮名。",
+            source: URL(string: "https://github.com/github/gemoji"),
+            licenseURL: URL(string: "https://github.com/github/gemoji/blob/master/LICENSE")
+        ),
+        LicenseItem(
             name: "FediDB",
             license: "CC BY 4.0",
             copyright: "FediDB",

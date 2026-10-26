@@ -163,7 +163,7 @@ struct EmojiPaletteTests {
         #expect(sections.first?.emojis.map(\.recentKey) == ["🐈", "blobcat"])
     }
 
-    /// ひらがなとカタカナ、全角と半角、大文字と小文字を区別せずに、言葉と一致するもの、言葉で始まるもの、言葉を含むものの順に並べる。
+    /// ひらがなとカタカナ、全角と半角、大文字と小文字を区別せずに、名前と一致するもの、言葉と一致するもの、言葉で始まるもの、言葉を含むものの順に並べる。
     @Test func searchesStandardEmojiByKeywords() {
         let groups = [StandardEmojiGroup(title: "動物と自然", emojis: [
             standard("🐱", "ネコの顔", ["顔", "ネコ"]),
@@ -171,7 +171,7 @@ struct EmojiPaletteTests {
             standard("🐈‍⬛", "黒猫", ["ブラックキャット", "black cat"]),
             standard("🐶", "イヌの顔", ["dog"]),
         ])]
-        #expect(StandardEmojiSearch.candidates(matching: "ねこ", in: groups, limit: 10).map(\.emoji) == ["🐱", "🐈"])
+        #expect(StandardEmojiSearch.candidates(matching: "ねこ", in: groups, limit: 10).map(\.emoji) == ["🐈", "🐱"])
         #expect(StandardEmojiSearch.candidates(matching: "猫", in: groups, limit: 10).map(\.emoji) == ["🐈", "🐈‍⬛"])
         #expect(StandardEmojiSearch.candidates(matching: "ＣＡＴ", in: groups, limit: 10).map(\.emoji) == ["🐈‍⬛"])
         #expect(StandardEmojiSearch.candidates(matching: "  ", in: groups, limit: 10).isEmpty)
@@ -185,6 +185,30 @@ struct EmojiPaletteTests {
             standard("🐈‍⬛", "黒猫", ["black cat"]),
         ])]
         #expect(StandardEmojiSearch.candidates(matching: "cat", in: groups, limit: 10).map(\.emoji) == ["🐈", "🐈‍⬛"])
+    }
+
+    /// 英語の名前と短縮名は、言葉より先に並べ、語で始まるものは一致した語の短い順にする。
+    @Test func ranksNamesBeforeKeywords() {
+        let groups = [StandardEmojiGroup(title: "記号", emojis: [
+            StandardEmoji(emoji: "🥰", name: "ハートの笑顔", englishName: "smiling face with hearts", keywords: ["heart"], version: "1.0"),
+            StandardEmoji(emoji: "❤️", name: "赤いハート", englishName: "red heart", keywords: ["love"], shortcodes: ["heart"], version: "1.0"),
+            StandardEmoji(emoji: "💌", name: "ラブレター", englishName: "love letter", keywords: ["heartfelt"], version: "1.0"),
+            StandardEmoji(emoji: "💗", name: "ドキドキハート", englishName: "growing heart", keywords: ["hearts"], version: "1.0"),
+        ])]
+        #expect(StandardEmojiSearch.candidates(matching: "heart", in: groups, limit: 10).map(\.emoji) == ["❤️", "🥰", "💗", "💌"])
+        #expect(StandardEmojiSearch.candidates(matching: "hea", in: groups, limit: 10).map(\.emoji) == ["❤️", "💗", "🥰", "💌"])
+    }
+
+    /// 実際の一覧で、補完に出る数件のうちに、名前どおりの絵文字が先に来る。短縮名でも探せる。
+    @Test func ranksBundledStandardEmojiByName() {
+        let first = { (query: String) in StandardEmojiSearch.candidates(matching: query, in: StandardEmojiCatalog.groups, limit: 5).map(\.emoji) }
+        #expect(first("fire").first == "🔥")
+        #expect(first("heart").first == "❤️")
+        #expect(first("+1").first == "👍")
+        #expect(first("thumbsup").first == "👍")
+        #expect(first("-1").first == "👎")
+        #expect(first("cat").contains("🐈"))
+        #expect(first("ねこ").contains("🐈"))
     }
 
     /// 実際の一覧で、日本語の言葉から探せる。

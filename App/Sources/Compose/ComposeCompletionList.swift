@@ -300,6 +300,19 @@ private struct CompletionRowView: View {
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("絵文字 \(emoji.shortcode)")
+        case .standardEmoji(let emoji):
+            // 本文と同じ設定の絵（OSの絵文字かtwemoji）で、カスタム絵文字の画像と同じくらいの大きさに描く。
+            // 文字ではなく画像と並べる絵なので、端末の文字の大きさではなく枠の大きさで決める。
+            RowLayout {
+                // swiftlint:disable:next fixed_font_size
+                Text(emoji.emoji).font(Font(EmojiFont.font(.systemFont(ofSize: 24), style: model.settings.emojiStyle)))
+            } title: {
+                Text(emoji.name)
+            } subtitle: {
+                Text(emoji.englishName)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("絵文字 \(emoji.name)")
         }
     }
 

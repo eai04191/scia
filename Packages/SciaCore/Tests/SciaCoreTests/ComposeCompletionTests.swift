@@ -235,6 +235,87 @@ struct ComposeCompletionTests {
         #expect(accts(completion.content).first == ":blobcat:")
     }
 
+    private let standardGroups = [StandardEmojiGroup(title: "動物と自然", emojis: [
+        StandardEmoji(emoji: "🐱", name: "ネコの顔", englishName: "cat face", keywords: ["ネコ"], shortcodes: ["cat"], version: "0.6"),
+        StandardEmoji(emoji: "😺", name: "笑うネコ", englishName: "grinning cat", keywords: ["blob"], version: "0.6"),
+        StandardEmoji(emoji: "👍", name: "サムズアップ", englishName: "thumbs up", keywords: ["いいね"], shortcodes: ["+1", "thumbsup"], version: "0.6"),
+    ])]
+
+    private func emoji(_ query: String, mayBeProse: Bool) -> CompletionToken {
+        CompletionToken(kind: .emoji, range: 0 ..< 1 + query.utf16.count, query: query, needsLeadingSpace: false, mayBeProse: mayBeProse)
+    }
+
+    /// Unicodeの絵文字は、名前と一致するものだけを語で始まるカスタム絵文字より上に、ほかは語で始まるカスタム絵文字と語を含むカスタム絵文字の間に混ぜる。
+    @Test func mixesStandardEmojis() async throws {
+        let completion = makeCompletion(limit: 10)
+        completion.standardEmojiGroups = { [standardGroups] in standardGroups }
+        completion.prefetch()
+        try await waitUntil { completion.emojis != nil }
+        completion.textDidChange(emoji("cat"))
+        #expect(accts(completion.content) == ["🐱", "😺", ":blobcat:", ":blobcat_heart:"])
+        completion.textDidChange(emoji("blob"))
+        #expect(accts(completion.content) == [":blobcat:", ":blobcat_heart:", "😺", ":ablob:"])
+        completion.textDidChange(emoji("+1"))
+        #expect(accts(completion.content) == ["👍"])
+    }
+
+    /// カスタム絵文字の一覧を読む間も、読めなかったときも、Unicodeの絵文字は出す。
+    @Test func showsStandardEmojisWithoutCustomEmojis() async throws {
+        let completion = makeCompletion()
+        completion.standardEmojiGroups = { [standardGroups] in standardGroups }
+        await server.setFailsEmojis(true)
+        completion.textDidChange(emoji("thumbs"))
+        #expect(accts(completion.content) == ["👍"])
+        try await waitUntil { !completion.isLoading }
+        guard case .candidatesWithFailure(let candidates, _) = completion.content else {
+            Issue.record("Unicodeの絵文字と失敗を出していません")
+            return
+        }
+        #expect(candidates.map(\.completion) == ["👍"])
+    }
+
+    /// 日本語の文の`：`かもしれない語は、合うものがなければ、一致しないことも読み込み中も失敗も出さない。合えば出す。
+    @Test func hidesUnmatchedProse() async throws {
+        let completion = makeCompletion()
+        completion.standardEmojiGroups = { [standardGroups] in standardGroups }
+        await server.setFailsEmojis(true)
+        completion.textDidChange(emoji("東京", mayBeProse: true))
+        #expect(completion.content == nil)
+        try await waitUntil { !completion.isLoading }
+        #expect(completion.content == nil)
+        completion.textDidChange(emoji("いいね", mayBeProse: true))
+        try await waitUntil { !completion.isLoading }
+        guard case .candidatesWithFailure(let candidates, _) = completion.content else {
+            Issue.record("合う絵文字を出していません")
+            return
+        }
+        #expect(candidates.map(\.completion) == ["👍"])
+    }
+
+    /// 日本語の文の`：`かもしれない語に変わるところへカーソルだけを動かしたら閉じる。出したままの候補を、改行のつもりのReturnで確定しないため。
+    @Test func closesWhenCursorMovesIntoProse() throws {
+        let completion = makeCompletion()
+        completion.standardEmojiGroups = { [standardGroups] in standardGroups }
+        let text = ":catです"
+        let typed = try #require(CompletionTokenizer.token(in: text, selection: 4 ..< 4))
+        completion.textDidChange(typed)
+        #expect(accts(completion.content).first == "🐱")
+        let moved = try #require(CompletionTokenizer.token(in: text, selection: 6 ..< 6))
+        #expect(moved.mayBeProse)
+        completion.selectionDidChange(moved)
+        #expect(completion.content == nil)
+        #expect(completion.selectedCandidate == nil)
+    }
+
+    /// Unicodeの絵文字は、サーバーが読むための空白を足さずに、語と置き換える。カスタム絵文字は空白を足す。
+    @Test func insertsStandardEmojiWithoutSpaces() throws {
+        let thumbsUp = try #require(standardGroups.first?.emojis.last)
+        let token = CompletionToken(kind: .emoji, range: 3 ..< 6, query: "いいね", needsLeadingSpace: true, mayBeProse: true)
+        #expect(CompletionCandidate.standardEmoji(thumbsUp).insertion(replacing: token, in: "最高!:いいね") == CompletionInsertion(range: 3 ..< 6, text: "👍", cursor: 5))
+        let custom = CompletionCandidate.emoji(ServerEmoji.stub("blobcat"))
+        #expect(custom.insertion(replacing: token, in: "最高!:いいね") == CompletionInsertion(range: 3 ..< 6, text: " :blobcat: ", cursor: 14))
+    }
+
     /// Escで閉じたら、語の位置がずれても出さない。語が変われば出し直す。
     @Test func dismissHidesUntilQueryChanges() async throws {
         let completion = makeCompletion()

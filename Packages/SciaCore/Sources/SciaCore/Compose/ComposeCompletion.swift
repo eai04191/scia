@@ -11,6 +11,7 @@ public enum CompletionCandidate: Hashable, Sendable, Identifiable {
     /// 返信先の人か、補完で選んだことのある人。サーバーの検索結果と同じ人なら、こちらだけを出す。
     case localAccount(LocalMention, LocalMentionSource)
     case emoji(ServerEmoji)
+    case standardEmoji(StandardEmoji)
 
     public var id: String {
         switch self {
@@ -20,6 +21,7 @@ public enum CompletionCandidate: Hashable, Sendable, Identifiable {
         case .hashtag(let hashtag): "hashtag:\(Hashtag.normalizedName(hashtag.name))"
         case .ownHashtag(let hashtag): "hashtag:\(Hashtag.normalizedName(hashtag.name))"
         case .emoji(let emoji): "emoji:\(emoji.shortcode)"
+        case .standardEmoji(let emoji): "standardEmoji:\(emoji.emoji)"
         }
     }
 
@@ -31,7 +33,16 @@ public enum CompletionCandidate: Hashable, Sendable, Identifiable {
         case .hashtag(let hashtag): "#\(hashtag.name)"
         case .ownHashtag(let hashtag): "#\(hashtag.name)"
         case .emoji(let emoji): ":\(emoji.shortcode):"
+        case .standardEmoji(let emoji): emoji.emoji
         }
+    }
+
+    /// 選んだときに、語と置き換えて本文へ入れるもの。Unicodeの絵文字は文字そのものなので、サーバーが読むための空白を足さない。
+    public func insertion(replacing token: CompletionToken, in text: String) -> CompletionInsertion {
+        guard case .standardEmoji(let emoji) = self else {
+            return CompletionTokenizer.insertion(of: completion, replacing: token, in: text)
+        }
+        return CompletionInsertion(range: token.range, text: emoji.emoji, cursor: token.range.lowerBound + emoji.emoji.utf16.count)
     }
 }
 
@@ -41,8 +52,32 @@ public enum LocalMentionSource: Hashable, Sendable {
     case recent
 }
 
-/// カスタム絵文字の一覧から、打った語に合うものを選ぶ。
+/// カスタム絵文字とUnicodeの絵文字の一覧から、打った語に合うものを選ぶ。
 public enum EmojiCompletion {
+    /// カスタム絵文字とUnicodeの絵文字を、合ったところの強さで混ぜて並べる。
+    /// ショートコードと一致するカスタム絵文字、名前と一致するUnicodeの絵文字、語で始まるカスタム絵文字、言葉と一致するか名前か言葉が語で始まるUnicodeの絵文字、
+    /// 語を含むカスタム絵文字、語を含むUnicodeの絵文字の順にする。
+    /// カスタム絵文字を全部先にすると、`cat1`、`cat2`のように語で始まるものが多いサーバーでは、🐈のような名前と一致する絵文字が候補の数から押し出されるため。
+    /// 名前と一致するものより下は、カスタム絵文字を先にする。サーバーにしかない絵文字を探しに来ることが多いため。
+    public static func candidates(matching query: String, custom: [ServerEmoji], standard groups: [StandardEmojiGroup], limit: Int) -> [CompletionCandidate] {
+        let customQuery = query.precomposedStringWithCompatibilityMapping.lowercased()
+        let customMatches = candidates(matching: customQuery, in: custom, limit: Int.max)
+        let exactCustom = customMatches.filter { $0.shortcode.lowercased() == customQuery }
+        let prefixedCustom = customMatches.filter { $0.shortcode.lowercased() != customQuery && $0.shortcode.lowercased().hasPrefix(customQuery) }
+        let containedCustom = customMatches.filter { !$0.shortcode.lowercased().hasPrefix(customQuery) }
+        let standard = StandardEmojiSearch.matches(matching: query, in: groups)
+        let standardNamed = standard.filter { $0.kind == .nameExact }.map(\.emoji)
+        let standardContained = standard.filter { $0.kind == .contained }.map(\.emoji)
+        let standardRest = standard.filter { $0.kind != .nameExact && $0.kind != .contained }.map(\.emoji)
+        let ordered: [CompletionCandidate] = exactCustom.map(CompletionCandidate.emoji)
+            + standardNamed.map(CompletionCandidate.standardEmoji)
+            + prefixedCustom.map(CompletionCandidate.emoji)
+            + standardRest.map(CompletionCandidate.standardEmoji)
+            + containedCustom.map(CompletionCandidate.emoji)
+            + standardContained.map(CompletionCandidate.standardEmoji)
+        return Array(ordered.prefix(max(limit, 0)))
+    }
+
     /// 大文字小文字を区別せず、語で始まるものを先に、語を含むものを後に並べる。それぞれ短い順、同じ長さなら名前の順。
     /// 一覧に出さない絵文字は除く。
     public static func candidates(matching query: String, in emojis: [ServerEmoji], limit: Int) -> [ServerEmoji] {
@@ -165,7 +200,8 @@ public final class ComposeCompletion {
     public var content: Content? {
         guard let token, !isDismissed else { return nil }
         // 手元の候補だけを出す間は、合うものがなければ何も出さない。「一致しない」と出すと、記号を打つたびに一覧が出るため。
-        if !searchesServer(token), candidates.isEmpty { return nil }
+        // 日本語の文の`：`かもしれない語も、合うものがなければ、読み込み中や失敗も含めて何も出さない。文を書くたびに一覧が出るため。
+        if !searchesServer(token) || token.mayBeProse, candidates.isEmpty { return nil }
         if let failureMessage {
             return candidates.isEmpty ? .failed(failureMessage) : .candidatesWithFailure(candidates, failureMessage)
         }
@@ -204,6 +240,8 @@ public final class ComposeCompletion {
     var isLoadingOwnTags: Bool { ownTagsTask != nil }
     /// 始めた検索のうち、取り消されたものも含めて終えた数。テストで、取り消した検索が終わるまで待つ。
     @ObservationIgnored private(set) var finishedSearchCount = 0
+    /// 補完に出すUnicodeの絵文字。端末で描けるものは設定の絵文字の絵で変わるので、候補を出すたびに読む。
+    @ObservationIgnored public var standardEmojiGroups: () -> [StandardEmojiGroup] = { [] }
     /// 返信先の人。書いている途中で返信先が変わることがあるので、候補を出すたびに読む。返信でなければ空。
     @ObservationIgnored public var replyParticipants: () -> [LocalMention] = { [] }
     @ObservationIgnored private let recentMentions: RecentMentions?
@@ -264,9 +302,11 @@ public final class ComposeCompletion {
     ///
     /// UIKitは打った文字を入れたとき、本文が変わった知らせより先にカーソルが動いた知らせを送る。
     /// そのため語の中身は比べず、どこから始まる語かだけを見て、語が伸びたことは本文が変わった知らせで扱う。
+    /// ただし、日本語の文の`：`かもしれない語かどうかが変わったら閉じる。`:cat|です`からカーソルを後ろへ動かすと、語は`catです`になり、
+    /// 出したままの`cat`の候補をReturnで確定すると、置き換える範囲はいまのカーソルで決め直すので「です」まで消すため。
     public func selectionDidChange(_ new: CompletionToken?) {
         guard let token else { return }
-        guard let new, new.kind == token.kind, new.range.lowerBound == token.range.lowerBound else {
+        guard let new, new.kind == token.kind, new.range.lowerBound == token.range.lowerBound, new.mayBeProse == token.mayBeProse else {
             clear()
             return
         }
@@ -283,7 +323,7 @@ public final class ComposeCompletion {
         switch candidate {
         case .account(let account): recentMentions?.record(LocalMention(account: account))
         case .localAccount(let mention, _): recentMentions?.record(mention)
-        case .hashtag, .ownHashtag, .emoji, nil: break
+        case .hashtag, .ownHashtag, .emoji, .standardEmoji, nil: break
         }
         clear()
     }
@@ -333,9 +373,9 @@ public final class ComposeCompletion {
         failureMessage = nil
         switch token.kind {
         case .emoji:
-            if let emojis {
-                show(EmojiCompletion.candidates(matching: token.query, in: emojis, limit: settings.limit).map(CompletionCandidate.emoji))
-            } else {
+            // カスタム絵文字の一覧を読む間も、Unicodeの絵文字は手元にあるので先に出す。
+            show(emojiCandidates(for: token))
+            if emojis == nil {
                 isLoading = true
                 loadEmojis()
             }
@@ -383,6 +423,11 @@ public final class ComposeCompletion {
         case .emoji:
             []
         }
+    }
+
+    /// 読めていればカスタム絵文字も混ぜた、語に合う絵文字。
+    private func emojiCandidates(for token: CompletionToken) -> [CompletionCandidate] {
+        EmojiCompletion.candidates(matching: token.query, custom: emojis ?? [], standard: standardEmojiGroups(), limit: settings.limit)
     }
 
     /// 語の文字数が、サーバーで探す文字数に届いているか。絵文字は手元の一覧で絞るので、いつも届いている扱いにする。
@@ -500,8 +545,10 @@ public final class ComposeCompletion {
         emojiTask = nil
         logger.info("completion: custom emojis failed: \(ErrorPresentation(error).code ?? "unknown", privacy: .public)")
         emojiFailureMessage = Self.failureMessage(for: error)
-        guard token?.kind == .emoji else { return }
-        candidates = []
+        guard let token, token.kind == .emoji else { return }
+        // Unicodeの絵文字の候補は、失敗の上に残して選べるようにする。
+        candidates = emojiCandidates(for: token)
+        selectedIndex = min(selectedIndex, max(candidates.count - 1, 0))
         isLoading = false
         failureMessage = Self.failureMessage(for: error)
     }
