@@ -45,19 +45,30 @@ enum AppDependencies {
     /// 画像を、APIの外のURLから取得する。2xx以外の応答の本文を、画像として渡さない。
     nonisolated static let remoteFetch = RemoteFetch(client: http)
 
+    /// 画像を、URLから取得する。設定の見本の画像は端末で作ったものなので、通信せずに返す。
+    nonisolated static func imageData(from url: URL) async throws -> Data {
+        if let data = await PreviewImages.data(for: url) {
+            return data
+        }
+        return try await remoteFetch.data(from: url)
+    }
+
     static let emojiImages = EmojiImageStore { url in
-        try await remoteFetch.data(from: url)
+        try await imageData(from: url)
     }
 
     static let avatarImages = AvatarImageStore { url in
-        try await remoteFetch.data(from: url)
+        try await imageData(from: url)
     }
 
     /// 添付ファイルの元のファイルを置くディスクキャッシュ。ビューアで開いた画像の元のファイルと、共有や保存のために落とした動画などを置く。
     static let mediaFiles = MediaFileCache()
 
     static let mediaImages = MediaImageStore(files: mediaFiles) { url, range in
-        try await MediaImageStore.download(url, range: range)
+        if range == nil, let data = await PreviewImages.data(for: url) {
+            return data
+        }
+        return try await MediaImageStore.download(url, range: range)
     }
 
     static let mediaDownloads = MediaDownloads(files: mediaFiles)
