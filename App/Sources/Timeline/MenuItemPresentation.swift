@@ -184,7 +184,7 @@ extension HashtagMenuItem {
                 let domain = account.acct.split(separator: "@", maxSplits: 1).dropFirst().first.map(String.init)
                 return [UIAction(title: "@\(account.username)の投稿", subtitle: domain, image: item.image) { _ in openAccountStatuses(account) }]
             case .mute:
-                return muteActions.map { [$0.element(for: name, item: item)] } ?? []
+                return muteActions?.elements(for: name, item: item) ?? []
             // 共通の項目は、上で中身から組んだ。
             case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
                 return []
@@ -195,33 +195,49 @@ extension HashtagMenuItem {
 
 /// ハッシュタグのメニューの「ミュート」で、ミュートしているかを読み、変える。決まりはdocs/menus.mdの「ハッシュタグのメニュー」にある。
 struct HashtagMuteActions {
-    /// `#`を除いた名前のタグのミュート。ミュートしていなければnil。
-    let load: @MainActor (String) async throws -> HashtagMute?
+    /// 覚えている自分のフィルターで決めた、`#`を除いた名前のタグをミュートしているか。フィルターをまだ読めていなければnil。
+    let known: @MainActor (String) -> Bool?
+    /// 自分のフィルターを読み直していなければ読み直す。メニューを開いたときに呼び、次に開いたときから使う。
+    let refresh: @MainActor () -> Void
+    /// `#`を除いた名前のタグをミュートしているか。フィルターを読み直している途中なら、それを待つ。
+    let load: @MainActor (String) async throws -> Bool
     /// ミュートする。nilなら解除するまで続ける。
     let mute: @MainActor (String, Duration?) -> Void
-    let unmute: @MainActor (String, HashtagMute) -> Void
+    /// ミュートを解除する。解く条件は、解除するときにフィルターを読み直して決める。メニューを組んだときに覚えていた条件で消すと、
+    /// その後に別の端末やwebで同じフィルターに足した条件まで、フィルターごと消してしまうため。
+    let unmute: @MainActor (String) -> Void
 
-    /// メニューを開いてからフィルターを読んで中身を決めるため、読む間はUIKitの読み込み中の行を出す。
-    /// ミュートしていなければ、ユーザーのミュートと同じ期間をサブメニューで選び、ミュート中なら「ミュートを解除」にする。読めなければ、押せない行で知らせる。
+    /// ミュートしていなければ、ユーザーのミュートと同じ期間をサブメニューで選び、ミュート中なら「ミュートを解除」にする。
+    /// フィルターを覚えていれば、その場で決める。読み込み中の行を出してから中身を差し替えると、開く途中のサブメニューの動きが崩れるため。
+    /// メニューを開くたびにフィルターを読み直し、別の端末やwebで変えたミュートを次に開いたときから反映する。
+    /// まだ読めていなければ、読む間はUIKitの読み込み中の行を出し、読めなければ押せない行で知らせる。
     @MainActor
-    func element(for name: String, item: HashtagMenuItem) -> UIMenuElement {
-        UIDeferredMenuElement.uncached { completion in
+    func elements(for name: String, item: HashtagMenuItem) -> [UIMenuElement] {
+        func elements(isMuted: Bool) -> [UIMenuElement] {
+            if isMuted {
+                return [UIAction(title: "ミュートを解除", image: UIImage(systemName: "speaker.wave.2")) { _ in unmute(name) }]
+            }
+            return [UIMenu(title: item.title, image: item.image, children: UserRelationChange.muteDurations.map { choice in
+                UIAction(title: choice.title) { _ in mute(name, choice.duration) }
+            })]
+        }
+        let isMuted = known(name)
+        refresh()
+        if let isMuted {
+            return elements(isMuted: isMuted)
+        }
+        return [UIDeferredMenuElement.uncached { completion in
             Task { @MainActor in
                 do {
-                    if let muted = try await load(name) {
-                        completion([UIAction(title: "ミュートを解除", image: UIImage(systemName: "speaker.wave.2")) { _ in unmute(name, muted) }])
-                        return
-                    }
-                    completion([UIMenu(title: item.title, image: item.image, children: UserRelationChange.muteDurations.map { choice in
-                        UIAction(title: choice.title) { _ in mute(name, choice.duration) }
-                    })])
+                    completion(elements(isMuted: try await load(name)))
                 } catch {
                     completion([UIAction(title: "ミュートを読み込めませんでした", image: UIImage(systemName: "exclamationmark.triangle"), attributes: .disabled) { _ in }])
                 }
             }
-        }
+        }]
     }
 }
+
 
 /// 投稿のメニューの中で、ユーザーのメニューを出す相手。メンションはアカウントの全体を持たないため、IDでプロフィールを開く。
 enum MenuUser {

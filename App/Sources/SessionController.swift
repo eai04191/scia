@@ -105,6 +105,8 @@ final class SessionController {
     /// セッションで読んだアカウント。メニューと投稿欄の補完に、メンションされたユーザーのアイコンを出すのに使う。
     /// 補完の口は`init`の中で`self`より先に作るので、それより前に作る。
     private let accounts: AccountCache
+    /// 読んだ自分のフィルター。ハッシュタグのメニューの「ミュート」を、メニューを組むときに決めるのに使う。
+    private let serverFilters: ServerFilterCache
     /// 補完の候補を読む口。投稿欄とプロフィールの編集で使う。
     private let completionSources: ComposeCompletion.Sources
     /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
@@ -346,6 +348,7 @@ final class SessionController {
         }
         let accounts = AccountCache { [client] ids in try await client.accounts(ids) }
         self.accounts = accounts
+        serverFilters = ServerFilterCache { [client] in try await client.filters() }
         completionSources = ComposeCompletion.Sources(
             searchAccounts: { query, limit in
                 do {
@@ -1285,14 +1288,16 @@ final class SessionController {
         source?.navigationController?.pushViewController(viewController, animated: true)
     }
 
-    /// ハッシュタグのメニューのミュート。メニューを開くたびに、自分のフィルターを読んでミュートしているかを決める。
+    /// ハッシュタグのメニューのミュート。覚えている自分のフィルターでミュートしているかを決め、メニューを開くたびに読み直す。
     private var hashtagMuteActions: HashtagMuteActions {
-        let client = client
+        let serverFilters = serverFilters
         let now = now
         return HashtagMuteActions(
-            load: { name in HashtagMute.find(name, in: try await client.filters(), now: now()) },
+            known: { name in serverFilters.filters.map { HashtagMute.find(name, in: $0, now: now()) != nil } },
+            refresh: { serverFilters.refresh() },
+            load: { name in HashtagMute.find(name, in: try await serverFilters.latest(), now: now()) != nil },
             mute: { [weak self] name, duration in self?.muteHashtag(name, duration: duration) },
-            unmute: { [weak self] name, muted in self?.unmuteHashtag(name, muted) }
+            unmute: { [weak self] name in self?.unmuteHashtag(name) }
         )
     }
 
@@ -1306,6 +1311,7 @@ final class SessionController {
             guard let self else { return }
             do {
                 try await HashtagMute.mute(name, duration: duration, client: client)
+                serverFilters.reload()
                 excludeInLists(tag: name, excluded: true)
                 if let duration {
                     includeAfterHashtagMuteExpires(name, duration: duration)
@@ -1319,13 +1325,19 @@ final class SessionController {
     }
 
     /// ハッシュタグのミュートを解除する。除いた投稿は戻さず、読み込み直したときに戻る。ユーザーのミュートの解除と同じ。
-    private func unmuteHashtag(_ name: String, _ muted: HashtagMute) {
+    /// 解く条件は、解除するときにフィルターを読み直して決める。メニューを組んだときに覚えていた条件で消すと、
+    /// その後に別の端末やwebで同じフィルターに足した条件まで、フィルターごと消してしまうため。もうミュートしていなければ、何も消さない。
+    private func unmuteHashtag(_ name: String) {
         let client = client
         logger.info("hashtag unmute")
-        tasks.run(key: "hashtagMute:\(name)", .skippingWhileRunning) { [weak self] in
+        tasks.run(key: "hashtagMute:\(name)", .skippingWhileRunning) { [weak self, now] in
             guard let self else { return }
             do {
-                try await muted.unmute(client: client)
+                serverFilters.reload()
+                if let muted = HashtagMute.find(name, in: try await serverFilters.latest(), now: now()) {
+                    try await muted.unmute(client: client)
+                    serverFilters.reload()
+                }
                 excludeInLists(tag: name, excluded: false)
                 notices.showTransient(Notice(id: "hashtag.muteChanged", kind: .success, title: "#\(name)のミュートを解除しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
             } catch {
@@ -1344,12 +1356,14 @@ final class SessionController {
 
     /// 期限を付けたハッシュタグのミュートが切れたら、フィルターを読み直し、もうミュートしていなければ、また足すようにする。ユーザーのミュートと同じく、少し余裕を見てから読む。
     private func includeAfterHashtagMuteExpires(_ name: String, duration: Duration) {
-        let client = client
+        let serverFilters = serverFilters
         // ミュートし直したら、前の期限の待ちを止めて待ち直す。
         tasks.run(key: "muteExpiry:tag:\(name)", .replacing) { [weak self, clock, now] in
             do {
                 try await clock.sleep(for: duration + .seconds(60))
-                guard HashtagMute.find(name, in: try await client.filters(), now: now()) == nil else { return }
+                // 覚えているフィルターも新しくし、次に開くメニューでミュートが明けたことを出す。
+                serverFilters.reload()
+                guard HashtagMute.find(name, in: try await serverFilters.latest(), now: now()) == nil else { return }
                 self?.excludeInLists(tag: name, excluded: false)
             } catch is CancellationError {
                 // セッションを止めたか、同じハッシュタグをミュートし直した。

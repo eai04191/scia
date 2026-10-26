@@ -425,6 +425,43 @@ struct StatusMenuTests {
         #expect(dogLinks.allSatisfy { $0.attributes.contains(.disabled) })
     }
 
+    /// ハッシュタグの「ミュート」は、自分のフィルターを覚えていれば、その場でミュートしているかを決め、読み込み中の行を出さない。
+    /// まだ読めていなければ、読んでから中身を決める。どちらでも、メニューを組むたびにフィルターを読み直す。
+    @Test func hashtagMuteUsesKnownFiltersAndRefreshes() throws {
+        let base = try status(url: nil)
+        let post = Status(
+            id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil,
+            tags: [Tag(name: "cat", url: nil), Tag(name: "dog", url: nil), Tag(name: "fox", url: nil)]
+        )
+        let refreshes = ReloadRecorder()
+        let viewController = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: try makeSettings())
+        viewController.hashtagMuteActions = HashtagMuteActions(
+            known: { name in
+                switch name {
+                case "cat": true
+                case "dog": false
+                default: nil
+                }
+            },
+            refresh: { refreshes.requests.append([]) },
+            load: { _ in false },
+            mute: { _, _ in },
+            unmute: { _ in }
+        )
+
+        let tags = (viewController.contextMenu(for: .status(post), id: TimelineEntry.status(post).id)?.children ?? [])
+            .flatMap { ($0 as? UIMenu)?.children ?? [] }
+            .filter { $0.title.hasPrefix("#") }
+            .map(describe)
+
+        #expect(tags.count == 3)
+        #expect(tags[0].contains("ミュートを解除"))
+        #expect(tags[1].contains("ミュート[無期限,"))
+        #expect(!tags[0].contains("…") && !tags[1].contains("…"))
+        #expect(tags[2].contains("…"))
+        #expect(!refreshes.requests.isEmpty)
+    }
+
     /// ハッシュタグのない投稿では、ハッシュタグの項目を出さない。
     @Test func hashtagsAreHiddenWithoutTags() throws {
         let titles = try outline(menu(for: .status(status(url: nil)))).joined()
