@@ -229,6 +229,15 @@ struct AppearanceEditorTests {
         #expect(AppearanceChoice.showsSeparators.highlight.locate(in: rows) != nil)
     }
 
+    /// 外観ごとにしか効かない項目を触っている間は、プレビューをその外観で描く。ほかの項目では、端末の外観のまま描く。
+    @Test func appearanceSpecificItemsSwitchPreviewScheme() {
+        #expect(AppearanceFocus.value(AppearanceCatalog.reactionGlowDarkOpacity).colorScheme == .dark)
+        #expect(AppearanceFocus.value(AppearanceCatalog.reactionGlowLightOpacity).colorScheme == .light)
+        #expect(AppearanceFocus.choice(.reactionGlowLightFavouriteColor).colorScheme == .light)
+        #expect(AppearanceFocus.value(AppearanceCatalog.reactionGlowHeight).colorScheme == nil)
+        #expect(AppearanceFocus.choice(.drawsReactionGlowInHDR).colorScheme == nil)
+    }
+
     /// プレビューのどの部品をタップしても、何かの項目が開く。
     @Test func everyPartOpensAnItem() {
         for part in AppearancePreviewPart.allCases {

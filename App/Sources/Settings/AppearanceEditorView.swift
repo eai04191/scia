@@ -28,12 +28,13 @@ struct AppearanceEditorView: View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 AppearancePreview(
-                    configurations: samples.configurations(colorScheme: colorScheme, includesXPost: showsXPost, revision: revision),
+                    configurations: samples.configurations(colorScheme: previewColorScheme, includesXPost: showsXPost, revision: revision),
                     highlight: focused?.highlight,
                     onSelectPart: select,
                     onTapHighlight: { focused = nil },
                     showsSeparators: settings.showsSeparators,
-                    choices: choicesRevision
+                    choices: choicesRevision,
+                    interfaceStyle: focused?.colorScheme.map { $0 == .dark ? .dark : .light } ?? .unspecified
                 )
                 .frame(height: geometry.size.height * 0.42)
                 Divider()
@@ -114,6 +115,11 @@ struct AppearanceEditorView: View {
                 focused = nil
             }
         }
+    }
+
+    /// 見本を描く外観。外観ごとにしか効かない項目を触っている間は、その外観で描く。端末と違う外観の項目では、値を変えても見た目が変わらないため。
+    private var previewColorScheme: ColorScheme {
+        focused?.colorScheme ?? colorScheme
     }
 
     /// Xの投稿を出すのは試作で、チューニングで出すようにしているときだけ、その区画と見本を並べる。
@@ -294,6 +300,15 @@ enum AppearanceFocus: Hashable {
         switch self {
         case .value(let item): AppearanceHighlight(item)
         case .choice(let choice): choice.highlight
+        }
+    }
+
+    /// この項目が効く外観。どちらの外観でも効く項目はnil。
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .value(AppearanceCatalog.reactionGlowDarkOpacity): .dark
+        case .value(AppearanceCatalog.reactionGlowLightOpacity), .choice(.reactionGlowLightFavouriteColor): .light
+        default: nil
         }
     }
 }

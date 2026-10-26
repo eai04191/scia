@@ -223,6 +223,8 @@ struct AppearancePreview: UIViewRepresentable {
     let onTapHighlight: () -> Void
     var showsSeparators = true
     var choices = 0
+    /// 見本を描く外観。外観ごとにしか効かない項目を触っている間だけ、端末の外観と違うものにする。
+    var interfaceStyle: UIUserInterfaceStyle = .unspecified
 
     func makeUIView(context: Context) -> AppearancePreviewView {
         AppearancePreviewView()
@@ -231,6 +233,7 @@ struct AppearancePreview: UIViewRepresentable {
     func updateUIView(_ view: AppearancePreviewView, context: Context) {
         view.onSelectPart = onSelectPart
         view.onTapHighlight = onTapHighlight
+        view.overrideUserInterfaceStyle = interfaceStyle
         view.apply(configurations, highlight: highlight, showsSeparators: showsSeparators, choices: choices)
     }
 }
