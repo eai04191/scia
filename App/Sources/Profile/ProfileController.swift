@@ -124,6 +124,7 @@ final class ProfileController {
         header.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination) }
         viewController.onScroll = { [weak self] scrollView in self?.updateBars(scrollView) }
         header.onChangeBannerLayout = { [weak self] in self?.viewController?.headerDidChangeSize() }
+        header.onExpandNote = { [weak self] duration in self?.viewController?.headerDidChangeSize(animatingWithDuration: duration) }
         header.onChangeExtendsUnderBars = { [weak self] in
             guard let scrollView = self?.viewController?.collectionView else { return }
             self?.updateBars(scrollView)
@@ -283,6 +284,7 @@ final class ProfileController {
             )
             header.countsSpacing = tuning.value(of: TuningCatalog.profileCountsSpacing)
             header.noteFadeWidth = tuning.value(of: TuningCatalog.profileNoteFadeWidth)
+            header.noteExpandDuration = tuning.value(of: TuningCatalog.profileNoteExpandDuration)
         }
         header.apply(ProfileHeaderView.Content(
             account: account,

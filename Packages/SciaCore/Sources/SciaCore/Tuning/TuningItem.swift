@@ -270,6 +270,15 @@ public enum TuningCatalog {
         defaultValue: 32
     )
 
+    /// プロフィールの自己紹介の「さらに表示」を押して全文に広げるときに、下の内容を下げていく時間。0なら切り替える。
+    public static let profileNoteExpandDuration = NumberTuning(
+        id: "profile.noteExpandDuration",
+        title: "自己紹介を「さらに表示」で広げる時間（秒）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.35
+    )
+
     /// プロフィールの最初の投稿の一覧を出す前に、行のアイコンが読み込み終わるのを待つ上限。読み込み終われば上限を待たずに出す。0なら待たない。
     public static let profileAvatarWait = NumberTuning(
         id: "profile.avatarWait",
@@ -1343,6 +1352,7 @@ public enum TuningCatalog {
             .number(profileBannerReflectionSeam),
             .number(profileCountsSpacing),
             .number(profileNoteFadeWidth),
+            .number(profileNoteExpandDuration),
         ]),
         TuningSection(id: "thread", title: "スレッド", items: [
             .number(threadOpenDuration),

@@ -47,6 +47,10 @@ final class ProfileHeaderView: UIView {
         get { pinnedShelf.onOpen }
         set { pinnedShelf.onOpen = newValue }
     }
+    /// 「さらに表示」で自己紹介を広げたときに、下の内容を下げていく時間を渡して呼ぶ。0なら動かさずに切り替える。
+    var onExpandNote: ((TimeInterval) -> Void)?
+    /// 「さらに表示」で自己紹介を広げるときに、下の内容を下げていく時間。0なら切り替える。
+    var noteExpandDuration: TimeInterval = 0
     /// ヘッダー画像を読み込み終えて、バーの下へ伸ばすかが変わったときに呼ぶ。
     var onChangeExtendsUnderBars: (() -> Void)?
     /// ヘッダー画像の大きさや位置が変わって、ヘッダーの高さが変わったときに呼ぶ。
@@ -599,6 +603,7 @@ final class ProfileHeaderView: UIView {
         noteContainer?.isHidden = note.length == 0
         if previous?.account.id != account.id {
             isNoteExpanded = false
+            noteView.finishExpanding()
         }
         noteLabel.numberOfLines = isNoteExpanded ? 0 : Self.collapsedNoteLines
         applyFields(account, language: content.glyphLanguage, animatedEmojis: animatedEmojis)
@@ -850,9 +855,9 @@ final class ProfileHeaderView: UIView {
     private func expandNote() {
         isNoteExpanded = true
         noteLabel.numberOfLines = 0
-        moreButton.isHidden = true
-        noteView.setNeedsLayout()
-        onChangeBannerLayout?()
+        let duration = window != nil && !UIAccessibility.isReduceMotionEnabled ? noteExpandDuration : 0
+        noteView.expand(duration: duration)
+        onExpandNote?(duration)
     }
 
     /// 自己紹介が切った行数に収まらないときだけ、「さらに表示」を出す。測る幅は、一覧がヘッダーを測る幅から、左右の余白を引いたもの。

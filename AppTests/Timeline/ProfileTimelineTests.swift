@@ -68,6 +68,34 @@ struct ProfileTimelineTests {
         #expect(abs(after - before - 50) <= tolerance, "先頭の投稿が\(after - before)pt動きました")
     }
 
+    /// 「さらに表示」で自己紹介を広げるときは、伸びるのを動きで見せる。ヘッダーの上端が画面の上の外にあっても、ヘッダーは動かさず、伸びた分だけ下の投稿を下げる。
+    @Test(arguments: [0.0, 300.0])
+    func headerGrowingWithAnimationKeepsHeaderAndPushesStatusesDown(scrolled: CGFloat) throws {
+        let header = UIView()
+        let height = header.heightAnchor.constraint(equalToConstant: 600)
+        height.isActive = true
+        let harness = try TimelineHarness(headerView: header)
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 40, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        harness.collectionView.contentOffset.y = -harness.collectionView.adjustedContentInset.top + scrolled
+        harness.collectionView.layoutIfNeeded()
+        let first = try #require(statuses.first.map { TimelineEntry.ID.status($0.id) })
+        let headerBefore = header.convert(header.bounds, to: nil).minY
+        let firstBefore = try #require(harness.windowMinY(of: first))
+
+        height.constant = 700
+        harness.viewController.headerDidChangeSize(animatingWithDuration: 0.3)
+        harness.collectionView.layoutIfNeeded()
+
+        let headerAfter = header.convert(header.bounds, to: nil).minY
+        #expect(abs(headerAfter - headerBefore) <= tolerance, "ヘッダーが\(headerAfter - headerBefore)pt動きました")
+        let firstAfter = try #require(harness.windowMinY(of: first))
+        #expect(abs(firstAfter - firstBefore - 100) <= tolerance, "先頭の投稿が\(firstAfter - firstBefore)pt動きました")
+        let attributes = harness.collectionView.layoutAttributesForSupplementaryElement(ofKind: UICollectionView.elementKindSectionHeader, at: IndexPath(item: 0, section: 0))
+        #expect(abs((attributes?.frame.height ?? 0) - height.constant) <= tolerance, "一覧のヘッダーの高さが\(attributes?.frame.height ?? 0)ptでした")
+    }
+
     /// ヘッダーが画面の途中にあるときにタブを切り替えると、両方の一覧にある投稿を基準に位置を保ってしまい、
     /// 上に足された固定された投稿の分だけヘッダーとタブが押し上げられていた。タブは押した場所に残し、中身だけを差し替える。
     @Test func switchingTabKeepsHeaderPosition() throws {

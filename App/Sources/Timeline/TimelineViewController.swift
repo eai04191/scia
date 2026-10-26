@@ -1827,6 +1827,36 @@ extension TimelineViewController {
         }
     }
 
+    /// ヘッダーの中身が変わって伸び縮みした分を、ヘッダーの下の内容と下の行ごとスプリングで動かしてつなぐ。動きの途中も操作を受け付ける。
+    /// ヘッダーを読み終えて下の行を読んでいるときと、`duration`が0のときは、動かさずに`headerDidChangeSize()`と同じく位置を保つ。
+    func headerDidChangeSize(animatingWithDuration duration: TimeInterval) {
+        guard duration > 0, view.window != nil, headerView != nil, dataSource.snapshot().numberOfSections > 0 else {
+            headerDidChangeSize()
+            return
+        }
+        let header = IndexPath(item: 0, section: 0)
+        // ここで並べ直すと、伸びた中身を前の高さのヘッダーに押し込んだ形が、動きの出発点になってしまう。並べ直すのは動きの中だけにする。
+        let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
+        guard let headerFrame = collectionView.layoutAttributesForSupplementaryElement(ofKind: UICollectionView.elementKindSectionHeader, at: header)?.frame,
+              headerFrame.maxY > visibleTop
+        else {
+            headerDidChangeSize()
+            return
+        }
+        let offset = collectionView.contentOffset.y
+        UIView.animate(springDuration: duration, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            let context = UICollectionViewLayoutInvalidationContext()
+            context.invalidateSupplementaryElements(ofKind: UICollectionView.elementKindSectionHeader, at: [header])
+            self.collectionView.collectionViewLayout.invalidateLayout(with: context)
+            self.collectionView.layoutIfNeeded()
+            // ヘッダーの上端が表示領域の上端より上にあると、一覧は下の行の位置を保とうとして、伸びた分だけスクロール位置を足す。
+            // それではヘッダーが上へ伸びて見えるため、`headerDidChangeSize()`と同じく、ヘッダーを動かさず下の行を動かす位置に戻す。
+            let top = -self.collectionView.adjustedContentInset.top
+            let bottom = self.collectionView.contentSize.height + self.collectionView.adjustedContentInset.bottom - self.collectionView.bounds.height
+            self.collectionView.contentOffset.y = offset < top ? offset : min(offset, max(bottom, top))
+        }
+    }
+
     /// 画面に出るときに、`id`の行の上端を、ウインドウの`windowY`の高さに置く。スレッドを、押した行を一覧で見えていた位置に置いて開くのに使う。
     /// 画面に出るまでは、安全領域とバーの高さが分からないため、出るときに置く。
     func placeOnAppearing(_ id: ItemID, atWindowY windowY: CGFloat) {
