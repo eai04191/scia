@@ -52,6 +52,11 @@ struct AppearanceSheets {
         for choice in AppearanceChoice.allCases {
             let before = try Self.makeSettings()
             let after = try Self.makeSettings()
+            // 本文の右に小さく出すときにだけ効く選択肢は、その並べ方で比べる。
+            if choice == .tiltsStackedPhotos {
+                before.mediaArrangement = .besideBody
+                after.mediaArrangement = .besideBody
+            }
             let description = Self.change(choice, in: after)
             pairs.append((
                 "選択肢 \(choice) \(description)",
@@ -135,6 +140,8 @@ struct AppearanceSheets {
         case .mediaArrangement:
             settings.mediaArrangement = .besideBody
             return "→ 本文の右に小さく"
+        case .tiltsStackedPhotos:
+            return flip(\.tiltsStackedPhotos)
         case .drawsReactionGlowInHDR: return flip(\.drawsReactionGlowInHDR)
         case .reactionGlowIcons:
             settings.reactionGlowIcons = .atBottom
