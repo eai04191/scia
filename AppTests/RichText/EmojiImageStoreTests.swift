@@ -132,4 +132,25 @@ struct EmojiImageStoreTests {
 
         #expect(origins.withLock { $0 } == [.automatic, .user])
     }
+
+    /// 裏に回っても読んだ静止画を捨てない。捨てると、行を描き直すたびに画面に出ている絵文字を空けた場所で描いて読み直すため。
+    /// Macでは窓が見えたまま録画のツールなどにフォーカスが移っても裏に回った扱いになる。
+    @Test func stillImagesSurviveEnteringTheBackground() async throws {
+        let urls = (0..<3).map { URL(filePath: "/").appending(path: "emoji\($0).png") }
+        let reads = Mutex(0)
+        let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in }.pngData())
+        let store = EmojiImageStore(clock: clock) { _ in
+            reads.withLock { $0 += 1 }
+            return png
+        }
+
+        for url in urls { _ = store.image(for: url) }
+        try await waitUntil { urls.allSatisfy { store.image(for: $0) != nil } }
+        NotificationCenter.default.post(name: UIApplication.didEnterBackgroundNotification, object: UIApplication.shared)
+
+        for url in urls {
+            #expect(store.image(for: url) != nil, "裏に回ったときに静止画を捨てました")
+        }
+        #expect(reads.withLock { $0 } == 3)
+    }
 }

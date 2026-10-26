@@ -34,11 +34,11 @@ final class EmojiImageStore {
 
     private let fetch: Fetch
     /// 縮めた静止画。96pxの高さで1枚40KBほどなので、正方形の絵文字なら800個ほど入る。
-    private let stills: NSCache<NSURL, UIImage> = {
-        let cache = NSCache<NSURL, UIImage>()
-        cache.totalCostLimit = 32 * 1024 * 1024
-        return cache
-    }()
+    /// 静止画は行を描き直すたびにここから求め直す。上限を超えたときだけ、使ってから一番長いものから捨てる。
+    /// `NSCache`には持たない。`NSCache`はシステムの判断で中身を捨てるため。iOSシミュレーターでは、アプリが裏に回った知らせを送った直後に捨てた。
+    /// 画面に出ている絵文字が捨てられると空けた場所で描いて読み直し、読み終えるとまた行を描き直す。
+    /// Macで名前の絵文字が出たり消えたりを繰り返したときに`NSCache`から捨てられていたかと、何が捨てさせたかは確かめていない。
+    private var stills = CostLimitedCache<URL, UIImage>(totalCostLimit: 32 * 1024 * 1024)
     /// 読めなかった静止画。読み直している途中も、読めるまでは`:shortcode:`の文字で描き続けるため、読んでいる途中とは分けて持つ。
     private var failedStills: Set<URL> = []
     /// 静止画を読んでいる途中のURL。
@@ -72,7 +72,7 @@ final class EmojiImageStore {
     /// 読めなかった画像は、間隔をおいてから読み直す。
     /// - Parameter retriesNow: 使う人が自分で見に行った操作（投稿のメニューを開くなど）で、間隔を待たずに読み直す。
     func image(for url: URL, retriesNow: Bool = false) -> UIImage? {
-        if let image = stills.object(forKey: url as NSURL) {
+        if let image = stills.value(forKey: url) {
             return image
         }
         // まだ読んでいない画像も、同じサーバーの`/media_proxy`が制限されている間は読まない（`RetrySchedule.rateLimitScope`）。
@@ -133,7 +133,7 @@ final class EmojiImageStore {
             do {
                 let data = try await fetch(url)
                 guard let image = await Self.decodeStill(data) else { throw DecodeError() }
-                stills.setObject(image, forKey: url as NSURL, cost: Self.cost(of: image))
+                stills.setValue(image, forKey: url, cost: Self.cost(of: image))
                 failedStills.remove(url)
                 retry.recordSuccess(for: url)
             } catch {
