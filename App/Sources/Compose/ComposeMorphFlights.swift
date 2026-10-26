@@ -252,7 +252,7 @@ private final class FlightCopy: UIView {
         inner.layer.allowsEdgeAntialiasing = true
         layer.cornerCurve = .continuous
         if case .thumbnail = content {
-            backgroundColor = .white
+            backgroundColor = PhotoPaper.color
         }
         addSubview(inner)
     }

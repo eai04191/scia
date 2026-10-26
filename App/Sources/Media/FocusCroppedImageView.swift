@@ -47,9 +47,18 @@ final class FocusCroppedImageView: UIView {
             layer.borderWidth = paperBorder
             // 色は消さない。太さだけをアニメーションで細くしている間も、白いまま見せるため。太さが0なら描かれない。
             if paperBorder > 0 {
-                layer.borderColor = UIColor.white.cgColor
+                layer.borderColor = paperColor.cgColor
             }
             setNeedsLayout()
+        }
+    }
+
+    /// 紙（フチと、中身を薄くしたぶん見せる下地）の色。ビューアは画面を常にダークにしているので、自分の外観では決めず、
+    /// 使う側が起点の写真の外観で解決した色を渡す。
+    var paperColor: UIColor = .white {
+        didSet {
+            paperView.backgroundColor = paperColor
+            layer.borderColor = paperBorder > 0 ? paperColor.cgColor : layer.borderColor
         }
     }
 
@@ -60,7 +69,7 @@ final class FocusCroppedImageView: UIView {
         isUserInteractionEnabled = false
         // 届いた画像の縦横比が添付ファイルの大きさと違っても、枠に画像のない部分を作らない。
         imageView.contentMode = .scaleAspectFill
-        paperView.backgroundColor = .white
+        paperView.backgroundColor = paperColor
         paperView.alpha = 0
         dimView.backgroundColor = .black
         dimView.alpha = 0

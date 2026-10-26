@@ -1254,6 +1254,7 @@ struct MediaViewerControllerTests {
         let rotation = 10 * CGFloat.pi / 180
         let border: CGFloat = 10
         let photo = UIView(frame: CGRect(x: 100, y: 200, width: 120, height: 120))
+        photo.overrideUserInterfaceStyle = .light
         photo.transform = CGAffineTransform(rotationAngle: rotation)
         harness.viewController.view.addSubview(photo)
         let tile = MediaTileView(store: .offline)
@@ -1290,6 +1291,9 @@ struct MediaViewerControllerTests {
         let openingFrame = viewer.view.convert(opening.unrotatedFrame, to: window)
         #expect(abs(opening.rotation - rotation) < 0.001, "開き始めの角度が起点と違います: \(opening.rotation)")
         #expect(abs(opening.border - border) < 0.001, "開き始めに写真のフチを付けていません: \(opening.border)")
+        // ビューアは常にダークだが、紙の色はライトの起点に合わせて白にする。
+        let lightPaper = PhotoPaper.color.resolvedColor(with: UITraitCollection(userInterfaceStyle: .light))
+        #expect(viewer.morphPaperColor == lightPaper, "ライトの起点なのに紙の色が白ではありません: \(viewer.morphPaperColor)")
         #expect(abs(openingFrame.width - source.width) < 0.5 && abs(openingFrame.midX - source.midX) < 0.5 && abs(openingFrame.midY - source.midY) < 0.5, "開き始めの枠が起点と違います: \(openingFrame) \(source)")
         // 画像が大きくなってからも細い線が残らないよう、前半で細くしきる。大きさの進み具合が6割を超えたら、フチは残っていない。
         let targetWidth = viewer.view.bounds.width

@@ -169,6 +169,7 @@ final class MediaBarLayering {
             image.image = morph.image
         }
         image.focus = morph.focus
+        image.paperColor = morph.paperColor
         image.paperBorder = morph.paperBorder
         image.contentOpacity = morph.contentOpacity
         image.dimming = morph.dimming

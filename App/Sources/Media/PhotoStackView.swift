@@ -187,6 +187,13 @@ enum PhotoStackShadow {
     }
 }
 
+/// 重ねた写真の紙（フチ）の色。ライトテーマでは白、ダークテーマでは白より少し暗い明るいグレーにする。暗い背景で真っ白だと強く浮いて目に刺さるため。
+enum PhotoPaper {
+    static let color = UIColor { traits in
+        traits.userInterfaceStyle == .dark ? UIColor(white: 0.85, alpha: 1) : .white
+    }
+}
+
 /// 白いフチの付いた紙焼きの写真。自分では影を落とさず、上に重ねた写真の影を、自分の中にだけ描く。
 @MainActor
 final class StackedPhotoView: UIView {
@@ -238,7 +245,7 @@ final class StackedPhotoView: UIView {
         tile = MediaTileView(store: store)
         super.init(frame: .zero)
         isUserInteractionEnabled = false
-        backgroundColor = .white
+        backgroundColor = PhotoPaper.color
         layer.cornerRadius = Self.cornerRadius
         layer.cornerCurve = .continuous
         tile.isUserInteractionEnabled = false

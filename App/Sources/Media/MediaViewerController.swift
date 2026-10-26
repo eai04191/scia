@@ -282,6 +282,11 @@ final class MediaViewerController: UIViewController {
         morph.image
     }
 
+    /// 複製の紙の色。
+    var morphPaperColor: UIColor {
+        morph.paperColor
+    }
+
     /// 起点の上に重なっているビューの複製を、画像の複製の手前に重ねている。
     var showsSourceOverlap: Bool {
         morphOverlap != nil
@@ -989,6 +994,8 @@ extension MediaViewerController {
         let tileImage = tile.flatMap { $0.showsAttachment(currentItem.id) ? $0.thumbnailImage : nil }
         morph.image = page?.transitionImage ?? tileImage ?? page.map(Self.snapshot)
         // 重ねた表示はフチの内側に置くので、先に枠とフチを決める。
+        // 紙の色は、ビューア（常にダーク）ではなく起点の写真の外観で決める。ライトテーマの一覧の白いフチから、グレーに替わって見えないようにする。
+        morph.paperColor = PhotoPaper.color.resolvedColor(with: tile?.traitCollection ?? traitCollection)
         morph.paperBorder = border
         // 起点の近くから始めるときは、起点の見え方（中身を描かない、暗くする）から始める。
         let appearance: (contentOpacity: CGFloat, dimming: CGFloat) = border > 0 ? tile?.viewerAppearance ?? (1, 0) : (1, 0)
