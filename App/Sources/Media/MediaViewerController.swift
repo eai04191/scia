@@ -1538,7 +1538,8 @@ final class ImagePageController: MediaPageController {
     private var loadTask: Task<Void, Never>?
     /// 前に開いたときの元のファイルがキャッシュに残っているかを確かめる。
     private var originalCheckTask: Task<Void, Never>?
-    /// 画像の中の文字を選んだり、リンクや電話番号を開いたりする（Live Text）。元の画像が届いてから解析する。
+    /// 画像の中の文字を選べるようにする（Live Text）。元の画像が届いてから解析する。
+    /// data detectorsは使わない。投稿者のメディアに、見る人が頼んでいない下線を描き足すため。選んだ文字がURLなら、選択のメニューから開ける。
     private let liveText = ImageAnalysisInteraction()
     private var analysisTask: Task<Void, Never>?
     /// 元の画像の解析を終えた。文字が見つからなかったときや、解析に失敗したときも含む。対応していない端末では変わらない。
@@ -1628,7 +1629,7 @@ final class ImagePageController: MediaPageController {
         zoomView.onSingleTap = { [weak self] in self?.onSingleTap?() }
         zoomView.imageAccessibilityLabel = item.description
         view.addSubview(zoomView)
-        liveText.preferredInteractionTypes = [.textSelection, .dataDetectors]
+        liveText.preferredInteractionTypes = [.textSelection]
         liveText.isSupplementaryInterfaceHidden = true
         zoomView.addImageInteraction(liveText)
         addLongPressMenu(to: zoomView)
