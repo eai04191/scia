@@ -8,19 +8,25 @@ struct RichTextLabel: UIViewRepresentable {
     let emojiImages: EmojiImageStore
     /// アニメーションするカスタム絵文字を動かすか。
     let animatesEmojis: Bool
+    /// 1行に入りきらないときに、「…」で切らず、行末をぼかす（`FadingLabel`）。
+    let fadesTail: Bool
     let render: @MainActor () -> NSAttributedString
 
-    init(numberOfLines: Int = 0, emojiImages: EmojiImageStore = AppDependencies.emojiImages, animatesEmojis: Bool = false, render: @escaping @MainActor () -> NSAttributedString) {
+    init(numberOfLines: Int = 0, emojiImages: EmojiImageStore = AppDependencies.emojiImages, animatesEmojis: Bool = false, fadesTail: Bool = false, render: @escaping @MainActor () -> NSAttributedString) {
         self.numberOfLines = numberOfLines
         self.emojiImages = emojiImages
         self.animatesEmojis = animatesEmojis
+        self.fadesTail = fadesTail
         self.render = render
     }
 
     func makeUIView(context: Context) -> EmojiLabel {
-        let label = EmojiLabel()
+        let label = fadesTail ? FadingLabel() : EmojiLabel()
         label.numberOfLines = numberOfLines
-        label.lineBreakMode = .byTruncatingTail
+        // FadingLabelは自分で行末で切るよう設定する。
+        if !fadesTail {
+            label.lineBreakMode = .byTruncatingTail
+        }
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         let coordinator = context.coordinator
         emojiImages.addListener(owner: coordinator) { [weak label, weak coordinator] _ in

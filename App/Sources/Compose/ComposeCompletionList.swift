@@ -230,14 +230,12 @@ private struct CompletionRowView: View {
             RowLayout {
                 AvatarImage(url: account.avatarStatic ?? account.avatar, shape: model.settings.avatarShape)
             } title: {
-                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis) { [model] in
-                    Self.truncatingTail(
-                        RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
-                            .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
-                    )
+                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis, fadesTail: true) { [model] in
+                    RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
+                        .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
                 }
             } subtitle: {
-                Text("@\(account.acct)")
+                Text("@\(account.acct)").fadingTail(of: account.acct)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(account.displayNameOrUsername)、@\(account.acct)")
@@ -250,16 +248,14 @@ private struct CompletionRowView: View {
             RowLayout {
                 AvatarImage(url: mention.avatar, shape: model.settings.avatarShape)
             } title: {
-                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis) { [model] in
-                    Self.truncatingTail(
-                        RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
-                            .render(.plain(mention.displayNameOrUsername, emojis: mention.emojis))
-                    )
+                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis, fadesTail: true) { [model] in
+                    RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
+                        .render(.plain(mention.displayNameOrUsername, emojis: mention.emojis))
                 }
             } subtitle: {
                 // 長いハンドルでも、どこから出した人かは切らずに見せる。
                 HStack(spacing: 0) {
-                    Text("@\(mention.acct)")
+                    Text("@\(mention.acct)").fadingTail(of: mention.acct)
                     Text("・\(note)").layoutPriority(1)
                 }
             }
@@ -269,7 +265,7 @@ private struct CompletionRowView: View {
             RowLayout {
                 Image(systemName: "number").foregroundStyle(.secondary)
             } title: {
-                Text(hashtag.name)
+                Text(hashtag.name).fadingTail(of: hashtag.name)
             } subtitle: {
                 if hashtag.recentUses > 0 {
                     Text("最近の投稿\(hashtag.recentUses)件")
@@ -286,7 +282,7 @@ private struct CompletionRowView: View {
             RowLayout {
                 Image(systemName: "number").foregroundStyle(.secondary)
             } title: {
-                Text(hashtag.name)
+                Text(hashtag.name).fadingTail(of: hashtag.name)
             } subtitle: {
                 Text(note)
             }
@@ -296,7 +292,7 @@ private struct CompletionRowView: View {
             RowLayout {
                 EmojiImage(url: emoji.staticUrl, animationURL: model.settings.animatesCustomEmojis ? emoji.url : nil, store: model.emojiImages)
             } title: {
-                Text(":\(emoji.shortcode):")
+                Text(":\(emoji.shortcode):").fadingTail(of: emoji.shortcode)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("絵文字 \(emoji.shortcode)")
@@ -307,24 +303,13 @@ private struct CompletionRowView: View {
                 // swiftlint:disable:next fixed_font_size
                 Text(emoji.emoji).font(Font(EmojiFont.font(.systemFont(ofSize: 24), style: model.settings.emojiStyle)))
             } title: {
-                Text(emoji.name)
+                Text(emoji.name).fadingTail(of: emoji.name)
             } subtitle: {
-                Text(emoji.englishName)
+                Text(emoji.englishName).fadingTail(of: emoji.englishName)
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("絵文字 \(emoji.name)")
         }
-    }
-
-    /// 描いた表示名は段落の設定を持ち、ラベルの切り方より優先されるため、長い名前の末尾を「…」で切るよう段落の設定を直す。
-    private static func truncatingTail(_ text: NSAttributedString) -> NSAttributedString {
-        let result = NSMutableAttributedString(attributedString: text)
-        result.enumerateAttribute(.paragraphStyle, in: NSRange(location: 0, length: result.length)) { value, range, _ in
-            let style = (value as? NSParagraphStyle)?.mutableCopy() as? NSMutableParagraphStyle ?? NSMutableParagraphStyle()
-            style.lineBreakMode = .byTruncatingTail
-            result.addAttribute(.paragraphStyle, value: style, range: range)
-        }
-        return result
     }
 
     private static func emptyTitle(_ kind: CompletionKind) -> String {
@@ -336,7 +321,7 @@ private struct CompletionRowView: View {
     }
 }
 
-/// 候補の1行。左にアイコンか絵文字、右に名前と補足を2段で並べる。長い名前は末尾を切る。
+/// 候補の1行。左にアイコンか絵文字、右に名前と補足を2段で並べる。長い名前は、名前ごとに`fadingTail`で行末をぼかして切る。
 private struct RowLayout<Icon: View, Title: View, Subtitle: View, Trailing: View>: View {
     var subtitleLines = 1
     @ViewBuilder let icon: Icon
@@ -374,6 +359,34 @@ extension RowLayout where Subtitle == EmptyView, Trailing == EmptyView {
 extension RowLayout where Trailing == EmptyView {
     init(@ViewBuilder icon: () -> Icon, @ViewBuilder title: () -> Title, @ViewBuilder subtitle: () -> Subtitle) {
         self.init(icon: icon, title: title, subtitle: subtitle, trailing: { EmptyView() })
+    }
+}
+
+private extension View {
+    /// 1行に入りきらないときに、「…」で切らず、行末を透明へ向けてぼかす。入りきるときは何もかけない。タイムラインの名前（`FadingLabel`）と同じ見え方にする。
+    /// 右から左に書く文字列では、行末は左端なので、文字列の頭を右端にそろえて左端をぼかす。画面の向きではなく、文字列の向きで決める。
+    func fadingTail(of text: String) -> some View {
+        let isRightToLeft = FadingLabel.isRightToLeft(text)
+        return ViewThatFits(in: .horizontal) {
+            self
+            // 大きさは、ふつうに1行で切った見えない文字で決め、全文は重ねて描くだけにする。全文の幅を大きさにすると、一覧の幅まで広がるため。
+            self
+                .hidden()
+                .frame(maxWidth: .infinity, alignment: isRightToLeft ? .trailing : .leading)
+                .overlay(alignment: isRightToLeft ? .trailing : .leading) {
+                    self.fixedSize(horizontal: true, vertical: false)
+                }
+                .clipped()
+                .mask {
+                    // FadingLabelの既定と同じく、行末の20ptをぼかす。
+                    let fade = LinearGradient(colors: isRightToLeft ? [.clear, .black] : [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 20)
+                    HStack(spacing: 0) {
+                        if isRightToLeft { fade }
+                        Color.black
+                        if !isRightToLeft { fade }
+                    }
+                }
+        }
     }
 }
 
