@@ -2426,9 +2426,11 @@ final class SessionController {
         case .compose(let text, let mediaCount):
             composer.beginEditing()
             if let text {
-                composer.model.text = text
+                composer.replaceTextForDebug(text)
             }
             composer.model.addPastedMedia(DummyMedia.pastedImages(count: mediaCount))
+        case .composeClose:
+            composer.endEditing()
         case .holdArrivals(let isOn):
             DebugFaults.setHoldingArrivals(isOn)
             if !isOn {

@@ -364,6 +364,15 @@ final class InlineComposeController: NSObject {
         resignInput()
     }
 
+    #if DEBUG
+    /// 本文を`text`に置き換える。打ったときと同じ経路を通し、末尾の語の補完を出す。
+    /// シミュレーターの日本語のキーボードでは半角の`#`や`@`を打ちにくいため、`scia-debug://compose?text=`で補完を出すところまで用意する。
+    func replaceTextForDebug(_ text: String) {
+        textView.text = text
+        textViewDidChange(textView)
+    }
+    #endif
+
     /// 投稿欄の入力欄。本文、注意書き、投票の選択肢。
     private var inputs: [UIResponder] { [textView, spoilerField] + pollEditor.fields }
 

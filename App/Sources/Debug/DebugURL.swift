@@ -73,8 +73,10 @@ enum DebugURL: Equatable {
     case inject(Tab, file: String)
     /// `scia-debug://compose?text=<本文>&media=<枚数>`。インライン投稿欄で書き始め、本文を渡した文に置き換え、番号を描いた色違いの画像を添付に足す。
     /// どちらも省ける。シミュレーターのクリップボードが使えないときにも、URLを含む本文などを打たずに用意し、ピッカーを操作せずに添付を用意するため。
-    /// 画像はペーストと同じ経路で足すので、サーバーに送る。
+    /// 本文は打ったときと同じ経路で置き換えるので、末尾の語の補完も出す。画像はペーストと同じ経路で足すので、サーバーに送る。
     case compose(text: String?, mediaCount: Int)
+    /// `scia-debug://compose/close`。キーボードを閉じて、投稿欄を書いていないときのカプセルに戻す。下書きは残す。
+    case composeClose
     /// `scia-debug://profile-edit?note=<自己紹介>&field=<補足情報の内容>`。自分のプロフィールの編集を開く。`note`を渡すと、読み込んだあとに自己紹介をその文に置き換えて、
     /// 末尾にキーボードを出す。`field`を渡すと、その内容の補足情報を足して、内容の欄の末尾にキーボードを出す。どちらも、打ったときと同じく末尾の語の補完を出す。
     /// シミュレーターの日本語のキーボードでは半角の`:`や`@`を打てないため、補完を確かめるときに語の頭を用意する。
@@ -119,6 +121,7 @@ enum DebugURL: Equatable {
         "catalog": .catalog(nil),
         "dump": .dump,
         "reset": .reset,
+        "compose/close": .composeClose,
         "settings": .settings,
         "tuning": .tuning,
         "sheet-keyboard": .sheetKeyboard,
