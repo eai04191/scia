@@ -205,7 +205,7 @@ enum PostRowCatalog {
             post("ブーストされた投稿", status(content: "<p>ブーストされた投稿。</p>", media: images(2), rebloggedBy: booster)),
             post("傾けない、画像1つ", status(content: "<p>写真を傾けない設定。</p>", media: images(1)), isStraight: true),
             post("傾けない、画像2つ", status(content: "<p>写真を傾けない設定。</p>", media: images(2)), isStraight: true),
-            post("傾けない、画像4つ（右下へ等間隔）", status(content: "<p>写真を傾けない設定。</p>", media: images(4)), isStraight: true),
+            post("傾けない、画像4つ（奥ほど小さく下からのぞく）", status(content: "<p>写真を傾けない設定。</p>", media: images(4)), isStraight: true),
             post("傾けない、画像5つ（5つ目は描かない）", status(content: "<p>写真を傾けない設定。</p>", media: images(5)), isStraight: true),
         ]
     }
