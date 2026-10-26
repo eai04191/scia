@@ -17,6 +17,8 @@ final class MediaPhotoStackView: PhotoStackView {
     private var variation = (rotation: 0.0, offset: 0.0)
     /// ばらつきを決める投稿のID。nilならばらつかせない。
     private var seed: String?
+    /// 写真を傾ける。falseなら、どの写真もまっすぐに置く。
+    private var tilts = true
     /// この投稿の置き方。基準の置き方を、投稿のIDでばらつかせたもの。
     private var placements: [PhotoStackPlacement] = []
     /// いま写真に渡している置き方。ずらす量はpt。同じなら渡し直さず、並べ直しを繰り返さない。
@@ -91,10 +93,12 @@ final class MediaPhotoStackView: PhotoStackView {
     }
 
     /// 基準の置き方を、投稿のIDでばらつかせる。同じ投稿は、どの行で描いても同じ形になる。
+    /// 傾けないときは、基準の角度を0にする。角度が0の写真はばらつかせないので、まっすぐのまま置かれる。
     private func updatePlacements() {
+        let base = tilts ? basePlacements : basePlacements.map { PhotoStackPlacement(rotation: 0, offsetX: $0.offsetX, offsetY: $0.offsetY) }
         placements = seed.map {
-            PhotoStackVariation.placements(basePlacements, seed: $0, maximumRotation: variation.rotation, maximumOffset: variation.offset)
-        } ?? basePlacements
+            PhotoStackVariation.placements(base, seed: $0, maximumRotation: variation.rotation, maximumOffset: variation.offset)
+        } ?? base
         setNeedsLayout()
     }
 
@@ -102,8 +106,9 @@ final class MediaPhotoStackView: PhotoStackView {
     func apply(_ content: MediaGridView.Content, coverTitle: String) {
         let attachments = Array(content.attachments.prefix(3))
         count = attachments.count
-        if content.stackSeed != seed {
+        if content.stackSeed != seed || content.tiltsStack != tilts {
             seed = content.stackSeed
+            tilts = content.tiltsStack
             updatePlacements()
         }
         isCovered = content.isCovered

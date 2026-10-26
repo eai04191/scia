@@ -76,6 +76,7 @@ struct AppearanceEditorView: View {
                     .onChange(of: settings.boldsName) { focused = .choice(.boldsName) }
                     .onChange(of: settings.showsAvatarBorder) { focused = .choice(.showsAvatarBorder) }
                     .onChange(of: settings.showsMediaBadges) { focused = .choice(.showsMediaBadges) }
+                    .onChange(of: settings.tiltsStackedPhotos) { focused = .choice(.tiltsStackedPhotos) }
                     .onChange(of: settings.showsLinkCard) { focused = .choice(.showsLinkCard) }
                     .onChange(of: settings.boldsLinkCardTitle) { focused = .choice(.boldsLinkCardTitle) }
                     .onChange(of: settings.showsSeparators) { focused = .choice(.showsSeparators) }
@@ -161,6 +162,7 @@ struct AppearanceEditorView: View {
         hasher.combine(settings.animatesCustomEmojis)
         hasher.combine(settings.linkCardThumbnailSide)
         hasher.combine(settings.mediaArrangement)
+        hasher.combine(settings.tiltsStackedPhotos)
         hasher.combine(settings.glyphLanguage)
         hasher.combine(settings.emojiStyle)
         hasher.combine(settings.drawsReactionGlowInHDR)
@@ -234,6 +236,8 @@ struct AppearanceEditorView: View {
             TitledToggleRow(title: "カスタム絵文字のアニメーションを再生する", isOn: $settings.animatesCustomEmojis) { toggleFocus(.choice(.animatesCustomEmojis)) }
         case "media":
             PopUpChoiceRow(title: "並べ方", selection: $settings.mediaArrangement, options: [(.belowBody, "本文の下に大きく"), (.besideBody, "本文の右に小さく")], onOpen: { focus(.mediaArrangement) }, onTapTitle: { toggleFocus(.choice(.mediaArrangement)) })
+            TitledToggleRow(title: "写真を傾ける", isOn: $settings.tiltsStackedPhotos) { toggleFocus(.choice(.tiltsStackedPhotos)) }
+                .disabled(settings.mediaArrangement != .besideBody)
             TitledToggleRow(title: "ALTやGIFのバッジを出す", isOn: $settings.showsMediaBadges) { toggleFocus(.choice(.showsMediaBadges)) }
         case "linkCard":
             TitledToggleRow(title: "リンクカードを出す", isOn: $settings.showsLinkCard) { toggleFocus(.choice(.showsLinkCard)) }
@@ -333,6 +337,7 @@ enum AppearanceChoice: Hashable, CaseIterable {
     case animatesCustomEmojis
     case linkCardThumbnailSide
     case mediaArrangement
+    case tiltsStackedPhotos
     case drawsReactionGlowInHDR
     case reactionGlowIcons
     case reactionGlowFillsWidthWhenAlone
@@ -364,6 +369,7 @@ enum AppearanceChoice: Hashable, CaseIterable {
         case .animatesCustomEmojis: .firstOf([.part(.customEmojis), .part(.bodyText)])
         case .linkCardThumbnailSide: .part(.card)
         case .mediaArrangement: .firstOf([.part(.besideMedia), .part(.media)])
+        case .tiltsStackedPhotos: .firstOf([.part(.besideMedia), .part(.media)])
         case .drawsReactionGlowInHDR, .reactionGlowLightFavouriteColor: .part(.reactionGlow)
         case .reactionGlowFillsWidthWhenAlone: .firstOf([.part(.reactionGlowAlone), .part(.reactionGlow)])
         case .reactionGlowIcons: .firstOf([.part(.reactionGlowIcons), .part(.reactionGlow)])

@@ -513,6 +513,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = settings.animatesCustomEmojis
             _ = settings.linkCardThumbnailSide
             _ = settings.mediaArrangement
+            _ = settings.tiltsStackedPhotos
             _ = settings.glyphLanguage
             _ = settings.emojiStyle
             _ = settings.drawsReactionGlowInHDR

@@ -12,6 +12,7 @@ extension TimelineViewController {
             content?.arrangement = .stack(side: settings.value(of: AppearanceCatalog.mediaBesideSide))
             // ブーストでも元の投稿のIDでばらつかせ、同じ投稿はどの行でも同じ形にする。
             content?.stackSeed = status.displayed.id
+            content?.tiltsStack = settings.tiltsStackedPhotos
         }
         return content
     }
