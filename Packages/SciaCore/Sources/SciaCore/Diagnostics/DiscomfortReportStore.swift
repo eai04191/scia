@@ -45,6 +45,15 @@ public struct DiscomfortReportStore: Sendable {
             .sorted { $0.capturedAt > $1.capturedAt }
     }
 
+    /// 保存したレポートを全部消す。設定のストレージの画面で、使う人が消すときに呼ぶ。次に保存するときは、フォルダーを作り直す。
+    public func removeAll() throws {
+        do {
+            try FileManager.default.removeItem(at: directory)
+        } catch CocoaError.fileNoSuchFile {
+            return
+        }
+    }
+
     private static let logger = SciaLog.logger(category: "discomfort")
 
     private static let encoder: JSONEncoder = {

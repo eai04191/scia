@@ -86,6 +86,20 @@ struct DiscomfortReportStoreTests {
         #expect(try store.loadAll().map(\.capturedAt) == [report.capturedAt])
     }
 
+    /// 全部消したあとも、続けて保存できる。まだ何も保存していなくても失敗しない。
+    @Test func removeAllDeletesReportsAndKeepsSaving() throws {
+        let store = makeStore()
+        try store.removeAll()
+        try store.save(makeReport(capturedAt: Date(timeIntervalSince1970: 1_791_861_705)))
+        try store.save(makeReport(capturedAt: Date(timeIntervalSince1970: 1_791_861_706)))
+
+        try store.removeAll()
+
+        #expect(try store.loadAll().isEmpty)
+        try store.save(makeReport(capturedAt: Date(timeIntervalSince1970: 1_791_861_707)))
+        #expect(try store.loadAll().count == 1)
+    }
+
     @Test func loadAllReturnsEmptyWhenNothingSaved() throws {
         #expect(try makeStore().loadAll().isEmpty)
     }

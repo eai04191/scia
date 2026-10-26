@@ -238,6 +238,9 @@ struct SettingsView: View {
                     NavigationLink("接続の状態") {
                         ConnectionStatusView(instance: instance, diagnostics: diagnostics, listTitles: listTitles)
                     }
+                    NavigationLink("ストレージ") {
+                        StorageView()
+                    }
                     NavigationLink("ライセンス") {
                         LicensesView()
                     }

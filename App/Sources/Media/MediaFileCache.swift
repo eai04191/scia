@@ -148,6 +148,17 @@ actor MediaFileCache {
         }
     }
 
+    /// 置いたファイルを全部消す。設定のストレージの画面で、使う人が消すときに呼ぶ。
+    /// 共有や保存に渡したコピーは、共有先がまだ読んでいるかもしれないので消さない。消したあとに置き直すときは、フォルダーを作り直す。
+    func removeCachedFiles() throws {
+        generation += 1
+        do {
+            try FileManager.default.removeItem(at: directory)
+        } catch CocoaError.fileNoSuchFile {
+            return
+        }
+    }
+
     /// 書き終えた`source`を、`folder`にあった前のファイルと入れ替えて`name`の名前で置き、整理する。
     private func publish(_ source: URL, named name: String, in folder: URL) throws -> URL {
         for old in Self.storedFiles(in: folder) {

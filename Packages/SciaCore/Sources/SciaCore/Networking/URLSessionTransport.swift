@@ -13,6 +13,11 @@ public struct URLSessionTransport: HTTPTransport {
         session = .shared
     }
 
+    /// 応答のキャッシュ。この通信の口は`URLSession.shared`を使うので、その設定のキャッシュ。設定のストレージの画面で、大きさを出して消すのに使う。
+    public static var responseCache: URLCache? {
+        URLSession.shared.configuration.urlCache
+    }
+
     public func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let (body, response) = try await open(request, limit: .max)
         var data = Data()

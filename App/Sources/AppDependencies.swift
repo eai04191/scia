@@ -30,6 +30,18 @@ enum AppDependencies {
         CACurrentMediaTime()
     }
 
+    /// このプロセスを起動した日時。カーネルが覚えている値を読む。読めなければnil。
+    /// 設定のストレージの画面で、これより前に作った一時ファイルを、どこからも使っていない残りとして消すのに使う。
+    nonisolated static let processStartDate: Date? = {
+        var info = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        var name: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, getpid()]
+        guard sysctl(&name, u_int(name.count), &info, &size, nil, 0) == 0, size > 0 else { return nil }
+        let start = info.kp_proc.p_un.__p_starttime
+        guard start.tv_sec > 0 else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(start.tv_sec) + TimeInterval(start.tv_usec) / 1_000_000)
+    }()
+
     /// アプリの通信の口。デバッグでは、障害の差し込みと、ダミー投稿の`data:`のURLを返す口を挟む。
     nonisolated static let transport: any HTTPTransport = {
         #if DEBUG
