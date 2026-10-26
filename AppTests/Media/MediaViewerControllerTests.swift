@@ -16,7 +16,7 @@ struct MediaViewerControllerTests {
     private let settings: AppSettings
     private let drag = DragToDismiss(distanceThreshold: 0.12, velocityThreshold: 0.8, smallestScale: 0.6, fadeDistance: 0.5, restoreDuration: 0.35)
 
-    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3, doubleTapZoomDuration: 0.2)
+    private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3, doubleTapZoomDuration: 0.2, paperBorderPortion: 0.4)
 
     init() throws {
         let defaults = TestScratch.defaults("MediaViewerControllerTests")
@@ -1284,13 +1284,24 @@ struct MediaViewerControllerTests {
         try await waitUntil { viewer.isContentHiddenForTransition }
         let window = try #require(tile.window)
         let source = tile.unrotatedFrame(in: window).insetBy(dx: -border, dy: -border)
+        let startWidth = viewer.morphPlacement.unrotatedFrame.width
         let opening = viewer.morphPlacement
         // 開く間の複製は、ビューアの画面に載せている。
         let openingFrame = viewer.view.convert(opening.unrotatedFrame, to: window)
         #expect(abs(opening.rotation - rotation) < 0.001, "開き始めの角度が起点と違います: \(opening.rotation)")
         #expect(opening.border == border, "開き始めに写真のフチを付けていません")
         #expect(abs(openingFrame.width - source.width) < 0.5 && abs(openingFrame.midX - source.midX) < 0.5 && abs(openingFrame.midY - source.midY) < 0.5, "開き始めの枠が起点と違います: \(openingFrame) \(source)")
-        harness.frames.runUntilStopped()
+        // 画像が大きくなってからも細い線が残らないよう、前半で細くしきる。大きさの進み具合が6割を超えたら、フチは残っていない。
+        let targetWidth = viewer.view.bounds.width
+        var sawThinning = false
+        while viewer.isMoving {
+            let placement = viewer.morphPlacement
+            let grown = (placement.unrotatedFrame.width - startWidth) / (targetWidth - startWidth)
+            if placement.border > 0, placement.border < border { sawThinning = true }
+            #expect(grown < 0.6 || placement.border == 0, "広がってからもフチが残っています: 大きさ\(grown) フチ\(placement.border)")
+            harness.frames.step()
+        }
+        #expect(sawThinning, "フチを細くしていく途中がありません")
         #expect(abs(viewer.morphPlacement.rotation) < 0.001, "開ききってもまっすぐになっていません")
         #expect(viewer.morphPlacement.border < 0.1, "開ききってもフチが残っています: \(viewer.morphPlacement.border)")
 

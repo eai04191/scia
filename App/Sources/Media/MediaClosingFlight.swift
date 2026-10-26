@@ -52,6 +52,8 @@ final class MediaClosingFlight {
     private let startRadius: CGFloat
     /// 閉じ始めの複製の白いフチの幅。ふつうは0で、開く途中から閉じるときだけ残っている。
     private let startBorder: CGFloat
+    /// 写真の白いフチを太くし始めてから着くまでの、動きの進み具合の幅。後半で太くし、広がった画像を細い線が囲まないようにする。
+    private let paperBorderPortion: CGFloat
     private let startDecorationAlpha: CGFloat
     private let startFadingAlphas: [CGFloat]
     private var concealedTile: (any MediaViewerSource)?
@@ -70,6 +72,7 @@ final class MediaClosingFlight {
     ///   - barOverlapFadeEnd: 閉じ始めにバーと重なっていた部分を、一覧の中の複製へ入れ替え終える進み具合。一覧の中の複製がなければ使わない。
     ///   - startOverlapOpacity: 閉じ始めに、バーと重なっていた部分を手前に見せていた濃さ。開く途中から閉じるときは1未満になる。
     ///   - movesImage: falseなら複製を動かさず、その場で薄くする。
+    ///   - paperBorderPortion: 写真の白いフチ（一覧で重ねた写真）を、着く手前のこの進み具合の幅で太くする。
     ///   - source: 経過時間を送る元。テストでは、実際の時間に頼らずに動きを進めるため、手で送る元を渡す。
     init(
         parts: Parts,
@@ -79,6 +82,7 @@ final class MediaClosingFlight {
         barOverlapFadeEnd: CGFloat,
         startOverlapOpacity: CGFloat,
         movesImage: Bool,
+        paperBorderPortion: CGFloat = 1,
         concealedTile: (any MediaViewerSource)?,
         source: any FrameSource = DisplayLinkFrameSource.shared,
         findTile: @escaping @MainActor () -> (any MediaViewerSource)?
@@ -90,6 +94,7 @@ final class MediaClosingFlight {
         self.barOverlapFadeEnd = min(max(barOverlapFadeEnd, 0.01), 1)
         self.startOverlapOpacity = startOverlapOpacity
         self.movesImage = movesImage
+        self.paperBorderPortion = min(max(paperBorderPortion, 0.01), 1)
         self.concealedTile = concealedTile
         self.source = source
         self.findTile = findTile
@@ -144,7 +149,8 @@ final class MediaClosingFlight {
         if movesImage, let target = lastTarget {
             parts.morph.place(unrotatedFrame: Self.interpolate(startFrame, target.frame, progress), rotation: startRotation + (target.rotation - startRotation) * progress)
             parts.morph.layer.cornerRadius = startRadius + (target.radius - startRadius) * clamped
-            parts.morph.paperBorder = startBorder + (target.border - startBorder) * clamped
+            let borderProgress = min(max((clamped - (1 - paperBorderPortion)) / paperBorderPortion, 0), 1)
+            parts.morph.paperBorder = startBorder + (target.border - startBorder) * borderProgress
             parts.decoration?.frame = parts.morph.bounds.insetBy(dx: parts.morph.paperBorder, dy: parts.morph.paperBorder)
             let decorationAlpha = startDecorationAlpha + (1 - startDecorationAlpha) * clamped
             parts.decoration?.alpha = decorationAlpha

@@ -587,6 +587,16 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
+    /// 一覧で重ねた写真とビューアの開閉で、写真の白いフチを細くしきる（閉じるときは太くし始める）動きの進み具合。0から1。
+    /// 動き全体で細くすると、広がった画像を細い線が囲んだまま残り、開ききったところで一度に消えて見えるため、前半で細くしきる。
+    public static let mediaPaperBorderPortion = NumberTuning(
+        id: "media.paperBorderPortion",
+        title: "開閉で写真のフチを細くしきる動きの進み具合",
+        range: 0.05...1,
+        step: 0.05,
+        defaultValue: 0.4
+    )
+
     /// ビューアを閉じるとき、サムネイルへ縮めて戻すまでの時間。
     public static let mediaCloseDuration = NumberTuning(
         id: "media.closeDuration",
@@ -1538,6 +1548,7 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "media.transition", title: "ビューア：開閉の動き", items: [
             .number(mediaOpenDuration),
+            .number(mediaPaperBorderPortion),
             .number(mediaCloseDuration),
             .number(mediaDragCloseBounce),
         ]),

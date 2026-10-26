@@ -117,6 +117,8 @@ final class MediaViewerController: UIViewController {
         let videoSkipEffectDuration: TimeInterval
         /// 画像をダブルタップして拡大するときと、戻すときの時間。
         let doubleTapZoomDuration: TimeInterval
+        /// 一覧で重ねた写真とのあいだの開閉で、写真の白いフチを細くしきる（閉じるときは太くし始める）動きの進み具合。0から1。
+        var paperBorderPortion: Double = 1
     }
 
     /// 投稿欄で選んだメディアを開いたときの操作。ビューアは投稿欄を知らず、メニューと代替テキストの書き終わりをここから渡す。
@@ -1142,7 +1144,8 @@ extension MediaViewerController {
             rotation: startRotation * (1 - progress)
         )
         morph.layer.cornerRadius = startRadius * (1 - clamped)
-        morph.paperBorder = startBorder * (1 - clamped)
+        // 前半で細くしきる。広がった画像を細い線が囲んだまま残ると、開ききったところで一度に消えて見えるため。
+        morph.paperBorder = startBorder * (1 - min(clamped / CGFloat(max(timing.paperBorderPortion, 0.01)), 1))
         // 重ねた表示はフチの内側に置く。細くなっていくフチに合わせ、画像と同じ枠にそろえる。
         morphDecoration?.frame = morph.bounds.insetBy(dx: morph.paperBorder, dy: morph.paperBorder)
         setDecorationAlpha(1 - clamped)
@@ -1393,6 +1396,7 @@ extension MediaViewerController {
             startOverlapOpacity: startOverlapOpacity,
             // 戻り先が最初から見つからなければ、その場で薄くする。
             movesImage: moves,
+            paperBorderPortion: CGFloat(timing.paperBorderPortion),
             concealedTile: closingTile,
             source: frameSource,
             findTile: { sourceTile(attachmentID) }
@@ -2605,7 +2609,8 @@ extension MediaViewerController.Timing {
             savedChipDuration: tuning.value(of: TuningCatalog.mediaSavedChipDuration),
             videoControlsHideDelay: tuning.value(of: TuningCatalog.mediaVideoControlsHideDelay),
             videoSkipEffectDuration: tuning.value(of: TuningCatalog.mediaVideoSkipEffectDuration),
-            doubleTapZoomDuration: tuning.value(of: TuningCatalog.mediaDoubleTapZoomDuration)
+            doubleTapZoomDuration: tuning.value(of: TuningCatalog.mediaDoubleTapZoomDuration),
+            paperBorderPortion: tuning.value(of: TuningCatalog.mediaPaperBorderPortion)
         )
     }
 }
