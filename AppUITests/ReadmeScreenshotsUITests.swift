@@ -9,7 +9,7 @@ final class ReadmeScreenshotsUITests: XCTestCase {
         app.launchArguments = ["-scenario", "readme"]
         app.launch()
         XCTAssertTrue(app.buttons["通知"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.buttons["画像、夕焼けの空と丘"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["画像、写真1"].waitForExistence(timeout: 5))
 
         // 少し読み進めたところに新着が届き、読んでいる位置は動かずに新着のボタンだけが出る
         let middle = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6))
@@ -26,7 +26,7 @@ final class ReadmeScreenshotsUITests: XCTestCase {
         let uploading = NSPredicate(format: "label == '画像' AND (value CONTAINS '中' OR value CONTAINS 'できませんでした')")
         XCTAssertTrue(waitUntil(timeout: 10) { app.buttons.matching(NSPredicate(format: "label == '画像'")).count == 3 && app.buttons.matching(uploading).count == 0 }, "下書きの写真を送り終えない")
         signal("draft-hashtag")
-        let candidate = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'ハッシュタグ 写真'")).firstMatch
+        let candidate = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'ハッシュタグ イーハトーヴォ'")).firstMatch
         XCTAssertTrue(candidate.waitForExistence(timeout: 5), "ハッシュタグの補完が出ない")
         pause(1)
         capture("screenshot-compose")
@@ -34,11 +34,11 @@ final class ReadmeScreenshotsUITests: XCTestCase {
         // 下書きをカプセルに残して切り替えタブのリストを開き、お気に入りの通知をステータスバーに出す
         signal("draft-close")
         pause(1.5)
-        app.buttons["写真"].tap()
-        XCTAssertTrue(waitUntil(timeout: 5) { app.buttons["写真"].isSelected }, "リストが開かない")
+        app.buttons["モリーオ"].tap()
+        XCTAssertTrue(waitUntil(timeout: 5) { app.buttons["モリーオ"].isSelected }, "リストが開かない")
         pause(1)
         signal("favourite")
-        let ticker = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'あかりがお気に入りに登録しました'")).firstMatch
+        let ticker = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'ファゼーロがお気に入りに登録しました'")).firstMatch
         XCTAssertTrue(ticker.waitForExistence(timeout: 5), "ステータスバーの通知が出ない")
         // 出てくる動きが終わるのを待つ
         pause(0.8)

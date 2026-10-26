@@ -1,6 +1,5 @@
 #if DEBUG
 import Foundation
-import UIKit
 
 /// シナリオの投稿や通知を、Mastodon APIと同じ形のJSONで作る。
 /// SciaCoreのモデルをエンコードせずに組み立てるのは、モデルのデコードが欠けた項目を補うため、エンコードし直した形がAPIと同じになる保証がないから。
@@ -136,82 +135,6 @@ enum ScenarioFixtures {
 
     private static func timestamp(_ date: Date) -> String {
         date.formatted(.iso8601.year().month().day().time(includingFractionalSeconds: true))
-    }
-}
-
-/// シナリオのアイコンと写真を、通信せずに端末で描く。
-enum ScenarioArtwork {
-    /// 色の地に1文字を白く描いたアイコン。
-    static func avatar(_ character: String, color: UIColor) -> String {
-        let size = CGSize(width: 240, height: 240)
-        let image = renderer(size: size).image { context in
-            color.setFill()
-            context.fill(CGRect(origin: .zero, size: size))
-            let text = NSAttributedString(string: character, attributes: [
-                .font: UIFont.systemFont(ofSize: 120, weight: .bold),
-                .foregroundColor: UIColor.white,
-            ])
-            let textSize = text.size()
-            text.draw(at: CGPoint(x: (size.width - textSize.width) / 2, y: (size.height - textSize.height) / 2))
-        }
-        return dataURL(image)
-    }
-
-    /// 空のグラデーションに、太陽と2つの丘を重ねた風景。
-    struct Landscape {
-        let sky: (top: UIColor, bottom: UIColor)
-        let sun: UIColor
-        let hills: (far: UIColor, near: UIColor)
-    }
-
-    static func landscape(_ landscape: Landscape, size: CGSize, description: String? = nil) -> ScenarioFixtures.Picture {
-        let image = landscapeImage(landscape, size: size)
-        return ScenarioFixtures.Picture(url: dataURL(image), width: Int(size.width), height: Int(size.height), description: description)
-    }
-
-    /// 風景の画像。投稿欄の添付のように、data URLではなく画像のまま渡す場面に使う。
-    static func landscapeImage(_ landscape: Landscape, size: CGSize) -> UIImage {
-        renderer(size: size).image { context in
-            let cgContext = context.cgContext
-            let colors = [landscape.sky.top.cgColor, landscape.sky.bottom.cgColor] as CFArray
-            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
-                cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: size.height), options: [])
-            }
-            let sunSide = min(size.width, size.height) * 0.22
-            landscape.sun.setFill()
-            cgContext.fillEllipse(in: CGRect(x: size.width * 0.62, y: size.height * 0.28, width: sunSide, height: sunSide))
-            hill(in: size, baseline: 0.68, amplitude: 0.08, phase: 0.3, color: landscape.hills.far)
-            hill(in: size, baseline: 0.80, amplitude: 0.06, phase: 1.7, color: landscape.hills.near)
-        }
-    }
-
-    /// 横へゆるく波打つ丘。`baseline`と`amplitude`は高さに対する割合。
-    private static func hill(in size: CGSize, baseline: CGFloat, amplitude: CGFloat, phase: CGFloat, color: UIColor) {
-        let path = UIBezierPath()
-        path.move(to: CGPoint(x: 0, y: size.height))
-        for step in 0...40 {
-            let x = size.width * CGFloat(step) / 40
-            let y = size.height * (baseline + amplitude * sin(CGFloat(step) / 40 * .pi * 2 + phase))
-            path.addLine(to: CGPoint(x: x, y: y))
-        }
-        path.addLine(to: CGPoint(x: size.width, y: size.height))
-        path.close()
-        color.setFill()
-        path.fill()
-    }
-
-    private static func renderer(size: CGSize) -> UIGraphicsImageRenderer {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        format.opaque = true
-        return UIGraphicsImageRenderer(size: size, format: format)
-    }
-
-    private static func dataURL(_ image: UIImage) -> String {
-        guard let data = image.jpegData(compressionQuality: 0.85) else {
-            preconditionFailure("シナリオの画像をJPEGにできない")
-        }
-        return "data:image/jpeg;base64,\(data.base64EncodedString())"
     }
 }
 #endif

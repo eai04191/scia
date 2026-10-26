@@ -6,12 +6,12 @@ import UIKit
 /// READMEのスクリーンショットのシナリオ。撮る場面はdocs/promo-video.mdの「READMEのスクリーンショット」にある。起動の引数`-scenario readme`で選ぶ。
 /// 投稿、通知、新着は「流れても、動かない」（`StreamingDemoScenario`）のものを使い、タブの並び、リスト、写真付きの下書き、ハッシュタグの補完を足す。
 enum ReadmeScreenshotsScenario {
-    /// 切り替えタブに入れるリスト。中身は、ホームの投稿のうち写真をよく上げる人のもの。
-    private static let list = MastodonList(id: "1", title: "写真")
+    /// 切り替えタブに入れるリスト。中身は、ホームの投稿のうち3人のもの。
+    private static let list = MastodonList(id: "1", title: "モリーオ")
     private static let listMemberIDs: Set<String> = ["101", "103", "105"]
 
     /// 下書きの本文。2枚目では、末尾に`#`を足してハッシュタグの補完を出す。
-    private static let draftText = "週末に撮った写真を整理した。空の色が全部ちがって面白い"
+    private static let draftText = ScenarioDummyText.sentence(from: 1, count: 2)
 
     static func make(launchedAt now: Date) -> ScenarioScript {
         let base = StreamingDemoScenario.make(launchedAt: now)
@@ -59,10 +59,10 @@ enum ReadmeScreenshotsScenario {
         ]
         let domain = ScenarioFixtures.domain
         let featured: [[String: Any]] = [
-            ["id": "1", "name": "写真", "url": "https://\(domain)/@yuu/tagged/写真", "statuses_count": 128, "last_status_at": "2026-01-01"],
-            ["id": "2", "name": "空", "url": "https://\(domain)/@yuu/tagged/空", "statuses_count": 64, "last_status_at": "2026-01-01"],
+            ["id": "1", "name": "イーハトーヴォ", "url": "https://\(domain)/@kyuste/tagged/イーハトーヴォ", "statuses_count": 128, "last_status_at": "2026-01-01"],
+            ["id": "2", "name": "モリーオ", "url": "https://\(domain)/@kyuste/tagged/モリーオ", "statuses_count": 64, "last_status_at": "2026-01-01"],
         ]
-        let suggestions: [[String: Any]] = ["散歩", "夕焼け"].map { name in
+        let suggestions: [[String: Any]] = ["ポラーノ", "幻燈"].map { name in
             ["name": name, "url": "https://\(domain)/tags/\(name)", "history": [Any]()]
         }
         return [
@@ -99,12 +99,9 @@ enum ReadmeScreenshotsScenario {
         ] as [String: Any])
     }
 
-    /// 下書きに添付する写真。タイムラインの4枚と見分けられるよう、違う色の風景にする。
+    /// 下書きに添付する写真。タイムラインの写真と別の模様にする。
     @MainActor private static func draftImages() -> [UIImage] {
-        let dusk = ScenarioArtwork.Landscape(sky: (.systemPink, .systemOrange), sun: .white, hills: (.systemIndigo, UIColor(red: 0.15, green: 0.1, blue: 0.3, alpha: 1)))
-        let noon = ScenarioArtwork.Landscape(sky: (.systemBlue, .systemCyan), sun: .systemYellow, hills: (.systemMint, UIColor(red: 0.1, green: 0.45, blue: 0.3, alpha: 1)))
-        let snow = ScenarioArtwork.Landscape(sky: (UIColor(red: 0.7, green: 0.8, blue: 0.95, alpha: 1), .white), sun: UIColor(red: 1, green: 0.9, blue: 0.6, alpha: 1), hills: (UIColor(white: 0.92, alpha: 1), UIColor(white: 0.8, alpha: 1)))
-        return [dusk, noon, snow].map { ScenarioArtwork.landscapeImage($0, size: CGSize(width: 1_200, height: 900)) }
+        ["draft-1", "draft-2", "draft-3"].map { ScenarioArtwork.photoImage($0, size: CGSize(width: 1_200, height: 900)) }
     }
 }
 #endif

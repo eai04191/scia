@@ -93,6 +93,8 @@ make test SIM='iPhone 16 Pro'
 
 `App/Resources/Twemoji.ttf`は、[Twemoji](https://github.com/jdecked/twemoji)の絵（Copyright Twitter, Inc and other contributors、[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)）から`Tools/build-twemoji-font.py`で作った書体です。
 
+撮影用のシナリオのアイコンと写真の模様を描く`App/Sources/Debug/Scenario/ScenarioArtwork.swift`は、[Boring Avatars](https://github.com/boringdesigners/boring-avatars)（Copyright (c) 2021 boringdesigners）の描き方を移したもので、ファイルの頭に載せたMIT Licenseが適用されます。
+
 ## 名称とアイコン・ロゴ
 
 「Scia」という名称と、アプリアイコン・ロゴ（`App/Resources/AppIcon.icon`、`App/Resources/AppIconLight.icon`、そこから描き出した`docs/images/icon-*.webp`）は、MIT-0の対象に含めません。

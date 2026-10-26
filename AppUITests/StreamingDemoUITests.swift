@@ -11,7 +11,7 @@ final class StreamingDemoUITests: XCTestCase {
         XCTAssertTrue(app.buttons["通知"].waitForExistence(timeout: 10))
 
         // ビューアは、起動して最初に開くときだけ準備で止まるので、撮る前に一度開いて4枚とも送り、閉じておく
-        let photo = app.buttons["画像、夕焼けの空と丘"]
+        let photo = app.buttons["画像、写真1"]
         XCTAssertTrue(photo.waitForExistence(timeout: 5))
         try openViewer()
         pause(1)
