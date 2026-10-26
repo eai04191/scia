@@ -3,16 +3,13 @@ import SciaCore
 import UIKit
 
 /// 一覧で本文の右に出す添付ファイル。投稿欄のカプセルと同じく紙焼きの写真に見立てて重ね、一辺の正方形の中に、回した写真の角まで収める。
-/// 1つだけでも写真にする。回す角度、ずらす量、影の濃さは一覧のチューニングで決め、フチの太さ、角の丸み、影の広がりは、カプセルの写真から大きさの比で大きくする。
+/// 1つだけでも写真にする。回す角度、ずらす量、影の濃さは一覧のチューニングで決め、フチの太さ、角の丸み、影の広がりは、写真の大きさによらずカプセルの写真と同じにする。
 /// どこを押しても1枚目から開き、長押しのメニューも1枚目のものを出す。奥の写真はほとんど隠れていて、押し分けられないため。
 ///
 /// 閲覧注意などでぼかすときは、写真のフチと重なりはそのまま見せ、中の画像を読まずにblurhashで描いて、リンクカードのサムネイルと同じ薄い素材を重ねる。
 /// 写真は小さく文字が入りきらないため、手前の写真にだけ目の記号を出す。
 @MainActor
 final class MediaPhotoStackView: PhotoStackView {
-    /// 投稿欄のカプセルの写真の一辺。フチや影は、これとの比で大きくする。
-    private static let referencePhotoSide: CGFloat = 26
-
     private let tuning: TuningStore
     /// チューニングで決めた置き方。ずらす量は写真の一辺に対する割合。
     private var placements: [PhotoStackPlacement] = []
@@ -159,7 +156,6 @@ final class MediaPhotoStackView: PhotoStackView {
         let fit = PhotoStackFit(placements: placements, count: count, side: min(bounds.width, bounds.height))
         self.fit = fit
         photoSide = fit.photoSide
-        scale = fit.photoSide / Self.referencePhotoSide
         let scaled = placements.map {
             PhotoStackPlacement(rotation: $0.rotation, offsetX: $0.offsetX * fit.photoSide, offsetY: $0.offsetY * fit.photoSide)
         }

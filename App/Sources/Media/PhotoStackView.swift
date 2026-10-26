@@ -23,25 +23,12 @@ class PhotoStackView: UIView {
     private var thirdOffset = CGPoint.zero
     /// 写真同士の影の濃さ。
     private var betweenShadowOpacity: Float = 0
-    private var stackShadowOpacity: Float = 0
 
     /// 写真の一辺（フチを含む）。
     var photoSide: CGFloat = 26 {
         didSet {
             guard photoSide != oldValue else { return }
             invalidateIntrinsicContentSize()
-            setNeedsLayout()
-        }
-    }
-
-    /// フチの太さ、角の丸み、影の広がりの倍率。投稿欄のカプセルの写真を1とし、大きな写真でも同じ形にする。
-    var scale: CGFloat = 1 {
-        didSet {
-            guard scale != oldValue else { return }
-            for photo in [front, back, third] {
-                photo.scale = scale
-            }
-            PhotoStackShadow.castStack(on: stackShadow.layer, opacity: stackShadowOpacity, scale: scale)
             setNeedsLayout()
         }
     }
@@ -91,9 +78,8 @@ class PhotoStackView: UIView {
     ///   - stack: 写真のスタックが下の面に落とす影の濃さ。
     ///   - between: 上の写真が下の写真に落とす影の濃さ。
     func setShadowOpacities(stack: Float, between: Float) {
-        stackShadowOpacity = stack
         betweenShadowOpacity = between
-        PhotoStackShadow.castStack(on: stackShadow.layer, opacity: stack, scale: scale)
+        PhotoStackShadow.castStack(on: stackShadow.layer, opacity: stack)
         setNeedsLayout()
     }
 
@@ -182,7 +168,7 @@ class PhotoStackView: UIView {
     /// 写真の輪郭を、スタックの中の位置で返す。
     private func outline(of photo: StackedPhotoView) -> UIBezierPath {
         let size = photo.bounds.size
-        let path = UIBezierPath(roundedRect: CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height), cornerRadius: photo.photoCornerRadius)
+        let path = UIBezierPath(roundedRect: CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height), cornerRadius: StackedPhotoView.cornerRadius)
         path.apply(photo.transform)
         path.apply(CGAffineTransform(translationX: photo.center.x, y: photo.center.y))
         return path
@@ -190,29 +176,29 @@ class PhotoStackView: UIView {
 }
 
 /// 重ねた写真の影の形。写真は薄いので、写真同士の影は、スタックが下の面に落とす影より近く、ぼかしも小さい。
-/// 広がりは、投稿欄のカプセルの写真を1とした倍率`scale`で大きくする。
+/// 影の広がりは写真が下の面から浮いている高さで決まり、写真の大きさでは変わらないので、どの大きさの写真でも同じにする。
 enum PhotoStackShadow {
     /// 写真のスタックが下の面に落とす影。
-    static func castStack(on layer: CALayer, opacity: Float, scale: CGFloat = 1) {
+    static func castStack(on layer: CALayer, opacity: Float) {
         layer.shadowColor = UIColor.black.cgColor
         layer.shadowOpacity = opacity
-        layer.shadowRadius = 1.5 * scale
-        layer.shadowOffset = CGSize(width: 0, height: 0.5 * scale)
+        layer.shadowRadius = 1.5
+        layer.shadowOffset = CGSize(width: 0, height: 0.5)
     }
 
     /// 上の写真が下の写真に落とす影。
-    static func castBetween(on layer: CALayer, opacity: Float, scale: CGFloat = 1) {
+    static func castBetween(on layer: CALayer, opacity: Float) {
         layer.shadowColor = UIColor.black.cgColor
         layer.shadowOpacity = opacity
-        layer.shadowRadius = 0.75 * scale
-        layer.shadowOffset = CGSize(width: 0, height: 0.25 * scale)
+        layer.shadowRadius = 0.75
+        layer.shadowOffset = CGSize(width: 0, height: 0.25)
     }
 }
 
 /// 白いフチの付いた紙焼きの写真。自分では影を落とさず、上に重ねた写真の影を、自分の中にだけ描く。
 @MainActor
 final class StackedPhotoView: UIView {
-    /// 投稿欄のカプセルの写真の、フチの太さと角の丸み。ほかの大きさでは`scale`を掛ける。
+    /// フチの太さと角の丸み。紙焼きの写真は、大きく焼いてもフチや角が大きさに比例して太くならないので、写真の大きさによらず同じにする。
     static let border: CGFloat = 2
     static let cornerRadius: CGFloat = 3
 
@@ -221,19 +207,6 @@ final class StackedPhotoView: UIView {
     private let betweenShadowClip = UIView()
     private let betweenShadow = CALayer()
     private let failureMark = UIImageView(image: UIImage(systemName: "exclamationmark.circle.fill"))
-    private var betweenShadowOpacity: Float = 0
-
-    /// フチの太さ、角の丸み、写真同士の影の広がりの倍率。
-    var scale: CGFloat = 1 {
-        didSet {
-            guard scale != oldValue else { return }
-            applyCornerRadius()
-            setNeedsLayout()
-        }
-    }
-
-    var photoBorder: CGFloat { Self.border * scale }
-    var photoCornerRadius: CGFloat { Self.cornerRadius * scale }
 
     /// フチごと隠している。ビューアが一覧の写真とのあいだで画像を動かしている間に使う。
     /// 透明にすると触れても反応しなくなるため、サムネイルと同じく空のマスクで隠す。
@@ -255,21 +228,24 @@ final class StackedPhotoView: UIView {
         super.init(frame: .zero)
         isUserInteractionEnabled = false
         backgroundColor = .white
+        layer.cornerRadius = Self.cornerRadius
         layer.cornerCurve = .continuous
         tile.isUserInteractionEnabled = false
         tile.isAccessibilityElement = false
         // 小さな枠では、ALTやGIFのバッジは読めないため出さない。手前の写真に出すかは、使う側が決める。
         tile.hidesBadge = true
+        tile.layer.cornerRadius = Self.cornerRadius - Self.border / 2
+        tile.paperBorder = (Self.border, Self.cornerRadius)
         // 回して置くので、縁がギザギザにならないよう、紙と中の画像の縁をなめらかに描く。
         layer.allowsEdgeAntialiasing = true
         tile.layer.allowsEdgeAntialiasing = true
         addSubview(tile)
         betweenShadowClip.isUserInteractionEnabled = false
         betweenShadowClip.clipsToBounds = true
+        betweenShadowClip.layer.cornerRadius = Self.cornerRadius
         betweenShadowClip.layer.cornerCurve = .continuous
         betweenShadowClip.layer.addSublayer(betweenShadow)
         addSubview(betweenShadowClip)
-        applyCornerRadius()
         // 感嘆符を白、円を赤で描き、どんなサムネイルの上でも見分けられるようにする。列のエラーのアイコンと同じ。
         failureMark.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 12).applying(UIImage.SymbolConfiguration(paletteColors: [.white, .systemRed]))
         failureMark.isHidden = true
@@ -281,21 +257,12 @@ final class StackedPhotoView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    private func applyCornerRadius() {
-        tile.paperBorder = (photoBorder, photoCornerRadius)
-        layer.cornerRadius = photoCornerRadius
-        tile.layer.cornerRadius = photoCornerRadius - photoBorder / 2
-        betweenShadowClip.layer.cornerRadius = photoCornerRadius
-        PhotoStackShadow.castBetween(on: betweenShadow, opacity: betweenShadow.shadowPath == nil ? 0 : betweenShadowOpacity, scale: scale)
-    }
-
     /// 上に重ねた写真の輪郭（この写真の中の位置）で、影を落とす。上に写真がなければnil。
     func setBetweenShadow(outline: CGPath?, opacity: Float) {
-        betweenShadowOpacity = opacity
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         betweenShadow.shadowPath = outline
-        PhotoStackShadow.castBetween(on: betweenShadow, opacity: outline == nil ? 0 : opacity, scale: scale)
+        PhotoStackShadow.castBetween(on: betweenShadow, opacity: outline == nil ? 0 : opacity)
         CATransaction.commit()
     }
 
@@ -308,7 +275,7 @@ final class StackedPhotoView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        tile.frame = bounds.insetBy(dx: photoBorder, dy: photoBorder)
+        tile.frame = bounds.insetBy(dx: Self.border, dy: Self.border)
         betweenShadowClip.frame = bounds
         betweenShadow.frame = bounds
         let mark = failureMark.intrinsicContentSize
