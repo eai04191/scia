@@ -1,6 +1,7 @@
 import AVKit
 import Combine
 import CoreImage
+import MediaPlayer
 import os
 import SciaCore
 import UIKit
@@ -1810,6 +1811,8 @@ final class PlayerPageController: MediaPageController {
     private var loopObserver: (any NSObjectProtocol)?
     /// 動画を最後まで再生したら、隠したボタンや操作の部品を出すための通知の受け口。
     private var endObserver: (any NSObjectProtocol)?
+    /// 再生の途中で読めなくなったら、Now Playingを離すための通知の受け口。
+    private var failureObserver: (any NSObjectProtocol)?
     /// VoiceOverを入れたり切ったりしたときに、自動で隠すかを決め直す通知の受け口。
     private var voiceOverObserver: (any NSObjectProtocol)?
     /// 再生している間、操作の部品の再生位置を進める受け口。
@@ -1844,6 +1847,8 @@ final class PlayerPageController: MediaPageController {
     private var wasPlayingBeforeScrub = false
     /// 長押しで速く再生し始めたとき、再生していたか。指を離したら、その状態に戻す。長押ししていなければnil。
     private var wasPlayingBeforeFastForward: Bool?
+    /// このページがNow Playingに再生の情報を出しているか。
+    private var holdsNowPlaying = false
 
     /// 動画の表示の準備が整うまでは、添付ファイルの縦横比で画面に収めた枠を返す。開く遷移はその準備より先に始まるため。
     override var contentFrame: CGRect {
@@ -1865,6 +1870,8 @@ final class PlayerPageController: MediaPageController {
         playerController.showsPlaybackControls = false
         // 止めたコマの文字を長押しで選べる機能は、長押しの2倍速とぶつかるため切る。
         playerController.allowsVideoFrameAnalysis = false
+        // Now Playingは、動画と音声を再生し始めてから掴む。音を出さないGIFでは掴まない。
+        playerController.updatesNowPlayingInfoCenter = false
         view.addSubview(playerController.view)
         playerController.didMove(toParent: self)
         let tap = UITapGestureRecognizer(target: self, action: #selector(tapped))
@@ -1939,11 +1946,12 @@ final class PlayerPageController: MediaPageController {
         guard let player = playerController.player, let url = mediaURL, let playing = playingURL, playing != url else { return }
         let time = player.currentTime()
         let wasPlaying = player.timeControlStatus != .paused
-        for observer in [loopObserver, endObserver].compactMap(\.self) {
+        for observer in [loopObserver, endObserver, failureObserver].compactMap(\.self) {
             NotificationCenter.default.removeObserver(observer)
         }
         loopObserver = nil
         endObserver = nil
+        failureObserver = nil
         if let timeObserver {
             player.removeTimeObserver(timeObserver)
         }
@@ -2040,8 +2048,14 @@ final class PlayerPageController: MediaPageController {
                     // 最後で止めずに先頭から続ける。止めないため、隠したボタンや操作の部品は出さない。
                     player?.seek(to: .zero)
                 } else {
+                    self.releaseNowPlaying()
                     self.onRequestChromeHidden?(false)
                 }
+            }
+        }
+        failureObserver = NotificationCenter.default.addObserver(forName: AVPlayerItem.failedToPlayToEndTimeNotification, object: playerItem, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.releaseNowPlaying()
             }
         }
         Task { [weak self] in
@@ -2102,6 +2116,9 @@ final class PlayerPageController: MediaPageController {
         if let endObserver {
             NotificationCenter.default.removeObserver(endObserver)
         }
+        if let failureObserver {
+            NotificationCenter.default.removeObserver(failureObserver)
+        }
         if let voiceOverObserver {
             NotificationCenter.default.removeObserver(voiceOverObserver)
         }
@@ -2123,6 +2140,10 @@ final class PlayerPageController: MediaPageController {
     }
 
     private func playbackStatusDidChange() {
+        if let player = playerController.player {
+            // 読み込みを待っている間は掴まない。読み込めずに終わったメディアで、Now Playingを掴んだままにしないため。
+            updateNowPlaying(isPlaying: player.timeControlStatus == .playing)
+        }
         applyDynamicRange()
         updateControls()
         scheduleAutoHide()
@@ -2370,7 +2391,30 @@ final class PlayerPageController: MediaPageController {
     override func viewWillDisappear(_ animated: Bool) {
         super.viewWillDisappear(animated)
         playerController.player?.pause()
+        releaseNowPlaying()
         hideTask?.cancel()
+    }
+
+    /// 再生し始めたら、Now Playingに再生の情報を出し、操作をこのアプリで受ける。掴んでいる間は、再生と一時停止を伝える。
+    /// Macは音声セッションから再生の状態を判断しないため、`playbackState`を再生や停止のたびに設定する必要がある。標準の再生画面はこれを設定しない。
+    private func updateNowPlaying(isPlaying: Bool) {
+        guard holdsNowPlaying || isPlaying else { return }
+        if !holdsNowPlaying {
+            holdsNowPlaying = true
+            playerController.updatesNowPlayingInfoCenter = true
+        }
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
+    }
+
+    /// 最後まで再生したとき、再生の途中で読めなくなったとき、ページを離れたときに、Now Playingを離す。途中で止めただけなら、再生し直せるよう掴んだままにする。
+    /// 標準の再生画面は、更新をやめると情報を空にして送るが、止めたことは伝えない。Macでは止めたと伝えないと、ほかのアプリが再生するまでNow Playingがこのアプリのままになる。
+    /// `playbackState`はアプリで1つなので、Macで2つのビューアのウィンドウが同時に再生しているときは、片方が離すと、もう片方も止めたことになる。
+    /// もう片方は次に再生か一時停止をしたときに伝え直す。複数のウィンドウで同時に再生する使い方は想定せず、ページの間で持ち主を調停しない。
+    private func releaseNowPlaying() {
+        guard holdsNowPlaying else { return }
+        holdsNowPlaying = false
+        playerController.updatesNowPlayingInfoCenter = false
+        MPNowPlayingInfoCenter.default().playbackState = .stopped
     }
 
     override func stateDump() -> String {
