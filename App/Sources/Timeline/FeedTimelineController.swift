@@ -835,7 +835,7 @@ extension FeedTimelineController {
         case .video:
             streamDummyVideoStatus(content: "ビューアの確認用に動画とGIFを1本ずつ添付", make: DummyMedia.videoAttachments)
         case .longVideo:
-            streamDummyVideoStatus(content: "ビューアの確認用に、毎秒音が鳴る90秒の動画を添付", make: DummyMedia.longVideoAttachment)
+            streamDummyVideoStatus(content: "ビューアの確認用に、無音の音声トラックが付いた90秒の動画を添付", make: DummyMedia.longVideoAttachment)
         case .linkCard:
             streamDummyLinkCard(withImage: false)
         case .linkCardImage:

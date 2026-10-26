@@ -183,12 +183,13 @@ enum DummyMedia {
         }
     }
 
-    /// 90秒の横長の動画1本。毎秒の頭に短い音を鳴らし、10秒ごとに高い音にする。絵には経過した秒数を大きく描く。
-    /// 再生の操作の部品で、シークバーや10秒戻る・進むで動かした位置と、消音を、絵と音の両方で確かめられるようにする。
+    /// 90秒の横長の動画1本。絵には経過した秒数を大きく描く。音声のトラックは付けるが、中身は無音にする。
+    /// 再生の操作の部品で、シークバーや10秒戻る・進むで動かした位置を絵で確かめ、音声のトラックがあるときにだけ出る消音のボタンも出す。
+    /// 確かめている間に端末から音が鳴らないよう、音は入れない。
     /// 書き出しに時間がかかるため、初回だけ書き出し、2回目からは一時ディレクトリに残したファイルを使う。
     static func longVideoAttachment() async throws -> (String) -> [MediaAttachment] {
         let spec = Spec(size: CGSize(width: 640, height: 360), color: .systemOrange, label: "8 長い動画", description: nil)
-        let url = try await longMovieURL(for: spec, name: "dummy-long-video", seconds: 90)
+        let url = try await longMovieURL(for: spec, name: "dummy-silent-long-video", seconds: 90)
         let preview = dataURL(for: spec)
         return { idPrefix in
             [
@@ -215,7 +216,7 @@ enum DummyMedia {
         }
         let audio = FileManager.default.temporaryDirectory.appendingPathComponent("\(name)-\(UUID().uuidString).m4a")
         defer { try? FileManager.default.removeItem(at: audio) }
-        try writeBeeps(to: audio, seconds: seconds)
+        try writeSilence(to: audio, seconds: seconds)
         let partial = FileManager.default.temporaryDirectory.appendingPathComponent("\(name)-\(UUID().uuidString).mp4")
         defer { try? FileManager.default.removeItem(at: partial) }
         try await combine(video: silent, audio: audio, to: partial)
@@ -225,8 +226,8 @@ enum DummyMedia {
         return url
     }
 
-    /// 毎秒の頭に0.1秒の音を鳴らすAACを書き出す。10秒ごとの音は高くし、何秒目かを耳で数えやすくする。
-    private static func writeBeeps(to url: URL, seconds: Int) throws {
+    /// 無音のAACを書き出す。
+    private static func writeSilence(to url: URL, seconds: Int) throws {
         let sampleRate = 44_100.0
         let file = try AVAudioFile(
             forWriting: url,
@@ -235,16 +236,12 @@ enum DummyMedia {
             interleaved: false
         )
         let frames = AVAudioFrameCount(sampleRate)
-        for second in 0..<seconds {
+        for _ in 0..<seconds {
             guard let buffer = AVAudioPCMBuffer(pcmFormat: file.processingFormat, frameCapacity: frames),
                   let samples = buffer.floatChannelData?[0]
             else { throw DummyMediaError.writeFailed }
             buffer.frameLength = frames
-            let frequency = second % 10 == 0 ? 880.0 : 440.0
-            let beepFrames = Int(sampleRate * 0.1)
-            for index in 0..<Int(frames) {
-                samples[index] = index < beepFrames ? Float(0.3 * sin(2 * .pi * frequency * Double(index) / sampleRate)) : 0
-            }
+            samples.update(repeating: 0, count: Int(frames))
             try file.write(from: buffer)
         }
     }
