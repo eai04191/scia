@@ -15,14 +15,15 @@ Scia（シア、/ˈʃi.a/）はストリーミングAPIに対応した、手触�
 自分のメインクライアントとして使うために作っています。現在は基本的な機能が完成していないためTestFlightやApp Storeで配布していません。準備ができ次第配布する予定です。
 
 <p align="center">
-  <img src="docs/images/screenshot-timeline.webp" width="260" alt="ホームのタイムライン">
-  <img src="docs/images/screenshot-compose.webp" width="260" alt="ハッシュタグの候補を出した投稿欄">
-  <img src="docs/images/screenshot-link.webp" width="260" alt="タイムラインの上に開いたリンク先のページ">
+  <img src="docs/images/screenshot-timeline.webp" width="260" alt="読んでいる途中に届いた新着が上に溜まっているホームのタイムライン">
+  <img src="docs/images/screenshot-compose.webp" width="260" alt="タイムラインの上で写真を3枚添付し、ハッシュタグの候補を出した投稿欄">
+  <img src="docs/images/screenshot-ticker.webp" width="260" alt="ステータスバーの場所に流れたお気に入りの通知">
 </p>
 
 ## 特徴
 
 - ストリーミングはもちろん、ストリーミングを見ながら投稿や反応、リンク先の閲覧ができる
+- 通知タブを開かなくても、自分への反応がステータスバーの場所に流れて気づける
 - バックグラウンドからの復帰や再接続のときも取りこぼしや重複なくタイムラインがつながる
 - HIGに沿った美しく滑らかなインターフェイス
 - アニメーションの途中でも操作を受け付けどこで止めても破綻しない
@@ -43,7 +44,7 @@ Scia（シア、/ˈʃi.a/）はストリーミングAPIに対応した、手触�
 - Xcode 26以降
 - [XcodeGen](https://github.com/yonaskolb/XcodeGen)
 - [SwiftLint](https://github.com/realm/SwiftLint)（`make lint`と`make check`で使う）
-- [WebP](https://developers.google.com/speed/webp)の`cwebp`（READMEのアイコンを描き出す`make readme-icons`で使う）
+- [WebP](https://developers.google.com/speed/webp)の`cwebp`（READMEのアイコンを描き出す`make readme-icons`と、スクリーンショットを撮る`make readme-screenshots`で使う）
 
 ```bash
 brew install xcodegen swiftlint webp
