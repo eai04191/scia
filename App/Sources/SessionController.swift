@@ -1555,11 +1555,13 @@ final class SessionController {
     /// 読み直すのは、その間にブロックしたり、期間を選び直したりしていることがあるため。読めなければ、起動し直すまで除いたままにする。
     /// Mastodonは期限の時刻に予約したジョブ（`DeleteMuteWorker`）でミュートを消すため、ちょうどの時刻ではまだ残っていることがある。1分おいてから読む。
     private func includeAfterMuteExpires(_ accountID: String, duration: Duration) {
-        let client = client
+        let relationships = profiles.relationships
         tasks.run(key: "muteExpiry:account:\(accountID)", .replacing) { [weak self, clock] in
             do {
                 try await clock.sleep(for: duration + .seconds(60))
-                guard let relationship = try await client.relationship(with: accountID), !relationship.muting else { return }
+                // 覚えている関係も新しくし、次に開くメニューでミュートが明けたことを出す。
+                relationships.reload([accountID])
+                guard let relationship = try await relationships.relationship(accountID), !relationship.muting else { return }
                 self?.excludeInLists(relationship)
             } catch is CancellationError {
                 // セッションを止めたか、同じ相手をミュートし直した。
