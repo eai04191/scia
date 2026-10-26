@@ -32,10 +32,32 @@ extension UIViewController {
             },
         ]
         let appWide: [UIMenuElement] = (handle.map { handle in
-            // チップの列の動き（画面を移る途中、引っぱる途中）を、実機でもダウンロードを用意せずに確かめるため。
-            [UIAction(title: "処理中のチップを1分出す", image: UIImage(systemName: "hourglass")) { _ in
-                handle(.progressNotice(seconds: 60))
-            }]
+            [
+                // チップの列の動き（画面を移る途中、引っぱる途中）を、実機でもダウンロードを用意せずに確かめるため。
+                UIAction(title: "処理中のチップを1分出す", image: UIImage(systemName: "hourglass")) { _ in
+                    handle(.progressNotice(seconds: 60))
+                },
+                // 添付ファイルの列や送る前に縮める流れを、ピッカーで写真を選ばずに確かめるため。サーバーにアップロードする。
+                UIMenu(title: "投稿欄に画像を添付", image: UIImage(systemName: "photo.on.rectangle"), children: (1...4).map { count in
+                    UIAction(title: "\(count)枚") { _ in
+                        handle(.compose(text: nil, mediaCount: count))
+                    }
+                }),
+                // オンとオフのチェックマークを、開くたびに今の状態で出す。
+                UIDeferredMenuElement.uncached { completion in
+                    let isOn = DebugFaults.isHoldingArrivals
+                    completion([
+                        UIAction(
+                            title: "新着を溜める",
+                            subtitle: isOn ? "選び直すと、溜まった新着を挿入する" : "ホームと通知",
+                            image: UIImage(systemName: "tray.full"),
+                            state: isOn ? .on : .off
+                        ) { _ in
+                            handle(.holdArrivals(!isOn))
+                        },
+                    ])
+                },
+            ]
         } ?? []) + (faults.map { [$0] } ?? [])
         let sections: [UIMenuElement] = [
             UIMenu(options: .displayInline, children: [buildInfo]),

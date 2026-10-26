@@ -147,16 +147,19 @@ enum DebugFaults {
     }
 
     /// 決めると、投稿欄が使うサーバーのメディアの上限のうち、決めた項目だけを差し替える。送る前に縮める流れを、大きなメディアなしで確かめるため。
-    private static let mediaLimitsOverride = Mutex<MediaLimits?>(nil)
+    private static let mediaLimitsOverrideState = Mutex<MediaLimits?>(nil)
 
     /// - Parameter limits: nilなら戻す。
     static func overrideMediaLimits(_ limits: MediaLimits?) {
-        mediaLimitsOverride.withLock { $0 = limits }
+        mediaLimitsOverrideState.withLock { $0 = limits }
     }
+
+    /// 差し替えている上限。差し替えていなければnil。
+    static var mediaLimitsOverride: MediaLimits? { mediaLimitsOverrideState.withLock { $0 } }
 
     /// サーバーの設定の上限に、差し替えた項目を当てる。
     static func applyingMediaLimits(to configuration: InstanceConfiguration?) -> InstanceConfiguration? {
-        guard let configuration, let override = mediaLimitsOverride.withLock({ $0 }) else { return configuration }
+        guard let configuration, let override = mediaLimitsOverrideState.withLock({ $0 }) else { return configuration }
         let server = configuration.mediaLimits
         return InstanceConfiguration(
             streamingURL: configuration.streamingURL,

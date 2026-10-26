@@ -33,6 +33,7 @@ enum DebugFaultMenu {
                 toggle("ストリーミングを切る", image: "antenna.radiowaves.left.and.right.slash", isOn: !DebugFaults.isStreamingOnline) { isOn in
                     handle(.streaming(isOnline: !isOn))
                 },
+                mediaLimitsMenu(handle: handle),
             ]),
             UIMenu(title: "遅らせる", options: .displayInline, children: [
                 toggle("ダウンロードを30秒遅らせる", image: "tortoise", isOn: DebugFaults.slowDownloadDelay != nil) { isOn in
@@ -40,6 +41,9 @@ enum DebugFaultMenu {
                 },
                 toggle("メニューのアイコンを3秒遅らせる", image: "person.crop.circle.badge.clock", isOn: DebugFaults.slowMenuIconDelay != nil) { isOn in
                     handle(.slowMenuIcons(seconds: isOn ? 3 : nil))
+                },
+                toggle("プロフィールを探すのを3秒遅らせる", image: "person.crop.circle.badge.questionmark", isOn: DebugFaults.slowLookupDelay != nil) { isOn in
+                    handle(.slowLookups(seconds: isOn ? 3 : nil))
                 },
             ]),
         ]
@@ -59,6 +63,32 @@ enum DebugFaultMenu {
     /// 選び直すと戻せる障害。
     private static func toggle(_ title: String, image: String, isOn: Bool, action: @escaping @MainActor (_ isOn: Bool) -> Void) -> UIAction {
         UIAction(title: title, image: UIImage(systemName: image), state: isOn ? .on : .off) { _ in action(!isOn) }
+    }
+
+    /// 投稿欄が使うサーバーのメディアの上限を差し替え、送る前に縮める流れを、大きなメディアを用意せずに確かめる。
+    /// 下書きのない状態で投稿欄を開いたときから効く。
+    private static func mediaLimitsMenu(handle: @escaping @MainActor (DebugURL) -> Void) -> UIMenu {
+        let current = DebugFaults.mediaLimitsOverride
+        let choices: [(title: String, limits: MediaLimits)] = [
+            ("容量", MediaLimits(imageSizeLimit: 1_000_000, imageMatrixLimit: nil, videoSizeLimit: 3_000_000, videoMatrixLimit: nil, videoFrameRateLimit: nil)),
+            ("画素数", MediaLimits(imageSizeLimit: nil, imageMatrixLimit: 1_000_000, videoSizeLimit: nil, videoMatrixLimit: 640 * 360, videoFrameRateLimit: nil)),
+            ("フレームレート", MediaLimits(imageSizeLimit: nil, imageMatrixLimit: nil, videoSizeLimit: nil, videoMatrixLimit: nil, videoFrameRateLimit: 24)),
+        ]
+        let subtitles = ["画像1MB、動画3MB", "画像100万画素、動画640×360", "動画24fps"]
+        let overrides = zip(choices, subtitles).map { choice, subtitle in
+            UIAction(title: choice.title, subtitle: subtitle, state: current == choice.limits ? .on : .off) { _ in
+                handle(.mediaLimits(choice.limits))
+            }
+        }
+        let clear = UIAction(title: "サーバーの値に戻す", image: UIImage(systemName: "arrow.uturn.backward"), attributes: current == nil ? .disabled : []) { _ in
+            handle(.mediaLimits(nil))
+        }
+        return UIMenu(
+            title: "メディアの上限を小さくする",
+            subtitle: "下書きのない投稿欄を開いたときから効く",
+            image: UIImage(systemName: "arrow.down.right.and.arrow.up.left"),
+            children: overrides + [UIMenu(options: .displayInline, children: [clear])]
+        )
     }
 
     /// サーバーやプロキシの障害。429と503は、自動の通信を止めて明けたら読み込み直すところを確かめられるよう`Retry-After`も返す。
