@@ -48,7 +48,7 @@ extension TimelineViewController {
     }
 
     /// お気に入りやブーストなど、自分の投稿の再掲になる通知。誰が何をしたかの行を目立たせ、本文は控えめな色で短く切り、
-    /// 添付ファイルは小さなサムネイルを1列だけ並べる。
+    /// 添付ファイルは小さなサムネイルを1列だけ並べる。引用は囲みを出さず、引用のある投稿であることを示す1行にする。
     /// - Parameter showsPollResults: 投票を結果の形で足す。投票はできない形にし、選択肢は押下を受けない。
     private func quotedConfiguration(for notification: MastodonNotification, status: Status, showsPollResults: Bool, itemID: ItemID?, base: UIListContentConfiguration) -> NotificationContentConfiguration {
         let shown = status.displayed
@@ -64,7 +64,10 @@ extension TimelineViewController {
                 mediaSpacing: tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing),
                 poll: showsPollResults ? pollContent(for: shown, allowsVoting: false, base: base) : nil,
                 pollSpacing: tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing),
-                hashtagAccount: shown.account
+                hashtagAccount: shown.account,
+                // 再掲では引用の囲みを出さず、引用のある投稿であることだけを、一番下の1行で示す。
+                filterNote: shown.quote == nil ? nil : postContentBuilder.quoteNote(),
+                filterNoteSpacing: tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing)
             ),
             bodySpacing: tuning.value(of: TuningCatalog.notificationQuotedSpacing),
             base: base

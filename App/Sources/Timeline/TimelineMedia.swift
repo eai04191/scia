@@ -65,9 +65,7 @@ extension TimelineViewController {
     }
 
     private func reconfigureRows(showing status: Status) {
-        let statusID = status.displayed.id
-        let ids = displayedItemIDs.filter { self.status(for: $0)?.displayed.id == statusID }
-        reconfigure(Set(ids))
+        reconfigure(Set(itemIDs(showing: status)))
     }
 
     /// 添付ファイルのビューアで覆っている。ビューアは閉じる操作の間に一覧を透かすため、開いている間も一覧を画面に残す。

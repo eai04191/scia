@@ -219,12 +219,82 @@ struct PostContentBuilder {
         )
     }
 
+    /// 引用元の投稿の囲み。作者の行は名前だけを太くし、本文は引用元の投稿の言語で描く。
+    /// - Parameters:
+    ///   - spoiler: 引用元の注意書きかフィルターの警告。開いているかは一覧が覚えているため、置く側が決めて渡す。
+    ///   - media: 引用元の添付ファイル。ぼかすかは一覧が覚えているため、置く側が決めて渡す。
+    func quote(_ quoted: Status, spoiler: PostBodyContent.Spoiler?, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
+        let font = PostTypography(settings: settings).font(.xPostBody)
+        var notes: [EmbeddedPostView.Content.Note] = []
+        // 囲みが投稿1件分に近い重さにならないよう、投票は選択肢を並べず、あることだけを示す。
+        if quoted.poll != nil {
+            notes.append(EmbeddedPostView.Content.Note(text: noteText("投票", symbolName: "chart.bar.xaxis", color: .secondaryLabel, font: font), isPressable: false))
+        }
+        switch NestedQuote(quoted.quote) {
+        case .link:
+            notes.append(EmbeddedPostView.Content.Note(text: noteText("引用した投稿があります", symbolName: "quote.bubble", color: .tintColor, font: font), isPressable: true))
+        case .unavailable(let reason):
+            notes.append(EmbeddedPostView.Content.Note(text: noteText(Self.quoteUnavailableText(reason), symbolName: "quote.bubble", color: .secondaryLabel, font: font), isPressable: false))
+        case nil:
+            break
+        }
+        return embed(
+            id: "quote:\(quoted.id)",
+            header: EmbeddedPostView.Content.Header(
+                avatar: avatarContent(of: quoted.account),
+                name: embedName(.plain(quoted.account.displayNameOrUsername, emojis: quoted.account.emojis), handle: quoted.account.acct, base: base),
+                opensAccount: true
+            ),
+            spoiler: spoiler.map {
+                SpoilerView.Content(text: $0.text, isCollapsed: $0.isCollapsed, kind: $0.kind, padding: $0.padding, buttonFont: $0.buttonFont, buttonSpacing: $0.buttonSpacing, cornerRadius: $0.cornerRadius)
+            },
+            text: bodyRenderer(of: quoted, font: font, color: .label).render(.status(quoted)),
+            media: media,
+            notes: notes,
+            openActionName: "引用元の投稿を開く"
+        )
+    }
+
+    /// 引用元を出せないときの囲み。作者の行を出さず、理由の1行だけを控えめな色で出す。
+    /// - Parameters:
+    ///   - id: 引用した投稿のID。
+    ///   - revealTitle: 押して開けるときに、理由の下に添える押せることを示す文言。開けなければnil。
+    func quotePlaceholder(id: Status.ID, message: String, revealTitle: String?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
+        let font = PostTypography(settings: settings).font(.xPostBody)
+        let text = NSMutableAttributedString(string: message, attributes: [.font: font, .foregroundColor: UIColor.secondaryLabel])
+        if let revealTitle {
+            text.append(NSAttributedString(string: "\n" + revealTitle, attributes: [.font: font, .foregroundColor: UIColor.tintColor]))
+        }
+        var content = embed(id: "quote-placeholder:\(id)", header: nil, text: text, media: nil, openActionName: revealTitle ?? "")
+        content.isPressable = revealTitle != nil
+        return content
+    }
+
+    /// 引用元を出せない理由の文言。
+    static func quoteUnavailableText(_ reason: QuoteDisplay.Reason) -> String {
+        switch reason {
+        case .pending: "承認待ちの引用です"
+        case .withdrawn: "引用元の投稿者が引用を取り消しました"
+        case .deleted: "引用元の投稿は削除されました"
+        case .unauthorized: "引用元の投稿を表示できません"
+        case .blockedAccount: "ブロックしている人の投稿です"
+        case .blockedDomain: "ブロックしているドメインの人の投稿です"
+        case .mutedAccount: "ミュートしている人の投稿です"
+        }
+    }
+
+    /// お気に入りやブーストの通知で再掲する投稿に、囲みの代わりに添える、引用のある投稿であることを示す1行。
+    func quoteNote() -> NSAttributedString {
+        noteText("引用した投稿", symbolName: "quote.bubble", color: .secondaryLabel, font: PostTypography(settings: settings).font(.filterNote))
+    }
+
     private func embed(
         id: String,
         header: EmbeddedPostView.Content.Header?,
         spoiler: SpoilerView.Content? = nil,
         text: NSAttributedString,
         media: MediaGridView.Content?,
+        notes: [EmbeddedPostView.Content.Note] = [],
         openActionName: String
     ) -> EmbeddedPostView.Content {
         EmbeddedPostView.Content(
@@ -234,6 +304,7 @@ struct PostContentBuilder {
             spoiler: spoiler,
             text: text,
             media: media,
+            notes: notes,
             openActionName: openActionName,
             padding: settings.value(of: AppearanceCatalog.xPostPadding),
             avatarNameSpacing: settings.value(of: AppearanceCatalog.xPostAvatarNameSpacing),
@@ -251,6 +322,18 @@ struct PostContentBuilder {
         let secondary = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, emojiImages: emojiImages, language: language)
         let text = NSMutableAttributedString(attributedString: primary.render(name))
         text.append(secondary.render(.plain(" @\(handle)", emojis: [])))
+        return text
+    }
+
+    /// 囲みの補足の1行。先頭に記号を置く。文言はアプリのものなので、アプリの文字で描く。
+    private func noteText(_ string: String, symbolName: String, color: UIColor, font: UIFont) -> NSAttributedString {
+        let text = NSMutableAttributedString()
+        if let symbol = UIImage(systemName: symbolName, withConfiguration: UIImage.SymbolConfiguration(font: font, scale: .small)) {
+            text.append(NSAttributedString(attachment: NSTextAttachment(image: symbol.withRenderingMode(.alwaysTemplate))))
+            text.append(NSAttributedString(string: " "))
+        }
+        text.append(NSAttributedString(string: string))
+        text.addAttributes([.font: font, .foregroundColor: color], range: NSRange(location: 0, length: text.length))
         return text
     }
 
@@ -301,8 +384,12 @@ struct PostContentBuilder {
 
     /// 本文と注意書きは投稿した人が書いたものなので、投稿の言語で描く。
     private func bodyRenderer(of status: Status, base: UIListContentConfiguration, color: UIColor) -> RichTextRenderer {
+        bodyRenderer(of: status, font: PostTypography(settings: settings).font(.body), color: color)
+    }
+
+    private func bodyRenderer(of status: Status, font: UIFont, color: UIColor) -> RichTextRenderer {
         RichTextRenderer(
-            font: PostTypography(settings: settings).font(.body),
+            font: font,
             textColor: color,
             paragraphSpacing: settings.value(of: AppearanceCatalog.paragraphSpacing),
             lineSpacing: settings.value(of: AppearanceCatalog.bodyLineSpacing),

@@ -71,6 +71,12 @@ final class SessionController {
         tasks.onClose { [weak lookup] in lookup?.cancel() }
         return lookup
     }()
+    /// 引用元の中の引用のように、IDしか分からない投稿のスレッドを開く操作の入口。後から押したものだけを開く。
+    private lazy var statusOpening: LatestLookup = {
+        let lookup = LatestLookup(clock: clock) { nil }
+        tasks.onClose { [weak lookup] in lookup?.cancel() }
+        return lookup
+    }()
     /// 「接続の状態」画面に出す、このセッションの接続の状態。
     let diagnostics: ConnectionDiagnostics
     private let interactions: StatusInteractions
@@ -812,6 +818,10 @@ final class SessionController {
             guard let viewController else { return }
             self?.openThread(of: status, rowFrame: rowFrame, from: viewController)
         }
+        viewController.onOpenStatusID = { [weak self, weak viewController] statusID, rowFrame in
+            guard let viewController else { return }
+            self?.openThread(statusID: statusID, rowFrame: rowFrame, from: viewController)
+        }
         viewController.userMenuActions = userMenuActions
         viewController.hashtagMuteActions = hashtagMuteActions
         viewController.onVisibleLinkOnlyCardsChange = { [weak self, weak viewController] statuses in
@@ -1105,6 +1115,21 @@ final class SessionController {
         viewController.placeOnAppearing(.status(focus.id), atWindowY: rowFrame.minY)
         guard let navigation = source.navigationController else { return }
         ThreadPushDelegate.push(viewController, on: navigation, duration: viewController.tuning.value(of: TuningCatalog.threadOpenDuration))
+    }
+
+    /// IDしか分からない投稿を読んでから、そのスレッドを開く。待つ間にタブを移ったり、戻ったり、別の画面を開いたりしたら、読めても開かず、失敗も知らせない。
+    private func openThread(statusID: Status.ID, rowFrame: CGRect, from source: UIViewController) {
+        let client = client
+        let anchor = PushAnchor(source)
+        statusOpening.start({ try await client.status(statusID) }) { anchor.isStillShowing } completion: { [weak self, weak source] result in
+            guard let self, let source else { return }
+            switch result {
+            case .success(let status):
+                openThread(of: status, rowFrame: rowFrame, from: source)
+            case .failure(let error):
+                handle(error, title: "投稿を開けませんでした")
+            }
+        }
     }
 
     /// 自分のプロフィールの編集をシートで開く。保存したら、開いている自分のプロフィールに反映する。

@@ -107,6 +107,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onGapApproach: ((String, TimelineStore.GapDirection) -> Void)?
     /// 投稿の行か、投稿を含む通知の行の、中の部品が受けなかった押下で呼ぶ。押した投稿（通知なら通知の投稿）と、行のウインドウ上の枠を渡す。スレッドを開く。nilなら押せない。
     var onOpenThread: ((Status, CGRect) -> Void)?
+    /// 引用元の中の引用のように、IDしか分からない投稿のスレッドを開くときに、IDと、押した行のウインドウ上の枠を渡して呼ぶ。
+    var onOpenStatusID: ((Status.ID, CGRect) -> Void)?
     /// スレッドの画面で押した投稿。押してもスレッドを開き直さない。
     var threadFocusID: Status.ID?
     /// スレッドを開くときに、押した行を一覧で見えていた位置に置くため、上の余白に足している高さ。
@@ -256,6 +258,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var xPosts: XPostStore?
     /// この一覧で当てるサーバーのフィルターと、警告で折りたたんだ投稿のうち開いたもの。一覧を持つ側が、一覧の場所に合わせて入れる。
     var filterWarnings = FilterWarnings()
+    /// ブロックかミュートしている人の引用元のうち、押して開いたもの。
+    var quoteReveals = QuoteReveals()
     /// 投票する前に選んでいる選択肢と、結果を見ると選んだ投票、送っている途中の投票。
     var pollChoices = PollChoices()
     /// 投票の「投票」が押されたときに、選んだ選択肢と、押した投稿（ブーストならブーストした投稿）を渡して呼ぶ。
@@ -553,9 +557,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         reconfigure(Set(ids))
     }
 
-    private static func emojiURLs(of status: Status) -> Set<URL> {
+    /// 引用の囲みに出す引用元の本文、注意書き、作者の名前の絵文字も含める。
+    static func emojiURLs(of status: Status) -> Set<URL> {
         let shown = status.displayed
-        return Set((shown.emojis + (shown.poll?.emojis ?? []) + shown.account.emojis + status.account.emojis).map(\.staticUrl))
+        let quoted = shown.quote?.quotedStatus.map { $0.emojis + $0.account.emojis } ?? []
+        return Set((shown.emojis + (shown.poll?.emojis ?? []) + shown.account.emojis + status.account.emojis + quoted).map(\.staticUrl))
     }
 
     private static func emojiURLs(of notification: MastodonNotification) -> Set<URL> {
@@ -1458,7 +1464,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.poll = pollContent(for: shown, base: base)
         configuration.onPollAction = { [weak self] action in self?.handlePollAction(action, on: status, keeping: itemID) }
         configuration.card?.coversImage = mediaCovers.linkCardImageCover(for: shown) != nil
-        if let xPost = xPostContent(for: shown, base: base) {
+        if let quote = quoteEmbed(for: status, itemID: itemID, base: base) {
+            configuration.embed = quote.content
+            configuration.embedActions = quote.actions
+        } else if let xPost = xPostContent(for: shown, base: base) {
             configuration.embed = xPost.content
             configuration.embedActions.open = { [weak self] _ in self?.onOpenLink?(.url(xPost.url), shown) }
             configuration.embedActions.selectMedia = { [weak self] index, grid in
@@ -1494,9 +1503,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             filterWarnings.reveal(status)
         }
         guard isViewLoaded else { return }
+        reconfigure(Set(itemIDs(showing: status)), keeping: anchorID)
+    }
+
+    /// `status`を出している行。ブーストした行、通知の行と、引用の囲みに出している行も含める。
+    func itemIDs(showing status: Status) -> [ItemID] {
         let shownID = status.displayed.id
-        let ids = displayedItemIDs.filter { self.status(for: $0)?.displayed.id == shownID }
-        reconfigure(Set(ids), keeping: anchorID)
+        return displayedItemIDs.filter { id in
+            guard let displayed = self.status(for: id)?.displayed else { return false }
+            return displayed.id == shownID || displayed.quote?.quotedStatus?.id == shownID
+        }
     }
 
     func avatarContent(of account: Account) -> AvatarView.Content {
@@ -1698,7 +1714,7 @@ extension TimelineViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
         if let id = dataSource.itemIdentifier(for: indexPath), let status = status(for: id), let cell = collectionView.cellForItem(at: indexPath) {
             collectionView.deselectItem(at: indexPath, animated: true)
-            UserAction.openThread(screen: texts.dumpName).record()
+            recordOpenThread()
             onOpenThread?(status, cell.convert(cell.bounds, to: nil))
             return
         }
@@ -1718,6 +1734,11 @@ extension TimelineViewController: UICollectionViewDelegate {
         guard !loadingGapIDs.contains(gapID), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return }
         let visibleRect = collectionView.bounds.inset(by: collectionView.adjustedContentInset)
         onGapSelect?(gapID, frame.midY < visibleRect.midY ? .fromOlder : .fromNewer)
+    }
+
+    /// スレッドを開いたことを、違和感レポートの操作の記録に残す。
+    func recordOpenThread() {
+        UserAction.openThread(screen: texts.dumpName).record()
     }
 
     func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
