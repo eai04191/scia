@@ -43,6 +43,18 @@ struct LinkLabelTests {
         #expect(label.link(at: try center(of: "見て", in: label)) == nil)
     }
 
+    /// 🅰のようにサロゲートペアで書く絵文字や、`U+FE0F`の付いた絵文字だけのリンクも、絵文字の上で押せる。
+    @Test func findsLinkUnderEmoji() throws {
+        let url = try #require(URL(string: "https://example.social/tags/ab"))
+        let text = RichText(blocks: [
+            .init(inlines: [.text("見て ", []), .link("#🅰️🅱️", .hashtag(name: "🅰️🅱️", url: url), [])]),
+        ])
+        let label = label(for: text)
+
+        #expect(label.link(at: try center(of: "🅰️", in: label)) == .hashtag(name: "🅰️🅱️", url: url))
+        #expect(label.link(at: try center(of: "🅱️", in: label)) == .hashtag(name: "🅰️🅱️", url: url))
+    }
+
     /// 行数を限って末尾を「…」で切る本文でも、2行目より後のリンクを、UILabelが描いた位置で押せる。ここでは「…」で切られる3行目のリンクを押す。
     /// UILabelは折り返してから最後の行だけを切るが、TextKit 2は「…」で切る段落を1行に並べるため、折り返して並べ直す。
     @Test func findsLinkInTruncatedParagraph() throws {

@@ -378,13 +378,20 @@ class EmojiLabel: UILabel {
         let boundaryIndex = contentStorage.offset(from: contentStorage.documentRange.location, to: boundary)
         // 返るのは文字と文字の境目で、押した文字の前か後ろかは書く向きで変わる。境目の前後の文字のうち、描かれた枠に押した点が入るほうを選ぶ。
         let candidates = [boundaryIndex, boundaryIndex - 1].filter { 0 <= $0 && $0 < attributedText.length }
-        return candidates.first { characterFrame(at: $0, in: contentStorage, layoutManager: layoutManager)?.contains(point) ?? false }
+        return candidates.first {
+            characterFrame(at: $0, in: attributedText, contentStorage: contentStorage, layoutManager: layoutManager)?.contains(point) ?? false
+        }
     }
 
-    /// `index`の文字が描かれる枠。ラベルの座標で返す。
-    final func characterFrame(at index: Int, in contentStorage: NSTextContentStorage, layoutManager: NSTextLayoutManager) -> CGRect? {
-        guard let start = contentStorage.location(contentStorage.documentRange.location, offsetBy: index),
-              let end = contentStorage.location(start, offsetBy: 1),
+    /// `index`（UTF-16の位置）を含む文字が描かれる枠。ラベルの座標で返す。
+    /// 枠はUTF-16の1単位ではなく、`index`を含む書記素クラスタ全体で測る。🅰のようにサロゲートペアで書く絵文字や、
+    /// `U+FE0F`の付いた絵文字は1単位では描かれる枠がなく、絵文字のリンクを押しても当たらなかったため。
+    final func characterFrame(
+        at index: Int, in text: NSAttributedString, contentStorage: NSTextContentStorage, layoutManager: NSTextLayoutManager
+    ) -> CGRect? {
+        let cluster = (text.string as NSString).rangeOfComposedCharacterSequence(at: index)
+        guard let start = contentStorage.location(contentStorage.documentRange.location, offsetBy: cluster.location),
+              let end = contentStorage.location(start, offsetBy: cluster.length),
               let range = NSTextRange(location: start, end: end)
         else { return nil }
         var frame: CGRect?
