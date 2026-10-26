@@ -187,6 +187,21 @@ public enum AppearanceCatalog {
     /// 投票の選択肢の、文字の上下の余白。
     public static let pollOptionPadding = AppearanceValue(id: "timeline.pollOptionPadding", title: "選択肢の上下の余白", range: 0...100, step: 1, defaultValue: 8)
 
+    // MARK: お気に入りとブーストの光
+
+    /// 下の端から照らす光の高さ。光は行の中にだけ伸ばす。ライトでHDRを使わずに描くときは、`ReactionGlow.Style`でこの高さを縮める。
+    public static let reactionGlowHeight = AppearanceValue(id: "reactionGlow.height", title: "光の高さ", range: 0...200, step: 2, defaultValue: 64)
+    public static let reactionGlowDarkOpacity = AppearanceValue(id: "reactionGlow.darkOpacity", title: "光の濃さ（ダークモード）", range: 0...1, step: 0.05, defaultValue: 0.4, unit: .ratio)
+    /// ライトでHDRで描くときの濃さ。HDRを使わずに描くときは、`ReactionGlow.Style`でこの濃さを薄める。
+    public static let reactionGlowLightOpacity = AppearanceValue(id: "reactionGlow.lightOpacity", title: "光の濃さ（ライトモード）", range: 0...1, step: 0.05, defaultValue: 0.95, unit: .ratio)
+    /// 左半分のブーストと右半分のお気に入りの光を、真ん中で混ぜる幅。0でくっきり分ける。
+    public static let reactionGlowBlendWidth = AppearanceValue(id: "reactionGlow.blendWidth", title: "真ん中で2色を混ぜる幅", range: 0...400, step: 4, defaultValue: 48)
+    /// 光に添えるアイコンの大きさ。散らすときは、これを基準に大きさを変える。
+    /// 0ptの記号は書体の標準の大きさで描かれ、小さくしたつもりが大きくなるため、文字と同じく1ptを下限にする。
+    public static let reactionGlowIconSize = AppearanceValue(id: "reactionGlow.iconSize", title: "アイコンの大きさ", range: 1...200, step: 1, defaultValue: 8)
+    /// 光に添えるアイコンの濃さ。光より目立たせないため、既定では薄くする。
+    public static let reactionGlowIconOpacity = AppearanceValue(id: "reactionGlow.iconOpacity", title: "アイコンの濃さ", range: 0...1, step: 0.05, defaultValue: 0.6, unit: .ratio)
+
     public static let groups: [AppearanceGroup] = [
         AppearanceGroup(id: "row", title: "行", values: [rowPaddingTop, rowPaddingBottom, rowPaddingLeading, rowPaddingTrailing]),
         AppearanceGroup(id: "context", title: "名前の上の行", values: [contextText, contextSecondaryText, contextPartsSpacing, contextLabelText, boosterAvatarSize, contextSymbolSpacing, contextAvatarTextSpacing, contextSpacing]),
@@ -198,6 +213,7 @@ public enum AppearanceCatalog {
         AppearanceGroup(id: "linkCard", title: "リンクカード", values: [linkCardTitleText, linkCardDetailText, linkCardTitleLines, linkCardDescriptionLines, linkCardLineSpacing, linkCardImageWidthRatio, bodyLinkCardSpacing, linkCardPadding]),
         AppearanceGroup(id: Self.xPostGroupID, title: "Xの投稿", values: [xPostNameText, xPostBodyText, xPostAvatarSize, xPostAvatarNameSpacing, xPostHeaderSpacing, xPostMediaSpacing, xPostPadding, bodyXPostSpacing]),
         AppearanceGroup(id: "poll", title: "投票", values: [pollFooterText, bodyPollSpacing, pollOptionSpacing, pollOptionPadding, pollOptionHorizontalPadding, pollOptionCornerRadius, pollFooterSpacing]),
+        AppearanceGroup(id: "reactionGlow", title: "お気に入りとブーストの光", values: [reactionGlowHeight, reactionGlowDarkOpacity, reactionGlowLightOpacity, reactionGlowBlendWidth, reactionGlowIconSize, reactionGlowIconOpacity]),
     ]
 
     public static let values: [AppearanceValue] = groups.flatMap(\.values)

@@ -124,6 +124,14 @@ enum AppearancePreviewPart: Hashable, CaseIterable {
     case pollFooter
     /// 自分のフィルターに一致したことを示す注記。
     case filterNote
+    /// お気に入りとブーストの光の全体。
+    case reactionGlow
+    /// お気に入りとブーストの片方だけをした投稿の光。
+    case reactionGlowAlone
+    /// 光の真ん中で、ブーストとお気に入りの2色を混ぜる幅。
+    case reactionGlowBlend
+    /// 光に添えたアイコン。
+    case reactionGlowIcons
 }
 
 extension AppearancePreviewPart {

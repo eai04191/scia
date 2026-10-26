@@ -15,27 +15,12 @@ struct PostPreview: UIViewRepresentable {
     let glyphLanguage: GlyphLanguage
     let emojiStyle: EmojiStyle
     var appearanceValues: [String: Double] = [:]
-    /// お気に入りとブーストをした投稿の見本にする。下の端の光を見せるため。
-    var showsReactions = false
-    var drawsReactionGlowInHDR = true
     let builder: PostContentBuilder
     /// リンクカードの見本の灰色を、外観に合わせて選ぶ。
     @Environment(\.colorScheme) private var colorScheme
 
     private var status: Status {
-        if showsReactions {
-            return Status(
-                id: "preview-reactions",
-                createdAt: createdAt,
-                account: account,
-                content: "<p>お気に入りとブーストをした投稿は、このように表示されます。</p>",
-                spoilerText: "",
-                url: nil,
-                favourited: true,
-                reblogged: true
-            )
-        }
-        return Status(
+        Status(
             id: "preview",
             createdAt: createdAt,
             account: account,

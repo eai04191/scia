@@ -257,4 +257,22 @@ struct AppSettingsTests {
         #expect(relaunched.statusNameStyle == .nameAndAcct)
         #expect(relaunched.value(of: AppearanceCatalog.avatarSize) == AppearanceCatalog.avatarSize.defaultValue)
     }
+
+    /// 「投稿の見た目」に移したお気に入りとブーストの光の選択肢も、まとめて戻す対象にし、起動し直しても残る。
+    @Test(arguments: [
+        { (settings: AppSettings) in settings.drawsReactionGlowInHDR = false },
+        { (settings: AppSettings) in settings.reactionGlowIcons = .scattered },
+        { (settings: AppSettings) in settings.reactionGlowFillsWidthWhenAlone = true },
+        { (settings: AppSettings) in settings.reactionGlowLightFavouriteColor = .yellow },
+    ] as [@MainActor @Sendable (AppSettings) -> Void])
+    func reactionGlowChoicesAreAppearance(change: @MainActor @Sendable (AppSettings) -> Void) throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        change(settings)
+        #expect(settings.isAppearanceModified)
+        #expect(AppSettings(defaults: defaults).isAppearanceModified)
+        settings.resetAppearance()
+        #expect(!settings.isAppearanceModified)
+        #expect(!AppSettings(defaults: defaults).isAppearanceModified)
+    }
 }

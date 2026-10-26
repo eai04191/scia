@@ -44,6 +44,22 @@ public enum LinkCardThumbnailSide: String, CaseIterable, Sendable {
     case right
 }
 
+/// お気に入りとブーストの光に、何を示すかのアイコンを添えるか。
+public enum ReactionGlowIcons: String, CaseIterable, Sendable {
+    case none
+    /// 下の端に、ブーストとお気に入りのアイコンを1つずつ置く。
+    case atBottom
+    /// 下の端に、小さなアイコンを大きさと濃さを変えて散らす。
+    case scattered
+}
+
+/// ライトモードのお気に入りの光の色。ダークモードではいつも黄色にする。
+public enum ReactionGlowLightFavouriteColor: String, CaseIterable, Sendable {
+    /// 白い背景では黄色が見えにくいため、既定はこちら。
+    case orange
+    case yellow
+}
+
 public enum StatusTimestamp {
     /// 相対表記で、日付に切り替えるまでの日数。
     static let relativeDays = 7

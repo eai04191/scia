@@ -141,6 +141,20 @@ public final class AppSettings {
         didSet { defaults.set(animatesCustomEmojis, forKey: Keys.animatesCustomEmojis) }
     }
 
+    /// お気に入りとブーストの光に、何を示すかのアイコンを添えるか。
+    public var reactionGlowIcons: ReactionGlowIcons {
+        didSet { defaults.set(reactionGlowIcons.rawValue, forKey: Keys.reactionGlowIcons) }
+    }
+
+    /// お気に入りとブーストの片方だけをしたときに、その色で全幅を光らせる。オフなら、その半分だけを光らせる。
+    public var reactionGlowFillsWidthWhenAlone: Bool {
+        didSet { defaults.set(reactionGlowFillsWidthWhenAlone, forKey: Keys.reactionGlowFillsWidthWhenAlone) }
+    }
+
+    public var reactionGlowLightFavouriteColor: ReactionGlowLightFavouriteColor {
+        didSet { defaults.set(reactionGlowLightFavouriteColor.rawValue, forKey: Keys.reactionGlowLightFavouriteColor) }
+    }
+
     /// 最上部で新着に追従しているとき、新着を足してから最上部へ動かして見せるか。最上部より下で読んでいるときは、読んでいる位置を保つため動かさない。
     public var insertionMotion: InsertionMotion {
         didSet { defaults.set(insertionMotion.rawValue, forKey: Keys.insertionMotion) }
@@ -186,7 +200,7 @@ public final class AppSettings {
     /// 「投稿の見た目」の数値か選択肢のどれかが、既定値から変わっているか。
     public var isAppearanceModified: Bool {
         typealias D = AppearanceDefaults
-        return AppearanceCatalog.values.contains(where: isModified) || statusNameStyle != D.statusNameStyle || statusTimeStyle != D.statusTimeStyle || contextNameStyle != D.contextNameStyle || glyphLanguage != D.glyphLanguage || emojiStyle != D.emojiStyle || avatarShape != D.avatarShape || linkCardThumbnailSide != D.linkCardThumbnailSide || showsVisibilitySymbol != D.showsVisibilitySymbol || showsEditedMark != D.showsEditedMark || showsLinkCardSite != D.showsLinkCardSite || showsContextSymbol != D.showsContextSymbol || boldsName != D.boldsName || showsAvatarBorder != D.showsAvatarBorder || showsMediaBadges != D.showsMediaBadges || showsLinkCard != D.showsLinkCard || boldsLinkCardTitle != D.boldsLinkCardTitle || showsSeparators != D.showsSeparators || showsBoosterAvatar != D.showsBoosterAvatar || showsReplyLabel != D.showsReplyLabel || showsReplyLines != D.showsReplyLines || showsTime != D.showsTime || showsLinkCardImage != D.showsLinkCardImage || animatesAvatars != D.animatesAvatars || animatesCustomEmojis != D.animatesCustomEmojis
+        return AppearanceCatalog.values.contains(where: isModified) || statusNameStyle != D.statusNameStyle || statusTimeStyle != D.statusTimeStyle || contextNameStyle != D.contextNameStyle || glyphLanguage != D.glyphLanguage || emojiStyle != D.emojiStyle || avatarShape != D.avatarShape || linkCardThumbnailSide != D.linkCardThumbnailSide || showsVisibilitySymbol != D.showsVisibilitySymbol || showsEditedMark != D.showsEditedMark || showsLinkCardSite != D.showsLinkCardSite || showsContextSymbol != D.showsContextSymbol || boldsName != D.boldsName || showsAvatarBorder != D.showsAvatarBorder || showsMediaBadges != D.showsMediaBadges || showsLinkCard != D.showsLinkCard || boldsLinkCardTitle != D.boldsLinkCardTitle || showsSeparators != D.showsSeparators || showsBoosterAvatar != D.showsBoosterAvatar || showsReplyLabel != D.showsReplyLabel || showsReplyLines != D.showsReplyLines || showsTime != D.showsTime || showsLinkCardImage != D.showsLinkCardImage || animatesAvatars != D.animatesAvatars || animatesCustomEmojis != D.animatesCustomEmojis || drawsReactionGlowInHDR != D.drawsReactionGlowInHDR || reactionGlowIcons != D.reactionGlowIcons || reactionGlowFillsWidthWhenAlone != D.reactionGlowFillsWidthWhenAlone || reactionGlowLightFavouriteColor != D.reactionGlowLightFavouriteColor
     }
 
     /// 「投稿の見た目」の数値と選択肢を、すべて既定値へ戻す。
@@ -217,6 +231,10 @@ public final class AppSettings {
         showsLinkCardImage = D.showsLinkCardImage
         animatesAvatars = D.animatesAvatars
         animatesCustomEmojis = D.animatesCustomEmojis
+        drawsReactionGlowInHDR = D.drawsReactionGlowInHDR
+        reactionGlowIcons = D.reactionGlowIcons
+        reactionGlowFillsWidthWhenAlone = D.reactionGlowFillsWidthWhenAlone
+        reactionGlowLightFavouriteColor = D.reactionGlowLightFavouriteColor
     }
 
     /// 項目を既定値へ戻す。
@@ -371,6 +389,9 @@ public final class AppSettings {
         static let mediaDynamicRange = "settings.mediaDynamicRange"
         static let viewerMediaDynamicRange = "settings.viewerMediaDynamicRange"
         static let drawsReactionGlowInHDR = "settings.drawsReactionGlowInHDR"
+        static let reactionGlowIcons = "settings.reactionGlowIcons"
+        static let reactionGlowFillsWidthWhenAlone = "settings.reactionGlowFillsWidthWhenAlone"
+        static let reactionGlowLightFavouriteColor = "settings.reactionGlowLightFavouriteColor"
 
         static func appearance(_ id: String) -> String {
             "settings.appearance.\(id)"
@@ -423,7 +444,10 @@ public final class AppSettings {
         videoUploadSize = defaults.string(forKey: Keys.videoUploadSize).flatMap(VideoUploadSize.init(rawValue:)) ?? .p1080
         mediaDynamicRange = defaults.string(forKey: Keys.mediaDynamicRange).flatMap(MediaDynamicRange.init(rawValue:)) ?? .standard
         viewerMediaDynamicRange = defaults.string(forKey: Keys.viewerMediaDynamicRange).flatMap(MediaDynamicRange.init(rawValue:)) ?? .constrainedHigh
-        drawsReactionGlowInHDR = defaults.object(forKey: Keys.drawsReactionGlowInHDR) as? Bool ?? true
+        drawsReactionGlowInHDR = defaults.object(forKey: Keys.drawsReactionGlowInHDR) as? Bool ?? AppearanceDefaults.drawsReactionGlowInHDR
+        reactionGlowIcons = defaults.string(forKey: Keys.reactionGlowIcons).flatMap(ReactionGlowIcons.init(rawValue:)) ?? AppearanceDefaults.reactionGlowIcons
+        reactionGlowFillsWidthWhenAlone = defaults.object(forKey: Keys.reactionGlowFillsWidthWhenAlone) as? Bool ?? AppearanceDefaults.reactionGlowFillsWidthWhenAlone
+        reactionGlowLightFavouriteColor = defaults.string(forKey: Keys.reactionGlowLightFavouriteColor).flatMap(ReactionGlowLightFavouriteColor.init(rawValue:)) ?? AppearanceDefaults.reactionGlowLightFavouriteColor
         var appearanceValues: [String: Double] = [:]
         for item in AppearanceCatalog.values {
             if let stored = defaults.object(forKey: Keys.appearance(item.id)) as? Double, item.range.contains(stored) {
@@ -464,4 +488,8 @@ private enum AppearanceDefaults {
     static let showsLinkCardImage = true
     static let animatesAvatars = false
     static let animatesCustomEmojis = false
+    static let drawsReactionGlowInHDR = true
+    static let reactionGlowIcons: ReactionGlowIcons = .none
+    static let reactionGlowFillsWidthWhenAlone = false
+    static let reactionGlowLightFavouriteColor: ReactionGlowLightFavouriteColor = .orange
 }

@@ -483,23 +483,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = tuning.value(of: TuningCatalog.notificationGroupAvatarSize)
             _ = tuning.value(of: TuningCatalog.notificationGroupAvatarSpacing)
             _ = tuning.value(of: TuningCatalog.notificationGroupAvatarHeaderSpacing)
-            _ = tuning.value(of: TuningCatalog.reactionGlowHeight)
-            _ = tuning.value(of: TuningCatalog.reactionGlowLightSDRHeight)
-            _ = tuning.value(of: TuningCatalog.reactionGlowDarkOpacity)
-            _ = tuning.value(of: TuningCatalog.reactionGlowLightOpacity)
-            _ = tuning.value(of: TuningCatalog.reactionGlowBlendWidth)
             _ = tuning.value(of: TuningCatalog.reactionGlowMixesInOKLab)
-            _ = tuning.value(of: TuningCatalog.reactionGlowIconSize)
-            _ = tuning.value(of: TuningCatalog.reactionGlowIconOpacity)
             _ = tuning.value(of: TuningCatalog.reactionGlowIconRiseDelay)
-            _ = tuning.value(of: TuningCatalog.reactionGlowFillsWidthWhenAlone)
             _ = tuning.value(of: TuningCatalog.reactionGlowHDRExposure)
             _ = tuning.value(of: TuningCatalog.reactionGlowLightIntensity)
-            _ = tuning.value(of: TuningCatalog.reactionGlowLightHDROpacity)
             _ = tuning.value(of: TuningCatalog.reactionGlowLightBloomIntensityRatio)
             _ = tuning.value(of: TuningCatalog.reactionGlowDarkGlowHDRExposure)
-            _ = tuning.value(of: TuningCatalog.reactionGlowLightFavouriteIsYellow)
-            _ = tuning.value(of: TuningCatalog.reactionGlowIconStyle)
             _ = network.conditions
             _ = settings.usesOriginalThumbnailsOnExpensiveNetwork
             _ = settings.ignoresUselessAltText
@@ -528,6 +517,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = settings.glyphLanguage
             _ = settings.emojiStyle
             _ = settings.drawsReactionGlowInHDR
+            _ = settings.reactionGlowIcons
+            _ = settings.reactionGlowFillsWidthWhenAlone
+            _ = settings.reactionGlowLightFavouriteColor
         } onChange: { [weak self] in
             Task { @MainActor in
                 guard let self else { return }

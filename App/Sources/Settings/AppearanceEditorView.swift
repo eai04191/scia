@@ -52,6 +52,7 @@ struct AppearanceEditorView: View {
                                             onFocus: { focused = .value(item) },
                                             onToggleFocus: { toggleFocus(.value(item)) }
                                         )
+                                        .disabled(isUnused(item))
                                     }
                                 } label: {
                                     GroupLabel(title: group.title, isModified: group.values.contains(where: settings.isModified))
@@ -86,6 +87,8 @@ struct AppearanceEditorView: View {
                     .onChange(of: settings.showsLinkCardImage) { focused = .choice(.showsLinkCardImage) }
                     .onChange(of: settings.animatesAvatars) { focused = .choice(.animatesAvatars) }
                     .onChange(of: settings.animatesCustomEmojis) { focused = .choice(.animatesCustomEmojis) }
+                    .onChange(of: settings.drawsReactionGlowInHDR) { focused = .choice(.drawsReactionGlowInHDR) }
+                    .onChange(of: settings.reactionGlowFillsWidthWhenAlone) { focused = .choice(.reactionGlowFillsWidthWhenAlone) }
                     .onChange(of: scrollTarget) { _, target in
                         guard let target else { return }
                         withAnimation { proxy.scrollTo(target, anchor: .top) }
@@ -162,6 +165,10 @@ struct AppearanceEditorView: View {
         hasher.combine(settings.linkCardThumbnailSide)
         hasher.combine(settings.glyphLanguage)
         hasher.combine(settings.emojiStyle)
+        hasher.combine(settings.drawsReactionGlowInHDR)
+        hasher.combine(settings.reactionGlowIcons)
+        hasher.combine(settings.reactionGlowFillsWidthWhenAlone)
+        hasher.combine(settings.reactionGlowLightFavouriteColor)
         return hasher.finalize()
     }
 
@@ -236,9 +243,20 @@ struct AppearanceEditorView: View {
             PopUpChoiceRow(title: "画像の位置", selection: $settings.linkCardThumbnailSide, options: [(.left, "左"), (.right, "右")], onOpen: { focus(.linkCardThumbnailSide) }, onTapTitle: { toggleFocus(.choice(.linkCardThumbnailSide)) })
                 .disabled(!settings.showsLinkCardImage)
             TitledToggleRow(title: "サイト名を出す", isOn: $settings.showsLinkCardSite) { toggleFocus(.choice(.showsLinkCardSite)) }
+        case "reactionGlow":
+            // HDRのメディアの明るさの設定はメディアに対するものなので、光はそれに従わせず、ここで別に選ぶ。
+            TitledToggleRow(title: "HDRに対応した画面では白より明るく光らせる", isOn: $settings.drawsReactionGlowInHDR) { toggleFocus(.choice(.drawsReactionGlowInHDR)) }
+            PopUpChoiceRow(title: "アイコン", selection: $settings.reactionGlowIcons, options: [(.none, "出さない"), (.atBottom, "下の端に1つずつ"), (.scattered, "散らす")], onOpen: { focus(.reactionGlowIcons) }, onTapTitle: { toggleFocus(.choice(.reactionGlowIcons)) })
+            TitledToggleRow(title: "片方だけのときは全幅を光らせる", isOn: $settings.reactionGlowFillsWidthWhenAlone) { toggleFocus(.choice(.reactionGlowFillsWidthWhenAlone)) }
+            PopUpChoiceRow(title: "ライトモードのお気に入りの色", selection: $settings.reactionGlowLightFavouriteColor, options: [(.orange, "橙"), (.yellow, "黄色")], onOpen: { focus(.reactionGlowLightFavouriteColor) }, onTapTitle: { toggleFocus(.choice(.reactionGlowLightFavouriteColor)) })
         default:
             EmptyView()
         }
+    }
+
+    /// ほかの選択肢のために、見た目に効かない項目。光のアイコンを出さないときの、アイコンの大きさと濃さ。
+    private func isUnused(_ item: AppearanceValue) -> Bool {
+        settings.reactionGlowIcons == .none && [AppearanceCatalog.reactionGlowIconSize, AppearanceCatalog.reactionGlowIconOpacity].contains(item)
     }
 
     /// 選択肢のメニューを開いたときに、その場所を示す。選んで閉じても示したままにする。
@@ -306,6 +324,10 @@ enum AppearanceChoice: Hashable, CaseIterable {
     case emojiStyle
     case animatesCustomEmojis
     case linkCardThumbnailSide
+    case drawsReactionGlowInHDR
+    case reactionGlowIcons
+    case reactionGlowFillsWidthWhenAlone
+    case reactionGlowLightFavouriteColor
 
     var highlight: AppearanceHighlight {
         switch self {
@@ -332,6 +354,9 @@ enum AppearanceChoice: Hashable, CaseIterable {
         case .glyphLanguage, .emojiStyle: .allParts([.contextLine, .namePrimary, .nameSecondary, .spoilerText, .bodyText])
         case .animatesCustomEmojis: .firstOf([.part(.customEmojis), .part(.bodyText)])
         case .linkCardThumbnailSide: .part(.card)
+        case .drawsReactionGlowInHDR, .reactionGlowLightFavouriteColor: .part(.reactionGlow)
+        case .reactionGlowFillsWidthWhenAlone: .firstOf([.part(.reactionGlowAlone), .part(.reactionGlow)])
+        case .reactionGlowIcons: .firstOf([.part(.reactionGlowIcons), .part(.reactionGlow)])
         }
     }
 }
@@ -638,7 +663,7 @@ struct AppearanceSamples {
                 image: cardImage
             )
         }
-        func status(_ id: String, minutes: Double, account: Account, content: String, spoiler: String = "", media: [MediaAttachment] = [], poll: Poll? = nil, card: PreviewCard? = nil, replyingTo: Account? = nil, visibility: Status.Visibility = .public, edited: Bool = false, emojis: [CustomEmoji] = [], filtered: [FilterResult] = []) -> Status {
+        func status(_ id: String, minutes: Double, account: Account, content: String, spoiler: String = "", media: [MediaAttachment] = [], poll: Poll? = nil, card: PreviewCard? = nil, replyingTo: Account? = nil, visibility: Status.Visibility = .public, edited: Bool = false, emojis: [CustomEmoji] = [], filtered: [FilterResult] = [], favourited: Bool = false, reblogged: Bool = false) -> Status {
             Status(
                 id: "preview-\(id)",
                 createdAt: now.addingTimeInterval(-minutes * 60),
@@ -655,10 +680,13 @@ struct AppearanceSamples {
                 poll: poll,
                 card: card,
                 filtered: filtered,
-                editedAt: edited ? now : nil
+                editedAt: edited ? now : nil,
+                favourited: favourited,
+                reblogged: reblogged
             )
         }
-        let boosted = status("boosted", minutes: 30, account: friend, content: #"<p>段落の1つ目です。設定を変えると、タイムラインの投稿がこのように表示されます🎉:scia:</p><p>段落の2つ目です。<a href="https://github.com/eai04191/scia">github.com/eai04191/scia</a></p>"#, card: card, emojis: emojis)
+        // お気に入りとブーストの光を見せるため、ブーストした投稿は、お気に入りとブーストをした投稿にする。
+        let boosted = status("boosted", minutes: 30, account: friend, content: #"<p>段落の1つ目です。設定を変えると、タイムラインの投稿がこのように表示されます🎉:scia:</p><p>段落の2つ目です。<a href="https://github.com/eai04191/scia">github.com/eai04191/scia</a></p>"#, card: card, emojis: emojis, favourited: true, reblogged: true)
         let boost = Status(id: "preview-boost", createdAt: now.addingTimeInterval(-180), account: scia, content: "", spoilerText: "", url: nil, reblog: boosted)
         let poll = Poll(
             id: "preview-poll",
@@ -675,7 +703,8 @@ struct AppearanceSamples {
             // 公開範囲の記号と編集済みの「*」を見せるため、未収載で編集した投稿にする。
             (status("reply", minutes: 12, account: friend, content: "<p>注意書きの下の本文です。</p>", spoiler: "注意書き", replyingTo: scia, visibility: .unlisted, edited: true), ReplyConnection(above: true)),
             (status("media", minutes: 8, account: scia, content: "", media: [tallImage]), ReplyConnection()),
-            (status("wide", minutes: 7, account: friend, content: "<p>横長の画像を1枚付けた投稿です。</p>", media: [wideImage]), ReplyConnection()),
+            // 片方だけのときの光の幅を見せるため、お気に入りだけをした投稿にする。
+            (status("wide", minutes: 7, account: friend, content: "<p>横長の画像を1枚付けた投稿です。</p>", media: [wideImage], favourited: true), ReplyConnection()),
             (status("poll", minutes: 5, account: longNamed, content: "<p>アイコンの形はどちらが好きですか？</p>", poll: poll), ReplyConnection()),
             (status("filtered", minutes: 2, account: scia, content: "<p>自分のフィルターに一致した、自分の投稿です。</p>", filtered: [ownFilter]), ReplyConnection()),
         ]

@@ -415,6 +415,7 @@ final class PostContentView: UIView, UIContentView {
         }
         frames.merge(contextTextPreviewFrames()) { $1 }
         frames.merge(bodyView.previewFrames(in: self)) { $1 }
+        frames.merge(reactionGlowView.previewFrames(in: self)) { $1 }
         return frames
     }
 
@@ -473,7 +474,10 @@ final class PostContentView: UIView, UIContentView {
         if current.replyConnection.below {
             frames[.replyLineSlot] = replyLineBelow.isHidden ? line(x: avatarView.frame.midX, y: avatarView.frame.maxY, height: bounds.maxY - avatarView.frame.maxY) : [replyLineBelow.frame]
         }
-        frames[.separatorLine] = bar(x: 0, y: bounds.maxY - 1, width: bounds.width)
+        // 返信でつながった行と光っている行には、一覧で区切り線を引かないので、示さない。
+        if !current.replyConnection.below, current.reactionGlow?.isLit != true {
+            frames[.separatorLine] = bar(x: 0, y: bounds.maxY - 1, width: bounds.width)
+        }
         if current.hasHiddenLinkCard {
             frames[.cardSlot] = bar(x: bodyView.frame.minX, y: bodyView.frame.maxY, width: bodyView.frame.width)
         }

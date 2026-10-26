@@ -70,7 +70,8 @@ final class AppearancePreviewView: UIView {
             for (index, row) in rows.enumerated() {
                 stack.addArrangedSubview(row)
                 // 一覧と同じく、行のあいだに区切り線を引く。返信でつながった行は、線が切れて見えないよう引かない。
-                if index < rows.count - 1, !configurations[index].replyConnection.below {
+                // 光っている行も、光の下の端を区切りにする。区切り線が光に重なると、光源が灰色に濁って見えるため。
+                if index < rows.count - 1, !configurations[index].replyConnection.below, configurations[index].reactionGlow?.isLit != true {
                     let separator = UIView()
                     separator.backgroundColor = .separator
                     separator.heightAnchor.constraint(equalToConstant: 1 / max(traitCollection.displayScale, 1)).isActive = true

@@ -49,15 +49,17 @@ struct ReactionGlow: Equatable {
         /// 下の端に、小さなアイコンを大きさと濃さを変えて散らす。本文と重ならないよう、下の余白の高さに収める。
         case scattered
 
-        /// チューニングの数値（0: なし、1: 下の端、2: 散らす）から選ぶ。
-        init(_ value: Double) {
-            self = switch value {
-            case 1: .atBottom
-            case 2: .scattered
-            default: .none
+        init(_ icons: ReactionGlowIcons) {
+            self = switch icons {
+            case .none: .none
+            case .atBottom: .atBottom
+            case .scattered: .scattered
             }
         }
     }
+
+    /// お気に入りかブーストのどちらかをしていて、光っている。光っている行には、一覧の区切り線を引かない。
+    var isLit: Bool { isReblogged || isFavourited }
 
     /// 読み上げで、名前や本文に続けて読む状態。
     var accessibilityText: String? {
@@ -67,26 +69,35 @@ struct ReactionGlow: Equatable {
 }
 
 extension ReactionGlow.Style {
+    /// ライトでHDRを使わずに描くときの、光の高さと濃さの、HDRで描くときに対する割合。
+    /// 白い背景に光の色を薄く重ねるだけなので、高く濃くすると汚れのように見える。設定ではHDRのときの値だけを選ばせ、これを掛ける。
+    /// 割合は、設定に移す前にチューニングで決めていた値（高さは64ptに対して38pt、濃さは0.95に対して0.3）から求めた。
+    static let lightSDRHeightRatio: CGFloat = 38.0 / 64.0
+    static let lightSDROpacityRatio: CGFloat = 0.3 / 0.95
+
     @MainActor
     init(tuning: TuningStore, settings: AppSettings) {
+        typealias C = AppearanceCatalog
+        let height = settings.value(of: C.reactionGlowHeight)
+        let lightOpacity = settings.value(of: C.reactionGlowLightOpacity)
         self.init(
-            height: tuning.value(of: TuningCatalog.reactionGlowHeight),
-            lightSDRHeight: tuning.value(of: TuningCatalog.reactionGlowLightSDRHeight),
-            darkOpacity: tuning.value(of: TuningCatalog.reactionGlowDarkOpacity),
-            lightOpacity: tuning.value(of: TuningCatalog.reactionGlowLightOpacity),
+            height: height,
+            lightSDRHeight: height * Self.lightSDRHeightRatio,
+            darkOpacity: settings.value(of: C.reactionGlowDarkOpacity),
+            lightOpacity: lightOpacity * Self.lightSDROpacityRatio,
             hdrExposure: tuning.value(of: TuningCatalog.reactionGlowHDRExposure),
             allowsHDR: settings.drawsReactionGlowInHDR,
-            lightHDROpacity: tuning.value(of: TuningCatalog.reactionGlowLightHDROpacity),
+            lightHDROpacity: lightOpacity,
             lightBloomIntensityRatio: tuning.value(of: TuningCatalog.reactionGlowLightBloomIntensityRatio),
             darkGlowHDRExposure: tuning.value(of: TuningCatalog.reactionGlowDarkGlowHDRExposure),
-            lightFavouriteIsYellow: tuning.value(of: TuningCatalog.reactionGlowLightFavouriteIsYellow),
+            lightFavouriteIsYellow: settings.reactionGlowLightFavouriteColor == .yellow,
             lightIntensity: tuning.value(of: TuningCatalog.reactionGlowLightIntensity),
-            fillsWidthWhenAlone: tuning.value(of: TuningCatalog.reactionGlowFillsWidthWhenAlone),
-            iconStyle: ReactionGlow.IconStyle(tuning.value(of: TuningCatalog.reactionGlowIconStyle)),
-            iconSize: tuning.value(of: TuningCatalog.reactionGlowIconSize),
-            iconOpacity: tuning.value(of: TuningCatalog.reactionGlowIconOpacity),
+            fillsWidthWhenAlone: settings.reactionGlowFillsWidthWhenAlone,
+            iconStyle: ReactionGlow.IconStyle(settings.reactionGlowIcons),
+            iconSize: settings.value(of: C.reactionGlowIconSize),
+            iconOpacity: settings.value(of: C.reactionGlowIconOpacity),
             iconRiseDelay: tuning.value(of: TuningCatalog.reactionGlowIconRiseDelay),
-            blendWidth: tuning.value(of: TuningCatalog.reactionGlowBlendWidth),
+            blendWidth: settings.value(of: C.reactionGlowBlendWidth),
             mixSpace: tuning.value(of: TuningCatalog.reactionGlowMixesInOKLab) ? .oklab : .linear,
             duration: tuning.value(of: TuningCatalog.reactionGlowDuration)
         )
@@ -229,6 +240,25 @@ final class ReactionGlowView: UIView {
         render()
     }
 
+    /// 「投稿の見た目」のプレビューで場所を示すための、光の全体（片方だけをした投稿なら、その別にも）、真ん中で2色を混ぜる幅、出ているアイコンの枠。`space`の座標で返す。光っていなければ空。
+    func previewFrames(in space: UIView) -> AppearancePreviewFrames {
+        // 高さを0にしたときも、光があった下の端を示せるよう、高さのない枠を返す。
+        guard !glow.isHidden, let style = current?.style else { return [:] }
+        let blendWidth = min(style.blendWidth, bounds.width)
+        var frames: AppearancePreviewFrames = [
+            .reactionGlow: [convert(bounds, to: space)],
+            .reactionGlowBlend: [convert(CGRect(x: bounds.midX - blendWidth / 2, y: 0, width: blendWidth, height: bounds.height), to: space)],
+        ]
+        if current?.isReblogged != current?.isFavourited {
+            frames[.reactionGlowAlone] = frames[.reactionGlow]
+        }
+        let shownIcons = icons.filter { $0.alpha > 0 }.map { $0.convert($0.bounds, to: space) }
+        if !shownIcons.isEmpty {
+            frames[.reactionGlowIcons] = shownIcons
+        }
+        return frames
+    }
+
     private func step(_ elapsed: CFTimeInterval) -> Bool {
         guard var fade else { return false }
         fade.elapsed += elapsed
@@ -259,7 +289,7 @@ final class ReactionGlowView: UIView {
         }
         let isDark = traitCollection.userInterfaceStyle == .dark
         let boostColor = Self.srgb(.systemGreen, traits: traitCollection)
-        // 白い背景では黄色が見えにくいため、ライトモードでは既定で橙に寄せる。チューニングで黄色にもできる。
+        // 白い背景では黄色が見えにくいため、ライトモードでは既定で橙に寄せる。設定で黄色にもできる。
         let favouriteColor = Self.srgb(isDark || style.lightFavouriteIsYellow ? .systemYellow : .systemOrange, traits: traitCollection)
         func makeGradient(_ levels: Levels) -> ReactionGlowGradient {
             ReactionGlowGradient(
@@ -378,12 +408,15 @@ final class ReactionGlowView: UIView {
             let size = style.iconSize * (0.6 + Self.fraction(i * 0.754 + 0.3) * 0.5)
             // 余白の下半分の中で高さをずらし、大きさは余白の残りに収める。
             let lift = base + Self.fraction(i * 0.382 + 0.1) * max(iconAreaHeight - base, 0) / 2
+            let maxHeight = iconAreaHeight - lift - Self.iconTextGap
+            // 照らす明るさと沈む深さは、余白に収めて縮めたあとの大きさで測る。縮める前の大きさで測ると、大きなアイコンの中ほどが光の外に出て、すべて消えるため。
+            let drawnSize = min(size, max(maxHeight, 0))
             // 光源からの遠さ。並びの中でいちばん低いアイコンが0、いちばん高いアイコンが1。
             let distance = highestLift > base ? (lift - base) / (highestLift - base) : 0
             let delay = 1 + style.iconRiseDelay * distance
             let sample = gradient.sample(at: x)
             // 照らされた側と同じ減り方で、アイコンの中ほどの高さの明るさを決める。
-            let illumination = Self.falloff(at: bounds.height > 0 ? (lift + size / 2) / bounds.height : 0)
+            let illumination = Self.falloff(at: bounds.height > 0 ? (lift + drawnSize / 2) / bounds.height : 0)
             let alpha = pow(sample.alpha, delay) * illumination * style.iconOpacity
             let slotProgress = fade?.iconProgress(delay: delay) ?? 1
             let toFavourite = isFavourite(at: x, in: targetGradient, levels: target) ?? isFavourite(at: x, in: sourceGradient, levels: source) ?? false
@@ -391,7 +424,7 @@ final class ReactionGlowView: UIView {
             // 入れ替わる置き場所は、前半で古い記号を光源へ沈めながら消し、後半で新しい記号を光源から昇らせながら出す。
             // 2つの形を同時に見せないため。沈む深さは、記号が下の端の向こうへ隠れきるところまで。視差効果を減らす設定では動かさない。
             let changes = fromFavourite != toFavourite
-            let sinkDepth = UIAccessibility.isReduceMotionEnabled ? 0 : lift + size
+            let sinkDepth = UIAccessibility.isReduceMotionEnabled ? 0 : lift + drawnSize
             let leaving = changes ? min(slotProgress * 2, 1) : 0
             let arriving = changes ? max(slotProgress * 2 - 1, 0) : 1
             let oldShare = changes ? 1 - leaving : 0
@@ -408,7 +441,7 @@ final class ReactionGlowView: UIView {
                     x: bounds.width * x,
                     bottom: bounds.height - lift + state.offset,
                     size: size,
-                    maxHeight: iconAreaHeight - lift - Self.iconTextGap,
+                    maxHeight: maxHeight,
                     color: sample.color,
                     alpha: alpha * state.share
                 )

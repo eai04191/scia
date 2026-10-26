@@ -160,6 +160,75 @@ struct AppearanceEditorTests {
         #expect(CGImageSourceGetCount(source) > 1)
     }
 
+    /// 光の高さと濃さは、設定ではHDRのときの値を選び、ライトでHDRを使わずに描くときは、決まった割合で低く薄くする。
+    /// 既定では、設定に移す前にチューニングで決めていた値（高さ64ptと38pt、ライトの濃さ0.95と0.3）になる。
+    @Test func reactionGlowStyleScalesLightSDR() throws {
+        let settings = try makeSettings()
+        let tuning = TuningStore(defaults: nil)
+        let standard = ReactionGlow.Style(tuning: tuning, settings: settings)
+        #expect(standard.height == 64)
+        #expect(abs(standard.lightSDRHeight - 38) < 0.001)
+        #expect(standard.lightHDROpacity == 0.95)
+        #expect(abs(standard.lightOpacity - 0.3) < 0.001)
+        settings.setValue(100, for: AppearanceCatalog.reactionGlowHeight)
+        settings.setValue(0.5, for: AppearanceCatalog.reactionGlowLightOpacity)
+        settings.reactionGlowIcons = .scattered
+        settings.reactionGlowLightFavouriteColor = .yellow
+        let changed = ReactionGlow.Style(tuning: tuning, settings: settings)
+        #expect(changed.height == 100)
+        #expect(abs(changed.lightSDRHeight - 100 * 38 / 64) < 0.001)
+        #expect(changed.lightHDROpacity == 0.5)
+        #expect(abs(changed.lightOpacity - 0.5 * 0.3 / 0.95) < 0.001)
+        #expect(changed.iconStyle == .scattered)
+        #expect(changed.lightFavouriteIsYellow)
+    }
+
+    /// アイコンを出すと、光の項目はアイコンの場所を示す。出さないときは、アイコンが出る光を示す。
+    @Test(arguments: [ReactionGlowIcons.none, .atBottom, .scattered])
+    func reactionGlowIconItemsShowIcons(icons: ReactionGlowIcons) throws {
+        let settings = try makeSettings()
+        settings.reactionGlowIcons = icons
+        let rows = layOutSamples(settings)
+        let highlight = try #require(AppearanceHighlight(AppearanceCatalog.reactionGlowIconSize))
+        let found = try #require(highlight.locate(in: rows))
+        let row = rows[found.row]
+        let expected = icons == .none ? row[.reactionGlow] : row[.reactionGlowIcons]
+        #expect(found.rects == expected)
+        #expect((row[.reactionGlowIcons] != nil) == (icons != .none))
+    }
+
+    /// 「片方だけのときは全幅を光らせる」は、片方だけをした見本の投稿の光を示す。両方をした投稿では、切り替えても見た目が変わらないため。
+    @Test func fillsWidthChoiceShowsGlowOfSingleReaction() throws {
+        let rows = layOutSamples(try makeSettings())
+        let found = try #require(AppearanceChoice.reactionGlowFillsWidthWhenAlone.highlight.locate(in: rows))
+        #expect(rows[found.row][.reactionGlowAlone] != nil)
+    }
+
+    /// 光の高さを0にしても、光があった下の端を示す。高さを変えている最中に、示す場所が消えないようにするため。
+    @Test func zeroGlowHeightStillShowsPlace() throws {
+        let settings = try makeSettings()
+        settings.setValue(0, for: AppearanceCatalog.reactionGlowHeight)
+        let highlight = try #require(AppearanceHighlight(AppearanceCatalog.reactionGlowHeight))
+        #expect(highlight.locate(in: layOutSamples(settings)) != nil)
+    }
+
+    /// アイコンを大きくして散らしても、アイコンは消えない。濃さは、下の余白に収めて縮めたあとの大きさで、光源からの遠さを測って決めるため。
+    @Test func largeScatteredIconsStayVisible() throws {
+        let settings = try makeSettings()
+        settings.reactionGlowIcons = .scattered
+        settings.setValue(200, for: AppearanceCatalog.reactionGlowIconSize)
+        let row = try #require(layOutSamples(settings).first { $0[.reactionGlow] != nil })
+        #expect(row[.reactionGlowIcons] != nil)
+    }
+
+    /// 光っている行には、一覧と同じく区切り線を引かないので、区切り線の場所も示さない。
+    @Test func litRowHasNoSeparator() throws {
+        let rows = layOutSamples(try makeSettings())
+        let lit = try #require(rows.first { $0[.reactionGlow] != nil })
+        #expect(lit[.separatorLine] == nil)
+        #expect(AppearanceChoice.showsSeparators.highlight.locate(in: rows) != nil)
+    }
+
     /// プレビューのどの部品をタップしても、何かの項目が開く。
     @Test func everyPartOpensAnItem() {
         for part in AppearancePreviewPart.allCases {

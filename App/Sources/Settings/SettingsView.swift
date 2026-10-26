@@ -100,36 +100,7 @@ struct SettingsView: View {
                 } header: {
                     Text("投稿の見た目")
                 } footer: {
-                    Text("文字の大きさや余白、名前や時刻の表記を、プレビューを見ながら変えます。")
-                }
-                Section {
-                    PostPreview(
-                        createdAt: previewDate,
-                        nameStyle: settings.statusNameStyle,
-                        timeStyle: settings.statusTimeStyle,
-                        avatarShape: settings.avatarShape,
-                        animatesAvatars: settings.animatesAvatars,
-                        linkCardThumbnailSide: settings.linkCardThumbnailSide,
-                        glyphLanguage: settings.glyphLanguage,
-                        emojiStyle: settings.emojiStyle,
-                        showsReactions: true,
-                        drawsReactionGlowInHDR: settings.drawsReactionGlowInHDR,
-                        builder: PostContentBuilder(
-                            tuning: AppDependencies.tuning,
-                            settings: settings,
-                            emojiImages: AppDependencies.emojiImages,
-                            mediaImages: AppDependencies.mediaImages,
-                            avatarImages: AppDependencies.avatarImages
-                        )
-                    )
-                    .listRowInsets(EdgeInsets())
-                    // タイムラインと同じく、光の下の端を区切りにする。区切り線が光に重なると、光が灰色に濁って見えるため。
-                    .listRowSeparator(.hidden, edges: .bottom)
-                    Toggle("HDRで光らせる", isOn: $settings.drawsReactionGlowInHDR)
-                } header: {
-                    Text("お気に入りとブーストの光")
-                } footer: {
-                    Text("お気に入りやブーストをした投稿の下の端の光を、HDRに対応した画面では白より明るく表示します。オフにすると、ほかの表示と同じ明るさにします。HDRのメディアの明るさの設定とは別に選べます。")
+                    Text("文字の大きさや余白、名前や時刻の表記、お気に入りとブーストの光を、プレビューを見ながら変えます。")
                 }
                 Section {
                     Picker("最上部での新着の挿入", selection: $settings.insertionMotion) {

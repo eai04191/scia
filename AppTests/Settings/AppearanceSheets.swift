@@ -111,6 +111,14 @@ struct AppearanceSheets {
         case .linkCardThumbnailSide:
             settings.linkCardThumbnailSide = .right
             return "→ 右"
+        case .drawsReactionGlowInHDR: return flip(\.drawsReactionGlowInHDR)
+        case .reactionGlowIcons:
+            settings.reactionGlowIcons = .atBottom
+            return "→ 下の端に1つずつ"
+        case .reactionGlowFillsWidthWhenAlone: return flip(\.reactionGlowFillsWidthWhenAlone)
+        case .reactionGlowLightFavouriteColor:
+            settings.reactionGlowLightFavouriteColor = .yellow
+            return "→ 黄色"
         }
     }
 

@@ -108,6 +108,14 @@ enum AppearanceHighlight: Equatable {
             (C.pollOptionHorizontalPadding, .part(.pollOptionSidePadding)),
             (C.pollOptionCornerRadius, .part(.pollOptionCorners)),
             (C.pollFooterSpacing, .verticalGap(above: [.pollOptions], below: [.pollFooter])),
+
+            (C.reactionGlowHeight, .part(.reactionGlow)),
+            (C.reactionGlowDarkOpacity, .part(.reactionGlow)),
+            (C.reactionGlowLightOpacity, .part(.reactionGlow)),
+            (C.reactionGlowBlendWidth, .part(.reactionGlowBlend)),
+            // アイコンを出さない設定では、アイコンが出る光を示す。
+            (C.reactionGlowIconSize, .firstOf([.part(.reactionGlowIcons), .part(.reactionGlow)])),
+            (C.reactionGlowIconOpacity, .firstOf([.part(.reactionGlowIcons), .part(.reactionGlow)])),
         ]
         return Dictionary(uniqueKeysWithValues: pairs.map { ($0.0.id, $0.1) })
     }()
@@ -151,6 +159,7 @@ enum AppearanceHighlight: Equatable {
         case .media, .mediaBadgeSlot: C.mediaTileSpacing
         case .pollOptions: C.pollOptionPadding
         case .poll: C.bodyPollSpacing
+        case .reactionGlowAlone: C.reactionGlowHeight
         default: nil
         }
     }

@@ -1210,43 +1210,6 @@ public enum TuningCatalog {
         )
     }
 
-    /// お気に入りとブーストをした投稿の行の、下の端から照らす光の高さ。光は行の中にだけ伸ばす。ライトでSDRで描くときは、`reactionGlowLightSDRHeight`を使う。
-    public static let reactionGlowHeight = NumberTuning(
-        id: "timeline.reactionGlowHeight",
-        title: "光の高さ（pt）",
-        range: 0...120,
-        step: 2,
-        defaultValue: 64
-    )
-
-    /// ライトモードでSDRで描くときの光の高さ。白い背景に光の色を薄く重ねるだけなので、HDRのときより低くする。
-    public static let reactionGlowLightSDRHeight = NumberTuning(
-        id: "timeline.reactionGlowLightSDRHeight",
-        title: "光の高さ（ライト、SDR、pt）",
-        range: 0...120,
-        step: 2,
-        defaultValue: 38
-    )
-
-    /// ダークモードでの、光のいちばん明るいところ（下の端）の濃さ。
-    public static let reactionGlowDarkOpacity = NumberTuning(
-        id: "timeline.reactionGlowDarkOpacity",
-        title: "光の濃さ（ダーク）",
-        range: 0...1,
-        step: 0.05,
-        defaultValue: 0.4
-    )
-
-    /// ライトモードでSDRで描くときの、光のいちばん明るいところ（下の端）の濃さ。白い背景では濃いと汚れのように見えるため、ダークと分ける。
-    /// HDRで描くときは「光の濃さ（ライト、HDR）」を使う。
-    public static let reactionGlowLightOpacity = NumberTuning(
-        id: "timeline.reactionGlowLightOpacity",
-        title: "光の濃さ（ライト、SDR）",
-        range: 0...1,
-        step: 0.05,
-        defaultValue: 0.3
-    )
-
     /// 光をHDRで描くときの倍率。にじみをSDRの白の何倍の明るさで描くかで、1ならSDRのまま描く。ライトでは1を超えると、照らされた面を白より明るく描く。
     /// どこまで明るくなるかは、画面の明るさと周りの明るさで変わる。
     public static let reactionGlowHDRExposure = NumberTuning(
@@ -1273,15 +1236,6 @@ public enum TuningCatalog {
         defaultValue: false
     )
 
-    /// ライトモードでHDRで描くときの、照らされた側を重ねる濃さ。1なら「白＋光」の色をそのまま重ねる。SDRで描くときは「光の濃さ（ライト）」を使う。
-    public static let reactionGlowLightHDROpacity = NumberTuning(
-        id: "timeline.reactionGlowLightHDROpacity",
-        title: "光の濃さ（ライト、HDR）",
-        range: 0...1,
-        step: 0.05,
-        defaultValue: 0.95
-    )
-
     /// ライトモードでHDRで描くときの、下の端のにじみの強さ。照らす光の強さの何倍にするか。
     public static let reactionGlowLightBloomIntensityRatio = NumberTuning(
         id: "timeline.reactionGlowLightBloomIntensityRatio",
@@ -1300,47 +1254,6 @@ public enum TuningCatalog {
         defaultValue: 1
     )
 
-    /// ライトモードのお気に入りの色を黄色にする。オフなら橙。白い背景では黄色が見えにくいため、既定は橙。
-    public static let reactionGlowLightFavouriteIsYellow = ToggleTuning(
-        id: "timeline.reactionGlowLightFavouriteIsYellow",
-        title: "ライトのお気に入りの色を黄色にする（オフで橙）",
-        defaultValue: false
-    )
-
-    /// 片方だけのときは、その色で全幅を光らせる。オフなら、片方だけでもその半分だけを光らせる。
-    public static let reactionGlowFillsWidthWhenAlone = ToggleTuning(
-        id: "timeline.reactionGlowFillsWidthWhenAlone",
-        title: "片方だけのときは全幅を光らせる",
-        defaultValue: false
-    )
-
-    /// 光が何を示すかを、アイコンで添える。0はなし、1は下の端に1つずつ置く、2は下の端に小さく散らす。
-    public static let reactionGlowIconStyle = NumberTuning(
-        id: "timeline.reactionGlowIconStyle",
-        title: "光のアイコン（0: なし、1: 下の端、2: 散らす）",
-        range: 0...2,
-        step: 1,
-        defaultValue: 0
-    )
-
-    /// 光に添えるアイコンの大きさ。散らすときは、これを基準に大きさを変える。
-    public static let reactionGlowIconSize = NumberTuning(
-        id: "timeline.reactionGlowIconSize",
-        title: "光のアイコンの大きさ（pt）",
-        range: 4...14,
-        step: 1,
-        defaultValue: 8
-    )
-
-    /// 光に添えるアイコンの濃さ。光より目立たせないため、薄くする。
-    public static let reactionGlowIconOpacity = NumberTuning(
-        id: "timeline.reactionGlowIconOpacity",
-        title: "光のアイコンの濃さ",
-        range: 0...1,
-        step: 0.05,
-        defaultValue: 0.6
-    )
-
     /// 散らしたアイコンを、光源から遠いほど遅れて点け、早く消す強さ。0なら全部が一緒に点く。
     public static let reactionGlowIconRiseDelay = NumberTuning(
         id: "timeline.reactionGlowIconRiseDelay",
@@ -1348,15 +1261,6 @@ public enum TuningCatalog {
         range: 0...8,
         step: 0.5,
         defaultValue: 3
-    )
-
-    /// 左半分のブーストと右半分のお気に入りの光を、真ん中で混ぜる幅。0でくっきり分ける。
-    public static let reactionGlowBlendWidth = NumberTuning(
-        id: "timeline.reactionGlowBlendWidth",
-        title: "光の真ん中で混ぜる幅（pt）",
-        range: 0...240,
-        step: 4,
-        defaultValue: 48
     )
 
     /// ブーストとお気に入りの光の色を、真ん中でOKLabで混ぜる。オフなら光の強さ（線形）で混ぜる。
@@ -1386,23 +1290,12 @@ public enum TuningCatalog {
             .number(mediaThumbnailUpscaleTolerance),
         ]),
         TuningSection(id: "timeline.reactionGlow", title: "お気に入りとブーストの光", items: [
-            .number(reactionGlowHeight),
-            .number(reactionGlowLightSDRHeight),
-            .number(reactionGlowDarkOpacity),
-            .number(reactionGlowLightOpacity),
             .number(reactionGlowHDRExposure),
             .number(reactionGlowLightIntensity),
-            .number(reactionGlowLightHDROpacity),
             .number(reactionGlowLightBloomIntensityRatio),
             .number(reactionGlowDarkGlowHDRExposure),
-            .toggle(reactionGlowLightFavouriteIsYellow),
             .toggle(debugShowsEDRHeadroom),
-            .toggle(reactionGlowFillsWidthWhenAlone),
-            .number(reactionGlowIconStyle),
-            .number(reactionGlowIconSize),
-            .number(reactionGlowIconOpacity),
             .number(reactionGlowIconRiseDelay),
-            .number(reactionGlowBlendWidth),
             .toggle(reactionGlowMixesInOKLab),
             .number(reactionGlowDuration),
         ]),
