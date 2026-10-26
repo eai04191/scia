@@ -26,7 +26,7 @@ struct NotificationContentViewTests {
     /// 足りない分は行の下の余白で吸い、文字のラベルは求める高さを保つ。
     @Test(arguments: [false, true])
     func labelsKeepTheirHeightWhenRowIsSlightlyShort(withMedia: Bool) throws {
-        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline)
+        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline, settings: .isolated())
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let status = Status(
             id: base.id,
@@ -54,7 +54,7 @@ struct NotificationContentViewTests {
     /// 誰が何をしたかの行とまとめた行のアイコンのタップで開くプロフィールは、VoiceOverでは通知の要素の操作で開く。まとめた行では人ごとに出す。
     @Test(arguments: [false, true])
     func profilesOpenFromVoiceOverActions(grouped: Bool) throws {
-        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline)
+        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline, settings: .isolated())
         let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
         let carol = Account(id: "3", username: "carol", acct: "carol", displayName: "Carol", avatar: nil)

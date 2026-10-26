@@ -14,7 +14,7 @@ struct AccountRowContentTests {
     /// 大きな文字の設定で名前とハンドルがアイコンより高くなっても、文字を縮めずに行を伸ばす。
     @Test(arguments: [17.0, 40.0])
     func labelsKeepTheirHeight(fontSize: CGFloat) throws {
-        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline)
+        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline, settings: .isolated())
         let account = Account(id: "2", username: "bob", acct: "bob@remote.example", displayName: "Bob", avatar: nil)
         var base = UIListContentConfiguration.cell()
         base.textProperties.font = .systemFont(ofSize: fontSize)
