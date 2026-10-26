@@ -63,6 +63,8 @@ final class PollView: UIView {
         super.init(frame: frame)
         optionsStack.axis = .vertical
         summaryLabel.textColor = .secondaryLabel
+        // 文字を大きくして横に入りきらなくなったら、切り詰めずに折り返す。票数や締め切りが読めなくなるため。
+        summaryLabel.numberOfLines = 0
         summaryLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
 
         var secondary = UIButton.Configuration.plain()
@@ -94,6 +96,11 @@ final class PollView: UIView {
             secondaryButton.trailingAnchor.constraint(equalTo: voteButton.leadingAnchor, constant: -4),
             secondaryButton.trailingAnchor.constraint(equalTo: footer.trailingAnchor, constant: 8),
         ]
+        // 下の行は、ボタンと票数の文字が収まる最小の高さに寄せる。
+        // 一覧はセルの高さを、高さを譲れる優先度（fittingSizeLevel）で測るので、それより強くする。同じ強さだと高さが決まらず、セルが目安の高さまで伸びる。
+        let compactFooter = footer.heightAnchor.constraint(equalToConstant: 0)
+        compactFooter.priority = .defaultLow
+        compactFooter.isActive = true
         NSLayoutConstraint.activate([
             optionsStack.topAnchor.constraint(equalTo: topAnchor),
             optionsStack.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -102,9 +109,11 @@ final class PollView: UIView {
             footer.leadingAnchor.constraint(equalTo: leadingAnchor),
             footer.trailingAnchor.constraint(equalTo: trailingAnchor),
             footer.bottomAnchor.constraint(equalTo: bottomAnchor),
-            // 結果の形では「投票」を隠すが、下の行の高さは変えない。
-            footer.heightAnchor.constraint(equalTo: voteButton.heightAnchor),
-            voteButton.topAnchor.constraint(equalTo: footer.topAnchor),
+            // 結果の形では「投票」を隠すが、下の行の高さは変えない。票数が折り返したときは、その高さまで広げる。
+            footer.heightAnchor.constraint(greaterThanOrEqualTo: voteButton.heightAnchor),
+            summaryLabel.topAnchor.constraint(greaterThanOrEqualTo: footer.topAnchor),
+            summaryLabel.bottomAnchor.constraint(lessThanOrEqualTo: footer.bottomAnchor),
+            voteButton.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
             voteButton.trailingAnchor.constraint(equalTo: footer.trailingAnchor),
             summaryLabel.leadingAnchor.constraint(equalTo: footer.leadingAnchor),
             summaryLabel.centerYAnchor.constraint(equalTo: footer.centerYAnchor),
