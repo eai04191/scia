@@ -23,5 +23,5 @@ jobs:
           branch: chore/update-known-servers
           commit-message: "chore: ログイン画面の補完に使うサーバーの一覧をFediDBの最新の出力に合わせる"
           title: "chore: ログイン画面の補完に使うサーバーの一覧を更新する"
-          body: "FediDBのデータセット（https://fedidb.com/datasets 、CC BY 4.0）から、`Tools/update-known-servers.sh`で作り直しました。"
+          body: "FediDBのデータセット（https://fedidb.com/datasets 、CC BY 4.0）から、`Tools/update-known-servers.sh`で作り直しました。FediDBに載らないサーバーは、`Tools/known-servers-extra.txt`のものをNodeInfoから足しています。"
           delete-branch: true
