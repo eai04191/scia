@@ -1,6 +1,6 @@
 import UIKit
 
-/// 「投稿の見た目」のプレビューで、調整している項目の場所を示すための、投稿の部品。
+/// 「投稿の見た目」と「通知の見た目」のプレビューで、調整している項目の場所を示すための、投稿と通知の行の部品。
 enum AppearancePreviewPart: Hashable, CaseIterable {
     case rowPaddingTop
     case rowPaddingBottom
@@ -132,6 +132,43 @@ enum AppearancePreviewPart: Hashable, CaseIterable {
     case reactionGlowBlend
     /// 光に添えたアイコン。
     case reactionGlowIcons
+
+    // MARK: 通知の行
+
+    /// 通知の種類を示す記号。メンションなどの投稿として出す通知では、名前の上の行の記号（`contextSymbol`）になる。
+    case notificationSymbol
+    /// 誰が何をしたかの行。
+    case notificationHeader
+    /// 誰が何をしたかの行の字面。下端は、最後のベースラインからem枠で測る。
+    case notificationHeaderGlyphs
+    /// 名前の前に差し込んだアイコン。
+    case notificationHeaderAvatar
+    /// 名前の前のアイコンと名前のすき間。
+    case notificationHeaderAvatarGap
+    /// まとめた通知で並べたアイコン。行の幅で切れた分は含めない。
+    case groupAvatars
+    /// まとめた通知で、隣り合うアイコンのあいだ。
+    case groupAvatarGaps
+    /// フォローなどの通知で、誰が何をしたかの行の下に添えたハンドル。
+    case notificationAccount
+    /// 添えたハンドルの字面。
+    case notificationAccountGlyphs
+    /// 再掲する投稿の注意書きのボックス。
+    case quotedSpoiler
+    /// 再掲する投稿の本文。
+    case quotedBodyText
+    /// 再掲する投稿の本文の字面。
+    case quotedBodyGlyphs
+    /// 再掲する投稿のサムネイルを1列に並べた部分。
+    case quotedMedia
+    /// 1列に並べたサムネイル。行の幅で切れた分も含める。
+    case quotedThumbnails
+    /// 1列に並べたサムネイル同士のあいだ。
+    case quotedThumbnailGaps
+    /// 結果の形で足した投票。
+    case quotedPoll
+    /// 引用のある投稿であることを示す1行。
+    case quotedNote
 }
 
 extension AppearancePreviewPart {
@@ -142,12 +179,22 @@ extension AppearancePreviewPart {
              .mediaTileGaps, .pollOptionGaps, .pollOptionPadding, .pollOptionSidePadding, .pollOptionCorners,
              .cardLineGaps, .cardPaddingBands, .xPostPaddingBands, .spoilerPaddingBands, .spoilerCorners,
              .bodyLineGaps, .bodyParagraphGaps, .quoteIndent, .visibilitySymbolGap, .editedMarkGap,
-             .nameFade, .nameTimeMinGap, .avatarCorners:
+             .nameFade, .nameTimeMinGap, .avatarCorners,
+             .notificationHeaderAvatarGap, .groupAvatarGaps, .quotedThumbnailGaps:
             true
         default:
             false
         }
     }
+}
+
+extension AppearancePreviewPart {
+    /// 通知の行だけにある部品。「投稿の見た目」の項目は開かない。
+    static let notificationParts: Set<AppearancePreviewPart> = [
+        .notificationSymbol, .notificationHeader, .notificationHeaderGlyphs, .notificationHeaderAvatar, .notificationHeaderAvatarGap,
+        .groupAvatars, .groupAvatarGaps, .notificationAccount, .notificationAccountGlyphs,
+        .quotedSpoiler, .quotedBodyText, .quotedBodyGlyphs, .quotedMedia, .quotedThumbnails, .quotedThumbnailGaps, .quotedPoll, .quotedNote,
+    ]
 }
 
 /// 部品ごとの枠。1つの部品が離れた複数の枠を持つことがある（リンクカードのサイト名と説明など）。

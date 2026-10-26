@@ -368,7 +368,7 @@ enum AppearanceChoice: Hashable, CaseIterable {
 }
 
 /// 部品の見出し。既定値から変えた項目があれば、印を添える。
-private struct GroupLabel: View {
+struct GroupLabel: View {
     let title: String
     let isModified: Bool
 

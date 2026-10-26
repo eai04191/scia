@@ -81,6 +81,7 @@ extension TimelineViewController {
             bodySpacing: settings.value(of: N.quotedSpacing),
             base: base
         )
+        configuration.bodyKind = .quotedPost
         configuration.reactionGlow = postContentBuilder.reactionGlow(for: shown)
         configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
         configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
@@ -106,13 +107,15 @@ extension TimelineViewController {
             .font: PostTypography(settings: settings).font(.notificationAccount),
             .foregroundColor: UIColor.secondaryLabel,
         ])
-        return headerConfiguration(
+        var configuration = headerConfiguration(
             for: notification,
             // ハンドルの下には添付ファイルを置かないため、本文と添付ファイルのあいだの余白は使われない。
             body: PostBodyContent(text: acct, mediaSpacing: 0),
             bodySpacing: settings.value(of: NotificationAppearanceCatalog.accountSpacing),
             base: base
         )
+        configuration.bodyKind = .account
+        return configuration
     }
 
     private func headerConfiguration(

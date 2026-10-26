@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 「投稿の見た目」のプレビューに並べる行の中身。
+/// 「投稿の見た目」と「通知の見た目」のプレビューに並べる行の中身。
 protocol AppearancePreviewConfiguration: UIContentConfiguration {
     /// 一覧と同じく、この行の下に区切り線を引くか。
     var drawsPreviewSeparatorBelow: Bool { get }
@@ -15,7 +15,7 @@ protocol AppearancePreviewRow: UIView, UIContentView {
     func previewFrames() -> AppearancePreviewFrames
 }
 
-/// 「投稿の見た目」の上に固定して置くプレビュー。一覧と同じ部品で見本の行を並べ、触っている項目の場所を色の帯で示す。
+/// 「投稿の見た目」と「通知の見た目」の上に固定して置くプレビュー。一覧と同じ部品で見本の行を並べ、触っている項目の場所を色の帯で示す。
 final class AppearancePreviewView: UIView {
     /// 部品がタップされたときに、タップした場所に重なる部品を、小さい順に並べて呼ぶ。部品のない場所なら空で呼ぶ。
     var onSelectPart: (([AppearancePreviewPart]) -> Void)?
@@ -265,3 +265,15 @@ extension PostContentConfiguration: AppearancePreviewConfiguration {
 }
 
 extension PostContentView: AppearancePreviewRow {}
+
+extension NotificationContentConfiguration: AppearancePreviewConfiguration {
+    var drawsPreviewSeparatorBelow: Bool {
+        reactionGlow?.isLit != true
+    }
+
+    func makePreviewRow() -> any AppearancePreviewRow {
+        NotificationContentView(configuration: self)
+    }
+}
+
+extension NotificationContentView: AppearancePreviewRow {}

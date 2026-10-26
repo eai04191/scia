@@ -242,10 +242,14 @@ struct AppearanceEditorTests {
         #expect(AppearanceFocus.choice(.drawsReactionGlowInHDR).colorScheme == nil)
     }
 
-    /// プレビューのどの部品をタップしても、何かの項目が開く。
+    /// プレビューのどの部品をタップしても、何かの項目が開く。通知の行だけにある部品は「通知の見た目」の項目を開く。
     @Test func everyPartOpensAnItem() {
         for part in AppearancePreviewPart.allCases {
-            #expect(AppearanceHighlight.item(selectedBy: part) != nil, "\(part)をタップしても項目が開きません")
+            if AppearancePreviewPart.notificationParts.contains(part) {
+                #expect(AppearanceHighlight.notificationItem(selectedBy: part) != nil, "\(part)をタップしても通知の項目が開きません")
+            } else {
+                #expect(AppearanceHighlight.item(selectedBy: part) != nil, "\(part)をタップしても項目が開きません")
+            }
         }
     }
 

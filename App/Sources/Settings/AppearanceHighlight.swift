@@ -1,7 +1,7 @@
 import CoreGraphics
 import SciaCore
 
-/// 「投稿の見た目」で項目を触っている間に、プレビューのどこを示すか。
+/// 「投稿の見た目」と「通知の見た目」で項目を触っている間に、プレビューのどこを示すか。
 enum AppearanceHighlight: Equatable {
     /// 部品そのもの。大きさや文字、内側の余白の項目。
     case part(AppearancePreviewPart)
@@ -117,7 +117,40 @@ enum AppearanceHighlight: Equatable {
             (C.reactionGlowIconSize, .firstOf([.part(.reactionGlowIcons), .part(.reactionGlow)])),
             (C.reactionGlowIconOpacity, .firstOf([.part(.reactionGlowIcons), .part(.reactionGlow)])),
         ]
-        return Dictionary(uniqueKeysWithValues: pairs.map { ($0.0.id, $0.1) })
+        typealias N = NotificationAppearanceCatalog
+        let notificationPairs: [(AppearanceValue, AppearanceHighlight)] = [
+            (N.groupAvatarSize, .part(.groupAvatars)),
+            (N.groupAvatarSpacing, .part(.groupAvatarGaps)),
+            (N.groupAvatarHeaderSpacing, .verticalGap(above: [.groupAvatars], below: [.notificationHeader])),
+
+            (N.headerText, .part(.notificationHeader)),
+            (N.headerAvatarScale, .firstOf([.part(.notificationHeaderAvatar), .part(.notificationHeader)])),
+            (N.headerAvatarNameSpacing, .firstOf([.part(.notificationHeaderAvatarGap), .part(.notificationHeader)])),
+
+            // メンションなどの名前の上の行の記号も同じ幅で置くので、誰が何をしたかの行がなければ、そちらで示す。
+            (N.symbolSpacing, .firstOf([
+                .horizontalGap(leading: [.notificationSymbol], trailing: [.notificationHeader]),
+                .horizontalGap(leading: [.contextSymbol], trailing: [.contextText]),
+            ])),
+
+            (N.accountText, .part(.notificationAccount)),
+            (N.accountSpacing, .verticalGap(above: [.notificationHeaderGlyphs], below: [.notificationAccountGlyphs])),
+
+            (N.quotedSpacing, .verticalGap(above: [.notificationHeaderGlyphs], below: [.quotedSpoiler, .quotedBodyGlyphs, .quotedMedia])),
+            (N.quotedBodyText, .part(.quotedBodyText)),
+            (N.quotedBodyLines, .part(.quotedBodyText)),
+            (N.quotedMediaSpacing, .verticalGap(above: [.quotedBodyGlyphs], below: [.quotedMedia])),
+            (N.quotedThumbnailSize, .part(.quotedThumbnails)),
+            (N.quotedThumbnailSpacing, .part(.quotedThumbnailGaps)),
+            // 投票は添付ファイルの下に置くので、添付ファイルのない行で示す。
+            (N.quotedPollSpacing, .verticalGap(above: [.quotedBodyGlyphs], below: [.quotedPoll], absent: [.quotedMedia])),
+            (N.quotedNoteText, .part(.quotedNote)),
+            (N.quotedNoteSpacing, .verticalGap(above: [.quotedPoll, .quotedMedia, .quotedBodyGlyphs], below: [.quotedNote])),
+
+            (N.contextText, .part(.contextLine)),
+            (N.contextSpacing, .verticalGap(above: [.contextLine], below: [.nameRow])),
+        ]
+        return Dictionary(uniqueKeysWithValues: (pairs + notificationPairs).map { ($0.0.id, $0.1) })
     }()
 
     /// プレビューで部品をタップしたときに開く項目。部品そのものを示す項目があればそれを、なければ部品ごとに決めた項目を開く。
@@ -160,6 +193,25 @@ enum AppearanceHighlight: Equatable {
         case .pollOptions: C.pollOptionPadding
         case .poll: C.bodyPollSpacing
         case .reactionGlowAlone: C.reactionGlowHeight
+        default: nil
+        }
+    }
+
+    /// 「通知の見た目」のプレビューで部品をタップしたときに開く項目。部品そのものを示す項目があればそれを、なければ部品ごとに決めた項目を開く。
+    /// メンションなどの投稿の部品は「投稿の見た目」の項目なので、名前の上の行のほかは開かない。
+    static func notificationItem(selectedBy part: AppearancePreviewPart) -> AppearanceValue? {
+        if let item = NotificationAppearanceCatalog.values.first(where: { AppearanceHighlight($0)?.selects(part) == true }) {
+            return item
+        }
+        typealias N = NotificationAppearanceCatalog
+        return switch part {
+        case .notificationSymbol, .contextSymbol: N.symbolSpacing
+        case .notificationHeaderGlyphs: N.headerText
+        case .notificationAccountGlyphs: N.accountText
+        case .quotedSpoiler, .quotedBodyGlyphs: N.quotedBodyText
+        case .quotedMedia: N.quotedThumbnailSize
+        case .quotedPoll: N.quotedPollSpacing
+        case .contextText: N.contextText
         default: nil
         }
     }

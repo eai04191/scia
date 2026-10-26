@@ -18,6 +18,8 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     /// まとめた行で並べたアイコンの人の名前。`groupAvatars`と同じ順。
     var groupAccountNames: [String] = []
     var body: PostBodyContent
+    /// 本文の列に置いた中身の種類。「通知の見た目」のプレビューで、本文の部品を通知の部品として示すのに使う。
+    var bodyKind: BodyKind = .none
     var metrics: Metrics
     /// 再掲した投稿に、お気に入りやブーストをしたことを示す、行の下の端の光。
     var reactionGlow: ReactionGlow?
@@ -37,6 +39,15 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     var onOpenGroupAccounts: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
+
+    enum BodyKind {
+        /// 本文の列に何も置かない（まとめた行）。
+        case none
+        /// フォローなどで、誰が何をしたかの行の下に添えたハンドル。
+        case account
+        /// お気に入りやブーストで再掲する投稿。
+        case quotedPost
+    }
 
     /// 大きさと文字の見た目。
     struct Metrics {
@@ -83,6 +94,8 @@ final class NotificationContentView: UIView, UIContentView {
     private let headerLabel = EmojiLabel()
     private let bodyView: PostBodyView
     private let reactionGlowView = ReactionGlowView()
+    /// 誰が何をしたかの行の最後のベースライン。プレビューで、行の字面の下端を測るのに使う。
+    private let headerLastBaselineGuide = UILayoutGuide()
     private var current: NotificationContentConfiguration
     /// 大きさで変わる制約。適用のたびに作り直す。
     private var variableConstraints: [NSLayoutConstraint] = []
@@ -125,6 +138,11 @@ final class NotificationContentView: UIView, UIContentView {
             fitsStack,
         ])
         reactionGlowView.install(in: self)
+        addLayoutGuide(headerLastBaselineGuide)
+        NSLayoutConstraint.activate([
+            headerLastBaselineGuide.topAnchor.constraint(equalTo: headerLabel.lastBaselineAnchor),
+            headerLastBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
+        ])
         bodyView.onSelectMedia = { [weak self] index, grid in self?.current.onSelectMedia?(index, grid) }
         bodyView.onRevealMedia = { [weak self] in self?.current.onRevealMedia?() }
         bodyView.onToggleSpoiler = { [weak self] in self?.current.onToggleSpoiler?() }
@@ -271,5 +289,105 @@ final class NotificationContentView: UIView, UIContentView {
         bodyView.layoutIfNeeded()
         let bodyTextFrame = bodyView.convert(bodyView.textFrame, to: self)
         textAccessibilityElement.accessibilityFrameInContainerSpace = headerLabel.frame.union(bodyTextFrame).union(symbolView.frame)
+    }
+}
+
+extension NotificationContentView {
+    /// 「通知の見た目」のプレビューで示す、部品ごとの枠。本文の列の部品は、置いた中身の種類で通知の部品に読み替える。
+    func previewFrames() -> AppearancePreviewFrames {
+        var frames: AppearancePreviewFrames = [
+            .notificationSymbol: symbolView.image == nil ? nil : symbolView.previewFrame(in: self),
+            .notificationHeader: headerLabel.previewFrame(in: self),
+            .notificationHeaderGlyphs: headerGlyphsFrame(),
+        ].compactMapValues(\.self)
+        frames.merge(headerAvatarPreviewFrames()) { $1 }
+        frames.merge(groupAvatarPreviewFrames()) { $1 }
+        let body = bodyView.previewFrames(in: self)
+        switch current.bodyKind {
+        case .none:
+            break
+        case .account:
+            frames[.notificationAccount] = body[.bodyText]
+            frames[.notificationAccountGlyphs] = body[.bodyGlyphs]
+        case .quotedPost:
+            let parts: [AppearancePreviewPart: AppearancePreviewPart] = [
+                .spoiler: .quotedSpoiler,
+                .bodyText: .quotedBodyText,
+                .bodyGlyphs: .quotedBodyGlyphs,
+                .media: .quotedMedia,
+                .poll: .quotedPoll,
+                .filterNote: .quotedNote,
+            ]
+            for (part, quoted) in parts {
+                frames[quoted] = body[part]
+            }
+            if let tiles = bodyView.mediaGrid?.tilePreviewFrames(in: self), !tiles.isEmpty {
+                frames[.quotedThumbnails] = tiles
+                if tiles.count > 1 {
+                    frames[.quotedThumbnailGaps] = Self.gaps(inRow: tiles)
+                }
+            }
+        }
+        return frames
+    }
+
+    /// 誰が何をしたかの行の字面。上端はラベルの上端、下端は最後のベースラインからem枠で測る。下に置く中身との間隔は、この下端から測るため。
+    private func headerGlyphsFrame() -> [CGRect]? {
+        guard let label = headerLabel.previewFrame(in: self)?.first else { return nil }
+        let bottom = headerLastBaselineGuide.layoutFrame.minY + current.metrics.headerFont.pointSize * PostBodyView.emBoxDescent
+        return [CGRect(x: label.minX, y: label.minY, width: label.width, height: max(bottom - label.minY, 0))]
+    }
+
+    /// 名前の前に差し込んだアイコンと、アイコンと名前のすき間。アイコンを差し込んでいなければ空。
+    private func headerAvatarPreviewFrames() -> AppearancePreviewFrames {
+        guard let text = headerLabel.attributedText, !headerLabel.isHidden else { return [:] }
+        var index: Int?
+        text.enumerateAttribute(.attachment, in: NSRange(location: 0, length: text.length)) { value, range, stop in
+            guard value != nil else { return }
+            index = range.location
+            stop.pointee = true
+        }
+        guard let index else { return [:] }
+        let layout = headerLabel.textLayout(of: text)
+        func frame(at index: Int) -> CGRect? {
+            guard index < text.length else { return nil }
+            return headerLabel.characterFrame(at: index, in: text, contentStorage: layout.contentStorage, layoutManager: layout.layoutManager)
+                .map { headerLabel.convert($0, to: self) }
+        }
+        guard let avatar = frame(at: index) else { return [:] }
+        var frames: AppearancePreviewFrames = [.notificationHeaderAvatar: [avatar]]
+        // すき間は、アイコンの後ろの空白の幅と、その字送りの和。TextKit 2で空白の後ろの文字の位置を測ると、空白の字送りがUILabelの描く位置どおりに入らない（字送りを20増やしても6.5しか動かなかった）ため、文字の属性から求める。
+        if index + 1 < text.length, let font = text.attribute(.font, at: index + 1, effectiveRange: nil) as? UIFont {
+            let space = (" " as NSString).size(withAttributes: [.font: font]).width
+            let kern = text.attribute(.kern, at: index + 1, effectiveRange: nil) as? CGFloat ?? 0
+            frames[.notificationHeaderAvatarGap] = [CGRect(x: avatar.maxX, y: avatar.minY, width: max(space + kern, 0), height: avatar.height)]
+        }
+        return frames
+    }
+
+    /// まとめた行で並べたアイコンと、アイコン同士のあいだ。行の幅で切れた分は、見えている部分だけにする。
+    private func groupAvatarPreviewFrames() -> AppearancePreviewFrames {
+        guard !groupAvatarClip.isHidden, !groupAvatarViews.isEmpty else { return [:] }
+        let clip = groupAvatarClip.convert(groupAvatarClip.bounds, to: self)
+        let avatars = groupAvatarViews.compactMap { view -> CGRect? in
+            let frame = view.convert(view.bounds, to: self)
+            // 大きさ0のアイコンも場所を示せるよう、切る枠と重ならないときだけ除く。
+            guard frame.minX < clip.maxX || frame.width == 0 else { return nil }
+            return CGRect(x: frame.minX, y: frame.minY, width: max(min(frame.maxX, clip.maxX) - frame.minX, 0), height: frame.height)
+        }
+        var frames: AppearancePreviewFrames = [.groupAvatars: avatars]
+        if avatars.count > 1 {
+            frames[.groupAvatarGaps] = Self.gaps(inRow: avatars)
+        }
+        return frames
+    }
+
+    /// 1列に並べた枠の、隣り合うもののあいだ。`AppearanceHighlight.gaps(between:)`は縦の重なりで隣を探すため、
+    /// 大きさを0にして高さのない枠では隣が見つからず、帯がなくなる。1列と分かっているので、左から順に隣とみなす。
+    private static func gaps(inRow frames: [CGRect]) -> [CGRect] {
+        let sorted = frames.sorted { $0.minX < $1.minX }
+        return zip(sorted, sorted.dropFirst()).map { left, right in
+            CGRect(x: left.maxX, y: left.minY, width: max(right.minX - left.maxX, 0), height: left.height)
+        }
     }
 }
