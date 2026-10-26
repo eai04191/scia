@@ -167,6 +167,9 @@ final class PostBodyView: UIView {
                 }
             }
         }
+        if let badges = mediaGrid?.badgePreviewFrames(in: space), !badges.isEmpty {
+            frames[.mediaBadgeSlot] = badges
+        }
         if let options = poll?.optionPreviewFrames(in: space), !options.isEmpty {
             if options.count > 1 {
                 frames[.pollOptionGaps] = AppearanceHighlight.gaps(between: options.map(\.option))

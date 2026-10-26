@@ -133,6 +133,21 @@ struct AppearanceEditorTests {
         ].map { "\($0)" }))
     }
 
+    /// ALTやGIFのバッジは、メディア全体ではなくサムネイルの中のバッジの場所を示し、消しても同じ場所を示す。
+    @Test(arguments: [true, false])
+    func mediaBadgeSlotStaysWhenHidden(showsBadges: Bool) throws {
+        let settings = try makeSettings()
+        settings.showsMediaBadges = showsBadges
+        let row = try #require(layOutSamples(settings).first { $0[.mediaBadgeSlot] != nil })
+        let badges = try #require(row[.mediaBadgeSlot])
+        let media = try #require(row[.media]?.first)
+        for badge in badges {
+            #expect(badge.width > 0 && badge.height > 0)
+            #expect(media.contains(badge))
+            #expect(badge.width < media.width && badge.height < media.height)
+        }
+    }
+
     /// プレビューのどの部品をタップしても、何かの項目が開く。
     @Test func everyPartOpensAnItem() {
         for part in AppearancePreviewPart.allCases {

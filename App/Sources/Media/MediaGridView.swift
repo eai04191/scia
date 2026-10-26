@@ -151,6 +151,11 @@ final class MediaGridView: UIView {
         tiles.compactMap { $0.previewFrame(in: space) }.flatMap(\.self)
     }
 
+    /// 表示中のサムネイルのバッジの枠。消していれば、バッジがあった位置。
+    func badgePreviewFrames(in space: UIView) -> [CGRect] {
+        tiles.compactMap { $0.badgePreviewFrame(in: space) }
+    }
+
     override func layoutSubviews() {
         super.layoutSubviews()
         guard let content else { return }
@@ -449,12 +454,20 @@ final class MediaTileView: UIButton, MediaViewerSource {
 
     private func updateBadge() {
         let showsHDR = marksHDR && isHDRThumbnail
-        badge.marks = hidesBadge ? [] : marks + (showsHDR ? [.hdr] : [])
+        // 消していても大きさと位置は決めておき、「投稿の見た目」のプレビューで、バッジがあった位置を示せるようにする。
+        badge.marks = marks + (showsHDR ? [.hdr] : [])
+        badge.isHidden = hidesBadge || badge.marks.isEmpty
         accessibilityLabel = [accessibilityParts.kind, showsHDR ? "HDR" : nil, accessibilityParts.description]
             .compactMap(\.self)
             .filter { !$0.isEmpty }
             .joined(separator: "、")
         setNeedsLayout()
+    }
+
+    /// バッジの枠。消していれば、バッジがあった位置。付けるラベルがなければnil。
+    func badgePreviewFrame(in space: UIView) -> CGRect? {
+        guard !isHidden, !badge.marks.isEmpty else { return nil }
+        return badge.convert(badge.bounds, to: space)
     }
 
     /// ビューアがこのサムネイルとのあいだで画像を動かしている間、見えなくする。

@@ -313,7 +313,7 @@ enum AppearanceChoice: Hashable, CaseIterable {
         case .showsContextSymbol: .part(.contextSymbolSlot)
         case .boldsName: .part(.namePrimary)
         case .showsAvatarBorder: .part(.avatar)
-        case .showsMediaBadges: .part(.media)
+        case .showsMediaBadges: .part(.mediaBadgeSlot)
         case .showsLinkCard: .firstOf([.part(.card), .part(.cardSlot)])
         case .boldsLinkCardTitle: .firstPart([.cardTitle, .card])
         case .showsSeparators: .part(.separatorLine)

@@ -44,6 +44,8 @@ enum AppearancePreviewPart: Hashable, CaseIterable {
     case cardSlot
     case cardImageSlot
     case cardSiteSlot
+    /// サムネイルのALTやGIFのバッジ。
+    case mediaBadgeSlot
     /// 投稿の下の区切り線の位置。
     case separatorLine
     /// 公開範囲の記号を付けた投稿の時刻。

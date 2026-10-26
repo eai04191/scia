@@ -148,7 +148,7 @@ enum AppearanceHighlight: Equatable {
         case .connectedAvatar: C.avatarSize
         case .cardImage: C.linkCardPadding
         case .spoilerText: C.spoilerPadding
-        case .media: C.mediaTileSpacing
+        case .media, .mediaBadgeSlot: C.mediaTileSpacing
         case .pollOptions: C.pollOptionPadding
         case .poll: C.bodyPollSpacing
         default: nil
