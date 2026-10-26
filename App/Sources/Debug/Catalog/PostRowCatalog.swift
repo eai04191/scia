@@ -239,7 +239,8 @@ enum PostRowCatalog {
             row("お気に入り（リンクカードは出さない）", .favourite, status: status(content: #"<p><a href="https://news.example/articles/1">news.example/articles/1</a></p>"#)),
             row("メンション（投稿が届かなかった）", .mention, status: nil),
             row("投稿の通知", .status),
-            row("引用", .quote),
+            row("引用", .quote, status: status(content: "<p>自分の投稿を引用した投稿。</p>", account: booster, quote: Quote(state: "accepted", quotedStatus: mine))),
+            row("お気に入り（引用した自分の投稿。囲みは出さず1行にする）", .favourite, status: status(content: "<p>引用した自分の投稿。</p>", quote: Quote(state: "accepted", quotedStatus: mentioned))),
             row("ブースト", .reblog, status: mine),
             row("お気に入り", .favourite, status: mine),
             row("お気に入り（自分でもお気に入りとブースト済み）", .favourite, status: status(content: "<p>自分でもお気に入りとブーストをした自分の投稿。</p>", favourited: true, reblogged: true)),
@@ -291,6 +292,62 @@ enum PostRowCatalog {
         ]
     }
 
+    /// 投稿の中の引用。引用元を出せないときの`state`ごとの文言と、囲みの中の注意書き、フィルター、入れ子、長さの違いを並べる。決まりは`docs/quote.md`。
+    @MainActor
+    static func quoteStates() -> [CatalogState] {
+        let home = TimelineViewController(texts: .home, refresh: {})
+        home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
+        /// - Parameters:
+        ///   - expandsQuotedSpoiler: 引用元の注意書きを開く。フィルターの警告で折りたたんでいれば、警告を開く。
+        ///   - revealsQuote: ブロックかミュートしている人の引用元を開く。
+        func post(_ title: String, _ quote: Quote, content: String = "<p>引用した投稿の本文。</p>", spoilerText: String = "", expandsQuotedSpoiler: Bool = false, revealsQuote: Bool = false) -> CatalogState {
+            CatalogState(title: title) {
+                let status = status(content: content, spoilerText: spoilerText, quote: quote)
+                if expandsQuotedSpoiler, let quoted = quote.quotedStatus { home.toggleSpoiler(of: quoted) }
+                if revealsQuote { home.quoteReveals.reveal(status) }
+                return CatalogFrame.bordered(PostContentView(configuration: home.contentConfiguration(for: status, base: .cell())))
+            }
+        }
+        func quoted(content: String = "<p>引用元の本文。</p>", account: Account = booster, spoilerText: String = "", media: [MediaAttachment] = [], sensitive: Bool = false, poll: Poll? = nil, filtered: [FilterResult] = [], quote: Quote? = nil) -> Status {
+            status(content: content, account: account, spoilerText: spoilerText, media: media, sensitive: sensitive, poll: poll, filtered: filtered, quote: quote)
+        }
+        func accepted(_ status: Status) -> Quote {
+            Quote(state: "accepted", quotedStatus: status)
+        }
+        let image = Fixtures.attachment("a", width: 1_600, height: 900, color: .systemTeal)
+        let longNamed = Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com")
+        let longBody = "<p>" + String(repeating: "引用元の本文が長いときも、行数で切らずに全文を出すことを確かめる文。", count: 4) + "</p>"
+        return [
+            post("引用元の本文だけ", accepted(quoted())),
+            post("引用元に画像", accepted(quoted(media: [image]))),
+            post("引用元の本文がなく画像だけ", accepted(quoted(content: "", media: [image]))),
+            post("引用元の本文が長い（切らない）", accepted(quoted(content: longBody))),
+            post("引用元の名前とハンドルが長い", accepted(quoted(account: longNamed))),
+            post("引用元に投票（1行にする）", accepted(quoted(poll: PollCatalog.endedPoll))),
+            post("引用元が閲覧注意の画像", accepted(quoted(media: [image], sensitive: true))),
+            post("引用元に注意書き（閉じた）", accepted(quoted(spoilerText: "ネタバレ", media: [image], sensitive: true))),
+            post("引用元に注意書き（開いた）", accepted(quoted(spoilerText: "ネタバレ", media: [image], sensitive: true)), expandsQuotedSpoiler: true),
+            post("引用した投稿に注意書き（閉じて、囲みごと隠す）", accepted(quoted()), spoilerText: "引用のネタバレ"),
+            post("引用元がフィルターの警告に一致", accepted(quoted(filtered: [filter("ネタバレ", .warn)]))),
+            post("引用元がフィルターで画像をぼかすに一致", accepted(quoted(media: [image], filtered: [filter("ネタバレ", .blur)]))),
+            post("引用元がフィルターの「隠す」に一致", accepted(quoted(filtered: [filter("ネタバレ", .hide)]))),
+            post("引用元がさらに引用している（押せる）", accepted(quoted(quote: Quote(state: "accepted", quotedStatusID: "1")))),
+            post("引用元がさらに引用している（承認待ちで押せない）", accepted(quoted(quote: Quote(state: "pending")))),
+            post("引用元に投票があり、さらに引用している", accepted(quoted(poll: PollCatalog.endedPoll, quote: Quote(state: "accepted", quotedStatusID: "1")))),
+            post("承認待ち", Quote(state: "pending")),
+            post("断られた", Quote(state: "rejected")),
+            post("取り消された", Quote(state: "revoked")),
+            post("削除された", Quote(state: "deleted")),
+            post("見る権限がない", Quote(state: "unauthorized")),
+            post("知らないstate", Quote(state: "a_future_state")),
+            post("ブロックしている人（押すと開く）", Quote(state: "blocked_account", quotedStatus: quoted())),
+            post("ブロックしているドメインの人", Quote(state: "blocked_domain", quotedStatus: quoted())),
+            post("ミュートしている人", Quote(state: "muted_account", quotedStatus: quoted())),
+            post("ミュートしている人（開いた）", Quote(state: "muted_account", quotedStatus: quoted()), revealsQuote: true),
+            post("引用した投稿の本文がない", accepted(quoted()), content: ""),
+        ]
+    }
+
     /// お気に入りした人などの一覧の行。名前とハンドルの長さで崩れないかを見る。
     @MainActor
     static func accountStates() -> [CatalogState] {
@@ -325,7 +382,8 @@ enum PostRowCatalog {
         reblogged: Bool = false,
         rebloggedBy: Account? = nil,
         replyingTo replyTarget: Account? = nil,
-        mentionsReplyTarget: Bool = true
+        mentionsReplyTarget: Bool = true,
+        quote: Quote? = nil
     ) -> Status {
         let mentions = replyTarget.map { [Mention(id: $0.id, username: $0.username, url: nil, acct: $0.acct)] } ?? []
         let original = Status(
@@ -343,6 +401,7 @@ enum PostRowCatalog {
             inReplyToAccountId: replyTarget?.id,
             poll: poll,
             card: card,
+            quote: quote,
             filtered: filtered,
             editedAt: editedAt,
             favourited: favourited,

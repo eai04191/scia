@@ -850,6 +850,8 @@ extension FeedTimelineController {
             streamDummyAnimatedEmojis()
         case .polls:
             streamDummyPolls()
+        case .quotes:
+            streamDummyQuotes()
         case .notifications:
             onDummyNotifications?()
         }
@@ -924,6 +926,45 @@ extension FeedTimelineController {
                     spoilerText: "",
                     url: nil,
                     poll: post.poll
+                )
+                controller.store.debugLocalOnlyIDs.insert(dummy.id)
+                controller.receive(.update(dummy))
+            }
+        }
+    }
+
+    /// 引用のあるダミーの投稿を、新着と同じ経路で流す。引用元に画像と入れ子の引用、引用元に注意書き、承認待ち、ミュートしている人の4件。
+    /// 引用元もサーバーにないため、囲みを押して開くスレッドは読み込めずに失敗する。
+    private func streamDummyQuotes() {
+        let avatar = store.statuses.first?.account.avatar ?? client.credential.instance
+        let quotedAccount = Account(id: "dummy-quoted", username: "quoted", acct: "quoted", displayName: "ダミー（引用元）", avatar: avatar)
+        func quoted(_ id: String, content: String, spoilerText: String = "", media: [MediaAttachment] = [], quote: Quote? = nil) -> Status {
+            Status(id: id, createdAt: now().addingTimeInterval(-3_600), account: quotedAccount, content: "<p>\(content)</p>", spoilerText: spoilerText, url: nil, mediaAttachments: media, quote: quote)
+        }
+        let posts: [(content: String, quote: (String) -> Quote)] = [
+            ("画像と入れ子の引用のある投稿を引用したダミー", { id in
+                Quote(state: "accepted", quotedStatus: quoted("\(id)-q", content: "引用元の本文。", media: DummyMedia.attachments(idPrefix: "\(id)-q"), quote: Quote(state: "accepted", quotedStatusID: "\(id)-nested")))
+            }),
+            ("注意書きのある投稿を引用したダミー", { id in
+                Quote(state: "accepted", quotedStatus: quoted("\(id)-q", content: "注意書きの下の本文。", spoilerText: "ダミーの注意書き"))
+            }),
+            ("承認待ちの引用のダミー", { _ in Quote(state: "pending") }),
+            ("ミュートしている人の投稿を引用したダミー", { id in
+                Quote(state: "muted_account", quotedStatus: quoted("\(id)-q", content: "ミュートしている人の本文。"))
+            }),
+        ]
+        run { controller in
+            for (index, post) in posts.enumerated() {
+                guard !controller.isStopped else { return }
+                let base = Self.dummyStatus(number: index + 1, avatar: avatar, now: controller.now())
+                let dummy = Status(
+                    id: base.id,
+                    createdAt: base.createdAt,
+                    account: Account(id: "dummy", username: "dummy", acct: "dummy", displayName: "ダミー（引用）", avatar: avatar),
+                    content: #"<p class="quote-inline">RE: <a href="https://example.com/@quoted/1">example.com/@quoted/1</a></p><p>\#(post.content)</p>"#,
+                    spoilerText: "",
+                    url: nil,
+                    quote: post.quote(base.id)
                 )
                 controller.store.debugLocalOnlyIDs.insert(dummy.id)
                 controller.receive(.update(dummy))
@@ -1150,6 +1191,7 @@ enum DebugDummyPost: String, CaseIterable {
     case filtered
     case animatedEmojis = "animated-emojis"
     case polls
+    case quotes
     case notifications
 
     var title: String {
@@ -1168,6 +1210,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .filtered: "フィルターに一致した投稿（警告、ぼかし、隠す）"
         case .animatedEmojis: "動く絵文字の多い投稿（40件）"
         case .polls: "投票の付いた投稿（4件）"
+        case .quotes: "引用のある投稿（4件）"
         case .notifications: "ステータスバーに流す通知（連続）"
         }
     }
@@ -1194,7 +1237,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .arrivals, .animatedEmojis: .timeline
         case .images, .tall, .small, .transparent, .video, .longVideo: .media
         case .linkCard, .linkCardImage, .linkCardSensitive, .xPost: .delayed
-        case .filtered, .polls: .content
+        case .filtered, .polls, .quotes: .content
         case .notifications: nil
         }
     }
@@ -1213,6 +1256,7 @@ enum DebugDummyPost: String, CaseIterable {
         case .filtered: "line.3.horizontal.decrease.circle"
         case .animatedEmojis: "face.smiling"
         case .polls: "chart.bar.horizontal.page"
+        case .quotes: "quote.opening"
         case .notifications: "bell.badge"
         }
     }
