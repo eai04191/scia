@@ -266,7 +266,7 @@ public enum UserMenuItem: String, MenuItemKind {
     case openInDefaultBrowser
     /// 開く場所の設定にかかわらず、アプリ内のSafariで開く。
     case openInAppSafari
-    /// フォローしていなければフォローし、フォロー中なら外し、リクエスト中なら取り消す。以下の関係の項目は、メニューを開いてから関係を読んで出す。自分には出さない。
+    /// フォローしていなければフォローし、フォロー中なら外し、リクエスト中なら取り消す。以下の関係の項目は、相手との関係に合わせて出す。自分には出さない。
     case follow
     /// フォローしている相手のブーストを、ホームに流すかを切り替える。
     case showReblogs
@@ -299,6 +299,21 @@ public enum UserMenuItem: String, MenuItemKind {
         .item(.block, isVisible: true),
         .item(.report, isVisible: true),
     ])
+
+    /// 相手との関係で中身が変わる項目。通報は関係で変わらず、自分に出さないかはIDで決まるため含めない。
+    public var dependsOnRelationship: Bool {
+        switch self {
+        case .follow, .showReblogs, .notify, .mute, .block: true
+        case .profile, .mention, .copyHandle, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .report: false
+        }
+    }
+}
+
+extension MenuLayout<UserMenuItem>.Groups {
+    /// 出している項目に、相手との関係で中身が変わるものがある。ないなら、メニューを開いても関係を読まない。
+    public var needsRelationship: Bool {
+        (main + more).flatMap(\.items).contains(where: \.dependsOnRelationship)
+    }
 }
 
 /// 本文のURLのリンクを長押ししたときのメニューの項目。開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。

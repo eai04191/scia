@@ -210,7 +210,7 @@ final class SessionController {
         }
         streamingHub.onUnauthorized = { forward() }
         self.client = client
-        let profiles = ProfileRegistry()
+        let profiles = ProfileRegistry(relationships: RelationshipCache { [client] ids in try await client.relationships(ids) })
         self.profiles = profiles
         let threads = ThreadRegistry()
         self.threads = threads
@@ -1375,14 +1375,25 @@ final class SessionController {
                     notify()
                 }
             },
-            loadRelation: { [weak self] target in
-                try await self?.relation(of: target)
+            resolveTarget: { [weak self] target in
+                guard let self else { throw CancellationError() }
+                let found = try await self.identity(of: target)
+                return UserIdentity(id: found.id, acct: found.acct)
+            },
+            loadRelation: { [weak self] target, identity in
+                try await self?.relation(of: target, identity: identity)
+            },
+            knownRelation: { [weak self] target in
+                self?.knownRelation(of: target)
+            },
+            reloadRelations: { [weak self] ids in
+                self?.reloadRelations(ids)
             },
             changeRelation: { [weak self] change, relation in
                 self?.confirmChanging(change, of: relation)
             },
-            report: { [weak self] relation, statusID in
-                self?.presentReport(relation, statusID: statusID)
+            report: { [weak self] accountID, acct, statusID in
+                self?.presentReport(accountID: accountID, acct: acct, statusID: statusID)
             },
             accounts: accounts
         )
@@ -1424,15 +1435,30 @@ final class SessionController {
         }
     }
 
-    /// ユーザーのメニューの関係の項目のために、相手との関係を読む。自分ならnil。開き直したプロフィールが同じ関係から始まるよう、読んだ関係を覚える。
-    private func relation(of target: UserMenuTarget) async throws -> UserRelation? {
-        let identity = try await identity(of: target)
+    /// ユーザーのメニューの関係の項目のために、相手との関係を読む。自分ならnil。
+    /// 読んだ関係は覚えておき、次にメニューを開いたときと、開き直したプロフィールで使う。
+    private func relation(of target: UserMenuTarget, identity: UserIdentity) async throws -> UserRelation? {
         guard identity.id != credential.accountID else { return nil }
-        guard let relationship = try await client.relationship(with: identity.id) else {
+        // リンクのメンションは、相手を探すまでIDが分からず、メニューを開いたときにまとめて読み直せないため、ここで読み直す。
+        if case .profileURL = target {
+            profiles.relationships.reload([identity.id])
+        }
+        guard let relationship = try await profiles.relationships.relationship(identity.id) else {
             throw ProfileNotFound(acct: identity.acct)
         }
-        profiles.relationships[identity.id] = relationship
         return UserRelation(accountID: identity.id, acct: identity.acct, relationship: relationship)
+    }
+
+    /// 相手のIDが分かっていて、自分か、関係を覚えている相手なら、その関係。メニューを組むときに、読まずにその場で関係の項目を組むのに使う。
+    private func knownRelation(of target: UserMenuTarget) -> KnownRelation? {
+        guard case .account(let id, let acct) = target else { return nil }
+        guard id != credential.accountID else { return .myself }
+        return profiles.relationships[id].map { .relation(UserRelation(accountID: id, acct: acct, relationship: $0)) }
+    }
+
+    /// メニューに出る人の関係を、まとめて1回で読み直す。別の端末で変えた関係も、次に開いたときから反映する。
+    private func reloadRelations(_ ids: [String]) {
+        profiles.relationships.reload(ids.filter { $0 != credential.accountID })
     }
 
     /// フォローを外す、リクエストを取り消す、ブロックは、押し間違えに備えて確かめてから送る。プロフィール画面のフォローのボタンと同じく、フォローとミュートは確かめずに送る。
@@ -1499,9 +1525,9 @@ final class SessionController {
     }
 
     /// 通報のシートを開く。送れたら、シートを閉じて知らせる。
-    private func presentReport(_ relation: UserRelation, statusID: String?) {
+    private func presentReport(accountID: String, acct: String, statusID: String?) {
         let client = client
-        let draft = ReportDraft(accountID: relation.accountID, acct: relation.acct, statusID: statusID, api: ReportDraft.API(
+        let draft = ReportDraft(accountID: accountID, acct: acct, statusID: statusID, api: ReportDraft.API(
             rules: { try await client.instanceRules() },
             submit: { try await client.report($0) }
         ))
@@ -2594,8 +2620,12 @@ private final class ProfileRegistry {
     }
 
     private var entries: [Entry] = []
-    /// 開き直したプロフィールで、前に読んだ関係から始めるためのキャッシュ。
-    let relationships = RelationshipCache()
+    /// 読んだ関係のキャッシュ。開き直したプロフィールで前に読んだ関係から始め、ユーザーのメニューの関係の項目をその場で組むのに使う。
+    let relationships: RelationshipCache
+
+    init(relationships: RelationshipCache) {
+        self.relationships = relationships
+    }
 
     func add(_ controller: ProfileController) {
         entries.removeAll { $0.controller == nil }

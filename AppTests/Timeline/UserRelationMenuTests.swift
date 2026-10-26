@@ -50,4 +50,44 @@ struct UserRelationMenuTests {
         #expect(describe(.report, Relationship(id: "2")) == ["通報"])
         #expect(describe(.report, Relationship(id: "2", blocking: true)) == ["通報"])
     }
+
+    /// 相手を探すのは、関係を読むのとは別に待てる。通報は探すのだけを待つので、関係を読めなくても出せる。
+    /// 同じメニューの項目で分け合い、相手を探すのも関係を読むのも1度だけにする。
+    @Test func identityIsSharedAndDoesNotWaitForRelation() async throws {
+        let counts = LoadCounter()
+        let load = UserRelationLoad {
+            counts.resolves += 1
+            return UserIdentity(id: "2", acct: "alice@remote.example")
+        } load: { _ in
+            counts.loads += 1
+            throw URLError(.notConnectedToInternet)
+        }
+
+        #expect(try await load.identity.id == "2")
+        #expect(counts.loads == 0)
+        await #expect(throws: URLError.self) { try await load.value }
+        await #expect(throws: URLError.self) { try await load.value }
+        #expect(try await load.identity.acct == "alice@remote.example")
+        #expect(counts.resolves == 1)
+        #expect(counts.loads == 1)
+    }
+
+    @MainActor
+    private final class LoadCounter {
+        var resolves = 0
+        var loads = 0
+    }
+
+    /// 関係を読めなかった知らせは、最初に出る、関係で中身が変わる項目の場所に出す。
+    /// 相手を探せなかった知らせは、最初に出る、相手を探すのを待つ項目の場所に出す。通報は相手のIDが分かっていれば待たないので、探すときだけその場所になる。
+    /// 通報を関係の項目より前に並べても、関係を読めなかった知らせは関係の項目の場所に出る。
+    @Test func failureIsShownAtFirstItemThatWaitsForIt() {
+        let reportOnly = MenuLayout<UserMenuItem>(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .profile || $0 == .report) } + [.more]).groups
+        let reportFirst = MenuLayout<UserMenuItem>(elements: [.item(.report, isVisible: true)] + UserMenuItem.allCases.filter { $0 != .report }.map { .item($0, isVisible: true) } + [.more]).groups
+
+        #expect(UserMenuItem.defaultLayout.groups.relationFailureSlots(waitsForReport: false) == RelationFailureSlots(relation: .follow, resolve: .follow))
+        #expect(reportOnly.relationFailureSlots(waitsForReport: false) == RelationFailureSlots(relation: nil, resolve: nil))
+        #expect(reportOnly.relationFailureSlots(waitsForReport: true) == RelationFailureSlots(relation: nil, resolve: .report))
+        #expect(reportFirst.relationFailureSlots(waitsForReport: true) == RelationFailureSlots(relation: .follow, resolve: .report))
+    }
 }

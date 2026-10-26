@@ -524,7 +524,17 @@ public struct MastodonClient: Sendable {
     /// 自分と相手の関係。相手が見つからなければnil。
     /// https://docs.joinmastodon.org/methods/accounts/#relationships
     public func relationship(with id: String) async throws -> Relationship? {
-        try await get([Relationship].self, path: "api/v1/accounts/relationships", query: [URLQueryItem(name: "id[]", value: id)]).0.first { $0.id == id }
+        try await relationships([id]).first { $0.id == id }
+    }
+
+    /// 一度に読む関係の数。Mastodonはこのエンドポイントで数を制限しないが、URLが長くなりすぎないよう、アカウントのまとめ読みと同じ数で区切る。
+    public static let multipleRelationshipsLimit = multipleAccountsLimit
+
+    /// 自分と相手たちの関係をまとめて読む。見つからない相手の関係は返らない。
+    /// https://docs.joinmastodon.org/methods/accounts/#relationships
+    public func relationships(_ ids: [String]) async throws -> [Relationship] {
+        let query = ids.map { URLQueryItem(name: "id[]", value: $0) }
+        return try await get([Relationship].self, path: "api/v1/accounts/relationships", query: query).0
     }
 
     /// アカウントの投稿を新しい順に返す。

@@ -563,6 +563,23 @@ struct MastodonClientTests {
         #expect(relationship == Relationship(id: "2", showingReblogs: false, followedBy: true, requested: true))
     }
 
+    /// 何人分でも1回のリクエストで、IDを並べて送る。
+    @Test func relationshipsRequestAllAccountsAtOnce() async throws {
+        let transport = StubTransport([try .fixture("relationships")])
+
+        let relationships = try await makeClient(transport).relationships(["2", "3"])
+
+        let requests = await transport.requests
+        #expect(requests.count == 1)
+        let url = try #require(requests.first?.url)
+        #expect(url.path() == "/api/v1/accounts/relationships")
+        #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems == [
+            URLQueryItem(name: "id[]", value: "2"),
+            URLQueryItem(name: "id[]", value: "3"),
+        ])
+        #expect(relationships.map(\.id) == ["2"])
+    }
+
     @Test func followAndUnfollowPostToAccount() async throws {
         let relationship = #"{"id":"2","following":true,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false}"#
         let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])

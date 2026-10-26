@@ -185,6 +185,21 @@ struct MenuLayoutTests {
         #expect([UserMenuItem.openInDefaultBrowser, .openInAppSafari].allSatisfy { layout.elements.contains(.item($0, isVisible: false)) })
     }
 
+    /// 関係で中身が変わる項目を1つでも出していれば、メニューを開いたときに関係を読む。「その他」の中にあっても読む。
+    /// 通報だけなら、自分かどうかはIDで決まるので読まない。
+    @Test func userMenuNeedsRelationshipOnlyWithRelationDependentItems() {
+        func layout(_ tokens: [String]) -> MenuLayout<UserMenuItem>.Groups {
+            MenuLayout<UserMenuItem>(elements: MenuLayout<UserMenuItem>(tokens: tokens).elements.map { element in
+                guard case .item(let item, _) = element else { return element }
+                return .item(item, isVisible: tokens.contains("item:\(item.rawValue)"))
+            }).groups
+        }
+
+        #expect(UserMenuItem.defaultLayout.groups.needsRelationship)
+        #expect(layout(["item:profile", "more", "item:mute"]).needsRelationship)
+        #expect(!layout(["item:profile", "item:copyLink", "more", "item:report"]).needsRelationship)
+    }
+
     /// メンション、フォロー、ハンドルをコピーを足す前に保存したユーザーのメニューでも、3つはプロフィールの後ろに出る。
     /// 既定で「その他」の先頭にあるフォローの設定、ミュート、ブロック、通報は、「その他」に入る。
     @Test func savedUserMenuGainsNewItemsAfterProfile() {

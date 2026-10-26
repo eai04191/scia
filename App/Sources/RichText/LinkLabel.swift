@@ -233,8 +233,9 @@ final class LinkHitArea: UIControl {
             let host = nearest((any LinkMenuHost).self)
             let target = UserMenuTarget.profileURL(url, shownAcct: acct)
             let actions = host?.userMenuActions
-            let load = actions.map { actions in UserRelationLoad { try await actions.loadRelation(target) } }
-            let firstRelationItem = settings.userMenuLayout.groups.firstRelationItem
+            let load = actions.map { $0.relationLoad(for: target) }
+            // 通報も、相手を探すのを待って出す。
+            let failureSlots = settings.userMenuLayout.groups.relationFailureSlots(waitsForReport: true)
             children = settings.userMenuLayout.groups.menuElements { item in
                 if let action = item.urlAction {
                     return [action.action(url: url, handlers: handlers)]
@@ -244,7 +245,7 @@ final class LinkHitArea: UIControl {
                 case .mention, .copyHandle: return actions?.action(item, target: target, notifying: host).map { [$0] } ?? []
                 case .follow, .showReblogs, .notify, .mute, .block, .report:
                     guard let actions, let load else { return [] }
-                    return [actions.relationElement(item, load: load, showsFailure: item == firstRelationItem)]
+                    return actions.relationElements(item, target: target, load: load, failureSlots: failureSlots)
                 // 共通の項目は、上で中身から組んだ。
                 case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari: return []
                 }

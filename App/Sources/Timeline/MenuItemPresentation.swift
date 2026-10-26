@@ -268,12 +268,18 @@ struct UserMenuActions {
     let mention: @MainActor (UserMenuTarget) -> Void
     /// サーバー名を付けた`@username@domain`の形でコピーし、コピーできたら`notify`を呼ぶ。
     let copyHandle: @MainActor (UserMenuTarget, _ notify: @escaping @MainActor () -> Void) -> Void
-    /// 相手と自分の関係を読む。自分ならnil。
-    let loadRelation: @MainActor (UserMenuTarget) async throws -> UserRelation?
+    /// 相手のIDと`acct`を決める。リンクのメンションは、プロフィールのURLから探す。見つからなければ投げる。
+    let resolveTarget: @MainActor (UserMenuTarget) async throws -> UserIdentity
+    /// `resolveTarget`で決めた相手と自分の関係を読む。覚えている関係を読み直している途中なら、それを待つ。自分ならnil。
+    let loadRelation: @MainActor (UserMenuTarget, UserIdentity) async throws -> UserRelation?
+    /// 手元で分かっている相手との関係。相手のIDが分からないか、関係を覚えていなければnil。
+    let knownRelation: @MainActor (UserMenuTarget) -> KnownRelation?
+    /// 相手たちとの関係をまとめて1回で読み直し、覚えておく。自分は除く。
+    let reloadRelations: @MainActor ([String]) -> Void
     /// 関係の項目で選んだ変更を送る。取り消しにくい変更は、確かめてから送る。
     let changeRelation: @MainActor (UserRelationChange, UserRelation) -> Void
     /// 通報のシートを開く。投稿のメニューから開いたときは、添えられる相手の投稿のIDを渡す。
-    let report: @MainActor (UserRelation, _ statusID: String?) -> Void
+    let report: @MainActor (_ accountID: String, _ acct: String, _ statusID: String?) -> Void
     /// セッションで読んだアカウント。メンションされたユーザーのように、アイコンのURLが手元にない相手のアイコンを出すのに使う。
     let accounts: AccountCache
 

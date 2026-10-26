@@ -57,6 +57,7 @@ extension TimelineViewController {
         defer { loadPendingMenuIcons() }
         // 人の一覧の行では、その人へのユーザーのメニューを、そのまま出す。
         if case .account(let account) = entry {
+            defer { reloadRelations([account.id]) }
             return userElement(for: .account(account), id: id).map { UIMenu(children: [$0]) }
         }
         let status = Self.status(of: entry)
@@ -68,7 +69,15 @@ extension TimelineViewController {
         if case .notification(let notification) = entry, notification.type == .followRequest {
             children.insert(followRequestMenu(for: notification), at: 0)
         }
+        reloadRelations(Array(shownUserIDs))
         return children.isEmpty ? nil : UIMenu(children: children)
+    }
+
+    /// メニューに出る人の関係を、まとめて1回で読み直す。組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。
+    /// 覚えていなかった人の関係の項目は、この読み直しを待って中身を渡す。関係で中身が変わる項目を出していなければ読まない。
+    private func reloadRelations(_ ids: [String]) {
+        guard !ids.isEmpty, settings.userMenuLayout.groups.needsRelationship else { return }
+        userMenuActions?.reloadRelations(ids)
     }
 
     private func followRequestMenu(for request: MastodonNotification) -> UIMenu {
@@ -361,10 +370,10 @@ extension TimelineViewController {
         let reportableStatusID = shown?.account.id == user.id ? shown?.id : nil
         // 関係の項目は読んでから中身が決まり、名前に相手を入れられないため、1つだけでもサブメニューにする。
         if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first?.items, only.count == 1, !only[0].isRelation {
-            return userElement(only[0], for: user, handlers: handlers, load: load, reportableStatusID: reportableStatusID, inSubmenu: false)
+            return userAction(only[0], for: user, handlers: handlers, inSubmenu: false)
         }
         let children = groups.menuElements { item in
-            userElement(item, for: user, handlers: handlers, load: load, reportableStatusID: reportableStatusID, inSubmenu: true).map { [$0] } ?? []
+            userElements(item, for: user, handlers: handlers, load: load, reportableStatusID: reportableStatusID, inSubmenu: true)
         }
         guard !children.isEmpty else { return nil }
         let parts = user.acct.split(separator: "@", maxSplits: 1)
@@ -492,22 +501,23 @@ extension TimelineViewController {
         let load = relationLoad(for: user)
         let children = settings.userMenuLayout.groups.menuElements { item in
             guard item != .profile else { return [] }
-            return userElement(item, for: user, handlers: handlers, load: load, reportableStatusID: nil, inSubmenu: true).map { [$0] } ?? []
+            return userElements(item, for: user, handlers: handlers, load: load, reportableStatusID: nil, inSubmenu: true)
         }
+        reloadRelations([account.id])
         return children.isEmpty ? nil : UIMenu(children: children)
     }
 
     /// メニューを1回開く間、関係の項目で分け合う関係の読み込み。
     private func relationLoad(for user: MenuUser) -> UserRelationLoad? {
         guard let userMenuActions else { return nil }
-        let target = UserMenuTarget.account(id: user.id, acct: user.acct)
-        return UserRelationLoad { try await userMenuActions.loadRelation(target) }
+        return userMenuActions.relationLoad(for: .account(id: user.id, acct: user.acct))
     }
 
-    private func userElement(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, load: UserRelationLoad?, reportableStatusID: String?, inSubmenu: Bool) -> UIMenuElement? {
-        guard item.isRelation else { return userAction(item, for: user, handlers: handlers, inSubmenu: inSubmenu) }
-        guard let userMenuActions, let load else { return nil }
-        return userMenuActions.relationElement(item, load: load, showsFailure: item == settings.userMenuLayout.groups.firstRelationItem, reportableStatusID: reportableStatusID)
+    private func userElements(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, load: UserRelationLoad?, reportableStatusID: String?, inSubmenu: Bool) -> [UIMenuElement] {
+        guard item.isRelation else { return userAction(item, for: user, handlers: handlers, inSubmenu: inSubmenu).map { [$0] } ?? [] }
+        guard let userMenuActions, let load else { return [] }
+        let target = UserMenuTarget.account(id: user.id, acct: user.acct)
+        return userMenuActions.relationElements(item, target: target, load: load, failureSlots: settings.userMenuLayout.groups.relationFailureSlots(waitsForReport: false), reportableStatusID: reportableStatusID)
     }
 
     private func userAction(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, inSubmenu: Bool) -> UIAction? {

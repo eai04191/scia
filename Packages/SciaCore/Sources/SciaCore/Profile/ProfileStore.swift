@@ -136,7 +136,7 @@ public final class ProfileStore {
         tab: ProfileTab = .posts,
         postsFilter: ProfilePostsFilter,
         pageSize: Int = 40,
-        relationshipCache: RelationshipCache = RelationshipCache(),
+        relationshipCache: RelationshipCache,
         now: @escaping @MainActor () -> Date = SystemTime.now,
         api: API
     ) {

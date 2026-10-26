@@ -40,7 +40,22 @@ struct StatusMenuTests {
         }
     }
 
-    /// 関係の項目は開いてから読むため、`…`で表す。
+    /// - Parameters:
+    ///   - known: 手元で分かっている相手との関係。渡さなければ、どの相手の関係も覚えていない。
+    ///   - reload: メニューを開いたときに関係を読み直す相手を受け取る。
+    private func userMenuActions(
+        known: @escaping @MainActor (UserMenuTarget) -> KnownRelation? = { _ in nil },
+        reload: @escaping @MainActor ([String]) -> Void = { _ in },
+        accounts: AccountCache = AccountCache { _ in [] }
+    ) -> UserMenuActions {
+        UserMenuActions(
+            mention: { _ in }, copyHandle: { _, _ in },
+            resolveTarget: { _ in throw CancellationError() }, loadRelation: { _, _ in nil }, knownRelation: known, reloadRelations: reload,
+            changeRelation: { _, _ in }, report: { _, _, _ in }, accounts: accounts
+        )
+    }
+
+    /// 関係を覚えていない相手の関係の項目は、読んでから中身を決めるため、`…`で表す。
     private func describe(_ element: UIMenuElement) -> String {
         if element is UIDeferredMenuElement { return "…" }
         guard let menu = element as? UIMenu else { return element.title }
@@ -159,13 +174,13 @@ struct StatusMenuTests {
     }
 
     /// 既定のユーザーのメニューは、開く・書く操作、フォロー、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
-    /// 関係の項目は、開いてから読む。開く場所を選んで開く2つは隠れている。
+    /// 関係を覚えていない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() throws {
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in }, accounts: AccountCache { _ in [] })
+        let actions = userMenuActions()
 
         let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
 
-        #expect(outline.last == ["@alice[プロフィール,メンション,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,…]]"])
+        #expect(outline.last == ["@alice[プロフィール,メンション,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報]]"])
     }
 
     /// メンション、ハンドルをコピー、関係の項目を組むものを渡されていない画面では、これらを出さない。
@@ -179,18 +194,76 @@ struct StatusMenuTests {
     @Test func singleRelationItemStaysInSubmenu() throws {
         let settings = try makeSettings()
         settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .follow) } + [.more])
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in }, accounts: AccountCache { _ in [] })
+        let actions = userMenuActions()
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings, userMenuActions: actions))
 
         #expect(outline.last == ["@alice[…]"])
     }
 
+    /// 関係を覚えている相手は、その関係で関係の項目をその場で組み、読み込み中の行を出さない。
+    /// 読み込み中の行から中身を差し替えると、開く途中のサブメニューの動きが崩れるため。
+    @Test func knownRelationBuildsRelationItemsImmediately() throws {
+        let actions = userMenuActions(known: { target in
+            guard case .account(let id, let acct) = target else { return nil }
+            return .relation(UserRelation(accountID: id, acct: acct, relationship: Relationship(id: id, following: true)))
+        })
+
+        let user = try #require(try outline(menu(for: .status(status(url: nil)), userMenuActions: actions)).last?.first)
+
+        #expect(user.hasPrefix("@alice[プロフィール,メンション,フォローを外す,"))
+        #expect(!user.contains("…"))
+    }
+
+    /// 自分には関係の項目も通報も出さない。自分かどうかはIDで決まるため、関係を読まずに決める。
+    @Test func myselfHasNoRelationItems() throws {
+        let actions = userMenuActions(known: { _ in .myself })
+
+        let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
+
+        #expect(outline.last == ["@alice[プロフィール,メンション,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く]"])
+    }
+
+    /// メニューを開いたら、メニューに出る人全員の関係を1回でまとめて読み直す。
+    /// 関係で中身が変わる項目を出していない設定では読まない。
+    @Test func openingMenuReloadsRelationsOfShownUsersAtOnce() throws {
+        let author = try account("2", "alice")
+        let booster = try account("3", "bob")
+        let post = try status(url: nil, account: booster, reblog: status(url: nil, account: author))
+        let reloads = ReloadRecorder()
+        let actions = userMenuActions(reload: { reloads.requests.append($0) })
+
+        _ = try menu(for: .status(post), userMenuActions: actions)
+        #expect(reloads.requests.map(Set.init) == [["2", "3"]])
+
+        let settings = try makeSettings()
+        settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .profile || $0 == .report) } + [.more])
+        _ = try menu(for: .status(post), settings: settings, userMenuActions: actions)
+        #expect(reloads.requests.count == 1)
+    }
+
+    /// プロフィール画面のメニューも、開くたびにその人の関係を読み直す。
+    @Test func profileUserMenuReloadsRelation() throws {
+        let viewController = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: try makeSettings())
+        let reloads = ReloadRecorder()
+        viewController.userMenuActions = userMenuActions(reload: { reloads.requests.append($0) })
+
+        _ = viewController.profileUserMenu(for: try account("2", "alice"), from: UIBarButtonItem())
+
+        #expect(reloads.requests == [["2"]])
+    }
+
+    /// 関係を読み直すよう頼まれた相手の組を記録する。
+    @MainActor
+    private final class ReloadRecorder {
+        var requests: [[String]] = []
+    }
+
     /// サブメニューにせず直接並べるときは、メンションの名前に相手を入れる。
     @Test func singleMentionItemIsListedDirectlyWithAcct() throws {
         let settings = try makeSettings()
         settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .mention) } + [.more])
-        let actions = UserMenuActions(mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in }, accounts: AccountCache { _ in [] })
+        let actions = userMenuActions()
 
         let outline = try outline(menu(for: .status(status(url: nil)), settings: settings, userMenuActions: actions))
 
@@ -288,10 +361,7 @@ struct StatusMenuTests {
             },
             settings: settings
         )
-        viewController.userMenuActions = UserMenuActions(
-            mention: { _ in }, copyHandle: { _, _ in }, loadRelation: { _ in nil }, changeRelation: { _, _ in }, report: { _, _ in },
-            accounts: AccountCache { ids in await recorder.accounts(ids) }
-        )
+        viewController.userMenuActions = userMenuActions(accounts: AccountCache { ids in await recorder.accounts(ids) })
         let author = try account("2", "alice")
         let post = try status(url: nil, account: author, mentions: [Mention(id: "3", username: "carol", url: nil, acct: "carol")])
 
