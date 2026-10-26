@@ -1,8 +1,10 @@
 import Foundation
 import os
 import Testing
+import SciaTesting
 @testable import SciaCore
 
+@Suite(.scratch)
 @MainActor
 struct StateDumpRegistryTests {
     private final class Screen {
@@ -35,9 +37,10 @@ struct StateDumpRegistryTests {
     }
 }
 
+@Suite(.scratch)
 struct DiscomfortReportStoreTests {
     private func makeStore() -> DiscomfortReportStore {
-        DiscomfortReportStore(directory: FileManager.default.temporaryDirectory.appending(path: "DiscomfortReportStoreTests-\(UUID().uuidString)"))
+        DiscomfortReportStore(directory: TestScratch.url("DiscomfortReportStoreTests"))
     }
 
     private func makeReport(capturedAt: Date) -> DiscomfortReport {
@@ -108,6 +111,7 @@ struct DiscomfortReportStoreTests {
 // macOSでは、OSLogStoreをプロセスで初めて読むときにMac全体のログを走査し、1回に10秒以上かかる。
 // 2件で`make test-core`の時間の半分を占めるため、iOSシミュレーター（`make test`）でだけ走らせる。
 #if os(iOS)
+@Suite(.scratch)
 struct RecentLogReaderTests {
     /// iOSシミュレーターでは、ログを書いてからOSLogStoreで読めるまでに1秒以上かかることがある。
     /// マーカーまで読めるのを待つことで、確保した瞬間の直前のログまで含める。

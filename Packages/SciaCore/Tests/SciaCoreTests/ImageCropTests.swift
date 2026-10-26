@@ -2,9 +2,11 @@ import CoreGraphics
 import Foundation
 import ImageIO
 import Testing
+import SciaTesting
 import UniformTypeIdentifiers
 @testable import SciaCore
 
+@Suite(.scratch)
 struct ImageCropTests {
     private let size = PixelSize(width: 200, height: 100)
 
@@ -71,6 +73,7 @@ struct ImageCropTests {
     }
 }
 
+@Suite(.scratch)
 struct CropBoxTests {
     private let bounds = CGRect(x: 0, y: 0, width: 300, height: 200)
 
@@ -113,6 +116,7 @@ struct CropBoxTests {
     }
 }
 
+@Suite(.scratch)
 struct CropRotationPoseTests {
     private let center = CGPoint(x: 200, y: 400)
 
@@ -164,6 +168,7 @@ struct CropRotationPoseTests {
     }
 }
 
+@Suite(.scratch)
 struct ImageCropEncodingTests {
     /// 左上を赤、右上を緑、左下を青、右下を白に塗った画像をPNGで書き出す。
     private func writeQuadrants(width: Int, height: Int, to url: URL) throws {
@@ -215,7 +220,7 @@ struct ImageCropEncodingTests {
     }
 
     private func makeDirectory() throws -> URL {
-        let directory = FileManager.default.temporaryDirectory.appending(path: "ImageCropEncodingTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let directory = TestScratch.url("ImageCropEncodingTests")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }

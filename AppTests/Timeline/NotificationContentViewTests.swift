@@ -1,8 +1,10 @@
 import SciaCore
 import Testing
+import SciaTesting
 import UIKit
 @testable import Scia
 
+@Suite(.scratch)
 @MainActor
 struct NotificationContentViewTests {
     private func image(_ id: String) -> MediaAttachment {

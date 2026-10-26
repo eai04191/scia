@@ -7,7 +7,7 @@ import UIKit
 
 /// 添付ファイルのサムネイルの並べ方と、閲覧注意のぼかしを確かめる。
 @MainActor
-@Suite(.serialized)
+@Suite(.scratch, .serialized)
 struct TimelineMediaTests {
     private func image(_ id: String, width: Int, height: Int, description: String? = nil) -> MediaAttachment {
         MediaAttachment(

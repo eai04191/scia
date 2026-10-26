@@ -1,4 +1,6 @@
 import Foundation
+import SciaTesting
+import Testing
 import SciaCore
 @testable import Scia
 
@@ -7,11 +9,6 @@ extension AppSettings {
     /// 既定の`AppDependencies.settings`を使うと、端末で変えた表示の設定によってテストの結果が変わる。
     @MainActor
     static func isolated() -> AppSettings {
-        let suite = "IsolatedSettings.\(UUID().uuidString)"
-        guard let defaults = UserDefaults(suiteName: suite) else {
-            preconditionFailure("テスト用の保存先を作れませんでした")
-        }
-        defaults.removePersistentDomain(forName: suite)
-        return AppSettings(defaults: defaults)
+        AppSettings(defaults: TestScratch.defaults("IsolatedSettings"))
     }
 }

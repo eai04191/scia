@@ -2,17 +2,19 @@ import CoreText
 import Foundation
 import SciaCore
 import Testing
+import SciaTesting
 import UIKit
 @testable import Scia
 
 /// 文字列に言語がないと、システムは端末の言語の一覧から漢字とかなの書体を選ぶ。英語の設定では、日本語の文も中国語の書体で描かれていた。
 /// 端末の言語の設定に左右されないことを確かめるため、英語の設定（`-testLanguage en`）でも通す。
+@Suite(.scratch)
 @MainActor
 struct GlyphLanguageTests {
     private let account = Account(id: "1", username: "alice", acct: "alice", displayName: "日本語の名前", avatar: nil)
 
     private func controller(glyphLanguage: GlyphLanguage) throws -> TimelineViewController {
-        let defaults = try #require(UserDefaults(suiteName: "GlyphLanguageTests.\(UUID().uuidString)"))
+        let defaults = TestScratch.defaults("GlyphLanguageTests")
         let settings = AppSettings(defaults: defaults)
         settings.glyphLanguage = glyphLanguage
         return TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)

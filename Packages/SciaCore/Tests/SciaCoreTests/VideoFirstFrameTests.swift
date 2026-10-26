@@ -2,8 +2,10 @@ import AVFoundation
 import Foundation
 import Synchronization
 import Testing
+import SciaTesting
 @testable import SciaCore
 
+@Suite(.scratch)
 struct VideoFirstFrameTests {
     /// ファイルの中身から求められた範囲を返し、求められた範囲を記録する。
     private final class RangeServer: Sendable {
@@ -30,9 +32,8 @@ struct VideoFirstFrameTests {
 
     /// AVFoundationで、`data`から0秒目のフレームを作る。
     private func makeFrame(from data: Data) async throws -> CGImage {
-        let file = FileManager.default.temporaryDirectory.appending(path: "\(UUID().uuidString).mp4")
+        let file = TestScratch.url("VideoFirstFrameTests", pathExtension: "mp4")
         try data.write(to: file)
-        defer { try? FileManager.default.removeItem(at: file) }
         let generator = AVAssetImageGenerator(asset: AVURLAsset(url: file))
         generator.requestedTimeToleranceBefore = .zero
         generator.requestedTimeToleranceAfter = .positiveInfinity

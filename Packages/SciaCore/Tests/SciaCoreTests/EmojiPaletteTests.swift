@@ -1,7 +1,9 @@
 import Foundation
 import Testing
+import SciaTesting
 @testable import SciaCore
 
+@Suite(.scratch)
 @MainActor
 struct EmojiPaletteTests {
     private func emoji(_ shortcode: String, category: String? = nil, visible: Bool = true) throws -> ServerEmoji {
@@ -10,9 +12,7 @@ struct EmojiPaletteTests {
     }
 
     private func makeDefaults() throws -> UserDefaults {
-        let suite = "EmojiPaletteTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("EmojiPaletteTests")
         return defaults
     }
 

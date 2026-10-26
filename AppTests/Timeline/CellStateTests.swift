@@ -1,11 +1,12 @@
 import SciaCore
 import Testing
+import SciaTesting
 import UIKit
 @testable import Scia
 
 /// セルの状態と、表示中の投稿の報告を確かめる。
 @MainActor
-@Suite(.serialized)
+@Suite(.scratch, .serialized)
 struct CellStateTests {
     /// 遠くから最上部へ戻ったときも、止まった時点で最上部の投稿を見たと報告する。
     /// スクロールの通知の時点では表示中のセルの一覧が前のフレームのままで、新着ボタンで遠くから戻ると、

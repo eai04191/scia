@@ -8,7 +8,7 @@ import VisionKit
 
 /// 閉じるボタンを置かないため、ほかの閉じ方とメニューが使えることを確かめる。
 @MainActor
-@Suite(.serialized)
+@Suite(.scratch, .serialized)
 struct MediaViewerControllerTests {
     /// アプリ全体のアプリ内通知。ハーネスのウインドウに重ねた列と、落とす処理の両方に渡す。
     private let notices = NoticeCenter()
@@ -19,9 +19,7 @@ struct MediaViewerControllerTests {
     private let timing = MediaViewerController.Timing(openDuration: 0.5, closeDuration: 0.5, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3, doubleTapZoomDuration: 0.2)
 
     init() throws {
-        let suite = "MediaViewerControllerTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("MediaViewerControllerTests")
         settings = AppSettings(defaults: defaults)
     }
 
@@ -726,7 +724,7 @@ struct MediaViewerControllerTests {
     }
 
     private func makeDownloads(files: MediaFileCache = .temporary(), download: @escaping MediaDownloads.Download) -> MediaDownloads {
-        MediaDownloads(files: files, stagingDirectory: .temporaryDirectory.appending(path: "MediaViewerControllerTests-\(UUID().uuidString)"), download: download)
+        MediaDownloads(files: files, stagingDirectory: TestScratch.url("MediaViewerControllerTests"), download: download)
     }
 
     private func makeTransfers(

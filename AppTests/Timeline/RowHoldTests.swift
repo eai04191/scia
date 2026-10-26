@@ -1,12 +1,13 @@
 import SciaCore
 import Testing
+import SciaTesting
 import UIKit
 @testable import Scia
 
 /// 長押しのメニューを出している間は、一覧の並びを変えず、閉じてから反映することを確かめる。
 /// メニューの元になった行が動くと、メニューと表示がずれるため。
 @MainActor
-@Suite(.serialized)
+@Suite(.scratch, .serialized)
 struct RowHoldTests {
     @Test func entriesAreAppliedAfterMenuHides() throws {
         let harness = try TimelineHarness()

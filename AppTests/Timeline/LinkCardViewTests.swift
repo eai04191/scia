@@ -1,8 +1,10 @@
 import SciaCore
 import Testing
+import SciaTesting
 import UIKit
 @testable import Scia
 
+@Suite(.scratch)
 @MainActor
 struct LinkCardViewTests {
     private func layout(descriptionLines: Int, showsSite: Bool = true) throws -> (view: LinkCardView, frames: AppearancePreviewFrames) {

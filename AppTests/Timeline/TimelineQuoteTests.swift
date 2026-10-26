@@ -1,11 +1,12 @@
 import SciaCore
 import Testing
+import SciaTesting
 import UIKit
 @testable import Scia
 
 /// 投稿の中の引用の囲みを確かめる。決まりは`docs/quote.md`。
 @MainActor
-@Suite(.serialized)
+@Suite(.scratch, .serialized)
 struct TimelineQuoteTests {
     private let quotedAccount = Account(id: "9", username: "bob", acct: "bob@remote.example", displayName: "Bob", avatar: URL(string: "https://remote.example/a.png"))
 

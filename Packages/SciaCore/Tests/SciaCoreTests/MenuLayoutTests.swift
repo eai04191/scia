@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import SciaTesting
 @testable import SciaCore
 
 /// 既定で「その他」のすぐ後ろにある項目を持つ、テスト用のメニュー。
@@ -21,12 +22,11 @@ private enum TestMenuItem: String, MenuItemKind {
     ])
 }
 
+@Suite(.scratch)
 @MainActor
 struct MenuLayoutTests {
     private func makeDefaults() throws -> UserDefaults {
-        let suite = "MenuLayoutTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("MenuLayoutTests")
         return defaults
     }
 

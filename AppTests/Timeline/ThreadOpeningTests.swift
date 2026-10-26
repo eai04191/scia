@@ -1,11 +1,12 @@
 import SciaCore
 import Testing
+import SciaTesting
 import UIKit
 @testable import Scia
 
 /// スレッドを開くとき、押した投稿を一覧で見えていた画面上の位置に置き、会話を読んで前後に並べても、その位置から動かさないことを確かめる。
 @MainActor
-@Suite(.serialized)
+@Suite(.scratch, .serialized)
 struct ThreadOpeningTests {
     /// 画面の1ピクセル未満のずれは許容する。
     private var tolerance: CGFloat { 1 / max(UITraitCollection.current.displayScale, 1) }

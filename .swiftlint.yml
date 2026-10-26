@@ -15,6 +15,7 @@ only_rules:
   - unsafe_file_name
   - log_private_value
   - url_session_outside_network_layer
+  - test_file_without_scratch
 
 included:
   - App
@@ -46,6 +47,18 @@ custom_rules:
       - doccomment
       - string
     message: "テストを実際の時間や今の時刻に頼らせない。待つ処理にはTestClockを渡し、ほかの処理はGateかwaitUntilで待ち、日時は決まった値で作る"
+    severity: error
+
+  # テストが毎回違う名前で作る一時ファイルと設定の保存先は、消さないと走らせるたびに溜まる。アプリのテストは端末のアプリのコンテナに、
+  # SciaCoreのテストはMacのユーザーのtmpとLibrary/Preferencesに残り、何万にもなっていた。SciaTestingのTestScratchで作ると、`.scratch`を付けたテストの終わりに消す
+  test_file_without_scratch:
+    included: "(AppTests|Packages/SciaCore/Tests)/.*\\.swift"
+    regex: "\\bUserDefaults\\(suiteName: \"|\\.temporaryDirectory\\b|\\bNSTemporaryDirectory\\("
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "テストで作る一時ファイルと設定の保存先は、TestScratchで作り、テストかスイートに.scratchを付ける"
     severity: error
 
   # 譲る回数で待つテストは、相手がどこまで進んだかを実行の順の都合に任せる。1回譲っただけでは相手が走ったとは限らず、

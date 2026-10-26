@@ -9,9 +9,10 @@ import VideoToolbox
 @testable import SciaCore
 
 /// ビューアで開いたメディアの、ファイルの中身から読む情報を確かめる。
+@Suite(.scratch)
 struct MediaFileDetailsTests {
     private func makeDirectory() throws -> URL {
-        let url = FileManager.default.temporaryDirectory.appending(path: "MediaFileDetailsTests-\(UUID().uuidString)")
+        let url = TestScratch.url("MediaFileDetailsTests")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }

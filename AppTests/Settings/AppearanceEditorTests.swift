@@ -2,15 +2,15 @@ import ImageIO
 import SciaCore
 import SwiftUI
 import Testing
+import SciaTesting
 import UIKit
 @testable import Scia
 
+@Suite(.scratch)
 @MainActor
 struct AppearanceEditorTests {
     private func makeSettings() throws -> AppSettings {
-        let suite = "AppearanceEditorTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("AppearanceEditorTests")
         return AppSettings(defaults: defaults)
     }
 

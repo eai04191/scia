@@ -3,9 +3,10 @@ import SciaTesting
 import Testing
 @testable import Scia
 
+@Suite(.scratch)
 struct MediaFileCacheTests {
     private struct Directories {
-        let root = URL.temporaryDirectory.appending(path: "MediaFileCacheTests-\(UUID().uuidString)")
+        let root = TestScratch.url("MediaFileCacheTests")
         var cache: URL { root.appending(path: "cache") }
         var sharing: URL { root.appending(path: "sharing") }
 

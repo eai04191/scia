@@ -1,7 +1,9 @@
 import Foundation
 import Testing
+import SciaTesting
 @testable import SciaCore
 
+@Suite(.scratch)
 @MainActor
 struct UnprocessableMediaFormatsTests {
     private func instance() throws -> URL {
@@ -9,9 +11,7 @@ struct UnprocessableMediaFormatsTests {
     }
 
     private func makeDefaults() throws -> UserDefaults {
-        let suite = "UnprocessableMediaFormatsTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("UnprocessableMediaFormatsTests")
         return defaults
     }
 

@@ -7,9 +7,10 @@ import Testing
 import UniformTypeIdentifiers
 @testable import SciaCore
 
+@Suite(.scratch)
 struct MediaReencoderTests {
     private func makeDirectory() throws -> URL {
-        let directory = FileManager.default.temporaryDirectory.appending(path: "MediaReencoderTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+        let directory = TestScratch.url("MediaReencoderTests")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory
     }

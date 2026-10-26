@@ -1,9 +1,11 @@
 import Foundation
 import Testing
+import SciaTesting
 @testable import SciaCore
 
+@Suite(.scratch)
 struct StorageUsageTests {
-    private let root = FileManager.default.temporaryDirectory.appending(path: "StorageUsageTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+    private let root = TestScratch.url("StorageUsageTests")
 
     /// `path`に`size`バイトのファイルを書く。
     @discardableResult

@@ -6,10 +6,11 @@ import Testing
 import UIKit
 @testable import Scia
 
+@Suite(.scratch)
 @MainActor
 struct MediaDownloadsTests {
     private func makeStaging() -> URL {
-        .temporaryDirectory.appending(path: "MediaDownloadsTests-\(UUID().uuidString)")
+        TestScratch.url("MediaDownloadsTests")
     }
 
     /// 落としたファイルはキャッシュに置き、同じ添付ファイルをまた共有するときは落とし直さない。渡すのは毎回キャッシュのコピー。

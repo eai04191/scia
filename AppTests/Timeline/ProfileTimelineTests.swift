@@ -1,11 +1,12 @@
 import SciaCore
 import Testing
+import SciaTesting
 import UIKit
 @testable import Scia
 
 /// プロフィールを開いて戻る操作と、プロフィールのヘッダーの伸び縮みで、読んでいる位置が動かないことを確かめる。
 @MainActor
-@Suite(.serialized)
+@Suite(.scratch, .serialized)
 struct ProfileTimelineTests {
     private var tolerance: CGFloat { 1 / max(UITraitCollection.current.displayScale, 1) }
 

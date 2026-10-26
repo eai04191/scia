@@ -1,8 +1,10 @@
 import Foundation
 import Synchronization
 import Testing
+import SciaTesting
 @testable import SciaCore
 
+@Suite(.scratch)
 @MainActor
 struct AccountRegistryTests {
     /// 読み出す順が決まらないKeychainに合わせ、保存した順と逆に返す。
@@ -42,9 +44,7 @@ struct AccountRegistryTests {
     }
 
     private func makeDefaults() throws -> UserDefaults {
-        let name = "net.mizle.scia.tests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
+        let defaults = TestScratch.defaults("net.mizle.scia.tests")
         return defaults
     }
 

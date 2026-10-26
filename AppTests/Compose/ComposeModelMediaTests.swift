@@ -8,6 +8,7 @@ import UIKit
 @testable import Scia
 
 /// 投稿欄で選んだメディアのアップロードと、投稿の`media_ids[]`。
+@Suite(.scratch)
 @MainActor
 struct ComposeModelMediaTests {
     private struct Failure: Error {}
@@ -85,7 +86,7 @@ struct ComposeModelMediaTests {
     }
 
     private func picked(_ id: String) throws -> PickedMedia {
-        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "\(id).jpg")
         // 送る前に大きさを読むので、読める画像にする。
@@ -98,7 +99,7 @@ struct ComposeModelMediaTests {
 
     /// ペーストしたメディア。`kind`は、上限を超えて足さなかったときに知らせる種類にだけ使う。
     private func pasted(_ name: String, kind: MediaAttachment.Kind = .image) throws -> PastedMedia {
-        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "\(name).jpg")
         try writePhoto(width: 4, height: 3, to: url)
@@ -157,10 +158,10 @@ struct ComposeModelMediaTests {
             }
             return Self.attachment(id: "m-\(upload.filename)", processed: true)
         }
-        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         // ピッカーから読み込むたびに別のディレクトリへコピーするのと同じく、HEICとJPEGを別のディレクトリに置く。送り直すときはHEICをディレクトリごと消すため。
-        let jpegFolder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        let jpegFolder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: jpegFolder, withIntermediateDirectories: true)
         let heic = folder.appending(path: "a.heic")
         let jpeg = jpegFolder.appending(path: "a.jpg")
@@ -187,7 +188,7 @@ struct ComposeModelMediaTests {
     /// 元のまま送る写真でも、撮った場所の位置情報は除いて送る。サーバーが除くかはAPIで分からないため。
     @Test func removesLocationBeforeSending() async throws {
         let server = FakeServer()
-        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "located.jpg")
         let image = try #require(UIGraphicsImageRenderer(size: CGSize(width: 40, height: 30)).image { context in
@@ -219,7 +220,7 @@ struct ComposeModelMediaTests {
             return Self.attachment(id: "m-\(upload.filename)", processed: true)
         }
         func folder() throws -> URL {
-            let url = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+            let url = TestScratch.url("ComposeModelMediaTests")
             try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
             return url
         }
@@ -250,7 +251,7 @@ struct ComposeModelMediaTests {
     /// サーバーの容量の上限を超える画像は、収まるまで縮めて送り、使う人が選んでいない変化なので知らせる。
     @Test func shrinksImageToFitTheServerSizeLimitAndTells() async throws {
         let server = FakeServer()
-        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "large.jpg")
         try writePhoto(width: 800, height: 600, noise: true, to: url)
@@ -287,7 +288,7 @@ struct ComposeModelMediaTests {
             uploadCount += 1
             return Self.attachment(id: "m\(uploadCount)", processed: true, description: upload.description)
         }
-        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "photo.jpg")
         try writePhoto(width: 400, height: 300, to: url)
@@ -321,7 +322,7 @@ struct ComposeModelMediaTests {
     /// 同じ範囲を選び直しても送り直さない。範囲を外すと、元のまま送り直す。
     @Test func clearingCropResendsOriginal() async throws {
         let server = FakeServer()
-        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "photo.jpg")
         try writePhoto(width: 40, height: 30, to: url)
@@ -349,7 +350,7 @@ struct ComposeModelMediaTests {
     @Test func cancelledUploadDoesNotDeleteOriginalWhenCropping() async throws {
         let server = FakeServer()
         server.completesImmediately = false
-        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "photo.heic")
         try writePhoto(width: 40, height: 30, to: url)
@@ -374,7 +375,7 @@ struct ComposeModelMediaTests {
     /// 開き直して動かさずに完了したときのように、割合が丸めの誤差でずれても、同じ画素を選んでいれば送り直さない。
     @Test func cropSelectingSamePixelsDoesNotResend() async throws {
         let server = FakeServer()
-        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "photo.jpg")
         try writePhoto(width: 40, height: 30, to: url)
@@ -398,7 +399,7 @@ struct ComposeModelMediaTests {
     /// 動画は切り抜かない。
     @Test func cannotCropVideo() async throws {
         let server = FakeServer()
-        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "clip.mov")
         try Data([0]).write(to: url)
@@ -533,7 +534,7 @@ struct ComposeModelMediaTests {
 
     /// ピッカーで選んだ1秒の動画。
     private func pickedVideo(_ id: String, withAudio: Bool) async throws -> PickedMedia {
-        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "\(id).mov")
         try await TestVideo.write(width: 64, height: 36, withAudio: withAudio, to: url)
@@ -542,7 +543,7 @@ struct ComposeModelMediaTests {
 
     /// 送った動画に音声があるか。
     private func hasAudio(_ upload: MediaUpload) async throws -> Bool {
-        let url = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString).mov")
+        let url = TestScratch.url("ComposeModelMediaTests", pathExtension: "mov")
         defer { try? FileManager.default.removeItem(at: url) }
         try upload.data.write(to: url)
         return try #require(await VideoReencoder.info(of: url)).hasAudio
@@ -769,7 +770,7 @@ struct ComposeModelMediaTests {
             }
             return Self.attachment(id: "m-\(upload.filename)", processed: true)
         }
-        let folder = FileManager.default.temporaryDirectory.appending(path: "ComposeModelMediaTests-\(UUID().uuidString)")
+        let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let heic = folder.appending(path: "p.heic")
         let image = try #require(UIGraphicsImageRenderer(size: CGSize(width: 40, height: 30)).image { context in

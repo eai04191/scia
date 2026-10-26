@@ -7,7 +7,7 @@ import UIKit
 
 /// 投稿欄を実際のウィンドウに載せ、開閉や返信先の付け替えで行が崩れないことを確かめる。
 @MainActor
-@Suite(.serialized)
+@Suite(.scratch, .serialized)
 struct InlineComposeControllerTests {
     private let window: UIWindow
     private let composer: InlineComposeController
@@ -26,9 +26,7 @@ struct InlineComposeControllerTests {
         window.frame = CGRect(x: 0, y: 0, width: 393, height: 852)
         window.rootViewController = tabBarController
         window.makeKeyAndVisible()
-        let suite = "InlineComposeControllerTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("InlineComposeControllerTests")
         settings = AppSettings(defaults: defaults)
         // 動きの終わりを待つだけのテストが、実際の長さの動きを待たずに済むよう、形を変える動きを短くする。
         // 動きの途中で状態を見るテストや次の操作を送るテストは、間合いをアプリの既定の長さに合わせて決めているので、useDefaultAnimationDurations()で戻す。
@@ -651,7 +649,7 @@ struct InlineComposeControllerTests {
     }
 
     private func pickedImage() throws -> PickedMedia {
-        let folder = FileManager.default.temporaryDirectory.appending(path: "InlineComposeControllerTests-\(UUID().uuidString)")
+        let folder = TestScratch.url("InlineComposeControllerTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "a.jpg")
         // 送る前に大きさを読むので、読める画像にする。

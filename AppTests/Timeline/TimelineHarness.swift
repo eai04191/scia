@@ -30,9 +30,7 @@ final class TimelineHarness {
         notices: NoticeCenter = NoticeCenter(),
         prepare: ((TimelineViewController) -> Void)? = nil
     ) throws {
-        let suite = "TimelineHarness.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("TimelineHarness")
         settings = AppSettings(defaults: defaults)
         viewController = TimelineViewController(refresh: {}, tuning: tuning, emojiImages: .offline, mediaImages: mediaImages, avatarImages: .offline, settings: settings)
         viewController.headerView = headerView
@@ -160,7 +158,7 @@ extension AvatarImageStore {
 extension MediaFileCache {
     /// テストごとに別の場所を使うキャッシュ。
     static func temporary() -> MediaFileCache {
-        let root = URL.temporaryDirectory.appending(path: "MediaFileCache-\(UUID().uuidString)")
+        let root = TestScratch.url("MediaFileCache")
         return MediaFileCache(directory: root.appending(path: "cache"), sharingDirectory: root.appending(path: "sharing"))
     }
 }

@@ -3,12 +3,11 @@ import SciaTesting
 import Testing
 @testable import SciaCore
 
+@Suite(.scratch)
 @MainActor
 struct ConnectionDiagnosticsTests {
     private func makeMediaFormats() throws -> UnprocessableMediaFormats {
-        let suite = "ConnectionDiagnosticsTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("ConnectionDiagnosticsTests")
         return UnprocessableMediaFormats(defaults: defaults, instance: try #require(URL(string: "https://example.social")))
     }
 

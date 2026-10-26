@@ -5,6 +5,7 @@ import UIKit
 @testable import Scia
 
 /// ウインドウに重ねたチップの列の置き場所。決まりはdocs/notices.mdの「チップ」と「置き場所」にある。
+@Suite(.scratch)
 @MainActor
 struct TimelineNoticeTests {
     private let failure = Notice.interactionFailure(title: "お気に入りを変更できませんでした") {}

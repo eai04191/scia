@@ -4,12 +4,11 @@ import Testing
 import UIKit
 @testable import Scia
 
+@Suite(.scratch)
 @MainActor
 struct StatusMenuTests {
     private func makeSettings() throws -> AppSettings {
-        let suite = "StatusMenuTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("StatusMenuTests")
         return AppSettings(defaults: defaults)
     }
 

@@ -1,7 +1,9 @@
 import Foundation
 import Testing
+import SciaTesting
 @testable import SciaCore
 
+@Suite(.scratch)
 @MainActor
 struct AccountScopedDefaultsTests {
     private func credential(_ username: String, accountID: String, host: String = "example.social") throws -> Credential {
@@ -16,7 +18,7 @@ struct AccountScopedDefaultsTests {
     }
 
     private func makeDefaults() throws -> (UserDefaults, String) {
-        let suite = "AccountScopedDefaultsTests-\(UUID().uuidString)"
+        let suite = TestScratch.suiteName("AccountScopedDefaultsTests")
         return (try #require(UserDefaults(suiteName: suite)), suite)
     }
 
@@ -24,8 +26,7 @@ struct AccountScopedDefaultsTests {
     /// サーバーごとの値（最近使った絵文字、処理できない形式）は、同じサーバーのアカウントが残っている間は残し、いなくなったら消す。
     /// ホスト名にも「.」が入るため、名前が前に一致する別のサーバーのアカウントとサーバーの値を巻き込まない。
     @Test func keepsDataOfServerWhoseNameStartsTheSame() throws {
-        let (defaults, suite) = try makeDefaults()
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let (defaults, _) = try makeDefaults()
         let alice = try credential("alice", accountID: "1")
         let other = try credential("alice", accountID: "1", host: "example.social.jp")
         let settings = AppSettings(defaults: defaults)
@@ -40,7 +41,6 @@ struct AccountScopedDefaultsTests {
 
     @Test func removesAccountDataAndServerDataWithLastAccount() throws {
         let (defaults, suite) = try makeDefaults()
-        defer { defaults.removePersistentDomain(forName: suite) }
         let alice = try credential("alice", accountID: "1")
         let bob = try credential("bob", accountID: "2")
         let settings = AppSettings(defaults: defaults)

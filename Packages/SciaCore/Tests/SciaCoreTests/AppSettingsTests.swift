@@ -1,13 +1,13 @@
 import Foundation
 import Testing
+import SciaTesting
 @testable import SciaCore
 
+@Suite(.scratch)
 @MainActor
 struct AppSettingsTests {
     private func makeDefaults() throws -> UserDefaults {
-        let suite = "AppSettingsTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("AppSettingsTests")
         return defaults
     }
 

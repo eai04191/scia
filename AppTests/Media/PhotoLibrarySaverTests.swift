@@ -2,9 +2,11 @@ import Foundation
 import Photos
 import SciaCore
 import Testing
+import SciaTesting
 import UIKit
 @testable import Scia
 
+@Suite(.scratch)
 @MainActor
 struct PhotoLibrarySaverTests {
     /// 本物の写真ライブラリに保存する。写真ライブラリは変更のクロージャを自前のキューで呼ぶため、
@@ -18,7 +20,7 @@ struct PhotoLibrarySaverTests {
             UIColor.systemGreen.setFill()
             context.fill(CGRect(x: 0, y: 0, width: 8, height: 8))
         }.pngData())
-        let file = URL.temporaryDirectory.appending(path: "PhotoLibrarySaverTests-\(UUID().uuidString).png")
+        let file = TestScratch.url("PhotoLibrarySaverTests", pathExtension: "png")
         try data.write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
 

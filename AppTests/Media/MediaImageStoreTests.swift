@@ -6,6 +6,7 @@ import Testing
 import UIKit
 @testable import Scia
 
+@Suite(.scratch)
 @MainActor
 struct MediaImageStoreTests {
     private func pngData() throws -> Data {
@@ -189,6 +190,7 @@ struct MediaImageStoreTests {
 }
 
 /// 読めなかった画像は、一覧に描いたときは間隔をおいてから読み直し、ビューアを開いたときはすぐ読み直す。
+@Suite(.scratch)
 @MainActor
 struct MediaImageStoreRetryTests {
     private let clock = TestClock()

@@ -1,9 +1,11 @@
 import Foundation
 import SciaCore
 import Testing
+import SciaTesting
 
+@Suite(.scratch)
 struct SharedMediaInboxTests {
-    private let root = FileManager.default.temporaryDirectory.appending(path: "SharedMediaInboxTests-\(UUID().uuidString)", directoryHint: .isDirectory)
+    private let root = TestScratch.url("SharedMediaInboxTests")
 
     private func makeFile(named name: String, contents: String) throws -> URL {
         let folder = root.appending(path: "source-\(UUID().uuidString)", directoryHint: .isDirectory)

@@ -3,6 +3,7 @@ import SciaTesting
 import Testing
 @testable import SciaCore
 
+@Suite(.scratch)
 @MainActor
 struct ComposeCompletionTests {
     /// 問い合わせを記録し、語ごとに決めた応答を返す。`held`の語は、`release`するまで応答を返さない（取り消されても返さない）。
@@ -490,9 +491,7 @@ struct ComposeCompletionTests {
     // MARK: - 手元の候補
 
     private func makeRecentMentions() throws -> RecentMentions {
-        let suite = "ComposeCompletionTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("ComposeCompletionTests")
         return RecentMentions(defaults: defaults, account: "@me@example.social")
     }
 

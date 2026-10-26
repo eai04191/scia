@@ -1,7 +1,9 @@
 import Foundation
 import Testing
+import SciaTesting
 @testable import SciaCore
 
+@Suite(.scratch)
 struct TabPlacementTests {
     /// 既定は、切り替えタブを使わず、今までどおり4つを直接並べる。
     @Test func defaultPlacesEveryTimelineDirectly() {
@@ -140,12 +142,11 @@ struct TabPlacementTests {
     }
 }
 
+@Suite(.scratch)
 @MainActor
 struct TabLayoutSettingsTests {
     private func makeDefaults() throws -> UserDefaults {
-        let suite = "TabLayoutSettingsTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("TabLayoutSettingsTests")
         return defaults
     }
 

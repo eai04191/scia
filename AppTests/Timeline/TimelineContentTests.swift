@@ -1,10 +1,11 @@
 import SciaCore
 import Testing
+import SciaTesting
 import UIKit
 @testable import Scia
 
 @MainActor
-@Suite(.serialized)
+@Suite(.scratch, .serialized)
 struct TimelineContentTests {
     private func makeViewController() -> TimelineViewController {
         TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: .isolated())

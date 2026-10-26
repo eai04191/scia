@@ -9,13 +9,14 @@ import UIKit
 /// 文字列に言語がないと、システムは端末の言語の一覧から漢字とかなの書体を選び、英語の設定では中国語の書体で描かれていた。
 /// アプリの文言は、アプリが表示している言語の字形で描く。人が書いた言語の分からない文字は、設定の「漢字の字形」で描く。
 /// 英語の設定（`-testLanguage en`）でも通す。
+@Suite(.scratch)
 @MainActor
 struct WindowGlyphLanguageTests {
     private let text = "直骨関ホーム"
     private let font = UIFont.systemFont(ofSize: 40)
 
     private func settings(_ glyphLanguage: GlyphLanguage) throws -> AppSettings {
-        let defaults = try #require(UserDefaults(suiteName: "WindowGlyphLanguageTests.\(UUID().uuidString)"))
+        let defaults = TestScratch.defaults("WindowGlyphLanguageTests")
         let settings = AppSettings(defaults: defaults)
         settings.glyphLanguage = glyphLanguage
         return settings

@@ -6,7 +6,7 @@ import UIKit
 
 /// 共有で投稿欄に入れるときに、一覧の上に重ねた画面のうち、ビューアとメニューだけを閉じる。
 @MainActor
-@Suite(.serialized)
+@Suite(.scratch, .serialized)
 struct ComposerRevealTests {
     private let notices = NoticeCenter()
     private let drag = DragToDismiss(distanceThreshold: 0.12, velocityThreshold: 0.8, smallestScale: 0.6, fadeDistance: 0.5, restoreDuration: 0.35)

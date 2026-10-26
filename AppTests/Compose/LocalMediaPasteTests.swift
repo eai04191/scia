@@ -1,11 +1,13 @@
 import Foundation
 import SciaCore
 import Testing
+import SciaTesting
 import UIKit
 import UniformTypeIdentifiers
 @testable import Scia
 
 /// ペーストしたファイルのURLの項目を、指す先のファイルで添付に回すか。
+@Suite(.scratch)
 @MainActor
 struct LocalMediaPasteTests {
     /// MacのFinderでコピーしたファイルと同じく、ファイルのURL、ファイル名の文字、アイコンの画像を持つ項目を作る。
@@ -21,7 +23,7 @@ struct LocalMediaPasteTests {
     }
 
     private func temporaryFile(named name: String, contents: Data) throws -> URL {
-        let folder = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let folder = TestScratch.url("LocalMediaPasteTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: name)
         try contents.write(to: url)

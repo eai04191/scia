@@ -1,7 +1,9 @@
 import Foundation
 import Testing
+import SciaTesting
 @testable import SciaCore
 
+@Suite(.scratch)
 @MainActor
 struct TuningStoreTests {
     private let interval = NumberTuning(id: "interval", title: "挿入間隔", range: 0...5, step: 0.1, defaultValue: 1)
@@ -16,9 +18,7 @@ struct TuningStoreTests {
     private var items: [TuningSection] { [streaming, appearance] }
 
     private func makeDefaults() throws -> UserDefaults {
-        let suite = "TuningStoreTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("TuningStoreTests")
         return defaults
     }
 

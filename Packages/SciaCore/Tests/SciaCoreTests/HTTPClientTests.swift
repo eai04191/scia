@@ -5,6 +5,7 @@ import Testing
 @testable import SciaCore
 
 /// アプリの通信はすべて`HTTPClient`を通り、同じ決まり（docs/network.md）に従う。
+@Suite(.scratch)
 struct HTTPClientTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
@@ -290,7 +291,7 @@ extension HTTPClient {
 /// エラーの本文をファイルに落とす口。消されたかを確かめられるよう、書いたファイルを覚える。
 private final class RecordingDownloadTransport: HTTPTransport {
     let statusCode: Int
-    let file = URL.temporaryDirectory.appending(path: "RecordingDownloadTransport-\(UUID().uuidString)")
+    let file = TestScratch.url("RecordingDownloadTransport")
 
     init(statusCode: Int) {
         self.statusCode = statusCode

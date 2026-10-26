@@ -1,9 +1,11 @@
 import Foundation
 import SciaCore
 import Testing
+import SciaTesting
 import UIKit
 @testable import Scia
 
+@Suite(.scratch)
 @MainActor
 struct LinkLabelTests {
     private func label(for text: RichText, width: CGFloat = 300) -> LinkLabel {
@@ -216,9 +218,7 @@ struct LinkLabelTests {
     }
 
     private func settings() throws -> AppSettings {
-        let suite = "LinkLabelTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
+        let defaults = TestScratch.defaults("LinkLabelTests")
         return AppSettings(defaults: defaults)
     }
 

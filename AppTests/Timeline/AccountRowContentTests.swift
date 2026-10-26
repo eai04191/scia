@@ -1,8 +1,10 @@
 import SciaCore
 import Testing
+import SciaTesting
 import UIKit
 @testable import Scia
 
+@Suite(.scratch)
 @MainActor
 struct AccountRowContentTests {
     private func visibleLabels(in view: UIView) -> [UILabel] {
