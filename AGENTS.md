@@ -94,6 +94,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 状態が1つしかないか実物ですぐ出せる見た目、動きや間合い（アニメーション、ジェスチャー、スクロール位置）、画面をまたぐ流れは、カタログに載せない。動きはチューニングと録画で確かめる
 - カタログは状態を直接渡し、置き場所も実物をまねたものなので、その状態にたどり着くかと、置かれた場所での見え方（ほかの表示との重なり、安全領域、キーボード）は確かめられない。ふだん通る流れは実物で撮り、失敗の流れも`scia-debug://status/502`などで実物で一度は通す。カタログでは、実物で出しにくい状態と、文言や長さの違いを見比べる
 - 部品の見た目を変えた作業の報告には、カタログに足した状態か載せない理由と、どの状態を実物で見て、どの状態をカタログだけで見たかを書く
+- 「投稿の見た目」の項目や見本、投稿の行の描き方を変えたら、すべての項目と選択肢を変える前と後に並べた画像を作って、全部見る。`TEST_RUNNER_SCIA_APPEARANCE_SHEETS=1 xcodebuild -project Scia.xcodeproj -scheme Scia -destination 'platform=iOS Simulator,name=<使う端末>' -derivedDataPath DerivedData test -only-testing:SciaTests/AppearanceSheets`で、`xcrun simctl get_app_container '<使う端末>' net.mizle.scia data`のtmp/AppearanceSheetsに書く。示す帯（赤）が変わった部分と合っているか、変えて崩れないかを確かめる。いくつかをつまんで見るだけでは、ずれに気づけない
 - トークンが無効になったときの表示の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unauthorized'`で、以後のREST APIに401を返させる。資格情報は消えず、起動し直すと戻る
 - 読めなかった投稿や通知の行の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://unreadable'`で、以後のホームと通知の応答の3件に1件を読めない形に壊して読み込み直す。起動し直すと戻る
 - サーバーやプロキシの障害の表示の確認には、`xcrun simctl openurl '<使う端末>' 'scia-debug://status/502'`のように、以後のREST APIにそのステータスのHTMLのエラーページを返させて読み込み直す。`?retry-after=<秒>`を付けると`Retry-After`ヘッダーも返し、429や503で自動の通信を止めて明けたら読み込み直すところを確かめられる。`&target=<経路>`を付けると、REST API（`api`、省略時）のほかの経路にも返させる。経路は`media-proxy`（サーバーが中継する画像）、`files`（そのほかの画像やファイル、リンク先のページ）、`x`（fxtwitter）、`streaming`（つなぐときの応答を断る。開いている接続も切る）、`all`。`scia-debug://status/ok`か起動し直すと戻る
