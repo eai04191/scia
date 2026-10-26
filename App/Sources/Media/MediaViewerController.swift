@@ -2407,14 +2407,18 @@ final class PlayerPageController: MediaPageController {
     }
 
     /// 最後まで再生したとき、再生の途中で読めなくなったとき、ページを離れたときに、Now Playingを離す。途中で止めただけなら、再生し直せるよう掴んだままにする。
-    /// 標準の再生画面は、更新をやめると情報を空にして送るが、止めたことは伝えない。Macでは止めたと伝えないと、ほかのアプリが再生するまでNow Playingがこのアプリのままになる。
-    /// `playbackState`はアプリで1つなので、Macで2つのビューアのウィンドウが同時に再生しているときは、片方が離すと、もう片方も止めたことになる。
-    /// もう片方は次に再生か一時停止をしたときに伝え直す。複数のウィンドウで同時に再生する使い方は想定せず、ページの間で持ち主を調停しない。
+    /// 標準の再生画面は、情報を出し始めるときにアプリをNow Playingの持ち主になれると届け出るが、更新をやめても取り下げない。
+    /// Macでは、届け出たままだと、止めたと伝えても、ほかのアプリが再生していてもNow Playingがこのアプリのままになる（macOS 27.0.1で確かめた）。
+    /// 公開の手段では`endReceivingRemoteControlEvents()`で取り下げられる。これは`beginReceivingRemoteControlEvents()`の回数が1から0に戻ったときにだけ取り下げるため、組にして呼ぶ。
+    /// 届け出と`playbackState`はアプリで1つなので、Macで2つのビューアのウィンドウが同時に再生しているときは、片方が離すと、もう片方もNow Playingから外れる。
+    /// 複数のウィンドウで同時に再生する使い方は想定せず、ページの間で持ち主を調停しない。
     private func releaseNowPlaying() {
         guard holdsNowPlaying else { return }
         holdsNowPlaying = false
         playerController.updatesNowPlayingInfoCenter = false
         MPNowPlayingInfoCenter.default().playbackState = .stopped
+        UIApplication.shared.beginReceivingRemoteControlEvents()
+        UIApplication.shared.endReceivingRemoteControlEvents()
     }
 
     override func stateDump() -> String {
