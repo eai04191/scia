@@ -191,7 +191,28 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: net.mizle.scia.uitests
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: Scia
+  # UIKitの公開されていない作りに頼っている部分が、シミュレーターのiOSの今の版でも動くかを確かめる。版が変わったときだけmake testから走らせる（Tools/system-ui-check.sh）
+  SciaSystemUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - AppSystemUITests
+    dependencies:
+      - target: Scia
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: net.mizle.scia.systemuitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Scia
 schemes:
+  SciaSystemUITests:
+    build:
+      targets:
+        Scia: all
+        SciaSystemUITests: [test]
+    test:
+      targets:
+        - SciaSystemUITests
   # シナリオは録画と合わせて走らせるため、make testで走る`Scia`のテストに混ぜない
   SciaPromo:
     build:
