@@ -21,6 +21,10 @@ struct URLSessionWebSocketTests {
 
         #expect(try await connection.receive() == "first")
         #expect(try await connection.receive() == "second")
+        // 本番と同じく、受信を待ったままpingを送る。メッセージを読んだあと受信を待たずにpingだけを送ると、
+        // ほかのテストと並べて走らせたときに、応答が来ないまま終わらないことがあった（全体のテストを100回走らせて5回）。受信を待つ形では200回とも返った。
+        let receiving = Task { try? await connection.receive() }
+        defer { receiving.cancel() }
         try await connection.ping()
         #expect(server.receivedAuthorization == "Bearer token")
     }
