@@ -91,5 +91,54 @@ struct ProfileTimelineTests {
         let after = header.convert(header.bounds, to: nil).minY
         #expect(abs(after - before) <= tolerance, "ヘッダーが\(after - before)pt動きました")
     }
-}
 
+    /// 固定された投稿の棚はタブの下にあり、「投稿」の一覧でだけ出す。タブを切り替えて棚が出たり消えたりしても、ヘッダーとタブは押した場所に残す。
+    @Test(arguments: [200.0, -200.0])
+    func pinnedShelfChangingWithTabKeepsHeaderPosition(heightChange: CGFloat) throws {
+        let header = UIView()
+        let height = header.heightAnchor.constraint(equalToConstant: 600)
+        height.isActive = true
+        let harness = try TimelineHarness(headerView: header)
+        defer { harness.tearDown() }
+        let posts = StatusFactory.make(count: 40, startingAt: 1_000)
+        harness.viewController.setEntries(posts.map(TimelineEntry.status))
+        harness.collectionView.layoutIfNeeded()
+        // ヘッダーの下端が画面の半分あたりに来るまでスクロールする。
+        harness.collectionView.contentOffset.y = -harness.collectionView.adjustedContentInset.top + 300
+        harness.collectionView.layoutIfNeeded()
+        let before = header.convert(header.bounds, to: nil).minY
+
+        // プロフィールは、棚を変えてヘッダーの高さを測り直してから、切り替えた一覧を入れる。
+        height.constant += heightChange
+        harness.viewController.headerDidChangeSize()
+        let middle = header.convert(header.bounds, to: nil).minY
+        #expect(abs(middle - before) <= tolerance, "高さを測り直した時点でヘッダーが\(middle - before)pt動きました")
+        harness.viewController.setEntries(Array(posts.prefix(20)).map(TimelineEntry.status), keepsOffset: true)
+        harness.collectionView.layoutIfNeeded()
+
+        let after = header.convert(header.bounds, to: nil).minY
+        #expect(abs(after - before) <= tolerance, "ヘッダーが\(after - before)pt動きました")
+        // 一覧が持つヘッダーの高さが、測り直した高さになっている。見積もりの高さに戻ったままだと、ヘッダーが画面外と見なされて消える。
+        let attributes = harness.collectionView.layoutAttributesForSupplementaryElement(ofKind: UICollectionView.elementKindSectionHeader, at: IndexPath(item: 0, section: 0))
+        #expect(abs((attributes?.frame.height ?? 0) - height.constant) <= tolerance, "一覧のヘッダーの高さが\(attributes?.frame.height ?? 0)ptでした")
+    }
+
+    /// 一番上から引っぱっている間に、画像やアカウントが届いてヘッダーの高さが変わっても、引っぱった分を保つ。上端に詰めると、指を離す前にヘッダーが跳ぶ。
+    @Test func headerChangingWhilePulledKeepsPull() throws {
+        let header = UIView()
+        let height = header.heightAnchor.constraint(equalToConstant: 600)
+        height.isActive = true
+        let harness = try TimelineHarness(headerView: header)
+        defer { harness.tearDown() }
+        harness.setStatuses(StatusFactory.make(count: 40, startingAt: 1_000))
+        let top = -harness.collectionView.adjustedContentInset.top
+        harness.collectionView.contentOffset.y = top - 80
+        harness.collectionView.layoutIfNeeded()
+
+        height.constant = 700
+        harness.viewController.headerDidChangeSize()
+
+        let pulled = top - harness.collectionView.contentOffset.y
+        #expect(abs(pulled - 80) <= tolerance, "引っぱった分が\(pulled)ptになりました")
+    }
+}

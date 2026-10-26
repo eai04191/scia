@@ -1780,10 +1780,22 @@ extension TimelineViewController {
             at: IndexPath(item: 0, section: 0)
         )?.frame
         let anchor = (headerFrame.map { $0.maxY <= visibleTop } ?? false) ? currentAnchor() : nil
-        collectionView.collectionViewLayout.invalidateLayout()
         if let anchor {
+            collectionView.collectionViewLayout.invalidateLayout()
             restore(anchor)
         } else {
+            // ヘッダーが見えている間は、ヘッダーを動かさず、伸び縮みした分だけ下の行を動かす。
+            // 作り直したレイアウトでは、ヘッダーの高さが見積もり（28pt）に戻り、その高さで画面に入るときだけ測り直される。
+            // ヘッダーの上端が画面の上の外にあると、見積もりのまま画面外と見なされ、ヘッダーが消える。
+            // そのため、作り直す間だけ一番上へ移して測らせ、同じフレームの中で元の位置へ戻す。
+            let offset = collectionView.contentOffset.y
+            let top = -collectionView.adjustedContentInset.top
+            collectionView.contentOffset.y = top
+            collectionView.collectionViewLayout.invalidateLayout()
+            collectionView.layoutIfNeeded()
+            let bottom = collectionView.contentSize.height + collectionView.adjustedContentInset.bottom - collectionView.bounds.height
+            // 一番上から引っぱっている間（上端より上）は、引っぱった分をそのまま戻す。上端に詰めると、指を離す前にヘッダーが跳ぶ。
+            collectionView.contentOffset.y = offset < top ? offset : min(offset, max(bottom, top))
             collectionView.layoutIfNeeded()
         }
     }
