@@ -949,9 +949,10 @@ final class SessionController {
     /// プロフィールのURLでアカウントを探して開く。自分のサーバーが知らないアカウントも、相手のサーバーに問い合わせて探す。
     private func openProfile(resolving url: URL, acct: String, from source: UIViewController) {
         let client = client
+        let accounts = accounts
         let logger = logger
         openProfile(from: source) {
-            guard let account = try await client.resolveAccount(at: url) else {
+            guard let account = try await accounts.resolve(.profileURL(url), search: { try await client.resolveAccount(at: url) }) else {
                 logger.error("profile not found host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash))")
                 throw ProfileNotFound(acct: acct)
             }
@@ -962,9 +963,10 @@ final class SessionController {
     /// リンクのメニューの「プロフィールとして開く」。リンク先をプロフィールとして探し、見つかれば開く。探すにはサーバーが相手のページを取りに行くため、時間がかかりやすい。
     private func openProfile(resolvingLink url: URL, from source: UIViewController) {
         let client = client
+        let accounts = accounts
         let logger = logger
         openProfile(from: source) {
-            guard let account = try await client.resolveAccount(at: url) else {
+            guard let account = try await accounts.resolve(.profileURL(url), search: { try await client.resolveAccount(at: url) }) else {
                 logger.info("profile not found for link host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash))")
                 throw LinkProfileNotFound()
             }
@@ -1419,7 +1421,8 @@ final class SessionController {
         case .account(let id, let acct):
             return (id, acct)
         case .profileURL(let url, let shownAcct):
-            guard let account = try await client.resolveAccount(at: url) else {
+            let client = client
+            guard let account = try await accounts.resolve(.profileURL(url), search: { try await client.resolveAccount(at: url) }) else {
                 logger.error("user menu target not found host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash))")
                 throw ProfileNotFound(acct: shownAcct)
             }
@@ -2274,9 +2277,10 @@ final class SessionController {
         }
         guard let root = tabs.selectedNavigation?.viewControllers.first else { return }
         let client = client
+        let accounts = accounts
         let logger = logger
         openProfile(from: root) {
-            guard let account = try await client.resolveAccount(acct) else {
+            guard let account = try await accounts.resolve(.acct(acct), search: { try await client.resolveAccount(acct) }) else {
                 logger.error("profile not found acct=\(acct, privacy: .private(mask: .hash))")
                 throw ProfileNotFound(acct: acct)
             }

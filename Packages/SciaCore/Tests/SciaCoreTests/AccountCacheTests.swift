@@ -1,5 +1,6 @@
 import Foundation
 import Synchronization
+import SciaTesting
 import Testing
 @testable import SciaCore
 
@@ -129,5 +130,63 @@ struct AccountCacheTests {
         server.fail(false)
         #expect(await cache.load(["1", "missing-2"]).keys.sorted() == ["1"])
         #expect(server.requests == [["1"], ["missing-2"], ["1", "missing-2"]])
+    }
+
+    /// 探して見つかったアカウントは、探した値ごとに覚え、次は探さずに返す。ハンドルは大文字と小文字を区別しない。
+    /// 見つかったアカウントはIDでも引ける。
+    @Test func resolvedAccountIsRememberedByLookup() async throws {
+        let cache = makeCache(Server())
+        let searches = Mutex(0)
+        let found = Account(id: "7", username: "alice", acct: "alice@remote.example", displayName: "", avatar: nil)
+        let search: @Sendable () async throws -> Account? = {
+            searches.withLock { $0 += 1 }
+            return found
+        }
+
+        #expect(try await cache.resolve(.acct("Alice@Remote.example"), search: search)?.id == "7")
+        #expect(try await cache.resolve(.acct("alice@remote.example"), search: search)?.id == "7")
+        #expect(searches.withLock { $0 } == 1)
+        #expect(cache.account("7")?.acct == "alice@remote.example")
+    }
+
+    /// 探している途中の値を続けて探したら、二重に検索せず、その検索を待つ。
+    @Test func resolvingSameLookupWaitsForSearchInFlight() async throws {
+        let cache = makeCache(Server())
+        let gate = Gate()
+        let searches = Mutex(0)
+        let url = try #require(URL(string: "https://remote.example/@alice"))
+        let search: @Sendable () async throws -> Account? = {
+            searches.withLock { $0 += 1 }
+            try await gate.wait()
+            return Account(id: "7", username: "alice", acct: "alice@remote.example", displayName: "", avatar: nil)
+        }
+
+        let first = Task { try await cache.resolve(.profileURL(url), search: search) }
+        try await waitUntil { gate.waiterCount == 1 }
+        let second = Task { try await cache.resolve(.profileURL(url), search: search) }
+        gate.open()
+
+        #expect(try await first.value?.id == "7")
+        #expect(try await second.value?.id == "7")
+        #expect(searches.withLock { $0 } == 1)
+    }
+
+    /// 見つからなかったときと、検索が失敗したときは覚えず、次に探し直す。
+    @Test func unresolvedLookupIsSearchedAgain() async throws {
+        let cache = makeCache(Server())
+        let searches = Mutex(0)
+        let search: @Sendable () async throws -> Account? = {
+            let count = searches.withLock { state in
+                state += 1
+                return state
+            }
+            if count == 1 { throw URLError(.notConnectedToInternet) }
+            return nil
+        }
+
+        await #expect(throws: URLError.self) { try await cache.resolve(.acct("nobody"), search: search) }
+        #expect(try await cache.resolve(.acct("nobody"), search: search) == nil)
+        #expect(try await cache.resolve(.acct("nobody"), search: search) == nil)
+        #expect(searches.withLock { $0 } == 3)
     }
 }

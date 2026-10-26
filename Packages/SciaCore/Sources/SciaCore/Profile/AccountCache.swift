@@ -1,7 +1,8 @@
-import Foundation
+public import Foundation
 import os
 
 /// ログイン中のセッションで読んだアカウント。メンションのように、IDしか分からない相手のアイコンを出すのに使う。
+/// プロフィールのURLやハンドルで探したアカウントも、探した値ごとに覚える。探すのは検索のAPIで、相手のサーバーへの問い合わせも起きるため、同じ相手を何度も探さない。
 ///
 /// 足りないアカウントは、相手ごとにリクエストを送らず、`MastodonClient.multipleAccountsLimit`件ずつまとめて1回で読む。
 /// メンションが何人いても、メニューを開くたびのリクエストは1回で済み、トークンごとのレート制限を削らない。
@@ -15,6 +16,10 @@ public final class AccountCache {
     private var accounts: [String: Account] = [:]
     /// 読み込み中のIDと、それを読んでいる読み込み。同じIDを続けて求められても、二重に送らない。
     private var inFlight: [String: Task<Void, Never>] = [:]
+    /// 探して見つかったアカウントのID。
+    private var resolvedIDs: [AccountLookup: String] = [:]
+    /// 探している途中の値と、その検索。同じ値を続けて探しても、二重に送らない。
+    private var resolving: [AccountLookup: Task<Account?, any Error>] = [:]
     private let logger = SciaLog.logger(category: "accountCache")
 
     /// - Parameter limit: 1回のリクエストで読む数。
@@ -57,6 +62,43 @@ public final class AccountCache {
         }
         return unique.reduce(into: [:]) { loaded, id in
             loaded[id] = accounts[id]
+        }
+    }
+
+    /// `lookup`で探したアカウント。前に見つけていればそれを返し、探している途中ならその検索を待ち、どちらでもなければ`search`で探す。
+    /// 見つからなかったときと、検索が失敗したときは覚えず、次に求められたときに探し直す。
+    public func resolve(_ lookup: AccountLookup, search: @escaping @Sendable () async throws -> Account?) async throws -> Account? {
+        let lookup = lookup.normalized
+        if let id = resolvedIDs[lookup], let account = accounts[id] {
+            return account
+        }
+        if let task = resolving[lookup] {
+            return try await task.value
+        }
+        let task = Task { try await search() }
+        resolving[lookup] = task
+        defer { resolving[lookup] = nil }
+        let account = try await task.value
+        if let account {
+            accounts[account.id] = account
+            resolvedIDs[lookup] = account.id
+        }
+        return account
+    }
+}
+
+/// アカウントを探す値。
+public enum AccountLookup: Hashable, Sendable {
+    /// プロフィールのページのURL。本文や自己紹介のメンションのリンク。
+    case profileURL(URL)
+    /// `user@domain`の形のハンドル。大文字と小文字を区別しない。
+    case acct(String)
+
+    /// 同じ相手を同じ値として覚えるため、ハンドルは小文字にそろえる。
+    var normalized: AccountLookup {
+        switch self {
+        case .profileURL: self
+        case .acct(let acct): .acct(acct.lowercased())
         }
     }
 }
