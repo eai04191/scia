@@ -126,8 +126,9 @@ final class InlineComposeController: NSObject {
     private let remainingLabel = UILabel()
     private lazy var sendButton = UIButton(configuration: .filled(), primaryAction: UIAction { [weak self] _ in self?.submit() })
     private var isPresentingError = false
-    /// 入力バーと、その下のタブバーやキーボードとの間の余白。
-    private let barSpacing: CGFloat = 8
+    /// 入力バーと、その下のタブバーやキーボードとの間の余白。切り替えタブの長押しのメニューも、下端を入力バーとそろえるのに使う。
+    static let barSpacing: CGFloat = 8
+    private var barSpacing: CGFloat { Self.barSpacing }
     /// ＋と部品のボタンの幅。記号の幅で決めると、記号ごとに幅が揃わず、公開範囲を切り替えるだけで幅が変わるので、HIGの推奨の当たり判定の44ptに揃え、間を空けずに並べる。
     private let toolButtonWidth: CGFloat = 44
     /// 残り文字数と送信の間隔。ボタンの行の間隔は0にしているので、ここだけ空ける。

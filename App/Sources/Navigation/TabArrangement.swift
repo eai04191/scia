@@ -37,6 +37,8 @@ final class TabArrangement {
     private var forgotten: Set<TabItem> = []
     /// 最初の`apply`で、切り替えタブで開く項目を決めるのに使う。
     private var restoredSwitchSelection: TabItem?
+    /// 切り替えタブの長押しで出すメニュー。iOS 27以降だけ付ける。
+    private(set) var switchTabMenu: SwitchTabMenuInteraction?
 
     static let switchIdentifier = "switch"
 
@@ -50,6 +52,9 @@ final class TabArrangement {
         switchTab = Self.makeSwitchTab(for: .home, container: switchContainer)
         restoredSwitchSelection = restoring
         apply(placement)
+        if #available(iOS 27.0, *) {
+            switchTabMenu = SwitchTabMenuInteraction(on: tabBarController.tabBar, isPlaced: { [weak self] in self?.switchSelection != nil }, menuBottom: { [weak self] in self?.switchMenuBottom }, menu: { [weak self] in self?.switchMenu() })
+        }
         // Macで窓の幅を変えたときなど、並べられる数が変わったら振り分け直す。
         tabBarController.registerForTraitChanges([UITraitHorizontalSizeClass.self, UITraitUserInterfaceIdiom.self]) { [weak self] (_: UITabBarController, _: UITraitCollection) in
             guard let self else { return }
@@ -240,16 +245,25 @@ final class TabArrangement {
                 root.navigationItem.titleMenuProvider = nil
                 continue
             }
-            root.navigationItem.titleMenuProvider = { [weak self] _ in
-                guard let self else { return nil }
-                return UIMenu(children: placement.switchable.map { candidate in
-                    UIAction(title: candidate.title, image: UIImage(systemName: candidate.symbolName), state: candidate == switchSelection ? .on : .off) { [weak self] _ in
-                        UserAction.selectTab(candidate.rawValue).record()
-                        self?.show(candidate)
-                    }
-                })
-            }
+            root.navigationItem.titleMenuProvider = { [weak self] _ in self?.switchMenu() }
         }
+    }
+
+    /// 切り替えタブの長押しのメニューの下端（ウィンドウの座標）。投稿欄の下端とそろえる。投稿欄と同じく、タブバーの上の領域の下端から余白を空けた位置。
+    private var switchMenuBottom: CGFloat? {
+        guard let view = tabBarController.view, let window = view.window else { return nil }
+        let frame = tabBarController.contentLayoutGuide.layoutFrame
+        return view.convert(CGPoint(x: frame.minX, y: frame.maxY - InlineComposeController.barSpacing), to: window).y
+    }
+
+    /// 切り替えタブの中の項目から選ぶメニュー。見出しと、切り替えタブの長押しで出す。
+    private func switchMenu() -> UIMenu {
+        UIMenu(children: placement.switchable.map { candidate in
+            UIAction(title: candidate.title, image: UIImage(systemName: candidate.symbolName), state: candidate == switchSelection ? .on : .off) { [weak self] _ in
+                UserAction.selectTab(candidate.rawValue).record()
+                self?.show(candidate)
+            }
+        })
     }
 
     /// 通知の未読の数は、通知を並べているタブに出す。切り替えタブの中なら、開いている項目によらず切り替えタブに出す。
@@ -283,4 +297,91 @@ final class SwitchTabViewController: UIViewController {
 
     override var childForStatusBarStyle: UIViewController? { current }
     override var childForStatusBarHidden: UIViewController? { current }
+}
+
+/// 切り替えタブを長押ししたときに、中の項目から選ぶメニューを出す。見出しまで手を伸ばさずに切り替えるため。
+///
+/// UIKitのタブには長押しを受け取る仕組みも、タブのボタンの位置を知る仕組みもないため、タブバーに付けて、ボタンの並び方から見分ける。
+/// iOS 27のタブバーは、普通のタブを並べたカプセルと、目立たせたタブ1つを入れた丸を、別々のビューとしてタブバーの直下に置く。
+/// そこで、直下のビューのうち行の終わりの側の端にあるものが正方形なら、それを切り替えタブのボタンとみなす。
+/// 読み上げの名前では見分けない。VoiceOverなどが動いていない実機では、タブのボタンに名前が入っておらず、メニューが出なかったため。
+/// iOSの更新で並び方が変わったら、メニューは出ず、長押しはふつうのタップに戻る。
+@MainActor
+final class SwitchTabMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
+    private weak var tabBar: UIView?
+    /// 切り替えタブを並べているか。
+    private let isPlaced: @MainActor () -> Bool
+    private let menu: @MainActor () -> UIMenu?
+    /// メニューの下端に許す、いちばん下の位置（ウィンドウの座標）。
+    private let menuBottom: @MainActor () -> CGFloat?
+    /// compactのメニューは位置を渡せないため、出たあとに投稿欄の下端より上へ移す。
+    private let positioner = ContextMenuPositioner()
+    /// メニューを出している切り替えタブのボタン。
+    private weak var button: UIView?
+
+    init(on tabBar: UIView, isPlaced: @escaping @MainActor () -> Bool, menuBottom: @escaping @MainActor () -> CGFloat?, menu: @escaping @MainActor () -> UIMenu?) {
+        self.tabBar = tabBar
+        self.isPlaced = isPlaced
+        self.menuBottom = menuBottom
+        self.menu = menu
+        super.init()
+        tabBar.addInteraction(CompactContextMenuInteraction(delegate: self))
+    }
+
+    /// 長押しした場所（タブバーの座標）が切り替えタブのボタンなら、そのボタン。
+    func switchTabButton(at location: CGPoint) -> UIView? {
+        guard let tabBar, isPlaced() else { return nil }
+        let groups = tabBar.subviews.filter { !$0.isHidden && $0.alpha > 0 && !$0.bounds.isEmpty }
+        guard groups.count >= 2 else { return nil }
+        let isRightToLeft = tabBar.effectiveUserInterfaceLayoutDirection == .rightToLeft
+        let trailing = isRightToLeft ? groups.min { $0.frame.minX < $1.frame.minX } : groups.max { $0.frame.maxX < $1.frame.maxX }
+        guard let trailing, abs(trailing.bounds.width - trailing.bounds.height) < 1, trailing.frame.contains(location) else { return nil }
+        return trailing
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
+        guard let button = switchTabButton(at: location), let menu = menu() else { return nil }
+        self.button = button
+        positioner.prepare(in: tabBar?.window)
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { _ in menu }
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willDisplayMenuFor configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
+        positioner.menuWillAppear(bottomLimit: menuBottom)
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willEndFor configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
+        positioner.menuWillEnd()
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+        preview
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, dismissalPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+        preview
+    }
+
+    /// ボタンの場所に置いた、ボタンと同じ大きさの透明な丸。メニューはここから開く。
+    /// ボタンそのものを渡すと、UIKitがメニューを出している間ボタンを隠し、押している間ボタンが消えたため、別のビューを渡す。
+    private var preview: UITargetedPreview? {
+        guard let tabBar, let button, button.window != nil else { return nil }
+        let circle = UIView(frame: button.bounds)
+        let parameters = UIPreviewParameters()
+        parameters.visiblePath = UIBezierPath(ovalIn: circle.bounds)
+        parameters.backgroundColor = .clear
+        parameters.shadowPath = UIBezierPath()
+        let center = button.convert(CGPoint(x: button.bounds.midX, y: button.bounds.midY), to: tabBar)
+        return UITargetedPreview(view: circle, parameters: parameters, target: UIPreviewTarget(container: tabBar, center: center))
+    }
+}
+
+/// 背景を暗くしない、ボタンのメニューと同じ表示（compact）で出すコンテキストメニュー。
+/// 長押しの時間と触覚は、投稿などの長押しと同じくUIKitのコンテキストメニューのものを使い、こちらでは数値を決めない。
+/// UIKitが表示の形を選ぶときにこのプロパティを読むことに頼っている。iOS 27.0で確かめた。読まなくなったら、背景が暗くなる標準の表示に戻るだけで、メニューは出る。
+@MainActor
+final class CompactContextMenuInteraction: UIContextMenuInteraction {
+    override var menuAppearance: UIContextMenuInteraction.appearance {
+        .compact
+    }
 }

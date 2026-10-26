@@ -97,6 +97,39 @@ struct TabArrangementTests {
         #expect(harness.arrangement.tabBarController.prominentTabIdentifier == nil)
     }
 
+    /// iOS 27以降では、切り替えタブのボタン（タブバーの右端の丸）を長押ししたときだけ、中の項目から選ぶメニューを出す。ほかのタブの長押しには出さない。
+    @Test func longPressOnSwitchTabOffersMenu() throws {
+        guard #available(iOS 27.0, *) else { return }
+        let harness = try Harness(Self.layout(tabs: [.home, .notifications], switchable: [.local, .federated]))
+        harness.window.layoutIfNeeded()
+        let tabBar = harness.arrangement.tabBarController.tabBar
+        let menu = try #require(harness.arrangement.switchTabMenu)
+
+        let groups = tabBar.subviews.filter { !$0.bounds.isEmpty }.sorted { $0.frame.minX < $1.frame.minX }
+        let circle = try #require(groups.last)
+        let tabs = try #require(groups.first)
+        #expect(circle !== tabs)
+        #expect(menu.switchTabButton(at: CGPoint(x: circle.frame.midX, y: circle.frame.midY)) === circle)
+        #expect(menu.switchTabButton(at: CGPoint(x: tabs.frame.minX + 20, y: tabs.frame.midY)) == nil)
+        #expect(menu.switchTabButton(at: CGPoint(x: tabs.frame.maxX - 20, y: tabs.frame.midY)) == nil)
+    }
+
+    /// 切り替えタブがないときは、どこを長押ししてもメニューを出さない。
+    @Test func longPressOffersNoMenuWithoutSwitchTab() throws {
+        guard #available(iOS 27.0, *) else { return }
+        let harness = try Harness(Self.layout(tabs: [.home, .notifications], switchable: []))
+        harness.window.layoutIfNeeded()
+        let tabBar = harness.arrangement.tabBarController.tabBar
+        let menu = try #require(harness.arrangement.switchTabMenu)
+
+        let groups = tabBar.subviews.filter { !$0.bounds.isEmpty }
+        #expect(!groups.isEmpty)
+        for group in groups {
+            #expect(menu.switchTabButton(at: CGPoint(x: group.frame.midX, y: group.frame.midY)) == nil)
+            #expect(menu.switchTabButton(at: CGPoint(x: group.frame.maxX - 20, y: group.frame.midY)) == nil)
+        }
+    }
+
     /// 起動し直したときは、前に切り替えタブで開いていた項目から開く。もう切り替えタブになければ先頭から開く。
     @Test func restoresSwitchSelection() throws {
         let restored = try Harness(Self.layout(tabs: [.home], switchable: [.local, .federated, .notifications]), restoring: .notifications)
