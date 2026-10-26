@@ -10,6 +10,8 @@ extension TimelineViewController {
         var content = mediaContent(of: status.displayed.mediaAttachments, cover: mediaCover(for: status))
         if settings.mediaArrangement == .besideBody {
             content?.arrangement = .stack(side: settings.value(of: AppearanceCatalog.mediaBesideSide))
+            // ブーストでも元の投稿のIDでばらつかせ、同じ投稿はどの行でも同じ形にする。
+            content?.stackSeed = status.displayed.id
         }
         return content
     }

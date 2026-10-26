@@ -28,6 +28,8 @@ final class MediaGridView: UIView {
         var widestAspectRatio = MediaGridView.widestAspectRatio
         /// 代替テキストやGIFなどを示すバッジを出す。
         var showsBadges = true
+        /// 重ねるときに、置き方を投稿ごとにばらつかせる種。投稿のID。nilならばらつかせない。
+        var stackSeed: String?
 
         var isCovered: Bool { cover != nil }
 

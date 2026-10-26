@@ -125,13 +125,14 @@ public enum TuningCatalog {
         defaultValue: 36
     )
 
-    /// 本文の右に重ねた写真のうち、手前の1枚目を回す角度（度）。正の値で右回り。初めの値は投稿欄のカプセルと同じ。
+    /// 本文の右に重ねた写真のうち、手前の1枚目を回す角度（度）。正の値で右回り。一覧の投稿は残り続けるので、投稿欄のカプセルより控えめにする。
+    /// 0にすると、投稿ごとにばらつかせても、まっすぐのままになる。
     public static let mediaStackFrontRotation = NumberTuning(
         id: "timeline.stackFrontRotation",
         title: "本文の右の1枚目の写真の角度（度）",
         range: -15...15,
         step: 0.5,
-        defaultValue: -2
+        defaultValue: -1
     )
 
     /// 本文の右に重ねた写真のうち、2枚目を回す角度（度）。正の値で右回り。
@@ -140,7 +141,7 @@ public enum TuningCatalog {
         title: "本文の右の2枚目の写真の角度（度）",
         range: -15...15,
         step: 0.5,
-        defaultValue: 7
+        defaultValue: 3
     )
 
     /// 本文の右に重ねた2枚目の写真の中心を、1枚目の中心から横にずらす量。写真の大きさを変えても同じ形になるよう、写真の一辺に対する割合で決める。初めの値は、投稿欄のカプセルのずらす量を写真の一辺（26pt）で割ったもの。
@@ -167,7 +168,7 @@ public enum TuningCatalog {
         title: "本文の右の3枚目の写真の角度（度）",
         range: -15...15,
         step: 0.5,
-        defaultValue: -8
+        defaultValue: -3
     )
 
     /// 本文の右に重ねた3枚目の写真の中心を、1枚目の中心から横にずらす量。写真の一辺に対する割合。
@@ -204,6 +205,24 @@ public enum TuningCatalog {
         range: 0...0.6,
         step: 0.01,
         defaultValue: 0.15
+    )
+
+    /// 本文の右に重ねた写真の角度を、投稿ごとにばらつかせる幅（度）。ばらつかせても回す向きは変えない。0で、どの投稿も同じ角度にする。
+    public static let mediaStackRotationVariation = NumberTuning(
+        id: "timeline.stackRotationVariation",
+        title: "本文の右の写真の角度を投稿ごとにばらつかせる幅（度）",
+        range: 0...5,
+        step: 0.25,
+        defaultValue: 1
+    )
+
+    /// 本文の右に重ねた写真のずらす量を、投稿ごとにばらつかせる幅（写真の一辺に対する割合）。ばらつかせてものぞかせる側は変えない。0で、どの投稿も同じ重なりにする。
+    public static let mediaStackOffsetVariation = NumberTuning(
+        id: "timeline.stackOffsetVariation",
+        title: "本文の右の写真のずらす量を投稿ごとにばらつかせる幅（写真の一辺に対する割合）",
+        range: 0...0.1,
+        step: 0.005,
+        defaultValue: 0.03
     )
 
     /// プロフィールを開いたあと、フォローのボタンの文字と最初の投稿の一覧を、読み込みが届いたときにフェードで入れる時間。0なら切り替える。
@@ -1401,6 +1420,8 @@ public enum TuningCatalog {
             .number(mediaStackThirdOffsetY),
             .number(mediaStackShadowOpacity),
             .number(mediaStackBetweenShadowOpacity),
+            .number(mediaStackRotationVariation),
+            .number(mediaStackOffsetVariation),
         ]),
         TuningSection(id: "timeline.reactionGlow", title: "お気に入りとブーストの光", items: [
             .number(reactionGlowHDRExposure),

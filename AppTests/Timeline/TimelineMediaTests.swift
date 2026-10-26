@@ -83,6 +83,28 @@ struct TimelineMediaTests {
         #expect(photo.layer.mask == nil)
     }
 
+    /// 本文の右に重ねた写真は、投稿のIDで置き方をばらつかせる。同じ投稿はどの行で描いても同じ形に、違う投稿は違う形にする。
+    @Test func stackedPhotosVaryByPost() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let attachments = (1...3).map { image("\($0)", width: 400, height: 300) }
+        func photoTransforms(seed: String) throws -> [CGAffineTransform] {
+            let grid = MediaGridView(store: .offline)
+            grid.frame = CGRect(x: 20, y: 200, width: 64, height: 64)
+            harness.viewController.view.addSubview(grid)
+            defer { grid.removeFromSuperview() }
+            var content = MediaGridView.Content(attachments: attachments, cover: nil, tallestAspectRatio: 0.75, thumbnailPolicy: .offline, spacing: 4)
+            content.arrangement = .stack(side: 64)
+            content.stackSeed = seed
+            grid.apply(content)
+            grid.layoutIfNeeded()
+            return try ["1", "2", "3"].map { try #require(grid.tile(for: $0)?.superview).transform }
+        }
+        #expect(try photoTransforms(seed: "100") == photoTransforms(seed: "100"), "同じ投稿で形が変わりました")
+        let shapes = try (0..<5).map { try photoTransforms(seed: "\(200 + $0)").map { "\($0)" } }
+        #expect(Set(shapes).count > 1, "投稿が違っても同じ形です")
+    }
+
     /// サムネイルの高さは添付ファイルの縦横比で決まり、画像が届く前から確定している。
     @Test func gridHeightFollowsAttachmentAspectRatio() throws {
         let harness = try TimelineHarness()

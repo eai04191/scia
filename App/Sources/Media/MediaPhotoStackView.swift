@@ -11,7 +11,13 @@ import UIKit
 @MainActor
 final class MediaPhotoStackView: PhotoStackView {
     private let tuning: TuningStore
-    /// チューニングで決めた置き方。ずらす量は写真の一辺に対する割合。
+    /// チューニングで決めた基準の置き方。ずらす量は写真の一辺に対する割合。
+    private var basePlacements: [PhotoStackPlacement] = []
+    /// 投稿ごとにばらつかせる、角度（度）とずらす量（写真の一辺に対する割合）の幅。
+    private var variation = (rotation: 0.0, offset: 0.0)
+    /// ばらつきを決める投稿のID。nilならばらつかせない。
+    private var seed: String?
+    /// この投稿の置き方。基準の置き方を、投稿のIDでばらつかせたもの。
     private var placements: [PhotoStackPlacement] = []
     /// いま写真に渡している置き方。ずらす量はpt。同じなら渡し直さず、並べ直しを繰り返さない。
     private var appliedPlacements: [PhotoStackPlacement] = []
@@ -63,7 +69,7 @@ final class MediaPhotoStackView: PhotoStackView {
     }
 
     private func applyTuning() {
-        placements = [
+        basePlacements = [
             PhotoStackPlacement(rotation: tuning.value(of: TuningCatalog.mediaStackFrontRotation)),
             PhotoStackPlacement(
                 rotation: tuning.value(of: TuningCatalog.mediaStackBackRotation),
@@ -76,10 +82,19 @@ final class MediaPhotoStackView: PhotoStackView {
                 offsetY: tuning.value(of: TuningCatalog.mediaStackThirdOffsetY)
             ),
         ]
+        variation = (tuning.value(of: TuningCatalog.mediaStackRotationVariation), tuning.value(of: TuningCatalog.mediaStackOffsetVariation))
         setShadowOpacities(
             stack: Float(tuning.value(of: TuningCatalog.mediaStackShadowOpacity)),
             between: Float(tuning.value(of: TuningCatalog.mediaStackBetweenShadowOpacity))
         )
+        updatePlacements()
+    }
+
+    /// 基準の置き方を、投稿のIDでばらつかせる。同じ投稿は、どの行で描いても同じ形になる。
+    private func updatePlacements() {
+        placements = seed.map {
+            PhotoStackVariation.placements(basePlacements, seed: $0, maximumRotation: variation.rotation, maximumOffset: variation.offset)
+        } ?? basePlacements
         setNeedsLayout()
     }
 
@@ -87,6 +102,10 @@ final class MediaPhotoStackView: PhotoStackView {
     func apply(_ content: MediaGridView.Content, coverTitle: String) {
         let attachments = Array(content.attachments.prefix(3))
         count = attachments.count
+        if content.stackSeed != seed {
+            seed = content.stackSeed
+            updatePlacements()
+        }
         isCovered = content.isCovered
         for (index, photo) in [front, back, third].enumerated() {
             guard index < attachments.count else {
