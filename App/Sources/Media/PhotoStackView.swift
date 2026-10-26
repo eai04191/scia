@@ -1,26 +1,18 @@
 import SciaCore
 import UIKit
 
-/// 添付ファイルを、白いフチを付けた紙焼きの写真に見立てて、1枚目を手前にして3枚目までを重ねる。投稿欄のカプセルと、一覧で本文の右に出す添付ファイルで使う。
-/// アイコンのように見えないよう写真に見立て、2枚目は1枚目の下に重ねる。手で置いた写真らしく、どれも真っすぐにはせず回す。
-/// 3枚目は、2枚だけが置かれて見える不自然さをなくすためのもので、いちばん下に置き、2枚目と逆の側からのぞかせる。
-/// 4枚目より後ろは3枚目の下に隠れているものとし、枚数のバッジは付けない。
+/// 添付ファイルを、白いフチを付けた紙焼きの写真に見立てて、1枚目を手前にして重ねる。投稿欄のカプセルと、一覧で本文の右に出す添付ファイルで使う。
+/// アイコンのように見えないよう写真に見立て、2枚目より後ろは1枚目の下に重ねる。重ねる枚数は使う側が決め、それより後ろはいちばん奥の写真の下に隠れているものとし、枚数のバッジは付けない。
 /// 回す角度とずらす量、影の濃さは、使う側が決めて渡す。
 ///
 /// 影は、写真のスタックが下の面に落とす影と、上の写真が下の写真に落とす影の2つに分ける。写真ごとに影を付けると、
 /// 重なったところで影が二重に濃くなり、写真の上に落ちる影も下の面に落ちる影と同じ広さになるため。
 @MainActor
 class PhotoStackView: UIView {
-    /// 手前の1枚を回す角度（ラジアン）。
-    private var frontRotation: CGFloat = 0
-    /// 奥の1枚を回す角度（ラジアン）。
-    private var backRotation: CGFloat = 0
-    /// 奥の1枚の中心を、手前の1枚の中心からずらす量。
-    private var backOffset = CGPoint.zero
-    /// 3枚目を回す角度（ラジアン）。
-    private var thirdRotation: CGFloat = 0
-    /// 3枚目の中心を、手前の1枚の中心からずらす量。
-    private var thirdOffset = CGPoint.zero
+    /// 写真ごとの回す角度（ラジアン）。先頭が1枚目。
+    private var rotations: [CGFloat]
+    /// 写真ごとの、1枚目の中心からずらす量。先頭（1枚目）は0。
+    private var offsets: [CGPoint]
     /// 写真同士の影の濃さ。
     private var betweenShadowOpacity: Float = 0
 
@@ -35,21 +27,26 @@ class PhotoStackView: UIView {
 
     /// 写真のスタックが下の面に落とす影。重ねた写真の輪郭を合わせた形で、影を1つだけ落とす。
     private let stackShadow = UIView()
+    /// 重ねる写真。先頭が手前の1枚目で、後ろほど下に重ねる。添付が足りない分は、使う側が隠す。
+    let photos: [StackedPhotoView]
     /// 手前の1枚。1枚目の添付。
-    let front: StackedPhotoView
+    var front: StackedPhotoView { photos[0] }
     /// 奥の1枚。2枚目の添付。2枚以上のときだけ出す。
-    let back: StackedPhotoView
+    var back: StackedPhotoView { photos[1] }
     /// 2枚目の下の1枚。3枚目の添付。3枚以上のときだけ出す。
-    let third: StackedPhotoView
+    var third: StackedPhotoView { photos[2] }
 
-    init(store: MediaImageStore) {
-        front = StackedPhotoView(store: store)
-        back = StackedPhotoView(store: store)
-        third = StackedPhotoView(store: store)
+    /// - Parameter photoCount: 重ねる写真の数。3以上。
+    init(store: MediaImageStore, photoCount: Int = 3) {
+        precondition(photoCount >= 3, "写真のスタックは3枚以上を重ねる")
+        photos = (0..<photoCount).map { _ in StackedPhotoView(store: store) }
+        rotations = Array(repeating: 0, count: photoCount)
+        offsets = Array(repeating: .zero, count: photoCount)
         super.init(frame: .zero)
         stackShadow.isUserInteractionEnabled = false
-        for view in [stackShadow, third, back, front] {
-            addSubview(view)
+        addSubview(stackShadow)
+        for photo in photos.reversed() {
+            addSubview(photo)
         }
     }
 
@@ -58,18 +55,15 @@ class PhotoStackView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 1枚目、2枚目、3枚目の置き方。ずらす量はptで渡す。3つ揃っていなければ何もしない。
+    /// 写真ごとの置き方。先頭が1枚目で、ずらす量はptで渡す。1枚目のずらす量は使わない。足りない写真は、回さずずらさずに置く。
     func setPlacements(_ placements: [PhotoStackPlacement]) {
-        guard placements.count == 3 else { return }
         let degree = CGFloat.pi / 180
-        frontRotation = placements[0].rotation * degree
-        backRotation = placements[1].rotation * degree
-        backOffset = CGPoint(x: placements[1].offsetX, y: placements[1].offsetY)
-        thirdRotation = placements[2].rotation * degree
-        thirdOffset = CGPoint(x: placements[2].offsetX, y: placements[2].offsetY)
-        front.transform = CGAffineTransform(rotationAngle: frontRotation)
-        back.transform = CGAffineTransform(rotationAngle: backRotation)
-        third.transform = CGAffineTransform(rotationAngle: thirdRotation)
+        for (index, photo) in photos.enumerated() {
+            let placement = index < placements.count ? placements[index] : PhotoStackPlacement(rotation: 0)
+            rotations[index] = placement.rotation * degree
+            offsets[index] = index == 0 ? .zero : CGPoint(x: placement.offsetX, y: placement.offsetY)
+            photo.transform = CGAffineTransform(rotationAngle: rotations[index])
+        }
         invalidateIntrinsicContentSize()
         setNeedsLayout()
     }
@@ -90,7 +84,7 @@ class PhotoStackView: UIView {
 
     /// 写真同士の影を、薄い状態から浮かび上がらせる。開閉で写真が着いたあとに呼ぶ。動いている間の複製は、写真同士の影を落とさないため。
     func revealBetweenShadows(duration: TimeInterval) {
-        for photo in [front, back, third] {
+        for photo in photos {
             photo.revealBetweenShadow(duration: duration)
         }
     }
@@ -98,13 +92,9 @@ class PhotoStackView: UIView {
     /// 見えている写真の、1枚目の中心から見た左右の端。回した写真の角も含める。スタックの幅はこの間にし、1枚目を左端からこの分だけ右に置く。
     private var horizontalExtent: (minX: CGFloat, maxX: CGFloat) {
         let half = photoSide / 2
-        var placements = [(offset: CGFloat(0), rotation: frontRotation)]
-        if !back.isHidden {
-            placements.append((backOffset.x, backRotation))
-        }
-        if !third.isHidden {
-            placements.append((thirdOffset.x, thirdRotation))
-        }
+        let placements = photos.indices
+            .filter { $0 == 0 || !photos[$0].isHidden }
+            .map { (offset: offsets[$0].x, rotation: rotations[$0]) }
         let extents = placements.map { placement in
             let reach = half * (abs(cos(placement.rotation)) + abs(sin(placement.rotation)))
             return (placement.offset - reach, placement.offset + reach)
@@ -127,19 +117,17 @@ class PhotoStackView: UIView {
         super.layoutSubviews()
         let size = CGSize(width: photoSide, height: photoSide)
         let frontCenter = frontCenter()
-        front.bounds.size = size
-        front.center = frontCenter
-        back.bounds.size = size
-        back.center = CGPoint(x: frontCenter.x + backOffset.x, y: frontCenter.y + backOffset.y)
-        third.bounds.size = size
-        third.center = CGPoint(x: frontCenter.x + thirdOffset.x, y: frontCenter.y + thirdOffset.y)
+        for (photo, offset) in zip(photos, offsets) {
+            photo.bounds.size = size
+            photo.center = CGPoint(x: frontCenter.x + offset.x, y: frontCenter.y + offset.y)
+        }
         layoutShadows()
     }
 
     /// スタックの影は見えている写真の輪郭を合わせた形で、写真同士の影は、下の写真の中に、それより上の写真の輪郭で落とす。
     private func layoutShadows() {
         // ビューアのために隠している写真は、影も落とさない。
-        let stacked = [front, back, third].filter { !$0.isHidden && !$0.isConcealed }
+        let stacked = photos.filter { !$0.isHidden && !$0.isConcealed }
         stackShadow.frame = bounds
         let union = UIBezierPath()
         for photo in stacked {
