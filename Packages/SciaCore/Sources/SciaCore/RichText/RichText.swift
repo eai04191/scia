@@ -85,8 +85,9 @@ extension RichText {
         MastodonHTMLParser(mentions: [], tags: [], emojis: emojis).parse(html)
     }
 
+    /// 引用のある投稿では、サーバーが互換のために足す`RE: <リンク>`の段落を除く。
     public static func status(_ status: Status) -> RichText {
-        MastodonHTMLParser(mentions: status.mentions, tags: status.tags, emojis: status.emojis).parse(status.content)
+        MastodonHTMLParser(mentions: status.mentions, tags: status.tags, emojis: status.emojis, dropsQuoteInline: status.quote != nil).parse(status.content)
     }
 }
 

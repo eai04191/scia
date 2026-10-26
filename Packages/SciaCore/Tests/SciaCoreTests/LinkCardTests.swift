@@ -170,6 +170,6 @@ struct LinkCardTests {
         let json = #"{"state":"accepted","quoted_status":null}"#
         let quote = try MastodonDecoder.make().decode(Quote.self, from: Data(json.utf8))
 
-        #expect(quote.state == "accepted")
+        #expect(quote.state == .accepted)
     }
 }

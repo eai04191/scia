@@ -8,16 +8,21 @@ public struct MastodonHTMLParser {
     private let mentions: [Mention]
     private let tagNames: Set<String>
     private let emojiSplitter: CustomEmojiSplitter
+    private let dropsQuoteInline: Bool
 
-    /// `tags`は投稿のタグ。`class`も`rel`もないハッシュタグを、リンクの文字列で見分けるのに使う。
-    public init(mentions: [Mention], tags: [Tag], emojis: [CustomEmoji]) {
+    /// - Parameters:
+    ///   - tags: 投稿のタグ。`class`も`rel`もないハッシュタグを、リンクの文字列で見分けるのに使う。
+    ///   - dropsQuoteInline: `class`に`quote-inline`のある段落を除く。引用のある投稿で、サーバーが互換のために本文の頭に足す`RE: <リンク>`を出さないため。
+    ///     引用のない投稿では、書いた人の本文なので除かない。
+    public init(mentions: [Mention], tags: [Tag], emojis: [CustomEmoji], dropsQuoteInline: Bool = false) {
         self.mentions = mentions
         tagNames = Hashtag.normalizedNames(of: tags)
         emojiSplitter = CustomEmojiSplitter(emojis: emojis)
+        self.dropsQuoteInline = dropsQuoteInline
     }
 
     public func parse(_ html: String) -> RichText {
-        var builder = Builder(mentions: mentions, tagNames: tagNames, emojiSplitter: emojiSplitter)
+        var builder = Builder(mentions: mentions, tagNames: tagNames, emojiSplitter: emojiSplitter, dropsQuoteInline: dropsQuoteInline)
         for token in HTMLTokenizer.tokenize(html) {
             builder.handle(token)
         }
@@ -62,6 +67,7 @@ private struct Builder {
     let mentions: [Mention]
     let tagNames: Set<String>
     let emojiSplitter: CustomEmojiSplitter
+    let dropsQuoteInline: Bool
 
     private var blocks: [RichText.Block] = []
     private var inlines: [RichText.Inline] = []
@@ -72,11 +78,14 @@ private struct Builder {
     private var listMarker: String?
     private var link: LinkContext?
     private var spans: [SpanKind] = []
+    /// `quote-inline`の段落の中にいて、閉じるまで読み飛ばしている。段落は入れ子にならないため、最初の`</p>`で終える。
+    private var isSkippingQuoteInline = false
 
-    init(mentions: [Mention], tagNames: Set<String>, emojiSplitter: CustomEmojiSplitter) {
+    init(mentions: [Mention], tagNames: Set<String>, emojiSplitter: CustomEmojiSplitter, dropsQuoteInline: Bool) {
         self.mentions = mentions
         self.tagNames = tagNames
         self.emojiSplitter = emojiSplitter
+        self.dropsQuoteInline = dropsQuoteInline
     }
 
     mutating func finish() -> RichText {
@@ -92,6 +101,10 @@ private struct Builder {
     }
 
     mutating func handle(_ token: HTMLToken) {
+        if isSkippingQuoteInline {
+            if case .close(name: "p") = token { isSkippingQuoteInline = false }
+            return
+        }
         switch token {
         case .text(let raw):
             appendRawText(raw)
@@ -125,6 +138,9 @@ private struct Builder {
         switch name {
         case "p":
             flush()
+            if dropsQuoteInline, (attributes["class"] ?? "").split(separator: " ").contains("quote-inline") {
+                isSkippingQuoteInline = true
+            }
         case "br":
             let style = currentStyle
             if link != nil {
