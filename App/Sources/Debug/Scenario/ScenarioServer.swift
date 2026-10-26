@@ -79,6 +79,9 @@ private struct ScenarioTransport: HTTPTransport {
         if request.httpMethod == "POST", path == "api/v1/markers" {
             return try respond(url, Data("{}".utf8))
         }
+        if path == "api/v2/notifications", let items = script.lists["api/v1/notifications"] {
+            return try respond(url, Self.groupedNotifications(Self.select(items, query: query)))
+        }
         if let items = script.lists[path] {
             return try respond(url, Self.page(of: items, query: query))
         }
@@ -92,6 +95,11 @@ private struct ScenarioTransport: HTTPTransport {
     /// Mastodonと同じく、`max_id`より古い、`since_id`より新しい、`min_id`のすぐ後の、`limit`件を新しい順に返す。
     /// IDは桁をそろえて作るので、文字列の大小で比べる。
     static func page(of items: [ScenarioScript.Item], query: [URLQueryItem]) -> Data {
+        let selected = select(items, query: query)
+        return Data("[".utf8) + Data(selected.map(\.json).joined(separator: Data(",".utf8))) + Data("]".utf8)
+    }
+
+    private static func select(_ items: [ScenarioScript.Item], query: [URLQueryItem]) -> [ScenarioScript.Item] {
         func value(_ name: String) -> String? { query.first { $0.name == name }?.value }
         let limit = value("limit").flatMap(Int.init) ?? 20
         var selected = items
@@ -102,7 +110,40 @@ private struct ScenarioTransport: HTTPTransport {
         } else {
             selected = Array(selected.prefix(limit))
         }
-        return Data("[".utf8) + Data(selected.map(\.json).joined(separator: Data(",".utf8))) + Data("]".utf8)
+        return selected
+    }
+
+    /// `api/v1/notifications`の形で持つ通知を、`api/v2/notifications`の形（`GroupedNotificationsResults`）で返す。
+    /// シナリオの通知はまとめずに1件ずつのまとまりにする。まとめた見た目を撮るなら、まとまりをシナリオに持たせる。
+    private static func groupedNotifications(_ items: [ScenarioScript.Item]) -> Data {
+        var accounts: [String: Any] = [:]
+        var statuses: [String: Any] = [:]
+        let groups: [[String: Any]] = items.map { item in
+            guard let notification = try? JSONSerialization.jsonObject(with: item.json) as? [String: Any],
+                  let account = notification["account"] as? [String: Any], let accountID = account["id"] as? String
+            else { preconditionFailure("シナリオの通知を読めない") }
+            accounts[accountID] = account
+            var group: [String: Any] = [
+                "group_key": "ungrouped-\(item.id)",
+                "notifications_count": 1,
+                "type": notification["type"] ?? NSNull(),
+                "most_recent_notification_id": item.id,
+                "page_min_id": item.id,
+                "page_max_id": item.id,
+                "latest_page_notification_at": notification["created_at"] ?? NSNull(),
+                "sample_account_ids": [accountID],
+            ]
+            if let status = notification["status"] as? [String: Any], let statusID = status["id"] as? String {
+                statuses[statusID] = status
+                group["status_id"] = statusID
+            }
+            return group
+        }
+        return ScenarioFixtures.json([
+            "accounts": Array(accounts.values),
+            "statuses": Array(statuses.values),
+            "notification_groups": groups,
+        ] as [String: Any])
     }
 
     private func respond(_ url: URL, _ data: Data, statusCode: Int = 200) throws -> (Data, HTTPURLResponse) {
