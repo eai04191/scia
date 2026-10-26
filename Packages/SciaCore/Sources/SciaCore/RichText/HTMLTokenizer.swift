@@ -6,30 +6,32 @@ enum HTMLToken: Equatable {
 }
 
 enum HTMLTokenizer {
+    /// 区切りの`<`と`>`は、文字（書記素クラスタ）ではなくUnicodeのスカラー値で探す。
+    /// `>`のあとに`U+FE0F U+20E3`のような結合する文字が続くと、`>️⃣`で1文字になり、文字で探すとタグの閉じを見落とすため。
     static func tokenize(_ html: String) -> [HTMLToken] {
         var tokens: [HTMLToken] = []
-        var rest = Substring(html)
+        var rest = Substring(html).unicodeScalars
         while !rest.isEmpty {
             guard let lt = rest.firstIndex(of: "<") else {
-                tokens.append(.text(rest))
+                tokens.append(.text(Substring(rest)))
                 break
             }
             if lt > rest.startIndex {
-                tokens.append(.text(rest[..<lt]))
+                tokens.append(.text(Substring(rest[..<lt])))
             }
             let afterLT = rest.index(after: lt)
-            if rest[afterLT...].hasPrefix("!--") {
+            if rest[afterLT...].starts(with: "!--".unicodeScalars) {
                 // コメントは読み飛ばす。閉じがなければ残りをすべて捨てる。
-                guard let end = rest[afterLT...].firstRange(of: "-->") else { break }
+                guard let end = rest[afterLT...].firstRange(of: "-->".unicodeScalars) else { break }
                 rest = rest[end.upperBound...]
                 continue
             }
             guard let gt = tagEnd(in: rest[afterLT...]) else {
                 // 閉じていない`<`は文字として扱う。
-                tokens.append(.text(rest[lt...]))
+                tokens.append(.text(Substring(rest[lt...])))
                 break
             }
-            if let token = parseTag(rest[afterLT..<gt]) {
+            if let token = parseTag(Substring(rest[afterLT..<gt])) {
                 tokens.append(token)
             }
             rest = rest[rest.index(after: gt)...]
@@ -38,15 +40,15 @@ enum HTMLTokenizer {
     }
 
     /// 属性値の引用符の中の`>`を無視して、タグの閉じを探す。
-    private static func tagEnd(in text: Substring) -> Substring.Index? {
-        var quote: Character?
+    private static func tagEnd(in text: Substring.UnicodeScalarView) -> Substring.Index? {
+        var quote: Unicode.Scalar?
         for index in text.indices {
-            let character = text[index]
+            let scalar = text[index]
             if let open = quote {
-                if character == open { quote = nil }
-            } else if character == "\"" || character == "'" {
-                quote = character
-            } else if character == ">" {
+                if scalar == open { quote = nil }
+            } else if scalar == "\"" || scalar == "'" {
+                quote = scalar
+            } else if scalar == ">" {
                 return index
             }
         }

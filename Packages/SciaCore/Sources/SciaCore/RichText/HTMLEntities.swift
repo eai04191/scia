@@ -15,16 +15,18 @@ enum HTMLEntities {
         "ensp": "\u{2002}", "emsp": "\u{2003}", "thinsp": "\u{2009}", "zwj": "\u{200D}", "zwnj": "\u{200C}",
     ]
 
+    /// `&`と`;`は、文字（書記素クラスタ）ではなくUnicodeのスカラー値で探す。
+    /// `;`のあとに結合する文字（`U+0338`など）が続くと、`;̸`で1文字になり、文字で探すと文字参照を戻せないため。
     static func decode(_ text: some StringProtocol) -> String {
-        guard text.contains("&") else { return String(text) }
+        guard text.unicodeScalars.contains("&") else { return String(text) }
         var result = ""
-        var rest = Substring(text)
+        var rest = Substring(text).unicodeScalars
         while let amp = rest.firstIndex(of: "&") {
-            result += rest[..<amp]
+            result += Substring(rest[..<amp])
             let afterAmp = rest.index(after: amp)
             // 文字参照は短いので、;が近くにないものは文字参照として扱わない。
             guard let semicolon = rest[afterAmp...].prefix(10).firstIndex(of: ";"),
-                  let decoded = decodeReference(rest[afterAmp..<semicolon])
+                  let decoded = decodeReference(Substring(rest[afterAmp..<semicolon]))
             else {
                 result += "&"
                 rest = rest[afterAmp...]
@@ -33,7 +35,7 @@ enum HTMLEntities {
             result += decoded
             rest = rest[rest.index(after: semicolon)...]
         }
-        result += rest
+        result += Substring(rest)
         return result
     }
 

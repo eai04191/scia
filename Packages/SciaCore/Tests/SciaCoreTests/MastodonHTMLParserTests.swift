@@ -33,6 +33,11 @@ struct MastodonHTMLParserTests {
             == "<tag> & \"q\" 's' 😀 &unknown; a&b")
     }
 
+    /// `;`のあとに結合する文字が続くと、`;`とつながって1文字になる。それでも文字参照として戻す。
+    @Test func decodesEntityFollowedByCombiningMark() {
+        #expect(parse("<p>&gt;\u{0338} &amp;\u{FE0F}\u{20E3}</p>").plainText == ">\u{0338} &\u{FE0F}\u{20E3}")
+    }
+
     @Test func shortensURLLikeMastodonWeb() throws {
         let html = """
         <p><a href="https://example.com/users/someone/status/2109995948407476369?s=46" target="_blank" rel="nofollow noopener" translate="no"><span class="invisible">https://</span><span class="ellipsis">example.com/users/someone/stat</span><span class="invisible">us/2109995948407476369?s=46</span></a><br />え、な、なに？</p>
@@ -72,6 +77,26 @@ struct MastodonHTMLParserTests {
 
         #expect(parse(html).blocks.first?.inlines == [
             .link("#scia", .hashtag(name: "scia", url: try url("https://example.social/tags/scia")), []),
+        ])
+    }
+
+    /// 名前が`U+FE0F U+20E3`で始まると、`#`とつながってキーキャップの絵文字`#️⃣`の1文字になる。
+    /// 文字ではなくUnicodeのスカラー値で`#`を外し、残りを名前にする。
+    @Test func hashtagStartingWithKeycapCombiningMarks() throws {
+        let name = "\u{FE0F}\u{20E3}🅰️0️⃣"
+        let html = #"<p><a href="https://example.social/tags/x" class="mention hashtag" rel="tag">#<span>"# + name + "</span></a></p>"
+
+        #expect(parse(html).blocks.first?.inlines == [
+            .link("#" + name, .hashtag(name: name, url: try url("https://example.social/tags/x")), []),
+        ])
+    }
+
+    @Test func misskeyHashtagStartingWithKeycapCombiningMarksMatchesStatusTags() throws {
+        let name = "\u{FE0F}\u{20E3}🅰️0️⃣"
+        let html = #"<p><a href="https://misskey.example/tags/x" rel="nofollow noopener" target="_blank">#"# + name + "</a></p>"
+
+        #expect(parse(html, tags: [SciaCore.Tag(name: "🅰0", url: nil)]).blocks.first?.inlines == [
+            .link("#" + name, .hashtag(name: name, url: try url("https://misskey.example/tags/x")), []),
         ])
     }
 

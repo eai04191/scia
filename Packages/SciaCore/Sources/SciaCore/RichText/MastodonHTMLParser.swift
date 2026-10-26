@@ -213,7 +213,7 @@ private struct Builder {
         }
         let destination: RichText.LinkDestination
         if link.classes.contains("hashtag") || link.rels.contains("tag") || Hashtag.isTagText(text, normalizedNames: tagNames) {
-            destination = .hashtag(name: String(text.drop { $0 == "#" }), url: url)
+            destination = .hashtag(name: Hashtag.name(ofTagText: text), url: url)
         } else if link.classes.contains("mention") {
             let acct = mentions.first { $0.url == url }?.acct ?? String(text.drop { $0 == "@" })
             destination = .mention(acct: acct, url: url)

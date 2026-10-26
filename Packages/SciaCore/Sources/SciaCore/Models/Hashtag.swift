@@ -45,8 +45,15 @@ public struct Hashtag: Decodable, Hashable, Sendable {
     /// `normalizedNames`は`normalizedNames(of:)`でそろえたもの。`text`は文字参照を戻したものを渡す。
     static func isTagText(_ text: String, normalizedNames: Set<String>) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.first == "#" else { return false }
-        return normalizedNames.contains(normalizedName(String(trimmed.dropFirst())))
+        guard trimmed.unicodeScalars.first == "#" else { return false }
+        return normalizedNames.contains(normalizedName(name(ofTagText: trimmed)))
+    }
+
+    /// リンクの文字列から先頭の`#`を外した名前。
+    /// 文字（書記素クラスタ）ではなくUnicodeのスカラー値で外す。名前が`U+FE0F U+20E3`で始まると、`#`とつながって
+    /// キーキャップの絵文字`#️⃣`の1文字になり、文字で外すと`#`が残るため。
+    static func name(ofTagText text: String) -> String {
+        String(text.unicodeScalars.drop { $0 == "#" })
     }
 
     private static let asciiFolding: [Character: Character] = {
