@@ -341,6 +341,18 @@ struct MastodonClientTests {
         ])
     }
 
+    @Test func postStatusSendsQuotedStatusID() async throws {
+        let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
+
+        _ = try await makeClient(transport).postStatus(StatusDraft(text: "見て", quotedStatusID: "113000000000000000", idempotencyKey: "key-1"))
+
+        let request = try #require(await transport.requests.first)
+        var components = URLComponents()
+        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
+        #expect(components.queryItems?.filter { $0.name == "quoted_status_id" } == [URLQueryItem(name: "quoted_status_id", value: "113000000000000000")])
+        #expect(components.queryItems?.contains { $0.name == "in_reply_to_id" } == false)
+    }
+
     @Test func postStatusSendsPoll() async throws {
         let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
         let poll = PollDraft(options: [" 朝 ", "", "夜"], multiple: true, hidesTotals: true, expiresIn: 3_600)

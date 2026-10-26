@@ -16,6 +16,8 @@ final class ComposeModel {
     private(set) var visibility: Status.Visibility
     /// 返信先。新しい投稿と、編集ならnil。
     private(set) var replyTo: Status?
+    /// 引用する投稿。引用しなければnil。返信先とは一緒に付けない。決まりはdocs/quote.mdの「引用して投稿する」にある。
+    private(set) var quoteTarget: Status?
     /// 編集している自分の投稿。編集でなければnil。公開範囲と返信先は変えられない。
     private(set) var editedStatus: Status?
     private(set) var maxCharacters = 500
@@ -123,21 +125,21 @@ final class ComposeModel {
     /// メディアを選べる。枚数の上限をサーバーの値で読むまでは、ピッカーを開かない。
     /// 読めなかったときは、次に書き始めたときに読み直す。
     /// 編集している投稿の添付で上限まで埋まっていても開かない。ピッカーの上限の0は、選べないではなく上限なしを意味するため。
-    /// 投票の欄を出している間も開かない。Mastodonは投票と添付を一緒に付けられないため。
+    /// 投票の欄を出している間と、引用している間も開かない。Mastodonは投票や引用と添付を一緒に付けられないため。
     var canAttachMedia: Bool {
-        !isPosting && hasLoadedConfiguration && pickerSelectionLimit > 0 && poll == nil
+        !isPosting && hasLoadedConfiguration && pickerSelectionLimit > 0 && poll == nil && quoteTarget == nil
     }
 
     /// メディアをペーストできる。ピッカーと違い、上限まで埋まっていても受け付け、入りきらない分を知らせる。
-    /// 投票の欄を出している間は受け付けない。
+    /// 投票の欄を出している間と、引用している間は受け付けない。
     var canPasteMedia: Bool {
-        !isPosting && hasLoadedConfiguration && poll == nil
+        !isPosting && hasLoadedConfiguration && poll == nil && quoteTarget == nil
     }
 
-    /// 投票の欄を足せる。添付があるときは、Mastodonが一緒に付けられないため足せない。
+    /// 投票の欄を足せる。添付があるときと引用しているときは、Mastodonが一緒に付けられないため足せない。
     /// 編集では足せない。投票の付いた投稿の編集は、元の投票をそのまま送り直す。決まりはdocs/compose.mdの「自分の投稿の編集」にある。
     var canAddPoll: Bool {
-        !isPosting && attachments.isEmpty && editedStatus == nil
+        !isPosting && attachments.isEmpty && editedStatus == nil && quoteTarget == nil
     }
 
     /// 投票の欄を出す。足せないときは何もしない。
@@ -160,10 +162,23 @@ final class ComposeModel {
         poll = nil
     }
 
-    /// 返信先と既定値から決まる公開範囲。
+    /// 返信先か引用元と、既定値から決まる公開範囲。
     private var resolvedVisibility: Status.Visibility {
         let base = defaultVisibility ?? .public
-        return replyTo.map { StatusDraft.reply(to: $0, myAccountID: myAccountID, defaultVisibility: base).visibility } ?? base
+        if let replyTo {
+            return StatusDraft.reply(to: replyTo, myAccountID: myAccountID, defaultVisibility: base).visibility
+        }
+        if let quoteTarget {
+            return StatusDraft.quote(of: quoteTarget, defaultVisibility: base).visibility
+        }
+        return base
+    }
+
+    /// 選べる公開範囲。引用元がフォロワー限定なら、それより広い範囲は選べない。サーバーが受け付けないため。
+    func canChoose(_ visibility: Status.Visibility) -> Bool {
+        guard editedStatus == nil else { return false }
+        guard let limit = quoteTarget.flatMap(StatusDraft.maxVisibility(quoting:)) else { return true }
+        return visibility.narrower(limit) == visibility
     }
 
     /// インスタンスの上限と、ユーザーの既定の公開範囲と閲覧注意を反映する。公開範囲を自分で選んでいたら変えない。
@@ -189,9 +204,9 @@ final class ComposeModel {
         visibility = resolvedVisibility
     }
 
-    /// 編集では公開範囲を変えられないため、選んでも変えない。
+    /// 編集では公開範囲を変えられないため、選んでも変えない。引用元より広い範囲も変えない。
     func choose(_ visibility: Status.Visibility) {
-        guard editedStatus == nil else { return }
+        guard canChoose(visibility) else { return }
         self.visibility = visibility
         hasChosenVisibility = true
     }
@@ -220,6 +235,7 @@ final class ComposeModel {
     ///
     /// 送信を待つ間は変えない。送っている下書きと食い違い、成功して空に戻すときに新しい返信先まで消してしまうため。
     /// 同じ投稿を選び直したときも変えない。失敗した投稿を同じIdempotency-Keyで送り直せるようにするため。
+    /// 返信と引用は一緒に付けないため、引用していれば外す。
     func setReplyTarget(_ status: Status?) {
         guard !isPosting else { return }
         // 同じ投稿を元の投稿とブーストのように別の場所から選び直したときは、下書きを保ったまま、ラベルが指す先だけを選んだ方にする。
@@ -228,10 +244,38 @@ final class ComposeModel {
             return
         }
         guard status != nil || replyTo != nil else { return }
+        retarget(to: status.map { StatusDraft.reply(to: $0, myAccountID: myAccountID) } ?? StatusDraft(), replyTo: status, quoteTarget: nil)
+    }
+
+    /// 引用元を付け替える。nilなら引用をやめる。返信と引用は一緒に付けないため、返信先があれば外す。
+    /// 自分で書いた本文と注意書き、公開範囲の扱いは、返信先を付け替えるときと同じ。
+    /// Mastodonは引用に添付と投票を付けられないため、付けるときは添付と投票を外す。外してよいかは、呼ぶ側が先に聞く。
+    func setQuoteTarget(_ status: Status?) {
+        guard !isPosting else { return }
+        if let status, status.displayed.id == quoteTarget?.displayed.id {
+            quoteTarget = status
+            return
+        }
+        guard status != nil || quoteTarget != nil else { return }
+        if status != nil {
+            removeAllAttachments()
+            poll = nil
+        }
+        retarget(to: status.map { StatusDraft.quote(of: $0) } ?? StatusDraft(), replyTo: nil, quoteTarget: status)
+    }
+
+    /// 引用を付けると外れる、添付か投票がある。
+    var hasQuoteConflicts: Bool {
+        !attachments.isEmpty || poll != nil
+    }
+
+    /// 返信先と引用元を入れ替え、前の返信先から自動で入れた宛先と注意書きだけを入れ替える。
+    private func retarget(to draft: StatusDraft, replyTo: Status?, quoteTarget: Status?) {
         let typed = typedText
         let keepsSpoiler = showsSpoiler && (spoilerText != initialDraft.spoilerText || initialDraft.spoilerText.isEmpty)
-        initialDraft = status.map { StatusDraft.reply(to: $0, myAccountID: myAccountID) } ?? StatusDraft()
-        replyTo = status
+        initialDraft = draft
+        self.replyTo = replyTo
+        self.quoteTarget = quoteTarget
         text = initialDraft.text + typed
         if !keepsSpoiler {
             spoilerText = initialDraft.spoilerText
@@ -262,6 +306,7 @@ final class ComposeModel {
         initialDraft = draft
         editedStatus = status
         replyTo = nil
+        quoteTarget = nil
         text = draft.text
         spoilerText = draft.spoilerText
         showsSpoiler = draft.hasSpoiler
@@ -277,6 +322,7 @@ final class ComposeModel {
     func reset() {
         initialDraft = StatusDraft()
         replyTo = nil
+        quoteTarget = nil
         editedStatus = nil
         text = ""
         spoilerText = ""
@@ -295,7 +341,7 @@ final class ComposeModel {
            lastSubmitted.visibility == draft.visibility, lastSubmitted.mediaIDs == draft.mediaIDs, lastSubmitted.poll == draft.poll {
             return lastSubmitted
         }
-        return StatusDraft(text: draft.text, spoilerText: draft.spoilerText, hasSpoiler: draft.hasSpoiler, visibility: draft.visibility, inReplyToID: draft.inReplyToID, attachments: draft.attachments, poll: draft.poll)
+        return StatusDraft(text: draft.text, spoilerText: draft.spoilerText, hasSpoiler: draft.hasSpoiler, visibility: draft.visibility, inReplyToID: draft.inReplyToID, quotedStatusID: draft.quotedStatusID, attachments: draft.attachments, poll: draft.poll)
     }
 
     /// 投稿し、成功したら下書きを空に戻す。失敗したら下書きを残し、同じ下書きで送り直せるようにする。

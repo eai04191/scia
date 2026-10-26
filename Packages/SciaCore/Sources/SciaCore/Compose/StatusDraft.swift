@@ -10,6 +10,8 @@ public struct StatusDraft: Sendable, Equatable {
     public var hasSpoiler: Bool
     public var visibility: Status.Visibility
     public let inReplyToID: String?
+    /// 引用する投稿のID。Mastodonは引用と添付・投票を一緒に付けられない。
+    public let quotedStatusID: String?
     /// 添付するメディア。この順番で投稿に並ぶ。
     public var attachments: [DraftAttachment]
     /// 付ける投票。付けなければnil。Mastodonは投票と添付を一緒に付けられない。
@@ -25,6 +27,7 @@ public struct StatusDraft: Sendable, Equatable {
         hasSpoiler: Bool = false,
         visibility: Status.Visibility = .public,
         inReplyToID: String? = nil,
+        quotedStatusID: String? = nil,
         attachments: [DraftAttachment] = [],
         poll: PollDraft? = nil,
         idempotencyKey: String = UUID().uuidString,
@@ -35,6 +38,7 @@ public struct StatusDraft: Sendable, Equatable {
         self.hasSpoiler = hasSpoiler
         self.visibility = visibility
         self.inReplyToID = inReplyToID
+        self.quotedStatusID = quotedStatusID
         self.attachments = attachments
         self.poll = poll
         self.idempotencyKey = idempotencyKey
@@ -62,6 +66,26 @@ public struct StatusDraft: Sendable, Equatable {
         )
     }
 
+    /// 引用の下書き。ブーストなら元の投稿を引用する。宛先と注意書きは入れない。
+    /// 公開範囲は、返信と同じく、引用元と`defaultVisibility`のうち届く範囲が狭い方にする。
+    /// 引用元がフォロワー限定より狭いかサーバー独自の公開範囲なら、`maxVisibility(quoting:)`のフォロワー限定までにする。
+    public static func quote(of status: Status, defaultVisibility: Status.Visibility = .public) -> StatusDraft {
+        let target = status.displayed
+        let ceiling = maxVisibility(quoting: target) ?? target.visibility
+        return StatusDraft(visibility: defaultVisibility.narrower(ceiling), quotedStatusID: target.id)
+    }
+
+    /// 引用するときに選べる、いちばん広い公開範囲。制限がなければnil。
+    /// Mastodonは、フォロワー限定の投稿の引用を、フォロワー限定（かそれより狭い範囲）でしか受け付けない。
+    /// サーバー独自の公開範囲の投稿も、どこまで届くか分からないため、同じくフォロワー限定までにする。
+    /// https://docs.joinmastodon.org/client/quotes/#new-parameters-to-existing-endpoints
+    public static func maxVisibility(quoting status: Status) -> Status.Visibility? {
+        switch status.displayed.visibility {
+        case .public, .unlisted: nil
+        case .private, .direct, .other: .private
+        }
+    }
+
     /// 添付を閲覧注意にする。注意書きの欄を出していて、添付があるとき。
     /// 添付のない投稿に付けても、Mastodonは何も隠さないので付けない（注意書きがあれば、サーバーが投稿を閲覧注意にする）。
     public var sensitive: Bool {
@@ -84,11 +108,13 @@ public struct StatusDraft: Sendable, Equatable {
     }
 
     /// 送れる内容になっている。
-    /// 本文が空白だけでも、メディアを添付していれば送れる（Mastodonは`media_ids`があれば`status`を省ける）。投票では省けない。
+    /// 本文が空白だけでも、メディアを添付しているか引用していれば送れる（Mastodonは`media_ids`か引用があれば`status`を省ける）。投票では省けない。
     /// 添付ファイルは、上限の数以内で、全部のアップロードと代替テキストの送信が済むまで送れない。
     /// 投票は、サーバーが受け付ける内容で、添付と一緒でないときだけ送れる。
+    /// 引用は、添付も投票もないときだけ送れる。
     public func canPost(maxCharacters: Int, charactersReservedPerURL: Int, maxMediaAttachments: Int, pollLimits: PollLimits = .mastodonDefault) -> Bool {
-        (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty)
+        (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty || quotedStatusID != nil)
+            && (quotedStatusID == nil || (attachments.isEmpty && poll == nil))
             && length(charactersReservedPerURL: charactersReservedPerURL) <= maxCharacters
             && attachments.count <= maxMediaAttachments
             && mediaIDs != nil

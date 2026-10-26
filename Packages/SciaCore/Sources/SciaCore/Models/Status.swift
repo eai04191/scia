@@ -28,6 +28,8 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
     public private(set) var card: PreviewCard?
     /// 引用。引用していなければnil。
     public private(set) var quote: Quote?
+    /// 誰が引用できるかと、自分が引用できるか。引用に対応していないサーバーではnil。
+    public let quoteApproval: QuoteApproval?
     /// 一致した自分のフィルター。ログインせずに読んだときや、Mastodon 4.0より前のサーバーでは返らないため、無ければ空にする。
     /// ブーストでは、サーバーは元の投稿と同じ結果をブーストにも付ける。
     public private(set) var filtered: [FilterResult]
@@ -68,6 +70,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         poll: Poll? = nil,
         card: PreviewCard? = nil,
         quote: Quote? = nil,
+        quoteApproval: QuoteApproval? = nil,
         filtered: [FilterResult] = [],
         editedAt: Date? = nil,
         favourited: Bool = false,
@@ -98,6 +101,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         self.poll = poll
         self.card = card
         self.quote = quote
+        self.quoteApproval = quoteApproval
         self.filtered = filtered
         self.editedAt = editedAt
         self.favourited = favourited
@@ -113,7 +117,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
 
     /// 自分の操作を表す項目と件数は、ログインせずに読んだときや、サーバーの実装によっては返らないため、無ければ既定値にする。
     /// URLと、メンションなどの配列も、サーバーによって空や欠落で返るため、URLはnil、配列は空にする。
-    /// 投票、カード、引用、編集した日時は、読めなくても本文は読めるため、読めなければ記録してnilにする。
+    /// 投票、カード、引用、引用できるか、編集した日時は、読めなくても本文は読めるため、読めなければ記録してnilにする。
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
@@ -134,6 +138,11 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
         poll = container.decodeLossyIfPresent(Poll.self, forKey: .poll)
         card = container.decodeLossyIfPresent(PreviewCard.self, forKey: .card)
         quote = container.decodeLossyIfPresent(Quote.self, forKey: .quote)
+        // 自分の操作を表す項目がなければ、ログインしていない人向けの形（公開とハッシュタグのストリーミング）で届いたもので、
+        // `current_user`が自分について決めた値ではない。
+        let isRenderedForViewer = container.contains(.favourited)
+        quoteApproval = container.decodeLossyIfPresent(QuoteApproval.self, forKey: .quoteApproval)
+            .map { isRenderedForViewer ? $0 : $0.forAnonymousViewer() }
         filtered = try container.decodeLossyArray(FilterResult.self, forKey: .filtered)
         editedAt = container.decodeLossyIfPresent(Date.self, forKey: .editedAt)
         favourited = try container.decodeIfPresent(Bool.self, forKey: .favourited) ?? false
@@ -274,7 +283,7 @@ public struct Status: Codable, Hashable, Sendable, Identifiable {
 
     private enum CodingKeys: String, CodingKey {
         case id, createdAt, account, content, spoilerText, language, url, mentions, tags, emojis, mediaAttachments, sensitive
-        case visibility, inReplyToId, inReplyToAccountId, poll, card, quote, filtered, editedAt
+        case visibility, inReplyToId, inReplyToAccountId, poll, card, quote, quoteApproval, filtered, editedAt
         case favourited, reblogged, bookmarked, muted, pinned, favouritesCount, reblogsCount, repliesCount
         case reblogBox = "reblog"
     }

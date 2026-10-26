@@ -331,6 +331,9 @@ public struct MastodonClient: Sendable {
         if let inReplyToID = draft.inReplyToID {
             form.append(URLQueryItem(name: "in_reply_to_id", value: inReplyToID))
         }
+        if let quotedStatusID = draft.quotedStatusID {
+            form.append(URLQueryItem(name: "quoted_status_id", value: quotedStatusID))
+        }
         form += mediaIDs.map { URLQueryItem(name: "media_ids[]", value: $0) }
         if let poll = draft.poll {
             form += poll.formItems

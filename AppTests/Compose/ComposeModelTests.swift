@@ -183,6 +183,72 @@ struct ComposeModelTests {
         #expect(model.replyTo == nil)
     }
 
+    /// 返信と引用は一緒に付けない。付け替えても、自分で書いた本文は残し、返信先から入れた宛先だけを外す。
+    @Test func quoteTargetReplacesReplyAndKeepsTypedText() throws {
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        model.setReplyTarget(try status(visibility: .public))
+        model.text += "なるほど"
+
+        model.setQuoteTarget(try status(visibility: .public))
+        #expect(model.text == "なるほど")
+        #expect(model.replyTo == nil)
+        #expect(model.quoteTarget?.id == "10")
+
+        model.setReplyTarget(try status(visibility: .public))
+        #expect(model.text == "@bob なるほど")
+        #expect(model.quoteTarget == nil)
+    }
+
+    /// フォロワー限定の投稿の引用は、フォロワー限定より広い範囲を選べない。引用をやめれば既定に戻る。
+    @Test func quotingPrivateStatusLimitsVisibility() throws {
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+
+        model.setQuoteTarget(try status(visibility: .private))
+        #expect(model.visibility == .private)
+        #expect(!model.canChoose(.public))
+        #expect(!model.canChoose(.unlisted))
+        #expect(model.canChoose(.direct))
+
+        model.choose(.public)
+        #expect(model.visibility == .private)
+
+        model.setQuoteTarget(nil)
+        #expect(model.visibility == .public)
+        #expect(model.canChoose(.public))
+    }
+
+    /// 引用すると投票の欄を外し、引用している間は足せない。Mastodonが一緒に付けられないため。
+    @Test func quotingRemovesPollAndBlocksAddingOne() throws {
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }
+        model.addPoll()
+        #expect(model.hasQuoteConflicts)
+
+        model.setQuoteTarget(try status(visibility: .public))
+
+        #expect(model.poll == nil)
+        #expect(!model.canAddPoll)
+        #expect(!model.canAttachMedia)
+        model.addPoll()
+        #expect(model.poll == nil)
+    }
+
+    /// 引用元を付けて送り、送れたら引用をやめた空の投稿欄に戻す。
+    @Test func postsQuotedStatusIDAndResets() async throws {
+        var sent: [StatusDraft] = []
+        let model = ComposeModel(tasks: TaskScope(), myAccountID: "1") { sent.append($0) }
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        model.setQuoteTarget(try status(visibility: .public))
+        model.text = "見て"
+
+        await model.submit()
+
+        #expect(sent.map(\.quotedStatusID) == ["10"])
+        #expect(sent.first?.inReplyToID == nil)
+        #expect(model.quoteTarget == nil)
+    }
+
     /// 宛先を書き換えていたら、本文には手を付けず新しい宛先を前に足す。
     @Test func replyTargetKeepsEditedMentions() throws {
         let model = ComposeModel(tasks: TaskScope(), replyTo: try status(visibility: .public), myAccountID: "1") { _ in }

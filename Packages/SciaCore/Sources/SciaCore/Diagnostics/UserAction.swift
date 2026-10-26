@@ -23,6 +23,8 @@ public enum UserAction: Sendable, Equatable {
     /// 投稿の行を押して、スレッドを開いた。
     case openThread(screen: String)
     case reply
+    /// 投稿のメニューで、投稿を引用して書き始めた。
+    case quote
     /// ユーザーのメニューで、投稿欄にメンションを入れた。
     case mention
     case toggleFavourite
@@ -64,6 +66,7 @@ public enum UserAction: Sendable, Equatable {
         case .openAccountList: "accountList.open"
         case .openThread(let screen): "thread.open \(screen)"
         case .reply: "status.reply"
+        case .quote: "status.quote"
         case .mention: "user.mention"
         case .toggleFavourite: "status.favourite"
         case .toggleReblog: "status.reblog"
@@ -119,6 +122,7 @@ public enum UserAction: Sendable, Equatable {
         case ("accountList.open", 0): self = .openAccountList
         case ("thread.open", 1): self = .openThread(screen: args[0])
         case ("status.reply", 0): self = .reply
+        case ("status.quote", 0): self = .quote
         case ("user.mention", 0): self = .mention
         case ("status.favourite", 0): self = .toggleFavourite
         case ("status.reblog", 0): self = .toggleReblog
@@ -161,6 +165,7 @@ public enum UserAction: Sendable, Equatable {
         case .openAccountList: "人の一覧を開いた"
         case .openThread(let screen): "\(Self.screenName(screen))で投稿を押してスレッドを開いた"
         case .reply: "投稿への返信を書き始めた"
+        case .quote: "投稿を引用して書き始めた"
         case .mention: "投稿欄にメンションを入れた"
         // 投稿への操作と投稿は通信の前に記録するため、失敗した場合や応答を待つ間もあるので、成功したとは書かない。
         case .toggleFavourite: "投稿のお気に入りを押した"

@@ -1263,7 +1263,10 @@ final class SessionController {
         switch action {
         case .reply:
             UserAction.reply.record()
-            confirmLeavingEdit { [weak self] in self?.composer.reply(to: status) }
+            confirmLeavingEdit(title: "編集をやめて返信しますか？") { [weak self] in self?.composer.reply(to: status) }
+        case .quote:
+            UserAction.quote.record()
+            startQuoting(status)
         case .favourite:
             UserAction.toggleFavourite.record()
             toggle(.favourite, on: status, failureTitle: "お気に入りを変更できませんでした")
@@ -1647,19 +1650,75 @@ final class SessionController {
         }
     }
 
-    /// 編集している途中で返信を選んだら、編集をやめてよいか聞いてから返信を始める。編集でなければすぐ始める。
-    /// 返信は書いた本文を残して返信先を付け替えるが、編集の本文は元の投稿のものなので、返信には引き継がない。
-    private func confirmLeavingEdit(_ proceed: @escaping () -> Void) {
+    /// 編集している途中で返信か引用を選んだら、編集をやめてよいか聞いてから始める。編集でなければすぐ始める。
+    /// 返信と引用は書いた本文を残して返信先や引用元を付け替えるが、編集の本文は元の投稿のものなので、引き継がない。
+    private func confirmLeavingEdit(title: String, _ proceed: @escaping () -> Void) {
         guard composer.model.editedStatus != nil else {
             proceed()
             return
         }
-        let alert = UIAlertController(title: "編集をやめて返信しますか？", message: "編集中の内容は消えます。", preferredStyle: .alert)
+        let alert = UIAlertController(title: title, message: "編集中の内容は消えます。", preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         alert.addAction(UIAlertAction(title: "編集をやめる", style: .destructive) { [weak self] _ in
             // 編集を送っている間はやめず、返信も始めない。送り終えれば空に戻るので、返信はそのあと選び直してもらう。
             guard self?.composer.cancelStatusEdit() == true else { return }
             proceed()
+        })
+        topViewController.present(alert, animated: true)
+    }
+
+    /// 自分が引用できるかが分かっていれば、すぐ引用を始める。公開とハッシュタグのストリーミングで届いた投稿は、
+    /// ログインしていない人向けの形で届き、引用できるかが分からないので、読み直して確かめてから始める。
+    /// 読めなかったら、編集を始められなかったときと同じく、チップの列に出す。
+    private func startQuoting(_ status: Status) {
+        guard status.displayed.quoteApproval?.availability == .unverified else {
+            beginQuoting(status)
+            return
+        }
+        let client = client
+        let target = status.displayed
+        tasks.run { [weak self] in
+            do {
+                let refetched = try await client.status(target.id)
+                guard let self else { return }
+                switch refetched.quoteApproval?.availability {
+                case .automatic, .manual:
+                    beginQuoting(status)
+                case .denied(followersOnly: true):
+                    presentAlert(title: "この投稿は引用できません", message: "フォロワーだけが引用できる投稿です。")
+                case .denied(followersOnly: false), .unverified, nil:
+                    presentAlert(title: "この投稿は引用できません", message: "投稿者が引用を許していない投稿です。")
+                }
+            } catch {
+                guard let self else { return }
+                let title = "引用を始められませんでした"
+                logger.error("quote check failed: \(SciaLog.describe(error), privacy: .public)")
+                let reason = await failureReason(for: error)
+                operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
+                showFailureNotice(.interactionFailure(title: title) { [weak self] in
+                    self?.presentAlert(title: title, message: reason.text)
+                })
+            }
+        }
+    }
+
+    private func beginQuoting(_ status: Status) {
+        confirmLeavingEdit(title: "編集をやめて引用しますか？") { [weak self] in self?.confirmQuoting(status) }
+    }
+
+    /// 下書きに添付か投票があれば、外してよいか聞いてから引用を始める。なければすぐ始める。
+    /// Mastodonは引用に添付と投票を付けられないため。本文は残す。
+    private func confirmQuoting(_ status: Status) {
+        let model = composer.model
+        guard model.hasQuoteConflicts else {
+            composer.quote(status)
+            return
+        }
+        let removing = [model.attachments.isEmpty ? nil : "添付ファイル", model.poll == nil ? nil : "投票"].compactMap(\.self).joined(separator: "と")
+        let alert = UIAlertController(title: "\(removing)を外して引用しますか？", message: "引用する投稿には、添付ファイルや投票を付けられません。書いた本文は残ります。", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        alert.addAction(UIAlertAction(title: "外して引用", style: .destructive) { [weak self] _ in
+            self?.composer.quote(status)
         })
         topViewController.present(alert, animated: true)
     }
@@ -2314,7 +2373,13 @@ final class SessionController {
             guard composer.model.canPasteMedia else {
                 discardSharedMedia(media)
                 logger.error("shared media dropped posting=\(self.composer.model.isPosting, privacy: .public)")
-                let message = composer.model.isPosting ? Self.sharedMediaWhilePostingMessage : "サーバーの設定を読み込めませんでした。もう一度共有してください。"
+                let message = if composer.model.isPosting {
+                    Self.sharedMediaWhilePostingMessage
+                } else if composer.model.quoteTarget != nil {
+                    "引用する投稿には添付できません。引用をやめてから、もう一度共有してください。"
+                } else {
+                    "サーバーの設定を読み込めませんでした。もう一度共有してください。"
+                }
                 presentAlert(title: Self.sharedMediaFailureTitle, message: message)
                 return
             }

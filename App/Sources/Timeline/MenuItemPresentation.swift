@@ -77,6 +77,7 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .favourite: .own(title: "お気に入り", symbolName: "star")
         case .reblog: .own(title: "ブースト", symbolName: "arrow.2.squarepath")
         case .bookmark: .own(title: "ブックマーク", symbolName: "bookmark")
+        case .quote: .own(title: "引用", symbolName: "quote.bubble", note: "引用に対応したサーバーでだけ出ます。引用できない投稿では押せません")
         case .reblogWithVisibility: .own(title: "公開範囲を選んでブースト", symbolName: "arrow.2.squarepath", note: "ブーストしていない、公開かひかえめな公開の投稿でだけ出ます")
         case .pin: .own(title: "プロフィールに固定", symbolName: "pin", note: "ダイレクトではない自分の投稿でだけ出ます")
         case .muteConversation: .own(title: "会話をミュート", symbolName: "bell.slash", note: "自分の投稿、通知、自分へのメンションを含む投稿でだけ出ます")

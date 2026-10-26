@@ -67,11 +67,11 @@ final class InlineComposeController: NSObject {
     private let bar = ComposeBarView(effect: InlineComposeController.interactiveGlass())
     /// 背景の付いたラベルにする。背景のない文字だけのボタンは、ガラスの上で単色に描かれることがあり、色合いの青が消えた。
     private lazy var replyButton = UIButton(configuration: .tinted(), primaryAction: UIAction { [weak self] _ in
-        guard let target = self?.model.editedStatus ?? self?.model.replyTo else { return }
+        guard let target = self?.model.editedStatus ?? self?.model.replyTo ?? self?.model.quoteTarget else { return }
         self?.onShowReplyTarget(target)
     })
     private lazy var replyRow = makeReplyRow()
-    /// ラベルの右の×。返信なら返信先を外して書いた本文を残し、編集なら編集をやめて空の投稿欄に戻す。
+    /// ラベルの右の×。返信なら返信先を、引用なら引用元を外して書いた本文を残し、編集なら編集をやめて空の投稿欄に戻す。
     private lazy var replyClearButton: UIButton = {
         var configuration = UIButton.Configuration.plain()
         configuration.image = UIImage(systemName: "xmark.circle.fill")
@@ -81,6 +81,8 @@ final class InlineComposeController: NSObject {
             guard let self else { return }
             if model.editedStatus != nil {
                 cancelStatusEdit()
+            } else if model.quoteTarget != nil {
+                model.setQuoteTarget(nil)
             } else {
                 model.setReplyTarget(nil)
             }
@@ -402,7 +404,7 @@ final class InlineComposeController: NSObject {
     /// 違和感レポートに残す状態。行が重なっていれば、どの行かも書く。
     func stateDump() -> String {
         """
-        editing: \(isEditing) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : pollEditor.fields.firstIndex(where: \.isFirstResponder).map { "poll\($0 + 1)" } ?? "none") spoiler: \(model.showsSpoiler) poll: \(model.poll.map { "options=\($0.options.count) multiple=\($0.multiple) hidesTotals=\($0.hidesTotals) expiresIn=\($0.expiresIn)" } ?? "nil") sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil")
+        editing: \(isEditing) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : pollEditor.fields.firstIndex(where: \.isFirstResponder).map { "poll\($0 + 1)" } ?? "none") spoiler: \(model.showsSpoiler) poll: \(model.poll.map { "options=\($0.options.count) multiple=\($0.multiple) hidesTotals=\($0.hidesTotals) expiresIn=\($0.expiresIn)" } ?? "nil") sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") quoteTarget: \(model.quoteTarget?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil")
         mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
         tools: row=\(toolPlacement.map { "\($0.row.map(\.rawValue))" } ?? "nil") menu=\(toolPlacement.map { "\($0.menu.map { $0.map(\.rawValue) })" } ?? "nil")
@@ -482,6 +484,17 @@ final class InlineComposeController: NSObject {
     func reply(to status: Status) {
         model.setReplyTarget(status)
         // モデルの変更が画面に届くのは少しあとなので、ラベルの行を出す前に、ラベルの文字をここで入れておく。
+        update()
+        beginEditing()
+    }
+
+    /// 引用元を付けて書き始める。添付と投票は外す。外してよいかは、呼ぶ側が先に聞く。
+    /// 開いているピッカーは、外した添付をピッカーの選択から足し直されないよう、`discardDraft()`と同じく閉じる。
+    func quote(_ status: Status) {
+        if model.hasQuoteConflicts {
+            mediaPicker?.close(notifiesWillClose: true)
+        }
+        model.setQuoteTarget(status)
         update()
         beginEditing()
     }
@@ -617,7 +630,9 @@ final class InlineComposeController: NSObject {
                 : UIAction(title: "キーボードに戻る", image: UIImage(systemName: "keyboard")) { [weak self] _ in self?.toggleMediaPicker() }
             if mediaPicker == nil, !model.canAttachMedia {
                 action.attributes = .disabled
-                if model.poll != nil {
+                if model.quoteTarget != nil {
+                    action.subtitle = "引用とは一緒に付けられません"
+                } else if model.poll != nil {
                     action.subtitle = "投票とは一緒に付けられません"
                 }
             }
@@ -628,7 +643,7 @@ final class InlineComposeController: NSObject {
             }
             if model.poll == nil, !model.canAddPoll {
                 action.attributes = .disabled
-                action.subtitle = model.editedStatus != nil ? "編集では付けられません" : "メディアとは一緒に付けられません"
+                action.subtitle = model.editedStatus != nil ? "編集では付けられません" : model.quoteTarget != nil ? "引用とは一緒に付けられません" : "メディアとは一緒に付けられません"
             }
             return action
         case .spoiler:
@@ -665,10 +680,10 @@ final class InlineComposeController: NSObject {
     }
 
     /// 編集では公開範囲を変えられないため、今の範囲にチェックマークを付けたまま、どれも押せないようにする。
+    /// 編集中と、引用元より広い範囲は、選べない形で並べる。
     private func visibilityActions() -> [UIAction] {
-        let attributes: UIMenuElement.Attributes = model.editedStatus == nil ? [] : .disabled
-        return VisibilityOption.choices.map { choice in
-            UIAction(title: choice.title, image: UIImage(systemName: choice.symbolName), attributes: attributes, state: choice.visibility == model.visibility ? .on : .off) { [weak self] _ in
+        VisibilityOption.choices.map { choice in
+            UIAction(title: choice.title, image: UIImage(systemName: choice.symbolName), attributes: model.canChoose(choice.visibility) ? [] : .disabled, state: choice.visibility == model.visibility ? .on : .off) { [weak self] _ in
                 self?.model.choose(choice.visibility)
             }
         }
@@ -1580,7 +1595,7 @@ final class InlineComposeController: NSObject {
     /// 隠す設定で、残すもの（自分で書いたもの、返信先、編集）がない。このときは、書き終えたら隠す。
     /// 残すものがあるときに隠すと、下書きが残っていることに気づけないため。
     private var sinksWhenDone: Bool {
-        settings.hidesEmptyComposeBar && !model.hasWrittenContent && model.replyTo == nil
+        settings.hidesEmptyComposeBar && !model.hasWrittenContent && model.replyTo == nil && model.quoteTarget == nil
     }
 
     /// 監視していない`isEditing`は最後に読む。先に読むと、書いている間の評価で下書きを読まずに終わり、下書きが監視から外れる。
@@ -1830,8 +1845,8 @@ final class InlineComposeController: NSObject {
         replyRow.setNeedsLayout()
     }
 
-    /// 本文の上のラベル。返信なら返信先、編集なら編集していること（返信の編集なら返信先も）を書く。
-    /// 編集では返信先を変えられないので、返信先のラベルは出さず、編集のラベルにまとめる。返信と編集で1つの行を使い、行を増やさない。
+    /// 本文の上のラベル。返信なら返信先、引用なら引用元、編集なら編集していること（返信の編集なら返信先も）を書く。
+    /// 編集では返信先を変えられないので、返信先のラベルは出さず、編集のラベルにまとめる。返信、引用、編集で1つの行を使い、行を増やさない。
     private struct Chip {
         let title: String
         let symbolName: String
@@ -1842,6 +1857,10 @@ final class InlineComposeController: NSObject {
     private var chip: Chip? {
         if let title = model.editChipTitle {
             return Chip(title: title, symbolName: "pencil", hint: "タイムラインの編集している投稿を表示します", clearLabel: "編集をやめる")
+        }
+        if let quoteTarget = model.quoteTarget {
+            let acct = "@\(quoteTarget.displayed.account.acct)"
+            return Chip(title: "\(acct)の投稿を引用", symbolName: "quote.bubble.fill", hint: "タイムラインの引用元の投稿を表示します", clearLabel: "引用をやめる")
         }
         guard let replyTo = model.replyTo else { return nil }
         let acct = "@\(replyTo.displayed.account.acct)"
@@ -2649,11 +2668,19 @@ extension InlineComposeController: UITextPasteDelegate {
     }
 
     /// 指す先を調べているファイルがなくなっていれば、ペーストしたメディアを添付に足す。
+    /// 調べている間に引用か投票を付けたり、送り始めたりしていたら、添付できないので足さずに捨てる。
     private func addPendingPastedMedia() {
         guard resolvingPastedFiles.isEmpty, !pendingPastedMedia.isEmpty else { return }
         let pasted = pendingPastedMedia.compactMap(\.self)
         pendingPastedMedia = []
         guard !pasted.isEmpty else { return }
+        guard model.canPasteMedia else {
+            logger.info("paste: pending media dropped while attaching is unavailable (count=\(pasted.count))")
+            for media in pasted {
+                media.discard()
+            }
+            return
+        }
         logger.info("paste: adding media (count=\(pasted.count))")
         model.addPastedMedia(pasted)
     }

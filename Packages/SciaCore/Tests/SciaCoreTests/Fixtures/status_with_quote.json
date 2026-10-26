@@ -6,6 +6,11 @@
   "spoiler_text": "",
   "language": "ja",
   "visibility": "public",
+  "quote_approval": {
+    "automatic": ["followers"],
+    "manual": [],
+    "current_user": "denied"
+  },
   "url": "https://example.social/@alice/113000000000000001",
   "content": "<p class=\"quote-inline\">RE: <a href=\"https://mastodon.example/@alice/200\">mastodon.example/@alice/200</a></p><p>引用した本文</p>",
   "account": {

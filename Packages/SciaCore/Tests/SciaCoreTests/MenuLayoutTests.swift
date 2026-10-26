@@ -166,7 +166,7 @@ struct MenuLayoutTests {
         #expect(groups.main.map(\.isRow) == [true, false, false, false, false])
         #expect(groups.main.map(\.items) == [
             [.reply, .favourite, .reblog],
-            [.edit, .bookmark],
+            [.edit, .bookmark, .quote],
             [.copyLink, .copyText, .share, .openInBrowser],
             [.systemTranslate],
             [.notifyingUser, .author, .booster, .hashtags],
@@ -258,11 +258,19 @@ struct MenuLayoutTests {
         #expect(index.map { saved.elements[$0 + 1] } == .item(.bookmark, isVisible: true))
     }
 
+    /// 引用を足す前に保存した投稿のメニューでも、引用はブックマークの後ろに、表示されて入る。
+    @Test func savedStatusMenuGainsVisibleQuoteAfterBookmark() {
+        let saved = MenuLayout<StatusMenuItem>(tokens: StatusMenuItem.defaultLayout.tokens.filter { !$0.hasSuffix(":quote") })
+        let index = saved.elements.firstIndex(of: .item(.bookmark, isVisible: true))
+
+        #expect(index.map { saved.elements[$0 + 1] } == .item(.quote, isVisible: true))
+    }
+
     /// 編集と削除を足す前に保存した並びでも、編集はブーストの後ろに、削除は「その他」に入る。
     @Test func savedStatusMenuGainsEditAndDelete() {
         let saved = MenuLayout<StatusMenuItem>(tokens: ["item:reblog", "item:reply", "item:favourite", "separator", "item:copyLink", "more", "hidden:share"])
 
-        #expect(saved.groups.main.map(\.items).first == [.reblog, .edit, .bookmark, .reply, .favourite])
+        #expect(saved.groups.main.map(\.items).first == [.reblog, .edit, .bookmark, .quote, .reply, .favourite])
         // 編集履歴は既定で「その他」の先頭にあるため、保存した並びでも「その他」の先頭に入り、削除までの項目がその後ろに続く。
         // 共有を「その他」に入れた並びなので、共有の後ろに来るブラウザで開くなども、その後ろに続く。
         #expect(saved.groups.more.map(\.items).first.map { Array($0.prefix(9)) } == [.editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .customEmojis, .muteConversation, .pin, .dismissNotification, .delete])

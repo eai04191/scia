@@ -9,6 +9,8 @@ enum StatusAction {
     /// 公開範囲を選んでブーストする。
     case reblogWithVisibility(ReblogVisibility)
     case bookmark
+    /// 投稿欄で投稿を引用して書き始める。
+    case quote
     case muteConversation
     case pin
     case editHistory
@@ -124,7 +126,7 @@ extension TimelineViewController {
         case .hashtags:
             guard let shown = status?.displayed else { return [] }
             return hashtagElements(of: shown, id: id)
-        case .reply, .favourite, .reblog, .bookmark, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .edit, .delete:
+        case .reply, .favourite, .reblog, .bookmark, .quote, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .edit, .delete:
             guard let status else { return [] }
             return statusAction(item, on: status, isNotification: notification != nil, id: id).map { [$0] } ?? []
         }
@@ -167,6 +169,8 @@ extension TimelineViewController {
             ) { [weak self] _ in
                 self?.onStatusAction?(.bookmark, status)
             }
+        case .quote:
+            return quoteAction(item, on: status)
         case .muteConversation:
             // サーバーはどの会話でもミュートできるが、通知が届かない会話をミュートしても変わらないため、自分が加わっていそうな投稿でだけ出す。
             // 自分が途中で返信した会話で、自分へのメンションを含まない投稿には出ない。そのときは、通知か自分の投稿からミュートする。
@@ -265,6 +269,22 @@ extension TimelineViewController {
             )
             guard !children.isEmpty else { return nil }
             return UIMenu(title: "#\(tag.name)", image: StatusMenuItem.hashtags.image, children: children)
+        }
+    }
+
+    /// 引用の項目。引用に対応していないサーバー（`quote_approval`がない）では出さない。押せるかを決められないため。
+    /// 投稿者の承認が要るときと、引用できないときは、そのことをサブタイトルに添える。決まりはdocs/quote.mdの「引用して投稿する」にある。
+    private func quoteAction(_ item: StatusMenuItem, on status: Status) -> UIAction? {
+        guard let availability = status.displayed.quoteApproval?.availability else { return nil }
+        let subtitle: String? = switch availability {
+        // ログインしていない人向けに届いた投稿は、押してから確かめる。
+        case .automatic, .unverified: nil
+        case .manual: "投稿者が承認すると表示されます"
+        case .denied(followersOnly: true): "フォロワーだけが引用できます"
+        case .denied(followersOnly: false): "引用できない投稿です"
+        }
+        return UIAction(title: item.title, subtitle: subtitle, image: item.image, attributes: availability.canQuote ? [] : .disabled) { [weak self] _ in
+            self?.onStatusAction?(.quote, status)
         }
     }
 

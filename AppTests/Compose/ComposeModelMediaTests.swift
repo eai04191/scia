@@ -658,6 +658,20 @@ struct ComposeModelMediaTests {
         #expect(sent.first?.mediaIDs == ["m-a.jpg", "m-p.jpg"])
     }
 
+    /// 引用すると添付を外す。Mastodonが一緒に付けられないため。
+    @Test func quotingRemovesAttachments() async throws {
+        let server = FakeServer()
+        let model = makeModel(server)
+        model.addPastedMedia([try pasted("p")])
+        #expect(model.hasQuoteConflicts)
+
+        model.setQuoteTarget(Status(id: "10", createdAt: Date(timeIntervalSince1970: 0), account: Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil), content: "", spoilerText: "", url: nil))
+
+        #expect(model.attachments.isEmpty)
+        #expect(!model.hasQuoteConflicts)
+        #expect(!model.canPasteMedia)
+    }
+
     /// ピッカーの選択が変わっても、ペーストしたメディアは外さない。ペーストした分だけ、ピッカーで選べる枚数を減らす。
     @Test func pastedMediaStaysWhenPickerSelectionChanges() async throws {
         let server = FakeServer()
