@@ -278,19 +278,28 @@ struct URLSessionWebSocketConnection: WebSocketConnection {
         }
     }
 
-    /// 完了ハンドラが最初に呼ばれるまで待つ。2回目以降の呼び出しは無視する。
+    /// 完了ハンドラが最初に呼ばれるまで待つ。2回目以降の呼び出しは無視する。取り消されたら、呼ばれるのを待たずに`CancellationError`を投げる。
     ///
     /// macOSのURLSessionWebSocketTaskは、pingの応答を待つ間に接続が切れると、`sendPing`の完了ハンドラを違うエラーで2回呼ぶことがある（Code 57のあとに53など）。そのまま続きを再開すると二重の再開でクラッシュする。
+    /// 応答が来なければ、完了ハンドラは接続を閉じるまで呼ばれない。取り消しに応じないと、呼び出した側は取り消されても戻れない。
     static func awaitFirstCompletion(_ send: (@escaping @Sendable ((any Error)?) -> Void) -> Void) async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
-            let pending = PendingContinuation(continuation)
-            send { error in
-                if let error {
-                    pending.take()?.resume(throwing: error)
-                } else {
-                    pending.take()?.resume()
+        let pending = PendingContinuation()
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, any Error>) in
+                guard pending.hold(continuation) else {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                send { error in
+                    if let error {
+                        pending.take()?.resume(throwing: error)
+                    } else {
+                        pending.take()?.resume()
+                    }
                 }
             }
+        } onCancel: {
+            pending.take()?.resume(throwing: CancellationError())
         }
     }
 
@@ -305,18 +314,30 @@ struct URLSessionWebSocketConnection: WebSocketConnection {
     }
 }
 
-/// 続きを1回だけ取り出せるように持つ。
+/// 続きを1回だけ取り出せるように持つ。持つ前に取り出されたら（取り消されたら）、持たない。
 private final class PendingContinuation: Sendable {
-    private let continuation: Mutex<CheckedContinuation<Void, any Error>?>
-
-    init(_ continuation: CheckedContinuation<Void, any Error>) {
-        self.continuation = Mutex(continuation)
+    private enum State {
+        case waiting
+        case holding(CheckedContinuation<Void, any Error>)
+        case taken
     }
 
-    /// 最初の呼び出しだけ続きを返す。
+    private let state = Mutex(State.waiting)
+
+    /// 続きを持つ。すでに取り出されていたら持たずにfalseを返す。
+    func hold(_ continuation: CheckedContinuation<Void, any Error>) -> Bool {
+        state.withLock { state in
+            guard case .waiting = state else { return false }
+            state = .holding(continuation)
+            return true
+        }
+    }
+
+    /// 最初の呼び出しだけ続きを返す。持つ前に呼ばれたら、以後は持たない。
     func take() -> CheckedContinuation<Void, any Error>? {
-        continuation.withLock { continuation in
-            defer { continuation = nil }
+        state.withLock { state in
+            defer { state = .taken }
+            guard case .holding(let continuation) = state else { return nil }
             return continuation
         }
     }

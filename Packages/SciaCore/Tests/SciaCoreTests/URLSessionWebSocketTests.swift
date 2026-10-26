@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import SciaTesting
 import Synchronization
 import Testing
 @testable import SciaCore
@@ -43,6 +44,26 @@ struct URLSessionWebSocketTests {
             }
         }
         #expect(error?.code == .ENOTCONN)
+    }
+
+    /// 応答の来ないpingも、取り消したら待つのをやめる。待ち続けると、スイートの時間制限で取り消しても、テストの実行全体が終わらなくなる。
+    @Test func pingWithoutCompletionEndsWhenCancelled() async throws {
+        let sent = ResumeFlag()
+        let pinging = Task {
+            try await URLSessionWebSocketConnection.awaitFirstCompletion { _ in
+                sent.value.withLock { $0 = true }
+            }
+        }
+        try await waitUntil { sent.value.withLock { $0 } }
+        pinging.cancel()
+        // 終わらないまま待つと、このテストも止まるので、終わったかを条件で待つ。
+        let outcome = PingOutcome()
+        Task {
+            let result = await pinging.result
+            outcome.value.withLock { $0 = result }
+        }
+        try await waitUntil { outcome.value.withLock { $0 != nil } }
+        #expect(throws: CancellationError.self) { try outcome.value.withLock { $0 }?.get() }
     }
 
     @Test func rejectedHandshakeIsReportedFromPing() async throws {
@@ -186,4 +207,8 @@ private final class ReceivedHeader: Sendable {
 
 private final class ResumeFlag: Sendable {
     let value = Mutex(false)
+}
+
+private final class PingOutcome: Sendable {
+    let value = Mutex<Result<Void, any Error>?>(nil)
 }
