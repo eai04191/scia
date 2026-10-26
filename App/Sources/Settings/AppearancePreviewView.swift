@@ -2,7 +2,20 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 「投稿の見た目」の上に固定して置くプレビュー。一覧と同じ`PostContentView`で見本の投稿を並べ、触っている項目の場所を色の帯で示す。
+/// 「投稿の見た目」のプレビューに並べる行の中身。
+protocol AppearancePreviewConfiguration: UIContentConfiguration {
+    /// 一覧と同じく、この行の下に区切り線を引くか。
+    var drawsPreviewSeparatorBelow: Bool { get }
+    @MainActor func makePreviewRow() -> any AppearancePreviewRow
+}
+
+/// プレビューに並べる行のビュー。部品の枠を返し、触っている項目の場所を示すのに使う。
+@MainActor
+protocol AppearancePreviewRow: UIView, UIContentView {
+    func previewFrames() -> AppearancePreviewFrames
+}
+
+/// 「投稿の見た目」の上に固定して置くプレビュー。一覧と同じ部品で見本の行を並べ、触っている項目の場所を色の帯で示す。
 final class AppearancePreviewView: UIView {
     /// 部品がタップされたときに、タップした場所に重なる部品を、小さい順に並べて呼ぶ。部品のない場所なら空で呼ぶ。
     var onSelectPart: (([AppearancePreviewPart]) -> Void)?
@@ -11,7 +24,7 @@ final class AppearancePreviewView: UIView {
 
     private let scrollView = UIScrollView()
     private let stack = UIStackView()
-    private var rows: [PostContentView] = []
+    private var rows: [any AppearancePreviewRow] = []
     private var separators: [UIView] = []
     /// 前に描いたときの、数値以外の設定。変わっていれば、部品を動かさずに切り替える。
     private var lastChoices: Int?
@@ -56,22 +69,23 @@ final class AppearancePreviewView: UIView {
     ///   - showsSeparators: 一覧と同じく、投稿のあいだに区切り線を引く。
     ///   - choices: 数値以外の設定（出すかどうかや表記）を表す値。変わったときは部品を動かさない。
     ///     出していなかった部品は前の位置を持たないため、動かすと、位置0から飛んでくるように見える。
-    func apply(_ configurations: [PostContentConfiguration], highlight: AppearanceHighlight?, showsSeparators: Bool = true, choices: Int = 0) {
+    func apply(_ configurations: [any AppearancePreviewConfiguration], highlight: AppearanceHighlight?, showsSeparators: Bool = true, choices: Int = 0) {
         let choicesChanged = lastChoices.map { $0 != choices } ?? false
         lastChoices = choices
-        if rows.count != configurations.count {
+        // 行の数か、行の種類（投稿か通知か）が変わったら、行を作り直す。行のビューは、自分の種類の中身しか受け付けないため。
+        let kindsChanged = zip(rows, configurations).contains { row, configuration in type(of: row.configuration) != type(of: configuration) }
+        if rows.count != configurations.count || kindsChanged {
             stack.arrangedSubviews.forEach { $0.removeFromSuperview() }
             separators = []
-            rows = configurations.map { PostContentView(configuration: $0) }
+            rows = configurations.map { $0.makePreviewRow() }
             // 見本の投稿は押しても動かさず、タップはどの部品かを選ぶのに使う。
             for row in rows {
                 row.isUserInteractionEnabled = false
             }
             for (index, row) in rows.enumerated() {
                 stack.addArrangedSubview(row)
-                // 一覧と同じく、行のあいだに区切り線を引く。返信でつながった行は、線が切れて見えないよう引かない。
-                // 光っている行も、光の下の端を区切りにする。区切り線が光に重なると、光源が灰色に濁って見えるため。
-                if index < rows.count - 1, !configurations[index].replyConnection.below, configurations[index].reactionGlow?.isLit != true {
+                // 一覧と同じく、行のあいだに区切り線を引く。引かない行は、行の中身が決める。
+                if index < rows.count - 1, configurations[index].drawsPreviewSeparatorBelow {
                     let separator = UIView()
                     separator.backgroundColor = .separator
                     separator.heightAnchor.constraint(equalToConstant: 1 / max(traitCollection.displayScale, 1)).isActive = true
@@ -175,7 +189,7 @@ final class AppearancePreviewView: UIView {
     }
 
     /// 見本の行。テストで、行を画像にして確かめるときに使う。
-    var rowViews: [PostContentView] {
+    var rowViews: [any AppearancePreviewRow] {
         rows
     }
 
@@ -217,7 +231,7 @@ final class AppearancePreviewView: UIView {
 }
 
 struct AppearancePreview: UIViewRepresentable {
-    let configurations: [PostContentConfiguration]
+    let configurations: [any AppearancePreviewConfiguration]
     let highlight: AppearanceHighlight?
     let onSelectPart: ([AppearancePreviewPart]) -> Void
     let onTapHighlight: () -> Void
@@ -237,3 +251,17 @@ struct AppearancePreview: UIViewRepresentable {
         view.apply(configurations, highlight: highlight, showsSeparators: showsSeparators, choices: choices)
     }
 }
+
+// 返信でつながった行は、線が切れて見えないよう区切り線を引かない。
+// 光っている行も、光の下の端を区切りにする。区切り線が光に重なると、光源が灰色に濁って見えるため。
+extension PostContentConfiguration: AppearancePreviewConfiguration {
+    var drawsPreviewSeparatorBelow: Bool {
+        !replyConnection.below && reactionGlow?.isLit != true
+    }
+
+    func makePreviewRow() -> any AppearancePreviewRow {
+        PostContentView(configuration: self)
+    }
+}
+
+extension PostContentView: AppearancePreviewRow {}
