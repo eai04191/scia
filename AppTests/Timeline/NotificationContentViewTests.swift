@@ -82,4 +82,30 @@ struct NotificationContentViewTests {
         }
         #expect(opened == (grouped ? ["2", "3"] : ["2"]))
     }
+
+    /// 名前の前に差し込むアイコンも、角丸の四角の丸みを「投稿の見た目」の設定に従わせる。丸みを0にすると、四隅も中央と同じ濃さで塗る。
+    @Test func headerAvatarFollowsCornerRatio() throws {
+        let settings = AppSettings.isolated()
+        settings.avatarShape = .roundedSquare
+        settings.setValue(0, for: AppearanceCatalog.avatarCornerRatio)
+        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline, settings: settings)
+        let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
+        let notification = MastodonNotification(id: "1", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: bob, status: nil)
+        let configuration = try #require(vc.contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
+        let attachment = try #require(configuration.header.attribute(.attachment, at: 0, effectiveRange: nil) as? NSTextAttachment)
+        let image = try #require(attachment.image?.cgImage)
+        // 画像のないアイコンは半透明の灰色で塗るので、濃さは中央の画素と比べる。
+        let center = try alpha(of: image, x: image.width / 2, y: image.height / 2)
+        #expect(center > 0)
+        #expect(try alpha(of: image, x: 0, y: 0) == center)
+    }
+
+    /// 上端から数えた位置の画素の濃さ。
+    private func alpha(of image: CGImage, x: Int, y: Int) throws -> UInt8 {
+        var pixel: [UInt8] = [0, 0, 0, 0]
+        let context = try #require(CGContext(data: &pixel, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
+        // その1画素だけが、1×1の描く先に入るようずらして描く。CGContextの原点は左下なので、上端からの位置を下からの位置に直す。
+        context.draw(image, in: CGRect(x: -CGFloat(x), y: CGFloat(y + 1 - image.height), width: CGFloat(image.width), height: CGFloat(image.height)))
+        return pixel[3]
+    }
 }

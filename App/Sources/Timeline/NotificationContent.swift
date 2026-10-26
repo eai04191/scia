@@ -179,7 +179,7 @@ extension TimelineViewController {
         let content = avatarContent(of: account)
         let image = notificationAvatarKey(of: account, font: font).flatMap(avatarImages.requestImage(for:))
         let attachment = NSTextAttachment()
-        attachment.image = Self.shapedAvatar(image, side: side, shape: content.shape)
+        attachment.image = Self.shapedAvatar(image, side: side, shape: content.shape, cornerRatio: content.cornerRatio)
         attachment.bounds = CGRect(x: 0, y: font.descender, width: side, height: side)
         let string = NSMutableAttributedString(attachment: attachment)
         // アイコンと名前のあいだを空ける。
@@ -213,12 +213,12 @@ extension TimelineViewController {
         }
     }
 
-    private static func shapedAvatar(_ image: UIImage?, side: CGFloat, shape: AvatarShape) -> UIImage {
+    private static func shapedAvatar(_ image: UIImage?, side: CGFloat, shape: AvatarShape, cornerRatio: CGFloat) -> UIImage {
         let rect = CGRect(x: 0, y: 0, width: side, height: side)
         return UIGraphicsImageRenderer(size: rect.size).image { _ in
             let radius = switch shape {
             case .circle: side / 2
-            case .roundedSquare: side * 0.2
+            case .roundedSquare: side * cornerRatio
             }
             UIBezierPath(roundedRect: rect, cornerRadius: radius).addClip()
             if let image, image.size.width > 0, image.size.height > 0 {
