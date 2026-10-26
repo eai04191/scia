@@ -7,9 +7,11 @@
 #   Tools/check-stamp.sh tree                        今の作業ツリーのtreeを出す
 #   Tools/check-stamp.sh record <check|test> <tree>  今の作業ツリーが<tree>のままなら、通ったものとして覚える
 #   Tools/check-stamp.sh missing <commit> [<base>]   <commit>の中身でまだ通っていないもの（make check、make test）を1行ずつ出す
-# <base>を渡すと、<base>の中身で通っていて、<commit>との違いがMarkdown（*.md）だけなら、通ったものとして扱い、<commit>の中身も覚える。
+# <base>を渡すと、<base>の中身で通っていて、<commit>との違いがMarkdown（*.md）とサーバーの一覧（known-servers.txt）だけなら、通ったものとして扱い、<commit>の中身も覚える。
 # 追跡しているMarkdownは、ルートの文書、docs/、.claude/にしかなく、ビルドにもlintにもテストにも入らないので、結果が変わらないため。
 # .claude/skills/にはシェルスクリプトもあるので、ディレクトリではなく拡張子で見る。
+# サーバーの一覧は、GitHub Actionsが毎週作り直してPRにするデータで、読むテストはServerSuggestionsTestsのloadsTheBundledListだけ。その条件（1000件を超える、mastodon.socialがある、空の行がない）は、Tools/update-known-servers.shが書き出す前に確かめる。
+# 手で一覧を書き換えたときは、この条件を誰も確かめないまま通ったものとして扱う。一覧を手で直すことはなく、確かめるためにmake testを走らせると、除外する意味がなくなるので、そこまでは見ない。
 set -euo pipefail
 
 KINDS="check test"
@@ -30,9 +32,10 @@ worktree_tree() {
 
 # renameを1つの変更として扱うと、.swiftから.mdへの名前の変更が.mdの変更だけに見えるので、--no-renamesで消したファイルも比べる
 # git diff --quietは、違いがなければ0、あれば1を返す。それ以外は調べられなかったので、取り違えないよう失敗させる
-only_markdown_differs() {
+only_unchecked_files_differ() {
     local status=0
-    git diff --quiet --no-renames "$1" "$2" -- . ':(exclude)*.md' || status=$?
+    git diff --quiet --no-renames "$1" "$2" -- . ':(exclude)*.md' \
+        ':(exclude)Packages/SciaCore/Sources/SciaCore/Auth/Resources/known-servers.txt' || status=$?
     case $status in
         0) return 0 ;;
         1) return 1 ;;
@@ -68,7 +71,7 @@ case "${1:-}" in
         [[ -n "$base" ]] && base_tree=$(git rev-parse "$base^{tree}")
         for kind in $KINDS; do
             [[ -e "$(stamp_dir "$kind")/$tree" ]] && continue
-            if [[ -n "$base_tree" && -e "$(stamp_dir "$kind")/$base_tree" ]] && only_markdown_differs "$base" "$commit"; then
+            if [[ -n "$base_tree" && -e "$(stamp_dir "$kind")/$base_tree" ]] && only_unchecked_files_differ "$base" "$commit"; then
                 # 次にこの中身と比べるときにも引き継げるよう、覚えておく
                 touch "$(stamp_dir "$kind")/$tree"
                 continue

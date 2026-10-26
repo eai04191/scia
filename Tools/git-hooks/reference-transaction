@@ -14,7 +14,7 @@ set -euo pipefail
 # 古い版が新しい置き場所を読めず拒否するので、その1回だけ、古い置き場所にも同じ記録を置いてから入れる
 
 stamp="$(git rev-parse --path-format=absolute --git-common-dir)/../Tools/check-stamp.sh"
-# 今のmainの中身で通っていて、違いがMarkdownだけなら、通ったものとして扱う（Tools/check-stamp.shのmissing）
+# 今のmainの中身で通っていて、違いがMarkdownとサーバーの一覧だけなら、通ったものとして扱う（Tools/check-stamp.shのmissing）
 main=$(git rev-parse -q --verify refs/heads/main || true)
 
 checked() {

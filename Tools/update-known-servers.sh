@@ -18,9 +18,19 @@ curl -fsSL https://api.fedidb.org/datasets/servers.json.gz | gunzip | jq -r '
 chmod 644 "$tmp"
 
 # 取得や絞り込みの失敗で一覧が空や極端に短くなったら、置き換えずに失敗させる。
+# 一覧だけの更新は、make checkとmake testを走らせ直さずにmainへ入れる（Tools/check-stamp.sh）ので、
+# 一覧を読むテスト（ServerSuggestionsTestsのloadsTheBundledList）と同じ条件をここで確かめる。
 count=$(wc -l < "$tmp")
-if [ "$count" -lt 1000 ]; then
+if [ "$count" -le 1000 ]; then
   echo "サーバーが${count}件しかないため、一覧を置き換えません" >&2
+  exit 1
+fi
+if ! grep -qx 'mastodon.social' "$tmp"; then
+  echo "一覧にmastodon.socialがないため、置き換えません" >&2
+  exit 1
+fi
+if grep -qx '' "$tmp"; then
+  echo "一覧に空の行があるため、置き換えません" >&2
   exit 1
 fi
 mv "$tmp" "$out"
