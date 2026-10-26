@@ -35,6 +35,10 @@ enum CompletionListCatalog {
             .emoji(ServerEmoji(shortcode: "blobcat", url: emojiURL, staticUrl: emojiURL)),
             .emoji(ServerEmoji(shortcode: "a_very_long_shortcode_for_a_custom_emoji_that_does_not_fit_in_the_list", url: emojiURL, staticUrl: emojiURL)),
         ]
+        // 実際の一覧から、名前の短いものと、日本語と英語の名前が一覧の幅に収まらない長いもの。
+        let standardEmojis: [CompletionCandidate] = ["🐈", "👍", "🧑‍🦼‍➡️", "🇬🇸"].compactMap { character in
+            StandardEmojiCatalog.groups.lazy.flatMap(\.emojis).first { $0.emoji == character }.map(CompletionCandidate.standardEmoji)
+        }
         return [
             CatalogState(title: "メンションの候補（長い名前、表示名なし、アイコンなし）") { list(.candidates(accounts), kind: .mention) },
             CatalogState(title: "手元のメンションの候補（返信先、アイコンのないメンションされた人、前にメンションした長いハンドル）") { list(.candidates(localMentions), kind: .mention) },
@@ -42,6 +46,10 @@ enum CompletionListCatalog {
             CatalogState(title: "広げて打っている行の下に出すとき（一番上が最優先）") { list(.candidates(accounts), kind: .mention, growsUpward: false) },
             CatalogState(title: "ハッシュタグの候補（プロフィールのタグ、最近使ったタグ、最近の投稿の件数、長い名前）") { list(.candidates(hashtags), kind: .hashtag) },
             CatalogState(title: "カスタム絵文字の候補（長いショートコード）") { list(.candidates(emojis), kind: .emoji) },
+            CatalogState(title: "カスタム絵文字とUnicodeの絵文字の候補（Unicodeの絵文字の長い名前）") { list(.candidates(Array(emojis.prefix(1)) + standardEmojis), kind: .emoji) },
+            CatalogState(title: "カスタム絵文字の一覧を読み込めなかったが、Unicodeの絵文字は出せる") {
+                list(.candidatesWithFailure(Array(standardEmojis.prefix(2)), ComposeCompletion.failureMessage(for: MastodonAPIError(statusCode: 502, message: "Bad Gateway"))), kind: .emoji)
+            },
             CatalogState(title: "候補を探している") { list(.loading, kind: .mention) },
             CatalogState(title: "一致するアカウントがない") { list(.empty, kind: .mention) },
             CatalogState(title: "一致するハッシュタグがない") { list(.empty, kind: .hashtag) },
