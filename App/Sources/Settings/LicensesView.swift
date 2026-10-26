@@ -34,7 +34,7 @@ struct LicensesView: View {
             license: "CC BY 4.0",
             copyright: "FediDB",
             usage: "ログイン画面で出すサーバーの候補。FediDBのサーバーのデータセットから、Mastodonとその派生のサーバーを選び、月間のアクティブユーザーが多い順に並べて使っています。",
-            source: URL(string: "https://fedidb.com"),
+            source: URL(string: "https://fedidb.com/datasets"),
             licenseURL: URL(string: "https://creativecommons.org/licenses/by/4.0/")
         ),
     ]
