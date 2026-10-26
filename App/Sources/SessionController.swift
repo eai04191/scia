@@ -2377,6 +2377,8 @@ final class SessionController {
                     Self.sharedMediaWhilePostingMessage
                 } else if composer.model.quoteTarget != nil {
                     "引用する投稿には添付できません。引用をやめてから、もう一度共有してください。"
+                } else if composer.model.poll != nil {
+                    "投票の付いた投稿には添付できません。投票を外してから、もう一度共有してください。"
                 } else {
                     "サーバーの設定を読み込めませんでした。もう一度共有してください。"
                 }
