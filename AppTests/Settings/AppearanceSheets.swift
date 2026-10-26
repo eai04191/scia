@@ -126,7 +126,7 @@ struct AppearanceSheets {
     private static func render(settings: AppSettings, highlight: AppearanceHighlight?) -> UIImage {
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: width, height: 6_000))
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        preview.apply(samples.configurations(colorScheme: .light, includesXPost: true, revision: 0), highlight: nil, showsSeparators: settings.showsSeparators)
+        preview.apply(samples.configurations(colorScheme: .light, revision: 0), highlight: nil, showsSeparators: settings.showsSeparators)
         preview.layoutIfNeeded()
         guard let highlight, let found = highlight.locate(in: preview.rowFrames()) else {
             return label("示す場所が見本にない", size: CGSize(width: width, height: 40))

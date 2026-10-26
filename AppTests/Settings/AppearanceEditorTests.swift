@@ -100,12 +100,12 @@ struct AppearanceEditorTests {
         #expect(found?.rects == [CGRect(x: 60, y: 30, width: 300, height: 12)])
     }
 
-    /// プレビューの見本だけで、どの項目も場所を示せる。引用とXの投稿の区画は、いつも見本へ足す引用の囲みで示す。
+    /// プレビューの見本だけで、どの項目も場所を示せる。引用の区画は、いつも見本へ足す引用の囲みで示す。
     @Test func samplesShowEveryItem() throws {
         let settings = try makeSettings()
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 2_000))
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        preview.apply(samples.configurations(colorScheme: .light, includesXPost: true, revision: 0), highlight: nil)
+        preview.apply(samples.configurations(colorScheme: .light, revision: 0), highlight: nil)
         preview.layoutIfNeeded()
         let rows = preview.rowFrames()
         for item in AppearanceCatalog.values {
@@ -257,7 +257,7 @@ struct AppearanceEditorTests {
             }
         }
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        let configurations = samples.configurations(colorScheme: .light, includesXPost: true, revision: 0)
+        let configurations = samples.configurations(colorScheme: .light, revision: 0)
         for (index, configuration) in configurations.enumerated() {
             let view = PostContentView(configuration: configuration)
             let height = view.systemLayoutSizeFitting(
@@ -288,7 +288,7 @@ struct AppearanceEditorTests {
         settings.setValue(value, for: item)
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 4_000))
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        preview.apply(samples.configurations(colorScheme: .light, includesXPost: true, revision: 0), highlight: nil)
+        preview.apply(samples.configurations(colorScheme: .light, revision: 0), highlight: nil)
         preview.layoutIfNeeded()
         let found = try #require(AppearanceHighlight(item)?.locate(in: preview.rowFrames()), "\(item.id)の場所が見本にありません")
         for rect in found.rects {
@@ -297,12 +297,16 @@ struct AppearanceEditorTests {
         }
     }
 
-    /// 引用とXの投稿の区画は、Xの投稿を出さないときも、引用の見本の囲みで場所を示せる。
-    @Test func embedGroupHasSampleWithoutXPost() throws {
-        let samples = AppearanceSamples(settings: try makeSettings(), tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        let configurations = samples.configurations(colorScheme: .light, includesXPost: false, revision: 0)
+    /// 囲みの区画は「引用」の区画で、見本の囲みも引用だけにする。Xの投稿は既定では出さない試作のため、見本に出さない。
+    @Test func embedSamplesAreQuotesOnly() throws {
+        // Xの投稿の試作を出すようにしていても、見本には出さない。
+        let tuning = TuningStore(defaults: nil)
+        tuning.setValue(true, for: TuningCatalog.xPostEmbeds)
+        let samples = AppearanceSamples(settings: try makeSettings(), tuning: tuning, now: Date(timeIntervalSince1970: 1_800_000_000))
+        let configurations = samples.configurations(colorScheme: .light, revision: 0)
 
         #expect(configurations.contains { $0.embed?.id.hasPrefix("quote:") == true })
+        #expect(!configurations.contains { $0.embed?.id.hasPrefix("x:") == true })
     }
 
     /// 割合の項目の説明は項目ごとに決まり、縦長の比率の説明がほかの割合の項目に出ない。
@@ -316,7 +320,7 @@ struct AppearanceEditorTests {
     private func layOutSamples(_ settings: AppSettings) -> [AppearancePreviewFrames] {
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 6_000))
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        preview.apply(samples.configurations(colorScheme: .light, includesXPost: true, revision: 0), highlight: nil)
+        preview.apply(samples.configurations(colorScheme: .light, revision: 0), highlight: nil)
         preview.layoutIfNeeded()
         return preview.rowFrames()
     }

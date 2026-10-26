@@ -28,7 +28,7 @@ struct AppearanceEditorView: View {
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 AppearancePreview(
-                    configurations: samples.configurations(colorScheme: previewColorScheme, includesXPost: showsXPost, revision: revision),
+                    configurations: samples.configurations(colorScheme: previewColorScheme, revision: revision),
                     highlight: focused?.highlight,
                     onSelectPart: select,
                     onTapHighlight: { focused = nil },
@@ -120,12 +120,6 @@ struct AppearanceEditorView: View {
     /// 見本を描く外観。外観ごとにしか効かない項目を触っている間は、その外観で描く。端末と違う外観の項目では、値を変えても見た目が変わらないため。
     private var previewColorScheme: ColorScheme {
         focused?.colorScheme ?? colorScheme
-    }
-
-    /// Xの投稿を出すのは試作で、チューニングで出すようにしているときだけ、その見本を並べる。
-    /// 囲みの区画は、引用の見本で場所を示せるため、いつも並べる。
-    private var showsXPost: Bool {
-        tuning.value(of: TuningCatalog.xPostEmbeds)
     }
 
     private var groups: [AppearanceGroup] {
@@ -566,19 +560,16 @@ struct AppearanceSamples {
         }
     }
 
-    /// 引用の囲みを出した投稿は、いつも最後に並べる。
-    /// - Parameters:
-    ///   - includesXPost: Xの投稿の囲みを出した投稿を足す。
-    ///   - revision: 描き直しのきっかけ。中身は使わない。
-    func configurations(colorScheme: ColorScheme, includesXPost: Bool, revision _: Int) -> [PostContentConfiguration] {
+    /// 引用の囲みを出した投稿は、いつも最後に並べる。Xの投稿の囲みも同じ値で描くが、Xの投稿は既定では出さない試作のため、見本には出さない。
+    /// - Parameter revision: 描き直しのきっかけ。中身は使わない。
+    func configurations(colorScheme: ColorScheme, revision _: Int) -> [PostContentConfiguration] {
         let cardImage = PreviewImages.cardURL(for: colorScheme == .dark ? .dark : .light)
         let configurations = (colorScheme == .dark ? posts : lightPosts).map { post in
             var configuration = timeline.contentConfiguration(for: post.status, base: .cell())
             configuration.replyConnection = post.connection
             return configuration
         }
-        let quote = quoteConfiguration(image: cardImage)
-        return includesXPost ? configurations + [xPostConfiguration(image: cardImage), quote] : configurations + [quote]
+        return configurations + [quoteConfiguration(image: cardImage)]
     }
 
     /// 投稿を引用した投稿。引用元には、囲みの中の部品が出るよう、本文と画像を付ける。
@@ -612,44 +603,6 @@ struct AppearanceSamples {
             quote: Quote(state: "accepted", quotedStatus: quoted)
         )
         return timeline.contentConfiguration(for: status, base: .cell())
-    }
-
-    /// Xの投稿へのリンクを、読み終えたXの投稿の囲みで出した投稿。囲みは通信せずに、見本の投稿から組む。
-    private func xPostConfiguration(image: URL?) -> PostContentConfiguration {
-        let avatar = PreviewImages.avatarURL()
-        let link = "https://x.com/scia/status/1"
-        let account = Account(id: "preview-friend", username: "friend", acct: "friend@example.com", displayName: "ともだち", avatar: avatar)
-        let status = Status(
-            id: "preview-x",
-            createdAt: now.addingTimeInterval(-60),
-            account: account,
-            content: #"<p>Xの投稿を貼った投稿です。<a href="\#(link)">x.com/scia/status/1</a></p>"#,
-            spoilerText: "",
-            url: nil
-        )
-        let attachment = MediaAttachment(
-            id: "preview-x-image",
-            type: .image,
-            url: image,
-            previewUrl: image,
-            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_200, height: 900))
-        )
-        guard let url = URL(string: link) else {
-            preconditionFailure("見本のXの投稿のURLが読めません")
-        }
-        let post = XPost(
-            id: "1",
-            url: url,
-            authorName: "Scia",
-            authorScreenName: "scia",
-            authorAvatar: avatar,
-            text: .plain("Xの投稿の本文です。", emojis: []),
-            media: [attachment]
-        )
-        var configuration = timeline.contentConfiguration(for: status, base: .cell())
-        let media = MediaGridView.Content.make(of: post.media, cover: nil, settings: settings, tuning: tuning, network: AppDependencies.network)
-        configuration.embed = timeline.postContentBuilder.xPost(post, media: media, base: .cell())
-        return configuration
     }
 
     private static let myAccountID = "preview-scia"

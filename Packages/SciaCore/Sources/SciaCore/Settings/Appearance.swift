@@ -211,7 +211,8 @@ public enum AppearanceCatalog {
         AppearanceGroup(id: "spoiler", title: "注意書き", values: [spoilerButtonText, spoilerButtonSpacing, spoilerPadding, spoilerCornerRadius, spoilerBodySpacing]),
         AppearanceGroup(id: "media", title: "メディア", values: [bodyMediaSpacing, mediaTileSpacing, mediaTallestAspectRatio, mediaWidestAspectRatio]),
         AppearanceGroup(id: "linkCard", title: "リンクカード", values: [linkCardTitleText, linkCardDetailText, linkCardTitleLines, linkCardDescriptionLines, linkCardLineSpacing, linkCardImageWidthRatio, bodyLinkCardSpacing, linkCardPadding]),
-        AppearanceGroup(id: Self.xPostGroupID, title: "引用とXの投稿", values: [xPostNameText, xPostBodyText, xPostAvatarSize, xPostAvatarNameSpacing, xPostHeaderSpacing, xPostMediaSpacing, xPostPadding, bodyXPostSpacing]),
+        // Xの投稿の囲みも同じ値を使うが、Xの投稿は既定では出さない試作のため、名前には書かない。
+        AppearanceGroup(id: Self.xPostGroupID, title: "引用", values: [xPostNameText, xPostBodyText, xPostAvatarSize, xPostAvatarNameSpacing, xPostHeaderSpacing, xPostMediaSpacing, xPostPadding, bodyXPostSpacing]),
         AppearanceGroup(id: "poll", title: "投票", values: [pollFooterText, bodyPollSpacing, pollOptionSpacing, pollOptionPadding, pollOptionHorizontalPadding, pollOptionCornerRadius, pollFooterSpacing]),
         AppearanceGroup(id: "reactionGlow", title: "お気に入りとブーストの光", values: [reactionGlowHeight, reactionGlowDarkOpacity, reactionGlowLightOpacity, reactionGlowBlendWidth, reactionGlowIconSize, reactionGlowIconOpacity]),
     ]
