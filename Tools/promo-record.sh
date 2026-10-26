@@ -80,7 +80,7 @@ record_simulator() {
     trap restore EXIT
 
     xcrun simctl ui "$device" appearance light
-    xcrun simctl status_bar "$device" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --operatorName "" --batteryState charged --batteryLevel 100
+    xcrun simctl status_bar "$device" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 --cellularMode active --cellularBars 4 --operatorName "" --batteryState discharging --batteryLevel 100
     xcrun simctl terminate "$device" "$BUNDLE_ID" 2>/dev/null || true
     xcrun simctl io "$device" recordVideo --codec=h264 --force "$raw" 2>"$recorder_log" &
     recorder=$!
