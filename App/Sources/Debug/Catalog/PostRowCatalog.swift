@@ -143,9 +143,20 @@ enum PostRowCatalog {
         let mine = TimelineViewController(texts: .home, refresh: {}, settings: settings)
         mine.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: author.id))
         mine.myAccountID = author.id
-        func post(_ title: String, _ status: Status, expandsSpoiler: Bool = false, isMine: Bool = false) -> CatalogState {
+        // 「写真を傾ける」をオフにした設定の一覧。
+        let straightSuiteName = "net.mizle.scia.catalog.mediaBeside.straight"
+        guard let straightDefaults = UserDefaults(suiteName: straightSuiteName) else {
+            preconditionFailure("カタログのUserDefaultsを作れない")
+        }
+        straightDefaults.removePersistentDomain(forName: straightSuiteName)
+        let straightSettings = AppSettings(defaults: straightDefaults)
+        straightSettings.mediaArrangement = .besideBody
+        straightSettings.tiltsStackedPhotos = false
+        let straight = TimelineViewController(texts: .home, refresh: {}, settings: straightSettings)
+        straight.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
+        func post(_ title: String, _ status: Status, expandsSpoiler: Bool = false, isMine: Bool = false, isStraight: Bool = false) -> CatalogState {
             CatalogState(title: title) {
-                let timeline = isMine ? mine : home
+                let timeline = isStraight ? straight : isMine ? mine : home
                 if expandsSpoiler { timeline.toggleSpoiler(of: status) }
                 return CatalogFrame.bordered(PostContentView(configuration: timeline.contentConfiguration(for: status, base: .cell())))
             }
@@ -192,6 +203,10 @@ enum PostRowCatalog {
                 media: images(3)
             )),
             post("ブーストされた投稿", status(content: "<p>ブーストされた投稿。</p>", media: images(2), rebloggedBy: booster)),
+            post("傾けない、画像1つ", status(content: "<p>写真を傾けない設定。</p>", media: images(1)), isStraight: true),
+            post("傾けない、画像2つ", status(content: "<p>写真を傾けない設定。</p>", media: images(2)), isStraight: true),
+            post("傾けない、画像4つ（右下へ等間隔）", status(content: "<p>写真を傾けない設定。</p>", media: images(4)), isStraight: true),
+            post("傾けない、画像5つ（5つ目は描かない）", status(content: "<p>写真を傾けない設定。</p>", media: images(5)), isStraight: true),
         ]
     }
 
