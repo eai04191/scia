@@ -169,11 +169,13 @@ final class MediaBarLayering {
             image.image = morph.image
         }
         image.focus = morph.focus
+        image.paperBorder = morph.paperBorder
         image.place(unrotatedFrame: host.convert(morphFrame, from: window), rotation: rotation - host.rotation(in: window))
         image.layer.cornerRadius = morph.layer.cornerRadius
         image.layer.maskedCorners = morph.layer.maskedCorners
         image.alpha = visibility
         underlay.decoration?.alpha = decoration?.alpha ?? 0
+        underlay.decoration?.frame = image.bounds.insetBy(dx: image.paperBorder, dy: image.paperBorder)
         image.backgroundColor = morph.backgroundColor
         let bounds = image.bounds
         // 複製が回っていると、画面の上下左右にそろった範囲は複製の中では回った四角になるため、角を移して形を作る。
@@ -218,11 +220,14 @@ final class MediaBarLayering {
         backdropMask.frame = backdrop.bounds
         backdropOutsideMask.frame = backdrop.bounds
         backdropOutsideMask.path = path.cgPath
+        // 画像は白いフチ（不透明）の内側に描くので、透明な部分に下地を残す範囲も、フチの内側の枠にする。中心は同じなので、同じ角度で回す。
+        let border = morph.paperBorder
+        let imageFrame = hole.insetBy(dx: border, dy: border)
         backdropHoleFill.setAffineTransform(.identity)
-        backdropHoleFill.frame = hole
+        backdropHoleFill.frame = imageFrame
         backdropHoleFill.setAffineTransform(CGAffineTransform(rotationAngle: holeRotation))
-        backdropHoleFill.contentsRect = morph.image.map { MediaFocus.contentsRect(imageSize: $0.size, boundsSize: hole.size, focus: morph.focus) } ?? CGRect(x: 0, y: 0, width: 1, height: 1)
-        backdropHoleFill.cornerRadius = radius
+        backdropHoleFill.contentsRect = morph.image.map { MediaFocus.contentsRect(imageSize: $0.size, boundsSize: imageFrame.size, focus: morph.focus) } ?? CGRect(x: 0, y: 0, width: 1, height: 1)
+        backdropHoleFill.cornerRadius = max(radius - border, 0)
         backdropHoleFill.cornerCurve = morph.layer.cornerCurve
         backdropHoleFill.maskedCorners = morph.layer.maskedCorners
         backdropHoleFill.opacity = Float(1 - (morph.backgroundColor?.cgColor.alpha ?? 0))

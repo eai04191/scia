@@ -23,6 +23,9 @@ protocol MediaViewerSource: UIView {
     /// `id`の添付ファイルを描いているか。一覧で重ねた写真は、何番目の添付ファイルでも手前の写真を開閉の起点にするため、起点が別の添付ファイルを描いていることがある。
     /// 描いていなければ、ビューアは起点の枠と角の丸みだけを使い、画像、焦点、重ねた表示は使わない。
     func showsAttachment(_ id: MediaAttachment.ID) -> Bool
+    /// 起点を囲む白いフチ（一覧で重ねた写真の紙）の幅と、フチの外側の角の丸み。フチがなければnil。
+    /// ビューアは開閉で動かす画像にもこのフチを付け、ビューアの画像の位置へ向かうにつれて細くしてなくす。
+    var paperBorder: (width: CGFloat, cornerRadius: CGFloat)? { get }
 }
 
 extension MediaViewerSource {
@@ -30,6 +33,7 @@ extension MediaViewerSource {
     var thumbnailFocus: MediaFocus? { nil }
     /// 添付ファイルを1つしか描かない起点（プロフィールの画像やリンクカードの画像）は、いつも開いたものを描いている。
     func showsAttachment(_ id: MediaAttachment.ID) -> Bool { true }
+    var paperBorder: (width: CGFloat, cornerRadius: CGFloat)? { nil }
 }
 
 extension UIView {

@@ -1247,15 +1247,18 @@ struct MediaViewerControllerTests {
 
     /// 一覧で重ねた写真のように回して置いた起点からは、同じ角度と大きさから回しながら開き、開ききったらまっすぐにする。
     /// 閉じるときは、起点の角度と大きさまで回しながら戻す。外側に接する四角へ戻すと、閉じ終わりにまっすぐな四角から回した写真へ切り替わって見えるため。
+    /// 写真の白いフチも、フチを含めた写真の枠から始めて開くにつれて細くしてなくし、閉じるときは元の太さに戻す。
     @Test func transitionFollowsRotationOfSource() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let rotation = 10 * CGFloat.pi / 180
+        let border: CGFloat = 10
         let photo = UIView(frame: CGRect(x: 100, y: 200, width: 120, height: 120))
         photo.transform = CGAffineTransform(rotationAngle: rotation)
         harness.viewController.view.addSubview(photo)
         let tile = MediaTileView(store: .offline)
-        tile.frame = CGRect(x: 10, y: 10, width: 100, height: 100)
+        tile.frame = CGRect(x: border, y: border, width: 100, height: 100)
+        tile.paperBorder = (border, 12)
         photo.addSubview(tile)
         let attachment = MediaAttachment(
             id: "1",
@@ -1280,20 +1283,23 @@ struct MediaViewerControllerTests {
         let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
         try await waitUntil { viewer.isContentHiddenForTransition }
         let window = try #require(tile.window)
-        let source = tile.unrotatedFrame(in: window)
+        let source = tile.unrotatedFrame(in: window).insetBy(dx: -border, dy: -border)
         let opening = viewer.morphPlacement
         // 開く間の複製は、ビューアの画面に載せている。
         let openingFrame = viewer.view.convert(opening.unrotatedFrame, to: window)
         #expect(abs(opening.rotation - rotation) < 0.001, "開き始めの角度が起点と違います: \(opening.rotation)")
+        #expect(opening.border == border, "開き始めに写真のフチを付けていません")
         #expect(abs(openingFrame.width - source.width) < 0.5 && abs(openingFrame.midX - source.midX) < 0.5 && abs(openingFrame.midY - source.midY) < 0.5, "開き始めの枠が起点と違います: \(openingFrame) \(source)")
         harness.frames.runUntilStopped()
         #expect(abs(viewer.morphPlacement.rotation) < 0.001, "開ききってもまっすぐになっていません")
+        #expect(viewer.morphPlacement.border < 0.1, "開ききってもフチが残っています: \(viewer.morphPlacement.border)")
 
         viewer.close()
         try await waitUntil { harness.viewController.presentedViewController == nil }
         harness.frames.runUntilStopped()
         let closed = viewer.morphPlacement
         #expect(abs(closed.rotation - rotation) < 0.001, "閉じ終わりの角度が起点と違います: \(closed.rotation)")
+        #expect(abs(closed.border - border) < 0.1, "閉じ終わりのフチの太さが写真と違います: \(closed.border)")
         #expect(abs(closed.unrotatedFrame.width - source.width) < 0.5 && abs(closed.unrotatedFrame.midX - source.midX) < 0.5 && abs(closed.unrotatedFrame.midY - source.midY) < 0.5, "閉じ終わりの枠が起点と違います: \(closed.unrotatedFrame) \(source)")
     }
 

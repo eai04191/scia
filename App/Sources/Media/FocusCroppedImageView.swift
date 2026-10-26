@@ -22,6 +22,20 @@ final class FocusCroppedImageView: UIView {
         }
     }
 
+    /// 縁に描く白いフチの幅。画像はフチの内側に収める。一覧で重ねた写真の紙を、ビューアの開閉の複製でも描くのに使う。
+    /// フチはレイヤーの縁取りで、画像より手前に描かれるので、内側からはみ出た画像の端はフチに隠れる。
+    var paperBorder: CGFloat = 0 {
+        didSet {
+            guard paperBorder != oldValue else { return }
+            layer.borderWidth = paperBorder
+            // 色は消さない。太さだけをアニメーションで細くしている間も、白いまま見せるため。太さが0なら描かれない。
+            if paperBorder > 0 {
+                layer.borderColor = UIColor.white.cgColor
+            }
+            setNeedsLayout()
+        }
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         clipsToBounds = true
@@ -39,6 +53,7 @@ final class FocusCroppedImageView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        imageView.frame = MediaFocus.fillFrame(imageSize: imageView.image?.size ?? bounds.size, in: bounds, focus: focus)
+        let inner = bounds.insetBy(dx: paperBorder, dy: paperBorder)
+        imageView.frame = MediaFocus.fillFrame(imageSize: imageView.image?.size ?? inner.size, in: inner, focus: focus)
     }
 }

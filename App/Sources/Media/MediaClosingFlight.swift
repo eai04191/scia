@@ -50,11 +50,13 @@ final class MediaClosingFlight {
     /// 閉じ始めの複製の角度。開く途中から閉じるときは、回した起点から始めていれば0でないことがある。
     private let startRotation: CGFloat
     private let startRadius: CGFloat
+    /// 閉じ始めの複製の白いフチの幅。ふつうは0で、開く途中から閉じるときだけ残っている。
+    private let startBorder: CGFloat
     private let startDecorationAlpha: CGFloat
     private let startFadingAlphas: [CGFloat]
     private var concealedTile: (any MediaViewerSource)?
     /// 戻り先の、回転を戻したときの枠、角度、角の丸み。回した起点（一覧で重ねた写真）へは、その角度まで回しながら戻す。
-    private var lastTarget: (frame: CGRect, rotation: CGFloat, radius: CGFloat)?
+    private var lastTarget: (frame: CGRect, rotation: CGFloat, radius: CGFloat, border: CGFloat)?
     private let source: any FrameSource
     /// 戻り始めてからの時間。
     private var time: CFTimeInterval = 0
@@ -95,6 +97,7 @@ final class MediaClosingFlight {
         startCoveredFrame = parts.morph.frame
         startRotation = parts.morph.transformRotation
         startRadius = parts.morph.layer.cornerRadius
+        startBorder = parts.morph.paperBorder
         startDecorationAlpha = parts.decoration?.alpha ?? 0
         startFadingAlphas = parts.fadingViews.map(\.alpha)
     }
@@ -130,7 +133,10 @@ final class MediaClosingFlight {
             concealedTile = tileToConceal
         }
         if let tile {
-            lastTarget = (tile.unrotatedFrame(in: window), tile.rotation(in: window), tile.layer.cornerRadius)
+            // 白いフチの付いた起点（一覧で重ねた写真）へは、フチを含めた写真の枠と角の丸みへ、フチを太くしながら戻す。
+            let paper = tile.paperBorder
+            let border = paper?.width ?? 0
+            lastTarget = (tile.unrotatedFrame(in: window).insetBy(dx: -border, dy: -border), tile.rotation(in: window), paper?.cornerRadius ?? tile.layer.cornerRadius, border)
             parts.morph.layer.maskedCorners = tile.layer.maskedCorners
             parts.layering.track(tile)
             parts.overlap?.follow(tile)
@@ -138,6 +144,8 @@ final class MediaClosingFlight {
         if movesImage, let target = lastTarget {
             parts.morph.place(unrotatedFrame: Self.interpolate(startFrame, target.frame, progress), rotation: startRotation + (target.rotation - startRotation) * progress)
             parts.morph.layer.cornerRadius = startRadius + (target.radius - startRadius) * clamped
+            parts.morph.paperBorder = startBorder + (target.border - startBorder) * clamped
+            parts.decoration?.frame = parts.morph.bounds.insetBy(dx: parts.morph.paperBorder, dy: parts.morph.paperBorder)
             let decorationAlpha = startDecorationAlpha + (1 - startDecorationAlpha) * clamped
             parts.decoration?.alpha = decorationAlpha
             parts.morph.backgroundColor = MediaViewerController.placeholderColor(parts.placeholderColor, alpha: decorationAlpha)

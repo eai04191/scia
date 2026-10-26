@@ -282,6 +282,7 @@ final class StackedPhotoView: UIView {
     }
 
     private func applyCornerRadius() {
+        tile.paperBorder = (photoBorder, photoCornerRadius)
         layer.cornerRadius = photoCornerRadius
         tile.layer.cornerRadius = photoCornerRadius - photoBorder / 2
         betweenShadowClip.layer.cornerRadius = photoCornerRadius

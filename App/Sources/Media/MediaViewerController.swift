@@ -285,9 +285,9 @@ final class MediaViewerController: UIViewController {
         morphOverlap != nil
     }
 
-    /// 複製の角度（ラジアン）と、回転を戻したときの枠（複製を載せている層の座標。閉じる動きではウィンドウと同じ）。
-    var morphPlacement: (rotation: CGFloat, unrotatedFrame: CGRect) {
-        (morph.transformRotation, morph.unrotatedFrame)
+    /// 複製の角度（ラジアン）、回転を戻したときの枠（複製を載せている層の座標。閉じる動きではウィンドウと同じ）、白いフチの幅。
+    var morphPlacement: (rotation: CGFloat, unrotatedFrame: CGRect, border: CGFloat) {
+        (morph.transformRotation, morph.unrotatedFrame, morph.paperBorder)
     }
 
     override var keyCommands: [UIKeyCommand]? {
@@ -979,14 +979,18 @@ extension MediaViewerController {
     /// - Parameter decorationAlpha: サムネイルに重ねた表示の濃さ。サムネイルの位置から始めるなら1、ビューアの画像の位置から始めるなら0。
     static let allCorners: CACornerMask = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
 
-    /// - Parameter rotation: 複製を回す角度（ラジアン）。回した起点から始めるときに、その角度を渡す。
-    private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: (any MediaViewerSource)?, decorationAlpha: CGFloat, rotation: CGFloat = 0) {
+    /// - Parameters:
+    ///   - rotation: 複製を回す角度（ラジアン）。回した起点から始めるときに、その角度を渡す。
+    ///   - border: 複製の縁に描く白いフチの幅。フチの付いた起点から始めるときに、そのフチの幅を渡す。`frame`はフチを含めた枠。
+    private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: (any MediaViewerSource)?, decorationAlpha: CGFloat, rotation: CGFloat = 0, border: CGFloat = 0) {
         let page = pages[currentIndex]
         let tileImage = tile.flatMap { $0.showsAttachment(currentItem.id) ? $0.thumbnailImage : nil }
         morph.image = page?.transitionImage ?? tileImage ?? page.map(Self.snapshot)
+        // 重ねた表示はフチの内側に置くので、先に枠とフチを決める。
+        morph.paperBorder = border
+        morph.place(unrotatedFrame: frame, rotation: rotation)
         attachDecoration(from: tile, alpha: decorationAlpha)
         morphFollowsPage = page?.drawsImage ?? false
-        morph.place(unrotatedFrame: frame, rotation: rotation)
         morph.layer.cornerRadius = cornerRadius
         morph.layer.cornerCurve = tile?.layer.cornerCurve ?? .continuous
         // リンクカードのサムネイルのように、外側の角だけを丸めたサムネイルもあるため、丸める角も合わせる。
@@ -1009,7 +1013,7 @@ extension MediaViewerController {
         morphPlaceholderColor = tile?.placeholderColor
         morphDecoration = tile.map { tile in
             let decoration = tile.makeDecorationCopy()
-            decoration.frame = morph.bounds
+            decoration.frame = morph.bounds.insetBy(dx: morph.paperBorder, dy: morph.paperBorder)
             decoration.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             morph.addSubview(decoration)
             return decoration
@@ -1053,7 +1057,7 @@ extension MediaViewerController {
         case .opening(let driver):
             driver.stop()
         case .settling(let animator):
-            animator.stopAnimation(true)
+            stopSettling(animator)
         case .idle, .dragging, .closing:
             return
         }
@@ -1097,14 +1101,17 @@ extension MediaViewerController {
         view.layoutIfNeeded()
         let update: @MainActor (CGFloat) -> Void
         if movesImage, let tile = currentTile {
-            let start = tileFrame(of: tile)
-            let startRadius = tile.layer.cornerRadius
+            // 白いフチの付いた起点（一覧で重ねた写真）からは、フチを含めた写真の枠と角の丸みから始める。
+            let paper = tile.paperBorder
+            let startBorder = paper?.width ?? 0
+            let start = tileFrame(of: tile).insetBy(dx: -startBorder, dy: -startBorder)
+            let startRadius = paper?.cornerRadius ?? tile.layer.cornerRadius
             let startRotation = tile.rotation(in: view)
-            showMorph(frame: start, cornerRadius: startRadius, tile: tile, decorationAlpha: 1, rotation: startRotation)
+            showMorph(frame: start, cornerRadius: startRadius, tile: tile, decorationAlpha: 1, rotation: startRotation, border: startBorder)
             barLayering = makeBarLayering(tile: tile)
             let target = contentFrame(in: view)
             update = { [weak self] progress in
-                self?.updateOpening(progress: progress, from: start, radius: startRadius, rotation: startRotation, to: target)
+                self?.updateOpening(progress: progress, from: start, radius: startRadius, rotation: startRotation, border: startBorder, to: target)
             }
         } else {
             update = { [weak self] progress in
@@ -1120,8 +1127,10 @@ extension MediaViewerController {
         driver.start()
     }
 
-    /// - Parameter startRotation: 起点の角度。ビューアの画像の位置へ向かうにつれて、まっすぐに戻す。
-    private func updateOpening(progress: CGFloat, from start: CGRect, radius startRadius: CGFloat, rotation startRotation: CGFloat, to target: CGRect) {
+    /// - Parameters:
+    ///   - startRotation: 起点の角度。ビューアの画像の位置へ向かうにつれて、まっすぐに戻す。
+    ///   - startBorder: 起点の白いフチの幅。ビューアの画像の位置へ向かうにつれて細くしてなくす。
+    private func updateOpening(progress: CGFloat, from start: CGRect, radius startRadius: CGFloat, rotation startRotation: CGFloat, border startBorder: CGFloat, to target: CGRect) {
         let clamped = min(max(progress, 0), 1)
         morph.place(
             unrotatedFrame: CGRect(
@@ -1133,6 +1142,9 @@ extension MediaViewerController {
             rotation: startRotation * (1 - progress)
         )
         morph.layer.cornerRadius = startRadius * (1 - clamped)
+        morph.paperBorder = startBorder * (1 - clamped)
+        // 重ねた表示はフチの内側に置く。細くなっていくフチに合わせ、画像と同じ枠にそろえる。
+        morphDecoration?.frame = morph.bounds.insetBy(dx: morph.paperBorder, dy: morph.paperBorder)
         setDecorationAlpha(1 - clamped)
         setVisibility(clamped)
         if barLayering != nil {
@@ -1213,7 +1225,7 @@ extension MediaViewerController {
             grabMovingMorph()
             convergeBarLayeringToFront()
         case .settling(let animator):
-            animator.stopAnimation(true)
+            stopSettling(animator)
             grabMovingMorph()
         case .idle:
             showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: currentTile, decorationAlpha: 0)
@@ -1235,6 +1247,14 @@ extension MediaViewerController {
         }
     }
 
+    /// 戻す動きを、見えている位置で止める。フチの太さはレイヤーのアニメーションで動かしているため、見えている太さで止め、そこから続けられるようにする。
+    private func stopSettling(_ animator: UIViewPropertyAnimator) {
+        animator.stopAnimation(true)
+        let presentedBorder = morph.layer.presentation()?.borderWidth ?? morph.paperBorder
+        morph.layer.removeAnimation(forKey: "paperBorder")
+        morph.paperBorder = presentedBorder
+    }
+
     /// 閉じずに離したら、複製をビューアの画像の枠へ戻し、開ききった状態にする。
     private func settle() {
         guard case .dragging = motion else { return }
@@ -1243,6 +1263,15 @@ extension MediaViewerController {
         endBarLayering()
         let animator = makeAnimator(duration: dragToDismiss.restoreDuration, bounce: 0)
         let target = contentFrame(in: view)
+        // 開く途中でつかんでフチが残っていたら、細くしてなくす。縁取りの太さはUIKitのアニメーションでは動かないため、レイヤーのアニメーションで動かす。
+        if morph.paperBorder > 0 {
+            let fade = CABasicAnimation(keyPath: "borderWidth")
+            fade.fromValue = morph.paperBorder
+            fade.toValue = 0
+            fade.duration = dragToDismiss.restoreDuration
+            morph.layer.add(fade, forKey: "paperBorder")
+            morph.paperBorder = 0
+        }
         animator.addAnimations {
             // 開く途中でつかんで回っていたら、まっすぐに戻す。
             self.morph.place(unrotatedFrame: target, rotation: 0)
@@ -1274,7 +1303,7 @@ extension MediaViewerController {
         case .opening(let driver):
             driver.stop()
         case .settling(let animator):
-            animator.stopAnimation(true)
+            stopSettling(animator)
         case .idle, .dragging:
             break
         }
@@ -1384,7 +1413,8 @@ extension MediaViewerController {
         image.layer.cornerCurve = morph.layer.cornerCurve
         image.layer.maskedCorners = morph.layer.maskedCorners
         image.isUserInteractionEnabled = false
-        let decoration = tile?.makeDecorationCopy()
+        // 起点がほかの添付ファイルを描いているときは、その重ねた表示を使わない。最前面の複製と同じ決まり。
+        let decoration = tile.flatMap { $0.showsAttachment(currentItem.id) ? $0.makeDecorationCopy() : nil }
         if let decoration {
             decoration.frame = image.bounds
             decoration.autoresizingMask = [.flexibleWidth, .flexibleHeight]

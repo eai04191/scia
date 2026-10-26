@@ -540,6 +540,9 @@ final class MediaTileView: UIButton, MediaViewerSource {
     /// 上に重なっているビュー。一覧で重ねた奥の写真では、それより手前の写真。
     var overlappingViews: [UIView] = []
 
+    /// 囲んでいる白いフチ。一覧で重ねた写真の中のサムネイルでは、その写真のフチ。
+    var paperBorder: (width: CGFloat, cornerRadius: CGFloat)?
+
     override var isHighlighted: Bool {
         didSet { alpha = isHighlighted ? 0.7 : 1 }
     }
