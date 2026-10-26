@@ -3,7 +3,7 @@ import UIKit
 
 /// 投稿の中身。投稿のセルと通知のセルで同じ部品を使い、どの部品をどう出すかは置く側が決める。
 ///
-/// 上から、注意書き、本文、投票、添付ファイル、リンクカードの順に並べる。引用は、部品ができたらここに足す。
+/// 上から、注意書き、本文、投票、添付ファイル、リンクカードか囲み（引用かXの投稿）の順に並べる。
 /// 注意書きで折りたたんでいる間は、注意書きだけを出す。
 /// 本文が空なら、本文と添付ファイルのあいだの余白も取らず、添付ファイルを上端から置く。上の行との間隔は置く側が`startsWithMedia`を見て決める。
 struct PostBodyContent {
@@ -48,18 +48,36 @@ struct PostBodyContent {
     var card: LinkCardView.Content?
     /// 本文か添付ファイルと、リンクカードのあいだの余白。
     var cardSpacing: CGFloat = 0
-    /// Xの投稿の囲み。あれば、リンクカードの代わりに同じ位置に置く。
-    var xPost: XPostView.Content?
-    /// 本文か添付ファイルと、Xの投稿の囲みのあいだ。
-    var xPostSpacing: CGFloat = 0
+    /// 引用かXの投稿の囲み。あれば、リンクカードの代わりに同じ位置に置く。
+    var embed: EmbeddedPostView.Content?
+    /// 本文か添付ファイルと、囲みのあいだ。
+    var embedSpacing: CGFloat = 0
     /// 表示している投稿。リンクカードから囲みに替わったのが同じ投稿の行かを見分ける。同じXの投稿へのリンクは、別の投稿にもありうるため。
     var statusID: Status.ID?
     /// 本文のハッシュタグのメニューの「ユーザーの投稿」で開くユーザー。投稿した人。nilなら項目を出さない。
     var hashtagAccount: Account?
-    /// 自分の投稿が自分のフィルターに一致していることを示す1行。一番下に置く。一致していなければnil。
+    /// 一番下に置く補足の1行。自分の投稿が自分のフィルターに一致していることか、通知で再掲する投稿に引用があることを示す。なければnil。
     var filterNote: NSAttributedString?
     /// 上の部品と、フィルターの注記のあいだ。
     var filterNoteSpacing: CGFloat = 0
+}
+
+/// 囲みの押下と、囲みの中の部品の押下で呼ぶ処理。引用とXの投稿で開く先が違うため、置く側が決める。
+struct EmbedActions {
+    /// 囲みが押されたときに、囲みを渡して呼ぶ。
+    var open: ((EmbeddedPostView) -> Void)?
+    /// 囲みのサムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
+    var selectMedia: ((Int, MediaGridView) -> Void)?
+    /// 囲みの添付ファイルの、閲覧注意のぼかしが押されたときに呼ぶ。
+    var revealMedia: (() -> Void)?
+    /// 囲みの本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
+    var openLink: ((RichText.LinkDestination) -> Void)?
+    /// 囲みの作者のアイコンがタップされたときに呼ぶ。
+    var openAccount: (() -> Void)?
+    /// 囲みの注意書きが押されたときに呼ぶ。
+    var toggleSpoiler: (() -> Void)?
+    /// 囲みの押せる補足の行がタップされたときに、何番目の行かを渡して呼ぶ。
+    var selectNote: ((Int) -> Void)?
 }
 
 final class PostBodyView: UIView {
@@ -73,8 +91,8 @@ final class PostBodyView: UIView {
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
-    /// Xの投稿の囲みのサムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
-    var onSelectXPostMedia: ((Int, MediaGridView) -> Void)?
+    /// 囲みの押下と、囲みの中の部品の押下を受ける。
+    var embedActions = EmbedActions()
     /// 投票の選択肢やボタンが押されたときに呼ぶ。選んだ状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onPollAction: ((PollView.Action) -> Void)?
 
@@ -92,7 +110,7 @@ final class PostBodyView: UIView {
     private var pollView: PollView?
     private var mediaView: MediaGridView?
     private var cardView: LinkCardView?
-    private var xPostView: XPostView?
+    private var embedView: EmbeddedPostView?
     private var filterNoteLabel: UILabel?
     private(set) var content: PostBodyContent?
     /// 添付ファイルの有無と並べ方で変わる制約。適用のたびに作り直す。
@@ -108,9 +126,9 @@ final class PostBodyView: UIView {
         Self.shown(cardView)
     }
 
-    /// 表示中のXの投稿の囲み。読み上げの要素に加え、ビューアの拡大と縮小の起点を探すときにも使う。
-    var xPost: XPostView? {
-        Self.shown(xPostView)
+    /// 表示中の囲み。読み上げの要素に加え、ビューアの拡大と縮小の起点を探すときにも使う。
+    var embed: EmbeddedPostView? {
+        Self.shown(embedView)
     }
 
     /// 表示中の投票。読み上げの要素に加える。
@@ -146,8 +164,8 @@ final class PostBodyView: UIView {
         if let card = linkCard {
             frames.merge(card.textPreviewFrames(in: space)) { $1 }
         }
-        if let xPost {
-            frames.merge(xPost.previewFrames(in: space)) { $1 }
+        if let embed {
+            frames.merge(embed.previewFrames(in: space)) { $1 }
         }
         frames.merge(textLinePreviewFrames(in: space)) { $1 }
         if let spoiler = Self.shown(spoilerView)?.previewFrame(in: space)?.first, let content = content?.spoiler {
@@ -246,6 +264,7 @@ final class PostBodyView: UIView {
             textLabel.emojiImages = newValue
             spoilerView?.emojiImages = newValue
             pollView?.emojiImages = newValue
+            embedView?.emojiImages = newValue
         }
     }
 
@@ -329,18 +348,22 @@ final class PostBodyView: UIView {
         return view
     }
 
-    private func loadedXPostView() -> XPostView {
-        if let xPostView { return xPostView }
-        let view = XPostView(store: mediaImages, avatarImages: avatarImages)
+    private func loadedEmbedView() -> EmbeddedPostView {
+        if let embedView { return embedView }
+        let view = EmbeddedPostView(store: mediaImages, avatarImages: avatarImages)
+        view.emojiImages = textLabel.emojiImages
         install(view)
-        view.onSelectMedia = { [weak self] index, grid in self?.onSelectXPostMedia?(index, grid) }
-        view.onRevealMedia = { [weak self] in self?.onRevealMedia?() }
-        view.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination) }
-        view.addAction(UIAction { [weak self] _ in
-            guard let self, let url = self.xPostView?.content?.post.url else { return }
-            self.onOpenLink?(.url(url))
+        view.onSelectMedia = { [weak self] index, grid in self?.embedActions.selectMedia?(index, grid) }
+        view.onRevealMedia = { [weak self] in self?.embedActions.revealMedia?() }
+        view.onOpenLink = { [weak self] destination in self?.embedActions.openLink?(destination) }
+        view.onOpenAccount = { [weak self] in self?.embedActions.openAccount?() }
+        view.onToggleSpoiler = { [weak self] in self?.embedActions.toggleSpoiler?() }
+        view.onSelectNote = { [weak self] index in self?.embedActions.selectNote?(index) }
+        view.addAction(UIAction { [weak self, weak view] _ in
+            guard let self, let view else { return }
+            self.embedActions.open?(view)
         }, for: .primaryActionTriggered)
-        xPostView = view
+        embedView = view
         return view
     }
 
@@ -375,9 +398,9 @@ final class PostBodyView: UIView {
         let isCollapsed = content.spoiler?.isCollapsed ?? false
         let poll = isCollapsed ? nil : content.poll
         let media = isCollapsed ? nil : content.media.flatMap { $0.aspectRatio == nil ? nil : $0 }
-        let xPost = isCollapsed ? nil : content.xPost
-        let card = isCollapsed || xPost != nil ? nil : content.card
-        textLabel.isHidden = isCollapsed || (content.text.length == 0 && (poll != nil || media != nil || card != nil || xPost != nil || content.spoiler != nil))
+        let embed = isCollapsed ? nil : content.embed
+        let card = isCollapsed || embed != nil ? nil : content.card
+        textLabel.isHidden = isCollapsed || (content.text.length == 0 && (poll != nil || media != nil || card != nil || embed != nil || content.spoiler != nil))
         // 本文と添付ファイルは、注意書きがあればその下から並べる。
         let placement = Placement(
             contentTop: shownSpoiler?.bottomAnchor ?? topAnchor,
@@ -390,11 +413,11 @@ final class PostBodyView: UIView {
         let shownPoll = applyPoll(poll, spacing: content.pollSpacing, placement: placement)
         let shownMedia = applyMedia(media, below: shownPoll, spacing: content.mediaSpacing, placement: placement)
         let shownCard = applyCard(card, below: shownMedia ?? shownPoll, spacing: content.cardSpacing, placement: placement)
-        let replacesCard = previous?.xPost == nil && previous?.card != nil && content.statusID != nil && previous?.statusID == content.statusID
-        let shownXPost = applyXPost(xPost, replacesCard: replacesCard, below: shownMedia ?? shownPoll, spacing: content.xPostSpacing, placement: placement)
+        let replacesCard = previous?.embed == nil && previous?.card != nil && content.statusID != nil && previous?.statusID == content.statusID
+        let shownEmbed = applyEmbed(embed, replacesCard: replacesCard, below: shownMedia ?? shownPoll, spacing: content.embedSpacing, placement: placement)
         // 添付ファイルもリンクカードもないのに本文を隠すのは、注意書きがあるときだけ。
-        let last: UIView = if let shownXPost {
-            shownXPost
+        let last: UIView = if let shownEmbed {
+            shownEmbed
         } else if let shownCard {
             shownCard
         } else if let shownMedia {
@@ -489,34 +512,34 @@ final class PostBodyView: UIView {
         return cardView
     }
 
-    /// 出したXの投稿の囲みを返す。
-    /// - Parameter replacesCard: 同じ投稿のリンクカードから替わった。このときだけ、囲みを浮かび上がらせる。行が伸びる動きは一覧が付ける。
+    /// 出した囲みを返す。
+    /// - Parameter replacesCard: 同じ投稿のリンクカードから替わった（Xの投稿を読み終えた）。このときだけ、囲みを浮かび上がらせる。行が伸びる動きは一覧が付ける。
     ///   使い回された行で別の投稿に替わったときは、動かさずに出す。
-    private func applyXPost(_ xPost: XPostView.Content?, replacesCard: Bool, below shownAbove: UIView?, spacing: CGFloat, placement: Placement) -> XPostView? {
-        guard let xPost else {
-            xPostView?.isHidden = true
+    private func applyEmbed(_ embed: EmbeddedPostView.Content?, replacesCard: Bool, below shownAbove: UIView?, spacing: CGFloat, placement: Placement) -> EmbeddedPostView? {
+        guard let embed else {
+            embedView?.isHidden = true
             return nil
         }
-        let fadesIn = replacesCard && window != nil && xPost.transitionDuration > 0 && !UIAccessibility.isReduceMotionEnabled
-        let xPostView = loadedXPostView()
-        xPostView.isHidden = false
-        xPostView.apply(xPost)
-        xPostView.alpha = fadesIn ? 0 : 1
+        let fadesIn = replacesCard && window != nil && embed.transitionDuration > 0 && !UIAccessibility.isReduceMotionEnabled
+        let embedView = loadedEmbedView()
+        embedView.isHidden = false
+        embedView.apply(embed)
+        embedView.alpha = fadesIn ? 0 : 1
         if fadesIn {
             // 一覧は動きを止めて描き直すことがあり、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
             DispatchQueue.main.async { [weak self] in
-                guard let self, let xPostView = self.xPostView else { return }
-                guard self.content?.xPost == xPost else {
-                    xPostView.alpha = 1
+                guard let self, let embedView = self.embedView else { return }
+                guard self.content?.embed == embed else {
+                    embedView.alpha = 1
                     return
                 }
-                UIView.animate(withDuration: xPost.transitionDuration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]) {
-                    xPostView.alpha = 1
+                UIView.animate(withDuration: embed.transitionDuration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]) {
+                    embedView.alpha = 1
                 }
             }
         }
-        variableConstraints.append(placement.top(of: xPostView, below: shownAbove, spacing: spacing))
-        return xPostView
+        variableConstraints.append(placement.top(of: embedView, below: shownAbove, spacing: spacing))
+        return embedView
     }
 
     /// フィルターの注記を一番下の部品の下に置き、自分の下端を決める。

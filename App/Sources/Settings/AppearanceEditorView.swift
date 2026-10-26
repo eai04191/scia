@@ -616,7 +616,7 @@ struct AppearanceSamples {
         )
         var configuration = timeline.contentConfiguration(for: status, base: .cell())
         let media = MediaGridView.Content.make(of: post.media, cover: nil, settings: settings, tuning: tuning, network: AppDependencies.network)
-        configuration.xPost = timeline.postContentBuilder.xPost(post, media: media, base: .cell())
+        configuration.embed = timeline.postContentBuilder.xPost(post, media: media, base: .cell())
         return configuration
     }
 

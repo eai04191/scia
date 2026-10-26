@@ -53,7 +53,7 @@ extension TimelineViewController {
     }
 
     /// Xの投稿へのリンクを出す投稿なら、読み終えた投稿の囲みを返す。まだなら読みに行き、読み終えるまではnilを返してリンクカードを出す。
-    func xPostContent(for status: Status, base: UIListContentConfiguration) -> (content: XPostView.Content, media: [MediaAttachment])? {
+    func xPostContent(for status: Status, base: UIListContentConfiguration) -> (content: EmbeddedPostView.Content, media: [MediaAttachment], url: URL)? {
         guard tuning.value(of: TuningCatalog.xPostEmbeds), let xPosts, let id = XPostLink.postID(of: status) else { return nil }
         guard let post = xPosts.post(id: id) else {
             xPosts.request(id: id)
@@ -61,7 +61,7 @@ extension TimelineViewController {
         }
         // 投稿した人が閲覧注意を付けていれば、Xの添付ファイルもぼかす。ぼかしを外すと、投稿の添付ファイルと同じくそろって外れる。
         let media = mediaContent(of: post.media, cover: mediaCover(for: status))
-        return (postContentBuilder.xPost(post, media: media, base: base), media?.attachments ?? [])
+        return (postContentBuilder.xPost(post, media: media, base: base), media?.attachments ?? [], post.url)
     }
 
     private func reconfigureRows(showing status: Status) {
@@ -114,7 +114,7 @@ extension TimelineViewController {
     private func visibleMediaTile(for attachmentID: MediaAttachment.ID) -> MediaTileView? {
         for cell in collectionView.visibleCells {
             let post = cell.contentView as? PostContentView
-            let grids = [post?.mediaGrid, post?.xPostMediaGrid, (cell.contentView as? NotificationContentView)?.mediaGrid]
+            let grids = [post?.mediaGrid, post?.embedMediaGrid, (cell.contentView as? NotificationContentView)?.mediaGrid]
             if let tile = grids.lazy.compactMap({ $0?.tile(for: attachmentID) }).first {
                 return tile
             }

@@ -4,7 +4,7 @@ import UIKit
 ///
 /// 注意書きはただの文字と見分けがつくよう、地の色を敷いたボックスに入れ、押せることが分かるよう、開閉の文言と記号を添える。
 final class SpoilerView: UIControl {
-    struct Content {
+    struct Content: Equatable {
         var text: NSAttributedString
         var isCollapsed: Bool
         var kind: PostBodyContent.Spoiler.Kind

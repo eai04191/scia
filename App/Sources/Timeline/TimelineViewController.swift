@@ -1459,10 +1459,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.onPollAction = { [weak self] action in self?.handlePollAction(action, on: status, keeping: itemID) }
         configuration.card?.coversImage = mediaCovers.linkCardImageCover(for: shown) != nil
         if let xPost = xPostContent(for: shown, base: base) {
-            configuration.xPost = xPost.content
-            configuration.onSelectXPostMedia = { [weak self] index, grid in
+            configuration.embed = xPost.content
+            configuration.embedActions.open = { [weak self] _ in self?.onOpenLink?(.url(xPost.url), shown) }
+            configuration.embedActions.selectMedia = { [weak self] index, grid in
                 self?.openMedia(xPost.media, at: index, of: shown, from: grid)
             }
+            // 投稿した人が付けた閲覧注意でぼかしているため、ぼかしを外すと、投稿の添付ファイルとそろって外れる。
+            configuration.embedActions.revealMedia = { [weak self] in self?.revealMedia(of: shown) }
+            configuration.embedActions.openLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
         }
         if case .card(let card)? = configuration.card?.card, let attachment = card.imageAttachment {
             configuration.onOpenLinkCardImage = { [weak self] thumbnail in

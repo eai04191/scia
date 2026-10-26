@@ -64,8 +64,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var poll: PollView.Content?
     /// リンクカードを出さなければnil。
     var card: LinkCardView.Content?
-    /// Xの投稿の囲み。あれば、リンクカードの代わりに出す。
-    var xPost: XPostView.Content?
+    /// 引用かXの投稿の囲み。あれば、リンクカードの代わりに出す。
+    var embed: EmbeddedPostView.Content?
     /// 表示している投稿。ブーストなら、ブーストされた投稿。
     var statusID: Status.ID?
     /// 本文のハッシュタグのメニューの「ユーザーの投稿」で開くユーザー。表示している投稿を投稿した人。
@@ -91,8 +91,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
-    /// Xの投稿の囲みのサムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
-    var onSelectXPostMedia: ((Int, MediaGridView) -> Void)?
+    /// 囲みの押下と、囲みの中の部品の押下で呼ぶ処理。
+    var embedActions = EmbedActions()
     /// 投票の選択肢やボタンが押されたときに呼ぶ。
     var onPollAction: ((PollView.Action) -> Void)?
 
@@ -145,8 +145,8 @@ struct PostContentConfiguration: UIContentConfiguration {
         var filterNoteSpacing: CGFloat = 10
         /// 名前の上の行の先頭に、ブーストや返信を示す記号を出す。
         var showsContextSymbol = true
-        /// 本文か添付ファイルと、Xの投稿の囲みのあいだ。
-        var bodyXPostSpacing: CGFloat = 10
+        /// 本文か添付ファイルと、囲みのあいだ。
+        var bodyEmbedSpacing: CGFloat = 10
     }
 
     func makeContentView() -> any UIView & UIContentView {
@@ -227,9 +227,14 @@ final class PostContentView: UIView, UIContentView {
         current.poll?.display
     }
 
-    /// 表示中の、Xの投稿の囲みのサムネイル。
-    var xPostMediaGrid: MediaGridView? {
-        bodyView.xPost?.mediaGrid
+    /// 表示中の、引用かXの投稿の囲み。
+    var embed: EmbeddedPostView? {
+        bodyView.embed
+    }
+
+    /// 表示中の、囲みのサムネイル。
+    var embedMediaGrid: MediaGridView? {
+        bodyView.embed?.mediaGrid
     }
 
     init(configuration: PostContentConfiguration) {
@@ -247,7 +252,6 @@ final class PostContentView: UIView, UIContentView {
         bodyView.onToggleSpoiler = { [weak self] in self?.current.onToggleSpoiler?() }
         bodyView.onOpenLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
         bodyView.onOpenLinkCardImage = { [weak self] thumbnail in self?.current.onOpenLinkCardImage?(thumbnail) }
-        bodyView.onSelectXPostMedia = { [weak self] index, grid in self?.current.onSelectXPostMedia?(index, grid) }
         bodyView.onPollAction = { [weak self] action in self?.current.onPollAction?(action) }
         // 名前の行は押下を受けず、行全体の押下に渡す。受けると、1行の投稿では行を押せる場所が本文の1行ほどしか残らない。
         avatarView.isUserInteractionEnabled = true
@@ -356,6 +360,7 @@ final class PostContentView: UIView, UIContentView {
         timeLabel.isHidden = !configuration.showsTime
 
         bodyView.emojiImages = configuration.emojiImages
+        bodyView.embedActions = configuration.embedActions
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,
             text: configuration.body,
@@ -365,8 +370,8 @@ final class PostContentView: UIView, UIContentView {
             pollSpacing: metrics.bodyPollSpacing,
             card: configuration.card,
             cardSpacing: metrics.bodyLinkCardSpacing,
-            xPost: configuration.xPost,
-            xPostSpacing: metrics.bodyXPostSpacing,
+            embed: configuration.embed,
+            embedSpacing: metrics.bodyEmbedSpacing,
             statusID: configuration.statusID,
             hashtagAccount: configuration.hashtagAccount,
             filterNote: configuration.filterNote,
@@ -702,7 +707,7 @@ final class PostContentView: UIView, UIContentView {
         // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
         setNeedsLayout()
-        accessibilityElements = [textAccessibilityElement] + (bodyView.poll?.accessibilityParts ?? []) + [bodyView.mediaGrid, bodyView.linkCard, bodyView.xPost, bodyView.filterNote].compactMap(\.self)
+        accessibilityElements = [textAccessibilityElement] + (bodyView.poll?.accessibilityParts ?? []) + [bodyView.mediaGrid, bodyView.linkCard, bodyView.embed, bodyView.filterNote].compactMap(\.self)
     }
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)

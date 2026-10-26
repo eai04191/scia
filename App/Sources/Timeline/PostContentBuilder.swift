@@ -45,7 +45,7 @@ struct PostContentBuilder {
             editedMarkSpacing: settings.value(of: AppearanceCatalog.editedMarkSpacing),
             filterNoteSpacing: settings.value(of: AppearanceCatalog.filterNoteSpacing),
             showsContextSymbol: settings.showsContextSymbol,
-            bodyXPostSpacing: settings.value(of: AppearanceCatalog.bodyXPostSpacing)
+            bodyEmbedSpacing: settings.value(of: AppearanceCatalog.bodyXPostSpacing)
         )
         let language = settings.glyphLanguageIdentifier()
         let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiScale: emojiScale, emojiImages: emojiImages, language: language)
@@ -201,29 +201,57 @@ struct PostContentBuilder {
 
     /// fxtwitterから読んだXの投稿の囲み。作者の行は名前だけを太くする。
     /// 本文はXの投稿の言語が分からないため、使う人の言語で描く。
-    func xPost(_ post: XPost, media: MediaGridView.Content?, base: UIListContentConfiguration) -> XPostView.Content {
+    func xPost(_ post: XPost, media: MediaGridView.Content?, base: UIListContentConfiguration) -> EmbeddedPostView.Content {
         let typography = PostTypography(settings: settings)
-        let nameFont = typography.font(.xPostName)
         let language = settings.glyphLanguageIdentifier()
-        let primary = RichTextRenderer(font: Self.boldFont(nameFont), textColor: base.textProperties.color, emojiImages: emojiImages, language: language)
-        let secondary = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, emojiImages: emojiImages, language: language)
-        let name = NSMutableAttributedString(attributedString: primary.render(.plain(post.authorName, emojis: [])))
-        name.append(secondary.render(.plain(" @\(post.authorScreenName)", emojis: [])))
         let body = RichTextRenderer(font: typography.font(.xPostBody), textColor: .label, emojiImages: emojiImages, language: language)
-        return XPostView.Content(
-            post: post,
-            // Xのアイコンは静止画なので、アニメーションの設定によらず動かさない。
-            avatar: AvatarView.Content(url: post.authorAvatar, shape: settings.avatarShape, animates: false),
-            avatarSize: settings.value(of: AppearanceCatalog.xPostAvatarSize),
-            name: name,
+        return embed(
+            id: "x:\(post.id)",
+            header: EmbeddedPostView.Content.Header(
+                // Xのアイコンは静止画なので、アニメーションの設定によらず動かさない。
+                avatar: AvatarView.Content(url: post.authorAvatar, shape: settings.avatarShape, animates: false),
+                name: embedName(.plain(post.authorName, emojis: []), handle: post.authorScreenName, base: base),
+                opensAccount: false
+            ),
             text: body.render(post.text),
             media: media,
+            openActionName: "Xの投稿を開く"
+        )
+    }
+
+    private func embed(
+        id: String,
+        header: EmbeddedPostView.Content.Header?,
+        spoiler: SpoilerView.Content? = nil,
+        text: NSAttributedString,
+        media: MediaGridView.Content?,
+        openActionName: String
+    ) -> EmbeddedPostView.Content {
+        EmbeddedPostView.Content(
+            id: id,
+            header: header,
+            avatarSize: settings.value(of: AppearanceCatalog.xPostAvatarSize),
+            spoiler: spoiler,
+            text: text,
+            media: media,
+            openActionName: openActionName,
             padding: settings.value(of: AppearanceCatalog.xPostPadding),
             avatarNameSpacing: settings.value(of: AppearanceCatalog.xPostAvatarNameSpacing),
             headerSpacing: settings.value(of: AppearanceCatalog.xPostHeaderSpacing),
             mediaSpacing: settings.value(of: AppearanceCatalog.xPostMediaSpacing),
             transitionDuration: tuning.value(of: TuningCatalog.linkCardTransitionDuration)
         )
+    }
+
+    /// 囲みの作者の行。名前だけを太くし、ハンドルを控えめに添える。
+    private func embedName(_ name: RichText, handle: String, base: UIListContentConfiguration) -> NSAttributedString {
+        let nameFont = PostTypography(settings: settings).font(.xPostName)
+        let language = settings.glyphLanguageIdentifier()
+        let primary = RichTextRenderer(font: Self.boldFont(nameFont), textColor: base.textProperties.color, emojiImages: emojiImages, language: language)
+        let secondary = RichTextRenderer(font: nameFont, textColor: .secondaryLabel, emojiImages: emojiImages, language: language)
+        let text = NSMutableAttributedString(attributedString: primary.render(name))
+        text.append(secondary.render(.plain(" @\(handle)", emojis: [])))
+        return text
     }
 
     /// 投稿の注意書き。注意書きがなければnil。開いているかは一覧が覚えているため、ここでは折りたたんだ形で返す。
