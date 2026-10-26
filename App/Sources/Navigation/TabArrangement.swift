@@ -176,6 +176,10 @@ final class TabArrangement {
             tabs.append(switchTab)
         }
         tabBarController.setTabs(tabs, animated: false)
+        // 切り替えタブを目立たせる。iOS 27では、検索タブと同じく右端に切り離した丸いボタンで描かれ、名前は出ずアイコンだけになる。
+        if #available(iOS 27.0, *) {
+            tabBarController.prominentTabIdentifier = selection == nil ? nil : Self.switchIdentifier
+        }
         if let selection {
             showInSwitchContainer(selection)
         } else {

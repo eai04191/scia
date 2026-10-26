@@ -86,6 +86,17 @@ struct TabArrangementTests {
         #expect(harness.switchTitle == "通知")
     }
 
+    /// iOS 27以降では、切り替えタブがあるときだけ、それを目立たせるタブにする。
+    @Test func switchTabIsProminentOnlyWhilePlaced() throws {
+        guard #available(iOS 27.0, *) else { return }
+        let harness = try Harness(Self.layout(tabs: [.home], switchable: [.local, .federated]))
+        #expect(harness.arrangement.tabBarController.prominentTabIdentifier == TabArrangement.switchIdentifier)
+
+        harness.apply(Self.layout(tabs: [.home, .local, .federated], switchable: []))
+        #expect(!harness.tabIdentifiers.contains(TabArrangement.switchIdentifier))
+        #expect(harness.arrangement.tabBarController.prominentTabIdentifier == nil)
+    }
+
     /// 起動し直したときは、前に切り替えタブで開いていた項目から開く。もう切り替えタブになければ先頭から開く。
     @Test func restoresSwitchSelection() throws {
         let restored = try Harness(Self.layout(tabs: [.home], switchable: [.local, .federated, .notifications]), restoring: .notifications)
