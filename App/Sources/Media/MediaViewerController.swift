@@ -525,7 +525,7 @@ final class MediaViewerController: UIViewController {
         if let page = pages[index] { return page }
         let item = items[index]
         let page: MediaPageController = switch Self.pageKind(of: item) {
-        case .image: ImagePageController(item: item, store: store, preview: sourceTile(item.id)?.loadedThumbnail ?? item.localThumbnail)
+        case .image: ImagePageController(item: item, store: store, preview: imageSource(of: item.id)?.loadedThumbnail ?? item.localThumbnail)
         case .player: PlayerPageController(item: item)
         case .unsupported: UnsupportedPageController(item: item)
         }
@@ -607,7 +607,7 @@ final class MediaViewerController: UIViewController {
     /// 共有シートに渡すもの。見出しのプレビューに、`index`の添付ファイルの描いている画像（動画は再生しているコマ）か一覧のサムネイルを添える。
     /// 落としている間にページを替えられるため、表示中のページではなく、共有を選んだときのページから取る。
     private func shareSheetItem(for file: URL, at index: Int) -> Any {
-        guard let preview = pages[index]?.transitionImage ?? sourceTile(items[index].id)?.loadedThumbnail else { return file }
+        guard let preview = pages[index]?.transitionImage ?? imageSource(of: items[index].id)?.loadedThumbnail else { return file }
         return MediaShareSheetItem(file: file, preview: preview)
     }
 
@@ -952,6 +952,11 @@ extension MediaViewerController {
         sourceTile(currentItem.id)
     }
 
+    /// `id`の添付ファイルを描いている起点。起点が別の添付ファイルを描いていれば、その画像を使わないようnilにする。
+    private func imageSource(of id: MediaAttachment.ID) -> (any MediaViewerSource)? {
+        sourceTile(id).flatMap { $0.showsAttachment(id) ? $0 : nil }
+    }
+
     private func tileFrame(of tile: any MediaViewerSource) -> CGRect {
         tile.convert(tile.bounds, to: view)
     }
@@ -964,7 +969,8 @@ extension MediaViewerController {
 
     private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: (any MediaViewerSource)?, decorationAlpha: CGFloat) {
         let page = pages[currentIndex]
-        morph.image = page?.transitionImage ?? tile?.thumbnailImage ?? page.map(Self.snapshot)
+        let tileImage = tile.flatMap { $0.showsAttachment(currentItem.id) ? $0.thumbnailImage : nil }
+        morph.image = page?.transitionImage ?? tileImage ?? page.map(Self.snapshot)
         attachDecoration(from: tile, alpha: decorationAlpha)
         morphFollowsPage = page?.drawsImage ?? false
         morph.frame = frame
@@ -981,7 +987,9 @@ extension MediaViewerController {
     /// サムネイルに重ねた表示の複製を、複製に載せ直す。サムネイルを隠す前に描き写す必要がある。
     /// 切り抜く位置も、サムネイルの焦点に合わせ直す。
     /// 複製の大きさが変わっても角からの位置を保つよう、複製いっぱいに広げて自動で位置を合わせる。
-    private func attachDecoration(from tile: (any MediaViewerSource)?, alpha: CGFloat) {
+    /// 起点が別の添付ファイルを描いていれば、その焦点、背景の色、重ねた表示は使わない。
+    private func attachDecoration(from source: (any MediaViewerSource)?, alpha: CGFloat) {
+        let tile = source.flatMap { $0.showsAttachment(currentItem.id) ? $0 : nil }
         morphDecoration?.removeFromSuperview()
         morph.focus = tile?.thumbnailFocus
         morphPlaceholderColor = tile?.placeholderColor

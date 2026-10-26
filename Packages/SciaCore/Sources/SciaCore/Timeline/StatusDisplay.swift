@@ -44,6 +44,14 @@ public enum LinkCardThumbnailSide: String, CaseIterable, Sendable {
     case right
 }
 
+/// 一覧の投稿の添付ファイルの並べ方。
+public enum MediaArrangement: String, CaseIterable, Sendable {
+    /// 本文の下に、行の幅いっぱいで並べる。
+    case belowBody
+    /// 本文の右に小さな正方形で出し、2つ以上なら重ねる。
+    case besideBody
+}
+
 /// お気に入りとブーストの光に、何を示すかのアイコンを添えるか。
 public enum ReactionGlowIcons: String, CaseIterable, Sendable {
     case none

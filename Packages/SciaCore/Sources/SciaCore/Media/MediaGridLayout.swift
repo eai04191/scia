@@ -36,6 +36,22 @@ public struct MediaGridLayout: Equatable, Sendable {
         frames = (0..<shown).map { CGRect(x: CGFloat($0) * (side + spacing), y: 0, width: side, height: side) }
     }
 
+    /// 一辺`side`の正方形1つに、すべての添付ファイルをまとめて出す。本文の右に重ねて出すときに使う。
+    /// 正方形の中での並べ方は置く側が決めるので、枠は正方形1つだけを返し、数も出さないので`hiddenCount`に数えない。
+    public init(squareOf count: Int, side: CGFloat) {
+        hiddenCount = 0
+        guard count > 0 else {
+            aspectRatio = nil
+            height = 0
+            frames = []
+            return
+        }
+        let side = max(side, 0)
+        aspectRatio = 1
+        height = side
+        frames = [CGRect(x: 0, y: 0, width: side, height: side)]
+    }
+
     /// - Parameters:
     ///   - aspectRatios: 添付ファイルごとの幅と高さの比。分からなければnil。
     ///   - tallestAspectRatio: 1つだけ出すとき、これより縦長なものは上下を切り落とす。

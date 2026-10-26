@@ -61,6 +61,22 @@ struct MediaGridLayoutTests {
         #expect(strip.hiddenCount == 0)
     }
 
+    /// 数によらず、正方形1つにまとめ、数は出さない。
+    @Test func squareHoldsEveryAttachment() {
+        let square = MediaGridLayout(squareOf: 5, side: 64)
+        #expect(square.frames == [CGRect(x: 0, y: 0, width: 64, height: 64)])
+        #expect(square.aspectRatio == 1)
+        #expect(square.height == 64)
+        #expect(square.hiddenCount == 0)
+    }
+
+    @Test func emptySquareTakesNoSpace() {
+        let square = MediaGridLayout(squareOf: 0, side: 64)
+        #expect(square.height == 0)
+        #expect(square.frames.isEmpty)
+        #expect(square.aspectRatio == nil)
+    }
+
     @Test func emptyStripTakesNoSpace() {
         let strip = MediaGridLayout(stripOf: 0, side: 40, spacing: 4)
         #expect(strip.height == 0)

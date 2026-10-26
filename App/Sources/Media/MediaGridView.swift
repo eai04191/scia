@@ -11,6 +11,8 @@ final class MediaGridView: UIView {
         case grid
         /// 一辺`side`の小さな正方形を、左から1列にすべて並べる。行の幅に収まらない分は横にスクロールして見る。高さは`side`で決まる。
         case strip(side: CGFloat)
+        /// 一辺`side`の正方形の中に、紙焼きの写真に見立てて重ねる。本文の右に小さく出すときに使う。重ね方は`MediaPhotoStackView`にある。
+        case stack(side: CGFloat)
     }
 
     struct Content: Equatable {
@@ -29,6 +31,10 @@ final class MediaGridView: UIView {
 
         var isCovered: Bool { cover != nil }
 
+        var isStacked: Bool {
+            if case .stack = arrangement { true } else { false }
+        }
+
         /// 全体の幅を高さで割った値。添付ファイルがなければnil。
         var aspectRatio: Double? {
             layout(width: 1).aspectRatio
@@ -46,6 +52,8 @@ final class MediaGridView: UIView {
                 )
             case .strip(let side):
                 MediaGridLayout(stripOf: attachments.count, side: side, spacing: spacing)
+            case .stack(let side):
+                MediaGridLayout(squareOf: attachments.count, side: side)
             }
         }
     }
@@ -66,6 +74,8 @@ final class MediaGridView: UIView {
     /// 閲覧注意のぼかし。ぼかしの素材と設定付きのボタンを作るのは重く、一覧の行はどれも添付ファイルの欄を持つため、初めてぼかすときに作る。
     private var cover: UIView?
     private var coverButton: UIButton?
+    /// 本文の右に重ねて出す写真。サムネイルを並べる入れ物とは別に、初めて重ねるときに作る。
+    private var photoStack: MediaPhotoStackView?
     private(set) var content: Content?
 
     init(store: MediaImageStore) {
@@ -92,6 +102,15 @@ final class MediaGridView: UIView {
             tileContainer.contentOffset = .zero
         }
         self.content = content
+        if content.isStacked {
+            tileContainer.isHidden = true
+            loadedPhotoStack().isHidden = false
+            photoStack?.apply(content, coverTitle: Self.coverTitle(of: content.cover))
+            setNeedsLayout()
+            return
+        }
+        photoStack?.isHidden = true
+        tileContainer.isHidden = false
         let layout = content.layout(width: bounds.width)
         while tiles.count < layout.frames.count {
             let tile = MediaTileView(store: store)
@@ -134,7 +153,12 @@ final class MediaGridView: UIView {
     /// 添付ファイルのサムネイル。ビューアを開くときと閉じるときに、拡大と縮小の起点にする。表示していなければnil。
     /// 1列に並べていて、横のスクロールで行の外に出ているときは、見える位置までスクロールしてから返す。
     /// ビューアでめくった先の画像へ閉じるとき、行の外へ縮んで消えないようにするため。
+    /// 重ねているときは、何番目でも手前の写真を返す。奥の写真はほとんど隠れていて、そこへ戻しても行き先が見えないため。
     func tile(for attachmentID: MediaAttachment.ID) -> MediaTileView? {
+        if let content, content.isStacked {
+            guard !content.isCovered, content.attachments.contains(where: { $0.id == attachmentID }), window != nil else { return nil }
+            return photoStack?.frontTile
+        }
         guard let content, !content.isCovered, let index = content.attachments.firstIndex(where: { $0.id == attachmentID }),
               index < tiles.count, !tiles[index].isHidden, window != nil
         else { return nil }
@@ -152,13 +176,38 @@ final class MediaGridView: UIView {
     }
 
     /// 表示中のサムネイルのバッジの枠。消していれば、バッジがあった位置。
+    /// 重ねているときは、手前の写真のバッジだけ。
     func badgePreviewFrames(in space: UIView) -> [CGRect] {
-        tiles.compactMap { $0.badgePreviewFrame(in: space) }
+        if content?.isStacked == true {
+            return (photoStack?.frontTile.badgePreviewFrame(in: space)).map { [$0] } ?? []
+        }
+        return tiles.compactMap { $0.badgePreviewFrame(in: space) }
+    }
+
+    private func loadedPhotoStack() -> MediaPhotoStackView {
+        if let photoStack { return photoStack }
+        let stack = MediaPhotoStackView(store: store)
+        stack.frontTile.addAction(UIAction { [weak self] _ in
+            guard let self else { return }
+            if self.content?.isCovered == true {
+                self.onReveal?()
+            } else {
+                self.onSelect?(0)
+            }
+        }, for: .primaryActionTriggered)
+        stack.onReveal = { [weak self] in self?.onReveal?() }
+        addSubview(stack)
+        photoStack = stack
+        return stack
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
         guard let content else { return }
+        if content.isStacked {
+            photoStack?.frame = bounds
+            return
+        }
         let layout = content.layout(width: bounds.width)
         for (tile, frame) in zip(tiles, layout.frames) {
             tile.frame = frame
@@ -169,6 +218,8 @@ final class MediaGridView: UIView {
             tileContainer.isScrollEnabled = false
             tileContainer.contentSize = bounds.size
             cover?.frame = bounds
+        case .stack:
+            break
         case .strip:
             // 1列に並べるときは、行の幅いっぱいではなく、並べたサムネイルだけをぼかす。
             let tilesFrame = layout.frames.reduce(CGRect.null) { $0.union($1) }
@@ -181,23 +232,27 @@ final class MediaGridView: UIView {
     /// 小さなサムネイルには文字が入りきらないため、1列に並べるときは記号だけを出す。
     private func updateCoverButton(for content: Content) {
         guard let coverButton, var configuration = coverButton.configuration else { return }
-        // 使う人が隠した投稿に「閲覧注意」と出すと、投稿者が付けたように読めるため、文言を分ける。
-        // フィルターでぼかした投稿は、どのフィルターに一致したかを出す。
-        let title = switch content.cover {
-        case .hidden: "非表示"
-        case .filtered(let titles): "フィルター: \(titles.joined(separator: "、"))"
-        case .sensitive, nil: "閲覧注意"
-        }
+        let title = Self.coverTitle(of: content.cover)
         switch content.arrangement {
         case .grid:
             configuration.title = title
             configuration.subtitle = "タップして表示"
-        case .strip:
+        case .strip, .stack:
             configuration.title = nil
             configuration.subtitle = nil
         }
         coverButton.configuration = configuration
         coverButton.accessibilityLabel = "\(title)、タップして表示"
+    }
+
+    /// ぼかしている理由。使う人が隠した投稿に「閲覧注意」と出すと、投稿者が付けたように読めるため、文言を分ける。
+    /// フィルターでぼかした投稿は、どのフィルターに一致したかを出す。
+    static func coverTitle(of cover: MediaCover?) -> String {
+        switch cover {
+        case .hidden: "非表示"
+        case .filtered(let titles): "フィルター: \(titles.joined(separator: "、"))"
+        case .sensitive, nil: "閲覧注意"
+        }
     }
 
     private func loadedCover() -> UIView {
@@ -478,6 +533,14 @@ final class MediaTileView: UIButton, MediaViewerSource {
 
     override var isHighlighted: Bool {
         didSet { alpha = isHighlighted ? 0.7 : 1 }
+    }
+
+    /// 一覧で重ねた写真の手前のサムネイルのように、ほかの添付ファイルを開いたときも開閉の起点にする。
+    /// そのときだけ、描いている添付ファイルかを確かめる。ほかでは、ビューアが探すID（投稿欄では下書きの添付のID）と描いている添付ファイルのIDが一致しないことがあり、いつもその添付ファイルを描いている。
+    var standsInForOtherAttachments = false
+
+    func showsAttachment(_ id: MediaAttachment.ID) -> Bool {
+        !standsInForOtherAttachments || attachment?.id == id
     }
 
     /// 閲覧注意でぼかしている間は画像を読まず、blurhashのぼかしだけを描く。ぼかしを外さない投稿で通信しないようにする。

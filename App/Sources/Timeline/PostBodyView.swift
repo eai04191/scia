@@ -6,6 +6,8 @@ import UIKit
 /// 上から、注意書き、本文、投票、添付ファイル、リンクカードか囲み（引用かXの投稿）の順に並べる。
 /// 注意書きで折りたたんでいる間は、注意書きだけを出す。
 /// 本文が空なら、本文と添付ファイルのあいだの余白も取らず、添付ファイルを上端から置く。上の行との間隔は置く側が`startsWithMedia`を見て決める。
+/// 添付ファイルを重ねて出すときは、本文の右に置き、本文はその分をあけて折り返す。投票から下の部品は、本文とサムネイルのどちらよりも下に置く。
+/// 本文がなくても、サムネイルの上端は本文の1行目の字面の上端と同じ位置にする。
 struct PostBodyContent {
     struct Spoiler {
         /// ボックスに入れて本文を折りたたむもの。
@@ -115,6 +117,13 @@ final class PostBodyView: UIView {
     private(set) var content: PostBodyContent?
     /// 添付ファイルの有無と並べ方で変わる制約。適用のたびに作り直す。
     private var variableConstraints: [NSLayoutConstraint] = []
+    /// 本文の右端。添付ファイルを本文の右に出すときは、その分を左へ寄せる。
+    private var textTrailing: NSLayoutConstraint?
+    /// 添付ファイルを本文の右に出すとき、本文の字面とサムネイルの下端のうち、下にあるほう。投票から下の部品をここから並べる。
+    private let besideGuide = UILayoutGuide()
+    /// 添付ファイルを本文の右に出し、その下に何も置かないとき、本文のラベルとサムネイルの下端のうち、下にあるほう。自分の下端にする。
+    /// 本文の下に並べるときと同じく、本文で終わる行の下端は字面ではなくラベルの下端にする。
+    private let besideEndGuide = UILayoutGuide()
 
     /// 表示中のサムネイル。ビューアの拡大と縮小の起点を探すときに使う。
     var mediaGrid: MediaGridView? {
@@ -142,8 +151,9 @@ final class PostBodyView: UIView {
     }
 
     /// 注意書きも本文もなく、添付ファイルが上端から始まる。
+    /// 本文の右に出すときは、本文がなくても本文の位置から置くので、当てはまらない。
     var startsWithMedia: Bool {
-        Self.shown(spoilerView) == nil && textLabel.isHidden && mediaGrid != nil
+        Self.shown(spoilerView) == nil && textLabel.isHidden && mediaGrid != nil && mediaGrid?.content?.isStacked != true
     }
 
     /// 「投稿の見た目」のプレビューで、部品の場所を示すための枠。`space`の座標で返す。
@@ -154,7 +164,6 @@ final class PostBodyView: UIView {
             .spoilerText: Self.shown(spoilerView)?.textPreviewFrame(in: space),
             .bodyText: textLabel.previewFrame(in: space),
             .bodyGlyphs: textGlyphsFrame(in: space),
-            .media: mediaGrid?.previewFrame(in: space),
             .card: linkCard?.previewFrame(in: space),
             .poll: poll?.previewFrame(in: space),
             .pollOptions: poll?.optionsPreviewFrame(in: space),
@@ -175,19 +184,7 @@ final class PostBodyView: UIView {
         if let summary = poll?.summaryPreviewFrame(in: space) {
             frames[.pollSummary] = summary
         }
-        if let tiles = mediaGrid?.tilePreviewFrames(in: space) {
-            if tiles.count > 1 {
-                frames[.mediaTileGaps] = AppearanceHighlight.gaps(between: tiles)
-            } else if !tiles.isEmpty {
-                frames[.singleMedia] = tiles
-                if let ratio = content?.media?.attachments.first?.aspectRatio {
-                    frames[ratio < 1 ? .singleTallMedia : .singleWideMedia] = tiles
-                }
-            }
-        }
-        if let badges = mediaGrid?.badgePreviewFrames(in: space), !badges.isEmpty {
-            frames[.mediaBadgeSlot] = badges
-        }
+        frames.merge(mediaPreviewFrames(in: space)) { $1 }
         if let options = poll?.optionPreviewFrames(in: space), !options.isEmpty {
             if options.count > 1 {
                 frames[.pollOptionGaps] = AppearanceHighlight.gaps(between: options.map(\.option))
@@ -206,6 +203,32 @@ final class PostBodyView: UIView {
                     CGRect(x: option.minX, y: option.minY, width: option.width, height: max(title.minY - option.minY, AppearanceHighlight.minimumGapThickness)),
                     CGRect(x: option.minX, y: title.maxY, width: option.width, height: max(option.maxY - title.maxY, AppearanceHighlight.minimumGapThickness)),
                 ]
+            }
+        }
+        return frames
+    }
+
+    /// 添付ファイルの枠。本文の右に重ねて出すときは、本文の下に並べたときと示す項目が違うので、別の部品として返す。
+    private func mediaPreviewFrames(in space: UIView) -> AppearancePreviewFrames {
+        guard let grid = mediaGrid, let frame = grid.previewFrame(in: space) else { return [:] }
+        var frames: AppearancePreviewFrames = [:]
+        let badges = grid.badgePreviewFrames(in: space)
+        if !badges.isEmpty {
+            frames[.mediaBadgeSlot] = badges
+        }
+        // 重ねたサムネイルには、すき間も1つのときの比率も効かないので示さない。
+        if grid.content?.isStacked == true {
+            frames[.besideMedia] = frame
+            return frames
+        }
+        frames[.media] = frame
+        let tiles = grid.tilePreviewFrames(in: space)
+        if tiles.count > 1 {
+            frames[.mediaTileGaps] = AppearanceHighlight.gaps(between: tiles)
+        } else if !tiles.isEmpty {
+            frames[.singleMedia] = tiles
+            if let ratio = content?.media?.attachments.first?.aspectRatio {
+                frames[ratio < 1 ? .singleTallMedia : .singleWideMedia] = tiles
             }
         }
         return frames
@@ -273,8 +296,12 @@ final class PostBodyView: UIView {
         self.avatarImages = avatarImages
         super.init(frame: .zero)
         textLabel.numberOfLines = 0
-        install(textLabel)
-        for guide in [textFirstBaselineGuide, textLastBaselineGuide] {
+        textLabel.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(textLabel)
+        let textTrailing = textLabel.trailingAnchor.constraint(equalTo: trailingAnchor)
+        self.textTrailing = textTrailing
+        NSLayoutConstraint.activate([textLabel.leadingAnchor.constraint(equalTo: leadingAnchor), textTrailing])
+        for guide in [textFirstBaselineGuide, textLastBaselineGuide, besideGuide, besideEndGuide] {
             addLayoutGuide(guide)
         }
         NSLayoutConstraint.activate([
@@ -324,7 +351,9 @@ final class PostBodyView: UIView {
     private func loadedMediaView() -> MediaGridView {
         if let mediaView { return mediaView }
         let view = MediaGridView(store: mediaImages)
-        install(view)
+        // 左右の位置は、並べ方で変わるため適用のたびに決める。
+        view.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(view)
         view.onSelect = { [weak self] index in
             guard let self, let mediaView = self.mediaView else { return }
             self.onSelectMedia?(index, mediaView)
@@ -398,36 +427,42 @@ final class PostBodyView: UIView {
         let isCollapsed = content.spoiler?.isCollapsed ?? false
         let poll = isCollapsed ? nil : content.poll
         let media = isCollapsed ? nil : content.media.flatMap { $0.aspectRatio == nil ? nil : $0 }
+        let besideSide: CGFloat? = if case .stack(let side)? = media?.arrangement { side } else { nil }
+        textTrailing?.constant = besideSide.map { -($0 + content.mediaSpacing) } ?? 0
         let embed = isCollapsed ? nil : content.embed
         let card = isCollapsed || embed != nil ? nil : content.card
         textLabel.isHidden = isCollapsed || (content.text.length == 0 && (poll != nil || media != nil || card != nil || embed != nil || content.spoiler != nil))
         // 本文と添付ファイルは、注意書きがあればその下から並べる。
-        let placement = Placement(
-            contentTop: shownSpoiler?.bottomAnchor ?? topAnchor,
-            contentTopSpacing: shownSpoiler == nil ? 0 : content.spoiler?.bodySpacing ?? 0,
-            text: textLabel.isHidden ? nil : (label: textLabel, bottomInset: Self.textBottomInset(of: content.text))
-        )
+        let contentTop = shownSpoiler?.bottomAnchor ?? topAnchor
+        let contentTopSpacing = shownSpoiler == nil ? 0 : content.spoiler?.bodySpacing ?? 0
+        let text = textLabel.isHidden ? nil : (label: textLabel, bottomInset: Self.textBottomInset(of: content.text))
         if !textLabel.isHidden {
-            variableConstraints.append(textLabel.firstBaselineAnchor.constraint(equalTo: placement.contentTop, constant: placement.contentTopSpacing + Self.textTopInset(of: content.text)))
+            variableConstraints.append(textLabel.firstBaselineAnchor.constraint(equalTo: contentTop, constant: contentTopSpacing + Self.textTopInset(of: content.text)))
         }
+        let besideBottom = media.flatMap { media in
+            besideSide.map { applyBesideMedia(media, side: $0, top: contentTop, topSpacing: contentTopSpacing, text: text) }
+        }
+        let placement = Placement(contentTop: contentTop, contentTopSpacing: contentTopSpacing, text: text, besideBottom: besideBottom?.parts)
         let shownPoll = applyPoll(poll, spacing: content.pollSpacing, placement: placement)
-        let shownMedia = applyMedia(media, below: shownPoll, spacing: content.mediaSpacing, placement: placement)
+        let shownMedia = besideSide == nil ? applyMedia(media, below: shownPoll, spacing: content.mediaSpacing, placement: placement) : nil
         let shownCard = applyCard(card, below: shownMedia ?? shownPoll, spacing: content.cardSpacing, placement: placement)
         let replacesCard = previous?.embed == nil && previous?.card != nil && content.statusID != nil && previous?.statusID == content.statusID
         let shownEmbed = applyEmbed(embed, replacesCard: replacesCard, below: shownMedia ?? shownPoll, spacing: content.embedSpacing, placement: placement)
         // 添付ファイルもリンクカードもないのに本文を隠すのは、注意書きがあるときだけ。
-        let last: UIView = if let shownEmbed {
-            shownEmbed
+        let last: Bottom = if let shownEmbed {
+            .view(shownEmbed)
         } else if let shownCard {
-            shownCard
+            .view(shownCard)
         } else if let shownMedia {
-            shownMedia
+            .view(shownMedia)
         } else if let shownPoll {
-            shownPoll
+            .view(shownPoll)
+        } else if let besideBottom {
+            .beside(parts: besideBottom.parts, end: besideBottom.end)
         } else if textLabel.isHidden, let shownSpoiler {
-            shownSpoiler
+            .view(shownSpoiler)
         } else {
-            textLabel
+            .view(textLabel)
         }
         applyFilterNote(content.filterNote, below: last, spacing: content.filterNoteSpacing, textBottomInset: Self.textBottomInset(of: content.text))
         NSLayoutConstraint.activate(variableConstraints)
@@ -441,11 +476,15 @@ final class PostBodyView: UIView {
         let contentTopSpacing: CGFloat
         /// 出している本文と、その最後の文字の、ベースラインから字面の下端まで。本文を出していなければnil。
         let text: (label: UILabel, bottomInset: CGFloat)?
+        /// 添付ファイルを本文の右に出すとき、本文の字面とサムネイルの下端のうち、下にあるほう。出さなければnil。
+        let besideBottom: NSLayoutYAxisAnchor?
 
-        /// 上の部品の下端から、次の部品を置く位置。本文の下なら、字面の下端から測る。
+        /// 上の部品の下端から、次の部品を置く位置。本文の下なら、字面の下端から測る。本文の右に添付ファイルがあれば、その下端とも比べる。
         func top(of view: UIView, below shownAbove: UIView?, spacing: CGFloat) -> NSLayoutConstraint {
             if let shownAbove {
                 view.topAnchor.constraint(equalTo: shownAbove.bottomAnchor, constant: spacing)
+            } else if let besideBottom {
+                view.topAnchor.constraint(equalTo: besideBottom, constant: spacing)
             } else if let text {
                 view.topAnchor.constraint(equalTo: text.label.lastBaselineAnchor, constant: spacing + text.bottomInset)
             } else {
@@ -490,13 +529,45 @@ final class PostBodyView: UIView {
         mediaView.apply(media)
         let height = switch media.arrangement {
         case .grid: mediaView.heightAnchor.constraint(equalTo: mediaView.widthAnchor, multiplier: 1 / aspectRatio)
-        case .strip(let side): mediaView.heightAnchor.constraint(equalToConstant: side)
+        case .strip(let side), .stack(let side): mediaView.heightAnchor.constraint(equalToConstant: side)
         }
         variableConstraints += [
             placement.top(of: mediaView, below: shownAbove, spacing: spacing),
+            mediaView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            mediaView.trailingAnchor.constraint(equalTo: trailingAnchor),
             height,
         ]
         return mediaView
+    }
+
+    /// 添付ファイルを本文の右に、一辺`side`の正方形で出す。上端は本文の1行目の字面の上端にそろえる。
+    /// - Returns: 本文の字面とサムネイルの下端のうち下にあるほう（下の部品を並べ始める位置）と、本文のラベルとサムネイルの下端のうち下にあるほう（ほかに何もないときの自分の下端）。
+    private func applyBesideMedia(_ media: MediaGridView.Content, side: CGFloat, top: NSLayoutYAxisAnchor, topSpacing: CGFloat, text: (label: UILabel, bottomInset: CGFloat)?) -> (parts: NSLayoutYAxisAnchor, end: NSLayoutYAxisAnchor) {
+        let mediaView = loadedMediaView()
+        mediaView.isHidden = false
+        mediaView.apply(media)
+        variableConstraints += [
+            mediaView.topAnchor.constraint(equalTo: top, constant: topSpacing),
+            mediaView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            mediaView.widthAnchor.constraint(equalToConstant: side),
+            mediaView.heightAnchor.constraint(equalToConstant: side),
+        ]
+        let mediaBottom = (anchor: mediaView.bottomAnchor, inset: CGFloat(0))
+        let textGlyphsBottom = text.map { (anchor: $0.label.lastBaselineAnchor, inset: $0.bottomInset) }
+        let textLabelBottom = text.map { (anchor: $0.label.bottomAnchor, inset: CGFloat(0)) }
+        variableConstraints += lowestBottom(besideGuide, top: top, of: [mediaBottom, textGlyphsBottom].compactMap(\.self))
+        variableConstraints += lowestBottom(besideEndGuide, top: top, of: [mediaBottom, textLabelBottom].compactMap(\.self))
+        return (besideGuide.bottomAnchor, besideEndGuide.bottomAnchor)
+    }
+
+    /// `guide`の下端を、`bottoms`のうち一番下にあるものに合わせる。上端を`top`に置いて高さをできるだけ縮めるので、どれよりも下で一番上の位置に決まる。
+    private func lowestBottom(_ guide: UILayoutGuide, top: NSLayoutYAxisAnchor, of bottoms: [(anchor: NSLayoutYAxisAnchor, inset: CGFloat)]) -> [NSLayoutConstraint] {
+        // 本文のラベルの縮みにくさ（`.defaultHigh`）より低くする。同じだと、ラベルを縮めてサムネイルの高さで本文を切ってしまう。
+        let collapse = guide.heightAnchor.constraint(equalToConstant: 0)
+        collapse.priority = .defaultLow
+        return [guide.topAnchor.constraint(equalTo: top), collapse] + bottoms.map {
+            guide.bottomAnchor.constraint(greaterThanOrEqualTo: $0.anchor, constant: $0.inset)
+        }
     }
 
     /// 出したリンクカードを返す。
@@ -542,12 +613,23 @@ final class PostBodyView: UIView {
         return embedView
     }
 
+    /// 一番下の部品。
+    private enum Bottom {
+        case view(UIView)
+        /// 本文の右に添付ファイルを出し、その下に何もない。`parts`は本文の字面とサムネイルの、`end`は本文のラベルとサムネイルの、下にあるほうの下端。
+        case beside(parts: NSLayoutYAxisAnchor, end: NSLayoutYAxisAnchor)
+    }
+
     /// フィルターの注記を一番下の部品の下に置き、自分の下端を決める。
     /// - Parameter textBottomInset: 一番下が本文のときの、最後の文字のベースラインから字面の下端まで。
-    private func applyFilterNote(_ note: NSAttributedString?, below last: UIView, spacing: CGFloat, textBottomInset: CGFloat) {
+    private func applyFilterNote(_ note: NSAttributedString?, below bottom: Bottom, spacing: CGFloat, textBottomInset: CGFloat) {
         guard let note else {
             filterNoteLabel?.isHidden = true
-            variableConstraints.append(bottomAnchor.constraint(equalTo: last.bottomAnchor))
+            let end = switch bottom {
+            case .view(let last): last.bottomAnchor
+            case .beside(_, let end): end
+            }
+            variableConstraints.append(bottomAnchor.constraint(equalTo: end))
             return
         }
         let filterNoteLabel = loadedFilterNoteLabel()
@@ -556,9 +638,11 @@ final class PostBodyView: UIView {
         // 先頭の記号は画像の文字なので、読み上げでは除く。
         filterNoteLabel.accessibilityLabel = note.string.trimmingCharacters(in: CharacterSet(charactersIn: "\u{FFFC}").union(.whitespaces))
         // 本文の下なら、ほかの部品と同じく字面の下端から測る。
-        let lastBottom = last === textLabel
-            ? (anchor: textLabel.lastBaselineAnchor, inset: textBottomInset)
-            : (anchor: last.bottomAnchor, inset: 0)
+        let lastBottom = switch bottom {
+        case .view(let last) where last === textLabel: (anchor: textLabel.lastBaselineAnchor, inset: textBottomInset)
+        case .view(let last): (anchor: last.bottomAnchor, inset: CGFloat(0))
+        case .beside(let parts, _): (anchor: parts, inset: CGFloat(0))
+        }
         variableConstraints += [
             filterNoteLabel.firstBaselineAnchor.constraint(equalTo: lastBottom.anchor, constant: lastBottom.inset + spacing + Self.textTopInset(of: note)),
             bottomAnchor.constraint(equalTo: filterNoteLabel.lastBaselineAnchor, constant: Self.textBottomInset(of: note)),

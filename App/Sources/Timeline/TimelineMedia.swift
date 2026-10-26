@@ -5,8 +5,13 @@ extension TimelineViewController {
     /// 閲覧注意の投稿と、注意書きのある投稿と、添付ファイルをぼかすフィルターに一致した投稿は、タップするまで添付ファイルをぼかす。
     /// メニューから隠した投稿もぼかす。ブーストなら元の投稿の添付ファイルを並べる。
     /// 説明にならない代替テキストは、ALTの目印にもビューアにも読み上げにも出さないよう、ここで除いておく。
+    /// 本文の右に小さく出す設定なら、重ねて出す。
     func mediaContent(for status: Status) -> MediaGridView.Content? {
-        mediaContent(of: status.displayed.mediaAttachments, cover: mediaCover(for: status))
+        var content = mediaContent(of: status.displayed.mediaAttachments, cover: mediaCover(for: status))
+        if settings.mediaArrangement == .besideBody {
+            content?.arrangement = .stack(side: settings.value(of: AppearanceCatalog.mediaBesideSide))
+        }
+        return content
     }
 
     /// 添付ファイルをぼかす理由。ぼかさなければnil。
@@ -14,7 +19,7 @@ extension TimelineViewController {
         mediaCovers.cover(for: status, filterTitles: filterWarnings.verdict(for: status).mediaTitles)
     }
 
-    /// `attachments`を並べる中身。Xの投稿の囲みの添付ファイルにも使う。
+    /// `attachments`を並べる中身。引用とXの投稿の囲みの添付ファイルにも使う。囲みは元の投稿の見た目を写すので、設定によらず本文の下に並べる。
     func mediaContent(of attachments: [MediaAttachment], cover: MediaCover?) -> MediaGridView.Content? {
         MediaGridView.Content.make(of: attachments, cover: cover, settings: settings, tuning: tuning, network: network)
     }

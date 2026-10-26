@@ -11,7 +11,7 @@ extension TimelineViewController {
         guard let display = QuoteDisplay(quoting: shown, isRevealed: quoteReveals.isRevealed(shown), verdict: { filterWarnings.verdict(for: $0) }) else { return nil }
         switch display {
         case .post(let quoted):
-            let media = mediaContent(for: quoted)
+            let media = mediaContent(of: quoted.mediaAttachments, cover: mediaCover(for: quoted))
             let content = postContentBuilder.quote(quoted, spoiler: spoiler(of: quoted, base: base), media: media, base: base)
             var actions = EmbedActions()
             actions.open = { [weak self] view in

@@ -78,10 +78,13 @@ enum AppearanceHighlight: Equatable {
             (C.spoilerCornerRadius, .part(.spoilerCorners)),
             (C.spoilerBodySpacing, .verticalGap(above: [.spoiler], below: [.bodyGlyphs])),
 
-            (C.bodyMediaSpacing, .verticalGap(above: [.bodyGlyphs], below: [.media])),
+            // 本文の右に出すときは、本文とサムネイルの横のすき間になる。
+            (C.bodyMediaSpacing, .firstOf([.verticalGap(above: [.bodyGlyphs], below: [.media]), .horizontalGap(leading: [.bodyText], trailing: [.besideMedia])])),
             (C.mediaTileSpacing, .part(.mediaTileGaps)),
             (C.mediaTallestAspectRatio, .firstOf([.part(.singleTallMedia), .part(.singleMedia)])),
             (C.mediaWidestAspectRatio, .firstOf([.part(.singleWideMedia), .part(.singleMedia)])),
+            // 本文の下に並べているときは効かないが、何の大きさかが分かるよう、並べた添付ファイルを示す。
+            (C.mediaBesideSide, .firstOf([.part(.besideMedia), .part(.media)])),
 
             (C.linkCardTitleText, .part(.cardTitle)),
             (C.linkCardDetailText, .firstOf([.part(.cardDetail), .part(.card)])),

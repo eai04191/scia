@@ -81,6 +81,8 @@ enum AppearancePreviewPart: Hashable, CaseIterable {
     /// リンクカードのサイト名。
     case cardSite
     case media
+    /// 本文の右に小さく出した添付ファイル。本文の下に並べたときの`media`とは示す項目が違うため分ける。
+    case besideMedia
     /// 添付ファイルが1つのときのサムネイル。
     case singleMedia
     /// 縦長の添付ファイル1つのサムネイル。

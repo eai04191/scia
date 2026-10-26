@@ -125,6 +125,87 @@ public enum TuningCatalog {
         defaultValue: 36
     )
 
+    /// 本文の右に重ねた写真のうち、手前の1枚目を回す角度（度）。正の値で右回り。初めの値は投稿欄のカプセルと同じ。
+    public static let mediaStackFrontRotation = NumberTuning(
+        id: "timeline.stackFrontRotation",
+        title: "本文の右の1枚目の写真の角度（度）",
+        range: -15...15,
+        step: 0.5,
+        defaultValue: -2
+    )
+
+    /// 本文の右に重ねた写真のうち、2枚目を回す角度（度）。正の値で右回り。
+    public static let mediaStackBackRotation = NumberTuning(
+        id: "timeline.stackBackRotation",
+        title: "本文の右の2枚目の写真の角度（度）",
+        range: -15...15,
+        step: 0.5,
+        defaultValue: 7
+    )
+
+    /// 本文の右に重ねた2枚目の写真の中心を、1枚目の中心から横にずらす量。写真の大きさを変えても同じ形になるよう、写真の一辺に対する割合で決める。初めの値は、投稿欄のカプセルのずらす量を写真の一辺（26pt）で割ったもの。
+    public static let mediaStackBackOffsetX = NumberTuning(
+        id: "timeline.stackBackOffsetX",
+        title: "本文の右の2枚目の写真を横にずらす量（写真の一辺に対する割合、負で左）",
+        range: -0.3...0.3,
+        step: 0.005,
+        defaultValue: 0.155
+    )
+
+    /// 本文の右に重ねた2枚目の写真の中心を、1枚目の中心から縦にずらす量。写真の一辺に対する割合。
+    public static let mediaStackBackOffsetY = NumberTuning(
+        id: "timeline.stackBackOffsetY",
+        title: "本文の右の2枚目の写真を縦にずらす量（写真の一辺に対する割合、負で上）",
+        range: -0.3...0.3,
+        step: 0.005,
+        defaultValue: 0.04
+    )
+
+    /// 本文の右に重ねた写真のうち、1枚目の左上側からのぞかせる3枚目を回す角度（度）。正の値で右回り。
+    public static let mediaStackThirdRotation = NumberTuning(
+        id: "timeline.stackThirdRotation",
+        title: "本文の右の3枚目の写真の角度（度）",
+        range: -15...15,
+        step: 0.5,
+        defaultValue: -8
+    )
+
+    /// 本文の右に重ねた3枚目の写真の中心を、1枚目の中心から横にずらす量。写真の一辺に対する割合。
+    public static let mediaStackThirdOffsetX = NumberTuning(
+        id: "timeline.stackThirdOffsetX",
+        title: "本文の右の3枚目の写真を横にずらす量（写真の一辺に対する割合、負で左）",
+        range: -0.3...0.3,
+        step: 0.005,
+        defaultValue: -0.115
+    )
+
+    /// 本文の右に重ねた3枚目の写真の中心を、1枚目の中心から縦にずらす量。写真の一辺に対する割合。
+    public static let mediaStackThirdOffsetY = NumberTuning(
+        id: "timeline.stackThirdOffsetY",
+        title: "本文の右の3枚目の写真を縦にずらす量（写真の一辺に対する割合、負で上）",
+        range: -0.3...0.3,
+        step: 0.005,
+        defaultValue: -0.04
+    )
+
+    /// 本文の右に重ねた写真のスタックが、一覧の背景に落とす影の濃さ。
+    public static let mediaStackShadowOpacity = NumberTuning(
+        id: "timeline.stackShadowOpacity",
+        title: "本文の右の重ねた写真が背景に落とす影の濃さ",
+        range: 0...0.6,
+        step: 0.01,
+        defaultValue: 0.15
+    )
+
+    /// 本文の右に重ねた写真のうち、上の写真が下の写真に落とす影の濃さ。
+    public static let mediaStackBetweenShadowOpacity = NumberTuning(
+        id: "timeline.stackBetweenShadowOpacity",
+        title: "本文の右の重ねた写真同士の影の濃さ",
+        range: 0...0.6,
+        step: 0.01,
+        defaultValue: 0.15
+    )
+
     /// プロフィールを開いたあと、フォローのボタンの文字と最初の投稿の一覧を、読み込みが届いたときにフェードで入れる時間。0なら切り替える。
     public static let profileRevealDuration = NumberTuning(
         id: "profile.revealDuration",
@@ -1311,6 +1392,15 @@ public enum TuningCatalog {
             .number(mediaSymbolMinSize),
             .number(mediaSymbolMaxSize),
             .number(mediaThumbnailUpscaleTolerance),
+            .number(mediaStackFrontRotation),
+            .number(mediaStackBackRotation),
+            .number(mediaStackBackOffsetX),
+            .number(mediaStackBackOffsetY),
+            .number(mediaStackThirdRotation),
+            .number(mediaStackThirdOffsetX),
+            .number(mediaStackThirdOffsetY),
+            .number(mediaStackShadowOpacity),
+            .number(mediaStackBetweenShadowOpacity),
         ]),
         TuningSection(id: "timeline.reactionGlow", title: "お気に入りとブーストの光", items: [
             .number(reactionGlowHDRExposure),

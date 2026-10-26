@@ -120,6 +120,8 @@ public enum AppearanceCatalog {
     public static let filterNoteSpacing = AppearanceValue(id: "timeline.filterNoteSpacing", title: "注記とのあいだ", range: 0...100, step: 1, defaultValue: 10)
     /// 添付ファイルが1つの投稿で、横長の画像をどこまで横長のまま出すか（幅÷高さ）。これより横長なものは左右を切り落とす。
     public static let mediaWidestAspectRatio = AppearanceValue(id: "timeline.mediaWidestAspectRatio", title: "1枚の画像の最も横長な比率（幅÷高さ）", range: 1...10, step: 0.1, defaultValue: 3, unit: .ratio)
+    /// 添付ファイルを本文の右に並べるときの、正方形の一辺。2つ以上を重ねるときも、重なり全体をこの正方形に収める。
+    public static let mediaBesideSide = AppearanceValue(id: "timeline.mediaBesideSide", title: "右に並べるときの大きさ", range: 0...200, step: 1, defaultValue: 64)
     /// リンクカードのタイトルの行数。
     public static let linkCardTitleLines = AppearanceValue(id: "timeline.linkCardTitleLines", title: "タイトルの行数", range: 1...10, step: 1, defaultValue: 1, unit: .lines)
     /// リンクカードの画像の幅の上限の、カードの幅に対する割合。画像はカードの高さの正方形にし、これより広くしない。
@@ -209,7 +211,7 @@ public enum AppearanceCatalog {
         AppearanceGroup(id: "name", title: "名前の行", values: [namePrimaryText, nameSecondaryText, timeText, namePartsSpacing, nameTimeSpacing, visibilitySymbolSpacing, editedMarkSpacing, nameFadeWidth, nameBodySpacing, nameMediaSpacing]),
         AppearanceGroup(id: "body", title: "本文", values: [bodyText, bodyLineSpacing, paragraphSpacing, quoteIndent, customEmojiScale, filterNoteText, filterNoteSpacing]),
         AppearanceGroup(id: "spoiler", title: "注意書き", values: [spoilerButtonText, spoilerButtonSpacing, spoilerPadding, spoilerCornerRadius, spoilerBodySpacing]),
-        AppearanceGroup(id: "media", title: "メディア", values: [bodyMediaSpacing, mediaTileSpacing, mediaTallestAspectRatio, mediaWidestAspectRatio]),
+        AppearanceGroup(id: "media", title: "メディア", values: [bodyMediaSpacing, mediaTileSpacing, mediaTallestAspectRatio, mediaWidestAspectRatio, mediaBesideSide]),
         AppearanceGroup(id: "linkCard", title: "リンクカード", values: [linkCardTitleText, linkCardDetailText, linkCardTitleLines, linkCardDescriptionLines, linkCardLineSpacing, linkCardImageWidthRatio, bodyLinkCardSpacing, linkCardPadding]),
         // Xの投稿の囲みも同じ値を使うが、Xの投稿は既定では出さない試作のため、名前には書かない。
         AppearanceGroup(id: Self.xPostGroupID, title: "引用", values: [xPostNameText, xPostBodyText, xPostAvatarSize, xPostAvatarNameSpacing, xPostHeaderSpacing, xPostMediaSpacing, xPostPadding, bodyXPostSpacing]),

@@ -132,6 +132,11 @@ public final class AppSettings {
     }
 
     /// 一覧で、GIFなどのアニメーションするアイコンを動かす。オフなら最初のコマで止めた版を読む。
+    /// 一覧の投稿の添付ファイルを、本文の下に並べるか、本文の右に小さく出すか。
+    public var mediaArrangement: MediaArrangement {
+        didSet { defaults.set(mediaArrangement.rawValue, forKey: Keys.mediaArrangement) }
+    }
+
     public var animatesAvatars: Bool {
         didSet { defaults.set(animatesAvatars, forKey: Keys.animatesAvatars) }
     }
@@ -200,7 +205,7 @@ public final class AppSettings {
     /// 「投稿の見た目」の数値か選択肢のどれかが、既定値から変わっているか。
     public var isAppearanceModified: Bool {
         typealias D = AppearanceDefaults
-        return AppearanceCatalog.values.contains(where: isModified) || statusNameStyle != D.statusNameStyle || statusTimeStyle != D.statusTimeStyle || contextNameStyle != D.contextNameStyle || glyphLanguage != D.glyphLanguage || emojiStyle != D.emojiStyle || avatarShape != D.avatarShape || linkCardThumbnailSide != D.linkCardThumbnailSide || showsVisibilitySymbol != D.showsVisibilitySymbol || showsEditedMark != D.showsEditedMark || showsLinkCardSite != D.showsLinkCardSite || showsContextSymbol != D.showsContextSymbol || boldsName != D.boldsName || showsAvatarBorder != D.showsAvatarBorder || showsMediaBadges != D.showsMediaBadges || showsLinkCard != D.showsLinkCard || boldsLinkCardTitle != D.boldsLinkCardTitle || showsSeparators != D.showsSeparators || showsBoosterAvatar != D.showsBoosterAvatar || showsReplyLabel != D.showsReplyLabel || showsReplyLines != D.showsReplyLines || showsTime != D.showsTime || showsLinkCardImage != D.showsLinkCardImage || animatesAvatars != D.animatesAvatars || animatesCustomEmojis != D.animatesCustomEmojis || drawsReactionGlowInHDR != D.drawsReactionGlowInHDR || reactionGlowIcons != D.reactionGlowIcons || reactionGlowFillsWidthWhenAlone != D.reactionGlowFillsWidthWhenAlone || reactionGlowLightFavouriteColor != D.reactionGlowLightFavouriteColor
+        return AppearanceCatalog.values.contains(where: isModified) || statusNameStyle != D.statusNameStyle || statusTimeStyle != D.statusTimeStyle || contextNameStyle != D.contextNameStyle || glyphLanguage != D.glyphLanguage || emojiStyle != D.emojiStyle || avatarShape != D.avatarShape || linkCardThumbnailSide != D.linkCardThumbnailSide || mediaArrangement != D.mediaArrangement || showsVisibilitySymbol != D.showsVisibilitySymbol || showsEditedMark != D.showsEditedMark || showsLinkCardSite != D.showsLinkCardSite || showsContextSymbol != D.showsContextSymbol || boldsName != D.boldsName || showsAvatarBorder != D.showsAvatarBorder || showsMediaBadges != D.showsMediaBadges || showsLinkCard != D.showsLinkCard || boldsLinkCardTitle != D.boldsLinkCardTitle || showsSeparators != D.showsSeparators || showsBoosterAvatar != D.showsBoosterAvatar || showsReplyLabel != D.showsReplyLabel || showsReplyLines != D.showsReplyLines || showsTime != D.showsTime || showsLinkCardImage != D.showsLinkCardImage || animatesAvatars != D.animatesAvatars || animatesCustomEmojis != D.animatesCustomEmojis || drawsReactionGlowInHDR != D.drawsReactionGlowInHDR || reactionGlowIcons != D.reactionGlowIcons || reactionGlowFillsWidthWhenAlone != D.reactionGlowFillsWidthWhenAlone || reactionGlowLightFavouriteColor != D.reactionGlowLightFavouriteColor
     }
 
     /// 「投稿の見た目」の数値と選択肢を、すべて既定値へ戻す。
@@ -214,6 +219,7 @@ public final class AppSettings {
         emojiStyle = D.emojiStyle
         avatarShape = D.avatarShape
         linkCardThumbnailSide = D.linkCardThumbnailSide
+        mediaArrangement = D.mediaArrangement
         showsVisibilitySymbol = D.showsVisibilitySymbol
         showsEditedMark = D.showsEditedMark
         showsLinkCardSite = D.showsLinkCardSite
@@ -379,6 +385,7 @@ public final class AppSettings {
         static let animatesAvatars = "settings.animatesAvatars"
         static let animatesCustomEmojis = "settings.animatesCustomEmojis"
         static let linkCardThumbnailSide = "settings.linkCardThumbnailSide"
+        static let mediaArrangement = "settings.mediaArrangement"
         static let insertionMotion = "settings.insertionMotion"
         static let profileShowsReplies = "settings.profileShowsReplies"
         static let profileShowsBoosts = "settings.profileShowsBoosts"
@@ -437,6 +444,7 @@ public final class AppSettings {
         animatesAvatars = defaults.object(forKey: Keys.animatesAvatars) as? Bool ?? AppearanceDefaults.animatesAvatars
         animatesCustomEmojis = defaults.object(forKey: Keys.animatesCustomEmojis) as? Bool ?? AppearanceDefaults.animatesCustomEmojis
         linkCardThumbnailSide = defaults.string(forKey: Keys.linkCardThumbnailSide).flatMap(LinkCardThumbnailSide.init(rawValue:)) ?? AppearanceDefaults.linkCardThumbnailSide
+        mediaArrangement = defaults.string(forKey: Keys.mediaArrangement).flatMap(MediaArrangement.init(rawValue:)) ?? AppearanceDefaults.mediaArrangement
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
         linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .external
         reblogVisibility = defaults.string(forKey: Keys.reblogVisibility).flatMap(ReblogVisibility.init(rawValue:)) ?? .accountDefault
@@ -481,6 +489,7 @@ private enum AppearanceDefaults {
     static let emojiStyle: EmojiStyle = .system
     static let avatarShape: AvatarShape = .roundedSquare
     static let linkCardThumbnailSide: LinkCardThumbnailSide = .left
+    static let mediaArrangement: MediaArrangement = .belowBody
     static let showsVisibilitySymbol = true
     static let showsEditedMark = true
     static let showsLinkCardSite = true

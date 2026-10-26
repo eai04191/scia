@@ -125,6 +125,25 @@ struct TimelineQuoteTests {
         #expect(configuration(in: harness, of: status.id)?.embed?.media?.isCovered == false)
     }
 
+    /// 添付ファイルを本文の右に重ねる並べ方でも、囲みは元の投稿の見た目を写すので、引用元の添付ファイルは本文の下に並べる。
+    @Test func quotedMediaStaysBelowBodyWhenBesideBody() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.settings.mediaArrangement = .besideBody
+        let statuses = StatusFactory.make(count: 10, startingAt: 1_000)
+        let image = MediaAttachment(
+            id: "m1",
+            type: .image,
+            url: URL(string: "https://files.example.social/original/m1.png"),
+            previewUrl: URL(string: "https://files.example.social/small/m1.png"),
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 400, height: 300))
+        )
+        let status = quoting(statuses[0], Quote(state: "accepted", quotedStatus: quoted("q1", media: [image])))
+        harness.setStatuses([status] + statuses.dropFirst())
+
+        #expect(configuration(in: harness, of: status.id)?.embed?.media?.arrangement == .grid)
+    }
+
     /// 引用元がさらに引用していると、その引用はIDだけで届く。囲みを押したら、引用元を読み直す経路で開き、スレッドで入れ子の引用を出せるようにする。
     @Test func openingQuotedStatusWithNestedQuoteFetchesItFirst() throws {
         let harness = try TimelineHarness()
