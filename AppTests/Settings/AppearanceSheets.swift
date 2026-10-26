@@ -34,6 +34,21 @@ struct AppearanceSheets {
                 Self.render(settings: after, highlight: highlight)
             ))
         }
+        // 本文の右に小さく出すときにだけ効く項目と、効き方の変わる項目は、その並べ方でも並べる。
+        for item in Self.besideBodyItems {
+            let before = try Self.makeSettings()
+            let after = try Self.makeSettings()
+            before.mediaArrangement = .besideBody
+            after.mediaArrangement = .besideBody
+            let value = Self.changedValue(of: item)
+            after.setValue(value, for: item)
+            let highlight = AppearanceHighlight(item)
+            pairs.append((
+                "本文の右に小さく \(item.id)「\(item.title)」 \(item.defaultValue) → \(value)",
+                Self.render(settings: before, highlight: highlight),
+                Self.render(settings: after, highlight: highlight)
+            ))
+        }
         for choice in AppearanceChoice.allCases {
             let before = try Self.makeSettings()
             let after = try Self.makeSettings()
@@ -50,6 +65,8 @@ struct AppearanceSheets {
             try #require(sheet.pngData()).write(to: url)
         }
     }
+
+    private static let besideBodyItems = [AppearanceCatalog.mediaBesideSide, AppearanceCatalog.bodyMediaSpacing, AppearanceCatalog.bodyLinkCardSpacing, AppearanceCatalog.filterNoteSpacing]
 
     /// 既定値の設定。名前の上の行の添える部分の項目も確かめられるよう、ブーストした人の表記は名前とハンドルにする。
     private static func makeSettings() throws -> AppSettings {
@@ -115,6 +132,9 @@ struct AppearanceSheets {
         case .linkCardThumbnailSide:
             settings.linkCardThumbnailSide = .right
             return "→ 右"
+        case .mediaArrangement:
+            settings.mediaArrangement = .besideBody
+            return "→ 本文の右に小さく"
         case .drawsReactionGlowInHDR: return flip(\.drawsReactionGlowInHDR)
         case .reactionGlowIcons:
             settings.reactionGlowIcons = .atBottom

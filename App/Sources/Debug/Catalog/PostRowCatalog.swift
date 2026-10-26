@@ -127,6 +127,74 @@ enum PostRowCatalog {
         ]
     }
 
+    /// 添付ファイルを本文の右に小さく出す並べ方の投稿。アプリの設定は変えず、この並べ方にした設定で組む。
+    /// 数による重なり、本文の長さとの高さの比べ合い、ぼかし、下に並ぶ部品との重なりを見比べる。
+    @MainActor
+    static func mediaBesideStates() -> [CatalogState] {
+        let suiteName = "net.mizle.scia.catalog.mediaBeside"
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            preconditionFailure("カタログのUserDefaultsを作れない")
+        }
+        defaults.removePersistentDomain(forName: suiteName)
+        let settings = AppSettings(defaults: defaults)
+        settings.mediaArrangement = .besideBody
+        let home = TimelineViewController(texts: .home, refresh: {}, settings: settings)
+        home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
+        let mine = TimelineViewController(texts: .home, refresh: {}, settings: settings)
+        mine.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: author.id))
+        mine.myAccountID = author.id
+        func post(_ title: String, _ status: Status, expandsSpoiler: Bool = false, isMine: Bool = false) -> CatalogState {
+            CatalogState(title: title) {
+                let timeline = isMine ? mine : home
+                if expandsSpoiler { timeline.toggleSpoiler(of: status) }
+                return CatalogFrame.bordered(PostContentView(configuration: timeline.contentConfiguration(for: status, base: .cell())))
+            }
+        }
+        let colors: [UIColor] = [.systemBlue, .systemGreen, .systemOrange, .systemPurple, .systemPink]
+        func images(_ count: Int) -> [MediaAttachment] {
+            (0..<count).map { Fixtures.attachment("\($0)", width: 1_200, height: 900, color: colors[$0 % colors.count], label: "\($0 + 1)") }
+        }
+        let longText = "<p>" + String(repeating: "本文が長く、サムネイルの右をあけて何行にもわたって折り返すことを確かめる文。", count: 4) + "</p>"
+        let link = "https://news.example/articles/2026/10/link-card"
+        let card = URL(string: link).map {
+            PreviewCard(url: $0, title: "記事の見出し", description: "記事の要約が入る。", type: .link, providerName: "News Example", image: Fixtures.imageURL(width: 400, height: 225, color: .systemIndigo), width: 400, height: 225, blurhash: Fixtures.blurhash)
+        }
+        return [
+            post("画像1つ、本文が1行（サムネイルの分だけ行が伸びる）", status(content: "<p>短い本文。</p>", media: images(1))),
+            post("画像1つ、本文が長い", status(content: longText, media: images(1))),
+            post("画像2つ", status(content: "<p>画像を2つ添付した投稿。</p>", media: images(2))),
+            post("画像3つ", status(content: "<p>画像を3つ添付した投稿。</p>", media: images(3))),
+            post("画像4つ（4つ目は描かない）", status(content: "<p>画像を4つ添付した投稿。</p>", media: images(4))),
+            post("本文がなく、画像2つ", status(content: "", media: images(2))),
+            post("縦長の画像1つ（正方形に切り抜く）", status(content: "<p>縦長の画像。</p>", media: [Fixtures.attachment("tall", width: 600, height: 1_800, color: .systemTeal, label: "縦長")])),
+            post("動画と、代替テキストのある画像（バッジは手前だけ）", status(content: "<p>動画と画像。</p>", media: [
+                Fixtures.attachment("video", type: .video, width: 1_600, height: 900, color: .systemRed),
+                Fixtures.attachment("described", width: 1_200, height: 900, color: .systemGreen, description: "緑の地に白い格子"),
+            ])),
+            post("代替テキストのある画像が手前", status(content: "<p>代替テキストのある画像。</p>", media: [
+                Fixtures.attachment("described", width: 1_200, height: 900, color: .systemGreen, description: "緑の地に白い格子"),
+                Fixtures.attachment("plain", width: 1_200, height: 900, color: .systemBlue),
+            ])),
+            post("閲覧注意の画像2つ", status(content: "<p>閲覧注意の画像を添付した投稿。</p>", media: images(2), sensitive: true)),
+            post("フィルターで画像をぼかす（名前が長い）", status(content: "<p>フィルターで画像をぼかした投稿。</p>", media: images(2), filtered: [filter(longFilterTitle, .blur)])),
+            post("注意書き（閉じた、サムネイルは出さない）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", media: images(2))),
+            post("注意書き（開いた、サムネイルは本文の横）", status(content: "<p>注意書きの下の本文。</p>", spoilerText: "ネタバレ", media: images(2)), expandsSpoiler: true),
+            post("注意書きと画像だけで本文がない（開いた）", status(content: "", spoilerText: "ネタバレ", media: images(1)), expandsSpoiler: true),
+            post("画像とリンクカード（カードは両方より下）", status(
+                content: #"<p>記事を読んだ。<a href="\#(link)">news.example/articles/2026/10/link-card</a></p>"#,
+                media: images(2),
+                card: card
+            )),
+            post("自分の投稿がフィルターに一致した（注記は両方より下）", status(content: "<p>フィルターした話題に自分で触れた投稿。</p>", media: images(2), filtered: [filter("画像", .warn)]), isMine: true),
+            post("名前が長く、本文が長い", status(
+                content: longText,
+                account: Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com"),
+                media: images(3)
+            )),
+            post("ブーストされた投稿", status(content: "<p>ブーストされた投稿。</p>", media: images(2), rebloggedBy: booster)),
+        ]
+    }
+
     /// リンクカードの付いた投稿。サーバーのカードが後から届いても行の高さが変わらないことを、カードとリンク先だけのカードを並べて見比べる。
     @MainActor
     static func linkCardStates() -> [CatalogState] {
