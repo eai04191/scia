@@ -74,6 +74,7 @@ enum DebugURL: Equatable {
     /// `scia-debug://compose?text=<本文>&media=<枚数>`。インライン投稿欄で書き始め、本文を渡した文に置き換え、番号を描いた色違いの画像を添付に足す。
     /// どちらも省ける。シミュレーターのクリップボードが使えないときにも、URLを含む本文などを打たずに用意し、ピッカーを操作せずに添付を用意するため。
     /// 本文は打ったときと同じ経路で置き換えるので、末尾の語の補完も出す。画像はペーストと同じ経路で足すので、サーバーに送る。
+    /// 撮影モードでは、番号を描いた画像の代わりに、シナリオの写真（`ScenarioScript.draftImages`）を足す。
     case compose(text: String?, mediaCount: Int)
     /// `scia-debug://compose/close`。キーボードを閉じて、投稿欄を書いていないときのカプセルに戻す。下書きは残す。
     case composeClose

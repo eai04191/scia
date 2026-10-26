@@ -2346,7 +2346,11 @@ final class SessionController {
             // SceneDelegateが、セッションの有無にかかわらず先に受けてダミーのセッションを開くため、ここには来ない。
             break
         case .scenario(let event):
-            ScenarioMode.handle(event)
+            if let action = ScenarioMode.server?.script.actions[event] {
+                handle(action)
+            } else {
+                ScenarioMode.handle(event)
+            }
         case .unauthorized:
             DebugFaults.rejectAsUnauthorized()
             reportUnauthorized()
@@ -2428,7 +2432,11 @@ final class SessionController {
             if let text {
                 composer.replaceTextForDebug(text)
             }
-            composer.model.addPastedMedia(DummyMedia.pastedImages(count: mediaCount))
+            if let draftImages = ScenarioMode.server?.script.draftImages {
+                composer.model.addPastedMedia(DummyMedia.pastedImages(Array(draftImages().prefix(mediaCount))))
+            } else {
+                composer.model.addPastedMedia(DummyMedia.pastedImages(count: mediaCount))
+            }
         case .composeClose:
             composer.endEditing()
         case .holdArrivals(let isOn):

@@ -165,7 +165,13 @@ enum ScenarioArtwork {
     }
 
     static func landscape(_ landscape: Landscape, size: CGSize, description: String? = nil) -> ScenarioFixtures.Picture {
-        let image = renderer(size: size).image { context in
+        let image = landscapeImage(landscape, size: size)
+        return ScenarioFixtures.Picture(url: dataURL(image), width: Int(size.width), height: Int(size.height), description: description)
+    }
+
+    /// 風景の画像。投稿欄の添付のように、data URLではなく画像のまま渡す場面に使う。
+    static func landscapeImage(_ landscape: Landscape, size: CGSize) -> UIImage {
+        renderer(size: size).image { context in
             let cgContext = context.cgContext
             let colors = [landscape.sky.top.cgColor, landscape.sky.bottom.cgColor] as CFArray
             if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
@@ -177,7 +183,6 @@ enum ScenarioArtwork {
             hill(in: size, baseline: 0.68, amplitude: 0.08, phase: 0.3, color: landscape.hills.far)
             hill(in: size, baseline: 0.80, amplitude: 0.06, phase: 1.7, color: landscape.hills.near)
         }
-        return ScenarioFixtures.Picture(url: dataURL(image), width: Int(size.width), height: Int(size.height), description: description)
     }
 
     /// 横へゆるく波打つ丘。`baseline`と`amplitude`は高さに対する割合。

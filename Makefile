@@ -5,7 +5,7 @@ SIM_DESTINATION ?= generic/platform=iOS Simulator
 # 端末を決めないビルドは、既定ではシミュレーターの全アーキテクチャ（arm64とx86_64）を作る。このMacで動く分だけにして、コンパイルを半分にする
 SIM_ARCH ?= $(shell uname -m)
 
-.PHONY: generate lint test-core build warnings test sim-keyboard promo readme-icons update-known-servers check check-steps hooks clean
+.PHONY: generate lint test-core build warnings test sim-keyboard promo readme-screenshots readme-icons update-known-servers check check-steps hooks clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -54,6 +54,11 @@ SCENARIO ?= StreamingDemoUITests/testStreamingDemo
 OUT ?= $(DERIVED_DATA)/promo.mp4
 promo: generate
 	Tools/promo-record.sh '$(SIM)' $(SCENARIO) '$(OUT)'
+
+## READMEのスクリーンショットを、シナリオのUIテストを走らせて撮り、docs/imagesに書き出す（docs/promo-video.md）。撮り直したらcommitする
+## 例: make readme-screenshots SIM='Scia 1'
+readme-screenshots: generate
+	Tools/readme-screenshots.sh '$(SIM)'
 
 ## READMEに載せるアイコンの絵を、.iconから描き出す。アイコンを変えたら描き出し直してcommitする
 ## ライトはふだんの見た目、ダークはホーム画面のダークモードと同じ見た目にする。128ptで出すので、App Storeのアイコンと同じ1024pxで描き出し、劣化なしのWebPにする

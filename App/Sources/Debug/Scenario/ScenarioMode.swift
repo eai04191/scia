@@ -29,9 +29,9 @@ enum ScenarioMode {
         return defaults
     }()
 
-    /// シナリオからシグナルを受け取るパス（`ScenarioSignals`）。シナリオのイベント、録画の始めと終わり、ビューアを開く操作。
+    /// シナリオからシグナルを受け取るパス（`ScenarioSignals`）。シナリオのイベントと操作、録画の始めと終わり、ビューアを開く操作。
     static var signalPaths: [String] {
-        let events = (server?.script.events.keys.sorted() ?? []) + ["record-start", "record-stop", "mark"]
+        let events = (server?.script.events.keys.sorted() ?? []) + (server?.script.actions.keys.sorted() ?? []) + ["record-start", "record-stop", "mark"]
         return events.map { "scenario/\($0)" } + ["viewer?index=0"]
     }
 
@@ -48,6 +48,7 @@ enum ScenarioMode {
     private static func script(named name: String, launchedAt date: Date) -> ScenarioScript? {
         switch name {
         case "streaming": StreamingDemoScenario.make(launchedAt: date)
+        case "readme": ReadmeScreenshotsScenario.make(launchedAt: date)
         default: nil
         }
     }

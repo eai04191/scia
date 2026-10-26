@@ -85,12 +85,17 @@ enum DummyMedia {
     }
 
     /// 番号を描いた色違いの画像を、ペーストしたメディアとして渡す。添付の並びを見分けられるよう、1枚目から赤、青、オレンジ……の順にする。
-    /// 添付から外すとファイルを置いたディレクトリごと消すので、1枚ずつ別のディレクトリに書く。
     static func pastedImages(count: Int) -> [PastedMedia] {
         let colors: [UIColor] = [.systemRed, .systemBlue, .systemOrange, .systemPurple, .systemGreen, .systemPink, .systemTeal, .systemYellow]
-        return (0..<count).map { index in
-            let image = DummyMedia.image(size: CGSize(width: 600, height: 600), color: colors[index % colors.count], label: "\(index + 1)")
-            return PastedMedia(kind: .image) {
+        return pastedImages((0..<count).map { index in
+            DummyMedia.image(size: CGSize(width: 600, height: 600), color: colors[index % colors.count], label: "\(index + 1)")
+        })
+    }
+
+    /// `images`を、ペーストしたメディアとして渡す。添付から外すとファイルを置いたディレクトリごと消すので、1枚ずつ別のディレクトリに書く。
+    static func pastedImages(_ images: [UIImage]) -> [PastedMedia] {
+        images.enumerated().map { index, image in
+            PastedMedia(kind: .image) {
                 let directory = FileManager.default.temporaryDirectory.appending(path: UUID().uuidString)
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
                 let url = directory.appending(path: "dummy-\(index + 1).png")

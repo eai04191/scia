@@ -36,6 +36,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         self.window = window
         #if DEBUG
         if let scenario = ScenarioMode.server {
+            scenario.script.configure(AppDependencies.settings, AppDependencies.tuning)
             showTimeline(for: scenario.script.credential)
             ScenarioHeartbeat.start()
             ScenarioSignals.listen(for: ScenarioMode.signalPaths) { [weak self] path in

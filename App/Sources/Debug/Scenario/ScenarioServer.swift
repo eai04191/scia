@@ -3,6 +3,7 @@ import Foundation
 import os
 import SciaCore
 import Synchronization
+import UIKit
 
 /// 撮影モードのシナリオ。サーバーが返す一覧と、URLで起こすイベントを持つ。
 struct ScenarioScript: Sendable {
@@ -20,19 +21,30 @@ struct ScenarioScript: Sendable {
     /// `scia-debug://scenario/<名前>`で流す、ストリーミングのメッセージ。流した時刻を受け取って作り、`interval`おきに1つずつ流す。
     let events: [String: @Sendable (Date) -> [String]]
     let interval: Duration
+    /// POSTで返すJSON。キーはパス。受け取ったPOSTの通し番号（0から）を受け取って作る。添付ファイルのIDのように、送るたびに変わる値に使う。
+    var postResponses: [String: @Sendable (Int) -> Data] = [:]
+    /// 撮影モードの設定とチューニングに、撮る前に入れておく値。どちらも起動のたびに空にした保存先（`ScenarioMode.defaults`）から読む。
+    var configure: @MainActor @Sendable (AppSettings, TuningStore) -> Void = { _, _ in }
+    /// `scia-debug://scenario/<名前>`で行う、デバッグURLの操作。投稿欄で書き始めるなど、ストリーミングで流すのでなくアプリを操作する場面に使う。
+    /// シナリオ（UIテスト）から本文などを長いパスで送らずに済むよう、名前で引く。
+    var actions: [String: DebugURL] = [:]
+    /// `scia-debug://compose?media=<枚数>`で投稿欄に足す写真。nilなら、撮影モードでないときと同じく番号を描いた画像を足す。
+    var draftImages: (@MainActor @Sendable () -> [UIImage])?
 }
 
 /// 撮影モードで、Mastodonのサーバーの代わりにシナリオどおりに答える。
 final class ScenarioServer: Sendable {
     let script: ScenarioScript
     private let mailbox = Mutex<ScenarioMailbox?>(nil)
+    /// 受け取ったPOSTの数。`postResponses`に通し番号として渡す。
+    fileprivate let postCount = Atomic<Int>(0)
     private let logger = SciaLog.logger(category: "scenario")
 
     init(script: ScenarioScript) {
         self.script = script
     }
 
-    var transport: any HTTPTransport { ScenarioTransport(script: script) }
+    var transport: any HTTPTransport { ScenarioTransport(server: self) }
     var connector: any WebSocketConnector { ScenarioWebSocketConnector(server: self) }
 
     /// 新しいストリーミングの接続を開く。イベントは、いちばん新しい接続に流す。
@@ -69,7 +81,8 @@ final class ScenarioServer: Sendable {
 
 /// シナリオの`responses`と`lists`を返すHTTPTransport。シナリオにないAPIには404を返し、ログに残す。
 private struct ScenarioTransport: HTTPTransport {
-    let script: ScenarioScript
+    let server: ScenarioServer
+    private var script: ScenarioScript { server.script }
     private let logger = SciaLog.logger(category: "scenario")
 
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
@@ -78,6 +91,9 @@ private struct ScenarioTransport: HTTPTransport {
         let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
         if request.httpMethod == "POST", path == "api/v1/markers" {
             return try respond(url, Data("{}".utf8))
+        }
+        if request.httpMethod == "POST", let make = script.postResponses[path] {
+            return try respond(url, make(server.postCount.add(1, ordering: .relaxed).oldValue))
         }
         if path == "api/v2/notifications", let items = script.lists["api/v1/notifications"] {
             return try respond(url, Self.groupedNotifications(Self.select(items, query: query)))
