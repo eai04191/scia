@@ -91,7 +91,7 @@ public final class ProfileStore {
     public private(set) var relationship: Relationship? {
         didSet { relationshipCache[account.id] = relationship }
     }
-    /// 固定された投稿。「投稿」の一覧の上に置く。フィルターで出さない投稿は除く。
+    /// 固定された投稿。ヘッダーの下に棚として並べる。フィルターで出さない投稿は除く。
     public var pinned: [Status] {
         let now = now()
         return loadedPinned.filter { !filtering.verdict(for: $0, now: now).isHidden }
@@ -260,11 +260,6 @@ public final class ProfileStore {
         guard filter != postsFilter else { return nil }
         postsFilter = filter
         return tab == .posts ? rebuildTimeline() : nil
-    }
-
-    /// 一覧の上に置く固定された投稿。「投稿」の一覧でだけ置く。
-    public var displayedPinned: [Status] {
-        tab == .posts ? pinned : []
     }
 
     /// フォローしていなければフォローし、フォロー中かリクエスト中なら外す。送っている途中なら何もしない。

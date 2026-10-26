@@ -42,6 +42,11 @@ final class ProfileHeaderView: UIView {
     var followRevealDuration: TimeInterval = 0
     /// 自己紹介か補足情報の値のリンクがタップされたときと、メンションの長押しのメニューでプロフィールを選んだときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
+    /// 固定された投稿のカードが押されたときに、その投稿と、ウインドウの座標でのカードの枠を渡して呼ぶ。
+    var onOpenPinned: ((Status, CGRect) -> Void)? {
+        get { pinnedShelf.onOpen }
+        set { pinnedShelf.onOpen = newValue }
+    }
     /// ヘッダー画像を読み込み終えて、バーの下へ伸ばすかが変わったときに呼ぶ。
     var onChangeExtendsUnderBars: (() -> Void)?
     /// ヘッダー画像の大きさや位置が変わって、ヘッダーの高さが変わったときに呼ぶ。
@@ -139,12 +144,38 @@ final class ProfileHeaderView: UIView {
     private let followedByBadge = PaddedLabel()
     private let noteLabel = LinkLabel()
     private let fieldsStack = UIStackView()
-    /// フォローとフォロワーの数は、押すとその一覧を開く。押した文字で見分けるため、文字の位置を探せるラベルにする。
-    private let countsLabel = EmojiLabel()
     private let remoteStack = UIStackView()
     private let openOriginalButton = UIButton(configuration: .plain())
     private let tabControl = UISegmentedControl(items: ["投稿", "メディア"])
     private let filterButton = UIButton(configuration: .plain())
+    /// 固定された投稿の棚。カードを画面の端まで流すため、左右の余白の外まで広げる。
+    private let pinnedShelf: ProfilePinnedShelfView
+    /// 投稿、フォロー、フォロワーの数。補足情報のカードの一番下に小さく出す。
+    /// フォローとフォロワーは、押すとその一覧を開く。押した文字で見分けるため、文字の位置を探せるラベルにする。
+    private let countsLabel = EmojiLabel()
+    /// 補足情報と数の間の区切り線。補足情報がなければ出さない。
+    private let fieldsDivider = UIView()
+    /// 補足情報のカードで、数の行の上と下に空ける余白。上は区切り線から、下はほかのサーバーのアカウントの行まで。
+    var countsSpacing: CGFloat = 14 {
+        didSet {
+            guard countsSpacing != oldValue else { return }
+            applyCountsSpacing()
+        }
+    }
+    /// 補足情報、数、ほかのサーバーのアカウントであることをまとめたカード。
+    private let aboutBox = UIStackView()
+    /// 自己紹介を3行で切っているときに、その場で全文に広げるボタン。
+    private let moreButton = UIButton(configuration: .plain())
+    /// 自己紹介を全文に広げた。別のアカウントを出したら切った状態に戻す。
+    private var isNoteExpanded = false
+    /// 自己紹介を切るときの行数。
+    private static let collapsedNoteLines = 3
+    /// 固定された投稿の棚より下（タブ）。一覧を出すまで隠し、一覧と一緒に出す。
+    /// 先に出すと、一覧と一緒に届く棚が後から差し込まれ、タブが下へずれるため。
+    private var sections: [UIView] = []
+    private var isSectionsRevealed = false
+    /// 自己紹介を余白付きで包んだもの。自己紹介がなければ、余白ごと隠す。
+    private var noteContainer: UIView?
     private var content: Content?
     private var bannerTask: Task<Void, Never>?
     private var bannerURL: URL?
@@ -153,6 +184,7 @@ final class ProfileHeaderView: UIView {
         self.emojiImages = emojiImages
         self.mediaImages = mediaImages
         avatarView = AvatarView(store: avatarImages)
+        pinnedShelf = ProfilePinnedShelfView(emojiImages: emojiImages, mediaImages: mediaImages)
         super.init(frame: .zero)
         configureSubviews()
     }
@@ -230,7 +262,7 @@ final class ProfileHeaderView: UIView {
         followedByBadge.text = "フォローされています"
         // 触れたらヘッダー画像を開けるよう、タップは下のヘッダー画像に通す。
         followedByBadge.isUserInteractionEnabled = false
-        noteLabel.numberOfLines = 0
+        noteLabel.numberOfLines = Self.collapsedNoteLines
         noteLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
         fieldsStack.axis = .vertical
         fieldsStack.spacing = 8
@@ -244,21 +276,36 @@ final class ProfileHeaderView: UIView {
             }
         }
 
+        moreButton.configuration?.title = "さらに表示"
+        moreButton.configuration?.contentInsets = .zero
+        moreButton.contentHorizontalAlignment = .trailing
+        moreButton.isHidden = true
+        moreButton.addAction(UIAction { [weak self] _ in self?.expandNote() }, for: .primaryActionTriggered)
+
+        // ほかのサーバーのアカウントであることは、補足情報のカードの中に1行で出す。投稿がこのサーバーに届いた分だけなのは、押して開く元のサーバーで分かる。
         let remoteLabel = UILabel()
-        remoteLabel.numberOfLines = 0
         remoteLabel.font = .preferredFont(forTextStyle: .footnote)
+        remoteLabel.adjustsFontForContentSizeCategory = true
         remoteLabel.textColor = .secondaryLabel
-        remoteLabel.text = "他のサーバーのアカウントです。投稿は、このサーバーが受け取ったものだけを表示しています。"
+        remoteLabel.text = "他のサーバーのアカウント"
+        remoteLabel.setContentHuggingPriority(.required, for: .horizontal)
         let openOriginal = openOriginalButton
         openOriginal.configuration?.title = "元のサーバーで開く"
         openOriginal.configuration?.image = UIImage(systemName: "safari")
         openOriginal.configuration?.imagePadding = 4
         openOriginal.configuration?.contentInsets = .zero
-        openOriginal.contentHorizontalAlignment = .leading
+        openOriginal.configuration?.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .footnote)
+        openOriginal.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes
+            attributes.font = UIFont.preferredFont(forTextStyle: .footnote)
+            return attributes
+        }
+        openOriginal.contentHorizontalAlignment = .trailing
         openOriginal.addAction(UIAction { [weak self] _ in self?.onOpenOriginal?() }, for: .primaryActionTriggered)
-        remoteStack.axis = .vertical
-        remoteStack.alignment = .leading
-        remoteStack.spacing = 4
+        remoteStack.axis = .horizontal
+        // ボタンには、ベースラインで揃える設定が効かず、文字が上にずれる。どちらも同じ大きさの文字なので、中心で揃える。
+        remoteStack.alignment = .center
+        remoteStack.spacing = 8
         remoteStack.addArrangedSubview(remoteLabel)
         remoteStack.addArrangedSubview(openOriginal)
 
@@ -275,12 +322,52 @@ final class ProfileHeaderView: UIView {
         tabRow.spacing = 8
         tabRow.alignment = .center
 
-        let infoStack = UIStackView(arrangedSubviews: [nameLabel, acctLabel, noteLabel, fieldsStack, countsLabel, remoteStack, tabRow])
-        infoStack.axis = .vertical
-        infoStack.spacing = 8
-        infoStack.setCustomSpacing(2, after: nameLabel)
-        infoStack.setCustomSpacing(12, after: remoteStack)
-        infoStack.setCustomSpacing(12, after: countsLabel)
+        // 名前とハンドル、自己紹介、補足情報のカード、固定された投稿の棚、タブの順に置く。
+        let margin: CGFloat = 16
+        func inset(_ views: [UIView], spacing: CGFloat = 0) -> UIStackView {
+            let stack = UIStackView(arrangedSubviews: views)
+            stack.axis = .vertical
+            stack.spacing = spacing
+            stack.isLayoutMarginsRelativeArrangement = true
+            stack.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: margin, bottom: 0, trailing: margin)
+            return stack
+        }
+        let identity = inset([nameLabel, acctLabel], spacing: 2)
+
+        // 自己紹介はカードにせず、名前の下にそのまま置く。
+        let note = inset([noteLabel, moreButton], spacing: 2)
+        // 補足情報は、数とほかのサーバーのアカウントであることと一緒に、角の丸いカードにまとめる。
+        // 補足情報と数の間にも、補足情報の行どうしと同じ区切り線を引く。
+        fieldsDivider.backgroundColor = .separator
+        fieldsDivider.heightAnchor.constraint(equalToConstant: 1 / max(traitCollection.displayScale, 1)).isActive = true
+        for view in [fieldsStack, fieldsDivider, countsLabel, remoteStack] as [UIView] {
+            aboutBox.addArrangedSubview(view)
+        }
+        aboutBox.axis = .vertical
+        aboutBox.spacing = 12
+        aboutBox.setCustomSpacing(8, after: fieldsStack)
+        applyCountsSpacing()
+        aboutBox.backgroundColor = .secondarySystemFill
+        aboutBox.layer.cornerRadius = 16
+        aboutBox.layer.cornerCurve = .continuous
+        aboutBox.isLayoutMarginsRelativeArrangement = true
+        aboutBox.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 14, leading: 14, bottom: 14, trailing: 14)
+        let about = inset([aboutBox])
+
+        pinnedShelf.isHidden = true
+        let tabs = inset([tabRow])
+        let contentStack = UIStackView()
+        for view in [identity, note, about, pinnedShelf, tabs] as [UIView] {
+            contentStack.addArrangedSubview(view)
+        }
+        noteContainer = note
+        // 固定された投稿の棚は一覧と一緒に出すので、その下のタブも一緒に出す。上の自己紹介とカードは、棚が出ても動かないので先に出す。
+        sections = [tabs]
+        applySectionsVisibility()
+        contentStack.axis = .vertical
+        contentStack.spacing = 24
+        contentStack.setCustomSpacing(12, after: identity)
+        contentStack.setCustomSpacing(16, after: note)
 
         bannerReflectionClip.clipsToBounds = true
         bannerReflectionClip.isUserInteractionEnabled = false
@@ -296,11 +383,10 @@ final class ProfileHeaderView: UIView {
         bannerView.cover = bannerCover
         bannerView.onChangeConcealment = { [weak self] in self?.applyReflectionImage() }
 
-        for view in [bannerReflectionClip, bannerView, bannerCover, followedByBadge, avatarRingView, avatarView, followArea, infoStack] as [UIView] {
+        for view in [bannerReflectionClip, bannerView, bannerCover, followedByBadge, avatarRingView, avatarView, followArea, contentStack] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
-        let margin: CGFloat = 16
         let bannerReflectionTop = bannerReflectionClip.topAnchor.constraint(equalTo: topAnchor)
         self.bannerReflectionTop = bannerReflectionTop
         let bannerTop = bannerView.topAnchor.constraint(equalTo: topAnchor)
@@ -332,8 +418,7 @@ final class ProfileHeaderView: UIView {
             // アイコンはヘッダー画像の下端に半分かける。
             avatarView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margin + Self.avatarRing),
             avatarView.centerYAnchor.constraint(equalTo: bannerView.bottomAnchor),
-            avatarView.widthAnchor.constraint(equalToConstant: Self.avatarSize),
-            avatarView.heightAnchor.constraint(equalToConstant: Self.avatarSize),
+
             avatarRingView.centerXAnchor.constraint(equalTo: avatarView.centerXAnchor),
             avatarRingView.centerYAnchor.constraint(equalTo: avatarView.centerYAnchor),
             avatarRingView.widthAnchor.constraint(equalTo: avatarView.widthAnchor, constant: Self.avatarRing * 2),
@@ -344,11 +429,13 @@ final class ProfileHeaderView: UIView {
             followArea.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
             followArea.leadingAnchor.constraint(greaterThanOrEqualTo: avatarRingView.trailingAnchor, constant: 12),
 
-            infoStack.topAnchor.constraint(equalTo: avatarView.bottomAnchor, constant: 12),
-            infoStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margin),
-            infoStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margin),
-            infoStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
+            contentStack.topAnchor.constraint(equalTo: avatarView.bottomAnchor, constant: 12),
+            contentStack.leadingAnchor.constraint(equalTo: leadingAnchor),
+            contentStack.trailingAnchor.constraint(equalTo: trailingAnchor),
+            contentStack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -12),
         ])
+        avatarView.widthAnchor.constraint(equalToConstant: Self.avatarSize).isActive = true
+        avatarView.heightAnchor.constraint(equalToConstant: Self.avatarSize).isActive = true
         followAreaBottom = followArea.bottomAnchor.constraint(equalTo: avatarView.bottomAnchor)
         followAreaBottom?.isActive = true
         relationshipFailureBaseline = relationshipFailureLabel.lastBaselineAnchor.constraint(equalTo: avatarView.bottomAnchor)
@@ -367,11 +454,13 @@ final class ProfileHeaderView: UIView {
         verticalFittingPriority: UILayoutPriority
     ) -> CGSize {
         applyBannerLayout(width: targetSize.width, notifies: false)
+        updateMoreButton(width: targetSize.width)
         return super.systemLayoutSizeFitting(targetSize, withHorizontalFittingPriority: horizontalFittingPriority, verticalFittingPriority: verticalFittingPriority)
     }
 
     override func layoutSubviews() {
         applyBannerLayout(width: bounds.width, notifies: false)
+        updateMoreButton(width: bounds.width)
         super.layoutSubviews()
     }
 
@@ -502,9 +591,15 @@ final class ProfileHeaderView: UIView {
         noteLabel.hashtagAccount = account
         noteLabel.accessibilityCustomActions = linkAccessibilityActions(in: note)
         noteLabel.isHidden = note.length == 0
+        noteContainer?.isHidden = note.length == 0
+        if previous?.account.id != account.id {
+            isNoteExpanded = false
+        }
+        noteLabel.numberOfLines = isNoteExpanded ? 0 : Self.collapsedNoteLines
         applyFields(account, language: content.glyphLanguage, animatedEmojis: animatedEmojis)
         countsLabel.attributedText = Self.countsText(of: account)
         remoteStack.isHidden = !content.isRemote
+        applySectionsVisibility()
         // サーバーがプロフィールのURLを返さなかったら、開く先がないのでボタンを出さない。
         openOriginalButton.isHidden = account.url == nil
 
@@ -543,6 +638,8 @@ final class ProfileHeaderView: UIView {
     private func applyFields(_ account: Account, language: String, animatedEmojis: EmojiImageStore?) {
         fieldsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         fieldsStack.isHidden = account.fields.isEmpty
+        fieldsDivider.isHidden = account.fields.isEmpty
+        fieldsStack.spacing = 0
         let nameFont = UIFont.preferredFont(forTextStyle: .footnote)
         let valueFont = UIFont.preferredFont(forTextStyle: .subheadline)
         for field in account.fields {
@@ -570,6 +667,16 @@ final class ProfileHeaderView: UIView {
             let row = UIStackView(arrangedSubviews: [nameLabel, valueLabel])
             row.axis = .vertical
             row.spacing = 2
+            if !fieldsStack.arrangedSubviews.isEmpty {
+                // 設定のグループと同じく、行の間に区切り線を引く。
+                let divider = UIView()
+                divider.backgroundColor = .separator
+                divider.heightAnchor.constraint(equalToConstant: 1 / max(traitCollection.displayScale, 1)).isActive = true
+                let spacer = UIStackView(arrangedSubviews: [divider])
+                spacer.isLayoutMarginsRelativeArrangement = true
+                spacer.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0)
+                fieldsStack.addArrangedSubview(spacer)
+            }
             fieldsStack.addArrangedSubview(row)
         }
     }
@@ -582,36 +689,6 @@ final class ProfileHeaderView: UIView {
                 return true
             }
         }
-    }
-
-    /// 投稿、フォロー、フォロワーの数。フォローとフォロワーは、数と名前に、押すと開く一覧を付ける。
-    static func countsText(of account: Account) -> NSAttributedString {
-        let font = UIFont.preferredFont(forTextStyle: .subheadline)
-        let bold = font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
-        let text = NSMutableAttributedString()
-        let counts: [(Int, String, ProfileCountList?)] = [(account.statusesCount, "投稿", nil), (account.followingCount, "フォロー", .following), (account.followersCount, "フォロワー", .followers)]
-        for (index, (count, label, list)) in counts.enumerated() {
-            if index > 0 {
-                text.append(NSAttributedString(string: "　", attributes: [.font: font]))
-            }
-            var countAttributes: [NSAttributedString.Key: Any] = [.font: bold, .foregroundColor: UIColor.label]
-            var labelAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
-            if let list {
-                countAttributes[.profileCountList] = list.rawValue
-                labelAttributes[.profileCountList] = list.rawValue
-            }
-            text.append(NSAttributedString(string: count.formatted(), attributes: countAttributes))
-            text.append(NSAttributedString(string: " \(label)", attributes: labelAttributes))
-        }
-        return text
-    }
-
-    @objc private func countsTapped(_ gesture: UITapGestureRecognizer) {
-        guard let index = countsLabel.characterIndex(at: gesture.location(in: countsLabel)),
-              let rawValue = countsLabel.attributedText?.attribute(.profileCountList, at: index, effectiveRange: nil) as? String,
-              let list = ProfileCountList(rawValue: rawValue)
-        else { return }
-        onOpenCountList?(list)
     }
 
     private func applyFollowButton(_ content: Content) {
@@ -762,6 +839,107 @@ final class ProfileHeaderView: UIView {
         bannerBlur = blur
         applyReflectionImage()
         bannerCover.image = blur?.cover
+    }
+
+    /// 自己紹介を全文に広げる。下の内容だけが下がり、ヘッダーと上の棚は動かない（`headerDidChangeSize`）。
+    private func expandNote() {
+        isNoteExpanded = true
+        noteLabel.numberOfLines = 0
+        moreButton.isHidden = true
+        onChangeBannerLayout?()
+    }
+
+    /// 自己紹介が切った行数に収まらないときだけ、「さらに表示」を出す。測る幅は、一覧がヘッダーを測る幅から、左右の余白を引いたもの。
+    private func updateMoreButton(width: CGFloat) {
+        guard !isNoteExpanded, !noteLabel.isHidden, width > 0 else {
+            moreButton.isHidden = true
+            return
+        }
+        let textWidth = width - 16 * 2
+        // 段落の間隔を含めて、ラベルが描くのと同じ測り方で比べる。
+        let bounds = CGRect(x: 0, y: 0, width: textWidth, height: .greatestFiniteMagnitude)
+        let full = noteLabel.textRect(forBounds: bounds, limitedToNumberOfLines: 0).height
+        let limited = noteLabel.textRect(forBounds: bounds, limitedToNumberOfLines: Self.collapsedNoteLines).height
+        moreButton.isHidden = full <= limited + 1
+    }
+
+    /// 固定された投稿の棚に並べる投稿を変える。空なら棚を見出しごと隠す。中身が変わって高さが変わりうるならtrue。
+    @discardableResult
+    func setPinned(_ items: [ProfileShelfItem], glyphLanguage: String) -> Bool {
+        let wasHidden = pinnedShelf.isHidden
+        let previous = pinnedShelf.items
+        pinnedShelf.setItems(items, glyphLanguage: glyphLanguage)
+        pinnedShelf.isHidden = items.isEmpty
+        return wasHidden != pinnedShelf.isHidden || previous != items
+    }
+
+    private func applyCountsSpacing() {
+        aboutBox.setCustomSpacing(countsSpacing, after: fieldsDivider)
+        aboutBox.setCustomSpacing(countsSpacing, after: countsLabel)
+    }
+
+    /// 固定された投稿のカードの本文に、`urls`のカスタム絵文字を使っているものがあれば描き直す。描き直したらtrue。
+    @discardableResult
+    func redrawPinned(ifUsing urls: Set<URL>) -> Bool {
+        guard pinnedShelf.uses(emojiURLs: urls) else { return false }
+        pinnedShelf.redraw()
+        return true
+    }
+
+    /// 固定された投稿の棚より下を出す。一覧と一緒に出すまでは隠す。変わったらtrue。
+    @discardableResult
+    func setSectionsRevealed(_ revealed: Bool) -> Bool {
+        guard revealed != isSectionsRevealed else { return false }
+        isSectionsRevealed = revealed
+        applySectionsVisibility()
+        return true
+    }
+
+    private func applySectionsVisibility() {
+        for view in sections {
+            view.isHidden = !isSectionsRevealed
+        }
+    }
+
+    /// 投稿、フォロー、フォロワーの数。フォローとフォロワーは、数と名前に、押すと開く一覧を付ける。
+    static func countsText(of account: Account) -> NSAttributedString {
+        let font = UIFont.preferredFont(forTextStyle: .footnote)
+        let bold = font.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? font
+        let text = NSMutableAttributedString()
+        let counts: [(Int, String, ProfileCountList?)] = [(account.statusesCount, "投稿", nil), (account.followingCount, "フォロー", .following), (account.followersCount, "フォロワー", .followers)]
+        for (index, (count, label, list)) in counts.enumerated() {
+            if index > 0 {
+                text.append(NSAttributedString(string: "　", attributes: [.font: font]))
+            }
+            var countAttributes: [NSAttributedString.Key: Any] = [.font: bold, .foregroundColor: UIColor.label]
+            var labelAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
+            if let list {
+                countAttributes[.profileCountList] = list.rawValue
+                labelAttributes[.profileCountList] = list.rawValue
+            }
+            text.append(NSAttributedString(string: count.formatted(), attributes: countAttributes))
+            text.append(NSAttributedString(string: " \(label)", attributes: labelAttributes))
+        }
+        return text
+    }
+
+    @objc private func countsTapped(_ gesture: UITapGestureRecognizer) {
+        guard let index = countsLabel.characterIndex(at: gesture.location(in: countsLabel)),
+              let rawValue = countsLabel.attributedText?.attribute(.profileCountList, at: index, effectiveRange: nil) as? String,
+              let list = ProfileCountList(rawValue: rawValue)
+        else { return }
+        onOpenCountList?(list)
+    }
+
+    /// 固定された投稿の棚と、その下を、一覧の行と一緒にフェードで出す。
+    func fadeInSections(duration: TimeInterval) {
+        guard duration > 0 else { return }
+        for shelf in [pinnedShelf] + sections where !shelf.isHidden {
+            shelf.alpha = 0
+            UIView.animate(withDuration: duration, delay: 0, options: [.allowUserInteraction]) {
+                shelf.alpha = 1
+            }
+        }
     }
 
     /// ウィンドウの座標で渡した帯（ステータスバー）の下に見えるヘッダー画像やそのぼかしに、読みやすい文字の色。

@@ -131,7 +131,7 @@ struct ProfileStoreTests {
         #expect(failures.isEmpty)
         #expect(store.account.statusesCount == 42)
         #expect(store.followState == .following)
-        #expect(store.displayedPinned == [pinned])
+        #expect(store.pinned == [pinned])
     }
 
     /// 同じ相手を開き直したら、読み込む前から前に読んだ関係で始める。読んだら新しい関係で置き換える。
@@ -365,7 +365,7 @@ struct ProfileStoreTests {
         _ = await store.loadProfile()
 
         #expect(store.removeStatus("10"))
-        #expect(store.displayedPinned.isEmpty)
+        #expect(store.pinned.isEmpty)
         #expect(!store.removeStatus("10"))
     }
 
@@ -383,12 +383,12 @@ struct ProfileStoreTests {
         )
         let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, relationshipCache: localRelationships(), api: api)
         _ = await store.loadProfile()
-        #expect(store.displayedPinned.isEmpty)
+        #expect(store.pinned.isEmpty)
 
         await server.set([pinned])
         try await store.reloadPinned()
 
-        #expect(store.displayedPinned == [pinned])
+        #expect(store.pinned == [pinned])
     }
 
     /// 固定と解除を続けて押し、先に読み始めた読み直しの応答が遅れて届いても、あとの読み直しの結果を戻さない。
@@ -423,7 +423,7 @@ struct ProfileStoreTests {
         await gate.release()
         try await afterPin.value
 
-        #expect(store.displayedPinned.isEmpty)
+        #expect(store.pinned.isEmpty)
     }
 
     /// 読み直しを待つ間に反映したお気に入りを、読み始めた時点の応答で戻さない。
@@ -448,7 +448,7 @@ struct ProfileStoreTests {
         await gate.release()
         try await reload.value
 
-        #expect(store.displayedPinned.map(\.favourited) == [true])
+        #expect(store.pinned.map(\.favourited) == [true])
     }
 
     /// 削除の前に読み始めた固定された投稿の応答が、削除のあとに届いても、削除した投稿を戻さない。
@@ -472,7 +472,7 @@ struct ProfileStoreTests {
         await gate.release()
         _ = await read.value
 
-        #expect(store.displayedPinned.isEmpty)
+        #expect(store.pinned.isEmpty)
     }
 
     /// アカウントの読み直しに失敗しても、関係と固定された投稿は反映する。失敗はアカウントの分だけ返す。
@@ -493,7 +493,7 @@ struct ProfileStoreTests {
         #expect(failures.pinned == nil)
         #expect(store.account == known)
         #expect(store.followState == .requested)
-        #expect(store.displayedPinned == [pinned])
+        #expect(store.pinned == [pinned])
     }
 
     /// 固定された投稿を読めなくても、フォローのボタンには関係しない。
@@ -616,17 +616,6 @@ struct ProfileStoreTests {
             AccountStatusFilter(excludesReplies: false, excludesReblogs: true),
             AccountStatusFilter(onlyMedia: true),
         ])
-    }
-
-    @Test func pinnedAreShownOnlyOnPostsTab() async throws {
-        let known = try account()
-        let pinned = try pinnedStatus()
-        let store = ProfileStore(account: known, myAccountID: "1", postsFilter: .standard, relationshipCache: localRelationships(), api: makeAPI(account: known, pinned: [pinned]))
-        _ = await store.loadProfile()
-
-        _ = store.select(.media)
-
-        #expect(store.displayedPinned.isEmpty)
     }
 }
 

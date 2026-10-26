@@ -119,6 +119,7 @@ final class ProfileController {
             UIApplication.shared.open(url)
         }
         header.onOpenImage = { [weak self] image in self?.openImage(image) }
+        header.onOpenPinned = { [weak viewController] status, frame in viewController?.onOpenThread?(status, frame) }
         header.menuForImage = { [weak self] image in self?.imageMenu(image) }
         header.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination) }
         viewController.onScroll = { [weak self] scrollView in self?.updateBars(scrollView) }
@@ -133,7 +134,12 @@ final class ProfileController {
         viewController.navigationItem.title = header.extendsUnderBars ? nil : "@\(account.acct)"
         // 名前や自己紹介の絵文字が届いたら、ヘッダーを描き直す。投稿の絵文字は一覧が描き直す。
         viewController.emojiImages.addListener(owner: self) { [weak self] urls in
-            guard let self, !Set(self.store.account.emojis.map(\.staticUrl)).isDisjoint(with: urls) else { return }
+            guard let self else { return }
+            // 固定された投稿は一覧の行ではなく棚に並べるので、一覧の描き直しでは描き直されない。棚のカードもここで描き直す。
+            if self.header.redrawPinned(ifUsing: Set(urls)) {
+                self.viewController?.headerDidChangeSize()
+            }
+            guard !Set(self.store.account.emojis.map(\.staticUrl)).isDisjoint(with: urls) else { return }
             self.updateHeader()
         }
     }
@@ -275,6 +281,7 @@ final class ProfileController {
                 dim: tuning.value(of: TuningCatalog.profileBannerReflectionDim),
                 seam: tuning.value(of: TuningCatalog.profileBannerReflectionSeam)
             )
+            header.countsSpacing = tuning.value(of: TuningCatalog.profileCountsSpacing)
         }
         header.apply(ProfileHeaderView.Content(
             account: account,
@@ -297,12 +304,21 @@ final class ProfileController {
     /// - Parameter replacing: 一覧を切り替えた。タブを押した場所に残し、その下の中身だけを差し替える。
     /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。
     private func showEntries(replacing: Bool = false, animatesRemoval: Bool = false) {
+        // 固定された投稿の棚とその下のタブは、一覧と一緒に出す。棚はタブより上にあるので、どちらのタブでも出す。
+        let isRevealed = listReveal == .revealed
+        // 一度出したら隠し直さない。最初の一覧を読めなかったときは、一覧より先にタブを出している（`showListFailure`）。
+        let changesSections = isRevealed && header.setSectionsRevealed(true)
+        // 棚にも、一覧の行と同じサーバーのフィルターの警告とぼかしを当てる。
+        let items = { (statuses: [Status]) in statuses.map { ProfileShelfItem(status: $0, verdict: self.store.filtering.verdict(for: $0)) } }
+        let changesPinned = header.setPinned(isRevealed ? items(store.pinned) : [], glyphLanguage: settings.glyphLanguageIdentifier())
+        if changesSections || changesPinned {
+            viewController?.headerDidChangeSize()
+        }
         viewController?.setEntries(listReveal == .revealed ? shownEntries() : [], keepsOffset: replacing, animatesRemoval: animatesRemoval)
     }
 
     private func shownEntries() -> [TimelineEntry] {
-        let pinned = shownTab == .posts ? store.pinned : []
-        return pinned.map(TimelineEntry.pinned) + shownTimeline.entries
+        shownTimeline.entries
     }
 
     /// 最初の一覧を出せるようになっていたら、見える行のアイコンを上限まで待ってから、フェードで出す。
@@ -328,13 +344,14 @@ final class ProfileController {
                     controller.viewController?.setFooterState(controller.shownTimeline.reachedEnd ? .reachedEnd : .idle)
                 }
                 controller.viewController?.fadeInVisibleItems(duration: controller.revealDuration)
+                controller.header.fadeInSections(duration: controller.revealDuration)
             }
         }
     }
 
-    /// 最初の一覧の投稿を読み終え、「投稿」の一覧なら固定された投稿も読み終えた。
+    /// 最初の一覧の投稿と、固定された投稿を読み終えた。棚が後から現れて、タブと一覧を押し下げないようにするため。
     private var isReadyToRevealList: Bool {
-        isInitialListLoaded && (shownTab != .posts || store.isPinnedSettled)
+        isInitialListLoaded && store.isPinnedSettled
     }
 
     private var revealDuration: TimeInterval {
@@ -518,6 +535,10 @@ final class ProfileController {
     private func showListFailure(_ error: any Error) {
         handleUnauthorized(error)
         viewController?.setFooterState(.failed(ErrorPresentation(error)))
+        // タブは一覧と一緒に出すが、最初の一覧を読めなかったときも出し、ほかのタブへ切り替えられるようにする。
+        if header.setSectionsRevealed(true) {
+            viewController?.headerDidChangeSize()
+        }
     }
 
     private func handleUnauthorized(_ error: any Error) {

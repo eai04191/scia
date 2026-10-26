@@ -252,6 +252,15 @@ public enum TuningCatalog {
         defaultValue: 24
     )
 
+    /// プロフィールの補足情報のカードで、投稿、フォロー、フォロワーの数の行の上と下に空ける余白。
+    public static let profileCountsSpacing = NumberTuning(
+        id: "profile.countsSpacing",
+        title: "補足情報のカードの数の行の上下の余白（pt）",
+        range: 0...32,
+        step: 1,
+        defaultValue: 14
+    )
+
     /// プロフィールの最初の投稿の一覧を出す前に、行のアイコンが読み込み終わるのを待つ上限。読み込み終われば上限を待たずに出す。0なら待たない。
     public static let profileAvatarWait = NumberTuning(
         id: "profile.avatarWait",
@@ -1323,6 +1332,7 @@ public enum TuningCatalog {
             .number(profileBannerReflectionBlur),
             .number(profileBannerReflectionDim),
             .number(profileBannerReflectionSeam),
+            .number(profileCountsSpacing),
         ]),
         TuningSection(id: "thread", title: "スレッド", items: [
             .number(threadOpenDuration),
