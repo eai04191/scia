@@ -189,4 +189,27 @@ struct AccountCacheTests {
         #expect(try await cache.resolve(.acct("nobody"), search: search) == nil)
         #expect(searches.withLock { $0 } == 3)
     }
+
+    /// 止めたら、探している途中の検索を取り消し、以後は探さない。ログアウトのあとに前のアカウントで通信し続けないため。
+    @Test func closeCancelsSearchAndStopsResolving() async throws {
+        let cache = makeCache(Server())
+        let gate = Gate()
+        let url = try #require(URL(string: "https://remote.example/@alice"))
+        let first = Task {
+            try await cache.resolve(.profileURL(url)) {
+                try await gate.wait()
+                return Account(id: "7", username: "alice", acct: "alice@remote.example", displayName: "", avatar: nil)
+            }
+        }
+        try await waitUntil { gate.waiterCount == 1 }
+
+        cache.close()
+        await #expect(throws: CancellationError.self) { try await first.value }
+        await #expect(throws: CancellationError.self) {
+            try await cache.resolve(.acct("alice@remote.example")) {
+                Issue.record("止めたあとに探した")
+                return nil
+            }
+        }
+    }
 }

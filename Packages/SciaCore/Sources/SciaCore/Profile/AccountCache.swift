@@ -20,6 +20,7 @@ public final class AccountCache {
     private var resolvedIDs: [AccountLookup: String] = [:]
     /// 探している途中の値と、その検索。同じ値を続けて探しても、二重に送らない。
     private var resolving: [AccountLookup: Task<Account?, any Error>] = [:]
+    private var isClosed = false
     private let logger = SciaLog.logger(category: "accountCache")
 
     /// - Parameter limit: 1回のリクエストで読む数。
@@ -38,7 +39,7 @@ public final class AccountCache {
     public func load(_ ids: [String]) async -> [String: Account] {
         var seen = Set<String>()
         let unique = ids.filter { seen.insert($0).inserted }
-        let missing = unique.filter { accounts[$0] == nil && inFlight[$0] == nil }
+        let missing = isClosed ? [] : unique.filter { accounts[$0] == nil && inFlight[$0] == nil }
         for start in stride(from: 0, to: missing.count, by: limit) {
             let chunk = Array(missing[start..<min(start + limit, missing.count)])
             let task = Task {
@@ -65,6 +66,17 @@ public final class AccountCache {
         }
     }
 
+    /// 走っている読み込みと検索を止め、以後は読まない。ログアウトやアカウントの切り替えのあとに、前のアカウントのトークンで通信し続けないため。
+    public func close() {
+        isClosed = true
+        for task in Set(inFlight.values) {
+            task.cancel()
+        }
+        for task in resolving.values {
+            task.cancel()
+        }
+    }
+
     /// `lookup`で探したアカウント。前に見つけていればそれを返し、探している途中ならその検索を待ち、どちらでもなければ`search`で探す。
     /// 見つからなかったときと、検索が失敗したときは覚えず、次に求められたときに探し直す。
     public func resolve(_ lookup: AccountLookup, search: @escaping @Sendable () async throws -> Account?) async throws -> Account? {
@@ -75,6 +87,7 @@ public final class AccountCache {
         if let task = resolving[lookup] {
             return try await task.value
         }
+        guard !isClosed else { throw CancellationError() }
         let task = Task { try await search() }
         resolving[lookup] = task
         defer { resolving[lookup] = nil }

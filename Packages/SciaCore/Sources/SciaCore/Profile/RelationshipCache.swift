@@ -17,6 +17,7 @@ public final class RelationshipCache {
     private var inFlight: [String: Task<Void, any Error>] = [:]
     /// IDごとに、関係を書き込んだ回数。読み直しを頼んだあとに関係を変えたら、遅れて届いた読み直しの応答で古い関係に戻さない。
     private var writes: [String: Int] = [:]
+    private var isClosed = false
     private let logger = SciaLog.logger(category: "relationshipCache")
 
     /// - Parameter limit: 1回のリクエストで読む数。
@@ -37,6 +38,7 @@ public final class RelationshipCache {
     /// `ids`の関係を読み直す。読み直している途中のIDは重ねて送らない。覚えている関係は、読み終えるまでそのまま返す。
     /// 応答に入らなかった相手（削除の予定や凍結で、Mastodonが返さない）の関係は忘れる。読めなかったら、覚えている関係を残してログに残す。
     public func reload(_ ids: [String]) {
+        guard !isClosed else { return }
         var seen = Set<String>()
         let missing = ids.filter { seen.insert($0).inserted && inFlight[$0] == nil }
         for start in stride(from: 0, to: missing.count, by: limit) {
@@ -61,6 +63,14 @@ public final class RelationshipCache {
             for id in chunk {
                 inFlight[id] = task
             }
+        }
+    }
+
+    /// 走っている読み直しを止め、以後は読まない。ログアウトやアカウントの切り替えのあとに、前のアカウントのトークンで通信し続けないため。
+    public func close() {
+        isClosed = true
+        for task in Set(inFlight.values) {
+            task.cancel()
         }
     }
 

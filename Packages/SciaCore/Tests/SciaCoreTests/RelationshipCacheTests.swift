@@ -180,4 +180,20 @@ struct RelationshipCacheTests {
         #expect(try await cache.relationship("2")?.following == false)
         #expect(cache["1"]?.following == true)
     }
+
+    /// 止めたら、走っている読み直しを取り消し、以後は読まない。ログアウトのあとに前のアカウントで通信し続けないため。
+    @Test func closeCancelsReloadAndStopsLoading() async throws {
+        let server = Server(holds: true)
+        let cache = makeCache(server)
+        cache.reload(["1"])
+        await server.waitForRequests(1)
+        let waiting = Task { try await cache.relationship("1") }
+
+        cache.close()
+        server.release()
+        _ = try? await waiting.value
+        cache.reload(["2"])
+        #expect(try await cache.relationship("2") == nil)
+        #expect(server.requests == [["1"]])
+    }
 }

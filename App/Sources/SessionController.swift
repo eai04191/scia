@@ -349,6 +349,12 @@ final class SessionController {
         let accounts = AccountCache { [client] ids in try await client.accounts(ids) }
         self.accounts = accounts
         serverFilters = ServerFilterCache { [client] in try await client.filters() }
+        // キャッシュが自分で始めた通信も、ログアウトやアカウントの切り替えで止める。
+        tasks.onClose { [weak accounts, weak serverFilters, weak relationships = profiles.relationships] in
+            accounts?.close()
+            serverFilters?.close()
+            relationships?.close()
+        }
         completionSources = ComposeCompletion.Sources(
             searchAccounts: { query, limit in
                 do {
