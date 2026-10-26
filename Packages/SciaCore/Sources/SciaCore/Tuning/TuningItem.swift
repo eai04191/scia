@@ -207,6 +207,15 @@ public enum TuningCatalog {
         defaultValue: 0.15
     )
 
+    /// 「写真を傾ける」がオフのとき、本文の右に重ねた写真を、奥へ行くほど右下へずらす1枚ごとの幅（写真の一辺に対する割合）。
+    public static let mediaStackStraightStep = NumberTuning(
+        id: "timeline.stackStraightStep",
+        title: "傾けないときに本文の右の写真を1枚ごとに右下へずらす幅（写真の一辺に対する割合）",
+        range: 0.02...0.2,
+        step: 0.005,
+        defaultValue: 0.08
+    )
+
     /// 本文の右に重ねた写真の角度を、投稿ごとにばらつかせる幅（度）。ばらつかせても回す向きは変えない。0で、どの投稿も同じ角度にする。
     public static let mediaStackRotationVariation = NumberTuning(
         id: "timeline.stackRotationVariation",
@@ -1431,6 +1440,7 @@ public enum TuningCatalog {
             .number(mediaStackShadowOpacity),
             .number(mediaStackBetweenShadowOpacity),
             .number(mediaStackRotationVariation),
+            .number(mediaStackStraightStep),
             .number(mediaStackOffsetVariation),
         ]),
         TuningSection(id: "timeline.reactionGlow", title: "お気に入りとブーストの光", items: [

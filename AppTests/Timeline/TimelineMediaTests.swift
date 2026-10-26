@@ -111,6 +111,32 @@ struct TimelineMediaTests {
         }
     }
 
+    /// 「写真を傾ける」がオフなら、4枚目までをまっすぐ、奥へ行くほど同じ幅ずつ右下へずらして並べる。
+    /// 5枚目より後ろは4枚目の写真の位置にあるものとし、ビューアはそこへ戻す。
+    @Test func straightPhotosAreEvenlySpacedDownRight() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let attachments = (1...5).map { image("\($0)", width: 400, height: 300) }
+        let grid = MediaGridView(store: .offline)
+        grid.frame = CGRect(x: 20, y: 200, width: 64, height: 64)
+        harness.viewController.view.addSubview(grid)
+        var content = MediaGridView.Content(attachments: attachments, cover: nil, tallestAspectRatio: 0.75, thumbnailPolicy: .offline, spacing: 4)
+        content.arrangement = .stack(side: 64)
+        content.stackSeed = "1"
+        content.tiltsStack = false
+        grid.apply(content)
+        grid.layoutIfNeeded()
+
+        let photos = try (1...4).map { try #require(grid.tile(for: "\($0)")?.superview) }
+        #expect(Set(photos.map(ObjectIdentifier.init)).count == 4, "4枚目まで描いていません")
+        #expect(grid.tile(for: "5") === grid.tile(for: "4"), "5枚目を4枚目の写真へ戻していません")
+        #expect(photos.allSatisfy { $0.transform == .identity }, "傾いています")
+        let steps = zip(photos, photos.dropFirst()).map { CGPoint(x: $1.center.x - $0.center.x, y: $1.center.y - $0.center.y) }
+        #expect(steps.allSatisfy { $0.x > 0 && $0.y > 0 }, "右下へずれていません: \(steps)")
+        #expect(steps.allSatisfy { abs($0.x - steps[0].x) < 0.01 && abs($0.y - steps[0].y) < 0.01 }, "等間隔ではありません: \(steps)")
+        #expect(photos.allSatisfy { grid.bounds.contains($0.frame) }, "正方形からはみ出しています")
+    }
+
     /// サムネイルの高さは添付ファイルの縦横比で決まり、画像が届く前から確定している。
     @Test func gridHeightFollowsAttachmentAspectRatio() throws {
         let harness = try TimelineHarness()
