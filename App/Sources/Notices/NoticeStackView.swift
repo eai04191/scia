@@ -170,14 +170,25 @@ final class NoticeStackView: UIView {
     private func update(_ chip: NoticeChip, with notice: Notice) {
         let previous = chip.notice
         defer { chip.announce(changingFrom: previous) }
-        // 文言や種類が変わったら、中身だけを薄く入れ替える。進み具合だけなら、そのまま描き直す。
-        if chip.notice?.title != notice.title || chip.notice?.kind != notice.kind {
+        // 文言や種類が変わったときと、値、件数、「›」が付いたり外れたりしたときは、中身だけを薄く入れ替え、広げる動きも動かす。
+        // 値が付くだけのとき（「処理中」に「1%」が付くなど）にすぐ広げると、ガラスが1コマで広がるため。進み具合の数字が変わるだけなら、そのまま描き直す。
+        if Self.changesShape(from: chip.notice, to: notice) {
             chip.crossfade(to: notice, duration: animationDuration)
             relayout(growingWithAnimation: chip)
         } else {
             chip.apply(notice)
             relayout()
         }
+    }
+
+    private static func changesShape(from previous: Notice?, to notice: Notice) -> Bool {
+        guard let previous else { return true }
+        return previous.title != notice.title || previous.kind != notice.kind || (previous.value == nil) != (notice.value == nil)
+            || previous.additionalCount != notice.additionalCount || showsDisclosure(previous) != showsDisclosure(notice)
+    }
+
+    private static func showsDisclosure(_ notice: Notice) -> Bool {
+        if case .disclosure = notice.action { true } else { false }
     }
 
     private func remove(_ chip: NoticeChip) {
@@ -376,7 +387,8 @@ final class NoticeStackView: UIView {
             let y = origins[ObjectIdentifier(chip)] ?? 0
             let target = frame(for: chip, at: y)
             if chip !== growingChip, target.width > chip.bounds.width || target.height > chip.bounds.height {
-                UIView.performWithoutAnimation {
+                // 詰め直しのスプリングで広げている途中でも、その動きを止めてすぐ広げる。
+                UIView.performStoppingSmoothAnimations {
                     chip.bounds.size = CGSize(width: max(target.width, chip.bounds.width), height: max(target.height, chip.bounds.height))
                     chip.layoutIfNeeded()
                 }
@@ -394,7 +406,7 @@ final class NoticeStackView: UIView {
             placeChips()
             return
         }
-        UIView.animate(withDuration: animationDuration, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]) {
+        UIView.animateSmoothly(duration: animationDuration) {
             self.placeChips(growingWithAnimation: growingChip)
             self.layoutIfNeeded()
         }

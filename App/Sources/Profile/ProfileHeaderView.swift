@@ -652,11 +652,14 @@ final class ProfileHeaderView: UIView {
         // サーバーがプロフィールのURLを返さなかったら、開く先がないのでボタンを出さない。
         openOriginalButton.isHidden = account.url == nil
 
-        let revealsFollow = previous?.followState == .unknown && content.followState != .unknown
-        if revealsFollow, followRevealDuration > 0, window != nil, !UIAccessibility.isReduceMotionEnabled {
+        // 関係が届いたときと、フォローしたり外したりして関係や送っている途中の表示が替わったときは、ボタンをクロスフェードする。
+        // 文字と色だけでなく、カプセルの幅も替わるため、並べ直しもクロスフェードの中で行う。外で行うと、幅だけが1コマで替わる。
+        let changesFollow = previous.map { $0.followState != content.followState || $0.isChangingFollow != content.isChangingFollow } ?? false
+        if changesFollow, followRevealDuration > 0, window != nil, !UIAccessibility.isReduceMotionEnabled {
             let options: UIView.AnimationOptions = [.transitionCrossDissolve, .allowUserInteraction]
             UIView.transition(with: followButton, duration: followRevealDuration, options: options) {
                 self.applyFollowButton(content)
+                self.layoutIfNeeded()
             }
             UIView.transition(with: followedByBadge, duration: followRevealDuration, options: options) {
                 self.applyFollowedByBadge(content)

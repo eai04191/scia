@@ -253,7 +253,7 @@ public enum TuningCatalog {
         defaultValue: 0.03
     )
 
-    /// プロフィールを開いたあと、フォローのボタンの文字と最初の投稿の一覧を、読み込みが届いたときにフェードで入れる時間。0なら切り替える。
+    /// プロフィールを開いたあと、フォローのボタンの文字と最初の投稿の一覧を、読み込みが届いたときにフェードで入れる時間。フォローしたり外したりしてボタンが替わるときのクロスフェードにも使う。0なら切り替える。
     public static let profileRevealDuration = NumberTuning(
         id: "profile.revealDuration",
         title: "読み込みが届いたときのフェード（秒）",
@@ -1154,6 +1154,15 @@ public enum TuningCatalog {
         defaultValue: 0.35
     )
 
+    /// 改行や折り返しで本文の行が増減したときに、投稿欄の高さを変える時間。
+    public static let composeTextGrowDuration = NumberTuning(
+        id: "compose.textGrowDuration",
+        title: "本文の行が増減したときに欄の高さを変える時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.25
+    )
+
     /// 投稿欄を展開ボタンで広げたときの、本文の最低の行数。本文がこれより短くても、この行数の高さまで広げて書き足す場所を先に取る。
     public static let composeExpandedMinLines = NumberTuning(
         id: "compose.expandedMinLines",
@@ -1330,6 +1339,15 @@ public enum TuningCatalog {
         range: 0...0.6,
         step: 0.02,
         defaultValue: 0.12
+    )
+
+    /// 出ている補完の候補の一覧で、候補の数が変わったときに、一覧の高さを変えて中身を入れ替える時間（秒）。
+    public static let completionResizeDuration = NumberTuning(
+        id: "compose.completion.resizeDuration",
+        title: "補完：候補の数が変わったときに一覧の高さを変える時間（秒）",
+        range: 0...0.6,
+        step: 0.02,
+        defaultValue: 0.25
     )
 
     @MainActor
@@ -1560,6 +1578,7 @@ public enum TuningCatalog {
             .number(composeStackBetweenShadowOpacity),
             .number(composeExpandDuration),
             .number(composeExpandedMinLines),
+            .number(composeTextGrowDuration),
             .number(linkTitleMorphDuration),
             .number(linkTitleShimmerPeriod),
             .toggle(composePickerMatchesKeyboard),
@@ -1574,6 +1593,7 @@ public enum TuningCatalog {
             .number(completionMinimumQuery),
             .number(completionEmojiMinimumQuery),
             .number(completionFadeDuration),
+            .number(completionResizeDuration),
         ]),
         TuningSection(id: "settings", title: "設定画面", items: [
             .number(menuLayoutNoteDuration),

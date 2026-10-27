@@ -79,7 +79,37 @@ final class ComposeCompletionList: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func update(_ content: ComposeCompletion.Content, kind: CompletionKind, selectedIndex: Int) {
+    /// ガラスの枠の高さを、一覧の枠の中で`height`にする。nilなら一覧の枠いっぱいにする。
+    /// 候補の数が変わったときに、投稿欄が一覧の枠を大きいほうの高さにしたまま、この高さを動かして、ガラスの枠ごと伸び縮みさせる。
+    /// UIKitの側で一覧の枠の高さを動かしても、SwiftUIのガラスは新しい高さで描かれて、形が付いてこないため。
+    /// ガラスの枠の高さを決めて動かしている途中か。nilなら一覧の枠いっぱい。
+    var glassHeight: CGFloat? { model.glassHeight }
+
+    /// ガラスの枠の高さを動かしている間は、一覧の枠に残る透明な部分では触れたものを受けず、下の入力欄や一覧へ通す。
+    /// 縮める間は、向かっている高さの外を通す。
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        guard let height = model.glassHeight else { return super.point(inside: point, with: event) }
+        let glass = model.growsUpward
+            ? CGRect(x: 0, y: bounds.maxY - height, width: bounds.width, height: height)
+            : CGRect(x: 0, y: 0, width: bounds.width, height: height)
+        return glass.contains(point)
+    }
+
+    func setGlassHeight(_ height: CGFloat?, animation: Animation? = nil, completion: (() -> Void)? = nil) {
+        guard let animation else {
+            model.glassHeight = height
+            completion?()
+            return
+        }
+        withAnimation(animation, completionCriteria: .logicallyComplete) {
+            model.glassHeight = height
+        } completion: {
+            completion?()
+        }
+    }
+
+    /// - Parameter animation: 出ている一覧で候補を入れ替えるときの動き。ガラスの枠の中で、前の候補と次の候補をクロスフェードする。
+    func update(_ content: ComposeCompletion.Content, kind: CompletionKind, selectedIndex: Int, animation: Animation? = nil) {
         let rows: [Row] = switch content {
         case .candidates(let candidates): candidates.map(Row.candidate)
         case .loading: [.loading]
@@ -88,9 +118,11 @@ final class ComposeCompletionList: UIView {
         case .candidatesWithFailure(let candidates, let message): candidates.map(Row.candidate) + [.failed(message)]
         }
         if rows != model.rows {
-            model.rows = rows
-            // 語が変わって候補を入れ替えたら、スクロールを端に戻す。
-            model.generation += 1
+            withAnimation(animation) {
+                model.rows = rows
+                // 語が変わって候補を入れ替えたら、スクロールを端に戻す。
+                model.generation += 1
+            }
         }
         model.selectedIndex = selectedIndex
     }
@@ -102,6 +134,8 @@ private final class CompletionListModel {
     var rows: [ComposeCompletionList.Row] = []
     var selectedIndex = 0
     var growsUpward = false
+    /// ガラスの枠の高さ。nilなら一覧の枠いっぱい。
+    var glassHeight: CGFloat?
     /// 候補を入れ替えた回数。スクロールを端に戻すのに使う。
     var generation = 0
     @ObservationIgnored var settings = AppDependencies.settings
@@ -168,6 +202,9 @@ private struct CompletionListView: View {
         .glassEffect(.regular, in: .rect(cornerRadius: 20))
         .accessibilityElement(children: .contain)
         .accessibilityLabel("補完の候補")
+        // 打っている文字に近い端に寄せ、反対側の端を伸び縮みさせる。
+        .frame(height: model.glassHeight)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: anchor == .bottom ? .bottom : .top)
     }
 }
 

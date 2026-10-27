@@ -2,6 +2,7 @@ import Observation
 import os
 import PhotosUI
 import SciaCore
+import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
@@ -96,6 +97,8 @@ final class InlineComposeController: NSObject {
     /// 注意書きの欄を閉じるボタン。閲覧注意も一緒に外れる。
     private let spoilerClearButton = UIButton(type: .system)
     private let textView = ComposeTextView()
+    /// 本文の行の増減で欄の高さを動かしている数。動かし終えるまで入力欄を切り抜く。
+    private var textHeightAnimations = 0
     /// 投票の欄。＋のメニューから足したときだけ、本文の下に出す。
     private let pollEditor = ComposePollEditor()
     /// 最後にキーボードを出していた入力欄。シートやビューアを閉じたら、ここへキーボードを戻す。
@@ -233,6 +236,10 @@ final class InlineComposeController: NSObject {
     /// 本文に重ねるときの、一覧の上端の位置。打っている行に合わせて決める。
     private var completionListTop: NSLayoutConstraint?
     private var completionListHeight: NSLayoutConstraint?
+    /// 候補の数が変わって一覧の高さを動かした回数。動き終えたときに、あとから別の高さへ動かし始めていれば、一覧の枠を縮めない。
+    private var completionListResizeGeneration = 0
+    /// 置き場所の計算が決めた、一覧の高さ。ガラスの枠を動かしている間は、一覧の枠の高さと違うことがある。
+    private var completionListWantedHeight: CGFloat = 0
     /// 一覧を出している（消える動きの途中はfalse）。
     private var isCompletionListShown = false
     /// 補完している入力欄。本文か注意書き。
@@ -2188,14 +2195,58 @@ final class InlineComposeController: NSObject {
     /// 補完の状態を一覧に映す。書いていて、補完している入力欄がキーボードを出しているときだけ出す。
     private func updateCompletionList() {
         let content = completion.content
-        if let content, let kind = completion.token?.kind {
-            completionList.update(content, kind: kind, selectedIndex: completion.selectedIndex)
-        }
         let shows = content != nil && isEditing && (completionInput as? UIResponder)?.isFirstResponder == true
+        // 出たまま候補が入れ替わるときは、ガラスの枠を1つのまま伸び縮みさせ、中の候補をクロスフェードする。
+        let duration = tuning.value(of: TuningCatalog.completionResizeDuration)
+        let animation: Animation? = isCompletionListShown && shows && duration > 0 && !UIAccessibility.isReduceMotionEnabled ? .smooth(duration: duration) : nil
+        let previousHeight = completionListHeight?.constant
+        // 動かさずに出し直すときは、前に動かしていたガラスの枠の高さを外し、動き終えたときの処理も効かなくする。
+        // 縮める途中に閉じて、すぐ別の語で出し直すと、古い高さのガラスが残るため。消す間は、薄くなるまでそのまま残す。
+        if animation == nil, shows, completionList.glassHeight != nil {
+            completionListResizeGeneration += 1
+            completionList.setGlassHeight(nil)
+        }
+        if let content, let kind = completion.token?.kind {
+            completionList.update(content, kind: kind, selectedIndex: completion.selectedIndex, animation: animation)
+        }
         if shows {
             layoutCompletionList()
+            if let animation, let previousHeight {
+                resizeCompletionListGlass(from: previousHeight, animation: animation)
+            }
         }
         setCompletionListShown(shows)
+    }
+
+    /// 一覧の高さが変わったら、一覧の枠をいったん大きいほうの高さにして、その中でガラスの枠を前の高さから新しい高さへ動かす。
+    /// 動き終えたら、一覧の枠を新しい高さにし、ガラスの枠を一覧の枠いっぱいに戻す。
+    /// 広げていて打っている行の上に出すときは、一覧の上端が高さで変わるため動かさない。
+    private func resizeCompletionListGlass(from previousHeight: CGFloat, animation: Animation) {
+        guard let host, let completionListHeight, let completionListTop else { return }
+        let height = completionListWantedHeight
+        guard !(completionListTop.isActive && completionList.growsUpward) else {
+            completionListResizeGeneration += 1
+            completionList.setGlassHeight(nil)
+            return
+        }
+        // 動かしている途中なら、比べるのは一覧の枠（大きいほうの高さ）ではなく、ガラスの枠が向かっている高さ。
+        // 同じ高さへ向かっているなら（選ぶ候補を移しただけなど）、動きをそのまま続ける。
+        if let target = completionList.glassHeight {
+            guard abs(height - target) > 0.5 else { return }
+        } else {
+            guard abs(height - previousHeight) > 0.5 else { return }
+            completionList.setGlassHeight(previousHeight)
+        }
+        completionListResizeGeneration += 1
+        let generation = completionListResizeGeneration
+        completionListHeight.constant = max(previousHeight, height)
+        host.view.layoutIfNeeded()
+        completionList.setGlassHeight(height, animation: animation) { [weak self] in
+            guard let self, generation == self.completionListResizeGeneration else { return }
+            self.completionList.setGlassHeight(nil)
+            self.layoutCompletionListIfShown()
+            self.host?.view.layoutIfNeeded()
+        }
     }
 
     private func layoutCompletionListIfShown() {
@@ -2238,7 +2289,9 @@ final class InlineComposeController: NSObject {
             completionListTop.isActive = false
             completionListAboveBar.isActive = true
         }
-        setConstant(completionListHeight, height)
+        completionListWantedHeight = height
+        // ガラスの枠の高さを動かしている間は、一覧の枠をガラスより小さくしない。動き終えたら、改めて置き直す。
+        setConstant(completionListHeight, completionList.glassHeight == nil ? height : max(completionListHeight.constant, height))
     }
 
     /// 同じ値を入れ直すと、欄が動くたびに測り直しが続くので、変わったときだけ入れる。
@@ -2537,7 +2590,31 @@ extension InlineComposeController: UITextViewDelegate {
             linkTitleEffects.textDidChange(textView.text)
         }
         textDidChange()
+        animateTextHeightChange()
         textCompletion.textDidChange(in: textView)
+    }
+
+    /// 改行や折り返しで本文の行が増減したら、欄の高さを動きの中で変える。入力欄が自分の高さを決め直すのを次の並べ直しに任せると、
+    /// 欄の上端が1行分一度に飛ぶため。リンクのタイトルの変形の間は、変形の動きが並べ直すので行わない。
+    private func animateTextHeightChange() {
+        // 視差効果を減らす設定では、動かさずに次の並べ直しに任せる。
+        guard !isReplacingLink, !textView.isScrollEnabled, !UIAccessibility.isReduceMotionEnabled, let host, host.view.window != nil else { return }
+        let fitting = textView.sizeThatFits(CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)).height
+        guard abs(fitting - textView.bounds.height) > 0.5 else { return }
+        // 入力欄は文字を切り抜かないため、伸ばす途中は、増えた行が下のボタンの行に重なって見える。伸ばしている間だけ切り抜く。
+        // ふだんは切り抜かない。入力欄の上に重ねる部品（ハイライトしたURLなど）が枠の外へ出ることがあるため。
+        textHeightAnimations += 1
+        textView.clipsToBounds = true
+        UIView.animateSmoothly(duration: tuning.value(of: TuningCatalog.composeTextGrowDuration)) {
+            host.view.layoutIfNeeded()
+            self.layoutCompletionListIfShown()
+            host.view.layoutIfNeeded()
+        } completion: {
+            self.textHeightAnimations -= 1
+            if self.textHeightAnimations == 0 {
+                self.textView.clipsToBounds = false
+            }
+        }
     }
 
     func textViewDidChangeSelection(_ textView: UITextView) {
