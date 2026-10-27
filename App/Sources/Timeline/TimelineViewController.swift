@@ -558,53 +558,65 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         reconfigureShiftingRowsBelow(Set(ids), duration: tuning.value(of: TuningCatalog.customEmojiArrivalDuration))
     }
 
-    /// 行の中身を、同じセルのまま動かさずに描き直し、高さが変わって位置がずれた見えている行を、元の位置から新しい位置へ動かしてつなぐ。
-    /// 表示領域の上端をまたぐ行の高さが変わるときは、読んでいる位置を保って動かさない（docs/vision.mdの「一覧の動き」）。
+    /// 行の中身を、同じセルのまま動かさずに描き直し、高さが変わって位置がずれた見えている行と区切り線を、元の位置から新しい位置へ動かしてつなぐ。
+    /// 上端が表示領域の上端より上にある行の高さが変わるときも、その行の位置は保ったまま、下の行を動かす（docs/vision.mdの「一覧の動き」）。
     /// 押し下げられて表示領域の外へ出る行は、描き直す前に取っておいた像を動かして外へ送る。
     ///
-    /// 動きは、セルの層の位置に足し合わせる形（additive）で付ける。描き直しを続けて重ねても、前の動きの途中の位置から次の動きがつながり、
+    /// 動きは、層の位置に足し合わせる形（additive）で付ける。描き直しを続けて重ねても、前の動きの途中の位置から次の動きがつながり、
     /// スクロールで一覧が行の位置を置き直しても、動きは外れない。差分を動きつきで当てる描き直しと違い、一覧がセルを入れ替えないので、
     /// セルの中で続いている動き（絵文字が入る文字の動きなど）も止まらない。
+    /// 区切り線は、行のセルとは別のビューとして一覧に並ぶため、セルと一緒に動かす。動かさないと、伸びた行の下の線だけが1コマで下がる。
     func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, duration: TimeInterval) {
         guard !ids.isEmpty else { return }
         guard duration > 0, view.window != nil, !isShowingMenu, !UIAccessibility.isReduceMotionEnabled else {
             reconfigure(ids)
             return
         }
-        // 表示領域の上端をまたぐ行は、高さが変わったら、読んでいる位置を保つだけで動かさない。描き直す前の高さを覚えておき、あとで比べる。
-        let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
-        let rowsAcrossTop: [ItemID: CGFloat] = ids.reduce(into: [:]) { result, id in
-            guard let indexPath = dataSource.indexPath(for: id), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame,
-                  frame.minY < visibleTop, frame.maxY > visibleTop
-            else { return }
-            result[id] = frame.height
-        }
-        let before = visibleRows(takingSnapshots: true)
+        let before = visibleRows(snapshottingBelow: ids)
+        let separatorsBefore = visibleSeparators()
         reconfigure(ids)
         collectionView.layoutIfNeeded()
-        let changesRowAcrossTop = rowsAcrossTop.contains { id, height in
-            guard let indexPath = dataSource.indexPath(for: id), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return false }
-            return abs(frame.height - height) > 0.5
-        }
-        guard !changesRowAcrossTop else { return }
-        let after = visibleRows(takingSnapshots: false)
+        let after = visibleRows(snapshottingBelow: [])
+        // 動かす行と区切り線は、動かない行より手前に描く。伸びた行のセルは一度に高くなり、その背景が、下がってくる途中の下の行を隠すため。
+        // `zPosition`を上げるとバーの下のぼかしより手前に出てしまうため、同じ`zPosition`のビューどうしの並び順で手前に出す（`MediaBarLayering`と同じ）。
+        var moved: [UIView] = []
         for (id, old) in before {
             if let row = after[id] {
-                shiftRow(row.cell.layer, by: row.minY - old.minY, duration: duration)
+                if shiftRow(row.cell.layer, by: row.minY - old.minY, duration: duration) {
+                    moved.append(row.cell)
+                }
             } else if let indexPath = dataSource.indexPath(for: id), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame {
                 // 押し下げられて表示領域の外へ出た行は、一覧がセルを外すので、描き直す前に取っておいた像を動かして外へ送る。
                 let minY = collectionView.convert(frame, to: nil).minY
                 sendOut(old.snapshot, from: old.minY, to: minY, duration: duration)
             }
         }
+        for (key, separator) in visibleSeparators() {
+            guard let old = separatorsBefore[key]?.minY else { continue }
+            if shiftRow(separator.view.layer, by: separator.minY - old, duration: duration) {
+                moved.append(separator.view)
+            }
+        }
+        for view in moved {
+            collectionView.bringSubviewToFront(view)
+        }
+    }
+
+    /// 一覧に並ぶ区切り線のビューと、その画面（ウインドウ）での上端。区切り線はUIKitの非公開のビューなので、行のセルでも背景でもない、高さが細い線のビューとして見分ける。
+    private func visibleSeparators() -> [ObjectIdentifier: (view: UIView, minY: CGFloat)] {
+        collectionView.subviews.reduce(into: [:]) { result, view in
+            guard !(view is UICollectionViewCell), !view.isHidden, view.bounds.height <= 2, view.bounds.width > 0 else { return }
+            result[ObjectIdentifier(view)] = (view, view.convert(view.bounds, to: nil).minY)
+        }
     }
 
     /// 足し合わせる行の動きに付ける名前を、重ねても取り替えないよう分ける。
     private var rowShiftCount = 0
 
-    /// 層を、`shift`だけ前の位置から今の位置へ動かす。前の動きの途中なら、その動きは足し合わせたまま続く。
-    private func shiftRow(_ layer: CALayer, by shift: CGFloat, duration: TimeInterval) {
-        guard abs(shift) > 0.5 else { return }
+    /// 層を、`shift`だけ前の位置から今の位置へ動かす。前の動きの途中なら、その動きは足し合わせたまま続く。動かしたらtrueを返す。
+    @discardableResult
+    private func shiftRow(_ layer: CALayer, by shift: CGFloat, duration: TimeInterval) -> Bool {
+        guard abs(shift) > 0.5 else { return false }
         let move = CABasicAnimation(keyPath: "position")
         move.isAdditive = true
         move.fromValue = CGPoint(x: 0, y: -shift)
@@ -613,6 +625,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         move.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         rowShiftCount += 1
         layer.add(move, forKey: "rowShift\(rowShiftCount)")
+        return true
     }
 
     /// 表示領域の外へ出た行の像を、前の位置から新しい位置へ動かしてから外す。
@@ -634,15 +647,17 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 見えている行の、画面（ウインドウ）での上端と、表示領域の外へ押し出されたときに動かす像。
     /// 画面の座標で比べるのは、読んでいる位置を保つためにスクロール位置を補正した分を、行の動きに数えないため。
     /// 動きの途中の行も、動きを足す前の位置で測る。前の動きは足し合わせたまま続くので、次の動きはずれた分だけを足せばつながる。
-    private func visibleRows(takingSnapshots: Bool) -> [ItemID: (cell: UICollectionViewCell, minY: CGFloat, snapshot: UIView?)] {
-        collectionView.visibleCells.reduce(into: [:]) { result, cell in
-            guard let id = collectionView.indexPath(for: cell).flatMap({ dataSource.itemIdentifier(for: $0) }) else { return }
-            let frame = cell.convert(cell.bounds, to: nil)
-            // 像は、表示領域の下端にかかる行だけ取る。押し出されて外へ出るのは、その行だけのため。
-            let bottom = collectionView.convert(collectionView.bounds, to: nil).maxY
-            let snapshot = takingSnapshots && frame.maxY > bottom - 1 ? cell.snapshotView(afterScreenUpdates: false) : nil
-            snapshot?.frame = cell.frame
-            result[id] = (cell, frame.minY, snapshot)
+    /// - Parameter changed: 描き直す行。像は、そのうち一番上の見えている行より下の行だけ取る。行が大きく伸びると、その下の何行もが外へ押し出されるため。
+    private func visibleRows(snapshottingBelow changed: Set<ItemID>) -> [ItemID: (cell: UICollectionViewCell, minY: CGFloat, snapshot: UIView?)] {
+        let rows: [(id: ItemID, cell: UICollectionViewCell, minY: CGFloat)] = collectionView.visibleCells.compactMap { cell in
+            guard let id = collectionView.indexPath(for: cell).flatMap({ dataSource.itemIdentifier(for: $0) }) else { return nil }
+            return (id, cell, cell.convert(cell.bounds, to: nil).minY)
+        }
+        let changedTop = rows.filter { changed.contains($0.id) }.map(\.minY).min()
+        return rows.reduce(into: [:]) { result, row in
+            let snapshot = changedTop.map { row.minY > $0 } == true ? row.cell.snapshotView(afterScreenUpdates: false) : nil
+            snapshot?.frame = row.cell.frame
+            result[row.id] = (row.cell, row.minY, snapshot)
         }
     }
 
@@ -708,8 +723,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 行の中身を描き直し、高さが変わる分を、下の行ごとスプリングで動かしてつなぐ。動きの途中も操作を受け付ける。
-    /// 上端が表示領域の上端より上にある行は、伸びると読んでいる位置がずれるため、動かさずに位置を保って描き直す。
-    /// 画面に出ていない行と、メニューを出している間も、動かさずに描き直す。
+    /// 上端が表示領域の上端より上にある行は、スプリングで伸ばすと読んでいる位置がずれるため、その行の位置を保って描き直し、
+    /// 下の行と区切り線を動かしてつなぐ（`reconfigureShiftingRowsBelow`）。画面に出ていない行と、メニューを出している間は、動かさずに描き直す。
     func reconfigureAnimatingHeight(_ ids: Set<ItemID>, duration: TimeInterval) {
         guard !ids.isEmpty else { return }
         guard duration > 0, view.window != nil, !isShowingMenu, !UIAccessibility.isReduceMotionEnabled else {
@@ -728,7 +743,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 others.insert(id)
             }
         }
-        reconfigure(others)
+        // 上端が表示領域より上にある行は、その行の位置を保ったまま描き直し、下の行を動かしてつなぐ。
+        reconfigureShiftingRowsBelow(others, duration: duration)
         guard !animated.isEmpty else { return }
         var snapshot = dataSource.snapshot()
         snapshot.reconfigureItems(animated)

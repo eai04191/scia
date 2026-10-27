@@ -174,6 +174,13 @@ struct EmojiArrivalTests {
         #expect(try abs(#require(harness.windowMinY(of: below)) - (belowY + grown)) < 0.5)
         #expect(belowCell.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } == true, "下の行を動かしていません")
         #expect(aboveCell.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } != true, "上の行を動かしました")
+        // 下がる行は、伸びた行より手前に描く。伸びた行のセルは一度に高くなり、その背景が下がってくる途中の行を隠すため。
+        let order = harness.collectionView.subviews
+        #expect(try #require(order.firstIndex(of: belowCell)) > #require(order.firstIndex(of: cell)), "下がる行を伸びた行より手前に描いていません")
+        #expect(belowCell.layer.zPosition == 0, "バーの下のぼかしより手前に出ないよう、zPositionは変えません")
+        // 区切り線は行のセルとは別のビューなので、一緒に動かす。動かさないと、伸びた行の下の線だけが1コマで下がる。
+        let separators = harness.collectionView.subviews.filter { !($0 is UICollectionViewCell) && $0.bounds.height <= 2 }
+        #expect(separators.contains { $0.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } == true }, "区切り線を動かしていません")
     }
 
     /// `index`番目の行に、届くと折り返しが増える横長の絵文字を並べた一覧。絵文字は`gate`を開けるまで届かない。
@@ -251,6 +258,7 @@ struct EmojiArrivalTests {
     }
 
     /// 絵文字が届いて、上端が表示領域より上にある行の折り返しが増えても、その行の画面上の位置は動かない。
+    /// 下の行は、1コマで下げず、元の位置から新しい位置へ動かす。
     @Test func emojiArrivalKeepsRowAboveTop() async throws {
         let wide = try (1...6).map { try emoji("wide\($0)") }
         let png = try widePNG()
@@ -279,10 +287,12 @@ struct EmojiArrivalTests {
         harness.collectionView.layoutIfNeeded()
         let y = try #require(harness.windowMinY(of: id))
         let height = try #require(harness.visibleCell(of: id)?.frame.height)
+        let belowCell = try #require(harness.visibleCell(of: .status(statuses[11].id)))
 
         gate.open()
         try await waitUntil { (try? #require(harness.visibleCell(of: id)?.frame.height)).map { $0 > height } ?? false }
 
         #expect(harness.windowMinY(of: id) == y)
+        #expect(hasRowShift(belowCell), "下の行を動かしていません")
     }
 }

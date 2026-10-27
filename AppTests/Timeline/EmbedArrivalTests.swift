@@ -154,7 +154,7 @@ struct XPostArrivalScrollTests {
         return (harness, store)
     }
 
-    /// 上端が表示領域より上にある行が伸びても、その行の画面上の位置は動かない。
+    /// 上端が表示領域より上にある行が伸びても、その行の画面上の位置は動かない。下の行は、元の位置から新しい位置へ動かす。
     @Test func rowAboveTopKeepsPosition() throws {
         var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
         statuses[10] = linking(statuses[10], to: "7")
@@ -166,12 +166,46 @@ struct XPostArrivalScrollTests {
         harness.collectionView.layoutIfNeeded()
         let y = try #require(harness.windowMinY(of: id))
         let height = try #require(harness.visibleCell(of: id)?.frame.height)
+        let belowCell = try #require(harness.visibleCell(of: .status(statuses[11].id)))
 
         store.deliver(try post("7"))
         harness.viewController.applyXPost(id: "7")
 
         #expect(try #require(harness.visibleCell(of: id)?.frame.height) > height, "囲みに替わって行が伸びていません")
         #expect(harness.windowMinY(of: id) == y)
+        #expect(belowCell.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } == true, "下の行を動かしていません")
+    }
+
+    /// 上端が表示領域より上にある行が大きく伸びて、下の何行もが表示領域の外へ押し出されるときは、押し出される行をどれも1コマで消さず、
+    /// 描き直す前の像を動かして外へ送る。
+    @Test func largeGrowthSendsOutEveryPushedRow() async throws {
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        statuses[10] = linking(statuses[10], to: "7")
+        let (harness, store) = try harness(with: statuses)
+        defer { harness.tearDown() }
+        let id = TimelineViewController.ItemID.status(statuses[10].id)
+        try harness.scroll(to: id, at: .top)
+        harness.collectionView.contentOffset.y += 20
+        harness.collectionView.layoutIfNeeded()
+        // 描かれる前の行は像を取れないため、描かれるのを待つ。
+        try await waitUntil { harness.collectionView.visibleCells.allSatisfy { $0.snapshotView(afterScreenUpdates: false) != nil } }
+        let before = Set(harness.collectionView.visibleCells.map(ObjectIdentifier.init))
+
+        let long = XPost(
+            id: "7",
+            url: try #require(URL(string: "https://x.com/dummy/status/7")),
+            authorName: "ダミー",
+            authorScreenName: "dummy",
+            text: .plain(String(repeating: "とても長いXの投稿の本文。", count: 80), emojis: [])
+        )
+        store.deliver(long)
+        harness.viewController.applyXPost(id: "7")
+        harness.collectionView.layoutIfNeeded()
+
+        let pushedOut = before.subtracting(harness.collectionView.visibleCells.map(ObjectIdentifier.init))
+        #expect(pushedOut.count >= 2, "複数の行が押し出される条件になっていません")
+        let sentOut = harness.collectionView.subviews.filter { !($0 is UICollectionViewCell) && $0.layer.animation(forKey: "rowShiftEnd") != nil }
+        #expect(sentOut.count >= pushedOut.count, "押し出された行の像を動かしていません")
     }
 
     /// 見えている行が伸びたら、上の行は動かさず、下の行を伸びた分だけ押し下げる。
