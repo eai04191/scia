@@ -2,11 +2,12 @@ import Foundation
 import Network
 import Synchronization
 import Testing
+import SciaTesting
 @testable import SciaCore
 
 /// URLSessionTransportを、ローカルで立てたHTTPサーバーに実際につないで確かめる。
 /// 応答が来ないまま固まったら、テストの実行を止めずに失敗させる。上限は待つ長さの見積もりではなく、固まったとみなす長さ。
-@Suite(.serialized, .timeLimit(.minutes(1)))
+@Suite(.serialized, .timeLimit(.minutes(1)), .scratch)
 struct URLSessionTransportTests {
     @Test func sendsAndReceivesBody() async throws {
         let server = try await LocalHTTPServer(response: Self.response(status: 200, body: "hello", length: true))
@@ -58,21 +59,59 @@ struct URLSessionTransportTests {
     @Test func downloadsToFile() async throws {
         let server = try await LocalHTTPServer(response: Self.response(status: 200, body: "file", length: true))
         defer { server.stop() }
+        let folder = try Self.makeDownloadFolder()
 
-        let (file, response) = try await URLSessionTransport().download(URLRequest(url: server.url), limit: 1_024) { _ in }
-        defer { try? FileManager.default.removeItem(at: file) }
+        let (file, response) = try await URLSessionTransport(downloadDirectory: folder).download(URLRequest(url: server.url), limit: 1_024) { _ in }
 
         #expect(response.statusCode == 200)
+        #expect(file.deletingLastPathComponent().standardizedFileURL == folder.standardizedFileURL)
         #expect(try Data(contentsOf: file) == Data("file".utf8))
     }
 
-    @Test func stopsDownloadOverLimit() async throws {
-        let server = try await LocalHTTPServer(response: Self.response(status: 200, body: String(repeating: "a", count: 64 * 1_024), length: true))
+    /// 上限を超えて止めたら、落としかけのファイルを残さない。長さを先に知らせる応答も、知らせない応答も。
+    @Test(arguments: [true, false])
+    func stopsDownloadOverLimit(length: Bool) async throws {
+        let server = try await LocalHTTPServer(response: Self.response(status: 200, body: String(repeating: "a", count: 64 * 1_024), length: length))
         defer { server.stop() }
+        let folder = try Self.makeDownloadFolder()
 
         await #expect(throws: ResponseTooLarge(limit: 1_024)) {
-            _ = try await URLSessionTransport().download(URLRequest(url: server.url), limit: 1_024) { _ in }
+            _ = try await URLSessionTransport(downloadDirectory: folder).download(URLRequest(url: server.url), limit: 1_024) { _ in }
         }
+        #expect(try Self.contents(of: folder) == [])
+    }
+
+    /// 本文の途中で接続が切れたら、落としかけのファイルを残さない。
+    @Test func removesPartialDownloadWhenConnectionDrops() async throws {
+        let partial = Data("HTTP/1.1 200 Status\r\nContent-Length: \(64 * 1_024)\r\nConnection: close\r\n\r\n\(String(repeating: "a", count: 1_024))".utf8)
+        let server = try await LocalHTTPServer(response: partial)
+        defer { server.stop() }
+        let folder = try Self.makeDownloadFolder()
+
+        await #expect(throws: (any Error).self) {
+            _ = try await URLSessionTransport(downloadDirectory: folder).download(URLRequest(url: server.url), limit: 1_024 * 1_024) { _ in }
+        }
+        #expect(try Self.contents(of: folder) == [])
+    }
+
+    /// 落とす途中で取り消されたら、落としかけのファイルを残さない。
+    @Test func removesPartialDownloadWhenCancelled() async throws {
+        let partial = Data("HTTP/1.1 200 Status\r\nContent-Length: \(64 * 1_024)\r\n\r\n\(String(repeating: "a", count: 1_024))".utf8)
+        let server = try await LocalHTTPServer(response: partial, closesAfterResponse: false)
+        defer { server.stop() }
+        let folder = try Self.makeDownloadFolder()
+        let started = Gate()
+
+        let download = Task {
+            try await URLSessionTransport(downloadDirectory: folder).download(URLRequest(url: server.url), limit: 1_024 * 1_024) { fraction in
+                if fraction > 0 { started.open() }
+            }
+        }
+        try await started.wait()
+        download.cancel()
+
+        await #expect(throws: (any Error).self) { _ = try await download.value }
+        #expect(try Self.contents(of: folder) == [])
     }
 
     /// サーバーが返したURLで、端末のファイルを読まない。
@@ -88,15 +127,25 @@ struct URLSessionTransportTests {
         let lengthHeader = length ? "Content-Length: \(body.utf8.count)\r\n" : ""
         return Data("HTTP/1.1 \(status) Status\r\n\(headers)\(lengthHeader)Connection: close\r\n\r\n\(body)".utf8)
     }
+
+    private static func makeDownloadFolder() throws -> URL {
+        let folder = TestScratch.url("URLSessionTransportTests")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder
+    }
+
+    private static func contents(of folder: URL) throws -> [String] {
+        try FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false))
+    }
 }
 
-/// 接続してきた相手に、決まった応答を書いて閉じるHTTPサーバー。
+/// 接続してきた相手に、決まった応答を書いて閉じるHTTPサーバー。`closesAfterResponse`がfalseなら、書いたあとも閉じずに止めるまで待たせる。
 private final class LocalHTTPServer: Sendable {
     private let listener: NWListener
     private let connections = HTTPConnections()
     let url: URL
 
-    init(response: Data) async throws {
+    init(response: Data, closesAfterResponse: Bool = true) async throws {
         let queue = DispatchQueue(label: "LocalHTTPServer")
         let listener = try NWListener(using: .tcp, on: .any)
         self.listener = listener
@@ -105,7 +154,9 @@ private final class LocalHTTPServer: Sendable {
             connections.value.withLock { $0.append(connection) }
             connection.start(queue: queue)
             connection.receive(minimumIncompleteLength: 1, maximumLength: 65_536) { _, _, _, _ in
-                connection.send(content: response, completion: .contentProcessed { _ in connection.cancel() })
+                connection.send(content: response, completion: .contentProcessed { _ in
+                    if closesAfterResponse { connection.cancel() }
+                })
             }
         }
         let port = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<UInt16, any Error>) in

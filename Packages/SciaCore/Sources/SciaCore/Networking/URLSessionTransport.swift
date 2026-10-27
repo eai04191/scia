@@ -8,9 +8,12 @@ import Synchronization
 /// 別のホストへリダイレクトされたときは、URLSessionが`Authorization`を外して送る（macOSで、127.0.0.1からlocalhostへの302で確かめた）。
 public struct URLSessionTransport: HTTPTransport {
     private let session: URLSession
+    private let downloadDirectory: URL
 
-    public init() {
+    /// - Parameter downloadDirectory: `download`が本文を書くフォルダー。
+    public init(downloadDirectory: URL = .temporaryDirectory) {
         session = .shared
+        self.downloadDirectory = downloadDirectory
     }
 
     /// 応答のキャッシュ。この通信の口は`URLSession.shared`を使うので、その設定のキャッシュ。設定のストレージの画面で、大きさを出して消すのに使う。
@@ -53,21 +56,30 @@ public struct URLSessionTransport: HTTPTransport {
         return (body, response)
     }
 
+    /// 本文を、届いたその場で自分で作ったファイルへ書く。URLSessionのダウンロードのタスクは、止めたり失敗したりすると、
+    /// 書きかけの`CFNetworkDownload_*.tmp`を一時フォルダーに残し、その場所を公開の形で教えないため使わない。
+    /// 上限を超えたとき、接続が切れたとき、取り消されたときは、書きかけのファイルを消してから投げる。
     public func download(_ request: URLRequest, limit: Int, progress: @escaping @Sendable (Double) -> Void) async throws -> (URL, HTTPURLResponse) {
         try Self.checkScheme(of: request, allowing: ["http", "https"])
-        let observer = DownloadObserver(limit: limit, progress: progress)
-        let location: URL
-        let response: URLResponse
+        let file = downloadDirectory.appending(fileName: SafeFileName("Download-\(UUID().uuidString)"))
+        guard FileManager.default.createFile(atPath: file.path(percentEncoded: false), contents: nil) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
         do {
-            (location, response) = try await session.download(for: request, delegate: observer)
-        } catch let error as URLError where error.code == .cancelled && observer.isOverLimit {
-            throw ResponseTooLarge(limit: limit)
+            let receiver = DownloadReceiver(file: try FileHandle(forWritingTo: file), limit: limit, progress: progress)
+            let task = session.dataTask(with: request)
+            task.delegate = receiver
+            task.resume()
+            let response = try await withTaskCancellationHandler {
+                try await receiver.response()
+            } onCancel: {
+                task.cancel()
+            }
+            return (file, response)
+        } catch {
+            try? FileManager.default.removeItem(at: file)
+            throw error
         }
-        guard let http = response as? HTTPURLResponse else {
-            try? FileManager.default.removeItem(at: location)
-            throw URLError(.badServerResponse)
-        }
-        return (location, http)
     }
 
     static func checkScheme(of request: URLRequest, allowing schemes: Set<String>) throws {
@@ -188,33 +200,112 @@ private final class ResponseReceiver: NSObject, URLSessionDataDelegate, Sendable
     }
 }
 
-/// ダウンロードの進み具合を伝え、上限を超えたら止める。非同期の`download(for:delegate:)`では書き込みの通知が届かないため、タスクを見張る。
-private final class DownloadObserver: NSObject, URLSessionTaskDelegate, Sendable {
-    private let limit: Int
-    private let progress: @Sendable (Double) -> Void
-    private let state = Mutex<(observation: NSKeyValueObservation?, isOverLimit: Bool)>((nil, false))
-
-    init(limit: Int, progress: @escaping @Sendable (Double) -> Void) {
-        self.limit = limit
-        self.progress = progress
+/// 本文を、届いたその場でファイルへ書く。タスクごとに作る。
+/// 書き終えるまで次の塊を受け取らないので、書き込みが通信に追いつかなくても、書いていない本文をメモリに溜めない。
+/// 頭の長さか受け取った量が`limit`を超えたら、その時点で止める。
+private final class DownloadReceiver: NSObject, URLSessionDataDelegate, Sendable {
+    private struct State {
+        var file: FileHandle?
+        var received: Int64 = 0
+        var response: HTTPURLResponse?
+        var failure: (any Error)?
+        var result: Result<HTTPURLResponse, any Error>?
+        var waiting: CheckedContinuation<HTTPURLResponse, any Error>?
     }
 
-    var isOverLimit: Bool { state.withLock { $0.isOverLimit } }
+    private let limit: Int
+    private let progress: @Sendable (Double) -> Void
+    private let state: Mutex<State>
 
-    func urlSession(_ session: URLSession, didCreateTask task: URLSessionTask) {
-        let limit = limit
-        let progress = progress
-        let observation = task.observe(\.countOfBytesReceived, options: [.new]) { [weak self] task, _ in
-            if task.countOfBytesReceived > limit || task.countOfBytesExpectedToReceive > limit {
-                self?.state.withLock { $0.isOverLimit = true }
-                task.cancel()
-                return
+    init(file: FileHandle, limit: Int, progress: @escaping @Sendable (Double) -> Void) {
+        self.limit = limit
+        self.progress = progress
+        state = Mutex(State(file: file))
+    }
+
+    /// 本文を書き終えるまで待ち、応答の頭を返す。途中で終わったら投げる。投げたときは、ファイルはもう閉じている。
+    func response() async throws -> HTTPURLResponse {
+        try await withCheckedThrowingContinuation { continuation in
+            let result: Result<HTTPURLResponse, any Error>? = state.withLock { state in
+                guard let result = state.result else {
+                    state.waiting = continuation
+                    return nil
+                }
+                return result
             }
-            if task.countOfBytesExpectedToReceive > 0 {
-                progress(Double(task.countOfBytesReceived) / Double(task.countOfBytesExpectedToReceive))
+            if let result {
+                continuation.resume(with: result)
             }
         }
-        state.withLock { $0.observation = observation }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive response: URLResponse,
+        completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void
+    ) {
+        let failure: (any Error)? = state.withLock { state in
+            guard let response = response as? HTTPURLResponse else {
+                state.failure = URLError(.badServerResponse)
+                return state.failure
+            }
+            guard response.expectedContentLength <= Int64(limit) else {
+                state.failure = ResponseTooLarge(limit: limit)
+                return state.failure
+            }
+            state.response = response
+            return nil
+        }
+        completionHandler(failure == nil ? .allow : .cancel)
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        let fraction: Double? = state.withLock { state in
+            guard state.failure == nil, let file = state.file else { return nil }
+            guard state.received + Int64(data.count) <= Int64(limit) else {
+                state.failure = ResponseTooLarge(limit: limit)
+                return nil
+            }
+            do {
+                try file.write(contentsOf: data)
+            } catch {
+                state.failure = error
+                return nil
+            }
+            state.received += Int64(data.count)
+            let expected = dataTask.countOfBytesExpectedToReceive
+            // 圧縮されて届くと、展開した量が頭の長さを超えるので、1で止める。
+            return expected > 0 ? min(Double(state.received) / Double(expected), 1) : nil
+        }
+        if let fraction {
+            progress(fraction)
+        } else if state.withLock({ $0.failure != nil }) {
+            dataTask.cancel()
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        let (waiting, result): (CheckedContinuation<HTTPURLResponse, any Error>?, Result<HTTPURLResponse, any Error>) = state.withLock { state in
+            var result: Result<HTTPURLResponse, any Error>
+            if let failure = state.failure ?? error {
+                result = .failure(failure)
+            } else if let response = state.response {
+                result = .success(response)
+            } else {
+                result = .failure(URLError(.badServerResponse))
+            }
+            do {
+                try state.file?.close()
+            } catch {
+                if case .success = result { result = .failure(error) }
+            }
+            state.file = nil
+            state.result = result
+            defer { state.waiting = nil }
+            return (state.waiting, result)
+        }
+        waiting?.resume(with: result)
     }
 }
 
