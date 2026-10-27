@@ -7,6 +7,8 @@ final class NoticeChip: UIControl {
     /// 押せる範囲の最小の大きさ。見た目より小さければ、外側まで広げる。
     static let minimumHitSize: CGFloat = 44
 
+    /// 出てくるときの濃さと大きさを動かすための包み。ガラスの濃さを変えても、アニメーションにならないため。
+    private let appearanceView = UIView()
     private let effectView = UIVisualEffectView(effect: UIGlassEffect())
     private let iconView = UIImageView()
     private let spinner = UIActivityIndicatorView(style: .medium)
@@ -69,12 +71,19 @@ final class NoticeChip: UIControl {
         stack.translatesAutoresizingMaskIntoConstraints = false
         effectView.translatesAutoresizingMaskIntoConstraints = false
         effectView.contentView.addSubview(stack)
-        addSubview(effectView)
+        appearanceView.isUserInteractionEnabled = false
+        appearanceView.translatesAutoresizingMaskIntoConstraints = false
+        appearanceView.addSubview(effectView)
+        addSubview(appearanceView)
         NSLayoutConstraint.activate([
-            effectView.topAnchor.constraint(equalTo: topAnchor),
-            effectView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            effectView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            effectView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            appearanceView.topAnchor.constraint(equalTo: topAnchor),
+            appearanceView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            appearanceView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            appearanceView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            effectView.topAnchor.constraint(equalTo: appearanceView.topAnchor),
+            effectView.leadingAnchor.constraint(equalTo: appearanceView.leadingAnchor),
+            effectView.trailingAnchor.constraint(equalTo: appearanceView.trailingAnchor),
+            effectView.bottomAnchor.constraint(equalTo: appearanceView.bottomAnchor),
             stack.topAnchor.constraint(equalTo: effectView.contentView.topAnchor, constant: 10),
             stack.bottomAnchor.constraint(equalTo: effectView.contentView.bottomAnchor, constant: -10),
             stack.leadingAnchor.constraint(equalTo: effectView.contentView.leadingAnchor, constant: 16),
@@ -109,6 +118,20 @@ final class NoticeChip: UIControl {
         super.layoutSubviews()
         // ガラスのカプセルと同じ丸みで切り抜く。大きさを変える動きの中で呼ばれれば、丸みも一緒に動く。
         effectView.contentView.layer.cornerRadius = bounds.height / 2
+    }
+
+    /// 薄く少し小さい状態から出てくる。チップそのものの濃さと変形は、並べる側がスワイプや隠すのに使うため、ガラスの包みに付けて動かす。
+    /// チップに付けると、出てくる途中に指で触れたとき、指に合わせる変形で出てくる動きが止まり、大きさや濃さが1コマで替わる。
+    func animateAppearance(duration: TimeInterval) {
+        appearanceView.alpha = 0
+        // 視差効果を減らす設定では、大きさを変えずに薄くするだけにする。
+        if !UIAccessibility.isReduceMotionEnabled {
+            appearanceView.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
+        }
+        UIView.animate(withDuration: duration, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]) {
+            self.appearanceView.alpha = 1
+            self.appearanceView.transform = .identity
+        }
     }
 
     /// 中身を、古い文言を薄くしながら新しい文言に入れ替える。チップ全体ではなくガラスの中身だけを入れ替え、ガラスの形の外には描かない。

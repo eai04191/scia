@@ -81,6 +81,42 @@ struct TimelineNoticeTests {
         #expect(heldMinY > start && heldMinY < end)
     }
 
+    /// 出てくる途中に指で触れても、大きさと濃さは見えているところから出てくる動きを続け、1コマで替えない。
+    @Test func grabbingAppearingChipKeepsItsAppearance() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.tuning.setValue(1, for: TuningCatalog.noticeAnimationDuration)
+        let clock = LayerClock(freezing: harness.window.layer)
+        let stack = harness.overlay.column.stack
+        harness.viewController.showNotice(failure)
+        try await clock.advance(by: 0.2)
+        let chip = try #require(stack.chips.first)
+        let before = presentedAppearance(of: chip)
+        #expect(before.scale < 0.99 && before.alpha < 0.99)
+
+        stack.beginFollowingFinger(chip)
+        CATransaction.flush()
+
+        let grabbed = presentedAppearance(of: chip)
+        #expect(abs(grabbed.scale - before.scale) < 0.001)
+        #expect(abs(grabbed.alpha - before.alpha) < 0.001)
+        try await clock.advance(by: 0.4)
+        let later = presentedAppearance(of: chip)
+        #expect(later.scale > grabbed.scale && later.alpha > grabbed.alpha)
+    }
+
+    /// チップと、その中のガラスの包みの、描かれている大きさの倍率と濃さ。
+    private func presentedAppearance(of chip: NoticeChip) -> (scale: CGFloat, alpha: CGFloat) {
+        var scale: CGFloat = 1
+        var alpha: CGFloat = 1
+        for layer in [chip.layer] + (chip.layer.sublayers ?? []) {
+            let shown = layer.presentation() ?? layer
+            scale *= shown.affineTransform().a
+            alpha *= CGFloat(shown.opacity)
+        }
+        return (scale, alpha)
+    }
+
     /// 一番上から引っぱっても、列は下げない。十分に引っぱれば、一番上の投稿が列の下に見えるため。
     @Test func pullingDownLeavesChipInPlace() throws {
         let harness = try TimelineHarness()

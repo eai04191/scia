@@ -134,7 +134,6 @@ final class NoticeStackView: UIView {
         let chip = NoticeChip()
         chip.apply(notice)
         chip.announce(changingFrom: nil)
-        chip.alpha = 0
         chip.onHoldChange = { [weak self, weak chip] in
             guard let self, let chip else { return }
             self.holdDidChange(chip)
@@ -154,16 +153,10 @@ final class NoticeStackView: UIView {
     private func appear(_ chip: NoticeChip) {
         UIView.performWithoutAnimation {
             chip.frame = frame(for: chip, at: targetOrigins()[ObjectIdentifier(chip)] ?? 0)
+            chip.alpha = targetAlpha(of: chip)
             chip.layoutIfNeeded()
         }
-        // 視差効果を減らす設定では、大きさを変えずに薄くするだけにする。
-        if !UIAccessibility.isReduceMotionEnabled {
-            chip.transform = CGAffineTransform(scaleX: 0.9, y: 0.9)
-        }
-        UIView.animate(withDuration: animationDuration, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]) {
-            chip.alpha = self.targetAlpha(of: chip)
-            chip.transform = .identity
-        }
+        chip.animateAppearance(duration: animationDuration)
         relayout()
     }
 
@@ -224,10 +217,7 @@ final class NoticeStackView: UIView {
         let translation = pan.translation(in: self).y
         switch pan.state {
         case .began:
-            // 出てくる途中の大きさの動きや戻る途中の動きを止め、いま見えている位置から指に合わせて動かす。
-            chip.panStartOffset = chip.layer.presentation()?.affineTransform().ty ?? chip.transform.ty
-            chip.layer.removeAnimation(forKey: "transform")
-            chip.isPanning = true
+            beginFollowingFinger(chip)
             followFinger(chip, translation: translation)
         case .changed:
             followFinger(chip, translation: translation)
@@ -246,6 +236,15 @@ final class NoticeStackView: UIView {
         default:
             break
         }
+    }
+
+    /// 戻る途中の動きを止め、いま見えている位置から指に合わせて動かす。出てくる途中の動きはガラスに付けてあるため、止めずに続ける。
+    func beginFollowingFinger(_ chip: NoticeChip) {
+        chip.panStartOffset = chip.layer.presentation()?.affineTransform().ty ?? chip.transform.ty
+        chip.layer.removeAnimation(forKey: "transform")
+        // 戻る途中の濃さの動きも止める。残すと、指に合わせた濃さの代わりに動きの濃さを描き続け、動きが終わったコマで指に合わせた濃さへ替わる。
+        chip.layer.removeAnimation(forKey: "opacity")
+        chip.isPanning = true
     }
 
     private func followFinger(_ chip: NoticeChip, translation: CGFloat) {
