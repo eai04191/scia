@@ -108,6 +108,14 @@ final class InlineComposeController: NSObject {
     })
     /// 書いている途中に予約の日時を選ぶシートを開いてから、閉じるまでtrue。この間は、キーボードを閉じても書いている状態を解かない。
     private var isShowingScheduleDatePicker = false
+    /// 書いている途中に言語を選ぶシートを開いてから、閉じるまでtrue。予約の日時のシートと同じ扱い。
+    private var isShowingLanguagePicker = false
+    /// 言語を選ぶシートに渡すもの。
+    private let languages: PostingLanguageSource
+    /// シートで選んだ言語の名前。端末が名前を知らない言語でも、メニューの副題とVoiceOverでサーバーの名前を出すため。
+    private var chosenLanguageNames: [String: String] = [:]
+    /// 既定と違う言語を選んでいて、言語の項目が＋の中にあるときに、＋の右上に付けるコードのバッジ。ボタンの行の幅を変えないよう、＋に重ねる。
+    private let languageBadge = UILabel()
     /// 添付したメディアのサムネイルの列。書いていて、添付があるときだけ出す。
     let attachmentStrip = ComposeAttachmentStrip()
     /// 注意書きの入力欄。＋のメニューから足したときと、注意書きの付いた投稿へ返信したときだけ、本文の上に出す。
@@ -203,7 +211,7 @@ final class InlineComposeController: NSObject {
         switch item {
         case .visibility: (item, visibilityButton)
         case .expand: (item, expandButton)
-        case .media, .spoiler, .poll, .schedule, .linkTitle, .customEmoji, .customize, .mention, .hashtag: (item, makeToolButton(item))
+        case .media, .spoiler, .poll, .schedule, .language, .linkTitle, .customEmoji, .customize, .mention, .hashtag: (item, makeToolButton(item))
         }
     })
     /// 今のボタンの行と＋のメニューへの振り分け。ボタンの行の幅が決まるたびに決め直す。まだ一度も振り分けていなければnil。
@@ -291,7 +299,7 @@ final class InlineComposeController: NSObject {
         linkTitleVoiceOverObservation?.cancel()
     }
 
-    init(model: ComposeModel, completion: ComposeCompletion? = nil, recentEmojis: RecentEmojis? = nil, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, keyboardNotifications: NotificationCenter = .default) {
+    init(model: ComposeModel, completion: ComposeCompletion? = nil, recentEmojis: RecentEmojis? = nil, languages: PostingLanguageSource = .unavailable, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, keyboardNotifications: NotificationCenter = .default) {
         self.model = model
         textCompletion = TextInputCompletion(
             completion: completion ?? ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)),
@@ -302,6 +310,7 @@ final class InlineComposeController: NSObject {
         self.tuning = tuning
         self.settings = settings
         self.keyboardNotifications = keyboardNotifications
+        self.languages = languages
         super.init()
         configureTextCompletion()
         model.onPosted = { [weak self] in
@@ -430,7 +439,7 @@ final class InlineComposeController: NSObject {
     /// 違和感レポートに残す状態。行が重なっていれば、どの行かも書く。
     func stateDump() -> String {
         """
-        editing: \(isEditing) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : pollEditor.fields.firstIndex(where: \.isFirstResponder).map { "poll\($0 + 1)" } ?? "none") spoiler: \(model.showsSpoiler) poll: \(model.poll.map { "options=\($0.options.count) multiple=\($0.multiple) hidesTotals=\($0.hidesTotals) expiresIn=\($0.expiresIn)" } ?? "nil") sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") quoteTarget: \(model.quoteTarget?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil") scheduledAt: \(model.scheduledAt.map { "\($0)" } ?? "nil") rewritingSchedule: \(model.rewritingSchedule?.id ?? "nil") scheduleDatePicker: \(isShowingScheduleDatePicker)
+        editing: \(isEditing) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : pollEditor.fields.firstIndex(where: \.isFirstResponder).map { "poll\($0 + 1)" } ?? "none") spoiler: \(model.showsSpoiler) poll: \(model.poll.map { "options=\($0.options.count) multiple=\($0.multiple) hidesTotals=\($0.hidesTotals) expiresIn=\($0.expiresIn)" } ?? "nil") sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") quoteTarget: \(model.quoteTarget?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil") scheduledAt: \(model.scheduledAt.map { "\($0)" } ?? "nil") rewritingSchedule: \(model.rewritingSchedule?.id ?? "nil") scheduleDatePicker: \(isShowingScheduleDatePicker) language: \(model.language ?? "nil") defaultLanguage: \(model.defaultLanguage ?? "nil") languagePicker: \(isShowingLanguagePicker)
         mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
         tools: row=\(toolPlacement.map { "\($0.row.map(\.rawValue))" } ?? "nil") menu=\(toolPlacement.map { "\($0.menu.map { $0.map(\.rawValue) })" } ?? "nil")
@@ -693,6 +702,11 @@ final class InlineComposeController: NSObject {
                 action.subtitle = "編集では付けられません"
             }
             return action
+        case .language:
+            // 選んでいる言語が分かるよう、名前を添える。
+            return UIAction(title: item.title, subtitle: languageName(model.language), image: UIImage(systemName: item.symbolName)) { [weak self] _ in
+                self?.presentLanguagePicker()
+            }
         case .spoiler:
             // 添付があれば、注意書きの欄を出すと閲覧注意にもなることを添える。
             let action = UIAction(title: item.title, image: UIImage(systemName: item.symbolName), state: model.showsSpoiler ? .on : .off) { [weak self] _ in
@@ -784,6 +798,49 @@ final class InlineComposeController: NSObject {
     private func scheduleDatePickerDidClose(resumesEditing: Bool) {
         logger.info("compose: schedule date picker closed")
         isShowingScheduleDatePicker = false
+        guard resumesEditing, isEditing else { return }
+        focusLastInput()
+    }
+
+    /// 言語を選ぶシートを重ねる。書いている途中なら、閉じたあとにキーボードを戻す。予約の日時のシートと同じ扱い。
+    private func presentLanguagePicker() {
+        guard let host, !model.isPosting else { return }
+        let presenter = topPresenter(from: host)
+        guard presenter.presentedViewController == nil, presenter.transitionCoordinator == nil else {
+            logger.info("compose: language picker ignored while another sheet is closing")
+            return
+        }
+        let resumesEditing = isEditing
+        logger.info("compose: present language picker (editing=\(resumesEditing))")
+        isShowingLanguagePicker = resumesEditing
+        resignInput()
+        // 編集では「サーバーに任せる」を出さない。言語を送らなければ、サーバーは今の言語を残すので、選んだとおりにならないため。
+        let picker = PostingLanguagePicker(defaultCode: model.defaultLanguage, selectedCode: model.language, recentCodes: languages.recent?.codes ?? [], offersServerDecision: model.editedStatus == nil, load: languages.load)
+        let sheet = PostingLanguageSheet(picker: picker) { [weak self] row in
+            guard let self else { return }
+            logger.info("compose: language chosen")
+            let code = row.code
+            if let code {
+                languages.recent?.record(code)
+                chosenLanguageNames[code] = row.name
+            }
+            model.choose(language: code)
+            update()
+        } onClose: { [weak self] in
+            self?.languagePickerDidClose(resumesEditing: resumesEditing)
+        }
+        presenter.present(sheet, animated: true)
+        guard presenter.presentedViewController !== sheet else { return }
+        logger.error("compose: language picker could not be presented")
+        isShowingLanguagePicker = false
+        if resumesEditing {
+            focusLastInput()
+        }
+    }
+
+    private func languagePickerDidClose(resumesEditing: Bool) {
+        logger.info("compose: language picker closed")
+        isShowingLanguagePicker = false
         guard resumesEditing, isEditing else { return }
         focusLastInput()
     }
@@ -1030,6 +1087,7 @@ final class InlineComposeController: NSObject {
             case .spoiler: self?.toggleSpoiler()
             case .poll: self?.togglePoll()
             case .schedule: self?.toggleSchedule()
+            case .language: self?.presentLanguagePicker()
             case .customize: self?.presentToolLayoutSettings()
             case .linkTitle: self?.toggleLinkSelection()
             case .customEmoji: self?.toggleEmojiPalette()
@@ -1057,6 +1115,26 @@ final class InlineComposeController: NSObject {
         button.accessibilityLabel = item.title
         button.isHidden = true
         return button
+    }
+
+    /// ＋の右上に重ねる言語のコードのバッジ。＋の記号に少しかかる位置に置き、押しても＋のメニューが開くよう、触れたものを受けない。
+    private func configureLanguageBadge() {
+        languageBadge.font = Self.languageCodeFont(for: addButton.traitCollection)
+        languageBadge.textColor = .white
+        languageBadge.backgroundColor = .tintColor
+        languageBadge.layer.cornerRadius = languageBadge.font.lineHeight / 2
+        languageBadge.layer.cornerCurve = .continuous
+        languageBadge.clipsToBounds = true
+        languageBadge.isUserInteractionEnabled = false
+        languageBadge.isAccessibilityElement = false
+        languageBadge.isHidden = true
+        languageBadge.translatesAutoresizingMaskIntoConstraints = false
+        addButton.addSubview(languageBadge)
+        let center = addButton.imageView ?? addButton
+        NSLayoutConstraint.activate([
+            languageBadge.leadingAnchor.constraint(equalTo: addButton.centerXAnchor, constant: 2),
+            languageBadge.bottomAnchor.constraint(equalTo: center.centerYAnchor, constant: -2),
+        ])
     }
 
     private static func remainingFont(for traits: UITraitCollection) -> UIFont {
@@ -1093,6 +1171,34 @@ final class InlineComposeController: NSObject {
             schedule.accessibilityTraits = model.scheduledAt != nil ? [.button, .selected] : .button
             schedule.isEnabled = model.scheduledAt != nil || model.canSchedule
         }
+        updateLanguageIndicators()
+    }
+
+    /// 既定と違う言語を選んでいる間、言語のコードを見せる。項目がボタンの行にあれば記号の代わりにコードを、＋の中にあれば＋の右上にバッジを出す。
+    private func updateLanguageIndicators() {
+        let code = model.choosesNonDefaultLanguage ? model.language.map(PostingLanguage.badgeText(of:)) : nil
+        if let button = toolButtons[.language] {
+            button.configuration?.image = code == nil ? UIImage(systemName: ComposeToolItem.language.symbolName) : nil
+            button.configuration?.attributedTitle = code.map { AttributedString($0, attributes: AttributeContainer([.font: Self.languageCodeFont(for: button.traitCollection)])) }
+            button.configuration?.baseForegroundColor = code == nil ? .label : .tintColor
+            button.accessibilityValue = languageName(model.language)
+        }
+        let showsBadge = code != nil && toolPlacement?.row.contains(.language) != true && toolPlacement?.showsAddButton == true
+        languageBadge.text = code.map { " \($0) " }
+        languageBadge.isHidden = !showsBadge
+        addButton.accessibilityValue = showsBadge ? "言語: \(languageName(model.language))" : nil
+    }
+
+    private static func languageCodeFont(for traits: UITraitCollection) -> UIFont {
+        let font = UIFont.preferredFont(forTextStyle: .caption1, compatibleWith: traits)
+        let descriptor = font.fontDescriptor.withDesign(.monospaced)?.withSymbolicTraits(.traitBold) ?? font.fontDescriptor
+        return UIFont(descriptor: descriptor, size: 0)
+    }
+
+    /// 言語の名前。サーバーに任せているときは、そう書く。
+    private func languageName(_ code: String?) -> String {
+        guard let code else { return "サーバーに任せる" }
+        return PostingLanguage.localizedName(of: code, in: .current) ?? chosenLanguageNames[code] ?? PostingLanguage.badgeText(of: code)
     }
 
     /// 設定の並びが変わったら、ボタンを並びの順に置き直し、振り分けを決め直す。
@@ -1128,7 +1234,8 @@ final class InlineComposeController: NSObject {
             layout: settings.composeToolLayout,
             available: available,
             addButtonWidth: max(addButton.intrinsicContentSize.width, toolButtonWidth),
-            width: { [toolButtons, toolButtonWidth] item in max(toolButtons[item]?.intrinsicContentSize.width ?? 0, toolButtonWidth) }
+            // 言語のボタンは、記号とコードのどちらを出していても幅を変えない。コードの長さで振り分けが変わらないようにするため。
+            width: { [toolButtons, toolButtonWidth] item in item == .language ? toolButtonWidth : max(toolButtons[item]?.intrinsicContentSize.width ?? 0, toolButtonWidth) }
         )
         guard placement != toolPlacement else { return }
         logger.info("compose tools: row=\(placement.row.map(\.rawValue), privacy: .public) menu=\(placement.menu.map { $0.map(\.rawValue) }, privacy: .public) available=\(available)")
@@ -1137,6 +1244,8 @@ final class InlineComposeController: NSObject {
             setRowHidden(button, !placement.row.contains(item))
         }
         setRowHidden(addButton, !placement.showsAddButton)
+        // 言語の項目が行と＋のどちらにあるかで、コードの出し方が変わる。
+        updateLanguageIndicators()
     }
 
     /// 行を並べ終えてから振り分けを決め直す。並べている最中にボタンを出したり隠したりすると、スタックビューが別のボタンを幅0で並べ、出したボタンと重なった。
@@ -1504,7 +1613,7 @@ final class InlineComposeController: NSObject {
     /// 書いている途中でバーを留めるので下げない。下げている途中でキーボードが戻ったら、バーも戻す。
     private func updateSinkingWithKeyboard(keyboardHeight height: CGFloat) {
         let sinks = height <= Self.softwareKeyboardMinimumHeight && isSoftwareKeyboardShown && sinksWhenDone && isEditing
-            && !isBarHeld && bottomSheet == nil && !isShowingMediaViewer && !isPresentingError && !isShowingToolLayoutSettings && !isShowingScheduleDatePicker && !isMovingFocus
+            && !isBarHeld && bottomSheet == nil && !isShowingMediaViewer && !isPresentingError && !isShowingToolLayoutSettings && !isShowingScheduleDatePicker && !isShowingLanguagePicker && !isMovingFocus
         guard sinks != isSinkingWithKeyboard else { return }
         isSinkingWithKeyboard = sinks
         logger.info("compose: bar \(sinks ? "sinking with" : "returning with", privacy: .public) keyboard")
@@ -2732,6 +2841,7 @@ final class InlineComposeController: NSObject {
         addButton.configuration?.baseForegroundColor = .label
         addButton.accessibilityLabel = "追加"
         addButton.showsMenuAsPrimaryAction = true
+        configureLanguageBadge()
         // 開くたびに項目を作り直し、添付できるかやシートを出しているかを、その時点の状態で出す。
         addButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
             completion(self?.addMenuElements() ?? [])
@@ -2743,6 +2853,13 @@ final class InlineComposeController: NSObject {
         }
         for button in [addButton] + toolButtons.values {
             fitToolButtonWidth(button)
+        }
+        if let language = toolButtons[.language] {
+            // コードは長さが言語で違う（`ZH-TW`、`MN-MONG`）ので、幅を記号のボタンと同じに留め、入りきらなければ縮める。
+            language.widthAnchor.constraint(lessThanOrEqualToConstant: toolButtonWidth).isActive = true
+            language.configuration?.titleLineBreakMode = .byClipping
+            language.titleLabel?.adjustsFontSizeToFitWidth = true
+            language.titleLabel?.minimumScaleFactor = 0.5
         }
         tools.alignment = .center
         tools.spacing = 0
@@ -2911,7 +3028,7 @@ extension InlineComposeController: UITextViewDelegate {
         // メディアを選ぶシートを出すためにキーボードを閉じたときも同じ。
         // 添付のビューアや、投稿の失敗の知らせを開くためにキーボードを閉じたときも同じ。閉じ終わったら入力欄にキーボードを戻す。
         // シートを閉じたあとに書き終えたときは、キーボードが上がりきった知らせが来ずにバーを留めたままでも、カプセルに戻す。
-        guard !isMovingFocus, bottomSheet == nil, !isShowingMediaViewer, !isShowingToolLayoutSettings, !isShowingScheduleDatePicker, !isPresentingError else { return }
+        guard !isMovingFocus, bottomSheet == nil, !isShowingMediaViewer, !isShowingToolLayoutSettings, !isShowingScheduleDatePicker, !isShowingLanguagePicker, !isPresentingError else { return }
         releaseHoldAboveKeyboard()
         setEditing(false)
         onEndEditing()

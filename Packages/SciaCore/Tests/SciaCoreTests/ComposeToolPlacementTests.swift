@@ -5,15 +5,15 @@ import Testing
 struct ComposeToolPlacementTests {
     private func placement(_ elements: [MenuLayout<ComposeToolItem>.Element], available: Double, addButtonWidth: Double = 40) -> ComposeToolPlacement {
         // 公開範囲と展開は、並びに書かなければ既定どおり行に差し込まれるので、隠しておく。
-        ComposeToolPlacement(layout: MenuLayout(elements: elements + [.item(.visibility, isVisible: false), .item(.expand, isVisible: false), .item(.linkTitle, isVisible: false), .item(.customEmoji, isVisible: false), .item(.customize, isVisible: false), .item(.poll, isVisible: false), .item(.schedule, isVisible: false), .item(.mention, isVisible: false), .item(.hashtag, isVisible: false)]), available: available, addButtonWidth: addButtonWidth, width: { _ in 40 })
+        ComposeToolPlacement(layout: MenuLayout(elements: elements + [.item(.visibility, isVisible: false), .item(.expand, isVisible: false), .item(.linkTitle, isVisible: false), .item(.customEmoji, isVisible: false), .item(.customize, isVisible: false), .item(.poll, isVisible: false), .item(.schedule, isVisible: false), .item(.language, isVisible: false), .item(.mention, isVisible: false), .item(.hashtag, isVisible: false)]), available: available, addButtonWidth: addButtonWidth, width: { _ in 40 })
     }
 
-    /// 既定では、注意書き、投票、予約、リンクにタイトルを付ける、カスタマイズ、メンション、ハッシュタグは＋に入れ、ボタンの行は「＋ 公開範囲 添付 絵文字 展開」にする。
+    /// 既定では、注意書き、投票、予約、言語、リンクにタイトルを付ける、カスタマイズ、メンション、ハッシュタグは＋に入れ、ボタンの行は「＋ 公開範囲 添付 絵文字 展開」にする。
     @Test func defaultShowsExistingButtonsInRowAndSpoilerInMenu() {
         let placement = ComposeToolPlacement(layout: ComposeToolItem.defaultLayout, available: 200, addButtonWidth: 40, width: { _ in 40 })
 
         #expect(placement.row == [.visibility, .media, .customEmoji, .expand])
-        #expect(placement.menu == [[.customize], [.linkTitle, .spoiler, .poll, .schedule], [.mention, .hashtag]])
+        #expect(placement.menu == [[.customize], [.linkTitle, .spoiler, .poll, .schedule, .language], [.mention, .hashtag]])
         #expect(placement.showsAddButton)
     }
 

@@ -455,7 +455,8 @@ final class SessionController {
                 }
             },
             completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle)),
-            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
+            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance),
+            languages: PostingLanguageSource(recent: RecentPostingLanguages(defaults: .standard, account: credential.handle), load: PostingLanguageCache { try await client.postingLanguages() }.languages)
         )
         rootViewController = tabBarController
         forward = { [weak self] in self?.reportUnauthorized() }
@@ -2198,7 +2199,7 @@ final class SessionController {
             #else
             let loaded = await configuration
             #endif
-            self.composer.model.apply(configuration: loaded, defaultVisibility: await preferences?.defaultVisibility, defaultSensitive: await preferences?.defaultSensitive)
+            self.composer.model.apply(configuration: loaded, defaultVisibility: await preferences?.defaultVisibility, defaultSensitive: await preferences?.defaultSensitive, defaultLanguage: await preferences.map(\.defaultLanguage))
         }
     }
 

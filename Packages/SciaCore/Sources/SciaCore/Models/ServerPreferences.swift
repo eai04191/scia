@@ -7,10 +7,13 @@ public struct ServerPreferences: Sendable, Equatable {
     public var defaultSensitive: Bool
     /// 注意書き（CW）のある投稿を、最初から開いておくか。
     public var expandsSpoilers: Bool
+    /// 新しく投稿するときの言語のコード。決めていなければnil。
+    public var defaultLanguage: String?
 
-    public init(defaultVisibility: Status.Visibility, defaultSensitive: Bool, expandsSpoilers: Bool) {
+    public init(defaultVisibility: Status.Visibility, defaultSensitive: Bool, expandsSpoilers: Bool, defaultLanguage: String? = nil) {
         self.defaultVisibility = defaultVisibility
         self.defaultSensitive = defaultSensitive
         self.expandsSpoilers = expandsSpoilers
+        self.defaultLanguage = defaultLanguage
     }
 }

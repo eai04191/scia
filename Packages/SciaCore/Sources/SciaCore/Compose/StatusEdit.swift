@@ -90,7 +90,8 @@ extension StatusDraft {
             visibility: status.visibility,
             inReplyToID: status.inReplyToId,
             attachments: attachments,
-            editing: StatusEditTarget(statusID: status.id, poll: status.poll.flatMap { PollResubmission($0, now: now) })
+            editing: StatusEditTarget(statusID: status.id, poll: status.poll.flatMap { PollResubmission($0, now: now) }),
+            language: status.language
         )
     }
 
@@ -113,6 +114,10 @@ extension StatusDraft {
             URLQueryItem(name: "spoiler_text", value: spoilerText),
             URLQueryItem(name: "sensitive", value: sensitive ? "true" : "false"),
         ]
+        // 言語は、送らなければサーバーが今の言語のまま残すので、分からないときだけ送らない。
+        if let language {
+            form.append(URLQueryItem(name: "language", value: language))
+        }
         form += mediaIDs.map { URLQueryItem(name: "media_ids[]", value: $0) }
         // Rackは配列の中のハッシュを、同じキーがもう一度出たところで次の要素に分ける。要素ごとにidを先に置く。
         for (id, description) in changedAttachedDescriptions {

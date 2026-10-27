@@ -215,10 +215,12 @@ public struct MastodonClient: Sendable {
             let visibility: Status.Visibility?
             let sensitive: Bool?
             let expandsSpoilers: Bool?
+            let language: String?
 
             private enum CodingKeys: String, CodingKey {
                 case visibility = "posting:default:visibility"
                 case sensitive = "posting:default:sensitive"
+                case language = "posting:default:language"
                 case expandsSpoilers = "reading:expand:spoilers"
             }
         }
@@ -227,7 +229,19 @@ public struct MastodonClient: Sendable {
         let (data, response) = try await send(request, feature: .preferences)
         let preferences = try decode(Preferences.self, from: data, of: response, for: request, using: JSONDecoder())
         // 返さない項目は、Mastodonの既定値を使う。
-        return ServerPreferences(defaultVisibility: preferences.visibility ?? .public, defaultSensitive: preferences.sensitive ?? false, expandsSpoilers: preferences.expandsSpoilers ?? false)
+        // 既定の言語は、決めていなければnullか空で返る。
+        return ServerPreferences(
+            defaultVisibility: preferences.visibility ?? .public,
+            defaultSensitive: preferences.sensitive ?? false,
+            expandsSpoilers: preferences.expandsSpoilers ?? false,
+            defaultLanguage: preferences.language.flatMap { $0.isEmpty ? nil : $0 }
+        )
+    }
+
+    /// サーバーが投稿の言語として受け付ける言語。並びはサーバーが返すまま。
+    /// https://github.com/mastodon/mastodon/blob/main/app/controllers/api/v1/instances/languages_controller.rb
+    public func postingLanguages() async throws -> [PostingLanguage] {
+        try await get([PostingLanguage].self, path: "api/v1/instance/languages", query: []).0
     }
 
     // MARK: - 投稿への操作
@@ -346,6 +360,10 @@ public struct MastodonClient: Sendable {
         }
         if let quotedStatusID = draft.quotedStatusID {
             form.append(URLQueryItem(name: "quoted_status_id", value: quotedStatusID))
+        }
+        // 送らなければ、サーバーはアカウントの既定の言語、なければweb UIの表示言語にする。
+        if let language = draft.language {
+            form.append(URLQueryItem(name: "language", value: language))
         }
         form += mediaIDs.map { URLQueryItem(name: "media_ids[]", value: $0) }
         if let poll = draft.poll {

@@ -341,6 +341,26 @@ struct MastodonClientTests {
         ])
     }
 
+    /// 言語を選んでいれば送り、選んでいなければ送らずにサーバーに任せる。
+    @Test(arguments: [("en", ["en"]), (nil, [])] as [(String?, [String])])
+    func postStatusSendsLanguageOnlyWhenChosen(language: String?, expected: [String]) async throws {
+        let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
+
+        _ = try await makeClient(transport).postStatus(StatusDraft(text: "hello", idempotencyKey: "key-1", language: language))
+
+        let request = try #require(await transport.requests.first)
+        var components = URLComponents()
+        components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
+        #expect(components.queryItems?.filter { $0.name == "language" }.compactMap(\.value) == expected)
+    }
+
+    @Test func readsPostingLanguages() async throws {
+        let transport = StubTransport([.json(#"[{"code":"ja","name":"Japanese"},{"code":"zh-TW","name":"Chinese (Taiwan)"}]"#, statusCode: 200)])
+
+        #expect(try await makeClient(transport).postingLanguages() == [PostingLanguage(code: "ja", name: "Japanese"), PostingLanguage(code: "zh-TW", name: "Chinese (Taiwan)")])
+        #expect(await transport.requests.first?.url?.path() == "/api/v1/instance/languages")
+    }
+
     @Test func postStatusSendsQuotedStatusID() async throws {
         let transport = StubTransport([.json(Self.interactedStatus, statusCode: 200)])
 
@@ -433,6 +453,19 @@ struct MastodonClientTests {
 
         #expect(try await makeClient(transport).preferences() == ServerPreferences(defaultVisibility: .unlisted, defaultSensitive: true, expandsSpoilers: true))
         #expect(await transport.requests.first?.url?.path() == "/api/v1/preferences")
+    }
+
+    @Test func readsDefaultLanguage() async throws {
+        let transport = StubTransport([.json(#"{"posting:default:visibility":"public","posting:default:language":"en"}"#, statusCode: 200)])
+
+        #expect(try await makeClient(transport).preferences().defaultLanguage == "en")
+    }
+
+    /// 既定の言語を決めていないアカウントでは、空の文字列を返すサーバーもある。
+    @Test func emptyDefaultLanguageIsNone() async throws {
+        let transport = StubTransport([.json(#"{"posting:default:language":""}"#, statusCode: 200)])
+
+        #expect(try await makeClient(transport).preferences().defaultLanguage == nil)
     }
 
     /// 返さない項目は、Mastodonの既定値にする。

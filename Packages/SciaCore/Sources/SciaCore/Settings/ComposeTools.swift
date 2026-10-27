@@ -9,6 +9,8 @@ public enum ComposeToolItem: String, MenuItemKind {
     case poll
     /// 返信や編集のラベルの下に予約の行を出す。出している間に押すと外す。決まりはdocs/compose.mdの「予約投稿」にある。
     case schedule
+    /// 投稿の言語を選ぶシートを出す。決まりはdocs/compose.mdの「投稿の言語」にある。
+    case language
     /// 本文のURLを選び、リンク先のページのタイトルを付ける。
     case linkTitle
     /// カスタム絵文字を並べたシートを出す。出している間に押すとキーボードに戻す。
@@ -20,7 +22,7 @@ public enum ComposeToolItem: String, MenuItemKind {
     /// 本文のカーソルの位置に半角の`#`を入れ、補完を出す。
     case hashtag
 
-    /// ＋の中は、上からカスタマイズ、区切り線、リンクにタイトルを付ける、注意書き、投票、予約、区切り線、メンション、ハッシュタグにし、ボタンの行は「＋ 公開範囲 添付 絵文字 展開」にする。
+    /// ＋の中は、上からカスタマイズ、区切り線、リンクにタイトルを付ける、注意書き、投票、予約、言語、区切り線、メンション、ハッシュタグにし、ボタンの行は「＋ 公開範囲 添付 絵文字 展開」にする。
     /// ＋のメニューはボタンの上に開き、下ほど指が届きやすいので、使う頻度の低いカスタマイズをいちばん上に、書きながら何度も使う記号をいちばん下に置く。
     public static let defaultLayout = MenuLayout<ComposeToolItem>(defaultElements: [
         .item(.customize, isVisible: true),
@@ -29,6 +31,7 @@ public enum ComposeToolItem: String, MenuItemKind {
         .item(.spoiler, isVisible: true),
         .item(.poll, isVisible: true),
         .item(.schedule, isVisible: true),
+        .item(.language, isVisible: true),
         .separator,
         .item(.mention, isVisible: true),
         .item(.hashtag, isVisible: true),

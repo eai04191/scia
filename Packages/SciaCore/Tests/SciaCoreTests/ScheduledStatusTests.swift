@@ -159,6 +159,16 @@ struct ScheduledStatusTests {
         #expect(media.attachments.first?.isAttachedToStatus == false)
     }
 
+    /// 予約したときの言語を戻す。送っていない予約では、言語を送らずにサーバーに任せる。
+    @Test func rewriteRestoresLanguage() throws {
+        let withLanguage = #"{"id":"80","scheduled_at":"2026-10-28T00:00:00.000Z","params":{"text":"hello","language":"en"},"media_attachments":[]}"#
+        let withoutLanguage = #"{"id":"81","scheduled_at":"2026-10-28T00:00:00.000Z","params":{"text":"こんにちは","language":null},"media_attachments":[]}"#
+
+        let decoder = MastodonDecoder.make()
+        #expect(StatusDraft.rewrite(of: try decoder.decode(ScheduledStatus.self, from: Data(withLanguage.utf8))).language == "en")
+        #expect(StatusDraft.rewrite(of: try decoder.decode(ScheduledStatus.self, from: Data(withoutLanguage.utf8))).language == nil)
+    }
+
     /// 添付は、投稿するときと同じく`params.media_ids`の順に並べる。サーバーはデータベースの順で返すため。
     @Test func ordersAttachmentsByMediaIDs() throws {
         let json = #"{"id":"80","scheduled_at":"2026-10-28T00:00:00.000Z","params":{"text":"並べ替え","media_ids":["2","1"]},"media_attachments":[{"id":"1","type":"image","url":"https://example.social/1.jpg","preview_url":null},{"id":"2","type":"image","url":"https://example.social/2.jpg","preview_url":null}]}"#

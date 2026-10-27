@@ -43,11 +43,17 @@ final class ComposeModel {
     private(set) var scheduledAt: Date?
     /// 書き直している予約。送れたら`onScheduleRewritten`で取り消させる。決まりはdocs/compose.mdの「書き直す」にある。
     private(set) var rewritingSchedule: ScheduledStatus?
+    /// 投稿の言語のコード。nilなら送らず、サーバーに任せる。決まりはdocs/compose.mdの「投稿の言語」にある。
+    private(set) var language: String?
+    /// アカウントの既定の言語。決めていないか、まだ読めていなければnil。
+    private(set) var defaultLanguage: String?
 
     /// 返信先から自動で入れた宛先と注意書き。返信先を替えたとき、自分で書いた部分と見分けるために使う。
     @ObservationIgnored private var initialDraft: StatusDraft
     /// 公開範囲を自分で選んだ。後から既定値が届いても上書きしない。
     private var hasChosenVisibility = false
+    /// 言語を自分で選んだか、編集や予約の書き直しで元の言語を入れた。後から既定値が届いても上書きしない。
+    @ObservationIgnored private var hasChosenLanguage = false
     /// 既定の公開範囲を読み終えた、または読めなかった。読み終えるまでは、既定より広い範囲で投稿しないよう、選ばない限り投稿させない。
     private var hasResolvedDefaults = false
     @ObservationIgnored private var defaultVisibility: Status.Visibility?
@@ -117,7 +123,20 @@ final class ComposeModel {
         draft.attachments = attachments
         draft.poll = poll
         draft.scheduledAt = scheduledAt
+        draft.language = language
         return draft
+    }
+
+    /// 既定と違う言語を選んでいる。前の言語のまま気づかずに送らないよう、コードを見せる。サーバーに任せているときは既定のままとみなす。
+    var choosesNonDefaultLanguage: Bool {
+        language != nil && language != defaultLanguage
+    }
+
+    /// 言語を選ぶ。nilなら送らずにサーバーに任せる。
+    func choose(language: String?) {
+        guard !isPosting else { return }
+        self.language = language
+        hasChosenLanguage = true
     }
 
     /// 添付を閲覧注意にして投稿する。
@@ -230,10 +249,17 @@ final class ComposeModel {
         return visibility.narrower(limit) == visibility
     }
 
-    /// インスタンスの上限と、ユーザーの既定の公開範囲と閲覧注意を反映する。公開範囲を自分で選んでいたら変えない。
+    /// インスタンスの上限と、ユーザーの既定の公開範囲、閲覧注意、言語を反映する。公開範囲と言語は、自分で選んでいたら変えない。
     /// 既定の閲覧注意は、この後に最初の添付を足したときから使う。
-    func apply(configuration: InstanceConfiguration?, defaultVisibility: Status.Visibility?, defaultSensitive: Bool?) {
+    /// - Parameter defaultLanguage: 既定の言語。読めなければnilで、今のままにする。既定を決めていなければ`.some(nil)`。
+    func apply(configuration: InstanceConfiguration?, defaultVisibility: Status.Visibility?, defaultSensitive: Bool?, defaultLanguage: String?? = nil) {
         hasResolvedDefaults = true
+        if let defaultLanguage {
+            self.defaultLanguage = defaultLanguage
+            if !hasChosenLanguage {
+                language = defaultLanguage
+            }
+        }
         if let configuration {
             maxCharacters = configuration.maxCharacters
             charactersReservedPerURL = configuration.charactersReservedPerURL
@@ -373,6 +399,8 @@ final class ComposeModel {
         poll = nil
         scheduledAt = nil
         rewritingSchedule = nil
+        language = draft.language
+        hasChosenLanguage = true
         lastSubmitted = nil
         hasChosenVisibility = false
         return true
@@ -403,6 +431,9 @@ final class ComposeModel {
         poll = draft.poll
         scheduledAt = draft.scheduledAt
         rewritingSchedule = scheduled
+        // 言語を送っていない予約は、送らずにサーバーに任せたままにする。
+        language = draft.language
+        hasChosenLanguage = true
         lastSubmitted = nil
         // 予約したときの公開範囲を、あとから届く既定の公開範囲で上書きしない。公開範囲を送っていない予約は、既定の公開範囲が届くのを待つ。
         hasChosenVisibility = scheduled.params.visibility != nil
@@ -425,6 +456,9 @@ final class ComposeModel {
         lastSubmitted = nil
         hasChosenVisibility = false
         visibility = resolvedVisibility
+        // 選んだ言語を次の投稿に残さない。たまに英語で書いたあとの投稿まで、英語として送らないため。
+        hasChosenLanguage = false
+        language = defaultLanguage
     }
 
     /// 編集には`Idempotency-Key`を付けないため、そのまま送る。同じ編集を送り直しても、サーバーは変化がなければ編集として残さない。
@@ -432,10 +466,10 @@ final class ComposeModel {
         guard draft.editing == nil, let lastSubmitted else { return draft }
         if lastSubmitted.text == draft.text, lastSubmitted.spoilerText == draft.spoilerText, lastSubmitted.sensitive == draft.sensitive,
            lastSubmitted.visibility == draft.visibility, lastSubmitted.mediaIDs == draft.mediaIDs, lastSubmitted.poll == draft.poll,
-           lastSubmitted.scheduledAt == draft.scheduledAt {
+           lastSubmitted.scheduledAt == draft.scheduledAt, lastSubmitted.language == draft.language {
             return lastSubmitted
         }
-        return StatusDraft(text: draft.text, spoilerText: draft.spoilerText, hasSpoiler: draft.hasSpoiler, visibility: draft.visibility, inReplyToID: draft.inReplyToID, quotedStatusID: draft.quotedStatusID, attachments: draft.attachments, poll: draft.poll, scheduledAt: draft.scheduledAt)
+        return StatusDraft(text: draft.text, spoilerText: draft.spoilerText, hasSpoiler: draft.hasSpoiler, visibility: draft.visibility, inReplyToID: draft.inReplyToID, quotedStatusID: draft.quotedStatusID, attachments: draft.attachments, poll: draft.poll, scheduledAt: draft.scheduledAt, language: draft.language)
     }
 
     /// 投稿し、成功したら下書きを空に戻す。失敗したら下書きを残し、同じ下書きで送り直せるようにする。

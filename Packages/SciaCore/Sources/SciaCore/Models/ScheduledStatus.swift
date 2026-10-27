@@ -49,6 +49,8 @@ public struct ScheduledStatus: Decodable, Hashable, Sendable, Identifiable {
         public let poll: PollDraft?
         /// 投稿するときに付ける添付のID。この順で投稿に並ぶ。
         public let mediaIDs: [String]
+        /// 送らなかったときはnilで、投稿するときにサーバーが決める。
+        public let language: String?
 
         public init(
             text: String,
@@ -58,7 +60,8 @@ public struct ScheduledStatus: Decodable, Hashable, Sendable, Identifiable {
             inReplyToID: String? = nil,
             quotedStatusID: String? = nil,
             poll: PollDraft? = nil,
-            mediaIDs: [String] = []
+            mediaIDs: [String] = [],
+            language: String? = nil
         ) {
             self.text = text
             self.spoilerText = spoilerText
@@ -68,10 +71,11 @@ public struct ScheduledStatus: Decodable, Hashable, Sendable, Identifiable {
             self.quotedStatusID = quotedStatusID
             self.poll = poll
             self.mediaIDs = mediaIDs
+            self.language = language
         }
 
         private enum CodingKeys: String, CodingKey {
-            case text, spoilerText, sensitive, visibility, poll
+            case text, spoilerText, sensitive, visibility, poll, language
             case mediaIDs = "mediaIds"
             case inReplyToID = "inReplyToId"
             case quotedStatusID = "quotedStatusId"
@@ -88,6 +92,7 @@ public struct ScheduledStatus: Decodable, Hashable, Sendable, Identifiable {
             quotedStatusID = try? container.decodeFlexibleString(forKey: .quotedStatusID)
             poll = container.decodeLossyIfPresent(ScheduledPoll.self, forKey: .poll)?.draft
             mediaIDs = (try? container.decodeIfPresent([String].self, forKey: .mediaIDs)) ?? []
+            language = (try? container.decodeIfPresent(String.self, forKey: .language)).flatMap { $0 }.flatMap { $0.isEmpty ? nil : $0 }
         }
     }
 }

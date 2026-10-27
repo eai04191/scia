@@ -22,6 +22,8 @@ public struct StatusDraft: Sendable, Equatable {
     public let editing: StatusEditTarget?
     /// 予約する日時。すぐ投稿するならnil。編集では予約できない。
     public var scheduledAt: Date?
+    /// 投稿の言語のコード。nilなら送らず、サーバーに任せる。決まりはdocs/compose.mdの「投稿の言語」にある。
+    public var language: String?
 
     public init(
         text: String = "",
@@ -34,7 +36,8 @@ public struct StatusDraft: Sendable, Equatable {
         poll: PollDraft? = nil,
         idempotencyKey: String = UUID().uuidString,
         editing: StatusEditTarget? = nil,
-        scheduledAt: Date? = nil
+        scheduledAt: Date? = nil,
+        language: String? = nil
     ) {
         self.text = text
         self.spoilerText = spoilerText
@@ -47,6 +50,7 @@ public struct StatusDraft: Sendable, Equatable {
         self.idempotencyKey = idempotencyKey
         self.editing = editing
         self.scheduledAt = scheduledAt
+        self.language = language
     }
 
     /// 返信の下書き。返信先の投稿者と、その投稿でメンションされた相手を宛先に入れる。自分は入れない。
@@ -128,7 +132,8 @@ public struct StatusDraft: Sendable, Equatable {
             quotedStatusID: params.quotedStatusID,
             attachments: attachments,
             poll: params.poll,
-            scheduledAt: scheduled.scheduledAt
+            scheduledAt: scheduled.scheduledAt,
+            language: params.language
         )
     }
 

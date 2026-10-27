@@ -30,7 +30,8 @@ struct StatusEditTests {
         media: [MediaAttachment] = [],
         sensitive: Bool = false,
         poll: Poll? = nil,
-        reblog: Status? = nil
+        reblog: Status? = nil,
+        language: String? = nil
     ) -> Status {
         Status(
             id: "10",
@@ -38,6 +39,7 @@ struct StatusEditTests {
             account: account(accountID),
             content: "<p>本文</p>",
             spoilerText: spoilerText,
+            language: language,
             url: nil,
             mediaAttachments: media,
             sensitive: sensitive,
@@ -65,6 +67,15 @@ struct StatusEditTests {
         #expect(draft.visibility == .private)
         #expect(draft.inReplyToID == "9")
         #expect(draft.editing == StatusEditTarget(statusID: "10", poll: nil))
+    }
+
+    /// 言語は元の投稿のまま始め、送り直す。言語の分からない投稿では送らず、サーバーに今の言語を残させる。
+    @Test(arguments: [("en", ["en"]), (nil, [])] as [(String?, [String])])
+    func editKeepsLanguage(language: String?, expected: [String]) throws {
+        let draft = try #require(StatusDraft.edit(of: status(language: language), source: StatusSource(id: "10", text: "本文", spoilerText: ""), now: Self.now))
+
+        #expect(draft.language == language)
+        #expect(try form(draft).filter { $0.name == "language" }.compactMap(\.value) == expected)
     }
 
     /// 注意書きなしで添付だけ閲覧注意にしていた投稿は、空の注意書きの欄を出して閲覧注意を保つ。
