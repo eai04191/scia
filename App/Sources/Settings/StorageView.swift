@@ -173,7 +173,7 @@ extension StorageView.Actions {
         }
         let locations = StorageLocations(
             container: URL.homeDirectory,
-            mediaFiles: AppDependencies.mediaFiles.directory,
+            mediaFiles: [AppDependencies.mediaFiles.directory, AppDependencies.mediaPrefetchFiles.directory],
             temporary: URL.temporaryDirectory,
             discomfortReports: AppDependencies.discomfortReports.directory,
             preferences: URL.libraryDirectory.appending(path: "Preferences", directoryHint: .isDirectory),
@@ -190,6 +190,7 @@ extension StorageView.Actions {
         )
         let launchDate = AppDependencies.processStartDate
         let mediaFiles = AppDependencies.mediaFiles
+        let mediaPrefetchFiles = AppDependencies.mediaPrefetchFiles
         let discomfortReports = AppDependencies.discomfortReports
         let clock = AppDependencies.clock
         return Self(
@@ -198,6 +199,7 @@ extension StorageView.Actions {
                 switch category {
                 case .mediaFiles:
                     try await mediaFiles.removeCachedFiles()
+                    try await mediaPrefetchFiles.removeCachedFiles()
                 case .networkCache:
                     URLSessionTransport.responseCache?.removeAllCachedResponses()
                     try await waitUntilSettled(locations.networkCache, clock: clock)

@@ -10,6 +10,8 @@ public struct MediaThumbnailRequest: Equatable, Sendable {
     public let source: Source
     /// 送るときの目的。元の画像や動画の最初のコマなら質を上げる通信、サーバーのプレビュー画像なら表示に要る通信。
     public let purpose: RequestPurpose
+    /// ビューアで開くのと同じ元の画像を読むか。読んだら、ビューアの先読みの置き場にも置く。
+    public let isOriginal: Bool
 
     public enum Source: Equatable, Sendable {
         case image
@@ -17,11 +19,17 @@ public struct MediaThumbnailRequest: Equatable, Sendable {
         case videoFrame(fallback: URL)
     }
 
-    public init(url: URL, maxPixelSize: Int, source: Source = .image, purpose: RequestPurpose = .display) {
+    public init(url: URL, maxPixelSize: Int, source: Source = .image, purpose: RequestPurpose = .display, isOriginal: Bool = false) {
         self.url = url
         self.maxPixelSize = maxPixelSize
         self.source = source
         self.purpose = purpose
+        self.isOriginal = isOriginal
+    }
+
+    /// 同じものを、別の目的で読む。ぼかしている間に、外したときに備えて先読みするのに使う。
+    public func sent(as purpose: RequestPurpose) -> MediaThumbnailRequest {
+        MediaThumbnailRequest(url: url, maxPixelSize: maxPixelSize, source: source, purpose: purpose, isOriginal: isOriginal)
     }
 }
 
@@ -31,10 +39,13 @@ public struct MediaThumbnailPolicy: Equatable, Sendable {
     public var enhancement: RequestPurpose?
     /// サーバーが縮めたプレビュー画像（small）を、何倍まで引き伸ばして出してよいか。1なら、少しでも引き伸ばすことになれば元の画像を読む。
     public var upscaleTolerance: Double
+    /// ぼかしている間に、外したときに備えて先に読むときの目的。今の回線で先読みしないならnil（`NetworkUsePolicy.prefetch`）。
+    public var prefetch: RequestPurpose?
 
-    public init(enhancement: RequestPurpose?, upscaleTolerance: Double) {
+    public init(enhancement: RequestPurpose?, upscaleTolerance: Double, prefetch: RequestPurpose? = nil) {
         self.enhancement = enhancement
         self.upscaleTolerance = upscaleTolerance
+        self.prefetch = prefetch
     }
 }
 
@@ -63,7 +74,7 @@ public enum MediaThumbnailSelection {
         let required = requiredPixelSize(tileSize: tileSize, displayScale: displayScale, aspectRatio: attachment.aspectRatio)
         let maxPixelSize = roundedPixelSize(max(required.width, required.height))
         if let enhancement = policy.enhancement, let video = videoFrameSource(of: attachment, required: required, policy: policy) {
-            return MediaThumbnailRequest(url: video.url, maxPixelSize: maxPixelSize, source: .videoFrame(fallback: video.fallback), purpose: enhancement)
+            return MediaThumbnailRequest(url: video.url, maxPixelSize: maxPixelSize, source: .videoFrame(fallback: video.fallback), purpose: enhancement, isOriginal: true)
         }
         switch attachment.type {
         case .video, .gifv:
@@ -74,13 +85,13 @@ public enum MediaThumbnailSelection {
                 return attachment.previewUrl.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize) }
             }
             if usesOriginal(attachment, required: required, policy: policy), let original = attachment.url {
-                return MediaThumbnailRequest(url: original, maxPixelSize: maxPixelSize, purpose: enhancement)
+                return MediaThumbnailRequest(url: original, maxPixelSize: maxPixelSize, purpose: enhancement, isOriginal: true)
             }
             if let preview = attachment.previewUrl {
                 return MediaThumbnailRequest(url: preview, maxPixelSize: maxPixelSize)
             }
             // プレビュー画像を返さないサーバーでは、元の画像しか描くものがないため、表示に要る通信として読む。
-            return attachment.url.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize) }
+            return attachment.url.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize, isOriginal: true) }
         // プレビューのURLが画像とは限らない。
         case .audio, .unknown:
             return nil

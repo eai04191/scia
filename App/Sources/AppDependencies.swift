@@ -76,7 +76,14 @@ enum AppDependencies {
     /// 添付ファイルの元のファイルを置くディスクキャッシュ。ビューアで開いた画像の元のファイルと、共有や保存のために落とした動画などを置く。
     static let mediaFiles = MediaFileCache()
 
-    static let mediaImages = MediaImageStore(files: mediaFiles) { url, range in
+    /// ビューアで開く画像を先読みして置く場所。開いていない画像で、ビューアで開いた画像を押し出したり、ストレージの一覧に並べたりしないよう分ける。
+    static let mediaPrefetchFiles = MediaFileCache(
+        directory: .cachesDirectory.appending(path: "MediaPrefetch"),
+        sharingDirectory: .temporaryDirectory.appending(path: "MediaPrefetchSharing"),
+        sizeLimit: 100 * 1_024 * 1_024
+    )
+
+    static let mediaImages = MediaImageStore(files: mediaFiles, prefetchedFiles: mediaPrefetchFiles) { url, range in
         if range == nil, let data = await PreviewImages.data(for: url) {
             return data
         }

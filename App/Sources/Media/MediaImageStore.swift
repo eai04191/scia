@@ -24,6 +24,8 @@ final class MediaImageStore {
     private var inFlight: [Key: Task<Loaded, any Error>] = [:]
     /// 元のファイルを置くディスクキャッシュ。共有や保存で縮めずに元の形式のまま渡すために残し、ビューアで開き直すときは通信せずにここから読む。
     private let files: MediaFileCache
+    /// 先読みした元の画像の置き場。ビューアで開いたら`files`へ移す。nilなら先読みしない。
+    private let prefetchedFiles: MediaFileCache?
     /// 先頭から最初のフレームを作れなかった動画。サーバーのプレビューを出し、読み直さない。通信の失敗や429、5xxは、待てば作れるため含めない。
     private var failedVideoFrames: Set<URL> = []
     /// 読めなかった画像と動画の最初のフレームを、一覧に描いたときにいつ読み直すか。
@@ -32,12 +34,14 @@ final class MediaImageStore {
 
     init(
         files: MediaFileCache,
+        prefetchedFiles: MediaFileCache? = nil,
         clock: any Clock<Duration> = AppDependencies.clock,
         retryPolicy: @escaping @MainActor () -> RetrySchedule.Policy = { TuningCatalog.imageRetry(in: AppDependencies.tuning) },
         fetch: @escaping Fetch
     ) {
         self.fetch = fetch
         self.files = files
+        self.prefetchedFiles = prefetchedFiles
         retry = RetrySchedule(policy: retryPolicy, clock: clock)
         // 4096px四方の画像が4枚ほど入る大きさ。
         cache.totalCostLimit = 256 * 1_024 * 1_024
@@ -55,6 +59,7 @@ final class MediaImageStore {
         var isVideoFrame = false
         /// 送ってよい回線。キャッシュの鍵には含めず、読み込みの待ち合わせだけを分ける。
         /// Wi-Fiで始めた元の画像の読み込みにモバイル通信でOSが断ると、同じURLをプレビューとして読む処理までその失敗を受けてしまうため。
+        /// 違う回線の読み込みも`joinRestricted(of:)`で待つが、OSが断ったときは失敗を引き継がない。
         var networkAccess = RequestPurpose.display.networkAccess
 
         var cacheKey: NSString { "\(isVideoFrame ? "frame " : "")\(maxPixelSize) \(url.absoluteString)" as NSString }
@@ -78,15 +83,48 @@ final class MediaImageStore {
         }
     }
 
+    /// ビューアで開く元の画像を、展開せずに先読みの置き場へ落とす。置いてあるもの、ビューアで開いたもの、前に読めなかったものは読まない。
+    /// 展開しないのは、1枚で数十MBのメモリを使うため。展開はビューアで開いたときに行う。
+    /// 先読みの途中にビューアで同じ画像を開くと、ビューアは先読みを待たずに自分で読み、同じ画像を2回読む。Wi-Fiでだけ起き、
+    /// 待ち合わせのために先読みの置き場とビューアの読み込みを結ぶ手間に見合わないため、そのままにしている（docs/image-loading.md）。
+    /// Wi-Fiでは一覧のサムネイルにも元の画像を読むことがあるので、同じ画像をサムネイルとして読んでいる途中なら、それを待つ。
+    /// サムネイルで読んだ元の画像も先読みの置き場に置くため、同じファイルを2回読まずに済む。
+    func prefetchOriginal(_ url: URL, purpose: RequestPurpose) async {
+        guard let prefetchedFiles else { return }
+        for task in inFlight.filter({ $0.key.url == url && !$0.key.isVideoFrame }).values {
+            _ = try? await task.value
+        }
+        guard retry.allowsAutomaticLoad(of: url), !retry.hasFailed(url),
+              await !files.contains(url), await !prefetchedFiles.contains(url)
+        else { return }
+        let generation = await prefetchedFiles.generation
+        let fetch = fetch
+        do {
+            let data = try await RequestPurpose.$current.withValue(purpose) {
+                try await fetch(url, nil)
+            }
+            guard let name = await Self.originalFileName(of: data, for: url) else {
+                throw DecodeError()
+            }
+            _ = try await prefetchedFiles.store(data, named: name, for: url, generation: generation)
+            logger.debug("media prefetched host=\(SciaLog.host(of: url), privacy: .public) bytes=\(data.count, privacy: .public)")
+        } catch {
+            guard HTTPFailure(error) != nil else { return }
+            logger.info("media prefetch failed host=\(SciaLog.host(of: url), privacy: .public) url=\(url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
+            retry.recordFailure(error, for: url)
+        }
+    }
+
     /// 一覧のサムネイルを読み込む。動画の最初のフレームを作れなければ、サーバーのプレビューを読む。
     /// 前に読めなかったものは、読み直してよくなるまで読まない（`image(for:maxPixelSize:keepsOriginal:retriesNow:)`）。
     func thumbnail(for request: MediaThumbnailRequest) async throws -> UIImage {
         switch request.source {
         case .image:
-            return try await image(for: request.url, maxPixelSize: request.maxPixelSize, purpose: request.purpose)
+            return try await image(for: request.url, maxPixelSize: request.maxPixelSize, purpose: request.purpose, sharesWithPrefetch: request.isOriginal)
         case .videoFrame(let fallback):
-            // 通信の失敗で作れなかった間は、読み直してよくなるまでサーバーのプレビューで描く。
-            if !failedVideoFrames.contains(request.url), retry.allowsAutomaticLoad(of: request.url) {
+            // 通信の失敗で作れなかった間は、読み直してよくなるまでサーバーのプレビューで描く。先読みでは、前に読めなかったものを読まない。
+            if !failedVideoFrames.contains(request.url), retry.allowsAutomaticLoad(of: request.url),
+               request.purpose != .prefetch || !retry.hasFailed(request.url) {
                 do {
                     let frame = try await videoFrame(for: request.url, maxPixelSize: request.maxPixelSize, purpose: request.purpose)
                     retry.recordSuccess(for: request.url)
@@ -102,13 +140,24 @@ final class MediaImageStore {
                     }
                 }
             }
-            return try await image(for: fallback, maxPixelSize: request.maxPixelSize)
+            // ぼかしている間の先読みなら、代わりのプレビューも先読みとして読み、モバイル通信や低データモードでは読まない。
+            return try await image(for: fallback, maxPixelSize: request.maxPixelSize, purpose: request.purpose == .prefetch ? .prefetch : .display)
         }
     }
 
     /// 動画の先頭だけを読み、最初のフレームを作る。読む長さは`VideoFirstFrame`が動画の目次から決める。
     private func videoFrame(for url: URL, maxPixelSize: Int, purpose: RequestPurpose) async throws -> UIImage {
         let key = Key(url: url, maxPixelSize: maxPixelSize, isVideoFrame: true, networkAccess: purpose.networkAccess)
+        if let image = cache.object(forKey: key.cacheKey) {
+            return image
+        }
+        if let task = inFlight[key] {
+            return try await task.value.image
+        }
+        if let image = try await joinRestricted(of: key) {
+            return image
+        }
+        // 待っている間に、同じ目的のほかの呼び出しが読み始めたり読み終えたりしていれば、それを使う。
         if let image = cache.object(forKey: key.cacheKey) {
             return image
         }
@@ -135,6 +184,20 @@ final class MediaImageStore {
         }
     }
 
+    /// 同じものを、回線の制限の違う目的で読んでいる途中なら、その結果を待つ。ぼかしている間に先読みしていた画像を、外したときに読み直さないため。
+    /// 制限の厳しい読み込みにOSが断ったら、その失敗は引き継がずにnilを返し、呼び出し側が自分の目的で読む。
+    private func joinRestricted(of key: Key) async throws -> UIImage? {
+        guard let task = inFlight.first(where: {
+            $0.key.url == key.url && $0.key.maxPixelSize == key.maxPixelSize && $0.key.isVideoFrame == key.isVideoFrame
+        })?.value else { return nil }
+        do {
+            return try await task.value.image
+        } catch {
+            guard HTTPFailure(error) == .unavailableOnNetwork else { throw error }
+            return nil
+        }
+    }
+
     /// キャッシュに置いた元のファイルの場所。置いていなければnil。メディアの情報で、ファイルの中身を読むのに使う。
     func originalFile(for url: URL) async -> URL? {
         await files.file(for: url)
@@ -153,7 +216,15 @@ final class MediaImageStore {
     /// 前に読めなかった画像は、読み直してよくなるまで`ImageLoadDeferred`を投げる。
     /// - Parameter retriesNow: 使う人が自分で見に行った操作（ビューアを開く、長押しするなど）で、間隔を待たずに読み直す。
     /// - Parameter purpose: `retriesNow`でないときに送る目的。一覧のサムネイルの元の画像は、質を上げる通信として送る。
-    func image(for url: URL, maxPixelSize: Int, keepsOriginal: Bool = false, retriesNow: Bool = false, purpose: RequestPurpose = .display) async throws -> UIImage {
+    /// - Parameter sharesWithPrefetch: ビューアで開くのと同じ元の画像を、一覧のサムネイルとして読む。読んだファイルを先読みの置き場にも置く。
+    func image(
+        for url: URL,
+        maxPixelSize: Int,
+        keepsOriginal: Bool = false,
+        retriesNow: Bool = false,
+        purpose: RequestPurpose = .display,
+        sharesWithPrefetch: Bool = false
+    ) async throws -> UIImage {
         let purpose = retriesNow ? .action : purpose
         let key = Key(url: url, maxPixelSize: maxPixelSize, networkAccess: purpose.networkAccess)
         if let image = cache.object(forKey: key.cacheKey) {
@@ -167,17 +238,48 @@ final class MediaImageStore {
         if let task = inFlight[key] {
             return try await task.value.image
         }
+        // 元のファイルを残す読み込みは、残さない読み込みの結果では済まないので待ち合わせない。
+        if !keepsOriginal {
+            if let image = try await joinRestricted(of: key) {
+                return image
+            }
+            // 待っている間に、同じ目的のほかの呼び出しが読み始めたり読み終えたりしていれば、それを使う。
+            if let image = cache.object(forKey: key.cacheKey) {
+                return image
+            }
+            if let task = inFlight[key] {
+                return try await task.value.image
+            }
+        }
         guard retriesNow || retry.allowsAutomaticLoad(of: url) else {
+            throw ImageLoadDeferred()
+        }
+        // 先読みでは、前に読めなかった画像を読まない（docs/image-loading.md）。
+        if purpose == .prefetch, retry.hasFailed(url) {
             throw ImageLoadDeferred()
         }
         let fetch = fetch
         let files = keepsOriginal ? files : nil
+        let prefetchedForViewer = keepsOriginal ? prefetchedFiles : nil
+        // サムネイルに読んだ元の画像は、ビューアで開く画像と同じなので、先読みの置き場にも置く。先読みで同じファイルを読み直さないため。
+        let prefetchedFromThumbnail = sharesWithPrefetch && !keepsOriginal ? prefetchedFiles : nil
         // 一覧に描くための読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
         let task = RequestPurpose.$current.withValue(purpose) { Task<Loaded, any Error> {
             let generation = await files?.generation
+            let thumbnailGeneration = await prefetchedFromThumbnail?.generation
             // ビューアで開く画像は、元のファイルがキャッシュにあれば通信せずに使う。壊れていて展開できなければ、通信で取り直して置き直す。
             if let files, let cached = await files.data(for: url), let image = await Self.decode(cached, maxPixelSize: maxPixelSize) {
                 return Loaded(image: image, keptOriginal: true)
+            }
+            // 先読みしてあれば通信せずに使い、メディアのキャッシュへ移す。開いていない画像と開いた画像の置き場を分けているため（docs/image-loading.md）。
+            if let files, let generation, let prefetchedFiles = prefetchedForViewer, let prefetched = await prefetchedFiles.data(for: url),
+               let image = await Self.decode(prefetched, maxPixelSize: maxPixelSize) {
+                var keptOriginal = false
+                if let name = await Self.originalFileName(of: prefetched, for: url) {
+                    keptOriginal = (try? await files.store(prefetched, named: name, for: url, generation: generation)) != nil
+                }
+                await prefetchedFiles.remove(url)
+                return Loaded(image: image, keptOriginal: keptOriginal)
             }
             let data = try await fetch(url, nil)
             guard let image = await Self.decode(data, maxPixelSize: maxPixelSize) else {
@@ -187,6 +289,9 @@ final class MediaImageStore {
             var keptOriginal = false
             if let files, let generation, let name = await Self.originalFileName(of: data, for: url) {
                 keptOriginal = (try? await files.store(data, named: name, for: url, generation: generation)) != nil
+            }
+            if let prefetchedFromThumbnail, let thumbnailGeneration, let name = await Self.originalFileName(of: data, for: url) {
+                _ = try? await prefetchedFromThumbnail.store(data, named: name, for: url, generation: thumbnailGeneration)
             }
             return Loaded(image: image, keptOriginal: keptOriginal)
         } }

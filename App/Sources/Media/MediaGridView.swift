@@ -328,6 +328,8 @@ final class MediaTileView: UIButton, MediaViewerSource {
         let attachmentID: MediaAttachment.ID
         /// 読み込む画像。閲覧注意でぼかしている間と、枠の大きさが決まる前はnilにし、通信しない。
         let request: MediaThumbnailRequest?
+        /// ぼかしている間に、外したらすぐ出せるよう先に読んでおく画像。描かずにキャッシュへ入れるだけ。Wi-Fiでだけ読む。
+        let prefetchRequest: MediaThumbnailRequest?
         let blurhash: String?
         /// blurhashを展開する縦横比。同じblurhashでも、比が違えば描き直す。
         let aspectRatio: Double?
@@ -638,6 +640,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
             Source(
                 attachmentID: attachment.id,
                 request: thumbnailRequest(for: attachment),
+                prefetchRequest: coveredPrefetchRequest(for: attachment),
                 blurhash: attachment.blurhash,
                 aspectRatio: attachment.aspectRatio
             )
@@ -655,6 +658,13 @@ final class MediaTileView: UIButton, MediaViewerSource {
         return MediaThumbnailSelection.request(for: attachment, tileSize: bounds.size, displayScale: scale, policy: policy)
     }
 
+    /// ぼかしている間に先読みする画像。外したときに読むのと同じものを、先読みの目的で読む（docs/timeline-media.mdの「状態の表示」）。
+    private func coveredPrefetchRequest(for attachment: MediaAttachment) -> MediaThumbnailRequest? {
+        let scale = traitCollection.displayScale
+        guard isCovered, let policy, let purpose = policy.prefetch, !bounds.isEmpty, scale > 0 else { return nil }
+        return MediaThumbnailSelection.request(for: attachment, tileSize: bounds.size, displayScale: scale, policy: policy)?.sent(as: purpose)
+    }
+
     private func showImage(of attachment: MediaAttachment?, from source: Source?, keepsCurrentImage: Bool) {
         loadTask?.cancel()
         loadTask = nil
@@ -662,6 +672,11 @@ final class MediaTileView: UIButton, MediaViewerSource {
             loadedThumbnail = nil
             thumbnailView.image = attachment.flatMap { attachment in
                 attachment.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: attachment.aspectRatio) }
+            }
+        }
+        if let prefetch = source?.prefetchRequest, store.cachedThumbnail(for: prefetch) == nil {
+            loadTask = Task { [store] in
+                _ = try? await store.thumbnail(for: prefetch)
             }
         }
         guard let request = source?.request else { return }

@@ -69,6 +69,11 @@ actor MediaFileCache {
         Self.storedFile(in: folder(for: url)) != nil
     }
 
+    /// `url`のファイルを消す。先読みの置き場から、ビューアで開いてメディアのキャッシュへ移したものを消すのに使う。
+    func remove(_ url: URL) {
+        try? FileManager.default.removeItem(at: folder(for: url))
+    }
+
     /// `data`を`url`のファイルとして`name`の名前で置き、置いた場所を返す。同じURLのファイルがあれば置き換える。
     /// 書き込みの途中で落ちても書きかけのファイルを置いたものとして扱わないよう、隠しファイルに書いてから名前を付け替える。
     /// - Parameter generation: 読み始めたときの`generation`。その後に`removeAll()`で消していたら、置かずに`CancellationError`を投げる。

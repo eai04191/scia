@@ -254,6 +254,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     let avatarImages: AvatarImageStore
     let network: NetworkConditionsMonitor
     let settings: AppSettings
+    /// スクロールが止まったときに見えている画像を、ビューアで開く元の画像で先読みする。セッションが入れる。nilなら先読みしない。
+    var mediaPrefetcher: MediaPrefetcher?
     /// 添付ファイルをぼかすか。閲覧注意のぼかしを外した投稿と、メニューから隠した投稿を覚える。セッションがほかの画面とそろえる。
     var mediaCovers = MediaCovers()
     /// この画面で開いたり隠したりしたときに、変えたあとの状態と、変えた投稿を渡して呼ぶ。
@@ -1304,6 +1306,24 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             if case .notification(let notificationID) = id { notificationID } else { nil }
         })
         onVisibleLinkOnlyCardsChange?(linkOnlyCardStatuses(among: ids))
+        prefetchMediaIfSettled(among: ids)
+    }
+
+    /// スクロールが止まっていれば、`ids`の行に出ている画像を先読みする（docs/image-loading.mdの「ビューアで開く画像の先読み」）。
+    /// 動いている間は止め、流し見で通り過ぎた投稿を読まない。止まったときに差し替え、画面から外れた画像の読み込みを止める。
+    private func prefetchMediaIfSettled(among ids: [ItemID]) {
+        guard let mediaPrefetcher else { return }
+        guard !collectionView.isTracking, !collectionView.isDragging, !collectionView.isDecelerating, springScroll == nil else {
+            mediaPrefetcher.prefetch([])
+            return
+        }
+        let attachments = ids.flatMap { id -> [MediaAttachment] in
+            guard let indexPath = dataSource.indexPath(for: id), let contentView = collectionView.cellForItem(at: indexPath)?.contentView else { return [] }
+            let post = contentView as? PostContentView
+            let grids = [post?.mediaGrid, post?.embedMediaGrid, (contentView as? NotificationContentView)?.mediaGrid]
+            return grids.compactMap { $0?.content?.attachments }.flatMap { $0 }
+        }
+        mediaPrefetcher.prefetch(attachments)
     }
 
     /// `ids`の行のうち、リンク先だけのカードを出している投稿。通知でカードを出さない行は除くため、組み立てた中身で見分ける。

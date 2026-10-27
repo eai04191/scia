@@ -188,6 +188,201 @@ struct MediaImageStoreTests {
         #expect(origins.withLock { $0 } == [.display, .action])
     }
 
+    /// 先読みは、展開せずに先読みの置き場へ置き、メディアのキャッシュには置かない。先読みの目的で送る。
+    @Test func prefetchStoresOriginalInPrefetchCacheOnly() async throws {
+        let png = try pngData()
+        let files = MediaFileCache.temporary()
+        let prefetched = MediaFileCache.temporary()
+        let purposes = Mutex<[RequestPurpose]>([])
+        let store = MediaImageStore(files: files, prefetchedFiles: prefetched) { _, _ in
+            purposes.withLock { $0.append(RequestPurpose.current) }
+            return png
+        }
+        let url = try #require(URL(string: "https://files.example.social/original/1.png"))
+
+        await store.prefetchOriginal(url, purpose: .prefetch)
+
+        #expect(await prefetched.contains(url))
+        #expect(await files.contains(url) == false)
+        #expect(store.cachedImage(for: url, maxPixelSize: MediaImageStore.fullPixelSize) == nil)
+        #expect(purposes.withLock { $0 } == [.prefetch])
+
+        // 置いてあれば、読み直さない。
+        await store.prefetchOriginal(url, purpose: .prefetch)
+        #expect(purposes.withLock { $0 }.count == 1)
+    }
+
+    /// ビューアで開いたら、先読みしたファイルを通信せずに使い、メディアのキャッシュへ移す。
+    @Test func viewerUsesPrefetchedOriginalAndMovesItToMediaCache() async throws {
+        let png = try pngData()
+        let files = MediaFileCache.temporary()
+        let prefetched = MediaFileCache.temporary()
+        let fetches = Mutex(0)
+        let store = MediaImageStore(files: files, prefetchedFiles: prefetched) { _, _ in
+            fetches.withLock { $0 += 1 }
+            return png
+        }
+        let url = try #require(URL(string: "https://files.example.social/original/1.png"))
+        await store.prefetchOriginal(url, purpose: .prefetch)
+
+        _ = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true, retriesNow: true)
+
+        #expect(fetches.withLock { $0 } == 1)
+        #expect(await files.contains(url))
+        #expect(await prefetched.contains(url) == false)
+        #expect(await store.hasOriginal(for: url))
+    }
+
+    /// サムネイルに元の画像を読んだら、先読みの置き場にも置き、先読みで同じファイルを読み直さない。
+    @Test func thumbnailOriginalIsSharedWithPrefetch() async throws {
+        let png = try pngData()
+        let prefetched = MediaFileCache.temporary()
+        let fetches = Mutex(0)
+        let store = MediaImageStore(files: .temporary(), prefetchedFiles: prefetched) { _, _ in
+            fetches.withLock { $0 += 1 }
+            return png
+        }
+        let url = try #require(URL(string: "https://files.example.social/original/1.png"))
+
+        _ = try await store.image(for: url, maxPixelSize: 1_024, purpose: .enhancement(onExpensiveNetwork: true), sharesWithPrefetch: true)
+        await store.prefetchOriginal(url, purpose: .prefetch)
+
+        #expect(fetches.withLock { $0 } == 1)
+        #expect(await prefetched.contains(url))
+    }
+
+    /// サムネイルとして読んでいる途中なら、先読みはそれを待ち、同じファイルを読まない。
+    @Test func prefetchWaitsForThumbnailOriginalInFlight() async throws {
+        let png = try pngData()
+        let gate = Gate()
+        let fetches = Mutex(0)
+        let store = MediaImageStore(files: .temporary(), prefetchedFiles: .temporary()) { _, _ in
+            fetches.withLock { $0 += 1 }
+            try await gate.wait()
+            return png
+        }
+        let url = try #require(URL(string: "https://files.example.social/original/1.png"))
+        let thumbnail = Task { try await store.image(for: url, maxPixelSize: 1_024, purpose: .enhancement(onExpensiveNetwork: true), sharesWithPrefetch: true) }
+        try await waitUntil { gate.waiterCount == 1 }
+
+        let prefetch = Task { await store.prefetchOriginal(url, purpose: .prefetch) }
+        gate.open()
+        _ = try await thumbnail.value
+        await prefetch.value
+
+        #expect(fetches.withLock { $0 } == 1)
+    }
+
+    /// ぼかしている間に先読みしているサムネイルは、外したあとの表示の読み込みが待ち、同じ画像を読み直さない。
+    @Test func revealJoinsCoveredPrefetchInFlight() async throws {
+        let png = try pngData()
+        let gate = Gate()
+        let fetches = Mutex(0)
+        let store = MediaImageStore(files: .temporary()) { _, _ in
+            fetches.withLock { $0 += 1 }
+            try await gate.wait()
+            return png
+        }
+        let url = try #require(URL(string: "https://files.example.social/small/1.png"))
+        let prefetch = MediaThumbnailRequest(url: url, maxPixelSize: 512).sent(as: .prefetch)
+        let covered = Task { try await store.thumbnail(for: prefetch) }
+        try await waitUntil { gate.waiterCount == 1 }
+
+        let revealed = Task { try await store.thumbnail(for: MediaThumbnailRequest(url: url, maxPixelSize: 512)) }
+        gate.open()
+        _ = try await covered.value
+        _ = try await revealed.value
+
+        #expect(fetches.withLock { $0 } == 1)
+        #expect(store.cachedThumbnail(for: MediaThumbnailRequest(url: url, maxPixelSize: 512)) != nil)
+    }
+
+    /// ぼかした動画の最初のコマを作れなかったら、代わりのプレビューも先読みとして読む。モバイル通信に変わってOSが断っても、表示の目的に戻して読まない。
+    @Test func coveredVideoFallbackKeepsPrefetchPurpose() async throws {
+        let png = try pngData()
+        let purposes = Mutex<[RequestPurpose]>([])
+        let store = MediaImageStore(files: .temporary()) { _, range in
+            purposes.withLock { $0.append(RequestPurpose.current) }
+            if range != nil {
+                throw URLError(.notConnectedToInternet, userInfo: [NSURLErrorNetworkUnavailableReasonKey: URLError.NetworkUnavailableReason.expensive.rawValue])
+            }
+            return png
+        }
+        let video = try #require(URL(string: "https://files.example.social/original/1.mp4"))
+        let preview = try #require(URL(string: "https://files.example.social/small/1.png"))
+        let request = MediaThumbnailRequest(url: video, maxPixelSize: 1_024, source: .videoFrame(fallback: preview), isOriginal: true).sent(as: .prefetch)
+
+        _ = try await store.thumbnail(for: request)
+
+        #expect(purposes.withLock { $0 } == [.prefetch, .prefetch])
+    }
+
+    /// 外して表示しようとする呼び出しが複数あり、待っていた先読みをOSが断ったら、読み直すのは1回だけにする。
+    @Test func refusedPrefetchIsReadAgainOnceForManyRevealers() async throws {
+        let png = try pngData()
+        let gate = Gate()
+        let fetches = Mutex(0)
+        let store = MediaImageStore(files: .temporary()) { _, _ in
+            fetches.withLock { $0 += 1 }
+            guard RequestPurpose.current == .prefetch else { return png }
+            try await gate.wait()
+            throw URLError(.notConnectedToInternet, userInfo: [NSURLErrorNetworkUnavailableReasonKey: URLError.NetworkUnavailableReason.expensive.rawValue])
+        }
+        let url = try #require(URL(string: "https://files.example.social/small/2.png"))
+        let covered = Task { try await store.image(for: url, maxPixelSize: 512, purpose: .prefetch) }
+        try await waitUntil { gate.waiterCount == 1 }
+        var entered = 0
+        let reveals = (0..<3).map { _ in
+            Task { @MainActor in
+                entered += 1
+                return try await store.image(for: url, maxPixelSize: 512)
+            }
+        }
+        try await waitUntil { entered == 3 }
+
+        gate.open()
+        _ = await covered.result
+        for reveal in reveals {
+            _ = try await reveal.value
+        }
+
+        #expect(fetches.withLock { $0 } == 2)
+    }
+
+    /// ぼかしている間の先読みでも、前に読めなかった画像は読まない。
+    @Test func coveredPrefetchSkipsImagesThatFailed() async throws {
+        let clock = TestClock()
+        let fetches = Mutex(0)
+        let store = MediaImageStore(files: .temporary(), clock: clock) { _, _ in
+            fetches.withLock { $0 += 1 }
+            throw HTTPStatusError(statusCode: 503)
+        }
+        let url = try #require(URL(string: "https://files.example.social/small/3.png"))
+        let request = MediaThumbnailRequest(url: url, maxPixelSize: 512).sent(as: .prefetch)
+        _ = try? await store.thumbnail(for: request)
+        clock.advance(by: .seconds(600))
+
+        await #expect(throws: ImageLoadDeferred.self) { try await store.thumbnail(for: request) }
+        #expect(fetches.withLock { $0 } == 1)
+    }
+
+    /// 読めなかった画像は、読み直しの間隔が過ぎるまで先読みしない。
+    @Test func prefetchSkipsImagesThatFailed() async throws {
+        let fetches = Mutex(0)
+        let prefetched = MediaFileCache.temporary()
+        let store = MediaImageStore(files: .temporary(), prefetchedFiles: prefetched) { _, _ in
+            fetches.withLock { $0 += 1 }
+            throw HTTPStatusError(statusCode: 503)
+        }
+        let url = try #require(URL(string: "https://files.example.social/original/1.png"))
+
+        await store.prefetchOriginal(url, purpose: .prefetch)
+        await store.prefetchOriginal(url, purpose: .prefetch)
+
+        #expect(fetches.withLock { $0 } == 1)
+        #expect(await prefetched.contains(url) == false)
+    }
+
     /// Wi-Fiで始めた元の画像の読み込みにモバイル通信でOSが断っても、同じURLをプレビューとして読む処理はその失敗を引き継がずに読む。
     @Test func displayLoadDoesNotJoinEnhancementRefusedOnNetwork() async throws {
         let png = try pngData()

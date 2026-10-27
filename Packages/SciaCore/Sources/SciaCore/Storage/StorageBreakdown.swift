@@ -61,7 +61,8 @@ public struct StorageBreakdown: Sendable, Equatable {
 public struct StorageLocations: Sendable {
     /// アプリのデータのコンテナ（ホームディレクトリ）。
     public var container: URL
-    public var mediaFiles: URL
+    /// メディアのキャッシュ。ビューアで開いた画像などの置き場と、先読みした画像の置き場。
+    public var mediaFiles: [URL]
     public var temporary: URL
     public var discomfortReports: URL
     public var preferences: URL
@@ -73,7 +74,7 @@ public struct StorageLocations: Sendable {
     public var sharedContainer: URL?
     public var appBundle: URL
 
-    public init(container: URL, mediaFiles: URL, temporary: URL, discomfortReports: URL, preferences: URL, networkCache: [URL], inAppSafari: URL, sharedContainer: URL?, appBundle: URL) {
+    public init(container: URL, mediaFiles: [URL], temporary: URL, discomfortReports: URL, preferences: URL, networkCache: [URL], inAppSafari: URL, sharedContainer: URL?, appBundle: URL) {
         self.container = container
         self.mediaFiles = mediaFiles
         self.temporary = temporary
@@ -92,7 +93,8 @@ extension StorageBreakdown {
     ///   - launchDate: このプロセスを起動した日時。一時ファイルは、これより前に置いたものだけを消してよいものとして数える。
     ///     下書きの添付やダウンロードの途中のファイルはどれもこのプロセスが作るもので、起動より前のものはどこからも使っていないため。nilなら一時ファイルを消さない。
     public static func measure(_ locations: StorageLocations, launchDate: Date?) -> StorageBreakdown {
-        let media = StorageUsage.allocatedSize(of: locations.mediaFiles)
+        let mediaFiles = locations.mediaFiles.map { ($0, StorageUsage.allocatedSize(of: $0)) }
+        let media = mediaFiles.reduce(0) { $0 + $1.1 }
         let temporary = StorageUsage.allocatedSize(of: locations.temporary)
         let leftovers = launchDate.map { StorageUsage.allocatedSize(in: locations.temporary, addedBefore: $0) } ?? 0
         let reports = StorageUsage.allocatedSize(of: locations.discomfortReports)
@@ -104,12 +106,11 @@ extension StorageBreakdown {
         let networkCacheBytes = networkCache.reduce(0) { $0 + $1.1 }
         // 残りは、コンテナの合計から、コンテナの中にある項目を引いて出す。Macでは一時ファイルがコンテナの外にあるため、中にあるかを確かめてから引く。
         let inside: [(URL, Int64)] = [
-            (locations.mediaFiles, media),
             (locations.temporary, temporary),
             (locations.discomfortReports, reports),
             (locations.preferences, settings),
             (locations.inAppSafari, safari ?? 0),
-        ] + networkCache
+        ] + mediaFiles + networkCache
         let counted = inside.filter { isInside($0.0, locations.container) }.reduce(0) { $0 + $1.1 }
         let other = max(0, StorageUsage.allocatedSize(of: locations.container) - counted)
         return StorageBreakdown(

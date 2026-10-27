@@ -137,13 +137,15 @@ extension MediaGridView.Content {
     @MainActor
     static func make(of attachments: [MediaAttachment], cover: MediaCover?, settings: AppSettings, tuning: TuningStore, network: NetworkConditionsMonitor) -> Self? {
         guard !attachments.isEmpty else { return nil }
+        let usePolicy = network.usePolicy(settings: settings)
         return MediaGridView.Content(
             attachments: attachments.map { $0.filteringAltText(ignoresUseless: settings.ignoresUselessAltText) },
             cover: cover,
             tallestAspectRatio: settings.value(of: AppearanceCatalog.mediaTallestAspectRatio),
             thumbnailPolicy: MediaThumbnailPolicy(
-                enhancement: network.usePolicy(settings: settings).enhancement,
-                upscaleTolerance: tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
+                enhancement: usePolicy.enhancement,
+                upscaleTolerance: tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance),
+                prefetch: usePolicy.prefetch
             ),
             spacing: settings.value(of: AppearanceCatalog.mediaTileSpacing),
             widestAspectRatio: settings.value(of: AppearanceCatalog.mediaWidestAspectRatio),

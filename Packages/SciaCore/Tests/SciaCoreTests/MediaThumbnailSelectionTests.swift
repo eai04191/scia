@@ -191,6 +191,15 @@ struct MediaThumbnailSelectionTests {
         #expect(small?.purpose == .display)
     }
 
+    /// 元の画像は、ビューアで開くのと同じものとして印を付け、プレビュー画像には付けない。先読みの目的に替えても印は残す。
+    @Test func originalIsMarkedAndKeptWhenSentAsPrefetch() {
+        let original = request(attachment())
+        #expect(original?.isOriginal == true)
+        #expect(original?.sent(as: .prefetch).isOriginal == true)
+        #expect(original?.sent(as: .prefetch).purpose == .prefetch)
+        #expect(request(attachment(), tile: CGSize(width: 100, height: 56.25))?.isOriginal == false)
+    }
+
     /// 動画の最初のコマも、質を上げる通信として送る。
     @Test func videoFrameIsSentAsEnhancement() {
         let enhancement = RequestPurpose.enhancement(onExpensiveNetwork: true)

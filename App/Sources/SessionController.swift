@@ -132,6 +132,8 @@ final class SessionController {
     /// 引用元の、受け取ったあとの編集、削除、ミュート、ブロック。どの一覧の囲みにも当て、開き直した画面にも引き継ぐ。
     private var quoteSources = QuoteSourceChanges()
     /// fxtwitterから読んだXの投稿。ホームと通知とプロフィールで同じ投稿を1回だけ読む。
+    /// 一覧で見えている画像の先読み。ログアウトしたら、セッションの持ち主と一緒に止める。
+    private lazy var mediaPrefetcher = MediaPrefetcher(scope: tasks, store: AppDependencies.mediaImages, network: AppDependencies.network, settings: AppDependencies.settings)
     private let xPosts = XPostStore(client: XPostClient(client: AppDependencies.http), retryPolicy: { TuningCatalog.imageRetry(in: AppDependencies.tuning) })
     private var composerObscuredHeight: CGFloat = 0
     /// 本文のリンクを開くアプリ内のSafari。シートが覆っている高さも、投稿欄と同じく一覧の下の余白にする。
@@ -788,6 +790,7 @@ final class SessionController {
         viewController.mediaCovers = mediaCovers
         viewController.quoteSourceChanges = quoteSources
         viewController.xPosts = xPosts
+        viewController.mediaPrefetcher = mediaPrefetcher
         viewController.onChangeMediaCovers = { [weak self, weak viewController] covers, status in
             self?.shareMediaCovers(covers, changed: status, from: viewController)
         }

@@ -1866,7 +1866,8 @@ final class ImagePageController: MediaPageController {
     }
 
     private func load(_ attachment: MediaAttachment, hasPreview: Bool) {
-        guard let url = attachment.url ?? attachment.remoteUrl ?? attachment.previewUrl else {
+        // 先読みしたファイルを使えるよう、先読みと同じURLを読む（docs/image-loading.md）。
+        guard let url = MediaPrefetch.viewerImageURL(of: attachment) ?? attachment.previewUrl else {
             failureLabel.isHidden = hasPreview
             return
         }
