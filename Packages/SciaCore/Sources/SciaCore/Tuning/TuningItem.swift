@@ -698,6 +698,15 @@ public enum TuningCatalog {
         defaultValue: 0.15
     )
 
+    /// 投稿欄から開いたビューアで代替テキストを書き始めるときと書き終えるときに、下の説明の帯と入力欄を薄くして入れ替える時間。
+    public static let mediaDescriptionEditorFadeDuration = NumberTuning(
+        id: "media.descriptionEditorFadeDuration",
+        title: "代替テキストの帯と入力欄を入れ替える時間（秒）",
+        range: 0.05...1,
+        step: 0.05,
+        defaultValue: 0.2
+    )
+
     /// ビューアを開閉するとき、画像のうちバーにかかる部分を、バーの奥にも描く。
     /// オフなら、開くときは複製をバーの手前にだけ描き、閉じるときはバーにかかる部分を着地へ近づくにつれて切り落とすだけにする。
     /// 開き始めにバーの下のサムネイルがバーの手前へ急に出て、閉じる着地の瞬間にバー越しのサムネイルが急に現れる。
@@ -1723,6 +1732,7 @@ public enum TuningCatalog {
         TuningSection(id: "media.description", title: "ビューア：代替テキスト", items: [
             .number(mediaDescriptionRemainingThreshold),
             .number(mediaDescriptionMaxLines),
+            .number(mediaDescriptionEditorFadeDuration),
         ]),
         TuningSection(id: "media.crop", title: "ビューア：トリミング", items: [
             .number(mediaCropRecenterDelay),

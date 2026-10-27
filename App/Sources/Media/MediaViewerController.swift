@@ -129,6 +129,8 @@ final class MediaViewerController: UIViewController {
         var naturalSizeDuration: TimeInterval = 0.3
         /// blurhashのぼかしを出していたところへ元の画像が届いたときに、薄くして入れ替える時間。
         var placeholderFadeDuration: TimeInterval = 0.15
+        /// 代替テキストを書き始めるときと書き終えるときに、下の説明の帯と入力欄を薄くして入れ替える時間。
+        var descriptionEditorFadeDuration: TimeInterval = 0.2
     }
 
     /// 投稿欄で選んだメディアを開いたときの操作。ビューアは投稿欄を知らず、メニューと代替テキストの書き終わりをここから渡す。
@@ -833,10 +835,47 @@ final class MediaViewerController: UIViewController {
         isEditingDescription = true
         descriptionEditor.limit = editing.descriptionLimit
         descriptionEditor.text = currentItem.description ?? ""
-        descriptionEditor.isHidden = false
-        updateChrome()
+        // 小さい文字の帯を薄くして消し、大きい文字の入力欄を0から浮かび上がらせる。1コマで入れ替えると、文字の大きさと位置が飛んで見える。
+        transitionDescriptionEditor(shows: true)
+        updateChrome(animatingCaption: true)
         view.layoutIfNeeded()
         descriptionEditor.beginEditing()
+    }
+
+    /// 代替テキストの入力欄を出し始めた回数。消す途中にまた出したら、前の動きの完了で隠さない。
+    private var descriptionEditorGeneration = 0
+
+    /// 入力欄を薄くして出し入れする。消すときは、薄くし終えてから隠す。消える途中にまた出すときは、見えている濃さから戻す。
+    private func transitionDescriptionEditor(shows: Bool) {
+        descriptionEditorGeneration += 1
+        let generation = descriptionEditorGeneration
+        let duration = timing.descriptionEditorFadeDuration
+        guard view.window != nil else {
+            descriptionEditor.alpha = 1
+            descriptionEditor.isHidden = !shows
+            return
+        }
+        if shows {
+            if descriptionEditor.isHidden {
+                descriptionEditor.alpha = 0
+                descriptionEditor.isHidden = false
+            }
+            descriptionEditor.isUserInteractionEnabled = true
+            UIView.animateSmoothly(duration: duration) {
+                self.descriptionEditor.alpha = 1
+            }
+            return
+        }
+        // 薄くしている間に触れても、書き始めないようにする。書き直すときは帯を押す。
+        descriptionEditor.isUserInteractionEnabled = false
+        UIView.animateSmoothly(duration: duration) {
+            self.descriptionEditor.alpha = 0
+        } completion: {
+            guard generation == self.descriptionEditorGeneration else { return }
+            self.descriptionEditor.isHidden = true
+            self.descriptionEditor.alpha = 1
+            self.descriptionEditor.isUserInteractionEnabled = true
+        }
     }
 
     /// キーボードを下げて書き終える。書き終えた値は`descriptionEditingDidEnd`で受け取る。
@@ -855,11 +894,11 @@ final class MediaViewerController: UIViewController {
         guard isEditingDescription else { return }
         SciaLog.logger(category: "media").info("end editing description length=\(text.count, privacy: .public)")
         isEditingDescription = false
-        descriptionEditor.isHidden = true
+        transitionDescriptionEditor(shows: false)
         let id = currentItem.id
         items[currentIndex].description = text.isEmpty ? nil : text
         draftEditing?.commitDescription(id, text)
-        updateChrome()
+        updateChrome(animatingCaption: true)
         // キーボードのEscで閉じられるよう、最初の応答者に戻る。
         if case .idle = motion {
             becomeFirstResponder()
@@ -2893,7 +2932,8 @@ extension MediaViewerController.Timing {
             paperBorderPortion: tuning.value(of: TuningCatalog.mediaPaperBorderPortion),
             interruptedOpenFadeDuration: tuning.value(of: TuningCatalog.mediaInterruptedOpenFadeDuration),
             naturalSizeDuration: tuning.value(of: TuningCatalog.mediaNaturalSizeDuration),
-            placeholderFadeDuration: tuning.value(of: TuningCatalog.mediaPlaceholderFadeDuration)
+            placeholderFadeDuration: tuning.value(of: TuningCatalog.mediaPlaceholderFadeDuration),
+            descriptionEditorFadeDuration: tuning.value(of: TuningCatalog.mediaDescriptionEditorFadeDuration)
         )
     }
 }

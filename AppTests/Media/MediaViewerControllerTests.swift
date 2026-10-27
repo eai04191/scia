@@ -308,8 +308,9 @@ struct MediaViewerControllerTests {
         #expect(viewer.captionView.accessibilityLabel == "代替テキストを追加")
         #expect(viewer.captionView.accessibilityActivate())
         #expect(viewer.isEditingDescription)
-        #expect(!viewer.descriptionEditor.isHidden)
-        #expect(viewer.captionView.isHidden)
+        // 帯を薄くして消し、入力欄を0から浮かび上がらせる。1コマで入れ替えない。
+        #expect(!viewer.descriptionEditor.isHidden && viewer.descriptionEditor.alpha == 1)
+        #expect(!viewer.captionView.isHidden && viewer.captionView.alpha == 0)
 
         viewer.descriptionEditor.text = "黒猫"
         viewer.endEditingDescription()
@@ -318,6 +319,9 @@ struct MediaViewerControllerTests {
         #expect(actions.commits.map(\.text) == ["黒猫"])
         #expect(actions.commits.map(\.id) == ["a"])
         #expect(viewer.captionView.accessibilityLabel == "黒猫")
+        // 入力欄は薄くしてから隠し、帯は浮かび上がらせる。
+        #expect(!viewer.descriptionEditor.isHidden && viewer.descriptionEditor.alpha == 0)
+        #expect(!viewer.captionView.isHidden && viewer.captionView.alpha == 1)
     }
 
     /// 残りの文字数を出し始める数と入力欄の最大の行数は、投稿欄から渡した値を使う。
