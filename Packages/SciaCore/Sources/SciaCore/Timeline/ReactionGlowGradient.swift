@@ -47,9 +47,16 @@ extension SRGBColor {
         self.init(red: Self.encode(linear.x), green: Self.encode(linear.y), blue: Self.encode(linear.z))
     }
 
-    /// 変換の係数は、OKLabの定義（https://bottosson.github.io/posts/oklab/ ）による。
     var oklab: SIMD3<Double> {
-        let rgb = linear
+        Self.oklab(linear: linear)
+    }
+
+    init(oklab lab: SIMD3<Double>) {
+        self.init(linear: Self.linear(oklab: lab))
+    }
+
+    /// ガンマを外したsRGBの成分を、OKLabにする。変換の係数は、OKLabの定義（https://bottosson.github.io/posts/oklab/ ）による。
+    static func oklab(linear rgb: SIMD3<Double>) -> SIMD3<Double> {
         let l = 0.4122214708 * rgb.x + 0.5363325363 * rgb.y + 0.0514459929 * rgb.z
         let m = 0.2119034982 * rgb.x + 0.6806995451 * rgb.y + 0.1073969566 * rgb.z
         let s = 0.0883024619 * rgb.x + 0.2817188376 * rgb.y + 0.6299787005 * rgb.z
@@ -61,25 +68,28 @@ extension SRGBColor {
         )
     }
 
-    init(oklab lab: SIMD3<Double>) {
+    /// OKLabを、ガンマを外したsRGBの成分にする。sRGBの外の色は、0〜1の外に出る。
+    static func linear(oklab lab: SIMD3<Double>) -> SIMD3<Double> {
         let l3 = lab.x + 0.3963377774 * lab.y + 0.2158037573 * lab.z
         let m3 = lab.x - 0.1055613458 * lab.y - 0.0638541728 * lab.z
         let s3 = lab.x - 0.0894841775 * lab.y - 1.2914855480 * lab.z
         let l = l3 * l3 * l3, m = m3 * m3 * m3, s = s3 * s3 * s3
-        self.init(linear: SIMD3(
+        return SIMD3(
             4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
             -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
             -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
-        ))
+        )
     }
 
-    private static func decode(_ value: Double) -> Double {
+    /// sRGBのガンマを外す。Display P3も同じ曲線を使う。
+    static func decode(_ value: Double) -> Double {
         let magnitude = abs(value)
         let decoded = magnitude <= 0.04045 ? magnitude / 12.92 : pow((magnitude + 0.055) / 1.055, 2.4)
         return value < 0 ? -decoded : decoded
     }
 
-    private static func encode(_ value: Double) -> Double {
+    /// sRGBのガンマを掛ける。Display P3も同じ曲線を使う。
+    static func encode(_ value: Double) -> Double {
         let magnitude = abs(value)
         let encoded = magnitude <= 0.0031308 ? magnitude * 12.92 : 1.055 * pow(magnitude, 1 / 2.4) - 0.055
         return value < 0 ? -encoded : encoded
