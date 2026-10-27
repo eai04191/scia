@@ -142,10 +142,7 @@ extension MediaGridView.Content {
             cover: cover,
             tallestAspectRatio: settings.value(of: AppearanceCatalog.mediaTallestAspectRatio),
             thumbnailPolicy: MediaThumbnailPolicy(
-                allowsOriginal: MediaThumbnailSelection.allowsOriginal(
-                    on: network.conditions,
-                    usesOriginalOnExpensiveNetwork: settings.usesOriginalThumbnailsOnExpensiveNetwork
-                ),
+                enhancement: network.usePolicy(settings: settings).enhancement,
                 upscaleTolerance: tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
             ),
             spacing: settings.value(of: AppearanceCatalog.mediaTileSpacing),

@@ -6,7 +6,7 @@ import Testing
 struct MediaThumbnailSelectionTests {
     private let original = URL(string: "https://example.com/original.png")
     private let preview = URL(string: "https://example.com/small.png")
-    private let allowsOriginal = MediaThumbnailPolicy(allowsOriginal: true, upscaleTolerance: 1)
+    private let allowsOriginal = MediaThumbnailPolicy(enhancement: .enhancement(onExpensiveNetwork: true), upscaleTolerance: 1)
 
     private func attachment(
         _ type: MediaAttachment.Kind = .image,
@@ -46,22 +46,22 @@ struct MediaThumbnailSelectionTests {
 
     /// 引き伸ばしてよい倍率までなら、プレビューで足りるとみなす。
     @Test func upscaleToleranceAcceptsASlightlySmallerPreview() {
-        let tolerant = MediaThumbnailPolicy(allowsOriginal: true, upscaleTolerance: 1.6)
+        let tolerant = MediaThumbnailPolicy(enhancement: .enhancement(onExpensiveNetwork: true), upscaleTolerance: 1.6)
         #expect(request(attachment(), policy: tolerant)?.url == preview)
-        let strict = MediaThumbnailPolicy(allowsOriginal: true, upscaleTolerance: 1.5)
+        let strict = MediaThumbnailPolicy(enhancement: .enhancement(onExpensiveNetwork: true), upscaleTolerance: 1.5)
         #expect(request(attachment(), policy: strict)?.url == original)
     }
 
     /// 低データモードなどで元の画像を読まないときは、足りなくてもプレビューを読む。
     @Test func readsPreviewWhenOriginalIsNotAllowed() {
-        let policy = MediaThumbnailPolicy(allowsOriginal: false, upscaleTolerance: 1)
+        let policy = MediaThumbnailPolicy(enhancement: nil, upscaleTolerance: 1)
         #expect(request(attachment(), policy: policy)?.url == preview)
     }
 
     /// 元の画像を読まない条件では、プレビュー画像がなくても元の画像へ切り替えない。
     @Test func readsNothingWithoutPreviewWhenOriginalIsNotAllowed() {
         let noPreview = MediaAttachment(id: "1", type: .image, url: original, previewUrl: nil)
-        let policy = MediaThumbnailPolicy(allowsOriginal: false, upscaleTolerance: 1)
+        let policy = MediaThumbnailPolicy(enhancement: nil, upscaleTolerance: 1)
         #expect(request(noPreview, policy: policy) == nil)
         #expect(request(noPreview)?.url == original)
     }
@@ -133,7 +133,7 @@ struct MediaThumbnailSelectionTests {
     }
 
     @Test func videoReadsPreviewWhenOriginalIsNotAllowed() {
-        let policy = MediaThumbnailPolicy(allowsOriginal: false, upscaleTolerance: 1)
+        let policy = MediaThumbnailPolicy(enhancement: nil, upscaleTolerance: 1)
         #expect(request(video(), policy: policy)?.source == .image)
     }
 
@@ -181,22 +181,29 @@ struct MediaThumbnailSelectionTests {
         #expect(request(attachment(), tile: CGSize(width: 10_000, height: 5_625))?.maxPixelSize == 4_096)
     }
 
-    @Test func originalIsNotAllowedInLowDataModeRegardlessOfSetting() {
-        let lowData = NetworkConditions(isConstrained: true, isExpensive: false)
-        #expect(!MediaThumbnailSelection.allowsOriginal(on: lowData, usesOriginalOnExpensiveNetwork: true))
-        let lowDataOnCellular = NetworkConditions(isConstrained: true, isExpensive: true)
-        #expect(!MediaThumbnailSelection.allowsOriginal(on: lowDataOnCellular, usesOriginalOnExpensiveNetwork: true))
+    /// 元の画像は質を上げる通信として、プレビュー画像は表示に要る通信として送る。回線が変わったら、元の画像だけをOSが止める。
+    @Test func originalIsSentAsEnhancementAndPreviewAsDisplay() {
+        let enhancement = RequestPurpose.enhancement(onExpensiveNetwork: false)
+        let policy = MediaThumbnailPolicy(enhancement: enhancement, upscaleTolerance: 1)
+        #expect(request(attachment(), policy: policy)?.purpose == enhancement)
+        let small = request(attachment(), tile: CGSize(width: 100, height: 56.25), policy: policy)
+        #expect(small?.url == preview)
+        #expect(small?.purpose == .display)
     }
 
-    @Test func expensiveNetworkFollowsTheSetting() {
-        let cellular = NetworkConditions(isConstrained: false, isExpensive: true)
-        #expect(MediaThumbnailSelection.allowsOriginal(on: cellular, usesOriginalOnExpensiveNetwork: true))
-        #expect(!MediaThumbnailSelection.allowsOriginal(on: cellular, usesOriginalOnExpensiveNetwork: false))
-    }
-
-    /// Wi-Fiでは、モバイル通信の設定をオフにしていても元の画像を読む。
-    @Test func unmeteredNetworkIgnoresTheSetting() {
-        let wifi = NetworkConditions(isConstrained: false, isExpensive: false)
-        #expect(MediaThumbnailSelection.allowsOriginal(on: wifi, usesOriginalOnExpensiveNetwork: false))
+    /// 動画の最初のコマも、質を上げる通信として送る。
+    @Test func videoFrameIsSentAsEnhancement() {
+        let enhancement = RequestPurpose.enhancement(onExpensiveNetwork: true)
+        let policy = MediaThumbnailPolicy(enhancement: enhancement, upscaleTolerance: 1)
+        let video = MediaAttachment(
+            id: "1",
+            type: .video,
+            url: URL(string: "https://example.com/media_attachments/files/1/original/video.mp4"),
+            previewUrl: URL(string: "https://example.com/media_attachments/files/1/small/video.png"),
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_920, height: 1_080), small: MediaAttachment.Size(width: 640, height: 360))
+        )
+        let frame = request(video, policy: policy)
+        #expect(frame?.source != .image)
+        #expect(frame?.purpose == enhancement)
     }
 }

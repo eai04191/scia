@@ -75,6 +75,23 @@ struct RetryScheduleTests {
         #expect(schedule.hasFailed(image))
     }
 
+    /// 回線で控えた失敗は覚えない。回線が変わって描き直したときに、すぐ読めるようにする。
+    @Test func failureUnavailableOnNetworkIsNotRecorded() {
+        var schedule = makeSchedule()
+        let error = URLError(.notConnectedToInternet, userInfo: [NSURLErrorNetworkUnavailableReasonKey: URLError.NetworkUnavailableReason.expensive.rawValue])
+        schedule.recordFailure(error, for: image)
+        #expect(schedule.allowsAutomaticLoad(of: image))
+        #expect(!schedule.hasFailed(image))
+    }
+
+    /// 端末の設定でモバイルデータ通信を切ったときの失敗は、アプリが付けた制限ではないので、間隔をおいて読み直す。
+    @Test func cellularRestrictionIsTemporary() {
+        var schedule = makeSchedule()
+        let error = URLError(.notConnectedToInternet, userInfo: [NSURLErrorNetworkUnavailableReasonKey: URLError.NetworkUnavailableReason.cellular.rawValue])
+        schedule.recordFailure(error, for: image)
+        #expect(!schedule.allowsAutomaticLoad(of: image))
+    }
+
     @Test(arguments: [CancellationError() as any Error, URLError(.cancelled)])
     func cancellationIsNotRecorded(error: any Error) {
         var schedule = makeSchedule()

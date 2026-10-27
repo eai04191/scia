@@ -61,7 +61,8 @@ public struct RetrySchedule {
     /// 読めなかったことを覚える。取り消しは失敗ではないので覚えない。
     public mutating func recordFailure(_ error: any Error, for url: URL) {
         switch HTTPFailure(error) {
-        case nil:
+        // 回線で控えたものは、回線が変わって描き直したときに読むものを選び直すので、時間では覚えない。
+        case nil, .unavailableOnNetwork:
             return
         case .permanent, .unauthorized:
             records[url] = .permanent

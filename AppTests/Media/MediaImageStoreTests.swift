@@ -187,6 +187,28 @@ struct MediaImageStoreTests {
 
         #expect(origins.withLock { $0 } == [.display, .action])
     }
+
+    /// Wi-Fiで始めた元の画像の読み込みにモバイル通信でOSが断っても、同じURLをプレビューとして読む処理はその失敗を引き継がずに読む。
+    @Test func displayLoadDoesNotJoinEnhancementRefusedOnNetwork() async throws {
+        let png = try pngData()
+        let enhancementStarted = Gate()
+        let refuse = Gate()
+        let store = MediaImageStore(files: .temporary()) { _, _ in
+            guard RequestPurpose.current == .enhancement(onExpensiveNetwork: false) else { return png }
+            enhancementStarted.open()
+            try await refuse.wait()
+            throw URLError(.notConnectedToInternet, userInfo: [NSURLErrorNetworkUnavailableReasonKey: URLError.NetworkUnavailableReason.expensive.rawValue])
+        }
+        let url = try #require(URL(string: "https://files.example.social/1.png"))
+
+        let enhancement = Task { try await store.image(for: url, maxPixelSize: 8, purpose: .enhancement(onExpensiveNetwork: false)) }
+        try await enhancementStarted.wait()
+        let display = Task { try await store.image(for: url, maxPixelSize: 8) }
+        refuse.open()
+
+        await #expect(throws: URLError.self) { try await enhancement.value }
+        _ = try await display.value
+    }
 }
 
 /// 読めなかった画像は、一覧に描いたときは間隔をおいてから読み直し、ビューアを開いたときはすぐ読み直す。

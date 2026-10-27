@@ -246,6 +246,42 @@ struct HTTPClientTests {
         #expect(await transport.requests.count == 1)
     }
 
+    // MARK: - 回線
+
+    /// 質を上げると先読みの通信は、聞いたあとで回線が変わってもOSが送らないよう、目的に合わせて回線の制限を付ける。
+    @Test(arguments: [
+        (RequestPurpose.action, true, true),
+        (.display, true, true),
+        (.enhancement(onExpensiveNetwork: true), true, false),
+        (.enhancement(onExpensiveNetwork: false), false, false),
+        (.prefetch, false, false),
+    ])
+    func restrictsNetworkAccessByPurpose(purpose: RequestPurpose, expensive: Bool, constrained: Bool) async throws {
+        let transport = StubTransport([.init(statusCode: 200, body: Data([1]))])
+        _ = try await RequestPurpose.$current.withValue(purpose) {
+            try await client(transport).data(for: URLRequest(url: try url("https://files.example.social/1.png")), limit: 100, scope: .host)
+        }
+        let request = try #require(await transport.requests.first)
+        #expect(request.allowsExpensiveNetworkAccess == expensive)
+        #expect(request.allowsConstrainedNetworkAccess == constrained)
+    }
+
+    /// 回線で控えた失敗は、同じ回線で送り直しても同じなので、その場で送り直さない。
+    @Test func doesNotRetryWhenUnavailableOnNetwork() async throws {
+        let unavailable = URLError(.notConnectedToInternet, userInfo: [NSURLErrorNetworkUnavailableReasonKey: URLError.NetworkUnavailableReason.expensive.rawValue])
+        let transport = ScriptedOpenTransport { _ in throw unavailable }
+        let client = client(StubTransport([])).withTransport(transport, retry: RetryPolicy(maxRetries: 2, initialDelay: .zero))
+        do {
+            _ = try await RequestPurpose.$current.withValue(.prefetch) {
+                try await client.data(for: URLRequest(url: try url("https://files.example.social/1.png")), limit: 100, scope: .host)
+            }
+            Issue.record("送れてしまった")
+        } catch {
+            #expect(HTTPFailure(error) == .unavailableOnNetwork)
+        }
+        #expect(transport.requestCount == 1)
+    }
+
     // MARK: - 少しずつ読む、ファイルへ落とす
 
     /// 少しずつ読む口も、2xx以外は失敗にし、示された再開の時刻でホストを止める。

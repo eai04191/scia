@@ -165,5 +165,5 @@ extension MediaFileCache {
 
 extension MediaThumbnailPolicy {
     /// 元の画像を読まない。テストの添付ファイルはURLを持たず、blurhashのぼかしだけで描く。
-    static let offline = MediaThumbnailPolicy(allowsOriginal: false, upscaleTolerance: 1)
+    static let offline = MediaThumbnailPolicy(enhancement: nil, upscaleTolerance: 1)
 }

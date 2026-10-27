@@ -8,6 +8,8 @@ public struct MediaThumbnailRequest: Equatable, Sendable {
     /// 縮めて展開するときの長い辺の最大（ピクセル）。元の画像より大きければ、元の大きさのまま展開する。
     public let maxPixelSize: Int
     public let source: Source
+    /// 送るときの目的。元の画像や動画の最初のコマなら質を上げる通信、サーバーのプレビュー画像なら表示に要る通信。
+    public let purpose: RequestPurpose
 
     public enum Source: Equatable, Sendable {
         case image
@@ -15,36 +17,24 @@ public struct MediaThumbnailRequest: Equatable, Sendable {
         case videoFrame(fallback: URL)
     }
 
-    public init(url: URL, maxPixelSize: Int, source: Source = .image) {
+    public init(url: URL, maxPixelSize: Int, source: Source = .image, purpose: RequestPurpose = .display) {
         self.url = url
         self.maxPixelSize = maxPixelSize
         self.source = source
+        self.purpose = purpose
     }
 }
 
 /// サムネイルを読むときの条件。回線と設定から決める。
 public struct MediaThumbnailPolicy: Equatable, Sendable {
-    /// 元の大きさの画像を読んでよいか。
-    public var allowsOriginal: Bool
+    /// 元の大きさの画像や動画の最初のコマを読むときの目的。今の回線で送らないならnil（`NetworkUsePolicy.enhancement`）。
+    public var enhancement: RequestPurpose?
     /// サーバーが縮めたプレビュー画像（small）を、何倍まで引き伸ばして出してよいか。1なら、少しでも引き伸ばすことになれば元の画像を読む。
     public var upscaleTolerance: Double
 
-    public init(allowsOriginal: Bool, upscaleTolerance: Double) {
-        self.allowsOriginal = allowsOriginal
+    public init(enhancement: RequestPurpose?, upscaleTolerance: Double) {
+        self.enhancement = enhancement
         self.upscaleTolerance = upscaleTolerance
-    }
-}
-
-/// いまの回線の状態。
-public struct NetworkConditions: Equatable, Sendable {
-    /// 低データモード。
-    public var isConstrained: Bool
-    /// モバイル通信や、インターネット共有のように通信量に限りのある回線。
-    public var isExpensive: Bool
-
-    public init(isConstrained: Bool, isExpensive: Bool) {
-        self.isConstrained = isConstrained
-        self.isExpensive = isExpensive
     }
 }
 
@@ -60,12 +50,6 @@ public enum MediaThumbnailSelection {
     /// 展開する大きさの上限。ビューアで展開する大きさと揃える。
     static let maxPixelSizeLimit = 4_096
 
-    /// 低データモードでは、設定によらず元の画像を読まない。
-    /// - Parameter usesOriginalOnExpensiveNetwork: モバイル通信などでも元の画像を読む設定。
-    public static func allowsOriginal(on network: NetworkConditions, usesOriginalOnExpensiveNetwork: Bool) -> Bool {
-        !network.isConstrained && (!network.isExpensive || usesOriginalOnExpensiveNetwork)
-    }
-
     /// - Parameters:
     ///   - tileSize: サムネイルの枠の大きさ（ポイント）。空でないこと。
     ///   - displayScale: 画面の1ポイントあたりのピクセル数。
@@ -78,23 +62,29 @@ public enum MediaThumbnailSelection {
     ) -> MediaThumbnailRequest? {
         let required = requiredPixelSize(tileSize: tileSize, displayScale: displayScale, aspectRatio: attachment.aspectRatio)
         let maxPixelSize = roundedPixelSize(max(required.width, required.height))
-        if let video = videoFrameSource(of: attachment, required: required, policy: policy) {
-            return MediaThumbnailRequest(url: video.url, maxPixelSize: maxPixelSize, source: .videoFrame(fallback: video.fallback))
+        if let enhancement = policy.enhancement, let video = videoFrameSource(of: attachment, required: required, policy: policy) {
+            return MediaThumbnailRequest(url: video.url, maxPixelSize: maxPixelSize, source: .videoFrame(fallback: video.fallback), purpose: enhancement)
         }
-        let url: URL? = switch attachment.type {
-        case .video, .gifv: attachment.previewUrl
-        // 元の画像を読まない条件では、プレビュー画像がなければ読まずにblurhashのぼかしだけを出す。
-        case .image: if !policy.allowsOriginal {
-            attachment.previewUrl
-        } else if usesOriginal(attachment, required: required, policy: policy) {
-            attachment.url
-        } else {
-            attachment.previewUrl ?? attachment.url
-        }
+        switch attachment.type {
+        case .video, .gifv:
+            return attachment.previewUrl.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize) }
+        case .image:
+            // 元の画像を読まない条件では、プレビュー画像がなければ読まずにblurhashのぼかしだけを出す。
+            guard let enhancement = policy.enhancement else {
+                return attachment.previewUrl.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize) }
+            }
+            if usesOriginal(attachment, required: required, policy: policy), let original = attachment.url {
+                return MediaThumbnailRequest(url: original, maxPixelSize: maxPixelSize, purpose: enhancement)
+            }
+            if let preview = attachment.previewUrl {
+                return MediaThumbnailRequest(url: preview, maxPixelSize: maxPixelSize)
+            }
+            // プレビュー画像を返さないサーバーでは、元の画像しか描くものがないため、表示に要る通信として読む。
+            return attachment.url.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize) }
         // プレビューのURLが画像とは限らない。
-        case .audio, .unknown: nil
+        case .audio, .unknown:
+            return nil
         }
-        return url.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize) }
     }
 
     /// 動画とGIFで、サーバーのプレビューの代わりに動画の最初のフレームを作るなら、その動画とプレビューのURL。
@@ -109,7 +99,6 @@ public enum MediaThumbnailSelection {
     /// https://github.com/mastodon/mastodon/blob/main/app/controllers/media_proxy_controller.rb
     private static func videoFrameSource(of attachment: MediaAttachment, required: CGSize, policy: MediaThumbnailPolicy) -> (url: URL, fallback: URL)? {
         guard attachment.type == .video || attachment.type == .gifv,
-              policy.allowsOriginal,
               let video = attachment.url,
               let preview = attachment.previewUrl,
               isGeneratedFromVideo(preview: preview, previewRemoteUrl: attachment.previewRemoteUrl),

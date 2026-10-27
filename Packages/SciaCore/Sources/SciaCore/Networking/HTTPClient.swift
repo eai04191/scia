@@ -4,6 +4,7 @@ import os
 /// アプリの通信の入口。REST API、ログイン、画像、ファイル、fxtwitter、リンク先のページが通り、同じ決まりに従う（docs/network.md）。
 ///
 /// - 自動の通信（`RequestPurpose.isAutomatic`）は、止められている間は送らずに`AutomaticRequestsPaused`を投げる
+/// - 質を上げると先読みの通信は、目的に合わせて、低データモードやモバイル通信ではOSに送らせない
 /// - 429や503が再開の時刻を示したら、その単位（`Scope`）の自動の通信を時刻まで止める
 /// - GETと`Idempotency-Key`付きは、一時的な失敗（502、504、再開の時刻のない503、通信の失敗）で、その場で送り直す
 /// - 応答は、用途ごとに決めた大きさ（`ResponseLimit`）までしか読まない
@@ -55,6 +56,7 @@ public struct HTTPClient: Sendable {
         retries allowsRetry: Bool = true,
         beforeAttempt: @Sendable () async throws -> Void = {}
     ) async throws -> (Data, HTTPURLResponse) {
+        let request = Self.restrictingNetworkAccess(of: request)
         let gate = await gate(for: scope, url: request.url)
         let canRetry = allowsRetry && RetryPolicy.canRetry(request)
         var retries = 0
@@ -98,6 +100,7 @@ public struct HTTPClient: Sendable {
     /// 応答の頭を受け取ったら返し、本文は届いた分から渡す。読むのをやめれば通信も止まる。範囲指定や、ページの頭だけを読むときに使う。
     /// 本文が`limit`バイトを超えたら、列を`ResponseTooLarge`で終える。2xx以外は`HTTPStatusError`を投げる。読む途中でやめられるよう、送り直さない。
     public func open(_ request: URLRequest, limit: Int, scope: Scope) async throws -> (HTTPResponseBody, HTTPURLResponse) {
+        let request = Self.restrictingNetworkAccess(of: request)
         let gate = await gate(for: scope, url: request.url)
         try await checkBeforeSending(gate)
         let (body, response) = try await transport.open(request, limit: limit)
@@ -115,6 +118,7 @@ public struct HTTPClient: Sendable {
         scope: Scope,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> (URL, HTTPURLResponse) {
+        let request = Self.restrictingNetworkAccess(of: request)
         let gate = await gate(for: scope, url: request.url)
         try await checkBeforeSending(gate)
         let (file, response) = try await transport.download(request, limit: limit, progress: progress)
@@ -137,6 +141,16 @@ public struct HTTPClient: Sendable {
         // 取り消されると、列は失敗せずに終わる。途中までの本文を、読み終えたものとして返さない。
         try Task.checkCancellation()
         return data
+    }
+
+    /// 今の目的（`RequestPurpose.current`）で送らない回線を、リクエストに付ける。呼び出し側が回線を聞いたあとで
+    /// Wi-Fiからモバイル通信に変わっても、OSが送らない。呼び出し側が付けた制限は外さない。
+    static func restrictingNetworkAccess(of request: URLRequest) -> URLRequest {
+        let purpose = RequestPurpose.current
+        var request = request
+        request.allowsExpensiveNetworkAccess = request.allowsExpensiveNetworkAccess && purpose.allowsExpensiveNetworkAccess
+        request.allowsConstrainedNetworkAccess = request.allowsConstrainedNetworkAccess && purpose.allowsConstrainedNetworkAccess
+        return request
     }
 
     /// 429か503が、まだ来ていない再開の時刻を示しているか。

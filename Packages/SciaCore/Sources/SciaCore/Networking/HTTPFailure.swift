@@ -1,6 +1,6 @@
 import Foundation
 
-/// 失敗を、次にどうするかで3つに分ける。送り直すか、待って読み直すか、あきらめるかは、どの経路もこの分け方だけを見て決める。
+/// 失敗を、次にどうするかで4つに分ける。送り直すか、待って読み直すか、あきらめるかは、どの経路もこの分け方だけを見て決める。
 /// 経路ごとにステータスを読み分けると、429を「読めない」として二度と読まない経路が出るため、分け方はここにしか書かない。
 public enum HTTPFailure: Equatable, Sendable {
     /// 待てば直る。通信の失敗、408、429、5xx、自動の通信を控えている間。`retryAfter`は、応答が示した再開までの長さ。
@@ -9,6 +9,8 @@ public enum HTTPFailure: Equatable, Sendable {
     case unauthorized
     /// 待っても直らない。そのほかの4xx、範囲指定に応えない応答、上限を超えた応答、読めない中身。
     case permanent
+    /// 質を上げると先読みの通信を、今の回線では送らないとOSが断った（`RequestPurpose`）。時間をおいては読み直さず、回線が変わって描き直したときに選び直す。
+    case unavailableOnNetwork
 
     /// 取り消しはnil。失敗ではないので、覚えも知らせもしない。
     public init?(_ error: any Error) {
@@ -18,7 +20,11 @@ public enum HTTPFailure: Equatable, Sendable {
         case let error as URLError:
             // 通信の失敗は、つながれば通る。
             guard error.code != .cancelled else { return nil }
-            self = .temporary(retryAfter: nil)
+            // `.cellular`は、端末の設定でこのアプリのモバイルデータ通信を切ったときなどにも付く。アプリが付けた制限ではないので、つながれば通る失敗にする。
+            self = switch error.networkUnavailableReason {
+            case .expensive?, .constrained?: .unavailableOnNetwork
+            default: .temporary(retryAfter: nil)
+            }
         case let error as any HTTPStatusFailure:
             self = HTTPFailure(statusCode: error.statusCode, retryAfter: error.retryAfter)
         case let error as AutomaticRequestsPaused:

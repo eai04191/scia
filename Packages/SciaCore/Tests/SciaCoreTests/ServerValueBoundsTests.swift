@@ -88,7 +88,7 @@ struct ServerValueBoundsTests {
                 for: attachment,
                 tileSize: CGSize(width: 393, height: 393),
                 displayScale: 3,
-                policy: MediaThumbnailPolicy(allowsOriginal: true, upscaleTolerance: 1)
+                policy: MediaThumbnailPolicy(enhancement: .enhancement(onExpensiveNetwork: true), upscaleTolerance: 1)
             )
 
             #expect(request != nil)

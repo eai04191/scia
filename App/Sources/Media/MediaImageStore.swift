@@ -53,6 +53,9 @@ final class MediaImageStore {
         let maxPixelSize: Int
         /// 動画の先頭から作った最初のフレーム。
         var isVideoFrame = false
+        /// 送ってよい回線。キャッシュの鍵には含めず、読み込みの待ち合わせだけを分ける。
+        /// Wi-Fiで始めた元の画像の読み込みにモバイル通信でOSが断ると、同じURLをプレビューとして読む処理までその失敗を受けてしまうため。
+        var networkAccess = RequestPurpose.display.networkAccess
 
         var cacheKey: NSString { "\(isVideoFrame ? "frame " : "")\(maxPixelSize) \(url.absoluteString)" as NSString }
     }
@@ -80,21 +83,22 @@ final class MediaImageStore {
     func thumbnail(for request: MediaThumbnailRequest) async throws -> UIImage {
         switch request.source {
         case .image:
-            return try await image(for: request.url, maxPixelSize: request.maxPixelSize)
+            return try await image(for: request.url, maxPixelSize: request.maxPixelSize, purpose: request.purpose)
         case .videoFrame(let fallback):
             // 通信の失敗で作れなかった間は、読み直してよくなるまでサーバーのプレビューで描く。
             if !failedVideoFrames.contains(request.url), retry.allowsAutomaticLoad(of: request.url) {
                 do {
-                    let frame = try await videoFrame(for: request.url, maxPixelSize: request.maxPixelSize)
+                    let frame = try await videoFrame(for: request.url, maxPixelSize: request.maxPixelSize, purpose: request.purpose)
                     retry.recordSuccess(for: request.url)
                     return frame
                 } catch {
                     // 通信の失敗やサーバーの一時的な障害は、待てば作れるため、間隔をおいて作り直す。
                     // 範囲に応えないサーバーや、先頭から作れない動画は、作り直しても同じなので覚える。
-                    if HTTPFailure(error)?.isTemporary == true {
-                        retry.recordFailure(error, for: request.url)
-                    } else if HTTPFailure(error) != nil {
-                        failedVideoFrames.insert(request.url)
+                    // 回線で控えたものは、回線が変わって描き直したときに選び直すので覚えない。
+                    switch HTTPFailure(error) {
+                    case .temporary: retry.recordFailure(error, for: request.url)
+                    case .permanent, .unauthorized: failedVideoFrames.insert(request.url)
+                    case nil, .unavailableOnNetwork: break
                     }
                 }
             }
@@ -103,8 +107,8 @@ final class MediaImageStore {
     }
 
     /// 動画の先頭だけを読み、最初のフレームを作る。読む長さは`VideoFirstFrame`が動画の目次から決める。
-    private func videoFrame(for url: URL, maxPixelSize: Int) async throws -> UIImage {
-        let key = Key(url: url, maxPixelSize: maxPixelSize, isVideoFrame: true)
+    private func videoFrame(for url: URL, maxPixelSize: Int, purpose: RequestPurpose) async throws -> UIImage {
+        let key = Key(url: url, maxPixelSize: maxPixelSize, isVideoFrame: true, networkAccess: purpose.networkAccess)
         if let image = cache.object(forKey: key.cacheKey) {
             return image
         }
@@ -112,8 +116,8 @@ final class MediaImageStore {
             return try await task.value.image
         }
         let fetch = fetch
-        // 一覧に描くための読み込みなので、自動の通信として送り、止められている間は送らない（docs/network.md）。
-        let task = RequestPurpose.$current.withValue(.display) {
+        // 一覧に描くための読み込みなので、呼び出し側の目的（質を上げる通信）で送り、止められている間と、その回線では送らない（docs/network.md）。
+        let task = RequestPurpose.$current.withValue(purpose) {
             Task<Loaded, any Error> {
                 let prefix = try await VideoFirstFrame.readPrefix { range in try await fetch(url, range) }
                 return Loaded(image: try await Self.makeVideoFrame(from: prefix, maxPixelSize: maxPixelSize), keptOriginal: false)
@@ -148,8 +152,10 @@ final class MediaImageStore {
     ///   ビューアは常に残すよう求めるため、この組み合わせは起きない。
     /// 前に読めなかった画像は、読み直してよくなるまで`ImageLoadDeferred`を投げる。
     /// - Parameter retriesNow: 使う人が自分で見に行った操作（ビューアを開く、長押しするなど）で、間隔を待たずに読み直す。
-    func image(for url: URL, maxPixelSize: Int, keepsOriginal: Bool = false, retriesNow: Bool = false) async throws -> UIImage {
-        let key = Key(url: url, maxPixelSize: maxPixelSize)
+    /// - Parameter purpose: `retriesNow`でないときに送る目的。一覧のサムネイルの元の画像は、質を上げる通信として送る。
+    func image(for url: URL, maxPixelSize: Int, keepsOriginal: Bool = false, retriesNow: Bool = false, purpose: RequestPurpose = .display) async throws -> UIImage {
+        let purpose = retriesNow ? .action : purpose
+        let key = Key(url: url, maxPixelSize: maxPixelSize, networkAccess: purpose.networkAccess)
         if let image = cache.object(forKey: key.cacheKey) {
             if !keepsOriginal {
                 return image
@@ -167,7 +173,7 @@ final class MediaImageStore {
         let fetch = fetch
         let files = keepsOriginal ? files : nil
         // 一覧に描くための読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
-        let task = RequestPurpose.$current.withValue(retriesNow ? .action : .display) { Task<Loaded, any Error> {
+        let task = RequestPurpose.$current.withValue(purpose) { Task<Loaded, any Error> {
             let generation = await files?.generation
             // ビューアで開く画像は、元のファイルがキャッシュにあれば通信せずに使う。壊れていて展開できなければ、通信で取り直して置き直す。
             if let files, let cached = await files.data(for: url), let image = await Self.decode(cached, maxPixelSize: maxPixelSize) {

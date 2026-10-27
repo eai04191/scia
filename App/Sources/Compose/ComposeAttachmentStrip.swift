@@ -17,7 +17,7 @@ final class ComposeAttachmentStrip: UIView {
 
     /// 編集している投稿に付いている添付のサムネイル。枠が64ptと小さいので、元の画像は読まず、サーバーのプレビュー画像を少し引き伸ばして出す。
     /// 書いていないときのカプセルのサムネイルも、同じ決め方で読む。
-    static let attachedThumbnailPolicy = MediaThumbnailPolicy(allowsOriginal: false, upscaleTolerance: 2)
+    static let attachedThumbnailPolicy = MediaThumbnailPolicy(enhancement: nil, upscaleTolerance: 2)
 
     /// サムネイルを押したときに呼ぶ。
     var onSelect: (DraftAttachment.ID) -> Void = { _ in }

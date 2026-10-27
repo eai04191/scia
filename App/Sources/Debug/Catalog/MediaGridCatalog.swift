@@ -92,7 +92,7 @@ enum MediaGridCatalog {
         }
         for width in widths {
             let tile = MediaTileView(store: AppDependencies.mediaImages)
-            tile.apply(attachment, hiddenCount: 0, isCovered: false, policy: MediaThumbnailPolicy(allowsOriginal: true, upscaleTolerance: 2))
+            tile.apply(attachment, hiddenCount: 0, isCovered: false, policy: MediaThumbnailPolicy(enhancement: .enhancement(onExpensiveNetwork: true), upscaleTolerance: 2))
             tile.widthAnchor.constraint(equalToConstant: width).isActive = true
             tile.heightAnchor.constraint(equalToConstant: square ? width : 64).isActive = true
             row.addArrangedSubview(tile)

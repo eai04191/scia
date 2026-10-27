@@ -492,8 +492,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = tuning.value(of: TuningCatalog.reactionGlowLightIntensity)
             _ = tuning.value(of: TuningCatalog.reactionGlowLightBloomIntensityRatio)
             _ = tuning.value(of: TuningCatalog.reactionGlowDarkGlowHDRExposure)
-            _ = network.conditions
-            _ = settings.usesOriginalThumbnailsOnExpensiveNetwork
+            _ = network.usePolicy(settings: settings)
             _ = settings.ignoresUselessAltText
             _ = settings.statusNameStyle
             _ = settings.contextNameStyle

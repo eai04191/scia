@@ -284,7 +284,7 @@ struct ProfileShelfItem: Equatable {
             for: attachment,
             tileSize: CGSize(width: size, height: size),
             displayScale: 3,
-            policy: MediaThumbnailPolicy(allowsOriginal: false, upscaleTolerance: 1)
+            policy: MediaThumbnailPolicy(enhancement: nil, upscaleTolerance: 1)
         )
     }
 }

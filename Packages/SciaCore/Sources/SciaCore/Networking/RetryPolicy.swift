@@ -34,7 +34,8 @@ public struct RetryPolicy: Sendable {
         [502, 503, 504].contains(statusCode)
     }
 
+    /// 回線で控えた失敗（`HTTPFailure.unavailableOnNetwork`）は、同じ回線で送り直しても同じなので含めない。
     static func isTemporary(_ error: URLError) -> Bool {
-        [.timedOut, .networkConnectionLost, .notConnectedToInternet, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed].contains(error.code)
+        HTTPFailure(error) != .unavailableOnNetwork && [.timedOut, .networkConnectionLost, .notConnectedToInternet, .cannotConnectToHost, .cannotFindHost, .dnsLookupFailed].contains(error.code)
     }
 }

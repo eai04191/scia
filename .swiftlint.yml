@@ -15,6 +15,7 @@ only_rules:
   - unsafe_file_name
   - log_private_value
   - url_session_outside_network_layer
+  - network_conditions_outside_policy
   - test_file_without_scratch
 
 included:
@@ -124,6 +125,18 @@ custom_rules:
       - doccomment
       - string
     message: "実際の時間に直接触れない。時間をおく処理はClockで、今の日付は日付を返す関数で受け取り、既定値はSystemTimeかAppDependenciesを参照する"
+    severity: error
+
+  # 回線を経路ごとに読み分けると、モバイル通信で控える経路と控えない経路が混ざり、新しく足した経路が決まりから漏れる（docs/network.mdの「通信の目的」）
+  network_conditions_outside_policy:
+    included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"
+    excluded: "(App/Sources/Media/NetworkConditionsMonitor\\.swift|Packages/SciaCore/Sources/SciaCore/Networking/(NetworkUsePolicy|NetworkPathTracker|RequestPurpose|HTTPClient)\\.swift)"
+    regex: "\\b(isExpensive|isConstrained|allowsExpensiveNetworkAccess|allowsConstrainedNetworkAccess)\\b|\\bNWPathMonitor\\b|\\bnetwork\\.conditions\\b"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "回線の状態を読んで送るかを分けない。目的（RequestPurpose）を名乗り、送ってよいかはNetworkUsePolicyに聞く"
     severity: error
 
   # 文字の大きさを数字で決め打ちすると、端末の文字の大きさに従わない。書式（preferredFont）か、UIFontMetricsで大きさを変える文字で作る。
