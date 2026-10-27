@@ -28,6 +28,10 @@ struct StatusBarTickerLargeContentTests {
         ticker.receive(StatusBarTickerItem(id: "1", kind: .favourite, account: account, subject: .text(RichText.plain("本文", emojis: []))))
         let view = try #require(tickerView(in: scene))
         view.layoutIfNeeded()
+        // 押した場所は、見えているカプセルの枠で当てる。広がりきる前に押すと、描画が確定しているかどうかで、
+        // 広がり始めの小さい枠か、広がった枠かが変わるため、層の時計で広がりきるまで進めてから押す。
+        let layerClock = LayerClock(freezing: try #require(view.window).layer)
+        try await layerClock.runUntilIdle()
         let capsule = try #require(view.subviews.first { $0.isAccessibilityElement })
         let point = CGPoint(x: capsule.frame.midX, y: capsule.frame.midY)
         let interaction = UILargeContentViewerInteraction(delegate: view)
