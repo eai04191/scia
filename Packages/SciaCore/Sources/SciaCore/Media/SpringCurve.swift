@@ -31,6 +31,9 @@ public struct SpringCurve: Sendable, Equatable {
         to target: (x: Double, y: Double),
         duration: TimeInterval
     ) -> Double {
+        // ジェスチャーの速さは、NaNや無限大で届くことがある（指の最後の動きと離した時刻が同じなら、距離を0の時間で割る）。
+        // NaNは下の範囲の制限をすり抜け、進み具合を動き始めからNaNにしてアプリを落とすため、引き継がない。
+        guard releaseVelocity.x.isFinite, releaseVelocity.y.isFinite else { return 0 }
         let distance = (x: target.x - start.x, y: target.y - start.y)
         let squaredLength = distance.x * distance.x + distance.y * distance.y
         guard squaredLength > 1 else { return 0 }

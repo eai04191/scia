@@ -68,4 +68,20 @@ struct SpringCurveTests {
         #expect(away == 0)
         #expect(sameSpot == 0)
     }
+
+    /// 指を離した速さが数でない（指の最後の動きと離した時刻が同じで、距離を0の時間で割った）ときは、引き継がない。
+    /// 引き継ぐと、進み具合が動き始めたところからNaNになり、閉じるビューアの画像の枠にNaNを入れてアプリが落ちる。
+    @Test(arguments: [
+        (Double.nan, Double.nan),
+        (0.0, Double.nan),
+        (Double.infinity, -Double.infinity),
+        (Double.infinity, 0.0),
+    ] as [(Double, Double)])
+    func initialVelocityIgnoresReleaseVelocityThatIsNotANumber(x: Double, y: Double) {
+        let velocity = SpringCurve.initialVelocity(releaseVelocity: (x, y), from: (0, 0), to: (0, 500), duration: 0.4)
+        let spring = SpringCurve(duration: 0.4, bounce: 0.3, initialVelocity: velocity)
+
+        #expect(velocity == 0)
+        #expect(spring.value(at: 0.01).isFinite)
+    }
 }
