@@ -634,7 +634,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 表示中の要素を、新しい順に並んだ`newEntries`で置き換える。
     ///
     /// 読んでいる位置の要素が画面上で動かないようにする。基準は表示領域の上端にかかっている要素で、`anchorID`を渡せばその要素にする。
-    /// ただし最上部にいて追従が有効なら、最上部に留まって新着を見せる。
+    /// ただし最上部にいて追従が有効なら、最上部に留まって新着を見せる。ビューアや全画面のアプリ内のSafariで覆っている間は追従しない。
     /// `topID`を渡すと、その要素を表示領域の上端に置く。既読位置から読み始めるときに使う。
     /// - Parameter keepsOffset: 一覧の中身を取り替える。要素を基準にせず、スクロール位置をそのまま保つ。
     ///   プロフィールのタブの切り替えのように、ヘッダーを押した場所に残し、その下の中身だけを入れ替えたいときに使う。
@@ -659,7 +659,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let previous = entries
         let keepsRowContents = base.map { Self.sharesStorage($0, appliedEntries) } ?? false
         appliedEntries = newEntries
-        let followsTop = anchorID == nil && topID == nil && isAtTop && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
+        // 添付ファイルのビューアや全画面のアプリ内のSafariで覆っている間は、新着を見たと報告しないので、追従もせずに読んでいた行の位置を保つ。
+        let isCovered = isCoveredByMediaViewer || isCoveredByInAppBrowser
+        let followsTop = anchorID == nil && topID == nil && isAtTop && !isCovered && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
         let newIDs = newEntries.map(\.id)
         entries = Dictionary(zip(newIDs, newEntries), uniquingKeysWith: { _, new in new })
         gapIDs = newEntries.compactMap { entry in

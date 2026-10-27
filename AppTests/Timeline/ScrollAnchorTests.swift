@@ -185,6 +185,34 @@ struct ScrollAnchorTests {
         #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
     }
 
+    /// 添付ファイルのビューアや全画面のアプリ内のSafariで覆っている間は、最上部にいても新着に追従せず、それまで最上部にあった行の位置を保つ。
+    /// 覆っている間は新着を見たと報告しないため、追従すると見ていない新着の分だけ読んでいた行が下へ流れ、ビューアを閉じる先の写真もずれる。
+    @Test(arguments: [false, true], [InsertionMotion.animated, .instant])
+    func prependAtTopWhileCoveredKeepsPreviousTop(byViewer: Bool, motion: InsertionMotion) async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.settings.insertionMotion = motion
+        let existing = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(existing)
+        harness.scroll(toFraction: 0)
+        let previousTop = try #require(existing.first)
+        if byViewer {
+            let attachment = MediaAttachment(id: "1", type: .image, url: URL(string: "https://x.example/1.png"), previewUrl: nil)
+            let drag = DragToDismiss(distanceThreshold: 0.12, velocityThreshold: 0.8, smallestScale: 0.6, fadeDistance: 0.5, restoreDuration: 0.35)
+            let timing = MediaViewerController.Timing(openDuration: 0.1, closeDuration: 0.1, dragCloseBounce: 0, drawsUnderBars: true, openHandoffEnd: 0.3, openBarOverlapFadeStart: 0.7, handoffStart: 0.7, barOverlapFadeEnd: 0.3, savedChipDuration: 1.5, videoControlsHideDelay: 3, videoSkipEffectDuration: 0.3, doubleTapZoomDuration: 0.2)
+            try await harness.viewController.presentForTesting(MediaViewerController(attachments: [attachment], startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil }))
+        } else {
+            harness.viewController.setCoveredByInAppBrowser(true)
+        }
+        let before = try #require(harness.windowMinY(of: .status(previousTop.id)))
+
+        harness.setStatuses(StatusFactory.make(count: 3, startingAt: 1_003) + existing)
+
+        #expect(!harness.viewController.isScrollingToTop, "覆っている間に最上部へ動かし始めました")
+        let after = try #require(harness.windowMinY(of: .status(previousTop.id)), "それまで最上部にあった投稿が画面外へ出ました")
+        #expect(abs(after - before) <= tolerance, "それまで最上部にあった投稿が\(after - before)pt動きました")
+    }
+
     /// 表示領域の上端にかかっている行が消え、別の行が先頭に入っても（まとめた通知が新着で一番上へ移るときなど）、
     /// 消えた行のすぐ下の行の位置を保つ。消えた行を基準にすると、基準がなくなって読んでいる行が流れる。
     @Test(arguments: [0.4, 1.0])
