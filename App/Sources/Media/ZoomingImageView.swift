@@ -31,6 +31,30 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         }
     }
 
+    /// 元の画像が届いて、等倍の大きさが初めて分かったときに設定する。開いたときの倍率のままなら、画面に収めた大きさから等倍へ、`duration`秒かけて縮める。
+    /// 一度に縮めると、画面幅いっぱいの画像が1コマで小さくなる。`duration`が0なら、動かさずに縮める。拡大していれば、見ている大きさを変えない。
+    func setNaturalSize(_ size: CGSize, duration: TimeInterval) {
+        let wasAtRest = isAtRest
+        naturalSize = size
+        guard let imageSize = imageView.image?.size, imageSize.width > 0, imageSize.height > 0, bounds.width > 0, bounds.height > 0 else { return }
+        minimumZoomScale = fitScale * naturalRatio()
+        guard wasAtRest, abs(zoomScale - minimumZoomScale) > 0.001 else { return }
+        stopZoomAnimation()
+        guard duration > 0 else {
+            zoomScale = minimumZoomScale
+            return
+        }
+        animateZoom(duration: duration) { $0.setZoomScale($0.minimumZoomScale, animated: false) }
+    }
+
+    /// 画像を描いている枠の、いま見えている位置。自身の座標。等倍へ縮めている途中は、動いている途中の枠を返す。
+    var presentedImageFrame: CGRect? {
+        guard imageView.image != nil else { return nil }
+        guard let image = imageView.layer.presentation(), let scroll = layer.presentation() else { return imageView.frame }
+        // 自身の座標は境界の原点（スクロールの位置）からの位置なので、見えている原点に合わせて直す。
+        return image.frame.offsetBy(dx: bounds.minX - scroll.bounds.minX, dy: bounds.minY - scroll.bounds.minY)
+    }
+
     /// 画像そのものに操作を付ける。Live Textのように、画像の中の位置で振る舞いを変え、拡大に合わせて動く必要がある操作に使う。
     func addImageInteraction(_ interaction: any UIInteraction) {
         imageView.isUserInteractionEnabled = true
@@ -192,9 +216,9 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         animateZoom { $0.zoom(to: rect, animated: false) }
     }
 
-    private func animateZoom(_ changes: @escaping (ZoomingImageView) -> Void) {
+    private func animateZoom(duration: TimeInterval? = nil, _ changes: @escaping (ZoomingImageView) -> Void) {
         isAnimatingZoom = true
-        UIView.animate(springDuration: doubleTapZoomDuration, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+        UIView.animate(springDuration: duration ?? doubleTapZoomDuration, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
             changes(self)
         } completion: { [weak self] finished in
             if finished { self?.isAnimatingZoom = false }

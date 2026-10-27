@@ -680,6 +680,15 @@ public enum TuningCatalog {
         defaultValue: 0.2
     )
 
+    /// ビューアで元の大きさの分からない小さい画像が届いたときに、画面に収めた大きさから等倍へ縮める時間。
+    public static let mediaNaturalSizeDuration = NumberTuning(
+        id: "media.naturalSizeDuration",
+        title: "元の大きさが分かった画像を等倍へ縮める時間（秒）",
+        range: 0.1...1,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
     /// ビューアを開閉するとき、画像のうちバーにかかる部分を、バーの奥にも描く。
     /// オフなら、開くときは複製をバーの手前にだけ描き、閉じるときはバーにかかる部分を着地へ近づくにつれて切り落とすだけにする。
     /// 開き始めにバーの下のサムネイルがバーの手前へ急に出て、閉じる着地の瞬間にバー越しのサムネイルが急に現れる。
@@ -1665,6 +1674,9 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "media.zoom", title: "ビューア：拡大", items: [
             .number(mediaDoubleTapZoomDuration),
+        ]),
+        TuningSection(id: "media.loading", title: "ビューア：画像が届いたとき", items: [
+            .number(mediaNaturalSizeDuration),
         ]),
         TuningSection(id: "media.bars", title: "ビューア：バーとの重なり", items: [
             .toggle(mediaCloseDrawsUnderBars),

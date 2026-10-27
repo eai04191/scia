@@ -76,4 +76,33 @@ struct ZoomingImageViewTests {
 
         #expect(abs((view.imageFrame?.width ?? 0) - 400) < 0.5)
     }
+
+    /// 元の大きさの分からない小さい画像が届いたら、画面に収めた大きさから等倍へ動かして縮める。
+    /// 縮める途中の見えている枠は、動き始めでは画面に収めた枠のまま、行き着く先は等倍の枠にする。
+    @Test func shrinksToNaturalSizeGraduallyWhenItBecomesKnown() throws {
+        let view = ZoomingImageView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        let small = image(width: 100, height: 100)
+        view.image = small
+        view.layoutIfNeeded()
+        let fitted = try #require(view.presentedImageFrame)
+        #expect(abs(fitted.width - 400) < 0.5)
+
+        view.setNaturalSize(small.size, duration: 0.3)
+
+        #expect(abs((view.imageFrame?.width ?? 0) - 100) < 0.5, "等倍へ行き着きません: \(String(describing: view.imageFrame))")
+        #expect(view.layer.animationKeys()?.isEmpty == false || view.subviews.contains { $0.layer.animationKeys()?.isEmpty == false }, "等倍へ1コマで縮めています")
+    }
+
+    /// 拡大して見ている間に元の大きさが分かっても、見ている大きさを変えない。
+    @Test func keepsZoomWhenNaturalSizeBecomesKnownWhileZoomedIn() {
+        let view = ZoomingImageView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        view.image = image(width: 100, height: 100)
+        view.layoutIfNeeded()
+        view.zoomScale = view.minimumZoomScale * 2
+        let width = view.imageFrame?.width ?? 0
+
+        view.setNaturalSize(CGSize(width: 100, height: 100), duration: 0.3)
+
+        #expect(abs((view.imageFrame?.width ?? 0) - width) < 0.5)
+    }
 }

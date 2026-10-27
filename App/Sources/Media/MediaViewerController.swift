@@ -125,6 +125,8 @@ final class MediaViewerController: UIViewController {
         var paperBorderPortion: Double = 1
         /// 開く途中で左右にめくったときに、途中の見え方を薄くして、開ききった見え方へ移す時間。
         var interruptedOpenFadeDuration: TimeInterval = 0.2
+        /// 元の大きさの分からない画像が届いたときに、画面に収めた大きさから等倍へ縮める時間。
+        var naturalSizeDuration: TimeInterval = 0.3
     }
 
     /// 投稿欄で選んだメディアを開いたときの操作。ビューアは投稿欄を知らず、メニューと代替テキストの書き終わりをここから渡す。
@@ -217,6 +219,13 @@ final class MediaViewerController: UIViewController {
     func contentFrame(in view: UIView) -> CGRect {
         guard let page = pages[currentIndex] else { return view.bounds }
         return page.view.convert(page.contentFrame, to: view)
+    }
+
+    /// 表示中の添付ファイルの、いま見えている枠。`view`の座標。元の大きさの分かった画像を等倍へ縮めている途中は、縮んでいく途中の枠を返す。
+    /// 複製を出し始める位置と、開く動きの行き先に使う。戻す動きの行き先には、縮み終えた枠（`contentFrame(in:)`）を使う。
+    private func presentedContentFrame(in view: UIView) -> CGRect {
+        guard let page = pages[currentIndex] else { return view.bounds }
+        return page.view.convert(page.presentedContentFrame, to: view)
     }
 
     /// 複製を動かしているか。開き終わり、閉じる操作もしていなければfalse。
@@ -629,6 +638,7 @@ final class MediaViewerController: UIViewController {
         page.isEditingDescription = isEditingDescription
         if let image = page as? ImagePageController {
             image.doubleTapZoomDuration = timing.doubleTapZoomDuration
+            image.naturalSizeDuration = timing.naturalSizeDuration
         }
         if let player = page as? PlayerPageController {
             player.controlsHideDelay = timing.videoControlsHideDelay
@@ -1277,7 +1287,6 @@ extension MediaViewerController {
             let startRotation = tile.rotation(in: view)
             showMorph(frame: start, cornerRadius: startRadius, tile: tile, decorationAlpha: 1, rotation: startRotation, border: startBorder)
             barLayering = makeBarLayering(tile: tile)
-            let target = contentFrame(in: view)
             let startAppearance = morph.contentOpacity
             let startDimming = morph.dimming
             let startShadow = morphShadow.opacity
@@ -1287,7 +1296,8 @@ extension MediaViewerController {
                 let paperProgress = min(min(max(progress, 0), 1) / CGFloat(max(self.timing.paperBorderPortion, 0.01)), 1)
                 // 影も、フチを細くしきるのと同じ区間で薄くしてなくす。
                 self.morphShadow.opacity = startShadow * Float(1 - paperProgress)
-                self.updateOpening(progress: progress, from: start, radius: startRadius, rotation: startRotation, border: startBorder, to: target)
+                // 行き先は毎フレーム読み直す。開く途中に元の大きさの分からない画像が届くと、ページの画像が等倍へ縮み始めるため。
+                self.updateOpening(progress: progress, from: start, radius: startRadius, rotation: startRotation, border: startBorder, to: self.presentedContentFrame(in: self.view))
                 self.morph.contentOpacity = startAppearance + (1 - startAppearance) * paperProgress
                 self.morph.dimming = startDimming * (1 - paperProgress)
             }
@@ -1410,7 +1420,7 @@ extension MediaViewerController {
             stopSettling(animator)
             grabMovingMorph()
         case .idle:
-            showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: currentTile, decorationAlpha: 0, copiesPageOverlay: true)
+            showMorph(frame: presentedContentFrame(in: view), cornerRadius: 0, tile: currentTile, decorationAlpha: 0, copiesPageOverlay: true)
         case .dragging, .closing:
             return
         }
@@ -1423,7 +1433,7 @@ extension MediaViewerController {
     private func grabMovingMorph() {
         if morph.isHidden {
             // 薄くして開いていた途中なら、ここから複製を出す。
-            showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: currentTile, decorationAlpha: 0)
+            showMorph(frame: presentedContentFrame(in: view), cornerRadius: 0, tile: currentTile, decorationAlpha: 0)
         } else {
             hide(currentTile)
         }
@@ -1523,7 +1533,7 @@ extension MediaViewerController {
         motion = .closing
         let tile = currentTile
         if morph.isHidden {
-            showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: tile, decorationAlpha: 0, copiesPageOverlay: true)
+            showMorph(frame: presentedContentFrame(in: view), cornerRadius: 0, tile: tile, decorationAlpha: 0, copiesPageOverlay: true)
         } else {
             if tile !== hiddenTile {
                 // 左右の切り替えで戻り先が変わっていたら、重ねた表示をその戻り先のものに載せ直す。
@@ -1752,6 +1762,9 @@ class MediaPageController: UIViewController {
     /// 添付ファイルを描いている枠。`view`の座標。
     var contentFrame: CGRect { view.bounds }
 
+    /// 添付ファイルを描いている枠の、いま見えている位置。`view`の座標。動かしていなければ`contentFrame`と同じ。
+    var presentedContentFrame: CGRect { contentFrame }
+
     /// 開閉で動かす、描いている画像。
     var transitionImage: UIImage? { nil }
 
@@ -1870,6 +1883,9 @@ final class ImagePageController: MediaPageController {
         set { zoomView.doubleTapZoomDuration = newValue }
     }
 
+    /// 元の大きさの分からない画像が届いたときに、画面に収めた大きさから等倍へ縮める時間。
+    var naturalSizeDuration: TimeInterval = 0.3
+
     override var allowsInteractiveDismiss: Bool { !zoomView.isZoomedIn }
 
     /// 画像から読み取った文字の全文。解析し終えるまでと、文字のない画像ではnil。
@@ -1897,6 +1913,11 @@ final class ImagePageController: MediaPageController {
 
     override var contentFrame: CGRect {
         zoomView.imageFrame.map { zoomView.convert($0, to: view) } ?? view.bounds
+    }
+
+    /// 等倍へ縮めている途中は、縮んでいく途中の枠を返す。開く途中や閉じ始めの複製を、縮んでいく画像に合わせるため。
+    override var presentedContentFrame: CGRect {
+        zoomView.presentedImageFrame.map { zoomView.convert($0, to: view) } ?? view.bounds
     }
 
     override var transitionImage: UIImage? { zoomView.image }
@@ -2045,11 +2066,12 @@ final class ImagePageController: MediaPageController {
             if let image {
                 self.originalURL = await store.hasOriginal(for: url) ? url : nil
                 self.imageSource = "full"
-                // サーバーが元の大きさを返さなければ、届いた画像の大きさを等倍にする。サムネイルを出していた間は画面に収めていたため、ここで大きさが変わる。
-                if self.zoomView.naturalSize == nil {
-                    self.zoomView.naturalSize = image.size
-                }
                 self.zoomView.image = image
+                // サーバーが元の大きさを返さなければ、届いた画像の大きさを等倍にする。サムネイルを出していた間は画面に収めていたため、ここで大きさが変わる。
+                // 画面に収めたまま差し替えてから、等倍へ縮めていく。視差効果を減らす設定では、開閉と同じく動かさずに縮める。
+                if self.zoomView.naturalSize == nil {
+                    self.zoomView.setNaturalSize(image.size, duration: UIAccessibility.isReduceMotionEnabled ? 0 : self.naturalSizeDuration)
+                }
                 self.onImageChange?()
                 self.analyze(image)
             } else {
@@ -2842,7 +2864,8 @@ extension MediaViewerController.Timing {
             videoSkipEffectDuration: tuning.value(of: TuningCatalog.mediaVideoSkipEffectDuration),
             doubleTapZoomDuration: tuning.value(of: TuningCatalog.mediaDoubleTapZoomDuration),
             paperBorderPortion: tuning.value(of: TuningCatalog.mediaPaperBorderPortion),
-            interruptedOpenFadeDuration: tuning.value(of: TuningCatalog.mediaInterruptedOpenFadeDuration)
+            interruptedOpenFadeDuration: tuning.value(of: TuningCatalog.mediaInterruptedOpenFadeDuration),
+            naturalSizeDuration: tuning.value(of: TuningCatalog.mediaNaturalSizeDuration)
         )
     }
 }
