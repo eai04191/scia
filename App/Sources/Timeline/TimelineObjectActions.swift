@@ -75,7 +75,7 @@ extension TimelineViewController {
         )
     }
 
-    /// リンクカードとXの投稿の囲み。対象はリンクで、メニューはリンクのメニュー。
+    /// リンクカード。対象はリンクで、メニューはリンクのメニュー。
     /// - Parameter open: 主な操作（ブラウザで開く）で行う、今のタップの処理。
     func linkTarget(for url: URL, id: ItemID, open: @escaping () -> Void) -> ObjectTarget<LinkMenuItem> {
         ObjectTarget(
@@ -83,6 +83,22 @@ extension TimelineViewController {
             settings: settings,
             primary: { _ in open() },
             buildMenu: { [weak self] groups in self?.linkMenu(for: url, id: id, groups: groups) },
+            lifecycle: rowMenuLifecycle,
+            notify: { [weak self] in self?.showNotice($0) }
+        )
+    }
+
+    /// Xの投稿の囲みのような、ほかのサービスの投稿。
+    /// - Parameters:
+    ///   - url: 元の投稿のURL。
+    ///   - text: コピーや翻訳に渡す本文。本文がなければnil。
+    ///   - open: 主な操作（ブラウザで開く）で行う、今のタップの処理。
+    func externalPostTarget(url: URL, text: String?, id: ItemID, open: @escaping () -> Void) -> ObjectTarget<ExternalPostMenuItem> {
+        ObjectTarget(
+            entity: .externalPost,
+            settings: settings,
+            primary: { _ in open() },
+            buildMenu: { [weak self] groups in self?.externalPostMenu(url: url, text: text, id: id, groups: groups) },
             lifecycle: rowMenuLifecycle,
             notify: { [weak self] in self?.showNotice($0) }
         )

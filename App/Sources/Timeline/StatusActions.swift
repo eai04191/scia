@@ -414,7 +414,7 @@ extension TimelineViewController {
         )
     }
 
-    /// リンクカードとXの投稿の囲みを長押ししたときに出す、リンクのメニュー。本文のリンクの長押しのメニューと同じ並びで組む。出す項目がなければnil。
+    /// リンクカードを長押ししたときに出す、リンクのメニュー。本文のリンクの長押しのメニューと同じ並びで組む。出す項目がなければnil。
     /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
     func linkMenu(for url: URL, id: ItemID, groups: MenuLayout<LinkMenuItem>.Groups? = nil) -> UIMenu? {
         let handlers = urlHandlers(id: id)
@@ -425,6 +425,35 @@ extension TimelineViewController {
             switch item {
             case .openAsProfile:
                 return [LinkMenuItem.openAsProfileAction(title: item.title, image: item.image, url: url) { [weak self] in self?.openProfile(resolving: url) }]
+            // 共通の項目は、上で中身から組んだ。
+            case .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share:
+                return []
+            }
+        }
+        return children.isEmpty ? nil : UIMenu(title: url.absoluteString, children: children)
+    }
+
+    /// Xの投稿の囲みのような、ほかのサービスの投稿を長押ししたときに出すメニュー。出す項目がなければnil。
+    /// - Parameters:
+    ///   - text: コピーや翻訳に渡す本文。本文がなければnilで、本文を使う項目を出さない。
+    ///   - groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
+    func externalPostMenu(url: URL, text: String?, id: ItemID, groups: MenuLayout<ExternalPostMenuItem>.Groups? = nil) -> UIMenu? {
+        let handlers = urlHandlers(id: id)
+        let children = (groups ?? settings.externalPostMenuLayout.groups).menuElements { item in
+            if let action = item.urlAction {
+                return [action.action(url: url, handlers: handlers)]
+            }
+            switch item {
+            case .copyText:
+                guard let text else { return [] }
+                return [UIAction(title: item.title, image: item.image) { [weak self] _ in
+                    UIPasteboard.general.string = text
+                    guard let self else { return }
+                    showNotice(.textCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+                }]
+            case .systemTranslate:
+                guard let text else { return [] }
+                return [UIAction(title: item.title, image: item.image) { [weak self] _ in self?.translation.present(text) }]
             // 共通の項目は、上で中身から組んだ。
             case .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share:
                 return []

@@ -61,7 +61,8 @@ extension TimelineViewController {
     }
 
     /// Xの投稿へのリンクを出す投稿なら、読み終えた投稿の囲みを返す。まだなら読みに行き、読み終えるまではnilを返してリンクカードを出す。
-    func xPostContent(for status: Status, base: UIListContentConfiguration) -> (content: EmbeddedPostView.Content, media: [MediaAttachment], url: URL)? {
+    /// `text`は、コピーや翻訳に渡す本文。本文が空白だけならnil。
+    func xPostContent(for status: Status, base: UIListContentConfiguration) -> (content: EmbeddedPostView.Content, media: [MediaAttachment], url: URL, text: String?)? {
         guard tuning.value(of: TuningCatalog.xPostEmbeds), let xPosts, let id = XPostLink.postID(of: status) else { return nil }
         guard let post = xPosts.post(id: id) else {
             xPosts.request(id: id)
@@ -69,7 +70,8 @@ extension TimelineViewController {
         }
         // 投稿した人が閲覧注意を付けていれば、Xの添付ファイルもぼかす。ぼかしを外すと、投稿の添付ファイルと同じくそろって外れる。
         let media = mediaContent(of: post.media, cover: mediaCover(for: status))
-        return (postContentBuilder.xPost(post, media: media, base: base), media?.attachments ?? [], post.url)
+        let text = post.text.plainText
+        return (postContentBuilder.xPost(post, media: media, base: base), media?.attachments ?? [], post.url, text.allSatisfy(\.isWhitespace) ? nil : text)
     }
 
     private func reconfigureRows(showing status: Status) {

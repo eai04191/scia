@@ -105,6 +105,11 @@ extension LinkMenuItem: ObjectActionItem {
     public static var primaryItem: Self { .openInBrowser }
 }
 
+/// 開く場所の設定に従って、元の投稿を開く。
+extension ExternalPostMenuItem: ObjectActionItem {
+    public static var primaryItem: Self { .openInBrowser }
+}
+
 extension HashtagMenuItem: ObjectActionItem {
     public static var primaryItem: Self { .timeline }
 }

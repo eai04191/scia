@@ -13,6 +13,7 @@ struct ObjectActionTests {
         #expect(settings.notificationActions == ObjectActions(tap: .item(.openThread), longPress: .menu))
         #expect(settings.userActions == ObjectActions(tap: .item(.profile), longPress: .menu))
         #expect(settings.linkActions == ObjectActions(tap: .item(.openInBrowser), longPress: .menu))
+        #expect(settings.externalPostActions == ObjectActions(tap: .item(.openInBrowser), longPress: .menu))
         #expect(settings.hashtagActions == ObjectActions(tap: .item(.timeline), longPress: .menu))
         #expect(settings.mediaActions == ObjectActions(tap: .item(.open), longPress: .menu))
     }
@@ -22,9 +23,13 @@ struct ObjectActionTests {
         let settings = AppSettings(defaults: defaults)
         settings.statusActions = ObjectActions(tap: .menu, longPress: .item(.favourite))
         settings.userActions = ObjectActions(tap: .item(.mention), longPress: .item(.profile))
+        settings.externalPostActions = ObjectActions(tap: .item(.openInBrowser), longPress: .item(.systemTranslate))
         let relaunched = AppSettings(defaults: defaults)
         #expect(relaunched.statusActions == ObjectActions(tap: .menu, longPress: .item(.favourite)))
         #expect(relaunched.userActions == ObjectActions(tap: .item(.mention), longPress: .item(.profile)))
+        #expect(relaunched.externalPostActions == ObjectActions(tap: .item(.openInBrowser), longPress: .item(.systemTranslate)))
+        // リンクとほかのサービスの投稿は、どちらもブラウザで開くが、別の設定にする。
+        #expect(relaunched.linkActions == .standard)
         // 投稿と通知は同じ項目から選ぶが、別の設定にする。
         #expect(relaunched.notificationActions == .standard)
     }

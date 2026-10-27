@@ -227,6 +227,12 @@ struct MenuLayoutTests {
         #expect(HashtagMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
     }
 
+    /// ほかのサービスの投稿のメニューは、持ち出す操作と翻訳のまとまりに分ける。開く場所を選んで開く2つは隠しておく。
+    @Test func externalPostMenuDefaults() {
+        #expect(ExternalPostMenuItem.defaultLayout.groups.main.map(\.items) == [[.openInBrowser, .copyLink, .copyText, .share], [.systemTranslate]])
+        #expect(ExternalPostMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
+    }
+
     /// 「プロフィールとして開く」を足す前に保存したリンクのメニューでも、「ブラウザで開く」の下に出る。
     @Test func savedLinkMenuGainsOpenAsProfileAfterOpenInBrowser() {
         let saved = MenuLayout<LinkMenuItem>(tokens: [
@@ -325,6 +331,16 @@ struct MenuLayoutTests {
         let restored = AppSettings(defaults: defaults)
         #expect(restored.linkMenuLayout == link)
         #expect(restored.hashtagMenuLayout == hashtag)
+    }
+
+    @Test func appSettingsPersistsExternalPostMenuLayout() throws {
+        let defaults = try makeDefaults()
+        #expect(AppSettings(defaults: defaults).externalPostMenuLayout == ExternalPostMenuItem.defaultLayout)
+
+        let layout = MenuLayout<ExternalPostMenuItem>(elements: [.item(.systemTranslate, isVisible: true), .separator, .item(.share, isVisible: false), .more])
+        AppSettings(defaults: defaults).externalPostMenuLayout = layout
+
+        #expect(AppSettings(defaults: defaults).externalPostMenuLayout == layout)
     }
 }
 

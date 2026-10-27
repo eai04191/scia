@@ -150,6 +150,20 @@ extension LinkMenuItem: MenuItemContentProviding {
     }
 }
 
+extension ExternalPostMenuItem: MenuItemContentProviding {
+    var content: MenuItemContent {
+        switch self {
+        case .openInBrowser: .url(.openInBrowser, noteSuffix: "囲みをタップしたときと同じです")
+        case .openInDefaultBrowser: .url(.openInDefaultBrowser)
+        case .openInAppSafari: .url(.openInAppSafari)
+        case .copyLink: .url(.copyLink)
+        case .copyText: .own(title: "テキストをコピー", symbolName: "doc.on.doc", note: "本文のある投稿でだけ出ます")
+        case .share: .url(.share)
+        case .systemTranslate: .own(title: "翻訳", symbolName: "translate", note: "本文のある投稿でだけ出ます")
+        }
+    }
+}
+
 extension HashtagMenuItem: MenuItemContentProviding {
     var content: MenuItemContent {
         switch self {

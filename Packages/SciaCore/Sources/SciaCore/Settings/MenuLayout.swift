@@ -353,6 +353,37 @@ public enum LinkMenuItem: String, MenuItemKind {
     ])
 }
 
+/// ほかのサービスの投稿（Xの投稿の囲みなど）を長押ししたときのメニューの項目。決まりはdocs/menus.mdの「メニューの単位」にある。
+/// 開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
+public enum ExternalPostMenuItem: String, MenuItemKind {
+    /// 元の投稿を、開く場所の設定に従って開く。
+    case openInBrowser
+    /// 開く場所の設定にかかわらず、既定のブラウザで開く。
+    case openInDefaultBrowser
+    /// 開く場所の設定にかかわらず、アプリ内のSafariで開く。
+    case openInAppSafari
+    case copyLink
+    /// 本文をプレーンテキストにしてコピーする。本文のある投稿でだけ出る。
+    case copyText
+    case share
+    /// 本文をプレーンテキストにして、システムの翻訳シートで訳す。本文のある投稿でだけ出る。
+    case systemTranslate
+
+    /// - 持ち出す: ブラウザで開く、リンクとテキストのコピー、共有
+    /// - 読む: 翻訳
+    public static let defaultLayout = MenuLayout<ExternalPostMenuItem>(defaultElements: [
+        .item(.openInBrowser, isVisible: true),
+        .item(.openInDefaultBrowser, isVisible: false),
+        .item(.openInAppSafari, isVisible: false),
+        .item(.copyLink, isVisible: true),
+        .item(.copyText, isVisible: true),
+        .item(.share, isVisible: true),
+        .separator,
+        .item(.systemTranslate, isVisible: true),
+        .more,
+    ])
+}
+
 /// 本文のハッシュタグを長押ししたときのメニューの項目。
 public enum HashtagMenuItem: String, MenuItemKind {
     /// ハッシュタグのタイムラインを開く。ハッシュタグをタップしたときと同じ。

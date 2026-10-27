@@ -1491,7 +1491,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             configuration.embed = xPost.content
             configuration.embedActions.open = { [weak self] _ in self?.onOpenLink?(.url(xPost.url), shown) }
             if let itemID {
-                configuration.embedActions.target = linkTarget(for: xPost.url, id: itemID) { [weak self] in self?.onOpenLink?(.url(xPost.url), shown) }
+                configuration.embedActions.target = externalPostTarget(url: xPost.url, text: xPost.text, id: itemID) { [weak self] in self?.onOpenLink?(.url(xPost.url), shown) }
             }
             configuration.embedActions.selectMedia = { [weak self] index, grid in
                 self?.openMedia(xPost.media, at: index, of: shown, from: grid)

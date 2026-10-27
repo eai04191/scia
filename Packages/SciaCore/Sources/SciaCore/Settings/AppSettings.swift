@@ -316,6 +316,11 @@ public final class AppSettings {
         didSet { defaults.set(linkMenuLayout.tokens, forKey: Keys.linkMenuLayout) }
     }
 
+    /// ほかのサービスの投稿（Xの投稿の囲みなど）を長押しして出すメニューの並び。
+    public var externalPostMenuLayout: MenuLayout<ExternalPostMenuItem> {
+        didSet { defaults.set(externalPostMenuLayout.tokens, forKey: Keys.externalPostMenuLayout) }
+    }
+
     /// 本文のハッシュタグを長押しして出すメニューの並び。
     public var hashtagMenuLayout: MenuLayout<HashtagMenuItem> {
         didSet { defaults.set(hashtagMenuLayout.tokens, forKey: Keys.hashtagMenuLayout) }
@@ -341,9 +346,14 @@ public final class AppSettings {
         didSet { defaults.set(userActions.tokens, forKey: Keys.userActions) }
     }
 
-    /// URLのリンク、リンクカード、Xの投稿の囲みをタップ、長押ししたときの操作。
+    /// URLのリンク、リンクカードをタップ、長押ししたときの操作。
     public var linkActions: ObjectActions<LinkMenuItem> {
         didSet { defaults.set(linkActions.tokens, forKey: Keys.linkActions) }
+    }
+
+    /// ほかのサービスの投稿（Xの投稿の囲みなど）をタップ、長押ししたときの操作。
+    public var externalPostActions: ObjectActions<ExternalPostMenuItem> {
+        didSet { defaults.set(externalPostActions.tokens, forKey: Keys.externalPostActions) }
     }
 
     /// ハッシュタグをタップ、長押ししたときの操作。
@@ -431,6 +441,7 @@ public final class AppSettings {
         static let statusMenuLayout = "settings.statusMenuLayout"
         static let userMenuLayout = "settings.userMenuLayout"
         static let linkMenuLayout = "settings.linkMenuLayout"
+        static let externalPostMenuLayout = "settings.externalPostMenuLayout"
         static let hashtagMenuLayout = "settings.hashtagMenuLayout"
         static let mediaMenuLayout = "settings.mediaMenuLayout"
         static let composeToolLayout = "settings.composeToolLayout"
@@ -438,6 +449,7 @@ public final class AppSettings {
         static let notificationActions = "settings.objectActions.notification"
         static let userActions = "settings.objectActions.user"
         static let linkActions = "settings.objectActions.link"
+        static let externalPostActions = "settings.objectActions.externalPost"
         static let hashtagActions = "settings.objectActions.hashtag"
         static let mediaActions = "settings.objectActions.media"
         /// `AccountScopedDefaults`で、アカウントごとのキーにする名前。
@@ -495,6 +507,7 @@ public final class AppSettings {
         statusMenuLayout = defaults.stringArray(forKey: Keys.statusMenuLayout).map(MenuLayout.init(tokens:)) ?? StatusMenuItem.defaultLayout
         userMenuLayout = defaults.stringArray(forKey: Keys.userMenuLayout).map(MenuLayout.init(tokens:)) ?? UserMenuItem.defaultLayout
         linkMenuLayout = defaults.stringArray(forKey: Keys.linkMenuLayout).map(MenuLayout.init(tokens:)) ?? LinkMenuItem.defaultLayout
+        externalPostMenuLayout = defaults.stringArray(forKey: Keys.externalPostMenuLayout).map(MenuLayout.init(tokens:)) ?? ExternalPostMenuItem.defaultLayout
         hashtagMenuLayout = defaults.stringArray(forKey: Keys.hashtagMenuLayout).map(MenuLayout.init(tokens:)) ?? HashtagMenuItem.defaultLayout
         mediaMenuLayout = defaults.stringArray(forKey: Keys.mediaMenuLayout).map(MenuLayout.init(tokens:)) ?? MediaMenuItem.defaultLayout
         composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout
@@ -502,6 +515,7 @@ public final class AppSettings {
         notificationActions = defaults.stringArray(forKey: Keys.notificationActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         userActions = defaults.stringArray(forKey: Keys.userActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         linkActions = defaults.stringArray(forKey: Keys.linkActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
+        externalPostActions = defaults.stringArray(forKey: Keys.externalPostActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         hashtagActions = defaults.stringArray(forKey: Keys.hashtagActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         mediaActions = defaults.stringArray(forKey: Keys.mediaActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         tabLayouts = AccountScopedDefaults.accountValues(named: Keys.tabLayout, in: defaults).compactMapValues { ($0 as? [String]).map(MenuLayout.init(tokens:)) }

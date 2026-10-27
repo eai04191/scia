@@ -40,6 +40,12 @@ extension ObjectEntity where Item == LinkMenuItem {
     static var link: Self { ObjectEntity(title: "リンク", actions: \.linkActions) }
 }
 
+/// Xの投稿の囲みのような、Mastodonの外のサービスの投稿。
+@MainActor
+extension ObjectEntity where Item == ExternalPostMenuItem {
+    static var externalPost: Self { ObjectEntity(title: "ほかのサービスの投稿", actions: \.externalPostActions) }
+}
+
 @MainActor
 extension ObjectEntity where Item == HashtagMenuItem {
     static var hashtag: Self { ObjectEntity(title: "ハッシュタグ", actions: \.hashtagActions) }
