@@ -146,6 +146,17 @@ enum DebugFaults {
         lookupDelay.withLock { $0 = delay }
     }
 
+    /// 決めると、以後の投稿欄のメディアのアップロードを、送る前にその時間だけ遅らせる。
+    /// 投稿ボタンを押してから準備が済むまでの、待つのをやめる、待つ間に畳む、といった操作を、大きなメディアなしで確かめるため。
+    private static let uploadDelay = Mutex<Duration?>(nil)
+
+    static var slowUploadDelay: Duration? { uploadDelay.withLock { $0 } }
+
+    /// - Parameter delay: nilなら戻す。
+    static func slowUploads(by delay: Duration?) {
+        uploadDelay.withLock { $0 = delay }
+    }
+
     /// 決めると、投稿欄が使うサーバーのメディアの上限のうち、決めた項目だけを差し替える。送る前に縮める流れを、大きなメディアなしで確かめるため。
     private static let mediaLimitsOverrideState = Mutex<MediaLimits?>(nil)
 

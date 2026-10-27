@@ -31,6 +31,9 @@ struct DebugURLTests {
         #expect(DebugURL(try #require(URL(string: "scia-debug://lookup/slow"))) == .slowLookups(seconds: 3))
         #expect(DebugURL(try #require(URL(string: "scia-debug://lookup/slow?seconds=10"))) == .slowLookups(seconds: 10))
         #expect(DebugURL(try #require(URL(string: "scia-debug://lookup/normal"))) == .slowLookups(seconds: nil))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://upload/slow"))) == .slowUploads(seconds: 5))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://upload/slow?seconds=20"))) == .slowUploads(seconds: 20))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://upload/normal"))) == .slowUploads(seconds: nil))
     }
 
     @Test func readsNotice() throws {

@@ -43,6 +43,9 @@ enum DebugURL: Equatable {
     /// `scia-debug://lookup/slow`で、以後のプロフィールを開く操作と、メンションとハンドルのコピーで、相手を探すのを3秒遅らせる。
     /// `?seconds=<秒>`で遅らせる時間を変える。`scia-debug://lookup/normal`で戻す。
     case slowLookups(seconds: Double?)
+    /// `scia-debug://upload/slow`で、以後の投稿欄のメディアのアップロードを5秒遅らせる。
+    /// `?seconds=<秒>`で遅らせる時間を変える。`scia-debug://upload/normal`で戻す。
+    case slowUploads(seconds: Double?)
     /// `scia-debug://notice/progress`で、出たままの「処理中」のチップを、進み具合を少しずつ進めながら60秒出す。`?seconds=<秒>`で長さを、`?title=<文言>`で文言を変える。
     /// アプリ全体のアプリ内通知として出すため、画面を移る途中や引っぱる途中のチップの列の動きを、ダウンロードを用意せずに確かめられる。
     case progressNotice(seconds: Double, title: String?)
@@ -129,6 +132,7 @@ enum DebugURL: Equatable {
         "download/normal": .slowDownload(seconds: nil),
         "menu-icons/normal": .slowMenuIcons(seconds: nil),
         "lookup/normal": .slowLookups(seconds: nil),
+        "upload/normal": .slowUploads(seconds: nil),
         "media-limits/server": .mediaLimits(nil),
         "catalog": .catalog(nil),
         "dump": .dump,
@@ -162,6 +166,7 @@ enum DebugURL: Equatable {
         case "download": Self.slowDownload(url)
         case "menu-icons": Self.slowMenuIcons(url)
         case "lookup": Self.slowLookups(url)
+        case "upload": Self.slowUploads(url)
         case "notice": Self.notice(url)
         case "media-limits": Self.mediaLimits(url)
         case "viewer": Self.viewer(url)
@@ -224,6 +229,11 @@ enum DebugURL: Equatable {
     private static func slowLookups(_ url: URL) -> DebugURL? {
         guard url.lastPathComponent == "slow" else { return nil }
         return .slowLookups(seconds: query("seconds", in: url).flatMap { Double($0) } ?? 3)
+    }
+
+    private static func slowUploads(_ url: URL) -> DebugURL? {
+        guard url.lastPathComponent == "slow" else { return nil }
+        return .slowUploads(seconds: query("seconds", in: url).flatMap { Double($0) } ?? 5)
     }
 
     private static func notice(_ url: URL) -> DebugURL? {

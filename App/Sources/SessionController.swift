@@ -331,6 +331,11 @@ final class SessionController {
         let media = ComposeMediaService(
             upload: { upload in
                 do {
+                    #if DEBUG
+                    if let delay = DebugFaults.slowUploadDelay {
+                        try await AppDependencies.clock.sleep(for: delay)
+                    }
+                    #endif
                     return try await client.uploadMedia(upload)
                 } catch {
                     reportIfUnauthorized(error)
@@ -2639,6 +2644,8 @@ final class SessionController {
             DebugFaults.slowMenuIcons(by: seconds.map { .seconds($0) })
         case .slowLookups(let seconds):
             DebugFaults.slowLookups(by: seconds.map { .seconds($0) })
+        case .slowUploads(let seconds):
+            DebugFaults.slowUploads(by: seconds.map { .seconds($0) })
         case .progressNotice(let seconds, let title):
             showDebugProgress(for: .seconds(seconds), title: title ?? "確かめるための処理中")
         case .transientNotice(let title, let seconds):
