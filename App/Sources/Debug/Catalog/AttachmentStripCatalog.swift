@@ -130,12 +130,14 @@ enum ComposeCapsuleCatalog {
             CatalogState(title: "返信と画像2枚と長い本文") { capsule(symbol: reply, attachments: [.systemRed, .systemBlue], text: longText) },
             CatalogState(title: "返信と空の本文") { capsule(symbol: reply) },
             CatalogState(title: "編集と画像1枚と失敗") { capsule(symbol: edit, attachments: [.systemGreen], failedIndex: 0, text: longText) },
+            CatalogState(title: "予約と長い本文") { capsule(schedules: true, text: longText) },
+            CatalogState(title: "返信と予約と画像2枚") { capsule(symbol: reply, schedules: true, attachments: [.systemRed, .systemBlue], text: "来週は…") },
         ]
     }
 
     /// カプセルと同じく、ガラスの細いカプセルに載せる。高さと上下の余白は、書いていないときの投稿欄の既定に合わせる。
     @MainActor
-    private static func capsule(symbol: String? = nil, attachments colors: [UIColor] = [], kind: MediaAttachment.Kind = .image, failedIndex: Int? = nil, text: String = "") -> UIView {
+    private static func capsule(symbol: String? = nil, schedules: Bool = false, attachments colors: [UIColor] = [], kind: MediaAttachment.Kind = .image, failedIndex: Int? = nil, text: String = "") -> UIView {
         let content = ComposeRestContent()
         let items = colors.enumerated().map { index, color in
             AttachmentStripCatalog.item(kind, color: color, status: index == failedIndex ? .failed : .ready)
@@ -144,7 +146,7 @@ enum ComposeCapsuleCatalog {
         let attributed = text.isEmpty
             ? NSAttributedString(string: "いまどうしてる？", attributes: [.font: font, .foregroundColor: UIColor.placeholderText])
             : NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: UIColor.label])
-        content.configure(symbolName: symbol, attachments: items, text: attributed)
+        content.configure(symbolName: symbol, showsSchedule: schedules, attachments: items, text: attributed)
         let glass = UIVisualEffectView(effect: UIGlassEffect())
         glass.cornerConfiguration = .capsule(maximumRadius: 24)
         content.translatesAutoresizingMaskIntoConstraints = false

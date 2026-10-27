@@ -113,6 +113,7 @@ enum DebugURL: Equatable {
         case notifications
         case bookmarks
         case favourites
+        case scheduled
     }
 
     /// 引数を持たないURL。`host`か`host/path`で引く。
