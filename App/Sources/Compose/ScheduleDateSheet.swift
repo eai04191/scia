@@ -3,12 +3,14 @@ import UIKit
 
 /// 予約の日時を選ぶシート。投稿欄の予約の行と、予約の一覧の「日時を変える」から出す。決まりはdocs/compose.mdの「予約投稿」にある。
 /// 日時は標準の`UIDatePicker`のカレンダーと時刻で選ぶ。選べるのは、サーバーが受け付ける今から5分より後だけ。
-/// 決めても、キャンセルしても、下へスワイプしても、閉じたら`onClose`を1回呼ぶ。決めたときは、閉じ終えてから、`onClose`の前に`onConfirm`を呼ぶ。
+/// 決めても、キャンセルしても、下へスワイプしても、出した側から閉じられても、閉じたら`onClose`を1回呼ぶ。決めたときは、閉じ終えてから、`onClose`の前に`onConfirm`を呼ぶ。
 final class ScheduleDateSheet: UINavigationController {
     private let picker = UIDatePicker()
     private let onConfirm: (Date) -> Void
     private let onClose: () -> Void
     private var hasClosed = false
+    /// 自分の`dismiss`で閉じている。`viewDidDisappear`は`dismiss`の完了より先に呼ばれるので、そこで知らせると、決めたことより先に閉じたことを知らせてしまう。
+    private var isDismissingItself = false
 
     /// - Parameters:
     ///   - title: 見出し。
@@ -64,10 +66,19 @@ final class ScheduleDateSheet: UINavigationController {
 
     /// 決めたとき、キャンセルしたとき、コードから閉じたとき。閉じ終わってから知らせる。
     override func dismiss(animated flag: Bool, completion: (() -> Void)? = nil) {
+        isDismissingItself = true
         // 閉じ終わるまでの間だけ自分を持つ。弱く持つと、閉じたあとに出していた画面が手放していて、知らせられないことがある。
         super.dismiss(animated: flag) {
             completion?()
             self.notifyClosed()
+        }
+    }
+
+    /// 出した側の画面からまとめて閉じられたとき（デバッグのリセットなど）。自分の`dismiss`も下へのスワイプの知らせも通らないので、消えたところで知らせる。
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if !isDismissingItself, isBeingDismissed || presentingViewController == nil {
+            notifyClosed()
         }
     }
 

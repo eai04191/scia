@@ -426,6 +426,56 @@ struct InlineComposeControllerTests {
         #expect(textView.isFirstResponder, "閉じてもキーボードが戻りません\n\(composer.stateDump())")
     }
 
+    /// 予約の日時のシートと言語のシートを、出した側の画面からまとめて閉じても（デバッグのリセットなど）、閉じたことになり、キーボードを閉じれば書き終える。
+    /// シート自身の`dismiss`も下へのスワイプの知らせも通らない閉じ方なので、閉じた扱いにならないと、以後キーボードを閉じても欄がカプセルに戻らない。
+    @Test(arguments: [ComposeToolItem.schedule, .language])
+    func sheetClosedByPresenterEndsShowing(item: ComposeToolItem) async throws {
+        defer { window.isHidden = true }
+        settings.composeToolLayout = MenuLayout(elements: [.more, .item(item, isVisible: true)])
+        composer.beginEditing()
+        try await waitUntilSettled()
+        window.layoutIfNeeded()
+        let tool = try #require(buttons(in: window).first { $0.accessibilityLabel == item.title })
+        tool.sendActions(for: .primaryActionTriggered)
+        try await waitUntilSettled()
+        if item == .schedule {
+            window.layoutIfNeeded()
+            let date = try #require(buttons(in: window).first { $0.accessibilityLabel == "予約の日時" })
+            date.sendActions(for: .primaryActionTriggered)
+            try await waitUntilSettled()
+        }
+        let host = try #require(window.rootViewController)
+        let sheet = try #require(host.presentedViewController)
+        #expect(sheet is ScheduleDateSheet || sheet is PostingLanguageSheet)
+
+        host.dismiss(animated: true)
+        try await clock.advance { host.presentedViewController == nil }
+        try await waitUntilSettled()
+        composer.endEditing()
+        try await waitUntilSettled()
+
+        #expect(composer.stateDump().contains("editing: false"), "閉じたシートを出したままの扱いです\n\(composer.stateDump())")
+    }
+
+    /// 予約の日時を「決定」で閉じると、日時を知らせてから閉じたことを知らせる。投稿欄が日時を反映してからキーボードを戻すため。
+    @Test func scheduleSheetConfirmsBeforeClosing() async throws {
+        defer { window.isHidden = true }
+        var events: [String] = []
+        let sheet = ScheduleDateSheet(title: "予約の日時", date: Date(timeIntervalSince1970: 1_800_000_000), minimumDate: Date(timeIntervalSince1970: 1_700_000_000), confirmTitle: "決定") { _ in
+            events.append("confirm")
+        } onClose: {
+            events.append("close")
+        }
+        let host = try #require(window.rootViewController)
+        try await host.presentForTesting(sheet, advancing: clock)
+
+        let confirm = try #require(sheet.topViewController?.navigationItem.rightBarButtonItem?.primaryAction)
+        confirm.performWithSender(nil, target: nil)
+        try await clock.advance { events.count == 2 }
+
+        #expect(events == ["confirm", "close"])
+    }
+
     /// ほかの画面が閉じていく途中にカスタマイズを押すと、その瞬間は画面を重ねられないので何もしない。
     /// 開いた扱いだけが残ると、以後キーボードを閉じても欄がカプセルに戻らなくなる。
     @Test func customizeWhileAnotherSheetClosingDoesNothing() async throws {
