@@ -34,6 +34,13 @@ enum NoticeCatalog {
                 stack(persistent: .download(of: url, fraction: 0.42) {}, transient: .transferFailure(title: Notice.transferFailureTitle(of: .gifv, purpose: .share)) {})
             },
             CatalogState(title: "共有を止めました（数秒で消える）") { stack(transient: .shareStopped) },
+            // タップや長押しに選んだ項目が使えない。文言は項目の名前で長くなり、押せない理由はその状態の投稿がないと出せない。
+            CatalogState(title: "タップに選んだ項目が使えない、名前が長い（数秒で消える）") {
+                stack(transient: .objectActionUnavailable(itemTitle: StatusMenuItem.mentionedUsers.title, reason: nil))
+            },
+            CatalogState(title: "タップに選んだ項目が押せない理由（数秒で消える）") {
+                stack(transient: .objectActionUnavailable(itemTitle: StatusMenuItem.edit.title, reason: "締め切りまで5分を切った投票は編集できません"))
+            },
             CatalogState(title: "プロフィールを取得中") { stack(persistent: .profileLookup) },
             CatalogState(title: "書き出し中（23%）") { stack(persistent: Notice.draftStatus(.exporting, progress: 0.23) {}) },
             CatalogState(title: "アップロード中") { stack(persistent: draft(.uploading)) },
