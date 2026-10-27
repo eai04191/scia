@@ -244,6 +244,48 @@ struct InlineComposeControllerTests {
         #expect(!composer.isBarHeld, "キーボードが上がらないのに、バーをシートの上端に留めたままです\n\(composer.stateDump())")
     }
 
+    /// メディアを選ぶシートを出したまま投稿ボタンを押したら、添付の準備を待つ前にシートを閉じる。待つ間にシートで選び直せないようにするため。
+    @Test func submittingWhileMediaPickerIsShownClosesIt() async throws {
+        defer {
+            window.rootViewController?.dismiss(animated: false)
+            window.isHidden = true
+        }
+        let uploading = Gate()
+        let media = ComposeMediaService(
+            upload: { upload in
+                try await uploading.wait()
+                return MediaAttachment(id: "m-\(upload.filename)", type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil)
+            },
+            waitUntilProcessed: { id in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
+            updateDescription: { id, _ in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
+            makeThumbnail: { _ in nil },
+            unprocessableImageTypes: { [] },
+            recordUnprocessableImageType: { _ in },
+            preparation: { .keepsOriginal }
+        )
+        var sent: [StatusDraft] = []
+        let composer = try installComposer(media: media) { sent.append($0) }
+        composer.model.apply(configuration: InstanceConfiguration(streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil, mediaLimits: .unknown), defaultVisibility: .public, defaultSensitive: nil)
+        composer.beginEditing()
+        try await waitUntilSettled()
+        let mediaButton = try #require(buttons(in: window).first { $0.accessibilityLabel == ComposeToolItem.media.title })
+        mediaButton.sendActions(for: .primaryActionTriggered)
+        try await clock.advance { window.rootViewController?.presentedViewController is PHPickerViewController }
+        composer.model.applyPickerSelection([try pickedImage()])
+        try await waitUntil { uploading.waiterCount == 1 }
+
+        let send = try #require(buttons(in: window).first { $0.accessibilityLabel == "投稿" })
+        send.sendActions(for: .primaryActionTriggered)
+        try await waitUntil { composer.model.isWaitingForMedia }
+        try await clock.advance { composer.stateDump().contains("mediaPicker: nil") }
+        #expect(composer.stateDump().contains("mediaPicker: nil"), "シートが閉じませんでした\n\(composer.stateDump())")
+        #expect(sent.isEmpty)
+
+        uploading.open()
+        try await waitUntil { !composer.model.isPosting }
+        #expect(sent.map(\.mediaIDs) == [["m-a.jpg"]])
+    }
+
     /// 入力欄の中でスクロールするほど書いてから行を消して収まる長さに戻すと、入力欄は書いた行の高さまで縮み、潰れない。
     @Test(arguments: [5, 6])
     func textViewKeepsHeightWhenShrinkingBelowScrollLimit(lines: Int) async throws {
@@ -538,6 +580,10 @@ struct InlineComposeControllerTests {
         #expect(composer.stateDump().contains("editing: true"), "送っている間に書き終えたことになりました\n\(composer.stateDump())")
         #expect(textView.delegate?.textView?(textView, shouldChangeTextIn: NSRange(location: 0, length: 0), replacementText: "あ") == false)
         #expect(field.delegate?.textField?(field, shouldChangeCharactersIn: NSRange(location: 0, length: 0), replacementString: "あ") == false)
+        // 注意書きの欄の×でも外さない。外すと、押した時点で付いていた閲覧注意が外れて送られるため。
+        let clear = try #require(buttons(in: window).first { $0.accessibilityLabel == "注意書きを外す" })
+        clear.sendActions(for: .primaryActionTriggered)
+        #expect(composer.model.showsSpoiler)
 
         gate.open()
         await posting.value

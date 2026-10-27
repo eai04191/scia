@@ -79,6 +79,11 @@ struct ComposeModelMediaTests {
             let pending = pendingDescriptionUpdates.removeFirst()
             pending.continuation.resume(returning: attachment(id: pending.id, processed: true, description: pending.description))
         }
+
+        /// 止めていた代替テキストの送信を失敗させる。
+        func failNextDescriptionUpdate(with error: any Error) {
+            pendingDescriptionUpdates.removeFirst().continuation.resume(throwing: error)
+        }
     }
 
     private static func attachment(id: String, processed: Bool, description: String? = nil) -> MediaAttachment {
@@ -304,7 +309,7 @@ struct ComposeModelMediaTests {
         // 時計回りに1回回して、回したあとの上半分を残す。
         model.setCrop(ImageCrop(quarterTurns: 1, rect: CGRect(x: 0, y: 0, width: 1, height: 0.5)), preview: nil, of: id)
         #expect(model.attachmentStatus(of: id) == .uploading)
-        #expect(!model.canPost)
+        #expect(!model.isMediaReady)
         try await settleSlowly { isSettled(model) }
         #expect(model.localMedia[id]?.file?.url == url)
         await model.submit()
@@ -489,7 +494,8 @@ struct ComposeModelMediaTests {
         #expect(background.heldCount == 0)
     }
 
-    @Test func cannotPostUntilEveryUploadFinishes() async throws {
+    /// 送っている途中の添付があっても投稿ボタンは押せるが、全部済むまでは待たずに送れない。
+    @Test func mediaIsNotReadyUntilEveryUploadFinishes() async throws {
         let server = FakeServer()
         server.completesImmediately = false
         let model = makeModel(server)
@@ -508,15 +514,254 @@ struct ComposeModelMediaTests {
         try await settle { server.pendingCount == 1 }
         arrivesLate.open()
         try await settle { server.pendingCount == 2 }
-        #expect(!model.canPost)
+        #expect(model.canPost)
+        #expect(!model.isMediaReady)
 
         try server.finishUpload(named: "a.jpg", with: .success(Self.attachment(id: "1", processed: true)))
         try await settle { model.attachments.first?.serverID == "1" }
-        #expect(!model.canPost)
+        #expect(!model.isMediaReady)
 
         try server.finishUpload(named: "b.jpg", with: .success(Self.attachment(id: "2", processed: true)))
         try await settle { isSettled(model) }
-        #expect(model.canPost)
+        #expect(model.isMediaReady)
+    }
+
+    /// 送っている途中に押したら、済むのを待ってから、済んだ添付で送る。
+    @Test func postsAfterPendingUploadFinishes() async throws {
+        let server = FakeServer()
+        server.completesImmediately = false
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+        model.text = "見て"
+        model.applyPickerSelection([try picked("a")])
+        try await settle { server.pendingCount == 1 }
+
+        let posting = Task { await model.submit() }
+        try await settle { model.isWaitingForMedia }
+        #expect(model.isPosting)
+        #expect(sent.isEmpty)
+
+        server.finishNextUpload(with: .success(Self.attachment(id: "1", processed: true)))
+        await posting.value
+
+        #expect(sent.map(\.mediaIDs) == [["1"]])
+        #expect(!model.isWaitingForMedia)
+        #expect(!model.isPosting)
+        #expect(model.attachments.isEmpty)
+    }
+
+    /// 代替テキストを送っている途中に押したら、届くのを待ってから送る。
+    @Test func postsAfterPendingDescriptionReachesServer() async throws {
+        let server = FakeServer()
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+        model.applyPickerSelection([try picked("a")])
+        try await settle { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+        server.holdsDescriptionUpdates = true
+        model.setDescription("猫", of: id)
+        try await settle { server.pendingDescriptionCount == 1 }
+
+        let posting = Task { await model.submit() }
+        try await settle { model.isWaitingForMedia }
+        #expect(sent.isEmpty)
+
+        server.finishNextDescriptionUpdate()
+        await posting.value
+
+        #expect(sent.map(\.mediaIDs) == [["m-a.jpg"]])
+    }
+
+    /// 待っている間にアップロードが失敗したら、送らずに知らせ、下書きを残す。
+    @Test func failureWhileWaitingKeepsDraftWithoutPosting() async throws {
+        let server = FakeServer()
+        server.completesImmediately = false
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+        model.text = "見て"
+        model.applyPickerSelection([try picked("a")])
+        try await settle { server.pendingCount == 1 }
+
+        let posting = Task { await model.submit() }
+        try await settle { model.isWaitingForMedia }
+        server.finishNextUpload(with: .failure(Failure()))
+        await posting.value
+
+        #expect(sent.isEmpty)
+        #expect(model.errorMessage == "メディアを送信できなかったため、投稿しませんでした。")
+        #expect(model.text == "見て")
+        #expect(model.attachments.first?.state == .failed(serverID: nil))
+        #expect(!model.isPosting)
+        #expect(!model.canPost)
+    }
+
+    /// 待っている間に代替テキストの送信が失敗したときも、送らずに知らせる。
+    @Test func descriptionFailureWhileWaitingKeepsDraftWithoutPosting() async throws {
+        let server = FakeServer()
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+        model.applyPickerSelection([try picked("a")])
+        try await settle { isSettled(model) }
+        let id = try #require(model.attachments.first?.id)
+        server.holdsDescriptionUpdates = true
+        model.setDescription("猫", of: id)
+        try await settle { server.pendingDescriptionCount == 1 }
+
+        let posting = Task { await model.submit() }
+        try await settle { model.isWaitingForMedia }
+        server.failNextDescriptionUpdate(with: MastodonAPIError(statusCode: 500, message: ""))
+        await posting.value
+
+        #expect(sent.isEmpty)
+        #expect(model.errorMessage == "メディアを送信できなかったため、投稿しませんでした。")
+        #expect(model.attachmentStatus(of: id) == .descriptionFailed)
+    }
+
+    /// 待つのをやめたら、そのあと準備が済んでも送らず、書ける状態に戻る。
+    @Test func cancellingWaitKeepsDraftWithoutPosting() async throws {
+        let server = FakeServer()
+        server.completesImmediately = false
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+        model.text = "見て"
+        model.applyPickerSelection([try picked("a")])
+        try await settle { server.pendingCount == 1 }
+
+        let posting = Task { await model.submit() }
+        try await settle { model.isWaitingForMedia }
+        model.cancelWaitingForMedia()
+        await posting.value
+        #expect(!model.isPosting)
+        #expect(model.errorMessage == nil)
+
+        server.finishNextUpload(with: .success(Self.attachment(id: "1", processed: true)))
+        try await settle { isSettled(model) }
+
+        #expect(sent.isEmpty)
+        #expect(model.text == "見て")
+        #expect(model.isMediaReady)
+    }
+
+    /// 待っている間は、送る中身を押した時点のものに決め、添付を外す、並べ替える、代替テキストを書き換えるのを受け付けない。
+    @Test func attachmentsAreFixedWhileWaiting() async throws {
+        let server = FakeServer()
+        server.completesImmediately = false
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+        model.applyPickerSelection([try picked("a"), try picked("b")])
+        try await settle { server.pendingCount == 2 }
+        let ids = model.attachments.map(\.id)
+
+        let posting = Task { await model.submit() }
+        try await settle { model.isWaitingForMedia }
+        model.moveAttachment(ids[1], to: 0)
+        model.setDescription("猫", of: ids[0])
+        model.removeAttachment(ids[1], pickerIsOpen: false)
+        #expect(!model.canCrop(ids[0]))
+        #expect(model.attachments.map(\.id) == ids)
+
+        try server.finishUpload(named: "a.jpg", with: .success(Self.attachment(id: "1", processed: true)))
+        try server.finishUpload(named: "b.jpg", with: .success(Self.attachment(id: "2", processed: true)))
+        await posting.value
+
+        #expect(sent.map(\.mediaIDs) == [["1", "2"]])
+        #expect(server.descriptionUpdates.isEmpty)
+    }
+
+    /// 待っている間にピッカーで選び直したら、待つのをやめて書ける状態に戻る。押した時点の添付と違うものを送らないため。
+    @Test func pickerChangeWhileWaitingStopsWaiting() async throws {
+        let server = FakeServer()
+        server.completesImmediately = false
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+        model.text = "見て"
+        model.applyPickerSelection([try picked("a")])
+        try await settle { server.pendingCount == 1 }
+
+        let posting = Task { await model.submit() }
+        try await settle { model.isWaitingForMedia }
+        model.applyPickerSelection([])
+        await posting.value
+
+        #expect(sent.isEmpty)
+        #expect(!model.isPosting)
+        #expect(model.text == "見て")
+        #expect(model.attachments.isEmpty)
+    }
+
+    /// 代替テキストを書き戻して送り直す途中に押したら、送り直しが済むまで待つ。
+    /// 前の送信の応答を受け取った時点では、まだ書き戻した値を送っていないため。
+    @Test func waitsForResentDescriptionAfterRevert() async throws {
+        let server = FakeServer()
+        server.uploadResult = { _ in Self.attachment(id: "1", processed: true, description: "猫") }
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+        model.applyPickerSelection([try picked("a")])
+        let id = try #require(model.attachments.first?.id)
+        model.setDescription("猫", of: id)
+        try await settle { model.attachments.first?.isReady == true }
+        server.holdsDescriptionUpdates = true
+        model.setDescription("黒猫", of: id)
+        try await settle { server.pendingDescriptionCount == 1 }
+        model.setDescription("猫", of: id)
+
+        let posting = Task { await model.submit() }
+        try await settle { model.isWaitingForMedia }
+        server.finishNextDescriptionUpdate()
+        try await settle { server.pendingDescriptionCount == 1 }
+        #expect(sent.isEmpty)
+        #expect(model.isWaitingForMedia)
+
+        server.finishNextDescriptionUpdate()
+        await posting.value
+        #expect(sent.map(\.mediaIDs) == [["1"]])
+    }
+
+    /// 予約の日時は送る直前にも確かめる。待っている間に今から5分以内になったら、予約せずに知らせる。
+    @Test func scheduleThatBecameTooSoonWhileWaitingIsNotSent() async throws {
+        let server = FakeServer()
+        server.completesImmediately = false
+        var sent: [StatusDraft] = []
+        let model = makeModel(server) { sent.append($0) }
+        var now = Date(timeIntervalSince1970: 1_800_000_000)
+        model.now = { now }
+        model.calendar = Calendar(identifier: .gregorian)
+        model.addSchedule()
+        let scheduledAt = try #require(model.scheduledAt)
+        model.applyPickerSelection([try picked("a")])
+        try await settle { server.pendingCount == 1 }
+
+        let posting = Task { await model.submit() }
+        try await settle { model.isWaitingForMedia }
+        now = scheduledAt.addingTimeInterval(-60)
+        server.finishNextUpload(with: .success(Self.attachment(id: "1", processed: true)))
+        await posting.value
+
+        #expect(sent.isEmpty)
+        #expect(model.errorMessage == "予約の日時は、今から5分より後にしてください。")
+    }
+
+    /// 待っている間にセッションを閉じたら、送らずに待つのをやめる。
+    @Test func closingSessionStopsWaiting() async throws {
+        let server = FakeServer()
+        server.completesImmediately = false
+        let session = TaskScope()
+        var sent: [StatusDraft] = []
+        let model = ComposeModel(tasks: session.child(), myAccountID: "1", media: server.service) { sent.append($0) }
+        model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
+        model.applyPickerSelection([try picked("a")])
+        try await settle { server.pendingCount == 1 }
+
+        model.tasks.run { await model.submit() }
+        try await settle { model.isWaitingForMedia }
+        session.close()
+        try await settle { !model.isPosting }
+        // 止めておいたアップロードは止められても返らないので、ここで返して、送らないまま終わることを確かめる。
+        server.finishNextUpload(with: .success(Self.attachment(id: "1", processed: true)))
+        try await settle { session.runningCount == 0 }
+
+        #expect(sent.isEmpty)
+        #expect(!model.isWaitingForMedia)
     }
 
     /// 動画や大きな画像は、受け付けられた後にサーバーでの変換を待つ。
@@ -921,7 +1166,7 @@ struct ComposeModelMediaTests {
         #expect(model.canPost)
     }
 
-    @Test func descriptionWrittenAfterUploadIsSentAndBlocksPostingUntilDone() async throws {
+    @Test func descriptionWrittenAfterUploadIsSentAndKeepsMediaPendingUntilDone() async throws {
         let server = FakeServer()
         let model = makeModel(server)
         model.applyPickerSelection([try picked("a")])
@@ -929,13 +1174,13 @@ struct ComposeModelMediaTests {
         let id = try #require(model.attachments.first?.id)
 
         model.setDescription("猫", of: id)
-        #expect(!model.canPost)
+        #expect(!model.isMediaReady)
         #expect(model.attachmentStatus(of: id) == .sendingDescription)
         try await settle { model.attachments.first?.isReady == true }
 
         #expect(server.descriptionUpdates.map(\.id) == ["m-a.jpg"])
         #expect(model.attachmentStatus(of: id) == .ready)
-        #expect(model.canPost)
+        #expect(model.isMediaReady)
     }
 
     /// 代替テキストを送れなかったら理由を残し、再試行で送り直す。ファイルは送り直さない。
@@ -977,8 +1222,8 @@ struct ComposeModelMediaTests {
         #expect(model.attachments.first?.description == "黒猫")
     }
 
-    /// 送っている間に元の値へ書き戻しても、送り終えるまでは投稿できない。送り終えたら、書き戻した値を送り直す。
-    @Test func descriptionRevertedWhileSendingBlocksPostingUntilResent() async throws {
+    /// 送っている間に元の値へ書き戻しても、送り終えるまでは待たずに送れない。送り終えたら、書き戻した値を送り直す。
+    @Test func descriptionRevertedWhileSendingKeepsMediaPendingUntilResent() async throws {
         let server = FakeServer()
         server.uploadResult = { _ in Self.attachment(id: "1", processed: true, description: "猫") }
         let model = makeModel(server)
@@ -993,7 +1238,7 @@ struct ComposeModelMediaTests {
         model.setDescription("猫", of: id)
 
         #expect(model.attachmentStatus(of: id) == .sendingDescription)
-        #expect(!model.canPost)
+        #expect(!model.isMediaReady)
 
         server.finishNextDescriptionUpdate()
         try await settle { server.pendingDescriptionCount == 1 }
@@ -1001,7 +1246,7 @@ struct ComposeModelMediaTests {
         try await settle { model.attachmentStatus(of: id) == .ready }
 
         #expect(server.descriptionUpdates.map(\.description) == ["黒猫", "猫"])
-        #expect(model.canPost)
+        #expect(model.isMediaReady)
     }
 
     /// サーバーが代替テキストを整えて返しても、書き直していなければ、返った値で済んだとみなして送り続けない。

@@ -137,17 +137,23 @@ public struct StatusDraft: Sendable, Equatable {
         )
     }
 
-    /// 送れる内容になっている。
+    /// 送れる内容になっている。`canSubmit`に加え、全部の添付のアップロードと代替テキストの送信が済んでいる。
+    public func canPost(maxCharacters: Int, charactersReservedPerURL: Int, maxMediaAttachments: Int, pollLimits: PollLimits = .mastodonDefault) -> Bool {
+        canSubmit(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL, maxMediaAttachments: maxMediaAttachments, pollLimits: pollLimits)
+            && mediaIDs != nil
+    }
+
+    /// 添付の準備が済むのを待てば送れる内容になっている。決まりはdocs/compose.mdの「メディアの準備を待って送る」にある。
     /// 本文が空白だけでも、メディアを添付しているか引用していれば送れる（Mastodonは`media_ids`か引用があれば`status`を省ける）。投票では省けない。
-    /// 添付ファイルは、上限の数以内で、全部のアップロードと代替テキストの送信が済むまで送れない。
+    /// 添付ファイルは、上限の数以内で、失敗したものがないときだけ送れる。送っている途中と変換を待っている途中のものは、済むのを待てばよい。
     /// 投票は、サーバーが受け付ける内容で、添付と一緒でないときだけ送れる。
     /// 引用は、添付も投票もないときだけ送れる。
-    public func canPost(maxCharacters: Int, charactersReservedPerURL: Int, maxMediaAttachments: Int, pollLimits: PollLimits = .mastodonDefault) -> Bool {
+    public func canSubmit(maxCharacters: Int, charactersReservedPerURL: Int, maxMediaAttachments: Int, pollLimits: PollLimits = .mastodonDefault) -> Bool {
         (!text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty || quotedStatusID != nil)
             && (quotedStatusID == nil || (attachments.isEmpty && poll == nil))
             && length(charactersReservedPerURL: charactersReservedPerURL) <= maxCharacters
             && attachments.count <= maxMediaAttachments
-            && mediaIDs != nil
+            && !attachments.contains { if case .failed = $0.state { true } else { false } }
             && poll.map { $0.isValid(limits: pollLimits) && attachments.isEmpty } ?? true
     }
 }

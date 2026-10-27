@@ -32,6 +32,8 @@ final class ComposeAttachmentStrip: UIView {
     private let collectionView: UICollectionView
     private var dataSource: UICollectionViewDiffableDataSource<Int, DraftAttachment.ID>?
     private var items: [DraftAttachment.ID: Item] = [:]
+    /// 投稿を送っている間と、準備を待っている間。並べ替え、移動、削除を受け付けない。送る中身は押した時点で決めるため。
+    private var isLocked = false
 
     struct Item {
         let attachment: DraftAttachment
@@ -81,7 +83,7 @@ final class ComposeAttachmentStrip: UIView {
             collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: id)
         }
         // ドロップしたら、データソースが並びを当て直してから知らせてくる。
-        dataSource.reorderingHandlers.canReorderItem = { _ in true }
+        dataSource.reorderingHandlers.canReorderItem = { [weak self] _ in !(self?.isLocked ?? true) }
         dataSource.reorderingHandlers.didReorder = { [weak self] transaction in
             self?.didReorder(transaction)
         }
@@ -94,7 +96,9 @@ final class ComposeAttachmentStrip: UIView {
     }
 
     /// 並びと各サムネイルの状態を描き直す。足したものは後ろに付け、並びの変わらないものは中身だけ描き直す。
-    func update(_ newItems: [Item]) {
+    /// - Parameter isLocked: 投稿を送っている間と、準備を待っている間。
+    func update(_ newItems: [Item], isLocked: Bool = false) {
+        self.isLocked = isLocked
         items = Dictionary(uniqueKeysWithValues: newItems.map { ($0.attachment.id, $0) })
         guard let dataSource else { return }
         let ids = newItems.map(\.attachment.id)
@@ -135,6 +139,7 @@ final class ComposeAttachmentStrip: UIView {
     /// 移動と削除の操作。端にあって動かせない向きは含めない。
     /// 先頭へ・末尾へは、前へ・後ろへと同じ位置に移すとき（隣が端のとき）は出さず、同じ結果の項目を並べない。
     private func actions(for id: DraftAttachment.ID, at index: Int) -> [AttachmentAction] {
+        guard !isLocked else { return [] }
         let last = itemCount - 1
         var actions: [AttachmentAction] = []
         if index > 1 {
@@ -189,6 +194,7 @@ extension ComposeAttachmentStrip: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
         guard let indexPath = indexPaths.first, let id = dataSource?.itemIdentifier(for: indexPath) else { return nil }
         let actions = actions(for: id, at: indexPath.item)
+        guard !actions.isEmpty else { return nil }
         return UIContextMenuConfiguration(actionProvider: { _ in
             let elements = actions.map { action in
                 UIAction(title: action.title, image: UIImage(systemName: action.systemImage), attributes: action.isDestructive ? .destructive : []) { _ in action.handler() }
@@ -203,7 +209,7 @@ extension ComposeAttachmentStrip: UICollectionViewDelegate {
 
 extension ComposeAttachmentStrip: UICollectionViewDragDelegate, UICollectionViewDropDelegate {
     func collectionView(_ collectionView: UICollectionView, itemsForBeginning session: any UIDragSession, at indexPath: IndexPath) -> [UIDragItem] {
-        guard let id = dataSource?.itemIdentifier(for: indexPath) else { return [] }
+        guard !isLocked, let id = dataSource?.itemIdentifier(for: indexPath) else { return [] }
         let item = UIDragItem(itemProvider: NSItemProvider())
         item.localObject = id
         return [item]

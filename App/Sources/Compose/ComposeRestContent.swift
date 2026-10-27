@@ -3,6 +3,7 @@ import SciaCore
 import UIKit
 
 /// 書いていないときのカプセルの1行。返信や編集のラベルのアイコン、予約の時計、添付のサムネイル、自分で書いた本文を、この順に並べる。
+/// 投稿を送っている間と、準備を待っている間は、右端に回る表示を出す。
 /// ラベルは文字を出さずアイコンだけにする。開閉では、ラベルのアイコンとサムネイルを、書いているときのラベルと列の同じものとのあいだで動かすため、それぞれを外から読めるようにする。
 @MainActor
 final class ComposeRestContent: UIView {
@@ -11,6 +12,7 @@ final class ComposeRestContent: UIView {
     let scheduleIcon = UIImageView(image: UIImage(systemName: "clock"))
     let thumbnails = ComposeRestThumbnails()
     let label = UILabel()
+    private let postingIndicator = UIActivityIndicatorView(style: .medium)
     private let stack = UIStackView()
 
     override init(frame: CGRect) {
@@ -29,7 +31,10 @@ final class ComposeRestContent: UIView {
         thumbnails.setContentCompressionResistancePriority(.required, for: .horizontal)
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        for view in [chipIcon, scheduleIcon, thumbnails, label] {
+        postingIndicator.setContentHuggingPriority(.required, for: .horizontal)
+        postingIndicator.setContentCompressionResistancePriority(.required, for: .horizontal)
+        postingIndicator.isHidden = true
+        for view in [chipIcon, scheduleIcon, thumbnails, label, postingIndicator] {
             stack.addArrangedSubview(view)
         }
         stack.axis = .horizontal
@@ -53,13 +58,20 @@ final class ComposeRestContent: UIView {
     /// - Parameters:
     ///   - symbolName: ラベルのアイコン。返信も編集もしていなければnil。
     ///   - showsSchedule: 予約している。
-    func configure(symbolName: String?, showsSchedule: Bool, attachments: [ComposeAttachmentStrip.Item], text: NSAttributedString) {
+    ///   - isPosting: 投稿を送っているか、準備を待っている。
+    func configure(symbolName: String?, showsSchedule: Bool, attachments: [ComposeAttachmentStrip.Item], text: NSAttributedString, isPosting: Bool) {
         chipIcon.image = symbolName.flatMap { UIImage(systemName: $0) }
         setHidden(chipIcon, symbolName == nil)
         setHidden(scheduleIcon, !showsSchedule)
         thumbnails.update(attachments)
         setHidden(thumbnails, attachments.isEmpty)
         label.attributedText = text
+        setHidden(postingIndicator, !isPosting)
+        if isPosting {
+            postingIndicator.startAnimating()
+        } else {
+            postingIndicator.stopAnimating()
+        }
     }
 
     /// スタックビューの行は、値が変わるときだけ隠したり出したりする。同じ値を代入し直すと、隠したものとして並べたまま見えることがあるため。

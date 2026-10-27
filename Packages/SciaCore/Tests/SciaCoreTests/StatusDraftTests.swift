@@ -160,6 +160,19 @@ struct StatusDraftTests {
         }
     }
 
+    /// 送っている途中と変換を待っている途中の添付は、済むのを待てば送れる。失敗した添付があれば、待っても送れない。
+    @Test func canSubmitWhileAttachmentsArePending() {
+        let done = uploaded("1")
+        var describing = uploaded("3", description: "猫")
+        describing.description = "窓辺の猫"
+        for pending in [DraftAttachment(state: .uploading), DraftAttachment(state: .processing(serverID: "2")), describing] {
+            #expect(StatusDraft(text: "見て", attachments: [done, pending]).canSubmit(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4))
+        }
+        for failed in [DraftAttachment(state: .failed(serverID: nil)), DraftAttachment(state: .failed(serverID: "2"))] {
+            #expect(!StatusDraft(text: "見て", attachments: [done, failed]).canSubmit(maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4))
+        }
+    }
+
     @Test func cannotPostUntilDescriptionReachesServer() {
         var attachment = uploaded("1", description: "猫")
         #expect(canPost(StatusDraft(attachments: [attachment])))

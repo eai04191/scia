@@ -147,6 +147,8 @@ final class MediaViewerController: UIViewController {
         let commitDescription: @MainActor (String, String) -> Void
         /// 失敗の表示を押した。理由と、送り直すか外すかを、渡したビューアの上に出す。
         let showFailure: @MainActor (String, UIViewController) -> Void
+        /// いま代替テキストを書き換えられる。投稿を送っている間と、準備を待っている間は書き換えられない。
+        var canEditDescription: @MainActor () -> Bool = { true }
     }
 
     /// - Parameter sourceTile: `MediaViewerItem.id`のサムネイルを返す。開閉のたびに呼ぶため、閉じるまでに一覧の行が再利用されても今の位置を返せる。
@@ -424,7 +426,7 @@ final class MediaViewerController: UIViewController {
         menuButton.showsMenuAsPrimaryAction = true
         captionView.onOpen = { [weak self] in
             guard let self else { return }
-            if self.draftEditing != nil {
+            if let editing = self.draftEditing, editing.canEditDescription() {
                 self.beginEditingDescription()
             } else {
                 self.showAltText()
@@ -817,17 +819,17 @@ final class MediaViewerController: UIViewController {
 
     /// メニューの「代替テキストを編集」と、投稿欄から渡された項目。
     private func editingMenuElements(_ editing: Editing) -> [UIMenuElement] {
-        let edit = UIAction(title: "代替テキストを編集", image: UIImage(systemName: "text.below.photo")) { [weak self] _ in
+        let edit = editing.canEditDescription() ? UIAction(title: "代替テキストを編集", image: UIImage(systemName: "text.below.photo")) { [weak self] _ in
             self?.beginEditingDescription()
-        }
+        } : nil
         let loop = (pages[currentIndex] as? PlayerPageController)?.loopMenuAction()
         let liveText = currentImagePage?.liveTextMenuAction()
-        return [edit] + [loop, liveText].compactMap(\.self) + editing.menuElements(currentItem.id)
+        return [edit, loop, liveText].compactMap(\.self) + editing.menuElements(currentItem.id)
     }
 
     /// 代替テキストの入力欄をキーボードのすぐ上に出して書き始める。
     func beginEditingDescription() {
-        guard let editing = draftEditing, !isEditingDescription else { return }
+        guard let editing = draftEditing, editing.canEditDescription(), !isEditingDescription else { return }
         // 開いている途中や戻している途中なら、動きを終えてから書き始める。
         completeMotionImmediately()
         guard case .idle = motion else { return }

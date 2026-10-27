@@ -156,7 +156,15 @@ final class InlineComposeController: NSObject {
     /// 広げる・戻すたびに増やす。前の動きの終わりで、次の戻す動きの途中に本文のスクロールを切り替えないようにする。
     private var expansionGeneration = 0
     private let remainingLabel = UILabel()
-    private lazy var sendButton = UIButton(configuration: .filled(), primaryAction: UIAction { [weak self] _ in self?.submit() })
+    /// 添付の準備を待っている間に押すと、待つのをやめる。決まりはdocs/compose.mdの「メディアの準備を待って送る」にある。
+    private lazy var sendButton = UIButton(configuration: .filled(), primaryAction: UIAction { [weak self] _ in
+        guard let self else { return }
+        if model.isWaitingForMedia {
+            model.cancelWaitingForMedia()
+        } else {
+            submit()
+        }
+    })
     private var isPresentingError = false
     /// 入力バーと、その下のタブバーやキーボードとの間の余白。切り替えタブの長押しのメニューも、下端を入力バーとそろえるのに使う。
     static let barSpacing: CGFloat = 8
@@ -603,6 +611,10 @@ final class InlineComposeController: NSObject {
             }
             guard let self else { return }
             addPendingPastedMedia()
+            // 添付の準備を待つ間にシートで選び直せないよう、押したらメディアを選ぶシートを閉じる。決まりはdocs/compose.mdの「メディアの準備を待って送る」にある。
+            if model.canPost {
+                mediaPicker?.close(notifiesWillClose: true)
+            }
             await model.submit()
         }
     }
@@ -1414,7 +1426,9 @@ final class InlineComposeController: NSObject {
     // MARK: - 注意書き
 
     /// 注意書きの欄を出して書き始めるか、外して本文に戻る。外しても書いた注意書きは残し、もう一度足すと戻る。投稿には付けない。
+    /// 送っている間と、準備を待っている間は切り替えない。注意書きの欄を出すかで、添付を閲覧注意にするかが変わるため。
     private func setSpoilerShown(_ shown: Bool) {
+        guard !model.isPosting else { return }
         logger.info("compose: spoiler \(shown ? "shown" : "hidden", privacy: .public)")
         if shown {
             model.showsSpoiler = true
@@ -2030,7 +2044,7 @@ final class InlineComposeController: NSObject {
                 isSensitive: model.isSensitive
             )
         }
-        attachmentStrip.update(attachmentItems)
+        attachmentStrip.update(attachmentItems, isLocked: model.isPosting)
         mediaViewer?.update(items: viewerItems())
         setRowShown(attachmentStrip, isEditing && !model.attachments.isEmpty)
 
@@ -2059,17 +2073,22 @@ final class InlineComposeController: NSObject {
         remainingLabel.textColor = model.remainingCharacters < 0 ? .systemRed : .secondaryLabel
         remainingLabel.accessibilityLabel = "残り\(model.remainingCharacters)文字"
         remainingLabel.largeContentTitle = remainingLabel.accessibilityLabel
-        sendButton.isEnabled = model.canPost
+        sendButton.isEnabled = model.canPost || model.isWaitingForMedia
         sendButton.configuration?.showsActivityIndicator = model.isPosting
         // 予約している間は、押すと予約されることを、押す前に分かるようにする。
         let sendSymbol = model.scheduledAt != nil ? "clock" : "arrow.up"
         if sendButton.configuration?.image != UIImage(systemName: sendSymbol) {
             sendButton.configuration?.image = UIImage(systemName: sendSymbol)
         }
-        sendButton.accessibilityLabel = model.scheduledAt != nil ? "予約" : "投稿"
+        sendButton.accessibilityLabel = switch (model.isWaitingForMedia, model.scheduledAt != nil) {
+        case (true, true): "予約をやめる"
+        case (true, false): "投稿をやめる"
+        case (false, true): "予約"
+        case (false, false): "投稿"
+        }
         sendButton.largeContentTitle = sendButton.accessibilityLabel
 
-        restContent.configure(symbolName: chip?.symbolName, showsSchedule: model.scheduledAt != nil, attachments: attachmentItems, text: restText())
+        restContent.configure(symbolName: chip?.symbolName, showsSchedule: model.scheduledAt != nil, attachments: attachmentItems, text: restText(), isPosting: model.isPosting)
         restRow.accessibilityValue = restAccessibilityValue(chip: chip, attachments: attachmentItems)
         presentErrorIfNeeded()
         logOverlappingRows(after: "update")
@@ -2184,6 +2203,9 @@ final class InlineComposeController: NSObject {
             parts.append("\(ScheduleDateText.spokenTitle(for: scheduledAt, now: model.now(), calendar: model.calendar))に予約")
         }
         parts.append(restText().string)
+        if model.isPosting {
+            parts.append(model.scheduledAt != nil ? "予約中" : "投稿中")
+        }
         return parts.joined(separator: "、")
     }
 
@@ -2258,7 +2280,8 @@ final class InlineComposeController: NSObject {
                 showFailure: { [weak self] itemID, presenter in
                     guard let id = UUID(uuidString: itemID) else { return }
                     self?.presentAttachmentFailure(id, from: presenter)
-                }
+                },
+                canEditDescription: { [weak self] in !(self?.model.isPosting ?? true) }
             ),
             sourceTile: { [weak self] itemID in
                 UUID(uuidString: itemID).flatMap { self?.attachmentStrip.tile(for: $0) }
@@ -2295,7 +2318,7 @@ final class InlineComposeController: NSObject {
                 self?.presentCrop(id)
             })
         }
-        if let local = model.localMedia[id], local.hasAudio == true {
+        if !model.isPosting, let local = model.localMedia[id], local.hasAudio == true {
             // Mastodonは音声のない動画をGIFとして扱うので、「音声を消す」ではなく、送ったあとの姿で書く。
             let removesAudio = local.removesAudio
             elements.append(UIAction(title: "GIFとして送る", image: UIImage(systemName: "speaker.slash"), state: removesAudio ? .on : .off) { [weak self] _ in
@@ -2307,6 +2330,8 @@ final class InlineComposeController: NSObject {
                 self?.model.retryAttachment(id)
             })
         }
+        // 送っている間と、準備を待っている間は外さない。トリミングとGIFとして送るかも出さない。
+        guard !model.isPosting else { return elements }
         elements.append(UIAction(title: "削除", image: UIImage(systemName: "trash"), attributes: .destructive) { [weak self] _ in
             self?.removeAttachment(id)
         })

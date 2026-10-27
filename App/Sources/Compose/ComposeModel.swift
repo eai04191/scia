@@ -29,16 +29,23 @@ final class ComposeModel {
     @ObservationIgnored private var mediaLimits = MediaLimits.unknown
     /// サーバーが受け付けると返した形式。返さないサーバーではnil。
     @ObservationIgnored private var supportedMediaTypes: [String]?
+    /// 投稿ボタンを押してから、送り終えるか、送るのをやめるまで。添付の準備を待っている間も含む。
     private(set) var isPosting = false
+    /// 投稿ボタンを押したあと、添付の準備が済むのを待っている。決まりはdocs/compose.mdの「メディアの準備を待って送る」にある。
+    private(set) var isWaitingForMedia = false
     var errorMessage: String?
     /// 添付したメディア。この順で投稿に並ぶ。
-    private(set) var attachments: [DraftAttachment] = []
+    private(set) var attachments: [DraftAttachment] = [] {
+        didSet { settleMediaWait() }
+    }
     /// 付ける投票。投票の欄を出していなければnil。添付とは一緒に付けられないため、添付があるときは足せない。
     var poll: PollDraft?
     /// サーバーが受け付ける投票の上限。読めるまではMastodonの既定値にする。
     private(set) var pollLimits = PollLimits.mastodonDefault
     /// 添付したメディアごとの、端末の側だけで持つもの。
-    private(set) var localMedia: [DraftAttachment.ID: LocalMedia] = [:]
+    private(set) var localMedia: [DraftAttachment.ID: LocalMedia] = [:] {
+        didSet { settleMediaWait() }
+    }
     /// 予約する日時。予約の行を出していなければnil。決まりはdocs/compose.mdの「予約投稿」にある。
     private(set) var scheduledAt: Date?
     /// 書き直している予約。送れたら`onScheduleRewritten`で取り消させる。決まりはdocs/compose.mdの「書き直す」にある。
@@ -79,7 +86,11 @@ final class ComposeModel {
     @ObservationIgnored private var thumbnailTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
     /// 代替テキストを送っている添付。送っている間は、書き戻してサーバーの値と同じになっても、送り終えるまで投稿させない。
     /// 送り終えた後のサーバーの値が、書き戻した値と違うことがあるため。投稿の可否が変わるので、変更を見張れるようにする。
-    private var descriptionTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
+    private var descriptionTasks: [DraftAttachment.ID: Task<Void, Never>] = [:] {
+        didSet { settleMediaWait() }
+    }
+    /// 添付の準備を待っている投稿の続き。待っていなければnil。
+    @ObservationIgnored private var mediaWait: CheckedContinuation<MediaWaitOutcome, Never>?
     @ObservationIgnored private var pickerSelection = MediaPickerSelection()
     @ObservationIgnored private let logger = SciaLog.logger(category: "compose")
     /// 投稿できて、下書きを空に戻したあとに呼ぶ。
@@ -148,8 +159,16 @@ final class ComposeModel {
         maxCharacters - draftToPost.length(charactersReservedPerURL: charactersReservedPerURL)
     }
 
+    /// 投稿ボタンを押せる。添付の準備が済んでいなくても、失敗したものがなければ押せ、済むのを待ってから送る。
     var canPost: Bool {
-        !isPosting && descriptionTasks.isEmpty && (hasResolvedDefaults || hasChosenVisibility || editedStatus != nil) && draftToPost.canPost(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL, maxMediaAttachments: maxMediaAttachments, pollLimits: pollLimits)
+        !isPosting && (hasResolvedDefaults || hasChosenVisibility || editedStatus != nil)
+            && draftToPost.canSubmit(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL, maxMediaAttachments: maxMediaAttachments, pollLimits: pollLimits)
+            && !attachments.contains { attachmentStatus(of: $0.id) == .descriptionFailed }
+    }
+
+    /// 添付のアップロードと代替テキストの送信が全部済み、待たずに送れる。
+    var isMediaReady: Bool {
+        descriptionTasks.isEmpty && draftToPost.mediaIDs != nil
     }
 
     /// メディアを選べる。枚数の上限をサーバーの値で読むまでは、ピッカーを開かない。
@@ -244,7 +263,7 @@ final class ComposeModel {
 
     /// 選べる公開範囲。引用元がフォロワー限定なら、それより広い範囲は選べない。サーバーが受け付けないため。
     func canChoose(_ visibility: Status.Visibility) -> Bool {
-        guard editedStatus == nil else { return false }
+        guard editedStatus == nil, !isPosting else { return false }
         guard let limit = quoteTarget.flatMap(StatusDraft.maxVisibility(quoting:)) else { return true }
         return visibility.narrower(limit) == visibility
     }
@@ -474,13 +493,10 @@ final class ComposeModel {
 
     /// 投稿し、成功したら下書きを空に戻す。失敗したら下書きを残し、同じ下書きで送り直せるようにする。
     /// 予約の日時が今から5分より後でなければ送らずに知らせる。サーバーは過去の日時を断らずにすぐ投稿するため。
+    /// 添付の準備が済んでいなければ、済むまで待ってから送る。待っている間に失敗したら送らずに知らせ、待つのをやめたら何もしない。
+    /// 予約の日時は、押したときと送る直前の両方で確かめる。待っている間に近づくことがあるため。
     func submit() async {
-        guard canPost else { return }
-        if let scheduledAt, !ScheduledPosting.accepts(scheduledAt, now: now()) {
-            logger.info("compose: schedule too soon")
-            errorMessage = "予約の日時は、今から5分より後にしてください。"
-            return
-        }
+        guard canPost, acceptsSchedule() else { return }
         UserAction.submitPost.record()
         isPosting = true
         let endBackgroundTime = backgroundTime("post status")
@@ -488,6 +504,18 @@ final class ComposeModel {
             isPosting = false
             endBackgroundTime()
         }
+        switch await waitForMedia() {
+        case .ready:
+            break
+        case .cancelled:
+            logger.info("compose: stopped waiting for media")
+            return
+        case .failed:
+            logger.info("compose: media failed while waiting to post")
+            errorMessage = "メディアを送信できなかったため、投稿しませんでした。"
+            return
+        }
+        guard acceptsSchedule() else { return }
         let draft = submission(of: draftToPost)
         lastSubmitted = draft
         do {
@@ -507,6 +535,65 @@ final class ComposeModel {
             errorMessage = ErrorPresentation(error).text
         }
     }
+
+    /// 予約していなければtrue。予約の日時が今から5分より後でなければ、知らせてfalseを返す。サーバーは過去の日時を断らずにすぐ投稿するため。
+    private func acceptsSchedule() -> Bool {
+        guard let scheduledAt, !ScheduledPosting.accepts(scheduledAt, now: now()) else { return true }
+        logger.info("compose: schedule too soon")
+        errorMessage = "予約の日時は、今から5分より後にしてください。"
+        return false
+    }
+
+    /// 添付の準備を待つのをやめ、書ける状態に戻す。待っていなければ何もしない。サーバーに送り始めたあとは、取り消しても投稿されることがあるため。
+    func cancelWaitingForMedia() {
+        guard isWaitingForMedia else { return }
+        resumeMediaWait(.cancelled)
+    }
+
+    /// 添付の準備が済むか、失敗するか、待つのをやめるまで待つ。セッションを閉じて止められたときも、やめたものとする。
+    private func waitForMedia() async -> MediaWaitOutcome {
+        if let outcome = mediaWaitOutcome { return outcome }
+        logger.info("compose: waiting for media before posting")
+        isWaitingForMedia = true
+        defer { isWaitingForMedia = false }
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { mediaWait = $0 }
+        } onCancel: {
+            Task { @MainActor [weak self] in self?.resumeMediaWait(.cancelled) }
+        }
+    }
+
+    /// 待つのを終えられる状態なら、その結果。まだ済んでいない添付があればnil。
+    private var mediaWaitOutcome: MediaWaitOutcome? {
+        let failed = attachments.contains { attachment in
+            let status = attachmentStatus(of: attachment.id)
+            return status == .failed || status == .descriptionFailed
+        }
+        if failed { return .failed }
+        return isMediaReady ? .ready : nil
+    }
+
+    /// 添付の状態が変わるたびに呼び、待っている投稿を終えられるなら続ける。
+    private func settleMediaWait() {
+        guard mediaWait != nil, let outcome = mediaWaitOutcome else { return }
+        resumeMediaWait(outcome)
+    }
+
+    private func resumeMediaWait(_ outcome: MediaWaitOutcome) {
+        guard let mediaWait else { return }
+        self.mediaWait = nil
+        mediaWait.resume(returning: outcome)
+    }
+}
+
+/// 投稿ボタンを押したあとに、添付の準備を待った結果。
+private enum MediaWaitOutcome {
+    /// 全部済んだので送る。
+    case ready
+    /// 失敗した添付があるので送らない。
+    case failed
+    /// 待つのをやめた。
+    case cancelled
 }
 
 // MARK: - メディアの添付
@@ -645,8 +732,14 @@ extension ComposeModel {
     /// ピッカーの今の選択を取り込む。外されたものは添付から外し、足されたものは後ろに足してアップロードを始める。
     /// 投稿を待つ間も取り込む。ピッカーは選択が変わったことを覚えるので、捨てると投稿に失敗した後の下書きとピッカーの選択が食い違う。
     /// 送っている下書きは送る前にコピーしてあるので、ここで変えても影響しない。
+    /// 添付の準備を待っている間に選択が変わったら、待つのをやめる。待ったあとに作る下書きが、押した時点と違う添付になるため。
+    /// 押したときにシートは閉じるが、閉じ終わる前に選び直しが届くことがある。
     func applyPickerSelection(_ selection: [PickedMedia]) {
         let changes = pickerSelection.changes(current: attachedAssetIdentifiers, selected: selection.map(\.assetIdentifier))
+        if isWaitingForMedia, !changes.removed.isEmpty || !changes.added.isEmpty {
+            logger.info("compose: picker selection changed while waiting for media")
+            resumeMediaWait(.cancelled)
+        }
         let removed = Set(changes.removed)
         for attachment in attachments where localMedia[attachment.id]?.assetIdentifier.map(removed.contains) ?? false {
             discardAttachment(attachment.id)
@@ -697,8 +790,9 @@ extension ComposeModel {
 
     /// 投稿欄から添付を外す。ピッカーを開いていれば、ピッカーがまだ選んだままの選択を送ってきても足し直さない。
     /// 編集している投稿に付いている添付とペーストした添付は、ピッカーで選んだものではないため、そのまま外す。
+    /// 送っている間と、準備を待っている間は外さない。送る中身は押した時点で決めるため。
     func removeAttachment(_ id: DraftAttachment.ID, pickerIsOpen: Bool) {
-        guard attachments.contains(where: { $0.id == id }) else { return }
+        guard !isPosting, attachments.contains(where: { $0.id == id }) else { return }
         if let assetIdentifier = localMedia[id]?.assetIdentifier {
             pickerSelection.didRemoveInDraft(assetIdentifier, pickerIsOpen: pickerIsOpen)
         }
@@ -723,7 +817,7 @@ extension ComposeModel {
     /// 動画をGIFとして送るか（音声を除くか）を切り替え、送り直す。送り終えていても、サーバーの添付は使わずに送り直す。
     /// 音声のない動画は、もとからGIFとして扱われるので切り替えない。
     func setRemovesAudio(_ removesAudio: Bool, of id: DraftAttachment.ID) {
-        guard let local = localMedia[id], local.hasAudio == true, local.removesAudio != removesAudio else { return }
+        guard !isPosting, let local = localMedia[id], local.hasAudio == true, local.removesAudio != removesAudio else { return }
         logger.info("attachment removesAudio=\(removesAudio, privacy: .public)")
         localMedia[id]?.removesAudio = removesAudio
         localMedia[id]?.audioSwitchCount += 1
@@ -744,15 +838,16 @@ extension ComposeModel {
 
     /// 代替テキストを書き換える。アップロードが済んでいればすぐ送り、済む前ならアップロードと一緒に（間に合わなければ済んでから）送る。
     func setDescription(_ description: String, of id: DraftAttachment.ID) {
-        guard let index = attachments.firstIndex(where: { $0.id == id }), attachments[index].description != description else { return }
+        guard !isPosting, let index = attachments.firstIndex(where: { $0.id == id }), attachments[index].description != description else { return }
         attachments[index].description = description
         localMedia[id]?.descriptionFailure = nil
         sendDescriptionIfNeeded(id)
     }
 
     /// 切り抜ける添付。読み込み終えた画像で、編集している投稿にもう付いていないもの。GIFは動きを保ったまま切り抜けないので除く。
+    /// 送っている間と、準備を待っている間は切り抜かない。
     func canCrop(_ id: DraftAttachment.ID) -> Bool {
-        guard let attachment = attachments.first(where: { $0.id == id }), !attachment.isAttachedToStatus,
+        guard !isPosting, let attachment = attachments.first(where: { $0.id == id }), !attachment.isAttachedToStatus,
               let file = localMedia[id]?.file
         else { return false }
         return file.kind == .image && file.mimeType != "image/gif"
@@ -793,7 +888,7 @@ extension ComposeModel {
 
     /// 添付を`index`の位置へ移す。投稿の`media_ids[]`はこの順になる。
     func moveAttachment(_ id: DraftAttachment.ID, to index: Int) {
-        guard let from = attachments.firstIndex(where: { $0.id == id }) else { return }
+        guard !isPosting, let from = attachments.firstIndex(where: { $0.id == id }) else { return }
         let attachment = attachments.remove(at: from)
         attachments.insert(attachment, at: min(max(index, 0), attachments.count))
     }
@@ -1104,9 +1199,10 @@ extension ComposeModel {
             do {
                 let updated = try await media.updateDescription(serverID, description)
                 guard let self, !Task.isCancelled else { return }
-                self.descriptionTasks[id] = nil
+                // 応答を反映してから送り終えたことにする。先に外すと、投稿を待つ側が、書き戻した値と前のサーバーの値が同じなのを見て、送り直す前に済んだと判断するため。
                 self.setState(.uploaded(updated), of: id)
                 self.acceptServerDescription(of: id, sent: description, returned: updated)
+                self.descriptionTasks[id] = nil
                 self.sendDescriptionIfNeeded(id)
             } catch {
                 guard let self, !Task.isCancelled else { return }
