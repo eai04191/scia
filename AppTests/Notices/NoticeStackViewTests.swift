@@ -27,7 +27,7 @@ struct NoticeStackViewTests {
         #expect(chip.frame.minY == 0)
     }
 
-    /// 高さは中身によらず2枚分を取る。中身で変えると、置く側の並べ直しが動きの途中に入り、チップが上下に揺れるため。
+    /// 高さは中身によらず、2行のチップ2枚分を取る。中身で変えると、置く側の並べ直しが動きの途中に入り、チップが上下に揺れるため。
     @Test func heightStaysForTwoChips() throws {
         let stack = makeStack()
         let empty = stack.intrinsicContentSize.height
@@ -39,6 +39,48 @@ struct NoticeStackViewTests {
         let bottom = try #require(stack.chips.last)
         #expect(stack.intrinsicContentSize.height == empty)
         #expect(bottom.frame.maxY <= empty)
+    }
+
+    /// 1行に収まる文言は文言の幅にし、収まらない文言は列の幅いっぱいに広げて2行に折り返す。
+    @Test func longTextWrapsToTwoLinesAtFullWidth() throws {
+        let stack = makeStack()
+        stack.showTransient(saved, duration: 60)
+        stack.layoutIfNeeded()
+        let oneLine = try #require(stack.chips.first).frame
+
+        stack.showTransient(Notice(id: "long", kind: .info, title: "この投稿では「メンションされたユーザー」を使えません"), duration: 60)
+        stack.layoutIfNeeded()
+        let wrapped = try #require(stack.chips.first).frame
+
+        #expect(oneLine.width < stack.bounds.width)
+        #expect(wrapped.width == stack.bounds.width)
+        #expect(wrapped.height > oneLine.height)
+    }
+
+    /// 2行にも収まらない文言は、3行目へ送らず2行目の末尾で切る。
+    @Test func overflowingTextStaysAtTwoLines() throws {
+        let stack = makeStack()
+        stack.showTransient(Notice(id: "long", kind: .info, title: "この投稿では「メンションされたユーザー」を使えません"), duration: 60)
+        stack.layoutIfNeeded()
+        let twoLines = try #require(stack.chips.first).frame.height
+
+        stack.showTransient(Notice(id: "long", kind: .info, title: String(repeating: "2行にも収まらないほど長い文言", count: 6)), duration: 60)
+        stack.layoutIfNeeded()
+
+        #expect(try #require(stack.chips.first).frame.height == twoLines)
+    }
+
+    /// 2行のチップを2枚並べても重ねず、取っておいた高さに収める。
+    @Test func twoWrappedChipsStackWithinHeight() throws {
+        let stack = makeStack()
+        stack.setPersistent(Notice(id: "failed", kind: .failure, title: "代替テキストを送信できませんでした。押すと理由を確かめられます"))
+        stack.showTransient(Notice(id: "long", kind: .info, title: "この投稿では「メンションされたユーザー」を使えません"), duration: 60)
+        stack.layoutIfNeeded()
+
+        let top = try #require(stack.chips.first)
+        let bottom = try #require(stack.chips.last)
+        #expect(bottom.frame.minY > top.frame.maxY)
+        #expect(bottom.frame.maxY <= stack.intrinsicContentSize.height)
     }
 
     /// 出たままのチップを上、数秒で消えるチップをその下に並べ、出たままのものが消えたら上に詰める。

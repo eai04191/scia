@@ -51,7 +51,8 @@ final class NoticeStackView: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         // 処理中のインジケーターは、ほかのアイコンより背が高い。
-        sizingChip.apply(Notice(id: "sizing", kind: .progress, title: "あ"))
+        // 2行に折り返したチップが2枚並んでも収まる高さを取るため、2行の文言で測る。
+        sizingChip.apply(Notice(id: "sizing", kind: .progress, title: "あ\nあ"))
         // 文字の大きさの設定が変われば、高さを測り直す。
         registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (self: Self, _) in
             self.invalidateIntrinsicContentSize()
@@ -360,8 +361,7 @@ final class NoticeStackView: UIView {
     }
 
     private func chipSize(_ chip: NoticeChip) -> CGSize {
-        let size = chip.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
-        return CGSize(width: min(size.width, bounds.width), height: size.height)
+        chip.fittingSize(maxWidth: bounds.width)
     }
 
     private func frame(for chip: NoticeChip, at y: CGFloat) -> CGRect {
@@ -405,7 +405,7 @@ final class NoticeStackView: UIView {
         placeChips()
     }
 
-    /// 中身によって高さを変えると、置く側の並べ直しがチップの動きの途中に入り、チップが上下に揺れるため、いつも2枚分の高さを取る。
+    /// 中身によって高さを変えると、置く側の並べ直しがチップの動きの途中に入り、チップが上下に揺れるため、いつも2行のチップ2枚分の高さを取る。
     override var intrinsicContentSize: CGSize {
         let chipHeight = sizingChip.systemLayoutSizeFitting(UIView.layoutFittingCompressedSize).height
         return CGSize(width: UIView.noIntrinsicMetric, height: chipHeight * 2 + spacing)

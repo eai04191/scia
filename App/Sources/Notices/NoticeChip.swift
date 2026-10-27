@@ -43,6 +43,8 @@ final class NoticeChip: UIControl {
         titleLabel.font = UIFontMetrics(forTextStyle: .subheadline).scaledFont(for: .monospacedDigitSystemFont(ofSize: 15, weight: .regular))
         titleLabel.adjustsFontForContentSizeCategory = true
         titleLabel.textColor = .label
+        // 長い文言は2行まで折り返し、それでも収まらなければ2行目の末尾を切る。
+        titleLabel.numberOfLines = 2
         titleLabel.lineBreakMode = .byTruncatingTail
         countLabel.font = .preferredFont(forTextStyle: .subheadline)
         countLabel.adjustsFontForContentSizeCategory = true
@@ -82,6 +84,22 @@ final class NoticeChip: UIControl {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    /// 1行に収まればその幅にし、収まらなければ`maxWidth`いっぱいにして、2行まで折り返した高さを返す。
+    /// 折り返せるラベルは、1行のときの幅も、幅を決めたときの折り返しも自分では測れないため、1行に限って測ってから、収まらないときだけ文言に使える幅を渡して測り直す。
+    func fittingSize(maxWidth: CGFloat) -> CGSize {
+        titleLabel.numberOfLines = 1
+        titleLabel.preferredMaxLayoutWidth = 0
+        let oneLine = systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
+        let oneLineTitleWidth = titleLabel.intrinsicContentSize.width
+        titleLabel.numberOfLines = 2
+        guard oneLine.width > maxWidth else { return oneLine }
+        // 文言のほかのアイコン、件数、「›」、余白の幅は、1行のときから変わらない。
+        let otherWidth = oneLine.width - oneLineTitleWidth
+        titleLabel.preferredMaxLayoutWidth = max(maxWidth - otherWidth, 0)
+        let wrapped = systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
+        return CGSize(width: maxWidth, height: wrapped.height)
     }
 
     /// 中身を描き直す。読み上げは並べる側が`announce`で行う。
