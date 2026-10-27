@@ -256,7 +256,10 @@ final class ObjectLongPress: NSObject, UIGestureRecognizerDelegate {
     @objc private func handle(_ gesture: UILongPressGestureRecognizer) {
         guard gesture.state == .began, let view = gesture.view else { return }
         let location = gesture.location(in: view)
-        UIImpactFeedbackGenerator(style: .medium, view: view).impactOccurred(at: location)
+        let intensity = AppDependencies.tuning.value(of: TuningCatalog.objectLongPressHapticIntensity)
+        if intensity > 0 {
+            UIImpactFeedbackGenerator(style: .medium, view: view).impactOccurred(intensity: intensity, at: location)
+        }
         perform(location)
     }
 

@@ -458,6 +458,15 @@ public enum TuningCatalog {
         defaultValue: 0
     )
 
+    /// 長押しにメニュー以外を選んだ対象を長押ししたときの、触覚フィードバックの強さ。スタイルは`medium`で、0なら出さない。決まりはdocs/object-actions.mdにある。
+    public static let objectLongPressHapticIntensity = NumberTuning(
+        id: "timeline.objectLongPressHapticIntensity",
+        title: "長押しで操作を行うときの触覚の強さ（0で出さない）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 1
+    )
+
     /// 新着ボタン、タブの選び直し、ステータスバーのタップで最上部へ戻る時間。どれだけ離れていても、この時間で戻る。
     public static let scrollToTopDuration = NumberTuning(
         id: "timeline.scrollToTopDuration",
@@ -1481,6 +1490,7 @@ public enum TuningCatalog {
             .number(scrollToStatusBounce),
             .number(insertionScrollDuration),
             .number(insertionScrollBounce),
+            .number(objectLongPressHapticIntensity),
         ]),
         TuningSection(id: "profile", title: "プロフィール", items: [
             .number(profileRevealDuration),
