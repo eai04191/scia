@@ -68,7 +68,7 @@ enum StorageCatalog {
         removeError: String? = nil
     ) -> CatalogState {
         CatalogState(title: title) {
-            let actions = StorageView.Actions(measure: measure ?? { breakdown }, remove: { _ in })
+            let actions = StorageView.Actions(measure: measure ?? { breakdown }, remove: { _ in }, mediaFiles: MediaCacheView.Actions(entries: { [] }, open: { _ in nil }))
             let controller = UIHostingController(rootView: NavigationStack {
                 StorageView(actions: actions, removing: removing, removeError: removeError)
             })

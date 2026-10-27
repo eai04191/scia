@@ -8,6 +8,8 @@ struct StorageView: View {
     struct Actions {
         var measure: @Sendable () async -> StorageBreakdown
         var remove: @Sendable (StorageBreakdown.Category) async throws -> Void
+        /// メディアのキャッシュの中身を並べる画面の処理。
+        var mediaFiles: MediaCacheView.Actions
     }
 
     let actions: Actions
@@ -35,7 +37,16 @@ struct StorageView: View {
             if let breakdown {
                 Section {
                     ForEach(breakdown.items, id: \.category) { item in
-                        LabeledContent(Self.name(of: item.category), value: Self.text(item.bytes))
+                        if item.category == .mediaFiles {
+                            // 中身を見返して、共有や保存をできるようにする。
+                            NavigationLink {
+                                MediaCacheView(actions: actions.mediaFiles)
+                            } label: {
+                                LabeledContent(Self.name(of: item.category), value: Self.text(item.bytes))
+                            }
+                        } else {
+                            LabeledContent(Self.name(of: item.category), value: Self.text(item.bytes))
+                        }
                     }
                     LabeledContent {
                         Text(Self.text(breakdown.dataBytes))
@@ -203,7 +214,8 @@ extension StorageView.Actions {
                 case .settings, .sharedMedia, .other:
                     preconditionFailure("消せない項目を消そうとした")
                 }
-            }
+            },
+            mediaFiles: .app
         )
     }
 

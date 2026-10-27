@@ -189,5 +189,41 @@ struct MediaFileCacheTests {
 
         #expect(!FileManager.default.fileExists(atPath: folder.path))
     }
-}
 
+    /// ストレージの画面で見返すために、置いたファイルを最後に使った順に並べる。並べても最後に使った日時は変えず、書きかけのフォルダは並べない。
+    @Test func listsEntriesByLastUse() async throws {
+        let directories = Directories()
+        defer { directories.remove() }
+        let clock = TestClock()
+        let cache = directories.makeCache(clock: clock)
+        for name in ["a", "b", "c"] {
+            _ = try await cache.store(Data(name.utf8), named: "\(name).jpg", for: try url(name), generation: 0)
+            clock.advance(by: .seconds(1))
+        }
+        _ = await cache.file(for: try url("a"))
+        try FileManager.default.createDirectory(at: directories.cache.appending(path: "unfinished"), withIntermediateDirectories: true)
+
+        let entries = await cache.entries()
+
+        #expect(entries.map(\.file.lastPathComponent) == ["a.jpg", "c.jpg", "b.jpg"])
+        #expect(entries.allSatisfy { $0.size > 0 })
+        #expect(await cache.entries() == entries)
+    }
+
+    /// 並べたファイルのコピーを渡す。並べたあとに消えていたらnilで、キャッシュの外のフォルダは引かない。
+    @Test func copiesListedEntryForSharing() async throws {
+        let directories = Directories()
+        defer { directories.remove() }
+        let cache = directories.makeCache()
+        _ = try await cache.store(Data("photo".utf8), named: "a.jpg", for: try url("a"), generation: 0)
+        let entry = try #require(await cache.entries().first)
+
+        let copy = try #require(try await cache.copyForSharing(of: entry.id))
+
+        #expect(copy.lastPathComponent == "a.jpg")
+        #expect(try Data(contentsOf: copy) == Data("photo".utf8))
+        #expect(try await cache.copyForSharing(of: "..") == nil)
+        try await cache.removeCachedFiles()
+        #expect(try await cache.copyForSharing(of: entry.id) == nil)
+    }
+}

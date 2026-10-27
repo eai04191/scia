@@ -98,11 +98,46 @@ actor MediaFileCache {
     /// APFSでは中身をコピーせずに複製するため、大きなファイルでもすぐに済み、元が残っている間は場所も取らない。
     func copyForSharing(for url: URL) throws -> URL? {
         guard let file = file(for: url) else { return nil }
+        return try copyForSharing(file)
+    }
+
+    private func copyForSharing(_ file: URL) throws -> URL {
         let folder = sharingDirectory.appending(fileName: SafeFileName(UUID().uuidString), directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let copy = folder.appending(fileName: SafeFileName(file.lastPathComponent))
         try FileManager.default.copyItem(at: file, to: copy)
         return copy
+    }
+
+    /// 置いてあるファイル1つ。設定のストレージの画面で中身を見返すために並べる。
+    /// どの投稿の、どのURLのものかは記録していないので持たない。
+    struct Entry: Identifiable, Sendable, Equatable {
+        /// URLごとのフォルダーの名前。`copyForSharing(of:)`で引くのに使う。
+        let id: String
+        let file: URL
+        let size: Int
+        let lastUsed: Date
+    }
+
+    /// 置いてあるファイルを、最後に使った日時の新しい順に並べる。並べるだけなので、最後に使った日時は更新しない。
+    /// 書き込みの途中で落ちて、置いたファイルのないフォルダは並べない。
+    func entries() -> [Entry] {
+        let keys: Set<URLResourceKey> = [.contentAccessDateKey, .totalFileAllocatedSizeKey]
+        guard let folders = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return [] }
+        return folders.compactMap { folder -> Entry? in
+            guard let file = Self.storedFile(in: folder), let values = try? file.resourceValues(forKeys: keys) else { return nil }
+            return Entry(id: folder.lastPathComponent, file: file, size: values.totalFileAllocatedSize ?? 0, lastUsed: values.contentAccessDate ?? .distantPast)
+        }
+        .sorted { ($0.lastUsed, $0.id) > ($1.lastUsed, $1.id) }
+    }
+
+    /// `entries()`で並べたファイルが残っていれば、共有や保存に渡すコピーを作る。並べたあとに整理で消えていればnil。
+    /// 引いたものとして最後に使った日時を更新する。
+    func copyForSharing(of id: Entry.ID) throws -> URL? {
+        // `SafeFileName`が区切りと先頭の`.`を外すので、キャッシュの直下のフォルダーしか引かない。
+        guard let file = Self.storedFile(in: directory.appending(fileName: SafeFileName(id), directoryHint: .isDirectory)) else { return nil }
+        touch(file)
+        return try copyForSharing(file)
     }
 
     /// 合計が上限を超えていたら、最後に使った日時の古いものから、上限の`trimRatio`倍まで消す。
