@@ -87,6 +87,44 @@ extension StatusBarTickerViewTests {
     }
 }
 
+extension StatusBarTickerViewTests {
+    /// 文字を上へ送って入れ替えている途中に縮め始めても（押して通知タブへ移るときなど）、出ていく中身と入ってくる中身の高さと濃さは、上へ送る動きの続きから動かす。
+    @Test func shrinkDuringSwapKeepsContentWhereShown() async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 200)
+        let clock = LayerClock(freezing: window.layer)
+        let view = StatusBarTickerView(cutout: .island(CGRect(x: 140, y: 11, width: 110, height: 32), sideMargin: 14))
+        view.mediaTime = { clock.now }
+        view.animationDuration = 1
+        view.frame = CGRect(x: 0, y: 0, width: 390, height: 54)
+        window.addSubview(view)
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let capsule = try #require(view.subviews.first { $0.isAccessibilityElement })
+        view.show(item("1"), animated: true)
+        try await clock.runUntilIdle()
+        let outgoing = try #require(capsule.subviews.first)
+        view.show(item("2"), animated: true)
+        let incoming = try #require(capsule.subviews.last { $0.frame.minX < capsule.bounds.midX })
+        try await clock.advance(by: 0.2)
+        let shown = try [outgoing, incoming].map { try #require($0.layer.presentation()) }.map { ($0.position.y, $0.opacity) }
+
+        view.hide(animated: true)
+        // 描く前に0.1秒止まった。止まっている間も、上へ送る動きは進む。
+        window.layer.timeOffset += 0.1
+        CATransaction.flush()
+
+        // 押した時点の高さと濃さへ戻らず、上へ送る動きの続きにいる。
+        for (part, before) in zip([outgoing, incoming], shown) {
+            let after = try #require(part.layer.presentation())
+            #expect(after.position.y < before.0 - 0.5)
+            #expect(after.position.y > part.layer.position.y - 0.5)
+        }
+        #expect(try #require(incoming.layer.presentation()).opacity > shown[1].1)
+    }
+}
+
 /// ステータスバーの通知を消してから、ステータスバーを出し直すまで。
 /// ステータスバーを出し直している途中に隠し直すと、システムは1コマで濃く出してから薄くするため、出し直すのは縮め終えてからにし、出し直している間は次を出さない。
 @MainActor

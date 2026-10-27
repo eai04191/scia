@@ -512,10 +512,11 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             }
         }
         if let fadingContent {
-            let alphas = progresses.map(contentAlpha)
-            fadingContent.setAlpha(alphas.last ?? 1)
+            // 濃さは、濃くした状態からの差として重ねる。入れ替えで薄い状態から出てくる途中なら、その動きを残したまま、背景と一緒に出入りする分だけ薄くする。
+            // 置き換えると、出てくる途中の濃さが1コマで濃くなる。
+            fadingContent.setAlpha(1)
             for layer in [fadingContent.left.layer, fadingContent.right.layer] {
-                addKeyframes(to: layer, keyPath: "opacity", values: alphas.map { Float($0) }, times: times, beginTime: nil)
+                addKeyframes(to: layer, keyPath: "opacity", values: progresses.map { Float(contentAlpha($0) - 1) }, times: times, beginTime: nil, additive: true)
             }
         }
         CATransaction.commit()
@@ -533,14 +534,15 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         let times = keyframeTimes(from: elapsed, to: motion.spring.duration)
         let placements = times.map { edgeFrames(content, visible: motion.frame(at: CGFloat(motion.spring.progress(at: $0)))) }
         guard let last = placements.last else { return }
+        // 沿わせるのは横の位置だけにする。縦は、入れ替えで上へ送っている途中の中身が、送っている途中の高さから続けて動けるよう、置いた高さのままにする。
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        content.left.frame = last.left
-        content.right.frame = last.right
+        content.left.layer.position.x = last.left.midX
+        content.right.layer.position.x = last.right.midX
         let beginTime = startTime.map { $0 + elapsed }
         let shiftedTimes = times.map { $0 - elapsed }
-        addKeyframes(to: content.left.layer, keyPath: "position", values: placements.map { NSValue(cgPoint: CGPoint(x: $0.left.midX, y: $0.left.midY)) }, times: shiftedTimes, beginTime: beginTime)
-        addKeyframes(to: content.right.layer, keyPath: "position", values: placements.map { NSValue(cgPoint: CGPoint(x: $0.right.midX, y: $0.right.midY)) }, times: shiftedTimes, beginTime: beginTime)
+        addKeyframes(to: content.left.layer, keyPath: "position.x", values: placements.map { $0.left.midX }, times: shiftedTimes, beginTime: beginTime)
+        addKeyframes(to: content.right.layer, keyPath: "position.x", values: placements.map { $0.right.midX }, times: shiftedTimes, beginTime: beginTime)
         CATransaction.commit()
     }
 
@@ -559,12 +561,14 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
 
     /// `values`を`times`（`beginTime`からの経過時間）に置いたキーフレームを足す。モデルの値は呼ぶ前に行き先にしておく。
     /// `beginTime`がnilなら、描き始める時刻から動かす。
-    private func addKeyframes(to layer: CALayer, keyPath: String, values: [Any], times: [TimeInterval], beginTime: CFTimeInterval?) {
+    /// `additive`なら、モデルの値とほかの動きの値に足す。
+    private func addKeyframes(to layer: CALayer, keyPath: String, values: [Any], times: [TimeInterval], beginTime: CFTimeInterval?, additive: Bool = false) {
         guard let duration = times.last, duration > 0 else { return }
         let animation = CAKeyframeAnimation(keyPath: keyPath)
         animation.values = values
         animation.keyTimes = times.map { NSNumber(value: $0 / duration) }
         animation.calculationMode = .linear
+        animation.isAdditive = additive
         animation.duration = duration
         if let beginTime {
             animation.beginTime = layer.convertTime(beginTime, from: nil)
@@ -574,10 +578,13 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
     }
 
     /// 背景と中身の、今の見た目の位置で止める。中身の動き（上へ送る途中のUIKitのアニメーションを含む）も、背景に沿わせ直すので外す。
+    /// 背景と中身の、背景に合わせた動きを、今の見た目の位置で止める。
+    /// 中身を上へ送って入れ替えている途中のUIKitの動きは残す。中身は横の位置だけを背景に沿わせるので、送る動きとぶつからない。
+    /// 外して見えている高さから動かし直すと、描くまでにメインスレッドが止まったとき（押して通知タブへ移るときなど）、止まっている間に進んだ分だけ、1コマで高さが戻る。
     private func removeMotionAnimations() {
         motion = nil
         for layer in [capsule.layer] + (trackedContents + leavingContents).flatMap({ [$0.left.layer, $0.right.layer] }) {
-            for key in layer.animationKeys() ?? [] where key.hasPrefix(Self.animationKeyPrefix) || key == "position" {
+            for key in layer.animationKeys() ?? [] where key.hasPrefix(Self.animationKeyPrefix) {
                 layer.removeAnimation(forKey: key)
             }
         }
