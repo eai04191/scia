@@ -45,9 +45,45 @@ struct StatusBarTickerViewTests {
         }
         try await clock.advance(by: 0.3)
         #expect(try #require(first.first?.layer.presentation()).opacity < before)
+        // 広げ直す途中、残っている中身と新しい中身は、同じ時刻表で背景の左端に沿う。
+        let incoming = try #require(capsule.subviews.last { !first.contains($0) && $0.frame.minX < capsule.bounds.midX })
+        let outgoingX = try #require(first.first?.layer.presentation()).frame.minX
+        #expect(abs(try #require(incoming.layer.presentation()).frame.minX - outgoingX) < 0.5)
         try await clock.runUntilIdle()
         #expect(first.allSatisfy { $0.superview == nil })
         #expect(view.isExpanded)
+    }
+}
+
+extension StatusBarTickerViewTests {
+    /// 縮め始めてから描くまでにメインスレッドが止まっても（押して通知タブへ移るときなど）、止まっていた分だけ進んだところから描かず、広げた形から縮め始める。
+    /// あとから加わる中身も、背景と同じ時刻表で端に沿わせる。
+    @Test func shrinkStartsWhenFirstDrawnAfterStall() async throws {
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 200)
+        let clock = LayerClock(freezing: window.layer)
+        let view = StatusBarTickerView(cutout: .island(CGRect(x: 140, y: 11, width: 110, height: 32), sideMargin: 14))
+        view.mediaTime = { clock.now }
+        view.animationDuration = 1
+        view.frame = CGRect(x: 0, y: 0, width: 390, height: 54)
+        window.addSubview(view)
+        window.isHidden = false
+        defer { window.isHidden = true }
+        let capsule = try #require(view.subviews.first { $0.isAccessibilityElement })
+        view.show(item("1"), animated: true)
+        try await clock.runUntilIdle()
+        let expanded = capsule.frame
+
+        view.hide(animated: true)
+        // 描く前に0.3秒止まった。
+        window.layer.timeOffset += 0.3
+        CATransaction.flush()
+
+        let drawn = try #require(capsule.layer.presentation()).frame
+        #expect(abs(drawn.width - expanded.width) < 1)
+        try await clock.advance(by: 0.1)
+        #expect(try #require(capsule.layer.presentation()).frame.width < expanded.width - 1)
     }
 }
 

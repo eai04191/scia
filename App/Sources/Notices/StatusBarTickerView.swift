@@ -445,10 +445,10 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         leavingContents = []
     }
 
-    /// 背景を広げたり縮めたりしている動きの、始まった時刻と、始まりと行き先の枠と丸み。途中から加わる中身の動きを、残りの時間に合わせて作るために持つ。
+    /// 背景を広げたり縮めたりしている動きの、始まりと行き先の枠と丸み。途中から加わる中身の動きを、残りの時間に合わせて作るために持つ。
+    /// 始まった時刻は持たず、描き始めた時刻を`motionStartTime`で読む。
     private struct Motion {
         let id: UUID
-        let startTime: CFTimeInterval
         let spring: UIKitSpring
         let fromFrame: CGRect
         let toFrame: CGRect
@@ -483,7 +483,6 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         let spring = UIKitSpring.make(duration: animationDuration, dampingRatio: dampingRatio)
         let motion = Motion(
             id: UUID(),
-            startTime: mediaTime(),
             spring: spring,
             fromFrame: fromFrame,
             toFrame: target,
@@ -504,9 +503,9 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         }
         setCapsule(frame: target, cornerRadius: motion.toRadius)
         let frames = progresses.map(motion.frame(at:))
-        addKeyframes(to: capsule.layer, keyPath: "position", values: frames.map { NSValue(cgPoint: CGPoint(x: $0.midX, y: $0.midY)) }, times: times, beginTime: motion.startTime)
-        addKeyframes(to: capsule.layer, keyPath: "bounds", values: frames.map { NSValue(cgRect: CGRect(origin: .zero, size: $0.size)) }, times: times, beginTime: motion.startTime)
-        addKeyframes(to: capsule.layer, keyPath: "cornerRadius", values: progresses.map { motion.radius(at: $0) }, times: times, beginTime: motion.startTime)
+        addKeyframes(to: capsule.layer, keyPath: "position", values: frames.map { NSValue(cgPoint: CGPoint(x: $0.midX, y: $0.midY)) }, times: times, beginTime: nil)
+        addKeyframes(to: capsule.layer, keyPath: "bounds", values: frames.map { NSValue(cgRect: CGRect(origin: .zero, size: $0.size)) }, times: times, beginTime: nil)
+        addKeyframes(to: capsule.layer, keyPath: "cornerRadius", values: progresses.map { motion.radius(at: $0) }, times: times, beginTime: nil)
         if tracksEdges {
             for content in trackedContents {
                 follow(content, along: motion)
@@ -516,7 +515,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             let alphas = progresses.map(contentAlpha)
             fadingContent.setAlpha(alphas.last ?? 1)
             for layer in [fadingContent.left.layer, fadingContent.right.layer] {
-                addKeyframes(to: layer, keyPath: "opacity", values: alphas.map { Float($0) }, times: times, beginTime: motion.startTime)
+                addKeyframes(to: layer, keyPath: "opacity", values: alphas.map { Float($0) }, times: times, beginTime: nil)
             }
         }
         CATransaction.commit()
@@ -527,7 +526,9 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
 
     /// 中身を、`motion`の残りの時間、背景の端から余白だけ内側に沿わせる。動き終わったときの位置を、中身の置き場所にする。
     private func follow(_ content: ContentViews, along motion: Motion) {
-        let elapsed = max(mediaTime() - motion.startTime, 0)
+        // まだ描き始めていなければ、背景と同じく描き始める時刻から動かす。
+        let startTime = motionStartTime
+        let elapsed = startTime.map { max(mediaTime() - $0, 0) } ?? 0
         guard elapsed < motion.spring.duration else { return }
         let times = keyframeTimes(from: elapsed, to: motion.spring.duration)
         let placements = times.map { edgeFrames(content, visible: motion.frame(at: CGFloat(motion.spring.progress(at: $0)))) }
@@ -536,7 +537,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         CATransaction.setDisableActions(true)
         content.left.frame = last.left
         content.right.frame = last.right
-        let beginTime = motion.startTime + elapsed
+        let beginTime = startTime.map { $0 + elapsed }
         let shiftedTimes = times.map { $0 - elapsed }
         addKeyframes(to: content.left.layer, keyPath: "position", values: placements.map { NSValue(cgPoint: CGPoint(x: $0.left.midX, y: $0.left.midY)) }, times: shiftedTimes, beginTime: beginTime)
         addKeyframes(to: content.right.layer, keyPath: "position", values: placements.map { NSValue(cgPoint: CGPoint(x: $0.right.midX, y: $0.right.midY)) }, times: shiftedTimes, beginTime: beginTime)
@@ -548,15 +549,26 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         return (0...count).map { start + (end - start) * Double($0) / Double(count) }
     }
 
+    /// 背景の動きを描き始めた時刻。まだ描いていなければnil。
+    /// 動きを足したあと、描く前にメインスレッドが止まる（押して通知タブへ移るときなど）と、足した時刻から数えた動きは止まっていた分だけ進んだところから描かれ、1コマで飛ぶ。
+    /// そのため背景の動きは描き始めた時刻から始め、あとから加わる中身の動きはこの時刻に合わせる。
+    private var motionStartTime: CFTimeInterval? {
+        guard let animation = capsule.layer.animation(forKey: Self.animationKeyPrefix + "position"), animation.beginTime > 0 else { return nil }
+        return capsule.layer.convertTime(animation.beginTime, to: nil)
+    }
+
     /// `values`を`times`（`beginTime`からの経過時間）に置いたキーフレームを足す。モデルの値は呼ぶ前に行き先にしておく。
-    private func addKeyframes(to layer: CALayer, keyPath: String, values: [Any], times: [TimeInterval], beginTime: CFTimeInterval) {
+    /// `beginTime`がnilなら、描き始める時刻から動かす。
+    private func addKeyframes(to layer: CALayer, keyPath: String, values: [Any], times: [TimeInterval], beginTime: CFTimeInterval?) {
         guard let duration = times.last, duration > 0 else { return }
         let animation = CAKeyframeAnimation(keyPath: keyPath)
         animation.values = values
         animation.keyTimes = times.map { NSNumber(value: $0 / duration) }
         animation.calculationMode = .linear
         animation.duration = duration
-        animation.beginTime = layer.convertTime(beginTime, from: nil)
+        if let beginTime {
+            animation.beginTime = layer.convertTime(beginTime, from: nil)
+        }
         animation.fillMode = .backwards
         layer.add(animation, forKey: Self.animationKeyPrefix + keyPath)
     }
