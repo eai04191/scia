@@ -1534,7 +1534,12 @@ final class InlineComposeController: NSObject {
             for id in ids {
                 guard let tile = attachmentStrip.tile(for: id) else { continue }
                 tile.superview?.layoutIfNeeded()
-                ends[.attachment(id)] = .init(view: tile, content: .thumbnail(tile.thumbnailImage, tile.thumbnailFocus), cornerRadius: MediaGridView.cornerRadius) { tile.alpha = $0 ? 0 : 1 }
+                // 重ねた状態の表示も一緒に隠す。隠さないと、閉じ始めに空いた枠の位置に取り残され、開くときは写真が着く前から浮かぶ。
+                let overlay = attachmentStrip.overlay(for: id)
+                ends[.attachment(id)] = .init(view: tile, content: .thumbnail(tile.thumbnailImage, tile.thumbnailFocus), cornerRadius: MediaGridView.cornerRadius, decoration: overlay) { concealed in
+                    tile.alpha = concealed ? 0 : 1
+                    overlay?.alpha = concealed ? 0 : 1
+                }
             }
         } else if !restRow.isHidden {
             restContent.layoutIfNeeded()

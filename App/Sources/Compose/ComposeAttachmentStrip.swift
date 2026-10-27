@@ -114,6 +114,14 @@ final class ComposeAttachmentStrip: UIView {
         return cell.tile
     }
 
+    /// 添付のサムネイルに重ねた、状態の表示（暗い下地、進み具合、失敗のアイコン、閲覧注意のバッジ）。
+    func overlay(for id: DraftAttachment.ID) -> UIView? {
+        guard window != nil, !isHidden, let indexPath = dataSource?.indexPath(for: id),
+              let cell = collectionView.cellForItem(at: indexPath) as? ComposeAttachmentCell
+        else { return nil }
+        return cell.overlay
+    }
+
     /// 添付を見える位置までスクロールする。ビューアを閉じるとき、戻り先のサムネイルが列の外にあると、画像を薄くして消すしかないため。
     func scrollToItem(_ id: DraftAttachment.ID) {
         guard let indexPath = dataSource?.indexPath(for: id) else { return }
@@ -241,8 +249,8 @@ extension ComposeAttachmentStrip: UICollectionViewDragDelegate, UICollectionView
 /// ビューアはこのサムネイルとのあいだで画像を動かす。
 private final class ComposeAttachmentCell: UICollectionViewCell {
     let tile = MediaTileView(store: AppDependencies.mediaImages)
-    /// 状態の表示を、サムネイルと同じ角の丸い枠に収める。
-    private let overlay = UIView()
+    /// 状態の表示を、サムネイルと同じ角の丸い枠に収める。投稿欄の開閉では、サムネイルと一緒に隠し、像を複製に載せて運ぶ。
+    let overlay = UIView()
     /// 送信中と変換待ちの間、サムネイルを少し暗くする。
     private let dimView = UIView()
     private let spinner = UIActivityIndicatorView(style: .medium)

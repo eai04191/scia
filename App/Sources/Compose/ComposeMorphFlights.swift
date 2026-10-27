@@ -25,7 +25,10 @@ final class ComposeMorphFlights {
         var cornerRadius: CGFloat = 0
         /// 白いフチの幅。カプセルの写真だけに付く。
         var border: CGFloat = 0
-        /// 動かしている間、本物を見えなくする。
+        /// 写真に重ねた表示（列のサムネイルの、送信中の暗い下地や失敗のアイコンなど）。起点にあれば像を複製に載せ、
+        /// 向かう間に薄くする。行き先にあれば、着いてから浮かび上がらせる。
+        var decoration: UIView?
+        /// 動かしている間、本物を見えなくする。重ねた表示も一緒に隠す。
         let conceal: (Bool) -> Void
     }
 
@@ -93,6 +96,9 @@ final class ComposeMorphFlights {
                 container.addSubview(copy)
             }
             copy.apply(geometry(of: source))
+            if let decoration = source.decoration, Self.showsSomething(decoration) {
+                copy.attachDecoration(decoration.snapshotView(afterScreenUpdates: false))
+            }
             conceal(source)
             flights[key] = Flight(copy: copy, ends: [source])
         }
@@ -144,6 +150,8 @@ final class ComposeMorphFlights {
             let move = {
                 copy.alpha = 1
                 copy.apply(destination)
+                // 複製に載せた重ねた表示は、行き先によらず向かう間に薄くする。列に着くときは、着いてから本物を浮かび上がらせる。
+                copy.decorationAlpha = 0
             }
             if delay > 0 {
                 delayedAnimation(delay, move)
@@ -178,6 +186,8 @@ final class ComposeMorphFlights {
         for (copy, destination, delay) in moved {
             animations(delay) {
                 copy.apply(destination)
+                // 止めたときに見えている濃さで残した重ねた表示も、残りの時間で薄くし続ける。
+                copy.decorationAlpha = 0
             }
         }
     }
@@ -192,10 +202,25 @@ final class ComposeMorphFlights {
             flight.copy.removeFromSuperview()
             for end in flight.ends {
                 end.conceal(false)
+                // 着いた先の重ねた表示は、複製に載せていないので、着いてから浮かび上がらせる。
+                if let decoration = end.decoration, let destination = flight.ends.last, destination.view === end.view {
+                    decoration.alpha = 0
+                    UIView.animateSmoothly(duration: Self.decorationRevealDuration) {
+                        decoration.alpha = 1
+                    }
+                }
             }
         }
         flights = [:]
         return true
+    }
+
+    /// 着いた先の重ねた表示を浮かび上がらせる時間。カプセルの写真同士の影を浮かび上がらせる時間と揃える。
+    private static let decorationRevealDuration: TimeInterval = 0.15
+
+    /// 重ねた表示に、見えているものがあるか。何も出していなければ、像を載せない。
+    private static func showsSomething(_ decoration: UIView) -> Bool {
+        decoration.subviews.contains { !$0.isHidden && $0.alpha > 0 }
     }
 
     private func conceal(_ end: End) {
@@ -228,6 +253,23 @@ private final class FlightCopy: UIView {
 
     private let inner: UIView
     private var border: CGFloat = 0
+    /// 起点の写真に重ねていた表示の像。中の画像の中央に、元の大きさのまま置く。
+    private var decoration: UIView?
+
+    var decorationAlpha: CGFloat {
+        get { decoration?.alpha ?? 0 }
+        set { decoration?.alpha = newValue }
+    }
+
+    func attachDecoration(_ snapshot: UIView?) {
+        decoration?.removeFromSuperview()
+        decoration = snapshot
+        guard let snapshot else { return }
+        snapshot.isUserInteractionEnabled = false
+        snapshot.center = CGPoint(x: inner.bounds.midX, y: inner.bounds.midY)
+        snapshot.autoresizingMask = [.flexibleLeftMargin, .flexibleRightMargin, .flexibleTopMargin, .flexibleBottomMargin]
+        inner.addSubview(snapshot)
+    }
 
     init(content: ComposeMorphFlights.Content) {
         switch content {
@@ -292,6 +334,7 @@ private final class FlightCopy: UIView {
         let radius = presented?.cornerRadius ?? layer.cornerRadius
         let innerRadius = innerPresented?.cornerRadius ?? inner.layer.cornerRadius
         let opacity = presented.map { CGFloat($0.opacity) } ?? alpha
+        let decorationOpacity = decoration.map { decoration in decoration.layer.presentation().map { CGFloat($0.opacity) } ?? decoration.alpha }
         // 中の画像（`FocusCroppedImageView`の中の画像）も前の行き先へ動き続けるので、中まですべての動きを止め、今の大きさで並べ直す。
         Self.removeAllAnimations(in: layer)
         border = max((size.width - innerSize.width) / 2, 0)
@@ -301,6 +344,9 @@ private final class FlightCopy: UIView {
         layer.cornerRadius = radius
         inner.layer.cornerRadius = innerRadius
         alpha = opacity
+        if let decorationOpacity {
+            decoration?.alpha = decorationOpacity
+        }
         setNeedsLayout()
         layoutIfNeeded()
         inner.setNeedsLayout()
