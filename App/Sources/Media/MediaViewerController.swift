@@ -443,6 +443,11 @@ final class MediaViewerController: UIViewController {
 
     private var chromeViews: [UIView] { [menuButton, counterLabel, captionView] }
 
+    /// 閉じる操作と閉じる動きを始めたときに、ページの中の部品（動画の操作の部品と暗くする下地）を描き写したもの。
+    /// 動かしている間はページを空のマスクで隠すため、描き写さないと、つかんだ瞬間に部品が1コマで消える。
+    /// 部品は動く画像と位置が合わなくなるため、ボタン類のように指の位置で濃さを決めず、始めたところから薄くして消す。
+    private var pageOverlayCopy: UIView?
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         layOutPages()
@@ -501,12 +506,19 @@ final class MediaViewerController: UIViewController {
         }
     }
 
-    private func updateChrome() {
+    /// - Parameter animatingCaption: 説明の出し入れと文の差し替えを、薄くして行う。ボタン類を隠すタップと、ページをめくり終えたとき。
+    private func updateChrome(animatingCaption: Bool = false) {
         counterLabel.text = "\(currentIndex + 1) / \(items.count)"
         let description = currentItem.description ?? ""
-        captionView.text = description
         // 投稿欄から開いたときは、空でも代替テキストを書き始められるよう出しておく。
-        captionView.isHidden = isChromeHidden || isEditingDescription || (description.isEmpty && draftEditing == nil)
+        let showsCaption = !(isChromeHidden || isEditingDescription || (description.isEmpty && draftEditing == nil))
+        if animatingCaption, view.window != nil {
+            transitionCaption(to: description, shows: showsCaption)
+        } else {
+            captionShown = showsCaption
+            captionView.text = description
+            captionView.isHidden = !showsCaption
+        }
         for page in pages.values {
             page.isEditingDescription = isEditingDescription
         }
@@ -515,6 +527,54 @@ final class MediaViewerController: UIViewController {
         overlay?.update()
         view.setNeedsLayout()
     }
+
+    /// 説明を出す向きか。薄くして消す途中は、`isHidden`がまだ偽でも偽になる。
+    private var captionShown = true
+    /// 説明の出し入れを始めた回数。途中で向きを変えると、前の動きの完了がその場で呼ばれるため、最後の動きの完了でだけ隠す。
+    private var captionGeneration = 0
+
+    /// 説明を薄くして出し入れし、出たままなら文をクロスフェードで差し替える。`isHidden`はアニメーションしないため、
+    /// 消すときは薄くし終えてから隠す。消える途中にまた出すときは、見えている濃さから戻す。
+    private func transitionCaption(to description: String, shows: Bool) {
+        let wasShown = captionShown
+        captionShown = shows
+        captionGeneration += 1
+        let generation = captionGeneration
+        let duration = Self.chromeFadeDuration
+        if shows {
+            if captionView.isHidden {
+                captionView.alpha = 0
+                captionView.isHidden = false
+                captionView.text = description
+            } else if captionView.text != description {
+                UIView.transition(with: captionView, duration: duration, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+                    self.captionView.text = description
+                }
+            }
+            UIView.animateSmoothly(duration: duration) {
+                self.captionView.alpha = 1
+            }
+            return
+        }
+        guard wasShown, !captionView.isHidden else {
+            captionView.text = description
+            captionView.isHidden = true
+            return
+        }
+        UIView.animateSmoothly(duration: duration) {
+            self.captionView.alpha = 0
+        } completion: {
+            guard generation == self.captionGeneration, !self.captionShown else { return }
+            self.captionView.isHidden = true
+            self.captionView.text = description
+            // 隠したあとの濃さは、ほかのボタン類と揃える。閉じる操作を取り消したあとに透明のまま残らないようにする。
+            self.captionView.alpha = self.isChromeHidden ? 0 : 1
+            self.view.setNeedsLayout()
+        }
+    }
+
+    /// ボタン類と説明を薄くして出し入れする時間。
+    private static let chromeFadeDuration: TimeInterval = 0.2
 
     /// 動画のページに頼まれて、ボタンと説明を隠すか出す。再生している間に触れずにいたときと、再生し終えたとき。
     /// 代替テキストを書いている間と、開閉や閉じる操作で動かしている間は、隠さない。
@@ -529,14 +589,14 @@ final class MediaViewerController: UIViewController {
     /// 画像を1回タップしたら、ボタンと説明を隠して画像だけにする。もう1回で戻す。
     fileprivate func toggleChrome() {
         isChromeHidden.toggle()
-        UIView.animate(withDuration: 0.2) {
-            // 説明は表示を`isHidden`で切り替えるが、閉じる操作を取り消すと透明のまま残るため、不透明度も戻す。
-            for view in self.chromeViews {
+        UIView.animateSmoothly(duration: Self.chromeFadeDuration) {
+            // 説明は、出し入れと一緒に`updateChrome`が薄くする。
+            for view in self.chromeViews where view !== self.captionView {
                 view.alpha = self.isChromeHidden ? 0 : 1
             }
-            self.updateChrome()
             self.setNeedsStatusBarAppearanceUpdate()
         }
+        updateChrome(animatingCaption: true)
         for page in pages.values {
             page.setChromeHidden(isChromeHidden, animated: true)
         }
@@ -995,7 +1055,8 @@ extension MediaViewerController {
     /// - Parameters:
     ///   - rotation: 複製を回す角度（ラジアン）。回した起点から始めるときに、その角度を渡す。
     ///   - border: 複製の縁に描く白いフチの幅。フチの付いた起点から始めるときに、そのフチの幅を渡す。`frame`はフチを含めた枠。
-    private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: (any MediaViewerSource)?, decorationAlpha: CGFloat, rotation: CGFloat = 0, border: CGFloat = 0) {
+    /// - Parameter copiesPageOverlay: 開いたページの中の部品を描き写して残す。開き始めはページをまだ描いていないため、描き写さない。
+    private func showMorph(frame: CGRect, cornerRadius: CGFloat, tile: (any MediaViewerSource)?, decorationAlpha: CGFloat, rotation: CGFloat = 0, border: CGFloat = 0, copiesPageOverlay: Bool = false) {
         let page = pages[currentIndex]
         let tileImage = tile.flatMap { $0.showsAttachment(currentItem.id) ? $0.thumbnailImage : nil }
         morph.image = page?.transitionImage ?? tileImage ?? page.map(Self.snapshot)
@@ -1019,8 +1080,24 @@ extension MediaViewerController {
         morph.alpha = 1
         morph.isHidden = false
         morphShadow.follow(morph, alpha: 1)
+        attachPageOverlayCopy(from: copiesPageOverlay ? page : nil)
         setPageHidden(true)
         hide(tile)
+    }
+
+    private func attachPageOverlayCopy(from page: MediaPageController?) {
+        pageOverlayCopy?.removeFromSuperview()
+        pageOverlayCopy = nil
+        guard !isChromeHidden, let overlay = page?.transitionOverlay, overlay.window != nil,
+              let copy = overlay.snapshotView(afterScreenUpdates: false)
+        else { return }
+        copy.frame = overlay.convert(overlay.bounds, to: view)
+        copy.isUserInteractionEnabled = false
+        view.insertSubview(copy, aboveSubview: morphOverlap?.view ?? morph)
+        pageOverlayCopy = copy
+        UIView.animateSmoothly(duration: Self.chromeFadeDuration) {
+            copy.alpha = 0
+        }
     }
 
     /// サムネイルに重ねた表示の複製を、複製に載せ直す。サムネイルを隠す前に描き写す必要がある。
@@ -1069,6 +1146,15 @@ extension MediaViewerController {
         morphOverlap = nil
         morphFollowsPage = false
         setPageHidden(false)
+        pageOverlayCopy?.removeFromSuperview()
+        pageOverlayCopy = nil
+        if let overlay = pages[currentIndex]?.transitionOverlay {
+            // 開き終えたときと、閉じずに戻し終えたときは、部品を薄い状態から浮かび上がらせる。
+            overlay.alpha = 0
+            UIView.animateSmoothly(duration: Self.chromeFadeDuration) {
+                overlay.alpha = 1
+            }
+        }
     }
 
     /// ページを見えなくする。透明にすると触れても反応しなくなるため、空のマスクで隠し、複製を動かしている間も左右の切り替えやタップを受け付ける。
@@ -1269,7 +1355,7 @@ extension MediaViewerController {
             stopSettling(animator)
             grabMovingMorph()
         case .idle:
-            showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: currentTile, decorationAlpha: 0)
+            showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: currentTile, decorationAlpha: 0, copiesPageOverlay: true)
         case .dragging, .closing:
             return
         }
@@ -1382,7 +1468,7 @@ extension MediaViewerController {
         motion = .closing
         let tile = currentTile
         if morph.isHidden {
-            showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: tile, decorationAlpha: 0)
+            showMorph(frame: contentFrame(in: view), cornerRadius: 0, tile: tile, decorationAlpha: 0, copiesPageOverlay: true)
         } else {
             if tile !== hiddenTile {
                 // 左右の切り替えで戻り先が変わっていたら、重ねた表示をその戻り先のものに載せ直す。
@@ -1410,6 +1496,20 @@ extension MediaViewerController {
         overlay.addSubview(morph)
         morphShadow.follow(morph, alpha: 1)
         morphOverlap?.move(to: overlay)
+        if let copy = pageOverlayCopy {
+            // 薄くしている途中の部品の複製も、閉じる動きを描く層へ移し、見えている濃さから薄くし続ける。
+            let alpha = CGFloat(copy.layer.presentation()?.opacity ?? Float(copy.alpha))
+            copy.layer.removeAllAnimations()
+            copy.frame = view.convert(copy.frame, to: window)
+            copy.alpha = alpha
+            overlay.addSubview(copy)
+            pageOverlayCopy = nil
+            UIView.animateSmoothly(duration: Self.chromeFadeDuration * alpha) {
+                copy.alpha = 0
+            } completion: {
+                copy.removeFromSuperview()
+            }
+        }
         window.addSubview(overlay)
         // チップの列は、閉じる動きを描く層の手前に残す。閉じ終えたら、根の画面のすぐ上に戻す。
         let noticeOverlay = self.overlay
@@ -1520,7 +1620,7 @@ extension MediaViewerController: UIPageViewControllerDataSource, UIPageViewContr
         if pages[page.index] !== page {
             self.pageController.setViewControllers([self.page(at: page.index)], direction: .forward, animated: false)
         }
-        updateChrome()
+        updateChrome(animatingCaption: true)
     }
 }
 
@@ -1602,6 +1702,9 @@ class MediaPageController: UIViewController {
 
     /// 画像を描くページ。開閉の複製を、このページの画像の更新に合わせて差し替える。
     var drawsImage: Bool { false }
+
+    /// ページの中に出している部品。開閉と閉じる操作のあいだ、ビューアがボタン類と一緒に薄くする。出していなければnil。
+    var transitionOverlay: UIView? { nil }
 
     /// 違和感レポートに残す、ページの状態。
     func stateDump() -> String { "" }
@@ -1952,6 +2055,11 @@ final class PlayerPageController: MediaPageController {
     private var frameOrientation = UIImage.Orientation.up
     /// 動画と音声の操作の部品。GIFではnil。
     private var controls: VideoControlsView?
+
+    override var transitionOverlay: UIView? {
+        guard let controls, controls.isShowingControls else { return nil }
+        return controls
+    }
     /// 音声のトラックがあるか。なければ消音のボタンを出さない。
     private var hasAudio = false
     /// 再生している間、最後に触れてから操作の部品とビューアのボタンを隠すまでの時間。

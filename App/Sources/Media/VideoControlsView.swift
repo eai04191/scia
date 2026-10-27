@@ -103,6 +103,11 @@ final class VideoControlsView: UIView {
         }
     }
 
+    /// 部品か暗くする下地が見えている。隠す途中も含む。
+    var isShowingControls: Bool {
+        fadingViews.contains { $0.alpha > 0.01 }
+    }
+
     /// 部品を隠す。隠している間はタッチを受けず、下の動画に渡す。動いている途中でも、その場から向きを変える。
     func setControlsHidden(_ hidden: Bool, animated: Bool) {
         let changes = {

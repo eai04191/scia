@@ -229,6 +229,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 投稿のメニューの、システムの翻訳で出す翻訳シート。
     let translation = SystemTranslation()
     private lazy var newArrivalsButton = makeNewArrivalsButton()
+    /// 新着ボタンを出す向きか。消える動きの途中は、`isHidden`がまだ偽でも偽になる。
+    private var newArrivalsButtonShown = false
+    /// 新着ボタンの出し入れを始めた回数。途中で向きを変えると、前の動きの完了がその場で呼ばれるため、最後の動きの完了でだけ隠す。
+    private var newArrivalsButtonGeneration = 0
     /// 一覧の最上部から引っぱって、浮かべた新着のボタンを下げている量。
     private var pulledDistance: CGFloat = 0
     /// アプリ全体のアプリ内通知。お気に入りやブーストの失敗、リンクのコピーを出す。セッションが入れる。
@@ -826,17 +830,52 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// - Parameter isLowerBound: 未読の区間に読み込んでいない投稿があり、実際はもっと多い。
     func setUnreadCount(_ count: Int, isLowerBound: Bool = false) {
         unreadCount = count
-        updateNewArrivalsButtonVisibility()
         // 通知のタブのバッジと同じく、読み込んでいない分があるときは「+」を付ける。
-        newArrivalsButton.configuration?.title = isLowerBound ? "\(count)+" : "\(count)"
+        let title = isLowerBound ? "\(count)+" : "\(count)"
         newArrivalsButton.accessibilityLabel = isLowerBound ? "\(count)件以上の新着" : "\(count)件の新着"
+        if newArrivalsButton.configuration?.title != title {
+            // 桁が変わると幅が変わるため、出ている間は前後のカプセルをクロスフェードする。幅を伸ばすと、伸びる途中で件数の文字が切れるため。
+            if newArrivalsButtonShown, view.window != nil {
+                UIView.transition(with: newArrivalsButton, duration: newArrivalsButtonDuration, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+                    self.newArrivalsButton.configuration?.title = title
+                    self.view.layoutIfNeeded()
+                }
+            } else {
+                newArrivalsButton.configuration?.title = title
+            }
+        }
+        updateNewArrivalsButtonVisibility()
+    }
+
+    private var newArrivalsButtonDuration: TimeInterval {
+        tuning.value(of: TuningCatalog.newArrivalsButtonDuration)
     }
 
     /// 最上部へ動かしている間は隠す。新着を足して最上部へ動かすときに、新着が画面に入るまでの間だけ出てしまうため。
+    /// 出し入れは濃さで動かす。消え終えてから隠すので、消える途中にまた出すときは、見えている濃さから戻す。
     private func updateNewArrivalsButtonVisibility() {
-        let isHidden = unreadCount == 0 || isScrollingToTop
-        guard newArrivalsButton.isHidden != isHidden else { return }
-        newArrivalsButton.isHidden = isHidden
+        let isShown = unreadCount > 0 && !isScrollingToTop
+        guard newArrivalsButtonShown != isShown else { return }
+        newArrivalsButtonShown = isShown
+        let button = newArrivalsButton
+        button.isUserInteractionEnabled = isShown
+        guard view.window != nil else {
+            button.alpha = isShown ? 1 : 0
+            button.isHidden = !isShown
+            return
+        }
+        if isShown, button.isHidden {
+            button.alpha = 0
+            button.isHidden = false
+        }
+        newArrivalsButtonGeneration += 1
+        let generation = newArrivalsButtonGeneration
+        UIView.animateSmoothly(duration: newArrivalsButtonDuration) {
+            button.alpha = isShown ? 1 : 0
+        } completion: {
+            guard generation == self.newArrivalsButtonGeneration, !self.newArrivalsButtonShown else { return }
+            button.isHidden = true
+        }
     }
 
     // MARK: アプリ内通知
@@ -1036,6 +1075,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         })
         button.translatesAutoresizingMaskIntoConstraints = false
         button.isHidden = true
+        button.alpha = 0
         return button
     }
 

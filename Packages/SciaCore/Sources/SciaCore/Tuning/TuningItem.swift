@@ -61,7 +61,7 @@ public struct ToggleTuning: Sendable, Identifiable {
 /// アプリで使うチューニング項目の一覧。値を足すときは、ここに定義を追加してTuningStoreから読む。
 public enum TuningCatalog {
 
-    /// 投票したときに、結果の棒が伸びるスプリングの時間。0なら動かさない。
+    /// 投票したときに、結果の棒が伸びるスプリングの時間。投票する形と結果の形を入れ替えるクロスフェードは、この半分の時間。0なら動かさない。
     public static let pollBarDuration = NumberTuning(
         id: "timeline.pollBarDuration",
         title: "投票の結果の棒が伸びる時間（秒）",
@@ -483,6 +483,15 @@ public enum TuningCatalog {
         range: 0...0.4,
         step: 0.05,
         defaultValue: 0
+    )
+
+    /// 新着ボタンを薄くして出し入れする時間と、件数の桁が変わったときに幅を変える時間。
+    public static let newArrivalsButtonDuration = NumberTuning(
+        id: "timeline.newArrivalsButtonDuration",
+        title: "新着ボタンの出し入れの時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.2
     )
 
     /// 返信先のラベルや、アプリ内通知から、一覧の投稿へ動く時間。どれだけ離れていても、この時間で動く。
@@ -1490,6 +1499,7 @@ public enum TuningCatalog {
             .number(scrollToStatusBounce),
             .number(insertionScrollDuration),
             .number(insertionScrollBounce),
+            .number(newArrivalsButtonDuration),
             .number(objectLongPressHapticIntensity),
         ]),
         TuningSection(id: "profile", title: "プロフィール", items: [

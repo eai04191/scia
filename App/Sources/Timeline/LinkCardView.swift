@@ -144,6 +144,7 @@ final class LinkCardView: UIButton {
         if paddingChanged {
             invalidateIntrinsicContentSize()
         }
+        holdsThumbnailForArrival = animates
         updateThumbnail()
         setNeedsLayout()
         guard animates else {
@@ -151,8 +152,10 @@ final class LinkCardView: UIButton {
             return
         }
         // 一覧は動きを止めて描き直し（animatingDifferences: false）、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
+        // サムネイルも、それまで前の中身のまま残し、動きの中で入れ替える。
         DispatchQueue.main.async { [weak self] in
             guard let self, self.content == content else { return }
+            self.holdsThumbnailForArrival = false
             self.animateArrival(of: content)
         }
     }
@@ -177,6 +180,8 @@ final class LinkCardView: UIButton {
         setText(of: content)
         for label in changed { label.alpha = 0 }
         let duration = content.transitionDuration
+        // リンクの記号から画像（届くまではblurhashのぼかし）への入れ替えも、新しい文字と同じ時間で薄くして行う。
+        updateThumbnail(crossfadeDuration: duration * 0.6)
         let options: UIView.AnimationOptions = [.allowUserInteraction, .beginFromCurrentState]
         UIView.animate(springDuration: duration, bounce: 0, options: options) {
             self.laysOutThumbnail = content.showsThumbnail
@@ -186,21 +191,23 @@ final class LinkCardView: UIButton {
                 // 像は古い文字の大きさのまま、新しい文字の左上に合わせて動かす。
                 snapshot.frame.origin = label.frame.origin
             }
-        } completion: { _ in
-            self.removeTransitionSnapshots(snapshots.map(\.1))
         }
         // 濃さは位置と別に、古い文字を先に薄くし、新しい文字を少し遅れて濃くする。同時に入れ替えると、
         // スプリングの出だしで両方が濃いまま重なり、読めない文字が数コマ出るため。
         // 新しい文字は直前に濃さを0にしたばかりで、画面上はまだ濃いため、今の見た目からは始めない。
-        UIView.animate(withDuration: duration * 0.4, delay: 0, options: [.allowUserInteraction, .curveEaseOut]) {
+        // 像は、薄くし終えてから外す。位置の動きの完了で外すと、サムネイルの枠が変わらないカードでは位置の動きが何も動かさず、
+        // 完了がすぐ呼ばれて、古い文字が1コマで消えるため。
+        UIView.animateSmoothly(duration: duration * 0.4) {
             for (_, snapshot) in snapshots { snapshot.alpha = 0 }
+        } completion: {
+            self.removeTransitionSnapshots(snapshots.map(\.1))
         }
-        UIView.animate(withDuration: duration * 0.6, delay: duration * 0.2, options: [.allowUserInteraction, .curveEaseInOut]) {
+        UIView.animateSmoothly(duration: duration * 0.6, delay: duration * 0.2) {
             for label in changed { label.alpha = 1 }
         }
     }
 
-    /// 入れ替えの途中で重ねている、古い文字の像。
+    /// 入れ替えの途中で重ねている、古い文字の像とリンクの記号の複製。
     private var transitionSnapshots: [UIView] = []
 
     private func removeTransitionSnapshots(_ snapshots: [UIView]? = nil) {
@@ -295,12 +302,14 @@ final class LinkCardView: UIButton {
     /// 前の投稿の枠や文字の動きが新しい中身に重ならないよう、ここで止める。
     private func showText(of content: Content) {
         removeTransitionSnapshots()
+        removeIncomingThumbnail()
         for view in [thumbnailView, symbolView] {
             view.layer.removeAllAnimations()
         }
         for label in [siteLabel, headlineLabel, descriptionLabel] {
             label.layer.removeAllAnimations()
-            label.alpha = 1
+            // 届いたときの動きで濃くしている途中なら、その動きも止める。止めないと、使い回した行の新しい文字が薄い状態から濃くなる。
+            label.stopFading(at: 1)
         }
         setText(of: content)
     }
@@ -488,8 +497,13 @@ final class LinkCardView: UIButton {
         updateThumbnail()
     }
 
+    /// カードが届いた動きを始めるまで、サムネイルを前の中身のまま残す。描き直しの中で入れ替えると、動かせずに1コマで替わるため。
+    private var holdsThumbnailForArrival = false
+
     /// サムネイルを、枠の大きさに合わせて読む。サムネイルのないカードとリンク先だけのカードには、リンクの記号を出す。
-    private func updateThumbnail() {
+    /// - Parameter crossfadeDuration: カードが届いたときに、記号やぼかしの下地をこの時間で薄くして入れ替える。nilならすぐ入れ替える。
+    private func updateThumbnail(crossfadeDuration: TimeInterval? = nil) {
+        guard !holdsThumbnailForArrival else { return }
         // 画像を出さない設定では、画像を読まず、画像を開く操作も置かない。
         let card: PreviewCard? = if content?.showsImage != false, case .card(let card) = content?.card { card } else { nil }
         let scale = traitCollection.displayScale
@@ -504,7 +518,11 @@ final class LinkCardView: UIButton {
         } else {
             nil
         }
-        symbolView.isHidden = card?.image != nil
+        let hidesSymbol = card?.image != nil
+        if let crossfadeDuration, hidesSymbol, !symbolView.isHidden {
+            fadeOutSymbol(duration: crossfadeDuration)
+        }
+        symbolView.isHidden = hidesSymbol
         guard request != self.request else {
             updateImageInteraction()
             return
@@ -515,13 +533,14 @@ final class LinkCardView: UIButton {
         loadTask?.cancel()
         loadTask = nil
         if !keepsImage {
-            thumbnailView.showPlaceholder(card?.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: bounds.height > 0 ? thumbnailWidth / bounds.height : 1) })
+            let placeholder = card?.blurhash.flatMap { store.placeholder(for: $0, aspectRatio: bounds.height > 0 ? thumbnailWidth / bounds.height : 1) }
+            crossfadeThumbnail(duration: crossfadeDuration) { $0.showPlaceholder(placeholder) }
         }
         updateImageInteraction()
         // ぼかしている間は画像を読まない。ぼかしを外さない投稿で通信しないようにする。
         guard let request, !request.isCovered else { return }
         if let cached = store.cachedImage(for: request.url, maxPixelSize: request.maxPixelSize) {
-            thumbnailView.showLoaded(cached, from: request.url)
+            crossfadeThumbnail(duration: crossfadeDuration) { $0.showLoaded(cached, from: request.url) }
             updateImageInteraction()
             return
         }
@@ -529,10 +548,88 @@ final class LinkCardView: UIButton {
             guard let image = try? await store.image(for: request.url, maxPixelSize: request.maxPixelSize),
                   let self, !Task.isCancelled, self.request == request
             else { return }
-            UIView.transition(with: self.thumbnailView, duration: 0.15, options: .transitionCrossDissolve) {
+            if let incoming = self.incomingThumbnail {
+                // 下地を濃くしている途中に届いたら、重ねている方で入れ替え、サムネイルそのものは前の見え方のまま残す。
+                let base = self.thumbnailView.image
                 self.thumbnailView.showLoaded(image, from: request.url)
+                self.thumbnailView.image = base
+                UIView.transition(with: incoming, duration: 0.15, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+                    incoming.image = image
+                }
+            } else {
+                UIView.transition(with: self.thumbnailView, duration: 0.15, options: .transitionCrossDissolve) {
+                    self.thumbnailView.showLoaded(image, from: request.url)
+                }
             }
             self.updateImageInteraction()
+        }
+    }
+
+    /// サムネイルの見え方を入れ替える。`duration`があれば、新しい見え方をサムネイルの中に重ねて濃くし、濃くし終えてから入れ替える。
+    /// 前の見え方を上に重ねて薄くする形にしないのは、灰色の下地が半透明で、下の新しい画像が透けて1コマで替わって見えるため。
+    private func crossfadeThumbnail(duration: TimeInterval?, _ change: (LinkCardThumbnailView) -> Void) {
+        guard let duration else {
+            removeIncomingThumbnail()
+            change(thumbnailView)
+            return
+        }
+        // 重ねている途中にまた入れ替えるとき（下地を出した同じ回に、端末に残っていた画像を出すなど）は、重ねていたものを捨て、
+        // 前の見え方から濃くし直す。
+        let base = incomingThumbnail != nil ? incomingThumbnailBase : thumbnailView.image
+        incomingThumbnail?.removeFromSuperview()
+        incomingThumbnail = nil
+        change(thumbnailView)
+        let shown = thumbnailView.image
+        guard shown !== base else { return }
+        let incoming = UIImageView(image: shown)
+        incoming.contentMode = thumbnailView.contentMode
+        incoming.clipsToBounds = true
+        incoming.frame = thumbnailView.bounds
+        incoming.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        incoming.alpha = 0
+        incoming.isUserInteractionEnabled = false
+        // 閲覧注意のぼかしより下に置く。
+        thumbnailView.insertSubview(incoming, at: 0)
+        thumbnailView.image = base
+        incomingThumbnail = incoming
+        incomingThumbnailBase = base
+        UIView.animateSmoothly(duration: duration) {
+            incoming.alpha = 1
+        } completion: {
+            guard self.incomingThumbnail === incoming else { return }
+            self.removeIncomingThumbnail()
+        }
+    }
+
+    /// 入れ替えの途中で、サムネイルの中に重ねて濃くしている新しい見え方。サムネイルそのものは、その間は前の見え方を描く。
+    private var incomingThumbnail: UIImageView?
+    private var incomingThumbnailBase: UIImage?
+
+    /// 重ねていた新しい見え方を、サムネイルそのものに描かせて外す。
+    private func removeIncomingThumbnail() {
+        guard let incoming = incomingThumbnail else { return }
+        incomingThumbnail = nil
+        incomingThumbnailBase = nil
+        thumbnailView.image = incoming.image
+        incoming.removeFromSuperview()
+    }
+
+    /// リンクの記号の複製を重ねて薄くする。記号そのものは並べ方が濃さを決めるため、動かさずに隠す。
+    private func fadeOutSymbol(duration: TimeInterval) {
+        let copy = UIImageView(image: symbolView.image)
+        copy.tintColor = symbolView.tintColor
+        copy.contentMode = symbolView.contentMode
+        copy.bounds = symbolView.bounds
+        copy.center = symbolView.center
+        copy.transform = symbolView.transform
+        copy.alpha = symbolView.alpha
+        copy.isUserInteractionEnabled = false
+        insertSubview(copy, aboveSubview: thumbnailView)
+        transitionSnapshots.append(copy)
+        UIView.animateSmoothly(duration: duration) {
+            copy.alpha = 0
+        } completion: {
+            self.removeTransitionSnapshots([copy])
         }
     }
 }

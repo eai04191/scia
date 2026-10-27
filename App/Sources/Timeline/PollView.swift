@@ -152,6 +152,14 @@ final class PollView: UIView {
         // 同じ投票で割合が変わったときだけ、棒を前の長さから伸ばす。使い回された行で別の投票に替わったときは、動かさずに出す。
         // 同じ投票で割合も形も変わらない描き直し（送っている途中のインジケーターを外すときなど）では、伸ばしている途中の棒をそのままにする。
         let samePoll = previous?.pollID == content.pollID
+        // 投票する形と結果の形が入れ替わるときは、フチ、記号、割合、ボタンが一度に替わるため、投票全体をクロスフェードする。
+        // 棒はクロスフェードの中でも伸ばす。一覧は動きを止めて描き直すことがあり、その中ではUIView.transitionが動かないため、レイヤーに直接足す。
+        if samePoll, previous?.display.mode != display.mode, window != nil, content.barDuration > 0, !UIAccessibility.isReduceMotionEnabled {
+            let fade = CATransition()
+            fade.type = .fade
+            fade.duration = content.barDuration * 0.5
+            layer.add(fade, forKey: "modeChange")
+        }
         let keepsBars = samePoll && previous?.display.mode == display.mode && previous?.display.options.map(\.fraction) == display.options.map(\.fraction)
         let animatesBars = samePoll && !keepsBars && display.mode == .results
             && window != nil && content.barDuration > 0 && !UIAccessibility.isReduceMotionEnabled
