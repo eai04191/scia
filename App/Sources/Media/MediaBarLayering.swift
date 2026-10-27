@@ -178,7 +178,7 @@ final class MediaBarLayering {
             host.bringSubviewToFront(image)
         }
         if image.image !== morph.image {
-            image.image = morph.image
+            image.setImage(morph.image, crossfadeDuration: morph.lastCrossfadeDuration)
         }
         image.focus = morph.focus
         image.paperColor = morph.paperColor

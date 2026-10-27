@@ -689,6 +689,15 @@ public enum TuningCatalog {
         defaultValue: 0.3
     )
 
+    /// ビューアでblurhashのぼかしを出していたところへ元の画像が届いたときに、薄くして入れ替える時間。一覧のサムネイルは0.15秒で入れ替えている。
+    public static let mediaPlaceholderFadeDuration = NumberTuning(
+        id: "media.placeholderFadeDuration",
+        title: "ぼかしから元の画像へ入れ替える時間（秒）",
+        range: 0.05...1,
+        step: 0.05,
+        defaultValue: 0.15
+    )
+
     /// ビューアを開閉するとき、画像のうちバーにかかる部分を、バーの奥にも描く。
     /// オフなら、開くときは複製をバーの手前にだけ描き、閉じるときはバーにかかる部分を着地へ近づくにつれて切り落とすだけにする。
     /// 開き始めにバーの下のサムネイルがバーの手前へ急に出て、閉じる着地の瞬間にバー越しのサムネイルが急に現れる。
@@ -1677,6 +1686,7 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "media.loading", title: "ビューア：画像が届いたとき", items: [
             .number(mediaNaturalSizeDuration),
+            .number(mediaPlaceholderFadeDuration),
         ]),
         TuningSection(id: "media.bars", title: "ビューア：バーとの重なり", items: [
             .toggle(mediaCloseDrawsUnderBars),

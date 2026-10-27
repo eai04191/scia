@@ -27,10 +27,22 @@ final class FocusCroppedImageView: UIView {
 
     var image: UIImage? {
         get { imageView.image }
-        set {
-            imageView.image = newValue
-            setNeedsLayout()
+        set { setImage(newValue, crossfadeDuration: 0) }
+    }
+
+    /// 最後に画像を差し替えたときに、前の画像から薄く入れ替えた時間。0なら1コマで差し替えた。
+    /// 同じ見た目の複製（ビューアの開閉で一覧の中に置く複製）を、同じ入れ替え方でそろえるのに使う。
+    private(set) var lastCrossfadeDuration: TimeInterval = 0
+
+    /// 画像を差し替える。`crossfadeDuration`が0より大きければ、前の画像をその時間で薄くして入れ替える。
+    /// - Parameter startAlpha: 前の画像の濃さの始まり。ほかで薄くしている途中の見え方を引き継ぐときに渡す。
+    func setImage(_ newImage: UIImage?, crossfadeDuration: TimeInterval, from startAlpha: CGFloat = 1) {
+        lastCrossfadeDuration = crossfadeDuration
+        if newImage !== imageView.image {
+            imageView.fadeOutCurrentImage(duration: crossfadeDuration, from: startAlpha)
         }
+        imageView.image = newImage
+        setNeedsLayout()
     }
 
     var focus: MediaFocus? {

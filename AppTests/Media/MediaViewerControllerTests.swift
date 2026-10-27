@@ -1619,6 +1619,58 @@ struct MediaViewerControllerTests {
         harness.frames.runUntilStopped()
     }
 
+    /// 一覧のサムネイルが読めずにblurhashのぼかしから開いた画像は、元の画像が届いたら、ページも開く途中の複製も、ぼかしから薄くして入れ替える。
+    @Test func originalReplacesBlurhashWithCrossfade() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let arriving = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 36), format: format).image { context in
+            UIColor.systemGreen.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 64, height: 36))
+        }
+        let data = try #require(arriving.pngData())
+        let arrival = Gate()
+        let store = MediaImageStore(files: .temporary()) { _, _ in
+            try await arrival.wait()
+            return data
+        }
+        let tile = MediaTileView(store: .offline)
+        tile.frame = CGRect(x: 20, y: 200, width: 160, height: 90)
+        harness.viewController.view.addSubview(tile)
+        let attachment = MediaAttachment(
+            id: "1",
+            type: .image,
+            url: URL(string: "https://files.example.social/original/1.png"),
+            previewUrl: nil,
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 64, height: 36)),
+            blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+        )
+        MediaViewerController.present(
+            attachments: [attachment],
+            startIndex: 0,
+            store: store,
+            dragToDismiss: drag,
+            timing: timing,
+            from: harness.viewController,
+            sourceTile: { _ in nil },
+            onDismiss: {},
+            frameSource: harness.frames
+        )
+        let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
+        harness.frames.runUntilStopped()
+        // 起点がないので薄くして開き、つかんで複製を出してから届ける。
+        viewer.beginDragging(at: CGPoint(x: 100, y: 300))
+        #expect(viewer.isContentHiddenForTransition)
+        arrival.open()
+
+        try await waitUntil { viewer.morphImage?.size == arriving.size }
+        #expect(viewer.morphImageCrossfadeDuration == timing.placeholderFadeDuration, "複製をぼかしから1コマで差し替えています")
+        viewer.close()
+        try await waitUntil { harness.viewController.presentedViewController == nil }
+        harness.frames.runUntilStopped()
+    }
+
     /// ビューアは一覧を残したまま上に重ねるため、開いている間も閉じたあとも、一覧の読んでいる位置を動かさない。
     @Test func timelineKeepsPositionWhileViewerOpensAndCloses() async throws {
         let harness = try TimelineHarness(notices: notices)

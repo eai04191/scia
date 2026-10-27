@@ -127,6 +127,8 @@ final class MediaViewerController: UIViewController {
         var interruptedOpenFadeDuration: TimeInterval = 0.2
         /// 元の大きさの分からない画像が届いたときに、画面に収めた大きさから等倍へ縮める時間。
         var naturalSizeDuration: TimeInterval = 0.3
+        /// blurhashのぼかしを出していたところへ元の画像が届いたときに、薄くして入れ替える時間。
+        var placeholderFadeDuration: TimeInterval = 0.15
     }
 
     /// 投稿欄で選んだメディアを開いたときの操作。ビューアは投稿欄を知らず、メニューと代替テキストの書き終わりをここから渡す。
@@ -295,6 +297,11 @@ final class MediaViewerController: UIViewController {
     /// 複製に描いている画像。
     var morphImage: UIImage? {
         morph.image
+    }
+
+    /// 複製の画像を最後に差し替えたときに、前の画像から薄く入れ替えた時間。
+    var morphImageCrossfadeDuration: TimeInterval {
+        morph.lastCrossfadeDuration
     }
 
     /// 複製の紙の色。
@@ -639,6 +646,7 @@ final class MediaViewerController: UIViewController {
         if let image = page as? ImagePageController {
             image.doubleTapZoomDuration = timing.doubleTapZoomDuration
             image.naturalSizeDuration = timing.naturalSizeDuration
+            image.placeholderFadeDuration = timing.placeholderFadeDuration
         }
         if let player = page as? PlayerPageController {
             player.controlsHideDelay = timing.videoControlsHideDelay
@@ -648,9 +656,9 @@ final class MediaViewerController: UIViewController {
                 self.setChromeHidden(hidden)
             }
         }
-        page.onImageChange = { [weak self, weak page] in
+        page.onImageChange = { [weak self, weak page] crossfadeDuration in
             guard let self, let page, self.morphFollowsPage, page.index == self.currentIndex, let image = page.transitionImage else { return }
-            self.morph.image = image
+            self.morph.setImage(image, crossfadeDuration: crossfadeDuration)
         }
         pages[index] = page
         return page
@@ -1090,6 +1098,11 @@ extension MediaViewerController {
         let page = pages[currentIndex]
         let tileImage = tile.flatMap { $0.showsAttachment(currentItem.id) ? $0.thumbnailImage : nil }
         morph.image = page?.transitionImage ?? tileImage ?? page.map(Self.snapshot)
+        if let fading = page?.fadingTransitionImage, let image = morph.image {
+            // ページがぼかしから元の画像へ薄く入れ替えている途中なら、複製も同じ濃さから入れ替え続ける。元の画像だけを載せると、ぼかしが1コマで消える。
+            morph.image = fading.image
+            morph.setImage(image, crossfadeDuration: fading.remaining, from: fading.alpha)
+        }
         // 重ねた表示はフチの内側に置くので、先に枠とフチを決める。
         // 紙の色は、ビューア（常にダーク）ではなく起点の写真の外観で決める。ライトテーマの一覧の白いフチから、グレーに替わって見えないようにする。
         morph.paperColor = PhotoPaper.color.resolvedColor(with: tile?.traitCollection ?? traitCollection)
@@ -1730,7 +1743,8 @@ class MediaPageController: UIViewController {
     var index = 0
     var onSingleTap: (() -> Void)?
     /// 描いている画像が変わった。開閉の複製を、元の画像が届いた時点で差し替えるために使う。
-    var onImageChange: (() -> Void)?
+    /// 渡す値は、前の画像を薄くして入れ替えた時間。0なら1コマで差し替えた。
+    var onImageChange: ((_ crossfadeDuration: TimeInterval) -> Void)?
     /// 長押しで出すメニューの項目。右上のメニューボタンと同じものを返す。
     var menuElements: (() -> [UIMenuElement])?
     /// ファイルの中身から読んだ、メディアの情報に出す詳しい値。読み終えるまでと、読めなかったときはnil。
@@ -1770,6 +1784,9 @@ class MediaPageController: UIViewController {
 
     /// 画像を描くページ。開閉の複製を、このページの画像の更新に合わせて差し替える。
     var drawsImage: Bool { false }
+
+    /// 前の画像から薄く入れ替えている途中なら、前の画像と、いま見えている濃さと、入れ替え終えるまでの時間。
+    var fadingTransitionImage: (image: UIImage, alpha: CGFloat, remaining: TimeInterval)? { nil }
 
     /// ページの中に出している部品。開閉と閉じる操作のあいだ、ビューアがボタン類と一緒に薄くする。出していなければnil。
     var transitionOverlay: UIView? { nil }
@@ -1885,6 +1902,8 @@ final class ImagePageController: MediaPageController {
 
     /// 元の大きさの分からない画像が届いたときに、画面に収めた大きさから等倍へ縮める時間。
     var naturalSizeDuration: TimeInterval = 0.3
+    /// blurhashのぼかしを出していたところへ元の画像が届いたときに、薄くして入れ替える時間。
+    var placeholderFadeDuration: TimeInterval = 0.15
 
     override var allowsInteractiveDismiss: Bool { !zoomView.isZoomedIn }
 
@@ -1924,6 +1943,11 @@ final class ImagePageController: MediaPageController {
 
     override var drawsImage: Bool { true }
 
+    /// 濃さが減るほど残りの時間も減るとみなす。薄くする動きはスプリングなので、残りの時間とはずれるが、引き継ぐ複製の動きがわずかに速いか遅いだけになる。
+    override var fadingTransitionImage: (image: UIImage, alpha: CGFloat, remaining: TimeInterval)? {
+        zoomView.fadingImage.map { ($0.image, $0.alpha, placeholderFadeDuration * $0.alpha) }
+    }
+
     override func stateDump() -> String {
         """
         imageSource: \(imageSource)
@@ -1962,7 +1986,7 @@ final class ImagePageController: MediaPageController {
             zoomView.naturalSize = CGSize(width: width, height: height)
         }
         zoomView.image = preview ?? placeholder
-        onImageChange?()
+        onImageChange?(0)
         load(hasPreview: preview != nil)
     }
 
@@ -1981,7 +2005,7 @@ final class ImagePageController: MediaPageController {
             imageSource = "local thumbnail"
             zoomView.naturalSize = thumbnail.size
             zoomView.image = thumbnail
-            onImageChange?()
+            onImageChange?(0)
             // 前の画像の文字の位置が残らないよう、切り抜いた画像で解析し直す。
             liveText.analysis = nil
             hasFinishedAnalysis = false
@@ -2023,7 +2047,7 @@ final class ImagePageController: MediaPageController {
                 self.imageSource = "local"
                 self.zoomView.naturalSize = image.size
                 self.zoomView.image = image
-                self.onImageChange?()
+                self.onImageChange?(0)
                 self.analyze(image)
             } else {
                 self.failureLabel.isHidden = hasPreview
@@ -2065,14 +2089,17 @@ final class ImagePageController: MediaPageController {
             self.spinner.stopAnimating()
             if let image {
                 self.originalURL = await store.hasOriginal(for: url) ? url : nil
+                let replacesPlaceholder = self.imageSource == "blurhash"
                 self.imageSource = "full"
-                self.zoomView.image = image
+                // ぼかしからは、一覧のサムネイルが届いたときと同じく、薄くして入れ替える。中身の分かるサムネイルからは、細部が増えるだけなので差し替える。
+                let crossfadeDuration = replacesPlaceholder ? self.placeholderFadeDuration : 0
+                self.zoomView.setImage(image, crossfadeDuration: crossfadeDuration)
                 // サーバーが元の大きさを返さなければ、届いた画像の大きさを等倍にする。サムネイルを出していた間は画面に収めていたため、ここで大きさが変わる。
                 // 画面に収めたまま差し替えてから、等倍へ縮めていく。視差効果を減らす設定では、開閉と同じく動かさずに縮める。
                 if self.zoomView.naturalSize == nil {
                     self.zoomView.setNaturalSize(image.size, duration: UIAccessibility.isReduceMotionEnabled ? 0 : self.naturalSizeDuration)
                 }
-                self.onImageChange?()
+                self.onImageChange?(crossfadeDuration)
                 self.analyze(image)
             } else {
                 // サムネイルを出せていれば、そのまま見せる。
@@ -2865,7 +2892,8 @@ extension MediaViewerController.Timing {
             doubleTapZoomDuration: tuning.value(of: TuningCatalog.mediaDoubleTapZoomDuration),
             paperBorderPortion: tuning.value(of: TuningCatalog.mediaPaperBorderPortion),
             interruptedOpenFadeDuration: tuning.value(of: TuningCatalog.mediaInterruptedOpenFadeDuration),
-            naturalSizeDuration: tuning.value(of: TuningCatalog.mediaNaturalSizeDuration)
+            naturalSizeDuration: tuning.value(of: TuningCatalog.mediaNaturalSizeDuration),
+            placeholderFadeDuration: tuning.value(of: TuningCatalog.mediaPlaceholderFadeDuration)
         )
     }
 }

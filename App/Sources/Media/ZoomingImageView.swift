@@ -22,13 +22,19 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
 
     var image: UIImage? {
         get { imageView.image }
-        set {
-            let wasAtRest = isAtRest
-            imageView.image = newValue
-            imageView.isHidden = newValue == nil
-            // サムネイルから元の画像へ差し替えたときは、見ている位置を保つため、倍率を変えていれば見た目の大きさを変えない。
-            updateZoomScales(resetting: wasAtRest)
+        set { setImage(newValue, crossfadeDuration: 0) }
+    }
+
+    /// 画像を差し替える。`crossfadeDuration`が0より大きければ、前の画像をその時間で薄くして入れ替える。
+    func setImage(_ newImage: UIImage?, crossfadeDuration: TimeInterval) {
+        let wasAtRest = isAtRest
+        if newImage !== imageView.image {
+            imageView.fadeOutCurrentImage(duration: crossfadeDuration)
         }
+        imageView.image = newImage
+        imageView.isHidden = newImage == nil
+        // サムネイルから元の画像へ差し替えたときは、見ている位置を保つため、倍率を変えていれば見た目の大きさを変えない。
+        updateZoomScales(resetting: wasAtRest)
     }
 
     /// 元の画像が届いて、等倍の大きさが初めて分かったときに設定する。開いたときの倍率のままなら、画面に収めた大きさから等倍へ、`duration`秒かけて縮める。
@@ -53,6 +59,11 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         guard let image = imageView.layer.presentation(), let scroll = layer.presentation() else { return imageView.frame }
         // 自身の座標は境界の原点（スクロールの位置）からの位置なので、見えている原点に合わせて直す。
         return image.frame.offsetBy(dx: bounds.minX - scroll.bounds.minX, dy: bounds.minY - scroll.bounds.minY)
+    }
+
+    /// 前の画像から薄く入れ替えている途中なら、前の画像と、いま見えている濃さ。
+    var fadingImage: (image: UIImage, alpha: CGFloat)? {
+        imageView.fadingImage
     }
 
     /// 画像そのものに操作を付ける。Live Textのように、画像の中の位置で振る舞いを変え、拡大に合わせて動く必要がある操作に使う。
