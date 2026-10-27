@@ -31,6 +31,8 @@ final class StatusBarTicker {
     /// 出している長さと、デバッグで出し続ける間合いを数える時計。
     private let clock: any Clock<Duration>
     private var advanceTask: Task<Void, Never>?
+    /// 消し終えてから、ステータスバーを出し直し終えるまでを待つ処理。
+    private var statusBarReturnTask: Task<Void, Never>?
     private let logger = SciaLog.logger(category: "statusBarTicker")
 
     init(tuning: TuningStore = AppDependencies.tuning, clock: any Clock<Duration> = AppDependencies.clock) {
@@ -38,6 +40,11 @@ final class StatusBarTicker {
         self.clock = clock
         queue = StatusBarTickerQueue(timing: TuningCatalog.statusBarTickerTiming(in: tuning))
     }
+
+    /// 流しているビュー。まだ一度も流していなければnil。
+    var tickerView: StatusBarTickerView? { window?.ticker }
+    /// 重ねたウィンドウがステータスバーを隠しているか。
+    var isHidingStatusBar: Bool { window?.host.hidesStatusBar ?? false }
 
     func receive(_ notification: MastodonNotification, verdict: FilterVerdict) {
         guard let item = StatusBarTickerItem(notification, verdict: verdict) else { return }
@@ -49,7 +56,10 @@ final class StatusBarTicker {
         queue.timing = TuningCatalog.statusBarTickerTiming(in: tuning)
         queue.enqueue(item)
         if sinceShown == nil {
-            advance()
+            // ステータスバーを出し直している間は、出し終えてから出す。
+            if statusBarReturnTask == nil {
+                advance()
+            }
         } else {
             // 出している間に届いたら、待っている数で、今の1件を出しておく時間を測り直す。
             scheduleAdvance()
@@ -72,7 +82,8 @@ final class StatusBarTicker {
     private func currentCutout() -> StatusBarCutout? {
         // iPadとMacでは、帯をステータスバーの高さで測るが、iPadでは出している間は自分でステータスバーを隠していて高さが0になるため、出し始めに測った形を使う。
         // 出している間にiPadのウィンドウを縮めても、待っている通知を流し終えるまでは同じ形で出す。次に出し始めるときに測り直す。
-        if sinceShown != nil, let window, window.traitCollection.userInterfaceIdiom != .phone {
+        // 消したあとも、縮め終えるまではステータスバーを隠したままなので、同じく出し始めに測った形を使う。
+        if sinceShown != nil || window?.host.hidesStatusBar == true, let window, window.traitCollection.userInterfaceIdiom != .phone {
             return window.ticker.cutout
         }
         guard let scene = scene(), let reference = scene.windows.first(where: { $0.isKeyWindow }) ?? scene.windows.first else { return nil }
@@ -103,7 +114,9 @@ final class StatusBarTicker {
         if !wasShowing {
             window.isHidden = false
         }
-        if !wasShowing, hidesSystemStatusBar {
+        // 縮めている途中に届いたときは、ステータスバーを隠したままなので、隠し直さず、安全領域の補いもそのまま使う。
+        // 隠している間はステータスバーの高さが0になり、補い直すと補いが消えて画面が上へずれるため。
+        if !window.host.hidesStatusBar, hidesSystemStatusBar {
             keepSafeArea(whileHiding: true, window: window)
             window.host.hidesStatusBar = true
             UIView.animate(withDuration: window.ticker.animationDuration * 0.5) {
@@ -156,18 +169,39 @@ final class StatusBarTicker {
             return
         }
         sinceShown = nil
-        if hidesSystemStatusBar {
-            keepSafeArea(whileHiding: false, window: window)
-            window.host.hidesStatusBar = false
-        }
         window.ticker.hide(animated: true) { [weak self, weak window] in
-            // 消している間に次の通知が来て出し直していたら、ウィンドウは隠さない。
+            // 消している間に次の通知が来て出し直していたら、ステータスバーは隠したまま、ウィンドウも隠さない。
             guard let self, let window, self.sinceShown == nil else { return }
-            window.isHidden = true
+            self.restoreStatusBar(in: window)
         }
-        if hidesSystemStatusBar {
-            UIView.animate(withDuration: window.ticker.animationDuration) {
-                window.host.setNeedsStatusBarAppearanceUpdate()
+    }
+
+    /// 消し終えてから、ステータスバーを出し直し、出し終えたらウィンドウを隠す。出し終えるまでに届いた通知は、出し終えてから出す。
+    /// ステータスバーを出し直している途中に隠し直すと、システムは途中の濃さからではなく、1コマで濃く出してから薄くし、薄くなるまでカプセルの上に重なって描く。
+    /// 縮めている途中から出し直すと、縮めている途中に次の通知が届いたときにそうなるため、縮め終えるまでステータスバーは隠したままにする。
+    private func restoreStatusBar(in window: TickerWindow) {
+        guard hidesSystemStatusBar else {
+            window.isHidden = true
+            return
+        }
+        keepSafeArea(whileHiding: false, window: window)
+        window.host.hidesStatusBar = false
+        let duration = window.ticker.animationDuration
+        UIView.animate(withDuration: duration) {
+            window.host.setNeedsStatusBarAppearanceUpdate()
+        }
+        let clock = clock
+        statusBarReturnTask = Task { [weak self, weak window] in
+            try? await clock.sleep(for: .seconds(duration))
+            guard let self else { return }
+            self.statusBarReturnTask = nil
+            if !self.queue.waiting.isEmpty, self.canShowNow() {
+                self.advance()
+            } else {
+                // 待っている間に流せなくなったら（ビューアを開いたときなど）、待っている通知を捨て、ウィンドウを隠す。
+                // 残すと、重ねたウィンドウがステータスバーの見た目を決めてしまう。
+                self.queue.removeAll()
+                window?.isHidden = true
             }
         }
     }

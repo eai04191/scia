@@ -343,8 +343,10 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             }
             return
         }
-        outgoing?.removeFromSuperview()
-        removeLeavingContents()
+        // 消し終えていれば中身は残っていない。残っていれば、縮めている途中か薄くしている途中なので、出ていく途中の中身として、見えている濃さから薄くして入れ替える。
+        // その場で取り除くと、中身が1コマで消える。
+        let outgoingAlpha = outgoing.map { CGFloat($0.left.layer.presentation()?.opacity ?? Float($0.left.alpha)) }
+        startLeaving(outgoing)
         if reducesMotion {
             capsule.frame = expandedFrame
             layoutContent(incoming, in: expandedFrame)
@@ -352,6 +354,9 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             capsule.alpha = 0
             UIView.animate(withDuration: animationDuration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
                 self.capsule.alpha = 1
+            }
+            if let outgoing, let outgoingAlpha {
+                fadeOut(outgoing, from: outgoingAlpha)
             }
             return
         }
@@ -362,9 +367,25 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
         }
         capsule.alpha = 1
         layoutContent(incoming, in: expandedFrame)
-        trackedContents = [incoming]
+        trackedContents = [incoming] + leavingContents
         fadingContent = incoming
         animateCapsule(to: expandedFrame, dampingRatio: 0.85, contentAlpha: { progress in min(max(progress / 0.25, 0), 1) }) {}
+        if let outgoing, let outgoingAlpha {
+            fadeOut(outgoing, from: outgoingAlpha)
+        }
+    }
+
+    /// 出ていく中身を、`alpha`から入れ替えと同じ時間で薄くして取り除く。縮めるときに付けた濃さの動きは外し、この薄くする動きに替える。
+    private func fadeOut(_ content: ContentViews, from alpha: CGFloat) {
+        for layer in [content.left.layer, content.right.layer] {
+            layer.removeAnimation(forKey: Self.animationKeyPrefix + "opacity")
+        }
+        content.setAlpha(alpha)
+        UIView.animate(withDuration: animationDuration * 0.6, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            content.setAlpha(0)
+        } completion: { [weak self] _ in
+            self?.finishLeaving(content)
+        }
     }
 
     /// 切り欠きへ縮めて消す。「視差効果を減らす」がオンなら、その場で薄くして消す。
