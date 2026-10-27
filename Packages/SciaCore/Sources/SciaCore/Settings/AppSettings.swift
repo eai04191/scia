@@ -321,6 +321,11 @@ public final class AppSettings {
         didSet { defaults.set(externalPostMenuLayout.tokens, forKey: Keys.externalPostMenuLayout) }
     }
 
+    /// プロフィールの表示名、自己紹介、補足情報の行を長押しして出すメニューの並び。
+    public var profileTextMenuLayout: MenuLayout<ProfileTextMenuItem> {
+        didSet { defaults.set(profileTextMenuLayout.tokens, forKey: Keys.profileTextMenuLayout) }
+    }
+
     /// 本文のハッシュタグを長押しして出すメニューの並び。
     public var hashtagMenuLayout: MenuLayout<HashtagMenuItem> {
         didSet { defaults.set(hashtagMenuLayout.tokens, forKey: Keys.hashtagMenuLayout) }
@@ -442,6 +447,7 @@ public final class AppSettings {
         static let userMenuLayout = "settings.userMenuLayout"
         static let linkMenuLayout = "settings.linkMenuLayout"
         static let externalPostMenuLayout = "settings.externalPostMenuLayout"
+        static let profileTextMenuLayout = "settings.profileTextMenuLayout"
         static let hashtagMenuLayout = "settings.hashtagMenuLayout"
         static let mediaMenuLayout = "settings.mediaMenuLayout"
         static let composeToolLayout = "settings.composeToolLayout"
@@ -508,6 +514,7 @@ public final class AppSettings {
         userMenuLayout = defaults.stringArray(forKey: Keys.userMenuLayout).map(MenuLayout.init(tokens:)) ?? UserMenuItem.defaultLayout
         linkMenuLayout = defaults.stringArray(forKey: Keys.linkMenuLayout).map(MenuLayout.init(tokens:)) ?? LinkMenuItem.defaultLayout
         externalPostMenuLayout = defaults.stringArray(forKey: Keys.externalPostMenuLayout).map(MenuLayout.init(tokens:)) ?? ExternalPostMenuItem.defaultLayout
+        profileTextMenuLayout = defaults.stringArray(forKey: Keys.profileTextMenuLayout).map(MenuLayout.init(tokens:)) ?? ProfileTextMenuItem.defaultLayout
         hashtagMenuLayout = defaults.stringArray(forKey: Keys.hashtagMenuLayout).map(MenuLayout.init(tokens:)) ?? HashtagMenuItem.defaultLayout
         mediaMenuLayout = defaults.stringArray(forKey: Keys.mediaMenuLayout).map(MenuLayout.init(tokens:)) ?? MediaMenuItem.defaultLayout
         composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout

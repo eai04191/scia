@@ -121,6 +121,14 @@ final class ProfileController {
         header.onOpenImage = { [weak self] image in self?.openImage(image) }
         header.onOpenPinned = { [weak viewController] status, frame in viewController?.onOpenThread?(status, frame) }
         header.menuForImage = { [weak self] image, groups in self?.imageMenu(image, groups: groups) }
+        header.menuForText = { [weak self] part in
+            guard let self, let text = store.account.profileText(part) else { return nil }
+            return self.viewController?.profileTextMenu(for: text)
+        }
+        header.textMenuLifecycle = MenuLifecycle(
+            willShow: { [weak viewController] in viewController?.linkMenuWillShow() },
+            didHide: { [weak viewController] in viewController?.linkMenuDidHide() }
+        )
         header.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination) }
         viewController.onScroll = { [weak self] scrollView in self?.updateBars(scrollView) }
         header.onChangeBannerLayout = { [weak self] in self?.viewController?.headerDidChangeSize() }

@@ -39,6 +39,14 @@ final class ProfileHeaderView: UIView {
     var menuForImage: ((ProfileImage, MenuLayout<MediaMenuItem>.Groups?) -> UIMenu?)?
     /// アイコンとヘッダー画像の、メディアのメニューの長押し。決まりはdocs/menus.mdの「メディアのメニュー」にある。
     private var imageMenuInteractions: [ProfileImage: MediaMenuInteraction] = [:]
+    /// 表示名、自己紹介、補足情報の行を長押ししたときの、文章のメニュー。nilを返せばメニューを出さない。
+    var menuForText: ((ProfileTextPart) -> UIMenu?)?
+    /// 文章のメニューを出したときと閉じたとき。
+    var textMenuLifecycle = MenuLifecycle()
+    /// 表示名と自己紹介の、文章のメニューの長押し。決まりはdocs/menus.mdの「プロフィールの文章のメニュー」にある。
+    private var textMenuInteractions: [ProfileTextMenuInteraction] = []
+    /// 補足情報の行の、文章のメニューの長押し。行を作り直すたびに付け直す。
+    private var fieldMenuInteractions: [ProfileTextMenuInteraction] = []
     /// 関係が届いて、フォローのボタンの場所取りから本物の文字に変わるときのフェードの時間。0なら切り替える。
     var followRevealDuration: TimeInterval = 0
     /// 自己紹介か補足情報の値のリンクがタップされたときと、メンションの長押しのメニューでプロフィールを選んだときに、その行き先を渡して呼ぶ。
@@ -242,6 +250,10 @@ final class ProfileHeaderView: UIView {
         imageMenuInteractions = [
             .header: imageMenuInteraction(on: bannerView, for: .header),
             .avatar: imageMenuInteraction(on: avatarView, for: .avatar),
+        ]
+        textMenuInteractions = [
+            textMenuInteraction(on: nameLabel, for: .displayName),
+            textMenuInteraction(on: noteView, for: .note),
         ]
         for (view, label) in [(bannerView, "ヘッダー画像"), (avatarView, "アイコン")] as [(UIView, String)] {
             view.isUserInteractionEnabled = true
@@ -742,12 +754,13 @@ final class ProfileHeaderView: UIView {
     private func applyFields(_ account: Account, language: String, animatedEmojis: EmojiImageStore?) {
         fieldsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         fieldRowDividers = []
+        fieldMenuInteractions = []
         fieldsStack.isHidden = account.fields.isEmpty
         fieldsDivider.isHidden = account.fields.isEmpty
         fieldsStack.spacing = 0
         let nameFont = UIFont.preferredFont(forTextStyle: .footnote)
         let valueFont = UIFont.preferredFont(forTextStyle: .subheadline)
-        for field in account.fields {
+        for (index, field) in account.fields.enumerated() {
             let nameLabel = EmojiLabel()
             nameLabel.numberOfLines = 0
             nameLabel.emojiImages = animatedEmojis
@@ -786,7 +799,25 @@ final class ProfileHeaderView: UIView {
                 fieldsStack.addArrangedSubview(spacer)
             }
             fieldsStack.addArrangedSubview(row)
+            // 補足情報の行は、文字の色をカードの色に合わせているため、カードの色を下地にして持ち上げる。色がなければ既定の下地にする。
+            fieldMenuInteractions.append(textMenuInteraction(on: row, for: .field(index)) { [weak self] in
+                guard let self, avatarAccent != nil else { return nil }
+                return aboutBox.backgroundColor
+            })
         }
+    }
+
+    private func textMenuInteraction(
+        on view: UIView,
+        for part: ProfileTextPart,
+        previewBackground: @escaping @MainActor () -> UIColor? = { nil }
+    ) -> ProfileTextMenuInteraction {
+        let lifecycle = MenuLifecycle(
+            willShow: { [weak self] in self?.textMenuLifecycle.willShow() },
+            willEnd: { [weak self] in self?.textMenuLifecycle.willEnd() },
+            didHide: { [weak self] in self?.textMenuLifecycle.didHide() }
+        )
+        return ProfileTextMenuInteraction(on: view, menu: { [weak self] in self?.menuForText?(part) }, previewBackground: previewBackground, lifecycle: lifecycle)
     }
 
     /// 読み上げで、リンクを開く操作。

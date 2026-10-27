@@ -164,6 +164,16 @@ extension ExternalPostMenuItem: MenuItemContentProviding {
     }
 }
 
+extension ProfileTextMenuItem: MenuItemContentProviding {
+    var content: MenuItemContent {
+        switch self {
+        case .copyText: .own(title: "テキストをコピー", symbolName: "doc.on.doc", note: "補足情報では値だけをコピーします")
+        case .systemTranslate: .own(title: "翻訳", symbolName: "translate", note: "補足情報では値だけを訳します")
+        case .customEmojis: .own(title: "カスタム絵文字", symbolName: "face.smiling", note: "長押しした文章にカスタム絵文字があるときだけ出ます。絵文字ごとに、画像のメディアのメニューを出します")
+        }
+    }
+}
+
 extension HashtagMenuItem: MenuItemContentProviding {
     var content: MenuItemContent {
         switch self {

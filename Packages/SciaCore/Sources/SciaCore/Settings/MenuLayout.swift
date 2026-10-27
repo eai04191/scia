@@ -384,6 +384,25 @@ public enum ExternalPostMenuItem: String, MenuItemKind {
     ])
 }
 
+/// プロフィールの表示名、自己紹介、補足情報の行を長押ししたときのメニューの項目。決まりはdocs/menus.mdの「プロフィールの文章のメニュー」にある。
+public enum ProfileTextMenuItem: String, MenuItemKind {
+    /// 文章をプレーンテキストにしてコピーする。文字のある文章でだけ出る。
+    case copyText
+    /// 文章をプレーンテキストにして、システムの翻訳シートで訳す。文字のある文章でだけ出る。
+    case systemTranslate
+    /// 文章に描いているカスタム絵文字ごとに、絵文字の画像のメディアのメニューを出す。絵文字のある文章でだけ出る。
+    case customEmojis
+
+    public static let defaultLayout = MenuLayout<ProfileTextMenuItem>(defaultElements: [
+        .item(.copyText, isVisible: true),
+        .separator,
+        .item(.systemTranslate, isVisible: true),
+        .separator,
+        .item(.customEmojis, isVisible: true),
+        .more,
+    ])
+}
+
 /// 本文のハッシュタグを長押ししたときのメニューの項目。
 public enum HashtagMenuItem: String, MenuItemKind {
     /// ハッシュタグのタイムラインを開く。ハッシュタグをタップしたときと同じ。

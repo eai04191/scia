@@ -233,6 +233,12 @@ struct MenuLayoutTests {
         #expect(ExternalPostMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
     }
 
+    /// プロフィールの文章のメニューは、3つの項目を区切り線で分けて並べ、どれも隠さず「その他」も使わない。
+    @Test func profileTextMenuDefaults() {
+        #expect(ProfileTextMenuItem.defaultLayout.groups.main.map(\.items) == [[.copyText], [.systemTranslate], [.customEmojis]])
+        #expect(ProfileTextMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
+    }
+
     /// 「プロフィールとして開く」を足す前に保存したリンクのメニューでも、「ブラウザで開く」の下に出る。
     @Test func savedLinkMenuGainsOpenAsProfileAfterOpenInBrowser() {
         let saved = MenuLayout<LinkMenuItem>(tokens: [
@@ -331,6 +337,16 @@ struct MenuLayoutTests {
         let restored = AppSettings(defaults: defaults)
         #expect(restored.linkMenuLayout == link)
         #expect(restored.hashtagMenuLayout == hashtag)
+    }
+
+    @Test func appSettingsPersistsProfileTextMenuLayout() throws {
+        let defaults = try makeDefaults()
+        #expect(AppSettings(defaults: defaults).profileTextMenuLayout == ProfileTextMenuItem.defaultLayout)
+
+        let layout = MenuLayout<ProfileTextMenuItem>(elements: [.item(.customEmojis, isVisible: true), .separator, .item(.copyText, isVisible: false), .more])
+        AppSettings(defaults: defaults).profileTextMenuLayout = layout
+
+        #expect(AppSettings(defaults: defaults).profileTextMenuLayout == layout)
     }
 
     @Test func appSettingsPersistsExternalPostMenuLayout() throws {

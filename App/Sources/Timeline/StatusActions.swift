@@ -320,7 +320,7 @@ extension TimelineViewController {
 
     /// カスタム絵文字の画像のメディアのメニューを、絵文字の画像と`:shortcode:`のサブメニューにする。「投稿」はこのメニューの中なので出さない。
     /// 画像は行に描いているアニメーションしない版を、メニューに文字色で塗られないよう元の色のまま置く。まだ届いていなければ、項目のアイコンを置く。
-    private func emojiElement(for emoji: CustomEmoji, subject: OperationStatus.Subject?) -> UIMenuElement? {
+    func emojiElement(for emoji: CustomEmoji, subject: OperationStatus.Subject?) -> UIMenuElement? {
         let attachment = emoji.attachment
         // 使う人が開いたメニューなので、前に読めなかった画像も間隔を待たずに読み直す。
         let image = emojiImages.image(for: emoji.staticUrl, retriesNow: true)

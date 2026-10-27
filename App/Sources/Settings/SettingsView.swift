@@ -178,6 +178,9 @@ struct SettingsView: View {
                     NavigationLink("ほかのサービスの投稿のメニュー") {
                         MenuLayoutSettingsView(title: "ほかのサービスの投稿のメニュー", layout: $settings.externalPostMenuLayout)
                     }
+                    NavigationLink("プロフィールの文章のメニュー") {
+                        MenuLayoutSettingsView(title: "プロフィールの文章のメニュー", layout: $settings.profileTextMenuLayout)
+                    }
                     NavigationLink("ハッシュタグのメニュー") {
                         MenuLayoutSettingsView(title: "ハッシュタグのメニュー", layout: $settings.hashtagMenuLayout)
                     }
@@ -187,7 +190,7 @@ struct SettingsView: View {
                 } header: {
                     Text("長押しのメニュー")
                 } footer: {
-                    Text("投稿や通知、本文のリンクやハッシュタグ、メディアを長押ししたときのメニューに出す項目と、その並びを選びます。ユーザーのメニューは、投稿のメニューの中に、投稿したユーザーなどのサブメニューとして出るほか、本文のメンションを長押ししたときと、プロフィール画面の右上にも出ます。メディアのメニューは、サムネイルやプロフィールの画像を長押ししたときと、ビューアのメニューに出ます。ほかのサービスの投稿のメニューは、Xの投稿の囲みを長押ししたときに出ます。")
+                    Text("投稿や通知、本文のリンクやハッシュタグ、メディアを長押ししたときのメニューに出す項目と、その並びを選びます。ユーザーのメニューは、投稿のメニューの中に、投稿したユーザーなどのサブメニューとして出るほか、本文のメンションを長押ししたときと、プロフィール画面の右上にも出ます。メディアのメニューは、サムネイルやプロフィールの画像を長押ししたときと、ビューアのメニューに出ます。ほかのサービスの投稿のメニューは、Xの投稿の囲みを長押ししたときに出ます。プロフィールの文章のメニューは、プロフィールの表示名、自己紹介、補足情報の行を長押ししたときに出ます。")
                 }
                 Section {
                     Toggle("書いていないときは隠す", isOn: $settings.hidesEmptyComposeBar)
