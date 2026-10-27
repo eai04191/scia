@@ -45,11 +45,8 @@ struct StorageView: View {
                 } header: {
                     Text("書類とデータ")
                 } footer: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if breakdown.hasUnmeasuredItems {
-                            Text("「不明」の項目は、アプリから大きさを測れないため、合計に入っていません。iPhoneの設定の「書類とデータ」には入るため、そちらのほうが大きくなります。")
-                        }
-                        Text("メディアのキャッシュ、通信のキャッシュ、一時ファイルは、iCloudのバックアップに入りません。違和感レポートは、ファイルアプリの「このiPhone内」の「Scia」から取り出せます。")
+                    if breakdown.hasUnmeasuredItems {
+                        Text("「不明」の項目は合計に入っていません。")
                     }
                 }
                 Section {
@@ -57,12 +54,9 @@ struct StorageView: View {
                         removeButton(category, bytes: breakdown.item(category).map(\.removableBytes) ?? 0)
                     }
                 } footer: {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("メディアのキャッシュを消すと、一度開いた画像や動画を、次に開くときにもう一度読み込みます。一時ファイルは、前に起動したときに残ったものだけを消します。書いている投稿の添付や、共有や保存の途中のファイルは消しません。アプリ内のSafariのデータを消すと、アプリ内のSafariで開いたサイトからログアウトします。違和感レポートは、1件ずつ消すときはファイルアプリから消します。")
-                        if let removeError {
-                            Text("消せませんでした。\(removeError)")
-                                .foregroundStyle(.red)
-                        }
+                    if let removeError {
+                        Text("消せませんでした。\(removeError)")
+                            .foregroundStyle(.red)
                     }
                 }
                 Section {
