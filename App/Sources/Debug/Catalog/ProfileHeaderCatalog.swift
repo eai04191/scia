@@ -16,6 +16,12 @@ enum ProfileHeaderCatalog {
         fields: [
             Account.Field(name: "Webサイト", value: "<a href=\"https://example.com\">example.com</a>", verifiedAt: .now),
             Account.Field(name: "場所", value: "東京"),
+            // サーバーが30字で縮めた形のURL。補足情報では全体を出して折り返し、確認済みのチェックマークは末尾に付く。
+            Account.Field(
+                name: "長いリンク",
+                value: "<a href=\"https://example.com/users/catalog/very/long/path/to/the/page\"><span class=\"invisible\">https://</span><span class=\"ellipsis\">example.com/users/catalog/very</span><span class=\"invisible\">/long/path/to/the/page</span></a>",
+                verifiedAt: .now
+            ),
         ]
     )
 
