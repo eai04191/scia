@@ -550,6 +550,9 @@ final class MediaTileView: UIButton, MediaViewerSource {
     /// 見え方。一覧で重ねた写真の中のサムネイルでは、その写真が中身を描くかと暗さ。
     var viewerAppearance: (contentOpacity: CGFloat, dimming: CGFloat) = (1, 0)
 
+    /// 下の面に落としている影の濃さ。一覧で重ねた写真の中のサムネイルでは、スタックの影の濃さ。
+    var viewerShadowOpacity: Float = 0
+
     override var isHighlighted: Bool {
         didSet { alpha = isHighlighted ? 0.7 : 1 }
     }

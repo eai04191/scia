@@ -26,6 +26,9 @@ final class MediaBarLayering {
     }
 
     private let morph: FocusCroppedImageView
+    /// 複製のすぐ後ろに置く影。最前面の複製と同じ範囲で切り抜き、バーの手前に影だけが出ないようにする。
+    private let shadow: UIView?
+    private let shadowMask = CALayer()
     /// 最前面の複製に載せた、サムネイルに重ねた表示の複製。
     private let decoration: UIView?
     private let backdrop: UIView
@@ -52,8 +55,11 @@ final class MediaBarLayering {
     /// `backdropHoleFill`に描いている、反転の元にした画像。
     private weak var holeFillSource: UIImage?
 
-    init(morph: FocusCroppedImageView, decoration: UIView?, backdrop: UIView, underlay: Underlay?, window: UIWindow) {
+    init(morph: FocusCroppedImageView, shadow: UIView? = nil, decoration: UIView?, backdrop: UIView, underlay: Underlay?, window: UIWindow) {
         self.morph = morph
+        self.shadow = shadow
+        shadowMask.backgroundColor = UIColor.black.cgColor
+        shadow?.layer.mask = shadowMask
         self.decoration = decoration
         self.backdrop = backdrop
         self.underlay = underlay
@@ -115,6 +121,9 @@ final class MediaBarLayering {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         place(clipMask, at: clipRect, in: morph)
+        if let shadow {
+            place(shadowMask, at: clipRect, in: shadow)
+        }
         place(overlapMask, at: overlapRect.intersection(window.bounds), in: morph)
         overlapMask.opacity = Float(swap.overlapOpacity)
         CATransaction.commit()
@@ -139,6 +148,9 @@ final class MediaBarLayering {
     func tearDown() {
         if morph.layer.mask === morphMask {
             morph.layer.mask = nil
+        }
+        if let shadow, shadow.layer.mask === shadowMask {
+            shadow.layer.mask = nil
         }
         if backdrop.layer.mask === backdropMask {
             backdrop.layer.mask = nil

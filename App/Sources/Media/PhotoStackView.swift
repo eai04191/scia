@@ -78,6 +78,9 @@ class PhotoStackView: UIView {
     func setShadowOpacities(stack: Float, between: Float) {
         betweenShadowOpacity = between
         PhotoStackShadow.castStack(on: stackShadow.layer, opacity: stack)
+        for photo in photos {
+            photo.tile.viewerShadowOpacity = stack
+        }
         setNeedsLayout()
     }
 
@@ -85,6 +88,19 @@ class PhotoStackView: UIView {
     func setStackShadowConcealed(_ concealed: Bool) {
         stackShadow.alpha = concealed ? 0 : 1
     }
+
+    /// 隠していた写真を見せ直した。その写真と、その下の写真の写真同士の影は、隠している間は描いていなかったので、一度に現れないよう浮かび上がらせる。
+    /// ビューアの開閉で動かす画像は写真同士の影を落とさないため、着いて写真を見せ直したところで影が一度に現れて見えないようにする。
+    func photoDidReappear(_ photo: StackedPhotoView) {
+        guard let index = photos.firstIndex(where: { $0 === photo }) else { return }
+        layoutIfNeeded()
+        for lower in photos[index...] {
+            lower.revealBetweenShadow(duration: Self.betweenShadowRevealDuration)
+        }
+    }
+
+    /// 写真同士の影を浮かび上がらせる時間。投稿欄のカプセルに着いたときと同じ。
+    static let betweenShadowRevealDuration: TimeInterval = 0.15
 
     /// 写真同士の影を、薄い状態から浮かび上がらせる。開閉で写真が着いたあとに呼ぶ。動いている間の複製は、写真同士の影を落とさないため。
     func revealBetweenShadows(duration: TimeInterval) {
@@ -233,6 +249,9 @@ final class StackedPhotoView: UIView {
             guard isConcealed != oldValue else { return }
             layer.mask = isConcealed ? CALayer() : nil
             superview?.setNeedsLayout()
+            if !isConcealed {
+                (superview as? PhotoStackView)?.photoDidReappear(self)
+            }
         }
     }
 

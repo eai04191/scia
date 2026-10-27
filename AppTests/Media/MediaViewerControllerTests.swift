@@ -1248,6 +1248,7 @@ struct MediaViewerControllerTests {
     /// 一覧で重ねた写真のように回して置いた起点からは、同じ角度と大きさから回しながら開き、開ききったらまっすぐにする。
     /// 閉じるときは、起点の角度と大きさまで回しながら戻す。外側に接する四角へ戻すと、閉じ終わりにまっすぐな四角から回した写真へ切り替わって見えるため。
     /// 写真の白いフチも、フチを含めた写真の枠から始めて開くにつれて細くしてなくし、閉じるときは元の太さに戻す。
+    /// 写真が落とす影も、開き始めは同じ濃さから薄くしてなくし、閉じ終わりには同じ濃さに戻す。
     @Test func transitionFollowsRotationOfSource() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -1260,6 +1261,7 @@ struct MediaViewerControllerTests {
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: border, y: border, width: 100, height: 100)
         tile.paperBorder = (border, 12)
+        tile.viewerShadowOpacity = 0.2
         photo.addSubview(tile)
         let attachment = MediaAttachment(
             id: "1",
@@ -1283,6 +1285,7 @@ struct MediaViewerControllerTests {
         )
         let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
         try await waitUntil { viewer.isContentHiddenForTransition }
+        #expect(abs(viewer.morphPlacement.shadowOpacity - 0.2) < 0.001, "開き始めの影が起点と違います: \(viewer.morphPlacement.shadowOpacity)")
         let window = try #require(tile.window)
         let source = tile.unrotatedFrame(in: window).insetBy(dx: -border, dy: -border)
         let startWidth = viewer.morphPlacement.unrotatedFrame.width
@@ -1308,6 +1311,7 @@ struct MediaViewerControllerTests {
         #expect(sawThinning, "フチを細くしていく途中がありません")
         #expect(abs(viewer.morphPlacement.rotation) < 0.001, "開ききってもまっすぐになっていません")
         #expect(viewer.morphPlacement.border < 0.1, "開ききってもフチが残っています: \(viewer.morphPlacement.border)")
+        #expect(viewer.morphPlacement.shadowOpacity == 0, "開ききっても影が残っています")
 
         viewer.close()
         try await waitUntil { harness.viewController.presentedViewController == nil }
@@ -1315,6 +1319,7 @@ struct MediaViewerControllerTests {
         let closed = viewer.morphPlacement
         #expect(abs(closed.rotation - rotation) < 0.001, "閉じ終わりの角度が起点と違います: \(closed.rotation)")
         #expect(abs(closed.border - border) < 0.1, "閉じ終わりのフチの太さが写真と違います: \(closed.border)")
+        #expect(abs(closed.shadowOpacity - 0.2) < 0.01, "閉じ終わりの影が起点と違います: \(closed.shadowOpacity)")
         #expect(abs(closed.unrotatedFrame.width - source.width) < 0.5 && abs(closed.unrotatedFrame.midX - source.midX) < 0.5 && abs(closed.unrotatedFrame.midY - source.midY) < 0.5, "閉じ終わりの枠が起点と違います: \(closed.unrotatedFrame) \(source)")
     }
 
@@ -1423,6 +1428,8 @@ struct MediaViewerControllerTests {
         list.addSubview(row)
         let tile = MediaTileView(store: .offline)
         tile.frame = CGRect(x: 20, y: 0, width: 160, height: 90)
+        tile.paperBorder = (2, 3)
+        tile.viewerShadowOpacity = 0.2
         row.addSubview(tile)
         let attachment = MediaAttachment(
             id: "1",
@@ -1447,6 +1454,9 @@ struct MediaViewerControllerTests {
         let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
         try await waitUntil { viewer.isContentHiddenForTransition }
         #expect(row.subviews.contains { $0 !== tile }, "開く途中に一覧の行の中へ複製を置いていません")
+        // バーの奥に描き分ける間は動かす複製を薄くするが、影は起点と同じ濃さで残す。
+        harness.frames.step()
+        #expect(viewer.morphPlacement.shadowOpacity > 0.15, "バーの奥に描き分ける開き始めに影が消えています: \(viewer.morphPlacement.shadowOpacity)")
 
         harness.frames.runUntilStopped()
         #expect(!viewer.isMoving)

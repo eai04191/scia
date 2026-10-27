@@ -69,6 +69,8 @@ final class MediaViewerController: UIViewController {
     /// 開閉とドラッグで動かす画像の複製。縦横比を保って枠を埋めるように切り抜くため、枠の形をサムネイルとビューアの画像のあいだで変えるだけで、
     /// サムネイルと同じ切り抜き方へ移る。
     private let morph = FocusCroppedImageView()
+    /// 複製のすぐ後ろに置く影。起点が影を落としていれば、起点の近くで同じ影にする。
+    private let morphShadow = MorphShadowView()
     /// 複製に載せる、サムネイルに重ねた表示（ALT、GIF、残りの枚数）の複製。サムネイルに近いほど濃くし、ビューアの画像の大きさでは見せない。
     private var morphDecoration: UIView?
     /// 複製のさらに手前に置く、サムネイルに重なっているビューの複製。重ねた表示と同じ濃さで出し入れする。
@@ -88,6 +90,8 @@ final class MediaViewerController: UIViewController {
     private var barSwap = MediaBarSwap.front
     /// 開く途中でつかんだあと、複製をすべてバーの手前へ寄せる動き。
     private var barConvergence: SpringDriver?
+    /// 閉じずに離して戻す間、影を戻る複製に付けたまま薄くする動き。
+    private var shadowSettling: SpringDriver?
     /// 開閉の動きに、毎フレームの経過時間を送る元。テストでは、実際の時間に頼らずに動きを進めるため、手で送る元を渡す。
     var frameSource: any FrameSource = DisplayLinkFrameSource.shared
 
@@ -293,8 +297,8 @@ final class MediaViewerController: UIViewController {
     }
 
     /// 複製の角度（ラジアン）、回転を戻したときの枠（複製を載せている層の座標。閉じる動きではウィンドウと同じ）、白いフチの幅、中身の濃さ、暗さ。
-    var morphPlacement: (rotation: CGFloat, unrotatedFrame: CGRect, border: CGFloat, contentOpacity: CGFloat, dimming: CGFloat) {
-        (morph.transformRotation, morph.unrotatedFrame, morph.paperBorder, morph.contentOpacity, morph.dimming)
+    var morphPlacement: (rotation: CGFloat, unrotatedFrame: CGRect, border: CGFloat, contentOpacity: CGFloat, dimming: CGFloat, shadowOpacity: Float) {
+        (morph.transformRotation, morph.unrotatedFrame, morph.paperBorder, morph.contentOpacity, morph.dimming, morphShadow.isHidden ? 0 : morphShadow.opacity * Float(morphShadow.alpha))
     }
 
     override var keyCommands: [UIKeyCommand]? {
@@ -352,6 +356,7 @@ final class MediaViewerController: UIViewController {
         pageController.setViewControllers([page(at: currentIndex)], direction: .forward, animated: false)
         morph.isHidden = true
         view.addSubview(morph)
+        morphShadow.follow(morph, alpha: 1)
         setUpChrome()
         updateChrome()
         translation.install(in: self)
@@ -887,6 +892,7 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
             let scale = dragToDismiss.scale(translation: translation.y, height: height)
             // 開く途中でつかんだときの回転は、ドラッグの間は変えない。
             morph.setUnrotatedFrame(Self.scaled(start, by: scale, around: dismissPanAnchor).offsetBy(dx: translation.x, dy: translation.y))
+            morphShadow.follow(morph, alpha: 1)
             applyBarLayering()
             let backgroundAlpha = visibility * dragToDismiss.backgroundAlpha(translation: translation.y, height: height)
             backdrop.alpha = backgroundAlpha
@@ -1002,6 +1008,8 @@ extension MediaViewerController {
         morph.contentOpacity = appearance.contentOpacity
         morph.dimming = appearance.dimming
         morph.place(unrotatedFrame: frame, rotation: rotation)
+        // 影は、起点の近くから始めるときだけ起点と同じ濃さから始める。ビューアの画像の位置から始めるときは描かず、閉じる動きが濃くしていく。
+        morphShadow.opacity = border > 0 ? tile?.viewerShadowOpacity ?? 0 : 0
         attachDecoration(from: tile, alpha: decorationAlpha)
         morphFollowsPage = page?.drawsImage ?? false
         morph.layer.cornerRadius = cornerRadius
@@ -1010,6 +1018,7 @@ extension MediaViewerController {
         morph.layer.maskedCorners = tile?.layer.maskedCorners ?? Self.allCorners
         morph.alpha = 1
         morph.isHidden = false
+        morphShadow.follow(morph, alpha: 1)
         setPageHidden(true)
         hide(tile)
     }
@@ -1053,6 +1062,9 @@ extension MediaViewerController {
 
     private func hideMorph() {
         morph.isHidden = true
+        shadowSettling?.stop()
+        shadowSettling = nil
+        morphShadow.isHidden = true
         morphOverlap?.view.removeFromSuperview()
         morphOverlap = nil
         morphFollowsPage = false
@@ -1127,11 +1139,14 @@ extension MediaViewerController {
             let target = contentFrame(in: view)
             let startAppearance = morph.contentOpacity
             let startDimming = morph.dimming
+            let startShadow = morphShadow.opacity
             update = { [weak self] progress in
-                self?.updateOpening(progress: progress, from: start, radius: startRadius, rotation: startRotation, border: startBorder, to: target)
-                // 起点の見え方から、フチを細くしきるのと同じ区間で、ビューアの画像の見え方へ移す。
                 guard let self else { return }
+                // 起点の見え方から、フチを細くしきるのと同じ区間で、ビューアの画像の見え方へ移す。
                 let paperProgress = min(min(max(progress, 0), 1) / CGFloat(max(self.timing.paperBorderPortion, 0.01)), 1)
+                // 影も、フチを細くしきるのと同じ区間で薄くしてなくす。
+                self.morphShadow.opacity = startShadow * Float(1 - paperProgress)
+                self.updateOpening(progress: progress, from: start, radius: startRadius, rotation: startRotation, border: startBorder, to: target)
                 self.morph.contentOpacity = startAppearance + (1 - startAppearance) * paperProgress
                 self.morph.dimming = startDimming * (1 - paperProgress)
             }
@@ -1164,6 +1179,8 @@ extension MediaViewerController {
             rotation: startRotation * (1 - progress)
         )
         morph.layer.cornerRadius = startRadius * (1 - clamped)
+        // バーの奥に描き分ける切り抜きは影の位置で計算するので、描き分けより先に置く。
+        morphShadow.follow(morph, alpha: 1)
         // 前半で細くしきる。広がった画像を細い線が囲んだまま残ると、開ききったところで一度に消えて見えるため。
         morph.paperBorder = startBorder * (1 - min(clamped / CGFloat(max(timing.paperBorderPortion, 0.01)), 1))
         // 重ねた表示はフチの内側に置く。細くなっていくフチに合わせ、画像と同じ枠にそろえる。
@@ -1181,6 +1198,7 @@ extension MediaViewerController {
         guard timing.drawsUnderBars, let window = view.window else { return nil }
         let layering = MediaBarLayering(
             morph: morph,
+            shadow: morphShadow,
             decoration: morphDecoration,
             backdrop: backdrop,
             underlay: makeUnderlay(decoratedLike: tile),
@@ -1271,11 +1289,32 @@ extension MediaViewerController {
     }
 
     /// 戻す動きを、見えている位置で止める。フチの太さはレイヤーのアニメーションで動かしているため、見えている太さで止め、そこから続けられるようにする。
+    /// 影も、見えている濃さで止める。
     private func stopSettling(_ animator: UIViewPropertyAnimator) {
+        shadowSettling?.stop()
+        shadowSettling = nil
         animator.stopAnimation(true)
         let presentedBorder = morph.layer.presentation()?.borderWidth ?? morph.paperBorder
         morph.layer.removeAnimation(forKey: "paperBorder")
         morph.paperBorder = presentedBorder
+    }
+
+    /// 戻す複製に影を付けたまま、濃さを0へ動かす。
+    private func settleShadow(duration: TimeInterval) {
+        shadowSettling?.stop()
+        shadowSettling = nil
+        let start = morphShadow.opacity
+        guard start > 0 else { return }
+        let driver = SpringDriver(spring: SpringCurve(duration: duration, bounce: 0), source: frameSource) { [weak self] progress in
+            guard let self else { return }
+            self.morphShadow.opacity = start * Float(1 - min(max(progress, 0), 1))
+            self.morphShadow.followPresentation(of: self.morph, alpha: 1)
+        } completion: { [weak self] in
+            self?.morphShadow.opacity = 0
+            self?.shadowSettling = nil
+        }
+        shadowSettling = driver
+        driver.start()
     }
 
     /// 閉じずに離したら、複製をビューアの画像の枠へ戻し、開ききった状態にする。
@@ -1287,6 +1326,9 @@ extension MediaViewerController {
         let animator = makeAnimator(duration: dragToDismiss.restoreDuration, bounce: 0)
         let target = contentFrame(in: view)
         // 開く途中でつかんでフチが残っていたら、細くしてなくす。縁取りの太さはUIKitのアニメーションでは動かないため、レイヤーのアニメーションで動かす。
+        // 開く途中でつかんで影が残っていたら、戻る複製に付けたまま薄くしてなくす。影の濃さと形はUIKitのアニメーションでは動かないため、
+        // 同じ長さのスプリングを毎フレーム進め、複製のいま見えている位置に合わせる。
+        settleShadow(duration: dragToDismiss.restoreDuration)
         if morph.paperBorder > 0 {
             let fade = CABasicAnimation(keyPath: "borderWidth")
             fade.fromValue = morph.paperBorder
@@ -1366,6 +1408,7 @@ extension MediaViewerController {
         }
         morph.setUnrotatedFrame(view.convert(morph.unrotatedFrame, to: window))
         overlay.addSubview(morph)
+        morphShadow.follow(morph, alpha: 1)
         morphOverlap?.move(to: overlay)
         window.addSubview(overlay)
         // チップの列は、閉じる動きを描く層の手前に残す。閉じ終えたら、根の画面のすぐ上に戻す。
@@ -1398,6 +1441,7 @@ extension MediaViewerController {
             parts: MediaClosingFlight.Parts(
                 overlay: overlay,
                 morph: morph,
+                shadow: morphShadow,
                 decoration: morphDecoration,
                 overlap: morphOverlap,
                 placeholderColor: morphPlaceholderColor,
@@ -1405,6 +1449,7 @@ extension MediaViewerController {
                 fadingViews: [backdrop] + chromeSnapshots,
                 layering: MediaBarLayering(
                     morph: morph,
+                    shadow: morphShadow,
                     decoration: morphDecoration,
                     backdrop: backdrop,
                     underlay: moves && timing.drawsUnderBars ? makeUnderlay(decoratedLike: tile) : nil,

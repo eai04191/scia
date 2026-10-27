@@ -18,6 +18,8 @@ final class MediaClosingFlight {
         /// 複製や下地を載せる、操作を素通しする層。終わったら外す。
         let overlay: UIView
         let morph: FocusCroppedImageView
+        /// 複製のすぐ後ろに置く影。戻り先が影を落としていれば、着くにつれて同じ濃さにする。
+        let shadow: MorphShadowView
         /// 複製に載せた、サムネイルに重ねた表示の複製。
         let decoration: UIView?
         /// 複製のさらに手前に置いた、サムネイルに重なっているビューの複製。重ねた表示と同じ濃さで出し入れする。
@@ -54,13 +56,15 @@ final class MediaClosingFlight {
     private let startBorder: CGFloat
     /// 閉じ始めの複製の、中身の濃さと暗さ。
     private let startAppearance: (contentOpacity: CGFloat, dimming: CGFloat)
+    /// 閉じ始めの影の濃さ。
+    private let startShadowOpacity: Float
     /// 写真の白いフチを太くし始めてから着くまでの、動きの進み具合の幅。後半で太くし、広がった画像を細い線が囲まないようにする。
     private let paperBorderPortion: CGFloat
     private let startDecorationAlpha: CGFloat
     private let startFadingAlphas: [CGFloat]
     private var concealedTile: (any MediaViewerSource)?
     /// 戻り先の、回転を戻したときの枠、角度、角の丸み。回した起点（一覧で重ねた写真）へは、その角度まで回しながら戻す。
-    private var lastTarget: (frame: CGRect, rotation: CGFloat, radius: CGFloat, border: CGFloat, appearance: (contentOpacity: CGFloat, dimming: CGFloat))?
+    private var lastTarget: (frame: CGRect, rotation: CGFloat, radius: CGFloat, border: CGFloat, appearance: (contentOpacity: CGFloat, dimming: CGFloat), shadowOpacity: Float)?
     private let source: any FrameSource
     /// 戻り始めてからの時間。
     private var time: CFTimeInterval = 0
@@ -106,6 +110,7 @@ final class MediaClosingFlight {
         startRadius = parts.morph.layer.cornerRadius
         startBorder = parts.morph.paperBorder
         startAppearance = (parts.morph.contentOpacity, parts.morph.dimming)
+        startShadowOpacity = parts.shadow.opacity
         startDecorationAlpha = parts.decoration?.alpha ?? 0
         startFadingAlphas = parts.fadingViews.map(\.alpha)
     }
@@ -146,7 +151,7 @@ final class MediaClosingFlight {
             let paper = tile.paperBorder
             let scale = tile.scale(in: window)
             let border = (paper?.width ?? 0) * scale
-            lastTarget = (tile.unrotatedFrame(in: window).insetBy(dx: -border, dy: -border), tile.rotation(in: window), (paper?.cornerRadius ?? tile.layer.cornerRadius) * scale, border, tile.viewerAppearance)
+            lastTarget = (tile.unrotatedFrame(in: window).insetBy(dx: -border, dy: -border), tile.rotation(in: window), (paper?.cornerRadius ?? tile.layer.cornerRadius) * scale, border, tile.viewerAppearance, tile.viewerShadowOpacity)
             parts.morph.layer.maskedCorners = tile.layer.maskedCorners
             parts.layering.track(tile)
             parts.overlap?.follow(tile)
@@ -160,6 +165,8 @@ final class MediaClosingFlight {
             // フチを太くするのと同じ区間で、戻り先の見え方（中身を描かない、暗くする）へ移す。着いたところで見え方が急に替わらないようにする。
             parts.morph.contentOpacity = startAppearance.contentOpacity + (target.appearance.contentOpacity - startAppearance.contentOpacity) * borderProgress
             parts.morph.dimming = startAppearance.dimming + (target.appearance.dimming - startAppearance.dimming) * borderProgress
+            // 影も同じ区間で、戻り先が落としている影の濃さにする。着いたところで影が一度に現れて見えないようにする。
+            parts.shadow.opacity = startShadowOpacity + (target.shadowOpacity - startShadowOpacity) * Float(borderProgress)
             let decorationAlpha = startDecorationAlpha + (1 - startDecorationAlpha) * clamped
             parts.decoration?.alpha = decorationAlpha
             parts.morph.backgroundColor = MediaViewerController.placeholderColor(parts.placeholderColor, alpha: decorationAlpha)
@@ -173,6 +180,8 @@ final class MediaClosingFlight {
             visibility = 1 - clamped
             parts.overlap?.view.alpha = 0
         }
+        // バーの奥に描き分ける切り抜きは影の位置で計算するので、描き分けより先に置く。
+        parts.shadow.follow(parts.morph, alpha: visibility)
         let layering = parts.layering
         if layering.drawsUnderBars {
             // バーの位置は一覧の中の複製が埋めるため、最前面の複製を見せるのは一覧のバーに隠れない範囲と、閉じ始めにすでに描いていた枠だけにする。

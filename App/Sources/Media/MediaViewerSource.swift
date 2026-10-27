@@ -29,6 +29,9 @@ protocol MediaViewerSource: UIView {
     /// 起点の見え方。中身の濃さ（0なら紙だけを見せる）と、暗くする度合い。一覧で傾けずに重ねた奥の写真は、中身を描かず暗くしている。
     /// ビューアは開閉で動かす画像を、起点の近くではこの見え方に近づける。
     var viewerAppearance: (contentOpacity: CGFloat, dimming: CGFloat) { get }
+    /// 起点が下の面に落としている影の濃さ。影を落とさなければ0。一覧で重ねた写真は、スタックの影を落としている。
+    /// ビューアは開閉で動かす画像に同じ形の影を付け、起点の近くではこの濃さにする。
+    var viewerShadowOpacity: Float { get }
 }
 
 extension MediaViewerSource {
@@ -38,6 +41,7 @@ extension MediaViewerSource {
     func showsAttachment(_ id: MediaAttachment.ID) -> Bool { true }
     var paperBorder: (width: CGFloat, cornerRadius: CGFloat)? { nil }
     var viewerAppearance: (contentOpacity: CGFloat, dimming: CGFloat) { (1, 0) }
+    var viewerShadowOpacity: Float { 0 }
 }
 
 extension UIView {
