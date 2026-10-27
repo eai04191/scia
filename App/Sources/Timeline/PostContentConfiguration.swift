@@ -245,6 +245,14 @@ final class PostContentView: UIView, UIContentView {
         bodyView.embed?.mediaGrid
     }
 
+    /// 名前の行の上に置いた、ブーストした人や返信先の行の分の高さ。置いていなければ0。
+    /// スレッドを開くとき、一覧の行とスレッドの行で、この行の有無が違っても投稿の中身の位置を合わせるのに使う。
+    var contextHeight: CGFloat {
+        guard current.context != nil else { return 0 }
+        layoutIfNeeded()
+        return nameRow.frame.minY - current.metrics.margins.top
+    }
+
     init(configuration: PostContentConfiguration) {
         current = configuration
         avatarView = AvatarView(store: configuration.avatarImages)

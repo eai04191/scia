@@ -1860,9 +1860,15 @@ extension TimelineViewController: UICollectionViewDelegate {
     }
 
     /// 要素の行の、ウインドウでの枠。スレッドを開く動きの起点にする。行が画面になければゼロ。
+    /// ブーストした人や返信先の行は、スレッドの行には出ないことがあるため、その行を除いた投稿の中身の枠にする。
     func rowFrame(of id: ItemID) -> CGRect {
         guard let indexPath = dataSource.indexPath(for: id), let cell = collectionView.cellForItem(at: indexPath) else { return .zero }
-        return cell.convert(cell.bounds, to: nil)
+        let context = Self.contextHeight(of: cell)
+        return cell.convert(cell.bounds, to: nil).inset(by: UIEdgeInsets(top: context, left: 0, bottom: 0, right: 0))
+    }
+
+    private static func contextHeight(of cell: UICollectionViewCell) -> CGFloat {
+        (cell.contentView as? PostContentView)?.contextHeight ?? 0
     }
 
     /// スレッドを開いたことを、違和感レポートの操作の記録に残す。
@@ -1996,8 +2002,13 @@ extension TimelineViewController {
         pendingOpening = nil
         collectionView.layoutIfNeeded()
         guard let indexPath = dataSource.indexPath(for: opening.id),
-              let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
+              var frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame
         else { return }
+        // 押した行と同じく、ブーストした人や返信先の行を除いた投稿の中身の上端を、押した位置に合わせる。
+        // 一覧ではブーストの行でも、スレッドではブーストした人の行がないため、行の上端で合わせると中身が1行分ずれて重なって見える。
+        if let cell = collectionView.cellForItem(at: indexPath) {
+            frame.origin.y += Self.contextHeight(of: cell)
+        }
         let rowTopInView = frame.minY - collectionView.contentOffset.y
         let targetInView = collectionView.convert(CGPoint(x: 0, y: opening.windowY), from: window).y - collectionView.contentOffset.y
         // 押した行の上端がバーの下に隠れていたときは、余白は足さず、同じだけ隠れた位置に置く。

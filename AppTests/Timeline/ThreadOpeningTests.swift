@@ -47,6 +47,26 @@ struct ThreadOpeningTests {
         #expect(abs(loaded - windowY) <= tolerance, "読んだあとに押した投稿が\(loaded - windowY)pt動きました")
     }
 
+    /// ブーストの行から開いたときは、ブーストした人の行を除いた投稿の中身の上端を、スレッドの押した投稿の上端に合わせる。
+    /// スレッドの押した投稿にはブーストした人の行がないため、行の上端で合わせると、中身が1行分ずれて重なって見える。
+    @Test func boostRowAlignsPostContentNotRowTop() throws {
+        let list = try TimelineHarness()
+        defer { list.tearDown() }
+        let booster = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: focus.account.avatar)
+        let boost = Status(id: "2000", createdAt: focus.createdAt, account: booster, content: "", spoilerText: "", url: nil, reblog: focus)
+        list.setStatuses([boost] + StatusFactory.make(count: 10, startingAt: 800))
+        let boostID = TimelineViewController.ItemID.status(boost.id)
+        let rowTop = try #require(list.windowMinY(of: boostID))
+        let content = list.viewController.rowFrame(of: boostID)
+        #expect(content.minY > rowTop + 1, "ブーストした人の行を除いていません")
+
+        let harness = try openThread(atWindowY: content.minY)
+        defer { harness.tearDown() }
+
+        let opened = try #require(harness.windowMinY(of: focusID))
+        #expect(abs(opened - content.minY) <= tolerance, "押した投稿の中身が\(opened - content.minY)pt ずれました")
+    }
+
     /// 祖先が押した位置より上に足りないときは、最上部まで動かして祖先を上端に置き、上の空きを詰める。
     @Test func closesGapAboveAncestors() async throws {
         let harness = try openThread(atWindowY: 500)
