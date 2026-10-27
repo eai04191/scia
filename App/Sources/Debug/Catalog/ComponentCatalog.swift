@@ -43,6 +43,7 @@ enum CatalogComponent: String, CaseIterable {
     case reportSheet = "report-sheet"
     case profileEdit = "profile-edit"
     case storage
+    case mediaCache = "media-cache"
 
     var title: String {
         switch self {
@@ -76,6 +77,7 @@ enum CatalogComponent: String, CaseIterable {
         case .reportSheet: "通報のシート"
         case .profileEdit: "プロフィールの編集"
         case .storage: "設定のストレージ"
+        case .mediaCache: "ストレージのメディアのキャッシュ"
         }
     }
 
@@ -112,6 +114,7 @@ enum CatalogComponent: String, CaseIterable {
         case .reportSheet: ReportSheetCatalog.states()
         case .profileEdit: ProfileEditCatalog.states()
         case .storage: StorageCatalog.states()
+        case .mediaCache: StorageCatalog.mediaCacheStates()
         }
     }
 }
