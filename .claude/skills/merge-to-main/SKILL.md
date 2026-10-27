@@ -49,7 +49,7 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
 
 ## 3. 列に並ぶ
 
-- `make test`の端末は、引数にあればそれにする。なければ、このthreadで使うよう指示された端末にする。どちらもなければ、ユーザーに聞く
+- `make test`の端末は、引数にあればそれにする。なければ、このthreadに割り当てた端末にする。どちらもなければ、`sim`のskillで割り当てる
 - 引数の`after:`のセッションIDごとに、`mcp__ccd_session_mgmt__get_session`でそのスレッドのbranchを引く。引けなければ、並ばずに報告する
 - 作業ツリーに未commitの変更がないことを確かめてから、作業branchのworktreeで`Tools/merge-queue.sh run '<端末>' <前提のbranch>...`をBashの`run_in_background`で起動する。並んだことを伝えて、ターンを終える。待っている間と走っている間は、作業ツリーを変えない。列は`Tools/merge-queue.sh status`で見られる
 
