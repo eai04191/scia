@@ -36,6 +36,9 @@ final class NoticeChip: UIControl {
         super.init(frame: frame)
         effectView.cornerConfiguration = .capsule()
         effectView.isUserInteractionEnabled = false
+        // 文言を入れ替えながら大きさを変える途中に、古い文言や新しい文言がガラスの外にはみ出さないよう、中身をガラスの形で切り抜く。
+        effectView.contentView.clipsToBounds = true
+        effectView.contentView.layer.cornerCurve = .continuous
         iconView.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .subheadline, scale: .medium)
         iconView.tintColor = .label
         spinner.hidesWhenStopped = true
@@ -100,6 +103,19 @@ final class NoticeChip: UIControl {
         titleLabel.preferredMaxLayoutWidth = max(maxWidth - otherWidth, 0)
         let wrapped = systemLayoutSizeFitting(UIView.layoutFittingCompressedSize)
         return CGSize(width: maxWidth, height: wrapped.height)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // ガラスのカプセルと同じ丸みで切り抜く。大きさを変える動きの中で呼ばれれば、丸みも一緒に動く。
+        effectView.contentView.layer.cornerRadius = bounds.height / 2
+    }
+
+    /// 中身を、古い文言を薄くしながら新しい文言に入れ替える。チップ全体ではなくガラスの中身だけを入れ替え、ガラスの形の外には描かない。
+    func crossfade(to notice: Notice, duration: TimeInterval) {
+        UIView.transition(with: effectView.contentView, duration: duration, options: [.transitionCrossDissolve, .allowUserInteraction, .beginFromCurrentState]) {
+            self.apply(notice)
+        }
     }
 
     /// 中身を描き直す。読み上げは並べる側が`announce`で行う。

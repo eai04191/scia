@@ -172,13 +172,12 @@ final class NoticeStackView: UIView {
         defer { chip.announce(changingFrom: previous) }
         // 文言や種類が変わったら、中身だけを薄く入れ替える。進み具合だけなら、そのまま描き直す。
         if chip.notice?.title != notice.title || chip.notice?.kind != notice.kind {
-            UIView.transition(with: chip, duration: animationDuration, options: [.transitionCrossDissolve, .allowUserInteraction, .beginFromCurrentState]) {
-                chip.apply(notice)
-            }
+            chip.crossfade(to: notice, duration: animationDuration)
+            relayout(growingWithAnimation: chip)
         } else {
             chip.apply(notice)
+            relayout()
         }
-        relayout()
     }
 
     private func remove(_ chip: NoticeChip) {
@@ -370,12 +369,13 @@ final class NoticeStackView: UIView {
     }
 
     /// 広げるときは、動きに遅れて文言が切れないよう、すぐ広げる。縮めるときは中身が収まったまま動かせるため、動きに任せる。
-    private func placeChips() {
+    /// - Parameter growingChip: 文言を薄くしながら入れ替えているチップ。新しい文言は薄い状態から出てくるため、ガラスの広がりに合わせて見えてきても切れて見えない。ガラスだけが1コマで大きくならないよう、広げるときも動きに任せる。
+    private func placeChips(growingWithAnimation growingChip: NoticeChip? = nil) {
         let origins = targetOrigins()
         for chip in chips {
             let y = origins[ObjectIdentifier(chip)] ?? 0
             let target = frame(for: chip, at: y)
-            if target.width > chip.bounds.width || target.height > chip.bounds.height {
+            if chip !== growingChip, target.width > chip.bounds.width || target.height > chip.bounds.height {
                 UIView.performWithoutAnimation {
                     chip.bounds.size = CGSize(width: max(target.width, chip.bounds.width), height: max(target.height, chip.bounds.height))
                     chip.layoutIfNeeded()
@@ -388,14 +388,14 @@ final class NoticeStackView: UIView {
         }
     }
 
-    private func relayout() {
+    private func relayout(growingWithAnimation growingChip: NoticeChip? = nil) {
         // 視差効果を減らす設定では、詰め直しを動かさずに置き直す。
         guard window != nil, !UIAccessibility.isReduceMotionEnabled else {
             placeChips()
             return
         }
         UIView.animate(withDuration: animationDuration, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]) {
-            self.placeChips()
+            self.placeChips(growingWithAnimation: growingChip)
             self.layoutIfNeeded()
         }
     }
