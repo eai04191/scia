@@ -52,7 +52,11 @@ final class ComposeCompletionList: UIView {
 
     /// 行をすべて見せる高さ。
     var contentHeight: CGFloat {
-        model.rows.map(Self.height(of:)).reduce(0, +) + Self.verticalInset * 2
+        Self.contentHeight(of: model.rows)
+    }
+
+    static func contentHeight(of rows: [Row]) -> CGFloat {
+        rows.map(height(of:)).reduce(0, +) + verticalInset * 2
     }
 
     init(settings: AppSettings = AppDependencies.settings, emojiImages: EmojiImageStore = AppDependencies.emojiImages) {
@@ -63,7 +67,7 @@ final class ComposeCompletionList: UIView {
         model.onRetry = { [weak self] in self?.onRetry() }
         hosting.view.backgroundColor = .clear
         hosting.view.translatesAutoresizingMaskIntoConstraints = false
-        // 中身の大きさに合わせず、投稿欄が決めた枠いっぱいに描く。
+        // 中身の大きさに合わせず、投稿欄が決めた枠（出してよい場所）いっぱいに広げる。ガラスの枠は、その中で候補の数に合わせる。
         hosting.sizingOptions = []
         addSubview(hosting.view)
         NSLayoutConstraint.activate([
@@ -79,36 +83,24 @@ final class ComposeCompletionList: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// ガラスの枠の高さを、一覧の枠の中で`height`にする。nilなら一覧の枠いっぱいにする。
-    /// 候補の数が変わったときに、投稿欄が一覧の枠を大きいほうの高さにしたまま、この高さを動かして、ガラスの枠ごと伸び縮みさせる。
-    /// UIKitの側で一覧の枠の高さを動かしても、SwiftUIのガラスは新しい高さで描かれて、形が付いてこないため。
-    /// ガラスの枠の高さを決めて動かしている途中か。nilなら一覧の枠いっぱい。
-    var glassHeight: CGFloat? { model.glassHeight }
-
-    /// ガラスの枠の高さを動かしている間は、一覧の枠に残る透明な部分では触れたものを受けず、下の入力欄や一覧へ通す。
-    /// 縮める間は、向かっている高さの外を通す。
+    /// ガラスの枠の外の透明な部分では触れたものを受けず、下の入力欄や一覧へ通す。一覧の枠は、出してよい場所いっぱいに広げているため。
+    /// 入れ替えの途中は、まだ並べている前の行も押せるよう、前と後の大きいほうの高さで受ける。
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
-        guard let height = model.glassHeight else { return super.point(inside: point, with: event) }
+        let height = min(max(contentHeight, Self.contentHeight(of: model.displayedRows)), bounds.height)
         let glass = model.growsUpward
             ? CGRect(x: 0, y: bounds.maxY - height, width: bounds.width, height: height)
             : CGRect(x: 0, y: 0, width: bounds.width, height: height)
         return glass.contains(point)
     }
 
-    func setGlassHeight(_ height: CGFloat?, animation: Animation? = nil, completion: (() -> Void)? = nil) {
-        guard let animation else {
-            model.glassHeight = height
-            completion?()
-            return
-        }
-        withAnimation(animation, completionCriteria: .logicallyComplete) {
-            model.glassHeight = height
-        } completion: {
-            completion?()
-        }
+    /// 行を薄くして出し入れする時間。ガラスの伸び縮みと同じ時間。
+    var rowFadeDuration: TimeInterval {
+        get { model.rowFadeDuration }
+        set { model.rowFadeDuration = newValue }
     }
 
-    /// - Parameter animation: 出ている一覧で候補を入れ替えるときの動き。ガラスの枠の中で、前の候補と次の候補をクロスフェードする。
+    /// - Parameter animation: 出ている一覧で候補を入れ替えるときの動き。nilなら、すぐ入れ替える。
+    ///   前にも後にも同じ場所にある候補はその場に残し、消える候補を薄くしきってから、ガラスの枠を伸び縮みさせて、増えた候補を浮かび上がらせる。
     func update(_ content: ComposeCompletion.Content, kind: CompletionKind, selectedIndex: Int, animation: Animation? = nil) {
         let rows: [Row] = switch content {
         case .candidates(let candidates): candidates.map(Row.candidate)
@@ -118,26 +110,95 @@ final class ComposeCompletionList: UIView {
         case .candidatesWithFailure(let candidates, let message): candidates.map(Row.candidate) + [.failed(message)]
         }
         if rows != model.rows {
-            withAnimation(animation) {
-                model.rows = rows
-                // 語が変わって候補を入れ替えたら、スクロールを端に戻す。
-                model.generation += 1
-            }
+            model.rows = rows
+            model.show(rows, animated: animation != nil)
+            // 語が変わって候補を入れ替えたら、スクロールを選んでいる候補（ふつうは端の候補）へ戻す。
+            model.generation += 1
+        } else if animation == nil, model.isSwapping {
+            // 入れ替えの途中に閉じて、同じ候補で出し直したときは、途中の入れ替えを捨てて、すぐ並べる。
+            model.show(rows, animated: false)
         }
         model.selectedIndex = selectedIndex
+        // 選んでいる候補の印は、確定する候補（出したい行の`selectedIndex`番目）と同じ行にだけ付ける。
+        // 入れ替えの途中に並べている前の行には付けず、Return・Tabで入る候補と、印の付いた候補が食い違わないようにする。
+        model.selectedID = rows.indices.contains(selectedIndex) ? CompletionRowID(row: rows[selectedIndex], index: selectedIndex) : nil
+    }
+}
+
+/// 行の見分け。中身と、打っている文字に近い端から何番目かの組で見分ける。前にも後にも同じ場所にある候補はその場に残し、
+/// 場所が変わった候補は、ほかの行の上を滑らせずに、消してから新しい場所に出す。滑らせると、ほかの行と文字が重なって読めなかった。
+private struct CompletionRowID: Hashable {
+    let row: ComposeCompletionList.Row
+    let index: Int
+
+    static func ids(of rows: [ComposeCompletionList.Row]) -> [CompletionRowID] {
+        rows.enumerated().map { CompletionRowID(row: $1, index: $0) }
     }
 }
 
 @MainActor
 @Observable
 private final class CompletionListModel {
-    var rows: [ComposeCompletionList.Row] = []
+    /// 出したい行。投稿欄が置き場所を決めるのに使う。
+    @ObservationIgnored var rows: [ComposeCompletionList.Row] = []
+    /// いま並べている行。入れ替えの途中は、消える候補を薄くしきるまで、前の行のまま。
+    var displayedRows: [ComposeCompletionList.Row] = []
+    /// 薄くしている途中の、消える行。
+    var fadingOut: Set<CompletionRowID> = []
+    /// 薄くしきったら並べる行。薄くしている途中にまた入れ替わったら、ここだけを替える。
+    @ObservationIgnored private var pendingRows: [ComposeCompletionList.Row] = []
+    /// 薄くしている途中か。
+    @ObservationIgnored private(set) var isSwapping = false
+    /// 薄くし始めた回数。前の薄くし方の続きを捨てるのに使う。
+    @ObservationIgnored private var fadeGeneration = 0
+
+    /// 行を入れ替える。動かすときは、2段に分ける。消える行を薄くしきってから、並べ直してガラスの枠を伸び縮みさせ、増えた行を浮かび上がらせる。
+    /// 同時に入れ替えると、消える行と増える行が同じ場所で重なり、文字が二重に読めたため。
+    /// 薄くしている途中にまた入れ替わったら、いま並べている行から比べ直し、見えている濃さから続ける。消す行が同じなら、その薄くし方を続け、
+    /// 薄くしきったところで最新の行を並べる。同じ値を入れ直しても新しい動きにならず、続きがすぐ呼ばれて、薄くしきる前に行が消えるため。
+    func show(_ rows: [ComposeCompletionList.Row], animated: Bool) {
+        pendingRows = rows
+        guard animated, rowFadeDuration > 0 else {
+            fadeGeneration += 1
+            isSwapping = false
+            fadingOut = []
+            displayedRows = rows
+            return
+        }
+        let removed = Set(CompletionRowID.ids(of: displayedRows)).subtracting(CompletionRowID.ids(of: rows))
+        guard !removed.isEmpty else {
+            fadeGeneration += 1
+            isSwapping = false
+            withAnimation(.smooth(duration: rowFadeDuration)) {
+                fadingOut = []
+                displayedRows = rows
+            }
+            return
+        }
+        if isSwapping, removed == fadingOut { return }
+        fadeGeneration += 1
+        let generation = fadeGeneration
+        isSwapping = true
+        withAnimation(.smooth(duration: rowFadeDuration * 0.4), completionCriteria: .logicallyComplete) {
+            fadingOut = removed
+        } completion: { [weak self] in
+            guard let self, generation == self.fadeGeneration else { return }
+            self.isSwapping = false
+            withAnimation(.smooth(duration: self.rowFadeDuration)) {
+                self.fadingOut = []
+                self.displayedRows = self.pendingRows
+            }
+        }
+    }
+
     var selectedIndex = 0
+    /// 選んでいる候補の行。確定する候補と同じ行にだけ印を付ける。
+    var selectedID: CompletionRowID?
     var growsUpward = false
-    /// ガラスの枠の高さ。nilなら一覧の枠いっぱい。
-    var glassHeight: CGFloat?
     /// 候補を入れ替えた回数。スクロールを端に戻すのに使う。
     var generation = 0
+    /// 行を薄くして出し入れする時間。ガラスの伸び縮みと同じ時間。
+    @ObservationIgnored var rowFadeDuration: TimeInterval = 0.25
     @ObservationIgnored var settings = AppDependencies.settings
     @ObservationIgnored var emojiImages = AppDependencies.emojiImages
     @ObservationIgnored var onSelect: (CompletionCandidate) -> Void = { _ in }
@@ -149,7 +210,8 @@ private struct CompletionListView: View {
 
     /// 1行分。何番目かと、そのときの行の中身を一緒に持つ。
     private struct Item: Identifiable {
-        let id: Int
+        let id: CompletionRowID
+        let index: Int
         let row: ComposeCompletionList.Row
     }
 
@@ -158,52 +220,115 @@ private struct CompletionListView: View {
     /// 行には、番号ではなく、この時点で写し取った行の中身を渡す。番号だけを渡して描くときに`model.rows`を読むと、
     /// 候補が減った直後にSwiftUIが古い番号の行を描き直し、範囲外を読んで落ちた（実機で、自分のタグから検索の結果に入れ替わるとき）。
     private func items(_ rows: [ComposeCompletionList.Row]) -> [Item] {
-        let order = model.growsUpward ? Array(rows.indices.reversed()) : Array(rows.indices)
-        return order.map { Item(id: $0, row: rows[$0]) }
+        let all = rows.enumerated().map { index, row in
+            Item(id: CompletionRowID(row: row, index: index), index: index, row: row)
+        }
+        return model.growsUpward ? all.reversed() : all
     }
 
     private var anchor: UnitPoint {
         model.growsUpward ? .bottom : .top
     }
 
-    var body: some View {
-        let rows = model.rows
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(spacing: 0) {
-                    ForEach(items(rows)) { item in
-                        CompletionRowView(model: model, index: item.id, row: item.row, rowCount: rows.count)
-                            .frame(height: ComposeCompletionList.height(of: item.row))
-                            .id(item.id)
-                    }
-                }
-                .padding(.vertical, ComposeCompletionList.verticalInset)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            // 一覧を引いても、入力欄のキーボードを閉じない。閉じると書き終えたことになり、一覧も消える。
-            .scrollDismissesKeyboard(.never)
-            .defaultScrollAnchor(anchor, for: .initialOffset)
-            .defaultScrollAnchor(anchor, for: .sizeChanges)
-            .defaultScrollAnchor(anchor, for: .alignment)
-            .id(model.generation)
-            // 候補を入れ替えて作り直すと端に戻るので、選んでいる候補が端でなければ、見える位置まで送り直す。
-            .onAppear {
-                if model.selectedIndex != 0 {
-                    proxy.scrollTo(model.selectedIndex)
-                }
-            }
-            // ハードウェアキーボードで選んだ候補が見えていなければ、見える位置まで送る。
-            .onChange(of: model.selectedIndex) { _, index in
-                proxy.scrollTo(index)
+    /// 増えた行は薄い状態から出す。消える行は、外す前に薄くしきっているので、そのまま外す。
+    private var rowTransition: AnyTransition {
+        .asymmetric(insertion: .opacity, removal: .identity)
+    }
+
+    /// 行を、打っている文字に近い端からの距離で置き、出してよい場所いっぱいの、大きさの変わらない入れ物に入れる。
+    /// ガラスの形と、中身を切り抜く形だけを、候補の数に合わせた高さで動かす。行は、ガラスがどう伸び縮みしてもその場から動かない。
+    /// 行をガラスの枠の中に入れて枠ごと高さを動かすと、行がガラスの端に引きずられて動いたため。
+    private func anchoredRows(_ items: [Item], rows: [ComposeCompletionList.Row]) -> some View {
+        let edge: Alignment = model.growsUpward ? .bottom : .top
+        let direction: CGFloat = model.growsUpward ? -1 : 1
+        var distances: [CGFloat] = []
+        var distance = ComposeCompletionList.verticalInset
+        for row in rows {
+            distances.append(distance)
+            distance += ComposeCompletionList.height(of: row)
+        }
+        let glassHeight = ComposeCompletionList.contentHeight(of: rows)
+        return ZStack(alignment: edge) {
+            ForEach(items) { item in
+                CompletionRowView(model: model, index: item.index, row: item.row, rowCount: rows.count)
+                    .frame(height: ComposeCompletionList.height(of: item.row))
+                    .opacity(model.fadingOut.contains(item.id) ? 0 : 1)
+                    .offset(y: direction * distances[item.index])
+                    .transition(rowTransition)
             }
         }
-        // 行の背景（`ConcentricRectangle`）を、この形と同心に丸める。
-        .containerShape(.rect(cornerRadius: 20))
-        .glassEffect(.regular, in: .rect(cornerRadius: 20))
+        .frame(maxWidth: .infinity, idealHeight: glassHeight, maxHeight: .infinity, alignment: edge)
+        // 行の背景（`ConcentricRectangle`）を、ガラスの形と同心に丸める。
+        .containerShape(.rect(cornerRadius: Self.cornerRadius))
+        .mask(alignment: edge) {
+            RoundedRectangle(cornerRadius: Self.cornerRadius).frame(height: glassHeight)
+        }
+        .background(alignment: edge) {
+            Color.clear
+                .frame(height: glassHeight)
+                .glassEffect(.regular, in: .rect(cornerRadius: Self.cornerRadius))
+        }
+    }
+
+    private static let cornerRadius: CGFloat = 20
+
+    private func scrollToSelection(_ proxy: ScrollViewProxy, items: [Item]) {
+        let selected = items.first { $0.id == model.selectedID } ?? items.first { $0.index == 0 }
+        if let selected {
+            proxy.scrollTo(selected.id, anchor: selected.index == 0 ? anchor : nil)
+        }
+    }
+
+    private func rowStack(_ items: [Item], rowCount: Int) -> some View {
+        VStack(spacing: 0) {
+            ForEach(items) { item in
+                CompletionRowView(model: model, index: item.index, row: item.row, rowCount: rowCount)
+                    .frame(height: ComposeCompletionList.height(of: item.row))
+                    .opacity(model.fadingOut.contains(item.id) ? 0 : 1)
+                    .transition(rowTransition)
+            }
+        }
+        .padding(.vertical, ComposeCompletionList.verticalInset)
+    }
+
+    /// ガラスの枠は、候補の数に合わせた高さにし、打っている文字に近い端に寄せる。候補の数が変わると、反対側の端が伸び縮みする。
+    /// 入りきるときはスクロールさせない。入りきらないときだけ、出してよい場所いっぱいのガラスの中でスクロールする。
+    /// 中身はガラスの形で切り抜き、伸び縮みの途中に行がガラスの外に描かれないようにする。
+    var body: some View {
+        let rows = model.displayedRows
+        let items = items(rows)
+        ViewThatFits(in: .vertical) {
+            anchoredRows(items, rows: rows)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    rowStack(items, rowCount: rows.count)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                // 一覧を引いても、入力欄のキーボードを閉じない。閉じると書き終えたことになり、一覧も消える。
+                .scrollDismissesKeyboard(.never)
+                .defaultScrollAnchor(anchor, for: .initialOffset)
+                .defaultScrollAnchor(anchor, for: .sizeChanges)
+                .defaultScrollAnchor(anchor, for: .alignment)
+                // 出したときと、語が変わって候補を入れ替えたら、選んでいる候補（ふつうは端の候補）が見えるよう送る。
+                .onAppear {
+                    scrollToSelection(proxy, items: items)
+                }
+                .onChange(of: model.generation) {
+                    scrollToSelection(proxy, items: items)
+                }
+                // ハードウェアキーボードで選んだ候補が見えていなければ、見える位置まで送る。
+                .onChange(of: model.selectedIndex) { _, index in
+                    if let item = items.first(where: { $0.index == index }) {
+                        proxy.scrollTo(item.id)
+                    }
+                }
+            }
+            .clipShape(.rect(cornerRadius: Self.cornerRadius))
+            .containerShape(.rect(cornerRadius: Self.cornerRadius))
+            .glassEffect(.regular, in: .rect(cornerRadius: Self.cornerRadius))
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("補完の候補")
-        // 打っている文字に近い端に寄せ、反対側の端を伸び縮みさせる。
-        .frame(height: model.glassHeight)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: anchor == .bottom ? .bottom : .top)
     }
 }
@@ -223,7 +348,7 @@ private struct CompletionRowView: View {
                 } label: {
                     candidateLabel(candidate)
                 }
-                .buttonStyle(RowButtonStyle(isSelected: index == model.selectedIndex))
+                .buttonStyle(RowButtonStyle(isSelected: CompletionRowID(row: row, index: index) == model.selectedID))
             case .failed(let message):
                 Button {
                     model.onRetry()

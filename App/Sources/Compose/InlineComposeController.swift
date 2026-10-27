@@ -263,10 +263,6 @@ final class InlineComposeController: NSObject {
     /// 本文に重ねるときの、一覧の上端の位置。打っている行に合わせて決める。
     private var completionListTop: NSLayoutConstraint?
     private var completionListHeight: NSLayoutConstraint?
-    /// 候補の数が変わって一覧の高さを動かした回数。動き終えたときに、あとから別の高さへ動かし始めていれば、一覧の枠を縮めない。
-    private var completionListResizeGeneration = 0
-    /// 置き場所の計算が決めた、一覧の高さ。ガラスの枠を動かしている間は、一覧の枠の高さと違うことがある。
-    private var completionListWantedHeight: CGFloat = 0
     /// 一覧を出している（消える動きの途中はfalse）。
     private var isCompletionListShown = false
     /// 補完している入力欄。本文か注意書き。
@@ -2487,57 +2483,18 @@ final class InlineComposeController: NSObject {
     private func updateCompletionList() {
         let content = completion.content
         let shows = content != nil && isEditing && (completionInput as? UIResponder)?.isFirstResponder == true
-        // 出たまま候補が入れ替わるときは、ガラスの枠を1つのまま伸び縮みさせ、中の候補をクロスフェードする。
+        // 出たまま候補が入れ替わるときは、ガラスの枠を1つのまま候補の数に合わせて伸び縮みさせ、増えた候補と消えた候補だけを薄くして出し入れする。
+        // 一覧の枠は出してよい場所いっぱいに置き、ガラスの高さはSwiftUIが決めるので、続けて打って途中で向きが変わっても、見えている高さから続ける。
         let duration = tuning.value(of: TuningCatalog.completionResizeDuration)
         let animation: Animation? = isCompletionListShown && shows && duration > 0 && !UIAccessibility.isReduceMotionEnabled ? .smooth(duration: duration) : nil
-        let previousHeight = completionListHeight?.constant
-        // 動かさずに出し直すときは、前に動かしていたガラスの枠の高さを外し、動き終えたときの処理も効かなくする。
-        // 縮める途中に閉じて、すぐ別の語で出し直すと、古い高さのガラスが残るため。消す間は、薄くなるまでそのまま残す。
-        if animation == nil, shows, completionList.glassHeight != nil {
-            completionListResizeGeneration += 1
-            completionList.setGlassHeight(nil)
-        }
+        completionList.rowFadeDuration = duration
         if let content, let kind = completion.token?.kind {
             completionList.update(content, kind: kind, selectedIndex: completion.selectedIndex, animation: animation)
         }
         if shows {
             layoutCompletionList()
-            if let animation, let previousHeight {
-                resizeCompletionListGlass(from: previousHeight, animation: animation)
-            }
         }
         setCompletionListShown(shows)
-    }
-
-    /// 一覧の高さが変わったら、一覧の枠をいったん大きいほうの高さにして、その中でガラスの枠を前の高さから新しい高さへ動かす。
-    /// 動き終えたら、一覧の枠を新しい高さにし、ガラスの枠を一覧の枠いっぱいに戻す。
-    /// 広げていて打っている行の上に出すときは、一覧の上端が高さで変わるため動かさない。
-    private func resizeCompletionListGlass(from previousHeight: CGFloat, animation: Animation) {
-        guard let host, let completionListHeight, let completionListTop else { return }
-        let height = completionListWantedHeight
-        guard !(completionListTop.isActive && completionList.growsUpward) else {
-            completionListResizeGeneration += 1
-            completionList.setGlassHeight(nil)
-            return
-        }
-        // 動かしている途中なら、比べるのは一覧の枠（大きいほうの高さ）ではなく、ガラスの枠が向かっている高さ。
-        // 同じ高さへ向かっているなら（選ぶ候補を移しただけなど）、動きをそのまま続ける。
-        if let target = completionList.glassHeight {
-            guard abs(height - target) > 0.5 else { return }
-        } else {
-            guard abs(height - previousHeight) > 0.5 else { return }
-            completionList.setGlassHeight(previousHeight)
-        }
-        completionListResizeGeneration += 1
-        let generation = completionListResizeGeneration
-        completionListHeight.constant = max(previousHeight, height)
-        host.view.layoutIfNeeded()
-        completionList.setGlassHeight(height, animation: animation) { [weak self] in
-            guard let self, generation == self.completionListResizeGeneration else { return }
-            self.completionList.setGlassHeight(nil)
-            self.layoutCompletionListIfShown()
-            self.host?.view.layoutIfNeeded()
-        }
     }
 
     private func layoutCompletionListIfShown() {
@@ -2546,6 +2503,7 @@ final class InlineComposeController: NSObject {
     }
 
     /// 欄の上に置く。広げて欄の上に2行ぶんの場所も残っていなければ、打っている行のすぐ下（入りきらなければ行の上）に重ねる。
+    /// 一覧の枠は、選んだ場所いっぱいにする。ガラスの枠は、その中で候補の数に合わせ、打っている文字に近い端に寄せる。
     /// 入りきらない高さは、一覧の中でスクロールする。
     private func layoutCompletionList() {
         guard let host, let completionListHeight, let completionListAboveBar, let completionListTop else { return }
@@ -2563,11 +2521,11 @@ final class InlineComposeController: NSObject {
             let top: CGFloat
             // 下に全部入れば下、入らず上なら入るなら上、どちらにも入らなければ広い方に出して中でスクロールする。
             if below >= wanted || (above < wanted && below >= above) {
-                height = min(wanted, max(below, 0))
+                height = max(below, 0)
                 top = caret.maxY + completionListSpacing
                 completionList.growsUpward = false
             } else {
-                height = min(wanted, max(above, 0))
+                height = max(above, 0)
                 top = caret.minY - completionListSpacing - height
                 completionList.growsUpward = true
             }
@@ -2575,14 +2533,12 @@ final class InlineComposeController: NSObject {
             completionListAboveBar.isActive = false
             completionListTop.isActive = true
         } else {
-            height = min(wanted, max(available, min(wanted, ComposeCompletionList.rowHeight * 2)))
+            height = max(available, min(wanted, ComposeCompletionList.rowHeight * 2))
             completionList.growsUpward = true
             completionListTop.isActive = false
             completionListAboveBar.isActive = true
         }
-        completionListWantedHeight = height
-        // ガラスの枠の高さを動かしている間は、一覧の枠をガラスより小さくしない。動き終えたら、改めて置き直す。
-        setConstant(completionListHeight, completionList.glassHeight == nil ? height : max(completionListHeight.constant, height))
+        setConstant(completionListHeight, height)
     }
 
     /// 同じ値を入れ直すと、欄が動くたびに測り直しが続くので、変わったときだけ入れる。
