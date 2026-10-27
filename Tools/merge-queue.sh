@@ -8,7 +8,7 @@
 # ロックはlockfのプロセスが持つので、処理から起動したmakeやxcodebuildが常駐のプロセスを残しても、ロックは残らない。
 # 並びを持つのはこのスクリプトのプロセス。止められたり落ちたりしてプロセスが消えた並びは、次に列を見たプロセスが消す。
 # 使い方:
-#   Tools/merge-queue.sh run <端末> [<前提のbranch>...]   今のbranchを列に並べ、番が来たら入れる。<端末>はmake testのSIMに渡す
+#   Tools/merge-queue.sh run [<前提のbranch>...]   今のbranchを列に並べ、番が来たら入れる。make testの端末は、走らせる直前にTools/sim.sh acquireで借りる
 #   Tools/merge-queue.sh status                         並んでいるbranchを順に出す
 # runの終了コード: 0 入れた、1 使い方の誤りや想定外の失敗、2 未commitの変更がある、3 rebaseがconflictした、4 make checkかmake testが落ちた、
 #   5 前提のbranchが、列にもmainにもないまま10分経った
@@ -108,7 +108,7 @@ absent_deps() {
 
 # 番が来て入れ終わるか、判断の要ることで終わるまで待つ。入れる処理の終了コードで終わる
 wait_and_land() {
-    local me=$1 sim=$2 dep since expired entries absent absent_since='' status shown='' message
+    local me=$1 dep since expired entries absent absent_since='' status shown='' message
     while :; do
         for dep in $(entry_field "$me" 4); do
             git rev-parse -q --verify "refs/heads/$dep" > /dev/null || { echo "error: 前提のbranch $dep がなくなりました" >&2; exit 1; }
@@ -134,7 +134,7 @@ wait_and_land() {
 
         if ready "$me" && ! ready_ahead "$me" "$entries"; then
             status=0
-            lockf -s -k -t 0 "$(queue_dir)/.turn" "$SELF" land "$sim" || status=$?
+            lockf -s -k -t 0 "$(queue_dir)/.turn" "$SELF" land || status=$?
             [[ "$status" == "$LOCK_BUSY" ]] || exit "$status"
             message="ほかの並びがmainへ入れているので、待っています"
         elif ready "$me"; then
@@ -176,14 +176,23 @@ rebase_onto_target() {
 }
 
 run_missing_steps() {
-    local sim=$1 missing steps step
+    local missing steps step sim lent
     # 調べられなかったときに、出力が空なのを通ったものと取り違えないよう、失敗したら止める
     missing=$(Tools/check-stamp.sh missing HEAD "$TARGET") || { echo "error: 通っていないものを調べられませんでした" >&2; exit 1; }
     steps=$(awk '{ print $2 }' <<< "$missing")
     for step in $steps; do
         echo "make $step を走らせます"
         if [[ "$step" == test ]]; then
-            make test SIM="$sim" || { echo "error: make test が落ちました" >&2; exit 4; }
+            # 並んで待つ間は端末を持たない。ほかのスレッドが使えるよう、走らせる直前に借りて、終わったら返す。
+            lent=$(Tools/sim.sh acquire --wait 0 | tail -1) || { echo "error: make test の端末を借りられませんでした" >&2; exit 1; }
+            sim=${lent% *}
+            # ほかのworktreeが使ったあとの端末は、その設定やチューニングを持ち込まないよう、既定に戻してからテストする。
+            if [[ "${lent##* }" != ready ]]; then
+                Tools/sim.sh reset "$sim" || { Tools/sim.sh release >/dev/null; echo "error: $sim の設定を戻せませんでした" >&2; exit 1; }
+            fi
+            echo "make test を $sim で走らせます"
+            make test SIM="$sim" || { Tools/sim.sh release >/dev/null; echo "error: make test が落ちました" >&2; exit 4; }
+            Tools/sim.sh release >/dev/null
         else
             make "$step" || { echo "error: make $step が落ちました" >&2; exit 4; }
         fi
@@ -204,7 +213,7 @@ fast_forward() {
 
 # .turnのロックを持った状態で、lockfから呼ばれる
 land() {
-    local sim=$1 before
+    local before
     echo "番が来ました"
     # 並んでから番が来るまでの間に変えたファイルを、確かめていない中身として入れないよう、もう一度確かめる
     require_clean "$(git rev-parse --show-toplevel)"
@@ -212,7 +221,7 @@ land() {
     while :; do
         before=$(git rev-parse "$TARGET")
         rebase_onto_target
-        run_missing_steps "$sim"
+        run_missing_steps
         [[ "$(git rev-parse "$TARGET")" == "$before" ]] && break
         echo "$TARGET が動いたので、載せ直します"
     done
@@ -222,8 +231,7 @@ land() {
 }
 
 run() {
-    local sim=${1:?make testに使う端末を渡す} dep
-    shift
+    local dep
     for dep in "$@"; do
         git rev-parse -q --verify "refs/heads/$dep" > /dev/null || { echo "error: 前提のbranch $dep がありません" >&2; exit 1; }
     done
@@ -232,7 +240,7 @@ run() {
     entry=$(enqueue "$@")
     trap 'rm -f "$entry"' EXIT
     echo "$(git symbolic-ref --short HEAD) を列に並べました"
-    wait_and_land "$entry" "$sim"
+    wait_and_land "$entry"
 }
 
 status() {
@@ -249,13 +257,13 @@ case "${1:-}" in
         run "$@"
         ;;
     land)
-        land "${2:?}"
+        land
         ;;
     status)
         status
         ;;
     *)
-        echo "使い方: Tools/merge-queue.sh run <端末> [<前提のbranch>...] | status" >&2
+        echo "使い方: Tools/merge-queue.sh run [<前提のbranch>...] | status" >&2
         exit 1
         ;;
 esac

@@ -20,6 +20,17 @@
 #     その端末の名前かUDIDをコマンドラインに含む処理（make test、xcodebuild、simctl、録画など）を探し、どのworktreeのスレッドが起動したかを出す。
 #     ターンを返したあともバックグラウンドの処理は走り続けるので、止まっているスレッドの端末を取る前に、使っている処理が残っていないかを確かめる。
 #     シミュレーターのツールのタップやスワイプは1回ずつで終わり、処理として残らないので、ここには出ない。
+#   Tools/sim.sh acquire [--wait <秒>] ['<端末>']
+#     このworktreeに端末を貸す。空きがなければ空くまで待ち（既定は540秒、0なら上限なく待つ）、借りた端末と状態を「Scia 2 ready」の形で出す。
+#     readyなら、前にこのworktreeが設定を戻してビルドを入れ、そのあと誰も借りていない。claimedなら、設定を戻してビルドを入れ直し、readyを記録する。
+#     すでに借りていれば同じ端末を延ばす。貸し出しは30分で切れるので、長く使うときはacquireし直す。待っても空かなければ終了コード75で終わる。
+#   Tools/sim.sh release
+#     このworktreeが借りている端末を返す。シミュレーターを触り終えたら、ターンを返す前に返す。
+#   Tools/sim.sh ready '<端末>'
+#     借りた端末に、設定を戻して自分のビルドを入れ終えたことを記録する。
+#   Tools/sim.sh status
+#     端末ごとの借り手、最後にビルドを入れたworktree、使っている処理の数を出す。
+#   shot、dump、resetは、このworktreeが借りている端末にしか使えない。
 set -euo pipefail
 
 BUNDLE_ID=net.mizle.scia
@@ -109,6 +120,7 @@ settle() {
 command_shot() {
     local sim=$1
     shift
+    require_lease "$sim"
     local width="" crop="" out="" full="" do_settle=1
     while [ $# -gt 0 ]; do
         case $1 in
@@ -159,6 +171,7 @@ command_shot() {
 
 command_dump() {
     local sim=$1 container file deadline
+    require_lease "$sim"
     # アプリは起動時に、この設定を見てアクセシビリティの要素を作るかを決める。ないとボタンやタブの名前が取れない。
     # VoiceOverは動かないが、要素を作るぶんアプリが少し重くなるので、hitchを測るときは`defaults delete`で外す。
     if [ "$(xcrun simctl spawn "$sim" defaults read com.apple.Accessibility ApplicationAccessibilityEnabled 2>/dev/null)" != 1 ]; then
@@ -184,6 +197,7 @@ RESET_KEY_PREFIXES='settings. tuning. tuningPanel. debug.'
 command_reset() {
     [ $# -eq 1 ] || fail "使い方: Tools/sim.sh reset '<端末>'"
     local sim=$1 container domain keys key
+    require_lease "$sim"
     container=$(xcrun simctl get_app_container "$sim" "$BUNDLE_ID" data 2>/dev/null) || fail "アプリが入っていない: $sim"
     # 動いているアプリは、覚えている値を書き戻すことがあるので、先に終了する。起動していなければ失敗するが、構わない。
     xcrun simctl terminate "$sim" "$BUNDLE_ID" >/dev/null 2>&1 || true
@@ -210,9 +224,9 @@ with open(sys.argv[1], "rb") as f:
     echo "設定を既定に戻した（$(grep -c . <<< "$keys" || true)個）: $sim"
 }
 
-command_busy() {
-    [ $# -eq 1 ] || fail "使い方: Tools/sim.sh busy '<端末>'"
-    local sim=$1 device name udid
+# 端末の名前かUDIDをコマンドラインに含む処理を、1行ずつ出す。2つ目の引数のworktreeから起動したものは除く。
+busy_procs() {
+    local sim=$1 exclude=$2 device name udid
     # UDIDで渡されても、名前で走らせた処理（make test SIM='Scia 1'など）を拾えるよう、名前とUDIDの両方を引く。
     device=$(xcrun simctl list devices -j | /usr/bin/python3 -I -c '
 import json, sys
@@ -226,7 +240,7 @@ for devices in json.load(sys.stdin)["devices"].values():
     name=${device#* }
     ps -axo pid=,ppid=,command= | /usr/bin/python3 -I -c '
 import os, re, subprocess, sys
-name, udid, caller = sys.argv[1], sys.argv[2], int(sys.argv[3])
+name, udid, caller, exclude = sys.argv[1], sys.argv[2], int(sys.argv[3]), sys.argv[4]
 procs = {}
 for line in sys.stdin:
     pid, ppid, command = line.strip().split(None, 2)
@@ -244,12 +258,16 @@ pattern = re.compile(re.escape(name) + r"(?![0-9])|" + re.escape(udid))
 agent = re.compile(r"/claude-code/.*/MacOS/claude ")
 app = re.compile(r"^/Applications/Claude\.app/Contents/MacOS/Claude\b")
 booted = re.compile(r"^launchd_sim ")
+# 貸し借りの操作（空きを待っているacquireなど）は、端末名を引数に持つが、端末を触らない。
+bookkeeping = re.compile(r"sim\.sh (acquire|release|ready|status|busy|__[a-z_]+)( |$)")
 found = []
 for pid, (_, command) in procs.items():
     if pid in mine or not pattern.search(command):
         continue
     # 起動している端末の中のプロセス（launchd_simと、その子のアプリなど）も、パスにUDIDを含むが、スレッドの操作ではない。
     if booted.search(command) or any(booted.search(procs[a][1]) for a in ancestors(pid)):
+        continue
+    if bookkeeping.search(command):
         continue
     owner = None
     for a in ancestors(pid):
@@ -264,13 +282,26 @@ for pid, (_, command) in procs.items():
     if owner is not None:
         out = subprocess.run(["lsof", "-a", "-p", str(owner), "-d", "cwd", "-Fn"], capture_output=True, text=True).stdout
         where = next((l[1:] for l in out.splitlines() if l.startswith("n")), "不明")
+        # 元のcheckoutの下に.claude/worktrees/のworktreeがあるので、パスの前方一致ではなく、処理のworktreeで比べる。
+        top = subprocess.run(["git", "-C", where, "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip()
+        if exclude and top == exclude:
+            continue
     found.append(f"{pid} {where}: {command[:160]}")
 if found:
-    print(f"使っている処理がある: {name}")
     print("\n".join(found))
-else:
-    print(f"使っている処理はない: {name}")
-' "$name" "$udid" "$$"
+' "$name" "$udid" "$$" "$exclude"
+}
+
+command_busy() {
+    [ $# -eq 1 ] || fail "使い方: Tools/sim.sh busy '<端末>'"
+    local found
+    found=$(busy_procs "$1" "")
+    if [ -n "$found" ]; then
+        echo "使っている処理がある: $1"
+        echo "$found"
+    else
+        echo "使っている処理はない: $1"
+    fi
 }
 
 command_drag() {
@@ -290,7 +321,166 @@ print(json.dumps(points, separators=(",", ":")))
 ' "$@"
 }
 
-[ $# -ge 2 ] || fail "使い方: Tools/sim.sh shot|dump|reset|busy '<端末>' [オプション]、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
+# 端末の貸し借りの記録。worktreeどうしで共有するgitのディレクトリに置く。
+# 並行するスレッドはworktreeを分けるので、借り手はworktreeのパスで表す。スレッドの一覧を読まずに、シェルだけで判断できるようにするため。
+lock_root() {
+    local common
+    common=$(git rev-parse --path-format=absolute --git-common-dir) || fail "gitのリポジトリの外で走らせている"
+    mkdir -p "$common/sim-locks"
+    echo "$common/sim-locks"
+}
+
+borrower() {
+    git rev-parse --show-toplevel || fail "gitのworktreeの外で走らせている"
+}
+
+# 貸す端末。名前が「Scia <番号>」の端末を番号の順に並べる。
+pool() {
+    xcrun simctl list devices -j | /usr/bin/python3 -I -c '
+import json, re, sys
+names = [d["name"] for ds in json.load(sys.stdin)["devices"].values() for d in ds if re.fullmatch(r"Scia [0-9]+", d["name"])]
+print("\n".join(sorted(set(names), key=lambda n: int(n.split()[1]))))
+'
+}
+
+# 借りたまま返さずに止まったスレッドのため、この秒数より古い貸し出しは返されたものとして扱う。長く使うときは、acquireし直して延ばす。
+LEASE_SECONDS=${LEASE_SECONDS:-1800}
+
+# 貸し出しの記録を読んで書き換える処理は、.guardをlockfで持って1つずつ走らせる。
+# 2つのスレッドが同じ端末を空きと見て、両方が借りる入れ違いを起こさないため。
+guarded() {
+    lockf -k -t 30 "$(lock_root)/.guard" "$0" "$@"
+}
+
+# 端末を今借りているworktree。借りられていないか、期限が切れていれば空を出す。
+lease_holder() {
+    local file="$(lock_root)/$1.lease" holder since
+    [ -f "$file" ] || return 0
+    read -r since holder < "$file"
+    [ $(( $(date +%s) - since )) -le "$LEASE_SECONDS" ] || return 0
+    echo "$holder"
+}
+
+# 端末に最後に設定を戻してビルドを入れたworktreeと、入れ終えたか（claimed、ready）。
+build_state() {
+    local file="$(lock_root)/$1.build"
+    [ -f "$file" ] && cat "$file"
+    return 0
+}
+
+# 以下の__で始まる操作は、guardedから.guardを持った状態で呼ばれる。
+command___acquire_try() {
+    local me=$1 want=${2:-} root sim held='' candidates procs
+    root=$(lock_root)
+    # すでに借りていれば、同じ端末を延ばす。別の端末を指定されたら、借りていたものを返す。
+    while IFS= read -r sim; do
+        [ -n "$sim" ] && [ "$(lease_holder "$sim")" = "$me" ] || continue
+        if [ -z "$want" ] || [ "$want" = "$sim" ]; then
+            held=$sim
+        else
+            rm -f "$root/$sim.lease"
+        fi
+    done <<< "$(pool)"
+    if [ -n "$held" ]; then
+        echo "$(date +%s) $me" > "$root/$held.lease"
+        if [ "$(build_state "$held")" = "$me ready" ]; then echo "$held ready"; else echo "$held claimed"; fi
+        return 0
+    fi
+    # 前に自分のビルドを入れ終えた端末を先に試す。入れ直しを省けるため。
+    candidates=$( { if [ -n "$want" ]; then echo "$want"; else pool; fi; } | while IFS= read -r sim; do
+        if [ "$(build_state "$sim")" = "$me ready" ]; then echo "0 $sim"; else echo "1 $sim"; fi
+    done | sort -s -k1,1 | cut -d' ' -f2-)
+    while IFS= read -r sim; do
+        [ -n "$sim" ] && [ -z "$(lease_holder "$sim")" ] || continue
+        # 返したあとも走り続けるバックグラウンドの処理（make test、録画など）が残っていれば、借りられない。
+        # 調べられなかったときに、出力が空なのを空きと取り違えないよう、失敗したら止める。
+        procs=$(busy_procs "$sim" "$me") || fail "$simを使っている処理を調べられない"
+        [ -z "$procs" ] || continue
+        echo "$(date +%s) $me" > "$root/$sim.lease"
+        if [ "$(build_state "$sim")" = "$me ready" ]; then
+            echo "$sim ready"
+        else
+            echo "$me claimed" > "$root/$sim.build"
+            echo "$sim claimed"
+        fi
+        return 0
+    done <<< "$candidates"
+    return 75
+}
+
+command___release() {
+    local me=$1 sim
+    while IFS= read -r sim; do
+        [ -n "$sim" ] && [ "$(lease_holder "$sim")" = "$me" ] && rm -f "$(lock_root)/$sim.lease"
+    done <<< "$(pool)"
+    return 0
+}
+
+command___ready() {
+    local sim=$1 me=$2
+    [ "$(lease_holder "$sim")" = "$me" ] || fail "$simを借りていない（借りているもの: $(lease_holder "$sim" | sed 's/^$/なし/')）"
+    echo "$me ready" > "$(lock_root)/$sim.build"
+}
+
+# 端末を受け取るほかの操作の前に、このworktreeが借りているかを確かめる。借りずに触ると、ほかのスレッドの確かめを乱すため。
+require_lease() {
+    local sim=$1 holder
+    holder=$(lease_holder "$sim")
+    [ "$holder" = "$(borrower)" ] || fail "$simを借りていない（借りているもの: ${holder:-なし}）。先にTools/sim.sh acquireで借りる"
+}
+
+command_acquire() {
+    local wait=540 want='' me out status deadline
+    while [ $# -gt 0 ]; do
+        case $1 in
+            --wait) wait=$2; shift 2 ;;
+            *) want=$1; shift ;;
+        esac
+    done
+    [ -z "$want" ] || pool | grep -qxF "$want" || fail "貸す端末にない: $want"
+    me=$(borrower)
+    # 回数ではなく経過時間で数える。.guardの取り合いでlockfが待つ時間も、上限に含めるため。0なら上限なく待つ。
+    deadline=$(( $(date +%s) + wait ))
+    while true; do
+        status=0
+        out=$(guarded __acquire_try "$me" "$want") || status=$?
+        if [ "$status" -eq 0 ]; then
+            echo "$out"
+            return
+        fi
+        [ "$status" -eq 75 ] || fail "借りられない（終了コード $status）"
+        if [ "$wait" -ne 0 ] && [ "$(date +%s)" -ge "$deadline" ]; then
+            echo "sim.sh: 空いている端末がない。もう一度acquireして待つ" >&2
+            command_status >&2
+            exit 75
+        fi
+        sleep 2
+    done
+}
+
+command_release() {
+    guarded __release "$(borrower)"
+    echo "返した: $(borrower)"
+}
+
+command_ready() {
+    [ $# -eq 1 ] || fail "使い方: Tools/sim.sh ready '<端末>'"
+    guarded __ready "$1" "$(borrower)"
+    echo "入れ終えた: $1"
+}
+
+command_status() {
+    local sim holder build procs
+    while IFS= read -r sim; do
+        [ -n "$sim" ] || continue
+        holder=$(lease_holder "$sim")
+        build=$(build_state "$sim")
+        procs=$(busy_procs "$sim" "" | grep -c . || true)
+        echo "$sim: 借り手=${holder:-なし} ビルド=${build:-なし} 使っている処理=${procs}件"
+    done <<< "$(pool)"
+}
+
+[ $# -ge 1 ] || fail "使い方: Tools/sim.sh shot|dump|reset|busy|ready '<端末>' [オプション]、Tools/sim.sh acquire [--wait <秒>] ['<端末>']、Tools/sim.sh release|status、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
 subcommand=$1
 shift
 case $subcommand in
@@ -299,5 +489,12 @@ case $subcommand in
     drag) command_drag "$@" ;;
     reset) command_reset "$@" ;;
     busy) command_busy "$@" ;;
+    acquire) command_acquire "$@" ;;
+    release) command_release "$@" ;;
+    ready) command_ready "$@" ;;
+    status) command_status "$@" ;;
+    __acquire_try) command___acquire_try "$@" ;;
+    __release) command___release "$@" ;;
+    __ready) command___ready "$@" ;;
     *) fail "知らない操作: $subcommand" ;;
 esac
