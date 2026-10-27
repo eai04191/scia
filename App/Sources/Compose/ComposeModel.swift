@@ -39,6 +39,10 @@ final class ComposeModel {
     private(set) var pollLimits = PollLimits.mastodonDefault
     /// 添付したメディアごとの、端末の側だけで持つもの。
     private(set) var localMedia: [DraftAttachment.ID: LocalMedia] = [:]
+    /// 予約する日時。予約の行を出していなければnil。決まりはdocs/compose.mdの「予約投稿」にある。
+    private(set) var scheduledAt: Date?
+    /// 書き直している予約。送れたら`onScheduleRewritten`で取り消させる。決まりはdocs/compose.mdの「書き直す」にある。
+    private(set) var rewritingSchedule: ScheduledStatus?
 
     /// 返信先から自動で入れた宛先と注意書き。返信先を替えたとき、自分で書いた部分と見分けるために使う。
     @ObservationIgnored private var initialDraft: StatusDraft
@@ -55,6 +59,10 @@ final class ComposeModel {
     /// 応答だけが失われていた場合に、変えた内容が投稿されないまま成功扱いにならないようにするため。
     @ObservationIgnored private var lastSubmitted: StatusDraft?
     @ObservationIgnored let myAccountID: String
+    /// 予約の日時を決める今の日付。テストでは決まった日付に差し替える。
+    @ObservationIgnored var now: () -> Date = AppDependencies.now
+    /// 予約の日時を区切る暦。テストでは決まったタイムゾーンの暦に差し替える。
+    @ObservationIgnored var calendar = Calendar.autoupdatingCurrent
     @ObservationIgnored private let post: (StatusDraft) async throws -> Void
     @ObservationIgnored private let media: ComposeMediaService
     /// 下書きの送信とアップロードの持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで閉じると、送っている途中のものも止める。
@@ -70,6 +78,8 @@ final class ComposeModel {
     @ObservationIgnored private let logger = SciaLog.logger(category: "compose")
     /// 投稿できて、下書きを空に戻したあとに呼ぶ。
     @ObservationIgnored var onPosted: () -> Void = {}
+    /// 予約を書き直した投稿を送れて、`onPosted`を呼んだあとに、元の予約のIDを渡して呼ぶ。元の予約を取り消すのは呼ぶ側。
+    @ObservationIgnored var onScheduleRewritten: (ScheduledStatus.ID) -> Void = { _ in }
     /// サーバーの上限のために、設定で選んだより小さく、または低い画質にした。使う人が選んでいない画質の変化なので、知らせる。
     @ObservationIgnored var onMediaReduced: (MediaAttachment.Kind) -> Void = { _ in }
     /// ペーストしたメディアのうち、添付の上限を超えて足さなかったものの種類。
@@ -106,6 +116,7 @@ final class ComposeModel {
         draft.visibility = visibility
         draft.attachments = attachments
         draft.poll = poll
+        draft.scheduledAt = scheduledAt
         return draft
     }
 
@@ -127,19 +138,57 @@ final class ComposeModel {
     /// 編集している投稿の添付で上限まで埋まっていても開かない。ピッカーの上限の0は、選べないではなく上限なしを意味するため。
     /// 投票の欄を出している間と、引用している間も開かない。Mastodonは投票や引用と添付を一緒に付けられないため。
     var canAttachMedia: Bool {
-        !isPosting && hasLoadedConfiguration && pickerSelectionLimit > 0 && poll == nil && quoteTarget == nil
+        !isPosting && hasLoadedConfiguration && pickerSelectionLimit > 0 && poll == nil && !isQuoting
     }
 
     /// メディアをペーストできる。ピッカーと違い、上限まで埋まっていても受け付け、入りきらない分を知らせる。
     /// 投票の欄を出している間と、引用している間は受け付けない。
     var canPasteMedia: Bool {
-        !isPosting && hasLoadedConfiguration && poll == nil && quoteTarget == nil
+        !isPosting && hasLoadedConfiguration && poll == nil && !isQuoting
     }
 
     /// 投票の欄を足せる。添付があるときと引用しているときは、Mastodonが一緒に付けられないため足せない。
     /// 編集では足せない。投票の付いた投稿の編集は、元の投票をそのまま送り直す。決まりはdocs/compose.mdの「自分の投稿の編集」にある。
     var canAddPoll: Bool {
-        !isPosting && attachments.isEmpty && editedStatus == nil && quoteTarget == nil
+        !isPosting && attachments.isEmpty && editedStatus == nil && !isQuoting
+    }
+
+    /// 引用している。書き直している予約の引用は、引用元の投稿を持たずIDだけを持つ。
+    var isQuoting: Bool {
+        quoteTarget != nil || initialDraft.quotedStatusID != nil
+    }
+
+    /// 返信している。書き直している予約の返信は、返信先の投稿を持たずIDだけを持つ。
+    var isReplying: Bool {
+        replyTo != nil || initialDraft.inReplyToID != nil
+    }
+
+    /// 予約の行を足せる。Mastodonは編集の予約を受け付けないため、編集では足せない。
+    var canSchedule: Bool {
+        !isPosting && editedStatus == nil
+    }
+
+    /// 予約の行を出す。日時は1時間より先の、いちばん近い正時にする。足せないときは何もしない。
+    func addSchedule() {
+        guard scheduledAt == nil, canSchedule else { return }
+        scheduledAt = ScheduledPosting.defaultDate(now: now(), calendar: calendar)
+    }
+
+    /// 予約の日時を変える。予約の行を出していなければ何もしない。
+    func setScheduledDate(_ date: Date) {
+        guard !isPosting, scheduledAt != nil else { return }
+        scheduledAt = date
+    }
+
+    /// 予約の行を外し、すぐ投稿する下書きに戻す。
+    func removeSchedule() {
+        guard !isPosting else { return }
+        scheduledAt = nil
+    }
+
+    /// 予約の日時として選べる最も早い日時。
+    var earliestScheduleDate: Date {
+        ScheduledPosting.earliestDate(now: now(), calendar: calendar)
     }
 
     /// 投票の欄を出す。足せないときは何もしない。
@@ -214,7 +263,7 @@ final class ComposeModel {
     /// 本文のうち、返信先から自動で入れた宛先を除いた、自分で書いた部分。宛先を書き換えていたら本文全体。
     /// 編集では、元の本文も自分で書いたものなので本文全体。
     var typedText: String {
-        guard editedStatus == nil else { return text }
+        guard editedStatus == nil, rewritingSchedule == nil else { return text }
         return text.hasPrefix(initialDraft.text) ? String(text.dropFirst(initialDraft.text.count)) : text
     }
 
@@ -286,10 +335,19 @@ final class ComposeModel {
         visibility = resolvedVisibility
     }
 
-    /// 捨てると失われる、自分で書いたものがある。編集は書き換えていなくても、始めたこと自体を失うものとして扱う。
+    /// 書き直しのラベルの文字。返信か引用の予約なら、そう書く。返信先と引用元の投稿は持たないので、相手は書かない。
+    var rewriteChipTitle: String? {
+        guard rewritingSchedule != nil else { return nil }
+        if initialDraft.quotedStatusID != nil { return "予約した引用を書き直し中" }
+        if initialDraft.inReplyToID != nil { return "予約した返信を書き直し中" }
+        return "予約を書き直し中"
+    }
+
+    /// 捨てると失われる、自分で書いたものがある。編集と予約の書き直しは書き換えていなくても、始めたこと自体を失うものとして扱う。
     /// 返信先から自動で入れた宛先と注意書きは数えない。
     var hasWrittenContent: Bool {
         editedStatus != nil
+            || rewritingSchedule != nil
             || !typedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !attachments.isEmpty
             || (!spoilerText.isEmpty && spoilerText != initialDraft.spoilerText)
@@ -313,8 +371,41 @@ final class ComposeModel {
         visibility = draft.visibility
         attachments = draft.attachments
         poll = nil
+        scheduledAt = nil
+        rewritingSchedule = nil
         lastSubmitted = nil
         hasChosenVisibility = false
+        return true
+    }
+
+    /// 予約した投稿を書き直し始める。今の下書きは捨てる。送っている間は始めずfalseを返す。
+    /// 予約したときの内容と日時を戻す。元の予約は、送れたあとに取り消させる。
+    @discardableResult
+    func beginRewriting(_ scheduled: ScheduledStatus) -> Bool {
+        guard !isPosting else { return false }
+        // 公開範囲を送っていない予約は、既定の公開範囲にする。まだ届いていなければ、届いたときに`apply`が入れ直す。
+        let draft = StatusDraft.rewrite(of: scheduled, defaultVisibility: defaultVisibility ?? .public)
+        removeAllAttachments()
+        initialDraft = draft
+        editedStatus = nil
+        replyTo = nil
+        quoteTarget = nil
+        text = draft.text
+        spoilerText = draft.spoilerText
+        showsSpoiler = draft.hasSpoiler
+        visibility = draft.visibility
+        attachments = draft.attachments
+        // 予約から戻した添付は端末にファイルがなく、サーバーのメディアで描く。代替テキストを送れなかったことは、ほかの添付と同じくここに持つ。
+        // 読み直すファイルがないので、読み込みを送り直すことはない。
+        for attachment in draft.attachments {
+            localMedia[attachment.id] = LocalMedia(assetIdentifier: nil) { _ in throw CocoaError(.fileNoSuchFile) }
+        }
+        poll = draft.poll
+        scheduledAt = draft.scheduledAt
+        rewritingSchedule = scheduled
+        lastSubmitted = nil
+        // 予約したときの公開範囲を、あとから届く既定の公開範囲で上書きしない。公開範囲を送っていない予約は、既定の公開範囲が届くのを待つ。
+        hasChosenVisibility = scheduled.params.visibility != nil
         return true
     }
 
@@ -328,6 +419,8 @@ final class ComposeModel {
         spoilerText = ""
         showsSpoiler = false
         poll = nil
+        scheduledAt = nil
+        rewritingSchedule = nil
         removeAllAttachments()
         lastSubmitted = nil
         hasChosenVisibility = false
@@ -338,15 +431,22 @@ final class ComposeModel {
     private func submission(of draft: StatusDraft) -> StatusDraft {
         guard draft.editing == nil, let lastSubmitted else { return draft }
         if lastSubmitted.text == draft.text, lastSubmitted.spoilerText == draft.spoilerText, lastSubmitted.sensitive == draft.sensitive,
-           lastSubmitted.visibility == draft.visibility, lastSubmitted.mediaIDs == draft.mediaIDs, lastSubmitted.poll == draft.poll {
+           lastSubmitted.visibility == draft.visibility, lastSubmitted.mediaIDs == draft.mediaIDs, lastSubmitted.poll == draft.poll,
+           lastSubmitted.scheduledAt == draft.scheduledAt {
             return lastSubmitted
         }
-        return StatusDraft(text: draft.text, spoilerText: draft.spoilerText, hasSpoiler: draft.hasSpoiler, visibility: draft.visibility, inReplyToID: draft.inReplyToID, quotedStatusID: draft.quotedStatusID, attachments: draft.attachments, poll: draft.poll)
+        return StatusDraft(text: draft.text, spoilerText: draft.spoilerText, hasSpoiler: draft.hasSpoiler, visibility: draft.visibility, inReplyToID: draft.inReplyToID, quotedStatusID: draft.quotedStatusID, attachments: draft.attachments, poll: draft.poll, scheduledAt: draft.scheduledAt)
     }
 
     /// 投稿し、成功したら下書きを空に戻す。失敗したら下書きを残し、同じ下書きで送り直せるようにする。
+    /// 予約の日時が今から5分より後でなければ送らずに知らせる。サーバーは過去の日時を断らずにすぐ投稿するため。
     func submit() async {
         guard canPost else { return }
+        if let scheduledAt, !ScheduledPosting.accepts(scheduledAt, now: now()) {
+            logger.info("compose: schedule too soon")
+            errorMessage = "予約の日時は、今から5分より後にしてください。"
+            return
+        }
         UserAction.submitPost.record()
         isPosting = true
         let endBackgroundTime = backgroundTime("post status")
@@ -358,8 +458,12 @@ final class ComposeModel {
         lastSubmitted = draft
         do {
             try await post(draft)
+            let rewritten = rewritingSchedule?.id
             reset()
             onPosted()
+            if let rewritten {
+                onScheduleRewritten(rewritten)
+            }
         } catch {
             // 編集は応答だけを失っても、代替テキストはサーバーに届いていることがある。元の値に戻して送り直しても届くよう、送った添付に目印を付ける。
             let sentIDs = Set(draft.changedAttachedDescriptions.map(\.id))

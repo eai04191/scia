@@ -8,12 +8,8 @@ extension TimelineViewController {
     /// 本文の右に小さく出す設定なら、重ねて出す。
     func mediaContent(for status: Status) -> MediaGridView.Content? {
         var content = mediaContent(of: status.displayed.mediaAttachments, cover: mediaCover(for: status))
-        if settings.mediaArrangement == .besideBody {
-            content?.arrangement = .stack(side: settings.value(of: AppearanceCatalog.mediaBesideSide))
-            // ブーストでも元の投稿のIDでばらつかせ、同じ投稿はどの行でも同じ形にする。
-            content?.stackSeed = status.displayed.id
-            content?.tiltsStack = settings.tiltsStackedPhotos
-        }
+        // ブーストでも元の投稿のIDでばらつかせ、同じ投稿はどの行でも同じ形にする。
+        content?.arrange(beside: status.displayed.id, settings: settings)
         return content
     }
 
@@ -132,6 +128,15 @@ extension TimelineViewController {
 }
 
 extension MediaGridView.Content {
+    /// 投稿の見た目で本文の右に小さく出す設定なら、重ねて出す。重ね方は`seed`でばらつかせ、同じ投稿はどの行でも同じ形にする。
+    @MainActor
+    mutating func arrange(beside seed: String, settings: AppSettings) {
+        guard settings.mediaArrangement == .besideBody else { return }
+        arrangement = .stack(side: settings.value(of: AppearanceCatalog.mediaBesideSide))
+        stackSeed = seed
+        tiltsStack = settings.tiltsStackedPhotos
+    }
+
     /// `attachments`を、今の設定とチューニングで並べる中身。添付ファイルがなければnil。一覧の外（編集履歴など）でも同じ見た目にする。
     /// 説明にならない代替テキストは、ALTの目印にもビューアにも読み上げにも出さないよう、ここで除いておく。
     @MainActor

@@ -12,11 +12,12 @@ struct TabPlacementTests {
         #expect(placement.switchable.isEmpty)
     }
 
-    /// ブックマークとお気に入りは既定で無効にし、有効にすると切り替えタブに入る。保存済みの並びにも同じ位置で差し込む。
+    /// ブックマーク、お気に入り、予約投稿は既定で無効にし、有効にすると切り替えタブに入る。保存済みの並びにも同じ位置で差し込む。
     @Test func savedListsStartDisabledBelowBoundary() {
         let saved = MenuLayout<TabItem>(tokens: ["item:home", "item:notifications", "more", "item:local", "item:federated"])
-        #expect(saved.tokens == ["item:home", "item:notifications", "more", "hidden:bookmarks", "hidden:favourites", "item:local", "item:federated"])
+        #expect(saved.tokens == ["item:home", "item:notifications", "more", "hidden:bookmarks", "hidden:favourites", "hidden:scheduled", "item:local", "item:federated"])
         #expect(TabPlacement(layout: saved, tabBarCapacity: TabPlacement.compactTabBarCapacity).location(of: .bookmarks) == .disabled)
+        #expect(TabPlacement(layout: saved, tabBarCapacity: TabPlacement.compactTabBarCapacity).location(of: .scheduled) == .disabled)
 
         let enabled = MenuLayout<TabItem>(tokens: ["item:home", "more", "item:bookmarks"])
         #expect(TabPlacement(layout: enabled, tabBarCapacity: TabPlacement.compactTabBarCapacity).location(of: .bookmarks) == .switchTab)

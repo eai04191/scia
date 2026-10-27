@@ -2,11 +2,13 @@ import Observation
 import SciaCore
 import UIKit
 
-/// 書いていないときのカプセルの1行。返信や編集のラベルのアイコン、添付のサムネイル、自分で書いた本文を、この順に並べる。
+/// 書いていないときのカプセルの1行。返信や編集のラベルのアイコン、予約の時計、添付のサムネイル、自分で書いた本文を、この順に並べる。
 /// ラベルは文字を出さずアイコンだけにする。開閉では、ラベルのアイコンとサムネイルを、書いているときのラベルと列の同じものとのあいだで動かすため、それぞれを外から読めるようにする。
 @MainActor
 final class ComposeRestContent: UIView {
     let chipIcon = UIImageView()
+    /// 予約しているときの時計。
+    let scheduleIcon = UIImageView(image: UIImage(systemName: "clock"))
     let thumbnails = ComposeRestThumbnails()
     let label = UILabel()
     private let stack = UIStackView()
@@ -18,11 +20,16 @@ final class ComposeRestContent: UIView {
         chipIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .body, scale: .small)
         chipIcon.setContentHuggingPriority(.required, for: .horizontal)
         chipIcon.setContentCompressionResistancePriority(.required, for: .horizontal)
+        scheduleIcon.tintColor = .tintColor
+        scheduleIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .body, scale: .small)
+        scheduleIcon.setContentHuggingPriority(.required, for: .horizontal)
+        scheduleIcon.setContentCompressionResistancePriority(.required, for: .horizontal)
+        scheduleIcon.isHidden = true
         thumbnails.setContentHuggingPriority(.required, for: .horizontal)
         thumbnails.setContentCompressionResistancePriority(.required, for: .horizontal)
         label.lineBreakMode = .byTruncatingTail
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        for view in [chipIcon, thumbnails, label] {
+        for view in [chipIcon, scheduleIcon, thumbnails, label] {
             stack.addArrangedSubview(view)
         }
         stack.axis = .horizontal
@@ -43,10 +50,13 @@ final class ComposeRestContent: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// - Parameter symbolName: ラベルのアイコン。返信も編集もしていなければnil。
-    func configure(symbolName: String?, attachments: [ComposeAttachmentStrip.Item], text: NSAttributedString) {
+    /// - Parameters:
+    ///   - symbolName: ラベルのアイコン。返信も編集もしていなければnil。
+    ///   - showsSchedule: 予約している。
+    func configure(symbolName: String?, showsSchedule: Bool, attachments: [ComposeAttachmentStrip.Item], text: NSAttributedString) {
         chipIcon.image = symbolName.flatMap { UIImage(systemName: $0) }
         setHidden(chipIcon, symbolName == nil)
+        setHidden(scheduleIcon, !showsSchedule)
         thumbnails.update(attachments)
         setHidden(thumbnails, attachments.isEmpty)
         label.attributedText = text

@@ -15,6 +15,10 @@ final class SessionController {
     private let notifications: NotificationsController
     private let bookmarks: SavedStatusesController
     private let favourites: SavedStatusesController
+    /// 予約した投稿の一覧のタブ。
+    private let scheduled: ScheduledStatusesController
+    /// タブを無効にしているときに、手前に重ねて開いた予約の一覧。閉じたあとも、次に開くまで持つ。
+    private var presentedScheduled: ScheduledStatusesController?
     /// リストとハッシュタグのタイムラインのタブ。並びに出たときに作る。
     private let serverFeeds: ServerFeedRegistry
     /// ハッシュタグのメニューやタップで、開いた一覧に積んだハッシュタグの一覧。
@@ -184,6 +188,12 @@ final class SessionController {
         let notifications = NotificationsController(client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
         let bookmarks = SavedStatusesController(kind: .bookmarks, client: client, tasks: tasks.child()) { forward() }
         let favourites = SavedStatusesController(kind: .favourites, client: client, tasks: tasks.child()) { forward() }
+        // 自分のアカウントを読むのはselfなので、作り終えてからつなぐ。
+        let myAccountReference = SessionReference()
+        let scheduled = ScheduledStatusesController(client: client, tasks: tasks.child(), myAccount: {
+            guard let session = myAccountReference.session else { throw CancellationError() }
+            return try await session.myAccount()
+        }) { forward() }
         let serverFeeds = ServerFeedRegistry { [weak tasks] item in
             guard let tasks else { return nil }
             return switch item {
@@ -193,13 +203,14 @@ final class SessionController {
                 FeedTimelineController(feed: .hashtag(name: name), texts: .hashtag(name: name), client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
             case .accountHashtag(let accountID, let acct, let name, _):
                 FeedTimelineController(feed: .accountHashtag(accountID: accountID, name: name), texts: .accountHashtag(name: name, acct: acct), client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
-            case .home, .local, .federated, .notifications, .bookmarks, .favourites:
+            case .home, .local, .federated, .notifications, .bookmarks, .favourites, .scheduled:
                 nil
             }
         }
         self.serverFeeds = serverFeeds
         self.bookmarks = bookmarks
         self.favourites = favourites
+        self.scheduled = scheduled
         self.home = home
         self.local = local
         self.federated = federated
@@ -275,6 +286,7 @@ final class SessionController {
         let notificationsNavigation = ContentNavigationController(rootViewController: notifications.viewController)
         let bookmarksNavigation = ContentNavigationController(rootViewController: bookmarks.viewController)
         let favouritesNavigation = ContentNavigationController(rootViewController: favourites.viewController)
+        let scheduledNavigation = ContentNavigationController(rootViewController: scheduled.viewController)
         let tabs = TabArrangement(
             navigation: { item in
                 switch item {
@@ -284,6 +296,7 @@ final class SessionController {
                 case .notifications: notificationsNavigation
                 case .bookmarks: bookmarksNavigation
                 case .favourites: favouritesNavigation
+                case .scheduled: scheduledNavigation
                 case .list, .hashtag, .accountHashtag: serverFeeds.navigation(for: item)
                 }
             },
@@ -306,7 +319,7 @@ final class SessionController {
             tabBarController.noticeOverlay?.follow(nil)
         }
         tabBarController.delegate = tabBarDelegate
-        for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation, bookmarksNavigation, favouritesNavigation] {
+        for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation, bookmarksNavigation, favouritesNavigation, scheduledNavigation] {
             Self.configure(navigation, delegate: navigationDelegate, scrollToTop: scrollToTop)
         }
         // トークンの失効は、どのAPIで分かっても同じくログインし直しを促す。
@@ -415,6 +428,8 @@ final class SessionController {
         )
         // 投稿欄は初期化の途中で作るため、編集した投稿を引用の囲みに当てる先は、初期化を終えてからつなぐ。
         let editedStatuses = SessionReference()
+        // 予約できたことのチップを出す先も、初期化を終えてからつなぐ。
+        let schedules = SessionReference()
         composer = InlineComposeController(
             model: ComposeModel(tasks: tasks.child(), myAccountID: credential.accountID, media: media) { draft in
                 do {
@@ -425,6 +440,9 @@ final class SessionController {
                             update(edited.id) { _ in edited }
                         }
                         editedStatuses.session?.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
+                    } else if let scheduledAt = draft.scheduledAt {
+                        let scheduledStatus = try await client.scheduleStatus(draft, at: scheduledAt)
+                        schedules.session?.didSchedule(scheduledStatus)
                     } else {
                         // ストリーミングで届くまで数秒かかることがあるため、応答の投稿をすぐホームと、返信先を開いているスレッドに出す。
                         let posted = try await client.postStatus(draft)
@@ -498,6 +516,14 @@ final class SessionController {
         }
         notices.showOperationStatus = { [weak self] presenter in self?.showOperationStatus(from: presenter) }
         editedStatuses.session = self
+        schedules.session = self
+        myAccountReference.session = self
+        scheduled.viewController.mediaTransfers = mediaTransfers
+        scheduled.viewController.notices = notices
+        composer.model.onScheduleRewritten = { [weak self] id in self?.cancelRewrittenSchedule(id) }
+        composer.onShowScheduledStatuses = { [weak self] in self?.showScheduledStatuses() }
+        scheduled.onRewrite = { [weak self] status in self?.confirmRewriting(status) }
+        installAccountButton(on: scheduled.viewController)
         streamingHub.onEvent = { [weak self] event in
             switch event {
             case .statusUpdate(let edited): self?.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
@@ -667,6 +693,15 @@ final class SessionController {
 
     /// タブの一番下の画面の一覧に、アカウントのボタンを置き、投稿への操作とプロフィールを開けるようにする。
     private func configureTabRoot(_ viewController: TimelineViewController) {
+        installAccountButton(on: viewController)
+        #if DEBUG
+        viewController.onDebugURL = { [weak self] url in self?.handle(url) }
+        #endif
+        configure(viewController)
+    }
+
+    /// タブの根の画面の左上に、アカウントのボタンを置く。
+    private func installAccountButton(on viewController: UIViewController) {
         let accountMenu = accountMenu
         viewController.navigationItem.leftBarButtonItem = Self.accountButton(for: credential) { [weak self, weak viewController] in
             let myProfile = UIAction(title: "自分のプロフィール", image: UIImage(systemName: "person.crop.circle")) { _ in
@@ -678,10 +713,6 @@ final class SessionController {
             }
             return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile, recent])] + accountMenu().children)
         }
-        #if DEBUG
-        viewController.onDebugURL = { [weak self] url in self?.handle(url) }
-        #endif
-        configure(viewController)
     }
 
     /// タブのナビゲーションで、チップの列を画面の移り変わりに合わせ、Macでバーの空いたところを押したら一覧を最上部へ動かす。
@@ -1764,6 +1795,90 @@ final class SessionController {
         }
     }
 
+    // MARK: - 予約投稿
+
+    /// 予約できた。予約はタイムラインに何も出ず、うまくいったことが画面の変化で見えないため、チップで知らせる。押すと予約の一覧を開く。
+    fileprivate func didSchedule(_ status: ScheduledStatus) {
+        scheduled.didSchedule(status)
+        let title = "\(ScheduleDateText.shortTitle(for: status.scheduledAt, now: now(), calendar: .autoupdatingCurrent))に予約しました"
+        let notice = Notice(id: "compose.scheduled", kind: .success, title: title, action: .disclosure(hint: "予約した投稿の一覧を表示します。") { [weak self] in
+            self?.showScheduledStatuses()
+        })
+        notices.showTransient(notice, duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))
+    }
+
+    /// 予約した投稿の一覧を開く。タブに並べていればそのタブを開き、無効にしていれば、閉じるボタンを付けて手前に重ねる。
+    private func showScheduledStatuses() {
+        if tabs.placement.location(of: .scheduled) != .disabled {
+            tabs.show(.scheduled)
+            return
+        }
+        let list = ScheduledStatusesController(client: client, tasks: tasks.child(), myAccount: { [weak self] in
+            guard let self else { throw CancellationError() }
+            return try await myAccount()
+        }) { [weak self] in self?.reportUnauthorized() }
+        list.viewController.mediaTransfers = mediaTransfers
+        list.viewController.notices = notices
+        list.onRewrite = { [weak self, weak list] status in
+            // 投稿欄は一覧の下にあるので、書き直すときは一覧を閉じてから聞く。
+            list?.viewController.dismiss(animated: true) {
+                self?.confirmRewriting(status)
+            }
+        }
+        presentedScheduled = list
+        let navigation = UINavigationController(rootViewController: list.viewController)
+        list.viewController.navigationItem.rightBarButtonItem = UIBarButtonItem(systemItem: .close, primaryAction: UIAction { [weak navigation] _ in
+            navigation?.dismiss(animated: true)
+        })
+        topViewController.present(navigation, animated: true)
+    }
+
+    /// 書きかけの下書きがあれば捨ててよいかを聞いてから、予約した投稿の書き直しを始める。
+    private func confirmRewriting(_ status: ScheduledStatus) {
+        guard composer.model.hasWrittenContent else {
+            composer.rewrite(status)
+            return
+        }
+        let alert = UIAlertController(title: "下書きを捨てて書き直しますか？", message: composer.model.editedStatus != nil ? "編集中の内容は消えます。" : "書きかけの下書きは消えます。", preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        alert.addAction(UIAlertAction(title: "捨てて書き直す", style: .destructive) { [weak self] _ in
+            self?.composer.rewrite(status)
+        })
+        topViewController.present(alert, animated: true)
+    }
+
+    /// 書き直した投稿を送れたので、元の予約を取り消す。取り消せなければ、両方投稿されないよう知らせて一覧を開く。
+    /// もう投稿されていたら（404）、取り消すものはないので何もしない。
+    private func cancelRewrittenSchedule(_ id: ScheduledStatus.ID) {
+        logger.info("rewritten schedule cancel start")
+        // 書き直した投稿を送ってすぐバックグラウンドへ移っても、取り消し終えるまでアプリを止めないよう頼む。取り消せないまま元の予約が投稿されないようにするため。
+        let endBackgroundTime = BackgroundTime.request("cancel rewritten schedule")
+        let task = tasks.run { [weak self, client] in
+            defer { endBackgroundTime() }
+            do {
+                try await client.cancelScheduledStatus(id)
+            } catch let error as MastodonAPIError where error.statusCode == 404 {
+                self?.logger.info("rewritten schedule already gone")
+            } catch {
+                guard let self, !(error is CancellationError) else { return }
+                logger.error("rewritten schedule cancel failed: \(SciaLog.describe(error), privacy: .public)")
+                if let error = error as? MastodonAPIError, error.isUnauthorized {
+                    reportUnauthorized()
+                }
+                let alert = UIAlertController(title: "元の予約を取り消せませんでした", message: "書き直した投稿は送りましたが、元の予約が残っています。両方投稿されないよう、予約の一覧から取り消してください。\n\(ErrorPresentation(error).text)", preferredStyle: .alert)
+                alert.addAction(UIAlertAction(title: "予約の一覧を開く", style: .default) { [weak self] _ in self?.showScheduledStatuses() })
+                alert.addAction(UIAlertAction(title: "閉じる", style: .cancel))
+                topViewController.present(alert, animated: true)
+                return
+            }
+            self?.logger.info("rewritten schedule cancel done")
+            self?.scheduled.didCancel(id)
+        }
+        if task == nil {
+            endBackgroundTime()
+        }
+    }
+
     /// 書きかけの下書きがあれば捨ててよいかを、投票の付いた投稿なら締め切りがずれることを、聞いてから編集を始める。どちらもなければすぐ始める。
     /// 本文を読んでから聞く。先に聞くと、読んでいる間に書いたものを、聞かずに捨ててしまうため。
     private func confirmEditing(_ status: Status, source: StatusSource) {
@@ -2713,6 +2828,8 @@ final class SessionController {
         for list in savedLists {
             list.enterForeground()
         }
+        scheduled.enterForeground()
+        presentedScheduled?.enterForeground()
         threads.enterForeground()
         // ほかの端末で作ったり消したりしたリストや、フォローしたハッシュタグを、戻ったときに並びへ反映する。
         if hasStarted {

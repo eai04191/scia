@@ -15,6 +15,8 @@ final class ComposeMorphFlights {
     var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
     enum Key: Hashable {
         case chip
+        /// 予約の時計。
+        case schedule
         case attachment(DraftAttachment.ID)
     }
 

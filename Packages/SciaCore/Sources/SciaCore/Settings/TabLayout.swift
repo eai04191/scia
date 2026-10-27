@@ -7,6 +7,8 @@ public enum TabItem: MenuItemKind {
     case notifications
     case bookmarks
     case favourites
+    /// 予約した投稿の一覧。決まりはdocs/tabs.mdの「予約投稿」にある。
+    case scheduled
     /// 自分のリスト。`title`は、リストの一覧を読む前からタブの名前を出せるよう、並びと一緒に保存する。
     /// 同じ項目かどうかはIDだけで見る。名前が変わっても、並びの中の同じ場所の同じリストとして扱うため。
     case list(id: String, title: String)
@@ -27,7 +29,7 @@ public enum TabItem: MenuItemKind {
     private static let accountHashtagPrefix = "accountHashtag:"
 
     /// 決まった項目。リストとハッシュタグは使う人ごとに違うため含まない。既定の並びと、保存した並びに足りない項目を差し込むのに使う。
-    public static let allCases: [TabItem] = [.home, .local, .federated, .notifications, .bookmarks, .favourites]
+    public static let allCases: [TabItem] = [.home, .local, .federated, .notifications, .bookmarks, .favourites, .scheduled]
 
     public init?(rawValue: String) {
         if rawValue.hasPrefix(Self.accountHashtagPrefix) {
@@ -60,6 +62,7 @@ public enum TabItem: MenuItemKind {
         case .notifications: "notifications"
         case .bookmarks: "bookmarks"
         case .favourites: "favourites"
+        case .scheduled: "scheduled"
         case .list(let id, let title): "\(Self.listPrefix)\(id):\(title)"
         case .hashtag(let name): "\(Self.hashtagPrefix)\(name)"
         case .accountHashtag(let accountID, let acct, let name, let title): "\(Self.accountHashtagPrefix)\(accountID):\(acct):\(name):\(title)"
@@ -116,7 +119,7 @@ public enum TabItem: MenuItemKind {
         }
     }
 
-    /// 既定は、切り替えタブを使わず4つを直接並べる。ブックマークとお気に入りは無効にして、切り替えタブの側に置く。
+    /// 既定は、切り替えタブを使わず4つを直接並べる。ブックマーク、お気に入り、予約投稿は無効にして、切り替えタブの側に置く。
     /// 有効にすると切り替えタブに入る。たまに見る一覧なので、ふだん並べる4つを押しのけないため。
     public static let defaultLayout = MenuLayout<TabItem>(defaultElements: [
         .item(.home, isVisible: true),
@@ -126,6 +129,7 @@ public enum TabItem: MenuItemKind {
         .more,
         .item(.bookmarks, isVisible: false),
         .item(.favourites, isVisible: false),
+        .item(.scheduled, isVisible: false),
     ])
 }
 

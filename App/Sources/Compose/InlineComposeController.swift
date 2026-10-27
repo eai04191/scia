@@ -39,6 +39,8 @@ final class InlineComposeController: NSObject {
     var onShowReplyTarget: (Status) -> Void = { _ in }
     /// 投稿できたあとに呼ぶ。
     var onPosted: () -> Void = {}
+    /// 予約の書き直しのラベルを押したときに呼ぶ。予約の一覧を見せる。
+    var onShowScheduledStatuses: () -> Void = {}
     /// 画面の下端から、投稿欄（書いているときはキーボードも）が覆っている高さが変わったときに呼ぶ。
     var onObscuredHeightChange: (CGFloat) -> Void = { _ in }
     /// リンクに付けるタイトルを読み始めたときと、付け終えたときに呼ぶ。読んでいる途中かは`isLoadingLinkTitle`で見る。
@@ -68,8 +70,13 @@ final class InlineComposeController: NSObject {
     private let bar = ComposeBarView(effect: InlineComposeController.interactiveGlass())
     /// 背景の付いたラベルにする。背景のない文字だけのボタンは、ガラスの上で単色に描かれることがあり、色合いの青が消えた。
     private lazy var replyButton = UIButton(configuration: .tinted(), primaryAction: UIAction { [weak self] _ in
-        guard let target = self?.model.editedStatus ?? self?.model.replyTo ?? self?.model.quoteTarget else { return }
-        self?.onShowReplyTarget(target)
+        guard let self else { return }
+        if model.rewritingSchedule != nil {
+            onShowScheduledStatuses()
+            return
+        }
+        guard let target = model.editedStatus ?? model.replyTo ?? model.quoteTarget else { return }
+        onShowReplyTarget(target)
     })
     private lazy var replyRow = makeReplyRow()
     /// ラベルの右の×。返信なら返信先を、引用なら引用元を外して書いた本文を残し、編集なら編集をやめて空の投稿欄に戻す。
@@ -82,6 +89,8 @@ final class InlineComposeController: NSObject {
             guard let self else { return }
             if model.editedStatus != nil {
                 cancelStatusEdit()
+            } else if model.rewritingSchedule != nil {
+                discardDraft()
             } else if model.quoteTarget != nil {
                 model.setQuoteTarget(nil)
             } else {
@@ -89,6 +98,16 @@ final class InlineComposeController: NSObject {
             }
         })
     }()
+    /// 予約の行。＋のメニューから足したときと、予約を書き直しているときだけ、返信や編集のラベルの下に出す。
+    private lazy var scheduleRow = makeScheduleRow()
+    /// 予約の行の時計。開閉では、カプセルの時計とのあいだで動かす。
+    private let scheduleIcon = UIImageView(image: UIImage(systemName: "clock"))
+    /// 予約の日時。押すと日時を選ぶシートを出す。
+    private lazy var scheduleDateButton = UIButton(configuration: .tinted(), primaryAction: UIAction { [weak self] _ in
+        self?.presentScheduleDatePicker()
+    })
+    /// 書いている途中に予約の日時を選ぶシートを開いてから、閉じるまでtrue。この間は、キーボードを閉じても書いている状態を解かない。
+    private var isShowingScheduleDatePicker = false
     /// 添付したメディアのサムネイルの列。書いていて、添付があるときだけ出す。
     let attachmentStrip = ComposeAttachmentStrip()
     /// 注意書きの入力欄。＋のメニューから足したときと、注意書きの付いた投稿へ返信したときだけ、本文の上に出す。
@@ -184,7 +203,7 @@ final class InlineComposeController: NSObject {
         switch item {
         case .visibility: (item, visibilityButton)
         case .expand: (item, expandButton)
-        case .media, .spoiler, .poll, .linkTitle, .customEmoji, .customize, .mention, .hashtag: (item, makeToolButton(item))
+        case .media, .spoiler, .poll, .schedule, .linkTitle, .customEmoji, .customize, .mention, .hashtag: (item, makeToolButton(item))
         }
     })
     /// 今のボタンの行と＋のメニューへの振り分け。ボタンの行の幅が決まるたびに決め直す。まだ一度も振り分けていなければnil。
@@ -411,7 +430,7 @@ final class InlineComposeController: NSObject {
     /// 違和感レポートに残す状態。行が重なっていれば、どの行かも書く。
     func stateDump() -> String {
         """
-        editing: \(isEditing) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : pollEditor.fields.firstIndex(where: \.isFirstResponder).map { "poll\($0 + 1)" } ?? "none") spoiler: \(model.showsSpoiler) poll: \(model.poll.map { "options=\($0.options.count) multiple=\($0.multiple) hidesTotals=\($0.hidesTotals) expiresIn=\($0.expiresIn)" } ?? "nil") sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") quoteTarget: \(model.quoteTarget?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil")
+        editing: \(isEditing) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : pollEditor.fields.firstIndex(where: \.isFirstResponder).map { "poll\($0 + 1)" } ?? "none") spoiler: \(model.showsSpoiler) poll: \(model.poll.map { "options=\($0.options.count) multiple=\($0.multiple) hidesTotals=\($0.hidesTotals) expiresIn=\($0.expiresIn)" } ?? "nil") sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") quoteTarget: \(model.quoteTarget?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil") scheduledAt: \(model.scheduledAt.map { "\($0)" } ?? "nil") rewritingSchedule: \(model.rewritingSchedule?.id ?? "nil") scheduleDatePicker: \(isShowingScheduleDatePicker)
         mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
         tools: row=\(toolPlacement.map { "\($0.row.map(\.rawValue))" } ?? "nil") menu=\(toolPlacement.map { "\($0.menu.map { $0.map(\.rawValue) })" } ?? "nil")
@@ -424,7 +443,7 @@ final class InlineComposeController: NSObject {
     }
 
     private var rowStates: [(name: String, view: UIView)] {
-        [("rest", restRow), ("reply", replyRow), ("spoiler", spoilerRow), ("attachments", attachmentStrip), ("text", textView), ("poll", pollEditor), ("tools", tools)]
+        [("rest", restRow), ("reply", replyRow), ("schedule", scheduleRow), ("spoiler", spoilerRow), ("attachments", attachmentStrip), ("text", textView), ("poll", pollEditor), ("tools", tools)]
     }
 
     /// 表示しているのに高さを確保できていない行と、縦に重なっている行の組み。
@@ -447,6 +466,18 @@ final class InlineComposeController: NSObject {
         guard !model.isPosting, status.canBeEdited(now: now) else { return false }
         bottomSheet?.close(notifiesWillClose: true)
         guard model.beginEditing(status, source: source, now: now) else { return false }
+        update()
+        beginEditing()
+        return true
+    }
+
+    /// 予約した投稿の書き直しを始める。今の下書きは捨てるので、捨ててよいかは呼ぶ側で確かめておく。送っている間は始めずfalseを返す。
+    /// 開いているピッカーは、`edit(_:source:)`と同じ理由で閉じる。
+    @discardableResult
+    func rewrite(_ scheduled: ScheduledStatus) -> Bool {
+        guard !model.isPosting else { return false }
+        bottomSheet?.close(notifiesWillClose: true)
+        guard model.beginRewriting(scheduled) else { return false }
         update()
         beginEditing()
         return true
@@ -653,6 +684,15 @@ final class InlineComposeController: NSObject {
                 action.subtitle = model.editedStatus != nil ? "編集では付けられません" : model.quoteTarget != nil ? "引用とは一緒に付けられません" : "メディアとは一緒に付けられません"
             }
             return action
+        case .schedule:
+            let action = UIAction(title: item.title, image: UIImage(systemName: item.symbolName), state: model.scheduledAt != nil ? .on : .off) { [weak self] _ in
+                self?.toggleSchedule()
+            }
+            if model.scheduledAt == nil, !model.canSchedule {
+                action.attributes = .disabled
+                action.subtitle = "編集では付けられません"
+            }
+            return action
         case .spoiler:
             // 添付があれば、注意書きの欄を出すと閲覧注意にもなることを添える。
             let action = UIAction(title: item.title, image: UIImage(systemName: item.symbolName), state: model.showsSpoiler ? .on : .off) { [weak self] _ in
@@ -698,6 +738,54 @@ final class InlineComposeController: NSObject {
 
     private func toggleSpoiler() {
         setSpoilerShown(!model.showsSpoiler)
+    }
+
+    /// 予約の行を出すか、外してすぐ投稿する下書きに戻す。
+    private func toggleSchedule() {
+        if model.scheduledAt != nil {
+            logger.info("compose: schedule removed")
+            model.removeSchedule()
+        } else {
+            guard model.canSchedule else { return }
+            logger.info("compose: schedule added")
+            model.addSchedule()
+        }
+        update()
+    }
+
+    /// 予約の日時を選ぶシートを重ねる。書いている途中なら、閉じたあとにキーボードを戻す。
+    /// 開いている間は、キーボードを閉じても書いている状態を解かない。並びを変える画面と同じ扱い。
+    private func presentScheduleDatePicker() {
+        guard let host, let scheduledAt = model.scheduledAt, !model.isPosting else { return }
+        // 並びを変える画面と同じく、ほかの画面が閉じていく途中は出せないので、何もしない。
+        let presenter = topPresenter(from: host)
+        guard presenter.presentedViewController == nil, presenter.transitionCoordinator == nil else {
+            logger.info("compose: schedule date picker ignored while another sheet is closing")
+            return
+        }
+        let resumesEditing = isEditing
+        logger.info("compose: present schedule date picker (editing=\(resumesEditing))")
+        isShowingScheduleDatePicker = resumesEditing
+        resignInput()
+        let sheet = ScheduleDateSheet(title: "予約の日時", date: scheduledAt, minimumDate: model.earliestScheduleDate, confirmTitle: "決定") { [weak self] date in
+            self?.model.setScheduledDate(date)
+        } onClose: { [weak self] in
+            self?.scheduleDatePickerDidClose(resumesEditing: resumesEditing)
+        }
+        presenter.present(sheet, animated: true)
+        guard presenter.presentedViewController !== sheet else { return }
+        logger.error("compose: schedule date picker could not be presented")
+        isShowingScheduleDatePicker = false
+        if resumesEditing {
+            focusLastInput()
+        }
+    }
+
+    private func scheduleDatePickerDidClose(resumesEditing: Bool) {
+        logger.info("compose: schedule date picker closed")
+        isShowingScheduleDatePicker = false
+        guard resumesEditing, isEditing else { return }
+        focusLastInput()
     }
 
     /// 投票の欄を出して最初の選択肢を書き始めるか、外して本文に戻る。外すと書いた選択肢も捨てる。
@@ -928,6 +1016,7 @@ final class InlineComposeController: NSObject {
             case .media: self?.toggleMediaPicker()
             case .spoiler: self?.toggleSpoiler()
             case .poll: self?.togglePoll()
+            case .schedule: self?.toggleSchedule()
             case .customize: self?.presentToolLayoutSettings()
             case .linkTitle: self?.toggleLinkSelection()
             case .customEmoji: self?.toggleEmojiPalette()
@@ -985,6 +1074,11 @@ final class InlineComposeController: NSObject {
             poll.configuration?.baseForegroundColor = model.poll != nil ? .tintColor : .label
             poll.accessibilityTraits = model.poll != nil ? [.button, .selected] : .button
             poll.isEnabled = model.poll != nil || model.canAddPoll
+        }
+        if let schedule = toolButtons[.schedule] {
+            schedule.configuration?.baseForegroundColor = model.scheduledAt != nil ? .tintColor : .label
+            schedule.accessibilityTraits = model.scheduledAt != nil ? [.button, .selected] : .button
+            schedule.isEnabled = model.scheduledAt != nil || model.canSchedule
         }
     }
 
@@ -1397,7 +1491,7 @@ final class InlineComposeController: NSObject {
     /// 書いている途中でバーを留めるので下げない。下げている途中でキーボードが戻ったら、バーも戻す。
     private func updateSinkingWithKeyboard(keyboardHeight height: CGFloat) {
         let sinks = height <= Self.softwareKeyboardMinimumHeight && isSoftwareKeyboardShown && sinksWhenDone && isEditing
-            && !isBarHeld && bottomSheet == nil && !isShowingMediaViewer && !isPresentingError && !isShowingToolLayoutSettings && !isMovingFocus
+            && !isBarHeld && bottomSheet == nil && !isShowingMediaViewer && !isPresentingError && !isShowingToolLayoutSettings && !isShowingScheduleDatePicker && !isMovingFocus
         guard sinks != isSinkingWithKeyboard else { return }
         isSinkingWithKeyboard = sinks
         logger.info("compose: bar \(sinks ? "sinking with" : "returning with", privacy: .public) keyboard")
@@ -1469,7 +1563,7 @@ final class InlineComposeController: NSObject {
         let animatesFlights = bar.window != nil && !UIAccessibility.isReduceMotionEnabled
         if animatesFlights {
             // カプセルで重ねているとおり、後ろの添付ほど下に、1枚目をその上に、ラベルのアイコンをいちばん上に重ねて動かす。
-            let order = model.attachments.reversed().map { ComposeMorphFlights.Key.attachment($0.id) } + [.chip]
+            let order = model.attachments.reversed().map { ComposeMorphFlights.Key.attachment($0.id) } + [.chip, .schedule]
             // 開くときはカプセルの写真のスタックの影から、閉じるときは影のない列の写真から動き始める。
             let stackShadow = editing ? ComposeRestThumbnails.stackShadowOpacity(in: tuning) : 0
             morphFlights.takeOff(from: morphEnds(editing: !editing), stackingOrder: order, stackShadowOpacity: stackShadow)
@@ -1531,6 +1625,11 @@ final class InlineComposeController: NSObject {
                 replyButton.layoutIfNeeded()
                 ends[.chip] = .init(view: icon, content: .symbol(icon.image)) { icon.alpha = $0 ? 0 : 1 }
             }
+            if !scheduleRow.isHidden {
+                scheduleRow.layoutIfNeeded()
+                let icon = scheduleIcon
+                ends[.schedule] = .init(view: icon, content: .symbol(icon.image)) { icon.alpha = $0 ? 0 : 1 }
+            }
             for id in ids {
                 guard let tile = attachmentStrip.tile(for: id) else { continue }
                 tile.superview?.layoutIfNeeded()
@@ -1546,6 +1645,10 @@ final class InlineComposeController: NSObject {
             let icon = restContent.chipIcon
             if !icon.isHidden, icon.image != nil {
                 ends[.chip] = .init(view: icon, content: .symbol(icon.image)) { icon.alpha = $0 ? 0 : 1 }
+            }
+            let schedule = restContent.scheduleIcon
+            if !schedule.isHidden {
+                ends[.schedule] = .init(view: schedule, content: .symbol(schedule.image)) { schedule.alpha = $0 ? 0 : 1 }
             }
             for (index, id) in ids.enumerated() {
                 let thumbnails = restContent.thumbnails
@@ -1573,6 +1676,9 @@ final class InlineComposeController: NSObject {
         let showsReply = isEditing && chip != nil
         setRowHidden(replyRow, !showsReply)
         replyRow.alpha = showsReply ? 1 : 0
+        let showsSchedule = isEditing && model.scheduledAt != nil
+        setRowHidden(scheduleRow, !showsSchedule)
+        scheduleRow.alpha = showsSchedule ? 1 : 0
         let showsSpoiler = isEditing && model.showsSpoiler
         setRowHidden(spoilerRow, !showsSpoiler)
         spoilerRow.alpha = showsSpoiler ? 1 : 0
@@ -1779,6 +1885,17 @@ final class InlineComposeController: NSObject {
         }
         setRowShown(replyRow, isEditing && chip != nil)
 
+        // 行を消すときは、薄くなる間も日時が残るよう、前の日時のままにする。
+        if let scheduledAt = model.scheduledAt {
+            let title = ScheduleDateText.title(for: scheduledAt, now: model.now(), calendar: model.calendar)
+            if scheduleDateButton.configuration?.title != title {
+                scheduleDateButton.configuration?.title = title
+            }
+            scheduleDateButton.accessibilityLabel = "予約の日時"
+            scheduleDateButton.accessibilityValue = ScheduleDateText.spokenTitle(for: scheduledAt, now: model.now(), calendar: model.calendar)
+        }
+        setRowShown(scheduleRow, isEditing && model.scheduledAt != nil)
+
         let attachmentItems = model.attachments.map { attachment in
             ComposeAttachmentStrip.Item(
                 attachment: attachment,
@@ -1819,8 +1936,15 @@ final class InlineComposeController: NSObject {
         remainingLabel.largeContentTitle = remainingLabel.accessibilityLabel
         sendButton.isEnabled = model.canPost
         sendButton.configuration?.showsActivityIndicator = model.isPosting
+        // 予約している間は、押すと予約されることを、押す前に分かるようにする。
+        let sendSymbol = model.scheduledAt != nil ? "clock" : "arrow.up"
+        if sendButton.configuration?.image != UIImage(systemName: sendSymbol) {
+            sendButton.configuration?.image = UIImage(systemName: sendSymbol)
+        }
+        sendButton.accessibilityLabel = model.scheduledAt != nil ? "予約" : "投稿"
+        sendButton.largeContentTitle = sendButton.accessibilityLabel
 
-        restContent.configure(symbolName: chip?.symbolName, attachments: attachmentItems, text: restText())
+        restContent.configure(symbolName: chip?.symbolName, showsSchedule: model.scheduledAt != nil, attachments: attachmentItems, text: restText())
         restRow.accessibilityValue = restAccessibilityValue(chip: chip, attachments: attachmentItems)
         presentErrorIfNeeded()
         logOverlappingRows(after: "update")
@@ -1867,6 +1991,9 @@ final class InlineComposeController: NSObject {
     }
 
     private var chip: Chip? {
+        if let title = model.rewriteChipTitle {
+            return Chip(title: title, symbolName: "pencil", hint: "予約した投稿の一覧を表示します", clearLabel: "書き直しをやめる")
+        }
         if let title = model.editChipTitle {
             return Chip(title: title, symbolName: "pencil", hint: "タイムラインの編集している投稿を表示します", clearLabel: "編集をやめる")
         }
@@ -1902,6 +2029,9 @@ final class InlineComposeController: NSObject {
                 parts.append("送信できなかった添付があります")
             }
         }
+        if let scheduledAt = model.scheduledAt {
+            parts.append("\(ScheduleDateText.spokenTitle(for: scheduledAt, now: model.now(), calendar: model.calendar))に予約")
+        }
         parts.append(restText().string)
         return parts.joined(separator: "、")
     }
@@ -1921,7 +2051,7 @@ final class InlineComposeController: NSObject {
             }
             resignInput()
         }
-        let alert = UIAlertController(title: "投稿できませんでした", message: message, preferredStyle: .alert)
+        let alert = UIAlertController(title: model.scheduledAt != nil ? "予約できませんでした" : "投稿できませんでした", message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "OK", style: .cancel) { [weak self] _ in
             guard let self else { return }
             isPresentingError = false
@@ -2070,10 +2200,11 @@ final class InlineComposeController: NSObject {
     private func viewerItems() -> [MediaViewerItem] {
         model.attachments.map { attachment in
             let status = model.attachmentStatus(of: attachment.id) ?? .uploading
-            if attachment.isAttachedToStatus, case .uploaded(let media) = attachment.state {
+            let local = model.localMedia[attachment.id]
+            // 編集している投稿に付いている添付と、予約から戻した添付は、端末にファイルがないので、サーバーのメディアを見せる。
+            if attachment.isAttachedToStatus || local?.file == nil, case .uploaded(let media) = attachment.state {
                 return MediaViewerItem(id: attachment.id.uuidString, attached: media, description: attachment.description, status: status)
             }
-            let local = model.localMedia[attachment.id]
             return MediaViewerItem(
                 id: attachment.id.uuidString,
                 kind: local?.displayKind ?? .image,
@@ -2364,6 +2495,53 @@ final class InlineComposeController: NSObject {
         return row
     }
 
+    /// 予約の行。時計、日時、「に投稿」、外すボタンを並べる。日時は返信先のラベルと同じ形で、押すと日時を選ぶシートを出す。
+    private func makeScheduleRow() -> UIView {
+        scheduleIcon.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .footnote)
+        scheduleIcon.tintColor = .tintColor
+        scheduleIcon.setContentHuggingPriority(.required, for: .horizontal)
+        scheduleIcon.setContentCompressionResistancePriority(.required, for: .horizontal)
+        scheduleIcon.isAccessibilityElement = false
+
+        scheduleDateButton.configuration?.titleLineBreakMode = .byTruncatingTail
+        scheduleDateButton.configuration?.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes
+            attributes.font = .preferredFont(forTextStyle: .footnote)
+            return attributes
+        }
+        scheduleDateButton.configuration?.cornerStyle = .capsule
+        scheduleDateButton.configuration?.contentInsets = NSDirectionalEdgeInsets(top: 4, leading: 10, bottom: 4, trailing: 10)
+        scheduleDateButton.setContentHuggingPriority(.required, for: .horizontal)
+        scheduleDateButton.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let suffix = UILabel()
+        suffix.text = "に投稿"
+        suffix.font = .preferredFont(forTextStyle: .footnote)
+        suffix.adjustsFontForContentSizeCategory = true
+        suffix.textColor = .secondaryLabel
+        suffix.setContentHuggingPriority(.required, for: .horizontal)
+        suffix.setContentCompressionResistancePriority(.required, for: .horizontal)
+        suffix.isAccessibilityElement = false
+
+        var configuration = UIButton.Configuration.plain()
+        configuration.image = UIImage(systemName: "xmark.circle.fill")
+        configuration.baseForegroundColor = .secondaryLabel
+        configuration.contentInsets = .zero
+        let clear = UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.toggleSchedule() })
+        clear.accessibilityLabel = "予約をやめる"
+        clear.setContentHuggingPriority(.required, for: .horizontal)
+        clear.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let spacer = UIView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let row = UIStackView(arrangedSubviews: [scheduleIcon, scheduleDateButton, suffix, spacer, clear])
+        row.alignment = .center
+        row.spacing = 6
+        row.setCustomSpacing(4, after: scheduleIcon)
+        row.setCustomSpacing(4, after: scheduleDateButton)
+        return row
+    }
+
     /// 注意書きの行。アイコン、入力欄、外すボタンを並べ、下に線を引いて本文と分ける。
     private func makeSpoilerRow() -> UIView {
         let icon = UIImageView(image: UIImage(systemName: "exclamationmark.triangle"))
@@ -2539,7 +2717,7 @@ final class InlineComposeController: NSObject {
         attachmentStrip.onContextMenuWillShow = { [weak self] in self?.holdBarForContextMenu() }
         attachmentStrip.onContextMenuWillEnd = { [weak self] in self?.contextMenuWillEnd() }
         configurePollEditor()
-        for view in [restRow, replyRow, spoilerRow, attachmentStrip, textView, pollEditor, tools] {
+        for view in [restRow, replyRow, scheduleRow, spoilerRow, attachmentStrip, textView, pollEditor, tools] {
             stack.addArrangedSubview(view)
         }
         stack.axis = .vertical
@@ -2687,7 +2865,7 @@ extension InlineComposeController: UITextViewDelegate {
         // メディアを選ぶシートを出すためにキーボードを閉じたときも同じ。
         // 添付のビューアや、投稿の失敗の知らせを開くためにキーボードを閉じたときも同じ。閉じ終わったら入力欄にキーボードを戻す。
         // シートを閉じたあとに書き終えたときは、キーボードが上がりきった知らせが来ずにバーを留めたままでも、カプセルに戻す。
-        guard !isMovingFocus, bottomSheet == nil, !isShowingMediaViewer, !isShowingToolLayoutSettings, !isPresentingError else { return }
+        guard !isMovingFocus, bottomSheet == nil, !isShowingMediaViewer, !isShowingToolLayoutSettings, !isShowingScheduleDatePicker, !isPresentingError else { return }
         releaseHoldAboveKeyboard()
         setEditing(false)
         onEndEditing()

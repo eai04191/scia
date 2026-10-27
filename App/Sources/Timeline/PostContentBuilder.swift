@@ -178,6 +178,11 @@ struct PostContentBuilder {
         bodyRenderer(of: status, font: font ?? PostTypography(settings: settings).font(.body), color: color).render(.status(status))
     }
 
+    /// HTMLではない文字（予約した投稿のソースなど）を、投稿の本文と同じ文字の大きさと行間で描く。空白と改行は書いたまま残す。
+    func body(plain text: String, of status: Status, base: UIListContentConfiguration) -> NSAttributedString {
+        bodyRenderer(of: status, font: PostTypography(settings: settings).font(.body), color: .label).render(.plain(text, emojis: status.emojis))
+    }
+
     /// 投稿のリンクカード。出さない投稿ならnil。
     func linkCard(of status: Status) -> LinkCardView.Content? {
         guard settings.showsLinkCard else { return nil }

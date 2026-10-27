@@ -42,9 +42,9 @@ final class ComposeAttachmentStrip: UIView {
         /// 閲覧注意にして投稿する。どの添付も同じ値になる。
         let isSensitive: Bool
 
-        /// 編集している投稿に付いている添付の、サーバーの添付ファイル。手元で選んだ添付ではnil。
+        /// サーバーのメディアで描く添付の、サーバーの添付ファイル。編集している投稿に付いている添付と、予約から戻した添付のように、端末にファイルがないもの。手元で選んだ添付ではnil。
         var attachedMedia: MediaAttachment? {
-            guard attachment.isAttachedToStatus, case .uploaded(let media) = attachment.state else { return nil }
+            guard attachment.isAttachedToStatus || local?.file == nil, case .uploaded(let media) = attachment.state else { return nil }
             return media
         }
     }

@@ -10,6 +10,7 @@ extension TabItem: MenuItemPresentable {
         case .notifications: "通知"
         case .bookmarks: "ブックマーク"
         case .favourites: "お気に入り"
+        case .scheduled: "予約投稿"
         case .list(_, let title): title
         case .hashtag(let name): "#\(name)"
         case .accountHashtag(_, _, let name, let title): title.isEmpty ? "#\(name)" : title
@@ -30,6 +31,7 @@ extension TabItem: MenuItemPresentable {
         case .notifications: "bell"
         case .bookmarks: "bookmark"
         case .favourites: "star"
+        case .scheduled: "clock"
         case .list: "list.bullet"
         case .hashtag: "number"
         case .accountHashtag: "number.square"
