@@ -18,8 +18,8 @@ public enum NotificationAppearanceCatalog {
 
     /// お気に入りやフォローなどの通知の、誰が何をしたかの行の文字。種類の記号もこの大きさで描く。
     public static let headerText = AppearanceValue(id: "notification.text.header", title: "文字", range: -40...40, step: 1, defaultValue: 1, unit: .textOffset)
-    /// 名前の前に差し込むアイコンの一辺の、文字の行の高さに対する割合。
-    public static let headerAvatarScale = AppearanceValue(id: "notification.headerAvatarScale", title: "名前の前のアイコンの大きさ（行の高さに対する割合）", range: 0...4, step: 0.1, defaultValue: 0.9, unit: .ratio)
+    /// 名前の前に差し込むアイコンの一辺。投稿の名前の上の行の、ブーストした人のアイコンと同じく、文字の大きさでは変えない。
+    public static let headerAvatarSize = AppearanceValue(id: "notification.headerAvatarSize", title: "名前の前のアイコンの大きさ", range: 0...200, step: 1, defaultValue: 17)
     /// 名前の前に差し込むアイコンと、名前のすき間。
     public static let headerAvatarNameSpacing = AppearanceValue(id: "notification.headerAvatarNameSpacing", title: "名前の前のアイコンと名前のすき間", range: 0...100, step: 1, defaultValue: 4)
 
@@ -67,7 +67,7 @@ public enum NotificationAppearanceCatalog {
     /// 通知の行の上から下への並びで並べる。
     public static let groups: [AppearanceGroup] = [
         AppearanceGroup(id: "notification.group", title: "まとめた通知", values: [groupAvatarSize, groupAvatarSpacing, groupAvatarHeaderSpacing]),
-        AppearanceGroup(id: "notification.header", title: "誰が何をしたかの行", values: [headerText, headerAvatarScale, headerAvatarNameSpacing]),
+        AppearanceGroup(id: "notification.header", title: "誰が何をしたかの行", values: [headerText, headerAvatarSize, headerAvatarNameSpacing]),
         AppearanceGroup(id: "notification.symbol", title: "種類の記号", values: [symbolSpacing]),
         AppearanceGroup(id: "notification.account", title: "フォローなどのハンドル", values: [accountText, accountSpacing]),
         AppearanceGroup(id: "notification.quoted", title: "お気に入りやブーストで再掲する投稿", values: [quotedSpacing, quotedBodyText, quotedBodyLines, quotedMediaSpacing, quotedThumbnailSize, quotedThumbnailSpacing, quotedPollSpacing, quotedNoteText, quotedNoteSpacing]),

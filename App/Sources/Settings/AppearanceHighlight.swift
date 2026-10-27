@@ -124,7 +124,7 @@ enum AppearanceHighlight: Equatable {
             (N.groupAvatarHeaderSpacing, .verticalGap(above: [.groupAvatars], below: [.notificationHeader])),
 
             (N.headerText, .part(.notificationHeader)),
-            (N.headerAvatarScale, .firstOf([.part(.notificationHeaderAvatar), .part(.notificationHeader)])),
+            (N.headerAvatarSize, .firstOf([.part(.notificationHeaderAvatar), .part(.notificationHeader)])),
             (N.headerAvatarNameSpacing, .firstOf([.part(.notificationHeaderAvatarGap), .part(.notificationHeader)])),
 
             // メンションなどの名前の上の行の記号も同じ幅で置くので、誰が何をしたかの行がなければ、そちらで示す。

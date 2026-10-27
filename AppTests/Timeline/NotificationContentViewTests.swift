@@ -278,10 +278,54 @@ struct NotificationAppearanceTests {
         view.subviews.flatMap { [$0] + allSubviews(of: $0) }
     }
 
-    /// 名前の前のアイコンは行の高さに対する割合で大きさを決め、0にするとアイコンもすき間も置かない。
-    @Test func headerAvatarScaleZeroRemovesAvatar() throws {
+    /// 名前の前のアイコンは、文字の大きさによらず設定の大きさで、行に収まるときは文字の行の上下の中央に置く。
+    @Test func headerAvatarKeepsSizeAcrossTextSizes() throws {
         let settings = AppSettings.isolated()
-        settings.setValue(0, for: NotificationAppearanceCatalog.headerAvatarScale)
+        settings.setValue(20, for: NotificationAppearanceCatalog.headerAvatarSize)
+        settings.setValue(10, for: NotificationAppearanceCatalog.headerText)
+        let notification = try #require(notifications().first { $0.type == .follow })
+        let configuration = try #require(makeViewController(settings).contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
+        let header = configuration.header
+        var attachment: NSTextAttachment?
+        var index = 0
+        header.enumerateAttribute(.attachment, in: NSRange(location: 0, length: header.length)) { value, range, stop in
+            guard let value = value as? NSTextAttachment else { return }
+            attachment = value
+            index = range.location
+            stop.pointee = true
+        }
+        let bounds = try #require(attachment).bounds
+        let font = try #require(header.attribute(.font, at: index + 1, effectiveRange: nil) as? UIFont)
+        #expect(bounds.size == CGSize(width: 20, height: 20))
+        #expect(abs(bounds.midY - (font.ascender + font.descender) / 2) < 0.001)
+    }
+
+    /// 名前の前のアイコンは、どの大きさでも字面の下端より下に出ない。下に続くハンドルや再掲する投稿は字面の下端から測って置くので、出ると重なる。
+    @Test(arguments: [10.0, 17, 100, 200])
+    func headerAvatarStaysAboveGlyphBottom(side: Double) throws {
+        let settings = AppSettings.isolated()
+        settings.setValue(side, for: NotificationAppearanceCatalog.headerAvatarSize)
+        let notification = try #require(notifications().first { $0.type == .follow })
+        let configuration = try #require(makeViewController(settings).contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
+        let header = configuration.header
+        var attachment: NSTextAttachment?
+        var index = 0
+        header.enumerateAttribute(.attachment, in: NSRange(location: 0, length: header.length)) { value, range, stop in
+            guard let value = value as? NSTextAttachment else { return }
+            attachment = value
+            index = range.location
+            stop.pointee = true
+        }
+        let bounds = try #require(attachment).bounds
+        let font = try #require(header.attribute(.font, at: index + 1, effectiveRange: nil) as? UIFont)
+        #expect(abs(bounds.height - side) < 0.001)
+        #expect(bounds.minY >= -font.pointSize * PostBodyView.emBoxDescent - 0.001)
+    }
+
+    /// 名前の前のアイコンの大きさを0にすると、アイコンもすき間も置かない。
+    @Test func headerAvatarSizeZeroRemovesAvatar() throws {
+        let settings = AppSettings.isolated()
+        settings.setValue(0, for: NotificationAppearanceCatalog.headerAvatarSize)
         let vc = makeViewController(settings)
         let notification = try #require(notifications().first { $0.type == .follow })
         let configuration = try #require(vc.contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)

@@ -186,16 +186,18 @@ extension TimelineViewController {
 }
 
 extension TimelineViewController {
-    /// 通知を送った人の名前の前に置く、文字の行に合わせた大きさのアイコン。届くまでは同じ大きさの灰色で場所を取っておく。
+    /// 通知を送った人の名前の前に置くアイコン。行の上下の中央に置き、そうすると字面の下端より下に出る大きさなら、下端を字面の下端に揃えて上へ伸ばす。
+    /// 下に続く本文は字面の下端から測って置くので、それより下へ出ると、余白が設定より狭くなったり重なったりするため。
+    /// 届くまでは同じ大きさの灰色で場所を取っておく。
     /// サーバーがアイコンのURLを返さなかったときも、灰色のままにする。大きさを0にしたときは、アイコンもすき間も置かない。
     private func avatarAttachment(of account: Account, font: UIFont) -> NSAttributedString {
-        let side = headerAvatarSide(font: font)
+        let side = headerAvatarSide
         guard side > 0 else { return NSAttributedString() }
         let content = avatarContent(of: account)
         let image = notificationAvatarKey(of: account, side: side).flatMap(avatarImages.requestImage(for:))
         let attachment = NSTextAttachment()
         attachment.image = Self.shapedAvatar(image, side: side, shape: content.shape, cornerRatio: content.cornerRatio)
-        attachment.bounds = CGRect(x: 0, y: font.descender, width: side, height: side)
+        attachment.bounds = CGRect(x: 0, y: max((font.ascender + font.descender - side) / 2, -font.pointSize * PostBodyView.emBoxDescent), width: side, height: side)
         let string = NSMutableAttributedString(attachment: attachment)
         // 画像の添付の文字には字送りが効かないので、後ろに空白を置き、空白の幅を差し引いた字送りで、すき間を設定の値にする。
         let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width
@@ -205,8 +207,8 @@ extension TimelineViewController {
     }
 
     /// 名前の前に置くアイコンの一辺。
-    private func headerAvatarSide(font: UIFont) -> CGFloat {
-        font.lineHeight * settings.value(of: NotificationAppearanceCatalog.headerAvatarScale)
+    private var headerAvatarSide: CGFloat {
+        settings.value(of: NotificationAppearanceCatalog.headerAvatarSize)
     }
 
     /// 通知の組み方ごとに、`contentConfiguration(for:itemID:base:)`が描くアイコン。
@@ -224,7 +226,7 @@ extension TimelineViewController {
                 return content.url.map { AvatarView.key(url: $0, animates: content.animates, side: side, scale: traitCollection.displayScale) }
             }
         }
-        let side = headerAvatarSide(font: PostTypography(settings: settings).font(.notificationHeader))
+        let side = headerAvatarSide
         guard side > 0 else { return [] }
         return notificationAvatarKey(of: notification.account, side: side).map { [$0] } ?? []
     }
