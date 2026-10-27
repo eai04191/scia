@@ -1,7 +1,7 @@
 import Foundation
 
 /// 投稿に付ける投票の下書き。決まりは`docs/poll.md`の「投票を作る」にある。
-public struct PollDraft: Sendable, Equatable {
+public struct PollDraft: Sendable, Hashable {
     /// 選択肢。書いた順に投票に並ぶ。
     public var options: [String]
     /// 複数の選択肢を選べる。

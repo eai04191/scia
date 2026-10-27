@@ -318,6 +318,19 @@ public struct MastodonClient: Sendable {
     /// サーバーが内容を拒んだら、422の`MastodonAPIError`を投げる。
     /// https://docs.joinmastodon.org/methods/statuses/#create
     public func postStatus(_ draft: StatusDraft) async throws -> Status {
+        try await post(Status.self, path: "api/v1/statuses", form: try postForm(of: draft), headers: ["Idempotency-Key": draft.idempotencyKey]).0
+    }
+
+    /// `date`に投稿するよう予約する。投稿と同じく、下書きごとの`Idempotency-Key`を付ける。サーバーは予約にも同じキーで二重に作らない。
+    /// 今から5分以内の日時は、サーバーが422の`MastodonAPIError`で断る。過去の日時はすぐ投稿されてしまうため、送る前に`ScheduledPosting.accepts`で確かめる。
+    /// https://docs.joinmastodon.org/methods/statuses/#create
+    public func scheduleStatus(_ draft: StatusDraft, at date: Date) async throws -> ScheduledStatus {
+        let form = try postForm(of: draft) + [URLQueryItem(name: "scheduled_at", value: date.formatted(.iso8601))]
+        return try await post(ScheduledStatus.self, path: "api/v1/statuses", form: form, headers: ["Idempotency-Key": draft.idempotencyKey]).0
+    }
+
+    /// 投稿と予約で送るフォーム。
+    private func postForm(of draft: StatusDraft) throws -> [URLQueryItem] {
         guard let mediaIDs = draft.mediaIDs else { throw StatusPostError.attachmentsNotReady }
         var form = [
             URLQueryItem(name: "status", value: draft.text),
@@ -338,7 +351,40 @@ public struct MastodonClient: Sendable {
         if let poll = draft.poll {
             form += poll.formItems
         }
-        return try await post(Status.self, path: "api/v1/statuses", form: form, headers: ["Idempotency-Key": draft.idempotencyKey]).0
+        return form
+    }
+
+    /// 予約した投稿をすべて返す。並びはサーバーが返すまま（予約した新しい順）。続きを`Link`ヘッダーで読み、最後まで読み切ってから返す。
+    /// 予約は1人300件までで、1回に読める件数の上限は40件。
+    /// https://docs.joinmastodon.org/methods/scheduled_statuses/#get
+    public func scheduledStatuses() async throws -> [ScheduledStatus] {
+        var statuses: [ScheduledStatus] = []
+        var maxID: String?
+        var readMaxIDs: Set<String> = []
+        repeat {
+            let query = [URLQueryItem(name: "limit", value: "40")] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
+            let (page, response) = try await get([ScheduledStatus].self, path: "api/v1/scheduled_statuses", query: query)
+            statuses += page
+            let next = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)?.queryValue("max_id", of: "next")
+            // 読んだ位置を返すサーバー（同じ位置を返し続ける、位置が循環する）で、同じページを読み続けないよう止める。
+            if let maxID { readMaxIDs.insert(maxID) }
+            maxID = next.flatMap { readMaxIDs.contains($0) || page.isEmpty ? nil : $0 }
+        } while maxID != nil
+        return statuses
+    }
+
+    /// 予約の日時を変える。中身は変えられない。今から5分以内の日時は、サーバーが422で断る。
+    /// https://docs.joinmastodon.org/methods/scheduled_statuses/#update
+    public func rescheduleStatus(_ id: ScheduledStatus.ID, to date: Date) async throws -> ScheduledStatus {
+        try await send(formRequest(method: "PUT", path: "api/v1/scheduled_statuses/\(id)", form: [URLQueryItem(name: "scheduled_at", value: date.formatted(.iso8601))]), decoding: ScheduledStatus.self).0
+    }
+
+    /// 予約を取り消す。応答の中身は使わない。もう投稿されたか取り消した予約なら、404の`MastodonAPIError`を投げる。
+    /// https://docs.joinmastodon.org/methods/scheduled_statuses/#cancel
+    public func cancelScheduledStatus(_ id: ScheduledStatus.ID) async throws {
+        var request = URLRequest(url: credential.instance.appending(path: "api/v1/scheduled_statuses/\(id)"))
+        request.httpMethod = "DELETE"
+        _ = try await send(request)
     }
 
     /// 編集の元にする、投稿を書いたときの本文と注意書き。

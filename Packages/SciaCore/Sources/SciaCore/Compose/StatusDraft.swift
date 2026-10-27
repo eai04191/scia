@@ -20,6 +20,8 @@ public struct StatusDraft: Sendable, Equatable {
     public let idempotencyKey: String
     /// 自分の投稿の編集なら、元の投稿から引き継ぐもの。新しい投稿ならnil。
     public let editing: StatusEditTarget?
+    /// 予約する日時。すぐ投稿するならnil。編集では予約できない。
+    public var scheduledAt: Date?
 
     public init(
         text: String = "",
@@ -31,7 +33,8 @@ public struct StatusDraft: Sendable, Equatable {
         attachments: [DraftAttachment] = [],
         poll: PollDraft? = nil,
         idempotencyKey: String = UUID().uuidString,
-        editing: StatusEditTarget? = nil
+        editing: StatusEditTarget? = nil,
+        scheduledAt: Date? = nil
     ) {
         self.text = text
         self.spoilerText = spoilerText
@@ -43,6 +46,7 @@ public struct StatusDraft: Sendable, Equatable {
         self.poll = poll
         self.idempotencyKey = idempotencyKey
         self.editing = editing
+        self.scheduledAt = scheduledAt
     }
 
     /// 返信の下書き。返信先の投稿者と、その投稿でメンションされた相手を宛先に入れる。自分は入れない。
@@ -105,6 +109,27 @@ public struct StatusDraft: Sendable, Equatable {
             ids.append(serverID)
         }
         return ids
+    }
+
+    /// 予約した投稿を書き直す下書き。予約したときに送った内容を戻す。決まりはdocs/compose.mdの「書き直す」にある。
+    /// 添付は、アップロードの済んだ添付として並べる。元の予約に付いたまま新しい投稿に付け直せるので、元の予約は送れたあとに取り消す。
+    /// 公開範囲を送っていない予約では、`defaultVisibility`にする。
+    public static func rewrite(of scheduled: ScheduledStatus, defaultVisibility: Status.Visibility = .public) -> StatusDraft {
+        let params = scheduled.params
+        let attachments = scheduled.mediaAttachments.map { attachment in
+            DraftAttachment(state: .uploaded(attachment), description: attachment.description ?? "")
+        }
+        return StatusDraft(
+            text: params.text,
+            spoilerText: params.spoilerText,
+            hasSpoiler: !params.spoilerText.isEmpty || (params.sensitive && !attachments.isEmpty),
+            visibility: params.visibility ?? defaultVisibility,
+            inReplyToID: params.inReplyToID,
+            quotedStatusID: params.quotedStatusID,
+            attachments: attachments,
+            poll: params.poll,
+            scheduledAt: scheduled.scheduledAt
+        )
     }
 
     /// 送れる内容になっている。

@@ -1,0 +1,49 @@
+[
+  {
+    "id": "52",
+    "scheduled_at": "2026-10-28T00:00:00.000Z",
+    "params": {
+      "poll": { "options": ["朝", "夜"], "expires_in": "86400", "multiple": "true", "hide_totals": "false" },
+      "text": "@bob どっち？",
+      "language": null,
+      "media_ids": null,
+      "sensitive": "false",
+      "visibility": "unlisted",
+      "idempotency": null,
+      "scheduled_at": null,
+      "spoiler_text": "",
+      "application_id": 3,
+      "in_reply_to_id": 113000000000000000,
+      "with_rate_limit": false,
+      "quoted_status_id": null,
+      "quote_approval_policy": "public"
+    },
+    "media_attachments": []
+  },
+  {
+    "id": "51",
+    "scheduled_at": "2026-10-27T12:30:00.000Z",
+    "params": {
+      "poll": null,
+      "text": null,
+      "media_ids": ["113000000000000100"],
+      "sensitive": "true",
+      "visibility": null,
+      "spoiler_text": "ねこ",
+      "in_reply_to_id": null,
+      "quoted_status_id": "113000000000000009"
+    },
+    "media_attachments": [
+      {
+        "id": "113000000000000100",
+        "type": "image",
+        "url": "https://files.example.social/media_attachments/files/113/000/000/000/000/100/original/e96382f26c72a29c.jpeg",
+        "preview_url": "https://files.example.social/media_attachments/files/113/000/000/000/000/100/small/e96382f26c72a29c.jpeg",
+        "remote_url": null,
+        "meta": { "original": { "width": 640, "height": 480 } },
+        "description": "窓辺の猫",
+        "blurhash": "UFBWY:8_0Jxv4mx]t8t64.%M-:IUWGWAt6M}"
+      }
+    ]
+  }
+]
