@@ -69,6 +69,9 @@ final class FocusCroppedImageView: UIView {
         isUserInteractionEnabled = false
         // 届いた画像の縦横比が添付ファイルの大きさと違っても、枠に画像のない部分を作らない。
         imageView.contentMode = .scaleAspectFill
+        // 元の大きさの画像を一覧の写真ほどに縮めて描くと、既定の線形の縮小では細い線が間引かれて模様が乱れる。
+        // ビューアの開閉では、縮めた複製から一覧のサムネイルへ着地の一コマで替わるため、乱れが消える瞬間が見える。
+        imageView.layer.minificationFilter = .trilinear
         paperView.backgroundColor = paperColor
         paperView.alpha = 0
         dimView.backgroundColor = .black
