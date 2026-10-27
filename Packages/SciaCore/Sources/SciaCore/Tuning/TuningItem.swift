@@ -1163,6 +1163,15 @@ public enum TuningCatalog {
         defaultValue: 0.25
     )
 
+    /// 投票の選択肢の欄が増減したときに、投稿欄の高さを変え、欄を浮かび上がらせる（薄くする）時間。
+    public static let composePollOptionDuration = NumberTuning(
+        id: "compose.pollOptionDuration",
+        title: "投票の選択肢の欄が増減したときに欄の高さを変える時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.25
+    )
+
     /// 投稿欄を展開ボタンで広げたときの、本文の最低の行数。本文がこれより短くても、この行数の高さまで広げて書き足す場所を先に取る。
     public static let composeExpandedMinLines = NumberTuning(
         id: "compose.expandedMinLines",
@@ -1579,6 +1588,7 @@ public enum TuningCatalog {
             .number(composeExpandDuration),
             .number(composeExpandedMinLines),
             .number(composeTextGrowDuration),
+            .number(composePollOptionDuration),
             .number(linkTitleMorphDuration),
             .number(linkTitleShimmerPeriod),
             .toggle(composePickerMatchesKeyboard),

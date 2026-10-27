@@ -37,6 +37,10 @@ final class ComposePollEditor: UIView {
     private lazy var hidesTotalsWidth = Self.minimumWidth(of: hidesTotalsButton)
     private let removeButton = UIButton(configuration: .plain())
     private(set) var content: Content?
+    /// 増えて、まだ浮かび上がらせていない欄。
+    private var appearingRows: [UIView] = []
+    /// 減って並びから外し、まだ薄くし始めていない欄。
+    private var leavingRows: [UIView] = []
 
     /// 選択肢の1行。角丸のボックスに、選び方のマークと入力欄を並べる。
     private struct OptionRow {
@@ -49,6 +53,9 @@ final class ComposePollEditor: UIView {
         super.init(frame: frame)
         optionsStack.axis = .vertical
         optionsStack.spacing = 6
+        // 欄が増減するとき、増えた欄や薄くしている欄が、伸び縮みする途中の欄の外へ出て、設定の行に重ならないよう切り抜く。
+        // 欄の中身は角丸のボックスの内側に収まり、外へ描くものはない。
+        optionsStack.clipsToBounds = true
 
         for button in [expiryButton, multipleButton, hidesTotalsButton] {
             var configuration = UIButton.Configuration.gray()
@@ -118,18 +125,43 @@ final class ComposePollEditor: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    func apply(_ content: Content) {
+    /// 下書きに合わせる。`animatesRows`なら、欄の増減をすぐには見せず、置く側が投稿欄の高さを変える動きの中で`revealRowChanges`を、
+    /// 動き終えたら`finishRowChanges`を呼ぶ。増えた欄は、置かれる場所で透明にしておき、浮かび上がらせる。減った欄は、並びから外して元の場所に残し、薄くしてから外す。
+    /// 欄の数が変わったらtrueを返す。
+    @discardableResult
+    func apply(_ content: Content, animatesRows: Bool = false) -> Bool {
         self.content = content
         let poll = content.poll
+        let rowCount = optionRows.count
         while optionRows.count < poll.options.count {
             let row = makeOptionRow(index: optionRows.count)
+            let previous = optionRows.last?.view.frame
             optionRows.append(row)
             fields.append(row.field)
             optionsStack.addArrangedSubview(row.view)
+            if animatesRows, let previous {
+                // 並べ直しを動きの中で行うと、作ったばかりの欄は大きさ0から広がるため、並ぶ場所に先に置く。
+                UIView.performWithoutAnimation {
+                    row.view.frame = previous.offsetBy(dx: 0, dy: previous.height + optionsStack.spacing)
+                    row.view.layoutIfNeeded()
+                }
+                row.view.alpha = 0
+                appearingRows.append(row.view)
+            }
         }
         while optionRows.count > poll.options.count, let row = optionRows.popLast() {
             fields.removeLast()
-            row.view.removeFromSuperview()
+            if animatesRows {
+                // 並びから外すと位置を決める制約もなくなり、薄くする途中に縮みながら動くため、今の位置に留める。
+                let frame = row.view.frame
+                optionsStack.removeArrangedSubview(row.view)
+                row.view.translatesAutoresizingMaskIntoConstraints = true
+                row.view.frame = frame
+                row.view.isUserInteractionEnabled = false
+                leavingRows.append(row.view)
+            } else {
+                row.view.removeFromSuperview()
+            }
         }
         let indicator = UIImage(systemName: poll.multiple ? "square" : "circle")
         for (index, row) in optionRows.enumerated() {
@@ -155,6 +187,22 @@ final class ComposePollEditor: UIView {
         multipleWidth.constant = Self.widestFit(of: multipleButton, values: [("1つ選ぶ", "checklist"), ("複数選ぶ", "checklist.checked")])
         hidesTotalsWidth.constant = Self.widestFit(of: hidesTotalsButton, values: [("結果を見せる", "eye"), ("結果を隠す", "eye.slash")])
         hidesTotalsButton.accessibilityHint = poll.hidesTotals ? "締め切るまで票数を見せません。押すと、投票した人に票数を見せます" : "投票した人に票数を見せます。押すと、締め切るまで隠します"
+        return optionRows.count != rowCount
+    }
+
+    /// 増えた欄を浮かび上がらせ、減った欄を薄くする。投稿欄の高さを変える動きの中で呼び、返した欄を、動き終えたら`finishRowChanges`に渡す。
+    func revealRowChanges() -> [UIView] {
+        appearingRows.forEach { $0.alpha = 1 }
+        appearingRows = []
+        let leaving = leavingRows
+        leaving.forEach { $0.alpha = 0 }
+        leavingRows = []
+        return leaving
+    }
+
+    /// 薄くし終えた欄を外す。
+    func finishRowChanges(_ leaving: [UIView]) {
+        leaving.forEach { $0.removeFromSuperview() }
     }
 
     private static func minimumWidth(of button: UIButton) -> NSLayoutConstraint {

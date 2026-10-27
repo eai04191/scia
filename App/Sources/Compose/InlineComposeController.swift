@@ -828,16 +828,29 @@ final class InlineComposeController: NSObject {
             }
         }
         // フォーカスを移してから、画面の更新を待たずに欄の数を合わせる。待つと、書いてすぐReturnを押したときに次の欄がまだなく、本文へ移ってしまった。
-        applyPollEditorContent()
+        applyPollEditorContent(animatesRows: true)
     }
 
     /// 投票の欄を、下書きの投票に合わせる。投票がなければ何もしない。
-    private func applyPollEditorContent() {
+    /// `animatesRows`なら、選択肢の欄が増減したときに、投稿欄の高さを動きの中で変える。次の並べ直しに任せると、欄の上端が1行分一度に飛ぶため。
+    private func applyPollEditorContent(animatesRows: Bool = false) {
         guard let poll = model.poll else { return }
-        pollEditor.apply(ComposePollEditor.Content(
+        // 視差効果を減らす設定や、画面に出ていないときは、動かさずに次の並べ直しに任せる。
+        let animates = animatesRows && !UIAccessibility.isReduceMotionEnabled && host?.view.window != nil
+        let changed = pollEditor.apply(ComposePollEditor.Content(
             poll: poll,
             expiryChoices: PollDraft.expiryChoices(within: model.pollLimits)
-        ))
+        ), animatesRows: animates)
+        guard changed, animates, let host else { return }
+        var leaving: [UIView] = []
+        UIView.animateSmoothly(duration: tuning.value(of: TuningCatalog.composePollOptionDuration)) {
+            leaving = self.pollEditor.revealRowChanges()
+            host.view.layoutIfNeeded()
+            self.layoutCompletionListIfShown()
+            host.view.layoutIfNeeded()
+        } completion: {
+            self.pollEditor.finishRowChanges(leaving)
+        }
     }
 
     /// 投票の欄の入力欄とボタンを、下書きにつなぐ。入力欄は本文や注意書きと同じく、フォーカスと補完をここで扱う。
