@@ -29,6 +29,10 @@ struct AppearanceEditorTests {
         #expect(typography.font(.pollFooter, compatibleWith: large).pointSize == size(.footnote))
         #expect(typography.font(.spoilerButton, compatibleWith: large).pointSize == size(.footnote))
         #expect(typography.font(.namePrimary, compatibleWith: large).fontDescriptor.symbolicTraits.contains(.traitBold))
+        // 通知の誰が何をしたかの行は、本文（subheadline）と太字の名前（body）のあいだの大きさにする。ハンドルとメンションの上の行は本文と同じ。
+        #expect(typography.font(.notificationHeader, compatibleWith: large).pointSize == size(.subheadline) + 1)
+        #expect(typography.font(.notificationAccount, compatibleWith: large).pointSize == size(.subheadline))
+        #expect(typography.font(.notificationContext, compatibleWith: large).pointSize == size(.subheadline))
     }
 
     /// 本文を大きくすると、ほかの文字も本文との差を保って一緒に大きくなる。

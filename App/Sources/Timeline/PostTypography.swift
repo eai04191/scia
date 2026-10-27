@@ -1,7 +1,7 @@
 import SciaCore
 import UIKit
 
-/// 投稿の文字の大きさ。本文は、iPhoneの文字サイズが標準のときの本文の大きさに設定の差を足し、ほかの文字は本文との差で決める。
+/// 投稿と通知の文字の大きさ。本文は、iPhoneの文字サイズが標準のときの本文の大きさに設定の差を足し、ほかの文字は本文との差で決める。
 /// どの文字も本文と同じ`UIFontMetrics`で伸び縮みさせるので、iPhoneの文字サイズを変えても釣り合いを保ったまま一緒に大きくなる。
 struct PostTypography: Equatable {
     enum Role: CaseIterable {
@@ -19,6 +19,16 @@ struct PostTypography: Equatable {
         case filterNote
         case xPostName
         case xPostBody
+        /// 通知の、誰が何をしたかの行。
+        case notificationHeader
+        /// メンションなどの投稿として出す通知の、名前の上の行。
+        case notificationContext
+        /// フォローなどの通知で、誰が何をしたかの行の下に添えるハンドル。
+        case notificationAccount
+        /// お気に入りやブーストの通知で再掲する投稿の本文と注意書き。
+        case notificationQuotedBody
+        /// 再掲する投稿が引用のある投稿であることを示す1行。
+        case notificationQuotedNote
 
         var setting: AppearanceValue {
             switch self {
@@ -36,6 +46,11 @@ struct PostTypography: Equatable {
             case .filterNote: AppearanceCatalog.filterNoteText
             case .xPostName: AppearanceCatalog.xPostNameText
             case .xPostBody: AppearanceCatalog.xPostBodyText
+            case .notificationHeader: NotificationAppearanceCatalog.headerText
+            case .notificationContext: NotificationAppearanceCatalog.contextText
+            case .notificationAccount: NotificationAppearanceCatalog.accountText
+            case .notificationQuotedBody: NotificationAppearanceCatalog.quotedBodyText
+            case .notificationQuotedNote: NotificationAppearanceCatalog.quotedNoteText
             }
         }
     }

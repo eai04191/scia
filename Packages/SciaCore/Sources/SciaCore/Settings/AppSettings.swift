@@ -178,7 +178,7 @@ public final class AppSettings {
         didSet { defaults.set(reblogVisibility.rawValue, forKey: Keys.reblogVisibility) }
     }
 
-    /// 「投稿の見た目」で変えた数値。キーは`AppearanceValue.id`。既定値のままの項目は持たない。
+    /// 「投稿の見た目」と「通知の見た目」で変えた数値。キーは`AppearanceValue.id`。既定値のままの項目は持たない。
     public private(set) var appearanceValues: [String: Double]
 
     public func value(of item: AppearanceValue) -> Double {
@@ -235,6 +235,16 @@ public final class AppSettings {
         reactionGlowIcons = D.reactionGlowIcons
         reactionGlowFillsWidthWhenAlone = D.reactionGlowFillsWidthWhenAlone
         reactionGlowLightFavouriteColor = D.reactionGlowLightFavouriteColor
+    }
+
+    /// 「通知の見た目」の数値のどれかが、既定値から変わっているか。
+    public var isNotificationAppearanceModified: Bool {
+        NotificationAppearanceCatalog.values.contains(where: isModified)
+    }
+
+    /// 「通知の見た目」の数値を、すべて既定値へ戻す。
+    public func resetNotificationAppearance() {
+        reset(NotificationAppearanceCatalog.values)
     }
 
     /// 項目を既定値へ戻す。
@@ -449,7 +459,7 @@ public final class AppSettings {
         reactionGlowFillsWidthWhenAlone = defaults.object(forKey: Keys.reactionGlowFillsWidthWhenAlone) as? Bool ?? AppearanceDefaults.reactionGlowFillsWidthWhenAlone
         reactionGlowLightFavouriteColor = defaults.string(forKey: Keys.reactionGlowLightFavouriteColor).flatMap(ReactionGlowLightFavouriteColor.init(rawValue:)) ?? AppearanceDefaults.reactionGlowLightFavouriteColor
         var appearanceValues: [String: Double] = [:]
-        for item in AppearanceCatalog.values {
+        for item in AppearanceCatalog.values + NotificationAppearanceCatalog.values {
             if let stored = defaults.object(forKey: Keys.appearance(item.id)) as? Double, item.range.contains(stored) {
                 appearanceValues[item.id] = stored
             }

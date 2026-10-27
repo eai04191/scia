@@ -77,6 +77,8 @@ final class NotificationContentView: UIView, UIContentView {
     private let symbolView = UIImageView()
     /// まとめた行で、誰が何をしたかの行の上に並べるアイコン。
     private let groupAvatarStack = UIStackView()
+    /// 並べたアイコンが行の幅に収まらないとき、行の右の余白の手前で切る枠。アイコンの大きさは設定どおりに保つ。
+    private let groupAvatarClip = UIView()
     private var groupAvatarViews: [AvatarView] = []
     private let headerLabel = EmojiLabel()
     private let bodyView: PostBodyView
@@ -106,10 +108,22 @@ final class NotificationContentView: UIView, UIContentView {
         headerLabel.numberOfLines = 0
         groupAvatarStack.axis = .horizontal
         groupAvatarStack.alignment = .center
-        for view in [symbolView, groupAvatarStack, headerLabel, bodyView] as [UIView] {
+        for view in [symbolView, groupAvatarClip, headerLabel, bodyView] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
+        groupAvatarClip.clipsToBounds = true
+        groupAvatarStack.translatesAutoresizingMaskIntoConstraints = false
+        groupAvatarClip.addSubview(groupAvatarStack)
+        // 枠は並べたアイコンの幅に合わせ、行に収まらない分だけ狭める。
+        let fitsStack = groupAvatarClip.trailingAnchor.constraint(equalTo: groupAvatarStack.trailingAnchor)
+        fitsStack.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            groupAvatarStack.topAnchor.constraint(equalTo: groupAvatarClip.topAnchor),
+            groupAvatarStack.bottomAnchor.constraint(equalTo: groupAvatarClip.bottomAnchor),
+            groupAvatarStack.leadingAnchor.constraint(equalTo: groupAvatarClip.leadingAnchor),
+            fitsStack,
+        ])
         reactionGlowView.install(in: self)
         bodyView.onSelectMedia = { [weak self] index, grid in self?.current.onSelectMedia?(index, grid) }
         bodyView.onRevealMedia = { [weak self] in self?.current.onRevealMedia?() }
@@ -157,7 +171,7 @@ final class NotificationContentView: UIView, UIContentView {
         for (view, content) in zip(groupAvatarViews, contents) {
             view.apply(content)
         }
-        groupAvatarStack.isHidden = contents.isEmpty
+        groupAvatarClip.isHidden = contents.isEmpty
     }
 
     private func apply(_ configuration: NotificationContentConfiguration) {
@@ -183,14 +197,14 @@ final class NotificationContentView: UIView, UIContentView {
         // まとめた行では、アイコンを並べた下に誰が何をしたかの行を置く。
         let headerTop = configuration.groupAvatars.isEmpty
             ? headerLabel.topAnchor.constraint(equalTo: topAnchor, constant: margins.top)
-            : headerLabel.topAnchor.constraint(equalTo: groupAvatarStack.bottomAnchor, constant: metrics.groupAvatarHeaderSpacing)
+            : headerLabel.topAnchor.constraint(equalTo: groupAvatarClip.bottomAnchor, constant: metrics.groupAvatarHeaderSpacing)
         let groupAvatarSizes = groupAvatarViews.flatMap { view in
             [view.widthAnchor.constraint(equalToConstant: metrics.groupAvatarSize), view.heightAnchor.constraint(equalToConstant: metrics.groupAvatarSize)]
         }
         variableConstraints = groupAvatarSizes + [
-            groupAvatarStack.topAnchor.constraint(equalTo: topAnchor, constant: margins.top),
-            groupAvatarStack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: textLeading),
-            groupAvatarStack.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -margins.trailing),
+            groupAvatarClip.topAnchor.constraint(equalTo: topAnchor, constant: margins.top),
+            groupAvatarClip.leadingAnchor.constraint(equalTo: leadingAnchor, constant: textLeading),
+            groupAvatarClip.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -margins.trailing),
             // 記号は、投稿のセルの名前の上の行と同じく、文字の列から決まった幅だけ離して置く。
             symbolView.trailingAnchor.constraint(equalTo: leadingAnchor, constant: textLeading - metrics.symbolSpacing),
             // 記号は、メンションなどの名前の上の行の記号と同じく、文字の1行目のベースラインに乗せる。

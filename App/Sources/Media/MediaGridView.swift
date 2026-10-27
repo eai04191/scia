@@ -20,7 +20,7 @@ final class MediaGridView: UIView {
         let tallestAspectRatio: Double
         let thumbnailPolicy: MediaThumbnailPolicy
         /// サムネイル同士のすき間。
-        let spacing: CGFloat
+        var spacing: CGFloat
         var arrangement: Arrangement = .grid
         /// 1つだけ出すとき、これより横長なものは左右を切り落とす。
         var widestAspectRatio = MediaGridView.widestAspectRatio

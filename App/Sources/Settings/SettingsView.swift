@@ -103,6 +103,13 @@ struct SettingsView: View {
                     Text("文字の大きさや余白、名前や時刻の表記、お気に入りとブーストの光を、プレビューを見ながら変えます。")
                 }
                 Section {
+                    NavigationLink("通知の見た目") {
+                        NotificationAppearanceEditorView(settings: settings)
+                    }
+                } footer: {
+                    Text("誰が何をしたかの行や、お気に入りやブーストで再掲する投稿の、文字の大きさと余白を変えます。")
+                }
+                Section {
                     Picker("最上部での新着の挿入", selection: $settings.insertionMotion) {
                         Text("自動").tag(InsertionMotion.followsSystem)
                         Text("動かして見せる").tag(InsertionMotion.animated)

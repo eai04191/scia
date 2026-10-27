@@ -162,12 +162,12 @@ struct TimelineMediaTests {
 
     /// メンションでは投稿と同じく行の幅いっぱいに並べ、自分の投稿へのお気に入りやブーストの通知では、小さなサムネイルを1列に並べる。
     @Test func notificationMediaArrangementDependsOnKind() throws {
-        let tuning = TuningStore(defaults: nil)
-        let vc = TimelineViewController(refresh: {}, tuning: tuning, emojiImages: .offline, mediaImages: .offline, settings: .isolated())
+        let settings = AppSettings.isolated()
+        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, settings: settings)
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let status = withMedia(base, [image("1", width: 100, height: 100)])
         let actor = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: base.account.avatar)
-        let side = tuning.value(of: TuningCatalog.notificationQuotedThumbnailSize)
+        let side = settings.value(of: NotificationAppearanceCatalog.quotedThumbnailSize)
 
         let mention = MastodonNotification(id: "1", type: .mention, createdAt: Date(timeIntervalSince1970: 0), account: actor, status: status)
         let post = try #require(vc.contentConfiguration(for: mention, base: .cell()) as? PostContentConfiguration)

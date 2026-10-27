@@ -1,4 +1,4 @@
-/// 設定の「投稿の見た目」で使う人が調整する数値。値は`AppSettings`が持つ。
+/// 設定の「投稿の見た目」と「通知の見た目」で使う人が調整する数値。値は`AppSettings`が持つ。
 public struct AppearanceValue: Sendable, Identifiable, Hashable {
     public enum Unit: Sendable, Hashable {
         /// 長さ。値をそのままptで使う。

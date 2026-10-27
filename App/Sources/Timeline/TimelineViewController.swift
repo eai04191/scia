@@ -481,14 +481,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = settings.appearanceValues
             _ = tuning.value(of: TuningCatalog.mediaThumbnailUpscaleTolerance)
             _ = tuning.value(of: TuningCatalog.xPostEmbeds)
-            _ = tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing)
-            _ = tuning.value(of: TuningCatalog.notificationHeaderDetailSpacing)
-            _ = tuning.value(of: TuningCatalog.notificationQuotedSpacing)
-            _ = tuning.value(of: TuningCatalog.notificationQuotedBodyLines)
-            _ = tuning.value(of: TuningCatalog.notificationQuotedThumbnailSize)
-            _ = tuning.value(of: TuningCatalog.notificationGroupAvatarSize)
-            _ = tuning.value(of: TuningCatalog.notificationGroupAvatarSpacing)
-            _ = tuning.value(of: TuningCatalog.notificationGroupAvatarHeaderSpacing)
             _ = tuning.value(of: TuningCatalog.reactionGlowMixesInOKLab)
             _ = tuning.value(of: TuningCatalog.reactionGlowIconRiseDelay)
             _ = tuning.value(of: TuningCatalog.reactionGlowHDRExposure)
@@ -1527,10 +1519,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 注意書き。開いているかは、この一覧で覚えている状態を当てる。ブーストなら元の投稿の注意書きにする。
     /// フィルターの警告で折りたたんでいれば、注意書きの代わりに警告を出す。警告を開くと、注意書きのある投稿は注意書きで折りたたんだ形に戻る。
-    func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> PostBodyContent.Spoiler? {
+    /// - Parameter font: 注意書きの文字の書体。nilなら本文の文字で描く。フィルターの警告には使わない。
+    func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil) -> PostBodyContent.Spoiler? {
         let warningTitles = filterWarnings.verdict(for: status).warningTitles
         guard warningTitles.isEmpty else { return postContentBuilder.filterWarning(titles: warningTitles, base: base) }
-        var spoiler = postContentBuilder.spoiler(of: status.displayed, base: base, color: color)
+        var spoiler = postContentBuilder.spoiler(of: status.displayed, base: base, color: color, font: font)
         spoiler?.isCollapsed = spoilerExpansion.isCollapsed(status)
         return spoiler
     }

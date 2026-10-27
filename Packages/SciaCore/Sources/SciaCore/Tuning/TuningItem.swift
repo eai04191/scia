@@ -125,80 +125,6 @@ public enum TuningCatalog {
         defaultValue: 36
     )
 
-    /// お気に入りやブーストの通知で、再掲する本文と、1列に並べるサムネイルのあいだ。
-    public static let notificationQuotedMediaSpacing = NumberTuning(
-        id: "notification.quotedMediaSpacing",
-        title: "通知で再掲する本文とサムネイルのあいだ（pt）",
-        range: 0...24,
-        step: 1,
-        defaultValue: 10
-    )
-
-    /// フォローなどの通知で、誰が何をしたかの行と、その下に添えるアカウント名のあいだ。
-    public static let notificationHeaderDetailSpacing = NumberTuning(
-        id: "notification.headerDetailSpacing",
-        title: "通知の行とアカウント名のあいだ（pt）",
-        range: 0...16,
-        step: 1,
-        defaultValue: 5
-    )
-
-    /// お気に入りやブーストの通知で、誰が何をしたかの行と、再掲する投稿のあいだの余白。
-    /// 本文がなく添付ファイルだけの投稿も、同じ余白で添付ファイルを置く。
-    public static let notificationQuotedSpacing = NumberTuning(
-        id: "notification.quotedSpacing",
-        title: "通知で再掲する投稿の上の余白（pt）",
-        range: 0...16,
-        step: 1,
-        defaultValue: 9
-    )
-
-    /// お気に入りやブーストの通知で、再掲する投稿の本文を切る行数。誰が何をしたかの行を主役にするため、本文は短く切る。
-    public static let notificationQuotedBodyLines = NumberTuning(
-        id: "notification.quotedBodyLines",
-        title: "通知で再掲する本文の行数",
-        range: 1...10,
-        step: 1,
-        defaultValue: 3
-    )
-
-    /// お気に入りやブーストの通知で、再掲する投稿の添付ファイルを1列に並べるサムネイルの一辺。
-    /// 行の幅に収まらない分は横にスクロールして見せるため、大きくしても並べられる数は減らない。
-    public static let notificationQuotedThumbnailSize = NumberTuning(
-        id: "notification.quotedThumbnailSize",
-        title: "通知で再掲するサムネイルの大きさ（pt）",
-        range: 24...100,
-        step: 2,
-        defaultValue: 40
-    )
-
-    /// まとめた通知で、誰が何をしたかの行の上に並べるアイコンの一辺。
-    public static let notificationGroupAvatarSize = NumberTuning(
-        id: "notification.groupAvatarSize",
-        title: "まとめた通知のアイコンの大きさ（pt）",
-        range: 16...48,
-        step: 1,
-        defaultValue: 28
-    )
-
-    /// まとめた通知で、並べるアイコン同士のすき間。
-    public static let notificationGroupAvatarSpacing = NumberTuning(
-        id: "notification.groupAvatarSpacing",
-        title: "まとめた通知のアイコンのすき間（pt）",
-        range: 0...16,
-        step: 1,
-        defaultValue: 4
-    )
-
-    /// まとめた通知で、並べたアイコンと、誰が何をしたかの行のあいだ。
-    public static let notificationGroupAvatarHeaderSpacing = NumberTuning(
-        id: "notification.groupAvatarHeaderSpacing",
-        title: "まとめた通知のアイコンと行のあいだ（pt）",
-        range: 0...16,
-        step: 1,
-        defaultValue: 6
-    )
-
     /// プロフィールを開いたあと、フォローのボタンの文字と最初の投稿の一覧を、読み込みが届いたときにフェードで入れる時間。0なら切り替える。
     public static let profileRevealDuration = NumberTuning(
         id: "profile.revealDuration",
@@ -1325,16 +1251,6 @@ public enum TuningCatalog {
             .number(reactionGlowIconRiseDelay),
             .toggle(reactionGlowMixesInOKLab),
             .number(reactionGlowDuration),
-        ]),
-        TuningSection(id: "notification", title: "通知の見た目", items: [
-            .number(notificationQuotedSpacing),
-            .number(notificationQuotedMediaSpacing),
-            .number(notificationHeaderDetailSpacing),
-            .number(notificationQuotedBodyLines),
-            .number(notificationQuotedThumbnailSize),
-            .number(notificationGroupAvatarSize),
-            .number(notificationGroupAvatarSpacing),
-            .number(notificationGroupAvatarHeaderSpacing),
         ]),
         TuningSection(id: "timeline.motion", title: "タイムラインの動き", items: [
             .number(scrollToTopDuration),

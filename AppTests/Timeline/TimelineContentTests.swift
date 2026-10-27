@@ -69,13 +69,13 @@ struct TimelineContentTests {
         #expect(content.body.string == makeViewController().body(of: status, base: .cell()).string)
     }
 
-    /// 再掲する本文は、チューニングの行数で切る。
-    @Test func quotedBodyIsTruncatedByTuning() throws {
+    /// 再掲する本文は、「通知の見た目」の行数で切る。
+    @Test func quotedBodyIsTruncatedBySetting() throws {
         let status = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let notification = MastodonNotification(id: "1", type: .reblog, createdAt: Date(timeIntervalSince1970: 0), account: status.account, status: status)
-        let tuning = TuningStore(defaults: nil)
-        tuning.setValue(5, for: TuningCatalog.notificationQuotedBodyLines)
-        let vc = TimelineViewController(refresh: {}, tuning: tuning, emojiImages: .offline, avatarImages: .offline, settings: .isolated())
+        let settings = AppSettings.isolated()
+        settings.setValue(5, for: NotificationAppearanceCatalog.quotedBodyLines)
+        let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
 
         let content = try #require(vc.contentConfiguration(for: notification, base: .cell()) as? NotificationContentConfiguration)
 

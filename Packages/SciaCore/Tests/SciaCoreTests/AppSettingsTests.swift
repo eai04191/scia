@@ -219,8 +219,23 @@ struct AppSettingsTests {
 
     /// 保存のキーが重なると、別の項目の値を読んでしまう。
     @Test func appearanceIDsAreUnique() {
-        let ids = AppearanceCatalog.values.map(\.id)
+        let ids = (AppearanceCatalog.values + NotificationAppearanceCatalog.values).map(\.id)
         #expect(Set(ids).count == ids.count)
+    }
+
+    /// 「通知の見た目」の数値も保存して読み直せ、まとめて既定に戻すと「投稿の見た目」の数値は残る。
+    @Test func notificationAppearancePersistsAndResetsAlone() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.setValue(12, for: NotificationAppearanceCatalog.quotedPollSpacing)
+        settings.setValue(4, for: AppearanceCatalog.bodyText)
+        let relaunched = AppSettings(defaults: defaults)
+        #expect(relaunched.value(of: NotificationAppearanceCatalog.quotedPollSpacing) == 12)
+        #expect(relaunched.isNotificationAppearanceModified)
+        relaunched.resetNotificationAppearance()
+        #expect(!relaunched.isNotificationAppearanceModified)
+        #expect(AppSettings(defaults: defaults).value(of: NotificationAppearanceCatalog.quotedPollSpacing) == NotificationAppearanceCatalog.quotedPollSpacing.defaultValue)
+        #expect(AppSettings(defaults: defaults).value(of: AppearanceCatalog.bodyText) == 4)
     }
 
     /// 名前の上の行は狭いので、ブーストした人は名前だけを既定にする。

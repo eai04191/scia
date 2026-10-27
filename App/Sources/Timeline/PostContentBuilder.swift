@@ -40,7 +40,6 @@ struct PostContentBuilder {
             timeFont: typography.font(.time),
             // 名前の上の行は、ブーストならブーストした人の名前の文字、返信と固定ならラベルの文字で描く。記号の大きさもこれに合わせる。
             contextFont: typography.font(status.reblog != nil ? .context : .contextLabel),
-            notificationSymbolFont: base.textProperties.font,
             visibilitySymbolSpacing: settings.value(of: AppearanceCatalog.visibilitySymbolSpacing),
             editedMarkSpacing: settings.value(of: AppearanceCatalog.editedMarkSpacing),
             filterNoteSpacing: settings.value(of: AppearanceCatalog.filterNoteSpacing),
@@ -172,10 +171,11 @@ struct PostContentBuilder {
     }
 
     /// 投稿の本文。注意書きがあっても本文を返し、折りたたむかどうかは`spoiler(of:base:color:)`で決める。
-    /// 文字の大きさは標準のリストの2行目の文字に揃え、色は読むものなのでいちばん濃い色を既定にする。
+    /// 文字の大きさは「投稿の見た目」の本文の文字にし、色は読むものなのでいちばん濃い色を既定にする。
     /// 引用ブロックは、RichTextRendererがこれより一段薄く描く。
-    func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> NSAttributedString {
-        bodyRenderer(of: status, base: base, color: color).render(.status(status))
+    /// - Parameter font: 本文の文字と違う大きさで描くときの書体。通知で再掲する投稿は「通知の見た目」の文字で描く。
+    func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil) -> NSAttributedString {
+        bodyRenderer(of: status, font: font ?? PostTypography(settings: settings).font(.body), color: color).render(.status(status))
     }
 
     /// 投稿のリンクカード。出さない投稿ならnil。
@@ -284,8 +284,8 @@ struct PostContentBuilder {
     }
 
     /// お気に入りやブーストの通知で再掲する投稿に、囲みの代わりに添える、引用のある投稿であることを示す1行。
-    func quoteNote() -> NSAttributedString {
-        noteText("引用した投稿", symbolName: "quote.bubble", color: .secondaryLabel, font: PostTypography(settings: settings).font(.filterNote))
+    func quoteNote(font: UIFont) -> NSAttributedString {
+        noteText("引用した投稿", symbolName: "quote.bubble", color: .secondaryLabel, font: font)
     }
 
     private func embed(
@@ -338,10 +338,11 @@ struct PostContentBuilder {
     }
 
     /// 投稿の注意書き。注意書きがなければnil。開いているかは一覧が覚えているため、ここでは折りたたんだ形で返す。
-    func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label) -> PostBodyContent.Spoiler? {
+    /// - Parameter font: 注意書きの文字の書体。nilなら本文の文字で描く。
+    func spoiler(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil) -> PostBodyContent.Spoiler? {
         guard !status.spoilerText.isEmpty else { return nil }
         return PostBodyContent.Spoiler(
-            text: bodyRenderer(of: status, base: base, color: color).render(.plain(status.spoilerText, emojis: status.emojis)),
+            text: bodyRenderer(of: status, font: font ?? PostTypography(settings: settings).font(.body), color: color).render(.plain(status.spoilerText, emojis: status.emojis)),
             isCollapsed: true,
             padding: settings.value(of: AppearanceCatalog.spoilerPadding),
             bodySpacing: settings.value(of: AppearanceCatalog.spoilerBodySpacing),
@@ -383,10 +384,6 @@ struct PostContentBuilder {
     }
 
     /// 本文と注意書きは投稿した人が書いたものなので、投稿の言語で描く。
-    private func bodyRenderer(of status: Status, base: UIListContentConfiguration, color: UIColor) -> RichTextRenderer {
-        bodyRenderer(of: status, font: PostTypography(settings: settings).font(.body), color: color)
-    }
-
     private func bodyRenderer(of status: Status, font: UIFont, color: UIColor) -> RichTextRenderer {
         RichTextRenderer(
             font: font,

@@ -12,9 +12,10 @@ struct PostContentConfiguration: UIContentConfiguration {
         let symbolName: String
         /// 通知では種類ごとの色で描く。
         var symbolColor: UIColor = .secondaryLabel
-        /// 通知の種類を示す記号。誰が何をしたかの行を主役にする通知の記号と縦に並ぶため、同じ大きさで描く。
+        /// 通知の種類を示す記号の大きさを決める文字。通知の種類を示す記号でなければnil。
+        /// 通知の記号は、誰が何をしたかの行を主役にする通知の記号と縦に並ぶため、その行の文字で描き、文字の1行目のベースラインに乗せる。
         /// ブーストや固定の記号は、小さい文字の補足の行に釣り合うよう、文字より一段小さく描く。
-        var isNotificationSymbol = false
+        var notificationSymbolFont: UIFont?
         /// ブーストした人のアイコン。
         let avatar: AvatarView.Content?
         let text: NSAttributedString
@@ -134,9 +135,6 @@ struct PostContentConfiguration: UIContentConfiguration {
         var timeFont: UIFont
         /// 名前の上の行の文字。記号の大きさもこれに合わせる。
         var contextFont: UIFont
-        /// 通知の種類を示す記号の大きさを決める文字。誰が何をしたかの行を主役にする通知の記号と同じ大きさに揃えるため、
-        /// 名前の上の行の小さい文字ではなく、本文と同じ大きさの文字にする。
-        var notificationSymbolFont: UIFont
         /// 時刻の前の公開範囲の記号と、時刻のすき間。
         var visibilitySymbolSpacing: CGFloat = 4
         /// 時刻の前の編集済みの「*」と、時刻のすき間。
@@ -330,8 +328,8 @@ final class PostContentView: UIView, UIContentView {
         contextLabel.emojiImages = configuration.emojiImages
         contextLabel.attributedText = context?.text
         contextLabel.fadeWidth = metrics.nameFadeWidth
-        let symbolConfiguration = if context?.isNotificationSymbol == true {
-            UIImage.SymbolConfiguration(font: metrics.notificationSymbolFont)
+        let symbolConfiguration = if let font = context?.notificationSymbolFont {
+            UIImage.SymbolConfiguration(font: font)
         } else {
             UIImage.SymbolConfiguration(font: metrics.contextFont, scale: .small)
         }
@@ -626,7 +624,7 @@ final class PostContentView: UIView, UIContentView {
                 // 記号は本文の列から決まった幅だけ離して置き、ブーストした人のアイコンと名前は本文の列に揃える。
                 // アイコンの列の右端に揃えると、細い記号では文字とのあいだが間延びして見えるため。
                 contextIcon.trailingAnchor.constraint(equalTo: textGuide.leadingAnchor, constant: -metrics.contextSymbolSpacing),
-                Self.symbolVerticalConstraint(contextIcon, beside: contextLabel, onBaseline: context.isNotificationSymbol),
+                Self.symbolVerticalConstraint(contextIcon, beside: contextLabel, onBaseline: context.notificationSymbolFont != nil),
                 nameRow.topAnchor.constraint(equalTo: contextGuide.bottomAnchor, constant: metrics.contextSpacing),
             ]
             if context.avatar != nil {

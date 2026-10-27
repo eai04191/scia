@@ -17,12 +17,14 @@ extension TimelineViewController {
         }
     }
 
-    /// メンションなど、相手が書いた投稿を読む通知。ホームの投稿と同じ見た目にし、名前の上に誰が何をしたかの行を足す。
+    /// メンションなど、相手が書いた投稿を読む通知。投稿として扱い、投稿の部品は「投稿の見た目」で描く。
+    /// 名前の上に足す、誰が何をしたかの行だけは、通知のための部品なので「通知の見た目」で描く。
     /// 投稿した人は通知を送った人と同じで、下の名前の行にアイコンが出るため、上の行にはアイコンを出さない。
     private func postConfiguration(for notification: MastodonNotification, status: Status, itemID: ItemID?, base: UIListContentConfiguration) -> PostContentConfiguration {
         var configuration = contentConfiguration(for: status, itemID: itemID, base: base)
         let appearance = NotificationAppearance(notification.type)
-        let renderer = RichTextRenderer(font: base.secondaryTextProperties.font, textColor: .secondaryLabel, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
+        let typography = PostTypography(settings: settings)
+        let renderer = RichTextRenderer(font: typography.font(.notificationContext), textColor: .secondaryLabel, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
         // 言い回しはアプリの文言なので、言語を外し、ウィンドウに付けたアプリの言語で描く。
         func phrase(_ string: String) -> NSAttributedString {
             let rendered = NSMutableAttributedString(attributedString: renderer.render(.plain(string, emojis: [])))
@@ -37,39 +39,46 @@ extension TimelineViewController {
         configuration.context = PostContentConfiguration.Context(
             symbolName: appearance.symbolName,
             symbolColor: appearance.color,
-            isNotificationSymbol: true,
+            notificationSymbolFont: typography.font(.notificationHeader),
             avatar: nil,
             text: text,
             accessibilityText: text.string,
             accountName: notification.account.displayNameOrUsername
         )
+        configuration.metrics.contextSymbolSpacing = settings.value(of: NotificationAppearanceCatalog.symbolSpacing)
+        configuration.metrics.contextSpacing = settings.value(of: NotificationAppearanceCatalog.contextSpacing)
         configuration.onOpenContextAccount = { [weak self] in self?.onOpenProfile?(notification.account) }
         return configuration
     }
 
     /// お気に入りやブーストなど、自分の投稿の再掲になる通知。誰が何をしたかの行を目立たせ、本文は控えめな色で短く切り、
     /// 添付ファイルは小さなサムネイルを1列だけ並べる。引用は囲みを出さず、引用のある投稿であることを示す1行にする。
+    /// 再掲の縮めた形は通知のためのものなので、大きさと余白は「通知の見た目」で決める。注意書きのボックスや投票の部品は、投稿と同じ部品を使う。
     /// - Parameter showsPollResults: 投票を結果の形で足す。投票はできない形にし、選択肢は押下を受けない。
     private func quotedConfiguration(for notification: MastodonNotification, status: Status, showsPollResults: Bool, itemID: ItemID?, base: UIListContentConfiguration) -> NotificationContentConfiguration {
+        typealias N = NotificationAppearanceCatalog
         let shown = status.displayed
+        let typography = PostTypography(settings: settings)
+        let bodyFont = typography.font(.notificationQuotedBody)
         var media = mediaContent(for: status)
-        media?.arrangement = .strip(side: tuning.value(of: TuningCatalog.notificationQuotedThumbnailSize))
+        media?.arrangement = .strip(side: settings.value(of: N.quotedThumbnailSize))
+        media?.spacing = settings.value(of: N.quotedThumbnailSpacing)
         var configuration = headerConfiguration(
             for: notification,
             body: PostBodyContent(
-                spoiler: spoiler(of: status, base: base, color: .secondaryLabel),
-                text: body(of: shown, base: base, color: .secondaryLabel),
-                maximumLines: Int(tuning.value(of: TuningCatalog.notificationQuotedBodyLines)),
+                spoiler: spoiler(of: status, base: base, color: .secondaryLabel, font: bodyFont),
+                text: postContentBuilder.body(of: shown, base: base, color: .secondaryLabel, font: bodyFont),
+                maximumLines: Int(settings.value(of: N.quotedBodyLines)),
                 media: media,
-                mediaSpacing: tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing),
+                mediaSpacing: settings.value(of: N.quotedMediaSpacing),
                 poll: showsPollResults ? pollContent(for: shown, allowsVoting: false, base: base) : nil,
-                pollSpacing: tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing),
+                pollSpacing: settings.value(of: N.quotedPollSpacing),
                 hashtagAccount: shown.account,
                 // 再掲では引用の囲みを出さず、引用のある投稿であることだけを、一番下の1行で示す。
-                filterNote: shown.quote == nil ? nil : postContentBuilder.quoteNote(),
-                filterNoteSpacing: tuning.value(of: TuningCatalog.notificationQuotedMediaSpacing)
+                filterNote: shown.quote == nil ? nil : postContentBuilder.quoteNote(font: typography.font(.notificationQuotedNote)),
+                filterNoteSpacing: settings.value(of: N.quotedNoteSpacing)
             ),
-            bodySpacing: tuning.value(of: TuningCatalog.notificationQuotedSpacing),
+            bodySpacing: settings.value(of: N.quotedSpacing),
             base: base
         )
         configuration.reactionGlow = postContentBuilder.reactionGlow(for: shown)
@@ -86,22 +95,22 @@ extension TimelineViewController {
         return configuration
     }
 
-    /// フォローなど、誰が何をしたかの行だけの通知。誰からかが分かるよう、名前の下にアカウントを添える。
-    /// アカウントは誰が何をしたかの行の続きなので、再掲する投稿より詰めて置く。
-    /// まとめた行では、並べたアイコンで誰からかが分かるため、アカウントを添えない。
+    /// フォローなど、誰が何をしたかの行だけの通知。誰からかが分かるよう、名前の下にハンドルを添える。
+    /// ハンドルは誰が何をしたかの行の続きなので、再掲する投稿より詰めて置く。
+    /// まとめた行では、並べたアイコンで誰からかが分かるため、ハンドルを添えない。
     private func headerOnlyConfiguration(for notification: MastodonNotification, base: UIListContentConfiguration) -> NotificationContentConfiguration {
         if notification.isGroup {
             return headerConfiguration(for: notification, body: PostBodyContent(text: NSAttributedString(), mediaSpacing: 0), bodySpacing: 0, base: base)
         }
         let acct = NSAttributedString(string: "@\(notification.account.acct)", attributes: [
-            .font: base.secondaryTextProperties.font,
+            .font: PostTypography(settings: settings).font(.notificationAccount),
             .foregroundColor: UIColor.secondaryLabel,
         ])
         return headerConfiguration(
             for: notification,
-            // アカウントの下には添付ファイルを置かないため、本文と添付ファイルのあいだの余白は使われない。
+            // ハンドルの下には添付ファイルを置かないため、本文と添付ファイルのあいだの余白は使われない。
             body: PostBodyContent(text: acct, mediaSpacing: 0),
-            bodySpacing: tuning.value(of: TuningCatalog.notificationHeaderDetailSpacing),
+            bodySpacing: settings.value(of: NotificationAppearanceCatalog.accountSpacing),
             base: base
         )
     }
@@ -112,8 +121,9 @@ extension TimelineViewController {
         bodySpacing: CGFloat,
         base: UIListContentConfiguration
     ) -> NotificationContentConfiguration {
+        typealias N = NotificationAppearanceCatalog
         let appearance = NotificationAppearance(notification.type)
-        let font = base.textProperties.font
+        let font = PostTypography(settings: settings).font(.notificationHeader)
         let nameRenderer = RichTextRenderer(font: font, textColor: base.textProperties.color, emojiImages: emojiImages, language: settings.glyphLanguageIdentifier())
         // 言い回しはアプリの文言なので、言語を付けず、ウィンドウに付けたアプリの言語で描く。
         let phraseAttributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: UIColor.secondaryLabel]
@@ -139,15 +149,16 @@ extension TimelineViewController {
             header: header,
             body: body,
             metrics: NotificationContentConfiguration.Metrics(
+                // 行の余白とアイコンの列は、同じ一覧に並ぶメンションなどの投稿の行と文字の列を揃えるため、「投稿の見た目」に従う。
                 margins: settings.rowMargins,
                 avatarSize: settings.value(of: AppearanceCatalog.avatarSize),
                 headerFont: font,
                 bodySpacing: bodySpacing,
-                symbolSpacing: settings.value(of: AppearanceCatalog.contextSymbolSpacing),
+                symbolSpacing: settings.value(of: N.symbolSpacing),
                 avatarSpacing: settings.value(of: AppearanceCatalog.avatarSpacing),
-                groupAvatarSize: tuning.value(of: TuningCatalog.notificationGroupAvatarSize),
-                groupAvatarSpacing: tuning.value(of: TuningCatalog.notificationGroupAvatarSpacing),
-                groupAvatarHeaderSpacing: tuning.value(of: TuningCatalog.notificationGroupAvatarHeaderSpacing)
+                groupAvatarSize: settings.value(of: N.groupAvatarSize),
+                groupAvatarSpacing: settings.value(of: N.groupAvatarSpacing),
+                groupAvatarHeaderSpacing: settings.value(of: N.groupAvatarHeaderSpacing)
             ),
             mediaImages: mediaImages,
             avatarImages: avatarImages,
@@ -172,19 +183,27 @@ extension TimelineViewController {
 }
 
 extension TimelineViewController {
-    /// 通知を送った人の名前の前に置く、文字と同じ高さのアイコン。届くまでは同じ大きさの灰色で場所を取っておく。
-    /// サーバーがアイコンのURLを返さなかったときも、灰色のままにする。
+    /// 通知を送った人の名前の前に置く、文字の行に合わせた大きさのアイコン。届くまでは同じ大きさの灰色で場所を取っておく。
+    /// サーバーがアイコンのURLを返さなかったときも、灰色のままにする。大きさを0にしたときは、アイコンもすき間も置かない。
     private func avatarAttachment(of account: Account, font: UIFont) -> NSAttributedString {
-        let side = font.lineHeight
+        let side = headerAvatarSide(font: font)
+        guard side > 0 else { return NSAttributedString() }
         let content = avatarContent(of: account)
-        let image = notificationAvatarKey(of: account, font: font).flatMap(avatarImages.requestImage(for:))
+        let image = notificationAvatarKey(of: account, side: side).flatMap(avatarImages.requestImage(for:))
         let attachment = NSTextAttachment()
         attachment.image = Self.shapedAvatar(image, side: side, shape: content.shape, cornerRatio: content.cornerRatio)
         attachment.bounds = CGRect(x: 0, y: font.descender, width: side, height: side)
         let string = NSMutableAttributedString(attachment: attachment)
-        // アイコンと名前のあいだを空ける。
-        string.append(NSAttributedString(string: " ", attributes: [.font: font]))
+        // 画像の添付の文字には字送りが効かないので、後ろに空白を置き、空白の幅を差し引いた字送りで、すき間を設定の値にする。
+        let spaceWidth = (" " as NSString).size(withAttributes: [.font: font]).width
+        let spacing = settings.value(of: NotificationAppearanceCatalog.headerAvatarNameSpacing)
+        string.append(NSAttributedString(string: " ", attributes: [.font: font, .kern: spacing - spaceWidth]))
         return string
+    }
+
+    /// 名前の前に置くアイコンの一辺。
+    private func headerAvatarSide(font: UIFont) -> CGFloat {
+        font.lineHeight * settings.value(of: NotificationAppearanceCatalog.headerAvatarScale)
     }
 
     /// 通知の組み方ごとに、`contentConfiguration(for:itemID:base:)`が描くアイコン。
@@ -195,21 +214,22 @@ extension TimelineViewController {
         }
         guard NotificationAppearance(notification.type).phrase.includesName else { return [] }
         if notification.isGroup {
-            let side = tuning.value(of: TuningCatalog.notificationGroupAvatarSize)
+            let side = settings.value(of: NotificationAppearanceCatalog.groupAvatarSize)
+            guard side > 0 else { return [] }
             return notification.sampleAccounts.compactMap { account in
                 let content = avatarContent(of: account)
                 return content.url.map { AvatarView.key(url: $0, animates: content.animates, side: side, scale: traitCollection.displayScale) }
             }
         }
-        // 行の中身は、セルの`defaultContentConfiguration()`の文字の大きさで組む。一覧のセルはどれも`cell()`の見た目になる。
-        let font = UIListContentConfiguration.cell().textProperties.font
-        return notificationAvatarKey(of: notification.account, font: font).map { [$0] } ?? []
+        let side = headerAvatarSide(font: PostTypography(settings: settings).font(.notificationHeader))
+        guard side > 0 else { return [] }
+        return notificationAvatarKey(of: notification.account, side: side).map { [$0] } ?? []
     }
 
     /// 名前の前に差し込むアイコンの画像。文字に描き込むため、動くアイコンでも先頭のコマで止める。URLがなければnil。
-    func notificationAvatarKey(of account: Account, font: UIFont) -> AvatarImageStore.Key? {
+    private func notificationAvatarKey(of account: Account, side: CGFloat) -> AvatarImageStore.Key? {
         avatarContent(of: account).url.map { url in
-            AvatarView.key(url: url, animates: false, side: font.lineHeight, scale: traitCollection.displayScale)
+            AvatarView.key(url: url, animates: false, side: side, scale: traitCollection.displayScale)
         }
     }
 
