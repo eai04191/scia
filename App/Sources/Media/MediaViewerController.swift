@@ -123,6 +123,8 @@ final class MediaViewerController: UIViewController {
         let doubleTapZoomDuration: TimeInterval
         /// 一覧で重ねた写真とのあいだの開閉で、写真の白いフチを細くしきる（閉じるときは太くし始める）動きの進み具合。0から1。
         var paperBorderPortion: Double = 1
+        /// 開く途中で左右にめくったときに、途中の見え方を薄くして、開ききった見え方へ移す時間。
+        var interruptedOpenFadeDuration: TimeInterval = 0.2
     }
 
     /// 投稿欄で選んだメディアを開いたときの操作。ビューアは投稿欄を知らず、メニューと代替テキストの書き終わりをここから渡す。
@@ -452,6 +454,9 @@ final class MediaViewerController: UIViewController {
     /// 動かしている間はページを空のマスクで隠すため、描き写さないと、つかんだ瞬間に部品が1コマで消える。
     /// 部品は動く画像と位置が合わなくなるため、ボタン類のように指の位置で濃さを決めず、始めたところから薄くして消す。
     private var pageOverlayCopy: UIView?
+
+    /// 開く途中で左右にめくったときに、止めた動きの途中の見え方を描き写した像。薄くし終えたらnil。
+    private(set) var interruptedMotionCopy: UIView?
 
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
@@ -1178,6 +1183,8 @@ extension MediaViewerController {
     }
 
     /// 開いている途中や戻している途中なら、動きを終えて開ききった状態にする。左右の切り替えなど、ほかの操作を優先するため。
+    /// 途中の見え方（小さい複製と透けた背景）は、画面を描き写した像に残して薄くし、開ききった見え方へ移す。
+    /// 複製はページと一緒に動かせないため、複製を開ききった位置へ動かし続けることはしない。
     fileprivate func completeMotionImmediately() {
         switch motion {
         case .opening(let driver):
@@ -1187,8 +1194,41 @@ extension MediaViewerController {
         case .idle, .dragging, .closing:
             return
         }
+        // 開く途中は、複製の一部を一覧の中にも描いているため、ビューアではなくウインドウごと描き写す。
+        // チップの列は、開ききった位置へ本物を動かすので、写し込まない。隠して描き直してから描き写す。
+        let interrupted = view.window.flatMap { window in
+            let column = overlay.flatMap { $0.superview === window && !$0.isHidden ? $0 : nil }
+            column?.isHidden = true
+            defer { column?.isHidden = false }
+            return window.snapshotView(afterScreenUpdates: column != nil).map { (window, $0) }
+        }
         setVisibility(1)
         finishOpen()
+        if let (window, copy) = interrupted {
+            fadeOutInterruptedMotion(copy, in: window)
+        }
+    }
+
+    /// 止めた動きの途中の像を、開ききった見え方の手前に重ねて薄くする。ウインドウに載せるので、薄くしている間に閉じても、閉じる動きの奥で薄くし続ける。
+    private func fadeOutInterruptedMotion(_ copy: UIView, in window: UIWindow) {
+        copy.frame = window.bounds
+        // めくり始めた指や、続けてつかむ指を、像の奥のページに通す。
+        copy.isUserInteractionEnabled = false
+        // チップの列は手前に残す。
+        if let overlay, overlay.superview === window {
+            window.insertSubview(copy, belowSubview: overlay)
+        } else {
+            window.addSubview(copy)
+        }
+        interruptedMotionCopy = copy
+        UIView.animateSmoothly(duration: timing.interruptedOpenFadeDuration) {
+            copy.alpha = 0
+        } completion: { [weak self] in
+            copy.removeFromSuperview()
+            if self?.interruptedMotionCopy === copy {
+                self?.interruptedMotionCopy = nil
+            }
+        }
     }
 
     /// ページが描いている枠を画像にする。
@@ -2801,7 +2841,8 @@ extension MediaViewerController.Timing {
             videoControlsHideDelay: tuning.value(of: TuningCatalog.mediaVideoControlsHideDelay),
             videoSkipEffectDuration: tuning.value(of: TuningCatalog.mediaVideoSkipEffectDuration),
             doubleTapZoomDuration: tuning.value(of: TuningCatalog.mediaDoubleTapZoomDuration),
-            paperBorderPortion: tuning.value(of: TuningCatalog.mediaPaperBorderPortion)
+            paperBorderPortion: tuning.value(of: TuningCatalog.mediaPaperBorderPortion),
+            interruptedOpenFadeDuration: tuning.value(of: TuningCatalog.mediaInterruptedOpenFadeDuration)
         )
     }
 }

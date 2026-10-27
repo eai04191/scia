@@ -1371,6 +1371,53 @@ struct MediaViewerControllerTests {
         harness.frames.runUntilStopped()
     }
 
+    /// 開く途中で左右にめくり始めたら、開ききった見え方に移しつつ、途中の見え方を描き写した像を手前に残して薄くする。
+    /// 像を残さないと、半分開いた小さい画像と透けた背景が、画面いっぱいの画像と黒い背景に1コマで替わる。
+    @Test func pagingWhileOpeningFadesOutInterruptedMotion() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let tile = MediaTileView(store: .offline)
+        tile.frame = CGRect(x: 20, y: 200, width: 160, height: 90)
+        harness.viewController.view.addSubview(tile)
+        let attachments = ["1", "2"].map { id in
+            MediaAttachment(
+                id: id,
+                type: .image,
+                url: nil,
+                previewUrl: nil,
+                meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900)),
+                blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+            )
+        }
+        tile.apply(attachments[0], hiddenCount: 0, isCovered: false, policy: .offline)
+        MediaViewerController.present(
+            attachments: attachments,
+            startIndex: 0,
+            store: .offline,
+            dragToDismiss: drag,
+            timing: timing,
+            from: harness.viewController,
+            sourceTile: { _ in tile },
+            onDismiss: {},
+            frameSource: harness.frames
+        )
+        let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
+        try await waitUntil { viewer.isContentHiddenForTransition }
+        harness.frames.step()
+        harness.frames.step()
+        #expect(viewer.isMoving)
+
+        viewer.pageViewController(UIPageViewController(), willTransitionTo: [])
+        #expect(!viewer.isMoving, "めくり始めても開く動きが残っています")
+        let copy = try #require(viewer.interruptedMotionCopy, "途中の見え方を残していません")
+        #expect(copy.window === viewer.view.window && copy.frame == viewer.view.window?.bounds)
+        #expect(!copy.isUserInteractionEnabled, "めくる指を像が受けます")
+
+        viewer.close()
+        try await waitUntil { harness.viewController.presentedViewController == nil }
+        harness.frames.runUntilStopped()
+    }
+
     /// 起点がほかの添付ファイルを描いていても（一覧で重ねた3枚目の写真が4枚目の起点になるとき）、起点の上に重なっている写真は複製の手前に重ねる。
     /// 画像を使わないことと、重なっているビューを重ねないことは別で、重ねないと戻る画像が手前の写真を覆う。
     @Test func sourceOverlapIsKeptWhenSourceShowsOtherAttachment() async throws {

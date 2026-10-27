@@ -662,6 +662,15 @@ public enum TuningCatalog {
         defaultValue: 0.1
     )
 
+    /// ビューアを開く途中で左右にめくったときに、途中の見え方（小さい画像と透けた背景）を薄くして、開ききった見え方へ移す時間。
+    public static let mediaInterruptedOpenFadeDuration = NumberTuning(
+        id: "media.interruptedOpenFadeDuration",
+        title: "開く途中でめくったときに、途中の見え方を薄くする時間（秒）",
+        range: 0.05...1,
+        step: 0.05,
+        defaultValue: 0.2
+    )
+
     /// ビューアで画像をダブルタップして拡大するときと、元の大きさへ戻すときの時間。
     public static let mediaDoubleTapZoomDuration = NumberTuning(
         id: "media.doubleTapZoomDuration",
@@ -1652,6 +1661,7 @@ public enum TuningCatalog {
             .number(mediaPaperBorderPortion),
             .number(mediaCloseDuration),
             .number(mediaDragCloseBounce),
+            .number(mediaInterruptedOpenFadeDuration),
         ]),
         TuningSection(id: "media.zoom", title: "ビューア：拡大", items: [
             .number(mediaDoubleTapZoomDuration),
