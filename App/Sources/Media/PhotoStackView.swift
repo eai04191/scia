@@ -13,6 +13,8 @@ class PhotoStackView: UIView {
     private var rotations: [CGFloat]
     /// 写真ごとの、1枚目の中心からずらす量。先頭（1枚目）は0。
     private var offsets: [CGPoint]
+    /// 写真ごとの大きさの倍率。
+    private var scales: [CGFloat]
     /// 写真同士の影の濃さ。
     private var betweenShadowOpacity: Float = 0
 
@@ -42,6 +44,7 @@ class PhotoStackView: UIView {
         photos = (0..<photoCount).map { _ in StackedPhotoView(store: store) }
         rotations = Array(repeating: 0, count: photoCount)
         offsets = Array(repeating: .zero, count: photoCount)
+        scales = Array(repeating: 1, count: photoCount)
         super.init(frame: .zero)
         stackShadow.isUserInteractionEnabled = false
         addSubview(stackShadow)
@@ -55,14 +58,15 @@ class PhotoStackView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 写真ごとの置き方。先頭が1枚目で、ずらす量はptで渡す。1枚目のずらす量は使わない。足りない写真は、回さずずらさずに置く。
+    /// 写真ごとの置き方。先頭が1枚目で、ずらす量はptで渡す。1枚目のずらす量は使わない。足りない写真は、回さずずらさず縮めずに置く。
     func setPlacements(_ placements: [PhotoStackPlacement]) {
         let degree = CGFloat.pi / 180
         for (index, photo) in photos.enumerated() {
             let placement = index < placements.count ? placements[index] : PhotoStackPlacement(rotation: 0)
             rotations[index] = placement.rotation * degree
             offsets[index] = index == 0 ? .zero : CGPoint(x: placement.offsetX, y: placement.offsetY)
-            photo.transform = CGAffineTransform(rotationAngle: rotations[index])
+            scales[index] = placement.scale
+            photo.transform = CGAffineTransform(rotationAngle: rotations[index]).scaledBy(x: scales[index], y: scales[index])
         }
         invalidateIntrinsicContentSize()
         setNeedsLayout()
@@ -94,9 +98,9 @@ class PhotoStackView: UIView {
         let half = photoSide / 2
         let placements = photos.indices
             .filter { $0 == 0 || !photos[$0].isHidden }
-            .map { (offset: offsets[$0].x, rotation: rotations[$0]) }
+            .map { (offset: offsets[$0].x, rotation: rotations[$0], scale: scales[$0]) }
         let extents = placements.map { placement in
-            let reach = half * (abs(cos(placement.rotation)) + abs(sin(placement.rotation)))
+            let reach = half * placement.scale * (abs(cos(placement.rotation)) + abs(sin(placement.rotation)))
             return (placement.offset - reach, placement.offset + reach)
         }
         return (extents.map(\.0).min() ?? -half, extents.map(\.1).max() ?? half)
@@ -195,6 +199,25 @@ final class StackedPhotoView: UIView {
     private let betweenShadowClip = UIView()
     private let betweenShadow = CALayer()
     private let failureMark = UIImageView(image: UIImage(systemName: "exclamationmark.circle.fill"))
+    /// 写真全体を暗くする。一覧で傾けずに重ねるとき、奥の写真ほど暗くする。
+    private let dimView = UIView()
+
+    /// 写真全体を暗くする度合い。0で暗くしない。
+    var dimming: CGFloat = 0 {
+        didSet {
+            dimView.alpha = dimming
+            tile.viewerAppearance.dimming = dimming
+        }
+    }
+
+    /// 中の画像を描く。falseなら紙（白い縁）だけを描く。一覧で傾けずに重ねるとき、下からのぞく奥の写真に、中身の色の帯を並べないため。
+    /// 写真としてはそこにあり、ビューアの開閉の起点にもなるので、サムネイルは消さずに見えなくするだけにする。
+    var showsContent = true {
+        didSet {
+            tile.alpha = showsContent ? 1 : 0
+            tile.viewerAppearance.contentOpacity = showsContent ? 1 : 0
+        }
+    }
 
     /// フチごと隠している。ビューアが一覧の写真とのあいだで画像を動かしている間に使う。
     /// 透明にすると触れても反応しなくなるため、サムネイルと同じく空のマスクで隠す。
@@ -234,6 +257,12 @@ final class StackedPhotoView: UIView {
         betweenShadowClip.layer.cornerCurve = .continuous
         betweenShadowClip.layer.addSublayer(betweenShadow)
         addSubview(betweenShadowClip)
+        dimView.isUserInteractionEnabled = false
+        dimView.backgroundColor = .black
+        dimView.alpha = 0
+        dimView.layer.cornerRadius = Self.cornerRadius
+        dimView.layer.cornerCurve = .continuous
+        addSubview(dimView)
         // 感嘆符を白、円を赤で描き、どんなサムネイルの上でも見分けられるようにする。列のエラーのアイコンと同じ。
         failureMark.preferredSymbolConfiguration = UIImage.SymbolConfiguration(pointSize: 12).applying(UIImage.SymbolConfiguration(paletteColors: [.white, .systemRed]))
         failureMark.isHidden = true
@@ -266,6 +295,7 @@ final class StackedPhotoView: UIView {
         tile.frame = bounds.insetBy(dx: Self.border, dy: Self.border)
         betweenShadowClip.frame = bounds
         betweenShadow.frame = bounds
+        dimView.frame = bounds
         let mark = failureMark.intrinsicContentSize
         failureMark.frame = CGRect(x: bounds.maxX - mark.width / 2 - 1, y: bounds.maxY - mark.height / 2 - 1, width: mark.width, height: mark.height)
     }

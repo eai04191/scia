@@ -1289,7 +1289,7 @@ struct MediaViewerControllerTests {
         // 開く間の複製は、ビューアの画面に載せている。
         let openingFrame = viewer.view.convert(opening.unrotatedFrame, to: window)
         #expect(abs(opening.rotation - rotation) < 0.001, "開き始めの角度が起点と違います: \(opening.rotation)")
-        #expect(opening.border == border, "開き始めに写真のフチを付けていません")
+        #expect(abs(opening.border - border) < 0.001, "開き始めに写真のフチを付けていません: \(opening.border)")
         #expect(abs(openingFrame.width - source.width) < 0.5 && abs(openingFrame.midX - source.midX) < 0.5 && abs(openingFrame.midY - source.midY) < 0.5, "開き始めの枠が起点と違います: \(openingFrame) \(source)")
         // 画像が大きくなってからも細い線が残らないよう、前半で細くしきる。大きさの進み具合が6割を超えたら、フチは残っていない。
         let targetWidth = viewer.view.bounds.width
@@ -1354,6 +1354,56 @@ struct MediaViewerControllerTests {
         #expect(viewer.showsSourceOverlap, "起点の上に重なっている写真を重ねていません")
         harness.frames.runUntilStopped()
         viewer.dismiss(animated: false)
+    }
+
+    /// 縮めて置いた起点（一覧で傾けずに重ねた奥の写真）へは、縮めた大きさと、同じ倍率で細くしたフチへ閉じる。
+    /// 起点が中身を描かず暗くしていれば、着くまでにその見え方へ移す。着いたところで画像の帯が急に紙に替わらないようにする。
+    @Test func closingFollowsScaleOfSource() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let scale: CGFloat = 0.8
+        let border: CGFloat = 10
+        let photo = UIView(frame: CGRect(x: 100, y: 200, width: 120, height: 120))
+        photo.transform = CGAffineTransform(scaleX: scale, y: scale)
+        harness.viewController.view.addSubview(photo)
+        let tile = MediaTileView(store: .offline)
+        tile.frame = CGRect(x: border, y: border, width: 100, height: 100)
+        tile.paperBorder = (border, 12)
+        photo.addSubview(tile)
+        let attachment = MediaAttachment(
+            id: "1",
+            type: .image,
+            url: nil,
+            previewUrl: nil,
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900)),
+            blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+        )
+        tile.apply(attachment, hiddenCount: 0, isCovered: false, policy: .offline)
+        MediaViewerController.present(
+            attachments: [attachment],
+            startIndex: 0,
+            store: .offline,
+            dragToDismiss: drag,
+            timing: timing,
+            from: harness.viewController,
+            sourceTile: { _ in tile },
+            onDismiss: {},
+            frameSource: harness.frames
+        )
+        let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
+        try await waitUntil { viewer.isContentHiddenForTransition }
+        harness.frames.runUntilStopped()
+        tile.viewerAppearance = (0, 0.12)
+        viewer.close()
+        try await waitUntil { harness.viewController.presentedViewController == nil }
+        harness.frames.runUntilStopped()
+        let window = try #require(tile.window)
+        let expected = tile.convert(tile.bounds, to: window).insetBy(dx: -border * scale, dy: -border * scale)
+        let closed = viewer.morphPlacement
+        #expect(abs(closed.unrotatedFrame.width - expected.width) < 0.5 && abs(closed.unrotatedFrame.midY - expected.midY) < 0.5, "閉じ終わりの枠が縮めた写真と違います: \(closed.unrotatedFrame) \(expected)")
+        #expect(abs(closed.border - border * scale) < 0.1, "閉じ終わりのフチが縮めた太さと違います: \(closed.border)")
+        #expect(closed.contentOpacity < 0.01, "閉じ終わりに中身が残っています: \(closed.contentOpacity)")
+        #expect(abs(closed.dimming - 0.12) < 0.01, "閉じ終わりの暗さが起点と違います: \(closed.dimming)")
     }
 
     /// 開く途中は、バーの下のサムネイルと同じ見え方から始めるため、サムネイルを含む一覧の行の中にも複製を置く。開ききったら外し、最前面の複製のマスクも外す。

@@ -52,13 +52,15 @@ final class MediaClosingFlight {
     private let startRadius: CGFloat
     /// 閉じ始めの複製の白いフチの幅。ふつうは0で、開く途中から閉じるときだけ残っている。
     private let startBorder: CGFloat
+    /// 閉じ始めの複製の、中身の濃さと暗さ。
+    private let startAppearance: (contentOpacity: CGFloat, dimming: CGFloat)
     /// 写真の白いフチを太くし始めてから着くまでの、動きの進み具合の幅。後半で太くし、広がった画像を細い線が囲まないようにする。
     private let paperBorderPortion: CGFloat
     private let startDecorationAlpha: CGFloat
     private let startFadingAlphas: [CGFloat]
     private var concealedTile: (any MediaViewerSource)?
     /// 戻り先の、回転を戻したときの枠、角度、角の丸み。回した起点（一覧で重ねた写真）へは、その角度まで回しながら戻す。
-    private var lastTarget: (frame: CGRect, rotation: CGFloat, radius: CGFloat, border: CGFloat)?
+    private var lastTarget: (frame: CGRect, rotation: CGFloat, radius: CGFloat, border: CGFloat, appearance: (contentOpacity: CGFloat, dimming: CGFloat))?
     private let source: any FrameSource
     /// 戻り始めてからの時間。
     private var time: CFTimeInterval = 0
@@ -103,6 +105,7 @@ final class MediaClosingFlight {
         startRotation = parts.morph.transformRotation
         startRadius = parts.morph.layer.cornerRadius
         startBorder = parts.morph.paperBorder
+        startAppearance = (parts.morph.contentOpacity, parts.morph.dimming)
         startDecorationAlpha = parts.decoration?.alpha ?? 0
         startFadingAlphas = parts.fadingViews.map(\.alpha)
     }
@@ -139,9 +142,11 @@ final class MediaClosingFlight {
         }
         if let tile {
             // 白いフチの付いた起点（一覧で重ねた写真）へは、フチを含めた写真の枠と角の丸みへ、フチを太くしながら戻す。
+            // 縮めて置いた起点（一覧で傾けずに重ねた奥の写真）へは、フチと角の丸みも同じ倍率で細くして戻す。
             let paper = tile.paperBorder
-            let border = paper?.width ?? 0
-            lastTarget = (tile.unrotatedFrame(in: window).insetBy(dx: -border, dy: -border), tile.rotation(in: window), paper?.cornerRadius ?? tile.layer.cornerRadius, border)
+            let scale = tile.scale(in: window)
+            let border = (paper?.width ?? 0) * scale
+            lastTarget = (tile.unrotatedFrame(in: window).insetBy(dx: -border, dy: -border), tile.rotation(in: window), (paper?.cornerRadius ?? tile.layer.cornerRadius) * scale, border, tile.viewerAppearance)
             parts.morph.layer.maskedCorners = tile.layer.maskedCorners
             parts.layering.track(tile)
             parts.overlap?.follow(tile)
@@ -152,6 +157,9 @@ final class MediaClosingFlight {
             let borderProgress = min(max((clamped - (1 - paperBorderPortion)) / paperBorderPortion, 0), 1)
             parts.morph.paperBorder = startBorder + (target.border - startBorder) * borderProgress
             parts.decoration?.frame = parts.morph.bounds.insetBy(dx: parts.morph.paperBorder, dy: parts.morph.paperBorder)
+            // フチを太くするのと同じ区間で、戻り先の見え方（中身を描かない、暗くする）へ移す。着いたところで見え方が急に替わらないようにする。
+            parts.morph.contentOpacity = startAppearance.contentOpacity + (target.appearance.contentOpacity - startAppearance.contentOpacity) * borderProgress
+            parts.morph.dimming = startAppearance.dimming + (target.appearance.dimming - startAppearance.dimming) * borderProgress
             let decorationAlpha = startDecorationAlpha + (1 - startDecorationAlpha) * clamped
             parts.decoration?.alpha = decorationAlpha
             parts.morph.backgroundColor = MediaViewerController.placeholderColor(parts.placeholderColor, alpha: decorationAlpha)

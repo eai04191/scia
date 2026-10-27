@@ -12,12 +12,12 @@ public struct PhotoStackFit: Equatable, Sendable {
     public let frontCenter: CGPoint
 
     /// - Parameters:
-    ///   - placements: 1枚目から順の置き方。ずらす量は写真の一辺に対する割合。1枚目のずらす量は使わない。
+    ///   - placements: 1枚目から順の置き方。ずらす量は写真の一辺に対する割合。1枚目のずらす量は使わない。縮めた写真は、縮めた大きさで収める。
     ///   - count: 出す写真の数。`placements`の数より多い分は使わない。
     public init(placements: [PhotoStackPlacement], count: Int, side: CGFloat) {
         let side = max(side, 0)
         let shown = placements.prefix(max(count, 1)).enumerated().map { index, placement in
-            (x: index == 0 ? 0 : placement.offsetX, y: index == 0 ? 0 : placement.offsetY, reach: Self.reach(rotation: placement.rotation))
+            (x: index == 0 ? 0 : placement.offsetX, y: index == 0 ? 0 : placement.offsetY, reach: Self.reach(rotation: placement.rotation) * placement.scale)
         }
         let minX = shown.map { $0.x - $0.reach }.min() ?? -0.5
         let maxX = shown.map { $0.x + $0.reach }.max() ?? 0.5

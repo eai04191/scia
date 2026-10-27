@@ -287,9 +287,9 @@ final class MediaViewerController: UIViewController {
         morphOverlap != nil
     }
 
-    /// 複製の角度（ラジアン）、回転を戻したときの枠（複製を載せている層の座標。閉じる動きではウィンドウと同じ）、白いフチの幅。
-    var morphPlacement: (rotation: CGFloat, unrotatedFrame: CGRect, border: CGFloat) {
-        (morph.transformRotation, morph.unrotatedFrame, morph.paperBorder)
+    /// 複製の角度（ラジアン）、回転を戻したときの枠（複製を載せている層の座標。閉じる動きではウィンドウと同じ）、白いフチの幅、中身の濃さ、暗さ。
+    var morphPlacement: (rotation: CGFloat, unrotatedFrame: CGRect, border: CGFloat, contentOpacity: CGFloat, dimming: CGFloat) {
+        (morph.transformRotation, morph.unrotatedFrame, morph.paperBorder, morph.contentOpacity, morph.dimming)
     }
 
     override var keyCommands: [UIKeyCommand]? {
@@ -990,6 +990,10 @@ extension MediaViewerController {
         morph.image = page?.transitionImage ?? tileImage ?? page.map(Self.snapshot)
         // 重ねた表示はフチの内側に置くので、先に枠とフチを決める。
         morph.paperBorder = border
+        // 起点の近くから始めるときは、起点の見え方（中身を描かない、暗くする）から始める。
+        let appearance: (contentOpacity: CGFloat, dimming: CGFloat) = border > 0 ? tile?.viewerAppearance ?? (1, 0) : (1, 0)
+        morph.contentOpacity = appearance.contentOpacity
+        morph.dimming = appearance.dimming
         morph.place(unrotatedFrame: frame, rotation: rotation)
         attachDecoration(from: tile, alpha: decorationAlpha)
         morphFollowsPage = page?.drawsImage ?? false
@@ -1104,16 +1108,25 @@ extension MediaViewerController {
         let update: @MainActor (CGFloat) -> Void
         if movesImage, let tile = currentTile {
             // 白いフチの付いた起点（一覧で重ねた写真）からは、フチを含めた写真の枠と角の丸みから始める。
+            // 縮めて置いた起点（一覧で傾けずに重ねた奥の写真）では、フチと角の丸みも同じ倍率で細くなっている。
             let paper = tile.paperBorder
-            let startBorder = paper?.width ?? 0
+            let tileScale = tile.scale(in: view)
+            let startBorder = (paper?.width ?? 0) * tileScale
             let start = tileFrame(of: tile).insetBy(dx: -startBorder, dy: -startBorder)
-            let startRadius = paper?.cornerRadius ?? tile.layer.cornerRadius
+            let startRadius = (paper?.cornerRadius ?? tile.layer.cornerRadius) * tileScale
             let startRotation = tile.rotation(in: view)
             showMorph(frame: start, cornerRadius: startRadius, tile: tile, decorationAlpha: 1, rotation: startRotation, border: startBorder)
             barLayering = makeBarLayering(tile: tile)
             let target = contentFrame(in: view)
+            let startAppearance = morph.contentOpacity
+            let startDimming = morph.dimming
             update = { [weak self] progress in
                 self?.updateOpening(progress: progress, from: start, radius: startRadius, rotation: startRotation, border: startBorder, to: target)
+                // 起点の見え方から、フチを細くしきるのと同じ区間で、ビューアの画像の見え方へ移す。
+                guard let self else { return }
+                let paperProgress = min(min(max(progress, 0), 1) / CGFloat(max(self.timing.paperBorderPortion, 0.01)), 1)
+                self.morph.contentOpacity = startAppearance + (1 - startAppearance) * paperProgress
+                self.morph.dimming = startDimming * (1 - paperProgress)
             }
         } else {
             update = { [weak self] progress in
@@ -1276,8 +1289,10 @@ extension MediaViewerController {
             morph.paperBorder = 0
         }
         animator.addAnimations {
-            // 開く途中でつかんで回っていたら、まっすぐに戻す。
+            // 開く途中でつかんで回っていたら、まっすぐに戻す。見え方もビューアの画像に戻す。
             self.morph.place(unrotatedFrame: target, rotation: 0)
+            self.morph.contentOpacity = 1
+            self.morph.dimming = 0
             self.morph.layoutIfNeeded()
             self.morph.layer.cornerRadius = 0
             self.setDecorationAlpha(0)

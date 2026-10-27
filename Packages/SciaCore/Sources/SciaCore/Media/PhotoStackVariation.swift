@@ -16,8 +16,8 @@ public enum PhotoStackVariation {
             let offsetX = vary(placement.offsetX, range: maximumOffset, using: &generator)
             let offsetY = vary(placement.offsetY, range: maximumOffset, using: &generator)
             return index == 0
-                ? PhotoStackPlacement(rotation: rotation, offsetX: placement.offsetX, offsetY: placement.offsetY)
-                : PhotoStackPlacement(rotation: rotation, offsetX: offsetX, offsetY: offsetY)
+                ? PhotoStackPlacement(rotation: rotation, offsetX: placement.offsetX, offsetY: placement.offsetY, scale: placement.scale)
+                : PhotoStackPlacement(rotation: rotation, offsetX: offsetX, offsetY: offsetY, scale: placement.scale)
         }
     }
 

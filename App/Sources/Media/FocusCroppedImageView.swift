@@ -7,6 +7,23 @@ import UIKit
 /// 呼ばないと、中の画像だけが動き終えた位置へ飛ぶ。毎フレーム枠を置き直す動きでは、描く前に並べ直されるため呼ばなくてよい。
 final class FocusCroppedImageView: UIView {
     private let imageView = UIImageView()
+    /// 中の画像を薄くしたぶん見せる、紙の白。
+    private let paperView = UIView()
+    /// 全体を暗くする。
+    private let dimView = UIView()
+
+    /// 中の画像の濃さ。下げたぶん、紙の白を見せる。一覧で中身を描かずに紙だけを見せる写真へ、ビューアの複製を着かせるときに使う。
+    var contentOpacity: CGFloat = 1 {
+        didSet {
+            imageView.alpha = contentOpacity
+            paperView.alpha = 1 - contentOpacity
+        }
+    }
+
+    /// 全体を暗くする度合い。一覧で暗くした写真へ、ビューアの複製を着かせるときに使う。
+    var dimming: CGFloat = 0 {
+        didSet { dimView.alpha = dimming }
+    }
 
     var image: UIImage? {
         get { imageView.image }
@@ -43,7 +60,14 @@ final class FocusCroppedImageView: UIView {
         isUserInteractionEnabled = false
         // 届いた画像の縦横比が添付ファイルの大きさと違っても、枠に画像のない部分を作らない。
         imageView.contentMode = .scaleAspectFill
-        addSubview(imageView)
+        paperView.backgroundColor = .white
+        paperView.alpha = 0
+        dimView.backgroundColor = .black
+        dimView.alpha = 0
+        for view in [paperView, imageView, dimView] {
+            view.isUserInteractionEnabled = false
+            addSubview(view)
+        }
     }
 
     @available(*, unavailable)
@@ -53,6 +77,8 @@ final class FocusCroppedImageView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        paperView.frame = bounds
+        dimView.frame = bounds
         let inner = bounds.insetBy(dx: paperBorder, dy: paperBorder)
         imageView.frame = MediaFocus.fillFrame(imageSize: imageView.image?.size ?? inner.size, in: inner, focus: focus)
     }

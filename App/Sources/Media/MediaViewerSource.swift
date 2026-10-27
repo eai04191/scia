@@ -26,6 +26,9 @@ protocol MediaViewerSource: UIView {
     /// 起点を囲む白いフチ（一覧で重ねた写真の紙）の幅と、フチの外側の角の丸み。フチがなければnil。
     /// ビューアは開閉で動かす画像にもこのフチを付け、ビューアの画像の位置へ向かうにつれて細くしてなくす。
     var paperBorder: (width: CGFloat, cornerRadius: CGFloat)? { get }
+    /// 起点の見え方。中身の濃さ（0なら紙だけを見せる）と、暗くする度合い。一覧で傾けずに重ねた奥の写真は、中身を描かず暗くしている。
+    /// ビューアは開閉で動かす画像を、起点の近くではこの見え方に近づける。
+    var viewerAppearance: (contentOpacity: CGFloat, dimming: CGFloat) { get }
 }
 
 extension MediaViewerSource {
@@ -34,10 +37,11 @@ extension MediaViewerSource {
     /// 添付ファイルを1つしか描かない起点（プロフィールの画像やリンクカードの画像）は、いつも開いたものを描いている。
     func showsAttachment(_ id: MediaAttachment.ID) -> Bool { true }
     var paperBorder: (width: CGFloat, cornerRadius: CGFloat)? { nil }
+    var viewerAppearance: (contentOpacity: CGFloat, dimming: CGFloat) { (1, 0) }
 }
 
 extension UIView {
-    /// `space`から見た、このビューの回転の角度（ラジアン）。祖先のビューの回転も含める。拡大や縮小はしていないものとする。
+    /// `space`から見た、このビューの回転の角度（ラジアン）。祖先のビューの回転も含める。
     /// 一覧で重ねた写真のように回して置いた起点から、ビューアが画像を回しながら動かすときに使う。
     func rotation(in space: UIView) -> CGFloat {
         let origin = convert(CGPoint.zero, to: space)
@@ -45,11 +49,21 @@ extension UIView {
         return atan2(unitX.y - origin.y, unitX.x - origin.x)
     }
 
-    /// `space`の座標で、回転を戻したときの枠。中心はこのビューの中心のまま、大きさは`bounds`の大きさ。
+    /// `space`から見た、このビューの大きさの倍率。祖先のビューの縮小も含める。縦横は同じ倍率で縮めているものとする。
+    /// 一覧で傾けずに重ねた奥の写真のように、縮めて置いた起点へビューアが画像を戻すときに使う。
+    func scale(in space: UIView) -> CGFloat {
+        let origin = convert(CGPoint.zero, to: space)
+        let unitX = convert(CGPoint(x: 1, y: 0), to: space)
+        return hypot(unitX.x - origin.x, unitX.y - origin.y)
+    }
+
+    /// `space`の座標で、回転を戻したときの枠。中心はこのビューの中心のまま、大きさは`bounds`の大きさに`scale(in:)`を掛けたもの。
     /// 回したビューを`convert(bounds, to:)`で移すと、外側に接する大きめの四角になるため。
     func unrotatedFrame(in space: UIView) -> CGRect {
         let center = convert(CGPoint(x: bounds.midX, y: bounds.midY), to: space)
-        return CGRect(x: center.x - bounds.width / 2, y: center.y - bounds.height / 2, width: bounds.width, height: bounds.height)
+        let scale = scale(in: space)
+        let size = CGSize(width: bounds.width * scale, height: bounds.height * scale)
+        return CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2, width: size.width, height: size.height)
     }
 
     /// 親ビューの座標で、回転を戻したときの枠。回したビューの`frame`は外側に接する四角になり、置き直しにも使えないため、中心と大きさから求める。

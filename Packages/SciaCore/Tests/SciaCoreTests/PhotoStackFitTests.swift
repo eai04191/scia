@@ -50,6 +50,21 @@ struct PhotoStackFitTests {
         #expect(abs(max(maxX - minX, maxY - minY) - side) < 0.001)
     }
 
+    /// 縮めた写真は縮めた大きさで収める。奥の写真を縮めて下からのぞかせると、手前の写真の下端から同じ幅ずつ下へ出て、正方形の下端に着く。
+    @Test func scaledPhotosPeekBelowWithinTheSquare() {
+        let peek = 0.07
+        let shrink = 0.12
+        let stacked = (0..<4).map { index in
+            let scale = 1 - shrink * Double(index)
+            return PhotoStackPlacement(rotation: 0, offsetY: peek * Double(index) + (1 - scale) / 2, scale: scale)
+        }
+        let fit = PhotoStackFit(placements: stacked, count: 4, side: 64)
+        #expect(abs(fit.photoSide - 64 / (1 + peek * 3)) < 0.001)
+        let lowestBottom = fit.frontCenter.y + (stacked[3].offsetY + stacked[3].scale / 2) * fit.photoSide
+        #expect(abs(lowestBottom - 64) < 0.001)
+        #expect(abs(fit.frontCenter.x - 32) < 0.001, "左右にずれています")
+    }
+
     /// 重ねると、1つのときより写真が小さくなる。
     @Test func moreTilesMakeSmallerPhotos() {
         let single = PhotoStackFit(placements: placements, count: 1, side: 64)

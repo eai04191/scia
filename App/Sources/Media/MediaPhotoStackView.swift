@@ -4,7 +4,9 @@ import UIKit
 
 /// 一覧で本文の右に出す添付ファイル。投稿欄のカプセルと同じく紙焼きの写真に見立てて重ね、一辺の正方形の中に、回した写真の角まで収める。
 /// 1つだけでも写真にする。傾けるときは3枚目まで、傾けないときは4枚目までを重ね、それより後ろはいちばん奥の写真の下に隠れているものとする。
-/// 傾けないときは、手で置いた写真の見立てをやめ、奥へ行くほど同じ幅ずつ右下へずらして並べ、投稿ごとにばらつかせない。
+/// 傾けないときは、手で置いた写真の見立てをやめ、`rectangle.stack`を上下逆にした形で重ねる。奥の写真は手前の写真の下に隠れているだけの写真として扱い、
+/// 奥へ行くほど同じ割合ずつ小さくし、同じ幅ずつ下からのぞかせ、少しずつ暗くする。奥の写真は中身を描かず紙だけにし、のぞく帯に中身の色を並べない。
+/// 左右にはずらさず、投稿ごとにばらつかせない。
 /// 回す角度、ずらす量、影の濃さは一覧のチューニングで決め、フチの太さ、角の丸み、影の広がりは、写真の大きさによらずカプセルの写真と同じにする。
 /// どこを押しても1枚目から開き、長押しのメニューも1枚目のものを出す。奥の写真はほとんど隠れていて、押し分けられないため。
 ///
@@ -21,8 +23,8 @@ final class MediaPhotoStackView: PhotoStackView {
     private var seed: String?
     /// 写真を傾ける。falseなら、どの写真もまっすぐに置く。
     private var tilts = true
-    /// 傾けないときに、1枚ごとに右下へずらす幅（写真の一辺に対する割合）。
-    private var straightStep = 0.0
+    /// 傾けないときの、1枚ごとに下へのぞかせる幅（写真の一辺に対する割合）、小さくする割合、暗くする度合い。
+    private var straight = (peek: 0.0, shrink: 0.0, dimming: 0.0)
     /// この投稿の置き方。基準の置き方を、投稿のIDでばらつかせたもの。
     private var placements: [PhotoStackPlacement] = []
     /// いま写真に渡している置き方。ずらす量はpt。同じなら渡し直さず、並べ直しを繰り返さない。
@@ -95,7 +97,11 @@ final class MediaPhotoStackView: PhotoStackView {
             ),
         ]
         variation = (tuning.value(of: TuningCatalog.mediaStackRotationVariation), tuning.value(of: TuningCatalog.mediaStackOffsetVariation))
-        straightStep = tuning.value(of: TuningCatalog.mediaStackStraightStep)
+        straight = (
+            tuning.value(of: TuningCatalog.mediaStackStraightPeek),
+            tuning.value(of: TuningCatalog.mediaStackStraightShrink),
+            tuning.value(of: TuningCatalog.mediaStackStraightDimming)
+        )
         setShadowOpacities(
             stack: Float(tuning.value(of: TuningCatalog.mediaStackShadowOpacity)),
             between: Float(tuning.value(of: TuningCatalog.mediaStackBetweenShadowOpacity))
@@ -104,7 +110,8 @@ final class MediaPhotoStackView: PhotoStackView {
     }
 
     /// 傾けるときは、基準の置き方を投稿のIDでばらつかせる。同じ投稿は、どの行で描いても同じ形になる。
-    /// 傾けないときは、まっすぐに置き、奥へ行くほど同じ幅ずつ右下へずらす。等間隔を崩さないよう、ばらつかせない。
+    /// 傾けないときは、まっすぐに置き、奥へ行くほど同じ割合ずつ小さくして、手前の写真の下端から同じ幅ずつ下へのぞかせる。
+    /// 縮めた写真の中心は、下端が1枚ごとに`peek`ずつ下がる位置に置く。等間隔を崩さないよう、ばらつかせない。
     private func updatePlacements() {
         if tilts {
             placements = seed.map {
@@ -112,8 +119,13 @@ final class MediaPhotoStackView: PhotoStackView {
             } ?? basePlacements
         } else {
             placements = photos.indices.map { index in
-                PhotoStackPlacement(rotation: 0, offsetX: straightStep * Double(index), offsetY: straightStep * Double(index))
+                let scale = max(1 - straight.shrink * Double(index), 0.1)
+                return PhotoStackPlacement(rotation: 0, offsetY: straight.peek * Double(index) + (1 - scale) / 2, scale: scale)
             }
+        }
+        for (index, photo) in photos.enumerated() {
+            photo.dimming = tilts ? 0 : CGFloat(min(straight.dimming * Double(index), 1))
+            photo.showsContent = tilts || index == 0
         }
         setNeedsLayout()
     }
@@ -137,7 +149,8 @@ final class MediaPhotoStackView: PhotoStackView {
             photo.isHidden = false
             // 奥の写真のバッジは、隅からのぞいて手前の写真のものに見えるため出さない。
             photo.tile.hidesBadge = index > 0 || !content.showsBadges
-            photo.tile.apply(attachments[index], hiddenCount: 0, isCovered: content.isCovered, policy: content.thumbnailPolicy)
+            // 中身を描かない写真（傾けないときの奥の写真）は、ぼかすときと同じく画像を読まず、blurhashだけを下地にする。見えない画像を通信しないため。
+            photo.tile.apply(attachments[index], hiddenCount: 0, isCovered: content.isCovered || !photo.showsContent, policy: content.thumbnailPolicy)
         }
         if content.isCovered {
             loadCovers()
@@ -197,7 +210,7 @@ final class MediaPhotoStackView: PhotoStackView {
         self.fit = fit
         photoSide = fit.photoSide
         let scaled = placements.map {
-            PhotoStackPlacement(rotation: $0.rotation, offsetX: $0.offsetX * fit.photoSide, offsetY: $0.offsetY * fit.photoSide)
+            PhotoStackPlacement(rotation: $0.rotation, offsetX: $0.offsetX * fit.photoSide, offsetY: $0.offsetY * fit.photoSide, scale: $0.scale)
         }
         if scaled != appliedPlacements {
             appliedPlacements = scaled

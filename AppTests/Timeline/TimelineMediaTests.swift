@@ -107,13 +107,13 @@ struct TimelineMediaTests {
         #expect(Set(shapes).count > 1, "投稿が違っても同じ形です")
         // 「写真を傾ける」をオフにすると、どの投稿でもどの写真もまっすぐに置く。
         for index in 0..<5 {
-            #expect(try photoTransforms(seed: "\(200 + index)", tilts: false).allSatisfy { $0 == .identity }, "傾けない設定で傾いています")
+            #expect(try photoTransforms(seed: "\(200 + index)", tilts: false).allSatisfy { $0.b == 0 && $0.c == 0 }, "傾けない設定で傾いています")
         }
     }
 
-    /// 「写真を傾ける」がオフなら、4枚目までをまっすぐ、奥へ行くほど同じ幅ずつ右下へずらして並べる。
-    /// 5枚目より後ろは4枚目の写真の位置にあるものとし、ビューアはそこへ戻す。
-    @Test func straightPhotosAreEvenlySpacedDownRight() throws {
+    /// 「写真を傾ける」がオフなら、4枚目までをまっすぐ、奥へ行くほど同じ割合ずつ小さくして、同じ幅ずつ下からのぞかせる。左右にはずらさない。
+    /// 奥の写真は中身を描かず、奥ほど暗くする。5枚目より後ろは4枚目の写真の位置にあるものとし、ビューアはそこへ戻す。
+    @Test func straightPhotosPeekBelowEvenly() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         let attachments = (1...5).map { image("\($0)", width: 400, height: 300) }
@@ -130,11 +130,18 @@ struct TimelineMediaTests {
         let photos = try (1...4).map { try #require(grid.tile(for: "\($0)")?.superview) }
         #expect(Set(photos.map(ObjectIdentifier.init)).count == 4, "4枚目まで描いていません")
         #expect(grid.tile(for: "5") === grid.tile(for: "4"), "5枚目を4枚目の写真へ戻していません")
-        #expect(photos.allSatisfy { $0.transform == .identity }, "傾いています")
-        let steps = zip(photos, photos.dropFirst()).map { CGPoint(x: $1.center.x - $0.center.x, y: $1.center.y - $0.center.y) }
-        #expect(steps.allSatisfy { $0.x > 0 && $0.y > 0 }, "右下へずれていません: \(steps)")
-        #expect(steps.allSatisfy { abs($0.x - steps[0].x) < 0.01 && abs($0.y - steps[0].y) < 0.01 }, "等間隔ではありません: \(steps)")
-        #expect(photos.allSatisfy { grid.bounds.contains($0.frame) }, "正方形からはみ出しています")
+        #expect(photos.allSatisfy { $0.transform.b == 0 && $0.transform.c == 0 }, "傾いています")
+        let widths = photos.map(\.frame.width)
+        #expect(zip(widths, widths.dropFirst()).allSatisfy { $1 < $0 }, "奥ほど小さくなっていません: \(widths)")
+        #expect(photos.allSatisfy { abs($0.center.x - photos[0].center.x) < 0.01 }, "左右にずれています")
+        let peeks = zip(photos, photos.dropFirst()).map { $1.frame.maxY - $0.frame.maxY }
+        #expect(peeks.allSatisfy { $0 > 0 && abs($0 - peeks[0]) < 0.01 }, "下から同じ幅ずつのぞいていません: \(peeks)")
+        #expect(photos.allSatisfy { grid.bounds.insetBy(dx: -0.01, dy: -0.01).contains($0.frame) }, "正方形からはみ出しています")
+        let photoViews = photos.compactMap { $0 as? StackedPhotoView }
+        #expect(photoViews.count == 4)
+        #expect(photoViews.first?.showsContent == true && photoViews.dropFirst().allSatisfy { !$0.showsContent }, "奥の写真の中身を描いています")
+        let dimmings = photoViews.map(\.dimming)
+        #expect(zip(dimmings, dimmings.dropFirst()).allSatisfy { $1 > $0 }, "奥ほど暗くなっていません: \(dimmings)")
     }
 
     /// サムネイルの高さは添付ファイルの縦横比で決まり、画像が届く前から確定している。
@@ -336,6 +343,29 @@ struct TimelineMediaTests {
         // プレビュー画像と元の画像のどちらを読むかは、枠の大きさや回線で変わる。選び方はMediaThumbnailSelectionTestsで確かめる。
         #expect(log.fetched.count == 1)
         #expect(log.fetched.allSatisfy { [attachment.previewUrl, attachment.url].contains($0) })
+    }
+
+    /// 本文の右の写真を傾けないときは、奥の写真の中身を描かないので、その画像を読まない。手前の写真の画像だけを読む。
+    @Test func straightStackFetchesOnlyFrontImage() async throws {
+        let log = FetchLog()
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let attachments = (1...4).map { image("\($0)", width: 400, height: 300) }
+        let grid = MediaGridView(store: log.makeStore())
+        grid.frame = CGRect(x: 20, y: 200, width: 64, height: 64)
+        harness.viewController.view.addSubview(grid)
+        var content = MediaGridView.Content(attachments: attachments, cover: nil, tallestAspectRatio: 0.75, thumbnailPolicy: .offline, spacing: 4)
+        content.arrangement = .stack(side: 64)
+        content.stackSeed = "1"
+        content.tiltsStack = false
+        grid.apply(content)
+        grid.layoutIfNeeded()
+
+        let tiles = try (1...4).map { try #require(grid.tile(for: "\($0)")) }
+        #expect(tiles[0].requestsThumbnail, "手前の写真の画像を読んでいません")
+        #expect(tiles.dropFirst().allSatisfy { !$0.requestsThumbnail }, "見えない奥の写真の画像を読もうとしています")
+        try await waitUntil { !log.fetched.isEmpty }
+        #expect(log.fetched.allSatisfy { [attachments[0].previewUrl, attachments[0].url].contains($0) }, "手前の写真のほかの画像を読みました: \(log.fetched)")
     }
 
     /// blurhashの下地は、添付ファイルの縦横比で、長い辺を32ピクセルにする。ビューアで画像の枠を決めるのに使うため。

@@ -6,11 +6,14 @@ public struct PhotoStackPlacement: Equatable, Sendable {
     public var offsetX: Double
     /// 1枚目の中心から縦にずらす量（pt）。負の値で上。
     public var offsetY: Double
+    /// 写真の大きさの倍率。1枚目と同じ大きさなら1。一覧で傾けずに重ねるとき、奥の写真ほど小さくする。
+    public var scale: Double
 
-    public init(rotation: Double, offsetX: Double = 0, offsetY: Double = 0) {
+    public init(rotation: Double, offsetX: Double = 0, offsetY: Double = 0, scale: Double = 1) {
         self.rotation = rotation
         self.offsetX = offsetX
         self.offsetY = offsetY
+        self.scale = scale
     }
 }
 

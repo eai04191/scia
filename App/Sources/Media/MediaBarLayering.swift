@@ -170,6 +170,8 @@ final class MediaBarLayering {
         }
         image.focus = morph.focus
         image.paperBorder = morph.paperBorder
+        image.contentOpacity = morph.contentOpacity
+        image.dimming = morph.dimming
         image.place(unrotatedFrame: host.convert(morphFrame, from: window), rotation: rotation - host.rotation(in: window))
         image.layer.cornerRadius = morph.layer.cornerRadius
         image.layer.maskedCorners = morph.layer.maskedCorners

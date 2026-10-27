@@ -23,11 +23,12 @@ final class MediaSourceOverlap {
             guard overlapping.window === window, !overlapping.isHidden, overlapping.alpha > 0,
                   let snapshot = overlapping.snapshotView(afterScreenUpdates: false)
             else { return nil }
-            // 回したビュー（一覧で重ねた写真）も同じ形に重なるよう、回転を戻した枠に置いてから同じ角度に回す。
+            // 回したり縮めたりしたビュー（一覧で重ねた写真）も同じ形に重なるよう、元の大きさで写し、同じ中心に置いてから同じ角度と倍率にする。
             let frame = overlapping.unrotatedFrame(in: window)
-            snapshot.bounds.size = frame.size
+            let scale = overlapping.scale(in: window)
+            snapshot.bounds.size = overlapping.bounds.size
             snapshot.center = CGPoint(x: frame.midX - visibleRect.minX, y: frame.midY - visibleRect.minY)
-            snapshot.transform = CGAffineTransform(rotationAngle: overlapping.rotation(in: window))
+            snapshot.transform = CGAffineTransform(rotationAngle: overlapping.rotation(in: window)).scaledBy(x: scale, y: scale)
             return snapshot
         }
         guard !snapshots.isEmpty else { return nil }

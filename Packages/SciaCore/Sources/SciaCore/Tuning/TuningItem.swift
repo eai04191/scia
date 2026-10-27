@@ -207,13 +207,31 @@ public enum TuningCatalog {
         defaultValue: 0.15
     )
 
-    /// 「写真を傾ける」がオフのとき、本文の右に重ねた写真を、奥へ行くほど右下へずらす1枚ごとの幅（写真の一辺に対する割合）。
-    public static let mediaStackStraightStep = NumberTuning(
-        id: "timeline.stackStraightStep",
-        title: "傾けないときに本文の右の写真を1枚ごとに右下へずらす幅（写真の一辺に対する割合）",
+    /// 「写真を傾ける」がオフのとき、本文の右に重ねた奥の写真を、1枚ごとに手前の写真の下端から下へのぞかせる幅（写真の一辺に対する割合）。
+    public static let mediaStackStraightPeek = NumberTuning(
+        id: "timeline.stackStraightPeek",
+        title: "傾けないときに本文の右の奥の写真を1枚ごとに下へのぞかせる幅（写真の一辺に対する割合）",
         range: 0.02...0.2,
         step: 0.005,
+        defaultValue: 0.04
+    )
+
+    /// 「写真を傾ける」がオフのとき、本文の右に重ねた奥の写真を、1枚ごとに小さくする割合。
+    public static let mediaStackStraightShrink = NumberTuning(
+        id: "timeline.stackStraightShrink",
+        title: "傾けないときに本文の右の奥の写真を1枚ごとに小さくする割合",
+        range: 0...0.25,
+        step: 0.01,
         defaultValue: 0.08
+    )
+
+    /// 「写真を傾ける」がオフのとき、本文の右に重ねた奥の写真を、1枚ごとに暗くする度合い。白い縁が同じ白だと、帯の境目が影だけになり重なりを見分けにくいため。
+    public static let mediaStackStraightDimming = NumberTuning(
+        id: "timeline.stackStraightDimming",
+        title: "傾けないときに本文の右の奥の写真を1枚ごとに暗くする度合い",
+        range: 0...0.3,
+        step: 0.01,
+        defaultValue: 0.06
     )
 
     /// 本文の右に重ねた写真の角度を、投稿ごとにばらつかせる幅（度）。ばらつかせても回す向きは変えない。0で、どの投稿も同じ角度にする。
@@ -1440,7 +1458,9 @@ public enum TuningCatalog {
             .number(mediaStackShadowOpacity),
             .number(mediaStackBetweenShadowOpacity),
             .number(mediaStackRotationVariation),
-            .number(mediaStackStraightStep),
+            .number(mediaStackStraightPeek),
+            .number(mediaStackStraightShrink),
+            .number(mediaStackStraightDimming),
             .number(mediaStackOffsetVariation),
         ]),
         TuningSection(id: "timeline.reactionGlow", title: "お気に入りとブーストの光", items: [

@@ -22,7 +22,7 @@ struct FocusCroppedImageViewTests {
         view.focus = MediaFocus(x: -0.25, y: 0)
         view.layoutIfNeeded()
 
-        let imageView = try #require(view.subviews.first)
+        let imageView = try #require(view.subviews.first { $0 is UIImageView })
         #expect(view.clipsToBounds)
         #expect(imageView.frame == CGRect(x: -25, y: 0, width: 200, height: 100))
     }
