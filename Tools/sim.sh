@@ -13,6 +13,9 @@
 #   Tools/sim.sh dump '<端末>'
 #     起動済みのアプリに`scia-debug://dump`を送り、画面にある要素の名前と枠（ポイント）を出す。
 #     アプリの中で、アニメーションとスクロールの慣性が止まるのを待ってから書き出すので、操作の直後に呼んでよい。
+#   Tools/sim.sh reset '<端末>'
+#     アプリを終了し、アプリの設定（設定、チューニング、デバッグ用の値）を既定に戻す。端末を割り当てられたときに走らせ、
+#     前に使ったスレッドが確かめのために変えた値を持ち込まない。アカウントの並びと使うアカウント、アカウントやサーバーごとに覚えた値は残す。
 set -euo pipefail
 
 BUNDLE_ID=net.mizle.scia
@@ -171,6 +174,38 @@ command_dump() {
     cat "$file"
 }
 
+# 既定に戻す設定のキーの頭。アカウントの並び（accounts.）や、アカウントとサーバーごとに覚えた値（account.、server.）は、確かめのために変える設定ではないので残す。
+RESET_KEY_PREFIXES='settings. tuning. tuningPanel. debug.'
+
+command_reset() {
+    [ $# -eq 1 ] || fail "使い方: Tools/sim.sh reset '<端末>'"
+    local sim=$1 container domain keys key
+    container=$(xcrun simctl get_app_container "$sim" "$BUNDLE_ID" data 2>/dev/null) || fail "アプリが入っていない: $sim"
+    # 動いているアプリは、覚えている値を書き戻すことがあるので、先に終了する。起動していなければ失敗するが、構わない。
+    xcrun simctl terminate "$sim" "$BUNDLE_ID" >/dev/null 2>&1 || true
+    domain="$container/Library/Preferences/$BUNDLE_ID"
+    if [ ! -f "$domain.plist" ]; then
+        echo "設定はまだない: $sim"
+        return
+    fi
+    # JSONに直さずにplistのまま読む。アカウントごとに覚えた値にはData型があり、`plutil -convert json`はそれで失敗する。
+    keys=$(/usr/bin/python3 -I -c '
+import plistlib, sys
+prefixes = tuple(sys.argv[2].split())
+with open(sys.argv[1], "rb") as f:
+    for key in plistlib.load(f):
+        if key.startswith(prefixes):
+            print(key)
+' "$domain.plist" "$RESET_KEY_PREFIXES")
+    # plistのファイルを直接書き換えると、端末のcfprefsdが覚えている値で書き戻されるので、端末の中のdefaultsで消す。
+    # ドメインはアプリのコンテナの中のパスで渡す。`net.mizle.scia`で渡すと、コンテナの外の設定を指してアプリに届かない。
+    while IFS= read -r key; do
+        [ -n "$key" ] || continue
+        xcrun simctl spawn "$sim" defaults delete "$domain" "$key"
+    done <<< "$keys"
+    echo "設定を既定に戻した（$(grep -c . <<< "$keys" || true)個）: $sim"
+}
+
 command_drag() {
     [ $# -eq 4 ] || fail "使い方: Tools/sim.sh drag <x1> <y1> <x2> <y2>"
     /usr/bin/python3 -I -c '
@@ -188,12 +223,13 @@ print(json.dumps(points, separators=(",", ":")))
 ' "$@"
 }
 
-[ $# -ge 2 ] || fail "使い方: Tools/sim.sh shot|dump '<端末>' [オプション]、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
+[ $# -ge 2 ] || fail "使い方: Tools/sim.sh shot|dump|reset '<端末>' [オプション]、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
 subcommand=$1
 shift
 case $subcommand in
     shot) command_shot "$@" ;;
     dump) command_dump "$@" ;;
     drag) command_drag "$@" ;;
+    reset) command_reset "$@" ;;
     *) fail "知らない操作: $subcommand" ;;
 esac
