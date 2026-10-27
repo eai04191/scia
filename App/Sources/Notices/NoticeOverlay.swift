@@ -221,7 +221,10 @@ final class NoticeOverlay: UIView {
     private func holdDidChange() {
         if column.isHeld {
             // 動いている途中なら、いま見えている位置で止める。centerは動きの終わりの位置を指しているため、見えている位置を使う。
-            let shown = column.layer.presentation()?.position ?? column.center
+            // 動いていなければ置いた位置のまま留める。動いていないときの`presentation()`は、最後に描画を確定した時点の位置で、
+            // 動かさずに置き直した直後（確定する前）に触れると、古い位置へ跳ぶため。
+            let isMoving = column.layer.animationKeys()?.isEmpty == false
+            let shown = isMoving ? column.layer.presentation()?.position ?? column.center : column.center
             column.layer.removeAllAnimations()
             column.center = shown
         } else if let placedTop {

@@ -57,6 +57,26 @@ struct TimelineNoticeTests {
         #expect(try chipMinY(in: harness) > before + 20)
     }
 
+    /// 動かさずに置き直した直後（描画が確定する前）に触れても、置いた位置で留める。
+    /// 動いていないときの`presentation()`は、最後に描画を確定した時点の古い位置を返すため、それを見えている位置として使うと、列が古い位置へ跳ぶ。
+    @Test func heldRightAfterPlacementWithoutAnimationStaysWherePlaced() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.viewController.showNotice(failure)
+        let placed = try chipMinY(in: harness)
+        let chip = try #require(harness.overlay.column.stack.chips.first)
+        // 今の位置で描画を確定させてから、動かさずに置き直す。
+        CATransaction.flush()
+        harness.viewController.additionalSafeAreaInsets.top += 40
+        harness.window.layoutIfNeeded()
+        let moved = try chipMinY(in: harness)
+        #expect(moved != placed, "動かさずに置き直す条件になっていません")
+
+        chip.accessibilityElementDidBecomeFocused()
+
+        #expect(try chipMinY(in: harness) == moved)
+    }
+
     /// 画面を移って動いている途中に触れたら、その場で止めて留める。
     @Test func chipStopsWhereItIsWhenHeldWhileMoving() async throws {
         let harness = try TimelineHarness()

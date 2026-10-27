@@ -241,7 +241,9 @@ final class NoticeStackView: UIView {
 
     /// 戻る途中の動きを止め、いま見えている位置から指に合わせて動かす。出てくる途中の動きはガラスに付けてあるため、止めずに続ける。
     func beginFollowingFinger(_ chip: NoticeChip) {
-        chip.panStartOffset = chip.layer.presentation()?.affineTransform().ty ?? chip.transform.ty
+        // 戻る途中でなければ、今の位置から動かす。動いていないときの`presentation()`は、最後に描画を確定した時点の古い位置のことがあるため。
+        let isReturning = chip.layer.animation(forKey: "transform") != nil
+        chip.panStartOffset = isReturning ? chip.layer.presentation()?.affineTransform().ty ?? chip.transform.ty : chip.transform.ty
         chip.layer.removeAnimation(forKey: "transform")
         // 戻る途中の濃さの動きも止める。残すと、指に合わせた濃さの代わりに動きの濃さを描き続け、動きが終わったコマで指に合わせた濃さへ替わる。
         chip.layer.removeAnimation(forKey: "opacity")
