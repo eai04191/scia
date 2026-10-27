@@ -26,6 +26,8 @@ final class AvatarView: UIView {
     private(set) var loadingKey: AvatarImageStore.Key?
     private var loadTask: Task<Void, Never>?
     private var observers: [any NSObjectProtocol] = []
+    /// 描く画像が変わったときに呼ぶ。2つ目は、読み込みを待って届いた画像か。端末に残っていた画像をすぐに描いたときと、画像を消したときはfalse。
+    var onShowImage: ((UIImage?, _ arrived: Bool) -> Void)?
 
     /// - Parameter playsAnimatedImages: 端末の設定が動く画像を許すか。`content.animates`でも、許さなければ静止画で描く。
     init(store: AvatarImageStore, playsAnimatedImages: @escaping () -> Bool = { AnimatedImagePlayback.isAllowed }) {
@@ -104,7 +106,7 @@ final class AvatarView: UIView {
         show(nil)
         loadTask = Task { [weak self, store] in
             guard let image = try? await store.image(for: key), let self, !Task.isCancelled, self.loadingKey == key else { return }
-            self.show(image)
+            self.show(image, arrived: true)
             self.imageView.alpha = 0
             // フェードの間もプロフィールを開くタップを受け付ける。
             UIView.animate(withDuration: 0.15, delay: 0, options: [.allowUserInteraction]) {
@@ -126,10 +128,11 @@ final class AvatarView: UIView {
     }
 
     /// 画像をすぐに描く。読み込み中のフェードの途中なら止める。
-    private func show(_ image: UIImage?) {
+    private func show(_ image: UIImage?, arrived: Bool = false) {
         imageView.layer.removeAllAnimations()
         imageView.alpha = 1
         imageView.image = image
+        onShowImage?(image, arrived)
     }
 
     private func cancelLoad() {

@@ -149,6 +149,7 @@ final class ProfileHeaderView: UIView {
     private let noteLabel = LinkLabel()
     private let fieldsStack = UIStackView()
     private let remoteStack = UIStackView()
+    private let remoteLabel = UILabel()
     private let openOriginalButton = UIButton(configuration: .plain())
     private let tabControl = UISegmentedControl(items: ["投稿", "メディア"])
     private let filterButton = UIButton(configuration: .plain())
@@ -159,6 +160,8 @@ final class ProfileHeaderView: UIView {
     private let countsLabel = EmojiLabel()
     /// 補足情報と数の間の区切り線。補足情報がなければ出さない。
     private let fieldsDivider = UIView()
+    /// 補足情報の行どうしの間の区切り線。カードの色に合わせて塗り直す。
+    private var fieldRowDividers: [UIView] = []
     /// 補足情報のカードで、数の行の上と下に空ける余白。上は区切り線から、下はほかのサーバーのアカウントの行まで。
     var countsSpacing: CGFloat = 14 {
         didSet {
@@ -189,6 +192,16 @@ final class ProfileHeaderView: UIView {
     private var content: Content?
     private var bannerTask: Task<Void, Never>?
     private var bannerURL: URL?
+    /// カードの色の、確保するコントラストとダークモードでの暗くし方。端末の「コントラストを上げる」がオンなら、目標を上げて使う。
+    var accentOptions = ProfileCardPalette.Options()
+    /// アイコンが届いてカードの色が変わるときの、クロスディゾルブの時間。
+    var accentFadeDuration: TimeInterval = 0.3
+    /// 画面のティントカラーを変えるときに呼ぶ。nilならシステムの色に戻す。
+    var onChangeScreenTint: ((UIColor?) -> Void)?
+    /// 塗りつぶしたフォローのボタンの地と文字の色。nilならシステムの色。
+    private var filledButtonColors: (fill: UIColor, foreground: UIColor)?
+    /// アイコンから作った、カードの色。アイコンがまだないか、透明なアイコンならnilで、カードはシステムの色にする。
+    private var avatarAccent: ProfileAccentColor?
 
     init(emojiImages: EmojiImageStore, mediaImages: MediaImageStore, avatarImages: AvatarImageStore) {
         self.emojiImages = emojiImages
@@ -205,6 +218,19 @@ final class ProfileHeaderView: UIView {
     }
 
     private func configureSubviews() {
+        registerForTraitChanges([UITraitUserInterfaceStyle.self, UITraitAccessibilityContrast.self]) { (view: ProfileHeaderView, _) in
+            view.applyAccent()
+        }
+        avatarView.onShowImage = { [weak self] image, arrived in
+            // 読み込みの間に描く空の画像では、色を消さない。消すと、同じ人のアイコンを読み直すたびに、システムの色を挟んで点滅するため。
+            // 別の人に変わったときは、applyで消す。
+            guard let self, let image else { return }
+            let accent = ProfileAccentColor(uiImage: image)
+            guard accent != avatarAccent else { return }
+            avatarAccent = accent
+            // 端末に残っていた画像は、開いたときにはもう描けているので、すぐに色を付ける。部品カタログでは、ここで動かすと、クロスディゾルブが終わらずにレイヤーに残った（プロフィールの画面では残らなかった）。
+            applyAccent(animated: arrived)
+        }
         bannerView.contentMode = .scaleAspectFill
         bannerView.clipsToBounds = true
         bannerView.backgroundColor = .secondarySystemFill
@@ -292,7 +318,6 @@ final class ProfileHeaderView: UIView {
         moreButton.addAction(UIAction { [weak self] _ in self?.expandNote() }, for: .primaryActionTriggered)
 
         // ほかのサーバーのアカウントであることは、補足情報のカードの中に1行で出す。投稿がこのサーバーに届いた分だけなのは、押して開く元のサーバーで分かる。
-        let remoteLabel = UILabel()
         remoteLabel.font = .preferredFont(forTextStyle: .footnote)
         remoteLabel.adjustsFontForContentSizeCategory = true
         remoteLabel.textColor = .secondaryLabel
@@ -573,6 +598,7 @@ final class ProfileHeaderView: UIView {
         let previous = self.content
         self.content = content
         let account = content.account
+        if previous?.account.id != account.id { avatarAccent = nil }
 
         avatarView.apply(AvatarView.Content(
             url: content.animatesAvatar ? account.avatar : account.avatarStatic,
@@ -630,6 +656,58 @@ final class ProfileHeaderView: UIView {
         // メディアの一覧では使えないが、消すとタブの幅が変わって動くため、場所を残したまま押せなくする。
         filterButton.isEnabled = content.tab == .posts
         applyFilterButton(content.postsFilter)
+        applyAccent()
+    }
+
+    /// 補足情報のカードと固定された投稿のカード、画面のティントカラーに、アイコンから作った色を付ける。
+    /// - Parameter animated: 色が変わるなら、ヘッダーごとクロスディゾルブで移す。画面に出ていないときは、すぐに変える。
+    ///   文字の色やボタンの色は、色の変化として動かせないため、ヘッダーをまとめて移す。移る間もタップとスクロールを受け付ける。
+    private func applyAccent(animated: Bool = false) {
+        guard animated, window != nil, accentFadeDuration > 0 else {
+            applyAccentNow()
+            return
+        }
+        UIView.transition(with: self, duration: accentFadeDuration, options: [.transitionCrossDissolve, .allowUserInteraction, .beginFromCurrentState]) {
+            self.applyAccentNow()
+        }
+    }
+
+    private func applyAccentNow() {
+        let isDark = traitCollection.userInterfaceStyle == .dark
+        let options = traitCollection.accessibilityContrast == .high ? accentOptions.raisingContrast() : accentOptions
+        let appearance = avatarAccent.map { ProfileAccentAppearance(palette: ProfileCardPalette(color: $0, options: options, isDark: isDark)) }
+        if let appearance {
+            appearance.apply(to: aboutBox)
+        } else {
+            ProfileAccentAppearance.reset(aboutBox)
+        }
+        ProfileAccentAppearance.recolorSecondaryText(in: aboutBox, to: appearance?.secondaryText)
+        // 属性のない文字のラベルは、上の塗り替えでは変わらないので、直接塗る。
+        remoteLabel.textColor = appearance?.secondaryText ?? .secondaryLabel
+        ProfileAccentAppearance.restyleLinks(in: aboutBox, underline: appearance != nil, badge: appearance?.text)
+        for divider in [fieldsDivider] + fieldRowDividers {
+            divider.backgroundColor = appearance?.separator ?? .separator
+        }
+        let underlinesScreenLinks = appearance?.underlinesScreenLinks ?? false
+        ProfileAccentAppearance.restyleLinks(in: noteLabel, underline: underlinesScreenLinks, badge: nil)
+        var moreTitle = AttributedString("さらに表示")
+        if underlinesScreenLinks { moreTitle.underlineStyle = .single }
+        moreButton.configuration?.attributedTitle = moreTitle
+        pinnedShelf.accent = appearance
+        // 本文と色で見分けられるティントカラーだけを、画面全体に当てる。見分けられないときは、下線を引けるヘッダーの中だけに当て、
+        // 投稿の一覧はシステムの色のままにする。投稿の本文のリンクは、タイムラインの行と同じ描き方で、下線を引けないため。
+        if let appearance, appearance.underlinesScreenLinks {
+            tintColor = appearance.screenTint
+            onChangeScreenTint?(nil)
+        } else {
+            tintColor = nil
+            onChangeScreenTint?(appearance?.screenTint)
+        }
+        let colors = appearance.map { (fill: $0.background, foreground: $0.text) }
+        if colors?.fill != filledButtonColors?.fill || colors?.foreground != filledButtonColors?.foreground {
+            filledButtonColors = colors
+            if let content { applyFollowButton(content) }
+        }
     }
 
     private func acctText(of account: Account) -> NSAttributedString {
@@ -647,6 +725,7 @@ final class ProfileHeaderView: UIView {
     /// - Parameter animatedEmojis: アニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
     private func applyFields(_ account: Account, language: String, animatedEmojis: EmojiImageStore?) {
         fieldsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
+        fieldRowDividers = []
         fieldsStack.isHidden = account.fields.isEmpty
         fieldsDivider.isHidden = account.fields.isEmpty
         fieldsStack.spacing = 0
@@ -669,7 +748,9 @@ final class ProfileHeaderView: UIView {
                let check = UIImage(systemName: "checkmark.seal.fill", withConfiguration: UIImage.SymbolConfiguration(font: valueFont, scale: .small)) {
                 // リンク先にこのアカウントへのリンクがあると確かめられた値に付くチェックマーク。
                 value.append(NSAttributedString(string: " "))
-                value.append(NSAttributedString(attachment: NSTextAttachment(image: check.withTintColor(.systemGreen, renderingMode: .alwaysOriginal))))
+                let badge = NSMutableAttributedString(attachment: NSTextAttachment(image: check.withTintColor(.systemGreen, renderingMode: .alwaysOriginal)))
+                badge.addAttribute(.profileVerifiedBadge, value: true, range: NSRange(location: 0, length: badge.length))
+                value.append(badge)
                 valueLabel.accessibilityValue = "確認済み"
             }
             valueLabel.attributedText = value
@@ -681,6 +762,7 @@ final class ProfileHeaderView: UIView {
                 // 設定のグループと同じく、行の間に区切り線を引く。
                 let divider = UIView()
                 divider.backgroundColor = .separator
+                fieldRowDividers.append(divider)
                 divider.heightAnchor.constraint(equalToConstant: 1 / max(traitCollection.displayScale, 1)).isActive = true
                 let spacer = UIStackView(arrangedSubviews: [divider])
                 spacer.isLayoutMarginsRelativeArrangement = true
@@ -701,6 +783,11 @@ final class ProfileHeaderView: UIView {
         }
     }
 
+    /// 塗りつぶさないボタン（「フォロー中」など）の見た目。カードに色を付けているときは、画面のティントカラーで薄く塗り、塗りつぶしたボタンと色を揃える。
+    private func secondaryButtonConfiguration() -> UIButton.Configuration {
+        filledButtonColors == nil ? .gray() : .tinted()
+    }
+
     private func applyFollowButton(_ content: Content) {
         let title: String?
         var configuration: UIButton.Configuration
@@ -710,23 +797,25 @@ final class ProfileHeaderView: UIView {
         switch content.followState {
         case .myself:
             title = "プロフィールを編集"
-            configuration = .gray()
+            configuration = secondaryButtonConfiguration()
         case .loadFailed, .blocked:
             title = nil
             configuration = .filled()
         case .unknown:
             title = "フォローする"
-            configuration = .gray()
+            configuration = secondaryButtonConfiguration()
             configuration.baseForegroundColor = .clear
         case .notFollowing(let locked):
             title = locked ? "フォローをリクエスト" : "フォローする"
             configuration = .filled()
+            configuration.baseBackgroundColor = filledButtonColors?.fill
+            configuration.baseForegroundColor = filledButtonColors?.foreground
         case .requested:
             title = "リクエスト中"
-            configuration = .gray()
+            configuration = secondaryButtonConfiguration()
         case .following:
             title = "フォロー中"
-            configuration = .gray()
+            configuration = secondaryButtonConfiguration()
         }
         configuration.title = title
         configuration.cornerStyle = .capsule

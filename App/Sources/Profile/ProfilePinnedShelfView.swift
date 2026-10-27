@@ -16,6 +16,14 @@ final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
     /// 並べている投稿と、それぞれに当てたフィルターの判定。同じなら作り直さない。
     private(set) var items: [ProfileShelfItem] = []
     private var glyphLanguage = ""
+    /// カードに付ける色。
+    var accent: ProfileAccentAppearance? {
+        didSet {
+            for case let card as ProfilePinnedCard in cardStack.arrangedSubviews {
+                card.applyAccent(accent)
+            }
+        }
+    }
 
     /// カードの幅の、棚の幅に対する割合。次のカードの端をのぞかせ、横にスクロールできると分かるようにする。
     private static let cardWidthRatio: CGFloat = 0.72
@@ -111,6 +119,7 @@ final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
                 guard let card else { return }
                 self?.onOpen?(status, card.convert(card.bounds, to: nil))
             }
+            card.applyAccent(accent)
             cardStack.addArrangedSubview(card)
             card.widthAnchor.constraint(equalTo: widthAnchor, multiplier: Self.cardWidthRatio).isActive = true
         }
@@ -221,6 +230,18 @@ private final class ProfilePinnedCard: UIControl {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    /// カードに色を付ける。nilならシステムの色に戻す。
+    func applyAccent(_ accent: ProfileAccentAppearance?) {
+        if let accent {
+            accent.apply(to: self)
+        } else {
+            ProfileAccentAppearance.reset(self)
+        }
+        dateLabel.textColor = accent?.secondaryText ?? .secondaryLabel
+        ProfileAccentAppearance.recolorSecondaryText(in: bodyLabel, to: accent?.secondaryText)
+        ProfileAccentAppearance.restyleLinks(in: bodyLabel, underline: accent != nil, badge: nil)
     }
 
     deinit {

@@ -205,6 +205,76 @@ public enum TuningCatalog {
         defaultValue: 0.35
     )
 
+    /// プロフィールのカードで、本文とリンクに確保するコントラスト比（WCAG 2.1）。APCAのLcと両方に届くまで、地に敷く色の明るさを動かす。
+    public static let profileAccentBodyContrast = NumberTuning(
+        id: "profile.accentBodyContrast",
+        title: "カードの本文のWCAGのコントラスト比",
+        range: 1...7,
+        step: 0.5,
+        defaultValue: 4.5
+    )
+
+    /// プロフィールのカードで、見出しや日付などの控えめな文字に確保するコントラスト比。控えめな文字は、この比とAPCAのLcを両方保てる一番薄い色にする。
+    public static let profileAccentSecondaryContrast = NumberTuning(
+        id: "profile.accentSecondaryContrast",
+        title: "カードの控えめな文字のWCAGのコントラスト比",
+        range: 1...7,
+        step: 0.5,
+        defaultValue: 3
+    )
+
+    /// プロフィールのカードで、本文とリンクに確保するAPCAのLcの絶対値。WCAGの比と両方に届くようにする。
+    public static let profileAccentBodyLc = NumberTuning(
+        id: "profile.accentBodyLc",
+        title: "カードの本文のAPCAのLc",
+        range: 0...100,
+        step: 5,
+        defaultValue: 75
+    )
+
+    /// プロフィールのカードで、見出しや日付などの控えめな文字に確保するAPCAのLcの絶対値。13ptの文字のAPCAの目安（Lc 90）より低いのは、本文と強弱を付けるため。
+    public static let profileAccentSecondaryLc = NumberTuning(
+        id: "profile.accentSecondaryLc",
+        title: "カードの控えめな文字のAPCAのLc",
+        range: 0...100,
+        step: 5,
+        defaultValue: 60
+    )
+
+    /// ダークモードで、地に敷くカードの色の明るさに掛ける倍率。暗い画面で色の面がまぶしくならないようにする。
+    public static let profileAccentDarkLightness = NumberTuning(
+        id: "profile.accentDarkLightness",
+        title: "ダークモードのカードの色の明るさの倍率",
+        range: 0.5...1,
+        step: 0.05,
+        defaultValue: 0.85
+    )
+
+    /// ダークモードで、灰色のカードの明るさの上限。白い地のアイコンの人のカードが、黒い画面の中で明るい面として浮かないようにする。
+    public static let profileAccentDarkNeutralMaxLightness = NumberTuning(
+        id: "profile.accentDarkNeutralMaxLightness",
+        title: "ダークモードの灰色のカードの明るさの上限",
+        range: 0.25...0.9,
+        step: 0.05,
+        defaultValue: 0.45
+    )
+
+    /// アイコンが届いて、プロフィールのカードの色が変わるときのクロスディゾルブの時間（秒）。
+    public static let profileAccentFadeDuration = NumberTuning(
+        id: "profile.accentFadeDuration",
+        title: "カードの色が変わるときの時間（秒）",
+        range: 0...2,
+        step: 0.05,
+        defaultValue: 0.3
+    )
+
+    /// プロフィールのカードの、見出しや日付などの控えめな文字に、カードの色から作った色を使う。
+    public static let profileAccentTintsText = ToggleTuning(
+        id: "profile.accentTintsText",
+        title: "カードの控えめな文字にカードの色を使う",
+        defaultValue: true
+    )
+
     /// プロフィールの最初の投稿の一覧を出す前に、行のアイコンが読み込み終わるのを待つ上限。読み込み終われば上限を待たずに出す。0なら待たない。
     public static let profileAvatarWait = NumberTuning(
         id: "profile.avatarWait",
@@ -1269,6 +1339,14 @@ public enum TuningCatalog {
             .number(profileCountsSpacing),
             .number(profileNoteFadeWidth),
             .number(profileNoteExpandDuration),
+            .number(profileAccentBodyContrast),
+            .number(profileAccentSecondaryContrast),
+            .number(profileAccentBodyLc),
+            .number(profileAccentSecondaryLc),
+            .number(profileAccentDarkLightness),
+            .number(profileAccentDarkNeutralMaxLightness),
+            .number(profileAccentFadeDuration),
+            .toggle(profileAccentTintsText),
         ]),
         TuningSection(id: "thread", title: "スレッド", items: [
             .number(threadOpenDuration),

@@ -125,6 +125,9 @@ final class ProfileController {
         viewController.onScroll = { [weak self] scrollView in self?.updateBars(scrollView) }
         header.onChangeBannerLayout = { [weak self] in self?.viewController?.headerDidChangeSize() }
         header.onExpandNote = { [weak self] duration in self?.viewController?.headerDidChangeSize(animatingWithDuration: duration) }
+        header.onChangeScreenTint = { [weak self] color in
+            self?.viewController?.view.tintColor = color
+        }
         header.onChangeExtendsUnderBars = { [weak self] in
             guard let scrollView = self?.viewController?.collectionView else { return }
             self?.updateBars(scrollView)
@@ -285,6 +288,8 @@ final class ProfileController {
             header.countsSpacing = tuning.value(of: TuningCatalog.profileCountsSpacing)
             header.noteFadeWidth = tuning.value(of: TuningCatalog.profileNoteFadeWidth)
             header.noteExpandDuration = tuning.value(of: TuningCatalog.profileNoteExpandDuration)
+            header.accentOptions = ProfileCardPalette.Options(tuning: tuning)
+            header.accentFadeDuration = tuning.value(of: TuningCatalog.profileAccentFadeDuration)
         }
         header.apply(ProfileHeaderView.Content(
             account: account,

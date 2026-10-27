@@ -72,6 +72,12 @@ class EmojiLabel: UILabel {
 
     /// 置く側が渡した文字列。アニメーションする絵文字を透明な画像に差し替える前のもの。
     private var sourceText: NSAttributedString?
+
+    /// 置く側が渡した文字列。描いている`attributedText`は、アニメーションする絵文字を透明な画像に差し替えたものなので、
+    /// 色や下線を変えて書き戻すときはこちらを読む。差し替えたものを書き戻すと、動かすのをやめたときに静止画に戻せなくなる。
+    var originalAttributedText: NSAttributedString? {
+        sourceText ?? attributedText
+    }
     /// `sourceText`にカスタム絵文字がある。なければ、並べ直さずに済ませる。
     private var hasCustomEmoji = false
     /// 描いているのが、絵文字を差し替えた文字列。
