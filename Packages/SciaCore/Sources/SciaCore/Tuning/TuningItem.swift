@@ -79,6 +79,15 @@ public enum TuningCatalog {
         defaultValue: 0.4
     )
 
+    /// カスタム絵文字の画像が届いたとき、同じ行のあとの文字を前の位置から新しい位置へ動かし、絵文字を薄い状態から濃くする時間。0なら切り替える。
+    public static let customEmojiArrivalDuration = NumberTuning(
+        id: "timeline.customEmojiArrivalDuration",
+        title: "カスタム絵文字が届いたときの動きの時間（秒）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.25
+    )
+
     /// Xの投稿へのリンクを、fxtwitterから読んだ作者、本文、添付ファイルの囲みで出す。読み終えるまでと、読めなかったときは、リンクカードを出す。
     /// 表示の試作。読み終えたときに行が伸びるため、ガタつきが気になるかを実機で確かめる。
     public static let xPostEmbeds = ToggleTuning(
@@ -1544,6 +1553,7 @@ public enum TuningCatalog {
             .number(pollBarDuration),
             .number(linkCardTransitionDuration),
             .toggle(xPostEmbeds),
+            .number(customEmojiArrivalDuration),
             .number(mediaSymbolRatio),
             .number(mediaSymbolMinSize),
             .number(mediaSymbolMaxSize),

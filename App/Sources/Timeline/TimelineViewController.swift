@@ -541,7 +541,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 絵文字の画像が届いたら、その絵文字を使う投稿だけを描き直す。
+    /// 絵文字の画像が届いたら、その絵文字を使う投稿だけを描き直す。読んでいる位置は保つ。
+    /// 文字が横へずれたり次の行へ移ったりする動きは、ラベルが付ける（`EmojiArrivalTransition`）。
+    /// 行の高さを下の行ごと動かす描き直し（`reconfigureAnimatingHeight`）にしないのは、1つの投稿の絵文字は続けて届き、
+    /// 動いている途中に次の描き直しが重なると、一覧が行のセルを入れ替え、動かしているラベルが窓から外れて動きが止まるため（シミュレーターで確かめた）。
     private func emojiImagesDidLoad(_ urls: Set<URL>) {
         let ids = dataSource.snapshot().itemIdentifiers.filter { id in
             switch entries[id] {

@@ -31,6 +31,17 @@ class EmojiLabel: UILabel {
     }
 
     override var attributedText: NSAttributedString? {
+        willSet {
+            // UILabelは受け取った文字列を写し替えて持ち、絵文字の画像も同じものではなくなるため、置く側が渡したもの同士で比べる。
+            let filled = Self.filledEmojiIndices(from: assignedText, to: newValue)
+            if !filled.isEmpty {
+                prepareEmojiArrival(filling: filled)
+            } else if assignedText?.string != newValue?.string {
+                // 絵文字を入れている途中に、使い回された行で別の文字列に替わったら、前の文字列の像を重ねない。
+                cancelEmojiArrival()
+            }
+            assignedText = newValue
+        }
         didSet {
             layoutCache = nil
             truncationCache = nil
@@ -44,6 +55,8 @@ class EmojiLabel: UILabel {
 
     override var text: String? {
         didSet {
+            assignedText = nil
+            cancelEmojiArrival()
             layoutCache = nil
             truncationCache = nil
             sourceText = nil
@@ -70,6 +83,63 @@ class EmojiLabel: UILabel {
         }
     }
 
+    /// カスタム絵文字の画像が届いて、空けていた場所に入るときの動きの時間。0なら切り替える。
+    var emojiArrivalDuration: () -> TimeInterval = { AppDependencies.tuning.value(of: TuningCatalog.customEmojiArrivalDuration) }
+
+    /// 同じ文字列のまま、読み込み中で空けていたカスタム絵文字の場所に画像が入った位置。入っていなければ空。
+    static func filledEmojiIndices(from old: NSAttributedString?, to new: NSAttributedString?) -> Set<Int> {
+        guard let old, let new, old.length == new.length, old.string == new.string else { return [] }
+        var filled: Set<Int> = []
+        old.enumerateAttribute(.attachment, in: NSRange(location: 0, length: old.length)) { value, range, _ in
+            guard (value as? NSTextAttachment)?.image === RichTextRenderer.emojiPlaceholder,
+                  let image = (new.attribute(.attachment, at: range.location, effectiveRange: nil) as? NSTextAttachment)?.image,
+                  image !== RichTextRenderer.emojiPlaceholder
+            else { return }
+            filled.insert(range.location)
+        }
+        return filled
+    }
+
+    /// 絵文字の画像が入るときの動き。文字列を入れ替える前に前の並びを測っておき、並べ終えた`layoutSubviews`で動かし始める。
+    private(set) var emojiArrival: EmojiArrivalTransition?
+    /// 前の並びを測り、まだ動かし始めていない。
+    private var pendingEmojiArrival = false
+
+    /// 文字列を入れ替える前に、動き始めるときの文字の見え方を測る。動いている途中なら、いま見えている位置と濃さから動かし直す。
+    private func prepareEmojiArrival(filling filled: Set<Int>) {
+        let running = emojiArrival?.isRunning == true ? emojiArrival : nil
+        let duration = emojiArrivalDuration()
+        guard duration > 0, window != nil, bounds.width > 0, let shown = attributedText else {
+            cancelEmojiArrival()
+            return
+        }
+        // 視差効果を減らす設定では、文字を動かさず、前の描画から薄くして入れ替える。
+        guard !UIAccessibility.isReduceMotionEnabled else {
+            cancelEmojiArrival()
+            let transition = CATransition()
+            transition.type = .fade
+            transition.duration = duration
+            layer.add(transition, forKey: kCATransition)
+            return
+        }
+        let start = running?.currentPlacements(filling: filled) ?? EmojiArrivalTransition.placements(of: shown, in: self, filling: filled)
+        // 前の動きの層は、次の動きを始めるまで残す。同じ描き直しの中で入れ替わるので、そのあいだのコマは描かれない。
+        let previous = emojiArrival
+        emojiArrival = EmojiArrivalTransition(label: self, start: start, duration: duration)
+        previous?.finish()
+        pendingEmojiArrival = true
+        setNeedsLayout()
+    }
+
+    private func cancelEmojiArrival() {
+        pendingEmojiArrival = false
+        emojiArrival?.finish()
+        emojiArrival = nil
+    }
+
+    /// 置く側が最後に渡した文字列そのもの。絵文字の画像が届いたかを見分けるのに使う。
+    private var assignedText: NSAttributedString?
+
     /// 置く側が渡した文字列。アニメーションする絵文字を透明な画像に差し替える前のもの。
     private var sourceText: NSAttributedString?
 
@@ -93,6 +163,12 @@ class EmojiLabel: UILabel {
     override func layoutSubviews() {
         super.layoutSubviews()
         layoutAnimatedEmojis()
+        if pendingEmojiArrival, let attributedText {
+            pendingEmojiArrival = false
+            emojiArrival?.start(newText: attributedText)
+        } else if emojiArrival?.isRunning == true {
+            emojiArrival?.hideLabelLayers()
+        }
     }
 
     /// 置く側が渡した文字列から、アニメーション版が届いている絵文字を透明な画像に差し替えて描き直す。

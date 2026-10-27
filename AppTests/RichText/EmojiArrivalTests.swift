@@ -1,0 +1,170 @@
+import SciaCore
+import SciaTesting
+import Testing
+import UIKit
+@testable import Scia
+
+/// カスタム絵文字の画像が、空けていた場所に後から届くときの見え方。
+@Suite(.scratch)
+@MainActor
+struct EmojiArrivalTests {
+    private let font = UIFont.preferredFont(forTextStyle: .body)
+
+    private func emoji(_ shortcode: String) throws -> CustomEmoji {
+        let url = try #require(URL(string: "https://example.social/emoji/\(shortcode).png"))
+        return CustomEmoji(shortcode: shortcode, url: url, staticUrl: url)
+    }
+
+    /// 横長の絵文字の画像。空けていた正方形より幅が広いので、届くと同じ行のあとの文字がずれる。
+    private func widePNG() throws -> Data {
+        try #require(UIGraphicsImageRenderer(size: CGSize(width: 40, height: 10)).image { context in
+            UIColor.systemOrange.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 40, height: 10))
+        }.pngData())
+    }
+
+    /// 空けていた場所に絵文字の画像が入ったら、ラベルを1コマで描き替えず、あとの文字を前の位置から新しい位置へ動かし、
+    /// 絵文字はその場で薄い状態から濃くする。動いている間は、ラベル自身の描画を隠す。同じ中身を入れ直したときは、動かさない。
+    @Test func labelMovesTextWhenEmojiArrives() async throws {
+        let blobcat = try emoji("blobcat")
+        let png = try widePNG()
+        let store = EmojiImageStore { _ in png }
+        let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja")
+        let text = RichText.plain("前 :blobcat: 後ろの文字", emojis: [blobcat])
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let label = EmojiLabel()
+        label.numberOfLines = 0
+        label.emojiArrivalDuration = { 0.25 }
+        label.frame = CGRect(x: 0, y: 100, width: 300, height: 60)
+        window.addSubview(label)
+        let clock = LayerClock(freezing: label.layer)
+
+        let placeholder = renderer.render(text)
+        label.attributedText = placeholder
+        label.layoutIfNeeded()
+        label.attributedText = placeholder
+        label.layoutIfNeeded()
+        #expect(label.emojiArrival?.isRunning != true)
+
+        try await waitUntil { store.image(for: blobcat.staticUrl) != nil }
+        label.attributedText = renderer.render(text)
+        label.layoutIfNeeded()
+
+        let arrival = try #require(label.emojiArrival)
+        #expect(arrival.isRunning)
+        #expect(label.layer.contentsRect == .zero, "動いている間に、ラベル自身の描画を隠していません")
+        let pieces = label.layer.sublayers?.last?.sublayers ?? []
+        #expect(pieces.contains { $0.animation(forKey: "move") != nil }, "あとの文字を動かしていません")
+        #expect(pieces.contains { $0.animation(forKey: "fadeIn") != nil }, "絵文字を薄い状態から濃くしていません")
+        // 行数を限らないラベルでは、像をラベルの枠で切らない。折り返しが減ると、前の最後の行から上がる文字が枠の外から動き始めるため。
+        #expect(label.layer.sublayers?.last?.masksToBounds == false)
+
+        // 動いている途中に、動く絵文字のアニメーション版が届いて層が出し直されても、隠したままにする。
+        let animated = CALayer()
+        label.layer.insertSublayer(animated, at: 0)
+        label.setNeedsLayout()
+        label.layoutIfNeeded()
+        #expect(animated.isHidden, "動いている途中に出し直された層を隠していません")
+
+        try await clock.advance(by: 0.3)
+        #expect(!animated.isHidden)
+        #expect(!arrival.isRunning)
+        #expect(label.layer.contentsRect == CGRect(x: 0, y: 0, width: 1, height: 1))
+    }
+
+    /// 動いている途中に、使い回された行で別の文字列に替わったら、前の文字列の像を残さない。
+    @Test func reuseDropsEmojiArrival() async throws {
+        let blobcat = try emoji("blobcat")
+        let png = try widePNG()
+        let store = EmojiImageStore { _ in png }
+        let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja")
+        let text = RichText.plain("前 :blobcat: 後ろの文字", emojis: [blobcat])
+        let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let window = UIWindow(windowScene: scene)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let label = EmojiLabel()
+        label.emojiArrivalDuration = { 0.25 }
+        label.frame = CGRect(x: 0, y: 100, width: 300, height: 60)
+        window.addSubview(label)
+        _ = LayerClock(freezing: label.layer)
+        label.attributedText = renderer.render(text)
+        label.layoutIfNeeded()
+        try await waitUntil { store.image(for: blobcat.staticUrl) != nil }
+        label.attributedText = renderer.render(text)
+        label.layoutIfNeeded()
+        let arrival = try #require(label.emojiArrival)
+        #expect(arrival.isRunning)
+
+        label.attributedText = NSAttributedString(string: "別の投稿")
+
+        #expect(!arrival.isRunning)
+        #expect(label.layer.contentsRect == CGRect(x: 0, y: 0, width: 1, height: 1))
+    }
+
+    /// 文字は、同じ行に並び、同じだけ動く、続いた文字のまとまりで動かす。次の行へ移る文字は、行をまたいで動く。
+    /// 新しく入った絵文字は、動かさずに薄い状態から濃くする。
+    @Test func piecesFollowLines() {
+        typealias Placement = EmojiArrivalTransition.Placement
+        // 「A[絵文字]BC」で、絵文字が広がり、Cが次の行の頭へ移る。
+        let start: [Int: Placement] = [
+            0: Placement(frame: CGRect(x: 0, y: 0, width: 10, height: 20), opacity: 1),
+            1: Placement(frame: CGRect(x: 10, y: 0, width: 20, height: 20), opacity: 0),
+            2: Placement(frame: CGRect(x: 30, y: 0, width: 10, height: 20), opacity: 1),
+            3: Placement(frame: CGRect(x: 40, y: 0, width: 10, height: 20), opacity: 1),
+        ]
+        let final: [Int: CGRect] = [
+            0: CGRect(x: 0, y: 0, width: 10, height: 20),
+            1: CGRect(x: 10, y: 0, width: 30, height: 20),
+            2: CGRect(x: 40, y: 0, width: 10, height: 20),
+            3: CGRect(x: 0, y: 20, width: 10, height: 20),
+        ]
+
+        let pieces = EmojiArrivalTransition.pieces(start: start, final: final)
+
+        #expect(pieces.map(\.indices) == [[0], [1], [2], [3]])
+        #expect(pieces[0].offset == .zero)
+        #expect(pieces[1].startOpacity == 0)
+        #expect(pieces[2].offset == CGPoint(x: 10, y: 0))
+        #expect(pieces[3].offset == CGPoint(x: -40, y: 20))
+    }
+
+    /// 絵文字が届いて、上端が表示領域より上にある行の折り返しが増えても、その行の画面上の位置は動かない。
+    @Test func emojiArrivalKeepsRowAboveTop() async throws {
+        let wide = try (1...6).map { try emoji("wide\($0)") }
+        let png = try widePNG()
+        let gate = Gate()
+        let store = EmojiImageStore { _ in
+            try await gate.wait()
+            return png
+        }
+        let harness = try TimelineHarness(emojiImages: store)
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        let base = statuses[10]
+        statuses[10] = Status(
+            id: base.id,
+            createdAt: base.createdAt,
+            account: base.account,
+            content: "<p>" + wide.map { ":\($0.shortcode):" }.joined(separator: " 文字 ") + "</p>",
+            spoilerText: "",
+            url: nil,
+            emojis: wide
+        )
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(base.id)
+        try harness.scroll(to: id, at: .top)
+        harness.collectionView.contentOffset.y += 10
+        harness.collectionView.layoutIfNeeded()
+        let y = try #require(harness.windowMinY(of: id))
+        let height = try #require(harness.visibleCell(of: id)?.frame.height)
+
+        gate.open()
+        try await waitUntil { (try? #require(harness.visibleCell(of: id)?.frame.height)).map { $0 > height } ?? false }
+
+        #expect(harness.windowMinY(of: id) == y)
+    }
+}

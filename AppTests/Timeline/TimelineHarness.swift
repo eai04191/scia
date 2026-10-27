@@ -26,13 +26,14 @@ final class TimelineHarness {
     init(
         size: CGSize = CGSize(width: 393, height: 852),
         mediaImages: MediaImageStore = .offline,
+        emojiImages: EmojiImageStore = .offline,
         headerView: UIView? = nil,
         notices: NoticeCenter = NoticeCenter(),
         prepare: ((TimelineViewController) -> Void)? = nil
     ) throws {
         let defaults = TestScratch.defaults("TimelineHarness")
         settings = AppSettings(defaults: defaults)
-        viewController = TimelineViewController(refresh: {}, tuning: tuning, emojiImages: .offline, mediaImages: mediaImages, avatarImages: .offline, settings: settings)
+        viewController = TimelineViewController(refresh: {}, tuning: tuning, emojiImages: emojiImages, mediaImages: mediaImages, avatarImages: .offline, settings: settings)
         viewController.headerView = headerView
         viewController.notices = notices
         viewController.frameSource = frames

@@ -111,7 +111,7 @@ struct RichTextRenderer {
         case .unchanged: break
         }
         string.enumerateAttribute(.attachment, in: whole) { value, _, _ in
-            guard let attachment = value as? NSTextAttachment, let image = attachment.image, image !== placeholder else { return }
+            guard let attachment = value as? NSTextAttachment, let image = attachment.image, image !== emojiPlaceholder else { return }
             attachment.image = UIGraphicsImageRenderer(size: image.size, format: UIGraphicsImageRendererFormat(for: UITraitCollection(displayScale: image.scale))).image { context in
                 let rect = CGRect(origin: .zero, size: image.size)
                 switch change {
@@ -209,7 +209,7 @@ struct RichTextRenderer {
             attachment.bounds = CGRect(x: 0, y: y, width: height * image.size.width / image.size.height, height: height)
         } else {
             // 読み込み中は同じ高さの空白で場所を取っておく。
-            attachment.image = Self.placeholder
+            attachment.image = Self.emojiPlaceholder
             attachment.bounds = CGRect(x: 0, y: y, width: height, height: height)
         }
         let string = NSMutableAttributedString(attachment: attachment)
@@ -224,7 +224,8 @@ struct RichTextRenderer {
         text.replacingOccurrences(of: "\n", with: "\u{2028}")
     }
 
-    private static let placeholder = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { _ in }
+    /// 読み込み中のカスタム絵文字の場所を空けておく、透明な画像。ラベルが、画像が届いて入れ替わったことを見分けるのにも使う。
+    static let emojiPlaceholder = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { _ in }
 
     private func attributes(style: RichText.Style, block: RichText.Block) -> [NSAttributedString.Key: Any] {
         var attributes: [NSAttributedString.Key: Any] = [
