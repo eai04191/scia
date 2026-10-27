@@ -88,6 +88,16 @@ public enum TuningCatalog {
         defaultValue: 0.25
     )
 
+    /// アカウントを切り替えたとき、前のアカウントの画面から新しいアカウントの画面へのクロスフェードの時間。
+    /// 一覧が最初の読み込みで、読み込み中の表示から行を出すとき（起動したときも）のフェードにも使う。0なら切り替える。
+    public static let accountSwitchDuration = NumberTuning(
+        id: "timeline.accountSwitchDuration",
+        title: "アカウントを切り替えたときのフェードの時間（秒）",
+        range: 0...1,
+        step: 0.05,
+        defaultValue: 0.25
+    )
+
     /// Xの投稿へのリンクを、fxtwitterから読んだ作者、本文、添付ファイルの囲みで出す。読み終えるまでと、読めなかったときは、リンクカードを出す。
     /// 表示の試作。読み終えたときに行が伸びるため、ガタつきが気になるかを実機で確かめる。
     public static let xPostEmbeds = ToggleTuning(
@@ -1592,6 +1602,7 @@ public enum TuningCatalog {
             .number(insertionScrollDuration),
             .number(insertionScrollBounce),
             .number(newArrivalsButtonDuration),
+            .number(accountSwitchDuration),
             .number(objectLongPressHapticIntensity),
         ]),
         TuningSection(id: "profile", title: "プロフィール", items: [

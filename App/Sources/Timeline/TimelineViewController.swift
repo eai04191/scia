@@ -660,6 +660,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             return
         }
         let previous = entries
+        // 読み込み中の表示から最初の行を出すときは、表示を薄くしながら行を浮かび上がらせる。
+        // 読み込みが速く、読み込み中の表示を画面に置く前に行が届いたときも、行は浮かび上がらせる。
+        let revealsFromLoading = contentState == .loading && headerView == nil && previous.isEmpty && !newEntries.isEmpty
+        let loadingSnapshot = revealsFromLoading ? loadingViewSnapshot() : nil
         let keepsRowContents = base.map { Self.sharesStorage($0, appliedEntries) } ?? false
         appliedEntries = newEntries
         // 添付ファイルのビューアや全画面のアプリ内のSafariで覆っている間は、新着を見たと報告しないので、追従もせずに読んでいた行の位置を保つ。
@@ -728,8 +732,38 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             updateObscuredBottomInset()
         }
         setNeedsUpdateContentUnavailableConfiguration()
+        if revealsFromLoading {
+            revealFirstEntries(over: loadingSnapshot)
+        }
         reportVisibleItems()
         reportApproachingGaps()
+    }
+
+    /// 全面に出している読み込み中の表示の像を、同じ位置に重ねて返す。表示を外したあとも、薄くし終えるまで残すため。
+    private func loadingViewSnapshot() -> UIView? {
+        let duration = tuning.value(of: TuningCatalog.accountSwitchDuration)
+        guard duration > 0, view.window != nil, contentUnavailableConfiguration != nil,
+              let shown = view.subviews.first(where: { $0 is UIContentUnavailableView }),
+              let snapshot = shown.snapshotView(afterScreenUpdates: false)
+        else { return nil }
+        snapshot.frame = shown.frame
+        snapshot.isUserInteractionEnabled = false
+        view.addSubview(snapshot)
+        return snapshot
+    }
+
+    /// 読み込み中の表示を外して最初の行を出したとき、表示の像を薄くし、見えている行を浮かび上がらせる。1コマで入れ替えないため。
+    /// アカウントを切り替えたときと起動したときの、最初の読み込みで通る。
+    private func revealFirstEntries(over loadingSnapshot: UIView?) {
+        let duration = tuning.value(of: TuningCatalog.accountSwitchDuration)
+        if let loadingSnapshot {
+            UIView.animateSmoothly(duration: duration * 0.6) {
+                loadingSnapshot.alpha = 0
+            } completion: {
+                loadingSnapshot.removeFromSuperview()
+            }
+        }
+        fadeInVisibleItems(duration: duration)
     }
 
     /// 行を消すだけの更新を、閉じる動きで当てられるか。

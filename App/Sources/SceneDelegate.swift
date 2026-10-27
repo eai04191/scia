@@ -210,9 +210,23 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             guard let self, session === self.session else { return }
             await self.reauthenticate(session.credential)
         })
+        let replacesSession = self.session != nil
         self.session = session
-        window?.rootViewController = session.rootViewController
-        installNoticeOverlay()
+        // アカウントを切り替えたときは、前のアカウントの画面から薄くして入れ替える。起動したときは、ローンチ画面から切り替える。
+        let duration = replacesSession ? AppDependencies.tuning.value(of: TuningCatalog.accountSwitchDuration) : 0
+        if let window, duration > 0 {
+            UIView.transition(with: window, duration: duration, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+                // 新しい画面の並べ方まで動きに乗ると、左上の小さな枠から広がって見えるため、差し替えは動かさずに行い、見え方だけを入れ替える。
+                UIView.performWithoutAnimation {
+                    window.rootViewController = session.rootViewController
+                    self.installNoticeOverlay()
+                    window.layoutIfNeeded()
+                }
+            }
+        } else {
+            window?.rootViewController = session.rootViewController
+            installNoticeOverlay()
+        }
         session.start()
         // 裏にいる窓でアカウントを切り替えたときなど。始めた時点で裏なら、前に戻るまで接続しない。戻ったときに`sceneWillEnterForeground`で始め直す。
         if window?.windowScene?.activationState == .background {
