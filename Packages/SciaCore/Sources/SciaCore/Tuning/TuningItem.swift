@@ -126,31 +126,32 @@ public enum TuningCatalog {
     )
 
     /// 本文の右に重ねた写真のうち、手前の1枚目を回す角度（度）。正の値で右回り。一覧の投稿は残り続けるので、投稿欄のカプセルより控えめにする。
+    /// 写真は画面の中心より右にあるので、中心から外へ傾くよう、カプセルの重なりを左右反転させた向きにする。
     /// 0にすると、投稿ごとにばらつかせても、まっすぐのままになる。
     public static let mediaStackFrontRotation = NumberTuning(
         id: "timeline.stackFrontRotation",
         title: "本文の右の1枚目の写真の角度（度）",
         range: -15...15,
         step: 0.5,
-        defaultValue: -1
+        defaultValue: 1
     )
 
-    /// 本文の右に重ねた写真のうち、2枚目を回す角度（度）。正の値で右回り。
+    /// 本文の右に重ねた写真のうち、1枚目の左下側からのぞかせる2枚目を回す角度（度）。正の値で右回り。
     public static let mediaStackBackRotation = NumberTuning(
         id: "timeline.stackBackRotation",
         title: "本文の右の2枚目の写真の角度（度）",
         range: -15...15,
         step: 0.5,
-        defaultValue: 3
+        defaultValue: -3
     )
 
-    /// 本文の右に重ねた2枚目の写真の中心を、1枚目の中心から横にずらす量。写真の大きさを変えても同じ形になるよう、写真の一辺に対する割合で決める。初めの値は、投稿欄のカプセルのずらす量を写真の一辺（26pt）で割ったもの。
+    /// 本文の右に重ねた2枚目の写真の中心を、1枚目の中心から横にずらす量。写真の大きさを変えても同じ形になるよう、写真の一辺に対する割合で決める。初めの値は、投稿欄のカプセルのずらす量を写真の一辺（26pt）で割り、左右反転させたもの。
     public static let mediaStackBackOffsetX = NumberTuning(
         id: "timeline.stackBackOffsetX",
         title: "本文の右の2枚目の写真を横にずらす量（写真の一辺に対する割合、負で左）",
         range: -0.3...0.3,
         step: 0.005,
-        defaultValue: 0.155
+        defaultValue: -0.155
     )
 
     /// 本文の右に重ねた2枚目の写真の中心を、1枚目の中心から縦にずらす量。写真の一辺に対する割合。
@@ -162,13 +163,13 @@ public enum TuningCatalog {
         defaultValue: 0.04
     )
 
-    /// 本文の右に重ねた写真のうち、1枚目の左上側からのぞかせる3枚目を回す角度（度）。正の値で右回り。
+    /// 本文の右に重ねた写真のうち、1枚目の右上側からのぞかせる3枚目を回す角度（度）。正の値で右回り。
     public static let mediaStackThirdRotation = NumberTuning(
         id: "timeline.stackThirdRotation",
         title: "本文の右の3枚目の写真の角度（度）",
         range: -15...15,
         step: 0.5,
-        defaultValue: -3
+        defaultValue: 3
     )
 
     /// 本文の右に重ねた3枚目の写真の中心を、1枚目の中心から横にずらす量。写真の一辺に対する割合。
@@ -177,7 +178,7 @@ public enum TuningCatalog {
         title: "本文の右の3枚目の写真を横にずらす量（写真の一辺に対する割合、負で左）",
         range: -0.3...0.3,
         step: 0.005,
-        defaultValue: -0.115
+        defaultValue: 0.115
     )
 
     /// 本文の右に重ねた3枚目の写真の中心を、1枚目の中心から縦にずらす量。写真の一辺に対する割合。
