@@ -1670,7 +1670,9 @@ final class InlineComposeController: NSObject {
                 let content: ComposeMorphFlights.Content = index < 3
                     ? .thumbnail(photo.tile.thumbnailImage, photo.tile.thumbnailFocus)
                     : .thumbnail(model.localMedia[id]?.thumbnail, nil)
-                ends[.attachment(id)] = .init(view: photo, content: content, cornerRadius: StackedPhotoView.cornerRadius, border: StackedPhotoView.border) { concealed in
+                // 写真同士の影は、その写真のものなので、3枚目の位置に重ねる4枚目より後ろには載せない。
+                let betweenShadow = index < 3 ? photo.betweenShadowSnapshot() : nil
+                ends[.attachment(id)] = .init(view: photo, content: content, cornerRadius: StackedPhotoView.cornerRadius, border: StackedPhotoView.border, betweenShadow: betweenShadow) { concealed in
                     photo.alpha = concealed ? 0 : 1
                     thumbnails.setStackShadowConcealed(concealed)
                 }

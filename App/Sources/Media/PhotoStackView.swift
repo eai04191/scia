@@ -309,6 +309,12 @@ final class StackedPhotoView: UIView {
         CATransaction.commit()
     }
 
+    /// 上に重ねた写真が落としている影の像。影を描いていなければnil。開閉で動かす複製に載せ、動き始めに薄くするために使う。
+    func betweenShadowSnapshot() -> UIView? {
+        guard betweenShadow.shadowPath != nil, betweenShadow.shadowOpacity > 0, betweenShadowClip.alpha > 0 else { return nil }
+        return betweenShadowClip.snapshotView(afterScreenUpdates: false)
+    }
+
     func revealBetweenShadow(duration: TimeInterval) {
         UIView.performWithoutAnimation { betweenShadowClip.alpha = 0 }
         UIView.animate(withDuration: duration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {

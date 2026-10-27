@@ -46,4 +46,26 @@ struct ComposeMorphFlightsTests {
         #expect(start == CGPoint(x: source.frame.midX, y: source.frame.midY))
         #expect(copy.center == CGPoint(x: target.frame.midX, y: target.frame.midY))
     }
+
+    /// カプセルから動き始める写真の複製は、起点の写真が受けていた写真同士の影を載せて動き始める。
+    /// 載せないと、動き始めのコマで、手前の写真が奥の写真に落としていた影が1コマで消える。
+    @Test func takeOffCarriesBetweenShadow() throws {
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 400))
+        let source = UIView(frame: CGRect(x: 16, y: 10, width: 26, height: 26))
+        container.addSubview(source)
+        let shadow = UIView()
+        let flights = ComposeMorphFlights(container: container)
+        let key = ComposeMorphFlights.Key.attachment(UUID())
+        let end = ComposeMorphFlights.End(view: source, content: .thumbnail(nil, nil), cornerRadius: 3, border: 2, betweenShadow: shadow) { source.alpha = $0 ? 0 : 1 }
+
+        flights.takeOff(from: [key: end], stackingOrder: [key], stackShadowOpacity: 0)
+
+        let copy = try #require(shadow.superview)
+        #expect(copy.bounds.size == source.bounds.size)
+        #expect(shadow.frame == copy.bounds)
+        // 複製の大きさに合わせて伸び縮みする。
+        #expect(shadow.autoresizingMask == [.flexibleWidth, .flexibleHeight])
+        // 載せた影は、動き始めに薄くし始める。
+        #expect(shadow.alpha == 0)
+    }
 }

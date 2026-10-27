@@ -8,7 +8,8 @@ import UIKit
 /// 複製はバーの中に置くので、キーボードに乗ってバーごと動いても、バーの中の位置だけを動かせばよい。
 /// カプセルの写真は白いフチが付いて回っているので、複製も大きさ、回転、フチの幅、角の丸みを一緒に移す。
 /// カプセルの写真のスタックは、輪郭を合わせた形で影を1つだけ落とす。動いている複製はスタックの形が崩れていくので、写真の複製をまとめて1つの入れ物に入れ、
-/// 入れ物の影として、動いている途中の形のまま描く。写真同士の影は、動いている間は描かない。
+/// 入れ物の影として、動いている途中の形のまま描く。写真同士の影は、動いている間は描かない。カプセルから動き始めるときは、
+/// 写真同士の影の像を複製に載せて薄くし、着くときは、着いてから本物の影を浮かび上がらせて、どちらの端でも1コマで替わらないようにする。
 @MainActor
 final class ComposeMorphFlights {
     /// 画面の描き換えと同じ時間。テストでは差し替える。
@@ -30,6 +31,8 @@ final class ComposeMorphFlights {
         /// 写真に重ねた表示（列のサムネイルの、送信中の暗い下地や失敗のアイコンなど）。起点にあれば像を複製に載せ、
         /// 向かう間に薄くする。行き先にあれば、着いてから浮かび上がらせる。
         var decoration: UIView?
+        /// 上に重ねた写真が落としている影の像。カプセルの写真だけに付く。起点にあれば複製に載せ、動き始めに薄くする。
+        var betweenShadow: UIView?
         /// 動かしている間、本物を見えなくする。重ねた表示も一緒に隠す。
         let conceal: (Bool) -> Void
     }
@@ -100,6 +103,12 @@ final class ComposeMorphFlights {
             copy.apply(geometry(of: source))
             if let decoration = source.decoration, Self.showsSomething(decoration) {
                 copy.attachDecoration(decoration.snapshotView(afterScreenUpdates: false))
+            }
+            if let betweenShadow = source.betweenShadow {
+                copy.attachBetweenShadow(betweenShadow)
+                UIView.animateSmoothly(duration: Self.decorationRevealDuration) {
+                    copy.betweenShadowAlpha = 0
+                }
             }
             conceal(source)
             flights[key] = Flight(copy: copy, ends: [source])
@@ -217,7 +226,7 @@ final class ComposeMorphFlights {
         return true
     }
 
-    /// 着いた先の重ねた表示を浮かび上がらせる時間。カプセルの写真同士の影を浮かび上がらせる時間と揃える。
+    /// 着いた先の重ねた表示を浮かび上がらせる時間。カプセルの写真同士の影を浮かび上がらせる時間と揃え、動き始めに写真同士の影を薄くする時間にも使う。
     private static let decorationRevealDuration: TimeInterval = 0.15
 
     /// 重ねた表示に、見えているものがあるか。何も出していなければ、像を載せない。
@@ -261,6 +270,23 @@ private final class FlightCopy: UIView {
     var decorationAlpha: CGFloat {
         get { decoration?.alpha ?? 0 }
         set { decoration?.alpha = newValue }
+    }
+
+    /// 起点の写真に、上の写真が落としていた影の像。写真と同じ大きさなので、複製の大きさに合わせて伸び縮みさせる。
+    private var betweenShadow: UIView?
+
+    var betweenShadowAlpha: CGFloat {
+        get { betweenShadow?.alpha ?? 0 }
+        set { betweenShadow?.alpha = newValue }
+    }
+
+    func attachBetweenShadow(_ snapshot: UIView) {
+        betweenShadow?.removeFromSuperview()
+        betweenShadow = snapshot
+        snapshot.isUserInteractionEnabled = false
+        snapshot.frame = bounds
+        snapshot.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        addSubview(snapshot)
     }
 
     func attachDecoration(_ snapshot: UIView?) {
