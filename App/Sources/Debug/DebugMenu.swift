@@ -35,7 +35,7 @@ extension UIViewController {
             [
                 // チップの列の動き（画面を移る途中、引っぱる途中）を、実機でもダウンロードを用意せずに確かめるため。
                 UIAction(title: "処理中のチップを1分出す", image: UIImage(systemName: "hourglass")) { _ in
-                    handle(.progressNotice(seconds: 60))
+                    handle(.progressNotice(seconds: 60, title: nil))
                 },
                 // 添付ファイルの列や送る前に縮める流れを、ピッカーで写真を選ばずに確かめるため。サーバーにアップロードする。
                 UIMenu(title: "投稿欄に画像を添付", image: UIImage(systemName: "photo.on.rectangle"), children: (1...4).map { count in

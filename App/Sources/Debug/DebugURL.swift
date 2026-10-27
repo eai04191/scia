@@ -43,9 +43,12 @@ enum DebugURL: Equatable {
     /// `scia-debug://lookup/slow`で、以後のプロフィールを開く操作と、メンションとハンドルのコピーで、相手を探すのを3秒遅らせる。
     /// `?seconds=<秒>`で遅らせる時間を変える。`scia-debug://lookup/normal`で戻す。
     case slowLookups(seconds: Double?)
-    /// `scia-debug://notice/progress`で、出たままの「処理中」のチップを、進み具合を少しずつ進めながら60秒出す。`?seconds=<秒>`で長さを変える。
+    /// `scia-debug://notice/progress`で、出たままの「処理中」のチップを、進み具合を少しずつ進めながら60秒出す。`?seconds=<秒>`で長さを、`?title=<文言>`で文言を変える。
     /// アプリ全体のアプリ内通知として出すため、画面を移る途中や引っぱる途中のチップの列の動きを、ダウンロードを用意せずに確かめられる。
-    case progressNotice(seconds: Double)
+    case progressNotice(seconds: Double, title: String?)
+    /// `scia-debug://notice/transient?title=<文言>`で、数秒で消えるチップを出す。`&seconds=<秒>`で消えるまでの長さを変える。
+    /// 2行に折り返す長い文言の出入りや差し替えを、その文言になる失敗を起こさずに確かめるため。
+    case transientNotice(title: String, seconds: Double?)
     /// `scia-debug://media-limits?image-size=<バイト>&image-matrix=<画素>&video-size=<バイト>&video-matrix=<画素>&video-frame-rate=<fps>`。
     /// 投稿欄が使うサーバーのメディアの上限を、指定した項目だけ差し替える。次に投稿欄で書き始めたときから効く。`scia-debug://media-limits/server`で戻す。
     case mediaLimits(MediaLimits?)
@@ -158,7 +161,7 @@ enum DebugURL: Equatable {
         case "download": Self.slowDownload(url)
         case "menu-icons": Self.slowMenuIcons(url)
         case "lookup": Self.slowLookups(url)
-        case "notice": Self.progressNotice(url)
+        case "notice": Self.notice(url)
         case "media-limits": Self.mediaLimits(url)
         case "viewer": Self.viewer(url)
         case "autoscroll": Self.autoScroll(url)
@@ -222,9 +225,16 @@ enum DebugURL: Equatable {
         return .slowLookups(seconds: query("seconds", in: url).flatMap { Double($0) } ?? 3)
     }
 
-    private static func progressNotice(_ url: URL) -> DebugURL? {
-        guard url.lastPathComponent == "progress", let seconds = Double(query("seconds", in: url) ?? "60"), seconds > 0 else { return nil }
-        return .progressNotice(seconds: seconds)
+    private static func notice(_ url: URL) -> DebugURL? {
+        let seconds = query("seconds", in: url).flatMap { Double($0) }
+        // 正の有限値だけを受け付ける。NaNや無限大はDurationにできず落ちるため。
+        if let seconds, !(seconds.isFinite && seconds > 0) { return nil }
+        let title = query("title", in: url)
+        switch url.lastPathComponent {
+        case "progress": return .progressNotice(seconds: seconds ?? 60, title: title)
+        case "transient": return title.map { .transientNotice(title: $0, seconds: seconds) }
+        default: return nil
+        }
     }
 
     private static func mediaLimits(_ url: URL) -> DebugURL? {

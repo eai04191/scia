@@ -2435,7 +2435,7 @@ final class SessionController {
 
     #if DEBUG
     /// 確かめるための処理中のチップを、進み具合を少しずつ進めながら`duration`のあいだ出し、済んだら消す。出している途中に呼び直したら、初めから数え直す。
-    private func showDebugProgress(for duration: Duration) {
+    private func showDebugProgress(for duration: Duration, title: String) {
         debugProgressTask?.cancel()
         let elapsed = stopwatch(on: clock)
         let clock = clock
@@ -2445,7 +2445,7 @@ final class SessionController {
             while !Task.isCancelled {
                 let fraction = min(elapsed() / duration, 1)
                 self?.notices.setPersistent({ _ in
-                    Notice(id: id, kind: .progress, title: "確かめるための処理中", value: Notice.percentText(of: fraction), valueIsProgress: true)
+                    Notice(id: id, kind: .progress, title: title, value: Notice.percentText(of: fraction), valueIsProgress: true)
                 }, in: .debug)
                 guard fraction < 1 else { break }
                 try? await clock.sleep(for: .milliseconds(500))
@@ -2520,8 +2520,13 @@ final class SessionController {
             DebugFaults.slowMenuIcons(by: seconds.map { .seconds($0) })
         case .slowLookups(let seconds):
             DebugFaults.slowLookups(by: seconds.map { .seconds($0) })
-        case .progressNotice(let seconds):
-            showDebugProgress(for: .seconds(seconds))
+        case .progressNotice(let seconds, let title):
+            showDebugProgress(for: .seconds(seconds), title: title ?? "確かめるための処理中")
+        case .transientNotice(let title, let seconds):
+            notices.showTransient(
+                Notice(id: "debug.transient", kind: .info, title: title),
+                duration: seconds ?? AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration)
+            )
         case .mediaLimits(let limits):
             DebugFaults.overrideMediaLimits(limits)
         case .catalog(let component):

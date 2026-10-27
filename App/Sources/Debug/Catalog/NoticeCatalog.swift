@@ -87,6 +87,35 @@ enum NoticeCatalog {
             CatalogState(title: "長い文言でも件数と「›」を残す") {
                 stack(persistent: Notice(id: "long", kind: .failure, title: "長い文言のときに件数と「›」が残るかを確かめるための文", additionalCount: 12, action: disclosure))
             },
+            CatalogState(title: "1行に収まらない文言を2行に折り返す（数秒で消える）") {
+                stack(transient: Notice(id: "wrap", kind: .info, title: "この投稿では「メンションされたユーザー」を使えません"))
+            },
+            CatalogState(title: "1行に収まらない英語の文言を2行に折り返す（数秒で消える、押すと理由）") {
+                stack(transient: .interactionFailure(title: "\u{201C}Mentioned users\u{201D} isn\u{2019}t available for this post") {})
+            },
+            CatalogState(title: "2行にも収まらない文言は2行目の末尾で切り、件数と「›」を残す") {
+                stack(persistent: Notice(
+                    id: "overflow", kind: .failure,
+                    title: "2行にも収まらないほど長い文言のときに、2行目の末尾で切れて、件数と「›」が残るかを確かめるための文",
+                    additionalCount: 12, action: disclosure
+                ))
+            },
+            CatalogState(title: "2行の出たままと、1行の数秒で消えるものを並べる") {
+                stack(persistent: draft(.failed).map { notice in
+                    var notice = notice
+                    notice.title = "代替テキストを送信できませんでした。押すと理由を確かめられます"
+                    return notice
+                }, transient: .savedToPhotos)
+            },
+            CatalogState(title: "1行の出たままと、2行の数秒で消えるものを並べる") {
+                stack(persistent: .download(of: url, fraction: 0.42) {}, transient: Notice(id: "wrap", kind: .info, title: "この投稿では「メンションされたユーザー」を使えません"))
+            },
+            CatalogState(title: "2行のものを2枚並べる") {
+                stack(
+                    persistent: Notice(id: "wrap1", kind: .failure, title: "長い文言の出たままの失敗が、2行に折り返したときの並びを確かめるための文", action: disclosure),
+                    transient: .interactionFailure(title: "\u{201C}Mentioned users\u{201D} isn\u{2019}t available for this post") {}
+                )
+            },
             CatalogState(title: "出たままと数秒で消えるものを並べる") {
                 stack(persistent: .download(of: url, fraction: 0.42) {}, transient: .savedToPhotos)
             },

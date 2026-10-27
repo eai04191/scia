@@ -33,9 +33,12 @@ struct DebugURLTests {
         #expect(DebugURL(try #require(URL(string: "scia-debug://lookup/normal"))) == .slowLookups(seconds: nil))
     }
 
-    @Test func readsProgressNotice() throws {
-        #expect(DebugURL(try #require(URL(string: "scia-debug://notice/progress"))) == .progressNotice(seconds: 60))
-        #expect(DebugURL(try #require(URL(string: "scia-debug://notice/progress?seconds=5"))) == .progressNotice(seconds: 5))
+    @Test func readsNotice() throws {
+        #expect(DebugURL(try #require(URL(string: "scia-debug://notice/progress"))) == .progressNotice(seconds: 60, title: nil))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://notice/progress?seconds=5"))) == .progressNotice(seconds: 5, title: nil))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://notice/progress?title=%E9%95%B7%E3%81%84"))) == .progressNotice(seconds: 60, title: "長い"))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://notice/transient?title=%E9%95%B7%E3%81%84"))) == .transientNotice(title: "長い", seconds: nil))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://notice/transient?title=a&seconds=30"))) == .transientNotice(title: "a", seconds: 30))
         #expect(DebugURL(try #require(URL(string: "scia-debug://notice/other"))) == nil)
     }
 
@@ -114,6 +117,10 @@ struct DebugURLTests {
         "scia-debug://ticker-loop/unknown",
         "scia-debug://unsupported/unknown",
         "scia-debug://notice/progress?seconds=0",
+        "scia-debug://notice/transient",
+        "scia-debug://notice/transient?title=a&seconds=0",
+        "scia-debug://notice/progress?seconds=nan",
+        "scia-debug://notice/transient?title=a&seconds=inf",
         "scia-debug://tab/unknown",
         "scia-debug://arrivals/unknown",
         "scia-debug://viewer?index=-1",
