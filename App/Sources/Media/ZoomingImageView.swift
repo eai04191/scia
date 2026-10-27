@@ -17,8 +17,27 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
     var onSingleTap: (() -> Void)?
     /// ダブルタップして拡大するときと、戻すときの時間。UIScrollViewの`animated`の拡大は時間を変えられないため、自前で動かす。
     var doubleTapZoomDuration: TimeInterval = 0.2
-    /// ダブルタップの拡大か縮小が動いている。
+    /// ダブルタップの拡大か縮小か、等倍へ縮める動きが動いている。
     private var isAnimatingZoom = false
+    /// 拡大や縮小の動きを始めた回数。途中で次の動きを始めたら、前の動きの終わりの知らせを捨てる。
+    private var zoomAnimationGeneration = 0
+    /// 拡大や縮小の動きが終わるのを待っている処理。
+    private var actionsAfterZoom: [@MainActor () -> Void] = []
+
+    /// 拡大や縮小の動きと、指でのピンチやスクロールが終わってから`action`を行う。どちらもしていなければすぐに行う。
+    /// メインスレッドで重い処理を、動きの途中に重ねて止まって見えないようにするのに使う。
+    func afterZoomAnimation(_ action: @escaping @MainActor () -> Void) {
+        actionsAfterZoom.append(action)
+        runActionsAfterZoom()
+    }
+
+    /// 動きも指での操作もしていなければ、待っている処理を行う。動きを指で止めたときは、指を離して止まるまで待つ。
+    private func runActionsAfterZoom() {
+        guard !actionsAfterZoom.isEmpty, !isAnimatingZoom, !isTracking, !isDragging, !isDecelerating, !isZooming, !isZoomBouncing else { return }
+        let actions = actionsAfterZoom
+        actionsAfterZoom = []
+        actions.forEach { $0() }
+    }
 
     var image: UIImage? {
         get { imageView.image }
@@ -229,10 +248,16 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
 
     private func animateZoom(duration: TimeInterval? = nil, _ changes: @escaping (ZoomingImageView) -> Void) {
         isAnimatingZoom = true
+        zoomAnimationGeneration += 1
+        let generation = zoomAnimationGeneration
         UIView.animate(springDuration: duration ?? doubleTapZoomDuration, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
             changes(self)
-        } completion: { [weak self] finished in
-            if finished { self?.isAnimatingZoom = false }
+        } completion: { [weak self] _ in
+            // 並べ直しで倍率を置き直すと、動きは途中で打ち切られ、終えていない知らせが届く。それでも最後に始めた動きなら、動いていないとみなす。
+            // 動いているままにすると、動きの終わりを待つ処理がいつまでも行われない。
+            guard let self, generation == self.zoomAnimationGeneration, self.isAnimatingZoom else { return }
+            self.isAnimatingZoom = false
+            self.runActionsAfterZoom()
         }
     }
 
@@ -268,6 +293,16 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
         stopZoomAnimation()
     }
 
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate {
+            runActionsAfterZoom()
+        }
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        runActionsAfterZoom()
+    }
+
     func scrollViewDidZoom(_ scrollView: UIScrollView) {
         centerImage()
     }
@@ -275,6 +310,7 @@ final class ZoomingImageView: UIScrollView, UIScrollViewDelegate {
     /// 等倍で出している小さい画像を、画面に収める倍率の近くまでピンチしたら、画面に収める。
     /// 等倍へ戻したときは寄せない。等倍が画面に収める倍率に近い画像で、ダブルタップで等倍へ戻せなくなるため。
     func scrollViewDidEndZooming(_ scrollView: UIScrollView, with view: UIView?, atScale scale: CGFloat) {
+        defer { runActionsAfterZoom() }
         guard fitScale > minimumZoomScale + 0.01, scale > minimumZoomScale + 0.01, abs(scale - fitScale) > 0.001, abs(scale - fitScale) <= fitScale * Self.fitSnapTolerance else { return }
         setZoomScale(fitScale, animated: true)
     }

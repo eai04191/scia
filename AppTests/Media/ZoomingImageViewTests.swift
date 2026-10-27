@@ -1,3 +1,4 @@
+import SciaTesting
 import Testing
 import UIKit
 @testable import Scia
@@ -104,5 +105,32 @@ struct ZoomingImageViewTests {
         view.setNaturalSize(CGSize(width: 100, height: 100), duration: 0.3)
 
         #expect(abs((view.imageFrame?.width ?? 0) - width) < 0.5)
+    }
+
+    /// 等倍へ縮めている間に頼まれた処理は、縮め終えてから行う。重い処理を縮む動きに重ねて、止まって見えないようにするため。
+    @Test func actionWaitsForShrinkToFinish() async throws {
+        let view = ZoomingImageView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        let small = image(width: 100, height: 100)
+        view.image = small
+        view.layoutIfNeeded()
+        var ran = false
+
+        view.setNaturalSize(small.size, duration: 0.3)
+        view.afterZoomAnimation { ran = true }
+
+        #expect(!ran, "縮めている途中に行いました")
+        try await waitUntil { ran }
+    }
+
+    /// 動いていなければ、頼まれた処理をすぐに行う。
+    @Test func actionRunsImmediatelyWhenIdle() {
+        let view = ZoomingImageView(frame: CGRect(x: 0, y: 0, width: 400, height: 800))
+        view.image = image(width: 100, height: 100)
+        view.layoutIfNeeded()
+        var ran = false
+
+        view.afterZoomAnimation { ran = true }
+
+        #expect(ran)
     }
 }

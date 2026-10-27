@@ -2166,8 +2166,13 @@ extension ImagePageController {
             do {
                 let analysis = try await Self.analyzer.analyze(image, configuration: ImageAnalyzer.Configuration([.text, .machineReadableCode]))
                 guard let self, !Task.isCancelled else { return }
-                self.liveText.analysis = analysis
-                self.hasFinishedAnalysis = true
+                // 結果を渡すと、VisionKitが初めての準備でメインスレッドを数十ミリ秒使うことがある。元の大きさの分かった画像を等倍へ縮めている途中だと、
+                // 縮む動きが止まって見えるため、縮め終えてから渡す。
+                self.zoomView.afterZoomAnimation { [weak self] in
+                    guard let self, self.zoomView.image === image else { return }
+                    self.liveText.analysis = analysis
+                    self.hasFinishedAnalysis = true
+                }
             } catch {
                 SciaLog.logger(category: "media").error("live text analysis failed: \(SciaLog.describe(error), privacy: .public)")
                 guard let self, !Task.isCancelled else { return }
