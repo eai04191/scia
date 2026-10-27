@@ -126,6 +126,9 @@ final class ImageCropViewController: UIViewController {
         scrollView.showsVerticalScrollIndicator = false
         scrollView.showsHorizontalScrollIndicator = false
         scrollView.decelerationRate = .fast
+        // 回している途中は、キャンバスを縮めて回すので、画面の外にあった画像も画面に入る。切り抜くと、回し始めに画面の外の画像が1コマで消える。
+        // キャンバスは画面と同じ大きさなので、止まっているときは切り抜かなくても見え方は変わらない。
+        scrollView.clipsToBounds = false
         scrollView.addSubview(imageView)
         canvas.addSubview(scrollView)
         // 触れた瞬間の位置を覚え、回している途中なら回し終える。枠のハンドルも画像も、キャンバスの中で触れるので、ここで1か所で受ける。
@@ -438,7 +441,7 @@ final class ImageCropViewController: UIViewController {
         guard baseImage != nil else { return }
         let shown = rotation?.pose ?? .identity
         stopRotationTicker()
-        canvas.transform = .identity
+        setCanvasTransform(.identity)
         cancelRecenter()
         stopRecentering()
         let rect = currentRect()
@@ -466,16 +469,13 @@ final class ImageCropViewController: UIViewController {
             duration: tuning.value(of: TuningCatalog.mediaCropRotateDuration)
         )
         rotation = state
-        canvas.transform = start.affineTransform
-        // 回る途中で、枠の外の暗くしていない画像が画面の隅に見えないよう、枠の外を黒で覆う。
-        overlay.coversOutside = true
+        setCanvasTransform(start.affineTransform)
         let ticker = FrameTicker(source: frameSource, longestElapsed: nil) { [weak self] elapsed in
             guard let self, let rotation = self.rotation, rotation === state else { return false }
             rotation.elapsed += elapsed
-            self.canvas.transform = rotation.pose.affineTransform
+            self.setCanvasTransform(rotation.pose.affineTransform)
             guard rotation.isFinished else { return true }
             self.rotation = nil
-            self.uncoverOutside()
             return false
         }
         rotationTicker = ticker
@@ -487,20 +487,20 @@ final class ImageCropViewController: UIViewController {
     private func finishRotation() {
         guard rotation != nil else { return }
         stopRotationTicker()
-        canvas.transform = .identity
-        uncoverOutside()
+        setCanvasTransform(.identity)
+    }
+
+    /// キャンバスに回す途中の変形をかける。枠の線と四隅のハンドルは、キャンバスごと縮めても、画面の上で同じ太さと長さに見えるよう描き直す。
+    /// 縮めたまま描くと、回し始めのコマで線とハンドルが1コマで細く小さくなるため。
+    private func setCanvasTransform(_ transform: CGAffineTransform) {
+        canvas.transform = transform
+        overlay.drawingScale = hypot(transform.a, transform.b)
     }
 
     private func stopRotationTicker() {
         rotation = nil
         rotationTicker?.stop()
         rotationTicker = nil
-    }
-
-    private func uncoverOutside() {
-        UIView.animate(withDuration: 0.2, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
-            self.overlay.coversOutside = false
-        }
     }
 
     @objc private func reset() {
@@ -613,13 +613,6 @@ final class CropOverlayView: UIView {
         didSet { setNeedsLayout() }
     }
 
-    /// 枠の外を、暗くするのではなく黒で覆う。回している途中に使う。
-    var coversOutside = false {
-        didSet {
-            for dim in dimViews { dim.backgroundColor = UIColor.black.withAlphaComponent(coversOutside ? 1 : Self.dimAlpha) }
-        }
-    }
-
     private static let dimAlpha: CGFloat = 0.6
 
     /// 枠を3つに分ける線を出す。枠や画像を動かしている間だけ出す。
@@ -629,6 +622,16 @@ final class CropOverlayView: UIView {
             UIView.animate(withDuration: 0.2, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
                 for line in self.gridLines { line.alpha = self.showsGrid ? 1 : 0 }
             }
+        }
+    }
+
+    /// 置かれているキャンバスを縮めている倍率。線とハンドルを、この倍率で割った太さと長さで描き、画面の上の見え方を保つ。
+    var drawingScale: CGFloat = 1 {
+        didSet {
+            guard drawingScale != oldValue, drawingScale > 0 else { return }
+            border.layer.borderWidth = 1 / drawingScale
+            setNeedsLayout()
+            layoutIfNeeded()
         }
     }
 
@@ -672,20 +675,24 @@ final class CropOverlayView: UIView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let bounds = self.bounds
-        dimViews[0].frame = CGRect(x: 0, y: 0, width: bounds.width, height: max(box.minY, 0))
-        dimViews[1].frame = CGRect(x: 0, y: box.maxY, width: bounds.width, height: max(bounds.height - box.maxY, 0))
-        dimViews[2].frame = CGRect(x: 0, y: box.minY, width: max(box.minX, 0), height: box.height)
-        dimViews[3].frame = CGRect(x: box.maxX, y: box.minY, width: max(bounds.width - box.maxX, 0), height: box.height)
+        // 回している途中は、キャンバスごと縮めて回すので、自分の外にある画像も画面に入る。そこも暗くするよう、自分の外まで広げて覆う。
+        // 縮める倍率は回す前後の枠の大きさの比で決まり、極端な縦横比でも足りるよう、長い辺の10倍まで広げる。
+        let reach = max(self.bounds.width, self.bounds.height) * 10
+        let bounds = self.bounds.insetBy(dx: -reach, dy: -reach)
+        dimViews[0].frame = CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width, height: max(box.minY - bounds.minY, 0))
+        dimViews[1].frame = CGRect(x: bounds.minX, y: box.maxY, width: bounds.width, height: max(bounds.maxY - box.maxY, 0))
+        dimViews[2].frame = CGRect(x: bounds.minX, y: box.minY, width: max(box.minX - bounds.minX, 0), height: box.height)
+        dimViews[3].frame = CGRect(x: box.maxX, y: box.minY, width: max(bounds.maxX - box.maxX, 0), height: box.height)
         border.frame = box
         let size = box.size
         for index in 0..<2 {
             let fraction = CGFloat(index + 1) / 3
-            gridLines[index].frame = CGRect(x: size.width * fraction, y: 0, width: 1 / traitCollection.displayScale, height: size.height)
-            gridLines[index + 2].frame = CGRect(x: 0, y: size.height * fraction, width: size.width, height: 1 / traitCollection.displayScale)
+            let line = 1 / traitCollection.displayScale / drawingScale
+            gridLines[index].frame = CGRect(x: size.width * fraction, y: 0, width: line, height: size.height)
+            gridLines[index + 2].frame = CGRect(x: 0, y: size.height * fraction, width: size.width, height: line)
         }
         // 角ごとに、横と縦の2本の太い線を、枠の外側へはみ出させて描く。
-        let length = Self.cornerLength, thickness = Self.cornerThickness
+        let length = Self.cornerLength / drawingScale, thickness = Self.cornerThickness / drawingScale
         let origins: [(CGFloat, CGFloat, CGFloat, CGFloat)] = [(0, 0, 1, 1), (size.width, 0, -1, 1), (0, size.height, 1, -1), (size.width, size.height, -1, -1)]
         for (index, (x, y, dx, dy)) in origins.enumerated() {
             let horizontalX = dx > 0 ? x - thickness : x - length
