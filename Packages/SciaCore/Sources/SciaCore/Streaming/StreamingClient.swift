@@ -29,7 +29,7 @@ public struct StreamingClient: Sendable {
 
     /// - Parameter baseURL: `StreamingEndpoint.url()`で得た接続先。
     public func open(baseURL: URL) async throws -> StreamingConnection {
-        if RequestOrigin.current == .automatic {
+        if RequestPurpose.current.isAutomatic {
             try await rateLimit.checkAutomaticRequest()
         }
         var request = URLRequest(url: baseURL.appending(path: "api/v1/streaming"))

@@ -188,12 +188,12 @@ struct XPostTests {
         let origins = FetchOrigins()
         let post = XPost(id: "1", url: try url("https://x.com/a/status/1"), authorName: "A", authorScreenName: "a", text: .plain("本文", emojis: []))
         let store = XPostStore(retryPolicy: Self.retryPolicy) { _ in
-            await origins.append(RequestOrigin.current)
+            await origins.append(RequestPurpose.current)
             return post
         }
         store.request(id: "1")
         try await waitUntil { store.post(id: "1") != nil }
-        #expect(await origins.values == [.automatic])
+        #expect(await origins.values == [.display])
     }
 
     /// 同じ投稿を並べた行が続けて求めても、読むのは1回。読み終えたら知らせる。待っても読めない失敗（404など）の投稿は読み直さない。
@@ -266,9 +266,9 @@ private actor FetchCounter {
 }
 
 private actor FetchOrigins {
-    private(set) var values: [RequestOrigin] = []
+    private(set) var values: [RequestPurpose] = []
 
-    func append(_ origin: RequestOrigin) {
-        values.append(origin)
+    func append(_ purpose: RequestPurpose) {
+        values.append(purpose)
     }
 }

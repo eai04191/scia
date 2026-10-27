@@ -118,10 +118,10 @@ struct EmojiImageStoreTests {
 
     /// 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない。使う人が見に行った操作は、使う人の通信として送る。
     @Test func loadsAreSentWithTheirOrigin() async throws {
-        let origins = Mutex<[RequestOrigin]>([])
+        let origins = Mutex<[RequestPurpose]>([])
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in }.pngData())
         let store = EmojiImageStore(clock: clock, retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { _ in
-            origins.withLock { $0.append(RequestOrigin.current) }
+            origins.withLock { $0.append(RequestPurpose.current) }
             return png
         }
 
@@ -130,7 +130,7 @@ struct EmojiImageStoreTests {
         _ = store.image(for: URL(filePath: "/").appending(path: "other.png"), retriesNow: true)
         try await waitUntil { origins.withLock { $0.count } == 2 }
 
-        #expect(origins.withLock { $0 } == [.automatic, .user])
+        #expect(origins.withLock { $0 } == [.display, .action])
     }
 
     /// 裏に回っても読んだ静止画を捨てない。捨てると、行を描き直すたびに画面に出ている絵文字を空けた場所で描いて読み直すため。

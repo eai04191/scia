@@ -97,7 +97,7 @@ public final class XPostStore {
         }
         entries[id] = .loading
         let fetch = fetch
-        RequestOrigin.$current.withValue(.automatic) {
+        RequestPurpose.$current.withValue(.display) {
             Task { [weak self] in
                 do {
                     let post = try await fetch(id)

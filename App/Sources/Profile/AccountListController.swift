@@ -35,15 +35,15 @@ final class AccountListController {
         }
         self.viewController = viewController
         self.onUnauthorized = onUnauthorized
-        viewController.onApproachingEnd = { [weak self] in self?.loadOlder(origin: .automatic) }
+        viewController.onApproachingEnd = { [weak self] in self?.loadOlder(purpose: .display) }
         viewController.onRetry = { [weak self] in self?.retry() }
     }
 
-    /// - Parameter origin: 電波の回復などでやり直すときは`.automatic`。レート制限で止められている間は送らない。
+    /// - Parameter purpose: 電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
     @discardableResult
-    func start(origin: RequestOrigin = .user) -> Task<Void, Never>? {
+    func start(purpose: RequestPurpose = .action) -> Task<Void, Never>? {
         viewController?.setContentState(.loading)
-        return run(origin) { controller in
+        return run(purpose) { controller in
             do {
                 guard let accounts = try await controller.store.loadInitial() else { return }
                 controller.showEntries()
@@ -82,10 +82,10 @@ final class AccountListController {
         }
     }
 
-    private func loadOlder(origin: RequestOrigin = .user) {
+    private func loadOlder(purpose: RequestPurpose = .action) {
         guard !store.isLoading, !store.reachedEnd, !store.accounts.isEmpty else { return }
         viewController?.setFooterState(.loading)
-        run(origin) { controller in
+        run(purpose) { controller in
             do {
                 guard let added = try await controller.store.loadOlder() else { return }
                 controller.showEntries()
@@ -98,9 +98,9 @@ final class AccountListController {
     }
 
     @discardableResult
-    private func run(_ origin: RequestOrigin, _ operation: @escaping @MainActor (AccountListController) async -> Void) -> Task<Void, Never>? {
+    private func run(_ purpose: RequestPurpose, _ operation: @escaping @MainActor (AccountListController) async -> Void) -> Task<Void, Never>? {
         // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
-        RequestOrigin.$current.withValue(origin) {
+        RequestPurpose.$current.withValue(purpose) {
             tasks.run { [weak self] in
                 guard let self else { return }
                 await operation(self)

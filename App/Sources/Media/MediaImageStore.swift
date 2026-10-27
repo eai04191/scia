@@ -113,7 +113,7 @@ final class MediaImageStore {
         }
         let fetch = fetch
         // 一覧に描くための読み込みなので、自動の通信として送り、止められている間は送らない（docs/network.md）。
-        let task = RequestOrigin.$current.withValue(.automatic) {
+        let task = RequestPurpose.$current.withValue(.display) {
             Task<Loaded, any Error> {
                 let prefix = try await VideoFirstFrame.readPrefix { range in try await fetch(url, range) }
                 return Loaded(image: try await Self.makeVideoFrame(from: prefix, maxPixelSize: maxPixelSize), keptOriginal: false)
@@ -167,7 +167,7 @@ final class MediaImageStore {
         let fetch = fetch
         let files = keepsOriginal ? files : nil
         // 一覧に描くための読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
-        let task = RequestOrigin.$current.withValue(retriesNow ? .user : .automatic) { Task<Loaded, any Error> {
+        let task = RequestPurpose.$current.withValue(retriesNow ? .action : .display) { Task<Loaded, any Error> {
             let generation = await files?.generation
             // ビューアで開く画像は、元のファイルがキャッシュにあれば通信せずに使う。壊れていて展開できなければ、通信で取り直して置き直す。
             if let files, let cached = await files.data(for: url), let image = await Self.decode(cached, maxPixelSize: maxPixelSize) {

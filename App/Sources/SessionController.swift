@@ -720,7 +720,7 @@ final class SessionController {
     ) {
         guard loadingTabSources.insert(name).inserted else { return }
         let client = client
-        RequestOrigin.$current.withValue(.automatic) {
+        RequestPurpose.$current.withValue(.display) {
             tasks.run { [weak self] in
                 defer { self?.loadingTabSources.remove(name) }
                 do {
@@ -2126,7 +2126,7 @@ final class SessionController {
         observeRecoveries()
         loadServerVersion()
         loadTabSources()
-        RequestOrigin.$current.withValue(.automatic) {
+        RequestPurpose.$current.withValue(.display) {
             tasks.run { [weak self] in await self?.loadPreferences() }
         }
     }
@@ -2135,7 +2135,7 @@ final class SessionController {
     private func loadServerVersion() {
         let client = client
         let instance = credential.instance.host() ?? credential.instance.absoluteString
-        RequestOrigin.$current.withValue(.automatic) {
+        RequestPurpose.$current.withValue(.display) {
             tasks.run { [weak self] in
                 do {
                     let version = try await client.serverVersion()

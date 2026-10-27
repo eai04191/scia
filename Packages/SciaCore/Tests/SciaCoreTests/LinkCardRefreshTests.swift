@@ -273,10 +273,10 @@ struct LinkCardRefreshTests {
     @MainActor
     @Test func refreshesAsAutomaticRequest() async {
         let clock = FakeClock(now: Self.start)
-        let origins = Recorder<RequestOrigin>()
+        let origins = Recorder<RequestPurpose>()
         let refresher = LinkCardRefresher(
             fetch: { ids in
-                await origins.append(RequestOrigin.current)
+                await origins.append(RequestPurpose.current)
                 return []
             },
             apply: { _ in },
@@ -288,7 +288,7 @@ struct LinkCardRefreshTests {
         refresher.setVisible([Self.status("1")], from: owner)
         await refresher.waitUntilIdle()
 
-        #expect(await origins.values == [.automatic])
+        #expect(await origins.values == [.display])
     }
 
     @Test func adoptsCardOfSameVersion() throws {

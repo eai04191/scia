@@ -99,7 +99,7 @@ final class FeedTimelineController {
         self.tuning = tuning
         self.onUnauthorized = onUnauthorized
         viewController.filterWarnings = FilterWarnings(filtering: filtering)
-        viewController.onApproachingEnd = { [weak self] in self?.loadOlder(origin: .automatic) }
+        viewController.onApproachingEnd = { [weak self] in self?.loadOlder(purpose: .display) }
         viewController.onRetry = { [weak self] in self?.retry() }
         viewController.onVisibleStatusesChange = { [weak self] ids in self?.markRead(ids) }
         viewController.onInteractionSettle = { [weak self] in self?.interactionDidSettle() }
@@ -115,12 +115,12 @@ final class FeedTimelineController {
         tasks.onClose { [weak self] in self?.didStop() }
     }
 
-    /// - Parameter origin: 電波の回復などでやり直すときは`.automatic`。レート制限で止められている間は送らない。
-    func start(origin: RequestOrigin = .user) {
+    /// - Parameter purpose: 電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
+    func start(purpose: RequestPurpose = .action) {
         guard !isStopped else { return }
         hasStarted = true
         viewController.setContentState(.loading)
-        run(origin) { await $0.loadInitial() }
+        run(purpose) { await $0.loadInitial() }
     }
 
     private static func texts(for feed: TimelineFeed) -> TimelineViewController.Texts {
@@ -271,9 +271,9 @@ final class FeedTimelineController {
     private func retryFailedLoads() {
         guard !feed.isAccountHashtag || isShown else { return }
         if case .failed = viewController.contentState {
-            start(origin: .automatic)
+            start(purpose: .display)
         } else if case .failed = viewController.footerState {
-            loadOlder(origin: .automatic)
+            loadOlder(purpose: .display)
         }
     }
 
@@ -285,7 +285,7 @@ final class FeedTimelineController {
     /// 補完で429や503を受けて止められていたら、待機中と出す。補完の終わりの反映を待たせないよう、別に確かめる。
     private func showPauseAfterFill() {
         let attempt = catchUp.attempt
-        run(.automatic) { controller in
+        run(.display) { controller in
             guard let until = await controller.client.automaticRequestsPausedUntil() else { return }
             controller.updateCatchUp { $0.pause(after: attempt, until: until) }
         }
@@ -305,11 +305,11 @@ final class FeedTimelineController {
         viewController.setOutageNotice(false)
     }
 
-    /// - Parameter origin: 自動の読み込みなら`.automatic`。レート制限で止められている間は送らずに失敗させる。
+    /// - Parameter purpose: 自動の読み込みなら`.display`。レート制限で止められている間は送らずに失敗させる。
     @discardableResult
-    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (FeedTimelineController) async -> Void) -> Task<Void, Never>? {
+    private func run(_ purpose: RequestPurpose = .action, _ operation: @escaping @MainActor (FeedTimelineController) async -> Void) -> Task<Void, Never>? {
         // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
-        RequestOrigin.$current.withValue(origin) {
+        RequestPurpose.$current.withValue(purpose) {
             tasks.run { [weak self] in
                 guard let self else { return }
                 await operation(self)
@@ -330,7 +330,7 @@ final class FeedTimelineController {
             return
         }
         // 補完の最中なら、ストアはその補完の後に続けて読む。続きを読み終えるまで閉じないよう、走っている補完もすべて待つ。
-        fillFromLatest(origin: .user)
+        fillFromLatest(purpose: .action)
         if activeFills > 0 {
             await withCheckedContinuation { fillWaiters.append($0) }
         }
@@ -366,10 +366,10 @@ final class FeedTimelineController {
         }
     }
 
-    private func loadOlder(origin: RequestOrigin = .user) {
+    private func loadOlder(purpose: RequestPurpose = .action) {
         guard !isStopped, !store.isLoading, !store.reachedEnd, !store.isEmpty else { return }
         viewController.setFooterState(.loading)
-        run(origin) { controller in
+        run(purpose) { controller in
             controller.logger.info("\(controller.feed.name, privacy: .public) loadOlder start")
             do {
                 guard let added = try await controller.store.loadOlder(), !controller.isStopped else { return }
@@ -410,7 +410,7 @@ final class FeedTimelineController {
     }
 
     /// つながるたびと、つながらない間のポーリングで、切れていた間の投稿を読む。1ページに収まらなければギャップを置く。
-    private func fillFromLatest(origin: RequestOrigin = .automatic) {
+    private func fillFromLatest(purpose: RequestPurpose = .display) {
         #if DEBUG
         // 補完で読んだ新着はストアへ直接合流し、insertPendingの保留を通らないため、保留中は補完を始めない。
         // 保留を送る前に始まった補完は止めない。その結果は、保留中でも一覧に入る。
@@ -422,7 +422,7 @@ final class FeedTimelineController {
         #endif
         // 読み始める前に数える。走り始める前に引っぱった読み直しが待ち始めても、この補完を待つため。
         activeFills += 1
-        run(origin) { controller in
+        run(purpose) { controller in
             defer { controller.endFill() }
             do {
                 let before = controller.store.entries
@@ -505,7 +505,7 @@ final class FeedTimelineController {
         let anchorID = store.entries.indices.contains(neighborIndex) ? store.entries[neighborIndex].id : nil
         viewController.setGapStates(loading: store.loadingGapIDs.union([id]), failures: store.gapFailures.filter { $0.key != id })
         let gapBefore = store.gaps.first { $0.id == id }
-        run(isAutomatic ? .automatic : .user) { controller in
+        run(isAutomatic ? .display : .action) { controller in
             controller.logger.info("\(controller.feed.name, privacy: .public) loadGap start id=\(id, privacy: .public) direction=\(String(describing: direction), privacy: .public) automatic=\(isAutomatic, privacy: .public)")
             do {
                 let added = try await controller.store.loadGap(id, from: direction)
@@ -628,7 +628,7 @@ final class FeedTimelineController {
 
     private func syncReadPosition() {
         guard let marker = feed.marker else { return }
-        run(.automatic) { controller in
+        run(.display) { controller in
             do {
                 guard let markerID = try await controller.client.marker(for: marker), !controller.isStopped else { return }
                 controller.store.applySavedMarker(markerID)
@@ -654,7 +654,7 @@ final class FeedTimelineController {
         isSavingReadPosition = true
         let client = client
         // 既読位置の保存は、スクロールやバックグラウンドへの移行で自動で送る。
-        RequestOrigin.$current.withValue(.automatic) {
+        RequestPurpose.$current.withValue(.display) {
             tasks.run { [weak self] in
                 while let self, !self.isStopped, let id = self.store.readIDToSave {
                     do {

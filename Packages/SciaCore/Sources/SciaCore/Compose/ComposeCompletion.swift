@@ -401,7 +401,7 @@ public final class ComposeCompletion {
                 defer { self?.finishedSearchCount += 1 }
                 do {
                     try await sleep(settings.debounce)
-                    let candidates = try await RequestOrigin.$current.withValue(.automatic) {
+                    let candidates = try await RequestPurpose.$current.withValue(.display) {
                         try await Self.search(key, sources: sources)
                     }
                     guard !Task.isCancelled else { return }
@@ -523,7 +523,7 @@ public final class ComposeCompletion {
         emojiFailureMessage = nil
         emojiTask = Task { [weak self, sources] in
             do {
-                let emojis = try await RequestOrigin.$current.withValue(.automatic) {
+                let emojis = try await RequestPurpose.$current.withValue(.display) {
                     try await sources.customEmojis()
                 }
                 self?.didLoadEmojis(emojis)
@@ -559,7 +559,7 @@ public final class ComposeCompletion {
         let loadsFeatured = featuredTags == nil
         let loadsRecent = recentTags == nil
         ownTagsTask = Task { [weak self, sources] in
-            let (featuredResult, recentResult) = await RequestOrigin.$current.withValue(.automatic) {
+            let (featuredResult, recentResult) = await RequestPurpose.$current.withValue(.display) {
                 async let featured = Self.result(loadsFeatured ? sources.featuredTags : nil)
                 async let recent = Self.result(loadsRecent ? sources.recentTags : nil)
                 return await (featured, recent)
@@ -609,7 +609,7 @@ public final class ComposeCompletion {
         replyParticipantLoadCount += 1
         Task { [weak self, sources] in
             do {
-                let accounts = try await RequestOrigin.$current.withValue(.automatic) {
+                let accounts = try await RequestPurpose.$current.withValue(.display) {
                     try await sources.accounts(ids)
                 }
                 self?.didLoadParticipants(accounts)

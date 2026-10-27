@@ -3,7 +3,7 @@ import os
 
 /// アプリの通信の入口。REST API、ログイン、画像、ファイル、fxtwitter、リンク先のページが通り、同じ決まりに従う（docs/network.md）。
 ///
-/// - 自動の通信（`RequestOrigin.automatic`）は、止められている間は送らずに`AutomaticRequestsPaused`を投げる
+/// - 自動の通信（`RequestPurpose.isAutomatic`）は、止められている間は送らずに`AutomaticRequestsPaused`を投げる
 /// - 429や503が再開の時刻を示したら、その単位（`Scope`）の自動の通信を時刻まで止める
 /// - GETと`Idempotency-Key`付きは、一時的な失敗（502、504、再開の時刻のない503、通信の失敗）で、その場で送り直す
 /// - 応答は、用途ごとに決めた大きさ（`ResponseLimit`）までしか読まない
@@ -159,7 +159,7 @@ public struct HTTPClient: Sendable {
     /// 自動の通信は、止められている間は送らない。
     private func checkBeforeSending(_ gate: RateLimitGate?) async throws {
         try Task.checkCancellation()
-        guard let gate, RequestOrigin.current == .automatic else { return }
+        guard let gate, RequestPurpose.current.isAutomatic else { return }
         try await gate.checkAutomaticRequest()
     }
 

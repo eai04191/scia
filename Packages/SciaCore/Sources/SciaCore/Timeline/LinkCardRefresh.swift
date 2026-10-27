@@ -219,7 +219,7 @@ public final class LinkCardRefresher {
         do {
             // スクロールなど使う人の操作から始めたTaskでも、取り直しはアプリが自分で送るものなので、レート制限で止めている間は控える。
             let fetch = fetch
-            let statuses = try await RequestOrigin.$current.withValue(.automatic) {
+            let statuses = try await RequestPurpose.$current.withValue(.display) {
                 try await fetch(ids)
             }
             let carded = statuses.filter { $0.card != nil }

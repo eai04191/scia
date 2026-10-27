@@ -141,7 +141,7 @@ final class AvatarImageStore {
         }
         let fetch = fetch
         // 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
-        let task = RequestOrigin.$current.withValue(retriesNow ? .user : .automatic) {
+        let task = RequestPurpose.$current.withValue(retriesNow ? .action : .display) {
             Task<UIImage, any Error> {
                 let data = try await fetch(key.url)
                 guard let image = await Self.decode(data, maxPixelSize: key.maxPixelSize, animates: key.animates) else {

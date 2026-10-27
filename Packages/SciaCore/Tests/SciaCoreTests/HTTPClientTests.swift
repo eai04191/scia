@@ -77,20 +77,20 @@ struct HTTPClientTests {
         ])
         let client = client(transport)
         await #expect(throws: HTTPStatusError(statusCode: 429, retryAfter: .seconds(60))) {
-            try await RequestOrigin.$current.withValue(.automatic) {
+            try await RequestPurpose.$current.withValue(.display) {
                 _ = try await client.data(for: URLRequest(url: try url("https://files.example.social/1.png")), limit: 100, scope: .host)
             }
         }
 
         let paused = await #expect(throws: AutomaticRequestsPaused.self) {
-            try await RequestOrigin.$current.withValue(.automatic) {
+            try await RequestPurpose.$current.withValue(.display) {
                 _ = try await client.data(for: URLRequest(url: try url("https://files.example.social/2.png")), limit: 100, scope: .host)
             }
         }
         #expect(paused?.retryAfter == .seconds(60))
         #expect(await transport.requests.count == 1, "止めている間に送りました")
 
-        let other = try await RequestOrigin.$current.withValue(.automatic) {
+        let other = try await RequestPurpose.$current.withValue(.display) {
             try await client.data(for: URLRequest(url: try url("https://other.example/1.png")), limit: 100, scope: .host)
         }
         #expect(other.0 == Data([2]))
@@ -106,7 +106,7 @@ struct HTTPClientTests {
         _ = try? await first.data(for: URLRequest(url: try url("https://files.example.social/emoji.png")), limit: 100, scope: .host)
 
         await #expect(throws: AutomaticRequestsPaused.self) {
-            try await RequestOrigin.$current.withValue(.automatic) {
+            try await RequestPurpose.$current.withValue(.display) {
                 _ = try await client(second, hosts: hosts).data(for: URLRequest(url: try url("https://files.example.social/avatar.png")), limit: 100, scope: .host)
             }
         }
@@ -121,7 +121,7 @@ struct HTTPClientTests {
         let client = client(transport)
         _ = try? await client.data(for: URLRequest(url: try url("https://example.social/media_proxy/1/original")), limit: 100, scope: .host)
 
-        let next = try await RequestOrigin.$current.withValue(.automatic) {
+        let next = try await RequestPurpose.$current.withValue(.display) {
             try await client.data(for: URLRequest(url: try url("https://example.social/system/emoji.png")), limit: 100, scope: .host)
         }
         #expect(next.0 == Data([1]))
@@ -133,7 +133,7 @@ struct HTTPClientTests {
         let client = client(transport)
         _ = try? await client.data(for: URLRequest(url: try url("https://files.example.social/1.png")), limit: 100, scope: .host)
 
-        let next = try await RequestOrigin.$current.withValue(.automatic) {
+        let next = try await RequestPurpose.$current.withValue(.display) {
             try await client.data(for: URLRequest(url: try url("https://files.example.social/2.png")), limit: 100, scope: .host)
         }
         #expect(next.0 == Data([1]))
@@ -147,7 +147,7 @@ struct HTTPClientTests {
             _ = try await client.data(for: URLRequest(url: try url("https://files.example.social/1.png")), limit: 100, scope: .host)
         }
         await #expect(throws: AutomaticRequestsPaused.self) {
-            try await RequestOrigin.$current.withValue(.automatic) {
+            try await RequestPurpose.$current.withValue(.display) {
                 _ = try await client.data(for: URLRequest(url: try url("https://files.example.social/2.png")), limit: 100, scope: .host)
             }
         }
@@ -165,7 +165,7 @@ struct HTTPClientTests {
         }
         #expect(transport.requestCount == 1)
         await #expect(throws: AutomaticRequestsPaused.self) {
-            try await RequestOrigin.$current.withValue(.automatic) {
+            try await RequestPurpose.$current.withValue(.display) {
                 _ = try await client.data(for: URLRequest(url: try url("https://files.example.social/2.png")), limit: 100, scope: .host)
             }
         }
@@ -181,7 +181,7 @@ struct HTTPClientTests {
         _ = try? await client.data(for: URLRequest(url: try url("https://files.example.social/1.png")), limit: 100, scope: .host)
 
         await #expect(throws: AutomaticRequestsPaused.self) {
-            try await RequestOrigin.$current.withValue(.automatic) {
+            try await RequestPurpose.$current.withValue(.display) {
                 _ = try await client.data(for: URLRequest(url: try url("https://cdn.example.net/2.png")), limit: 100, scope: .host)
             }
         }
@@ -256,7 +256,7 @@ struct HTTPClientTests {
             _ = try await client.open(URLRequest(url: try url("https://files.example.social/video.mp4")), limit: 100, scope: .host)
         }
         await #expect(throws: AutomaticRequestsPaused.self) {
-            try await RequestOrigin.$current.withValue(.automatic) {
+            try await RequestPurpose.$current.withValue(.display) {
                 _ = try await client.open(URLRequest(url: try url("https://files.example.social/video.mp4")), limit: 100, scope: .host)
             }
         }

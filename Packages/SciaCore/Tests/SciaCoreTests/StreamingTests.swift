@@ -171,7 +171,7 @@ struct StreamingClientTests {
         let url = try #require(URL(string: "wss://streaming.example.social"))
 
         let error = await #expect(throws: AutomaticRequestsPaused.self) {
-            try await RequestOrigin.$current.withValue(.automatic) { _ = try await client.open(baseURL: url) }
+            try await RequestPurpose.$current.withValue(.display) { _ = try await client.open(baseURL: url) }
         }
         #expect(error?.retryAfter == .seconds(60))
         #expect(connector.requests.isEmpty)

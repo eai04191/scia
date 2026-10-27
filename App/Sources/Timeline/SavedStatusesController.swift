@@ -39,7 +39,7 @@ final class SavedStatusesController {
         self.onUnauthorized = onUnauthorized
         // 公式のWebクライアントと同じく、ホームの文脈のフィルターを当て、「隠す」に一致した投稿も隠さずに警告で折りたたむ。自分で残した投稿だから。
         viewController.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: client.credential.accountID, hidesMatches: false))
-        viewController.onApproachingEnd = { [weak self] in self?.loadOlder(origin: .automatic) }
+        viewController.onApproachingEnd = { [weak self] in self?.loadOlder(purpose: .display) }
         viewController.onRetry = { [weak self] in self?.retry() }
         viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction) }
         // 開くまで読まない。開いたことのない一覧のために、起動のたびに通信しないため。
@@ -60,13 +60,13 @@ final class SavedStatusesController {
         start()
     }
 
-    /// - Parameter origin: 電波の回復などでやり直すときは`.automatic`。レート制限で止められている間は送らない。
+    /// - Parameter purpose: 電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
     @discardableResult
-    private func start(origin: RequestOrigin = .user) -> Task<Void, Never>? {
+    private func start(purpose: RequestPurpose = .action) -> Task<Void, Never>? {
         guard !isStopped else { return nil }
         hasStarted = true
         viewController.setContentState(.loading)
-        return run(origin) { controller in
+        return run(purpose) { controller in
             controller.logger.info("\(controller.name, privacy: .public) loadInitial start")
             do {
                 guard try await controller.store.loadInitial(), !controller.isStopped else { return }
@@ -119,9 +119,9 @@ final class SavedStatusesController {
 
     private func retryFailedLoads() {
         if case .failed = viewController.contentState {
-            start(origin: .automatic)
+            start(purpose: .display)
         } else if case .failed = viewController.footerState {
-            loadOlder(origin: .automatic)
+            loadOlder(purpose: .display)
         }
     }
 
@@ -131,9 +131,9 @@ final class SavedStatusesController {
     }
 
     @discardableResult
-    private func run(_ origin: RequestOrigin = .user, _ operation: @escaping @MainActor (SavedStatusesController) async -> Void) -> Task<Void, Never>? {
+    private func run(_ purpose: RequestPurpose = .action, _ operation: @escaping @MainActor (SavedStatusesController) async -> Void) -> Task<Void, Never>? {
         // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
-        RequestOrigin.$current.withValue(origin) {
+        RequestPurpose.$current.withValue(purpose) {
             tasks.run { [weak self] in
                 guard let self else { return }
                 await operation(self)
@@ -152,7 +152,7 @@ final class SavedStatusesController {
         }
         // タブを開いたときなどの読み込みの最中なら、ストアは重ねて読まないため、終わってから読む。
         await tasks.waitForRunning()
-        await refreshNewest(origin: .user)?.value
+        await refreshNewest(purpose: .action)?.value
     }
 
     private func retry() {
@@ -163,10 +163,10 @@ final class SavedStatusesController {
         }
     }
 
-    private func loadOlder(origin: RequestOrigin = .user) {
+    private func loadOlder(purpose: RequestPurpose = .action) {
         guard !isStopped, !store.isLoading, store.isLoaded, !store.reachedEnd else { return }
         viewController.setFooterState(.loading)
-        run(origin) { controller in
+        run(purpose) { controller in
             do {
                 let added = try await controller.store.loadOlder()
                 guard !controller.isStopped else { return }
@@ -181,9 +181,9 @@ final class SavedStatusesController {
 
     /// 最新のページを読み、手元より新しい分を先頭に足す。失敗しても、一覧はそのまま見せ、次に開いたときに読み直す。
     @discardableResult
-    private func refreshNewest(origin: RequestOrigin = .automatic) -> Task<Void, Never>? {
+    private func refreshNewest(purpose: RequestPurpose = .display) -> Task<Void, Never>? {
         guard !isStopped, store.isLoaded, !store.isLoading else { return nil }
-        return run(origin) { controller in
+        return run(purpose) { controller in
             do {
                 guard try await controller.store.refreshNewest(), !controller.isStopped else { return }
                 controller.viewController.setFooterState(controller.store.reachedEnd ? .reachedEnd : .idle)

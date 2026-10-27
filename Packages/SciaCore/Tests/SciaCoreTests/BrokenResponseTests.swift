@@ -98,7 +98,7 @@ struct BrokenResponseTests {
         let pausedUntil = try #require(await rateLimit.pausedUntil)
         #expect(abs(pausedUntil.timeIntervalSince(reset)) < 0.01)
         await #expect(throws: AutomaticRequestsPaused.self) {
-            try await RequestOrigin.$current.withValue(.automatic) { try await client.homeTimeline(TimelineQuery(limit: 40)) }
+            try await RequestPurpose.$current.withValue(.display) { try await client.homeTimeline(TimelineQuery(limit: 40)) }
         }
         _ = try await client.homeTimeline(TimelineQuery(limit: 40))
     }

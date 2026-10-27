@@ -61,7 +61,7 @@ struct RateLimitTests {
 
         await #expect(throws: MastodonAPIError.self) { try await client.homeTimeline(TimelineQuery(limit: 40)) }
         let paused = await #expect(throws: AutomaticRequestsPaused.self) {
-            try await RequestOrigin.$current.withValue(.automatic) { try await client.homeTimeline(TimelineQuery(limit: 40)) }
+            try await RequestPurpose.$current.withValue(.display) { try await client.homeTimeline(TimelineQuery(limit: 40)) }
         }
         #expect(paused?.until == Self.now.addingTimeInterval(300))
         // 使う人の操作は止めない。
@@ -75,7 +75,7 @@ struct RateLimitTests {
         let client = try makeClient(transport, gate: gate)
 
         await #expect(throws: MastodonAPIError.self) {
-            try await RequestOrigin.$current.withValue(.automatic) { try await client.homeTimeline(TimelineQuery(limit: 40)) }
+            try await RequestPurpose.$current.withValue(.display) { try await client.homeTimeline(TimelineQuery(limit: 40)) }
         }
 
         #expect(await gate.pausedUntil == Self.now.addingTimeInterval(30))
@@ -100,7 +100,7 @@ struct RateLimitTests {
 
         clock.advance(by: .seconds(61))
 
-        _ = try await RequestOrigin.$current.withValue(.automatic) { try await client.homeTimeline(TimelineQuery(limit: 40)) }
+        _ = try await RequestPurpose.$current.withValue(.display) { try await client.homeTimeline(TimelineQuery(limit: 40)) }
     }
 
     /// 止めた時刻が過ぎたら、失敗していた読み込みをやり直せるよう知らせる。

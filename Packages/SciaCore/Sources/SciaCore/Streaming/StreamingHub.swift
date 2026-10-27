@@ -211,7 +211,7 @@ public final class StreamingHub {
         let logger = logger
         logger.info("streaming start")
         // 接続先を調べる通信も、自動の通信として扱う。
-        runTask = RequestOrigin.$current.withValue(.automatic) {
+        runTask = RequestPurpose.$current.withValue(.display) {
             Task { [weak self] in
                 do {
                     try await updates.run { [weak self] activity in

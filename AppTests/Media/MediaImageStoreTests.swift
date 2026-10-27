@@ -176,16 +176,16 @@ struct MediaImageStoreTests {
     /// 一覧に描くための読み込みは自動の通信として送り、止められている間は送らない。ビューアで開くときは、使う人の通信として送る。
     @Test func loadsAreSentWithTheirOrigin() async throws {
         let png = try pngData()
-        let origins = Mutex<[RequestOrigin]>([])
+        let origins = Mutex<[RequestPurpose]>([])
         let store = MediaImageStore(files: .temporary()) { _, _ in
-            origins.withLock { $0.append(RequestOrigin.current) }
+            origins.withLock { $0.append(RequestPurpose.current) }
             return png
         }
 
         _ = try await store.image(for: try #require(URL(string: "https://files.example.social/1.png")), maxPixelSize: 8)
         _ = try await store.image(for: try #require(URL(string: "https://files.example.social/2.png")), maxPixelSize: 8, keepsOriginal: true, retriesNow: true)
 
-        #expect(origins.withLock { $0 } == [.automatic, .user])
+        #expect(origins.withLock { $0 } == [.display, .action])
     }
 }
 
