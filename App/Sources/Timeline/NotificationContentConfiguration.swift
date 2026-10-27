@@ -33,6 +33,11 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     var onToggleSpoiler: (() -> Void)?
     /// 誰が何をしたかの行がタップされたときに呼ぶ。通知のもとになる操作をした人のプロフィールを開く。
     var onOpenAccount: (() -> Void)?
+    /// 誰が何をしたかの行（「ほか3人」の文字の外）のタップと長押し。渡すと、タップは`onOpenAccount`の代わりにこれで行う。
+    /// 決まりはdocs/object-actions.mdにある。読み上げの操作は、`onOpenAccount`のまま。
+    var accountTarget: (any ObjectActionTarget)?
+    /// まとめた行で並べたアイコンの、タップと長押し。`groupAvatars`と同じ順に並べる。
+    var groupAccountTargets: [any ObjectActionTarget] = []
     /// まとめた行で、並べたアイコンがタップされたときに、何番目かを渡して呼ぶ。その人のプロフィールを開く。
     var onOpenGroupAccount: ((Int) -> Void)?
     /// まとめた行で、誰が何をしたかの行の`groupAccountsLink`の文字（「ほか3人」）がタップされたときに呼ぶ。人の一覧を開く。
@@ -91,6 +96,10 @@ final class NotificationContentView: UIView, UIContentView {
     /// 並べたアイコンが行の幅に収まらないとき、行の右の余白の手前で切る枠。アイコンの大きさは設定どおりに保つ。
     private let groupAvatarClip = UIView()
     private var groupAvatarViews: [AvatarView] = []
+    /// 並べたアイコンの、長押しのメニューと長押しの操作。`groupAvatarViews`と同じ順に並べる。
+    private var groupAvatarInteractions: [ObjectInteraction] = []
+    /// 誰が何をしたかの行の、長押しのメニューと長押しの操作。
+    private var headerInteraction: ObjectInteraction?
     private let headerLabel = EmojiLabel()
     private let bodyView: PostBodyView
     private let reactionGlowView = ReactionGlowView()
@@ -149,6 +158,7 @@ final class NotificationContentView: UIView, UIContentView {
         bodyView.onOpenLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
         headerLabel.isUserInteractionEnabled = true
         headerLabel.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(headerTapped)))
+        headerInteraction = ObjectInteraction(on: headerLabel, tapsSelf: false)
         apply(configuration)
     }
 
@@ -162,6 +172,8 @@ final class NotificationContentView: UIView, UIContentView {
         if let index = headerLabel.characterIndex(at: gesture.location(in: headerLabel)),
            headerLabel.attributedText?.attribute(.groupAccountsLink, at: index, effectiveRange: nil) != nil {
             current.onOpenGroupAccounts?()
+        } else if let target = current.accountTarget {
+            target.perform(.tap, in: headerLabel, at: gesture.location(in: headerLabel))
         } else {
             current.onOpenAccount?()
         }
@@ -169,7 +181,11 @@ final class NotificationContentView: UIView, UIContentView {
 
     @objc private func groupAvatarTapped(_ gesture: UITapGestureRecognizer) {
         guard let view = gesture.view as? AvatarView, let index = groupAvatarViews.firstIndex(of: view) else { return }
-        current.onOpenGroupAccount?(index)
+        if current.groupAccountTargets.indices.contains(index) {
+            current.groupAccountTargets[index].perform(.tap, in: view, at: gesture.location(in: view))
+        } else {
+            current.onOpenGroupAccount?(index)
+        }
     }
 
     /// 並べるアイコンの数に合わせてビューを足し引きし、中身を当てる。
@@ -179,11 +195,16 @@ final class NotificationContentView: UIView, UIContentView {
             view.translatesAutoresizingMaskIntoConstraints = false
             view.isUserInteractionEnabled = true
             view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(groupAvatarTapped)))
+            groupAvatarInteractions.append(ObjectInteraction(on: view, tapsSelf: false))
             groupAvatarViews.append(view)
             groupAvatarStack.addArrangedSubview(view)
         }
         while groupAvatarViews.count > contents.count {
             groupAvatarViews.removeLast().removeFromSuperview()
+            groupAvatarInteractions.removeLast()
+        }
+        for (index, interaction) in groupAvatarInteractions.enumerated() {
+            interaction.target = current.groupAccountTargets.indices.contains(index) ? current.groupAccountTargets[index] : nil
         }
         groupAvatarStack.spacing = metrics.groupAvatarSpacing
         for (view, content) in zip(groupAvatarViews, contents) {
@@ -194,6 +215,7 @@ final class NotificationContentView: UIView, UIContentView {
 
     private func apply(_ configuration: NotificationContentConfiguration) {
         current = configuration
+        headerInteraction?.target = configuration.accountTarget
         let metrics = configuration.metrics
         // ベースラインの位置を読むため、大きさの設定を画像そのものに当てておく。
         symbolView.image = UIImage(systemName: configuration.symbolName, withConfiguration: UIImage.SymbolConfiguration(font: metrics.headerFont))

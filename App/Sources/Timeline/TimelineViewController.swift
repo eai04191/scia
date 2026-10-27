@@ -170,6 +170,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var entries: [ItemID: TimelineEntry] = [:]
     /// 長押しのメニューを開いている間に届いたアイコンを、メニューを組み直さずに差し替える。
     let contextMenuIcons = ContextMenuIconSwapper()
+    /// 行を触れた位置。行のタップの処理は押した位置を受け取らないため、タップでメニューを出す位置にする。
+    let touchRecorder = TouchLocationRecorder()
+    /// 行の長押しにメニュー以外を選んだときに、長押しを受ける。
+    var rowLongPress: ObjectLongPress?
     /// 組んでいるメニューで、アイコンを読んでから差し替える人。メニューを組み終えたら、まとめて読み始める。
     var pendingMenuIcons: [PendingMenuIcon] = []
     /// 前回`setEntries`で並べた配列。次に渡された`keepingRowContentsOf`と同じ配列かを、中身を比べずに確かめるために持つ。
@@ -342,6 +346,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.delegate = self
         collectionView.prefetchDataSource = self
         collectionView.addGestureRecognizer(springScrollInterruption)
+        installRowObjectActions()
         // タブバーの上の投稿欄で書いている間も、読み進めるだけならキーボードを閉じない。キーボードまで引き下ろしたら閉じる。
         collectionView.keyboardDismissMode = .interactive
         refreshControl.addAction(UIAction { [weak self] _ in self?.beginRefresh() }, for: .valueChanged)
@@ -956,6 +961,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         entries[id]
     }
 
+    /// 一覧の位置にある要素。
+    func itemID(at indexPath: IndexPath) -> ItemID? {
+        dataSource.itemIdentifier(for: indexPath)
+    }
+
+    /// 違和感レポートの操作の記録に残す、画面の名前。
+    var screenName: String {
+        texts.dumpName
+    }
+
     /// 一覧の行にいる、そのIDのアカウント。いなければnil。
     func account(withID id: String) -> Account? {
         Self.account(withID: id, in: entries.values)
@@ -1444,8 +1459,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.replyConnection = connection
         configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(shown.account) }
         configuration.onOpenLink = { [weak self] destination in self?.onOpenLink?(destination, shown) }
+        if let itemID {
+            configuration.authorTarget = userTarget(for: shown.account, id: itemID)
+        }
         if status.reblog != nil, !isPinned {
             configuration.onOpenContextAccount = { [weak self] in self?.onOpenProfile?(status.account) }
+            if let itemID {
+                configuration.contextTarget = userTarget(for: status.account, id: itemID)
+            }
         }
         // フィルターの結果はブーストの外側にだけ付くことがあるため、判定にはブーストごと渡す。
         if let media = mediaContent(for: status) {
@@ -1460,12 +1481,18 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.poll = pollContent(for: shown, base: base)
         configuration.onPollAction = { [weak self] action in self?.handlePollAction(action, on: status, keeping: itemID) }
         configuration.card?.coversImage = mediaCovers.linkCardImageCover(for: shown) != nil
+        if let itemID, let url = configuration.card?.card.url {
+            configuration.linkCardTarget = linkTarget(for: url, id: itemID) { [weak self] in self?.onOpenLink?(.url(url), shown) }
+        }
         if let quote = quoteEmbed(for: status, itemID: itemID, base: base) {
             configuration.embed = quote.content
             configuration.embedActions = quote.actions
         } else if let xPost = xPostContent(for: shown, base: base) {
             configuration.embed = xPost.content
             configuration.embedActions.open = { [weak self] _ in self?.onOpenLink?(.url(xPost.url), shown) }
+            if let itemID {
+                configuration.embedActions.target = linkTarget(for: xPost.url, id: itemID) { [weak self] in self?.onOpenLink?(.url(xPost.url), shown) }
+            }
             configuration.embedActions.selectMedia = { [weak self] index, grid in
                 self?.openMedia(xPost.media, at: index, of: shown, from: grid)
             }
@@ -1662,6 +1689,7 @@ extension TimelineViewController: UICollectionViewDelegate {
     /// 長押しで投稿への操作のメニューを出す。添付ファイルのサムネイルとリンクカードの画像はボタンで、ここへは届かないため、
     /// それぞれが`MediaMenuHost`に問い合わせてメディアのメニューを出す。
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
+        if indexPaths.count == 1, let indexPath = indexPaths.first, rowTarget(at: indexPath)?.performsLongPress() == true { return nil }
         guard indexPaths.count == 1, let indexPath = indexPaths.first, let id = dataSource.itemIdentifier(for: indexPath), let entry = entry(for: id),
               let menu = contextMenu(for: entry, id: id)
         else { return nil }
@@ -1694,10 +1722,8 @@ extension TimelineViewController: UICollectionViewDelegate {
         return switch (id, entries[id]) {
         case (.gap, _): true
         case (_, .unreadable(let item)): item.url != nil
-        case (_, .status(let status)), (_, .pinned(let status)): onOpenThread != nil && status.displayed.id != threadFocusID
-        // 投稿を含む通知は、その投稿のスレッドを開く。フォローなど投稿のない通知は押せない。
-        case (_, .notification(let notification)): onOpenThread != nil && notification.status != nil
-        case (_, .account): onOpenProfile != nil
+        // 投稿、通知、人の一覧の行は、タップに選んだ操作を行う。既定の操作が行えない行（スレッドの中心の投稿、投稿のない通知）は、今どおり押せないままにする。
+        case (_, .status), (_, .pinned), (_, .notification), (_, .account): rowTarget(at: indexPath)?.acceptsTap ?? false
         default: false
         }
     }
@@ -1709,15 +1735,12 @@ extension TimelineViewController: UICollectionViewDelegate {
     /// ギャップは、画面の上半分にあれば下から遡ってきたとみなして古い側から、下半分にあれば新しい側から読む。
     /// どちらも、いま読んでいる側に続く投稿から埋まる。
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        if let id = dataSource.itemIdentifier(for: indexPath), let status = status(for: id), let cell = collectionView.cellForItem(at: indexPath) {
+        if let target = rowTarget(at: indexPath) {
             collectionView.deselectItem(at: indexPath, animated: true)
-            recordOpenThread()
-            onOpenThread?(status, cell.convert(cell.bounds, to: nil))
-            return
-        }
-        if let id = dataSource.itemIdentifier(for: indexPath), case .account(let account) = entries[id] {
-            collectionView.deselectItem(at: indexPath, animated: true)
-            onOpenProfile?(account)
+            // キーボードや読み上げのように触れずに選んだときは、前に触れた位置ではなく、選んだ行の真ん中にメニューを出す。
+            let touched = touchRecorder.lastLocation.flatMap { collectionView.indexPathForItem(at: $0) == indexPath ? $0 : nil }
+            let center = collectionView.layoutAttributesForItem(at: indexPath).map { CGPoint(x: $0.frame.midX, y: $0.frame.midY) } ?? .zero
+            target.perform(.tap, in: collectionView, at: touched ?? center)
             return
         }
         if let id = dataSource.itemIdentifier(for: indexPath), case .unreadable(let item) = entries[id], let url = item.url {
@@ -1731,6 +1754,17 @@ extension TimelineViewController: UICollectionViewDelegate {
         guard !loadingGapIDs.contains(gapID), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return }
         let visibleRect = collectionView.bounds.inset(by: collectionView.adjustedContentInset)
         onGapSelect?(gapID, frame.midY < visibleRect.midY ? .fromOlder : .fromNewer)
+    }
+
+    /// 投稿のスレッドを開けるか。スレッドの中心の投稿は、開いているスレッドそのものなので開かない。
+    func canOpenThread(of status: Status) -> Bool {
+        onOpenThread != nil && status.displayed.id != threadFocusID
+    }
+
+    /// 要素の行の、ウインドウでの枠。スレッドを開く動きの起点にする。行が画面になければゼロ。
+    func rowFrame(of id: ItemID) -> CGRect {
+        guard let indexPath = dataSource.indexPath(for: id), let cell = collectionView.cellForItem(at: indexPath) else { return .zero }
+        return cell.convert(cell.bounds, to: nil)
     }
 
     /// スレッドを開いたことを、違和感レポートの操作の記録に残す。
@@ -1988,7 +2022,7 @@ final class TimelineCollectionView: UICollectionView {
 
 extension TimelineViewController: MediaMenuHost {
     /// サムネイルかリンクカードの画像を長押しした。行の要素を探して、メディアのメニューを組む。投稿のメニューは、その「投稿」に入れる。
-    func mediaMenu(from view: UIView, at location: CGPoint) -> UIMenu? {
+    func mediaMenu(from view: UIView, at location: CGPoint, groups: MenuLayout<MediaMenuItem>.Groups?) -> UIMenu? {
         var cellView = view.superview
         while let current = cellView, !(current is UICollectionViewCell) {
             cellView = current.superview
@@ -1997,7 +2031,7 @@ extension TimelineViewController: MediaMenuHost {
               let id = dataSource.itemIdentifier(for: indexPath), let entry = entry(for: id),
               let target = mediaMenuTarget(at: view.convert(location, to: collectionView), in: cell)
         else { return nil }
-        return mediaMenu(for: target, entry: entry, id: id)
+        return mediaMenu(for: target, entry: entry, id: id, groups: groups)
     }
 
     func mediaMenuWillShow() {

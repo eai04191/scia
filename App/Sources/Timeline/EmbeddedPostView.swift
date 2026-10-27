@@ -57,6 +57,12 @@ final class EmbeddedPostView: UIButton {
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// 作者のアイコンがタップされたときに呼ぶ。
     var onOpenAccount: (() -> Void)?
+    /// 作者のアイコンのタップと長押し。渡すと、タップは`onOpenAccount`の代わりにこれで行い、長押しではその人のユーザーのメニューか、選んだ操作を行う。
+    /// 決まりはdocs/object-actions.mdにある。読み上げの操作は、`onOpenAccount`のまま。
+    var accountTarget: (any ObjectActionTarget)? {
+        didSet { accountInteraction?.target = accountTarget }
+    }
+    private var accountInteraction: ObjectInteraction?
     /// 注意書きが押されたときに呼ぶ。開閉した状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onToggleSpoiler: (() -> Void)?
     /// 押せる補足の行がタップされたときに、何番目の行かを渡して呼ぶ。
@@ -103,7 +109,8 @@ final class EmbeddedPostView: UIButton {
         textLabel.numberOfLines = 0
         // 本文はリンクの上だけ押下を受ける。リンクの外の押下は、囲みのボタンが受ける。
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
-        avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAccount)))
+        avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped)))
+        accountInteraction = ObjectInteraction(on: avatarView, tapsSelf: false)
         spoilerView.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?() }, for: .touchUpInside)
         for view in [avatarView, nameLabel, spoilerView, textLabel, mediaView] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
@@ -126,7 +133,15 @@ final class EmbeddedPostView: UIButton {
         fatalError("init(coder:) has not been implemented")
     }
 
-    @objc private func openAccount() {
+    @objc private func avatarTapped(_ gesture: UITapGestureRecognizer) {
+        guard let accountTarget, let view = gesture.view else {
+            openAccount()
+            return
+        }
+        accountTarget.perform(.tap, in: view, at: gesture.location(in: view))
+    }
+
+    private func openAccount() {
         onOpenAccount?()
     }
 

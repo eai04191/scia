@@ -315,9 +315,9 @@ public final class ProfileStore {
     public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) -> Bool {
         var changed = timeline.updateStatus(id, transform)
         loadedPinned = loadedPinned.map { status in
-            guard status.id == id else { return status }
-            changed = true
-            return transform(status)
+            let updated = TimelineStore.updating(id, in: status, transform)
+            if updated != status { changed = true }
+            return updated
         }
         return changed
     }

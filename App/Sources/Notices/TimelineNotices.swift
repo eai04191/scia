@@ -19,4 +19,11 @@ extension Notice {
 
     /// 投稿の本文をコピーした。
     static let textCopied = Notice(id: "timeline.textCopied", kind: .success, title: "テキストをコピーしました")
+
+    /// タップや長押しに選んだメニューの項目が、押した対象では使えない（他人の投稿の「編集」など）。決まりはdocs/object-actions.mdの「項目を行う」にある。
+    /// 押した直後で何に対してかは分かるため、対象の呼び名（「この投稿では」）は付けない。チップは1行で、付けると項目の名前が長いときに「使えません」が切れる。
+    /// - Parameter reason: 項目が押せない理由（項目のサブタイトル）。あれば、それを文言にする。
+    static func objectActionUnavailable(itemTitle: String, reason: String?) -> Notice {
+        Notice(id: "objectAction.unavailable", kind: .info, title: reason ?? "「\(itemTitle)」を使えません")
+    }
 }

@@ -119,7 +119,8 @@ final class MediaGridView: UIView {
         while tiles.count < layout.frames.count {
             let tile = MediaTileView(store: store)
             let index = tiles.count
-            tile.addAction(UIAction { [weak self] _ in self?.onSelect?(index) }, for: .primaryActionTriggered)
+            tile.onOpen = { [weak self] in self?.onSelect?(index) }
+            tile.addAction(UIAction { [weak tile] _ in tile?.tapped() }, for: .primaryActionTriggered)
             if let cover {
                 tileContainer.insertSubview(tile, belowSubview: cover)
             } else {
@@ -298,6 +299,8 @@ final class RowContentScrollView: UIScrollView {}
 /// タップ、キーボード、ポインタのどれで選ばれても`.primaryActionTriggered`で受けられるよう、`UIButton`にする。
 /// `UIControl`を直接継承したものは、このイベントを送らない。
 final class MediaTileView: UIButton, MediaViewerSource {
+    /// ビューアで開く。タップに選んだ操作によらず、メニューの「開く」と持ち上げた画像のタップでも、これで開く。
+    var onOpen: (() -> Void)?
     private let store: MediaImageStore
     private let settings: AppSettings
     private let tuning: TuningStore
@@ -366,12 +369,22 @@ final class MediaTileView: UIButton, MediaViewerSource {
         followDynamicRanges()
         followSymbolSizing()
         menuInteraction = MediaMenuInteraction(on: self, wholeImage: { [weak self] in self?.loadedThumbnail }, open: { [weak self] in
-            self?.sendActions(for: .primaryActionTriggered)
+            self?.onOpen?()
         }, sharperImage: { [weak self] maxPixelSize in
             // 動画とGIFのサムネイルはコマの画像で、元のファイルは画像として読めないため、読み直さない。
             guard let self, let attachment = self.menuAttachment, attachment.type == .image, let url = attachment.url ?? attachment.remoteUrl else { return nil }
             return try? await self.store.image(for: url, maxPixelSize: maxPixelSize, retriesNow: true)
         }, offersMenu: { [weak self] _ in self?.menuAttachment != nil })
+    }
+
+    /// タップに選んだ操作を行う。既定（開く）は、今のタップの処理のまま開く。決まりはdocs/object-actions.mdにある。
+    func tapped() {
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        guard !ObjectEntity.media.performsPrimary(.tap, settings: settings), let menuInteraction, menuInteraction.buildsMenu else {
+            onOpen?()
+            return
+        }
+        menuInteraction.target(at: center)?.perform(.tap, in: self, at: center)
     }
 
     /// HDRのバッジを出す明るさの組み合わせかを、設定から決め続ける。選び直すと、出ているバッジにもすぐ効かせる。

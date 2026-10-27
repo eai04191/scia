@@ -35,9 +35,10 @@ final class ProfileHeaderView: UIView {
     /// アイコンかヘッダー画像がタップされた。画像を読み込み終えていなければ呼ばない。
     var onOpenImage: ((ProfileImage) -> Void)?
     /// アイコンかヘッダー画像を長押ししたときの、メディアのメニュー。画像を読み込み終えていなければ呼ばない。nilを返せばメニューを出さない。
-    var menuForImage: ((ProfileImage) -> UIMenu?)?
+    /// 並びがnilなら設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
+    var menuForImage: ((ProfileImage, MenuLayout<MediaMenuItem>.Groups?) -> UIMenu?)?
     /// アイコンとヘッダー画像の、メディアのメニューの長押し。決まりはdocs/menus.mdの「メディアのメニュー」にある。
-    private var imageMenuInteractions: [MediaMenuInteraction] = []
+    private var imageMenuInteractions: [ProfileImage: MediaMenuInteraction] = [:]
     /// 関係が届いて、フォローのボタンの場所取りから本物の文字に変わるときのフェードの時間。0なら切り替える。
     var followRevealDuration: TimeInterval = 0
     /// 自己紹介か補足情報の値のリンクがタップされたときと、メンションの長押しのメニューでプロフィールを選んだときに、その行き先を渡して呼ぶ。
@@ -238,9 +239,10 @@ final class ProfileHeaderView: UIView {
         // 伸ばしたぼかしを描くビューがヘッダー画像の手前に重なり、タップを受けるため、伸ばす部品の側でタップを受ける。ぼかした部分をタップしても開く。
         bannerView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openHeader)))
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAvatar)))
-        imageMenuInteractions = [(bannerView, ProfileImage.header), (avatarView, ProfileImage.avatar)].map { view, image in
-            imageMenuInteraction(on: view, for: image)
-        }
+        imageMenuInteractions = [
+            .header: imageMenuInteraction(on: bannerView, for: .header),
+            .avatar: imageMenuInteraction(on: avatarView, for: .avatar),
+        ]
         for (view, label) in [(bannerView, "ヘッダー画像"), (avatarView, "アイコン")] as [(UIView, String)] {
             view.isUserInteractionEnabled = true
             view.isAccessibilityElement = true
@@ -540,12 +542,23 @@ final class ProfileHeaderView: UIView {
         return bannerView.image == nil || hasBannerImage
     }
 
-    @objc private func openAvatar() {
-        open(.avatar)
+    @objc private func openAvatar(_ gesture: UITapGestureRecognizer) {
+        imageTapped(.avatar, gesture: gesture)
     }
 
-    @objc private func openHeader() {
-        open(.header)
+    @objc private func openHeader(_ gesture: UITapGestureRecognizer) {
+        imageTapped(.header, gesture: gesture)
+    }
+
+    /// 画像のタップに選んだ操作を行う。既定（開く）なら、今のタップの処理のまま開く。決まりはdocs/object-actions.mdにある。
+    private func imageTapped(_ image: ProfileImage, gesture: UITapGestureRecognizer) {
+        let interaction = imageMenuInteractions[image]
+        guard !ObjectEntity.media.performsPrimary(.tap), let interaction, let view = gesture.view else {
+            open(image)
+            return
+        }
+        let point = gesture.location(in: view)
+        interaction.target(at: point)?.perform(.tap, in: view, at: point)
     }
 
     private func open(_ image: ProfileImage) {
@@ -574,8 +587,8 @@ final class ProfileHeaderView: UIView {
         }
         return MediaMenuInteraction(on: view, wholeImage: wholeImage, open: { [weak self] in
             self?.open(image)
-        }, menu: { [weak self] in
-            self?.menuForImage?(image)
+        }, menu: { [weak self] groups in
+            self?.menuForImage?(image, groups)
         }, sharperImage: sharperImage, onLiftChange: onLiftChange, offersMenu: { [weak self] _ in
             self?.viewerSource(for: image) != nil
         })

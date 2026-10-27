@@ -46,22 +46,23 @@ extension TimelineViewController {
     }
 
     /// 長押しで出す、`entry`の`target`のメディアのメニュー。投稿のメニューは、その「投稿」に入れる。出す項目がなければnil。
-    func mediaMenu(for target: MediaMenuTarget, entry: TimelineEntry, id: ItemID) -> UIMenu? {
+    /// - Parameter groups: 組む並び。nilなら設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
+    func mediaMenu(for target: MediaMenuTarget, entry: TimelineEntry, id: ItemID, groups: MenuLayout<MediaMenuItem>.Groups? = nil) -> UIMenu? {
         let subject = Self.status(of: entry).map { OperationStatus.Subject($0.displayed) }
-        return mediaMenu(for: target, subject: subject, statusMenu: contextMenu(for: entry, id: id))
+        return mediaMenu(for: target, subject: subject, statusMenu: contextMenu(for: entry, id: id), groups: groups)
     }
 
     private func mediaMenuTarget(of tile: MediaTileView) -> MediaMenuTarget? {
         guard let attachment = tile.menuAttachment else { return nil }
         return MediaMenuTarget(attachment: attachment, source: tile) { [weak tile] in
-            tile?.sendActions(for: .primaryActionTriggered)
+            tile?.onOpen?()
         }
     }
 
     /// - Parameters:
     ///   - subject: メディアの投稿。共有や保存の失敗を「最近の失敗」に残すときに添える。プロフィールの画像ならnil。
     ///   - statusMenu: 投稿の投稿のメニュー。「投稿」のサブメニューにする。プロフィールの画像ならnil。
-    func mediaMenu(for target: MediaMenuTarget, subject: OperationStatus.Subject?, statusMenu: UIMenu?) -> UIMenu? {
+    func mediaMenu(for target: MediaMenuTarget, subject: OperationStatus.Subject?, statusMenu: UIMenu?, groups: MenuLayout<MediaMenuItem>.Groups? = nil) -> UIMenu? {
         let attachment = target.attachment
         let fileURL = attachment.url ?? attachment.remoteUrl
         var menu = MediaMenu(kind: attachment.type, attachment: attachment)
@@ -98,7 +99,7 @@ extension TimelineViewController {
             guard let self else { return }
             showNotice(.textCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
-        return menu.menu(layout: settings.mediaMenuLayout)
+        return menu.menu(groups: groups ?? settings.mediaMenuLayout.groups)
     }
 
     /// メディアのメニューのURLの項目。共有のシートは、長押ししたサムネイルから出す。サムネイルがなければ一覧から出す。

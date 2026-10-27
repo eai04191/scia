@@ -37,11 +37,6 @@ final class LinkLabel: EmojiLabel {
         return view === self ? nil : view
     }
 
-    fileprivate func tapped(at point: CGPoint) {
-        guard let destination = link(at: point) else { return }
-        onTapLink?(destination)
-    }
-
     fileprivate func open(_ destination: RichText.LinkDestination) {
         onTapLink?(destination)
     }
@@ -93,6 +88,25 @@ final class LinkLabel: EmojiLabel {
 }
 
 
+/// 本文のリンクのメニューを、タップや長押しに割り当てた1項目だけで組むときの並び。行き先の対象ごとに、項目の種類が違う。
+enum LinkMenuGroups {
+    case link(MenuLayout<LinkMenuItem>.Groups)
+    case user(MenuLayout<UserMenuItem>.Groups)
+    case hashtag(MenuLayout<HashtagMenuItem>.Groups)
+
+    var link: MenuLayout<LinkMenuItem>.Groups? {
+        if case .link(let groups) = self { groups } else { nil }
+    }
+
+    var user: MenuLayout<UserMenuItem>.Groups? {
+        if case .user(let groups) = self { groups } else { nil }
+    }
+
+    var hashtag: MenuLayout<HashtagMenuItem>.Groups? {
+        if case .hashtag(let groups) = self { groups } else { nil }
+    }
+}
+
 /// 本文のリンクの長押しのメニューを出す画面。ラベルはレスポンダーチェーンをさかのぼって、いちばん近いものに知らせる。
 @MainActor
 protocol LinkMenuHost: AnyObject {
@@ -102,6 +116,8 @@ protocol LinkMenuHost: AnyObject {
     func linkMenuDidHide()
     /// 「リンクをコピー」を選んだ。
     func showLinkCopiedNotice()
+    /// タップや長押しに選んだ項目が使えないことなどを、数秒で消えるチップで知らせる。
+    func showNotice(_ notice: Notice)
     /// ユーザーのメニューの「ハンドルをコピー」を選んだ。
     func showHandleCopiedNotice()
     /// ユーザーのメニューのメンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
@@ -124,12 +140,14 @@ protocol LinkMenuHost: AnyObject {
 /// リンクの上の長押しは、セルの後ろのコレクションビューに渡らず投稿のメニューにならないため、この部品でリンクのメニューを出す。
 final class LinkHitArea: UIControl {
     private weak var label: LinkLabel?
+    private var longPress: ObjectLongPress?
 
     init(label: LinkLabel) {
         self.label = label
         super.init(frame: .zero)
         isAccessibilityElement = false
         isContextMenuInteractionEnabled = true
+        installLongPress()
     }
 
     @available(*, unavailable)
@@ -144,15 +162,50 @@ final class LinkHitArea: UIControl {
 
     override func endTracking(_ touch: UITouch?, with event: UIEvent?) {
         super.endTracking(touch, with: event)
-        guard let touch, let label, isTouchInside else { return }
-        label.tapped(at: touch.location(in: label))
+        guard let touch, isTouchInside else { return }
+        let point = touch.location(in: self)
+        target(at: point)?.perform(.tap, in: self, at: point)
+    }
+
+    /// 押したリンクの行き先の対象（リンク、ユーザー、ハッシュタグ）。リンクの外ならnil。決まりはdocs/object-actions.mdにある。
+    /// 主な操作（開く）は、今のタップの処理のまま行う。
+    private func target(at point: CGPoint) -> (any ObjectActionTarget)? {
+        guard let label, let destination = label.link(at: convert(point, to: label)) else { return nil }
+        let host = nearest((any LinkMenuHost).self)
+        let lifecycle = MenuLifecycle(willShow: { host?.linkMenuWillShow() }, didHide: { host?.linkMenuDidHide() })
+        let notify: (Notice) -> Void = { host?.showNotice($0) }
+        let open: (UIView) -> Void = { [weak label] _ in label?.open(destination) }
+        switch destination {
+        case .url:
+            return ObjectTarget(entity: .link, settings: label.settings, primary: open, buildMenu: { [weak self] in
+                self?.menu(for: destination, at: point, groups: $0.map { .link($0) })
+            }, lifecycle: lifecycle, notify: notify)
+        case .mention:
+            return ObjectTarget(entity: .user, settings: label.settings, primary: open, buildMenu: { [weak self] in
+                self?.menu(for: destination, at: point, groups: $0.map { .user($0) })
+            }, lifecycle: lifecycle, notify: notify)
+        case .hashtag:
+            return ObjectTarget(entity: .hashtag, settings: label.settings, primary: open, buildMenu: { [weak self] in
+                self?.menu(for: destination, at: point, groups: $0.map { .hashtag($0) })
+            }, lifecycle: lifecycle, notify: notify)
+        }
+    }
+
+    /// 長押しにメニュー以外を選んだときに、リンクの上の長押しを受ける。
+    func installLongPress() {
+        longPress = ObjectLongPress(on: self, accepts: { [weak self] point in
+            self?.target(at: point)?.performsLongPress() ?? false
+        }, perform: { [weak self] point in
+            guard let self else { return }
+            target(at: point)?.perform(.longPress, in: self, at: point)
+        })
     }
 
     override func contextMenuInteraction(
         _ interaction: UIContextMenuInteraction,
         configurationForMenuAtLocation location: CGPoint
     ) -> UIContextMenuConfiguration? {
-        guard let label else { return nil }
+        guard let label, target(at: location)?.performsLongPress() != true else { return nil }
         let point = convert(location, to: label)
         // 出す項目をすべて隠していれば、メニューを出さない。
         guard let destination = label.link(at: point), let menu = menu(for: destination, at: point) else { return nil }
@@ -209,7 +262,8 @@ final class LinkHitArea: UIControl {
 
     /// 並びは設定のリンクのメニューとハッシュタグのメニューに従う。メンションはユーザーなので、ユーザーのメニューで出す。出す項目がなければnil。
     /// 開く項目は、メニューを出した画面に開く場所を渡して開かせる。アプリ内のSafariはセッションが持つため、ラベルからは開けない。
-    func menu(for destination: RichText.LinkDestination, at point: CGPoint) -> UIMenu? {
+    /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。行き先の対象と違う並びは使わない。
+    func menu(for destination: RichText.LinkDestination, at point: CGPoint, groups: LinkMenuGroups? = nil) -> UIMenu? {
         guard let label else { return nil }
         let settings = label.settings
         let handlers = urlHandlers(at: point, linkBrowser: settings.linkBrowser)
@@ -218,7 +272,7 @@ final class LinkHitArea: UIControl {
         switch destination {
         case .url(let url):
             title = url.absoluteString
-            children = settings.linkMenuLayout.groups.menuElements { item in
+            children = (groups?.link ?? settings.linkMenuLayout.groups).menuElements { item in
                 if let action = item.urlAction {
                     return [action.action(url: url, handlers: handlers)]
                 }
@@ -235,8 +289,10 @@ final class LinkHitArea: UIControl {
             let actions = host?.userMenuActions
             let load = actions.map { $0.relationLoad(for: target) }
             // 通報も、相手を探すのを待って出す。
-            let failureSlots = settings.userMenuLayout.groups.relationFailureSlots(waitsForReport: true)
-            children = settings.userMenuLayout.groups.menuElements { item in
+            let userGroups = groups?.user ?? settings.userMenuLayout.groups
+            // 知らせる項目は、組む並びから決める。1項目だけ組むときに、出さない項目で知らせて空のメニューにならないため。
+            let failureSlots = userGroups.relationFailureSlots(waitsForReport: true)
+            children = userGroups.menuElements { item in
                 if let action = item.urlAction {
                     return [action.action(url: url, handlers: handlers)]
                 }
@@ -256,7 +312,7 @@ final class LinkHitArea: UIControl {
                 name: name,
                 url: url,
                 account: label.hashtagAccount,
-                layout: settings.hashtagMenuLayout,
+                groups: groups?.hashtag ?? settings.hashtagMenuLayout.groups,
                 handlers: handlers,
                 muteActions: nearest((any LinkMenuHost).self)?.hashtagMuteActions,
                 openTimeline: { [weak self] in self?.label?.open(destination) },
@@ -270,10 +326,8 @@ final class LinkHitArea: UIControl {
         UIAction(title: title, image: image) { [weak self] _ in self?.label?.open(destination) }
     }
 
-    /// サーバーはhttpとhttps以外をURLとして探さず、ふつうの文字列の検索になるため、そのリンクでは押せないようにする。
     private func openAsProfileAction(_ title: String, image: UIImage?, url: URL) -> UIAction {
-        let isWeb = ["http", "https"].contains(url.scheme?.lowercased())
-        return UIAction(title: title, image: image, attributes: isWeb ? [] : .disabled) { [weak self] _ in
+        LinkMenuItem.openAsProfileAction(title: title, image: image, url: url) { [weak self] in
             self?.nearest((any LinkMenuHost).self)?.openProfile(resolving: url)
         }
     }

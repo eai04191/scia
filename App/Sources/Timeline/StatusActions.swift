@@ -54,7 +54,8 @@ extension TimelineViewController {
     /// フォローリクエストの通知では、設定の並びの前に、承認と却下を設定によらず置く。
     /// 出す項目がなければnil。
     /// - Parameter id: メニューを出した要素。共有のシートを、その行から出す。
-    func contextMenu(for entry: TimelineEntry, id: ItemID) -> UIMenu? {
+    /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
+    func contextMenu(for entry: TimelineEntry, id: ItemID, groups: MenuLayout<StatusMenuItem>.Groups? = nil) -> UIMenu? {
         // 組みながら集めた、アイコンのまだない人をまとめて読む。
         defer { loadPendingMenuIcons() }
         // 人の一覧の行では、その人へのユーザーのメニューを、そのまま出す。
@@ -65,10 +66,10 @@ extension TimelineViewController {
         let status = Self.status(of: entry)
         let notification: MastodonNotification? = if case .notification(let notification) = entry { notification } else { nil }
         var shownUserIDs: Set<String> = []
-        var children = settings.statusMenuLayout.groups.menuElements { item in
+        var children = (groups ?? settings.statusMenuLayout.groups).menuElements { item in
             elements(for: item, status: status, notification: notification, id: id, shownUserIDs: &shownUserIDs)
         }
-        if case .notification(let notification) = entry, notification.type == .followRequest {
+        if groups == nil, case .notification(let notification) = entry, notification.type == .followRequest {
             children.insert(followRequestMenu(for: notification), at: 0)
         }
         reloadRelations(Array(shownUserIDs))
@@ -77,8 +78,9 @@ extension TimelineViewController {
 
     /// メニューに出る人の関係を、まとめて1回で読み直す。組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。
     /// 覚えていなかった人の関係の項目は、この読み直しを待って中身を渡す。関係で中身が変わる項目を出していなければ読まない。
-    private func reloadRelations(_ ids: [String]) {
-        guard !ids.isEmpty, settings.userMenuLayout.groups.needsRelationship else { return }
+    /// - Parameter groups: 組んだユーザーのメニューの並び。タップや長押しに割り当てた1項目だけを組んだときは、その並びで決める。
+    private func reloadRelations(_ ids: [String], groups: MenuLayout<UserMenuItem>.Groups? = nil) {
+        guard !ids.isEmpty, (groups ?? settings.userMenuLayout.groups).needsRelationship else { return }
         userMenuActions?.reloadRelations(ids)
     }
 
@@ -111,6 +113,13 @@ extension TimelineViewController {
             guard let notification else { return [] }
             return [UIAction(title: item.title, image: item.image) { [weak self] _ in
                 self?.onDismissNotification?(notification)
+            }]
+        case .openThread:
+            guard let status, canOpenThread(of: status) else { return [] }
+            return [UIAction(title: item.title, image: item.image) { [weak self] _ in
+                guard let self else { return }
+                recordOpenThread()
+                onOpenThread?(status, rowFrame(of: id))
             }]
         case .author:
             return users(status.map { [.account($0.displayed.account)] } ?? [])
@@ -246,7 +255,7 @@ extension TimelineViewController {
             return UIAction(title: item.title, image: item.image) { [weak self] _ in
                 self?.translation.present(text)
             }
-        case .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .hashtags, .dismissNotification, .reblogWithVisibility:
+        case .openThread, .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .hashtags, .dismissNotification, .reblogWithVisibility:
             return nil
         }
     }
@@ -261,7 +270,7 @@ extension TimelineViewController {
                 name: tag.name,
                 url: tag.url,
                 account: shown.account,
-                layout: settings.hashtagMenuLayout,
+                groups: settings.hashtagMenuLayout.groups,
                 handlers: handlers,
                 muteActions: hashtagMuteActions,
                 openTimeline: { [weak self] in self?.onOpenHashtag?(tag.name) },
@@ -405,6 +414,44 @@ extension TimelineViewController {
         )
     }
 
+    /// リンクカードとXの投稿の囲みを長押ししたときに出す、リンクのメニュー。本文のリンクの長押しのメニューと同じ並びで組む。出す項目がなければnil。
+    /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
+    func linkMenu(for url: URL, id: ItemID, groups: MenuLayout<LinkMenuItem>.Groups? = nil) -> UIMenu? {
+        let handlers = urlHandlers(id: id)
+        let children = (groups ?? settings.linkMenuLayout.groups).menuElements { item in
+            if let action = item.urlAction {
+                return [action.action(url: url, handlers: handlers)]
+            }
+            switch item {
+            case .openAsProfile:
+                return [LinkMenuItem.openAsProfileAction(title: item.title, image: item.image, url: url) { [weak self] in self?.openProfile(resolving: url) }]
+            // 共通の項目は、上で中身から組んだ。
+            case .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share:
+                return []
+            }
+        }
+        return children.isEmpty ? nil : UIMenu(title: url.absoluteString, children: children)
+    }
+
+    /// アイコンや人の一覧の行を長押ししたときに出す、その人のユーザーのメニュー。見出しは、投稿のメニューのユーザーのサブメニューと同じにする。
+    /// 出す項目がなければnil。
+    /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
+    func userMenu(for user: MenuUser, id: ItemID, groups: MenuLayout<UserMenuItem>.Groups? = nil) -> UIMenu? {
+        let groups = groups ?? settings.userMenuLayout.groups
+        defer { reloadRelations([user.id], groups: groups) }
+        let handlers = urlHandlers(id: id)
+        let load = relationLoad(for: user)
+        let shown = status(for: id)?.displayed
+        let reportableStatusID = shown?.account.id == user.id ? shown?.id : nil
+        let failureSlots = groups.relationFailureSlots(waitsForReport: false)
+        let children = groups.menuElements { item in
+            userElements(item, for: user, handlers: handlers, load: load, reportableStatusID: reportableStatusID, inSubmenu: true, failureSlots: failureSlots)
+        }
+        guard !children.isEmpty else { return nil }
+        let parts = user.acct.split(separator: "@", maxSplits: 1)
+        return UIMenu(title: "@\(parts.first ?? Substring(user.acct))", subtitle: parts.count == 2 ? String(parts[1]) : nil, children: children)
+    }
+
     /// ユーザーのメニューのアイコンにする、その人のアイコン。読み込み済みの画像を、一覧と同じ形に切り抜く。
     /// メンションされたユーザーは、APIの`Mention`にアイコンのURLがないため、一覧の行か前に読んだアカウントから探す。
     /// まだアイコンを出せなければ記号のプレースホルダーを返し、アカウントとアイコンを読み終えたら、開いているメニューのプレースホルダーを差し替える。
@@ -533,11 +580,13 @@ extension TimelineViewController {
         return userMenuActions.relationLoad(for: .account(id: user.id, acct: user.acct))
     }
 
-    private func userElements(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, load: UserRelationLoad?, reportableStatusID: String?, inSubmenu: Bool) -> [UIMenuElement] {
+    /// - Parameter failureSlots: 関係を読めなかったことを知らせる項目。組む並びから決める。省略すると設定の並びで決める。
+    private func userElements(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, load: UserRelationLoad?, reportableStatusID: String?, inSubmenu: Bool, failureSlots: RelationFailureSlots? = nil) -> [UIMenuElement] {
         guard item.isRelation else { return userAction(item, for: user, handlers: handlers, inSubmenu: inSubmenu).map { [$0] } ?? [] }
         guard let userMenuActions, let load else { return [] }
         let target = UserMenuTarget.account(id: user.id, acct: user.acct)
-        return userMenuActions.relationElements(item, target: target, load: load, failureSlots: settings.userMenuLayout.groups.relationFailureSlots(waitsForReport: false), reportableStatusID: reportableStatusID)
+        let failureSlots = failureSlots ?? settings.userMenuLayout.groups.relationFailureSlots(waitsForReport: false)
+        return userMenuActions.relationElements(item, target: target, load: load, failureSlots: failureSlots, reportableStatusID: reportableStatusID)
     }
 
     private func userAction(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, inSubmenu: Bool) -> UIAction? {

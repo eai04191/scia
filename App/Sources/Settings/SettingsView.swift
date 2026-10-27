@@ -153,6 +153,18 @@ struct SettingsView: View {
                     Text("タブバーに並べるタイムラインと、その並びを選びます。「切り替えタブ」より下に置いたものは、タブバーの最後のタブにまとめ、見出しのメニューで切り替えます。並びは\(account)のものです。")
                 }
                 Section {
+                    ObjectActionsRow(entity: .status, settings: settings)
+                    ObjectActionsRow(entity: .notification, settings: settings)
+                    ObjectActionsRow(entity: .user, settings: settings)
+                    ObjectActionsRow(entity: .link, settings: settings)
+                    ObjectActionsRow(entity: .hashtag, settings: settings)
+                    ObjectActionsRow(entity: .media, settings: settings)
+                } header: {
+                    Text("タップと長押し")
+                } footer: {
+                    Text("投稿や通知、ユーザーのアイコン、リンク、ハッシュタグ、メディアをタップ、長押ししたときに、メニューを開くか、メニューのどの操作をするかを選びます。引用の囲みは投稿、リンクカードとXの投稿の囲みはリンクとして扱います。ビューアの中は対象にしません。")
+                }
+                Section {
                     NavigationLink("投稿のメニュー") {
                         MenuLayoutSettingsView(title: "投稿のメニュー", layout: $settings.statusMenuLayout)
                     }

@@ -260,6 +260,10 @@ extension EditHistoryViewController: LinkMenuHost {
         notices?.showTransient(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
 
+    func showNotice(_ notice: Notice) {
+        notices?.showTransient(notice, duration: tuning.value(of: TuningCatalog.noticeFailureChipDuration))
+    }
+
     func showHandleCopiedNotice() {
         notices?.showTransient(.handleCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }

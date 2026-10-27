@@ -326,6 +326,36 @@ public final class AppSettings {
         didSet { defaults.set(mediaMenuLayout.tokens, forKey: Keys.mediaMenuLayout) }
     }
 
+    /// 投稿の行と引用の囲みをタップ、長押ししたときの操作。決まりはdocs/object-actions.mdにある。
+    public var statusActions: ObjectActions<StatusMenuItem> {
+        didSet { defaults.set(statusActions.tokens, forKey: Keys.statusActions) }
+    }
+
+    /// 通知の行をタップ、長押ししたときの操作。項目は投稿のメニューから選ぶ。
+    public var notificationActions: ObjectActions<StatusMenuItem> {
+        didSet { defaults.set(notificationActions.tokens, forKey: Keys.notificationActions) }
+    }
+
+    /// アイコン、「〜がブースト」の行、人の一覧の行、メンションをタップ、長押ししたときの操作。
+    public var userActions: ObjectActions<UserMenuItem> {
+        didSet { defaults.set(userActions.tokens, forKey: Keys.userActions) }
+    }
+
+    /// URLのリンク、リンクカード、Xの投稿の囲みをタップ、長押ししたときの操作。
+    public var linkActions: ObjectActions<LinkMenuItem> {
+        didSet { defaults.set(linkActions.tokens, forKey: Keys.linkActions) }
+    }
+
+    /// ハッシュタグをタップ、長押ししたときの操作。
+    public var hashtagActions: ObjectActions<HashtagMenuItem> {
+        didSet { defaults.set(hashtagActions.tokens, forKey: Keys.hashtagActions) }
+    }
+
+    /// サムネイル、リンクカードの画像、プロフィールの画像をタップ、長押ししたときの操作。ビューアの中は含めない。
+    public var mediaActions: ObjectActions<MediaMenuItem> {
+        didSet { defaults.set(mediaActions.tokens, forKey: Keys.mediaActions) }
+    }
+
     /// 投稿欄の部品を足す項目の並び。どれをボタンの行に常に出し、どれを＋のメニューに入れるか。
     public var composeToolLayout: MenuLayout<ComposeToolItem> {
         didSet { defaults.set(composeToolLayout.tokens, forKey: Keys.composeToolLayout) }
@@ -404,6 +434,12 @@ public final class AppSettings {
         static let hashtagMenuLayout = "settings.hashtagMenuLayout"
         static let mediaMenuLayout = "settings.mediaMenuLayout"
         static let composeToolLayout = "settings.composeToolLayout"
+        static let statusActions = "settings.objectActions.status"
+        static let notificationActions = "settings.objectActions.notification"
+        static let userActions = "settings.objectActions.user"
+        static let linkActions = "settings.objectActions.link"
+        static let hashtagActions = "settings.objectActions.hashtag"
+        static let mediaActions = "settings.objectActions.media"
         /// `AccountScopedDefaults`で、アカウントごとのキーにする名前。
         static let tabLayout = "tabLayout"
         static let switchTabItem = "switchTabItem"
@@ -462,6 +498,12 @@ public final class AppSettings {
         hashtagMenuLayout = defaults.stringArray(forKey: Keys.hashtagMenuLayout).map(MenuLayout.init(tokens:)) ?? HashtagMenuItem.defaultLayout
         mediaMenuLayout = defaults.stringArray(forKey: Keys.mediaMenuLayout).map(MenuLayout.init(tokens:)) ?? MediaMenuItem.defaultLayout
         composeToolLayout = defaults.stringArray(forKey: Keys.composeToolLayout).map(MenuLayout.init(tokens:)) ?? ComposeToolItem.defaultLayout
+        statusActions = defaults.stringArray(forKey: Keys.statusActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
+        notificationActions = defaults.stringArray(forKey: Keys.notificationActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
+        userActions = defaults.stringArray(forKey: Keys.userActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
+        linkActions = defaults.stringArray(forKey: Keys.linkActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
+        hashtagActions = defaults.stringArray(forKey: Keys.hashtagActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
+        mediaActions = defaults.stringArray(forKey: Keys.mediaActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         tabLayouts = AccountScopedDefaults.accountValues(named: Keys.tabLayout, in: defaults).compactMapValues { ($0 as? [String]).map(MenuLayout.init(tokens:)) }
         switchTabItems = AccountScopedDefaults.accountValues(named: Keys.switchTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
         hidesEmptyComposeBar = defaults.object(forKey: Keys.hidesEmptyComposeBar) as? Bool ?? false

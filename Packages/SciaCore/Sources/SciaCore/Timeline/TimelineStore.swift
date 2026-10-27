@@ -833,7 +833,19 @@ public final class TimelineStore {
     /// - Parameter adoptsFilterResults: ブーストを書き換えるときに、フィルターの結果も元の投稿の結果にそろえる。`Status.replacingReblog(with:adoptsFilterResults:)`を参照。
     static func updating(_ id: Status.ID, in status: Status, adoptsFilterResults: Bool = false, _ transform: (Status) -> Status) -> Status {
         if status.id == id { return transform(status) }
-        if let reblog = status.reblog, reblog.id == id { return status.replacingReblog(with: transform(reblog), adoptsFilterResults: adoptsFilterResults) }
-        return status
+        if let reblog = status.reblog {
+            if reblog.id == id { return status.replacingReblog(with: transform(reblog), adoptsFilterResults: adoptsFilterResults) }
+            let updated = updatingQuoted(id, in: reblog, transform)
+            return updated == reblog ? status : status.replacingReblog(with: updated, adoptsFilterResults: adoptsFilterResults)
+        }
+        return updatingQuoted(id, in: status, transform)
+    }
+
+    /// 引用元が`id`なら、引用元に`transform`を当てる。引用の囲みから行ったお気に入りやブックマークの結果を、囲みにも出すため。
+    /// 当てないと、囲みは操作の前の状態のままになり、もう一度行うと取り消しではなく同じ操作をもう一度送る。
+    /// 引用元の中の引用はIDだけで届くため、1段だけ見る。
+    static func updatingQuoted(_ id: Status.ID, in status: Status, _ transform: (Status) -> Status) -> Status {
+        guard let quote = status.quote, let quoted = quote.quotedStatus, quoted.id == id else { return status }
+        return status.replacingQuote(Quote(state: quote.rawState, quotedStatus: transform(quoted), quotedStatusID: quote.quotedStatusID))
     }
 }

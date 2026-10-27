@@ -88,12 +88,19 @@ struct PostContentConfiguration: UIContentConfiguration {
     var onOpenAccount: (() -> Void)?
     /// 名前の上の行がタップされたときに呼ぶ。ブーストした人や、通知のもとになる操作をした人のプロフィールを開く。
     var onOpenContextAccount: (() -> Void)?
+    /// アイコンのタップと長押し。渡すと、タップは`onOpenAccount`の代わりにこれで行い、長押しではその人のユーザーのメニューか、選んだ操作を行う。
+    /// 決まりはdocs/object-actions.mdにある。読み上げの操作は、`onOpenAccount`のまま。
+    var authorTarget: (any ObjectActionTarget)?
+    /// 名前の上の行のタップと長押し。`authorTarget`と同じ。
+    var contextTarget: (any ObjectActionTarget)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
     /// 囲みの押下と、囲みの中の部品の押下で呼ぶ処理。
     var embedActions = EmbedActions()
+    /// リンクカードのタップと長押し。決まりはdocs/object-actions.mdにある。
+    var linkCardTarget: (any ObjectActionTarget)?
     /// 投票の選択肢やボタンが押されたときに呼ぶ。
     var onPollAction: ((PollView.Action) -> Void)?
 
@@ -187,6 +194,9 @@ final class PostContentView: UIView, UIContentView {
     private let contextIcon = UIImageView()
     private let contextAvatarView: AvatarView
     private let contextLabel = FadingLabel()
+    /// アイコンと名前の上の行の、長押しのメニューと長押しの操作。
+    private var authorInteraction: ObjectInteraction?
+    private var contextInteractions: [ObjectInteraction] = []
     private let nameLabels = [FadingLabel(), FadingLabel()]
     private let timeLabel = UILabel()
     /// 描いている時刻の表記。記号を除いた文字で、書き直すかどうかを比べる。
@@ -253,19 +263,37 @@ final class PostContentView: UIView, UIContentView {
         bodyView.onPollAction = { [weak self] action in self?.current.onPollAction?(action) }
         // 名前の行は押下を受けず、行全体の押下に渡す。受けると、1行の投稿では行を押せる場所が本文の1行ほどしか残らない。
         avatarView.isUserInteractionEnabled = true
-        avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openAccount)))
+        avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped)))
+        authorInteraction = ObjectInteraction(on: avatarView, tapsSelf: false)
         for view in [contextAvatarView, contextLabel] as [UIView] {
             view.isUserInteractionEnabled = true
-            view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openContextAccount)))
+            view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(contextTapped)))
+            contextInteractions.append(ObjectInteraction(on: view, tapsSelf: false))
         }
         apply(configuration)
     }
 
-    @objc private func openAccount() {
+    @objc private func avatarTapped(_ gesture: UITapGestureRecognizer) {
+        guard let target = current.authorTarget, let view = gesture.view else {
+            openAccount()
+            return
+        }
+        target.perform(.tap, in: view, at: gesture.location(in: view))
+    }
+
+    @objc private func contextTapped(_ gesture: UITapGestureRecognizer) {
+        guard let target = current.contextTarget, let view = gesture.view else {
+            openContextAccount()
+            return
+        }
+        target.perform(.tap, in: view, at: gesture.location(in: view))
+    }
+
+    private func openAccount() {
         current.onOpenAccount?()
     }
 
-    @objc private func openContextAccount() {
+    private func openContextAccount() {
         current.onOpenContextAccount?()
     }
 
@@ -318,6 +346,10 @@ final class PostContentView: UIView, UIContentView {
         let metrics = configuration.metrics
 
         avatarView.apply(configuration.avatar)
+        authorInteraction?.target = configuration.authorTarget
+        for interaction in contextInteractions {
+            interaction.target = configuration.context?.opensAccount == true ? configuration.contextTarget : nil
+        }
         let context = configuration.context
         contextIcon.isHidden = context == nil || !metrics.showsContextSymbol
         contextAvatarView.isHidden = context?.avatar == nil
@@ -359,6 +391,7 @@ final class PostContentView: UIView, UIContentView {
 
         bodyView.emojiImages = configuration.emojiImages
         bodyView.embedActions = configuration.embedActions
+        bodyView.cardTarget = configuration.linkCardTarget
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,
             text: configuration.body,

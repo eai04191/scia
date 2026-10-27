@@ -95,14 +95,18 @@ public final class ThreadStore {
         updateStatus(updated.id) { _ in updated }
     }
 
-    /// 同じIDの投稿の中身を`transform`で変える。表示に関わる変化があればtrueを返す。
+    /// 同じIDの投稿の中身を`transform`で変える。引用元が`id`の投稿も、引用元を変える。表示に関わる変化があればtrueを返す。
     @discardableResult
     public func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) -> Bool {
-        guard let status = statuses[id] else { return false }
-        let updated = transform(status)
-        guard updated != status else { return false }
-        statuses[id] = updated
-        updatedWhileLoading.insert(id)
+        var changedIDs: [Status.ID] = []
+        for (statusID, status) in statuses {
+            let updated = statusID == id ? transform(status) : TimelineStore.updatingQuoted(id, in: status, transform)
+            guard updated != status else { continue }
+            statuses[statusID] = updated
+            changedIDs.append(statusID)
+        }
+        guard !changedIDs.isEmpty else { return false }
+        updatedWhileLoading.formUnion(changedIDs)
         rebuild()
         return true
     }

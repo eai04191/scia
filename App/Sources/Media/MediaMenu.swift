@@ -57,12 +57,16 @@ struct MediaMenu {
 
     /// 出す項目がなければ空。
     func elements(layout: MenuLayout<MediaMenuItem>) -> [UIMenuElement] {
-        layout.groups.menuElements { item in element(for: item).map { [$0] } ?? [] }
+        elements(groups: layout.groups)
+    }
+
+    func elements(groups: MenuLayout<MediaMenuItem>.Groups) -> [UIMenuElement] {
+        groups.menuElements { item in element(for: item).map { [$0] } ?? [] }
     }
 
     /// 見出しは置かない。長押ししたサムネイルを持ち上げて見せるので、何のメニューかは見れば分かるため。出す項目がなければnil。
-    func menu(layout: MenuLayout<MediaMenuItem>) -> UIMenu? {
-        let children = elements(layout: layout)
+    func menu(groups: MenuLayout<MediaMenuItem>.Groups) -> UIMenu? {
+        let children = elements(groups: groups)
         guard !children.isEmpty else { return nil }
         return UIMenu(children: children)
     }
@@ -117,9 +121,12 @@ struct MediaMenu {
 @MainActor
 protocol MediaMenuHost: AnyObject {
     /// `view`の`location`（`view`の座標）を長押しした。出すものがなければnil。
-    func mediaMenu(from view: UIView, at location: CGPoint) -> UIMenu?
+    /// - Parameter groups: 組む並び。nilなら設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
+    func mediaMenu(from view: UIView, at location: CGPoint, groups: MenuLayout<MediaMenuItem>.Groups?) -> UIMenu?
     func mediaMenuWillShow()
     func mediaMenuDidHide()
+    /// タップや長押しに選んだ項目が使えないことを、数秒で消えるチップで知らせる。
+    func showNotice(_ notice: Notice)
 }
 
 /// サムネイル、リンクカードの画像、プロフィールの画像に付ける、メディアのメニューの長押し。
@@ -142,8 +149,9 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     private let wholeImage: (@MainActor () -> UIImage?)?
     /// 持ち上げた画像をタップしたときに、タップしたときと同じくビューアで開く。
     private let open: @MainActor () -> Void
-    /// メニューを組む。nilなら、応答の連鎖で見つけた`MediaMenuHost`に問い合わせる（一覧の行の中のサムネイル）。
-    private let menu: (@MainActor () -> UIMenu?)?
+    /// メニューを組む。並びがnilなら設定の並びで組む。nilなら、応答の連鎖で見つけた`MediaMenuHost`に問い合わせる（一覧の行の中のサムネイル）。
+    private let menu: (@MainActor (MenuLayout<MediaMenuItem>.Groups?) -> UIMenu?)?
+    private var longPress: ObjectLongPress?
     /// 持ち上げた画像を、渡したピクセル数の長い辺で読み直す。読めなければnil。
     /// サムネイルは表示の大きさに合わせて縮めて読んでいるため、画面の幅に引き伸ばすとぼやける。届いたらプレビューの中で差し替える。
     private let sharperImage: (@MainActor (_ maxPixelSize: Int) async -> UIImage?)?
@@ -159,7 +167,7 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
         on view: UIView,
         wholeImage: (@MainActor () -> UIImage?)?,
         open: @escaping @MainActor () -> Void,
-        menu: (@MainActor () -> UIMenu?)? = nil,
+        menu: (@MainActor (MenuLayout<MediaMenuItem>.Groups?) -> UIMenu?)? = nil,
         sharperImage: (@MainActor (_ maxPixelSize: Int) async -> UIImage?)? = nil,
         onLiftChange: (@MainActor (Bool) -> Void)? = nil,
         offersMenu: @escaping @MainActor (CGPoint) -> Bool
@@ -173,10 +181,40 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
         self.offersMenu = offersMenu
         super.init()
         view.addInteraction(UIContextMenuInteraction(delegate: self))
+        longPress = ObjectLongPress(on: view, accepts: { [weak self] point in
+            self?.target(at: point)?.performsLongPress() ?? false
+        }, perform: { [weak self] point in
+            guard let self, let view = self.view else { return }
+            target(at: point)?.perform(.longPress, in: view, at: point)
+        })
+    }
+
+    /// メニューを組めるか。組めない画面（編集履歴のように`MediaMenuHost`のない画面）は、タップと長押しの操作の対象にせず、今どおりタップで開く。
+    var buildsMenu: Bool {
+        menu != nil || host != nil
+    }
+
+    private func buildMenu(at location: CGPoint, groups: MenuLayout<MediaMenuItem>.Groups?) -> UIMenu? {
+        guard let view else { return nil }
+        return menu.map { $0(groups) } ?? host?.mediaMenu(from: view, at: location, groups: groups)
+    }
+
+    /// 押したメディア。メニューを出さないメディア（ぼかしているものなど）ならnil。決まりはdocs/object-actions.mdにある。
+    /// タップでメニューを出すときは、画像を持ち上げずに押した位置にメニューだけを出す。
+    func target(at point: CGPoint) -> ObjectTarget<MediaMenuItem>? {
+        guard offersMenu(point) else { return nil }
+        let host = host
+        return ObjectTarget(
+            entity: .media,
+            primary: { [open] _ in open() },
+            buildMenu: { [weak self] groups in self?.buildMenu(at: point, groups: groups) },
+            lifecycle: MenuLifecycle(willShow: { host?.mediaMenuWillShow() }, didHide: { host?.mediaMenuDidHide() }),
+            notify: { host?.showNotice($0) }
+        )
     }
 
     func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
-        guard let view, offersMenu(location), let menu = menu.map({ $0() }) ?? host?.mediaMenu(from: view, at: location) else { return nil }
+        guard let target = target(at: location), !target.performsLongPress(), let menu = target.menu() else { return nil }
         let preview = wholeImagePreview()
         return UIContextMenuConfiguration(identifier: nil, previewProvider: preview.map { controller in { controller } }) { _ in menu }
     }

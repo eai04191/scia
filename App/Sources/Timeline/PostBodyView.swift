@@ -68,6 +68,11 @@ struct PostBodyContent {
 struct EmbedActions {
     /// 囲みが押されたときに、囲みを渡して呼ぶ。
     var open: ((EmbeddedPostView) -> Void)?
+    /// 囲みのタップと長押し。渡すと、タップは`open`の代わりにこれで行い、長押しでは囲みの対象のメニューか、選んだ操作を行う。
+    /// 決まりはdocs/object-actions.mdにある。
+    var target: (any ObjectActionTarget)?
+    /// 囲みの作者のアイコンのタップと長押し。
+    var accountTarget: (any ObjectActionTarget)?
     /// 囲みのサムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var selectMedia: ((Int, MediaGridView) -> Void)?
     /// 囲みの添付ファイルの、閲覧注意のぼかしが押されたときに呼ぶ。
@@ -94,7 +99,18 @@ final class PostBodyView: UIView {
     /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
     var onOpenLinkCardImage: ((LinkCardThumbnailView) -> Void)?
     /// 囲みの押下と、囲みの中の部品の押下を受ける。
-    var embedActions = EmbedActions()
+    var embedActions = EmbedActions() {
+        didSet {
+            embedInteraction?.target = embedActions.target
+            embedView?.accountTarget = embedActions.accountTarget
+        }
+    }
+    /// リンクカードのタップと長押し。渡すと、タップは`onOpenLink`の代わりにこれで行い、長押しではリンクのメニューか、選んだ操作を行う。
+    var cardTarget: (any ObjectActionTarget)? {
+        didSet { cardInteraction?.target = cardTarget }
+    }
+    private var cardInteraction: ObjectInteraction?
+    private var embedInteraction: ObjectInteraction?
     /// 投票の選択肢やボタンが押されたときに呼ぶ。選んだ状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onPollAction: ((PollView.Action) -> Void)?
 
@@ -369,10 +385,17 @@ final class PostBodyView: UIView {
         install(view)
         view.onOpenImage = { [weak self] thumbnail in self?.onOpenLinkCardImage?(thumbnail) }
         view.onRevealImage = { [weak self] in self?.onRevealMedia?() }
-        view.addAction(UIAction { [weak self] _ in
+        let interaction = ObjectInteraction(on: view, tapsSelf: false)
+        cardInteraction = interaction
+        view.addAction(UIAction { [weak self, weak interaction] _ in
             guard let self, let url = self.cardView?.content?.card.url else { return }
-            self.onOpenLink?(.url(url))
+            if interaction?.target != nil {
+                interaction?.handleTap()
+            } else {
+                self.onOpenLink?(.url(url))
+            }
         }, for: .primaryActionTriggered)
+        cardInteraction?.target = cardTarget
         cardView = view
         return view
     }
@@ -388,10 +411,18 @@ final class PostBodyView: UIView {
         view.onOpenAccount = { [weak self] in self?.embedActions.openAccount?() }
         view.onToggleSpoiler = { [weak self] in self?.embedActions.toggleSpoiler?() }
         view.onSelectNote = { [weak self] index in self?.embedActions.selectNote?(index) }
-        view.addAction(UIAction { [weak self, weak view] _ in
+        let interaction = ObjectInteraction(on: view, tapsSelf: false)
+        embedInteraction = interaction
+        view.addAction(UIAction { [weak self, weak view, weak interaction] _ in
             guard let self, let view else { return }
-            self.embedActions.open?(view)
+            if interaction?.target != nil {
+                interaction?.handleTap()
+            } else {
+                self.embedActions.open?(view)
+            }
         }, for: .primaryActionTriggered)
+        embedInteraction?.target = embedActions.target
+        view.accountTarget = embedActions.accountTarget
         embedView = view
         return view
     }

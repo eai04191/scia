@@ -34,6 +34,11 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
         public var main: [Group]
         /// 「その他」のサブメニューの中身。空なら「その他」を出さない。
         public var more: [Group]
+
+        /// 1つの項目だけの並び。タップや長押しに割り当てた項目を、メニューと同じ組み方で組むために使う。
+        public static func single(_ item: Item) -> Groups {
+            Groups(main: [Group([item])], more: [])
+        }
     }
 
     public private(set) var elements: [Element]
@@ -152,6 +157,8 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
 
 /// 投稿のメニューの項目。通知のメニューも、対象の投稿のこのメニューで組む。
 public enum StatusMenuItem: String, MenuItemKind {
+    /// 投稿のスレッドを開く。投稿と通知のタップの既定。スレッドの中心の投稿と、投稿のない通知では出ない。
+    case openThread
     case reply
     case favourite
     case reblog
@@ -208,7 +215,7 @@ public enum StatusMenuItem: String, MenuItemKind {
     /// - 返信・お気に入り・ブースト: いちばんよく使い、アイコンだけでも見分けられるので、横に並べる
     /// - 反応のつづき: 編集（自分の投稿でだけ出る。自分の投稿では返信などより先に使う）、ブックマーク、引用。公開範囲を選んでブーストは、ブーストの公開範囲の設定で代わりがきくため隠し、出したときにブーストの近くに来るようここに置く
     /// - 持ち出す: リンクとテキストのコピー、共有、ブラウザで開く。開く場所を選んで開く2つは、開く場所の設定と重なるため隠す
-    /// - 読む: 翻訳
+    /// - 読む: 翻訳。スレッドを開くは、既定ではタップで開けて代わりがきくため隠し、出したときに読む操作の先頭に来るようここに置く
     /// - 関係するユーザーとハッシュタグ: メンションされたユーザーは、何人もいるとメニューが長くなるため隠す。ハッシュタグは、ある投稿でしか出ないので、「その他」に入れずに出す
     /// - 「その他」: たまにしか使わない編集履歴、お気に入りした人、ブーストした人、メディアを隠す、カスタム絵文字、会話のミュート、固定と、取り消せない通知の削除、投稿の削除
     public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
@@ -229,6 +236,7 @@ public enum StatusMenuItem: String, MenuItemKind {
         .item(.openInDefaultBrowser, isVisible: false),
         .item(.openInAppSafari, isVisible: false),
         .separator,
+        .item(.openThread, isVisible: false),
         .item(.systemTranslate, isVisible: true),
         .separator,
         .item(.notifyingUser, isVisible: true),

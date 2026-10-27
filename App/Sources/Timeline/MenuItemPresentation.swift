@@ -73,6 +73,7 @@ extension MenuItemContentProviding {
 extension StatusMenuItem: MenuItemContentProviding {
     var content: MenuItemContent {
         switch self {
+        case .openThread: .own(title: "スレッドを開く", symbolName: "text.bubble", note: "スレッドの中心の投稿と、投稿のない通知では出ません。既定ではタップで開きます")
         case .reply: .own(title: "返信", symbolName: "arrowshape.turn.up.left")
         case .favourite: .own(title: "お気に入り", symbolName: "star")
         case .reblog: .own(title: "ブースト", symbolName: "arrow.2.squarepath")
@@ -126,6 +127,15 @@ extension UserMenuItem: MenuItemContentProviding {
     }
 }
 
+extension LinkMenuItem {
+    /// 「プロフィールとして開く」。サーバーはhttpとhttps以外をURLとして探さず、ふつうの文字列の検索になるため、そのリンクでは押せないようにする。
+    @MainActor
+    static func openAsProfileAction(title: String, image: UIImage?, url: URL, open: @escaping @MainActor () -> Void) -> UIAction {
+        let isWeb = ["http", "https"].contains(url.scheme?.lowercased())
+        return UIAction(title: title, image: image, attributes: isWeb ? [] : .disabled) { _ in open() }
+    }
+}
+
 extension LinkMenuItem: MenuItemContentProviding {
     var content: MenuItemContent {
         switch self {
@@ -166,13 +176,13 @@ extension HashtagMenuItem {
         name: String,
         url: URL?,
         account: Account?,
-        layout: MenuLayout<HashtagMenuItem>,
+        groups: MenuLayout<HashtagMenuItem>.Groups,
         handlers: URLMenuHandlers,
         muteActions: HashtagMuteActions?,
         openTimeline: @escaping () -> Void,
         openAccountStatuses: @escaping (Account) -> Void
     ) -> [UIMenuElement] {
-        layout.groups.menuElements { item in
+        groups.menuElements { item in
             if let action = item.urlAction {
                 return [action.action(url: url, handlers: handlers)]
             }

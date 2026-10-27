@@ -26,6 +26,14 @@ extension TimelineViewController {
                     onOpenThread?(quoted, frame)
                 }
             }
+            if let itemID {
+                let open = actions.open
+                actions.target = statusTarget(for: quoted, id: itemID) { view in
+                    guard let embed = view as? EmbeddedPostView else { return }
+                    open?(embed)
+                }
+                actions.accountTarget = userTarget(for: quoted.account, id: itemID)
+            }
             if let media {
                 actions.selectMedia = { [weak self] index, grid in
                     self?.openMedia(media.attachments, at: index, of: quoted, from: grid)

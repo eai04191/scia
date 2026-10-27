@@ -48,6 +48,7 @@ extension TimelineViewController {
         configuration.metrics.contextSymbolSpacing = settings.value(of: NotificationAppearanceCatalog.symbolSpacing)
         configuration.metrics.contextSpacing = settings.value(of: NotificationAppearanceCatalog.contextSpacing)
         configuration.onOpenContextAccount = { [weak self] in self?.onOpenProfile?(notification.account) }
+        configuration.contextTarget = userTarget(for: notification.account, id: .notification(notification.id))
         return configuration
     }
 
@@ -170,6 +171,7 @@ extension TimelineViewController {
         if appearance.phrase.includesName {
             configuration.accountName = notification.account.displayNameOrUsername
             configuration.onOpenAccount = { [weak self] in self?.onOpenProfile?(notification.account) }
+            configuration.accountTarget = userTarget(for: notification.account, id: .notification(notification.id))
         }
         if notification.isGroup {
             let accounts = notification.sampleAccounts
@@ -180,6 +182,7 @@ extension TimelineViewController {
                 self?.onOpenProfile?(accounts[index])
             }
             configuration.onOpenGroupAccounts = { [weak self] in self?.onOpenGroupAccounts?(notification) }
+            configuration.groupAccountTargets = accounts.map { userTarget(for: $0, id: .notification(notification.id)) }
         }
         return configuration
     }

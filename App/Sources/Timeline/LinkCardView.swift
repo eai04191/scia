@@ -88,7 +88,7 @@ final class LinkCardView: UIButton {
         thumbnailView.backgroundColor = .secondarySystemFill
         thumbnailView.layer.cornerRadius = MediaGridView.cornerRadius
         thumbnailView.layer.cornerCurve = .continuous
-        thumbnailView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(openImage)))
+        thumbnailView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(imageTapped)))
         imageMenuInteraction = MediaMenuInteraction(on: thumbnailView, wholeImage: { [weak self] in self?.thumbnailView.loadedThumbnail }, open: { [weak self] in
             self?.openImageFromMenu()
         }, sharperImage: { [weak self] maxPixelSize in
@@ -249,7 +249,17 @@ final class LinkCardView: UIButton {
         return card.image != nil
     }
 
-    @objc private func openImage() {
+    /// 画像のタップに選んだ操作を行う。ぼかしていればぼかしを外し、既定（開く）なら今のタップの処理のまま開く。決まりはdocs/object-actions.mdにある。
+    @objc private func imageTapped(_ gesture: UITapGestureRecognizer) {
+        guard !isCoveringImage, !ObjectEntity.media.performsPrimary(.tap), let imageMenuInteraction else {
+            openImage()
+            return
+        }
+        let point = gesture.location(in: thumbnailView)
+        imageMenuInteraction.target(at: point)?.perform(.tap, in: thumbnailView, at: point)
+    }
+
+    private func openImage() {
         if isCoveringImage {
             onRevealImage?()
         } else {
