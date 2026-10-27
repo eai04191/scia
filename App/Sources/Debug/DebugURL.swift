@@ -72,6 +72,9 @@ enum DebugURL: Equatable {
     /// `scia-debug://arrivals/hold`で、以後に届いた新着を一覧に挿入せずに溜める。`scia-debug://arrivals/release`で、溜まった新着をまとめて挿入する。
     /// ストリーミングはつないだままなので、切断の知らせやポーリングで一覧が動かない。
     case holdArrivals(Bool)
+    /// `scia-debug://autoscroll?distance=<pt>&speed=<pt/秒>`。選んでいるタブの一覧を、決まった速さで決まった距離だけ動かす。distanceが負なら上へ戻す。
+    /// 指で操作できない検証用の実機で、スクロールの重さ（hitch）を同じ条件で測るため。慣性のない一定の速さで動かすので、指のスクロールとは動きが違う。
+    case autoScroll(distance: CGFloat, speed: CGFloat)
     /// `scia-debug://inject/<home|local|federated|notifications>?file=<ファイル名>`。アプリのDocuments/DebugInjectに置いたJSONを読み、ストリーミングの新着と同じ経路で一覧に流す。
     /// ホーム、ローカル、連合は`Status`の配列、通知は`Notification`の配列で、APIの応答と同じ形で書く。実データにない投稿や通知の見え方を、ログインした端末のまま確かめるため。
     case inject(Tab, file: String)
@@ -158,6 +161,7 @@ enum DebugURL: Equatable {
         case "notice": Self.progressNotice(url)
         case "media-limits": Self.mediaLimits(url)
         case "viewer": Self.viewer(url)
+        case "autoscroll": Self.autoScroll(url)
         case "inject": Self.inject(url)
         case "lists": Self.lists(url)
         case "tags": Self.tags(url)
@@ -243,6 +247,13 @@ enum DebugURL: Equatable {
         let text = query("text", in: url)
         guard let mediaCount = Int(query("media", in: url) ?? "0"), mediaCount >= 0, text != nil || mediaCount > 0 else { return nil }
         return .compose(text: text, mediaCount: mediaCount)
+    }
+
+    private static func autoScroll(_ url: URL) -> DebugURL? {
+        guard let distance = query("distance", in: url).flatMap(Double.init),
+              let speed = Double(query("speed", in: url) ?? "2000"), speed > 0
+        else { return nil }
+        return .autoScroll(distance: distance, speed: speed)
     }
 
     private static func viewer(_ url: URL) -> DebugURL? {

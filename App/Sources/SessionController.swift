@@ -56,6 +56,10 @@ final class SessionController {
     #if DEBUG
     /// `scia-debug://notice/progress`で出している、確かめるための処理中のチップを進める。
     private var debugProgressTask: Task<Void, Never>?
+    /// `scia-debug://autoscroll`で一覧を動かしている。
+    private var debugScrollTicker: FrameTicker?
+    /// `scia-debug://autoscroll`で動かしている間に、落ちたフレームを数える。
+    private let debugScrollHitches = ScrollHitchMonitor()
     #endif
     /// プロフィールを開く操作の入口。メンション、リンク、自分のプロフィール、ほかのアプリからのURLのどれで開くときも通し、後から押したものだけを開く。
     /// 探すのが長引いたら「取得中」のチップを出す。すぐ見つかったときにチップが一瞬だけ出入りしないよう、出すのは少し待ってから。
@@ -2540,6 +2544,8 @@ final class SessionController {
             }
         case .viewer(let index):
             openTopmostMedia(at: index)
+        case .autoScroll(let distance, let speed):
+            autoScroll(distance: distance, speed: speed)
         case .createList(let title):
             changeTabSourcesForDebug("create") { _ = try await $0.createList(title: title) }
         case .deleteList(let id):
@@ -2603,6 +2609,71 @@ final class SessionController {
             return
         }
         grid.onSelect?(index)
+    }
+
+    /// 選んでいるタブの一覧を、一定の速さで動かす。端に着いたら止める。
+    /// タブの中には隠れたままの一覧もあるので、中身のいちばん長いコレクションビューを一覧とみなす。
+    /// 動かしている間の落ちたフレームを指のスクロールと同じ仕組みで数え、Documents/DebugAutoscroll.logに1行ずつ書き足す。
+    /// 指で操作できない実機ではログを読めないので、`devicectl device copy from`でファイルを取り出して読む。
+    private func autoScroll(distance: CGFloat, speed: CGFloat) {
+        guard let view = (rootViewController as? UITabBarController)?.selectedViewController?.view,
+              let list = Self.collectionViews(in: view).max(by: { $0.contentSize.height < $1.contentSize.height })
+        else {
+            logger.error("debug autoscroll: no list")
+            return
+        }
+        debugScrollTicker?.stop()
+        _ = debugScrollHitches.stop()
+        debugScrollHitches.start()
+        let startedAt = AppDependencies.mediaTime()
+        let settings = AppDependencies.settings
+        let label = "\(settings.mediaArrangement.rawValue) tilts=\(settings.tiltsStackedPhotos)"
+        var remaining = abs(distance)
+        let direction: CGFloat = distance < 0 ? -1 : 1
+        let ticker = FrameTicker(longestElapsed: nil) { [weak list, weak self] elapsed in
+            // 画面を閉じたり、タブを切り替えたりして一覧が画面から外れたら、動かすのも数えるのもやめる。記録は残さない。
+            // 選ばれていないタブの一覧はウィンドウから外れるので、ウィンドウにあるかで両方を見分ける。
+            guard let list, list.window != nil else {
+                _ = self?.debugScrollHitches.stop()
+                return false
+            }
+            let step = min(speed * CGFloat(elapsed), remaining)
+            remaining -= step
+            let inset = list.adjustedContentInset
+            let top = -inset.top
+            let bottom = max(list.contentSize.height + inset.bottom - list.bounds.height, top)
+            let target = min(max(list.contentOffset.y + step * direction, top), bottom)
+            list.contentOffset.y = target
+            let reachedEnd = direction > 0 ? target >= bottom : target <= top
+            let continues = remaining > 0 && !reachedEnd
+            if !continues {
+                self?.finishAutoScroll(label: label, distance: distance, duration: AppDependencies.mediaTime() - startedAt)
+            }
+            return continues
+        }
+        debugScrollTicker = ticker
+        ticker.start()
+    }
+
+    private func finishAutoScroll(label: String, distance: CGFloat, duration: CFTimeInterval) {
+        let hitches = debugScrollHitches.stop()
+        let line = String(format: "%@ distance=%.0f duration=%.2f dropped=%d hitch=%.3f\n", label, distance, duration, hitches.droppedFrames, hitches.hitchTime)
+        logger.info("debug autoscroll: \(line, privacy: .public)")
+        let file = URL.documentsDirectory.appending(path: "DebugAutoscroll.log")
+        guard let data = line.data(using: .utf8) else { return }
+        if let handle = try? FileHandle(forWritingTo: file) {
+            defer { try? handle.close() }
+            _ = try? handle.seekToEnd()
+            try? handle.write(contentsOf: data)
+        } else {
+            try? data.write(to: file)
+        }
+    }
+
+    private static func collectionViews(in view: UIView) -> [UICollectionView] {
+        guard !view.isHidden else { return [] }
+        if let list = view as? UICollectionView { return [list] }
+        return view.subviews.flatMap(collectionViews(in:))
     }
 
     private static func mediaGrids(in view: UIView) -> [MediaGridView] {
