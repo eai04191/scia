@@ -304,8 +304,14 @@ private final class FlightCopy: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// 最後に`apply`した形と、その前の形。まだ一度も描いていない複製を止めるとき、見えている形として前の形を使う。
+    private var appliedGeometry: Geometry?
+    private var previousGeometry: Geometry?
+
     /// アニメーションの中で呼ぶと、外枠、中の画像、角の丸みを一緒に動かす。
     func apply(_ geometry: Geometry) {
+        previousGeometry = appliedGeometry ?? geometry
+        appliedGeometry = geometry
         border = geometry.border
         bounds = CGRect(origin: .zero, size: geometry.size)
         center = geometry.center
@@ -324,7 +330,19 @@ private final class FlightCopy: UIView {
     }
 
     /// 動いている途中の見えている形で止め、そこから次の行き先へ向かい直せるようにする。
+    /// 作ったばかりでまだ一度も描いていない複製（描き直しの前に行き先を測り直したとき）は、見えている形を読めない。
+    /// 読めないまま止めると、行き先の値を見えている形と取り違え、行き先へ1コマで移るため、動かす前の形に戻す。
     func freezeAtPresentation() {
+        guard layer.presentation() != nil else {
+            Self.removeAllAnimations(in: layer)
+            if let previousGeometry {
+                apply(previousGeometry)
+                self.previousGeometry = previousGeometry
+            }
+            // 重ねた表示は、行き先へ向かう動きで薄くし始めるまで、濃いまま見えている。
+            decoration?.alpha = 1
+            return
+        }
         let presented = layer.presentation()
         let innerPresented = inner.layer.presentation()
         let size = presented?.bounds.size ?? bounds.size
