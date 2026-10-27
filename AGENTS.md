@@ -57,6 +57,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - セッションの持ち物（各一覧、開いた画面、投稿欄）で始める処理は、セッションの持ち主（`TaskScope`）の子で始める。ログアウト、アカウントの切り替え、窓を閉じたときに、止める処理を並べなくても止まるようにするため（`make lint`の`session_task_outside_scope`で止める）
 - タイムラインはUICollectionViewとdiffable data sourceで組む。スクロール位置を細かく制御する必要があるため、SwiftUIのListやScrollViewにはしない
 - 独自のアニメーションやジェスチャーを足す前に、UIKit標準の部品と挙動で実現できないか検討する
+- UIKitの動きは、SwiftUIのスプリング（`.smooth`、`.snappy`など）を`UIView.animate(_:changes:completion:)`に渡して書く。途中で止める、逆向きにするなど`UIViewPropertyAnimator`で動かすときは、`UISpringTimingParameters(duration:bounce:)`で同じスプリングにする。`UIView.animate(withDuration:)`の既定の加減速や`usingSpringWithDamping`では書かない。SwiftUIの部品と動きが揃わず、そこだけ古い動きに見えるため。前の書き方で残っている動きは、その箇所に手を入れるときに置き換える。ただし、OSから渡る時間と曲線に合わせる動き（キーボードの出入りに付いて動く投稿欄など）は、渡された値のまま動かす。スプリングの進み具合を自分で計算して、ほかの値を付いて動かしている部分（ステータスバーの通知の中身は、`UIKitSpring`でUIKitのスプリングを計算している）は、動きと計算を一緒に置き換える。片方だけ替えると、付いて動く値がずれるため
 - 画面の骨格、スクロール位置の制御、入力（入力欄、変換、キー操作、フォーカス）、ジェスチャーはUIKitで作る。中に入力もスクロール位置の精密な制御も持たない表示の部品は、SwiftUIで作れないかを先に考え、UIKitの画面に`UIHostingController`で載せる。Liquid Glassの組み方（`glassEffect`、`ConcentricRectangle`、`.containerShape`）をそのまま使えるため。補完の候補の一覧では、UIKitの`containerConcentric`がスクロールに追従しなかったが、SwiftUIでは追従した
 - UIKitで作った部品でLiquid Glassの不都合が出たら、SwiftUIへの置き換えを候補に入れる。UIKitとSwiftUIの境目では、`UIViewRepresentable`の中身が大きさの希望を変え続けて並べ直しが止まらなくなることがあるので、包む部品は`sizeThatFits`で大きさを決める
 - Mastodon APIの仕様は推測せず、公式ドキュメント（https://docs.joinmastodon.org/ ）で確認する。サーバー実装による差異（glitch-soc、Fedibird、GoToSocialなど）は、必要になった時点で個別に対応してテストに残す
