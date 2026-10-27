@@ -54,6 +54,10 @@ enum DebugURL: Equatable {
     /// `scia-debug://dump`。画面にある要素の名前と枠を、アプリのDocuments/AgentDump/screen.txtに書き出す。
     /// agentがスクリーンショットを読まずに、タップする座標や今の画面を文字で知るため。
     case dump
+    /// `scia-debug://storage-probe`。ストレージの画面が測る置き場所を、読めるかを含めて、アプリのDocuments/AgentDump/storage.txtに書き出す（`StorageProbe`）。
+    case storageProbe
+    /// `scia-debug://browser?url=<URL>`。アプリ内のSafariでURLを開く。実機でアプリ内のSafariのデータを溜めるため。
+    case browser(URL)
     /// `scia-debug://reset`。重ねた画面をすべて閉じ、どのタブも最初の画面に戻して、ホームのタブを選ぶ。
     case reset
     /// `scia-debug://settings`。設定を開く。
@@ -121,6 +125,7 @@ enum DebugURL: Equatable {
         "media-limits/server": .mediaLimits(nil),
         "catalog": .catalog(nil),
         "dump": .dump,
+        "storage-probe": .storageProbe,
         "reset": .reset,
         "compose/close": .composeClose,
         "settings": .settings,
@@ -157,6 +162,7 @@ enum DebugURL: Equatable {
         case "lists": Self.lists(url)
         case "tags": Self.tags(url)
         case "compose": Self.compose(url)
+        case "browser": Self.query("url", in: url).flatMap(URL.init(string:)).flatMap { LinkBrowser.inApp.browser(for: $0) == .inApp ? .browser($0) : nil }
         case "profile-edit": .profileEdit(note: Self.query("note", in: url), field: Self.query("field", in: url))
         default: nil
         }

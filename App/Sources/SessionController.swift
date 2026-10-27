@@ -2510,6 +2510,10 @@ final class SessionController {
             topViewController.presentComponentCatalog(opening: component)
         case .dump:
             AgentScreenDump.write(scene: rootViewController.view.window?.windowScene)
+        case .storageProbe:
+            StorageProbe.write()
+        case .browser(let url):
+            browser.open(url, from: rootViewController.frontmostPresented)
         case .reset:
             rootViewController.dismiss(animated: false)
             for navigation in tabs.allNavigations {
