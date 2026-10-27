@@ -127,13 +127,13 @@ final class ComposeMorphFlights {
     /// 写真のスタックの影は、`duration`の間に`stackShadowOpacity`（カプセルに着くならスタックの影の濃さ、列に着くなら0）へ向かわせる。
     func land(on targets: [Key: End], delays: [Key: TimeInterval], stackShadowOpacity: Float, duration: TimeInterval, delayedAnimation: (TimeInterval, @escaping () -> Void) -> Void) -> Int {
         generation += 1
-        // 影の濃さはUIKitのアニメーションで動かないので、Core Animationで動かす。
+        // 影の濃さはUIKitのアニメーションで動かないので、Core Animationで、複製と同じ`.smooth`のスプリングで動かす。
         let groupLayer = shadowGroup.layer
-        let animation = CABasicAnimation(keyPath: "shadowOpacity")
+        let animation = CASpringAnimation(perceptualDuration: duration, bounce: 0)
+        animation.keyPath = "shadowOpacity"
         animation.fromValue = groupLayer.shadowOpacity
         animation.toValue = stackShadowOpacity
-        animation.duration = duration
-        animation.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        animation.duration = animation.settlingDuration
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         groupLayer.shadowOpacity = stackShadowOpacity

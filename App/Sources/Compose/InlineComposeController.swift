@@ -1584,7 +1584,8 @@ final class InlineComposeController: NSObject {
         var flightGeneration: Int?
         let morphDuration = tuning.value(of: TuningCatalog.composeMorphDuration)
         let morphEnd = mediaTime() + morphDuration
-        UIView.animate(withDuration: morphDuration, delay: 0, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+        // SwiftUIの`.smooth`と同じスプリングで動かす。複製を見えている形で止めて向かい直すため、Core Animationで動くUIKitの書き方にする。
+        UIView.animate(springDuration: morphDuration, bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
             if collapses {
                 self.applyExpandedLayout()
             }
@@ -1599,7 +1600,7 @@ final class InlineComposeController: NSObject {
                 let stackShadow = editing ? 0 : ComposeRestThumbnails.stackShadowOpacity(in: self.tuning)
                 flightGeneration = self.morphFlights.land(on: self.morphEnds(editing: editing), delays: delays, stackShadowOpacity: stackShadow, duration: morphDuration) { delay, animations in
                     // 外側のアニメーションの中で呼ぶので、時間と曲線を受け継がないよう上書きする。受け継ぐと遅らせた分だけ着くのが遅れ、外側の終わりで複製が消えて本物の位置へ飛ぶ。
-                    UIView.animate(withDuration: morphDuration - delay, delay: delay, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState, .overrideInheritedDuration, .overrideInheritedCurve], animations: animations)
+                    UIView.animate(springDuration: morphDuration - delay, bounce: 0, delay: delay, options: [.allowUserInteraction, .beginFromCurrentState, .overrideInheritedDuration, .overrideInheritedCurve], animations: animations)
                 }
             }
         } completion: { _ in
@@ -1619,7 +1620,7 @@ final class InlineComposeController: NSObject {
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 morphFlights.retarget(on: morphEnds(editing: editing), generation: flightGeneration) { delay, animations in
-                    UIView.animate(withDuration: max(morphEnd - mediaTime() - delay, 0.05), delay: delay, usingSpringWithDamping: 1, initialSpringVelocity: 0, options: [.allowUserInteraction, .beginFromCurrentState], animations: animations)
+                    UIView.animate(springDuration: max(morphEnd - mediaTime() - delay, 0.05), bounce: 0, delay: delay, options: [.allowUserInteraction, .beginFromCurrentState], animations: animations)
                 }
             }
         }
