@@ -129,6 +129,8 @@ final class PostBodyView: UIView {
     private var mediaView: MediaGridView?
     private var cardView: LinkCardView?
     private var embedView: EmbeddedPostView?
+    /// 囲みに替わったリンクカードの像。囲みを濃くする間、カードのあった位置に重ねて薄くする。
+    private(set) var leavingCardSnapshot: UIView?
     private var filterNoteLabel: UILabel?
     private(set) var content: PostBodyContent?
     /// 添付ファイルの有無と並べ方で変わる制約。適用のたびに作り直す。
@@ -476,9 +478,20 @@ final class PostBodyView: UIView {
         let placement = Placement(contentTop: contentTop, contentTopSpacing: contentTopSpacing, text: text, besideBottom: besideBottom?.parts)
         let shownPoll = applyPoll(poll, spacing: content.pollSpacing, placement: placement)
         let shownMedia = besideSide == nil ? applyMedia(media, below: shownPoll, spacing: content.mediaSpacing, placement: placement) : nil
-        let shownCard = applyCard(card, below: shownMedia ?? shownPoll, spacing: content.cardSpacing, placement: placement)
         let replacesCard = previous?.embed == nil && previous?.card != nil && content.statusID != nil && previous?.statusID == content.statusID
-        let shownEmbed = applyEmbed(embed, replacesCard: replacesCard, below: shownMedia ?? shownPoll, spacing: content.embedSpacing, placement: placement)
+        let fadesInEmbed = embed.map { replacesCard && window != nil && $0.transitionDuration > 0 && !UIAccessibility.isReduceMotionEnabled } ?? false
+        // 別の投稿に替わったときと、注意書きを折りたたんで囲みを隠したときは、カードの像を残さない。
+        // 同じ投稿の描き直し（画像が届いたなど）では、薄くし続ける。
+        let isSameStatus = previous?.statusID == content.statusID
+        if !isSameStatus || embed == nil {
+            removeLeavingCardSnapshot()
+        }
+        // カードは隠す前に像を取っておき、囲みと入れ替えて薄くする。
+        let leavingCard = fadesInEmbed ? leaveCard() : nil
+        let shownCard = applyCard(card, below: shownMedia ?? shownPoll, spacing: content.cardSpacing, placement: placement)
+        // 同じ投稿の囲みを描き直すだけなら、浮かび上がらせている途中の濃さを変えない。
+        let keepsEmbedFade = isSameStatus && previous?.embed != nil && !(previous?.spoiler?.isCollapsed ?? false)
+        let shownEmbed = applyEmbed(embed, fadesIn: fadesInEmbed, keepsFade: keepsEmbedFade, leavingCard: leavingCard, below: shownMedia ?? shownPoll, spacing: content.embedSpacing, placement: placement)
         // 添付ファイルもリンクカードもないのに本文を隠すのは、注意書きがあるときだけ。
         let last: Bottom = if let shownEmbed {
             .view(shownEmbed)
@@ -615,33 +628,74 @@ final class PostBodyView: UIView {
     }
 
     /// 出した囲みを返す。
-    /// - Parameter replacesCard: 同じ投稿のリンクカードから替わった（Xの投稿を読み終えた）。このときだけ、囲みを浮かび上がらせる。行が伸びる動きは一覧が付ける。
-    ///   使い回された行で別の投稿に替わったときは、動かさずに出す。
-    private func applyEmbed(_ embed: EmbeddedPostView.Content?, replacesCard: Bool, below shownAbove: UIView?, spacing: CGFloat, placement: Placement) -> EmbeddedPostView? {
+    /// - Parameter fadesIn: 同じ投稿のリンクカードから替わった（Xの投稿を読み終えた）。このときだけ、カードの像を薄くしながら囲みを浮かび上がらせる。
+    ///   行が伸びる動きは一覧が付ける。使い回された行で別の投稿に替わったときは、動かさずに出す。
+    /// - Parameter keepsFade: 同じ投稿の囲みを描き直すだけ。浮かび上がらせている途中なら、その濃さのまま動かし続ける。
+    private func applyEmbed(_ embed: EmbeddedPostView.Content?, fadesIn: Bool, keepsFade: Bool, leavingCard: UIView?, below shownAbove: UIView?, spacing: CGFloat, placement: Placement) -> EmbeddedPostView? {
         guard let embed else {
             embedView?.isHidden = true
             return nil
         }
-        let fadesIn = replacesCard && window != nil && embed.transitionDuration > 0 && !UIAccessibility.isReduceMotionEnabled
         let embedView = loadedEmbedView()
         embedView.isHidden = false
         embedView.apply(embed)
-        embedView.alpha = fadesIn ? 0 : 1
+        // 一覧は行の高さを動かす動きの中で描き直すため、その動きに乗せず、すぐ消す。乗せると、濃い状態から薄くなる途中で
+        // 濃くし始め、1コマで囲みが出て見える。濃くしている途中の行が別の投稿に使い回されたときも、その動きを止める。
         if fadesIn {
+            embedView.stopFading(at: 0)
+        } else if !keepsFade {
+            embedView.stopFading(at: 1)
+        }
+        if fadesIn {
+            let statusID = content?.statusID
             // 一覧は動きを止めて描き直すことがあり、その中ではUIView.animateが動かないため、描き直しを終えてから動かす。
             DispatchQueue.main.async { [weak self] in
                 guard let self, let embedView = self.embedView else { return }
-                guard self.content?.embed == embed else {
-                    embedView.alpha = 1
+                // 待つ間に同じ投稿の囲みが描き直された（絵文字が届いたなど）だけなら、そのまま浮かび上がらせる。
+                guard self.content?.statusID == statusID, self.content?.embed != nil, self.embed != nil else {
+                    embedView.stopFading(at: 1)
+                    self.removeLeavingCardSnapshot()
                     return
                 }
-                UIView.animate(withDuration: embed.transitionDuration, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState, .curveEaseOut]) {
-                    embedView.alpha = 1
-                }
+                self.animateEmbedArrival(embedView, leavingCard: leavingCard, duration: embed.transitionDuration)
             }
         }
         variableConstraints.append(placement.top(of: embedView, below: shownAbove, spacing: spacing))
         return embedView
+    }
+
+    /// 出しているリンクカードの像を、カードの位置に重ねて返す。カードを出していなければnil。
+    private func leaveCard() -> UIView? {
+        removeLeavingCardSnapshot()
+        guard let cardView = Self.shown(cardView), let snapshot = cardView.snapshotView(afterScreenUpdates: false) else { return nil }
+        // 一覧は行の高さを動かす動きの中で描き直すため、像の置き場所がその動きに乗って左上から動かないよう、動きの外で置く。
+        UIView.performWithoutAnimation {
+            snapshot.frame = cardView.frame
+            snapshot.isUserInteractionEnabled = false
+            addSubview(snapshot)
+        }
+        leavingCardSnapshot = snapshot
+        return snapshot
+    }
+
+    /// カードの像を先に薄くし、囲みを少し遅れて濃くする。同時に入れ替えると、出だしで両方が濃いまま重なって読めないため（リンクカードの文字の入れ替えと同じ）。
+    private func animateEmbedArrival(_ embedView: EmbeddedPostView, leavingCard: UIView?, duration: TimeInterval) {
+        if let leavingCard {
+            UIView.animateSmoothly(duration: duration * 0.4) {
+                leavingCard.alpha = 0
+            } completion: { [weak self] in
+                guard let self, self.leavingCardSnapshot === leavingCard else { return }
+                self.removeLeavingCardSnapshot()
+            }
+        }
+        UIView.animateSmoothly(duration: duration * 0.6, delay: duration * 0.2) {
+            embedView.alpha = 1
+        }
+    }
+
+    private func removeLeavingCardSnapshot() {
+        leavingCardSnapshot?.removeFromSuperview()
+        leavingCardSnapshot = nil
     }
 
     /// 一番下の部品。
