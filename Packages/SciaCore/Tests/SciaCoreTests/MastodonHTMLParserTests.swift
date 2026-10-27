@@ -52,6 +52,23 @@ struct MastodonHTMLParserTests {
         ])
     }
 
+    /// プロフィールの補足情報は幅に余裕があるので、サーバーが30字で縮めた後ろの部分も出す。先頭のスキームは省いたまま。
+    @Test func profileFieldShowsWholeShortenedURL() throws {
+        let html = """
+        <a href="https://github.com/eai04191/scia/blob/main/.claude/skills/codex-proof-review/SKILL.md" target="_blank" rel="nofollow noopener me" translate="no"><span class="invisible">https://</span><span class="ellipsis">github.com/eai04191/scia/blob/</span><span class="invisible">main/.claude/skills/codex-proof-review/SKILL.md</span></a>
+        """
+
+        let text = RichText.profileField(html, emojis: [])
+
+        #expect(text.blocks.first?.inlines == [
+            .link(
+                "github.com/eai04191/scia/blob/main/.claude/skills/codex-proof-review/SKILL.md",
+                .url(try url("https://github.com/eai04191/scia/blob/main/.claude/skills/codex-proof-review/SKILL.md")),
+                []
+            ),
+        ])
+    }
+
     @Test func resolvesMentionFromStatusMentions() throws {
         let mention = Mention(id: "2", username: "bob", url: try url("https://remote.example/@bob"), acct: "bob@remote.example")
         let html = #"<p><span class="h-card" translate="no"><a href="https://remote.example/@bob" class="u-url mention">@<span>bob</span></a></span> こんにちは</p>"#

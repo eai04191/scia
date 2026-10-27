@@ -759,7 +759,7 @@ final class ProfileHeaderView: UIView {
             valueLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
             valueLabel.hashtagAccount = account
             let value = NSMutableAttributedString(attributedString: RichTextRenderer(font: valueFont, textColor: .label, emojiImages: emojiImages, language: language)
-                .render(.html(field.value, emojis: account.emojis)))
+                .render(.profileField(field.value, emojis: account.emojis)))
             if field.verifiedAt != nil,
                let check = UIImage(systemName: "checkmark.seal.fill", withConfiguration: UIImage.SymbolConfiguration(font: valueFont, scale: .small)) {
                 // リンク先にこのアカウントへのリンクがあると確かめられた値に付くチェックマーク。

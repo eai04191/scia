@@ -9,20 +9,23 @@ public struct MastodonHTMLParser {
     private let tagNames: Set<String>
     private let emojiSplitter: CustomEmojiSplitter
     private let dropsQuoteInline: Bool
+    private let expandsShortenedURLs: Bool
 
     /// - Parameters:
     ///   - tags: 投稿のタグ。`class`も`rel`もないハッシュタグを、リンクの文字列で見分けるのに使う。
     ///   - dropsQuoteInline: `class`に`quote-inline`のある段落を除く。引用のある投稿で、サーバーが互換のために本文の頭に足す`RE: <リンク>`を出さないため。
     ///     引用のない投稿では、書いた人の本文なので除かない。
-    public init(mentions: [Mention], tags: [Tag], emojis: [CustomEmoji], dropsQuoteInline: Bool = false) {
+    ///   - expandsShortenedURLs: サーバーが30字で縮めたURLの、省いた後ろの部分も出し、「…」を付けない。先頭のスキームは省いたまま。
+    public init(mentions: [Mention], tags: [Tag], emojis: [CustomEmoji], dropsQuoteInline: Bool = false, expandsShortenedURLs: Bool = false) {
         self.mentions = mentions
         tagNames = Hashtag.normalizedNames(of: tags)
         emojiSplitter = CustomEmojiSplitter(emojis: emojis)
         self.dropsQuoteInline = dropsQuoteInline
+        self.expandsShortenedURLs = expandsShortenedURLs
     }
 
     public func parse(_ html: String) -> RichText {
-        var builder = Builder(mentions: mentions, tagNames: tagNames, emojiSplitter: emojiSplitter, dropsQuoteInline: dropsQuoteInline)
+        var builder = Builder(mentions: mentions, tagNames: tagNames, emojiSplitter: emojiSplitter, dropsQuoteInline: dropsQuoteInline, expandsShortenedURLs: expandsShortenedURLs)
         for token in HTMLTokenizer.tokenize(html) {
             builder.handle(token)
         }
@@ -41,6 +44,8 @@ private struct Builder {
         let href: String
         let classes: Set<String>
         let rels: Set<String>
+        /// 省略された部分（`ellipsis`）を読んだ。このあとの`invisible`は、縮めるときに省いた後ろの部分。
+        var hasEllipsis = false
         /// リンクの中の文字を、書式ごとのまとまりで持つ。
         var runs: [(text: String, style: RichText.Style)] = []
 
@@ -68,6 +73,7 @@ private struct Builder {
     let tagNames: Set<String>
     let emojiSplitter: CustomEmojiSplitter
     let dropsQuoteInline: Bool
+    let expandsShortenedURLs: Bool
 
     private var blocks: [RichText.Block] = []
     private var inlines: [RichText.Inline] = []
@@ -81,11 +87,12 @@ private struct Builder {
     /// `quote-inline`の段落の中にいて、閉じるまで読み飛ばしている。段落は入れ子にならないため、最初の`</p>`で終える。
     private var isSkippingQuoteInline = false
 
-    init(mentions: [Mention], tagNames: Set<String>, emojiSplitter: CustomEmojiSplitter, dropsQuoteInline: Bool) {
+    init(mentions: [Mention], tagNames: Set<String>, emojiSplitter: CustomEmojiSplitter, dropsQuoteInline: Bool, expandsShortenedURLs: Bool) {
         self.mentions = mentions
         self.tagNames = tagNames
         self.emojiSplitter = emojiSplitter
         self.dropsQuoteInline = dropsQuoteInline
+        self.expandsShortenedURLs = expandsShortenedURLs
     }
 
     mutating func finish() -> RichText {
@@ -180,7 +187,15 @@ private struct Builder {
             link = LinkContext(href: attributes["href"] ?? "", classes: classes, rels: rels)
         case "span":
             let classes = Set((attributes["class"] ?? "").split(separator: " "))
-            spans.append(classes.contains("invisible") ? .invisible : classes.contains("ellipsis") ? .ellipsis : .plain)
+            if classes.contains("invisible") {
+                // 縮めるときに省いた後ろの部分は、広げるときは出す。先頭のスキームは`ellipsis`より前に来るので省いたまま。
+                spans.append(expandsShortenedURLs && link?.hasEllipsis == true ? .plain : .invisible)
+            } else if classes.contains("ellipsis") {
+                link?.hasEllipsis = true
+                spans.append(.ellipsis)
+            } else {
+                spans.append(.plain)
+            }
         default:
             // <pre>の中の<code>は、ブロック全体が等幅になるので書式として数えない。
             if let style = Self.style(for: name), !(name == "code" && preDepth > 0) {
@@ -207,7 +222,7 @@ private struct Builder {
         case "a":
             closeLink()
         case "span":
-            if spans.popLast() == .ellipsis, !isHidden {
+            if spans.popLast() == .ellipsis, !isHidden, !expandsShortenedURLs {
                 appendDisplayedText("…")
             }
         default:
