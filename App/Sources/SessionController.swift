@@ -1282,16 +1282,24 @@ final class SessionController {
             toggle(.reblog, on: status, reblogVisibility: visibility, failureTitle: "ブーストできませんでした")
         case .bookmark:
             UserAction.toggleBookmark.record()
-            toggle(.bookmark, on: status, failureTitle: "ブックマークを変更できませんでした")
+            let done = status.displayed.bookmarked ? "ブックマークを外しました" : "ブックマークしました"
+            toggle(.bookmark, on: status, failureTitle: "ブックマークを変更できませんでした") { [weak self] in
+                self?.showToggledNotice(done)
+            }
         case .muteConversation:
             UserAction.toggleConversationMute.record()
-            toggle(.muteConversation, on: status, failureTitle: "会話のミュートを変更できませんでした")
+            let done = status.displayed.muted ? "会話のミュートを解除しました" : "会話をミュートしました"
+            toggle(.muteConversation, on: status, failureTitle: "会話のミュートを変更できませんでした") { [weak self] in
+                self?.showToggledNotice(done)
+            }
         case .pin:
             UserAction.togglePin.record()
+            let done = status.displayed.pinned ? "プロフィールの固定を外しました" : "プロフィールに固定しました"
             // 固定の数の上限を超えたときは、サーバーの422の文言が理由に出る。
             toggle(.pin, on: status, failureTitle: "プロフィールの固定を変更できませんでした") { [weak self] in
                 guard let self else { return }
                 profiles.reloadPinned(of: credential.accountID)
+                showToggledNotice(done)
             }
         case .editHistory:
             UserAction.openEditHistory.record()
@@ -1932,6 +1940,12 @@ final class SessionController {
     /// 押し直せば済む失敗なので、操作を止めるアラートにせず、チップの列に数秒で消えるチップを出し、押すと理由を出す。
     /// 消えたあとも確かめられるよう、「最近の失敗」に残す。
     /// - Parameter onSuccess: サーバーが受け付けたら呼ぶ。同じ操作の結果を待っている間に押されて送らなかったときは呼ばない。
+    /// 行に見える変化がない操作（ブックマーク、会話のミュート、固定）が済んだことを知らせる。メニューを閉じると、変わったことが見えないため。
+    /// お気に入りとブーストは、行の光の動きで分かるので知らせない。決まりはdocs/object-actions.mdの「結果の知らせ」にある。
+    private func showToggledNotice(_ title: String) {
+        notices.showTransient(Notice(id: "status.toggled", kind: .success, title: title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+    }
+
     private func toggle(_ action: StatusInteractions.Action, on status: Status, reblogVisibility: ReblogVisibility = .accountDefault, failureTitle: String, onSuccess: (() -> Void)? = nil) {
         let interactions = interactions
         tasks.run { [weak self] in
