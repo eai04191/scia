@@ -147,7 +147,9 @@ private final class LocalHTTPServer: Sendable {
 
     init(response: Data, closesAfterResponse: Bool = true) async throws {
         let queue = DispatchQueue(label: "LocalHTTPServer")
-        let listener = try NWListener(using: .tcp, on: .any)
+        let parameters = NWParameters.tcp
+        parameters.requiredLocalEndpoint = .loopbackWithAnyPort
+        let listener = try NWListener(using: parameters)
         self.listener = listener
         let connections = connections
         listener.newConnectionHandler = { connection in

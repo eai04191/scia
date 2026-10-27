@@ -159,7 +159,8 @@ private final class LocalWebSocketServer: Sendable {
         self.authorization = authorization
         let connections = ConnectionList()
         self.connections = connections
-        let listener = try NWListener(using: parameters, on: .any)
+        parameters.requiredLocalEndpoint = .loopbackWithAnyPort
+        let listener = try NWListener(using: parameters)
         self.listener = listener
         listener.newConnectionHandler = { connection in
             // 送り終えたあとも解放されて閉じないよう、止めるまで持つ。
