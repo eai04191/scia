@@ -1137,6 +1137,15 @@ public enum TuningCatalog {
         defaultValue: 1.2
     )
 
+    /// リンクにタイトルを付けるとき、きらめきを浮かび上がらせたり、薄くして消したりする時間。読み終えたときと、読んでいる間にURLの折り返しが変わって入れ替えるときに使う。
+    public static let linkTitleShimmerFadeDuration = NumberTuning(
+        id: "compose.linkTitleShimmerFadeDuration",
+        title: "きらめきを出し入れする時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.2
+    )
+
     /// メニューの並びの設定で、横並びの区切り線の知らせが出たり消えたりして、行が伸び縮みする時間。
     public static let menuLayoutNoteDuration = NumberTuning(
         id: "settings.menuLayoutNoteDuration",
@@ -1591,6 +1600,7 @@ public enum TuningCatalog {
             .number(composePollOptionDuration),
             .number(linkTitleMorphDuration),
             .number(linkTitleShimmerPeriod),
+            .number(linkTitleShimmerFadeDuration),
             .toggle(composePickerMatchesKeyboard),
             .number(composePickerHeight),
             .toggle(composeEmojiPaletteHardEdgeEffect),

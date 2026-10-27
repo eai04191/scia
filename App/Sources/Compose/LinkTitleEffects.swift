@@ -92,8 +92,13 @@ final class LinkTitleEffects {
     /// きらめきを止め、読み始めてから本文が書き換えられて動いた分を含めた、そのURLの今の場所を返す。
     func endLoading(_ id: UUID) -> LinkOccurrence? {
         guard let loading = loadings.removeValue(forKey: id) else { return nil }
-        loading.views.forEach { $0.disappear() }
+        loading.views.forEach { $0.disappear(duration: shimmerFadeDuration) }
         return loading.occurrence
+    }
+
+    /// きらめきを浮かび上がらせたり、薄くして消したりする時間。
+    private var shimmerFadeDuration: TimeInterval {
+        tuning.value(of: TuningCatalog.linkTitleShimmerFadeDuration)
     }
 
     private func shimmerViews(for occurrence: LinkOccurrence) -> [ShimmerView] {
@@ -106,14 +111,39 @@ final class LinkTitleEffects {
         }
     }
 
-    /// 読んでいるURLのきらめきを、`occurrence`の場所に描き直す。
+    /// 読んでいるURLのきらめきを、`occurrence`の場所へ移す。
     private func moveLoadings(_ move: (LinkOccurrence) -> LinkOccurrence?) {
         for (id, loading) in loadings {
-            loading.views.forEach { $0.removeFromSuperview() }
             // 消されていたら、きらめきだけを消し、読み終えたときに置き換えるかは呼ぶ側が決める。
-            let moved = move(loading.occurrence)
-            loadings[id] = Loading(occurrence: moved ?? loading.occurrence, views: moved.map(shimmerViews(for:)) ?? [])
+            guard let moved = move(loading.occurrence) else {
+                loading.views.forEach { $0.disappear(duration: shimmerFadeDuration) }
+                loadings[id] = Loading(occurrence: loading.occurrence, views: [])
+                continue
+            }
+            loadings[id] = Loading(occurrence: moved, views: movedShimmers(loading.views, to: moved))
         }
+    }
+
+    /// 流れているきらめきを、`occurrence`の場所へ移す。作り直すと、流れている途中の光が1コマで消えて左端から流れ直すため、
+    /// 行ごとの大きさが変わらなければ（URLの後ろや前に打ったとき）、同じビューを置き直す。
+    /// 折り返しが変わって大きさが合わないときは、作り直したものを浮かび上がらせ、前のものを薄くして消す。
+    private func movedShimmers(_ views: [ShimmerView], to occurrence: LinkOccurrence) -> [ShimmerView] {
+        let frames = rects(for: occurrence.range).map { $0.insetBy(dx: -3, dy: -1) }
+        let sameSizes = frames.count == views.count && zip(frames, views).allSatisfy { frame, view in
+            abs(frame.width - view.bounds.width) < 0.5 && abs(frame.height - view.bounds.height) < 0.5
+        }
+        if sameSizes {
+            UIView.performWithoutAnimation {
+                for (view, frame) in zip(views, frames) {
+                    view.frame = frame
+                }
+            }
+            return views
+        }
+        views.forEach { $0.disappear(duration: shimmerFadeDuration) }
+        let replacements = shimmerViews(for: occurrence)
+        replacements.forEach { $0.appear(duration: shimmerFadeDuration) }
+        return replacements
     }
 
     // MARK: - 本文や欄が変わったとき
@@ -223,11 +253,12 @@ final class LinkTitleEffects {
             }
         }
         animator.isUserInteractionEnabled = true
+        let fadeDuration = shimmerFadeDuration
         animator.addCompletion { [weak self] position in
             self?.logger.info("compose: link title morph ended (\(position == .end ? "end" : "other", privacy: .public))")
             self?.showText(hiddenColor)
             (pieces.map(\.view) + title).forEach { $0.removeFromSuperview() }
-            sparkles.forEach { $0.disappear() }
+            sparkles.forEach { $0.disappear(duration: fadeDuration) }
             self?.morph = nil
         }
         morph = animator
@@ -536,10 +567,17 @@ private final class ShimmerView: UIView {
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
 
-    func disappear() {
-        UIView.animate(withDuration: 0.2, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
+    func appear(duration: TimeInterval) {
+        alpha = 0
+        UIView.animateSmoothly(duration: duration) {
+            self.alpha = 1
+        }
+    }
+
+    func disappear(duration: TimeInterval) {
+        UIView.animateSmoothly(duration: duration) {
             self.alpha = 0
-        } completion: { _ in
+        } completion: {
             self.removeFromSuperview()
         }
     }
