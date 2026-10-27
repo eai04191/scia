@@ -278,8 +278,8 @@ final class ProfileEditImagesCell: UITableViewCell {
     var onPick: (ProfileImage) -> Void = { _ in }
     var onRemove: (ProfileImage) -> Void = { _ in }
     var onRevert: (ProfileImage) -> Void = { _ in }
-    /// ヘッダー画像の枠の高さが変わった。表に行の高さを測り直させる。
-    var onHeightChange: () -> Void = {}
+    /// ヘッダー画像の枠の高さが変わった。表に行の高さを測り直させる。後から届いた画像で変わったときは、`true`を渡す。動きでつなぐため。
+    var onHeightChange: (_ animated: Bool) -> Void = { _ in }
 
     private let headerButton = UIButton(type: .custom)
     private let headerImageView = UIImageView()
@@ -390,20 +390,72 @@ final class ProfileEditImagesCell: UITableViewCell {
         return badge
     }
 
-    /// 今の画像を読み込む。
+    /// 今の画像を読み込む。端末に読み込み済みの画像は、すぐ出す。同じ画像で呼び直したときは、読み直さない。
     func apply(account: Account, mediaImages: MediaImageStore, avatarShape: AvatarShape) {
         self.avatarShape = avatarShape
-        loadTasks.forEach { $0.cancel() }
         let scale = max(traitCollection.displayScale, 2)
-        loadTasks = [(ProfileImage.avatar, account.avatarStatic, Int(Self.avatarSize * scale)), (.header, account.headerStatic, Int(402 * scale))].compactMap { kind, url, size in
+        let requests = [(ProfileImage.avatar, account.avatarStatic, Int(Self.avatarSize * scale)), (.header, account.headerStatic, Int(402 * scale))]
+        let urls = requests.map(\.1)
+        guard urls != requestedURLs else {
+            refresh()
+            return
+        }
+        requestedURLs = urls
+        loadTasks.forEach { $0.cancel() }
+        pendingImages = []
+        loadTasks = requests.compactMap { kind, url, size in
             guard let url else { return nil }
+            if let cached = mediaImages.cachedImage(for: url, maxPixelSize: size) {
+                originals[kind] = cached
+                return nil
+            }
+            pendingImages.insert(kind)
             return Task { [weak self] in
-                guard let image = try? await mediaImages.image(for: url, maxPixelSize: size), !Task.isCancelled else { return }
-                self?.originals[kind] = image
-                self?.refresh()
+                let image = try? await mediaImages.image(for: url, maxPixelSize: size)
+                guard let self, !Task.isCancelled else { return }
+                self.pendingImages.remove(kind)
+                if let image {
+                    self.originals[kind] = image
+                    self.refresh(fadesImages: true)
+                }
+                if self.pendingImages.isEmpty {
+                    self.finishWaitingForImages()
+                }
+            }
+        }
+        refresh()
+    }
+
+    /// 読み込んでいる画像が届くのを、`timeout`まで待つ。表を出す前に呼び、出したあとにアイコンが人の記号から1コマで替わるのを避ける。
+    func waitForImages(within timeout: Duration, clock: any Clock<Duration>) async {
+        guard !pendingImages.isEmpty, timeout > .zero else { return }
+        finishWaitingForImages()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            imagesWaiter = continuation
+            imagesWaitTimer = Task { [weak self] in
+                try? await clock.sleep(for: timeout)
+                guard !Task.isCancelled else { return }
+                self?.finishWaitingForImages()
             }
         }
     }
+
+    private func finishWaitingForImages() {
+        imagesWaitTimer?.cancel()
+        imagesWaitTimer = nil
+        imagesWaiter?.resume()
+        imagesWaiter = nil
+    }
+
+    /// 後から届いた画像を入れ替えるクロスフェードの時間。0なら切り替える。
+    var imageFadeDuration: TimeInterval = 0
+    private var requestedURLs: [URL?]?
+    /// アイコンに出している画像。人の記号を出しているときはnil。
+    private var shownAvatar: UIImage?
+    /// まだ届いていない画像。
+    private var pendingImages: Set<ProfileImage> = []
+    private var imagesWaiter: CheckedContinuation<Void, Never>?
+    private var imagesWaitTimer: Task<Void, Never>?
 
     private var shown: (avatar: ProfileImageChange, header: ProfileImageChange, replaced: [ProfileImage: UIImage], hasAvatar: Bool, hasHeader: Bool)?
 
@@ -413,8 +465,10 @@ final class ProfileEditImagesCell: UITableViewCell {
         refresh()
     }
 
-    private func refresh() {
+    /// - Parameter fadesImages: 後から届いた画像を、前の見え方からクロスフェードで入れる。ヘッダー画像の枠の高さが変わるときは、表に動きで測り直させる。
+    private func refresh(fadesImages: Bool = false) {
         guard let shown else { return }
+        let fades = fadesImages && imageFadeDuration > 0 && window != nil
         avatarImageView.layer.cornerRadius = switch avatarShape {
         case .circle: Self.avatarSize / 2
         case .roundedSquare: Self.avatarSize * 0.2
@@ -426,22 +480,38 @@ final class ProfileEditImagesCell: UITableViewCell {
         }
         avatarRing.layer.cornerCurve = .continuous
         let avatar = image(for: .avatar, change: shown.avatar, replaced: shown.replaced, has: shown.hasAvatar)
-        avatarImageView.image = avatar ?? UIImage(systemName: "person.fill")
-        avatarImageView.contentMode = avatar == nil ? .center : .scaleAspectFill
         let header = image(for: .header, change: shown.header, replaced: shown.replaced, has: shown.hasHeader)
-        headerImageView.image = header
+        // 見え方が変わるビューにだけクロスフェードをかける。アイコンとヘッダー画像はほぼ同時に届くことがあり、
+        // 変わらないビューにかけ直すと、進んでいる途中のクロスフェードが新しい画像同士の遷移に置き換わり、1コマで替わって見えるため。
+        crossfade(avatarImageView, if: fades && avatar !== shownAvatar) {
+            self.avatarImageView.image = avatar ?? UIImage(systemName: "person.fill")
+            self.avatarImageView.contentMode = avatar == nil ? .center : .scaleAspectFill
+        }
+        shownAvatar = avatar
+        crossfade(headerImageView, if: fades && header !== headerImageView.image) {
+            self.headerImageView.image = header
+        }
         let ratio = Self.headerHeightRatio(of: header)
         if let headerHeight, abs(headerHeight.multiplier - ratio) > 0.001 {
             headerHeight.isActive = false
             let replaced = headerButton.heightAnchor.constraint(equalTo: headerButton.widthAnchor, multiplier: ratio)
             replaced.isActive = true
             self.headerHeight = replaced
-            onHeightChange()
+            onHeightChange(fades)
         }
         avatarButton.menu = menu(for: .avatar, change: shown.avatar, has: shown.hasAvatar)
         headerButton.menu = menu(for: .header, change: shown.header, has: shown.hasHeader)
         avatarButton.accessibilityValue = Self.accessibilityValue(change: shown.avatar, has: shown.hasAvatar)
         headerButton.accessibilityValue = Self.accessibilityValue(change: shown.header, has: shown.hasHeader)
+    }
+
+    /// 見え方を変える。`fades`なら、前の見え方からクロスフェードで入れる。変わらなければ、見た目は動かない。
+    private func crossfade(_ view: UIImageView, if fades: Bool, _ change: @escaping () -> Void) {
+        guard fades else {
+            change()
+            return
+        }
+        UIView.transition(with: view, duration: imageFadeDuration, options: [.transitionCrossDissolve, .allowUserInteraction], animations: change)
     }
 
     private func image(for kind: ProfileImage, change: ProfileImageChange, replaced: [ProfileImage: UIImage], has: Bool) -> UIImage? {

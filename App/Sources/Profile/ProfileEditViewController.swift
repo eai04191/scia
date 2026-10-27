@@ -21,6 +21,8 @@ final class ProfileEditViewController: UIViewController {
     private let mediaImages: MediaImageStore
     private let settings: AppSettings
     private let tuning: TuningStore
+    /// 表を出す前に画像を待つ上限を数える。
+    private let clock: any Clock<Duration>
     private let logger = SciaLog.logger(category: "profile")
 
     private let tableView = UITableView(frame: .zero, style: .insetGrouped)
@@ -59,6 +61,8 @@ final class ProfileEditViewController: UIViewController {
     private var showsAddFieldRow = false
     /// 表に下書きを映した。それまでは表に区切りがないので、行を出し入れしない。
     private var isTableLoaded = false
+    /// 読み込み中の表示を薄くしながら、表を出している途中。
+    private var isRevealingTable = false
     /// 絵文字のシートが閉じ終わったら行う操作。シートを出している間は、編集画面に別の画面を重ねられず、閉じることもできないため。
     private var afterEmojiSheetCloses: (() -> Void)?
     #if DEBUG
@@ -76,8 +80,9 @@ final class ProfileEditViewController: UIViewController {
         case flags
     }
 
-    init(editor: ProfileEditor, completion: TextInputCompletion, mediaImages: MediaImageStore = AppDependencies.mediaImages, settings: AppSettings = AppDependencies.settings, tuning: TuningStore = AppDependencies.tuning) {
+    init(editor: ProfileEditor, completion: TextInputCompletion, mediaImages: MediaImageStore = AppDependencies.mediaImages, settings: AppSettings = AppDependencies.settings, tuning: TuningStore = AppDependencies.tuning, clock: any Clock<Duration> = AppDependencies.clock) {
         self.editor = editor
+        self.clock = clock
         textCompletion = completion
         self.mediaImages = mediaImages
         self.settings = settings
@@ -126,6 +131,11 @@ final class ProfileEditViewController: UIViewController {
 
     private func load() async {
         await editor.load()
+        // プロフィールを開くときと同じく、アイコンとヘッダー画像を上限まで待ってから表を出す。表を出したあとに画像が1コマで入らないようにするため。
+        if case .loaded(let source) = editor.source {
+            imagesCell.apply(account: source.account, mediaImages: mediaImages, avatarShape: settings.avatarShape)
+            await imagesCell.waitForImages(within: .seconds(tuning.value(of: TuningCatalog.profileAvatarWait)), clock: clock)
+        }
         showDraft()
         #if DEBUG
         // 読み込めなかったときは入れず、再試行で読めたときに入れる。
@@ -169,6 +179,7 @@ final class ProfileEditViewController: UIViewController {
         isTableLoaded = true
         updateFooters()
         tableView.reloadData()
+        applyEditorState()
     }
 
     func stateDump() -> String {
@@ -206,7 +217,11 @@ final class ProfileEditViewController: UIViewController {
     }
 
     private func applyEditorState() {
-        let isLoaded = editor.draft != nil
+        // 下書きを読み終えても、表に映すまでは読み込み中の表示を続ける。画像を待つ間に、空の表を出さないため。
+        let isLoaded = editor.draft != nil && isTableLoaded
+        if tableView.isHidden, isLoaded {
+            revealTable()
+        }
         tableView.isHidden = !isLoaded
         switch editor.source {
         case .loading where !isLoaded:
@@ -217,7 +232,11 @@ final class ProfileEditViewController: UIViewController {
             failureLabel.text = "プロフィールを読み込めませんでした\n\(ErrorPresentation(error).text)"
             failureView.isHidden = false
         default:
-            loadingView.stopAnimating()
+            if !isLoaded {
+                loadingView.startAnimating()
+            } else if loadingView.isAnimating, !isRevealingTable {
+                loadingView.stopAnimating()
+            }
             failureView.isHidden = true
         }
         let saving = editor.isSaving
@@ -235,6 +254,24 @@ final class ProfileEditViewController: UIViewController {
         isModalInPresentation = editor.hasChanges || saving
         syncAddFieldRow()
         updateFooters()
+    }
+
+    /// 読み込み中の表示を薄くしながら、表を浮かび上がらせる。
+    private func revealTable() {
+        let duration = tuning.value(of: TuningCatalog.profileRevealDuration)
+        guard duration > 0, view.window != nil else { return }
+        isRevealingTable = true
+        tableView.alpha = 0
+        UIView.animateSmoothly(duration: duration * 0.6) {
+            self.loadingView.alpha = 0
+        } completion: {
+            self.isRevealingTable = false
+            self.loadingView.stopAnimating()
+            self.loadingView.alpha = 1
+        }
+        UIView.animateSmoothly(duration: duration) {
+            self.tableView.alpha = 1
+        }
     }
 
     /// 文字数や問題の文言を変える。行数が変わったら、表を作り直さずに高さを測り直す。
@@ -366,10 +403,19 @@ final class ProfileEditViewController: UIViewController {
             guard let self else { return }
             editor.draft?.bot = botSwitch.isOn
         }, for: .valueChanged)
-        imagesCell.onHeightChange = { [weak self] in
+        imagesCell.imageFadeDuration = tuning.value(of: TuningCatalog.profileRevealDuration)
+        imagesCell.onHeightChange = { [weak self] animated in
             guard let self, isTableLoaded else { return }
-            UIView.performWithoutAnimation {
-                self.tableView.performBatchUpdates(nil)
+            // 待つ上限を過ぎて届いたヘッダー画像で枠の高さが変わったときは、下の欄ごと動かす。
+            if animated, !UIAccessibility.isReduceMotionEnabled {
+                UIView.animateSmoothly(duration: self.imagesCell.imageFadeDuration) {
+                    self.tableView.performBatchUpdates(nil)
+                    self.tableView.layoutIfNeeded()
+                }
+            } else {
+                UIView.performWithoutAnimation {
+                    self.tableView.performBatchUpdates(nil)
+                }
             }
         }
         imagesCell.onPick = { [weak self] image in self?.pickImage(image) }
