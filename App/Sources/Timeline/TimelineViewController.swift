@@ -543,7 +543,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 絵文字の画像が届いたら、その絵文字を使う投稿だけを描き直す。読んでいる位置は保つ。
     /// 文字が横へずれたり次の行へ移ったりする動きは、ラベルが付ける（`EmojiArrivalTransition`）。
-    /// 行の高さを下の行ごと動かす描き直し（`reconfigureAnimatingHeight`）にしないのは、1つの投稿の絵文字は続けて届き、
+    /// 折り返しが変わって見えている行の高さが変わるときは、下の行ごと動かしてつなぐ（`reconfigureShiftingRowsBelow`）。
+    /// リンクカードと同じ描き直し（`reconfigureAnimatingHeight`）にしないのは、1つの投稿の絵文字は続けて届き、
     /// 動いている途中に次の描き直しが重なると、一覧が行のセルを入れ替え、動かしているラベルが窓から外れて動きが止まるため（シミュレーターで確かめた）。
     private func emojiImagesDidLoad(_ urls: Set<URL>) {
         let ids = dataSource.snapshot().itemIdentifiers.filter { id in
@@ -554,7 +555,109 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             case .gap, .unreadable, nil: false
             }
         }
-        reconfigure(Set(ids))
+        reconfigureShiftingRowsBelow(Set(ids), duration: tuning.value(of: TuningCatalog.customEmojiArrivalDuration))
+    }
+
+    /// 行の中身を、同じセルのまま動かさずに描き直し、高さが変わって位置がずれた見えている行を、元の位置から新しい位置へ動かしてつなぐ。
+    /// 表示領域の上端をまたぐ行の高さが変わるときは、読んでいる位置を保って動かさない（docs/vision.mdの「一覧の動き」）。
+    /// 押し下げられて表示領域の外へ出る行は、描き直す前に取っておいた像を動かして外へ送る。
+    ///
+    /// 動きは、セルの層の位置に足し合わせる形（additive）で付ける。描き直しを続けて重ねても、前の動きの途中の位置から次の動きがつながり、
+    /// スクロールで一覧が行の位置を置き直しても、動きは外れない。差分を動きつきで当てる描き直しと違い、一覧がセルを入れ替えないので、
+    /// セルの中で続いている動き（絵文字が入る文字の動きなど）も止まらない。
+    func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, duration: TimeInterval) {
+        guard !ids.isEmpty else { return }
+        guard duration > 0, view.window != nil, !isShowingMenu, !UIAccessibility.isReduceMotionEnabled else {
+            reconfigure(ids)
+            return
+        }
+        // 表示領域の上端をまたぐ行は、高さが変わったら、読んでいる位置を保つだけで動かさない。描き直す前の高さを覚えておき、あとで比べる。
+        let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
+        let rowsAcrossTop: [ItemID: CGFloat] = ids.reduce(into: [:]) { result, id in
+            guard let indexPath = dataSource.indexPath(for: id), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame,
+                  frame.minY < visibleTop, frame.maxY > visibleTop
+            else { return }
+            result[id] = frame.height
+        }
+        let before = visibleRows(takingSnapshots: true)
+        reconfigure(ids)
+        collectionView.layoutIfNeeded()
+        let changesRowAcrossTop = rowsAcrossTop.contains { id, height in
+            guard let indexPath = dataSource.indexPath(for: id), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return false }
+            return abs(frame.height - height) > 0.5
+        }
+        guard !changesRowAcrossTop else { return }
+        let after = visibleRows(takingSnapshots: false)
+        for (id, old) in before {
+            if let row = after[id] {
+                shiftRow(row.cell.layer, by: row.minY - old.minY, duration: duration)
+            } else if let indexPath = dataSource.indexPath(for: id), let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame {
+                // 押し下げられて表示領域の外へ出た行は、一覧がセルを外すので、描き直す前に取っておいた像を動かして外へ送る。
+                let minY = collectionView.convert(frame, to: nil).minY
+                sendOut(old.snapshot, from: old.minY, to: minY, duration: duration)
+            }
+        }
+    }
+
+    /// 足し合わせる行の動きに付ける名前を、重ねても取り替えないよう分ける。
+    private var rowShiftCount = 0
+
+    /// 層を、`shift`だけ前の位置から今の位置へ動かす。前の動きの途中なら、その動きは足し合わせたまま続く。
+    private func shiftRow(_ layer: CALayer, by shift: CGFloat, duration: TimeInterval) {
+        guard abs(shift) > 0.5 else { return }
+        let move = CABasicAnimation(keyPath: "position")
+        move.isAdditive = true
+        move.fromValue = CGPoint(x: 0, y: -shift)
+        move.toValue = CGPoint.zero
+        move.duration = duration
+        move.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        rowShiftCount += 1
+        layer.add(move, forKey: "rowShift\(rowShiftCount)")
+    }
+
+    /// 表示領域の外へ出た行の像を、前の位置から新しい位置へ動かしてから外す。
+    private func sendOut(_ snapshot: UIView?, from oldMinY: CGFloat, to newMinY: CGFloat, duration: TimeInterval) {
+        guard let snapshot, abs(newMinY - oldMinY) > 0.5 else { return }
+        snapshot.isUserInteractionEnabled = false
+        collectionView.addSubview(snapshot)
+        let origin = collectionView.convert(CGPoint(x: 0, y: newMinY), from: nil)
+        snapshot.frame.origin.y = origin.y
+        shiftRow(snapshot.layer, by: newMinY - oldMinY, duration: duration)
+        let remove = CABasicAnimation(keyPath: "opacity")
+        remove.fromValue = 1
+        remove.toValue = 1
+        remove.duration = duration
+        remove.delegate = RowShiftCompletion { snapshot.removeFromSuperview() }
+        snapshot.layer.add(remove, forKey: "rowShiftEnd")
+    }
+
+    /// 見えている行の、画面（ウインドウ）での上端と、表示領域の外へ押し出されたときに動かす像。
+    /// 画面の座標で比べるのは、読んでいる位置を保つためにスクロール位置を補正した分を、行の動きに数えないため。
+    /// 動きの途中の行も、動きを足す前の位置で測る。前の動きは足し合わせたまま続くので、次の動きはずれた分だけを足せばつながる。
+    private func visibleRows(takingSnapshots: Bool) -> [ItemID: (cell: UICollectionViewCell, minY: CGFloat, snapshot: UIView?)] {
+        collectionView.visibleCells.reduce(into: [:]) { result, cell in
+            guard let id = collectionView.indexPath(for: cell).flatMap({ dataSource.itemIdentifier(for: $0) }) else { return }
+            let frame = cell.convert(cell.bounds, to: nil)
+            // 像は、表示領域の下端にかかる行だけ取る。押し出されて外へ出るのは、その行だけのため。
+            let bottom = collectionView.convert(collectionView.bounds, to: nil).maxY
+            let snapshot = takingSnapshots && frame.maxY > bottom - 1 ? cell.snapshotView(afterScreenUpdates: false) : nil
+            snapshot?.frame = cell.frame
+            result[id] = (cell, frame.minY, snapshot)
+        }
+    }
+
+    /// 押し出された行の像を、動き終えたら外す。
+    @MainActor
+    private final class RowShiftCompletion: NSObject, @MainActor CAAnimationDelegate {
+        private let handler: () -> Void
+
+        init(_ handler: @escaping () -> Void) {
+            self.handler = handler
+        }
+
+        func animationDidStop(_ animation: CAAnimation, finished: Bool) {
+            handler()
+        }
     }
 
     /// 通知のアイコンは文字に差し込んでいるため、届いたらその人からの通知を描き直す。投稿のアイコンはビューが自分で受け取る。

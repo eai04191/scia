@@ -132,6 +132,124 @@ struct EmojiArrivalTests {
         #expect(pieces[3].offset == CGPoint(x: -40, y: 20))
     }
 
+    /// 絵文字が届いて見えている行の折り返しが増えたら、下の行を1コマで下げず、元の位置から新しい位置へ動かす。上の行は動かさない。
+    /// 行のセルは入れ替えない。入れ替えると、セルの中で続いている文字の動きが止まるため。
+    @Test func visibleRowGrowthShiftsRowsBelow() async throws {
+        let wide = try (1...6).map { try emoji("wide\($0)") }
+        let png = try widePNG()
+        let gate = Gate()
+        let store = EmojiImageStore { _ in
+            try await gate.wait()
+            return png
+        }
+        let harness = try TimelineHarness(emojiImages: store)
+        defer { harness.tearDown() }
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        let base = statuses[10]
+        statuses[10] = Status(
+            id: base.id,
+            createdAt: base.createdAt,
+            account: base.account,
+            content: "<p>" + wide.map { ":\($0.shortcode):" }.joined(separator: " 文字 ") + "</p>",
+            spoilerText: "",
+            url: nil,
+            emojis: wide
+        )
+        harness.setStatuses(statuses)
+        let id = TimelineViewController.ItemID.status(base.id)
+        let above = TimelineViewController.ItemID.status(statuses[9].id)
+        let below = TimelineViewController.ItemID.status(statuses[11].id)
+        try harness.scroll(to: id, at: .centeredVertically)
+        let cell = try #require(harness.visibleCell(of: id))
+        let belowCell = try #require(harness.visibleCell(of: below))
+        let aboveCell = try #require(harness.visibleCell(of: above))
+        let height = cell.frame.height
+        let belowY = try #require(harness.windowMinY(of: below))
+
+        gate.open()
+        try await waitUntil { cell.frame.height > height }
+
+        #expect(harness.visibleCell(of: id) === cell, "行のセルを入れ替えました")
+        let grown = cell.frame.height - height
+        #expect(try abs(#require(harness.windowMinY(of: below)) - (belowY + grown)) < 0.5)
+        #expect(belowCell.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } == true, "下の行を動かしていません")
+        #expect(aboveCell.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } != true, "上の行を動かしました")
+    }
+
+    /// `index`番目の行に、届くと折り返しが増える横長の絵文字を並べた一覧。絵文字は`gate`を開けるまで届かない。
+    private func widePostHarness(at index: Int) throws -> (harness: TimelineHarness, gate: Gate, statuses: [Status]) {
+        let wide = try (1...6).map { try emoji("wide\($0)") }
+        let png = try widePNG()
+        let gate = Gate()
+        let store = EmojiImageStore { _ in
+            try await gate.wait()
+            return png
+        }
+        let harness = try TimelineHarness(emojiImages: store)
+        var statuses = StatusFactory.make(count: 30, startingAt: 1_000)
+        let base = statuses[index]
+        statuses[index] = Status(
+            id: base.id,
+            createdAt: base.createdAt,
+            account: base.account,
+            content: "<p>" + wide.map { ":\($0.shortcode):" }.joined(separator: " 文字 ") + "</p>",
+            spoilerText: "",
+            url: nil,
+            emojis: wide
+        )
+        harness.setStatuses(statuses)
+        return (harness, gate, statuses)
+    }
+
+    private func hasRowShift(_ cell: UICollectionViewCell) -> Bool {
+        cell.layer.animationKeys()?.contains { $0.hasPrefix("rowShift") } == true
+    }
+
+    /// ナビゲーションバーの裏に隠れた行が伸び、読んでいる位置を保つためにスクロール位置を補正したときは、見えている行を動かさない。
+    @Test func hiddenRowGrowthDoesNotShiftVisibleRows() async throws {
+        let (harness, gate, statuses) = try widePostHarness(at: 10)
+        defer { harness.tearDown() }
+        let hidden = TimelineViewController.ItemID.status(statuses[10].id)
+        let reading = TimelineViewController.ItemID.status(statuses[11].id)
+        try harness.scroll(to: reading, at: .top)
+        let hiddenCell = try #require(harness.visibleCell(of: hidden), "隠れた行のセルがありません")
+        let height = hiddenCell.frame.height
+        let readingCell = try #require(harness.visibleCell(of: reading))
+        let y = try #require(harness.windowMinY(of: reading))
+
+        gate.open()
+        try await waitUntil { hiddenCell.frame.height > height }
+
+        #expect(harness.windowMinY(of: reading) == y)
+        #expect(!hasRowShift(readingCell), "位置を保った行を動かしました")
+    }
+
+    /// 表示領域の上端をまたぐ行が同じ絵文字を使っていても、その行の高さが変わらなければ、見えている行が伸びた分は下の行ごと動かす。
+    @Test func unchangedRowAcrossTopDoesNotStopShifting() async throws {
+        let (harness, gate, statuses) = try widePostHarness(at: 12)
+        defer { harness.tearDown() }
+        // 上端をまたぐ行にも同じ絵文字を1つだけ置く。届いても折り返しは変わらない。
+        let across = statuses[10]
+        let small = Status(id: across.id, createdAt: across.createdAt, account: across.account, content: "<p>:wide1:</p>", spoilerText: "", url: nil, emojis: [try emoji("wide1")])
+        var updated = statuses
+        updated[10] = small
+        harness.setStatuses(updated)
+        let acrossID = TimelineViewController.ItemID.status(across.id)
+        let growing = TimelineViewController.ItemID.status(statuses[12].id)
+        let below = TimelineViewController.ItemID.status(statuses[13].id)
+        try harness.scroll(to: acrossID, at: .top)
+        harness.collectionView.contentOffset.y += 10
+        harness.collectionView.layoutIfNeeded()
+        let growingCell = try #require(harness.visibleCell(of: growing))
+        let belowCell = try #require(harness.visibleCell(of: below))
+        let height = growingCell.frame.height
+
+        gate.open()
+        try await waitUntil { growingCell.frame.height > height }
+
+        #expect(hasRowShift(belowCell), "上端をまたぐ行が変わらないのに、下の行を動かしませんでした")
+    }
+
     /// 絵文字が届いて、上端が表示領域より上にある行の折り返しが増えても、その行の画面上の位置は動かない。
     @Test func emojiArrivalKeepsRowAboveTop() async throws {
         let wide = try (1...6).map { try emoji("wide\($0)") }
