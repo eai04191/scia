@@ -31,6 +31,7 @@ enum CatalogComponent: String, CaseIterable {
     case streamingStatus = "streaming-status"
     case mediaGrid = "media-grid"
     case profileHeader = "profile-header"
+    case profileAccent = "profile-accent"
     case posts
     case linkCards = "link-cards"
     case quotes
@@ -63,6 +64,7 @@ enum CatalogComponent: String, CaseIterable {
         case .streamingStatus: "引っぱると見える新着の経路"
         case .mediaGrid: "一覧の添付ファイルのサムネイル"
         case .profileHeader: "プロフィールのヘッダー"
+        case .profileAccent: "プロフィールのカードの色"
         case .posts: "一覧の投稿"
         case .linkCards: "リンクカード"
         case .quotes: "投稿の中の引用"
@@ -98,6 +100,7 @@ enum CatalogComponent: String, CaseIterable {
         case .streamingStatus: StreamingStatusCatalog.states()
         case .mediaGrid: MediaGridCatalog.states()
         case .profileHeader: ProfileHeaderCatalog.states()
+        case .profileAccent: ProfileHeaderCatalog.accentStates()
         case .posts: PostRowCatalog.postStates()
         case .linkCards: PostRowCatalog.linkCardStates()
         case .quotes: PostRowCatalog.quoteStates()

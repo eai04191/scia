@@ -36,7 +36,7 @@ enum ProfileHeaderCatalog {
         }
         return [
             status("long", "<p>固定された投稿の本文が長いときは、5行で切って末尾を省く。カードの高さは一番背の高いカードに揃うので、短い本文のカードも同じ高さになる。ここから先は省かれる部分の文。ここから先は省かれる部分の文。</p>", daysAgo: 1),
-            status("media", "<p>添付ファイルのある投稿は、最初の1枚を右に小さく出す。</p>", media: [Fixtures.attachment("pinned-media", width: 1_200, height: 800, color: .systemOrange)], daysAgo: 30),
+            status("media", "<p>添付ファイルのある投稿は、最初の1枚を右に小さく出す。<a href=\"https://example.com\">example.com</a></p>", media: [Fixtures.attachment("pinned-media", width: 1_200, height: 800, color: .systemOrange)], daysAgo: 30),
             status("warning", "<p>警告の下の本文。カードには出さない。</p>", spoilerText: "閲覧注意の警告の文", media: [Fixtures.attachment("pinned-warning", width: 800, height: 800)], daysAgo: 120),
             status("sensitive", "<p>添付ファイルだけを閲覧注意にした投稿。カードでは添付ファイルを出さない。</p>", media: [Fixtures.attachment("pinned-sensitive", width: 800, height: 800, color: .systemRed)], sensitive: true, daysAgo: 400),
             status("short", "<p>短い本文</p>", daysAgo: 800),
@@ -116,6 +116,138 @@ enum ProfileHeaderCatalog {
         ]
     }
 
+    /// カードの色を確かめるアカウント。リンクの色を見比べるため、自己紹介にハッシュタグとメンションとURLを、補足情報に確認済みと確認していないリンクを入れる。
+    /// 自己紹介は3行に収まらない長さにし、画面のティントカラーで描く「さらに表示」も出す。
+    /// ヘッダー画像は、どの色でも同じものを1回だけ作る。状態ごとに画像を描いてJPEGに書き出すと、32のヘッダーの分だけ開くのが重くなるため。
+    private static let accentBanner = Fixtures.imageURL(width: 600, height: 200, color: .systemGray4)
+
+    private static func accentAccount(avatar: URL?) -> Account {
+        Fixtures.account(
+            displayName: "カードの色",
+            acct: "accent@remote.example",
+            avatar: avatar,
+            header: accentBanner,
+            note: "<p>本文の中の<a href=\"https://example.com/tags/scia\">#scia</a>と<a href=\"https://example.com/@catalog\">@catalog</a>、<a href=\"https://example.com\">example.com</a>の色。</p><p>2段落目。3行に収まらないので、「さらに表示」が出る。</p><p>3段落目。</p>",
+            fields: [
+                Account.Field(name: "確認済みのリンク", value: "<a href=\"https://example.com\">example.com</a>", verifiedAt: .now),
+                Account.Field(name: "確認していないリンク", value: "<a href=\"https://example.org\">example.org</a>"),
+                Account.Field(name: "文字だけ", value: "東京"),
+            ]
+        )
+    }
+
+    /// カードの色を確かめるアイコンの色。
+    static let accentColors: [(name: String, color: UIColor)] = [
+        ("オレンジ", UIColor(red: 1, green: 0.55, blue: 0, alpha: 1)),
+        ("黄色", UIColor(red: 1, green: 0.85, blue: 0.1, alpha: 1)),
+        ("赤", UIColor(red: 0.85, green: 0.1, blue: 0.15, alpha: 1)),
+        ("淡い桃色", UIColor(red: 1, green: 0.75, blue: 0.8, alpha: 1)),
+        ("紫", UIColor(red: 0.4, green: 0.25, blue: 1, alpha: 1)),
+        ("青", UIColor(red: 0, green: 0.45, blue: 1, alpha: 1)),
+        ("紺", UIColor(red: 0.05, green: 0.1, blue: 0.35, alpha: 1)),
+        ("青緑", UIColor(red: 0.1, green: 0.6, blue: 0.58, alpha: 1)),
+        ("緑", UIColor(red: 0.2, green: 0.7, blue: 0.3, alpha: 1)),
+        ("茶色", UIColor(red: 0.45, green: 0.3, blue: 0.2, alpha: 1)),
+        ("白（灰色のテーマ）", UIColor(white: 1, alpha: 1)),
+        ("灰色（灰色のテーマ）", UIColor(white: 0.5, alpha: 1)),
+        ("黒（灰色のテーマ）", UIColor(white: 0.05, alpha: 1)),
+    ]
+
+    /// カードの色で変わるフォローのボタンの状態。
+    static let accentFollowStates: [(name: String, state: FollowState)] = [
+        ("していない", .notFollowing(locked: false)),
+        ("フォロー中", .following),
+        ("リクエスト中", .requested),
+        ("自分", .myself),
+    ]
+
+    /// アイコンの色とフォローの状態を選び、カードの色、文字とリンクの色、フォローのボタン、画面のティントカラーを、ライトとダークで並べる。
+    /// 実物と同じく、アイコンの画像から色を作り、チューニングの値で付ける。
+    /// 組み合わせを全部並べず、選んだ1つだけを出す。ヘッダーを32並べると、Auto Layoutが1つの画面の制約をまとめて解くため、開くのに20秒以上かかったため。
+    @MainActor
+    static func accentStates() -> [CatalogState] {
+        [CatalogState(title: "アイコンの色とボタンの状態を選ぶ（上がライト、下がダーク）") { AccentPicker() }]
+    }
+
+    /// 選んだ色と状態の、ライトとダークのヘッダーの組。書き出して見比べるときにも使う。
+    @MainActor
+    static func accentPair(color: UIColor, followState: FollowState) -> UIView {
+        // ライトとダークで同じアイコンを使い、画像を作るのを1回にする。
+        let account = accentAccount(avatar: Fixtures.imageURL(width: 120, height: 120, color: color))
+        let stack = UIStackView(arrangedSubviews: [UIUserInterfaceStyle.light, .dark].map { style in
+            accentHeader(account, followState: followState, style: style)
+        })
+        stack.axis = .vertical
+        return stack
+    }
+
+    /// 色とフォローの状態を選ぶ部品と、選んだ組み合わせのヘッダーの組。選び直すと、ヘッダーを作り直す。
+    private final class AccentPicker: UIStackView {
+        private let colorControl = UISegmentedControl()
+        private let stateControl = UISegmentedControl(items: ProfileHeaderCatalog.accentFollowStates.map(\.name))
+        private var pair: UIView?
+
+        init() {
+            super.init(frame: .zero)
+            axis = .vertical
+            spacing = 12
+            // 名前を並べると幅に収まらないので、アイコンの色の丸を並べる。
+            for (index, entry) in ProfileHeaderCatalog.accentColors.enumerated() {
+                let dot = UIGraphicsImageRenderer(size: CGSize(width: 18, height: 18)).image { context in
+                    entry.color.setFill()
+                    UIColor.separator.setStroke()
+                    let path = UIBezierPath(ovalIn: CGRect(x: 1, y: 1, width: 16, height: 16))
+                    path.fill()
+                    path.stroke()
+                }.withRenderingMode(.alwaysOriginal)
+                dot.accessibilityLabel = entry.name
+                colorControl.insertSegment(with: dot, at: index, animated: false)
+            }
+            colorControl.selectedSegmentIndex = 0
+            stateControl.selectedSegmentIndex = 0
+            colorControl.addAction(UIAction { [weak self] _ in self?.select() }, for: .valueChanged)
+            stateControl.addAction(UIAction { [weak self] _ in self?.select() }, for: .valueChanged)
+            addArrangedSubview(colorControl)
+            addArrangedSubview(stateControl)
+            select()
+        }
+
+        @available(*, unavailable)
+        required init(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        private func select() {
+            pair?.removeFromSuperview()
+            let entry = ProfileHeaderCatalog.accentColors[colorControl.selectedSegmentIndex]
+            let state = ProfileHeaderCatalog.accentFollowStates[stateControl.selectedSegmentIndex]
+            let view = ProfileHeaderCatalog.accentPair(color: entry.color, followState: state.state)
+            addArrangedSubview(view)
+            pair = view
+        }
+    }
+
+    /// ライトかダークに固定した下地に、カードの色を付けたヘッダーを置く。カタログの画面ではなく、下地にティントカラーを当てる。
+    @MainActor
+    private static func accentHeader(_ account: Account, followState: FollowState, style: UIUserInterfaceStyle) -> UIView {
+        let backdrop = UIView()
+        backdrop.overrideUserInterfaceStyle = style
+        backdrop.backgroundColor = .systemBackground
+        let view = header(account, followState, pinned: Array(pinnedStatuses.prefix(2))) { header in
+            header.accentOptions = ProfileCardPalette.Options(tuning: AppDependencies.tuning)
+            header.onChangeScreenTint = { [weak backdrop] tint in backdrop?.tintColor = tint }
+        }
+        view.translatesAutoresizingMaskIntoConstraints = false
+        backdrop.addSubview(view)
+        NSLayoutConstraint.activate([
+            view.topAnchor.constraint(equalTo: backdrop.topAnchor),
+            view.bottomAnchor.constraint(equalTo: backdrop.bottomAnchor),
+            view.leadingAnchor.constraint(equalTo: backdrop.leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: backdrop.trailingAnchor),
+        ])
+        return backdrop
+    }
+
     @MainActor
     private static func header(
         _ account: Account,
@@ -126,13 +258,15 @@ enum ProfileHeaderCatalog {
         tab: ProfileTab = .posts,
         postsFilter: ProfilePostsFilter = .standard,
         avatarShape: AvatarShape = .circle,
-        pinned: [Status] = []
+        pinned: [Status] = [],
+        configure: (ProfileHeaderView) -> Void = { _ in }
     ) -> UIView {
         let header = ProfileHeaderView(
             emojiImages: AppDependencies.emojiImages,
             mediaImages: AppDependencies.mediaImages,
             avatarImages: AppDependencies.avatarImages
         )
+        configure(header)
         var content = ProfileHeaderView.Content(
             account: account,
             followState: followState,
