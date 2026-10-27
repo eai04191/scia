@@ -1,7 +1,7 @@
 ---
 name: merge-to-main
 description: sciaの作業branchを、ほかのスレッドと1つずつ、ローカルのmainへ安全に入れる。残タスクや同意を取っていない項目がないかを確かめ、mergeに適切な単位かを判断してから、Tools/merge-queue.shの列に並べる。番が来たら最新のmainへrebaseし、まだ通っていないmake checkとmake testだけを走らせてfast-forwardで入れ、archiveしてよいかを伝える。ユーザーが/merge-to-mainで起動したときだけ使う。
-argument-hint: "[端末] [after:<セッションID>...]"
+argument-hint: "[after:<セッションID>...]"
 disable-model-invocation: true
 ---
 
@@ -13,7 +13,7 @@ mainへ入れる処理（rebase、`make check`、`make test`、fast-forward）�
 
 targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/HEAD`のbranch名(例: `main`)。比較にはremoteではなくローカルのtargetを使う。
 
-引数（`$ARGUMENTS`）には、`make test`に使う端末と、前提のスレッドのセッションID（`after:local_…`、複数可）が入る。
+引数（`$ARGUMENTS`）には、前提のスレッドのセッションID（`after:local_…`、複数可）が入る。`make test`の端末は、列が走らせる直前に`Tools/sim.sh acquire`で借りる。
 
 ## 1. 残タスクと、同意を取っていない項目を確かめる
 
@@ -49,9 +49,8 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
 
 ## 3. 列に並ぶ
 
-- `make test`の端末は、引数にあればそれにする。なければ、このthreadに割り当てた端末にする。どちらもなければ、`sim`のskillで割り当てる
 - 引数の`after:`のセッションIDごとに、`mcp__ccd_session_mgmt__get_session`でそのスレッドのbranchを引く。引けなければ、並ばずに報告する
-- 作業ツリーに未commitの変更がないことを確かめてから、作業branchのworktreeで`Tools/merge-queue.sh run '<端末>' <前提のbranch>...`をBashの`run_in_background`で起動する。並んだことを伝えて、ターンを終える。待っている間と走っている間は、作業ツリーを変えない。列は`Tools/merge-queue.sh status`で見られる
+- 作業ツリーに未commitの変更がないことを確かめてから、作業branchのworktreeで`Tools/merge-queue.sh run <前提のbranch>...`をBashの`run_in_background`で起動する。並んだことを伝えて、ターンを終える。待っている間と走っている間は、作業ツリーを変えない。列は`Tools/merge-queue.sh status`で見られる
 
 ## 4. 終わったら
 
@@ -71,7 +70,7 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
 
 - 入れたcommitの一覧（スクリプトの出力の最後にある）
 - pr-readinessの判定
-- `make check`と`make test`の結果と、使った端末。出力に「走らせます」とあったものが走らせたもの、なかったものは前の結果を使ったもの。並び直して通ったテストと、直したもの
+- `make check`と`make test`の結果と、使った端末（出力の「make test を <端末> で走らせます」）。出力に「走らせます」とあったものが走らせたもの、なかったものは前の結果を使ったもの。並び直して通ったテストと、直したもの
 - どのcommitをどれにまとめたか。まとめなかった場合はその旨。整理前後で差分がないこと
 - conflictを解決した場合は、どのファイルをどう解決したか
 - 元のHEADのSHA。rebaseした場合はrebase前のHEADのSHAも
