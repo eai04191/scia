@@ -163,8 +163,9 @@ final class NoticeStackView: UIView {
     private func update(_ chip: NoticeChip, with notice: Notice) {
         let previous = chip.notice
         defer { chip.announce(changingFrom: previous) }
-        // 文言や種類が変わったときと、値、件数、「›」が付いたり外れたりしたときは、中身だけを薄く入れ替え、広げる動きも動かす。
-        // 値が付くだけのとき（「処理中」に「1%」が付くなど）にすぐ広げると、ガラスが1コマで広がるため。進み具合の数字が変わるだけなら、そのまま描き直す。
+        // 文言や種類が変わったときと、値、件数、「›」が付いたり外れたり、値の桁数が変わったりしたときは、中身だけを薄く入れ替え、広げる動きも動かす。
+        // 値が付くだけのとき（「処理中」に「1%」が付くなど）や、桁が増えるだけのとき（8%から10%）にすぐ広げると、ガラスが1コマで広がるため。
+        // 数字の幅はそろえてあるので、桁数が同じまま数字が変わるだけなら幅は変わらず、そのまま描き直す。
         if Self.changesShape(from: chip.notice, to: notice) {
             chip.crossfade(to: notice, duration: animationDuration)
             relayout(growingWithAnimation: chip)
@@ -176,7 +177,7 @@ final class NoticeStackView: UIView {
 
     private static func changesShape(from previous: Notice?, to notice: Notice) -> Bool {
         guard let previous else { return true }
-        return previous.title != notice.title || previous.kind != notice.kind || (previous.value == nil) != (notice.value == nil)
+        return previous.title != notice.title || previous.kind != notice.kind || previous.value?.count != notice.value?.count
             || previous.additionalCount != notice.additionalCount || showsDisclosure(previous) != showsDisclosure(notice)
     }
 

@@ -105,6 +105,26 @@ struct TimelineNoticeTests {
         #expect(later.scale > grabbed.scale && later.alpha > grabbed.alpha)
     }
 
+    /// 進み具合の数字の桁が増えたとき（8%から10%）も、値が付くときと同じく、ガラスを1コマで広げず、動きの中で広げる。
+    @Test func progressGainingDigitWidensWithAnimation() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.tuning.setValue(1, for: TuningCatalog.noticeAnimationDuration)
+        let clock = LayerClock(freezing: harness.window.layer)
+        let stack = harness.overlay.column.stack
+        stack.setPersistent(Notice(id: "download", kind: .progress, title: "ダウンロード中", value: "8%"))
+        try await clock.runUntilIdle()
+        let chip = try #require(stack.chips.first)
+        let before = try #require(chip.layer.presentation()).bounds.width
+
+        stack.setPersistent(Notice(id: "download", kind: .progress, title: "ダウンロード中", value: "10%"))
+        CATransaction.flush()
+
+        #expect(abs(try #require(chip.layer.presentation()).bounds.width - before) < 0.5)
+        try await clock.runUntilIdle()
+        #expect(try #require(chip.layer.presentation()).bounds.width > before + 1)
+    }
+
     /// チップと、その中のガラスの包みの、描かれている大きさの倍率と濃さ。
     private func presentedAppearance(of chip: NoticeChip) -> (scale: CGFloat, alpha: CGFloat) {
         var scale: CGFloat = 1
