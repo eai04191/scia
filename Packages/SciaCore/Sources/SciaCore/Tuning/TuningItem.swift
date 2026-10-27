@@ -1181,6 +1181,15 @@ public enum TuningCatalog {
         defaultValue: 0.25
     )
 
+    /// 書いている間に返信先や引用元を替えたときに、ラベルを入れ替え、幅を変える時間。
+    public static let composeReplyLabelSwitchDuration = NumberTuning(
+        id: "compose.replyLabelSwitchDuration",
+        title: "返信先や引用元を替えたときにラベルを入れ替える時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.25
+    )
+
     /// 投稿欄を展開ボタンで広げたときの、本文の最低の行数。本文がこれより短くても、この行数の高さまで広げて書き足す場所を先に取る。
     public static let composeExpandedMinLines = NumberTuning(
         id: "compose.expandedMinLines",
@@ -1598,6 +1607,7 @@ public enum TuningCatalog {
             .number(composeExpandedMinLines),
             .number(composeTextGrowDuration),
             .number(composePollOptionDuration),
+            .number(composeReplyLabelSwitchDuration),
             .number(linkTitleMorphDuration),
             .number(linkTitleShimmerPeriod),
             .number(linkTitleShimmerFadeDuration),

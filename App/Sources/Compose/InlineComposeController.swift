@@ -1891,10 +1891,14 @@ final class InlineComposeController: NSObject {
         // ラベルを消すときは、薄くなる間も文字が残るよう、前の文字のままにする。
         // 返信先から引き継いだ注意書きは、注意書きの欄に見えているので、ラベルには書かない。
         if let chip {
+            let previous = replyLabelSwitchSnapshot(to: chip)
             setReplyTitle(chip.title)
             replyButton.configuration?.image = UIImage(systemName: chip.symbolName)
             replyButton.accessibilityHint = chip.hint
             replyClearButton.accessibilityLabel = chip.clearLabel
+            if let previous {
+                crossfadeReplyLabel(from: previous)
+            }
         }
         setRowShown(replyRow, isEditing && chip != nil)
 
@@ -1980,6 +1984,32 @@ final class InlineComposeController: NSObject {
             self.setRowHidden(row, !shown)
             row.alpha = shown ? 1 : 0
             self.host?.view.layoutIfNeeded()
+        }
+    }
+
+    /// 出ているラベルの中身が替わるなら、替わる前のラベルの像。替わらないか、ラベルが見えていなければnil。
+    private func replyLabelSwitchSnapshot(to chip: Chip) -> UIView? {
+        guard isEditing, bar.window != nil, !replyRow.isHidden, replyRow.alpha > 0, !UIAccessibility.isReduceMotionEnabled,
+              replyButton.configuration?.title != chip.title || replyButton.configuration?.image != UIImage(systemName: chip.symbolName)
+        else { return nil }
+        return replyButton.snapshotView(afterScreenUpdates: false)
+    }
+
+    /// 書いている間に返信先や引用元を替えたら、前のラベルを薄くしながら、新しいラベルを前の幅から新しい幅へ広げて（縮めて）浮かび上がらせる。
+    /// 次の並べ直しに任せると、ラベルの幅と文字が1コマで替わるため。
+    private func crossfadeReplyLabel(from previous: UIView) {
+        guard let host else { return }
+        // 前の入れ替えの途中なら、ラベルは前の行き先の幅へ向かっている途中なので、行き先ではなく見えている形に置く。
+        previous.frame = replyButton.layer.presentation()?.frame ?? replyButton.frame
+        previous.isUserInteractionEnabled = false
+        replyRow.addSubview(previous)
+        replyButton.stopFading(at: 0)
+        UIView.animateSmoothly(duration: tuning.value(of: TuningCatalog.composeReplyLabelSwitchDuration)) {
+            previous.alpha = 0
+            self.replyButton.alpha = 1
+            host.view.layoutIfNeeded()
+        } completion: {
+            previous.removeFromSuperview()
         }
     }
 
