@@ -24,6 +24,7 @@ enum StorageCatalog {
     private static let small = StorageBreakdown(
         items: [
             .init(category: .mediaFiles, bytes: 8_800_000, removableBytes: 8_800_000),
+            .init(category: .mediaPrefetch, bytes: 42_300_000, removableBytes: 42_300_000),
             .init(category: .networkCache, bytes: 1_500_000, removableBytes: 1_500_000),
             .init(category: .temporaryFiles, bytes: 164_200_000, removableBytes: 164_163_000),
             .init(category: .inAppSafari, bytes: 13_600_000, removableBytes: 13_600_000),
@@ -48,6 +49,7 @@ enum StorageCatalog {
     private static let large = StorageBreakdown(
         items: [
             .init(category: .mediaFiles, bytes: 157_286_400, removableBytes: 157_286_400),
+            .init(category: .mediaPrefetch, bytes: 104_857_600, removableBytes: 104_857_600),
             .init(category: .networkCache, bytes: 1_234_567_890, removableBytes: 1_234_567_890),
             .init(category: .temporaryFiles, bytes: 12_345_678_901, removableBytes: 12_000_000_000),
             .init(category: .inAppSafari, bytes: 987_654_321, removableBytes: 987_654_321),
@@ -59,15 +61,17 @@ enum StorageCatalog {
         appBytes: 1_234_567_890
     )
 
-    /// ストレージのメディアのキャッシュの中身の画面。アプリのキャッシュに触れず、カタログ用の場所に書いた画像を並べる。
+    /// ストレージのメディアのキャッシュの段（表示済みと先読み）の中身の画面。アプリのキャッシュに触れず、カタログ用の場所に書いた画像を並べる。
     /// 押すと開くが、キャッシュから消えていた失敗はアラートなので、`open`がnilを返す状態で押して確かめる。
     @MainActor
     static func mediaCacheStates() -> [CatalogState] {
         let files = catalogMediaFiles()
         return [
             mediaCacheState("読み込んでいる途中", entries: { try? await Task.sleep(for: .seconds(3_600)); return [] }),
-            mediaCacheState("ない", entries: { [] }),
+            mediaCacheState("ない（表示済み）", entries: { [] }),
+            mediaCacheState("ない（先読み）", category: .mediaPrefetch, entries: { [] }),
             mediaCacheState("並んでいる（縦長、横長、画像でないファイル）", entries: { files }),
+            mediaCacheState("並んでいる（先読み）", category: .mediaPrefetch, entries: { files }),
             mediaCacheState("押すとキャッシュから消えていた", entries: { files }, open: { _ in nil }),
         ]
     }
@@ -75,12 +79,13 @@ enum StorageCatalog {
     @MainActor
     private static func mediaCacheState(
         _ title: String,
+        category: StorageBreakdown.Category = .mediaFiles,
         entries: @escaping @Sendable () async -> [MediaFileCache.Entry],
         open: (@Sendable (MediaFileCache.Entry.ID) async throws -> URL?)? = nil
     ) -> CatalogState {
         CatalogState(title: title) {
             let controller = UIHostingController(rootView: NavigationStack {
-                MediaCacheView(actions: mediaCacheActions(entries: entries, open: open))
+                MediaCacheView(category: category, actions: mediaCacheActions(entries: entries, open: open))
             })
             return CatalogControllerHost(controller, height: 500)
         }
@@ -126,7 +131,7 @@ enum StorageCatalog {
         removeError: String? = nil
     ) -> CatalogState {
         CatalogState(title: title) {
-            let actions = StorageView.Actions(measure: measure ?? { breakdown }, remove: { _ in }, mediaFiles: mediaCacheActions(entries: { [] }))
+            let actions = StorageView.Actions(measure: measure ?? { breakdown }, remove: { _ in }, mediaFiles: mediaCacheActions(entries: { [] }), mediaPrefetch: mediaCacheActions(entries: { [] }))
             let controller = UIHostingController(rootView: NavigationStack {
                 StorageView(actions: actions, removing: removing, removeError: removeError)
             })

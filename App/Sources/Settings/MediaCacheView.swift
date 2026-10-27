@@ -3,7 +3,8 @@ import QuickLookThumbnailing
 import SciaCore
 import SwiftUI
 
-/// メディアのキャッシュに残っているファイル（ビューアで開いた画像、共有や保存で落としたもの）を、最後に使った順に並べる画面。
+/// メディアのキャッシュの段（表示済みか先読み）に残っているファイルを、最後に使った順に並べる画面。
+/// 表示済みは、ビューアで開いた画像と、共有や保存で落としたもの。先読みは、ビューアで開く前に読んでおいた画像。
 /// 押すとQuick Lookで開き、そこから共有や保存をする。どの投稿のものかは記録していないので出さない。
 struct MediaCacheView: View {
     /// 並べる処理と開く処理。部品カタログでは、アプリのキャッシュに触れずに状態を作るために差し替える。
@@ -13,19 +14,22 @@ struct MediaCacheView: View {
         var open: @Sendable (MediaFileCache.Entry.ID) async throws -> URL?
     }
 
+    /// 並べる段。`mediaFiles`（表示済み）か`mediaPrefetch`（先読み）。
+    let category: StorageBreakdown.Category
     let actions: Actions
     @State private var entries: [MediaFileCache.Entry]?
     @State private var previewing: URL?
     @State private var openError: String?
 
-    init(actions: Actions = .app) {
+    init(category: StorageBreakdown.Category, actions: Actions) {
+        self.category = category
         self.actions = actions
     }
 
     var body: some View {
         Group {
             if let entries, entries.isEmpty {
-                ContentUnavailableView("メディアのキャッシュはありません", systemImage: "photo.on.rectangle")
+                ContentUnavailableView("\(StorageView.name(of: category))はありません", systemImage: "photo.on.rectangle")
             } else if let entries {
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 2)], spacing: 2) {
@@ -39,17 +43,18 @@ struct MediaCacheView: View {
                             .accessibilityLabel(entry.file.lastPathComponent)
                         }
                     }
-                    Text("最後に使った順に\(entries.count)件。どの投稿のものかは記録していません。")
+                    // 写真アプリの一覧の下と同じく、件数だけを出す。
+                    Text("\(entries.count)件")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(maxWidth: .infinity)
                         .padding()
                 }
             } else {
                 ProgressView("読み込んでいます")
             }
         }
-        .navigationTitle(StorageView.name(of: .mediaFiles))
+        .navigationTitle(StorageView.name(of: category))
         .navigationBarTitleDisplayMode(.inline)
         .task {
             entries = await actions.entries()
@@ -117,10 +122,9 @@ private struct MediaCacheTile: View {
 }
 
 extension MediaCacheView.Actions {
-    @MainActor
-    static var app: Self {
-        let files = AppDependencies.mediaFiles
-        return Self(
+    /// `files`に置いたファイルを並べる。
+    static func app(_ files: MediaFileCache) -> Self {
+        Self(
             entries: { await files.entries() },
             open: { try await files.copyForSharing(of: $0) }
         )

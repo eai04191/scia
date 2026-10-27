@@ -147,7 +147,8 @@ struct StorageUsageTests {
         let size = { (path: String) in StorageUsage.allocatedSize(of: root.appending(path: path)) }
         let locations = StorageLocations(
             container: root.appending(path: "Container"),
-            mediaFiles: ["MediaFiles", "MediaPrefetch"].map { root.appending(path: "Container/Library/Caches/\($0)") },
+            mediaFiles: root.appending(path: "Container/Library/Caches/MediaFiles"),
+            mediaPrefetch: root.appending(path: "Container/Library/Caches/MediaPrefetch"),
             temporary: root.appending(path: "Container/tmp"),
             discomfortReports: root.appending(path: "Container/Documents/DiscomfortReports"),
             preferences: root.appending(path: "Container/Library/Preferences"),
@@ -159,9 +160,11 @@ struct StorageUsageTests {
         let networkCache = size("Container/Library/Caches/net.example/Cache.db") + size("Container/Library/Caches/net.example/fsCachedData")
         let breakdown = StorageBreakdown.measure(locations, launchDate: launch)
 
-        // 先読みした画像の置き場も、メディアのキャッシュに入れる。
-        let media = size("Container/Library/Caches/MediaFiles") + size("Container/Library/Caches/MediaPrefetch")
+        let media = size("Container/Library/Caches/MediaFiles")
         #expect(breakdown.item(.mediaFiles) == .init(category: .mediaFiles, bytes: media, removableBytes: media))
+        // 先読みした画像は、置き場を分けたので、ストレージでも項目を分ける。
+        let prefetch = size("Container/Library/Caches/MediaPrefetch")
+        #expect(breakdown.item(.mediaPrefetch) == .init(category: .mediaPrefetch, bytes: prefetch, removableBytes: prefetch))
         #expect(breakdown.item(.networkCache) == .init(category: .networkCache, bytes: networkCache, removableBytes: networkCache))
         #expect(breakdown.item(.temporaryFiles) == .init(category: .temporaryFiles, bytes: size("Container/tmp"), removableBytes: size("Container/tmp/old")))
         let reports = size("Container/Documents/DiscomfortReports")
@@ -186,7 +189,7 @@ struct StorageUsageTests {
         try write("Container/Library/Caches/MediaFiles/a.jpg", size: 20_000)
         try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: safari.path(percentEncoded: false))
         let locations = StorageLocations(
-            container: root.appending(path: "Container"), mediaFiles: [root.appending(path: "Container/Library/Caches/MediaFiles")], temporary: root.appending(path: "tmp"),
+            container: root.appending(path: "Container"), mediaFiles: root.appending(path: "Container/Library/Caches/MediaFiles"), mediaPrefetch: root.appending(path: "Container/Library/Caches/MediaPrefetch"), temporary: root.appending(path: "tmp"),
             discomfortReports: root.appending(path: "d"), preferences: root.appending(path: "p"), networkCache: [], inAppSafari: safari, sharedContainer: nil, appBundle: root.appending(path: "a")
         )
         let breakdown = StorageBreakdown.measure(locations, launchDate: nil)
@@ -198,7 +201,7 @@ struct StorageUsageTests {
     /// まだ作られていないフォルダーは、読めないのではなく何もないので0とする。
     @Test func missingSafariDataIsZero() {
         let locations = StorageLocations(
-            container: root, mediaFiles: [root.appending(path: "m")], temporary: root.appending(path: "tmp"),
+            container: root, mediaFiles: root.appending(path: "m"), mediaPrefetch: root.appending(path: "p"), temporary: root.appending(path: "tmp"),
             discomfortReports: root.appending(path: "d"), preferences: root.appending(path: "p"), networkCache: [], inAppSafari: root.appending(path: "s"), sharedContainer: nil, appBundle: root.appending(path: "a")
         )
         let breakdown = StorageBreakdown.measure(locations, launchDate: nil)
@@ -211,7 +214,7 @@ struct StorageUsageTests {
         defer { try? FileManager.default.removeItem(at: root) }
         try write("tmp/old")
         let locations = StorageLocations(
-            container: root, mediaFiles: [root.appending(path: "m")], temporary: root.appending(path: "tmp"),
+            container: root, mediaFiles: root.appending(path: "m"), mediaPrefetch: root.appending(path: "p"), temporary: root.appending(path: "tmp"),
             discomfortReports: root.appending(path: "d"), preferences: root.appending(path: "p"), networkCache: [], inAppSafari: root.appending(path: "s"), sharedContainer: nil, appBundle: root.appending(path: "a")
         )
         let breakdown = StorageBreakdown.measure(locations, launchDate: nil)

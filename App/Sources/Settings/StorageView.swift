@@ -8,8 +8,10 @@ struct StorageView: View {
     struct Actions {
         var measure: @Sendable () async -> StorageBreakdown
         var remove: @Sendable (StorageBreakdown.Category) async throws -> Void
-        /// メディアのキャッシュの中身を並べる画面の処理。
+        /// メディアのキャッシュの、表示済みの段の中身を並べる画面の処理。
         var mediaFiles: MediaCacheView.Actions
+        /// メディアのキャッシュの、先読みの段の中身を並べる画面の処理。
+        var mediaPrefetch: MediaCacheView.Actions
     }
 
     let actions: Actions
@@ -30,21 +32,20 @@ struct StorageView: View {
     }
 
     /// 消せる項目。ほかの項目は、使う人のデータか、なくなるとアプリが動かないもの。
-    static let removableCategories: [StorageBreakdown.Category] = [.mediaFiles, .networkCache, .temporaryFiles, .inAppSafari, .discomfortReports]
+    static let removableCategories: [StorageBreakdown.Category] = [.mediaFiles, .mediaPrefetch, .networkCache, .temporaryFiles, .inAppSafari, .discomfortReports]
 
     var body: some View {
         List {
             if let breakdown {
                 Section {
                     ForEach(breakdown.items, id: \.category) { item in
-                        if item.category == .mediaFiles {
-                            // 中身を見返して、共有や保存をできるようにする。
-                            NavigationLink {
-                                MediaCacheView(actions: actions.mediaFiles)
-                            } label: {
-                                LabeledContent(Self.name(of: item.category), value: Self.text(item.bytes))
-                            }
-                        } else {
+                        switch item.category {
+                        case .mediaFiles:
+                            mediaCacheRows(viewed: item, prefetched: breakdown.item(.mediaPrefetch))
+                        case .mediaPrefetch:
+                            // メディアのキャッシュの下の段に並べる。
+                            EmptyView()
+                        default:
                             LabeledContent(Self.name(of: item.category), value: Self.text(item.bytes))
                         }
                     }
@@ -100,6 +101,32 @@ struct StorageView: View {
         }
     }
 
+    /// メディアのキャッシュを、合計の行の下に、表示済みと先読みの2段に分けて並べる。
+    /// 置き場の違う2つを1つの項目として数えつつ、それぞれの大きさと中身を見られるようにする（docs/image-loading.md）。
+    @ViewBuilder
+    private func mediaCacheRows(viewed: StorageBreakdown.Item, prefetched: StorageBreakdown.Item?) -> some View {
+        let total: Int64? = if let viewedBytes = viewed.bytes, let prefetchedBytes = prefetched?.bytes { viewedBytes + prefetchedBytes } else { nil }
+        LabeledContent(Self.mediaCacheName, value: Self.text(total))
+        // 中身を見返して、共有や保存をできるようにする。
+        NavigationLink {
+            MediaCacheView(category: .mediaFiles, actions: actions.mediaFiles)
+        } label: {
+            LabeledContent("表示済み", value: Self.text(viewed.bytes))
+                .padding(.leading, Self.subrowIndent)
+        }
+        NavigationLink {
+            MediaCacheView(category: .mediaPrefetch, actions: actions.mediaPrefetch)
+        } label: {
+            LabeledContent("先読み", value: Self.text(prefetched?.bytes))
+                .padding(.leading, Self.subrowIndent)
+        }
+    }
+
+    /// 表示済みと先読みを合わせた、メディアのキャッシュの名前。
+    static let mediaCacheName = "メディアのキャッシュ"
+    /// メディアのキャッシュの下の段を、合計の行より下げる幅。
+    private static let subrowIndent: CGFloat = 16
+
     /// `bytes`がnilなら、測れないだけで消せるものがあるかもしれないので、押せるままにする。
     private func removeButton(_ category: StorageBreakdown.Category, bytes: Int64?) -> some View {
         Button {
@@ -142,13 +169,14 @@ struct StorageView: View {
         switch category {
         case .inAppSafari: "アプリ内のSafariで開いたサイトのキャッシュとCookieを消します。サイトからログアウトします。"
         case .discomfortReports: "保存した違和感レポートを全部消します。消したレポートは戻せません。"
-        case .mediaFiles, .networkCache, .temporaryFiles, .settings, .sharedMedia, .other: nil
+        case .mediaFiles, .mediaPrefetch, .networkCache, .temporaryFiles, .settings, .sharedMedia, .other: nil
         }
     }
 
     static func name(of category: StorageBreakdown.Category) -> String {
         switch category {
-        case .mediaFiles: "メディアのキャッシュ"
+        case .mediaFiles: "表示済みのメディア"
+        case .mediaPrefetch: "先読みしたメディア"
         case .networkCache: "通信のキャッシュ"
         case .temporaryFiles: "一時ファイル"
         case .inAppSafari: "アプリ内のSafariのデータ"
@@ -173,7 +201,8 @@ extension StorageView.Actions {
         }
         let locations = StorageLocations(
             container: URL.homeDirectory,
-            mediaFiles: [AppDependencies.mediaFiles.directory, AppDependencies.mediaPrefetchFiles.directory],
+            mediaFiles: AppDependencies.mediaFiles.directory,
+            mediaPrefetch: AppDependencies.mediaPrefetchFiles.directory,
             temporary: URL.temporaryDirectory,
             discomfortReports: AppDependencies.discomfortReports.directory,
             preferences: URL.libraryDirectory.appending(path: "Preferences", directoryHint: .isDirectory),
@@ -199,6 +228,7 @@ extension StorageView.Actions {
                 switch category {
                 case .mediaFiles:
                     try await mediaFiles.removeCachedFiles()
+                case .mediaPrefetch:
                     try await mediaPrefetchFiles.removeCachedFiles()
                 case .networkCache:
                     URLSessionTransport.responseCache?.removeAllCachedResponses()
@@ -217,7 +247,8 @@ extension StorageView.Actions {
                     preconditionFailure("消せない項目を消そうとした")
                 }
             },
-            mediaFiles: .app
+            mediaFiles: .app(mediaFiles),
+            mediaPrefetch: .app(mediaPrefetchFiles)
         )
     }
 
