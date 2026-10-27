@@ -16,6 +16,10 @@
 #   Tools/sim.sh reset '<端末>'
 #     アプリを終了し、アプリの設定（設定、チューニング、デバッグ用の値）を既定に戻す。端末を割り当てられたときに走らせ、
 #     前に使ったスレッドが確かめのために変えた値を持ち込まない。アカウントの並びと使うアカウント、アカウントやサーバーごとに覚えた値は残す。
+#   Tools/sim.sh busy '<端末>'
+#     その端末の名前かUDIDをコマンドラインに含む処理（make test、xcodebuild、simctl、録画など）を探し、どのworktreeのスレッドが起動したかを出す。
+#     ターンを返したあともバックグラウンドの処理は走り続けるので、止まっているスレッドの端末を取る前に、使っている処理が残っていないかを確かめる。
+#     シミュレーターのツールのタップやスワイプは1回ずつで終わり、処理として残らないので、ここには出ない。
 set -euo pipefail
 
 BUNDLE_ID=net.mizle.scia
@@ -206,6 +210,69 @@ with open(sys.argv[1], "rb") as f:
     echo "設定を既定に戻した（$(grep -c . <<< "$keys" || true)個）: $sim"
 }
 
+command_busy() {
+    [ $# -eq 1 ] || fail "使い方: Tools/sim.sh busy '<端末>'"
+    local sim=$1 device name udid
+    # UDIDで渡されても、名前で走らせた処理（make test SIM='Scia 1'など）を拾えるよう、名前とUDIDの両方を引く。
+    device=$(xcrun simctl list devices -j | /usr/bin/python3 -I -c '
+import json, sys
+for devices in json.load(sys.stdin)["devices"].values():
+    for d in devices:
+        if d["name"] == sys.argv[1] or d["udid"] == sys.argv[1]:
+            print(d["udid"], d["name"]); sys.exit()
+' "$sim")
+    [ -n "$device" ] || fail "端末が見つからない: $sim"
+    udid=${device%% *}
+    name=${device#* }
+    ps -axo pid=,ppid=,command= | /usr/bin/python3 -I -c '
+import os, re, subprocess, sys
+name, udid, caller = sys.argv[1], sys.argv[2], int(sys.argv[3])
+procs = {}
+for line in sys.stdin:
+    pid, ppid, command = line.strip().split(None, 2)
+    procs[int(pid)] = (int(ppid), command)
+def ancestors(pid):
+    # psが一覧を取ったあとに親が終わると、親の行がない。そこで止める。
+    while pid in procs and procs[pid][0] in procs and pid > 1:
+        pid = procs[pid][0]
+        yield pid
+# 呼び出したスレッドのシェルも端末の名前を含むので、このスクリプトと、その祖先と子孫は数えない。
+# psがPythonより先に一覧を取ると、Python自身は一覧にないので、スクリプトのシェルのPIDを渡してもらう。
+mine = {caller, *ancestors(caller)}
+mine |= {pid for pid in procs if caller in ancestors(pid)}
+pattern = re.compile(re.escape(name) + r"(?![0-9])|" + re.escape(udid))
+agent = re.compile(r"/claude-code/.*/MacOS/claude ")
+app = re.compile(r"^/Applications/Claude\.app/Contents/MacOS/Claude\b")
+booted = re.compile(r"^launchd_sim ")
+found = []
+for pid, (_, command) in procs.items():
+    if pid in mine or not pattern.search(command):
+        continue
+    # 起動している端末の中のプロセス（launchd_simと、その子のアプリなど）も、パスにUDIDを含むが、スレッドの操作ではない。
+    if booted.search(command) or any(booted.search(procs[a][1]) for a in ancestors(pid)):
+        continue
+    owner = None
+    for a in ancestors(pid):
+        if agent.search(procs[a][1]):
+            owner = a; break
+        if app.search(procs[a][1]):
+            owner = "app"; break
+    # Claudeのアプリ本体が直接起動したもの（シミュレーターのパネルが画面の向きを読むlog streamなど）は、スレッドの操作ではない。
+    if owner == "app":
+        continue
+    where = "スレッドの外（ターミナルなど）"
+    if owner is not None:
+        out = subprocess.run(["lsof", "-a", "-p", str(owner), "-d", "cwd", "-Fn"], capture_output=True, text=True).stdout
+        where = next((l[1:] for l in out.splitlines() if l.startswith("n")), "不明")
+    found.append(f"{pid} {where}: {command[:160]}")
+if found:
+    print(f"使っている処理がある: {name}")
+    print("\n".join(found))
+else:
+    print(f"使っている処理はない: {name}")
+' "$name" "$udid" "$$"
+}
+
 command_drag() {
     [ $# -eq 4 ] || fail "使い方: Tools/sim.sh drag <x1> <y1> <x2> <y2>"
     /usr/bin/python3 -I -c '
@@ -223,7 +290,7 @@ print(json.dumps(points, separators=(",", ":")))
 ' "$@"
 }
 
-[ $# -ge 2 ] || fail "使い方: Tools/sim.sh shot|dump|reset '<端末>' [オプション]、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
+[ $# -ge 2 ] || fail "使い方: Tools/sim.sh shot|dump|reset|busy '<端末>' [オプション]、Tools/sim.sh drag <x1> <y1> <x2> <y2>"
 subcommand=$1
 shift
 case $subcommand in
@@ -231,5 +298,6 @@ case $subcommand in
     dump) command_dump "$@" ;;
     drag) command_drag "$@" ;;
     reset) command_reset "$@" ;;
+    busy) command_busy "$@" ;;
     *) fail "知らない操作: $subcommand" ;;
 esac
