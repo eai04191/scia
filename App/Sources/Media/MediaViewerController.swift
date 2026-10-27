@@ -1360,7 +1360,15 @@ extension MediaViewerController {
                 self?.setVisibility(clamped)
             }
         }
-        let driver = SpringDriver(spring: SpringCurve(duration: timing.openDuration, bounce: 0), source: frameSource, update: update) { [weak self] in
+        // 開いた直後は、キーボードの入力を受ける準備や、Live Textを使えるかの初めての確認で、メインスレッドが数十ミリ秒止まることがある。
+        // 止まった分を次のフレームでまとめて進めると、開き始めに複製が一度に大きく進んで見えるため、1フレームで進める時間に上限を付ける。
+        // 止まった分だけ開き終わりが遅れるが、開く動きはほかの動きと時刻を合わせていない（受け渡しも進み具合で決める）ため、遅れても崩れない。
+        let driver = SpringDriver(
+            spring: SpringCurve(duration: timing.openDuration, bounce: 0),
+            source: frameSource,
+            longestElapsed: FrameTicker.defaultLongestElapsed,
+            update: update
+        ) { [weak self] in
             self?.finishOpen()
         }
         motion = .opening(driver)
