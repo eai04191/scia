@@ -101,13 +101,22 @@ struct URLSessionTransportTests {
         defer { server.stop() }
         let folder = try Self.makeDownloadFolder()
         let started = Gate()
+        let settled = Gate()
 
         let download = Task {
-            try await URLSessionTransport(downloadDirectory: folder).download(URLRequest(url: server.url), limit: 1_024 * 1_024) { fraction in
-                if fraction > 0 { started.open() }
+            // 進み具合が届く前に終わったら、届くのを待ち続けずに、下で落とす。
+            defer { settled.open() }
+            return try await URLSessionTransport(downloadDirectory: folder).download(URLRequest(url: server.url), limit: 1_024 * 1_024) { fraction in
+                guard fraction > 0 else { return }
+                started.open()
+                settled.open()
             }
         }
-        try await started.wait()
+        try await settled.wait()
+        guard started.isOpen else {
+            Issue.record("進み具合が届く前にダウンロードが終わりました: \(await download.result)")
+            return
+        }
         download.cancel()
 
         await #expect(throws: (any Error).self) { _ = try await download.value }
