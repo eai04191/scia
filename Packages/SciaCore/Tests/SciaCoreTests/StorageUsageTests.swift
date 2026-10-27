@@ -173,6 +173,37 @@ struct StorageUsageTests {
         #expect(breakdown.dataBytes == size("Container") + size("Shared"))
     }
 
+    /// 中を読めないフォルダー（実機のアプリ内のSafariのデータ）は、0ではなく測れないものとし、合計にも入れない。消すのは公開APIで行えるので、消せるものとして扱う。
+    @Test func unreadableSafariDataIsUnmeasured() throws {
+        let safari = root.appending(path: "Container/SystemData/com.apple.SafariViewService")
+        defer {
+            try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: safari.path(percentEncoded: false))
+            try? FileManager.default.removeItem(at: root)
+        }
+        try write("Container/SystemData/com.apple.SafariViewService/Library/w", size: 6_000)
+        try write("Container/Library/Caches/MediaFiles/a.jpg", size: 20_000)
+        try FileManager.default.setAttributes([.posixPermissions: 0o000], ofItemAtPath: safari.path(percentEncoded: false))
+        let locations = StorageLocations(
+            container: root.appending(path: "Container"), mediaFiles: root.appending(path: "Container/Library/Caches/MediaFiles"), temporary: root.appending(path: "tmp"),
+            discomfortReports: root.appending(path: "d"), preferences: root.appending(path: "p"), networkCache: [], inAppSafari: safari, sharedContainer: nil, appBundle: root.appending(path: "a")
+        )
+        let breakdown = StorageBreakdown.measure(locations, launchDate: nil)
+        #expect(breakdown.item(.inAppSafari) == .init(category: .inAppSafari, bytes: nil, removableBytes: nil))
+        #expect(breakdown.hasUnmeasuredItems)
+        #expect(breakdown.dataBytes == StorageUsage.allocatedSize(of: root.appending(path: "Container/Library/Caches/MediaFiles")))
+    }
+
+    /// まだ作られていないフォルダーは、読めないのではなく何もないので0とする。
+    @Test func missingSafariDataIsZero() {
+        let locations = StorageLocations(
+            container: root, mediaFiles: root.appending(path: "m"), temporary: root.appending(path: "tmp"),
+            discomfortReports: root.appending(path: "d"), preferences: root.appending(path: "p"), networkCache: [], inAppSafari: root.appending(path: "s"), sharedContainer: nil, appBundle: root.appending(path: "a")
+        )
+        let breakdown = StorageBreakdown.measure(locations, launchDate: nil)
+        #expect(breakdown.item(.inAppSafari) == .init(category: .inAppSafari, bytes: 0, removableBytes: 0))
+        #expect(!breakdown.hasUnmeasuredItems)
+    }
+
     /// 起動の日時が分からないときは、一時ファイルを消してよいものとして数えない。
     @Test func unknownLaunchDateKeepsTemporaryFiles() throws {
         defer { try? FileManager.default.removeItem(at: root) }

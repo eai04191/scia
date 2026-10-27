@@ -21,11 +21,12 @@ public struct StorageBreakdown: Sendable, Equatable {
 
     public struct Item: Sendable, Equatable {
         public let category: Category
-        public let bytes: Int64
-        /// そのうち、いま消してよい大きさ。
-        public let removableBytes: Int64
+        /// 大きさ。アプリから中を読めず測れないときはnil。
+        public let bytes: Int64?
+        /// そのうち、いま消してよい大きさ。測れないときはnil。
+        public let removableBytes: Int64?
 
-        public init(category: Category, bytes: Int64, removableBytes: Int64 = 0) {
+        public init(category: Category, bytes: Int64?, removableBytes: Int64? = 0) {
             self.category = category
             self.bytes = bytes
             self.removableBytes = removableBytes
@@ -41,9 +42,14 @@ public struct StorageBreakdown: Sendable, Equatable {
         self.appBytes = appBytes
     }
 
-    /// 書類とデータの合計。
+    /// 書類とデータの合計。測れない項目は入れない。
     public var dataBytes: Int64 {
-        items.reduce(0) { $0 + $1.bytes }
+        items.reduce(0) { $0 + ($1.bytes ?? 0) }
+    }
+
+    /// 測れない項目がある。合計は、iPhoneの設定の「書類とデータ」より小さくなる。
+    public var hasUnmeasuredItems: Bool {
+        items.contains { $0.bytes == nil }
     }
 
     public func item(_ category: Category) -> Item? {
@@ -91,7 +97,9 @@ extension StorageBreakdown {
         let leftovers = launchDate.map { StorageUsage.allocatedSize(in: locations.temporary, addedBefore: $0) } ?? 0
         let reports = StorageUsage.allocatedSize(of: locations.discomfortReports)
         let settings = StorageUsage.allocatedSize(of: locations.preferences)
-        let safari = StorageUsage.allocatedSize(of: locations.inAppSafari)
+        // 実機では、アプリ内のSafariのデータはSafariのサービスの持ち物で、アプリからは中を読めない（iOS 27のiPhone SE 3で確かめた）。
+        // 0と出すと、何もないように見えて消すボタンも押せなくなるため、測れないものとして出す。
+        let safari = StorageUsage.allocatedSizeIfReadable(of: locations.inAppSafari)
         let networkCache = locations.networkCache.map { ($0, StorageUsage.allocatedSize(of: $0)) }
         let networkCacheBytes = networkCache.reduce(0) { $0 + $1.1 }
         // 残りは、コンテナの合計から、コンテナの中にある項目を引いて出す。Macでは一時ファイルがコンテナの外にあるため、中にあるかを確かめてから引く。
@@ -100,7 +108,7 @@ extension StorageBreakdown {
             (locations.temporary, temporary),
             (locations.discomfortReports, reports),
             (locations.preferences, settings),
-            (locations.inAppSafari, safari),
+            (locations.inAppSafari, safari ?? 0),
         ] + networkCache
         let counted = inside.filter { isInside($0.0, locations.container) }.reduce(0) { $0 + $1.1 }
         let other = max(0, StorageUsage.allocatedSize(of: locations.container) - counted)

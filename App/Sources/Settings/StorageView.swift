@@ -45,11 +45,16 @@ struct StorageView: View {
                 } header: {
                     Text("書類とデータ")
                 } footer: {
-                    Text("メディアのキャッシュ、通信のキャッシュ、一時ファイルは、iCloudのバックアップに入りません。違和感レポートは、ファイルアプリの「このiPhone内」の「Scia」から取り出せます。")
+                    VStack(alignment: .leading, spacing: 8) {
+                        if breakdown.hasUnmeasuredItems {
+                            Text("「不明」の項目は、アプリから大きさを測れないため、合計に入っていません。iPhoneの設定の「書類とデータ」には入るため、そちらのほうが大きくなります。")
+                        }
+                        Text("メディアのキャッシュ、通信のキャッシュ、一時ファイルは、iCloudのバックアップに入りません。違和感レポートは、ファイルアプリの「このiPhone内」の「Scia」から取り出せます。")
+                    }
                 }
                 Section {
                     ForEach(Self.removableCategories, id: \.self) { category in
-                        removeButton(category, bytes: breakdown.item(category)?.removableBytes ?? 0)
+                        removeButton(category, bytes: breakdown.item(category).map(\.removableBytes) ?? 0)
                     }
                 } footer: {
                     VStack(alignment: .leading, spacing: 8) {
@@ -90,7 +95,8 @@ struct StorageView: View {
         }
     }
 
-    private func removeButton(_ category: StorageBreakdown.Category, bytes: Int64) -> some View {
+    /// `bytes`がnilなら、測れないだけで消せるものがあるかもしれないので、押せるままにする。
+    private func removeButton(_ category: StorageBreakdown.Category, bytes: Int64?) -> some View {
         Button {
             if Self.confirmationMessage(for: category) != nil {
                 confirming = category
@@ -148,9 +154,9 @@ struct StorageView: View {
         }
     }
 
-    /// iPhoneの設定と同じく、1000バイトを1KBとして、大きさに合った単位で書く。
-    static func text(_ bytes: Int64) -> String {
-        bytes.formatted(.byteCount(style: .file))
+    /// iPhoneの設定と同じく、1000バイトを1KBとして、大きさに合った単位で書く。測れないときは「不明」。
+    static func text(_ bytes: Int64?) -> String {
+        bytes?.formatted(.byteCount(style: .file)) ?? "不明"
     }
 }
 

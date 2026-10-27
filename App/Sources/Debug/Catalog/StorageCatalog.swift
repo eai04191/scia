@@ -3,7 +3,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 設定のストレージの画面。ファイルを測ったり消したりせずに、測っている途中、消している途中、消せなかったとき、GBの大きさを並べる。消すを押しても何も消さない。
+/// 設定のストレージの画面。ファイルを測ったり消したりせずに、測っている途中、消している途中、消せなかったとき、測れない項目があるとき、GBの大きさを並べる。消すを押しても何も消さない。
 enum StorageCatalog {
     private struct Failure: LocalizedError {
         var errorDescription: String? { "ファイルを消す権限がありません。" }
@@ -16,6 +16,7 @@ enum StorageCatalog {
             state("消している途中（一時ファイル）", removing: .temporaryFiles),
             state("消せなかった", removeError: ErrorPresentation(Failure()).text),
             state("消せるものがない", breakdown: empty),
+            state("測れない項目がある（実機のアプリ内のSafari）", breakdown: unmeasured),
             state("GBの大きさ", breakdown: large),
         ]
     }
@@ -37,6 +38,11 @@ enum StorageCatalog {
     private static let empty = StorageBreakdown(
         items: StorageBreakdown.Category.allCases.map { .init(category: $0, bytes: 0) },
         appBytes: 88_200_000
+    )
+
+    private static let unmeasured = StorageBreakdown(
+        items: small.items.map { $0.category == .inAppSafari ? .init(category: .inAppSafari, bytes: nil, removableBytes: nil) : $0 },
+        appBytes: small.appBytes
     )
 
     private static let large = StorageBreakdown(

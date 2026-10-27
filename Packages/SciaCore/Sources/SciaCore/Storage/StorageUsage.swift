@@ -11,6 +11,19 @@ public enum StorageUsage {
         total(files(under: url))
     }
 
+    /// `allocatedSize(of:)`と同じだが、`url`がフォルダーで、権限がなく中を読めないときはnil。なければ0。
+    /// 読めない中身は列挙で黙って飛ばされ、0と区別できないため、先に中を読めるかを確かめる。
+    public static func allocatedSizeIfReadable(of url: URL) -> Int64? {
+        do {
+            _ = try FileManager.default.contentsOfDirectory(atPath: url.path(percentEncoded: false))
+        } catch CocoaError.fileReadNoPermission {
+            return nil
+        } catch {
+            // ないか、フォルダーではない。どちらも`allocatedSize(of:)`で測れる。
+        }
+        return allocatedSize(of: url)
+    }
+
     /// `directory`の下で、`date`より前に置いたファイルの大きさの合計（バイト）。
     public static func allocatedSize(in directory: URL, addedBefore date: Date) -> Int64 {
         total(files(under: directory).filter { $0.added < date })
