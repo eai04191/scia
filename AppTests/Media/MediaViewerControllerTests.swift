@@ -1323,6 +1323,54 @@ struct MediaViewerControllerTests {
         #expect(abs(closed.unrotatedFrame.width - source.width) < 0.5 && abs(closed.unrotatedFrame.midX - source.midX) < 0.5 && abs(closed.unrotatedFrame.midY - source.midY) < 0.5, "閉じ終わりの枠が起点と違います: \(closed.unrotatedFrame) \(source)")
     }
 
+    /// 開く途中でつかんだら、ボタン類はつかんだときの濃さから薄くする。開いている度合いと指の位置から濃さを決め直すと、
+    /// 半分ほど開いたところでつかんだ瞬間に、ボタン類が一度に消える。
+    @Test func grabbingWhileOpeningKeepsChromeAlpha() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let tile = MediaTileView(store: .offline)
+        tile.frame = CGRect(x: 20, y: 200, width: 160, height: 90)
+        harness.viewController.view.addSubview(tile)
+        let attachment = MediaAttachment(
+            id: "1",
+            type: .image,
+            url: nil,
+            previewUrl: nil,
+            description: "説明",
+            meta: MediaAttachment.Meta(original: MediaAttachment.Size(width: 1_600, height: 900)),
+            blurhash: "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
+        )
+        tile.apply(attachment, hiddenCount: 0, isCovered: false, policy: .offline)
+        MediaViewerController.present(
+            attachments: [attachment],
+            startIndex: 0,
+            store: .offline,
+            dragToDismiss: drag,
+            timing: timing,
+            from: harness.viewController,
+            sourceTile: { _ in tile },
+            onDismiss: {},
+            frameSource: harness.frames
+        )
+        let viewer = try #require(harness.viewController.presentedViewController as? MediaViewerController)
+        try await waitUntil { viewer.isContentHiddenForTransition }
+        while viewer.chromeAlpha < 0.5 {
+            harness.frames.step()
+        }
+        let before = viewer.chromeAlpha
+        #expect(before < 0.95, "開く途中で止められていません: \(before)")
+
+        viewer.beginDragging(at: CGPoint(x: 100, y: 300))
+        viewer.updateDragging(translation: CGPoint(x: 0, y: 1))
+        #expect(abs(viewer.chromeAlpha - before) < 0.05, "つかんだ瞬間にボタン類の濃さが飛びました: \(before) → \(viewer.chromeAlpha)")
+        viewer.updateDragging(translation: CGPoint(x: 0, y: viewer.view.bounds.height * 0.3))
+        #expect(viewer.chromeAlpha == 0, "背景が半分透けてもボタン類が残っています: \(viewer.chromeAlpha)")
+
+        viewer.close()
+        try await waitUntil { harness.viewController.presentedViewController == nil }
+        harness.frames.runUntilStopped()
+    }
+
     /// 起点がほかの添付ファイルを描いていても（一覧で重ねた3枚目の写真が4枚目の起点になるとき）、起点の上に重なっている写真は複製の手前に重ねる。
     /// 画像を使わないことと、重なっているビューを重ねないことは別で、重ねないと戻る画像が手前の写真を覆う。
     @Test func sourceOverlapIsKeptWhenSourceShowsOtherAttachment() async throws {

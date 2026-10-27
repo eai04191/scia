@@ -291,6 +291,11 @@ final class MediaViewerController: UIViewController {
         morph.paperColor
     }
 
+    /// 右上のメニューボタンの濃さ。ボタン類は同じ濃さで出し入れする。
+    var chromeAlpha: CGFloat {
+        menuButton.alpha
+    }
+
     /// 起点の上に重なっているビューの複製を、画像の複製の手前に重ねている。
     var showsSourceOverlap: Bool {
         morphOverlap != nil
@@ -948,20 +953,7 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
         case .began:
             beginDragging(at: recognizer.location(in: view))
         case .changed:
-            guard case .dragging(let start, let visibility) = motion else { return }
-            let scale = dragToDismiss.scale(translation: translation.y, height: height)
-            // 開く途中でつかんだときの回転は、ドラッグの間は変えない。
-            morph.setUnrotatedFrame(Self.scaled(start, by: scale, around: dismissPanAnchor).offsetBy(dx: translation.x, dy: translation.y))
-            morphShadow.follow(morph, alpha: 1)
-            applyBarLayering()
-            let backgroundAlpha = visibility * dragToDismiss.backgroundAlpha(translation: translation.y, height: height)
-            backdrop.alpha = backgroundAlpha
-            // ボタンと説明は、背景が半分透けたところで消えきるようにする。この画面だけのチップは、ボタン類を隠していても残るものがあるため、隠したかによらず薄くする。
-            // アプリ全体のチップは消さず、背景の濃さに合わせて下の画面の位置へ近づける。
-            for chrome in chromeViews {
-                chrome.alpha = isChromeHidden ? 0 : max(backgroundAlpha * 2 - 1, 0)
-            }
-            setNoticePresence(backgroundAlpha, screenAlpha: max(backgroundAlpha * 2 - 1, 0))
+            updateDragging(translation: translation)
         case .ended:
             pageController.view.isUserInteractionEnabled = true
             let velocity = recognizer.velocity(in: view).y
@@ -978,6 +970,28 @@ extension MediaViewerController: UIGestureRecognizerDelegate {
         default:
             break
         }
+    }
+
+    /// 指で動かした分だけ、複製を動かして縮め、背景とボタン類を薄くする。
+    func updateDragging(translation: CGPoint) {
+        guard case .dragging(let start, let visibility, let chromeAlpha) = motion else { return }
+        let height = view.bounds.height
+        let scale = dragToDismiss.scale(translation: translation.y, height: height)
+        // 開く途中でつかんだときの回転は、ドラッグの間は変えない。
+        morph.setUnrotatedFrame(Self.scaled(start, by: scale, around: dismissPanAnchor).offsetBy(dx: translation.x, dy: translation.y))
+        morphShadow.follow(morph, alpha: 1)
+        applyBarLayering()
+        let dragAlpha = dragToDismiss.backgroundAlpha(translation: translation.y, height: height)
+        let backgroundAlpha = visibility * dragAlpha
+        backdrop.alpha = backgroundAlpha
+        // ボタンと説明は、背景が半分透けたところで消えきるようにする。この画面だけのチップは、ボタン類を隠していても残るものがあるため、隠したかによらず薄くする。
+        // アプリ全体のチップは消さず、背景の濃さに合わせて下の画面の位置へ近づける。
+        // 開く途中や戻す途中でつかんだときは、つかんだときの濃さから薄くする。背景の濃さから決めると、半分ほど開いたところでつかんだ瞬間に、ボタン類が一度に消える。
+        let fade = max(dragAlpha * 2 - 1, 0)
+        for chrome in chromeViews {
+            chrome.alpha = isChromeHidden ? 0 : chromeAlpha.buttons * fade
+        }
+        setNoticePresence(backgroundAlpha, screenAlpha: chromeAlpha.notices * fade)
     }
 
     /// `rect`を`anchor`を中心に`scale`倍する。押した位置の下に、画像の同じ場所が来るようにするため。
@@ -999,8 +1013,9 @@ extension MediaViewerController {
         /// 複製を隠し、ページの画像を見せている。
         case idle
         case opening(SpringDriver)
-        /// 指に追従している。`start`はつかんだときの複製の枠、`visibility`はそのときの開いている度合い。
-        case dragging(start: CGRect, visibility: CGFloat)
+        /// 指に追従している。`start`はつかんだときの複製の枠、`visibility`はそのときの開いている度合い、
+        /// `chromeAlpha`はそのときのボタン類と、この画面だけのチップの濃さ。
+        case dragging(start: CGRect, visibility: CGFloat, chromeAlpha: (buttons: CGFloat, notices: CGFloat))
         /// 閉じずに離したあと、ビューアの画像の枠へ戻している。
         case settling(UIViewPropertyAnimator)
         case closing
@@ -1344,7 +1359,7 @@ extension MediaViewerController {
     }
 
     /// 開いている途中や戻している途中なら、その場で止めてつかむ。開ききっていれば、ビューアの画像の位置に複製を出してつかむ。
-    private func beginDragging(at location: CGPoint) {
+    func beginDragging(at location: CGPoint) {
         switch motion {
         case .opening(let driver):
             // 止めた時点の見た目のまま残す。
@@ -1361,7 +1376,7 @@ extension MediaViewerController {
         }
         dismissPanAnchor = location
         pageController.view.isUserInteractionEnabled = false
-        motion = .dragging(start: morph.unrotatedFrame, visibility: backdrop.alpha)
+        motion = .dragging(start: morph.unrotatedFrame, visibility: backdrop.alpha, chromeAlpha: (menuButton.alpha, noticeScreenAlpha))
     }
 
     /// 開いている途中や戻している途中に止めた複製をつかむ。
