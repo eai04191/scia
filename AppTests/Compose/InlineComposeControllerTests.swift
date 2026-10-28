@@ -8,13 +8,17 @@ import UIKit
 /// 投稿欄を実際のウィンドウに載せ、開閉や返信先の付け替えで行が崩れないことを確かめる。
 @MainActor
 @Suite(.scratch, .serialized)
-struct InlineComposeControllerTests {
+final class InlineComposeControllerTests {
     private let window: UIWindow
     private let composer: InlineComposeController
     private let settings: AppSettings
     private let tuning = TuningStore(defaults: nil)
     /// ウィンドウの中の動きの時間。実際の時間では進まず、テストが進めた分だけ進む。
     private let clock: LayerClock
+
+    /// Swift Testingは、テストを終えたスイートの値をメインスレッドの外で手放す。持っているウィンドウやビューもそこで手放され、UIKitの解放がメインスレッドの外で走ると、
+    /// 続くテストの描画と競って、解放中のウィンドウへのweak参照や解放済みのビューを触って落ちる。メインスレッドで手放させる。
+    isolated deinit {}
 
     init() throws {
         let scene = try #require(

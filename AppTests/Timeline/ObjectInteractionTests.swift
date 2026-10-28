@@ -4,8 +4,12 @@ import UIKit
 
 /// 対象のタップと長押しを付けた部品で、長押しのメニューを出すときに何を持ち上げるかを確かめる。決まりはdocs/menus.mdの「持ち上げ方」にある。
 @MainActor
-struct ObjectInteractionTests {
+final class ObjectInteractionTests {
     private let window: UIWindow
+
+    /// Swift Testingは、テストを終えたスイートの値をメインスレッドの外で手放す。持っているウィンドウやビューもそこで手放され、UIKitの解放がメインスレッドの外で走ると、
+    /// 続くテストの描画と競って、解放中のウィンドウへのweak参照や解放済みのビューを触って落ちる。メインスレッドで手放させる。
+    isolated deinit {}
 
     init() throws {
         let scene = try #require(
@@ -31,6 +35,7 @@ struct ObjectInteractionTests {
 
     /// アイコンは、押したビューを今の角丸の形のまま持ち上げ、同じ形で戻す。
     @Test func shapeLiftsTheViewWithItsCorners() throws {
+        defer { window.isHidden = true }
         let avatar = UIView(frame: CGRect(x: 20, y: 100, width: 48, height: 48))
         avatar.layer.cornerRadius = 9.6
         window.rootViewController?.view.addSubview(avatar)
@@ -46,6 +51,7 @@ struct ObjectInteractionTests {
 
     /// 文字の行は、一覧の行と同じく持ち上げず、押した位置に置いた見えない目印からメニューだけを出す。
     @Test func noneShowsMenuAtTouchWithoutLifting() throws {
+        defer { window.isHidden = true }
         let header = UILabel(frame: CGRect(x: 60, y: 100, width: 300, height: 20))
         window.rootViewController?.view.addSubview(header)
 

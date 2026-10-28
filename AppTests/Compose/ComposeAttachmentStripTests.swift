@@ -6,9 +6,13 @@ import UIKit
 /// 投稿欄のサムネイルの列を、ドラッグできない人も並べ替えたり外したりできる。
 @MainActor
 @Suite(.serialized)
-struct ComposeAttachmentStripTests {
+final class ComposeAttachmentStripTests {
     private let window: UIWindow
     private let strip = ComposeAttachmentStrip()
+
+    /// Swift Testingは、テストを終えたスイートの値をメインスレッドの外で手放す。持っているウィンドウやビューもそこで手放され、UIKitの解放がメインスレッドの外で走ると、
+    /// 続くテストの描画と競って、解放中のウィンドウへのweak参照や解放済みのビューを触って落ちる。メインスレッドで手放させる。
+    isolated deinit {}
 
     init() throws {
         let scene = try #require(
