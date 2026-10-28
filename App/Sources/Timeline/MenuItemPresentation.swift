@@ -121,6 +121,7 @@ extension UserMenuItem: MenuItemContentProviding {
         case .follow: .own(title: "フォロー", symbolName: "person.badge.plus", note: "フォロー中なら外し、リクエスト中なら取り消します。自分には出ません")
         case .showReblogs: .own(title: "ブーストを表示", symbolName: "arrow.2.squarepath", note: "フォローしている相手でだけ出ます")
         case .notify: .own(title: "投稿を通知", symbolName: "bell", note: "フォローしている相手でだけ出ます")
+        case .note: .own(title: "メモを追加", symbolName: "note.text", note: "自分にしか見えないメモを書きます。メモがあれば編集します。自分には出ません")
         case .mute: .own(title: "ミュート", symbolName: "speaker.slash", note: "期間を選んでミュートします。ミュート中なら解除します")
         case .block: .own(title: "ブロック", symbolName: "hand.raised", note: "ブロック中なら解除します")
         case .report: .own(title: "通報", symbolName: "flag", note: "投稿のメニューから開くと、その人の投稿なら添えます。自分には出ません")
@@ -343,6 +344,8 @@ struct UserMenuActions {
     let reloadRelations: @MainActor ([String]) -> Void
     /// 関係の項目で選んだ変更を送る。取り消しにくい変更は、確かめてから送る。
     let changeRelation: @MainActor (UserRelationChange, UserRelation) -> Void
+    /// 相手のプロフィールに書く、自分にしか見えないメモのシートを開く。
+    let editNote: @MainActor (UserRelation) -> Void
     /// 通報のシートを開く。投稿のメニューから開いたときは、添えられる相手の投稿のIDを渡す。
     let report: @MainActor (_ accountID: String, _ acct: String, _ statusID: String?) -> Void
     /// セッションで読んだアカウント。メンションされたユーザーのように、アイコンのURLが手元にない相手のアイコンを出すのに使う。
@@ -361,7 +364,7 @@ struct UserMenuActions {
             return UIAction(title: title ?? item.title, image: item.image) { [weak host] _ in
                 copyHandle(target) { host?.showHandleCopiedNotice() }
             }
-        case .profile, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .follow, .showReblogs, .notify, .mute, .block, .report:
+        case .profile, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .follow, .showReblogs, .notify, .note, .mute, .block, .report:
             return nil
         }
     }

@@ -76,6 +76,16 @@ struct ProfileTextTests {
         #expect(account().profileText(.displayName)?.text == "alice")
     }
 
+    /// メモは書いたままの文字を渡し、ラベルもカスタム絵文字もない。`<`や`:shortcode:`もそのまま残す。
+    @Test func privateNoteIsPlainTextWithoutLabelOrEmojis() {
+        let note = ProfileText.privateNote("前に会った <b>人</b>\n:blobcat: 好き")
+
+        #expect(note.text == "前に会った <b>人</b>\n:blobcat: 好き")
+        #expect(note.label == nil)
+        #expect(note.emojis.isEmpty)
+        #expect(ProfileText.privateNote(" \n").text == nil)
+    }
+
     /// 空白だけの文章では、コピーと翻訳を出さない。
     @Test func whitespaceOnlyTextIsNil() {
         #expect(account(note: "<p> </p>").profileText(.note)?.text == nil)

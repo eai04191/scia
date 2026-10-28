@@ -26,6 +26,11 @@ public struct ProfileText: Equatable, Sendable {
         }
     }
 
+    /// 相手のプロフィールに書いた、自分にしか見えないメモ。サーバーは整形しないので、書いたままの文字を渡す。`:`で囲んだ語も絵文字として読まない。
+    public static func privateNote(_ note: String) -> ProfileText {
+        ProfileText(text: .plain(note, emojis: []), emojiSources: [])
+    }
+
     private static func plain(_ text: RichText) -> String? {
         let plain = text.plainText
         return plain.allSatisfy(\.isWhitespace) ? nil : plain

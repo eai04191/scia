@@ -143,7 +143,7 @@ struct ProfileRelationshipActivityTests {
 
 /// 関係の読み込みを門で止める通信。ほかの読み込みは失敗させる。プロフィールの画面は、読めなかった部分をログに残して続ける。
 private final class ProfileTransport: HTTPTransport {
-    static let following = #"[{"id":"2","following":true,"showing_reblogs":true,"notifying":false,"followed_by":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"requested":false}]"#
+    static let following = #"[{"id":"2","following":true,"showing_reblogs":true,"notifying":false,"followed_by":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"requested":false,"note":""}]"#
 
     let relationships = Gate()
     private let relationshipsBody: String

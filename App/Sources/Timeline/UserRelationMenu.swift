@@ -1,11 +1,11 @@
 import SciaCore
 import UIKit
 
-/// ユーザーのメニューの、相手との関係で中身が変わる項目（フォロー、フォローの設定、ミュート、ブロック）。決まりはdocs/menus.mdの「ユーザーのメニュー」にある。
+/// ユーザーのメニューの、相手との関係で中身が変わる項目（フォロー、フォローの設定、メモ、ミュート、ブロック）。決まりはdocs/menus.mdの「ユーザーのメニュー」にある。
 extension UserMenuItem {
     var isRelation: Bool {
         switch self {
-        case .follow, .showReblogs, .notify, .mute, .block, .report: true
+        case .follow, .showReblogs, .notify, .note, .mute, .block, .report: true
         case .profile, .mention, .copyHandle, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari: false
         }
     }
@@ -136,6 +136,8 @@ extension UserMenuActions {
         func elements(_ relation: UserRelation) -> [UIMenuElement] {
             Self.relationElements(item, relationship: relation.relationship) { change in
                 changeRelation(change, relation)
+            } editNote: {
+                editNote(relation)
             } report: {
                 report(relation.accountID, relation.acct, reportableStatusID)
             }
@@ -212,7 +214,13 @@ extension UserMenuActions {
     /// 関係に合わせた項目。出さないときは空。
     /// ブロックしているか、されているときは、フォローもフォローの設定もできないため出さない。フォローの設定は、フォロー中かリクエスト中の相手にだけ出す。
     @MainActor
-    static func relationElements(_ item: UserMenuItem, relationship: Relationship, perform: @escaping @MainActor (UserRelationChange) -> Void, report: @escaping @MainActor () -> Void) -> [UIMenuElement] {
+    static func relationElements(
+        _ item: UserMenuItem,
+        relationship: Relationship,
+        perform: @escaping @MainActor (UserRelationChange) -> Void,
+        editNote: @escaping @MainActor () -> Void,
+        report: @escaping @MainActor () -> Void
+    ) -> [UIMenuElement] {
         func action(_ title: String, _ symbolName: String?, attributes: UIMenuElement.Attributes = [], state: UIMenuElement.State = .off, _ change: UserRelationChange) -> UIAction {
             UIAction(title: title, image: symbolName.flatMap { UIImage(systemName: $0) }, attributes: attributes, state: state) { _ in perform(change) }
         }
@@ -230,6 +238,9 @@ extension UserMenuActions {
         case .notify:
             guard !blocked, followsOrRequests else { return [] }
             return [action(item.title, "bell", state: relationship.notifying ? .on : .off, .notify(!relationship.notifying))]
+        case .note:
+            // ブロックしていてもメモは書ける。
+            return [UIAction(title: relationship.note.isEmpty ? item.title : "メモを編集", image: item.image) { _ in editNote() }]
         case .mute:
             if relationship.muting { return [action("ミュートを解除", "speaker.wave.2", .unmute)] }
             return [UIMenu(title: item.title, image: item.image, children: UserRelationChange.muteDurations.map { choice in

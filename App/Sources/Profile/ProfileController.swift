@@ -111,6 +111,7 @@ final class ProfileController {
         header.onToggleFollow = { [weak self] source in self?.confirmToggleFollow(from: source) }
         header.onRetryRelationship = { [weak self] in self?.reloadRelationship() }
         header.onEditProfile = { [weak self] in self?.onEditProfile?() }
+        header.onEditPrivateNote = { [weak self] in self?.editPrivateNote() }
         header.onOpenCountList = { [weak self] list in
             guard let self else { return }
             let accountID = store.account.id
@@ -128,6 +129,10 @@ final class ProfileController {
         header.menuForText = { [weak self] part in
             guard let self, let text = store.account.profileText(part) else { return nil }
             return self.viewController?.profileTextMenu(for: text)
+        }
+        header.menuForPrivateNote = { [weak self] in
+            guard let self, let note = store.relationship?.note, !note.isEmpty else { return nil }
+            return self.viewController?.privateNoteMenu(for: note) { [weak self] in self?.editPrivateNote() }
         }
         header.textMenuLifecycle = MenuLifecycle(
             willShow: { [weak viewController] in viewController?.linkMenuWillShow() },
@@ -331,7 +336,8 @@ final class ProfileController {
             animatesCustomEmojis: settings.animatesCustomEmojis,
             glyphLanguage: settings.glyphLanguageIdentifier(),
             // ローカルのアカウントのacctには@以降が付かない。
-            isRemote: account.acct.contains("@")
+            isRemote: account.acct.contains("@"),
+            privateNote: store.relationship?.note ?? ""
         ))
         viewController?.headerDidChangeSize()
     }
@@ -448,6 +454,13 @@ final class ProfileController {
         guard isRelationshipSlow else { return }
         isRelationshipSlow = false
         afterTransition { $0.updateHeader() }
+    }
+
+    /// 自分にしか見えないメモの欄を押したら、ユーザーのメニューの「メモを編集」と同じシートを開く。
+    private func editPrivateNote() {
+        guard let relationship = store.relationship else { return }
+        let account = store.account
+        viewController?.userMenuActions?.editNote(UserRelation(accountID: account.id, acct: account.acct, relationship: relationship))
     }
 
     /// フォローのボタンの場所の再試行。失敗したら、読めなかった表示のまま残す。

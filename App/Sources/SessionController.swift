@@ -1519,6 +1519,9 @@ final class SessionController {
             changeRelation: { [weak self] change, relation in
                 self?.confirmChanging(change, of: relation)
             },
+            editNote: { [weak self] relation in
+                self?.presentNoteEditor(for: relation)
+            },
             report: { [weak self] accountID, acct, statusID in
                 self?.presentReport(accountID: accountID, acct: acct, statusID: statusID)
             },
@@ -1650,6 +1653,24 @@ final class SessionController {
             break
         }
         notices.showTransient(Notice(id: "user.relationChanged", kind: .success, title: change.doneTitle(relationship)), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+    }
+
+    /// 相手のプロフィールに書く、自分にしか見えないメモのシートを開く。保存したら、シートを閉じて知らせ、開いているその人のプロフィールにも反映する。
+    private func presentNoteEditor(for relation: UserRelation) {
+        let client = client
+        let editor = AccountNoteEditor(accountID: relation.accountID, note: relation.relationship.note) { id, comment in
+            try await client.setNote(id, comment: comment)
+        }
+        logger.info("account note sheet opened (empty: \(relation.relationship.note.isEmpty, privacy: .public))")
+        let controller = AccountNoteViewController(editor: editor, acct: relation.acct, tasks: tasks.child())
+        controller.onSaved = { [weak self] relationship in
+            guard let self else { return }
+            profiles.apply(relationship, reloadsAccount: false)
+            let title = relationship.note.isEmpty ? "メモを消しました" : "メモを保存しました"
+            notices.showTransient(Notice(id: "user.noteSaved", kind: .success, title: title), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+        }
+        controller.onError = { [weak self] error, title in self?.handle(error, title: title) }
+        topViewController.present(controller.wrappedInNavigation(), animated: true)
     }
 
     /// 通報のシートを開く。送れたら、シートを閉じて知らせる。

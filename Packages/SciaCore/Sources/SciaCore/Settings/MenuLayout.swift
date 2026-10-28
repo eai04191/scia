@@ -286,6 +286,8 @@ public enum UserMenuItem: String, MenuItemKind {
     case showReblogs
     /// フォローしている相手が投稿したら通知するかを切り替える。
     case notify
+    /// 相手のプロフィールに、自分にしか見えないメモを書くシートを開く。メモがあれば編集する。メモは関係と一緒に返る。
+    case note
     /// ミュートしていなければ、期間を選んでミュートする。ミュート中なら解除する。
     case mute
     /// ブロックしていなければブロックし、ブロック中なら解除する。
@@ -296,6 +298,7 @@ public enum UserMenuItem: String, MenuItemKind {
     public static let defaultLayout = MenuLayout<UserMenuItem>(defaultElements: [
         .item(.profile, isVisible: true),
         .item(.mention, isVisible: true),
+        .item(.note, isVisible: true),
         .separator,
         .item(.follow, isVisible: true),
         .separator,
@@ -317,7 +320,7 @@ public enum UserMenuItem: String, MenuItemKind {
     /// 相手との関係で中身が変わる項目。通報は関係で変わらず、自分に出さないかはIDで決まるため含めない。
     public var dependsOnRelationship: Bool {
         switch self {
-        case .follow, .showReblogs, .notify, .mute, .block: true
+        case .follow, .showReblogs, .notify, .note, .mute, .block: true
         case .profile, .mention, .copyHandle, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .report: false
         }
     }

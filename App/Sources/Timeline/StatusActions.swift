@@ -638,7 +638,7 @@ extension TimelineViewController {
             return userMenuActions?.action(item, target: .account(id: user.id, acct: user.acct), title: inSubmenu ? nil : "@\(user.acct)にメンション", notifying: self)
         case .copyHandle:
             return userMenuActions?.action(item, target: .account(id: user.id, acct: user.acct), title: inSubmenu ? nil : "@\(user.acct)のハンドルをコピー", notifying: self)
-        case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .follow, .showReblogs, .notify, .mute, .block, .report:
+        case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .follow, .showReblogs, .notify, .note, .mute, .block, .report:
             // 共通の項目は、上で中身から組んだ。
             return nil
         }

@@ -34,7 +34,8 @@ struct ProfileHeaderFollowRevealTests {
             animatesAvatar: false,
             animatesCustomEmojis: false,
             glyphLanguage: "ja",
-            isRemote: false
+            isRemote: false,
+            privateNote: ""
         )
     }
 

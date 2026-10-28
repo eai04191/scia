@@ -8,7 +8,7 @@ import UIKit
 struct UserRelationMenuTests {
     /// 項目の名前。押せないものは`(押せない)`、チェックの付いたものは`✓`、取り消せない操作は`!`を付け、サブメニューは`名前[中身]`で表す。
     private func describe(_ item: UserMenuItem, _ relationship: Relationship) -> [String] {
-        UserMenuActions.relationElements(item, relationship: relationship, perform: { _ in }, report: {}).map(describe)
+        UserMenuActions.relationElements(item, relationship: relationship, perform: { _ in }, editNote: {}, report: {}).map(describe)
     }
 
     private func describe(_ element: UIMenuElement) -> String {
@@ -43,6 +43,18 @@ struct UserRelationMenuTests {
         #expect(describe(.mute, Relationship(id: "2", muting: true)) == ["ミュートを解除"])
         #expect(describe(.block, Relationship(id: "2")) == ["ブロック!"])
         #expect(describe(.block, Relationship(id: "2", blocking: true)) == ["ブロックを解除"])
+    }
+
+    /// メモは、なければ「メモを追加」、あれば「メモを編集」にする。ブロックしていても書ける。押すとシートを開く。
+    @Test func noteItemAddsOrEditsNote() {
+        #expect(describe(.note, Relationship(id: "2")) == ["メモを追加"])
+        #expect(describe(.note, Relationship(id: "2", note: "前に会った")) == ["メモを編集"])
+        #expect(describe(.note, Relationship(id: "2", blocking: true)) == ["メモを追加"])
+
+        var opened = 0
+        let elements = UserMenuActions.relationElements(.note, relationship: Relationship(id: "2"), perform: { _ in }, editNote: { opened += 1 }, report: {})
+        (elements.first as? UIAction)?.performWithSender(nil, target: nil)
+        #expect(opened == 1)
     }
 
     /// 通報は関係によらず出す。
@@ -85,7 +97,8 @@ struct UserRelationMenuTests {
         let reportOnly = MenuLayout<UserMenuItem>(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .profile || $0 == .report) } + [.more]).groups
         let reportFirst = MenuLayout<UserMenuItem>(elements: [.item(.report, isVisible: true)] + UserMenuItem.allCases.filter { $0 != .report }.map { .item($0, isVisible: true) } + [.more]).groups
 
-        #expect(UserMenuItem.defaultLayout.groups.relationFailureSlots(waitsForReport: false) == RelationFailureSlots(relation: .follow, resolve: .follow))
+        // 既定の並びでは、メモがフォローより先に出る。
+        #expect(UserMenuItem.defaultLayout.groups.relationFailureSlots(waitsForReport: false) == RelationFailureSlots(relation: .note, resolve: .note))
         #expect(reportOnly.relationFailureSlots(waitsForReport: false) == RelationFailureSlots(relation: nil, resolve: nil))
         #expect(reportOnly.relationFailureSlots(waitsForReport: true) == RelationFailureSlots(relation: nil, resolve: .report))
         #expect(reportFirst.relationFailureSlots(waitsForReport: true) == RelationFailureSlots(relation: .follow, resolve: .report))

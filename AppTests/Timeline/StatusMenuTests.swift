@@ -50,7 +50,7 @@ struct StatusMenuTests {
         UserMenuActions(
             mention: { _ in }, copyHandle: { _, _ in },
             resolveTarget: { _ in throw CancellationError() }, loadRelation: { _, _ in nil }, knownRelation: known, reloadRelations: reload,
-            changeRelation: { _, _ in }, report: { _, _, _ in }, accounts: accounts
+            changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, accounts: accounts
         )
     }
 
@@ -172,14 +172,14 @@ struct StatusMenuTests {
         #expect(outline.last == ["@aliceのプロフィール"])
     }
 
-    /// 既定のユーザーのメニューは、開く・書く操作、フォロー、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
+    /// 既定のユーザーのメニューは、開く・書く操作（メモを含む）、フォロー、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
     /// 関係を覚えていない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() throws {
         let actions = userMenuActions()
 
         let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
 
-        #expect(outline.last == ["@alice[プロフィール,メンション,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報]]"])
+        #expect(outline.last == ["@alice[プロフィール,メンション,…,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報]]"])
     }
 
     /// メンション、ハンドルをコピー、関係の項目を組むものを渡されていない画面では、これらを出さない。
@@ -210,7 +210,7 @@ struct StatusMenuTests {
 
         let user = try #require(try outline(menu(for: .status(status(url: nil)), userMenuActions: actions)).last?.first)
 
-        #expect(user.hasPrefix("@alice[プロフィール,メンション,フォローを外す,"))
+        #expect(user.hasPrefix("@alice[プロフィール,メンション,メモを追加,フォローを外す,"))
         #expect(!user.contains("…"))
     }
 

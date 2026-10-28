@@ -16,6 +16,8 @@ public struct Relationship: Codable, Hashable, Sendable {
     public let muting: Bool
     /// ミュートで、相手からの通知も隠している。
     public let mutingNotifications: Bool
+    /// 相手のプロフィールに書いた、自分にしか見えないメモ。書いていなければ空。サーバーは整形せず、書いたままの平文で返す。
+    public let note: String
 
     public init(
         id: String,
@@ -27,7 +29,8 @@ public struct Relationship: Codable, Hashable, Sendable {
         blocking: Bool = false,
         blockedBy: Bool = false,
         muting: Bool = false,
-        mutingNotifications: Bool = false
+        mutingNotifications: Bool = false,
+        note: String = ""
     ) {
         self.id = id
         self.following = following
@@ -39,5 +42,6 @@ public struct Relationship: Codable, Hashable, Sendable {
         self.blockedBy = blockedBy
         self.muting = muting
         self.mutingNotifications = mutingNotifications
+        self.note = note
     }
 }

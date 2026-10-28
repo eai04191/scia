@@ -23,11 +23,18 @@ final class ProfileHeaderView: UIView {
         let glyphLanguage: String
         /// 自分のサーバーのアカウントではない。投稿や数が実際と合わないことを知らせる。
         let isRemote: Bool
+        /// 相手のプロフィールに書いた、自分にしか見えないメモ。空なら欄を出さない。
+        let privateNote: String
     }
 
     var onToggleFollow: ((UIView) -> Void)?
     /// 自分のプロフィールで、フォローのボタンの場所に出す「プロフィールを編集」を押した。
     var onEditProfile: (() -> Void)?
+    /// 自分にしか見えないメモの欄を押した。
+    var onEditPrivateNote: (() -> Void)? {
+        get { privateNoteView.onTap }
+        set { privateNoteView.onTap = newValue }
+    }
     /// フォローかフォロワーの数が押されたときに、どちらの一覧かを渡して呼ぶ。
     var onOpenCountList: ((ProfileCountList) -> Void)?
     /// フォローの関係を読めなかったときに、フォローのボタンの場所に出す再試行が押された。
@@ -48,6 +55,10 @@ final class ProfileHeaderView: UIView {
     var textMenuLifecycle = MenuLifecycle()
     /// 表示名と自己紹介の、文章のメニューの長押し。決まりはdocs/menus.mdの「プロフィールの文章のメニュー」にある。
     private var textMenuInteractions: [ProfileTextMenuInteraction] = []
+    /// 自分にしか見えないメモの欄を長押ししたときのメニュー。nilを返せばメニューを出さない。
+    var menuForPrivateNote: (() -> UIMenu?)?
+    /// メモの欄の、文章のメニューの長押し。
+    private var privateNoteMenuInteraction: ProfileTextMenuInteraction?
     /// 補足情報の行の、文章のメニューの長押し。行を作り直すたびに付け直す。
     private var fieldMenuInteractions: [ProfileTextMenuInteraction] = []
     /// 関係が届いて、フォローのボタンの場所取りから本物の文字に変わるときのフェードの時間。0なら切り替える。
@@ -159,6 +170,9 @@ final class ProfileHeaderView: UIView {
     /// ヘッダー画像の上なら場所を取らない。添付ファイルのALTのバッジと同じ見た目にする。
     private let followedByBadge = PaddedLabel()
     private let noteLabel = LinkLabel()
+    private let privateNoteView = ProfilePrivateNoteView()
+    /// 自分にしか見えないメモを余白付きで包んだもの。メモがなければ、余白ごと隠す。
+    private var privateNoteContainer: UIView?
     private let fieldsStack = UIStackView()
     private let remoteStack = UIStackView()
     private let remoteLabel = UILabel()
@@ -258,6 +272,13 @@ final class ProfileHeaderView: UIView {
             textMenuInteraction(on: nameLabel, for: .displayName),
             textMenuInteraction(on: noteView, for: .note),
         ]
+        // メモの欄は角の丸い面なので、余白を足さず、欄の形のまま持ち上げる。
+        privateNoteMenuInteraction = ProfileTextMenuInteraction(
+            on: privateNoteView,
+            menu: { [weak self] in self?.menuForPrivateNote?() },
+            previewPath: { UIBezierPath(roundedRect: $0, cornerRadius: ProfilePrivateNoteView.cornerRadius) },
+            lifecycle: textMenuLifecycleForwarding()
+        )
         for (view, label) in [(bannerView, "ヘッダー画像"), (avatarView, "アイコン")] as [(UIView, String)] {
             view.isUserInteractionEnabled = true
             view.isAccessibilityElement = true
@@ -388,6 +409,8 @@ final class ProfileHeaderView: UIView {
 
         // 自己紹介はカードにせず、名前の下にそのまま置く。
         let note = inset([noteView])
+        // 自分にしか見えないメモは、自己紹介の下に置く。
+        let privateNote = inset([privateNoteView])
         // 補足情報は、数とほかのサーバーのアカウントであることと一緒に、角の丸いカードにまとめる。
         // 補足情報と数の間にも、補足情報の行どうしと同じ区切り線を引く。
         fieldsDivider.backgroundColor = .separator
@@ -409,10 +432,11 @@ final class ProfileHeaderView: UIView {
         pinnedShelf.isHidden = true
         let tabs = inset([tabRow])
         let contentStack = UIStackView()
-        for view in [identity, note, about, pinnedShelf, tabs] as [UIView] {
+        for view in [identity, note, privateNote, about, pinnedShelf, tabs] as [UIView] {
             contentStack.addArrangedSubview(view)
         }
         noteContainer = note
+        privateNoteContainer = privateNote
         // 固定された投稿の棚は一覧と一緒に出すので、その下のタブも一緒に出す。上の自己紹介とカードは、棚が出ても動かないので先に出す。
         sections = [tabs]
         applySectionsVisibility()
@@ -420,6 +444,7 @@ final class ProfileHeaderView: UIView {
         contentStack.spacing = 24
         contentStack.setCustomSpacing(12, after: identity)
         contentStack.setCustomSpacing(16, after: note)
+        contentStack.setCustomSpacing(16, after: privateNote)
 
         bannerReflectionClip.clipsToBounds = true
         bannerReflectionClip.isUserInteractionEnabled = false
@@ -661,6 +686,8 @@ final class ProfileHeaderView: UIView {
             noteView.finishExpanding()
         }
         noteLabel.numberOfLines = isNoteExpanded ? 0 : Self.collapsedNoteLines
+        privateNoteView.apply(note: content.privateNote, glyphLanguage: content.glyphLanguage, emojiImages: emojiImages)
+        privateNoteContainer?.isHidden = content.privateNote.isEmpty
         applyFields(account, language: content.glyphLanguage, animatedEmojis: animatedEmojis)
         countsLabel.attributedText = Self.countsText(of: account)
         remoteStack.isHidden = !content.isRemote
@@ -813,12 +840,16 @@ final class ProfileHeaderView: UIView {
         for part: ProfileTextPart,
         previewBackground: @escaping @MainActor () -> UIColor? = { nil }
     ) -> ProfileTextMenuInteraction {
-        let lifecycle = MenuLifecycle(
+        ProfileTextMenuInteraction(on: view, menu: { [weak self] in self?.menuForText?(part) }, previewBackground: previewBackground, lifecycle: textMenuLifecycleForwarding())
+    }
+
+    /// 文章のメニューを出したときと閉じたときを、`textMenuLifecycle`へ伝える。
+    private func textMenuLifecycleForwarding() -> MenuLifecycle {
+        MenuLifecycle(
             willShow: { [weak self] in self?.textMenuLifecycle.willShow() },
             willEnd: { [weak self] in self?.textMenuLifecycle.willEnd() },
             didHide: { [weak self] in self?.textMenuLifecycle.didHide() }
         )
-        return ProfileTextMenuInteraction(on: view, menu: { [weak self] in self?.menuForText?(part) }, previewBackground: previewBackground, lifecycle: lifecycle)
     }
 
     /// 読み上げで、リンクを開く操作。

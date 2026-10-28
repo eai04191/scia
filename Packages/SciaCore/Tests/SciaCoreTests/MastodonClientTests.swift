@@ -626,7 +626,7 @@ struct MastodonClientTests {
     }
 
     @Test func followAndUnfollowPostToAccount() async throws {
-        let relationship = #"{"id":"2","following":true,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false}"#
+        let relationship = #"{"id":"2","following":true,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"note":""}"#
         let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
         let client = try makeClient(transport)
 
@@ -640,7 +640,7 @@ struct MastodonClientTests {
 
     /// フォローの設定は渡したものだけを送り、渡さなければサーバーの既定に任せる。
     @Test func followSendsOnlyGivenSettings() async throws {
-        let relationship = #"{"id":"2","following":true,"showing_reblogs":false,"notifying":true,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false}"#
+        let relationship = #"{"id":"2","following":true,"showing_reblogs":false,"notifying":true,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"note":""}"#
         let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
         let client = try makeClient(transport)
 
@@ -656,7 +656,7 @@ struct MastodonClientTests {
 
     /// ミュートの時間は秒で送り、無期限なら送らない（サーバーの既定の0が無期限）。ミュート、ブロックと解除は、それぞれのパスにPOSTする。
     @Test func muteBlockAndTheirUndoPostToAccount() async throws {
-        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":true,"muting_notifications":true}"#
+        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":true,"muting_notifications":true,"note":""}"#
         let transport = StubTransport(Array(repeating: .json(relationship, statusCode: 200), count: 5))
         let client = try makeClient(transport)
 
@@ -717,8 +717,29 @@ struct MastodonClientTests {
         #expect(rules == [InstanceRule(id: "1", text: "スパム禁止", hint: ""), InstanceRule(id: "2", text: "差別禁止")])
     }
 
+    /// メモは`comment`で送り、空なら空の`comment`を送って消す。応答の関係からメモを読む。
+    @Test func setNotePostsCommentAndDecodesNote() async throws {
+        let written = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"note":"前に会った & 話した"}"#
+        let cleared = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":false,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"note":""}"#
+        let transport = StubTransport([.json(written, statusCode: 200), .json(cleared, statusCode: 200)])
+        let client = try makeClient(transport)
+
+        #expect(try await client.setNote("2", comment: "前に会った & 話した").note == "前に会った & 話した")
+        #expect(try await client.setNote("2", comment: "").note == "")
+
+        let requests = await transport.requests
+        #expect(requests.map(\.httpMethod) == ["POST", "POST"])
+        #expect(requests.map { $0.url?.path() } == ["/api/v1/accounts/2/note", "/api/v1/accounts/2/note"])
+        let comments = try requests.map { request in
+            var components = URLComponents()
+            components.percentEncodedQuery = String(decoding: try #require(request.httpBody), as: UTF8.self)
+            return components.queryItems ?? []
+        }
+        #expect(comments == [[URLQueryItem(name: "comment", value: "前に会った & 話した")], [URLQueryItem(name: "comment", value: "")]])
+    }
+
     @Test func authorizeAndRejectFollowRequestPostToFollowRequests() async throws {
-        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":true,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false}"#
+        let relationship = #"{"id":"2","following":false,"showing_reblogs":true,"notifying":false,"followed_by":true,"requested":false,"blocking":false,"blocked_by":false,"muting":false,"muting_notifications":false,"note":""}"#
         let transport = StubTransport([.json(relationship, statusCode: 200), .json(relationship, statusCode: 200)])
         let client = try makeClient(transport)
 

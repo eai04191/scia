@@ -822,6 +822,12 @@ public struct MastodonClient: Sendable {
         return try await post(Relationship.self, path: "api/v1/accounts/\(id)/mute", form: form).0
     }
 
+    /// 相手のプロフィールに、自分にしか見えないメモを書く。空なら消す。
+    /// https://docs.joinmastodon.org/methods/accounts/#note
+    public func setNote(_ id: String, comment: String) async throws -> Relationship {
+        try await post(Relationship.self, path: "api/v1/accounts/\(id)/note", form: [URLQueryItem(name: "comment", value: comment)]).0
+    }
+
     /// 自分のフィルターをすべて返す。ページに分けずに返る。
     /// https://docs.joinmastodon.org/methods/filters/#get
     public func filters() async throws -> [ServerFilter] {

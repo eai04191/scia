@@ -323,7 +323,7 @@ final class LinkHitArea: UIControl {
                 switch item {
                 case .profile: return [profileAction(item.title, image: host?.mentionMenuIcon(for: url) ?? item.image, destination)]
                 case .mention, .copyHandle: return actions?.action(item, target: target, notifying: host).map { [$0] } ?? []
-                case .follow, .showReblogs, .notify, .mute, .block, .report:
+                case .follow, .showReblogs, .notify, .note, .mute, .block, .report:
                     guard let actions, let load else { return [] }
                     return actions.relationElements(item, target: target, load: load, failureSlots: failureSlots)
                 // 共通の項目は、上で中身から組んだ。
