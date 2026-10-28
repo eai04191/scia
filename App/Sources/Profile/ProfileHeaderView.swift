@@ -1,4 +1,5 @@
 import SciaCore
+import SwiftUI
 import UIKit
 
 /// プロフィールの一覧の頭に置く、アカウントの情報と、一覧の切り替え。
@@ -142,10 +143,7 @@ final class ProfileHeaderView: UIView {
     }
     private let avatarRingView = UIView()
     private let avatarView: AvatarView
-    private let followButton = UIButton(configuration: .filled())
-    /// 関係を読む前のボタンの中に出すインジケータ。ボタンの子に置き、関係が届いたときのクロスフェードで一緒に消えるようにする。
-    /// ボタンの`showsActivityIndicator`は、場所を取るために消した文字の横に出て中央に来ないため、使わない。
-    private let relationshipActivityIndicator = UIActivityIndicatorView(style: .medium)
+    private let followButton = ProfileFollowButton()
     private let relationshipFailureStack = UIStackView()
     private let relationshipRetryButton = UIButton(configuration: .plain())
     private let relationshipFailureLabel = UILabel()
@@ -274,22 +272,16 @@ final class ProfileHeaderView: UIView {
         avatarRingView.backgroundColor = .systemBackground
         avatarRingView.layer.cornerCurve = .continuous
 
-        followButton.addAction(UIAction { [weak self] _ in
+        followButton.onTap = { [weak self] in
             guard let self else { return }
             if content?.followState == .myself {
                 onEditProfile?()
             } else {
                 onToggleFollow?(followButton)
             }
-        }, for: .primaryActionTriggered)
-        followButton.setContentCompressionResistancePriority(.required, for: .horizontal)
-        relationshipActivityIndicator.translatesAutoresizingMaskIntoConstraints = false
-        relationshipActivityIndicator.isUserInteractionEnabled = false
-        followButton.addSubview(relationshipActivityIndicator)
-        NSLayoutConstraint.activate([
-            relationshipActivityIndicator.centerXAnchor.constraint(equalTo: followButton.centerXAnchor),
-            relationshipActivityIndicator.centerYAnchor.constraint(equalTo: followButton.centerYAnchor),
-        ])
+        }
+        // 枠は、いちばん長い文字とインジケータの分で取る。横幅が足りない画面（iPadの狭い分割表示など）では、必須の制約とぶつからないよう縮める。
+        followButton.setContentCompressionResistancePriority(.required - 1, for: .horizontal)
 
         // フォローの関係を読めなかったら、ボタンを黙って消さず、その場所で読めなかったことと再試行を示す。
         relationshipFailureLabel.text = "読み込みエラー"
@@ -676,23 +668,16 @@ final class ProfileHeaderView: UIView {
         // サーバーがプロフィールのURLを返さなかったら、開く先がないのでボタンを出さない。
         openOriginalButton.isHidden = account.url == nil
 
-        // 関係が届いたときと、フォローしたり外したりして関係や送っている途中の表示が替わったときは、ボタンをクロスフェードする。
-        // 文字と色だけでなく、カプセルの幅も替わるため、並べ直しもクロスフェードの中で行う。外で行うと、幅だけが1コマで替わる。
+        // 関係が届いたときと、フォローしたり外したりして関係や送っている途中の表示が替わったときは、ボタンの文字を替わる文字だけ入れ替え、
+        // 幅と色をスプリングで変える。「フォローされています」はクロスフェードする。
         let changesFollow = previous.map { $0.followState != content.followState || $0.isChangingFollow != content.isChangingFollow } ?? false
-        if changesFollow, followRevealDuration > 0, window != nil, !UIAccessibility.isReduceMotionEnabled {
-            // 補足情報の行は上で作り直したばかりで、まだ並べていない。クロスフェードの中で初めて並べると、行が大きさ0から伸び、
-            // 文字が空になったり縦に潰れたりして見えるため、ボタンを替える前に並べ終えておく。
-            layoutIfNeeded()
-            let options: UIView.AnimationOptions = [.transitionCrossDissolve, .allowUserInteraction]
-            UIView.transition(with: followButton, duration: followRevealDuration, options: options) {
-                self.applyFollowButton(content)
-                self.layoutIfNeeded()
-            }
-            UIView.transition(with: followedByBadge, duration: followRevealDuration, options: options) {
+        let animatesFollow = changesFollow && followRevealDuration > 0 && window != nil && !UIAccessibility.isReduceMotionEnabled
+        applyFollowButton(content, animation: animatesFollow ? .smooth(duration: followRevealDuration) : nil)
+        if animatesFollow {
+            UIView.transition(with: followedByBadge, duration: followRevealDuration, options: [.transitionCrossDissolve, .allowUserInteraction]) {
                 self.applyFollowedByBadge(content)
             }
         } else {
-            applyFollowButton(content)
             applyFollowedByBadge(content)
         }
         tabControl.selectedSegmentIndex = content.tab == .media ? 1 : 0
@@ -749,7 +734,8 @@ final class ProfileHeaderView: UIView {
         let colors = appearance.map { (fill: $0.background, foreground: $0.text) }
         if colors?.fill != filledButtonColors?.fill || colors?.foreground != filledButtonColors?.foreground {
             filledButtonColors = colors
-            if let content { applyFollowButton(content) }
+            followButton.filledColors = colors
+            if let content { applyFollowButton(content, animation: nil) }
         }
     }
 
@@ -846,51 +832,31 @@ final class ProfileHeaderView: UIView {
     }
 
     /// 塗りつぶさないボタン（「フォロー中」など）の見た目。カードに色を付けているときは、画面のティントカラーで薄く塗り、塗りつぶしたボタンと色を揃える。
-    private func secondaryButtonConfiguration() -> UIButton.Configuration {
-        filledButtonColors == nil ? .gray() : .tinted()
+    private var secondaryButtonStyle: ProfileFollowButton.Style {
+        filledButtonColors == nil ? .gray : .tinted
     }
 
-    private func applyFollowButton(_ content: Content) {
-        let title: String?
-        var configuration: UIButton.Configuration
+    private func applyFollowButton(_ content: Content, animation: Animation?) {
         // 関係を読む前は、届いたときに何もない所から出ないよう、文字を消したボタンで場所を取っておく。
-        // 幅は、一番多い「フォローする」に合わせる。
         let isPlaceholder = content.followState == .unknown
-        switch content.followState {
-        case .myself:
-            title = "プロフィールを編集"
-            configuration = secondaryButtonConfiguration()
-        case .loadFailed, .blocked:
-            title = nil
-            configuration = .filled()
-        case .unknown:
-            title = "フォローする"
-            configuration = secondaryButtonConfiguration()
-            configuration.baseForegroundColor = .clear
-        case .notFollowing(let locked):
-            title = locked ? "フォローをリクエスト" : "フォローする"
-            configuration = .filled()
-            configuration.baseBackgroundColor = filledButtonColors?.fill
-            configuration.baseForegroundColor = filledButtonColors?.foreground
-        case .requested:
-            title = "リクエスト中"
-            configuration = secondaryButtonConfiguration()
-        case .following:
-            title = "フォロー中"
-            configuration = secondaryButtonConfiguration()
+        let button: (title: String, style: ProfileFollowButton.Style)? = switch content.followState {
+        case .myself: ("プロフィールを編集", secondaryButtonStyle)
+        case .loadFailed, .blocked: nil
+        case .unknown: ("フォローする", secondaryButtonStyle)
+        case .notFollowing(let locked): (locked ? "フォローをリクエスト" : "フォローする", .filled)
+        case .requested: ("リクエスト中", secondaryButtonStyle)
+        case .following: ("フォロー中", secondaryButtonStyle)
         }
-        configuration.title = title
-        configuration.cornerStyle = .capsule
-        configuration.showsActivityIndicator = content.isChangingFollow
-        followButton.configuration = configuration
-        followButton.isHidden = title == nil
-        followButton.isEnabled = !content.isChangingFollow
-        // 押せない見た目にすると、消した文字が灰色で出てしまうため、見た目はそのままで触れないだけにする。
-        followButton.isUserInteractionEnabled = !isPlaceholder
-        followButton.accessibilityLabel = isPlaceholder ? "フォローの状態を読み込み中" : nil
-        followButton.accessibilityTraits = isPlaceholder ? [.button, .notEnabled] : .button
-
-        applyRelationshipActivity(isPlaceholder && content.showsRelationshipActivity)
+        followButton.isHidden = button == nil
+        if let button {
+            followButton.apply(ProfileFollowButton.State(
+                title: button.title,
+                style: button.style,
+                isPlaceholder: isPlaceholder,
+                showsActivity: isPlaceholder && content.showsRelationshipActivity,
+                isChanging: content.isChangingFollow
+            ), animation: animation)
+        }
 
         relationshipFailureStack.isHidden = content.followState != .loadFailed
         let alignsFailureText = content.followState == .loadFailed
@@ -901,20 +867,6 @@ final class ProfileHeaderView: UIView {
         (alignsFailureText ? relationshipFailureBaseline : followAreaBottom)?.isActive = true
         relationshipRetryButton.configuration?.showsActivityIndicator = content.isReloadingRelationship
         relationshipRetryButton.isEnabled = !content.isReloadingRelationship
-    }
-
-    /// 関係を待つのが長引いたら、ボタンの中のインジケータを浮かび上がらせる。消すときは、関係が届いたときのボタンのクロスフェードに任せる。
-    private func applyRelationshipActivity(_ shows: Bool) {
-        guard shows != relationshipActivityIndicator.isAnimating else { return }
-        guard shows else {
-            relationshipActivityIndicator.stopAnimating()
-            return
-        }
-        relationshipActivityIndicator.alpha = 0
-        relationshipActivityIndicator.startAnimating()
-        UIView.animateSmoothly(duration: window == nil ? 0 : followRevealDuration) {
-            self.relationshipActivityIndicator.alpha = 1
-        }
     }
 
     private func applyFollowedByBadge(_ content: Content) {

@@ -27,12 +27,16 @@ struct ProfileRelationshipActivityTests {
 
         /// フォローのボタンに関係が届いて、「フォロー中」になった。
         var showsFollowing: Bool {
-            viewController.view.descendants(of: UIButton.self).contains { $0.configuration?.title == "フォロー中" }
+            (try? button().state?.title) == "フォロー中"
         }
 
-        /// フォローのボタンの中のインジケータ。一覧の読み込み中のインジケータと分けるため、ボタンの子だけを探す。
-        func indicator() throws -> UIActivityIndicatorView {
-            try #require(viewController.view.descendants(of: UIActivityIndicatorView.self).first { $0.superview is UIButton })
+        func button() throws -> ProfileFollowButton {
+            try #require(viewController.view.descendants(of: ProfileFollowButton.self).first)
+        }
+
+        /// フォローのボタンの中にインジケータを出している。
+        func showsIndicator() throws -> Bool {
+            try button().state?.showsActivity == true
         }
 
         func close() {
@@ -85,14 +89,14 @@ struct ProfileRelationshipActivityTests {
 
         clock.advance(by: opened.delay - .milliseconds(1))
         #expect(opened.relationshipWaits == 1)
-        #expect(try !opened.indicator().isAnimating)
+        #expect(try !opened.showsIndicator())
 
         clock.advance(by: .milliseconds(1))
-        try await waitUntil { try opened.indicator().isAnimating }
+        try await waitUntil { try opened.showsIndicator() }
 
         opened.transport.relationships.open()
         try await waitUntil { opened.showsFollowing }
-        #expect(try !opened.indicator().isAnimating)
+        #expect(try !opened.showsIndicator())
     }
 
     /// 待つ時間より前に届いたら、インジケータを出さず、待つ処理も残さない。
@@ -109,7 +113,7 @@ struct ProfileRelationshipActivityTests {
         // 待ちが明けて、関係が届いていたことを確かめて終わるまで待つ。
         try await waitUntil { opened.controller.runningTaskCount == running - 1 }
 
-        #expect(try !opened.indicator().isAnimating)
+        #expect(try !opened.showsIndicator())
     }
 
     /// 相手がサーバーの応答に入らなかった（凍結や削除の予定で、Mastodonが返さない）ときは、関係は分からないまま読み込みを終える。
@@ -120,10 +124,10 @@ struct ProfileRelationshipActivityTests {
         defer { opened.close() }
         try await waitUntil { opened.relationshipWaits == 1 }
         clock.advance(by: opened.delay)
-        try await waitUntil { try opened.indicator().isAnimating }
+        try await waitUntil { try opened.showsIndicator() }
 
         opened.transport.relationships.open()
-        try await waitUntil { try !opened.indicator().isAnimating }
+        try await waitUntil { try !opened.showsIndicator() }
     }
 
     /// 一度読んだ関係を覚えていれば、すぐにボタンを出すので、待たない。
@@ -133,7 +137,7 @@ struct ProfileRelationshipActivityTests {
         defer { opened.close() }
 
         #expect(opened.relationshipWaits == 0)
-        #expect(try !opened.indicator().isAnimating)
+        #expect(try !opened.showsIndicator())
     }
 }
 

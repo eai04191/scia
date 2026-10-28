@@ -637,6 +637,10 @@ final class ProfileController {
         })
         sheet.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         sheet.popoverPresentationController?.sourceView = source
+        // フォローのボタンは、いちばん長い文字の幅で枠を取り、カプセルを右端に寄せて描くので、カプセルを指す。
+        if let button = source as? ProfileFollowButton {
+            sheet.popoverPresentationController?.sourceRect = button.capsuleFrame
+        }
         viewController?.frontmostPresented.present(sheet, animated: true)
     }
 
