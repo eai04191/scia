@@ -36,6 +36,10 @@ final class ProfileController {
     private var listReveal = ListReveal.waiting
     /// 最初の一覧に使う投稿の一覧を読み終えた。
     private var isInitialListLoaded = false
+    /// フォローの関係を待つのが長引いている。フォローのボタンの中にアクティビティインジケータを出す。
+    private var isRelationshipSlow = false
+    /// 開いたときの読み込みを終えた。相手がサーバーの応答に入らなかったときは、関係が分からないまま終わる。
+    private var isProfileLoaded = false
 
     private enum ListReveal {
         case waiting
@@ -224,6 +228,20 @@ final class ProfileController {
         showEntries()
         loadProfile()
         loadInitial()
+        waitForRelationship()
+    }
+
+    /// 開いたときにフォローの関係がまだなければ、少し待っても届かないときだけ、フォローのボタンの中にインジケータを出す。
+    /// 一度読んだ関係は覚えているので、開き直したときは待たない。
+    private func waitForRelationship() {
+        guard store.followState == .unknown, let viewController else { return }
+        let clock = viewController.clock
+        let delay = viewController.tuning.value(of: TuningCatalog.profileRelationshipActivityDelay)
+        run { controller in
+            guard (try? await clock.sleep(for: .seconds(delay))) != nil, controller.store.followState == .unknown, !controller.isProfileLoaded else { return }
+            controller.isRelationshipSlow = true
+            controller.afterTransition { $0.updateHeader() }
+        }
     }
 
     /// 投稿への操作の結果を、固定された投稿と一覧に反映する。
@@ -305,6 +323,7 @@ final class ProfileController {
             followedBy: store.relationship?.followedBy ?? false,
             isChangingFollow: store.isChangingFollow,
             isReloadingRelationship: store.isReloadingRelationship,
+            showsRelationshipActivity: isRelationshipSlow,
             tab: store.tab,
             postsFilter: store.postsFilter,
             avatarShape: settings.avatarShape,
@@ -413,12 +432,22 @@ final class ProfileController {
     private func loadProfile() {
         run { controller in
             let failures = await controller.store.loadProfile()
+            controller.finishWaitingForRelationship()
             for (part, error) in [("account", failures.account), ("relationship", failures.relationship), ("pinned", failures.pinned)] {
                 guard let error else { continue }
                 controller.logger.error("profile \(part, privacy: .public) load failed: \(SciaLog.describe(error), privacy: .public)")
                 controller.handleUnauthorized(error)
             }
         }
+    }
+
+    /// 読み込みを終えたら、インジケータを消す。相手がサーバーの応答に入らなかった（凍結や削除の予定で、Mastodonが返さない）ときは、
+    /// 関係は分からないまま残るので、読み込み中を示し続けないよう、ここで消す。
+    private func finishWaitingForRelationship() {
+        isProfileLoaded = true
+        guard isRelationshipSlow else { return }
+        isRelationshipSlow = false
+        afterTransition { $0.updateHeader() }
     }
 
     /// フォローのボタンの場所の再試行。失敗したら、読めなかった表示のまま残す。

@@ -10,6 +10,8 @@ final class ProfileHeaderView: UIView {
         let isChangingFollow: Bool
         /// 読めなかったフォローの関係を読み直している途中。
         let isReloadingRelationship: Bool
+        /// フォローの関係を待つのが長引いている。関係を読む前のボタンの中に、アクティビティインジケータを出す。
+        let showsRelationshipActivity: Bool
         let tab: ProfileTab
         let postsFilter: ProfilePostsFilter
         let avatarShape: AvatarShape
@@ -141,6 +143,9 @@ final class ProfileHeaderView: UIView {
     private let avatarRingView = UIView()
     private let avatarView: AvatarView
     private let followButton = UIButton(configuration: .filled())
+    /// 関係を読む前のボタンの中に出すインジケータ。ボタンの子に置き、関係が届いたときのクロスフェードで一緒に消えるようにする。
+    /// ボタンの`showsActivityIndicator`は、場所を取るために消した文字の横に出て中央に来ないため、使わない。
+    private let relationshipActivityIndicator = UIActivityIndicatorView(style: .medium)
     private let relationshipFailureStack = UIStackView()
     private let relationshipRetryButton = UIButton(configuration: .plain())
     private let relationshipFailureLabel = UILabel()
@@ -278,6 +283,13 @@ final class ProfileHeaderView: UIView {
             }
         }, for: .primaryActionTriggered)
         followButton.setContentCompressionResistancePriority(.required, for: .horizontal)
+        relationshipActivityIndicator.translatesAutoresizingMaskIntoConstraints = false
+        relationshipActivityIndicator.isUserInteractionEnabled = false
+        followButton.addSubview(relationshipActivityIndicator)
+        NSLayoutConstraint.activate([
+            relationshipActivityIndicator.centerXAnchor.constraint(equalTo: followButton.centerXAnchor),
+            relationshipActivityIndicator.centerYAnchor.constraint(equalTo: followButton.centerYAnchor),
+        ])
 
         // フォローの関係を読めなかったら、ボタンを黙って消さず、その場所で読めなかったことと再試行を示す。
         relationshipFailureLabel.text = "読み込みエラー"
@@ -878,6 +890,8 @@ final class ProfileHeaderView: UIView {
         followButton.accessibilityLabel = isPlaceholder ? "フォローの状態を読み込み中" : nil
         followButton.accessibilityTraits = isPlaceholder ? [.button, .notEnabled] : .button
 
+        applyRelationshipActivity(isPlaceholder && content.showsRelationshipActivity)
+
         relationshipFailureStack.isHidden = content.followState != .loadFailed
         let alignsFailureText = content.followState == .loadFailed
         // 先に外してから付け、2つが同時に効いて矛盾しないようにする。
@@ -887,6 +901,20 @@ final class ProfileHeaderView: UIView {
         (alignsFailureText ? relationshipFailureBaseline : followAreaBottom)?.isActive = true
         relationshipRetryButton.configuration?.showsActivityIndicator = content.isReloadingRelationship
         relationshipRetryButton.isEnabled = !content.isReloadingRelationship
+    }
+
+    /// 関係を待つのが長引いたら、ボタンの中のインジケータを浮かび上がらせる。消すときは、関係が届いたときのボタンのクロスフェードに任せる。
+    private func applyRelationshipActivity(_ shows: Bool) {
+        guard shows != relationshipActivityIndicator.isAnimating else { return }
+        guard shows else {
+            relationshipActivityIndicator.stopAnimating()
+            return
+        }
+        relationshipActivityIndicator.alpha = 0
+        relationshipActivityIndicator.startAnimating()
+        UIView.animateSmoothly(duration: window == nil ? 0 : followRevealDuration) {
+            self.relationshipActivityIndicator.alpha = 1
+        }
     }
 
     private func applyFollowedByBadge(_ content: Content) {

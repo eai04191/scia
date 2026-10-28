@@ -432,6 +432,16 @@ public enum TuningCatalog {
         defaultValue: 0.15
     )
 
+    /// プロフィールを開いてから、フォローの関係を待つ間のフォローのボタンにアクティビティインジケータを出すまでの時間。
+    /// すぐ届いたときに、インジケータが一瞬だけ回らないようにする。
+    public static let profileRelationshipActivityDelay = NumberTuning(
+        id: "profile.relationshipActivityDelay",
+        title: "フォローの関係を待つ間のインジケータを出すまでの時間（秒）",
+        range: 0...2,
+        step: 0.1,
+        defaultValue: 0.5
+    )
+
     /// ストリーミングで届いた新着を、まとめてタイムラインに挿入する間隔。最初の新着が届いてからこの時間待つ。
     /// 0なら届いたらすぐ挿入する。指で触っている間や長押しのメニューを出している間は、この値によらず操作が終わるまで待つ。
     public static let insertionInterval = NumberTuning(
@@ -1608,6 +1618,7 @@ public enum TuningCatalog {
         TuningSection(id: "profile", title: "プロフィール", items: [
             .number(profileRevealDuration),
             .number(profileAvatarWait),
+            .number(profileRelationshipActivityDelay),
             .number(profileBannerReflectionBlur),
             .number(profileBannerReflectionDim),
             .number(profileBannerReflectionSeam),
