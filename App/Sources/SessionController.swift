@@ -162,9 +162,9 @@ final class SessionController {
         let tasks = TaskScope()
         self.tasks = tasks
         #if DEBUG
-        let client = MastodonClient(credential: credential, transport: FaultInjectingTransport(base: ScenarioMode.server?.transport ?? URLSessionTransport()), rateLimit: rateLimit, features: features, requestLog: requestLog)
+        let client = MastodonClient(credential: credential, transport: BurstMonitoringTransport(base: FaultInjectingTransport(base: ScenarioMode.server?.transport ?? URLSessionTransport()), monitor: RequestBurstLog.monitor), rateLimit: rateLimit, features: features, requestLog: requestLog)
         #else
-        let client = MastodonClient(credential: credential, transport: URLSessionTransport(), rateLimit: rateLimit, features: features, requestLog: requestLog)
+        let client = MastodonClient(credential: credential, transport: BurstMonitoringTransport(base: URLSessionTransport(), monitor: RequestBurstLog.monitor), rateLimit: rateLimit, features: features, requestLog: requestLog)
         #endif
         #if DEBUG
         let streaming = StreamingClient(credential: credential, connector: FaultInjectingWebSocketConnector(base: ScenarioMode.server?.connector ?? URLSessionWebSocketConnector()), rateLimit: rateLimit)

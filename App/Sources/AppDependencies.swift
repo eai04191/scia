@@ -42,12 +42,12 @@ enum AppDependencies {
         return Date(timeIntervalSince1970: TimeInterval(start.tv_sec) + TimeInterval(start.tv_usec) / 1_000_000)
     }()
 
-    /// アプリの通信の口。デバッグでは、障害の差し込みと、ダミー投稿の`data:`のURLを返す口を挟む。
+    /// アプリの通信の口。送った数を数え（`RequestBurstLog`）、デバッグでは、障害の差し込みと、ダミー投稿の`data:`のURLを返す口を挟む。
     nonisolated static let transport: any HTTPTransport = {
         #if DEBUG
-        FaultInjectingTransport(base: URLSessionTransport())
+        BurstMonitoringTransport(base: FaultInjectingTransport(base: URLSessionTransport()), monitor: RequestBurstLog.monitor)
         #else
-        URLSessionTransport()
+        BurstMonitoringTransport(base: URLSessionTransport(), monitor: RequestBurstLog.monitor)
         #endif
     }()
 

@@ -100,7 +100,7 @@ final class NoticeOverlay: UIView {
     // MARK: 前の画面
 
     /// 入れ物のうち、前に出ている子。入れ物でなければnil。
-    private static func frontChild(of viewController: UIViewController) -> UIViewController? {
+    static func frontChild(of viewController: UIViewController) -> UIViewController? {
         switch viewController {
         case let navigation as UINavigationController: navigation.topViewController
         case let tabs as UITabBarController: tabs.selectedViewController
