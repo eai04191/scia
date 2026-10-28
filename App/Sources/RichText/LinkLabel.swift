@@ -88,6 +88,37 @@ final class LinkLabel: EmojiLabel {
 }
 
 
+
+/// `LinkHitArea`の長押しのメニューを出す。コントロール自身を委譲先にすると、組み込まれたメニューの処理と混ざるため、別のものにする。
+@MainActor
+private final class LinkMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
+    private weak var hitArea: LinkHitArea?
+
+    init(hitArea: LinkHitArea) {
+        self.hitArea = hitArea
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configurationForMenuAtLocation location: CGPoint) -> UIContextMenuConfiguration? {
+        hitArea?.menuConfiguration(at: location)
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+        hitArea?.linkPreview(for: configuration)
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, dismissalPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
+        hitArea?.linkPreview(for: configuration)
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willDisplayMenuFor configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
+        hitArea?.menuWillShow()
+    }
+
+    func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willEndFor configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
+        hitArea?.menuWillEnd(animator: animator)
+    }
+}
+
 /// 本文のリンクのメニューを、タップや長押しに割り当てた1項目だけで組むときの並び。行き先の対象ごとに、項目の種類が違う。
 enum LinkMenuGroups {
     case link(MenuLayout<LinkMenuItem>.Groups)
@@ -138,15 +169,18 @@ protocol LinkMenuHost: AnyObject {
 /// `LinkLabel`の上に重ねる、リンクの上だけを当たりにする部品。リンクの外では当たりにならず、押下はラベルの後ろのセルへ渡る。
 /// スクロールビューは標準では`UIControl`の上で始まった押下をスクロールに切り替えないため、載せるスクロールビューは`touchesShouldCancel(in:)`でこの部品にtrueを返す。
 /// リンクの上の長押しは、セルの後ろのコレクションビューに渡らず投稿のメニューにならないため、この部品でリンクのメニューを出す。
+/// メニューは、コントロールに組み込まれたメニュー（`isContextMenuInteractionEnabled`）ではなく、別に付けた`UIContextMenuInteraction`で出す。
+/// 組み込まれたメニューでは、長押しで開いても触覚フィードバックが出ないため。
 final class LinkHitArea: UIControl {
     private weak var label: LinkLabel?
     private var longPress: ObjectLongPress?
+    private lazy var menuInteraction = LinkMenuInteraction(hitArea: self)
 
     init(label: LinkLabel) {
         self.label = label
         super.init(frame: .zero)
         isAccessibilityElement = false
-        isContextMenuInteractionEnabled = true
+        addInteraction(UIContextMenuInteraction(delegate: menuInteraction))
         installLongPress()
     }
 
@@ -201,10 +235,8 @@ final class LinkHitArea: UIControl {
         })
     }
 
-    override func contextMenuInteraction(
-        _ interaction: UIContextMenuInteraction,
-        configurationForMenuAtLocation location: CGPoint
-    ) -> UIContextMenuConfiguration? {
+    /// 長押しのメニューの構成。リンクの外か、出す項目をすべて隠していればnil。
+    fileprivate func menuConfiguration(at location: CGPoint) -> UIContextMenuConfiguration? {
         guard let label, target(at: location)?.performsLongPress() != true else { return nil }
         let point = convert(location, to: label)
         // 出す項目をすべて隠していれば、メニューを出さない。
@@ -213,36 +245,12 @@ final class LinkHitArea: UIControl {
         return UIContextMenuConfiguration(identifier: NSValue(cgPoint: point), previewProvider: nil) { _ in menu }
     }
 
-    override func contextMenuInteraction(
-        _ interaction: UIContextMenuInteraction,
-        previewForHighlightingMenuWithConfiguration configuration: UIContextMenuConfiguration
-    ) -> UITargetedPreview? {
-        linkPreview(for: configuration)
-    }
-
-    override func contextMenuInteraction(
-        _ interaction: UIContextMenuInteraction,
-        previewForDismissingMenuWithConfiguration configuration: UIContextMenuConfiguration
-    ) -> UITargetedPreview? {
-        linkPreview(for: configuration)
-    }
-
-    override func contextMenuInteraction(
-        _ interaction: UIContextMenuInteraction,
-        willDisplayMenuFor configuration: UIContextMenuConfiguration,
-        animator: (any UIContextMenuInteractionAnimating)?
-    ) {
-        super.contextMenuInteraction(interaction, willDisplayMenuFor: configuration, animator: animator)
+    fileprivate func menuWillShow() {
         nearest((any LinkMenuHost).self)?.linkMenuWillShow()
     }
 
     /// 閉じるアニメーションの間も行を動かさない。
-    override func contextMenuInteraction(
-        _ interaction: UIContextMenuInteraction,
-        willEndFor configuration: UIContextMenuConfiguration,
-        animator: (any UIContextMenuInteractionAnimating)?
-    ) {
-        super.contextMenuInteraction(interaction, willEndFor: configuration, animator: animator)
+    fileprivate func menuWillEnd(animator: (any UIContextMenuInteractionAnimating)?) {
         // 閉じ終わる前にセルが使い回されてもよいよう、知らせる先は閉じ始めに決めておく。
         let host = nearest((any LinkMenuHost).self)
         guard let animator else {
@@ -253,11 +261,27 @@ final class LinkHitArea: UIControl {
     }
 
     /// 押したリンクの文字だけを浮かせる。部品はラベルと同じ大きさで透明なため、そのままでは本文の全体が浮く。
-    private func linkPreview(for configuration: UIContextMenuConfiguration) -> UITargetedPreview? {
+    /// ラベルそのものを渡すと、UIKitがメニューを出している間ラベルを隠し、浮かせたリンクのほかの本文が消えるため、ラベルのスナップショットを浮かせる。
+    /// スナップショットは、リンクの文字の枠でちょうど切り抜く。浮かせる面はリンクの枠より余白の分広く、切り抜かないと隣の文字まで面に写り、元の本文と二重に見えるため。
+    /// スナップショットは画面に置かないので、開き始めの約3コマは本文に残ったリンクと浮かせた面が二重に見え、閉じた直後の約3コマはリンクの両隣の文字が欠ける。
+    /// リンクだけを写したビューをリンクの真上に置き、ラベルからリンクの部分を抜いてそのビューを浮かせると、開閉の両端はずれなくなる。
+    /// ただ、メニューを出す前に指を動かして取りやめると、UIKitは置いたビューを隠したまま縮めて戻し、面にも中身を写さないので、約0.4秒リンクの場所が空白になる。
+    /// 公開APIでは取りやめの間にビューを見せ直せないため、取りやめでも文字が見えたままのこちらを選んだ。
+    fileprivate func linkPreview(for configuration: UIContextMenuConfiguration) -> UITargetedPreview? {
         guard let label, let point = (configuration.identifier as? NSValue)?.cgPointValue else { return nil }
         let frames = label.linkFrames(at: point)
-        guard !frames.isEmpty else { return nil }
-        return UITargetedPreview(view: label, parameters: UIPreviewParameters(textLineRects: frames.map { NSValue(cgRect: $0) }))
+        guard !frames.isEmpty, let snapshot = label.snapshotView(afterScreenUpdates: false) else { return nil }
+        let linkOnly = UIView(frame: label.bounds)
+        linkOnly.addSubview(snapshot)
+        let mask = CAShapeLayer()
+        let path = UIBezierPath()
+        frames.forEach { path.append(UIBezierPath(rect: $0)) }
+        mask.path = path.cgPath
+        linkOnly.layer.mask = mask
+        // UIKitは、浮かせる面（リンクの枠）の中央をtargetの中央に置く。ラベルの中央を渡すと、面がリンクの位置からずれて出る。
+        let linkBounds = frames.reduce(CGRect.null) { $0.union($1) }
+        let target = UIPreviewTarget(container: label, center: CGPoint(x: linkBounds.midX, y: linkBounds.midY))
+        return UITargetedPreview(view: linkOnly, parameters: UIPreviewParameters(textLineRects: frames.map { NSValue(cgRect: $0) }), target: target)
     }
 
     /// 並びは設定のリンクのメニューとハッシュタグのメニューに従う。メンションはユーザーなので、ユーザーのメニューで出す。出す項目がなければnil。

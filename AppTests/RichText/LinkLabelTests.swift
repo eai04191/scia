@@ -315,6 +315,21 @@ struct LinkLabelTests {
         #expect(URLMenuAction.openInAppSafari.browser(for: magnet, following: .inApp) == nil)
     }
 
+    /// 長押しのメニューは、コントロールに組み込まれたメニューではなく、別に付けたコンテキストメニューで出す。組み込まれたメニューでは触覚フィードバックが出ないため。
+    @Test func longPressMenuUsesSeparateInteraction() throws {
+        let url = try #require(URL(string: "https://example.com/a"))
+        let label = label(for: RichText(blocks: [.init(inlines: [.text("見て ", []), .link("example.com/a", .url(url), [])])]))
+        label.settings = try settings()
+        let hitArea = try #require(label.subviews.compactMap { $0 as? LinkHitArea }.first)
+        let interaction = try #require(hitArea.interactions.lazy.compactMap { $0 as? UIContextMenuInteraction }.first)
+        let delegate = try #require(interaction.delegate)
+
+        #expect(!hitArea.isContextMenuInteractionEnabled)
+        #expect(interaction !== hitArea.contextMenuInteraction)
+        #expect(delegate.contextMenuInteraction(interaction, configurationForMenuAtLocation: try center(of: "example.com/a", in: label)) != nil)
+        #expect(delegate.contextMenuInteraction(interaction, configurationForMenuAtLocation: try center(of: "見て", in: label)) == nil)
+    }
+
     /// 出す項目をすべて隠したら、メニューを出さない。
     @Test func hidingEveryItemShowsNoMenu() throws {
         let tag = try #require(URL(string: "https://example.social/tags/cat"))

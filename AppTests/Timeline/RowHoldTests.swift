@@ -44,17 +44,18 @@ struct RowHoldTests {
         let touched = try #require(harness.windowMinY(of: .status(existing[0].id)))
         let cell = try #require(harness.visibleCell(of: .status(existing[0].id)))
         let hitArea = try #require(Self.subviews(of: cell).compactMap { $0 as? LinkHitArea }.first)
-        let interaction = try #require(hitArea.contextMenuInteraction)
+        let interaction = try #require(hitArea.interactions.lazy.compactMap { $0 as? UIContextMenuInteraction }.first)
+        let delegate = try #require(interaction.delegate)
         let configuration = UIContextMenuConfiguration()
 
-        hitArea.contextMenuInteraction(interaction, willDisplayMenuFor: configuration, animator: nil)
+        delegate.contextMenuInteraction?(interaction, willDisplayMenuFor: configuration, animator: nil)
         let arrivals = StatusFactory.make(count: 3, startingAt: 1_003)
         harness.setStatuses(arrivals + existing)
 
         #expect(harness.viewController.displayedStatusIDs == existing.map(\.id))
         #expect(harness.windowMinY(of: .status(existing[0].id)) == touched)
 
-        hitArea.contextMenuInteraction(interaction, willEndFor: configuration, animator: nil)
+        delegate.contextMenuInteraction?(interaction, willEndFor: configuration, animator: nil)
 
         #expect(harness.viewController.displayedStatusIDs == (arrivals + existing).map(\.id))
         #expect(!harness.viewController.isUserInteracting)
