@@ -124,25 +124,24 @@ enum KnownRelation {
     case relation(UserRelation)
 }
 
-extension UserMenuActions {
+extension UserMenu {
     /// 関係の項目。関係を覚えている相手は、覚えている関係でその場で組む。
     /// 覚えていない相手は、読む間はUIKitの読み込み中の行を出し、読んでから中身を渡す。開く途中のサブメニューで中身が替わると動きが崩れるため、
     /// メニューを開いたときに出る人の関係をまとめて読み直し（`reloadRelations`）、次からは覚えている関係で組めるようにしている。
     /// 自分には出さない。読めなかったら、`failureSlots`の項目にだけ押せない行で知らせ、ほかの項目は何も出さない。項目ごとに同じ知らせが並ばないようにするため。
     /// 通報は関係で中身が変わらないため、関係を待たずに出す。リンクのメンションのように相手を探す必要があるときは、探してから出す。
-    /// - Parameter reportableStatusID: 通報に添えられる投稿。Mastodonは通報する相手の投稿しか添えられないため、相手が書いた投稿のときだけ渡す。
-    @MainActor
-    func relationElements(_ item: UserMenuItem, target: UserMenuTarget, load: UserRelationLoad, failureSlots: RelationFailureSlots, reportableStatusID: String? = nil) -> [UIMenuElement] {
+    func relationElements(_ item: UserMenuItem, actions: UserMenuActions, load: UserRelationLoad, failureSlots: RelationFailureSlots) -> [UIMenuElement] {
+        let reportableStatusID = reportableStatusID
         func elements(_ relation: UserRelation) -> [UIMenuElement] {
             Self.relationElements(item, relationship: relation.relationship) { change in
-                changeRelation(change, relation)
+                actions.changeRelation(change, relation)
             } editNote: {
-                editNote(relation)
+                actions.editNote(relation)
             } report: {
-                report(relation.accountID, relation.acct, reportableStatusID)
+                actions.report(relation.accountID, relation.acct, reportableStatusID)
             }
         }
-        switch knownRelation(target) {
+        switch actions.knownRelation(subject.target) {
         case .myself:
             return []
         case .relation(let relation):
@@ -151,7 +150,7 @@ extension UserMenuActions {
             break
         }
         if item == .report {
-            return reportElements(target: target, load: load, showsFailure: failureSlots.resolve == .report, reportableStatusID: reportableStatusID)
+            return reportElements(actions: actions, load: load, showsFailure: failureSlots.resolve == .report)
         }
         return [UIDeferredMenuElement.uncached { completion in
             Task { @MainActor in
@@ -171,19 +170,19 @@ extension UserMenuActions {
     }
 
     /// 関係を覚えていない相手の通報。相手のIDが分かっていればその場で出し、相手を探すときは探してから出す。自分には出さない。
-    @MainActor
-    private func reportElements(target: UserMenuTarget, load: UserRelationLoad, showsFailure: Bool, reportableStatusID: String?) -> [UIMenuElement] {
+    private func reportElements(actions: UserMenuActions, load: UserRelationLoad, showsFailure: Bool) -> [UIMenuElement] {
+        let reportableStatusID = reportableStatusID
         func action(_ identity: UserIdentity) -> UIAction {
-            UIAction(title: UserMenuItem.report.title, image: UserMenuItem.report.image) { _ in report(identity.id, identity.acct, reportableStatusID) }
+            UIAction(title: UserMenuItem.report.title, image: UserMenuItem.report.image) { _ in actions.report(identity.id, identity.acct, reportableStatusID) }
         }
-        if case .account(let id, let acct) = target {
+        if case .account(let id, let acct) = subject.target {
             return [action(UserIdentity(id: id, acct: acct))]
         }
         return [UIDeferredMenuElement.uncached { completion in
             Task { @MainActor in
                 do {
                     let identity = try await load.identity
-                    if case .myself = knownRelation(.account(id: identity.id, acct: identity.acct)) {
+                    if case .myself = actions.knownRelation(.account(id: identity.id, acct: identity.acct)) {
                         completion([])
                     } else {
                         completion([action(identity)])
@@ -196,24 +195,21 @@ extension UserMenuActions {
     }
 
     /// 関係を読めなかった知らせ。押せない行で出す。
-    @MainActor
     private static var relationFailureAction: UIAction {
         UIAction(title: "関係を読み込めませんでした", image: UIImage(systemName: "exclamationmark.triangle"), attributes: .disabled) { _ in }
     }
 
     /// メニューを1回開く間、同じユーザーの項目で分け合う、相手の探し方と関係の読み方。
-    @MainActor
-    func relationLoad(for target: UserMenuTarget) -> UserRelationLoad {
+    static func relationLoad(for target: UserMenuTarget, actions: UserMenuActions) -> UserRelationLoad {
         UserRelationLoad {
-            try await resolveTarget(target)
+            try await actions.resolveTarget(target)
         } load: { identity in
-            try await loadRelation(target, identity)
+            try await actions.loadRelation(target, identity)
         }
     }
 
     /// 関係に合わせた項目。出さないときは空。
     /// ブロックしているか、されているときは、フォローもフォローの設定もできないため出さない。フォローの設定は、フォロー中かリクエスト中の相手にだけ出す。
-    @MainActor
     static func relationElements(
         _ item: UserMenuItem,
         relationship: Relationship,

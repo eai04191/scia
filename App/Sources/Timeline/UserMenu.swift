@@ -115,7 +115,7 @@ struct UserMenu {
             self.inSubmenu = inSubmenu
             self.openProfile = openProfile
             self.profileIcon = profileIcon
-            load = menu.actions?.relationLoad(for: menu.subject.target)
+            load = menu.actions.map { UserMenu.relationLoad(for: menu.subject.target, actions: $0) }
             // 知らせる項目は、組む並びから決める。1項目だけ組むときに、出さない項目で知らせて空のメニューにならないため。
             // リンクのメンションは相手を探す必要があるので、通報も探すのを待って出す。
             failureSlots = groups.relationFailureSlots(waitsForReport: menu.subject.id == nil)
@@ -131,12 +131,18 @@ struct UserMenu {
                 guard let openProfile else { return [] }
                 return [UIAction(title: inSubmenu ? item.title : "@\(subject.acct)のプロフィール", image: profileIcon() ?? item.image) { _ in openProfile() }]
             case .mention:
-                return menu.actions?.action(item, target: subject.target, title: inSubmenu ? nil : "@\(subject.acct)にメンション", notifying: menu.host).map { [$0] } ?? []
+                guard let actions = menu.actions else { return [] }
+                let target = subject.target
+                return [UIAction(title: inSubmenu ? item.title : "@\(subject.acct)にメンション", image: item.image) { _ in actions.mention(target) }]
             case .copyHandle:
-                return menu.actions?.action(item, target: subject.target, title: inSubmenu ? nil : "@\(subject.acct)のハンドルをコピー", notifying: menu.host).map { [$0] } ?? []
+                guard let actions = menu.actions else { return [] }
+                let target = subject.target
+                return [UIAction(title: inSubmenu ? item.title : "@\(subject.acct)のハンドルをコピー", image: item.image) { [weak host = menu.host] _ in
+                    actions.copyHandle(target) { host?.showHandleCopiedNotice() }
+                }]
             case .follow, .showReblogs, .notify, .note, .mute, .block, .report:
                 guard let actions = menu.actions, let load else { return [] }
-                return actions.relationElements(item, target: subject.target, load: load, failureSlots: failureSlots, reportableStatusID: menu.reportableStatusID)
+                return menu.relationElements(item, actions: actions, load: load, failureSlots: failureSlots)
             // 共通の項目は、上で中身から組んだ。
             case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
                 return []

@@ -8,7 +8,7 @@ import UIKit
 struct UserRelationMenuTests {
     /// 項目の名前。押せないものは`(押せない)`、チェックの付いたものは`✓`、取り消せない操作は`!`を付け、サブメニューは`名前[中身]`で表す。
     private func describe(_ item: UserMenuItem, _ relationship: Relationship) -> [String] {
-        UserMenuActions.relationElements(item, relationship: relationship, perform: { _ in }, editNote: {}, report: {}).map(describe)
+        UserMenu.relationElements(item, relationship: relationship, perform: { _ in }, editNote: {}, report: {}).map(describe)
     }
 
     private func describe(_ element: UIMenuElement) -> String {
@@ -52,7 +52,7 @@ struct UserRelationMenuTests {
         #expect(describe(.note, Relationship(id: "2", blocking: true)) == ["メモを追加"])
 
         var opened = 0
-        let elements = UserMenuActions.relationElements(.note, relationship: Relationship(id: "2"), perform: { _ in }, editNote: { opened += 1 }, report: {})
+        let elements = UserMenu.relationElements(.note, relationship: Relationship(id: "2"), perform: { _ in }, editNote: { opened += 1 }, report: {})
         (elements.first as? UIAction)?.performWithSender(nil, target: nil)
         #expect(opened == 1)
     }

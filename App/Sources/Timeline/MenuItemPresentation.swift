@@ -333,8 +333,8 @@ enum UserMenuTarget {
     case profileURL(URL, shownAcct: String)
 }
 
-/// ユーザーのメニューの、投稿欄とログイン中のサーバーに頼る項目（メンション、ハンドルをコピー、関係の項目）を組むもの。
-/// 画面を組み立てる側が渡す。渡されていない画面では、これらの項目を出さない。
+/// ユーザーのメニューの、投稿欄とログイン中のサーバーに頼る項目（メンション、ハンドルをコピー、関係の項目）の動き。項目は`UserMenu`が組む。
+/// セッションが作り、画面を組み立てる側が渡す。渡されていない画面では、これらの項目を出さない。
 struct UserMenuActions {
     /// 投稿欄で、カーソルの位置に`@acct`を入れる。
     let mention: @MainActor (UserMenuTarget) -> Void
@@ -357,21 +357,4 @@ struct UserMenuActions {
     /// セッションで読んだアカウント。メンションされたユーザーのように、アイコンのURLが手元にない相手のアイコンを出すのに使う。
     let accounts: AccountCache
 
-    /// メンションとハンドルをコピーの項目。ほかの項目ではnil。
-    /// - Parameters:
-    ///   - title: 項目の名前の代わりに出す名前。投稿のメニューで、ユーザーの項目をサブメニューにせず並べるときに使う。
-    ///   - host: コピーしたことを知らせる画面。
-    @MainActor
-    func action(_ item: UserMenuItem, target: UserMenuTarget, title: String? = nil, notifying host: (any LinkMenuHost)?) -> UIAction? {
-        switch item {
-        case .mention:
-            return UIAction(title: title ?? item.title, image: item.image) { _ in mention(target) }
-        case .copyHandle:
-            return UIAction(title: title ?? item.title, image: item.image) { [weak host] _ in
-                copyHandle(target) { host?.showHandleCopiedNotice() }
-            }
-        case .profile, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .follow, .showReblogs, .notify, .note, .mute, .block, .report:
-            return nil
-        }
-    }
 }
