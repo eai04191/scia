@@ -16,8 +16,8 @@ struct PostContentBuilder {
     func configuration(for status: Status, isPinned: Bool = false, replyLabel: ReplyLabel? = nil, base: UIListContentConfiguration) -> PostContentConfiguration {
         let shown = status.displayed
         let typography = PostTypography(settings: settings)
-        // 名前のカスタム絵文字も、本文と同じ割合で大きさを変える。
-        let emojiScale = CGFloat(settings.value(of: AppearanceCatalog.customEmojiScale))
+        // 名前の上の行も名前を描くので、名前の行と同じ割合で絵文字の大きさを変える。本文の絵文字は本文の割合で描く。
+        let emojiScale = CGFloat(settings.value(of: AppearanceCatalog.nameCustomEmojiScale))
         let metrics = PostContentConfiguration.Metrics(
             margins: settings.rowMargins,
             avatarSize: settings.value(of: AppearanceCatalog.avatarSize),

@@ -61,6 +61,7 @@ enum AppearanceHighlight: Equatable {
             (C.visibilitySymbolSpacing, .firstOf([.part(.visibilitySymbolGap), .part(.visibilitySymbol)])),
             (C.editedMarkSpacing, .firstOf([.part(.editedMarkGap), .part(.editedMark)])),
             (C.nameFadeWidth, .firstOf([.part(.nameFade), .part(.nameRow)])),
+            (C.nameCustomEmojiScale, .firstOf([.part(.nameCustomEmojis), .part(.nameRow)])),
             (C.nameBodySpacing, .verticalGap(above: [.nameGlyphs], below: [.spoiler, .bodyGlyphs])),
             (C.nameMediaSpacing, .verticalGap(above: [.nameGlyphs], below: [.media], absent: [.spoiler, .bodyText])),
 

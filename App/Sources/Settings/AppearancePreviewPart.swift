@@ -31,6 +31,8 @@ enum AppearancePreviewPart: Hashable, CaseIterable {
     /// 編集済みの「*」。消していれば、「*」があった位置。
     case editedMark
     case editedMarkGap
+    /// 名前の行と名前の上の行のカスタム絵文字。
+    case nameCustomEmojis
     /// 入りきらない名前の行末をぼかしている部分。
     case nameFade
     /// 名前が入りきらず時刻に詰まった投稿の、名前と時刻のすき間。最小のすき間がそのまま空く。

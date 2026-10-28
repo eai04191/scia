@@ -461,6 +461,7 @@ final class PostContentView: UIView, UIContentView {
             .replyLabel: current.isReply && current.context != nil ? textExtent(of: contextLabel) : nil,
             .connectedAvatar: current.replyConnection.below ? avatarView.previewFrame(in: self) : nil,
             .nameFade: nameFadeFrames(),
+            .nameCustomEmojis: nameCustomEmojiFrames(),
             .nameTimeMinGap: nameTimeMinGapFrame(),
         ].compactMapValues(\.self)
         frames.merge(slotPreviewFrames()) { $1 }
@@ -493,6 +494,14 @@ final class PostContentView: UIView, UIContentView {
         let time = timeLabel.convert(timeLabel.bounds, to: self)
         let minY = min(name.minY, time.minY)
         return [CGRect(x: name.maxX, y: minY, width: max(time.minX - name.maxX, 0), height: max(name.maxY, time.maxY) - minY)]
+    }
+
+    /// 名前の行と名前の上の行の、カスタム絵文字の枠。
+    private func nameCustomEmojiFrames() -> [CGRect]? {
+        let frames = (nameLabels + [contextLabel]).filter { !$0.isHidden }.flatMap { label in
+            label.previewCustomEmojiFrames().map { label.convert($0, to: self) }
+        }
+        return frames.isEmpty ? nil : frames
     }
 
     /// 入りきらずに行末をぼかしている名前やブーストした人の行の、ぼかしている部分。

@@ -371,3 +371,47 @@ extension PostContentViewTests {
         #expect((element.accessibilityCustomActions ?? []).filter { $0.name.hasSuffix("のプロフィール") }.count == 1)
     }
 }
+
+extension PostContentViewTests {
+    private func emojiPNG() throws -> Data {
+        try #require(UIGraphicsImageRenderer(size: CGSize(width: 10, height: 10)).image { context in
+            UIColor.systemOrange.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 10, height: 10))
+        }.pngData())
+    }
+
+    /// 名前と本文の両方にカスタム絵文字のある投稿を、絵文字の画像が届いた状態で並べ、部品の枠を返す。
+    private func emojiPostFrames(nameScale: Double, bodyScale: Double) async throws -> AppearancePreviewFrames {
+        let url = try #require(URL(string: "https://example.social/emoji/blobcat.png"))
+        let blobcat = CustomEmoji(shortcode: "blobcat", url: url, staticUrl: url)
+        let png = try emojiPNG()
+        let store = EmojiImageStore { _ in png }
+        _ = store.image(for: url)
+        try await waitUntil { store.image(for: url) != nil }
+        let settings = AppSettings.isolated()
+        settings.setValue(nameScale, for: AppearanceCatalog.nameCustomEmojiScale)
+        settings.setValue(bodyScale, for: AppearanceCatalog.customEmojiScale)
+        let base = try status(content: "")
+        let author = Account(id: "3", username: "carol", acct: "carol", displayName: "名前 :blobcat:", avatar: nil, emojis: [blobcat])
+        let post = Status(id: base.id, createdAt: base.createdAt, account: author, content: "<p>本文 :blobcat: の絵文字</p>", spoilerText: "", url: nil, emojis: [blobcat])
+        let controller = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: store, avatarImages: .offline, settings: settings)
+        let view = try #require(controller.contentConfiguration(for: post, base: .cell()).makeContentView() as? PostContentView)
+        let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
+        view.frame = CGRect(origin: .zero, size: size)
+        view.layoutIfNeeded()
+        return view.previewFrames()
+    }
+
+    /// 名前と本文のカスタム絵文字は、それぞれの設定の割合で大きさを変える。
+    @Test func nameAndBodyEmojiScaleIndependently() async throws {
+        let plain = try await emojiPostFrames(nameScale: 1, bodyScale: 1)
+        let scaled = try await emojiPostFrames(nameScale: 2, bodyScale: 3)
+        let plainName = try #require(plain[.nameCustomEmojis]?.first)
+        let plainBody = try #require(plain[.customEmojis]?.first)
+        let scaledName = try #require(scaled[.nameCustomEmojis]?.first)
+        let scaledBody = try #require(scaled[.customEmojis]?.first)
+
+        #expect(abs(scaledName.height - plainName.height * 2) < 1, "名前: \(plainName.height) → \(scaledName.height)")
+        #expect(abs(scaledBody.height - plainBody.height * 3) < 1, "本文: \(plainBody.height) → \(scaledBody.height)")
+    }
+}
