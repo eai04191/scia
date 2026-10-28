@@ -81,6 +81,11 @@ public final class LayerClock {
             await waitUntilMainRunLoopIsIdle()
             return Self.endedAnimations(in: layer, at: now).isEmpty
         }
+        // 待つのを打ち切ったときは、どの動きが外れなかったかを残す。たまに起きる止まり方の原因を、次に起きたときに追えるようにする。
+        let stuck = Self.endedAnimations(in: layer, at: now)
+        if !stuck.isEmpty {
+            Issue.record("終わったはずなのに外れない動きがあります（今の時間\(now)）: \(stuck)")
+        }
     }
 
     /// 止めたままでは、終わった動きの終わりの処理が呼ばれない。ごく遅く時間を流して、今の時点までに終わったものを知らせさせ、すぐ止め直す。
@@ -112,13 +117,16 @@ public final class LayerClock {
         return own.map { "\(owner).\($0)" } + (layer.sublayers ?? []).flatMap(finiteAnimations(in:))
     }
 
-    /// `time`（止めた層の時間）までに終わったのに、まだ外れていない動き。終わりの処理が呼ばれると外れる。終わっても残す動き（`isRemovedOnCompletion`がfalse）は含めない。
+    /// `time`（止めた層の時間）までに終わったのに、まだ外れていない動きと、その始まりと終わりの時間。終わりの処理が呼ばれると外れる。終わっても残す動き（`isRemovedOnCompletion`がfalse）は含めない。
     private static func endedAnimations(in layer: CALayer, at time: TimeInterval, root: CALayer? = nil) -> [String] {
         let root = root ?? layer
         let local = layer.convertTime(time, from: root)
-        let own = (layer.animationKeys() ?? []).filter { key in
-            guard let animation = layer.animation(forKey: key), animation.isRemovedOnCompletion, isFinite(animation) else { return false }
-            return animation.beginTime + activeDuration(of: animation) <= local
+        let owner = layer.delegate.map { String(describing: type(of: $0)) } ?? String(describing: type(of: layer))
+        let own = (layer.animationKeys() ?? []).compactMap { key -> String? in
+            guard let animation = layer.animation(forKey: key), animation.isRemovedOnCompletion, isFinite(animation) else { return nil }
+            let end = animation.beginTime + activeDuration(of: animation)
+            guard end <= local else { return nil }
+            return "\(owner).\(key)（\(type(of: animation))、始まり\(animation.beginTime)、終わり\(end)、層の時間\(local)）"
         }
         return own + (layer.sublayers ?? []).flatMap { endedAnimations(in: $0, at: time, root: root) }
     }
