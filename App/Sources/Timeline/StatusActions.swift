@@ -78,9 +78,8 @@ extension TimelineViewController {
 
     /// メニューに出る人の関係を、まとめて1回で読み直す。組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。
     /// 覚えていなかった人の関係の項目は、この読み直しを待って中身を渡す。関係で中身が変わる項目を出していなければ読まない。
-    /// - Parameter groups: 組んだユーザーのメニューの並び。タップや長押しに割り当てた1項目だけを組んだときは、その並びで決める。
-    private func reloadRelations(_ ids: [String], groups: MenuLayout<UserMenuItem>.Groups? = nil) {
-        guard !ids.isEmpty, (groups ?? settings.userMenuLayout.groups).needsRelationship else { return }
+    private func reloadRelations(_ ids: [String]) {
+        guard !ids.isEmpty, settings.userMenuLayout.groups.needsRelationship else { return }
         userMenuActions?.reloadRelations(ids)
     }
 
@@ -394,24 +393,11 @@ extension TimelineViewController {
         return UIImage.animatedImage(with: frames, duration: total)?.withRenderingMode(.alwaysOriginal)
     }
 
-    /// ユーザーのメニューを`@acct`のサブメニューにする。中身が1つで「その他」が空なら、サブメニューにせず直接並べる。
+    /// 投稿のメニューに置く、ユーザーのメニューのサブメニュー。
     private func userElement(for user: MenuUser, id: ItemID) -> UIMenuElement? {
-        let groups = settings.userMenuLayout.groups
-        let handlers = urlHandlers(id: id)
-        let load = relationLoad(for: user)
-        // Mastodonは通報する相手の投稿しか添えられないため、長押しした投稿をその人が書いたときだけ添える。
-        let shown = status(for: id)?.displayed
-        let reportableStatusID = shown?.account.id == user.id ? shown?.id : nil
-        // 関係の項目は読んでから中身が決まり、名前に相手を入れられないため、1つだけでもサブメニューにする。
-        if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first?.items, only.count == 1, !only[0].isRelation {
-            // サブメニューの項目に付けるアイコンがないので、「プロフィール」にその人のアイコンを付ける。
-            return userAction(only[0], for: user, handlers: handlers, inSubmenu: false, profileIcon: only[0] == .profile ? userMenuIcon(for: user, id: id) : nil)
+        makeUserMenu(for: user, id: id).submenu(groups: settings.userMenuLayout.groups, openProfile: openProfile(of: user)) {
+            self.userMenuIcon(for: user, id: id)
         }
-        let children = groups.menuElements { item in
-            userElements(item, for: user, handlers: handlers, load: load, reportableStatusID: reportableStatusID, inSubmenu: true)
-        }
-        guard !children.isEmpty else { return nil }
-        return UIMenu.user(acct: user.acct, image: userMenuIcon(for: user, id: id), children: children)
     }
 
     /// リンクカードを長押ししたときに出す、リンクのメニュー。本文のリンクの長押しのメニューと同じ並びで組む。出す項目がなければnil。
@@ -462,24 +448,30 @@ extension TimelineViewController {
         return children.isEmpty ? nil : UIMenu(title: url.absoluteString, children: children)
     }
 
-    /// アイコンや人の一覧の行を長押ししたときに出す、その人のユーザーのメニュー。サブメニューの項目がないので、「プロフィール」にその人のアイコンを付ける。
-    /// 出す項目がなければnil。
+    /// アイコンや人の一覧の行を長押ししたときに出す、その人のユーザーのメニュー。出す項目がなければnil。
     /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
     func userMenu(for user: MenuUser, id: ItemID, groups: MenuLayout<UserMenuItem>.Groups? = nil) -> UIMenu? {
-        let groups = groups ?? settings.userMenuLayout.groups
-        defer { reloadRelations([user.id], groups: groups) }
         defer { loadPendingMenuIcons() }
-        let handlers = urlHandlers(id: id)
-        let load = relationLoad(for: user)
-        let shown = status(for: id)?.displayed
-        let reportableStatusID = shown?.account.id == user.id ? shown?.id : nil
-        let failureSlots = groups.relationFailureSlots(waitsForReport: false)
-        let children = groups.menuElements { item in
-            let profileIcon = item == .profile ? userMenuIcon(for: user, id: id) : nil
-            return userElements(item, for: user, handlers: handlers, load: load, reportableStatusID: reportableStatusID, inSubmenu: true, profileIcon: profileIcon, failureSlots: failureSlots)
+        return makeUserMenu(for: user, id: id).menu(groups: groups ?? settings.userMenuLayout.groups, openProfile: openProfile(of: user)) {
+            self.userMenuIcon(for: user, id: id)
         }
-        guard !children.isEmpty else { return nil }
-        return UIMenu.user(acct: user.acct, children: children)
+    }
+
+    /// この一覧の行から出すユーザーのメニュー。共有のシートはその行から出す。
+    private func makeUserMenu(for user: MenuUser, id: ItemID) -> UserMenu {
+        // Mastodonは通報する相手の投稿しか添えられないため、長押しした投稿をその人が書いたときだけ添える。
+        let shown = status(for: id)?.displayed
+        return UserMenu(subject: UserMenuSubject(user), actions: userMenuActions, handlers: urlHandlers(id: id), host: self, reportableStatusID: shown?.account.id == user.id ? shown?.id : nil)
+    }
+
+    /// ユーザーのメニューの「プロフィール」で開く。メンションされたユーザーはアカウントの全体がないため、IDで開く。
+    private func openProfile(of user: MenuUser) -> @MainActor () -> Void {
+        { [weak self] in
+            switch user {
+            case .account(let account): self?.onOpenProfile?(account)
+            case .mention(let mention): self?.onOpenProfileID?(mention.id)
+            }
+        }
     }
 
     /// ユーザーのメニューのアイコンにする、その人のアイコン。読み込み済みの画像を、一覧と同じ形に切り抜く。
@@ -581,8 +573,7 @@ extension TimelineViewController {
         }.withRenderingMode(.alwaysOriginal)
     }
 
-    /// プロフィール画面のナビゲーションバーに出す、そのユーザーのユーザーのメニュー。開いているプロフィールを開く「プロフィール」は出さない。
-    /// 出す項目がなければnil。
+    /// プロフィール画面のナビゲーションバーに出す、そのユーザーのユーザーのメニュー。出す項目がなければnil。
     /// - Parameter barButtonItem: 共有のシートを出す起点。
     func profileUserMenu(for account: Account, from barButtonItem: UIBarButtonItem) -> UIMenu? {
         let handlers = URLMenuHandlers(
@@ -594,65 +585,8 @@ extension TimelineViewController {
             },
             open: { [weak self] url, browser in self?.openURL(url, in: browser) }
         )
-        let user = MenuUser.account(account)
-        let load = relationLoad(for: user)
-        let children = settings.userMenuLayout.groups.menuElements { item in
-            guard item != .profile else { return [] }
-            return userElements(item, for: user, handlers: handlers, load: load, reportableStatusID: nil, inSubmenu: true)
-        }
-        reloadRelations([account.id])
-        return children.isEmpty ? nil : UIMenu(children: children)
-    }
-
-    /// メニューを1回開く間、関係の項目で分け合う関係の読み込み。
-    private func relationLoad(for user: MenuUser) -> UserRelationLoad? {
-        guard let userMenuActions else { return nil }
-        return userMenuActions.relationLoad(for: .account(id: user.id, acct: user.acct))
-    }
-
-    /// - Parameters:
-    ///   - profileIcon: 「プロフィール」に付ける、その人のアイコン。nilなら記号を付ける。
-    ///   - failureSlots: 関係を読めなかったことを知らせる項目。組む並びから決める。省略すると設定の並びで決める。
-    private func userElements(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, load: UserRelationLoad?, reportableStatusID: String?, inSubmenu: Bool, profileIcon: UIImage? = nil, failureSlots: RelationFailureSlots? = nil) -> [UIMenuElement] {
-        guard item.isRelation else { return userAction(item, for: user, handlers: handlers, inSubmenu: inSubmenu, profileIcon: profileIcon).map { [$0] } ?? [] }
-        guard let userMenuActions, let load else { return [] }
-        let target = UserMenuTarget.account(id: user.id, acct: user.acct)
-        let failureSlots = failureSlots ?? settings.userMenuLayout.groups.relationFailureSlots(waitsForReport: false)
-        return userMenuActions.relationElements(item, target: target, load: load, failureSlots: failureSlots, reportableStatusID: reportableStatusID)
-    }
-
-    /// - Parameter profileIcon: 「プロフィール」に付ける、その人のアイコン。nilなら記号を付ける。
-    private func userAction(_ item: UserMenuItem, for user: MenuUser, handlers: URLMenuHandlers, inSubmenu: Bool, profileIcon: UIImage? = nil) -> UIAction? {
-        if let action = item.urlAction {
-            return action.action(title: inSubmenu ? nil : Self.inlineTitle(of: action, for: user), url: user.url, handlers: handlers)
-        }
-        switch item {
-        case .profile:
-            return UIAction(title: inSubmenu ? item.title : "@\(user.acct)のプロフィール", image: profileIcon ?? item.image) { [weak self] _ in
-                switch user {
-                case .account(let account): self?.onOpenProfile?(account)
-                case .mention(let mention): self?.onOpenProfileID?(mention.id)
-                }
-            }
-        case .mention:
-            return userMenuActions?.action(item, target: .account(id: user.id, acct: user.acct), title: inSubmenu ? nil : "@\(user.acct)にメンション", notifying: self)
-        case .copyHandle:
-            return userMenuActions?.action(item, target: .account(id: user.id, acct: user.acct), title: inSubmenu ? nil : "@\(user.acct)のハンドルをコピー", notifying: self)
-        case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .follow, .showReblogs, .notify, .note, .mute, .block, .report:
-            // 共通の項目は、上で中身から組んだ。
-            return nil
-        }
-    }
-
-    /// サブメニューにせず投稿のメニューに直接並べるときの、ユーザーの共通の項目の名前。
-    private static func inlineTitle(of action: URLMenuAction, for user: MenuUser) -> String {
-        switch action {
-        case .copyLink: "@\(user.acct)のリンクをコピー"
-        case .share: "@\(user.acct)を共有"
-        case .openInBrowser: "@\(user.acct)をブラウザで開く"
-        case .openInDefaultBrowser: "@\(user.acct)を既定のブラウザで開く"
-        case .openInAppSafari: "@\(user.acct)をアプリ内のSafariで開く"
-        }
+        let menu = UserMenu(subject: UserMenuSubject(.account(account)), actions: userMenuActions, handlers: handlers, host: self)
+        return menu.profileScreenMenu(groups: settings.userMenuLayout.groups)
     }
 
     /// 共有のシートは、メニューを出した行から出す。

@@ -307,28 +307,10 @@ final class LinkHitArea: UIControl {
                 }
             }
         case .mention(let acct, let url):
-            makeMenu = { UIMenu.user(acct: acct, children: $0) }
             let host = nearest((any LinkMenuHost).self)
-            let target = UserMenuTarget.profileURL(url, shownAcct: acct)
-            let actions = host?.userMenuActions
-            let load = actions.map { $0.relationLoad(for: target) }
-            // 通報も、相手を探すのを待って出す。
-            let userGroups = groups?.user ?? settings.userMenuLayout.groups
-            // 知らせる項目は、組む並びから決める。1項目だけ組むときに、出さない項目で知らせて空のメニューにならないため。
-            let failureSlots = userGroups.relationFailureSlots(waitsForReport: true)
-            children = userGroups.menuElements { item in
-                if let action = item.urlAction {
-                    return [action.action(url: url, handlers: handlers)]
-                }
-                switch item {
-                case .profile: return [profileAction(item.title, image: host?.mentionMenuIcon(for: url) ?? item.image, destination)]
-                case .mention, .copyHandle: return actions?.action(item, target: target, notifying: host).map { [$0] } ?? []
-                case .follow, .showReblogs, .notify, .note, .mute, .block, .report:
-                    guard let actions, let load else { return [] }
-                    return actions.relationElements(item, target: target, load: load, failureSlots: failureSlots)
-                // 共通の項目は、上で中身から組んだ。
-                case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari: return []
-                }
+            let menu = UserMenu(subject: UserMenuSubject(mentionLink: url, acct: acct), actions: host?.userMenuActions, handlers: handlers, host: host)
+            return menu.menu(groups: groups?.user ?? settings.userMenuLayout.groups, openProfile: { [weak self] in self?.label?.open(destination) }) {
+                host?.mentionMenuIcon(for: url)
             }
         case .hashtag(let name, let url):
             makeMenu = { UIMenu(title: "#\(name)", children: $0) }
@@ -344,10 +326,6 @@ final class LinkHitArea: UIControl {
             )
         }
         return children.isEmpty ? nil : makeMenu(children)
-    }
-
-    private func profileAction(_ title: String, image: UIImage?, _ destination: RichText.LinkDestination) -> UIAction {
-        UIAction(title: title, image: image) { [weak self] _ in self?.label?.open(destination) }
     }
 
     private func openAsProfileAction(_ title: String, image: UIImage?, url: URL) -> UIAction {
