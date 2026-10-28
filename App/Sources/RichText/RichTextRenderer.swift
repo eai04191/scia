@@ -34,7 +34,7 @@ struct RichTextRenderer {
             for inline in block.inlines {
                 result.append(render(inline, block: block))
             }
-            result.addAttribute(.paragraphStyle, value: paragraphStyle(for: block), range: NSRange(location: start, length: result.length - start))
+            applyParagraphStyle(for: block, to: result, range: NSRange(location: start, length: result.length - start))
         }
         result.separateFallbackSymbols(in: NSRange(location: 0, length: result.length))
         EmojiFont.restoreTextPresentation(in: result)
@@ -75,7 +75,7 @@ struct RichTextRenderer {
                 }
                 result.append(rendered)
             }
-            result.addAttribute(.paragraphStyle, value: paragraphStyle(for: block), range: NSRange(location: start, length: result.length - start))
+            applyParagraphStyle(for: block, to: result, range: NSRange(location: start, length: result.length - start))
         }
         result.separateFallbackSymbols(in: NSRange(location: 0, length: result.length))
         EmojiFont.restoreTextPresentation(in: result)
@@ -201,8 +201,9 @@ struct RichTextRenderer {
             return NSAttributedString(string: ":\(emoji.shortcode):", attributes: attributes(style: [], block: block))
         }
         let height = font.lineHeight * emojiScale
-        // 下端は文字の下端に揃え、大きくしたときは上へ伸ばす。ベースラインより下へはみ出すと、ラベルが見積もる高さと描く高さがずれ、本文が上の行に重なるため。
-        let y = font.descender
+        // 絵文字の中心を、和文の字面（em枠）の中心に揃える。文字と大きさが違っても、文字が絵文字の横の真ん中に来るようにするため。
+        // 欧文の大文字の中心とも0.03emほどしか違わない。等倍の絵文字は、下端がほぼ文字の下端（descender）に来る。
+        let y = Self.emojiCenterHeight * font.pointSize - height / 2
         let attachment = NSTextAttachment()
         if let image, image.size.height > 0 {
             attachment.image = image
@@ -223,6 +224,9 @@ struct RichTextRenderer {
     private static func lineSeparated(_ text: String) -> String {
         text.replacingOccurrences(of: "\n", with: "\u{2028}")
     }
+
+    /// カスタム絵文字の中心の、ベースラインからの高さ（文字の大きさに対する割合）。em枠の中心。
+    static let emojiCenterHeight = (PostBodyView.emBoxAscent - PostBodyView.emBoxDescent) / 2
 
     /// 読み込み中のカスタム絵文字の場所を空けておく、透明な画像。ラベルが、画像が届いて入れ替わったことを見分けるのにも使う。
     static let emojiPlaceholder = UIGraphicsImageRenderer(size: CGSize(width: 1, height: 1)).image { _ in }
@@ -260,14 +264,38 @@ struct RichTextRenderer {
         return UIFont(descriptor: descriptor, size: font.pointSize)
     }
 
-    private func paragraphStyle(for block: RichText.Block) -> NSParagraphStyle {
+    /// 段落スタイルを付ける。行の高さは、段落の絵文字から決める。
+    private func applyParagraphStyle(for block: RichText.Block, to result: NSMutableAttributedString, range: NSRange) {
+        result.addAttribute(.paragraphStyle, value: paragraphStyle(for: block, emojiExtent: Self.emojiExtent(in: result, range: range)), range: range)
+    }
+
+    /// 範囲の中のカスタム絵文字の画像が、ベースラインから上と下へ伸びる長さ。絵文字がなければ0。
+    static func emojiExtent(in text: NSAttributedString, range: NSRange) -> (above: CGFloat, below: CGFloat) {
+        var above: CGFloat = 0
+        var below: CGFloat = 0
+        text.enumerateAttribute(.attachment, in: range) { value, _, _ in
+            guard let attachment = value as? NSTextAttachment else { return }
+            above = max(above, attachment.bounds.maxY)
+            below = max(below, -attachment.bounds.minY)
+        }
+        return (above, below)
+    }
+
+    /// 範囲の文字の書体。`fromEnd`なら最後の文字の書体。
+    static func textFont(in text: NSAttributedString, range: NSRange, fromEnd: Bool = false) -> UIFont? {
+        guard range.length > 0 else { return nil }
+        return text.attribute(.font, at: fromEnd ? NSMaxRange(range) - 1 : range.location, effectiveRange: nil) as? UIFont
+    }
+
+    private func paragraphStyle(for block: RichText.Block, emojiExtent: (above: CGFloat, below: CGFloat) = (0, 0)) -> NSParagraphStyle {
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = paragraphSpacing
         style.lineSpacing = lineSpacing
-        // カスタム絵文字を文字の行より大きくした段落は、行の高さを絵文字の高さ以上にする。
+        // 絵文字を文字の行より大きくした段落は、行の高さを絵文字が上下に伸びる長さ以上にする。
         // 指定しないと、UILabelが見積もる高さより描く行が高くなり、ラベルが文字を縦の中央に寄せて、1行目が上の部品に重なる。
-        if emojiScale > 1, block.inlines.contains(where: { if case .emoji = $0 { true } else { false } }) {
-            style.minimumLineHeight = ceil(font.lineHeight * emojiScale)
+        let height = max(font.ascender, emojiExtent.above) + max(-font.descender, emojiExtent.below)
+        if height > font.lineHeight + 0.5 {
+            style.minimumLineHeight = ceil(height)
         }
         let indent = CGFloat(block.quoteLevel + max(0, block.listLevel - 1)) * indentPerLevel
         style.firstLineHeadIndent = indent

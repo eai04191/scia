@@ -587,13 +587,12 @@ final class PostContentView: UIView, UIContentView {
         return frames
     }
 
-    /// 名前の字面の枠。上端と下端は、ベースラインからem枠で測る。並びも同じ測り方で、本文やメディアとのすき間を取っている。
+    /// 名前の字面の枠。上端と下端は、ベースラインからem枠で測る。下端は、大きくした絵文字が下へ伸びていればその下端にする。並びも同じ測り方で、本文やメディアとのすき間を取っている。
     private func nameGlyphsFrame() -> [CGRect]? {
         guard let row = nameRow.previewFrame(in: self)?.first else { return nil }
         let baseline = nameBaselineGuide.layoutFrame.minY
-        let size = Self.largestNamePointSize(of: current)
-        let top = baseline - size * PostBodyView.emBoxAscent
-        return [CGRect(x: row.minX, y: top, width: row.width, height: size * (PostBodyView.emBoxAscent + PostBodyView.emBoxDescent))]
+        let top = baseline - Self.largestNamePointSize(of: current) * PostBodyView.emBoxAscent
+        return [CGRect(x: row.minX, y: top, width: row.width, height: baseline + Self.nameBottomInset(of: current) - top)]
     }
 
     /// 名前の上の行の文字を、名前の部分と添える部分に分けた枠。添える部分がなければ、全体を名前の部分とする。
@@ -663,7 +662,7 @@ final class PostContentView: UIView, UIContentView {
             // 間隔は、名前の行の字面の下端から測る。名前の行の部分はベースラインで揃っているので、いちばん大きい文字の字面の下端を使う。
             bodyView.topAnchor.constraint(
                 equalTo: nameLabels[0].lastBaselineAnchor,
-                constant: (bodyView.startsWithMedia ? metrics.nameMediaSpacing : metrics.nameBodySpacing) + Self.largestNamePointSize(of: configuration) * PostBodyView.emBoxDescent
+                constant: (bodyView.startsWithMedia ? metrics.nameMediaSpacing : metrics.nameBodySpacing) + Self.nameBottomInset(of: configuration)
             ),
             bodyView.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
             bodyView.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
@@ -723,10 +722,15 @@ final class PostContentView: UIView, UIContentView {
         NSLayoutConstraint.activate(constraints)
     }
 
+    /// 名前の行のベースラインから、字面の下端まで。大きくした絵文字が字面より下へ伸びていれば、その下端まで。
+    static func nameBottomInset(of configuration: PostContentConfiguration) -> CGFloat {
+        configuration.nameParts.map(PostBodyView.textBottomInset).reduce(largestNamePointSize(of: configuration) * PostBodyView.emBoxDescent, max)
+    }
+
     /// 名前の行に出す文字（名前、ハンドル、時刻）のうち、いちばん大きい文字の大きさ。
     static func largestNamePointSize(of configuration: PostContentConfiguration) -> CGFloat {
         var sizes = configuration.nameParts.compactMap { part in
-            part.length > 0 ? (part.attribute(.font, at: 0, effectiveRange: nil) as? UIFont)?.pointSize : nil
+            RichTextRenderer.textFont(in: part, range: NSRange(location: 0, length: part.length))?.pointSize
         }
         sizes.append(configuration.metrics.nameFont.pointSize)
         if configuration.showsTime {

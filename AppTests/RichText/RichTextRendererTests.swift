@@ -247,6 +247,38 @@ struct RichTextRendererTests {
     }
 }
 
+extension RichTextRendererTests {
+    /// カスタム絵文字は、大きさによらず、中心を和文の字面（em枠）の中心に揃える。
+    @Test(arguments: [0.5, 1.0, 4.0])
+    func customEmojiIsCenteredOnTheEmBox(scale: Double) throws {
+        let blobcat = try emoji("blobcat")
+        var renderer = renderer(.offline)
+        renderer.emojiScale = scale
+        let bounds = try #require(attachments(in: renderer.render(.plain("文 :blobcat:", emojis: [blobcat]))).first).bounds
+
+        #expect(abs(bounds.midY - font.pointSize * RichTextRenderer.emojiCenterHeight) < 0.01)
+        #expect(abs(bounds.height - font.lineHeight * scale) < 0.01)
+    }
+
+    /// 絵文字を大きくした段落は、行の高さを、絵文字が上下に伸びる長さ以上にする。等倍では行の高さを変えない。
+    @Test(arguments: [1.0, 3.0])
+    func paragraphWithLargeEmojiIsTallEnough(scale: Double) throws {
+        let blobcat = try emoji("blobcat")
+        var renderer = renderer(.offline)
+        renderer.emojiScale = scale
+        let text = renderer.render(.plain("文:blobcat:", emojis: [blobcat]))
+        let style = try #require(text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
+        let extent = RichTextRenderer.emojiExtent(in: text, range: NSRange(location: 0, length: text.length))
+
+        if scale == 1 {
+            #expect(style.minimumLineHeight == 0)
+        } else {
+            #expect(style.minimumLineHeight >= extent.above + extent.below)
+            #expect(extent.below > -font.descender, "大きくした絵文字は、文字の下端より下へも伸びる")
+        }
+    }
+}
+
 @MainActor
 private final class LoadRecorder {
     var urls: Set<URL> = []

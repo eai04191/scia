@@ -393,7 +393,7 @@ extension PostContentViewTests {
         settings.setValue(bodyScale, for: AppearanceCatalog.customEmojiScale)
         let base = try status(content: "")
         let author = Account(id: "3", username: "carol", acct: "carol", displayName: "名前 :blobcat:", avatar: nil, emojis: [blobcat])
-        let post = Status(id: base.id, createdAt: base.createdAt, account: author, content: "<p>本文 :blobcat: の絵文字</p>", spoilerText: "", url: nil, emojis: [blobcat])
+        let post = Status(id: base.id, createdAt: base.createdAt, account: author, content: "<p>本文 :blobcat: の絵文字</p><p>最後の段落 :blobcat:</p>", spoilerText: "", url: nil, emojis: [blobcat])
         let controller = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: store, avatarImages: .offline, settings: settings)
         let view = try #require(controller.contentConfiguration(for: post, base: .cell()).makeContentView() as? PostContentView)
         let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
@@ -407,9 +407,42 @@ extension PostContentViewTests {
     func largeBodyEmojiStaysBelowNameRow(scale: Double) async throws {
         let frames = try await emojiPostFrames(nameScale: 1, bodyScale: scale)
         let name = try #require(frames[.nameGlyphs]?.first)
-        let emoji = try #require(frames[.customEmojis]?.first)
+        let emojis = frames[.customEmojis] ?? []
 
-        #expect(emoji.minY >= name.maxY, "絵文字=\(emoji) 名前の字面=\(name)")
+        #expect(!emojis.isEmpty)
+        for emoji in emojis {
+            #expect(emoji.minY >= name.maxY, "絵文字=\(emoji) 名前の字面=\(name)")
+        }
+    }
+
+    /// 名前の絵文字を大きくしても、字面の中心より下へ伸びた分で、本文の1行目に重ならない。
+    @Test(arguments: [1.0, 4.0])
+    func largeNameEmojiStaysAboveBody(scale: Double) async throws {
+        let frames = try await emojiPostFrames(nameScale: scale, bodyScale: 1)
+        let body = try #require(frames[.bodyGlyphs]?.first)
+        let name = try #require(frames[.nameGlyphs]?.first)
+        let emojis = frames[.nameCustomEmojis] ?? []
+
+        #expect(name.maxY <= body.minY + 0.01)
+        for emoji in emojis {
+            #expect(emoji.maxY <= body.minY + 0.01, "絵文字=\(emoji) 本文の字面=\(body)")
+        }
+    }
+
+    /// 本文の絵文字を大きくしても、最初と最後の段落の絵文字が伸びた分を本文の字面に含め、上と下の部品とのあいだをそこから測る。
+    /// 等倍の絵文字も、上下が書体のascenderとdescenderまであり、em枠の字面から少し出る。大きくしても、出る長さはそれと同じにする。
+    @Test func largeBodyEmojiIsInsideBodyGlyphs() async throws {
+        let frames = try await emojiPostFrames(nameScale: 1, bodyScale: 4)
+        let body = try #require(frames[.bodyGlyphs]?.first)
+        let emojis = frames[.customEmojis] ?? []
+        let font = PostTypography(settings: .isolated()).font(.body)
+        let above = font.ascender - font.pointSize * PostBodyView.emBoxAscent
+        let below = -font.descender - font.pointSize * PostBodyView.emBoxDescent
+
+        #expect(emojis.count >= 2)
+        for emoji in emojis {
+            #expect(emoji.minY >= body.minY - above - 0.5 && emoji.maxY <= body.maxY + below + 0.5, "絵文字=\(emoji) 本文の字面=\(body)")
+        }
     }
 
     /// 名前と本文のカスタム絵文字は、それぞれの設定の割合で大きさを変える。
