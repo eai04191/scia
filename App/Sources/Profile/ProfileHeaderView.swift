@@ -538,15 +538,19 @@ final class ProfileHeaderView: UIView {
         withHorizontalFittingPriority horizontalFittingPriority: UILayoutPriority,
         verticalFittingPriority: UILayoutPriority
     ) -> CGSize {
-        applyBannerLayout(width: targetSize.width, notifies: false)
-        updateMoreButton(width: targetSize.width)
-        return super.systemLayoutSizeFitting(targetSize, withHorizontalFittingPriority: horizontalFittingPriority, verticalFittingPriority: verticalFittingPriority)
+        FrameWork.measure("ProfileHeaderView.sizing") {
+            applyBannerLayout(width: targetSize.width, notifies: false)
+            updateMoreButton(width: targetSize.width)
+            return super.systemLayoutSizeFitting(targetSize, withHorizontalFittingPriority: horizontalFittingPriority, verticalFittingPriority: verticalFittingPriority)
+        }
     }
 
     override func layoutSubviews() {
-        applyBannerLayout(width: bounds.width, notifies: false)
-        updateMoreButton(width: bounds.width)
-        super.layoutSubviews()
+        FrameWork.measure("ProfileHeaderView.layoutSubviews") {
+            applyBannerLayout(width: bounds.width, notifies: false)
+            updateMoreButton(width: bounds.width)
+            super.layoutSubviews()
+        }
     }
 
     /// ヘッダーの外へ上にはみ出したヘッダー画像も、タップを受ける。

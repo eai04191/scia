@@ -318,6 +318,10 @@ final class NotificationContentView: UIView, UIContentView {
     }
 
     override func layoutSubviews() {
+        FrameWork.measure("NotificationContentView.layoutSubviews") { layoutContents() }
+    }
+
+    private func layoutContents() {
         super.layoutSubviews()
         reactionGlowView.layout(in: bounds, bottomMargin: current.metrics.margins.bottom)
         // 本文の枠は中身の部品の中で決まるため、先に並べておく。

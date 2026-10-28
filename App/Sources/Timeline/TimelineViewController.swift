@@ -708,7 +708,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         defer { isRestoringAnchor = false }
         var snapshot = dataSource.snapshot()
         snapshot.reconfigureItems(snapshot.itemIdentifiers)
-        dataSource.apply(snapshot, animatingDifferences: false)
+        FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: false) }
         if let anchor {
             restore(anchor)
         }
@@ -812,18 +812,18 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         snapshot.reconfigureItems(Array(reconnectedIDs.union(changedIDs)))
         if animatesRemoval, changedIDs.isEmpty, canAnimateRemoval(leaving: newIDs) {
-            dataSource.apply(snapshot, animatingDifferences: true)
+            FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: true) }
             logger.info("setEntries count=\(newEntries.count, privacy: .public) animatesRemoval=true")
         } else if let topID {
             isRestoringAnchor = true
-            dataSource.apply(snapshot, animatingDifferences: false)
+            FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: false) }
             scrollToTop(of: topID)
             isRestoringAnchor = false
             logger.info("setEntries count=\(newEntries.count, privacy: .public) top=\(Self.label(topID), privacy: .public)")
         } else if keepsOffset {
             isRestoringAnchor = true
             let offset = collectionView.contentOffset.y
-            dataSource.apply(snapshot, animatingDifferences: false)
+            FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: false) }
             collectionView.layoutIfNeeded()
             let inset = collectionView.adjustedContentInset
             let maxOffset = max(collectionView.contentSize.height + inset.bottom - collectionView.bounds.height, -inset.top)
@@ -843,7 +843,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 )
             } else {
                 isRestoringAnchor = true
-                dataSource.apply(snapshot, animatingDifferences: false)
+                FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: false) }
                 collectionView.contentOffset.y = -collectionView.adjustedContentInset.top
                 isRestoringAnchor = false
             }
@@ -1581,27 +1581,32 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
+    private func configure(_ cell: TimelineCell, for entry: TimelineEntry, id: ItemID) {
+        switch entry {
+        case .status(let status):
+            cell.contentConfiguration = contentConfiguration(for: status, itemID: id, base: cell.defaultContentConfiguration())
+        case .pinned(let status):
+            cell.contentConfiguration = contentConfiguration(for: status, isPinned: true, itemID: id, base: cell.defaultContentConfiguration())
+        case .gap(let gap):
+            cell.contentConfiguration = gapContentConfiguration(
+                isLoading: loadingGapIDs.contains(gap.id),
+                failure: gapFailures[gap.id],
+                base: cell.defaultContentConfiguration()
+            )
+        case .notification(let notification):
+            cell.contentConfiguration = contentConfiguration(for: notification, itemID: id, base: cell.defaultContentConfiguration())
+        case .unreadable(let item):
+            cell.contentConfiguration = unreadableContentConfiguration(for: item, base: cell.defaultContentConfiguration())
+        case .account(let account):
+            cell.contentConfiguration = accountConfiguration(for: account, base: cell.defaultContentConfiguration())
+        }
+    }
+
     private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, ItemID> {
-        let registration = UICollectionView.CellRegistration<UICollectionViewListCell, ItemID> { [weak self] cell, _, id in
+        let registration = UICollectionView.CellRegistration<TimelineCell, ItemID> { [weak self] cell, _, id in
             guard let self, let entry = self.entries[id] else { return }
-            switch entry {
-            case .status(let status):
-                cell.contentConfiguration = self.contentConfiguration(for: status, itemID: id, base: cell.defaultContentConfiguration())
-            case .pinned(let status):
-                cell.contentConfiguration = self.contentConfiguration(for: status, isPinned: true, itemID: id, base: cell.defaultContentConfiguration())
-            case .gap(let gap):
-                cell.contentConfiguration = self.gapContentConfiguration(
-                    isLoading: self.loadingGapIDs.contains(gap.id),
-                    failure: self.gapFailures[gap.id],
-                    base: cell.defaultContentConfiguration()
-                )
-            case .notification(let notification):
-                cell.contentConfiguration = self.contentConfiguration(for: notification, itemID: id, base: cell.defaultContentConfiguration())
-            case .unreadable(let item):
-                cell.contentConfiguration = self.unreadableContentConfiguration(for: item, base: cell.defaultContentConfiguration())
-            case .account(let account):
-                cell.contentConfiguration = self.accountConfiguration(for: account, base: cell.defaultContentConfiguration())
-            }
+            cell.workName = entry.workName
+            FrameWork.measure("\(entry.workName).configure") { self.configure(cell, for: entry, id: id) }
         }
         let footerRegistration = UICollectionView.SupplementaryRegistration<TimelineFooterView>(
             elementKind: UICollectionView.elementKindSectionFooter
@@ -1619,13 +1624,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
         dataSource.supplementaryViewProvider = { collectionView, kind, indexPath in
             if kind == UICollectionView.elementKindSectionHeader {
-                return collectionView.dequeueConfiguredReusableSupplementary(using: headerRegistration, for: indexPath)
+                return FrameWork.measure("header.dequeue") { collectionView.dequeueConfiguredReusableSupplementary(using: headerRegistration, for: indexPath) }
             }
             return collectionView.dequeueConfiguredReusableSupplementary(using: footerRegistration, for: indexPath)
         }
         var snapshot = NSDiffableDataSourceSnapshot<Section, ItemID>()
         snapshot.appendSections([.main])
-        dataSource.apply(snapshot, animatingDifferences: false)
+        FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: false) }
         return dataSource
     }
 
@@ -1822,6 +1827,10 @@ extension TimelineViewController: LinkMenuHost {
 
 extension TimelineViewController: UICollectionViewDelegate {
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        FrameWork.measure("scrollViewDidScroll") { handleScroll(scrollView) }
+    }
+
+    private func handleScroll(_ scrollView: UIScrollView) {
         if scrollView.isTracking {
             // 指が下へ動いていれば、内容は上の新しい投稿の方へ動く。
             let velocity = scrollView.panGestureRecognizer.velocity(in: scrollView).y
@@ -1874,7 +1883,8 @@ extension TimelineViewController: UICollectionViewDelegate {
     private func recordScroll() {
         guard let start = scrollStart else { return }
         scrollStart = nil
-        let hitches = scrollHitches.stop()
+        let (hitches, work) = scrollHitches.finish()
+        FrameWorkLog.record(work, screen: texts.dumpName)
         UserAction.scroll(ScrollRecord(
             screen: texts.dumpName,
             startOffset: start.offset,
@@ -2256,7 +2266,7 @@ extension TimelineViewController {
         // 表示領域の上端にかかっている行が消えるときは、残る行のうち一番上に見えている行を基準にする。
         // 消える行を基準にすると、当て直したあとに位置を合わせる行がなく、読んでいる行が流れるため。
         let anchor = anchorID.flatMap(anchor(of:)) ?? currentAnchor(among: Set(snapshot.itemIdentifiers))
-        dataSource.apply(snapshot, animatingDifferences: false)
+        FrameWork.measure("snapshot.apply") { dataSource.apply(snapshot, animatingDifferences: false) }
         if let anchor {
             restore(anchor)
         }
@@ -2293,6 +2303,10 @@ extension TimelineViewController: NoticeScreen {
 
 /// タイムラインの一覧。本文のリンクを押して少し止めてから引いても、スクロールできるようにする。
 final class TimelineCollectionView: UICollectionView {
+    override func layoutSubviews() {
+        FrameWork.measure("TimelineCollectionView.layoutSubviews") { super.layoutSubviews() }
+    }
+
     override func touchesShouldCancel(in view: UIView) -> Bool {
         view is LinkHitArea || super.touchesShouldCancel(in: view)
     }

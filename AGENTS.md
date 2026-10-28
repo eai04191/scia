@@ -120,6 +120,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - 描画性能: スクロール時のhitchは`xcrun xctrace record --template 'Animation Hitches'`や`XCTOSSignpostMetric.scrollDecelerationMetric`で測る。シミュレーターの値は参考値で、最終確認は実機で行う
 - 見た目: 実データに近いfixtureを使い、スクリーンショットで確認する
 - 好みで決まる値は、ハードコードで決め打ちしない。余白や文字の大きさのような投稿の見た目の値は、設定の「投稿の見た目」（`AppearanceCatalog`）に項目を足す。アニメーションの時間や新着をまとめて挿入する間隔のような、動きや間合いの値は、`TuningCatalog`に項目を足してデバッグ用のチューニングパネルから調整できるようにする。どちらも、ユーザーに選んでもらう
+- フレームが落ちたスクロールでは、落ちたフレームに使った処理の時間（行の組み立て、行の大きさの計算、並べ直しなど）を、`frameWork`のnoticeのログに1行で残し、アプリのDocuments/FrameWork.jsonに起動をまたいで足し上げる。直す場所を選ぶときは、まずこのファイルで合計の長い処理を見る。測るのは`FrameWork.measure`で囲んだ処理だけなので、`measured`が`hitchTime`よりずっと小さければ、測っていない処理が重い。そのときは`FrameWork.measure`で囲む場所を足すか、Time Profilerで測る
 - ユーザーがシェイクで残した違和感レポートは、アプリのDocuments/DiscomfortReportsにJSONで保存される。シミュレーターでは`xcrun simctl get_app_container '<使う端末>' net.mizle.scia data`で場所を調べられる。状態を追いたい画面は`AppDependencies.stateDumps`に状態ダンプを登録し、調査に必要なイベントはinfo以上のレベルで`SciaLog`に出す（debugレベルはレポートに残らない）
 
 ## テスト

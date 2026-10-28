@@ -783,6 +783,10 @@ final class PostContentView: UIView, UIContentView {
     }
 
     override func layoutSubviews() {
+        FrameWork.measure("PostContentView.layoutSubviews") { layoutContents() }
+    }
+
+    private func layoutContents() {
         super.layoutSubviews()
         reactionGlowView.layout(in: bounds, bottomMargin: current.metrics.margins.bottom)
         layoutReplyLines()
