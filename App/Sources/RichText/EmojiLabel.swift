@@ -373,6 +373,28 @@ class EmojiLabel: UILabel {
         return frames
     }
 
+    /// 大きさを変えたUnicodeの絵文字の枠。ラベルの座標で返す。「投稿の見た目」のプレビューで、絵文字の場所を示すのに使う。
+    final func previewUnicodeEmojiFrames() -> [CGRect] {
+        guard let attributedText, attributedText.length > 0 else { return [] }
+        let layout = textLayout(of: attributedText)
+        let contentStorage = layout.contentStorage
+        let start = contentStorage.documentRange.location
+        var frames: [CGRect] = []
+        attributedText.enumerateAttribute(.scaledUnicodeEmoji, in: NSRange(location: 0, length: attributedText.length)) { value, range, _ in
+            guard value != nil,
+                  let from = contentStorage.location(start, offsetBy: range.location),
+                  let to = contentStorage.location(start, offsetBy: NSMaxRange(range)),
+                  let textRange = NSTextRange(location: from, end: to)
+            else { return }
+            let extent = RichTextRenderer.emojiExtent(in: attributedText, range: range)
+            layout.layoutManager.enumerateTextSegments(in: textRange, type: .standard, options: []) { _, frame, baseline, _ in
+                frames.append(CGRect(x: frame.minX, y: frame.minY + baseline - extent.above, width: frame.width, height: extent.above + extent.below))
+                return true
+            }
+        }
+        return frames
+    }
+
     /// 並べた行ごとの、行の枠と、段落の最初の行か、行の字下げ。ラベルの座標で返す。
     /// 「投稿の見た目」のプレビューで、行間、段落のあいだ、字下げの場所を示すのに使う。
     final func previewLines() -> [(frame: CGRect, startsParagraph: Bool, indent: CGFloat)] {

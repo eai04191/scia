@@ -255,7 +255,8 @@ final class PostContentView: UIView, UIContentView {
     var contextHeight: CGFloat {
         guard current.context != nil else { return 0 }
         layoutIfNeeded()
-        return nameRow.frame.minY - current.metrics.margins.top
+        // 名前の行は、大きい絵文字があると上の空きの分だけ上に置くので、アイコンの上端から測る。
+        return avatarView.frame.minY - current.metrics.margins.top
     }
 
     init(configuration: PostContentConfiguration) {
@@ -462,6 +463,7 @@ final class PostContentView: UIView, UIContentView {
             .connectedAvatar: current.replyConnection.below ? avatarView.previewFrame(in: self) : nil,
             .nameFade: nameFadeFrames(),
             .nameCustomEmojis: nameCustomEmojiFrames(),
+            .nameUnicodeEmojis: nameUnicodeEmojiFrames(),
             .nameTimeMinGap: nameTimeMinGapFrame(),
         ].compactMapValues(\.self)
         frames.merge(slotPreviewFrames()) { $1 }
@@ -500,6 +502,14 @@ final class PostContentView: UIView, UIContentView {
     private func nameCustomEmojiFrames() -> [CGRect]? {
         let frames = (nameLabels + [contextLabel]).filter { !$0.isHidden }.flatMap { label in
             label.previewCustomEmojiFrames().map { label.convert($0, to: self) }
+        }
+        return frames.isEmpty ? nil : frames
+    }
+
+    /// 名前の行と名前の上の行の、大きさを変えた絵文字の枠。
+    private func nameUnicodeEmojiFrames() -> [CGRect]? {
+        let frames = (nameLabels + [contextLabel]).filter { !$0.isHidden }.flatMap { label in
+            label.previewUnicodeEmojiFrames().map { label.convert($0, to: self) }
         }
         return frames.isEmpty ? nil : frames
     }
@@ -650,9 +660,11 @@ final class PostContentView: UIView, UIContentView {
         NSLayoutConstraint.deactivate(variableConstraints)
         let metrics = configuration.metrics
         let margins = metrics.margins
+        let nameTopGap = configuration.nameParts.map(RichTextRenderer.lineTopGap).max() ?? 0
         var constraints = [
             avatarView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margins.leading),
-            avatarView.topAnchor.constraint(equalTo: nameRow.topAnchor),
+            // 名前の行は、ラベルが1行目の上に取る空きの分だけ上に置き、字面の上端を、アイコンの上端と同じ位置にそろえる。
+            avatarView.topAnchor.constraint(equalTo: nameRow.topAnchor, constant: nameTopGap),
             avatarView.widthAnchor.constraint(equalToConstant: metrics.avatarSize),
             avatarView.heightAnchor.constraint(equalToConstant: metrics.avatarSize),
             textGuide.leadingAnchor.constraint(equalTo: avatarView.trailingAnchor, constant: metrics.avatarSpacing),
@@ -686,7 +698,7 @@ final class PostContentView: UIView, UIContentView {
                 // アイコンの列の右端に揃えると、細い記号では文字とのあいだが間延びして見えるため。
                 contextIcon.trailingAnchor.constraint(equalTo: textGuide.leadingAnchor, constant: -metrics.contextSymbolSpacing),
                 Self.symbolVerticalConstraint(contextIcon, beside: contextLabel, onBaseline: context.notificationSymbolFont != nil),
-                nameRow.topAnchor.constraint(equalTo: contextGuide.bottomAnchor, constant: metrics.contextSpacing),
+                nameRow.topAnchor.constraint(equalTo: contextGuide.bottomAnchor, constant: metrics.contextSpacing - nameTopGap),
             ]
             if context.avatar != nil {
                 constraints += [
@@ -702,7 +714,7 @@ final class PostContentView: UIView, UIContentView {
                 constraints.append(contextLabel.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor))
             }
         } else {
-            constraints.append(nameRow.topAnchor.constraint(equalTo: topAnchor, constant: margins.top))
+            constraints.append(nameRow.topAnchor.constraint(equalTo: topAnchor, constant: margins.top - nameTopGap))
         }
         let contentBottom = bodyView.bottomAnchor
         // アイコンの方が下まで届くときは、等しさを諦めてアイコンの下に余白を取る。
@@ -724,10 +736,10 @@ final class PostContentView: UIView, UIContentView {
 
     /// 名前の行のベースラインから、字面の下端まで。大きくした絵文字が字面より下へ伸びていれば、その下端まで。
     static func nameBottomInset(of configuration: PostContentConfiguration) -> CGFloat {
-        configuration.nameParts.map(PostBodyView.textBottomInset).reduce(largestNamePointSize(of: configuration) * PostBodyView.emBoxDescent, max)
+        configuration.nameParts.map { PostBodyView.textBottomInset(of: $0) }.reduce(largestNamePointSize(of: configuration) * PostBodyView.emBoxDescent, max)
     }
 
-    /// 名前の行に出す文字（名前、ハンドル、時刻）のうち、いちばん大きい文字の大きさ。
+    /// 名前の行に出す文字（名前、ハンドル、時刻）のうち、いちばん大きい文字の大きさ。大きさを変えた絵文字は除く。
     static func largestNamePointSize(of configuration: PostContentConfiguration) -> CGFloat {
         var sizes = configuration.nameParts.compactMap { part in
             RichTextRenderer.textFont(in: part, range: NSRange(location: 0, length: part.length))?.pointSize

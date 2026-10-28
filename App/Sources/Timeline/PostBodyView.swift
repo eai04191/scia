@@ -277,6 +277,8 @@ final class PostBodyView: UIView {
         frames[.quoteIndent] = indents.isEmpty ? nil : indents
         let emojis = textLabel.previewCustomEmojiFrames().map { textLabel.convert($0, to: space) }
         frames[.customEmojis] = emojis.isEmpty ? nil : emojis
+        let unicodeEmojis = textLabel.previewUnicodeEmojiFrames().map { textLabel.convert($0, to: space) }
+        frames[.unicodeEmojis] = unicodeEmojis.isEmpty ? nil : unicodeEmojis
         return frames
     }
 
@@ -533,7 +535,7 @@ final class PostBodyView: UIView {
         // 本文と添付ファイルは、注意書きがあればその下から並べる。
         let contentTop = shownSpoiler?.bottomAnchor ?? topAnchor
         let contentTopSpacing = shownSpoiler == nil ? 0 : content.spoiler?.bodySpacing ?? 0
-        let text = textLabel.isHidden ? nil : (label: textLabel, bottomInset: Self.textBottomInset(of: content.text))
+        let text = textLabel.isHidden ? nil : (label: textLabel, bottomInset: Self.textBottomInset(of: content.text, isTruncated: content.maximumLines > 0))
         if !textLabel.isHidden {
             variableConstraints.append(textLabel.firstBaselineAnchor.constraint(equalTo: contentTop, constant: contentTopSpacing + Self.textTopInset(of: content.text)))
         }
@@ -573,7 +575,7 @@ final class PostBodyView: UIView {
         } else {
             .view(textLabel)
         }
-        applyFilterNote(content.filterNote, below: last, spacing: content.filterNoteSpacing, textBottomInset: Self.textBottomInset(of: content.text))
+        applyFilterNote(content.filterNote, below: last, spacing: content.filterNoteSpacing, textBottomInset: Self.textBottomInset(of: content.text, isTruncated: content.maximumLines > 0))
         NSLayoutConstraint.activate(variableConstraints)
     }
 
@@ -804,23 +806,28 @@ final class PostBodyView: UIView {
     static let emBoxAscent: CGFloat = 0.88
     static let emBoxDescent: CGFloat = 0.12
 
-    /// 先頭の文字の、ベースラインから字面の上端まで。
+    /// 先頭の文字の、ベースラインから字面の上端まで。絵文字が字面より上へ伸びていれば、その上端まで。
     /// 絵文字を文字の行より大きくした段落は、絵文字が字面の中心から上下へ伸び、行が文字の行より高くなる。
-    /// 字面だけで測ると、1行目の絵文字が上の部品（名前の行）に重なるため、行の上端を超えて伸びた分を足す。
+    /// 字面だけで測ると、1行目の絵文字が上の部品（名前の行）に重なるため、絵文字の上端で測る。
+    /// 字面に、書体のascenderを超えた分だけを足すと、ascenderが字面より高いぶん絵文字の上端に届かず、上の部品との間隔が設定より狭くなる。
     /// 段落のどの行も同じ高さに広げるので（`RichTextRenderer`の`minimumLineHeight`）、絵文字が1行目になくても最初の段落の絵文字で測る。
     static func textTopInset(of text: NSAttributedString) -> CGFloat {
         guard text.length > 0 else { return 0 }
         let paragraph = (text.string as NSString).paragraphRange(for: NSRange(location: 0, length: 0))
         guard let font = RichTextRenderer.textFont(in: text, range: paragraph) else { return 0 }
-        return font.pointSize * emBoxAscent + max(0, RichTextRenderer.emojiExtent(in: text, range: paragraph).above - font.ascender)
+        return max(font.pointSize * emBoxAscent, RichTextRenderer.emojiExtent(in: text, range: paragraph).above)
     }
 
-    /// 最後の文字の、ベースラインから字面の下端まで。最後の段落の絵文字が行の下端を超えて伸びる分を足す。
-    static func textBottomInset(of text: NSAttributedString) -> CGFloat {
+    /// 最後の文字の、ベースラインから字面の下端まで。最後の段落の絵文字が字面より下へ伸びていれば、その下端まで。
+    /// - Parameter isTruncated: 行数で切って描くときはtrue。最後に見える行がどの段落か分からないため、全体の絵文字で測る。
+    ///   切れた先にだけ大きい絵文字があると、下の部品とのあいだが絵文字の分だけ広く空くが、重なるよりよいので受け入れる。
+    static func textBottomInset(of text: NSAttributedString, isTruncated: Bool = false) -> CGFloat {
         guard text.length > 0 else { return 0 }
-        let paragraph = (text.string as NSString).paragraphRange(for: NSRange(location: text.length - 1, length: 0))
+        let paragraph = isTruncated
+            ? NSRange(location: 0, length: text.length)
+            : (text.string as NSString).paragraphRange(for: NSRange(location: text.length - 1, length: 0))
         guard let font = RichTextRenderer.textFont(in: text, range: paragraph, fromEnd: true) else { return 0 }
-        return font.pointSize * emBoxDescent + max(0, RichTextRenderer.emojiExtent(in: text, range: paragraph).below + font.descender)
+        return max(font.pointSize * emBoxDescent, RichTextRenderer.emojiExtent(in: text, range: paragraph).below)
     }
 
     /// 読み上げで、注意書きの本文を開閉する操作。注意書きがなければnil。

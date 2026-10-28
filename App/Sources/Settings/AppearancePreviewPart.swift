@@ -33,6 +33,8 @@ enum AppearancePreviewPart: Hashable, CaseIterable {
     case editedMarkGap
     /// 名前の行と名前の上の行のカスタム絵文字。
     case nameCustomEmojis
+    /// 名前の行と名前の上の行の、大きさを変えた絵文字。等倍のときは示さない。
+    case nameUnicodeEmojis
     /// 入りきらない名前の行末をぼかしている部分。
     case nameFade
     /// 名前が入りきらず時刻に詰まった投稿の、名前と時刻のすき間。最小のすき間がそのまま空く。
@@ -80,6 +82,8 @@ enum AppearancePreviewPart: Hashable, CaseIterable {
     case quoteIndent
     /// 本文のカスタム絵文字。
     case customEmojis
+    /// 本文の、大きさを変えた絵文字。等倍のときは示さない。
+    case unicodeEmojis
     /// リンクカードのサイト名。
     case cardSite
     case media

@@ -118,10 +118,14 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
 
 extension NSAttributedString {
     /// RichTextRendererで描いた本文を、アプリの外に貼る文字にする。カスタム絵文字は`:shortcode:`に、段落の中の改行（行区切り文字）は改行にする。
+    /// 絵文字の前に置いた幅のない文字（`leadingEmojiGuard`）は除く。
     var copiedPlainText: String {
         var result = ""
-        enumerateAttribute(.customEmoji, in: NSRange(location: 0, length: length)) { value, range, _ in
-            if let emoji = value as? CustomEmoji {
+        enumerateAttributes(in: NSRange(location: 0, length: length)) { attributes, range, _ in
+            if attributes[.leadingEmojiGuard] != nil {
+                return
+            }
+            if let emoji = attributes[.customEmoji] as? CustomEmoji {
                 // 同じ絵文字が並ぶと1つの範囲にまとまるので、絵文字1つが1文字であることから数を戻す。
                 result += String(repeating: ":\(emoji.shortcode):", count: range.length)
             } else {

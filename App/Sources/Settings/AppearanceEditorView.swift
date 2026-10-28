@@ -624,8 +624,8 @@ struct AppearanceSamples {
         let scia = Account(id: myAccountID, username: "scia", acct: "scia", displayName: "Scia", avatar: animated, avatarStatic: avatar)
         // カスタム絵文字の大きさを見せるため、アプリのアイコンを絵文字にする。
         let emojis = avatar.map { [CustomEmoji(shortcode: "scia", url: animated ?? $0, staticUrl: $0)] } ?? []
-        // 名前のカスタム絵文字の大きさを見せるため、名前にも本文と同じ絵文字を付ける。
-        let friend = Account(id: "preview-friend", username: "friend", acct: "friend@example.com", displayName: "ともだち:scia:", avatar: animated, avatarStatic: avatar, emojis: emojis)
+        // 名前の絵文字とカスタム絵文字の大きさを見せるため、名前にも絵文字と本文と同じカスタム絵文字を付ける。
+        let friend = Account(id: "preview-friend", username: "friend", acct: "friend@example.com", displayName: "ともだち🌱:scia:", avatar: animated, avatarStatic: avatar, emojis: emojis)
         // 入りきらない名前の行末のぼかしを見せるため、名前の長いアカウントも用意する。
         let longNamed = Account(id: "preview-long", username: "long", acct: "long@example.com", displayName: "とても長い名前のアカウントで、名前の行に入りきりません", avatar: animated, avatarStatic: avatar)
         let image = MediaAttachment(

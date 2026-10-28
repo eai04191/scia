@@ -381,7 +381,7 @@ extension PostContentViewTests {
     }
 
     /// 名前と本文の両方にカスタム絵文字のある投稿を、絵文字の画像が届いた状態で並べ、部品の枠を返す。
-    private func emojiPostFrames(nameScale: Double, bodyScale: Double) async throws -> AppearancePreviewFrames {
+    private func emojiPostFrames(nameScale: Double, bodyScale: Double, nameUnicodeScale: Double = 1, bodyUnicodeScale: Double = 1) async throws -> AppearancePreviewFrames {
         let url = try #require(URL(string: "https://example.social/emoji/blobcat.png"))
         let blobcat = CustomEmoji(shortcode: "blobcat", url: url, staticUrl: url)
         let png = try emojiPNG()
@@ -391,9 +391,11 @@ extension PostContentViewTests {
         let settings = AppSettings.isolated()
         settings.setValue(nameScale, for: AppearanceCatalog.nameCustomEmojiScale)
         settings.setValue(bodyScale, for: AppearanceCatalog.customEmojiScale)
+        settings.setValue(nameUnicodeScale, for: AppearanceCatalog.nameUnicodeEmojiScale)
+        settings.setValue(bodyUnicodeScale, for: AppearanceCatalog.unicodeEmojiScale)
         let base = try status(content: "")
-        let author = Account(id: "3", username: "carol", acct: "carol", displayName: "名前 :blobcat:", avatar: nil, emojis: [blobcat])
-        let post = Status(id: base.id, createdAt: base.createdAt, account: author, content: "<p>本文 :blobcat: の絵文字</p><p>最後の段落 :blobcat:</p>", spoilerText: "", url: nil, emojis: [blobcat])
+        let author = Account(id: "3", username: "carol", acct: "carol", displayName: "名前 :blobcat: 😀", avatar: nil, emojis: [blobcat])
+        let post = Status(id: base.id, createdAt: base.createdAt, account: author, content: "<p>本文 :blobcat: の絵文字 😀</p><p>最後の段落 :blobcat: 😀</p>", spoilerText: "", url: nil, emojis: [blobcat])
         let controller = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: store, avatarImages: .offline, settings: settings)
         let view = try #require(controller.contentConfiguration(for: post, base: .cell()).makeContentView() as? PostContentView)
         let size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
@@ -405,9 +407,9 @@ extension PostContentViewTests {
     /// 本文のカスタム絵文字を大きくしても、1行目の絵文字が上へ伸びて名前の行に重ならない。
     @Test(arguments: [1.0, 2.0, 4.0])
     func largeBodyEmojiStaysBelowNameRow(scale: Double) async throws {
-        let frames = try await emojiPostFrames(nameScale: 1, bodyScale: scale)
+        let frames = try await emojiPostFrames(nameScale: 1, bodyScale: scale, bodyUnicodeScale: scale)
         let name = try #require(frames[.nameGlyphs]?.first)
-        let emojis = frames[.customEmojis] ?? []
+        let emojis = (frames[.customEmojis] ?? []) + (frames[.unicodeEmojis] ?? [])
 
         #expect(!emojis.isEmpty)
         for emoji in emojis {
@@ -418,10 +420,10 @@ extension PostContentViewTests {
     /// 名前の絵文字を大きくしても、字面の中心より下へ伸びた分で、本文の1行目に重ならない。
     @Test(arguments: [1.0, 4.0])
     func largeNameEmojiStaysAboveBody(scale: Double) async throws {
-        let frames = try await emojiPostFrames(nameScale: scale, bodyScale: 1)
+        let frames = try await emojiPostFrames(nameScale: scale, bodyScale: 1, nameUnicodeScale: scale)
         let body = try #require(frames[.bodyGlyphs]?.first)
         let name = try #require(frames[.nameGlyphs]?.first)
-        let emojis = frames[.nameCustomEmojis] ?? []
+        let emojis = (frames[.nameCustomEmojis] ?? []) + (frames[.nameUnicodeEmojis] ?? [])
 
         #expect(name.maxY <= body.minY + 0.01)
         for emoji in emojis {
@@ -432,17 +434,32 @@ extension PostContentViewTests {
     /// 本文の絵文字を大きくしても、最初と最後の段落の絵文字が伸びた分を本文の字面に含め、上と下の部品とのあいだをそこから測る。
     /// 等倍の絵文字も、上下が書体のascenderとdescenderまであり、em枠の字面から少し出る。大きくしても、出る長さはそれと同じにする。
     @Test func largeBodyEmojiIsInsideBodyGlyphs() async throws {
-        let frames = try await emojiPostFrames(nameScale: 1, bodyScale: 4)
+        let frames = try await emojiPostFrames(nameScale: 1, bodyScale: 4, bodyUnicodeScale: 4)
         let body = try #require(frames[.bodyGlyphs]?.first)
-        let emojis = frames[.customEmojis] ?? []
+        let emojis = (frames[.customEmojis] ?? []) + (frames[.unicodeEmojis] ?? [])
         let font = PostTypography(settings: .isolated()).font(.body)
         let above = font.ascender - font.pointSize * PostBodyView.emBoxAscent
         let below = -font.descender - font.pointSize * PostBodyView.emBoxDescent
 
-        #expect(emojis.count >= 2)
+        #expect(emojis.count >= 4)
         for emoji in emojis {
             #expect(emoji.minY >= body.minY - above - 0.5 && emoji.maxY <= body.maxY + below + 0.5, "絵文字=\(emoji) 本文の字面=\(body)")
         }
+    }
+
+    /// 行数で切って描く本文（通知の再掲など）は、最後に見える行の段落が分からないため、最後の段落でなくても大きい絵文字の分を下の余白に含める。
+    @Test func truncatedBodyReservesEmojiBelowFromAnyParagraph() {
+        let font = UIFont.preferredFont(forTextStyle: .body)
+        var renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: .offline, language: "ja")
+        renderer.unicodeEmojiScale = 4
+        let text = renderer.render(RichText(blocks: [
+            RichText.Block(inlines: [.text("文😀", [])]),
+            RichText.Block(inlines: [.text("切れて見えない最後の段落", [])]),
+        ]))
+        let below = RichTextRenderer.emojiExtent(in: text, range: NSRange(location: 0, length: text.length)).below
+
+        #expect(PostBodyView.textBottomInset(of: text, isTruncated: true) >= below - 0.01 + font.pointSize * PostBodyView.emBoxDescent + font.descender)
+        #expect(PostBodyView.textBottomInset(of: text, isTruncated: true) > PostBodyView.textBottomInset(of: text))
     }
 
     /// 名前と本文のカスタム絵文字は、それぞれの設定の割合で大きさを変える。

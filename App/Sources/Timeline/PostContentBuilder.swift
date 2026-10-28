@@ -18,6 +18,7 @@ struct PostContentBuilder {
         let typography = PostTypography(settings: settings)
         // 名前の上の行も名前を描くので、名前の行と同じ割合で絵文字の大きさを変える。本文の絵文字は本文の割合で描く。
         let emojiScale = CGFloat(settings.value(of: AppearanceCatalog.nameCustomEmojiScale))
+        let unicodeEmojiScale = CGFloat(settings.value(of: AppearanceCatalog.nameUnicodeEmojiScale))
         let metrics = PostContentConfiguration.Metrics(
             margins: settings.rowMargins,
             avatarSize: settings.value(of: AppearanceCatalog.avatarSize),
@@ -47,10 +48,10 @@ struct PostContentBuilder {
             bodyEmbedSpacing: settings.value(of: AppearanceCatalog.bodyXPostSpacing)
         )
         let language = settings.glyphLanguageIdentifier()
-        let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiScale: emojiScale, emojiImages: emojiImages, language: language)
-        let secondaryRenderer = RichTextRenderer(font: typography.font(.nameSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, emojiImages: emojiImages, language: language)
-        let contextRenderer = RichTextRenderer(font: metrics.contextFont, textColor: .secondaryLabel, emojiScale: emojiScale, emojiImages: emojiImages, language: language)
-        let contextSecondaryRenderer = RichTextRenderer(font: typography.font(.contextSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, emojiImages: emojiImages, language: language)
+        let primaryRenderer = RichTextRenderer(font: metrics.nameFont, textColor: base.textProperties.color, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, emojiImages: emojiImages, language: language)
+        let secondaryRenderer = RichTextRenderer(font: typography.font(.nameSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, emojiImages: emojiImages, language: language)
+        let contextRenderer = RichTextRenderer(font: metrics.contextFont, textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, emojiImages: emojiImages, language: language)
+        let contextSecondaryRenderer = RichTextRenderer(font: typography.font(.contextSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, emojiImages: emojiImages, language: language)
         let boosterName = Self.joined(spacing: settings.value(of: AppearanceCatalog.contextPartsSpacing), settings.contextNameStyle.parts.enumerated().map { index, part in
             let renderer = index == 0 ? contextRenderer : contextSecondaryRenderer
             return switch part {
@@ -397,6 +398,7 @@ struct PostContentBuilder {
             lineSpacing: settings.value(of: AppearanceCatalog.bodyLineSpacing),
             indentPerLevel: settings.value(of: AppearanceCatalog.quoteIndent),
             emojiScale: settings.value(of: AppearanceCatalog.customEmojiScale),
+            unicodeEmojiScale: settings.value(of: AppearanceCatalog.unicodeEmojiScale),
             emojiImages: emojiImages,
             language: settings.glyphLanguageIdentifier(for: status.language)
         )

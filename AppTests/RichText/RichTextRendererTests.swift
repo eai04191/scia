@@ -260,22 +260,115 @@ extension RichTextRendererTests {
         #expect(abs(bounds.height - font.lineHeight * scale) < 0.01)
     }
 
-    /// 絵文字を大きくした段落は、行の高さを、絵文字が上下に伸びる長さ以上にする。等倍では行の高さを変えない。
+    /// 絵文字は、割合の大きさの書体で描き、中心を字面の中心に揃える。文字の形で描く指定の付いた文字、本文の書体が持つ「©」、キーキャップにならない数字は変えない。
+    @Test func unicodeEmojiIsScaledAndCentered() throws {
+        var renderer = renderer(.offline)
+        renderer.unicodeEmojiScale = 2
+        let text = renderer.render(.plain("文😀1️⃣❤☺\u{FE0E}©1#", emojis: []))
+        let string = text.string as NSString
+        func attributes(of cluster: String) -> [NSAttributedString.Key: Any] {
+            text.attributes(at: string.range(of: cluster).location, effectiveRange: nil)
+        }
+
+        // 「❤」は既定では文字で描く指定の文字だが、本文の書体が持たないため絵文字の書体で描かれる。
+        for cluster in ["😀", "1️⃣", "❤"] {
+            let font = try #require(attributes(of: cluster)[.font] as? UIFont)
+            let offset = try #require(attributes(of: cluster)[.baselineOffset] as? CGFloat)
+            #expect(font.pointSize == self.font.pointSize * 2, "\(cluster)")
+            // 書体の字面の中心（大きさ×em枠の中心）を、ずらしたあとに文字の字面の中心へ揃える。
+            #expect(abs(font.pointSize * RichTextRenderer.emojiCenterHeight + offset - self.font.pointSize * RichTextRenderer.emojiCenterHeight) < 0.01, "\(cluster)")
+        }
+        for cluster in ["文", "☺\u{FE0E}", "©", "1#"] {
+            #expect((attributes(of: cluster)[.font] as? UIFont)?.pointSize == font.pointSize, "\(cluster)")
+            #expect(attributes(of: cluster)[.scaledUnicodeEmoji] == nil, "\(cluster)")
+        }
+    }
+
+    /// 絵文字を大きくした段落は、行の高さを、絵文字の上端から文字の下端（descent）までにする。下へ伸びる分は、ラベルが行の下に足す。等倍では行の高さを変えない。
     @Test(arguments: [1.0, 3.0])
     func paragraphWithLargeEmojiIsTallEnough(scale: Double) throws {
-        let blobcat = try emoji("blobcat")
         var renderer = renderer(.offline)
-        renderer.emojiScale = scale
-        let text = renderer.render(.plain("文:blobcat:", emojis: [blobcat]))
+        renderer.unicodeEmojiScale = scale
+        let text = renderer.render(.plain("文😀", emojis: []))
         let style = try #require(text.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)
         let extent = RichTextRenderer.emojiExtent(in: text, range: NSRange(location: 0, length: text.length))
 
         if scale == 1 {
             #expect(style.minimumLineHeight == 0)
         } else {
-            #expect(style.minimumLineHeight >= extent.above + extent.below)
+            #expect(style.minimumLineHeight == ceil(max(font.ascender, extent.above) - font.descender))
             #expect(extent.below > -font.descender, "大きくした絵文字は、文字の下端より下へも伸びる")
         }
+    }
+}
+
+extension RichTextRendererTests {
+    /// ラベルに描いた色のある画素の、上端と下端の行。文字は黒で描くので、色のある画素は絵文字だけになる。
+    private func coloredRows(of text: NSAttributedString, width: CGFloat = 400) throws -> ClosedRange<Int> {
+        let label = EmojiLabel()
+        label.numberOfLines = 0
+        label.attributedText = text
+        let size = label.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude))
+        label.frame = CGRect(origin: .zero, size: size)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: CGSize(width: width, height: size.height), format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: width, height: size.height))
+            label.drawText(in: label.bounds)
+        }
+        let cgImage = try #require(image.cgImage)
+        let bytes = try #require(CFDataGetBytePtr(cgImage.dataProvider?.data))
+        let rows = (0..<cgImage.height).filter { y in
+            (0..<cgImage.width).contains { x in
+                let pixel = y * cgImage.bytesPerRow + x * 4
+                let channels = [bytes[pixel], bytes[pixel + 1], bytes[pixel + 2]]
+                return Int(channels.max() ?? 0) - Int(channels.min() ?? 0) > 64
+            }
+        }
+        let first = try #require(rows.first)
+        let last = try #require(rows.last)
+        return first...last
+    }
+
+    /// 絵文字だけの段落と、大きさの違う絵文字が隣り合う段落でも、余白は文字の書体から測り、絵文字は1つずつ測る。
+    @Test func emojiOnlyAndMixedSizeEmojisAreMeasuredFromTheTextFont() throws {
+        var renderer = renderer(.offline)
+        renderer.unicodeEmojiScale = 4
+        let emojiOnly = renderer.render(.plain("😀", emojis: []))
+        #expect(RichTextRenderer.textFont(in: emojiOnly, range: NSRange(location: 0, length: emojiOnly.length))?.pointSize == font.pointSize)
+
+        // 書体の大きさが違う2つの絵文字を隣に並べ、大きいほうまで測る。
+        let mixed = NSMutableAttributedString(attributedString: renderer.render(.plain("😀😀", emojis: [])))
+        let second = NSRange(location: 2, length: 2)
+        let larger = font.withSize(font.pointSize * 8)
+        mixed.addAttributes([.font: larger, .baselineOffset: RichTextRenderer.emojiCenterHeight * (font.pointSize - larger.pointSize)], range: second)
+        let extent = RichTextRenderer.emojiExtent(in: mixed, range: NSRange(location: 0, length: mixed.length))
+        #expect(extent.below >= -(larger.descender + RichTextRenderer.emojiCenterHeight * (font.pointSize - larger.pointSize)) - 0.01)
+    }
+
+    /// 下げて描く絵文字が先頭にあると幅のない文字を前に置くが、コピーする文字には含めない。
+    @Test func leadingEmojiGuardIsNotCopied() {
+        var renderer = renderer(.offline)
+        renderer.unicodeEmojiScale = 2
+        let text = renderer.render(.plain("😀文", emojis: []))
+
+        #expect(text.string.hasPrefix(RichTextRenderer.leadingEmojiGuard))
+        #expect(text.copiedPlainText == "😀文")
+    }
+
+    /// 大きくした絵文字は、行の先頭に置いても末尾に置いても、ラベルの中で欠けずに同じ高さで描く。
+    @Test(arguments: [2.0, 4.0])
+    func largeUnicodeEmojiIsNotClippedAtLineStart(scale: Double) throws {
+        var renderer = renderer(.offline)
+        renderer.textColor = .black
+        renderer.emojiStyle = .system
+        renderer.unicodeEmojiScale = scale
+        let leading = try coloredRows(of: renderer.render(.plain("😀文", emojis: [])))
+        let trailing = try coloredRows(of: renderer.render(.plain("文😀", emojis: [])))
+
+        #expect(abs(leading.count - trailing.count) <= 1, "先頭=\(leading) 末尾=\(trailing)")
     }
 }
 

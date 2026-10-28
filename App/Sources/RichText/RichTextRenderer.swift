@@ -15,6 +15,8 @@ struct RichTextRenderer {
     var indentPerLevel: CGFloat = 16
     /// カスタム絵文字の高さの、文字の行の高さに対する割合。
     var emojiScale: CGFloat = 1
+    /// Unicodeの絵文字の大きさの、文字の大きさに対する割合。
+    var unicodeEmojiScale: CGFloat = 1
     let emojiImages: EmojiImageStore
     /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
     let language: String
@@ -264,12 +266,60 @@ struct RichTextRenderer {
         return UIFont(descriptor: descriptor, size: font.pointSize)
     }
 
-    /// 段落スタイルを付ける。行の高さは、段落の絵文字から決める。
+    /// 段落の絵文字の大きさを変えてから、段落スタイルを付ける。行の高さは、大きさを変えた絵文字から決める。
     private func applyParagraphStyle(for block: RichText.Block, to result: NSMutableAttributedString, range: NSRange) {
+        scaleUnicodeEmojis(in: result, range: range)
+        var range = range
+        // 文字列の最初の文字が、下げて描く絵文字だと、ラベルはその絵文字のずらした位置を最初のベースラインとして報告し、
+        // 1行目の上端も絵文字のずらす前の位置から決めるため、本文が上の部品に重なり、絵文字の上が欠ける。
+        // 2文字目より後ろや、2行目より後ろの行の先頭ではずれないため、最初の文字だけ、ずらさない幅のない文字を前に置く。
+        if range.location == 0, range.length > 0, result.attribute(.scaledUnicodeEmoji, at: 0, effectiveRange: nil) != nil {
+            var attributes = attributes(style: [], block: block)
+            attributes[.leadingEmojiGuard] = true
+            result.insert(NSAttributedString(string: Self.leadingEmojiGuard, attributes: attributes), at: 0)
+            range.length += 1
+        }
         result.addAttribute(.paragraphStyle, value: paragraphStyle(for: block, emojiExtent: Self.emojiExtent(in: result, range: range)), range: range)
     }
 
-    /// 範囲の中のカスタム絵文字の画像が、ベースラインから上と下へ伸びる長さ。絵文字がなければ0。
+    /// 下げて描く絵文字の前に置く、幅のない文字。コピーするときは取り除く。
+    static let leadingEmojiGuard = "\u{200B}"
+
+    /// Unicodeの絵文字を`unicodeEmojiScale`の大きさにし、カスタム絵文字と同じく、中心を字面の中心に揃える。
+    /// 大きさを変えたことを示す属性には、変える前の書体を入れる。絵文字だけの段落でも、余白を文字の書体から測るため。
+    private func scaleUnicodeEmojis(in string: NSMutableAttributedString, range: NSRange) {
+        guard unicodeEmojiScale != 1 else { return }
+        let text = string.string as NSString
+        var location = range.location
+        while location < NSMaxRange(range) {
+            let cluster = text.rangeOfComposedCharacterSequence(at: location)
+            location = NSMaxRange(cluster)
+            guard let font = string.attribute(.font, at: cluster.location, effectiveRange: nil) as? UIFont,
+                  Self.isUnicodeEmoji(text.substring(with: cluster), in: font)
+            else { continue }
+            let size = font.pointSize * unicodeEmojiScale
+            string.addAttributes([
+                .font: font.withSize(size),
+                .baselineOffset: Self.emojiCenterHeight * (font.pointSize - size),
+                .scaledUnicodeEmoji: font,
+            ], range: cluster)
+        }
+    }
+
+    /// 書記素クラスタが、絵文字の絵で描かれるか。文字の形で描く指定（U+FE0E）の付いた文字と、キーキャップにならない数字や「#」「*」は除く。
+    /// 「❤」や「☺」のように、既定では文字で描く指定の文字も、`font`の書体が持っていなければ、絵文字の書体で描かれるので絵文字とみなす。
+    /// 「©」のように`font`の書体が持つ文字は、文字のまま描かれるので除く。
+    static func isUnicodeEmoji(_ cluster: String, in font: UIFont) -> Bool {
+        let scalars = cluster.unicodeScalars
+        guard let first = scalars.first, first.properties.isEmoji, !scalars.contains("\u{FE0E}") else { return false }
+        if "0123456789#*".unicodeScalars.contains(first) { return scalars.contains("\u{20E3}") }
+        if first.properties.isEmojiPresentation || scalars.count > 1 { return true }
+        let characters = Array(String(first).utf16)
+        var glyphs = [CGGlyph](repeating: 0, count: characters.count)
+        return !CTFontGetGlyphsForCharacters(font as CTFont, characters, &glyphs, characters.count)
+    }
+
+    /// 範囲の中の絵文字（カスタム絵文字の画像と、大きさを変えたUnicodeの絵文字）が、ベースラインから上と下へ伸びる長さ。絵文字がなければ0。
     static func emojiExtent(in text: NSAttributedString, range: NSRange) -> (above: CGFloat, below: CGFloat) {
         var above: CGFloat = 0
         var below: CGFloat = 0
@@ -278,22 +328,47 @@ struct RichTextRenderer {
             above = max(above, attachment.bounds.maxY)
             below = max(below, -attachment.bounds.minY)
         }
+        // 書体の大きさが違う絵文字が隣り合っても1つずつ測るよう、どの属性が変わってもランを分ける。
+        text.enumerateAttributes(in: range) { attributes, _, _ in
+            guard attributes[.scaledUnicodeEmoji] != nil, let font = attributes[.font] as? UIFont else { return }
+            let offset = attributes[.baselineOffset] as? CGFloat ?? 0
+            above = max(above, font.ascender + offset)
+            below = max(below, -(font.descender + offset))
+        }
         return (above, below)
     }
 
-    /// 範囲の文字の書体。`fromEnd`なら最後の文字の書体。
+    /// 1行目の上端から、文字と絵文字の上端までの空き。ふだんは0。
+    /// 大きくしたUnicodeの絵文字を下げて描くと、ラベルは下げる前の書体のascenderまでを行の上に取るため、下げた分が1行目の上に空く。
+    static func lineTopGap(in text: NSAttributedString) -> CGFloat {
+        guard text.length > 0 else { return 0 }
+        let paragraph = (text.string as NSString).paragraphRange(for: NSRange(location: 0, length: 0))
+        guard let font = textFont(in: text, range: paragraph) else { return 0 }
+        let visible = max(font.ascender, emojiExtent(in: text, range: paragraph).above)
+        var reserved = visible
+        text.enumerateAttributes(in: paragraph) { attributes, _, _ in
+            guard attributes[.scaledUnicodeEmoji] != nil, let emojiFont = attributes[.font] as? UIFont else { return }
+            reserved = max(reserved, emojiFont.ascender)
+        }
+        return reserved - visible
+    }
+
+    /// 範囲の文字の書体。大きさを変えたUnicodeの絵文字は、大きさを変える前の書体にする。`fromEnd`なら最後の文字の書体。
     static func textFont(in text: NSAttributedString, range: NSRange, fromEnd: Bool = false) -> UIFont? {
         guard range.length > 0 else { return nil }
-        return text.attribute(.font, at: fromEnd ? NSMaxRange(range) - 1 : range.location, effectiveRange: nil) as? UIFont
+        let attributes = text.attributes(at: fromEnd ? NSMaxRange(range) - 1 : range.location, effectiveRange: nil)
+        return attributes[.scaledUnicodeEmoji] as? UIFont ?? attributes[.font] as? UIFont
     }
 
     private func paragraphStyle(for block: RichText.Block, emojiExtent: (above: CGFloat, below: CGFloat) = (0, 0)) -> NSParagraphStyle {
         let style = NSMutableParagraphStyle()
         style.paragraphSpacing = paragraphSpacing
         style.lineSpacing = lineSpacing
-        // 絵文字を文字の行より大きくした段落は、行の高さを絵文字が上下に伸びる長さ以上にする。
+        // 絵文字が文字の行より上へ伸びる段落は、行の高さを、絵文字の上端から文字の下端（descent）までにする。
         // 指定しないと、UILabelが見積もる高さより描く行が高くなり、ラベルが文字を縦の中央に寄せて、1行目が上の部品に重なる。
-        let height = max(font.ascender, emojiExtent.above) + max(-font.descender, emojiExtent.below)
+        // ラベルは、この高さから文字のdescentを引いた位置にベースラインを置き、絵文字が文字のdescentより下へ伸びる分は、行の下に自分で足す。
+        // 下へ伸びる分までこの高さに含めると、その分が行の上に空く。
+        let height = max(font.ascender, emojiExtent.above) - font.descender
         if height > font.lineHeight + 0.5 {
             style.minimumLineHeight = ceil(height)
         }
@@ -316,4 +391,8 @@ extension NSAttributedString.Key {
     static let customEmoji = NSAttributedString.Key("net.mizle.scia.customEmoji")
     /// カスタム絵文字を動かすときに、動く層の上に重ねる色（`UIColor`）。編集履歴で足した絵文字を示すのに使う。
     static let emojiTint = NSAttributedString.Key("net.mizle.scia.emojiTint")
+    /// 下げて描く絵文字の前に置いた、幅のない文字（`RichTextRenderer.leadingEmojiGuard`）。
+    static let leadingEmojiGuard = NSAttributedString.Key("net.mizle.scia.leadingEmojiGuard")
+    /// 大きさを変えたUnicodeの絵文字の、大きさを変える前の書体（`UIFont`）。行の高さと、本文の上下の余白を測るときに、文字の書体と見分けるのに使う。
+    static let scaledUnicodeEmoji = NSAttributedString.Key("net.mizle.scia.scaledUnicodeEmoji")
 }
