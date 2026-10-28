@@ -40,11 +40,13 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
         fatalError("init(coder:) has not been implemented")
     }
 
-    /// 本文の全体を選び、編集メニューを出す。
+    /// 本文の全体を選び、編集メニューを出す。Macでは出さない。右クリックやキー操作でコピーなどを行えるため。
     func beginSelectingAll() {
         becomeFirstResponder()
         selectedRange = NSRange(location: 0, length: attributedText.length)
-        presentEditMenu()
+        if !ProcessInfo.processInfo.isiOSAppOnMac {
+            presentEditMenu()
+        }
     }
 
     /// 選んだ範囲の上に編集メニューを出す。プログラムで選んだだけでは出ず、選んだ文字をタップし直さないと出ないため、
