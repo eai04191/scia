@@ -90,11 +90,39 @@ struct MenuPlacementTests {
         #expect(card.title == body.title)
     }
 
+    /// 本文のハッシュタグの長押しと、投稿のメニューの「ハッシュタグ」で、同じ見出し、項目、並びになる。
+    /// 投稿のメニューでは、サブメニューの項目に「ハッシュタグ」のアイコンを付ける。
+    @Test func sameHashtagMenuFromBodyAndStatusMenu() throws {
+        let settings = makeSettings()
+        let items = HashtagMenuItem.allCases.map { MenuLayout<HashtagMenuItem>.Element.item($0, isVisible: true) }
+        settings.hashtagMenuLayout = MenuLayout(elements: Array(items.prefix(3)) + [.separator] + Array(items.dropFirst(3).prefix(2)) + [.more] + Array(items.dropFirst(5)))
+        let viewController = makeViewController(settings: settings)
+        viewController.hashtagMuteActions = HashtagMuteActions(known: { _ in false }, refresh: {}, load: { _ in false }, mute: { _, _ in }, unmute: { _ in })
+        let tagURL = try #require(URL(string: "https://example.social/tags/cat"))
+        let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
+        let post = Status(id: base.id, createdAt: base.createdAt, account: alice, content: base.content, spoilerText: "", url: nil, tags: [Tag(name: "cat", url: tagURL)])
+        let entry = TimelineEntry.status(post)
+
+        let body = try #require(try bodyLinkMenu(for: .hashtag(name: "cat", url: tagURL), in: viewController, settings: settings, hashtagAccount: alice))
+        let submenu = try #require(viewController.contextMenu(for: entry, id: entry.id)?.children
+            .flatMap { ($0 as? UIMenu)?.children ?? [] }
+            .compactMap { $0 as? UIMenu }
+            .first { $0.title == "#cat" })
+
+        let expected = "すべての投稿,@aliceの投稿,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日]|ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,リンクをコピー,共有]"
+        #expect(describe(body.children) == expected)
+        #expect(describe(submenu.children) == expected)
+        #expect(body.title == "#cat")
+        #expect(submenu.image != nil)
+    }
+
     /// 一覧に載せた本文の、リンクを長押ししたときのメニュー。
-    private func bodyLinkMenu(for destination: RichText.LinkDestination, in viewController: TimelineViewController, settings: AppSettings) throws -> UIMenu? {
+    /// - Parameter hashtagAccount: ハッシュタグのメニューの「投稿したユーザーの投稿」で開くユーザー。
+    private func bodyLinkMenu(for destination: RichText.LinkDestination, in viewController: TimelineViewController, settings: AppSettings, hashtagAccount: Account? = nil) throws -> UIMenu? {
         let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: .offline, language: "ja")
         let label = LinkLabel()
         label.settings = settings
+        label.hashtagAccount = hashtagAccount
         label.attributedText = renderer.render(RichText(blocks: [.init(inlines: [.link("x", destination, [])])]))
         label.frame = CGRect(x: 0, y: 0, width: 300, height: 44)
         viewController.view.addSubview(label)

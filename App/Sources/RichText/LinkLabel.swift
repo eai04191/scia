@@ -291,8 +291,6 @@ final class LinkHitArea: UIControl {
         guard let label else { return nil }
         let settings = label.settings
         let handlers = urlHandlers(at: point, linkBrowser: settings.linkBrowser)
-        let makeMenu: ([UIMenuElement]) -> UIMenu
-        let children: [UIMenuElement]
         switch destination {
         case .url(let url):
             let menu = LinkMenu(url: url, handlers: handlers) { [weak self] in
@@ -306,19 +304,17 @@ final class LinkHitArea: UIControl {
                 host?.mentionMenuIcon(for: url)
             }
         case .hashtag(let name, let url):
-            makeMenu = { UIMenu(title: "#\(name)", children: $0) }
-            children = HashtagMenuItem.menuElements(
+            let menu = HashtagMenu(
                 name: name,
                 url: url,
                 account: label.hashtagAccount,
-                groups: groups?.hashtag ?? settings.hashtagMenuLayout.groups,
                 handlers: handlers,
                 muteActions: nearest((any LinkMenuHost).self)?.hashtagMuteActions,
                 openTimeline: { [weak self] in self?.label?.open(destination) },
                 openAccountStatuses: { [weak self] account in self?.nearest((any LinkMenuHost).self)?.openHashtag(name, of: account) }
             )
+            return menu.menu(groups: groups?.hashtag ?? settings.hashtagMenuLayout.groups)
         }
-        return children.isEmpty ? nil : makeMenu(children)
     }
 
     /// コピーと開くは、メニューを出した画面に頼む。共有のシートは、押したリンクから出す。

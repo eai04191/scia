@@ -271,18 +271,15 @@ extension TimelineViewController {
         var seen: Set<String> = []
         let handlers = urlHandlers(id: id)
         return shown.tags.filter { seen.insert(Hashtag.normalizedName($0.name)).inserted }.compactMap { tag in
-            let children = HashtagMenuItem.menuElements(
+            HashtagMenu(
                 name: tag.name,
                 url: tag.url,
                 account: shown.account,
-                groups: settings.hashtagMenuLayout.groups,
                 handlers: handlers,
                 muteActions: hashtagMuteActions,
                 openTimeline: { [weak self] in self?.onOpenHashtag?(tag.name) },
                 openAccountStatuses: { [weak self] account in self?.onOpenAccountHashtag?(tag.name, account) }
-            )
-            guard !children.isEmpty else { return nil }
-            return UIMenu(title: "#\(tag.name)", image: StatusMenuItem.hashtags.image, children: children)
+            ).submenu(groups: settings.hashtagMenuLayout.groups)
         }
     }
 

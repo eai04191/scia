@@ -183,34 +183,49 @@ extension HashtagMenuItem: MenuItemContentProviding {
     }
 }
 
-extension HashtagMenuItem {
-    /// ハッシュタグのメニューの中身。本文のハッシュタグを長押ししたときと、投稿のメニューの「ハッシュタグ」で、同じものを並べる。
-    /// - Parameters:
-    ///   - url: サーバーのハッシュタグのページ。分からなければ、URLの項目を押せないまま並べる。
-    ///   - account: 「投稿したユーザーの投稿」で開くユーザー。nilなら項目を出さない。
-    ///   - muteActions: ミュートを読んで変えるもの。nilなら「ミュート」を出さない。
-    @MainActor
-    static func menuElements(
-        name: String,
-        url: URL?,
-        account: Account?,
-        groups: MenuLayout<HashtagMenuItem>.Groups,
-        handlers: URLMenuHandlers,
-        muteActions: HashtagMuteActions?,
-        openTimeline: @escaping () -> Void,
-        openAccountStatuses: @escaping (Account) -> Void
-    ) -> [UIMenuElement] {
+/// ハッシュタグのメニュー。本文のハッシュタグの長押しと、投稿のメニューの「ハッシュタグ」で、同じ並びから組む。決まりはdocs/menus.mdの「メニューの単位」にある。
+/// 項目の名前、並び、出す条件、見出し、動きはここだけが知る。出す場所は、タグと、その場所でしかできないこと（共有のシートを出す起点、一覧を開く先）だけを渡す。
+@MainActor
+struct HashtagMenu {
+    /// `#`を除いた名前。
+    let name: String
+    /// サーバーのハッシュタグのページ。分からなければ、URLの項目を押せないまま並べる。
+    let url: URL?
+    /// 「投稿したユーザーの投稿」で開くユーザー。nilなら項目を出さない。
+    let account: Account?
+    /// URLの項目の動き。
+    let handlers: URLMenuHandlers
+    /// ミュートを読んで変えるもの。nilなら「ミュート」を出さない。
+    let muteActions: HashtagMuteActions?
+    /// 「すべての投稿」で、ハッシュタグのタイムラインを開く。
+    let openTimeline: () -> Void
+    /// 「投稿したユーザーの投稿」で、そのユーザーのハッシュタグの付いた投稿を開く。
+    let openAccountStatuses: (Account) -> Void
+
+    /// 本文のハッシュタグの長押しで単独で出すメニュー。見出しに`#名前`を置く。出す項目がなければnil。
+    func menu(groups: MenuLayout<HashtagMenuItem>.Groups) -> UIMenu? {
+        let children = elements(groups: groups)
+        return children.isEmpty ? nil : UIMenu(title: "#\(name)", children: children)
+    }
+
+    /// 投稿のメニューの「ハッシュタグ」に並べる、`#名前`のサブメニュー。出す項目がなければnil。
+    func submenu(groups: MenuLayout<HashtagMenuItem>.Groups) -> UIMenu? {
+        let children = elements(groups: groups)
+        return children.isEmpty ? nil : UIMenu(title: "#\(name)", image: StatusMenuItem.hashtags.image, children: children)
+    }
+
+    private func elements(groups: MenuLayout<HashtagMenuItem>.Groups) -> [UIMenuElement] {
         groups.menuElements { item in
             if let action = item.urlAction {
                 return [action.action(url: url, handlers: handlers)]
             }
             switch item {
             case .timeline:
-                return [UIAction(title: item.title, image: item.image) { _ in openTimeline() }]
+                return [UIAction(title: item.title, image: item.image) { [openTimeline] _ in openTimeline() }]
             case .accountStatuses:
                 guard let account else { return [] }
                 // ほかのサーバーのユーザーなら、ユーザーのメニューの見出しと同じく、サーバー名をサブタイトルに出す。
-                return [UIAction(title: "@\(account.username)の投稿", subtitle: UserHeading(acct: account.acct).subtitle, image: item.image) { _ in openAccountStatuses(account) }]
+                return [UIAction(title: "@\(account.username)の投稿", subtitle: UserHeading(acct: account.acct).subtitle, image: item.image) { [openAccountStatuses] _ in openAccountStatuses(account) }]
             case .mute:
                 return muteActions?.elements(for: name, item: item) ?? []
             // 共通の項目は、上で中身から組んだ。
