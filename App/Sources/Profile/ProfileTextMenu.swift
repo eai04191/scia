@@ -8,12 +8,9 @@ extension TimelineViewController {
         let children = settings.profileTextMenuLayout.groups.menuElements { item in
             switch item {
             case .copyText:
-                guard let plain = text.text else { return [] }
-                return [UIAction(title: item.title, image: item.image) { [weak self] _ in
-                    UIPasteboard.general.string = plain
-                    guard let self else { return }
-                    showNotice(.textCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
-                }]
+                return copyAction(item, copying: text.text)
+            case .copyLabel:
+                return copyAction(item, copying: text.label)
             case .systemTranslate:
                 guard let plain = text.text else { return [] }
                 return [UIAction(title: item.title, image: item.image) { [weak self] _ in self?.translation.present(plain) }]
@@ -25,6 +22,15 @@ extension TimelineViewController {
             }
         }
         return children.isEmpty ? nil : UIMenu(children: children)
+    }
+
+    private func copyAction(_ item: ProfileTextMenuItem, copying plain: String?) -> [UIMenuElement] {
+        guard let plain else { return [] }
+        return [UIAction(title: item.title, image: item.image) { [weak self] _ in
+            UIPasteboard.general.string = plain
+            guard let self else { return }
+            showNotice(.textCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+        }]
     }
 }
 

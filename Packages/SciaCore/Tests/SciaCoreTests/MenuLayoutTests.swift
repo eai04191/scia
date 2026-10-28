@@ -235,7 +235,7 @@ struct MenuLayoutTests {
 
     /// プロフィールの文章のメニューは、3つの項目を区切り線で分けて並べ、どれも隠さず「その他」も使わない。
     @Test func profileTextMenuDefaults() {
-        #expect(ProfileTextMenuItem.defaultLayout.groups.main.map(\.items) == [[.copyText], [.systemTranslate], [.customEmojis]])
+        #expect(ProfileTextMenuItem.defaultLayout.groups.main.map(\.items) == [[.copyLabel, .copyText], [.systemTranslate], [.customEmojis]])
         #expect(ProfileTextMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
     }
 

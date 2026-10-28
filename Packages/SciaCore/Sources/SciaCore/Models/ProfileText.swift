@@ -12,22 +12,29 @@ public enum ProfileTextPart: Hashable, Sendable {
 public struct ProfileText: Equatable, Sendable {
     /// 書式とリンクを落とした文字。カスタム絵文字は`:shortcode:`のまま残す。空白だけならnil。
     public let text: String?
+    /// 補足情報のラベルを、`text`と同じ形にした文字。補足情報でないか、空白だけならnil。
+    public let label: String?
     /// 文章に描いているカスタム絵文字を、出てくる順に並べる。同じ画像の絵文字は1度だけ数える。
     public let emojis: [CustomEmoji]
 
-    init(text: RichText, emojiSources: [RichText]) {
-        let plain = text.plainText
-        self.text = plain.allSatisfy(\.isWhitespace) ? nil : plain
+    init(text: RichText, label: RichText? = nil, emojiSources: [RichText]) {
+        self.text = Self.plain(text)
+        self.label = label.flatMap(Self.plain)
         var seen: Set<URL> = []
         emojis = emojiSources.flatMap(\.blocks).flatMap(\.inlines).compactMap { inline in
             if case .emoji(let emoji) = inline, seen.insert(emoji.url).inserted { emoji } else { nil }
         }
     }
+
+    private static func plain(_ text: RichText) -> String? {
+        let plain = text.plainText
+        return plain.allSatisfy(\.isWhitespace) ? nil : plain
+    }
 }
 
 extension Account {
     /// プロフィール画面に描いている`part`の文章。補足情報の番号が範囲の外ならnil。
-    /// 補足情報は、値だけをコピーと翻訳に渡し、絵文字は名前と値の両方から集める。
+    /// 補足情報は、内容をコピーと翻訳に、ラベルをラベルのコピーに渡し、絵文字はラベルと内容の両方から集める。
     public func profileText(_ part: ProfileTextPart) -> ProfileText? {
         switch part {
         case .displayName:
@@ -39,8 +46,9 @@ extension Account {
         case .field(let index):
             guard fields.indices.contains(index) else { return nil }
             let field = fields[index]
+            let label = RichText.plain(field.name, emojis: emojis)
             let value = RichText.profileField(field.value, emojis: emojis)
-            return ProfileText(text: value, emojiSources: [.plain(field.name, emojis: emojis), value])
+            return ProfileText(text: value, label: label, emojiSources: [label, value])
         }
     }
 }

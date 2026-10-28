@@ -388,12 +388,16 @@ public enum ExternalPostMenuItem: String, MenuItemKind {
 public enum ProfileTextMenuItem: String, MenuItemKind {
     /// 文章をプレーンテキストにしてコピーする。文字のある文章でだけ出る。
     case copyText
+    /// 補足情報のラベルをプレーンテキストにしてコピーする。文字のあるラベルの補足情報の行でだけ出る。
+    case copyLabel
     /// 文章をプレーンテキストにして、システムの翻訳シートで訳す。文字のある文章でだけ出る。
     case systemTranslate
     /// 文章に描いているカスタム絵文字ごとに、絵文字の画像のメディアのメニューを出す。絵文字のある文章でだけ出る。
     case customEmojis
 
     public static let defaultLayout = MenuLayout<ProfileTextMenuItem>(defaultElements: [
+        // 補足情報の行では、ラベルが内容の上にあるので、コピーも同じ順に並べる。
+        .item(.copyLabel, isVisible: true),
         .item(.copyText, isVisible: true),
         .separator,
         .item(.systemTranslate, isVisible: true),

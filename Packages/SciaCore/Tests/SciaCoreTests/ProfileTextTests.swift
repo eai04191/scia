@@ -46,8 +46,8 @@ struct ProfileTextTests {
         #expect(alice.profileText(.note)?.emojis.map(\.shortcode) == ["a"])
     }
 
-    /// 補足情報は、値だけをコピーと翻訳に渡し、絵文字は名前と値の両方から集める。
-    @Test func fieldTextIsTheValueAndEmojisIncludeTheName() {
+    /// 補足情報は、内容をコピーと翻訳に、ラベルをラベルのコピーに渡し、絵文字はラベルと内容の両方から集める。
+    @Test func fieldTextIsTheValueAndEmojisIncludeTheLabel() {
         let alice = account(
             fields: [
                 Account.Field(name: "Web", value: "https://example.com"),
@@ -57,8 +57,18 @@ struct ProfileTextTests {
         )
 
         #expect(alice.profileText(.field(1))?.text == "example.org :value:")
+        #expect(alice.profileText(.field(1))?.label == ":label: Site")
         #expect(alice.profileText(.field(1))?.emojis.map(\.shortcode) == ["label", "value"])
         #expect(alice.profileText(.field(2)) == nil)
+    }
+
+    /// ラベルは補足情報にだけあり、空白だけならラベルのコピーを出さない。
+    @Test func labelIsOnlyForFieldsWithText() {
+        let alice = account(displayName: "Alice", note: "<p>Hi</p>", fields: [Account.Field(name: " ", value: "Hi")])
+
+        #expect(alice.profileText(.displayName)?.label == nil)
+        #expect(alice.profileText(.note)?.label == nil)
+        #expect(alice.profileText(.field(0))?.label == nil)
     }
 
     /// 表示名が空ならユーザー名を描いているので、ユーザー名を渡す。
