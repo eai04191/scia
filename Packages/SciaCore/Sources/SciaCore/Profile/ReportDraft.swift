@@ -22,9 +22,6 @@ public final class ReportDraft {
         case failed(any Error)
     }
 
-    /// コメントの上限。Mastodonは`Report::COMMENT_SIZE_LIMIT`で、Rubyの文字列の長さ（コードポイントの数）で数える。
-    public static let commentLimit = 1_000
-
     public let accountID: String
     public let acct: String
     /// 投稿のメニューから開いたときの、添えられる相手の投稿。
@@ -57,10 +54,12 @@ public final class ReportDraft {
         return parts.count == 2 ? String(parts[1]) : nil
     }
 
+    /// コメントの文字数。Mastodonと同じく、Rubyの文字列の長さ（コードポイントの数）で数える。サーバーに断られたとき、どれだけ削ればよいかの目安にする。
     public var commentLength: Int { comment.unicodeScalars.count }
 
+    /// コメントの長さは確かめない。Mastodonの上限はAPIで返らず、サーバーによって変えてあるため、超えたらサーバーが422で断って理由を返す。
     public var canSubmit: Bool {
-        guard !isSubmitting, let category, commentLength <= Self.commentLimit else { return false }
+        guard !isSubmitting, let category else { return false }
         return category != .violation || !selectedRuleIDs.isEmpty
     }
 

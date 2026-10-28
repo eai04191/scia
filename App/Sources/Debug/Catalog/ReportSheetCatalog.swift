@@ -3,7 +3,7 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 通報のシート。サーバーに通報を送らずに、ルールの読み込み中や失敗、長いルール、上限を超えたコメント、送れなかったときを並べる。送信を押しても何も送らない。
+/// 通報のシート。サーバーに通報を送らずに、ルールの読み込み中や失敗、長いルール、長いコメント、送れなかったとき、サーバーが断ったときを並べる。送信を押しても何も送らない。
 enum ReportSheetCatalog {
     private struct Failure: LocalizedError {
         var errorDescription: String? { "サーバーに接続できませんでした。" }
@@ -26,13 +26,21 @@ enum ReportSheetCatalog {
                 draft.category = .violation
                 draft.toggleRule("2")
             },
-            state("コメントが上限を超えた（とても長いサーバー名）", acct: "bob@a-very-long-server-name-that-wraps-in-the-forward-toggle.example") { draft in
+            state("長いコメント（とても長いサーバー名）", acct: "bob@a-very-long-server-name-that-wraps-in-the-forward-toggle.example") { draft in
                 draft.category = .other
                 draft.comment = String(repeating: "長いコメント。", count: 150)
             },
             state("送れなかった", submit: { _ in throw Failure() }) { draft in
                 draft.category = .spam
                 draft.comment = "宣伝のリンクを繰り返し送ってきます。"
+                Task { _ = await draft.submit() }
+            },
+            state("サーバーが断った", submit: { _ in
+                let reason = "Validation failed: Comment is too long (maximum is 1000 characters)"
+                throw MastodonAPIError(statusCode: 422, message: reason, serverMessage: reason)
+            }) { draft in
+                draft.category = .other
+                draft.comment = String(repeating: "長いコメント。", count: 150)
                 Task { _ = await draft.submit() }
             },
         ]

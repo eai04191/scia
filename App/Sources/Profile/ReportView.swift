@@ -51,9 +51,10 @@ struct ReportView: View {
                 } header: {
                     Text("補足")
                 } footer: {
-                    Text("\(draft.commentLength) / \(ReportDraft.commentLimit)")
+                    // 上限はサーバーごとに違うので、分母は出さない。
+                    // メモの欄の文字数と揃え、3桁の区切りを付けない。
+                    Text(verbatim: "\(draft.commentLength)文字")
                         .monospacedDigit()
-                        .foregroundStyle(draft.commentLength > ReportDraft.commentLimit ? .red : .secondary)
                 }
                 if let domain = draft.remoteDomain {
                     // サーバー名は説明文に出す。スイッチの名前に入れると、長いサーバー名で「にも送る」が切れて見えなくなるため。

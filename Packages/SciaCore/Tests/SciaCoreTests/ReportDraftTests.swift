@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SciaCore
 
@@ -40,16 +41,35 @@ struct ReportDraftTests {
         #expect(!report.canSubmit)
     }
 
-    /// コメントの上限は、サーバーと同じくコードポイントで数える。結合文字の絵文字は、見た目の1文字でも複数に数える。
-    @Test func commentLimitCountsCodePoints() {
+    /// コメントの長さでは止めない。Mastodonの既定の上限（1000文字）を超えても送れる。
+    @Test func longCommentCanBeSubmitted() {
         let report = draft()
         report.category = ReportCategory.other
-        report.comment = String(repeating: "あ", count: ReportDraft.commentLimit)
+        report.comment = String(repeating: "あ", count: 5_000)
         #expect(report.canSubmit)
+        #expect(report.request?.comment == report.comment)
+    }
 
-        report.comment += "👍🏽"
-        #expect(report.commentLength == ReportDraft.commentLimit + 2)
-        #expect(!report.canSubmit)
+    /// 文字数は、サーバーと同じくコードポイントで数える。結合文字の絵文字は、見た目の1文字でも複数に数える。
+    @Test func commentLengthCountsCodePoints() {
+        let report = draft()
+        report.comment = "あ👍🏽"
+        #expect(report.commentLength == 3)
+    }
+
+    /// サーバーが長さなどで断ったら、返した理由を送れなかった理由として出す。
+    @Test func rejectionShowsServerReason() async {
+        let reason = "Validation failed: Comment is too long (maximum is 1000 characters)"
+        let report = ReportDraft(accountID: "2", acct: "bob", statusID: nil, api: ReportDraft.API(
+            rules: { [] },
+            submit: { _ in throw MastodonAPIError.from(statusCode: 422, body: Data(#"{"error":"\#(reason)"}"#.utf8)) }
+        ))
+        report.category = ReportCategory.other
+        report.comment = String(repeating: "あ", count: 1_001)
+
+        #expect(await report.submit() == false)
+        #expect(report.submitError.map { ErrorPresentation($0).message } == reason)
+        #expect(report.canSubmit)
     }
 
     /// 添える投稿と転送は、外したら送らない。転送は、ほかのサーバーのアカウントでだけ送る。ルールは、違反を選んだときだけ送る。
