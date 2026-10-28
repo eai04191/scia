@@ -13,6 +13,10 @@ public final class LayerClock {
     public static let frame: TimeInterval = 1.0 / 60
     /// 終わった動きを知らせさせるときに、時間を流す速さ。
     private static let deliverySpeed: Float = 1e-6
+    /// 終わりを待つのは、今よりこれだけ前に終わった動きに限る。今ちょうどに終わる動きは、Core Animationが終わったとみなすかどうかが揺れ、
+    /// 終わっていないとみなされると、知らせを出しても外れないまま待ち続けて止まる（層を止めた時間に足した0.35秒の動きを、1コマずつ0.35まで進めたときに起きた）。
+    /// そうした動きは、次のコマで確実に外れるので待たない。1コマより十分短くする。
+    private static let endedMargin: TimeInterval = 1e-6
 
     private let layer: CALayer
 
@@ -117,7 +121,7 @@ public final class LayerClock {
         return own.map { "\(owner).\($0)" } + (layer.sublayers ?? []).flatMap(finiteAnimations(in:))
     }
 
-    /// `time`（止めた層の時間）までに終わったのに、まだ外れていない動きと、その始まりと終わりの時間。終わりの処理が呼ばれると外れる。終わっても残す動き（`isRemovedOnCompletion`がfalse）は含めない。
+    /// `time`（止めた層の時間）より`endedMargin`以上前に終わったのに、まだ外れていない動きと、その始まりと終わりの時間。終わりの処理が呼ばれると外れる。終わっても残す動き（`isRemovedOnCompletion`がfalse）は含めない。
     private static func endedAnimations(in layer: CALayer, at time: TimeInterval, root: CALayer? = nil) -> [String] {
         let root = root ?? layer
         let local = layer.convertTime(time, from: root)
@@ -125,7 +129,7 @@ public final class LayerClock {
         let own = (layer.animationKeys() ?? []).compactMap { key -> String? in
             guard let animation = layer.animation(forKey: key), animation.isRemovedOnCompletion, isFinite(animation) else { return nil }
             let end = animation.beginTime + activeDuration(of: animation)
-            guard end <= local else { return nil }
+            guard end <= local - endedMargin else { return nil }
             return "\(owner).\(key)（\(type(of: animation))、始まり\(animation.beginTime)、終わり\(end)、層の時間\(local)）"
         }
         return own + (layer.sublayers ?? []).flatMap { endedAnimations(in: $0, at: time, root: root) }
