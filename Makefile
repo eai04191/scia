@@ -32,15 +32,20 @@ warnings: build
 ## テストはハードウェアキーボードがつながった状態を前提にしているので、先につなぐ。sim-keyboardで外したままだと、投稿欄のテストが落ちる
 ## 端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（SciaSystemUITests）も走らせる（Tools/system-ui-check.sh）
 ## 通ったら、確かめた作業ツリーの中身を覚える。make hooksを入れたcheckoutでは、make checkとmake testの両方が通った中身のcommitしかmainに入れられない
+## ONLYにテストの識別子（空白区切りで複数）を渡すと、それだけを走らせる。全部は走らせていないので、SciaSystemUITestsも走らせず、通っても中身を覚えない
+## 失敗時の診断の収集は止める。集めると、simctl diagnoseが応答を待って600秒のタイムアウトまで止まるため
 ## 例: make test SIM='Scia 1'
+## 例: make test SIM='Scia 1' ONLY='SciaTests/LinkLabelTests SciaTests/TimelineNoticeTests/progressGainingDigitWidensWithAnimation()'
 TEST_TREE := $(DERIVED_DATA)/test-tree
 test: generate
 	@test -n '$(SIM)' || { echo "SIM='<端末の名前>'を指定する" >&2; exit 1; }
 	@mkdir -p $(DERIVED_DATA) && Tools/check-stamp.sh tree > $(TEST_TREE)
 	swift Tools/sim-keyboard.swift '$(SIM)' hardware
-	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(DERIVED_DATA) -collect-test-diagnostics never test
+	xcodebuild -project $(PROJECT) -scheme $(SCHEME) -destination 'platform=iOS Simulator,name=$(SIM)' -derivedDataPath $(DERIVED_DATA) -collect-test-diagnostics never test $(foreach t,$(ONLY),'-only-testing:$(t)')
+ifeq ($(strip $(ONLY)),)
 	Tools/system-ui-check.sh '$(SIM)' $(DERIVED_DATA)
 	@Tools/check-stamp.sh record test "$$(cat $(TEST_TREE))"
+endif
 
 ## シミュレーターのハードウェアキーボードを外してソフトウェアキーボードを出す（KEYBOARD=hardwareでつなぎ直す）
 ## 例: make sim-keyboard SIM='Scia 1'
