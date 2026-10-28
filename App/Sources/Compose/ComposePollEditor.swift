@@ -51,16 +51,17 @@ final class ComposePollEditor: UIView {
     private(set) var fields: [ComposeLineField] = []
     private var optionRows: [OptionRow] = []
     private let optionsStack = UIStackView()
-    private let expiryButton = UIButton(configuration: .gray())
-    private let multipleButton = UIButton(configuration: .gray())
-    private let hidesTotalsButton = UIButton(configuration: .gray())
+    // 幅が足りずに文字を切るときは、「…」ではなく行末をぼかす。
+    private let expiryButton = FadingTitleButton(configuration: .gray())
+    private let multipleButton = FadingTitleButton(configuration: .gray())
+    private let hidesTotalsButton = FadingTitleButton(configuration: .gray())
     /// 選び方のボタンの幅を、どちらの値でも同じにする制約。文字の大きさが変わったら測り直す。
     /// 結果のボタンには付けない。右は空きで、幅が変わっても動くものがなく、揃えると「隠す」の両側に余白が目立ったため。
     private lazy var multipleWidth = Self.minimumWidth(of: multipleButton)
     private let removeButton = UIButton(configuration: .plain())
     private let settingsRow = UIStackView()
     /// 折りたたんだときに、選択肢の欄と設定の行の代わりに出す1行。書いた選択肢を並べ、押すと開く。
-    private let summaryButton = UIButton(configuration: .plain())
+    private let summaryButton = FadingTitleButton(configuration: .plain())
     /// 折りたたんだ1行の末尾に置く、押すと開くことを示すシンボル。ボタンの画像は先頭の1つしか置けないので、別のビューで重ねる。
     private let summaryChevron = UIImageView(image: UIImage(systemName: "chevron.down"))
     /// 選択肢の欄と設定の行を入れ、折りたたむと高さを0にして切り抜く入れ物。
@@ -108,7 +109,7 @@ final class ComposePollEditor: UIView {
                 return attributes
             }
             configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .footnote)
-            configuration.titleLineBreakMode = .byTruncatingTail
+            configuration.titleLineBreakMode = .byClipping
             button.configuration = configuration
             button.setContentHuggingPriority(.required, for: .horizontal)
             // 幅が足りなければ、設定の文字を切り、外すボタンは縮めない。
@@ -268,7 +269,7 @@ final class ComposePollEditor: UIView {
     }
 
     /// 設定の行を`width`に収める段階。結果のボタンを先に縮める。行のいちばん後ろにあり、幅が足りないと「結果を…」と切れて、見せるか隠すかが読めなくなったため。
-    /// 目のアイコンが結果を表すので、「見せる」「隠す」だけでも通じる。どの段階でも収まらなければ、いちばん短い文言にして、残りは文字を切る。
+    /// 目のアイコンが結果を表すので、「見せる」「隠す」だけでも通じる。どの段階でも収まらなければ、いちばん短い文言にして、残りは行末をぼかして切る。
     private func fittingLabelLength(width: CGFloat) -> SettingsLabelLength {
         // 締め切りのボタンは、文言を入れたばかりだと大きさに出ていないので、`widestFit`で測る。
         let expiry = Self.widestFit(of: expiryButton, values: [(expiryButton.configuration?.title ?? "", "clock")])
@@ -384,7 +385,7 @@ final class ComposePollEditor: UIView {
         configuration.contentInsets = NSDirectionalEdgeInsets(top: 7, leading: 10, bottom: 7, trailing: 10)
         configuration.imagePadding = 8
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .subheadline)
-        configuration.titleLineBreakMode = .byTruncatingTail
+        configuration.titleLineBreakMode = .byClipping
         summaryButton.configuration = configuration
         summaryButton.contentHorizontalAlignment = .leading
         // 先頭は、＋のメニューで投票を足す項目と同じシンボルにする。選択肢の欄と同じ○や□にすると、まとめた1行が長い選択肢の1つに見えるため。

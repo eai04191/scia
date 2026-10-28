@@ -13,7 +13,6 @@ final class FadingLabel: EmojiLabel {
     override init(frame: CGRect) {
         super.init(frame: frame)
         lineBreakMode = .byClipping
-        fadeMask.colors = [UIColor.black.cgColor, UIColor.clear.cgColor]
     }
 
     @available(*, unavailable)
@@ -65,21 +64,43 @@ final class FadingLabel: EmojiLabel {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let isTruncated = intrinsicContentSize.width > bounds.width + 0.5
-        guard isTruncated, bounds.width > 0 else {
-            layer.mask = nil
+        Self.updateFade(fadeMask, on: self, isTruncated: intrinsicContentSize.width > bounds.width + 0.5, fadeWidth: fadeWidth)
+    }
+
+    /// 入りきらないラベルの層に、行末を透明へ向けてぼかすマスクをかける。入りきるときは外す。ボタンのタイトルなど、FadingLabelにできないラベルにも使う。
+    static func updateFade(_ fadeMask: CAGradientLayer, on label: UILabel, isTruncated: Bool, fadeWidth: CGFloat) {
+        guard isTruncated, label.bounds.width > 0 else {
+            label.layer.mask = nil
             return
         }
         CATransaction.begin()
         // セルの再利用やスクロール中に、マスクが前の位置から動いて見えないようにする。
         CATransaction.setDisableActions(true)
-        fadeMask.frame = bounds
-        let fade = min(fadeWidth, bounds.width) / bounds.width
+        fadeMask.colors = [UIColor.black.cgColor, UIColor.clear.cgColor]
+        fadeMask.frame = label.bounds
+        let fade = min(fadeWidth, label.bounds.width) / label.bounds.width
         // 右から左に書く文字列では、行末は左端になる。画面の向きではなく、文字列の向きで決める。
-        let isRightToLeft = Self.isRightToLeft(attributedText?.string ?? "")
+        let isRightToLeft = isRightToLeft(label.attributedText?.string ?? label.text ?? "")
         fadeMask.startPoint = CGPoint(x: isRightToLeft ? fade : 1 - fade, y: 0.5)
         fadeMask.endPoint = CGPoint(x: isRightToLeft ? 0 : 1, y: 0.5)
         CATransaction.commit()
-        layer.mask = fadeMask
+        label.layer.mask = fadeMask
+    }
+}
+
+/// タイトルが入りきらないときに、「…」で切らず、FadingLabelと同じく行末を透明へ向けてぼかすボタン。
+/// `UIButton.Configuration`のタイトルを`.byClipping`で切らせ、ボタンが置いたタイトルのラベルにマスクをかける。
+final class FadingTitleButton: UIButton {
+    /// 行末をぼかす幅。
+    var fadeWidth: CGFloat = 16 {
+        didSet { setNeedsLayout() }
+    }
+
+    private let fadeMask = CAGradientLayer()
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard let titleLabel else { return }
+        FadingLabel.updateFade(fadeMask, on: titleLabel, isTruncated: titleLabel.intrinsicContentSize.width > titleLabel.bounds.width + 0.5, fadeWidth: fadeWidth)
     }
 }
