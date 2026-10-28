@@ -996,16 +996,25 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         onInteractionSettle?()
     }
 
+    /// `setUnreadCount`を呼んだ回数。新着ボタンを描き直す前の並べ直しの中から呼ばれたかを見分ける。
+    private var unreadCountUpdates = 0
+
     /// 既読より新しい投稿の数。0なら新着ボタンを隠す。
     /// - Parameter isLowerBound: 未読の区間に読み込んでいない投稿があり、実際はもっと多い。
     func setUnreadCount(_ count: Int, isLowerBound: Bool = false) {
         unreadCount = count
+        unreadCountUpdates += 1
+        let update = unreadCountUpdates
         // 通知のタブのバッジと同じく、読み込んでいない分があるときは「+」を付ける。
         let title = isLowerBound ? "\(count)+" : "\(count)"
         newArrivalsButton.accessibilityLabel = isLowerBound ? "\(count)件以上の新着" : "\(count)件の新着"
         if newArrivalsButton.configuration?.title != title {
             // 桁が変わると幅が変わるため、出ている間は前後のカプセルをクロスフェードする。幅を伸ばすと、伸びる途中で件数の文字が切れるため。
             if newArrivalsButtonShown, view.window != nil {
+                // 待っている並べ直しは、クロスフェードの前に済ませる。中で済ませると、ボタンと関係のない行やメディアまで動きに乗るため。
+                view.layoutIfNeeded()
+                // 並べ直しでスクロール位置が補正されて既読が進むと、その中から新しい件数で呼ばれ、表示を済ませている。古い件数で上書きしない。
+                guard update == unreadCountUpdates else { return }
                 UIView.transition(with: newArrivalsButton, duration: newArrivalsButtonDuration, options: [.transitionCrossDissolve, .allowUserInteraction]) {
                     self.newArrivalsButton.configuration?.title = title
                     self.view.layoutIfNeeded()
@@ -1605,8 +1614,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private func makeDataSource() -> UICollectionViewDiffableDataSource<Section, ItemID> {
         let registration = UICollectionView.CellRegistration<TimelineCell, ItemID> { [weak self] cell, _, id in
             guard let self, let entry = self.entries[id] else { return }
+            // 別の行を出し始めたセルは、中身を動きの外で並べる。Macでウインドウの幅を変えたときのように、一覧が動きの中で並べ直すと、
+            // 初めて画面に入った行の写真やボタンまで動きに乗り、大きさ0の左上から滑ってきて見えるため。
+            // 同じ行の描き直し（リンクカードが届いたときなど）は、これまでどおり呼んだ側の動きに任せる。
+            let startsNewRow = cell.itemID != id
+            cell.itemID = id
             cell.workName = entry.workName
             FrameWork.measure("\(entry.workName).configure") { self.configure(cell, for: entry, id: id) }
+            if startsNewRow {
+                UIView.performWithoutAnimation { cell.layoutIfNeeded() }
+            }
         }
         let footerRegistration = UICollectionView.SupplementaryRegistration<TimelineFooterView>(
             elementKind: UICollectionView.elementKindSectionFooter

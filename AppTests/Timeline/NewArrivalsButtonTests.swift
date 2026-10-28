@@ -38,4 +38,44 @@ struct NewArrivalsButtonTests {
         #expect(button.alpha == 0)
         #expect(!button.isUserInteractionEnabled)
     }
+
+    /// 件数の桁が変わるときは、待っている並べ直しを済ませてから入れ替える。その並べ直しで既読が進み、中から新しい件数で呼ばれたら、
+    /// 外の古い件数で上書きしない。
+    @Test func keepsCountSetDuringPendingLayout() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.viewController.setUnreadCount(3)
+        harness.window.layoutIfNeeded()
+        let button = try button(in: harness)
+        let reporter = LayoutReporter { harness.viewController.setUnreadCount(5) }
+        harness.viewController.view.addSubview(reporter)
+        reporter.setNeedsLayout()
+
+        harness.viewController.setUnreadCount(12)
+
+        #expect(button.configuration?.title == "5")
+        #expect(button.accessibilityLabel == "5件の新着")
+    }
+}
+
+/// 次に並べたときに一度だけ`action`を呼ぶ。並べ直しの中で既読が進むところに見立てる。
+private final class LayoutReporter: UIView {
+    private var action: (() -> Void)?
+
+    init(_ action: @escaping () -> Void) {
+        self.action = action
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let action = self.action
+        self.action = nil
+        action?()
+    }
 }

@@ -160,6 +160,37 @@ struct TimelineMediaTests {
         #expect(mediaGrid(in: harness, of: statuses[1].id) == nil)
     }
 
+    /// Macでウインドウの幅を変えると、一覧は幅の変化を動きの中で並べ直す。そのとき初めて画面に入った行の写真まで動きに乗ると、
+    /// 大きさ0の左上から、まっすぐ滑ってきて見えていた。初めて並べる行の中身は、動きに乗せずに置く。
+    /// 写真の高さは幅に比例するので、狭めると行が低くなり、下から新しい行が画面に入る。
+    @Test func rowsAppearingWhileWidthAnimatesPlaceMediaWithoutAnimation() throws {
+        let harness = try TimelineHarness(size: CGSize(width: 900, height: 852))
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 40, startingAt: 1_000).map { withMedia($0, [image("\($0.id)", width: 400, height: 300)]) }
+        harness.setStatuses(statuses)
+        harness.collectionView.layoutIfNeeded()
+        let before = Set(harness.collectionView.indexPathsForVisibleItems.compactMap { harness.viewController.itemIdentifier(at: $0) })
+
+        UIView.animate(withDuration: 1) {
+            harness.window.frame.size.width = 393
+            harness.window.layoutIfNeeded()
+        }
+
+        let appeared = harness.collectionView.visibleCells.filter { cell in
+            guard let id = harness.collectionView.indexPath(for: cell).flatMap({ harness.viewController.itemIdentifier(at: $0) }) else { return false }
+            return !before.contains(id)
+        }
+        #expect(!appeared.isEmpty)
+        for cell in appeared {
+            let grid = try #require((cell.contentView as? PostContentView)?.mediaGrid)
+            let tiles = grid.descendants(of: MediaTileView.self)
+            #expect(!tiles.isEmpty)
+            for tile in tiles {
+                #expect(tile.layer.animationKeys() == nil, "\(tile.layer.animationKeys() ?? [])")
+            }
+        }
+    }
+
     /// 閲覧注意の投稿と、注意書きのある投稿はぼかす。ぼかしを外しても行の高さは変わらない。
     @Test func sensitiveMediaIsCoveredUntilRevealedWithoutChangingHeight() throws {
         let harness = try TimelineHarness()

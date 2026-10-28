@@ -6,6 +6,8 @@ import UIKit
 final class TimelineCell: UICollectionViewListCell {
     /// 測った時間に付ける、行の種類の名前。
     var workName = "row"
+    /// 出している行。別の行を出し始めたかを見分ける。
+    var itemID: TimelineViewController.ItemID?
 
     override func preferredLayoutAttributesFitting(_ layoutAttributes: UICollectionViewLayoutAttributes) -> UICollectionViewLayoutAttributes {
         FrameWork.measure("\(workName).sizing") { super.preferredLayoutAttributesFitting(layoutAttributes) }
