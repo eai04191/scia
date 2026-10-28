@@ -337,7 +337,9 @@ final class ProfileController {
             glyphLanguage: settings.glyphLanguageIdentifier(),
             // ローカルのアカウントのacctには@以降が付かない。
             isRemote: account.acct.contains("@"),
-            privateNote: store.relationship?.note ?? ""
+            privateNote: store.relationship?.note ?? "",
+            avatarDescription: attachment(of: .avatar)?.description,
+            headerDescription: attachment(of: .header)?.description
         ))
         viewController?.headerDidChangeSize()
     }
@@ -417,15 +419,20 @@ final class ProfileController {
 
     /// アイコンかヘッダー画像を、添付ファイルと同じビューアで開く。1枚だけを開き、左右に切り替えない。
     private func openImage(_ image: ProfileImage) {
-        guard let attachment = store.account.attachment(of: image) else { return }
+        guard let attachment = attachment(of: image) else { return }
         viewController?.openMedia([attachment], at: 0, subject: nil) { [weak header] _ in
             header?.viewerSource(for: image)
         }
     }
 
+    /// 説明にならない代替テキストは、一覧の添付ファイルと同じく、ビューアにもメニューにも出さないよう除いておく。
+    private func attachment(of image: ProfileImage) -> MediaAttachment? {
+        store.account.attachment(of: image)?.filteringAltText(ignoresUseless: settings.ignoresUselessAltText)
+    }
+
     /// アイコンかヘッダー画像のメディアのメニュー。投稿がないため「投稿」は出さない。
     private func imageMenu(_ image: ProfileImage, groups: MenuLayout<MediaMenuItem>.Groups?) -> UIMenu? {
-        guard let attachment = store.account.attachment(of: image), let source = header.viewerSource(for: image) else { return nil }
+        guard let attachment = attachment(of: image), let source = header.viewerSource(for: image) else { return nil }
         let target = TimelineViewController.MediaMenuTarget(attachment: attachment, source: source) { [weak self] in
             self?.openImage(image)
         }

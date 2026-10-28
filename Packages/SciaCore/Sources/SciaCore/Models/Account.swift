@@ -13,6 +13,10 @@ public struct Account: Codable, Hashable, Sendable, Identifiable {
     public let avatarStatic: URL?
     public let header: URL?
     public let headerStatic: URL?
+    /// アイコンの代替テキスト。Mastodon 4.4から。古いサーバーは返さないため、なければnil。
+    public let avatarDescription: String?
+    /// ヘッダー画像の代替テキスト。`avatarDescription`と同じく、なければnil。
+    public let headerDescription: String?
     /// 自己紹介。Mastodonが返すHTML文字列。
     public let note: String
     /// プロフィールのページ。リモートのアカウントなら、元のサーバーのページ。読めなければnil。
@@ -53,6 +57,8 @@ public struct Account: Codable, Hashable, Sendable, Identifiable {
         avatarStatic: URL? = nil,
         header: URL? = nil,
         headerStatic: URL? = nil,
+        avatarDescription: String? = nil,
+        headerDescription: String? = nil,
         note: String = "",
         url: URL? = nil,
         fields: [Field] = [],
@@ -71,6 +77,8 @@ public struct Account: Codable, Hashable, Sendable, Identifiable {
         self.avatarStatic = avatarStatic ?? avatar
         self.header = header ?? avatar
         self.headerStatic = headerStatic ?? header ?? avatar
+        self.avatarDescription = avatarDescription
+        self.headerDescription = headerDescription
         self.note = note
         self.url = url ?? avatar
         self.fields = fields
@@ -93,6 +101,8 @@ public struct Account: Codable, Hashable, Sendable, Identifiable {
         avatarStatic = container.decodeURL(.media, forKey: .avatarStatic)
         header = container.decodeURL(.media, forKey: .header)
         headerStatic = container.decodeURL(.media, forKey: .headerStatic)
+        avatarDescription = try container.decodeIfPresent(String.self, forKey: .avatarDescription)
+        headerDescription = try container.decodeIfPresent(String.self, forKey: .headerDescription)
         note = try container.decode(String.self, forKey: .note)
         url = container.decodeURL(.destination, forKey: .url)
         fields = try container.decodeLossyArray(Field.self, forKey: .fields)

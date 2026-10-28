@@ -25,6 +25,9 @@ final class ProfileHeaderView: UIView {
         let isRemote: Bool
         /// 相手のプロフィールに書いた、自分にしか見えないメモ。空なら欄を出さない。
         let privateNote: String
+        /// 読み上げるアイコンとヘッダー画像の代替テキスト。説明にならないものは除いておく。なければnil。
+        let avatarDescription: String?
+        let headerDescription: String?
     }
 
     var onToggleFollow: ((UIView) -> Void)?
@@ -664,6 +667,8 @@ final class ProfileHeaderView: UIView {
         case .roundedSquare: Self.avatarSize * 0.2 + Self.avatarRing
         }
         loadBanner(account.headerStatic)
+        avatarView.accessibilityValue = content.avatarDescription
+        bannerView.accessibilityValue = content.headerDescription
 
         let title = UIFont.preferredFont(forTextStyle: .title2)
         let boldTitle = title.fontDescriptor.withSymbolicTraits(.traitBold).map { UIFont(descriptor: $0, size: 0) } ?? title

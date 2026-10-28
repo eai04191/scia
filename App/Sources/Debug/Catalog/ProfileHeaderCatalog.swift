@@ -302,7 +302,9 @@ enum ProfileHeaderCatalog {
             animatesCustomEmojis: false,
             glyphLanguage: AppDependencies.settings.glyphLanguageIdentifier(),
             isRemote: account.acct.contains("@"),
-            privateNote: privateNote
+            privateNote: privateNote,
+            avatarDescription: account.avatarDescription,
+            headerDescription: account.headerDescription
         )
         header.apply(content)
         // カタログは読み込み終えた状態を見せるので、一覧と一緒に出す部分も出しておく。
@@ -365,7 +367,9 @@ private extension ProfileHeaderView.Content {
             animatesCustomEmojis: animatesCustomEmojis,
             glyphLanguage: glyphLanguage,
             isRemote: isRemote,
-            privateNote: privateNote
+            privateNote: privateNote,
+            avatarDescription: avatarDescription,
+            headerDescription: headerDescription
         )
     }
 }

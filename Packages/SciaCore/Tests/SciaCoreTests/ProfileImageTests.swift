@@ -51,4 +51,19 @@ struct ProfileImageTests {
         #expect(originalOnly.attachment(of: .avatar)?.previewUrl == url("avatar.png"))
         #expect(originalOnly.attachment(of: .header) == nil)
     }
+
+    /// アイコンとヘッダー画像の代替テキストを、ビューアで開く添付ファイルに渡す。返さない古いサーバーではnil。
+    @Test func passesAltTextOfEachImage() throws {
+        let account = try MastodonDecoder.make().decode(Account.self, from: Data("""
+        {"id":"1","username":"a","acct":"a","display_name":"","avatar":"https://example.com/avatar.png","avatar_static":"https://example.com/avatar.png",
+         "avatar_description":"unaghost Halloween edition","header":"https://example.com/header.png","header_static":"https://example.com/header.png",
+         "header_description":"","note":"","url":null,"fields":[],"emojis":[],"locked":false,"bot":false,
+         "followers_count":0,"following_count":0,"statuses_count":0}
+        """.utf8))
+        #expect(account.attachment(of: .avatar)?.description == "unaghost Halloween edition")
+        #expect(account.attachment(of: .header)?.description == "")
+
+        let old = Account(id: "1", username: "a", acct: "a", displayName: "", avatar: url("a.png"))
+        #expect(old.attachment(of: .avatar)?.description == nil)
+    }
 }
