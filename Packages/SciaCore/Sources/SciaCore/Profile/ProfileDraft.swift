@@ -91,7 +91,7 @@ public struct ProfileFieldDraft: Sendable, Equatable, Identifiable {
         self.value = value
     }
 
-    /// 名前も値も空の行は、サーバーが捨てる。
+    /// ラベルも内容も空の行は、サーバーが捨てる。
     var isBlank: Bool {
         name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -113,7 +113,7 @@ public enum ProfileDraftProblem: Sendable, Equatable {
     case tooManyFields
     case fieldNameTooLong(ProfileFieldDraft.ID)
     case fieldValueTooLong(ProfileFieldDraft.ID)
-    /// 値があるのに名前が空。サーバーは名前の空の行を拒む。
+    /// 内容があるのにラベルが空。サーバーはラベルの空の行を拒む。
     case fieldNameMissing(ProfileFieldDraft.ID)
 }
 
@@ -135,7 +135,7 @@ public struct ProfileDraft: Sendable, Equatable {
         bot = source.account.bot
     }
 
-    /// 元の値から変えたか。補足情報は、空の行を除いて名前と値の並びで比べる。行を足しただけでは変えたことにしない。
+    /// 元の値から変えたか。補足情報は、空の行を除いてラベルと内容の並びで比べる。行を足しただけでは変えたことにしない。
     public func hasChanges(from source: ProfileSource) -> Bool {
         displayName != source.account.displayName
             || note != source.note

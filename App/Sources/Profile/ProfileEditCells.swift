@@ -8,7 +8,7 @@ protocol ProfileEditInput: UIView, UITextInput {
     var inputAccessoryView: UIView? { get set }
 }
 
-/// 1行の入力欄。表示名と、補足情報の名前と内容に使う。
+/// 1行の入力欄。表示名と、補足情報のラベルと内容に使う。
 final class ProfileEditTextField: GlyphLanguageTextField, ProfileEditInput {
     var completionKeys = CompletionKeys()
     /// 補足情報の行の入力欄なら、その行。
@@ -120,7 +120,7 @@ final class ProfileEditInputCell: UITableViewCell {
     }
 }
 
-/// 補足情報の1行。名前と内容の2つの入力欄を縦に並べる。
+/// 補足情報の1行。ラベルと内容の2つの入力欄を縦に並べる。
 final class ProfileEditFieldCell: UITableViewCell, UITextFieldDelegate {
     static let reuseIdentifier = "ProfileEditFieldCell"
 
@@ -137,8 +137,8 @@ final class ProfileEditFieldCell: UITableViewCell, UITextFieldDelegate {
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
         selectionStyle = .none
-        nameField.placeholder = "名前"
-        nameField.accessibilityLabel = "補足情報の名前"
+        nameField.placeholder = "ラベル"
+        nameField.accessibilityLabel = "補足情報のラベル"
         nameField.font = .preferredFont(forTextStyle: .subheadline)
         valueField.placeholder = "内容"
         valueField.completionKinds = Set(CompletionKind.allCases)

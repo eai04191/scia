@@ -293,14 +293,14 @@ final class ProfileEditViewController: UIViewController {
         let fieldCount = draft.fields.count
         var fieldsText = "\(fieldCount) / \(limits.fields)"
         if problems.contains(where: { if case .fieldNameMissing = $0 { true } else { false } }) {
-            fieldsText = "値を書いた行には名前も書いてください"
+            fieldsText = "内容を書いた行にはラベルも書いてください"
         } else if problems.contains(where: {
             switch $0 {
             case .fieldNameTooLong, .fieldValueTooLong: true
             default: false
             }
         }) {
-            fieldsText = "名前と内容は\(limits.fieldName)文字までです"
+            fieldsText = "ラベルと内容は\(limits.fieldName)文字までです"
         }
         fieldsFooter.setText(fieldsText, isProblem: fieldsText != "\(fieldCount) / \(limits.fields)" || fieldCount > limits.fields)
     }
@@ -587,7 +587,7 @@ final class ProfileEditViewController: UIViewController {
     private func configureCompletion() {
         textCompletion.kinds = { [weak self] input in
             // サーバーは自己紹介と補足情報の内容を同じ整形にかけ、メンションとハッシュタグもリンクにする（`FormattingHelper#account_field_value_format`）。
-            // 表示名と補足情報の名前は、カスタム絵文字だけを読む。
+            // 表示名と補足情報のラベルは、カスタム絵文字だけを読む。
             if input === self?.noteView { return Set(CompletionKind.allCases) }
             return (input as? ProfileEditTextField)?.completionKinds ?? [.emoji]
         }

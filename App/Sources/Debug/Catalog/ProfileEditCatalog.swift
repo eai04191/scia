@@ -27,9 +27,9 @@ enum ProfileEditCatalog {
             state("上限を超えた") { draft in
                 draft.displayName = String(repeating: "長", count: limits.displayName + 3)
                 draft.note = String(repeating: "あ", count: limits.note + 10)
-                draft.fields = [ProfileFieldDraft(name: "", value: "名前のない内容")]
+                draft.fields = [ProfileFieldDraft(name: "", value: "ラベルのない内容")]
             },
-            state("補足情報の名前が長すぎる") { draft in
+            state("補足情報のラベルが長すぎる") { draft in
                 draft.fields = [ProfileFieldDraft(name: String(repeating: "名", count: limits.fieldName + 1), value: "内容")]
             },
             state("保存の途中", save: { _ in try await Task.sleep(for: .seconds(3_600)); return source() }) { draft in
