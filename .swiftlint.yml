@@ -10,6 +10,7 @@ only_rules:
   - direct_time_access
   - fixed_font_size
   - dimmed_white_text
+  - built_in_context_menu
   - session_task_outside_scope
   - server_value_without_check
   - unsafe_file_name
@@ -163,6 +164,18 @@ custom_rules:
       - doccomment
       - string
     message: "半透明の白い文字はdimmedWhiteText(alpha:)で作り、コントラストを上げる設定で濃くする"
+    severity: error
+
+  # コントロールに組み込まれた長押しのメニューは、開いても触覚フィードバックが出ず、ボタンはメニューに変形する形で出る。サムネイルで直したあとに足した本文のリンクで、同じ抜けがまた起きた。
+  # 長押しのメニューは、別に付けたUIContextMenuInteractionで出す（MediaMenuInteraction、ObjectInteraction、LinkHitAreaのLinkMenuInteraction）
+  built_in_context_menu:
+    included: "(App/Sources|ShareExtension)/.*\\.swift"
+    regex: "\\bisContextMenuInteractionEnabled\\s*=\\s*true\\b"
+    excluded_match_kinds:
+      - comment
+      - doccomment
+      - string
+    message: "長押しのメニューは、コントロールに組み込まれたメニューではなく、別に付けたUIContextMenuInteractionで出す。組み込まれたメニューでは触覚フィードバックが出ない"
     severity: error
 
   # セッションの持ち物（各一覧、開いた画面、投稿欄）で始める処理は、持ち主（TaskScope）を通す。持ち主を通さないTaskは、ログアウト、アカウントの切り替え、
