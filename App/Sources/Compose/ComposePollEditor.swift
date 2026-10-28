@@ -24,6 +24,8 @@ final class ComposePollEditor: UIView {
     var onSetMultiple: (Bool) -> Void = { _ in }
     var onSetHidesTotals: (Bool) -> Void = { _ in }
     var onRemovePoll: () -> Void = {}
+    /// 折りたたんだ1行を押したときに呼ぶ。置く側が欄を開き、選択肢の入力欄にフォーカスを移す。
+    var onUnfold: () -> Void = {}
 
     /// 選択肢の入力欄。並びの順。
     private(set) var fields: [ComposeLineField] = []
@@ -36,6 +38,20 @@ final class ComposePollEditor: UIView {
     private lazy var multipleWidth = Self.minimumWidth(of: multipleButton)
     private lazy var hidesTotalsWidth = Self.minimumWidth(of: hidesTotalsButton)
     private let removeButton = UIButton(configuration: .plain())
+    private let settingsRow = UIStackView()
+    /// 折りたたんだときに、選択肢の欄と設定の行の代わりに出す1行。書いた選択肢を並べ、押すと開く。
+    private let summaryButton = UIButton(configuration: .plain())
+    /// 折りたたんだ1行の末尾に置く、押すと開くことを示すシンボル。ボタンの画像は先頭の1つしか置けないので、別のビューで重ねる。
+    private let summaryChevron = UIImageView(image: UIImage(systemName: "chevron.down"))
+    /// 選択肢の欄と設定の行を入れ、折りたたむと高さを0にして切り抜く入れ物。
+    private let expandedContainer = UIView()
+    /// 折りたたんだ1行を入れ、開くと高さを0にして切り抜く入れ物。
+    private let summaryContainer = UIView()
+    /// 入れ物の高さを0にする制約。折りたたむ、開くの動きの中で切り替える。
+    private lazy var expandedCollapsed = expandedContainer.heightAnchor.constraint(equalToConstant: 0)
+    private lazy var summaryCollapsed = summaryContainer.heightAnchor.constraint(equalToConstant: 0)
+    /// 選択肢の欄と設定の行を、1行に折りたたんでいる。小さい画面で本文を書く場所を空けるため、置く側が決める。
+    private(set) var isFolded = false
     private(set) var content: Content?
     /// 増えて、まだ浮かび上がらせていない欄。
     private var appearingRows: [UIView] = []
@@ -103,13 +119,25 @@ final class ComposePollEditor: UIView {
 
         let spacer = UIView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let settingsRow = UIStackView(arrangedSubviews: [expiryButton, multipleButton, hidesTotalsButton, spacer, removeButton])
+        for view in [expiryButton, multipleButton, hidesTotalsButton, spacer, removeButton] {
+            settingsRow.addArrangedSubview(view)
+        }
         settingsRow.alignment = .center
         settingsRow.spacing = 6
 
-        let stack = UIStackView(arrangedSubviews: [optionsStack, settingsRow])
+        configureSummaryButton()
+        let expandedContent = UIStackView(arrangedSubviews: [optionsStack, settingsRow])
+        expandedContent.axis = .vertical
+        expandedContent.spacing = 8
+        Self.clip(expandedContent, in: expandedContainer)
+        Self.clip(summaryButton, in: summaryContainer)
+        summaryCollapsed.isActive = true
+        summaryContainer.alpha = 0
+        summaryContainer.accessibilityElementsHidden = true
+        summaryContainer.isUserInteractionEnabled = false
+
+        let stack = UIStackView(arrangedSubviews: [summaryContainer, expandedContainer])
         stack.axis = .vertical
-        stack.spacing = 8
         stack.translatesAutoresizingMaskIntoConstraints = false
         addSubview(stack)
         NSLayoutConstraint.activate([
@@ -186,8 +214,58 @@ final class ComposePollEditor: UIView {
         // 押すとラベルの長さが変わり、右隣のボタンがずれるため、2つの値の長いほうに幅を合わせる。
         multipleWidth.constant = Self.widestFit(of: multipleButton, values: [("1つ選ぶ", "checklist"), ("複数選ぶ", "checklist.checked")])
         hidesTotalsWidth.constant = Self.widestFit(of: hidesTotalsButton, values: [("結果を見せる", "eye"), ("結果を隠す", "eye.slash")])
+        updateSummary(poll)
         hidesTotalsButton.accessibilityHint = poll.hidesTotals ? "締め切るまで票数を見せません。押すと、投票した人に票数を見せます" : "投票した人に票数を見せます。押すと、締め切るまで隠します"
         return optionRows.count != rowCount
+    }
+
+    /// 選択肢の欄と設定の行を、1行に折りたたむか開く。置く側が、投稿欄の高さを変える動きの中で呼ぶ。
+    /// 隠す行の`isHidden`は、変わるときだけ代入する。同じ値を動きの途中に入れ直すと、スタックビューが行を高さ0で並べたまま見せてしまうため。
+    /// 隠さずに、入れ物の高さだけを0との間で動かす。`isHidden`で隠すと、スタックビューが中身ごと高さ0へ潰して動きの外で並べ直し、
+    /// 閉じ始めに選択肢の文字が○の位置へ一コマで跳んだため。中身は元の大きさのまま上に留め、はみ出した分を切り抜く。
+    func setFolded(_ folded: Bool) {
+        guard folded != isFolded else { return }
+        isFolded = folded
+        expandedCollapsed.isActive = folded
+        summaryCollapsed.isActive = !folded
+        expandedContainer.alpha = folded ? 0 : 1
+        summaryContainer.alpha = folded ? 1 : 0
+        // 切り抜いて見えない側は、読み上げと操作の対象から外す。
+        expandedContainer.accessibilityElementsHidden = folded
+        summaryContainer.accessibilityElementsHidden = !folded
+        expandedContainer.isUserInteractionEnabled = !folded
+        summaryContainer.isUserInteractionEnabled = folded
+    }
+
+    /// `content`を`container`の上に留め、`container`の高さを0にしても`content`は元の高さのまま、はみ出した分を切り抜く。
+    /// 下端を揃える制約は、入れ物の高さを0にする制約に負け、投稿欄が本文を縮める制約（`defaultLow`）には勝ち、欄の中身が縮まない強さ（`defaultHigh`）より弱くする。
+    private static func clip(_ content: UIView, in container: UIView) {
+        container.clipsToBounds = true
+        content.translatesAutoresizingMaskIntoConstraints = false
+        container.addSubview(content)
+        let bottom = content.bottomAnchor.constraint(equalTo: container.bottomAnchor)
+        bottom.priority = .defaultHigh - 1
+        NSLayoutConstraint.activate([
+            content.topAnchor.constraint(equalTo: container.topAnchor),
+            content.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            content.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            bottom,
+        ])
+    }
+
+    /// 開いたときの高さ。折りたたんでいても、開いたらどれだけ要るかを測る。
+    /// 折りたたむと入れ物の高さを0にするので、入れ物ごと測ると0になる。中身を1つずつ測って足す。
+    func unfoldedHeight(width: CGFloat) -> CGFloat {
+        func height(of view: UIView) -> CGFloat {
+            view.systemLayoutSizeFitting(
+                CGSize(width: width, height: UIView.layoutFittingCompressedSize.height),
+                withHorizontalFittingPriority: .required,
+                verticalFittingPriority: .fittingSizeLevel
+            ).height
+        }
+        let options = optionRows.reduce(0) { $0 + height(of: $1.view) } + optionsStack.spacing * CGFloat(max(optionRows.count - 1, 0))
+        let settings = settingsRow.arrangedSubviews.filter { !$0.isHidden }.map { height(of: $0) }.max() ?? 0
+        return 4 + options + 8 + settings + 4
     }
 
     /// 増えた欄を浮かび上がらせ、減った欄を薄くする。投稿欄の高さを変える動きの中で呼び、返した欄を、動き終えたら`finishRowChanges`に渡す。
@@ -232,6 +310,52 @@ final class ComposePollEditor: UIView {
         button.configuration?.title = title
         button.configuration?.image = UIImage(systemName: symbolName)
         button.accessibilityValue = title
+    }
+
+    /// 折りたたんだ1行を、選択肢の欄と同じ角丸のボックスにする。選択肢の欄の代わりに出ていると分かるようにするため。
+    private func configureSummaryButton() {
+        var configuration = UIButton.Configuration.plain()
+        configuration.background.backgroundColor = .tertiarySystemFill
+        configuration.background.cornerRadius = 8
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 7, leading: 10, bottom: 7, trailing: 10)
+        configuration.imagePadding = 8
+        configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(textStyle: .subheadline)
+        configuration.titleLineBreakMode = .byTruncatingTail
+        summaryButton.configuration = configuration
+        summaryButton.contentHorizontalAlignment = .leading
+        // 先頭は、＋のメニューで投票を足す項目と同じシンボルにする。選択肢の欄と同じ○や□にすると、まとめた1行が長い選択肢の1つに見えるため。
+        summaryButton.configuration?.image = UIImage(systemName: ComposeToolItem.poll.symbolName)
+        summaryButton.tintColor = .secondaryLabel
+        summaryChevron.preferredSymbolConfiguration = UIImage.SymbolConfiguration(textStyle: .footnote, scale: .medium)
+        summaryChevron.tintColor = .tertiaryLabel
+        summaryChevron.setContentHuggingPriority(.required, for: .horizontal)
+        summaryChevron.translatesAutoresizingMaskIntoConstraints = false
+        summaryButton.addSubview(summaryChevron)
+        NSLayoutConstraint.activate([
+            summaryChevron.trailingAnchor.constraint(equalTo: summaryButton.trailingAnchor, constant: -10),
+            summaryChevron.centerYAnchor.constraint(equalTo: summaryButton.centerYAnchor),
+        ])
+        summaryButton.accessibilityLabel = "投票の選択肢"
+        summaryButton.accessibilityHint = "開いて、選択肢を書きます"
+        summaryButton.addAction(UIAction { [weak self] _ in self?.onUnfold() }, for: .primaryActionTriggered)
+        // 1行の文字は大きさを決めて入れるので、文字の大きさの設定が変わったら入れ直す。
+        summaryButton.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { [weak self] (_: UIButton, _) in
+            guard let poll = self?.content?.poll else { return }
+            self?.updateSummary(poll)
+        }
+    }
+
+    /// 折りたたんだ1行に、書いた選択肢を出す。選択肢を1つも書いていなければ、書く場所だと分かる案内を出す。
+    /// 締め切りは出さない。選択肢のあとに並べると、小さい画面では末尾で切れて読めなかったため。
+    private func updateSummary(_ poll: PollDraft) {
+        let options = poll.options.filter { !$0.isEmpty }
+        var title = AttributedString(options.isEmpty ? "選択肢を書く" : options.joined(separator: "、"))
+        title.font = .preferredFont(forTextStyle: .body)
+        title.foregroundColor = options.isEmpty ? .placeholderText : .label
+        summaryButton.configuration?.attributedTitle = title
+        // 選択肢の文字が末尾のシンボルに重ならないよう、シンボルの幅だけ文字の右の余白を空ける。文字の大きさで幅が変わるので、入れ直すたびに測る。
+        summaryButton.configuration?.contentInsets.trailing = 10 + summaryChevron.intrinsicContentSize.width + 8
+        summaryButton.accessibilityValue = options.isEmpty ? "まだ書いていません" : options.joined(separator: "、")
     }
 
     private func makeOptionRow(index: Int) -> OptionRow {

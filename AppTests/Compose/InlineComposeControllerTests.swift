@@ -331,6 +331,65 @@ final class InlineComposeControllerTests {
         #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
     }
 
+    /// 投票の欄を出して本文を書いているとき、欄を全部出すと本文に最低の行数も残らないなら、選択肢の欄を1行に折りたたむ。
+    /// 1行を押すと開いて選択肢に書き始め、本文に戻るとまた折りたたむ。場所が足りていれば、本文を書いていても開いたままにする。
+    @Test func pollFoldsWhileWritingTextOnlyWhenItDoesNotFit() async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        composer.model.addPoll()
+        for (index, option) in ["a", "b", "c", "d"].enumerated() {
+            composer.model.setPollOption(option, at: index)
+        }
+        try await waitUntilSettled()
+        let textView = try #require(textViews(in: window).first)
+        textView.becomeFirstResponder()
+        postKeyboardFrame(height: 0)
+        try await waitUntilSettled()
+        #expect(composer.stateDump().contains("folded=false"), "場所が足りているのに折りたたみました\n\(composer.stateDump())")
+
+        // 画面の高さの半分以上をキーボードが占め、投票の欄を全部出すと本文の場所が残らない。
+        postKeyboardFrame(height: 500)
+        try await waitUntilSettled()
+        #expect(composer.stateDump().contains("folded=true"), "場所が足りないのに折りたたんでいません\n\(composer.stateDump())")
+
+        let summary = try #require(buttons(in: window).first { $0.accessibilityLabel == "投票の選択肢" })
+        summary.sendActions(for: .primaryActionTriggered)
+        try await waitUntilSettled()
+        #expect(composer.stateDump().contains("firstResponder: poll"), "1行を押しても、選択肢に書き始めていません\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("folded=false"), "選択肢を書いているのに折りたたんだままです\n\(composer.stateDump())")
+
+        textView.becomeFirstResponder()
+        try await waitUntilSettled()
+        // キーボードの枠の知らせが続いても、開き直さない。
+        postKeyboardFrame(height: 500)
+        try await waitUntilSettled()
+        #expect(composer.stateDump().contains("folded=true"), "本文に戻っても折りたたんでいません\n\(composer.stateDump())")
+        #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
+    }
+
+    /// 本文を書いたまま文字を大きくすると、キーボードの知らせが来なくても、折りたたむかを決め直す。
+    @Test func pollFoldingFollowsContentSizeChange() async throws {
+        defer {
+            window.traitOverrides.preferredContentSizeCategory = .large
+            window.isHidden = true
+        }
+        composer.beginEditing()
+        composer.model.addPoll()
+        for (index, option) in ["a", "b", "c", "d"].enumerated() {
+            composer.model.setPollOption(option, at: index)
+        }
+        try await waitUntilSettled()
+        let textView = try #require(textViews(in: window).first)
+        textView.becomeFirstResponder()
+        postKeyboardFrame(height: 300)
+        try await waitUntilSettled()
+        #expect(composer.stateDump().contains("folded=false"), "場所が足りているのに折りたたみました\n\(composer.stateDump())")
+
+        window.traitOverrides.preferredContentSizeCategory = .accessibilityExtraExtraExtraLarge
+        try await waitUntilSettled()
+        #expect(composer.stateDump().contains("folded=true"), "文字を大きくして場所が足りなくなったのに折りたたんでいません\n\(composer.stateDump())")
+    }
+
     /// 本文と注意書きの間でキーボードを移しても、書き終えたことにならず、欄はカプセルに戻らない。
     @Test func movingFocusBetweenSpoilerAndTextKeepsEditing() async throws {
         defer { window.isHidden = true }

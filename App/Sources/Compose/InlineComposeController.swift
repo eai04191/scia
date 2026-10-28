@@ -49,6 +49,9 @@ final class InlineComposeController: NSObject {
     var onLinkTitleFailed: (LinkTitleFailure) -> Void = { _ in }
 
     private weak var host: UIViewController?
+    /// 書いていないときに投稿欄を留める、タブバーの上までの枠。キーボードがないときに、投稿欄をどこまで伸ばせるかを測るのに使う。
+    private weak var restingGuide: UILayoutGuide?
+    private var isPollFoldingScheduled = false
     private let tuning: TuningStore
     private let settings: AppSettings
     /// キーボードの知らせを受ける先。テストでは、端末の本物のキーボードの知らせが混ざらないよう別のものを渡す。
@@ -340,6 +343,7 @@ final class InlineComposeController: NSObject {
     /// キーボードに付いて下がり、タブバーの上で止まる。
     func install(in host: UITabBarController) {
         self.host = host
+        restingGuide = host.contentLayoutGuide
         configureBar()
         // タブバーの入れ物のすぐ奥に置く。隠すときに、タブバーの裏へ沈んで見えるようにするため。
         if let tabBarContainer = host.view.subviews.first(where: { host.tabBar.isDescendant(of: $0) }) {
@@ -423,11 +427,11 @@ final class InlineComposeController: NSObject {
         for (index, option) in options.enumerated() {
             setPollOption(option, at: index)
         }
-        if wasWritingText {
         // 前に入れた選択肢が多ければ、後ろから空にして詰める。残すと、少ない選択肢に置き換えられない。
         for index in (options.count..<(model.poll?.options.count ?? 0)).reversed() {
             setPollOption("", at: index)
         }
+        if wasWritingText {
             textView.becomeFirstResponder()
         }
     }
@@ -462,7 +466,7 @@ final class InlineComposeController: NSObject {
     /// 違和感レポートに残す状態。行が重なっていれば、どの行かも書く。
     func stateDump() -> String {
         """
-        editing: \(isEditing) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : pollEditor.fields.firstIndex(where: \.isFirstResponder).map { "poll\($0 + 1)" } ?? "none") spoiler: \(model.showsSpoiler) poll: \(model.poll.map { "options=\($0.options.count) multiple=\($0.multiple) hidesTotals=\($0.hidesTotals) expiresIn=\($0.expiresIn)" } ?? "nil") sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") quoteTarget: \(model.quoteTarget?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil") scheduledAt: \(model.scheduledAt.map { "\($0)" } ?? "nil") rewritingSchedule: \(model.rewritingSchedule?.id ?? "nil") scheduleDatePicker: \(isShowingScheduleDatePicker) language: \(model.language ?? "nil") defaultLanguage: \(model.defaultLanguage ?? "nil") languagePicker: \(isShowingLanguagePicker)
+        editing: \(isEditing) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : pollEditor.fields.firstIndex(where: \.isFirstResponder).map { "poll\($0 + 1)" } ?? "none") spoiler: \(model.showsSpoiler) poll: \(model.poll.map { "options=\($0.options.count) multiple=\($0.multiple) hidesTotals=\($0.hidesTotals) expiresIn=\($0.expiresIn) folded=\(pollEditor.isFolded)" } ?? "nil") sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") quoteTarget: \(model.quoteTarget?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil") scheduledAt: \(model.scheduledAt.map { "\($0)" } ?? "nil") rewritingSchedule: \(model.rewritingSchedule?.id ?? "nil") scheduleDatePicker: \(isShowingScheduleDatePicker) language: \(model.language ?? "nil") defaultLanguage: \(model.defaultLanguage ?? "nil") languagePicker: \(isShowingLanguagePicker)
         mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
         tools: row=\(toolPlacement.map { "\($0.row.map(\.rawValue))" } ?? "nil") menu=\(toolPlacement.map { "\($0.menu.map { $0.map(\.rawValue) })" } ?? "nil")
@@ -885,6 +889,8 @@ final class InlineComposeController: NSObject {
         model.addPoll()
         // モデルの変更が画面に届くのは少しあとなので、欄を出してからフォーカスを移す。
         update()
+        // 前に外した投票の欄を折りたたんだままだと、隠れた入力欄にはフォーカスを移せないため、開いておく。
+        setPollFolded(false, animated: false)
         guard let first = pollEditor.fields.first else { return }
         lastFocusedInput = first
         if let bottomSheet {
@@ -966,6 +972,79 @@ final class InlineComposeController: NSObject {
             model.poll?.hidesTotals = hides
         }
         pollEditor.onRemovePoll = { [weak self] in self?.togglePoll() }
+        pollEditor.onUnfold = { [weak self] in self?.unfoldPoll() }
+    }
+
+    // MARK: - 投票の欄を折りたたむ
+
+    /// 投票の欄を出して本文か注意書きを書いているとき、欄を全部出すと本文に最低の行数も残らないなら、選択肢の欄と設定の行を1行に折りたたむ。
+    /// 選択肢の入力欄に移ったら開く。iPhone SEのような小さい画面で、返信先や予約の行と投票の欄を出すと、本文がほぼ0の高さまで潰れて打てなかったため。
+    /// 今の高さではなく、開いたときに要る高さで決める。今の高さで決めると、たたむと収まって開き、開くと収まらずにたたむ、を繰り返すため。
+    private func updatePollFolding() {
+        guard isEditing, model.poll != nil else { return }
+        if pollEditor.fields.contains(where: \.isFirstResponder) {
+            setPollFolded(false, animated: true)
+        } else if textView.isFirstResponder || spoilerField.isFirstResponder {
+            setPollFolded(pollNeedsFolding(), animated: true)
+        }
+        // シートやビューアのためにキーボードを閉じている間は、今のままにする。戻ったときに欄が替わって見えないようにするため。
+    }
+
+    /// 並べ直しを終えてから、投票の欄を折りたたむかを決め直す。
+    private func updatePollFoldingAfterLayout() {
+        guard !isPollFoldingScheduled else { return }
+        isPollFoldingScheduled = true
+        Task { @MainActor [weak self] in
+            self?.isPollFoldingScheduled = false
+            self?.updatePollFolding()
+        }
+    }
+
+    /// 投票の欄を開いたまま本文に最低の行数を残すと、投稿欄が上の安全領域からキーボード（なければタブバー）の上までに収まらない。
+    private func pollNeedsFolding() -> Bool {
+        guard let host, let restingGuide else { return false }
+        let width = stack.bounds.width
+        guard width > 0 else { return false }
+        let others = stack.arrangedSubviews.filter { !$0.isHidden && $0 !== textView && $0 !== pollEditor }
+        let othersHeight = others.reduce(0) { $0 + Self.fittingHeight(of: $1, width: width) }
+        let minBody = textHeight(lines: tuning.value(of: TuningCatalog.composePollFoldMinBodyLines))
+        let needed = stackTop.constant - stackBottom.constant + othersHeight + stack.spacing * CGFloat(others.count + 1)
+            + minBody + pollEditor.unfoldedHeight(width: width)
+        let bottom = min(restingGuide.layoutFrame.maxY, host.view.bounds.maxY - currentKeyboardHeight) - barSpacing
+        let available = bottom - host.view.safeAreaLayoutGuide.layoutFrame.minY
+        return needed > available
+    }
+
+    private static func fittingHeight(of view: UIView, width: CGFloat) -> CGFloat {
+        view.systemLayoutSizeFitting(
+            CGSize(width: width, height: UIView.layoutFittingCompressedSize.height),
+            withHorizontalFittingPriority: .required,
+            verticalFittingPriority: .fittingSizeLevel
+        ).height
+    }
+
+    /// 投票の欄を折りたたむか開く。投稿欄の高さを、ほかの行の出し入れと同じく動きの中で変える。
+    private func setPollFolded(_ folded: Bool, animated: Bool) {
+        guard folded != pollEditor.isFolded else { return }
+        logger.info("compose: poll \(folded ? "folded" : "unfolded", privacy: .public)")
+        guard animated, let host, host.view.window != nil, !UIAccessibility.isReduceMotionEnabled else {
+            pollEditor.setFolded(folded)
+            return
+        }
+        UIView.animateSmoothly(duration: tuning.value(of: TuningCatalog.composePollFoldDuration)) {
+            self.pollEditor.setFolded(folded)
+            host.view.layoutIfNeeded()
+            self.layoutCompletionListIfShown()
+            host.view.layoutIfNeeded()
+        }
+    }
+
+    /// 折りたたんだ1行を押したら、開いて、まだ書いていない最初の選択肢（なければ最後の選択肢）に書き始める。
+    private func unfoldPoll() {
+        setPollFolded(false, animated: true)
+        let fields = pollEditor.fields
+        guard let field = fields.first(where: { ($0.text ?? "").isEmpty }) ?? fields.last else { return }
+        field.becomeFirstResponder()
     }
 
     // MARK: - リンクにタイトルを付ける
@@ -1584,6 +1663,7 @@ final class InlineComposeController: NSObject {
             applyBarPlacement()
         }
         updateSinkingWithKeyboard(keyboardHeight: height)
+        updatePollFolding()
         if let before = keyboardHeightBeforeContextMenu {
             if currentKeyboardHeight < before {
                 didKeyboardHideForContextMenu = true
@@ -2078,6 +2158,7 @@ final class InlineComposeController: NSObject {
         }
         setRowShown(pollEditor, isEditing && model.poll != nil)
         applyPollTopLimit()
+        updatePollFolding()
 
         let option = VisibilityOption(model.visibility)
         visibilityButton.configuration?.image = UIImage(systemName: option.symbolName)
@@ -2546,7 +2627,7 @@ final class InlineComposeController: NSObject {
         layoutCompletionList()
     }
 
-    /// 欄の上に置く。広げて欄の上に2行ぶんの場所も残っていなければ、打っている行のすぐ下（入りきらなければ行の上）に重ねる。
+    /// 欄の上に置く。欄の上に2行ぶんの場所も残っていなければ（広げたときや、小さい画面で欄が上端まで伸びたとき）、打っている行のすぐ下（入りきらなければ行の上）に欄の中身に重ねる。
     /// 一覧の枠は、選んだ場所いっぱいにする。ガラスの枠は、その中で候補の数に合わせ、打っている文字に近い端に寄せる。
     /// 入りきらない高さは、一覧の中でスクロールする。
     private func layoutCompletionList() {
@@ -2554,10 +2635,10 @@ final class InlineComposeController: NSObject {
         let wanted = completionList.contentHeight
         let safeTop = host.view.safeAreaLayoutGuide.layoutFrame.minY
         let available = bar.frame.minY - completionListSpacing * 2 - safeTop
-        // 広げていないときは、場所が足りなくても欄の上に2行ぶん出し、上の安全領域に重ねる。広げていると欄が上端まで伸びて上に場所がないことがあるので、そのときだけ本文に重ねる。
+        // 欄の上に2行ぶんの場所がなければ、欄の中身に重ねる。欄の上に出すと、上の安全領域を越えて画面の外へはみ出し、選べなかったため。
         let fitsAboveBar = available >= min(wanted, ComposeCompletionList.rowHeight * 2)
         var height: CGFloat
-        if isExpanded, !fitsAboveBar, let caret = textCompletion.caretRect(in: host.view) {
+        if !fitsAboveBar, let caret = textCompletion.caretRect(in: host.view) {
             let lower = tools.convert(tools.bounds, to: host.view).minY - completionListSpacing
             let upper = bar.frame.minY + completionListSpacing
             let below = lower - (caret.maxY + completionListSpacing)
@@ -2789,14 +2870,18 @@ final class InlineComposeController: NSObject {
         textView.onSubmit = { [weak self] in self?.submit() }
         // 回転やウィンドウの幅の変化で折り返す行の数が変わると、広げている間の本文の高さが合わなくなるため、測り直す。
         // 折り返し直されるので、ハイライトしたURLの枠やきらめきも並べ直す。
+        // 投票の欄を折りたたむかも、要る高さが変わるので決め直す。キーボードの知らせが来ないこともあるため。
+        // 知らせの時点では、投票の欄はまだ前の幅と文字の大きさで並んでいるので、並べ終えてから決める。
         textView.onWidthChange = { [weak self] in
             self?.textDidChange()
             self?.linkTitleEffects.layoutDidChange()
+            self?.updatePollFoldingAfterLayout()
         }
         // 文字の大きさが変わっても、行の高さが変わって広げている間の本文の高さが合わなくなるため、測り直す。
         textView.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { [weak self] (_: UITextView, _) in
             self?.textDidChange()
             self?.linkTitleEffects.layoutDidChange()
+            self?.updatePollFoldingAfterLayout()
         }
         textView.completionKeys = completionKeys()
         textView.overlayControl = { [weak self] point in self?.linkTitleEffects.highlight(at: point) }
@@ -2915,7 +3000,7 @@ extension InlineComposeController: UITextViewDelegate {
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        // 広げている間に本文をスクロールしたら、打っている行に付けた一覧も動かす。
+        // 一覧を欄に重ねている間に本文をスクロールしたら、打っている行に付けた一覧も動かす。
         if scrollView === textView {
             layoutCompletionListIfShown()
             return
@@ -3016,6 +3101,7 @@ extension InlineComposeController: UITextViewDelegate {
         if let input = input as? any UITextInput {
             textCompletion.inputDidBeginEditing(input)
         }
+        updatePollFolding()
         // シートを入れ替える途中なら、次のシートは出さない。閉じ終わってから出すと、戻したフォーカスがまた外れるため。
         pendingSheet = nil
         guard let bottomSheet, !bottomSheet.isClosing else { return }

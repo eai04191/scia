@@ -1247,6 +1247,24 @@ public enum TuningCatalog {
         defaultValue: 0.25
     )
 
+    /// 投票の欄を出して本文を書いているとき、本文に残す最低の行数。欄を全部出すと本文がこの高さより低くなるなら、選択肢の欄を1行に折りたたむ。
+    public static let composePollFoldMinBodyLines = NumberTuning(
+        id: "compose.pollFoldMinBodyLines",
+        title: "投票の欄を折りたたんで本文に残す最低の行数",
+        range: 1...10,
+        step: 1,
+        defaultValue: 3
+    )
+
+    /// 投票の選択肢の欄を折りたたむ、開くときに、投稿欄の高さを変え、中身を入れ替える時間。
+    public static let composePollFoldDuration = NumberTuning(
+        id: "compose.pollFoldDuration",
+        title: "投票の選択肢の欄を折りたたむ、開く時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.25
+    )
+
     /// 書いている間に返信先や引用元を替えたときに、ラベルを入れ替え、幅を変える時間。
     public static let composeReplyLabelSwitchDuration = NumberTuning(
         id: "compose.replyLabelSwitchDuration",
@@ -1676,6 +1694,8 @@ public enum TuningCatalog {
             .number(composeExpandedMinLines),
             .number(composeTextGrowDuration),
             .number(composePollOptionDuration),
+            .number(composePollFoldMinBodyLines),
+            .number(composePollFoldDuration),
             .number(composeReplyLabelSwitchDuration),
             .number(linkTitleMorphDuration),
             .number(linkTitleShimmerPeriod),

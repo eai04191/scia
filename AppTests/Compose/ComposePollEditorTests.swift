@@ -53,6 +53,19 @@ struct ComposePollEditorTests {
         #expect(removed.superview == nil)
     }
 
+    /// 折りたたんでいても、開いたときの高さを測れる。隠した欄の高さを0と測ると、置く側が収まると取り違えて、すぐ開き直してしまう。
+    @Test func unfoldedHeightIsSameWhileFolded() {
+        let editor = laidOutEditor(["a", "b", "c", ""])
+        let unfolded = editor.unfoldedHeight(width: 320)
+        #expect(abs(unfolded - editor.systemLayoutSizeFitting(CGSize(width: 320, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height) < 0.5)
+
+        editor.setFolded(true)
+        editor.layoutIfNeeded()
+
+        #expect(editor.unfoldedHeight(width: 320) == unfolded)
+        #expect(editor.systemLayoutSizeFitting(CGSize(width: 320, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height < unfolded / 2)
+    }
+
     /// 動かさないときは、これまでどおり、すぐ足して外す。
     @Test func rowsChangeAtOnceWithoutAnimation() throws {
         let editor = laidOutEditor(["a", "b", ""])
