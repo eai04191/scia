@@ -246,7 +246,7 @@ struct LinkLabelTests {
 
         #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: ブラウザで開く,プロフィールとして開く,リンクをコピー,共有")
         #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: すべての投稿|ブラウザで開く,リンクをコピー,共有")
-        #expect(try menuOutline(of: .mention(acct: "bob@example.social", url: profile), settings: settings) == "@bob@example.social: プロフィール|リンクをコピー,共有,ブラウザで開く")
+        #expect(try menuOutline(of: .mention(acct: "bob@example.social", url: profile), settings: settings) == "@bob\nexample.social: プロフィール|リンクをコピー,共有,ブラウザで開く")
     }
 
     /// ハッシュタグのメニューの「投稿したユーザーの投稿」は、開くユーザーが分かるときだけ「@名前の投稿」で出し、ほかのサーバーのユーザーならサーバー名をサブタイトルに出す。

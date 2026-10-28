@@ -267,11 +267,11 @@ final class LinkHitArea: UIControl {
         guard let label else { return nil }
         let settings = label.settings
         let handlers = urlHandlers(at: point, linkBrowser: settings.linkBrowser)
-        let title: String
+        let makeMenu: ([UIMenuElement]) -> UIMenu
         let children: [UIMenuElement]
         switch destination {
         case .url(let url):
-            title = url.absoluteString
+            makeMenu = { UIMenu(title: url.absoluteString, children: $0) }
             children = (groups?.link ?? settings.linkMenuLayout.groups).menuElements { item in
                 if let action = item.urlAction {
                     return [action.action(url: url, handlers: handlers)]
@@ -283,7 +283,7 @@ final class LinkHitArea: UIControl {
                 }
             }
         case .mention(let acct, let url):
-            title = "@\(acct)"
+            makeMenu = { UIMenu.user(acct: acct, children: $0) }
             let host = nearest((any LinkMenuHost).self)
             let target = UserMenuTarget.profileURL(url, shownAcct: acct)
             let actions = host?.userMenuActions
@@ -307,7 +307,7 @@ final class LinkHitArea: UIControl {
                 }
             }
         case .hashtag(let name, let url):
-            title = "#\(name)"
+            makeMenu = { UIMenu(title: "#\(name)", children: $0) }
             children = HashtagMenuItem.menuElements(
                 name: name,
                 url: url,
@@ -319,7 +319,7 @@ final class LinkHitArea: UIControl {
                 openAccountStatuses: { [weak self] account in self?.nearest((any LinkMenuHost).self)?.openHashtag(name, of: account) }
             )
         }
-        return children.isEmpty ? nil : UIMenu(title: title, children: children)
+        return children.isEmpty ? nil : makeMenu(children)
     }
 
     private func profileAction(_ title: String, image: UIImage?, _ destination: RichText.LinkDestination) -> UIAction {

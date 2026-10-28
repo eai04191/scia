@@ -205,9 +205,8 @@ extension HashtagMenuItem {
                 return [UIAction(title: item.title, image: item.image) { _ in openTimeline() }]
             case .accountStatuses:
                 guard let account else { return [] }
-                // ほかのサーバーのユーザーなら、ユーザーのサブメニューの見出しと同じく、サーバー名をサブタイトルに出す。
-                let domain = account.acct.split(separator: "@", maxSplits: 1).dropFirst().first.map(String.init)
-                return [UIAction(title: "@\(account.username)の投稿", subtitle: domain, image: item.image) { _ in openAccountStatuses(account) }]
+                // ほかのサーバーのユーザーなら、ユーザーのメニューの見出しと同じく、サーバー名をサブタイトルに出す。
+                return [UIAction(title: "@\(account.username)の投稿", subtitle: UserHeading(acct: account.acct).subtitle, image: item.image) { _ in openAccountStatuses(account) }]
             case .mute:
                 return muteActions?.elements(for: name, item: item) ?? []
             // 共通の項目は、上で中身から組んだ。
@@ -289,6 +288,19 @@ enum MenuUser {
         case .account(let account): account.url
         case .mention(let mention): mention.url
         }
+    }
+}
+
+extension UIMenu {
+    /// ユーザーのメニュー。投稿のメニューのサブメニューでも、ほかの場所から出すメニューでも、見出しを`UserHeading`で揃える。
+    /// - Parameter image: サブメニューの項目に付ける、その人のアイコン。単独で出すメニューではnil。
+    static func user(acct: String, image: UIImage? = nil, children: [UIMenuElement]) -> UIMenu {
+        let heading = UserHeading(acct: acct)
+        // 単独で出すメニューの見出しでは、UIKitがサブタイトルを描かないため、サーバー名を2行目に置く。
+        if image == nil, let subtitle = heading.subtitle {
+            return UIMenu(title: "\(heading.title)\n\(subtitle)", children: children)
+        }
+        return UIMenu(title: heading.title, subtitle: heading.subtitle, image: image, children: children)
     }
 }
 
