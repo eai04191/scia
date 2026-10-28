@@ -65,6 +65,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - サーバー（ほかのサーバーの利用者が書いた投稿や、fxtwitterの応答を含む）から来る件数、上限、URLは、読むところで確かめる。件数は`decodeCount`で範囲に収め、上限は`ServerLimit`で1以上だけを受け付け、URLは使い道（読み込む画像やメディアか、押して開く先か）ごとに`decodeURL`でスキームを確かめる（`make lint`の`server_value_without_check`で止める）。読んだあとの計算でも、サーバーの値から作った数（縦横比や割合）を整数に直す前に、範囲に収める
 - ファイルやフォルダーの名前は、文字列の決まった名前でなければ`SafeFileName`で作り、`appending(fileName:)`でつなげる。URLやサーバーの応答、ほかのアプリから受け取ったファイルの名前には、`/`や`..`が入りうるため（`make lint`の`unsafe_file_name`で止める）
 - ログに何を`privacy: .public`で出してよいかは[docs/logging.md](docs/logging.md)に従う。ハンドル、本文、URL、応答の本文、`localizedDescription`を公開扱いで出す書き方は、`make lint`の`log_private_value`で止める。違和感レポートの状態ダンプも同じ決まりで書く
+- サーバーの上限のうち、APIで返らないもの（メモや通報のコメントの文字数など）は、Mastodonのソースにある値でも手元で固定しない。Mastodonはソースを変えて動かせるので、上限を変えたサーバーで、書ける長さを手元で止めたり、断られる長さを通したりするため。手元では止めず、サーバーが断って返す理由を、送れなかったときの表示で出す。文字数のような目安は、上限を付けずに出してよい
 - 通信は`HTTPClient`を通す（APIの外は`AppDependencies.http`、ストリーミングは`StreamingClient`）。再開の時刻で止める、一時的な失敗で送り直す、応答の大きさの上限、httpとhttps以外を開かない決まりを、すべての経路で守らせるため。URLSessionを`URLSessionTransport`の外で使う書き方は、`make lint`の`url_session_outside_network_layer`で止める。決まりは[docs/network.md](docs/network.md)にある
 - Swift 6のstrict concurrencyを有効にしている。`@unchecked Sendable`や`nonisolated(unsafe)`で警告を消さず、設計で解決する
 
