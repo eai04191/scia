@@ -668,6 +668,9 @@ final class ProfileHeaderView: UIView {
         // 文字と色だけでなく、カプセルの幅も替わるため、並べ直しもクロスフェードの中で行う。外で行うと、幅だけが1コマで替わる。
         let changesFollow = previous.map { $0.followState != content.followState || $0.isChangingFollow != content.isChangingFollow } ?? false
         if changesFollow, followRevealDuration > 0, window != nil, !UIAccessibility.isReduceMotionEnabled {
+            // 補足情報の行は上で作り直したばかりで、まだ並べていない。クロスフェードの中で初めて並べると、行が大きさ0から伸び、
+            // 文字が空になったり縦に潰れたりして見えるため、ボタンを替える前に並べ終えておく。
+            layoutIfNeeded()
             let options: UIView.AnimationOptions = [.transitionCrossDissolve, .allowUserInteraction]
             UIView.transition(with: followButton, duration: followRevealDuration, options: options) {
                 self.applyFollowButton(content)
