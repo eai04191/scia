@@ -2724,10 +2724,13 @@ final class SessionController {
             statusBarTicker.setLooping(isOn, items: DummyNotifications.samples)
         case .inject(let tab, let file):
             inject(file, into: tab)
-        case .compose(let text, let mediaCount):
+        case .compose(let text, let mediaCount, let pollOptions):
             composer.beginEditing()
             if let text {
                 composer.replaceTextForDebug(text)
+            }
+            if let pollOptions {
+                composer.replacePollForDebug(pollOptions)
             }
             if let draftImages = ScenarioMode.server?.script.draftImages {
                 composer.model.addPastedMedia(DummyMedia.pastedImages(Array(draftImages().prefix(mediaCount))))

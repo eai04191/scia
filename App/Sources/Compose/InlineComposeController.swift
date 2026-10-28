@@ -412,6 +412,25 @@ final class InlineComposeController: NSObject {
         textView.text = text
         textViewDidChange(textView)
     }
+
+    /// 投票の欄を出して、選択肢を`options`に置き換える。本文を書いていたら、フォーカスを本文に戻す。
+    /// シミュレーターの日本語のキーボードでは選択肢を打つと変換されて崩れるため、`scia-debug://compose?poll=`で投票の欄を盛った状態を用意する。
+    func replacePollForDebug(_ options: [String]) {
+        let wasWritingText = textView.isFirstResponder
+        if model.poll == nil {
+            togglePoll()
+        }
+        for (index, option) in options.enumerated() {
+            setPollOption(option, at: index)
+        }
+        if wasWritingText {
+        // 前に入れた選択肢が多ければ、後ろから空にして詰める。残すと、少ない選択肢に置き換えられない。
+        for index in (options.count..<(model.poll?.options.count ?? 0)).reversed() {
+            setPollOption("", at: index)
+        }
+            textView.becomeFirstResponder()
+        }
+    }
     #endif
 
     /// 投稿欄の入力欄。本文、注意書き、投票の選択肢。

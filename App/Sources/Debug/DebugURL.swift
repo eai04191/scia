@@ -88,7 +88,8 @@ enum DebugURL: Equatable {
     /// どちらも省ける。シミュレーターのクリップボードが使えないときにも、URLを含む本文などを打たずに用意し、ピッカーを操作せずに添付を用意するため。
     /// 本文は打ったときと同じ経路で置き換えるので、末尾の語の補完も出す。画像はペーストと同じ経路で足すので、サーバーに送る。
     /// 撮影モードでは、番号を描いた画像の代わりに、シナリオの写真（`ScenarioScript.draftImages`）を足す。
-    case compose(text: String?, mediaCount: Int)
+    /// `&poll=<選択肢を,で区切る>`を付けると、投票の欄を出して選択肢を置き換え、フォーカスは本文に残す。シミュレーターの日本語のキーボードでは、選択肢を打つと変換されて崩れるため。
+    case compose(text: String?, mediaCount: Int, pollOptions: [String]? = nil)
     /// `scia-debug://compose/close`。キーボードを閉じて、投稿欄を書いていないときのカプセルに戻す。下書きは残す。
     case composeClose
     /// `scia-debug://profile-edit?note=<自己紹介>&field=<補足情報の内容>`。自分のプロフィールの編集を開く。`note`を渡すと、読み込んだあとに自己紹介をその文に置き換えて、
@@ -266,8 +267,9 @@ enum DebugURL: Equatable {
 
     private static func compose(_ url: URL) -> DebugURL? {
         let text = query("text", in: url)
-        guard let mediaCount = Int(query("media", in: url) ?? "0"), mediaCount >= 0, text != nil || mediaCount > 0 else { return nil }
-        return .compose(text: text, mediaCount: mediaCount)
+        let pollOptions = query("poll", in: url).map { $0.components(separatedBy: ",") }
+        guard let mediaCount = Int(query("media", in: url) ?? "0"), mediaCount >= 0, text != nil || mediaCount > 0 || pollOptions != nil else { return nil }
+        return .compose(text: text, mediaCount: mediaCount, pollOptions: pollOptions)
     }
 
     private static func autoScroll(_ url: URL) -> DebugURL? {
