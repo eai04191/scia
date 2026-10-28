@@ -10,6 +10,8 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
     /// 押下を受ける高さ。nilなら全体で受ける。文字に合わせて伸ばした最後の行の下の行間が、下の部品（サムネイル、投票など）に重なっても、
     /// その部品へのタップを奪わないよう、差し替えたラベルの高さを返す。
     var touchableHeight: (() -> CGFloat?)?
+    /// 最後に触れたタッチの種類。選択が空になったときに、やめるかを決めるのに使う。
+    var lastTouchType: UITouch.TouchType?
     private lazy var editMenu: UIEditMenuInteraction = {
         let interaction = UIEditMenuInteraction(delegate: self)
         addInteraction(interaction)
@@ -30,6 +32,7 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
         textContainer.lineFragmentPadding = 0
         attributedText = text
         delegate = self
+        addGestureRecognizer(TouchDownObserver { [weak self] touch in self?.lastTouchType = touch.type })
     }
 
     @available(*, unavailable)
@@ -81,7 +84,8 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
     }
 
     func textViewDidChangeSelection(_ textView: UITextView) {
-        if selectedRange.length == 0 {
+        // マウスやトラックパッドのクリックとドラッグは、語や範囲に広げる前に一度選択を空にするので、空になってもやめない。
+        if selectedRange.length == 0, lastTouchType != .indirectPointer {
             onEnd?()
         }
     }

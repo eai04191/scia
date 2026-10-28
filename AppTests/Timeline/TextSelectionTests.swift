@@ -99,6 +99,23 @@ struct TextSelectionTests {
         #expect(textView.selectedRange == NSRange(location: 0, length: text.length))
     }
 
+    /// 指で選択を解いたらやめる。マウスやトラックパッドのクリックで空になったときはやめない。クリックやドラッグは、語や範囲に広げる前に一度選択を空にするため。
+    @Test(arguments: [(UITouch.TouchType.direct, true), (.indirectPointer, false)])
+    func emptySelectionEndsOnlyByFinger(touchType: UITouch.TouchType, ends: Bool) throws {
+        let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
+        let window = try window(showing: view)
+        defer { window.isHidden = true }
+        view.apply(body(NSAttributedString(string: "選ぶ本文")))
+        view.layoutIfNeeded()
+        view.beginTextSelection()
+        let textView = try #require(view.selectionTextView)
+
+        textView.lastTouchType = touchType
+        textView.selectedRange = NSRange(location: 1, length: 0)
+
+        #expect(view.isSelectingText == !ends)
+    }
+
     /// 同じ投稿の描き直しでは選んだままにし、別の投稿に替わったらやめてラベルに戻す。
     @Test func selectionEndsOnlyWhenRowShowsAnotherStatus() throws {
         let view = PostBodyView(mediaImages: .offline, avatarImages: .offline)
