@@ -805,9 +805,20 @@ final class PostBodyView: UIView {
     static let emBoxDescent: CGFloat = 0.12
 
     /// 先頭の文字の、ベースラインから字面の上端まで。
+    /// カスタム絵文字を文字の行より大きくした段落は、絵文字がベースラインから上へ伸び、1行目が文字の行より高くなる。
+    /// 字面だけで測ると、1行目の絵文字が上の部品（名前の行）に重なるため、行の上端を超えて伸びた分を足す。
+    /// 段落のどの行も同じ高さに広げるので（`RichTextRenderer`の`minimumLineHeight`）、絵文字が1行目になくても最初の段落の絵文字で測る。
     static func textTopInset(of text: NSAttributedString) -> CGFloat {
         guard text.length > 0, let font = text.attribute(.font, at: 0, effectiveRange: nil) as? UIFont else { return 0 }
-        return font.pointSize * emBoxAscent
+        let firstParagraph = (text.string as NSString).paragraphRange(for: NSRange(location: 0, length: 0))
+        var overflow: CGFloat = 0
+        text.enumerateAttribute(.attachment, in: firstParagraph) { value, range, _ in
+            guard let attachment = value as? NSTextAttachment,
+                  let emojiFont = text.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont
+            else { return }
+            overflow = max(overflow, attachment.bounds.maxY - emojiFont.ascender)
+        }
+        return font.pointSize * emBoxAscent + overflow
     }
 
     /// 最後の文字の、ベースラインから字面の下端まで。

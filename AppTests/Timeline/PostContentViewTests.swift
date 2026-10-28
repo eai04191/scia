@@ -402,6 +402,16 @@ extension PostContentViewTests {
         return view.previewFrames()
     }
 
+    /// 本文のカスタム絵文字を大きくしても、1行目の絵文字が上へ伸びて名前の行に重ならない。
+    @Test(arguments: [1.0, 2.0, 4.0])
+    func largeBodyEmojiStaysBelowNameRow(scale: Double) async throws {
+        let frames = try await emojiPostFrames(nameScale: 1, bodyScale: scale)
+        let name = try #require(frames[.nameGlyphs]?.first)
+        let emoji = try #require(frames[.customEmojis]?.first)
+
+        #expect(emoji.minY >= name.maxY, "絵文字=\(emoji) 名前の字面=\(name)")
+    }
+
     /// 名前と本文のカスタム絵文字は、それぞれの設定の割合で大きさを変える。
     @Test func nameAndBodyEmojiScaleIndependently() async throws {
         let plain = try await emojiPostFrames(nameScale: 1, bodyScale: 1)
