@@ -66,6 +66,32 @@ struct ComposePollEditorTests {
         #expect(editor.systemLayoutSizeFitting(CGSize(width: 320, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel).height < unfolded / 2)
     }
 
+    /// 設定の行の幅が足りなくなるにつれ、結果のボタンを先に「見せる」に縮め、それでも足りなければ選び方のボタンも「1つ」に縮める。
+    /// 読み上げる値は、縮めても元の文言のまま。
+    @Test func settingsLabelsShortenAsWidthNarrows() throws {
+        let editor = laidOutEditor(["a", "b", ""])
+        var seen: [SettingsLabelLength] = []
+        for width in stride(from: 600, through: 150, by: -5) {
+            editor.frame.size.width = CGFloat(width)
+            editor.layoutIfNeeded()
+            if seen.last != editor.labelLength {
+                seen.append(editor.labelLength)
+            }
+        }
+        #expect(seen == [.full, .shortResults, .shortBoth])
+
+        let hidesTotals = try #require(buttons(in: editor).first { $0.accessibilityLabel == "結果" })
+        let multiple = try #require(buttons(in: editor).first { $0.accessibilityLabel == "選び方" })
+        #expect(hidesTotals.configuration?.title == "見せる")
+        #expect(multiple.configuration?.title == "1つ")
+        #expect(hidesTotals.accessibilityValue == "結果を見せる")
+        #expect(multiple.accessibilityValue == "1つ選ぶ")
+    }
+
+    private func buttons(in view: UIView) -> [UIButton] {
+        (view as? UIButton).map { [$0] } ?? view.subviews.flatMap(buttons(in:))
+    }
+
     /// 動かさないときは、これまでどおり、すぐ足して外す。
     @Test func rowsChangeAtOnceWithoutAnimation() throws {
         let editor = laidOutEditor(["a", "b", ""])

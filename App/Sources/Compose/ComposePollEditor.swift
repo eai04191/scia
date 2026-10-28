@@ -1,6 +1,26 @@
 import SciaCore
 import UIKit
 
+/// 投票の欄の切り替えのボタンの文言を、設定の行の幅に合わせて縮める段階。
+enum SettingsLabelLength: CaseIterable {
+    /// 「1つ選ぶ」「結果を見せる」
+    case full
+    /// 結果のボタンだけ「見せる」に縮める。
+    case shortResults
+    /// 選び方のボタンも「1つ」に縮める。
+    case shortBoth
+
+    typealias Label = (title: String, symbolName: String)
+
+    static func multipleLabels(short: Bool) -> (off: Label, on: Label) {
+        short ? (("1つ", "checklist"), ("複数", "checklist.checked")) : (("1つ選ぶ", "checklist"), ("複数選ぶ", "checklist.checked"))
+    }
+
+    static func hidesTotalsLabels(short: Bool) -> (off: Label, on: Label) {
+        short ? (("見せる", "eye"), ("隠す", "eye.slash")) : (("結果を見せる", "eye"), ("結果を隠す", "eye.slash"))
+    }
+}
+
 /// 投稿欄の投票の欄。本文の下に、選択肢の入力欄と、設定の1行を並べる。決まりは`docs/poll.md`の「投票を作る」。
 ///
 /// 選択肢の欄は、一覧の投票と同じく角丸のボックスに入れ、書くとどう見えるかを分かるようにする。欄の数は下書きが決め、最後の欄に書くと空の欄が増える。
@@ -34,9 +54,9 @@ final class ComposePollEditor: UIView {
     private let expiryButton = UIButton(configuration: .gray())
     private let multipleButton = UIButton(configuration: .gray())
     private let hidesTotalsButton = UIButton(configuration: .gray())
-    /// 切り替えのボタンの幅を、どちらの値でも同じにする制約。文字の大きさが変わったら測り直す。
+    /// 選び方のボタンの幅を、どちらの値でも同じにする制約。文字の大きさが変わったら測り直す。
+    /// 結果のボタンには付けない。右は空きで、幅が変わっても動くものがなく、揃えると「隠す」の両側に余白が目立ったため。
     private lazy var multipleWidth = Self.minimumWidth(of: multipleButton)
-    private lazy var hidesTotalsWidth = Self.minimumWidth(of: hidesTotalsButton)
     private let removeButton = UIButton(configuration: .plain())
     private let settingsRow = UIStackView()
     /// 折りたたんだときに、選択肢の欄と設定の行の代わりに出す1行。書いた選択肢を並べ、押すと開く。
@@ -53,6 +73,10 @@ final class ComposePollEditor: UIView {
     /// 選択肢の欄と設定の行を、1行に折りたたんでいる。小さい画面で本文を書く場所を空けるため、置く側が決める。
     private(set) var isFolded = false
     private(set) var content: Content?
+    /// 切り替えのボタンの文言を、設定の行に収まるところまで縮めた段階。幅が変わるたびに決め直す。
+    private(set) var labelLength = SettingsLabelLength.full
+    /// 最後に段階を決めた幅。並べ直しのたびに測り直さないよう、幅か中身か文字の大きさが変わったときだけ決め直す。
+    private var labelLengthWidth: CGFloat?
     /// 増えて、まだ浮かび上がらせていない欄。
     private var appearingRows: [UIView] = []
     /// 減って並びから外し、まだ薄くし始めていない欄。
@@ -208,15 +232,55 @@ final class ComposePollEditor: UIView {
                 self?.onSetExpiry(seconds)
             }
         })
-        // チェックが1つだけのアイコンと、2つとも付いたアイコンで、1つだけ選べるか、いくつも選べるかを表す。
-        Self.setValue(multipleButton, title: poll.multiple ? "複数選ぶ" : "1つ選ぶ", symbolName: poll.multiple ? "checklist.checked" : "checklist")
-        Self.setValue(hidesTotalsButton, title: poll.hidesTotals ? "結果を隠す" : "結果を見せる", symbolName: poll.hidesTotals ? "eye.slash" : "eye")
-        // 押すとラベルの長さが変わり、右隣のボタンがずれるため、2つの値の長いほうに幅を合わせる。
-        multipleWidth.constant = Self.widestFit(of: multipleButton, values: [("1つ選ぶ", "checklist"), ("複数選ぶ", "checklist.checked")])
-        hidesTotalsWidth.constant = Self.widestFit(of: hidesTotalsButton, values: [("結果を見せる", "eye"), ("結果を隠す", "eye.slash")])
+        applySettingsLabels(poll)
+        // 締め切りの文字の長さで、設定の行に残る幅が変わるので、次の並べ直しで段階を決め直す。
+        labelLengthWidth = nil
+        setNeedsLayout()
         updateSummary(poll)
         hidesTotalsButton.accessibilityHint = poll.hidesTotals ? "締め切るまで票数を見せません。押すと、投票した人に票数を見せます" : "投票した人に票数を見せます。押すと、締め切るまで隠します"
         return optionRows.count != rowCount
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // 幅だけから段階を決めるので、文言を替えて並べ直しても段階は変わらず、並べ直しが続かない。
+        guard bounds.width > 0, bounds.width != labelLengthWidth else { return }
+        labelLengthWidth = bounds.width
+        let length = fittingLabelLength(width: bounds.width)
+        guard length != labelLength else { return }
+        labelLength = length
+        if let poll = content?.poll {
+            applySettingsLabels(poll)
+        }
+    }
+
+    /// 切り替えのボタンに、今の段階の文言で今の設定を出す。読み上げには、縮めても元の文言を使う。
+    private func applySettingsLabels(_ poll: PollDraft) {
+        let multiple = SettingsLabelLength.multipleLabels(short: labelLength == .shortBoth)
+        let hidesTotals = SettingsLabelLength.hidesTotalsLabels(short: labelLength != .full)
+        // チェックが1つだけのアイコンと、2つとも付いたアイコンで、1つだけ選べるか、いくつも選べるかを表す。
+        Self.setValue(multipleButton, title: poll.multiple ? multiple.on.title : multiple.off.title, symbolName: poll.multiple ? multiple.on.symbolName : multiple.off.symbolName)
+        Self.setValue(hidesTotalsButton, title: poll.hidesTotals ? hidesTotals.on.title : hidesTotals.off.title, symbolName: poll.hidesTotals ? hidesTotals.on.symbolName : hidesTotals.off.symbolName)
+        multipleButton.accessibilityValue = poll.multiple ? "複数選ぶ" : "1つ選ぶ"
+        hidesTotalsButton.accessibilityValue = poll.hidesTotals ? "結果を隠す" : "結果を見せる"
+        // 押すとラベルの長さが変わり、右隣の結果のボタンがずれるため、2つの値の長いほうに幅を合わせる。
+        multipleWidth.constant = Self.widestFit(of: multipleButton, values: [multiple.off, multiple.on])
+    }
+
+    /// 設定の行を`width`に収める段階。結果のボタンを先に縮める。行のいちばん後ろにあり、幅が足りないと「結果を…」と切れて、見せるか隠すかが読めなくなったため。
+    /// 目のアイコンが結果を表すので、「見せる」「隠す」だけでも通じる。どの段階でも収まらなければ、いちばん短い文言にして、残りは文字を切る。
+    private func fittingLabelLength(width: CGFloat) -> SettingsLabelLength {
+        // 締め切りのボタンは、文言を入れたばかりだと大きさに出ていないので、`widestFit`で測る。
+        let expiry = Self.widestFit(of: expiryButton, values: [(expiryButton.configuration?.title ?? "", "clock")])
+        let others = expiry + removeButton.intrinsicContentSize.width + settingsRow.spacing * CGFloat(settingsRow.arrangedSubviews.count - 1)
+        return SettingsLabelLength.allCases.first { length in
+            let multiple = SettingsLabelLength.multipleLabels(short: length == .shortBoth)
+            let hidesTotals = SettingsLabelLength.hidesTotalsLabels(short: length != .full)
+            let multipleWidth = Self.widestFit(of: multipleButton, values: [multiple.off, multiple.on])
+            // 結果のボタンは幅を揃えないが、長いほうで測る。押して文言が替わっただけで、段階が切り替わらないようにするため。
+            let hidesTotalsWidth = Self.widestFit(of: hidesTotalsButton, values: [hidesTotals.off, hidesTotals.on])
+            return others + multipleWidth + hidesTotalsWidth <= width
+        } ?? .shortBoth
     }
 
     /// 選択肢の欄と設定の行を、1行に折りたたむか開く。置く側が、投稿欄の高さを変える動きの中で呼ぶ。
@@ -338,10 +402,12 @@ final class ComposePollEditor: UIView {
         summaryButton.accessibilityLabel = "投票の選択肢"
         summaryButton.accessibilityHint = "開いて、選択肢を書きます"
         summaryButton.addAction(UIAction { [weak self] _ in self?.onUnfold() }, for: .primaryActionTriggered)
-        // 1行の文字は大きさを決めて入れるので、文字の大きさの設定が変わったら入れ直す。
+        // 1行の文字は大きさを決めて入れるので、文字の大きさの設定が変わったら入れ直す。設定の行の文言の段階も決め直す。
         summaryButton.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { [weak self] (_: UIButton, _) in
-            guard let poll = self?.content?.poll else { return }
-            self?.updateSummary(poll)
+            guard let self, let poll = content?.poll else { return }
+            updateSummary(poll)
+            labelLengthWidth = nil
+            setNeedsLayout()
         }
     }
 
