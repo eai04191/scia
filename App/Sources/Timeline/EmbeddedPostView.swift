@@ -110,7 +110,7 @@ final class EmbeddedPostView: UIButton {
         // 本文はリンクの上だけ押下を受ける。リンクの外の押下は、囲みのボタンが受ける。
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped)))
-        accountInteraction = ObjectInteraction(on: avatarView, tapsSelf: false)
+        accountInteraction = ObjectInteraction(on: avatarView, tapsSelf: false, lift: .shape)
         spoilerView.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?() }, for: .touchUpInside)
         for view in [avatarView, nameLabel, spoilerView, textLabel, mediaView] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false

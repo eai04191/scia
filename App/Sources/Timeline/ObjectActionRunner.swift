@@ -286,19 +286,29 @@ final class ObjectLongPress: NSObject, UIGestureRecognizerDelegate {
     }
 }
 
+/// 長押しのメニューを出すときに、部品をどう持ち上げるか。決まりはdocs/menus.mdの「持ち上げ方」にある。
+enum ObjectLift {
+    /// 持ち上げず、一覧の行と同じく指の位置にメニューだけを出す。
+    /// 文字の行（通知の見出し、「〜がブースト」の行）も、行と同じく閉じるときに文字がゆがむため、持ち上げない。
+    case none
+    /// 部品を今の角丸の形のまま持ち上げる（アイコン）。
+    case shape
+}
+
 /// 自分ではタップも長押しも受けない部品（アイコン、引用の囲みなど）に、対象のタップと長押しを付ける。
-/// 長押しのメニューは、一覧の行と同じく、行を持ち上げずに指の位置に出す。
 @MainActor
 final class ObjectInteraction: NSObject, UIContextMenuInteractionDelegate {
     private weak var view: UIView?
+    private let lift: ObjectLift
     var target: (any ObjectActionTarget)?
     private var longPress: ObjectLongPress?
     /// 部品がボタンのように自分でタップを受けるとき、その処理は押した位置を受け取らないため、触れた位置を覚えてメニューを出す位置にする。
     private let touchRecorder = TouchLocationRecorder()
 
     /// - Parameter tapsSelf: 部品のタップもここで受ける。部品がボタンのように自分でタップを受けるなら、falseにしてその処理から`handleTap(at:)`を呼ぶ。
-    init(on view: UIView, tapsSelf: Bool) {
+    init(on view: UIView, tapsSelf: Bool, lift: ObjectLift = .none) {
         self.view = view
+        self.lift = lift
         super.init()
         view.isUserInteractionEnabled = true
         view.addInteraction(UIContextMenuInteraction(delegate: self))
@@ -338,11 +348,11 @@ final class ObjectInteraction: NSObject, UIContextMenuInteractionDelegate {
     }
 
     func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, highlightPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
-        anchorPreview(for: configuration)
+        preview(for: configuration)
     }
 
     func contextMenuInteraction(_ interaction: UIContextMenuInteraction, configuration: UIContextMenuConfiguration, dismissalPreviewForItemWithIdentifier identifier: any NSCopying) -> UITargetedPreview? {
-        anchorPreview(for: configuration)
+        preview(for: configuration)
     }
 
     func contextMenuInteraction(_ interaction: UIContextMenuInteraction, willDisplayMenuFor configuration: UIContextMenuConfiguration, animator: (any UIContextMenuInteractionAnimating)?) {
@@ -358,6 +368,18 @@ final class ObjectInteraction: NSObject, UIContextMenuInteractionDelegate {
             return
         }
         animator.addCompletion { lifecycle.didHide() }
+    }
+
+    private func preview(for configuration: UIContextMenuConfiguration) -> UITargetedPreview? {
+        switch lift {
+        case .none:
+            return anchorPreview(for: configuration)
+        case .shape:
+            guard let view, view.window != nil else { return nil }
+            let parameters = UIPreviewParameters()
+            parameters.visiblePath = UIBezierPath(roundedRect: view.bounds, cornerRadius: view.layer.cornerRadius)
+            return UITargetedPreview(view: view, parameters: parameters)
+        }
     }
 
     /// 指の位置の見えない目印をプレビューにして、メニューだけを指の位置に出す。

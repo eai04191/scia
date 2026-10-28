@@ -195,7 +195,7 @@ final class NotificationContentView: UIView, UIContentView {
             view.translatesAutoresizingMaskIntoConstraints = false
             view.isUserInteractionEnabled = true
             view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(groupAvatarTapped)))
-            groupAvatarInteractions.append(ObjectInteraction(on: view, tapsSelf: false))
+            groupAvatarInteractions.append(ObjectInteraction(on: view, tapsSelf: false, lift: .shape))
             groupAvatarViews.append(view)
             groupAvatarStack.addArrangedSubview(view)
         }

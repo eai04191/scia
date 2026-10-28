@@ -272,11 +272,11 @@ final class PostContentView: UIView, UIContentView {
         // 名前の行は押下を受けず、行全体の押下に渡す。受けると、1行の投稿では行を押せる場所が本文の1行ほどしか残らない。
         avatarView.isUserInteractionEnabled = true
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped)))
-        authorInteraction = ObjectInteraction(on: avatarView, tapsSelf: false)
+        authorInteraction = ObjectInteraction(on: avatarView, tapsSelf: false, lift: .shape)
         for view in [contextAvatarView, contextLabel] as [UIView] {
             view.isUserInteractionEnabled = true
             view.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(contextTapped)))
-            contextInteractions.append(ObjectInteraction(on: view, tapsSelf: false))
+            contextInteractions.append(ObjectInteraction(on: view, tapsSelf: false, lift: view === contextLabel ? .none : .shape))
         }
         apply(configuration)
     }
