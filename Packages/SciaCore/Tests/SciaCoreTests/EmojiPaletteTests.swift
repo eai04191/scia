@@ -199,6 +199,43 @@ struct EmojiPaletteTests {
         #expect(StandardEmojiSearch.candidates(matching: "hea", in: groups, limit: 10).map(\.emoji) == ["❤️", "💗", "🥰", "💌"])
     }
 
+    /// 補完の語には空白を打てないので、英語は名前と言葉の単語を空白なしでつなげて打っても探せる。`_`は単語の区切りとして読み飛ばす。
+    /// CLDRの英語の言葉は「New York」を`new`と`york`のように単語に分けて持つため、単語は言葉をまたいでつなげる。
+    @Test func englishQueryMatchesJoinedWords() {
+        let groups = [StandardEmojiGroup(title: "旅行と場所", emojis: [
+            StandardEmoji(emoji: "🗽", name: "自由の女神", englishName: "Statue of Liberty", keywords: ["new", "york", "liberty"], version: "0.6"),
+            StandardEmoji(emoji: "🎡", name: "観覧車", englishName: "ferris wheel", keywords: ["park", "wheel"], version: "0.6"),
+        ])]
+        let search = { (query: String) in StandardEmojiSearch.candidates(matching: query, in: groups, limit: 10).map(\.emoji) }
+        #expect(search("newy") == ["🗽"])
+        #expect(search("newyork") == ["🗽"])
+        #expect(search("new_y") == ["🗽"])
+        #expect(search("statueofli") == ["🗽"])
+        #expect(search("ferriswh") == ["🎡"])
+        #expect(search("newx").isEmpty)
+        #expect(search("ewy").isEmpty)
+        #expect(search("_").isEmpty)
+    }
+
+    /// 単語をつなげた一致は、名前や言葉が語で始まるものより後に並べる。
+    @Test func ranksJoinedWordsAfterPrefixes() {
+        let groups = [StandardEmojiGroup(title: "旅行と場所", emojis: [
+            StandardEmoji(emoji: "🗽", name: "自由の女神", englishName: "Statue of Liberty", keywords: ["new", "york"], version: "0.6"),
+            StandardEmoji(emoji: "🎍", name: "門松", englishName: "pine decoration", keywords: ["newyear"], version: "0.6"),
+        ])]
+        #expect(StandardEmojiSearch.candidates(matching: "newy", in: groups, limit: 10).map(\.emoji) == ["🎍", "🗽"])
+    }
+
+    /// 補完では、単語をつなげて合ったUnicodeの絵文字を、語を含むカスタム絵文字より後に並べる。
+    @Test func completionPutsJoinedWordsLast() throws {
+        let groups = [StandardEmojiGroup(title: "動物と自然", emojis: [
+            StandardEmoji(emoji: "🐱", name: "ネコの顔", englishName: "cat face", keywords: ["cat"], version: "0.6"),
+        ])]
+        let custom = [try emoji("blobcatface"), try emoji("catfish")]
+        let results = EmojiCompletion.candidates(matching: "catf", custom: custom, standard: groups, limit: 10)
+        #expect(results.map(\.completion) == [":catfish:", ":blobcatface:", "🐱"])
+    }
+
     /// 実際の一覧で、補完に出る数件のうちに、名前どおりの絵文字が先に来る。短縮名でも探せる。
     @Test func ranksBundledStandardEmojiByName() {
         let first = { (query: String) in StandardEmojiSearch.candidates(matching: query, in: StandardEmojiCatalog.groups, limit: 5).map(\.emoji) }
@@ -209,6 +246,8 @@ struct EmojiPaletteTests {
         #expect(first("-1").first == "👎")
         #expect(first("cat").contains("🐈"))
         #expect(first("ねこ").contains("🐈"))
+        #expect(first("newy").contains("🗽"))
+        #expect(first("ferriswh").contains("🎡"))
     }
 
     /// 実際の一覧で、日本語の言葉から探せる。

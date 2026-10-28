@@ -18,6 +18,8 @@ public struct StandardEmoji: Hashable, Sendable, Decodable {
     /// 検索で比べる、そろえた名前（日本語、英語、短縮名）と言葉。打つたびにそろえ直すと、全部で数十msかかるため、作るときに一度だけそろえる。
     let searchNames: [String]
     let searchKeywords: [String]
+    /// 名前と言葉を英数字以外で分けた、英語の単語。単語を空白なしでつなげて打ったときに比べる。打つたびに分けると遅いため、作るときに一度だけ分ける。
+    let searchWords: [[UInt8]]
 
     public init(emoji: String, name: String, englishName: String = "", keywords: [String], shortcodes: [String] = [], version: String) {
         self.emoji = emoji
@@ -28,6 +30,8 @@ public struct StandardEmoji: Hashable, Sendable, Decodable {
         self.version = version
         searchNames = ([name, englishName] + shortcodes).map(StandardEmojiSearch.normalize).filter { !$0.isEmpty }
         searchKeywords = keywords.map(StandardEmojiSearch.normalize)
+        let words = (searchNames + searchKeywords).flatMap { $0.split(whereSeparator: { !$0.isLetter && !$0.isNumber }) }
+        searchWords = Set(words.filter { $0.allSatisfy(\.isASCII) }.map(String.init)).sorted().map { Array($0.utf8) }
     }
 
     public init(from decoder: any Decoder) throws {
@@ -87,19 +91,23 @@ public enum StandardEmojiCatalog {
 /// 語で始まるものの中は、一致した語の短い順にし、ほかは一覧の順のままにする。
 /// 語を含むものは、語に英数字以外が入るときだけ探す。英語で途中の一致まで拾うと、「cat」で「education」や「location」が当たるため。
 /// 日本語は単語の区切りがないので、「ねこ」で「黒ねこ」のような途中の一致も拾う。
+/// 補完の語には空白を打てないので、英語は名前と言葉の単語を空白なしでつなげて打っても探す（`newy`で`new`と`york`を持つ🗽）。`_`は単語の区切りとして読み飛ばす。
+/// CLDRの英語の言葉は「New York」を`new`と`york`のように単語に分けて持ち、元の語順は残っていないので、語順は問わない。ほかの合い方より後に並べる。
 public enum StandardEmojiSearch {
     public static func candidates(matching query: String, in groups: [StandardEmojiGroup], limit: Int) -> [StandardEmoji] {
         guard limit > 0 else { return [] }
         return Array(matches(matching: query, in: groups).prefix(limit).map(\.emoji))
     }
 
-    /// 合ったところ。並べる順に、名前と一致、言葉と一致、名前が語で始まる、言葉が語で始まる、名前か言葉が語を含む。
+    /// 合ったところ。並べる順に、名前と一致、言葉と一致、名前が語で始まる、言葉が語で始まる、名前か言葉が語を含む、単語をつなげたものと合う。
+    /// 語を含むものは日本語だけ、単語をつなげたものは英語だけで探すので、同じ語で両方が出ることはない。
     enum MatchKind: Int, Comparable {
         case nameExact
         case keywordExact
         case namePrefix
         case keywordPrefix
         case contained
+        case joinedWords
 
         static func < (lhs: MatchKind, rhs: MatchKind) -> Bool {
             lhs.rawValue < rhs.rawValue
@@ -131,7 +139,24 @@ public enum StandardEmojiSearch {
         if let length = shortestPrefixMatch(of: query, in: emoji.searchNames) { return (.namePrefix, length) }
         if let length = shortestPrefixMatch(of: query, in: emoji.searchKeywords) { return (.keywordPrefix, length) }
         if matchesInside, (emoji.searchNames + emoji.searchKeywords).contains(where: { $0.contains(query) }) { return (.contained, 0) }
+        if !matchesInside, matchesJoinedWords(Array(query.utf8.filter { $0 != UInt8(ascii: "_") }), in: emoji.searchWords) { return (.joinedWords, 0) }
         return nil
+    }
+
+    /// 語が、単語を丸ごと1つ以上つなげ、最後に単語の始まりを付けたものになっているか。同じ単語を何度使ってもよい。
+    /// 何文字目まで丸ごとの単語で切り終えられるかだけを覚えて頭から進めるので、切り方がいくつあっても、手間は語の長さと単語の数で頭打ちになる。
+    private static func matchesJoinedWords(_ query: [UInt8], in words: [[UInt8]]) -> Bool {
+        guard !query.isEmpty else { return false }
+        var reachable = [Bool](repeating: false, count: query.count)
+        reachable[0] = true
+        for start in query.indices where reachable[start] {
+            let rest = query[start...]
+            for word in words {
+                if start > 0, word.starts(with: rest) { return true }
+                if word.count < rest.count, rest.starts(with: word) { reachable[start + word.count] = true }
+            }
+        }
+        return false
     }
 
     /// 語で始まる言葉（英語は言葉の中の単語）のうち、いちばん短いものの長さ。なければnil。

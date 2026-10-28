@@ -56,7 +56,7 @@ public enum LocalMentionSource: Hashable, Sendable {
 public enum EmojiCompletion {
     /// カスタム絵文字とUnicodeの絵文字を、合ったところの強さで混ぜて並べる。
     /// ショートコードと一致するカスタム絵文字、名前と一致するUnicodeの絵文字、語で始まるカスタム絵文字、言葉と一致するか名前か言葉が語で始まるUnicodeの絵文字、
-    /// 語を含むカスタム絵文字、語を含むUnicodeの絵文字の順にする。
+    /// 語を含むカスタム絵文字、語を含むか単語をつなげたものと合うUnicodeの絵文字の順にする。
     /// カスタム絵文字を全部先にすると、`cat1`、`cat2`のように語で始まるものが多いサーバーでは、🐈のような名前と一致する絵文字が候補の数から押し出されるため。
     /// 名前と一致するものより下は、カスタム絵文字を先にする。サーバーにしかない絵文字を探しに来ることが多いため。
     public static func candidates(matching query: String, custom: [ServerEmoji], standard groups: [StandardEmojiGroup], limit: Int) -> [CompletionCandidate] {
@@ -67,8 +67,8 @@ public enum EmojiCompletion {
         let containedCustom = customMatches.filter { !$0.shortcode.lowercased().hasPrefix(customQuery) }
         let standard = StandardEmojiSearch.matches(matching: query, in: groups)
         let standardNamed = standard.filter { $0.kind == .nameExact }.map(\.emoji)
-        let standardContained = standard.filter { $0.kind == .contained }.map(\.emoji)
-        let standardRest = standard.filter { $0.kind != .nameExact && $0.kind != .contained }.map(\.emoji)
+        let standardContained = standard.filter { $0.kind >= .contained }.map(\.emoji)
+        let standardRest = standard.filter { $0.kind != .nameExact && $0.kind < .contained }.map(\.emoji)
         let ordered: [CompletionCandidate] = exactCustom.map(CompletionCandidate.emoji)
             + standardNamed.map(CompletionCandidate.standardEmoji)
             + prefixedCustom.map(CompletionCandidate.emoji)
