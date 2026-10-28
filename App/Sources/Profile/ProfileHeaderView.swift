@@ -210,6 +210,11 @@ final class ProfileHeaderView: UIView {
     private lazy var noteView = ProfileNoteView(label: noteLabel, button: moreButton)
     /// 自己紹介を全文に広げた。別のアカウントを出したら切った状態に戻す。
     private var isNoteExpanded = false
+    /// 自己紹介が切った行数に収まるかを最後に測った幅。自己紹介を替えたらnilに戻す。
+    /// 一覧はスクロールのたびにヘッダーを並べ直すので、自己紹介と幅が同じ間は測り直さない。カスタム絵文字の多い自己紹介では、測るのが重い。
+    private var noteMeasuredWidth: CGFloat?
+    /// 自己紹介が切った行数に収まるかを測った回数。テストで、測り直していないことを確かめる。
+    private(set) var noteMeasurementCount = 0
     /// 自己紹介を切るときの行数。
     private static let collapsedNoteLines = 3
     /// 固定された投稿の棚より下（タブ）。一覧を出すまで隠し、一覧と一緒に出す。
@@ -682,6 +687,8 @@ final class ProfileHeaderView: UIView {
         let note = RichTextRenderer(font: body, textColor: .label, paragraphSpacing: 6, emojiImages: emojiImages, language: content.glyphLanguage).render(.html(account.note, emojis: account.emojis))
         noteLabel.emojiImages = animatedEmojis
         noteLabel.attributedText = note
+        noteMeasuredWidth = nil
+        setNeedsLayout()
         noteLabel.hashtagAccount = account
         noteLabel.accessibilityCustomActions = linkAccessibilityActions(in: note)
         noteLabel.isHidden = note.length == 0
@@ -1024,6 +1031,9 @@ final class ProfileHeaderView: UIView {
             }
             return
         }
+        guard width != noteMeasuredWidth else { return }
+        noteMeasuredWidth = width
+        noteMeasurementCount += 1
         let textWidth = width - 16 * 2
         // 段落の間隔を含めて、ラベルが描くのと同じ測り方で比べる。
         let bounds = CGRect(x: 0, y: 0, width: textWidth, height: .greatestFiniteMagnitude)
