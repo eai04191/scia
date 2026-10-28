@@ -55,7 +55,8 @@ struct MenuPlacementTests {
             .compactMap { $0 as? UIMenu }
             .first { $0.title == "@alice" })
         let avatar = try #require(viewController.userMenu(for: .account(alice), id: entry.id))
-        let mention = try #require(try mentionMenu(in: viewController, settings: settings))
+        let profileURL = try #require(alice.url)
+        let mention = try #require(try bodyLinkMenu(for: .mention(acct: alice.acct, url: profileURL), in: viewController, settings: settings))
         let profile = try #require(viewController.profileUserMenu(for: alice, from: UIBarButtonItem()))
 
         let expected = "プロフィール,メンション,ハンドルをコピー|リンクをコピー,共有,ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,フォローを外す,ブーストを表示,投稿を通知,メモを追加,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック,通報]"
@@ -70,14 +71,31 @@ struct MenuPlacementTests {
         #expect(mention.title == avatar.title)
     }
 
-    /// 一覧に載せた本文の、メンションのリンクを長押ししたときのメニュー。
-    private func mentionMenu(in viewController: TimelineViewController, settings: AppSettings) throws -> UIMenu? {
-        let url = try #require(alice.url)
-        let destination = RichText.LinkDestination.mention(acct: alice.acct, url: url)
+    /// 本文のリンクの長押しと、リンクカードの長押しで、同じ見出し、項目、並びになる。
+    @Test func sameLinkMenuFromBodyAndCard() throws {
+        let settings = makeSettings()
+        let items = LinkMenuItem.allCases.map { MenuLayout<LinkMenuItem>.Element.item($0, isVisible: true) }
+        settings.linkMenuLayout = MenuLayout(elements: Array(items.prefix(2)) + [.separator] + Array(items.dropFirst(2).prefix(2)) + [.more] + Array(items.dropFirst(4)))
+        let viewController = makeViewController(settings: settings)
+        let url = try #require(URL(string: "https://example.com/a"))
+        let entry = try #require(StatusFactory.make(count: 1, startingAt: 100).first.map(TimelineEntry.status))
+
+        let body = try #require(try bodyLinkMenu(for: .url(url), in: viewController, settings: settings))
+        let card = try #require(viewController.linkMenu(for: url, id: entry.id))
+
+        let expected = "ブラウザで開く,既定のブラウザで開く|アプリ内のSafariで開く,プロフィールとして開く|その他[リンクをコピー,共有]"
+        #expect(describe(body.children) == expected)
+        #expect(describe(card.children) == expected)
+        #expect(body.title == "https://example.com/a")
+        #expect(card.title == body.title)
+    }
+
+    /// 一覧に載せた本文の、リンクを長押ししたときのメニュー。
+    private func bodyLinkMenu(for destination: RichText.LinkDestination, in viewController: TimelineViewController, settings: AppSettings) throws -> UIMenu? {
         let renderer = RichTextRenderer(font: .preferredFont(forTextStyle: .body), textColor: .label, emojiImages: .offline, language: "ja")
         let label = LinkLabel()
         label.settings = settings
-        label.attributedText = renderer.render(RichText(blocks: [.init(inlines: [.link("@alice", destination, [])])]))
+        label.attributedText = renderer.render(RichText(blocks: [.init(inlines: [.link("x", destination, [])])]))
         label.frame = CGRect(x: 0, y: 0, width: 300, height: 44)
         viewController.view.addSubview(label)
         let hitArea = try #require(label.subviews.compactMap { $0 as? LinkHitArea }.first)

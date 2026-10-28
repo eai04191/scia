@@ -295,17 +295,10 @@ final class LinkHitArea: UIControl {
         let children: [UIMenuElement]
         switch destination {
         case .url(let url):
-            makeMenu = { UIMenu(title: url.absoluteString, children: $0) }
-            children = (groups?.link ?? settings.linkMenuLayout.groups).menuElements { item in
-                if let action = item.urlAction {
-                    return [action.action(url: url, handlers: handlers)]
-                }
-                switch item {
-                case .openAsProfile: return [openAsProfileAction(item.title, image: item.image, url: url)]
-                // 共通の項目は、上で中身から組んだ。
-                case .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share: return []
-                }
+            let menu = LinkMenu(url: url, handlers: handlers) { [weak self] in
+                self?.nearest((any LinkMenuHost).self)?.openProfile(resolving: url)
             }
+            return menu.menu(groups: groups?.link ?? settings.linkMenuLayout.groups)
         case .mention(let acct, let url):
             let host = nearest((any LinkMenuHost).self)
             let menu = UserMenu(subject: UserMenuSubject(mentionLink: url, acct: acct), actions: host?.userMenuActions, handlers: handlers, host: host)
@@ -326,12 +319,6 @@ final class LinkHitArea: UIControl {
             )
         }
         return children.isEmpty ? nil : makeMenu(children)
-    }
-
-    private func openAsProfileAction(_ title: String, image: UIImage?, url: URL) -> UIAction {
-        LinkMenuItem.openAsProfileAction(title: title, image: image, url: url) { [weak self] in
-            self?.nearest((any LinkMenuHost).self)?.openProfile(resolving: url)
-        }
     }
 
     /// コピーと開くは、メニューを出した画面に頼む。共有のシートは、押したリンクから出す。

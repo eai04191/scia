@@ -129,15 +129,6 @@ extension UserMenuItem: MenuItemContentProviding {
     }
 }
 
-extension LinkMenuItem {
-    /// 「プロフィールとして開く」。サーバーはhttpとhttps以外をURLとして探さず、ふつうの文字列の検索になるため、そのリンクでは押せないようにする。
-    @MainActor
-    static func openAsProfileAction(title: String, image: UIImage?, url: URL, open: @escaping @MainActor () -> Void) -> UIAction {
-        let isWeb = ["http", "https"].contains(url.scheme?.lowercased())
-        return UIAction(title: title, image: image, attributes: isWeb ? [] : .disabled) { _ in open() }
-    }
-}
-
 extension LinkMenuItem: MenuItemContentProviding {
     var content: MenuItemContent {
         switch self {

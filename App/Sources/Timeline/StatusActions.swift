@@ -400,23 +400,11 @@ extension TimelineViewController {
         }
     }
 
-    /// リンクカードを長押ししたときに出す、リンクのメニュー。本文のリンクの長押しのメニューと同じ並びで組む。出す項目がなければnil。
+    /// リンクカードを長押ししたときに出す、リンクのメニュー。出す項目がなければnil。
     /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
     func linkMenu(for url: URL, id: ItemID, groups: MenuLayout<LinkMenuItem>.Groups? = nil) -> UIMenu? {
-        let handlers = urlHandlers(id: id)
-        let children = (groups ?? settings.linkMenuLayout.groups).menuElements { item in
-            if let action = item.urlAction {
-                return [action.action(url: url, handlers: handlers)]
-            }
-            switch item {
-            case .openAsProfile:
-                return [LinkMenuItem.openAsProfileAction(title: item.title, image: item.image, url: url) { [weak self] in self?.openProfile(resolving: url) }]
-            // 共通の項目は、上で中身から組んだ。
-            case .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share:
-                return []
-            }
-        }
-        return children.isEmpty ? nil : UIMenu(title: url.absoluteString, children: children)
+        let menu = LinkMenu(url: url, handlers: urlHandlers(id: id)) { [weak self] in self?.openProfile(resolving: url) }
+        return menu.menu(groups: groups ?? settings.linkMenuLayout.groups)
     }
 
     /// Xの投稿の囲みのような、ほかのサービスの投稿を長押ししたときに出すメニュー。出す項目がなければnil。
