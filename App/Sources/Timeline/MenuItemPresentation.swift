@@ -84,6 +84,7 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .muteConversation: .own(title: "会話をミュート", symbolName: "bell.slash", note: "自分の投稿、通知、自分へのメンションを含む投稿でだけ出ます")
         case .copyLink: .url(.copyLink)
         case .copyText: .own(title: "テキストをコピー", symbolName: "doc.on.doc", note: "本文のある投稿でだけ出ます")
+        case .selectText: .own(title: "テキストを選択", symbolName: "character.cursor.ibeam", note: "本文を表示している投稿でだけ出ます。引用の囲みと、行数で切っている本文では出ません")
         case .share: .url(.share)
         case .openInBrowser: .url(.openInBrowser)
         case .openInDefaultBrowser: .url(.openInDefaultBrowser)

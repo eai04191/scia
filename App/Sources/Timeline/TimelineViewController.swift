@@ -228,6 +228,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private let scrollHitches = ScrollHitchMonitor()
     /// 投稿のメニューの、システムの翻訳で出す翻訳シート。
     let translation = SystemTranslation()
+    /// 「テキストを選択」で選べる状態にしている本文。一覧の行をタップしたときと、画面を離れたときにやめる。
+    private weak var textSelectionBody: PostBodyView?
+    /// 投稿のメニューで「テキストを選択」を選んだ本文と、その投稿。メニューが閉じ終えてから選び始める。閉じる途中に選ぶと、編集メニューが出ないため。
+    private var pendingTextSelection: (body: PostBodyView, statusID: Status.ID)?
     private lazy var newArrivalsButton = makeNewArrivalsButton()
     /// 新着ボタンを出す向きか。消える動きの途中は、`isHidden`がまだ偽でも偽になる。
     private var newArrivalsButtonShown = false
@@ -444,6 +448,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
+        endTextSelection()
         timeRefreshTask?.cancel()
         timeRefreshTask = nil
         onVisibleLinkOnlyCardsChange?([])
@@ -981,6 +986,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let reconfigureIDs = heldReconfigureIDs.intersection(existing)
         heldReconfigureIDs.removeAll()
         reconfigure(reconfigureIDs)
+        if let pending = pendingTextSelection {
+            pendingTextSelection = nil
+            // 溜めていた更新で、行が別の投稿に使い回されていれば選ばない。
+            if pending.body.content?.statusID == pending.statusID {
+                beginTextSelection(in: pending.body, statusID: pending.statusID)
+            }
+        }
         onInteractionSettle?()
     }
 
@@ -1906,6 +1918,8 @@ extension TimelineViewController: UICollectionViewDelegate {
     /// 長押しで投稿への操作のメニューを出す。添付ファイルのサムネイルとリンクカードの画像はボタンで、ここへは届かないため、
     /// それぞれが`MediaMenuHost`に問い合わせてメディアのメニューを出す。
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
+        // 選んでいる本文の上の長押しは、テキストビューが単語を選ぶのに使う。
+        if let body = textSelectionBody, let frame = body.textSelectionFrame, body.convert(frame, to: collectionView).contains(point) { return nil }
         if indexPaths.count == 1, let indexPath = indexPaths.first, rowTarget(at: indexPath)?.performsLongPress() == true { return nil }
         guard indexPaths.count == 1, let indexPath = indexPaths.first, let id = dataSource.itemIdentifier(for: indexPath), let entry = entry(for: id),
               let menu = contextMenu(for: entry, id: id)
@@ -1935,6 +1949,8 @@ extension TimelineViewController: UICollectionViewDelegate {
     /// 選べるのはギャップと、ブラウザで開ける読めなかった要素と、スレッドを開ける投稿と、投稿を含む通知と、人の一覧の人にする。
     /// 本文のリンクや添付ファイルなど、行の中の部品が押下を先に受けるため、投稿の行を選ぶのは、どの部品も受けなかったときだけになる。
     func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
+        // 本文を選んでいる間の行のタップは、選ぶのをやめるだけにし、行の操作は行わない。
+        if endTextSelection() { return false }
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
         return switch (id, entries[id]) {
         case (.gap, _): true
@@ -1946,7 +1962,41 @@ extension TimelineViewController: UICollectionViewDelegate {
     }
 
     func collectionView(_ collectionView: UICollectionView, shouldHighlightItemAt indexPath: IndexPath) -> Bool {
-        self.collectionView(collectionView, shouldSelectItemAt: indexPath)
+        // 本文を選んでいる間は、どの行のタップでも選ぶのをやめられるよう、押せない行でも選ぶ処理まで進める。
+        if isSelectingText { return true }
+        return self.collectionView(collectionView, shouldSelectItemAt: indexPath)
+    }
+
+    private var isSelectingText: Bool {
+        textSelectionBody?.isSelectingText == true
+    }
+
+    /// `id`の行に出している本文のうち、「テキストを選択」で選べるもの。行が画面にないとき、別の投稿（引用の囲みなど）のメニューのとき、選べないときはnil。
+    func selectableBody(for id: ItemID, statusID: Status.ID) -> PostBodyView? {
+        guard let indexPath = dataSource.indexPath(for: id), let contentView = collectionView.cellForItem(at: indexPath)?.contentView else { return nil }
+        let body = (contentView as? PostContentView)?.postBody ?? (contentView as? NotificationContentView)?.postBody
+        guard let body, body.content?.statusID == statusID, body.canSelectText else { return nil }
+        return body
+    }
+
+    /// 本文を選べる状態にする。ほかの行で選んでいれば、そちらはやめる。メニューを出している間は、閉じ終えてから選ぶ。
+    func beginTextSelection(in body: PostBodyView, statusID: Status.ID) {
+        if isShowingMenu {
+            pendingTextSelection = (body, statusID)
+            return
+        }
+        endTextSelection()
+        body.beginTextSelection()
+        textSelectionBody = body
+    }
+
+    /// 選べる状態の本文があれば、やめる。やめたらtrue。
+    @discardableResult
+    private func endTextSelection() -> Bool {
+        defer { textSelectionBody = nil }
+        guard let body = textSelectionBody, body.isSelectingText else { return false }
+        body.endTextSelection()
+        return true
     }
 
     /// ギャップは、画面の上半分にあれば下から遡ってきたとみなして古い側から、下半分にあれば新しい側から読む。

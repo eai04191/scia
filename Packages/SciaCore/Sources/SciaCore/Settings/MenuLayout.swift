@@ -174,6 +174,8 @@ public enum StatusMenuItem: String, MenuItemKind {
     case copyLink
     /// 本文をプレーンテキストにしてコピーする。本文のある投稿でだけ出る。
     case copyText
+    /// 行の本文を、その場で文字を選べる状態にする。本文を表示している投稿でだけ出る。
+    case selectText
     case share
     /// 開く場所の設定に従って開く。
     case openInBrowser
@@ -214,7 +216,7 @@ public enum StatusMenuItem: String, MenuItemKind {
     /// どの項目も設定を開かずに選べるよう、たまにしか使わない項目は隠さずに「その他」へ入れる。隠すのは、ほかの設定で代わりがきく項目と、メニューを長くしやすい項目だけにする。
     /// - 返信・お気に入り・ブースト: いちばんよく使い、アイコンだけでも見分けられるので、横に並べる
     /// - 反応のつづき: 編集（自分の投稿でだけ出る。自分の投稿では返信などより先に使う）、ブックマーク、引用。公開範囲を選んでブーストは、ブーストの公開範囲の設定で代わりがきくため隠し、出したときにブーストの近くに来るようここに置く
-    /// - 持ち出す: リンクとテキストのコピー、共有、ブラウザで開く。開く場所を選んで開く2つは、開く場所の設定と重なるため隠す
+    /// - 持ち出す: リンクとテキストのコピー、テキストを選択、共有、ブラウザで開く。開く場所を選んで開く2つは、開く場所の設定と重なるため隠す
     /// - 読む: 翻訳。スレッドを開くは、既定ではタップで開けて代わりがきくため隠し、出したときに読む操作の先頭に来るようここに置く
     /// - 関係するユーザーとハッシュタグ: メンションされたユーザーは、何人もいるとメニューが長くなるため隠す。ハッシュタグは、ある投稿でしか出ないので、「その他」に入れずに出す
     /// - 「その他」: たまにしか使わない編集履歴、お気に入りした人、ブーストした人、メディアを隠す、カスタム絵文字、会話のミュート、固定と、取り消せない通知の削除、投稿の削除
@@ -231,6 +233,7 @@ public enum StatusMenuItem: String, MenuItemKind {
         .separator,
         .item(.copyLink, isVisible: true),
         .item(.copyText, isVisible: true),
+        .item(.selectText, isVisible: true),
         .item(.share, isVisible: true),
         .item(.openInBrowser, isVisible: true),
         .item(.openInDefaultBrowser, isVisible: false),

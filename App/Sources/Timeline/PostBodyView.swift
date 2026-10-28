@@ -132,6 +132,8 @@ final class PostBodyView: UIView {
     /// 囲みに替わったリンクカードの像。囲みを濃くする間、カードのあった位置に重ねて薄くする。
     private(set) var leavingCardSnapshot: UIView?
     private var filterNoteLabel: UILabel?
+    /// 「テキストを選択」で、本文のラベルの代わりに同じ位置に出している選べるテキストビュー。選んでいなければnil。
+    private(set) var selectionTextView: SelectableTextView?
     private(set) var content: PostBodyContent?
     /// 添付ファイルの有無と並べ方で変わる制約。適用のたびに作り直す。
     private var variableConstraints: [NSLayoutConstraint] = []
@@ -448,8 +450,71 @@ final class PostBodyView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    /// 「テキストを選択」で本文を選べる状態にできるか。本文を表示していて、行数で切っていないときだけできる。
+    /// 切った本文は、切った部分を選べず、高さを変えずに全文を出せないため。
+    var canSelectText: Bool {
+        guard let content, !textLabel.isHidden, content.maximumLines == 0 else { return false }
+        return !content.text.string.allSatisfy(\.isWhitespace)
+    }
+
+    /// 本文を選べる状態にしたときと、やめたときに呼ぶ。置く側は、読み上げの要素を差し替える。
+    var onTextSelectionChange: (() -> Void)?
+
+    /// 本文を選べる状態にしている。
+    var isSelectingText: Bool {
+        selectionTextView != nil
+    }
+
+    /// 本文の上に重ねた選べるテキストビューの、自分の座標での枠。選んでいなければnil。
+    var textSelectionFrame: CGRect? {
+        selectionTextView?.frame
+    }
+
+    /// 本文のラベルを、同じ文字列を同じ位置に並べる選べるテキストビューに差し替え、全体を選ぶ。決まりはdocs/menus.mdの「本文の文字を選ぶ」にある。
+    /// ラベルは並べ方の基準に使っているので外さず、透明にして残す。透明なラベルは押下も受けないため、リンクは開かない。
+    func beginTextSelection() {
+        guard canSelectText, selectionTextView == nil, let text = textLabel.textForTextKit else { return }
+        let view = SelectableTextView(text: text)
+        view.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(view)
+        NSLayoutConstraint.activate([
+            view.topAnchor.constraint(equalTo: textLabel.topAnchor),
+            view.leadingAnchor.constraint(equalTo: textLabel.leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: textLabel.trailingAnchor),
+        ])
+        view.touchableHeight = { [weak textLabel] in textLabel?.bounds.height }
+        textLabel.alpha = 0
+        selectionTextView = view
+        layoutIfNeeded()
+        view.beginSelectingAll()
+        // 選び始めるときにテキストビューの選択が一度空になることがあるため、選んでから終わりを受け取る。
+        view.onEnd = { [weak self] in self?.endTextSelection() }
+        onTextSelectionChange?()
+    }
+
+    /// 本文を選べる状態をやめ、ラベルに戻す。
+    func endTextSelection() {
+        guard let view = selectionTextView else { return }
+        selectionTextView = nil
+        view.onEnd = nil
+        view.removeFromSuperview()
+        textLabel.alpha = 1
+        onTextSelectionChange?()
+    }
+
     func apply(_ content: PostBodyContent) {
         let previous = self.content
+        defer {
+            // 同じ投稿の描き直し（画像が届いた、数が変わったなど）では選んだままにし、別の投稿に替わったときと、本文が変わったか選べなくなったときにやめる。
+            // 選んだままにするときも、絵文字の画像や絵文字そのものは替わりうるので、ラベルと同じ中身にそろえる。
+            if isSelectingText {
+                if previous?.statusID != content.statusID || previous?.text.string != content.text.string || !canSelectText {
+                    endTextSelection()
+                } else if let text = textLabel.textForTextKit {
+                    selectionTextView?.replaceText(text)
+                }
+            }
+        }
         self.content = content
         textLabel.attributedText = Self.truncatingTail(content.text, when: content.maximumLines > 0)
         textLabel.hashtagAccount = content.hashtagAccount

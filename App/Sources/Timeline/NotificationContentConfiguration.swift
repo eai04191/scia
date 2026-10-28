@@ -122,6 +122,11 @@ final class NotificationContentView: UIView, UIContentView {
         bodyView.mediaGrid
     }
 
+    /// 投稿の中身。「テキストを選択」で本文を選べる状態にするときに使う。
+    var postBody: PostBodyView {
+        bodyView
+    }
+
     init(configuration: NotificationContentConfiguration) {
         current = configuration
         bodyView = PostBodyView(mediaImages: configuration.mediaImages, avatarImages: configuration.avatarImages)
@@ -156,6 +161,13 @@ final class NotificationContentView: UIView, UIContentView {
         bodyView.onRevealMedia = { [weak self] in self?.current.onRevealMedia?() }
         bodyView.onToggleSpoiler = { [weak self] in self?.current.onToggleSpoiler?() }
         bodyView.onOpenLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
+        bodyView.onTextSelectionChange = { [weak self] in
+            guard let self else { return }
+            updateAccessibility(for: current)
+            if let textView = bodyView.selectionTextView {
+                UIAccessibility.post(notification: .layoutChanged, argument: textView)
+            }
+        }
         headerLabel.isUserInteractionEnabled = true
         headerLabel.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(headerTapped)))
         headerInteraction = ObjectInteraction(on: headerLabel, tapsSelf: false)
@@ -281,7 +293,8 @@ final class NotificationContentView: UIView, UIContentView {
         // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
         setNeedsLayout()
-        accessibilityElements = [textAccessibilityElement] + (bodyView.poll?.accessibilityParts ?? []) + [bodyView.mediaGrid, bodyView.linkCard].compactMap(\.self)
+        // 「テキストを選択」で本文を選んでいる間は、選べるテキストビューを本文の要素の後ろに置き、読み上げでも選べるようにする。
+        accessibilityElements = [textAccessibilityElement] + [bodyView.selectionTextView].compactMap(\.self) + (bodyView.poll?.accessibilityParts ?? []) + [bodyView.mediaGrid, bodyView.linkCard].compactMap(\.self)
     }
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)

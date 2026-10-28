@@ -148,7 +148,7 @@ A4に入れていない、Mastodonのクライアントとしてできること�
 - [x] 実機デバッグ用に、`scia-debug://`相当の設定をアプリ内からできるようにする
 - [x] アニメーションカスタム絵文字の対応(apng, gif): 決まりは[animated-custom-emoji.md](animated-custom-emoji.md)
 - [x] 投稿の翻訳（システム）
-- [ ] 投稿の本文の一部を、行の中で選んでコピーする: 決まりは[menus.md](menus.md)の「本文の文字を選ぶ」
+- [x] 投稿の本文の一部を、行の中で選んでコピーする: 決まりは[menus.md](menus.md)の「本文の文字を選ぶ」
 - [ ] TL新着投稿挿入時間を大きさに比例させる
 - [x] pull to refreshのストリーミング接続状況のところに、RESTでの補完の状態も並べて出す: 決まりは[pull-status.md](pull-status.md)
 - [x] どの一覧でも、一番上から引っぱって離すと最新の状態を読み直す: 決まりは[pull-status.md](pull-status.md)の「引っぱって読み直す」

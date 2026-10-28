@@ -74,6 +74,7 @@ extension TimelineViewController {
                 mediaSpacing: settings.value(of: N.quotedMediaSpacing),
                 poll: showsPollResults ? pollContent(for: shown, allowsVoting: false, base: base) : nil,
                 pollSpacing: settings.value(of: N.quotedPollSpacing),
+                statusID: shown.id,
                 hashtagAccount: shown.account,
                 // 再掲では引用の囲みを出さず、引用のある投稿であることだけを、一番下の1行で示す。
                 filterNote: shown.quote == nil ? nil : postContentBuilder.quoteNote(font: typography.font(.notificationQuotedNote)),

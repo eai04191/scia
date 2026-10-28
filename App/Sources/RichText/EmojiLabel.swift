@@ -421,6 +421,13 @@ class EmojiLabel: UILabel {
         return result
     }
 
+    /// TextKit 2で並べたときに、このラベルと同じ位置に文字が並ぶ文字列。「テキストを選択」で、ラベルの代わりに出すテキストビューに渡す。
+    /// UILabelが自分のフォントや色で埋めたあとの文字列を使う。段落をつなぐ改行のようにフォントのない部分を、UITextViewは12ptの既定のフォントで並べ、
+    /// 空行の高さが変わって下の行がずれるため。
+    final var textForTextKit: NSAttributedString? {
+        sourceText.map { alignedLikeLabel(Self.wrappingInsteadOfTruncating($0)) }
+    }
+
     /// 行の寄せ方を、UILabelが描くのと同じにした文字列。
     /// 寄せ方が「自然」のとき、UILabelは画面の向き（日本語なら左から右）で寄せるが、TextKit 2は段落の文字の向きで寄せ、
     /// ヘブライ語やアラビア語の段落を右に寄せる。そのままだと行の置き場所がまるごとずれ、リンクを外すため、画面の向きに合わせて決めておく。

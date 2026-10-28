@@ -135,7 +135,7 @@ extension TimelineViewController {
         case .hashtags:
             guard let shown = status?.displayed else { return [] }
             return hashtagElements(of: shown, id: id)
-        case .reply, .favourite, .reblog, .bookmark, .quote, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .edit, .delete:
+        case .reply, .favourite, .reblog, .bookmark, .quote, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .selectText, .edit, .delete:
             guard let status else { return [] }
             return statusAction(item, on: status, isNotification: notification != nil, id: id).map { [$0] } ?? []
         }
@@ -254,6 +254,12 @@ extension TimelineViewController {
             guard let text = Self.plainText(of: shown) else { return nil }
             return UIAction(title: item.title, image: item.image) { [weak self] _ in
                 self?.translation.present(text)
+            }
+        case .selectText:
+            guard let body = selectableBody(for: id, statusID: shown.id) else { return nil }
+            return UIAction(title: item.title, image: item.image) { [weak self, weak body] _ in
+                guard let self, let body else { return }
+                beginTextSelection(in: body, statusID: shown.id)
             }
         case .openThread, .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .hashtags, .dismissNotification, .reblogWithVisibility:
             return nil
