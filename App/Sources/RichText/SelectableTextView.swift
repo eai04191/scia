@@ -22,6 +22,9 @@ final class SelectableTextView: UITextView, UITextViewDelegate, @MainActor UIEdi
         isEditable = false
         isSelectable = true
         isScrollEnabled = false
+        // 選んだ文字を持ち出すドラッグは、iPadとして動くMacでは既定で有効になる（iPhoneでは既定で無効）。全体を選んで始めるので、どこを押しても選んだ文字の上になり、
+        // マウスでドラッグすると、範囲を選び直す代わりに文字を持ち出すドラッグが始まるため止める。
+        textDragInteraction?.isEnabled = false
         backgroundColor = .clear
         textContainerInset = .zero
         textContainer.lineFragmentPadding = 0
