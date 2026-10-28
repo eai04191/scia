@@ -117,6 +117,16 @@ enum ProfileHeaderCatalog {
             CatalogState(title: "3行に収まらない自己紹介と補足情報3つ、ほかのサーバー（「さらに表示」で広がる）") {
                 header(longNoteAccount, .notFollowing(locked: false))
             },
+            CatalogState(title: "自分にしか見えないメモ（自己紹介と補足情報のカードの間）") {
+                header(fullAccount, .following, privateNote: "前にオフ会で会った人")
+            },
+            CatalogState(title: "長いメモで、自己紹介なし（改行と折り返し）") {
+                header(
+                    Fixtures.account(acct: "memo@remote.example"),
+                    .notFollowing(locked: false),
+                    privateNote: "1行目。メモは書いたままの平文で、リンクやメンションにしない。https://example.com @catalog #scia\n2行目。長いメモは省かずに全文を出し、幅に合わせて折り返す。ここから先も折り返して続く文。"
+                )
+            },
             CatalogState(title: "投稿の絞り込みを変えた（返信を含む）") {
                 header(fullAccount, .following, postsFilter: ProfilePostsFilter(showsReplies: true, showsBoosts: true))
             },
@@ -240,7 +250,9 @@ enum ProfileHeaderCatalog {
         let backdrop = UIView()
         backdrop.overrideUserInterfaceStyle = style
         backdrop.backgroundColor = .systemBackground
-        let view = header(account, followState, pinned: Array(pinnedStatuses.prefix(2))) { header in
+        // 自分にしか見えないメモの欄が、色を付けたカードと見分けられるかも見る。自分のプロフィールには出ない。
+        let privateNote = followState == .myself ? "" : "自分にしか見えないメモ"
+        let view = header(account, followState, pinned: Array(pinnedStatuses.prefix(2)), privateNote: privateNote) { header in
             header.accentOptions = ProfileCardPalette.Options(tuning: AppDependencies.tuning)
             header.onChangeScreenTint = { [weak backdrop] tint in backdrop?.tintColor = tint }
         }
@@ -267,6 +279,7 @@ enum ProfileHeaderCatalog {
         postsFilter: ProfilePostsFilter = .standard,
         avatarShape: AvatarShape = .circle,
         pinned: [Status] = [],
+        privateNote: String = "",
         configure: (ProfileHeaderView) -> Void = { _ in }
     ) -> UIView {
         let header = ProfileHeaderView(
@@ -288,7 +301,8 @@ enum ProfileHeaderCatalog {
             animatesAvatar: false,
             animatesCustomEmojis: false,
             glyphLanguage: AppDependencies.settings.glyphLanguageIdentifier(),
-            isRemote: account.acct.contains("@")
+            isRemote: account.acct.contains("@"),
+            privateNote: privateNote
         )
         header.apply(content)
         // カタログは読み込み終えた状態を見せるので、一覧と一緒に出す部分も出しておく。
@@ -350,7 +364,8 @@ private extension ProfileHeaderView.Content {
             animatesAvatar: animatesAvatar,
             animatesCustomEmojis: animatesCustomEmojis,
             glyphLanguage: glyphLanguage,
-            isRemote: isRemote
+            isRemote: isRemote,
+            privateNote: privateNote
         )
     }
 }
