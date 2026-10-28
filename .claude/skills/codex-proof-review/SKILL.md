@@ -29,7 +29,7 @@ description: SciaCoreの変更を、Codexに使い捨ての複製で実際に動
 
    ```bash
    gh_empty="$(mktemp -d)"
-   (cd "$dir" && env -u GH_TOKEN -u GITHUB_TOKEN GH_CONFIG_DIR="$gh_empty" codex review -c sandbox_mode='"workspace-write"' -c sandbox_workspace_write.network_access=true -c model='"gpt-6.1-sol"' -c model_reasoning_effort='"high"' -c service_tier='"priority"' - < <prompt-file> > <out-file> 2> <log-file>)
+   (cd "$dir" && env -u GH_TOKEN -u GITHUB_TOKEN GH_CONFIG_DIR="$gh_empty" codex review -c sandbox_mode='"workspace-write"' -c sandbox_workspace_write.network_access=true -c model='"gpt-6.1-sol"' -c model_reasoning_effort='"high"' - < <prompt-file> > <out-file> 2> <log-file>)
    rm -rf "$gh_empty"
    ```
 
