@@ -85,7 +85,7 @@ struct UserMenu {
     }
 
     /// 関係で中身が変わる項目を出していれば、その人の関係を読み直す。組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。
-    /// リンクのメンションは、相手を探すまでIDが分からないため読み直さない。
+    /// リンクのメンションは、相手を探すまでIDが分からないため、ここではなく、相手を探したあとに関係を読むところ（`UserMenuActions.loadRelation`）で読み直す。
     private func reloadRelation(groups: MenuLayout<UserMenuItem>.Groups) {
         guard let id = subject.id, groups.needsRelationship else { return }
         actions?.reloadRelations([id])
