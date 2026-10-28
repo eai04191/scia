@@ -89,6 +89,22 @@ struct ProfileHeaderFollowRevealTests {
         }
     }
 
+    /// 通信が詰まって、ヘッダーを並べる前に関係が届くと、SwiftUIのスプリングがボタンの枠が決まるところまで動かし、
+    /// カプセルが大きさ0の左上から滑ってきて見えていた。動かし始める前に、ボタンの枠を決め終えておく。
+    @Test func followButtonIsPlacedBeforeAnimatingWhenRelationshipArrivesBeforeLayout() throws {
+        let (header, window) = try placeHeader()
+        defer { close(window) }
+        header.followRevealDuration = 0.3
+        header.apply(content(followState: .unknown))
+
+        header.apply(content(followState: .following))
+
+        let button = try #require(header.descendants(of: ProfileFollowButton.self).first)
+        #expect(button.bounds.width > 0 && button.bounds.height > 0, "\(button.bounds)")
+        let hosting = try #require(button.subviews.first)
+        #expect(hosting.frame == button.bounds, "\(hosting.frame) in \(button.bounds)")
+    }
+
     /// 関係を待つのが長引いたら、場所を取っておいたボタンにインジケータを出す。関係が届いたら消す。
     @Test func relationshipActivityShowsInsidePlaceholder() throws {
         let (header, window) = try placeHeader()

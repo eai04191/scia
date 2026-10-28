@@ -715,6 +715,11 @@ final class ProfileHeaderView: UIView {
         // 幅と色をスプリングで変える。「フォローされています」はクロスフェードする。
         let changesFollow = previous.map { $0.followState != content.followState || $0.isChangingFollow != content.isChangingFollow } ?? false
         let animatesFollow = changesFollow && followRevealDuration > 0 && window != nil && !UIAccessibility.isReduceMotionEnabled
+        if animatesFollow {
+            // 動かし始める前に並べ終え、ボタンの枠を決めておく。通信が詰まってヘッダーを並べる前に関係が届くと、
+            // SwiftUIのスプリングが枠の決まるところまで動かし、カプセルが大きさ0の左上から滑ってきて見えるため。
+            layoutIfNeeded()
+        }
         applyFollowButton(content, animation: animatesFollow ? .smooth(duration: followRevealDuration) : nil)
         if animatesFollow {
             UIView.transition(with: followedByBadge, duration: followRevealDuration, options: [.transitionCrossDissolve, .allowUserInteraction]) {
