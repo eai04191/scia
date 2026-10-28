@@ -227,16 +227,47 @@ struct HashtagMenu {
                 // ほかのサーバーのユーザーなら、ユーザーのメニューの見出しと同じく、サーバー名をサブタイトルに出す。
                 return [UIAction(title: "@\(account.username)の投稿", subtitle: UserHeading(acct: account.acct).subtitle, image: item.image) { [openAccountStatuses] _ in openAccountStatuses(account) }]
             case .mute:
-                return muteActions?.elements(for: name, item: item) ?? []
+                guard let muteActions else { return [] }
+                return muteElements(muteActions, item: item)
             // 共通の項目は、上で中身から組んだ。
             case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
                 return []
             }
         }
     }
+
+    /// ミュートしていなければ、ユーザーのミュートと同じ期間をサブメニューで選び、ミュート中なら「ミュートを解除」にする。
+    /// フィルターを覚えていれば、その場で決める。読み込み中の行を出してから中身を差し替えると、開く途中のサブメニューの動きが崩れるため。
+    /// メニューを開くたびにフィルターを読み直し、別の端末やwebで変えたミュートを次に開いたときから反映する。
+    /// まだ読めていなければ、読む間はUIKitの読み込み中の行を出し、読めなければ押せない行で知らせる。
+    private func muteElements(_ muteActions: HashtagMuteActions, item: HashtagMenuItem) -> [UIMenuElement] {
+        let name = name
+        func elements(isMuted: Bool) -> [UIMenuElement] {
+            if isMuted {
+                return [UIAction(title: "ミュートを解除", image: UIImage(systemName: "speaker.wave.2")) { _ in muteActions.unmute(name) }]
+            }
+            return [UIMenu(title: item.title, image: item.image, children: UserRelationChange.muteDurations.map { choice in
+                UIAction(title: choice.title) { _ in muteActions.mute(name, choice.duration) }
+            })]
+        }
+        let isMuted = muteActions.known(name)
+        muteActions.refresh()
+        if let isMuted {
+            return elements(isMuted: isMuted)
+        }
+        return [UIDeferredMenuElement.uncached { completion in
+            Task { @MainActor in
+                do {
+                    completion(elements(isMuted: try await muteActions.load(name)))
+                } catch {
+                    completion([UIAction(title: "ミュートを読み込めませんでした", image: UIImage(systemName: "exclamationmark.triangle"), attributes: .disabled) { _ in }])
+                }
+            }
+        }]
+    }
 }
 
-/// ハッシュタグのメニューの「ミュート」で、ミュートしているかを読み、変える。決まりはdocs/menus.mdの「ハッシュタグのメニュー」にある。
+/// ハッシュタグのメニューの「ミュート」で、ミュートしているかを読み、変える。項目は`HashtagMenu`が組む。決まりはdocs/menus.mdの「ハッシュタグのメニュー」にある。
 struct HashtagMuteActions {
     /// 覚えている自分のフィルターで決めた、`#`を除いた名前のタグをミュートしているか。フィルターをまだ読めていなければnil。
     let known: @MainActor (String) -> Bool?
@@ -249,36 +280,6 @@ struct HashtagMuteActions {
     /// ミュートを解除する。解く条件は、解除するときにフィルターを読み直して決める。メニューを組んだときに覚えていた条件で消すと、
     /// その後に別の端末やwebで同じフィルターに足した条件まで、フィルターごと消してしまうため。
     let unmute: @MainActor (String) -> Void
-
-    /// ミュートしていなければ、ユーザーのミュートと同じ期間をサブメニューで選び、ミュート中なら「ミュートを解除」にする。
-    /// フィルターを覚えていれば、その場で決める。読み込み中の行を出してから中身を差し替えると、開く途中のサブメニューの動きが崩れるため。
-    /// メニューを開くたびにフィルターを読み直し、別の端末やwebで変えたミュートを次に開いたときから反映する。
-    /// まだ読めていなければ、読む間はUIKitの読み込み中の行を出し、読めなければ押せない行で知らせる。
-    @MainActor
-    func elements(for name: String, item: HashtagMenuItem) -> [UIMenuElement] {
-        func elements(isMuted: Bool) -> [UIMenuElement] {
-            if isMuted {
-                return [UIAction(title: "ミュートを解除", image: UIImage(systemName: "speaker.wave.2")) { _ in unmute(name) }]
-            }
-            return [UIMenu(title: item.title, image: item.image, children: UserRelationChange.muteDurations.map { choice in
-                UIAction(title: choice.title) { _ in mute(name, choice.duration) }
-            })]
-        }
-        let isMuted = known(name)
-        refresh()
-        if let isMuted {
-            return elements(isMuted: isMuted)
-        }
-        return [UIDeferredMenuElement.uncached { completion in
-            Task { @MainActor in
-                do {
-                    completion(elements(isMuted: try await load(name)))
-                } catch {
-                    completion([UIAction(title: "ミュートを読み込めませんでした", image: UIImage(systemName: "exclamationmark.triangle"), attributes: .disabled) { _ in }])
-                }
-            }
-        }]
-    }
 }
 
 
