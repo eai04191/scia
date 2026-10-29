@@ -2104,10 +2104,13 @@ extension TimelineViewController {
     }
 
     /// 表示領域の上端にかかっている、最も上の投稿を基準にする。
+    /// 上端にかかる分が半画素に満たない行は、見えていない行として扱う。行の位置は高さを足し合わせて決まるため、
+    /// 上の行の下端が表示領域の上端にぴったり重なるはずのときも、浮動小数点の誤差でわずかに下へずれ、隠れた上の行を基準に選んでしまうため。
     /// - Parameter candidates: 基準にしてよい行。nilなら、見えている行のどれでもよい。
     func currentAnchor(among candidates: Set<ItemID>? = nil) -> ScrollAnchor? {
         collectionView.layoutIfNeeded()
         let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
+        let halfPixel = 0.5 / max(collectionView.traitCollection.displayScale, 1)
         let topmost = collectionView.indexPathsForVisibleItems
             .compactMap { indexPath -> (ItemID, CGRect)? in
                 guard let id = dataSource.itemIdentifier(for: indexPath),
@@ -2116,7 +2119,7 @@ extension TimelineViewController {
                 else { return nil }
                 return (id, frame)
             }
-            .filter { $0.1.maxY > visibleTop }
+            .filter { $0.1.maxY > visibleTop + halfPixel }
             .min { $0.1.minY < $1.1.minY }
         guard let (id, frame) = topmost else { return nil }
         return ScrollAnchor(id: id, distanceFromVisibleTop: frame.minY - visibleTop)
