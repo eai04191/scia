@@ -198,9 +198,19 @@ public final class AppSettings {
     /// 範囲外の値は範囲内に丸めて保存する。数でない値（NaNや無限）は、行数などを整数に直すところで落ちるため、保存しない。
     public func setValue(_ value: Double, for item: AppearanceValue) {
         guard value.isFinite else { return }
-        let clamped = min(max(value, item.range.lowerBound), item.range.upperBound)
+        let clamped = min(max(Self.snapped(value, toMultipleOf: item.step), item.range.lowerBound), item.range.upperBound)
         appearanceValues[item.id] = clamped
         defaults.set(clamped, forKey: Keys.appearance(item.id))
+    }
+
+    /// 刻みの倍数との差が計算の誤差ほどしかない値を、その倍数にする。＋−（`Stepper`）は今の値に刻みを足すので、
+    /// 0.1のように2進数で表せない刻みでは誤差が溜まり、既定値まで戻しても既定値と一致しなくなるため。打って入れた、倍数から離れた値は変えない。
+    /// 小数の刻みは逆数（0.1なら10）で割って作る。刻みを掛けると、掛け算でも誤差が出るため。
+    static func snapped(_ value: Double, toMultipleOf step: Double) -> Double {
+        let steps = value / step
+        let nearest = steps.rounded()
+        guard abs(steps - nearest) < 1e-9 else { return value }
+        return step < 1 ? nearest / (1 / step).rounded() : nearest * step
     }
 
     public func isModified(_ item: AppearanceValue) -> Bool {

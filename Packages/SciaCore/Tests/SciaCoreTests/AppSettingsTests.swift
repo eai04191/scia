@@ -206,6 +206,24 @@ struct AppSettingsTests {
         #expect(relaunched.value(of: AppearanceCatalog.bodyText) == AppearanceCatalog.bodyText.range.upperBound)
     }
 
+    /// ＋−で刻みずつ足し引きして既定値に戻したら、変えていない扱いにする。0.1のような刻みは2進数で表せず、足すたびに誤差が溜まるため。
+    /// 打って入れた、刻みの倍数でない値はそのまま残す。
+    @Test func steppingBackToDefaultIsNotModified() throws {
+        let settings = AppSettings(defaults: try makeDefaults())
+        for item in AppearanceCatalog.values + NotificationAppearanceCatalog.values {
+            // 5刻み離れた値から、＋−と同じく1刻みずつ足し引きして既定値まで戻す。
+            let below = item.defaultValue - 5 * item.step
+            let direction: Double = item.range.contains(below) ? 1 : -1
+            var value = item.defaultValue - direction * 5 * item.step
+            for _ in 0..<5 { value += direction * item.step }
+            settings.setValue(value, for: item)
+            #expect(!settings.isModified(item), "\(item.id) \(value)")
+        }
+        let item = AppearanceCatalog.nameUnicodeEmojiScale
+        settings.setValue(1.23, for: item)
+        #expect(settings.value(of: item) == 1.23)
+    }
+
     @Test func resetsAppearanceValues() throws {
         let defaults = try makeDefaults()
         let settings = AppSettings(defaults: defaults)
