@@ -2125,6 +2125,12 @@ extension TimelineViewController {
         return ScrollAnchor(id: id, distanceFromVisibleTop: frame.minY - visibleTop)
     }
 
+    /// `frame`が表示領域の上端`visibleTop`より下に半画素以上かかっていれば、見えていると見なす。
+    /// ヘッダーの下端が表示領域の上端にぴったり重なるはずのときも、スクロール位置と上の余白を足し引きする浮動小数点の誤差で、わずかに下へずれるため。
+    private func isVisible(_ frame: CGRect, below visibleTop: CGFloat) -> Bool {
+        frame.maxY > visibleTop + 0.5 / max(collectionView.traitCollection.displayScale, 1)
+    }
+
     /// ヘッダーの中身が変わって高さが変わったときに呼ぶ。ヘッダーを読み終えて下の投稿を読んでいれば、その投稿の位置を変えない。
     /// ヘッダーが見えていれば、ヘッダーが伸び縮みした分だけ下の投稿が動くのに任せる。
     /// 画面を読み込む前は、最初の表示で測るため何もしない。
@@ -2138,7 +2144,7 @@ extension TimelineViewController {
             ofKind: UICollectionView.elementKindSectionHeader,
             at: IndexPath(item: 0, section: 0)
         )?.frame
-        let anchor = (headerFrame.map { $0.maxY <= visibleTop } ?? false) ? currentAnchor() : nil
+        let anchor = (headerFrame.map { !isVisible($0, below: visibleTop) } ?? false) ? currentAnchor() : nil
         if let anchor {
             collectionView.collectionViewLayout.invalidateLayout()
             restore(anchor)
@@ -2170,7 +2176,7 @@ extension TimelineViewController {
         // ここで並べ直すと、伸びた中身を前の高さのヘッダーに押し込んだ形が、動きの出発点になってしまう。並べ直すのは動きの中だけにする。
         let visibleTop = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
         guard let headerFrame = collectionView.layoutAttributesForSupplementaryElement(ofKind: UICollectionView.elementKindSectionHeader, at: header)?.frame,
-              headerFrame.maxY > visibleTop
+              isVisible(headerFrame, below: visibleTop)
         else {
             headerDidChangeSize()
             return

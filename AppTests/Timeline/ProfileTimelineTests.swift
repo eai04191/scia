@@ -50,6 +50,35 @@ struct ProfileTimelineTests {
         #expect(abs(after - before) <= tolerance, "基準の投稿が\(after - before)pt動きました")
     }
 
+    /// ヘッダーを読み終えて、ヘッダーの下端が表示領域の上端にぴったり重なっているときも、ヘッダーが伸び縮みしても読んでいる先頭の投稿を動かさない。
+    /// スクロール位置と表示領域の上端の計算に浮動小数点の誤差が出て、ヘッダーの下端がわずかに表示領域に入って見える高さでも確かめる。
+    /// 「さらに表示」で動きをつけて伸ばすときも同じく、読み終えたヘッダーは動きで見せない。
+    @Test(arguments: [50.0, -50.0], [0.0, 0.3])
+    func headerChangingRightAboveTopKeepsFirstStatus(heightChange: CGFloat, duration: TimeInterval) throws {
+        let header = UIView()
+        let height = header.heightAnchor.constraint(equalToConstant: 300)
+        height.isActive = true
+        let harness = try TimelineHarness(headerView: header)
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        let first = try #require(statuses.first.map { TimelineEntry.ID.status($0.id) })
+        let scale = max(harness.collectionView.traitCollection.displayScale, 1)
+        for pixels in 0..<60 {
+            height.constant = 300 + CGFloat(pixels) / scale
+            harness.viewController.headerDidChangeSize()
+            try harness.scroll(to: first, at: .top)
+            let before = try #require(harness.windowMinY(of: first))
+
+            height.constant += heightChange
+            harness.viewController.headerDidChangeSize(animatingWithDuration: duration)
+            harness.collectionView.layoutIfNeeded()
+
+            let after = try #require(harness.windowMinY(of: first), "ヘッダーの高さが\(height.constant - heightChange)ptのとき、先頭の投稿が画面外へ出ました")
+            #expect(abs(after - before) <= tolerance, "ヘッダーの高さが\(height.constant - heightChange)ptのとき、先頭の投稿が\(after - before)pt動きました")
+        }
+    }
+
     /// ヘッダーが見えている間は、ヘッダーが伸びた分だけ下の投稿が下がる。
     @Test func headerGrowingAtTopPushesStatusesDown() throws {
         let header = UIView()
