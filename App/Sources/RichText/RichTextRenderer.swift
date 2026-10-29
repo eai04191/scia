@@ -13,9 +13,9 @@ struct RichTextRenderer {
     var lineSpacing: CGFloat = 0
     /// 引用とリストの1段あたりの字下げ。
     var indentPerLevel: CGFloat = 16
-    /// カスタム絵文字の高さの、文字の行の高さに対する割合。
+    /// カスタム絵文字の高さの、Unicodeの絵文字を文字の大きさのまま描いたときの絵の高さ（`EmojiFont.glyphHeight`）に対する割合。
     var emojiScale: CGFloat = 1
-    /// Unicodeの絵文字の大きさの、文字の大きさに対する割合。
+    /// Unicodeの絵文字の絵の高さの、文字の大きさのまま描いたときの絵の高さに対する割合。カスタム絵文字と同じ割合なら、同じ高さに描く。
     var unicodeEmojiScale: CGFloat = 1
     let emojiImages: EmojiImageStore
     /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
@@ -202,7 +202,8 @@ struct RichTextRenderer {
         if image == nil, emojiImages.hasFailed(emoji.staticUrl) {
             return NSAttributedString(string: ":\(emoji.shortcode):", attributes: attributes(style: [], block: block))
         }
-        let height = font.lineHeight * emojiScale
+        // 割合が同じなら、Unicodeの絵文字と同じ高さに描く。
+        let height = EmojiFont.glyphHeight(of: font) * emojiScale
         // 絵文字の中心を、和文の字面（em枠）の中心に揃える。文字と大きさが違っても、文字が絵文字の横の真ん中に来るようにするため。
         // 欧文の大文字の中心とも0.03emほどしか違わない。等倍の絵文字は、下端がほぼ文字の下端（descender）に来る。
         let y = Self.emojiCenterHeight * font.pointSize - height / 2
@@ -285,7 +286,9 @@ struct RichTextRenderer {
     /// 下げて描く絵文字の前に置く、幅のない文字。コピーするときは取り除く。
     static let leadingEmojiGuard = "\u{200B}"
 
-    /// Unicodeの絵文字を`unicodeEmojiScale`の大きさにし、カスタム絵文字と同じく、中心を字面の中心に揃える。
+    /// Unicodeの絵文字を、絵の高さが`unicodeEmojiScale`の割合になる大きさにし、カスタム絵文字と同じく、中心を字面の中心に揃える。
+    /// 書体の大きさを割合どおりに変えるだけだと、Appleの絵文字は小さい文字ほど大きめに描くため、1.0から1.1に上げても大きくならず、
+    /// 大きくしたときにカスタム絵文字より小さくなる。
     /// 大きさを変えたことを示す属性には、変える前の書体を入れる。絵文字だけの段落でも、余白を文字の書体から測るため。
     private func scaleUnicodeEmojis(in string: NSMutableAttributedString, range: NSRange) {
         guard unicodeEmojiScale != 1 else { return }
@@ -297,10 +300,11 @@ struct RichTextRenderer {
             guard let font = string.attribute(.font, at: cluster.location, effectiveRange: nil) as? UIFont,
                   Self.isUnicodeEmoji(text.substring(with: cluster), in: font)
             else { continue }
-            let size = font.pointSize * unicodeEmojiScale
+            let emojiFont = font.withSize(EmojiFont.pointSize(of: font, drawingGlyphsOfHeight: EmojiFont.glyphHeight(of: font) * unicodeEmojiScale))
             string.addAttributes([
-                .font: font.withSize(size),
-                .baselineOffset: Self.emojiCenterHeight * (font.pointSize - size),
+                .font: emojiFont,
+                // 書体の字面ではなく描く絵の中心を揃える。絵文字の書体は、絵の上に余白を持つため。
+                .baselineOffset: Self.emojiCenterHeight * font.pointSize - EmojiFont.glyphBounds(of: emojiFont).midY,
                 .scaledUnicodeEmoji: font,
             ], range: cluster)
         }
@@ -329,11 +333,20 @@ struct RichTextRenderer {
             below = max(below, -attachment.bounds.minY)
         }
         // 書体の大きさが違う絵文字が隣り合っても1つずつ測るよう、どの属性が変わってもランを分ける。
-        text.enumerateAttributes(in: range) { attributes, _, _ in
+        text.enumerateAttributes(in: range) { attributes, run, _ in
             guard attributes[.scaledUnicodeEmoji] != nil, let font = attributes[.font] as? UIFont else { return }
             let offset = attributes[.baselineOffset] as? CGFloat ?? 0
-            above = max(above, font.ascender + offset)
-            below = max(below, -(font.descender + offset))
+            // 書体のascenderとdescenderではなく、描く絵の枠で測る。書体は絵の上に余白を持つため。
+            // 覚える量が絵文字の種類で収まるよう、ランごとではなく絵文字1つずつ測る。
+            let string = text.string as NSString
+            var location = run.location
+            while location < NSMaxRange(run) {
+                let cluster = string.rangeOfComposedCharacterSequence(at: location)
+                location = NSMaxRange(cluster)
+                let glyph = EmojiFont.glyphBounds(of: string.substring(with: cluster), in: font)
+                above = max(above, glyph.maxY + offset)
+                below = max(below, -(glyph.minY + offset))
+            }
         }
         return (above, below)
     }

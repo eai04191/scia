@@ -151,6 +151,37 @@ struct EmojiDrawingTests {
         #expect(abs(nameDrawn.lowerBound - avatar.frame.minY) <= 1, "名前=\(nameDrawn) アイコン=\(avatar.frame)")
     }
 
+    /// カスタム絵文字と絵文字は、割合が同じなら同じ高さに描き、割合を上げれば大きくなる。
+    /// 基準は、絵文字を文字の大きさのまま描いたときの絵の高さ。Appleの絵文字は小さい文字ほど文字より大きめに描くため、
+    /// 書体の大きさを割合どおりに変えるだけでは、1.0から1.1に上げても大きくならず、大きくしたときにカスタム絵文字より小さくなっていた。
+    @Test(arguments: [EmojiStyle.system, .twemoji])
+    func customAndUnicodeEmojisDrawAtTheSameHeight(style: EmojiStyle) async throws {
+        let (red, store) = try await redEmoji()
+        var previous: CGFloat = 0
+        for scale in [0.5, 1.0, 1.1, 1.5, 2.0, 3.0] {
+            var renderer = RichTextRenderer(font: font, textColor: .black, emojiImages: store, language: "ja")
+            renderer.emojiStyle = style
+            renderer.emojiScale = scale
+            renderer.unicodeEmojiScale = scale
+            func drawnHeight(_ text: RichText) throws -> CGFloat {
+                let label = LinkLabel()
+                label.numberOfLines = 0
+                label.attributedText = renderer.render(text)
+                label.frame = CGRect(x: 0, y: 0, width: 300, height: 200)
+                label.sizeToFit()
+                let drawn = try drawing(of: label).colored
+                return drawn.upperBound - drawn.lowerBound
+            }
+            // 「🟥」は、どちらの絵文字の書体でも、絵の枠いっぱいに描く。
+            let custom = try drawnHeight(.plain(":red:", emojis: [red]))
+            let unicode = try drawnHeight(.plain("🟥", emojis: []))
+
+            #expect(abs(custom - unicode) <= 1.5, "\(style) scale=\(scale) カスタム絵文字=\(custom) 絵文字=\(unicode)")
+            #expect(unicode > previous, "\(style) scale=\(scale) 絵文字=\(unicode) 前の割合=\(previous)")
+            previous = unicode
+        }
+    }
+
     private func subviews<T: UIView>(of type: T.Type, in view: UIView) -> [T] {
         view.subviews.flatMap { subview in [subview as? T].compactMap(\.self) + subviews(of: type, in: subview) }
     }

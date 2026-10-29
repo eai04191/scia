@@ -394,10 +394,11 @@ class EmojiLabel: UILabel {
                   let to = contentStorage.location(start, offsetBy: NSMaxRange(cluster)),
                   let textRange = NSTextRange(location: from, end: to)
             else { continue }
-            // 大きさを変えた絵文字を測る`RichTextRenderer.emojiExtent`と同じく、絵文字の書体と下げた量から上下を求める。
+            // 大きさを変えた絵文字を測る`RichTextRenderer.emojiExtent`と同じく、描く絵の枠と下げた量から上下を求める。
             let offset = attributes[.baselineOffset] as? CGFloat ?? 0
-            let above = font.ascender + offset
-            let below = -(font.descender + offset)
+            let glyph = EmojiFont.glyphBounds(of: string.substring(with: cluster), in: font)
+            let above = glyph.maxY + offset
+            let below = -(glyph.minY + offset)
             // 行末の絵文字では、同じ区切りが2回返る。1つの絵文字は行をまたがないので、区切りをまとめて1つの枠にする。
             var emoji: CGRect?
             layout.layoutManager.enumerateTextSegments(in: textRange, type: .standard, options: []) { _, frame, baseline, _ in

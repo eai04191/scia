@@ -463,7 +463,7 @@ extension PostContentViewTests {
     }
 
     /// 普通の絵文字が既定の1倍でも、名前と本文の普通の絵文字の枠を返す。返さないと、「投稿の見た目」で既定値に戻したとき、
-    /// 示す範囲が絵文字から名前の行や本文の全体に替わる。枠は、大きくしたときと同じく、書体のascenderとdescenderまでにする。
+    /// 示す範囲が絵文字から名前の行や本文の全体に替わる。枠は、大きくしたときと同じく、描く絵の枠にする。
     @Test func unscaledUnicodeEmojisHaveFrames() async throws {
         let frames = try await emojiPostFrames(nameScale: 1, bodyScale: 1)
         let name = try #require(frames[.nameUnicodeEmojis])
@@ -473,7 +473,7 @@ extension PostContentViewTests {
         #expect(name.count == 1)
         #expect(body.count == 2)
         for emoji in body {
-            #expect(abs(emoji.height - (font.ascender - font.descender)) < 0.5, "絵文字=\(emoji)")
+            #expect(abs(emoji.height - EmojiFont.glyphHeight(of: font)) < 0.5, "絵文字=\(emoji)")
         }
     }
 

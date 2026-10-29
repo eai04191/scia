@@ -515,6 +515,9 @@ struct AppearanceValueRow: View {
         case AppearanceCatalog.mediaWidestAspectRatio.id: "大きいほど横長のまま出す"
         case AppearanceCatalog.avatarCornerRatio.id: "0.5で円になる"
         case AppearanceCatalog.linkCardImageWidthRatio.id: "画像はカードの高さの正方形より広くならない"
+        // 割合の基準（絵文字を文字の大きさのまま描いたときの大きさ）は見出しに書かず、1がどの大きさかで伝える。
+        case AppearanceCatalog.customEmojiScale.id, AppearanceCatalog.nameCustomEmojiScale.id: "1で絵文字と同じ大きさ"
+        case AppearanceCatalog.unicodeEmojiScale.id, AppearanceCatalog.nameUnicodeEmojiScale.id: "1でいつもの大きさ"
         default: nil
         }
     }

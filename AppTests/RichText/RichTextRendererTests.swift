@@ -257,7 +257,7 @@ extension RichTextRendererTests {
         let bounds = try #require(attachments(in: renderer.render(.plain("文 :blobcat:", emojis: [blobcat]))).first).bounds
 
         #expect(abs(bounds.midY - font.pointSize * RichTextRenderer.emojiCenterHeight) < 0.01)
-        #expect(abs(bounds.height - font.lineHeight * scale) < 0.01)
+        #expect(abs(bounds.height - EmojiFont.glyphHeight(of: font) * scale) < 0.01)
     }
 
     /// 絵文字は、割合の大きさの書体で描き、中心を字面の中心に揃える。文字の形で描く指定の付いた文字、本文の書体が持つ「©」、キーキャップにならない数字は変えない。
@@ -274,9 +274,10 @@ extension RichTextRendererTests {
         for cluster in ["😀", "1️⃣", "❤"] {
             let font = try #require(attributes(of: cluster)[.font] as? UIFont)
             let offset = try #require(attributes(of: cluster)[.baselineOffset] as? CGFloat)
-            #expect(font.pointSize == self.font.pointSize * 2, "\(cluster)")
-            // 書体の字面の中心（大きさ×em枠の中心）を、ずらしたあとに文字の字面の中心へ揃える。
-            #expect(abs(font.pointSize * RichTextRenderer.emojiCenterHeight + offset - self.font.pointSize * RichTextRenderer.emojiCenterHeight) < 0.01, "\(cluster)")
+            // 絵の高さが、文字の大きさのまま描いたときの2倍になる大きさにする。
+            #expect(abs(EmojiFont.glyphHeight(of: font) - EmojiFont.glyphHeight(of: self.font) * 2) < 0.01, "\(cluster)")
+            // 描く絵の中心を、ずらしたあとに文字の字面の中心へ揃える。
+            #expect(abs(EmojiFont.glyphBounds(of: font).midY + offset - self.font.pointSize * RichTextRenderer.emojiCenterHeight) < 0.01, "\(cluster)")
         }
         for cluster in ["文", "☺\u{FE0E}", "©", "1#"] {
             #expect((attributes(of: cluster)[.font] as? UIFont)?.pointSize == font.pointSize, "\(cluster)")
@@ -345,7 +346,27 @@ extension RichTextRendererTests {
         let larger = font.withSize(font.pointSize * 8)
         mixed.addAttributes([.font: larger, .baselineOffset: RichTextRenderer.emojiCenterHeight * (font.pointSize - larger.pointSize)], range: second)
         let extent = RichTextRenderer.emojiExtent(in: mixed, range: NSRange(location: 0, length: mixed.length))
-        #expect(extent.below >= -(larger.descender + RichTextRenderer.emojiCenterHeight * (font.pointSize - larger.pointSize)) - 0.01)
+        #expect(extent.below >= -(EmojiFont.glyphBounds(of: larger).minY + RichTextRenderer.emojiCenterHeight * (font.pointSize - larger.pointSize)) - 0.01)
+    }
+
+    /// 大きくした絵文字の上下の範囲は、大きさを揃える基準の絵文字（🟥）の枠ではなく、その絵文字の字形で測る。
+    /// 「⚕️」や「♀️」は🟥より下へ伸びるため、基準の枠で測ると、下の部品とのあいだを狭く見積もって重なる。
+    @Test(arguments: ["⚕️", "♀️"])
+    func extentCoversEachEmojisOwnGlyph(cluster: String) throws {
+        var renderer = renderer(.offline)
+        // twemojiの「⚕️」と「♀️」は、🟥と下端が同じなので、Appleの絵文字で確かめる。
+        renderer.emojiStyle = .system
+        renderer.unicodeEmojiScale = 4
+        let text = renderer.render(.plain("文\(cluster)", emojis: []))
+        let range = (text.string as NSString).range(of: cluster)
+        let font = try #require(text.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont)
+        let offset = try #require(text.attribute(.baselineOffset, at: range.location, effectiveRange: nil) as? CGFloat)
+        let glyph = CTLineGetBoundsWithOptions(CTLineCreateWithAttributedString(NSAttributedString(string: cluster, attributes: [.font: font])), .useGlyphPathBounds)
+        let extent = RichTextRenderer.emojiExtent(in: text, range: NSRange(location: 0, length: text.length))
+
+        #expect(glyph.minY < EmojiFont.glyphBounds(of: font).minY, "基準の絵文字より下へ伸びる絵文字で確かめる")
+        #expect(extent.below >= -(glyph.minY + offset) - 0.01)
+        #expect(extent.above >= glyph.maxY + offset - 0.01)
     }
 
     /// 下げて描く絵文字が先頭にあると幅のない文字を前に置くが、コピーする文字には含めない。
