@@ -270,10 +270,12 @@ public final class ComposeCompletion {
     }
 
     /// - Parameter recentMentions: 補完で選んだアカウントを覚える場所。なければ覚えず、出さない。
-    public init(sources: Sources, settings: Settings, recentMentions: RecentMentions? = nil, sleep: @escaping @Sendable (Duration) async throws -> Void = { try await SystemTime.clock.sleep(for: $0) }) {
+    /// - Parameter emojis: 別の画面で読み終えたカスタム絵文字の一覧。渡せば読み直さず、絵文字のパレットを開いたときに読み込み中の段を挟まずに並べる。
+    public init(sources: Sources, settings: Settings, recentMentions: RecentMentions? = nil, emojis: [ServerEmoji]? = nil, sleep: @escaping @Sendable (Duration) async throws -> Void = { try await SystemTime.clock.sleep(for: $0) }) {
         self.sources = sources
         self.settings = settings
         self.recentMentions = recentMentions
+        self.emojis = emojis?.filter(\.visibleInPicker)
         self.sleep = sleep
     }
 

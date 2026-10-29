@@ -236,6 +236,41 @@ struct ComposeCompletionTests {
         #expect(accts(completion.content).first == ":blobcat:")
     }
 
+    /// 別の画面で読み終えた一覧を渡せば、作ったときから持ち、読み直さない。一覧に出さない絵文字は除く。
+    /// 絵文字のパレットを開いたときに、読み込み中の段を挟まずに並べるため。
+    @Test func startsWithEmojisLoadedElsewhere() async throws {
+        let server = server
+        let loaded = try await server.emojis()
+        let completion = ComposeCompletion(
+            sources: ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { try await server.emojis() }),
+            settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5),
+            emojis: loaded
+        )
+        #expect(completion.emojis?.map(\.shortcode) == ["blobcat_heart", "blobcat", "ablob", "taiyaki"])
+        completion.loadEmojisIfNeeded()
+        completion.prefetch()
+        completion.textDidChange(emoji("blob"))
+        #expect(accts(completion.content) == [":blobcat:", ":blobcat_heart:", ":ablob:"])
+        try await waitUntil { !completion.isLoadingOwnTags }
+        #expect(await server.emojiRequests == 1)
+    }
+
+    /// 取得元に覚えさせると、読めた一覧を覚え、次の画面の補完に渡せる。読めなかったときは、前に読めた一覧を残す。
+    @Test func remembersLoadedEmojisInCache() async throws {
+        let server = server
+        let cache = CustomEmojiCache()
+        let sources = ComposeCompletion.Sources(searchAccounts: { _, _ in [] }, searchHashtags: { _, _ in [] }, customEmojis: { try await server.emojis() })
+            .remembering(customEmojisIn: cache)
+        #expect(cache.emojis == nil)
+        let completion = ComposeCompletion(sources: sources, settings: ComposeCompletion.Settings(debounce: .milliseconds(30), limit: 5))
+        completion.loadEmojisIfNeeded()
+        try await waitUntil { cache.emojis != nil }
+        #expect(cache.emojis?.count == 5)
+        await server.setFailsEmojis(true)
+        await #expect(throws: URLError.self) { try await sources.customEmojis() }
+        #expect(cache.emojis?.count == 5)
+    }
+
     private let standardGroups = [StandardEmojiGroup(title: "動物と自然", emojis: [
         StandardEmoji(emoji: "🐱", name: "ネコの顔", englishName: "cat face", keywords: ["ネコ"], shortcodes: ["cat"], version: "0.6"),
         StandardEmoji(emoji: "😺", name: "笑うネコ", englishName: "grinning cat", keywords: ["blob"], version: "0.6"),

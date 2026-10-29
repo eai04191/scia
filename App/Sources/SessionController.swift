@@ -123,6 +123,8 @@ final class SessionController {
     private let serverFilters: ServerFilterCache
     /// 補完の候補を読む口。投稿欄とプロフィールの編集で使う。
     private let completionSources: ComposeCompletion.Sources
+    /// 補完で読めたカスタム絵文字の一覧。開くたびに補完を作るプロフィールの編集に渡し、読み直さずに並べる。
+    private let customEmojis: CustomEmojiCache
     /// タブバーの上の投稿欄。ホームと通知のどちらでも同じ下書きを使う。
     private let composer: InlineComposeController
     /// 書き始めたときに始めた、サーバーの上限と既定の公開範囲などの読み込み。共有されたメディアを、読み終えてから足すのに使う。
@@ -387,6 +389,8 @@ final class SessionController {
             serverFilters?.close()
             relationships?.close()
         }
+        let customEmojis = CustomEmojiCache()
+        self.customEmojis = customEmojis
         completionSources = ComposeCompletion.Sources(
             searchAccounts: { query, limit in
                 do {
@@ -430,7 +434,7 @@ final class SessionController {
             },
             // 読めなかった人は返らないだけで、失敗はAccountCacheがログに残す。
             accounts: { ids in await Array(accounts.load(ids).values) }
-        )
+        ).remembering(customEmojisIn: customEmojis)
         // 投稿欄は初期化の途中で作るため、編集した投稿を引用の囲みに当てる先は、初期化を終えてからつなぐ。
         let editedStatuses = SessionReference()
         // 予約できたことのチップを出す先も、初期化を終えてからつなぐ。
@@ -1218,7 +1222,7 @@ final class SessionController {
             editor.charactersReservedPerURL = configuration.charactersReservedPerURL
         }
         let completion = TextInputCompletion(
-            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle)),
+            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), recentMentions: RecentMentions(defaults: .standard, account: credential.handle), emojis: customEmojis.emojis),
             recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
         )
         let controller = ProfileEditViewController(editor: editor, completion: completion)
