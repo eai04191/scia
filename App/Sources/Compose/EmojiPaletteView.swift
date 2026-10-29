@@ -64,7 +64,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     var emojiStyle: EmojiStyle = .system {
         didSet {
             guard emojiStyle != oldValue else { return }
-            reconfigureVisibleCells(matching: nil)
+            reconfigureCells(matching: nil)
             rebuildSectionButtons()
         }
     }
@@ -72,7 +72,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     var animatesEmojis = false {
         didSet {
             guard animatesEmojis != oldValue else { return }
-            reconfigureVisibleCells(matching: nil)
+            reconfigureCells(matching: nil)
         }
     }
 
@@ -126,7 +126,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         super.init(frame: .zero)
         configureViews()
         emojiImages.addListener(owner: self) { [weak self] urls in
-            self?.reconfigureVisibleCells(matching: urls)
+            self?.reconfigureCells(matching: urls)
         }
     }
 
@@ -456,15 +456,23 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         }
     }
 
-    /// 届いた画像の絵文字だけを描き直す。nilなら見えているものをすべて描き直す。
-    private func reconfigureVisibleCells(matching urls: Set<URL>?) {
-        for indexPath in collectionView.indexPathsForVisibleItems {
-            guard let emoji = emoji(at: indexPath), let cell = collectionView.cellForItem(at: indexPath) as? EmojiPaletteCell else { continue }
-            if let urls {
-                // 画像が届いて描き直すのは、カスタム絵文字だけ。
-                guard case .custom(let custom) = emoji, urls.contains(custom.staticUrl) || urls.contains(custom.url) else { continue }
+    /// 届いた画像の絵文字だけを描き直す。nilならすべて描き直す。
+    /// 見えているセルだけでなく、スクロールで画面に入る前に組み立てたセルも描き直すため、差分で描き直させる。
+    /// 見えているセルだけを描き直すと、組み立てたあとに画像が届いたセルが、空のまま画面に入っていた。
+    private func reconfigureCells(matching urls: Set<URL>?) {
+        var snapshot = dataSource.snapshot()
+        let items = sections.flatMap { section in
+            section.emojis.compactMap { emoji -> Item? in
+                if let urls {
+                    // 画像が届いて描き直すのは、カスタム絵文字だけ。
+                    guard case .custom(let custom) = emoji, urls.contains(custom.staticUrl) || urls.contains(custom.url) else { return nil }
+                }
+                return Item(section: section.kind, key: emoji.recentKey)
             }
-            cell.configure(emoji, store: emojiImages, animates: animatesEmojis, emojiStyle: emojiStyle)
+        }
+        if !items.isEmpty {
+            snapshot.reconfigureItems(items)
+            dataSource.apply(snapshot, animatingDifferences: false)
         }
         updateSectionIcons(matching: urls)
     }
