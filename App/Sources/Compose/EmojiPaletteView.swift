@@ -3,7 +3,7 @@ import UIKit
 
 /// 投稿欄のカスタム絵文字のパレット。シート（`EmojiPaletteSheet`）の中身にする。
 ///
-/// 上に検索欄、真ん中に絵文字、下の段にまとまりへ飛ぶボタンと削除キーを置く。下の段はキーボードに沿う枠に付け、検索欄にキーボードを出すと、その上に来る。
+/// 上に検索欄、真ん中に絵文字、下の段にまとまりへ飛ぶボタンと削除キーを置く。下の段は、検索欄にキーボードを出している間だけキーボードに沿う枠に付け、キーボードの上に来る。
 /// 一覧は検索欄と下の段の裏まで伸ばし、重なった上下の端をシステムにぼかさせる。
 /// キーボードを出していないときは、iOSのキーボードの地球儀の段と同じく、ホームインジケーターの場所まで下げる。
 /// 絵文字は、幅に入るだけの列に左から右、上から下へ並べて縦にスクロールし、まとまり（最近使ったもの、カテゴリー）ごとに見出しを付ける。
@@ -101,7 +101,12 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private lazy var deleteButtonHeight = deleteButton.heightAnchor.constraint(equalToConstant: barHeight)
     /// 角の丸みに合わせて左右を内側に寄せた枠。
     private lazy var cornerAdaptedGuide = layoutGuide(for: .safeArea(cornerAdaptation: .horizontal))
-    private lazy var sectionBarBottom = sectionBar.bottomAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor, constant: -barBottomInset)
+    private lazy var sectionBarBottom = sectionBar.bottomAnchor.constraint(equalTo: keyboardEdge.topAnchor, constant: -barBottomInset)
+    /// 下の段と一覧の下端を付ける枠。ふだんはシートの下端に置き、検索欄にキーボードを出している間だけキーボードに沿わせる。
+    /// いつもキーボードに沿わせると、プロフィールの編集で入力欄のキーボードを下げながらシートを出したとき、キーボードに沿う枠の上端がシートの上がる間ずっと下端から約40pt上に残り、下がりきってから一度に下端へ移るので、下の段が一覧に重なってから落ちて見えた。
+    private let keyboardEdge = UILayoutGuide()
+    private lazy var keyboardEdgeAtBottom = keyboardEdge.topAnchor.constraint(equalTo: bottomAnchor)
+    private lazy var keyboardEdgeAtKeyboard = keyboardEdge.topAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor)
     private let statusLabel = UILabel()
 
     /// 上下の部品の高さと間隔。
@@ -191,6 +196,30 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         updateSectionBarLeadingInset()
     }
 
+    /// シートに載せたときは、検索欄にキーボードを出していなければシートの下端に置く。前に検索したまま閉じても、ほかの入力欄のキーボードに付いて動かさないため。
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard window != nil else { return }
+        setFollowsKeyboard(searchField.isFirstResponder)
+    }
+
+    @objc private func keyboardDidHide(_ notification: Notification) {
+        guard !searchField.isFirstResponder else { return }
+        setFollowsKeyboard(false)
+    }
+
+    private func setFollowsKeyboard(_ follows: Bool) {
+        guard keyboardEdgeAtKeyboard.isActive != follows else { return }
+        // 外してから付ける。両方を同時に有効にすると、満たせない制約になる。
+        if follows {
+            keyboardEdgeAtBottom.isActive = false
+            keyboardEdgeAtKeyboard.isActive = true
+        } else {
+            keyboardEdgeAtKeyboard.isActive = false
+            keyboardEdgeAtBottom.isActive = true
+        }
+    }
+
     /// 最初のまとまりのボタンを、角の丸みに合わせて内側に寄せた位置に置く。左端にいるときは、余白が変わっても左端にとどめる。
     private func updateSectionBarLeadingInset() {
         let inset = cornerAdaptedGuide.layoutFrame.minX + 8
@@ -270,6 +299,8 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         status.alignment = .center
         status.spacing = 8
         addSubview(status)
+        // 検索をやめてキーボードが下がりきったら、シートの下端に戻す。下がる間はキーボードに付いて動かす。
+        NotificationCenter.default.addObserver(self, selector: #selector(keyboardDidHide(_:)), name: UIResponder.keyboardDidHideNotification, object: nil)
 
         // キーボードを出していないとき、キーボードに沿う枠の上端を、下の安全領域の上ではなく下端にする。
         // 安全領域の上に置くと、下の段の下にホームインジケーターの分（34pt）の空きができ、iOSのキーボードより高く見えたため。
@@ -283,7 +314,12 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         // 検索欄と下の段の間。一覧の中身が見える場所で、空や見つからないことの文言をこの真ん中に置く。
         let visibleArea = UILayoutGuide()
         addLayoutGuide(visibleArea)
+        addLayoutGuide(keyboardEdge)
         NSLayoutConstraint.activate([
+            keyboardEdge.leadingAnchor.constraint(equalTo: leadingAnchor),
+            keyboardEdge.trailingAnchor.constraint(equalTo: trailingAnchor),
+            keyboardEdge.heightAnchor.constraint(equalToConstant: 0),
+            keyboardEdgeAtBottom,
             topBar.topAnchor.constraint(equalTo: topAnchor),
             topBar.leadingAnchor.constraint(equalTo: leadingAnchor),
             topBar.trailingAnchor.constraint(equalTo: trailingAnchor),
@@ -297,11 +333,11 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
             collectionView.trailingAnchor.constraint(equalTo: trailingAnchor),
             // 一覧と下の段の間は空けない。空けると、どちらにも当たらずに押しても反応しない帯ができる。
             // 一覧は下の段の裏まで伸ばす。下の段の分の余白を足し、いちばん下の絵文字も下の段より上まで送れるようにする。
-            collectionView.bottomAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor),
+            collectionView.bottomAnchor.constraint(equalTo: keyboardEdge.topAnchor),
             bottomBar.leadingAnchor.constraint(equalTo: leadingAnchor),
             bottomBar.trailingAnchor.constraint(equalTo: trailingAnchor),
             bottomBar.topAnchor.constraint(equalTo: sectionBar.topAnchor),
-            bottomBar.bottomAnchor.constraint(equalTo: keyboardLayoutGuide.topAnchor),
+            bottomBar.bottomAnchor.constraint(equalTo: keyboardEdge.topAnchor),
             // まとまりのボタンは、シートの左端からスクロールさせる。角の丸みに合わせた位置で切ると、送ったボタンがシートの端より手前でまっすぐ切れて見えたため。
             // 最初のボタンの位置は、中身の前の余白で角の丸みに合わせる（`layoutSubviews`）。
             sectionBar.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -639,6 +675,10 @@ final class EmojiPaletteCell: UICollectionViewCell {
 }
 
 extension EmojiPaletteView: UITextFieldDelegate {
+    func textFieldDidBeginEditing(_ textField: UITextField) {
+        setFollowsKeyboard(true)
+    }
+
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         onSearchSubmit()
         return false
