@@ -493,6 +493,7 @@ struct AppearanceValueRow: View {
         switch item.unit {
         case .ratio: nil
         case .lines: "行"
+        case .count: "個"
         case .point, .bodyTextOffset, .textOffset: "pt"
         }
     }
@@ -527,6 +528,7 @@ struct AppearanceValueRow: View {
         switch item.unit {
         case .point: return nil
         case .lines: return offset == 0 ? "出さない" : nil
+        case .count: return item == AppearanceCatalog.emojiOnlyLimit && offset == 0 ? "大きくしない" : nil
         case .ratio: return Self.ratioNote(for: item)
         case .bodyTextOffset: return offset == 0 ? "標準" : "標準\(Self.signed(offset))"
         case .textOffset: return offset == 0 ? "本文と同じ" : "本文\(Self.signed(offset))"
@@ -717,6 +719,8 @@ struct AppearanceSamples {
             // 公開範囲の記号と編集済みの「*」を見せるため、未収載で編集した投稿にする。
             (status("reply", minutes: 12, account: friend, content: "<p>注意書きの下の本文です。</p>", spoiler: "注意書き", replyingTo: scia, visibility: .unlisted, edited: true), ReplyConnection(above: true)),
             (status("media", minutes: 8, account: scia, content: "", media: [tallImage]), ReplyConnection()),
+            // 絵文字だけの本文を見せるため、先頭にメンションの付いた、絵文字だけの返信を用意する。メンションは大きくしない。
+            (status("emoji-only", minutes: 7.5, account: friend, content: #"<p><span class="h-card"><a href="https://example.com/@scia" class="u-url mention">@<span>scia</span></a></span> 👍:scia:🎉</p>"#, replyingTo: scia, emojis: emojis), ReplyConnection()),
             // 片方だけのときの光の幅を見せるため、お気に入りだけをした投稿にする。
             (status("wide", minutes: 7, account: friend, content: "<p>横長の画像を1枚付けた投稿です。</p>", media: [wideImage], favourited: true), ReplyConnection()),
             (status("poll", minutes: 5, account: longNamed, content: "<p>アイコンの形はどちらが好きですか？</p>", poll: poll), ReplyConnection()),

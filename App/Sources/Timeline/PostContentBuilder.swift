@@ -98,7 +98,7 @@ struct PostContentBuilder {
             showsVisibilitySymbol: settings.showsVisibilitySymbol,
             showsEditedMark: settings.showsEditedMark,
             timeStyle: settings.statusTimeStyle,
-            body: body(of: shown, base: base),
+            body: body(of: shown, base: base, enlargesEmojiOnly: true),
             spoiler: spoiler(of: shown, base: base),
             metrics: metrics,
             card: linkCard(of: shown),
@@ -175,8 +175,16 @@ struct PostContentBuilder {
     /// 文字の大きさは「投稿の見た目」の本文の文字にし、色は読むものなのでいちばん濃い色を既定にする。
     /// 引用ブロックは、RichTextRendererがこれより一段薄く描く。
     /// - Parameter font: 本文の文字と違う大きさで描くときの書体。通知で再掲する投稿は「通知の見た目」の文字で描く。
-    func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil) -> NSAttributedString {
-        bodyRenderer(of: status, font: font ?? PostTypography(settings: settings).font(.body), color: color).render(.status(status))
+    /// - Parameter enlargesEmojiOnly: 本文が絵文字だけなら、絵文字を大きく描く。一覧の投稿の本文だけで使い、縮めた見た目の再掲では使わない。
+    func body(of status: Status, base: UIListContentConfiguration, color: UIColor = .label, font: UIFont? = nil, enlargesEmojiOnly: Bool = false) -> NSAttributedString {
+        var renderer = bodyRenderer(of: status, font: font ?? PostTypography(settings: settings).font(.body), color: color)
+        if enlargesEmojiOnly {
+            renderer.emojiOnly = EmojiOnlyEnlargement(
+                scale: settings.value(of: AppearanceCatalog.emojiOnlyScale),
+                limit: Int(settings.value(of: AppearanceCatalog.emojiOnlyLimit))
+            )
+        }
+        return renderer.render(.status(status))
     }
 
     /// HTMLではない文字（予約した投稿のソースなど）を、投稿の本文と同じ文字の大きさと行間で描く。空白と改行は書いたまま残す。

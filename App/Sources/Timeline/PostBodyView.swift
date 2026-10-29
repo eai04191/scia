@@ -279,6 +279,11 @@ final class PostBodyView: UIView {
         frames[.customEmojis] = emojis.isEmpty ? nil : emojis
         let unicodeEmojis = textLabel.previewUnicodeEmojiFrames().map { textLabel.convert($0, to: space) }
         frames[.unicodeEmojis] = unicodeEmojis.isEmpty ? nil : unicodeEmojis
+        if let text = textLabel.attributedText, text.length > 0, text.attribute(.emojiOnlyBody, at: 0, effectiveRange: nil) != nil {
+            frames[.emojiOnlyBody] = [label]
+            let all = emojis + unicodeEmojis
+            frames[.emojiOnlyEmojis] = all.isEmpty ? nil : all
+        }
         return frames
     }
 

@@ -87,6 +87,8 @@ struct AppearanceSheets {
         case .bodyTextOffset, .textOffset: 6.0
         case .ratio: (item.range.upperBound - item.range.lowerBound) * 0.25
         case .lines: 2.0
+        // 上限の項目は、既定より少なくして見本の絵文字を大きくしないほうが、違いが分かる。
+        case .count: -item.defaultValue
         }
         let raised = item.defaultValue + delta
         return raised <= item.range.upperBound ? raised : max(item.defaultValue - delta, item.range.lowerBound)

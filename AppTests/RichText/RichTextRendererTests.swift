@@ -397,3 +397,62 @@ extension RichTextRendererTests {
 private final class LoadRecorder {
     var urls: Set<URL> = []
 }
+
+extension RichTextRendererTests {
+    private func mentionReply(_ rest: String) -> RichText {
+        let url = URL(string: "https://example.social/@bob")
+        return RichText(blocks: [.init(inlines: (url.map { [.link("@bob", .mention(acct: "bob", url: $0), [])] } ?? []) + [.text(rest, [])])])
+    }
+
+    /// 絵文字だけの本文は、カスタム絵文字と普通の絵文字の割合に同じ倍率を掛けて描く。先頭のメンションは普通の大きさのまま描く。
+    @Test func emojiOnlyBodyMultipliesBothEmojiScales() throws {
+        let blobcat = try emoji("blobcat")
+        var renderer = renderer(.offline)
+        renderer.emojiScale = 1.5
+        renderer.unicodeEmojiScale = 0.8
+        renderer.emojiOnly = EmojiOnlyEnlargement(scale: 2, limit: 10)
+        var text = mentionReply(" 😀")
+        text.blocks[0].inlines.append(.emoji(blobcat))
+        let rendered = renderer.render(text)
+        let string = rendered.string as NSString
+
+        let emojiFont = try #require(rendered.attribute(.font, at: string.range(of: "😀").location, effectiveRange: nil) as? UIFont)
+        #expect(abs(EmojiFont.glyphHeight(of: emojiFont) - EmojiFont.glyphHeight(of: font) * 1.6) < 0.01)
+        let bounds = try #require(attachments(in: rendered).first).bounds
+        #expect(abs(bounds.height - EmojiFont.glyphHeight(of: font) * 3) < 0.01)
+        let mentionFont = try #require(rendered.attribute(.font, at: string.range(of: "@bob").location, effectiveRange: nil) as? UIFont)
+        #expect(mentionFont.pointSize == font.pointSize)
+        #expect(rendered.attribute(.emojiOnlyBody, at: 0, effectiveRange: nil) != nil)
+    }
+
+    /// 上限より多い絵文字は大きくしない。絵文字だけの本文であることは残す。
+    @Test(arguments: [(2, true), (1, false), (0, false)])
+    func emojiOnlyBodyIsEnlargedUpToTheLimit(limit: Int, enlarged: Bool) throws {
+        var renderer = renderer(.offline)
+        renderer.emojiOnly = EmojiOnlyEnlargement(scale: 2, limit: limit)
+        let rendered = renderer.render(.plain("😀🎉", emojis: []))
+
+        let emojiFont = try #require(rendered.attribute(.font, at: (rendered.string as NSString).range(of: "😀").location, effectiveRange: nil) as? UIFont)
+        #expect(abs(EmojiFont.glyphHeight(of: emojiFont) - EmojiFont.glyphHeight(of: font) * (enlarged ? 2 : 1)) < 0.01)
+        #expect(rendered.attribute(.emojiOnlyBody, at: 0, effectiveRange: nil) != nil)
+    }
+
+    /// 文字のある本文は、絵文字だけの本文として扱わない。
+    @Test func mixedBodyIsNotEnlarged() throws {
+        var renderer = renderer(.offline)
+        renderer.emojiOnly = EmojiOnlyEnlargement(scale: 2, limit: 10)
+        let rendered = renderer.render(.plain("いいね😀", emojis: []))
+
+        #expect(rendered.attribute(.scaledUnicodeEmoji, at: (rendered.string as NSString).range(of: "😀").location, effectiveRange: nil) == nil)
+        #expect(rendered.attribute(.emojiOnlyBody, at: 0, effectiveRange: nil) == nil)
+    }
+
+    /// 絵文字かどうかは、描く書体で決める。等幅の書体が持たず、絵文字の絵で描かれる文字は、コード書式でも絵文字と数える。
+    @Test func emojiOnlyBodyJudgesCodeWithTheMonospacedFont() throws {
+        var renderer = renderer(.offline)
+        renderer.emojiOnly = EmojiOnlyEnlargement(scale: 2, limit: 10)
+        let rendered = renderer.render(RichText(blocks: [.init(inlines: [.text("✈", .code), .text("😀", [])])]))
+
+        #expect(rendered.attribute(.emojiOnlyBody, at: 0, effectiveRange: nil) != nil)
+    }
+}

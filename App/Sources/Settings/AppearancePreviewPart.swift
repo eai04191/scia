@@ -84,6 +84,10 @@ enum AppearancePreviewPart: Hashable, CaseIterable {
     case customEmojis
     /// 本文の、大きさを変えた絵文字。等倍のときは示さない。
     case unicodeEmojis
+    /// 絵文字だけの本文の、カスタム絵文字と大きさを変えた絵文字。
+    case emojiOnlyEmojis
+    /// 絵文字だけの本文。大きくしていないときも示す。
+    case emojiOnlyBody
     /// リンクカードのサイト名。
     case cardSite
     case media

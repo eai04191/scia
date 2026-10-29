@@ -11,6 +11,8 @@ public struct AppearanceValue: Sendable, Identifiable, Hashable {
         case ratio
         /// 行数。0なら出さない。
         case lines
+        /// 個数。
+        case count
     }
 
     /// 保存に使うキー。項目ごとに一意にする。
@@ -120,6 +122,10 @@ public enum AppearanceCatalog {
     public static let unicodeEmojiScale = AppearanceValue(id: "timeline.unicodeEmojiScale", title: "絵文字の大きさ", range: 0.5...4, step: 0.1, defaultValue: 1, unit: .ratio)
     /// 名前の行と名前の上の行の、カスタム絵文字でない絵文字の絵の高さの、標準の大きさに対する割合。
     public static let nameUnicodeEmojiScale = AppearanceValue(id: "timeline.nameUnicodeEmojiScale", title: "絵文字の大きさ", range: 0.5...4, step: 0.1, defaultValue: 1, unit: .ratio)
+    /// 本文が、先頭のメンションを除いて絵文字だけのとき、本文の絵文字の大きさ（`unicodeEmojiScale`と`customEmojiScale`）に掛ける倍率。1なら大きくしない。
+    public static let emojiOnlyScale = AppearanceValue(id: "timeline.emojiOnlyScale", title: "絵文字だけのときの絵文字の倍率", range: 1...4, step: 0.1, defaultValue: 2, unit: .ratio)
+    /// 絵文字だけの本文を大きくする、絵文字の数の上限。これより多ければ大きくしない。0なら大きくしない。
+    public static let emojiOnlyLimit = AppearanceValue(id: "timeline.emojiOnlyLimit", title: "大きくする絵文字の数", range: 0...500, step: 1, defaultValue: 10, unit: .count)
     /// アイコンを角丸の四角にしたときの、角の丸みの一辺に対する割合。0.5で円になる。
     public static let avatarCornerRatio = AppearanceValue(id: "timeline.avatarCornerRatio", title: "角丸の四角の丸み（一辺に対する割合）", range: 0...0.5, step: 0.05, defaultValue: 0.2, unit: .ratio)
     /// 注意書きのボックスの角の丸み。
@@ -217,7 +223,7 @@ public enum AppearanceCatalog {
         AppearanceGroup(id: "context", title: "名前の上の行", values: [contextText, contextSecondaryText, contextPartsSpacing, contextLabelText, boosterAvatarSize, contextSymbolSpacing, contextAvatarTextSpacing, contextSpacing]),
         AppearanceGroup(id: "avatar", title: "アイコン", values: [avatarSize, avatarCornerRatio, avatarSpacing, replyLineWidth, replyLineGap]),
         AppearanceGroup(id: "name", title: "名前の行", values: [namePrimaryText, nameSecondaryText, timeText, namePartsSpacing, nameTimeSpacing, visibilitySymbolSpacing, editedMarkSpacing, nameFadeWidth, nameUnicodeEmojiScale, nameCustomEmojiScale, nameBodySpacing, nameMediaSpacing]),
-        AppearanceGroup(id: "body", title: "本文", values: [bodyText, bodyLineSpacing, paragraphSpacing, quoteIndent, unicodeEmojiScale, customEmojiScale, filterNoteText, filterNoteSpacing]),
+        AppearanceGroup(id: "body", title: "本文", values: [bodyText, bodyLineSpacing, paragraphSpacing, quoteIndent, unicodeEmojiScale, customEmojiScale, emojiOnlyScale, emojiOnlyLimit, filterNoteText, filterNoteSpacing]),
         AppearanceGroup(id: "spoiler", title: "注意書き", values: [spoilerButtonText, spoilerButtonSpacing, spoilerPadding, spoilerCornerRadius, spoilerBodySpacing]),
         AppearanceGroup(id: "media", title: "メディア", values: [bodyMediaSpacing, mediaTileSpacing, mediaTallestAspectRatio, mediaWidestAspectRatio, mediaBesideSide]),
         AppearanceGroup(id: "linkCard", title: "リンクカード", values: [linkCardTitleText, linkCardDetailText, linkCardTitleLines, linkCardDescriptionLines, linkCardLineSpacing, linkCardImageWidthRatio, bodyLinkCardSpacing, linkCardPadding]),

@@ -17,6 +17,8 @@ struct RichTextRenderer {
     var emojiScale: CGFloat = 1
     /// Unicodeの絵文字の絵の高さの、文字の大きさのまま描いたときの絵の高さに対する割合。カスタム絵文字と同じ割合なら、同じ高さに描く。
     var unicodeEmojiScale: CGFloat = 1
+    /// 本文が絵文字だけのときに、絵文字を大きく描く決まり。nilなら絵文字だけでも大きくしない。
+    var emojiOnly: EmojiOnlyEnlargement?
     let emojiImages: EmojiImageStore
     /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
     let language: String
@@ -24,6 +26,9 @@ struct RichTextRenderer {
     var emojiStyle: EmojiStyle = AppDependencies.settings.emojiStyle
 
     func render(_ text: RichText) -> NSAttributedString {
+        if let emojiOnly, let count = text.emojiOnlyCount(isEmoji: { Self.isUnicodeEmoji($0, in: font(for: $1, block: $2)) }) {
+            return render(emojiOnlyText: text, count: count, enlargement: emojiOnly)
+        }
         let result = NSMutableAttributedString()
         for (index, block) in text.blocks.enumerated() {
             if index > 0 {
@@ -40,6 +45,21 @@ struct RichTextRenderer {
         }
         result.separateFallbackSymbols(in: NSRange(location: 0, length: result.length))
         EmojiFont.restoreTextPresentation(in: result)
+        return result
+    }
+
+    /// 絵文字だけの本文。上限までの数なら、カスタム絵文字と普通の絵文字の割合に同じ倍率を掛けて、普段の釣り合いのまま大きくする。
+    /// 先頭のメンションは文字なので、普通の大きさのまま描く。
+    /// 大きくしないときも、プレビューで上限の項目を示せるよう、絵文字だけの本文であることを属性に残す。
+    private func render(emojiOnlyText text: RichText, count: Int, enlargement: EmojiOnlyEnlargement) -> NSAttributedString {
+        var renderer = self
+        renderer.emojiOnly = nil
+        if count <= enlargement.limit {
+            renderer.emojiScale *= enlargement.scale
+            renderer.unicodeEmojiScale *= enlargement.scale
+        }
+        let result = NSMutableAttributedString(attributedString: renderer.render(text))
+        result.addAttribute(.emojiOnlyBody, value: true, range: NSRange(location: 0, length: result.length))
         return result
     }
 
@@ -408,4 +428,14 @@ extension NSAttributedString.Key {
     static let leadingEmojiGuard = NSAttributedString.Key("net.mizle.scia.leadingEmojiGuard")
     /// 大きさを変えたUnicodeの絵文字の、大きさを変える前の書体（`UIFont`）。行の高さと、本文の上下の余白を測るときに、文字の書体と見分けるのに使う。
     static let scaledUnicodeEmoji = NSAttributedString.Key("net.mizle.scia.scaledUnicodeEmoji")
+    /// 絵文字だけの本文（`RichText.emojiOnlyCount`）。プレビューで、絵文字だけの本文の項目を示すのに使う。
+    static let emojiOnlyBody = NSAttributedString.Key("net.mizle.scia.emojiOnlyBody")
+}
+
+/// 絵文字だけの本文の絵文字を大きく描く決まり。
+struct EmojiOnlyEnlargement {
+    /// 本文の絵文字の割合に掛ける倍率。
+    var scale: CGFloat
+    /// 大きくする絵文字の数の上限。
+    var limit: Int
 }

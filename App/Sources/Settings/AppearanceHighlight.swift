@@ -72,6 +72,8 @@ enum AppearanceHighlight: Equatable {
             (C.quoteIndent, .firstOf([.part(.quoteIndent), .part(.bodyText)])),
             (C.unicodeEmojiScale, .firstOf([.part(.unicodeEmojis), .part(.bodyText)])),
             (C.customEmojiScale, .firstOf([.part(.customEmojis), .part(.bodyText)])),
+            (C.emojiOnlyScale, .firstOf([.part(.emojiOnlyEmojis), .part(.emojiOnlyBody)])),
+            (C.emojiOnlyLimit, .part(.emojiOnlyBody)),
             (C.filterNoteText, .part(.filterNote)),
             (C.filterNoteSpacing, .verticalGap(above: [.card, .poll, .media, .bodyGlyphs], below: [.filterNote])),
 
