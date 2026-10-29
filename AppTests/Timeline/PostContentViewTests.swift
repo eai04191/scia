@@ -462,6 +462,21 @@ extension PostContentViewTests {
         #expect(PostBodyView.textBottomInset(of: text, isTruncated: true) > PostBodyView.textBottomInset(of: text))
     }
 
+    /// 普通の絵文字が既定の1倍でも、名前と本文の普通の絵文字の枠を返す。返さないと、「投稿の見た目」で既定値に戻したとき、
+    /// 示す範囲が絵文字から名前の行や本文の全体に替わる。枠は、大きくしたときと同じく、書体のascenderとdescenderまでにする。
+    @Test func unscaledUnicodeEmojisHaveFrames() async throws {
+        let frames = try await emojiPostFrames(nameScale: 1, bodyScale: 1)
+        let name = try #require(frames[.nameUnicodeEmojis])
+        let body = try #require(frames[.unicodeEmojis])
+        let font = PostTypography(settings: .isolated()).font(.body)
+
+        #expect(name.count == 1)
+        #expect(body.count == 2)
+        for emoji in body {
+            #expect(abs(emoji.height - (font.ascender - font.descender)) < 0.5, "絵文字=\(emoji)")
+        }
+    }
+
     /// 名前と本文のカスタム絵文字は、それぞれの設定の割合で大きさを変える。
     @Test func nameAndBodyEmojiScaleIndependently() async throws {
         let plain = try await emojiPostFrames(nameScale: 1, bodyScale: 1)

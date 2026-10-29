@@ -373,23 +373,40 @@ class EmojiLabel: UILabel {
         return frames
     }
 
-    /// 大きさを変えたUnicodeの絵文字の枠。ラベルの座標で返す。「投稿の見た目」のプレビューで、絵文字の場所を示すのに使う。
+    /// Unicodeの絵文字の枠。ラベルの座標で返す。「投稿の見た目」のプレビューで、絵文字の場所を示すのに使う。
+    /// 大きさを変えた印（`scaledUnicodeEmoji`）は1倍では付かないので、描くときと同じ判定で絵文字を探す。
+    /// 印から探すと、既定の1倍で絵文字が見つからず、示す範囲が名前の行や本文の全体に替わってしまうため。
     final func previewUnicodeEmojiFrames() -> [CGRect] {
         guard let attributedText, attributedText.length > 0 else { return [] }
         let layout = textLayout(of: attributedText)
         let contentStorage = layout.contentStorage
         let start = contentStorage.documentRange.location
+        let string = attributedText.string as NSString
         var frames: [CGRect] = []
-        attributedText.enumerateAttribute(.scaledUnicodeEmoji, in: NSRange(location: 0, length: attributedText.length)) { value, range, _ in
-            guard value != nil,
-                  let from = contentStorage.location(start, offsetBy: range.location),
-                  let to = contentStorage.location(start, offsetBy: NSMaxRange(range)),
+        var location = 0
+        while location < string.length {
+            let cluster = string.rangeOfComposedCharacterSequence(at: location)
+            location = NSMaxRange(cluster)
+            let attributes = attributedText.attributes(at: cluster.location, effectiveRange: nil)
+            guard let font = attributes[.font] as? UIFont,
+                  RichTextRenderer.isUnicodeEmoji(string.substring(with: cluster), in: attributes[.scaledUnicodeEmoji] as? UIFont ?? font),
+                  let from = contentStorage.location(start, offsetBy: cluster.location),
+                  let to = contentStorage.location(start, offsetBy: NSMaxRange(cluster)),
                   let textRange = NSTextRange(location: from, end: to)
-            else { return }
-            let extent = RichTextRenderer.emojiExtent(in: attributedText, range: range)
+            else { continue }
+            // 大きさを変えた絵文字を測る`RichTextRenderer.emojiExtent`と同じく、絵文字の書体と下げた量から上下を求める。
+            let offset = attributes[.baselineOffset] as? CGFloat ?? 0
+            let above = font.ascender + offset
+            let below = -(font.descender + offset)
+            // 行末の絵文字では、同じ区切りが2回返る。1つの絵文字は行をまたがないので、区切りをまとめて1つの枠にする。
+            var emoji: CGRect?
             layout.layoutManager.enumerateTextSegments(in: textRange, type: .standard, options: []) { _, frame, baseline, _ in
-                frames.append(CGRect(x: frame.minX, y: frame.minY + baseline - extent.above, width: frame.width, height: extent.above + extent.below))
+                let segment = CGRect(x: frame.minX, y: frame.minY + baseline - above, width: frame.width, height: above + below)
+                emoji = emoji?.union(segment) ?? segment
                 return true
+            }
+            if let emoji {
+                frames.append(emoji)
             }
         }
         return frames
