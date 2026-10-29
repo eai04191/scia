@@ -114,14 +114,14 @@ public enum AppearanceCatalog {
     public static let quoteIndent = AppearanceValue(id: "timeline.quoteIndent", title: "引用とリストの字下げ", range: 0...100, step: 1, defaultValue: 16)
     /// 本文と注意書きのカスタム絵文字の高さの、絵文字の標準の大きさ（絵文字を文字の大きさのまま描いたときの絵の高さ）に対する割合。
     /// 絵文字の大きさと同じ割合なら、同じ高さに描く。
-    public static let customEmojiScale = AppearanceValue(id: "timeline.customEmojiScale", title: "カスタム絵文字の大きさ", range: 0...4, step: 0.1, defaultValue: 1, unit: .ratio)
+    public static let customEmojiScale = AppearanceValue(id: "timeline.customEmojiScale", title: "カスタム絵文字の倍率", range: 0...4, step: 0.1, defaultValue: 1, unit: .ratio)
     /// 名前の行と名前の上の行のカスタム絵文字の高さの、絵文字の標準の大きさに対する割合。
-    public static let nameCustomEmojiScale = AppearanceValue(id: "timeline.nameCustomEmojiScale", title: "カスタム絵文字の大きさ", range: 0...4, step: 0.1, defaultValue: 1, unit: .ratio)
+    public static let nameCustomEmojiScale = AppearanceValue(id: "timeline.nameCustomEmojiScale", title: "カスタム絵文字の倍率", range: 0...4, step: 0.1, defaultValue: 1, unit: .ratio)
     /// 本文と注意書きの、カスタム絵文字でない絵文字の絵の高さの、標準の大きさ（文字の大きさのまま描いたときの絵の高さ）に対する割合。
     /// 0にすると書体の大きさが0ptになり、書体の標準の大きさで描かれるため、下限を0より上にする。
-    public static let unicodeEmojiScale = AppearanceValue(id: "timeline.unicodeEmojiScale", title: "絵文字の大きさ", range: 0.5...4, step: 0.1, defaultValue: 1, unit: .ratio)
+    public static let unicodeEmojiScale = AppearanceValue(id: "timeline.unicodeEmojiScale", title: "絵文字の倍率", range: 0.5...4, step: 0.1, defaultValue: 1, unit: .ratio)
     /// 名前の行と名前の上の行の、カスタム絵文字でない絵文字の絵の高さの、標準の大きさに対する割合。
-    public static let nameUnicodeEmojiScale = AppearanceValue(id: "timeline.nameUnicodeEmojiScale", title: "絵文字の大きさ", range: 0.5...4, step: 0.1, defaultValue: 1, unit: .ratio)
+    public static let nameUnicodeEmojiScale = AppearanceValue(id: "timeline.nameUnicodeEmojiScale", title: "絵文字の倍率", range: 0.5...4, step: 0.1, defaultValue: 1, unit: .ratio)
     /// 本文が、先頭のメンションを除いて絵文字だけのとき、本文の絵文字の大きさ（`unicodeEmojiScale`と`customEmojiScale`）に掛ける倍率。1なら大きくしない。
     public static let emojiOnlyScale = AppearanceValue(id: "timeline.emojiOnlyScale", title: "絵文字だけのときの絵文字の倍率", range: 1...4, step: 0.1, defaultValue: 2, unit: .ratio)
     /// 絵文字だけの本文を大きくする、絵文字の数の上限。これより多ければ大きくしない。0なら大きくしない。

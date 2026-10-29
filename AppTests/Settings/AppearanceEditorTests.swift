@@ -321,12 +321,13 @@ struct AppearanceEditorTests {
     @Test func ratioNotesBelongToTheirItems() {
         #expect(AppearanceValueRow.ratioNote(for: AppearanceCatalog.mediaTallestAspectRatio) == "小さいほど縦長のまま出す")
         #expect(AppearanceValueRow.ratioNote(for: AppearanceCatalog.reactionGlowIconOpacity) == nil)
-        // 絵文字の大きさは、見出しに割合の基準を書かず、1がどの大きさかを説明に出す。名前の行と本文で同じ説明にする。
+        // カスタム絵文字の倍率は、見出しに割合の基準を書かず、1がどの大きさかを説明に出す。名前の行と本文で同じ説明にする。
         for item in [AppearanceCatalog.customEmojiScale, AppearanceCatalog.nameCustomEmojiScale] {
             #expect(AppearanceValueRow.ratioNote(for: item) == "1で絵文字と同じ大きさ", "\(item.id)")
         }
-        for item in [AppearanceCatalog.unicodeEmojiScale, AppearanceCatalog.nameUnicodeEmojiScale] {
-            #expect(AppearanceValueRow.ratioNote(for: item) == "1でいつもの大きさ", "\(item.id)")
+        // 普通の絵文字の倍率は、1でいつもの大きさなのが倍率から分かるので、説明を出さない。
+        for item in [AppearanceCatalog.unicodeEmojiScale, AppearanceCatalog.nameUnicodeEmojiScale, AppearanceCatalog.emojiOnlyScale] {
+            #expect(AppearanceValueRow.ratioNote(for: item) == nil, "\(item.id)")
         }
         #expect(AppearanceValueRow.ratioNote(for: AppearanceCatalog.linkCardImageWidthRatio) == "画像はカードの高さの正方形より広くならない")
     }
