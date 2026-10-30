@@ -10,6 +10,8 @@ struct SettingsView: View {
     /// ログイン中のアカウントのハンドル。タブの並びはアカウントごとに持つ。
     let account: String
     let diagnostics: ConnectionDiagnostics
+    /// タブの並びで、タブに置いたプロフィールに出すその人のアイコン。
+    let tabIcons: ProfileTabIcons
     @Environment(\.dismiss) private var dismiss
     /// 時刻の表記の見本に使う、3分前の日時。
     @State private var previewDate: Date
@@ -23,6 +25,7 @@ struct SettingsView: View {
         instance: URL,
         account: String,
         diagnostics: ConnectionDiagnostics,
+        tabIcons: ProfileTabIcons,
         now: () -> Date = AppDependencies.now,
         clock: any Clock<Duration> = AppDependencies.clock
     ) {
@@ -30,6 +33,7 @@ struct SettingsView: View {
         self.instance = instance
         self.account = account
         self.diagnostics = diagnostics
+        self.tabIcons = tabIcons
         _previewDate = State(initialValue: now().addingTimeInterval(-180))
         self.clock = clock
     }
@@ -145,7 +149,7 @@ struct SettingsView: View {
                 }
                 Section {
                     NavigationLink("タブ") {
-                        MenuLayoutSettingsView(title: "タブ", layout: tabLayoutBinding)
+                        MenuLayoutSettingsView(title: "タブ", layout: tabLayoutBinding, image: { [tabIcons] in tabIcons.icon(for: $0)?.menu }, imageRevision: { [tabIcons] in tabIcons.revision })
                     }
                 } header: {
                     Text("タブ")
@@ -359,8 +363,9 @@ extension UIViewController {
     /// - Parameters:
     ///   - instance: ログイン中のアカウントのサーバー。
     ///   - diagnostics: 「接続の状態」画面に出す、ログイン中のアカウントの接続の状態。
-    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics) {
-        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics)
+    ///   - tabIcons: タブの並びで、タブに置いたプロフィールに出すその人のアイコン。
+    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons) {
+        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons)
         present(UIHostingController(rootView: view), animated: true)
     }
 }

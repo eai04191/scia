@@ -2,12 +2,14 @@ import SciaCore
 import UIKit
 
 /// タブに置いたプロフィールの、アカウントを読むまでの画面。並びにはアカウントのIDしかなく、プロフィール画面はアカウントがないと作れないため、
-/// 初めて開いたときにアカウントを読み、読めたら`onLoad`に渡す。渡された側が、この画面をプロフィール画面に差し替える。
-/// 決まりはdocs/tabs.mdの「プロフィール」にある。
+/// 並びに出たときにアカウントを読み（`loadAccount`）、タブのアイコンに使えるよう`onAccount`に渡す。
+/// 初めて開いたときに読めていれば`onLoad`に渡し、渡された側が、この画面をプロフィール画面に差し替える。
+/// 投稿は、開くまで読まない。決まりはdocs/tabs.mdの「プロフィール」にある。
 final class ProfileTabLoadingViewController: UIViewController {
     private enum State {
         case idle
         case loading
+        case loaded(Account)
         case failed(ErrorPresentation)
     }
 
@@ -15,7 +17,16 @@ final class ProfileTabLoadingViewController: UIViewController {
     private let tasks: TaskScope
     private var state = State.idle
     private var loadTask: Task<Void, Never>?
-    /// 読めたアカウントを渡す。
+    private var hasAppeared = false
+    /// 読めたアカウントを、開いているかによらず渡す。設定する前に読めていたら、設定したときに渡す。
+    var onAccount: ((Account) -> Void)? {
+        didSet {
+            if case .loaded(let account) = state {
+                onAccount?(account)
+            }
+        }
+    }
+    /// 開いている画面に、読めたアカウントを渡す。開く前に読めていたら、開いたときに渡す。
     var onLoad: ((Account) -> Void)?
     /// 読めなかったときに出す理由。
     var describe: @MainActor (any Error) async -> ErrorPresentation = { ErrorPresentation($0) }
@@ -40,11 +51,32 @@ final class ProfileTabLoadingViewController: UIViewController {
         view.backgroundColor = .systemBackground
     }
 
-    /// ローカルや連合と同じく、通信を増やさないよう、初めて開いたときに読む。
+    /// アカウントを読み始める。読めなかったときは読み直し、読めていたら`onAccount`にもう一度渡す。読んでいる途中なら何もしない。
+    func loadAccount() {
+        switch state {
+        case .idle, .failed:
+            load()
+        case .loaded(let account):
+            onAccount?(account)
+        case .loading:
+            break
+        }
+    }
+
+    /// 読めていたら、プロフィール画面に差し替えさせる。並びに出たときに読めなかったら、初めて開いたときに読み直す。
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
-        if case .idle = state {
+        let isFirst = !hasAppeared
+        hasAppeared = true
+        switch state {
+        case .idle:
             load()
+        case .loaded(let account):
+            onLoad?(account)
+        case .failed where isFirst:
+            load()
+        case .loading, .failed:
+            break
         }
     }
 
@@ -56,7 +88,12 @@ final class ProfileTabLoadingViewController: UIViewController {
         loadTask = tasks.run(.display) { [weak self] in
             do {
                 let account = try await fetch()
-                self?.onLoad?(account)
+                guard let self else { return }
+                state = .loaded(account)
+                onAccount?(account)
+                if hasAppeared {
+                    onLoad?(account)
+                }
             } catch is CancellationError {
                 return
             } catch {
@@ -69,7 +106,7 @@ final class ProfileTabLoadingViewController: UIViewController {
 
     override func updateContentUnavailableConfiguration(using state: UIContentUnavailableConfigurationState) {
         switch self.state {
-        case .idle, .loading:
+        case .idle, .loading, .loaded:
             contentUnavailableConfiguration = UIContentUnavailableConfiguration.loading()
         case .failed(let reason):
             var configuration = UIContentUnavailableConfiguration.empty()

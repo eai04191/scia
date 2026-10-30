@@ -15,6 +15,9 @@ final class TabArrangement {
     var onShownItemChange: (() -> Void)?
     /// 切り替えタブで開く項目が変わったとき。起動し直しても同じ項目から開けるよう、保存するのに使う。
     var onSwitchSelectionChange: ((TabItem) -> Void)?
+    /// 記号の代わりに出すアイコン。タブに置いたプロフィールのその人のアイコン。なければ項目の記号を出す。
+    /// 変わったら`refreshIcons`で出し直す。
+    var icon: ((TabItem) -> ProfileTabIcons.Icon?)?
 
     private(set) var placement: TabPlacement
     /// 使う人が決めた並び。タブバーに並べられる数が変わったら、この並びから振り分け直す。
@@ -109,7 +112,8 @@ final class TabArrangement {
     private func tab(for item: TabItem) -> UITab? {
         if let tab = itemTabs[item] { return tab }
         guard let navigation = navigation(for: item) else { return nil }
-        let tab = UITab(title: item.title, image: UIImage(systemName: item.symbolName), identifier: item.rawValue) { _ in navigation }
+        let tab = UITab(title: item.title, image: nil, identifier: item.rawValue) { _ in navigation }
+        setImage(of: tab, for: item)
         itemTabs[item] = tab
         return tab
     }
@@ -220,6 +224,7 @@ final class TabArrangement {
         switchContainer.show(nil)
         switchContainer = SwitchTabViewController()
         switchTab = Self.makeSwitchTab(for: item, container: switchContainer)
+        setImage(of: switchTab, for: item)
         // 新しいタブには、前のタブに出していた通知の未読の数を付け直す。
         applyBadges()
     }
@@ -259,11 +264,30 @@ final class TabArrangement {
     /// 切り替えタブの中の項目から選ぶメニュー。見出しと、切り替えタブの長押しで出す。
     private func switchMenu() -> UIMenu {
         UIMenu(children: placement.switchable.map { candidate in
-            UIAction(title: candidate.title, image: UIImage(systemName: candidate.symbolName), state: candidate == switchSelection ? .on : .off) { [weak self] _ in
+            UIAction(title: candidate.title, image: icon?(candidate)?.menu ?? UIImage(systemName: candidate.symbolName), state: candidate == switchSelection ? .on : .off) { [weak self] _ in
                 UserAction.selectTab(candidate.logName).record()
                 self?.show(candidate)
             }
         })
+    }
+
+    /// 記号の代わりに出すアイコンが変わったら、作ってあるタブのアイコンを出し直す。
+    func refreshIcons() {
+        for (item, tab) in itemTabs {
+            setImage(of: tab, for: item)
+        }
+        if let switchSelection {
+            setImage(of: switchTab, for: switchSelection)
+        }
+    }
+
+    private func setImage(of tab: UITab, for item: TabItem) {
+        let icon = icon?(item)
+        tab.image = icon?.tab ?? UIImage(systemName: item.symbolName)
+        // 選んでいるときの画像はiOS 26.1から渡せる。26.0では、選んでいるときも同じアイコンのままになり、名前の色だけが変わる。
+        if #available(iOS 26.1, *) {
+            tab.selectedImage = icon?.selectedTab
+        }
     }
 
     /// 通知の未読の数は、通知を並べているタブに出す。切り替えタブの中なら、開いている項目によらず切り替えタブに出す。

@@ -7,6 +7,9 @@ import UIKit
 struct TabArrangementTests {
     /// 確かめに使うリスト。
     private static let friends = TabItem.list(id: "1", title: "友だち")
+    /// 確かめに使うプロフィール。
+    private static let bob = TabItem.profile(accountID: "2", acct: "bob")
+    private static let carol = TabItem.profile(accountID: "3", acct: "carol")
 
     /// 項目ごとのナビゲーション。作るように頼まれた項目を記録する。
     /// 項目ごとのナビゲーション。リストは、アプリと同じく頼まれるたびに新しく作る。作るように頼まれた項目を記録する。
@@ -32,7 +35,7 @@ struct TabArrangementTests {
 
         func make(_ item: TabItem) -> UINavigationController? {
             made.append(item)
-            if item == TabArrangementTests.friends {
+            if item == TabArrangementTests.friends || item.isProfile {
                 all[item] = Self.navigation(for: item)
             }
             return all[item]
@@ -252,6 +255,39 @@ struct TabArrangementTests {
         harness.apply(Self.layout(tabs: [.home, Self.friends], switchable: [.local]))
 
         #expect(harness.made.made.filter { $0 == Self.friends }.count == 2)
+    }
+
+    /// アイコンを渡した項目は、タブ、切り替えタブ、見出しのメニューで記号の代わりにそのアイコンを出す。届いたら、作ってあるタブも出し直す。
+    @Test func iconReplacesSymbolOnceGiven() throws {
+        let harness = try Harness(Self.layout(tabs: [.home, Self.bob], switchable: [Self.carol, .local]))
+        let icons: [TabItem: ProfileTabIcons.Icon] = [Self.bob: Self.icon(.red), Self.carol: Self.icon(.blue)]
+        var given: Set<TabItem> = []
+        harness.arrangement.icon = { given.contains($0) ? icons[$0] : nil }
+        let bobTab = try #require(harness.arrangement.tabBarController.tabs.first { $0.identifier == Self.bob.rawValue })
+        let switchTab = try #require(harness.arrangement.tabBarController.tabs.first { $0.identifier == TabArrangement.switchIdentifier })
+        #expect(bobTab.image?.renderingMode != .alwaysOriginal)
+
+        given = [Self.bob, Self.carol]
+        harness.arrangement.refreshIcons()
+
+        #expect(bobTab.image === icons[Self.bob]?.tab)
+        #expect(switchTab.image === icons[Self.carol]?.tab)
+        if #available(iOS 26.1, *) {
+            #expect(bobTab.selectedImage === icons[Self.bob]?.selectedTab)
+        }
+        let root = try #require(harness.navigations[Self.carol]?.viewControllers.first)
+        let menu = try #require(root.navigationItem.titleMenuProvider?([]))
+        let images = menu.children.compactMap { ($0 as? UIAction)?.image }
+        #expect(images.first === icons[Self.carol]?.menu)
+        #expect(images.last?.renderingMode != .alwaysOriginal)
+    }
+
+    private static func icon(_ color: UIColor) -> ProfileTabIcons.Icon {
+        let image = { UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in
+            color.setFill()
+            UIRectFill(CGRect(x: 0, y: 0, width: 4, height: 4))
+        }.withRenderingMode(.alwaysOriginal) }
+        return ProfileTabIcons.Icon(tab: image(), selectedTab: image(), menu: image())
     }
 
     /// まだ並びにある項目は、忘れるよう頼まれても、並びから外れるまで捨てない。

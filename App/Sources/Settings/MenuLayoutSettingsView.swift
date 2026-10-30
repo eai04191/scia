@@ -8,9 +8,13 @@ import UIKit
 struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     let title: String
     @Binding var layout: MenuLayout<Item>
+    /// 項目の記号の代わりに出す画像。タブに置いたプロフィールのその人のアイコン。nilなら項目の記号を出す。
+    var image: (Item) -> UIImage? = { _ in nil }
+    /// `image`の返す画像が変わるたびに変わる値。変わったら行を描き直す。読んだ値の変化をSwiftUIが追えるよう、描くときに読む。
+    var imageRevision: () -> Int = { 0 }
 
     var body: some View {
-        MenuLayoutList(layout: $layout)
+        MenuLayoutList(layout: $layout, image: image, imageRevision: imageRevision())
             .ignoresSafeArea()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -19,14 +23,17 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
 
 private struct MenuLayoutList<Item: MenuItemKind & MenuItemPresentable>: UIViewControllerRepresentable {
     @Binding var layout: MenuLayout<Item>
+    let image: (Item) -> UIImage?
+    let imageRevision: Int
 
     func makeUIViewController(context: Context) -> MenuLayoutViewController<Item> {
-        MenuLayoutViewController(layout: layout) { layout = $0 }
+        MenuLayoutViewController(layout: layout, image: image, imageRevision: imageRevision) { layout = $0 }
     }
 
     func updateUIViewController(_ controller: MenuLayoutViewController<Item>, context: Context) {
         controller.onChange = { layout = $0 }
         controller.update(layout)
+        controller.setImageRevision(imageRevision)
     }
 }
 
@@ -59,8 +66,14 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     /// メニューで横に並ぶ項目の数。これを超えた項目は、横並びの下にふだんの行として続く。
     private let rowCapacity = 3
 
-    init(layout: MenuLayout<Item>, onChange: @escaping (MenuLayout<Item>) -> Void) {
+    /// 項目の記号の代わりに出す画像。nilなら項目の記号を出す。
+    private let image: (Item) -> UIImage?
+    private var imageRevision: Int
+
+    init(layout: MenuLayout<Item>, image: @escaping (Item) -> UIImage?, imageRevision: Int, onChange: @escaping (MenuLayout<Item>) -> Void) {
         rows = layout.elements.map { Row(element: $0) }
+        self.image = image
+        self.imageRevision = imageRevision
         self.onChange = onChange
         super.init(nibName: nil, bundle: nil)
     }
@@ -87,6 +100,18 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         guard layout.tokens != MenuLayout(defaultElements: rows.map(\.element)).tokens else { return }
         rows = layout.elements.map { Row(element: $0) }
         applySnapshot(animated: false)
+    }
+
+    /// `image`の返す画像が変わったら、項目の行を描き直す。
+    func setImageRevision(_ revision: Int) {
+        guard revision != imageRevision else { return }
+        imageRevision = revision
+        guard let dataSource else { return }
+        var snapshot = dataSource.snapshot()
+        snapshot.reconfigureItems(rows.compactMap { row in
+            if case .item = row.element { .row(row.id) } else { nil }
+        })
+        dataSource.apply(snapshot, animatingDifferences: false)
     }
 
     private func makeLayout() -> UICollectionViewLayout {
@@ -189,7 +214,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             content.secondaryText = item.note
             content.secondaryTextProperties.color = .secondaryLabel
             content.secondaryTextProperties.font = .preferredFont(forTextStyle: .footnote)
-            content.image = UIImage(systemName: item.symbolName)
+            content.image = image(item) ?? UIImage(systemName: item.symbolName)
             cell.contentConfiguration = content
             let toggle = UISwitch()
             toggle.isOn = isVisible

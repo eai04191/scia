@@ -23,6 +23,8 @@ final class SessionController {
     private let serverFeeds: ServerFeedRegistry
     /// タブに置いたプロフィール。並びに出たときに作る。
     private let profileTabs: ProfileTabRegistry
+    /// タブに置いたプロフィールで、記号の代わりに出すその人のアイコン。設定の並びにも出す。
+    let profileTabIcons: ProfileTabIcons
     /// ハッシュタグのメニューやタップで、開いた一覧に積んだハッシュタグの一覧。
     private let pushedFeeds: PushedFeedRegistry
     /// 投稿の一覧のタブ。ホーム、ローカル、連合と、作ったリストとハッシュタグ。
@@ -219,6 +221,8 @@ final class SessionController {
             return (loading, scope)
         }
         self.profileTabs = profileTabs
+        let profileTabIcons = ProfileTabIcons(settings: AppDependencies.settings)
+        self.profileTabIcons = profileTabIcons
         self.bookmarks = bookmarks
         self.favourites = favourites
         self.scheduled = scheduled
@@ -318,6 +322,8 @@ final class SessionController {
         tabs.onSwitchSelectionChange = { [handle = credential.handle] item in
             AppDependencies.settings.setSwitchTabItem(item, for: handle)
         }
+        tabs.icon = { [profileTabIcons] in profileTabIcons.icon(for: $0) }
+        profileTabIcons.onChange = { [weak tabs] in tabs?.refreshIcons() }
         self.tabs = tabs
         let tabBarController = tabs.tabBarController
         notifications.onUnreadCountChange = { [weak tabs] count, isLowerBound in
@@ -585,6 +591,9 @@ final class SessionController {
                 let userAdded = Set(Self.userAddedItems(in: layout))
                 tabs.forget(serverFeeds.removeAll(where: \.isAccountHashtag, except: userAdded))
                 tabs.forget(profileTabs.removeAll(except: userAdded))
+                profileTabIcons.removeAvatars(except: Set(userAdded.compactMap { item in
+                    if case .profile(let accountID, _, _) = item { accountID } else { nil }
+                }))
                 tabs.apply(layout)
                 observeTabLayout()
             }
@@ -601,6 +610,7 @@ final class SessionController {
         // 見せていた一覧を無効にしたら、UIKitが選んだ先頭のタブへ移り、見せなくなる。
         applyShownSavedLists()
         guard hasStarted else { return }
+        loadProfileTabIcons(placement)
         if placement.location(of: .home) != .disabled {
             home.startIfNeeded()
         }
@@ -771,6 +781,9 @@ final class SessionController {
         Self.configure(navigation, delegate: navigationDelegate) { navigation in
             (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
         }
+        loading.onAccount = { [weak self] account in
+            self?.loadProfileTabIcon(of: account, for: item)
+        }
         loading.onLoad = { [weak self, weak navigation] account in
             guard let self, let navigation, let tasks = profileTabs.tasks(for: item) else { return }
             let (controller, viewController) = makeProfile(account, tasks: tasks.child())
@@ -784,6 +797,29 @@ final class SessionController {
             // 読んでいる間に奥の画面を積むことはないので、一番下の画面だけを差し替える。
             navigation.setViewControllers([viewController] + navigation.viewControllers.dropFirst(), animated: false)
             controller.start()
+        }
+    }
+
+    /// 並びに出ているプロフィールのアカウントとアイコンを読む。タブのアイコンに使うので、開くのを待たず、切り替えタブで選んでいなくても読む。
+    /// 読めているものは読み直さない。読めなかったものは、並びが変わるたびに読み直す。決まりはdocs/tabs.mdの「プロフィール」にある。
+    private func loadProfileTabIcons(_ placement: TabPlacement) {
+        for item in placement.tabs + placement.switchable where item.isProfile && !profileTabIcons.hasAvatar(for: item) {
+            _ = profileTabs.navigation(for: item)
+            profileTabs.loading(for: item)?.loadAccount()
+        }
+    }
+
+    /// タブに置いたプロフィールの、タブに出すその人のアイコンを読む。読めなければ記号のままにする。
+    private func loadProfileTabIcon(of account: Account, for item: TabItem) {
+        guard let url = account.avatarStatic, let tasks = profileTabs.tasks(for: item) else { return }
+        let key = AvatarView.key(url: url, animates: false, side: ProfileTabIcons.loadSide, scale: tabs.tabBarController.traitCollection.displayScale)
+        tasks.run(.display) { [weak self] in
+            do {
+                let image = try await AppDependencies.avatarImages.image(for: key)
+                self?.profileTabIcons.setAvatar(image, forAccountID: account.id)
+            } catch {
+                self?.logger.error("profile tab icon load failed: \(SciaLog.describe(error), privacy: .public)")
+            }
         }
     }
 
@@ -2279,6 +2315,7 @@ final class SessionController {
         if tabs.placement.location(of: .notifications) != .disabled {
             notifications.start(purpose: .action)
         }
+        loadProfileTabIcons(tabs.placement)
         observeRecoveries()
         loadServerVersion()
         loadTabSources()
@@ -2673,7 +2710,8 @@ final class SessionController {
             rootViewController.frontmostPresented.presentSettings(
                 instance: credential.instance,
                 account: credential.handle,
-                diagnostics: diagnostics
+                diagnostics: diagnostics,
+                tabIcons: profileTabIcons
             )
         case .tuning:
             rootViewController.frontmostPresented.presentTuningPanel()
@@ -2925,6 +2963,8 @@ private final class ServerFeedRegistry {
 private final class ProfileTabRegistry {
     private struct Entry {
         let navigation: ContentNavigationController
+        /// アカウントを読む画面。プロフィール画面に差し替えたあとも、アイコンを読み直すのに使う。
+        let loading: ProfileTabLoadingViewController
         /// この項目で始めた処理の持ち主。外したときに閉じ、読み込みと新着の読み直しを止める。
         let tasks: TaskScope
         weak var controller: ProfileController?
@@ -2936,8 +2976,7 @@ private final class ProfileTabRegistry {
     var onCreate: ((TabItem, ProfileTabLoadingViewController, ContentNavigationController) -> Void)? {
         didSet {
             for (item, entry) in entries {
-                guard let loading = entry.navigation.viewControllers.first as? ProfileTabLoadingViewController else { continue }
-                onCreate?(item, loading, entry.navigation)
+                onCreate?(item, entry.loading, entry.navigation)
             }
         }
     }
@@ -2951,13 +2990,17 @@ private final class ProfileTabRegistry {
         if let entry = entries[item] { return entry.navigation }
         guard let (loading, tasks) = make(item) else { return nil }
         let navigation = ContentNavigationController(rootViewController: loading)
-        entries[item] = Entry(navigation: navigation, tasks: tasks)
+        entries[item] = Entry(navigation: navigation, loading: loading, tasks: tasks)
         onCreate?(item, loading, navigation)
         return navigation
     }
 
     func tasks(for item: TabItem) -> TaskScope? {
         entries[item]?.tasks
+    }
+
+    func loading(for item: TabItem) -> ProfileTabLoadingViewController? {
+        entries[item]?.loading
     }
 
     /// アカウントを読めて作ったプロフィール画面を渡す。読んでいる間にバックグラウンドへ入っていたら、そのことを伝える。
