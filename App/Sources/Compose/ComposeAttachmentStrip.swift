@@ -352,7 +352,7 @@ private final class ComposeAttachmentCell: UICollectionViewCell {
         setAnimating(descriptionSpinner, item.status == .sendingDescription)
         descriptionFailureView.isHidden = item.status != .descriptionFailed
         sensitiveBadge.isHidden = !item.isSensitive
-        let kindName = (item.local?.displayKind ?? item.attachedMedia?.type).map(MediaTileView.kindName(of:)) ?? "メディア"
+        let kindName = (item.local?.displayKind ?? item.attachedMedia?.type).map(\.displayName) ?? "メディア"
         accessibilityLabel = [kindName, item.isSensitive ? "閲覧注意" : "", description].filter { !$0.isEmpty }.joined(separator: "、")
         accessibilityValue = switch item.status {
         case .exporting: ["書き出し中", item.progress.flatMap(Notice.percentText(of:))].compactMap(\.self).joined(separator: "、")

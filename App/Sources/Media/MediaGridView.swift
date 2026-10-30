@@ -605,7 +605,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         marks = MediaBadgeView.marks(hasDescription: !(attachment.description?.isEmpty ?? true), kind: attachment.type)
         moreLabel.isHidden = hiddenCount == 0
         moreLabel.text = "+\(hiddenCount)"
-        accessibilityParts = (Self.kindName(of: attachment.type), attachment.description)
+        accessibilityParts = (attachment.type.displayName, attachment.description)
         updateBadge()
         accessibilityValue = hiddenCount > 0 ? "ほか\(hiddenCount)件" : nil
     }
@@ -628,7 +628,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         playView.isHidden = kind != .video
         marks = MediaBadgeView.marks(hasDescription: !description.isEmpty, kind: kind)
         moreLabel.isHidden = true
-        accessibilityParts = (kind.map(Self.kindName(of:)) ?? "メディア", description)
+        accessibilityParts = (kind.map(\.displayName) ?? "メディア", description)
         updateBadge()
         accessibilityValue = nil
         setNeedsLayout()
@@ -738,16 +738,6 @@ final class MediaTileView: UIButton, MediaViewerSource {
         case .image, .gifv, .video: nil
         case .audio: "waveform"
         case .unknown: "doc"
-        }
-    }
-
-    static func kindName(of kind: MediaAttachment.Kind) -> String {
-        switch kind {
-        case .image: "画像"
-        case .gifv: "GIF"
-        case .video: "動画"
-        case .audio: "音声"
-        case .unknown: "ファイル"
         }
     }
 }
