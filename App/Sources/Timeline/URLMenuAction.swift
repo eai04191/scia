@@ -1,17 +1,6 @@
 import SciaCore
 import UIKit
 
-extension URLMenuAction {
-    var image: UIImage? { UIImage(systemName: symbolName) }
-
-    /// メニューの項目。`url`がないか、開く項目で選んだ場所で開けなければ、押せないまま並べる。
-    /// - Parameter title: 共通の名前の代わりに出す名前。投稿のメニューで、ユーザーの項目をサブメニューにせず並べるときに使う。
-    @MainActor
-    func action(title: String? = nil, url: URL?, handlers: URLMenuHandlers) -> UIAction {
-        MenuRenderer(perform: handlers.perform).action(node(title: title, url: url, linkBrowser: handlers.linkBrowser))
-    }
-}
-
 /// 共通の項目を押したときに、メニューごとに違うところ。コピーしたことの知らせ方、共有のシートの起点、開き方。
 @MainActor
 struct URLMenuHandlers {

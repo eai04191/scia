@@ -43,10 +43,6 @@ struct HashtagMenu {
     }
 
     /// 本文のハッシュタグの長押しで単独で出すメニュー。見出しに`#名前`を置く。出す項目がなければnil。
-    func menu(groups: MenuLayout<HashtagMenuItem>.Groups) -> UIMenu? {
-        built(groups: groups)?.menu
-    }
-
     func built(groups: MenuLayout<HashtagMenuItem>.Groups) -> BuiltMenu<HashtagMenuCommand>? {
         tree.menu(groups: groups).map { BuiltMenu(root: $0, renderer: MenuRenderer(perform: perform)) }
     }

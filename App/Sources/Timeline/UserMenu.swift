@@ -38,10 +38,6 @@ struct UserMenu {
         return root.map { BuiltMenu(root: $0, renderer: renderer(openProfile: openProfile, avatarImage: avatarImage)) }
     }
 
-    func menu(groups: MenuLayout<UserMenuItem>.Groups, openProfile: @escaping @MainActor () -> Void, avatar: MenuAvatar, avatarImage: @escaping @MainActor (MenuAvatar) -> UIImage?) -> UIMenu? {
-        built(groups: groups, openProfile: openProfile, avatar: avatar, avatarImage: avatarImage)?.menu
-    }
-
     /// プロフィール画面のナビゲーションバーの「…」に出すメニュー。開くたびに、その人の関係を読み直す。出す項目がなければnil。
     func profileScreenMenu(groups: MenuLayout<UserMenuItem>.Groups) -> UIMenu? {
         let root = tree.profileScreenMenu(groups: groups)

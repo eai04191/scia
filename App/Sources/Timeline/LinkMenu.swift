@@ -13,10 +13,6 @@ struct LinkMenu {
     let openAsProfile: @MainActor () -> Void
 
     /// 見出しにURLを置く。出す項目がなければnil。
-    func menu(groups: MenuLayout<LinkMenuItem>.Groups) -> UIMenu? {
-        built(groups: groups)?.menu
-    }
-
     func built(groups: MenuLayout<LinkMenuItem>.Groups) -> BuiltMenu<LinkMenuCommand>? {
         LinkMenuTree(url: url, linkBrowser: handlers.linkBrowser).menu(groups: groups).map { root in
             BuiltMenu(root: root, renderer: MenuRenderer(perform: perform))
