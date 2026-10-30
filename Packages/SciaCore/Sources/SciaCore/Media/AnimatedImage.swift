@@ -142,9 +142,9 @@ public struct AnimatedImage: Sendable {
         return false
     }
 
-    /// コマを出しておく秒数。0.01秒以下のコマは、WebKitやブラウザと同じく0.1秒にする。
+    /// コマを出しておく秒数。0.02秒より短いコマは、ブラウザと同じく0.1秒にする。カスタム絵文字とアイコンで同じ値を使う。
     /// GIFには0秒や0.01秒のコマを書く画像が多く、ブラウザはそれを0.1秒で描くため、そのまま使うと絵文字が速く回りすぎる。
-    static func frameDuration(_ properties: [CFString: Any]) -> TimeInterval {
+    public static func frameDuration(_ properties: [CFString: Any]) -> TimeInterval {
         let keys: [(CFString, CFString, CFString)] = [
             (kCGImagePropertyGIFDictionary, kCGImagePropertyGIFUnclampedDelayTime, kCGImagePropertyGIFDelayTime),
             (kCGImagePropertyPNGDictionary, kCGImagePropertyAPNGUnclampedDelayTime, kCGImagePropertyAPNGDelayTime),
@@ -153,7 +153,7 @@ public struct AnimatedImage: Sendable {
         for (dictionaryKey, unclampedKey, clampedKey) in keys {
             guard let dictionary = properties[dictionaryKey] as? [CFString: Any] else { continue }
             let delay = (dictionary[unclampedKey] as? Double) ?? (dictionary[clampedKey] as? Double) ?? 0
-            return delay < 0.011 ? 0.1 : delay
+            return delay < 0.02 ? 0.1 : delay
         }
         return 0.1
     }

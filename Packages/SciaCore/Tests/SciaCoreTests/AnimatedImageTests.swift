@@ -85,6 +85,14 @@ struct AnimatedImageTests {
         #expect(image.durations == [0.1, 0.1, 0.02])
     }
 
+    /// 0.02秒より短いコマは、アイコンと同じく0.1秒で出す。APNGはミリ秒単位で書けるので、GIFにない0.015秒のようなコマがある。
+    @Test func treatsDelaysShorterThanTwoHundredthsAsTenthOfSecond() throws {
+        let image = try #require(AnimatedImage.decode(animation(.png, delays: [0.015, 0.03]), maxPixelSize: 96))
+
+        #expect(abs(image.durations[0] - 0.1) < 0.0001)
+        #expect(abs(image.durations[1] - 0.03) < 0.0001)
+    }
+
     @Test func shrinksFramesToMaxPixelSize() throws {
         let image = try #require(AnimatedImage.decode(animation(.gif, size: 200, delays: [0.1, 0.1]), maxPixelSize: 96))
 
