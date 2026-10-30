@@ -1,15 +1,7 @@
-import Foundation
+public import Foundation
 
 /// 他のアプリやショートカットから、`scia://profile/user@example.social`のようなURLでSciaの画面を開く。
-enum AppURL: Equatable {
-    /// いつものビルドは`scia`、撮影用のビルドは`scia-promo`。project.ymlの`SCIA_URL_SCHEME`を、Info.plistを通して読む。
-    static let scheme: String = {
-        guard let scheme = Bundle.main.object(forInfoDictionaryKey: "SciaURLScheme") as? String else {
-            preconditionFailure("Info.plistにSciaURLSchemeがない")
-        }
-        return scheme
-    }()
-
+public enum AppURL: Equatable, Sendable {
     /// `scia://profile/<user@domain>`。ローカルのアカウントは`<user>`だけでもよい。ホームのタブにプロフィールを開く。
     case profile(acct: String)
     /// `scia://share?id=<UUID>&unreadable=<件数>`。共有拡張が受け取ったメディア（`SharedMediaInbox`の`id`の共有）を、投稿欄に添付する。
@@ -20,7 +12,7 @@ enum AppURL: Equatable {
 
     /// ログに書く説明。書き始めの本文は、送る前の文やまだ公開していないページのURLを含むので、長さだけにする。
     /// ハンドルは、誰のプロフィールを開いたかが分かるので、ドメインだけにする（docs/logging.md）。
-    var logDescription: String {
+    public var logDescription: String {
         switch self {
         case .profile(let acct): "profile domain=\(acct.split(separator: "@").dropFirst().first ?? "local")"
         case .share(let id, let unreadableCount): "share id=\(id) unreadable=\(unreadableCount)"
@@ -28,8 +20,9 @@ enum AppURL: Equatable {
         }
     }
 
-    init?(_ url: URL) {
-        guard url.scheme == Self.scheme else { return nil }
+    /// - Parameter scheme: アプリのURLのスキーム。ビルドごとに違うので、読む側が渡す。
+    public init?(_ url: URL, scheme: String) {
+        guard url.scheme == scheme else { return nil }
         switch url.host() {
         case "profile":
             // `@user@domain`の形で書かれていても読めるよう、先頭の@を外す。
