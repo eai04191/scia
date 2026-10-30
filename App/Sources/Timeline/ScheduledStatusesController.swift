@@ -173,11 +173,9 @@ final class ScheduledStatusesController {
     // MARK: - 取り消す
 
     private func confirmCancel(_ scheduled: ScheduledStatus) {
-        let alert = UIAlertController(title: "予約を取り消しますか？", message: "取り消した予約は投稿されず、元に戻せません。", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        alert.addAction(UIAlertAction(title: "取り消す", style: .destructive) { [weak self] _ in
+        let alert = UIAlertController(Confirmation.cancelingSchedule, preferredStyle: .alert) { [weak self] _ in
             self?.cancel(scheduled)
-        })
+        }
         viewController.present(alert, animated: true)
     }
 

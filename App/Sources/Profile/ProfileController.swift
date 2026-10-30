@@ -637,25 +637,16 @@ final class ProfileController {
 
     // MARK: - フォロー
 
-    /// フォローは確かめずに送る。外すときとリクエストを取り消すときは、押し間違えに備えて確かめる。
+    /// フォローは確かめずに送る。外すときとリクエストを取り消すときは、押し間違えに備えて、ユーザーのメニューと同じ文言で確かめる。
     private func confirmToggleFollow(from source: UIView) {
-        let title: String
-        switch store.followState {
-        case .notFollowing:
+        guard let change = store.followState.toggleChange else { return }
+        guard let confirmation = Confirmation.relationChange(change, acct: store.account.acct) else {
             toggleFollow()
             return
-        case .following:
-            title = "@\(store.account.acct)のフォローを外しますか？"
-        case .requested:
-            title = "@\(store.account.acct)へのフォローのリクエストを取り消しますか？"
-        case .myself, .unknown, .loadFailed, .blocked:
-            return
         }
-        let sheet = UIAlertController(title: title, message: nil, preferredStyle: .actionSheet)
-        sheet.addAction(UIAlertAction(title: store.followState == .following ? "フォローを外す" : "リクエストを取り消す", style: .destructive) { [weak self] _ in
+        let sheet = UIAlertController(confirmation, preferredStyle: .actionSheet) { [weak self] _ in
             self?.toggleFollow()
-        })
-        sheet.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
+        }
         sheet.popoverPresentationController?.sourceView = source
         // フォローのボタンは、いちばん長い文字の幅で枠を取り、カプセルを右端に寄せて描くので、カプセルを指す。
         if let button = source as? ProfileFollowButton {

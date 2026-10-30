@@ -1598,24 +1598,13 @@ final class SessionController {
 
     /// フォローを外す、リクエストを取り消す、ブロックは、押し間違えに備えて確かめてから送る。プロフィール画面のフォローのボタンと同じく、フォローとミュートは確かめずに送る。
     private func confirmChanging(_ change: UserRelationChange, of relation: UserRelation) {
-        let confirmation: (title: String, message: String?, action: String)
-        switch change {
-        case .unfollow:
-            confirmation = ("@\(relation.acct)のフォローを外しますか？", nil, "フォローを外す")
-        case .cancelFollowRequest:
-            confirmation = ("@\(relation.acct)へのフォローのリクエストを取り消しますか？", nil, "リクエストを取り消す")
-        case .block:
-            confirmation = ("@\(relation.acct)をブロックしますか？", "相手の投稿と通知が表示されなくなり、お互いのフォローが外れます。", "ブロック")
-        case .follow, .showReblogs, .notify, .mute, .unmute, .unblock:
+        guard let confirmation = Confirmation.relationChange(change, acct: relation.acct) else {
             send(change, to: relation)
             return
         }
-        let alert = UIAlertController(title: confirmation.title, message: confirmation.message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        alert.addAction(UIAlertAction(title: confirmation.action, style: .destructive) { [weak self] _ in
+        topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
             self?.send(change, to: relation)
-        })
-        topViewController.present(alert, animated: true)
+        }, animated: true)
     }
 
     /// 関係の変更を送り、結果を開いているプロフィールに反映する。ミュートとブロックは、Mastodonのドキュメントに従い、ホームと通知の一覧からも相手を除く。
@@ -1730,18 +1719,15 @@ final class SessionController {
     /// 編集している途中で返信か引用を選んだら、編集をやめてよいか聞いてから始める。編集でなければすぐ始める。
     /// 返信と引用は書いた本文を残して返信先や引用元を付け替えるが、編集の本文は元の投稿のものなので、引き継がない。
     private func confirmLeavingEdit(title: String, _ proceed: @escaping () -> Void) {
-        guard composer.model.editedStatus != nil else {
+        guard let confirmation = Confirmation.leavingEdit(title: title, draft: composer.model) else {
             proceed()
             return
         }
-        let alert = UIAlertController(title: title, message: "編集中の内容は消えます。", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        alert.addAction(UIAlertAction(title: "編集をやめる", style: .destructive) { [weak self] _ in
+        topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
             // 編集を送っている間はやめず、返信も始めない。送り終えれば空に戻るので、返信はそのあと選び直してもらう。
             guard self?.composer.cancelStatusEdit() == true else { return }
             proceed()
-        })
-        topViewController.present(alert, animated: true)
+        }, animated: true)
     }
 
     /// 自分が引用できるかが分かっていれば、すぐ引用を始める。公開とハッシュタグのストリーミングで届いた投稿は、
@@ -1762,9 +1748,9 @@ final class SessionController {
                 case .automatic, .manual:
                     beginQuoting(status)
                 case .denied(followersOnly: true):
-                    presentAlert(title: "この投稿は引用できません", message: "フォロワーだけが引用できる投稿です。")
+                    presentRefusal(.quoteDenied(followersOnly: true))
                 case .denied(followersOnly: false), .unverified, nil:
-                    presentAlert(title: "この投稿は引用できません", message: "投稿者が引用を許していない投稿です。")
+                    presentRefusal(.quoteDenied(followersOnly: false))
                 }
             } catch {
                 guard let self else { return }
@@ -1786,18 +1772,13 @@ final class SessionController {
     /// 下書きに添付か投票があれば、外してよいか聞いてから引用を始める。なければすぐ始める。
     /// Mastodonは引用に添付と投票を付けられないため。本文は残す。
     private func confirmQuoting(_ status: Status) {
-        let model = composer.model
-        guard model.hasQuoteConflicts else {
+        guard let confirmation = Confirmation.quoting(draft: composer.model) else {
             composer.quote(status)
             return
         }
-        let removing = [model.attachments.isEmpty ? nil : "添付ファイル", model.poll == nil ? nil : "投票"].compactMap(\.self).joined(separator: "と")
-        let alert = UIAlertController(title: "\(removing)を外して引用しますか？", message: "引用する投稿には、添付ファイルや投票を付けられません。書いた本文は残ります。", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        alert.addAction(UIAlertAction(title: "外して引用", style: .destructive) { [weak self] _ in
+        topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
             self?.composer.quote(status)
-        })
-        topViewController.present(alert, animated: true)
+        }, animated: true)
     }
 
     /// 編集の元にする本文をサーバーから取得し、取得できたら投稿欄で編集を始める。同じ投稿を編集している途中なら、読み直さずに投稿欄を開く。
@@ -1866,16 +1847,13 @@ final class SessionController {
 
     /// 書きかけの下書きがあれば捨ててよいかを聞いてから、予約した投稿の書き直しを始める。
     private func confirmRewriting(_ status: ScheduledStatus) {
-        guard composer.model.hasWrittenContent else {
+        guard let confirmation = Confirmation.rewriting(draft: composer.model) else {
             composer.rewrite(status)
             return
         }
-        let alert = UIAlertController(title: "下書きを捨てて書き直しますか？", message: composer.model.editedStatus != nil ? "編集中の内容は消えます。" : "書きかけの下書きは消えます。", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        alert.addAction(UIAlertAction(title: "捨てて書き直す", style: .destructive) { [weak self] _ in
+        topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
             self?.composer.rewrite(status)
-        })
-        topViewController.present(alert, animated: true)
+        }, animated: true)
     }
 
     /// 書き直した投稿を送れたので、元の予約を取り消す。取り消せなければ、両方投稿されないよう知らせて一覧を開く。
@@ -1913,50 +1891,29 @@ final class SessionController {
     /// 書きかけの下書きがあれば捨ててよいかを、投票の付いた投稿なら締め切りがずれることを、聞いてから編集を始める。どちらもなければすぐ始める。
     /// 本文を読んでから聞く。先に聞くと、読んでいる間に書いたものを、聞かずに捨ててしまうため。
     private func confirmEditing(_ status: Status, source: StatusSource) {
-        guard status.canBeEdited(now: now()) else {
-            presentPollTooCloseAlert()
-            return
-        }
-        let discards = composer.model.hasWrittenContent
-        let hasPoll = status.poll != nil
-        guard discards || hasPoll else {
+        switch Confirmation.editing(status, draft: composer.model, now: now()) {
+        case .proceed:
             composer.edit(status, source: source)
-            return
+        case .refuse(let text):
+            presentRefusal(text)
+        case .confirm(let confirmation):
+            topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
+                guard let self else { return }
+                // 聞いている間に締め切りが近づいたら、投票なしで送って投票を消さないよう、編集を始めない。
+                if !status.canBeEdited(now: now()) {
+                    presentRefusal(.pollTooClose)
+                } else {
+                    composer.edit(status, source: source)
+                }
+            }, animated: true)
         }
-        var lines: [String] = []
-        if discards {
-            lines.append(composer.model.editedStatus != nil ? "編集中の内容は消えます。" : "書きかけの下書きは消えます。")
-        }
-        if hasPoll {
-            lines.append("投票はそのまま残りますが、締め切りは送った時点から数え直すため、少しずれます。")
-        }
-        let alert = UIAlertController(title: discards ? "下書きを捨てて編集しますか？" : "投票の付いた投稿を編集しますか？", message: lines.joined(separator: "\n"), preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        alert.addAction(UIAlertAction(title: discards ? "捨てて編集" : "編集", style: discards ? .destructive : .default) { [weak self] _ in
-            guard let self else { return }
-            // 聞いている間に締め切りが近づいたら、投票なしで送って投票を消さないよう、編集を始めない。
-            if !status.canBeEdited(now: now()) {
-                presentPollTooCloseAlert()
-            } else {
-                composer.edit(status, source: source)
-            }
-        })
-        topViewController.present(alert, animated: true)
-    }
-
-    /// メニューを出してから編集を始めるまでに、投票の締め切りまで5分を切ったとき。
-    private func presentPollTooCloseAlert() {
-        presentAlert(title: "編集できません", message: "投票の締め切りまで5分を切ったため、この投稿は編集できません。")
     }
 
     /// 削除は元に戻せないので、確かめてから送る。
     private func confirmDeleting(_ status: Status) {
-        let alert = UIAlertController(title: "投稿を削除しますか？", message: "削除した投稿は元に戻せません。", preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        alert.addAction(UIAlertAction(title: "削除", style: .destructive) { [weak self] _ in
+        topViewController.present(UIAlertController(Confirmation.deleting, preferredStyle: .alert) { [weak self] _ in
             self?.delete(status)
-        })
-        topViewController.present(alert, animated: true)
+        }, animated: true)
     }
 
     /// 消えたらどの一覧からも除く。編集している投稿を消したら、編集もやめる。
@@ -2207,6 +2164,10 @@ final class SessionController {
         topViewController.present(alert, animated: true)
     }
 
+    private func presentRefusal(_ refusal: RefusalText) {
+        presentAlert(title: refusal.title, message: refusal.message)
+    }
+
     /// いちばん手前に出ている画面。
     private var topViewController: UIViewController {
         var top = rootViewController
@@ -2412,43 +2373,34 @@ final class SessionController {
     /// 一覧の上に重ねた画面を閉じる範囲は、`receiveSharedMedia(id:unreadableCount:)`と同じ。
     private func receiveSharedText(_ text: String) {
         logger.info("shared text received length=\(text.count, privacy: .public)")
-        // 送っている間に足すと、送り終えて下書きを空に戻すときに一緒に消える。
-        guard !composer.model.isPosting else {
-            presentAlert(title: Self.sharedTextFailureTitle, message: Self.sharedTextWhilePostingMessage)
-            return
-        }
-        guard composer.model.hasWrittenContent else {
+        switch Confirmation.shared(.text, draft: composer.model) {
+        case .proceed:
             appendSharedText(text)
-            return
+        case .refuse(let refusal):
+            presentRefusal(refusal)
+        case .confirm(let confirmation):
+            topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] choice in
+                guard let self else { return }
+                switch choice {
+                case .append:
+                    appendSharedText(text)
+                case .discardAndWrite:
+                    // 聞いている間に送り始めていたら、捨てずに、受け取った文を足さない。
+                    guard composer.discardDraft() else { return }
+                    appendSharedText(text)
+                case .cancel:
+                    break
+                }
+            }, animated: true)
         }
-        let isEditing = composer.model.editedStatus != nil
-        let alert = UIAlertController(
-            title: isEditing ? "編集中の投稿があります" : "書きかけの下書きがあります",
-            message: "共有された文を、\(isEditing ? "編集中の投稿" : "下書き")の後ろに足すか、\(isEditing ? "編集をやめて" : "下書きを捨てて")新しく書くかを選んでください。",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: isEditing ? "編集中の投稿に足す" : "下書きに足す", style: .default) { [weak self] _ in
-            self?.appendSharedText(text)
-        })
-        alert.addAction(UIAlertAction(title: isEditing ? "編集をやめて新しく書く" : "下書きを捨てて新しく書く", style: .destructive) { [weak self] _ in
-            guard let self else { return }
-            // 聞いている間に送り始めていたら、捨てずに、受け取った文を足さない。
-            guard composer.discardDraft() else { return }
-            appendSharedText(text)
-        })
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
-        topViewController.present(alert, animated: true)
     }
-
-    private static let sharedTextFailureTitle = "共有された文で書き始められませんでした"
-    private static let sharedTextWhilePostingMessage = "投稿を送っている間は書き始められません。送り終えてから、もう一度共有してください。"
 
     /// 書き始めて、本文の後ろに足す。下書きがなくても置き換えずに足すのは、返信の宛先のように自動で入れた本文を残すため。
     /// 足した本文が上限の行数に収まらなければ、投稿欄を広げる。
     private func appendSharedText(_ text: String) {
         // 下書きがあるかを聞いている間に、送り始めていることがある。
         guard !composer.model.isPosting else {
-            presentAlert(title: Self.sharedTextFailureTitle, message: Self.sharedTextWhilePostingMessage)
+            presentRefusal(.sharedWhilePosting(.text))
             return
         }
         composer.beginEditing(appendingShared: text)
@@ -2471,7 +2423,7 @@ final class SessionController {
         } catch {
             // 同じURLを開き直したときなど、受け取ったファイルをもう消したあと。
             logger.error("shared media not found id=\(id, privacy: .public): \(SciaLog.describe(error), privacy: .public)")
-            presentAlert(title: Self.sharedMediaFailureTitle, message: "もう一度共有してください。")
+            presentRefusal(.sharedMediaGone)
             return
         }
         let media = files.compactMap(LocalMediaLoader.startCopyingFile)
@@ -2491,43 +2443,32 @@ final class SessionController {
             inbox.remove(id: id)
         }
         guard !media.isEmpty else { return }
-        // 送っている間に足すと、送り終えて下書きを空に戻すときに一緒に消える。
-        guard !composer.model.isPosting else {
+        let decision = Confirmation.shared(.media(allImages: media.allSatisfy { $0.kind == .image }), draft: composer.model)
+        switch decision {
+        case .proceed:
+            attachSharedMedia(media)
+        case .refuse(let refusal):
             discardSharedMedia(media)
-            presentAlert(title: Self.sharedMediaFailureTitle, message: Self.sharedMediaWhilePostingMessage)
-            return
+            presentRefusal(refusal)
+        case .confirm(let confirmation):
+            topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] choice in
+                guard let self else { return }
+                switch choice {
+                case .append:
+                    attachSharedMedia(media)
+                case .discardAndWrite:
+                    // 聞いている間に送り始めていたら、捨てずに、受け取ったものを足さない。
+                    guard composer.discardDraft() else {
+                        discardSharedMedia(media)
+                        return
+                    }
+                    attachSharedMedia(media)
+                case .cancel:
+                    discardSharedMedia(media)
+                }
+            }, animated: true)
         }
-        guard composer.model.hasWrittenContent else {
-            attachSharedMedia(media)
-            return
-        }
-        let noun = media.allSatisfy { $0.kind == .image } ? "画像" : "メディア"
-        let isEditing = composer.model.editedStatus != nil
-        let alert = UIAlertController(
-            title: isEditing ? "編集中の投稿があります" : "書きかけの下書きがあります",
-            message: "共有された\(noun)を、\(isEditing ? "編集中の投稿" : "下書き")に足すか、\(isEditing ? "編集をやめて" : "下書きを捨てて")新しく書くかを選んでください。",
-            preferredStyle: .alert
-        )
-        alert.addAction(UIAlertAction(title: isEditing ? "編集中の投稿に足す" : "下書きに足す", style: .default) { [weak self] _ in
-            self?.attachSharedMedia(media)
-        })
-        alert.addAction(UIAlertAction(title: isEditing ? "編集をやめて新しく書く" : "下書きを捨てて新しく書く", style: .destructive) { [weak self] _ in
-            guard let self else { return }
-            // 聞いている間に送り始めていたら、捨てずに、受け取ったものを足さない。
-            guard composer.discardDraft() else {
-                discardSharedMedia(media)
-                return
-            }
-            attachSharedMedia(media)
-        })
-        alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel) { [weak self] _ in
-            self?.discardSharedMedia(media)
-        })
-        topViewController.present(alert, animated: true)
     }
-
-    private static let sharedMediaFailureTitle = "共有されたメディアを添付できませんでした"
-    private static let sharedMediaWhilePostingMessage = "投稿を送っている間は添付できません。送り終えてから、もう一度共有してください。"
 
     /// 書き始めて、サーバーの上限と既定の閲覧注意を読み終えてから足す。先に足すと、上限に合わせて縮めずに送り始め、既定の閲覧注意も付かないため。
     /// ペーストが読み終えるまで受け付けない（`ComposeModel.canPasteMedia`）のと同じく、読めなかったら足さない。
@@ -2540,16 +2481,7 @@ final class SessionController {
             guard composer.model.canPasteMedia else {
                 discardSharedMedia(media)
                 logger.error("shared media dropped posting=\(self.composer.model.isPosting, privacy: .public)")
-                let message = if composer.model.isPosting {
-                    Self.sharedMediaWhilePostingMessage
-                } else if composer.model.quoteTarget != nil {
-                    "引用する投稿には添付できません。引用をやめてから、もう一度共有してください。"
-                } else if composer.model.poll != nil {
-                    "投票の付いた投稿には添付できません。投票を外してから、もう一度共有してください。"
-                } else {
-                    "サーバーの設定を読み込めませんでした。もう一度共有してください。"
-                }
-                presentAlert(title: Self.sharedMediaFailureTitle, message: message)
+                presentRefusal(.sharedMediaUnattachable(draft: composer.model))
                 return
             }
             composer.model.addPastedMedia(media)
