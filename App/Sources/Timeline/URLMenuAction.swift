@@ -1,60 +1,8 @@
 import SciaCore
 import UIKit
 
-/// 投稿、ユーザー、リンク、ハッシュタグのメニューに共通の、ページのURLに対する項目。
-/// どのメニューに置くかはメニューごとの項目の一覧で決め、ここでは名前とアイコンと、押せる状態かどうかと、開く項目がどこで開くかをそろえる。
-enum URLMenuAction {
-    case copyLink
-    case share
-    /// 開く場所の設定に従って開く。リンクをタップしたときと同じ。
-    case openInBrowser
-    /// 開く場所の設定にかかわらず、既定のブラウザで開く。
-    case openInDefaultBrowser
-    /// 開く場所の設定にかかわらず、アプリ内のSafariで開く。
-    case openInAppSafari
-
-    var title: String {
-        switch self {
-        case .copyLink: "リンクをコピー"
-        case .share: "共有"
-        case .openInBrowser: "ブラウザで開く"
-        case .openInDefaultBrowser: "既定のブラウザで開く"
-        case .openInAppSafari: "アプリ内のSafariで開く"
-        }
-    }
-
-    var symbolName: String {
-        switch self {
-        case .copyLink: "link"
-        case .share: "square.and.arrow.up"
-        case .openInBrowser: "safari"
-        case .openInDefaultBrowser: "arrow.up.forward.app"
-        case .openInAppSafari: "rectangle.bottomhalf.inset.filled"
-        }
-    }
-
-    /// 並びの設定画面で、名前の下に添える説明。メニューに固有の決まりがあれば、メニューの側でこれに書き足す。
-    var note: String? {
-        switch self {
-        case .openInBrowser: "設定の開く場所で開きます"
-        case .openInDefaultBrowser: "設定の開く場所にかかわらず、既定のブラウザで開きます"
-        case .openInAppSafari: "設定の開く場所にかかわらず、アプリ内のSafariで開きます"
-        case .copyLink, .share: nil
-        }
-    }
-
+extension URLMenuAction {
     var image: UIImage? { UIImage(systemName: symbolName) }
-
-    /// 開く項目で`url`を開く場所。その場所で開けなければnil。
-    func browser(for url: URL, following setting: LinkBrowser) -> LinkBrowser? {
-        switch self {
-        case .openInBrowser: setting.browser(for: url)
-        case .openInDefaultBrowser: .external
-        // アプリ内のSafariは、httpとhttps以外のURLを渡すと例外で落ちる。黙って既定のブラウザで開くと選んだ場所と違うため、押せないようにする。
-        case .openInAppSafari: LinkBrowser.inApp.browser(for: url) == .inApp ? .inApp : nil
-        case .copyLink, .share: nil
-        }
-    }
 
     /// メニューの項目。`url`がないか、開く項目で選んだ場所で開けなければ、押せないまま並べる。
     /// - Parameter title: 共通の名前の代わりに出す名前。投稿のメニューで、ユーザーの項目をサブメニューにせず並べるときに使う。

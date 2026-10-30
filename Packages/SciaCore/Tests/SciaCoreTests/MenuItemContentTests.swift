@@ -1,6 +1,5 @@
-import SciaCore
+@testable import SciaCore
 import Testing
-@testable import Scia
 
 /// 長押しのメニューの項目が、共通の項目と正しくつながっていることを確かめる。
 @MainActor

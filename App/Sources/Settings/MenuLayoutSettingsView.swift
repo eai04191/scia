@@ -2,34 +2,6 @@ import SciaCore
 import SwiftUI
 import UIKit
 
-/// 並びの設定画面に出す、項目の名前とアイコン。
-protocol MenuItemPresentable {
-    var title: String { get }
-    /// 名前の下に添える説明。
-    var note: String? { get }
-    var symbolName: String { get }
-    /// 「その他」の境目の行の名前と説明とアイコン。境目より下の項目をどこへ入れるかは、項目の種類ごとに違う。
-    static var moreBoundaryTitle: String { get }
-    static var moreBoundaryNote: String { get }
-    static var moreBoundarySymbolName: String { get }
-    /// 区切り線を足せるか。
-    static var supportsSeparators: Bool { get }
-    /// 横並びの区切り線を足せるか。
-    static var supportsRowSeparators: Bool { get }
-    /// 表示する項目を1つは残すか。残すなら、最後の1つのスイッチを切れなくする。
-    static var requiresVisibleItem: Bool { get }
-}
-
-/// 長押しのメニューでは、境目より下の項目は「その他」のサブメニューに入る。
-extension MenuItemPresentable {
-    static var moreBoundaryTitle: String { "その他" }
-    static var moreBoundaryNote: String { "これより下の項目は、メニューの「その他」の中に入ります" }
-    static var moreBoundarySymbolName: String { "ellipsis.circle" }
-    static var supportsSeparators: Bool { true }
-    static var supportsRowSeparators: Bool { true }
-    static var requiresVisibleItem: Bool { false }
-}
-
 /// 長押しのメニューや投稿欄の＋の並びを変える画面。項目、区切り線、「その他」の境目を1本のリストで並べ替え、項目ごとに表示を切り替える。決まりはdocs/menus.mdにある。
 /// 中身は`MenuLayoutViewController`で、UIKitのリストで作る。SwiftUIの`List`では、つまみは編集モードでしか出ず、編集モードでは行のスイッチが押せなくなるため、
 /// スイッチを押せたまま、つまみをつかんですぐ並べ替えられる形にできない。

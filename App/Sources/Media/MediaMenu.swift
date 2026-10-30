@@ -1,24 +1,6 @@
 import SciaCore
 import UIKit
 
-extension MediaMenuItem: MenuItemContentProviding {
-    var content: MenuItemContent {
-        switch self {
-        case .open: .own(title: "開く", symbolName: "arrow.up.left.and.arrow.down.right", note: "ビューアでは出ません")
-        case .share: .own(title: "共有", symbolName: "square.and.arrow.up", note: "メディアのファイルを共有します")
-        case .saveToPhotos: .own(title: "写真に保存", symbolName: "square.and.arrow.down", note: "画像、動画、GIFでだけ出ます")
-        case .altText: .own(title: "代替テキスト", symbolName: "text.below.photo", note: "代替テキストが付いているときだけ出ます")
-        case .translateText: .own(title: "画像の文字を翻訳", symbolName: "translate", note: "ビューアで画像から文字を読み取れたときだけ出ます")
-        case .copyLink: .url(.copyLink, noteSuffix: "メディアのファイルのURLをコピーします")
-        case .openInBrowser: .url(.openInBrowser, noteSuffix: "メディアのファイルを開きます")
-        case .openInDefaultBrowser: .url(.openInDefaultBrowser)
-        case .openInAppSafari: .url(.openInAppSafari)
-        case .status: .own(title: "投稿", symbolName: "text.bubble", note: "投稿のメニューをサブメニューで出します。ビューアとプロフィールの画像では出ません")
-        case .info: .own(title: "メディアの情報", symbolName: "info.circle", note: "解像度、形式、フレームレート、長さ、ビットレートのうち分かるものを出します")
-        }
-    }
-}
-
 /// メディアのメニュー。一覧とビューアで、設定の同じ並びから組む。決まりはdocs/menus.mdの「メディアのメニュー」にある。
 /// 項目ごとの動きは置く側で渡し、渡さなかった項目は出さない。
 @MainActor
