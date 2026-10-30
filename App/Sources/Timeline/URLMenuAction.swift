@@ -8,31 +8,7 @@ extension URLMenuAction {
     /// - Parameter title: 共通の名前の代わりに出す名前。投稿のメニューで、ユーザーの項目をサブメニューにせず並べるときに使う。
     @MainActor
     func action(title: String? = nil, url: URL?, handlers: URLMenuHandlers) -> UIAction {
-        switch self {
-        case .copyLink:
-            simpleAction(title: title, url: url, perform: handlers.copy)
-        case .share:
-            simpleAction(title: title, url: url, perform: handlers.share)
-        case .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
-            openAction(title: title, url: url, following: handlers.linkBrowser, open: handlers.open)
-        }
-    }
-
-    @MainActor
-    private func openAction(title: String?, url: URL?, following setting: LinkBrowser, open: @escaping @MainActor (URL, LinkBrowser) -> Void) -> UIAction {
-        let target = url.flatMap { url in browser(for: url, following: setting).map { (url: url, browser: $0) } }
-        return UIAction(title: title ?? self.title, image: image, attributes: target == nil ? .disabled : []) { _ in
-            guard let target else { return }
-            open(target.url, target.browser)
-        }
-    }
-
-    @MainActor
-    private func simpleAction(title: String?, url: URL?, perform: @escaping @MainActor (URL) -> Void) -> UIAction {
-        UIAction(title: title ?? self.title, image: image, attributes: url == nil ? .disabled : []) { _ in
-            guard let url else { return }
-            perform(url)
-        }
+        MenuRenderer(perform: handlers.perform).action(node(title: title, url: url, linkBrowser: handlers.linkBrowser))
     }
 }
 
@@ -45,6 +21,15 @@ struct URLMenuHandlers {
     let share: @MainActor (URL) -> Void
     /// `url`を、開く項目と開く場所の設定から決めた場所で開く。
     let open: @MainActor (URL, LinkBrowser) -> Void
+
+    /// 共通の項目で選んだ操作を行う。
+    func perform(_ command: URLMenuCommand) {
+        switch command {
+        case .copy(let url): copy(url)
+        case .share(let url): share(url)
+        case .open(let url, let browser): open(url, browser)
+        }
+    }
 }
 
 /// メニューで選んだURLの、コピーと共有。

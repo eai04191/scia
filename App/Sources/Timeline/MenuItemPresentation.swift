@@ -6,19 +6,11 @@ extension MenuLayout.Groups {
     /// まとまりごとに区切り線で分けて並べ、「その他」の中身はサブメニューにする。中身のないまとまりと「その他」は出さない。
     /// 横並びのまとまりは、アイコンと名前を縦に積んだ中くらいの大きさで横に並べる。横に並ぶのは3個までで、4個目からはその下にふだんの行として続く。
     func menuElements(_ elements: (Item) -> [UIMenuElement]) -> [UIMenuElement] {
-        func inline(_ groups: [MenuLayout<Item>.Group]) -> [UIMenuElement] {
-            groups.compactMap { group in
-                let children = group.items.flatMap(elements)
-                guard !children.isEmpty else { return nil }
-                let menu = UIMenu(options: .displayInline, children: children)
-                if group.isRow { menu.preferredElementSize = .medium }
-                return menu
-            }
-        }
-        let main = inline(main)
-        let more = inline(more)
-        guard !more.isEmpty else { return main }
-        return main + [UIMenu(title: "その他", image: UIImage(systemName: "ellipsis.circle"), children: more)]
+        arranged(elements, group: { children, isRow in
+            let menu = UIMenu(options: .displayInline, children: children)
+            if isRow { menu.preferredElementSize = .medium }
+            return menu
+        }, more: { UIMenu(title: "その他", image: UIImage(systemName: "ellipsis.circle"), children: $0) })
     }
 }
 
@@ -125,34 +117,6 @@ struct HashtagMuteActions {
     let unmute: @MainActor (String) -> Void
 }
 
-
-/// 投稿のメニューの中で、ユーザーのメニューを出す相手。メンションはアカウントの全体を持たないため、IDでプロフィールを開く。
-enum MenuUser {
-    case account(Account)
-    case mention(Mention)
-
-    var id: String {
-        switch self {
-        case .account(let account): account.id
-        case .mention(let mention): mention.id
-        }
-    }
-
-    var acct: String {
-        switch self {
-        case .account(let account): account.acct
-        case .mention(let mention): mention.acct
-        }
-    }
-
-    /// プロフィールのページのURL。
-    var url: URL? {
-        switch self {
-        case .account(let account): account.url
-        case .mention(let mention): mention.url
-        }
-    }
-}
 
 extension UIMenu {
     /// ユーザーのメニュー。投稿のメニューのサブメニューでも、ほかの場所から出すメニューでも、見出しを`UserHeading`で揃える。
