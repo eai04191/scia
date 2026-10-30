@@ -1,3 +1,4 @@
+import SciaCore
 import UIKit
 
 /// 知らせを1件描くガラスのカプセル。並べ方と消えるまでの時計は`NoticeStackView`が持つ。

@@ -1,3 +1,4 @@
+import SciaCore
 import UIKit
 
 /// チップの中身を決めるときに渡す、前に出ている画面の様子。文言は出す側が、この様子を受け取って決める。決まりはdocs/notices.mdの「置き場所」にある。

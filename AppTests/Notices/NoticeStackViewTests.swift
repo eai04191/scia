@@ -1,3 +1,4 @@
+import SciaCore
 import SciaTesting
 import Testing
 import UIKit

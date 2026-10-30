@@ -1,5 +1,5 @@
 import Testing
-@testable import Scia
+@testable import SciaCore
 
 /// 出たままの知らせが重なったときに、チップに出す1件。決まりはdocs/notices.mdの「チップ」にある。
 @MainActor
