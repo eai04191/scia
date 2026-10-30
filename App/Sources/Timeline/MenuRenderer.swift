@@ -64,3 +64,14 @@ struct MenuRenderer<Command> {
         return customIcon(icon) ?? icon.symbolName.flatMap { UIImage(systemName: $0) }
     }
 }
+
+/// 組んだメニューの木と、その描き方。タップや長押しに割り当てた1項目を行うときは、木を見て決める。
+@MainActor
+struct BuiltMenu<Command> {
+    let root: MenuNode<Command>
+    let renderer: MenuRenderer<Command>
+
+    var menu: UIMenu {
+        renderer.menu(root)
+    }
+}

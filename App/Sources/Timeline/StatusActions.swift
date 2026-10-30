@@ -410,27 +410,23 @@ extension TimelineViewController {
     ///   - groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
     func externalPostMenu(url: URL, text: String?, id: ItemID, groups: MenuLayout<ExternalPostMenuItem>.Groups? = nil) -> UIMenu? {
         let handlers = urlHandlers(id: id)
-        let children = (groups ?? settings.externalPostMenuLayout.groups).menuElements { item in
-            if let action = item.urlAction {
-                return [action.action(url: url, handlers: handlers)]
-            }
-            switch item {
-            case .copyText:
-                guard let text else { return [] }
-                return [UIAction(title: item.title, image: item.image) { [weak self] _ in
+        let tree = ExternalPostMenuTree(url: url, text: text, linkBrowser: handlers.linkBrowser)
+        return tree.menu(groups: groups ?? settings.externalPostMenuLayout.groups).map { root in
+            MenuRenderer { [weak self] (command: ExternalPostMenuCommand) in
+                switch command {
+                case .url(let command): handlers.perform(command)
+                case .copyText(let text):
                     UIPasteboard.general.string = text
-                    guard let self else { return }
-                    showNotice(.textCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
-                }]
-            case .systemTranslate:
-                guard let text else { return [] }
-                return [UIAction(title: item.title, image: item.image) { [weak self] _ in self?.translation.present(text) }]
-            // 共通の項目は、上で中身から組んだ。
-            case .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share:
-                return []
-            }
+                    self?.showTextCopiedNotice()
+                case .translate(let text): self?.translation.present(text)
+                }
+            }.menu(root)
         }
-        return children.isEmpty ? nil : UIMenu(title: url.absoluteString, children: children)
+    }
+
+    /// 本文をコピーしたことを数秒出す。
+    private func showTextCopiedNotice() {
+        showNotice(.textCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
 
     /// アイコンや人の一覧の行を長押ししたときに出す、その人のユーザーのメニュー。出す項目がなければnil。
