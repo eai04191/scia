@@ -1,8 +1,7 @@
 import Foundation
-import SciaCore
+@testable import SciaCore
 import SciaTesting
 import Testing
-@testable import Scia
 
 /// 投稿欄の予約と、予約した投稿の書き直し。決まりはdocs/compose.mdの「予約投稿」にある。
 @MainActor

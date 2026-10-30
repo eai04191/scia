@@ -4,50 +4,6 @@ import SciaCore
 import UIKit
 import UniformTypeIdentifiers
 
-/// 端末から選び、アプリの一時ディレクトリにコピーしたメディアのファイル。アップロードと、投稿欄のサムネイルに使う。
-struct LocalMediaFile: Sendable, Equatable {
-    let url: URL
-    let mimeType: String
-    let kind: MediaAttachment.Kind
-
-    /// ファイルを、コピーしたときに作ったディレクトリごと消す。添付から外したときと、投稿できたときに呼ぶ。
-    func remove() {
-        try? FileManager.default.removeItem(at: url.deletingLastPathComponent())
-    }
-}
-
-/// ピッカーで選んだメディア1つ。ファイルは、添付に足すと決まってから読み込む。
-struct PickedMedia {
-    /// ピッカーの`assetIdentifier`。開き直したときに前の選択として渡す。
-    let assetIdentifier: String
-    /// 引数のMIMEタイプの形式を避けて読み込む。サーバーが処理できない形式を避けて、同じ写真のJPEGを受け取るのに使う。
-    let load: @MainActor (_ avoiding: Set<String>) async throws -> LocalMediaFile
-}
-
-/// 投稿欄にペーストしたか、共有で受け取ったメディア1つ。ピッカーで選んだものと違い、あとから読み直せない。
-struct PastedMedia {
-    /// 上限を超えて足さなかったときに、知らせる文言を選ぶのに使う。
-    let kind: MediaAttachment.Kind
-    let load: @MainActor () async throws -> LocalMediaFile
-    /// 添付に足さなかったときに呼ぶ。読み込んだファイルを消す。
-    var discard: @MainActor () -> Void = {}
-}
-
-/// 端末からメディアを読み込めなかった。
-enum LocalMediaError: Error, LocalizedError {
-    /// 画像でも動画でもないものが届いた。ピッカーで画像と動画に絞っているので、普通は起きない。
-    case unsupportedType
-    /// 写真ライブラリからファイルを受け取れなかった。iCloudからの取得に失敗したときなど。
-    case loadFailed
-
-    var errorDescription: String? {
-        switch self {
-        case .unsupportedType: "このメディアの形式は添付できません。"
-        case .loadFailed: "端末からメディアを読み込めませんでした。"
-        }
-    }
-}
-
 enum LocalMediaLoader {
     /// 選んだメディアをコピーする先。起動し直すと、OSが一時ディレクトリの中身をいずれ消す。
     static let directory = FileManager.default.temporaryDirectory.appending(path: "ComposeMedia", directoryHint: .isDirectory)
@@ -178,13 +134,6 @@ enum LocalMediaLoader {
             return !types.contains { $0.conforms(to: .plainText) }
                 && types.contains { type in mediaTypes.contains { type.conforms(to: $0) } }
         }
-    }
-
-    /// アップロードするためにファイルを読む。動画では大きくなるため、メインスレッドの外で読む。
-    @concurrent
-    static func upload(of file: LocalMediaFile, description: String) async throws -> MediaUpload {
-        let data = try Data(contentsOf: file.url, options: .mappedIfSafe)
-        return MediaUpload(data: data, filename: file.url.lastPathComponent, mimeType: file.mimeType, description: description)
     }
 }
 

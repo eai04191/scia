@@ -36,7 +36,7 @@ final class InlineComposeControllerTests {
         // 動きの途中で状態を見るテストや次の操作を送るテストは、間合いをアプリの既定の長さに合わせて決めているので、useDefaultAnimationDurations()で戻す。
         tuning.setValue(0.05, for: TuningCatalog.composeMorphDuration)
         tuning.setValue(0.05, for: TuningCatalog.composeExpandDuration)
-        composer = InlineComposeController(model: ComposeModel(tasks: TaskScope(), myAccountID: "1") { _ in }, tuning: tuning, settings: settings)
+        composer = InlineComposeController(model: ComposeModel<UIImage>(tasks: TaskScope(), myAccountID: "1", backgroundTime: { _ in {} }) { _ in }, tuning: tuning, settings: settings)
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
         clock = LayerClock(freezing: window.layer)
@@ -255,7 +255,7 @@ final class InlineComposeControllerTests {
             window.isHidden = true
         }
         let uploading = Gate()
-        let media = ComposeMediaService(
+        let media = ComposeMediaService<UIImage>(
             upload: { upload in
                 try await uploading.wait()
                 return MediaAttachment(id: "m-\(upload.filename)", type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil)
@@ -689,7 +689,7 @@ final class InlineComposeControllerTests {
             window.isHidden = true
         }
         let gate = PostGate()
-        let media = ComposeMediaService(
+        let media = ComposeMediaService<UIImage>(
             upload: { upload in MediaAttachment(id: "m-\(upload.filename)", type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
             waitUntilProcessed: { id in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
             updateDescription: { id, _ in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
@@ -730,7 +730,7 @@ final class InlineComposeControllerTests {
             window.rootViewController?.dismiss(animated: false)
             window.isHidden = true
         }
-        let media = ComposeMediaService(
+        let media = ComposeMediaService<UIImage>(
             upload: { upload in MediaAttachment(id: "m-\(upload.filename)", type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
             waitUntilProcessed: { id in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
             updateDescription: { id, _ in MediaAttachment(id: id, type: .image, url: URL(string: "https://example.social/m.jpg"), previewUrl: nil, description: nil) },
@@ -798,10 +798,10 @@ final class InlineComposeControllerTests {
     }
 
     /// 送信を待たせるComposeModelで投稿欄を置き直す。
-    private func installComposer(media: ComposeMediaService = .unavailable, keyboardNotifications: NotificationCenter = .default, post: @escaping (StatusDraft) async throws -> Void) throws -> InlineComposeController {
+    private func installComposer(media: ComposeMediaService<UIImage> = .unavailable, keyboardNotifications: NotificationCenter = .default, post: @escaping (StatusDraft) async throws -> Void) throws -> InlineComposeController {
         let tabBarController = UITabBarController(tabs: [UITab(title: "ホーム", image: nil, identifier: "home") { _ in UIViewController() }])
         window.rootViewController = tabBarController
-        let composer = InlineComposeController(model: ComposeModel(tasks: TaskScope(), myAccountID: "1", media: media, post: post), tuning: tuning, settings: settings, keyboardNotifications: keyboardNotifications)
+        let composer = InlineComposeController(model: ComposeModel<UIImage>(tasks: TaskScope(), myAccountID: "1", media: media, backgroundTime: { _ in {} }, post: post), tuning: tuning, settings: settings, keyboardNotifications: keyboardNotifications)
         composer.install(in: tabBarController)
         window.layoutIfNeeded()
         return composer

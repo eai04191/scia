@@ -17,7 +17,7 @@ final class InlineComposeController: NSObject {
     var mediaTime: () -> CFTimeInterval = AppDependencies.mediaTime
     /// 編集できるかを決める今の日付。テストでは決まった日付に差し替える。
     var now: () -> Date = AppDependencies.now
-    let model: ComposeModel
+    let model: ComposeModel<UIImage>
     /// 本文と注意書きの補完とパレット。本文ではメンション、ハッシュタグ、カスタム絵文字を、注意書きではカスタム絵文字だけを補完する。
     /// サーバーは注意書きのメンションとハッシュタグを読まないため。
     private let textCompletion: TextInputCompletion
@@ -306,7 +306,7 @@ final class InlineComposeController: NSObject {
         linkTitleVoiceOverObservation?.cancel()
     }
 
-    init(model: ComposeModel, completion: ComposeCompletion? = nil, recentEmojis: RecentEmojis? = nil, languages: PostingLanguageSource = .unavailable, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, keyboardNotifications: NotificationCenter = .default) {
+    init(model: ComposeModel<UIImage>, completion: ComposeCompletion? = nil, recentEmojis: RecentEmojis? = nil, languages: PostingLanguageSource = .unavailable, tuning: TuningStore = AppDependencies.tuning, settings: AppSettings = AppDependencies.settings, keyboardNotifications: NotificationCenter = .default) {
         self.model = model
         textCompletion = TextInputCompletion(
             completion: completion ?? ComposeCompletion(sources: .unavailable, settings: TuningCatalog.completionSettings(in: tuning)),

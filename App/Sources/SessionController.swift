@@ -330,7 +330,7 @@ final class SessionController {
                 forward()
             }
         }
-        let media = ComposeMediaService(
+        let media = ComposeMediaService<UIImage>(
             upload: { upload in
                 do {
                     #if DEBUG
@@ -440,7 +440,7 @@ final class SessionController {
         // 予約できたことのチップを出す先も、初期化を終えてからつなぐ。
         let schedules = SessionReference()
         composer = InlineComposeController(
-            model: ComposeModel(tasks: tasks.child(), myAccountID: credential.accountID, media: media) { draft in
+            model: ComposeModel<UIImage>(tasks: tasks.child(), myAccountID: credential.accountID, media: media, backgroundTime: BackgroundTime.request) { draft in
                 do {
                     if let editing = draft.editing {
                         // ストリーミングの編集の知らせを待たずに、どの一覧にも編集したあとの投稿を出す。切れている間も直るようにするため。

@@ -1,59 +1,58 @@
-import Foundation
-import Observation
+public import Foundation
+public import Observation
 import os
-import SciaCore
-import UIKit
 
 /// 投稿欄の下書きの状態。
+/// `Thumbnail`は、添付のサムネイルとして描く画像の型。iOSでは`UIImage`にする。切り抜きのプレビューのように、向きを持った画像をそのまま渡すため、`CGImage`にはしない。
 @MainActor
 @Observable
-final class ComposeModel {
-    var text: String
-    var spoilerText: String
+public final class ComposeModel<Thumbnail: Sendable> {
+    public var text: String
+    public var spoilerText: String
     /// 注意書きの欄を出している。隠しているときは注意書きなしで投稿する。
     /// 出していれば、注意書きが空でも、添付を閲覧注意にする。
-    var showsSpoiler: Bool
-    private(set) var visibility: Status.Visibility
+    public var showsSpoiler: Bool
+    public private(set) var visibility: Status.Visibility
     /// 返信先。新しい投稿と、編集ならnil。
-    private(set) var replyTo: Status?
+    public private(set) var replyTo: Status?
     /// 引用する投稿。引用しなければnil。返信先とは一緒に付けない。決まりはdocs/quote.mdの「引用して投稿する」にある。
-    private(set) var quoteTarget: Status?
+    public private(set) var quoteTarget: Status?
     /// 編集している自分の投稿。編集でなければnil。公開範囲と返信先は変えられない。
-    private(set) var editedStatus: Status?
-    private(set) var maxCharacters = 500
-    private(set) var charactersReservedPerURL = 23
-    private(set) var maxMediaAttachments = 4
+    public private(set) var editedStatus: Status?
+    public private(set) var maxCharacters = 500
+    public private(set) var charactersReservedPerURL = 23
+    public private(set) var maxMediaAttachments = 4
     /// 代替テキストの文字数の上限。
-    private(set) var mediaDescriptionLimit = 1500
+    public private(set) var mediaDescriptionLimit = 1500
     /// サーバーが受け付けるメディアの大きさの上限。読めるまでは分からないものとして、縮めない。
     @ObservationIgnored private var mediaLimits = MediaLimits.unknown
     /// サーバーが受け付けると返した形式。返さないサーバーではnil。
     @ObservationIgnored private var supportedMediaTypes: [String]?
     /// 投稿ボタンを押してから、送り終えるか、送るのをやめるまで。添付の準備を待っている間も含む。
-    private(set) var isPosting = false
+    public private(set) var isPosting = false
     /// 投稿ボタンを押したあと、添付の準備が済むのを待っている。決まりはdocs/compose.mdの「メディアの準備を待って送る」にある。
-    private(set) var isWaitingForMedia = false
-    var errorMessage: String?
+    public private(set) var isWaitingForMedia = false
+    public var errorMessage: String?
     /// 添付したメディア。この順で投稿に並ぶ。
-    private(set) var attachments: [DraftAttachment] = [] {
+    public private(set) var attachments: [DraftAttachment] = [] {
         didSet { settleMediaWait() }
     }
     /// 付ける投票。投票の欄を出していなければnil。添付とは一緒に付けられないため、添付があるときは足せない。
-    var poll: PollDraft?
+    public var poll: PollDraft?
     /// サーバーが受け付ける投票の上限。読めるまではMastodonの既定値にする。
-    private(set) var pollLimits = PollLimits.mastodonDefault
+    public private(set) var pollLimits = PollLimits.mastodonDefault
     /// 添付したメディアごとの、端末の側だけで持つもの。
-    private(set) var localMedia: [DraftAttachment.ID: LocalMedia] = [:] {
+    public private(set) var localMedia: [DraftAttachment.ID: LocalMedia<Thumbnail>] = [:] {
         didSet { settleMediaWait() }
     }
     /// 予約する日時。予約の行を出していなければnil。決まりはdocs/compose.mdの「予約投稿」にある。
-    private(set) var scheduledAt: Date?
+    public private(set) var scheduledAt: Date?
     /// 書き直している予約。送れたら`onScheduleRewritten`で取り消させる。決まりはdocs/compose.mdの「書き直す」にある。
-    private(set) var rewritingSchedule: ScheduledStatus?
+    public private(set) var rewritingSchedule: ScheduledStatus?
     /// 投稿の言語のコード。nilなら送らず、サーバーに任せる。決まりはdocs/compose.mdの「投稿の言語」にある。
-    private(set) var language: String?
+    public private(set) var language: String?
     /// アカウントの既定の言語。決めていないか、まだ読めていなければnil。
-    private(set) var defaultLanguage: String?
+    public private(set) var defaultLanguage: String?
 
     /// 返信先から自動で入れた宛先と注意書き。返信先を替えたとき、自分で書いた部分と見分けるために使う。
     @ObservationIgnored private var initialDraft: StatusDraft
@@ -71,15 +70,15 @@ final class ComposeModel {
     /// 最後に送った内容。同じ内容を送り直すときだけ同じIdempotency-Keyを使い、変えたら別の投稿として新しいキーにする。
     /// 応答だけが失われていた場合に、変えた内容が投稿されないまま成功扱いにならないようにするため。
     @ObservationIgnored private var lastSubmitted: StatusDraft?
-    @ObservationIgnored let myAccountID: String
+    @ObservationIgnored public let myAccountID: String
     /// 予約の日時を決める今の日付。テストでは決まった日付に差し替える。
-    @ObservationIgnored var now: () -> Date = AppDependencies.now
+    @ObservationIgnored public var now: () -> Date = SystemTime.now
     /// 予約の日時を区切る暦。テストでは決まったタイムゾーンの暦に差し替える。
-    @ObservationIgnored var calendar = Calendar.autoupdatingCurrent
+    @ObservationIgnored public var calendar = Calendar.autoupdatingCurrent
     @ObservationIgnored private let post: (StatusDraft) async throws -> Void
-    @ObservationIgnored private let media: ComposeMediaService
+    @ObservationIgnored private let media: ComposeMediaService<Thumbnail>
     /// 下書きの送信とアップロードの持ち主。セッションの持ち主の子で、ログアウトやアカウントの切り替えで閉じると、送っている途中のものも止める。
-    @ObservationIgnored let tasks: TaskScope
+    @ObservationIgnored public let tasks: TaskScope
     /// 送っている途中にバックグラウンドへ移っても、送り終えるまでアプリを止めないよう頼む。終えるときに呼ぶものを返す。
     @ObservationIgnored private let backgroundTime: @MainActor (String) -> @MainActor () -> Void
     @ObservationIgnored private var uploadTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
@@ -94,20 +93,20 @@ final class ComposeModel {
     @ObservationIgnored private var pickerSelection = MediaPickerSelection()
     @ObservationIgnored private let logger = SciaLog.logger(category: "compose")
     /// 投稿できて、下書きを空に戻したあとに呼ぶ。
-    @ObservationIgnored var onPosted: () -> Void = {}
+    @ObservationIgnored public var onPosted: () -> Void = {}
     /// 予約を書き直した投稿を送れて、`onPosted`を呼んだあとに、元の予約のIDを渡して呼ぶ。元の予約を取り消すのは呼ぶ側。
-    @ObservationIgnored var onScheduleRewritten: (ScheduledStatus.ID) -> Void = { _ in }
+    @ObservationIgnored public var onScheduleRewritten: (ScheduledStatus.ID) -> Void = { _ in }
     /// サーバーの上限のために、設定で選んだより小さく、または低い画質にした。使う人が選んでいない画質の変化なので、知らせる。
-    @ObservationIgnored var onMediaReduced: (MediaAttachment.Kind) -> Void = { _ in }
+    @ObservationIgnored public var onMediaReduced: (MediaAttachment.Kind) -> Void = { _ in }
     /// ペーストしたメディアのうち、添付の上限を超えて足さなかったものの種類。
-    @ObservationIgnored var onPastedMediaSkipped: ([MediaAttachment.Kind]) -> Void = { _ in }
+    @ObservationIgnored public var onPastedMediaSkipped: ([MediaAttachment.Kind]) -> Void = { _ in }
 
-    init(
+    public init(
         tasks: TaskScope,
         replyTo: Status? = nil,
         myAccountID: String,
-        media: ComposeMediaService = .unavailable,
-        backgroundTime: @escaping @MainActor (String) -> @MainActor () -> Void = BackgroundTime.request,
+        media: ComposeMediaService<Thumbnail> = .unavailable,
+        backgroundTime: @escaping @MainActor (String) -> @MainActor () -> Void,
         post: @escaping (StatusDraft) async throws -> Void
     ) {
         self.tasks = tasks
@@ -139,35 +138,35 @@ final class ComposeModel {
     }
 
     /// 既定と違う言語を選んでいる。前の言語のまま気づかずに送らないよう、コードを見せる。サーバーに任せているときは既定のままとみなす。
-    var choosesNonDefaultLanguage: Bool {
+    public var choosesNonDefaultLanguage: Bool {
         language != nil && language != defaultLanguage
     }
 
     /// 言語を選ぶ。nilなら送らずにサーバーに任せる。
-    func choose(language: String?) {
+    public func choose(language: String?) {
         guard !isPosting else { return }
         self.language = language
         hasChosenLanguage = true
     }
 
     /// 添付を閲覧注意にして投稿する。
-    var isSensitive: Bool {
+    public var isSensitive: Bool {
         draftToPost.sensitive
     }
 
-    var remainingCharacters: Int {
+    public var remainingCharacters: Int {
         maxCharacters - draftToPost.length(charactersReservedPerURL: charactersReservedPerURL)
     }
 
     /// 投稿ボタンを押せる。添付の準備が済んでいなくても、失敗したものがなければ押せ、済むのを待ってから送る。
-    var canPost: Bool {
+    public var canPost: Bool {
         !isPosting && (hasResolvedDefaults || hasChosenVisibility || editedStatus != nil)
             && draftToPost.canSubmit(maxCharacters: maxCharacters, charactersReservedPerURL: charactersReservedPerURL, maxMediaAttachments: maxMediaAttachments, pollLimits: pollLimits)
             && !attachments.contains { attachmentStatus(of: $0.id) == .descriptionFailed }
     }
 
     /// 添付のアップロードと代替テキストの送信が全部済み、待たずに送れる。
-    var isMediaReady: Bool {
+    public var isMediaReady: Bool {
         descriptionTasks.isEmpty && draftToPost.mediaIDs != nil
     }
 
@@ -175,62 +174,62 @@ final class ComposeModel {
     /// 読めなかったときは、次に書き始めたときに読み直す。
     /// 編集している投稿の添付で上限まで埋まっていても開かない。ピッカーの上限の0は、選べないではなく上限なしを意味するため。
     /// 投票の欄を出している間と、引用している間も開かない。Mastodonは投票や引用と添付を一緒に付けられないため。
-    var canAttachMedia: Bool {
+    public var canAttachMedia: Bool {
         !isPosting && hasLoadedConfiguration && pickerSelectionLimit > 0 && poll == nil && !isQuoting
     }
 
     /// メディアをペーストできる。ピッカーと違い、上限まで埋まっていても受け付け、入りきらない分を知らせる。
     /// 投票の欄を出している間と、引用している間は受け付けない。
-    var canPasteMedia: Bool {
+    public var canPasteMedia: Bool {
         !isPosting && hasLoadedConfiguration && poll == nil && !isQuoting
     }
 
     /// 投票の欄を足せる。添付があるときと引用しているときは、Mastodonが一緒に付けられないため足せない。
     /// 編集では足せない。投票の付いた投稿の編集は、元の投票をそのまま送り直す。決まりはdocs/compose.mdの「自分の投稿の編集」にある。
-    var canAddPoll: Bool {
+    public var canAddPoll: Bool {
         !isPosting && attachments.isEmpty && editedStatus == nil && !isQuoting
     }
 
     /// 引用している。書き直している予約の引用は、引用元の投稿を持たずIDだけを持つ。
-    var isQuoting: Bool {
+    public var isQuoting: Bool {
         quoteTarget != nil || initialDraft.quotedStatusID != nil
     }
 
     /// 返信している。書き直している予約の返信は、返信先の投稿を持たずIDだけを持つ。
-    var isReplying: Bool {
+    public var isReplying: Bool {
         replyTo != nil || initialDraft.inReplyToID != nil
     }
 
     /// 予約の行を足せる。Mastodonは編集の予約を受け付けないため、編集では足せない。
-    var canSchedule: Bool {
+    public var canSchedule: Bool {
         !isPosting && editedStatus == nil
     }
 
     /// 予約の行を出す。日時は1時間より先の、いちばん近い正時にする。足せないときは何もしない。
-    func addSchedule() {
+    public func addSchedule() {
         guard scheduledAt == nil, canSchedule else { return }
         scheduledAt = ScheduledPosting.defaultDate(now: now(), calendar: calendar)
     }
 
     /// 予約の日時を変える。予約の行を出していなければ何もしない。
-    func setScheduledDate(_ date: Date) {
+    public func setScheduledDate(_ date: Date) {
         guard !isPosting, scheduledAt != nil else { return }
         scheduledAt = date
     }
 
     /// 予約の行を外し、すぐ投稿する下書きに戻す。
-    func removeSchedule() {
+    public func removeSchedule() {
         guard !isPosting else { return }
         scheduledAt = nil
     }
 
     /// 予約の日時として選べる最も早い日時。
-    var earliestScheduleDate: Date {
+    public var earliestScheduleDate: Date {
         ScheduledPosting.earliestDate(now: now(), calendar: calendar)
     }
 
     /// 投票の欄を出す。足せないときは何もしない。
-    func addPoll() {
+    public func addPoll() {
         guard poll == nil, canAddPoll else { return }
         // 締め切りは1日にする。サーバーの上限の外なら、選べるもののうち最初のもの。
         let choices = PollDraft.expiryChoices(within: pollLimits)
@@ -238,13 +237,13 @@ final class ComposeModel {
     }
 
     /// 選択肢を書き換える。最後の欄に書くと上限まで空の欄が増え、後ろに空の欄が並ぶと詰める。決まりは`PollDraft.setOption`にある。
-    func setPollOption(_ text: String, at index: Int) {
+    public func setPollOption(_ text: String, at index: Int) {
         guard !isPosting else { return }
         poll?.setOption(text, at: index, limits: pollLimits)
     }
 
     /// 投票の欄を外す。書いた選択肢も捨てる。
-    func removePoll() {
+    public func removePoll() {
         guard !isPosting else { return }
         poll = nil
     }
@@ -262,7 +261,7 @@ final class ComposeModel {
     }
 
     /// 選べる公開範囲。引用元がフォロワー限定なら、それより広い範囲は選べない。サーバーが受け付けないため。
-    func canChoose(_ visibility: Status.Visibility) -> Bool {
+    public func canChoose(_ visibility: Status.Visibility) -> Bool {
         guard editedStatus == nil, !isPosting else { return false }
         guard let limit = quoteTarget.flatMap(StatusDraft.maxVisibility(quoting:)) else { return true }
         return visibility.narrower(limit) == visibility
@@ -271,7 +270,7 @@ final class ComposeModel {
     /// インスタンスの上限と、ユーザーの既定の公開範囲、閲覧注意、言語を反映する。公開範囲と言語は、自分で選んでいたら変えない。
     /// 既定の閲覧注意は、この後に最初の添付を足したときから使う。
     /// - Parameter defaultLanguage: 既定の言語。読めなければnilで、今のままにする。既定を決めていなければ`.some(nil)`。
-    func apply(configuration: InstanceConfiguration?, defaultVisibility: Status.Visibility?, defaultSensitive: Bool?, defaultLanguage: String?? = nil) {
+    public func apply(configuration: InstanceConfiguration?, defaultVisibility: Status.Visibility?, defaultSensitive: Bool?, defaultLanguage: String?? = nil) {
         hasResolvedDefaults = true
         if let defaultLanguage {
             self.defaultLanguage = defaultLanguage
@@ -299,7 +298,7 @@ final class ComposeModel {
     }
 
     /// 編集では公開範囲を変えられないため、選んでも変えない。引用元より広い範囲も変えない。
-    func choose(_ visibility: Status.Visibility) {
+    public func choose(_ visibility: Status.Visibility) {
         guard canChoose(visibility) else { return }
         self.visibility = visibility
         hasChosenVisibility = true
@@ -307,13 +306,13 @@ final class ComposeModel {
 
     /// 本文のうち、返信先から自動で入れた宛先を除いた、自分で書いた部分。宛先を書き換えていたら本文全体。
     /// 編集では、元の本文も自分で書いたものなので本文全体。
-    var typedText: String {
+    public var typedText: String {
         guard editedStatus == nil, rewritingSchedule == nil else { return text }
         return text.hasPrefix(initialDraft.text) ? String(text.dropFirst(initialDraft.text.count)) : text
     }
 
     /// 編集のラベルの文字。返信の編集なら、誰への返信かも書く。返信先はメンションの中から探し、見つからなければ相手を書かない。
-    var editChipTitle: String? {
+    public var editChipTitle: String? {
         guard let editedStatus else { return nil }
         guard editedStatus.inReplyToId != nil else { return "投稿を編集中" }
         if editedStatus.inReplyToAccountId == myAccountID { return "自分への返信を編集中" }
@@ -330,7 +329,7 @@ final class ComposeModel {
     /// 送信を待つ間は変えない。送っている下書きと食い違い、成功して空に戻すときに新しい返信先まで消してしまうため。
     /// 同じ投稿を選び直したときも変えない。失敗した投稿を同じIdempotency-Keyで送り直せるようにするため。
     /// 返信と引用は一緒に付けないため、引用していれば外す。
-    func setReplyTarget(_ status: Status?) {
+    public func setReplyTarget(_ status: Status?) {
         guard !isPosting else { return }
         // 同じ投稿を元の投稿とブーストのように別の場所から選び直したときは、下書きを保ったまま、ラベルが指す先だけを選んだ方にする。
         if let status, status.displayed.id == replyTo?.displayed.id {
@@ -344,7 +343,7 @@ final class ComposeModel {
     /// 引用元を付け替える。nilなら引用をやめる。返信と引用は一緒に付けないため、返信先があれば外す。
     /// 自分で書いた本文と注意書き、公開範囲の扱いは、返信先を付け替えるときと同じ。
     /// Mastodonは引用に添付と投票を付けられないため、付けるときは添付と投票を外す。外してよいかは、呼ぶ側が先に聞く。
-    func setQuoteTarget(_ status: Status?) {
+    public func setQuoteTarget(_ status: Status?) {
         guard !isPosting else { return }
         if let status, status.displayed.id == quoteTarget?.displayed.id {
             quoteTarget = status
@@ -359,7 +358,7 @@ final class ComposeModel {
     }
 
     /// 引用を付けると外れる、添付か投票がある。
-    var hasQuoteConflicts: Bool {
+    public var hasQuoteConflicts: Bool {
         !attachments.isEmpty || poll != nil
     }
 
@@ -381,7 +380,7 @@ final class ComposeModel {
     }
 
     /// 書き直しのラベルの文字。返信か引用の予約なら、そう書く。返信先と引用元の投稿は持たないので、相手は書かない。
-    var rewriteChipTitle: String? {
+    public var rewriteChipTitle: String? {
         guard rewritingSchedule != nil else { return nil }
         if initialDraft.quotedStatusID != nil { return "予約した引用を書き直し中" }
         if initialDraft.inReplyToID != nil { return "予約した返信を書き直し中" }
@@ -390,7 +389,7 @@ final class ComposeModel {
 
     /// 捨てると失われる、自分で書いたものがある。編集と予約の書き直しは書き換えていなくても、始めたこと自体を失うものとして扱う。
     /// 返信先から自動で入れた宛先と注意書きは数えない。
-    var hasWrittenContent: Bool {
+    public var hasWrittenContent: Bool {
         editedStatus != nil
             || rewritingSchedule != nil
             || !typedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -403,7 +402,7 @@ final class ComposeModel {
     /// 投票を送り直せない投稿（締め切りまで5分を切った）でも、下書きを変えずにfalseを返す。
     /// 本文と注意書きは、HTMLの`content`ではなく、書いたときのソースから入れる。
     @discardableResult
-    func beginEditing(_ status: Status, source: StatusSource, now: Date = AppDependencies.now()) -> Bool {
+    public func beginEditing(_ status: Status, source: StatusSource, now: Date = SystemTime.now()) -> Bool {
         guard !isPosting, let draft = StatusDraft.edit(of: status, source: source, now: now) else { return false }
         removeAllAttachments()
         initialDraft = draft
@@ -428,7 +427,7 @@ final class ComposeModel {
     /// 予約した投稿を書き直し始める。今の下書きは捨てる。送っている間は始めずfalseを返す。
     /// 予約したときの内容と日時を戻す。元の予約は、送れたあとに取り消させる。
     @discardableResult
-    func beginRewriting(_ scheduled: ScheduledStatus) -> Bool {
+    public func beginRewriting(_ scheduled: ScheduledStatus) -> Bool {
         guard !isPosting else { return false }
         // 公開範囲を送っていない予約は、既定の公開範囲にする。まだ届いていなければ、届いたときに`apply`が入れ直す。
         let draft = StatusDraft.rewrite(of: scheduled, defaultVisibility: defaultVisibility ?? .public)
@@ -460,7 +459,7 @@ final class ComposeModel {
     }
 
     /// 下書きを空にして、返信先のない新しい投稿に戻す。編集していれば、編集をやめる。
-    func reset() {
+    public func reset() {
         initialDraft = StatusDraft()
         replyTo = nil
         quoteTarget = nil
@@ -495,7 +494,7 @@ final class ComposeModel {
     /// 予約の日時が今から5分より後でなければ送らずに知らせる。サーバーは過去の日時を断らずにすぐ投稿するため。
     /// 添付の準備が済んでいなければ、済むまで待ってから送る。待っている間に失敗したら送らずに知らせ、待つのをやめたら何もしない。
     /// 予約の日時は、押したときと送る直前の両方で確かめる。待っている間に近づくことがあるため。
-    func submit() async {
+    public func submit() async {
         guard canPost, acceptsSchedule() else { return }
         UserAction.submitPost.record()
         isPosting = true
@@ -545,7 +544,7 @@ final class ComposeModel {
     }
 
     /// 添付の準備を待つのをやめ、書ける状態に戻す。待っていなければ何もしない。サーバーに送り始めたあとは、取り消しても投稿されることがあるため。
-    func cancelWaitingForMedia() {
+    public func cancelWaitingForMedia() {
         guard isWaitingForMedia else { return }
         resumeMediaWait(.cancelled)
     }
@@ -599,62 +598,76 @@ private enum MediaWaitOutcome {
 // MARK: - メディアの添付
 
 /// 添付したメディア1つの、端末の側だけで持つもの。
-struct LocalMedia {
+public struct LocalMedia<Thumbnail> {
     /// ピッカーの`assetIdentifier`。開き直したときに前の選択として渡す。ペーストしたものはピッカーで選んでいないのでnil。
-    let assetIdentifier: String?
+    public let assetIdentifier: String?
     /// 読み込みを送り直すときに使う。前に選んだメディアはピッカーから読み直せないため、選んだときのものを持っておく。
     /// 引数のMIMEタイプの形式を避けて読み込む。
-    let load: @MainActor (_ avoiding: Set<String>) async throws -> LocalMediaFile
+    public let load: @MainActor (_ avoiding: Set<String>) async throws -> LocalMediaFile
     /// 添付から外したときに呼ぶ。ペーストしたものは足す前から読み込んでいて、`file`に入る前に外すとファイルが残るため、それを消す。
-    var discardLoading: @MainActor () -> Void = {}
+    public var discardLoading: @MainActor () -> Void = {}
     /// 読み込んだファイル。読み込む前と、読み込みに失敗したときはnil。
-    var file: LocalMediaFile?
-    var thumbnail: UIImage?
+    public var file: LocalMediaFile?
+    public var thumbnail: Thumbnail?
     /// 失敗の理由。`DraftAttachment.State.failed`は理由を持たないため、ここに持つ。
-    var failure: (any Error)?
+    public var failure: (any Error)?
     /// 代替テキストを送れなかった理由。送れないと`needsDescriptionUpdate`のまま止まるため、送り直す操作と表示に使う。
-    var descriptionFailure: (any Error)?
+    public var descriptionFailure: (any Error)?
     /// 送っている間の進み具合。0から1。
-    var progress: Double = 0
+    public var progress: Double = 0
     /// 端末で書き出している間と書き出したあとの進み具合。0から1。書き出さないならnil。
-    var exportProgress: Double?
+    public var exportProgress: Double?
     /// 送るファイル。縮めるために作り直したら、そのファイル。作り直さないなら読み込んだファイル。決める前はnil。
-    var sending: LocalMediaFile?
+    public var sending: LocalMediaFile?
     /// サーバーの上限のために縮めたときの前と後。
-    var reduction: MediaReduction?
+    public var reduction: MediaReduction?
     /// 送るファイルを、縮めるために作り直した。位置情報だけを除いて書き直したときは、元と同じ中身なのでfalse。切り抜いたときはtrue。
-    var sendingIsReencoded = false
+    public var sendingIsReencoded = false
     /// 送る前に切り抜く範囲。`file`は元のまま残し、送るファイルを作るときに当てる。切り抜かないならnil。
-    var crop: ImageCrop?
+    public var crop: ImageCrop?
     /// 切り抜く範囲を変えた回数。切り抜いたファイルの名前に入れる。
-    var cropCount = 0
+    public var cropCount = 0
     /// 動画に音声がある。読み込んで調べる前と、動画でないときはnil。
-    var hasAudio: Bool?
+    public var hasAudio: Bool?
     /// 動画の音声を除いて、GIFとして送る。Mastodonは音声のない動画をGIF（`gifv`）として扱うため。
-    var removesAudio = false
+    public var removesAudio = false
     /// GIFとして送るかを切り替えた回数。作り直したファイルの名前に入れる。
     /// 止めた前のアップロードがまだ書いていることがあり、同じ名前だと切り替えるたびに書き合うため。
-    var audioSwitchCount = 0
+    public var audioSwitchCount = 0
+
+    public init(
+        assetIdentifier: String?,
+        load: @escaping @MainActor (_ avoiding: Set<String>) async throws -> LocalMediaFile,
+        discardLoading: @escaping @MainActor () -> Void = {},
+        file: LocalMediaFile? = nil,
+        thumbnail: Thumbnail? = nil
+    ) {
+        self.assetIdentifier = assetIdentifier
+        self.load = load
+        self.discardLoading = discardLoading
+        self.file = file
+        self.thumbnail = thumbnail
+    }
 
     /// GIFとして送るかと、切り替えた回数。
-    var audioChoice: AudioChoice {
+    public var audioChoice: AudioChoice {
         AudioChoice(removesAudio: removesAudio, switchCount: audioSwitchCount)
     }
 
     /// 投稿欄とビューアで見せる種類。GIFとして送る動画はGIFにする。読み込む前はnil。
-    var displayKind: MediaAttachment.Kind? {
+    public var displayKind: MediaAttachment.Kind? {
         removesAudio ? .gifv : file?.kind
     }
 }
 
 /// 動画をGIFとして送るか（音声を除くか）と、切り替えた回数。切り替えた回数は、作り直したファイルの名前に入れる。
-struct AudioChoice {
-    var removesAudio = false
-    var switchCount = 0
+public struct AudioChoice {
+    public var removesAudio = false
+    public var switchCount = 0
 }
 
 /// 添付1つの、投稿欄とビューアで見せる状態。
-enum ComposeAttachmentStatus: Equatable {
+public enum ComposeAttachmentStatus: Equatable {
     /// 送るために、端末で動画を書き出している。
     case exporting
     /// ファイルを読み込んで送っている。
@@ -672,16 +685,24 @@ enum ComposeAttachmentStatus: Equatable {
 }
 
 /// 送る前に縮める大きさ（設定）と、作り直すときの好みの値（チューニング）。
-struct MediaPreparationSettings {
-    var imageSize: ImageUploadSize
-    var videoSize: VideoUploadSize
-    var imageQuality: Double
-    var videoQuality: VideoPlan.Quality
+public struct MediaPreparationSettings: Sendable {
+    public var imageSize: ImageUploadSize
+    public var videoSize: VideoUploadSize
+    public var imageQuality: Double
+    public var videoQuality: VideoPlan.Quality
     /// 書き出してから送るとき、進み具合の円のうち書き出しに割り振る割合。
-    var exportProgressShare: Double
+    public var exportProgressShare: Double
+
+    public init(imageSize: ImageUploadSize, videoSize: VideoUploadSize, imageQuality: Double, videoQuality: VideoPlan.Quality, exportProgressShare: Double) {
+        self.imageSize = imageSize
+        self.videoSize = videoSize
+        self.imageQuality = imageQuality
+        self.videoQuality = videoQuality
+        self.exportProgressShare = exportProgressShare
+    }
 
     /// 設定では縮めない。サーバーの上限を超えるものだけを縮める。メディアを添付しない画面とテストで使う。
-    static let keepsOriginal = MediaPreparationSettings(
+    public static let keepsOriginal = MediaPreparationSettings(
         imageSize: .original,
         videoSize: .original,
         imageQuality: TuningCatalog.mediaImageQuality.defaultValue,
@@ -691,21 +712,39 @@ struct MediaPreparationSettings {
 }
 
 /// 投稿欄がメディアのアップロードに使うもの。
-struct ComposeMediaService {
-    var upload: (MediaUpload) async throws -> MediaAttachment
-    var waitUntilProcessed: (String) async throws -> MediaAttachment
+public struct ComposeMediaService<Thumbnail> {
+    public var upload: (MediaUpload) async throws -> MediaAttachment
+    public var waitUntilProcessed: (String) async throws -> MediaAttachment
     /// サーバーのIDと代替テキストを受け取り、`PUT /api/v1/media/:id`で送る。
-    var updateDescription: (String, String) async throws -> MediaAttachment
-    var makeThumbnail: (LocalMediaFile) async -> UIImage?
+    public var updateDescription: (String, String) async throws -> MediaAttachment
+    public var makeThumbnail: (LocalMediaFile) async -> Thumbnail?
     /// 接続しているサーバーの今の版が処理できないと分かっている、画像の形式のMIMEタイプ。
-    var unprocessableImageTypes: @MainActor () -> Set<String>
+    public var unprocessableImageTypes: @MainActor () -> Set<String>
     /// 画像の形式を、接続しているサーバーの今の版では処理できないと覚える。
-    var recordUnprocessableImageType: @MainActor (String) -> Void
+    public var recordUnprocessableImageType: @MainActor (String) -> Void
     /// 送る前に縮める大きさと、作り直すときの好みの値。
-    var preparation: @MainActor () -> MediaPreparationSettings
+    public var preparation: @MainActor () -> MediaPreparationSettings
+
+    public init(
+        upload: @escaping (MediaUpload) async throws -> MediaAttachment,
+        waitUntilProcessed: @escaping (String) async throws -> MediaAttachment,
+        updateDescription: @escaping (String, String) async throws -> MediaAttachment,
+        makeThumbnail: @escaping (LocalMediaFile) async -> Thumbnail?,
+        unprocessableImageTypes: @escaping @MainActor () -> Set<String>,
+        recordUnprocessableImageType: @escaping @MainActor (String) -> Void,
+        preparation: @escaping @MainActor () -> MediaPreparationSettings
+    ) {
+        self.upload = upload
+        self.waitUntilProcessed = waitUntilProcessed
+        self.updateDescription = updateDescription
+        self.makeThumbnail = makeThumbnail
+        self.unprocessableImageTypes = unprocessableImageTypes
+        self.recordUnprocessableImageType = recordUnprocessableImageType
+        self.preparation = preparation
+    }
 
     /// メディアを添付しない画面とテストで使う。
-    static var unavailable: ComposeMediaService {
+    public static var unavailable: ComposeMediaService<Thumbnail> {
         ComposeMediaService(
             upload: { _ in throw CancellationError() },
             waitUntilProcessed: { _ in throw CancellationError() },
@@ -720,12 +759,12 @@ struct ComposeMediaService {
 
 extension ComposeModel {
     /// ピッカーに前の選択として渡すID。添付の並び順。
-    var attachedAssetIdentifiers: [String] {
+    public var attachedAssetIdentifiers: [String] {
         attachments.compactMap { localMedia[$0.id]?.assetIdentifier }
     }
 
     /// ピッカーで選べる枚数。編集している投稿に付いている添付とペーストした添付は、ピッカーの選択に入らないため、その分を除く。
-    var pickerSelectionLimit: Int {
+    public var pickerSelectionLimit: Int {
         max(maxMediaAttachments - attachments.filter { localMedia[$0.id]?.assetIdentifier == nil }.count, 0)
     }
 
@@ -734,7 +773,7 @@ extension ComposeModel {
     /// 送っている下書きは送る前にコピーしてあるので、ここで変えても影響しない。
     /// 添付の準備を待っている間に選択が変わったら、待つのをやめる。待ったあとに作る下書きが、押した時点と違う添付になるため。
     /// 押したときにシートは閉じるが、閉じ終わる前に選び直しが届くことがある。
-    func applyPickerSelection(_ selection: [PickedMedia]) {
+    public func applyPickerSelection(_ selection: [PickedMedia]) {
         let changes = pickerSelection.changes(current: attachedAssetIdentifiers, selected: selection.map(\.assetIdentifier))
         if isWaitingForMedia, !changes.removed.isEmpty || !changes.added.isEmpty {
             logger.info("compose: picker selection changed while waiting for media")
@@ -759,7 +798,7 @@ extension ComposeModel {
 
     /// ペーストしたメディアを後ろに足し、アップロードを始める。上限を超えた分は足さずに知らせる。
     /// 入る分だけ足すのは、全部を断るより、入りきらない分を選び直すほうが手間が少ないため。
-    func addPastedMedia(_ pasted: [PastedMedia]) {
+    public func addPastedMedia(_ pasted: [PastedMedia]) {
         let room = max(maxMediaAttachments - attachments.count, 0)
         let added = pasted.prefix(room)
         if attachments.isEmpty, defaultSensitive, !added.isEmpty {
@@ -769,7 +808,7 @@ extension ComposeModel {
             let load = media.load
             let attachment = DraftAttachment()
             attachments.append(attachment)
-            var local = LocalMedia(assetIdentifier: nil) { _ in try await load() }
+            var local = LocalMedia<Thumbnail>(assetIdentifier: nil) { _ in try await load() }
             local.discardLoading = media.discard
             localMedia[attachment.id] = local
             startUpload(attachment.id)
@@ -784,14 +823,14 @@ extension ComposeModel {
     }
 
     /// ピッカーを閉じた。
-    func mediaPickerDidClose() {
+    public func mediaPickerDidClose() {
         pickerSelection.pickerDidClose()
     }
 
     /// 投稿欄から添付を外す。ピッカーを開いていれば、ピッカーがまだ選んだままの選択を送ってきても足し直さない。
     /// 編集している投稿に付いている添付とペーストした添付は、ピッカーで選んだものではないため、そのまま外す。
     /// 送っている間と、準備を待っている間は外さない。送る中身は押した時点で決めるため。
-    func removeAttachment(_ id: DraftAttachment.ID, pickerIsOpen: Bool) {
+    public func removeAttachment(_ id: DraftAttachment.ID, pickerIsOpen: Bool) {
         guard !isPosting, attachments.contains(where: { $0.id == id }) else { return }
         if let assetIdentifier = localMedia[id]?.assetIdentifier {
             pickerSelection.didRemoveInDraft(assetIdentifier, pickerIsOpen: pickerIsOpen)
@@ -801,7 +840,7 @@ extension ComposeModel {
 
     /// 失敗した添付を送り直す。処理の待ち時間切れなら、サーバーに残っている同じIDで待ち直す。
     /// 代替テキストだけを送れなかったなら、代替テキストだけを送り直す。
-    func retryAttachment(_ id: DraftAttachment.ID) {
+    public func retryAttachment(_ id: DraftAttachment.ID) {
         guard let attachment = attachments.first(where: { $0.id == id }) else { return }
         switch attachment.state {
         case .failed:
@@ -816,7 +855,7 @@ extension ComposeModel {
 
     /// 動画をGIFとして送るか（音声を除くか）を切り替え、送り直す。送り終えていても、サーバーの添付は使わずに送り直す。
     /// 音声のない動画は、もとからGIFとして扱われるので切り替えない。
-    func setRemovesAudio(_ removesAudio: Bool, of id: DraftAttachment.ID) {
+    public func setRemovesAudio(_ removesAudio: Bool, of id: DraftAttachment.ID) {
         guard !isPosting, let local = localMedia[id], local.hasAudio == true, local.removesAudio != removesAudio else { return }
         logger.info("attachment removesAudio=\(removesAudio, privacy: .public)")
         localMedia[id]?.removesAudio = removesAudio
@@ -837,7 +876,7 @@ extension ComposeModel {
     }
 
     /// 代替テキストを書き換える。アップロードが済んでいればすぐ送り、済む前ならアップロードと一緒に（間に合わなければ済んでから）送る。
-    func setDescription(_ description: String, of id: DraftAttachment.ID) {
+    public func setDescription(_ description: String, of id: DraftAttachment.ID) {
         guard !isPosting, let index = attachments.firstIndex(where: { $0.id == id }), attachments[index].description != description else { return }
         attachments[index].description = description
         localMedia[id]?.descriptionFailure = nil
@@ -846,7 +885,7 @@ extension ComposeModel {
 
     /// 切り抜ける添付。読み込み終えた画像で、編集している投稿にもう付いていないもの。GIFは動きを保ったまま切り抜けないので除く。
     /// 送っている間と、準備を待っている間は切り抜かない。
-    func canCrop(_ id: DraftAttachment.ID) -> Bool {
+    public func canCrop(_ id: DraftAttachment.ID) -> Bool {
         guard !isPosting, let attachment = attachments.first(where: { $0.id == id }), !attachment.isAttachedToStatus,
               let file = localMedia[id]?.file
         else { return false }
@@ -858,7 +897,7 @@ extension ComposeModel {
     /// - Parameters:
     ///   - crop: 切り抜く範囲。切り抜かずに元のまま送るならnil。
     ///   - preview: 切り抜いた画像。送るファイルを作り終えるまで、投稿欄のサムネイルとビューアに出す。
-    func setCrop(_ crop: ImageCrop?, preview: UIImage?, of id: DraftAttachment.ID) {
+    public func setCrop(_ crop: ImageCrop?, preview: Thumbnail?, of id: DraftAttachment.ID) {
         guard canCrop(id), let local = localMedia[id], let file = local.file, let size = ImageReencoder.size(of: file.url),
               !ImageCrop.selectsSamePixels(local.crop, crop, in: size)
         else { return }
@@ -887,7 +926,7 @@ extension ComposeModel {
     }
 
     /// 添付を`index`の位置へ移す。投稿の`media_ids[]`はこの順になる。
-    func moveAttachment(_ id: DraftAttachment.ID, to index: Int) {
+    public func moveAttachment(_ id: DraftAttachment.ID, to index: Int) {
         guard !isPosting, let from = attachments.firstIndex(where: { $0.id == id }) else { return }
         let attachment = attachments.remove(at: from)
         attachments.insert(attachment, at: min(max(index, 0), attachments.count))
@@ -895,7 +934,7 @@ extension ComposeModel {
 
     /// 書き出しと送信の進み具合を1つにまとめた値。0から1。どちらもしていなければnil。
     /// 書き出すときは、円の前半を書き出し、後半を送信に割り振る。段階ごとに円を出し直すと、満ちた円がまた0から始まって見えるため。
-    func attachmentProgress(of id: DraftAttachment.ID) -> Double? {
+    public func attachmentProgress(of id: DraftAttachment.ID) -> Double? {
         guard let status = attachmentStatus(of: id), status == .exporting || status == .uploading, let local = localMedia[id] else { return nil }
         guard let export = local.exportProgress else { return local.progress }
         let share = media.preparation().exportProgressShare
@@ -903,7 +942,7 @@ extension ComposeModel {
     }
 
     /// 投稿欄とビューアで見せる状態。
-    func attachmentStatus(of id: DraftAttachment.ID) -> ComposeAttachmentStatus? {
+    public func attachmentStatus(of id: DraftAttachment.ID) -> ComposeAttachmentStatus? {
         guard let attachment = attachments.first(where: { $0.id == id }) else { return nil }
         switch attachment.state {
         case .uploading:
@@ -933,7 +972,7 @@ extension ComposeModel {
         attachments.removeAll { $0.id == id }
     }
 
-    func removeAllAttachments() {
+    public func removeAllAttachments() {
         for attachment in attachments {
             discardAttachment(attachment.id)
         }
@@ -1023,7 +1062,7 @@ extension ComposeModel {
         let report: @Sendable (Double) -> Void = { [weak self] fraction in
             Task { @MainActor in self?.setProgress(fraction, of: id) }
         }
-        let upload = try await LocalMediaLoader.upload(of: file, description: description)
+        let upload = try await file.upload(description: description)
         return try await UploadProgress.$report.withValue(report) {
             try await media.upload(upload)
         }
@@ -1158,7 +1197,7 @@ extension ComposeModel {
     }
 
     /// サーバーが処理できなかったファイルを捨て、その形式を避けて読み込み直す。サムネイルは同じ写真なので作り直さない。
-    private func reloadFile(_ id: DraftAttachment.ID, local: LocalMedia, avoiding rejected: LocalMediaFile) async throws -> LocalMediaFile {
+    private func reloadFile(_ id: DraftAttachment.ID, local: LocalMedia<Thumbnail>, avoiding rejected: LocalMediaFile) async throws -> LocalMediaFile {
         rejected.remove()
         localMedia[id]?.file = nil
         localMedia[id]?.sending = nil
@@ -1172,7 +1211,7 @@ extension ComposeModel {
     }
 
     /// 読み込み済みならそのファイルを使う。初めて読み込んだら、サムネイルも作り始める。
-    private func loadFile(_ id: DraftAttachment.ID, local: LocalMedia) async throws -> LocalMediaFile {
+    private func loadFile(_ id: DraftAttachment.ID, local: LocalMedia<Thumbnail>) async throws -> LocalMediaFile {
         if let file = local.file { return file }
         let file = try await local.load(media.unprocessableImageTypes())
         guard localMedia[id] != nil, !Task.isCancelled else {

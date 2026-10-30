@@ -101,7 +101,7 @@ enum AttachmentStripCatalog {
         case .ready, .sendingDescription, .descriptionFailed:
             .uploaded(MediaAttachment(id: id.uuidString, type: kind ?? .image, url: nil, previewUrl: nil, description: description))
         }
-        let local = LocalMedia(
+        let local = LocalMedia<UIImage>(
             assetIdentifier: id.uuidString,
             load: { _ in throw LocalMediaError.loadFailed },
             file: kind.map { LocalMediaFile(url: URL(filePath: "/dev/null"), mimeType: "", kind: $0) },

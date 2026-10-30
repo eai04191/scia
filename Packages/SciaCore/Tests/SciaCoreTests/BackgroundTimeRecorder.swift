@@ -1,5 +1,3 @@
-@testable import Scia
-
 /// バックグラウンドの時間を頼んだ数と、まだ返していない数を数える。送っている間だけ頼んでいることを、テストが確かめるのに使う。
 @MainActor
 final class BackgroundTimeRecorder {

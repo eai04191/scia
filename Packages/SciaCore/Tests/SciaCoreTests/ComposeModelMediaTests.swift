@@ -1,11 +1,9 @@
 import Foundation
 import ImageIO
-import SciaCore
+@testable import SciaCore
 import SciaTesting
 import UniformTypeIdentifiers
 import Testing
-import UIKit
-@testable import Scia
 
 /// 投稿欄で選んだメディアのアップロードと、投稿の`media_ids[]`。
 @Suite(.scratch)
@@ -95,10 +93,7 @@ struct ComposeModelMediaTests {
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "\(id).jpg")
         // 送る前に大きさを読むので、読める画像にする。
-        try #require(UIGraphicsImageRenderer(size: CGSize(width: 4, height: 3)).jpegData(withCompressionQuality: 0.8) { context in
-            UIColor.systemBlue.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 4, height: 3))
-        } as Data?).write(to: url)
+        try writePhoto(width: 4, height: 3, to: url)
         return PickedMedia(assetIdentifier: id) { _ in LocalMediaFile(url: url, mimeType: "image/jpeg", kind: .image) }
     }
 
@@ -136,22 +131,30 @@ struct ComposeModelMediaTests {
         }
     }
 
-    /// 写真を書き出す。`noise`なら、縮めると容量が減るよう、画素ごとにばらばらの色にする。
-    private func writePhoto(width: Int, height: Int, noise: Bool = false, to url: URL) throws {
-        let format = UIGraphicsImageRendererFormat()
-        format.scale = 1
-        let data = UIGraphicsImageRenderer(size: CGSize(width: width, height: height), format: format).jpegData(withCompressionQuality: 0.9) { context in
-            UIColor.systemBlue.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
-            guard noise else { return }
+    /// 塗りつぶした画像。`noise`なら、縮めると容量が減るよう、4画素四方ごとにばらばらの色にする。
+    private func image(width: Int, height: Int, noise: Bool = false) throws -> CGImage {
+        let context = try #require(CGContext(
+            data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+            space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ))
+        context.setFillColor(CGColor(red: 0.2, green: 0.5, blue: 0.8, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+        if noise {
             for y in stride(from: 0, to: height, by: 4) {
                 for x in stride(from: 0, to: width, by: 4) {
-                    UIColor(hue: .random(in: 0...1), saturation: 1, brightness: .random(in: 0.3...1), alpha: 1).setFill()
+                    context.setFillColor(CGColor(red: .random(in: 0...1), green: .random(in: 0...1), blue: .random(in: 0...1), alpha: 1))
                     context.fill(CGRect(x: x, y: y, width: 4, height: 4))
                 }
             }
         }
-        try data.write(to: url)
+        return try #require(context.makeImage())
+    }
+
+    /// 写真をJPEGで書き出す。`noise`なら、縮めると容量が減るよう、画素ごとにばらばらの色にする。
+    private func writePhoto(width: Int, height: Int, noise: Bool = false, to url: URL) throws {
+        let destination = try #require(CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil))
+        CGImageDestinationAddImage(destination, try image(width: width, height: height, noise: noise), [kCGImageDestinationLossyCompressionQuality: 0.9] as CFDictionary)
+        #expect(CGImageDestinationFinalize(destination))
     }
 
     /// 対応形式として返しながらHEICを処理できないサーバー（Mastodon 4.7.2と4.7.3）では、同じ写真のJPEGで1回だけ送り直し、その形式を覚える。
@@ -196,10 +199,7 @@ struct ComposeModelMediaTests {
         let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let url = folder.appending(path: "located.jpg")
-        let image = try #require(UIGraphicsImageRenderer(size: CGSize(width: 40, height: 30)).image { context in
-            UIColor.systemGreen.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 40, height: 30))
-        }.cgImage)
+        let image = try image(width: 40, height: 30)
         let destination = try #require(CGImageDestinationCreateWithURL(url as CFURL, UTType.jpeg.identifier as CFString, 1, nil))
         CGImageDestinationAddImage(destination, image, [kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 35.68, kCGImagePropertyGPSLatitudeRef: "N"]] as CFDictionary)
         #expect(CGImageDestinationFinalize(destination))
@@ -231,10 +231,7 @@ struct ComposeModelMediaTests {
         }
         let heic = try folder().appending(path: "a.heic")
         let jpeg = try folder().appending(path: "a.jpg")
-        let image = try #require(UIGraphicsImageRenderer(size: CGSize(width: 40, height: 30)).image { context in
-            UIColor.systemGreen.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 40, height: 30))
-        }.cgImage)
+        let image = try image(width: 40, height: 30)
         let destination = try #require(CGImageDestinationCreateWithURL(heic as CFURL, UTType.heic.identifier as CFString, 1, nil))
         CGImageDestinationAddImage(destination, image, [kCGImagePropertyGPSDictionary: [kCGImagePropertyGPSLatitude: 35.68, kCGImagePropertyGPSLatitudeRef: "N"]] as CFDictionary)
         #expect(CGImageDestinationFinalize(destination))
@@ -1018,10 +1015,7 @@ struct ComposeModelMediaTests {
         let folder = TestScratch.url("ComposeModelMediaTests")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         let heic = folder.appending(path: "p.heic")
-        let image = try #require(UIGraphicsImageRenderer(size: CGSize(width: 40, height: 30)).image { context in
-            UIColor.systemGreen.setFill()
-            context.fill(CGRect(x: 0, y: 0, width: 40, height: 30))
-        }.cgImage)
+        let image = try image(width: 40, height: 30)
         let destination = try #require(CGImageDestinationCreateWithURL(heic as CFURL, UTType.heic.identifier as CFString, 1, nil))
         CGImageDestinationAddImage(destination, image, nil)
         #expect(CGImageDestinationFinalize(destination))

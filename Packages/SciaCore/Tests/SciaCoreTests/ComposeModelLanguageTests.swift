@@ -1,8 +1,7 @@
 import Foundation
-import SciaCore
+@testable import SciaCore
 import SciaTesting
 import Testing
-@testable import Scia
 
 /// 投稿欄の言語。決まりはdocs/compose.mdの「投稿の言語」にある。
 @MainActor

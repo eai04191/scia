@@ -1,8 +1,7 @@
 import Foundation
-import SciaCore
+@testable import SciaCore
 import SciaTesting
 import Testing
-@testable import Scia
 
 @MainActor
 struct ComposeModelTests {

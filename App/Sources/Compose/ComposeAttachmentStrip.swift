@@ -37,7 +37,7 @@ final class ComposeAttachmentStrip: UIView {
 
     struct Item {
         let attachment: DraftAttachment
-        let local: LocalMedia?
+        let local: LocalMedia<UIImage>?
         let status: ComposeAttachmentStatus
         /// 送っている間の進み具合。0から1。送っていなければnil。
         var progress: Double? = nil
