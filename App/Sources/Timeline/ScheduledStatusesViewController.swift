@@ -5,11 +5,7 @@ import UIKit
 /// 行のタップで日時を変え、長押しのメニューに、日時を変える、投稿欄に戻して書き直す、取り消すを置き、取り消すは左へのスワイプでもできる。
 @MainActor
 final class ScheduledStatusesViewController: UICollectionViewController {
-    enum ContentState: Equatable {
-        case loading
-        case loaded
-        case failed(ErrorPresentation)
-    }
+    typealias ContentState = ScheduledStatusesContentState
 
     var onAppearing: () -> Void = {}
     var onDisappearing: () -> Void = {}
