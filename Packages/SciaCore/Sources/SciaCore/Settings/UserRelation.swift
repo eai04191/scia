@@ -115,7 +115,7 @@ public final class UserRelationLoad {
         }
     }
 
-    /// 相手との関係。自分ならnil。
+    /// 相手との関係。自分との関係も読む。
     public var value: UserRelation? {
         get async throws {
             let task = relationTask ?? Task { try await load(try await identity) }
@@ -127,8 +127,8 @@ public final class UserRelationLoad {
 
 /// 関係の項目を組むときに、手元で分かっている相手との関係。
 public enum KnownRelation: Sendable {
-    /// 自分。関係の項目を出さない。
-    case myself
+    /// 自分。関係の項目のうちメモだけを出す。自分との関係を覚えていなければnil。
+    case myself(UserRelation?)
     case relation(UserRelation)
 }
 

@@ -134,6 +134,27 @@ struct ProfileStoreTests {
         #expect(store.pinned == [pinned])
     }
 
+    /// 自分のプロフィールでも関係を読み、自分に書いたメモを出せるようにする。フォローのボタンは出さないまま。メモを書いたあとの関係も反映する。
+    @Test func myselfLoadsRelationshipForNote() async throws {
+        let known = try account()
+        let cache = localRelationships()
+        let store = ProfileStore(account: known, myAccountID: "2", postsFilter: .standard, relationshipCache: cache, api: makeAPI(
+            account: known,
+            relationship: Relationship(id: "2", note: "TODO")
+        ))
+
+        let failures = await store.loadProfile()
+
+        #expect(failures.isEmpty)
+        #expect(store.followState == .myself)
+        #expect(store.relationship?.note == "TODO")
+        #expect(cache[known.id]?.note == "TODO")
+
+        store.apply(Relationship(id: "2", note: "済んだ"))
+        #expect(store.relationship?.note == "済んだ")
+        #expect(store.followState == .myself)
+    }
+
     /// 同じ相手を開き直したら、読み込む前から前に読んだ関係で始める。読んだら新しい関係で置き換える。
     @Test func reopenedProfileStartsFromCachedRelationship() async throws {
         let known = try account()

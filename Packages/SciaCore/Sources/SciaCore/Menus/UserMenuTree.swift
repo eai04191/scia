@@ -63,11 +63,11 @@ public struct UserMenuActions {
     public let copyHandle: @MainActor (UserMenuTarget, _ notify: @escaping @MainActor () -> Void) -> Void
     /// 相手のIDと`acct`を決める。リンクのメンションは、プロフィールのURLから探す。見つからなければ投げる。
     public let resolveTarget: @MainActor (UserMenuTarget) async throws -> UserIdentity
-    /// `resolveTarget`で決めた相手と自分の関係を読む。覚えている関係を読み直している途中なら、それを待つ。自分ならnil。
+    /// `resolveTarget`で決めた相手と自分の関係を読む。相手が自分でも読む。覚えている関係を読み直している途中なら、それを待つ。
     public let loadRelation: @MainActor (UserMenuTarget, UserIdentity) async throws -> UserRelation?
     /// 手元で分かっている相手との関係。相手のIDが分からないか、関係を覚えていなければnil。
     public let knownRelation: @MainActor (UserMenuTarget) -> KnownRelation?
-    /// 相手たちとの関係をまとめて1回で読み直し、覚えておく。自分は除く。
+    /// 相手たちとの関係をまとめて1回で読み直し、覚えておく。自分のメモを出すため、自分も含める。
     public let reloadRelations: @MainActor ([String]) -> Void
     /// 関係の項目で選んだ変更を送る。取り消しにくい変更は、確かめてから送る。
     public let changeRelation: @MainActor (UserRelationChange, UserRelation) -> Void
@@ -238,13 +238,25 @@ extension UserMenuTree {
     /// 関係の項目。関係を覚えている相手は、覚えている関係でその場で組む。
     /// 覚えていない相手は、読む間は読み込み中の行を出し、読んでから中身を渡す。開く途中のサブメニューで中身が替わると動きが崩れるため、
     /// メニューを開いたときに出る人の関係をまとめて読み直し（`reloadRelations`）、次からは覚えている関係で組めるようにしている。
-    /// 自分には出さない。読めなかったら、`failureSlots`の項目にだけ押せない行で知らせ、ほかの項目は何も出さない。項目ごとに同じ知らせが並ばないようにするため。
+    /// 自分には、自分用の書き置きに使えるメモだけを出す。読めなかったら、`failureSlots`の項目にだけ押せない行で知らせ、ほかの項目は何も出さない。項目ごとに同じ知らせが並ばないようにするため。
     /// 通報は関係で中身が変わらないため、関係を待たずに出す。リンクのメンションのように相手を探す必要があるときは、探してから出す。
     func relationNodes(_ item: UserMenuItem, actions: UserMenuActions, load: UserRelationLoad, failureSlots: RelationFailureSlots) -> [MenuNode<UserMenuCommand>] {
         let reportableStatusID = reportableStatusID
         switch actions.knownRelation(subject.target) {
-        case .myself:
-            return []
+        case .myself(let relation):
+            guard item == .note else { return [] }
+            if let relation {
+                return Self.relationNodes(item, relation: relation)
+            }
+            return [.deferred {
+                do {
+                    guard let relation = try await load.value else { return [] }
+                    return Self.relationNodes(item, relation: relation)
+                } catch {
+                    // 自分に出す関係の項目はメモだけなので、知らせる場所を選ばずにメモの場所で知らせる。
+                    return [Self.relationFailureNode]
+                }
+            }]
         case .relation(let relation):
             return Self.relationNodes(item, relation: relation, reportableStatusID: reportableStatusID)
         case nil:
@@ -256,6 +268,10 @@ extension UserMenuTree {
         return [.deferred {
             do {
                 guard let relation = try await load.value else { return [] }
+                // リンクのメンションは、探すまで自分かどうか分からない。
+                if item != .note, case .myself = actions.knownRelation(.account(id: relation.accountID, acct: relation.acct)) {
+                    return []
+                }
                 return Self.relationNodes(item, relation: relation, reportableStatusID: reportableStatusID)
             } catch {
                 // 相手を探せなかったのか、探せて関係だけ読めなかったのかで、知らせる場所が違う。探した結果は分け合っているので、もう一度探しはしない。

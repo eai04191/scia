@@ -144,7 +144,7 @@ public final class ProfileStore {
         self.account = account
         isMyself = account.id == myAccountID
         self.relationshipCache = relationshipCache
-        relationship = isMyself ? nil : relationshipCache[account.id]
+        relationship = relationshipCache[account.id]
         filtering = StatusFiltering(context: .account, myAccountID: myAccountID)
         self.tab = tab
         self.postsFilter = postsFilter
@@ -185,9 +185,8 @@ public final class ProfileStore {
         let pinnedLoad = pinnedLoads
         return await withTaskGroup(of: (Part, Result<Loaded, any Error>).self) { group -> ProfileLoadFailures in
             group.addTask { (.account, await Result { .account(try await api.account(id)) }) }
-            if !isMyself {
-                group.addTask { (.relationship, await Result { .relationship(try await api.relationship(id)) }) }
-            }
+            // 自分のプロフィールでも読む。自分に書いたメモが関係に入って返るため。
+            group.addTask { (.relationship, await Result { .relationship(try await api.relationship(id)) }) }
             // 固定された投稿は一覧の補足なので、読めなかったものは並べない。読めなかったことはデコードの記録に残る。
             group.addTask { (.pinned, await Result { .pinned(try await api.statuses(id, AccountStatusFilter(pinned: true), TimelineQuery(limit: pageSize)).statuses) }) }
             var failures = ProfileLoadFailures()
@@ -238,7 +237,7 @@ public final class ProfileStore {
 
     /// 読めなかった関係を読み直す。失敗したら、読めなかったままにして投げる。読み直している途中なら何もしない。
     public func reloadRelationship() async throws {
-        guard !isMyself, !isReloadingRelationship else { return }
+        guard !isReloadingRelationship else { return }
         isReloadingRelationship = true
         defer { isReloadingRelationship = false }
         let followChangesAtRequest = followChanges
@@ -286,7 +285,7 @@ public final class ProfileStore {
 
     /// ユーザーのメニューなど、ほかの画面で変えた関係を反映する。前に頼んだ読み直しの応答が後から届いても、古い関係として捨てる。
     public func apply(_ relationship: Relationship) {
-        guard !isMyself, relationship.id == account.id else { return }
+        guard relationship.id == account.id else { return }
         self.relationship = relationship
         relationshipFailed = false
         followChanges += 1

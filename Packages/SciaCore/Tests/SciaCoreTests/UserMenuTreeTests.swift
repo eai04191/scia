@@ -181,9 +181,56 @@ struct UserMenuTreeTests {
         #expect(!user.contains("…"))
     }
 
-    /// 自分には関係の項目も通報も出さない。
-    @Test func myselfHasNoRelationItems() {
-        #expect(submenu(actions: actions { _ in .myself }) == "@alice[プロフィール,メンション,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く]")
+    /// 自分には、関係の項目のうちメモだけを出し、通報も出さない。自分との関係を覚えていれば、メモの項目をその場で組む。
+    @Test func myselfHasOnlyNoteItem() {
+        let me = UserRelation(accountID: "2", acct: "alice", relationship: Relationship(id: "2", note: "TODO"))
+        #expect(submenu(actions: actions { _ in .myself(me) }) == "@alice[プロフィール,メンション,メモを編集,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く]")
+        #expect(submenu(actions: actions { _ in .myself(nil) }) == "@alice[プロフィール,メンション,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く]")
+    }
+
+    /// 自分との関係を覚えていなければ、読んでからメモの項目を組む。読めなければ、メモの場所に知らせる。自分にはほかに関係の項目を出さないため。
+    @Test func myselfNoteWaitsForRelation() async throws {
+        func loaded(_ loadRelation: @escaping @MainActor (UserMenuTarget, UserIdentity) async throws -> UserRelation?) async throws -> [String] {
+            let actions = UserMenuActions(
+                mention: { _ in }, copyHandle: { _, _ in },
+                resolveTarget: { _ in UserIdentity(id: "2", acct: "alice") }, loadRelation: loadRelation, knownRelation: { _ in .myself(nil) }, reloadRelations: { _ in },
+                changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, accounts: AccountCache { _ in [] }
+            )
+            let tree = UserMenuTree(subject: UserMenuSubject(.account(alice)), actions: actions, linkBrowser: .inApp)
+            let menu = try #require(tree.menu(groups: layout(visible: [.follow, .note, .mute]), avatar: nil))
+            var loaded: [String] = []
+            for node in menu.flattenedChildren {
+                guard case .deferred(let load) = node.content else { continue }
+                loaded.append(MenuNodeTests.describe(await load()))
+            }
+            return loaded
+        }
+
+        #expect(try await loaded { _, identity in UserRelation(accountID: identity.id, acct: identity.acct, relationship: Relationship(id: identity.id)) } == ["メモを追加"])
+        #expect(try await loaded { _, _ in throw URLError(.notConnectedToInternet) } == ["関係を読み込めませんでした(押せない)"])
+    }
+
+    /// リンクのメンションから選んだ相手が自分だったら、探して関係を読んだあとも、メモのほかの関係の項目は出さない。
+    @Test func mentionLinkToMyselfShowsOnlyNote() async throws {
+        let actions = UserMenuActions(
+            mention: { _ in }, copyHandle: { _, _ in },
+            resolveTarget: { _ in UserIdentity(id: "2", acct: "alice") },
+            loadRelation: { _, identity in UserRelation(accountID: identity.id, acct: identity.acct, relationship: Relationship(id: identity.id)) },
+            knownRelation: { target in
+                guard case .account = target else { return nil }
+                return .myself(nil)
+            },
+            reloadRelations: { _ in }, changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, accounts: AccountCache { _ in [] }
+        )
+        let tree = UserMenuTree(subject: UserMenuSubject(mentionLink: try #require(alice.url), acct: "alice"), actions: actions, linkBrowser: .inApp)
+        let menu = try #require(tree.menu(groups: layout(visible: [.follow, .note, .report]), avatar: nil))
+        var loaded: [String] = []
+        for node in menu.flattenedChildren {
+            guard case .deferred(let load) = node.content else { continue }
+            loaded.append(MenuNodeTests.describe(await load()))
+        }
+
+        #expect(loaded == ["", "メモを追加", ""])
     }
 
     /// 「その他」に何かあれば、1項目でもサブメニューにする。出す項目がなければ何も出さない。

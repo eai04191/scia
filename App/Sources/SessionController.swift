@@ -1651,10 +1651,9 @@ final class SessionController {
         }
     }
 
-    /// ユーザーのメニューの関係の項目のために、相手との関係を読む。自分ならnil。
+    /// ユーザーのメニューの関係の項目のために、相手との関係を読む。自分のメモを出すため、自分との関係も読む。
     /// 読んだ関係は覚えておき、次にメニューを開いたときと、開き直したプロフィールで使う。
     private func relation(of target: UserMenuTarget, identity: UserIdentity) async throws -> UserRelation? {
-        guard identity.id != credential.accountID else { return nil }
         // リンクのメンションは、相手を探すまでIDが分からず、メニューを開いたときにまとめて読み直せないため、ここで読み直す。
         if case .profileURL = target {
             profiles.relationships.reload([identity.id], purpose: .action)
@@ -1668,14 +1667,15 @@ final class SessionController {
     /// 相手のIDが分かっていて、自分か、関係を覚えている相手なら、その関係。メニューを組むときに、読まずにその場で関係の項目を組むのに使う。
     private func knownRelation(of target: UserMenuTarget) -> KnownRelation? {
         guard case .account(let id, let acct) = target else { return nil }
-        guard id != credential.accountID else { return .myself }
-        return profiles.relationships[id].map { .relation(UserRelation(accountID: id, acct: acct, relationship: $0)) }
+        let relation = profiles.relationships[id].map { UserRelation(accountID: id, acct: acct, relationship: $0) }
+        guard id != credential.accountID else { return .myself(relation) }
+        return relation.map { .relation($0) }
     }
 
     /// メニューに出る人の関係を、まとめて1回で読み直す。別の端末で変えた関係も、次に開いたときから反映する。
     private func reloadRelations(_ ids: [String]) {
         // 関係を覚えていない人は、開いたメニューがこの読み直しを待つので、操作として送る。
-        profiles.relationships.reload(ids.filter { $0 != credential.accountID }, purpose: .action)
+        profiles.relationships.reload(ids, purpose: .action)
     }
 
     /// フォローを外す、リクエストを取り消す、ブロックは、押し間違えに備えて確かめてから送る。プロフィール画面のフォローのボタンと同じく、フォローとミュートは確かめずに送る。

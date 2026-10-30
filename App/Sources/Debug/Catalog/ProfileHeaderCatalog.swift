@@ -250,9 +250,8 @@ enum ProfileHeaderCatalog {
         let backdrop = UIView()
         backdrop.overrideUserInterfaceStyle = style
         backdrop.backgroundColor = .systemBackground
-        // 自分にしか見えないメモの欄が、色を付けたカードと見分けられるかも見る。自分のプロフィールには出ない。
-        let privateNote = followState == .myself ? "" : "自分にしか見えないメモ"
-        let view = header(account, followState, pinned: Array(pinnedStatuses.prefix(2)), privateNote: privateNote) { header in
+        // 自分にしか見えないメモの欄が、色を付けたカードと見分けられるかも見る。自分のプロフィールにも出る。
+        let view = header(account, followState, pinned: Array(pinnedStatuses.prefix(2)), privateNote: "自分にしか見えないメモ") { header in
             header.accentOptions = ProfileCardPalette.Options(tuning: AppDependencies.tuning)
             header.onChangeScreenTint = { [weak backdrop] tint in backdrop?.tintColor = tint }
         }
