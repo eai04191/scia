@@ -13,7 +13,7 @@ public enum UserAction: Sendable, Equatable {
     case scrollToTop(screen: String)
     case tapNewArrivals(screen: String)
     case tapGap(screen: String)
-    /// 長押しで投稿のメニューを出した。
+    /// メニューを出した。開き方（タップか長押しか）と対象（投稿、リンク、メディア、ユーザーなど）は記録しない。
     case openMenu(screen: String)
     case openViewer(count: Int, index: Int)
     case closeViewer(ViewerClose)
@@ -157,7 +157,7 @@ public enum UserAction: Sendable, Equatable {
         case .scrollToTop(let screen): "ステータスバーを押して\(Self.screenName(screen))の最上部へ戻った"
         case .tapNewArrivals(let screen): "\(Self.screenName(screen))の新着ボタンを押した"
         case .tapGap(let screen): "\(Self.screenName(screen))の読み込んでいない部分を押した"
-        case .openMenu(let screen): "\(Self.screenName(screen))で投稿を長押ししてメニューを開いた"
+        case .openMenu(let screen): "\(Self.screenName(screen))でメニューを開いた"
         case .openViewer(let count, let index): count == 1 ? "メディアをビューアで開いた" : "\(count)件のメディアの\(index + 1)件目をビューアで開いた"
         case .closeViewer(.drag): "ビューアをドラッグして閉じた"
         case .closeViewer(.button): "ビューアを閉じた"
