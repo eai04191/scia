@@ -1,7 +1,6 @@
 import CryptoKit
-import Foundation
+public import Foundation
 import os
-import SciaCore
 
 /// 添付ファイルの元のファイルを、合計の大きさに上限のあるディスクキャッシュに置く。共有や保存で縮めずに元の形式のまま渡すためと、
 /// ビューアで開き直した画像を通信せずに表示するために使う。
@@ -13,31 +12,31 @@ import SciaCore
 /// 整理で消してしまわないようにするため。
 ///
 /// 置く、整理する、引いてコピーするといった操作が重なると、引いたファイルをコピーする前に置き直しや整理で消してしまうため、actorで1つずつ行う。
-actor MediaFileCache {
+public actor MediaFileCache {
     /// 上限を超えたとき、ここまで減らす割合。整理のたびにすぐまた上限を超えないよう、少し余裕を持たせる（Nukeと同じ値）。
     private static let trimRatio = 0.7
 
-    nonisolated let directory: URL
+    public nonisolated let directory: URL
     /// 共有や保存に渡すコピーを置く場所。
-    nonisolated let sharingDirectory: URL
+    public nonisolated let sharingDirectory: URL
     /// 合計の大きさの上限（バイト）。
-    let sizeLimit: Int
+    public let sizeLimit: Int
     /// 引いたときや置いたときに、最後に使った日時として書く今の日時。
     private let now: @Sendable () -> Date
     private let logger = SciaLog.logger(category: "media")
     /// `removeAll()`で全部消すたびに進める。置く側は読み始めたときの値を`store`に渡し、その間に消していたら置かない。
     /// ログアウトの前に始めた読み込みが、消したあとにファイルを置き直さないため。
-    private(set) var generation = 0
+    public private(set) var generation = 0
 
     /// - Parameters:
     ///   - sharingDirectory: 共有や保存に渡すコピーを置く場所。共有先が読み終えたことを知るすべがないため、作るときに前回の起動で残したコピーを消す。
     ///   - sizeLimit: 合計の大きさの上限（バイト）。既定はNukeのディスクキャッシュの既定値と同じ150MB。
     ///   - now: 最後に使った日時として書く今の日時。テストでは、使った順を実際の時間に頼らずに決めるため、手で進める時計を渡す。
-    init(
+    public init(
         directory: URL = .cachesDirectory.appending(path: "MediaFiles"),
         sharingDirectory: URL = .temporaryDirectory.appending(path: "MediaSharing"),
         sizeLimit: Int = 150 * 1_024 * 1_024,
-        now: @escaping @Sendable () -> Date = AppDependencies.now
+        now: @escaping @Sendable () -> Date = SystemTime.now
     ) {
         self.directory = directory
         self.sharingDirectory = sharingDirectory
@@ -53,31 +52,31 @@ actor MediaFileCache {
     }
 
     /// `url`のファイルが置いてあれば、その場所。引いたものは最後に使った日時を更新し、整理で後回しにする。
-    func file(for url: URL) -> URL? {
+    public func file(for url: URL) -> URL? {
         guard let file = Self.storedFile(in: folder(for: url)) else { return nil }
         touch(file)
         return file
     }
 
     /// `url`のファイルが置いてあれば、その中身。引いたものは最後に使った日時を更新する。
-    func data(for url: URL) -> Data? {
+    public func data(for url: URL) -> Data? {
         file(for: url).flatMap { try? Data(contentsOf: $0) }
     }
 
     /// `url`のファイルが置いてあるか。最後に使った日時は更新しない。
-    func contains(_ url: URL) -> Bool {
+    public func contains(_ url: URL) -> Bool {
         Self.storedFile(in: folder(for: url)) != nil
     }
 
     /// `url`のファイルを消す。先読みの置き場から、ビューアで開いてメディアのキャッシュへ移したものを消すのに使う。
-    func remove(_ url: URL) {
+    public func remove(_ url: URL) {
         try? FileManager.default.removeItem(at: folder(for: url))
     }
 
     /// `data`を`url`のファイルとして`name`の名前で置き、置いた場所を返す。同じURLのファイルがあれば置き換える。
     /// 書き込みの途中で落ちても書きかけのファイルを置いたものとして扱わないよう、隠しファイルに書いてから名前を付け替える。
     /// - Parameter generation: 読み始めたときの`generation`。その後に`removeAll()`で消していたら、置かずに`CancellationError`を投げる。
-    func store(_ data: Data, named name: String, for url: URL, generation: Int) throws -> URL {
+    public func store(_ data: Data, named name: String, for url: URL, generation: Int) throws -> URL {
         guard generation == self.generation else { throw CancellationError() }
         let folder = folder(for: url)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -92,7 +91,7 @@ actor MediaFileCache {
     }
 
     /// `source`のファイルを`url`のファイルとして`name`の名前で置き（移す）、置いた場所を返す。大きな動画を一度にメモリへ読み込まないよう、ファイルのまま移す。
-    func store(movingFile source: URL, named name: String, for url: URL, generation: Int) throws -> URL {
+    public func store(movingFile source: URL, named name: String, for url: URL, generation: Int) throws -> URL {
         guard generation == self.generation else { throw CancellationError() }
         let folder = folder(for: url)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
@@ -101,7 +100,7 @@ actor MediaFileCache {
 
     /// `url`のファイルが置いてあれば、共有や保存に渡すコピーを作る。引いてからコピーするまでの間に置き直しや整理で消えないよう、1つの操作で行う。
     /// APFSでは中身をコピーせずに複製するため、大きなファイルでもすぐに済み、元が残っている間は場所も取らない。
-    func copyForSharing(for url: URL) throws -> URL? {
+    public func copyForSharing(for url: URL) throws -> URL? {
         guard let file = file(for: url) else { return nil }
         return try copyForSharing(file)
     }
@@ -116,17 +115,24 @@ actor MediaFileCache {
 
     /// 置いてあるファイル1つ。設定のストレージの画面で中身を見返すために並べる。
     /// どの投稿の、どのURLのものかは記録していないので持たない。
-    struct Entry: Identifiable, Sendable, Equatable {
+    public struct Entry: Identifiable, Sendable, Equatable {
         /// URLごとのフォルダーの名前。`copyForSharing(of:)`で引くのに使う。
-        let id: String
-        let file: URL
-        let size: Int
-        let lastUsed: Date
+        public let id: String
+        public let file: URL
+        public let size: Int
+        public let lastUsed: Date
+
+        public init(id: String, file: URL, size: Int, lastUsed: Date) {
+            self.id = id
+            self.file = file
+            self.size = size
+            self.lastUsed = lastUsed
+        }
     }
 
     /// 置いてあるファイルを、最後に使った日時の新しい順に並べる。並べるだけなので、最後に使った日時は更新しない。
     /// 書き込みの途中で落ちて、置いたファイルのないフォルダは並べない。
-    func entries() -> [Entry] {
+    public func entries() -> [Entry] {
         let keys: Set<URLResourceKey> = [.contentAccessDateKey, .totalFileAllocatedSizeKey]
         guard let folders = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return [] }
         return folders.compactMap { folder -> Entry? in
@@ -138,7 +144,7 @@ actor MediaFileCache {
 
     /// `entries()`で並べたファイルが残っていれば、共有や保存に渡すコピーを作る。並べたあとに整理で消えていればnil。
     /// 引いたものとして最後に使った日時を更新する。
-    func copyForSharing(of id: Entry.ID) throws -> URL? {
+    public func copyForSharing(of id: Entry.ID) throws -> URL? {
         // `SafeFileName`が区切りと先頭の`.`を外すので、キャッシュの直下のフォルダーしか引かない。
         guard let file = Self.storedFile(in: directory.appending(fileName: SafeFileName(id), directoryHint: .isDirectory)) else { return nil }
         touch(file)
@@ -148,7 +154,7 @@ actor MediaFileCache {
     /// 合計が上限を超えていたら、最後に使った日時の古いものから、上限の`trimRatio`倍まで消す。
     /// 最後に使ったものは、上限より大きくても消さない。置いた直後や引いた直後のファイルを、渡す前に消さないようにするため。
     /// 書き込みの途中で落ちて、置いたファイルのないフォルダは、上限にかかわらず消す。
-    func trim() {
+    public func trim() {
         let keys: Set<URLResourceKey> = [.contentAccessDateKey, .totalFileAllocatedSizeKey]
         guard let folders = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) else { return }
         var entries: [(folder: URL, accessDate: Date, size: Int)] = folders.compactMap { folder in
@@ -175,7 +181,7 @@ actor MediaFileCache {
     }
 
     /// 置いたファイルと共有用のコピーを全部消す。ログアウトで、そのアカウントで見た添付ファイルを残さないために呼ぶ。
-    func removeAll() {
+    public func removeAll() {
         generation += 1
         for folder in [directory, sharingDirectory] {
             do {
@@ -190,7 +196,7 @@ actor MediaFileCache {
 
     /// 置いたファイルを全部消す。設定のストレージの画面で、使う人が消すときに呼ぶ。
     /// 共有や保存に渡したコピーは、共有先がまだ読んでいるかもしれないので消さない。消したあとに置き直すときは、フォルダーを作り直す。
-    func removeCachedFiles() throws {
+    public func removeCachedFiles() throws {
         generation += 1
         do {
             try FileManager.default.removeItem(at: directory)

@@ -1,7 +1,7 @@
 import Foundation
 import SciaTesting
 import Testing
-@testable import Scia
+@testable import SciaCore
 
 @Suite(.scratch)
 struct MediaFileCacheTests {
@@ -65,7 +65,8 @@ struct MediaFileCacheTests {
 
             #expect(file.deletingLastPathComponent().deletingLastPathComponent().standardizedFileURL == directories.cache.standardizedFileURL, "\(name)を\(file.path)に置きました")
             #expect(!file.lastPathComponent.hasPrefix("."))
-            #expect(await cache.file(for: try url("a\(index)")) == file)
+            // macOSでは一時ディレクトリの`/var`が`/private/var`へのシンボリックリンクで、引いたURLはたどった形で返るので、たどってから比べる。
+            #expect(await cache.file(for: try url("a\(index)"))?.resolvingSymlinksInPath() == file.resolvingSymlinksInPath())
         }
         #expect(!FileManager.default.fileExists(atPath: directories.root.appending(path: "escaped.mp4").path))
     }
