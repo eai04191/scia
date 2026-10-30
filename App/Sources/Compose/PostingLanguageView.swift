@@ -38,7 +38,10 @@ struct PostingLanguageView: View {
                 }
             }
             .task(id: loadGeneration) {
-                await picker.loadLanguages()
+                // 使う人が開いた言語の選び方の中身なので、操作として読む。
+                await RequestPurpose.$current.withValue(.action) {
+                    await picker.loadLanguages()
+                }
             }
         }
     }

@@ -629,7 +629,7 @@ final class ProfileHeaderView: UIView {
         let sharperImage: (@MainActor (Int) async -> UIImage?)? = switch image {
         case .header: { [weak self] maxPixelSize in
             guard let self, let url = self.bannerURL else { return nil }
-            return try? await self.mediaImages.image(for: url, maxPixelSize: maxPixelSize, retriesNow: true)
+            return try? await self.mediaImages.image(for: url, maxPixelSize: maxPixelSize, retriesNow: true, purpose: .action)
         }
         case .avatar: nil
         }
@@ -973,7 +973,7 @@ final class ProfileHeaderView: UIView {
             return
         }
         bannerTask = Task { [weak self, mediaImages] in
-            guard let image = try? await mediaImages.image(for: url, maxPixelSize: pixelSize), let self, !Task.isCancelled, self.bannerURL == url else { return }
+            guard let image = try? await mediaImages.image(for: url, maxPixelSize: pixelSize, purpose: .display), let self, !Task.isCancelled, self.bannerURL == url else { return }
             UIView.transition(with: self, duration: 0.15, options: [.transitionCrossDissolve, .allowUserInteraction]) {
                 self.setBanner(image)
             }

@@ -126,6 +126,7 @@ struct RichTextDiffTests {
     }
 }
 
+@Suite(.requestPurpose(.action))
 struct StatusEditHistoryTests {
     private func makeClient(_ transport: StubTransport) throws -> MastodonClient {
         MastodonClient(

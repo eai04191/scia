@@ -4,6 +4,7 @@ import Testing
 
 /// スレッドの画面に、会話を平らに深さ優先で並べることと、開いている間に届いた返信、編集、削除を反映することを確かめる。
 @MainActor
+@Suite(.requestPurpose(.action))
 struct ThreadStoreTests {
     private let alice = Account(id: "1", username: "alice", acct: "alice", displayName: "Alice", avatar: nil)
     private let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)

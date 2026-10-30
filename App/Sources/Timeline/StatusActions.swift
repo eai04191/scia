@@ -334,7 +334,10 @@ extension TimelineViewController {
             }
             let unresolved = pending.filter { $0.account == nil }
             guard !unresolved.isEmpty, let accounts = userMenuActions?.accounts else { return }
-            let loaded = await accounts.load(unresolved.map(\.user.id))
+            // 使う人が開いたメニューに出す人なので、操作として読む。
+            let loaded = await RequestPurpose.$current.withValue(.action) {
+                await accounts.load(unresolved.map(\.user.id))
+            }
             for icon in unresolved {
                 if let account = loaded[icon.user.id] {
                     loadMenuIcon(of: account, replacing: icon.placeholder)

@@ -59,7 +59,7 @@ struct NotificationsControllerTests {
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
 
-        controller.start()
+        controller.start(purpose: .action)
         // 最初の読み込みのあと、つながったときの補完でギャップが入る。
         try await waitUntil { controller.viewController.displayedItemIDs.count == Self.initialIDs.count + Self.latestIDs.count + 1 }
         try await waitUntil { !controller.viewController.isScrollingToTop }

@@ -627,7 +627,7 @@ final class InlineComposeController: NSObject {
     }
 
     private func submit() {
-        model.tasks.run { [weak self] in
+        model.tasks.run(.action) { [weak self] in
             // ペーストしたファイルを添付に回すか決まる前に送ると、画像のない投稿になるため、決まるのを待ってから送る。
             while let resolving = self?.resolvingPastedFiles.values.first {
                 await resolving.value
@@ -1099,7 +1099,7 @@ final class InlineComposeController: NSObject {
         onLinkTitleLoadingChange()
         let loadingID = linkTitleEffects.beginLoading(occurrence)
         let loader = PageTitleLoader(client: AppDependencies.http)
-        model.tasks.run { [weak self] in
+        model.tasks.run(.action) { [weak self] in
             let title: String?
             do {
                 title = try await loader.title(of: target)
@@ -1210,7 +1210,7 @@ final class InlineComposeController: NSObject {
             }])
             // 通知の列は終わらないため、投稿欄がなくなったら止める。止めないと、セッションを作り直すたびに待ち続けるTaskが残る。
             linkTitleVoiceOverObservation?.cancel()
-            linkTitleVoiceOverObservation = model.tasks.run { [weak button] in
+            linkTitleVoiceOverObservation = model.tasks.run(.action) { [weak button] in
                 for await _ in NotificationCenter.default.notifications(named: UIAccessibility.voiceOverStatusDidChangeNotification) {
                     button?.showsMenuAsPrimaryAction = UIAccessibility.isVoiceOverRunning
                 }

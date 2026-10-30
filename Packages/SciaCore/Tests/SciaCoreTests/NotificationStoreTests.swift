@@ -4,6 +4,7 @@ import Testing
 @testable import SciaCore
 
 @MainActor
+@Suite(.requestPurpose(.action))
 struct NotificationStoreTests {
     /// 呼ばれた範囲を記録し、登録した順にページを返す。
     private final class PageQueue: Sendable {

@@ -660,7 +660,7 @@ final class SessionController {
 
     /// デモの通知。差出人は自分のアカウントにし、実物の通知と同じくアイコンと名前を出す。
     private func showStatusBarTickerDemo() {
-        tasks.run { [weak self] in
+        tasks.run(.action) { [weak self] in
             guard let self else { return }
             do {
                 let account = try await myAccount()
@@ -763,18 +763,16 @@ final class SessionController {
     ) {
         guard loadingTabSources.insert(name).inserted else { return }
         let client = client
-        RequestPurpose.$current.withValue(.display) {
-            tasks.run { [weak self] in
-                defer { self?.loadingTabSources.remove(name) }
-                do {
-                    let value = try await fetch(client)
-                    guard let self else { return }
-                    apply(self, value)
-                } catch {
-                    self?.logger.error("\(name, privacy: .public) load failed: \(SciaLog.describe(error), privacy: .public)")
-                    if let error = error as? MastodonAPIError, error.isUnauthorized {
-                        self?.reportUnauthorized()
-                    }
+        tasks.run(.display) { [weak self] in
+            defer { self?.loadingTabSources.remove(name) }
+            do {
+                let value = try await fetch(client)
+                guard let self else { return }
+                apply(self, value)
+            } catch {
+                self?.logger.error("\(name, privacy: .public) load failed: \(SciaLog.describe(error), privacy: .public)")
+                if let error = error as? MastodonAPIError, error.isUnauthorized {
+                    self?.reportUnauthorized()
                 }
             }
         }
@@ -1019,7 +1017,7 @@ final class SessionController {
         controller.showStreamingState(streamingHub.state)
         pushedFeeds.add(controller)
         navigation.pushViewController(viewController, animated: true)
-        controller.start()
+        controller.start(purpose: .action)
     }
 
     /// `url`を`browser`で開く。アプリ内のSafariはhttpとhttps以外のURLで例外を出して落ちるため、呼ぶ側が`LinkBrowser.browser(for:)`などで確かめてから渡す。
@@ -1068,7 +1066,7 @@ final class SessionController {
     /// 待つ間にタブを移ったり、戻ったり、別の画面を開いたりしたら、見つかっても積まず、失敗も知らせない。
     private func openProfile(from source: UIViewController, failureTitle: String = "プロフィールを開けませんでした", finding find: @escaping @Sendable () async throws -> Account) {
         let anchor = PushAnchor(source)
-        profileOpening.start(debugDelayed(find)) { [logger] in
+        profileOpening.start(.action, debugDelayed(find)) { [logger] in
             guard anchor.isStillShowing else {
                 logger.info("profile open dropped: screen changed while finding")
                 return false
@@ -1170,7 +1168,7 @@ final class SessionController {
         UserAction.openAccountList.record()
         configure(viewController)
         source.navigationController?.pushViewController(viewController, animated: true)
-        controller.start()
+        controller.start(purpose: .action)
     }
 
     // MARK: - スレッド
@@ -1194,7 +1192,7 @@ final class SessionController {
     private func openThread(statusID: Status.ID, rowFrame: CGRect, from source: UIViewController) {
         let client = client
         let anchor = PushAnchor(source)
-        statusOpening.start({ try await client.status(statusID) }) { anchor.isStillShowing } completion: { [weak self, weak source] result in
+        statusOpening.start(.action, { try await client.status(statusID) }) { anchor.isStillShowing } completion: { [weak self, weak source] result in
             guard let self, let source else { return }
             switch result {
             case .success(let status):
@@ -1216,7 +1214,7 @@ final class SessionController {
             save: { draft in try await client.updateProfile(draft) }
         ))
         // 上限を読めなければ、4.6.0より前のMastodonの値のまま使う。超えた分はサーバーが拒む。
-        tasks.run { [weak self] in
+        tasks.run(.action) { [weak self] in
             guard let configuration = await self?.loadInstanceConfiguration() else { return }
             editor.limits = configuration.profileLimits
             editor.charactersReservedPerURL = configuration.charactersReservedPerURL
@@ -1411,7 +1409,8 @@ final class SessionController {
         let now = now
         return HashtagMuteActions(
             known: { name in serverFilters.filters.map { HashtagMute.find(name, in: $0, now: now()) != nil } },
-            refresh: { serverFilters.refresh() },
+            // まだ読めていなければ、開いたメニューがこの読み直しを待つので、操作として送る。
+            refresh: { RequestPurpose.$current.withValue(.action) { serverFilters.refresh() } },
             load: { name in HashtagMute.find(name, in: try await serverFilters.latest(), now: now()) != nil },
             mute: { [weak self] name, duration in self?.muteHashtag(name, duration: duration) },
             unmute: { [weak self] name in self?.unmuteHashtag(name) }
@@ -1424,7 +1423,7 @@ final class SessionController {
         let client = client
         logger.info("hashtag mute")
         // 送り終える前にメニューを開き直して押しても、同じ要求を重ねて送らない。
-        tasks.run(key: "hashtagMute:\(name)", .skippingWhileRunning) { [weak self] in
+        tasks.run(key: "hashtagMute:\(name)", .skippingWhileRunning, .action) { [weak self] in
             guard let self else { return }
             do {
                 try await HashtagMute.mute(name, duration: duration, client: client)
@@ -1447,7 +1446,7 @@ final class SessionController {
     private func unmuteHashtag(_ name: String) {
         let client = client
         logger.info("hashtag unmute")
-        tasks.run(key: "hashtagMute:\(name)", .skippingWhileRunning) { [weak self, now] in
+        tasks.run(key: "hashtagMute:\(name)", .skippingWhileRunning, .action) { [weak self, now] in
             guard let self else { return }
             do {
                 serverFilters.reload()
@@ -1475,7 +1474,7 @@ final class SessionController {
     private func includeAfterHashtagMuteExpires(_ name: String, duration: Duration) {
         let serverFilters = serverFilters
         // ミュートし直したら、前の期限の待ちを止めて待ち直す。
-        tasks.run(key: "muteExpiry:tag:\(name)", .replacing) { [weak self, clock, now] in
+        tasks.run(key: "muteExpiry:tag:\(name)", .replacing, .action) { [weak self, clock, now] in
             do {
                 try await clock.sleep(for: duration + .seconds(60))
                 // 覚えているフィルターも新しくし、次に開くメニューでミュートが明けたことを出す。
@@ -1556,7 +1555,7 @@ final class SessionController {
             proceed(id, acct)
             return
         }
-        identityLookup.start(debugDelayed { [weak self] in
+        identityLookup.start(.action, debugDelayed { [weak self] in
             guard let self else { throw CancellationError() }
             return try await identity(of: target)
         }, isStillWanted: { true }) { [weak self] result in
@@ -1593,7 +1592,10 @@ final class SessionController {
 
     /// メニューに出る人の関係を、まとめて1回で読み直す。別の端末で変えた関係も、次に開いたときから反映する。
     private func reloadRelations(_ ids: [String]) {
-        profiles.relationships.reload(ids.filter { $0 != credential.accountID })
+        // 関係を覚えていない人は、開いたメニューがこの読み直しを待つので、操作として送る。
+        RequestPurpose.$current.withValue(.action) {
+            profiles.relationships.reload(ids.filter { $0 != credential.accountID })
+        }
     }
 
     /// フォローを外す、リクエストを取り消す、ブロックは、押し間違えに備えて確かめてから送る。プロフィール画面のフォローのボタンと同じく、フォローとミュートは確かめずに送る。
@@ -1613,7 +1615,7 @@ final class SessionController {
         let id = relation.accountID
         logger.info("user relation change: \(String(describing: change), privacy: .public)")
         // 送り終える前にメニューを開き直すと、サーバーからは前の関係が読めるため、同じ相手への変更は送り終えるまで重ねて送らない。
-        tasks.run(key: "relation:\(id)", .skippingWhileRunning) { [weak self] in
+        tasks.run(key: "relation:\(id)", .skippingWhileRunning, .action) { [weak self] in
             guard let self else { return }
             do {
                 let relationship = switch change {
@@ -1701,7 +1703,7 @@ final class SessionController {
     /// Mastodonは期限の時刻に予約したジョブ（`DeleteMuteWorker`）でミュートを消すため、ちょうどの時刻ではまだ残っていることがある。1分おいてから読む。
     private func includeAfterMuteExpires(_ accountID: String, duration: Duration) {
         let relationships = profiles.relationships
-        tasks.run(key: "muteExpiry:account:\(accountID)", .replacing) { [weak self, clock] in
+        tasks.run(key: "muteExpiry:account:\(accountID)", .replacing, .action) { [weak self, clock] in
             do {
                 try await clock.sleep(for: duration + .seconds(60))
                 // 覚えている関係も新しくし、次に開くメニューでミュートが明けたことを出す。
@@ -1740,7 +1742,7 @@ final class SessionController {
         }
         let client = client
         let target = status.displayed
-        tasks.run { [weak self] in
+        tasks.run(.action) { [weak self] in
             do {
                 let refetched = try await client.status(target.id)
                 guard let self else { return }
@@ -1790,7 +1792,7 @@ final class SessionController {
             return
         }
         let client = client
-        tasks.run { [weak self] in
+        tasks.run(.action) { [weak self] in
             do {
                 let source = try await client.statusSource(target.id)
                 self?.confirmEditing(target, source: source)
@@ -1862,7 +1864,7 @@ final class SessionController {
         logger.info("rewritten schedule cancel start")
         // 書き直した投稿を送ってすぐバックグラウンドへ移っても、取り消し終えるまでアプリを止めないよう頼む。取り消せないまま元の予約が投稿されないようにするため。
         let endBackgroundTime = BackgroundTime.request("cancel rewritten schedule")
-        let task = tasks.run { [weak self, client] in
+        let task = tasks.run(.action) { [weak self, client] in
             defer { endBackgroundTime() }
             do {
                 try await client.cancelScheduledStatus(id)
@@ -1923,7 +1925,7 @@ final class SessionController {
         let target = status.displayed
         let client = client
         // 送り終える前に確かめ直して押しても、同じ削除を重ねて送らない。
-        tasks.run(key: "delete:\(target.id)", .skippingWhileRunning) { [weak self] in
+        tasks.run(key: "delete:\(target.id)", .skippingWhileRunning, .action) { [weak self] in
             do {
                 try await client.deleteStatus(target.id)
                 guard let self else { return }
@@ -1959,7 +1961,7 @@ final class SessionController {
     private func answerFollowRequest(_ decision: FollowRequestDecision, to request: MastodonNotification) {
         let account = request.account
         let client = client
-        tasks.run { [weak self] in
+        tasks.run(.action) { [weak self] in
             do {
                 switch decision {
                 case .authorize: _ = try await client.authorizeFollowRequest(from: account.id)
@@ -1991,7 +1993,7 @@ final class SessionController {
     private func dismissNotification(_ notification: MastodonNotification) {
         UserAction.dismissNotification.record()
         let client = client
-        tasks.run { [weak self] in
+        tasks.run(.action) { [weak self] in
             do {
                 try await client.dismissNotificationGroup(notification.groupKey)
                 self?.notifications.removeNotification(notification)
@@ -2054,7 +2056,7 @@ final class SessionController {
 
     private func toggle(_ action: StatusInteractions.Action, on status: Status, reblogVisibility: ReblogVisibility = .accountDefault, failureTitle: String, onSuccess: (() -> Void)? = nil) {
         let interactions = interactions
-        tasks.run { [weak self] in
+        tasks.run(.action) { [weak self] in
             do {
                 guard try await interactions.toggle(action, on: status, reblogVisibility: reblogVisibility) else { return }
                 onSuccess?()
@@ -2093,7 +2095,7 @@ final class SessionController {
         UserAction.vote.record()
         let polls = polls
         let title = "投票できませんでした"
-        tasks.run { [weak self, weak timeline] in
+        tasks.run(.action) { [weak self, weak timeline] in
             do {
                 // ほかの一覧から送った同じ投票の結果を待っているときは送らない。その結果は、送った側がすべての一覧に反映する。
                 let sent = try await polls.vote(choices, on: status)
@@ -2117,7 +2119,7 @@ final class SessionController {
         UserAction.refreshPoll.record()
         let polls = polls
         let title = "投票の結果を読み直せませんでした"
-        tasks.run { [weak self, weak timeline] in
+        tasks.run(.action) { [weak self, weak timeline] in
             do {
                 try await polls.refresh(status)
                 timeline?.finishRefreshingPoll(pollID)
@@ -2139,7 +2141,7 @@ final class SessionController {
             presentAlert(title: title, message: ErrorPresentation(error).text)
             return
         }
-        tasks.run { [weak self] in
+        tasks.run(.action) { [weak self] in
             guard let self else { return }
             let reason = await self.failureReason(for: error)
             self.presentAlert(title: title, message: reason.text)
@@ -2181,7 +2183,7 @@ final class SessionController {
 
     /// 既定の公開範囲などを読めたら、投稿欄に反映する。読めなかったら、次に書き始めたときに読み直す。
     private func applyComposeDefaults() {
-        composeDefaultsTask = tasks.run { [weak self] in
+        composeDefaultsTask = tasks.run(.action) { [weak self] in
             guard let self else { return }
             async let configuration = self.loadInstanceConfiguration()
             async let preferences = self.loadPreferences()
@@ -2228,32 +2230,28 @@ final class SessionController {
         hasStarted = true
         // 無効にしている項目は、有効にしたときか開いたときに始める。
         if tabs.placement.location(of: .home) != .disabled {
-            home.start()
+            home.start(purpose: .action)
         }
         if tabs.placement.location(of: .notifications) != .disabled {
-            notifications.start()
+            notifications.start(purpose: .action)
         }
         observeRecoveries()
         loadServerVersion()
         loadTabSources()
-        RequestPurpose.$current.withValue(.display) {
-            tasks.run { [weak self] in await self?.loadPreferences() }
-        }
+        tasks.run(.display) { [weak self] in await self?.loadPreferences() }
     }
 
     /// 原因を絞れるよう、サーバーの版を記録に残す。読めなくても使うのに困らないので、失敗は記録するだけにする。
     private func loadServerVersion() {
         let client = client
         let instance = credential.instance.host() ?? credential.instance.absoluteString
-        RequestPurpose.$current.withValue(.display) {
-            tasks.run { [weak self] in
-                do {
-                    let version = try await client.serverVersion()
-                    self?.logger.info("server instance=\(instance, privacy: .public) version=\(version, privacy: .public)")
-                    self?.diagnostics.setServerVersion(version)
-                } catch {
-                    self?.logger.info("server version unavailable instance=\(instance, privacy: .public) error=\(SciaLog.describe(error), privacy: .public)")
-                }
+        tasks.run(.display) { [weak self] in
+            do {
+                let version = try await client.serverVersion()
+                self?.logger.info("server instance=\(instance, privacy: .public) version=\(version, privacy: .public)")
+                self?.diagnostics.setServerVersion(version)
+            } catch {
+                self?.logger.info("server version unavailable instance=\(instance, privacy: .public) error=\(SciaLog.describe(error), privacy: .public)")
             }
         }
     }
@@ -2261,12 +2259,12 @@ final class SessionController {
     private func observeRecoveries() {
         let rateLimit = rateLimit
         let network = AppDependencies.network
-        tasks.run { [weak self] in
+        tasks.run(.action) { [weak self] in
             for await _ in rateLimit.resumptions {
                 self?.recover(reason: "rate limit resumed")
             }
         }
-        tasks.run { [weak self] in
+        tasks.run(.action) { [weak self] in
             // 最初の値は今の回数なので飛ばす。
             for await _ in Observations({ network.recoveryCount }).dropFirst() {
                 self?.recover(reason: "network recovered")
@@ -2291,7 +2289,7 @@ final class SessionController {
 
     private func reportUnauthorized() {
         let authorization = authorization
-        tasks.run { _ = await authorization.reportUnauthorized() }
+        tasks.run(.action) { _ = await authorization.reportUnauthorized() }
     }
 
     /// トークンが無効だと確かめられたら、表示中の内容とアカウントのメニューは残したまま、自動の通信を止めてログインし直しを促す。
@@ -2331,7 +2329,7 @@ final class SessionController {
     private func reauthenticate() {
         guard !isReauthenticating else { return }
         setReauthenticating(true)
-        tasks.run { [weak self] in
+        tasks.run(.action) { [weak self] in
             guard let self else { return }
             await onReauthenticate(self)
             setReauthenticating(false)
@@ -2475,7 +2473,7 @@ final class SessionController {
     private func attachSharedMedia(_ media: [PastedMedia]) {
         composer.beginEditing()
         let loadingDefaults = composeDefaultsTask
-        tasks.run { [weak self] in
+        tasks.run(.action) { [weak self] in
             await loadingDefaults?.value
             guard let self else { return }
             guard composer.model.canPasteMedia else {
@@ -2522,7 +2520,7 @@ final class SessionController {
         let clock = clock
         // 出し直すたびに別のアプリ内通知にする。しまったあとに出し直しても、出てくるようにするため。
         let id = "debug.progress.\(UUID().uuidString)"
-        debugProgressTask = tasks.run { [weak self] in
+        debugProgressTask = tasks.run(.action) { [weak self] in
             while !Task.isCancelled {
                 let fraction = min(elapsed() / duration, 1)
                 self?.notices.setPersistent({ _ in
@@ -2578,19 +2576,19 @@ final class SessionController {
             DebugFaults.corruptListElements()
             feeds.forEach { $0.reloadIfStarted() }
             savedLists.forEach { $0.reloadIfStarted() }
-            notifications.start()
+            notifications.start(purpose: .action)
         case .status(let statusCode, let retryAfter, let target):
             DebugFaults.fail(withStatus: statusCode, retryAfter: retryAfter, target: target)
             feeds.forEach { $0.reloadIfStarted() }
             savedLists.forEach { $0.reloadIfStarted() }
-            notifications.start()
+            notifications.start(purpose: .action)
         case .statusCleared:
             DebugFaults.fail(withStatus: nil)
         case .unsupported(let feature):
             DebugFaults.makeUnsupported(feature)
             feeds.forEach { $0.reloadIfStarted() }
             savedLists.forEach { $0.reloadIfStarted() }
-            notifications.start()
+            notifications.start(purpose: .action)
         case .regenerating(let isOn):
             DebugFaults.setRegeneratingHome(isOn)
         case .streaming(let isOnline):
@@ -2689,7 +2687,7 @@ final class SessionController {
     /// `scia-debug://lists/...`と`scia-debug://tags/...`で、サーバーのリストやハッシュタグのフォローを変えてから読み直し、タブの並びに反映する。
     private func changeTabSourcesForDebug(_ operation: String, _ change: @escaping @Sendable (MastodonClient) async throws -> Void) {
         let client = client
-        tasks.run { [weak self] in
+        tasks.run(.action) { [weak self] in
             do {
                 try await change(client)
                 self?.logger.info("debug \(operation, privacy: .public) done")

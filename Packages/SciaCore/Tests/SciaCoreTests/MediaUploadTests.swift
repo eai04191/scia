@@ -3,6 +3,7 @@ import Synchronization
 import Testing
 @testable import SciaCore
 
+@Suite(.requestPurpose(.action))
 struct MediaUploadTests {
     private func makeClient(_ transport: StubTransport) throws -> MastodonClient {
         MastodonClient(

@@ -6,6 +6,7 @@ import Testing
 /// 開発者が試していないサーバーやプロキシが返しそうな壊れた応答を、クライアントから一覧の表示まで通して確かめる。
 /// 個々の項目の読み方はLenientDecodingTests、件数を丸めるサーバーはTimelineGapTestsのFakeHomeServerで確かめている。
 @MainActor
+@Suite(.requestPurpose(.action))
 struct BrokenResponseTests {
     private func makeClient(_ transport: StubTransport, rateLimit: RateLimitGate = RateLimitGate(), requestLog: RequestLog = RequestLog(includesBody: false)) throws -> MastodonClient {
         MastodonClient(

@@ -104,7 +104,7 @@ final class ProfileController {
         viewController.filterWarnings = FilterWarnings(filtering: store.filtering)
         viewController.headerView = header
         viewController.myAccountID = client.credential.accountID
-        viewController.onApproachingEnd = { [weak self] in self?.loadOlder() }
+        viewController.onApproachingEnd = { [weak self] in self?.loadOlder(purpose: .action) }
         viewController.onRetry = { [weak self] in self?.retry() }
         // 引っぱって読み直した投稿が多く、手元の投稿との間が残ったときだけギャップの行が出る。読み直しの続きなので、押されたときだけ読む。
         viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction) }
@@ -242,7 +242,7 @@ final class ProfileController {
         guard store.followState == .unknown, let viewController else { return }
         let clock = viewController.clock
         let delay = viewController.tuning.value(of: TuningCatalog.profileRelationshipActivityDelay)
-        run { controller in
+        run(.action) { controller in
             guard (try? await clock.sleep(for: .seconds(delay))) != nil, controller.store.followState == .unknown, !controller.isProfileLoaded else { return }
             controller.isRelationshipSlow = true
             controller.afterTransition { $0.updateHeader() }
@@ -265,7 +265,7 @@ final class ProfileController {
     func apply(_ relationship: Relationship, reloadsAccount: Bool) {
         store.apply(relationship)
         guard reloadsAccount else { return }
-        run { controller in
+        run(.action) { controller in
             do {
                 try await controller.store.reloadAccount()
             } catch {
@@ -285,7 +285,7 @@ final class ProfileController {
     /// 固定を変えたあとに、固定された投稿を読み直す。外した投稿は、使う人の操作の結果なので、閉じて詰める動きで消す。
     /// 読めなかったときは、前の固定された投稿のまま残す。固定の操作はできているので、知らせない。
     func reloadPinned() {
-        run { controller in
+        run(.action) { controller in
             do {
                 try await controller.store.reloadPinned()
                 controller.afterTransition { $0.showEntries(animatesRemoval: true) }
@@ -297,8 +297,8 @@ final class ProfileController {
     }
 
     @discardableResult
-    private func run(_ operation: @escaping @MainActor (ProfileController) async -> Void) -> Task<Void, Never>? {
-        tasks.run { [weak self] in
+    private func run(_ purpose: RequestPurpose, _ operation: @escaping @MainActor (ProfileController) async -> Void) -> Task<Void, Never>? {
+        tasks.run(purpose) { [weak self] in
             guard let self else { return }
             await operation(self)
         }
@@ -369,7 +369,7 @@ final class ProfileController {
     private func revealListIfReady() {
         guard listReveal == .waiting, isReadyToRevealList else { return }
         listReveal = .revealing
-        run { controller in
+        run(.action) { controller in
             guard let viewController = controller.viewController else { return }
             // 1画面に収まる行の数より多めに待つ。全部を待つと、画面の外の行のアイコンまで待たされる。
             let wait = Duration.seconds(viewController.tuning.value(of: TuningCatalog.profileAvatarWait))
@@ -443,7 +443,7 @@ final class ProfileController {
 
     /// 読めなかったものはアラートにしない。関係はフォローのボタンの場所で知らせ、アカウントと固定された投稿は、開いた時点の内容のままにしてログだけ残す。
     private func loadProfile() {
-        run { controller in
+        run(.action) { controller in
             let failures = await controller.store.loadProfile()
             controller.finishWaitingForRelationship()
             for (part, error) in [("account", failures.account), ("relationship", failures.relationship), ("pinned", failures.pinned)] {
@@ -472,7 +472,7 @@ final class ProfileController {
 
     /// フォローのボタンの場所の再試行。失敗したら、読めなかった表示のまま残す。
     private func reloadRelationship() {
-        run { controller in
+        run(.action) { controller in
             do {
                 try await controller.store.reloadRelationship()
             } catch {
@@ -486,7 +486,7 @@ final class ProfileController {
     private func loadInitial() -> Task<Void, Never>? {
         let timeline = store.timeline
         viewController?.setFooterState(.loading)
-        return run { controller in
+        return run(.action) { controller in
             do {
                 guard try await timeline.loadInitial() != nil, timeline === controller.store.timeline else { return }
                 controller.afterTransition { controller in
@@ -511,11 +511,12 @@ final class ProfileController {
         }
     }
 
-    private func loadOlder() {
+    /// - Parameter purpose: 末尾が近づいて読むときは`.display`。再試行を押したときは`.action`。
+    private func loadOlder(purpose: RequestPurpose) {
         let timeline = store.timeline
         guard !timeline.isLoading, !timeline.reachedEnd, !timeline.isEmpty else { return }
         viewController?.setFooterState(.loading)
-        run { controller in
+        run(purpose) { controller in
             do {
                 guard try await timeline.loadOlder() != nil, timeline === controller.store.timeline else { return }
                 controller.showEntries()
@@ -577,7 +578,7 @@ final class ProfileController {
         let neighborIndex = direction == .fromOlder ? entries.index(after: index) : entries.index(before: index)
         let anchorID = entries.indices.contains(neighborIndex) ? entries[neighborIndex].id : nil
         viewController?.setGapStates(loading: timeline.loadingGapIDs.union([id]), failures: timeline.gapFailures.filter { $0.key != id })
-        run { controller in
+        run(.action) { controller in
             do {
                 let added = try await timeline.loadGap(id, from: direction)
                 guard timeline === controller.store.timeline else { return }
@@ -616,7 +617,7 @@ final class ProfileController {
         if store.timeline.isEmpty {
             loadInitial()
         } else {
-            loadOlder()
+            loadOlder(purpose: .action)
         }
     }
 
@@ -656,7 +657,7 @@ final class ProfileController {
     }
 
     private func toggleFollow() {
-        run { controller in
+        run(.action) { controller in
             do {
                 guard try await controller.store.toggleFollow() else { return }
             } catch {

@@ -3,6 +3,7 @@ import os
 
 /// アプリの通信の入口。REST API、ログイン、画像、ファイル、fxtwitter、リンク先のページが通り、同じ決まりに従う（docs/network.md）。
 ///
+/// - 目的（`RequestPurpose`）を名乗っていない通信は、送らずに`UndeclaredRequestPurpose`を投げる
 /// - 自動の通信（`RequestPurpose.isAutomatic`）は、止められている間は送らずに`AutomaticRequestsPaused`を投げる
 /// - 質を上げると先読みの通信は、目的に合わせて、低データモードやモバイル通信ではOSに送らせない
 /// - 429や503が再開の時刻を示したら、その単位（`Scope`）の自動の通信を時刻まで止める
@@ -56,14 +57,15 @@ public struct HTTPClient: Sendable {
         retries allowsRetry: Bool = true,
         beforeAttempt: @Sendable () async throws -> Void = {}
     ) async throws -> (Data, HTTPURLResponse) {
-        let request = Self.restrictingNetworkAccess(of: request)
+        let purpose = try RequestPurpose.declared()
+        let request = Self.restrictingNetworkAccess(of: request, for: purpose)
         let gate = await gate(for: scope, url: request.url)
         let canRetry = allowsRetry && RetryPolicy.canRetry(request)
         var retries = 0
         while true {
             // 送り直しを待っている間に、並行する別の呼び出しが止めていることがある。
             try await beforeAttempt()
-            try await checkBeforeSending(gate)
+            try await checkBeforeSending(gate, for: purpose)
             let reason: String
             // 再開の時刻を示した429や503は、止める門がなくても（`/media_proxy`）、本文が途中で切れても、その場では送り直さない。
             var toldToWait = false
@@ -100,9 +102,10 @@ public struct HTTPClient: Sendable {
     /// 応答の頭を受け取ったら返し、本文は届いた分から渡す。読むのをやめれば通信も止まる。範囲指定や、ページの頭だけを読むときに使う。
     /// 本文が`limit`バイトを超えたら、列を`ResponseTooLarge`で終える。2xx以外は`HTTPStatusError`を投げる。読む途中でやめられるよう、送り直さない。
     public func open(_ request: URLRequest, limit: Int, scope: Scope) async throws -> (HTTPResponseBody, HTTPURLResponse) {
-        let request = Self.restrictingNetworkAccess(of: request)
+        let purpose = try RequestPurpose.declared()
+        let request = Self.restrictingNetworkAccess(of: request, for: purpose)
         let gate = await gate(for: scope, url: request.url)
-        try await checkBeforeSending(gate)
+        try await checkBeforeSending(gate, for: purpose)
         let (body, response) = try await transport.open(request, limit: limit)
         guard (200..<300).contains(response.statusCode) else {
             await pause(scope, request: request, respondingTo: response)
@@ -118,9 +121,10 @@ public struct HTTPClient: Sendable {
         scope: Scope,
         progress: @escaping @Sendable (Double) -> Void
     ) async throws -> (URL, HTTPURLResponse) {
-        let request = Self.restrictingNetworkAccess(of: request)
+        let purpose = try RequestPurpose.declared()
+        let request = Self.restrictingNetworkAccess(of: request, for: purpose)
         let gate = await gate(for: scope, url: request.url)
-        try await checkBeforeSending(gate)
+        try await checkBeforeSending(gate, for: purpose)
         let (file, response) = try await transport.download(request, limit: limit, progress: progress)
         guard (200..<300).contains(response.statusCode) else {
             try? FileManager.default.removeItem(at: file)
@@ -143,10 +147,9 @@ public struct HTTPClient: Sendable {
         return data
     }
 
-    /// 今の目的（`RequestPurpose.current`）で送らない回線を、リクエストに付ける。呼び出し側が回線を聞いたあとで
+    /// 目的で送らない回線を、リクエストに付ける。呼び出し側が回線を聞いたあとで
     /// Wi-Fiからモバイル通信に変わっても、OSが送らない。呼び出し側が付けた制限は外さない。
-    static func restrictingNetworkAccess(of request: URLRequest) -> URLRequest {
-        let purpose = RequestPurpose.current
+    static func restrictingNetworkAccess(of request: URLRequest, for purpose: RequestPurpose) -> URLRequest {
         var request = request
         request.allowsExpensiveNetworkAccess = request.allowsExpensiveNetworkAccess && purpose.allowsExpensiveNetworkAccess
         request.allowsConstrainedNetworkAccess = request.allowsConstrainedNetworkAccess && purpose.allowsConstrainedNetworkAccess
@@ -171,9 +174,9 @@ public struct HTTPClient: Sendable {
 
     /// 送ってよいか確かめる。取り消された処理からは送らない。呼び出し側が取り消しを失敗として飲み込んでも、次の通信が出ないようにする。
     /// 自動の通信は、止められている間は送らない。
-    private func checkBeforeSending(_ gate: RateLimitGate?) async throws {
+    private func checkBeforeSending(_ gate: RateLimitGate?, for purpose: RequestPurpose) async throws {
         try Task.checkCancellation()
-        guard let gate, RequestPurpose.current.isAutomatic else { return }
+        guard let gate, purpose.isAutomatic else { return }
         try await gate.checkAutomaticRequest()
     }
 

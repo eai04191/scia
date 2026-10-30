@@ -50,12 +50,12 @@ public final class SavedStatusesModel {
     /// まだ始めていなければ始める。開くまで読まない。開いたことのない一覧のために、起動のたびに通信しないため。
     public func startIfNeeded() {
         guard !hasStarted else { return }
-        start()
+        start(purpose: .action)
     }
 
-    /// - Parameter purpose: 電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
+    /// - Parameter purpose: 使う人が開いたり再試行を押したりしたときは`.action`。電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
     @discardableResult
-    private func start(purpose: RequestPurpose = .action) -> Task<Void, Never>? {
+    private func start(purpose: RequestPurpose) -> Task<Void, Never>? {
         guard !isStopped else { return nil }
         hasStarted = true
         setContentState(.loading)
@@ -77,7 +77,7 @@ public final class SavedStatusesModel {
     /// 始めている一覧だけ読み込み直す。障害を起こすデバッグURLで、開いたことのない一覧まで読み始めないようにする。
     public func reloadIfStarted() {
         guard hasStarted else { return }
-        start()
+        start(purpose: .action)
     }
     #endif
 
@@ -88,7 +88,7 @@ public final class SavedStatusesModel {
         guard shown != isShown else { return }
         isShown = shown
         if shown {
-            refreshNewest()
+            refreshNewest(purpose: .display)
         } else if !isStopped, store.pruneUnsaved() {
             logger.info("\(self.name, privacy: .public) pruned unsaved")
             showEntries()
@@ -100,7 +100,7 @@ public final class SavedStatusesModel {
         guard !isStopped else { return }
         retryFailedLoads()
         if isShown {
-            refreshNewest()
+            refreshNewest(purpose: .display)
         }
     }
 
@@ -124,13 +124,10 @@ public final class SavedStatusesModel {
     }
 
     @discardableResult
-    private func run(_ purpose: RequestPurpose = .action, _ operation: @escaping @MainActor (SavedStatusesModel) async -> Void) -> Task<Void, Never>? {
-        // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
-        RequestPurpose.$current.withValue(purpose) {
-            tasks.run { [weak self] in
-                guard let self else { return }
-                await operation(self)
-            }
+    private func run(_ purpose: RequestPurpose, _ operation: @escaping @MainActor (SavedStatusesModel) async -> Void) -> Task<Void, Never>? {
+        tasks.run(purpose) { [weak self] in
+            guard let self else { return }
+            await operation(self)
         }
     }
 
@@ -150,7 +147,7 @@ public final class SavedStatusesModel {
         guard !isStopped, hasStarted else { return }
         logger.info("\(self.name, privacy: .public) refresh")
         if case .failed = contentState {
-            await start()?.value
+            await start(purpose: .action)?.value
             return
         }
         // タブを開いたときなどの読み込みの最中なら、ストアは重ねて読まないため、終わってから読む。
@@ -161,9 +158,9 @@ public final class SavedStatusesModel {
     /// 失敗の表示の再試行が押されたときに呼ぶ。
     public func retry() {
         if store.isLoaded {
-            loadOlder()
+            loadOlder(purpose: .action)
         } else {
-            start()
+            start(purpose: .action)
         }
     }
 
@@ -172,7 +169,7 @@ public final class SavedStatusesModel {
         loadOlder(purpose: .display)
     }
 
-    private func loadOlder(purpose: RequestPurpose = .action) {
+    private func loadOlder(purpose: RequestPurpose) {
         guard !isStopped, !store.isLoading, store.isLoaded, !store.reachedEnd else { return }
         setFooterState(.loading)
         run(purpose) { model in
@@ -190,7 +187,8 @@ public final class SavedStatusesModel {
 
     /// 最新のページを読み、手元より新しい分を先頭に足す。失敗しても、一覧はそのまま見せ、次に開いたときに読み直す。
     @discardableResult
-    private func refreshNewest(purpose: RequestPurpose = .display) -> Task<Void, Never>? {
+    /// - Parameter purpose: 引っぱって読み込み直したときは`.action`。タブを見せ始めたときやアプリに戻ったときは`.display`。
+    private func refreshNewest(purpose: RequestPurpose) -> Task<Void, Never>? {
         guard !isStopped, store.isLoaded, !store.isLoading else { return nil }
         return run(purpose) { model in
             do {
@@ -211,7 +209,7 @@ public final class SavedStatusesModel {
         let neighborIndex = direction == .fromOlder ? store.entries.index(after: index) : store.entries.index(before: index)
         let anchorID = store.entries.indices.contains(neighborIndex) ? store.entries[neighborIndex].id : nil
         display?.setGapStates(loading: store.loadingGapIDs.union([id]), failures: store.gapFailures.filter { $0.key != id })
-        run { model in
+        run(.action) { model in
             do {
                 let changed = try await model.store.loadGap(id)
                 guard !model.isStopped else { return }

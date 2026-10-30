@@ -52,7 +52,7 @@ struct NotificationsModelTests {
         let badge = Mutex<(Int, Bool)?>(nil)
         model.onUnreadCountChange = { count, isLowerBound in badge.withLock { $0 = (count, isLowerBound) } }
 
-        model.start()
+        model.start(purpose: .action)
         try await waitUntil { display.contentState == .loaded }
 
         #expect(display.entries.map(\.id) == ["34975864", "34975863", "34975862", "34975861"].map { .notification($0) })
@@ -72,7 +72,7 @@ struct NotificationsModelTests {
         let arrivals = Mutex<[MastodonNotification.ID]>([])
         model.onArrival = { notification, _ in arrivals.withLock { $0.append(notification.id) } }
 
-        model.start()
+        model.start(purpose: .action)
         try await waitUntil { display.contentState == .loaded && display.catchUp?.attempt == 1 && display.catchUp?.phase == .idle && model.runningTaskCount == 0 }
         firstMessage.open()
         try await waitUntil { clock.sleeperCount == 1 }
@@ -93,7 +93,7 @@ struct NotificationsModelTests {
             transport.requests(to: "/api/v1/markers").filter { $0.httpMethod == "POST" }.map { String(decoding: $0.httpBody ?? Data(), as: UTF8.self) }
         }
 
-        model.start()
+        model.start(purpose: .action)
         try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
         display.isUserInteracting = true
         model.markRead(["34975862"])

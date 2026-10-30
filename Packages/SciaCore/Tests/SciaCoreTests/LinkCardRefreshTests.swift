@@ -273,7 +273,7 @@ struct LinkCardRefreshTests {
     @MainActor
     @Test func refreshesAsAutomaticRequest() async {
         let clock = FakeClock(now: Self.start)
-        let origins = Recorder<RequestPurpose>()
+        let origins = Recorder<RequestPurpose?>()
         let refresher = LinkCardRefresher(
             fetch: { ids in
                 await origins.append(RequestPurpose.current)
@@ -314,7 +314,7 @@ struct LinkCardRefreshTests {
         #expect(edited.adoptingCard(of: Self.status("1", card: card)).card == nil)
     }
 
-    @Test func clientRequestsStatusesByID() async throws {
+    @Test(.requestPurpose(.action)) func clientRequestsStatusesByID() async throws {
         let url = try #require(Bundle.module.url(forResource: "status", withExtension: "json", subdirectory: "Fixtures"))
         let body = "[" + (try String(contentsOf: url, encoding: .utf8)) + "]"
         let transport = StubTransport([.json(body, statusCode: 200)])

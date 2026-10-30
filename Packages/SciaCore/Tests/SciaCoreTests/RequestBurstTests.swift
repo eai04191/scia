@@ -5,6 +5,7 @@ import Testing
 @testable import SciaCore
 
 /// 短い間に異常な数のリクエストを送ったら、内訳を1度だけ返す。
+@Suite(.requestPurpose(.action))
 struct RequestBurstTests {
     private let image = URL(string: "https://files.example/a.png")
     private let other = URL(string: "https://cdn.example/b.png")

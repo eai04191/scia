@@ -411,7 +411,7 @@ final class ProfileEditImagesCell: UITableViewCell {
             }
             pendingImages.insert(kind)
             return Task { [weak self] in
-                let image = try? await mediaImages.image(for: url, maxPixelSize: size)
+                let image = try? await mediaImages.image(for: url, maxPixelSize: size, purpose: .display)
                 guard let self, !Task.isCancelled else { return }
                 self.pendingImages.remove(kind)
                 if let image {

@@ -114,7 +114,7 @@ final class AccountNoteViewController: UIViewController {
 
     private func save() {
         guard editor.canSave else { return }
-        tasks.run(key: "save", .skippingWhileRunning) { [weak self] in
+        tasks.run(key: "save", .skippingWhileRunning, .action) { [weak self] in
             guard let self else { return }
             do {
                 let saved = try await editor.save()

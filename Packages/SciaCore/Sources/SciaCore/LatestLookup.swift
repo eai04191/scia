@@ -32,8 +32,9 @@ public final class LatestLookup {
         self.slowAfter = slowAfter
     }
 
-    /// `work`を待ち、結果を`completion`に渡す。待っているものがあれば止める。
+    /// `work`を、通信の目的を`purpose`と名乗って待ち、結果を`completion`に渡す。待っているものがあれば止める。
     public func start<Value: Sendable>(
+        _ purpose: RequestPurpose,
         _ work: @escaping @Sendable () async throws -> Value,
         isStillWanted: @escaping @MainActor () -> Bool,
         completion: @escaping @MainActor (Result<Value, any Error>) -> Void
@@ -52,7 +53,7 @@ public final class LatestLookup {
         let task = Task { [weak self] in
             let result: Result<Value, any Error>
             do {
-                result = .success(try await work())
+                result = .success(try await RequestPurpose.$current.withValue(purpose) { try await work() })
             } catch {
                 result = .failure(error)
             }

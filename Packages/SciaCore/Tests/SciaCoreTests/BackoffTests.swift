@@ -2,6 +2,7 @@ import Testing
 @testable import SciaCore
 
 /// 送り直し、つなぎ直し、読み直しの間隔を決める決まり。
+@Suite(.requestPurpose(.action))
 struct BackoffTests {
     @Test func doublesUpToMaximum() {
         let backoff = Backoff(initial: .seconds(5), maximum: .seconds(60))

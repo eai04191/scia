@@ -8,7 +8,7 @@ struct TaskScopeTests {
     @Test func finishedTaskLeaves() async throws {
         let scope = TaskScope()
         let gate = Gate()
-        scope.run { try? await gate.wait() }
+        scope.run(.action) { try? await gate.wait() }
         #expect(scope.runningCount == 1)
         gate.open()
         try await waitUntil { scope.runningCount == 0 }
@@ -19,7 +19,7 @@ struct TaskScopeTests {
         let scope = TaskScope()
         let gate = Gate()
         var cancelled = false
-        scope.run {
+        scope.run(.action) {
             do { try await gate.wait() } catch { cancelled = true }
         }
         try await waitUntil { gate.waiterCount == 1 }
@@ -28,7 +28,7 @@ struct TaskScopeTests {
         #expect(cancelled)
 
         var ran = false
-        #expect(scope.run { ran = true } == nil)
+        #expect(scope.run(.action) { ran = true } == nil)
         #expect(scope.runningCount == 0)
         #expect(!ran)
     }
@@ -39,8 +39,8 @@ struct TaskScopeTests {
         let child = parent.child()
         let grandchild = child.child()
         let gate = Gate()
-        child.run { try? await gate.wait() }
-        grandchild.run { try? await gate.wait() }
+        child.run(.action) { try? await gate.wait() }
+        grandchild.run(.action) { try? await gate.wait() }
         try await waitUntil { gate.waiterCount == 2 }
         #expect(parent.runningCount == 2)
 
@@ -48,7 +48,7 @@ struct TaskScopeTests {
         #expect(child.isClosed)
         #expect(grandchild.isClosed)
         try await waitUntil { parent.runningCount == 0 && gate.waiterCount == 0 }
-        #expect(grandchild.run {} == nil)
+        #expect(grandchild.run(.action) {} == nil)
     }
 
     /// 閉じたあとも、子の取り消した処理が走り終えるまでは数える。止めたあとに何も起きないことを、走り終えたかで確かめるため。
@@ -56,7 +56,7 @@ struct TaskScopeTests {
         let parent = TaskScope()
         let child = parent.child()
         let gate = Gate()
-        child.run { try? await gate.wait() }
+        child.run(.action) { try? await gate.wait() }
         parent.close()
         // 取り消した処理は、まだ戻り切っていない。
         #expect(parent.runningCount == 1)
@@ -68,7 +68,7 @@ struct TaskScopeTests {
     @Test func closingBeforeStartSkipsOperation() async throws {
         let scope = TaskScope()
         var ran = false
-        let task = scope.run { ran = true }
+        let task = scope.run(.action) { ran = true }
         scope.close()
         await task?.value
         #expect(!ran)
@@ -79,8 +79,8 @@ struct TaskScopeTests {
     @Test func replacedBeforeStartSkipsOperation() async throws {
         let scope = TaskScope()
         var ran: [String] = []
-        let first = scope.run(key: "mute:1", .replacing) { ran.append("first") }
-        let second = scope.run(key: "mute:1", .replacing) { ran.append("second") }
+        let first = scope.run(key: "mute:1", .replacing, .action) { ran.append("first") }
+        let second = scope.run(key: "mute:1", .replacing, .action) { ran.append("second") }
         await first?.value
         await second?.value
         #expect(ran == ["second"])
@@ -92,7 +92,7 @@ struct TaskScopeTests {
         let gate = Gate()
         let started = Gate()
         var child: TaskScope? = parent.child()
-        child?.run {
+        child?.run(.action) {
             started.open()
             // 取り消しを受けても、門が開くまで戻らない後始末。
             await withTaskCancellationHandler {
@@ -120,7 +120,7 @@ struct TaskScopeTests {
         let parent = TaskScope()
         let gate = Gate()
         var child: TaskScope? = parent.child()
-        child?.run { try? await gate.wait() }
+        child?.run(.action) { try? await gate.wait() }
         try await waitUntil { gate.waiterCount == 1 }
         child = nil
         try await waitUntil { gate.waiterCount == 0 && parent.runningCount == 0 }
@@ -131,17 +131,17 @@ struct TaskScopeTests {
         let scope = TaskScope()
         let gate = Gate()
         var count = 0
-        let first = scope.run(key: "delete:1", .skippingWhileRunning) {
+        let first = scope.run(key: "delete:1", .skippingWhileRunning, .action) {
             count += 1
             try? await gate.wait()
         }
         #expect(first != nil)
-        #expect(scope.run(key: "delete:1", .skippingWhileRunning) { count += 1 } == nil)
+        #expect(scope.run(key: "delete:1", .skippingWhileRunning, .action) { count += 1 } == nil)
         #expect(scope.isRunning(key: "delete:1"))
         gate.open()
         await first?.value
         #expect(!scope.isRunning(key: "delete:1"))
-        await scope.run(key: "delete:1", .skippingWhileRunning) { count += 1 }?.value
+        await scope.run(key: "delete:1", .skippingWhileRunning, .action) { count += 1 }?.value
         #expect(count == 2)
     }
 
@@ -151,11 +151,11 @@ struct TaskScopeTests {
         let firstGate = Gate()
         let secondGate = Gate()
         var cancelled = false
-        let first = scope.run(key: "mute:1", .replacing) {
+        let first = scope.run(key: "mute:1", .replacing, .action) {
             do { try await firstGate.wait() } catch { cancelled = true }
         }
         try await waitUntil { firstGate.waiterCount == 1 }
-        scope.run(key: "mute:1", .replacing) { try? await secondGate.wait() }
+        scope.run(key: "mute:1", .replacing, .action) { try? await secondGate.wait() }
         await first?.value
         #expect(cancelled)
         #expect(scope.isRunning(key: "mute:1"))
@@ -170,7 +170,7 @@ struct TaskScopeTests {
         let scope = TaskScope()
         let gate = Gate()
         var finished = false
-        scope.run {
+        scope.run(.action) {
             try? await gate.wait()
             finished = true
         }
@@ -180,6 +180,20 @@ struct TaskScopeTests {
         gate.open()
         await waiting.value
         #expect(finished)
+    }
+
+    /// 始めるときに名乗った目的を、中の処理と、中で作るTaskに引き継ぐ。名前を付けて始めたときも同じ。
+    @Test func runDeclaresPurpose() async throws {
+        let scope = TaskScope()
+        var purposes: [RequestPurpose?] = []
+        await scope.run(.display) {
+            purposes.append(RequestPurpose.current)
+            await Task { @MainActor in purposes.append(RequestPurpose.current) }.value
+        }?.value
+        await scope.run(key: "poll", .replacing, .prefetch) {
+            purposes.append(RequestPurpose.current)
+        }?.value
+        #expect(purposes == [.display, .display, .prefetch])
     }
 
     /// 閉じるときに、Taskでない処理も止める。閉じたあとに登録したものはすぐ呼ぶ。

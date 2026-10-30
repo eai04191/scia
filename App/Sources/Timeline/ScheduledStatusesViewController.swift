@@ -71,7 +71,9 @@ final class ScheduledStatusesViewController: UICollectionViewController {
         let refresh = UIRefreshControl()
         refresh.addAction(UIAction { [weak self, weak refresh] _ in
             Task { @MainActor in
-                await self?.onRefresh()
+                await RequestPurpose.$current.withValue(.action) {
+                    await self?.onRefresh()
+                }
                 refresh?.endRefreshing()
             }
         }, for: .valueChanged)

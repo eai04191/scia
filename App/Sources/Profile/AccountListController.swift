@@ -39,9 +39,9 @@ final class AccountListController {
         viewController.onRetry = { [weak self] in self?.retry() }
     }
 
-    /// - Parameter purpose: 電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
+    /// - Parameter purpose: 使う人が開いたり再試行を押したりしたときは`.action`。電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
     @discardableResult
-    func start(purpose: RequestPurpose = .action) -> Task<Void, Never>? {
+    func start(purpose: RequestPurpose) -> Task<Void, Never>? {
         viewController?.setContentState(.loading)
         return run(purpose) { controller in
             do {
@@ -61,7 +61,7 @@ final class AccountListController {
     private func refresh() async {
         logger.info("accountList refresh")
         if case .failed = viewController?.contentState {
-            await start()?.value
+            await start(purpose: .action)?.value
             return
         }
         do {
@@ -76,13 +76,13 @@ final class AccountListController {
 
     private func retry() {
         if store.accounts.isEmpty {
-            start()
+            start(purpose: .action)
         } else {
-            loadOlder()
+            loadOlder(purpose: .action)
         }
     }
 
-    private func loadOlder(purpose: RequestPurpose = .action) {
+    private func loadOlder(purpose: RequestPurpose) {
         guard !store.isLoading, !store.reachedEnd, !store.accounts.isEmpty else { return }
         viewController?.setFooterState(.loading)
         run(purpose) { controller in
@@ -99,12 +99,9 @@ final class AccountListController {
 
     @discardableResult
     private func run(_ purpose: RequestPurpose, _ operation: @escaping @MainActor (AccountListController) async -> Void) -> Task<Void, Never>? {
-        // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
-        RequestPurpose.$current.withValue(purpose) {
-            tasks.run { [weak self] in
-                guard let self else { return }
-                await operation(self)
-            }
+        tasks.run(purpose) { [weak self] in
+            guard let self else { return }
+            await operation(self)
         }
     }
 

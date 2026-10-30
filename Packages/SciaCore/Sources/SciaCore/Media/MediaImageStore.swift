@@ -238,7 +238,7 @@ public final class MediaImageStore<Image: Sendable> {
         maxPixelSize: Int,
         keepsOriginal: Bool = false,
         retriesNow: Bool = false,
-        purpose: RequestPurpose = .display,
+        purpose: RequestPurpose,
         sharesWithPrefetch: Bool = false
     ) async throws -> Image {
         let purpose = retriesNow ? .action : purpose

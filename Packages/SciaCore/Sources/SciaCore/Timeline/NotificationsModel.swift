@@ -91,8 +91,8 @@ public final class NotificationsModel {
         tasks.onClose { [weak self] in self?.stopStreaming() }
     }
 
-    /// - Parameter purpose: 電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
-    public func start(purpose: RequestPurpose = .action) {
+    /// - Parameter purpose: 使う人が開いたり再試行を押したりしたときは`.action`。電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
+    public func start(purpose: RequestPurpose) {
         guard !isStopped else { return }
         hasStarted = true
         setContentState(.loading)
@@ -104,7 +104,7 @@ public final class NotificationsModel {
     /// まだ始めていなければ始める。無効にしていて起動のときに始めなかった通知を、有効にしたときに始めるのに使う。
     public func startIfNeeded() {
         guard !hasStarted else { return }
-        start()
+        start(purpose: .action)
     }
 
     /// 設定で有効か無効かを切り替える。無効にしたら購読をやめ、有効に戻したら、読み込み済みならつなぎ直す。
@@ -143,13 +143,10 @@ public final class NotificationsModel {
 
     /// - Parameter purpose: 自動の読み込みなら`.display`。レート制限で止められている間は送らずに失敗させる。
     @discardableResult
-    private func run(_ purpose: RequestPurpose = .action, _ operation: @escaping @MainActor (NotificationsModel) async -> Void) -> Task<Void, Never>? {
-        // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
-        RequestPurpose.$current.withValue(purpose) {
-            tasks.run { [weak self] in
-                guard let self else { return }
-                await operation(self)
-            }
+    private func run(_ purpose: RequestPurpose, _ operation: @escaping @MainActor (NotificationsModel) async -> Void) -> Task<Void, Never>? {
+        tasks.run(purpose) { [weak self] in
+            guard let self else { return }
+            await operation(self)
         }
     }
 
@@ -171,7 +168,7 @@ public final class NotificationsModel {
         if !hasLoadedInitial {
             if case .failed = contentState {
                 setContentState(.loading)
-                await run { await $0.loadInitial() }?.value
+                await run(.action) { await $0.loadInitial() }?.value
             }
             return
         }
@@ -195,9 +192,9 @@ public final class NotificationsModel {
     /// 失敗の表示の再試行が押されたときに呼ぶ。
     public func retry() {
         if store.isEmpty {
-            start()
+            start(purpose: .action)
         } else {
-            loadOlder()
+            loadOlder(purpose: .action)
         }
     }
 
@@ -223,7 +220,7 @@ public final class NotificationsModel {
         loadOlder(purpose: .display)
     }
 
-    private func loadOlder(purpose: RequestPurpose = .action) {
+    private func loadOlder(purpose: RequestPurpose) {
         guard !isStopped, !store.isLoading, !store.reachedEnd, !store.isEmpty else { return }
         setFooterState(.loading)
         run(purpose) { model in
@@ -246,7 +243,7 @@ public final class NotificationsModel {
         let neighborIndex = direction == .fromOlder ? entries.index(after: index) : entries.index(before: index)
         let anchorID = entries.indices.contains(neighborIndex) ? entries[neighborIndex].id : nil
         display?.setGapStates(loading: store.loadingGapIDs.union([id]), failures: store.gapFailures.filter { $0.key != id })
-        run { model in
+        run(.action) { model in
             do {
                 let added = try await model.store.loadGap(id, from: direction)
                 guard !model.isStopped else { return }
@@ -281,7 +278,7 @@ public final class NotificationsModel {
         // 切れていれば、セッションがつなぎ直させ、つながったところで切れていた間を補う。
         if hasLoadedInitial, !isDisabled, streamingHub.isConnected {
             // つながったときの補完が、止められている間や電波のない間に失敗していることがある。
-            fillFromLatest()
+            fillFromLatest(purpose: .display)
         }
         retryFailedLoads()
     }
@@ -328,14 +325,14 @@ public final class NotificationsModel {
         switch activity {
         case .connected:
             logger.info("notifications streaming connected")
-            fillFromLatest()
+            fillFromLatest(purpose: .display)
         case .event(.notification(let notification)):
             receive(notification)
         case .event:
             break
         case .poll:
             logger.info("notifications poll")
-            fillFromLatest()
+            fillFromLatest(purpose: .display)
         case .outage(let isOngoing):
             display?.setOutageNotice(isOngoing)
         }
@@ -369,7 +366,8 @@ public final class NotificationsModel {
     #endif
 
     /// つながるたびと、つながらない間のポーリングで、切れていた間の通知を読む。
-    private func fillFromLatest(purpose: RequestPurpose = .display) {
+    /// - Parameter purpose: 引っぱって読み込み直したときは`.action`。つながったときやポーリングは`.display`。
+    private func fillFromLatest(purpose: RequestPurpose) {
         #if DEBUG
         // 補完で読んだ新着はストアへ直接合流し、insertPendingの保留を通らないため、保留中は補完を始めない。
         // 保留を送る前に始まった補完は止めない。その結果は、保留中でも一覧に入る。
@@ -414,7 +412,7 @@ public final class NotificationsModel {
     /// 挿入する前に、ホームと同じく、通知のアイコンが読み込み終わるのを上限まで待つ。
     private func scheduleInsertion() {
         let interval = tuning.value(of: TuningCatalog.insertionInterval)
-        run { model in
+        run(.action) { model in
             try? await model.clock.sleep(for: .seconds(interval))
             guard !Task.isCancelled else { return }
             let wait = Duration.seconds(model.tuning.value(of: TuningCatalog.arrivalAvatarWait))
@@ -433,7 +431,7 @@ public final class NotificationsModel {
     public func releaseHeldArrivals() {
         if isFillHeld {
             isFillHeld = false
-            fillFromLatest()
+            fillFromLatest(purpose: .display)
         }
         if display?.isUserInteracting == true {
             isWaitingForInteractionToSettle = true
@@ -554,21 +552,19 @@ public final class NotificationsModel {
         isSavingReadPosition = true
         let client = client
         // 既読位置の保存は、スクロールやバックグラウンドへの移行で自動で送る。
-        RequestPurpose.$current.withValue(.display) {
-            tasks.run { [weak self] in
-                while let self, !self.isStopped, let id = self.store.readIDToSave {
-                    do {
-                        try await client.saveMarker(for: .notifications, lastReadID: id)
-                        self.store.markSaved(id)
-                        self.logger.info("notifications marker saved id=\(id, privacy: .public)")
-                    } catch {
-                        self.handle(error, during: "marker save") { _ in }
-                        break
-                    }
+        tasks.run(.display) { [weak self] in
+            while let self, !self.isStopped, let id = self.store.readIDToSave {
+                do {
+                    try await client.saveMarker(for: .notifications, lastReadID: id)
+                    self.store.markSaved(id)
+                    self.logger.info("notifications marker saved id=\(id, privacy: .public)")
+                } catch {
+                    self.handle(error, during: "marker save") { _ in }
+                    break
                 }
-                self?.isSavingReadPosition = false
-                self?.endReadPositionBackgroundTask()
             }
+            self?.isSavingReadPosition = false
+            self?.endReadPositionBackgroundTask()
         }
     }
 

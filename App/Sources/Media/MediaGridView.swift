@@ -375,7 +375,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         }, sharperImage: { [weak self] maxPixelSize in
             // 動画とGIFのサムネイルはコマの画像で、元のファイルは画像として読めないため、読み直さない。
             guard let self, let attachment = self.menuAttachment, attachment.type == .image, let url = attachment.url ?? attachment.remoteUrl else { return nil }
-            return try? await self.store.image(for: url, maxPixelSize: maxPixelSize, retriesNow: true)
+            return try? await self.store.image(for: url, maxPixelSize: maxPixelSize, retriesNow: true, purpose: .action)
         }, offersMenu: { [weak self] _ in self?.menuAttachment != nil })
     }
 

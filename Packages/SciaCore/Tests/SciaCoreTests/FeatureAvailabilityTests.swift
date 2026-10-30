@@ -4,6 +4,7 @@ import Testing
 @testable import SciaCore
 
 /// 使えないと分かった機能は、そのセッションの間だけ止める。次のセッションではもう一度試す。
+@Suite(.requestPurpose(.action))
 struct FeatureAvailabilityTests {
     private func makeClient(_ transport: StubTransport, features: FeatureAvailability) throws -> MastodonClient {
         MastodonClient(

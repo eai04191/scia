@@ -117,7 +117,11 @@ final class ProfileEditViewController: UIViewController {
         configureCompletion()
         observeEditor()
         AppDependencies.stateDumps.register("profileEdit", owner: self) { $0.stateDump() }
-        Task { await load() }
+        Task {
+            await RequestPurpose.$current.withValue(.action) {
+                await load()
+            }
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -312,7 +316,9 @@ final class ProfileEditViewController: UIViewController {
         view.endEditing(true)
         Task {
             do {
-                let saved = try await editor.save()
+                let saved = try await RequestPurpose.$current.withValue(.action) {
+                    try await editor.save()
+                }
                 logger.info("profile saved")
                 onSaved(saved)
                 dismiss(animated: true)
@@ -437,7 +443,11 @@ final class ProfileEditViewController: UIViewController {
         retry.cornerStyle = .capsule
         let retryButton = UIButton(configuration: retry, primaryAction: UIAction { [weak self] _ in
             guard let self else { return }
-            Task { await self.load() }
+            Task {
+                await RequestPurpose.$current.withValue(.action) {
+                    await self.load()
+                }
+            }
         })
         failureView.axis = .vertical
         failureView.alignment = .center

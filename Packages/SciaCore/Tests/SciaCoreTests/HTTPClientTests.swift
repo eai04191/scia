@@ -5,7 +5,7 @@ import Testing
 @testable import SciaCore
 
 /// アプリの通信はすべて`HTTPClient`を通り、同じ決まり（docs/network.md）に従う。
-@Suite(.scratch)
+@Suite(.requestPurpose(.action), .scratch)
 struct HTTPClientTests {
     private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
@@ -54,6 +54,24 @@ struct HTTPClientTests {
         let transport = StubTransport([.init(statusCode: 200, body: Data(), headers: ["Content-Length": "\(ResponseLimit.api + 1)"])])
         let client = MastodonClient(credential: try makeCredential(), transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero))
         await #expect(throws: ResponseTooLarge(limit: ResponseLimit.api)) { try await client.verifyCredentials() }
+    }
+
+    // MARK: - 通信の目的
+
+    /// 目的を名乗っていない通信は、使う人の操作として黙って送らず、送らずに待っても直らない失敗にする。どの口も同じ。
+    @Test func refusesRequestWithoutDeclaredPurpose() async throws {
+        let transport = StubTransport([.init(statusCode: 200, body: Data([1]))])
+        let client = client(transport)
+        let request = URLRequest(url: try url("https://example.social/a.png"))
+        try await RequestPurpose.$current.withValue(nil) {
+            await #expect(throws: UndeclaredRequestPurpose()) { try await client.data(for: request, limit: 10, scope: .host) }
+            await #expect(throws: UndeclaredRequestPurpose()) { try await client.open(request, limit: 10, scope: .host) }
+            await #expect(throws: UndeclaredRequestPurpose()) { try await client.download(request, limit: 10, scope: .host) { _ in } }
+            let api = MastodonClient(credential: try makeCredential(), transport: transport)
+            await #expect(throws: UndeclaredRequestPurpose()) { try await api.verifyCredentials() }
+        }
+        #expect(await transport.requests.isEmpty)
+        #expect(HTTPFailure(UndeclaredRequestPurpose()) == .permanent)
     }
 
     // MARK: - 2xx以外

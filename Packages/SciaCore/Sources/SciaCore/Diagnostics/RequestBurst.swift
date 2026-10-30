@@ -89,7 +89,8 @@ public final class RequestBurstMonitor: Sendable {
     }
 
     func record(_ request: URLRequest) {
-        let purpose = RequestPurpose.current
+        // 口へ渡すのは、目的を名乗った通信だけ（`HTTPClient`が名乗っていない通信を送らない）。
+        guard let purpose = RequestPurpose.current else { return }
         let at = elapsed()
         guard let burst = counter.withLock({ $0.record(url: request.url, purpose: purpose, at: at) }) else { return }
         onBurst(burst)

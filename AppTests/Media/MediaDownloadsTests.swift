@@ -139,7 +139,10 @@ struct MediaDownloadsTests {
         let downloads = MediaDownloads(files: files, stagingDirectory: makeStaging())
         let url = try #require(URL(string: "https://\(NotFoundProtocol.host)/media/a.mp4"))
 
-        await #expect(throws: HTTPStatusError(statusCode: 404)) { try await downloads.fileForSharing(for: url) { _ in } }
+        // 共有と保存は、使う人の操作として送る（本番では`MediaTransfers`が名乗る）。
+        await #expect(throws: HTTPStatusError(statusCode: 404)) {
+            try await RequestPurpose.$current.withValue(.action) { try await downloads.fileForSharing(for: url) { _ in } }
+        }
         #expect(await files.contains(url) == false)
     }
 
@@ -153,7 +156,7 @@ struct MediaDownloadsTests {
         try Data("movie".utf8).write(to: source)
         let downloads = MediaDownloads(files: .temporary(), stagingDirectory: directory.appending(path: "staging"))
 
-        let file = try await downloads.fileForSharing(for: source) { _ in }
+        let file = try await RequestPurpose.$current.withValue(.action) { try await downloads.fileForSharing(for: source) { _ in } }
 
         #expect(file.lastPathComponent == "a.mp4")
         #expect(try Data(contentsOf: file) == Data("movie".utf8))

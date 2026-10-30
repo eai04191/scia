@@ -3,6 +3,7 @@ import Synchronization
 import Testing
 @testable import SciaCore
 
+@Suite(.requestPurpose(.action))
 struct OAuthClientTests {
     private func makeInstance() throws -> URL {
         try #require(URL(string: "https://example.social"))

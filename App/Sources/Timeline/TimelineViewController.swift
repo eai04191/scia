@@ -367,7 +367,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         guard refreshTask == nil else { return }
         refreshTask = Task { [weak self] in
             guard let self else { return }
-            await refresh()
+            await RequestPurpose.$current.withValue(.action) {
+                await refresh()
+            }
             refreshTask = nil
             refreshControl.endRefreshing()
         }

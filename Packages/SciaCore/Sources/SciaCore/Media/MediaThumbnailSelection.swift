@@ -19,7 +19,7 @@ public struct MediaThumbnailRequest: Equatable, Sendable {
         case videoFrame(fallback: URL)
     }
 
-    public init(url: URL, maxPixelSize: Int, source: Source = .image, purpose: RequestPurpose = .display, isOriginal: Bool = false) {
+    public init(url: URL, maxPixelSize: Int, source: Source = .image, purpose: RequestPurpose, isOriginal: Bool = false) {
         self.url = url
         self.maxPixelSize = maxPixelSize
         self.source = source
@@ -78,20 +78,20 @@ public enum MediaThumbnailSelection {
         }
         switch attachment.type {
         case .video, .gifv:
-            return attachment.previewUrl.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize) }
+            return attachment.previewUrl.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize, purpose: .display) }
         case .image:
             // 元の画像を読まない条件では、プレビュー画像がなければ読まずにblurhashのぼかしだけを出す。
             guard let enhancement = policy.enhancement else {
-                return attachment.previewUrl.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize) }
+                return attachment.previewUrl.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize, purpose: .display) }
             }
             if usesOriginal(attachment, required: required, policy: policy), let original = attachment.url {
                 return MediaThumbnailRequest(url: original, maxPixelSize: maxPixelSize, purpose: enhancement, isOriginal: true)
             }
             if let preview = attachment.previewUrl {
-                return MediaThumbnailRequest(url: preview, maxPixelSize: maxPixelSize)
+                return MediaThumbnailRequest(url: preview, maxPixelSize: maxPixelSize, purpose: .display)
             }
             // プレビュー画像を返さないサーバーでは、元の画像しか描くものがないため、表示に要る通信として読む。
-            return attachment.url.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize, isOriginal: true) }
+            return attachment.url.map { MediaThumbnailRequest(url: $0, maxPixelSize: maxPixelSize, purpose: .display, isOriginal: true) }
         // プレビューのURLが画像とは限らない。
         case .audio, .unknown:
             return nil

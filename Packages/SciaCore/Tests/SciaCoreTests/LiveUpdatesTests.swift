@@ -3,6 +3,7 @@ import SciaTesting
 import Testing
 @testable import SciaCore
 
+@Suite(.requestPurpose(.action))
 struct LiveUpdatesTests {
     private static let reconnect = ReconnectingStream.Policy(
         initialRetryDelay: .milliseconds(10),

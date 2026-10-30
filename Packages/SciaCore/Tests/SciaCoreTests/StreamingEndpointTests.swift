@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import SciaCore
 
+@Suite(.requestPurpose(.action))
 struct StreamingEndpointTests {
     private func makeEndpoint(_ transport: StubTransport) throws -> StreamingEndpoint {
         StreamingEndpoint(client: MastodonClient(

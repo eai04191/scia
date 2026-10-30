@@ -41,9 +41,10 @@ public final class TaskScope {
         close()
     }
 
-    /// `operation`を始める。閉じていれば始めずにnilを返す。
+    /// `operation`を、通信の目的を`purpose`と名乗って始める。閉じていれば始めずにnilを返す。
+    /// 目的は、中で送る通信と、中で作るTaskに引き継がれる（`RequestPurpose`）。中の一部だけ違う目的で送るときは、そこで名乗り直す。
     @discardableResult
-    public func run(_ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never>? {
+    public func run(_ purpose: RequestPurpose, _ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never>? {
         guard !isClosed else { return nil }
         let id = nextID
         nextID += 1
@@ -53,7 +54,9 @@ public final class TaskScope {
         let task = Task { [weak self] in
             // 走り出す前に閉じたり始め直したりしたら、中身を動かさない。取り消しだけでは、まだ始まっていない中身は止まらないため。
             if !Task.isCancelled {
-                await operation()
+                await RequestPurpose.$current.withValue(purpose) {
+                    await operation()
+                }
             }
             counter.add(-1)
             self?.finish(id)
@@ -62,9 +65,9 @@ public final class TaskScope {
         return task
     }
 
-    /// 名前を付けて`operation`を始める。同じ名前の処理が走っていれば、`overlap`に従う。始めなかったらnilを返す。
+    /// 名前を付けて、`operation`を通信の目的を`purpose`と名乗って始める。同じ名前の処理が走っていれば、`overlap`に従う。始めなかったらnilを返す。
     @discardableResult
-    public func run(key: String, _ overlap: Overlap, _ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never>? {
+    public func run(key: String, _ overlap: Overlap, _ purpose: RequestPurpose, _ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never>? {
         guard !isClosed else { return nil }
         if let running = keys[key] {
             switch overlap {
@@ -75,7 +78,7 @@ public final class TaskScope {
             }
         }
         let id = nextID
-        guard let task = run(operation) else { return nil }
+        guard let task = run(purpose, operation) else { return nil }
         keys[key] = id
         return task
     }

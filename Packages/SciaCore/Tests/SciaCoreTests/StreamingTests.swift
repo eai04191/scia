@@ -88,6 +88,7 @@ struct StreamingMessageDecoderTests {
     }
 }
 
+@Suite(.requestPurpose(.action))
 struct StreamingClientTests {
     private func makeCredential() throws -> Credential {
         Credential(
@@ -109,6 +110,18 @@ struct StreamingClientTests {
         let request = try #require(connector.requests.first)
         #expect(request.url?.absoluteString == "wss://streaming.example.social/api/v1/streaming")
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer token")
+    }
+
+    /// 目的を名乗っていない接続は、開かずに失敗にする。
+    @Test func refusesToOpenWithoutDeclaredPurpose() async throws {
+        let connector = StubWebSocketConnector(messages: [])
+        let client = StreamingClient(credential: try makeCredential(), connector: connector)
+        let baseURL = try #require(URL(string: "wss://streaming.example.social"))
+
+        await RequestPurpose.$current.withValue(nil) {
+            await #expect(throws: UndeclaredRequestPurpose()) { _ = try await client.open(baseURL: baseURL) }
+        }
+        #expect(connector.requests.isEmpty)
     }
 
     @Test func sendsSubscribeAndUnsubscribe() async throws {

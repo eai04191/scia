@@ -61,7 +61,7 @@ struct FeedTimelineControllerTests {
         let transport = ScriptedTransport { _ in (206, Data("[]".utf8)) }
         let controller = try makeController(transport: transport)
 
-        controller.start()
+        controller.start(purpose: .action)
         try await waitUntil { controller.viewController.contentState != .loading }
 
         #expect(controller.viewController.contentState == .regenerating)
@@ -89,7 +89,7 @@ struct FeedTimelineControllerTests {
         let controller = try makeController(transport: transport, connector: connector, tuning: tuning, clock: clock)
         defer { controller.stop() }
 
-        controller.start()
+        controller.start(purpose: .action)
         // 最初の読み込みと、つながったときの補完。補完も206なので、読み直しを予約する。
         try await waitUntil { homeRequests.withLock { $0 } >= 2 && clock.sleeperCount == 1 }
         controller.setEnabled(false)
@@ -112,7 +112,7 @@ struct FeedTimelineControllerTests {
             reported.value = true
         }
 
-        controller.start()
+        controller.start(purpose: .action)
         await gate.waitUntilWaiting()
         controller.stop()
         await gate.open()
@@ -135,7 +135,7 @@ struct FeedTimelineControllerTests {
             reported.value = true
         }
 
-        controller.start()
+        controller.start(purpose: .action)
         await gate.waitUntilWaiting()
         session.close()
         await gate.open()
@@ -143,7 +143,7 @@ struct FeedTimelineControllerTests {
 
         #expect(!reported.value)
         // 閉じたあとは、始め直しても読まない。
-        controller.start()
+        controller.start(purpose: .action)
         #expect(controller.runningTaskCount == 0)
     }
 
@@ -158,7 +158,7 @@ struct FeedTimelineControllerTests {
         let controller = try makeController(transport: transport, connector: connector, tuning: tuning, clock: clock)
         defer { controller.stop() }
 
-        controller.start()
+        controller.start(purpose: .action)
         try await waitUntil { connector.isConnected }
         connector.send(try updateMessage(try #require(arriving.first)))
         // 届いた新着は、間隔をおいてから挿入する。
@@ -185,7 +185,7 @@ struct FeedTimelineControllerTests {
         let controller = try makeController(feed: .local, transport: transport, connector: connector, tuning: tuning, clock: clock)
         defer { controller.stop() }
 
-        controller.start()
+        controller.start(purpose: .action)
         try await waitUntil { connector.isConnected }
         #expect(controller.viewController.displayedStatusIDs == existing.map(\.id))
         connector.send(try updateMessage(try #require(arriving.first), stream: ["public:local"]))
@@ -205,7 +205,7 @@ struct FeedTimelineControllerTests {
         let controller = try makeController(transport: transport)
         defer { controller.stop() }
 
-        controller.start()
+        controller.start(purpose: .action)
         try await waitUntil { controller.viewController.contentState == .loaded }
 
         #expect(controller.viewController.unreadCount == 3)
@@ -216,7 +216,7 @@ struct FeedTimelineControllerTests {
         let controller = try makeController(transport: try HomeTransport(home: []), connector: connector)
         defer { controller.stop() }
 
-        controller.start()
+        controller.start(purpose: .action)
         try await waitUntil { connector.connectionCount == 1 }
         controller.enterBackground()
         controller.enterForeground()
@@ -242,7 +242,7 @@ struct FeedTimelineControllerTests {
         let controller = try makeController(transport: transport, connector: connector)
         defer { controller.stop() }
 
-        controller.start()
+        controller.start(purpose: .action)
         await gate.waitUntilWaiting()
         controller.enterBackground()
         await gate.open()
@@ -307,7 +307,7 @@ struct FeedTimelineControllerTests {
         defer { window.isHidden = true }
         let refreshControl = try #require(controller.viewController.collectionView.refreshControl)
 
-        controller.start()
+        controller.start(purpose: .action)
         try await waitUntil { connector.isConnected && controller.viewController.contentState == TimelineViewController.ContentState.loaded }
         servesNewer.isOn = true
         refreshControl.beginRefreshing()
@@ -330,7 +330,7 @@ struct FeedTimelineControllerTests {
         defer { window.isHidden = true }
         let refreshControl = try #require(controller.viewController.collectionView.refreshControl)
 
-        controller.start()
+        controller.start(purpose: .action)
         await gate.waitUntilWaiting()
         refreshControl.beginRefreshing()
         refreshControl.sendActions(for: .valueChanged)

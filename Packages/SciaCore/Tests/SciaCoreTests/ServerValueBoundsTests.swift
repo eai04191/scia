@@ -5,6 +5,7 @@ import Testing
 
 /// サーバー（ほかのサーバーの利用者が書いた投稿を含む）から来る数とURLを、読むところで確かめることを確かめる。
 /// Mastodonは数の範囲もリンクのスキームも確かめずに通すことがあるため、どんな値が来ても、落ちたり、ほかのアプリやファイルを開いたりしない。
+@Suite(.requestPurpose(.action))
 struct ServerValueBoundsTests {
     // MARK: - 数
 

@@ -4,6 +4,7 @@ import Synchronization
 import Testing
 @testable import SciaCore
 
+@Suite(.requestPurpose(.action))
 struct ReconnectingStreamTests {
     /// 待ち時間は手で進める時計で数えるので、長さは結果の確かめやすさで決める。
     private static let fastPolicy = ReconnectingStream.Policy(

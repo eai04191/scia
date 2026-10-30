@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import SciaCore
 
+@Suite(.requestPurpose(.action))
 struct MastodonClientTests {
     private func makeClient(_ transport: StubTransport) throws -> MastodonClient {
         MastodonClient(

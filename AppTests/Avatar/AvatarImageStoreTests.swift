@@ -118,7 +118,7 @@ struct AvatarImageStoreTests {
     /// 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない。使う人がメニューを開いたときは、使う人の通信として送る。
     @Test func loadsAreSentWithTheirOrigin() async throws {
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 8, height: 8)).image { _ in }.pngData())
-        let origins = Mutex<[RequestPurpose]>([])
+        let origins = Mutex<[RequestPurpose?]>([])
         let store = AvatarImageStore { _ in
             origins.withLock { $0.append(RequestPurpose.current) }
             return png

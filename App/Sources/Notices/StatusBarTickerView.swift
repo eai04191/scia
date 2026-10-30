@@ -979,7 +979,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
                 return imageView
             }
             guard let url = attachment.previewUrl else { return imageView }
-            let request = MediaThumbnailRequest(url: url, maxPixelSize: Int((side * 3).rounded(.up)))
+            let request = MediaThumbnailRequest(url: url, maxPixelSize: Int((side * 3).rounded(.up)), purpose: .display)
             if let cached = store.cachedThumbnail(for: request) {
                 imageView.image = cached
                 return imageView

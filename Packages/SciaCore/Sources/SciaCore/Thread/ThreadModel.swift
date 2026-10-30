@@ -59,20 +59,20 @@ public final class ThreadModel {
     /// 画面に積む前に呼ぶ。押した投稿だけを並べ、会話を読み始める。
     public func start() {
         display?.show(store.entries)
-        load()
+        load(purpose: .action)
         startStreaming()
     }
 
     /// 一覧を引っぱって離したときに、会話と押した投稿を読み直す。スレッドは上に新しい投稿が来る並びではないため、全体を読み直す。
     public func refresh() async {
         logger.info("thread refresh")
-        load()
+        load(purpose: .action)
         await loadTask?.value
     }
 
     /// 失敗の表示の再試行が押されたときに呼ぶ。
     public func retry() {
-        load()
+        load(purpose: .action)
     }
 
     private func setFooterState(_ state: TimelineFooterState) {
@@ -81,14 +81,15 @@ public final class ThreadModel {
     }
 
     /// 会話を読む。読んだ結果は、押した投稿の位置を保って並べる。
-    private func load() {
+    /// - Parameter purpose: 開いたときや引っぱったときは`.action`。つながったときやポーリングは`.display`。
+    private func load(purpose: RequestPurpose) {
         guard !tasks.isClosed else { return }
         setFooterState(.loading)
         loadTask?.cancel()
         store.beginLoading()
         isLoading = true
         let reloadsFocus = hasLoaded
-        loadTask = tasks.run { [weak self] in
+        loadTask = tasks.run(purpose) { [weak self] in
             guard let self else { return }
             // 止められた読み込みは、止めた側が始めた読み込みの途中に終わるため、読み込み中を下ろさない。
             defer {
@@ -172,7 +173,7 @@ public final class ThreadModel {
         case .connected, .poll:
             // 読んでいる途中なら、その読み込みが補う。最初の読み込みに失敗していれば、ここで読み直す。
             guard !isLoading else { return }
-            load()
+            load(purpose: .action)
         case .event(let event):
             // 使う人の操作によらない変化なので、削除も閉じる動きにせず、読んでいる行を動かさない。
             guard store.receive(event) else { return }

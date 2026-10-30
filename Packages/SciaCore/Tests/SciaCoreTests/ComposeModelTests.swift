@@ -88,7 +88,7 @@ struct ComposeModelTests {
         model.apply(configuration: nil, defaultVisibility: .public, defaultSensitive: nil)
         model.text = "こんにちは"
 
-        model.tasks.run { await model.submit() }
+        model.tasks.run(.action) { await model.submit() }
         try await waitUntil { gate.waiterCount == 1 }
         session.close()
 

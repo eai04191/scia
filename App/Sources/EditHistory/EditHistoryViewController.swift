@@ -113,7 +113,9 @@ final class EditHistoryViewController: UIViewController {
         loadTask = Task { [weak self] in
             guard let self else { return }
             do {
-                let revisions = try await fetch()
+                let revisions = try await RequestPurpose.$current.withValue(.action) {
+                    try await fetch()
+                }
                 state = .loaded(StatusEditHistory(
                     revisions: revisions,
                     mentions: status.mentions,

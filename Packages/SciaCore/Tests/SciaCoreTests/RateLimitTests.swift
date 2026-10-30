@@ -3,6 +3,7 @@ import SciaTesting
 import Testing
 @testable import SciaCore
 
+@Suite(.requestPurpose(.action))
 struct RateLimitTests {
     /// 2027-01-15T08:00:00Z
     private static let now = Date(timeIntervalSince1970: 1_800_000_000)

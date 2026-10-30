@@ -118,7 +118,7 @@ struct EmojiImageStoreTests {
 
     /// 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない。使う人が見に行った操作は、使う人の通信として送る。
     @Test func loadsAreSentWithTheirOrigin() async throws {
-        let origins = Mutex<[RequestPurpose]>([])
+        let origins = Mutex<[RequestPurpose?]>([])
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { _ in }.pngData())
         let store = EmojiImageStore(clock: clock, retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { _ in
             origins.withLock { $0.append(RequestPurpose.current) }

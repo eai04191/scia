@@ -3,6 +3,7 @@ import Testing
 @testable import SciaCore
 
 /// 一時的な失敗で自動で送り直すのは、何度送っても結果が変わらないGETと、`Idempotency-Key`付きの投稿だけ。
+@Suite(.requestPurpose(.action))
 struct RetryTests {
     private static let noWait = RetryPolicy(maxRetries: 2, initialDelay: .zero)
 

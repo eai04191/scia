@@ -28,7 +28,7 @@ struct MediaImageStoreTests {
         let url = try #require(URL(string: "https://files.example.social/original/abc.jpg"))
 
         #expect(await store.hasOriginal(for: url) == false)
-        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true)
+        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true, purpose: .display)
 
         #expect(await store.hasOriginal(for: url))
         let file = try #require(await files.file(for: url))
@@ -42,7 +42,7 @@ struct MediaImageStoreTests {
         let store = MediaImageStore(files: .temporary()) { _, _ in data }
         let url = try #require(URL(string: "https://files.example.social/small/abc.png"))
 
-        _ = try await store.image(for: url, maxPixelSize: 400)
+        _ = try await store.image(for: url, maxPixelSize: 400, purpose: .display)
 
         #expect(await store.hasOriginal(for: url) == false)
     }
@@ -53,10 +53,10 @@ struct MediaImageStoreTests {
         let files = MediaFileCache.temporary()
         let store = MediaImageStore(files: files) { _, _ in data }
         let url = try #require(URL(string: "https://files.example.social/original/abc.png"))
-        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true)
+        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true, purpose: .display)
         try FileManager.default.removeItem(at: files.directory)
 
-        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true)
+        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true, purpose: .display)
 
         #expect(await store.hasOriginal(for: url))
     }
@@ -69,7 +69,7 @@ struct MediaImageStoreTests {
         _ = try await files.store(data, named: "abc.png", for: url, generation: 0)
         let store = MediaImageStore(files: files) { _, _ in throw URLError(.notConnectedToInternet) }
 
-        let image = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true)
+        let image = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true, purpose: .display)
 
         #expect(image.size == CGSize(width: 8, height: 8))
     }
@@ -82,7 +82,7 @@ struct MediaImageStoreTests {
         _ = try await files.store(Data("broken".utf8), named: "abc.png", for: url, generation: 0)
         let store = MediaImageStore(files: files) { _, _ in data }
 
-        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true)
+        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true, purpose: .display)
 
         let file = try #require(await files.file(for: url))
         #expect(try Data(contentsOf: file) == data)
@@ -100,7 +100,7 @@ struct MediaImageStoreTests {
             return data
         }
 
-        _ = try await store.image(for: url, maxPixelSize: 400)
+        _ = try await store.image(for: url, maxPixelSize: 400, purpose: .display)
 
         #expect(fetched.withLock { $0 } == 1)
     }
@@ -116,7 +116,7 @@ struct MediaImageStoreTests {
         }
         let video = try #require(URL(string: "https://files.example.social/original/abc.mp4"))
         let preview = try #require(URL(string: "https://files.example.social/small/abc.png"))
-        let request = MediaThumbnailRequest(url: video, maxPixelSize: 1_024, source: .videoFrame(fallback: preview))
+        let request = MediaThumbnailRequest(url: video, maxPixelSize: 1_024, source: .videoFrame(fallback: preview), purpose: .display)
 
         let image = try await store.thumbnail(for: request)
         _ = try await store.thumbnail(for: request)
@@ -138,7 +138,7 @@ struct MediaImageStoreTests {
         }
         let video = try #require(URL(string: "https://files.example.social/original/abc.mp4"))
         let preview = try #require(URL(string: "https://files.example.social/small/abc.png"))
-        let request = MediaThumbnailRequest(url: video, maxPixelSize: 1_024, source: .videoFrame(fallback: preview))
+        let request = MediaThumbnailRequest(url: video, maxPixelSize: 1_024, source: .videoFrame(fallback: preview), purpose: .display)
 
         _ = try await store.thumbnail(for: request)
         _ = try await store.thumbnail(for: request)
@@ -163,7 +163,7 @@ struct MediaImageStoreTests {
         }
         let video = try #require(URL(string: "https://files.example.social/original/abc.mp4"))
         let preview = try #require(URL(string: "https://files.example.social/small/abc.png"))
-        let request = MediaThumbnailRequest(url: video, maxPixelSize: 1_024, source: .videoFrame(fallback: preview))
+        let request = MediaThumbnailRequest(url: video, maxPixelSize: 1_024, source: .videoFrame(fallback: preview), purpose: .display)
 
         _ = try await store.thumbnail(for: request)
         #expect(rangeReads.withLock { $0 } == 1)
@@ -176,14 +176,14 @@ struct MediaImageStoreTests {
     /// 一覧に描くための読み込みは自動の通信として送り、止められている間は送らない。ビューアで開くときは、使う人の通信として送る。
     @Test func loadsAreSentWithTheirOrigin() async throws {
         let png = try pngData()
-        let origins = Mutex<[RequestPurpose]>([])
+        let origins = Mutex<[RequestPurpose?]>([])
         let store = MediaImageStore(files: .temporary()) { _, _ in
             origins.withLock { $0.append(RequestPurpose.current) }
             return png
         }
 
-        _ = try await store.image(for: try #require(URL(string: "https://files.example.social/1.png")), maxPixelSize: 8)
-        _ = try await store.image(for: try #require(URL(string: "https://files.example.social/2.png")), maxPixelSize: 8, keepsOriginal: true, retriesNow: true)
+        _ = try await store.image(for: try #require(URL(string: "https://files.example.social/1.png")), maxPixelSize: 8, purpose: .display)
+        _ = try await store.image(for: try #require(URL(string: "https://files.example.social/2.png")), maxPixelSize: 8, keepsOriginal: true, retriesNow: true, purpose: .action)
 
         #expect(origins.withLock { $0 } == [.display, .action])
     }
@@ -193,7 +193,7 @@ struct MediaImageStoreTests {
         let png = try pngData()
         let files = MediaFileCache.temporary()
         let prefetched = MediaFileCache.temporary()
-        let purposes = Mutex<[RequestPurpose]>([])
+        let purposes = Mutex<[RequestPurpose?]>([])
         let store = MediaImageStore(files: files, prefetchedFiles: prefetched) { _, _ in
             purposes.withLock { $0.append(RequestPurpose.current) }
             return png
@@ -225,7 +225,7 @@ struct MediaImageStoreTests {
         let url = try #require(URL(string: "https://files.example.social/original/1.png"))
         await store.prefetchOriginal(url, purpose: .prefetch)
 
-        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true, retriesNow: true)
+        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true, retriesNow: true, purpose: .action)
 
         #expect(fetches.withLock { $0 } == 1)
         #expect(await files.contains(url))
@@ -284,23 +284,23 @@ struct MediaImageStoreTests {
             return png
         }
         let url = try #require(URL(string: "https://files.example.social/small/1.png"))
-        let prefetch = MediaThumbnailRequest(url: url, maxPixelSize: 512).sent(as: .prefetch)
+        let prefetch = MediaThumbnailRequest(url: url, maxPixelSize: 512, purpose: .display).sent(as: .prefetch)
         let covered = Task { try await store.thumbnail(for: prefetch) }
         try await waitUntil { gate.waiterCount == 1 }
 
-        let revealed = Task { try await store.thumbnail(for: MediaThumbnailRequest(url: url, maxPixelSize: 512)) }
+        let revealed = Task { try await store.thumbnail(for: MediaThumbnailRequest(url: url, maxPixelSize: 512, purpose: .display)) }
         gate.open()
         _ = try await covered.value
         _ = try await revealed.value
 
         #expect(fetches.withLock { $0 } == 1)
-        #expect(store.cachedThumbnail(for: MediaThumbnailRequest(url: url, maxPixelSize: 512)) != nil)
+        #expect(store.cachedThumbnail(for: MediaThumbnailRequest(url: url, maxPixelSize: 512, purpose: .display)) != nil)
     }
 
     /// ぼかした動画の最初のコマを作れなかったら、代わりのプレビューも先読みとして読む。モバイル通信に変わってOSが断っても、表示の目的に戻して読まない。
     @Test func coveredVideoFallbackKeepsPrefetchPurpose() async throws {
         let png = try pngData()
-        let purposes = Mutex<[RequestPurpose]>([])
+        let purposes = Mutex<[RequestPurpose?]>([])
         let store = MediaImageStore(files: .temporary()) { _, range in
             purposes.withLock { $0.append(RequestPurpose.current) }
             if range != nil {
@@ -310,7 +310,7 @@ struct MediaImageStoreTests {
         }
         let video = try #require(URL(string: "https://files.example.social/original/1.mp4"))
         let preview = try #require(URL(string: "https://files.example.social/small/1.png"))
-        let request = MediaThumbnailRequest(url: video, maxPixelSize: 1_024, source: .videoFrame(fallback: preview), isOriginal: true).sent(as: .prefetch)
+        let request = MediaThumbnailRequest(url: video, maxPixelSize: 1_024, source: .videoFrame(fallback: preview), purpose: .display, isOriginal: true).sent(as: .prefetch)
 
         _ = try await store.thumbnail(for: request)
 
@@ -335,7 +335,7 @@ struct MediaImageStoreTests {
         let reveals = (0..<3).map { _ in
             Task { @MainActor in
                 entered += 1
-                return try await store.image(for: url, maxPixelSize: 512)
+                return try await store.image(for: url, maxPixelSize: 512, purpose: .display)
             }
         }
         try await waitUntil { entered == 3 }
@@ -358,7 +358,7 @@ struct MediaImageStoreTests {
             throw HTTPStatusError(statusCode: 503)
         }
         let url = try #require(URL(string: "https://files.example.social/small/3.png"))
-        let request = MediaThumbnailRequest(url: url, maxPixelSize: 512).sent(as: .prefetch)
+        let request = MediaThumbnailRequest(url: url, maxPixelSize: 512, purpose: .display).sent(as: .prefetch)
         _ = try? await store.thumbnail(for: request)
         clock.advance(by: .seconds(600))
 
@@ -398,7 +398,7 @@ struct MediaImageStoreTests {
 
         let enhancement = Task { try await store.image(for: url, maxPixelSize: 8, purpose: .enhancement(onExpensiveNetwork: false)) }
         try await enhancementStarted.wait()
-        let display = Task { try await store.image(for: url, maxPixelSize: 8) }
+        let display = Task { try await store.image(for: url, maxPixelSize: 8, purpose: .display) }
         refuse.open()
 
         await #expect(throws: URLError.self) { try await enhancement.value }
@@ -425,15 +425,15 @@ struct MediaImageStoreRetryTests {
             return png
         }
 
-        await #expect(throws: HTTPStatusError.self) { try await store.image(for: url, maxPixelSize: 8) }
-        await #expect(throws: ImageLoadDeferred.self) { try await store.image(for: url, maxPixelSize: 8) }
+        await #expect(throws: HTTPStatusError.self) { try await store.image(for: url, maxPixelSize: 8, purpose: .display) }
+        await #expect(throws: ImageLoadDeferred.self) { try await store.image(for: url, maxPixelSize: 8, purpose: .display) }
         #expect(reads.withLock { $0 } == 1)
 
         clock.advance(by: .seconds(5))
-        await #expect(throws: HTTPStatusError.self) { try await store.image(for: url, maxPixelSize: 8) }
+        await #expect(throws: HTTPStatusError.self) { try await store.image(for: url, maxPixelSize: 8, purpose: .display) }
         #expect(reads.withLock { $0 } == 2)
 
-        _ = try await store.image(for: url, maxPixelSize: 8, retriesNow: true)
+        _ = try await store.image(for: url, maxPixelSize: 8, retriesNow: true, purpose: .action)
         #expect(reads.withLock { $0 } == 3)
     }
 }

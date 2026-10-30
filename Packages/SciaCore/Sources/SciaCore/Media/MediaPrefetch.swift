@@ -27,7 +27,7 @@ public final class PrefetchQueue<Item: Hashable & Sendable> {
 
     /// - Parameters:
     ///   - scope: 読む処理の持ち主。ログアウトしたら閉じ、そのアカウントで見た画像を読まないようにする。
-    ///   - load: 1つを読む。取り消されたら、読むのをやめて戻る。読めなくても投げずに戻る。
+    ///   - load: 1つを読む。先読み（`.prefetch`）と名乗って呼ぶ。取り消されたら、読むのをやめて戻る。読めなくても投げずに戻る。
     public init(scope: TaskScope, load: @escaping @MainActor (Item) async -> Void) {
         self.scope = scope
         self.load = load
@@ -57,7 +57,7 @@ public final class PrefetchQueue<Item: Hashable & Sendable> {
         let token = nextToken
         nextToken += 1
         let load = load
-        guard let task = scope.run({ [weak self] in
+        guard let task = scope.run(.prefetch, { [weak self] in
             await load(item)
             self?.finish(token)
         }) else {

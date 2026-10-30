@@ -4,6 +4,7 @@ import Testing
 @testable import SciaCore
 
 /// 画像を読むときは、2xx以外の応答の本文を画像として渡さない。
+@Suite(.requestPurpose(.action))
 struct RemoteFetchTests {
     private func url() throws -> URL {
         try #require(URL(string: "https://example.social/system/emoji.png"))

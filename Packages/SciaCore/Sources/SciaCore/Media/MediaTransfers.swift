@@ -104,7 +104,10 @@ public final class MediaTransfers {
             transfers.append(transfer)
             runningCount += 1
             tasks[transfer.id] = Task { [weak self] in
-                await self?.run(transfer.id)
+                // 共有と保存は、使う人が選んだ操作なので、レート制限で止められている間も送る（docs/network.md）。
+                await RequestPurpose.$current.withValue(.action) {
+                    await self?.run(transfer.id)
+                }
                 self?.runningCount -= 1
             }
             id = transfer.id

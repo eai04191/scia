@@ -7,7 +7,7 @@ import SciaTesting
 
 /// URLSessionTransportを、ローカルで立てたHTTPサーバーに実際につないで確かめる。
 /// 応答が来ないまま固まったら、テストの実行を止めずに失敗させる。上限は待つ長さの見積もりではなく、固まったとみなす長さ。
-@Suite(.serialized, .timeLimit(.minutes(1)), .scratch)
+@Suite(.requestPurpose(.action), .serialized, .timeLimit(.minutes(1)), .scratch)
 struct URLSessionTransportTests {
     @Test func sendsAndReceivesBody() async throws {
         let server = try await LocalHTTPServer(response: Self.response(status: 200, body: "hello", length: true))

@@ -106,8 +106,8 @@ public final class FeedTimelineModel {
         tasks.onClose { [weak self] in self?.didStop() }
     }
 
-    /// - Parameter purpose: 電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
-    public func start(purpose: RequestPurpose = .action) {
+    /// - Parameter purpose: 使う人が開いたり再試行を押したりしたときは`.action`。電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
+    public func start(purpose: RequestPurpose) {
         guard !isStopped else { return }
         hasStarted = true
         setContentState(.loading)
@@ -117,14 +117,14 @@ public final class FeedTimelineModel {
     /// まだ始めていなければ始める。開くまで読まない一覧を、初めて開いたときに始めるのに使う。
     public func startIfNeeded() {
         guard !hasStarted else { return }
-        start()
+        start(purpose: .action)
     }
 
     #if DEBUG
     /// 始めている一覧だけ読み込み直す。障害を起こすデバッグURLで、開いたことのない一覧まで読み始めないようにする。
     public func reloadIfStarted() {
         guard hasStarted else { return }
-        start()
+        start(purpose: .action)
     }
     #endif
 
@@ -177,7 +177,7 @@ public final class FeedTimelineModel {
         startStreaming()
         // ストリームにつながらない環境でも、見ている一覧はすぐ読む。つながったときの補完と重なれば、ストアが1つにまとめる。
         if feed.isAccountHashtag, isShown, !isDisabled {
-            fillFromLatest()
+            fillFromLatest(purpose: .display)
         }
         startPolling()
         syncReadPosition()
@@ -199,7 +199,7 @@ public final class FeedTimelineModel {
             // 見ていない間に見送った、失敗した読み込みのやり直し。
             retryFailedLoads()
             if hasLoadedInitial {
-                fillFromLatest()
+                fillFromLatest(purpose: .display)
             }
         }
         startPolling()
@@ -209,18 +209,18 @@ public final class FeedTimelineModel {
     /// ユーザーのハッシュタグは、見ていない間は読まない。見えたときに`setShown`で読むので、見ていない間の新着は取りこぼさない。
     private func fillFromLatestIfShownWhenNeeded() {
         guard !feed.isAccountHashtag || isShown else { return }
-        fillFromLatest()
+        fillFromLatest(purpose: .display)
     }
 
     private func startPolling() {
         guard isShown, !isStopped, !isDisabled, isInForeground, pollingTask == nil else { return }
-        pollingTask = tasks.run { [weak self, clock] in
+        pollingTask = tasks.run(.display) { [weak self, clock] in
             while let interval = self?.tuning.value(of: TuningCatalog.accountHashtagPollingInterval) {
                 try? await clock.sleep(for: .seconds(interval))
                 guard !Task.isCancelled, let self else { return }
                 guard self.hasLoadedInitial else { continue }
                 self.logger.info("\(self.feed.name, privacy: .public) poll while shown")
-                self.fillFromLatest()
+                self.fillFromLatest(purpose: .display)
             }
         }
     }
@@ -293,13 +293,10 @@ public final class FeedTimelineModel {
 
     /// - Parameter purpose: 自動の読み込みなら`.display`。レート制限で止められている間は送らずに失敗させる。
     @discardableResult
-    private func run(_ purpose: RequestPurpose = .action, _ operation: @escaping @MainActor (FeedTimelineModel) async -> Void) -> Task<Void, Never>? {
-        // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
-        RequestPurpose.$current.withValue(purpose) {
-            tasks.run { [weak self] in
-                guard let self else { return }
-                await operation(self)
-            }
+    private func run(_ purpose: RequestPurpose, _ operation: @escaping @MainActor (FeedTimelineModel) async -> Void) -> Task<Void, Never>? {
+        tasks.run(purpose) { [weak self] in
+            guard let self else { return }
+            await operation(self)
         }
     }
 
@@ -311,7 +308,7 @@ public final class FeedTimelineModel {
         if !hasLoadedInitial {
             if case .failed = contentState {
                 setContentState(.loading)
-                await run { await $0.loadInitial() }?.value
+                await run(.action) { await $0.loadInitial() }?.value
             }
             return
         }
@@ -327,9 +324,9 @@ public final class FeedTimelineModel {
     /// 失敗の表示の再試行が押されたときに呼ぶ。
     public func retry() {
         if store.isEmpty {
-            start()
+            start(purpose: .action)
         } else {
-            loadOlder()
+            loadOlder(purpose: .action)
         }
     }
 
@@ -358,7 +355,7 @@ public final class FeedTimelineModel {
         loadOlder(purpose: .display)
     }
 
-    private func loadOlder(purpose: RequestPurpose = .action) {
+    private func loadOlder(purpose: RequestPurpose) {
         guard !isStopped, !store.isLoading, !store.reachedEnd, !store.isEmpty else { return }
         setFooterState(.loading)
         run(purpose) { model in
@@ -402,7 +399,8 @@ public final class FeedTimelineModel {
     }
 
     /// つながるたびと、つながらない間のポーリングで、切れていた間の投稿を読む。1ページに収まらなければギャップを置く。
-    private func fillFromLatest(purpose: RequestPurpose = .display) {
+    /// - Parameter purpose: 引っぱって読み込み直したときは`.action`。つながったときやポーリングは`.display`。
+    private func fillFromLatest(purpose: RequestPurpose) {
         #if DEBUG
         // 補完で読んだ新着はストアへ直接合流し、insertPendingの保留を通らないため、保留中は補完を始めない。
         // 保留を送る前に始まった補完は止めない。その結果は、保留中でも一覧に入る。
@@ -470,12 +468,12 @@ public final class FeedTimelineModel {
         guard regeneratingRetryTask == nil, !isStopped, !isDisabled, isInForeground else { return }
         let interval = tuning.value(of: TuningCatalog.regeneratingRetryInterval)
         logger.info("\(self.feed.name, privacy: .public) regenerating retry scheduled after=\(interval, privacy: .public)")
-        regeneratingRetryTask = tasks.run { [weak self, clock] in
+        regeneratingRetryTask = tasks.run(.display) { [weak self, clock] in
             try? await clock.sleep(for: .seconds(interval))
             guard !Task.isCancelled, let self else { return }
             regeneratingRetryTask = nil
             guard !isStopped, !isDisabled, isInForeground else { return }
-            fillFromLatest()
+            fillFromLatest(purpose: .display)
         }
     }
 
@@ -574,7 +572,7 @@ public final class FeedTimelineModel {
     /// 挿入する前に、新着のアイコンが読み込み終わるのを上限まで待ち、行が出た時点でアイコンを描けているようにする。
     private func scheduleInsertion() {
         let interval = tuning.value(of: TuningCatalog.insertionInterval)
-        run { model in
+        run(.action) { model in
             try? await model.clock.sleep(for: .seconds(interval))
             guard !Task.isCancelled else { return }
             let wait = Duration.seconds(model.tuning.value(of: TuningCatalog.arrivalAvatarWait))
@@ -594,7 +592,7 @@ public final class FeedTimelineModel {
     public func releaseHeldArrivals() {
         if isFillHeld {
             isFillHeld = false
-            fillFromLatest()
+            fillFromLatest(purpose: .display)
         }
         if display?.isUserInteracting == true {
             isWaitingForInteractionToSettle = true
@@ -658,21 +656,19 @@ public final class FeedTimelineModel {
         isSavingReadPosition = true
         let client = client
         // 既読位置の保存は、スクロールやバックグラウンドへの移行で自動で送る。
-        RequestPurpose.$current.withValue(.display) {
-            tasks.run { [weak self] in
-                while let self, !self.isStopped, let id = self.store.readIDToSave {
-                    do {
-                        try await client.saveMarker(for: marker, lastReadID: id)
-                        self.store.markSaved(id)
-                        self.logger.info("\(self.feed.name, privacy: .public) marker saved id=\(id, privacy: .public)")
-                    } catch {
-                        self.handle(error, during: "marker save") { _ in }
-                        break
-                    }
+        tasks.run(.display) { [weak self] in
+            while let self, !self.isStopped, let id = self.store.readIDToSave {
+                do {
+                    try await client.saveMarker(for: marker, lastReadID: id)
+                    self.store.markSaved(id)
+                    self.logger.info("\(self.feed.name, privacy: .public) marker saved id=\(id, privacy: .public)")
+                } catch {
+                    self.handle(error, during: "marker save") { _ in }
+                    break
                 }
-                self?.isSavingReadPosition = false
-                self?.endReadPositionBackgroundTask()
             }
+            self?.isSavingReadPosition = false
+            self?.endReadPositionBackgroundTask()
         }
     }
 

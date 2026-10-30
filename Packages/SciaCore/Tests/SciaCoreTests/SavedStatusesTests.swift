@@ -28,6 +28,7 @@ struct LinkHeaderTests {
     }
 }
 
+@Suite(.requestPurpose(.action))
 struct SavedStatusesClientTests {
     private func makeClient(_ transport: StubTransport) throws -> MastodonClient {
         MastodonClient(

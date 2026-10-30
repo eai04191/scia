@@ -986,7 +986,7 @@ extension ComposeModel {
 
     private func startUpload(_ id: DraftAttachment.ID) {
         uploadTasks[id]?.cancel()
-        uploadTasks[id] = tasks.run { [weak self] in await self?.upload(id) }
+        uploadTasks[id] = tasks.run(.action) { [weak self] in await self?.upload(id) }
     }
 
     /// ファイルを読み込み、アップロードし、サーバーでの変換が済むまで待つ。途中で添付から外されたら、何も書き戻さない。
@@ -1219,7 +1219,7 @@ extension ComposeModel {
             throw CancellationError()
         }
         localMedia[id]?.file = file
-        thumbnailTasks[id] = tasks.run { [weak self, media] in
+        thumbnailTasks[id] = tasks.run(.action) { [weak self, media] in
             let thumbnail = await media.makeThumbnail(file)
             guard !Task.isCancelled else { return }
             self?.localMedia[id]?.thumbnail = thumbnail
@@ -1234,7 +1234,7 @@ extension ComposeModel {
               let serverID = attachment.serverID
         else { return }
         let description = attachment.description
-        descriptionTasks[id] = tasks.run { [weak self, media] in
+        descriptionTasks[id] = tasks.run(.action) { [weak self, media] in
             do {
                 let updated = try await media.updateDescription(serverID, description)
                 guard let self, !Task.isCancelled else { return }

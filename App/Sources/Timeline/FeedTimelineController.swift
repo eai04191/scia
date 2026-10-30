@@ -83,8 +83,8 @@ final class FeedTimelineController {
         }
     }
 
-    /// - Parameter purpose: 電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
-    func start(purpose: RequestPurpose = .action) {
+    /// - Parameter purpose: 使う人が開いたときは`.action`。電波の回復などでやり直すときは`.display`。レート制限で止められている間は送らない。
+    func start(purpose: RequestPurpose) {
         model.start(purpose: purpose)
     }
 

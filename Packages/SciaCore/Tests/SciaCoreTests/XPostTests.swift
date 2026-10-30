@@ -47,7 +47,7 @@ struct XPostTests {
         #expect(XPostLink.postID(of: status) == "2110205221557453003")
     }
 
-    @Test func decodesPhoto() async throws {
+    @Test(.requestPurpose(.action)) func decodesPhoto() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_photo")])
         let post = try await XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock())).post(id: "2110205221557453003")
 
@@ -75,7 +75,7 @@ struct XPostTests {
 
     /// URLは展開した先へのリンクにして短い形を見せ、ハッシュタグはXのページへのリンクにする。
     /// 位置はUnicodeのスカラー値で数えるため、前にある絵文字（UTF-16で2つ）の分だけずれない。末尾の添付ファイルのt.coは見せない。
-    @Test func linksFacets() async throws {
+    @Test(.requestPurpose(.action)) func linksFacets() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_facets")])
         let post = try await XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock())).post(id: "1899811117221761267")
 
@@ -91,7 +91,7 @@ struct XPostTests {
     }
 
     /// Xの本文は`<`などを文字参照のまま返し、位置も文字参照のまま数える。切り分けてから文字に戻す。
-    @Test func decodesEntitiesAfterSlicing() async throws {
+    @Test(.requestPurpose(.action)) func decodesEntitiesAfterSlicing() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_escaped")])
         let post = try await XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock())).post(id: "1683920951807971329")
 
@@ -101,7 +101,7 @@ struct XPostTests {
     }
 
     /// 長い投稿は、見せる範囲をUTF-16の長さで返すため、全文を見せる。本文にない位置を指す添付ファイルのfacetは使わない。メンションはXのページへのリンクにする。
-    @Test func linksNoteTweet() async throws {
+    @Test(.requestPurpose(.action)) func linksNoteTweet() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_note_tweet")])
         let post = try await XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock())).post(id: "2111375640717033777")
 
@@ -124,7 +124,7 @@ struct XPostTests {
         #expect(photo.meta?.small == MediaAttachment.Size(width: 612, height: 680))
     }
 
-    @Test func decodesVideoAndGIF() async throws {
+    @Test(.requestPurpose(.action)) func decodesVideoAndGIF() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_video"), try .fixture("fxtwitter_gif")])
         let client = XPostClient(client: HTTPClient(transport: transport, retry: RetryPolicy(maxRetries: 0, initialDelay: .zero), clock: TestClock()))
 
@@ -138,7 +138,7 @@ struct XPostTests {
         #expect(gif.url == (try url("https://video.twimg.com/tweet_video/HU6ZO8XbMAAmDz9.mp4")))
     }
 
-    @Test func failsWhenPostIsMissing() async throws {
+    @Test(.requestPurpose(.action)) func failsWhenPostIsMissing() async throws {
         let transport = StubTransport([try .fixture("fxtwitter_not_found", statusCode: 404)])
 
         await #expect(throws: HTTPStatusError(statusCode: 404)) {
@@ -266,9 +266,9 @@ private actor FetchCounter {
 }
 
 private actor FetchOrigins {
-    private(set) var values: [RequestPurpose] = []
+    private(set) var values: [RequestPurpose?] = []
 
-    func append(_ purpose: RequestPurpose) {
+    func append(_ purpose: RequestPurpose?) {
         values.append(purpose)
     }
 }

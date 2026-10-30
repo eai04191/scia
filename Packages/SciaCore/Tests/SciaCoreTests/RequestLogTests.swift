@@ -3,6 +3,7 @@ import Testing
 @testable import SciaCore
 
 /// リリース版の記録だけで原因を絞れるようにする。応答の本文は個人情報を含みうるため、デバッグ版でだけ足す。
+@Suite(.requestPurpose(.action))
 struct RequestLogTests {
     private func makeClient(_ transport: StubTransport, log: RequestLog) throws -> MastodonClient {
         MastodonClient(

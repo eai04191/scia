@@ -57,7 +57,7 @@ struct FeedTimelineModelTests {
         let (model, display) = makeModel(transport: Self.homeTransport([3, 2, 1], marker: "2"))
         defer { model.stop() }
 
-        model.start()
+        model.start(purpose: .action)
         #expect(display.contentState == .loading)
         try await waitUntil { display.contentState == .loaded }
 
@@ -85,7 +85,7 @@ struct FeedTimelineModelTests {
         let (model, display) = makeModel(transport: transport)
         defer { model.stop() }
 
-        model.start()
+        model.start(purpose: .action)
         try await waitUntil { model.runningTaskCount == 0 }
         guard case .failed = model.contentState else {
             Issue.record("最初の読み込みの失敗を覚えていません: \(model.contentState)")
@@ -105,7 +105,7 @@ struct FeedTimelineModelTests {
         let (model, display) = makeModel(transport: transport)
         defer { model.stop() }
 
-        model.start()
+        model.start(purpose: .action)
         try await waitUntil { display.contentState != .loading }
 
         #expect(display.contentState == .regenerating)
@@ -121,7 +121,7 @@ struct FeedTimelineModelTests {
         let (model, display) = makeModel(transport: Self.homeTransport([1]), hub: TimelineModelFixtures.hub(connector), tuning: tuning, clock: clock)
         defer { model.stop() }
 
-        model.start()
+        model.start(purpose: .action)
         // つながったときの補完まで終える。
         try await waitUntil { display.contentState == .loaded && model.isSubscribedToStreaming && display.catchUp?.attempt == 1 && display.catchUp?.phase == .idle && model.runningTaskCount == 0 }
         display.isUserInteracting = true
@@ -151,7 +151,7 @@ struct FeedTimelineModelTests {
             reported.withLock { $0 = true }
         }
 
-        model.start()
+        model.start(purpose: .action)
         try await waitUntil { gate.waiterCount == 1 }
         let commandsBeforeStop = display.commandCount
         model.stop()
@@ -169,7 +169,7 @@ struct FeedTimelineModelTests {
         let (model, display) = makeModel(transport: transport, backgroundTime: backgroundTime)
         defer { model.stop() }
 
-        model.start()
+        model.start(purpose: .action)
         try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
         model.markRead(["2"])
         #expect(display.unreadCount == 0)
@@ -198,7 +198,7 @@ struct FeedTimelineModelTests {
         let (model, display) = makeModel(transport: transport, backgroundTime: backgroundTime)
         defer { model.stop() }
 
-        model.start()
+        model.start(purpose: .action)
         try await waitUntil { display.contentState == .loaded && model.runningTaskCount == 0 }
         model.markRead(["2"])
         model.enterBackground()

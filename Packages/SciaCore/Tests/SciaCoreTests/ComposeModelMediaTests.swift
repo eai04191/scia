@@ -749,7 +749,7 @@ struct ComposeModelMediaTests {
         model.applyPickerSelection([try picked("a")])
         try await settle { server.pendingCount == 1 }
 
-        model.tasks.run { await model.submit() }
+        model.tasks.run(.action) { await model.submit() }
         try await settle { model.isWaitingForMedia }
         session.close()
         try await settle { !model.isPosting }

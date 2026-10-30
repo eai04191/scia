@@ -25,9 +25,9 @@ struct LatestLookupTests {
         let first = Gate()
         let second = Gate()
 
-        lookup.start(Self.work("first", after: first), isStillWanted: { true }) { recorder.results.append($0) }
+        lookup.start(.action, Self.work("first", after: first), isStillWanted: { true }) { recorder.results.append($0) }
         try await waitUntil { first.waiterCount == 1 }
-        lookup.start(Self.work("second", after: second), isStillWanted: { true }) { recorder.results.append($0) }
+        lookup.start(.action, Self.work("second", after: second), isStillWanted: { true }) { recorder.results.append($0) }
         // 前の要求は止めるので、門で待つのをやめる。
         try await waitUntil { first.waiterCount == 0 && second.waiterCount == 1 }
         first.open()
@@ -46,8 +46,8 @@ struct LatestLookupTests {
         // 前の要求は、止められても気づかずに結果を返す。
         let first: @Sendable () async throws -> String = { "first" }
 
-        lookup.start(first, isStillWanted: { true }) { recorder.results.append($0) }
-        lookup.start(Self.work("second", after: second), isStillWanted: { true }) { recorder.results.append($0) }
+        lookup.start(.action, first, isStillWanted: { true }) { recorder.results.append($0) }
+        lookup.start(.action, Self.work("second", after: second), isStillWanted: { true }) { recorder.results.append($0) }
         second.open()
         try await waitUntil { !lookup.isWaiting }
 
@@ -60,7 +60,7 @@ struct LatestLookupTests {
         let recorder = Recorder()
         let gate = Gate()
 
-        lookup.start(Self.work("profile", after: gate), isStillWanted: { recorder.wanted }) { recorder.results.append($0) }
+        lookup.start(.action, Self.work("profile", after: gate), isStillWanted: { recorder.wanted }) { recorder.results.append($0) }
         try await waitUntil { gate.waiterCount == 1 }
         recorder.wanted = false
         gate.open()
@@ -73,7 +73,7 @@ struct LatestLookupTests {
         let lookup = LatestLookup(clock: TestClock(), slowAfter: { .seconds(1) })
         let recorder = Recorder()
 
-        lookup.start({ throw Failure() }, isStillWanted: { true }) { recorder.results.append($0) }
+        lookup.start(.action, { throw Failure() }, isStillWanted: { true }) { recorder.results.append($0) }
         try await waitUntil { !lookup.isWaiting }
 
         #expect(recorder.results.count == 1)
@@ -88,7 +88,7 @@ struct LatestLookupTests {
         lookup.onSlowChange = { changes.append($0) }
         let gate = Gate()
 
-        lookup.start(Self.work("profile", after: gate), isStillWanted: { true }) { _ in }
+        lookup.start(.action, Self.work("profile", after: gate), isStillWanted: { true }) { _ in }
         try await waitUntil { clock.sleeperCount == 1 }
         clock.advance(by: .milliseconds(999))
         #expect(!lookup.isSlow)
@@ -107,7 +107,7 @@ struct LatestLookupTests {
         var changes: [Bool] = []
         lookup.onSlowChange = { changes.append($0) }
 
-        lookup.start({ "profile" }, isStillWanted: { true }) { _ in }
+        lookup.start(.action, { "profile" }, isStillWanted: { true }) { _ in }
         try await waitUntil { !lookup.isWaiting }
 
         #expect(changes.isEmpty)
@@ -124,11 +124,11 @@ struct LatestLookupTests {
         let first = Gate()
         let second = Gate()
 
-        lookup.start(Self.work("first", after: first), isStillWanted: { true }) { _ in }
+        lookup.start(.action, Self.work("first", after: first), isStillWanted: { true }) { _ in }
         try await waitUntil { clock.sleeperCount == 1 }
         clock.advance(by: .seconds(1))
         try await waitUntil { lookup.isSlow }
-        lookup.start(Self.work("second", after: second), isStillWanted: { true }) { _ in }
+        lookup.start(.action, Self.work("second", after: second), isStillWanted: { true }) { _ in }
         try await waitUntil { first.waiterCount == 0 && second.waiterCount == 1 }
         #expect(lookup.isSlow)
         #expect(clock.sleeperCount == 0)
@@ -147,7 +147,7 @@ struct LatestLookupTests {
         lookup.onSlowChange = { changes.append($0) }
         let gate = Gate()
 
-        lookup.start(Self.work("profile", after: gate), isStillWanted: { true }) { recorder.results.append($0) }
+        lookup.start(.action, Self.work("profile", after: gate), isStillWanted: { true }) { recorder.results.append($0) }
         try await waitUntil { clock.sleeperCount == 1 }
         clock.advance(by: .seconds(1))
         try await waitUntil { lookup.isSlow }
@@ -167,7 +167,7 @@ struct LatestLookupTests {
         let lookup = LatestLookup(clock: clock, slowAfter: { nil })
         let gate = Gate()
 
-        lookup.start(Self.work("profile", after: gate), isStillWanted: { true }) { _ in }
+        lookup.start(.action, Self.work("profile", after: gate), isStillWanted: { true }) { _ in }
         try await waitUntil { gate.waiterCount == 1 }
         #expect(clock.sleeperCount == 0)
         gate.open()

@@ -79,12 +79,9 @@ public final class ScheduledStatusesModel {
     @discardableResult
     public func reload(purpose: RequestPurpose) -> Task<Void, Never>? {
         if let loading { return loading }
-        // 作ったTaskは、作ったときのtask-localの値を引き継ぐ。
-        loading = RequestPurpose.$current.withValue(purpose) {
-            tasks.run { [weak self] in
-                await self?.load()
-                self?.loading = nil
-            }
+        loading = tasks.run(purpose) { [weak self] in
+            await self?.load()
+            self?.loading = nil
         }
         return loading
     }
@@ -160,7 +157,7 @@ public final class ScheduledStatusesModel {
     /// 予約の日時を変える。選んだ日時を確かめるのは、呼ぶ側。
     public func reschedule(_ scheduled: ScheduledStatus, to date: Date) {
         logger.info("scheduled reschedule start")
-        tasks.run { [weak self, client] in
+        tasks.run(.action) { [weak self, client] in
             do {
                 let moved = try await client.rescheduleStatus(scheduled.id, to: date)
                 guard let self, !tasks.isClosed else { return }
@@ -182,7 +179,7 @@ public final class ScheduledStatusesModel {
     /// 予約を取り消す。取り消してよいか聞くのは、呼ぶ側。
     public func cancel(_ scheduled: ScheduledStatus) {
         logger.info("scheduled cancel start")
-        tasks.run { [weak self, client] in
+        tasks.run(.action) { [weak self, client] in
             do {
                 try await client.cancelScheduledStatus(scheduled.id)
             } catch let error as MastodonAPIError where error.statusCode == 404 {

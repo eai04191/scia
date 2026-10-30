@@ -201,6 +201,7 @@ struct StatusEditTests {
     }
 }
 
+@Suite(.requestPurpose(.action))
 struct StatusEditClientTests {
     private func makeClient(_ transport: StubTransport) throws -> MastodonClient {
         MastodonClient(

@@ -3,6 +3,7 @@ import SciaTesting
 import Testing
 @testable import SciaCore
 
+@Suite(.requestPurpose(.action))
 struct PageTitleTests {
     private func title(_ html: String, contentType: String? = "text/html; charset=utf-8") -> String? {
         PageTitle.title(in: Data(html.utf8), contentType: contentType)
