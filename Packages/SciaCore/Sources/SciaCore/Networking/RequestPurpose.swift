@@ -66,3 +66,43 @@ public struct NetworkAccess: Hashable, Sendable {
     /// 低データモード。
     public let constrained: Bool
 }
+
+/// 通信を送らない処理の印。`Task(.withoutRequests) { ... }`と書き、名乗らずに始める処理と見分ける。
+public enum WithoutRequests: Sendable {
+    case withoutRequests
+}
+
+extension Task where Failure == Never {
+    /// `operation`を、通信の目的を`purpose`と名乗って始める。持ち主（`TaskScope`）を通らずに始める処理は、裸の`Task`ではなくこれで始める（`make lint`の`task_without_request_purpose`で止める）。
+    @discardableResult
+    public init(_ purpose: RequestPurpose, operation: @escaping @MainActor () async -> Success) {
+        self.init { @MainActor in
+            await RequestPurpose.$current.withValue(purpose) {
+                await operation()
+            }
+        }
+    }
+
+    /// 通信を送らない`operation`を始める。始めたところで名乗っていた目的も引き継がない。中で通信を送ると、名乗っていない通信として失敗する。
+    @discardableResult
+    public init(_: WithoutRequests, operation: @escaping @MainActor () async -> Success) {
+        self.init { @MainActor in
+            await RequestPurpose.$current.withValue(nil) {
+                await operation()
+            }
+        }
+    }
+}
+
+extension Task where Failure == any Error {
+    /// 通信を送らない`operation`を、呼んだところで今すぐ始める（`Task.immediate`）。始めたところの目的も引き継がない。
+    /// クリップボードの中身のように、待つ間に読めなくなるものを読むのに使う。
+    @discardableResult
+    public static func immediate(_: WithoutRequests, operation: @escaping @MainActor () async throws -> Success) -> Task {
+        Task.immediate { @MainActor in
+            try await RequestPurpose.$current.withValue(nil) {
+                try await operation()
+            }
+        }
+    }
+}

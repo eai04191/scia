@@ -394,7 +394,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         withObservationTracking {
             marksHDR = MediaDynamicRange.marksHDR(list: settings.mediaDynamicRange, viewer: settings.viewerMediaDynamicRange)
         } onChange: { [weak self] in
-            Task { @MainActor in
+            Task(.withoutRequests) { @MainActor in
                 self?.followDynamicRanges()
             }
         }
@@ -418,7 +418,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
                 range: tuning.value(of: TuningCatalog.mediaSymbolMinSize)...tuning.value(of: TuningCatalog.mediaSymbolMaxSize)
             )
         } onChange: { [weak self] in
-            Task { @MainActor in
+            Task(.withoutRequests) { @MainActor in
                 self?.followSymbolSizing()
                 self?.setNeedsLayout()
             }
@@ -675,7 +675,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
             }
         }
         if let prefetch = source?.prefetchRequest, store.cachedThumbnail(for: prefetch) == nil {
-            loadTask = Task { [store] in
+            loadTask = Task(.prefetch) { [store] in
                 _ = try? await store.thumbnail(for: prefetch)
             }
         }
@@ -685,7 +685,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
             thumbnailView.image = cached
             return
         }
-        loadTask = Task { [weak self, store] in
+        loadTask = Task(.display) { [weak self, store] in
             guard let image = try? await store.thumbnail(for: request),
                   let self, !Task.isCancelled, self.source?.request == request
             else { return }

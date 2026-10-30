@@ -86,7 +86,7 @@ struct StorageView: View {
         }
         .navigationTitle("ストレージ")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
+        .task(.withoutRequests) {
             breakdown = await actions.measure()
         }
         .confirmationDialog(
@@ -153,7 +153,7 @@ struct StorageView: View {
     private func remove(_ category: StorageBreakdown.Category) {
         removing = category
         removeError = nil
-        Task {
+        Task(.withoutRequests) {
             do {
                 try await actions.remove(category)
             } catch {

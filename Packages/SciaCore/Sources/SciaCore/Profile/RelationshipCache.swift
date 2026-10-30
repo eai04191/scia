@@ -35,9 +35,9 @@ public final class RelationshipCache {
         }
     }
 
-    /// `ids`の関係を読み直す。読み直している途中のIDは重ねて送らない。覚えている関係は、読み終えるまでそのまま返す。
+    /// `ids`の関係を、通信の目的を`purpose`と名乗って読み直す。読み直している途中のIDは重ねて送らない。覚えている関係は、読み終えるまでそのまま返す。
     /// 応答に入らなかった相手（削除の予定や凍結で、Mastodonが返さない）の関係は忘れる。読めなかったら、覚えている関係を残してログに残す。
-    public func reload(_ ids: [String]) {
+    public func reload(_ ids: [String], purpose: RequestPurpose) {
         guard !isClosed else { return }
         var seen = Set<String>()
         let missing = ids.filter { seen.insert($0).inserted && inFlight[$0] == nil }
@@ -51,7 +51,7 @@ public final class RelationshipCache {
                     }
                 }
                 do {
-                    let loaded = Dictionary(try await fetch(chunk).map { ($0.id, $0) }) { first, _ in first }
+                    let loaded = Dictionary(try await RequestPurpose.$current.withValue(purpose) { try await fetch(chunk) }.map { ($0.id, $0) }) { first, _ in first }
                     for (index, id) in chunk.enumerated() where writes[id, default: 0] == writesAtStart[index] {
                         relationships[id] = loaded[id]
                     }
@@ -78,7 +78,8 @@ public final class RelationshipCache {
     /// 読み直しに失敗したら、覚えている関係があっても投げる。
     public func relationship(_ id: String) async throws -> Relationship? {
         if inFlight[id] == nil, relationships[id] == nil {
-            reload([id])
+            // 待っている呼び出し側が名乗った目的で読む。
+            reload([id], purpose: try RequestPurpose.declared())
         }
         if let task = inFlight[id] {
             try await task.value

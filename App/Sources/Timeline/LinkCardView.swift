@@ -544,7 +544,7 @@ final class LinkCardView: UIButton {
             updateImageInteraction()
             return
         }
-        loadTask = Task { [weak self, store] in
+        loadTask = Task(.display) { [weak self, store] in
             guard let image = try? await store.image(for: request.url, maxPixelSize: request.maxPixelSize, purpose: .display),
                   let self, !Task.isCancelled, self.request == request
             else { return }

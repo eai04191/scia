@@ -2107,7 +2107,7 @@ final class ImagePageController: MediaPageController {
         }
         loadedLocalURL = file.url
         loadTask?.cancel()
-        loadTask = Task { [weak self] in
+        loadTask = Task(.withoutRequests) { [weak self] in
             let image = await LocalMediaThumbnail.make(for: file, maxPixelSize: CGFloat(MediaImagePixelSize.full))
             guard let self, !Task.isCancelled else { return }
             self.spinner.stopAnimating()
@@ -2128,7 +2128,7 @@ final class ImagePageController: MediaPageController {
         detailsTask?.cancel()
         fileDetails = nil
         guard let url = originalURL else { return }
-        detailsTask = Task { [weak self, store] in
+        detailsTask = Task(.withoutRequests) { [weak self, store] in
             guard let file = await store.originalFile(for: url) else { return }
             let details = await MediaFileDetails.image(at: file)
             guard let self, !Task.isCancelled else { return }
@@ -2146,11 +2146,11 @@ final class ImagePageController: MediaPageController {
             spinner.startAnimating()
         }
         // 前に開いたときの元のファイルが残っていれば、表示のための読み込みを待たずに共有と保存を選べるようにする。
-        originalCheckTask = Task { [weak self, store] in
+        originalCheckTask = Task(.withoutRequests) { [weak self, store] in
             guard await store.hasOriginal(for: url), let self, !Task.isCancelled else { return }
             self.originalURL = url
         }
-        loadTask = Task { [weak self, store] in
+        loadTask = Task(.action) { [weak self, store] in
             // ビューアは使う人が開いたものなので、前に読めなかった画像も間隔を待たずに読み直す。
             let image = try? await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true, retriesNow: true, purpose: .action)
             guard let self, !Task.isCancelled else { return }
@@ -2191,7 +2191,7 @@ extension ImagePageController {
             return
         }
         analysisTask?.cancel()
-        analysisTask = Task { [weak self] in
+        analysisTask = Task(.withoutRequests) { [weak self] in
             do {
                 let analysis = try await Self.analyzer.analyze(image, configuration: ImageAnalyzer.Configuration([.text, .machineReadableCode]))
                 guard let self, !Task.isCancelled else { return }
@@ -2427,7 +2427,7 @@ final class PlayerPageController: MediaPageController {
             player.actionAtItemEnd = isLooping ? .none : .pause
             observe(player, playing: playerItem)
         }
-        Task { [weak self] in
+        Task(.action) { [weak self] in
             guard let track = try? await playerItem.asset.loadTracks(withMediaType: .video).first,
                   let transform = try? await track.load(.preferredTransform)
             else { return }
@@ -2435,7 +2435,7 @@ final class PlayerPageController: MediaPageController {
         }
         // メディアの情報に出す、コーデックなどの詳しい値。再生と同じく、ストリーミングで読む。
         if let asset = playerItem.asset as? AVURLAsset {
-            Task { [weak self] in
+            Task(.action) { [weak self] in
                 let details = await MediaFileDetails.movie(asset)
                 self?.fileDetails = details
             }
@@ -2473,7 +2473,7 @@ final class PlayerPageController: MediaPageController {
                 self?.releaseNowPlaying()
             }
         }
-        Task { [weak self] in
+        Task(.action) { [weak self] in
             let audible = try? await playerItem.asset.loadTracks(withMediaCharacteristic: .audible)
             _ = try? await playerItem.asset.load(.duration)
             self?.hasAudio = audible?.isEmpty == false
@@ -2662,7 +2662,7 @@ final class PlayerPageController: MediaPageController {
                   isVoiceOverRunning: UIAccessibility.isVoiceOverRunning
               )
         else { return }
-        hideTask = Task { [weak self, clock, delay = hasHiddenChrome ? controlsHideDelay : 0] in
+        hideTask = Task(.withoutRequests) { [weak self, clock, delay = hasHiddenChrome ? controlsHideDelay : 0] in
             try? await clock.sleep(for: .seconds(delay))
             guard let self, !Task.isCancelled else { return }
             self.onRequestChromeHidden?(true)

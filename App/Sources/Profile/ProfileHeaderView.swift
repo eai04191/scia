@@ -972,7 +972,7 @@ final class ProfileHeaderView: UIView {
             setBanner(cached)
             return
         }
-        bannerTask = Task { [weak self, mediaImages] in
+        bannerTask = Task(.display) { [weak self, mediaImages] in
             guard let image = try? await mediaImages.image(for: url, maxPixelSize: pixelSize, purpose: .display), let self, !Task.isCancelled, self.bannerURL == url else { return }
             UIView.transition(with: self, duration: 0.15, options: [.transitionCrossDissolve, .allowUserInteraction]) {
                 self.setBanner(image)

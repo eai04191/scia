@@ -319,7 +319,7 @@ extension TimelineViewController {
         let pending = pendingMenuIcons
         pendingMenuIcons = []
         guard !pending.isEmpty else { return }
-        Task { [weak self, clock] in
+        Task(.action) { [weak self, clock] in
             #if DEBUG
             if let delay = DebugFaults.slowMenuIconDelay {
                 try? await clock.sleep(for: delay)
@@ -334,10 +334,7 @@ extension TimelineViewController {
             }
             let unresolved = pending.filter { $0.account == nil }
             guard !unresolved.isEmpty, let accounts = userMenuActions?.accounts else { return }
-            // 使う人が開いたメニューに出す人なので、操作として読む。
-            let loaded = await RequestPurpose.$current.withValue(.action) {
-                await accounts.load(unresolved.map(\.user.id))
-            }
+            let loaded = await accounts.load(unresolved.map(\.user.id))
             for icon in unresolved {
                 if let account = loaded[icon.user.id] {
                     loadMenuIcon(of: account, replacing: icon.placeholder)
@@ -349,7 +346,7 @@ extension TimelineViewController {
     /// `account`のアイコンを読み、開いているメニューの`placeholder`を差し替える。
     private func loadMenuIcon(of account: Account, replacing placeholder: UIImage) {
         guard let key = userMenuIconKey(of: account) else { return }
-        Task { [weak self] in
+        Task(.action) { [weak self] in
             // 使う人が開いたメニューなので、前に読めなかったアイコンも間隔を待たずに読み直す。
             guard let self, let image = try? await avatarImages.image(for: key, retriesNow: true),
                   let icon = Self.userMenuIcon(image, shape: settings.avatarShape) else { return }

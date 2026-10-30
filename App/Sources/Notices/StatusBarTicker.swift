@@ -133,7 +133,7 @@ final class StatusBarTicker {
         advanceTask?.cancel()
         let duration = Duration.seconds(queue.displayDuration)
         let clock = clock
-        advanceTask = Task { [weak self] in
+        advanceTask = Task(.withoutRequests) { [weak self] in
             // 出している間にビューアを開いたときなど、流してはいけなくなったらすぐ消す。画面を出す口は多く、どれにも知らせを足すより、出している間だけ見張るほうが漏れないため。
             // 長押しの拡大表示で読んでいる間は、時間が過ぎても進めず、離すのを待つ。
             while true {
@@ -191,7 +191,7 @@ final class StatusBarTicker {
             window.host.setNeedsStatusBarAppearanceUpdate()
         }
         let clock = clock
-        statusBarReturnTask = Task { [weak self, weak window] in
+        statusBarReturnTask = Task(.withoutRequests) { [weak self, weak window] in
             try? await clock.sleep(for: .seconds(duration))
             guard let self else { return }
             self.statusBarReturnTask = nil
@@ -219,7 +219,7 @@ final class StatusBarTicker {
         loopTask = nil
         guard isOn, !items.isEmpty else { return }
         let clock = clock
-        loopTask = Task { [weak self] in
+        loopTask = Task(.withoutRequests) { [weak self] in
             var index = 0
             while !Task.isCancelled {
                 while let self, !Task.isCancelled, self.sinceShown != nil || self.window?.isHidden == false {

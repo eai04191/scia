@@ -16,7 +16,7 @@ enum FrameWorkLog {
     static func record(_ work: FrameWorkTally, screen: String) {
         guard !work.isEmpty else { return }
         logger.notice("scroll hitch work screen=\(screen, privacy: .public) \(work.logLine, privacy: .public)")
-        Task { await writer.add(work) }
+        Task(.withoutRequests) { await writer.add(work) }
     }
 
     private actor Writer {

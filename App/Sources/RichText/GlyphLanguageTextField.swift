@@ -26,7 +26,7 @@ class GlyphLanguageTextField: UITextField {
         withObservationTracking {
             language = settings.glyphLanguageIdentifier()
         } onChange: { [weak self] in
-            Task { @MainActor in
+            Task(.withoutRequests) { @MainActor in
                 self?.followGlyphLanguage(of: settings)
             }
         }

@@ -196,6 +196,17 @@ struct TaskScopeTests {
         #expect(purposes == [.display, .display, .prefetch])
     }
 
+    /// 持ち主を通らずに始める処理も、名乗った目的を中へ引き継ぐ。通信しないと明示した処理は、始めたところの目的も引き継がない。
+    @Test func taskDeclaresPurpose() async {
+        var purposes: [RequestPurpose?] = []
+        await Task(.prefetch) { purposes.append(RequestPurpose.current) }.value
+        await RequestPurpose.$current.withValue(.action) {
+            await Task(.withoutRequests) { purposes.append(RequestPurpose.current) }.value
+            _ = try? await Task.immediate(.withoutRequests) { purposes.append(RequestPurpose.current) }.value
+        }
+        #expect(purposes == [.prefetch, nil, nil])
+    }
+
     /// 閉じるときに、Taskでない処理も止める。閉じたあとに登録したものはすぐ呼ぶ。
     @Test func closeActionsRunOnce() {
         let scope = TaskScope()

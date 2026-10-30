@@ -37,9 +37,9 @@ struct MenuRenderer<Command> {
         case .deferred(let load):
             // 読む間はUIKitの読み込み中の行を出す。
             return UIDeferredMenuElement.uncached { completion in
-                Task { @MainActor in
-                    // 使う人が開いたメニューの中身なので、操作として読む。
-                    completion(elements(await RequestPurpose.$current.withValue(.action) { await load() }))
+                // 使う人が開いたメニューの中身なので、操作として読む。
+                Task(.action) {
+                    completion(elements(await load()))
                 }
             }
         }

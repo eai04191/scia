@@ -40,7 +40,7 @@ struct SettingsView: View {
             AppDependencies.appIcon.current
         } set: { choice in
             appIconError = nil
-            Task {
+            Task(.withoutRequests) {
                 do {
                     try await AppDependencies.appIcon.select(choice)
                 } catch {
@@ -292,7 +292,7 @@ struct SettingsView: View {
                     // 押すとコピーする行だが、ほかの行と同じ文字の色にそろえる
                     .tint(.primary)
                     .accessibilityHint(copiedBuildInfo ? "コピーしました" : "タップでコピーします")
-                    .task(id: copiedBuildInfo) {
+                    .task(.withoutRequests, id: copiedBuildInfo) {
                         guard copiedBuildInfo else { return }
                         try? await clock.sleep(for: .seconds(1.5))
                         copiedBuildInfo = false

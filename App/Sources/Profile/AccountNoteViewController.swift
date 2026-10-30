@@ -89,7 +89,7 @@ final class AccountNoteViewController: UIViewController {
         withObservationTracking {
             applyEditorState()
         } onChange: { [weak self] in
-            Task { @MainActor in self?.observeEditor() }
+            Task(.withoutRequests) { @MainActor in self?.observeEditor() }
         }
     }
 

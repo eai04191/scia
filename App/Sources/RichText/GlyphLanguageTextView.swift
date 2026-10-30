@@ -16,7 +16,7 @@ class GlyphLanguageTextView: UITextView, NSTextStorageDelegate {
             textStorage.addAttribute(.languageIdentifier, value: language, range: NSRange(location: 0, length: textStorage.length))
             textStorage.separateFallbackSymbols(in: NSRange(location: 0, length: textStorage.length))
         } onChange: { [weak self] in
-            Task { @MainActor in
+            Task(.withoutRequests) { @MainActor in
                 self?.followGlyphLanguage(of: settings)
             }
         }

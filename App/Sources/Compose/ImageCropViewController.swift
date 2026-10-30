@@ -242,7 +242,7 @@ final class ImageCropViewController: UIViewController {
     }
 
     private func load() {
-        Task { [weak self, file] in
+        Task(.withoutRequests) { [weak self, file] in
             let image = await LocalMediaThumbnail.make(for: file, maxPixelSize: CGFloat(MediaImagePixelSize.full))
             guard let self else { return }
             self.spinner.stopAnimating()
@@ -348,7 +348,7 @@ final class ImageCropViewController: UIViewController {
     private func scheduleRecenter() {
         recenterTask?.cancel()
         let delay = tuning.value(of: TuningCatalog.mediaCropRecenterDelay)
-        recenterTask = Task { [weak self, clock] in
+        recenterTask = Task(.withoutRequests) { [weak self, clock] in
             try? await clock.sleep(for: .seconds(delay))
             guard !Task.isCancelled, let self else { return }
             self.recenterTask = nil

@@ -365,11 +365,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 読んでいる途中にもう一度引っぱっても、読み込みは重ねず、今の読み込みが終わったところで閉じる。
     private func beginRefresh() {
         guard refreshTask == nil else { return }
-        refreshTask = Task { [weak self] in
+        refreshTask = Task(.action) { [weak self] in
             guard let self else { return }
-            await RequestPurpose.$current.withValue(.action) {
-                await refresh()
-            }
+            await refresh()
             refreshTask = nil
             refreshControl.endRefreshing()
         }
@@ -410,7 +408,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private func startRefreshingTimes() {
         timeRefreshTask?.cancel()
         let clock = clock
-        timeRefreshTask = Task { [weak self] in
+        timeRefreshTask = Task(.withoutRequests) { [weak self] in
             while (try? await clock.sleep(for: .seconds(1), tolerance: .milliseconds(200))) != nil {
                 guard let self else { return }
                 refreshVisibleTimes()
@@ -487,7 +485,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = settings.reactionGlowFillsWidthWhenAlone
             _ = settings.reactionGlowLightFavouriteColor
         } onChange: { [weak self] in
-            Task { @MainActor in
+            Task(.withoutRequests) { @MainActor in
                 guard let self else { return }
                 self.reconfigure(Set(self.dataSource.snapshot().itemIdentifiers))
                 // 区切り線はリストのレイアウトが引くので、描き直しでは変わらない。引き直させる。

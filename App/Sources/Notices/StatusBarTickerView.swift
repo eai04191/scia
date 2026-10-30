@@ -984,7 +984,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
                 imageView.image = cached
                 return imageView
             }
-            Task { [weak imageView] in
+            Task(.display) { [weak imageView] in
                 guard let image = try? await store.thumbnail(for: request), let imageView else { return }
                 // 下地から1コマで替えず、一覧のサムネイルと同じく薄く重ねて入れる。
                 UIView.transition(with: imageView, duration: 0.15, options: [.transitionCrossDissolve, .allowUserInteraction]) {

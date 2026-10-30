@@ -410,7 +410,7 @@ final class ProfileEditImagesCell: UITableViewCell {
                 return nil
             }
             pendingImages.insert(kind)
-            return Task { [weak self] in
+            return Task(.display) { [weak self] in
                 let image = try? await mediaImages.image(for: url, maxPixelSize: size, purpose: .display)
                 guard let self, !Task.isCancelled else { return }
                 self.pendingImages.remove(kind)
@@ -432,7 +432,7 @@ final class ProfileEditImagesCell: UITableViewCell {
         finishWaitingForImages()
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             imagesWaiter = continuation
-            imagesWaitTimer = Task { [weak self] in
+            imagesWaitTimer = Task(.withoutRequests) { [weak self] in
                 try? await clock.sleep(for: timeout)
                 guard !Task.isCancelled else { return }
                 self?.finishWaitingForImages()

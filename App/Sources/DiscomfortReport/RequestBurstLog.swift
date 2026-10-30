@@ -10,7 +10,7 @@ enum RequestBurstLog {
 
     /// アプリのすべての通信の口で共有する。
     nonisolated static let monitor = RequestBurstMonitor { burst in
-        Task { @MainActor in
+        Task(.withoutRequests) { @MainActor in
             logger.error("request burst \(burst.summary, privacy: .public) topURL=\(burst.topURL.name, privacy: .private(mask: .hash)) screens=\(screens(), privacy: .public)")
         }
     }

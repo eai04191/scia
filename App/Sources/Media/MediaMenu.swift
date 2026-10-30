@@ -174,7 +174,7 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
         controller.preferredContentSize = size
         if let sharperImage {
             let maxPixelSize = Self.sharperPixelSize(previewSize: size, within: window.bounds.size, scale: window.screen.scale)
-            Task { [weak imageView] in
+            Task(.action) { [weak imageView] in
                 guard let sharper = await sharperImage(maxPixelSize) else { return }
                 imageView?.image = sharper
             }

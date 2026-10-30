@@ -94,10 +94,8 @@ struct ReportView: View {
             }
             // 書いたものを、下にスワイプして閉じたときに失わないようにする。
             .interactiveDismissDisabled(draft.isSubmitting || !draft.comment.isEmpty)
-            .task {
-                await RequestPurpose.$current.withValue(.action) {
-                    await draft.loadRules()
-                }
+            .task(.action) {
+                await draft.loadRules()
             }
         }
     }
@@ -142,11 +140,7 @@ struct ReportView: View {
                         .foregroundStyle(.secondary)
                 }
                 Button("再試行") {
-                    Task {
-                        await RequestPurpose.$current.withValue(.action) {
-                            await draft.loadRules()
-                        }
-                    }
+                    Task(.action) { await draft.loadRules() }
                 }
             case .loaded(let rules) where rules.isEmpty:
                 Text("このサーバーにはルールがありません")
@@ -186,8 +180,8 @@ struct ReportView: View {
     }
 
     private func submit() {
-        Task {
-            guard await RequestPurpose.$current.withValue(.action, operation: { await draft.submit() }) else { return }
+        Task(.action) {
+            guard await draft.submit() else { return }
             dismiss()
             onSubmitted()
         }

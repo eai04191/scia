@@ -18,7 +18,7 @@ enum MediaDynamicRangeTraits {
         withObservationTracking {
             apply(target, UIImage.DynamicRange(value(settings)))
         } onChange: { [weak target] in
-            Task { @MainActor in
+            Task(.withoutRequests) { @MainActor in
                 guard let target else { return }
                 follow(target, settings: settings, value, apply: apply)
             }

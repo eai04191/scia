@@ -78,7 +78,7 @@ final class MediaPhotoStackView: PhotoStackView {
         withObservationTracking {
             applyTuning()
         } onChange: { [weak self] in
-            Task { @MainActor in self?.followTuning() }
+            Task(.withoutRequests) { @MainActor in self?.followTuning() }
         }
     }
 

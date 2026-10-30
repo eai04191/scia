@@ -23,20 +23,21 @@ public final class ServerFilterCache {
         self.fetch = fetch
     }
 
-    /// 読み直していなければ読み直す。メニューを開いたときに呼び、別の端末やwebで変えたフィルターを次に開いたときから反映する。
-    public func refresh() {
+    /// 読み直していなければ、通信の目的を`purpose`と名乗って読み直す。メニューを開いたときに呼び、別の端末やwebで変えたフィルターを次に開いたときから反映する。
+    public func refresh(purpose: RequestPurpose) {
         guard task == nil else { return }
-        reload()
+        reload(purpose: purpose)
     }
 
-    /// 読み直している途中でも、新しく読み直す。フィルターを変えたあとに呼び、変える前に始めた読み直しの応答で古い一覧に戻さない。
+    /// 読み直している途中でも、通信の目的を`purpose`と名乗って新しく読み直す。フィルターを変えたあとに呼び、変える前に始めた読み直しの応答で古い一覧に戻さない。
     /// 読めなかったら、覚えている一覧を残してログに残す。
-    public func reload() {
+    public func reload(purpose: RequestPurpose) {
         guard !isClosed else { return }
         generation += 1
         let started = generation
+        let fetch = fetch
         task = Task {
-            let result = await Result { try await fetch() }
+            let result = await Result { try await RequestPurpose.$current.withValue(purpose) { try await fetch() } }
             guard generation == started else { return }
             switch result {
             case .success(let loaded): filters = loaded
@@ -51,7 +52,8 @@ public final class ServerFilterCache {
     /// まだ一度も読み直していなければ読む。いちばん新しい読み直しに失敗していたら、覚えている一覧があっても投げる。
     public func latest() async throws -> [ServerFilter] {
         if task == nil, latestResult == nil {
-            reload()
+            // 待っている呼び出し側が名乗った目的で読む。
+            reload(purpose: try RequestPurpose.declared())
         }
         while let task {
             await task.value

@@ -104,7 +104,7 @@ final class AvatarView: UIView {
             return
         }
         show(nil)
-        loadTask = Task { [weak self, store] in
+        loadTask = Task(.display) { [weak self, store] in
             guard let image = try? await store.image(for: key), let self, !Task.isCancelled, self.loadingKey == key else { return }
             self.show(image, arrived: true)
             self.imageView.alpha = 0

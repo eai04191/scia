@@ -315,7 +315,7 @@ final class NoticeStackView: UIView {
         let remaining = transientRemaining
         let clock = clock
         transientElapsed = stopwatch(on: clock)
-        hideTask = Task { [weak self] in
+        hideTask = Task(.withoutRequests) { [weak self] in
             try? await clock.sleep(for: remaining)
             guard let self, !Task.isCancelled else { return }
             self.removeTransient()

@@ -555,7 +555,7 @@ private final class SkipEffect: UIView {
             self.transform = .identity
         }
         glyph.spin(duration: duration)
-        hideTask = Task { [weak self, clock] in
+        hideTask = Task(.withoutRequests) { [weak self, clock] in
             try? await clock.sleep(for: .seconds(duration))
             guard let self, !Task.isCancelled else { return }
             UIView.animate(withDuration: 0.15, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction, .curveEaseOut]) {

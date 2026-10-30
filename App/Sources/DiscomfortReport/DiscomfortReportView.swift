@@ -114,7 +114,7 @@ struct DiscomfortReportView: View {
             } message: { index in
                 Text(draft.operations[index].line)
             }
-            .task {
+            .task(.withoutRequests) {
                 memoFocused = true
                 await draft.loadLogs()
             }

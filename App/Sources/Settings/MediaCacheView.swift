@@ -56,7 +56,7 @@ struct MediaCacheView: View {
         }
         .navigationTitle(StorageView.name(of: category))
         .navigationBarTitleDisplayMode(.inline)
-        .task {
+        .task(.withoutRequests) {
             entries = await actions.entries()
         }
         .quickLookPreview($previewing)
@@ -72,7 +72,7 @@ struct MediaCacheView: View {
     }
 
     private func open(_ entry: MediaFileCache.Entry) {
-        Task {
+        Task(.withoutRequests) {
             do {
                 if let copy = try await actions.open(entry.id) {
                     previewing = copy
@@ -109,7 +109,7 @@ private struct MediaCacheTile: View {
             .clipped()
             .contentShape(.rect)
             // LazyVGridは画面外に出たセルの状態も持ち続けるため、出るたびに作り、外れたら手放す。キャッシュの件数だけ展開した画像が溜まらないようにする。
-            .task(id: entry.id) {
+            .task(.withoutRequests, id: entry.id) {
                 let request = QLThumbnailGenerator.Request(fileAt: entry.file, size: CGSize(width: 192, height: 192), scale: displayScale, representationTypes: .thumbnail)
                 let image = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request).uiImage
                 guard !Task.isCancelled else { return }

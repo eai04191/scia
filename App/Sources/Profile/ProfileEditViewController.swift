@@ -117,11 +117,7 @@ final class ProfileEditViewController: UIViewController {
         configureCompletion()
         observeEditor()
         AppDependencies.stateDumps.register("profileEdit", owner: self) { $0.stateDump() }
-        Task {
-            await RequestPurpose.$current.withValue(.action) {
-                await load()
-            }
-        }
+        Task(.action) { [self] in await load() }
     }
 
     override func viewDidLayoutSubviews() {
@@ -216,7 +212,7 @@ final class ProfileEditViewController: UIViewController {
         withObservationTracking {
             applyEditorState()
         } onChange: { [weak self] in
-            Task { @MainActor in self?.observeEditor() }
+            Task(.withoutRequests) { @MainActor in self?.observeEditor() }
         }
     }
 
@@ -314,11 +310,9 @@ final class ProfileEditViewController: UIViewController {
     private func save() {
         guard closeEmojiSheet(then: { [weak self] in self?.save() }) else { return }
         view.endEditing(true)
-        Task {
+        Task(.action) { [self] in
             do {
-                let saved = try await RequestPurpose.$current.withValue(.action) {
-                    try await editor.save()
-                }
+                let saved = try await editor.save()
                 logger.info("profile saved")
                 onSaved(saved)
                 dismiss(animated: true)
@@ -443,11 +437,7 @@ final class ProfileEditViewController: UIViewController {
         retry.cornerStyle = .capsule
         let retryButton = UIButton(configuration: retry, primaryAction: UIAction { [weak self] _ in
             guard let self else { return }
-            Task {
-                await RequestPurpose.$current.withValue(.action) {
-                    await self.load()
-                }
-            }
+            Task(.action) { await self.load() }
         })
         failureView.axis = .vertical
         failureView.alignment = .center
@@ -626,7 +616,7 @@ final class ProfileEditViewController: UIViewController {
         withObservationTracking {
             updateCompletionList()
         } onChange: { [weak self] in
-            Task { @MainActor in self?.observeCompletion() }
+            Task(.withoutRequests) { @MainActor in self?.observeCompletion() }
         }
     }
 
@@ -795,7 +785,7 @@ final class ProfileEditViewController: UIViewController {
         withObservationTracking {
             updateEmojiPalette()
         } onChange: { [weak self] in
-            Task { @MainActor in
+            Task(.withoutRequests) { @MainActor in
                 self?.isObservingEmojiPalette = false
                 guard self?.emojiSheet != nil else { return }
                 self?.observeEmojiPalette()
@@ -1020,7 +1010,7 @@ extension ProfileEditViewController: PHPickerViewControllerDelegate {
         let type = isGIF ? UTType.gif : UTType.image
         provider.loadDataRepresentation(forTypeIdentifier: type.identifier) { [weak self] data, error in
             let decoded = data.flatMap(ProfileImageCropViewController.decode)
-            Task { @MainActor in
+            Task(.withoutRequests) { @MainActor in
                 guard let self else { return }
                 picker.dismiss(animated: true) {
                     guard let data, let decoded else {

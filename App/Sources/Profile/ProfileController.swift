@@ -203,7 +203,7 @@ final class ProfileController {
             _ = store.pinned
             _ = store.isPinnedSettled
         } onChange: { [weak self] in
-            Task { @MainActor in
+            Task(.withoutRequests) { @MainActor in
                 self?.afterTransition { controller in
                     controller.observeHeaderContent()
                     controller.showEntries()

@@ -124,11 +124,9 @@ struct LoginView: View {
 
     private func login(isPrivate: Bool) {
         guard let authenticator = makeAuthenticator() else { return }
-        Task {
-            await RequestPurpose.$current.withValue(.action) {
-                await model.login { url in
-                    try await authenticator.authenticate(url: url, callbackScheme: AppDependencies.oauthCallbackScheme, isPrivate: isPrivate)
-                }
+        Task(.action) {
+            await model.login { url in
+                try await authenticator.authenticate(url: url, callbackScheme: AppDependencies.oauthCallbackScheme, isPrivate: isPrivate)
             }
         }
     }

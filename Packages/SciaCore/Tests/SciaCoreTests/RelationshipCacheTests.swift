@@ -4,6 +4,7 @@ import Testing
 @testable import SciaCore
 
 @MainActor
+@Suite(.requestPurpose(.action))
 struct RelationshipCacheTests {
     /// 求められたIDの組を記録し、フォロー中の関係を返す。`holds`なら、`release()`まで返さない。
     private final class Server: Sendable {
@@ -80,12 +81,25 @@ struct RelationshipCacheTests {
         RelationshipCache(limit: limit) { ids in try await server.fetch(ids) }
     }
 
+    /// 読み直しは、渡した目的を名乗って読む。覚えていない相手を待つときは、待っている側が名乗った目的で読む。
+    @Test func reloadDeclaresPurpose() async throws {
+        let purposes = Mutex<[RequestPurpose?]>([])
+        let cache = RelationshipCache { ids in
+            purposes.withLock { $0.append(RequestPurpose.current) }
+            return []
+        }
+        cache.reload(["1"], purpose: .display)
+        _ = try await cache.relationship("1")
+        _ = try await RequestPurpose.$current.withValue(.prefetch) { try await cache.relationship("2") }
+        #expect(purposes.withLock { $0 } == [.display, .prefetch])
+    }
+
     /// 相手ごとに送らず、上限の数ずつまとめて読む。同じIDを重ねて求めても、1回だけ読む。
     @Test func reloadsInBatchesUpToTheLimit() async throws {
         let server = Server()
         let cache = makeCache(server, limit: 2)
 
-        cache.reload(["1", "2", "3", "1"])
+        cache.reload(["1", "2", "3", "1"], purpose: .action)
 
         #expect(try await cache.relationship("1")?.following == true)
         #expect(try await cache.relationship("3")?.following == true)
@@ -102,7 +116,7 @@ struct RelationshipCacheTests {
         cache["1"] = Relationship(id: "1", following: true)
         server.setFollowing(false)
 
-        cache.reload(["1"])
+        cache.reload(["1"], purpose: .action)
         await server.waitForRequests(1)
         #expect(cache["1"]?.following == true)
 
@@ -114,10 +128,10 @@ struct RelationshipCacheTests {
     @Test func waitsForRelationshipsBeingReloaded() async throws {
         let server = Server(holds: true)
         let cache = makeCache(server)
-        cache.reload(["1"])
+        cache.reload(["1"], purpose: .action)
         await server.waitForRequests(1)
 
-        cache.reload(["1", "2"])
+        cache.reload(["1", "2"], purpose: .action)
         await server.waitForRequests(2)
         let first = Task { try await cache.relationship("1") }
         server.release()
@@ -147,7 +161,7 @@ struct RelationshipCacheTests {
         #expect(try await cache.relationship("missing-2") == nil)
 
         server.fail(true)
-        cache.reload(["1"])
+        cache.reload(["1"], purpose: .action)
         await #expect(throws: URLError.self) {
             try await cache.relationship("1")
         }
@@ -160,7 +174,7 @@ struct RelationshipCacheTests {
         let cache = makeCache(server)
         cache["missing-1"] = Relationship(id: "missing-1", following: true)
 
-        cache.reload(["missing-1", "2"])
+        cache.reload(["missing-1", "2"], purpose: .action)
 
         #expect(try await cache.relationship("2")?.following == true)
         #expect(cache["missing-1"] == nil)
@@ -171,7 +185,7 @@ struct RelationshipCacheTests {
         let server = Server(holds: true)
         let cache = makeCache(server)
         server.setFollowing(false)
-        cache.reload(["1", "2"])
+        cache.reload(["1", "2"], purpose: .action)
         await server.waitForRequests(1)
 
         cache["1"] = Relationship(id: "1", following: true)
@@ -185,14 +199,14 @@ struct RelationshipCacheTests {
     @Test func closeCancelsReloadAndStopsLoading() async throws {
         let server = Server(holds: true)
         let cache = makeCache(server)
-        cache.reload(["1"])
+        cache.reload(["1"], purpose: .action)
         await server.waitForRequests(1)
         let waiting = Task { try await cache.relationship("1") }
 
         cache.close()
         server.release()
         _ = try? await waiting.value
-        cache.reload(["2"])
+        cache.reload(["2"], purpose: .action)
         #expect(try await cache.relationship("2") == nil)
         #expect(server.requests == [["1"]])
     }

@@ -1,4 +1,5 @@
 import AuthenticationServices
+import SciaCore
 import UIKit
 
 /// ASWebAuthenticationSessionで認可画面を開き、リダイレクト先のURLを返す。
@@ -28,7 +29,7 @@ final class WebAuthenticator: NSObject, ASWebAuthenticationPresentationContextPr
                 } else {
                     result = .failure(URLError(.badServerResponse))
                 }
-                Task { @MainActor in self?.finish(result) }
+                Task(.withoutRequests) { @MainActor in self?.finish(result) }
             }
             session.presentationContextProvider = self
             session.prefersEphemeralWebBrowserSession = isPrivate

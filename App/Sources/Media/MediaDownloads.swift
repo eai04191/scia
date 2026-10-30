@@ -44,7 +44,7 @@ final class MediaDownloads {
         defer { try? FileManager.default.removeItem(at: folder) }
         do {
             let downloaded = try await download(url, folder) { fraction in
-                Task { @MainActor in onProgress(fraction) }
+                Task(.withoutRequests) { @MainActor in onProgress(fraction) }
             }
             let name = await MediaOriginalFileName.name(ofFileAt: downloaded, for: url) ?? downloaded.lastPathComponent
             _ = try await files.store(movingFile: downloaded, named: name, for: url, generation: generation)

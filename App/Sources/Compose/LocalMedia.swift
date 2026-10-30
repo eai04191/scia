@@ -78,9 +78,9 @@ enum LocalMediaLoader {
     /// クリップボードには形式を選び直せる表現が並ぶとは限らないので、避ける形式は渡さない。処理できないと分かった形式は、送る前に作り直す（`ImagePlan.make`）。
     @MainActor
     static func startLoadingPasted(from provider: NSItemProvider, type: UTType) -> PastedMedia {
-        let loading = Task.immediate { @MainActor in try await load(from: provider, avoiding: []) }
+        let loading = Task.immediate(.withoutRequests) { try await load(from: provider, avoiding: []) }
         return PastedMedia(kind: kind(of: type), load: { try await loading.value }, discard: {
-            Task { try? await loading.value.remove() }
+            Task(.withoutRequests) { try? await loading.value.remove() }
         })
     }
 
@@ -105,9 +105,9 @@ enum LocalMediaLoader {
         guard let type = UTType(filenameExtension: url.pathExtension), mediaTypes.contains(where: { type.conforms(to: $0) }) else { return nil }
         let kind = kind(of: type)
         let mimeType = type.preferredMIMEType ?? (kind == .video ? "video/mp4" : "image/jpeg")
-        let loading = Task.immediate { try await copyPastedFile(url, mimeType: mimeType, kind: kind) }
+        let loading = Task.immediate(.withoutRequests) { try await copyPastedFile(url, mimeType: mimeType, kind: kind) }
         return PastedMedia(kind: kind, load: { try await loading.value }, discard: {
-            Task { try? await loading.value.remove() }
+            Task(.withoutRequests) { try? await loading.value.remove() }
         })
     }
 

@@ -563,7 +563,7 @@ final class SessionController {
         withObservationTracking {
             _ = AppDependencies.settings.tabLayout(for: handle)
         } onChange: { [weak self] in
-            Task { @MainActor [weak self] in
+            Task(.withoutRequests) { @MainActor [weak self] in
                 guard let self, !tasks.isClosed else { return }
                 // 最初の並びに戻したら、リストが消えるので足し直す。足し直した変更は、もう一度ここへ来て反映する。
                 addMissingServerItemsToTabLayout()
@@ -648,7 +648,7 @@ final class SessionController {
         withObservationTracking {
             _ = AppDependencies.settings.showsStatusBarTicker
         } onChange: { [weak self] in
-            Task { @MainActor in
+            Task(.withoutRequests) { @MainActor in
                 guard let self, !self.tasks.isClosed else { return }
                 if !wasOn, AppDependencies.settings.showsStatusBarTicker {
                     self.showStatusBarTickerDemo()
@@ -687,7 +687,7 @@ final class SessionController {
         withObservationTracking {
             _ = AppDependencies.settings.hidesEmptyComposeBar
         } onChange: { [weak self] in
-            Task { @MainActor in
+            Task(.withoutRequests) { @MainActor in
                 guard let self, !self.tasks.isClosed else { return }
                 self.applyShowsFocusInlineCompose()
                 self.observeHidesEmptyComposeBar()
@@ -1410,7 +1410,7 @@ final class SessionController {
         return HashtagMuteActions(
             known: { name in serverFilters.filters.map { HashtagMute.find(name, in: $0, now: now()) != nil } },
             // まだ読めていなければ、開いたメニューがこの読み直しを待つので、操作として送る。
-            refresh: { RequestPurpose.$current.withValue(.action) { serverFilters.refresh() } },
+            refresh: { serverFilters.refresh(purpose: .action) },
             load: { name in HashtagMute.find(name, in: try await serverFilters.latest(), now: now()) != nil },
             mute: { [weak self] name, duration in self?.muteHashtag(name, duration: duration) },
             unmute: { [weak self] name in self?.unmuteHashtag(name) }
@@ -1427,7 +1427,7 @@ final class SessionController {
             guard let self else { return }
             do {
                 try await HashtagMute.mute(name, duration: duration, client: client)
-                serverFilters.reload()
+                serverFilters.reload(purpose: .action)
                 excludeInLists(tag: name, excluded: true)
                 if let duration {
                     includeAfterHashtagMuteExpires(name, duration: duration)
@@ -1449,10 +1449,10 @@ final class SessionController {
         tasks.run(key: "hashtagMute:\(name)", .skippingWhileRunning, .action) { [weak self, now] in
             guard let self else { return }
             do {
-                serverFilters.reload()
+                serverFilters.reload(purpose: .action)
                 if let muted = HashtagMute.find(name, in: try await serverFilters.latest(), now: now()) {
                     try await muted.unmute(client: client)
-                    serverFilters.reload()
+                    serverFilters.reload(purpose: .action)
                 }
                 excludeInLists(tag: name, excluded: false)
                 notices.showTransient(Notice(id: "hashtag.muteChanged", kind: .success, title: "#\(name)のミュートを解除しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
@@ -1478,7 +1478,7 @@ final class SessionController {
             do {
                 try await clock.sleep(for: duration + .seconds(60))
                 // 覚えているフィルターも新しくし、次に開くメニューでミュートが明けたことを出す。
-                serverFilters.reload()
+                serverFilters.reload(purpose: .display)
                 guard HashtagMute.find(name, in: try await serverFilters.latest(), now: now()) == nil else { return }
                 self?.excludeInLists(tag: name, excluded: false)
             } catch is CancellationError {
@@ -1575,7 +1575,7 @@ final class SessionController {
         guard identity.id != credential.accountID else { return nil }
         // リンクのメンションは、相手を探すまでIDが分からず、メニューを開いたときにまとめて読み直せないため、ここで読み直す。
         if case .profileURL = target {
-            profiles.relationships.reload([identity.id])
+            profiles.relationships.reload([identity.id], purpose: .action)
         }
         guard let relationship = try await profiles.relationships.relationship(identity.id) else {
             throw ProfileNotFound(acct: identity.acct)
@@ -1593,9 +1593,7 @@ final class SessionController {
     /// メニューに出る人の関係を、まとめて1回で読み直す。別の端末で変えた関係も、次に開いたときから反映する。
     private func reloadRelations(_ ids: [String]) {
         // 関係を覚えていない人は、開いたメニューがこの読み直しを待つので、操作として送る。
-        RequestPurpose.$current.withValue(.action) {
-            profiles.relationships.reload(ids.filter { $0 != credential.accountID })
-        }
+        profiles.relationships.reload(ids.filter { $0 != credential.accountID }, purpose: .action)
     }
 
     /// フォローを外す、リクエストを取り消す、ブロックは、押し間違えに備えて確かめてから送る。プロフィール画面のフォローのボタンと同じく、フォローとミュートは確かめずに送る。
@@ -1707,7 +1705,7 @@ final class SessionController {
             do {
                 try await clock.sleep(for: duration + .seconds(60))
                 // 覚えている関係も新しくし、次に開くメニューでミュートが明けたことを出す。
-                relationships.reload([accountID])
+                relationships.reload([accountID], purpose: .display)
                 guard let relationship = try await relationships.relationship(accountID), !relationship.muting else { return }
                 self?.excludeInLists(relationship)
             } catch is CancellationError {
@@ -2434,7 +2432,7 @@ final class SessionController {
         // 投稿欄の一時ディレクトリへコピーし終えたら、受け渡しのフォルダーから消す。コピーに失敗したものは、添付の失敗として投稿欄に出る。
         // セッションを閉じても止めない。端末の中のコピーで通信せず、途中で止めると受け渡しのフォルダーが消されずに残るため。
         // swiftlint:disable:next session_task_outside_scope
-        Task {
+        Task(.withoutRequests) {
             for item in media {
                 _ = try? await item.load()
             }

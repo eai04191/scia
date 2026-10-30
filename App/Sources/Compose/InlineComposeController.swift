@@ -994,7 +994,7 @@ final class InlineComposeController: NSObject {
     private func updatePollFoldingAfterLayout() {
         guard !isPollFoldingScheduled else { return }
         isPollFoldingScheduled = true
-        Task { @MainActor [weak self] in
+        Task(.withoutRequests) { @MainActor [weak self] in
             self?.isPollFoldingScheduled = false
             self?.updatePollFolding()
         }
@@ -1312,7 +1312,7 @@ final class InlineComposeController: NSObject {
         withObservationTracking {
             arrangeToolButtons(settings.composeToolLayout)
         } onChange: { [weak self] in
-            Task { @MainActor in self?.observeToolLayout() }
+            Task(.withoutRequests) { @MainActor in self?.observeToolLayout() }
         }
     }
 
@@ -1358,7 +1358,7 @@ final class InlineComposeController: NSObject {
     private func placeToolsAfterLayout() {
         guard !isToolPlacementScheduled else { return }
         isToolPlacementScheduled = true
-        Task { @MainActor [weak self] in
+        Task(.withoutRequests) { @MainActor [weak self] in
             self?.isToolPlacementScheduled = false
             self?.placeTools()
         }
@@ -1495,7 +1495,7 @@ final class InlineComposeController: NSObject {
         withObservationTracking {
             updateEmojiPalette()
         } onChange: { [weak self] in
-            Task { @MainActor in
+            Task(.withoutRequests) { @MainActor in
                 self?.isObservingEmojiPalette = false
                 guard self?.emojiSheet != nil else { return }
                 self?.observeEmojiPalette()
@@ -1961,7 +1961,7 @@ final class InlineComposeController: NSObject {
         withObservationTracking {
             applyBarVisibility()
         } onChange: { [weak self] in
-            Task { @MainActor in self?.observeBarVisibility() }
+            Task(.withoutRequests) { @MainActor in self?.observeBarVisibility() }
         }
     }
 
@@ -2067,7 +2067,7 @@ final class InlineComposeController: NSObject {
             _ = tuning.value(of: TuningCatalog.composeExpandedMinLines)
             textDidChange()
         } onChange: { [weak self] in
-            Task { @MainActor in self?.observeTuning() }
+            Task(.withoutRequests) { @MainActor in self?.observeTuning() }
         }
     }
 
@@ -2077,7 +2077,7 @@ final class InlineComposeController: NSObject {
         withObservationTracking {
             update()
         } onChange: { [weak self] in
-            Task { @MainActor in self?.observeModel() }
+            Task(.withoutRequests) { @MainActor in self?.observeModel() }
         }
     }
 
@@ -2572,7 +2572,7 @@ final class InlineComposeController: NSObject {
         withObservationTracking {
             updateCompletionList()
         } onChange: { [weak self] in
-            Task { @MainActor in self?.observeCompletion() }
+            Task(.withoutRequests) { @MainActor in self?.observeCompletion() }
         }
     }
 
@@ -3149,7 +3149,7 @@ extension InlineComposeController: UITextPasteDelegate {
         let index = pendingPastedMedia.count
         pendingPastedMedia.append(nil)
         let id = UUID()
-        resolvingPastedFiles[id] = Task { @MainActor [weak self] in
+        resolvingPastedFiles[id] = Task(.withoutRequests) { @MainActor [weak self] in
             let pasted = await LocalMediaLoader.startLoadingPastedFile(from: item.itemProvider)
             guard let self else { return }
             resolvingPastedFiles[id] = nil

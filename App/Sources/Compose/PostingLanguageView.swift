@@ -37,11 +37,8 @@ struct PostingLanguageView: View {
                     Button("キャンセル", role: .cancel) { close() }
                 }
             }
-            .task(id: loadGeneration) {
-                // 使う人が開いた言語の選び方の中身なので、操作として読む。
-                await RequestPurpose.$current.withValue(.action) {
-                    await picker.loadLanguages()
-                }
+            .task(.action, id: loadGeneration) {
+                await picker.loadLanguages()
             }
         }
     }

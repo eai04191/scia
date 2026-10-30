@@ -5,6 +5,7 @@ import Testing
 @testable import SciaCore
 
 @MainActor
+@Suite(.requestPurpose(.action))
 struct ServerFilterCacheTests {
     /// 読まれた回数を数え、`holds`なら`release()`まで返さない。返す一覧は、読まれた時点の`titles`で作る。
     private final class Server: Sendable {
@@ -54,6 +55,19 @@ struct ServerFilterCacheTests {
         #expect(server.requests == 1)
     }
 
+    /// 読み直しは、渡した目的を名乗って読む。まだ読んでいない一覧を待つときは、待っている側が名乗った目的で読む。
+    @Test func reloadDeclaresPurpose() async throws {
+        let purposes = Mutex<[RequestPurpose?]>([])
+        let cache = ServerFilterCache {
+            purposes.withLock { $0.append(RequestPurpose.current) }
+            return []
+        }
+        _ = try await RequestPurpose.$current.withValue(.display) { try await cache.latest() }
+        cache.reload(purpose: .prefetch)
+        _ = try await cache.latest()
+        #expect(purposes.withLock { $0 } == [.display, .prefetch])
+    }
+
     /// メニューを開くたびの読み直しは、読み直している途中なら重ねて送らない。読み終えるまでは、覚えている一覧をそのまま返す。
     @Test func refreshDoesNotOverlapAndKeepsKnownFilters() async throws {
         let server = Server(titles: ["a"])
@@ -61,8 +75,8 @@ struct ServerFilterCacheTests {
         _ = try await cache.latest()
         server.setTitles(["a", "b"])
 
-        cache.refresh()
-        cache.refresh()
+        cache.refresh(purpose: .action)
+        cache.refresh(purpose: .action)
         #expect(cache.filters?.map(\.title) == ["a"])
         #expect(try await cache.latest().map(\.title) == ["a", "b"])
         #expect(server.requests == 2)
@@ -72,12 +86,12 @@ struct ServerFilterCacheTests {
     @Test func reloadSupersedesEarlierReload() async throws {
         let server = Server(titles: ["old"], holds: true)
         let cache = makeCache(server)
-        cache.refresh()
+        cache.refresh(purpose: .action)
         try await waitUntil { server.requests == 1 }
         let waiting = Task { try await cache.latest() }
 
         server.setTitles(["new"])
-        cache.reload()
+        cache.reload(purpose: .action)
         try await waitUntil { server.requests == 2 }
         try #require(server.gate).open()
 
@@ -92,7 +106,7 @@ struct ServerFilterCacheTests {
         _ = try await cache.latest()
         server.fail(true)
 
-        cache.reload()
+        cache.reload(purpose: .action)
         await #expect(throws: URLError.self) { try await cache.latest() }
         #expect(cache.filters?.map(\.title) == ["a"])
     }
@@ -125,10 +139,10 @@ struct ServerFilterCacheTests {
     @Test func latestReturnsNewerReloadEvenWhenItFinishesFirst() async throws {
         let server = OrderedServer([["old"], ["new"]])
         let cache = ServerFilterCache { try await server.fetch() }
-        cache.refresh()
+        cache.refresh(purpose: .action)
         try await waitUntil { server.requests == 1 }
         let waiting = Task { try await cache.latest() }
-        cache.reload()
+        cache.reload(purpose: .action)
         try await waitUntil { server.requests == 2 }
 
         server.gates[1].open()
@@ -143,10 +157,10 @@ struct ServerFilterCacheTests {
     @Test func latestIgnoresFailureOfSupersededReload() async throws {
         let server = OrderedServer([nil, ["new"]])
         let cache = ServerFilterCache { try await server.fetch() }
-        cache.refresh()
+        cache.refresh(purpose: .action)
         try await waitUntil { server.requests == 1 }
         let waiting = Task { try await cache.latest() }
-        cache.reload()
+        cache.reload(purpose: .action)
         try await waitUntil { server.requests == 2 }
 
         server.gates[0].open()
@@ -159,13 +173,13 @@ struct ServerFilterCacheTests {
     @Test func closeCancelsReloadAndStopsLoading() async throws {
         let server = OrderedServer([["a"], ["b"]])
         let cache = ServerFilterCache { try await server.fetch() }
-        cache.refresh()
+        cache.refresh(purpose: .action)
         try await waitUntil { server.requests == 1 }
         let waiting = Task { try await cache.latest() }
 
         cache.close()
         await #expect(throws: CancellationError.self) { try await waiting.value }
-        cache.reload()
+        cache.reload(purpose: .action)
         #expect(server.requests == 1)
     }
 }
