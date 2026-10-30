@@ -301,20 +301,66 @@ struct TabLayoutSettingsTests {
         }
     }
 
-    /// 最初の並びに戻しても、戻す前の並びにあったユーザーのハッシュタグは、無効にして残す。サーバーから取得して足し直せないため。
-    @Test func resetKeepsAccountHashtagsDisabled() {
+    /// 最初の並びに戻しても、戻す前の並びにあったユーザーのハッシュタグとプロフィールは、無効にして残す。サーバーから取得して足し直せないため。
+    @Test func resetKeepsUserAddedItemsDisabled() {
         let item = TabItem.accountHashtag(accountID: "109", acct: "bob", name: "scia", title: "ボブ")
-        let previous = TabItem.defaultLayout.adding(item).adding(.list(id: "1", title: "友だち"))
+        let profile = TabItem.profile(accountID: "110", acct: "carol@remote.example")
+        let previous = TabItem.defaultLayout.adding(item).adding(profile).adding(.list(id: "1", title: "友だち"))
 
-        let reset = TabItem.defaultLayout.keepingAccountHashtags(of: previous)
+        let reset = TabItem.defaultLayout.keepingUserAddedItems(of: previous)
 
         #expect(reset.elements.contains(.item(item, isVisible: false)))
+        #expect(reset.elements.contains(.item(profile, isVisible: false)))
         #expect(!reset.contains(.list(id: "1", title: "")))
         if case .accountHashtag(_, _, _, let title) = reset.item(matching: item) {
             #expect(title == "ボブ")
         } else {
             Issue.record("ユーザーのハッシュタグが残っていません")
         }
-        #expect(previous.keepingAccountHashtags(of: previous).tokens == previous.tokens)
+        #expect(previous.keepingUserAddedItems(of: previous).tokens == previous.tokens)
+    }
+
+    /// プロフィールの項目は、IDとハンドルと付けた名前を保存し、同じ項目かどうかはIDだけで見る。付けた名前は`:`を含みうる。
+    @Test func profileItemRoundTripsAndMatchesByID() {
+        let item = TabItem.profile(accountID: "109", acct: "bob@remote.example", title: "ボブ: 仕事")
+        if case .profile(let id, let acct, let title) = TabItem(rawValue: item.rawValue) {
+            #expect(id == "109")
+            #expect(acct == "bob@remote.example")
+            #expect(title == "ボブ: 仕事")
+        } else {
+            Issue.record("保存した値から読めませんでした")
+        }
+        #expect(item == .profile(accountID: "109", acct: "", title: ""))
+        #expect(item != .profile(accountID: "110", acct: "bob@remote.example"))
+        #expect(item != .accountHashtag(accountID: "109", acct: "bob@remote.example", name: "scia"))
+        #expect(TabItem(rawValue: "profile:109") == nil)
+        #expect(TabItem(rawValue: "profile::bob:") == nil)
+    }
+
+    /// タブの名前は、付けた名前がなければハンドルの`@`より前にする。ほかのサーバーの人と付けた名前のときは、設定の並びにハンドルを添える。
+    @Test func profileItemTitleAndNote() {
+        #expect(TabItem.profile(accountID: "1", acct: "bob").title == "@bob")
+        #expect(TabItem.profile(accountID: "1", acct: "bob").note == nil)
+        #expect(TabItem.profile(accountID: "1", acct: "bob@remote.example").title == "@bob")
+        #expect(TabItem.profile(accountID: "1", acct: "bob@remote.example").note == "@bob@remote.example")
+        #expect(TabItem.profile(accountID: "1", acct: "bob", title: "ボブ").title == "ボブ")
+        #expect(TabItem.profile(accountID: "1", acct: "bob", title: "ボブ").note == "@bob")
+    }
+
+    @Test func renamedChangesOnlyUserAddedItems() {
+        if case .profile(let id, let acct, let title) = TabItem.profile(accountID: "1", acct: "bob").renamed("ボブ") {
+            #expect(id == "1")
+            #expect(acct == "bob")
+            #expect(title == "ボブ")
+        } else {
+            Issue.record("プロフィールのまま変わっていません")
+        }
+        if case .accountHashtag(_, _, let name, let title) = TabItem.accountHashtag(accountID: "1", acct: "bob", name: "scia").renamed("ボブ") {
+            #expect(name == "scia")
+            #expect(title == "ボブ")
+        } else {
+            Issue.record("ユーザーのハッシュタグのまま変わっていません")
+        }
+        #expect(TabItem.home.renamed("ボブ").rawValue == "home")
     }
 }

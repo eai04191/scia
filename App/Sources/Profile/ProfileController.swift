@@ -40,6 +40,11 @@ final class ProfileController {
     private var isRelationshipSlow = false
     /// 開いたときの読み込みを終えた。相手がサーバーの応答に入らなかったときは、関係が分からないまま終わる。
     private var isProfileLoaded = false
+    /// タブに置いたプロフィールで、画面が前に出ている。前に出ている間だけ新着を読む。
+    private var isShown = false
+    private var isInForeground = true
+    /// 前に出ている間に新着を読む繰り返し。
+    private var pollingTask: Task<Void, Never>?
 
     private enum ListReveal {
         case waiting
@@ -281,6 +286,72 @@ final class ProfileController {
 
     /// 開いているプロフィールのアカウントのID。
     var accountID: String { store.account.id }
+
+    // MARK: - 前に出ている間の読み直し
+
+    /// タブに置いたプロフィールで、前に出ている間は間隔をおいて新着を読む。アカウントの投稿のストリームはないため。
+    /// 見ていない間は読まず、見えたときとアプリに戻ったときに、見ていなかった間の新着を読む。決まりはdocs/tabs.mdの「プロフィール」にある。
+    func readsNewWhileShown() {
+        viewController?.onVisibilityChange = { [weak self] isShown in self?.setShown(isShown) }
+    }
+
+    private func setShown(_ isShown: Bool) {
+        guard self.isShown != isShown else { return }
+        self.isShown = isShown
+        restartPolling()
+    }
+
+    func enterForeground() {
+        isInForeground = true
+        restartPolling()
+    }
+
+    func enterBackground() {
+        isInForeground = false
+        restartPolling()
+    }
+
+    /// 前に出ていれば、すぐ新着を読み、そのあとは間隔をおいて読む。前に出ていなければやめる。
+    private func restartPolling() {
+        pollingTask?.cancel()
+        pollingTask = nil
+        guard isShown, isInForeground, let viewController else { return }
+        let clock = viewController.clock
+        let tuning = viewController.tuning
+        // 使う人の操作によらず送るので、レート制限で止められている間は送らない。
+        pollingTask = run(.display) { controller in
+            await controller.readNew()
+            while !Task.isCancelled {
+                guard (try? await clock.sleep(for: .seconds(tuning.value(of: TuningCatalog.shownFeedPollingInterval)))) != nil else { return }
+                controller.logger.info("profile poll while shown")
+                await controller.readNew()
+            }
+        }
+    }
+
+    /// 見ている一覧の、一番新しい投稿より後の投稿を読んで足す。空の一覧なら、最新のページを読む。最初の一覧を出す前は、その読み込みに任せる。
+    /// 読めなかったことは画面に出さない。次の読み直しか、引っぱって読み直したときに読む。
+    private func readNew() async {
+        let timeline = store.timeline
+        guard listReveal == .revealed, timeline === shownTimeline, let viewController else { return }
+        // 最初の一覧を読めていなければ、フッターのやり直しに任せる。
+        if timeline.isEmpty, case .failed = viewController.footerState { return }
+        let wasEmpty = timeline.isEmpty
+        do {
+            let maxPages = Int(viewController.tuning.value(of: TuningCatalog.fillPageLimit))
+            guard let added = try await timeline.fillFromLatest(maxPages: maxPages), timeline === store.timeline else { return }
+            logger.info("profile read new added=\(added.count, privacy: .public) gaps=\(timeline.gaps.count, privacy: .public)")
+            if wasEmpty {
+                viewController.setFooterState(timeline.reachedEnd ? .reachedEnd : .idle)
+            }
+        } catch {
+            guard !(error is CancellationError) else { return }
+            logger.error("profile read new failed: \(SciaLog.describe(error), privacy: .public)")
+            handleUnauthorized(error)
+        }
+        showGapStates()
+        showEntries()
+    }
 
     /// 固定を変えたあとに、固定された投稿を読み直す。外した投稿は、使う人の操作の結果なので、閉じて詰める動きで消す。
     /// 読めなかったときは、前の固定された投稿のまま残す。固定の操作はできているので、知らせない。

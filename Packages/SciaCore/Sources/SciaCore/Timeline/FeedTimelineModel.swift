@@ -215,7 +215,7 @@ public final class FeedTimelineModel {
     private func startPolling() {
         guard isShown, !isStopped, !isDisabled, isInForeground, pollingTask == nil else { return }
         pollingTask = tasks.run(.display) { [weak self, clock] in
-            while let interval = self?.tuning.value(of: TuningCatalog.accountHashtagPollingInterval) {
+            while let interval = self?.tuning.value(of: TuningCatalog.shownFeedPollingInterval) {
                 try? await clock.sleep(for: .seconds(interval))
                 guard !Task.isCancelled, let self else { return }
                 guard self.hasLoadedInitial else { continue }

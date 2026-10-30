@@ -268,8 +268,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
 
     /// 画面を読み込んだときに並べた右上のボタン。投稿欄で書き始めるボタンは、出すときにこの先頭に足す。
     private var baseBarItems: [UIBarButtonItem] = []
-    /// 画面を組み立てる側が足す右上のボタン。投稿欄で書き始めるボタンの左に並ぶ。表示より前に設定する。
-    var screenBarItems: [UIBarButtonItem] = []
+    /// 画面を組み立てる側が足す右上のボタン。投稿欄で書き始めるボタンの左に並ぶ。画面を読み込んだあとに変えても並べ直す。
+    var screenBarItems: [UIBarButtonItem] = [] {
+        didSet {
+            if isViewLoaded { applyBarItems() }
+        }
+    }
 
     /// 右上に投稿欄で書き始めるボタンを出すかを決める。画面を読み込む前は値だけ覚える。
     func setShowsFocusInlineCompose(_ shows: Bool) {

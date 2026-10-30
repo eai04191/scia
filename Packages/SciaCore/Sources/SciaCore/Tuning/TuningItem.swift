@@ -552,11 +552,12 @@ public enum TuningCatalog {
         defaultValue: 5
     )
 
-    /// ユーザーのハッシュタグの一覧を前に出している間、新着をRESTで読む間隔。決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
-    /// ハッシュタグのストリームは公開の投稿しか運ばず、フォロワーのみなどの投稿は読まないと分からないため。
-    public static let accountHashtagPollingInterval = NumberTuning(
+    /// ユーザーのハッシュタグの一覧と、タブに置いたプロフィールを前に出している間、新着をRESTで読む間隔。
+    /// 決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」と「プロフィール」にある。ハッシュタグのストリームは公開の投稿しか運ばず、アカウントの投稿のストリームはないため。
+    /// `id`は前に保存した値を読むため、ユーザーのハッシュタグだけに使っていたころのまま残す。
+    public static let shownFeedPollingInterval = NumberTuning(
         id: "streaming.accountHashtagPollingInterval",
-        title: "ユーザーのハッシュタグを見ている間に新着を読む間隔（秒）",
+        title: "ユーザーのハッシュタグとプロフィールのタブを見ている間に新着を読む間隔（秒）",
         range: 15...300,
         step: 15,
         defaultValue: 30
@@ -1666,7 +1667,7 @@ public enum TuningCatalog {
             .number(fillPageLimit),
             .number(gapAutoLoadDistance),
             .number(pollingInterval),
-            .number(accountHashtagPollingInterval),
+            .number(shownFeedPollingInterval),
             .number(regeneratingRetryInterval),
             .number(outageNoticeDelay),
             .number(imageRetryInitialDelay),

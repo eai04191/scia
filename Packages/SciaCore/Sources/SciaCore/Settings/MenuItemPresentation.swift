@@ -255,13 +255,19 @@ extension TabItem: MenuItemPresentable {
         case .list(_, let title): title
         case .hashtag(let name): "#\(name)"
         case .accountHashtag(_, _, let name, let title): title.isEmpty ? "#\(name)" : title
+        // ほかのサーバーの人のハンドルは長く、タブバーの幅に収まらないため、`@`より前だけを出す。
+        case .profile(_, let acct, let title): title.isEmpty ? "@\(acct.prefix { $0 != "@" })" : title
         }
     }
 
     /// ユーザーのハッシュタグは、同じハッシュタグの項目と見分けられるよう、誰の投稿かを添える。
+    /// プロフィールは、名前だけでは分からないハンドル（ほかのサーバーの人のサーバー、付けた名前のときはハンドル全体）を添える。
     public var note: String? {
-        guard case .accountHashtag(_, let acct, let name, let title) = self else { return nil }
-        return title.isEmpty ? "@\(acct)の投稿" : "#\(name)、@\(acct)の投稿"
+        switch self {
+        case .accountHashtag(_, let acct, let name, let title): title.isEmpty ? "@\(acct)の投稿" : "#\(name)、@\(acct)の投稿"
+        case .profile(_, let acct, let title): title.isEmpty && !acct.contains("@") ? nil : "@\(acct)"
+        default: nil
+        }
     }
 
     public var symbolName: String {
@@ -276,6 +282,7 @@ extension TabItem: MenuItemPresentable {
         case .list: "list.bullet"
         case .hashtag: "number"
         case .accountHashtag: "number.square"
+        case .profile: "person.crop.circle"
         }
     }
 

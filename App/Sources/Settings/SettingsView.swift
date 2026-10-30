@@ -54,7 +54,7 @@ struct SettingsView: View {
         Binding {
             settings.tabLayout(for: account)
         } set: { layout in
-            settings.setTabLayout(layout.keepingAccountHashtags(of: settings.tabLayout(for: account)), for: account)
+            settings.setTabLayout(layout.keepingUserAddedItems(of: settings.tabLayout(for: account)), for: account)
         }
     }
 

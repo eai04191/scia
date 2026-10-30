@@ -21,6 +21,8 @@ final class SessionController {
     private var presentedScheduled: ScheduledStatusesController?
     /// リストとハッシュタグのタイムラインのタブ。並びに出たときに作る。
     private let serverFeeds: ServerFeedRegistry
+    /// タブに置いたプロフィール。並びに出たときに作る。
+    private let profileTabs: ProfileTabRegistry
     /// ハッシュタグのメニューやタップで、開いた一覧に積んだハッシュタグの一覧。
     private let pushedFeeds: PushedFeedRegistry
     /// 投稿の一覧のタブ。ホーム、ローカル、連合と、作ったリストとハッシュタグ。
@@ -205,11 +207,18 @@ final class SessionController {
                 FeedTimelineController(feed: .hashtag(name: name), texts: .hashtag(name: name), client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
             case .accountHashtag(let accountID, let acct, let name, _):
                 FeedTimelineController(feed: .accountHashtag(accountID: accountID, name: name), texts: .accountHashtag(name: name, acct: acct), client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
-            case .home, .local, .federated, .notifications, .bookmarks, .favourites, .scheduled:
+            case .home, .local, .federated, .notifications, .bookmarks, .favourites, .scheduled, .profile:
                 nil
             }
         }
         self.serverFeeds = serverFeeds
+        let profileTabs = ProfileTabRegistry { [weak tasks] item in
+            guard let tasks, case .profile(let accountID, let acct, _) = item else { return nil }
+            let scope = tasks.child()
+            let loading = ProfileTabLoadingViewController(title: "@\(acct)", tasks: scope) { try await client.account(accountID) }
+            return (loading, scope)
+        }
+        self.profileTabs = profileTabs
         self.bookmarks = bookmarks
         self.favourites = favourites
         self.scheduled = scheduled
@@ -300,6 +309,7 @@ final class SessionController {
                 case .favourites: favouritesNavigation
                 case .scheduled: scheduledNavigation
                 case .list, .hashtag, .accountHashtag: serverFeeds.navigation(for: item)
+                case .profile: profileTabs.navigation(for: item)
                 }
             },
             layout: AppDependencies.settings.tabLayout(for: credential.handle),
@@ -489,6 +499,9 @@ final class SessionController {
         serverFeeds.onCreate = { [weak self] item, controller, navigation in
             self?.configureServerFeed(controller, for: item, in: navigation)
         }
+        profileTabs.onCreate = { [weak self] item, loading, navigation in
+            self?.configureProfileTab(loading, for: item, in: navigation)
+        }
         composer.onBeginEditing = { [weak self] in
             self?.applyComposeDefaults()
             // アプリ内のSafariのシートは投稿欄より手前に出るため、書いている間は伏せた高さまで下げる。
@@ -568,8 +581,10 @@ final class SessionController {
                 // 最初の並びに戻したら、リストが消えるので足し直す。足し直した変更は、もう一度ここへ来て反映する。
                 addMissingServerItemsToTabLayout()
                 let layout = AppDependencies.settings.tabLayout(for: handle)
-                // ユーザーのハッシュタグは、「タブから外す」で並びから外したら、一覧を止めて捨てる。
-                tabs.forget(serverFeeds.removeAll(where: \.isAccountHashtag, except: Set(Self.accountHashtags(in: layout))))
+                // ユーザーのハッシュタグとプロフィールは、「タブから外す」で並びから外したら、一覧を止めて捨てる。
+                let userAdded = Set(Self.userAddedItems(in: layout))
+                tabs.forget(serverFeeds.removeAll(where: \.isAccountHashtag, except: userAdded))
+                tabs.forget(profileTabs.removeAll(except: userAdded))
                 tabs.apply(layout)
                 observeTabLayout()
             }
@@ -749,6 +764,29 @@ final class SessionController {
         controller.setEnabled(tabs.placement.location(of: TabItem(controller.feed)) != .disabled)
     }
 
+    /// 並びに出たプロフィールのタブを整える。アカウントを読めたら、プロフィール画面に差し替え、前に出ている間は新着を読ませる。
+    private func configureProfileTab(_ loading: ProfileTabLoadingViewController, for item: TabItem, in navigation: ContentNavigationController) {
+        installAccountButton(on: loading)
+        loading.describe = { [weak self] error in await self?.failureReason(for: error) ?? ErrorPresentation(error) }
+        Self.configure(navigation, delegate: navigationDelegate) { navigation in
+            (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
+        }
+        loading.onLoad = { [weak self, weak navigation] account in
+            guard let self, let navigation, let tasks = profileTabs.tasks(for: item) else { return }
+            let (controller, viewController) = makeProfile(account, tasks: tasks.child())
+            configureTabRoot(viewController)
+            viewController.screenBarItems.append(tabToggleItem(for: item))
+            // 切り替えタブの中なら、見出しのメニューで項目を切り替える。タブの並びは一番下の画面に付けているので、差し替える画面に移す。
+            viewController.navigationItem.titleMenuProvider = navigation.viewControllers.first?.navigationItem.titleMenuProvider
+            controller.readsNewWhileShown()
+            // 差し替えると画面が出始めて読み始めるので、その前にバックグラウンドかどうかを伝える。
+            profileTabs.setController(controller, for: item)
+            // 読んでいる間に奥の画面を積むことはないので、一番下の画面だけを差し替える。
+            navigation.setViewControllers([viewController] + navigation.viewControllers.dropFirst(), animated: false)
+            controller.start()
+        }
+    }
+
     /// 自分のリストとフォローしているハッシュタグを読み、タブの並びに反映する。決まりはdocs/tabs.mdの「リスト」と「フォローしているハッシュタグ」にある。
     /// 読めなかった一覧は、並びを変えない。
     private func loadTabSources() {
@@ -795,15 +833,15 @@ final class SessionController {
     }
 
     /// 最初の並びに戻したときに、直近に読んだリストとハッシュタグを無効のまま足し直す。並びにあるものは外しも書き換えもしない。
-    /// ユーザーのハッシュタグは、設定の画面が最初の並びを書くときに残す（`keepingAccountHashtags`）。
+    /// ユーザーのハッシュタグは、設定の画面が最初の並びを書くときに残す（`keepingUserAddedItems`）。
     private func addMissingServerItemsToTabLayout() {
         let items = (loadedLists ?? []).map { TabItem.list(id: $0.id, title: $0.title) } + (loadedHashtags ?? []).map { TabItem.hashtag(name: $0.name) }
         setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).addingMissing(items))
     }
 
-    private static func accountHashtags(in layout: MenuLayout<TabItem>) -> [TabItem] {
+    private static func userAddedItems(in layout: MenuLayout<TabItem>) -> [TabItem] {
         layout.elements.compactMap { element in
-            if case .item(let item, _) = element, item.isAccountHashtag { item } else { nil }
+            if case .item(let item, _) = element, item.isUserAdded { item } else { nil }
         }
     }
 
@@ -955,8 +993,8 @@ final class SessionController {
         openFeed(.accountHashtag(accountID: account.id, name: name), texts: .accountHashtag(name: name, acct: account.acct), barItems: [tabToggleItem(for: item)], from: source)
     }
 
-    /// ユーザーのハッシュタグの一覧の右上に置く、タブの並びに足すか外すボタン。並びは開いている間にも変わるので、メニューを開くたびに並びを見て中身を決める。
-    /// 決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」にある。
+    /// ユーザーのハッシュタグの一覧とプロフィール画面の右上に置く、タブの並びに足すか外すボタン。並びは開いている間にも変わるので、メニューを開くたびに並びを見て中身を決める。
+    /// 決まりはdocs/tabs.mdの「ユーザーのハッシュタグ」と「プロフィール」にある。
     private func tabToggleItem(for item: TabItem) -> UIBarButtonItem {
         let handle = credential.handle
         let menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
@@ -979,20 +1017,21 @@ final class SessionController {
         return UIBarButtonItem(title: "タブ", image: UIImage(systemName: "rectangle.stack"), menu: menu)
     }
 
-    /// ユーザーのハッシュタグのタブの名前を変える。空にすると`#名前`に戻す。
+    /// ユーザーのハッシュタグとプロフィールのタブの名前を変える。空にすると、既定の名前（`#名前`や`@name`）に戻す。
     private func presentTabRename(_ item: TabItem) {
-        guard case .accountHashtag(let accountID, let acct, let name, let title) = item else { return }
+        guard item.isUserAdded else { return }
         let handle = credential.handle
-        let alert = UIAlertController(title: "タブの名前", message: "空にすると「#\(name)」に戻ります", preferredStyle: .alert)
+        let defaultTitle = item.renamed("").title
+        let alert = UIAlertController(title: "タブの名前", message: "空にすると「\(defaultTitle)」に戻ります", preferredStyle: .alert)
         alert.addTextField { field in
-            field.text = title
-            field.placeholder = "#\(name)"
+            field.text = item.title == defaultTitle ? "" : item.title
+            field.placeholder = defaultTitle
             field.clearButtonMode = .whileEditing
         }
         alert.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         alert.addAction(UIAlertAction(title: "保存", style: .default) { [weak self, weak alert] _ in
             guard let text = alert?.textFields?.first?.text else { return }
-            let renamed = TabItem.accountHashtag(accountID: accountID, acct: acct, name: name, title: text.trimmingCharacters(in: .whitespacesAndNewlines))
+            let renamed = item.renamed(text.trimmingCharacters(in: .whitespacesAndNewlines))
             self?.setTabLayout(AppDependencies.settings.tabLayout(for: handle).replacing(renamed))
         })
         topViewController.present(alert, animated: true)
@@ -1123,12 +1162,20 @@ final class SessionController {
     }
 
     private func pushProfile(_ account: Account, from source: UIViewController) {
-        let (controller, viewController) = ProfileController.make(account: account, client: client, relationshipCache: profiles.relationships, tasks: tasks.child()) { [weak self] error, title in
+        let (controller, viewController) = makeProfile(account, tasks: tasks.child())
+        viewController.screenBarItems.append(tabToggleItem(for: .profile(accountID: account.id, acct: account.acct)))
+        UserAction.openProfile.record()
+        source.navigationController?.pushViewController(viewController, animated: true)
+        controller.start()
+    }
+
+    /// プロフィール画面を作り、投稿への操作とリンクを開けるようにする。積んで開くものとタブに置くもので使う。
+    private func makeProfile(_ account: Account, tasks: TaskScope) -> (ProfileController, TimelineViewController) {
+        let (controller, viewController) = ProfileController.make(account: account, client: client, relationshipCache: profiles.relationships, tasks: tasks) { [weak self] error, title in
             self?.handle(error, title: title)
         } onUnauthorized: { [weak self] in
             self?.reportUnauthorized()
         }
-        UserAction.openProfile.record()
         configure(viewController)
         controller.onEditProfile = { [weak self] in self?.presentProfileEditor() }
         controller.onOpenAccountList = { [weak self, weak viewController] kind in
@@ -1140,8 +1187,7 @@ final class SessionController {
             self?.open(destination, inProfileFrom: viewController)
         }
         profiles.add(controller)
-        source.navigationController?.pushViewController(viewController, animated: true)
-        controller.start()
+        return (controller, viewController)
     }
 
     // MARK: - 人の一覧
@@ -2795,6 +2841,7 @@ final class SessionController {
         scheduled.enterForeground()
         presentedScheduled?.enterForeground()
         threads.enterForeground()
+        profileTabs.enterForeground()
         // ほかの端末で作ったり消したりしたリストや、フォローしたハッシュタグを、戻ったときに並びへ反映する。
         if hasStarted {
             loadTabSources()
@@ -2808,6 +2855,7 @@ final class SessionController {
         }
         notifications.enterBackground()
         threads.enterBackground()
+        profileTabs.enterBackground()
     }
 }
 
@@ -2864,6 +2912,85 @@ private final class ServerFeedRegistry {
         var removed: [TabItem] = []
         for (item, entry) in entries where belongs(item) && !items.contains(item) {
             entry.controller.stop()
+            entries[item] = nil
+            removed.append(item)
+        }
+        return removed
+    }
+}
+
+/// タブに置いたプロフィール。項目ごとに、アカウントを読むまでの画面から始めるナビゲーションを持つ。
+/// 読めたら、セッションがプロフィール画面に差し替え、`setController`で渡す。プロフィール画面は、ナビゲーションの一番下の画面が生かしている。
+@MainActor
+private final class ProfileTabRegistry {
+    private struct Entry {
+        let navigation: ContentNavigationController
+        /// この項目で始めた処理の持ち主。外したときに閉じ、読み込みと新着の読み直しを止める。
+        let tasks: TaskScope
+        weak var controller: ProfileController?
+    }
+
+    private let make: (TabItem) -> (ProfileTabLoadingViewController, TaskScope)?
+    private var entries: [TabItem: Entry] = [:]
+    /// 作ったとき。設定するまでに作ったものは、設定したときにまとめて渡す。セッションを作り終える前に、タブを組むときに作るため。
+    var onCreate: ((TabItem, ProfileTabLoadingViewController, ContentNavigationController) -> Void)? {
+        didSet {
+            for (item, entry) in entries {
+                guard let loading = entry.navigation.viewControllers.first as? ProfileTabLoadingViewController else { continue }
+                onCreate?(item, loading, entry.navigation)
+            }
+        }
+    }
+
+    init(make: @escaping (TabItem) -> (ProfileTabLoadingViewController, TaskScope)?) {
+        self.make = make
+    }
+
+    /// 項目のナビゲーション。まだなければ作る。プロフィールでなければnil。
+    func navigation(for item: TabItem) -> ContentNavigationController? {
+        if let entry = entries[item] { return entry.navigation }
+        guard let (loading, tasks) = make(item) else { return nil }
+        let navigation = ContentNavigationController(rootViewController: loading)
+        entries[item] = Entry(navigation: navigation, tasks: tasks)
+        onCreate?(item, loading, navigation)
+        return navigation
+    }
+
+    func tasks(for item: TabItem) -> TaskScope? {
+        entries[item]?.tasks
+    }
+
+    /// アカウントを読めて作ったプロフィール画面を渡す。読んでいる間にバックグラウンドへ入っていたら、そのことを伝える。
+    func setController(_ controller: ProfileController, for item: TabItem) {
+        entries[item]?.controller = controller
+        if !isInForeground {
+            controller.enterBackground()
+        }
+    }
+
+    /// アカウントを読んでいる間に変わっても、作ったプロフィール画面に伝えられるよう覚えておく。
+    private var isInForeground = true
+
+    func enterForeground() {
+        isInForeground = true
+        for entry in entries.values {
+            entry.controller?.enterForeground()
+        }
+    }
+
+    func enterBackground() {
+        isInForeground = false
+        for entry in entries.values {
+            entry.controller?.enterBackground()
+        }
+    }
+
+    /// `items`にない項目（「タブから外す」で外したもの）の処理を止めて捨て、捨てた項目を返す。
+    @discardableResult
+    func removeAll(except items: Set<TabItem>) -> [TabItem] {
+        var removed: [TabItem] = []
+        for (item, entry) in entries where !items.contains(item) {
+            entry.tasks.close()
             entries[item] = nil
             removed.append(item)
         }
