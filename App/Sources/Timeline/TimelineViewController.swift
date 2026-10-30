@@ -10,47 +10,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private let logger = SciaLog.logger(category: "timeline")
 
     /// 一覧ごとに変わる文言。
-    struct Texts {
-        /// 違和感レポートの状態ダンプに使う名前。
-        let dumpName: String
-        let title: String
-        /// 題の下に添える文字。ストリーミングの切断を知らせるときは、その前に並べる。
-        var subtitle: String?
-        /// 1件もないとき。
-        let empty: String
-        /// これより古いものがないとき。
-        let reachedEnd: String
-        /// サーバーから届いたが、読めなかった要素の行。
-        let unreadable: String
-
-        static let home = Texts(dumpName: "timeline", title: "ホーム", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
-        static let local = Texts(dumpName: "local", title: "ローカル", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
-        static let federated = Texts(dumpName: "federated", title: "連合", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
-        static let bookmarks = Texts(dumpName: "bookmarks", title: "ブックマーク", empty: "ブックマークした投稿はありません", reachedEnd: "これより前にブックマークした投稿はありません", unreadable: "表示できない投稿")
-        static let favourites = Texts(dumpName: "favourites", title: "お気に入り", empty: "お気に入りした投稿はありません", reachedEnd: "これより前にお気に入りした投稿はありません", unreadable: "表示できない投稿")
-        static func list(title: String) -> Texts {
-            Texts(dumpName: "list", title: title, empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
-        }
-        static func hashtag(name: String) -> Texts {
-            Texts(dumpName: "hashtag", title: "#\(name)", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
-        }
-        /// `acct`のユーザーの、ハッシュタグの付いた投稿。題に入り切るよう、ハンドルは題の下に出す。
-        static func accountHashtag(name: String, acct: String) -> Texts {
-            Texts(dumpName: "accountHashtag", title: "#\(name)", subtitle: "@\(acct)", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
-        }
-        static let notifications = Texts(dumpName: "notifications", title: "通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
-        static let profile = Texts(dumpName: "profile", title: "", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
-        static let thread = Texts(dumpName: "thread", title: "スレッド", empty: "投稿がありません", reachedEnd: "", unreadable: "表示できない投稿")
-        static func accountList(_ kind: AccountListKind) -> Texts {
-            let (title, empty) = switch kind {
-            case .favouritedBy: ("お気に入りした人", "お気に入りした人はいません")
-            case .rebloggedBy: ("ブーストした人", "ブーストした人はいません")
-            case .followers: ("フォロワー", "フォロワーはいません")
-            case .following: ("フォロー", "フォローしている人はいません")
-            }
-            return Texts(dumpName: "accountList", title: title, empty: empty, reachedEnd: "", unreadable: "表示できないアカウント")
-        }
-    }
+    typealias Texts = TimelineTexts
 
     /// 一覧全体の状態。投稿がないときの表示に使う。
     enum ContentState: Equatable {
