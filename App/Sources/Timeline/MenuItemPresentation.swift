@@ -19,7 +19,8 @@ extension MenuItemContentProviding {
 }
 
 /// ハッシュタグのメニュー。本文のハッシュタグの長押しと、投稿のメニューの「ハッシュタグ」で、同じ並びから組む。決まりはdocs/menus.mdの「メニューの単位」にある。
-/// 項目の名前、並び、出す条件、見出し、動きはここだけが知る。出す場所は、タグと、その場所でしかできないこと（共有のシートを出す起点、一覧を開く先）だけを渡す。
+/// 項目の名前、並び、出す条件、見出しはSciaCoreの`HashtagMenuTree`が決め、ここではUIKitのメニューに描いて、押した項目の動きを呼ぶ。
+/// 出す場所は、タグと、その場所でしかできないこと（共有のシートを出す起点、一覧を開く先）だけを渡す。
 @MainActor
 struct HashtagMenu {
     /// `#`を除いた名前。
@@ -37,86 +38,29 @@ struct HashtagMenu {
     /// 「投稿したユーザーの投稿」で、そのユーザーのハッシュタグの付いた投稿を開く。
     let openAccountStatuses: (Account) -> Void
 
+    var tree: HashtagMenuTree {
+        HashtagMenuTree(name: name, url: url, account: account, linkBrowser: handlers.linkBrowser, muteActions: muteActions)
+    }
+
     /// 本文のハッシュタグの長押しで単独で出すメニュー。見出しに`#名前`を置く。出す項目がなければnil。
     func menu(groups: MenuLayout<HashtagMenuItem>.Groups) -> UIMenu? {
-        let children = elements(groups: groups)
-        return children.isEmpty ? nil : UIMenu(title: "#\(name)", children: children)
+        built(groups: groups)?.menu
     }
 
-    /// 投稿のメニューの「ハッシュタグ」に並べる、`#名前`のサブメニュー。出す項目がなければnil。
-    func submenu(groups: MenuLayout<HashtagMenuItem>.Groups) -> UIMenu? {
-        let children = elements(groups: groups)
-        return children.isEmpty ? nil : UIMenu(title: "#\(name)", image: StatusMenuItem.hashtags.image, children: children)
+    func built(groups: MenuLayout<HashtagMenuItem>.Groups) -> BuiltMenu<HashtagMenuCommand>? {
+        tree.menu(groups: groups).map { BuiltMenu(root: $0, renderer: MenuRenderer(perform: perform)) }
     }
 
-    private func elements(groups: MenuLayout<HashtagMenuItem>.Groups) -> [UIMenuElement] {
-        groups.menuElements { item in
-            if let action = item.urlAction {
-                return [action.action(url: url, handlers: handlers)]
-            }
-            switch item {
-            case .timeline:
-                return [UIAction(title: item.title, image: item.image) { [openTimeline] _ in openTimeline() }]
-            case .accountStatuses:
-                guard let account else { return [] }
-                // ほかのサーバーのユーザーなら、ユーザーのメニューの見出しと同じく、サーバー名をサブタイトルに出す。
-                return [UIAction(title: "@\(account.username)の投稿", subtitle: UserHeading(acct: account.acct).subtitle, image: item.image) { [openAccountStatuses] _ in openAccountStatuses(account) }]
-            case .mute:
-                guard let muteActions else { return [] }
-                return muteElements(muteActions, item: item)
-            // 共通の項目は、上で中身から組んだ。
-            case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
-                return []
-            }
+    func perform(_ command: HashtagMenuCommand) {
+        switch command {
+        case .url(let command): handlers.perform(command)
+        case .openTimeline: openTimeline()
+        case .openAccountStatuses(let account): openAccountStatuses(account)
+        case .mute(let duration): muteActions?.mute(name, duration)
+        case .unmute: muteActions?.unmute(name)
         }
-    }
-
-    /// ミュートしていなければ、ユーザーのミュートと同じ期間をサブメニューで選び、ミュート中なら「ミュートを解除」にする。
-    /// フィルターを覚えていれば、その場で決める。読み込み中の行を出してから中身を差し替えると、開く途中のサブメニューの動きが崩れるため。
-    /// メニューを開くたびにフィルターを読み直し、別の端末やwebで変えたミュートを次に開いたときから反映する。
-    /// まだ読めていなければ、読む間はUIKitの読み込み中の行を出し、読めなければ押せない行で知らせる。
-    private func muteElements(_ muteActions: HashtagMuteActions, item: HashtagMenuItem) -> [UIMenuElement] {
-        let name = name
-        func elements(isMuted: Bool) -> [UIMenuElement] {
-            if isMuted {
-                return [UIAction(title: "ミュートを解除", image: UIImage(systemName: "speaker.wave.2")) { _ in muteActions.unmute(name) }]
-            }
-            return [UIMenu(title: item.title, image: item.image, children: UserRelationChange.muteDurations.map { choice in
-                UIAction(title: choice.title) { _ in muteActions.mute(name, choice.duration) }
-            })]
-        }
-        let isMuted = muteActions.known(name)
-        muteActions.refresh()
-        if let isMuted {
-            return elements(isMuted: isMuted)
-        }
-        return [UIDeferredMenuElement.uncached { completion in
-            Task { @MainActor in
-                do {
-                    completion(elements(isMuted: try await muteActions.load(name)))
-                } catch {
-                    completion([UIAction(title: "ミュートを読み込めませんでした", image: UIImage(systemName: "exclamationmark.triangle"), attributes: .disabled) { _ in }])
-                }
-            }
-        }]
     }
 }
-
-/// ハッシュタグのメニューの「ミュート」で、ミュートしているかを読み、変える。項目は`HashtagMenu`が組む。決まりはdocs/menus.mdの「ハッシュタグのメニュー」にある。
-struct HashtagMuteActions {
-    /// 覚えている自分のフィルターで決めた、`#`を除いた名前のタグをミュートしているか。フィルターをまだ読めていなければnil。
-    let known: @MainActor (String) -> Bool?
-    /// 自分のフィルターを読み直していなければ読み直す。メニューを開いたときに呼び、次に開いたときから使う。
-    let refresh: @MainActor () -> Void
-    /// `#`を除いた名前のタグをミュートしているか。フィルターを読み直している途中なら、それを待つ。
-    let load: @MainActor (String) async throws -> Bool
-    /// ミュートする。nilなら解除するまで続ける。
-    let mute: @MainActor (String, Duration?) -> Void
-    /// ミュートを解除する。解く条件は、解除するときにフィルターを読み直して決める。メニューを組んだときに覚えていた条件で消すと、
-    /// その後に別の端末やwebで同じフィルターに足した条件まで、フィルターごと消してしまうため。
-    let unmute: @MainActor (String) -> Void
-}
-
 
 extension UIMenu {
     /// ユーザーのメニュー。投稿のメニューのサブメニューでも、ほかの場所から出すメニューでも、見出しを`UserHeading`で揃える。

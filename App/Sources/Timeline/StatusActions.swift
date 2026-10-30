@@ -271,7 +271,7 @@ extension TimelineViewController {
         var seen: Set<String> = []
         let handlers = urlHandlers(id: id)
         return shown.tags.filter { seen.insert(Hashtag.normalizedName($0.name)).inserted }.compactMap { tag in
-            HashtagMenu(
+            let menu = HashtagMenu(
                 name: tag.name,
                 url: tag.url,
                 account: shown.account,
@@ -279,7 +279,8 @@ extension TimelineViewController {
                 muteActions: hashtagMuteActions,
                 openTimeline: { [weak self] in self?.onOpenHashtag?(tag.name) },
                 openAccountStatuses: { [weak self] account in self?.onOpenAccountHashtag?(tag.name, account) }
-            ).submenu(groups: settings.hashtagMenuLayout.groups)
+            )
+            return menu.tree.submenu(groups: settings.hashtagMenuLayout.groups).map { MenuRenderer(perform: menu.perform).element($0) }
         }
     }
 
