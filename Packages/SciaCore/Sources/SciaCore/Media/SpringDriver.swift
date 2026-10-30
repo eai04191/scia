@@ -1,9 +1,9 @@
-import QuartzCore
-import SciaCore
+public import CoreGraphics
+import Foundation
 
 /// スプリングの進み具合を、画面を描き換えるたびに渡す。複製の位置と、マスクのようにUIKitのアニメーションで動かせない見た目を、同じフレームでそろえるために使う。
 @MainActor
-final class SpringDriver {
+public final class SpringDriver {
     private let spring: SpringCurve
     private let source: any FrameSource
     private let update: @MainActor (CGFloat) -> Void
@@ -19,9 +19,9 @@ final class SpringDriver {
     ///   - completion: 落ち着いたら呼ぶ。`stop`で止めたときは呼ばない。
     ///   - longestElapsed: 1フレームで進める時間の上限。nilなら、ひっかかりで間が空いても実際の時間で進め、決まった時間で落ち着かせる。
     ///     上限を付けると、間が空いたときに一度に大きく進まず、その分だけ落ち着くのが遅れる。
-    init(
+    public init(
         spring: SpringCurve,
-        source: any FrameSource = DisplayLinkFrameSource.shared,
+        source: any FrameSource,
         longestElapsed: CFTimeInterval? = nil,
         update: @escaping @MainActor (CGFloat) -> Void,
         completion: @escaping @MainActor () -> Void
@@ -34,7 +34,7 @@ final class SpringDriver {
     }
 
     /// 最初の進み具合をすぐに渡してから動かし始める。
-    func start() {
+    public func start() {
         ticker?.stop()
         time = 0
         // 上限を渡されなければ、スプリングは決まった時間で落ち着くため、ひっかかりで間が空いても経過時間を削らず、描かれる時刻とそろえる。
@@ -48,7 +48,7 @@ final class SpringDriver {
     }
 
     /// 止めた時点の見た目のまま残す。
-    func stop() {
+    public func stop() {
         ticker?.stop()
         ticker = nil
     }

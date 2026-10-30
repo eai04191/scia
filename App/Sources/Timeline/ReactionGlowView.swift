@@ -122,7 +122,7 @@ final class ReactionGlowView: UIView {
     /// ブーストとお気に入りの、いま描いている明るさ。点けたり消したりする途中は、0と1のあいだ。
     private var levels = Levels(boost: 0, favourite: 0)
     private var fade: Fade?
-    private lazy var ticker = FrameTicker { [weak self] elapsed in
+    private lazy var ticker = FrameTicker(source: DisplayLinkFrameSource.shared) { [weak self] elapsed in
         self?.step(elapsed) ?? false
     }
 

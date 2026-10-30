@@ -2803,7 +2803,7 @@ final class SessionController {
         let label = "\(settings.mediaArrangement.rawValue) tilts=\(settings.tiltsStackedPhotos)"
         var remaining = abs(distance)
         let direction: CGFloat = distance < 0 ? -1 : 1
-        let ticker = FrameTicker(longestElapsed: nil) { [weak list, weak self] elapsed in
+        let ticker = FrameTicker(source: DisplayLinkFrameSource.shared, longestElapsed: nil) { [weak list, weak self] elapsed in
             // 画面を閉じたり、タブを切り替えたりして一覧が画面から外れたら、動かすのも数えるのもやめる。記録は残さない。
             // 選ばれていないタブの一覧はウィンドウから外れるので、ウィンドウにあるかで両方を見分ける。
             guard let list, list.window != nil else {

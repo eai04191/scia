@@ -1,4 +1,5 @@
 import QuartzCore
+import SciaCore
 import SciaTesting
 import Testing
 @testable import Scia
@@ -16,7 +17,7 @@ struct FrameTickerTests {
 
     @Test func stopsWhenTickAsksToStop() async throws {
         let counter = Counter()
-        let ticker = FrameTicker { _ in
+        let ticker = FrameTicker(source: DisplayLinkFrameSource.shared) { _ in
             counter.count += 1
             return counter.count < 3
         }
@@ -32,7 +33,7 @@ struct FrameTickerTests {
     /// 表示の時計は受け取り手を強く持つため、止めないと、持ち主がいないまま毎フレーム呼び続ける。
     @Test func stopsAfterOwnerIsReleased() async throws {
         var owner: Counter? = Counter()
-        let ticker = FrameTicker { [weak owner] _ in
+        let ticker = FrameTicker(source: DisplayLinkFrameSource.shared) { [weak owner] _ in
             guard let owner else { return false }
             owner.count += 1
             return true
