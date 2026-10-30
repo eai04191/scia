@@ -1210,7 +1210,7 @@ final class InlineComposeController: NSObject {
             }])
             // 通知の列は終わらないため、投稿欄がなくなったら止める。止めないと、セッションを作り直すたびに待ち続けるTaskが残る。
             linkTitleVoiceOverObservation?.cancel()
-            linkTitleVoiceOverObservation = model.tasks.run(.action) { [weak button] in
+            linkTitleVoiceOverObservation = model.tasks.run(.display) { [weak button] in
                 for await _ in NotificationCenter.default.notifications(named: UIAccessibility.voiceOverStatusDidChangeNotification) {
                     button?.showsMenuAsPrimaryAction = UIAccessibility.isVoiceOverRunning
                 }

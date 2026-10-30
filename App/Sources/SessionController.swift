@@ -1474,7 +1474,7 @@ final class SessionController {
     private func includeAfterHashtagMuteExpires(_ name: String, duration: Duration) {
         let serverFilters = serverFilters
         // ミュートし直したら、前の期限の待ちを止めて待ち直す。
-        tasks.run(key: "muteExpiry:tag:\(name)", .replacing, .action) { [weak self, clock, now] in
+        tasks.run(key: "muteExpiry:tag:\(name)", .replacing, .display) { [weak self, clock, now] in
             do {
                 try await clock.sleep(for: duration + .seconds(60))
                 // 覚えているフィルターも新しくし、次に開くメニューでミュートが明けたことを出す。
@@ -1703,7 +1703,7 @@ final class SessionController {
     /// Mastodonは期限の時刻に予約したジョブ（`DeleteMuteWorker`）でミュートを消すため、ちょうどの時刻ではまだ残っていることがある。1分おいてから読む。
     private func includeAfterMuteExpires(_ accountID: String, duration: Duration) {
         let relationships = profiles.relationships
-        tasks.run(key: "muteExpiry:account:\(accountID)", .replacing, .action) { [weak self, clock] in
+        tasks.run(key: "muteExpiry:account:\(accountID)", .replacing, .display) { [weak self, clock] in
             do {
                 try await clock.sleep(for: duration + .seconds(60))
                 // 覚えている関係も新しくし、次に開くメニューでミュートが明けたことを出す。
@@ -2259,12 +2259,12 @@ final class SessionController {
     private func observeRecoveries() {
         let rateLimit = rateLimit
         let network = AppDependencies.network
-        tasks.run(.action) { [weak self] in
+        tasks.run(.display) { [weak self] in
             for await _ in rateLimit.resumptions {
                 self?.recover(reason: "rate limit resumed")
             }
         }
-        tasks.run(.action) { [weak self] in
+        tasks.run(.display) { [weak self] in
             // 最初の値は今の回数なので飛ばす。
             for await _ in Observations({ network.recoveryCount }).dropFirst() {
                 self?.recover(reason: "network recovered")
@@ -2289,7 +2289,7 @@ final class SessionController {
 
     private func reportUnauthorized() {
         let authorization = authorization
-        tasks.run(.action) { _ = await authorization.reportUnauthorized() }
+        tasks.run(.display) { _ = await authorization.reportUnauthorized() }
     }
 
     /// トークンが無効だと確かめられたら、表示中の内容とアカウントのメニューは残したまま、自動の通信を止めてログインし直しを促す。

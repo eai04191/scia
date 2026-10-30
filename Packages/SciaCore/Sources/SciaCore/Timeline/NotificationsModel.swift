@@ -412,7 +412,7 @@ public final class NotificationsModel {
     /// 挿入する前に、ホームと同じく、通知のアイコンが読み込み終わるのを上限まで待つ。
     private func scheduleInsertion() {
         let interval = tuning.value(of: TuningCatalog.insertionInterval)
-        run(.action) { model in
+        run(.display) { model in
             try? await model.clock.sleep(for: .seconds(interval))
             guard !Task.isCancelled else { return }
             let wait = Duration.seconds(model.tuning.value(of: TuningCatalog.arrivalAvatarWait))

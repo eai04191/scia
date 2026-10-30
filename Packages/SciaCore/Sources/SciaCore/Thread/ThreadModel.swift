@@ -173,7 +173,7 @@ public final class ThreadModel {
         case .connected, .poll:
             // 読んでいる途中なら、その読み込みが補う。最初の読み込みに失敗していれば、ここで読み直す。
             guard !isLoading else { return }
-            load(purpose: .action)
+            load(purpose: .display)
         case .event(let event):
             // 使う人の操作によらない変化なので、削除も閉じる動きにせず、読んでいる行を動かさない。
             guard store.receive(event) else { return }

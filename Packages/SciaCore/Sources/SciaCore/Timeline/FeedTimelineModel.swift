@@ -572,7 +572,7 @@ public final class FeedTimelineModel {
     /// 挿入する前に、新着のアイコンが読み込み終わるのを上限まで待ち、行が出た時点でアイコンを描けているようにする。
     private func scheduleInsertion() {
         let interval = tuning.value(of: TuningCatalog.insertionInterval)
-        run(.action) { model in
+        run(.display) { model in
             try? await model.clock.sleep(for: .seconds(interval))
             guard !Task.isCancelled else { return }
             let wait = Duration.seconds(model.tuning.value(of: TuningCatalog.arrivalAvatarWait))

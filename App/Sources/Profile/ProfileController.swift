@@ -104,7 +104,7 @@ final class ProfileController {
         viewController.filterWarnings = FilterWarnings(filtering: store.filtering)
         viewController.headerView = header
         viewController.myAccountID = client.credential.accountID
-        viewController.onApproachingEnd = { [weak self] in self?.loadOlder(purpose: .action) }
+        viewController.onApproachingEnd = { [weak self] in self?.loadOlder(purpose: .display) }
         viewController.onRetry = { [weak self] in self?.retry() }
         // 引っぱって読み直した投稿が多く、手元の投稿との間が残ったときだけギャップの行が出る。読み直しの続きなので、押されたときだけ読む。
         viewController.onGapSelect = { [weak self] id, direction in self?.loadGap(id, from: direction) }
@@ -369,7 +369,7 @@ final class ProfileController {
     private func revealListIfReady() {
         guard listReveal == .waiting, isReadyToRevealList else { return }
         listReveal = .revealing
-        run(.action) { controller in
+        run(.display) { controller in
             guard let viewController = controller.viewController else { return }
             // 1画面に収まる行の数より多めに待つ。全部を待つと、画面の外の行のアイコンまで待たされる。
             let wait = Duration.seconds(viewController.tuning.value(of: TuningCatalog.profileAvatarWait))
