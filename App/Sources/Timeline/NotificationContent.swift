@@ -263,45 +263,14 @@ extension TimelineViewController {
     }
 }
 
-/// 通知の種類ごとの見た目と文言。
-struct NotificationAppearance {
-    /// 操作したアカウントの名前の前後に置く文言。
-    struct Phrase {
-        let before: String
-        let after: String
-        let includesName: Bool
-
-        static func named(_ after: String) -> Phrase {
-            named("", after)
-        }
-
-        static func named(_ before: String, _ after: String) -> Phrase {
-            Phrase(before: before, after: after, includesName: true)
-        }
-
-        static func unnamed(_ text: String) -> Phrase {
-            Phrase(before: text, after: "", includesName: false)
-        }
-    }
-
-    let symbolName: String
-    let color: UIColor
-    let phrase: Phrase
-
-    init(_ kind: MastodonNotification.Kind) {
-        (symbolName, color, phrase) = switch kind {
-        case .mention: ("at", .tintColor, .named("からのメンション"))
-        case .status: ("bell.fill", .tintColor, .named("が投稿しました"))
-        case .reblog: ("arrow.2.squarepath", .systemGreen, .named("がブーストしました"))
-        case .favourite: ("star.fill", .systemOrange, .named("がお気に入りに登録しました"))
-        case .follow: ("person.fill.badge.plus", .tintColor, .named("にフォローされました"))
-        case .followRequest: ("person.badge.clock.fill", .tintColor, .named("からフォローリクエストが届きました"))
-        case .poll: ("chart.bar.fill", .tintColor, .unnamed("投票が終了しました"))
-        case .update: ("pencil", .secondaryLabel, .named("がブーストした投稿を編集しました"))
-        case .quote: ("quote.bubble.fill", .tintColor, .named("が引用しました"))
-        case .quotedUpdate: ("pencil", .secondaryLabel, .named("引用した投稿を", "が編集しました"))
-        // 種類を知らない通知も、誰からかだけは分かるように出す。
-        case .other(let rawValue): ("bell", .secondaryLabel, .named("からの通知（\(rawValue)）"))
+extension NotificationAppearance {
+    /// 通知の種類の記号の色。
+    var color: UIColor {
+        switch tint {
+        case .accent: .tintColor
+        case .green: .systemGreen
+        case .orange: .systemOrange
+        case .secondary: .secondaryLabel
         }
     }
 }
