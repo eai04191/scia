@@ -363,4 +363,13 @@ struct TabLayoutSettingsTests {
         }
         #expect(TabItem.home.renamed("ボブ").rawValue == "home")
     }
+
+    /// 操作の記録には、リストやハッシュタグの名前、ハンドル、付けた名前を残さない。IDは残す。
+    @Test func logNameOmitsNamesAndHandles() {
+        #expect(TabItem.home.logName == "home")
+        #expect(TabItem.list(id: "7", title: "友だち").logName == "list:7")
+        #expect(TabItem.hashtag(name: "cat").logName == "hashtag")
+        #expect(TabItem.accountHashtag(accountID: "109", acct: "bob@remote.example", name: "scia", title: "ボブ").logName == "accountHashtag:109")
+        #expect(TabItem.profile(accountID: "109", acct: "bob@remote.example", title: "ボブ").logName == "profile:109")
+    }
 }

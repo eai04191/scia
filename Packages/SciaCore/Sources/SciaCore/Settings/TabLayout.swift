@@ -83,6 +83,18 @@ public enum TabItem: MenuItemKind {
         }
     }
 
+    /// 操作の記録に残す名前。リストの名前、ハッシュタグの名前、ハンドル、付けた名前は、何に関心があるかが分かるので含めない（docs/logging.md）。
+    /// 状態ダンプと突き合わせられるよう、サーバーが振ったIDは残す。
+    public var logName: String {
+        switch self {
+        case .list(let id, _): "\(Self.listPrefix)\(id)"
+        case .hashtag: "hashtag"
+        case .accountHashtag(let accountID, _, _, _): "\(Self.accountHashtagPrefix)\(accountID)"
+        case .profile(let accountID, _, _): "\(Self.profilePrefix)\(accountID)"
+        default: rawValue
+        }
+    }
+
     /// 同じ項目かどうかを見る値。リストは名前を含めず、ハッシュタグはそろえた名前で見る。
     private var identity: String {
         switch self {

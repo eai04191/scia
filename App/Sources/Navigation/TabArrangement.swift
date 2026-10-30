@@ -260,7 +260,7 @@ final class TabArrangement {
     private func switchMenu() -> UIMenu {
         UIMenu(children: placement.switchable.map { candidate in
             UIAction(title: candidate.title, image: UIImage(systemName: candidate.symbolName), state: candidate == switchSelection ? .on : .off) { [weak self] _ in
-                UserAction.selectTab(candidate.rawValue).record()
+                UserAction.selectTab(candidate.logName).record()
                 self?.show(candidate)
             }
         })
