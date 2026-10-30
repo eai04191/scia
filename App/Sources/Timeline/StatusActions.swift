@@ -171,9 +171,8 @@ extension TimelineViewController {
         }.withRenderingMode(.alwaysOriginal)
     }
 
-    /// メニューのアイコンの一辺。本文の文字の大きさの設定に合わせる。
     private static var menuIconSide: CGFloat {
-        UIFontMetrics(forTextStyle: .body).scaledValue(for: 22)
+        AvatarIcon.menuSide
     }
 
     /// 動く絵文字を、メニューのアイコンの大きさの、動く画像にする。
@@ -356,22 +355,7 @@ extension TimelineViewController {
 
     /// アイコンを、メニューのアイコンの大きさで一覧と同じ形に切り抜き、元の色のまま描く。動くアイコンは先頭のコマで止める。
     private static func userMenuIcon(_ avatar: UIImage, shape: AvatarShape) -> UIImage? {
-        let image = avatar.images?.first ?? avatar
-        guard image.size.width > 0, image.size.height > 0 else { return nil }
-        let side = menuIconSide
-        let bounds = CGRect(x: 0, y: 0, width: side, height: side)
-        let clip = switch shape {
-        case .roundedSquare: UIBezierPath(roundedRect: bounds, cornerRadius: side * 0.2)
-        case .circle: UIBezierPath(ovalIn: bounds)
-        }
-        let scale = max(side / image.size.width, side / image.size.height)
-        let size = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-        let format = UIGraphicsImageRendererFormat.preferred()
-        format.opaque = false
-        return UIGraphicsImageRenderer(bounds: bounds, format: format).image { _ in
-            clip.addClip()
-            image.draw(in: CGRect(x: (side - size.width) / 2, y: (side - size.height) / 2, width: size.width, height: size.height))
-        }.withRenderingMode(.alwaysOriginal)
+        AvatarIcon.image(avatar, side: menuIconSide, shape: shape)
     }
 
     /// プロフィール画面のナビゲーションバーに出す、そのユーザーのユーザーのメニュー。出す項目がなければnil。
