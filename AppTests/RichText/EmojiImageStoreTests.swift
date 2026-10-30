@@ -33,7 +33,7 @@ struct EmojiImageStoreTests {
         }
     }
 
-    private func makeStore(_ responses: Responses) -> EmojiImageStore {
+    private func makeStore(_ responses: Responses) -> EmojiImageStore<UIImage> {
         EmojiImageStore(clock: clock, retryPolicy: { RetrySchedule.Policy(initialDelay: .seconds(5), maxDelay: .seconds(60)) }) { url in
             try responses.fetch(url)
         }

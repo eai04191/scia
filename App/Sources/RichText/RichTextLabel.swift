@@ -1,18 +1,19 @@
 import SwiftUI
+import SciaCore
 import UIKit
 
 /// RichTextRendererで描いた文字列を、SwiftUIの中に出す。SwiftUIのTextはカスタム絵文字の画像を描けないため、UILabelを使う。
 /// 絵文字の画像が後から届いたら描き直す。
 struct RichTextLabel: UIViewRepresentable {
     let numberOfLines: Int
-    let emojiImages: EmojiImageStore
+    let emojiImages: EmojiImageStore<UIImage>
     /// アニメーションするカスタム絵文字を動かすか。
     let animatesEmojis: Bool
     /// 1行に入りきらないときに、「…」で切らず、行末をぼかす（`FadingLabel`）。
     let fadesTail: Bool
     let render: @MainActor () -> NSAttributedString
 
-    init(numberOfLines: Int = 0, emojiImages: EmojiImageStore = AppDependencies.emojiImages, animatesEmojis: Bool = false, fadesTail: Bool = false, render: @escaping @MainActor () -> NSAttributedString) {
+    init(numberOfLines: Int = 0, emojiImages: EmojiImageStore<UIImage> = AppDependencies.emojiImages, animatesEmojis: Bool = false, fadesTail: Bool = false, render: @escaping @MainActor () -> NSAttributedString) {
         self.numberOfLines = numberOfLines
         self.emojiImages = emojiImages
         self.animatesEmojis = animatesEmojis

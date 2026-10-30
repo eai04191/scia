@@ -6,9 +6,9 @@ import UIKit
 struct PostContentBuilder {
     let tuning: TuningStore
     let settings: AppSettings
-    let emojiImages: EmojiImageStore
-    let mediaImages: MediaImageStore
-    let avatarImages: AvatarImageStore
+    let emojiImages: EmojiImageStore<UIImage>
+    let mediaImages: MediaImageStore<UIImage>
+    let avatarImages: AvatarImageStore<UIImage>
 
     /// タップしたときの処理と添付ファイルは含めない。一覧では呼び出し側が足す。
     /// - Parameter isPinned: プロフィールの上に置く、固定された投稿。名前の上に固定されていることを示す行を出す。

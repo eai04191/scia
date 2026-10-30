@@ -60,7 +60,7 @@ final class ProfilePrivateNoteView: UIView {
     }
 
     /// メモを出す。サーバーはメモを整形しないので、書いたままの平文で出す。
-    func apply(note: String, glyphLanguage: String, emojiImages: EmojiImageStore) {
+    func apply(note: String, glyphLanguage: String, emojiImages: EmojiImageStore<UIImage>) {
         bodyLabel.attributedText = RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: emojiImages, language: glyphLanguage)
             .render(.plain(note, emojis: []))
         accessibilityLabel = "メモ、\(note)"

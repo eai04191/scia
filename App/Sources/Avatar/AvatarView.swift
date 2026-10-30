@@ -19,18 +19,18 @@ final class AvatarView: UIView {
         var showsBorder = true
     }
 
-    private let store: AvatarImageStore
+    private let store: AvatarImageStore<UIImage>
     private let playsAnimatedImages: () -> Bool
     private let imageView = UIImageView()
     private var content: Content?
-    private(set) var loadingKey: AvatarImageStore.Key?
+    private(set) var loadingKey: AvatarImageKey?
     private var loadTask: Task<Void, Never>?
     private var observers: [any NSObjectProtocol] = []
     /// 描く画像が変わったときに呼ぶ。2つ目は、読み込みを待って届いた画像か。端末に残っていた画像をすぐに描いたときと、画像を消したときはfalse。
     var onShowImage: ((UIImage?, _ arrived: Bool) -> Void)?
 
     /// - Parameter playsAnimatedImages: 端末の設定が動く画像を許すか。`content.animates`でも、許さなければ静止画で描く。
-    init(store: AvatarImageStore, playsAnimatedImages: @escaping () -> Bool = { AnimatedImagePlayback.isAllowed }) {
+    init(store: AvatarImageStore<UIImage>, playsAnimatedImages: @escaping () -> Bool = { AnimatedImagePlayback.isAllowed }) {
         self.store = store
         self.playsAnimatedImages = playsAnimatedImages
         super.init(frame: .zero)
@@ -123,8 +123,8 @@ final class AvatarView: UIView {
         side: CGFloat,
         scale: CGFloat,
         playsAnimatedImages: Bool = AnimatedImagePlayback.isAllowed
-    ) -> AvatarImageStore.Key {
-        AvatarImageStore.Key(url: url, maxPixelSize: Int((side * scale).rounded(.up)), animates: animates && playsAnimatedImages)
+    ) -> AvatarImageKey {
+        AvatarImageKey(url: url, maxPixelSize: Int((side * scale).rounded(.up)), animates: animates && playsAnimatedImages)
     }
 
     /// 画像をすぐに描く。読み込み中のフェードの途中なら止める。

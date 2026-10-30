@@ -40,7 +40,7 @@ struct AnimatedEmojiTests {
     }
 
     /// `.gif`のURLには`gifFrames`コマのGIF、`.png`のURLには静止画を返すストア。
-    private func store(gifFrames: Int = 3) throws -> EmojiImageStore {
+    private func store(gifFrames: Int = 3) throws -> EmojiImageStore<UIImage> {
         let gif = try imageData(.gif, frames: gifFrames)
         let png = try imageData(.png, frames: 1)
         return EmojiImageStore { url in url.pathExtension == "gif" ? gif : png }
@@ -49,7 +49,7 @@ struct AnimatedEmojiTests {
     /// 静止画とアニメーション版が届くまで待ってから、`text`を描いたラベル。
     /// - Parameter lineBreakMode: はみ出す分の扱い。本物の本文や名前と同じく、文字列の段落に入れる。UILabelは文字列を入れたときに、
     ///   段落の設定で自分の`lineBreakMode`を上書きするため、ラベルに入れても効かない。
-    private func label(_ text: RichText, store: EmojiImageStore, numberOfLines: Int = 0, lineBreakMode: NSLineBreakMode = .byWordWrapping, width: CGFloat = 300) async throws -> LinkLabel {
+    private func label(_ text: RichText, store: EmojiImageStore<UIImage>, numberOfLines: Int = 0, lineBreakMode: NSLineBreakMode = .byWordWrapping, width: CGFloat = 300) async throws -> LinkLabel {
         let renderer = RichTextRenderer(font: font, textColor: .label, emojiImages: store, language: "ja")
         let emojis = text.blocks.flatMap(\.inlines).compactMap { inline -> CustomEmoji? in
             if case .emoji(let emoji) = inline { emoji } else { nil }

@@ -87,7 +87,7 @@ enum AppDependencies {
         if range == nil, let data = await PreviewImages.data(for: url) {
             return data
         }
-        return try await MediaImageStore.download(url, range: range)
+        return try await MediaRangeDownload.data(from: url, range: range, remoteFetch: remoteFetch, http: http)
     }
 
     static let mediaDownloads = MediaDownloads(files: mediaFiles)

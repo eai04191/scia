@@ -27,7 +27,7 @@ struct TimelineMediaTests {
 
         var fetched: [URL] { urls.withLock { $0 } }
 
-        @MainActor func makeStore() -> MediaImageStore {
+        @MainActor func makeStore() -> MediaImageStore<UIImage> {
             MediaImageStore(files: .temporary()) { [self] url, _ in
                 urls.withLock { $0.append(url) }
                 throw URLError(.notConnectedToInternet)
@@ -401,7 +401,7 @@ struct TimelineMediaTests {
 
     /// blurhashの下地は、添付ファイルの縦横比で、長い辺を32ピクセルにする。ビューアで画像の枠を決めるのに使うため。
     @Test func placeholderKeepsAspectRatio() throws {
-        let store = MediaImageStore.offline
+        let store = MediaImageStore<UIImage>.offline
         let wide = try #require(store.placeholder(for: "LEHV6nWB2yk8pyo0adR*.7kCMdnj", aspectRatio: 2))
         let tall = try #require(store.placeholder(for: "LEHV6nWB2yk8pyo0adR*.7kCMdnj", aspectRatio: 0.5))
 

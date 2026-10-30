@@ -23,7 +23,7 @@ final class AnimatedEmojiOverlay {
         }
     }
 
-    private let store: EmojiImageStore
+    private let store: EmojiImageStore<UIImage>
     /// アニメーション版が届いたときと、設定が変わったときに、文字を差し替え直す。
     private let onChange: @MainActor () -> Void
     /// 今の文字列にある絵文字の、元の画像のURL。届いたアニメーションがこのラベルのものかを見分ける。
@@ -35,7 +35,7 @@ final class AnimatedEmojiOverlay {
     private var entriesGeneration = 0
     private var observers: [any NSObjectProtocol] = []
 
-    init(store: EmojiImageStore, onChange: @escaping @MainActor () -> Void) {
+    init(store: EmojiImageStore<UIImage>, onChange: @escaping @MainActor () -> Void) {
         self.store = store
         self.onChange = onChange
         store.addListener(owner: self) { [weak self] urls in

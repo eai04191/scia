@@ -217,9 +217,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private let refreshControl = UIRefreshControl()
     private var refreshTask: Task<Void, Never>?
     let tuning: TuningStore
-    let emojiImages: EmojiImageStore
-    let mediaImages: MediaImageStore
-    let avatarImages: AvatarImageStore
+    let emojiImages: EmojiImageStore<UIImage>
+    let mediaImages: MediaImageStore<UIImage>
+    let avatarImages: AvatarImageStore<UIImage>
     let network: NetworkConditionsMonitor
     let settings: AppSettings
     /// スクロールが止まったときに見えている画像を、ビューアで開く元の画像で先読みする。セッションが入れる。nilなら先読みしない。
@@ -255,9 +255,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         texts: Texts = .home,
         refresh: @escaping @MainActor () async -> Void,
         tuning: TuningStore = AppDependencies.tuning,
-        emojiImages: EmojiImageStore = AppDependencies.emojiImages,
-        mediaImages: MediaImageStore = AppDependencies.mediaImages,
-        avatarImages: AvatarImageStore = AppDependencies.avatarImages,
+        emojiImages: EmojiImageStore<UIImage> = AppDependencies.emojiImages,
+        mediaImages: MediaImageStore<UIImage> = AppDependencies.mediaImages,
+        avatarImages: AvatarImageStore<UIImage> = AppDependencies.avatarImages,
         network: NetworkConditionsMonitor = AppDependencies.network,
         settings: AppSettings = AppDependencies.settings
     ) {
@@ -641,7 +641,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// 通知のアイコンは文字に差し込んでいるため、届いたらその人からの通知を描き直す。投稿のアイコンはビューが自分で受け取る。
-    private func avatarImageDidLoad(_ key: AvatarImageStore.Key) {
+    private func avatarImageDidLoad(_ key: AvatarImageKey) {
         let ids = dataSource.snapshot().itemIdentifiers.filter { id in
             guard case .notification(let notification) = entries[id] else { return false }
             return avatarContent(of: notification.account).url == key.url

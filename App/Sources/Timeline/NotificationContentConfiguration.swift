@@ -23,10 +23,10 @@ struct NotificationContentConfiguration: UIContentConfiguration {
     var metrics: Metrics
     /// 再掲した投稿に、お気に入りやブーストをしたことを示す、行の下の端の光。
     var reactionGlow: ReactionGlow?
-    let mediaImages: MediaImageStore
-    let avatarImages: AvatarImageStore
+    let mediaImages: MediaImageStore<UIImage>
+    let avatarImages: AvatarImageStore<UIImage>
     /// 見出し、注意書き、本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
-    var emojiImages: EmojiImageStore?
+    var emojiImages: EmojiImageStore<UIImage>?
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     var onRevealMedia: (() -> Void)?

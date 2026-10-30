@@ -216,7 +216,7 @@ extension TimelineViewController {
     }
 
     /// 通知の組み方ごとに、`contentConfiguration(for:itemID:base:)`が描くアイコン。
-    func avatarKeys(for notification: MastodonNotification) -> [AvatarImageStore.Key] {
+    func avatarKeys(for notification: MastodonNotification) -> [AvatarImageKey] {
         // 投稿として組む通知は、投稿と同じアイコンを出し、誰が何をしたかの行にはアイコンを出さない。
         if case .post = notification.layout, let status = notification.status {
             return avatarKeys(for: status)
@@ -236,7 +236,7 @@ extension TimelineViewController {
     }
 
     /// 名前の前に差し込むアイコンの画像。文字に描き込むため、動くアイコンでも先頭のコマで止める。URLがなければnil。
-    private func notificationAvatarKey(of account: Account, side: CGFloat) -> AvatarImageStore.Key? {
+    private func notificationAvatarKey(of account: Account, side: CGFloat) -> AvatarImageKey? {
         avatarContent(of: account).url.map { url in
             AvatarView.key(url: url, animates: false, side: side, scale: traitCollection.displayScale)
         }

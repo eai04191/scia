@@ -54,7 +54,7 @@ final class MediaPhotoStackView: PhotoStackView {
         return photos[min(index, shown - 1)].tile
     }
 
-    init(store: MediaImageStore, tuning: TuningStore = AppDependencies.tuning) {
+    init(store: MediaImageStore<UIImage>, tuning: TuningStore = AppDependencies.tuning) {
         self.tuning = tuning
         super.init(store: store, photoCount: 4)
         front.isUserInteractionEnabled = true

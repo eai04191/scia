@@ -71,7 +71,7 @@ final class MediaGridView: UIView {
     /// ぼかしがタップされたときに呼ぶ。
     var onReveal: (() -> Void)?
 
-    private let store: MediaImageStore
+    private let store: MediaImageStore<UIImage>
     /// サムネイルとぼかしを載せる。1列に並べるときだけ横にスクロールでき、ほかでは自分と同じ大きさで動かない。
     private let tileContainer = RowContentScrollView()
     private var tiles: [MediaTileView] = []
@@ -82,7 +82,7 @@ final class MediaGridView: UIView {
     private var photoStack: MediaPhotoStackView?
     private(set) var content: Content?
 
-    init(store: MediaImageStore) {
+    init(store: MediaImageStore<UIImage>) {
         self.store = store
         super.init(frame: .zero)
         tileContainer.showsHorizontalScrollIndicator = false
@@ -301,7 +301,7 @@ final class RowContentScrollView: UIScrollView {}
 final class MediaTileView: UIButton, MediaViewerSource {
     /// ビューアで開く。タップに選んだ操作によらず、メニューの「開く」と持ち上げた画像のタップでも、これで開く。
     var onOpen: (() -> Void)?
-    private let store: MediaImageStore
+    private let store: MediaImageStore<UIImage>
     private let settings: AppSettings
     private let tuning: TuningStore
     private let thumbnailView = FocusCroppedImageView()
@@ -335,7 +335,7 @@ final class MediaTileView: UIButton, MediaViewerSource {
         let aspectRatio: Double?
     }
 
-    init(store: MediaImageStore, settings: AppSettings = AppDependencies.settings, tuning: TuningStore = AppDependencies.tuning) {
+    init(store: MediaImageStore<UIImage>, settings: AppSettings = AppDependencies.settings, tuning: TuningStore = AppDependencies.tuning) {
         self.store = store
         self.settings = settings
         self.tuning = tuning

@@ -85,7 +85,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
     private(set) var content: Content = .sections([], customStatus: .loading)
     private var customStatus: CustomEmojiStatus?
     private var sections: [EmojiPaletteSection] = []
-    private let emojiImages: EmojiImageStore
+    private let emojiImages: EmojiImageStore<UIImage>
     private lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: makeLayout())
     private lazy var dataSource = makeDataSource()
     /// 検索欄の入れ物。一覧の上端に重ね、一覧の端の効果を、検索欄の形に合わせて描かせる。
@@ -121,7 +121,7 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
         let key: String
     }
 
-    init(emojiImages: EmojiImageStore) {
+    init(emojiImages: EmojiImageStore<UIImage>) {
         self.emojiImages = emojiImages
         super.init(frame: .zero)
         configureViews()
@@ -659,7 +659,7 @@ final class EmojiPaletteCell: UICollectionViewCell {
         didSet { highlight.isHidden = !isHighlighted }
     }
 
-    func configure(_ emoji: PaletteEmoji, store: EmojiImageStore, animates: Bool, emojiStyle: EmojiStyle) {
+    func configure(_ emoji: PaletteEmoji, store: EmojiImageStore<UIImage>, animates: Bool, emojiStyle: EmojiStyle) {
         switch emoji {
         case .custom(let custom):
             label.isHidden = true

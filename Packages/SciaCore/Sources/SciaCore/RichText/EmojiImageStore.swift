@@ -1,14 +1,13 @@
-import Foundation
+import CoreGraphics
+public import Foundation
 import os
-import SciaCore
-import UIKit
 
-/// カスタム絵文字の画像を読み込み、メモリに持つ。
+/// カスタム絵文字の画像を読み込み、メモリに持つ。`Image`は描く側の画像の型で、iOSでは`UIImage`にする。
 /// 静止画もアニメーション版も、高さを`pixelHeight`にそろえて縮めて持ち、上限を設けて、あふれたら古いものから捨て、また要るときに読み直す。
 /// ストアはアプリ全体で1つで、タイムラインやアカウント、絵文字のパレットをまたいで溜まるため。
 @MainActor
-final class EmojiImageStore {
-    typealias Fetch = @Sendable (URL) async throws -> Data
+public final class EmojiImageStore<Image: Sendable> {
+    public typealias Fetch = @Sendable (URL) async throws -> Data
 
     private struct Listener {
         weak var owner: AnyObject?
@@ -30,15 +29,16 @@ final class EmojiImageStore {
     /// 文字の中の絵文字は行の高さ（ふつうの本文で20〜30pt）に合わせて描き、iPhoneの画面は1ptを3ピクセルで描くので、32ptまでは拡大せずに描けてぼけない。
     /// 幅は縦横の比で決まるので、長い辺ではなく高さで縮める（`ImageDecoder.maxPixelSize(forHeight:of:)`）。
     /// 元の大きさのまま持つとメモリを使いすぎるため縮める。文字サイズの設定を大きくして行の高さが32ptを超えると、拡大して描くので少しぼける。
-    nonisolated static let pixelHeight = 96
+    public nonisolated static var pixelHeight: Int { 96 }
 
     private let fetch: Fetch
+    private let maker: PlatformImageMaker<Image>
     /// 縮めた静止画。96pxの高さで1枚40KBほどなので、正方形の絵文字なら800個ほど入る。
     /// 静止画は行を描き直すたびにここから求め直す。上限を超えたときだけ、使ってから一番長いものから捨てる。
     /// `NSCache`には持たない。`NSCache`はシステムの判断で中身を捨てるため。iOSシミュレーターでは、アプリが裏に回った知らせを送った直後に捨てた。
     /// 画面に出ている絵文字が捨てられると空けた場所で描いて読み直し、読み終えるとまた行を描き直す。
     /// Macで名前の絵文字が出たり消えたりを繰り返したときに`NSCache`から捨てられていたかと、何が捨てさせたかは確かめていない。
-    private var stills = CostLimitedCache<URL, UIImage>(totalCostLimit: 32 * 1024 * 1024)
+    private var stills = CostLimitedCache<URL, Image>(totalCostLimit: 32 * 1024 * 1024)
     /// 読めなかった静止画。読み直している途中も、読めるまでは`:shortcode:`の文字で描き続けるため、読んでいる途中とは分けて持つ。
     private var failedStills: Set<URL> = []
     /// 静止画を読んでいる途中のURL。
@@ -59,19 +59,21 @@ final class EmojiImageStore {
     private var pendingNotification: Set<URL> = []
     private let logger = SciaLog.logger(category: "emoji")
 
-    init(
-        clock: any Clock<Duration> = AppDependencies.clock,
-        retryPolicy: @escaping @MainActor () -> RetrySchedule.Policy = { TuningCatalog.imageRetry(in: AppDependencies.tuning) },
+    public init(
+        clock: any Clock<Duration>,
+        retryPolicy: @escaping @MainActor () -> RetrySchedule.Policy,
+        maker: PlatformImageMaker<Image>,
         fetch: @escaping Fetch
     ) {
         self.fetch = fetch
+        self.maker = maker
         retry = RetrySchedule(policy: retryPolicy, clock: clock)
     }
 
     /// 読み込み済みなら画像を返す。まだなら読み込みを始めてnilを返す。
     /// 読めなかった画像は、間隔をおいてから読み直す。
     /// - Parameter retriesNow: 使う人が自分で見に行った操作（投稿のメニューを開くなど）で、間隔を待たずに読み直す。
-    func image(for url: URL, retriesNow: Bool = false) -> UIImage? {
+    public func image(for url: URL, retriesNow: Bool = false) -> Image? {
         if let image = stills.value(forKey: url) {
             return image
         }
@@ -83,7 +85,7 @@ final class EmojiImageStore {
     }
 
     /// `url`のアニメーションを読み終えたか。動かすか静止画で描くかが決まっていればtrue。読み始めていなければfalse。
-    func hasFinishedLoadingAnimation(for url: URL) -> Bool {
+    public func hasFinishedLoadingAnimation(for url: URL) -> Bool {
         switch animationStates[url] {
         case .animated, .still, .failed: true
         case .loading, nil: false
@@ -92,7 +94,7 @@ final class EmojiImageStore {
 
     /// アニメーションする絵文字の、コマに分けた画像。`url`は絵文字の元の画像（`CustomEmoji.url`）を渡す。
     /// まだなら読み込みを始めてnilを返し、読み終えたら`addListener`で登録した処理に`url`を知らせる。1コマしかない画像や読めなかった画像でもnil。
-    func animation(for url: URL) -> EmojiAnimation? {
+    public func animation(for url: URL) -> EmojiAnimation? {
         switch animationStates[url] {
         case .animated:
             if let animation = animations.object(forKey: url as NSURL) ?? liveAnimations.object(forKey: url as NSURL) {
@@ -116,24 +118,25 @@ final class EmojiImageStore {
         }
     }
 
-    func hasFailed(_ url: URL) -> Bool {
+    public func hasFailed(_ url: URL) -> Bool {
         failedStills.contains(url)
     }
 
     /// 画像が届いたときに呼ぶ処理を登録する。`owner`が解放されると呼ばれなくなる。
-    func addListener(owner: AnyObject, onLoad: @escaping @MainActor (Set<URL>) -> Void) {
+    public func addListener(owner: AnyObject, onLoad: @escaping @MainActor (Set<URL>) -> Void) {
         listeners.append(Listener(owner: owner, onLoad: onLoad))
     }
 
     /// - Parameter purpose: 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
     private func load(_ url: URL, purpose: RequestPurpose) {
         guard loading.insert(url).inserted else { return }
+        let maker = maker
         RequestPurpose.$current.withValue(purpose) { Task {
             defer { loading.remove(url) }
             do {
                 let data = try await fetch(url)
                 guard let image = await Self.decodeStill(data) else { throw DecodeError() }
-                stills.setValue(image, forKey: url, cost: Self.cost(of: image))
+                stills.setValue(maker.still(image), forKey: url, cost: PlatformImageMaker<Image>.cost(of: image))
                 failedStills.remove(url)
                 retry.recordSuccess(for: url)
             } catch {
@@ -145,18 +148,14 @@ final class EmojiImageStore {
         } }
     }
 
-    struct DecodeError: Error {}
+    public struct DecodeError: Error {}
 
     /// 高さを`pixelHeight`にそろえて縮め、描く前に展開しておく。描くたびにメインスレッドで原寸のまま展開しないため。
     /// カスタム絵文字は文字と一緒にSDRで描く決まりなので（docs/hdr-display.md）、HDRを求めずに読む。
     @concurrent
-    private static func decodeStill(_ data: Data) async -> UIImage? {
+    private static func decodeStill(_ data: Data) async -> CGImage? {
         let maxPixelSize = ImageDecoder.maxPixelSize(forHeight: pixelHeight, of: data)
-        return ImageDecoder.thumbnail(of: data, maxPixelSize: maxPixelSize, dynamicRange: .standard).map { UIImage(cgImage: $0) }
-    }
-
-    private nonisolated static func cost(of image: UIImage) -> Int {
-        image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
+        return ImageDecoder.thumbnail(of: data, maxPixelSize: maxPixelSize, dynamicRange: .standard)
     }
 
     /// 動かすかは行に描くときに決めるため、いつも自動の通信として送る。
@@ -207,10 +206,10 @@ final class EmojiImageStore {
 }
 
 /// コマに分けたアニメーションする絵文字。描いている層が持っている間は、ストアから捨てても同じものを使い回す。
-final class EmojiAnimation: Sendable {
-    let image: AnimatedImage
+public final class EmojiAnimation: Sendable {
+    public let image: AnimatedImage
 
-    init(_ image: AnimatedImage) {
+    public init(_ image: AnimatedImage) {
         self.image = image
     }
 }

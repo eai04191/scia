@@ -16,7 +16,7 @@ struct RichTextRendererTests {
         return CustomEmoji(shortcode: shortcode, url: url, staticUrl: url)
     }
 
-    private func renderer(_ store: EmojiImageStore, paragraphSpacing: CGFloat = 0) -> RichTextRenderer {
+    private func renderer(_ store: EmojiImageStore<UIImage>, paragraphSpacing: CGFloat = 0) -> RichTextRenderer {
         RichTextRenderer(font: font, textColor: .label, paragraphSpacing: paragraphSpacing, emojiImages: store, language: "ja")
     }
 
@@ -235,7 +235,7 @@ struct RichTextRendererTests {
 
     @Test func failedEmojiFallsBackToShortcode() async throws {
         let blobcat = try emoji("blobcat")
-        let store = EmojiImageStore.offline
+        let store = EmojiImageStore<UIImage>.offline
         let loaded = LoadRecorder()
         store.addListener(owner: loaded) { urls in loaded.urls.formUnion(urls) }
         let text = RichText.plain("a:blobcat:", emojis: [blobcat])

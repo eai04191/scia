@@ -136,7 +136,7 @@ struct NotificationAppearanceEditorView: View {
 final class AvatarArrivals {
     private(set) var count = 0
 
-    init(store: AvatarImageStore) {
+    init(store: AvatarImageStore<UIImage>) {
         store.addListener(owner: self) { [weak self] _ in
             self?.count += 1
         }

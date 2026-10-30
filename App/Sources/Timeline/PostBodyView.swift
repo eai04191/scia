@@ -114,8 +114,8 @@ final class PostBodyView: UIView {
     /// 投票の選択肢やボタンが押されたときに呼ぶ。選んだ状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onPollAction: ((PollView.Action) -> Void)?
 
-    private let mediaImages: MediaImageStore
-    private let avatarImages: AvatarImageStore
+    private let mediaImages: MediaImageStore<UIImage>
+    private let avatarImages: AvatarImageStore<UIImage>
     private let textLabel = LinkLabel()
     /// 本文の最初と最後のベースラインの位置。本文の上下のすき間は字面から測るので、「投稿の見た目」のプレビューで字面の枠を求めるのに使う。
     private let textFirstBaselineGuide = UILayoutGuide()
@@ -308,7 +308,7 @@ final class PostBodyView: UIView {
     }
 
     /// 注意書きと本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
-    var emojiImages: EmojiImageStore? {
+    var emojiImages: EmojiImageStore<UIImage>? {
         get { textLabel.emojiImages }
         set {
             textLabel.emojiImages = newValue
@@ -318,7 +318,7 @@ final class PostBodyView: UIView {
         }
     }
 
-    init(mediaImages: MediaImageStore, avatarImages: AvatarImageStore) {
+    init(mediaImages: MediaImageStore<UIImage>, avatarImages: AvatarImageStore<UIImage>) {
         self.mediaImages = mediaImages
         self.avatarImages = avatarImages
         super.init(frame: .zero)

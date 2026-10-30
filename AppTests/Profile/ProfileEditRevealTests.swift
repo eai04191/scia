@@ -15,7 +15,7 @@ struct ProfileEditRevealTests {
     private static let avatarURL = URL(string: "https://example.social/avatars/alice.png")
     private static let headerURL = URL(string: "https://example.social/headers/alice.png")
 
-    private func makeController(images: MediaImageStore) throws -> (ProfileEditViewController, UIWindow) {
+    private func makeController(images: MediaImageStore<UIImage>) throws -> (ProfileEditViewController, UIWindow) {
         let account = Account(
             id: "1",
             username: "alice",

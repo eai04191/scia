@@ -19,7 +19,7 @@ final class MediaViewerController: UIViewController {
     private var items: [MediaViewerItem]
     /// 投稿欄で選んだメディアを開いたときの操作。投稿の添付ファイルを見るときはnil。
     private let draftEditing: Editing?
-    private let store: MediaImageStore
+    private let store: MediaImageStore<UIImage>
     /// HDRのメディアを描く明るさを読む設定。
     private let settings: AppSettings
     private let pageController = UIPageViewController(transitionStyle: .scroll, navigationOrientation: .horizontal, options: [.interPageSpacing: 16])
@@ -156,7 +156,7 @@ final class MediaViewerController: UIViewController {
     init(
         items: [MediaViewerItem],
         startIndex: Int,
-        store: MediaImageStore,
+        store: MediaImageStore<UIImage>,
         dragToDismiss: DragToDismiss,
         timing: Timing,
         editing: Editing? = nil,
@@ -188,7 +188,7 @@ final class MediaViewerController: UIViewController {
     convenience init(
         attachments: [MediaAttachment],
         startIndex: Int,
-        store: MediaImageStore,
+        store: MediaImageStore<UIImage>,
         dragToDismiss: DragToDismiss,
         timing: Timing,
         transfers: MediaTransferCenter? = nil,
@@ -1757,7 +1757,7 @@ extension MediaViewerController {
     static func present(
         attachments: [MediaAttachment],
         startIndex: Int,
-        store: MediaImageStore,
+        store: MediaImageStore<UIImage>,
         dragToDismiss: DragToDismiss,
         timing: Timing,
         from presenter: UIViewController,
@@ -1898,7 +1898,7 @@ extension MediaPageController: UIContextMenuInteractionDelegate {
 
 /// 画像のページ。一覧のサムネイルをすぐに出し、元の大きさの画像が届いたら差し替える。
 final class ImagePageController: MediaPageController {
-    private let store: MediaImageStore
+    private let store: MediaImageStore<UIImage>
     private let zoomView = ZoomingImageView()
     private let spinner = UIActivityIndicatorView(style: .medium)
     private let failureLabel = UILabel()
@@ -1931,7 +1931,7 @@ final class ImagePageController: MediaPageController {
     private var shownLocalThumbnail: UIImage?
 
     /// - Parameter preview: 一覧で読み込んだサムネイル。元の画像が届くまでの下地にする。
-    init(item: MediaViewerItem, store: MediaImageStore, preview: UIImage?) {
+    init(item: MediaViewerItem, store: MediaImageStore<UIImage>, preview: UIImage?) {
         self.store = store
         self.preview = preview
         super.init(item: item)
@@ -2089,7 +2089,7 @@ final class ImagePageController: MediaPageController {
         loadedLocalURL = file.url
         loadTask?.cancel()
         loadTask = Task { [weak self] in
-            let image = await LocalMediaThumbnail.make(for: file, maxPixelSize: CGFloat(MediaImageStore.fullPixelSize))
+            let image = await LocalMediaThumbnail.make(for: file, maxPixelSize: CGFloat(MediaImagePixelSize.full))
             guard let self, !Task.isCancelled else { return }
             self.spinner.stopAnimating()
             if let image {
@@ -2133,7 +2133,7 @@ final class ImagePageController: MediaPageController {
         }
         loadTask = Task { [weak self, store] in
             // ビューアは使う人が開いたものなので、前に読めなかった画像も間隔を待たずに読み直す。
-            let image = try? await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true, retriesNow: true)
+            let image = try? await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true, retriesNow: true)
             guard let self, !Task.isCancelled else { return }
             self.spinner.stopAnimating()
             if let image {

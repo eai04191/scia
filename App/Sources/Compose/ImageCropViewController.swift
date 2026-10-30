@@ -243,7 +243,7 @@ final class ImageCropViewController: UIViewController {
 
     private func load() {
         Task { [weak self, file] in
-            let image = await LocalMediaThumbnail.make(for: file, maxPixelSize: CGFloat(MediaImageStore.fullPixelSize))
+            let image = await LocalMediaThumbnail.make(for: file, maxPixelSize: CGFloat(MediaImagePixelSize.full))
             guard let self else { return }
             self.spinner.stopAnimating()
             guard let image else {

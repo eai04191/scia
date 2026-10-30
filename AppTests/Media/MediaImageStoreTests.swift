@@ -28,7 +28,7 @@ struct MediaImageStoreTests {
         let url = try #require(URL(string: "https://files.example.social/original/abc.jpg"))
 
         #expect(await store.hasOriginal(for: url) == false)
-        _ = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
+        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true)
 
         #expect(await store.hasOriginal(for: url))
         let file = try #require(await files.file(for: url))
@@ -53,10 +53,10 @@ struct MediaImageStoreTests {
         let files = MediaFileCache.temporary()
         let store = MediaImageStore(files: files) { _, _ in data }
         let url = try #require(URL(string: "https://files.example.social/original/abc.png"))
-        _ = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
+        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true)
         try FileManager.default.removeItem(at: files.directory)
 
-        _ = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
+        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true)
 
         #expect(await store.hasOriginal(for: url))
     }
@@ -69,7 +69,7 @@ struct MediaImageStoreTests {
         _ = try await files.store(data, named: "abc.png", for: url, generation: 0)
         let store = MediaImageStore(files: files) { _, _ in throw URLError(.notConnectedToInternet) }
 
-        let image = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
+        let image = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true)
 
         #expect(image.size == CGSize(width: 8, height: 8))
     }
@@ -82,7 +82,7 @@ struct MediaImageStoreTests {
         _ = try await files.store(Data("broken".utf8), named: "abc.png", for: url, generation: 0)
         let store = MediaImageStore(files: files) { _, _ in data }
 
-        _ = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true)
+        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true)
 
         let file = try #require(await files.file(for: url))
         #expect(try Data(contentsOf: file) == data)
@@ -204,7 +204,7 @@ struct MediaImageStoreTests {
 
         #expect(await prefetched.contains(url))
         #expect(await files.contains(url) == false)
-        #expect(store.cachedImage(for: url, maxPixelSize: MediaImageStore.fullPixelSize) == nil)
+        #expect(store.cachedImage(for: url, maxPixelSize: MediaImagePixelSize.full) == nil)
         #expect(purposes.withLock { $0 } == [.prefetch])
 
         // 置いてあれば、読み直さない。
@@ -225,7 +225,7 @@ struct MediaImageStoreTests {
         let url = try #require(URL(string: "https://files.example.social/original/1.png"))
         await store.prefetchOriginal(url, purpose: .prefetch)
 
-        _ = try await store.image(for: url, maxPixelSize: MediaImageStore.fullPixelSize, keepsOriginal: true, retriesNow: true)
+        _ = try await store.image(for: url, maxPixelSize: MediaImagePixelSize.full, keepsOriginal: true, retriesNow: true)
 
         #expect(fetches.withLock { $0 } == 1)
         #expect(await files.contains(url))

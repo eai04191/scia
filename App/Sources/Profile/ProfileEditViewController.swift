@@ -18,7 +18,7 @@ final class ProfileEditViewController: UIViewController {
 
     let editor: ProfileEditor
     private let textCompletion: TextInputCompletion
-    private let mediaImages: MediaImageStore
+    private let mediaImages: MediaImageStore<UIImage>
     private let settings: AppSettings
     private let tuning: TuningStore
     /// 表を出す前に画像を待つ上限を数える。
@@ -80,7 +80,7 @@ final class ProfileEditViewController: UIViewController {
         case flags
     }
 
-    init(editor: ProfileEditor, completion: TextInputCompletion, mediaImages: MediaImageStore = AppDependencies.mediaImages, settings: AppSettings = AppDependencies.settings, tuning: TuningStore = AppDependencies.tuning, clock: any Clock<Duration> = AppDependencies.clock) {
+    init(editor: ProfileEditor, completion: TextInputCompletion, mediaImages: MediaImageStore<UIImage> = AppDependencies.mediaImages, settings: AppSettings = AppDependencies.settings, tuning: TuningStore = AppDependencies.tuning, clock: any Clock<Duration> = AppDependencies.clock) {
         self.editor = editor
         self.clock = clock
         textCompletion = completion

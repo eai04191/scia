@@ -1,65 +1,72 @@
-import Foundation
+public import Foundation
 import ImageIO
 import os
-import SciaCore
-import UIKit
 
-/// アイコンの画像を読み込み、メモリに持つ。
+/// アイコンの画像を読み込み、メモリに持つ。`Image`は描く側の画像の型で、iOSでは`UIImage`にする。
 ///
 /// 絵文字と違って、スクロールし続けるとアカウントの数だけ増えるため、上限のあるキャッシュに入れる。
 /// 描画のたびにメインスレッドで展開しないよう、表示する大きさまで縮めて展開したものを持つ。
 @MainActor
-final class AvatarImageStore {
-    typealias Fetch = @Sendable (URL) async throws -> Data
+public final class AvatarImageStore<Image: Sendable> {
+    public typealias Fetch = @Sendable (URL) async throws -> Data
 
     /// アニメーションするアイコンで、展開するコマ数の上限。これより長いものは動かさず、先頭のコマで止める。
     /// 1コマ120ピクセル四方で60KBほどのため、上限まで展開しても1つ数MBに収まる。
-    nonisolated static let maxFrameCount = 100
+    public nonisolated static var maxFrameCount: Int { 100 }
 
     private let fetch: Fetch
-    private let cache = NSCache<NSString, UIImage>()
-    private var inFlight: [Key: Task<UIImage, any Error>] = [:]
+    private let maker: PlatformImageMaker<Image>
+    private let cache = NSCache<NSString, Entry>()
+    private var inFlight: [AvatarImageKey: Task<Decoded, any Error>] = [:]
     /// 読めなかった画像。先読みと新着の挿入前の待ちでは読み直さず、読めないアイコンのために通信を増やしたり挿入を遅らせたりしない。
     /// 行に描くときは、間隔をおいてから読み直す。読めたら忘れる。
     private var retry: RetrySchedule
     private var listeners: [Listener] = []
     private let logger = SciaLog.logger(category: "avatar")
     /// 読み込みを待つ期限の時計。テストでは手で進める時計に替える。
-    let clock: any Clock<Duration>
+    public let clock: any Clock<Duration>
 
-    init(
-        clock: any Clock<Duration> = AppDependencies.clock,
-        retryPolicy: @escaping @MainActor () -> RetrySchedule.Policy = { TuningCatalog.imageRetry(in: AppDependencies.tuning) },
+    public init(
+        clock: any Clock<Duration>,
+        retryPolicy: @escaping @MainActor () -> RetrySchedule.Policy,
+        maker: PlatformImageMaker<Image>,
         fetch: @escaping Fetch
     ) {
         self.clock = clock
         self.fetch = fetch
+        self.maker = maker
         retry = RetrySchedule(policy: retryPolicy, clock: clock)
         // 120ピクセル四方の止まった画像なら500枚ほど入る大きさ。
         cache.totalCostLimit = 32 * 1_024 * 1_024
     }
 
-    struct Key: Hashable {
-        let url: URL
-        let maxPixelSize: Int
-        /// コマを全部展開するか。オフなら先頭のコマだけにする。
-        let animates: Bool
+    /// キャッシュに入れる値。`NSCache`はクラスしか持てないため包む。
+    private final class Entry {
+        let image: Image
 
-        var cacheKey: NSString { "\(maxPixelSize) \(animates) \(url.absoluteString)" as NSString }
+        init(_ image: Image) {
+            self.image = image
+        }
+    }
+
+    /// 展開した画像と、それが使うメモリのバイト数。
+    private struct Decoded: Sendable {
+        let image: Image
+        let cost: Int
     }
 
     private struct Listener {
         weak var owner: AnyObject?
-        let onLoad: @MainActor (Key) -> Void
+        let onLoad: @MainActor (AvatarImageKey) -> Void
     }
 
-    func cachedImage(for key: Key) -> UIImage? {
-        cache.object(forKey: key.cacheKey)
+    public func cachedImage(for key: AvatarImageKey) -> Image? {
+        cache.object(forKey: key.cacheKey)?.image
     }
 
     /// 読み込み済みなら画像を返す。まだなら読み込みを始めてnilを返し、届いたら`addListener(owner:onLoad:)`で知らせる。
     /// 文字に差し込むアイコンのように、届いたときに描き直す側が画像を受け取れない場合に使う。
-    func requestImage(for key: Key) -> UIImage? {
+    public func requestImage(for key: AvatarImageKey) -> Image? {
         if let image = cachedImage(for: key) {
             return image
         }
@@ -70,7 +77,7 @@ final class AvatarImageStore {
     }
 
     /// 行を出す前に読み込みを始める。読み込み済みと、前に読めなかった画像は読まない。
-    func prefetch(_ keys: some Sequence<Key>) {
+    public func prefetch(_ keys: some Sequence<AvatarImageKey>) {
         for key in keys where cachedImage(for: key) == nil && !retry.hasFailed(key.url) {
             Task { _ = try? await image(for: key) }
         }
@@ -78,7 +85,7 @@ final class AvatarImageStore {
 
     /// 画像を読み込み終える（読めなかった場合も含む）か、`timeout`が過ぎるまで待つ。まだ読み込んでいなければ読み込みを始める。
     /// 前に読めなかった画像は、読み直さず待たない。`timeout`で戻っても、読み込みは止めずにキャッシュへ入れる。
-    func load(_ keys: Set<Key>, within timeout: Duration) async {
+    public func load(_ keys: Set<AvatarImageKey>, within timeout: Duration) async {
         let missing = keys.filter { cachedImage(for: $0) == nil && !retry.hasFailed($0.url) }
         guard !missing.isEmpty, timeout > .zero else { return }
         let clock = clock
@@ -121,7 +128,7 @@ final class AvatarImageStore {
     }
 
     /// 画像が届いたときに呼ぶ処理を登録する。`owner`が解放されると呼ばれなくなる。
-    func addListener(owner: AnyObject, onLoad: @escaping @MainActor (Key) -> Void) {
+    public func addListener(owner: AnyObject, onLoad: @escaping @MainActor (AvatarImageKey) -> Void) {
         listeners.append(Listener(owner: owner, onLoad: onLoad))
     }
 
@@ -129,38 +136,39 @@ final class AvatarImageStore {
     /// 呼び出し側のタスクを取り消しても、読み込みは止めずにキャッシュへ入れる。同じアカウントの投稿が続けて並ぶことが多いため。
     /// 前に読めなかった画像は、読み直してよくなるまで`ImageLoadDeferred`を投げる。
     /// - Parameter retriesNow: 使う人が自分で見に行った操作（投稿のメニューを開くなど）で、間隔を待たずに読み直す。
-    func image(for key: Key, retriesNow: Bool = false) async throws -> UIImage {
-        if let image = cache.object(forKey: key.cacheKey) {
+    public func image(for key: AvatarImageKey, retriesNow: Bool = false) async throws -> Image {
+        if let image = cachedImage(for: key) {
             return image
         }
         if let task = inFlight[key] {
-            return try await task.value
+            return try await task.value.image
         }
         guard retriesNow || retry.allowsAutomaticLoad(of: key.url) else {
             throw ImageLoadDeferred()
         }
         let fetch = fetch
+        let maker = maker
         // 行に描いたときの読み込みは自動の通信として送り、止められている間は送らない（docs/network.md）。
         let task = RequestPurpose.$current.withValue(retriesNow ? .action : .display) {
-            Task<UIImage, any Error> {
+            Task<Decoded, any Error> {
                 let data = try await fetch(key.url)
-                guard let image = await Self.decode(data, maxPixelSize: key.maxPixelSize, animates: key.animates) else {
+                guard let decoded = await Self.decode(data, maxPixelSize: key.maxPixelSize, animates: key.animates, maker: maker) else {
                     throw DecodeError()
                 }
-                return image
+                return decoded
             }
         }
         inFlight[key] = task
         defer { inFlight[key] = nil }
         do {
-            let image = try await task.value
-            cache.setObject(image, forKey: key.cacheKey, cost: Self.cost(of: image))
+            let decoded = try await task.value
+            cache.setObject(Entry(decoded.image), forKey: key.cacheKey, cost: decoded.cost)
             retry.recordSuccess(for: key.url)
             listeners.removeAll { $0.owner == nil }
             for listener in listeners {
                 listener.onLoad(key)
             }
-            return image
+            return decoded.image
         } catch {
             logger.error("avatar load failed host=\(SciaLog.host(of: key.url), privacy: .public) url=\(key.url.absoluteString, privacy: .private(mask: .hash)): \(SciaLog.describe(error), privacy: .public)")
             retry.recordFailure(error, for: key.url)
@@ -168,62 +176,59 @@ final class AvatarImageStore {
         }
     }
 
-    struct DecodeError: Error {}
+    public struct DecodeError: Error {}
 
     /// `maxPixelSize`まで縮めて展開する。`animates`なら、GIF・APNG・WebPのコマを、それぞれの表示時間に合わせて並べる。
     @concurrent
-    private static func decode(_ data: Data, maxPixelSize: Int, animates: Bool) async -> UIImage? {
+    private static func decode(_ data: Data, maxPixelSize: Int, animates: Bool, maker: PlatformImageMaker<Image>) async -> Decoded? {
         guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         // HDRの画像はHDRのまま展開し、描く明るさは画面ごとのtraitで決める。`MediaImageStore`と同じ。
         let frame = { (index: Int) in ImageDecoder.thumbnail(of: source, at: index, maxPixelSize: maxPixelSize, dynamicRange: .high) }
+        let still = { (index: Int) in frame(index).map { Decoded(image: maker.still($0), cost: PlatformImageMaker<Image>.cost(of: $0)) } }
         let count = CGImageSourceGetCount(source)
         guard animates, count > 1, count <= maxFrameCount else {
-            return frame(0).map { UIImage(cgImage: $0) }
+            return still(0)
         }
-        // UIImage.animatedImageはコマを均等な間隔で流すため、表示時間の最大公約数を1コマの長さにして、長いコマを繰り返して並べる。
-        let centiseconds = (0..<count).map { max(Int((frameDuration(of: source, at: $0) * 100).rounded()), 1) }
+        // 描く側の動く画像はコマを均等な間隔で流すため、表示時間の最大公約数を1コマの長さにして、長いコマを繰り返して並べる。
+        let centiseconds = (0..<count).map { index in
+            let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any] ?? [:]
+            return max(Int((AnimatedImage.frameDuration(properties) * 100).rounded()), 1)
+        }
         let unit = centiseconds.reduce(0, gcd)
         let repeats = centiseconds.map { $0 / unit }
         guard repeats.reduce(0, +) <= maxExpandedFrameCount else {
-            return frame(0).map { UIImage(cgImage: $0) }
+            return still(0)
         }
-        var frames: [UIImage] = []
+        var frames: [CGImage] = []
         for index in 0..<count {
             guard let frame = frame(index) else { return nil }
-            frames += Array(repeating: UIImage(cgImage: frame), count: repeats[index])
+            frames += Array(repeating: frame, count: repeats[index])
         }
-        return UIImage.animatedImage(with: frames, duration: TimeInterval(centiseconds.reduce(0, +)) / 100)
+        let cost = frames.reduce(0) { $0 + PlatformImageMaker<Image>.cost(of: $1) }
+        return maker.animated(frames, TimeInterval(centiseconds.reduce(0, +)) / 100).map { Decoded(image: $0, cost: cost) }
     }
 
     /// 表示時間を揃えるためにコマを繰り返したあとの、並べるコマ数の上限。同じ画像を指すため、メモリは増えない。
     /// これより多くなる組み合わせ（表示時間が細かく不揃いなもの）は、動かさずに先頭のコマで止める。
-    nonisolated static let maxExpandedFrameCount = 1_000
+    public nonisolated static var maxExpandedFrameCount: Int { 1_000 }
 
     private nonisolated static func gcd(_ a: Int, _ b: Int) -> Int {
         b == 0 ? a : gcd(b, a % b)
     }
+}
 
-    /// 1コマの表示時間。0や極端に短い値は、ブラウザと同じく0.1秒として扱う。
-    private nonisolated static func frameDuration(of source: CGImageSource, at index: Int) -> TimeInterval {
-        let properties = CGImageSourceCopyPropertiesAtIndex(source, index, nil) as? [CFString: Any]
-        let dictionaries: [(CFString, CFString, CFString)] = [
-            (kCGImagePropertyGIFDictionary, kCGImagePropertyGIFUnclampedDelayTime, kCGImagePropertyGIFDelayTime),
-            (kCGImagePropertyPNGDictionary, kCGImagePropertyAPNGUnclampedDelayTime, kCGImagePropertyAPNGDelayTime),
-            (kCGImagePropertyWebPDictionary, kCGImagePropertyWebPUnclampedDelayTime, kCGImagePropertyWebPDelayTime),
-        ]
-        for (dictionaryKey, unclampedKey, clampedKey) in dictionaries {
-            guard let dictionary = properties?[dictionaryKey] as? [CFString: Any] else { continue }
-            let delay = (dictionary[unclampedKey] as? Double) ?? (dictionary[clampedKey] as? Double) ?? 0
-            return delay < 0.02 ? 0.1 : delay
-        }
-        return 0.1
+/// アイコンを読み込んで持つときの区別。同じURLでも、縮める大きさと動かすかごとに分けて持つ。
+public struct AvatarImageKey: Hashable, Sendable {
+    public let url: URL
+    public let maxPixelSize: Int
+    /// コマを全部展開するか。オフなら先頭のコマだけにする。
+    public let animates: Bool
+
+    public init(url: URL, maxPixelSize: Int, animates: Bool) {
+        self.url = url
+        self.maxPixelSize = maxPixelSize
+        self.animates = animates
     }
 
-    private static func cost(of image: UIImage) -> Int {
-        let frames = image.images ?? [image]
-        return frames.reduce(0) { total, frame in
-            guard let cgImage = frame.cgImage else { return total }
-            return total + cgImage.bytesPerRow * cgImage.height
-        }
-    }
+    var cacheKey: NSString { "\(maxPixelSize) \(animates) \(url.absoluteString)" as NSString }
 }

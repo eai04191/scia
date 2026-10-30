@@ -127,8 +127,8 @@ final class ProfileHeaderView: UIView {
     private static let avatarSize: CGFloat = 80
     private static let avatarRing: CGFloat = 3
 
-    private let emojiImages: EmojiImageStore
-    private let mediaImages: MediaImageStore
+    private let emojiImages: EmojiImageStore<UIImage>
+    private let mediaImages: MediaImageStore<UIImage>
     private let bannerView = ProfileBannerView()
     /// ヘッダー画像の上を、画面の上端までぼかして伸ばす部分。画像はナビゲーションバーのボタンの奥まで上げて置き（`ProfileBannerLayout`）、
     /// 届かないステータスバーの帯と、引っぱった分だけを埋める。中の画像の下端を画像の上端に合わせ、見える高さで切り抜く。
@@ -237,7 +237,7 @@ final class ProfileHeaderView: UIView {
     /// アイコンから作った、カードの色。アイコンがまだないか、透明なアイコンならnilで、カードはシステムの色にする。
     private var avatarAccent: ProfileAccentColor?
 
-    init(emojiImages: EmojiImageStore, mediaImages: MediaImageStore, avatarImages: AvatarImageStore) {
+    init(emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>, avatarImages: AvatarImageStore<UIImage>) {
         self.emojiImages = emojiImages
         self.mediaImages = mediaImages
         avatarView = AvatarView(store: avatarImages)
@@ -800,7 +800,7 @@ final class ProfileHeaderView: UIView {
     }
 
     /// - Parameter animatedEmojis: アニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
-    private func applyFields(_ account: Account, language: String, animatedEmojis: EmojiImageStore?) {
+    private func applyFields(_ account: Account, language: String, animatedEmojis: EmojiImageStore<UIImage>?) {
         fieldsStack.arrangedSubviews.forEach { $0.removeFromSuperview() }
         fieldRowDividers = []
         fieldMenuInteractions = []

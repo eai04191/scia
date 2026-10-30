@@ -39,7 +39,7 @@ class PhotoStackView: UIView {
     var third: StackedPhotoView { photos[2] }
 
     /// - Parameter photoCount: 重ねる写真の数。3以上。
-    init(store: MediaImageStore, photoCount: Int = 3) {
+    init(store: MediaImageStore<UIImage>, photoCount: Int = 3) {
         precondition(photoCount >= 3, "写真のスタックは3枚以上を重ねる")
         photos = (0..<photoCount).map { _ in StackedPhotoView(store: store) }
         rotations = Array(repeating: 0, count: photoCount)
@@ -260,7 +260,7 @@ final class StackedPhotoView: UIView {
         didSet { failureMark.isHidden = !showsFailure }
     }
 
-    init(store: MediaImageStore) {
+    init(store: MediaImageStore<UIImage>) {
         tile = MediaTileView(store: store)
         super.init(frame: .zero)
         isUserInteractionEnabled = false

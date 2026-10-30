@@ -170,7 +170,7 @@ struct MediaMenuTests {
         // 縦横比1:20の画像は、画面の幅のまま縦に長い大きさを渡すが、読むのは画面の高さに収まる大きさまで。
         #expect(MediaMenuInteraction.sharperPixelSize(previewSize: CGSize(width: 390, height: 7800), within: screen, scale: 3) == 2532)
         // 画面に収まる大きさでも、ビューアの上限を超えない。
-        #expect(MediaMenuInteraction.sharperPixelSize(previewSize: CGSize(width: 2000, height: 1000), within: CGSize(width: 2000, height: 2000), scale: 3) == MediaImageStore.fullPixelSize)
+        #expect(MediaMenuInteraction.sharperPixelSize(previewSize: CGSize(width: 2000, height: 1000), within: CGSize(width: 2000, height: 2000), scale: 3) == MediaImagePixelSize.full)
         // 画面に収まる横長の画像は、渡した大きさのまま読む。
         #expect(MediaMenuInteraction.sharperPixelSize(previewSize: CGSize(width: 390, height: 219), within: screen, scale: 3) == 1170)
     }

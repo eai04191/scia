@@ -25,8 +25,8 @@ final class TimelineHarness {
     /// - Parameter prepare: ウィンドウに載せる前に一覧へ行う準備。スレッドのように、画面に出るときに位置を決める一覧に使う。
     init(
         size: CGSize = CGSize(width: 393, height: 852),
-        mediaImages: MediaImageStore = .offline,
-        emojiImages: EmojiImageStore = .offline,
+        mediaImages: MediaImageStore<UIImage> = .offline,
+        emojiImages: EmojiImageStore<UIImage> = .offline,
         headerView: UIView? = nil,
         notices: NoticeCenter = NoticeCenter(),
         prepare: ((TimelineViewController) -> Void)? = nil
@@ -135,23 +135,23 @@ enum StatusFactory {
     }
 }
 
-extension EmojiImageStore {
+extension EmojiImageStore<UIImage> where Image == UIImage {
     /// 画像を読みに行かず、すべて失敗として扱う。
-    static var offline: EmojiImageStore {
+    static var offline: EmojiImageStore<UIImage> {
         EmojiImageStore { _ in throw URLError(.notConnectedToInternet) }
     }
 }
 
-extension MediaImageStore {
+extension MediaImageStore<UIImage> where Image == UIImage {
     /// 画像を読みに行かず、すべて失敗として扱う。
-    static var offline: MediaImageStore {
+    static var offline: MediaImageStore<UIImage> {
         MediaImageStore(files: .temporary()) { _, _ in throw URLError(.notConnectedToInternet) }
     }
 }
 
-extension AvatarImageStore {
+extension AvatarImageStore<UIImage> where Image == UIImage {
     /// 画像を読みに行かず、すべて失敗として扱う。
-    static var offline: AvatarImageStore {
+    static var offline: AvatarImageStore<UIImage> {
         AvatarImageStore { _ in throw URLError(.notConnectedToInternet) }
     }
 }

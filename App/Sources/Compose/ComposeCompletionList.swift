@@ -59,7 +59,7 @@ final class ComposeCompletionList: UIView {
         rows.map(height(of:)).reduce(0, +) + verticalInset * 2
     }
 
-    init(settings: AppSettings = AppDependencies.settings, emojiImages: EmojiImageStore = AppDependencies.emojiImages) {
+    init(settings: AppSettings = AppDependencies.settings, emojiImages: EmojiImageStore<UIImage> = AppDependencies.emojiImages) {
         super.init(frame: .zero)
         model.settings = settings
         model.emojiImages = emojiImages
@@ -592,7 +592,7 @@ private struct EmojiImage: UIViewRepresentable {
     let url: URL
     /// 元の画像。アニメーション版を読むのに使う。nilなら動かさない。
     let animationURL: URL?
-    let store: EmojiImageStore
+    let store: EmojiImageStore<UIImage>
 
     func makeUIView(context: Context) -> EmojiImageView {
         let view = EmojiImageView(frame: .zero)

@@ -110,7 +110,7 @@ enum MediaGridCatalog {
 
     @MainActor
     /// - Parameter filterTitle: 添付ファイルをぼかすフィルターに一致したことにするなら、その名前。
-    private static func grid(_ attachments: [MediaAttachment], sensitive: Bool = false, hidden: Bool = false, filterTitle: String? = nil, store: MediaImageStore = AppDependencies.mediaImages) -> UIView {
+    private static func grid(_ attachments: [MediaAttachment], sensitive: Bool = false, hidden: Bool = false, filterTitle: String? = nil, store: MediaImageStore<UIImage> = AppDependencies.mediaImages) -> UIView {
         let filtered = filterTitle.map { title in
             [FilterResult(filter: FilterResult.Filter(id: title, title: title, context: [.home], filterAction: .blur))]
         } ?? []

@@ -14,7 +14,7 @@ import UIKit
 /// 先頭や中ほどで切るとき、右から左に書く文字を含む段落、左寄せでないときは、置き換えで行の中の位置が動くので、最後の行の絵文字をすべて止める。
 class EmojiLabel: UILabel {
     /// アニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら、絵文字は静止画のまま描く。
-    var emojiImages: EmojiImageStore? {
+    var emojiImages: EmojiImageStore<UIImage>? {
         didSet {
             guard emojiImages !== oldValue else { return }
             animatedEmojis?.removeLayers()

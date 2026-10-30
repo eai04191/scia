@@ -39,7 +39,7 @@ final class EditHistoryViewController: UIViewController {
     private let describe: @MainActor (any Error) async -> ErrorPresentation
     private let tuning: TuningStore
     private let builder: EditHistoryContentBuilder
-    private let mediaImages: MediaImageStore
+    private let mediaImages: MediaImageStore<UIImage>
     private let scrollView: UIScrollView = EditHistoryScrollView()
     private let stack = UIStackView()
     private var state = State.loading
@@ -59,8 +59,8 @@ final class EditHistoryViewController: UIViewController {
         describe: @escaping @MainActor (any Error) async -> ErrorPresentation,
         tuning: TuningStore = AppDependencies.tuning,
         settings: AppSettings = AppDependencies.settings,
-        emojiImages: EmojiImageStore = AppDependencies.emojiImages,
-        mediaImages: MediaImageStore = AppDependencies.mediaImages,
+        emojiImages: EmojiImageStore<UIImage> = AppDependencies.emojiImages,
+        mediaImages: MediaImageStore<UIImage> = AppDependencies.mediaImages,
         network: NetworkConditionsMonitor = AppDependencies.network
     ) {
         self.status = status

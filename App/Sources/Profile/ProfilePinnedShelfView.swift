@@ -8,8 +8,8 @@ final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
     /// カードが押されたときに、その投稿と、ウインドウの座標でのカードの枠を渡して呼ぶ。
     var onOpen: ((Status, CGRect) -> Void)?
 
-    private let emojiImages: EmojiImageStore
-    private let mediaImages: MediaImageStore
+    private let emojiImages: EmojiImageStore<UIImage>
+    private let mediaImages: MediaImageStore<UIImage>
     private let titleLabel = UILabel()
     private let scrollView = PinnedShelfScrollView()
     private let cardStack = UIStackView()
@@ -29,7 +29,7 @@ final class ProfilePinnedShelfView: UIView, UIScrollViewDelegate {
     private static let cardWidthRatio: CGFloat = 0.72
     private static let margin: CGFloat = 16
 
-    init(emojiImages: EmojiImageStore, mediaImages: MediaImageStore) {
+    init(emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>) {
         self.emojiImages = emojiImages
         self.mediaImages = mediaImages
         super.init(frame: .zero)
@@ -155,7 +155,7 @@ private final class ProfilePinnedCard: UIControl {
 
     private static let thumbnailSize: CGFloat = 64
 
-    init(status: Status, verdict: FilterVerdict, emojiImages: EmojiImageStore, mediaImages: MediaImageStore, glyphLanguage: String) {
+    init(status: Status, verdict: FilterVerdict, emojiImages: EmojiImageStore<UIImage>, mediaImages: MediaImageStore<UIImage>, glyphLanguage: String) {
         super.init(frame: .zero)
         backgroundColor = .secondarySystemFill
         layer.cornerRadius = 16
@@ -258,7 +258,7 @@ private final class ProfilePinnedCard: UIControl {
         didSet { alpha = isHighlighted ? 0.6 : 1 }
     }
 
-    private func loadThumbnail(_ request: MediaThumbnailRequest, from mediaImages: MediaImageStore) {
+    private func loadThumbnail(_ request: MediaThumbnailRequest, from mediaImages: MediaImageStore<UIImage>) {
         if let cached = mediaImages.cachedImage(for: request.url, maxPixelSize: request.maxPixelSize) {
             thumbnailView.image = cached
             return

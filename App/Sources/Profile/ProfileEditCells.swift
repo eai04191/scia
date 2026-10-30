@@ -391,7 +391,7 @@ final class ProfileEditImagesCell: UITableViewCell {
     }
 
     /// 今の画像を読み込む。端末に読み込み済みの画像は、すぐ出す。同じ画像で呼び直したときは、読み直さない。
-    func apply(account: Account, mediaImages: MediaImageStore, avatarShape: AvatarShape) {
+    func apply(account: Account, mediaImages: MediaImageStore<UIImage>, avatarShape: AvatarShape) {
         self.avatarShape = avatarShape
         let scale = max(traitCollection.displayScale, 2)
         let requests = [(ProfileImage.avatar, account.avatarStatic, Int(Self.avatarSize * scale)), (.header, account.headerStatic, Int(402 * scale))]

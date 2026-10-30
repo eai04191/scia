@@ -75,10 +75,10 @@ struct PostContentConfiguration: UIContentConfiguration {
     var filterNote: NSAttributedString?
     /// お気に入りとブーストをしたことを示す、行の下の端の光。
     var reactionGlow: ReactionGlow?
-    let mediaImages: MediaImageStore
-    let avatarImages: AvatarImageStore
+    let mediaImages: MediaImageStore<UIImage>
+    let avatarImages: AvatarImageStore<UIImage>
     /// 名前、ブーストした人の行、注意書き、本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
-    var emojiImages: EmojiImageStore?
+    var emojiImages: EmojiImageStore<UIImage>?
     /// サムネイルがタップされたときに、何番目の添付ファイルかと、並べているビューを渡して呼ぶ。
     var onSelectMedia: ((Int, MediaGridView) -> Void)?
     /// 添付ファイルか、リンクカードの画像の、閲覧注意のぼかしが押されたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。

@@ -281,7 +281,7 @@ struct AppearanceEditorView: View {
 final class EmojiArrivals {
     private(set) var count = 0
 
-    init(store: EmojiImageStore) {
+    init(store: EmojiImageStore<UIImage>) {
         store.addListener(owner: self) { [weak self] _ in
             self?.count += 1
         }

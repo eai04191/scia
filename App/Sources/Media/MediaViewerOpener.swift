@@ -6,7 +6,7 @@ import UIKit
 /// Macでは別のウィンドウで、iPhoneでは同じウィンドウの全画面に重ねて開く。
 @MainActor
 struct MediaViewerOpener {
-    let store: MediaImageStore
+    let store: MediaImageStore<UIImage>
     let tuning: TuningStore
     let transfers: MediaTransferCenter?
     /// アプリ全体のアプリ内通知。Macのビューアのウィンドウにもチップの列を重ねる。

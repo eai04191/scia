@@ -12,9 +12,9 @@ struct AccountRowConfiguration: UIContentConfiguration {
     var avatarSpacing: CGFloat
     /// 名前が入りきらないときに、行末をぼかす幅。投稿のセルの名前と同じ。
     var nameFadeWidth: CGFloat
-    let avatarImages: AvatarImageStore
+    let avatarImages: AvatarImageStore<UIImage>
     /// 名前のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
-    var emojiImages: EmojiImageStore?
+    var emojiImages: EmojiImageStore<UIImage>?
 
     func makeContentView() -> any UIView & UIContentView {
         AccountRowView(configuration: self)

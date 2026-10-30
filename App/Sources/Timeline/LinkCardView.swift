@@ -46,7 +46,7 @@ final class LinkCardView: UIButton {
         }
     }
 
-    private let store: MediaImageStore
+    private let store: MediaImageStore<UIImage>
     private let thumbnailView = LinkCardThumbnailView()
     /// 画像を長押ししたときのメディアのメニュー。カードはボタンで、一覧の行の長押しのメニューが届かないため、画像が自分で受ける。
     private var imageMenuInteraction: MediaMenuInteraction?
@@ -75,7 +75,7 @@ final class LinkCardView: UIButton {
         let isCovered: Bool
     }
 
-    init(store: MediaImageStore) {
+    init(store: MediaImageStore<UIImage>) {
         self.store = store
         super.init(frame: .zero)
         layer.cornerRadius = MediaGridView.cornerRadius

@@ -492,7 +492,7 @@ extension TimelineViewController {
     }
 
     /// メニューのアイコンの大きさで読む、止まったアイコン。
-    private func userMenuIconKey(of account: Account) -> AvatarImageStore.Key? {
+    private func userMenuIconKey(of account: Account) -> AvatarImageKey? {
         account.avatarStatic.map { AvatarView.key(url: $0, animates: false, side: Self.menuIconSide, scale: traitCollection.displayScale) }
     }
 

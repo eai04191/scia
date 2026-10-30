@@ -7,8 +7,8 @@ import UIKit
 /// 新着は挿入する前に、スクロールで出てくる行は画面に入る前に読み始め、出た時点で描けているようにする。
 extension TimelineViewController {
     /// `entries`の行に描くアイコンの画像。行を描くときと同じ大きさで求める。
-    func avatarKeys(for entries: some Sequence<TimelineEntry>) -> Set<AvatarImageStore.Key> {
-        var keys = Set<AvatarImageStore.Key>()
+    func avatarKeys(for entries: some Sequence<TimelineEntry>) -> Set<AvatarImageKey> {
+        var keys = Set<AvatarImageKey>()
         for entry in entries {
             switch entry {
             case .status(let status), .pinned(let status):
@@ -28,9 +28,9 @@ extension TimelineViewController {
     }
 
     /// 投稿した人のアイコンと、ブーストなら名前の上の行に出すブーストした人のアイコン。
-    func avatarKeys(for status: Status) -> [AvatarImageStore.Key] {
+    func avatarKeys(for status: Status) -> [AvatarImageKey] {
         let scale = traitCollection.displayScale
-        var keys: [AvatarImageStore.Key] = []
+        var keys: [AvatarImageKey] = []
         let shown = avatarContent(of: status.displayed.account)
         if let url = shown.url {
             keys.append(AvatarView.key(url: url, animates: shown.animates, side: settings.value(of: AppearanceCatalog.avatarSize), scale: scale))
@@ -55,7 +55,7 @@ extension TimelineViewController {
     /// 先読みで前に読めなかったアイコンも待たない。
     func waitForAvatars(of entries: () -> [TimelineEntry], within timeout: Duration) async {
         let elapsed = stopwatch(on: avatarImages.clock)
-        var requested = Set<AvatarImageStore.Key>()
+        var requested = Set<AvatarImageKey>()
         while elapsed() < timeout {
             let keys = avatarKeys(for: entries()).subtracting(requested)
             guard !keys.isEmpty else { return }

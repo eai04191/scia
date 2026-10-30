@@ -19,7 +19,7 @@ struct RichTextRenderer {
     var unicodeEmojiScale: CGFloat = 1
     /// 本文が絵文字だけのときに、絵文字を大きく描く決まり。nilなら絵文字だけでも大きくしない。
     var emojiOnly: EmojiOnlyEnlargement?
-    let emojiImages: EmojiImageStore
+    let emojiImages: EmojiImageStore<UIImage>
     /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
     let language: String
     /// Unicodeの絵文字を描く絵。描く場所ごとに渡さず、設定から読む。

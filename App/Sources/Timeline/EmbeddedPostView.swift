@@ -81,7 +81,7 @@ final class EmbeddedPostView: UIButton {
     private lazy var summaryElement = UIAccessibilityElement(accessibilityContainer: self)
 
     /// 名前、注意書き、本文のアニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
-    var emojiImages: EmojiImageStore? {
+    var emojiImages: EmojiImageStore<UIImage>? {
         get { textLabel.emojiImages }
         set {
             textLabel.emojiImages = newValue
@@ -95,7 +95,7 @@ final class EmbeddedPostView: UIButton {
         mediaView.isHidden ? nil : mediaView
     }
 
-    init(store: MediaImageStore, avatarImages: AvatarImageStore) {
+    init(store: MediaImageStore<UIImage>, avatarImages: AvatarImageStore<UIImage>) {
         mediaView = MediaGridView(store: store)
         avatarView = AvatarView(store: avatarImages)
         super.init(frame: .zero)

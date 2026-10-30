@@ -284,7 +284,7 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
         guard previewSize.width > 0, previewSize.height > 0, bounds.width > 0, bounds.height > 0 else { return 0 }
         let fit = min(1, bounds.width / previewSize.width, bounds.height / previewSize.height)
         let pixels = Int(ceil(max(previewSize.width, previewSize.height) * fit * scale))
-        return min(pixels, MediaImageStore.fullPixelSize)
+        return min(pixels, MediaImagePixelSize.full)
     }
 
     /// 角を丸めたまま、サムネイルを持ち上げる元と戻る先にする。画面から外れていれば、UIKitに任せる。

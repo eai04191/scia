@@ -1,4 +1,5 @@
 import UIKit
+import SciaCore
 
 /// 注意書き（CW）。本文の上に置き、押すと本文を開閉する。フィルターの警告も、同じボックスで本文の代わりに出す。
 ///
@@ -47,7 +48,7 @@ final class SpoilerView: UIControl {
     }
 
     /// 注意書きのアニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
-    var emojiImages: EmojiImageStore? {
+    var emojiImages: EmojiImageStore<UIImage>? {
         get { textLabel.emojiImages }
         set { textLabel.emojiImages = newValue }
     }

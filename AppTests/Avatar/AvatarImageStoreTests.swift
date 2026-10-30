@@ -32,7 +32,7 @@ struct AvatarImageStoreTests {
         let store = AvatarImageStore { _ in data }
         let url = try #require(URL(string: "https://example.social/avatar.gif"))
 
-        let image = try await store.image(for: AvatarImageStore.Key(url: url, maxPixelSize: 8, animates: true))
+        let image = try await store.image(for: AvatarImageKey(url: url, maxPixelSize: 8, animates: true))
 
         #expect(image.images?.count == 4)
         #expect(abs(image.duration - 0.4) < 0.001)
@@ -43,7 +43,7 @@ struct AvatarImageStoreTests {
         let store = AvatarImageStore { _ in data }
         let url = try #require(URL(string: "https://example.social/avatar.gif"))
 
-        let image = try await store.image(for: AvatarImageStore.Key(url: url, maxPixelSize: 8, animates: false))
+        let image = try await store.image(for: AvatarImageKey(url: url, maxPixelSize: 8, animates: false))
 
         #expect(image.images == nil)
     }
@@ -61,7 +61,7 @@ struct AvatarImageStoreTests {
             if read < 2 { throw URLError(.timedOut) }
             return png
         }
-        let key = AvatarImageStore.Key(url: try #require(URL(string: "https://example.social/avatar.png")), maxPixelSize: 8, animates: false)
+        let key = AvatarImageKey(url: try #require(URL(string: "https://example.social/avatar.png")), maxPixelSize: 8, animates: false)
 
         await #expect(throws: URLError.self) { try await store.image(for: key) }
         await #expect(throws: ImageLoadDeferred.self) { try await store.image(for: key) }
@@ -85,7 +85,7 @@ struct AvatarImageStoreTests {
             throw URLError(.fileDoesNotExist)
         }
         let url = try #require(URL(string: "https://example.social/missing.png"))
-        let key = AvatarImageStore.Key(url: url, maxPixelSize: 8, animates: false)
+        let key = AvatarImageKey(url: url, maxPixelSize: 8, animates: false)
 
         await store.load([key], within: .seconds(5))
         await store.load([key], within: .seconds(5))
@@ -103,7 +103,7 @@ struct AvatarImageStoreTests {
             return data
         }
         let url = try #require(URL(string: "https://example.social/slow.gif"))
-        let key = AvatarImageStore.Key(url: url, maxPixelSize: 8, animates: false)
+        let key = AvatarImageKey(url: url, maxPixelSize: 8, animates: false)
 
         let loading = Task { await store.load([key], within: .milliseconds(50)) }
         try await waitUntil { clock.sleeperCount == 1 && arrival.waiterCount == 1 }
@@ -123,8 +123,8 @@ struct AvatarImageStoreTests {
             origins.withLock { $0.append(RequestPurpose.current) }
             return png
         }
-        let first = AvatarImageStore.Key(url: try #require(URL(string: "https://example.social/1.png")), maxPixelSize: 8, animates: false)
-        let second = AvatarImageStore.Key(url: try #require(URL(string: "https://example.social/2.png")), maxPixelSize: 8, animates: false)
+        let first = AvatarImageKey(url: try #require(URL(string: "https://example.social/1.png")), maxPixelSize: 8, animates: false)
+        let second = AvatarImageKey(url: try #require(URL(string: "https://example.social/2.png")), maxPixelSize: 8, animates: false)
 
         _ = try await store.image(for: first)
         _ = try await store.image(for: second, retriesNow: true)

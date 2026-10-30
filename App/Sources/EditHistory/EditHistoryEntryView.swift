@@ -21,7 +21,7 @@ final class EditHistoryEntryView: UIView {
         var pollOptions: [Text]?
         var spacing: CGFloat
         /// アニメーションするカスタム絵文字を動かすときに、アニメーション版を読み込むストア。nilなら動かさない。
-        var animatedEmojis: EmojiImageStore?
+        var animatedEmojis: EmojiImageStore<UIImage>?
     }
 
     /// 差分を重ねた文字と、その読み上げ。
@@ -54,13 +54,13 @@ final class EditHistoryEntryView: UIView {
         case change(Int)
     }
 
-    private let mediaImages: MediaImageStore
+    private let mediaImages: MediaImageStore<UIImage>
     /// いま当てている中身の、動く絵文字のストア。文字のラベルを作るときに渡す。
-    private var animatedEmojis: EmojiImageStore?
+    private var animatedEmojis: EmojiImageStore<UIImage>?
     private let stack = UIStackView()
     private var mediaGrids: [MediaPlace: MediaGridView] = [:]
 
-    init(mediaImages: MediaImageStore) {
+    init(mediaImages: MediaImageStore<UIImage>) {
         self.mediaImages = mediaImages
         super.init(frame: .zero)
         stack.axis = .vertical

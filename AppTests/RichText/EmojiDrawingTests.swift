@@ -18,7 +18,7 @@ struct EmojiDrawingTests {
         let textBottom: CGFloat?
     }
 
-    private func redEmoji() async throws -> (CustomEmoji, EmojiImageStore) {
+    private func redEmoji() async throws -> (CustomEmoji, EmojiImageStore<UIImage>) {
         let url = try #require(URL(string: "https://example.social/emoji/red.png"))
         let png = try #require(UIGraphicsImageRenderer(size: CGSize(width: 10, height: 10)).image { context in
             UIColor.red.setFill()

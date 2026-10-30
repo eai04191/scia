@@ -15,7 +15,7 @@ enum MediaWindow {
     struct Request {
         let attachments: [MediaAttachment]
         let startIndex: Int
-        let store: MediaImageStore
+        let store: MediaImageStore<UIImage>
         let dragToDismiss: DragToDismiss
         let timing: MediaViewerController.Timing
         let transfers: MediaTransferCenter?

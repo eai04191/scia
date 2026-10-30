@@ -6,7 +6,7 @@ import UIKit
 struct EditHistoryContentBuilder {
     let tuning: TuningStore
     let settings: AppSettings
-    let emojiImages: EmojiImageStore
+    let emojiImages: EmojiImageStore<UIImage>
     let network: NetworkConditionsMonitor
 
     /// 今の投稿の版から順に並べる。

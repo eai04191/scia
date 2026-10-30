@@ -46,7 +46,7 @@ final class MediaDownloads {
             let downloaded = try await download(url, folder) { fraction in
                 Task { @MainActor in onProgress(fraction) }
             }
-            let name = await MediaImageStore.originalFileName(ofFileAt: downloaded, for: url) ?? downloaded.lastPathComponent
+            let name = await MediaOriginalFileName.name(ofFileAt: downloaded, for: url) ?? downloaded.lastPathComponent
             _ = try await files.store(movingFile: downloaded, named: name, for: url, generation: generation)
             // 置いたものは最後に使ったものとして整理で残るため、ここで見つからないのは置いた直後に消された異常な場合だけ。
             guard let copy = try await files.copyForSharing(for: url) else { throw CocoaError(.fileNoSuchFile) }
