@@ -13,21 +13,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     typealias Texts = TimelineTexts
 
     /// 一覧全体の状態。投稿がないときの表示に使う。
-    enum ContentState: Equatable {
-        case loading
-        case loaded
-        /// サーバーがホームを再生成中で、まだ投稿が返ってこない。
-        case regenerating
-        case failed(ErrorPresentation)
-    }
+    typealias ContentState = TimelineContentState
 
     /// 末尾の読み込みの状態。フッターに出す。
-    enum FooterState: Equatable {
-        case idle
-        case loading
-        case failed(ErrorPresentation)
-        case reachedEnd
-    }
+    typealias FooterState = TimelineFooterState
 
     /// 末尾が近づいたときに呼ぶ。古い投稿の読み込みを始める。
     var onApproachingEnd: (() -> Void)?

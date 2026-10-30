@@ -1,3 +1,4 @@
+import SciaCore
 import UIKit
 
 /// タイムライン末尾の、古い投稿や通知の読み込み状態を出すフッター。

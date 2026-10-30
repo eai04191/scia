@@ -182,7 +182,7 @@ custom_rules:
   # 窓を閉じたときに止まらず、前のアカウントのトークンで送り続けたり、終わった処理が溜まり続けたりしていた。止める処理の一覧を手で並べて保たずに済むよう、ここで止める。
   # 変化の知らせを受けてメインアクターへ戻るだけの乗り換え（`Task { @MainActor`）は、通信を持たないので対象外にする
   session_task_outside_scope:
-    included: "App/Sources/(SessionController|Timeline/(FeedTimelineController|NotificationsController|SavedStatusesController)|Profile/(ProfileController|AccountListController)|Thread/ThreadController|Compose/(ComposeModel|InlineComposeController))\\.swift"
+    included: "(App/Sources/(SessionController|Timeline/(FeedTimelineController|NotificationsController|SavedStatusesController)|Profile/(ProfileController|AccountListController)|Thread/ThreadController|Compose/(ComposeModel|InlineComposeController))|Packages/SciaCore/Sources/SciaCore/(Timeline/(FeedTimelineModel|NotificationsModel|SavedStatusesModel|ScheduledStatusesModel)|Thread/ThreadModel))\\.swift"
     regex: "\\bTask(\\.detached)?\\s*(\\{(?!\\s*@MainActor)|\\()"
     excluded_match_kinds:
       - comment
