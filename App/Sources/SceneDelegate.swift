@@ -371,7 +371,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let presenter = window?.rootViewController?.frontmostPresented else { return }
         weak var sheet: UIViewController?
         let attempt = AddAccountAttempt()
-        let model = LoginModel(accountDomains: accountDomains) { [weak self] credential in
+        let model = LoginModel(oauth: AppDependencies.oauth, accountDomains: accountDomains) { [weak self] credential in
             guard !attempt.isCancelled else { return }
             try self?.accounts?.add(credential)
             Self.leaveDummySession()
@@ -438,7 +438,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // ログイン画面に替えたら、出していたアカウントの処理を止める。ログアウトに失敗してここへ来たときも同じ。
         session = nil
         isShowingAccountsLoadFailure = false
-        let model = LoginModel(accountDomains: accountDomains) { [weak self] credential in
+        let model = LoginModel(oauth: AppDependencies.oauth, accountDomains: accountDomains) { [weak self] credential in
             guard let accounts = self?.accounts else {
                 throw AccountsUnavailable()
             }

@@ -1,69 +1,5 @@
-import os
 import SciaCore
 import SwiftUI
-
-@MainActor
-@Observable
-final class LoginModel {
-    var instanceInput = ""
-    private(set) var isLoggingIn = false
-    private(set) var errorMessage: String?
-
-    /// ログインできたときに呼ぶ。保存に失敗したら投げ、ログイン画面にエラーを出す。
-    private let onLogin: @MainActor (Credential) throws -> Void
-    private let serverSuggestions: ServerSuggestions
-    private let logger = SciaLog.logger(category: "login")
-
-    /// - Parameter accountDomains: ログイン済みのアカウントのサーバー。候補の上に出す。
-    init(accountDomains: [String] = [], onLogin: @escaping @MainActor (Credential) throws -> Void) {
-        self.onLogin = onLogin
-        let knownDomains: [String]
-        do {
-            knownDomains = try ServerSuggestions.loadKnownDomains()
-        } catch {
-            // 一覧はアプリに同梱していて、読めないのはビルドの誤りに限る。ログインは打てばできるので、候補をログイン済みのサーバーだけにして続ける。
-            logger.error("known servers unavailable: \(SciaLog.describe(error), privacy: .public)")
-            knownDomains = []
-        }
-        serverSuggestions = ServerSuggestions(accountDomains: accountDomains, knownDomains: knownDomains)
-    }
-
-    /// 打ったアドレスに合うサーバー。
-    var suggestions: [String] {
-        serverSuggestions.suggestions(for: instanceInput)
-    }
-
-    func showError(_ message: String) {
-        errorMessage = message
-    }
-
-    /// - Parameter isPrivate: Safariのcookieを使わずに認可画面を開く。
-    func login(authenticator: WebAuthenticator, isPrivate: Bool) async {
-        errorMessage = nil
-        let instance: URL
-        do {
-            instance = try InstanceAddress.parse(instanceInput)
-        } catch {
-            errorMessage = ErrorPresentation(error).text
-            return
-        }
-
-        isLoggingIn = true
-        defer { isLoggingIn = false }
-        do {
-            let credential = try await AppDependencies.oauth.login(instance: instance) { url in
-                try await authenticator.authenticate(url: url, callbackScheme: AppDependencies.oauthCallbackScheme, isPrivate: isPrivate)
-            }
-            logger.info("login succeeded instance=\(SciaLog.host(of: instance), privacy: .public)")
-            try onLogin(credential)
-        } catch is CancellationError {
-            logger.info("login cancelled")
-        } catch {
-            logger.error("login failed: \(SciaLog.describe(error), privacy: .public)")
-            errorMessage = ErrorPresentation(error).text
-        }
-    }
-}
 
 struct LoginView: View {
     @Bindable var model: LoginModel
@@ -188,7 +124,11 @@ struct LoginView: View {
 
     private func login(isPrivate: Bool) {
         guard let authenticator = makeAuthenticator() else { return }
-        Task { await model.login(authenticator: authenticator, isPrivate: isPrivate) }
+        Task {
+            await model.login { url in
+                try await authenticator.authenticate(url: url, callbackScheme: AppDependencies.oauthCallbackScheme, isPrivate: isPrivate)
+            }
+        }
     }
 }
 
