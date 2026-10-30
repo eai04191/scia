@@ -210,17 +210,17 @@ final class LinkHitArea: UIControl {
         let notify: (Notice) -> Void = { host?.showNotice($0) }
         let open: (UIView) -> Void = { [weak label] _ in label?.open(destination) }
         switch destination {
-        case .url:
+        case .url(let url):
             return ObjectTarget(entity: .link, settings: label.settings, primary: open, buildMenu: { [weak self] in
-                self?.menu(for: destination, at: point, groups: $0.map { .link($0) })
+                self?.linkMenu(for: url, at: point, groups: $0)
             }, lifecycle: lifecycle, notify: notify)
-        case .mention:
+        case .mention(let acct, let url):
             return ObjectTarget(entity: .user, settings: label.settings, primary: open, buildMenu: { [weak self] in
-                self?.menu(for: destination, at: point, groups: $0.map { .user($0) })
+                self?.userMenu(for: destination, acct: acct, url: url, at: point, groups: $0)
             }, lifecycle: lifecycle, notify: notify)
-        case .hashtag:
+        case .hashtag(let name, let url):
             return ObjectTarget(entity: .hashtag, settings: label.settings, primary: open, buildMenu: { [weak self] in
-                self?.menu(for: destination, at: point, groups: $0.map { .hashtag($0) })
+                self?.hashtagMenu(for: destination, name: name, url: url, at: point, groups: $0)
             }, lifecycle: lifecycle, notify: notify)
         }
     }
@@ -288,33 +288,48 @@ final class LinkHitArea: UIControl {
     /// 開く項目は、メニューを出した画面に開く場所を渡して開かせる。アプリ内のSafariはセッションが持つため、ラベルからは開けない。
     /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。行き先の対象と違う並びは使わない。
     func menu(for destination: RichText.LinkDestination, at point: CGPoint, groups: LinkMenuGroups? = nil) -> UIMenu? {
-        guard let label else { return nil }
-        let settings = label.settings
-        let handlers = urlHandlers(at: point, linkBrowser: settings.linkBrowser)
         switch destination {
         case .url(let url):
-            let menu = LinkMenu(url: url, handlers: handlers) { [weak self] in
-                self?.nearest((any LinkMenuHost).self)?.openProfile(resolving: url)
-            }
-            return menu.menu(groups: groups?.link ?? settings.linkMenuLayout.groups)
+            linkMenu(for: url, at: point, groups: groups?.link)?.menu
         case .mention(let acct, let url):
-            let host = nearest((any LinkMenuHost).self)
-            let menu = UserMenu(subject: UserMenuSubject(mentionLink: url, acct: acct), actions: host?.userMenuActions, handlers: handlers, host: host)
-            return menu.menu(groups: groups?.user ?? settings.userMenuLayout.groups, openProfile: { [weak self] in self?.label?.open(destination) }, avatar: .mentionLink(url)) { _ in
-                host?.mentionMenuIcon(for: url)
-            }
+            userMenu(for: destination, acct: acct, url: url, at: point, groups: groups?.user)?.menu
         case .hashtag(let name, let url):
-            let menu = HashtagMenu(
-                name: name,
-                url: url,
-                account: label.hashtagAccount,
-                handlers: handlers,
-                muteActions: nearest((any LinkMenuHost).self)?.hashtagMuteActions,
-                openTimeline: { [weak self] in self?.label?.open(destination) },
-                openAccountStatuses: { [weak self] account in self?.nearest((any LinkMenuHost).self)?.openHashtag(name, of: account) }
-            )
-            return menu.menu(groups: groups?.hashtag ?? settings.hashtagMenuLayout.groups)
+            hashtagMenu(for: destination, name: name, url: url, at: point, groups: groups?.hashtag)?.menu
         }
+    }
+
+    private func linkMenu(for url: URL, at point: CGPoint, groups: MenuLayout<LinkMenuItem>.Groups?) -> BuiltMenu<LinkMenuCommand>? {
+        guard let label else { return nil }
+        let settings = label.settings
+        let menu = LinkMenu(url: url, handlers: urlHandlers(at: point, linkBrowser: settings.linkBrowser)) { [weak self] in
+            self?.nearest((any LinkMenuHost).self)?.openProfile(resolving: url)
+        }
+        return menu.built(groups: groups ?? settings.linkMenuLayout.groups)
+    }
+
+    private func userMenu(for destination: RichText.LinkDestination, acct: String, url: URL, at point: CGPoint, groups: MenuLayout<UserMenuItem>.Groups?) -> BuiltMenu<UserMenuCommand>? {
+        guard let label else { return nil }
+        let settings = label.settings
+        let host = nearest((any LinkMenuHost).self)
+        let menu = UserMenu(subject: UserMenuSubject(mentionLink: url, acct: acct), actions: host?.userMenuActions, handlers: urlHandlers(at: point, linkBrowser: settings.linkBrowser), host: host)
+        return menu.built(groups: groups ?? settings.userMenuLayout.groups, openProfile: { [weak self] in self?.label?.open(destination) }, avatar: .mentionLink(url)) { _ in
+            host?.mentionMenuIcon(for: url)
+        }
+    }
+
+    private func hashtagMenu(for destination: RichText.LinkDestination, name: String, url: URL?, at point: CGPoint, groups: MenuLayout<HashtagMenuItem>.Groups?) -> BuiltMenu<HashtagMenuCommand>? {
+        guard let label else { return nil }
+        let settings = label.settings
+        let menu = HashtagMenu(
+            name: name,
+            url: url,
+            account: label.hashtagAccount,
+            handlers: urlHandlers(at: point, linkBrowser: settings.linkBrowser),
+            muteActions: nearest((any LinkMenuHost).self)?.hashtagMuteActions,
+            openTimeline: { [weak self] in self?.label?.open(destination) },
+            openAccountStatuses: { [weak self] account in self?.nearest((any LinkMenuHost).self)?.openHashtag(name, of: account) }
+        )
+        return menu.built(groups: groups ?? settings.hashtagMenuLayout.groups)
     }
 
     /// コピーと開くは、メニューを出した画面に頼む。共有のシートは、押したリンクから出す。

@@ -210,8 +210,12 @@ extension TimelineViewController {
     /// リンクカードを長押ししたときに出す、リンクのメニュー。出す項目がなければnil。
     /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
     func linkMenu(for url: URL, id: ItemID, groups: MenuLayout<LinkMenuItem>.Groups? = nil) -> UIMenu? {
+        builtLinkMenu(for: url, id: id, groups: groups)?.menu
+    }
+
+    func builtLinkMenu(for url: URL, id: ItemID, groups: MenuLayout<LinkMenuItem>.Groups? = nil) -> BuiltMenu<LinkMenuCommand>? {
         let menu = LinkMenu(url: url, handlers: urlHandlers(id: id)) { [weak self] in self?.openProfile(resolving: url) }
-        return menu.menu(groups: groups ?? settings.linkMenuLayout.groups)
+        return menu.built(groups: groups ?? settings.linkMenuLayout.groups)
     }
 
     /// Xの投稿の囲みのような、ほかのサービスの投稿を長押ししたときに出すメニュー。出す項目がなければnil。
@@ -219,10 +223,14 @@ extension TimelineViewController {
     ///   - text: コピーや翻訳に渡す本文。本文がなければnilで、本文を使う項目を出さない。
     ///   - groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
     func externalPostMenu(url: URL, text: String?, id: ItemID, groups: MenuLayout<ExternalPostMenuItem>.Groups? = nil) -> UIMenu? {
+        builtExternalPostMenu(url: url, text: text, id: id, groups: groups)?.menu
+    }
+
+    func builtExternalPostMenu(url: URL, text: String?, id: ItemID, groups: MenuLayout<ExternalPostMenuItem>.Groups? = nil) -> BuiltMenu<ExternalPostMenuCommand>? {
         let handlers = urlHandlers(id: id)
         let tree = ExternalPostMenuTree(url: url, text: text, linkBrowser: handlers.linkBrowser)
         return tree.menu(groups: groups ?? settings.externalPostMenuLayout.groups).map { root in
-            MenuRenderer { [weak self] (command: ExternalPostMenuCommand) in
+            BuiltMenu(root: root, renderer: MenuRenderer { [weak self] command in
                 switch command {
                 case .url(let command): handlers.perform(command)
                 case .copyText(let text):
@@ -230,17 +238,23 @@ extension TimelineViewController {
                     self?.showTextCopiedNotice()
                 case .translate(let text): self?.translation.present(text)
                 }
-            }.menu(root)
+            })
         }
     }
-
 
     /// アイコンや人の一覧の行を長押ししたときに出す、その人のユーザーのメニュー。出す項目がなければnil。
     /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
     func userMenu(for user: MenuUser, id: ItemID, groups: MenuLayout<UserMenuItem>.Groups? = nil) -> UIMenu? {
-        defer { loadPendingMenuIcons() }
-        return makeUserMenu(for: user, id: id).menu(groups: groups ?? settings.userMenuLayout.groups, openProfile: openProfile(of: user), avatar: .user(user)) { _ in
-            self.userMenuIcon(for: user, id: id)
+        builtUserMenu(for: user, id: id, groups: groups)?.menu
+    }
+
+    func builtUserMenu(for user: MenuUser, id: ItemID, groups: MenuLayout<UserMenuItem>.Groups? = nil) -> BuiltMenu<UserMenuCommand>? {
+        let built = makeUserMenu(for: user, id: id).built(groups: groups ?? settings.userMenuLayout.groups, openProfile: openProfile(of: user), avatar: .user(user)) { [weak self] _ in
+            self?.userMenuIcon(for: user, id: id)
+        }
+        // 描きながら集めた、アイコンのまだない人を読む。
+        return built.map { built in
+            BuiltMenu(root: built.root, renderer: built.renderer) { [weak self] in self?.loadPendingMenuIcons() }
         }
     }
 

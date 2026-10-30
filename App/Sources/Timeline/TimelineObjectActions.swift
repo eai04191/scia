@@ -32,7 +32,7 @@ extension TimelineViewController {
     }
 
     /// 投稿と通知の行。主な操作は、行のスレッドを開く。開けない行（スレッドの中心の投稿、投稿のない通知）では行えない。
-    private func rowStatusTarget(_ entity: ObjectEntity<StatusMenuItem>, entry: TimelineEntry, id: ItemID, opening status: Status?) -> ObjectTarget<StatusMenuItem> {
+    private func rowStatusTarget(_ entity: ObjectEntity<StatusMenuItem>, entry: TimelineEntry, id: ItemID, opening status: Status?) -> ObjectTarget<StatusMenuItem, StatusMenuCommand> {
         ObjectTarget(
             entity: entity,
             settings: settings,
@@ -42,20 +42,20 @@ extension TimelineViewController {
                 recordOpenThread()
                 onOpenThread?(status, rowFrame(of: id))
             },
-            buildMenu: { [weak self] groups in self?.contextMenu(for: entry, id: id, groups: groups) },
+            buildMenu: { [weak self] groups in self?.statusMenu(for: entry, id: id, groups: groups) },
             lifecycle: rowMenuLifecycle,
             notify: { [weak self] in self?.showNotice($0) }
         )
     }
 
     /// ユーザー。人の一覧の行と、行の中のアイコンや「〜がブースト」の行。長押しの既定は、その人のユーザーのメニュー。
-    func userTarget(for account: Account, id: ItemID) -> ObjectTarget<UserMenuItem> {
+    func userTarget(for account: Account, id: ItemID) -> ObjectTarget<UserMenuItem, UserMenuCommand> {
         ObjectTarget(
             entity: .user,
             settings: settings,
             primaryIsAvailable: onOpenProfile != nil,
             primary: { [weak self] _ in self?.onOpenProfile?(account) },
-            buildMenu: { [weak self] groups in self?.userMenu(for: .account(account), id: id, groups: groups) },
+            buildMenu: { [weak self] groups in self?.builtUserMenu(for: .account(account), id: id, groups: groups) },
             lifecycle: rowMenuLifecycle,
             notify: { [weak self] in self?.showNotice($0) }
         )
@@ -63,13 +63,13 @@ extension TimelineViewController {
 
     /// 引用の囲み。対象は引用元の投稿で、メニューは引用元の投稿の投稿のメニュー。
     /// - Parameter openThread: 主な操作（スレッドを開く）で行う、今のタップの処理。押した囲みを渡す。
-    func statusTarget(for status: Status, id: ItemID, openThread: @escaping (UIView) -> Void) -> ObjectTarget<StatusMenuItem> {
+    func statusTarget(for status: Status, id: ItemID, openThread: @escaping (UIView) -> Void) -> ObjectTarget<StatusMenuItem, StatusMenuCommand> {
         let entry = TimelineEntry.status(status)
         return ObjectTarget(
             entity: .status,
             settings: settings,
             primary: openThread,
-            buildMenu: { [weak self] groups in self?.contextMenu(for: entry, id: id, groups: groups) },
+            buildMenu: { [weak self] groups in self?.statusMenu(for: entry, id: id, groups: groups) },
             lifecycle: rowMenuLifecycle,
             notify: { [weak self] in self?.showNotice($0) }
         )
@@ -77,12 +77,12 @@ extension TimelineViewController {
 
     /// リンクカード。対象はリンクで、メニューはリンクのメニュー。
     /// - Parameter open: 主な操作（ブラウザで開く）で行う、今のタップの処理。
-    func linkTarget(for url: URL, id: ItemID, open: @escaping () -> Void) -> ObjectTarget<LinkMenuItem> {
+    func linkTarget(for url: URL, id: ItemID, open: @escaping () -> Void) -> ObjectTarget<LinkMenuItem, LinkMenuCommand> {
         ObjectTarget(
             entity: .link,
             settings: settings,
             primary: { _ in open() },
-            buildMenu: { [weak self] groups in self?.linkMenu(for: url, id: id, groups: groups) },
+            buildMenu: { [weak self] groups in self?.builtLinkMenu(for: url, id: id, groups: groups) },
             lifecycle: rowMenuLifecycle,
             notify: { [weak self] in self?.showNotice($0) }
         )
@@ -93,12 +93,12 @@ extension TimelineViewController {
     ///   - url: 元の投稿のURL。
     ///   - text: コピーや翻訳に渡す本文。本文がなければnil。
     ///   - open: 主な操作（ブラウザで開く）で行う、今のタップの処理。
-    func externalPostTarget(url: URL, text: String?, id: ItemID, open: @escaping () -> Void) -> ObjectTarget<ExternalPostMenuItem> {
+    func externalPostTarget(url: URL, text: String?, id: ItemID, open: @escaping () -> Void) -> ObjectTarget<ExternalPostMenuItem, ExternalPostMenuCommand> {
         ObjectTarget(
             entity: .externalPost,
             settings: settings,
             primary: { _ in open() },
-            buildMenu: { [weak self] groups in self?.externalPostMenu(url: url, text: text, id: id, groups: groups) },
+            buildMenu: { [weak self] groups in self?.builtExternalPostMenu(url: url, text: text, id: id, groups: groups) },
             lifecycle: rowMenuLifecycle,
             notify: { [weak self] in self?.showNotice($0) }
         )

@@ -49,7 +49,7 @@ final class ProfileHeaderView: UIView {
     var onOpenImage: ((ProfileImage) -> Void)?
     /// アイコンかヘッダー画像を長押ししたときの、メディアのメニュー。画像を読み込み終えていなければ呼ばない。nilを返せばメニューを出さない。
     /// 並びがnilなら設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
-    var menuForImage: ((ProfileImage, MenuLayout<MediaMenuItem>.Groups?) -> UIMenu?)?
+    var menuForImage: ((ProfileImage, MenuLayout<MediaMenuItem>.Groups?) -> BuiltMenu<MediaMenuCommand>?)?
     /// アイコンとヘッダー画像の、メディアのメニューの長押し。決まりはdocs/menus.mdの「メディアのメニュー」にある。
     private var imageMenuInteractions: [ProfileImage: MediaMenuInteraction] = [:]
     /// 表示名、自己紹介、補足情報の行を長押ししたときの、文章のメニュー。nilを返せばメニューを出さない。

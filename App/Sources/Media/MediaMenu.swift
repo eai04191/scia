@@ -8,7 +8,7 @@ import UIKit
 protocol MediaMenuHost: AnyObject {
     /// `view`の`location`（`view`の座標）を長押しした。出すものがなければnil。
     /// - Parameter groups: 組む並び。nilなら設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
-    func mediaMenu(from view: UIView, at location: CGPoint, groups: MenuLayout<MediaMenuItem>.Groups?) -> UIMenu?
+    func mediaMenu(from view: UIView, at location: CGPoint, groups: MenuLayout<MediaMenuItem>.Groups?) -> BuiltMenu<MediaMenuCommand>?
     func mediaMenuWillShow()
     func mediaMenuDidHide()
     /// タップや長押しに選んだ項目が使えないことを、数秒で消えるチップで知らせる。
@@ -36,7 +36,7 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
     /// 持ち上げた画像をタップしたときに、タップしたときと同じくビューアで開く。
     private let open: @MainActor () -> Void
     /// メニューを組む。並びがnilなら設定の並びで組む。nilなら、応答の連鎖で見つけた`MediaMenuHost`に問い合わせる（一覧の行の中のサムネイル）。
-    private let menu: (@MainActor (MenuLayout<MediaMenuItem>.Groups?) -> UIMenu?)?
+    private let menu: (@MainActor (MenuLayout<MediaMenuItem>.Groups?) -> BuiltMenu<MediaMenuCommand>?)?
     private var longPress: ObjectLongPress?
     /// 持ち上げた画像を、渡したピクセル数の長い辺で読み直す。読めなければnil。
     /// サムネイルは表示の大きさに合わせて縮めて読んでいるため、画面の幅に引き伸ばすとぼやける。届いたらプレビューの中で差し替える。
@@ -53,7 +53,7 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
         on view: UIView,
         wholeImage: (@MainActor () -> UIImage?)?,
         open: @escaping @MainActor () -> Void,
-        menu: (@MainActor (MenuLayout<MediaMenuItem>.Groups?) -> UIMenu?)? = nil,
+        menu: (@MainActor (MenuLayout<MediaMenuItem>.Groups?) -> BuiltMenu<MediaMenuCommand>?)? = nil,
         sharperImage: (@MainActor (_ maxPixelSize: Int) async -> UIImage?)? = nil,
         onLiftChange: (@MainActor (Bool) -> Void)? = nil,
         offersMenu: @escaping @MainActor (CGPoint) -> Bool
@@ -80,14 +80,14 @@ final class MediaMenuInteraction: NSObject, UIContextMenuInteractionDelegate {
         menu != nil || host != nil
     }
 
-    private func buildMenu(at location: CGPoint, groups: MenuLayout<MediaMenuItem>.Groups?) -> UIMenu? {
+    private func buildMenu(at location: CGPoint, groups: MenuLayout<MediaMenuItem>.Groups?) -> BuiltMenu<MediaMenuCommand>? {
         guard let view else { return nil }
         return menu.map { $0(groups) } ?? host?.mediaMenu(from: view, at: location, groups: groups)
     }
 
     /// 押したメディア。メニューを出さないメディア（ぼかしているものなど）ならnil。決まりはdocs/object-actions.mdにある。
     /// タップでメニューを出すときは、画像を持ち上げずに押した位置にメニューだけを出す。
-    func target(at point: CGPoint) -> ObjectTarget<MediaMenuItem>? {
+    func target(at point: CGPoint) -> ObjectTarget<MediaMenuItem, MediaMenuCommand>? {
         guard offersMenu(point) else { return nil }
         let host = host
         return ObjectTarget(

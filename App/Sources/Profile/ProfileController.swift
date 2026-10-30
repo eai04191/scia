@@ -431,12 +431,12 @@ final class ProfileController {
     }
 
     /// アイコンかヘッダー画像のメディアのメニュー。投稿がないため「投稿」は出さない。
-    private func imageMenu(_ image: ProfileImage, groups: MenuLayout<MediaMenuItem>.Groups?) -> UIMenu? {
+    private func imageMenu(_ image: ProfileImage, groups: MenuLayout<MediaMenuItem>.Groups?) -> BuiltMenu<MediaMenuCommand>? {
         guard let attachment = attachment(of: image), let source = header.viewerSource(for: image) else { return nil }
         let target = TimelineViewController.MediaMenuTarget(attachment: attachment, source: source) { [weak self] in
             self?.openImage(image)
         }
-        return viewController?.mediaMenu(for: target, subject: nil, statusMenu: nil, groups: groups)
+        return viewController?.builtMediaMenu(for: target, subject: nil, statusMenu: nil, groups: groups)
     }
 
     // MARK: - 読み込み

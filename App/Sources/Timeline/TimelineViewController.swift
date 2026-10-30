@@ -2289,7 +2289,7 @@ final class TimelineCollectionView: UICollectionView {
 
 extension TimelineViewController: MediaMenuHost {
     /// サムネイルかリンクカードの画像を長押しした。行の要素を探して、メディアのメニューを組む。投稿のメニューは、その「投稿」に入れる。
-    func mediaMenu(from view: UIView, at location: CGPoint, groups: MenuLayout<MediaMenuItem>.Groups?) -> UIMenu? {
+    func mediaMenu(from view: UIView, at location: CGPoint, groups: MenuLayout<MediaMenuItem>.Groups?) -> BuiltMenu<MediaMenuCommand>? {
         var cellView = view.superview
         while let current = cellView, !(current is UICollectionViewCell) {
             cellView = current.superview
@@ -2298,7 +2298,7 @@ extension TimelineViewController: MediaMenuHost {
               let id = dataSource.itemIdentifier(for: indexPath), let entry = entry(for: id),
               let target = mediaMenuTarget(at: view.convert(location, to: collectionView), in: cell)
         else { return nil }
-        return mediaMenu(for: target, entry: entry, id: id, groups: groups)
+        return builtMediaMenu(for: target, entry: entry, id: id, groups: groups)
     }
 
     func mediaMenuWillShow() {

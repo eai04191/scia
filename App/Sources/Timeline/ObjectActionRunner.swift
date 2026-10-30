@@ -71,8 +71,9 @@ protocol ObjectActionTarget {
 }
 
 /// 押された対象と、その主な操作の処理と、メニューの組み方。決まりはdocs/object-actions.mdの「項目を行う」にある。
+/// タップや長押しに割り当てた1項目をどう行うかは、SciaCoreで組んだメニューの木を見て決める（`MenuItemOutcome`）。
 @MainActor
-struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable>: ObjectActionTarget {
+struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable, Command>: ObjectActionTarget {
     let entity: ObjectEntity<Item>
     var settings: AppSettings = AppDependencies.settings
     /// 主な操作がいま行えるか。
@@ -80,7 +81,7 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable>: ObjectActionT
     /// 主な操作。今のタップの処理で行う。メニューの項目を組んで行うと、開く動きの起点などがタップと違うため。押した部品を渡す。
     let primary: (UIView) -> Void
     /// 渡した並びでメニューを組む。nilなら設定の並びで組む。出す項目がなければnil。
-    let buildMenu: (MenuLayout<Item>.Groups?) -> UIMenu?
+    let buildMenu: (MenuLayout<Item>.Groups?) -> BuiltMenu<Command>?
     let lifecycle: MenuLifecycle
     /// 使えない項目を選んだことを、数秒で消えるチップで知らせる。
     let notify: (Notice) -> Void
@@ -90,7 +91,7 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable>: ObjectActionT
     }
 
     func menu() -> UIMenu? {
-        buildMenu(nil)
+        buildMenu(nil)?.menu
     }
 
     var acceptsTap: Bool {
@@ -100,11 +101,7 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable>: ObjectActionT
     func performsLongPress() -> Bool {
         guard case .item(let item) = actions.longPress else { return false }
         if item == Item.primaryItem { return primaryIsAvailable }
-        let elements = singleElements(item)
-        if elements.count == 1, let action = elements.first as? UIAction {
-            return !action.attributes.contains(.disabled)
-        }
-        return !elements.isEmpty
+        return MenuItemOutcome(singleItemMenu: buildMenu(.single(item))?.root).isAvailable
     }
 
     func perform(_ trigger: ObjectTrigger, in view: UIView, at point: CGPoint) {
@@ -118,33 +115,22 @@ struct ObjectTarget<Item: ObjectActionItem & MenuItemPresentable>: ObjectActionT
                 primary(view)
                 return
             }
-            let elements = singleElements(item)
-            if elements.count == 1, let action = elements.first as? UIAction {
-                guard !action.attributes.contains(.disabled) else {
-                    notify(unavailable(item, reason: action.subtitle))
-                    return
-                }
-                TapMenuPresenter.shared.perform(action, in: view, at: point)
-            } else if elements.count == 1, let submenu = elements.first as? UIMenu {
+            // その対象のメニューと同じ組み方で、`item`だけを組む。
+            let built = buildMenu(.single(item))
+            switch MenuItemOutcome(singleItemMenu: built?.root) {
+            case .perform(let command):
+                TapMenuPresenter.shared.perform(in: view, at: point) { built?.renderer.perform(command) }
+            case .unavailable(let reason):
+                notify(unavailable(item, reason: reason))
+            case .submenu(let submenu):
                 // サブメニューの名前だけの1行のメニューを出すと、もう1回押さないと中身に届かないため、中身を出す。
-                TapMenuPresenter.shared.present(UIMenu(title: submenu.title, subtitle: submenu.subtitle, children: submenu.children), in: view, at: point, lifecycle: lifecycle)
-            } else if !elements.isEmpty {
-                TapMenuPresenter.shared.present(UIMenu(children: elements), in: view, at: point, lifecycle: lifecycle)
-            } else {
-                notify(unavailable(item, reason: nil))
+                guard let built else { return }
+                TapMenuPresenter.shared.present(UIMenu(title: submenu.title, subtitle: submenu.subtitle, children: built.elements(submenu.children)), in: view, at: point, lifecycle: lifecycle)
+            case .menu(let nodes):
+                guard let built else { return }
+                TapMenuPresenter.shared.present(UIMenu(children: built.elements(nodes)), in: view, at: point, lifecycle: lifecycle)
             }
         }
-    }
-
-    /// その対象のメニューと同じ組み方で、`item`だけを組んだ要素。まとまりを並べるためのメニュー（`displayInline`）は開いて並べる。
-    private func singleElements(_ item: Item) -> [UIMenuElement] {
-        func flattened(_ elements: [UIMenuElement]) -> [UIMenuElement] {
-            elements.flatMap { element -> [UIMenuElement] in
-                guard let menu = element as? UIMenu, menu.options.contains(.displayInline) else { return [element] }
-                return flattened(menu.children)
-            }
-        }
-        return buildMenu(.single(item)).map { flattened($0.children) } ?? []
     }
 
     /// 使えない項目を選んだことの知らせ。押せない理由があれば、それを文言にする。
@@ -181,10 +167,10 @@ final class TapMenuPresenter {
         button.performPrimaryAction()
     }
 
-    /// メニューの項目を、メニューを出さずに行う。`UIAction`を行う公開APIはないため、`UIControl`の`sendAction(_:)`で送る。
-    func perform(_ action: UIAction, in view: UIView, at point: CGPoint) {
+    /// メニューの項目を、メニューを出さずに行う。メニューを出せる画面の中の部品でだけ行う。
+    func perform(in view: UIView, at point: CGPoint, _ body: () -> Void) {
         guard place(in: view, at: point) else { return }
-        button.sendAction(action)
+        body()
     }
 
     /// 押した部品から一番近い画面のviewに置く。ウインドウの直下に置くと、応答の連鎖にメニューを出す画面がなく、メニューが出ない。
