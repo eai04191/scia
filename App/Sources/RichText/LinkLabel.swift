@@ -300,7 +300,7 @@ final class LinkHitArea: UIControl {
         case .mention(let acct, let url):
             let host = nearest((any LinkMenuHost).self)
             let menu = UserMenu(subject: UserMenuSubject(mentionLink: url, acct: acct), actions: host?.userMenuActions, handlers: handlers, host: host)
-            return menu.menu(groups: groups?.user ?? settings.userMenuLayout.groups, openProfile: { [weak self] in self?.label?.open(destination) }) {
+            return menu.menu(groups: groups?.user ?? settings.userMenuLayout.groups, openProfile: { [weak self] in self?.label?.open(destination) }, avatar: .mentionLink(url)) { _ in
                 host?.mentionMenuIcon(for: url)
             }
         case .hashtag(let name, let url):

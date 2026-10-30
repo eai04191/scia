@@ -393,8 +393,9 @@ extension TimelineViewController {
 
     /// 投稿のメニューに置く、ユーザーのメニューのサブメニュー。
     private func userElement(for user: MenuUser, id: ItemID) -> UIMenuElement? {
-        makeUserMenu(for: user, id: id).submenu(groups: settings.userMenuLayout.groups, openProfile: openProfile(of: user)) {
-            self.userMenuIcon(for: user, id: id)
+        let menu = makeUserMenu(for: user, id: id)
+        return menu.tree.submenu(groups: settings.userMenuLayout.groups, avatar: .user(user)).map { node in
+            menu.renderer(openProfile: openProfile(of: user)) { _ in self.userMenuIcon(for: user, id: id) }.element(node)
         }
     }
 
@@ -434,7 +435,7 @@ extension TimelineViewController {
     /// - Parameter groups: 組む並び。省略すると設定の並びで組む。タップや長押しに割り当てた1項目だけを組むときに渡す。
     func userMenu(for user: MenuUser, id: ItemID, groups: MenuLayout<UserMenuItem>.Groups? = nil) -> UIMenu? {
         defer { loadPendingMenuIcons() }
-        return makeUserMenu(for: user, id: id).menu(groups: groups ?? settings.userMenuLayout.groups, openProfile: openProfile(of: user)) {
+        return makeUserMenu(for: user, id: id).menu(groups: groups ?? settings.userMenuLayout.groups, openProfile: openProfile(of: user), avatar: .user(user)) { _ in
             self.userMenuIcon(for: user, id: id)
         }
     }
