@@ -1,8 +1,7 @@
-import CoreGraphics
-import SciaCore
+public import CoreGraphics
 
 /// 「投稿の見た目」と「通知の見た目」で項目を触っている間に、プレビューのどこを示すか。
-enum AppearanceHighlight: Equatable {
+public enum AppearanceHighlight: Equatable, Sendable {
     /// 部品そのもの。大きさや文字、内側の余白の項目。
     case part(AppearancePreviewPart)
     /// 候補のうち、見本のどこかで先に見つかった部品。行数を0にして消える部品のように、ないときは囲んでいる部品を示す。
@@ -19,10 +18,10 @@ enum AppearanceHighlight: Equatable {
     case allParts([AppearancePreviewPart])
 
     /// 余白が0でも見えるよう、あいだを示す帯をこれより細くしない。
-    static let minimumGapThickness: CGFloat = 2
+    public static let minimumGapThickness: CGFloat = 2
 
     /// 項目に対応する場所。プレビューで示せない項目はnil。
-    init?(_ item: AppearanceValue) {
+    public init?(_ item: AppearanceValue) {
         guard let highlight = Self.highlights[item.id] else { return nil }
         self = highlight
     }
@@ -162,7 +161,7 @@ enum AppearanceHighlight: Equatable {
     }()
 
     /// プレビューで部品をタップしたときに開く項目。部品そのものを示す項目があればそれを、なければ部品ごとに決めた項目を開く。
-    static func item(selectedBy part: AppearancePreviewPart) -> AppearanceValue? {
+    public static func item(selectedBy part: AppearancePreviewPart) -> AppearanceValue? {
         if let item = AppearanceCatalog.values.first(where: { AppearanceHighlight($0)?.selects(part) == true }) {
             return item
         }
@@ -207,7 +206,7 @@ enum AppearanceHighlight: Equatable {
 
     /// 「通知の見た目」のプレビューで部品をタップしたときに開く項目。部品そのものを示す項目があればそれを、なければ部品ごとに決めた項目を開く。
     /// メンションなどの投稿の部品は「投稿の見た目」の項目なので、名前の上の行のほかは開かない。
-    static func notificationItem(selectedBy part: AppearancePreviewPart) -> AppearanceValue? {
+    public static func notificationItem(selectedBy part: AppearancePreviewPart) -> AppearanceValue? {
         if let item = NotificationAppearanceCatalog.values.first(where: { AppearanceHighlight($0)?.selects(part) == true }) {
             return item
         }
@@ -236,7 +235,7 @@ enum AppearanceHighlight: Equatable {
     }
 
     /// プレビューの行を上から順に見て、示せる最初の行と、その行の座標での枠を返す。
-    func locate(in rows: [AppearancePreviewFrames]) -> (row: Int, rects: [CGRect], style: Style)? {
+    public func locate(in rows: [AppearancePreviewFrames]) -> (row: Int, rects: [CGRect], style: Style)? {
         if case .firstOf(let candidates) = self {
             return candidates.lazy.compactMap { $0.locate(in: rows) }.first
         }
@@ -252,7 +251,7 @@ enum AppearanceHighlight: Equatable {
     }
 
     /// 示す場所の描き方。
-    enum Style {
+    public enum Style {
         /// 部品の少し外側に枠を引き、中の部品を隠さない。部品の大きさや文字を変える項目に使う。
         case enclose
         /// その場所を塗る。すき間や余白のように、塗る場所に部品がない項目に使う。
@@ -287,7 +286,7 @@ enum AppearanceHighlight: Equatable {
     }
 
     /// 枠の内側の余白の帯。上下左右の4つ。
-    static func paddingBands(of rect: CGRect, padding: CGFloat) -> [CGRect] {
+    public static func paddingBands(of rect: CGRect, padding: CGFloat) -> [CGRect] {
         let side = min(padding, rect.width / 2)
         let edge = min(padding, rect.height / 2)
         return [
@@ -299,7 +298,7 @@ enum AppearanceHighlight: Equatable {
     }
 
     /// 枠の角の丸みが効く、四隅の正方形。
-    static func cornerSquares(of rect: CGRect, radius: CGFloat) -> [CGRect] {
+    public static func cornerSquares(of rect: CGRect, radius: CGFloat) -> [CGRect] {
         let side = min(radius, rect.width / 2, rect.height / 2)
         return [
             CGRect(x: rect.minX, y: rect.minY, width: side, height: side),
@@ -311,7 +310,7 @@ enum AppearanceHighlight: Equatable {
 
     /// 並んだ枠のうち、隣り合うもののあいだの帯。サムネイル同士や選択肢同士のすき間を示すのに使う。
     /// 右か下にある枠のうち、いちばん近いものだけを隣とみなす。
-    static func gaps(between frames: [CGRect]) -> [CGRect] {
+    public static func gaps(between frames: [CGRect]) -> [CGRect] {
         var gaps: [CGRect] = []
         for frame in frames {
             let right = frames

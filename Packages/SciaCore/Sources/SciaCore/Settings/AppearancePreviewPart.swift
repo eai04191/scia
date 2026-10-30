@@ -1,7 +1,7 @@
-import UIKit
+public import CoreGraphics
 
 /// 「投稿の見た目」と「通知の見た目」のプレビューで、調整している項目の場所を示すための、投稿と通知の行の部品。
-enum AppearancePreviewPart: Hashable, CaseIterable {
+public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
     case rowPaddingTop
     case rowPaddingBottom
     case rowPaddingLeading
@@ -185,7 +185,7 @@ enum AppearancePreviewPart: Hashable, CaseIterable {
 
 extension AppearancePreviewPart {
     /// 部品ではなく、すき間や余白、角のような場所か。場所は塗って示し、部品は中を隠さないよう外側に枠を引いて示す。
-    var isArea: Bool {
+    public var isArea: Bool {
         switch self {
         case .rowPaddingTop, .rowPaddingBottom, .rowPaddingLeading, .rowPaddingTrailing,
              .mediaTileGaps, .pollOptionGaps, .pollOptionPadding, .pollOptionSidePadding, .pollOptionCorners,
@@ -202,7 +202,7 @@ extension AppearancePreviewPart {
 
 extension AppearancePreviewPart {
     /// 通知の行だけにある部品。「投稿の見た目」の項目は開かない。
-    static let notificationParts: Set<AppearancePreviewPart> = [
+    public static let notificationParts: Set<AppearancePreviewPart> = [
         .notificationSymbol, .notificationHeader, .notificationHeaderGlyphs, .notificationHeaderAvatar, .notificationHeaderAvatarGap,
         .groupAvatars, .groupAvatarGaps, .notificationAccount, .notificationAccountGlyphs,
         .quotedSpoiler, .quotedBodyText, .quotedBodyGlyphs, .quotedMedia, .quotedThumbnails, .quotedThumbnailGaps, .quotedPoll, .quotedNote,
@@ -210,12 +210,4 @@ extension AppearancePreviewPart {
 }
 
 /// 部品ごとの枠。1つの部品が離れた複数の枠を持つことがある（リンクカードのサイト名と説明など）。
-typealias AppearancePreviewFrames = [AppearancePreviewPart: [CGRect]]
-
-extension UIView {
-    /// 表示中なら、このビューの枠を`space`の座標で返す。大きさを0にした部品も、場所を示せるよう、幅や高さが0の枠を返す。
-    func previewFrame(in space: UIView) -> [CGRect]? {
-        guard !isHidden, window != nil || superview != nil else { return nil }
-        return [convert(bounds, to: space)]
-    }
-}
+public typealias AppearancePreviewFrames = [AppearancePreviewPart: [CGRect]]
