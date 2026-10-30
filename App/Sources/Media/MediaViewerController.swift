@@ -743,19 +743,21 @@ final class MediaViewerController: UIViewController {
             return editingMenuElements(editing)
         }
         let attachment = currentItem.serverAttachment
-        var menu = MediaMenu(kind: currentItem.kind, attachment: attachment)
+        var tree = MediaMenuTree(kind: currentItem.kind, attachment: attachment)
         let canTransfer = currentFileURL != nil && transfers != nil
-        menu.share = MediaMenu.Command(isEnabled: canTransfer || currentUnsupportedURL != nil) { [weak self] in self?.share() }
-        menu.saveToPhotos = MediaMenu.Command(isEnabled: canTransfer) { [weak self] in self?.saveToPhotos() }
-        if let text = (pages[currentIndex] as? ImagePageController)?.recognizedText, !text.isEmpty {
-            menu.translateText = MediaMenu.Command { [weak self] in self?.translation.present(text) }
+        tree.share = canTransfer || currentUnsupportedURL != nil
+        tree.saveToPhotos = canTransfer
+        let recognizedText = (pages[currentIndex] as? ImagePageController)?.recognizedText
+        if let recognizedText, !recognizedText.isEmpty {
+            tree.translateText = true
         }
-        menu.showAltText = MediaMenu.Command { [weak self] in self?.showAltText() }
-        menu.fileURL = attachment.flatMap { $0.url ?? $0.remoteUrl }
-        menu.details = pages[currentIndex]?.fileDetails
+        tree.showAltText = true
+        tree.fileURL = attachment.flatMap { $0.url ?? $0.remoteUrl }
+        tree.details = pages[currentIndex]?.fileDetails
         // リンクのコピーは、開く先がなくても出す。
-        menu.opensURLs = onOpenURL != nil
-        menu.urlHandlers = URLMenuHandlers(
+        tree.opensURLs = onOpenURL != nil
+        tree.linkBrowser = settings.linkBrowser
+        let urlHandlers = URLMenuHandlers(
             linkBrowser: settings.linkBrowser,
             copy: { [weak self] url in
                 UIPasteboard.general.url = url
@@ -767,11 +769,28 @@ final class MediaViewerController: UIViewController {
                 self?.close()
             }
         )
-        menu.copyValue = { [weak self] value in
-            UIPasteboard.general.string = value
-            self?.showCopiedNotice(.textCopied)
+        let renderer = MenuRenderer<MediaMenuCommand> { [weak self] command in
+            switch command {
+            case .share:
+                self?.share()
+            case .saveToPhotos:
+                self?.saveToPhotos()
+            case .translateText:
+                guard let recognizedText else { return }
+                self?.translation.present(recognizedText)
+            case .showAltText:
+                self?.showAltText()
+            case .url(let command):
+                urlHandlers.perform(command)
+            case .copyValue(let value):
+                UIPasteboard.general.string = value
+                self?.showCopiedNotice(.textCopied)
+            case .open, .status:
+                // ビューアでは、開く項目と投稿のメニューを出さない。
+                break
+            }
         }
-        var elements = menu.elements(layout: settings.mediaMenuLayout)
+        var elements = renderer.elements(tree.nodes(groups: settings.mediaMenuLayout.groups))
         if let loop = (pages[currentIndex] as? PlayerPageController)?.loopMenuAction() {
             elements.append(UIMenu(options: .displayInline, children: [loop]))
         }

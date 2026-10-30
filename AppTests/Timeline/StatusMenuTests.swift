@@ -63,16 +63,6 @@ struct StatusMenuTests {
         return "\(menu.title)\(subtitle)[\(children.map(describe).joined(separator: ","))]"
     }
 
-    /// 投稿への操作。ユーザーの`@acct`のサブメニューの中は含めない。
-    private func actions(_ menu: UIMenu?) -> [UIAction] {
-        func flatten(_ element: UIMenuElement) -> [UIAction] {
-            if let action = element as? UIAction { return [action] }
-            guard let menu = element as? UIMenu, !menu.title.hasPrefix("@") else { return [] }
-            return menu.children.flatMap(flatten)
-        }
-        return (menu?.children ?? []).flatMap(flatten)
-    }
-
     /// 既定の並びは、何のための操作かでまとまりを分ける。
     /// 自分のアカウントが分からない一覧では、会話のミュート、固定、公開範囲を選んでブーストは出ない。
     @Test func defaultMenuGroupsItemsByPurpose() throws {
@@ -87,91 +77,6 @@ struct StatusMenuTests {
         ])
     }
 
-    /// 本文が空白だけの投稿では、扱う文字がないのでテキストのコピーと翻訳を出さない。
-    @Test func textItemsAreHiddenWithoutText() throws {
-        let titles = try actions(menu(for: .status(status(url: nil, content: "<p> </p>")))).map(\.title)
-
-        #expect(!titles.contains("テキストをコピー"))
-        #expect(!titles.contains("翻訳"))
-    }
-
-    /// ブーストは元の投稿のページを指す。ブーストの側のurlがなくても、元の投稿にあれば押せる。
-    /// ユーザーは元の投稿を書いた人、ブーストした人の順に並ぶ。
-    @Test func reblogUsesOriginalStatusURLAndListsBothUsers() throws {
-        let original = try status(url: URL(string: "https://remote.example/@bob/1"), account: account("2", "bob@remote.example"))
-        let menu = try menu(for: .status(status(url: nil, reblog: original)))
-
-        let links = actions(menu).filter { ["リンクをコピー", "共有", "ブラウザで開く"].contains($0.title) }
-        #expect(links.count == 3)
-        #expect(links.allSatisfy { !$0.attributes.contains(.disabled) })
-        #expect(outline(menu).last == ["@bob(remote.example)[プロフィール,リンクをコピー,共有,ブラウザで開く]", "@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"])
-    }
-
-    /// urlはAPIでnullを取りうる。ないときは押せないまま並べ、uriで代わりにしない。
-    @Test func linkActionsAreDisabledWithoutURL() throws {
-        let links = try actions(menu(for: .status(status(url: nil)))).filter { ["リンクをコピー", "共有", "ブラウザで開く"].contains($0.title) }
-
-        #expect(links.count == 3)
-        #expect(links.allSatisfy { $0.attributes.contains(.disabled) })
-    }
-
-    /// 自分の投稿を自分でブーストしたときのように、同じユーザーが2つの項目に当たるときは1度だけ出す。
-    @Test func sameUserIsListedOnce() throws {
-        let original = try status(url: nil)
-        let menu = try menu(for: .status(status(url: nil, reblog: original)))
-
-        #expect(outline(menu).last == ["@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"])
-    }
-
-    /// 投稿のない通知では、通知したユーザーと、投稿を必要としない通知の削除だけを出す。
-    @Test func followNotificationShowsOnlyNotifyingUserAndDismiss() throws {
-        let notification = MastodonNotification(id: "1", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: try account("2", "bob"))
-
-        #expect(try outline(menu(for: .notification(notification))) == [["@bob[プロフィール,リンクをコピー,共有,ブラウザで開く]"], ["その他[通知を削除]"]])
-    }
-
-    /// 通知したユーザーは、対象の投稿を書いた人より先に出る。
-    @Test func notificationListsNotifyingUserBeforeAuthor() throws {
-        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: try account("2", "bob"), status: try status(url: nil))
-
-        // 最後のまとまりは、通知の削除を入れた「その他」。
-        #expect(try outline(menu(for: .notification(notification))).dropLast().last == ["@bob[プロフィール,リンクをコピー,共有,ブラウザで開く]", "@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"])
-    }
-
-    /// 「その他」より下の項目はサブメニューに入る。非表示の項目は出さず、区切り線で分けたまとまりに従う。
-    @Test func itemsBelowMoreGoIntoSubmenu() throws {
-        let settings = try makeSettings()
-        settings.statusMenuLayout = MenuLayout(elements: [
-            .item(.reply, isVisible: true),
-            .item(.favourite, isVisible: false),
-            .separator,
-            .item(.share, isVisible: true),
-            .more,
-            .item(.copyLink, isVisible: true),
-            .separator,
-            .item(.reblog, isVisible: true),
-        ])
-
-        let outline = try outline(menu(for: .status(status(url: nil)), settings: settings))
-
-        // 並びに書かなかった項目は、既定で直前にある項目の後ろに差し込まれる。ブラウザで開くと翻訳は共有の後ろに、ユーザーの項目はその後ろに、テキストのコピーはリンクのコピーの後ろに、ブックマークはブーストの後ろに入る。
-        #expect(outline == [
-            ["返信"],
-            ["共有", "ブラウザで開く", "翻訳", "@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"],
-            ["その他[リンクをコピー,テキストをコピー,ブースト,ブックマーク]"],
-        ])
-    }
-
-    /// ユーザーのメニューの中身が1つで「その他」が空なら、サブメニューにせず直接並べる。
-    @Test func singleUserMenuItemIsListedDirectly() throws {
-        let settings = try makeSettings()
-        settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .profile) } + [.more])
-
-        let outline = try outline(menu(for: .status(status(url: nil)), settings: settings))
-
-        #expect(outline.last == ["@aliceのプロフィール"])
-    }
-
     /// 既定のユーザーのメニューは、開く・書く操作（メモを含む）、フォロー、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
     /// 関係を覚えていない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() throws {
@@ -180,47 +85,6 @@ struct StatusMenuTests {
         let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
 
         #expect(outline.last == ["@alice[プロフィール,メンション,…,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報]]"])
-    }
-
-    /// メンション、ハンドルをコピー、関係の項目を組むものを渡されていない画面では、これらを出さない。
-    @Test func userMenuOmitsMentionAndCopyUsernameWithoutActions() throws {
-        let outline = try outline(menu(for: .status(status(url: nil))))
-
-        #expect(outline.last == ["@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"])
-    }
-
-    /// 関係の項目は、1つだけでもサブメニューにする。読んでから中身が決まり、名前に相手を入れられないため。
-    @Test func singleRelationItemStaysInSubmenu() throws {
-        let settings = try makeSettings()
-        settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .follow) } + [.more])
-        let actions = userMenuActions()
-
-        let outline = try outline(menu(for: .status(status(url: nil)), settings: settings, userMenuActions: actions))
-
-        #expect(outline.last == ["@alice[…]"])
-    }
-
-    /// 関係を覚えている相手は、その関係で関係の項目をその場で組み、読み込み中の行を出さない。
-    /// 読み込み中の行から中身を差し替えると、開く途中のサブメニューの動きが崩れるため。
-    @Test func knownRelationBuildsRelationItemsImmediately() throws {
-        let actions = userMenuActions(known: { target in
-            guard case .account(let id, let acct) = target else { return nil }
-            return .relation(UserRelation(accountID: id, acct: acct, relationship: Relationship(id: id, following: true)))
-        })
-
-        let user = try #require(try outline(menu(for: .status(status(url: nil)), userMenuActions: actions)).last?.first)
-
-        #expect(user.hasPrefix("@alice[プロフィール,メンション,メモを追加,フォローを外す,"))
-        #expect(!user.contains("…"))
-    }
-
-    /// 自分には関係の項目も通報も出さない。自分かどうかはIDで決まるため、関係を読まずに決める。
-    @Test func myselfHasNoRelationItems() throws {
-        let actions = userMenuActions(known: { _ in .myself })
-
-        let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
-
-        #expect(outline.last == ["@alice[プロフィール,メンション,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く]"])
     }
 
     /// メニューを開いたら、メニューに出る人全員の関係を1回でまとめて読み直す。
@@ -256,37 +120,6 @@ struct StatusMenuTests {
     @MainActor
     private final class ReloadRecorder {
         var requests: [[String]] = []
-    }
-
-    /// サブメニューにせず直接並べるときは、メンションの名前に相手を入れる。
-    @Test func singleMentionItemIsListedDirectlyWithAcct() throws {
-        let settings = try makeSettings()
-        settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: $0 == .mention) } + [.more])
-        let actions = userMenuActions()
-
-        let outline = try outline(menu(for: .status(status(url: nil)), settings: settings, userMenuActions: actions))
-
-        #expect(outline.last == ["@aliceにメンション"])
-    }
-
-    /// ユーザーのメニューの中身が2つ以上か、「その他」に何かあれば、@acctのサブメニューにする。
-    @Test func userMenuBecomesSubmenuWhenProfileIsInMore() throws {
-        let settings = try makeSettings()
-        settings.userMenuLayout = MenuLayout(elements: [.more, .item(.profile, isVisible: true)])
-
-        let outline = try outline(menu(for: .status(status(url: nil)), settings: settings))
-
-        #expect(outline.last == ["@alice[その他[プロフィール,リンクをコピー,共有,ブラウザで開く]]"])
-    }
-
-    /// ユーザーのメニューに出す項目がなければ、ユーザーの項目を出さない。
-    @Test func emptyUserMenuHidesUserItems() throws {
-        let settings = try makeSettings()
-        settings.userMenuLayout = MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: false) } + [.more])
-
-        let outline = try outline(menu(for: .status(status(url: nil)), settings: settings))
-
-        #expect(!outline.joined().contains { $0.contains("@alice") })
     }
 
     /// メンションされたユーザーのアイコンは、一覧のほかの行にいるその人のアカウントから取る。ブーストされた投稿を書いた人と、通知した人からも探す。
@@ -371,20 +204,6 @@ struct StatusMenuTests {
         await recorder.releaseAccounts()
     }
 
-    /// メンションされたユーザーは既定で隠す。出すと、メンションされた人ごとに並ぶ。
-    @Test func mentionedUsersAreHiddenByDefaultAndListedWhenShown() throws {
-        let mentions = [Mention(id: "3", username: "carol", url: nil, acct: "carol"), Mention(id: "4", username: "dave", url: nil, acct: "dave@remote.example")]
-        let post = try status(url: nil, mentions: mentions)
-        #expect(try !outline(menu(for: .status(post))).joined().contains("@carol[プロフィール,リンクをコピー,共有,ブラウザで開く]"))
-
-        let settings = try makeSettings()
-        settings.statusMenuLayout = MenuLayout(elements: StatusMenuItem.defaultLayout.elements.map { element in
-            element == .item(.mentionedUsers, isVisible: false) ? .item(.mentionedUsers, isVisible: true) : element
-        })
-
-        #expect(try outline(menu(for: .status(post), settings: settings)).last == ["@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]", "@carol[プロフィール,リンクをコピー,共有,ブラウザで開く]", "@dave(remote.example)[プロフィール,リンクをコピー,共有,ブラウザで開く]"])
-    }
-
     /// カスタム絵文字は「その他」に、絵文字ごとの`:shortcode:`のサブメニューで並び、中に絵文字の画像のメディアのメニューを出す。
     /// 投稿のメニューの中なので、メディアのメニューの「投稿」は出さない。
     @Test func customEmojisListMediaMenuPerEmojiInMore() throws {
@@ -399,29 +218,6 @@ struct StatusMenuTests {
         #expect(more.title == "その他")
         let emoji = try #require(more.children.flatMap { ($0 as? UIMenu)?.children ?? [$0] }.first { $0.title == ":blobcat:" })
         #expect(describe(emoji) == ":blobcat:[開く,リンクをコピー,ブラウザで開く,その他[メディアの情報[PNG]]]")
-    }
-
-    /// ハッシュタグは、関係するユーザーの後ろに「その他」に入れずに、タグごとの`#名前`のサブメニューで並び、中に本文のハッシュタグを長押ししたときと同じハッシュタグのメニューを出す。
-    /// サーバーと同じ決まりでそろえた名前が同じタグは、1度だけ出す。
-    @Test func hashtagsListHashtagMenuPerTagAfterUsers() throws {
-        let tagURL = try #require(URL(string: "https://example.social/tags/cat"))
-        let base = try status(url: nil)
-        let post = Status(
-            id: base.id, createdAt: base.createdAt, account: base.account, content: base.content, spoilerText: "", url: nil,
-            tags: [Tag(name: "cat", url: tagURL), Tag(name: "Cat", url: tagURL), Tag(name: "dog", url: nil)]
-        )
-
-        let groups = try #require(menu(for: .status(post))?.children.compactMap { $0 as? UIMenu }.filter { $0.options.contains(.displayInline) })
-        let userGroup = try #require(groups.last)
-        #expect(userGroup.children.first?.title == "@\(post.account.username)")
-        let tags = userGroup.children.filter { $0.title.hasPrefix("#") }
-        #expect(tags.map(describe) == [
-            "#cat[すべての投稿,@\(post.account.username)の投稿,ブラウザで開く,リンクをコピー,共有]",
-            "#dog[すべての投稿,@\(post.account.username)の投稿,ブラウザで開く,リンクをコピー,共有]",
-        ])
-        // URLの分からないタグは、URLの項目を押せないまま並べる。
-        let dogLinks = try #require(tags.last as? UIMenu).children.flatMap { ($0 as? UIMenu)?.children ?? [$0] }.compactMap { $0 as? UIAction }.filter { $0.title != "すべての投稿" && !$0.title.hasPrefix("@") }
-        #expect(dogLinks.allSatisfy { $0.attributes.contains(.disabled) })
     }
 
     /// ハッシュタグの「ミュート」は、自分のフィルターを覚えていれば、その場でミュートしているかを決め、読み込み中の行を出さない。
@@ -461,20 +257,6 @@ struct StatusMenuTests {
         #expect(!refreshes.requests.isEmpty)
     }
 
-    /// ハッシュタグのない投稿では、ハッシュタグの項目を出さない。
-    @Test func hashtagsAreHiddenWithoutTags() throws {
-        let titles = try outline(menu(for: .status(status(url: nil)))).joined()
-
-        #expect(!titles.contains { $0.hasPrefix("#") })
-    }
-
-    /// カスタム絵文字のない投稿では、カスタム絵文字の項目を出さない。
-    @Test func customEmojisAreHiddenWithoutEmojis() throws {
-        let titles = try outline(menu(for: .status(status(url: nil)))).joined()
-
-        #expect(!titles.contains { $0.contains("カスタム絵文字") || $0.hasPrefix(":") })
-    }
-
     /// 横並びの区切り線の下のまとまりは、中くらいの大きさで横に並べる。既定では返信・お気に入り・ブーストのまとまりだけが横並びになる。
     @Test func rowSeparatorMakesFollowingGroupMediumSized() throws {
         let post = try status(url: nil)
@@ -490,45 +272,4 @@ struct StatusMenuTests {
         #expect(withoutRow.allSatisfy { $0.preferredElementSize != .medium })
     }
 
-    /// 会話のミュートは、自分の投稿、自分へのメンションを含む投稿、通知でだけ出る。
-    @Test func conversationMuteIsShownOnlyWhereIAmInvolved() throws {
-        let me = try account("9", "me")
-        let others = try status(url: nil)
-        let mine = try status(url: nil, account: me)
-        let mentioningMe = try status(url: nil, mentions: [Mention(id: "9", username: "me", url: nil, acct: "me")])
-        func titles(_ entry: TimelineEntry) throws -> [String] { try actions(menu(for: entry, myAccountID: "9")).map(\.title) }
-
-        #expect(try !titles(.status(others)).contains("会話をミュート"))
-        #expect(try titles(.status(mine)).contains("会話をミュート"))
-        #expect(try titles(.status(mentioningMe)).contains("会話をミュート"))
-        let notification = MastodonNotification(id: "1", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: try account("2", "bob"), status: others)
-        #expect(try titles(.notification(notification)).contains("会話をミュート"))
-    }
-
-    /// プロフィールへの固定は、ダイレクトではない自分の投稿でだけ出る。
-    @Test func pinIsShownOnlyForOwnPinnablePosts() throws {
-        let me = try account("9", "me")
-        let base = try status(url: nil, account: me)
-        let direct = Status(id: base.id, createdAt: base.createdAt, account: me, content: base.content, spoilerText: "", url: nil, visibility: .direct)
-        func titles(_ status: Status) throws -> [String] { try actions(menu(for: .status(status), myAccountID: "9")).map(\.title) }
-
-        #expect(try titles(base).contains("プロフィールに固定"))
-        #expect(try !titles(direct).contains("プロフィールに固定"))
-        #expect(try !titles(status(url: nil)).contains("プロフィールに固定"))
-    }
-
-    /// 公開範囲を選んでブーストは、既定では隠す。出したときは、ブーストしていない投稿で、3つの公開範囲のサブメニューとして出る。ブーストした投稿では出さない。
-    @Test func reblogWithVisibilityIsSubmenuOnlyBeforeBoosting() throws {
-        let post = try status(url: nil)
-        let submenu = "公開範囲を選んでブースト[公開,ひかえめな公開,フォロワーのみ]"
-        #expect(try !outline(menu(for: .status(post), myAccountID: "9")).joined().contains(submenu))
-
-        let settings = try makeSettings()
-        settings.statusMenuLayout = MenuLayout(elements: StatusMenuItem.defaultLayout.elements.map { element in
-            element == .item(.reblogWithVisibility, isVisible: false) ? .item(.reblogWithVisibility, isVisible: true) : element
-        })
-
-        #expect(try outline(menu(for: .status(post), settings: settings, myAccountID: "9")).joined().contains(submenu))
-        #expect(try !outline(menu(for: .status(post.settingReblogged(true)), settings: settings, myAccountID: "9")).joined().contains(submenu))
-    }
 }

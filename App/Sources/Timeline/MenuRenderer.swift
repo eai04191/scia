@@ -70,8 +70,23 @@ struct MenuRenderer<Command> {
 struct BuiltMenu<Command> {
     let root: MenuNode<Command>
     let renderer: MenuRenderer<Command>
+    /// 描き終えたあとに呼ぶ。描きながら集めた、まだ読んでいないアイコンを読み始める。
+    var didRender: @MainActor () -> Void = {}
+
+    init(root: MenuNode<Command>, renderer: MenuRenderer<Command>, didRender: @escaping @MainActor () -> Void = {}) {
+        self.root = root
+        self.renderer = renderer
+        self.didRender = didRender
+    }
 
     var menu: UIMenu {
-        renderer.menu(root)
+        defer { didRender() }
+        return renderer.menu(root)
+    }
+
+    /// 木の一部を描く。
+    func elements(_ nodes: [MenuNode<Command>]) -> [UIMenuElement] {
+        defer { didRender() }
+        return renderer.elements(nodes)
     }
 }
