@@ -121,11 +121,11 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         configuration.itemSeparatorHandler = { [weak self] indexPath, separator in
             var separator = separator
             guard let self, indexPath.section == 0 else { return separator }
-            let isSeparator = { (index: Int) in self.rows.indices.contains(index) && self.rows[index].element.isSeparator }
-            if isSeparator(indexPath.item) || isSeparator(indexPath.item - 1) {
+            let hidden = Self.hiddenSeparators(at: indexPath.item, in: rows)
+            if hidden.top {
                 separator.topSeparatorVisibility = .hidden
             }
-            if isSeparator(indexPath.item) || isSeparator(indexPath.item + 1) {
+            if hidden.bottom {
                 separator.bottomSeparatorVisibility = .hidden
             }
             return separator
@@ -195,12 +195,13 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         }
         dataSource.reorderingHandlers.didReorder = { [weak self] transaction in
             guard let self else { return }
+            let previousRows = rows
             let rowsByID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
             rows = transaction.finalSnapshot.itemIdentifiers(inSection: .rows).compactMap { cell in
                 if case .row(let id) = cell { rowsByID[id] } else { nil }
             }
             save()
-            refreshDependentRows()
+            refreshDependentRows(previousRows: previousRows)
         }
         return dataSource
     }
@@ -261,9 +262,30 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     }
 
     /// 横並びの知らせと行どうしの線は、ほかの行の並びや表示で変わるため、並びが変わるたびに描き直す。
-    private func refreshDependentRows() {
+    /// 線は、出方が変わった行だけレイアウトを無効にして引き直す。レイアウト全体を無効にすると、画面の外の行の測った高さが見積もりの高さに戻って一覧の高さが縮み、
+    /// 下のほうまでスクロールしているとスクロール位置が押し戻されて、指を離した直後に行が跳ねるため。
+    private func refreshDependentRows(previousRows: [Row]) {
         refreshRowSeparatorNotes()
-        collectionView.collectionViewLayout.invalidateLayout()
+        let previous = Dictionary(uniqueKeysWithValues: previousRows.indices.map { (previousRows[$0].id, Self.hiddenSeparators(at: $0, in: previousRows)) })
+        let changed = rows.indices.filter { previous[rows[$0].id] != Self.hiddenSeparators(at: $0, in: rows) }
+        guard !changed.isEmpty else { return }
+        let context = UICollectionViewLayoutInvalidationContext()
+        context.invalidateItems(at: changed.map { IndexPath(item: $0, section: 0) })
+        collectionView.collectionViewLayout.invalidateLayout(with: context)
+    }
+
+    /// 行の上と下に、行どうしの線を引かないか。区切り線の行は自分が線なので、その行と上下の行には引かない。
+    private static func hiddenSeparators(at index: Int, in rows: [Row]) -> HiddenSeparators {
+        let isSeparator = { (index: Int) in rows.indices.contains(index) && rows[index].element.isSeparator }
+        return HiddenSeparators(
+            top: isSeparator(index) || isSeparator(index - 1),
+            bottom: isSeparator(index) || isSeparator(index + 1)
+        )
+    }
+
+    private struct HiddenSeparators: Equatable {
+        var top: Bool
+        var bottom: Bool
     }
 
     /// 横並びの知らせは、まとまりの項目の表示を切り替えても変わる。
