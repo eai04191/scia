@@ -409,11 +409,10 @@ final class InlineComposeController: NSObject {
         resignInput()
     }
 
-    #if DEBUG
-    /// 書き始めて、投稿欄のボタンから開く画面を開く。`scia-debug://compose/<画面>`で、ボタンをたどらずに開くため。
-    func presentSheetForDebug(_ sheet: DebugURL.ComposeSheet) {
+    /// 書き始めて、投稿欄から開く画面を開く。外から頼まれた画面を開くとき（`AppDestination.compose`）に使う。
+    func present(_ screen: AppDestination.ComposeScreen) {
         beginEditing()
-        switch sheet {
+        switch screen {
         case .tools: presentToolLayoutSettings()
         case .language: presentLanguagePicker()
         case .schedule:
@@ -424,14 +423,36 @@ final class InlineComposeController: NSObject {
         case .emoji: presentEmojiPalette()
         case .mediaPicker: presentMediaPicker()
         case .attachment(let index):
-            guard model.attachments.indices.contains(index) else {
-                logger.error("debug compose attachment: no attachment at index=\(index, privacy: .public)")
+            if let id = attachmentID(at: index) {
+                openAttachment(id)
+            }
+        case .altText(let index):
+            // ビューアを開いていると、開き直さずに今の添付の代替テキストを書き始めてしまうため、開いていないときだけ行う。
+            guard mediaViewer == nil else {
+                logger.info("compose: alt text ignored while viewer is shown")
                 return
             }
-            openAttachment(model.attachments[index].id)
+            if let id = attachmentID(at: index) {
+                openAttachment(id)
+                mediaViewer?.beginEditingDescription()
+            }
+        case .crop(let index):
+            // GIFのように切り抜けない添付では、開いても結果を反映できない。ビューアのメニューと同じく出さない。
+            if let id = attachmentID(at: index), model.canCrop(id) {
+                presentCrop(id)
+            }
         }
     }
 
+    private func attachmentID(at index: Int) -> DraftAttachment.ID? {
+        guard model.attachments.indices.contains(index) else {
+            logger.error("compose: no attachment at index=\(index, privacy: .public)")
+            return nil
+        }
+        return model.attachments[index].id
+    }
+
+    #if DEBUG
     /// 本文を`text`に置き換える。打ったときと同じ経路を通し、末尾の語の補完を出す。
     /// シミュレーターの日本語のキーボードでは半角の`#`や`@`を打ちにくいため、`scia-debug://compose?text=`で補完を出すところまで用意する。
     func replaceTextForDebug(_ text: String) {

@@ -10,7 +10,7 @@ struct AppURLTests {
     ])
     func readsProfile(_ string: String, acct: String) throws {
         let url = try #require(URL(string: string))
-        #expect(AppURL(url, scheme: "scia") == .profile(acct: acct))
+        #expect(AppURL(url, scheme: "scia") == .open(.profile(acct: acct)))
     }
 
     @Test(arguments: [
@@ -37,8 +37,8 @@ struct AppURLTests {
 
     /// ハンドルは、誰のプロフィールを開いたかが分かるので、ドメインだけをログに書く。
     @Test func logsProfileWithDomainOnly() {
-        #expect(AppURL.profile(acct: "Bot_testing@stellaria.network").logDescription == "profile domain=stellaria.network")
-        #expect(AppURL.profile(acct: "Eai").logDescription == "profile domain=local")
+        #expect(AppURL.open(.profile(acct: "Bot_testing@stellaria.network")).logDescription == "profile domain=stellaria.network")
+        #expect(AppURL.open(.profile(acct: "Eai")).logDescription == "profile domain=local")
     }
 
     @Test(arguments: [

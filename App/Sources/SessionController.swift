@@ -89,6 +89,12 @@ final class SessionController {
         tasks.onClose { [weak lookup] in lookup?.cancel() }
         return lookup
     }()
+    /// 外から頼まれた画面のうち、編集履歴、メモ、通報、ユーザーのハッシュタグのように、読んでから開く画面の入口。後から頼まれたものだけを開く。
+    private lazy var destinationOpening: LatestLookup = {
+        let lookup = LatestLookup(clock: clock) { nil }
+        tasks.onClose { [weak lookup] in lookup?.cancel() }
+        return lookup
+    }()
     /// 「接続の状態」画面に出す、このセッションの接続の状態。
     let diagnostics: ConnectionDiagnostics
     private let interactions: StatusInteractions
@@ -2435,8 +2441,8 @@ final class SessionController {
     /// 他のアプリから開かれたURLの画面を出す。
     func open(_ url: AppURL) {
         switch url {
-        case .profile(let acct):
-            openProfile(acct: acct)
+        case .open(let destination):
+            open(destination)
         case .share(let id, let unreadableCount):
             rootViewController.closeScreensForSharedContent { [weak self] in
                 self?.receiveSharedMedia(id: id, unreadableCount: unreadableCount)
@@ -2593,6 +2599,124 @@ final class SessionController {
         }
     }
 
+    /// 外から頼まれた画面を開く。アプリのURL（`scia://`）と、これから足すショートカットは、ここを通す。
+    func open(_ destination: AppDestination) {
+        // 重ねた画面を閉じている途中に届くと、閉じていく画面を手前にあるものとして扱い、重ねたり積んだりできずに何もしないことがある。閉じ終えてから行う。
+        if let dismissing = rootViewController.presentedViewController, dismissing.isBeingDismissed, let coordinator = dismissing.transitionCoordinator {
+            coordinator.animate(alongsideTransition: nil) { [weak self] _ in self?.open(destination) }
+            return
+        }
+        switch destination {
+        case .tab(let item):
+            tabs.show(item)
+        case .userTab(let tab):
+            for case .item(let item, _) in AppDependencies.settings.tabLayout(for: credential.handle).elements where tab.matches(item, credential: credential) {
+                tabs.show(item)
+                return
+            }
+            logger.error("open tab: no matching tab in layout")
+        case .settings(let page):
+            // 閉じる途中の画面には重ねられないため、閉じる途中の画面を飛ばして重ねる。
+            rootViewController.frontmostPresented.presentSettings(
+                instance: credential.instance,
+                account: credential.handle,
+                diagnostics: diagnostics,
+                tabIcons: profileTabIcons,
+                opening: page
+            )
+        case .profile(let acct):
+            openProfile(acct: acct)
+        case .myProfile:
+            if let source = tabs.selectedNavigation?.topViewController {
+                openMyProfile(from: source)
+            }
+        case .profileEdit:
+            presentProfileEditor()
+        case .thread(let statusID):
+            guard let source = tabs.selectedNavigation?.topViewController else { return }
+            // 押した行の代わりに、画面の安全領域の上端に置いて開く。
+            openThread(statusID: statusID, rowFrame: source.view.convert(source.view.safeAreaLayoutGuide.layoutFrame, to: nil), from: source)
+        case .editHistory(let statusID):
+            let client = client
+            push("edit history", { try await client.status(statusID) }) { [weak self] status, source in
+                self?.openEditHistory(of: status, filterTitles: [], from: source)
+            }
+        case .accounts(let list):
+            guard let source = tabs.selectedNavigation?.topViewController else { return }
+            switch list {
+            case .followers(let accountID):
+                openAccountList(.followers(accountID: accountID ?? credential.accountID), ownerAcct: accountID == nil ? credential.username : nil, from: source)
+            case .following(let accountID):
+                openAccountList(.following(accountID: accountID ?? credential.accountID), ownerAcct: accountID == nil ? credential.username : nil, from: source)
+            case .favourited(let statusID):
+                openAccountList(.favouritedBy(statusID), from: source)
+            case .reblogged(let statusID):
+                openAccountList(.rebloggedBy(statusID), from: source)
+            }
+        case .hashtag(let name):
+            if let source = tabs.selectedNavigation?.topViewController {
+                openFeed(.hashtag(name: name), from: source)
+            }
+        case .accountHashtag(let acct, let name):
+            push("account hashtag", resolvingAccount(acct)) { [weak self] account, source in
+                self?.openAccountHashtag(name, of: account, from: source)
+            }
+        case .scheduled:
+            showScheduledStatuses()
+        case .operationStatus:
+            showOperationStatus()
+        case .note(let acct):
+            let client = client
+            let resolve = resolvingAccount(acct)
+            lookUp("note", {
+                let account = try await resolve()
+                guard let relationship = try await client.relationship(with: account.id) else { throw ProfileNotFound(acct: acct) }
+                return UserRelation(accountID: account.id, acct: account.acct, relationship: relationship)
+            }) { [weak self] relation in
+                self?.presentNoteEditor(for: relation)
+            }
+        case .report(let acct):
+            lookUp("report", resolvingAccount(acct)) { [weak self] account in
+                self?.presentReport(accountID: account.id, acct: account.acct, statusID: nil)
+            }
+        case .compose(let screen):
+            composer.present(screen)
+        }
+    }
+
+    /// `acct`の人を探す処理。見つからなければ失敗にする。
+    private func resolvingAccount(_ acct: String) -> @Sendable () async throws -> Account {
+        let client = client
+        let accounts = accounts
+        return {
+            guard let account = try await accounts.resolve(.acct(acct), search: { try await client.resolveAccount(acct) }) else { throw ProfileNotFound(acct: acct) }
+            return account
+        }
+    }
+
+    /// 開く画面に要るものを読んでから、`open`で開く。読めなければ、ふだんの失敗と同じく知らせる。読む間に次の画面を頼まれたら、前のものは開かない。
+    private func lookUp<Value: Sendable>(_ operation: String, _ load: @escaping @Sendable () async throws -> Value, isStillWanted: @escaping @MainActor () -> Bool = { true }, open: @escaping @MainActor (Value) -> Void) {
+        destinationOpening.start(.action, load, isStillWanted: isStillWanted) { [weak self] result in
+            switch result {
+            case .success(let value):
+                open(value)
+            case .failure(let error):
+                self?.logger.error("open \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
+                self?.handle(error, title: "開けませんでした")
+            }
+        }
+    }
+
+    /// 選んでいるタブに積む画面に要るものを読んでから、`open`で積む。読む間にタブを移ったり別の画面を開いたりしたら、積まない。スレッドを開く操作と同じ。
+    private func push<Value: Sendable>(_ operation: String, _ load: @escaping @Sendable () async throws -> Value, open: @escaping @MainActor (Value, UIViewController) -> Void) {
+        guard let source = tabs.selectedNavigation?.topViewController else { return }
+        let anchor = PushAnchor(source)
+        lookUp(operation, load, isStillWanted: { anchor.isStillShowing }) { [weak source] value in
+            guard let source else { return }
+            open(value, source)
+        }
+    }
+
     #if DEBUG
     /// 確かめるための処理中のチップを、進み具合を少しずつ進めながら`duration`のあいだ出し、済んだら消す。出している途中に呼び直したら、初めから数え直す。
     private func showDebugProgress(for duration: Duration, title: String) {
@@ -2710,89 +2834,17 @@ final class SessionController {
                 navigation.popToRootViewController(animated: false)
             }
             tabs.tabBarController.selectedIndex = 0
-        case .settings(let page):
-            // 直前のresetで閉じている途中の画面には重ねられないため、閉じる途中の画面を飛ばして重ねる。
-            rootViewController.frontmostPresented.presentSettings(
-                instance: credential.instance,
-                account: credential.handle,
-                diagnostics: diagnostics,
-                tabIcons: profileTabIcons,
-                opening: page
-            )
-        case .myProfile:
-            if let source = tabs.selectedNavigation?.topViewController {
-                openMyProfile(from: source)
-            }
-        case .thread(let statusID):
-            guard let source = tabs.selectedNavigation?.topViewController else { return }
-            // 押した行の代わりに、画面の安全領域の上端に置いて開く。
-            openThread(statusID: statusID, rowFrame: source.view.convert(source.view.safeAreaLayoutGuide.layoutFrame, to: nil), from: source)
-        case .editHistory(let statusID):
-            guard let source = tabs.selectedNavigation?.topViewController else { return }
-            // 読む間にタブを移ったり別の画面を開いたりしたら、開かない。スレッドを開く操作と同じ。
-            let anchor = PushAnchor(source)
-            let client = client
-            withDebugLookup("edit history", { try await client.status(statusID) }) { [weak self, weak source] status in
-                guard anchor.isStillShowing, let source else { return }
-                self?.openEditHistory(of: status, filterTitles: [], from: source)
-            }
-        case .accounts(let list):
-            guard let source = tabs.selectedNavigation?.topViewController else { return }
-            switch list {
-            case .followers(let accountID):
-                openAccountList(.followers(accountID: accountID ?? credential.accountID), ownerAcct: accountID == nil ? credential.username : nil, from: source)
-            case .following(let accountID):
-                openAccountList(.following(accountID: accountID ?? credential.accountID), ownerAcct: accountID == nil ? credential.username : nil, from: source)
-            case .favourited(let statusID):
-                openAccountList(.favouritedBy(statusID), from: source)
-            case .reblogged(let statusID):
-                openAccountList(.rebloggedBy(statusID), from: source)
-            }
-        case .scheduled:
-            showScheduledStatuses()
-        case .operationStatus:
-            showOperationStatus()
-        case .discomfortReport:
-            if let window = rootViewController.view.window {
-                DiscomfortReportPresenter.present(in: window)
-            }
-        case .note(let acct):
-            let client = client
-            withDebugLookup("note", { [accounts] in
-                guard let account = try await accounts.resolve(.acct(acct), search: { try await client.resolveAccount(acct) }),
-                      let relationship = try await client.relationship(with: account.id)
-                else { throw ProfileNotFound(acct: acct) }
-                return UserRelation(accountID: account.id, acct: account.acct, relationship: relationship)
-            }) { [weak self] relation in
-                self?.presentNoteEditor(for: relation)
-            }
-        case .report(let acct):
-            let client = client
-            withDebugLookup("report", { [accounts] in
-                guard let account = try await accounts.resolve(.acct(acct), search: { try await client.resolveAccount(acct) }) else { throw ProfileNotFound(acct: acct) }
-                return account
-            }) { [weak self] account in
-                self?.presentReport(accountID: account.id, acct: account.acct, statusID: nil)
-            }
-        case .composeSheet(let sheet):
-            composer.presentSheetForDebug(sheet)
         case .tuning:
             rootViewController.frontmostPresented.presentTuningPanel()
         case .profileEdit(let note, let field):
             presentProfileEditor(debugNote: note, debugField: field)
+        case .discomfortReport:
+            if let window = rootViewController.view.window {
+                DiscomfortReportPresenter.present(in: window)
+            }
         case .sheetKeyboard:
             // 書いている途中のキーボードから開いたときの動きも見るため、投稿欄は閉じない。高さはメディアを選ぶシートの決めた高さと同じにする。
             SheetKeyboardExperiment.present(from: rootViewController.frontmostPresented, lowHeight: AppDependencies.tuning.value(of: TuningCatalog.composePickerHeight) - (rootViewController.view.window?.safeAreaInsets.bottom ?? 0))
-        case .tab(let tab):
-            if let item = TabItem(rawValue: tab.rawValue) {
-                tabs.show(item)
-            }
-        case .userTab(let tab):
-            for case .item(let item, _) in AppDependencies.settings.tabLayout(for: credential.handle).elements where tab.matches(item, credential: credential) {
-                tabs.show(item)
-                return
-            }
-            logger.error("debug tab: no matching tab in layout")
         case .viewer(let index):
             openTopmostMedia(at: index)
         case .autoScroll(let distance, let speed):
@@ -2831,19 +2883,6 @@ final class SessionController {
                     feed.releaseHeldArrivals()
                 }
                 notifications.releaseHeldArrivals()
-            }
-        }
-    }
-
-    /// デバッグURLで開く画面に要るものを読んでから、`open`で開く。読めなければ、ふだんの失敗と同じく知らせる。
-    private func withDebugLookup<Value: Sendable>(_ operation: String, _ load: @escaping @Sendable () async throws -> Value, open: @escaping @MainActor (Value) -> Void) {
-        tasks.run(.action) { [weak self] in
-            do {
-                let value = try await load()
-                open(value)
-            } catch {
-                self?.logger.error("debug \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
-                self?.handle(error, title: "開けませんでした")
             }
         }
     }

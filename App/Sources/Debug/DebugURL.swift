@@ -66,15 +66,8 @@ enum DebugURL: Equatable {
     case browser(URL)
     /// `scia-debug://reset`。重ねた画面をすべて閉じ、どのタブも最初の画面に戻して、ホームのタブを選ぶ。
     case reset
-    /// `scia-debug://settings`。設定を開く。`scia-debug://settings/<SettingsPage.rawValue>`なら、設定の一覧から入るその画面まで重ねて開く。
-    case settings(SettingsPage?)
     /// `scia-debug://tuning`。チューニングパネルを開く。
     case tuning
-    /// `scia-debug://tab/<home|local|federated|notifications|bookmarks|favourites>`。タブを切り替える。無効にしている項目では何もしない。
-    case tab(Tab)
-    /// `scia-debug://tab/list?id=<リストのID>`、`tab/hashtag?name=<名前>`、`tab/profile?acct=<ハンドル>`、`tab/account-hashtag?acct=<ハンドル>&name=<名前>`。
-    /// タブの並びに足したタブを選ぶ。並びにない、または無効にしているタブでは何もしない。
-    case userTab(UserTab)
     /// `scia-debug://viewer?index=<n>`。選んでいるタブの、画面のいちばん上に見えている添付ファイル付きの投稿を、n番目（0から）の添付ファイルでビューアに開く。
     /// サムネイルをタップしたのと同じ経路で開く。
     case viewer(index: Int)
@@ -98,29 +91,10 @@ enum DebugURL: Equatable {
     /// `scia-debug://profile-edit?note=<自己紹介>&field=<補足情報の内容>`。自分のプロフィールの編集を開く。`note`を渡すと、読み込んだあとに自己紹介をその文に置き換えて、
     /// 末尾にキーボードを出す。`field`を渡すと、その内容の補足情報を足して、内容の欄の末尾にキーボードを出す。どちらも、打ったときと同じく末尾の語の補完を出す。
     /// シミュレーターの日本語のキーボードでは半角の`:`や`@`を打てないため、補完を確かめるときに語の頭を用意する。
+    /// どれも渡さずに開くだけなら、`scia://profile-edit`を使う。
     case profileEdit(note: String?, field: String?)
-    /// `scia-debug://my-profile`。選んでいるタブに、自分のプロフィールを開く。
-    case myProfile
-    /// `scia-debug://thread?id=<投稿のID>`。選んでいるタブに、その投稿のスレッドを開く。
-    case thread(statusID: String)
-    /// `scia-debug://edit-history?id=<投稿のID>`。その投稿の編集履歴を開く。
-    case editHistory(statusID: String)
-    /// `scia-debug://accounts/<followers|following>`で自分のフォロワーかフォローの一覧を、`?id=<アカウントのID>`でその人の一覧を開く。
-    /// `scia-debug://accounts/<favourited|reblogged>?id=<投稿のID>`で、その投稿をお気に入りした人、ブーストした人の一覧を開く。
-    case accounts(AccountList)
-    /// `scia-debug://scheduled`。予約した投稿の一覧を開く。タブに並べていればそのタブを、無効にしていれば手前に重ねて開く。
-    case scheduled
-    /// `scia-debug://operation-status`。「操作の状況」の一覧を開く。
-    case operationStatus
     /// `scia-debug://discomfort-report`。シェイクしたときと同じ、違和感レポートを書く画面を開く。
     case discomfortReport
-    /// `scia-debug://note?acct=<user@domain>`。その人のプロフィールに書く、自分にしか見えないメモの画面を開く。
-    case note(acct: String)
-    /// `scia-debug://report?acct=<user@domain>`。その人を通報する画面を開く。通報は送らない限りサーバーに届かない。
-    case report(acct: String)
-    /// `scia-debug://compose/<ComposeSheet.rawValue>`。投稿欄で書き始め、ボタンから開く画面を開く。
-    /// `compose/attachment?index=<n>`は、n番目（0から）の添付をビューアで開く。先に`scia-debug://compose?media=<枚数>`で添付を足す。
-    case composeSheet(ComposeSheet)
     /// `scia-debug://sheet-keyboard`。低い段のシートの中で入力欄にキーボードを出したときの動きを確かめる試作を開く（`SheetKeyboardExperiment`）。
     case sheetKeyboard
     /// `scia-debug://ticker-loop/on`で、ステータスバーの通知を、出る、出ている、消えるを繰り返して出し続ける。`scia-debug://ticker-loop/off`で止める。
@@ -134,53 +108,6 @@ enum DebugURL: Equatable {
     /// ハッシュタグをフォローする操作がまだないため、ハッシュタグのタブを実物で確かめるのに使う。サーバーのフォローを書き換える。
     case followTag(name: String)
     case unfollowTag(name: String)
-
-    enum UserTab: Equatable {
-        case list(id: String)
-        case hashtag(name: String)
-        case profile(acct: String)
-        case accountHashtag(acct: String, name: String)
-
-        /// - Parameter credential: ログイン中のアカウント。同じサーバーの人のタブはサーバー名のないハンドルで持つため、サーバー名を補ってそろえる。
-        func matches(_ item: TabItem, credential: Credential) -> Bool {
-            func sameAcct(_ lhs: String, _ rhs: String) -> Bool {
-                credential.handle(ofAcct: String(lhs.trimmingPrefix("@"))).lowercased() == credential.handle(ofAcct: String(rhs.trimmingPrefix("@"))).lowercased()
-            }
-            func sameTag(_ lhs: String, _ rhs: String) -> Bool {
-                Hashtag.normalizedName(lhs) == Hashtag.normalizedName(rhs)
-            }
-            return switch (self, item) {
-            case (.list(let id), .list(let itemID, _)): id == itemID
-            case (.hashtag(let name), .hashtag(let itemName)): sameTag(name, itemName)
-            case (.profile(let acct), .profile(_, let itemAcct, _)): sameAcct(acct, itemAcct)
-            case (.accountHashtag(let acct, let name), .accountHashtag(_, let itemAcct, let itemName, _)): sameAcct(acct, itemAcct) && sameTag(name, itemName)
-            default: false
-            }
-        }
-    }
-
-    enum AccountList: Equatable {
-        /// nilなら自分。
-        case followers(accountID: String?)
-        case following(accountID: String?)
-        case favourited(statusID: String)
-        case reblogged(statusID: String)
-    }
-
-    enum ComposeSheet: Equatable {
-        /// 投稿欄のボタンの並び。
-        case tools
-        /// 投稿の言語。
-        case language
-        /// 予約の日時。予約していなければ予約を始める。
-        case schedule
-        /// カスタム絵文字のパレット。
-        case emoji
-        /// メディアを選ぶシート。
-        case mediaPicker
-        /// 添付のビューア。
-        case attachment(index: Int)
-    }
 
     enum Tab: String {
         case home
@@ -212,16 +139,7 @@ enum DebugURL: Equatable {
         "storage-probe": .storageProbe,
         "reset": .reset,
         "compose/close": .composeClose,
-        "settings": .settings(nil),
-        "my-profile": .myProfile,
-        "scheduled": .scheduled,
-        "operation-status": .operationStatus,
         "discomfort-report": .discomfortReport,
-        "compose/tools": .composeSheet(.tools),
-        "compose/language": .composeSheet(.language),
-        "compose/schedule": .composeSheet(.schedule),
-        "compose/emoji": .composeSheet(.emoji),
-        "compose/media-picker": .composeSheet(.mediaPicker),
         "tuning": .tuning,
         "sheet-keyboard": .sheetKeyboard,
         "ticker-loop/on": .statusBarTickerLoop(true),
@@ -242,7 +160,6 @@ enum DebugURL: Equatable {
         case "dummy": DebugDummyPost(rawValue: last).map { .dummy($0) }
         case "scenario": .scenario(last)
         case "unsupported": OptionalFeature(rawValue: last).map { .unsupported($0) }
-        case "tab": Tab(rawValue: last).map { .tab($0) } ?? Self.userTab(url)
         case "catalog": CatalogComponent(rawValue: last).map { .catalog($0) }
         case "status": Self.status(url)
         case "download": Self.slowDownload(url)
@@ -256,13 +173,7 @@ enum DebugURL: Equatable {
         case "inject": Self.inject(url)
         case "lists": Self.lists(url)
         case "tags": Self.tags(url)
-        case "compose": last == "attachment" ? Self.composeAttachment(url) : Self.compose(url)
-        case "settings": SettingsPage(rawValue: last).map { .settings($0) }
-        case "thread": Self.query("id", in: url).flatMap { $0.isEmpty ? nil : .thread(statusID: $0) }
-        case "edit-history": Self.query("id", in: url).flatMap { $0.isEmpty ? nil : .editHistory(statusID: $0) }
-        case "accounts": Self.accounts(url)
-        case "note": Self.query("acct", in: url).flatMap { $0.isEmpty ? nil : .note(acct: $0) }
-        case "report": Self.query("acct", in: url).flatMap { $0.isEmpty ? nil : .report(acct: $0) }
+        case "compose": Self.compose(url)
         case "browser": Self.query("url", in: url).flatMap(URL.init(string:)).flatMap { LinkBrowser.inApp.browser(for: $0) == .inApp ? .browser($0) : nil }
         case "profile-edit": .profileEdit(note: Self.query("note", in: url), field: Self.query("field", in: url))
         default: nil
@@ -357,34 +268,6 @@ enum DebugURL: Equatable {
         let pollOptions = query("poll", in: url).map { $0.components(separatedBy: ",") }
         guard let mediaCount = Int(query("media", in: url) ?? "0"), mediaCount >= 0, text != nil || mediaCount > 0 || pollOptions != nil else { return nil }
         return .compose(text: text, mediaCount: mediaCount, pollOptions: pollOptions)
-    }
-
-    private static func userTab(_ url: URL) -> DebugURL? {
-        func value(_ name: String) -> String? { query(name, in: url).flatMap { $0.isEmpty ? nil : $0 } }
-        let tab: UserTab? = switch url.lastPathComponent {
-        case "list": value("id").map { .list(id: $0) }
-        case "hashtag": value("name").map { .hashtag(name: $0) }
-        case "profile": value("acct").map { .profile(acct: $0) }
-        case "account-hashtag": value("acct").flatMap { acct in value("name").map { .accountHashtag(acct: acct, name: $0) } }
-        default: nil
-        }
-        return tab.map { .userTab($0) }
-    }
-
-    private static func composeAttachment(_ url: URL) -> DebugURL? {
-        guard let index = Int(query("index", in: url) ?? "0"), index >= 0 else { return nil }
-        return .composeSheet(.attachment(index: index))
-    }
-
-    private static func accounts(_ url: URL) -> DebugURL? {
-        let id = query("id", in: url).flatMap { $0.isEmpty ? nil : $0 }
-        switch url.lastPathComponent {
-        case "followers": return .accounts(.followers(accountID: id))
-        case "following": return .accounts(.following(accountID: id))
-        case "favourited": return id.map { .accounts(.favourited(statusID: $0)) }
-        case "reblogged": return id.map { .accounts(.reblogged(statusID: $0)) }
-        default: return nil
-        }
     }
 
     private static func autoScroll(_ url: URL) -> DebugURL? {

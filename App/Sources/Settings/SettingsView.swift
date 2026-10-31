@@ -321,43 +321,6 @@ struct SettingsView: View {
     }
 }
 
-/// 設定の一覧から重ねて開く画面。`rawValue`は、`scia-debug://settings/<rawValue>`でその画面を直接開くときの名前。
-enum SettingsPage: String, CaseIterable, Hashable {
-    case appearance
-    case notificationAppearance = "notification-appearance"
-    case tabs
-    case statusActions = "status-actions"
-    case notificationActions = "notification-actions"
-    case userActions = "user-actions"
-    case linkActions = "link-actions"
-    case externalPostActions = "external-post-actions"
-    case hashtagActions = "hashtag-actions"
-    case mediaActions = "media-actions"
-    case statusMenu = "status-menu"
-    case userMenu = "user-menu"
-    case linkMenu = "link-menu"
-    case externalPostMenu = "external-post-menu"
-    case profileTextMenu = "profile-text-menu"
-    case hashtagMenu = "hashtag-menu"
-    case mediaMenu = "media-menu"
-    case composeTools = "compose-tools"
-    case connection
-    case storage
-    /// ストレージの、メディアのキャッシュの表示済みの段。
-    case viewedMediaCache = "storage-viewed"
-    /// ストレージの、メディアのキャッシュの先読みの段。
-    case prefetchedMediaCache = "storage-prefetched"
-    case licenses
-
-    /// 設定の一覧からこの画面までに重ねる画面。
-    var path: [SettingsPage] {
-        switch self {
-        case .viewedMediaCache, .prefetchedMediaCache: [.storage, self]
-        default: [self]
-        }
-    }
-}
-
 /// ステータスバーの通知の設定。使えない機種では、切り替えをオフにして灰色にし、理由を添える。
 struct StatusBarTickerSettingsSection: View {
     @Binding var isOn: Bool

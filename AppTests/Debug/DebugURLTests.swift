@@ -48,65 +48,9 @@ struct DebugURLTests {
     @Test func readsAgentNavigation() throws {
         #expect(DebugURL(try #require(URL(string: "scia-debug://dump"))) == .dump)
         #expect(DebugURL(try #require(URL(string: "scia-debug://reset"))) == .reset)
-        #expect(DebugURL(try #require(URL(string: "scia-debug://settings"))) == .settings(nil))
         #expect(DebugURL(try #require(URL(string: "scia-debug://tuning"))) == .tuning)
-        #expect(DebugURL(try #require(URL(string: "scia-debug://tab/home"))) == .tab(.home))
-        #expect(DebugURL(try #require(URL(string: "scia-debug://tab/notifications"))) == .tab(.notifications))
         #expect(DebugURL(try #require(URL(string: "scia-debug://viewer"))) == .viewer(index: 0))
         #expect(DebugURL(try #require(URL(string: "scia-debug://viewer?index=2"))) == .viewer(index: 2))
-    }
-
-    @Test(arguments: SettingsPage.allCases)
-    func readsEverySettingsPage(_ page: SettingsPage) throws {
-        let url = try #require(URL(string: "scia-debug://settings/\(page.rawValue)"))
-        #expect(DebugURL(url) == .settings(page))
-    }
-
-    @Test func readsScreens() throws {
-        let expected: [(String, DebugURL?)] = [
-            ("scia-debug://settings/unknown", nil),
-            ("scia-debug://my-profile", .myProfile),
-            ("scia-debug://tab/list?id=12", .userTab(.list(id: "12"))),
-            ("scia-debug://tab/hashtag?name=scia", .userTab(.hashtag(name: "scia"))),
-            ("scia-debug://tab/profile?acct=bob%40example.com", .userTab(.profile(acct: "bob@example.com"))),
-            ("scia-debug://tab/account-hashtag?acct=bob&name=scia", .userTab(.accountHashtag(acct: "bob", name: "scia"))),
-            ("scia-debug://tab/account-hashtag?acct=bob", nil),
-            ("scia-debug://tab/unknown", nil),
-            ("scia-debug://thread?id=123", .thread(statusID: "123")),
-            ("scia-debug://thread", nil),
-            ("scia-debug://edit-history?id=123", .editHistory(statusID: "123")),
-            ("scia-debug://accounts/followers", .accounts(.followers(accountID: nil))),
-            ("scia-debug://accounts/following?id=9", .accounts(.following(accountID: "9"))),
-            ("scia-debug://accounts/favourited?id=123", .accounts(.favourited(statusID: "123"))),
-            ("scia-debug://accounts/reblogged?id=123", .accounts(.reblogged(statusID: "123"))),
-            ("scia-debug://accounts/favourited", nil),
-            ("scia-debug://scheduled", .scheduled),
-            ("scia-debug://operation-status", .operationStatus),
-            ("scia-debug://discomfort-report", .discomfortReport),
-            ("scia-debug://note?acct=bob%40example.com", .note(acct: "bob@example.com")),
-            ("scia-debug://report?acct=bob", .report(acct: "bob")),
-            ("scia-debug://compose/tools", .composeSheet(.tools)),
-            ("scia-debug://compose/language", .composeSheet(.language)),
-            ("scia-debug://compose/schedule", .composeSheet(.schedule)),
-            ("scia-debug://compose/emoji", .composeSheet(.emoji)),
-            ("scia-debug://compose/media-picker", .composeSheet(.mediaPicker)),
-            ("scia-debug://compose/attachment", .composeSheet(.attachment(index: 0))),
-            ("scia-debug://compose/attachment?index=2", .composeSheet(.attachment(index: 2))),
-        ]
-        for (string, url) in expected {
-            #expect(DebugURL(try #require(URL(string: string))) == url, "\(string)")
-        }
-    }
-
-    @Test func matchesUserTabsLikeTheLayout() throws {
-        let credential = Credential(instance: try #require(URL(string: "https://example.social")), accessToken: "", clientID: "", clientSecret: "", accountID: "1", username: "me")
-        #expect(DebugURL.UserTab.profile(acct: "bob@example.social").matches(.profile(accountID: "2", acct: "bob"), credential: credential))
-        #expect(DebugURL.UserTab.profile(acct: "@Bob").matches(.profile(accountID: "2", acct: "bob"), credential: credential))
-        #expect(!DebugURL.UserTab.profile(acct: "bob@other.example").matches(.profile(accountID: "2", acct: "bob"), credential: credential))
-        #expect(DebugURL.UserTab.hashtag(name: "ＳＣＩＡ").matches(.hashtag(name: "scia"), credential: credential))
-        #expect(DebugURL.UserTab.accountHashtag(acct: "bob@example.social", name: "Café").matches(.accountHashtag(accountID: "2", acct: "bob", name: "cafe"), credential: credential))
-        #expect(DebugURL.UserTab.list(id: "3").matches(.list(id: "3", title: "a"), credential: credential))
-        #expect(!DebugURL.UserTab.list(id: "3").matches(.hashtag(name: "3"), credential: credential))
     }
 
     @Test func readsProfileEdit() throws {
