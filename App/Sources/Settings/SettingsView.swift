@@ -19,6 +19,8 @@ struct SettingsView: View {
     private let clock: any Clock<Duration>
     @State private var copiedBuildInfo = false
     @State private var appIconError: String?
+    /// 一覧から重ねて開いた画面。
+    @State private var path: [SettingsPage] = []
 
     init(
         settings: AppSettings,
@@ -72,12 +74,10 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Form {
                 Section {
-                    NavigationLink {
-                        AppearanceEditorView(settings: settings)
-                    } label: {
+                    NavigationLink(value: SettingsPage.appearance) {
                         PostPreview(
                             createdAt: previewDate,
                             nameStyle: settings.statusNameStyle,
@@ -107,9 +107,7 @@ struct SettingsView: View {
                     Text("文字の大きさや余白、名前や時刻の表記、お気に入りとブーストの光を、プレビューを見ながら変えます。")
                 }
                 Section {
-                    NavigationLink("通知の見た目") {
-                        NotificationAppearanceEditorView(settings: settings)
-                    }
+                    NavigationLink("通知の見た目", value: SettingsPage.notificationAppearance)
                 } footer: {
                     Text("誰が何をしたかの行や、お気に入りやブーストで再掲する投稿の、文字の大きさと余白を変えます。")
                 }
@@ -148,49 +146,33 @@ struct SettingsView: View {
                     Text("メニューの「ブースト」でブーストするときの公開範囲です。「アカウントの既定」では、サーバーで設定した投稿の公開範囲でブーストします。フォロワーのみの自分の投稿は、この設定にかかわらずフォロワーのみでブーストします。ほかの公開範囲でブーストするときは、メニューの「公開範囲を選んでブースト」を使います。")
                 }
                 Section {
-                    NavigationLink("タブ") {
-                        MenuLayoutSettingsView(title: "タブ", layout: tabLayoutBinding, image: { [tabIcons] in tabIcons.icon(for: $0)?.menu }, imageRevision: { [tabIcons] in tabIcons.revision })
-                    }
+                    NavigationLink("タブ", value: SettingsPage.tabs)
                 } header: {
                     Text("タブ")
                 } footer: {
                     Text("タブバーに並べるタイムラインと、その並びを選びます。「切り替えタブ」より下に置いたものは、タブバーの最後のタブにまとめ、見出しのメニューで切り替えます。並びは\(account)のものです。")
                 }
                 Section {
-                    ObjectActionsRow(entity: .status, settings: settings)
-                    ObjectActionsRow(entity: .notification, settings: settings)
-                    ObjectActionsRow(entity: .user, settings: settings)
-                    ObjectActionsRow(entity: .link, settings: settings)
-                    ObjectActionsRow(entity: .externalPost, settings: settings)
-                    ObjectActionsRow(entity: .hashtag, settings: settings)
-                    ObjectActionsRow(entity: .media, settings: settings)
+                    ObjectActionsRow(entity: .status, settings: settings, page: .statusActions)
+                    ObjectActionsRow(entity: .notification, settings: settings, page: .notificationActions)
+                    ObjectActionsRow(entity: .user, settings: settings, page: .userActions)
+                    ObjectActionsRow(entity: .link, settings: settings, page: .linkActions)
+                    ObjectActionsRow(entity: .externalPost, settings: settings, page: .externalPostActions)
+                    ObjectActionsRow(entity: .hashtag, settings: settings, page: .hashtagActions)
+                    ObjectActionsRow(entity: .media, settings: settings, page: .mediaActions)
                 } header: {
                     Text("タップと長押し")
                 } footer: {
                     Text("投稿や通知、ユーザーのアイコン、リンク、ハッシュタグ、メディアをタップ、長押ししたときに、メニューを開くか、メニューのどの操作をするかを選びます。引用の囲みは投稿、リンクカードはリンク、Xの投稿の囲みはほかのサービスの投稿として扱います。ビューアの中は対象にしません。")
                 }
                 Section {
-                    NavigationLink("投稿のメニュー") {
-                        MenuLayoutSettingsView(title: "投稿のメニュー", layout: $settings.statusMenuLayout)
-                    }
-                    NavigationLink("ユーザーのメニュー") {
-                        MenuLayoutSettingsView(title: "ユーザーのメニュー", layout: $settings.userMenuLayout)
-                    }
-                    NavigationLink("リンクのメニュー") {
-                        MenuLayoutSettingsView(title: "リンクのメニュー", layout: $settings.linkMenuLayout)
-                    }
-                    NavigationLink("ほかのサービスの投稿のメニュー") {
-                        MenuLayoutSettingsView(title: "ほかのサービスの投稿のメニュー", layout: $settings.externalPostMenuLayout)
-                    }
-                    NavigationLink("プロフィールの文章のメニュー") {
-                        MenuLayoutSettingsView(title: "プロフィールの文章のメニュー", layout: $settings.profileTextMenuLayout)
-                    }
-                    NavigationLink("ハッシュタグのメニュー") {
-                        MenuLayoutSettingsView(title: "ハッシュタグのメニュー", layout: $settings.hashtagMenuLayout)
-                    }
-                    NavigationLink("メディアのメニュー") {
-                        MenuLayoutSettingsView(title: "メディアのメニュー", layout: $settings.mediaMenuLayout)
-                    }
+                    NavigationLink("投稿のメニュー", value: SettingsPage.statusMenu)
+                    NavigationLink("ユーザーのメニュー", value: SettingsPage.userMenu)
+                    NavigationLink("リンクのメニュー", value: SettingsPage.linkMenu)
+                    NavigationLink("ほかのサービスの投稿のメニュー", value: SettingsPage.externalPostMenu)
+                    NavigationLink("プロフィールの文章のメニュー", value: SettingsPage.profileTextMenu)
+                    NavigationLink("ハッシュタグのメニュー", value: SettingsPage.hashtagMenu)
+                    NavigationLink("メディアのメニュー", value: SettingsPage.mediaMenu)
                 } header: {
                     Text("長押しのメニュー")
                 } footer: {
@@ -198,9 +180,7 @@ struct SettingsView: View {
                 }
                 Section {
                     Toggle("書いていないときは隠す", isOn: $settings.hidesEmptyComposeBar)
-                    NavigationLink("投稿欄のボタン") {
-                        MenuLayoutSettingsView(title: "投稿欄のボタン", layout: $settings.composeToolLayout)
-                    }
+                    NavigationLink("投稿欄のボタン", value: SettingsPage.composeTools)
                 } header: {
                     Text("投稿欄")
                 } footer: {
@@ -265,15 +245,9 @@ struct SettingsView: View {
                     }
                 }
                 Section {
-                    NavigationLink("接続の状態") {
-                        ConnectionStatusView(instance: instance, diagnostics: diagnostics, listTitles: listTitles)
-                    }
-                    NavigationLink("ストレージ") {
-                        StorageView()
-                    }
-                    NavigationLink("ライセンス") {
-                        LicensesView()
-                    }
+                    NavigationLink("接続の状態", value: SettingsPage.connection)
+                    NavigationLink("ストレージ", value: SettingsPage.storage)
+                    NavigationLink("ライセンス", value: SettingsPage.licenses)
                     // いろいろなブランチのビルドを入れ替えて試すときに、いま入っているのがどれか分かるようにする。
                     // 違和感の報告などに貼れるよう、タップでコピーする
                     Button {
@@ -304,6 +278,7 @@ struct SettingsView: View {
                 }
             }
             .topEdgeEffectHiddenOnMac()
+            .navigationDestination(for: SettingsPage.self) { destination($0) }
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -313,7 +288,64 @@ struct SettingsView: View {
             }
         }
     }
+
+    @ViewBuilder
+    private func destination(_ page: SettingsPage) -> some View {
+        switch page {
+        case .appearance: AppearanceEditorView(settings: settings)
+        case .notificationAppearance: NotificationAppearanceEditorView(settings: settings)
+        case .tabs: MenuLayoutSettingsView(title: "タブ", layout: tabLayoutBinding, image: { [tabIcons] in tabIcons.icon(for: $0)?.menu }, imageRevision: { [tabIcons] in tabIcons.revision })
+        case .statusActions: ObjectActionsSettingsView(entity: .status, settings: settings)
+        case .notificationActions: ObjectActionsSettingsView(entity: .notification, settings: settings)
+        case .userActions: ObjectActionsSettingsView(entity: .user, settings: settings)
+        case .linkActions: ObjectActionsSettingsView(entity: .link, settings: settings)
+        case .externalPostActions: ObjectActionsSettingsView(entity: .externalPost, settings: settings)
+        case .hashtagActions: ObjectActionsSettingsView(entity: .hashtag, settings: settings)
+        case .mediaActions: ObjectActionsSettingsView(entity: .media, settings: settings)
+        case .statusMenu: MenuLayoutSettingsView(title: "投稿のメニュー", layout: $settings.statusMenuLayout)
+        case .userMenu: MenuLayoutSettingsView(title: "ユーザーのメニュー", layout: $settings.userMenuLayout)
+        case .linkMenu: MenuLayoutSettingsView(title: "リンクのメニュー", layout: $settings.linkMenuLayout)
+        case .externalPostMenu: MenuLayoutSettingsView(title: "ほかのサービスの投稿のメニュー", layout: $settings.externalPostMenuLayout)
+        case .profileTextMenu: MenuLayoutSettingsView(title: "プロフィールの文章のメニュー", layout: $settings.profileTextMenuLayout)
+        case .hashtagMenu: MenuLayoutSettingsView(title: "ハッシュタグのメニュー", layout: $settings.hashtagMenuLayout)
+        case .mediaMenu: MenuLayoutSettingsView(title: "メディアのメニュー", layout: $settings.mediaMenuLayout)
+        case .composeTools: MenuLayoutSettingsView(title: "投稿欄のボタン", layout: $settings.composeToolLayout)
+        case .connection: ConnectionStatusView(instance: instance, diagnostics: diagnostics, listTitles: listTitles)
+        case .storage: StorageView()
+        case .viewedMediaCache: MediaCacheView(category: .mediaFiles, actions: StorageView.Actions.app.mediaFiles)
+        case .prefetchedMediaCache: MediaCacheView(category: .mediaPrefetch, actions: StorageView.Actions.app.mediaPrefetch)
+        case .licenses: LicensesView()
+        }
+    }
 }
+
+/// 設定の一覧から重ねて開く画面。
+enum SettingsPage: String, CaseIterable, Hashable {
+    case appearance
+    case notificationAppearance = "notification-appearance"
+    case tabs
+    case statusActions = "status-actions"
+    case notificationActions = "notification-actions"
+    case userActions = "user-actions"
+    case linkActions = "link-actions"
+    case externalPostActions = "external-post-actions"
+    case hashtagActions = "hashtag-actions"
+    case mediaActions = "media-actions"
+    case statusMenu = "status-menu"
+    case userMenu = "user-menu"
+    case linkMenu = "link-menu"
+    case externalPostMenu = "external-post-menu"
+    case profileTextMenu = "profile-text-menu"
+    case hashtagMenu = "hashtag-menu"
+    case mediaMenu = "media-menu"
+    case composeTools = "compose-tools"
+    case connection
+    case storage
+    /// ストレージの、メディアのキャッシュの表示済みの段。
+    case viewedMediaCache = "storage-viewed"
+    /// ストレージの、メディアのキャッシュの先読みの段。
+    case prefetchedMediaCache = "storage-prefetched"
+    case licenses
 
 /// ステータスバーの通知の設定。使えない機種では、切り替えをオフにして灰色にし、理由を添える。
 struct StatusBarTickerSettingsSection: View {

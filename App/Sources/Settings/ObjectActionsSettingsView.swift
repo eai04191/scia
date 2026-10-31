@@ -45,15 +45,15 @@ struct ObjectActionsSettingsView<Item: MenuItemKind & MenuItemPresentable>: View
 struct ObjectActionsRow<Item: ObjectActionItem & MenuItemPresentable>: View {
     let entity: ObjectEntity<Item>
     let settings: AppSettings
+    /// 押して開く、この対象の操作を選ぶ画面。
+    let page: SettingsPage
 
     private var actions: Binding<ObjectActions<Item>> {
-        Binding(get: { settings[keyPath: entity.actions] }, set: { settings[keyPath: entity.actions] = $0 })
+        entity.actions(in: settings)
     }
 
     var body: some View {
-        NavigationLink {
-            ObjectActionsSettingsView(title: entity.title, actions: actions)
-        } label: {
+        NavigationLink(value: page) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entity.title)
                 Text("タップ: \(name(of: actions.wrappedValue.tap))、長押し: \(name(of: actions.wrappedValue.longPress))")
@@ -68,5 +68,19 @@ struct ObjectActionsRow<Item: ObjectActionItem & MenuItemPresentable>: View {
         case .menu: "メニューを開く"
         case .item(let item): item.title
         }
+    }
+}
+
+@MainActor
+extension ObjectEntity {
+    func actions(in settings: AppSettings) -> Binding<ObjectActions<Item>> {
+        let actions = actions
+        return Binding(get: { settings[keyPath: actions] }, set: { settings[keyPath: actions] = $0 })
+    }
+}
+
+extension ObjectActionsSettingsView where Item: ObjectActionItem {
+    init(entity: ObjectEntity<Item>, settings: AppSettings) {
+        self.init(title: entity.title, actions: entity.actions(in: settings))
     }
 }
