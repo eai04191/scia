@@ -45,7 +45,43 @@ extension ExprSyntax {
     }
 }
 
+extension FunctionCallExprSyntax {
+    /// `present(...)`や`view.present(...)`の`present`のような、呼び出す関数の名前
+    var calledName: String? {
+        if let reference = calledExpression.as(DeclReferenceExprSyntax.self) { return reference.baseName.text }
+        if let member = calledExpression.as(MemberAccessExprSyntax.self) { return member.declName.baseName.text }
+        return nil
+    }
+
+    func hasArgument(labeled label: String) -> Bool {
+        arguments.contains { $0.label?.text == label }
+    }
+}
+
 extension SyntaxProtocol {
+    /// 親をたどった構文。近いものから並ぶ
+    var ancestors: [Syntax] {
+        var result: [Syntax] = []
+        var node = parent
+        while let current = node {
+            result.append(current)
+            node = current.parent
+        }
+        return result
+    }
+
+    /// 同じ文の中で親をたどった構文。閉包の中の文から、閉包を渡した呼び出しへは出ない
+    var ancestorsInStatement: [Syntax] {
+        Array(ancestors.prefix { !$0.is(CodeBlockItemSyntax.self) && !$0.is(ClosureExprSyntax.self) })
+    }
+
+    /// 識別子の名前を、出てくる順に集める
+    var identifierNames: [String] {
+        tokens(viewMode: .sourceAccurate).compactMap { token in
+            if case .identifier(let name) = token.tokenKind { name } else { nil }
+        }
+    }
+
     /// 子孫のうち、`type`の構文を出てくる順に集める
     func all<Node: SyntaxProtocol>(_ type: Node.Type) -> [Node] {
         let collector = NodeCollector<Node>()

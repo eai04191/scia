@@ -3,13 +3,10 @@ only_rules:
   - force_unwrapping
   - force_try
   - implicitly_unwrapped_optional
-  - present_without_waiting
   - time_dependent_test
   - yield_based_waiting
   - image_decoding_outside_decoder
   - direct_time_access
-  - fixed_font_size
-  - dimmed_white_text
   - built_in_context_menu
   - server_value_without_check
   - unsafe_file_name
@@ -26,17 +23,6 @@ included:
   - Packages/SciaCore/Tests
 
 custom_rules:
-  # 出る途中の画面の上に確認やシートを出すと、UIKitは出さずに捨てる。出した直後の待ちは負荷のかかった実行では出し終える前に抜けるため、ときどきだけ落ちる
-  present_without_waiting:
-    included: "AppTests/.*\\.swift"
-    regex: "(?<!func )\\bpresent\\([^\\n]*animated:"
-    excluded_match_kinds:
-      - comment
-      - doccomment
-      - string
-    message: "テストで画面を出すときは、presentForTestingで出し終えるまで待つ。出る途中を確かめるときだけ、理由を書いてこの規則を外す"
-    severity: error
-
   # 時間の長さで順を作ったり、今の時刻で結果が変わったりするテストは、負荷や実行の時刻によってときどきだけ落ちる。
   # 待つ処理には手で進める時計（SciaTestingのTestClock）を渡し、ほかの処理を待つときは門（Gate）か条件（waitUntil）で待つ。日時は決まった値で作る
   time_dependent_test:
@@ -136,32 +122,6 @@ custom_rules:
       - doccomment
       - string
     message: "回線の状態を読んで送るかを分けない。目的（RequestPurpose）を名乗り、送ってよいかはNetworkUsePolicyに聞く"
-    severity: error
-
-  # 文字の大きさを数字で決め打ちすると、端末の文字の大きさに従わない。書式（preferredFont）か、UIFontMetricsで大きさを変える文字で作る。
-  # preferredFontのpointSizeから作った文字も、作った時点の大きさで止まるため、数字の幅を揃えるときはmonospacedDigitFont(forTextStyle:)で作る。
-  # 枠の大きさが決まっていて文字を大きくできない場所（ステータスバーのように）だけ、拡大表示（Large Content Viewer）を付け、理由を書いてこの規則を外す
-  fixed_font_size:
-    included: "(App/Sources|ShareExtension)/.*\\.swift"
-    excluded: "App/Sources/Debug/"
-    regex: "^(?![^\\n]*scaledFont\\(for:)[^\\n]*\\b(systemFont|boldSystemFont|italicSystemFont|monospacedSystemFont|monospacedDigitSystemFont)\\(ofSize:|^(?![^\\n]*scaledFont\\(for:)[^\\n]*\\.system\\(size:"
-    excluded_match_kinds:
-      - comment
-      - doccomment
-      - string
-    message: "文字の大きさを数字で決め打ちしない。書式で作るか、UIFontMetricsで大きさを変える。数字の幅を揃えるときはmonospacedDigitFont(forTextStyle:)で作る"
-    severity: error
-
-  # 白を透かして控えめにした文字は、明るい画像の上で読みにくくなる。コントラストを上げる設定に応えるよう、dimmedWhiteText(alpha:)で作る
-  dimmed_white_text:
-    included: "(App/Sources|ShareExtension)/.*\\.swift"
-    excluded: "App/Sources/Debug/"
-    regex: "(textColor|foregroundColor|\\.foregroundStyle)[^\\n]*\\bwhite\\b[^\\n]*(withAlphaComponent|opacity)\\("
-    excluded_match_kinds:
-      - comment
-      - doccomment
-      - string
-    message: "半透明の白い文字はdimmedWhiteText(alpha:)で作り、コントラストを上げる設定で濃くする"
     severity: error
 
   # コントロールに組み込まれた長押しのメニューは、開いても触覚フィードバックが出ず、ボタンはメニューに変形する形で出る。サムネイルで直したあとに足した本文のリンクで、同じ抜けがまた起きた。

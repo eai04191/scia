@@ -23,6 +23,9 @@ public enum Linter {
         .logPrivateValue,
         .sessionTaskOutsideScope,
         .taskWithoutRequestPurpose,
+        .presentWithoutWaiting,
+        .fixedFontSize,
+        .dimmedWhiteText,
     ]
 
     /// `path`（リポジトリのルートからの相対パス）の`source`を、当てはまる規則で調べる。

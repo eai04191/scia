@@ -462,7 +462,7 @@ private struct CompletionRowView: View {
             // 本文と同じ設定の絵（OSの絵文字かtwemoji）で、カスタム絵文字の画像と同じくらいの大きさに描く。
             // 文字ではなく画像と並べる絵なので、端末の文字の大きさではなく枠の大きさで決める。
             RowLayout {
-                // swiftlint:disable:next fixed_font_size
+                // scialint:disable:next fixed_font_size
                 Text(emoji.emoji).font(Font(EmojiFont.font(.systemFont(ofSize: 24), style: model.settings.emojiStyle)))
             } title: {
                 Text(emoji.name).fadingTail(of: emoji.name)

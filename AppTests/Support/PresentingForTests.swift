@@ -9,14 +9,14 @@ extension UIViewController {
     /// 出した直後の待ちは、負荷のかかった実行では出し終える前に抜けることがあるため、時間や待ちの回数ではなく出し終えたことを条件にする。
     /// 出る途中の振る舞いを確かめるテストは、これを使わずに出し、その行で`present_without_waiting`を外す。
     func presentForTesting(_ viewController: UIViewController, sourceLocation: SourceLocation = #_sourceLocation) async throws {
-        // swiftlint:disable:next present_without_waiting
+        // scialint:disable:next present_without_waiting
         present(viewController, animated: false)
         try await waitUntil({ viewController.presentingViewController != nil && !viewController.isBeingPresented }, sourceLocation: sourceLocation)
     }
 
     /// 動きの時間を止めたウィンドウで、画面を動かさずに出し、`clock`を進めて出し終えるまで待つ。止めた時間のままでは出し終わらない。
     func presentForTesting(_ viewController: UIViewController, advancing clock: LayerClock, sourceLocation: SourceLocation = #_sourceLocation) async throws {
-        // swiftlint:disable:next present_without_waiting
+        // scialint:disable:next present_without_waiting
         present(viewController, animated: false)
         try await clock.advance(until: { viewController.presentingViewController != nil && !viewController.isBeingPresented }, sourceLocation: sourceLocation)
     }
