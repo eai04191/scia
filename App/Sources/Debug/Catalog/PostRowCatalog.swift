@@ -154,9 +154,25 @@ enum PostRowCatalog {
         straightSettings.appearance.tiltsStackedPhotos = false
         let straight = TimelineViewController(texts: .home, refresh: {}, settings: straightSettings)
         straight.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
-        func post(_ title: String, _ status: Status, expandsSpoiler: Bool = false, isMine: Bool = false, isStraight: Bool = false) -> CatalogState {
+        // 投稿と、引用とXの投稿の並べ方を分けた設定の一覧。
+        func timeline(suffix: String, post: MediaArrangement, embed: EmbedMediaArrangement) -> TimelineViewController {
+            let suiteName = "net.mizle.scia.catalog.mediaBeside.\(suffix)"
+            guard let defaults = UserDefaults(suiteName: suiteName) else {
+                preconditionFailure("カタログのUserDefaultsを作れない")
+            }
+            defaults.removePersistentDomain(forName: suiteName)
+            let settings = AppSettings(defaults: defaults)
+            settings.appearance.mediaArrangement = post
+            settings.appearance.embedMediaArrangement = embed
+            let timeline = TimelineViewController(texts: .home, refresh: {}, settings: settings)
+            timeline.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
+            return timeline
+        }
+        let embedsBelow = timeline(suffix: "embedsBelow", post: .besideBody, embed: .belowBody)
+        let embedsOnly = timeline(suffix: "embedsOnly", post: .belowBody, embed: .besideBody)
+        func post(_ title: String, _ status: Status, expandsSpoiler: Bool = false, isMine: Bool = false, isStraight: Bool = false, embedsBelow isEmbedsBelow: Bool = false, embedsOnly isEmbedsOnly: Bool = false) -> CatalogState {
             CatalogState(title: title) {
-                let timeline = isStraight ? straight : isMine ? mine : home
+                let timeline = isEmbedsBelow ? embedsBelow : isEmbedsOnly ? embedsOnly : isStraight ? straight : isMine ? mine : home
                 if expandsSpoiler { timeline.toggleSpoiler(of: status) }
                 return CatalogFrame.bordered(PostContentView(configuration: timeline.contentConfiguration(for: status, base: .cell())))
             }
@@ -207,7 +223,20 @@ enum PostRowCatalog {
             post("傾けない、画像2つ", status(content: "<p>写真を傾けない設定。</p>", media: images(2)), isStraight: true),
             post("傾けない、画像4つ（奥ほど小さく下からのぞく）", status(content: "<p>写真を傾けない設定。</p>", media: images(4)), isStraight: true),
             post("傾けない、画像5つ（5つ目は描かない）", status(content: "<p>写真を傾けない設定。</p>", media: images(5)), isStraight: true),
+            post("引用は本文の下（投稿は右）", quoting(status(content: "<p>引用元の本文。</p>", account: booster, media: images(2)), content: "<p>画像を添付して引用した投稿。</p>", media: images(2)), embedsBelow: true),
+            post("投稿は本文の下、引用は右", quoting(status(content: "<p>引用元の本文。</p>", account: booster, media: images(2)), content: "<p>画像を添付して引用した投稿。</p>", media: images(2)), embedsOnly: true),
+            post("引用も右、引用元に画像1つ、本文が1行", quoting(status(content: "<p>引用元の短い本文。</p>", account: booster, media: images(1)))),
+            post("引用も右、引用元に画像3つ、本文が長い", quoting(status(content: longText, account: booster, media: images(3)))),
+            post("引用も右、引用元の本文がなく画像2つ", quoting(status(content: "", account: booster, media: images(2)))),
+            post("引用も右、引用元に画像と投票（投票の行は両方より下）", quoting(status(content: "<p>引用元の短い本文。</p>", account: booster, media: images(2), poll: PollCatalog.endedPoll))),
+            post("引用も右、引用元が閲覧注意の画像", quoting(status(content: "<p>閲覧注意の画像を添付した引用元。</p>", account: booster, media: images(2), sensitive: true))),
+            post("引用も右、投稿と引用元の両方に画像", quoting(status(content: "<p>引用元の本文。</p>", account: booster, media: images(1)), content: "<p>画像を添付して引用した投稿。</p>", media: images(2))),
         ]
+    }
+
+    /// `quoted`を引用した投稿。
+    private static func quoting(_ quoted: Status, content: String = "<p>引用した投稿の本文。</p>", media: [MediaAttachment] = []) -> Status {
+        status(content: content, media: media, quote: Quote(state: "accepted", quotedStatus: quoted))
     }
 
     /// リンクカードの付いた投稿。サーバーのカードが後から届いても行の高さが変わらないことを、カードとリンク先だけのカードを並べて見比べる。

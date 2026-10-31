@@ -49,6 +49,22 @@ struct AppearanceSheets {
                 Self.render(settings: after, highlight: highlight)
             ))
         }
+        // 引用とXの投稿を本文の右に出すときにだけ効き方の変わる項目は、その並べ方でも並べる。
+        for item in Self.besideEmbedItems {
+            let before = try Self.makeSettings()
+            let after = try Self.makeSettings()
+            for settings in [before, after] {
+                settings.appearance.embedMediaArrangement = .besideBody
+            }
+            let value = Self.changedValue(of: item)
+            after.setValue(value, for: item)
+            let highlight = AppearanceHighlight(item)
+            pairs.append((
+                "引用とXの投稿を右に \(item.id)「\(item.title)」 \(item.defaultValue) → \(value)",
+                Self.render(settings: before, highlight: highlight),
+                Self.render(settings: after, highlight: highlight)
+            ))
+        }
         // 名前を2段に分けるとき、アイコンの下を空けないときにだけ効く項目と、効き方の変わる項目は、その並べ方でも並べる。
         for (title, keyPath, items) in Self.layoutVariants {
             for item in items {
@@ -92,6 +108,8 @@ struct AppearanceSheets {
         ("名前を2段", \.appearance.stacksNameParts, [AppearanceCatalog.nameStackSpacing, AppearanceCatalog.namePrimaryText, AppearanceCatalog.nameSecondaryText, AppearanceCatalog.nameBodySpacing, AppearanceCatalog.nameMediaSpacing]),
         ("アイコンの下を空けない", \.appearance.wrapsBelowAvatar, [AppearanceCatalog.avatarSize, AppearanceCatalog.nameBodySpacing, AppearanceCatalog.nameMediaSpacing, AppearanceCatalog.rowPaddingLeading]),
     ]
+
+    private static let besideEmbedItems = [AppearanceCatalog.mediaBesideSide, AppearanceCatalog.xPostMediaSpacing, AppearanceCatalog.xPostPadding]
 
     private static let besideBodyItems = [AppearanceCatalog.mediaBesideSide, AppearanceCatalog.bodyMediaSpacing, AppearanceCatalog.bodyLinkCardSpacing, AppearanceCatalog.filterNoteSpacing]
 
@@ -168,6 +186,9 @@ struct AppearanceSheets {
             return "→ 本文の右に小さく"
         case .tiltsStackedPhotos:
             return flip(\.appearance.tiltsStackedPhotos)
+        case .embedMediaArrangement:
+            settings.appearance.embedMediaArrangement = .besideBody
+            return "→ 本文の右に小さく"
         case .drawsReactionGlowInHDR: return flip(\.appearance.drawsReactionGlowInHDR)
         case .reactionGlowIcons:
             settings.appearance.reactionGlowIcons = .atBottom
