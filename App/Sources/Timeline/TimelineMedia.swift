@@ -9,7 +9,7 @@ extension TimelineViewController {
     func mediaContent(for status: Status) -> MediaGridView.Content? {
         var content = mediaContent(of: status.displayed.mediaAttachments, cover: mediaCover(for: status))
         // ブーストでも元の投稿のIDでばらつかせ、同じ投稿はどの行でも同じ形にする。
-        content?.arrange(beside: status.displayed.id, settings: settings)
+        content?.arrange(settings.appearance.mediaArrangement, seed: status.displayed.id, settings: settings)
         return content
     }
 
@@ -18,9 +18,17 @@ extension TimelineViewController {
         mediaCovers.cover(for: status, filterTitles: filterWarnings.verdict(for: status).mediaTitles)
     }
 
-    /// `attachments`を並べる中身。引用とXの投稿の囲みの添付ファイルにも使う。囲みは元の投稿の見た目を写すので、設定によらず本文の下に並べる。
+    /// `attachments`を並べる中身。引用とXの投稿の囲みの添付ファイルにも使う。
     func mediaContent(of attachments: [MediaAttachment], cover: MediaCover?) -> MediaGridView.Content? {
         MediaGridView.Content.make(of: attachments, cover: cover, settings: settings, tuning: tuning, network: network)
+    }
+
+    /// 引用とXの投稿の囲みの添付ファイルを並べる中身。囲みの並べ方が本文の右に小さく出す設定なら、重ねて出す。
+    /// - Parameter seed: 重ね方をばらつかせる種。引用元の投稿のIDか、Xの投稿のID。
+    func embedMediaContent(of attachments: [MediaAttachment], cover: MediaCover?, seed: String) -> MediaGridView.Content? {
+        var content = mediaContent(of: attachments, cover: cover)
+        content?.arrange(settings.appearance.resolvedEmbedMediaArrangement, seed: seed, settings: settings)
+        return content
     }
 
     /// ぼかしを外す。同じ投稿をブーストした行と通知の行もまとめて描き直す。ぼかしと中身は同じ大きさのため、行の高さは変わらない。
@@ -65,7 +73,7 @@ extension TimelineViewController {
             return nil
         }
         // 投稿した人が閲覧注意を付けていれば、Xの添付ファイルもぼかす。ぼかしを外すと、投稿の添付ファイルと同じくそろって外れる。
-        let media = mediaContent(of: post.media, cover: mediaCover(for: status))
+        let media = embedMediaContent(of: post.media, cover: mediaCover(for: status), seed: post.id)
         let text = post.text.plainText
         return (postContentBuilder.xPost(post, media: media, base: base), media?.attachments ?? [], post.url, text.allSatisfy(\.isWhitespace) ? nil : text)
     }
@@ -128,10 +136,10 @@ extension TimelineViewController {
 }
 
 extension MediaGridView.Content {
-    /// 投稿の見た目で本文の右に小さく出す設定なら、重ねて出す。重ね方は`seed`でばらつかせ、同じ投稿はどの行でも同じ形にする。
+    /// `chosen`が本文の右に小さく出す並べ方なら、重ねて出す。重ね方は`seed`でばらつかせ、同じ投稿はどの行でも同じ形にする。
     @MainActor
-    mutating func arrange(beside seed: String, settings: AppSettings) {
-        guard settings.appearance.mediaArrangement == .besideBody else { return }
+    mutating func arrange(_ chosen: MediaArrangement, seed: String, settings: AppSettings) {
+        guard chosen == .besideBody else { return }
         arrangement = .stack(side: settings.value(of: AppearanceCatalog.mediaBesideSide))
         stackSeed = seed
         tiltsStack = settings.appearance.tiltsStackedPhotos

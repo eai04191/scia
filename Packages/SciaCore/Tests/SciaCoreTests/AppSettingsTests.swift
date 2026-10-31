@@ -310,6 +310,23 @@ struct AppSettingsTests {
         #expect(choices.statusNameStyle == AppearanceChoices().statusNameStyle)
     }
 
+    /// 引用とXの投稿の並べ方は、「投稿と同じ」なら投稿の並べ方に従い、ほかは投稿によらずその並べ方にする。重ねた写真の選択肢は、どちらかで重ねるときに効く。
+    @Test(arguments: [
+        (EmbedMediaArrangement.sameAsPost, MediaArrangement.belowBody, MediaArrangement.belowBody, false),
+        (.sameAsPost, .besideBody, .besideBody, true),
+        (.besideBody, .belowBody, .besideBody, true),
+        (.belowBody, .besideBody, .belowBody, true),
+        (.belowBody, .belowBody, .belowBody, false),
+    ])
+    func embedMediaArrangementResolvesAgainstPost(embed: EmbedMediaArrangement, post: MediaArrangement, resolved: MediaArrangement, stacks: Bool) {
+        var choices = AppearanceChoices()
+        choices.mediaArrangement = post
+        choices.embedMediaArrangement = embed
+
+        #expect(choices.resolvedEmbedMediaArrangement == resolved)
+        #expect(choices.stacksMediaBesideBody == stacks)
+    }
+
     /// 保存がないか、JSONとして読めなければ、すべて既定値にする。
     @Test(arguments: [nil, Data("not json".utf8)] as [Data?])
     func appearanceChoicesFallBackToDefaults(data: Data?) {

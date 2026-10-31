@@ -125,11 +125,73 @@ struct TimelineQuoteTests {
         #expect(configuration(in: harness, of: status.id)?.embed?.media?.isCovered == false)
     }
 
-    /// 添付ファイルを本文の右に重ねる並べ方でも、囲みは元の投稿の見た目を写すので、引用元の添付ファイルは本文の下に並べる。
-    @Test func quotedMediaStaysBelowBodyWhenBesideBody() throws {
+    /// 投稿の添付ファイルを本文の右に重ねる並べ方でも、引用とXの投稿を本文の下にする設定なら、引用元の添付ファイルは本文の下に並べる。
+    @Test func quotedMediaStaysBelowBodyWhenEmbedsAreBelow() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
         harness.settings.appearance.mediaArrangement = .besideBody
+        harness.settings.appearance.embedMediaArrangement = .belowBody
+        let status = quotingImage(in: harness)
+
+        #expect(configuration(in: harness, of: status.id)?.embed?.media?.arrangement == .grid)
+    }
+
+    /// 投稿の添付ファイルを本文の下に並べていても、引用とXの投稿を本文の右にする設定なら、引用元の添付ファイルだけを重ねて出す。
+    @Test func quotedMediaIsBesideBodyWhilePostMediaIsBelow() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.settings.appearance.mediaArrangement = .belowBody
+        harness.settings.appearance.embedMediaArrangement = .besideBody
+        let status = quotingImage(in: harness)
+
+        let side = harness.settings.value(of: AppearanceCatalog.mediaBesideSide)
+        #expect(configuration(in: harness, of: status.id)?.embed?.media?.arrangement == .stack(side: side))
+    }
+
+    /// 投稿と同じ並べ方の既定で、投稿を本文の右にしていれば、引用元の添付ファイルも囲みの本文の右に重ね、本文はその分をあけて折り返す。囲みはサムネイルの分だけ伸びる。
+    @Test func quotedMediaFollowsPostBesideBodyByDefault() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.settings.appearance.mediaArrangement = .besideBody
+        let status = quotingImage(in: harness)
+
+        let content = try #require(configuration(in: harness, of: status.id)?.embed)
+        let side = harness.settings.value(of: AppearanceCatalog.mediaBesideSide)
+        #expect(content.media?.arrangement == .stack(side: side))
+        #expect(content.media?.stackSeed == "q1")
+        let embed = try #require(post(in: harness, of: status.id)?.embed)
+        embed.layoutIfNeeded()
+        let grid = try #require(embed.mediaGrid)
+        let body = try #require(embed.subviews.first { $0 is LinkLabel && !$0.isHidden })
+        #expect(grid.frame.size == CGSize(width: side, height: side))
+        #expect(abs(grid.frame.maxX - (embed.bounds.width - content.padding)) < 0.5)
+        #expect(body.frame.maxX <= grid.frame.minX - content.mediaSpacing + 0.5, "本文がサムネイルの分をあけていません")
+        #expect(grid.frame.minY < body.frame.maxY, "サムネイルが本文の横に並んでいません")
+        #expect(embed.bounds.height >= grid.frame.maxY + content.padding - 0.5, "囲みがサムネイルの分だけ伸びていません")
+    }
+
+    /// 右に並べる大きさと本文とのあいだを上限にしても、囲みの中のサムネイルとすき間は囲みの内側の半分までに縮め、本文の幅を残す。
+    @Test func quotedBesideMediaLeavesRoomForBody() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.settings.appearance.mediaArrangement = .besideBody
+        harness.settings.setValue(AppearanceCatalog.mediaBesideSide.range.upperBound, for: AppearanceCatalog.mediaBesideSide)
+        harness.settings.setValue(AppearanceCatalog.xPostMediaSpacing.range.upperBound, for: AppearanceCatalog.xPostMediaSpacing)
+        let status = quotingImage(in: harness)
+
+        let content = try #require(configuration(in: harness, of: status.id)?.embed)
+        let embed = try #require(post(in: harness, of: status.id)?.embed)
+        embed.layoutIfNeeded()
+        let grid = try #require(embed.mediaGrid)
+        let body = try #require(embed.subviews.first { $0 is LinkLabel && !$0.isHidden })
+        let inner = embed.bounds.width - content.padding * 2
+        #expect(grid.frame.width == grid.frame.height)
+        #expect(grid.frame.width + content.mediaSpacing <= inner / 2 + 0.5, "サムネイルとすき間が囲みの内側の半分を超えています")
+        #expect(abs(body.frame.width - (inner - grid.frame.width - content.mediaSpacing)) < 0.5, "本文がサムネイルの分だけをあけていません")
+    }
+
+    /// 引用元に画像を1つ付けた投稿を一覧の一番上に流す。
+    private func quotingImage(in harness: TimelineHarness) -> Status {
         let statuses = StatusFactory.make(count: 10, startingAt: 1_000)
         let image = MediaAttachment(
             id: "m1",
@@ -140,8 +202,7 @@ struct TimelineQuoteTests {
         )
         let status = quoting(statuses[0], Quote(state: "accepted", quotedStatus: quoted("q1", media: [image])))
         harness.setStatuses([status] + statuses.dropFirst())
-
-        #expect(configuration(in: harness, of: status.id)?.embed?.media?.arrangement == .grid)
+        return status
     }
 
     /// 引用元がさらに引用していると、その引用はIDだけで届く。囲みを押したら、引用元を読み直す経路で開き、スレッドで入れ子の引用を出せるようにする。

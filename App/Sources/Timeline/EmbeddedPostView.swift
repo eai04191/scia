@@ -4,6 +4,7 @@ import UIKit
 /// 投稿の本文の下に置く、ほかの投稿の囲み。Mastodonの引用と、fxtwitterから読んだXの投稿に使う。決まりは`docs/quote.md`と`docs/link-card.md`。
 ///
 /// 上から、作者の行、注意書き、本文、添付ファイル、補足の行を並べる。引用元を出せないときは、作者の行を出さず、理由の1行だけを本文として出す。
+/// 添付ファイルを重ねて出すときは、本文の右に置き、本文はその分をあけて折り返す。補足の行は、本文とサムネイルのどちらよりも下に置く。決まりは`docs/timeline-media.md`。
 /// 囲みのどこかが押されたら、置く側が決めた先を開く。アイコン、注意書き、サムネイル、本文のリンク、押せる補足の行の押下は、並べた部品が受ける。
 final class EmbeddedPostView: UIButton {
     struct Content: Equatable {
@@ -76,6 +77,8 @@ final class EmbeddedPostView: UIButton {
     private var noteViews: [NoteRow] = []
     /// アイコンと名前を並べる作者の行。
     private let headerGuide = UILayoutGuide()
+    /// 添付ファイルを本文の右に出すとき、本文とサムネイルの下端のうち、下にあるほう。補足の行をここから並べる。
+    private let besideGuide = UILayoutGuide()
     private(set) var content: Content?
     private var variableConstraints: [NSLayoutConstraint] = []
     private lazy var summaryElement = UIAccessibilityElement(accessibilityContainer: self)
@@ -117,6 +120,7 @@ final class EmbeddedPostView: UIButton {
             addSubview(view)
         }
         addLayoutGuide(headerGuide)
+        addLayoutGuide(besideGuide)
         mediaView.onSelect = { [weak self] index in
             guard let self else { return }
             self.onSelectMedia?(index, self.mediaView)
@@ -196,16 +200,29 @@ final class EmbeddedPostView: UIButton {
             spoilerView.isHidden = true
         }
         let isCollapsed = content.spoiler?.isCollapsed ?? false
+        let media = isCollapsed ? nil : content.media.flatMap { $0.aspectRatio == nil ? nil : $0 }
+        let besideSide: CGFloat? = if case .stack(let side)? = media?.arrangement { side } else { nil }
+        // 本文と、本文の右に出すサムネイルの上端。本文がなくても、サムネイルは本文があるときの位置に置く。
+        let contentTop = last
 
         textLabel.attributedText = content.text
         textLabel.isHidden = isCollapsed || content.text.length == 0
         if !textLabel.isHidden {
-            constraints += horizontalConstraints(of: textLabel, padding: padding)
-            constraints.append(textLabel.topAnchor.constraint(equalTo: last.anchor, constant: last.spacing))
+            constraints += [
+                textLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: padding),
+                textLabel.topAnchor.constraint(equalTo: last.anchor, constant: last.spacing),
+            ]
+            // 本文の右にサムネイルを出すときの右端は、サムネイルの左に合わせる。
+            if besideSide == nil {
+                constraints.append(textLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -padding))
+            }
             last = (textLabel.bottomAnchor, content.mediaSpacing)
         }
 
-        if !isCollapsed, let media = content.media, let aspectRatio = media.aspectRatio {
+        if let media, let besideSide {
+            constraints += applyBesideMedia(media, side: besideSide, spacing: content.mediaSpacing, padding: padding, top: contentTop, text: content.text)
+            last = (besideGuide.bottomAnchor, content.mediaSpacing)
+        } else if let media, let aspectRatio = media.aspectRatio {
             mediaView.isHidden = false
             mediaView.apply(media)
             constraints += horizontalConstraints(of: mediaView, padding: padding)
@@ -243,6 +260,42 @@ final class EmbeddedPostView: UIButton {
         variableConstraints = constraints
         NSLayoutConstraint.activate(constraints)
         updateAccessibility(for: content)
+    }
+
+    /// 添付ファイルを本文の右に、一辺`side`の正方形で出し、本文はその左に`spacing`をあけて折り返す。上端は本文の1行目の字面の上端にそろえ、本文がなければ本文のラベルの上端に置く。
+    /// 囲みは投稿の本文より狭いので、サムネイルとすき間は囲みの内側の半分までに縮め、本文の幅を残す。
+    /// `besideGuide`の下端を、本文のラベルとサムネイルの下端のうち、下にあるほうに合わせる。
+    private func applyBesideMedia(_ media: MediaGridView.Content, side: CGFloat, spacing: CGFloat, padding: CGFloat, top: (anchor: NSLayoutYAxisAnchor, spacing: CGFloat), text: NSAttributedString) -> [NSLayoutConstraint] {
+        mediaView.isHidden = false
+        mediaView.apply(media)
+        let mediaTop = if textLabel.isHidden {
+            mediaView.topAnchor.constraint(equalTo: top.anchor, constant: top.spacing)
+        } else {
+            mediaView.topAnchor.constraint(equalTo: textLabel.firstBaselineAnchor, constant: -PostBodyView.textTopInset(of: text))
+        }
+        // 本文のラベルの縮みにくさ（`.defaultHigh`）より低くする。同じだと、ラベルを縮めてサムネイルの高さで本文を切ってしまう。
+        let collapse = besideGuide.heightAnchor.constraint(equalToConstant: 0)
+        collapse.priority = .defaultLow
+        // 一辺は、入りきらなければ縮められるよう、上限より弱くする。
+        let width = mediaView.widthAnchor.constraint(equalToConstant: side)
+        width.priority = .required - 1
+        var constraints = [
+            mediaTop,
+            mediaView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -padding),
+            width,
+            mediaView.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, multiplier: 0.5, constant: -padding - spacing),
+            mediaView.heightAnchor.constraint(equalTo: mediaView.widthAnchor),
+            besideGuide.topAnchor.constraint(equalTo: mediaView.topAnchor),
+            collapse,
+            besideGuide.bottomAnchor.constraint(greaterThanOrEqualTo: mediaView.bottomAnchor),
+        ]
+        if !textLabel.isHidden {
+            constraints += [
+                textLabel.trailingAnchor.constraint(equalTo: mediaView.leadingAnchor, constant: -spacing),
+                besideGuide.bottomAnchor.constraint(greaterThanOrEqualTo: textLabel.bottomAnchor),
+            ]
+        }
+        return constraints
     }
 
     private func horizontalConstraints(of view: UIView, padding: CGFloat) -> [NSLayoutConstraint] {
@@ -320,8 +373,11 @@ final class EmbeddedPostView: UIButton {
             // 作者の行のラベルは余った幅を受け持つので、文字のある幅だけを示す。
             .xPostName: nameLabel.isHidden ? nil : nameLabel.previewFrame(in: space)?.map { CGRect(x: $0.minX, y: $0.minY, width: min($0.width, ceil(nameLabel.intrinsicContentSize.width)), height: $0.height) },
             .xPostBody: textLabel.isHidden ? nil : textLabel.previewFrame(in: space),
-            .xPostMedia: mediaGrid?.previewFrame(in: space),
         ].compactMapValues(\.self)
+        // 本文の右に重ねたサムネイルには、本文とのあいだが横のすき間として効くので、別の部品として示す。
+        if let grid = mediaGrid {
+            frames[grid.content?.isStacked == true ? .xPostBesideMedia : .xPostMedia] = grid.previewFrame(in: space)
+        }
         if content?.header != nil {
             frames[.xPostHeader] = [convert(headerGuide.layoutFrame, to: space)]
         }

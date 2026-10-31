@@ -91,7 +91,8 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (C.mediaTallestAspectRatio, .firstOf([.part(.singleTallMedia), .part(.singleMedia)])),
             (C.mediaWidestAspectRatio, .firstOf([.part(.singleWideMedia), .part(.singleMedia)])),
             // 本文の下に並べているときは効かないが、何の大きさかが分かるよう、並べた添付ファイルを示す。
-            (C.mediaBesideSide, .firstOf([.part(.besideMedia), .part(.media)])),
+            // 引用とXの投稿だけを本文の右に出すときは、大きさの効く囲みの中のメディアを示す。
+            (C.mediaBesideSide, .firstOf([.part(.besideMedia), .part(.xPostBesideMedia), .part(.media)])),
 
             (C.linkCardTitleText, .part(.cardTitle)),
             (C.linkCardDetailText, .firstOf([.part(.cardDetail), .part(.card)])),
@@ -107,7 +108,7 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (C.xPostAvatarSize, .part(.xPostAvatar)),
             (C.xPostAvatarNameSpacing, .horizontalGap(leading: [.xPostAvatar], trailing: [.xPostName])),
             (C.xPostHeaderSpacing, .verticalGap(above: [.xPostHeader], below: [.xPostBody])),
-            (C.xPostMediaSpacing, .verticalGap(above: [.xPostBody], below: [.xPostMedia])),
+            (C.xPostMediaSpacing, .firstOf([.verticalGap(above: [.xPostBody], below: [.xPostMedia]), .horizontalGap(leading: [.xPostBody], trailing: [.xPostBesideMedia])])),
             (C.xPostPadding, .part(.xPostPaddingBands)),
             (C.bodyXPostSpacing, .verticalGap(above: [.media, .bodyGlyphs], below: [.xPost])),
 
@@ -197,6 +198,7 @@ public enum AppearanceHighlight: Equatable, Sendable {
         case .xPost: C.xPostPadding
         case .pollFooter: C.pollFooterText
         case .xPostMedia: C.xPostMediaSpacing
+        case .xPostBesideMedia: C.mediaBesideSide
         case .boostLine, .replyLabel: C.contextText
         case .connectedAvatar: C.avatarSize
         case .cardImage: C.linkCardPadding

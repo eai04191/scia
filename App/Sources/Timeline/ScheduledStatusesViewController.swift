@@ -244,7 +244,7 @@ final class ScheduledStatusesViewController: UICollectionViewController {
         configuration.onRevealMedia = { [weak self] in self?.revealMedia(of: preview) }
         // 投稿されたときと同じく、閲覧注意と注意書きのある予約の添付はぼかす。
         if var media = MediaGridView.Content.make(of: scheduled.mediaAttachments, cover: mediaCovers.cover(for: preview, filterTitles: []), settings: settings, tuning: tuning, network: AppDependencies.network) {
-            media.arrange(beside: scheduled.id, settings: settings)
+            media.arrange(settings.appearance.mediaArrangement, seed: scheduled.id, settings: settings)
             configuration.media = media
             configuration.onSelectMedia = { [weak self] index, grid in
                 self?.openMedia(media.attachments, at: index, from: grid)

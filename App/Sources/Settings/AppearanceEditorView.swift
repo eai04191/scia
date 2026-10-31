@@ -212,8 +212,9 @@ struct AppearanceEditorView: View {
             TitledToggleRow(title: "カスタム絵文字のアニメーションを再生する", isOn: $settings.appearance.animatesCustomEmojis) { toggleFocus(.choice(.animatesCustomEmojis)) }
         case "media":
             PopUpChoiceRow(title: "並べ方", selection: $settings.appearance.mediaArrangement, options: [(.belowBody, "本文の下に大きく"), (.besideBody, "本文の右に小さく")], onOpen: { focus(.mediaArrangement) }, onTapTitle: { toggleFocus(.choice(.mediaArrangement)) })
+            PopUpChoiceRow(title: "引用", selection: $settings.appearance.embedMediaArrangement, options: [(.sameAsPost, "投稿と同じ"), (.besideBody, "本文の右に小さく"), (.belowBody, "本文の下に大きく")], onOpen: { focus(.embedMediaArrangement) }, onTapTitle: { toggleFocus(.choice(.embedMediaArrangement)) })
             TitledToggleRow(title: "写真を傾ける", isOn: $settings.appearance.tiltsStackedPhotos) { toggleFocus(.choice(.tiltsStackedPhotos)) }
-                .disabled(settings.appearance.mediaArrangement != .besideBody)
+                .disabled(!settings.appearance.stacksMediaBesideBody)
             TitledToggleRow(title: "ALTやGIFのバッジを出す", isOn: $settings.appearance.showsMediaBadges) { toggleFocus(.choice(.showsMediaBadges)) }
         case "linkCard":
             TitledToggleRow(title: "リンクカードを出す", isOn: $settings.appearance.showsLinkCard) { toggleFocus(.choice(.showsLinkCard)) }
@@ -315,6 +316,7 @@ enum AppearanceChoice: Hashable, CaseIterable {
     case animatesCustomEmojis
     case linkCardThumbnailSide
     case mediaArrangement
+    case embedMediaArrangement
     case tiltsStackedPhotos
     case drawsReactionGlowInHDR
     case reactionGlowIcons
@@ -349,7 +351,9 @@ enum AppearanceChoice: Hashable, CaseIterable {
         case .animatesCustomEmojis: .firstOf([.part(.customEmojis), .part(.bodyText)])
         case .linkCardThumbnailSide: .part(.card)
         case .mediaArrangement: .firstOf([.part(.besideMedia), .part(.media)])
-        case .tiltsStackedPhotos: .firstOf([.part(.besideMedia), .part(.media)])
+        // 引用とXの投稿だけを右に出すときは、囲みの中の写真を示す。
+        case .tiltsStackedPhotos: .firstOf([.part(.besideMedia), .part(.xPostBesideMedia), .part(.media)])
+        case .embedMediaArrangement: .firstOf([.part(.xPostBesideMedia), .part(.xPostMedia)])
         case .drawsReactionGlowInHDR, .reactionGlowLightFavouriteColor: .part(.reactionGlow)
         case .reactionGlowFillsWidthWhenAlone: .firstOf([.part(.reactionGlowAlone), .part(.reactionGlow)])
         case .reactionGlowIcons: .firstOf([.part(.reactionGlowIcons), .part(.reactionGlow)])

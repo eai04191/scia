@@ -19,6 +19,8 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var mediaArrangement: MediaArrangement = .belowBody
     /// 本文の右に重ねた写真を傾ける。オフなら、どの写真もまっすぐに置き、投稿ごとに角度をばらつかせない。
     public var tiltsStackedPhotos = true
+    /// 引用とXの投稿の囲みの中の添付ファイルを、本文の下に並べるか、囲みの本文の右に小さく出すか。
+    public var embedMediaArrangement: EmbedMediaArrangement = .sameAsPost
     /// 時刻の前に、公開でない投稿の公開範囲の記号を出す。
     public var showsVisibilitySymbol = true
     /// 編集された投稿の時刻の前に「*」を出す。
@@ -67,6 +69,16 @@ public struct AppearanceChoices: Codable, Hashable, Sendable {
     public var reactionGlowLightFavouriteColor: ReactionGlowLightFavouriteColor = .orange
 
     public init() {}
+
+    /// 引用とXの投稿の囲みの中で使う並べ方。
+    public var resolvedEmbedMediaArrangement: MediaArrangement {
+        embedMediaArrangement.resolved(post: mediaArrangement)
+    }
+
+    /// 投稿か、引用とXの投稿の囲みのどちらかで、添付ファイルを本文の右に重ねて出す。重ねた写真にだけ効く選択肢を押せるかを決める。
+    public var stacksMediaBesideBody: Bool {
+        mediaArrangement == .besideBody || resolvedEmbedMediaArrangement == .besideBody
+    }
 
     /// 保存したJSONから読む。保存にない項目は既定値にする。項目を足しても、保存してある値を失わないため。
     /// 読めない値（名前を変えた選択肢など）がある項目は既定値に戻し、ほかの項目は保存した値のまま読む。

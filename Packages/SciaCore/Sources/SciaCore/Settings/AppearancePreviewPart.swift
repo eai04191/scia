@@ -124,6 +124,8 @@ public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
     case xPostHeader
     case xPostBody
     case xPostMedia
+    /// 囲みの本文の右に小さく出した添付ファイル。本文の下に並べたときの`xPostMedia`とは示す項目が違うため分ける。
+    case xPostBesideMedia
     /// Xの投稿の囲みの内側の余白。
     case xPostPaddingBands
     case poll
