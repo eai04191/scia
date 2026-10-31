@@ -8,7 +8,8 @@ extension TimelineViewController {
         touchRecorder.delaysTouchesEnded = false
         collectionView.addGestureRecognizer(touchRecorder)
         rowLongPress = ObjectLongPress(on: collectionView, accepts: { [weak self] location in
-            guard let self, let indexPath = collectionView.indexPathForItem(at: location) else { return false }
+            // 投稿を選んでいる間は、長押しに割り当てた操作も行わない。行は選ぶか外すかだけにする。
+            guard let self, !isSelectingPosts, let indexPath = collectionView.indexPathForItem(at: location) else { return false }
             return rowTarget(at: indexPath)?.performsLongPress() ?? false
         }, perform: { [weak self] location in
             guard let self, let indexPath = collectionView.indexPathForItem(at: location) else { return }

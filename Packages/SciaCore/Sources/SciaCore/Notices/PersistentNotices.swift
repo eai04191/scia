@@ -10,6 +10,10 @@ public struct PersistentNotices {
         case download
         /// リンクのメニューの「プロフィールとして開く」で、リンク先を探している途中。見つかると別の画面に移るため、アプリ全体のもの。
         case profileLookup
+        /// まとめてブーストの途中。選んだ一覧を離れても続くため、アプリ全体のもの。
+        case batchReblog
+        /// まとめて共有するメディアを落としている途中。まとめてブーストと同時に進むことがあるため、別に持つ。
+        case batchShare
         #if DEBUG
         /// `scia-debug://notice/progress`で出す、確かめるための処理中。アプリ全体のもの。
         case debug

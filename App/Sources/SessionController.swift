@@ -117,6 +117,17 @@ final class SessionController {
     private let statusBarTicker = StatusBarTicker()
     /// 添付ファイルのビューアで、共有や保存のために落とす処理。ビューアを閉じても保存を続ける。
     private lazy var mediaTransfers = MediaTransferCenter(operationStatus: operationStatus, notices: notices)
+    /// 一覧で選んだ投稿に、まとめてブーストや共有をする。選んだ一覧を離れても続ける。
+    private lazy var batchActions = BatchActionCenter(
+        interactions: interactions,
+        notices: notices,
+        operationStatus: operationStatus,
+        tasks: tasks,
+        clock: clock,
+        fetch: { url, onProgress in try await AppDependencies.mediaDownloads.fileForSharing(for: url, onProgress: onProgress) }
+    ) { [weak self] error in
+        await self?.failureReason(for: error) ?? ErrorPresentation(error)
+    }
     /// APIが401を返したときに、トークンが本当に無効かを確かめる。
     private let authorization: AuthorizationCheck
     private let onReauthenticate: (SessionController) async -> Void
@@ -1011,6 +1022,12 @@ final class SessionController {
             self?.shareLongBodyExpansion(expansion, changed: key, from: viewController)
         }
         viewController.onStatusAction = { [weak self, weak viewController] action, status in self?.perform(action, on: status, from: viewController) }
+        viewController.onPostSelectionChange = { [weak self] isSelecting in self?.composer.yieldsToToolbar = isSelecting }
+        viewController.onBatchReblog = { [weak self] statuses in
+            guard let self else { return }
+            batchActions.reblog(statuses, myAccountID: credential.accountID, visibility: AppDependencies.settings.reblogVisibility)
+        }
+        viewController.onBatchShare = { [weak self] statuses in self?.batchActions.share(statuses) }
         viewController.onFollowRequestDecision = { [weak self] decision, request in self?.answerFollowRequest(decision, to: request) }
         viewController.onVote = { [weak self, weak viewController] choices, status in
             guard let viewController else { return }

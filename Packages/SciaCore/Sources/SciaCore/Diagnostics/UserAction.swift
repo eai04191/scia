@@ -33,6 +33,12 @@ public enum UserAction: Sendable, Equatable {
     case togglePin
     case toggleConversationMute
     case toggleBookmark
+    /// まとめて行う操作のために、一覧で投稿を選び始めた。
+    case beginPostSelection(screen: String)
+    /// 選んだ投稿のまとめてブーストを始めた。
+    case batchReblog
+    /// 選んだ投稿のまとめて共有を始めた。
+    case batchShare
     case vote
     case refreshPoll
     case openEditHistory
@@ -75,6 +81,9 @@ public enum UserAction: Sendable, Equatable {
         case .togglePin: "status.pin"
         case .toggleConversationMute: "status.muteConversation"
         case .toggleBookmark: "status.bookmark"
+        case .beginPostSelection(let screen): "selection.begin \(screen)"
+        case .batchReblog: "selection.reblog"
+        case .batchShare: "selection.share"
         case .vote: "poll.vote"
         case .refreshPoll: "poll.refresh"
         case .openEditHistory: "status.editHistory"
@@ -132,6 +141,9 @@ public enum UserAction: Sendable, Equatable {
         case ("status.pin", 0): self = .togglePin
         case ("status.muteConversation", 0): self = .toggleConversationMute
         case ("status.bookmark", 0): self = .toggleBookmark
+        case ("selection.begin", 1): self = .beginPostSelection(screen: args[0])
+        case ("selection.reblog", 0): self = .batchReblog
+        case ("selection.share", 0): self = .batchShare
         case ("poll.vote", 0): self = .vote
         case ("poll.refresh", 0): self = .refreshPoll
         case ("status.editHistory", 0): self = .openEditHistory
@@ -177,6 +189,9 @@ public enum UserAction: Sendable, Equatable {
         case .togglePin: "投稿のプロフィールへの固定を押した"
         case .toggleConversationMute: "投稿の会話のミュートを押した"
         case .toggleBookmark: "投稿のブックマークを押した"
+        case .beginPostSelection(let screen): "\(Self.screenName(screen))で投稿を選び始めた"
+        case .batchReblog: "選んだ投稿のまとめてブーストを始めた"
+        case .batchShare: "選んだ投稿のまとめて共有を始めた"
         case .vote: "投票の「投票」を押した"
         case .refreshPoll: "投票の「更新」を押した"
         case .openEditHistory: "投稿の編集履歴を開いた"

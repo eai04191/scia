@@ -187,6 +187,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private weak var textSelectionBody: PostBodyView?
     /// 投稿のメニューで「テキストを選択」を選んだ本文と、その投稿。メニューが閉じ終えてから選び始める。閉じる途中に選ぶと、編集メニューが出ないため。
     private var pendingTextSelection: (body: PostBodyView, statusID: Status.ID)?
+    /// まとめて行う操作のために選んでいる行。選んでいないときはnil。決まりはdocs/batch-actions.mdにある。
+    var postSelection: OrderedSelection<ItemID>?
+    /// 選び始める前のナビゲーションバーの中身。選び終えたら戻す。
+    var navigationItemBeforePostSelection: PostSelectionNavigationItems?
+    /// 投稿を選び始めたときと、選び終えたとき。投稿欄のカプセルを隠したり戻したりする。
+    var onPostSelectionChange: ((Bool) -> Void)?
+    /// 選んだ順の投稿を、まとめてブーストする。
+    var onBatchReblog: (([Status]) -> Void)?
+    /// 選んだ順の投稿を、まとめて共有する。
+    var onBatchShare: (([Status]) -> Void)?
     private lazy var newArrivalsButton = makeNewArrivalsButton()
     /// 新着ボタンを出す向きか。消える動きの途中は、`isHidden`がまだ偽でも偽になる。
     private var newArrivalsButtonShown = false
@@ -294,7 +304,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     /// `rightBarButtonItems`は右から並ぶため、先頭に足したボタンがいちばん右に来る。
-    private func applyBarItems() {
+    func applyBarItems() {
+        // 投稿を選んでいる間は、右上のボタンを出さない。選び終えたら並べ直す。
+        guard !isSelectingPosts else { return }
         navigationItem.rightBarButtonItems = (showsFocusInlineCompose && onFocusInlineCompose != nil ? [focusInlineComposeItem] : []) + screenBarItems + baseBarItems
     }
 
@@ -413,6 +425,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         endTextSelection()
+        endPostSelection()
         timeRefreshTask?.cancel()
         timeRefreshTask = nil
         onVisibleLinkOnlyCardsChange?([])
@@ -777,6 +790,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let followsTop = anchorID == nil && topID == nil && isAtTop && !isCovered && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
         let newIDs = newEntries.map(\.id)
         entries = Dictionary(zip(newIDs, newEntries), uniquingKeysWith: { _, new in new })
+        prunePostSelection()
         gapIDs = newEntries.compactMap { entry in
             if case .gap(let gap) = entry { gap.id } else { nil }
         }
@@ -929,9 +943,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.isTracking || collectionView.isDragging || collectionView.isDecelerating
     }
 
-    /// スクロールしている、または長押しのメニューを出している。新着を挿入するのは、これが終わってからにする。
+    /// スクロールしている、長押しのメニューを出している、またはまとめて行う操作のために投稿を選んでいる。新着を挿入するのは、これが終わってからにする。
+    /// 選んでいる間に新着で行がずれると、押そうとした行を押し損なうため。
     var isUserInteracting: Bool {
-        isUserScrolling || isShowingMenu
+        isUserScrolling || isShowingMenu || isSelectingPosts
     }
 
     /// 2つの配列が同じ記憶域を指している。指していれば、中身も同じ。
@@ -975,6 +990,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 beginTextSelection(in: pending.body, statusID: pending.statusID)
             }
         }
+        reportInteractionSettled()
+    }
+
+    /// スクロールやメニューの操作が終わったことを知らせる。溜めていた新着の挿入と、既読の位置の保存はここから始まる。
+    /// 投稿を選んでいる間は知らせず、選び終えたときに知らせる。選んでいる間に新着が入ると、押そうとした行がずれるため。
+    func reportInteractionSettled() {
+        guard !isSelectingPosts else { return }
         onInteractionSettle?()
     }
 
@@ -1310,9 +1332,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// タブバーや投稿欄のアクセサリーの分はsafe areaに入っているため、それを超えて覆っている分だけ足す。
     /// 画面を読み込む前は値だけを覚え、読み込んだあとのsafe areaの変化で反映する。ここで読み込むと、画面を組み立てる前に置くボタンなどの設定より先に読み込まれてしまう。
     /// スレッドでは、押した投稿を表示領域の上端まで上げられるだけの余白も、一覧の下に足す。
-    private func updateObscuredBottomInset() {
+    func updateObscuredBottomInset() {
         guard isViewLoaded else { return }
-        let inset = max(0, obscuredBottomHeight - view.safeAreaInsets.bottom)
+        // 投稿を選んでいる間は、投稿欄のカプセルを隠し、ツールバーの分はsafe areaに入る。
+        let inset = isSelectingPosts ? 0 : max(0, obscuredBottomHeight - view.safeAreaInsets.bottom)
         let total = inset + threadFocusBottomFill(obscuredInset: inset)
         guard collectionView.contentInset.bottom != total || collectionView.verticalScrollIndicatorInsets.bottom != inset else { return }
         collectionView.contentInset.bottom = total
@@ -1426,7 +1449,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         collectionView.contentOffset.y = target
         reportVisibleItemsAfterLayout()
         updateNewArrivalsButtonVisibility()
-        onInteractionSettle?()
+        reportInteractionSettled()
     }
 
     private func stopSpringScroll() {
@@ -1687,6 +1710,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             cell.itemID = id
             cell.workName = entry.workName
             FrameWork.measure("\(entry.workName).configure") { self.configure(cell, for: entry, id: id) }
+            cell.setSelectionMark(self.selectionMark(for: id))
             if startsNewRow {
                 UIView.performWithoutAnimation { cell.layoutIfNeeded() }
             }
@@ -2005,20 +2029,20 @@ extension TimelineViewController: UICollectionViewDelegate {
         if !decelerate {
             recordScroll()
             reportVisibleItemsAfterLayout()
-            onInteractionSettle?()
+            reportInteractionSettled()
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         recordScroll()
         reportVisibleItemsAfterLayout()
-        onInteractionSettle?()
+        reportInteractionSettled()
     }
 
     /// 返信先の投稿へ動かしたとき。
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
         reportVisibleItemsAfterLayout()
-        onInteractionSettle?()
+        reportInteractionSettled()
     }
 
     /// 最上部へ動かしている途中で指が触れたら、そこで止める。
@@ -2081,6 +2105,8 @@ extension TimelineViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, contextMenuConfigurationForItemsAt indexPaths: [IndexPath], point: CGPoint) -> UIContextMenuConfiguration? {
         // 選んでいる本文の上の長押しは、テキストビューが単語を選ぶのに使う。
         if let body = textSelectionBody, let frame = body.textSelectionFrame, body.convert(frame, to: collectionView).contains(point) { return nil }
+        // 投稿を選んでいる間は、行の長押しのメニューを出さない。
+        if isSelectingPosts { return nil }
         if indexPaths.count == 1, let indexPath = indexPaths.first, rowTarget(at: indexPath)?.performsLongPress() == true { return nil }
         guard indexPaths.count == 1, let indexPath = indexPaths.first, let id = dataSource.itemIdentifier(for: indexPath), let entry = entry(for: id),
               let menu = contextMenu(for: entry, id: id)
@@ -2113,6 +2139,8 @@ extension TimelineViewController: UICollectionViewDelegate {
         // 本文を選んでいる間の行のタップは、選ぶのをやめるだけにし、行の操作は行わない。
         if endTextSelection() { return false }
         guard let id = dataSource.itemIdentifier(for: indexPath) else { return false }
+        // 投稿を選んでいる間の行のタップは、その行を選ぶか外すかだけにする。
+        if isSelectingPosts { return canSelectPost(id) }
         return switch (id, entries[id]) {
         case (.gap, _): true
         case (_, .unreadable(let item)): item.url != nil
@@ -2155,7 +2183,7 @@ extension TimelineViewController: UICollectionViewDelegate {
 
     /// 選べる状態の本文があれば、やめる。やめたらtrue。
     @discardableResult
-    private func endTextSelection() -> Bool {
+    func endTextSelection() -> Bool {
         defer { textSelectionBody = nil }
         guard let body = textSelectionBody, body.isSelectingText else { return false }
         body.endTextSelection()
@@ -2165,6 +2193,11 @@ extension TimelineViewController: UICollectionViewDelegate {
     /// ギャップは、画面の上半分にあれば下から遡ってきたとみなして古い側から、下半分にあれば新しい側から読む。
     /// どちらも、いま読んでいる側に続く投稿から埋まる。
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        if isSelectingPosts, let id = dataSource.itemIdentifier(for: indexPath) {
+            collectionView.deselectItem(at: indexPath, animated: false)
+            togglePostSelection(id)
+            return
+        }
         if let target = rowTarget(at: indexPath) {
             collectionView.deselectItem(at: indexPath, animated: true)
             // キーボードや読み上げのように触れずに選んだときは、前に触れた位置ではなく、選んだ行の真ん中にメニューを出す。

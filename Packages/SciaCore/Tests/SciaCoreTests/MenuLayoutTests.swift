@@ -167,7 +167,7 @@ struct MenuLayoutTests {
         #expect(groups.main.map(\.items) == [
             [.reply, .favourite, .reblog],
             [.edit, .bookmark, .quote],
-            [.copyLink, .copyText, .selectText, .share, .openInBrowser],
+            [.copyLink, .copyText, .selectText, .share, .select, .openInBrowser],
             [.systemTranslate],
             [.notifyingUser, .author, .booster, .hashtags],
         ])

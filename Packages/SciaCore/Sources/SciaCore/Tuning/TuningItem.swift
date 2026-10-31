@@ -868,6 +868,15 @@ public enum TuningCatalog {
         defaultValue: 0.3
     )
 
+    /// まとめてブーストで、1件ごとにあける間隔。ほかのサーバーは、ブーストを秒までの日時で並べるため、同じ1秒の中に送ると順番が入れ替わりうる。
+    public static let batchReblogInterval = NumberTuning(
+        id: "batch.reblogInterval",
+        title: "まとめてブーストの1件ごとの間隔（秒）",
+        range: 0...5,
+        step: 0.1,
+        defaultValue: 1.1
+    )
+
     /// ステータスバーの場所に流す通知を、待っている通知がないときに出しておく時間。
     public static let statusBarTickerDuration = NumberTuning(
         id: "statusBarTicker.duration",
@@ -1727,6 +1736,9 @@ public enum TuningCatalog {
         ]),
         TuningSection(id: "settings", title: "設定画面", items: [
             .number(menuLayoutNoteDuration),
+        ]),
+        TuningSection(id: "batch", title: "まとめて行う操作", items: [
+            .number(batchReblogInterval),
         ]),
         TuningSection(id: "compose.media", title: "投稿欄：送る前に縮める", items: [
             .number(mediaImageQuality),

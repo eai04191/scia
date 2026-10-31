@@ -48,6 +48,19 @@ struct StatusMenuTreeTests {
         #expect(outline(tree(status(url: URL(string: "https://example.social/@alice/100")))) == "=返信,お気に入り,ブースト(押せない)|ブックマーク|リンクをコピー,テキストをコピー,共有,ブラウザで開く|翻訳|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[カスタマイズ]")
     }
 
+    /// 投稿を選べる一覧の行でだけ「選択」を出し、既定では共有のすぐ後ろに置く。投稿のない通知では出さない。
+    @Test func selectItemAppearsOnlyWhereRowsCanBeSelected() {
+        var selectable = tree(status())
+        selectable.canSelectPosts = true
+        let shown = titles(selectable)
+        #expect(shown.firstIndex(of: "選択") == shown.firstIndex(of: "共有").map { $0 + 1 })
+        #expect(!titles(tree(status())).contains("選択"))
+
+        var withoutStatus = tree(nil)
+        withoutStatus.canSelectPosts = true
+        #expect(!titles(withoutStatus).contains("選択"))
+    }
+
     /// 本文が空白だけの投稿では、扱う文字がないのでテキストのコピーと翻訳を出さない。
     @Test func textItemsAreHiddenWithoutText() {
         let titles = titles(tree(status(content: "<p> </p>")))

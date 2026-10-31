@@ -82,6 +82,31 @@ struct RowHoldTests {
         view.subviews + view.subviews.flatMap(subviews(of:))
     }
 
+    /// まとめて行う操作のために投稿を選んでいる間は、新着を入れずに溜め、選び終えたら1度だけ知らせることを確かめる。
+    /// 選んでいる間にメニューを閉じても知らせない。新着で行がずれると、押そうとした行を押し損なうため。
+    @Test func selectingPostsHoldsUntilSelectionEnds() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let existing = StatusFactory.make(count: 30, startingAt: 1_000)
+        harness.setStatuses(existing)
+        harness.viewController.onBatchReblog = { _ in }
+        harness.viewController.onBatchShare = { _ in }
+        var settled = 0
+        harness.viewController.onInteractionSettle = { settled += 1 }
+
+        harness.viewController.beginPostSelection(with: .status(existing[0].id))
+        #expect(harness.viewController.isUserInteracting)
+
+        harness.viewController.menuWillShow()
+        harness.viewController.menuDidHide()
+        #expect(harness.viewController.isUserInteracting)
+        #expect(settled == 0)
+
+        harness.viewController.endPostSelection()
+        #expect(!harness.viewController.isUserInteracting)
+        #expect(settled == 1)
+    }
+
     @Test func hidingMenuTwiceAppliesOnce() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }

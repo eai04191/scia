@@ -84,6 +84,8 @@ public final class StatusInteractions {
     /// 結果を待っている操作がある投稿の、いちばん新しい状態。あとから押した操作には、先に押した操作の見込みの状態が入っているため、押したときの投稿で置き換え、受け付けた結果と戻した状態を重ねる。
     /// `onSettle`に、先に押した操作の、押したときの古い状態を渡さないため。
     private var latest: [Status.ID: Status] = [:]
+    /// サーバーが受け付けた、投稿ごとの最後のブーストの状態。まとめてブーストで、選んだときの投稿より新しい状態を知るために使う。
+    private var settledReblogs: [Status.ID: Bool] = [:]
 
     public init(operations: Operations, update: @escaping Update) {
         self.operations = operations
@@ -122,6 +124,7 @@ public final class StatusInteractions {
             update(target.id) { Self.adopting(action, of: result, on: $0) }
             let settled = Self.adopting(action, of: result, on: latest[target.id] ?? target)
             latest[target.id] = settled
+            if action == .reblog { settledReblogs[target.id] = settled.reblogged }
             onSettle?(action, settled)
         } catch {
             update(target.id) { Self.setting(action, wasOn, on: $0) }
@@ -129,6 +132,14 @@ public final class StatusInteractions {
             throw error
         }
         return true
+    }
+
+    /// `status`（ブーストなら元の投稿）がブースト済みかもしれないか。結果を待っている操作の見込み、受け付けた結果、渡した投稿のどれかがブースト済みならtrue。
+    /// 迷ったときにブースト済みとみなすのは、まとめてブーストで、ブーストしていない投稿を取り消しても何も起きないが、
+    /// ブースト済みの投稿を取り消さずにブーストすると、前のブーストが返って選んだ順に並ばないため。
+    public func mayBeReblogged(_ status: Status) -> Bool {
+        let target = status.displayed
+        return latest[target.id]?.reblogged ?? (settledReblogs[target.id] == true || target.reblogged)
     }
 
     public static func isOn(_ action: Action, in status: Status) -> Bool {

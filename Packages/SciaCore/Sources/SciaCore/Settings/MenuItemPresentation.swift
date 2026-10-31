@@ -90,6 +90,7 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .copyText: .own(title: "テキストをコピー", symbolName: "doc.on.doc", note: "本文のある投稿でだけ出ます")
         case .selectText: .own(title: "テキストを選択", symbolName: "character.cursor.ibeam", note: "本文を表示している投稿でだけ出ます。引用の囲みと、行数で切っている本文では出ません")
         case .share: .url(.share)
+        case .select: .own(title: "選択", symbolName: "checkmark.circle", note: "投稿を順番を付けて選び、まとめてブーストや共有をします。一覧の投稿でだけ出ます")
         case .openInBrowser: .url(.openInBrowser)
         case .openInDefaultBrowser: .url(.openInDefaultBrowser)
         case .openInAppSafari: .url(.openInAppSafari)

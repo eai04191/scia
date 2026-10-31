@@ -41,6 +41,8 @@ public enum StatusMenuCommand {
     case translate(String)
     /// 本文の文字を選び始める。
     case selectText
+    /// 一覧で、この投稿を1番目にして投稿を選び始める。
+    case select
     case url(URLMenuCommand)
     /// フォローリクエストの通知の、承認と却下。
     case followRequest(FollowRequestDecision)
@@ -78,6 +80,8 @@ public struct StatusMenuTree {
     public var mediaIsCovered = false
     /// 本文の文字を選べるか。本文を表示している行でだけ選べる。
     public var canSelectText = false
+    /// 一覧で投稿を選び始められるか。投稿を選べる一覧の行でだけ選べる。
+    public var canSelectPosts = false
     /// ユーザーのメニューの並びと、メンション、ハンドルをコピー、関係の項目を組むもの。
     public var userMenu: MenuLayout<UserMenuItem>.Groups = UserMenuItem.defaultLayout.groups
     public var userActions: UserMenuActions?
@@ -153,6 +157,9 @@ public struct StatusMenuTree {
         case .openThread:
             guard status != nil, canOpenThread else { return [] }
             return [.action(item.title, icon: .symbol(item.symbolName), .openThread)]
+        case .select:
+            guard status != nil, canSelectPosts else { return [] }
+            return [.action(item.title, icon: .symbol(item.symbolName), .select)]
         case .author:
             return users(status.map { [.account($0.displayed.account)] } ?? [])
         case .booster:
@@ -244,7 +251,7 @@ public struct StatusMenuTree {
         case .selectText:
             guard canSelectText else { return nil }
             return .action(item.title, icon: icon, .selectText)
-        case .openThread, .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .hashtags, .dismissNotification, .reblogWithVisibility, .customize:
+        case .openThread, .select, .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .hashtags, .dismissNotification, .reblogWithVisibility, .customize:
             return nil
         }
     }

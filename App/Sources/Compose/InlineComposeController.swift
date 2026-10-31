@@ -2086,7 +2086,17 @@ final class InlineComposeController: NSObject {
     /// 監視していない`isEditing`は最後に読む。先に読むと、書いている間の評価で下書きを読まずに終わり、下書きが監視から外れる。
     /// そのあと書き終えてから下書きが空になっても（送っている間に閉じ、送り終えて空に戻したときなど）、隠せなくなる。
     private var hidesBar: Bool {
-        sinksWhenDone && !isEditing
+        yieldsToToolbar || sinksWhenDone && !isEditing
+    }
+
+    /// 一覧で投稿を選んでいる間、まとめて行う操作のツールバーに場所を譲って隠す。書いている途中なら書くのをやめてから隠し、下書きは残す。
+    /// 決まりはdocs/batch-actions.mdの「選んでいる間」にある。
+    var yieldsToToolbar = false {
+        didSet {
+            guard yieldsToToolbar != oldValue else { return }
+            if yieldsToToolbar, isEditing { endEditing() }
+            applyBarVisibility()
+        }
     }
 
     /// 設定と下書きが変わったら、バーを出すか隠すかと、どこに留めるかを決め直す。書き始めと書き終わりは`setEditing`で決め直す。

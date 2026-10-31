@@ -65,6 +65,7 @@ extension TimelineViewController {
         tree.canOpenThread = status.map(canOpenThread(of:)) ?? false
         tree.mediaIsCovered = status.map { mediaCover(for: $0) != nil } ?? false
         tree.canSelectText = body != nil
+        tree.canSelectPosts = canSelectPost(id)
         tree.userMenu = settings.userMenuLayout.groups
         tree.userActions = userMenuActions
         tree.hashtagMenu = settings.hashtagMenuLayout.groups
@@ -109,6 +110,8 @@ extension TimelineViewController {
             case .selectText:
                 guard let self, let selectableBody, let status else { return }
                 beginTextSelection(in: selectableBody, statusID: status.displayed.id)
+            case .select:
+                self?.beginPostSelection(with: id)
             case .url(let command):
                 self?.urlHandlers(id: id).perform(command)
             case .followRequest(let decision):

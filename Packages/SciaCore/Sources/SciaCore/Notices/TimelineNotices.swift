@@ -9,6 +9,24 @@ extension Notice {
     /// リンクのメニューの「プロフィールとして開く」で、リンク先を探している途中。サーバーが相手のページを取りに行くため、時間がかかることがある。
     public static let profileLookup = Notice(id: "timeline.profileLookup", kind: .progress, title: "取得中")
 
+    /// まとめてブーストの途中。済んだ件数と全体の件数を出し、押すと止めるかの確認を出す。決まりはdocs/batch-actions.mdの「ブースト」にある。
+    public static func batchReblog(completed: Int, total: Int, onStop: @escaping @MainActor () -> Void) -> Notice {
+        Notice(id: "timeline.batchReblog", kind: .progress, title: "ブースト中", value: "\(completed)/\(total)", action: .disclosure(hint: "まとめてブーストを止めるか選べます。", handler: onStop), valueIsProgress: true)
+    }
+
+    /// まとめてブーストが`index`番目（0から数える）の投稿で失敗して止まったときの文言。
+    public static func batchReblogFailureTitle(index: Int) -> String {
+        "\(index + 1)件目をブーストできませんでした"
+    }
+
+    /// まとめて共有するメディアを落としている途中。落とし終えた数と全体の数を出し、押すと止めるかの確認を出す。決まりはdocs/batch-actions.mdの「共有」にある。
+    public static func batchDownload(completed: Int, total: Int, onStop: @escaping @MainActor () -> Void) -> Notice {
+        Notice(id: "timeline.batchDownload", kind: .progress, title: "ダウンロード中", value: "\(completed)/\(total)", action: .disclosure(hint: "ダウンロードを止めるか選べます。", handler: onStop), valueIsProgress: true)
+    }
+
+    /// まとめて共有するメディアを落とせなかった。
+    public static let batchShareFailureTitle = "共有するメディアをダウンロードできませんでした"
+
     /// 投稿のリンクをコピーした。コピーは画面の変化で見えないため知らせる。
     public static let linkCopied = Notice(id: "timeline.linkCopied", kind: .success, title: "リンクをコピーしました")
 
