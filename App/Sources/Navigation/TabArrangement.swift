@@ -119,7 +119,7 @@ final class TabArrangement {
     }
 
     /// 開いて見せている項目。切り替えタブなら、開いている項目。
-    private var shownItem: TabItem? {
+    var shownItem: TabItem? {
         guard let selected = tabBarController.selectedTab else { return nil }
         if selected === switchTab { return switchSelection }
         return itemTabs.first { $0.value === selected }?.key

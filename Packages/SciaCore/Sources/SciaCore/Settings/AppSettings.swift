@@ -137,10 +137,25 @@ public final class AppSettings {
         defaults.set(item.rawValue, forKey: AccountScopedDefaults.key(Keys.switchTabItem, account: account))
     }
 
+    /// アカウントごとの、最後に見ていたタブの項目。切り替えタブの中なら、開いていた項目。キーはアカウントのハンドル。
+    /// 起動したときに、この項目を開く。タブを移るたびに書くので、変更を購読させない。
+    @ObservationIgnored private var shownTabItems: [String: TabItem]
+
+    public func shownTabItem(for account: String) -> TabItem? {
+        shownTabItems[account]
+    }
+
+    public func setShownTabItem(_ item: TabItem, for account: String) {
+        guard shownTabItems[account] != item else { return }
+        shownTabItems[account] = item
+        defaults.set(item.rawValue, forKey: AccountScopedDefaults.key(Keys.shownTabItem, account: account))
+    }
+
     /// ログアウトしたアカウントの並びと最後に開いた項目を忘れる。保存したキーは`AccountScopedDefaults.removeData`が消す。
     func forgetAccount(_ account: String) {
         tabLayouts[account] = nil
         switchTabItems[account] = nil
+        shownTabItems[account] = nil
     }
 
     /// 投稿を長押しして出すメニューの並び。通知のメニューもこれで組む。
@@ -278,6 +293,7 @@ public final class AppSettings {
         /// `AccountScopedDefaults`で、アカウントごとのキーにする名前。
         static let tabLayout = "tabLayout"
         static let switchTabItem = "switchTabItem"
+        static let shownTabItem = "shownTabItem"
         static let hidesEmptyComposeBar = "settings.hidesEmptyComposeBar"
         static let showsTabMenuCustomize = "settings.showsTabMenuCustomize"
         static let imageUploadSize = "settings.imageUploadSize"
@@ -316,6 +332,7 @@ public final class AppSettings {
         mediaActions = defaults.stringArray(forKey: Keys.mediaActions).map { ObjectActions(tokens: $0, default: .standard) } ?? .standard
         tabLayouts = AccountScopedDefaults.accountValues(named: Keys.tabLayout, in: defaults).compactMapValues { ($0 as? [String]).map(MenuLayout.init(tokens:)) }
         switchTabItems = AccountScopedDefaults.accountValues(named: Keys.switchTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
+        shownTabItems = AccountScopedDefaults.accountValues(named: Keys.shownTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
         hidesEmptyComposeBar = defaults.object(forKey: Keys.hidesEmptyComposeBar) as? Bool ?? false
         showsTabMenuCustomize = defaults.object(forKey: Keys.showsTabMenuCustomize) as? Bool ?? true
         // iPhoneの標準の写真（4032×3024）と動画（1080p）はそのまま送られ、それより大きな写真と4Kの動画だけが縮む。

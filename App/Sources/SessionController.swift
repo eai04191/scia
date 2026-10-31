@@ -343,6 +343,10 @@ final class SessionController {
         tabs.onSwitchSelectionChange = { [handle = credential.handle] item in
             AppDependencies.settings.setSwitchTabItem(item, for: handle)
         }
+        // 最後に見ていたタブから開く。その項目を無効にしていたら、先頭のタブのままにする。
+        if let shown = AppDependencies.settings.shownTabItem(for: credential.handle) {
+            tabs.show(shown)
+        }
         tabs.icon = { [profileTabIcons] in profileTabIcons.icon(for: $0) }
         profileTabIcons.onChange = { [weak tabs] in tabs?.refreshIcons() }
         self.tabs = tabs
@@ -654,6 +658,12 @@ final class SessionController {
         }
     }
 
+    /// 見ているタブの項目を、次に起動したときに開けるよう覚えておく。
+    private func rememberShownTab() {
+        guard let item = tabs.shownItem else { return }
+        AppDependencies.settings.setShownTabItem(item, for: credential.handle)
+    }
+
     private func configureStatusBarTicker(tabBarController: UITabBarController) {
         let ticker = statusBarTicker
         ticker.scene = { [weak tabBarController] in tabBarController?.view.window?.windowScene }
@@ -677,11 +687,13 @@ final class SessionController {
         tabs.onShownItemChange = { [weak self] in
             ticker.reevaluate()
             self?.applyShownSavedLists()
+            self?.rememberShownTab()
         }
         notifications.onArrival = { notification, verdict in ticker.receive(notification, verdict: verdict) }
         tabBarDelegate.onSelect = { [weak self] in
             ticker.reevaluate()
             self?.applyShownSavedLists()
+            self?.rememberShownTab()
         }
         observeStatusBarTickerSetting()
         #if DEBUG

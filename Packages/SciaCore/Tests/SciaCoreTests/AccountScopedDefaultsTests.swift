@@ -48,6 +48,7 @@ struct AccountScopedDefaultsTests {
             RecentMentions(defaults: defaults, account: account.handle).record(LocalMention(mention: Mention(id: "9", username: "carol", url: nil, acct: "carol@remote.example")))
             settings.setTabLayout(MenuLayout(tokens: ["home", "notifications"]), for: account.handle)
             settings.setSwitchTabItem(.notifications, for: account.handle)
+            settings.setShownTabItem(.local, for: account.handle)
         }
         RecentEmojis(defaults: defaults, instance: alice.instance).record("blobcat")
         UnprocessableMediaFormats(defaults: defaults, instance: alice.instance).record("image/heic", serverVersion: "4.7.3", date: Date(timeIntervalSince1970: 1_800_000_000))
@@ -59,11 +60,14 @@ struct AccountScopedDefaultsTests {
         #expect(RecentMentions(defaults: defaults, account: alice.handle).mentions.isEmpty)
         #expect(settings.tabLayout(for: alice.handle) == TabItem.defaultLayout)
         #expect(settings.switchTabItem(for: alice.handle) == nil)
+        #expect(settings.shownTabItem(for: alice.handle) == nil)
         // 消したアカウントの値は、作り直した設定にも戻らない。
         #expect(AppSettings(defaults: defaults).switchTabItem(for: alice.handle) == nil)
+        #expect(AppSettings(defaults: defaults).shownTabItem(for: alice.handle) == nil)
         // 残ったアカウントと、そのサーバーの値は残す。
         #expect(RecentMentions(defaults: defaults, account: bob.handle).mentions.map(\.id) == ["9"])
         #expect(AppSettings(defaults: defaults).switchTabItem(for: bob.handle) == .notifications)
+        #expect(AppSettings(defaults: defaults).shownTabItem(for: bob.handle) == .local)
         #expect(RecentEmojis(defaults: defaults, instance: bob.instance).keys == ["blobcat"])
 
         AccountScopedDefaults.removeData(of: bob, remaining: [], defaults: defaults, settings: settings)

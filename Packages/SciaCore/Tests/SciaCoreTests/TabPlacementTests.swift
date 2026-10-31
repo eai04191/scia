@@ -182,6 +182,17 @@ struct TabLayoutSettingsTests {
         #expect(relaunched.switchTabItem(for: "@bob@example.social") == nil)
     }
 
+    /// 最後に見ていたタブの項目は、起動し直しても覚えておく。アカウントごとに持つ。
+    @Test func shownTabItemIsPerAccountAndPersists() throws {
+        let defaults = try makeDefaults()
+        let settings = AppSettings(defaults: defaults)
+        settings.setShownTabItem(.local, for: "@alice@example.social")
+
+        let relaunched = AppSettings(defaults: defaults)
+        #expect(relaunched.shownTabItem(for: "@alice@example.social") == .local)
+        #expect(relaunched.shownTabItem(for: "@bob@example.social") == nil)
+    }
+
     /// リストはIDと名前を並びに残し、同じ項目かどうかはIDだけで見る。名前に`:`が入っていても読める。
     @Test func listItemKeepsTitleButIsIdentifiedByID() {
         let item = TabItem.list(id: "12249", title: "仕事: 開発")
