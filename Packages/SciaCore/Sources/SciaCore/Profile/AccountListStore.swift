@@ -14,6 +14,13 @@ public final class AccountListStore {
     public private(set) var isLoading = false
     private var nextMaxID: String?
     private let fetch: Fetch
+    /// 読んでいる間に足したり外したりした人。その前に送り出した読み込みの応答には入っていないので、応答を入れたあとにやり直す。
+    private var changesDuringLoad: [Change] = []
+
+    private enum Change {
+        case prepend(Account)
+        case remove(String)
+    }
 
     public init(kind: AccountListKind, fetch: @escaping Fetch) {
         self.kind = kind
@@ -26,9 +33,12 @@ public final class AccountListStore {
         isLoading = true
         defer { isLoading = false }
 
+        changesDuringLoad = []
         let page = try await fetch(nil)
         accounts = []
-        return apply(page, after: nil)
+        let added = apply(page, after: nil)
+        replayChangesDuringLoad()
+        return added
     }
 
     /// 続きのページを読み、新たに足した人を返す。読み込み中か、終わりに着いていれば何もせずnilを返す。
@@ -37,7 +47,37 @@ public final class AccountListStore {
         isLoading = true
         defer { isLoading = false }
 
-        return apply(try await fetch(maxID), after: maxID)
+        changesDuringLoad = []
+        let added = apply(try await fetch(maxID), after: maxID)
+        replayChangesDuringLoad()
+        return added
+    }
+
+    /// 一覧の先頭に足す。リストのメンバーの画面で、足した人を出すのに使う。もう並んでいれば何もしない。
+    public func prepend(_ account: Account) {
+        if isLoading { changesDuringLoad.append(.prepend(account)) }
+        insert(account)
+    }
+
+    /// 一覧から除く。リストのメンバーの画面で、外した人を消すのに使う。
+    public func remove(accountID: String) {
+        if isLoading { changesDuringLoad.append(.remove(accountID)) }
+        accounts.removeAll { $0.id == accountID }
+    }
+
+    private func insert(_ account: Account) {
+        guard !accounts.contains(where: { $0.id == account.id }) else { return }
+        accounts.insert(account, at: 0)
+    }
+
+    private func replayChangesDuringLoad() {
+        for change in changesDuringLoad {
+            switch change {
+            case .prepend(let account): insert(account)
+            case .remove(let id): accounts.removeAll { $0.id == id }
+            }
+        }
+        changesDuringLoad = []
     }
 
     /// 同じ位置を返し続けるサーバーで同じページを読み続けないよう、続きの位置が進まなければ終わりにする。

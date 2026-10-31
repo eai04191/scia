@@ -1,4 +1,5 @@
 import Foundation
+import SciaTesting
 import Synchronization
 import Testing
 @testable import SciaCore
@@ -63,6 +64,36 @@ struct AccountListStoreTests {
 
         #expect(try await store.loadOlder()?.map(\.id) == ["7"])
         #expect(store.reachedEnd)
+    }
+
+    /// リストのメンバーの画面で足した人は先頭に出し、もう並んでいる人は重ねない。外した人は除く。
+    @Test func prependAndRemoveChangeTheList() async throws {
+        let store = makeStore(PageQueue([AccountListPage(accounts: accounts(["5", "6"]), nextMaxID: nil)]))
+        _ = try await store.loadInitial()
+
+        store.prepend(accounts(["7"])[0])
+        store.prepend(accounts(["6"])[0])
+        #expect(store.accounts.map(\.id) == ["7", "5", "6"])
+
+        store.remove(accountID: "5")
+        #expect(store.accounts.map(\.id) == ["7", "6"])
+    }
+
+    /// 読み直している間に外したり足したりした人は、その前に送り出した読み直しの応答で戻さない。
+    @Test func changesDuringReloadSurviveTheOlderResponse() async throws {
+        let gate = Gate()
+        let store = AccountListStore(kind: .listMembers(listID: "1")) { _ in
+            try await gate.wait()
+            return AccountListPage(accounts: [Account(id: "5", username: "user5", acct: "user5", displayName: "", avatar: nil)], nextMaxID: nil)
+        }
+        let reload = Task { try await store.loadInitial() }
+        try await waitUntil { gate.waiterCount == 1 }
+        store.remove(accountID: "5")
+        store.prepend(accounts(["7"])[0])
+        gate.open()
+        _ = try await reload.value
+
+        #expect(store.accounts.map(\.id) == ["7"])
     }
 
     /// 読み込み直すと、最初のページで置き換える。

@@ -175,12 +175,12 @@ struct MenuLayoutTests {
         #expect(StatusMenuItem.defaultLayout.elements.contains(.item(.reblogWithVisibility, isVisible: false)))
     }
 
-    /// ユーザーのメニューは、開く・書く操作、フォロー、持ち出す操作でまとまりを分ける。開く場所を選んで開く2つは隠しておく。
+    /// ユーザーのメニューは、開く・書く操作、フォローとリストに追加、持ち出す操作でまとまりを分ける。開く場所を選んで開く2つは隠しておく。
     /// メモは書く操作に入れる。たまにしか使わないフォローの設定と、ミュート、ブロック、通報は「その他」に入れる。
     @Test func userMenuDefaultGroupsItemsByPurpose() {
         let layout = UserMenuItem.defaultLayout
 
-        #expect(layout.groups.main.map(\.items) == [[.profile, .mention, .note], [.follow], [.copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser]])
+        #expect(layout.groups.main.map(\.items) == [[.profile, .mention, .note], [.follow, .addToList], [.copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser]])
         #expect(layout.groups.more.map(\.items) == [[.showReblogs, .notify], [.mute, .block, .report], [.customize]])
         #expect([UserMenuItem.openInDefaultBrowser, .openInAppSafari].allSatisfy { layout.elements.contains(.item($0, isVisible: false)) })
     }
@@ -205,13 +205,20 @@ struct MenuLayoutTests {
     @Test func savedUserMenuGainsNewItemsAfterProfile() {
         let saved = MenuLayout<UserMenuItem>(tokens: ["item:profile", "item:copyLink", "item:share", "more"])
 
-        #expect(saved.groups.main.map(\.items) == [[.profile, .mention, .note, .follow, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser]])
+        #expect(saved.groups.main.map(\.items) == [[.profile, .mention, .note, .follow, .addToList, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser]])
         #expect(saved.groups.more.map(\.items) == [[.showReblogs, .notify, .mute, .block, .report, .customize]])
     }
 
     /// メモを足す前に保存したユーザーのメニューでも、メモはメンションのすぐ後ろに、表示されて入る。
     @Test func savedUserMenuGainsNoteAfterMention() {
         let saved = MenuLayout<UserMenuItem>(tokens: UserMenuItem.defaultLayout.tokens.filter { !$0.hasSuffix(":note") })
+
+        #expect(saved == UserMenuItem.defaultLayout)
+    }
+
+    /// リストに追加を足す前に保存したユーザーのメニューでも、リストに追加はフォローのすぐ後ろに、表示されて入る。
+    @Test func savedUserMenuGainsAddToListAfterFollow() {
+        let saved = MenuLayout<UserMenuItem>(tokens: UserMenuItem.defaultLayout.tokens.filter { !$0.hasSuffix(":addToList") })
 
         #expect(saved == UserMenuItem.defaultLayout)
     }
@@ -280,7 +287,7 @@ struct MenuLayoutTests {
         let saved = MenuLayout<UserMenuItem>(tokens: ["more", "item:profile"])
 
         #expect(saved.groups.main.map(\.items).isEmpty)
-        #expect(saved.groups.more.map(\.items) == [[.showReblogs, .notify, .mute, .block, .report, .customize, .profile, .mention, .note, .follow, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser]])
+        #expect(saved.groups.more.map(\.items) == [[.showReblogs, .notify, .mute, .block, .report, .customize, .profile, .mention, .note, .follow, .addToList, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser]])
     }
 
     /// ブックマークを足す前に保存した投稿のメニューでも、ブックマークは編集の後ろに、表示されて入る。

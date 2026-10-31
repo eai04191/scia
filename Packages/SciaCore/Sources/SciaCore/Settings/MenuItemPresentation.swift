@@ -129,6 +129,7 @@ extension UserMenuItem: MenuItemContentProviding {
         case .openInDefaultBrowser: .url(.openInDefaultBrowser)
         case .openInAppSafari: .url(.openInAppSafari)
         case .follow: .own(title: "フォロー", symbolName: "person.badge.plus", note: "フォロー中なら外し、リクエスト中なら取り消します。自分には出ません")
+        case .addToList: .own(title: "リストに追加", symbolName: "text.badge.plus", note: "どのリストに入れるかを選びます。フォローしていない人は、フォローしてから入れます")
         case .showReblogs: .own(title: "ブーストを表示", symbolName: "arrow.2.squarepath", note: "フォローしている相手でだけ出ます")
         case .notify: .own(title: "投稿を通知", symbolName: "bell", note: "フォローしている相手でだけ出ます")
         case .note: .own(title: "メモを追加", symbolName: "note.text", note: "自分にしか見えないメモを書きます。メモがあれば編集します。自分には出ません")

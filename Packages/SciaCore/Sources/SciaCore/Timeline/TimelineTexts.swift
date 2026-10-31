@@ -60,6 +60,7 @@ public struct TimelineTexts: Sendable {
         case .rebloggedBy: ("ブーストした人", "ブーストした人はいません")
         case .followers: ("フォロワー", "フォロワーはいません")
         case .following: ("フォロー", "フォローしている人はいません")
+        case .listMembers: ("メンバー", "メンバーはいません")
         }
         return TimelineTexts(dumpName: "accountList", title: title, empty: empty, reachedEnd: "", unreadable: "表示できないアカウント")
     }

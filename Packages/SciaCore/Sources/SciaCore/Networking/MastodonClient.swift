@@ -713,10 +713,23 @@ public struct MastodonClient: Sendable {
         try await get([MastodonList].self, path: "api/v1/lists", query: []).0
     }
 
-    /// リストを作る。
+    /// リストを作る。数と名前の長さの上限はAPIで返らないので、手元では止めない。超えたら、サーバーが422で断る。
     /// https://docs.joinmastodon.org/methods/lists/#create
     public func createList(title: String) async throws -> MastodonList {
         try await post(MastodonList.self, path: "api/v1/lists", form: [URLQueryItem(name: "title", value: title)]).0
+    }
+
+    /// リストの名前と設定を変える。サーバーは`title`を毎回求めるので、名前を変えないときも今の名前を渡す。nilの設定は送らず、今のままにする。
+    /// https://docs.joinmastodon.org/methods/lists/#update
+    public func updateList(_ listID: String, title: String, repliesPolicy: ListRepliesPolicy? = nil, exclusive: Bool? = nil) async throws -> MastodonList {
+        var form = [URLQueryItem(name: "title", value: title)]
+        if let repliesPolicy {
+            form.append(URLQueryItem(name: "replies_policy", value: repliesPolicy.rawValue))
+        }
+        if let exclusive {
+            form.append(URLQueryItem(name: "exclusive", value: exclusive ? "true" : "false"))
+        }
+        return try await send(formRequest(method: "PUT", path: "api/v1/lists/\(listID)", form: form), decoding: MastodonList.self).0
     }
 
     /// リストを消す。
@@ -725,6 +738,26 @@ public struct MastodonClient: Sendable {
         var request = URLRequest(url: credential.instance.appending(path: "api/v1/lists/\(listID)"))
         request.httpMethod = "DELETE"
         _ = try await send(request)
+    }
+
+    /// リストに人を足す。Mastodonが足せるのは、フォロー中かフォローをリクエスト中の人と、自分だけ。ほかの人なら404、もう入っていれば422で断る。
+    /// https://docs.joinmastodon.org/methods/lists/#accounts-add
+    public func addAccounts(_ accountIDs: [String], toList listID: String) async throws {
+        let form = accountIDs.map { URLQueryItem(name: "account_ids[]", value: $0) }
+        _ = try await send(formRequest(method: "POST", path: "api/v1/lists/\(listID)/accounts", form: form))
+    }
+
+    /// リストから人を外す。入っていない人を外しても成功する。
+    /// https://docs.joinmastodon.org/methods/lists/#accounts-remove
+    public func removeAccounts(_ accountIDs: [String], fromList listID: String) async throws {
+        let form = accountIDs.map { URLQueryItem(name: "account_ids[]", value: $0) }
+        _ = try await send(formRequest(method: "DELETE", path: "api/v1/lists/\(listID)/accounts", form: form))
+    }
+
+    /// 自分のリストのうち、その人が入っているもの。ページに分けずに返る。
+    /// https://docs.joinmastodon.org/methods/accounts/#lists
+    public func lists(containing accountID: String) async throws -> [MastodonList] {
+        try await get([MastodonList].self, path: "api/v1/accounts/\(accountID)/lists", query: []).0
     }
 
     /// リストのタイムラインを新しい順に返す。
@@ -800,12 +833,14 @@ public struct MastodonClient: Sendable {
     /// https://docs.joinmastodon.org/methods/statuses/#reblogged_by
     /// https://docs.joinmastodon.org/methods/accounts/#followers
     /// https://docs.joinmastodon.org/methods/accounts/#following
+    /// https://docs.joinmastodon.org/methods/lists/#accounts
     public func accounts(in list: AccountListKind, maxID: String?, limit: Int) async throws -> AccountListPage {
         let path = switch list {
         case .favouritedBy(let statusID): "api/v1/statuses/\(statusID)/favourited_by"
         case .rebloggedBy(let statusID): "api/v1/statuses/\(statusID)/reblogged_by"
         case .followers(let accountID): "api/v1/accounts/\(accountID)/followers"
         case .following(let accountID): "api/v1/accounts/\(accountID)/following"
+        case .listMembers(let listID): "api/v1/lists/\(listID)/accounts"
         }
         let query = [URLQueryItem(name: "limit", value: String(limit))] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
         let (accounts, response) = try await get(ElementList<Account>.self, path: path, query: query)
@@ -854,6 +889,19 @@ public struct MastodonClient: Sendable {
         let items = [
             URLQueryItem(name: "q", value: query),
             URLQueryItem(name: "resolve", value: "false"),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+        ]
+        return try await get(ElementList<Account>.self, path: "api/v1/accounts/search", query: items, retries: false).0.elements
+    }
+
+    /// リストのメンバーの画面で、足す人を探す。リストに足せるのはフォローしている人だけなので、フォローしている人に絞る。
+    /// 補完と同じく、打っている途中の問い合わせなので、相手のサーバーには問い合わせず、一時的な失敗でも送り直さない。
+    /// https://docs.joinmastodon.org/methods/accounts/#search
+    public func searchFollowedAccounts(_ query: String, limit: Int) async throws -> [Account] {
+        let items = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "resolve", value: "false"),
+            URLQueryItem(name: "following", value: "true"),
             URLQueryItem(name: "limit", value: "\(limit)"),
         ]
         return try await get(ElementList<Account>.self, path: "api/v1/accounts/search", query: items, retries: false).0.elements
@@ -1331,6 +1379,8 @@ public enum AccountListKind: Hashable, Sendable {
     case followers(accountID: String)
     /// アカウントがフォローしている人。
     case following(accountID: String)
+    /// 自分のリストのメンバー。
+    case listMembers(listID: String)
 }
 
 /// 検索で探す種類。`rawValue`は`api/v2/search`の`type`に渡す値。

@@ -307,6 +307,8 @@ public enum UserMenuItem: String, MenuItemKind {
     case openInAppSafari
     /// フォローしていなければフォローし、フォロー中なら外し、リクエスト中なら取り消す。以下の関係の項目は、相手との関係に合わせて出す。自分には出さない。
     case follow
+    /// その人をどのリストに入れるかを選ぶシートを開く。Mastodonは自分をリストに入れられるので、自分にも出す。決まりはdocs/lists.mdの「リストに追加」にある。
+    case addToList
     /// フォローしている相手のブーストを、ホームに流すかを切り替える。
     case showReblogs
     /// フォローしている相手が投稿したら通知するかを切り替える。
@@ -330,6 +332,7 @@ public enum UserMenuItem: String, MenuItemKind {
         .item(.note, isVisible: true),
         .separator,
         .item(.follow, isVisible: true),
+        .item(.addToList, isVisible: true),
         .separator,
         .item(.copyHandle, isVisible: true),
         .item(.copyUsername, isVisible: true),
@@ -367,7 +370,7 @@ public enum UserMenuItem: String, MenuItemKind {
     public var dependsOnRelationship: Bool {
         switch self {
         case .follow, .showReblogs, .notify, .note, .mute, .block: true
-        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .report, .customize: false
+        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .report, .customize: false
         }
     }
 }

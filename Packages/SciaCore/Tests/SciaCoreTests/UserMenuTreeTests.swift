@@ -16,7 +16,7 @@ struct UserMenuTreeTests {
         UserMenuActions(
             mention: { _ in }, copy: { _, _, _ in }, localServer: "example.social",
             resolveTarget: { _ in throw CancellationError() }, loadRelation: { _, _ in nil }, knownRelation: known, reloadRelations: { _ in },
-            changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, accounts: AccountCache { _ in [] }
+            changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in }, accounts: AccountCache { _ in [] }
         )
     }
 
@@ -140,10 +140,10 @@ struct UserMenuTreeTests {
 
     // MARK: - 投稿のメニューのサブメニュー
 
-    /// 既定のユーザーのメニューは、開く・書く操作（メモを含む）、フォロー、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
+    /// 既定のユーザーのメニューは、開く・書く操作（メモを含む）、フォローとリストに追加、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
     /// 関係を覚えていない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() {
-        #expect(submenu(actions: actions()) == "@alice[プロフィール,メンション,…,…,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報,カスタマイズ]]")
+        #expect(submenu(actions: actions()) == "@alice[プロフィール,メンション,…,…,リストに追加,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報,カスタマイズ]]")
     }
 
     /// メンション、ハンドルをコピー、関係の項目を組むものを渡されていない画面では、これらを出さない。
@@ -189,8 +189,8 @@ struct UserMenuTreeTests {
     /// 自分には、関係の項目のうちメモだけを出し、通報も出さない。自分との関係を覚えていれば、メモの項目をその場で組む。
     @Test func myselfHasOnlyNoteItem() {
         let me = UserRelation(accountID: "2", acct: "alice", relationship: Relationship(id: "2", note: "TODO"))
-        #expect(submenu(actions: actions { _ in .myself(me) }) == "@alice[プロフィール,メンション,メモを編集,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
-        #expect(submenu(actions: actions { _ in .myself(nil) }) == "@alice[プロフィール,メンション,…,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
+        #expect(submenu(actions: actions { _ in .myself(me) }) == "@alice[プロフィール,メンション,メモを編集,リストに追加,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
+        #expect(submenu(actions: actions { _ in .myself(nil) }) == "@alice[プロフィール,メンション,…,リストに追加,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
     }
 
     /// 自分との関係を覚えていなければ、読んでからメモの項目を組む。読めなければ、メモの場所に知らせる。自分にはほかに関係の項目を出さないため。
@@ -199,7 +199,7 @@ struct UserMenuTreeTests {
             let actions = UserMenuActions(
                 mention: { _ in }, copy: { _, _, _ in }, localServer: "example.social",
                 resolveTarget: { _ in UserIdentity(id: "2", acct: "alice") }, loadRelation: loadRelation, knownRelation: { _ in .myself(nil) }, reloadRelations: { _ in },
-                changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, accounts: AccountCache { _ in [] }
+                changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in }, accounts: AccountCache { _ in [] }
             )
             let tree = UserMenuTree(subject: UserMenuSubject(.account(alice)), actions: actions, linkBrowser: .inApp)
             let menu = try #require(tree.menu(groups: layout(visible: [.follow, .note, .mute]), avatar: nil))
@@ -225,7 +225,7 @@ struct UserMenuTreeTests {
                 guard case .account = target else { return nil }
                 return .myself(nil)
             },
-            reloadRelations: { _ in }, changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, accounts: AccountCache { _ in [] }
+            reloadRelations: { _ in }, changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, addToList: { _ in }, accounts: AccountCache { _ in [] }
         )
         let tree = UserMenuTree(subject: UserMenuSubject(mentionLink: try #require(alice.url), acct: "alice"), actions: actions, linkBrowser: .inApp)
         let menu = try #require(tree.menu(groups: layout(visible: [.follow, .note, .report]), avatar: nil))

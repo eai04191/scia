@@ -40,7 +40,12 @@ final class SessionController {
     /// タブの一覧と、積んで開いているハッシュタグの一覧。
     private var feeds: [FeedTimelineController] { tabFeeds + pushedFeeds.controllers }
     /// 直近に読んだ自分のリスト。並びを最初の並びに戻したときに、リストを足し直すのに使う。
+    /// リストの右上のメニューで、今の設定を出すのにも使う。アプリの中で作ったり変えたりしたら、読み直さずに入れる。
     private var loadedLists: [MastodonList]?
+    /// アプリの中でリストを作ったり、変えたり、消したりした回数。読み始める前と読み終えたときで違えば、読んだ一覧はその変更より古いので使わない。
+    private var listChangeCount = 0
+    /// リストを作る、変える、消す。
+    private lazy var listEditor = ListEditor(client: client, tasks: tasks.child(), host: self)
     /// 直近に読んだ、フォローしているハッシュタグ。並びを最初の並びに戻したときに、足し直すのに使う。
     private var loadedHashtags: [Hashtag]?
     /// 読んでいる一覧（`lists`、`followedTags`）。起動したときは、始めたときと前面に出たときの両方で読みに来るため、重ねて読まない。
@@ -881,6 +886,12 @@ final class SessionController {
         if item.isAccountHashtag {
             controller.viewController.screenBarItems = [tabToggleItem(for: item)]
         }
+        if case .list(let id, let title) = item {
+            controller.viewController.screenBarItems = [listEditor.barItem(listID: id, fallbackTitle: title) { [weak self, weak viewController = controller.viewController] title in
+                guard let viewController else { return }
+                self?.openListMembers(listID: id, title: title, from: viewController)
+            }]
+        }
         configure(navigation) { navigation in
             (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
         }
@@ -941,7 +952,16 @@ final class SessionController {
     /// 自分のリストとフォローしているハッシュタグを読み、タブの並びに反映する。決まりはdocs/tabs.mdの「リスト」と「フォローしているハッシュタグ」にある。
     /// 読めなかった一覧は、並びを変えない。
     private func loadTabSources() {
-        loadTabSource("lists", fetch: { try await $0.lists() }, apply: { $0.apply(lists: $1) })
+        let listChangeCount = listChangeCount
+        loadTabSource("lists", fetch: { try await $0.lists() }) { session, lists in
+            // 読んでいる間にアプリの中で作ったり消したりしていたら、読んだ一覧にはその変更が入っていないことがあり、作ったリストを外したり、消したリストを戻したりしてしまう。
+            // 手元はもう変更を入れてあるので、この一覧は使わず、次に起動したときかアプリに戻ったときに読み直す。
+            guard session.listChangeCount == listChangeCount else {
+                session.logger.info("lists load discarded after local change")
+                return
+            }
+            session.apply(lists: lists)
+        }
         loadTabSource("followedTags", fetch: { try await $0.followedTags() }, apply: { $0.apply(hashtags: $1) })
     }
 
@@ -2022,6 +2042,11 @@ final class SessionController {
             report: { [weak self] accountID, acct, statusID in
                 self?.presentReport(accountID: accountID, acct: acct, statusID: statusID)
             },
+            addToList: { [weak self] target in
+                self?.resolveIdentity(of: target, failureTitle: "リストに追加できませんでした") { id, acct in
+                    self?.presentListMembership(accountID: id, acct: acct)
+                }
+            },
             accounts: accounts
         )
     }
@@ -2173,6 +2198,86 @@ final class SessionController {
             self?.notices.showTransient(Notice(id: "user.reported", kind: .success, title: "通報しました"), duration: AppDependencies.tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
         topViewController.present(sheet, animated: true)
+    }
+
+    // MARK: - リスト
+
+    /// ユーザーのメニューの「リストに追加」のシートを開く。決まりはdocs/lists.mdの「リストに追加」にある。
+    private func presentListMembership(accountID: String, acct: String) {
+        let client = client
+        let model = ListMembershipModel(isMyself: accountID == credential.accountID, api: ListMembershipModel.API(
+            lists: { try await client.lists() },
+            listsContaining: { try await client.lists(containing: accountID) },
+            relationship: {
+                guard let relationship = try await client.relationships([accountID]).first else { throw ProfileNotFound(acct: acct) }
+                return relationship
+            },
+            add: { try await client.addAccounts([accountID], toList: $0) },
+            remove: { try await client.removeAccounts([accountID], fromList: $0) },
+            follow: { try await client.follow(accountID) },
+            create: { try await client.createList(title: $0) }
+        ), tasks: tasks.child()) { [weak self] in
+            self?.reportUnauthorized()
+        }
+        model.onFailure = { [weak self] operation, reason in
+            self?.reportListFailure(title: operation.failureTitle, reason: reason)
+        }
+        // 開いているその人のプロフィールと、覚えている関係にも入れる。
+        model.onFollowed = { [weak self] relationship in self?.profiles.apply(relationship, reloadsAccount: true) }
+        logger.info("list membership sheet opened")
+        let sheet = ListMembershipView.sheet(model: model, acct: acct) { [weak self, weak model] onCreate in
+            guard let model else { return }
+            self?.listEditor.presentCreate(create: { try await model.create(title: $0) }, onCreate: onCreate)
+        }
+        topViewController.present(sheet, animated: true)
+        model.load()
+    }
+
+    /// リストのメンバーの画面を開いた一覧に積む。決まりはdocs/lists.mdの「メンバー」にある。
+    private func openListMembers(listID: String, title: String, from source: UIViewController) {
+        let (controller, viewController) = AccountListController.make(kind: .listMembers(listID: listID), client: client, tasks: tasks.child()) { [weak self] in
+            self?.reportUnauthorized()
+        }
+        viewController.navigationItem.subtitle = title
+        controller.onMemberFailure = { [weak self] title, error in
+            self?.tasks.run(.action) { [weak self] in
+                guard let self else { return }
+                reportListFailure(title: title, reason: await listFailureReason(for: error))
+            }
+        }
+        let add = UIBarButtonItem(title: "メンバーを追加", image: UIImage(systemName: "plus"), primaryAction: UIAction { [weak self, weak controller] _ in
+            guard let controller else { return }
+            self?.presentListMemberSearch(for: controller)
+        })
+        add.isEnabled = false
+        controller.onLoadedChange = { [weak add] in add?.isEnabled = $0 }
+        viewController.screenBarItems = [add]
+        UserAction.openAccountList.record()
+        configure(viewController)
+        source.navigationController?.pushViewController(viewController, animated: true)
+        controller.start(purpose: .action)
+    }
+
+    /// メンバーの画面の＋で、フォローしている人を探して足すシートを開く。
+    private func presentListMemberSearch(for members: AccountListController) {
+        let client = client
+        let sheet = ListMemberSearchView.sheet(
+            search: { try await client.searchFollowedAccounts($0, limit: 20) },
+            initialMemberIDs: members.accountIDs
+        ) { [weak members] account, adds, completion in
+            guard let members else { return completion(false) }
+            members.changeMember(account, adds: adds, completion: completion)
+        }
+        topViewController.present(sheet, animated: true)
+    }
+
+    /// タブの並びの画面で、リストを作る、消す。
+    var settingsListActions: SettingsListActions {
+        SettingsListActions { [weak self] in
+            self?.listEditor.presentCreate()
+        } delete: { [weak self] id, title in
+            self?.listEditor.confirmDelete(listID: id, title: title)
+        }
     }
 
     /// ミュートかブロックしている相手を、投稿と通知の一覧から除く。どちらでもなくなったら、また足すようにする。
@@ -3101,6 +3206,7 @@ final class SessionController {
                 account: credential.handle,
                 diagnostics: diagnostics,
                 tabIcons: profileTabIcons,
+                lists: settingsListActions,
                 opening: page
             )
         case .profile(let acct):
@@ -3559,6 +3665,11 @@ private final class ServerFeedRegistry {
 
     var controllers: [FeedTimelineController] { entries.values.map(\.controller) }
 
+    /// 作ってある項目の一覧。まだ作っていなければnil。
+    func controller(for item: TabItem) -> FeedTimelineController? {
+        entries[item]?.controller
+    }
+
     /// 項目のナビゲーション。まだなければ作る。リストやハッシュタグでなければnil。
     func navigation(for item: TabItem) -> ContentNavigationController? {
         if let entry = entries[item] { return entry.navigation }
@@ -3897,5 +4008,54 @@ private final class TabReselectionDelegate: NSObject, UITabBarControllerDelegate
     /// 切り替えタブのように並びの項目でないタブは、識別子をそのまま残す。
     private static func logName(of tab: UITab) -> String {
         TabItem(rawValue: tab.identifier)?.logName ?? tab.identifier
+    }
+}
+
+// MARK: - リストの編集
+
+extension SessionController: ListEditorHost {
+    var listPresenter: UIViewController { topViewController }
+
+    func knownList(_ id: String) -> MastodonList? {
+        loadedLists?.first { $0.id == id }
+    }
+
+    /// 作ったリストは、「タブに追加」と同じく、有効にして切り替えタブの末尾に入れる。リストの一覧を読み直すのは待たない。
+    func listDidCreate(_ list: MastodonList) {
+        listChangeCount += 1
+        loadedLists = (loadedLists ?? []).filter { $0.id != list.id } + [list]
+        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).adding(.list(id: list.id, title: list.title)))
+    }
+
+    /// 変えたリストを覚え、名前が変わっていれば、並びの名前と、タブバーと一覧の見出しの名前をすぐ変える。
+    func listDidUpdate(_ list: MastodonList) {
+        listChangeCount += 1
+        let previous = knownList(list.id)
+        loadedLists = loadedLists.map { lists in lists.map { $0.id == list.id ? list : $0 } } ?? [list]
+        guard previous?.title != list.title else { return }
+        let item = TabItem.list(id: list.id, title: list.title)
+        serverFeeds.controller(for: item)?.viewController.title = list.title
+        tabs.retitle(item)
+        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).replacing(item))
+    }
+
+    /// 消したリストを、リストの一覧を読み直すのを待たずに並びから外し、一覧を止める。開いていたら、UIKitが選んだ先頭のタブへ移る。
+    func listDidDelete(_ id: String) {
+        listChangeCount += 1
+        loadedLists = loadedLists?.filter { $0.id != id }
+        let item = TabItem.list(id: id, title: "")
+        setTabLayout(AppDependencies.settings.tabLayout(for: credential.handle).removing(item))
+        tabs.forget(serverFeeds.removeAll(where: { $0 == item }, except: []))
+    }
+
+    func listFailureReason(for error: any Error) async -> ErrorPresentation {
+        await failureReason(for: error)
+    }
+
+    func reportListFailure(title: String, reason: ErrorPresentation) {
+        operationStatus.recordFailure(title: title, reason: reason)
+        showFailureNotice(.interactionFailure(title: title) { [weak self] in
+            self?.presentAlert(title: title, message: reason.text)
+        })
     }
 }

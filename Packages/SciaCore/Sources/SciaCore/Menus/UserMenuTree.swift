@@ -14,6 +14,8 @@ public enum UserMenuCommand: Sendable {
     case editNote(UserRelation)
     /// 通報のシートを開く。投稿のメニューから開いたときは、添えられる相手の投稿のIDを渡す。
     case report(accountID: String, acct: String, statusID: String?)
+    /// その人をどのリストに入れるかを選ぶシートを開く。
+    case addToList
     /// このメニューの並びの設定の画面を開く。
     case customize
 }
@@ -79,6 +81,8 @@ public struct UserMenuActions {
     public let editNote: @MainActor (UserRelation) -> Void
     /// 通報のシートを開く。投稿のメニューから開いたときは、添えられる相手の投稿のIDを渡す。
     public let report: @MainActor (_ accountID: String, _ acct: String, _ statusID: String?) -> Void
+    /// その人をどのリストに入れるかを選ぶシートを開く。リンクのメンションは、相手を探してから開く。
+    public let addToList: @MainActor (UserMenuTarget) -> Void
     /// セッションで読んだアカウント。メンションされたユーザーのように、アイコンのURLが手元にない相手のアイコンを出すのに使う。
     public let accounts: AccountCache
 
@@ -93,6 +97,7 @@ public struct UserMenuActions {
         changeRelation: @escaping @MainActor (UserRelationChange, UserRelation) -> Void,
         editNote: @escaping @MainActor (UserRelation) -> Void,
         report: @escaping @MainActor (_ accountID: String, _ acct: String, _ statusID: String?) -> Void,
+        addToList: @escaping @MainActor (UserMenuTarget) -> Void,
         accounts: AccountCache
     ) {
         self.mention = mention
@@ -105,6 +110,7 @@ public struct UserMenuActions {
         self.changeRelation = changeRelation
         self.editNote = editNote
         self.report = report
+        self.addToList = addToList
         self.accounts = accounts
     }
 }
@@ -235,6 +241,9 @@ public struct UserMenuTree {
                     subtitle = UserHandle(acct: acct, localServer: actions.localServer).text(of: part)
                 }
                 return [.action(inSubmenu ? item.title : "@\(subject.acct)の\(item.title)", subtitle: subtitle, icon: .symbol(item.symbolName), .copy(part))]
+            case .addToList:
+                guard tree.actions != nil else { return [] }
+                return [.action(inSubmenu ? item.title : "@\(subject.acct)をリストに追加", icon: .symbol(item.symbolName), .addToList)]
             case .follow, .showReblogs, .notify, .note, .mute, .block, .report:
                 guard let actions = tree.actions, let load else { return [] }
                 return tree.relationNodes(item, actions: actions, load: load, failureSlots: failureSlots)
@@ -379,7 +388,7 @@ extension UserMenuTree {
             return [node(item.title, "hand.raised", isDestructive: true, .block)]
         case .report:
             return [.action(item.title, icon: .symbol(item.symbolName), .report(accountID: relation.accountID, acct: relation.acct, statusID: reportableStatusID))]
-        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .customize:
+        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .addToList, .customize:
             return []
         }
     }

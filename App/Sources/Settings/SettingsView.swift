@@ -13,6 +13,8 @@ struct SettingsView: View {
     let diagnostics: ConnectionDiagnostics
     /// タブの並びで、タブに置いたプロフィールに出すその人のアイコン。
     let tabIcons: ProfileTabIcons
+    /// タブの並びでリストを作る、消す。
+    let lists: SettingsListActions
     @Environment(\.dismiss) private var dismiss
     /// 時刻の表記の見本に使う、3分前の日時。
     @State private var previewDate: Date
@@ -29,6 +31,7 @@ struct SettingsView: View {
         account: String,
         diagnostics: ConnectionDiagnostics,
         tabIcons: ProfileTabIcons,
+        lists: SettingsListActions,
         opening page: SettingsPage? = nil,
         now: () -> Date = AppDependencies.now,
         clock: any Clock<Duration> = AppDependencies.clock
@@ -38,6 +41,7 @@ struct SettingsView: View {
         self.account = account
         self.diagnostics = diagnostics
         self.tabIcons = tabIcons
+        self.lists = lists
         _previewDate = State(initialValue: now().addingTimeInterval(-180))
         _path = State(initialValue: page?.path ?? [])
         self.clock = clock
@@ -307,7 +311,13 @@ struct SettingsView: View {
                     title: "メニューに「カスタマイズ」を表示",
                     footer: "タブバーの最後のタブにまとめた項目を切り替えるメニューに、この画面を開く「カスタマイズ」を出します。",
                     isOn: $settings.showsTabMenuCustomize
-                )]
+                )],
+                actions: [MenuLayoutAction(title: "リストを作成", symbolName: "plus", handler: lists.create)],
+                itemDeletion: MenuLayoutItemDeletion(canDelete: \.isList, footer: "リストは左へスワイプすると削除できます。") { item in
+                    if case .list(let id, let title) = item {
+                        lists.delete(id, title)
+                    }
+                }
             )
         case .statusActions: ObjectActionsSettingsView(entity: .status, settings: settings)
         case .notificationActions: ObjectActionsSettingsView(entity: .notification, settings: settings)
@@ -377,14 +387,23 @@ private struct AppIconChoiceRow: View {
     }
 }
 
+/// タブの並びの画面で、リストを作る、消す。決まりはdocs/lists.mdにある。セッションが作る。
+struct SettingsListActions {
+    /// 名前を入れるアラートを出して作る。
+    let create: @MainActor () -> Void
+    /// 確かめてから消す。
+    let delete: @MainActor (_ id: String, _ title: String) -> Void
+}
+
 extension UIViewController {
     /// - Parameters:
     ///   - instance: ログイン中のアカウントのサーバー。
     ///   - diagnostics: 「接続の状態」画面に出す、ログイン中のアカウントの接続の状態。
     ///   - tabIcons: タブの並びで、タブに置いたプロフィールに出すその人のアイコン。
+    ///   - lists: タブの並びでリストを作る、消す。
     ///   - page: 一覧から重ねて開いておく画面。
-    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, opening page: SettingsPage? = nil) {
-        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, opening: page)
+    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, lists: SettingsListActions, opening page: SettingsPage? = nil) {
+        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, lists: lists, opening: page)
         present(UIHostingController(rootView: view), animated: true)
     }
 

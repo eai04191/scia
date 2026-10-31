@@ -14,13 +14,33 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     var imageRevision: () -> Int = { 0 }
     /// 並びの下に、並びとは別に置くスイッチ。
     var options: [MenuLayoutOption] = []
+    /// 並びのすぐ下に置くボタン。タブの並びの「リストを作成」。
+    var actions: [MenuLayoutAction] = []
+    /// 左へスワイプして消せる項目。タブの並びのリスト。
+    var itemDeletion: MenuLayoutItemDeletion<Item>?
 
     var body: some View {
-        MenuLayoutList(layout: $layout, image: image, imageRevision: imageRevision(), options: options)
+        MenuLayoutList(layout: $layout, image: image, imageRevision: imageRevision(), options: options, actions: actions, itemDeletion: itemDeletion)
             .ignoresSafeArea()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
     }
+}
+
+/// 並びのすぐ下に置くボタン。押したときの処理は、画面を作る側が決める。
+struct MenuLayoutAction {
+    let title: String
+    let symbolName: String
+    let handler: @MainActor () -> Void
+}
+
+/// 並びの項目を左へスワイプして消す。消すかどうかを確かめるのも、並びから外すのも、画面を作る側が行う。
+/// 並びの行は、外されて並びが変わったときに消える。
+struct MenuLayoutItemDeletion<Item> {
+    let canDelete: (Item) -> Bool
+    /// 並びの下の説明に添える文。
+    let footer: String
+    let delete: @MainActor (Item) -> Void
 }
 
 /// 並びの画面に、並びとは別に置くスイッチ。1つずつ欄を分け、欄の下に説明を添える。
@@ -37,9 +57,11 @@ private struct MenuLayoutList<Item: MenuItemKind & MenuItemPresentable>: UIViewC
     let image: (Item) -> UIImage?
     let imageRevision: Int
     let options: [MenuLayoutOption]
+    let actions: [MenuLayoutAction]
+    let itemDeletion: MenuLayoutItemDeletion<Item>?
 
     func makeUIViewController(context: Context) -> MenuLayoutViewController<Item> {
-        MenuLayoutViewController(layout: layout, image: image, imageRevision: imageRevision, options: options) { layout = $0 }
+        MenuLayoutViewController(layout: layout, image: image, imageRevision: imageRevision, options: options, actions: actions, itemDeletion: itemDeletion) { layout = $0 }
     }
 
     func updateUIViewController(_ controller: MenuLayoutViewController<Item>, context: Context) {
@@ -68,6 +90,8 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
 
     private enum Cell: Hashable {
         case row(UUID)
+        /// `actions`の何番目のボタンか。
+        case action(Int)
         case addSeparator
         case addRowSeparator
         case reset
@@ -87,12 +111,24 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     private let image: (Item) -> UIImage?
     private var imageRevision: Int
     private let options: [MenuLayoutOption]
+    private let actions: [MenuLayoutAction]
+    private let itemDeletion: MenuLayoutItemDeletion<Item>?
 
-    init(layout: MenuLayout<Item>, image: @escaping (Item) -> UIImage?, imageRevision: Int, options: [MenuLayoutOption], onChange: @escaping (MenuLayout<Item>) -> Void) {
+    init(
+        layout: MenuLayout<Item>,
+        image: @escaping (Item) -> UIImage?,
+        imageRevision: Int,
+        options: [MenuLayoutOption],
+        actions: [MenuLayoutAction],
+        itemDeletion: MenuLayoutItemDeletion<Item>?,
+        onChange: @escaping (MenuLayout<Item>) -> Void
+    ) {
         rows = layout.elements.map { Row(element: $0) }
         self.image = image
         self.imageRevision = imageRevision
         self.options = options
+        self.actions = actions
+        self.itemDeletion = itemDeletion
         self.onChange = onChange
         super.init(nibName: nil, bundle: nil)
     }
@@ -150,7 +186,17 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             return separator
         }
         configuration.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
-            guard let self, indexPath.section == 0, rows.indices.contains(indexPath.item), rows[indexPath.item].element.isSeparator else { return nil }
+            guard let self, indexPath.section == 0, rows.indices.contains(indexPath.item) else { return nil }
+            let element = rows[indexPath.item].element
+            if case .item(let item, _) = element, let itemDeletion, itemDeletion.canDelete(item) {
+                // 消すのは確かめてサーバーが受け付けてからなので、スワイプした行はいったん戻す。
+                let delete = UIContextualAction(style: .destructive, title: "削除") { _, _, completion in
+                    itemDeletion.delete(item)
+                    completion(false)
+                }
+                return UISwipeActionsConfiguration(actions: [delete])
+            }
+            guard element.isSeparator else { return nil }
             let delete = UIContextualAction(style: .destructive, title: "削除") { [weak self, id = rows[indexPath.item].id] _, _, completion in
                 self?.removeRow(id: id)
                 completion(true)
@@ -165,9 +211,14 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             guard let self, let row = rows.first(where: { $0.id == id }) else { return }
             configure(cell, for: row)
         }
-        let actionRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, Cell> { cell, _, item in
+        let actionRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, Cell> { [weak self] cell, _, item in
             var content = UIListContentConfiguration.cell()
             switch item {
+            case .action(let index):
+                guard let action = self?.actions[index] else { break }
+                content.text = action.title
+                content.image = UIImage(systemName: action.symbolName)
+                content.textProperties.color = .tintColor
             case .addSeparator:
                 content.text = "区切り線を足す"
                 content.textProperties.color = .tintColor
@@ -202,13 +253,14 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             if case .option(let index) = self?.dataSource?.sectionIdentifier(for: indexPath.section) {
                 content.text = self?.options[index].footer
             } else if indexPath.section == 0 {
-                content.text = if !Item.supportsSeparators {
+                let base = if !Item.supportsSeparators {
                     "右のつまみをドラッグすると並べ替えられます。"
                 } else if Item.supportsRowSeparators {
                     "右のつまみをドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。横並びの区切り線より下のまとまりは、メニューの中で横に並びます。"
                 } else {
                     "右のつまみをドラッグすると並べ替えられます。区切り線はメニューの項目のまとまりを分け、左へスワイプすると消せます。"
                 }
+                content.text = [base, self?.itemDeletion?.footer].compactMap(\.self).joined()
             }
             footer.contentConfiguration = content
         }
@@ -217,7 +269,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             switch item {
             case .row(let id):
                 collectionView.dequeueConfiguredReusableCell(using: rowRegistration, for: indexPath, item: id)
-            case .addSeparator, .addRowSeparator, .reset:
+            case .action, .addSeparator, .addRowSeparator, .reset:
                 collectionView.dequeueConfiguredReusableCell(using: actionRegistration, for: indexPath, item: item)
             case .option(let index):
                 collectionView.dequeueConfiguredReusableCell(using: optionRegistration, for: indexPath, item: index)
@@ -285,14 +337,14 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         var snapshot = NSDiffableDataSourceSnapshot<Section, Cell>()
         snapshot.appendSections([.rows, .actions])
         snapshot.appendItems(rows.map { .row($0.id) }, toSection: .rows)
-        let actions: [Cell] = if !Item.supportsSeparators {
+        let buttons: [Cell] = if !Item.supportsSeparators {
             [.reset]
         } else if Item.supportsRowSeparators {
             [.addSeparator, .addRowSeparator, .reset]
         } else {
             [.addSeparator, .reset]
         }
-        snapshot.appendItems(actions, toSection: .actions)
+        snapshot.appendItems(actions.indices.map(Cell.action) + buttons, toSection: .actions)
         for index in options.indices {
             snapshot.appendSections([.option(index)])
             snapshot.appendItems([.option(index)], toSection: .option(index))
@@ -421,6 +473,8 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             insert(.separator, at: rows.endIndex)
         case .addRowSeparator:
             insert(.rowSeparator, at: rows.endIndex)
+        case .action(let index):
+            actions[index].handler()
         case .reset:
             rows = Item.defaultLayout.elements.map { Row(element: $0) }
             save()

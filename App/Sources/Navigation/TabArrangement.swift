@@ -38,6 +38,10 @@ final class TabArrangement {
     /// サーバーから消えた項目（消したリスト、フォローをやめたハッシュタグ）。並びから外れたら、作ったナビゲーションとタブを捨てる。
     /// 同じ項目がまた並びに出たとき（同じハッシュタグをフォローし直したときなど）に、止めた一覧を使い回さず、作り直すため。
     private var forgotten: Set<TabItem> = []
+    /// アプリの中で名前を変えたリスト。リストの名前は、サーバーで変わっても起動し直すまで前の名前のまま残すが、
+    /// アプリの中で変えた名前は使う人が変えたものなので、ユーザーのハッシュタグと同じくすぐタブに出す（docs/lists.mdの「変える」）。
+    /// 無効にしている間に変えたら、有効に戻してタブを作るまで残す。
+    private var retitled: Set<TabItem> = []
     /// 最初の`apply`で、切り替えタブで開く項目を決めるのに使う。
     private var restoredSwitchSelection: TabItem?
     /// 切り替えタブの長押しで出すメニュー。iOS 27以降だけ付ける。
@@ -87,6 +91,11 @@ final class TabArrangement {
     var allNavigations: [UINavigationController] { Array(navigations.values) }
 
     /// サーバーから消えた項目の、作ったナビゲーションとタブを捨てる。まだ並びにあれば、並びから外れたときに捨てる。
+    /// 次に並びを反映するときに、項目のタブを今の名前で作り直す。アプリの中でリストの名前を変えたときに、並びを書く前に呼ぶ。
+    func retitle(_ item: TabItem) {
+        retitled.insert(item)
+    }
+
     func forget(_ items: some Sequence<TabItem>) {
         forgotten.formUnion(items)
         discardForgotten()
@@ -164,13 +173,15 @@ final class TabArrangement {
         self.placement = placement
         // 使う人が名前を変えたユーザーのハッシュタグとプロフィールは、作ってあるタブを、新しい名前で作り直す。無効にしている間に変えた名前も、有効に戻したときに出す。
         // 同じタブの`title`を変えると、タブバーの読み上げの名前が前の名前のまま残ることがあるため、作り直して差し替える。
-        for item in placement.tabs where item.isUserAdded && itemTabs[item].map({ $0.title != item.title }) == true {
+        let renamesAtOnce = { (item: TabItem) in item.isUserAdded || self.retitled.contains(item) }
+        for item in placement.tabs where renamesAtOnce(item) && itemTabs[item].map({ $0.title != item.title }) == true {
             itemTabs[item] = nil
         }
-        if let current = switchSelection, let item = placement.switchable.first(where: { $0 == current }), item.isUserAdded, item.title != switchTab.title {
+        if let current = switchSelection, let item = placement.switchable.first(where: { $0 == current }), renamesAtOnce(item), item.title != switchTab.title {
             switchSelection = item
             renewSwitchTab(for: item)
         }
+        retitled.subtract(placement.tabs + placement.switchable)
         let selection = placement.switchSelection(previous: switchSelection ?? restoredSwitchSelection)
         restoredSwitchSelection = nil
         // 切り替えタブからタブへ移るナビゲーションは、タブに渡す前に入れ物から外す。

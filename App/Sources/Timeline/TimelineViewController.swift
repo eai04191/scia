@@ -70,6 +70,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private var pendingOpening: (id: ItemID, windowY: CGFloat)?
     /// 投稿のアイコンやブーストした人の行がタップされたとき、または長押しのメニューで選ばれたときに、そのアカウントを渡して呼ぶ。
     var onOpenProfile: ((Account) -> Void)?
+    /// 人の行を左へスワイプして「外す」を押した。リストのメンバーの画面でだけ渡す。
+    var onRemoveAccount: ((Account) -> Void)?
     /// アカウントの全体を持たない相手（メンション）のプロフィールを、IDで開く。
     var onOpenProfileID: ((String) -> Void)?
     /// 投稿の本文のリンクがタップされたときに、行き先と、本文を描いた投稿（ブーストなら元の投稿）を渡して呼ぶ。
@@ -1600,7 +1602,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             self?.notificationRequestSwipe(at: indexPath, .accept)
         }
         configuration.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
-            self?.notificationRequestSwipe(at: indexPath, .dismiss)
+            self?.notificationRequestSwipe(at: indexPath, .dismiss) ?? self?.accountRemovalSwipe(at: indexPath)
         }
         return UICollectionViewCompositionalLayout { _, environment in
             let section = NSCollectionLayoutSection.list(using: configuration, layoutEnvironment: environment)
@@ -1634,6 +1636,17 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         case .dismiss:
             action.image = UIImage(systemName: "xmark")
         }
+        return UISwipeActionsConfiguration(actions: [action])
+    }
+
+    /// 人の行を左へスワイプして外す。リストのメンバーの画面でだけ出す。行を消すのは外せてからなので、スワイプした行はいったん戻す。
+    private func accountRemovalSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard let id = dataSource.itemIdentifier(for: indexPath), case .account(let account) = entries[id], let onRemoveAccount else { return nil }
+        let action = UIContextualAction(style: .destructive, title: "外す") { _, _, completion in
+            onRemoveAccount(account)
+            completion(false)
+        }
+        action.image = UIImage(systemName: "person.badge.minus")
         return UISwipeActionsConfiguration(actions: [action])
     }
 
