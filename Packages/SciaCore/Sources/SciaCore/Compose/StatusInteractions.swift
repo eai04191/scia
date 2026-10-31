@@ -95,6 +95,14 @@ public final class StatusInteractions {
     /// - Parameter reblogVisibility: ブーストするときの公開範囲。ほかの操作と、ブーストを取り消すときは使わない。
     @discardableResult
     public func toggle(_ action: Action, on status: Status, reblogVisibility: ReblogVisibility = .accountDefault) async throws -> Bool {
+        try await set(action, to: !Self.isOn(action, in: status.displayed), on: status, reblogVisibility: reblogVisibility)
+    }
+
+    /// `status`（ブーストなら元の投稿）の状態を`turningOn`にする。今の状態によらず、その向きの操作を送る。同じ操作の結果を待っている間は何もせずfalseを返す。
+    /// まとめてブーストで、取り消してから付け直すのに使う。失敗したら表示を戻してから投げる。
+    /// - Parameter reblogVisibility: ブーストするときの公開範囲。ほかの操作と、ブーストを取り消すときは使わない。
+    @discardableResult
+    public func set(_ action: Action, to turningOn: Bool, on status: Status, reblogVisibility: ReblogVisibility = .accountDefault) async throws -> Bool {
         let target = status.displayed
         let key = Key(statusID: target.id, action: action)
         guard inFlight.insert(key).inserted else { return false }
@@ -105,7 +113,7 @@ public final class StatusInteractions {
             }
         }
 
-        let turningOn = !Self.isOn(action, in: target)
+        let wasOn = Self.isOn(action, in: target)
         latest[target.id] = Self.setting(action, turningOn, on: target)
         update(target.id) { Self.setting(action, turningOn, on: $0) }
         do {
@@ -116,8 +124,8 @@ public final class StatusInteractions {
             latest[target.id] = settled
             onSettle?(action, settled)
         } catch {
-            update(target.id) { Self.setting(action, !turningOn, on: $0) }
-            latest[target.id] = latest[target.id].map { Self.setting(action, !turningOn, on: $0) }
+            update(target.id) { Self.setting(action, wasOn, on: $0) }
+            latest[target.id] = latest[target.id].map { Self.setting(action, wasOn, on: $0) }
             throw error
         }
         return true
