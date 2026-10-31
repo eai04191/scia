@@ -11,14 +11,11 @@ only_rules:
   - fixed_font_size
   - dimmed_white_text
   - built_in_context_menu
-  - session_task_outside_scope
   - server_value_without_check
   - unsafe_file_name
-  - log_private_value
   - url_session_outside_network_layer
   - network_conditions_outside_policy
   - test_file_without_scratch
-  - task_without_request_purpose
 
 included:
   - App
@@ -177,47 +174,6 @@ custom_rules:
       - doccomment
       - string
     message: "長押しのメニューは、コントロールに組み込まれたメニューではなく、別に付けたUIContextMenuInteractionで出す。組み込まれたメニューでは触覚フィードバックが出ない"
-    severity: error
-
-  # セッションの持ち物（各一覧、開いた画面、投稿欄）で始める処理は、持ち主（TaskScope）を通す。持ち主を通さないTaskは、ログアウト、アカウントの切り替え、
-  # 窓を閉じたときに止まらず、前のアカウントのトークンで送り続けたり、終わった処理が溜まり続けたりしていた。止める処理の一覧を手で並べて保たずに済むよう、ここで止める。
-  # 変化の知らせを受けてメインアクターへ戻るだけの乗り換え（`Task { @MainActor`）は、通信を持たないので対象外にする
-  session_task_outside_scope:
-    included: "(App/Sources/(SessionController|Timeline/(FeedTimelineController|NotificationsController|SavedStatusesController)|Profile/(ProfileController|AccountListController)|Thread/ThreadController|Compose/(ComposeModel|InlineComposeController))|Packages/SciaCore/Sources/SciaCore/(Timeline/(FeedTimelineModel|NotificationsModel|SavedStatusesModel|ScheduledStatusesModel)|Thread/ThreadModel))\\.swift"
-    regex: "\\bTask(\\.detached)?\\s*(\\{(?!\\s*@MainActor)|\\((?!\\.withoutRequests\\)))"
-    excluded_match_kinds:
-      - comment
-      - doccomment
-      - string
-    message: "セッションの持ち物で始める処理は、持ち主（TaskScope）のrunで始める。メインアクターへ戻るだけなら、アプリでは`Task(.withoutRequests) {`、SciaCoreでは`Task { @MainActor`と書く"
-    severity: error
-
-  # 持ち主（TaskScope）を通らずに始める処理は、始めるところで通信の目的を名乗る（docs/network.md）。名乗らない通信は通信の入口が送らずに失敗させるが、
-  # task-localの値はコンパイラが確かめられないため、名乗り忘れは実行時まで分からない。始める書き方をここで縛り、`Task(.action) {`のように目的を名乗るか、
-  # 通信しない処理は`Task(.withoutRequests) {`と書かせる。SwiftUIの`.task`も同じ（`.task(.action) {`、`.task(.withoutRequests, id:) {`）。
-  # SciaCoreのTaskは、名乗った処理の中で目的を引き継ぐために作るものが多いので対象外にし、同期の入口から始めるものは引数で目的を受け取る
-  task_without_request_purpose:
-    included: "App/Sources/.*\\.swift"
-    excluded: "App/Sources/Debug/.*"
-    regex: "\\bTask(\\s*<[^<>{}()]*>)?\\s*(\\.\\s*(detached|immediateDetached|init)\\b|\\.\\s*immediate\\s*(\\{|\\((?!\\s*\\.))|\\{|\\((?!\\s*\\.))|\\.task\\s*(\\{|\\((?!\\s*\\.))"
-    excluded_match_kinds:
-      - comment
-      - doccomment
-      - string
-    message: "処理を始めるところで通信の目的を名乗る。`Task(.action) {`、`Task(.display) {`のように書き、通信しない処理は`Task(.withoutRequests) {`（すぐ始めるなら`Task.immediate(.withoutRequests) {`）と書く。SwiftUIでは`.task(.action) {`と書く。`Task.detached`は使わない"
-    severity: error
-
-  # ログに、ハンドル、本文、URL、応答の本文、サーバーの文言を公開扱いで出さない。info以上のログは違和感レポートに入り、ファイルアプリから取り出せる。
-  # privacyを書かない文字列も伏せられずに出るため、.privateか.sensitive以外はすべて止める。名前で見分けるので、決まり（docs/logging.md）で伏せるものの名前を使い始めたら足す。
-  # デバッグ用のコードはリリース版に入らないため対象外にする
-  log_private_value:
-    included: "(App/Sources|ShareExtension|Packages/SciaCore/Sources/SciaCore)/.*\\.swift"
-    excluded: "App/Sources/Debug/"
-    regex: "(?<=\\.(?:debug|info|notice|error|fault|warning|trace|critical|log)\\(\"[^\\n]{0,400})\\\\\\((?!(?:[^()\\n]|\\((?:[^()\\n]|\\([^()\\n]*\\))*\\))*privacy: *\\.(?:private|sensitive))(?:(?:[^()\\n]|\\((?:[^()\\n]|\\([^()\\n]*\\))*\\))*?(?:\\b(?:localizedDescription|absoluteString|acct|username|displayName|serverMessage|blurhash|spoilerText)\\b|\\.(?:text|content|note|body)\\b(?!\\.(?:count|isEmpty))|\\bString\\(describing: *(?:\\w+\\.)*(?:error|failure)\\b|\\burl\\.(?:path|query|lastPathComponent|relativeString)\\b)|(?:[\\w]+\\.)*(?:error|failure|url|text|body|content|note)(?:, *privacy: *\\.public)?\\))"
-    excluded_match_kinds:
-      - comment
-      - doccomment
-    message: "ハンドル、本文、URL、応答の本文、サーバーの文言、localizedDescriptionをログに公開扱いで出さない。失敗はSciaLog.describe、URLはSciaLog.host(of:)で書き、追いたい値は.private(mask: .hash)にする（docs/logging.md）"
     severity: error
 
   # URLSessionは、通信の層のURLSessionTransport.swiftでだけ使う。ほかの場所で直接使うと、HTTPClientの決まり（再開の時刻で止める、送り直す、大きさの上限、httpとhttps以外を開かない）を通らない経路ができる。

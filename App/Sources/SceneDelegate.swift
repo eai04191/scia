@@ -102,7 +102,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     #if DEBUG
     // デバッグ版だけで受けるURLで、agentが送った操作を追うため、ログの決まり（docs/logging.md）から外してURLを丸ごと残す。
-    // swiftlint:disable log_private_value
+    // scialint:disable log_private_value
     /// 起動済みのアプリに届いたデバッグ用のURLを処理する。
     /// 起動時のURL（`connectionOptions.urlContexts`）は扱わない。最初の読み込みの前にダミーを流すと、読み込んだ投稿との並びを確かめられないため。
     private func openDebug(_ URLContexts: Set<UIOpenURLContext>) {
@@ -125,7 +125,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             session.handle(url)
         }
     }
-    // swiftlint:enable log_private_value
+    // scialint:enable log_private_value
     #endif
 
     #if DEBUG

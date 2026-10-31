@@ -2514,7 +2514,7 @@ final class SessionController {
         }
         // 投稿欄の一時ディレクトリへコピーし終えたら、受け渡しのフォルダーから消す。コピーに失敗したものは、添付の失敗として投稿欄に出る。
         // セッションを閉じても止めない。端末の中のコピーで通信せず、途中で止めると受け渡しのフォルダーが消されずに残るため。
-        // swiftlint:disable:next session_task_outside_scope
+        // scialint:disable:next session_task_outside_scope
         Task(.withoutRequests) {
             for item in media {
                 _ = try? await item.load()
@@ -2632,7 +2632,7 @@ final class SessionController {
             }
         } catch {
             // デバッグ版だけで流すファイルで、どこが読めなかったかを直すため、ログの決まり（docs/logging.md）から外して失敗を丸ごと残す。
-            // swiftlint:disable:next log_private_value
+            // scialint:disable:next log_private_value
             logger.error("debug inject failed file=\(file, privacy: .public): \(String(describing: error), privacy: .public)")
         }
     }

@@ -5,7 +5,7 @@ SIM_DESTINATION ?= generic/platform=iOS Simulator
 # 端末を決めないビルドは、既定ではシミュレーターの全アーキテクチャ（arm64とx86_64）を作る。このMacで動く分だけにして、コンパイルを半分にする
 SIM_ARCH ?= $(shell uname -m)
 
-.PHONY: generate lint test-core build warnings test sim-keyboard promo readme-screenshots readme-icons update-known-servers check check-steps hooks clean
+.PHONY: generate lint test-lint test-core build warnings test sim-keyboard promo readme-screenshots readme-icons update-known-servers check check-steps hooks clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -13,8 +13,14 @@ generate:
 
 ## 実行時クラッシュにつながる書き方（強制アンラップ、try!、IUO）と、テストで画面を出し終えるのを待たない書き方、テストで実際の時間や今の時刻に頼る書き方、テストでTask.yieldで譲って待つ書き方、本番のコードで実際の時間に直接触れる書き方、セッションの持ち物で持ち主を通さずに処理を始める書き方、ログにハンドルや本文、URL、失敗の文を公開扱いで出す書き方を検出する。swiftlintはbrew install swiftlintで入れる
 ## 設定を明示しないと、worktreeでは親のディレクトリにある元のcheckoutの.swiftlint.ymlも重ねて読み、そちらにない規則が外れる
+## 呼び出しや文字列の補間の形で決まる規則（持ち主を通さない処理、目的を名乗らない処理、ログに公開扱いで出す値）は、構文木で調べるTools/SciaLintで検出する
 lint:
 	swiftlint lint --quiet --config .swiftlint.yml
+	swift run --package-path Tools/SciaLint --quiet scia-lint .
+
+## Tools/SciaLintの規則のテストを実行する
+test-lint:
+	swift test --package-path Tools/SciaLint --quiet
 
 ## SciaCoreのユニットテストをmacOS上で実行する（シミュレーター不要）
 test-core:
@@ -93,13 +99,13 @@ check:
 	@$(MAKE) --no-print-directory check-steps
 	@Tools/check-stamp.sh record check "$$(cat $(CHECK_TREE))"
 
-## SciaCoreのテストとアプリのビルドは互いを待たないので、並べて走らせる。両方の出力が混ざるので、失敗はmakeが最後に出すターゲット名から追う
+## SciaCoreのテスト、lintの規則のテスト、アプリのビルドは互いを待たないので、並べて走らせる。出力が混ざるので、失敗はmakeが最後に出すターゲット名から追う
 check-steps: lint
-	@$(MAKE) --no-print-directory -j2 test-core warnings
+	@$(MAKE) --no-print-directory -j3 test-core test-lint warnings
 
 ## ローカルのmainを、make checkとmake testの両方が通った中身のcommitにしか動かさないhookを入れる。worktreeにも効く
 hooks:
 	ln -sfn ../../Tools/git-hooks/reference-transaction "$$(git rev-parse --git-common-dir)/hooks/reference-transaction"
 
 clean:
-	rm -rf $(DERIVED_DATA) $(PROJECT) Packages/SciaCore/.build
+	rm -rf $(DERIVED_DATA) $(PROJECT) Packages/SciaCore/.build Tools/SciaLint/.build

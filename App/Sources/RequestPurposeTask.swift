@@ -2,7 +2,7 @@ import SciaCore
 import SwiftUI
 
 // 裸の`.task`を止める規則（`task_without_request_purpose`）の代わりに使う入口なので、ここだけは裸の`.task`で書く。
-// swiftlint:disable task_without_request_purpose
+// scialint:disable task_without_request_purpose
 
 extension View {
     /// `.task`を、通信の目的を`purpose`と名乗って始める。持ち主（`TaskScope`）を通らずに始める処理は、裸の`.task`ではなくこれで始める。
@@ -42,4 +42,4 @@ extension View {
     }
 }
 
-// swiftlint:enable task_without_request_purpose
+// scialint:enable task_without_request_purpose
