@@ -15,13 +15,16 @@ public struct Credential: Codable, Sendable, Equatable, Identifiable {
     public var id: String { "\(instance.absoluteString)#\(accountID)" }
 
     /// `@alice@example.social`の形。アカウントの一覧に出す。
-    public var handle: String { "@\(username)@\(instance.host() ?? instance.absoluteString)" }
+    public var handle: String { "@\(username)@\(server)" }
+
+    /// ログインしているサーバーの名前。`example.social`の形。
+    public var server: String { instance.host() ?? instance.absoluteString }
 
     /// `acct`を、サーバー名を付けた`@username@domain`の形にする。Mastodonの`acct`は、同じサーバーのユーザーではサーバー名を含まないため、ログインしているサーバーの名前を付ける。
     /// サーバー名は`handle`と同じくログインしたアドレスから取る。ユーザーのIDにアドレスと別のドメイン（`LOCAL_DOMAIN`）を使うサーバーでは、IDとは違う形になる。
     /// 正しく出すには`api/v2/instance`の`domain`を持ち回る必要があり、アカウントの一覧の`handle`も同じ形で出しているため、そろえて読まない。
     public func handle(ofAcct acct: String) -> String {
-        acct.contains("@") ? "@\(acct)" : "@\(acct)@\(instance.host() ?? instance.absoluteString)"
+        acct.contains("@") ? "@\(acct)" : "@\(acct)@\(server)"
     }
 
     public init(instance: URL, accessToken: String, clientID: String, clientSecret: String, accountID: String, username: String) {
