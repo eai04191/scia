@@ -23,7 +23,7 @@ struct RichTextRenderer {
     /// 文字列に付ける言語。付けないと、漢字とかなの書体が端末の言語の設定で決まり、英語の設定では日本語も中国語の書体で描かれる。
     let language: String
     /// Unicodeの絵文字を描く絵。描く場所ごとに渡さず、設定から読む。
-    var emojiStyle: EmojiStyle = AppDependencies.settings.emojiStyle
+    var emojiStyle: EmojiStyle = AppDependencies.settings.appearance.emojiStyle
 
     func render(_ text: RichText) -> NSAttributedString {
         if let emojiOnly, let count = text.emojiOnlyCount(isEmoji: { Self.isUnicodeEmoji($0, in: font(for: $1, block: $2)) }) {

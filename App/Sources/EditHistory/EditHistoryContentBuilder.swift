@@ -75,7 +75,7 @@ struct EditHistoryContentBuilder {
                 }
             },
             spacing: settings.value(of: AppearanceCatalog.bodyMediaSpacing),
-            animatedEmojis: settings.animatesCustomEmojis ? emojiImages : nil
+            animatedEmojis: settings.appearance.animatesCustomEmojis ? emojiImages : nil
         )
     }
 

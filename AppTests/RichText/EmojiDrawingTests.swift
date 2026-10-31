@@ -114,7 +114,7 @@ struct EmojiDrawingTests {
     func largeNameAndBodyEmojisDoNotOverlap(scale: Double, largeTimeAndHandle: Bool) async throws {
         let (red, store) = try await redEmoji()
         let settings = AppSettings.isolated()
-        settings.emojiStyle = .system
+        settings.appearance.emojiStyle = .system
         for item in [AppearanceCatalog.nameCustomEmojiScale, AppearanceCatalog.nameUnicodeEmojiScale, AppearanceCatalog.customEmojiScale, AppearanceCatalog.unicodeEmojiScale] {
             settings.setValue(scale, for: item)
         }

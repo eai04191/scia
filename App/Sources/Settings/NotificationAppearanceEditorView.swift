@@ -32,7 +32,7 @@ struct NotificationAppearanceEditorView: View {
                     highlight: focused.flatMap(AppearanceHighlight.init),
                     onSelectPart: select,
                     onTapHighlight: { focused = nil },
-                    showsSeparators: settings.showsSeparators
+                    showsSeparators: settings.appearance.showsSeparators
                 )
                 .frame(height: geometry.size.height * 0.42)
                 Divider()

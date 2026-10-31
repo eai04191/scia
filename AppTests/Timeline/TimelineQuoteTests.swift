@@ -129,7 +129,7 @@ struct TimelineQuoteTests {
     @Test func quotedMediaStaysBelowBodyWhenBesideBody() throws {
         let harness = try TimelineHarness()
         defer { harness.tearDown() }
-        harness.settings.mediaArrangement = .besideBody
+        harness.settings.appearance.mediaArrangement = .besideBody
         let statuses = StatusFactory.make(count: 10, startingAt: 1_000)
         let image = MediaAttachment(
             id: "m1",

@@ -48,7 +48,7 @@ struct PostHeaderLayoutTests {
     }
 
     @Test func stackedNamePutsSecondPartBelowFirstLine() throws {
-        let configuration = try configuration { $0.stacksNameParts = true }
+        let configuration = try configuration { $0.appearance.stacksNameParts = true }
         let frames = frames(of: configuration).frames
         let first = try #require(frames[.nameFirstLineGlyphs]?.first)
         let second = try #require(frames[.nameSecondLineGlyphs]?.first)
@@ -67,7 +67,7 @@ struct PostHeaderLayoutTests {
 
     /// 2段のとき、名前と時刻の最小のすき間は、1段目の名前と時刻のあいだで示す。2段目は時刻と並ばないので、そこから測ると幅が0になる。
     @Test func stackedNameTimeGapIsMeasuredOnFirstLine() throws {
-        let configuration = try configuration(displayName: String(repeating: "とても長い名前", count: 10)) { $0.stacksNameParts = true }
+        let configuration = try configuration(displayName: String(repeating: "とても長い名前", count: 10)) { $0.appearance.stacksNameParts = true }
         let frames = frames(of: configuration).frames
         let gap = try #require(frames[.nameTimeMinGap]?.first)
 
@@ -76,7 +76,7 @@ struct PostHeaderLayoutTests {
 
     /// 本文のない投稿で2段目がアイコンより下にあっても、読み上げで指でなぞったときに投稿に止まるよう、読み上げの枠に2段目を含める。
     @Test func accessibilityFrameCoversSecondNameLine() throws {
-        var configuration = try configuration(media: true) { $0.stacksNameParts = true }
+        var configuration = try configuration(media: true) { $0.appearance.stacksNameParts = true }
         configuration.metrics.nameStackSpacing = 80
         let view = frames(of: configuration).view
         let second = try #require(view.previewFrames()[.nameSecondary]?.first)
@@ -88,8 +88,8 @@ struct PostHeaderLayoutTests {
     /// 名前を1つしか出さない表記では、分ける設定でも1段のまま。
     @Test func singleNamePartStaysOnOneLine() throws {
         let configuration = try configuration {
-            $0.stacksNameParts = true
-            $0.statusNameStyle = .nameOnly
+            $0.appearance.stacksNameParts = true
+            $0.appearance.statusNameStyle = .nameOnly
         }
         let frames = frames(of: configuration).frames
 
@@ -99,7 +99,7 @@ struct PostHeaderLayoutTests {
 
     /// 2段に分けたあとに戻すと、2つ目は1段目の、名前の後ろに戻る。
     @Test func unstackingReturnsSecondPartToFirstLine() throws {
-        let stacked = try configuration { $0.stacksNameParts = true }
+        let stacked = try configuration { $0.appearance.stacksNameParts = true }
         let view = frames(of: stacked).view
         view.configuration = try configuration { _ in }
         view.frame.size = view.systemLayoutSizeFitting(CGSize(width: 402, height: 0), withHorizontalFittingPriority: .required, verticalFittingPriority: .fittingSizeLevel)
@@ -114,7 +114,7 @@ struct PostHeaderLayoutTests {
 
     /// アイコンの下を空けないと、本文は行の左の余白から始まる。
     @Test func wrappedBodyStartsAtRowMargin() throws {
-        let configuration = try configuration { $0.wrapsBelowAvatar = true }
+        let configuration = try configuration { $0.appearance.wrapsBelowAvatar = true }
         let frames = frames(of: configuration).frames
         let body = try #require(frames[.bodyGlyphs]?.first)
         let avatar = try #require(frames[.avatar]?.first)
@@ -126,10 +126,10 @@ struct PostHeaderLayoutTests {
     /// アイコンの下を空けても、アイコンと名前の位置は変わらない。本文を名前に寄せようとして、名前の行を縦に引き伸ばすと、名前が下へずれる。
     @Test(arguments: [false, true])
     func wrappingKeepsHeaderInPlace(stacked: Bool) throws {
-        let plain = frames(of: try configuration { $0.stacksNameParts = stacked }).frames
+        let plain = frames(of: try configuration { $0.appearance.stacksNameParts = stacked }).frames
         let wrapped = frames(of: try configuration {
-            $0.stacksNameParts = stacked
-            $0.wrapsBelowAvatar = true
+            $0.appearance.stacksNameParts = stacked
+            $0.appearance.wrapsBelowAvatar = true
         }).frames
 
         for part in [AppearancePreviewPart.avatar, .nameGlyphs, .namePrimary, .time] {
@@ -143,8 +143,8 @@ struct PostHeaderLayoutTests {
     @Test(arguments: [8.0, 80.0])
     func wrappedBodyFollowsLowerOfAvatarAndName(avatarSize: Double) throws {
         var configuration = try configuration {
-            $0.wrapsBelowAvatar = true
-            $0.stacksNameParts = true
+            $0.appearance.wrapsBelowAvatar = true
+            $0.appearance.stacksNameParts = true
         }
         configuration.metrics.avatarSize = avatarSize
         let frames = frames(of: configuration).frames
@@ -159,7 +159,7 @@ struct PostHeaderLayoutTests {
 
     /// アイコンの下を空けないと、返信をつなぐ線を出す設定でも、線を出さない。
     @Test func wrappingHidesReplyLines() throws {
-        var configuration = try configuration { $0.wrapsBelowAvatar = true }
+        var configuration = try configuration { $0.appearance.wrapsBelowAvatar = true }
         configuration.replyConnection = ReplyConnection(above: true, below: true)
         let frames = frames(of: configuration).frames
 

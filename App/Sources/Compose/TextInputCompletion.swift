@@ -29,7 +29,7 @@ final class TextInputCompletion {
         self.recentEmojis = recentEmojis
         self.tuning = tuning
         self.settings = settings
-        completion.standardEmojiGroups = { [settings] in StandardEmojiAvailability.groups(for: settings.emojiStyle) }
+        completion.standardEmojiGroups = { [settings] in StandardEmojiAvailability.groups(for: settings.appearance.emojiStyle) }
     }
 
     // MARK: - 補完
@@ -168,10 +168,10 @@ final class TextInputCompletion {
         palette.hardEdgeEffect = tuning.value(of: TuningCatalog.composeEmojiPaletteHardEdgeEffect)
         palette.barHeight = tuning.value(of: TuningCatalog.composeEmojiPaletteBarHeight)
         palette.barBottomInset = tuning.value(of: TuningCatalog.composeEmojiPaletteBarBottomInset)
-        palette.animatesEmojis = settings.animatesCustomEmojis
-        palette.emojiStyle = settings.emojiStyle
+        palette.animatesEmojis = settings.appearance.animatesCustomEmojis
+        palette.emojiStyle = settings.appearance.emojiStyle
         let query = palette.query
-        let standardGroups = StandardEmojiAvailability.groups(for: settings.emojiStyle)
+        let standardGroups = StandardEmojiAvailability.groups(for: settings.appearance.emojiStyle)
         // カスタム絵文字の一覧がまだないか読めなかったときも、Unicodeの絵文字は通信なしで並べられるので出し、カスタム絵文字の場所に状態を出す。
         let emojis = completion.emojis ?? []
         let customStatus: EmojiPaletteView.CustomEmojiStatus? = if completion.emojis != nil {

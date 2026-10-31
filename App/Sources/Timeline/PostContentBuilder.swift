@@ -45,7 +45,7 @@ struct PostContentBuilder {
             visibilitySymbolSpacing: settings.value(of: AppearanceCatalog.visibilitySymbolSpacing),
             editedMarkSpacing: settings.value(of: AppearanceCatalog.editedMarkSpacing),
             filterNoteSpacing: settings.value(of: AppearanceCatalog.filterNoteSpacing),
-            showsContextSymbol: settings.showsContextSymbol,
+            showsContextSymbol: settings.appearance.showsContextSymbol,
             bodyEmbedSpacing: settings.value(of: AppearanceCatalog.bodyXPostSpacing)
         )
         let language = settings.glyphLanguageIdentifier()
@@ -53,14 +53,14 @@ struct PostContentBuilder {
         let secondaryRenderer = RichTextRenderer(font: typography.font(.nameSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, emojiImages: emojiImages, language: language)
         let contextRenderer = RichTextRenderer(font: metrics.contextFont, textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, emojiImages: emojiImages, language: language)
         let contextSecondaryRenderer = RichTextRenderer(font: typography.font(.contextSecondary), textColor: .secondaryLabel, emojiScale: emojiScale, unicodeEmojiScale: unicodeEmojiScale, emojiImages: emojiImages, language: language)
-        let boosterName = Self.joined(spacing: settings.value(of: AppearanceCatalog.contextPartsSpacing), settings.contextNameStyle.parts.enumerated().map { index, part in
+        let boosterName = Self.joined(spacing: settings.value(of: AppearanceCatalog.contextPartsSpacing), settings.appearance.contextNameStyle.parts.enumerated().map { index, part in
             let renderer = index == 0 ? contextRenderer : contextSecondaryRenderer
             return switch part {
             case .displayName: renderer.render(.plain(status.account.displayNameOrUsername, emojis: status.account.emojis))
             case .acct: renderer.render(.plain("@\(status.account.acct)", emojis: []))
             }
         })
-        let nameParts = settings.statusNameStyle.parts.enumerated().map { index, part in
+        let nameParts = settings.appearance.statusNameStyle.parts.enumerated().map { index, part in
             let renderer = index == 0 ? primaryRenderer : secondaryRenderer
             return switch part {
             case .displayName: renderer.render(.plain(shown.account.displayNameOrUsername, emojis: shown.account.emojis))
@@ -77,13 +77,13 @@ struct PostContentBuilder {
         } else if status.reblog != nil {
             PostContentConfiguration.Context(
                 symbolName: "arrow.2.squarepath",
-                avatar: settings.showsBoosterAvatar ? avatarContent(of: status.account) : nil,
+                avatar: settings.appearance.showsBoosterAvatar ? avatarContent(of: status.account) : nil,
                 text: boosterName.text,
                 secondaryRange: boosterName.secondaryRange,
                 accessibilityText: "\(status.account.displayNameOrUsername)がブースト",
                 accountName: status.account.displayNameOrUsername
             )
-        } else if let replyLabel, settings.showsReplyLabel {
+        } else if let replyLabel, settings.appearance.showsReplyLabel {
             replyContext(replyLabel, font: metrics.contextFont, language: language)
         } else {
             nil
@@ -96,9 +96,9 @@ struct PostContentBuilder {
             createdAt: shown.createdAt,
             isEdited: shown.editedAt != nil,
             visibility: shown.visibility,
-            showsVisibilitySymbol: settings.showsVisibilitySymbol,
-            showsEditedMark: settings.showsEditedMark,
-            timeStyle: settings.statusTimeStyle,
+            showsVisibilitySymbol: settings.appearance.showsVisibilitySymbol,
+            showsEditedMark: settings.appearance.showsEditedMark,
+            timeStyle: settings.appearance.statusTimeStyle,
             body: body(of: shown, base: base, enlargesEmojiOnly: true),
             spoiler: spoiler(of: shown, base: base),
             metrics: metrics,
@@ -106,16 +106,16 @@ struct PostContentBuilder {
             statusID: shown.id,
             mediaImages: mediaImages,
             avatarImages: avatarImages,
-            emojiImages: settings.animatesCustomEmojis ? emojiImages : nil
+            emojiImages: settings.appearance.animatesCustomEmojis ? emojiImages : nil
         )
         configuration.reactionGlow = reactionGlow(for: shown)
-        configuration.showsReplyLines = settings.showsReplyLines
-        configuration.showsTime = settings.showsTime
-        configuration.stacksNameParts = settings.stacksNameParts
-        configuration.wrapsBelowAvatar = settings.wrapsBelowAvatar
+        configuration.showsReplyLines = settings.appearance.showsReplyLines
+        configuration.showsTime = settings.appearance.showsTime
+        configuration.stacksNameParts = settings.appearance.stacksNameParts
+        configuration.wrapsBelowAvatar = settings.appearance.wrapsBelowAvatar
         configuration.isBoost = status.reblog != nil
         configuration.isReply = replyLabel != nil && status.reblog == nil && !isPinned
-        configuration.hasHiddenLinkCard = !settings.showsLinkCard && LinkCard(status: shown) != nil
+        configuration.hasHiddenLinkCard = !settings.appearance.showsLinkCard && LinkCard(status: shown) != nil
         configuration.hashtagAccount = shown.account
         return configuration
     }
@@ -147,11 +147,11 @@ struct PostContentBuilder {
 
     func avatarContent(of account: Account) -> AvatarView.Content {
         AvatarView.Content(
-            url: settings.animatesAvatars ? account.avatar : account.avatarStatic,
-            shape: settings.avatarShape,
-            animates: settings.animatesAvatars,
+            url: settings.appearance.animatesAvatars ? account.avatar : account.avatarStatic,
+            shape: settings.appearance.avatarShape,
+            animates: settings.appearance.animatesAvatars,
             cornerRatio: settings.value(of: AppearanceCatalog.avatarCornerRatio),
-            showsBorder: settings.showsAvatarBorder
+            showsBorder: settings.appearance.showsAvatarBorder
         )
     }
 
@@ -197,20 +197,20 @@ struct PostContentBuilder {
 
     /// 投稿のリンクカード。出さない投稿ならnil。
     func linkCard(of status: Status) -> LinkCardView.Content? {
-        guard settings.showsLinkCard else { return nil }
+        guard settings.appearance.showsLinkCard else { return nil }
         return LinkCard(status: status).map {
             LinkCardView.Content(
                 card: $0,
                 padding: settings.value(of: AppearanceCatalog.linkCardPadding),
                 transitionDuration: tuning.value(of: TuningCatalog.linkCardTransitionDuration),
-                thumbnailSide: settings.linkCardThumbnailSide,
+                thumbnailSide: settings.appearance.linkCardThumbnailSide,
                 typography: PostTypography(settings: settings),
-                showsSite: settings.showsLinkCardSite,
-                showsImage: settings.showsLinkCardImage,
+                showsSite: settings.appearance.showsLinkCardSite,
+                showsImage: settings.appearance.showsLinkCardImage,
                 descriptionLines: Int(settings.value(of: AppearanceCatalog.linkCardDescriptionLines)),
                 lineSpacing: settings.value(of: AppearanceCatalog.linkCardLineSpacing),
                 titleLines: Int(settings.value(of: AppearanceCatalog.linkCardTitleLines)),
-                boldsTitle: settings.boldsLinkCardTitle,
+                boldsTitle: settings.appearance.boldsLinkCardTitle,
                 imageWidthRatio: settings.value(of: AppearanceCatalog.linkCardImageWidthRatio)
             )
         }
@@ -226,7 +226,7 @@ struct PostContentBuilder {
             id: "x:\(post.id)",
             header: EmbeddedPostView.Content.Header(
                 // Xのアイコンは静止画なので、アニメーションの設定によらず動かさない。
-                avatar: AvatarView.Content(url: post.authorAvatar, shape: settings.avatarShape, animates: false),
+                avatar: AvatarView.Content(url: post.authorAvatar, shape: settings.appearance.avatarShape, animates: false),
                 name: embedName(.plain(post.authorName, emojis: []), handle: post.authorScreenName, base: base),
                 opensAccount: false
             ),

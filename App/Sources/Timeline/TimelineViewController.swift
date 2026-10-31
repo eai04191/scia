@@ -423,7 +423,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private func refreshVisibleTimes() {
         let now = now()
         refreshVisiblePolls(now: now)
-        guard settings.statusTimeStyle == .relative else { return }
+        guard settings.appearance.statusTimeStyle == .relative else { return }
         for cell in collectionView.visibleCells {
             (cell.contentView as? PostContentView)?.refreshTime(now: now)
         }
@@ -458,38 +458,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = tuning.value(of: TuningCatalog.reactionGlowDarkGlowHDRExposure)
             _ = network.usePolicy(settings: settings)
             _ = settings.ignoresUselessAltText
-            _ = settings.statusNameStyle
-            _ = settings.contextNameStyle
-            _ = settings.showsVisibilitySymbol
-            _ = settings.showsEditedMark
-            _ = settings.showsLinkCardSite
-            _ = settings.showsSeparators
-            _ = settings.showsContextSymbol
-            _ = settings.boldsName
-            _ = settings.showsAvatarBorder
-            _ = settings.showsMediaBadges
-            _ = settings.showsLinkCard
-            _ = settings.boldsLinkCardTitle
-            _ = settings.showsBoosterAvatar
-            _ = settings.showsReplyLabel
-            _ = settings.showsReplyLines
-            _ = settings.wrapsBelowAvatar
-            _ = settings.stacksNameParts
-            _ = settings.showsTime
-            _ = settings.showsLinkCardImage
-            _ = settings.statusTimeStyle
-            _ = settings.avatarShape
-            _ = settings.animatesAvatars
-            _ = settings.animatesCustomEmojis
-            _ = settings.linkCardThumbnailSide
-            _ = settings.mediaArrangement
-            _ = settings.tiltsStackedPhotos
-            _ = settings.glyphLanguage
-            _ = settings.emojiStyle
-            _ = settings.drawsReactionGlowInHDR
-            _ = settings.reactionGlowIcons
-            _ = settings.reactionGlowFillsWidthWhenAlone
-            _ = settings.reactionGlowLightFavouriteColor
+            _ = settings.appearance
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor in
                 guard let self else { return }
@@ -1522,7 +1491,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         configuration.itemSeparatorHandler = { [weak self] indexPath, separator in
             var separator = separator
             guard let self, let id = self.dataSource.itemIdentifier(for: indexPath) else { return separator }
-            guard self.settings.showsSeparators else {
+            guard self.settings.appearance.showsSeparators else {
                 separator.topSeparatorVisibility = .hidden
                 separator.bottomSeparatorVisibility = .hidden
                 return separator

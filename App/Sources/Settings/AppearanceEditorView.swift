@@ -32,7 +32,7 @@ struct AppearanceEditorView: View {
                     highlight: focused?.highlight,
                     onSelectPart: select,
                     onTapHighlight: { focused = nil },
-                    showsSeparators: settings.showsSeparators,
+                    showsSeparators: settings.appearance.showsSeparators,
                     choices: choicesRevision,
                     interfaceStyle: focused?.colorScheme.map { $0 == .dark ? .dark : .light } ?? .unspecified
                 )
@@ -71,28 +71,28 @@ struct AppearanceEditorView: View {
                         }
                     }
                     // スイッチは押すとすぐ切り替わるので、切り替えたときにその場所を示す。メニューで選ぶ項目は、メニューを開いたときに示す。
-                    .onChange(of: settings.showsBoosterAvatar) { focused = .choice(.showsBoosterAvatar) }
-                    .onChange(of: settings.showsContextSymbol) { focused = .choice(.showsContextSymbol) }
-                    .onChange(of: settings.boldsName) { focused = .choice(.boldsName) }
-                    .onChange(of: settings.showsAvatarBorder) { focused = .choice(.showsAvatarBorder) }
-                    .onChange(of: settings.showsMediaBadges) { focused = .choice(.showsMediaBadges) }
-                    .onChange(of: settings.tiltsStackedPhotos) { focused = .choice(.tiltsStackedPhotos) }
-                    .onChange(of: settings.showsLinkCard) { focused = .choice(.showsLinkCard) }
-                    .onChange(of: settings.boldsLinkCardTitle) { focused = .choice(.boldsLinkCardTitle) }
-                    .onChange(of: settings.showsSeparators) { focused = .choice(.showsSeparators) }
-                    .onChange(of: settings.showsReplyLabel) { focused = .choice(.showsReplyLabel) }
-                    .onChange(of: settings.showsReplyLines) { focused = .choice(.showsReplyLines) }
-                    .onChange(of: settings.wrapsBelowAvatar) { focused = .choice(.wrapsBelowAvatar) }
-                    .onChange(of: settings.stacksNameParts) { focused = .choice(.stacksNameParts) }
-                    .onChange(of: settings.showsTime) { focused = .choice(.showsTime) }
-                    .onChange(of: settings.showsVisibilitySymbol) { focused = .choice(.showsVisibilitySymbol) }
-                    .onChange(of: settings.showsEditedMark) { focused = .choice(.showsEditedMark) }
-                    .onChange(of: settings.showsLinkCardSite) { focused = .choice(.showsLinkCardSite) }
-                    .onChange(of: settings.showsLinkCardImage) { focused = .choice(.showsLinkCardImage) }
-                    .onChange(of: settings.animatesAvatars) { focused = .choice(.animatesAvatars) }
-                    .onChange(of: settings.animatesCustomEmojis) { focused = .choice(.animatesCustomEmojis) }
-                    .onChange(of: settings.drawsReactionGlowInHDR) { focused = .choice(.drawsReactionGlowInHDR) }
-                    .onChange(of: settings.reactionGlowFillsWidthWhenAlone) { focused = .choice(.reactionGlowFillsWidthWhenAlone) }
+                    .onChange(of: settings.appearance.showsBoosterAvatar) { focused = .choice(.showsBoosterAvatar) }
+                    .onChange(of: settings.appearance.showsContextSymbol) { focused = .choice(.showsContextSymbol) }
+                    .onChange(of: settings.appearance.boldsName) { focused = .choice(.boldsName) }
+                    .onChange(of: settings.appearance.showsAvatarBorder) { focused = .choice(.showsAvatarBorder) }
+                    .onChange(of: settings.appearance.showsMediaBadges) { focused = .choice(.showsMediaBadges) }
+                    .onChange(of: settings.appearance.tiltsStackedPhotos) { focused = .choice(.tiltsStackedPhotos) }
+                    .onChange(of: settings.appearance.showsLinkCard) { focused = .choice(.showsLinkCard) }
+                    .onChange(of: settings.appearance.boldsLinkCardTitle) { focused = .choice(.boldsLinkCardTitle) }
+                    .onChange(of: settings.appearance.showsSeparators) { focused = .choice(.showsSeparators) }
+                    .onChange(of: settings.appearance.showsReplyLabel) { focused = .choice(.showsReplyLabel) }
+                    .onChange(of: settings.appearance.showsReplyLines) { focused = .choice(.showsReplyLines) }
+                    .onChange(of: settings.appearance.wrapsBelowAvatar) { focused = .choice(.wrapsBelowAvatar) }
+                    .onChange(of: settings.appearance.stacksNameParts) { focused = .choice(.stacksNameParts) }
+                    .onChange(of: settings.appearance.showsTime) { focused = .choice(.showsTime) }
+                    .onChange(of: settings.appearance.showsVisibilitySymbol) { focused = .choice(.showsVisibilitySymbol) }
+                    .onChange(of: settings.appearance.showsEditedMark) { focused = .choice(.showsEditedMark) }
+                    .onChange(of: settings.appearance.showsLinkCardSite) { focused = .choice(.showsLinkCardSite) }
+                    .onChange(of: settings.appearance.showsLinkCardImage) { focused = .choice(.showsLinkCardImage) }
+                    .onChange(of: settings.appearance.animatesAvatars) { focused = .choice(.animatesAvatars) }
+                    .onChange(of: settings.appearance.animatesCustomEmojis) { focused = .choice(.animatesCustomEmojis) }
+                    .onChange(of: settings.appearance.drawsReactionGlowInHDR) { focused = .choice(.drawsReactionGlowInHDR) }
+                    .onChange(of: settings.appearance.reactionGlowFillsWidthWhenAlone) { focused = .choice(.reactionGlowFillsWidthWhenAlone) }
                     .onChange(of: scrollTarget) { _, target in
                         guard let target else { return }
                         withAnimation { proxy.scrollTo(target, anchor: .top) }
@@ -140,40 +140,7 @@ struct AppearanceEditorView: View {
 
     /// 数値以外の設定。変わったときは、プレビューの部品を動かさずに切り替える。
     private var choicesRevision: Int {
-        var hasher = Hasher()
-        hasher.combine(settings.statusNameStyle)
-        hasher.combine(settings.contextNameStyle)
-        hasher.combine(settings.showsVisibilitySymbol)
-        hasher.combine(settings.showsEditedMark)
-        hasher.combine(settings.showsLinkCardSite)
-        hasher.combine(settings.showsBoosterAvatar)
-        hasher.combine(settings.showsContextSymbol)
-        hasher.combine(settings.boldsName)
-        hasher.combine(settings.showsAvatarBorder)
-        hasher.combine(settings.showsMediaBadges)
-        hasher.combine(settings.showsLinkCard)
-        hasher.combine(settings.boldsLinkCardTitle)
-        hasher.combine(settings.showsSeparators)
-        hasher.combine(settings.showsReplyLabel)
-        hasher.combine(settings.showsReplyLines)
-        hasher.combine(settings.wrapsBelowAvatar)
-        hasher.combine(settings.stacksNameParts)
-        hasher.combine(settings.showsTime)
-        hasher.combine(settings.showsLinkCardImage)
-        hasher.combine(settings.statusTimeStyle)
-        hasher.combine(settings.avatarShape)
-        hasher.combine(settings.animatesAvatars)
-        hasher.combine(settings.animatesCustomEmojis)
-        hasher.combine(settings.linkCardThumbnailSide)
-        hasher.combine(settings.mediaArrangement)
-        hasher.combine(settings.tiltsStackedPhotos)
-        hasher.combine(settings.glyphLanguage)
-        hasher.combine(settings.emojiStyle)
-        hasher.combine(settings.drawsReactionGlowInHDR)
-        hasher.combine(settings.reactionGlowIcons)
-        hasher.combine(settings.reactionGlowFillsWidthWhenAlone)
-        hasher.combine(settings.reactionGlowLightFavouriteColor)
-        return hasher.finalize()
+        settings.appearance.hashValue
     }
 
     private func expansion(of group: AppearanceGroup) -> Binding<Bool> {
@@ -212,55 +179,55 @@ struct AppearanceEditorView: View {
     private func choices(of group: AppearanceGroup) -> some View {
         switch group.id {
         case "row":
-            TitledToggleRow(title: "投稿のあいだに区切り線を引く", isOn: $settings.showsSeparators) { toggleFocus(.choice(.showsSeparators)) }
+            TitledToggleRow(title: "投稿のあいだに区切り線を引く", isOn: $settings.appearance.showsSeparators) { toggleFocus(.choice(.showsSeparators)) }
         case "context":
-            PopUpChoiceRow(title: "ブーストした人の表記", selection: $settings.contextNameStyle, options: Self.nameStyles, onOpen: { focus(.contextNameStyle) }, onTapTitle: { toggleFocus(.choice(.contextNameStyle)) })
-            TitledToggleRow(title: "ブーストや返信の記号を出す", isOn: $settings.showsContextSymbol) { toggleFocus(.choice(.showsContextSymbol)) }
-            TitledToggleRow(title: "ブーストした人のアイコンを出す", isOn: $settings.showsBoosterAvatar) { toggleFocus(.choice(.showsBoosterAvatar)) }
-            TitledToggleRow(title: "返信のラベルを出す", isOn: $settings.showsReplyLabel) { toggleFocus(.choice(.showsReplyLabel)) }
+            PopUpChoiceRow(title: "ブーストした人の表記", selection: $settings.appearance.contextNameStyle, options: Self.nameStyles, onOpen: { focus(.contextNameStyle) }, onTapTitle: { toggleFocus(.choice(.contextNameStyle)) })
+            TitledToggleRow(title: "ブーストや返信の記号を出す", isOn: $settings.appearance.showsContextSymbol) { toggleFocus(.choice(.showsContextSymbol)) }
+            TitledToggleRow(title: "ブーストした人のアイコンを出す", isOn: $settings.appearance.showsBoosterAvatar) { toggleFocus(.choice(.showsBoosterAvatar)) }
+            TitledToggleRow(title: "返信のラベルを出す", isOn: $settings.appearance.showsReplyLabel) { toggleFocus(.choice(.showsReplyLabel)) }
         case "avatar":
-            PopUpChoiceRow(title: "形", selection: $settings.avatarShape, options: [(.circle, "円"), (.roundedSquare, "角丸の四角")], onOpen: { focus(.avatarShape) }, onTapTitle: { toggleFocus(.choice(.avatarShape)) })
-            TitledToggleRow(title: "縁取りを出す", isOn: $settings.showsAvatarBorder) { toggleFocus(.choice(.showsAvatarBorder)) }
-            TitledToggleRow(title: "アニメーションを再生する", isOn: $settings.animatesAvatars) { toggleFocus(.choice(.animatesAvatars)) }
-            TitledToggleRow(title: "アイコンの下を空けない", isOn: $settings.wrapsBelowAvatar) { toggleFocus(.choice(.wrapsBelowAvatar)) }
+            PopUpChoiceRow(title: "形", selection: $settings.appearance.avatarShape, options: [(.circle, "円"), (.roundedSquare, "角丸の四角")], onOpen: { focus(.avatarShape) }, onTapTitle: { toggleFocus(.choice(.avatarShape)) })
+            TitledToggleRow(title: "縁取りを出す", isOn: $settings.appearance.showsAvatarBorder) { toggleFocus(.choice(.showsAvatarBorder)) }
+            TitledToggleRow(title: "アニメーションを再生する", isOn: $settings.appearance.animatesAvatars) { toggleFocus(.choice(.animatesAvatars)) }
+            TitledToggleRow(title: "アイコンの下を空けない", isOn: $settings.appearance.wrapsBelowAvatar) { toggleFocus(.choice(.wrapsBelowAvatar)) }
             // アイコンの下を空けないときは、線の通る場所に本文などが入るので、線を出さない。
-            TitledToggleRow(title: "返信をつなぐ線を出す", isOn: $settings.showsReplyLines) { toggleFocus(.choice(.showsReplyLines)) }
-                .disabled(settings.wrapsBelowAvatar)
+            TitledToggleRow(title: "返信をつなぐ線を出す", isOn: $settings.appearance.showsReplyLines) { toggleFocus(.choice(.showsReplyLines)) }
+                .disabled(settings.appearance.wrapsBelowAvatar)
         case "name":
-            PopUpChoiceRow(title: "名前の表記", selection: $settings.statusNameStyle, options: Self.nameStyles, onOpen: { focus(.nameStyle) }, onTapTitle: { toggleFocus(.choice(.nameStyle)) })
-            TitledToggleRow(title: "名前とハンドルを2段に分ける", isOn: $settings.stacksNameParts) { toggleFocus(.choice(.stacksNameParts)) }
-                .disabled(settings.statusNameStyle.parts.count < 2)
-            PopUpChoiceRow(title: "時刻の表記", selection: $settings.statusTimeStyle, options: [(.relative, "相対時刻"), (.absolute, "日時")], onOpen: { focus(.timeStyle) }, onTapTitle: { toggleFocus(.choice(.timeStyle)) })
-            TitledToggleRow(title: "名前を太字にする", isOn: $settings.boldsName) { toggleFocus(.choice(.boldsName)) }
-            TitledToggleRow(title: "時刻を出す", isOn: $settings.showsTime) { toggleFocus(.choice(.showsTime)) }
-            TitledToggleRow(title: "公開範囲の記号を出す", isOn: $settings.showsVisibilitySymbol) { toggleFocus(.choice(.showsVisibilitySymbol)) }
-            TitledToggleRow(title: "編集済みの「*」を出す", isOn: $settings.showsEditedMark) { toggleFocus(.choice(.showsEditedMark)) }
+            PopUpChoiceRow(title: "名前の表記", selection: $settings.appearance.statusNameStyle, options: Self.nameStyles, onOpen: { focus(.nameStyle) }, onTapTitle: { toggleFocus(.choice(.nameStyle)) })
+            TitledToggleRow(title: "名前とハンドルを2段に分ける", isOn: $settings.appearance.stacksNameParts) { toggleFocus(.choice(.stacksNameParts)) }
+                .disabled(settings.appearance.statusNameStyle.parts.count < 2)
+            PopUpChoiceRow(title: "時刻の表記", selection: $settings.appearance.statusTimeStyle, options: [(.relative, "相対時刻"), (.absolute, "日時")], onOpen: { focus(.timeStyle) }, onTapTitle: { toggleFocus(.choice(.timeStyle)) })
+            TitledToggleRow(title: "名前を太字にする", isOn: $settings.appearance.boldsName) { toggleFocus(.choice(.boldsName)) }
+            TitledToggleRow(title: "時刻を出す", isOn: $settings.appearance.showsTime) { toggleFocus(.choice(.showsTime)) }
+            TitledToggleRow(title: "公開範囲の記号を出す", isOn: $settings.appearance.showsVisibilitySymbol) { toggleFocus(.choice(.showsVisibilitySymbol)) }
+            TitledToggleRow(title: "編集済みの「*」を出す", isOn: $settings.appearance.showsEditedMark) { toggleFocus(.choice(.showsEditedMark)) }
         case "body":
             PopUpChoiceRow(
                 title: "漢字の字形",
-                selection: $settings.glyphLanguage,
+                selection: $settings.appearance.glyphLanguage,
                 options: [(.automatic, "自動"), (.japanese, "日本語"), (.simplifiedChinese, "簡体字中国語"), (.traditionalChinese, "繁体字中国語"), (.korean, "韓国語")]
             , onOpen: { focus(.glyphLanguage) }, onTapTitle: { toggleFocus(.choice(.glyphLanguage)) })
-            PopUpChoiceRow(title: "絵文字", selection: $settings.emojiStyle, options: [(.system, "Apple"), (.twemoji, "Twemoji")], onOpen: { focus(.emojiStyle) }, onTapTitle: { toggleFocus(.choice(.emojiStyle)) })
-            TitledToggleRow(title: "カスタム絵文字のアニメーションを再生する", isOn: $settings.animatesCustomEmojis) { toggleFocus(.choice(.animatesCustomEmojis)) }
+            PopUpChoiceRow(title: "絵文字", selection: $settings.appearance.emojiStyle, options: [(.system, "Apple"), (.twemoji, "Twemoji")], onOpen: { focus(.emojiStyle) }, onTapTitle: { toggleFocus(.choice(.emojiStyle)) })
+            TitledToggleRow(title: "カスタム絵文字のアニメーションを再生する", isOn: $settings.appearance.animatesCustomEmojis) { toggleFocus(.choice(.animatesCustomEmojis)) }
         case "media":
-            PopUpChoiceRow(title: "並べ方", selection: $settings.mediaArrangement, options: [(.belowBody, "本文の下に大きく"), (.besideBody, "本文の右に小さく")], onOpen: { focus(.mediaArrangement) }, onTapTitle: { toggleFocus(.choice(.mediaArrangement)) })
-            TitledToggleRow(title: "写真を傾ける", isOn: $settings.tiltsStackedPhotos) { toggleFocus(.choice(.tiltsStackedPhotos)) }
-                .disabled(settings.mediaArrangement != .besideBody)
-            TitledToggleRow(title: "ALTやGIFのバッジを出す", isOn: $settings.showsMediaBadges) { toggleFocus(.choice(.showsMediaBadges)) }
+            PopUpChoiceRow(title: "並べ方", selection: $settings.appearance.mediaArrangement, options: [(.belowBody, "本文の下に大きく"), (.besideBody, "本文の右に小さく")], onOpen: { focus(.mediaArrangement) }, onTapTitle: { toggleFocus(.choice(.mediaArrangement)) })
+            TitledToggleRow(title: "写真を傾ける", isOn: $settings.appearance.tiltsStackedPhotos) { toggleFocus(.choice(.tiltsStackedPhotos)) }
+                .disabled(settings.appearance.mediaArrangement != .besideBody)
+            TitledToggleRow(title: "ALTやGIFのバッジを出す", isOn: $settings.appearance.showsMediaBadges) { toggleFocus(.choice(.showsMediaBadges)) }
         case "linkCard":
-            TitledToggleRow(title: "リンクカードを出す", isOn: $settings.showsLinkCard) { toggleFocus(.choice(.showsLinkCard)) }
-            TitledToggleRow(title: "タイトルを太字にする", isOn: $settings.boldsLinkCardTitle) { toggleFocus(.choice(.boldsLinkCardTitle)) }
-            TitledToggleRow(title: "画像を出す", isOn: $settings.showsLinkCardImage) { toggleFocus(.choice(.showsLinkCardImage)) }
-            PopUpChoiceRow(title: "画像の位置", selection: $settings.linkCardThumbnailSide, options: [(.left, "左"), (.right, "右")], onOpen: { focus(.linkCardThumbnailSide) }, onTapTitle: { toggleFocus(.choice(.linkCardThumbnailSide)) })
-                .disabled(!settings.showsLinkCardImage)
-            TitledToggleRow(title: "サイト名を出す", isOn: $settings.showsLinkCardSite) { toggleFocus(.choice(.showsLinkCardSite)) }
+            TitledToggleRow(title: "リンクカードを出す", isOn: $settings.appearance.showsLinkCard) { toggleFocus(.choice(.showsLinkCard)) }
+            TitledToggleRow(title: "タイトルを太字にする", isOn: $settings.appearance.boldsLinkCardTitle) { toggleFocus(.choice(.boldsLinkCardTitle)) }
+            TitledToggleRow(title: "画像を出す", isOn: $settings.appearance.showsLinkCardImage) { toggleFocus(.choice(.showsLinkCardImage)) }
+            PopUpChoiceRow(title: "画像の位置", selection: $settings.appearance.linkCardThumbnailSide, options: [(.left, "左"), (.right, "右")], onOpen: { focus(.linkCardThumbnailSide) }, onTapTitle: { toggleFocus(.choice(.linkCardThumbnailSide)) })
+                .disabled(!settings.appearance.showsLinkCardImage)
+            TitledToggleRow(title: "サイト名を出す", isOn: $settings.appearance.showsLinkCardSite) { toggleFocus(.choice(.showsLinkCardSite)) }
         case "reactionGlow":
             // HDRのメディアの明るさの設定はメディアに対するものなので、光はそれに従わせず、ここで別に選ぶ。
-            TitledToggleRow(title: "HDRに対応した画面では白より明るく光らせる", isOn: $settings.drawsReactionGlowInHDR) { toggleFocus(.choice(.drawsReactionGlowInHDR)) }
-            PopUpChoiceRow(title: "アイコン", selection: $settings.reactionGlowIcons, options: [(.none, "出さない"), (.atBottom, "下の端に1つずつ"), (.scattered, "散らす")], onOpen: { focus(.reactionGlowIcons) }, onTapTitle: { toggleFocus(.choice(.reactionGlowIcons)) })
-            TitledToggleRow(title: "片方だけのときは全幅を光らせる", isOn: $settings.reactionGlowFillsWidthWhenAlone) { toggleFocus(.choice(.reactionGlowFillsWidthWhenAlone)) }
-            PopUpChoiceRow(title: "ライトモードのお気に入りの色", selection: $settings.reactionGlowLightFavouriteColor, options: [(.orange, "橙"), (.yellow, "黄色")], onOpen: { focus(.reactionGlowLightFavouriteColor) }, onTapTitle: { toggleFocus(.choice(.reactionGlowLightFavouriteColor)) })
+            TitledToggleRow(title: "HDRに対応した画面では白より明るく光らせる", isOn: $settings.appearance.drawsReactionGlowInHDR) { toggleFocus(.choice(.drawsReactionGlowInHDR)) }
+            PopUpChoiceRow(title: "アイコン", selection: $settings.appearance.reactionGlowIcons, options: [(.none, "出さない"), (.atBottom, "下の端に1つずつ"), (.scattered, "散らす")], onOpen: { focus(.reactionGlowIcons) }, onTapTitle: { toggleFocus(.choice(.reactionGlowIcons)) })
+            TitledToggleRow(title: "片方だけのときは全幅を光らせる", isOn: $settings.appearance.reactionGlowFillsWidthWhenAlone) { toggleFocus(.choice(.reactionGlowFillsWidthWhenAlone)) }
+            PopUpChoiceRow(title: "ライトモードのお気に入りの色", selection: $settings.appearance.reactionGlowLightFavouriteColor, options: [(.orange, "橙"), (.yellow, "黄色")], onOpen: { focus(.reactionGlowLightFavouriteColor) }, onTapTitle: { toggleFocus(.choice(.reactionGlowLightFavouriteColor)) })
         default:
             EmptyView()
         }
@@ -268,7 +235,7 @@ struct AppearanceEditorView: View {
 
     /// ほかの選択肢のために、見た目に効かない項目。光のアイコンを出さないときの、アイコンの大きさと濃さ。
     private func isUnused(_ item: AppearanceValue) -> Bool {
-        settings.reactionGlowIcons == .none && [AppearanceCatalog.reactionGlowIconSize, AppearanceCatalog.reactionGlowIconOpacity].contains(item)
+        settings.appearance.reactionGlowIcons == .none && [AppearanceCatalog.reactionGlowIconSize, AppearanceCatalog.reactionGlowIconOpacity].contains(item)
     }
 
     /// 選択肢のメニューを開いたときに、その場所を示す。選んで閉じても示したままにする。

@@ -2964,7 +2964,7 @@ final class SessionController {
         debugScrollHitches.start()
         let startedAt = AppDependencies.mediaTime()
         let settings = AppDependencies.settings
-        let label = "\(settings.mediaArrangement.rawValue) tilts=\(settings.tiltsStackedPhotos)"
+        let label = "\(settings.appearance.mediaArrangement.rawValue) tilts=\(settings.appearance.tiltsStackedPhotos)"
         var remaining = abs(distance)
         let direction: CGFloat = distance < 0 ? -1 : 1
         let ticker = FrameTicker(source: DisplayLinkFrameSource.shared, longestElapsed: nil) { [weak list, weak self] elapsed in

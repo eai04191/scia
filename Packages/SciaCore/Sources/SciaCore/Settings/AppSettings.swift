@@ -23,158 +23,6 @@ public final class AppSettings {
         didSet { defaults.set(showsStatusBarTicker, forKey: Keys.showsStatusBarTicker) }
     }
 
-    /// 投稿の名前の行に、表示名とacctをどう並べるか。
-    public var statusNameStyle: StatusNameStyle {
-        didSet { defaults.set(statusNameStyle.rawValue, forKey: Keys.statusNameStyle) }
-    }
-
-    /// 名前の上の行で、ブーストした人の表示名とacctをどう並べるか。
-    public var contextNameStyle: StatusNameStyle {
-        didSet { defaults.set(contextNameStyle.rawValue, forKey: Keys.contextNameStyle) }
-    }
-
-    /// 時刻の前に、公開でない投稿の公開範囲の記号を出す。
-    public var showsVisibilitySymbol: Bool {
-        didSet { defaults.set(showsVisibilitySymbol, forKey: Keys.showsVisibilitySymbol) }
-    }
-
-    /// 編集された投稿の時刻の前に「*」を出す。
-    public var showsEditedMark: Bool {
-        didSet { defaults.set(showsEditedMark, forKey: Keys.showsEditedMark) }
-    }
-
-    /// 名前の上の行に、ブーストした人のアイコンを出す。
-    public var showsBoosterAvatar: Bool {
-        didSet { defaults.set(showsBoosterAvatar, forKey: Keys.showsBoosterAvatar) }
-    }
-
-    /// 返信の名前の上に、返信先を示すラベルを出す。
-    public var showsReplyLabel: Bool {
-        didSet { defaults.set(showsReplyLabel, forKey: Keys.showsReplyLabel) }
-    }
-
-    /// 返信と返信先の行のアイコンを、線でつなぐ。
-    public var showsReplyLines: Bool {
-        didSet { defaults.set(showsReplyLines, forKey: Keys.showsReplyLines) }
-    }
-
-    /// アイコンと名前の段の下から、本文やメディアを行の幅いっぱいに置く。オンなら返信をつなぐ線は出さない。決まりはdocs/post-header-layout.mdにある。
-    public var wrapsBelowAvatar: Bool {
-        didSet { defaults.set(wrapsBelowAvatar, forKey: Keys.wrapsBelowAvatar) }
-    }
-
-    /// 名前の表記で名前とハンドルの両方を出すとき、2つ目を2段目に置く。
-    public var stacksNameParts: Bool {
-        didSet { defaults.set(stacksNameParts, forKey: Keys.stacksNameParts) }
-    }
-
-    /// 名前の行の右端に、時刻を出す。
-    public var showsTime: Bool {
-        didSet { defaults.set(showsTime, forKey: Keys.showsTime) }
-    }
-
-    /// リンクカードに画像を出す。
-    public var showsLinkCardImage: Bool {
-        didSet { defaults.set(showsLinkCardImage, forKey: Keys.showsLinkCardImage) }
-    }
-
-    /// 名前の上の行の先頭に、ブーストや返信を示す記号を出す。
-    public var showsContextSymbol: Bool {
-        didSet { defaults.set(showsContextSymbol, forKey: Keys.showsContextSymbol) }
-    }
-
-    /// 名前の行の先頭の部分を太字にする。
-    public var boldsName: Bool {
-        didSet { defaults.set(boldsName, forKey: Keys.boldsName) }
-    }
-
-    /// アイコンの縁に細い線を引く。
-    public var showsAvatarBorder: Bool {
-        didSet { defaults.set(showsAvatarBorder, forKey: Keys.showsAvatarBorder) }
-    }
-
-    /// サムネイルに、代替テキストやGIFなどを示すバッジを出す。
-    public var showsMediaBadges: Bool {
-        didSet { defaults.set(showsMediaBadges, forKey: Keys.showsMediaBadges) }
-    }
-
-    /// 投稿にリンクカードを出す。
-    public var showsLinkCard: Bool {
-        didSet { defaults.set(showsLinkCard, forKey: Keys.showsLinkCard) }
-    }
-
-    /// リンクカードのタイトルを太字にする。
-    public var boldsLinkCardTitle: Bool {
-        didSet { defaults.set(boldsLinkCardTitle, forKey: Keys.boldsLinkCardTitle) }
-    }
-
-    /// 一覧の投稿と投稿のあいだに区切り線を引く。
-    public var showsSeparators: Bool {
-        didSet { defaults.set(showsSeparators, forKey: Keys.showsSeparators) }
-    }
-
-    /// リンクカードの一番上に、サイト名を出す。
-    public var showsLinkCardSite: Bool {
-        didSet { defaults.set(showsLinkCardSite, forKey: Keys.showsLinkCardSite) }
-    }
-
-    public var statusTimeStyle: StatusTimeStyle {
-        didSet { defaults.set(statusTimeStyle.rawValue, forKey: Keys.statusTimeStyle) }
-    }
-
-    /// 漢字とかなを描く字形。投稿に日本語・中国語・韓国語の言語が付いていれば、そちらを優先する。
-    public var glyphLanguage: GlyphLanguage {
-        didSet { defaults.set(glyphLanguage.rawValue, forKey: Keys.glyphLanguage) }
-    }
-
-    /// 本文や名前のUnicodeの絵文字を描く絵。
-    public var emojiStyle: EmojiStyle {
-        didSet { defaults.set(emojiStyle.rawValue, forKey: Keys.emojiStyle) }
-    }
-
-    public var avatarShape: AvatarShape {
-        didSet { defaults.set(avatarShape.rawValue, forKey: Keys.avatarShape) }
-    }
-
-    /// リンクカードのサムネイルを置く端。
-    public var linkCardThumbnailSide: LinkCardThumbnailSide {
-        didSet { defaults.set(linkCardThumbnailSide.rawValue, forKey: Keys.linkCardThumbnailSide) }
-    }
-
-    /// 一覧で、GIFなどのアニメーションするアイコンを動かす。オフなら最初のコマで止めた版を読む。
-    /// 一覧の投稿の添付ファイルを、本文の下に並べるか、本文の右に小さく出すか。
-    public var mediaArrangement: MediaArrangement {
-        didSet { defaults.set(mediaArrangement.rawValue, forKey: Keys.mediaArrangement) }
-    }
-
-    /// 本文の右に重ねた写真を傾ける。オフなら、どの写真もまっすぐに置き、投稿ごとに角度をばらつかせない。
-    public var tiltsStackedPhotos: Bool {
-        didSet { defaults.set(tiltsStackedPhotos, forKey: Keys.tiltsStackedPhotos) }
-    }
-
-    public var animatesAvatars: Bool {
-        didSet { defaults.set(animatesAvatars, forKey: Keys.animatesAvatars) }
-    }
-
-    /// GIFやAPNGのアニメーションするカスタム絵文字を動かす。オフなら最初のコマで止めた版を描く。
-    public var animatesCustomEmojis: Bool {
-        didSet { defaults.set(animatesCustomEmojis, forKey: Keys.animatesCustomEmojis) }
-    }
-
-    /// お気に入りとブーストの光に、何を示すかのアイコンを添えるか。
-    public var reactionGlowIcons: ReactionGlowIcons {
-        didSet { defaults.set(reactionGlowIcons.rawValue, forKey: Keys.reactionGlowIcons) }
-    }
-
-    /// お気に入りとブーストの片方だけをしたときに、その色で全幅を光らせる。オフなら、その半分だけを光らせる。
-    public var reactionGlowFillsWidthWhenAlone: Bool {
-        didSet { defaults.set(reactionGlowFillsWidthWhenAlone, forKey: Keys.reactionGlowFillsWidthWhenAlone) }
-    }
-
-    public var reactionGlowLightFavouriteColor: ReactionGlowLightFavouriteColor {
-        didSet { defaults.set(reactionGlowLightFavouriteColor.rawValue, forKey: Keys.reactionGlowLightFavouriteColor) }
-    }
-
     /// 最上部で新着に追従しているとき、新着を足してから最上部へ動かして見せるか。最上部より下で読んでいるときは、読んでいる位置を保つため動かさない。
     public var insertionMotion: InsertionMotion {
         didSet { defaults.set(insertionMotion.rawValue, forKey: Keys.insertionMotion) }
@@ -196,6 +44,11 @@ public final class AppSettings {
     /// メニューの「ブースト」でブーストするときの公開範囲。
     public var reblogVisibility: ReblogVisibility {
         didSet { defaults.set(reblogVisibility.rawValue, forKey: Keys.reblogVisibility) }
+    }
+
+    /// 「投稿の見た目」の選択肢。まとめて1つのキーに保存する。
+    public var appearance: AppearanceChoices {
+        didSet { defaults.set(appearance.storedData, forKey: Keys.appearanceChoices) }
     }
 
     /// 「投稿の見た目」と「通知の見た目」で変えた数値。キーは`AppearanceValue.id`。既定値のままの項目は持たない。
@@ -229,46 +82,13 @@ public final class AppSettings {
 
     /// 「投稿の見た目」の数値か選択肢のどれかが、既定値から変わっているか。
     public var isAppearanceModified: Bool {
-        typealias D = AppearanceDefaults
-        return AppearanceCatalog.values.contains(where: isModified) || statusNameStyle != D.statusNameStyle || statusTimeStyle != D.statusTimeStyle || contextNameStyle != D.contextNameStyle || glyphLanguage != D.glyphLanguage || emojiStyle != D.emojiStyle || avatarShape != D.avatarShape || linkCardThumbnailSide != D.linkCardThumbnailSide || mediaArrangement != D.mediaArrangement || tiltsStackedPhotos != D.tiltsStackedPhotos || showsVisibilitySymbol != D.showsVisibilitySymbol || showsEditedMark != D.showsEditedMark || showsLinkCardSite != D.showsLinkCardSite || showsContextSymbol != D.showsContextSymbol || boldsName != D.boldsName || showsAvatarBorder != D.showsAvatarBorder || showsMediaBadges != D.showsMediaBadges || showsLinkCard != D.showsLinkCard || boldsLinkCardTitle != D.boldsLinkCardTitle || showsSeparators != D.showsSeparators || showsBoosterAvatar != D.showsBoosterAvatar || showsReplyLabel != D.showsReplyLabel || showsReplyLines != D.showsReplyLines || wrapsBelowAvatar != D.wrapsBelowAvatar || stacksNameParts != D.stacksNameParts || showsTime != D.showsTime || showsLinkCardImage != D.showsLinkCardImage || animatesAvatars != D.animatesAvatars || animatesCustomEmojis != D.animatesCustomEmojis || drawsReactionGlowInHDR != D.drawsReactionGlowInHDR || reactionGlowIcons != D.reactionGlowIcons || reactionGlowFillsWidthWhenAlone != D.reactionGlowFillsWidthWhenAlone || reactionGlowLightFavouriteColor != D.reactionGlowLightFavouriteColor
+        AppearanceCatalog.values.contains(where: isModified) || appearance != AppearanceChoices()
     }
 
     /// 「投稿の見た目」の数値と選択肢を、すべて既定値へ戻す。
     public func resetAppearance() {
-        typealias D = AppearanceDefaults
         reset(AppearanceCatalog.values)
-        statusNameStyle = D.statusNameStyle
-        statusTimeStyle = D.statusTimeStyle
-        contextNameStyle = D.contextNameStyle
-        glyphLanguage = D.glyphLanguage
-        emojiStyle = D.emojiStyle
-        avatarShape = D.avatarShape
-        linkCardThumbnailSide = D.linkCardThumbnailSide
-        mediaArrangement = D.mediaArrangement
-        tiltsStackedPhotos = D.tiltsStackedPhotos
-        showsVisibilitySymbol = D.showsVisibilitySymbol
-        showsEditedMark = D.showsEditedMark
-        showsLinkCardSite = D.showsLinkCardSite
-        showsContextSymbol = D.showsContextSymbol
-        boldsName = D.boldsName
-        showsAvatarBorder = D.showsAvatarBorder
-        showsMediaBadges = D.showsMediaBadges
-        showsLinkCard = D.showsLinkCard
-        boldsLinkCardTitle = D.boldsLinkCardTitle
-        showsSeparators = D.showsSeparators
-        showsBoosterAvatar = D.showsBoosterAvatar
-        showsReplyLabel = D.showsReplyLabel
-        showsReplyLines = D.showsReplyLines
-        wrapsBelowAvatar = D.wrapsBelowAvatar
-        stacksNameParts = D.stacksNameParts
-        showsTime = D.showsTime
-        showsLinkCardImage = D.showsLinkCardImage
-        animatesAvatars = D.animatesAvatars
-        animatesCustomEmojis = D.animatesCustomEmojis
-        drawsReactionGlowInHDR = D.drawsReactionGlowInHDR
-        reactionGlowIcons = D.reactionGlowIcons
-        reactionGlowFillsWidthWhenAlone = D.reactionGlowFillsWidthWhenAlone
-        reactionGlowLightFavouriteColor = D.reactionGlowLightFavouriteColor
+        appearance = AppearanceChoices()
     }
 
     /// 「通知の見た目」の数値のどれかが、既定値から変わっているか。
@@ -419,12 +239,6 @@ public final class AppSettings {
         didSet { defaults.set(mediaDynamicRange.rawValue, forKey: Keys.mediaDynamicRange) }
     }
 
-    /// お気に入りとブーストの光を、HDRで描ける画面では白より明るく光らせる。オフならSDRで描く。
-    /// メディアの明るさの設定（`mediaDynamicRange`）はメディアに対するものなので、光はそれに従わせず、ここで別に選ぶ。
-    public var drawsReactionGlowInHDR: Bool {
-        didSet { defaults.set(drawsReactionGlowInHDR, forKey: Keys.drawsReactionGlowInHDR) }
-    }
-
     /// ビューアで、HDRのメディアを描く明るさ。
     public var viewerMediaDynamicRange: MediaDynamicRange {
         didSet { defaults.set(viewerMediaDynamicRange.rawValue, forKey: Keys.viewerMediaDynamicRange) }
@@ -434,34 +248,7 @@ public final class AppSettings {
         static let usesOriginalThumbnailsOnExpensiveNetwork = "settings.usesOriginalThumbnailsOnExpensiveNetwork"
         static let ignoresUselessAltText = "settings.ignoresUselessAltText"
         static let showsStatusBarTicker = "settings.showsStatusBarTicker"
-        static let statusNameStyle = "settings.statusNameStyle"
-        static let statusTimeStyle = "settings.statusTimeStyle"
-        static let contextNameStyle = "settings.contextNameStyle"
-        static let showsVisibilitySymbol = "settings.showsVisibilitySymbol"
-        static let showsEditedMark = "settings.showsEditedMark"
-        static let showsLinkCardSite = "settings.showsLinkCardSite"
-        static let showsContextSymbol = "settings.showsContextSymbol"
-        static let boldsName = "settings.boldsName"
-        static let showsAvatarBorder = "settings.showsAvatarBorder"
-        static let showsMediaBadges = "settings.showsMediaBadges"
-        static let showsLinkCard = "settings.showsLinkCard"
-        static let boldsLinkCardTitle = "settings.boldsLinkCardTitle"
-        static let showsSeparators = "settings.showsSeparators"
-        static let showsBoosterAvatar = "settings.showsBoosterAvatar"
-        static let showsReplyLabel = "settings.showsReplyLabel"
-        static let showsReplyLines = "settings.showsReplyLines"
-        static let wrapsBelowAvatar = "settings.wrapsBelowAvatar"
-        static let stacksNameParts = "settings.stacksNameParts"
-        static let showsTime = "settings.showsTime"
-        static let showsLinkCardImage = "settings.showsLinkCardImage"
-        static let glyphLanguage = "settings.glyphLanguage"
-        static let emojiStyle = "settings.emojiStyle"
-        static let avatarShape = "settings.avatarShape"
-        static let animatesAvatars = "settings.animatesAvatars"
-        static let animatesCustomEmojis = "settings.animatesCustomEmojis"
-        static let linkCardThumbnailSide = "settings.linkCardThumbnailSide"
-        static let mediaArrangement = "settings.mediaArrangement"
-        static let tiltsStackedPhotos = "settings.tiltsStackedPhotos"
+        static let appearanceChoices = "settings.appearanceChoices"
         static let insertionMotion = "settings.insertionMotion"
         static let profileShowsReplies = "settings.profileShowsReplies"
         static let profileShowsBoosts = "settings.profileShowsBoosts"
@@ -490,10 +277,6 @@ public final class AppSettings {
         static let videoUploadSize = "settings.videoUploadSize"
         static let mediaDynamicRange = "settings.mediaDynamicRange"
         static let viewerMediaDynamicRange = "settings.viewerMediaDynamicRange"
-        static let drawsReactionGlowInHDR = "settings.drawsReactionGlowInHDR"
-        static let reactionGlowIcons = "settings.reactionGlowIcons"
-        static let reactionGlowFillsWidthWhenAlone = "settings.reactionGlowFillsWidthWhenAlone"
-        static let reactionGlowLightFavouriteColor = "settings.reactionGlowLightFavouriteColor"
 
         static func appearance(_ id: String) -> String {
             "settings.appearance.\(id)"
@@ -505,34 +288,7 @@ public final class AppSettings {
         usesOriginalThumbnailsOnExpensiveNetwork = defaults.object(forKey: Keys.usesOriginalThumbnailsOnExpensiveNetwork) as? Bool ?? true
         ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
         showsStatusBarTicker = defaults.object(forKey: Keys.showsStatusBarTicker) as? Bool ?? true
-        statusNameStyle = defaults.string(forKey: Keys.statusNameStyle).flatMap(StatusNameStyle.init(rawValue:)) ?? AppearanceDefaults.statusNameStyle
-        statusTimeStyle = defaults.string(forKey: Keys.statusTimeStyle).flatMap(StatusTimeStyle.init(rawValue:)) ?? AppearanceDefaults.statusTimeStyle
-        contextNameStyle = defaults.string(forKey: Keys.contextNameStyle).flatMap(StatusNameStyle.init(rawValue:)) ?? AppearanceDefaults.contextNameStyle
-        showsVisibilitySymbol = defaults.object(forKey: Keys.showsVisibilitySymbol) as? Bool ?? AppearanceDefaults.showsVisibilitySymbol
-        showsEditedMark = defaults.object(forKey: Keys.showsEditedMark) as? Bool ?? AppearanceDefaults.showsEditedMark
-        showsLinkCardSite = defaults.object(forKey: Keys.showsLinkCardSite) as? Bool ?? AppearanceDefaults.showsLinkCardSite
-        showsContextSymbol = defaults.object(forKey: Keys.showsContextSymbol) as? Bool ?? AppearanceDefaults.showsContextSymbol
-        boldsName = defaults.object(forKey: Keys.boldsName) as? Bool ?? AppearanceDefaults.boldsName
-        showsAvatarBorder = defaults.object(forKey: Keys.showsAvatarBorder) as? Bool ?? AppearanceDefaults.showsAvatarBorder
-        showsMediaBadges = defaults.object(forKey: Keys.showsMediaBadges) as? Bool ?? AppearanceDefaults.showsMediaBadges
-        showsLinkCard = defaults.object(forKey: Keys.showsLinkCard) as? Bool ?? AppearanceDefaults.showsLinkCard
-        boldsLinkCardTitle = defaults.object(forKey: Keys.boldsLinkCardTitle) as? Bool ?? AppearanceDefaults.boldsLinkCardTitle
-        showsSeparators = defaults.object(forKey: Keys.showsSeparators) as? Bool ?? AppearanceDefaults.showsSeparators
-        showsBoosterAvatar = defaults.object(forKey: Keys.showsBoosterAvatar) as? Bool ?? AppearanceDefaults.showsBoosterAvatar
-        showsReplyLabel = defaults.object(forKey: Keys.showsReplyLabel) as? Bool ?? AppearanceDefaults.showsReplyLabel
-        showsReplyLines = defaults.object(forKey: Keys.showsReplyLines) as? Bool ?? AppearanceDefaults.showsReplyLines
-        wrapsBelowAvatar = defaults.object(forKey: Keys.wrapsBelowAvatar) as? Bool ?? AppearanceDefaults.wrapsBelowAvatar
-        stacksNameParts = defaults.object(forKey: Keys.stacksNameParts) as? Bool ?? AppearanceDefaults.stacksNameParts
-        showsTime = defaults.object(forKey: Keys.showsTime) as? Bool ?? AppearanceDefaults.showsTime
-        showsLinkCardImage = defaults.object(forKey: Keys.showsLinkCardImage) as? Bool ?? AppearanceDefaults.showsLinkCardImage
-        glyphLanguage = defaults.string(forKey: Keys.glyphLanguage).flatMap(GlyphLanguage.init(rawValue:)) ?? AppearanceDefaults.glyphLanguage
-        emojiStyle = defaults.string(forKey: Keys.emojiStyle).flatMap(EmojiStyle.init(rawValue:)) ?? AppearanceDefaults.emojiStyle
-        avatarShape = defaults.string(forKey: Keys.avatarShape).flatMap(AvatarShape.init(rawValue:)) ?? AppearanceDefaults.avatarShape
-        animatesAvatars = defaults.object(forKey: Keys.animatesAvatars) as? Bool ?? AppearanceDefaults.animatesAvatars
-        animatesCustomEmojis = defaults.object(forKey: Keys.animatesCustomEmojis) as? Bool ?? AppearanceDefaults.animatesCustomEmojis
-        linkCardThumbnailSide = defaults.string(forKey: Keys.linkCardThumbnailSide).flatMap(LinkCardThumbnailSide.init(rawValue:)) ?? AppearanceDefaults.linkCardThumbnailSide
-        mediaArrangement = defaults.string(forKey: Keys.mediaArrangement).flatMap(MediaArrangement.init(rawValue:)) ?? AppearanceDefaults.mediaArrangement
-        tiltsStackedPhotos = defaults.object(forKey: Keys.tiltsStackedPhotos) as? Bool ?? AppearanceDefaults.tiltsStackedPhotos
+        appearance = AppearanceChoices(stored: defaults.data(forKey: Keys.appearanceChoices))
         insertionMotion = defaults.string(forKey: Keys.insertionMotion).flatMap(InsertionMotion.init(rawValue:)) ?? .followsSystem
         linkBrowser = defaults.string(forKey: Keys.linkBrowser).flatMap(LinkBrowser.init(rawValue:)) ?? .external
         reblogVisibility = defaults.string(forKey: Keys.reblogVisibility).flatMap(ReblogVisibility.init(rawValue:)) ?? .accountDefault
@@ -559,10 +315,6 @@ public final class AppSettings {
         videoUploadSize = defaults.string(forKey: Keys.videoUploadSize).flatMap(VideoUploadSize.init(rawValue:)) ?? .p1080
         mediaDynamicRange = defaults.string(forKey: Keys.mediaDynamicRange).flatMap(MediaDynamicRange.init(rawValue:)) ?? .standard
         viewerMediaDynamicRange = defaults.string(forKey: Keys.viewerMediaDynamicRange).flatMap(MediaDynamicRange.init(rawValue:)) ?? .constrainedHigh
-        drawsReactionGlowInHDR = defaults.object(forKey: Keys.drawsReactionGlowInHDR) as? Bool ?? AppearanceDefaults.drawsReactionGlowInHDR
-        reactionGlowIcons = defaults.string(forKey: Keys.reactionGlowIcons).flatMap(ReactionGlowIcons.init(rawValue:)) ?? AppearanceDefaults.reactionGlowIcons
-        reactionGlowFillsWidthWhenAlone = defaults.object(forKey: Keys.reactionGlowFillsWidthWhenAlone) as? Bool ?? AppearanceDefaults.reactionGlowFillsWidthWhenAlone
-        reactionGlowLightFavouriteColor = defaults.string(forKey: Keys.reactionGlowLightFavouriteColor).flatMap(ReactionGlowLightFavouriteColor.init(rawValue:)) ?? AppearanceDefaults.reactionGlowLightFavouriteColor
         var appearanceValues: [String: Double] = [:]
         for item in AppearanceCatalog.values + NotificationAppearanceCatalog.values {
             if let stored = defaults.object(forKey: Keys.appearance(item.id)) as? Double, item.range.contains(stored) {
@@ -577,7 +329,6 @@ public final class AppSettings {
     }
 }
 
-/// 「投稿の見た目」の選択肢の既定値。読み込むときと、まとめて既定に戻すときで同じ値を使う。
 private enum AppearanceDefaults {
     static let statusNameStyle: StatusNameStyle = .nameAndAcct
     static let statusTimeStyle: StatusTimeStyle = .relative

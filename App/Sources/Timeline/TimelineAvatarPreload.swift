@@ -36,7 +36,7 @@ extension TimelineViewController {
             keys.append(AvatarView.key(url: url, animates: shown.animates, side: settings.value(of: AppearanceCatalog.avatarSize), scale: scale))
         }
         // ブーストした人のアイコンを出さない設定では読まない。新着の挿入は、ここで並べたアイコンを待つため。
-        if status.reblog != nil, settings.showsBoosterAvatar {
+        if status.reblog != nil, settings.appearance.showsBoosterAvatar {
             let booster = avatarContent(of: status.account)
             if let url = booster.url {
                 keys.append(AvatarView.key(url: url, animates: booster.animates, side: settings.value(of: AppearanceCatalog.boosterAvatarSize), scale: scale))

@@ -402,9 +402,9 @@ final class ProfileController {
             showsRelationshipActivity: isRelationshipSlow,
             tab: store.tab,
             postsFilter: store.postsFilter,
-            avatarShape: settings.avatarShape,
-            animatesAvatar: settings.animatesAvatars,
-            animatesCustomEmojis: settings.animatesCustomEmojis,
+            avatarShape: settings.appearance.avatarShape,
+            animatesAvatar: settings.appearance.animatesAvatars,
+            animatesCustomEmojis: settings.appearance.animatesCustomEmojis,
             glyphLanguage: settings.glyphLanguageIdentifier(),
             // ローカルのアカウントのacctには@以降が付かない。
             isRemote: account.acct.contains("@"),

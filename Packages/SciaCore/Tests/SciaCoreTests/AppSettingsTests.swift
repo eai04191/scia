@@ -72,13 +72,13 @@ struct AppSettingsTests {
     /// HDRで描ける画面では、お気に入りとブーストの光を既定で白より明るく光らせる。白い背景の上では、HDRでないと光って見えないため。
     @Test func drawsReactionGlowInHDRByDefault() throws {
         let settings = AppSettings(defaults: try makeDefaults())
-        #expect(settings.drawsReactionGlowInHDR)
+        #expect(settings.appearance.drawsReactionGlowInHDR)
     }
 
     @Test func persistsDrawsReactionGlowInHDR() throws {
         let defaults = try makeDefaults()
-        AppSettings(defaults: defaults).drawsReactionGlowInHDR = false
-        #expect(!AppSettings(defaults: defaults).drawsReactionGlowInHDR)
+        AppSettings(defaults: defaults).appearance.drawsReactionGlowInHDR = false
+        #expect(!AppSettings(defaults: defaults).appearance.drawsReactionGlowInHDR)
     }
 
     /// 届いた通知に気づけるよう、ステータスバーの通知は既定で流す。
@@ -107,38 +107,38 @@ struct AppSettingsTests {
 
     @Test func statusDisplayDefaults() throws {
         let settings = AppSettings(defaults: try makeDefaults())
-        #expect(settings.statusNameStyle == .nameAndAcct)
-        #expect(settings.statusTimeStyle == .relative)
-        #expect(settings.avatarShape == .roundedSquare)
-        #expect(settings.linkCardThumbnailSide == .left)
-        #expect(settings.glyphLanguage == .automatic)
-        #expect(settings.emojiStyle == .system)
+        #expect(settings.appearance.statusNameStyle == .nameAndAcct)
+        #expect(settings.appearance.statusTimeStyle == .relative)
+        #expect(settings.appearance.avatarShape == .roundedSquare)
+        #expect(settings.appearance.linkCardThumbnailSide == .left)
+        #expect(settings.appearance.glyphLanguage == .automatic)
+        #expect(settings.appearance.emojiStyle == .system)
         // 一覧でたくさん動くと読みにくいため、既定では止める。
-        #expect(!settings.animatesAvatars)
-        #expect(!settings.animatesCustomEmojis)
+        #expect(!settings.appearance.animatesAvatars)
+        #expect(!settings.appearance.animatesCustomEmojis)
     }
 
     @Test func persistsStatusDisplay() throws {
         let defaults = try makeDefaults()
         let settings = AppSettings(defaults: defaults)
-        settings.statusNameStyle = .acctOnly
-        settings.statusTimeStyle = .absolute
-        settings.avatarShape = .circle
-        settings.linkCardThumbnailSide = .right
-        settings.glyphLanguage = .traditionalChinese
-        settings.emojiStyle = .twemoji
-        settings.animatesAvatars = true
-        settings.animatesCustomEmojis = true
+        settings.appearance.statusNameStyle = .acctOnly
+        settings.appearance.statusTimeStyle = .absolute
+        settings.appearance.avatarShape = .circle
+        settings.appearance.linkCardThumbnailSide = .right
+        settings.appearance.glyphLanguage = .traditionalChinese
+        settings.appearance.emojiStyle = .twemoji
+        settings.appearance.animatesAvatars = true
+        settings.appearance.animatesCustomEmojis = true
 
         let restored = AppSettings(defaults: defaults)
-        #expect(restored.statusNameStyle == .acctOnly)
-        #expect(restored.statusTimeStyle == .absolute)
-        #expect(restored.avatarShape == .circle)
-        #expect(restored.linkCardThumbnailSide == .right)
-        #expect(restored.glyphLanguage == .traditionalChinese)
-        #expect(restored.emojiStyle == .twemoji)
-        #expect(restored.animatesAvatars)
-        #expect(restored.animatesCustomEmojis)
+        #expect(restored.appearance.statusNameStyle == .acctOnly)
+        #expect(restored.appearance.statusTimeStyle == .absolute)
+        #expect(restored.appearance.avatarShape == .circle)
+        #expect(restored.appearance.linkCardThumbnailSide == .right)
+        #expect(restored.appearance.glyphLanguage == .traditionalChinese)
+        #expect(restored.appearance.emojiStyle == .twemoji)
+        #expect(restored.appearance.animatesAvatars)
+        #expect(restored.appearance.animatesCustomEmojis)
     }
 
     /// 新着の挿入は、既定では端末の「視差効果を減らす」に従い、選び直した値は起動し直しても残る。
@@ -259,9 +259,9 @@ struct AppSettingsTests {
     /// 名前の上の行は狭いので、ブーストした人は名前だけを既定にする。
     @Test func contextNameStyleDefaultsToNameOnly() throws {
         let defaults = try makeDefaults()
-        #expect(AppSettings(defaults: defaults).contextNameStyle == .nameOnly)
-        AppSettings(defaults: defaults).contextNameStyle = .acctOnly
-        #expect(AppSettings(defaults: defaults).contextNameStyle == .acctOnly)
+        #expect(AppSettings(defaults: defaults).appearance.contextNameStyle == .nameOnly)
+        AppSettings(defaults: defaults).appearance.contextNameStyle = .acctOnly
+        #expect(AppSettings(defaults: defaults).appearance.contextNameStyle == .acctOnly)
     }
 
     /// 数でない値（NaNや無限）は保存しない。行数などを整数に直すところで落ちるため。
@@ -279,24 +279,49 @@ struct AppSettingsTests {
         let defaults = try makeDefaults()
         let settings = AppSettings(defaults: defaults)
         #expect(!settings.isAppearanceModified)
-        settings.showsTime = false
+        settings.appearance.showsTime = false
         #expect(settings.isAppearanceModified)
-        settings.statusNameStyle = .acctOnly
+        settings.appearance.statusNameStyle = .acctOnly
         settings.setValue(30, for: AppearanceCatalog.avatarSize)
         settings.resetAppearance()
         #expect(!settings.isAppearanceModified)
         let relaunched = AppSettings(defaults: defaults)
-        #expect(relaunched.showsTime)
-        #expect(relaunched.statusNameStyle == .nameAndAcct)
+        #expect(relaunched.appearance.showsTime)
+        #expect(relaunched.appearance.statusNameStyle == .nameAndAcct)
         #expect(relaunched.value(of: AppearanceCatalog.avatarSize) == AppearanceCatalog.avatarSize.defaultValue)
+    }
+
+    /// 保存したあとに選択肢を足しても、保存にない項目だけを既定値にし、保存した項目は残す。
+    @Test func appearanceChoicesKeepSavedValuesWhenFieldsAreMissing() throws {
+        let data = Data(#"{"showsTime":false}"#.utf8)
+        let choices = AppearanceChoices(stored: data)
+
+        #expect(!choices.showsTime)
+        #expect(choices.statusNameStyle == AppearanceChoices().statusNameStyle)
+    }
+
+    /// 読めない値（名前を変えた選択肢など）がある項目だけを既定値に戻し、ほかの項目は保存した値のまま読む。
+    @Test func appearanceChoicesDropOnlyUnreadableFields() throws {
+        let data = Data(#"{"showsTime":false,"statusNameStyle":"removedStyle","avatarShape":"circle"}"#.utf8)
+        let choices = AppearanceChoices(stored: data)
+
+        #expect(!choices.showsTime)
+        #expect(choices.avatarShape == .circle)
+        #expect(choices.statusNameStyle == AppearanceChoices().statusNameStyle)
+    }
+
+    /// 保存がないか、JSONとして読めなければ、すべて既定値にする。
+    @Test(arguments: [nil, Data("not json".utf8)] as [Data?])
+    func appearanceChoicesFallBackToDefaults(data: Data?) {
+        #expect(AppearanceChoices(stored: data) == AppearanceChoices())
     }
 
     /// 「投稿の見た目」に移したお気に入りとブーストの光の選択肢も、まとめて戻す対象にし、起動し直しても残る。
     @Test(arguments: [
-        { (settings: AppSettings) in settings.drawsReactionGlowInHDR = false },
-        { (settings: AppSettings) in settings.reactionGlowIcons = .scattered },
-        { (settings: AppSettings) in settings.reactionGlowFillsWidthWhenAlone = true },
-        { (settings: AppSettings) in settings.reactionGlowLightFavouriteColor = .yellow },
+        { (settings: AppSettings) in settings.appearance.drawsReactionGlowInHDR = false },
+        { (settings: AppSettings) in settings.appearance.reactionGlowIcons = .scattered },
+        { (settings: AppSettings) in settings.appearance.reactionGlowFillsWidthWhenAlone = true },
+        { (settings: AppSettings) in settings.appearance.reactionGlowLightFavouriteColor = .yellow },
     ] as [@MainActor @Sendable (AppSettings) -> Void])
     func reactionGlowChoicesAreAppearance(change: @MainActor @Sendable (AppSettings) -> Void) throws {
         let defaults = try makeDefaults()

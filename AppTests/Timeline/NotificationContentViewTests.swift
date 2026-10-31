@@ -86,7 +86,7 @@ struct NotificationContentViewTests {
     /// 名前の前に差し込むアイコンも、角丸の四角の丸みを「投稿の見た目」の設定に従わせる。丸みを0にすると、四隅も中央と同じ濃さで塗る。
     @Test func headerAvatarFollowsCornerRatio() throws {
         let settings = AppSettings.isolated()
-        settings.avatarShape = .roundedSquare
+        settings.appearance.avatarShape = .roundedSquare
         settings.setValue(0, for: AppearanceCatalog.avatarCornerRatio)
         let vc = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, avatarImages: .offline, settings: settings)
         let bob = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)

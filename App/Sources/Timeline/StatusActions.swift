@@ -283,7 +283,7 @@ extension TimelineViewController {
         case .account(let account): account
         case .mention(let mention): account(withID: mention.id) ?? userMenuActions?.accounts.account(mention.id)
         }
-        if let account, let image = cachedAvatar(of: account, id: id), let icon = Self.userMenuIcon(image, shape: settings.avatarShape) {
+        if let account, let image = cachedAvatar(of: account, id: id), let icon = Self.userMenuIcon(image, shape: settings.appearance.avatarShape) {
             return icon
         }
         let placeholder = contextMenuIcons.placeholder(symbolName: "person.crop.circle", side: Self.menuIconSide, traitCollection: traitCollection)
@@ -348,7 +348,7 @@ extension TimelineViewController {
         Task(.action) { [weak self] in
             // 使う人が開いたメニューなので、前に読めなかったアイコンも間隔を待たずに読み直す。
             guard let self, let image = try? await avatarImages.image(for: key, retriesNow: true),
-                  let icon = Self.userMenuIcon(image, shape: settings.avatarShape) else { return }
+                  let icon = Self.userMenuIcon(image, shape: settings.appearance.avatarShape) else { return }
             contextMenuIcons.setIcon(icon, for: placeholder)
         }
     }

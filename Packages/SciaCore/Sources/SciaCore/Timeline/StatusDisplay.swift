@@ -1,7 +1,7 @@
 public import Foundation
 
 /// 投稿の名前の行に、表示名とacctをどう並べるか。
-public enum StatusNameStyle: String, CaseIterable, Sendable {
+public enum StatusNameStyle: String, Codable, CaseIterable, Sendable {
     case nameAndAcct
     case nameOnly
     case acctOnly
@@ -24,7 +24,7 @@ public enum StatusNamePart: Sendable {
 }
 
 /// 投稿の時刻の書き方。
-public enum StatusTimeStyle: String, CaseIterable, Sendable {
+public enum StatusTimeStyle: String, Codable, CaseIterable, Sendable {
     /// 「3分」のように、今からどれだけ前か。1週間より前は日付にする。
     case relative
     /// 「10/3 12:34」のような日時。
@@ -32,20 +32,20 @@ public enum StatusTimeStyle: String, CaseIterable, Sendable {
 }
 
 /// アイコンの形。
-public enum AvatarShape: String, CaseIterable, Sendable {
+public enum AvatarShape: String, Codable, CaseIterable, Sendable {
     case circle
     case roundedSquare
 }
 
 /// リンクカードのサムネイルを、カードのどちらの端に置くか。画面の向きによらず、左右をそのまま指す。
 /// 文字はこれによらず、文字の言語の方向に寄せる。
-public enum LinkCardThumbnailSide: String, CaseIterable, Sendable {
+public enum LinkCardThumbnailSide: String, Codable, CaseIterable, Sendable {
     case left
     case right
 }
 
 /// 一覧の投稿の添付ファイルの並べ方。
-public enum MediaArrangement: String, CaseIterable, Sendable {
+public enum MediaArrangement: String, Codable, CaseIterable, Sendable {
     /// 本文の下に、行の幅いっぱいで並べる。
     case belowBody
     /// 本文の右に小さな正方形で出し、2つ以上なら重ねる。
@@ -53,7 +53,7 @@ public enum MediaArrangement: String, CaseIterable, Sendable {
 }
 
 /// お気に入りとブーストの光に、何を示すかのアイコンを添えるか。
-public enum ReactionGlowIcons: String, CaseIterable, Sendable {
+public enum ReactionGlowIcons: String, Codable, CaseIterable, Sendable {
     case none
     /// 下の端に、ブーストとお気に入りのアイコンを1つずつ置く。
     case atBottom
@@ -62,7 +62,7 @@ public enum ReactionGlowIcons: String, CaseIterable, Sendable {
 }
 
 /// ライトモードのお気に入りの光の色。ダークモードではいつも黄色にする。
-public enum ReactionGlowLightFavouriteColor: String, CaseIterable, Sendable {
+public enum ReactionGlowLightFavouriteColor: String, Codable, CaseIterable, Sendable {
     /// 白い背景では黄色が見えにくいため、既定はこちら。
     case orange
     case yellow

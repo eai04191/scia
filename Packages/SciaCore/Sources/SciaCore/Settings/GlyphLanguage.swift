@@ -3,7 +3,7 @@ import Foundation
 /// 漢字とかなを、どの言語の字形で描くか。
 /// 文字列に言語がないと、システムは端末の言語の一覧から書体を選ぶ。一覧に日本語・中国語・韓国語がない英語の設定などでは、
 /// 日本語の文も中国語の書体（簡体字の字形）で描かれるため、文字列に言語を付けて選ばせる。
-public enum GlyphLanguage: String, CaseIterable, Sendable {
+public enum GlyphLanguage: String, Codable, CaseIterable, Sendable {
     /// 端末の言語の一覧で最初に出てくる、日本語・中国語・韓国語に従う。どれもなければ日本語にする。アプリの文言が日本語のため。
     case automatic
     case japanese

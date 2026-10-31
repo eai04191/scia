@@ -390,9 +390,9 @@ private struct CompletionRowView: View {
         switch candidate {
         case .account(let account):
             RowLayout {
-                AvatarImage(url: account.avatarStatic ?? account.avatar, shape: model.settings.avatarShape)
+                AvatarImage(url: account.avatarStatic ?? account.avatar, shape: model.settings.appearance.avatarShape)
             } title: {
-                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis, fadesTail: true) { [model] in
+                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.appearance.animatesCustomEmojis, fadesTail: true) { [model] in
                     RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
                         .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
                 }
@@ -408,9 +408,9 @@ private struct CompletionRowView: View {
             case .recent: "前にメンションした人"
             }
             RowLayout {
-                AvatarImage(url: mention.avatar, shape: model.settings.avatarShape)
+                AvatarImage(url: mention.avatar, shape: model.settings.appearance.avatarShape)
             } title: {
-                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.animatesCustomEmojis, fadesTail: true) { [model] in
+                RichTextLabel(numberOfLines: 1, emojiImages: model.emojiImages, animatesEmojis: model.settings.appearance.animatesCustomEmojis, fadesTail: true) { [model] in
                     RichTextRenderer(font: .preferredFont(forTextStyle: .subheadline), textColor: .label, emojiImages: model.emojiImages, language: model.settings.glyphLanguageIdentifier())
                         .render(.plain(mention.displayNameOrUsername, emojis: mention.emojis))
                 }
@@ -452,7 +452,7 @@ private struct CompletionRowView: View {
             .accessibilityLabel("ハッシュタグ \(hashtag.name)、\(note)")
         case .emoji(let emoji):
             RowLayout {
-                EmojiImage(url: emoji.staticUrl, animationURL: model.settings.animatesCustomEmojis ? emoji.url : nil, store: model.emojiImages)
+                EmojiImage(url: emoji.staticUrl, animationURL: model.settings.appearance.animatesCustomEmojis ? emoji.url : nil, store: model.emojiImages)
             } title: {
                 Text(":\(emoji.shortcode):").fadingTail(of: emoji.shortcode)
             }
@@ -463,7 +463,7 @@ private struct CompletionRowView: View {
             // 文字ではなく画像と並べる絵なので、端末の文字の大きさではなく枠の大きさで決める。
             RowLayout {
                 // scialint:disable:next fixed_font_size
-                Text(emoji.emoji).font(Font(EmojiFont.font(.systemFont(ofSize: 24), style: model.settings.emojiStyle)))
+                Text(emoji.emoji).font(Font(EmojiFont.font(.systemFont(ofSize: 24), style: model.settings.appearance.emojiStyle)))
             } title: {
                 Text(emoji.name).fadingTail(of: emoji.name)
             } subtitle: {

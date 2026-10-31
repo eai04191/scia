@@ -135,7 +135,7 @@ final class ProfileEditViewController: UIViewController {
         await editor.load()
         // プロフィールを開くときと同じく、アイコンとヘッダー画像を上限まで待ってから表を出す。表を出したあとに画像が1コマで入らないようにするため。
         if case .loaded(let source) = editor.source {
-            imagesCell.apply(account: source.account, mediaImages: mediaImages, avatarShape: settings.avatarShape)
+            imagesCell.apply(account: source.account, mediaImages: mediaImages, avatarShape: settings.appearance.avatarShape)
             await imagesCell.waitForImages(within: .seconds(tuning.value(of: TuningCatalog.profileAvatarWait)), clock: clock)
         }
         showDraft()
@@ -181,7 +181,7 @@ final class ProfileEditViewController: UIViewController {
         lockedSwitch.isOn = draft.locked
         botSwitch.isOn = draft.bot
         if case .loaded(let source) = editor.source {
-            imagesCell.apply(account: source.account, mediaImages: mediaImages, avatarShape: settings.avatarShape)
+            imagesCell.apply(account: source.account, mediaImages: mediaImages, avatarShape: settings.appearance.avatarShape)
         }
         updateImages()
         showsAddFieldRow = canAddField
@@ -492,7 +492,7 @@ final class ProfileEditViewController: UIViewController {
     private var pickingImage: ProfileImage?
 
     private func presentCrop(_ cgImage: CGImage, for image: ProfileImage) {
-        let crop = ProfileImageCropViewController(image: cgImage, kind: image, avatarShape: settings.avatarShape)
+        let crop = ProfileImageCropViewController(image: cgImage, kind: image, avatarShape: settings.appearance.avatarShape)
         let navigation = UINavigationController(rootViewController: crop)
         navigation.modalPresentationStyle = .fullScreen
         // 画像を見やすいよう黒地にし、バーの文字とボタンも暗い見た目にそろえる。

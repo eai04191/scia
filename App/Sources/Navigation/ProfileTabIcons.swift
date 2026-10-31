@@ -65,7 +65,7 @@ final class ProfileTabIcons {
     /// 項目に出すアイコン。プロフィールでないか、アイコンをまだ読んでいなければnil。
     func icon(for item: TabItem) -> Icon? {
         guard case .profile(let accountID, _, _) = item, let avatar = avatars[accountID] else { return nil }
-        let shape = settings.avatarShape
+        let shape = settings.appearance.avatarShape
         guard let tab = AvatarIcon.image(avatar, side: Self.tabSide, shape: shape),
               let selectedTab = Self.ringed(avatar, shape: shape),
               let menu = AvatarIcon.image(avatar, side: AvatarIcon.menuSide, shape: shape) else { return nil }
@@ -90,7 +90,7 @@ final class ProfileTabIcons {
 
     private func observeShape() {
         withObservationTracking {
-            _ = settings.avatarShape
+            _ = settings.appearance.avatarShape
         } onChange: { [weak self] in
             Task(.withoutRequests) { @MainActor [weak self] in
                 guard let self else { return }

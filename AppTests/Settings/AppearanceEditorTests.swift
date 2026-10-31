@@ -142,7 +142,7 @@ struct AppearanceEditorTests {
     @Test(arguments: [true, false])
     func mediaBadgeSlotStaysWhenHidden(showsBadges: Bool) throws {
         let settings = try makeSettings()
-        settings.showsMediaBadges = showsBadges
+        settings.appearance.showsMediaBadges = showsBadges
         let row = try #require(layOutSamples(settings).first { $0[.mediaBadgeSlot] != nil })
         let badges = try #require(row[.mediaBadgeSlot])
         let media = try #require(row[.media]?.first)
@@ -176,8 +176,8 @@ struct AppearanceEditorTests {
         #expect(abs(standard.lightOpacity - 0.3) < 0.001)
         settings.setValue(100, for: AppearanceCatalog.reactionGlowHeight)
         settings.setValue(0.5, for: AppearanceCatalog.reactionGlowLightOpacity)
-        settings.reactionGlowIcons = .scattered
-        settings.reactionGlowLightFavouriteColor = .yellow
+        settings.appearance.reactionGlowIcons = .scattered
+        settings.appearance.reactionGlowLightFavouriteColor = .yellow
         let changed = ReactionGlow.Style(tuning: tuning, settings: settings)
         #expect(changed.height == 100)
         #expect(abs(changed.lightSDRHeight - 100 * 38 / 64) < 0.001)
@@ -191,7 +191,7 @@ struct AppearanceEditorTests {
     @Test(arguments: [ReactionGlowIcons.none, .atBottom, .scattered])
     func reactionGlowIconItemsShowIcons(icons: ReactionGlowIcons) throws {
         let settings = try makeSettings()
-        settings.reactionGlowIcons = icons
+        settings.appearance.reactionGlowIcons = icons
         let rows = layOutSamples(settings)
         let highlight = try #require(AppearanceHighlight(AppearanceCatalog.reactionGlowIconSize))
         let found = try #require(highlight.locate(in: rows))
@@ -219,7 +219,7 @@ struct AppearanceEditorTests {
     /// アイコンを大きくして散らしても、アイコンは消えない。濃さは、下の余白に収めて縮めたあとの大きさで、光源からの遠さを測って決めるため。
     @Test func largeScatteredIconsStayVisible() throws {
         let settings = try makeSettings()
-        settings.reactionGlowIcons = .scattered
+        settings.appearance.reactionGlowIcons = .scattered
         settings.setValue(200, for: AppearanceCatalog.reactionGlowIconSize)
         let row = try #require(layOutSamples(settings).first { $0[.reactionGlow] != nil })
         #expect(row[.reactionGlowIcons] != nil)
@@ -291,9 +291,9 @@ struct AppearanceEditorTests {
     func gapBandMatchesValue(item: AppearanceValue) throws {
         let settings = try makeSettings()
         // 名前の後ろに添える部分がないと、そのすき間を示せないため、名前の上の行にもハンドルを出す。
-        settings.contextNameStyle = .nameAndAcct
+        settings.appearance.contextNameStyle = .nameAndAcct
         // 1段目と2段目のあいだは、2段に分けないと示せない。
-        settings.stacksNameParts = item == AppearanceCatalog.nameStackSpacing
+        settings.appearance.stacksNameParts = item == AppearanceCatalog.nameStackSpacing
         let value = item.defaultValue + 3
         settings.setValue(value, for: item)
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 4_000))

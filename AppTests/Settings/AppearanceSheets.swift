@@ -38,8 +38,8 @@ struct AppearanceSheets {
         for item in Self.besideBodyItems {
             let before = try Self.makeSettings()
             let after = try Self.makeSettings()
-            before.mediaArrangement = .besideBody
-            after.mediaArrangement = .besideBody
+            before.appearance.mediaArrangement = .besideBody
+            after.appearance.mediaArrangement = .besideBody
             let value = Self.changedValue(of: item)
             after.setValue(value, for: item)
             let highlight = AppearanceHighlight(item)
@@ -71,8 +71,8 @@ struct AppearanceSheets {
             let after = try Self.makeSettings()
             // 本文の右に小さく出すときにだけ効く選択肢は、その並べ方で比べる。
             if choice == .tiltsStackedPhotos {
-                before.mediaArrangement = .besideBody
-                after.mediaArrangement = .besideBody
+                before.appearance.mediaArrangement = .besideBody
+                after.appearance.mediaArrangement = .besideBody
             }
             let description = Self.change(choice, in: after)
             pairs.append((
@@ -89,8 +89,8 @@ struct AppearanceSheets {
     }
 
     private static let layoutVariants: [(String, ReferenceWritableKeyPath<AppSettings, Bool>, [AppearanceValue])] = [
-        ("名前を2段", \.stacksNameParts, [AppearanceCatalog.nameStackSpacing, AppearanceCatalog.namePrimaryText, AppearanceCatalog.nameSecondaryText, AppearanceCatalog.nameBodySpacing, AppearanceCatalog.nameMediaSpacing]),
-        ("アイコンの下を空けない", \.wrapsBelowAvatar, [AppearanceCatalog.avatarSize, AppearanceCatalog.nameBodySpacing, AppearanceCatalog.nameMediaSpacing, AppearanceCatalog.rowPaddingLeading]),
+        ("名前を2段", \.appearance.stacksNameParts, [AppearanceCatalog.nameStackSpacing, AppearanceCatalog.namePrimaryText, AppearanceCatalog.nameSecondaryText, AppearanceCatalog.nameBodySpacing, AppearanceCatalog.nameMediaSpacing]),
+        ("アイコンの下を空けない", \.appearance.wrapsBelowAvatar, [AppearanceCatalog.avatarSize, AppearanceCatalog.nameBodySpacing, AppearanceCatalog.nameMediaSpacing, AppearanceCatalog.rowPaddingLeading]),
     ]
 
     private static let besideBodyItems = [AppearanceCatalog.mediaBesideSide, AppearanceCatalog.bodyMediaSpacing, AppearanceCatalog.bodyLinkCardSpacing, AppearanceCatalog.filterNoteSpacing]
@@ -98,7 +98,7 @@ struct AppearanceSheets {
     /// 既定値の設定。名前の上の行の添える部分の項目も確かめられるよう、ブーストした人の表記は名前とハンドルにする。
     private static func makeSettings() throws -> AppSettings {
         let settings = AppSettings.isolated()
-        settings.contextNameStyle = .nameAndAcct
+        settings.appearance.contextNameStyle = .nameAndAcct
         return settings
     }
 
@@ -124,57 +124,57 @@ struct AppearanceSheets {
         }
         switch choice {
         case .contextNameStyle:
-            settings.contextNameStyle = .acctOnly
+            settings.appearance.contextNameStyle = .acctOnly
             return "→ ハンドル"
-        case .showsContextSymbol: return flip(\.showsContextSymbol)
-        case .boldsName: return flip(\.boldsName)
-        case .showsAvatarBorder: return flip(\.showsAvatarBorder)
-        case .showsMediaBadges: return flip(\.showsMediaBadges)
-        case .showsLinkCard: return flip(\.showsLinkCard)
-        case .boldsLinkCardTitle: return flip(\.boldsLinkCardTitle)
-        case .showsSeparators: return flip(\.showsSeparators)
-        case .showsBoosterAvatar: return flip(\.showsBoosterAvatar)
-        case .showsReplyLabel: return flip(\.showsReplyLabel)
-        case .showsReplyLines: return flip(\.showsReplyLines)
-        case .wrapsBelowAvatar: return flip(\.wrapsBelowAvatar)
-        case .stacksNameParts: return flip(\.stacksNameParts)
-        case .showsTime: return flip(\.showsTime)
-        case .showsLinkCardImage: return flip(\.showsLinkCardImage)
-        case .showsVisibilitySymbol: return flip(\.showsVisibilitySymbol)
-        case .showsEditedMark: return flip(\.showsEditedMark)
-        case .showsLinkCardSite: return flip(\.showsLinkCardSite)
+        case .showsContextSymbol: return flip(\.appearance.showsContextSymbol)
+        case .boldsName: return flip(\.appearance.boldsName)
+        case .showsAvatarBorder: return flip(\.appearance.showsAvatarBorder)
+        case .showsMediaBadges: return flip(\.appearance.showsMediaBadges)
+        case .showsLinkCard: return flip(\.appearance.showsLinkCard)
+        case .boldsLinkCardTitle: return flip(\.appearance.boldsLinkCardTitle)
+        case .showsSeparators: return flip(\.appearance.showsSeparators)
+        case .showsBoosterAvatar: return flip(\.appearance.showsBoosterAvatar)
+        case .showsReplyLabel: return flip(\.appearance.showsReplyLabel)
+        case .showsReplyLines: return flip(\.appearance.showsReplyLines)
+        case .wrapsBelowAvatar: return flip(\.appearance.wrapsBelowAvatar)
+        case .stacksNameParts: return flip(\.appearance.stacksNameParts)
+        case .showsTime: return flip(\.appearance.showsTime)
+        case .showsLinkCardImage: return flip(\.appearance.showsLinkCardImage)
+        case .showsVisibilitySymbol: return flip(\.appearance.showsVisibilitySymbol)
+        case .showsEditedMark: return flip(\.appearance.showsEditedMark)
+        case .showsLinkCardSite: return flip(\.appearance.showsLinkCardSite)
         case .avatarShape:
-            settings.avatarShape = settings.avatarShape == .circle ? .roundedSquare : .circle
-            return "→ \(settings.avatarShape)"
-        case .animatesAvatars: return flip(\.animatesAvatars)
+            settings.appearance.avatarShape = settings.appearance.avatarShape == .circle ? .roundedSquare : .circle
+            return "→ \(settings.appearance.avatarShape)"
+        case .animatesAvatars: return flip(\.appearance.animatesAvatars)
         case .nameStyle:
-            settings.statusNameStyle = .acctAndName
+            settings.appearance.statusNameStyle = .acctAndName
             return "→ ハンドル、名前"
         case .timeStyle:
-            settings.statusTimeStyle = .absolute
+            settings.appearance.statusTimeStyle = .absolute
             return "→ 日時"
         case .glyphLanguage:
-            settings.glyphLanguage = .simplifiedChinese
+            settings.appearance.glyphLanguage = .simplifiedChinese
             return "→ 簡体字中国語"
         case .emojiStyle:
-            settings.emojiStyle = .twemoji
+            settings.appearance.emojiStyle = .twemoji
             return "→ Twemoji"
-        case .animatesCustomEmojis: return flip(\.animatesCustomEmojis)
+        case .animatesCustomEmojis: return flip(\.appearance.animatesCustomEmojis)
         case .linkCardThumbnailSide:
-            settings.linkCardThumbnailSide = .right
+            settings.appearance.linkCardThumbnailSide = .right
             return "→ 右"
         case .mediaArrangement:
-            settings.mediaArrangement = .besideBody
+            settings.appearance.mediaArrangement = .besideBody
             return "→ 本文の右に小さく"
         case .tiltsStackedPhotos:
-            return flip(\.tiltsStackedPhotos)
-        case .drawsReactionGlowInHDR: return flip(\.drawsReactionGlowInHDR)
+            return flip(\.appearance.tiltsStackedPhotos)
+        case .drawsReactionGlowInHDR: return flip(\.appearance.drawsReactionGlowInHDR)
         case .reactionGlowIcons:
-            settings.reactionGlowIcons = .atBottom
+            settings.appearance.reactionGlowIcons = .atBottom
             return "→ 下の端に1つずつ"
-        case .reactionGlowFillsWidthWhenAlone: return flip(\.reactionGlowFillsWidthWhenAlone)
+        case .reactionGlowFillsWidthWhenAlone: return flip(\.appearance.reactionGlowFillsWidthWhenAlone)
         case .reactionGlowLightFavouriteColor:
-            settings.reactionGlowLightFavouriteColor = .yellow
+            settings.appearance.reactionGlowLightFavouriteColor = .yellow
             return "→ 黄色"
         }
     }
@@ -183,7 +183,7 @@ struct AppearanceSheets {
     private static func render(settings: AppSettings, highlight: AppearanceHighlight?) -> UIImage {
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: width, height: 6_000))
         let samples = AppearanceSamples(settings: settings, tuning: TuningStore(defaults: nil), now: Date(timeIntervalSince1970: 1_800_000_000))
-        preview.apply(samples.configurations(colorScheme: .light, revision: 0), highlight: nil, showsSeparators: settings.showsSeparators)
+        preview.apply(samples.configurations(colorScheme: .light, revision: 0), highlight: nil, showsSeparators: settings.appearance.showsSeparators)
         preview.layoutIfNeeded()
         guard let highlight, let found = highlight.locate(in: preview.rowFrames()) else {
             return label("示す場所が見本にない", size: CGSize(width: width, height: 40))

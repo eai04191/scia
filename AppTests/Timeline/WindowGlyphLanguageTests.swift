@@ -18,7 +18,7 @@ struct WindowGlyphLanguageTests {
     private func settings(_ glyphLanguage: GlyphLanguage) throws -> AppSettings {
         let defaults = TestScratch.defaults("WindowGlyphLanguageTests")
         let settings = AppSettings(defaults: defaults)
-        settings.glyphLanguage = glyphLanguage
+        settings.appearance.glyphLanguage = glyphLanguage
         return settings
     }
 
@@ -102,7 +102,7 @@ struct WindowGlyphLanguageTests {
         #expect(languages(of: textView) == ["zh-Hant"])
 
         // 選び直しは、設定の変化を見ている入力欄が次のメインスレッドの番で付け直す。
-        settings.glyphLanguage = .japanese
+        settings.appearance.glyphLanguage = .japanese
         try await waitUntil { languages(of: textView) == ["ja"] }
     }
 
@@ -243,7 +243,7 @@ struct WindowGlyphLanguageTests {
 
         let middle = try #require(field.position(from: field.beginningOfDocument, offset: 1))
         field.selectedTextRange = field.textRange(from: middle, to: middle)
-        settings.glyphLanguage = .japanese
+        settings.appearance.glyphLanguage = .japanese
         try await waitUntil { languages(of: field) == ["ja"] }
         #expect(field.offset(from: field.beginningOfDocument, to: try #require(field.selectedTextRange).start) == 1)
         type("関")

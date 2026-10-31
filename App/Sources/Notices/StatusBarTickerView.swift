@@ -837,7 +837,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
                 avatar.widthAnchor.constraint(equalToConstant: metrics.avatarSide),
                 avatar.heightAnchor.constraint(equalToConstant: metrics.avatarSide),
             ])
-            avatar.apply(AvatarView.Content(url: item.account.avatarStatic, shape: AppDependencies.settings.avatarShape, animates: false))
+            avatar.apply(AvatarView.Content(url: item.account.avatarStatic, shape: AppDependencies.settings.appearance.avatarShape, animates: false))
             if metrics.badgesSymbol {
                 left.addArrangedSubview(Self.badged(avatar, with: symbol, side: metrics.avatarSide))
                 // 右下にはみ出す記号の分を空ける。
@@ -871,7 +871,7 @@ final class StatusBarTickerView: UIView, UILargeContentViewerInteractionDelegate
             let fadeWidth = AppDependencies.tuning.value(of: TuningCatalog.statusBarTickerFadeWidth)
             nameLabel.fadeWidth = fadeWidth
             subjectLabel.fadeWidth = fadeWidth
-            let animatedEmojis = settings.animatesCustomEmojis ? AppDependencies.emojiImages : nil
+            let animatedEmojis = settings.appearance.animatesCustomEmojis ? AppDependencies.emojiImages : nil
             nameLabel.emojiImages = animatedEmojis
             subjectLabel.emojiImages = animatedEmojis
             // 文字はステータスバーの高さに収めるため、大きさを決め打ちする。文字を大きくする設定では、拡大表示で読む。

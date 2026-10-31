@@ -56,7 +56,7 @@ struct ProfileTabIconsTests {
         var changes = 0
         icons.onChange = { changes += 1 }
 
-        settings.avatarShape = settings.avatarShape == .circle ? .roundedSquare : .circle
+        settings.appearance.avatarShape = settings.appearance.avatarShape == .circle ? .roundedSquare : .circle
 
         try await waitUntil { changes == 1 }
     }

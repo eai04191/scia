@@ -82,13 +82,13 @@ struct SettingsView: View {
                     NavigationLink(value: SettingsPage.appearance) {
                         PostPreview(
                             createdAt: previewDate,
-                            nameStyle: settings.statusNameStyle,
-                            timeStyle: settings.statusTimeStyle,
-                            avatarShape: settings.avatarShape,
-                            animatesAvatars: settings.animatesAvatars,
-                            linkCardThumbnailSide: settings.linkCardThumbnailSide,
-                            glyphLanguage: settings.glyphLanguage,
-                            emojiStyle: settings.emojiStyle,
+                            nameStyle: settings.appearance.statusNameStyle,
+                            timeStyle: settings.appearance.statusTimeStyle,
+                            avatarShape: settings.appearance.avatarShape,
+                            animatesAvatars: settings.appearance.animatesAvatars,
+                            linkCardThumbnailSide: settings.appearance.linkCardThumbnailSide,
+                            glyphLanguage: settings.appearance.glyphLanguage,
+                            emojiStyle: settings.appearance.emojiStyle,
                             appearanceValues: settings.appearanceValues,
                             builder: PostContentBuilder(
                                 tuning: AppDependencies.tuning,

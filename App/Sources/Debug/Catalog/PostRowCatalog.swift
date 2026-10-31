@@ -137,7 +137,7 @@ enum PostRowCatalog {
         }
         defaults.removePersistentDomain(forName: suiteName)
         let settings = AppSettings(defaults: defaults)
-        settings.mediaArrangement = .besideBody
+        settings.appearance.mediaArrangement = .besideBody
         let home = TimelineViewController(texts: .home, refresh: {}, settings: settings)
         home.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
         let mine = TimelineViewController(texts: .home, refresh: {}, settings: settings)
@@ -150,8 +150,8 @@ enum PostRowCatalog {
         }
         straightDefaults.removePersistentDomain(forName: straightSuiteName)
         let straightSettings = AppSettings(defaults: straightDefaults)
-        straightSettings.mediaArrangement = .besideBody
-        straightSettings.tiltsStackedPhotos = false
+        straightSettings.appearance.mediaArrangement = .besideBody
+        straightSettings.appearance.tiltsStackedPhotos = false
         let straight = TimelineViewController(texts: .home, refresh: {}, settings: straightSettings)
         straight.filterWarnings = FilterWarnings(filtering: StatusFiltering(context: .home, myAccountID: nil))
         func post(_ title: String, _ status: Status, expandsSpoiler: Bool = false, isMine: Bool = false, isStraight: Bool = false) -> CatalogState {

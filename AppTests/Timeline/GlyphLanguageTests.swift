@@ -16,7 +16,7 @@ struct GlyphLanguageTests {
     private func controller(glyphLanguage: GlyphLanguage) throws -> TimelineViewController {
         let defaults = TestScratch.defaults("GlyphLanguageTests")
         let settings = AppSettings(defaults: defaults)
-        settings.glyphLanguage = glyphLanguage
+        settings.appearance.glyphLanguage = glyphLanguage
         return TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
     }
 

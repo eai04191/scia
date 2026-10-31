@@ -73,7 +73,7 @@ struct PostTypography: Equatable {
     @MainActor
     init(settings: AppSettings) {
         offsets = Dictionary(uniqueKeysWithValues: Role.allCases.map { ($0, CGFloat(settings.value(of: $0.setting))) })
-        boldsName = settings.boldsName
+        boldsName = settings.appearance.boldsName
     }
 
     private init(offsets: [Role: CGFloat], boldsName: Bool) {

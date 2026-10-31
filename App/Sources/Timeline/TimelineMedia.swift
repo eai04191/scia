@@ -131,10 +131,10 @@ extension MediaGridView.Content {
     /// 投稿の見た目で本文の右に小さく出す設定なら、重ねて出す。重ね方は`seed`でばらつかせ、同じ投稿はどの行でも同じ形にする。
     @MainActor
     mutating func arrange(beside seed: String, settings: AppSettings) {
-        guard settings.mediaArrangement == .besideBody else { return }
+        guard settings.appearance.mediaArrangement == .besideBody else { return }
         arrangement = .stack(side: settings.value(of: AppearanceCatalog.mediaBesideSide))
         stackSeed = seed
-        tiltsStack = settings.tiltsStackedPhotos
+        tiltsStack = settings.appearance.tiltsStackedPhotos
     }
 
     /// `attachments`を、今の設定とチューニングで並べる中身。添付ファイルがなければnil。一覧の外（編集履歴など）でも同じ見た目にする。
@@ -154,7 +154,7 @@ extension MediaGridView.Content {
             ),
             spacing: settings.value(of: AppearanceCatalog.mediaTileSpacing),
             widestAspectRatio: settings.value(of: AppearanceCatalog.mediaWidestAspectRatio),
-            showsBadges: settings.showsMediaBadges
+            showsBadges: settings.appearance.showsMediaBadges
         )
     }
 }
