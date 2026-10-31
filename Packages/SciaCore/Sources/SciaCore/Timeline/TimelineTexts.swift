@@ -36,6 +36,11 @@ public struct TimelineTexts: Sendable {
     public static func accountHashtag(name: String, acct: String) -> TimelineTexts {
         TimelineTexts(dumpName: "accountHashtag", title: "#\(name)", subtitle: "@\(acct)", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
     }
+    public static let notificationRequests = TimelineTexts(dumpName: "notificationRequests", title: "保留中の通知", empty: "保留中の通知はありません", reachedEnd: "", unreadable: "表示できないアカウント")
+    /// 保留中の通知の1人分の、その人からの通知。
+    public static func accountNotifications(name: String) -> TimelineTexts {
+        TimelineTexts(dumpName: "accountNotifications", title: "\(name)からの通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
+    }
     public static let notifications = TimelineTexts(dumpName: "notifications", title: "通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
     public static let profile = TimelineTexts(dumpName: "profile", title: "", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
     public static let thread = TimelineTexts(dumpName: "thread", title: "スレッド", empty: "投稿がありません", reachedEnd: "", unreadable: "表示できない投稿")

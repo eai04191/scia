@@ -19,7 +19,7 @@ extension TimelineViewController {
         switch entry {
         case .status(let status), .pinned(let status): status
         case .notification(let notification): notification.status
-        case .gap, .unreadable, .account: nil
+        case .gap, .unreadable, .account, .notificationRequest: nil
         }
     }
 
@@ -41,7 +41,8 @@ extension TimelineViewController {
         let subject = status.map { OperationStatus.Subject($0.displayed) }
         let emojis = CustomEmojiMenus(timeline: self, subject: subject)
         let body = status.flatMap { selectableBody(for: id, statusID: $0.displayed.id) }
-        let renderer = statusMenuRenderer(status: status, notification: notification, id: id, selectableBody: body, emojis: emojis)
+        let request: NotificationRequest? = if case .notificationRequest(let request) = entry { request } else { nil }
+        let renderer = statusMenuRenderer(status: status, notification: notification, request: request, id: id, selectableBody: body, emojis: emojis)
         // 人の一覧の行では、その人へのユーザーのメニューを、そのまま出す。
         if case .account(let account) = entry {
             defer { reloadRelations([account.id]) }
@@ -49,6 +50,14 @@ extension TimelineViewController {
             let tree = UserMenuTree(subject: UserMenuSubject(user), actions: userMenuActions, linkBrowser: settings.linkBrowser)
             guard let node = tree.submenu(groups: settings.userMenuLayout.groups, avatar: .user(user)) else { return nil }
             return BuiltMenu(root: .submenu("", [node.map { .user(user, $0) }]), renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() }
+        }
+        // 保留中の通知の行では、受け入れると無視の下に、その人へのユーザーのメニューを出す。
+        if let request {
+            defer { reloadRelations([request.account.id]) }
+            let user = MenuUser.account(request.account)
+            let tree = UserMenuTree(subject: UserMenuSubject(user), actions: userMenuActions, linkBrowser: settings.linkBrowser)
+            let node = tree.submenu(groups: settings.userMenuLayout.groups, avatar: .user(user))
+            return BuiltMenu(root: StatusMenuTree.notificationRequestMenu(user: node?.map { .user(user, $0) }), renderer: renderer) { [weak self] in self?.loadPendingMenuIcons() }
         }
         var tree = StatusMenuTree(status: status, notification: notification, now: now(), linkBrowser: settings.linkBrowser)
         tree.rowStatus = self.status(for: id)
@@ -76,7 +85,7 @@ extension TimelineViewController {
 
     /// 投稿のメニューの描き方と、押された操作の行い方。
     /// - Parameter selectableBody: 「テキストを選択」で選ぶ本文。メニューを組んだときの行のものを使う。
-    private func statusMenuRenderer(status: Status?, notification: MastodonNotification?, id: ItemID, selectableBody: PostBodyView?, emojis: CustomEmojiMenus) -> MenuRenderer<StatusMenuCommand> {
+    private func statusMenuRenderer(status: Status?, notification: MastodonNotification?, request: NotificationRequest?, id: ItemID, selectableBody: PostBodyView?, emojis: CustomEmojiMenus) -> MenuRenderer<StatusMenuCommand> {
         MenuRenderer { [weak self, weak selectableBody] command in
             switch command {
             case .status(let action):
@@ -105,6 +114,9 @@ extension TimelineViewController {
             case .followRequest(let decision):
                 guard let notification else { return }
                 self?.onFollowRequestDecision?(decision, notification)
+            case .notificationRequest(let decision):
+                guard let request else { return }
+                self?.onNotificationRequestDecision?(decision, request)
             case .user(let user, let command):
                 guard let self else { return }
                 makeUserMenu(for: user, id: id).perform(command, openProfile: openProfile(of: user))

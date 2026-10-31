@@ -30,6 +30,12 @@ public enum AppDestination: Equatable, Sendable {
     case scheduled
     /// `operation-status`。「操作の状況」の一覧を開く。
     case operationStatus
+    /// `notification-requests`。通知のタブに、保留中の通知の一覧を開く。
+    case notificationRequests
+    /// `notification-request?id=<保留中の通知のID>`。通知のタブに、保留中の通知の一覧と、その人からの通知を重ねて開く。
+    case notificationRequest(id: String)
+    /// `notification-policy`。通知のフィルタリングの設定を開く。
+    case notificationPolicy
     /// `note?acct=<ハンドル>`。その人のプロフィールに書く、自分にしか見えないメモの画面を開く。
     case note(acct: String)
     /// `report?acct=<ハンドル>`。その人を通報する画面を開く。送らない限りサーバーに届かない。
@@ -105,6 +111,9 @@ public enum AppDestination: Equatable, Sendable {
         case .accountHashtag: "account hashtag"
         case .scheduled: "scheduled"
         case .operationStatus: "operation status"
+        case .notificationRequests: "notification requests"
+        case .notificationRequest: "notification request"
+        case .notificationPolicy: "notification policy"
         case .note: "note"
         case .report: "report"
         case .compose: "compose screen"
@@ -146,6 +155,9 @@ public enum AppDestination: Equatable, Sendable {
         case ("account-hashtag", ""): query("acct").flatMap { acct in query("name").map { .accountHashtag(acct: acct, name: $0) } }
         case ("scheduled", ""): .scheduled
         case ("operation-status", ""): .operationStatus
+        case ("notification-requests", ""): .notificationRequests
+        case ("notification-request", ""): query("id").map { .notificationRequest(id: $0) }
+        case ("notification-policy", ""): .notificationPolicy
         case ("note", ""): query("acct").map { .note(acct: $0) }
         case ("report", ""): query("acct").map { .report(acct: $0) }
         case ("compose", "tools"): .compose(.tools)
@@ -185,6 +197,9 @@ public enum AppDestination: Equatable, Sendable {
         case .accountHashtag(let acct, let name): ("account-hashtag", nil, [("acct", acct), ("name", name)])
         case .scheduled: ("scheduled", nil, [])
         case .operationStatus: ("operation-status", nil, [])
+        case .notificationRequests: ("notification-requests", nil, [])
+        case .notificationRequest(let id): ("notification-request", nil, [("id", id)])
+        case .notificationPolicy: ("notification-policy", nil, [])
         case .note(let acct): ("note", nil, [("acct", acct)])
         case .report(let acct): ("report", nil, [("acct", acct)])
         case .compose(.tools): ("compose", "tools", [])

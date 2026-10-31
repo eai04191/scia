@@ -98,6 +98,13 @@ struct StatusMenuTreeTests {
         #expect(MenuNodeTests.describe(single?.children ?? []) == "通知を削除")
     }
 
+    /// 保留中の通知の行では、受け入れると無視を先に置き、その下にユーザーのメニューを並べる。ユーザーのメニューに出す項目がなければ2つだけにする。
+    @Test func notificationRequestMenuPutsAnswersFirst() {
+        let user = MenuNode<StatusMenuCommand>.submenu("@bob", [.action("プロフィール", .openThread)])
+        #expect(MenuNodeTests.describe(StatusMenuTree.notificationRequestMenu(user: user).children) == "受け入れる,無視!|@bob[プロフィール]")
+        #expect(MenuNodeTests.describe(StatusMenuTree.notificationRequestMenu(user: nil).children) == "受け入れる,無視!")
+    }
+
     /// 「その他」より下の項目はサブメニューに入る。非表示の項目は出さず、区切り線で分けたまとまりに従う。
     @Test func itemsBelowMoreGoIntoSubmenu() {
         let layout = MenuLayout<StatusMenuItem>(elements: [

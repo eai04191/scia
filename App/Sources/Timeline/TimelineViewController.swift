@@ -33,6 +33,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onStatusAction: ((StatusAction, Status) -> Void)?
     /// フォローリクエストの通知のメニューで、承認か却下が選ばれたときに、その通知を渡して呼ぶ。
     var onFollowRequestDecision: ((FollowRequestDecision, MastodonNotification) -> Void)?
+    /// 保留中の通知の行で、受け入れるか無視が選ばれたときに、そのまとまりを渡して呼ぶ。nilなら行をスワイプできない。
+    var onNotificationRequestDecision: ((NotificationRequestDecision, NotificationRequest) -> Void)?
+    /// 保留中の通知の行がタップされたときに呼ぶ。その人からの通知を開く。
+    var onOpenNotificationRequest: ((NotificationRequest) -> Void)?
     /// 通知のメニューで、通知の削除が選ばれたときに、その通知を渡して呼ぶ。
     var onDismissNotification: ((MastodonNotification) -> Void)?
     /// まとめた通知の「ほか3人」が押されたときに呼ぶ。通知を送った人の一覧を開く。
@@ -481,6 +485,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             case .status(let status), .pinned(let status): !Self.emojiURLs(of: status, quoteSources: quoteSourceChanges).isDisjoint(with: urls)
             case .notification(let notification): !Self.emojiURLs(of: notification, quoteSources: quoteSourceChanges).isDisjoint(with: urls)
             case .account(let account): !Set(account.emojis.map(\.staticUrl)).isDisjoint(with: urls)
+            case .notificationRequest(let request): !Set(request.account.emojis.map(\.staticUrl)).isDisjoint(with: urls)
             case .gap, .unreadable, nil: false
             }
         }
@@ -1081,6 +1086,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         case .pinned(let id): "pinned-\(id)"
         case .unreadable(let id): "unreadable-\(id)"
         case .account(let id): "account-\(id)"
+        case .notificationRequest(let id): "notificationRequest-\(id)"
         }
     }
 
@@ -1130,7 +1136,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             let statuses: [Status] = switch entry {
             case .status(let status), .pinned(let status): [status, status.reblog].compactMap(\.self)
             case .notification(let notification): [notification.status, notification.status?.reblog].compactMap(\.self)
-            case .account, .gap, .unreadable: []
+            case .account, .notificationRequest, .gap, .unreadable: []
             }
             for status in statuses {
                 if let mention = status.mentions.first(where: { $0.url == url }) {
@@ -1148,6 +1154,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             case .status(let status), .pinned(let status): [status.account, status.reblog?.account].compactMap(\.self)
             case .notification(let notification): notification.sampleAccounts + [notification.status?.account, notification.status?.reblog?.account].compactMap(\.self)
             case .account(let account): [account]
+            case .notificationRequest(let request): [request.account]
             case .gap, .unreadable: []
             }
             if let account = accounts.first(where: { $0.id == id }) {
@@ -1194,14 +1201,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             // 固定投稿は、同じ投稿が下の一覧にも並ぶことがあり、IDでは見分けられない。上にある固定投稿の方へ移る。
             case .status(let status), .pinned(let status): status.id == statusID
             case .notification(let notification): notification.status?.id == statusID
-            case .gap, .unreadable, .account, nil: false
+            case .gap, .unreadable, .account, .notificationRequest, nil: false
             }
         }
         let found = chosen ?? ids.first { id in
             switch entries[id] {
             case .status(let status), .pinned(let status): status.displayed.id == displayedID
             case .notification(let notification): notification.status?.displayed.id == displayedID
-            case .gap, .unreadable, .account, nil: false
+            case .gap, .unreadable, .account, .notificationRequest, nil: false
             }
         }
         guard let found, let indexPath = dataSource.indexPath(for: found) else { return false }
@@ -1510,6 +1517,13 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             }
             return separator
         }
+        // 保留中の通知の行は、右へスワイプで受け入れ、左へスワイプで無視する。決まりはdocs/notification-filter.mdにある。
+        configuration.leadingSwipeActionsConfigurationProvider = { [weak self] indexPath in
+            self?.notificationRequestSwipe(at: indexPath, .accept)
+        }
+        configuration.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
+            self?.notificationRequestSwipe(at: indexPath, .dismiss)
+        }
         return UICollectionViewCompositionalLayout { _, environment in
             let section = NSCollectionLayoutSection.list(using: configuration, layoutEnvironment: environment)
             // plainのリストはフッターを表示範囲の下端に貼り付ける。貼り付いたフッターは、中身がなくてもタブバーのすぐ上を覆ってタップを吸うため、一覧の末尾に置く。
@@ -1518,6 +1532,31 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             }
             return section
         }
+    }
+
+    /// 保留中の通知の行のスワイプ。ほかの行ではnil。行を消すのは送れてからなので、スワイプした行はいったん戻す。
+    private func notificationRequestSwipe(at indexPath: IndexPath, _ decision: NotificationRequestDecision) -> UISwipeActionsConfiguration? {
+        guard let id = dataSource.itemIdentifier(for: indexPath), case .notificationRequest(let request) = entries[id], let onDecision = onNotificationRequestDecision else { return nil }
+        let action = switch decision {
+        case .accept:
+            UIContextualAction(style: .normal, title: "受け入れる") { _, _, completion in
+                onDecision(.accept, request)
+                completion(false)
+            }
+        case .dismiss:
+            UIContextualAction(style: .destructive, title: "無視") { _, _, completion in
+                onDecision(.dismiss, request)
+                completion(false)
+            }
+        }
+        switch decision {
+        case .accept:
+            action.image = UIImage(systemName: "checkmark")
+            action.backgroundColor = .systemGreen
+        case .dismiss:
+            action.image = UIImage(systemName: "xmark")
+        }
+        return UISwipeActionsConfiguration(actions: [action])
     }
 
     /// 区切り線を引き始める、行の左端からの長さ。行の本文の左端にする。
@@ -1530,7 +1569,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         case .notification(let notification):
             // メンションなどは投稿の行として描くので、投稿と同じ。ほかの通知の行は、アイコンの列の右に文字を置く。
             return notification.layout == .post && notification.status != nil && settings.appearance.wrapsBelowAvatar ? margin : textColumn
-        case .account:
+        case .account, .notificationRequest:
             return textColumn
         case .gap, .unreadable:
             // システムのリストの部品で組む行。任せると、すき間の行は行の余白から、読めなかった投稿の行は記号の右の文字から引き、右端も手前で止まって投稿の行の線と揃わないため、文字の列から引く。
@@ -1556,6 +1595,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             cell.contentConfiguration = unreadableContentConfiguration(for: item, base: cell.defaultContentConfiguration())
         case .account(let account):
             cell.contentConfiguration = accountConfiguration(for: account, base: cell.defaultContentConfiguration())
+        case .notificationRequest(let request):
+            cell.contentConfiguration = notificationRequestConfiguration(for: request, base: cell.defaultContentConfiguration())
         }
     }
 
@@ -1931,7 +1972,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         case (.gap, _): true
         case (_, .unreadable(let item)): item.url != nil
         // 投稿、通知、人の一覧の行は、タップに選んだ操作を行う。既定の操作が行えない行（スレッドの中心の投稿、投稿のない通知）は、今どおり押せないままにする。
-        case (_, .status), (_, .pinned), (_, .notification), (_, .account): rowTarget(at: indexPath)?.acceptsTap ?? false
+        case (_, .status), (_, .pinned), (_, .notification), (_, .account), (_, .notificationRequest): rowTarget(at: indexPath)?.acceptsTap ?? false
         default: false
         }
     }

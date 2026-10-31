@@ -32,6 +32,10 @@ struct AppDestinationTests {
             ("scia://account-hashtag?acct=bob&name=scia", .accountHashtag(acct: "bob", name: "scia")),
             ("scia://scheduled", .scheduled),
             ("scia://operation-status", .operationStatus),
+            ("scia://notification-requests", .notificationRequests),
+            ("scia://notification-request?id=7", .notificationRequest(id: "7")),
+            ("scia://notification-request", nil),
+            ("scia://notification-policy", .notificationPolicy),
             ("scia://note?acct=bob%40example.com", .note(acct: "bob@example.com")),
             ("scia://report?acct=bob", .report(acct: "bob")),
             ("scia://compose/tools", .compose(.tools)),
@@ -65,6 +69,7 @@ struct AppDestinationTests {
         + [.accounts(.followers(accountID: nil)), .accounts(.followers(accountID: "9")), .accounts(.following(accountID: nil)), .accounts(.following(accountID: "9"))]
         + [.accounts(.favourited(statusID: "123")), .accounts(.reblogged(statusID: "123"))]
         + [.hashtag(name: "日本語 & tag"), .accountHashtag(acct: "bob@example.com", name: "scia"), .scheduled, .operationStatus]
+        + [.notificationRequests, .notificationRequest(id: "7"), .notificationPolicy]
         + [.note(acct: "bob@example.com"), .report(acct: "bob+1@example.com")]
         + [.compose(.tools), .compose(.language), .compose(.schedule), .compose(.emoji), .compose(.mediaPicker)]
         + [.compose(.attachment(index: 0)), .compose(.altText(index: 2)), .compose(.crop(index: 3))]
@@ -97,6 +102,7 @@ struct AppDestinationTests {
     enum Kind: CaseIterable {
         case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, profile, myProfile, profileEdit
         case thread, editHistory, followers, following, favourited, reblogged, hashtag, accountHashtag, scheduled, operationStatus
+        case notificationRequests, notificationRequest, notificationPolicy
         case note, report, composeTools, composeLanguage, composeSchedule, composeEmoji, composeMediaPicker, composeAttachment, composeAltText, composeCrop
     }
 
@@ -121,6 +127,9 @@ struct AppDestinationTests {
         case .accountHashtag: .accountHashtag
         case .scheduled: .scheduled
         case .operationStatus: .operationStatus
+        case .notificationRequests: .notificationRequests
+        case .notificationRequest: .notificationRequest
+        case .notificationPolicy: .notificationPolicy
         case .note: .note
         case .report: .report
         case .compose(.tools): .composeTools

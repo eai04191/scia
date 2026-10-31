@@ -13,6 +13,8 @@ final class SessionController {
     private let local: FeedTimelineController
     private let federated: FeedTimelineController
     private let notifications: NotificationsController
+    /// 通知のフィルタリングの設定と、保留中の通知の人数。通知のタブのボタンと設定の画面が同じものを見る。
+    private let notificationPolicy: NotificationPolicyModel
     private let bookmarks: SavedStatusesController
     private let favourites: SavedStatusesController
     /// 予約した投稿の一覧のタブ。
@@ -244,6 +246,7 @@ final class SessionController {
         }
         notifications.viewController.onAppearing = { [weak notifications] in notifications?.startIfNeeded() }
         self.notifications = notifications
+        notificationPolicy = NotificationPolicyModel(client: client, tasks: tasks.child()) { forward() }
         let mediaFormats = UnprocessableMediaFormats(defaults: .standard, instance: credential.instance)
         let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog, mediaFormats: mediaFormats)
         self.diagnostics = diagnostics
@@ -564,11 +567,12 @@ final class SessionController {
         composer.onShowScheduledStatuses = { [weak self] in self?.showScheduledStatuses() }
         scheduled.onRewrite = { [weak self] status in self?.confirmRewriting(status) }
         installAccountButton(on: scheduled.viewController)
+        installNotificationRequests()
         streamingHub.onEvent = { [weak self] event in
             switch event {
             case .statusUpdate(let edited): self?.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
             case .delete(let id): self?.changeQuoteSources(.status(id)) { $0.delete(id) }
-            case .update, .notification, .filtersChanged, .unhandled: break
+            case .update, .notification, .filtersChanged, .notificationsMerged, .unhandled: break
             }
         }
         xPosts.onLoad = { [weak self] id in
@@ -757,7 +761,11 @@ final class SessionController {
             let recent = UIAction(title: "操作の状況", image: UIImage(systemName: "list.bullet.clipboard")) { _ in
                 self?.showOperationStatus()
             }
-            return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile, recent])] + accountMenu().children)
+            // サーバー上のアカウントの設定なので、アプリの設定ではなく、アカウントのメニューから開く。
+            let policy = UIAction(title: "通知のフィルタリング", image: UIImage(systemName: "line.3.horizontal.decrease.circle")) { _ in
+                self?.showNotificationPolicy()
+            }
+            return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile, recent, policy])] + accountMenu().children)
         }
     }
 
@@ -1262,6 +1270,106 @@ final class SessionController {
         configure(viewController)
         source.navigationController?.pushViewController(viewController, animated: true)
         controller.start(purpose: .action)
+    }
+
+    // MARK: - 保留中の通知
+
+    /// 通知のタブの右上に保留中の通知を開くボタンを置き、人数を添える。決まりはdocs/notification-filter.mdの「入口」にある。
+    private func installNotificationRequests() {
+        let item = UIBarButtonItem(image: UIImage(systemName: "tray"), primaryAction: UIAction { [weak self] _ in
+            guard let self else { return }
+            openNotificationRequests(from: notifications.viewController)
+        })
+        notifications.viewController.screenBarItems = [item]
+        notifications.onReload = { [weak notificationPolicy] in notificationPolicy?.reload(purpose: .display) }
+        notificationPolicy.onFailure = { [weak self] reason in
+            guard let self else { return }
+            let title = "通知のフィルタリングを変えられませんでした"
+            operationStatus.recordFailure(title: title, reason: reason)
+            showFailureNotice(.interactionFailure(title: title) { [weak self] in
+                self?.presentAlert(title: title, message: reason.text)
+            })
+        }
+        observePendingRequests(item)
+    }
+
+    /// 人数が変わるたびに、ボタンの数字と読み上げを直す。サーバーは100で止めるので、100なら「100+」にする。
+    private func observePendingRequests(_ item: UIBarButtonItem) {
+        withObservationTracking {
+            let count = notificationPolicy.pendingRequestsCount
+            let text = count >= NotificationPolicyModel.pendingRequestsCap ? "\(count)+" : "\(count)"
+            item.badge = count == 0 ? nil : .string(text)
+            item.accessibilityLabel = count == 0 ? "保留中の通知" : "保留中の通知、\(text)人"
+        } onChange: { [weak self, weak item] in
+            Task(.withoutRequests) { @MainActor [weak self, weak item] in
+                guard let self, let item, !tasks.isClosed else { return }
+                observePendingRequests(item)
+            }
+        }
+    }
+
+    /// 通知のタブを選んで、保留中の通知の一覧を開く。通知のタブを並べていなければ何もしない。
+    @discardableResult
+    private func openNotificationRequestsInTab() -> (NotificationRequestsController, TimelineViewController)? {
+        guard tabs.placement.location(of: .notifications) != .disabled else { return nil }
+        tabs.show(.notifications)
+        return openNotificationRequests(from: notifications.viewController)
+    }
+
+    /// 保留中の通知の一覧を開く。
+    @discardableResult
+    private func openNotificationRequests(from source: UIViewController) -> (NotificationRequestsController, TimelineViewController) {
+        let (controller, viewController) = NotificationRequestsController.make(client: client, tasks: tasks.child(), openPolicy: { [weak self] in
+            self?.showNotificationPolicy()
+        }) { [weak self] in
+            self?.reportUnauthorized()
+        }
+        controller.model.onAnswered = { [weak self] decision in
+            guard let self else { return }
+            notificationPolicy.requestsDidChange()
+            if decision == .accept {
+                notifications.didAcceptRequest()
+            }
+        }
+        controller.model.onFailure = { [weak self] decision, reason in
+            guard let self else { return }
+            let title = switch decision {
+            case .accept: "通知を受け入れられませんでした"
+            case .dismiss: "通知を無視できませんでした"
+            }
+            operationStatus.recordFailure(title: title, reason: reason)
+            showFailureNotice(.interactionFailure(title: title) { [weak self] in
+                self?.presentAlert(title: title, message: reason.text)
+            })
+        }
+        viewController.onOpenNotificationRequest = { [weak self, weak controller, weak viewController] request in
+            guard let self, let controller, let viewController else { return }
+            openAccountNotifications(of: request, in: controller.model, from: viewController)
+        }
+        configure(viewController)
+        source.navigationController?.pushViewController(viewController, animated: true)
+        controller.model.start(purpose: .action)
+        return (controller, viewController)
+    }
+
+    /// 保留中の通知の1人分の、その人からの通知を開く。受け入れるか無視が済んだら、一覧の画面に戻る。
+    private func openAccountNotifications(of request: NotificationRequest, in requests: NotificationRequestsModel, from source: UIViewController) {
+        let (controller, viewController) = AccountNotificationsController.make(request: request, client: client, tasks: tasks.child(), answer: { [weak requests] decision in
+            guard let requests else { return false }
+            await requests.answer(request, decision)?.value
+            return requests.isAnswered(request.id)
+        }) { [weak self] in
+            self?.reportUnauthorized()
+        }
+        notifications.track(controller)
+        configure(viewController)
+        source.navigationController?.pushViewController(viewController, animated: true)
+        controller.model.start(purpose: .action)
+    }
+
+    /// 通知のフィルタリングの設定をシートで開く。
+    func showNotificationPolicy(from presenter: UIViewController? = nil) {
+        (presenter ?? topViewController).present(NotificationPolicyView.makeSheet(model: notificationPolicy), animated: true)
     }
 
     // MARK: - スレッド
@@ -2696,6 +2804,22 @@ final class SessionController {
             showScheduledStatuses()
         case .operationStatus:
             showOperationStatus()
+        case .notificationRequests:
+            openNotificationRequestsInTab()
+        case .notificationRequest(let id):
+            guard let (controller, viewController) = openNotificationRequestsInTab() else { return }
+            let client = client
+            tasks.run(.action) { [weak self, weak controller, weak viewController] in
+                do {
+                    let request = try await client.notificationRequest(id)
+                    guard let self, let controller, let viewController else { return }
+                    openAccountNotifications(of: request, in: controller.model, from: viewController)
+                } catch {
+                    self?.logger.error("open notification request failed: \(SciaLog.describe(error), privacy: .public)")
+                }
+            }
+        case .notificationPolicy:
+            showNotificationPolicy()
         case .note(let acct):
             let client = client
             let resolve = resolvingAccount(acct)
@@ -3025,6 +3149,9 @@ final class SessionController {
             feed.enterForeground()
         }
         notifications.enterForeground()
+        if hasStarted {
+            notificationPolicy.reload(purpose: .display)
+        }
         for list in savedLists {
             list.enterForeground()
         }

@@ -16,15 +16,21 @@ extension TimelineViewController {
             case .notification(let notification):
                 keys.formUnion(avatarKeys(for: notification))
             case .account(let account):
-                let content = avatarContent(of: account)
-                if let url = content.url {
-                    keys.insert(AvatarView.key(url: url, animates: content.animates, side: settings.value(of: AppearanceCatalog.avatarSize), scale: traitCollection.displayScale))
-                }
+                keys.formUnion(rowAvatarKeys(of: account))
+            case .notificationRequest(let request):
+                keys.formUnion(rowAvatarKeys(of: request.account))
             case .gap, .unreadable:
                 break
             }
         }
         return keys
+    }
+
+    /// 人の一覧の行と保留中の通知の行に出す、その人のアイコン。
+    private func rowAvatarKeys(of account: Account) -> Set<AvatarImageKey> {
+        let content = avatarContent(of: account)
+        guard let url = content.url else { return [] }
+        return [AvatarView.key(url: url, animates: content.animates, side: settings.value(of: AppearanceCatalog.avatarSize), scale: traitCollection.displayScale)]
     }
 
     /// 投稿した人のアイコンと、ブーストなら名前の上の行に出すブーストした人のアイコン。

@@ -24,6 +24,7 @@ extension TimelineEntry {
         case .notification: "notification"
         case .unreadable: "unreadable"
         case .account: "account"
+        case .notificationRequest: "notificationRequest"
         }
     }
 }

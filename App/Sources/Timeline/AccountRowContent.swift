@@ -2,10 +2,13 @@ import SciaCore
 import UIKit
 
 /// 人の一覧の行の中身。左にアイコン、右に表示名とハンドルを2行で並べる。アイコンと文字の列は、投稿のセルと同じ位置に置く。
+/// 保留中の通知の行では、ハンドルの下に、保留している通知の件数を3行目に足す。
 struct AccountRowConfiguration: UIContentConfiguration {
     var avatar: AvatarView.Content
     var name: NSAttributedString
     var handle: NSAttributedString
+    /// ハンドルの下に足す行。なければnil。
+    var detail: NSAttributedString?
     var margins: NSDirectionalEdgeInsets
     var avatarSize: CGFloat
     /// アイコンの列と、文字の列のあいだ。
@@ -29,6 +32,7 @@ final class AccountRowView: UIView, UIContentView {
     private let avatarView: AvatarView
     private let nameLabel = FadingLabel()
     private let handleLabel = UILabel()
+    private let detailLabel = UILabel()
     /// 名前とハンドルの2行を囲む枠。アイコンの縦の中央に寄せるのに使う。
     private let textGuide = UILayoutGuide()
     private var current: AccountRowConfiguration
@@ -49,7 +53,8 @@ final class AccountRowView: UIView, UIContentView {
         super.init(frame: .zero)
         // 長い名前は投稿のセルと同じく行末をぼかし、ハンドルは末尾を省く。
         handleLabel.lineBreakMode = .byTruncatingTail
-        for view in [avatarView, nameLabel, handleLabel] as [UIView] {
+        detailLabel.lineBreakMode = .byTruncatingTail
+        for view in [avatarView, nameLabel, handleLabel, detailLabel] as [UIView] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -71,7 +76,9 @@ final class AccountRowView: UIView, UIContentView {
         nameLabel.attributedText = configuration.name
         nameLabel.fadeWidth = configuration.nameFadeWidth
         handleLabel.attributedText = configuration.handle
-        accessibilityLabel = [configuration.name.string, configuration.handle.string]
+        detailLabel.attributedText = configuration.detail
+        detailLabel.isHidden = configuration.detail == nil
+        accessibilityLabel = [configuration.name.string, configuration.handle.string, configuration.detail?.string ?? ""]
             .map { $0.replacingOccurrences(of: "\u{FFFC}", with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: "、")
@@ -81,7 +88,9 @@ final class AccountRowView: UIView, UIContentView {
         let textLeading = margins.leading + configuration.avatarSize + configuration.avatarSpacing
         // 一覧は行の高さを画素に丸めるため、下の余白は少し縮められるようにしておく。
         let bottom = bottomAnchor.constraint(greaterThanOrEqualTo: avatarView.bottomAnchor, constant: margins.bottom)
-        let textBottom = bottomAnchor.constraint(greaterThanOrEqualTo: handleLabel.bottomAnchor, constant: margins.bottom)
+        // 3行目があれば、文字の列の下端は3行目にする。
+        let lastLabel = configuration.detail == nil ? handleLabel : detailLabel
+        let textBottom = bottomAnchor.constraint(greaterThanOrEqualTo: lastLabel.bottomAnchor, constant: margins.bottom)
         let fit = bottomAnchor.constraint(equalTo: avatarView.bottomAnchor, constant: margins.bottom)
         fit.priority = .defaultLow
         let centered = textGuide.centerYAnchor.constraint(equalTo: avatarView.centerYAnchor)
@@ -93,7 +102,7 @@ final class AccountRowView: UIView, UIContentView {
             avatarView.heightAnchor.constraint(equalToConstant: configuration.avatarSize),
             // 2行の文字を、アイコンの縦の中央に寄せる。文字がアイコンより高いとき（大きな文字の設定など）は、上から並べて行を伸ばす。
             textGuide.topAnchor.constraint(equalTo: nameLabel.topAnchor),
-            textGuide.bottomAnchor.constraint(equalTo: handleLabel.bottomAnchor),
+            textGuide.bottomAnchor.constraint(equalTo: lastLabel.bottomAnchor),
             centered,
             nameLabel.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: margins.top),
             nameLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: textLeading),
@@ -101,6 +110,9 @@ final class AccountRowView: UIView, UIContentView {
             handleLabel.topAnchor.constraint(equalTo: nameLabel.bottomAnchor),
             handleLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
             handleLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.trailing),
+            detailLabel.topAnchor.constraint(equalTo: handleLabel.bottomAnchor),
+            detailLabel.leadingAnchor.constraint(equalTo: nameLabel.leadingAnchor),
+            detailLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.trailing),
             bottom,
             textBottom,
             fit,
@@ -130,5 +142,15 @@ extension TimelineViewController {
             avatarImages: avatarImages,
             emojiImages: settings.appearance.animatesCustomEmojis ? emojiImages : nil
         )
+    }
+
+    /// 保留中の通知の行。人の一覧の行に、保留している通知の件数を足す。
+    func notificationRequestConfiguration(for request: NotificationRequest, base: UIListContentConfiguration) -> AccountRowConfiguration {
+        var configuration = accountConfiguration(for: request.account, base: base)
+        configuration.detail = NSAttributedString(string: "通知\(request.notificationsCount.formatted())件", attributes: [
+            .font: base.secondaryTextProperties.font,
+            .foregroundColor: UIColor.secondaryLabel,
+        ])
+        return configuration
     }
 }

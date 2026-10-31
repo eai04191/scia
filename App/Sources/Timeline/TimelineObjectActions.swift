@@ -26,6 +26,12 @@ extension TimelineViewController {
             return rowStatusTarget(.notification, entry: entry, id: id, opening: notification.status)
         case .account(let account):
             return userTarget(for: account, id: id)
+        case .notificationRequest(let request):
+            return NotificationRequestTarget(
+                open: { [weak self] in self?.onOpenNotificationRequest?(request) },
+                buildMenu: { [weak self] in self?.contextMenu(for: entry, id: id) },
+                lifecycle: rowMenuLifecycle
+            )
         case .gap, .unreadable:
             return nil
         }
@@ -116,5 +122,33 @@ extension TimelineViewController {
             willEnd: { [weak self] in self?.contextMenuIcons.menuWillEnd() },
             didHide: { [weak self] in self?.menuDidHide() }
         )
+    }
+}
+
+/// 保留中の通知の行。タップでその人からの通知を開き、長押しで「受け入れる」「無視」とユーザーのメニューを出す。
+/// どちらも並びの設定に載せない固定の操作なので、タップと長押しの設定には従わない。決まりはdocs/notification-filter.mdにある。
+@MainActor
+private struct NotificationRequestTarget: ObjectActionTarget {
+    let open: () -> Void
+    let buildMenu: () -> UIMenu?
+    let lifecycle: MenuLifecycle
+
+    func menu() -> UIMenu? {
+        buildMenu()
+    }
+
+    var acceptsTap: Bool { true }
+
+    /// 長押しは、一覧の長押しのメニューで出す。
+    func performsLongPress() -> Bool { false }
+
+    func perform(_ trigger: ObjectTrigger, in view: UIView, at point: CGPoint) {
+        switch trigger {
+        case .tap:
+            open()
+        case .longPress:
+            guard let menu = menu() else { return }
+            TapMenuPresenter.shared.present(menu, in: view, at: point, lifecycle: lifecycle)
+        }
     }
 }

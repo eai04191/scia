@@ -20,8 +20,15 @@ final class NotificationsController {
     }
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
     var runningTaskCount: Int { model.runningTaskCount }
+    /// 一覧を最初から読み込んだとき、引っぱって読み直したときに呼ぶ。保留中の通知の人数を読み直すのに使う。
+    var onReload: () -> Void {
+        get { model.onReload }
+        set { model.onReload = newValue }
+    }
     /// 一覧を最上部からさらに引っぱったときに見せる、ストリーミングの状態。
     private let streamingStatusView = StreamingStatusPullView()
+    /// 開いている、保留中の通知の1人分の画面。通知の一覧と同じく、投稿の操作や削除を反映する。
+    private let accountScreens = NSHashTable<AccountNotificationsController>.weakObjects()
 
     init(
         client: MastodonClient,
@@ -108,33 +115,61 @@ final class NotificationsController {
     }
     #endif
 
+    /// 保留中の通知の1人分の画面を開いた。閉じるまで、投稿の操作や削除を反映する。
+    func track(_ screen: AccountNotificationsController) {
+        accountScreens.add(screen)
+    }
+
+    /// 保留中の通知を受け入れた。サーバーが取り込み終えたら一覧を読み直す。
+    func didAcceptRequest() {
+        model.didAcceptRequest()
+    }
+
     /// お気に入りなどの操作の結果を反映する。
     func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
         model.updateStatus(id, transform)
+        for screen in accountScreens.allObjects {
+            screen.updateStatus(id, transform)
+        }
     }
 
     /// 削除した投稿についての通知を除く。
     func removeStatus(_ id: Status.ID) {
         model.removeStatus(id)
+        for screen in accountScreens.allObjects {
+            screen.removeStatus(id)
+        }
     }
 
     /// ミュートしたハッシュタグの付いた投稿の通知を除く。
     func setTag(_ name: String, excluded: Bool) {
         model.setTag(name, excluded: excluded)
+        for screen in accountScreens.allObjects {
+            screen.setTag(name, excluded: excluded)
+        }
     }
 
     /// 通知を隠すミュートか、ブロックをした相手からの通知を除く。
     func setAccount(_ id: String, excluded: Bool) {
         model.setAccount(id, excluded: excluded)
+        for screen in accountScreens.allObjects {
+            screen.setAccount(id, excluded: excluded)
+        }
     }
 
     /// 使う人が削除した通知を除く。
     func removeNotification(_ notification: MastodonNotification) {
         model.removeNotification(notification)
+        for screen in accountScreens.allObjects {
+            screen.removeNotification(notification)
+        }
     }
 
     /// 片づけたフォローリクエストの通知と、同じユーザーからのリクエストの通知を除く。
     func removeFollowRequests(answering request: MastodonNotification) {
         model.removeFollowRequests(answering: request)
+        for screen in accountScreens.allObjects {
+            screen.removeFollowRequests(answering: request)
+        }
     }
 }

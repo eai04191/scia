@@ -42,6 +42,8 @@ public enum StatusMenuCommand {
     case url(URLMenuCommand)
     /// フォローリクエストの通知の、承認と却下。
     case followRequest(FollowRequestDecision)
+    /// 保留中の通知の行の、受け入れると無視。
+    case notificationRequest(NotificationRequestDecision)
     /// ユーザーのメニューのサブメニューの項目。
     case user(MenuUser, UserMenuCommand)
     /// ハッシュタグのメニューのサブメニューの項目。
@@ -118,6 +120,17 @@ public struct StatusMenuTree {
             ]), at: 0)
         }
         return Built(root: children.isEmpty ? nil : .submenu("", children), shownUserIDs: shownUserIDs)
+    }
+
+    /// 保留中の通知の行のメニュー。「受け入れる」と「無視」を1つのまとまりで置き、その下にその人のユーザーのメニューを並べる。
+    /// 2つは並びの設定に載せない固定の項目。決まりはdocs/notification-filter.mdにある。
+    /// - Parameter user: その人のユーザーのメニュー。出す項目がなければnil。
+    public static func notificationRequestMenu(user: MenuNode<StatusMenuCommand>?) -> MenuNode<StatusMenuCommand> {
+        let answers = MenuNode<StatusMenuCommand>.group([
+            .action("受け入れる", icon: .symbol("checkmark"), .notificationRequest(.accept)),
+            .action("無視", icon: .symbol("xmark"), isDestructive: true, .notificationRequest(.dismiss)),
+        ])
+        return .submenu("", [answers] + (user.map { [$0] } ?? []))
     }
 
     /// - Parameter users: ユーザーのメニューのサブメニューを組む。まだ出していない人だけを組む。

@@ -104,6 +104,13 @@ public struct MastodonClient: Sendable {
         return NotificationRequestPage(requests: requests.elements, nextMaxID: link?.queryValue("max_id", of: "next"))
     }
 
+    /// 保留中の通知の1人分のまとまり。
+    /// https://docs.joinmastodon.org/methods/notifications/#get-one-request
+    public func notificationRequest(_ id: String) async throws -> NotificationRequest {
+        let key = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? id
+        return try await get(NotificationRequest.self, path: "api/v1/notifications/requests/\(key)", query: []).0
+    }
+
     /// 保留中の通知に答える。受け入れると、サーバーはあとで保留していた通知を通知の一覧に戻し、終えたらストリーミングの`notifications_merged`で知らせる。
     /// 応答の中身は使わない。
     /// https://docs.joinmastodon.org/methods/notifications/#accept-request
