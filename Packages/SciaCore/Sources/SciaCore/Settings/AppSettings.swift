@@ -218,6 +218,12 @@ public final class AppSettings {
         didSet { defaults.set(composeToolLayout.tokens, forKey: Keys.composeToolLayout) }
     }
 
+    /// 切り替えタブのメニューに、タブの設定の画面を開く「カスタマイズ」を出す。タブの並びの項目はどれもタブになるため、並びに載せず、ここで出すかを決める。
+    /// 決まりはdocs/tabs.mdにある。
+    public var showsTabMenuCustomize: Bool {
+        didSet { defaults.set(showsTabMenuCustomize, forKey: Keys.showsTabMenuCustomize) }
+    }
+
     /// 書いていないときに、空の投稿欄を隠す。書くときは、一覧の右上のボタンで出す。
     /// 下書きや返信先があるときは、残っていると分かるよう隠さない。
     public var hidesEmptyComposeBar: Bool {
@@ -273,6 +279,7 @@ public final class AppSettings {
         static let tabLayout = "tabLayout"
         static let switchTabItem = "switchTabItem"
         static let hidesEmptyComposeBar = "settings.hidesEmptyComposeBar"
+        static let showsTabMenuCustomize = "settings.showsTabMenuCustomize"
         static let imageUploadSize = "settings.imageUploadSize"
         static let videoUploadSize = "settings.videoUploadSize"
         static let mediaDynamicRange = "settings.mediaDynamicRange"
@@ -310,6 +317,7 @@ public final class AppSettings {
         tabLayouts = AccountScopedDefaults.accountValues(named: Keys.tabLayout, in: defaults).compactMapValues { ($0 as? [String]).map(MenuLayout.init(tokens:)) }
         switchTabItems = AccountScopedDefaults.accountValues(named: Keys.switchTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
         hidesEmptyComposeBar = defaults.object(forKey: Keys.hidesEmptyComposeBar) as? Bool ?? false
+        showsTabMenuCustomize = defaults.object(forKey: Keys.showsTabMenuCustomize) as? Bool ?? true
         // iPhoneの標準の写真（4032×3024）と動画（1080p）はそのまま送られ、それより大きな写真と4Kの動画だけが縮む。
         imageUploadSize = defaults.string(forKey: Keys.imageUploadSize).flatMap(ImageUploadSize.init(rawValue:)) ?? .long4096
         videoUploadSize = defaults.string(forKey: Keys.videoUploadSize).flatMap(VideoUploadSize.init(rawValue:)) ?? .p1080

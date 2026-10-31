@@ -18,7 +18,8 @@ struct MenuLayoutImageTests {
         let controller = MenuLayoutViewController<TabItem>(
             layout: MenuLayout(elements: [.item(.home, isVisible: true), .item(Self.bob, isVisible: true), .more]),
             image: { $0 == Self.bob ? given : nil },
-            imageRevision: 0
+            imageRevision: 0,
+            options: []
         ) { _ in }
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene)

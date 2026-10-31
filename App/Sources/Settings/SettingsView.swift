@@ -297,7 +297,18 @@ struct SettingsView: View {
         switch page {
         case .appearance: AppearanceEditorView(settings: settings)
         case .notificationAppearance: NotificationAppearanceEditorView(settings: settings)
-        case .tabs: MenuLayoutSettingsView(title: "タブ", layout: tabLayoutBinding, image: { [tabIcons] in tabIcons.icon(for: $0)?.menu }, imageRevision: { [tabIcons] in tabIcons.revision })
+        case .tabs:
+            MenuLayoutSettingsView(
+                title: "タブ",
+                layout: tabLayoutBinding,
+                image: { [tabIcons] in tabIcons.icon(for: $0)?.menu },
+                imageRevision: { [tabIcons] in tabIcons.revision },
+                options: [MenuLayoutOption(
+                    title: "メニューに「カスタマイズ」を表示",
+                    footer: "タブバーの最後のタブにまとめた項目を切り替えるメニューに、この画面を開く「カスタマイズ」を出します。",
+                    isOn: $settings.showsTabMenuCustomize
+                )]
+            )
         case .statusActions: ObjectActionsSettingsView(entity: .status, settings: settings)
         case .notificationActions: ObjectActionsSettingsView(entity: .notification, settings: settings)
         case .userActions: ObjectActionsSettingsView(entity: .user, settings: settings)

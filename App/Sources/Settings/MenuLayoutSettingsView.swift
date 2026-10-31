@@ -12,22 +12,34 @@ struct MenuLayoutSettingsView<Item: MenuItemKind & MenuItemPresentable>: View {
     var image: (Item) -> UIImage? = { _ in nil }
     /// `image`の返す画像が変わるたびに変わる値。変わったら行を描き直す。読んだ値の変化をSwiftUIが追えるよう、描くときに読む。
     var imageRevision: () -> Int = { 0 }
+    /// 並びの下に、並びとは別に置くスイッチ。
+    var options: [MenuLayoutOption] = []
 
     var body: some View {
-        MenuLayoutList(layout: $layout, image: image, imageRevision: imageRevision())
+        MenuLayoutList(layout: $layout, image: image, imageRevision: imageRevision(), options: options)
             .ignoresSafeArea()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
     }
 }
 
+/// 並びの画面に、並びとは別に置くスイッチ。1つずつ欄を分け、欄の下に説明を添える。
+/// スイッチの表示は行を作るときに読む。同じ画面を別のウインドウでも開いて片方で切り替えると、もう片方は開き直すまで前の表示のまま残る。
+/// 窓を並べられるMacとiPadでしか起きず、並びの行のように別の窓の変更を受けて描き直す作りを足す手間に見合わないため、扱わない。
+struct MenuLayoutOption {
+    let title: String
+    let footer: String
+    let isOn: Binding<Bool>
+}
+
 private struct MenuLayoutList<Item: MenuItemKind & MenuItemPresentable>: UIViewControllerRepresentable {
     @Binding var layout: MenuLayout<Item>
     let image: (Item) -> UIImage?
     let imageRevision: Int
+    let options: [MenuLayoutOption]
 
     func makeUIViewController(context: Context) -> MenuLayoutViewController<Item> {
-        MenuLayoutViewController(layout: layout, image: image, imageRevision: imageRevision) { layout = $0 }
+        MenuLayoutViewController(layout: layout, image: image, imageRevision: imageRevision, options: options) { layout = $0 }
     }
 
     func updateUIViewController(_ controller: MenuLayoutViewController<Item>, context: Context) {
@@ -47,9 +59,11 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         var element: MenuLayout<Item>.Element
     }
 
-    private enum Section {
+    private enum Section: Hashable {
         case rows
         case actions
+        /// `options`の何番目のスイッチか。
+        case option(Int)
     }
 
     private enum Cell: Hashable {
@@ -57,6 +71,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         case addSeparator
         case addRowSeparator
         case reset
+        case option(Int)
     }
 
     private var rows: [Row]
@@ -71,11 +86,13 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     /// 項目の記号の代わりに出す画像。nilなら項目の記号を出す。
     private let image: (Item) -> UIImage?
     private var imageRevision: Int
+    private let options: [MenuLayoutOption]
 
-    init(layout: MenuLayout<Item>, image: @escaping (Item) -> UIImage?, imageRevision: Int, onChange: @escaping (MenuLayout<Item>) -> Void) {
+    init(layout: MenuLayout<Item>, image: @escaping (Item) -> UIImage?, imageRevision: Int, options: [MenuLayoutOption], onChange: @escaping (MenuLayout<Item>) -> Void) {
         rows = layout.elements.map { Row(element: $0) }
         self.image = image
         self.imageRevision = imageRevision
+        self.options = options
         self.onChange = onChange
         super.init(nibName: nil, bundle: nil)
     }
@@ -160,16 +177,31 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             case .reset:
                 content.text = "最初の並びに戻す"
                 content.textProperties.color = .systemRed
-            case .row:
+            case .row, .option:
                 break
             }
             cell.contentConfiguration = content
         }
+        let optionRegistration = UICollectionView.CellRegistration<UICollectionViewListCell, Int> { [weak self] cell, _, index in
+            guard let option = self?.options[index] else { return }
+            var content = UIListContentConfiguration.cell()
+            content.text = option.title
+            cell.contentConfiguration = content
+            let toggle = UISwitch()
+            toggle.isOn = option.isOn.wrappedValue
+            toggle.addAction(UIAction { action in
+                guard let toggle = action.sender as? UISwitch else { return }
+                option.isOn.wrappedValue = toggle.isOn
+            }, for: .valueChanged)
+            cell.accessories = [.customView(configuration: .init(customView: toggle, placement: .trailing()))]
+        }
         let footerRegistration = UICollectionView.SupplementaryRegistration<UICollectionViewListCell>(
             elementKind: UICollectionView.elementKindSectionFooter
-        ) { footer, _, indexPath in
+        ) { [weak self] footer, _, indexPath in
             var content = UIListContentConfiguration.footer()
-            if indexPath.section == 0 {
+            if case .option(let index) = self?.dataSource?.sectionIdentifier(for: indexPath.section) {
+                content.text = self?.options[index].footer
+            } else if indexPath.section == 0 {
                 content.text = if !Item.supportsSeparators {
                     "右のつまみをドラッグすると並べ替えられます。"
                 } else if Item.supportsRowSeparators {
@@ -187,6 +219,8 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
                 collectionView.dequeueConfiguredReusableCell(using: rowRegistration, for: indexPath, item: id)
             case .addSeparator, .addRowSeparator, .reset:
                 collectionView.dequeueConfiguredReusableCell(using: actionRegistration, for: indexPath, item: item)
+            case .option(let index):
+                collectionView.dequeueConfiguredReusableCell(using: optionRegistration, for: indexPath, item: index)
             }
         }
         dataSource.supplementaryViewProvider = { collectionView, _, indexPath in
@@ -259,6 +293,10 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             [.addSeparator, .reset]
         }
         snapshot.appendItems(actions, toSection: .actions)
+        for index in options.indices {
+            snapshot.appendSections([.option(index)])
+            snapshot.appendItems([.option(index)], toSection: .option(index))
+        }
         dataSource?.apply(snapshot, animatingDifferences: animated) { [weak self] in self?.refreshRowSeparatorNotes() }
     }
 
@@ -387,7 +425,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             rows = Item.defaultLayout.elements.map { Row(element: $0) }
             save()
             applySnapshot(animated: !UIAccessibility.isReduceMotionEnabled)
-        case .row, nil:
+        case .row, .option, nil:
             break
         }
     }

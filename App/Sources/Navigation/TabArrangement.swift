@@ -56,7 +56,7 @@ final class TabArrangement {
         restoredSwitchSelection = restoring
         apply(placement)
         if #available(iOS 27.0, *) {
-            switchTabMenu = SwitchTabMenuInteraction(on: tabBarController.tabBar, isPlaced: { [weak self] in self?.switchSelection != nil }, menuBottom: { [weak self] in self?.switchMenuBottom }, menu: { [weak self] in self?.switchMenu() })
+            switchTabMenu = SwitchTabMenuInteraction(on: tabBarController.tabBar, isPlaced: { [weak self] in self?.switchSelection != nil }, menuBottom: { [weak self] in self?.switchMenuBottom }, menu: { [weak self] in self?.switchMenu(from: .longPress) })
         }
         // Macで窓の幅を変えたときなど、並べられる数が変わったら振り分け直す。
         tabBarController.registerForTraitChanges([UITraitHorizontalSizeClass.self, UITraitUserInterfaceIdiom.self]) { [weak self] (_: UITabBarController, _: UITraitCollection) in
@@ -250,7 +250,7 @@ final class TabArrangement {
                 root.navigationItem.titleMenuProvider = nil
                 continue
             }
-            root.navigationItem.titleMenuProvider = { [weak self] _ in self?.switchMenu() }
+            root.navigationItem.titleMenuProvider = { [weak self] _ in self?.switchMenu(from: .title) }
         }
     }
 
@@ -261,14 +261,32 @@ final class TabArrangement {
         return view.convert(CGPoint(x: frame.minX, y: frame.maxY - InlineComposeController.barSpacing), to: window).y
     }
 
+    /// 切り替えタブのメニューを出す場所。
+    private enum SwitchMenuOrigin {
+        /// 見出し。メニューは下へ開く。
+        case title
+        /// 切り替えタブの長押し。メニューは上へ開く。
+        case longPress
+    }
+
     /// 切り替えタブの中の項目から選ぶメニュー。見出しと、切り替えタブの長押しで出す。
-    private func switchMenu() -> UIMenu {
-        UIMenu(children: placement.switchable.map { candidate in
+    /// タブの設定を開く「カスタマイズ」は、開いた場所から見て指から遠い端に置く。指にいちばん近い位置をタイムラインに使うため。
+    /// タイムラインの並びは、どちらでも設定の並びと同じ順にする。決まりはdocs/tabs.mdにある。
+    private func switchMenu(from origin: SwitchMenuOrigin) -> UIMenu {
+        let timelines = placement.switchable.map { candidate in
             UIAction(title: candidate.title, image: icon?(candidate)?.menu ?? UIImage(systemName: candidate.symbolName), state: candidate == switchSelection ? .on : .off) { [weak self] _ in
                 UserAction.selectTab(candidate.logName).record()
                 self?.show(candidate)
             }
-        })
+        }
+        guard AppDependencies.settings.showsTabMenuCustomize else { return UIMenu(children: timelines) }
+        let customize = UIMenu(options: .displayInline, children: [
+            UIAction(title: "カスタマイズ", image: UIImage(systemName: "slider.horizontal.3")) { [weak self] _ in
+                self?.tabBarController.openMenuSettings(.tabs)
+            },
+        ])
+        let timelineGroup = UIMenu(options: .displayInline, children: timelines)
+        return UIMenu(children: origin == .title ? [timelineGroup, customize] : [customize, timelineGroup])
     }
 
     /// 記号の代わりに出すアイコンが変わったら、作ってあるタブのアイコンを出し直す。
