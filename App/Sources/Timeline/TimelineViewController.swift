@@ -1502,6 +1502,12 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             if self.replyConnections[id]?.below == true {
                 separator.bottomSeparatorVisibility = .hidden
             }
+            // 線は本文の左端から引く。アイコンの下を空けるときは、アイコンの列に線を入れない。決まりはdocs/post-header-layout.mdにある。
+            if let entry = self.entries[id] {
+                let insets = NSDirectionalEdgeInsets(top: 0, leading: self.separatorLeadingInset(for: entry), bottom: 0, trailing: 0)
+                separator.topSeparatorInsets = insets
+                separator.bottomSeparatorInsets = insets
+            }
             return separator
         }
         return UICollectionViewCompositionalLayout { _, environment in
@@ -1511,6 +1517,24 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 item.pinToVisibleBounds = false
             }
             return section
+        }
+    }
+
+    /// 区切り線を引き始める、行の左端からの長さ。行の本文の左端にする。
+    func separatorLeadingInset(for entry: TimelineEntry) -> CGFloat {
+        let margin = settings.rowMargins.leading
+        let textColumn = margin + settings.value(of: AppearanceCatalog.avatarSize) + settings.value(of: AppearanceCatalog.avatarSpacing)
+        switch entry {
+        case .status, .pinned:
+            return settings.appearance.wrapsBelowAvatar ? margin : textColumn
+        case .notification(let notification):
+            // メンションなどは投稿の行として描くので、投稿と同じ。ほかの通知の行は、アイコンの列の右に文字を置く。
+            return notification.layout == .post && notification.status != nil && settings.appearance.wrapsBelowAvatar ? margin : textColumn
+        case .account:
+            return textColumn
+        case .gap, .unreadable:
+            // システムのリストの部品で組む行。任せると、すき間の行は行の余白から、読めなかった投稿の行は記号の右の文字から引き、右端も手前で止まって投稿の行の線と揃わないため、文字の列から引く。
+            return textColumn
         }
     }
 

@@ -166,4 +166,27 @@ struct PostHeaderLayoutTests {
         #expect(configuration.showsReplyLines)
         #expect(frames[.replyLineBelow] == nil)
     }
+
+    /// 区切り線は、行の本文の左端から引く。アイコンの下を空けるときはアイコンの列に入れず、空けないときは行の左の余白から引く。
+    /// メンションは投稿の行なので投稿と同じにし、お気に入りやフォローの通知の行、人の行、すき間と読めなかった投稿の行は、いつも文字の列から引く。
+    @Test(arguments: [false, true])
+    func separatorStartsAtBodyLeading(wraps: Bool) throws {
+        let settings = AppSettings.isolated()
+        settings.appearance.wrapsBelowAvatar = wraps
+        let timeline = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
+        let status = try status()
+        let margin = settings.rowMargins.leading
+        let textColumn: CGFloat = settings.rowMargins.leading + settings.value(of: AppearanceCatalog.avatarSize) + settings.value(of: AppearanceCatalog.avatarSpacing)
+        let mention = MastodonNotification(id: "1", type: .mention, createdAt: Date(timeIntervalSince1970: 0), account: status.account, status: status)
+        let favourite = MastodonNotification(id: "2", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: status.account, status: status)
+        let follow = MastodonNotification(id: "3", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: status.account, status: nil)
+
+        #expect(timeline.separatorLeadingInset(for: .status(status)) == (wraps ? margin : textColumn))
+        #expect(timeline.separatorLeadingInset(for: .notification(mention)) == (wraps ? margin : textColumn))
+        #expect(timeline.separatorLeadingInset(for: .notification(favourite)) == textColumn)
+        #expect(timeline.separatorLeadingInset(for: .notification(follow)) == textColumn)
+        #expect(timeline.separatorLeadingInset(for: .account(status.account)) == textColumn)
+        #expect(timeline.separatorLeadingInset(for: .gap(TimelineGap(newerID: "2", olderID: "1"))) == textColumn)
+        #expect(timeline.separatorLeadingInset(for: .unreadable(UnreadableItem(id: "u", url: nil))) == textColumn)
+    }
 }
