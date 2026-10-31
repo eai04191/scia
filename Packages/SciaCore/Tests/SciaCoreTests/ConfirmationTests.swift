@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import SciaCore
 
@@ -48,6 +49,17 @@ struct ConfirmationTests {
         let confirmation = Confirmation.rewriting(draft: draft(text: "書きかけ"))
         #expect(confirmation?.title == "下書きを捨てて書き直しますか？")
         #expect(confirmation?.message == "書きかけの下書きは消えます。")
+    }
+
+    /// 引用付きの予約投稿を書き直している間は、引用の投稿を読み直していないので`quoteTarget`がない。それでも引用を理由に断る。
+    @Test func unattachableRefusalExplainsQuoteWhileRewritingScheduledQuote() {
+        let model = draft()
+        model.beginRewriting(ScheduledStatus(
+            id: "70", scheduledAt: Date(timeIntervalSince1970: 1_800_000_000),
+            params: ScheduledStatus.Params(text: "予約した引用", visibility: .unlisted, quotedStatusID: "9")
+        ))
+        #expect(model.quoteTarget == nil)
+        #expect(RefusalText.sharedMediaUnattachable(draft: model).message == "引用する投稿には添付できません。引用をやめてから、もう一度共有してください。")
     }
 
     @Test func sharedContentAsksWhetherToAppendOrDiscard() {
