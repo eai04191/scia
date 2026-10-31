@@ -304,7 +304,7 @@ public final class SavedStatusesStore {
         switch entry {
         case .status(let status): status.id
         case .unreadable(let item): item.id
-        case .gap, .notification, .pinned, .account: nil
+        case .gap, .notification, .pinned, .account, .notificationRequest: nil
         }
     }
 
@@ -325,7 +325,7 @@ public final class SavedStatusesStore {
                 guard !deletedIDs.contains(status.id), !isExcluded(status) else { return false }
             case .unreadable(let item):
                 guard !deletedIDs.contains(item.id) else { return false }
-            case .gap, .notification, .pinned, .account:
+            case .gap, .notification, .pinned, .account, .notificationRequest:
                 return false
             }
             return seen.insert(entry.id).inserted

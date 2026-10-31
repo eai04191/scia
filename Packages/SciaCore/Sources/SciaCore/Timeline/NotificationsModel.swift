@@ -15,6 +15,8 @@ public final class NotificationsModel {
     public var onUnreadCountChange: ((Int, Bool) -> Void)?
     /// ストリーミングで新しい通知が届いたときに呼ぶ。ステータスバーに流す。2つめの値は、通知の投稿に当てたサーバーのフィルターの判定。
     public var onArrival: ((MastodonNotification, FilterVerdict) -> Void)?
+    /// 一覧を最初から読み込んだとき、引っぱって読み直したときに呼ぶ。保留中の通知の人数を読み直すのに使う。
+    public var onReload: () -> Void = {}
     /// 通知の投稿に当てるサーバーのフィルター。ステータスバーに流す通知にも、一覧と同じく当てる。
     public let filtering: StatusFiltering
     private let store: NotificationStore
@@ -55,6 +57,14 @@ public final class NotificationsModel {
     /// 新着の挿入を保留している間に、補完を見送った。保留を解いたときに補完する。
     private var isFillHeld = false
     #endif
+    /// 保留中の通知を受け入れ、サーバーが取り込み終えたのをまだ見ていない。
+    private var awaitsMerge = false
+    /// 取り込みが済んだが、ほかの読み込みの途中だったので、読み直すのを待っている。読み込みが終わったら読み直す。
+    private var needsMergeReload = false
+    /// 受け入れた保留中の通知が取り込まれるのを、問い合わせて待っている。ストリーミングにつながっていないときだけ待つ。
+    private var mergeWait: Task<Void, Never>?
+    /// 取り込みを問い合わせる間隔。だんだん延ばし、尽きたら待つのをやめる。
+    private static let mergeCheckDelays: [Duration] = [.seconds(2), .seconds(4), .seconds(8), .seconds(16), .seconds(32)]
     /// 走っている補完の数と、すべて終わるのを待っている引っぱった読み直し。
     private var activeFills = 0
     private var fillWaiters: [CheckedContinuation<Void, Never>] = []
@@ -147,6 +157,10 @@ public final class NotificationsModel {
         tasks.run(purpose) { [weak self] in
             guard let self else { return }
             await operation(self)
+            // 取り込みの知らせが読み込みの途中に届いていたら、終わったここで読み直す。
+            if needsMergeReload, !store.isLoading {
+                reloadAfterMerge()
+            }
         }
     }
 
@@ -179,6 +193,7 @@ public final class NotificationsModel {
         }
         guard !isStopped else { return }
         insertPending()
+        onReload()
     }
 
     private func endFill() {
@@ -210,6 +225,7 @@ public final class NotificationsModel {
             setFooterState(store.reachedEnd ? .reachedEnd : .idle)
             logger.info("notifications loadInitial done count=\(notifications.count, privacy: .public)")
             startStreaming()
+            onReload()
         } catch {
             handle(error, during: "loadInitial") { setContentState(.failed($0)) }
         }
@@ -292,6 +308,86 @@ public final class NotificationsModel {
         }
     }
 
+    // MARK: - 受け入れた保留中の通知の取り込み
+
+    /// 保留中の通知を受け入れた。サーバーが取り込み終えたら一覧を読み直す。決まりはdocs/notification-filter.mdの「受け入れた通知の取り込み」にある。
+    /// つながっていれば`notifications_merged`を待ち、つながっていなければ間をあけて問い合わせる。待つ間に切れてつなぎ直したときも、知らせを逃したかもしれないので問い合わせる。
+    public func didAcceptRequest() {
+        guard !isStopped, hasLoadedInitial else { return }
+        awaitsMerge = true
+        guard !streamingHub.isConnected else { return }
+        startMergeChecks()
+    }
+
+    /// つながっていない間、取り込みを間をあけて問い合わせる。問い合わせ尽きても待つのはやめず、次につながったときに問い合わせる。
+    private func startMergeChecks() {
+        guard awaitsMerge, mergeWait == nil, !streamingHub.isConnected else { return }
+        mergeWait = run(.display) { model in
+            defer { model.mergeWait = nil }
+            for delay in Self.mergeCheckDelays {
+                try? await model.clock.sleep(for: delay)
+                // 待つ間につながったら、つながったときの問い合わせに任せる。
+                guard !model.isStopped, !Task.isCancelled, model.awaitsMerge, !model.streamingHub.isConnected else { return }
+                if await model.checkMerged() { return }
+            }
+        }
+    }
+
+    /// 取り込みが済んだかを1回問い合わせ、済んでいれば読み直す。済んだらtrue。
+    private func checkMerged() async -> Bool {
+        do {
+            guard try await client.notificationRequestsMerged(), !isStopped, awaitsMerge else { return false }
+        } catch {
+            logger.error("notifications merged check failed: \(SciaLog.describe(error), privacy: .public)")
+            return false
+        }
+        logger.info("notifications merged by check")
+        mergeDidFinish()
+        return true
+    }
+
+    /// つながったとき。待っている間に知らせを逃したかもしれないので、1回問い合わせる。
+    private func checkMergedAfterConnecting() {
+        guard awaitsMerge else { return }
+        mergeWait?.cancel()
+        mergeWait = nil
+        run(.display) { _ = await $0.checkMerged() }
+    }
+
+    private func mergeDidFinish() {
+        awaitsMerge = false
+        mergeWait?.cancel()
+        mergeWait = nil
+        reloadAfterMerge()
+    }
+
+    /// 取り込まれた通知は古い日時のものもあり、一覧の途中に入るため、一番上から読み直して置き換え、一番上に置く。読んでいた位置は保たない。
+    /// ほかの読み込みの途中なら、それが終わってから読み直す。
+    private func reloadAfterMerge() {
+        guard !isStopped, hasLoadedInitial else { return }
+        guard !store.isLoading else {
+            needsMergeReload = true
+            return
+        }
+        needsMergeReload = false
+        run(.display) { model in
+            do {
+                guard try await model.store.loadInitial() != nil else {
+                    // 始めるまでのあいだに、ほかの読み込みが始まった。
+                    model.needsMergeReload = true
+                    return
+                }
+                guard !model.isStopped else { return }
+                model.showEntries(placingAtTop: model.store.entries.first?.id)
+                model.setFooterState(model.store.reachedEnd ? .reachedEnd : .idle)
+                model.onReload()
+            } catch {
+                // 読めなければ今の一覧を残す。次に引っぱったときや起動し直したときに出る。
+                model.handle(error, during: "reloadAfterMerge") { _ in }
+            }
+        }
+    }
+
     /// ストリーミングの接続の状態を、引っぱったときに見せる表示へ伝える。
     public func showStreamingState(_ state: ConnectionDiagnostics.StreamingState?) {
         streamingStatus?.setState(state)
@@ -326,13 +422,18 @@ public final class NotificationsModel {
         case .connected:
             logger.info("notifications streaming connected")
             fillFromLatest(purpose: .display)
+            checkMergedAfterConnecting()
         case .event(.notification(let notification)):
             receive(notification)
+        case .event(.notificationsMerged):
+            logger.info("notifications merged")
+            mergeDidFinish()
         case .event:
             break
         case .poll:
             logger.info("notifications poll")
             fillFromLatest(purpose: .display)
+            startMergeChecks()
         case .outage(let isOngoing):
             display?.setOutageNotice(isOngoing)
         }
@@ -586,9 +687,9 @@ public final class NotificationsModel {
     }
 
     /// - Parameter animatesRemoval: 使う人の操作で行を消した。消える行を閉じる動きで消す。
-    private func showEntries(animatesRemoval: Bool = false) {
+    private func showEntries(animatesRemoval: Bool = false, placingAtTop topID: TimelineEntry.ID? = nil) {
         showGapStates()
-        display?.show(store.entries, animatesRemoval: animatesRemoval)
+        display?.show(store.entries, placingAtTop: topID, animatesRemoval: animatesRemoval)
         updateUnreadCount()
     }
 
