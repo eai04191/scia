@@ -231,6 +231,8 @@ final class InlineComposeController: NSObject {
     private var isToolPlacementScheduled = false
     /// メディアを選ぶシート。出している間だけある。
     private var mediaPicker: MediaPickerSheet?
+    /// Macで出すファイルの選択画面。出している間だけある。
+    private var mediaFilePicker: MediaFilePicker?
     /// 最後に出したキーボードの、画面の下端からの高さ。メディアを選ぶシートをこの高さで出す。
     private var lastKeyboardHeight: CGFloat?
     /// メディアを選ぶシートやビューアを出している間、キーボードが閉じてもバーをシート（ビューアならキーボード）の上端の高さに留める。
@@ -1625,6 +1627,10 @@ final class InlineComposeController: NSObject {
     /// キーボードと同じ高さのシートを出し、バーをその上端に留めたまま、書いている状態を保つ。
     private func presentMediaPicker() {
         guard let host, isEditing, model.canAttachMedia else { return }
+        if ProcessInfo.processInfo.isiOSAppOnMac {
+            presentMediaFilePicker(from: host)
+            return
+        }
         let height = bottomSheetHeight
         setHoldAboveKeyboard(height: height)
         // 独自の高さはシートの下の安全領域を含まないので、その分を引く。
@@ -1643,6 +1649,41 @@ final class InlineComposeController: NSObject {
         mediaPicker = picker
         logger.info("media picker: presenting (height=\(height), keyboardHeight=\(self.lastKeyboardHeight ?? -1))")
         resignInput()
+        picker.present(from: presenterAboveInlineCompose?() ?? host)
+    }
+
+    /// Macでは、写真のピッカーの代わりにファイルの選択画面を出す。シートではないので、バーは留めず、入力欄のフォーカスも外さない。
+    /// 選んだファイルはペーストしたファイルと同じく後ろに足し、上限を超えた分は足さずに知らせる。
+    private func presentMediaFilePicker(from host: UIViewController) {
+        guard mediaFilePicker == nil else { return }
+        let picker = MediaFilePicker()
+        picker.onPick = { [weak self] urls in
+            guard let self else { return }
+            let files = urls.compactMap(LocalMediaLoader.startCopyingFile)
+            // 選択画面が作ったコピーは、投稿欄の一時ディレクトリへコピーし終えたら消す。添付しなかったものも、ここで消す。
+            // 端末の中のコピーで通信せず、途中で止めると選択画面のコピーが消されずに残るため、セッションを閉じても止めない。
+            // swiftlint:disable:next session_task_outside_scope
+            Task(.withoutRequests) {
+                for file in files {
+                    _ = try? await file.load()
+                }
+                for url in urls {
+                    try? FileManager.default.removeItem(at: url)
+                }
+            }
+            guard !files.isEmpty else { return }
+            guard model.canPasteMedia else {
+                logger.info("media file picker: picked media dropped while attaching is unavailable (count=\(files.count))")
+                for file in files {
+                    file.discard()
+                }
+                return
+            }
+            model.addPastedMedia(files)
+        }
+        picker.onDidClose = { [weak self] in self?.mediaFilePicker = nil }
+        mediaFilePicker = picker
+        logger.info("media file picker: presenting")
         picker.present(from: presenterAboveInlineCompose?() ?? host)
     }
 
