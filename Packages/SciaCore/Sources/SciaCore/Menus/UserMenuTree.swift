@@ -14,6 +14,8 @@ public enum UserMenuCommand: Sendable {
     case editNote(UserRelation)
     /// 通報のシートを開く。投稿のメニューから開いたときは、添えられる相手の投稿のIDを渡す。
     case report(accountID: String, acct: String, statusID: String?)
+    /// このメニューの並びの設定の画面を開く。
+    case customize
 }
 
 /// ユーザーのメニューの、メンション、ハンドルをコピー、関係の項目で使う相手。
@@ -124,14 +126,15 @@ public struct UserMenuTree {
     }
 
     /// 投稿のメニューに置く、`@acct`のサブメニュー。サブメニューの項目にその人のアイコンを付け、中の「プロフィール」は記号のままにする。同じ顔が2つ並ばないようにするため。
-    /// 中身が1つで「その他」が空なら、サブメニューにせず「@acctのプロフィール」のように直接並べる。出す項目がなければnil。
+    /// カスタマイズのほかの中身が1つで、「その他」にカスタマイズのほかに何もなければ、サブメニューにせず「@acctのプロフィール」のように直接並べ、カスタマイズは出さない。出す項目がなければnil。
     /// 関係の読み直しは、投稿のメニューに出る人をまとめて1回で頼むため、ここでは頼まない。
     /// - Parameter avatar: その人のアイコン。
     public func submenu(groups: MenuLayout<UserMenuItem>.Groups, avatar: MenuAvatar) -> MenuNode<UserMenuCommand>? {
         // 関係の項目は読んでから中身が決まり、名前に相手を入れられないため、1つだけでもサブメニューにする。
-        if groups.more.isEmpty, groups.main.count == 1, let only = groups.main.first?.items, only.count == 1, !only[0].isRelation {
+        let others = groups.excludingCustomize
+        if others.more.isEmpty, others.main.count == 1, let only = others.main.first?.items, only.count == 1, !only[0].isRelation {
             // サブメニューの項目に付けるアイコンがないので、「プロフィール」にその人のアイコンを付ける。
-            return Items(tree: self, groups: groups, inSubmenu: false, offersProfile: true, profileAvatar: avatar).nodes(for: only[0]).first
+            return Items(tree: self, groups: others, inSubmenu: false, offersProfile: true, profileAvatar: avatar).nodes(for: only[0]).first
         }
         let children = nodes(groups: groups, offersProfile: true, profileAvatar: nil)
         guard !children.isEmpty else { return nil }
@@ -213,6 +216,8 @@ public struct UserMenuTree {
             case .follow, .showReblogs, .notify, .note, .mute, .block, .report:
                 guard let actions = tree.actions, let load else { return [] }
                 return tree.relationNodes(item, actions: actions, load: load, failureSlots: failureSlots)
+            case .customize:
+                return [.action(item.title, icon: .symbol(item.symbolName), .customize)]
             // 共通の項目は、上で中身から組んだ。
             case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
                 return []
@@ -352,7 +357,7 @@ extension UserMenuTree {
             return [node(item.title, "hand.raised", isDestructive: true, .block)]
         case .report:
             return [.action(item.title, icon: .symbol(item.symbolName), .report(accountID: relation.accountID, acct: relation.acct, statusID: reportableStatusID))]
-        case .profile, .mention, .copyHandle, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
+        case .profile, .mention, .copyHandle, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .customize:
             return []
         }
     }

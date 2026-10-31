@@ -85,7 +85,7 @@ extension TimelineViewController {
             case .copyValue(let value):
                 UIPasteboard.general.string = value
                 self?.showTextCopiedNotice()
-            case .share, .saveToPhotos, .showAltText, .translateText, .url:
+            case .share, .saveToPhotos, .showAltText, .translateText, .url, .customize:
                 self?.performMediaMenu(command, target: MediaMenuTarget(attachment: attachment, source: source, preview: preview, open: open), subject: subject)
             }
         } customIcon: { icon in
@@ -147,6 +147,8 @@ extension TimelineViewController {
         case .copyValue(let value):
             UIPasteboard.general.string = value
             showTextCopiedNotice()
+        case .customize:
+            openMenuSettings(.mediaMenu)
         case .translateText, .status:
             // 一覧のメディアのメニューは、画像の文字の翻訳を出さない。「投稿」の中の項目は、投稿のメニューが行う。
             break
@@ -162,7 +164,8 @@ extension TimelineViewController {
                 guard let self else { return }
                 URLSharing.presentShareSheet(for: url, from: self) { $0.sourceItem = source ?? self.collectionView }
             },
-            open: { [weak self] url, browser in self?.openURL(url, in: browser) }
+            open: { [weak self] url, browser in self?.openURL(url, in: browser) },
+            openSettings: { [weak self] page in self?.openMenuSettings(page) }
         )
     }
 }

@@ -59,11 +59,11 @@ struct MenuPlacementTests {
         let mention = try #require(try bodyLinkMenu(for: .mention(acct: alice.acct, url: profileURL), in: viewController, settings: settings))
         let profile = try #require(viewController.profileUserMenu(for: alice, from: UIBarButtonItem()))
 
-        let expected = "プロフィール,メンション,ハンドルをコピー|リンクをコピー,共有,ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,フォローを外す,ブーストを表示,投稿を通知,メモを追加,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック,通報]"
+        let expected = "プロフィール,メンション,ハンドルをコピー|リンクをコピー,共有,ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,フォローを外す,ブーストを表示,投稿を通知,メモを追加,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック,通報,カスタマイズ]"
         #expect(describe(submenu.children) == expected)
         #expect(describe(avatar.children) == expected)
         #expect(describe(mention.children) == expected)
-        #expect(describe(profile.children) == "メンション,ハンドルをコピー|リンクをコピー,共有,ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,フォローを外す,ブーストを表示,投稿を通知,メモを追加,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック,通報]")
+        #expect(describe(profile.children) == "メンション,ハンドルをコピー|リンクをコピー,共有,ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,フォローを外す,ブーストを表示,投稿を通知,メモを追加,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック,通報,カスタマイズ]")
         // 見出しは、サブメニューでは名前とサブタイトル、単独で出すメニューでは2行に置く。
         #expect(submenu.title == "@alice")
         #expect(submenu.subtitle == "remote.example")
@@ -83,7 +83,7 @@ struct MenuPlacementTests {
         let body = try #require(try bodyLinkMenu(for: .url(url), in: viewController, settings: settings))
         let card = try #require(viewController.linkMenu(for: url, id: entry.id))
 
-        let expected = "ブラウザで開く,既定のブラウザで開く|アプリ内のSafariで開く,プロフィールとして開く|その他[リンクをコピー,共有]"
+        let expected = "ブラウザで開く,既定のブラウザで開く|アプリ内のSafariで開く,プロフィールとして開く|その他[リンクをコピー,共有,カスタマイズ]"
         #expect(describe(body.children) == expected)
         #expect(describe(card.children) == expected)
         #expect(body.title == "https://example.com/a")
@@ -109,7 +109,7 @@ struct MenuPlacementTests {
             .compactMap { $0 as? UIMenu }
             .first { $0.title == "#cat" })
 
-        let expected = "すべての投稿,@aliceの投稿,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日]|ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,リンクをコピー,共有]"
+        let expected = "すべての投稿,@aliceの投稿,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日]|ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,リンクをコピー,共有,カスタマイズ]"
         #expect(describe(body.children) == expected)
         #expect(describe(submenu.children) == expected)
         #expect(body.title == "#cat")

@@ -125,6 +125,8 @@ extension TimelineViewController {
                 self?.hashtagMenu(for: tag, of: status.displayed, id: id).perform(command)
             case .customEmoji(let emoji, let command):
                 emojis.perform(command, on: emoji)
+            case .customize:
+                self?.openMenuSettings(.statusMenu)
             }
         } customIcon: { [weak self] icon in
             switch icon {
@@ -248,6 +250,7 @@ extension TimelineViewController {
                     UIPasteboard.general.string = text
                     self?.showTextCopiedNotice()
                 case .translate(let text): self?.translation.present(text)
+                case .customize: self?.openMenuSettings(.externalPostMenu)
                 }
             })
         }
@@ -380,7 +383,8 @@ extension TimelineViewController {
                 guard let self else { return }
                 URLSharing.presentShareSheet(for: url, from: self) { $0.sourceItem = barButtonItem }
             },
-            open: { [weak self] url, browser in self?.openURL(url, in: browser) }
+            open: { [weak self] url, browser in self?.openURL(url, in: browser) },
+            openSettings: { [weak self] page in self?.openMenuSettings(page) }
         )
         let menu = UserMenu(subject: UserMenuSubject(.account(account)), actions: userMenuActions, handlers: handlers, host: self)
         return menu.profileScreenMenu(groups: settings.userMenuLayout.groups)
@@ -392,7 +396,8 @@ extension TimelineViewController {
             linkBrowser: settings.linkBrowser,
             copy: { [weak self] url in URLSharing.copy(url, notifying: self) },
             share: { [weak self] url in self?.presentShareSheet(for: url, from: id) },
-            open: { [weak self] url, browser in self?.openURL(url, in: browser) }
+            open: { [weak self] url, browser in self?.openURL(url, in: browser) },
+            openSettings: { [weak self] page in self?.openMenuSettings(page) }
         )
     }
 

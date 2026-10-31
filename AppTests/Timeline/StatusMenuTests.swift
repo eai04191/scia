@@ -73,7 +73,8 @@ struct StatusMenuTests {
             ["ブックマーク"],
             ["リンクをコピー", "テキストをコピー", "共有", "ブラウザで開く"],
             ["翻訳"],
-            ["@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]"],
+            ["@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]"],
+            ["その他[カスタマイズ]"],
         ])
     }
 
@@ -84,7 +85,7 @@ struct StatusMenuTests {
 
         let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
 
-        #expect(outline.last == ["@alice[プロフィール,メンション,…,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報]]"])
+        #expect(outline.dropLast().last == ["@alice[プロフィール,メンション,…,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報,カスタマイズ]]"])
     }
 
     /// メニューを開いたら、メニューに出る人全員の関係を1回でまとめて読み直す。
@@ -217,7 +218,7 @@ struct StatusMenuTests {
         let more = try #require(menu(for: .status(post))?.children.last as? UIMenu)
         #expect(more.title == "その他")
         let emoji = try #require(more.children.flatMap { ($0 as? UIMenu)?.children ?? [$0] }.first { $0.title == ":blobcat:" })
-        #expect(describe(emoji) == ":blobcat:[開く,リンクをコピー,ブラウザで開く,その他[メディアの情報[PNG]]]")
+        #expect(describe(emoji) == ":blobcat:[開く,リンクをコピー,ブラウザで開く,その他[メディアの情報[PNG],カスタマイズ]]")
     }
 
     /// ハッシュタグの「ミュート」は、自分のフィルターを覚えていれば、その場でミュートしているかを決め、読み込み中の行を出さない。

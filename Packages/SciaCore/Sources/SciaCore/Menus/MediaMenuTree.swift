@@ -12,6 +12,8 @@ public enum MediaMenuCommand {
     case copyValue(String)
     /// 「投稿」のサブメニューの、投稿のメニューの項目。
     indirect case status(StatusMenuCommand)
+    /// このメニューの並びの設定の画面を開く。
+    case customize
 }
 
 /// メディアのメニュー。一覧とビューアで、設定の同じ並びから組む。決まりはdocs/menus.mdの「メディアのメニュー」にある。
@@ -87,6 +89,8 @@ public struct MediaMenuTree {
             return .submenu(item.title, icon: .symbol(item.symbolName), statusMenu.map { $0.map(MediaMenuCommand.status) })
         case .info:
             return infoMenu(item)
+        case .customize:
+            return action(item, isEnabled: true, .customize)
         case .copyLink, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
             // 共通の項目は、上で中身から組んだ。
             return nil

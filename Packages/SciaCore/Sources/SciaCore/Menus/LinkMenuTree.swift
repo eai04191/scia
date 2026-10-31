@@ -5,6 +5,8 @@ public enum LinkMenuCommand: Equatable, Sendable {
     case url(URLMenuCommand)
     /// リンク先をプロフィールとしてサーバーで探して開く。
     case openAsProfile
+    /// このメニューの並びの設定の画面を開く。
+    case customize
 }
 
 /// リンクのメニュー。本文のリンクの長押しと、リンクカードの長押しで、同じ並びから組む。決まりはdocs/menus.mdの「メニューの単位」にある。
@@ -29,6 +31,8 @@ public struct LinkMenuTree {
             switch item {
             case .openAsProfile:
                 return [openAsProfileNode(item)]
+            case .customize:
+                return [.action(item.title, icon: .symbol(item.symbolName), .customize)]
             // 共通の項目は、上で中身から組んだ。
             case .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share:
                 return []
@@ -49,6 +53,8 @@ public enum ExternalPostMenuCommand: Equatable, Sendable {
     case url(URLMenuCommand)
     case copyText(String)
     case translate(String)
+    /// このメニューの並びの設定の画面を開く。
+    case customize
 }
 
 /// Xの投稿の囲みのような、ほかのサービスの投稿を長押ししたときに出すメニュー。
@@ -79,6 +85,8 @@ public struct ExternalPostMenuTree {
             case .systemTranslate:
                 guard let text else { return [] }
                 return [.action(item.title, icon: .symbol(item.symbolName), .translate(text))]
+            case .customize:
+                return [.action(item.title, icon: .symbol(item.symbolName), .customize)]
             // 共通の項目は、上で中身から組んだ。
             case .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .copyLink, .share:
                 return []

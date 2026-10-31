@@ -10,6 +10,8 @@ public enum HashtagMenuCommand: Equatable, Sendable {
     /// ミュートする。nilなら解除するまで続ける。
     case mute(Duration?)
     case unmute
+    /// このメニューの並びの設定の画面を開く。
+    case customize
 }
 
 /// ハッシュタグのメニュー。本文のハッシュタグの長押しと、投稿のメニューの「ハッシュタグ」で、同じ並びから組む。決まりはdocs/menus.mdの「メニューの単位」にある。
@@ -63,6 +65,8 @@ public struct HashtagMenuTree {
             case .mute:
                 guard let muteActions else { return [] }
                 return muteNodes(muteActions, item: item)
+            case .customize:
+                return [.action(item.title, icon: .symbol(item.symbolName), .customize)]
             // 共通の項目は、上で中身から組んだ。
             case .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari:
                 return []

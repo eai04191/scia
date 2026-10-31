@@ -171,7 +171,7 @@ struct MenuLayoutTests {
             [.systemTranslate],
             [.notifyingUser, .author, .booster, .hashtags],
         ])
-        #expect(groups.more.map(\.items) == [[.editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .customEmojis], [.muteConversation, .pin], [.dismissNotification, .delete]])
+        #expect(groups.more.map(\.items) == [[.editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .customEmojis], [.muteConversation, .pin], [.dismissNotification, .delete], [.customize]])
         #expect(StatusMenuItem.defaultLayout.elements.contains(.item(.reblogWithVisibility, isVisible: false)))
     }
 
@@ -181,7 +181,7 @@ struct MenuLayoutTests {
         let layout = UserMenuItem.defaultLayout
 
         #expect(layout.groups.main.map(\.items) == [[.profile, .mention, .note], [.follow], [.copyHandle, .copyLink, .share, .openInBrowser]])
-        #expect(layout.groups.more.map(\.items) == [[.showReblogs, .notify], [.mute, .block, .report]])
+        #expect(layout.groups.more.map(\.items) == [[.showReblogs, .notify], [.mute, .block, .report], [.customize]])
         #expect([UserMenuItem.openInDefaultBrowser, .openInAppSafari].allSatisfy { layout.elements.contains(.item($0, isVisible: false)) })
     }
 
@@ -206,7 +206,7 @@ struct MenuLayoutTests {
         let saved = MenuLayout<UserMenuItem>(tokens: ["item:profile", "item:copyLink", "item:share", "more"])
 
         #expect(saved.groups.main.map(\.items) == [[.profile, .mention, .note, .follow, .copyHandle, .copyLink, .share, .openInBrowser]])
-        #expect(saved.groups.more.map(\.items) == [[.showReblogs, .notify, .mute, .block, .report]])
+        #expect(saved.groups.more.map(\.items) == [[.showReblogs, .notify, .mute, .block, .report, .customize]])
     }
 
     /// メモを足す前に保存したユーザーのメニューでも、メモはメンションのすぐ後ろに、表示されて入る。
@@ -225,25 +225,39 @@ struct MenuLayoutTests {
         #expect(saved.groups == StatusMenuItem.defaultLayout.groups)
     }
 
+    /// どのメニューでも、カスタマイズは既定で「その他」のいちばん下に、ほかの項目と区切って出す。
+    @Test func customizeIsLastGroupInMoreByDefault() {
+        func lastMoreGroup<Item: MenuItemKind>(_: Item.Type) -> [Item]? {
+            Item.defaultLayout.groups.more.last?.items
+        }
+        #expect(lastMoreGroup(StatusMenuItem.self) == [.customize])
+        #expect(lastMoreGroup(UserMenuItem.self) == [.customize])
+        #expect(lastMoreGroup(LinkMenuItem.self) == [.customize])
+        #expect(lastMoreGroup(ExternalPostMenuItem.self) == [.customize])
+        #expect(lastMoreGroup(ProfileTextMenuItem.self) == [.customize])
+        #expect(lastMoreGroup(HashtagMenuItem.self) == [.customize])
+        #expect(lastMoreGroup(MediaMenuItem.self) == [.customize])
+    }
+
     /// 本文のリンクのメニューは、設定を足す前の決め打ちのメニューと同じ並びにする。ハッシュタグのメニューは、その前にアプリで開く2つとミュートを置く。開く場所を選んで開く2つは隠しておく。
     /// リンクのメニューには、あとから足した「プロフィールとして開く」が「ブラウザで開く」の下に入る。
     @Test func linkAndHashtagMenuDefaultsMatchMenuBeforeCustomization() {
         #expect(LinkMenuItem.defaultLayout.groups.main.map(\.items) == [[.openInBrowser, .openAsProfile, .copyLink, .share]])
-        #expect(LinkMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
+        #expect(LinkMenuItem.defaultLayout.groups.more.map(\.items) == [[.customize]])
         #expect(HashtagMenuItem.defaultLayout.groups.main.map(\.items) == [[.timeline, .accountStatuses], [.mute], [.openInBrowser, .copyLink, .share]])
-        #expect(HashtagMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
+        #expect(HashtagMenuItem.defaultLayout.groups.more.map(\.items) == [[.customize]])
     }
 
     /// ほかのサービスの投稿のメニューは、持ち出す操作と翻訳のまとまりに分ける。開く場所を選んで開く2つは隠しておく。
     @Test func externalPostMenuDefaults() {
         #expect(ExternalPostMenuItem.defaultLayout.groups.main.map(\.items) == [[.openInBrowser, .copyLink, .copyText, .share], [.systemTranslate]])
-        #expect(ExternalPostMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
+        #expect(ExternalPostMenuItem.defaultLayout.groups.more.map(\.items) == [[.customize]])
     }
 
-    /// プロフィールの文章のメニューは、3つの項目を区切り線で分けて並べ、どれも隠さず「その他」も使わない。
+    /// プロフィールの文章のメニューは、3つの項目を区切り線で分けて並べ、どれも隠さず「その他」にはカスタマイズだけを置く。
     @Test func profileTextMenuDefaults() {
         #expect(ProfileTextMenuItem.defaultLayout.groups.main.map(\.items) == [[.copyLabel, .copyText], [.systemTranslate], [.customEmojis]])
-        #expect(ProfileTextMenuItem.defaultLayout.groups.more.map(\.items).isEmpty)
+        #expect(ProfileTextMenuItem.defaultLayout.groups.more.map(\.items) == [[.customize]])
     }
 
     /// 「プロフィールとして開く」を足す前に保存したリンクのメニューでも、「ブラウザで開く」の下に出る。
@@ -266,7 +280,7 @@ struct MenuLayoutTests {
         let saved = MenuLayout<UserMenuItem>(tokens: ["more", "item:profile"])
 
         #expect(saved.groups.main.map(\.items).isEmpty)
-        #expect(saved.groups.more.map(\.items) == [[.showReblogs, .notify, .mute, .block, .report, .profile, .mention, .note, .follow, .copyHandle, .copyLink, .share, .openInBrowser]])
+        #expect(saved.groups.more.map(\.items) == [[.showReblogs, .notify, .mute, .block, .report, .customize, .profile, .mention, .note, .follow, .copyHandle, .copyLink, .share, .openInBrowser]])
     }
 
     /// ブックマークを足す前に保存した投稿のメニューでも、ブックマークは編集の後ろに、表示されて入る。
@@ -317,7 +331,7 @@ struct MenuLayoutTests {
             [.copyLink, .openInBrowser],
             [.status],
         ])
-        #expect(groups.more.map(\.items) == [[.info]])
+        #expect(groups.more.map(\.items) == [[.info], [.customize]])
     }
 
     @Test func appSettingsPersistsMediaMenuLayout() throws {

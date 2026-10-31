@@ -244,9 +244,9 @@ struct LinkLabelTests {
         let profile = try #require(URL(string: "https://example.social/@bob"))
         let settings = try settings()
 
-        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: ブラウザで開く,プロフィールとして開く,リンクをコピー,共有")
-        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: すべての投稿|ブラウザで開く,リンクをコピー,共有")
-        #expect(try menuOutline(of: .mention(acct: "bob@example.social", url: profile), settings: settings) == "@bob\nexample.social: プロフィール|リンクをコピー,共有,ブラウザで開く")
+        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: ブラウザで開く,プロフィールとして開く,リンクをコピー,共有|その他[カスタマイズ]")
+        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: すべての投稿|ブラウザで開く,リンクをコピー,共有|その他[カスタマイズ]")
+        #expect(try menuOutline(of: .mention(acct: "bob@example.social", url: profile), settings: settings) == "@bob\nexample.social: プロフィール|リンクをコピー,共有,ブラウザで開く|その他[カスタマイズ]")
     }
 
     /// ハッシュタグのメニューの「投稿したユーザーの投稿」は、開くユーザーが分かるときだけ「@名前の投稿」で出し、ほかのサーバーのユーザーならサーバー名をサブタイトルに出す。
@@ -256,7 +256,7 @@ struct LinkLabelTests {
         let local = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
         let remote = Account(id: "3", username: "carol", acct: "carol@remote.example", displayName: "Carol", avatar: nil)
 
-        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings, hashtagAccount: local) == "#cat: すべての投稿,@bobの投稿|ブラウザで開く,リンクをコピー,共有")
+        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings, hashtagAccount: local) == "#cat: すべての投稿,@bobの投稿|ブラウザで開く,リンクをコピー,共有|その他[カスタマイズ]")
         let label = label(for: RichText(blocks: [.init(inlines: [.link("x", .hashtag(name: "cat", url: tag), [])])]))
         label.settings = settings
         label.hashtagAccount = remote
@@ -275,8 +275,8 @@ struct LinkLabelTests {
         settings.linkMenuLayout = MenuLayout(elements: [.item(.share, isVisible: true), .separator, .item(.openInAppSafari, isVisible: true), .item(.openInBrowser, isVisible: false), .item(.openAsProfile, isVisible: false), .more, .item(.copyLink, isVisible: true)])
         settings.hashtagMenuLayout = MenuLayout(elements: [.item(.copyLink, isVisible: true), .item(.timeline, isVisible: false), .item(.accountStatuses, isVisible: false), .item(.openInBrowser, isVisible: false), .item(.share, isVisible: false), .more])
 
-        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: 共有|アプリ内のSafariで開く|その他[リンクをコピー]")
-        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: リンクをコピー")
+        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: 共有|アプリ内のSafariで開く|その他[カスタマイズ,リンクをコピー]")
+        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: リンクをコピー|その他[カスタマイズ]")
     }
 
     /// アプリ内のSafariはhttpとhttps以外のURLを開けず、サーバーもそのURLをプロフィールとして探さないため、そのリンクでは2つを押せない。ほかの開く項目は押せる。

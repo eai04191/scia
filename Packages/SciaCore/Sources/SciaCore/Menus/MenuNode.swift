@@ -202,17 +202,38 @@ extension MenuLayout.Groups {
     ///   - elements: 項目ごとの中身。出さない項目は空。
     ///   - group: まとまりを1つの要素にする。2つ目の引数は横並びか。
     ///   - more: 「その他」のサブメニューにする。
+    /// 並びにカスタマイズのほかの項目があるのに、どれも出ないときは、カスタマイズだけのメニューにせず空にする。並びがカスタマイズだけなら、それを出す。
+    /// 開いてから中身を読む項目（関係を覚えていない相手の関係の項目など）は、組む時点では出るものとして数える。読んだ結果が空になると、
+    /// 開いたメニューにカスタマイズだけが残る。開いたメニューは閉じずに中身を差し替えるだけなので、読んだあとにメニューごと引っ込められないため、この場合は扱わない。
     public func arranged<Element>(_ elements: (Item) -> [Element], group: ([Element], Bool) -> Element, more: ([Element]) -> Element) -> [Element] {
+        var showsOtherItem = false
         func inline(_ groups: [MenuLayout<Item>.Group]) -> [Element] {
             groups.compactMap { entry in
-                let children = entry.items.flatMap(elements)
+                let children = entry.items.flatMap { item in
+                    let built = elements(item)
+                    if item != Item.customizeItem, !built.isEmpty { showsOtherItem = true }
+                    return built
+                }
                 return children.isEmpty ? nil : group(children, entry.isRow)
             }
         }
         let mainElements = inline(main)
         let moreElements = inline(self.more)
+        let listsOtherItem = (main + self.more).flatMap(\.items).contains { $0 != Item.customizeItem }
+        guard showsOtherItem || !listsOtherItem else { return [] }
         guard !moreElements.isEmpty else { return mainElements }
         return mainElements + [more(moreElements)]
+    }
+
+    /// カスタマイズの項目を除いた並び。空になったまとまりは除く。
+    public var excludingCustomize: Self {
+        func removing(_ groups: [MenuLayout<Item>.Group]) -> [MenuLayout<Item>.Group] {
+            groups.compactMap { group in
+                let items = group.items.filter { $0 != Item.customizeItem }
+                return items.isEmpty ? nil : MenuLayout<Item>.Group(items, isRow: group.isRow)
+            }
+        }
+        return Self(main: removing(main), more: removing(more))
     }
 
     /// メニューの木にする。

@@ -143,12 +143,12 @@ struct UserMenuTreeTests {
     /// 既定のユーザーのメニューは、開く・書く操作（メモを含む）、フォロー、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
     /// 関係を覚えていない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() {
-        #expect(submenu(actions: actions()) == "@alice[プロフィール,メンション,…,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報]]")
+        #expect(submenu(actions: actions()) == "@alice[プロフィール,メンション,…,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報,カスタマイズ]]")
     }
 
     /// メンション、ハンドルをコピー、関係の項目を組むものを渡されていない画面では、これらを出さない。
     @Test func omitsMentionAndCopyUsernameWithoutActions() {
-        #expect(submenu() == "@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]")
+        #expect(submenu() == "@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
     }
 
     /// ユーザーのメニューの中身が1つで「その他」が空なら、サブメニューにせず、名前に相手を入れて直接並べる。プロフィールにはその人のアイコンを付ける。
@@ -162,6 +162,11 @@ struct UserMenuTreeTests {
         }
         #expect(user.id == "2")
         #expect(fallback == "person.crop.circle")
+    }
+
+    /// カスタマイズは数えない。ほかの中身が1つなら、カスタマイズを出さずに直接並べる。1回余計に押す手間を省くため。
+    @Test func customizeDoesNotPreventListingDirectly() {
+        #expect(submenu(layout(visible: [.profile, .customize])) == "@alice@remote.exampleのプロフィール")
     }
 
     /// 関係の項目は、1つだけでもサブメニューにする。読んでから中身が決まり、名前に相手を入れられないため。
@@ -184,8 +189,8 @@ struct UserMenuTreeTests {
     /// 自分には、関係の項目のうちメモだけを出し、通報も出さない。自分との関係を覚えていれば、メモの項目をその場で組む。
     @Test func myselfHasOnlyNoteItem() {
         let me = UserRelation(accountID: "2", acct: "alice", relationship: Relationship(id: "2", note: "TODO"))
-        #expect(submenu(actions: actions { _ in .myself(me) }) == "@alice[プロフィール,メンション,メモを編集,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く]")
-        #expect(submenu(actions: actions { _ in .myself(nil) }) == "@alice[プロフィール,メンション,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く]")
+        #expect(submenu(actions: actions { _ in .myself(me) }) == "@alice[プロフィール,メンション,メモを編集,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
+        #expect(submenu(actions: actions { _ in .myself(nil) }) == "@alice[プロフィール,メンション,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
     }
 
     /// 自分との関係を覚えていなければ、読んでからメモの項目を組む。読めなければ、メモの場所に知らせる。自分にはほかに関係の項目を出さないため。
@@ -235,7 +240,7 @@ struct UserMenuTreeTests {
 
     /// 「その他」に何かあれば、1項目でもサブメニューにする。出す項目がなければ何も出さない。
     @Test func submenuWhenProfileIsInMoreAndNothingWhenEmpty() {
-        #expect(submenu(MenuLayout(elements: [.more, .item(.profile, isVisible: true)]).groups) == "@alice[その他[プロフィール,リンクをコピー,共有,ブラウザで開く]]")
+        #expect(submenu(MenuLayout(elements: [.more, .item(.profile, isVisible: true)]).groups) == "@alice[その他[カスタマイズ,プロフィール,リンクをコピー,共有,ブラウザで開く]]")
         #expect(submenu(layout(visible: [])) == nil)
     }
 

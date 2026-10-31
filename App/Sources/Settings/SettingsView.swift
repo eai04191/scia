@@ -1,3 +1,4 @@
+import os
 import SciaCore
 import SwiftUI
 import UIKit
@@ -375,7 +376,21 @@ extension UIViewController {
         let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, opening: page)
         present(UIHostingController(rootView: view), animated: true)
     }
+
+    /// メニューの「カスタマイズ」から、その並びの設定の画面を、設定の一覧に重ねて開く。決まりはdocs/menus.mdの「並びの設定」にある。
+    /// `scia://settings/<画面>`と同じ入り口を通し、この画面を出している窓のセッションで開く。
+    /// Macでメディアを別のウインドウに開いたビューアは、窓にセッションを持たない（`MediaWindowSceneDelegate`）ため、押しても開かずにerrorのログだけ残す。
+    /// Macでしか起きず、別の窓のセッションへ届ける経路を足す手間に見合わないため、扱わない。
+    func openMenuSettings(_ page: SettingsPage) {
+        guard let delegate = viewIfLoaded?.window?.windowScene?.delegate as? SceneDelegate else {
+            settingsLogger.error("menu settings ignored without scene: \(page.rawValue, privacy: .public)")
+            return
+        }
+        delegate.open(.settings(page))
+    }
 }
+
+private let settingsLogger = SciaLog.logger(category: "settings")
 
 /// HDRのメディアの明るさの選択肢。ビューア以外とビューアで同じものを並べる。
 private struct MediaDynamicRangeOptions: View {

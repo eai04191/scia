@@ -79,6 +79,8 @@ struct UserMenu {
             actions?.editNote(relation)
         case .report(let accountID, let acct, let statusID):
             actions?.report(accountID, acct, statusID)
+        case .customize:
+            handlers.openSettings(.userMenu)
         }
     }
 }

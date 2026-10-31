@@ -21,10 +21,11 @@ struct PrivateNoteMenuTests {
     }
 
     /// 先頭に「メモを編集」を置き、その下に「テキストをコピー」を並べる。自分で書いた文章なので翻訳は出さず、ラベルのコピーとカスタム絵文字も出ない。
+    /// プロフィールの文章のメニューと並びを共有するので、「その他」にそのカスタマイズが入る。
     @Test func editComesFirstFollowedByTextItems() {
         let menu = makeViewController().privateNoteMenu(for: "前に会った :blobcat:") {}
 
-        #expect(outline(menu) == [["メモを編集"], ["テキストをコピー"]])
+        #expect(outline(menu) == [["メモを編集"], ["テキストをコピー"], ["その他"]])
     }
 
     @Test func editOpensTheNoteSheet() throws {

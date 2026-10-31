@@ -45,7 +45,7 @@ struct StatusMenuTreeTests {
     /// 既定の並びは、何のための操作かでまとまりを分ける。横並びの区切り線の下の返信・お気に入り・ブーストは横に並べる。
     /// 自分のアカウントが分からない一覧では、会話のミュート、固定、公開範囲を選んでブーストは出ない。
     @Test func defaultMenuGroupsItemsByPurpose() {
-        #expect(outline(tree(status(url: URL(string: "https://example.social/@alice/100")))) == "=返信,お気に入り,ブースト(押せない)|ブックマーク|リンクをコピー,テキストをコピー,共有,ブラウザで開く|翻訳|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]")
+        #expect(outline(tree(status(url: URL(string: "https://example.social/@alice/100")))) == "=返信,お気に入り,ブースト(押せない)|ブックマーク|リンクをコピー,テキストをコピー,共有,ブラウザで開く|翻訳|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[カスタマイズ]")
     }
 
     /// 本文が空白だけの投稿では、扱う文字がないのでテキストのコピーと翻訳を出さない。
@@ -65,9 +65,9 @@ struct StatusMenuTreeTests {
 
         #expect(links.count == 3)
         #expect(links.allSatisfy { $0.isEnabled })
-        let users = try #require(root.children.last)
-        #expect(MenuNodeTests.describe([users]) == "@bob[プロフィール,リンクをコピー,共有,ブラウザで開く],@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]")
-        #expect(root.children.last?.children.first?.subtitle == "remote.example")
+        let users = try #require(root.children.dropLast().last)
+        #expect(MenuNodeTests.describe([users]) == "@bob[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
+        #expect(users.children.first?.subtitle == "remote.example")
         #expect(built.shownUserIDs == ["2", "1"])
 
         let withoutURL = try #require(tree(status()).menu(groups: StatusMenuItem.defaultLayout.groups, includesFollowRequest: true).root)
@@ -77,17 +77,17 @@ struct StatusMenuTreeTests {
     /// 自分の投稿を自分でブーストしたときのように、同じユーザーが2つの項目に当たるときは1度だけ出す。
     @Test func sameUserIsListedOnce() {
         let built = tree(status(reblog: status())).menu(groups: StatusMenuItem.defaultLayout.groups, includesFollowRequest: true)
-        #expect(MenuNodeTests.describe(Array(built.root?.children.suffix(1) ?? [])) == "@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]")
+        #expect(MenuNodeTests.describe(Array(built.root?.children.dropLast().suffix(1) ?? [])) == "@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
         #expect(built.shownUserIDs == ["1"])
     }
 
     /// 投稿のない通知では、通知したユーザーと、投稿を必要としない通知の削除だけを出す。通知したユーザーは、対象の投稿を書いた人より先に出る。
     @Test func notificationsListNotifyingUserFirst() {
         let follow = MastodonNotification(id: "1", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: account("2", "bob"))
-        #expect(outline(tree(nil, notification: follow)) == "@bob[プロフィール,リンクをコピー,共有,ブラウザで開く]|その他[通知を削除]")
+        #expect(outline(tree(nil, notification: follow)) == "@bob[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[通知を削除,カスタマイズ]")
 
         let favourite = MastodonNotification(id: "1", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: account("2", "bob"), status: status())
-        #expect(outline(tree(status(), notification: favourite)).hasSuffix("|@bob[プロフィール,リンクをコピー,共有,ブラウザで開く],@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]|その他[通知を削除]"))
+        #expect(outline(tree(status(), notification: favourite)).hasSuffix("|@bob[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[通知を削除,カスタマイズ]"))
     }
 
     /// フォローリクエストの通知では、設定の並びの前に、承認と却下を置く。1項目だけ組むときは置かない。
@@ -119,7 +119,7 @@ struct StatusMenuTreeTests {
         ])
 
         // 並びに書かなかった項目は、既定で直前にある項目の後ろに差し込まれる。
-        #expect(outline(tree(status()), layout: layout) == "返信|共有(押せない),ブラウザで開く(押せない),翻訳,@alice[プロフィール,リンクをコピー,共有,ブラウザで開く]|その他[リンクをコピー(押せない),テキストをコピー,ブースト(押せない),ブックマーク]")
+        #expect(outline(tree(status()), layout: layout) == "返信|共有(押せない),ブラウザで開く(押せない),翻訳,@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[カスタマイズ,リンクをコピー(押せない),テキストをコピー,ブースト(押せない),ブックマーク]")
     }
 
     /// メンションされたユーザーは既定で隠す。出すと、メンションされた人ごとに並ぶ。
@@ -128,7 +128,7 @@ struct StatusMenuTreeTests {
         let post = status(mentions: mentions)
 
         #expect(!outline(tree(post)).contains("@carol"))
-        #expect(outline(tree(post), layout: showing(.mentionedUsers)).hasSuffix("|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く],@carol[プロフィール,リンクをコピー(押せない),共有(押せない),ブラウザで開く(押せない)],@dave[プロフィール,リンクをコピー(押せない),共有(押せない),ブラウザで開く(押せない)]"))
+        #expect(outline(tree(post), layout: showing(.mentionedUsers)).hasSuffix("|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],@carol[プロフィール,リンクをコピー(押せない),共有(押せない),ブラウザで開く(押せない),その他[カスタマイズ]],@dave[プロフィール,リンクをコピー(押せない),共有(押せない),ブラウザで開く(押せない),その他[カスタマイズ]]|その他[カスタマイズ]"))
     }
 
     /// カスタム絵文字は、置く側が組んだ絵文字ごとのサブメニューで「その他」に並ぶ。絵文字のない投稿では出さない。
@@ -142,7 +142,7 @@ struct StatusMenuTreeTests {
             return media.customEmojiSubmenu(emoji, groups: MediaMenuItem.defaultLayout.groups)
         }
 
-        #expect(outline(withEmoji).hasSuffix("|その他[:blobcat:[開く,その他[メディアの情報[PNG]]]]"))
+        #expect(outline(withEmoji).hasSuffix("|その他[:blobcat:[開く,その他[メディアの情報[PNG],カスタマイズ]],カスタマイズ]"))
         #expect(!outline(tree(status())).contains(":"))
     }
 
@@ -151,7 +151,7 @@ struct StatusMenuTreeTests {
         let tagURL = try #require(URL(string: "https://example.social/tags/cat"))
         let post = status(tags: [SciaCore.Tag(name: "cat", url: tagURL), SciaCore.Tag(name: "Cat", url: tagURL), SciaCore.Tag(name: "dog", url: nil)])
 
-        #expect(outline(tree(post)).hasSuffix("|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く],#cat[すべての投稿,@aliceの投稿,ブラウザで開く,リンクをコピー,共有],#dog[すべての投稿,@aliceの投稿,ブラウザで開く(押せない),リンクをコピー(押せない),共有(押せない)]"))
+        #expect(outline(tree(post)).hasSuffix("|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],#cat[すべての投稿,@aliceの投稿,ブラウザで開く,リンクをコピー,共有,その他[カスタマイズ]],#dog[すべての投稿,@aliceの投稿,ブラウザで開く(押せない),リンクをコピー(押せない),共有(押せない),その他[カスタマイズ]]|その他[カスタマイズ]"))
         #expect(!outline(tree(status())).contains("#"))
     }
 

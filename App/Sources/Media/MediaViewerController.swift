@@ -767,7 +767,8 @@ final class MediaViewerController: UIViewController {
             open: { [weak self] url, browser in
                 self?.urlToOpenAfterDismiss = (url, browser)
                 self?.close()
-            }
+            },
+            openSettings: { [weak self] page in self?.openMenuSettings(page) }
         )
         let renderer = MenuRenderer<MediaMenuCommand> { [weak self] command in
             switch command {
@@ -785,6 +786,8 @@ final class MediaViewerController: UIViewController {
             case .copyValue(let value):
                 UIPasteboard.general.string = value
                 self?.showCopiedNotice(.textCopied)
+            case .customize:
+                urlHandlers.openSettings(.mediaMenu)
             case .open, .status:
                 // ビューアでは、開く項目と投稿のメニューを出さない。
                 break

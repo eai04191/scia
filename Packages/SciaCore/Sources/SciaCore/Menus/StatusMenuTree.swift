@@ -50,6 +50,8 @@ public enum StatusMenuCommand {
     case hashtag(Tag, HashtagMenuCommand)
     /// カスタム絵文字の画像の、メディアのメニューのサブメニューの項目。
     indirect case customEmoji(CustomEmoji, MediaMenuCommand)
+    /// このメニューの並びの設定の画面を開く。
+    case customize
 }
 
 /// 投稿の長押しのメニュー。並びは設定の投稿のメニューに従い、関係するユーザーはユーザーのメニューのサブメニューにする。決まりはdocs/menus.mdにある。
@@ -162,6 +164,9 @@ public struct StatusMenuTree {
         case .hashtags:
             guard let shown = status?.displayed else { return [] }
             return hashtagNodes(of: shown)
+        case .customize:
+            // 投稿のない通知（フォローなど）でも出す。
+            return [.action(item.title, icon: .symbol(item.symbolName), .customize)]
         case .reply, .favourite, .reblog, .bookmark, .quote, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .selectText, .edit, .delete:
             guard let status else { return [] }
             return statusNode(item, on: status).map { [$0] } ?? []
@@ -233,7 +238,7 @@ public struct StatusMenuTree {
         case .selectText:
             guard canSelectText else { return nil }
             return .action(item.title, icon: icon, .selectText)
-        case .openThread, .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .hashtags, .dismissNotification, .reblogWithVisibility:
+        case .openThread, .notifyingUser, .author, .booster, .mentionedUsers, .customEmojis, .hashtags, .dismissNotification, .reblogWithVisibility, .customize:
             return nil
         }
     }

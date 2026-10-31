@@ -89,6 +89,15 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         session.open(url)
     }
 
+    /// アプリの中から、この窓のセッションで画面を開く。ログインしていなければ何もしない。
+    func open(_ destination: AppDestination) {
+        guard let session else {
+            logger.error("destination ignored without session")
+            return
+        }
+        session.open(destination)
+    }
+
     /// 他のアプリから開かれたURLを処理する。ログインしていなければ何もしない。
     private func open(_ URLContexts: Set<UIOpenURLContext>) {
         for context in URLContexts {

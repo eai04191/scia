@@ -3,6 +3,12 @@
 public protocol MenuItemKind: RawRepresentable<String>, CaseIterable, Hashable, Sendable {
     /// 既定の並び。項目を足すときは、ここにも足す。足した項目を保存済みの並びのどこに入れるかも、この並びで決まる。
     static var defaultLayout: MenuLayout<Self> { get }
+    /// このメニューの並びの設定の画面を開く項目。ほかに出す項目がないときは、この項目も出さない。決まりはdocs/menus.mdの「並びの設定」にある。
+    static var customizeItem: Self? { get }
+}
+
+extension MenuItemKind {
+    public static var customizeItem: Self? { nil }
 }
 
 /// 長押しのメニューの並び。項目、区切り線、「その他」の境目を1本に並べる。決まりはdocs/menus.mdにある。
@@ -212,6 +218,10 @@ public enum StatusMenuItem: String, MenuItemKind {
     /// 投稿のハッシュタグごとの、ハッシュタグのメニュー。ハッシュタグのある投稿でだけ出る。
     case hashtags
 
+    /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
+    case customize
+    public static var customizeItem: Self? { .customize }
+
     /// 既定は、よく押す項目だけをメニューに並べ、上ほどよく押すものを置いて、何のための操作かでまとまりを分ける。
     /// どの項目も設定を開かずに選べるよう、たまにしか使わない項目は隠さずに「その他」へ入れる。隠すのは、ほかの設定で代わりがきく項目と、メニューを長くしやすい項目だけにする。
     /// - 返信・お気に入り・ブースト: いちばんよく使い、アイコンだけでも見分けられるので、横に並べる
@@ -219,7 +229,7 @@ public enum StatusMenuItem: String, MenuItemKind {
     /// - 持ち出す: リンクとテキストのコピー、テキストを選択、共有、ブラウザで開く。開く場所を選んで開く2つは、開く場所の設定と重なるため隠す
     /// - 読む: 翻訳。スレッドを開くは、既定ではタップで開けて代わりがきくため隠し、出したときに読む操作の先頭に来るようここに置く
     /// - 関係するユーザーとハッシュタグ: メンションされたユーザーは、何人もいるとメニューが長くなるため隠す。ハッシュタグは、ある投稿でしか出ないので、「その他」に入れずに出す
-    /// - 「その他」: たまにしか使わない編集履歴、お気に入りした人、ブーストした人、メディアを隠す、カスタム絵文字、会話のミュート、固定と、取り消せない通知の削除、投稿の削除
+    /// - 「その他」: たまにしか使わない編集履歴、お気に入りした人、ブーストした人、メディアを隠す、カスタム絵文字、会話のミュート、固定と、取り消せない通知の削除、投稿の削除。いちばん下に、並びの設定を開くカスタマイズ
     public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
         .rowSeparator,
         .item(.reply, isVisible: true),
@@ -259,6 +269,8 @@ public enum StatusMenuItem: String, MenuItemKind {
         .separator,
         .item(.dismissNotification, isVisible: true),
         .item(.delete, isVisible: true),
+        .separator,
+        .item(.customize, isVisible: true),
     ])
 }
 
@@ -295,6 +307,10 @@ public enum UserMenuItem: String, MenuItemKind {
     /// 通報のシートを開く。
     case report
 
+    /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
+    case customize
+    public static var customizeItem: Self? { .customize }
+
     public static let defaultLayout = MenuLayout<UserMenuItem>(defaultElements: [
         .item(.profile, isVisible: true),
         .item(.mention, isVisible: true),
@@ -315,13 +331,15 @@ public enum UserMenuItem: String, MenuItemKind {
         .item(.mute, isVisible: true),
         .item(.block, isVisible: true),
         .item(.report, isVisible: true),
+        .separator,
+        .item(.customize, isVisible: true),
     ])
 
     /// 相手との関係で中身が変わる項目。通報は関係で変わらず、自分に出さないかはIDで決まるため含めない。
     public var dependsOnRelationship: Bool {
         switch self {
         case .follow, .showReblogs, .notify, .note, .mute, .block: true
-        case .profile, .mention, .copyHandle, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .report: false
+        case .profile, .mention, .copyHandle, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .report, .customize: false
         }
     }
 }
@@ -348,6 +366,10 @@ public enum LinkMenuItem: String, MenuItemKind {
     case copyLink
     case share
 
+    /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
+    case customize
+    public static var customizeItem: Self? { .customize }
+
     public static let defaultLayout = MenuLayout<LinkMenuItem>(defaultElements: [
         .item(.openInBrowser, isVisible: true),
         .item(.openAsProfile, isVisible: true),
@@ -356,6 +378,7 @@ public enum LinkMenuItem: String, MenuItemKind {
         .item(.copyLink, isVisible: true),
         .item(.share, isVisible: true),
         .more,
+        .item(.customize, isVisible: true),
     ])
 }
 
@@ -375,6 +398,10 @@ public enum ExternalPostMenuItem: String, MenuItemKind {
     /// 本文をプレーンテキストにして、システムの翻訳シートで訳す。本文のある投稿でだけ出る。
     case systemTranslate
 
+    /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
+    case customize
+    public static var customizeItem: Self? { .customize }
+
     /// - 持ち出す: ブラウザで開く、リンクとテキストのコピー、共有
     /// - 読む: 翻訳
     public static let defaultLayout = MenuLayout<ExternalPostMenuItem>(defaultElements: [
@@ -387,6 +414,7 @@ public enum ExternalPostMenuItem: String, MenuItemKind {
         .separator,
         .item(.systemTranslate, isVisible: true),
         .more,
+        .item(.customize, isVisible: true),
     ])
 }
 
@@ -401,6 +429,10 @@ public enum ProfileTextMenuItem: String, MenuItemKind {
     /// 文章に描いているカスタム絵文字ごとに、絵文字の画像のメディアのメニューを出す。絵文字のある文章でだけ出る。
     case customEmojis
 
+    /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
+    case customize
+    public static var customizeItem: Self? { .customize }
+
     public static let defaultLayout = MenuLayout<ProfileTextMenuItem>(defaultElements: [
         // 補足情報の行では、ラベルが内容の上にあるので、コピーも同じ順に並べる。
         .item(.copyLabel, isVisible: true),
@@ -410,6 +442,7 @@ public enum ProfileTextMenuItem: String, MenuItemKind {
         .separator,
         .item(.customEmojis, isVisible: true),
         .more,
+        .item(.customize, isVisible: true),
     ])
 }
 
@@ -430,6 +463,10 @@ public enum HashtagMenuItem: String, MenuItemKind {
     case copyLink
     case share
 
+    /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
+    case customize
+    public static var customizeItem: Self? { .customize }
+
     public static let defaultLayout = MenuLayout<HashtagMenuItem>(defaultElements: [
         .item(.timeline, isVisible: true),
         .item(.accountStatuses, isVisible: true),
@@ -442,6 +479,7 @@ public enum HashtagMenuItem: String, MenuItemKind {
         .item(.copyLink, isVisible: true),
         .item(.share, isVisible: true),
         .more,
+        .item(.customize, isVisible: true),
     ])
 }
 
@@ -470,11 +508,15 @@ public enum MediaMenuItem: String, MenuItemKind {
     /// 解像度や形式などを並べるサブメニュー。
     case info
 
+    /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
+    case customize
+    public static var customizeItem: Self? { .customize }
+
     /// - 開く・共有・写真に保存
     /// - 読む: 代替テキスト、画像の文字を翻訳
     /// - 持ち出す: リンクのコピー、ブラウザで開く。開く場所を選んで開く2つは、ほかのメニューと同じく隠す
     /// - 投稿
-    /// - 「その他」: メディアの情報
+    /// - 「その他」: メディアの情報と、並びの設定を開くカスタマイズ
     public static let defaultLayout = MenuLayout<MediaMenuItem>(defaultElements: [
         .item(.open, isVisible: true),
         .item(.share, isVisible: true),
@@ -491,5 +533,7 @@ public enum MediaMenuItem: String, MenuItemKind {
         .item(.status, isVisible: true),
         .more,
         .item(.info, isVisible: true),
+        .separator,
+        .item(.customize, isVisible: true),
     ])
 }

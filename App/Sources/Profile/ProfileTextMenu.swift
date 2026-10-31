@@ -21,6 +21,8 @@ extension TimelineViewController {
                 // 1つなら絵文字のサブメニューを直に置く。多いと1段目が絵文字で埋まるため、2つ以上はまとめる。
                 guard emojis.count > 1 else { return emojis }
                 return [UIMenu(title: item.title, image: item.image, children: emojis)]
+            case .customize:
+                return [UIAction(title: item.title, image: item.image) { [weak self] _ in self?.openMenuSettings(.profileTextMenu) }]
             }
         }
         return children.isEmpty ? nil : UIMenu(children: children)

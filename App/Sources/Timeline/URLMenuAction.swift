@@ -10,6 +10,8 @@ struct URLMenuHandlers {
     let share: @MainActor (URL) -> Void
     /// `url`を、開く項目と開く場所の設定から決めた場所で開く。
     let open: @MainActor (URL, LinkBrowser) -> Void
+    /// メニューの「カスタマイズ」で、その並びの設定の画面を開く。
+    let openSettings: @MainActor (SettingsPage) -> Void
 
     /// 共通の項目で選んだ操作を行う。
     func perform(_ command: URLMenuCommand) {

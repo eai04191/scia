@@ -23,6 +23,7 @@ struct LinkMenu {
         switch command {
         case .url(let command): handlers.perform(command)
         case .openAsProfile: openAsProfile()
+        case .customize: handlers.openSettings(.linkMenu)
         }
     }
 }

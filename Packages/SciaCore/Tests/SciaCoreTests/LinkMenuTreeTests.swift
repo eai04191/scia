@@ -13,7 +13,7 @@ struct LinkMenuTreeTests {
         let menu = try #require(LinkMenuTree(url: url, linkBrowser: .inApp).menu(groups: all))
 
         #expect(menu.title == "https://example.com/a")
-        #expect(MenuNodeTests.describe(menu.children) == "ブラウザで開く,既定のブラウザで開く,アプリ内のSafariで開く,プロフィールとして開く,リンクをコピー,共有")
+        #expect(MenuNodeTests.describe(menu.children) == "ブラウザで開く,既定のブラウザで開く,アプリ内のSafariで開く,プロフィールとして開く,リンクをコピー,共有,カスタマイズ")
     }
 
     /// httpとhttps以外のリンクでは、「プロフィールとして開く」とアプリ内のSafariで開くを押せない。
@@ -21,7 +21,7 @@ struct LinkMenuTreeTests {
         let url = try #require(URL(string: "mailto:alice@example.com"))
         let menu = try #require(LinkMenuTree(url: url, linkBrowser: .inApp).menu(groups: all))
 
-        #expect(MenuNodeTests.describe(menu.children) == "ブラウザで開く,既定のブラウザで開く,アプリ内のSafariで開く(押せない),プロフィールとして開く(押せない),リンクをコピー,共有")
+        #expect(MenuNodeTests.describe(menu.children) == "ブラウザで開く,既定のブラウザで開く,アプリ内のSafariで開く(押せない),プロフィールとして開く(押せない),リンクをコピー,共有,カスタマイズ")
     }
 
     /// 出す項目をすべて隠していれば、メニューを出さない。

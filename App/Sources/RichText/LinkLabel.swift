@@ -338,7 +338,8 @@ final class LinkHitArea: UIControl {
             linkBrowser: linkBrowser,
             copy: { [weak self] url in URLSharing.copy(url, notifying: self?.nearest((any LinkMenuHost).self)) },
             share: { [weak self] url in self?.presentShareSheet(for: url, at: point) },
-            open: { [weak self] url, browser in self?.nearest((any LinkMenuHost).self)?.openURL(url, in: browser) }
+            open: { [weak self] url, browser in self?.nearest((any LinkMenuHost).self)?.openURL(url, in: browser) },
+            openSettings: { [weak self] page in self?.nearest(UIViewController.self)?.openMenuSettings(page) }
         )
     }
 

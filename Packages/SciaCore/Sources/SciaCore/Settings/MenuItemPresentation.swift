@@ -107,6 +107,7 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .mentionedUsers: .own(title: "メンションされたユーザー", symbolName: "at")
         case .customEmojis: .own(title: "カスタム絵文字", symbolName: "face.smiling", note: "行にカスタム絵文字があるときだけ出ます。絵文字ごとに、画像のメディアのメニューを出します")
         case .hashtags: .own(title: "ハッシュタグ", symbolName: "number", note: "ハッシュタグのある投稿でだけ出ます。ハッシュタグごとに、ハッシュタグのメニューを出します")
+        case .customize: .own(title: "カスタマイズ", symbolName: "slider.horizontal.3", note: "このメニューの並びを変える画面を開きます。隠しても、設定から変えられます")
         }
     }
 }
@@ -129,6 +130,7 @@ extension UserMenuItem: MenuItemContentProviding {
         case .mute: .own(title: "ミュート", symbolName: "speaker.slash", note: "期間を選んでミュートします。ミュート中なら解除します")
         case .block: .own(title: "ブロック", symbolName: "hand.raised", note: "ブロック中なら解除します")
         case .report: .own(title: "通報", symbolName: "flag", note: "投稿のメニューから開くと、その人の投稿なら添えます。自分には出ません")
+        case .customize: .own(title: "カスタマイズ", symbolName: "slider.horizontal.3", note: "このメニューの並びを変える画面を開きます。隠しても、設定から変えられます")
         }
     }
 }
@@ -143,6 +145,7 @@ extension LinkMenuItem: MenuItemContentProviding {
         case .openAsProfile: .own(title: "プロフィールとして開く", symbolName: "person.crop.circle", note: "リンク先のプロフィールをサーバーで探して開きます。httpとhttpsのリンクでだけ押せます")
         case .copyLink: .url(.copyLink)
         case .share: .url(.share)
+        case .customize: .own(title: "カスタマイズ", symbolName: "slider.horizontal.3", note: "このメニューの並びを変える画面を開きます。隠しても、設定から変えられます")
         }
     }
 }
@@ -157,6 +160,7 @@ extension ExternalPostMenuItem: MenuItemContentProviding {
         case .copyText: .own(title: "テキストをコピー", symbolName: "doc.on.doc", note: "本文のある投稿でだけ出ます")
         case .share: .url(.share)
         case .systemTranslate: .own(title: "翻訳", symbolName: "translate", note: "本文のある投稿でだけ出ます")
+        case .customize: .own(title: "カスタマイズ", symbolName: "slider.horizontal.3", note: "このメニューの並びを変える画面を開きます。隠しても、設定から変えられます")
         }
     }
 }
@@ -168,6 +172,7 @@ extension ProfileTextMenuItem: MenuItemContentProviding {
         case .copyLabel: .own(title: "ラベルをコピー", symbolName: "tag", note: "補足情報の行でだけ出ます")
         case .systemTranslate: .own(title: "翻訳", symbolName: "translate", note: "補足情報では内容だけを訳します")
         case .customEmojis: .own(title: "カスタム絵文字", symbolName: "face.smiling", note: "長押しした文章にカスタム絵文字があるときだけ出ます。絵文字ごとに、画像のメディアのメニューを出します")
+        case .customize: .own(title: "カスタマイズ", symbolName: "slider.horizontal.3", note: "このメニューの並びを変える画面を開きます。隠しても、設定から変えられます")
         }
     }
 }
@@ -183,6 +188,7 @@ extension HashtagMenuItem: MenuItemContentProviding {
         case .openInAppSafari: .url(.openInAppSafari)
         case .copyLink: .url(.copyLink)
         case .share: .url(.share)
+        case .customize: .own(title: "カスタマイズ", symbolName: "slider.horizontal.3", note: "このメニューの並びを変える画面を開きます。隠しても、設定から変えられます")
         }
     }
 }
@@ -368,6 +374,7 @@ extension MediaMenuItem: MenuItemContentProviding {
         case .openInAppSafari: .url(.openInAppSafari)
         case .status: .own(title: "投稿", symbolName: "text.bubble", note: "投稿のメニューをサブメニューで出します。ビューアとプロフィールの画像では出ません")
         case .info: .own(title: "メディアの情報", symbolName: "info.circle", note: "解像度、形式、フレームレート、長さ、ビットレートのうち分かるものを出します")
+        case .customize: .own(title: "カスタマイズ", symbolName: "slider.horizontal.3", note: "このメニューの並びを変える画面を開きます。隠しても、設定から変えられます")
         }
     }
 }

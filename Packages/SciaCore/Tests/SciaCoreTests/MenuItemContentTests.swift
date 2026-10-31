@@ -20,10 +20,10 @@ struct MenuItemContentTests {
         #expect(mismatches(MediaMenuItem.self).isEmpty)
     }
 
-    /// リンクのメニューの独自の項目は、組む処理を持つ「プロフィールとして開く」だけにする。ほかを足したら、組む処理を足してからここに加える。
+    /// リンクのメニューの独自の項目は、組む処理を持つ「プロフィールとして開く」と「カスタマイズ」だけにする。ほかを足したら、組む処理を足してからここに加える。
     /// ハッシュタグのメニューは、独自の項目を`default`のない分岐で組むので、足し忘れはコンパイラが止める。
     @Test func linkMenuHasOnlyHandledOwnItems() {
-        #expect(LinkMenuItem.allCases.filter { $0.urlAction == nil } == [.openAsProfile])
+        #expect(LinkMenuItem.allCases.filter { $0.urlAction == nil } == [.openAsProfile, .customize])
     }
 
     /// 共通の項目の名前と説明はどのメニューでも同じで、メニューに固有の決まりだけを書き足す。
