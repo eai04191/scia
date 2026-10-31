@@ -84,3 +84,5 @@ targetは、指定がなければ`git symbolic-ref --short refs/remotes/origin/H
 - このmergeの外の変更: 別のリポジトリへのcommitなど、ユーザーが後で扱う必要があるもの
 
 どれもなければ「archiveしてよい」と書く。あれば、archiveの前に片付けるものと、閉じても困らないものに分けて挙げる。見つけたものは、確認せずに直したりdocsに書き足したりしない。
+
+「archiveしてよい」と書いたら、`mcp__ccd_session_mgmt__set_session_title`でthread名の先頭に✅を付ける。そのあと同じthreadで作業を始めたら、最初に✅を外す。
