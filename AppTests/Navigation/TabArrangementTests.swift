@@ -279,7 +279,9 @@ struct TabArrangementTests {
         }
         let root = try #require(harness.navigations[Self.carol]?.viewControllers.first)
         let menu = try #require(root.navigationItem.titleMenuProvider?([]))
-        let images = menu.children.compactMap { ($0 as? UIAction)?.image }
+        // 「カスタマイズ」を出す設定（端末の設定で、既定は出す）では、見出しのメニューのタイムラインの項目は最初のまとまりに入る。
+        let timelines = (menu.children.first as? UIMenu)?.children ?? menu.children
+        let images = timelines.compactMap { ($0 as? UIAction)?.image }
         #expect(images.first === icons[Self.carol]?.menu)
         #expect(images.last?.renderingMode != .alwaysOriginal)
     }
