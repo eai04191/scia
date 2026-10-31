@@ -40,7 +40,7 @@ struct ServerFilterCacheTests {
     }
 
     private func makeCache(_ server: Server) -> ServerFilterCache {
-        ServerFilterCache { try await server.fetch() }
+        ServerFilterCache(label: "filters") { try await server.fetch() }
     }
 
     /// 読んでいなければ、求められたときに読む。読んだ一覧は覚え、次は送らずに返す。
@@ -48,17 +48,17 @@ struct ServerFilterCacheTests {
         let server = Server(titles: ["a"])
         let cache = makeCache(server)
 
-        #expect(cache.filters == nil)
+        #expect(cache.value == nil)
         #expect(try await cache.latest().map(\.title) == ["a"])
         #expect(try await cache.latest().map(\.title) == ["a"])
-        #expect(cache.filters?.map(\.title) == ["a"])
+        #expect(cache.value?.map(\.title) == ["a"])
         #expect(server.requests == 1)
     }
 
     /// 読み直しは、渡した目的を名乗って読む。まだ読んでいない一覧を待つときは、待っている側が名乗った目的で読む。
     @Test func reloadDeclaresPurpose() async throws {
         let purposes = Mutex<[RequestPurpose?]>([])
-        let cache = ServerFilterCache {
+        let cache = ServerFilterCache(label: "filters") {
             purposes.withLock { $0.append(RequestPurpose.current) }
             return []
         }
@@ -77,7 +77,7 @@ struct ServerFilterCacheTests {
 
         cache.refresh(purpose: .action)
         cache.refresh(purpose: .action)
-        #expect(cache.filters?.map(\.title) == ["a"])
+        #expect(cache.value?.map(\.title) == ["a"])
         #expect(try await cache.latest().map(\.title) == ["a", "b"])
         #expect(server.requests == 2)
     }
@@ -96,7 +96,7 @@ struct ServerFilterCacheTests {
         try #require(server.gate).open()
 
         #expect(try await waiting.value.map(\.title) == ["new"])
-        #expect(cache.filters?.map(\.title) == ["new"])
+        #expect(cache.value?.map(\.title) == ["new"])
     }
 
     /// 読めなかったら、覚えている一覧を残して投げる。
@@ -108,7 +108,7 @@ struct ServerFilterCacheTests {
 
         cache.reload(purpose: .action)
         await #expect(throws: URLError.self) { try await cache.latest() }
-        #expect(cache.filters?.map(\.title) == ["a"])
+        #expect(cache.value?.map(\.title) == ["a"])
     }
 
     /// リクエストごとに別の門で止め、届く順を決められる。`responses`のn番目が、n番目のリクエストの結果になる。nilなら失敗する。
@@ -138,7 +138,7 @@ struct ServerFilterCacheTests {
     /// 待っている間に後から始めた読み直しが先に届いても、先に始めた読み直しの古い一覧を返さない。
     @Test func latestReturnsNewerReloadEvenWhenItFinishesFirst() async throws {
         let server = OrderedServer([["old"], ["new"]])
-        let cache = ServerFilterCache { try await server.fetch() }
+        let cache = ServerFilterCache(label: "filters") { try await server.fetch() }
         cache.refresh(purpose: .action)
         try await waitUntil { server.requests == 1 }
         let waiting = Task { try await cache.latest() }
@@ -146,17 +146,17 @@ struct ServerFilterCacheTests {
         try await waitUntil { server.requests == 2 }
 
         server.gates[1].open()
-        try await waitUntil { cache.filters != nil }
+        try await waitUntil { cache.value != nil }
         server.gates[0].open()
 
         #expect(try await waiting.value.map(\.title) == ["new"])
-        #expect(cache.filters?.map(\.title) == ["new"])
+        #expect(cache.value?.map(\.title) == ["new"])
     }
 
     /// 先に始めた読み直しが失敗しても、後から始めた読み直しが読めていれば、その一覧を返す。
     @Test func latestIgnoresFailureOfSupersededReload() async throws {
         let server = OrderedServer([nil, ["new"]])
-        let cache = ServerFilterCache { try await server.fetch() }
+        let cache = ServerFilterCache(label: "filters") { try await server.fetch() }
         cache.refresh(purpose: .action)
         try await waitUntil { server.requests == 1 }
         let waiting = Task { try await cache.latest() }
@@ -172,7 +172,7 @@ struct ServerFilterCacheTests {
     /// 止めたら、走っている読み直しを取り消し、以後は読まない。ログアウトのあとに前のアカウントで通信し続けないため。
     @Test func closeCancelsReloadAndStopsLoading() async throws {
         let server = OrderedServer([["a"], ["b"]])
-        let cache = ServerFilterCache { try await server.fetch() }
+        let cache = ServerFilterCache(label: "filters") { try await server.fetch() }
         cache.refresh(purpose: .action)
         try await waitUntil { server.requests == 1 }
         let waiting = Task { try await cache.latest() }

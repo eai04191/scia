@@ -466,7 +466,7 @@ final class SessionController {
         }
         let accounts = AccountCache { [client] ids in try await client.accounts(ids) }
         self.accounts = accounts
-        serverFilters = ServerFilterCache { [client] in try await client.filters() }
+        serverFilters = ServerFilterCache(label: "filters") { [client] in try await client.filters() }
         // キャッシュが自分で始めた通信も、ログアウトやアカウントの切り替えで止める。
         tasks.onClose { [weak accounts, weak serverFilters, weak relationships = profiles.relationships] in
             accounts?.close()
@@ -1944,7 +1944,7 @@ final class SessionController {
         let serverFilters = serverFilters
         let now = now
         return HashtagMuteActions(
-            known: { name in serverFilters.filters.map { HashtagMute.find(name, in: $0, now: now()) != nil } },
+            known: { name in serverFilters.value.map { HashtagMute.find(name, in: $0, now: now()) != nil } },
             // まだ読めていなければ、開いたメニューがこの読み直しを待つので、操作として送る。
             refresh: { serverFilters.refresh(purpose: .action) },
             load: { name in HashtagMute.find(name, in: try await serverFilters.latest(), now: now()) != nil },
