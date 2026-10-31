@@ -106,6 +106,15 @@ enum ProfileHeaderCatalog {
             CatalogState(title: "ほかのサーバーのbot") {
                 header(Fixtures.account(displayName: "ほかのサーバーのbot", acct: "bot@remote.example", bot: true), .notFollowing(locked: false))
             },
+            CatalogState(title: "折り返す長いハンドルの、承認制のbot") {
+                header(
+                    Fixtures.account(displayName: "長いハンドル", acct: "a_very_long_username_for_wrapping@a.very.long.server.name.example", locked: true, bot: true),
+                    .notFollowing(locked: true)
+                )
+            },
+            CatalogState(title: "1文字のハンドル（押せる幅は44pt）") {
+                header(Fixtures.account(displayName: "短いハンドル", acct: "_"), .notFollowing(locked: false))
+            },
             CatalogState(title: "メディアのタブ、角丸のアイコン") { header(fullAccount, .following, tab: .media, avatarShape: .roundedSquare) },
             CatalogState(title: "固定された投稿の棚（長い本文、添付ファイル、閲覧注意の警告、閲覧注意の添付ファイル、短い本文）") {
                 header(fullAccount, .following, pinned: pinnedStatuses)
