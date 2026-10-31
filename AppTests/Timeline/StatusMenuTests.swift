@@ -239,7 +239,7 @@ struct StatusMenuTests {
         )
         let refreshes = ReloadRecorder()
         let viewController = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: try makeSettings())
-        viewController.hashtagMuteActions = HashtagMuteActions(
+        viewController.hashtagMenuActions = HashtagMenuActions(mute: HashtagMuteActions(
             known: { name in
                 switch name {
                 case "cat": true
@@ -251,7 +251,7 @@ struct StatusMenuTests {
             load: { _ in false },
             mute: { _, _ in },
             unmute: { _ in }
-        )
+        ))
 
         let tags = (viewController.contextMenu(for: .status(post), id: TimelineEntry.status(post).id)?.children ?? [])
             .flatMap { ($0 as? UIMenu)?.children ?? [] }

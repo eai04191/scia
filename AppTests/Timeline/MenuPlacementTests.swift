@@ -97,7 +97,7 @@ struct MenuPlacementTests {
         let items = HashtagMenuItem.allCases.map { MenuLayout<HashtagMenuItem>.Element.item($0, isVisible: true) }
         settings.hashtagMenuLayout = MenuLayout(elements: Array(items.prefix(3)) + [.separator] + Array(items.dropFirst(3).prefix(2)) + [.more] + Array(items.dropFirst(5)))
         let viewController = makeViewController(settings: settings)
-        viewController.hashtagMuteActions = HashtagMuteActions(known: { _ in false }, refresh: {}, load: { _ in false }, mute: { _, _ in }, unmute: { _ in })
+        viewController.hashtagMenuActions = HashtagMenuActions(mute: HashtagMuteActions(known: { _ in false }, refresh: {}, load: { _ in false }, mute: { _, _ in }, unmute: { _ in }))
         let tagURL = try #require(URL(string: "https://example.social/tags/cat"))
         let base = try #require(StatusFactory.make(count: 1, startingAt: 100).first)
         let post = Status(id: base.id, createdAt: base.createdAt, account: alice, content: base.content, spoilerText: "", url: nil, tags: [Tag(name: "cat", url: tagURL)])

@@ -24,15 +24,15 @@ public struct HashtagMenuTree {
     /// 「投稿したユーザーの投稿」で開くユーザー。nilなら項目を出さない。
     public let account: Account?
     public let linkBrowser: LinkBrowser
-    /// ミュートを読むもの。nilなら「ミュート」を出さない。
-    public let muteActions: HashtagMuteActions?
+    /// ミュートなど、自分の状態を読んで変える項目のためのもの。nilなら、それらの項目を出さない。
+    public let actions: HashtagMenuActions?
 
-    public init(name: String, url: URL?, account: Account?, linkBrowser: LinkBrowser, muteActions: HashtagMuteActions?) {
+    public init(name: String, url: URL?, account: Account?, linkBrowser: LinkBrowser, actions: HashtagMenuActions?) {
         self.name = name
         self.url = url
         self.account = account
         self.linkBrowser = linkBrowser
-        self.muteActions = muteActions
+        self.actions = actions
     }
 
     /// 本文のハッシュタグの長押しで単独で出すメニュー。見出しに`#名前`を置く。出す項目がなければnil。
@@ -63,7 +63,7 @@ public struct HashtagMenuTree {
                 // ほかのサーバーのユーザーなら、ユーザーのメニューの見出しと同じく、サーバー名をサブタイトルに出す。
                 return [.action("@\(account.username)の投稿", subtitle: UserHeading(acct: account.acct).subtitle, icon: .symbol(item.symbolName), .openAccountStatuses(account))]
             case .mute:
-                guard let muteActions else { return [] }
+                guard let muteActions = actions?.mute else { return [] }
                 return muteNodes(muteActions, item: item)
             case .customize:
                 return [.action(item.title, icon: .symbol(item.symbolName), .customize)]
@@ -101,6 +101,16 @@ public struct HashtagMenuTree {
                 return [.action("ミュートを読み込めませんでした", icon: .symbol("exclamationmark.triangle"), isEnabled: false, nil)]
             }
         }]
+    }
+}
+
+/// ハッシュタグのメニューの、自分の状態を読んで変える項目のためのもの。出す場所が、セッションの持ち物から組んで渡す。
+public struct HashtagMenuActions {
+    /// nilなら「ミュート」を出さない。
+    public var mute: HashtagMuteActions?
+
+    public init(mute: HashtagMuteActions?) {
+        self.mute = mute
     }
 }
 

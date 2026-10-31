@@ -13,13 +13,13 @@ struct HashtagMenuTreeTests {
         var refreshes = 0
     }
 
-    private func muteActions(known: Bool?, recorder: Recorder = Recorder(), load: @escaping @MainActor (String) async throws -> Bool = { _ in false }) -> HashtagMuteActions {
-        HashtagMuteActions(known: { _ in known }, refresh: { recorder.refreshes += 1 }, load: load, mute: { _, _ in }, unmute: { _ in })
+    private func muteActions(known: Bool?, recorder: Recorder = Recorder(), load: @escaping @MainActor (String) async throws -> Bool = { _ in false }) -> HashtagMenuActions {
+        HashtagMenuActions(mute: HashtagMuteActions(known: { _ in known }, refresh: { recorder.refreshes += 1 }, load: load, mute: { _, _ in }, unmute: { _ in }))
     }
 
     /// 見出しに`#名前`を置き、ほかのサーバーのユーザーの「@名前の投稿」には、サーバー名をサブタイトルに添える。URLが分からなければ、URLの項目を押せない。
     @Test func headingAndItems() throws {
-        let tree = HashtagMenuTree(name: "cat", url: nil, account: alice, linkBrowser: .inApp, muteActions: nil)
+        let tree = HashtagMenuTree(name: "cat", url: nil, account: alice, linkBrowser: .inApp, actions: nil)
         let menu = try #require(tree.menu(groups: all))
 
         #expect(menu.title == "#cat")
@@ -35,7 +35,7 @@ struct HashtagMenuTreeTests {
     @Test func muteUsesKnownFiltersAndRefreshes() async throws {
         let recorder = Recorder()
         func describe(_ known: Bool?) throws -> String {
-            let tree = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, muteActions: muteActions(known: known, recorder: recorder))
+            let tree = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, actions: muteActions(known: known, recorder: recorder))
             return MenuNodeTests.describe(try #require(tree.menu(groups: .single(.mute))).children)
         }
 
@@ -47,7 +47,7 @@ struct HashtagMenuTreeTests {
 
     /// 読めなかったら、押せない行で知らせる。
     @Test func muteLoadFailureIsShownAsDisabledRow() async throws {
-        let tree = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, muteActions: muteActions(known: nil) { _ in throw URLError(.notConnectedToInternet) })
+        let tree = HashtagMenuTree(name: "cat", url: nil, account: nil, linkBrowser: .inApp, actions: muteActions(known: nil) { _ in throw URLError(.notConnectedToInternet) })
         let menu = try #require(tree.menu(groups: .single(.mute)))
         guard case .deferred(let load) = try #require(menu.flattenedChildren.first).content else {
             Issue.record("読み込み中の行になっていません")

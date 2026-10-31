@@ -69,7 +69,7 @@ extension TimelineViewController {
         tree.userMenu = settings.userMenuLayout.groups
         tree.userActions = userMenuActions
         tree.hashtagMenu = settings.hashtagMenuLayout.groups
-        tree.hashtagMute = hashtagMuteActions
+        tree.hashtagActions = hashtagMenuActions
         tree.customEmoji = { emojis.node(for: $0) }
         let built = tree.menu(groups: groups ?? settings.statusMenuLayout.groups, includesFollowRequest: groups == nil)
         reloadRelations(built.shownUserIDs)
@@ -147,7 +147,7 @@ extension TimelineViewController {
             url: tag.url,
             account: shown.account,
             handlers: urlHandlers(id: id),
-            muteActions: hashtagMuteActions,
+            actions: hashtagMenuActions,
             openTimeline: { [weak self] in self?.onOpenHashtag?(tag.name) },
             openAccountStatuses: { [weak self] account in self?.onOpenAccountHashtag?(tag.name, account) }
         )

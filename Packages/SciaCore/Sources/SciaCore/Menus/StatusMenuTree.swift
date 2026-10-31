@@ -89,7 +89,7 @@ public struct StatusMenuTree {
     public var userActions: UserMenuActions?
     /// ハッシュタグのメニューの並びと、ミュートを読むもの。
     public var hashtagMenu: MenuLayout<HashtagMenuItem>.Groups = HashtagMenuItem.defaultLayout.groups
-    public var hashtagMute: HashtagMuteActions?
+    public var hashtagActions: HashtagMenuActions?
     /// カスタム絵文字の画像のメディアのメニュー。メディアを共有や保存できるかは置く側で決まるため、置く側が組む。
     public var customEmoji: @MainActor (CustomEmoji) -> MenuNode<MediaMenuCommand>? = { _ in nil }
 
@@ -273,7 +273,7 @@ public struct StatusMenuTree {
     private func hashtagNodes(of shown: Status) -> [MenuNode<StatusMenuCommand>] {
         var seen: Set<String> = []
         return shown.tags.filter { seen.insert(Hashtag.normalizedName($0.name)).inserted }.compactMap { tag in
-            HashtagMenuTree(name: tag.name, url: tag.url, account: shown.account, linkBrowser: linkBrowser, muteActions: hashtagMute)
+            HashtagMenuTree(name: tag.name, url: tag.url, account: shown.account, linkBrowser: linkBrowser, actions: hashtagActions)
                 .submenu(groups: hashtagMenu)?
                 .map { .hashtag(tag, $0) }
         }

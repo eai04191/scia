@@ -347,8 +347,8 @@ protocol LinkMenuHost: AnyObject {
     func showHandleCopiedNotice(_ part: UserHandlePart)
     /// ユーザーのメニューのメンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
     var userMenuActions: UserMenuActions? { get }
-    /// ハッシュタグのメニューのミュートを組むもの。nilなら項目を出さない。
-    var hashtagMuteActions: HashtagMuteActions? { get }
+    /// ハッシュタグのメニューの、自分の状態を読んで変える項目を組むもの。nilなら、それらの項目を出さない。
+    var hashtagMenuActions: HashtagMenuActions? { get }
     /// 開く項目を選んだ。`browser`は選んだ項目と開く場所の設定から決めた、実際に開く場所。
     func openURL(_ url: URL, in browser: LinkBrowser)
     /// リンクのメニューの「プロフィールとして開く」を選んだ。
@@ -519,7 +519,7 @@ final class LinkHitArea: UIControl {
             url: url,
             account: label.hashtagAccount,
             handlers: urlHandlers(at: point, linkBrowser: settings.linkBrowser),
-            muteActions: nearest((any LinkMenuHost).self)?.hashtagMuteActions,
+            actions: nearest((any LinkMenuHost).self)?.hashtagMenuActions,
             openTimeline: { [weak self] in self?.label?.open(destination) },
             openAccountStatuses: { [weak self] account in self?.nearest((any LinkMenuHost).self)?.openHashtag(name, of: account) }
         )

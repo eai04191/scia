@@ -31,15 +31,15 @@ struct HashtagMenu {
     let account: Account?
     /// URLの項目の動き。
     let handlers: URLMenuHandlers
-    /// ミュートを読んで変えるもの。nilなら「ミュート」を出さない。
-    let muteActions: HashtagMuteActions?
+    /// ミュートなど、自分の状態を読んで変える項目のためのもの。nilなら、それらの項目を出さない。
+    let actions: HashtagMenuActions?
     /// 「すべての投稿」で、ハッシュタグのタイムラインを開く。
     let openTimeline: () -> Void
     /// 「投稿したユーザーの投稿」で、そのユーザーのハッシュタグの付いた投稿を開く。
     let openAccountStatuses: (Account) -> Void
 
     var tree: HashtagMenuTree {
-        HashtagMenuTree(name: name, url: url, account: account, linkBrowser: handlers.linkBrowser, muteActions: muteActions)
+        HashtagMenuTree(name: name, url: url, account: account, linkBrowser: handlers.linkBrowser, actions: actions)
     }
 
     /// 本文のハッシュタグの長押しで単独で出すメニュー。見出しに`#名前`を置く。出す項目がなければnil。
@@ -52,8 +52,8 @@ struct HashtagMenu {
         case .url(let command): handlers.perform(command)
         case .openTimeline: openTimeline()
         case .openAccountStatuses(let account): openAccountStatuses(account)
-        case .mute(let duration): muteActions?.mute(name, duration)
-        case .unmute: muteActions?.unmute(name)
+        case .mute(let duration): actions?.mute?.mute(name, duration)
+        case .unmute: actions?.mute?.unmute(name)
         case .customize: handlers.openSettings(.hashtagMenu)
         }
     }

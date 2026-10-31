@@ -1101,7 +1101,7 @@ final class SessionController {
             self?.openThread(statusID: statusID, rowFrame: rowFrame, from: viewController)
         }
         viewController.userMenuActions = userMenuActions
-        viewController.hashtagMuteActions = hashtagMuteActions
+        viewController.hashtagMenuActions = hashtagMenuActions
         viewController.onVisibleLinkOnlyCardsChange = { [weak self, weak viewController] statuses in
             guard let self, let viewController else { return }
             #if DEBUG
@@ -1511,7 +1511,7 @@ final class SessionController {
         let controller = AnnouncementsViewController(model: announcements, completion: completion)
         controller.notices = notices
         controller.userMenuActions = userMenuActions
-        controller.hashtagMuteActions = hashtagMuteActions
+        controller.hashtagMenuActions = hashtagMenuActions
         controller.onOpenLink = { [weak self, weak controller] destination, announcement in
             controller?.dismiss(animated: true) {
                 self?.open(destination, inAnnouncement: announcement)
@@ -1921,7 +1921,7 @@ final class SessionController {
             self?.openAccountHashtag(name, of: account, from: viewController)
         }
         viewController.userMenuActions = userMenuActions
-        viewController.hashtagMuteActions = hashtagMuteActions
+        viewController.hashtagMenuActions = hashtagMenuActions
         viewController.onOpenLink = { [weak self, weak viewController] destination in
             guard let self, let viewController else { return }
             // 編集で消したメンションは、今の投稿のメンションの一覧にないため、一覧と同じ引き方ではIDが分からない。プロフィールのURLから探す。
@@ -1932,6 +1932,11 @@ final class SessionController {
             }
         }
         source?.navigationController?.pushViewController(viewController, animated: true)
+    }
+
+    /// ハッシュタグのメニューの、自分の状態を読んで変える項目。
+    private var hashtagMenuActions: HashtagMenuActions {
+        HashtagMenuActions(mute: hashtagMuteActions)
     }
 
     /// ハッシュタグのメニューのミュート。覚えている自分のフィルターでミュートしているかを決め、メニューを開くたびに読み直す。

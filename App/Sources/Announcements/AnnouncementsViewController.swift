@@ -13,8 +13,8 @@ final class AnnouncementsViewController: UIViewController {
     var onOpenProfileURL: ((URL) -> Void)?
     /// メンションの長押しのメニューの、メンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
     var userMenuActions: UserMenuActions?
-    /// ハッシュタグのメニューのミュートを組むもの。nilなら項目を出さない。
-    var hashtagMuteActions: HashtagMuteActions?
+    /// ハッシュタグのメニューの、自分の状態を読んで変える項目を組むもの。nilなら、それらの項目を出さない。
+    var hashtagMenuActions: HashtagMenuActions?
     /// アプリ全体のアプリ内通知。
     var notices: NoticeCenter?
 
