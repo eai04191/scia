@@ -38,12 +38,23 @@ enum DummyServer {
         // ローカルと連合も、タブを開いたときに空振りしないよう、ホームと同じ投稿を返す。
         case ("GET", "/api/v1/timelines/home"), ("GET", "/api/v1/timelines/public"): isFirstPage ? Content.home : Data("[]".utf8)
         case ("GET", "/api/v2/notifications"): isFirstPage ? Content.notifications : Data(#"{"accounts":[],"statuses":[],"notification_groups":[]}"#.utf8)
+        // 保留中の通知の1人分の、その人からの通知。
+        case ("GET", "/api/v1/notifications"):
+            isFirstPage ? encode(notifications(from: query.first { $0.name == "account_id" }?.value)) : Data("[]".utf8)
         // まとめた通知の「ほか3人」から開く人の一覧。どれも同じ人を返し、続きはない。
         case ("GET", let path) where path.hasSuffix("/favourited_by") || path.hasSuffix("/reblogged_by") || path == "/api/v1/accounts/\(me.id)/followers":
             Content.people
         case (_, "/api/v1/markers"), ("GET", "/api/v1/preferences"): Data("{}".utf8)
         case ("GET", "/api/v1/custom_emojis"), ("GET", "/api/v2/filters"): Data("[]".utf8)
         case ("GET", "/api/v1/accounts/verify_credentials"), ("GET", "/api/v1/accounts/\(me.id)"): Content.me
+        // 保留中の通知と通知のフィルタリング。受け入れ、無視、設定の変更は、通信せずに済んだ扱いにする。一覧は読み直すと元に戻る。
+        case ("GET", "/api/v2/notifications/policy"): policyBody()
+        case ("PATCH", "/api/v2/notifications/policy"):
+            applyPolicyForm(request.httpBody)
+        case ("GET", "/api/v1/notifications/requests"): isFirstPage ? Content.requests : Data("[]".utf8)
+        case ("GET", let path) where path.hasPrefix("/api/v1/notifications/requests/"):
+            Content.requestByID[String(path.dropFirst("/api/v1/notifications/requests/".count))]
+        case ("POST", let path) where path.hasPrefix("/api/v1/notifications/requests/"): Data("{}".utf8)
         case ("GET", "/api/v2/instance"):
             Data(#"{"version":"4.4.0","configuration":{"urls":{"streaming":"wss://\#(host)"}}}"#.utf8)
         default: nil
@@ -82,6 +93,41 @@ enum DummyServer {
         static let notifications = encode(notificationGroups)
         static let people = encode([alice, bob, carol, dave])
         static let me = encode(DummyServer.me)
+        /// 保留中の通知。長い名前と、件数の多い人を含める。
+        static let requestList: [(id: String, account: Account, count: Int)] = [("dummy-request-1", bob, 3), ("dummy-request-2", dave, 128), ("dummy-request-3", carol, 1)]
+        static let requests = Data("[\(requestList.map { requestJSON($0.id, $0.account, $0.count) }.joined(separator: ","))]".utf8)
+        static let requestByID = Dictionary(uniqueKeysWithValues: requestList.map { ($0.id, Data(requestJSON($0.id, $0.account, $0.count).utf8)) })
+    }
+
+    private static func requestJSON(_ id: String, _ account: Account, _ count: Int) -> String {
+        let date = Date.now.formatted(.iso8601.year().month().day().time(includingFractionalSeconds: true))
+        return #"{"id":"\#(id)","created_at":"\#(date)","updated_at":"\#(date)","notifications_count":"\#(count)","account":\#(String(decoding: encode(account), as: UTF8.self))}"#
+    }
+
+    /// 通知のフィルタリングの設定。変えた値は、ダミーのセッションの間だけ覚える。
+    @MainActor private static var policyValues: [String: String] = [
+        "for_not_following": "accept",
+        "for_not_followers": "accept",
+        "for_new_accounts": "filter",
+        "for_private_mentions": "filter",
+        "for_limited_accounts": "filter",
+    ]
+
+    @MainActor
+    private static func policyBody() -> Data {
+        let items = policyValues.sorted { $0.key < $1.key }.map { #""\#($0.key)":"\#($0.value)""# }
+        let summary = #""summary":{"pending_requests_count":\#(Content.requestList.count),"pending_notifications_count":\#(Content.requestList.map(\.count).reduce(0, +))}"#
+        return Data("{\((items + [summary]).joined(separator: ","))}".utf8)
+    }
+
+    @MainActor
+    private static func applyPolicyForm(_ body: Data?) -> Data {
+        var components = URLComponents()
+        components.percentEncodedQuery = body.map { String(decoding: $0, as: UTF8.self) }
+        for item in components.queryItems ?? [] where policyValues[item.name] != nil {
+            policyValues[item.name] = item.value
+        }
+        return policyBody()
     }
 
     /// Mastodonと同じく、時刻からIDを作る。新しいほど大きい。
@@ -187,6 +233,21 @@ enum DummyServer {
             )
         }
         return GroupedNotifications(accounts: [alice, bob, carol, dave], statuses: [mine, mention], notificationGroups: groups)
+    }
+
+    /// `GET /api/v1/notifications?account_id=`の応答。通知のタブのダミーのうち、その人が入っている通知を1件ずつにする。
+    private static func notifications(from accountID: String?) -> [MastodonNotification] {
+        let all = notificationGroups
+        return all.notificationGroups.compactMap { group in
+            guard let accountID, group.sampleAccountIds.contains(accountID), let account = all.accounts.first(where: { $0.id == accountID }) else { return nil }
+            return MastodonNotification(
+                id: group.mostRecentNotificationId,
+                type: MastodonNotification.Kind(rawValue: group.type),
+                createdAt: group.latestPageNotificationAt,
+                account: account,
+                status: group.statusId.flatMap { id in all.statuses.first { $0.id == id } }
+            )
+        }
     }
 
     private static func encode(_ value: some Encodable) -> Data {

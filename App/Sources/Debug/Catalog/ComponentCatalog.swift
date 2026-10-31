@@ -75,7 +75,7 @@ enum CatalogComponent: String, CaseIterable {
         case .quotes: "投稿の中の引用"
         case .polls: "投稿の投票"
         case .notifications: "通知の種類"
-        case .accounts: "人の一覧の行"
+        case .accounts: "人の一覧と保留中の通知の行"
         case .editHistory: "編集履歴の版"
         case .hdrEmoji: "HDRのカスタム絵文字"
         case .reportSheet: "通報のシート"

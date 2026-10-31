@@ -447,6 +447,26 @@ enum PostRowCatalog {
                 acct: "a-very-long-account-name@subdomain.example.com"
             )),
             row("表示名がない（ユーザー名を出す）", Fixtures.account(displayName: "", acct: "noname@example.com")),
+        ] + notificationRequestStates()
+    }
+
+    /// 保留中の通知の一覧の行。人の一覧の行に、保留している通知の件数を3行目に足す。
+    @MainActor
+    private static func notificationRequestStates() -> [CatalogState] {
+        let list = TimelineViewController(texts: .notificationRequests, refresh: {})
+        func row(_ title: String, _ account: Account, count: Int) -> CatalogState {
+            CatalogState(title: "保留中の通知: \(title)") {
+                let request = NotificationRequest(id: "catalog", updatedAt: Date(timeIntervalSince1970: 1_800_000_000), account: account, notificationsCount: count)
+                return CatalogFrame.bordered(list.notificationRequestConfiguration(for: request, base: .cell()).makeContentView())
+            }
+        }
+        return [
+            row("ふつう", booster, count: 1),
+            row("件数が多い", booster, count: 12_345),
+            row("名前とハンドルが長い", Fixtures.account(
+                displayName: String(repeating: "とても長い名前", count: 4),
+                acct: "a-very-long-account-name@subdomain.example.com"
+            ), count: 3),
         ]
     }
 
