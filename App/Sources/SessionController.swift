@@ -3143,6 +3143,10 @@ final class SessionController {
             case .local: local.inject(try decoder.decode([Status].self, from: data))
             case .federated: federated.inject(try decoder.decode([Status].self, from: data))
             case .notifications: notifications.inject(try decoder.decode([MastodonNotification].self, from: data))
+            case .announcements:
+                for announcement in try decoder.decode([Announcement].self, from: data) {
+                    announcements.apply(.announcement(announcement))
+                }
             case .bookmarks, .favourites, .scheduled:
                 // ストリームのない一覧なので、新着と同じ経路がない。
                 logger.error("debug inject unsupported tab=\(tab.rawValue, privacy: .public)")

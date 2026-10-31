@@ -77,8 +77,8 @@ enum DebugURL: Equatable {
     /// `scia-debug://autoscroll?distance=<pt>&speed=<pt/秒>`。選んでいるタブの一覧を、決まった速さで決まった距離だけ動かす。distanceが負なら上へ戻す。
     /// 指で操作できない検証用の実機で、スクロールの重さ（hitch）を同じ条件で測るため。慣性のない一定の速さで動かすので、指のスクロールとは動きが違う。
     case autoScroll(distance: CGFloat, speed: CGFloat)
-    /// `scia-debug://inject/<home|local|federated|notifications>?file=<ファイル名>`。アプリのDocuments/DebugInjectに置いたJSONを読み、ストリーミングの新着と同じ経路で一覧に流す。
-    /// ホーム、ローカル、連合は`Status`の配列、通知は`Notification`の配列で、APIの応答と同じ形で書く。実データにない投稿や通知の見え方を、ログインした端末のまま確かめるため。
+    /// `scia-debug://inject/<home|local|federated|notifications|announcements>?file=<ファイル名>`。アプリのDocuments/DebugInjectに置いたJSONを読み、ストリーミングの新着と同じ経路で一覧に流す。
+    /// ホーム、ローカル、連合は`Status`の配列、通知は`Notification`の配列、お知らせは`Announcement`の配列で、APIの応答と同じ形で書く。実データにない投稿や通知の見え方を、ログインした端末のまま確かめるため。
     case inject(Tab, file: String)
     /// `scia-debug://compose?text=<本文>&media=<枚数>`。インライン投稿欄で書き始め、本文を渡した文に置き換え、番号を描いた色違いの画像を添付に足す。
     /// どちらも省ける。シミュレーターのクリップボードが使えないときにも、URLを含む本文などを打たずに用意し、ピッカーを操作せずに添付を用意するため。
@@ -118,6 +118,8 @@ enum DebugURL: Equatable {
         case bookmarks
         case favourites
         case scheduled
+        /// サーバーのお知らせ。`Announcement`の配列を、ストリーミングで届いたお知らせとして流す。
+        case announcements
     }
 
     /// 引数を持たないURL。`host`か`host/path`で引く。
