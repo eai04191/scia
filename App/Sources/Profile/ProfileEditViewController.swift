@@ -70,6 +70,8 @@ final class ProfileEditViewController: UIViewController {
     var debugNote: String?
     /// `scia-debug://profile-edit?field=`で渡した、読み込んだあとに足す補足情報の内容。
     var debugField: String?
+    /// `scia-debug://profile-edit?crop=`で渡した、読み込んだあとにダミーの画像で切り抜きを開く画像。写真を選ばずに切り抜きの画面を確かめるため。
+    var debugCrop: ProfileImage?
     #endif
 
     private enum Section: Int, CaseIterable {
@@ -158,6 +160,13 @@ final class ProfileEditViewController: UIViewController {
             tableView.scrollToRow(at: path, at: .middle, animated: false)
             if let input = (tableView.cellForRow(at: path) as? ProfileEditFieldCell)?.focusValue() {
                 textCompletion.textDidChange(in: input)
+            }
+        }
+        if let debugCrop {
+            self.debugCrop = nil
+            let size = debugCrop == .avatar ? CGSize(width: 800, height: 600) : CGSize(width: 1600, height: 900)
+            if let image = DummyMedia.image(size: size, color: .systemBlue, label: debugCrop.rawValue).cgImage {
+                presentCrop(image, for: debugCrop)
             }
         }
         #endif

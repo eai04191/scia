@@ -1295,7 +1295,8 @@ final class SessionController {
     /// - Parameters:
     ///   - debugNote: デバッグURLで渡した、読み込んだあとに置き換える自己紹介。
     ///   - debugField: デバッグURLで渡した、読み込んだあとに足す補足情報の内容。
-    private func presentProfileEditor(debugNote: String? = nil, debugField: String? = nil) {
+    ///   - debugCrop: デバッグURLで渡した、読み込んだあとにダミーの画像で切り抜きを開く画像。
+    private func presentProfileEditor(debugNote: String? = nil, debugField: String? = nil, debugCrop: ProfileImage? = nil) {
         let client = client
         let editor = ProfileEditor(api: ProfileEditor.API(
             source: { try await client.profileSource() },
@@ -1320,6 +1321,7 @@ final class SessionController {
         #if DEBUG
         controller.debugNote = debugNote
         controller.debugField = debugField
+        controller.debugCrop = debugCrop
         #endif
         rootViewController.frontmostPresented.present(controller.wrappedInNavigation(), animated: true)
     }
@@ -2836,8 +2838,8 @@ final class SessionController {
             tabs.tabBarController.selectedIndex = 0
         case .tuning:
             rootViewController.frontmostPresented.presentTuningPanel()
-        case .profileEdit(let note, let field):
-            presentProfileEditor(debugNote: note, debugField: field)
+        case .profileEdit(let note, let field, let crop):
+            presentProfileEditor(debugNote: note, debugField: field, debugCrop: crop)
         case .discomfortReport:
             if let window = rootViewController.view.window {
                 DiscomfortReportPresenter.present(in: window)

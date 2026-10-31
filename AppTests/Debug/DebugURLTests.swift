@@ -54,9 +54,11 @@ struct DebugURLTests {
     }
 
     @Test func readsProfileEdit() throws {
-        #expect(DebugURL(try #require(URL(string: "scia-debug://profile-edit"))) == .profileEdit(note: nil, field: nil))
-        #expect(DebugURL(try #require(URL(string: "scia-debug://profile-edit?note=%3Ablob"))) == .profileEdit(note: ":blob", field: nil))
-        #expect(DebugURL(try #require(URL(string: "scia-debug://profile-edit?field=%40bob"))) == .profileEdit(note: nil, field: "@bob"))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://profile-edit"))) == .profileEdit(note: nil, field: nil, crop: nil))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://profile-edit?note=%3Ablob"))) == .profileEdit(note: ":blob", field: nil, crop: nil))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://profile-edit?field=%40bob"))) == .profileEdit(note: nil, field: "@bob", crop: nil))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://profile-edit?crop=header"))) == .profileEdit(note: nil, field: nil, crop: .header))
+        #expect(DebugURL(try #require(URL(string: "scia-debug://profile-edit?crop=other"))) == nil)
     }
 
     @Test func readsArrivalHold() throws {

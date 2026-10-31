@@ -88,11 +88,12 @@ enum DebugURL: Equatable {
     case compose(text: String?, mediaCount: Int, pollOptions: [String]? = nil)
     /// `scia-debug://compose/close`。キーボードを閉じて、投稿欄を書いていないときのカプセルに戻す。下書きは残す。
     case composeClose
-    /// `scia-debug://profile-edit?note=<自己紹介>&field=<補足情報の内容>`。自分のプロフィールの編集を開く。`note`を渡すと、読み込んだあとに自己紹介をその文に置き換えて、
+    /// `scia-debug://profile-edit?note=<自己紹介>&field=<補足情報の内容>&crop=<avatar|header>`。自分のプロフィールの編集を開く。`note`を渡すと、読み込んだあとに自己紹介をその文に置き換えて、
     /// 末尾にキーボードを出す。`field`を渡すと、その内容の補足情報を足して、内容の欄の末尾にキーボードを出す。どちらも、打ったときと同じく末尾の語の補完を出す。
     /// シミュレーターの日本語のキーボードでは半角の`:`や`@`を打てないため、補完を確かめるときに語の頭を用意する。
+    /// `crop`を渡すと、読み込んだあとにダミーの画像でその画像の切り抜きを開く。写真のピッカーで選ばずに切り抜きの画面を確かめるため。
     /// どれも渡さずに開くだけなら、`scia://profile-edit`を使う。
-    case profileEdit(note: String?, field: String?)
+    case profileEdit(note: String?, field: String?, crop: ProfileImage?)
     /// `scia-debug://discomfort-report`。シェイクしたときと同じ、違和感レポートを書く画面を開く。
     case discomfortReport
     /// `scia-debug://sheet-keyboard`。低い段のシートの中で入力欄にキーボードを出したときの動きを確かめる試作を開く（`SheetKeyboardExperiment`）。
@@ -175,7 +176,7 @@ enum DebugURL: Equatable {
         case "tags": Self.tags(url)
         case "compose": Self.compose(url)
         case "browser": Self.query("url", in: url).flatMap(URL.init(string:)).flatMap { LinkBrowser.inApp.browser(for: $0) == .inApp ? .browser($0) : nil }
-        case "profile-edit": .profileEdit(note: Self.query("note", in: url), field: Self.query("field", in: url))
+        case "profile-edit": Self.profileEdit(url)
         default: nil
         }
         guard let parsed else { return nil }
@@ -268,6 +269,15 @@ enum DebugURL: Equatable {
         let pollOptions = query("poll", in: url).map { $0.components(separatedBy: ",") }
         guard let mediaCount = Int(query("media", in: url) ?? "0"), mediaCount >= 0, text != nil || mediaCount > 0 || pollOptions != nil else { return nil }
         return .compose(text: text, mediaCount: mediaCount, pollOptions: pollOptions)
+    }
+
+    private static func profileEdit(_ url: URL) -> DebugURL? {
+        var crop: ProfileImage?
+        if let name = query("crop", in: url) {
+            guard let image = ProfileImage(rawValue: name) else { return nil }
+            crop = image
+        }
+        return .profileEdit(note: query("note", in: url), field: query("field", in: url), crop: crop)
     }
 
     private static func autoScroll(_ url: URL) -> DebugURL? {
