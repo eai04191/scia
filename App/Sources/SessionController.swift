@@ -425,6 +425,25 @@ final class SessionController {
                 )
             }
         )
+        let redraft = ComposeRedraftService(
+            // 新しい投稿に付け直すので、添付は残して削除する。
+            deleteStatus: { id in
+                do {
+                    try await client.deleteStatus(id, deleteMedia: false)
+                } catch {
+                    reportIfUnauthorized(error)
+                    throw error
+                }
+            },
+            waitUntilReleased: { id in
+                do {
+                    return try await client.waitUntilReleased(id)
+                } catch {
+                    reportIfUnauthorized(error)
+                    throw error
+                }
+            }
+        )
         // 補完の検索は別のスレッドから呼ばれるため、ほかのAPIと同じ知らせ方を、隔離されたAuthorizationCheckに直接送る。
         let reportCompletionFailure: @Sendable (any Error) async -> Void = { [authorization] error in
             guard let error = error as? MastodonAPIError, error.isUnauthorized else { return }
@@ -490,7 +509,7 @@ final class SessionController {
         // 予約できたことのチップを出す先も、初期化を終えてからつなぐ。
         let schedules = SessionReference()
         composer = InlineComposeController(
-            model: ComposeModel<UIImage>(tasks: tasks.child(), myAccountID: credential.accountID, media: media, backgroundTime: BackgroundTime.request) { draft in
+            model: ComposeModel<UIImage>(tasks: tasks.child(), myAccountID: credential.accountID, media: media, redraft: redraft, backgroundTime: BackgroundTime.request) { draft in
                 do {
                     if let editing = draft.editing {
                         // ストリーミングの編集の知らせを待たずに、どの一覧にも編集したあとの投稿を出す。切れている間も直るようにするため。
@@ -588,6 +607,7 @@ final class SessionController {
         scheduled.viewController.mediaTransfers = mediaTransfers
         scheduled.viewController.notices = notices
         composer.model.onScheduleRewritten = { [weak self] id in self?.cancelRewrittenSchedule(id) }
+        composer.model.onRedraftDeleted = { [weak self] id in self?.removeDeletedStatus(id) }
         composer.onShowScheduledStatuses = { [weak self] in self?.showScheduledStatuses() }
         scheduled.onRewrite = { [weak self] status in self?.confirmRewriting(status) }
         installAccountButton(on: scheduled.viewController)
@@ -598,7 +618,10 @@ final class SessionController {
         streamingHub.onEvent = { [weak self] event in
             switch event {
             case .statusUpdate(let edited): self?.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
-            case .delete(let id): self?.changeQuoteSources(.status(id)) { $0.delete(id) }
+            case .delete(let id):
+                self?.changeQuoteSources(.status(id)) { $0.delete(id) }
+                // 書き直している元の投稿がほかの端末で消えたら、やめる前に確かめるようにする。
+                self?.composer.model.redraftedStatusWasDeleted(id, stopsRedrafting: false)
             case .update, .notification, .filtersChanged, .notificationsMerged, .announcement, .announcementReaction, .announcementDelete, .unhandled: break
             }
         }
@@ -1735,7 +1758,7 @@ final class SessionController {
         switch action {
         case .reply:
             UserAction.reply.record()
-            confirmLeavingEdit(title: "編集をやめて返信しますか？") { [weak self] in self?.composer.reply(to: status) }
+            confirmLeavingEdit(starting: "返信") { [weak self] in self?.composer.reply(to: status) }
         case .quote:
             UserAction.quote.record()
             startQuoting(status)
@@ -1785,6 +1808,9 @@ final class SessionController {
             startEditing(status)
         case .delete:
             confirmDeleting(status)
+        case .redraft:
+            UserAction.redraftStatus.record()
+            startRedrafting(status)
         }
     }
 
@@ -2151,15 +2177,15 @@ final class SessionController {
         }
     }
 
-    /// 編集している途中で返信か引用を選んだら、編集をやめてよいか聞いてから始める。編集でなければすぐ始める。
-    /// 返信と引用は書いた本文を残して返信先や引用元を付け替えるが、編集の本文は元の投稿のものなので、引き継がない。
-    private func confirmLeavingEdit(title: String, _ proceed: @escaping () -> Void) {
-        guard let confirmation = Confirmation.leavingEdit(title: title, draft: composer.model) else {
+    /// 編集か削除して書き直している途中で返信か引用を選んだら、やめてよいか聞いてから始める。どちらでもなければすぐ始める。
+    /// 返信と引用は書いた本文を残して返信先や引用元を付け替えるが、編集と書き直しの本文は元の投稿のものなので、引き継がない。
+    private func confirmLeavingEdit(starting: String, _ proceed: @escaping () -> Void) {
+        guard let confirmation = Confirmation.leavingEdit(starting: starting, draft: composer.model) else {
             proceed()
             return
         }
         topViewController.present(UIAlertController(confirmation, preferredStyle: .alert) { [weak self] _ in
-            // 編集を送っている間はやめず、返信も始めない。送り終えれば空に戻るので、返信はそのあと選び直してもらう。
+            // 送っている間はやめず、返信も始めない。送り終えれば空に戻るので、返信はそのあと選び直してもらう。
             guard self?.composer.cancelStatusEdit() == true else { return }
             proceed()
         }, animated: true)
@@ -2201,7 +2227,7 @@ final class SessionController {
     }
 
     private func beginQuoting(_ status: Status) {
-        confirmLeavingEdit(title: "編集をやめて引用しますか？") { [weak self] in self?.confirmQuoting(status) }
+        confirmLeavingEdit(starting: "引用") { [weak self] in self?.confirmQuoting(status) }
     }
 
     /// 下書きに添付か投票があれば、外してよいか聞いてから引用を始める。なければすぐ始める。
@@ -2240,6 +2266,39 @@ final class SessionController {
                 })
             }
         }
+    }
+
+    /// 書き直しの元にする本文をサーバーから取得し、取得できたら、送ると元の投稿を削除することを確かめてから、投稿欄で書き直しを始める。
+    /// 同じ投稿を書き直している途中なら、読み直さずに投稿欄を開く。読めなかったら、編集と同じく、チップの列に出す。
+    private func startRedrafting(_ status: Status) {
+        let target = status.displayed
+        if composer.model.redraft?.status.id == target.id {
+            composer.beginEditing()
+            return
+        }
+        let client = client
+        tasks.run(.action) { [weak self] in
+            do {
+                let source = try await client.statusSource(target.id)
+                self?.confirmRedrafting(target, source: source)
+            } catch {
+                guard let self else { return }
+                let title = "書き直しを始められませんでした"
+                logger.error("redraft source failed: \(SciaLog.describe(error), privacy: .public)")
+                let reason = await failureReason(for: error)
+                operationStatus.recordFailure(title: title, reason: reason, subject: OperationStatus.Subject(status))
+                showFailureNotice(.interactionFailure(title: title) { [weak self] in
+                    self?.presentAlert(title: title, message: reason.text)
+                })
+            }
+        }
+    }
+
+    /// 本文を読んでから聞く。先に聞くと、読んでいる間に書いたものを、聞かずに捨ててしまうため。
+    private func confirmRedrafting(_ status: Status, source: StatusSource) {
+        topViewController.present(UIAlertController(Confirmation.redrafting(status, draft: composer.model), preferredStyle: .alert) { [weak self] _ in
+            self?.composer.redraft(status, source: source)
+        }, animated: true)
     }
 
     // MARK: - 予約投稿
@@ -2351,7 +2410,8 @@ final class SessionController {
         }, animated: true)
     }
 
-    /// 消えたらどの一覧からも除く。編集している投稿を消したら、編集もやめる。
+    /// 消えたらどの一覧からも除く。編集か削除して書き直している投稿を消したら、編集と書き直しもやめる。
+    /// 書き直しをやめるのは、添付も消え、書き直した投稿に付けられなくなるため。
     /// 失敗は押し直せば済むので、お気に入りの失敗と同じく、チップの列に出す。
     private func delete(_ status: Status) {
         UserAction.deleteStatus.record()
@@ -2360,21 +2420,16 @@ final class SessionController {
         // 送り終える前に確かめ直して押しても、同じ削除を重ねて送らない。
         tasks.run(key: "delete:\(target.id)", .skippingWhileRunning, .action) { [weak self] in
             do {
-                try await client.deleteStatus(target.id)
+                // web UIと同じく、添付もすぐ消す。送らないと、削除して書き直すために、サーバーが添付を1日ほど残すため。
+                try await client.deleteStatus(target.id, deleteMedia: true)
                 guard let self else { return }
-                for feed in feeds {
-                    feed.removeStatus(target.id)
-                }
-                notifications.removeStatus(target.id)
-                for list in savedLists {
-                    list.removeStatus(target.id)
-                }
-                profiles.removeStatus(target.id)
-                threads.removeStatus(target.id)
-                searches.removeStatus(target.id)
-                changeQuoteSources(.status(target.id)) { $0.delete(target.id) }
+                removeDeletedStatus(target.id)
                 if composer.model.editedStatus?.id == target.id {
                     composer.cancelStatusEdit()
+                }
+                // 送っている間はやめられないので、送るのをやめられるところでやめさせる。
+                if composer.model.redraft?.status.id == target.id, !composer.cancelStatusEdit() {
+                    composer.model.redraftedStatusWasDeleted(target.id, stopsRedrafting: true)
                 }
             } catch {
                 guard let self else { return }
@@ -2387,6 +2442,21 @@ final class SessionController {
                 })
             }
         }
+    }
+
+    /// 削除した自分の投稿を、どの一覧からも除く。
+    private func removeDeletedStatus(_ id: Status.ID) {
+        for feed in feeds {
+            feed.removeStatus(id)
+        }
+        notifications.removeStatus(id)
+        for list in savedLists {
+            list.removeStatus(id)
+        }
+        profiles.removeStatus(id)
+        threads.removeStatus(id)
+        searches.removeStatus(id)
+        changeQuoteSources(.status(id)) { $0.delete(id) }
     }
 
     /// 承認か却下が済んだら、サーバーと同じく、そのユーザーからのリクエストの通知を一覧から除く。

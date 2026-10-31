@@ -78,6 +78,12 @@ final class InlineComposeController: NSObject {
             onShowScheduledStatuses()
             return
         }
+        // 削除したあとは、見せる元の投稿がない。
+        if let redraft = model.redraft {
+            guard !redraft.mayHaveDeleted else { return }
+            onShowReplyTarget(redraft.status)
+            return
+        }
         guard let target = model.editedStatus ?? model.replyTo ?? model.quoteTarget else { return }
         onShowReplyTarget(target)
     })
@@ -92,6 +98,8 @@ final class InlineComposeController: NSObject {
             guard let self else { return }
             if model.editedStatus != nil {
                 cancelStatusEdit()
+            } else if model.redraft != nil {
+                cancelRedrafting()
             } else if model.rewritingSchedule != nil {
                 discardDraft()
             } else if model.quoteTarget != nil {
@@ -168,7 +176,7 @@ final class InlineComposeController: NSObject {
             submit()
         }
     })
-    private var isPresentingError = false
+    private var isPresentingAlert = false
     /// 入力バーと、その下のタブバーやキーボードとの間の余白。切り替えタブの長押しのメニューも、下端を入力バーとそろえるのに使う。
     static let barSpacing: CGFloat = 8
     private var barSpacing: CGFloat { Self.barSpacing }
@@ -564,11 +572,23 @@ final class InlineComposeController: NSObject {
         return true
     }
 
-    /// 編集をやめて、空の投稿欄に戻す。送っている間はやめない。失敗したときに送り直せるよう、下書きを残すため。
+    /// 自分の投稿を削除して書き直し始める。今の下書きは捨てるので、捨ててよいかは呼ぶ側で確かめておく。送っている間は始めずfalseを返す。
+    /// 開いているピッカーは、`edit(_:source:)`と同じ理由で閉じる。
+    @discardableResult
+    func redraft(_ status: Status, source: StatusSource) -> Bool {
+        guard !model.isPosting else { return false }
+        bottomSheet?.close(notifiesWillClose: true)
+        guard model.beginRedrafting(status, source: source) else { return false }
+        update()
+        beginEditing()
+        return true
+    }
+
+    /// 編集か削除して書き直すのをやめて、空の投稿欄に戻す。送っている間はやめない。失敗したときに送り直せるよう、下書きを残すため。
     /// 開いているピッカーは、`edit(_:source:)`と同じ理由で閉じる。
     @discardableResult
     func cancelStatusEdit() -> Bool {
-        guard model.editedStatus != nil, !model.isPosting else { return false }
+        guard model.editedStatus != nil || model.redraft != nil, !model.isPosting else { return false }
         mediaPicker?.close(notifiesWillClose: true)
         model.reset()
         return true
@@ -1806,7 +1826,7 @@ final class InlineComposeController: NSObject {
     /// 書いている途中でバーを留めるので下げない。下げている途中でキーボードが戻ったら、バーも戻す。
     private func updateSinkingWithKeyboard(keyboardHeight height: CGFloat) {
         let sinks = height <= Self.softwareKeyboardMinimumHeight && isSoftwareKeyboardShown && sinksWhenDone && isEditing
-            && !isBarHeld && bottomSheet == nil && !isShowingMediaViewer && !isPresentingError && !isShowingToolLayoutSettings && !isShowingScheduleDatePicker && !isShowingLanguagePicker && !isMovingFocus
+            && !isBarHeld && bottomSheet == nil && !isShowingMediaViewer && !isPresentingAlert && !isShowingToolLayoutSettings && !isShowingScheduleDatePicker && !isShowingLanguagePicker && !isMovingFocus
         guard sinks != isSinkingWithKeyboard else { return }
         isSinkingWithKeyboard = sinks
         logger.info("compose: bar \(sinks ? "sinking with" : "returning with", privacy: .public) keyboard")
@@ -1824,7 +1844,7 @@ final class InlineComposeController: NSObject {
     @objc private func keyboardDidShow(_ notification: Notification) {
         // 投稿の失敗の知らせは、シートを閉じて戻したキーボードが上がりきる前に出ることがあり、その知らせが知らせを出したあとに届く。
         // 知らせを出している間はキーボードが下がるので、バーはキーボードの高さに留めたままにする。
-        guard isInputFocused, !isPresentingError else { return }
+        guard isInputFocused, !isPresentingAlert else { return }
         keyboardHeightBeforeContextMenu = nil
         releaseHoldAboveKeyboard()
     }
@@ -2345,6 +2365,11 @@ final class InlineComposeController: NSObject {
     }
 
     private var chip: Chip? {
+        if let title = model.redraftChipTitle {
+            // 削除したあとは、押しても見せる元の投稿がない。
+            let deleted = model.redraft?.mayHaveDeleted == true
+            return Chip(title: title, symbolName: "square.and.pencil", hint: deleted ? "" : "タイムラインの元の投稿を表示します", clearLabel: "書き直しをやめる")
+        }
         if let title = model.rewriteChipTitle {
             return Chip(title: title, symbolName: "pencil", hint: "予約した投稿の一覧を表示します", clearLabel: "書き直しをやめる")
         }
@@ -2394,13 +2419,36 @@ final class InlineComposeController: NSObject {
     }
 
     /// メディアを選ぶシートなどを出している間は出さず、閉じたときに知らせる。
-    ///
-    /// 知らせは表示されると最初の応答者になるため、何もしないとキーボードが下がって投稿欄がカプセルに戻り、書いていたところから直せない。
-    /// 添付のビューアと同じく、出す前に自分でキーボードを閉じ、バーをキーボードの高さに留め、閉じたら最後に書いていた入力欄にキーボードを戻す。
     private func presentErrorIfNeeded() {
-        guard let message = model.errorMessage, !isPresentingError, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
-        isPresentingError = true
+        guard let message = model.errorMessage, !isPresentingAlert, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
         logger.info("compose: presenting post error (focused=\(self.isInputFocused) editing=\(self.isEditing) picker=\(self.mediaPicker != nil))")
+        let alert = UIAlertController(title: model.scheduledAt != nil ? "予約できませんでした" : "投稿できませんでした", message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .cancel) { [weak self] _ in
+            self?.model.errorMessage = nil
+            self?.alertDidClose()
+        })
+        presentKeepingInput(alert, from: presenter)
+    }
+
+    /// 削除して書き直すのをやめる。元の投稿を削除した（かもしれない）なら、中身はもう下書きにしか残っていないので、捨ててよいか聞く。
+    private func cancelRedrafting() {
+        guard let confirmation = Confirmation.discardingRedraft(draft: model) else {
+            cancelStatusEdit()
+            return
+        }
+        guard !isPresentingAlert, let presenter = presenterForErrors, presenter.presentedViewController == nil else { return }
+        let alert = UIAlertController(confirmation, preferredStyle: .alert, onClose: { [weak self] in self?.alertDidClose() }) { [weak self] _ in
+            self?.cancelStatusEdit()
+        }
+        presentKeepingInput(alert, from: presenter)
+    }
+
+    /// アラートを、書いている状態を保ったまま出す。閉じたら`alertDidClose()`を呼ぶ。
+    ///
+    /// アラートは表示されると最初の応答者になるため、何もしないとキーボードが下がって投稿欄がカプセルに戻り、書いていたところから直せない。
+    /// 添付のビューアと同じく、出す前に自分でキーボードを閉じ、バーをキーボードの高さに留め、閉じたら最後に書いていた入力欄にキーボードを戻す。
+    private func presentKeepingInput(_ alert: UIAlertController, from presenter: UIViewController) {
+        isPresentingAlert = true
         if bottomSheet == nil, isInputFocused {
             // ハードウェアキーボードでは、閉じたあとに上がりきった知らせが来ず、留めると外れなくなる。ソフトウェアキーボードが出ているときだけ留める。
             if currentKeyboardHeight > Self.softwareKeyboardMinimumHeight {
@@ -2408,15 +2456,13 @@ final class InlineComposeController: NSObject {
             }
             resignInput()
         }
-        let alert = UIAlertController(title: model.scheduledAt != nil ? "予約できませんでした" : "投稿できませんでした", message: message, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "OK", style: .cancel) { [weak self] _ in
-            guard let self else { return }
-            isPresentingError = false
-            model.errorMessage = nil
-            guard bottomSheet == nil, isEditing else { return }
-            focusLastInput()
-        })
         presenter.present(alert, animated: true)
+    }
+
+    private func alertDidClose() {
+        isPresentingAlert = false
+        guard bottomSheet == nil, isEditing else { return }
+        focusLastInput()
     }
 
     // MARK: - 添付のビューア
@@ -3198,7 +3244,7 @@ extension InlineComposeController: UITextViewDelegate {
         // メディアを選ぶシートを出すためにキーボードを閉じたときも同じ。
         // 添付のビューアや、投稿の失敗の知らせを開くためにキーボードを閉じたときも同じ。閉じ終わったら入力欄にキーボードを戻す。
         // シートを閉じたあとに書き終えたときは、キーボードが上がりきった知らせが来ずにバーを留めたままでも、カプセルに戻す。
-        guard !isMovingFocus, bottomSheet == nil, !isShowingMediaViewer, !isShowingToolLayoutSettings, !isShowingScheduleDatePicker, !isShowingLanguagePicker, !isPresentingError else { return }
+        guard !isMovingFocus, bottomSheet == nil, !isShowingMediaViewer, !isShowingToolLayoutSettings, !isShowingScheduleDatePicker, !isShowingLanguagePicker, !isPresentingAlert else { return }
         releaseHoldAboveKeyboard()
         setEditing(false)
         onEndEditing()

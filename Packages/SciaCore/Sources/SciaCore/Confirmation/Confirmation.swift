@@ -96,13 +96,46 @@ extension Confirmation where Choice == Proceed {
         .destructive(title: "予約を取り消しますか？", message: "取り消した予約は投稿されず、元に戻せません。", action: "取り消す")
     }
 
-    /// 編集している途中で返信か引用を選んだら、編集をやめてよいか確かめる。編集でなければ確かめない（nil）。
-    /// 返信と引用は書いた本文を残して返信先や引用元を付け替えるが、編集の本文は元の投稿のものなので、引き継がない。
-    /// - Parameter title: 「編集をやめて返信しますか？」のような、始める操作に合わせた題。
+    /// 編集か削除して書き直している途中で返信か引用を選んだら、やめてよいか確かめる。どちらでもなければ確かめない（nil）。
+    /// 返信と引用は書いた本文を残して返信先や引用元を付け替えるが、編集と書き直しの本文は元の投稿のもので、
+    /// 書き直しでは返信先と引用元を変えられないため、引き継がない。
+    /// - Parameter starting: 「返信」「引用」のような、始める操作の名前。
     @MainActor
-    public static func leavingEdit<Thumbnail>(title: String, draft: ComposeModel<Thumbnail>) -> Confirmation? {
-        guard draft.editedStatus != nil else { return nil }
-        return .destructive(title: title, message: "編集中の内容は消えます。", action: "編集をやめる")
+    public static func leavingEdit<Thumbnail>(starting: String, draft: ComposeModel<Thumbnail>) -> Confirmation? {
+        if draft.editedStatus != nil {
+            return .destructive(title: "編集をやめて\(starting)しますか？", message: discardedDraftMessage(draft), action: "編集をやめる")
+        }
+        guard draft.redraft != nil else { return nil }
+        return .destructive(title: "書き直しをやめて\(starting)しますか？", message: discardedDraftMessage(draft), action: "書き直しをやめる")
+    }
+
+    /// 削除して書き直している途中でラベルの×を押したとき、元の投稿を削除した（かもしれない）なら、捨ててよいか確かめる。
+    /// 削除する前は、元の投稿が残るので確かめない（nil）。
+    @MainActor
+    public static func discardingRedraft<Thumbnail>(draft: ComposeModel<Thumbnail>) -> Confirmation? {
+        guard draft.redraft?.mayHaveDeleted == true else { return nil }
+        return .destructive(title: "書き直しをやめますか？", message: discardedDraftMessage(draft), action: "書き直しをやめる")
+    }
+
+    /// 送ると元の投稿を削除することを、書きかけの下書きがあれば捨ててよいかも、確かめてから削除して書き直し始める。
+    /// 投票の票は投票の付いた投稿でだけ、固定が外れることはプロフィールに固定している投稿でだけ書く。
+    @MainActor
+    public static func redrafting<Thumbnail>(_ status: Status, draft: ComposeModel<Thumbnail>) -> Confirmation {
+        let discards = draft.hasWrittenContent
+        let lost = ["お気に入り", "ブースト", status.poll == nil ? nil : "投票の票"].compactMap(\.self).joined(separator: "、")
+        var lines: [String] = []
+        if discards {
+            lines.append(discardedDraftMessage(draft))
+        }
+        lines.append("書き直した投稿を送ると、元の投稿を削除します。\(lost)はなくなり、元の投稿への返信はつながりを失います。")
+        if status.pinned {
+            lines.append("プロフィールへの固定も外れます。")
+        }
+        return .destructive(
+            title: discards ? "下書きを捨てて書き直しますか？" : "削除して書き直しますか？",
+            message: lines.joined(separator: "\n"),
+            action: discards ? "捨てて書き直す" : "書き直す"
+        )
     }
 
     /// 下書きに添付か投票があれば、外してよいか確かめる。なければ確かめない（nil）。
@@ -146,7 +179,13 @@ extension Confirmation where Choice == Proceed {
 
     @MainActor
     private static func discardedDraftMessage<Thumbnail>(_ draft: ComposeModel<Thumbnail>) -> String {
-        draft.editedStatus != nil ? "編集中の内容は消えます。" : "書きかけの下書きは消えます。"
+        if draft.editedStatus != nil { return "編集中の内容は消えます。" }
+        switch draft.redraft?.deletion {
+        case .pending: return "書き直し中の内容は消えます。元の投稿は残ります。"
+        case .uncertain: return "書き直し中の内容は消えます。元の投稿は削除したかもしれず、その場合は戻せません。"
+        case .done: return "書き直し中の内容は消えます。元の投稿は削除したため、戻せません。"
+        case nil: return "書きかけの下書きは消えます。"
+        }
     }
 }
 

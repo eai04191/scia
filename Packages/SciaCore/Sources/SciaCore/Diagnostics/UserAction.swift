@@ -38,6 +38,7 @@ public enum UserAction: Sendable, Equatable {
     case openEditHistory
     case editStatus
     case deleteStatus
+    case redraftStatus
     case expandCompose
     case submitPost
     case enterForeground
@@ -79,6 +80,7 @@ public enum UserAction: Sendable, Equatable {
         case .openEditHistory: "status.editHistory"
         case .editStatus: "status.edit"
         case .deleteStatus: "status.delete"
+        case .redraftStatus: "status.redraft"
         case .expandCompose: "compose.expand"
         case .submitPost: "compose.submit"
         case .enterForeground: "app.foreground"
@@ -135,6 +137,7 @@ public enum UserAction: Sendable, Equatable {
         case ("status.editHistory", 0): self = .openEditHistory
         case ("status.edit", 0): self = .editStatus
         case ("status.delete", 0): self = .deleteStatus
+        case ("status.redraft", 0): self = .redraftStatus
         case ("compose.expand", 0): self = .expandCompose
         case ("compose.submit", 0): self = .submitPost
         case ("app.foreground", 0): self = .enterForeground
@@ -179,6 +182,7 @@ public enum UserAction: Sendable, Equatable {
         case .openEditHistory: "投稿の編集履歴を開いた"
         case .editStatus: "自分の投稿の編集を選んだ"
         case .deleteStatus: "自分の投稿の削除を決めた"
+        case .redraftStatus: "自分の投稿の削除して書き直すを選んだ"
         case .expandCompose: "投稿欄を広げた"
         case .submitPost: "投稿を送った"
         case .enterForeground: "アプリに戻った"

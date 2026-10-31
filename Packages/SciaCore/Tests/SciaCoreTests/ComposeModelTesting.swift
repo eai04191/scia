@@ -12,8 +12,9 @@ extension SciaCore.ComposeModel where Thumbnail == Never {
         replyTo: Status? = nil,
         myAccountID: String,
         media: ComposeMediaService = .unavailable,
+        redraft: ComposeRedraftService = .unavailable,
         post: @escaping (StatusDraft) async throws -> Void
     ) {
-        self.init(tasks: tasks, replyTo: replyTo, myAccountID: myAccountID, media: media, backgroundTime: { _ in {} }, post: post)
+        self.init(tasks: tasks, replyTo: replyTo, myAccountID: myAccountID, media: media, redraft: redraft, backgroundTime: { _ in {} }, post: post)
     }
 }

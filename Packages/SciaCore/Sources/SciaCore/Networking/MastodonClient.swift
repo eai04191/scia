@@ -501,9 +501,14 @@ public struct MastodonClient: Sendable {
     }
 
     /// 自分の投稿を削除する。応答の中身は使わない。
+    /// `deleteMedia`なら添付もすぐ消す。送らないと、サーバーは削除して書き直すために、添付を1日ほど残す。
     /// https://docs.joinmastodon.org/methods/statuses/#delete
-    public func deleteStatus(_ statusID: Status.ID) async throws {
-        var request = URLRequest(url: credential.instance.appending(path: "api/v1/statuses/\(statusID)"))
+    public func deleteStatus(_ statusID: Status.ID, deleteMedia: Bool) async throws {
+        var url = credential.instance.appending(path: "api/v1/statuses/\(statusID)")
+        if deleteMedia {
+            url.append(queryItems: [URLQueryItem(name: "delete_media", value: "true")])
+        }
+        var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
         _ = try await send(request)
     }
@@ -567,6 +572,28 @@ public struct MastodonClient: Sendable {
             }
             try await clock.sleep(for: .seconds(max(log2(Double(count)), 1)))
             count += 1
+        }
+    }
+
+    /// 削除した投稿の添付を、新しい投稿に付けられるようになるまで待つ。決まりはdocs/compose.mdの「自分の投稿を削除して書き直す」にある。
+    /// サーバーは、削除した投稿を後ろの処理で消し終えるまで添付を投稿に付けたままにし、その間は404を返すので、1秒おきに読み直す。
+    /// `timeout`を過ぎても付けられなければ`RedraftMediaError.notReleased`を投げる。通報された投稿は、サーバーが消さずに残すため、いつまでも付けられない。
+    public func waitUntilReleased(_ id: String, timeout: Duration = .seconds(60)) async throws -> MediaAttachment {
+        try await waitUntilReleased(id, timeout: timeout, clock: clock)
+    }
+
+    func waitUntilReleased(_ id: String, timeout: Duration, clock: any Clock<Duration>) async throws -> MediaAttachment {
+        let elapsed = stopwatch(on: clock)
+        while true {
+            do {
+                if case .processed(let attachment) = try await mediaProcessingState(id) {
+                    return attachment
+                }
+            } catch let error as MastodonAPIError where error.statusCode == 404 {
+                // まだ削除した投稿に付いている。
+            }
+            guard elapsed() + .seconds(1) <= timeout else { throw RedraftMediaError.notReleased }
+            try await clock.sleep(for: .seconds(1))
         }
     }
 

@@ -199,6 +199,8 @@ public enum StatusMenuItem: String, MenuItemKind {
     case edit
     /// 自分の投稿を削除する。自分の投稿でだけ出る。
     case delete
+    /// 自分の投稿を投稿欄に戻して書き直し、送るときに元の投稿を削除する。自分の投稿でだけ出る。
+    case redraft
     /// 通知を削除する。通知でだけ出る。
     case dismissNotification
     /// 一覧で添付ファイルをぼかす。添付ファイルがあり、ぼかしていない投稿でだけ出る。開くときはぼかしをタップする。
@@ -229,7 +231,7 @@ public enum StatusMenuItem: String, MenuItemKind {
     /// - 持ち出す: リンクとテキストのコピー、テキストを選択、共有、ブラウザで開く。開く場所を選んで開く2つは、開く場所の設定と重なるため隠す
     /// - 読む: 翻訳。スレッドを開くは、既定ではタップで開けて代わりがきくため隠し、出したときに読む操作の先頭に来るようここに置く
     /// - 関係するユーザーとハッシュタグ: メンションされたユーザーは、何人もいるとメニューが長くなるため隠す。ハッシュタグは、ある投稿でしか出ないので、「その他」に入れずに出す
-    /// - 「その他」: たまにしか使わない編集履歴、お気に入りした人、ブーストした人、メディアを隠す、カスタム絵文字、会話のミュート、固定と、取り消せない通知の削除、投稿の削除。いちばん下に、並びの設定を開くカスタマイズ
+    /// - 「その他」: たまにしか使わない編集履歴、お気に入りした人、ブーストした人、メディアを隠す、カスタム絵文字、会話のミュート、固定と、取り消せない通知の削除、削除して書き直す、投稿の削除。いちばん下に、並びの設定を開くカスタマイズ
     public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
         .rowSeparator,
         .item(.reply, isVisible: true),
@@ -268,6 +270,7 @@ public enum StatusMenuItem: String, MenuItemKind {
         .item(.pin, isVisible: true),
         .separator,
         .item(.dismissNotification, isVisible: true),
+        .item(.redraft, isVisible: true),
         .item(.delete, isVisible: true),
         .separator,
         .item(.customize, isVisible: true),

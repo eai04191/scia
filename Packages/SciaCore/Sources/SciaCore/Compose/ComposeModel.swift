@@ -49,6 +49,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
     public private(set) var scheduledAt: Date?
     /// 書き直している予約。送れたら`onScheduleRewritten`で取り消させる。決まりはdocs/compose.mdの「書き直す」にある。
     public private(set) var rewritingSchedule: ScheduledStatus?
+    /// 削除して書き直している自分の投稿。元の投稿は、送るときに削除する。決まりはdocs/compose.mdの「自分の投稿を削除して書き直す」にある。
+    public private(set) var redraft: StatusRedraft?
     /// 投稿の言語のコード。nilなら送らず、サーバーに任せる。決まりはdocs/compose.mdの「投稿の言語」にある。
     public private(set) var language: String?
     /// アカウントの既定の言語。決めていないか、まだ読めていなければnil。
@@ -83,6 +85,13 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored private let backgroundTime: @MainActor (String) -> @MainActor () -> Void
     @ObservationIgnored private var uploadTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
     @ObservationIgnored private var thumbnailTasks: [DraftAttachment.ID: Task<Void, Never>] = [:]
+    /// 削除した元の投稿から外れるのを待っている添付。投稿の可否が変わるので、変更を見張れるようにする。
+    private var releaseTasks: [DraftAttachment.ID: Task<Void, Never>] = [:] {
+        didSet { settleMediaWait() }
+    }
+    @ObservationIgnored private let redraftService: ComposeRedraftService
+    /// 送っている間に、書き直している元の投稿を「削除」で消した。送るのをやめられるところでやめ、送り終えたら空に戻す。
+    @ObservationIgnored private var stopsRedraftingAfterSubmit = false
     /// 代替テキストを送っている添付。送っている間は、書き戻してサーバーの値と同じになっても、送り終えるまで投稿させない。
     /// 送り終えた後のサーバーの値が、書き戻した値と違うことがあるため。投稿の可否が変わるので、変更を見張れるようにする。
     private var descriptionTasks: [DraftAttachment.ID: Task<Void, Never>] = [:] {
@@ -96,6 +105,8 @@ public final class ComposeModel<Thumbnail: Sendable> {
     @ObservationIgnored public var onPosted: () -> Void = {}
     /// 予約を書き直した投稿を送れて、`onPosted`を呼んだあとに、元の予約のIDを渡して呼ぶ。元の予約を取り消すのは呼ぶ側。
     @ObservationIgnored public var onScheduleRewritten: (ScheduledStatus.ID) -> Void = { _ in }
+    /// 削除して書き直す元の投稿を削除できたら（もう消えていたときを含む）、そのIDを渡して呼ぶ。一覧から除くのは呼ぶ側。
+    @ObservationIgnored public var onRedraftDeleted: (Status.ID) -> Void = { _ in }
     /// サーバーの上限のために、設定で選んだより小さく、または低い画質にした。使う人が選んでいない画質の変化なので、知らせる。
     @ObservationIgnored public var onMediaReduced: (MediaAttachment.Kind) -> Void = { _ in }
     /// ペーストしたメディアのうち、添付の上限を超えて足さなかったものの種類。
@@ -106,6 +117,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         replyTo: Status? = nil,
         myAccountID: String,
         media: ComposeMediaService<Thumbnail> = .unavailable,
+        redraft redraftService: ComposeRedraftService = .unavailable,
         backgroundTime: @escaping @MainActor (String) -> @MainActor () -> Void,
         post: @escaping (StatusDraft) async throws -> Void
     ) {
@@ -121,6 +133,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         self.myAccountID = myAccountID
         self.post = post
         self.media = media
+        self.redraftService = redraftService
     }
 
     /// 送る内容。注意書きの欄を隠していれば、注意書きは送らない。
@@ -307,7 +320,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
     /// 本文のうち、返信先から自動で入れた宛先を除いた、自分で書いた部分。宛先を書き換えていたら本文全体。
     /// 編集では、元の本文も自分で書いたものなので本文全体。
     public var typedText: String {
-        guard editedStatus == nil, rewritingSchedule == nil else { return text }
+        guard editedStatus == nil, rewritingSchedule == nil, redraft == nil else { return text }
         return text.hasPrefix(initialDraft.text) ? String(text.dropFirst(initialDraft.text.count)) : text
     }
 
@@ -387,11 +400,22 @@ public final class ComposeModel<Thumbnail: Sendable> {
         return "予約を書き直し中"
     }
 
+    /// 削除して書き直すラベルの文字。返信か引用なら、そう書く。元の投稿を削除したあとは、もうないことが分かるように書く。
+    /// 返信先と引用元の投稿は持たないので、相手は書かない。
+    public var redraftChipTitle: String? {
+        guard let redraft else { return nil }
+        if redraft.deletion == .done { return "削除した投稿を書き直し中" }
+        if initialDraft.quotedStatusID != nil { return "引用を削除して書き直し中" }
+        if initialDraft.inReplyToID != nil { return "返信を削除して書き直し中" }
+        return "削除して書き直し中"
+    }
+
     /// 捨てると失われる、自分で書いたものがある。編集と予約の書き直しは書き換えていなくても、始めたこと自体を失うものとして扱う。
     /// 返信先から自動で入れた宛先と注意書きは数えない。
     public var hasWrittenContent: Bool {
         editedStatus != nil
             || rewritingSchedule != nil
+            || redraft != nil
             || !typedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             || !attachments.isEmpty
             || (!spoilerText.isEmpty && spoilerText != initialDraft.spoilerText)
@@ -417,6 +441,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         poll = nil
         scheduledAt = nil
         rewritingSchedule = nil
+        redraft = nil
         language = draft.language
         hasChosenLanguage = true
         lastSubmitted = nil
@@ -449,12 +474,45 @@ public final class ComposeModel<Thumbnail: Sendable> {
         poll = draft.poll
         scheduledAt = draft.scheduledAt
         rewritingSchedule = scheduled
+        redraft = nil
         // 言語を送っていない予約は、送らずにサーバーに任せたままにする。
         language = draft.language
         hasChosenLanguage = true
         lastSubmitted = nil
         // 予約したときの公開範囲を、あとから届く既定の公開範囲で上書きしない。公開範囲を送っていない予約は、既定の公開範囲が届くのを待つ。
         hasChosenVisibility = scheduled.params.visibility != nil
+        return true
+    }
+
+    /// 自分の投稿を削除して書き直し始める。今の下書きは捨てる。送っている間は始めずfalseを返す。
+    /// 元の投稿は、送るときに削除する。本文と注意書きは、HTMLの`content`ではなく、書いたときのソースから入れる。
+    @discardableResult
+    public func beginRedrafting(_ status: Status, source: StatusSource) -> Bool {
+        guard !isPosting else { return false }
+        let draft = StatusDraft.redraft(of: status, source: source, pollLimits: pollLimits)
+        removeAllAttachments()
+        initialDraft = draft
+        editedStatus = nil
+        replyTo = nil
+        quoteTarget = nil
+        text = draft.text
+        spoilerText = draft.spoilerText
+        showsSpoiler = draft.hasSpoiler
+        visibility = draft.visibility
+        attachments = draft.attachments
+        // 元の投稿の添付は端末にファイルがなく、サーバーのメディアで描く。予約の書き直しと同じく、読み直すファイルはない。
+        for attachment in draft.attachments {
+            localMedia[attachment.id] = LocalMedia(assetIdentifier: nil) { _ in throw CancellationError() }
+        }
+        poll = draft.poll
+        scheduledAt = nil
+        rewritingSchedule = nil
+        redraft = StatusRedraft(status: status)
+        language = draft.language
+        hasChosenLanguage = true
+        lastSubmitted = nil
+        // 元の投稿の公開範囲を、あとから届く既定の公開範囲で上書きしない。
+        hasChosenVisibility = true
         return true
     }
 
@@ -470,6 +528,7 @@ public final class ComposeModel<Thumbnail: Sendable> {
         poll = nil
         scheduledAt = nil
         rewritingSchedule = nil
+        redraft = nil
         removeAllAttachments()
         lastSubmitted = nil
         hasChosenVisibility = false
@@ -502,19 +561,21 @@ public final class ComposeModel<Thumbnail: Sendable> {
         defer {
             isPosting = false
             endBackgroundTime()
+            if stopsRedraftingAfterSubmit {
+                stopsRedraftingAfterSubmit = false
+                reset()
+            }
         }
-        switch await waitForMedia() {
-        case .ready:
-            break
-        case .cancelled:
-            logger.info("compose: stopped waiting for media")
-            return
-        case .failed:
-            logger.info("compose: media failed while waiting to post")
-            errorMessage = "メディアを送信できなかったため、投稿しませんでした。"
-            return
+        // 削除したあとに送れなかった書き直しでは、元の投稿から外れたと分かっていない添付を、待ち直す。
+        startReleasingRedraftMedia()
+        guard await waitForMediaToPost(), acceptsSchedule(), !stopsRedraftingAfterSubmit else { return }
+        // 削除して書き直すときは、新しく足した添付の準備が済んでから元の投稿を削除し、元の投稿から外れた添付を付けて送る。
+        // 準備に失敗して送れないまま、元の投稿だけが消えないようにするため。
+        if let redraft, redraft.deletion != .done {
+            guard await deleteRedraftedStatus(redraft.status.id), !stopsRedraftingAfterSubmit else { return }
+            startReleasingRedraftMedia()
+            guard await waitForMediaToPost(), acceptsSchedule() else { return }
         }
-        guard acceptsSchedule() else { return }
         let draft = submission(of: draftToPost)
         lastSubmitted = draft
         do {
@@ -532,6 +593,95 @@ public final class ComposeModel<Thumbnail: Sendable> {
                 attachments[index].hasUnconfirmedDescription = true
             }
             errorMessage = ErrorPresentation(error).text
+        }
+    }
+
+    /// 添付の準備が済むのを待ち、送れるならtrueを返す。失敗したら知らせ、待つのをやめたら何も知らせない。
+    private func waitForMediaToPost() async -> Bool {
+        switch await waitForMedia() {
+        case .ready:
+            return true
+        case .cancelled:
+            logger.info("compose: stopped waiting for media")
+            return false
+        case .failed:
+            logger.info("compose: media failed while waiting to post")
+            let release = attachments.lazy.compactMap { [localMedia] attachment in
+                attachment.isHeldByRedraftedStatus ? localMedia[attachment.id]?.failure : nil
+            }.first
+            errorMessage = release.map { "元の投稿を削除しましたが、投稿しませんでした。\n\(ErrorPresentation($0).text)" }
+                ?? "メディアを送信できなかったため、投稿しませんでした。"
+            return false
+        }
+    }
+
+    /// 書き直している元の投稿が、書き直しの外で削除されたと分かったときに呼ぶ（ストリーミングで知った、この端末の「削除」で消したなど）。
+    /// 元の投稿はもうないので、やめる前に確かめ、送るときは削除せずに続ける。
+    /// - Parameter stopsRedrafting: この端末の「削除」で消したならtrue。添付も消え、書き直した投稿に付けられないので、書き直しをやめる。
+    ///   送るのを待っている間なら、待つのをやめ、送るのをやめてから空に戻す。もう投稿を送り始めていれば、送り終えてから空に戻す。
+    public func redraftedStatusWasDeleted(_ id: Status.ID, stopsRedrafting: Bool) {
+        guard redraft?.status.id == id else { return }
+        redraft?.deletion = .done
+        guard stopsRedrafting else { return }
+        guard isPosting else {
+            reset()
+            return
+        }
+        stopsRedraftingAfterSubmit = true
+        cancelWaitingForMedia()
+    }
+
+    /// 削除して書き直す元の投稿を、添付を残して削除する。削除できたら（もう消えていたときを含む）trueを返す。
+    /// サーバーが断ったら元の投稿は残っているので、書き直しを続けられる。応答を受け取れなかったら、届いたか分からないものとして、送り直すときに削除から送り直す。
+    private func deleteRedraftedStatus(_ id: Status.ID) async -> Bool {
+        logger.info("compose: deleting redrafted status")
+        do {
+            try await redraftService.deleteStatus(id)
+        } catch let error as MastodonAPIError where error.statusCode == 404 {
+            logger.info("compose: redrafted status already gone")
+        } catch let error as MastodonAPIError where error.statusCode < 500 {
+            logger.error("compose: redrafted status delete refused: \(SciaLog.describe(error), privacy: .public)")
+            errorMessage = "元の投稿を削除できなかったため、投稿しませんでした。\n\(ErrorPresentation(error).text)"
+            return false
+        } catch {
+            // 5xxは、届いたか分からないものとして扱う。Mastodonは投稿を消してから応答を返すので、プロキシの502や504でも消えていることがあるため。
+            logger.error("compose: redrafted status delete unknown: \(SciaLog.describe(error), privacy: .public)")
+            // 待つ間にストリーミングで消えたと分かっていれば、それを残す。
+            if redraft?.deletion != .done {
+                redraft?.deletion = .uncertain
+            }
+            guard !(error is CancellationError) else { return false }
+            errorMessage = "元の投稿を削除できたか分からないため、投稿しませんでした。送り直すと、削除から送り直します。\n\(ErrorPresentation(error).text)"
+            return false
+        }
+        redraft?.deletion = .done
+        onRedraftDeleted(id)
+        return true
+    }
+
+    /// 元の投稿を削除したあと、まだ元の投稿に付いている添付が外れるのを待ち始める。外れたら、書き換えた代替テキストを送る。
+    /// 削除する前と、もう待っている添付では何もしない。
+    private func startReleasingRedraftMedia() {
+        guard redraft?.deletion == .done else { return }
+        for attachment in attachments where attachment.isHeldByRedraftedStatus && releaseTasks[attachment.id] == nil {
+            guard let serverID = attachment.serverID else { continue }
+            let id = attachment.id
+            localMedia[id]?.failure = nil
+            releaseTasks[id] = tasks.run(.action) { [weak self, redraftService] in
+                do {
+                    let released = try await redraftService.waitUntilReleased(serverID)
+                    guard let self, !Task.isCancelled, let index = attachments.firstIndex(where: { $0.id == id }) else { return }
+                    attachments[index].state = .uploaded(released)
+                    attachments[index].isHeldByRedraftedStatus = false
+                    releaseTasks[id] = nil
+                    sendDescriptionIfNeeded(id)
+                } catch {
+                    guard let self, !Task.isCancelled else { return }
+                    logger.error("compose: redraft media not released: \(SciaLog.describe(error), privacy: .public)")
+                    localMedia[id]?.failure = error
+                    releaseTasks[id] = nil
+                }
+            }
         }
     }
 
@@ -569,7 +719,15 @@ public final class ComposeModel<Thumbnail: Sendable> {
             return status == .failed || status == .descriptionFailed
         }
         if failed { return .failed }
-        return isMediaReady ? .ready : nil
+        return areAttachmentsPrepared ? .ready : nil
+    }
+
+    /// 送る前に済ませる添付の準備が済んでいる。削除して書き直す元の投稿に付いている添付は、元の投稿を削除するまでは済んだものとし、
+    /// 削除したあとは、元の投稿から外れて、書き換えた代替テキストを送るまで待つ。
+    private var areAttachmentsPrepared: Bool {
+        descriptionTasks.isEmpty && attachments.allSatisfy { attachment in
+            attachment.isHeldByRedraftedStatus ? redraft?.deletion != .done : attachment.isReady
+        }
     }
 
     /// 添付の状態が変わるたびに呼び、待っている投稿を終えられるなら続ける。
@@ -842,6 +1000,11 @@ extension ComposeModel {
     /// 代替テキストだけを送れなかったなら、代替テキストだけを送り直す。
     public func retryAttachment(_ id: DraftAttachment.ID) {
         guard let attachment = attachments.first(where: { $0.id == id }) else { return }
+        // 削除した元の投稿から外れるのを待ちきれなかった添付は、待ち直す。
+        if attachment.isHeldByRedraftedStatus {
+            startReleasingRedraftMedia()
+            return
+        }
         switch attachment.state {
         case .failed:
             startUpload(id)
@@ -951,6 +1114,10 @@ extension ComposeModel {
         case .processing: return .processing
         case .failed: return .failed
         case .uploaded:
+            if attachment.isHeldByRedraftedStatus {
+                if releaseTasks[id] != nil { return .processing }
+                return localMedia[id]?.failure == nil ? .ready : .failed
+            }
             if descriptionTasks[id] != nil { return .sendingDescription }
             guard attachment.needsDescriptionUpdate else { return .ready }
             return localMedia[id]?.descriptionFailure == nil ? .sendingDescription : .descriptionFailed
@@ -959,6 +1126,7 @@ extension ComposeModel {
 
     private func discardAttachment(_ id: DraftAttachment.ID) {
         uploadTasks.removeValue(forKey: id)?.cancel()
+        releaseTasks.removeValue(forKey: id)?.cancel()
         thumbnailTasks.removeValue(forKey: id)?.cancel()
         descriptionTasks.removeValue(forKey: id)?.cancel()
         if let local = localMedia.removeValue(forKey: id) {

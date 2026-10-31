@@ -98,6 +98,7 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .rebloggedBy: .own(title: "ブーストした人", symbolName: "arrow.2.squarepath.circle", note: "ブーストされた投稿でだけ出ます")
         case .edit: .own(title: "編集", symbolName: "pencil", note: "自分の投稿でだけ出ます")
         case .delete: .own(title: "削除", symbolName: "trash", note: "自分の投稿でだけ出ます")
+        case .redraft: .own(title: "削除して書き直す", symbolName: "square.and.pencil", note: "自分の投稿でだけ出ます")
         case .dismissNotification: .own(title: "通知を削除", symbolName: "xmark.bin", note: "通知でだけ出ます")
         case .hideMedia: .own(title: "メディアを隠す", symbolName: "eye.slash", note: "表示している添付ファイルがある投稿でだけ出ます")
         case .systemTranslate: .own(title: "翻訳", symbolName: "translate", note: "本文のある投稿でだけ出ます")

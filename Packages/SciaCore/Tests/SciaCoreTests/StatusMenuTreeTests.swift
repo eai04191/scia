@@ -167,7 +167,7 @@ struct StatusMenuTreeTests {
         #expect(titles(tree(others, notification: notification, myAccountID: "9")).contains("会話をミュート"))
     }
 
-    /// プロフィールへの固定は、ダイレクトではない自分の投稿でだけ出る。自分の投稿でだけ、編集と削除を出す。
+    /// プロフィールへの固定は、ダイレクトではない自分の投稿でだけ出る。自分の投稿でだけ、編集、削除して書き直す、削除を出す。
     @Test func ownPostItems() {
         let me = account("9", "me")
 
@@ -176,6 +176,8 @@ struct StatusMenuTreeTests {
         #expect(!titles(tree(status(), myAccountID: "9")).contains("プロフィールに固定"))
         #expect(titles(tree(status(account: me), myAccountID: "9")).contains("削除"))
         #expect(!titles(tree(status(), myAccountID: "9")).contains("削除"))
+        #expect(titles(tree(status(account: me), myAccountID: "9")).contains("削除して書き直す"))
+        #expect(!titles(tree(status(), myAccountID: "9")).contains("削除して書き直す"))
     }
 
     /// 公開範囲を選んでブーストは、既定では隠す。出したときは、ブーストしていない投稿で、3つの公開範囲のサブメニューとして出る。ブーストした投稿では出さない。

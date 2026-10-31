@@ -191,6 +191,35 @@ struct MediaUploadTests {
         #expect(clock.sleeps.reduce(.zero, +) > .seconds(10 * 60))
     }
 
+    /// 削除した投稿の添付は、サーバーが投稿から外し終えるまで404が返るので、1秒おきに読み直し、外れたら返す。
+    @Test func waitUntilReleasedPollsWhileAttachedToDeletedStatus() async throws {
+        let transport = StubTransport([
+            .json(#"{"error":"Record not found"}"#, statusCode: 404),
+            .json(#"{"error":"Record not found"}"#, statusCode: 404),
+            try .fixture("media_attachment"),
+        ])
+        let clock = ManualClock()
+
+        let attachment = try await makeClient(transport).waitUntilReleased("113000000000000100", timeout: .seconds(60), clock: clock)
+
+        #expect(attachment.id == "113000000000000100")
+        #expect(clock.sleeps == [.seconds(1), .seconds(1)])
+        let paths = await transport.requests.map { $0.url?.path() }
+        #expect(paths == Array(repeating: "/api/v1/media/113000000000000100", count: 3))
+    }
+
+    /// 決めた時間を過ぎても外れなければ、それ以上読まずに諦める。通報された投稿の添付は、サーバーがいつまでも外さないため。
+    @Test func waitUntilReleasedGivesUpAfterTimeout() async throws {
+        let transport = StubTransport(Array(repeating: .json(#"{"error":"Record not found"}"#, statusCode: 404), count: 4))
+        let clock = ManualClock()
+
+        await #expect(throws: RedraftMediaError.notReleased) {
+            _ = try await makeClient(transport).waitUntilReleased("113000000000000100", timeout: .seconds(3), clock: clock)
+        }
+        #expect(clock.sleeps == [.seconds(1), .seconds(1), .seconds(1)])
+        #expect(await transport.requests.count == 4)
+    }
+
     @Test func updateDescriptionSendsPutForm() async throws {
         let transport = StubTransport([try .fixture("media_attachment")])
 

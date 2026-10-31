@@ -41,7 +41,7 @@ struct ConfirmationTests {
     }
 
     @Test func leavingEditConfirmsOnlyWhileEditing() {
-        #expect(Confirmation.leavingEdit(title: "編集をやめて返信しますか？", draft: draft(text: "本文")) == nil)
+        #expect(Confirmation.leavingEdit(starting: "返信", draft: draft(text: "本文")) == nil)
     }
 
     @Test func rewritingConfirmsOnlyWithWrittenDraft() {

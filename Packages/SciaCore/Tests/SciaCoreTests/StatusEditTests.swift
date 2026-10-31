@@ -244,13 +244,17 @@ struct StatusEditClientTests {
         #expect(edited.editedAt != nil)
     }
 
+    /// ふつうの削除では、web UIと同じく添付もすぐ消す。削除して書き直すときは、新しい投稿に付け直すので残す。
     @Test func deleteSendsDelete() async throws {
-        let transport = StubTransport([.json(Self.editedStatus, statusCode: 200)])
+        let transport = StubTransport([.json(Self.editedStatus, statusCode: 200), .json(Self.editedStatus, statusCode: 200)])
+        let client = try makeClient(transport)
 
-        try await makeClient(transport).deleteStatus("113000000000000001")
+        try await client.deleteStatus("113000000000000001", deleteMedia: true)
+        try await client.deleteStatus("113000000000000001", deleteMedia: false)
 
-        let request = try #require(await transport.requests.first)
-        #expect(request.httpMethod == "DELETE")
-        #expect(request.url?.path() == "/api/v1/statuses/113000000000000001")
+        let requests = await transport.requests
+        #expect(requests.map(\.httpMethod) == ["DELETE", "DELETE"])
+        #expect(requests.map { $0.url?.path() } == Array(repeating: "/api/v1/statuses/113000000000000001", count: 2))
+        #expect(requests.map { $0.url?.query() } == ["delete_media=true", nil])
     }
 }

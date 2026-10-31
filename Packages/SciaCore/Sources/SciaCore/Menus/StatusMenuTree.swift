@@ -19,6 +19,8 @@ public enum StatusAction: Sendable {
     case openRebloggedBy
     case edit
     case delete
+    /// 投稿欄に戻して書き直し、送るときに元の投稿を削除する。
+    case redraft
 }
 
 /// フォローリクエストへの返事。
@@ -167,7 +169,7 @@ public struct StatusMenuTree {
         case .customize:
             // 投稿のない通知（フォローなど）でも出す。
             return [.action(item.title, icon: .symbol(item.symbolName), .customize)]
-        case .reply, .favourite, .reblog, .bookmark, .quote, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .selectText, .edit, .delete:
+        case .reply, .favourite, .reblog, .bookmark, .quote, .muteConversation, .pin, .copyLink, .copyText, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .systemTranslate, .selectText, .edit, .delete, .redraft:
             guard let status else { return [] }
             return statusNode(item, on: status).map { [$0] } ?? []
         }
@@ -224,6 +226,10 @@ public struct StatusMenuTree {
         case .delete:
             guard let myAccountID, status.isAuthored(by: myAccountID) else { return nil }
             return .action(item.title, icon: icon, isDestructive: true, .status(.delete))
+        case .redraft:
+            // 送ると元の投稿が消えるので、削除と同じく赤で出す。
+            guard let myAccountID, status.isAuthored(by: myAccountID) else { return nil }
+            return .action(item.title, icon: icon, isDestructive: true, .status(.redraft))
         case .hideMedia:
             // ぼかしている投稿では出さない。開くときは、閲覧注意と同じくぼかしをタップする。
             guard !shown.mediaAttachments.isEmpty, !mediaIsCovered else { return nil }

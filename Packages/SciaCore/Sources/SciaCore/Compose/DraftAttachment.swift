@@ -13,12 +13,17 @@ public struct DraftAttachment: Sendable, Equatable, Identifiable {
     /// 投稿に付いている添付で、書き換えた代替テキストを編集と一緒に送ったが、届いたか分からない（応答を受け取れなかった）。
     /// サーバーの値が元のままか、送った値か分からないので、次の編集では元と同じ値でも送る。
     public var hasUnconfirmedDescription = false
+    /// 削除して書き直す元の投稿に、まだ付いている添付。元の投稿を削除し、サーバーが投稿から外すまでは、
+    /// `PUT /api/v1/media/:id`も新しい投稿に付けることも断られる。外れたと確かめたらfalseにする。
+    /// 決まりはdocs/compose.mdの「自分の投稿を削除して書き直す」にある。
+    public var isHeldByRedraftedStatus: Bool
 
-    public init(id: UUID = UUID(), state: State = .uploading, description: String = "", isAttachedToStatus: Bool = false) {
+    public init(id: UUID = UUID(), state: State = .uploading, description: String = "", isAttachedToStatus: Bool = false, isHeldByRedraftedStatus: Bool = false) {
         self.id = id
         self.state = state
         self.description = description
         self.isAttachedToStatus = isAttachedToStatus
+        self.isHeldByRedraftedStatus = isHeldByRedraftedStatus
     }
 
     public enum State: Sendable, Equatable {
@@ -45,14 +50,15 @@ public struct DraftAttachment: Sendable, Equatable, Identifiable {
 
     /// 書いた代替テキストを、まだサーバーに送っていない。
     /// 送るのはアップロードが済んでからなので、済む前はfalse。投稿に付いている添付は、編集と一緒に送るのでfalse。
+    /// 削除して書き直す元の投稿に付いている添付は、投稿から外れてから送るので、外れるまではfalse。
     public var needsDescriptionUpdate: Bool {
-        guard !isAttachedToStatus, case .uploaded(let attachment) = state else { return false }
+        guard !isAttachedToStatus, !isHeldByRedraftedStatus, case .uploaded(let attachment) = state else { return false }
         return (attachment.description ?? "") != description
     }
 
-    /// 投稿に付けられる。アップロードが済み、書いた代替テキストもサーバーに届いている。
+    /// 投稿に付けられる。アップロードが済み、書いた代替テキストもサーバーに届いている。削除して書き直す元の投稿に付いている間は付けられない。
     public var isReady: Bool {
-        guard case .uploaded = state else { return false }
+        guard case .uploaded = state, !isHeldByRedraftedStatus else { return false }
         return !needsDescriptionUpdate
     }
 }

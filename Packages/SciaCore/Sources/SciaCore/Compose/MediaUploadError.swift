@@ -34,3 +34,15 @@ public enum StatusPostError: Error, Equatable, Sendable, LocalizedError {
         }
     }
 }
+
+/// 削除して書き直す投稿の、元の投稿の添付を付け直すときの失敗。決まりはdocs/compose.mdの「自分の投稿を削除して書き直す」にある。
+public enum RedraftMediaError: Error, Equatable, Sendable, LocalizedError {
+    /// 待っても、サーバーが削除した投稿から添付を外さなかった。サーバーが混んでいて消し終えていないか、通報された投稿を消さずに残している。
+    case notReleased
+
+    public var errorDescription: String? {
+        switch self {
+        case .notReleased: "サーバーが元の投稿を消し終えていないため、元の投稿のメディアを付けられませんでした。しばらくしてから送り直すか、元の投稿のメディアを外してください。"
+        }
+    }
+}
