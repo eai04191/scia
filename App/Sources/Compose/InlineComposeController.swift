@@ -401,8 +401,33 @@ final class InlineComposeController: NSObject {
 
     /// バーを広げて、キーボードを出す。
     func beginEditing() {
+        activateWindowOnMac()
         expandForEditing()
         textView.becomeFirstResponder()
+    }
+
+    /// Macでは、ほかのアプリが手前にあっても、右クリックのメニューなどから返信を選んで書き始められる。
+    /// Sciaが手前のアプリにならないままだと、打った文字が投稿欄に入らないため、書き始めるときにアプリを手前に出す。
+    /// iPadアプリのままでは手前に出す方法がない。ほかのアプリが手前でも、シーンは`foregroundActive`、窓は`isKeyWindow`のままで、
+    /// `activateSceneSession`を呼んでも手前に出なかった。そのため、プロセスにあるAppKitの`NSApplication`を名前で呼ぶ。
+    /// 将来のmacOSで呼べなくなったら、手前に出さずに書き始めるだけになる。
+    private func activateWindowOnMac() {
+        guard ProcessInfo.processInfo.isiOSAppOnMac else { return }
+        let sharedApplication = NSSelectorFromString("sharedApplication")
+        let isActive = NSSelectorFromString("isActive")
+        let activate = NSSelectorFromString("activate")
+        // 応答しないメソッドを呼んだり、存在しないキーをKVCで読んだりすると例外で落ちるため、呼ぶ前に応答するか確かめる。
+        guard let applicationClass = NSClassFromString("NSApplication") as? NSObject.Type,
+              applicationClass.responds(to: sharedApplication),
+              let application = applicationClass.perform(sharedApplication)?.takeUnretainedValue() as? NSObject,
+              application.responds(to: isActive), application.responds(to: activate)
+        else {
+            logger.error("compose: NSApplication not available")
+            return
+        }
+        guard application.value(forKey: "active") as? Bool == false else { return }
+        logger.info("compose: activating app")
+        application.perform(activate)
     }
 
     private func expandForEditing() {
