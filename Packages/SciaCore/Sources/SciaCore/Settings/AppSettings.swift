@@ -58,6 +58,16 @@ public final class AppSettings {
         didSet { defaults.set(showsReplyLines, forKey: Keys.showsReplyLines) }
     }
 
+    /// アイコンと名前の段の下から、本文やメディアを行の幅いっぱいに置く。オンなら返信をつなぐ線は出さない。決まりはdocs/post-header-layout.mdにある。
+    public var wrapsBelowAvatar: Bool {
+        didSet { defaults.set(wrapsBelowAvatar, forKey: Keys.wrapsBelowAvatar) }
+    }
+
+    /// 名前の表記で名前とハンドルの両方を出すとき、2つ目を2段目に置く。
+    public var stacksNameParts: Bool {
+        didSet { defaults.set(stacksNameParts, forKey: Keys.stacksNameParts) }
+    }
+
     /// 名前の行の右端に、時刻を出す。
     public var showsTime: Bool {
         didSet { defaults.set(showsTime, forKey: Keys.showsTime) }
@@ -220,7 +230,7 @@ public final class AppSettings {
     /// 「投稿の見た目」の数値か選択肢のどれかが、既定値から変わっているか。
     public var isAppearanceModified: Bool {
         typealias D = AppearanceDefaults
-        return AppearanceCatalog.values.contains(where: isModified) || statusNameStyle != D.statusNameStyle || statusTimeStyle != D.statusTimeStyle || contextNameStyle != D.contextNameStyle || glyphLanguage != D.glyphLanguage || emojiStyle != D.emojiStyle || avatarShape != D.avatarShape || linkCardThumbnailSide != D.linkCardThumbnailSide || mediaArrangement != D.mediaArrangement || tiltsStackedPhotos != D.tiltsStackedPhotos || showsVisibilitySymbol != D.showsVisibilitySymbol || showsEditedMark != D.showsEditedMark || showsLinkCardSite != D.showsLinkCardSite || showsContextSymbol != D.showsContextSymbol || boldsName != D.boldsName || showsAvatarBorder != D.showsAvatarBorder || showsMediaBadges != D.showsMediaBadges || showsLinkCard != D.showsLinkCard || boldsLinkCardTitle != D.boldsLinkCardTitle || showsSeparators != D.showsSeparators || showsBoosterAvatar != D.showsBoosterAvatar || showsReplyLabel != D.showsReplyLabel || showsReplyLines != D.showsReplyLines || showsTime != D.showsTime || showsLinkCardImage != D.showsLinkCardImage || animatesAvatars != D.animatesAvatars || animatesCustomEmojis != D.animatesCustomEmojis || drawsReactionGlowInHDR != D.drawsReactionGlowInHDR || reactionGlowIcons != D.reactionGlowIcons || reactionGlowFillsWidthWhenAlone != D.reactionGlowFillsWidthWhenAlone || reactionGlowLightFavouriteColor != D.reactionGlowLightFavouriteColor
+        return AppearanceCatalog.values.contains(where: isModified) || statusNameStyle != D.statusNameStyle || statusTimeStyle != D.statusTimeStyle || contextNameStyle != D.contextNameStyle || glyphLanguage != D.glyphLanguage || emojiStyle != D.emojiStyle || avatarShape != D.avatarShape || linkCardThumbnailSide != D.linkCardThumbnailSide || mediaArrangement != D.mediaArrangement || tiltsStackedPhotos != D.tiltsStackedPhotos || showsVisibilitySymbol != D.showsVisibilitySymbol || showsEditedMark != D.showsEditedMark || showsLinkCardSite != D.showsLinkCardSite || showsContextSymbol != D.showsContextSymbol || boldsName != D.boldsName || showsAvatarBorder != D.showsAvatarBorder || showsMediaBadges != D.showsMediaBadges || showsLinkCard != D.showsLinkCard || boldsLinkCardTitle != D.boldsLinkCardTitle || showsSeparators != D.showsSeparators || showsBoosterAvatar != D.showsBoosterAvatar || showsReplyLabel != D.showsReplyLabel || showsReplyLines != D.showsReplyLines || wrapsBelowAvatar != D.wrapsBelowAvatar || stacksNameParts != D.stacksNameParts || showsTime != D.showsTime || showsLinkCardImage != D.showsLinkCardImage || animatesAvatars != D.animatesAvatars || animatesCustomEmojis != D.animatesCustomEmojis || drawsReactionGlowInHDR != D.drawsReactionGlowInHDR || reactionGlowIcons != D.reactionGlowIcons || reactionGlowFillsWidthWhenAlone != D.reactionGlowFillsWidthWhenAlone || reactionGlowLightFavouriteColor != D.reactionGlowLightFavouriteColor
     }
 
     /// 「投稿の見た目」の数値と選択肢を、すべて既定値へ戻す。
@@ -249,6 +259,8 @@ public final class AppSettings {
         showsBoosterAvatar = D.showsBoosterAvatar
         showsReplyLabel = D.showsReplyLabel
         showsReplyLines = D.showsReplyLines
+        wrapsBelowAvatar = D.wrapsBelowAvatar
+        stacksNameParts = D.stacksNameParts
         showsTime = D.showsTime
         showsLinkCardImage = D.showsLinkCardImage
         animatesAvatars = D.animatesAvatars
@@ -438,6 +450,8 @@ public final class AppSettings {
         static let showsBoosterAvatar = "settings.showsBoosterAvatar"
         static let showsReplyLabel = "settings.showsReplyLabel"
         static let showsReplyLines = "settings.showsReplyLines"
+        static let wrapsBelowAvatar = "settings.wrapsBelowAvatar"
+        static let stacksNameParts = "settings.stacksNameParts"
         static let showsTime = "settings.showsTime"
         static let showsLinkCardImage = "settings.showsLinkCardImage"
         static let glyphLanguage = "settings.glyphLanguage"
@@ -507,6 +521,8 @@ public final class AppSettings {
         showsBoosterAvatar = defaults.object(forKey: Keys.showsBoosterAvatar) as? Bool ?? AppearanceDefaults.showsBoosterAvatar
         showsReplyLabel = defaults.object(forKey: Keys.showsReplyLabel) as? Bool ?? AppearanceDefaults.showsReplyLabel
         showsReplyLines = defaults.object(forKey: Keys.showsReplyLines) as? Bool ?? AppearanceDefaults.showsReplyLines
+        wrapsBelowAvatar = defaults.object(forKey: Keys.wrapsBelowAvatar) as? Bool ?? AppearanceDefaults.wrapsBelowAvatar
+        stacksNameParts = defaults.object(forKey: Keys.stacksNameParts) as? Bool ?? AppearanceDefaults.stacksNameParts
         showsTime = defaults.object(forKey: Keys.showsTime) as? Bool ?? AppearanceDefaults.showsTime
         showsLinkCardImage = defaults.object(forKey: Keys.showsLinkCardImage) as? Bool ?? AppearanceDefaults.showsLinkCardImage
         glyphLanguage = defaults.string(forKey: Keys.glyphLanguage).flatMap(GlyphLanguage.init(rawValue:)) ?? AppearanceDefaults.glyphLanguage
@@ -585,6 +601,8 @@ private enum AppearanceDefaults {
     static let showsBoosterAvatar = true
     static let showsReplyLabel = true
     static let showsReplyLines = true
+    static let wrapsBelowAvatar = false
+    static let stacksNameParts = false
     static let showsTime = true
     static let showsLinkCardImage = true
     static let animatesAvatars = false

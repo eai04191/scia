@@ -292,6 +292,8 @@ struct AppearanceEditorTests {
         let settings = try makeSettings()
         // 名前の後ろに添える部分がないと、そのすき間を示せないため、名前の上の行にもハンドルを出す。
         settings.contextNameStyle = .nameAndAcct
+        // 1段目と2段目のあいだは、2段に分けないと示せない。
+        settings.stacksNameParts = item == AppearanceCatalog.nameStackSpacing
         let value = item.defaultValue + 3
         settings.setValue(value, for: item)
         let preview = AppearancePreviewView(frame: CGRect(x: 0, y: 0, width: 402, height: 4_000))

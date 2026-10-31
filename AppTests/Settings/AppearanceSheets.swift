@@ -49,6 +49,23 @@ struct AppearanceSheets {
                 Self.render(settings: after, highlight: highlight)
             ))
         }
+        // 名前を2段に分けるとき、アイコンの下を空けないときにだけ効く項目と、効き方の変わる項目は、その並べ方でも並べる。
+        for (title, keyPath, items) in Self.layoutVariants {
+            for item in items {
+                let before = try Self.makeSettings()
+                let after = try Self.makeSettings()
+                before[keyPath: keyPath] = true
+                after[keyPath: keyPath] = true
+                let value = Self.changedValue(of: item)
+                after.setValue(value, for: item)
+                let highlight = AppearanceHighlight(item)
+                pairs.append((
+                    "\(title) \(item.id)「\(item.title)」 \(item.defaultValue) → \(value)",
+                    Self.render(settings: before, highlight: highlight),
+                    Self.render(settings: after, highlight: highlight)
+                ))
+            }
+        }
         for choice in AppearanceChoice.allCases {
             let before = try Self.makeSettings()
             let after = try Self.makeSettings()
@@ -70,6 +87,11 @@ struct AppearanceSheets {
             try #require(sheet.pngData()).write(to: url)
         }
     }
+
+    private static let layoutVariants: [(String, ReferenceWritableKeyPath<AppSettings, Bool>, [AppearanceValue])] = [
+        ("名前を2段", \.stacksNameParts, [AppearanceCatalog.nameStackSpacing, AppearanceCatalog.namePrimaryText, AppearanceCatalog.nameSecondaryText, AppearanceCatalog.nameBodySpacing, AppearanceCatalog.nameMediaSpacing]),
+        ("アイコンの下を空けない", \.wrapsBelowAvatar, [AppearanceCatalog.avatarSize, AppearanceCatalog.nameBodySpacing, AppearanceCatalog.nameMediaSpacing, AppearanceCatalog.rowPaddingLeading]),
+    ]
 
     private static let besideBodyItems = [AppearanceCatalog.mediaBesideSide, AppearanceCatalog.bodyMediaSpacing, AppearanceCatalog.bodyLinkCardSpacing, AppearanceCatalog.filterNoteSpacing]
 
@@ -114,6 +136,8 @@ struct AppearanceSheets {
         case .showsBoosterAvatar: return flip(\.showsBoosterAvatar)
         case .showsReplyLabel: return flip(\.showsReplyLabel)
         case .showsReplyLines: return flip(\.showsReplyLines)
+        case .wrapsBelowAvatar: return flip(\.wrapsBelowAvatar)
+        case .stacksNameParts: return flip(\.stacksNameParts)
         case .showsTime: return flip(\.showsTime)
         case .showsLinkCardImage: return flip(\.showsLinkCardImage)
         case .showsVisibilitySymbol: return flip(\.showsVisibilitySymbol)

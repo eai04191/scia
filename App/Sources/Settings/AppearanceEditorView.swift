@@ -82,6 +82,8 @@ struct AppearanceEditorView: View {
                     .onChange(of: settings.showsSeparators) { focused = .choice(.showsSeparators) }
                     .onChange(of: settings.showsReplyLabel) { focused = .choice(.showsReplyLabel) }
                     .onChange(of: settings.showsReplyLines) { focused = .choice(.showsReplyLines) }
+                    .onChange(of: settings.wrapsBelowAvatar) { focused = .choice(.wrapsBelowAvatar) }
+                    .onChange(of: settings.stacksNameParts) { focused = .choice(.stacksNameParts) }
                     .onChange(of: settings.showsTime) { focused = .choice(.showsTime) }
                     .onChange(of: settings.showsVisibilitySymbol) { focused = .choice(.showsVisibilitySymbol) }
                     .onChange(of: settings.showsEditedMark) { focused = .choice(.showsEditedMark) }
@@ -154,6 +156,8 @@ struct AppearanceEditorView: View {
         hasher.combine(settings.showsSeparators)
         hasher.combine(settings.showsReplyLabel)
         hasher.combine(settings.showsReplyLines)
+        hasher.combine(settings.wrapsBelowAvatar)
+        hasher.combine(settings.stacksNameParts)
         hasher.combine(settings.showsTime)
         hasher.combine(settings.showsLinkCardImage)
         hasher.combine(settings.statusTimeStyle)
@@ -218,9 +222,14 @@ struct AppearanceEditorView: View {
             PopUpChoiceRow(title: "形", selection: $settings.avatarShape, options: [(.circle, "円"), (.roundedSquare, "角丸の四角")], onOpen: { focus(.avatarShape) }, onTapTitle: { toggleFocus(.choice(.avatarShape)) })
             TitledToggleRow(title: "縁取りを出す", isOn: $settings.showsAvatarBorder) { toggleFocus(.choice(.showsAvatarBorder)) }
             TitledToggleRow(title: "アニメーションを再生する", isOn: $settings.animatesAvatars) { toggleFocus(.choice(.animatesAvatars)) }
+            TitledToggleRow(title: "アイコンの下を空けない", isOn: $settings.wrapsBelowAvatar) { toggleFocus(.choice(.wrapsBelowAvatar)) }
+            // アイコンの下を空けないときは、線の通る場所に本文などが入るので、線を出さない。
             TitledToggleRow(title: "返信をつなぐ線を出す", isOn: $settings.showsReplyLines) { toggleFocus(.choice(.showsReplyLines)) }
+                .disabled(settings.wrapsBelowAvatar)
         case "name":
             PopUpChoiceRow(title: "名前の表記", selection: $settings.statusNameStyle, options: Self.nameStyles, onOpen: { focus(.nameStyle) }, onTapTitle: { toggleFocus(.choice(.nameStyle)) })
+            TitledToggleRow(title: "名前とハンドルを2段に分ける", isOn: $settings.stacksNameParts) { toggleFocus(.choice(.stacksNameParts)) }
+                .disabled(settings.statusNameStyle.parts.count < 2)
             PopUpChoiceRow(title: "時刻の表記", selection: $settings.statusTimeStyle, options: [(.relative, "相対時刻"), (.absolute, "日時")], onOpen: { focus(.timeStyle) }, onTapTitle: { toggleFocus(.choice(.timeStyle)) })
             TitledToggleRow(title: "名前を太字にする", isOn: $settings.boldsName) { toggleFocus(.choice(.boldsName)) }
             TitledToggleRow(title: "時刻を出す", isOn: $settings.showsTime) { toggleFocus(.choice(.showsTime)) }
@@ -323,6 +332,8 @@ enum AppearanceChoice: Hashable, CaseIterable {
     case showsBoosterAvatar
     case showsReplyLabel
     case showsReplyLines
+    case wrapsBelowAvatar
+    case stacksNameParts
     case showsTime
     case showsLinkCardImage
     case showsVisibilitySymbol
@@ -356,6 +367,8 @@ enum AppearanceChoice: Hashable, CaseIterable {
         case .showsBoosterAvatar: .part(.boosterAvatarSlot)
         case .showsReplyLabel: .part(.replyLabelSlot)
         case .showsReplyLines: .part(.replyLineSlot)
+        case .wrapsBelowAvatar: .firstOf([.part(.postHeader), .part(.avatar)])
+        case .stacksNameParts: .firstOf([.part(.nameGlyphs), .part(.nameRow)])
         case .showsTime: .part(.timeSlot)
         case .showsLinkCardImage: .part(.cardImageSlot)
         case .showsVisibilitySymbol: .part(.visibilitySymbol)

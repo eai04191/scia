@@ -35,6 +35,10 @@ struct PostContentConfiguration: UIContentConfiguration {
     var showsReplyLines = true
     /// 名前の行の右端に時刻を出す。出さなくても、読み上げでは読む。
     var showsTime = true
+    /// 名前の行に2つ並べるとき、2つ目を2段目に置く。時刻は1段目の右端に残す。
+    var stacksNameParts = false
+    /// アイコンと名前の段を見出しにし、その下から本文やメディアを行の幅いっぱいに置く。決まりはdocs/post-header-layout.mdにある。
+    var wrapsBelowAvatar = false
     /// ブーストされた投稿。「投稿の見た目」のプレビューで、ブーストした人の行を探すのに使う。
     var isBoost = false
     /// 返信。返信のラベルを出さない設定でも立てる。「投稿の見た目」のプレビューで、ラベルの場所を探すのに使う。
@@ -137,6 +141,8 @@ struct PostContentConfiguration: UIContentConfiguration {
         var namePartsSpacing: CGFloat
         /// 名前と時刻の最小のすき間。
         var nameTimeSpacing: CGFloat
+        /// 名前を2段に分けるとき、1段目の字面の下端から2段目の字面の上端まで。
+        var nameStackSpacing: CGFloat = 2
         /// 名前の行で、太字で描く前の部分の文字。
         var nameFont: UIFont
         var timeFont: UIFont
@@ -160,6 +166,16 @@ struct PostContentConfiguration: UIContentConfiguration {
 
     func updated(for state: any UIConfigurationState) -> PostContentConfiguration {
         self
+    }
+
+    /// 2つ目の名前を2段目に置いているか。名前を1つしか出さないときは、分ける設定でも1段にする。
+    var isNameStacked: Bool {
+        stacksNameParts && nameParts.count > 1
+    }
+
+    /// 名前の1段目に並べる文字。2段に分けていなければ、名前の行のすべて。
+    var firstLineNameParts: [NSAttributedString] {
+        isNameStacked ? [nameParts[0]] : nameParts
     }
 
     /// `now`の時点での時刻の表記。
@@ -206,6 +222,8 @@ final class PostContentView: UIView, UIContentView {
     private let textGuide = UILayoutGuide()
     /// 名前の最後のベースラインの位置。名前の行の下のすき間は字面から測るので、「投稿の見た目」のプレビューで字面の下端を求めるのに使う。
     private let nameBaselineGuide = UILayoutGuide()
+    /// 名前の段の最後の行のベースラインの位置。2段に分けていれば2段目、分けていなければ1段目のベースラインにする。
+    private let nameLastBaselineGuide = UILayoutGuide()
     /// 名前の上の行の高さ。文字とブーストした人のアイコンの高いほうにする。アイコンを大きくしても、名前の行に重ならないようにするため。
     private let contextGuide = UILayoutGuide()
     private let reactionGlowView = ReactionGlowView()
@@ -267,6 +285,7 @@ final class PostContentView: UIView, UIContentView {
         super.init(frame: .zero)
         addLayoutGuide(textGuide)
         addLayoutGuide(nameBaselineGuide)
+        addLayoutGuide(nameLastBaselineGuide)
         addLayoutGuide(contextGuide)
         configureSubviews()
         bodyView.onSelectMedia = { [weak self] index, grid in self?.current.onSelectMedia?(index, grid) }
@@ -353,6 +372,7 @@ final class PostContentView: UIView, UIContentView {
         NSLayoutConstraint.activate([
             nameBaselineGuide.topAnchor.constraint(equalTo: nameLabels[0].lastBaselineAnchor),
             nameBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
+            nameLastBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
         ])
         for line in [replyLineAbove, replyLineBelow] {
             line.backgroundColor = .tertiaryLabel
@@ -397,11 +417,23 @@ final class PostContentView: UIView, UIContentView {
             label.isHidden = text == nil
             label.fadeWidth = metrics.nameFadeWidth
         }
-        // 2つ目がないときは、1つ目が余りの幅を受け持つ。
-        nameLabels[0].setContentHuggingPriority(configuration.nameParts.count > 1 ? .required : .defaultLow, for: .horizontal)
-        // 時刻の前のすき間は、出している最後の名前のあとに取る。隠したラベルのあとのすき間は使われないため。
+        // 2段に分けるときは、2つ目を名前の行の外に出し、1段目の下に置く。
+        let secondName = nameLabels[1]
+        if configuration.isNameStacked, secondName.superview === nameRow {
+            nameRow.removeArrangedSubview(secondName)
+            secondName.removeFromSuperview()
+            secondName.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(secondName)
+        } else if !configuration.isNameStacked, secondName.superview !== nameRow {
+            secondName.removeFromSuperview()
+            nameRow.insertArrangedSubview(secondName, at: 1)
+        }
+        let firstLineCount = configuration.firstLineNameParts.count
+        // 1段目の名前が1つなら、その名前が余りの幅を受け持つ。
+        nameLabels[0].setContentHuggingPriority(firstLineCount > 1 ? .required : .defaultLow, for: .horizontal)
+        // 時刻の前のすき間は、1段目に出している最後の名前のあとに取る。隠したラベルのあとのすき間は使われないため。
         nameRow.spacing = metrics.namePartsSpacing
-        let lastName = nameLabels[min(max(configuration.nameParts.count, 1), nameLabels.count) - 1]
+        let lastName = nameLabels[min(max(firstLineCount, 1), nameLabels.count) - 1]
         for label in nameLabels {
             nameRow.setCustomSpacing(label === lastName ? metrics.nameTimeSpacing : metrics.namePartsSpacing, after: label)
         }
@@ -431,8 +463,10 @@ final class PostContentView: UIView, UIContentView {
             filterNoteSpacing: metrics.filterNoteSpacing
         ))
         reactionGlowView.apply(configuration.reactionGlow)
-        replyLineAbove.isHidden = !(configuration.replyConnection.above && configuration.showsReplyLines)
-        replyLineBelow.isHidden = !(configuration.replyConnection.below && configuration.showsReplyLines)
+        // アイコンの下を空けないときは、線の通る場所に本文などが入るので、線を出さない。
+        let drawsReplyLines = configuration.showsReplyLines && !configuration.wrapsBelowAvatar
+        replyLineAbove.isHidden = !(configuration.replyConnection.above && drawsReplyLines)
+        replyLineBelow.isHidden = !(configuration.replyConnection.below && drawsReplyLines)
         setNeedsLayout()
         updateConstraints(for: configuration)
         updateAccessibility(for: configuration)
@@ -468,6 +502,7 @@ final class PostContentView: UIView, UIContentView {
         ].compactMapValues(\.self)
         frames.merge(slotPreviewFrames()) { $1 }
         frames.merge(timePreviewFrames()) { $1 }
+        frames.merge(headerPreviewFrames()) { $1 }
         if let avatar = avatarView.previewFrame(in: self)?.first {
             let radius = current.avatar.shape == .circle ? avatar.width / 2 : avatar.width * current.avatar.cornerRatio
             frames[.avatarCorners] = AppearanceHighlight.cornerSquares(of: avatar, radius: radius)
@@ -485,12 +520,14 @@ final class PostContentView: UIView, UIContentView {
         return [frame]
     }
 
-    /// 名前が入りきらず時刻に詰まっているときの、最後の名前と時刻のすき間。名前が短ければ、最小のすき間より広く空くのでnil。
+    /// 名前が入りきらず時刻に詰まっているときの、1段目の最後の名前と時刻のすき間。名前が短ければ、最小のすき間より広く空くのでnil。
     private func nameTimeMinGapFrame() -> [CGRect]? {
+        // 2段に分けたときの2段目は、時刻と並ばないので測らない。
+        let firstLine = nameLabels.prefix(current.firstLineNameParts.count)
         guard !timeLabel.isHidden,
               // 押し縮められて幅0になったハンドルも、時刻との最小のすき間はそのラベルのあとに取るので、幅によらず最後のラベルから測る。
-              let last = nameLabels.last(where: { !$0.isHidden }),
-              nameLabels.contains(where: { !$0.isHidden && $0.intrinsicContentSize.width > $0.bounds.width + 0.5 })
+              let last = firstLine.last(where: { !$0.isHidden }),
+              firstLine.contains(where: { !$0.isHidden && $0.intrinsicContentSize.width > $0.bounds.width + 0.5 })
         else { return nil }
         let name = last.convert(last.bounds, to: self)
         let time = timeLabel.convert(timeLabel.bounds, to: self)
@@ -597,12 +634,37 @@ final class PostContentView: UIView, UIContentView {
         return frames
     }
 
-    /// 名前の字面の枠。上端と下端は、ベースラインからem枠で測る。下端は、大きくした絵文字が下へ伸びていればその下端にする。並びも同じ測り方で、本文やメディアとのすき間を取っている。
+    /// 名前の段の字面の枠。上端と下端は、ベースラインからem枠で測る。下端は、大きくした絵文字が下へ伸びていればその下端にする。並びも同じ測り方で、本文やメディアとのすき間を取っている。
+    /// 2段に分けていれば、1段目の上端から2段目の下端まで。
     private func nameGlyphsFrame() -> [CGRect]? {
+        guard let row = nameRow.previewFrame(in: self)?.first, let top = nameFirstLineGlyphs()?.minY else { return nil }
+        let bottom = nameLastBaselineGuide.layoutFrame.minY + Self.nameBottomInset(of: current)
+        return [CGRect(x: row.minX, y: top, width: row.width, height: bottom - top)]
+    }
+
+    /// 名前の1段目の字面の枠。
+    private func nameFirstLineGlyphs() -> CGRect? {
         guard let row = nameRow.previewFrame(in: self)?.first else { return nil }
         let baseline = nameBaselineGuide.layoutFrame.minY
         let top = baseline - Self.largestNamePointSize(of: current) * PostBodyView.emBoxAscent
-        return [CGRect(x: row.minX, y: top, width: row.width, height: baseline + Self.nameBottomInset(of: current) - top)]
+        return CGRect(x: row.minX, y: top, width: row.width, height: baseline + Self.firstLineBottomInset(of: current) - top)
+    }
+
+    /// 2段に分けた名前の、1段目と2段目の字面の枠と、アイコンの下を空けないときの見出しの枠。
+    private func headerPreviewFrames() -> AppearancePreviewFrames {
+        var frames: AppearancePreviewFrames = [:]
+        if current.isNameStacked, let first = nameFirstLineGlyphs(), let second = nameLabels[1].previewFrame(in: self)?.first {
+            let baseline = nameLastBaselineGuide.layoutFrame.minY
+            let top = baseline - PostBodyView.textTopInset(of: current.nameParts[1])
+            frames[.nameFirstLineGlyphs] = [first]
+            frames[.nameSecondLineGlyphs] = [CGRect(x: second.minX, y: top, width: second.width, height: baseline + Self.nameBottomInset(of: current) - top)]
+        }
+        if current.wrapsBelowAvatar, let name = nameGlyphsFrame()?.first {
+            let avatar = avatarView.frame
+            let top = min(avatar.minY, name.minY)
+            frames[.postHeader] = [CGRect(x: avatar.minX, y: top, width: name.maxX - avatar.minX, height: max(avatar.maxY, name.maxY) - top)]
+        }
+        return frames
     }
 
     /// 名前の上の行の文字を、名前の部分と添える部分に分けた枠。添える部分がなければ、全体を名前の部分とする。
@@ -660,7 +722,10 @@ final class PostContentView: UIView, UIContentView {
         NSLayoutConstraint.deactivate(variableConstraints)
         let metrics = configuration.metrics
         let margins = metrics.margins
-        let nameTopGap = configuration.nameParts.map(RichTextRenderer.lineTopGap).max() ?? 0
+        let nameTopGap = configuration.firstLineNameParts.map(RichTextRenderer.lineTopGap).max() ?? 0
+        let bodySpacing = bodyView.startsWithMedia ? metrics.nameMediaSpacing : metrics.nameBodySpacing
+        // 本文の左右の端。アイコンの下を空けないときは、行の左右の余白の内側いっぱいにする。
+        let bodyLeading = configuration.wrapsBelowAvatar ? leadingAnchor : textGuide.leadingAnchor
         var constraints = [
             avatarView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: margins.leading),
             // 名前の行は、ラベルが1行目の上に取る空きの分だけ上に置き、字面の上端を、アイコンの上端と同じ位置にそろえる。
@@ -671,12 +736,7 @@ final class PostContentView: UIView, UIContentView {
             textGuide.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -margins.trailing),
             nameRow.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
             nameRow.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
-            // 間隔は、名前の行の字面の下端から測る。名前の行の部分はベースラインで揃っているので、いちばん大きい文字の字面の下端を使う。
-            bodyView.topAnchor.constraint(
-                equalTo: nameLabels[0].lastBaselineAnchor,
-                constant: (bodyView.startsWithMedia ? metrics.nameMediaSpacing : metrics.nameBodySpacing) + Self.nameBottomInset(of: configuration)
-            ),
-            bodyView.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
+            bodyView.leadingAnchor.constraint(equalTo: bodyLeading, constant: configuration.wrapsBelowAvatar ? margins.leading : 0),
             bodyView.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
             // 本文が短くても、アイコンが下の余白に食い込まないようにする。
             bottomAnchor.constraint(greaterThanOrEqualTo: avatarView.bottomAnchor, constant: margins.bottom),
@@ -716,6 +776,27 @@ final class PostContentView: UIView, UIContentView {
         } else {
             constraints.append(nameRow.topAnchor.constraint(equalTo: topAnchor, constant: margins.top - nameTopGap))
         }
+        constraints += nameStackConstraints(for: configuration)
+        // 2つ目の名前は名前の行に出し入れするので、そのラベルにつなぐ制約は適用のたびに作り直す。
+        let lastNameLabel = configuration.isNameStacked ? nameLabels[1] : nameLabels[0]
+        constraints.append(nameLastBaselineGuide.topAnchor.constraint(equalTo: lastNameLabel.lastBaselineAnchor))
+        // 間隔は、名前の段の字面の下端から測る。名前の行の部分はベースラインで揃っているので、いちばん大きい文字の字面の下端を使う。
+        if configuration.wrapsBelowAvatar {
+            // 見出しの下端は、アイコンの下端と名前の段の字面の下端のうち、下にあるほう。どちらも下限にし、弱い力で上へ寄せる。
+            // 寄せる力は、名前の行と名前の上の行を文字の高さに縮める制約（defaultLow）より弱くする。強いと、名前の行を縦に引き伸ばして名前を下へずらし、本文に近づけてしまう。
+            let pullUp = bodyView.topAnchor.constraint(equalTo: topAnchor)
+            pullUp.priority = .defaultLow - 50
+            constraints += [
+                bodyView.topAnchor.constraint(greaterThanOrEqualTo: lastNameLabel.lastBaselineAnchor, constant: bodySpacing + Self.nameBottomInset(of: configuration)),
+                bodyView.topAnchor.constraint(greaterThanOrEqualTo: avatarView.bottomAnchor, constant: bodySpacing),
+                pullUp,
+            ]
+        } else {
+            constraints.append(bodyView.topAnchor.constraint(
+                equalTo: lastNameLabel.lastBaselineAnchor,
+                constant: bodySpacing + Self.nameBottomInset(of: configuration)
+            ))
+        }
         let contentBottom = bodyView.bottomAnchor
         // アイコンの方が下まで届くときは、等しさを諦めてアイコンの下に余白を取る。
         // 文字のラベルの縦のhugging（defaultLow）より弱くし、余りの高さでラベルを伸ばさずに、本文の下に空きを置く。
@@ -734,21 +815,43 @@ final class PostContentView: UIView, UIContentView {
         NSLayoutConstraint.activate(constraints)
     }
 
-    /// 名前の行のベースラインから、字面の下端まで。大きくした絵文字が字面より下へ伸びていれば、その下端まで。
-    static func nameBottomInset(of configuration: PostContentConfiguration) -> CGFloat {
-        configuration.nameParts.map { PostBodyView.textBottomInset(of: $0) }.reduce(largestNamePointSize(of: configuration) * PostBodyView.emBoxDescent, max)
+    /// 2段目の名前を、1段目の字面の下端から設定のすき間だけ離して、文字の列の幅いっぱいに置く制約。2段に分けていなければ空。
+    private func nameStackConstraints(for configuration: PostContentConfiguration) -> [NSLayoutConstraint] {
+        guard configuration.isNameStacked else { return [] }
+        let second = nameLabels[1]
+        let offset = Self.firstLineBottomInset(of: configuration) + configuration.metrics.nameStackSpacing + PostBodyView.textTopInset(of: configuration.nameParts[1])
+        return [
+            second.leadingAnchor.constraint(equalTo: textGuide.leadingAnchor),
+            second.trailingAnchor.constraint(equalTo: textGuide.trailingAnchor),
+            second.firstBaselineAnchor.constraint(equalTo: nameLabels[0].lastBaselineAnchor, constant: offset),
+        ]
     }
 
-    /// 名前の行に出す文字（名前、ハンドル、時刻）のうち、いちばん大きい文字の大きさ。大きさを変えた絵文字は除く。
+    /// 名前の段の最後の行のベースラインから、字面の下端まで。大きくした絵文字が字面より下へ伸びていれば、その下端まで。
+    static func nameBottomInset(of configuration: PostContentConfiguration) -> CGFloat {
+        guard configuration.isNameStacked else { return firstLineBottomInset(of: configuration) }
+        let second = configuration.nameParts[1]
+        return max(PostBodyView.textBottomInset(of: second), pointSize(of: second) * PostBodyView.emBoxDescent)
+    }
+
+    /// 名前の1段目のベースラインから、字面の下端まで。
+    static func firstLineBottomInset(of configuration: PostContentConfiguration) -> CGFloat {
+        configuration.firstLineNameParts.map { PostBodyView.textBottomInset(of: $0) }.reduce(largestNamePointSize(of: configuration) * PostBodyView.emBoxDescent, max)
+    }
+
+    /// 名前の1段目に出す文字（名前、ハンドル、時刻）のうち、いちばん大きい文字の大きさ。大きさを変えた絵文字は除く。
     static func largestNamePointSize(of configuration: PostContentConfiguration) -> CGFloat {
-        var sizes = configuration.nameParts.compactMap { part in
-            RichTextRenderer.textFont(in: part, range: NSRange(location: 0, length: part.length))?.pointSize
-        }
+        var sizes = configuration.firstLineNameParts.map(pointSize(of:))
         sizes.append(configuration.metrics.nameFont.pointSize)
         if configuration.showsTime {
             sizes.append(configuration.metrics.timeFont.pointSize)
         }
         return sizes.max() ?? configuration.metrics.nameFont.pointSize
+    }
+
+    /// 名前の文字の大きさ。大きさを変えた絵文字は除く。
+    private static func pointSize(of part: NSAttributedString) -> CGFloat {
+        RichTextRenderer.textFont(in: part, range: NSRange(location: 0, length: part.length))?.pointSize ?? 0
     }
 
     /// 記号を、右の文字の行に対して縦に置く制約。
@@ -818,7 +921,8 @@ final class PostContentView: UIView, UIContentView {
         // 本文の枠は中身の部品の中で決まるため、先に並べておく。
         bodyView.layoutIfNeeded()
         let bodyTextFrame = bodyView.convert(bodyView.textFrame, to: self)
-        let textFrame = [contextLabel, nameRow].filter { !$0.isHidden }.map(\.frame).reduce(bodyTextFrame) { $0.union($1) }
+        // 2段目の名前は名前の行の外に置くので、名前の行とは別に含める。名前の行の中にあるときは、名前の行の枠に入っている。
+        let textFrame = [contextLabel, nameRow, nameLabels[1]].filter { !$0.isHidden }.map { $0.convert($0.bounds, to: self) }.reduce(bodyTextFrame) { $0.union($1) }
         textAccessibilityElement.accessibilityFrameInContainerSpace = textFrame.union(avatarView.frame)
     }
 

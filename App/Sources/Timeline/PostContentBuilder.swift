@@ -37,6 +37,7 @@ struct PostContentBuilder {
             bodyPollSpacing: settings.value(of: AppearanceCatalog.bodyPollSpacing),
             namePartsSpacing: settings.value(of: AppearanceCatalog.namePartsSpacing),
             nameTimeSpacing: settings.value(of: AppearanceCatalog.nameTimeSpacing),
+            nameStackSpacing: settings.value(of: AppearanceCatalog.nameStackSpacing),
             nameFont: typography.font(.namePrimary),
             timeFont: typography.font(.time),
             // 名前の上の行は、ブーストならブーストした人の名前の文字、返信と固定ならラベルの文字で描く。記号の大きさもこれに合わせる。
@@ -110,6 +111,8 @@ struct PostContentBuilder {
         configuration.reactionGlow = reactionGlow(for: shown)
         configuration.showsReplyLines = settings.showsReplyLines
         configuration.showsTime = settings.showsTime
+        configuration.stacksNameParts = settings.stacksNameParts
+        configuration.wrapsBelowAvatar = settings.wrapsBelowAvatar
         configuration.isBoost = status.reblog != nil
         configuration.isReply = replyLabel != nil && status.reblog == nil && !isPinned
         configuration.hasHiddenLinkCard = !settings.showsLinkCard && LinkCard(status: shown) != nil

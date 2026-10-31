@@ -55,6 +55,8 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (C.nameSecondaryText, .firstPart([.nameSecondary, .nameRow])),
             (C.timeText, .firstOf([.part(.time), .part(.timeSlot)])),
             (C.namePartsSpacing, .firstOf([.horizontalGap(leading: [.namePrimary], trailing: [.nameSecondary]), .part(.nameRow)])),
+            // 2段に分けていないと効かないので、分けていなければ名前の行を示す。
+            (C.nameStackSpacing, .firstOf([.verticalGap(above: [.nameFirstLineGlyphs], below: [.nameSecondLineGlyphs]), .part(.nameRow)])),
             // 時刻は右端に寄せるので、名前が短いと最小のすき間より広く空き、値を変えても見た目が変わらない。名前が時刻に詰まった投稿で示す。
             (C.nameTimeSpacing, .firstOf([.part(.nameTimeMinGap), .horizontalGap(leading: [.nameSecondary, .namePrimary], trailing: [.time]), .part(.timeSlot)])),
             (C.visibilitySymbolSpacing, .firstOf([.part(.visibilitySymbolGap), .part(.visibilitySymbol)])),
@@ -62,8 +64,9 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (C.nameFadeWidth, .firstOf([.part(.nameFade), .part(.nameRow)])),
             (C.nameUnicodeEmojiScale, .firstOf([.part(.nameUnicodeEmojis), .part(.nameRow)])),
             (C.nameCustomEmojiScale, .firstOf([.part(.nameCustomEmojis), .part(.nameRow)])),
-            (C.nameBodySpacing, .verticalGap(above: [.nameGlyphs], below: [.spoiler, .bodyGlyphs])),
-            (C.nameMediaSpacing, .verticalGap(above: [.nameGlyphs], below: [.media], absent: [.spoiler, .bodyText])),
+            // アイコンの下を空けないときは、アイコンと名前の段の下にあるほうから測る。
+            (C.nameBodySpacing, .verticalGap(above: [.postHeader, .nameGlyphs], below: [.spoiler, .bodyGlyphs])),
+            (C.nameMediaSpacing, .verticalGap(above: [.postHeader, .nameGlyphs], below: [.media], absent: [.spoiler, .bodyText])),
 
             (C.bodyText, .part(.bodyText)),
             (C.bodyLineSpacing, .firstOf([.part(.bodyLineGaps), .part(.bodyText)])),
@@ -171,7 +174,9 @@ public enum AppearanceHighlight: Equatable, Sendable {
         case .contextLine: C.contextText
         case .nameRow: C.namePrimaryText
         case .visibilityTime, .editedTime: C.timeText
-        case .nameGlyphs: C.namePrimaryText
+        case .nameGlyphs, .nameFirstLineGlyphs: C.namePrimaryText
+        case .nameSecondLineGlyphs: C.nameSecondaryText
+        case .postHeader: C.avatarSize
         case .bodyGlyphs: C.bodyText
         case .cardSite: C.linkCardDetailText
         case .xPostHeader: C.xPostNameText

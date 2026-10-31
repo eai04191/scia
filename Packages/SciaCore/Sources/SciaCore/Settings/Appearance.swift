@@ -93,6 +93,8 @@ public enum AppearanceCatalog {
     /// 名前の行で、太字の部分と、後ろに添える部分のすき間。
     public static let namePartsSpacing = AppearanceValue(id: "timeline.namePartsSpacing", title: "太字と添える部分のすき間", range: 0...100, step: 1, defaultValue: 4)
     /// 名前と時刻のあいだの、最も狭いすき間。時刻は右端に寄せるので、名前が短ければもっと空く。
+    /// 名前とハンドルを2段に分けるとき、1段目の字面の下端から2段目の字面の上端まで。
+    public static let nameStackSpacing = AppearanceValue(id: "timeline.nameStackSpacing", title: "1段目と2段目のあいだ", range: 0...100, step: 1, defaultValue: 2)
     public static let nameTimeSpacing = AppearanceValue(id: "timeline.nameTimeSpacing", title: "名前と時刻の最小のすき間", range: 0...100, step: 1, defaultValue: 8)
     /// 本文の行と行のあいだに足す余白。
     public static let bodyLineSpacing = AppearanceValue(id: "timeline.bodyLineSpacing", title: "行間", range: 0...100, step: 1, defaultValue: 0)
@@ -222,7 +224,7 @@ public enum AppearanceCatalog {
         AppearanceGroup(id: "row", title: "行", values: [rowPaddingTop, rowPaddingBottom, rowPaddingLeading, rowPaddingTrailing]),
         AppearanceGroup(id: "context", title: "名前の上の行", values: [contextText, contextSecondaryText, contextPartsSpacing, contextLabelText, boosterAvatarSize, contextSymbolSpacing, contextAvatarTextSpacing, contextSpacing]),
         AppearanceGroup(id: "avatar", title: "アイコン", values: [avatarSize, avatarCornerRatio, avatarSpacing, replyLineWidth, replyLineGap]),
-        AppearanceGroup(id: "name", title: "名前の行", values: [namePrimaryText, nameSecondaryText, timeText, namePartsSpacing, nameTimeSpacing, visibilitySymbolSpacing, editedMarkSpacing, nameFadeWidth, nameUnicodeEmojiScale, nameCustomEmojiScale, nameBodySpacing, nameMediaSpacing]),
+        AppearanceGroup(id: "name", title: "名前の行", values: [namePrimaryText, nameSecondaryText, timeText, namePartsSpacing, nameStackSpacing, nameTimeSpacing, visibilitySymbolSpacing, editedMarkSpacing, nameFadeWidth, nameUnicodeEmojiScale, nameCustomEmojiScale, nameBodySpacing, nameMediaSpacing]),
         AppearanceGroup(id: "body", title: "本文", values: [bodyText, bodyLineSpacing, paragraphSpacing, quoteIndent, unicodeEmojiScale, customEmojiScale, emojiOnlyScale, emojiOnlyLimit, filterNoteText, filterNoteSpacing]),
         AppearanceGroup(id: "spoiler", title: "注意書き", values: [spoilerButtonText, spoilerButtonSpacing, spoilerPadding, spoilerCornerRadius, spoilerBodySpacing]),
         AppearanceGroup(id: "media", title: "メディア", values: [bodyMediaSpacing, mediaTileSpacing, mediaTallestAspectRatio, mediaWidestAspectRatio, mediaBesideSide]),

@@ -473,6 +473,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             _ = settings.showsBoosterAvatar
             _ = settings.showsReplyLabel
             _ = settings.showsReplyLines
+            _ = settings.wrapsBelowAvatar
+            _ = settings.stacksNameParts
             _ = settings.showsTime
             _ = settings.showsLinkCardImage
             _ = settings.statusTimeStyle
