@@ -33,6 +33,9 @@ final class ComposeMorphFlights {
         var decoration: UIView?
         /// 上に重ねた写真が落としている影の像。カプセルの写真だけに付く。起点にあれば複製に載せ、動き始めに薄くする。
         var betweenShadow: UIView?
+        /// サムネイルに重ねている表示（ALTやGIFのバッジ、再生アイコン）の複製を作る。列のサムネイルだけに付く。カプセルの写真はバッジを出さないため。
+        /// 複製に載せ、列に向かうときは近づくにつれて濃くし、カプセルに向かうときは薄くする。載せないと、列に着いて本物に替わったコマでバッジが付く。
+        var makeThumbnailDecoration: (() -> UIView)?
         /// 動かしている間、本物を見えなくする。重ねた表示も一緒に隠す。
         let conceal: (Bool) -> Void
     }
@@ -104,6 +107,9 @@ final class ComposeMorphFlights {
             if let decoration = source.decoration, Self.showsSomething(decoration) {
                 copy.attachDecoration(decoration.snapshotView(afterScreenUpdates: false))
             }
+            if let thumbnailDecoration = source.makeThumbnailDecoration?() {
+                copy.attachThumbnailDecoration(thumbnailDecoration)
+            }
             if let betweenShadow = source.betweenShadow {
                 copy.attachBetweenShadow(betweenShadow)
                 UIView.animateSmoothly(duration: Self.decorationRevealDuration) {
@@ -150,7 +156,13 @@ final class ComposeMorphFlights {
                 if case .thumbnail(let image?, let focus) = target.content {
                     flight.copy.replaceThumbnailIfLarger(image, focus: focus)
                 }
+                if !flight.copy.hasThumbnailDecoration, let thumbnailDecoration = target.makeThumbnailDecoration?() {
+                    flight.copy.attachThumbnailDecoration(thumbnailDecoration)
+                    flight.copy.thumbnailDecorationAlpha = 0
+                }
+                flight.copy.markThumbnailDecorationAlphaBeforeMove()
             }
+            let showsThumbnailDecoration = target.makeThumbnailDecoration != nil
             let destination = geometry(of: target)
             let delay = delays[key] ?? 0
             flight.ends.append(target)
@@ -163,6 +175,7 @@ final class ComposeMorphFlights {
                 copy.apply(destination)
                 // 複製に載せた重ねた表示は、行き先によらず向かう間に薄くする。列に着くときは、着いてから本物を浮かび上がらせる。
                 copy.decorationAlpha = 0
+                copy.thumbnailDecorationAlpha = showsThumbnailDecoration ? 1 : 0
             }
             if delay > 0 {
                 delayedAnimation(delay, move)
@@ -180,7 +193,7 @@ final class ComposeMorphFlights {
     func retarget(on targets: [Key: End], generation: Int, animations: (TimeInterval, @escaping () -> Void) -> Void) {
         guard generation == self.generation else { return }
         let now = mediaTime()
-        var moved: [(FlightCopy, FlightCopy.Geometry, TimeInterval)] = []
+        var moved: [(FlightCopy, FlightCopy.Geometry, TimeInterval, Bool)] = []
         for (key, var flight) in flights {
             guard let target = targets[key], let previous = flight.destination else { continue }
             let destination = geometry(of: target)
@@ -192,13 +205,14 @@ final class ComposeMorphFlights {
             flight.destination = destination
             flights[key] = flight
             flight.copy.freezeAtPresentation()
-            moved.append((flight.copy, destination, max(flight.startTime - now, 0)))
+            moved.append((flight.copy, destination, max(flight.startTime - now, 0), target.makeThumbnailDecoration != nil))
         }
-        for (copy, destination, delay) in moved {
+        for (copy, destination, delay, showsThumbnailDecoration) in moved {
             animations(delay) {
                 copy.apply(destination)
                 // 止めたときに見えている濃さで残した重ねた表示も、残りの時間で薄くし続ける。
                 copy.decorationAlpha = 0
+                copy.thumbnailDecorationAlpha = showsThumbnailDecoration ? 1 : 0
             }
         }
     }
@@ -289,6 +303,37 @@ private final class FlightCopy: UIView {
         addSubview(snapshot)
     }
 
+    /// サムネイルに重ねている表示の複製。中の画像と同じ大きさにし、伸び縮みしても、サムネイルと同じ角からの位置を保つ。
+    private var thumbnailDecoration: UIView?
+
+    var hasThumbnailDecoration: Bool { thumbnailDecoration != nil }
+
+    /// 行き先へ向かい始める前の、サムネイルに重ねている表示の濃さ。まだ一度も描いていない複製を止めるとき、見えている濃さとして使う。
+    private var thumbnailDecorationAlphaBeforeMove: CGFloat = 0
+
+    func markThumbnailDecorationAlphaBeforeMove() {
+        thumbnailDecorationAlphaBeforeMove = thumbnailDecorationAlpha
+    }
+
+    var thumbnailDecorationAlpha: CGFloat {
+        get { thumbnailDecoration?.alpha ?? 0 }
+        set { thumbnailDecoration?.alpha = newValue }
+    }
+
+    /// 送信中の暗い下地などの重ねた表示より奥に置く。列のサムネイルでも、状態の表示はバッジより手前にあるため。
+    func attachThumbnailDecoration(_ copy: UIView) {
+        thumbnailDecoration?.removeFromSuperview()
+        thumbnailDecoration = copy
+        copy.isUserInteractionEnabled = false
+        copy.frame = inner.bounds
+        copy.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        if let decoration {
+            inner.insertSubview(copy, belowSubview: decoration)
+        } else {
+            inner.addSubview(copy)
+        }
+    }
+
     func attachDecoration(_ snapshot: UIView?) {
         decoration?.removeFromSuperview()
         decoration = snapshot
@@ -369,6 +414,7 @@ private final class FlightCopy: UIView {
             }
             // 重ねた表示は、行き先へ向かう動きで薄くし始めるまで、濃いまま見えている。
             decoration?.alpha = 1
+            thumbnailDecoration?.alpha = thumbnailDecorationAlphaBeforeMove
             return
         }
         let presented = layer.presentation()
@@ -381,6 +427,7 @@ private final class FlightCopy: UIView {
         let innerRadius = innerPresented?.cornerRadius ?? inner.layer.cornerRadius
         let opacity = presented.map { CGFloat($0.opacity) } ?? alpha
         let decorationOpacity = decoration.map { decoration in decoration.layer.presentation().map { CGFloat($0.opacity) } ?? decoration.alpha }
+        let thumbnailDecorationOpacity = thumbnailDecoration.map { decoration in decoration.layer.presentation().map { CGFloat($0.opacity) } ?? decoration.alpha }
         // 中の画像（`FocusCroppedImageView`の中の画像）も前の行き先へ動き続けるので、中まですべての動きを止め、今の大きさで並べ直す。
         Self.removeAllAnimations(in: layer)
         border = max((size.width - innerSize.width) / 2, 0)
@@ -392,6 +439,9 @@ private final class FlightCopy: UIView {
         alpha = opacity
         if let decorationOpacity {
             decoration?.alpha = decorationOpacity
+        }
+        if let thumbnailDecorationOpacity {
+            thumbnailDecoration?.alpha = thumbnailDecorationOpacity
         }
         setNeedsLayout()
         layoutIfNeeded()

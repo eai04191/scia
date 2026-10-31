@@ -68,4 +68,53 @@ struct ComposeMorphFlightsTests {
         // 載せた影は、動き始めに薄くし始める。
         #expect(shadow.alpha == 0)
     }
+    /// 列のサムネイルへ向かう複製は、サムネイルに重ねている表示（バッジなど）の複製を載せ、近づくにつれて濃くする。
+    /// 載せないと、列に着いて本物に替わったコマで、バッジが1コマで付く。
+    @Test func landingOnStripFadesInThumbnailDecoration() throws {
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 400))
+        let source = UIView(frame: CGRect(x: 16, y: 300, width: 26, height: 26))
+        let target = UIView(frame: CGRect(x: 16, y: 10, width: 64, height: 64))
+        container.addSubview(source)
+        container.addSubview(target)
+        let badge = UIView()
+        let flights = ComposeMorphFlights(container: container)
+        let key = ComposeMorphFlights.Key.attachment(UUID())
+
+        flights.takeOff(from: [key: .init(view: source, content: .thumbnail(nil, nil)) { source.alpha = $0 ? 0 : 1 }], stackingOrder: [key], stackShadowOpacity: 0)
+        UIView.animate(withDuration: 1) {
+            _ = flights.land(
+                on: [key: .init(view: target, content: .thumbnail(nil, nil), makeThumbnailDecoration: { badge }) { target.alpha = $0 ? 0 : 1 }],
+                delays: [:], stackShadowOpacity: 0, duration: 1
+            ) { _, animations in animations() }
+        }
+
+        #expect(badge.superview != nil, "複製にバッジを載せていません")
+        #expect(badge.alpha == 1)
+        let fade = try #require(badge.layer.animation(forKey: "opacity") as? CABasicAnimation, "バッジを濃くしていません")
+        #expect((fade.fromValue as? Float) == 0)
+        #expect(badge.autoresizingMask == [.flexibleWidth, .flexibleHeight])
+    }
+
+    /// 列のサムネイルからカプセルへ向かう複製は、バッジを載せて動き始め、カプセルに近づくにつれて薄くする。カプセルの写真はバッジを出さないため。
+    @Test func takingOffFromStripFadesOutThumbnailDecoration() throws {
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: 400, height: 400))
+        let source = UIView(frame: CGRect(x: 16, y: 10, width: 64, height: 64))
+        let target = UIView(frame: CGRect(x: 16, y: 300, width: 26, height: 26))
+        container.addSubview(source)
+        container.addSubview(target)
+        let badge = UIView()
+        let flights = ComposeMorphFlights(container: container)
+        let key = ComposeMorphFlights.Key.attachment(UUID())
+
+        flights.takeOff(from: [key: .init(view: source, content: .thumbnail(nil, nil), makeThumbnailDecoration: { badge }) { source.alpha = $0 ? 0 : 1 }], stackingOrder: [key], stackShadowOpacity: 0)
+        #expect(badge.superview != nil, "複製にバッジを載せていません")
+        #expect(badge.alpha == 1)
+        UIView.animate(withDuration: 1) {
+            _ = flights.land(on: [key: .init(view: target, content: .thumbnail(nil, nil)) { target.alpha = $0 ? 0 : 1 }], delays: [:], stackShadowOpacity: 0, duration: 1) { _, animations in animations() }
+        }
+
+        #expect(badge.alpha == 0)
+        let fade = try #require(badge.layer.animation(forKey: "opacity") as? CABasicAnimation, "バッジを薄くしていません")
+        #expect((fade.fromValue as? Float) == 1)
+    }
 }

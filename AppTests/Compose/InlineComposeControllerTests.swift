@@ -797,6 +797,33 @@ final class InlineComposeControllerTests {
         }
     }
 
+    /// GIFの付いた投稿の編集を始めたら、投稿欄が広がる間に動かすサムネイルの複製にも、GIFのバッジを載せる。
+    /// 載せないと、広がり終えて本物のサムネイルに替わったコマで、バッジが付く。
+    @Test func editingStatusCarriesMediaBadgeWhileExpanding() async throws {
+        defer { window.isHidden = true }
+        useDefaultAnimationDurations()
+        let gif = MediaAttachment(id: "100", type: .gifv, url: URL(string: "https://example.social/m.mp4"), previewUrl: URL(string: "https://example.social/m.png"))
+        let base = try status(id: "10")
+        let status = Status(id: base.id, createdAt: base.createdAt, account: base.account, content: "<p>本文</p>", spoilerText: "", url: nil, mediaAttachments: [gif])
+        #expect(composer.edit(status, source: StatusSource(id: "10", text: "本文", spoilerText: "")))
+        try await clock.advance(by: 0.02)
+
+        let strip = try #require(attachmentStrips(in: window).first)
+        let badge = try #require(badges(in: strip).first, "添付のサムネイルにバッジがありません")
+        #expect(!badge.isHidden)
+        // 複製に載せたバッジは、本物のバッジを描いた画像で、本物と同じ大きさになる。
+        let carried = imageViews(in: window).filter { !$0.isDescendant(of: strip) && $0.bounds.size == badge.bounds.size }
+        #expect(!carried.isEmpty, "広がる間に動かす複製に、バッジを載せていません")
+    }
+
+    private func badges(in view: UIView) -> [MediaBadgeView] {
+        (view as? MediaBadgeView).map { [$0] } ?? view.subviews.flatMap(badges(in:))
+    }
+
+    private func imageViews(in view: UIView) -> [UIImageView] {
+        ((view as? UIImageView).map { [$0] } ?? []) + view.subviews.flatMap(imageViews(in:))
+    }
+
     /// 送信を待たせるComposeModelで投稿欄を置き直す。
     private func installComposer(media: ComposeMediaService<UIImage> = .unavailable, keyboardNotifications: NotificationCenter = .default, post: @escaping (StatusDraft) async throws -> Void) throws -> InlineComposeController {
         let tabBarController = UITabBarController(tabs: [UITab(title: "ホーム", image: nil, identifier: "home") { _ in UIViewController() }])

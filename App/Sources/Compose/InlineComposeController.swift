@@ -1889,7 +1889,7 @@ final class InlineComposeController: NSObject {
                 tile.superview?.layoutIfNeeded()
                 // 重ねた状態の表示も一緒に隠す。隠さないと、閉じ始めに空いた枠の位置に取り残され、開くときは写真が着く前から浮かぶ。
                 let overlay = attachmentStrip.overlay(for: id)
-                ends[.attachment(id)] = .init(view: tile, content: .thumbnail(tile.thumbnailImage, tile.thumbnailFocus), cornerRadius: MediaGridView.cornerRadius, decoration: overlay) { concealed in
+                ends[.attachment(id)] = .init(view: tile, content: .thumbnail(tile.thumbnailImage, tile.thumbnailFocus), cornerRadius: MediaGridView.cornerRadius, decoration: overlay, makeThumbnailDecoration: tile.makeDecorationCopy) { concealed in
                     tile.alpha = concealed ? 0 : 1
                     overlay?.alpha = concealed ? 0 : 1
                 }
