@@ -1391,6 +1391,14 @@ final class SessionController {
         search.makeResults = { [weak self] input in
             self?.makeSearchResults(input, scope: .all) ?? TimelineViewController(texts: .search(.all, query: input.query)) {}
         }
+        search.onOpenProfile = { [weak self] account, source in self?.openProfile(account, from: source) }
+        search.onOpenHashtag = { [weak self] name, source in self?.openFeed(.hashtag(name: name), from: source) }
+        search.suggestions = SearchSuggestions(
+            client: client,
+            recents: RecentSearches(defaults: .standard, account: credential.handle),
+            settings: TuningCatalog.completionSettings(in: AppDependencies.tuning),
+            tasks: tasks.child()
+        )
     }
 
     /// 検索のタブを開く。語があれば確定する。検索を無効にしていれば、選んでいるタブに検索の画面を積んで開く。

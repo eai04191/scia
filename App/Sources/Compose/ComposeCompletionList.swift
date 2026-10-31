@@ -484,7 +484,7 @@ private struct CompletionRowView: View {
 }
 
 /// 候補の1行。左にアイコンか絵文字、右に名前と補足を2段で並べる。長い名前は、名前ごとに`fadingTail`で行末をぼかして切る。
-private struct RowLayout<Icon: View, Title: View, Subtitle: View, Trailing: View>: View {
+struct RowLayout<Icon: View, Title: View, Subtitle: View, Trailing: View>: View {
     var subtitleLines = 1
     @ViewBuilder let icon: Icon
     @ViewBuilder let title: Title
@@ -524,7 +524,7 @@ extension RowLayout where Trailing == EmptyView {
     }
 }
 
-private extension View {
+extension View {
     /// 1行に入りきらないときに、「…」で切らず、行末を透明へ向けてぼかす。入りきるときは何もかけない。タイムラインの名前（`FadingLabel`）と同じ見え方にする。
     /// 右から左に書く文字列では、行末は左端なので、文字列の頭を右端にそろえて左端をぼかす。画面の向きではなく、文字列の向きで決める。
     func fadingTail(of text: String) -> some View {
@@ -569,7 +569,7 @@ private struct RowButtonStyle: ButtonStyle {
 }
 
 /// アカウントのアイコン。タイムラインと同じ読み込みと形にする。
-private struct AvatarImage: UIViewRepresentable {
+struct AvatarImage: UIViewRepresentable {
     let url: URL?
     let shape: AvatarShape
 
