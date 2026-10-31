@@ -60,6 +60,7 @@ struct ConfirmationTests {
         ))
         #expect(model.quoteTarget == nil)
         #expect(RefusalText.sharedMediaUnattachable(draft: model).message == "引用する投稿には添付できません。引用をやめてから、もう一度共有してください。")
+        #expect(RefusalText.droppedMediaUnattachable(draft: model).message == "引用する投稿には添付できません。引用をやめてから、もう一度ドロップしてください。")
     }
 
     @Test func sharedContentAsksWhetherToAppendOrDiscard() {

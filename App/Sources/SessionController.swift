@@ -139,6 +139,8 @@ final class SessionController {
     private let composer: InlineComposeController
     /// 書き始めたときに始めた、サーバーの上限と既定の公開範囲などの読み込み。共有されたメディアを、読み終えてから足すのに使う。
     private var composeDefaultsTask: Task<Void, Never>?
+    /// 画面のどこにドロップした画像や動画でも、投稿欄に添付する受け口。
+    private let mediaDrop = MediaDropTarget()
     /// 投稿欄が覆っている高さを伝える一覧。ホームと通知に加え、開いているプロフィールの一覧も入る。閉じたものは自然に消える。
     private let timelines = NSHashTable<TimelineViewController>.weakObjects()
     /// 開いている編集履歴。添付ファイルを開いた・隠した選択を一覧とそろえるために持つ。閉じたものは自然に消える。
@@ -491,6 +493,9 @@ final class SessionController {
         )
         rootViewController = tabBarController
         forward = { [weak self] in self?.reportUnauthorized() }
+        tabBarController.view.addInteraction(UIDropInteraction(delegate: mediaDrop))
+        // ペーストと同じく、書きかけの下書きがあっても聞かずに後ろに足す。
+        mediaDrop.onDrop = { [weak self] drop in self?.receiveDroppedMedia(drop) }
         composer.model.onMediaReduced = { [weak self] kind in
             self?.notices.showTransient(.mediaReduced(kind), duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
         }
@@ -2533,7 +2538,7 @@ final class SessionController {
         let decision = Confirmation.shared(.media(allImages: media.allSatisfy { $0.kind == .image }), draft: composer.model)
         switch decision {
         case .proceed:
-            attachSharedMedia(media)
+            attachSharedMedia(media, unattachable: RefusalText.sharedMediaUnattachable(draft:))
         case .refuse(let refusal):
             discardSharedMedia(media)
             presentRefusal(refusal)
@@ -2542,14 +2547,14 @@ final class SessionController {
                 guard let self else { return }
                 switch choice {
                 case .append:
-                    attachSharedMedia(media)
+                    attachSharedMedia(media, unattachable: RefusalText.sharedMediaUnattachable(draft:))
                 case .discardAndWrite:
                     // 聞いている間に送り始めていたら、捨てずに、受け取ったものを足さない。
                     guard composer.discardDraft() else {
                         discardSharedMedia(media)
                         return
                     }
-                    attachSharedMedia(media)
+                    attachSharedMedia(media, unattachable: RefusalText.sharedMediaUnattachable(draft:))
                 case .cancel:
                     discardSharedMedia(media)
                 }
@@ -2557,9 +2562,33 @@ final class SessionController {
         }
     }
 
+    /// 画面にドロップしたメディアを、読み終えてから投稿欄に足す。読めなかった項目があれば、共有と同じチップで知らせる。
+    private func receiveDroppedMedia(_ drop: MediaDrop) {
+        let waiting = tasks.run(.action) { [weak self] in
+            let (media, missingCount) = await drop.result()
+            guard let self, !Task.isCancelled else {
+                for item in media {
+                    item.discard()
+                }
+                return
+            }
+            logger.info("media drop: loaded count=\(media.count, privacy: .public) missing=\(missingCount, privacy: .public)")
+            if missingCount > 0 {
+                notices.showTransient(.sharedMediaUnreadable(count: missingCount), duration: AppDependencies.tuning.value(of: TuningCatalog.noticeFailureChipDuration))
+            }
+            guard !media.isEmpty else { return }
+            attachSharedMedia(media, unattachable: RefusalText.droppedMediaUnattachable(draft:))
+        }
+        if waiting == nil {
+            drop.discard()
+        }
+    }
+
     /// 書き始めて、サーバーの上限と既定の閲覧注意を読み終えてから足す。先に足すと、上限に合わせて縮めずに送り始め、既定の閲覧注意も付かないため。
     /// ペーストが読み終えるまで受け付けない（`ComposeModel.canPasteMedia`）のと同じく、読めなかったら足さない。
-    private func attachSharedMedia(_ media: [PastedMedia]) {
+    /// 共有されたメディアと、画面にドロップしたメディアに使う。
+    /// - Parameter unattachable: 足せなかったときに出す断り。
+    private func attachSharedMedia(_ media: [PastedMedia], unattachable: @escaping @MainActor (ComposeModel<UIImage>) -> RefusalText) {
         composer.beginEditing()
         let loadingDefaults = composeDefaultsTask
         tasks.run(.action) { [weak self] in
@@ -2568,7 +2597,7 @@ final class SessionController {
             guard composer.model.canPasteMedia else {
                 discardSharedMedia(media)
                 logger.error("shared media dropped posting=\(self.composer.model.isPosting, privacy: .public)")
-                presentRefusal(.sharedMediaUnattachable(draft: composer.model))
+                presentRefusal(unattachable(composer.model))
                 return
             }
             composer.model.addPastedMedia(media)

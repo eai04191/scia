@@ -2282,6 +2282,19 @@ extension TimelineViewController: NoticeScreen {
 
 /// タイムラインの一覧。本文のリンクを押して少し止めてから引いても、スクロールできるようにする。
 final class TimelineCollectionView: UICollectionView {
+    /// ほかのアプリからのドロップを一覧では受けず、画面全体の受け口（`MediaDropTarget`）に回して添付する。
+    /// コレクションビューは、ドロップのデリゲートがなくても、Macではファイルのドロップを受け付けて何もせずに終える（Macでログを見て確かめた）。
+    private let dropDecliner = DropDecliner()
+
+    override init(frame: CGRect, collectionViewLayout layout: UICollectionViewLayout) {
+        super.init(frame: frame, collectionViewLayout: layout)
+        dropDelegate = dropDecliner
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     override func layoutSubviews() {
         FrameWork.measure("TimelineCollectionView.layoutSubviews") { super.layoutSubviews() }
     }
@@ -2289,6 +2302,15 @@ final class TimelineCollectionView: UICollectionView {
     override func touchesShouldCancel(in view: UIView) -> Bool {
         view is LinkHitArea || super.touchesShouldCancel(in: view)
     }
+}
+
+/// コレクションビューにドロップを受けさせず、上のビューに回す。
+private final class DropDecliner: NSObject, UICollectionViewDropDelegate {
+    func collectionView(_ collectionView: UICollectionView, canHandle session: any UIDropSession) -> Bool {
+        false
+    }
+
+    func collectionView(_ collectionView: UICollectionView, performDropWith coordinator: any UICollectionViewDropCoordinator) {}
 }
 
 extension TimelineViewController: MediaMenuHost {

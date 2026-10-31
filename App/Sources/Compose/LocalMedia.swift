@@ -72,6 +72,12 @@ enum LocalMediaLoader {
         return types.first { type in mediaTypes.contains { type.conforms(to: $0) } }
     }
 
+    /// ドロップした項目が持つメディアの型。ペーストと違い、文字を持つ項目もメディアを持てば添付に回す。
+    /// 投稿欄の本文の外へのドロップは、文字を入れる先がないため。
+    static func droppedMediaType(in provider: NSItemProvider) -> UTType? {
+        provider.registeredTypeIdentifiers.compactMap { UTType($0) }.first { type in mediaTypes.contains { type.conforms(to: $0) } }
+    }
+
     /// ペーストした項目の読み込みを、その場で始める。クリップボードの中身はあとから変わり、前にコピーしたものは読めなくなることがあるため
     /// （シミュレーターでは、「Operation not authorized」（PBErrorDomain 13）で読めなくなった）。
     /// 添付に足すかは、1回のペーストの項目がそろってから決めるので、足す前から読み込んでおく。

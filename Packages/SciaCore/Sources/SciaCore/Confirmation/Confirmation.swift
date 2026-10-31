@@ -205,16 +205,27 @@ extension RefusalText {
     /// 書き始めてサーバーの設定を読み終えても、下書きに共有されたメディアを足せなかったとき。足せない理由を出す。
     @MainActor
     public static func sharedMediaUnattachable<Thumbnail>(draft: ComposeModel<Thumbnail>) -> RefusalText {
+        mediaUnattachable(draft: draft, title: sharedMediaFailureTitle, retry: "もう一度共有してください。")
+    }
+
+    /// 画面にドロップしたメディアを、書き始めてサーバーの設定を読み終えても、下書きに足せなかったとき。足せない理由を出す。
+    @MainActor
+    public static func droppedMediaUnattachable<Thumbnail>(draft: ComposeModel<Thumbnail>) -> RefusalText {
+        mediaUnattachable(draft: draft, title: "ドロップしたメディアを添付できませんでした", retry: "もう一度ドロップしてください。")
+    }
+
+    @MainActor
+    private static func mediaUnattachable<Thumbnail>(draft: ComposeModel<Thumbnail>, title: String, retry: String) -> RefusalText {
         let message = if draft.isPosting {
-            sharedWhilePosting(.media(allImages: false)).message
+            "投稿を送っている間は添付できません。送り終えてから、\(retry)"
         } else if draft.isQuoting {
-            "引用する投稿には添付できません。引用をやめてから、もう一度共有してください。"
+            "引用する投稿には添付できません。引用をやめてから、\(retry)"
         } else if draft.poll != nil {
-            "投票の付いた投稿には添付できません。投票を外してから、もう一度共有してください。"
+            "投票の付いた投稿には添付できません。投票を外してから、\(retry)"
         } else {
-            "サーバーの設定を読み込めませんでした。もう一度共有してください。"
+            "サーバーの設定を読み込めませんでした。\(retry)"
         }
-        return RefusalText(title: sharedMediaFailureTitle, message: message)
+        return RefusalText(title: title, message: message)
     }
 
     /// 投稿を送っている間に、共有されたものを受け取ったとき。
