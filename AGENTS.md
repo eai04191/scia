@@ -49,6 +49,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
   - 投稿の一覧: `scia://hashtag?name=<名前>`（ハッシュタグ）、`scia://account-hashtag?acct=<ハンドル>&name=<名前>`（その人のハッシュタグ）、`scia://scheduled`（予約投稿。タブを無効にしていれば手前に重ねる）
   - 投稿: `scia://thread?id=<投稿のID>`（スレッド）、`scia://edit-history?id=<投稿のID>`（編集履歴）
   - 投稿欄: `scia://compose/<tools|language|schedule|emoji|media-picker>`（書き始めて、ボタンの並び、言語、予約の日時、絵文字のパレット、メディアのピッカーを開く。予約していなければ予約を始める）、`scia://compose/<attachment|alt-text|crop>?index=<n>`（n番目の添付のビューア、その代替テキストの入力、切り抜き。先に`scia-debug://compose?media=<枚数>`で添付を足す）
+  - 保留中の通知: `scia://notification-requests`（通知のタブに保留中の通知の一覧）、`scia://notification-request?id=<保留中の通知のID>`（その上にその人からの通知）、`scia://notification-policy`（通知のフィルタリングの設定）。IDは`api/v1/notifications/requests`で調べる。ダミーのセッションでは`dummy-request-1`〜`3`
   - そのほか: `scia://operation-status`（操作の状況）
   - デバッグ版だけ: `scia-debug://viewer?index=<n>`（選んでいるタブで一番上に見えている画像付きの投稿を、n番目の添付ファイルでビューアに開く。代替テキストの全文はビューアの「代替テキスト」から開く）、`scia-debug://profile-edit?crop=<avatar|header>`（ダミーの画像でアイコンかヘッダー画像の切り抜きを開く）、`scia-debug://discomfort-report`（違和感レポート）、`scia-debug://tuning`（チューニング）、`scia-debug://catalog`（部品カタログ）
 - `xcrun simctl openurl '<使う端末>' 'scia-debug://dummy-session'`で、通信しないダミーの投稿と通知でホームと通知の画面に入れる。ログインしていない端末（機種ごとに作る一時的な端末など）でも、ログイン済みの端末でも入れる。ログイン画面のデバッグ用のボタン「ダミーのデータで入る」でも入れる。ログイン済みの端末では、アカウントのメニューにダミーのアカウントが並び、本物のアカウントを選ぶと戻る。Keychainには保存しないので、起動し直すと保存してあるアカウントかログイン画面に戻る。投稿への操作はサーバーに届かず失敗する。新しい端末では、最初にURLを送ったときに「“Scia”で開きますか？」が出るので、一度「開く」を押す必要がある
