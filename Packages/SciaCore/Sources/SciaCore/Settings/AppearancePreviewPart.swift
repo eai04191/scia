@@ -94,6 +94,10 @@ public enum AppearancePreviewPart: Hashable, CaseIterable, Sendable {
     case emojiOnlyEmojis
     /// 絵文字だけの本文。大きくしていないときも示す。
     case emojiOnlyBody
+    /// 行数で切った本文。
+    case truncatedBody
+    /// 切った本文の「続きを読む」。
+    case readMore
     /// リンクカードのサイト名。
     case cardSite
     case media

@@ -17,6 +17,37 @@ final class LinkLabel: EmojiLabel {
     /// リンクの上で押されたビューが`UIControl`になるようにする。
     private lazy var hitArea = LinkHitArea(label: self)
 
+    /// 長い本文を切る行数。nilなら切らない。決まりはdocs/long-post.mdにある。
+    /// 切り始める行数を超えるかは並べる幅で変わるため、高さを測るときにその幅で決め、並べるときに行数（`numberOfLines`）を合わせる。
+    /// 渡している間は、置く側は行数を決めない。
+    var truncation: BodyTruncation? {
+        didSet {
+            guard truncation != oldValue else { return }
+            lineLimits = [:]
+            if truncation == nil {
+                numberOfLines = 0
+            }
+            invalidateIntrinsicContentSize()
+            setNeedsLayout()
+        }
+    }
+    /// 「続きを読む」が押されたときに呼ぶ。広げた状態を持つのは置く側で、`truncation`をnilにするまで見た目は変わらない。
+    var onExpand: (() -> Void)?
+    /// 幅ごとに決めた、本文を出す行数。高さを測るたびに並べ直さないよう、文字列か切る行数が変わるまで使い回す。
+    private var lineLimits: [CGFloat: Int] = [:]
+    private var readMoreButton: ReadMoreButton?
+    /// 最後の行のうち、「続きを読む」の手前で文字を薄くし、ボタンの下の文字を消す範囲。切っていなければnil。
+    private var readMoreFade: (line: CGRect, start: CGFloat, end: CGFloat)? {
+        didSet {
+            // 薄くし始める位置から、ボタンのある行の端まで。
+            obscuredTextRect = readMoreFade.map { fade in
+                let (minX, maxX) = fade.end >= fade.start ? (fade.start, fade.line.maxX) : (fade.line.minX, fade.start)
+                return CGRect(x: minX, y: fade.line.minY, width: maxX - minX, height: fade.line.height)
+            }
+            setNeedsDisplay()
+        }
+    }
+
     override init(frame: CGRect) {
         super.init(frame: frame)
         isUserInteractionEnabled = true
@@ -28,6 +59,117 @@ final class LinkLabel: EmojiLabel {
     @available(*, unavailable)
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+
+    override var attributedText: NSAttributedString? {
+        didSet { lineLimits = [:] }
+    }
+
+    /// 今の幅で、長い本文を切っている。
+    var isTruncatedByLength: Bool {
+        truncation != nil && lineLimit(forWidth: bounds.width) > 0
+    }
+
+    /// 「続きを読む」の枠。ラベルの座標で返す。切っていなければnil。「投稿の見た目」のプレビューで示すのに使う。
+    var readMoreFrame: CGRect? {
+        guard let readMoreButton, !readMoreButton.isHidden else { return nil }
+        return readMoreButton.frame
+    }
+
+    /// 切るときは、渡された行数の代わりに、`bounds`の幅で決めた行数で測る。並べる前の高さの見積もりでも、並べたあとと同じ高さになる。
+    override func textRect(forBounds bounds: CGRect, limitedToNumberOfLines numberOfLines: Int) -> CGRect {
+        guard truncation != nil else { return super.textRect(forBounds: bounds, limitedToNumberOfLines: numberOfLines) }
+        return super.textRect(forBounds: bounds, limitedToNumberOfLines: lineLimit(forWidth: bounds.width))
+    }
+
+    /// `width`で並べたときに本文を出す行数。0なら切らない。
+    /// 切り始める行数までと、それより1行多くで測った高さを比べ、高くなれば超えているとみなす。行数を数えるために全文を並べ直さずに済む。
+    private func lineLimit(forWidth width: CGFloat) -> Int {
+        guard let truncation else { return numberOfLines }
+        if let limit = lineLimits[width] { return limit }
+        let bounds = CGRect(x: 0, y: 0, width: width, height: .greatestFiniteMagnitude)
+        let atThreshold = super.textRect(forBounds: bounds, limitedToNumberOfLines: truncation.threshold).height
+        let beyond = super.textRect(forBounds: bounds, limitedToNumberOfLines: truncation.threshold + 1).height
+        let limit = truncation.lineLimit(exceedsThreshold: beyond > atThreshold)
+        lineLimits[width] = limit
+        return limit
+    }
+
+    override func layoutSubviews() {
+        if truncation != nil {
+            let limit = lineLimit(forWidth: bounds.width)
+            if numberOfLines != limit {
+                numberOfLines = limit
+            }
+        }
+        // 動かす絵文字を決める前に、消す範囲を決めておく。
+        layoutReadMore()
+        super.layoutSubviews()
+    }
+
+    /// 切っていれば、最後の行の末尾に「続きを読む」を置き、その手前の文字を薄くする。
+    private func layoutReadMore() {
+        guard truncation != nil, numberOfLines > 0, let attributedText, attributedText.length > 0, let line = lastLine(in: textLayout(of: attributedText)) else {
+            readMoreButton?.isHidden = true
+            if readMoreFade != nil {
+                readMoreFade = nil
+            }
+            return
+        }
+        let button = loadedReadMoreButton()
+        button.isHidden = false
+        let font = attributedText.attribute(.font, at: 0, effectiveRange: nil) as? UIFont ?? self.font ?? .preferredFont(forTextStyle: .body)
+        button.font = font
+        let size = button.intrinsicContentSize
+        let isRightToLeft = effectiveUserInterfaceLayoutDirection == .rightToLeft
+        button.frame = CGRect(x: isRightToLeft ? 0 : bounds.width - size.width, y: line.baseline - font.ascender, width: size.width, height: size.height)
+        // ボタンの手前を少し空けて文字を消し、その手前の2文字分ほどで薄くしてつなぐ。
+        let gap = font.pointSize * 0.5
+        let fadeWidth = font.pointSize * 2
+        let end = isRightToLeft ? button.frame.maxX + gap : button.frame.minX - gap
+        let start = isRightToLeft ? end + fadeWidth : end - fadeWidth
+        let lineFrame = CGRect(x: 0, y: line.frame.minY, width: bounds.width, height: line.frame.height)
+        if readMoreFade?.line != lineFrame || readMoreFade?.start != start || readMoreFade?.end != end {
+            readMoreFade = (lineFrame, start, end)
+        }
+    }
+
+    private func loadedReadMoreButton() -> ReadMoreButton {
+        if let readMoreButton { return readMoreButton }
+        let button = ReadMoreButton()
+        button.addAction(UIAction { [weak self] _ in self?.onExpand?() }, for: .touchUpInside)
+        addSubview(button)
+        readMoreButton = button
+        return button
+    }
+
+    /// 見えている最後の行の枠とベースライン。ラベルの座標で返す。
+    private func lastLine(in layout: TextLayout) -> (frame: CGRect, baseline: CGFloat)? {
+        var result: (frame: CGRect, baseline: CGFloat)?
+        layout.layoutManager.enumerateTextLayoutFragments(from: layout.layoutManager.documentRange.location, options: [.ensuresLayout]) { fragment in
+            let origin = fragment.layoutFragmentFrame.origin
+            for line in fragment.textLineFragments {
+                let frame = line.typographicBounds.offsetBy(dx: origin.x, dy: origin.y)
+                guard frame.minY < bounds.maxY else { return false }
+                result = (frame, origin.y + line.typographicBounds.minY + line.glyphOrigin.y)
+            }
+            return true
+        }
+        return result
+    }
+
+    /// 切っていれば、描いた文字のうち、最後の行の「続きを読む」の手前を薄くし、ボタンの下を消す。
+    /// ラベルの層を覆う`mask`で薄くすると、ボタンも隠れるため、描いた文字だけを消す。
+    override func drawText(in rect: CGRect) {
+        super.drawText(in: rect)
+        guard let fade = readMoreFade, let context = UIGraphicsGetCurrentContext(),
+              let gradient = CGGradient(colorsSpace: nil, colors: [UIColor.clear.cgColor, UIColor.black.cgColor] as CFArray, locations: [0, 1])
+        else { return }
+        context.saveGState()
+        context.setBlendMode(.destinationOut)
+        context.clip(to: fade.line)
+        context.drawLinearGradient(gradient, start: CGPoint(x: fade.start, y: 0), end: CGPoint(x: fade.end, y: 0), options: [.drawsAfterEndLocation])
+        context.restoreGState()
     }
 
     /// リンクの外では当たりにならず、押下は後ろのビューに渡る。リンクの上では、重ねた`hitArea`が当たりになる。
@@ -88,6 +230,58 @@ final class LinkLabel: EmojiLabel {
 }
 
 
+
+/// 切った本文の最後の行の末尾に重ねる「続きを読む」。押せる範囲は、文字の周りに少し広げる。
+/// 読み上げでは、本文の要素の操作で広げるので、要素にしない。
+/// スクロールビューは標準では`UIControl`の上で始まった押下をスクロールに切り替えないため、載せるスクロールビューは`touchesShouldCancel(in:)`でこの部品にtrueを返す。
+final class ReadMoreButton: UIControl {
+    static let title = "続きを読む"
+    private let label = UILabel()
+
+    var font: UIFont {
+        get { label.font }
+        set {
+            guard newValue != label.font else { return }
+            label.font = newValue
+            invalidateIntrinsicContentSize()
+        }
+    }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isAccessibilityElement = false
+        label.text = Self.title
+        label.textColor = tintColor
+        addSubview(label)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var intrinsicContentSize: CGSize {
+        label.intrinsicContentSize
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        label.frame = bounds
+    }
+
+    override func tintColorDidChange() {
+        super.tintColorDidChange()
+        label.textColor = tintColor
+    }
+
+    override var isHighlighted: Bool {
+        didSet { label.alpha = isHighlighted ? 0.4 : 1 }
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        bounds.insetBy(dx: -12, dy: -12).contains(point)
+    }
+}
 
 /// `LinkHitArea`の長押しのメニューを出す。コントロール自身を委譲先にすると、組み込まれたメニューの処理と混ざるため、別のものにする。
 @MainActor

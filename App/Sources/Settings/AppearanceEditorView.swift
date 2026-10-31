@@ -510,7 +510,7 @@ struct AppearanceValueRow: View {
         let offset = settings.value(of: item)
         switch item.unit {
         case .point: return nil
-        case .lines: return offset == 0 ? "出さない" : nil
+        case .lines: return offset == 0 ? (item == AppearanceCatalog.bodyTruncationThreshold ? "切らない" : "出さない") : nil
         case .count: return item == AppearanceCatalog.emojiOnlyLimit && offset == 0 ? "大きくしない" : nil
         case .ratio: return Self.ratioNote(for: item)
         case .bodyTextOffset: return offset == 0 ? "標準" : "標準\(Self.signed(offset))"
@@ -704,6 +704,9 @@ struct AppearanceSamples {
             (status("media", minutes: 8, account: scia, content: "", media: [tallImage]), ReplyConnection()),
             // 絵文字だけの本文を見せるため、先頭にメンションの付いた、絵文字だけの返信を用意する。メンションは大きくしない。
             (status("emoji-only", minutes: 7.5, account: friend, content: #"<p><span class="h-card"><a href="https://example.com/@scia" class="u-url mention">@<span>scia</span></a></span> 👍:scia:🎉</p>"#, replyingTo: scia, emojis: emojis), ReplyConnection()),
+            // 長い本文を切って「続きを読む」を出すところを見せるため、1行ずつの段落を、既定の切り始める行数より1行だけ多く並べる。
+            // 切り始める行数を少し増やすと切らなくなり、値の違いが見本に出る。
+            (status("long", minutes: 7.2, account: scia, content: (1...33).map { "<p>長い本文の\($0)行目です。</p>" }.joined()), ReplyConnection()),
             // 片方だけのときの光の幅を見せるため、お気に入りだけをした投稿にする。
             (status("wide", minutes: 7, account: friend, content: "<p>横長の画像を1枚付けた投稿です。</p>", media: [wideImage], favourited: true), ReplyConnection()),
             (status("poll", minutes: 5, account: longNamed, content: "<p>アイコンの形はどちらが好きですか？</p>", poll: poll), ReplyConnection()),

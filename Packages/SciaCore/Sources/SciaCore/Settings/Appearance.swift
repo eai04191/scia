@@ -128,6 +128,10 @@ public enum AppearanceCatalog {
     public static let emojiOnlyScale = AppearanceValue(id: "timeline.emojiOnlyScale", title: "絵文字だけのときの絵文字の倍率", range: 1...4, step: 0.1, defaultValue: 2, unit: .ratio)
     /// 絵文字だけの本文を大きくする、絵文字の数の上限。これより多ければ大きくしない。0なら大きくしない。
     public static let emojiOnlyLimit = AppearanceValue(id: "timeline.emojiOnlyLimit", title: "大きくする絵文字の数", range: 0...500, step: 1, defaultValue: 10, unit: .count)
+    /// 本文を切り始める行数。折り返した行数がこれを超えたら切って「続きを読む」を出す。0なら切らない。決まりはdocs/long-post.mdにある。
+    public static let bodyTruncationThreshold = AppearanceValue(id: "timeline.bodyTruncationThreshold", title: "この行数を超えたら切る", range: 0...200, step: 1, defaultValue: 32, unit: .lines)
+    /// 本文を切ったときに出す行数。切り始める行数より多ければ、切り始める行数まで出す。
+    public static let bodyTruncatedLines = AppearanceValue(id: "timeline.bodyTruncatedLines", title: "切ったときの行数", range: 1...200, step: 1, defaultValue: 15, unit: .lines)
     /// アイコンを角丸の四角にしたときの、角の丸みの一辺に対する割合。0.5で円になる。
     public static let avatarCornerRatio = AppearanceValue(id: "timeline.avatarCornerRatio", title: "角丸の四角の丸み（一辺に対する割合）", range: 0...0.5, step: 0.05, defaultValue: 0.2, unit: .ratio)
     /// 注意書きのボックスの角の丸み。
@@ -225,7 +229,7 @@ public enum AppearanceCatalog {
         AppearanceGroup(id: "context", title: "名前の上の行", values: [contextText, contextSecondaryText, contextPartsSpacing, contextLabelText, boosterAvatarSize, contextSymbolSpacing, contextAvatarTextSpacing, contextSpacing]),
         AppearanceGroup(id: "avatar", title: "アイコン", values: [avatarSize, avatarCornerRatio, avatarSpacing, replyLineWidth, replyLineGap]),
         AppearanceGroup(id: "name", title: "名前の行", values: [namePrimaryText, nameSecondaryText, timeText, namePartsSpacing, nameStackSpacing, nameTimeSpacing, visibilitySymbolSpacing, editedMarkSpacing, nameFadeWidth, nameUnicodeEmojiScale, nameCustomEmojiScale, nameBodySpacing, nameMediaSpacing]),
-        AppearanceGroup(id: "body", title: "本文", values: [bodyText, bodyLineSpacing, paragraphSpacing, quoteIndent, unicodeEmojiScale, customEmojiScale, emojiOnlyScale, emojiOnlyLimit, filterNoteText, filterNoteSpacing]),
+        AppearanceGroup(id: "body", title: "本文", values: [bodyText, bodyLineSpacing, paragraphSpacing, quoteIndent, unicodeEmojiScale, customEmojiScale, emojiOnlyScale, emojiOnlyLimit, bodyTruncationThreshold, bodyTruncatedLines, filterNoteText, filterNoteSpacing]),
         AppearanceGroup(id: "spoiler", title: "注意書き", values: [spoilerButtonText, spoilerButtonSpacing, spoilerPadding, spoilerCornerRadius, spoilerBodySpacing]),
         AppearanceGroup(id: "media", title: "メディア", values: [bodyMediaSpacing, mediaTileSpacing, mediaTallestAspectRatio, mediaWidestAspectRatio, mediaBesideSide]),
         AppearanceGroup(id: "linkCard", title: "リンクカード", values: [linkCardTitleText, linkCardDetailText, linkCardTitleLines, linkCardDescriptionLines, linkCardLineSpacing, linkCardImageWidthRatio, bodyLinkCardSpacing, linkCardPadding]),

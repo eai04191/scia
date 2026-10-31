@@ -79,6 +79,15 @@ public enum TuningCatalog {
         defaultValue: 0.4
     )
 
+    /// 切った本文を「続きを読む」で広げるときに、行が伸びて下の行が動く時間。0なら動かさない。
+    public static let longBodyExpandDuration = NumberTuning(
+        id: "timeline.longBodyExpandDuration",
+        title: "続きを読むで本文を広げる時間（秒）",
+        range: 0...1.5,
+        step: 0.05,
+        defaultValue: 0.4
+    )
+
     /// カスタム絵文字の画像が届いたとき、同じ行のあとの文字を前の位置から新しい位置へ動かし、絵文字を薄い状態から濃くする時間。0なら切り替える。
     public static let customEmojiArrivalDuration = NumberTuning(
         id: "timeline.customEmojiArrivalDuration",
@@ -1592,6 +1601,7 @@ public enum TuningCatalog {
         TuningSection(id: "timeline", title: "タイムラインの見た目", items: [
             .number(pollBarDuration),
             .number(linkCardTransitionDuration),
+            .number(longBodyExpandDuration),
             .toggle(xPostEmbeds),
             .number(customEmojiArrivalDuration),
             .number(mediaSymbolRatio),

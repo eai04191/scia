@@ -38,6 +38,8 @@ struct PostBodyContent {
     var text: NSAttributedString
     /// 本文を切る行数。0なら切らない。
     var maximumLines = 0
+    /// 長い本文を切って「続きを読む」を出す行数。nilなら切らない。`maximumLines`とは一緒に使わない。
+    var truncation: BodyTruncation?
     /// 添付ファイルがなければnil。
     var media: MediaGridView.Content?
     /// 本文と添付ファイルのあいだの余白。本文がなければ取らない。
@@ -85,6 +87,8 @@ struct EmbedActions {
     var toggleSpoiler: (() -> Void)?
     /// 囲みの押せる補足の行がタップされたときに、何番目の行かを渡して呼ぶ。
     var selectNote: ((Int) -> Void)?
+    /// 囲みの切った本文の「続きを読む」が押されたときに呼ぶ。
+    var expandBody: (() -> Void)?
 }
 
 final class PostBodyView: UIView {
@@ -94,6 +98,8 @@ final class PostBodyView: UIView {
     var onRevealMedia: (() -> Void)?
     /// 注意書きが押されたときに呼ぶ。開閉した状態を持つのは置く側で、適用し直すまで見た目は変わらない。
     var onToggleSpoiler: (() -> Void)?
+    /// 切った本文の「続きを読む」が押されたときに呼ぶ。広げた状態を持つのは置く側で、適用し直すまで見た目は変わらない。
+    var onExpandBody: (() -> Void)?
     /// 本文のリンクがタップされたときに、その行き先を渡して呼ぶ。
     var onOpenLink: ((RichText.LinkDestination) -> Void)?
     /// リンクカードの画像がタップされたときに、ビューアを開閉する起点として、サムネイルを渡して呼ぶ。
@@ -183,6 +189,8 @@ final class PostBodyView: UIView {
             .spoilerButton: Self.shown(spoilerView)?.buttonPreviewFrame(in: space),
             .spoilerText: Self.shown(spoilerView)?.textPreviewFrame(in: space),
             .bodyText: textLabel.previewFrame(in: space),
+            .truncatedBody: textLabel.isTruncatedByLength ? textLabel.previewFrame(in: space) : nil,
+            .readMore: textLabel.readMoreFrame.map { [textLabel.convert($0, to: space)] },
             .bodyGlyphs: textGlyphsFrame(in: space),
             .card: linkCard?.previewFrame(in: space),
             .poll: poll?.previewFrame(in: space),
@@ -338,6 +346,7 @@ final class PostBodyView: UIView {
             textLastBaselineGuide.heightAnchor.constraint(equalToConstant: 0),
         ])
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
+        textLabel.onExpand = { [weak self] in self?.onExpandBody?() }
     }
 
     private static func shown<View: UIView>(_ view: View?) -> View? {
@@ -422,6 +431,7 @@ final class PostBodyView: UIView {
         view.onOpenAccount = { [weak self] in self?.embedActions.openAccount?() }
         view.onToggleSpoiler = { [weak self] in self?.embedActions.toggleSpoiler?() }
         view.onSelectNote = { [weak self] index in self?.embedActions.selectNote?(index) }
+        view.onExpandBody = { [weak self] in self?.embedActions.expandBody?() }
         let interaction = ObjectInteraction(on: view, tapsSelf: false)
         embedInteraction = interaction
         view.addAction(UIAction { [weak self, weak view, weak interaction] _ in
@@ -460,7 +470,7 @@ final class PostBodyView: UIView {
     /// 「テキストを選択」で本文を選べる状態にできるか。本文を表示していて、行数で切っていないときだけできる。
     /// 切った本文は、切った部分を選べず、高さを変えずに全文を出せないため。
     var canSelectText: Bool {
-        guard let content, !textLabel.isHidden, content.maximumLines == 0 else { return false }
+        guard let content, !textLabel.isHidden, content.maximumLines == 0, !textLabel.isTruncatedByLength else { return false }
         return !content.text.string.allSatisfy(\.isWhitespace)
     }
 
@@ -525,7 +535,11 @@ final class PostBodyView: UIView {
         self.content = content
         textLabel.attributedText = Self.truncatingTail(content.text, when: content.maximumLines > 0)
         textLabel.hashtagAccount = content.hashtagAccount
-        textLabel.numberOfLines = content.maximumLines
+        // 長い本文を切るときは、行数をラベルが幅から決める。
+        if content.truncation == nil {
+            textLabel.numberOfLines = content.maximumLines
+        }
+        textLabel.truncation = content.truncation
         NSLayoutConstraint.deactivate(variableConstraints)
         variableConstraints = []
         let shownSpoiler = applySpoiler(content.spoiler)
@@ -826,6 +840,10 @@ final class PostBodyView: UIView {
     /// 最後の文字の、ベースラインから字面の下端まで。最後の段落の絵文字が字面より下へ伸びていれば、その下端まで。
     /// - Parameter isTruncated: 行数で切って描くときはtrue。最後に見える行がどの段落か分からないため、全体の絵文字で測る。
     ///   切れた先にだけ大きい絵文字があると、下の部品とのあいだが絵文字の分だけ広く空くが、重なるよりよいので受け入れる。
+    ///   長い本文を切る決まり（`PostBodyContent.truncation`）では、falseのまま最後の段落で測る。切るかどうかは並べる幅で決まるため、
+    ///   全体で測ると、切っていないほとんどの投稿でも途中の段落の絵文字の分だけ下の部品とのあいだが広がる。切ったときは、見える最後の行に、
+    ///   最後の段落より下へ伸びる大きい絵文字があると、その差の分だけ下の部品に近づく。幅が分かるのは並べるときで、あいだの制約を作る中身の適用では分からず、
+    ///   並べるときに制約を変えると、行の高さが一覧の測った高さと食い違うため、対応しない。
     static func textBottomInset(of text: NSAttributedString, isTruncated: Bool = false) -> CGFloat {
         guard text.length > 0 else { return 0 }
         let paragraph = isTruncated
@@ -833,6 +851,20 @@ final class PostBodyView: UIView {
             : (text.string as NSString).paragraphRange(for: NSRange(location: text.length - 1, length: 0))
         guard let font = RichTextRenderer.textFont(in: text, range: paragraph, fromEnd: true) else { return 0 }
         return max(font.pointSize * emBoxDescent, RichTextRenderer.emojiExtent(in: text, range: paragraph).below)
+    }
+
+    /// 長い本文を、今の幅で切っている。
+    var isBodyTruncated: Bool {
+        !textLabel.isHidden && textLabel.isTruncatedByLength
+    }
+
+    /// 読み上げで、切った本文を広げる操作。切っていなければnil。
+    func readMoreAccessibilityAction() -> UIAccessibilityCustomAction? {
+        guard isBodyTruncated else { return nil }
+        return UIAccessibilityCustomAction(name: ReadMoreButton.title) { [weak self] _ in
+            self?.onExpandBody?()
+            return true
+        }
     }
 
     /// 読み上げで、注意書きの本文を開閉する操作。注意書きがなければnil。

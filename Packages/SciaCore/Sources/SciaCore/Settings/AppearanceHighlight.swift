@@ -76,6 +76,8 @@ public enum AppearanceHighlight: Equatable, Sendable {
             (C.customEmojiScale, .firstOf([.part(.customEmojis), .part(.bodyText)])),
             (C.emojiOnlyScale, .firstOf([.part(.emojiOnlyEmojis), .part(.emojiOnlyBody)])),
             (C.emojiOnlyLimit, .part(.emojiOnlyBody)),
+            (C.bodyTruncationThreshold, .part(.truncatedBody)),
+            (C.bodyTruncatedLines, .part(.truncatedBody)),
             (C.filterNoteText, .part(.filterNote)),
             (C.filterNoteSpacing, .verticalGap(above: [.card, .poll, .media, .bodyGlyphs], below: [.filterNote])),
 
@@ -207,6 +209,7 @@ public enum AppearanceHighlight: Equatable, Sendable {
         case .pollOptions: C.pollOptionPadding
         case .poll: C.bodyPollSpacing
         case .reactionGlowAlone: C.reactionGlowHeight
+        case .readMore: C.bodyTruncationThreshold
         default: nil
         }
     }

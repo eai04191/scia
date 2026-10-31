@@ -153,6 +153,8 @@ final class SessionController {
     private let editHistories = NSHashTable<EditHistoryViewController>.weakObjects()
     /// 添付ファイルを覆うか。ホームと通知とプロフィールでそろえ、閉じて開き直したプロフィールにも引き継ぐ。
     private var mediaCovers = MediaCovers()
+    /// 「続きを読む」で広げた本文。どの一覧で広げても、開いている一覧と、あとで開く一覧にそろえる。
+    private var longBodyExpansion = LongBodyExpansion()
     /// 引用元の、受け取ったあとの編集、削除、ミュート、ブロック。どの一覧の囲みにも当て、開き直した画面にも引き継ぐ。
     private var quoteSources = QuoteSourceChanges()
     /// fxtwitterから読んだXの投稿。ホームと通知とプロフィールで同じ投稿を1回だけ読む。
@@ -950,6 +952,10 @@ final class SessionController {
         viewController.onChangeMediaCovers = { [weak self, weak viewController] covers, status in
             self?.shareMediaCovers(covers, changed: status, from: viewController)
         }
+        viewController.longBodyExpansion = longBodyExpansion
+        viewController.onChangeLongBodyExpansion = { [weak self, weak viewController] expansion, key in
+            self?.shareLongBodyExpansion(expansion, changed: key, from: viewController)
+        }
         viewController.onStatusAction = { [weak self, weak viewController] action, status in self?.perform(action, on: status, from: viewController) }
         viewController.onFollowRequestDecision = { [weak self] decision, request in self?.answerFollowRequest(decision, to: request) }
         viewController.onVote = { [weak self, weak viewController] choices, status in
@@ -1019,6 +1025,14 @@ final class SessionController {
         }
         for history in editHistories.allObjects where history !== source {
             history.applyMediaCovers(covers, changed: status)
+        }
+    }
+
+    /// 一覧で「続きを読む」で広げた本文を、ほかの一覧にもそろえる。
+    private func shareLongBodyExpansion(_ expansion: LongBodyExpansion, changed key: LongBodyExpansion.Key, from source: AnyObject?) {
+        longBodyExpansion = expansion
+        for timeline in timelines.allObjects where timeline !== source {
+            timeline.applyLongBodyExpansion(expansion, changed: key)
         }
     }
 

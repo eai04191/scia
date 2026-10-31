@@ -31,6 +31,8 @@ final class EmbeddedPostView: UIButton {
         /// 注意書きかフィルターの警告。折りたたんでいる間は、本文、添付ファイル、補足の行を出さない。
         var spoiler: SpoilerView.Content?
         var text: NSAttributedString
+        /// 長い本文を切って「続きを読む」を出す行数。nilなら切らない。
+        var truncation: BodyTruncation?
         /// 添付ファイルがなければnil。
         var media: MediaGridView.Content?
         var notes: [Note] = []
@@ -68,6 +70,8 @@ final class EmbeddedPostView: UIButton {
     var onToggleSpoiler: (() -> Void)?
     /// 押せる補足の行がタップされたときに、何番目の行かを渡して呼ぶ。
     var onSelectNote: ((Int) -> Void)?
+    /// 切った本文の「続きを読む」が押されたときに呼ぶ。広げた状態を持つのは置く側で、適用し直すまで見た目は変わらない。
+    var onExpandBody: (() -> Void)?
 
     private let avatarView: AvatarView
     private let nameLabel = EmojiLabel()
@@ -112,6 +116,7 @@ final class EmbeddedPostView: UIButton {
         textLabel.numberOfLines = 0
         // 本文はリンクの上だけ押下を受ける。リンクの外の押下は、囲みのボタンが受ける。
         textLabel.onTapLink = { [weak self] destination in self?.onOpenLink?(destination) }
+        textLabel.onExpand = { [weak self] in self?.onExpandBody?() }
         avatarView.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(avatarTapped)))
         accountInteraction = ObjectInteraction(on: avatarView, tapsSelf: false, lift: .shape)
         spoilerView.addAction(UIAction { [weak self] _ in self?.onToggleSpoiler?() }, for: .touchUpInside)
@@ -206,6 +211,7 @@ final class EmbeddedPostView: UIButton {
         let contentTop = last
 
         textLabel.attributedText = content.text
+        textLabel.truncation = content.truncation
         textLabel.isHidden = isCollapsed || content.text.length == 0
         if !textLabel.isHidden {
             constraints += [
@@ -355,13 +361,27 @@ final class EmbeddedPostView: UIButton {
                 }
             }
         }
+        if !textLabel.isHidden, textLabel.isTruncatedByLength {
+            actions.append(UIAccessibilityCustomAction(name: ReadMoreButton.title) { [weak self] _ in
+                self?.onExpandBody?()
+                return true
+            })
+        }
+        // 本文を切っているかは並べるまで分からないので、並べたあとに変わったら作り直す（`layoutSubviews`）。
+        accessibilityReflectsTruncation = !textLabel.isHidden && textLabel.isTruncatedByLength
         summaryElement.accessibilityCustomActions = actions
         setNeedsLayout()
         accessibilityElements = [summaryElement] + [mediaGrid].compactMap(\.self) + noteViews.filter { !$0.isHidden && $0.isUserInteractionEnabled }
     }
 
+    /// 読み上げの要素を作ったときに、本文を切っていたか。
+    private var accessibilityReflectsTruncation = false
+
     override func layoutSubviews() {
         super.layoutSubviews()
+        if let content, !textLabel.isHidden && textLabel.isTruncatedByLength != accessibilityReflectsTruncation {
+            updateAccessibility(for: content)
+        }
         summaryElement.accessibilityFrameInContainerSpace = bounds
     }
 

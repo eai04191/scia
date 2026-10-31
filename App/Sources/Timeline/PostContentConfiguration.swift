@@ -60,6 +60,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     var showsEditedMark = true
     var timeStyle: StatusTimeStyle
     var body: NSAttributedString
+    /// 長い本文を切って「続きを読む」を出す行数。nilなら切らない。
+    var bodyTruncation: BodyTruncation?
     /// 注意書きがなければnil。
     var spoiler: PostBodyContent.Spoiler?
     var metrics: Metrics
@@ -88,6 +90,8 @@ struct PostContentConfiguration: UIContentConfiguration {
     /// 添付ファイルか、リンクカードの画像の、閲覧注意のぼかしが押されたときに呼ぶ。ぼかしを外すのは置く側で、適用し直すまで見た目は変わらない。
     var onRevealMedia: (() -> Void)?
     var onToggleSpoiler: (() -> Void)?
+    /// 切った本文の「続きを読む」が押されたときに呼ぶ。広げた状態を持つのは置く側で、適用し直すまで見た目は変わらない。
+    var onExpandBody: (() -> Void)?
     /// アイコンがタップされたときに呼ぶ。投稿した人のプロフィールを開く。
     var onOpenAccount: (() -> Void)?
     /// 名前の上の行がタップされたときに呼ぶ。ブーストした人や、通知のもとになる操作をした人のプロフィールを開く。
@@ -291,6 +295,7 @@ final class PostContentView: UIView, UIContentView {
         bodyView.onSelectMedia = { [weak self] index, grid in self?.current.onSelectMedia?(index, grid) }
         bodyView.onRevealMedia = { [weak self] in self?.current.onRevealMedia?() }
         bodyView.onToggleSpoiler = { [weak self] in self?.current.onToggleSpoiler?() }
+        bodyView.onExpandBody = { [weak self] in self?.current.onExpandBody?() }
         bodyView.onOpenLink = { [weak self] destination in self?.current.onOpenLink?(destination) }
         bodyView.onTextSelectionChange = { [weak self] in
             guard let self else { return }
@@ -448,6 +453,7 @@ final class PostContentView: UIView, UIContentView {
         bodyView.apply(PostBodyContent(
             spoiler: configuration.spoiler,
             text: configuration.body,
+            truncation: configuration.bodyTruncation,
             media: configuration.media,
             mediaSpacing: metrics.bodyMediaSpacing,
             poll: configuration.poll,
@@ -881,7 +887,9 @@ final class PostContentView: UIView, UIContentView {
         parts.append(bodyView.accessibilityText)
         parts += [configuration.reactionGlow?.accessibilityText].compactMap(\.self)
         textAccessibilityElement.accessibilityLabel = parts.filter { !$0.isEmpty }.joined(separator: "、")
-        textAccessibilityElement.accessibilityCustomActions = [bodyView.spoilerAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
+        // 本文を切っているかは並べるまで分からないので、並べたあとに変わったら作り直す（`layoutContents`）。
+        accessibilityReflectsTruncation = bodyView.isBodyTruncated
+        textAccessibilityElement.accessibilityCustomActions = [bodyView.spoilerAccessibilityAction(), bodyView.readMoreAccessibilityAction()].compactMap(\.self) + bodyView.linkAccessibilityActions()
             + profileAccessibilityActions(for: configuration)
         // 枠はlayoutSubviewsで決める。大きさの変わらない描き直し（絵文字の画像が届いたときなど）では並べ直しが起きないため、枠を空にせず、並べ直しを頼む。
         // 空にすると、次に並べ直すまで、VoiceOverで指でなぞってもこの行に止まらない。
@@ -891,6 +899,8 @@ final class PostContentView: UIView, UIContentView {
     }
 
     private lazy var textAccessibilityElement = UIAccessibilityElement(accessibilityContainer: self)
+    /// 読み上げの要素を作ったときに、本文を切っていたか。
+    private var accessibilityReflectsTruncation = false
 
     /// アイコンと名前の上の行のタップで開くプロフィールを、VoiceOverでは操作として開く。
     private func profileAccessibilityActions(for configuration: PostContentConfiguration) -> [UIAccessibilityCustomAction] {
@@ -920,6 +930,9 @@ final class PostContentView: UIView, UIContentView {
         layoutReplyLines()
         // 本文の枠は中身の部品の中で決まるため、先に並べておく。
         bodyView.layoutIfNeeded()
+        if bodyView.isBodyTruncated != accessibilityReflectsTruncation {
+            updateAccessibility(for: current)
+        }
         let bodyTextFrame = bodyView.convert(bodyView.textFrame, to: self)
         // 2段目の名前は名前の行の外に置くので、名前の行とは別に含める。名前の行の中にあるときは、名前の行の枠に入っている。
         let textFrame = [contextLabel, nameRow, nameLabels[1]].filter { !$0.isHidden }.map { $0.convert($0.bounds, to: self) }.reduce(bodyTextFrame) { $0.union($1) }

@@ -12,7 +12,8 @@ extension TimelineViewController {
         switch display {
         case .post(let quoted):
             let media = embedMediaContent(of: quoted.mediaAttachments, cover: mediaCover(for: quoted), seed: quoted.id)
-            let content = postContentBuilder.quote(quoted, spoiler: spoiler(of: quoted, base: base), media: media, base: base)
+            var content = postContentBuilder.quote(quoted, spoiler: spoiler(of: quoted, base: base), media: media, base: base)
+            content.truncation = longBodyExpansion.truncation(forBodyOf: quoted, isThreadFocus: status.displayed.id == threadFocusID, rule: bodyTruncationRule)
             var actions = EmbedActions()
             actions.open = { [weak self] view in
                 guard let self else { return }
@@ -43,6 +44,7 @@ extension TimelineViewController {
             actions.openLink = { [weak self] destination in self?.onOpenLink?(destination, quoted) }
             actions.openAccount = { [weak self] in self?.onOpenProfile?(quoted.account) }
             actions.toggleSpoiler = { [weak self] in self?.toggleSpoiler(of: quoted, keeping: itemID) }
+            actions.expandBody = { [weak self] in self?.expandBody(.status(quoted.id), keeping: itemID) }
             if case .link(let nestedID) = NestedQuote(quoted.quote) {
                 actions.selectNote = { [weak self] _ in
                     guard let self else { return }

@@ -7,7 +7,7 @@ import UIKit
 /// TextKit 2の行の位置は、UILabelが描いた位置と一致することを確かめている。
 /// ラベルは文字の高さに合わせて置くため、UILabelが余った高さで文字を縦に中央へ寄せる分はずれとして扱わない。
 ///
-/// 動かすのは、ラベルの中に収まっている絵文字だけにする。切られて見えない行にある絵文字と、行末で切られてはみ出す絵文字は、文字の中の静止画のまま描く。
+/// 動かすのは、ラベルの中に収まっている絵文字だけにする。切られて見えない行にある絵文字と、行末で切られてはみ出す絵文字、薄くしている範囲（`obscuredTextRect`）の絵文字は、文字の中の静止画のまま描く。
 /// 「…」で切るラベルが実際に切られているときは、最後の行のうち、「…」に置き換わるかもしれない絵文字も静止画にする。UILabelが末尾を「…」に置き換えた位置は、
 /// TextKit 2の並びからは分からず、動く層だけが「…」の上に残るおそれがあるため。UILabelは折り返したあとで最後の行の末尾だけを置き換えるので、
 /// 末尾で切るときは、絵文字の右端に「…」の幅を足しても行に収まる絵文字は、並べた位置のまま残る。それより行末に近い絵文字だけを止める。
@@ -159,6 +159,14 @@ class EmojiLabel: UILabel {
     private var layoutCache: TextLayout?
     /// 「…」で切られているかを、調べたときの幅とともに持つ。
     private var truncationCache: (width: CGFloat, isTruncated: Bool)?
+    /// 描いた文字を薄くしたり消したりしている範囲。ラベルの座標。ここにかかる絵文字は、動かす層を重ねず、文字の中の静止画のまま描く。
+    /// 層は文字と一緒に薄くならないため。`layoutSubviews`より前に決める。
+    var obscuredTextRect: CGRect? {
+        didSet {
+            guard obscuredTextRect != oldValue else { return }
+            setNeedsLayout()
+        }
+    }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -223,7 +231,7 @@ class EmojiLabel: UILabel {
         sourceText.enumerateAttribute(.customEmoji, in: NSRange(location: 0, length: sourceText.length)) { value, range, _ in
             guard value != nil else { return }
             for index in range.location..<NSMaxRange(range) {
-                guard let frame = attachmentFrame(at: index, in: layout), visible.contains(frame) else {
+                guard let frame = attachmentFrame(at: index, in: layout), visible.contains(frame), !(obscuredTextRect?.intersects(frame) ?? false) else {
                     indices.insert(index)
                     continue
                 }

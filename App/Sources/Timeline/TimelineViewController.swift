@@ -246,6 +246,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
+    /// 「続きを読む」で広げた本文。決まりはdocs/long-post.mdにある。セッションが持ち、開いている一覧にそろえて配る。
+    var longBodyExpansion = LongBodyExpansion()
+    /// 「続きを読む」で本文を広げたときに、広げたあとの状態と広げたものを渡して呼ぶ。セッションが、ほかの一覧にもそろえる。
+    var onChangeLongBodyExpansion: ((LongBodyExpansion, LongBodyExpansion.Key) -> Void)?
+
     init(
         texts: Texts = .home,
         refresh: @escaping @MainActor () async -> Void,
@@ -502,16 +507,23 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// スクロールで一覧が行の位置を置き直しても、動きは外れない。差分を動きつきで当てる描き直しと違い、一覧がセルを入れ替えないので、
     /// セルの中で続いている動き（絵文字が入る文字の動きなど）も止まらない。
     /// 区切り線は、行のセルとは別のビューとして一覧に並ぶため、セルと一緒に動かす。動かさないと、伸びた行の下の線だけが1コマで下がる。
-    func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, duration: TimeInterval) {
+    /// - Parameter anchorID: 画面上の位置を保つ行。なければ、表示領域の上端にかかっている行を基準にする。
+    func reconfigureShiftingRowsBelow(_ ids: Set<ItemID>, keeping anchorID: ItemID? = nil, duration: TimeInterval) {
         guard !ids.isEmpty else { return }
         guard duration > 0, view.window != nil, !isShowingMenu, !UIAccessibility.isReduceMotionEnabled else {
-            reconfigure(ids)
+            reconfigure(ids, keeping: anchorID)
             return
         }
         let before = visibleRows(snapshottingBelow: ids)
         let separatorsBefore = visibleSeparators()
-        reconfigure(ids)
+        let heightsBefore = ids.compactMap { id in cell(for: id).map { (id, $0.bounds.height) } }
+        reconfigure(ids, keeping: anchorID)
         collectionView.layoutIfNeeded()
+        for (id, height) in heightsBefore {
+            if let cell = cell(for: id) {
+                revealGrowth(of: cell, from: height, duration: duration)
+            }
+        }
         let after = visibleRows(snapshottingBelow: [])
         // 動かす行と区切り線は、動かない行より手前に描く。伸びた行のセルは一度に高くなり、その背景が、下がってくる途中の下の行を隠すため。
         // `zPosition`を上げるとバーの下のぼかしより手前に出てしまうため、同じ`zPosition`のビューどうしの並び順で手前に出す（`MediaBarLayering`と同じ）。
@@ -563,6 +575,39 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         layer.add(move, forKey: "rowShift\(rowShiftCount)")
         return true
     }
+
+    /// 伸びた行のセルを、下の行の動きと同じ時間と曲線で、前の高さから新しい高さまで切り抜いて見せる。
+    /// 伸びた行の中身は一度に新しい高さで並ぶため、切り抜かないと、不透明なセルの背景と中身が、下がってくる途中の下の行と、押し出される行の像を覆う。
+    /// 像は一覧に足すが、一覧が並べ直すときにセルを手前へ戻すので、重なり順では避けられない。
+    /// 伸びている途中にまた伸びたら（広げている途中に絵文字が届いて折り返しが増えたなど）、同じ切り抜きを、今見えている高さから新しい高さへ動かし直す。
+    private func revealGrowth(of cell: UICollectionViewCell, from oldHeight: CGFloat, duration: TimeInterval) {
+        let newHeight = cell.bounds.height
+        let running = cell.layer.mask.flatMap { $0.name == Self.growthMaskName ? $0 : nil }
+        guard newHeight - oldHeight > 0.5, running != nil || cell.layer.mask == nil else { return }
+        let mask = running ?? CALayer()
+        let from = running?.presentation()?.bounds.height ?? oldHeight
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        mask.name = Self.growthMaskName
+        mask.backgroundColor = UIColor.black.cgColor
+        mask.anchorPoint = .zero
+        mask.frame = cell.layer.bounds
+        CATransaction.commit()
+        let grow = CABasicAnimation(keyPath: "bounds.size.height")
+        grow.fromValue = from
+        grow.toValue = newHeight
+        grow.duration = duration
+        grow.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        grow.delegate = RowShiftCompletion { [weak cell, weak mask] in
+            // 動かし直した動きが続いていれば外さない。動きの途中で使い回されて、ほかの切り抜きに替わっていたら、そちらも外さない。
+            guard let cell, let mask, cell.layer.mask === mask, mask.animation(forKey: Self.growthMaskName) == nil else { return }
+            cell.layer.mask = nil
+        }
+        mask.add(grow, forKey: Self.growthMaskName)
+        cell.layer.mask = mask
+    }
+
+    private static let growthMaskName = "rowGrowth"
 
     /// 表示領域の外へ出た行の像を、前の位置から新しい位置へ動かしてから外す。
     private func sendOut(_ snapshot: UIView?, from oldMinY: CGFloat, to newMinY: CGFloat, duration: TimeInterval) {
@@ -1779,6 +1824,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             configuration.embedActions = quote.actions
         } else if let xPost = xPostContent(for: shown, base: base) {
             configuration.embed = xPost.content
+            if let id = XPostLink.postID(of: shown) {
+                configuration.embed?.truncation = longBodyExpansion.truncation(forXPost: id, isThreadFocus: shown.id == threadFocusID, rule: bodyTruncationRule)
+                configuration.embedActions.expandBody = { [weak self] in self?.expandBody(.xPost(id), keeping: itemID) }
+            }
             configuration.embedActions.open = { [weak self] _ in self?.onOpenLink?(.url(xPost.url), shown) }
             if let itemID {
                 configuration.embedActions.target = externalPostTarget(url: xPost.url, text: xPost.text, id: itemID) { [weak self] in self?.onOpenLink?(.url(xPost.url), shown) }
@@ -1802,7 +1851,47 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let ownMatchTitles = filterWarnings.verdict(for: status).ownMatchTitles
         configuration.filterNote = ownMatchTitles.isEmpty ? nil : postContentBuilder.ownFilterNote(titles: ownMatchTitles)
         configuration.onToggleSpoiler = { [weak self] in self?.toggleSpoiler(of: status, keeping: itemID) }
+        configuration.bodyTruncation = longBodyExpansion.truncation(forBodyOf: status, isThreadFocus: shown.id == threadFocusID, rule: bodyTruncationRule)
+        configuration.onExpandBody = { [weak self] in self?.expandBody(.status(shown.id), keeping: itemID) }
         return configuration
+    }
+
+    /// 長い本文を切る行数。「投稿の見た目」の値で決める。
+    var bodyTruncationRule: BodyTruncation? {
+        BodyTruncation(
+            threshold: Int(settings.value(of: AppearanceCatalog.bodyTruncationThreshold)),
+            lines: Int(settings.value(of: AppearanceCatalog.bodyTruncatedLines))
+        )
+    }
+
+    /// 切った本文を「続きを読む」で広げる。同じ投稿を出している行（ブースト、通知、引用の囲み）もまとめて描き直す。
+    /// 広げる行は上端を動かさずに下へ伸びるので、行の位置を保って描き直し、下の行を元の位置から動かしてつなぐ。
+    /// 行ごとスプリングで伸ばす`reconfigureAnimatingHeight`では、全文が一度に並んで下の行を覆い、伸びる動きにならなかった。
+    /// - Parameter anchorID: 押した行。同じ投稿の行が上にも並んでいると、その行も伸びるため、押した行の画面上の位置を保つ。
+    func expandBody(_ key: LongBodyExpansion.Key, keeping anchorID: ItemID? = nil) {
+        longBodyExpansion.expand(key)
+        onChangeLongBodyExpansion?(longBodyExpansion, key)
+        guard isViewLoaded else { return }
+        reconfigureShiftingRowsBelow(Set(itemIDs(expanding: key)), keeping: anchorID, duration: tuning.value(of: TuningCatalog.longBodyExpandDuration))
+    }
+
+    /// ほかの一覧で広げた本文を、この一覧にもそろえる。使う人がこの一覧で行った操作ではないので、動かさずに描き直し、読んでいる行の位置を保つ。
+    func applyLongBodyExpansion(_ expansion: LongBodyExpansion, changed key: LongBodyExpansion.Key) {
+        longBodyExpansion = expansion
+        // まだ開いていない画面は、開いたときにこの状態で描く。描き直しのために画面を読み込ませない。
+        guard isViewLoaded else { return }
+        reconfigure(Set(itemIDs(expanding: key)))
+    }
+
+    /// 広げた本文を出している行。
+    private func itemIDs(expanding key: LongBodyExpansion.Key) -> [ItemID] {
+        displayedItemIDs.filter { id in
+            guard let displayed = status(for: id)?.displayed else { return false }
+            return switch key {
+            case .status(let statusID): displayed.id == statusID || displayed.quote?.quotedStatus?.id == statusID
+            case .xPost(let postID): XPostLink.postID(of: displayed) == postID
+            }
+        }
     }
 
     /// 注意書きの本文を開閉する。フィルターの警告で折りたたんでいれば、注意書きの代わりに警告を開く。同じ投稿をブーストした行と通知の行もまとめて描き直す。
@@ -2393,7 +2482,7 @@ final class TimelineCollectionView: UICollectionView {
     }
 
     override func touchesShouldCancel(in view: UIView) -> Bool {
-        view is LinkHitArea || super.touchesShouldCancel(in: view)
+        view is LinkHitArea || view is ReadMoreButton || super.touchesShouldCancel(in: view)
     }
 }
 
