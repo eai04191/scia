@@ -56,6 +56,84 @@ struct AppDestinationTests {
         #expect(AppDestination(url) == .settings(page))
     }
 
+    /// 開く先の項目ごとに1つ以上。開く先を足したら、ここにも足す。
+    static let samples: [AppDestination] = [.tab(.home), .tab(.scheduled)]
+        + [.userTab(.list(id: "12")), .userTab(.hashtag(name: "日本語")), .userTab(.profile(acct: "bob@example.com")), .userTab(.accountHashtag(acct: "bob", name: "scia"))]
+        + [.settings(nil)] + SettingsPage.allCases.map { .settings($0) }
+        + [.profile(acct: "bob@example.com"), .profile(acct: "bob"), .myProfile, .profileEdit]
+        + [.thread(statusID: "123"), .editHistory(statusID: "123")]
+        + [.accounts(.followers(accountID: nil)), .accounts(.followers(accountID: "9")), .accounts(.following(accountID: nil)), .accounts(.following(accountID: "9"))]
+        + [.accounts(.favourited(statusID: "123")), .accounts(.reblogged(statusID: "123"))]
+        + [.hashtag(name: "日本語 & tag"), .accountHashtag(acct: "bob@example.com", name: "scia"), .scheduled, .operationStatus]
+        + [.note(acct: "bob@example.com"), .report(acct: "bob+1@example.com")]
+        + [.compose(.tools), .compose(.language), .compose(.schedule), .compose(.emoji), .compose(.mediaPicker)]
+        + [.compose(.attachment(index: 0)), .compose(.altText(index: 2)), .compose(.crop(index: 3))]
+
+    /// 作ったURLを読み戻すと、同じ開く先になる。URLの形を書いても、読み取りを書き忘れていればURLを作れずに落ちる。
+    @Test(arguments: samples)
+    func readsBackItsOwnURL(_ destination: AppDestination) throws {
+        let url = try #require(destination.url(scheme: "scia"))
+        #expect(url.scheme == "scia")
+        #expect(AppDestination(url) == destination, "\(url.absoluteString)")
+    }
+
+    /// 見本が、開く先のすべての項目を含む。開く先を足すと`kind(of:)`がビルドできなくなり、足した種類の見本がなければこのテストが落ちる。
+    @Test func samplesCoverEveryKind() {
+        #expect(Set(Self.samples.map(Self.kind(of:))) == Set(Kind.allCases))
+    }
+
+    @Test(arguments: [
+        AppDestination.hashtag(name: ""),
+        .thread(statusID: ""),
+        .profile(acct: ""),
+        .accounts(.followers(accountID: "")),
+        .compose(.crop(index: -1)),
+        .userTab(.accountHashtag(acct: "bob", name: "")),
+    ])
+    func refusesValuesThatDoNotReadBack(_ destination: AppDestination) {
+        #expect(destination.url(scheme: "scia") == nil)
+    }
+
+    enum Kind: CaseIterable {
+        case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, profile, myProfile, profileEdit
+        case thread, editHistory, followers, following, favourited, reblogged, hashtag, accountHashtag, scheduled, operationStatus
+        case note, report, composeTools, composeLanguage, composeSchedule, composeEmoji, composeMediaPicker, composeAttachment, composeAltText, composeCrop
+    }
+
+    static func kind(of destination: AppDestination) -> Kind {
+        switch destination {
+        case .tab: .tab
+        case .userTab(.list): .userTabList
+        case .userTab(.hashtag): .userTabHashtag
+        case .userTab(.profile): .userTabProfile
+        case .userTab(.accountHashtag): .userTabAccountHashtag
+        case .settings: .settings
+        case .profile: .profile
+        case .myProfile: .myProfile
+        case .profileEdit: .profileEdit
+        case .thread: .thread
+        case .editHistory: .editHistory
+        case .accounts(.followers): .followers
+        case .accounts(.following): .following
+        case .accounts(.favourited): .favourited
+        case .accounts(.reblogged): .reblogged
+        case .hashtag: .hashtag
+        case .accountHashtag: .accountHashtag
+        case .scheduled: .scheduled
+        case .operationStatus: .operationStatus
+        case .note: .note
+        case .report: .report
+        case .compose(.tools): .composeTools
+        case .compose(.language): .composeLanguage
+        case .compose(.schedule): .composeSchedule
+        case .compose(.emoji): .composeEmoji
+        case .compose(.mediaPicker): .composeMediaPicker
+        case .compose(.attachment): .composeAttachment
+        case .compose(.altText): .composeAltText
+        case .compose(.crop): .composeCrop
+        }
+    }
+
     @Test func pushesStorageBeforeMediaCache() {
         #expect(SettingsPage.viewedMediaCache.path == [.storage, .viewedMediaCache])
         #expect(SettingsPage.licenses.path == [.licenses])

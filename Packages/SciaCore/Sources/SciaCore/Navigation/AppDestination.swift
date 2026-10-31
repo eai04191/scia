@@ -162,6 +162,49 @@ public enum AppDestination: Equatable, Sendable {
         self = parsed
     }
 
+    /// この画面を開くURL。`init?(_:)`で読み戻すと同じ画面になる。開く先を足したときに、URLの形を決め忘れないよう、すべての項目を扱う形で書く。
+    /// 空の名前やID、負の番号のように、URLにしても読み戻すと別の画面になるか読めない値では、nilを返す。
+    public func url(scheme: String) -> URL? {
+        let (host, path, query): (String, String?, [(String, String)]) = switch self {
+        case .tab(let item): ("tab", item.rawValue, [])
+        case .userTab(.list(let id)): ("tab", "list", [("id", id)])
+        case .userTab(.hashtag(let name)): ("tab", "hashtag", [("name", name)])
+        case .userTab(.profile(let acct)): ("tab", "profile", [("acct", acct)])
+        case .userTab(.accountHashtag(let acct, let name)): ("tab", "account-hashtag", [("acct", acct), ("name", name)])
+        case .settings(let page): ("settings", page?.rawValue, [])
+        case .profile(let acct): ("profile", acct, [])
+        case .myProfile: ("my-profile", nil, [])
+        case .profileEdit: ("profile-edit", nil, [])
+        case .thread(let statusID): ("thread", nil, [("id", statusID)])
+        case .editHistory(let statusID): ("edit-history", nil, [("id", statusID)])
+        case .accounts(.followers(let accountID)): ("accounts", "followers", accountID.map { [("id", $0)] } ?? [])
+        case .accounts(.following(let accountID)): ("accounts", "following", accountID.map { [("id", $0)] } ?? [])
+        case .accounts(.favourited(let statusID)): ("accounts", "favourited", [("id", statusID)])
+        case .accounts(.reblogged(let statusID)): ("accounts", "reblogged", [("id", statusID)])
+        case .hashtag(let name): ("hashtag", nil, [("name", name)])
+        case .accountHashtag(let acct, let name): ("account-hashtag", nil, [("acct", acct), ("name", name)])
+        case .scheduled: ("scheduled", nil, [])
+        case .operationStatus: ("operation-status", nil, [])
+        case .note(let acct): ("note", nil, [("acct", acct)])
+        case .report(let acct): ("report", nil, [("acct", acct)])
+        case .compose(.tools): ("compose", "tools", [])
+        case .compose(.language): ("compose", "language", [])
+        case .compose(.schedule): ("compose", "schedule", [])
+        case .compose(.emoji): ("compose", "emoji", [])
+        case .compose(.mediaPicker): ("compose", "media-picker", [])
+        case .compose(.attachment(let index)): ("compose", "attachment", [("index", String(index))])
+        case .compose(.altText(let index)): ("compose", "alt-text", [("index", String(index))])
+        case .compose(.crop(let index)): ("compose", "crop", [("index", String(index))])
+        }
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = host
+        components.path = path.map { "/\($0)" } ?? ""
+        components.queryItems = query.isEmpty ? nil : query.map { URLQueryItem(name: $0.0, value: $0.1) }
+        guard let url = components.url, AppDestination(url) == self else { return nil }
+        return url
+    }
+
     /// 最初からあるタブ。足したタブは`userTab`で選ぶ。
     private static let fixedTabs: [TabItem] = [.home, .local, .federated, .notifications, .bookmarks, .favourites, .scheduled]
 }
