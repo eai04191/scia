@@ -9,8 +9,9 @@ import UniformTypeIdentifiers
 /// 枠と同じ大きさのスクロールビューに画像を載せ、ピンチと移動で枠に入れる部分を選ばせる。UIKitのスクロールビューの拡大と慣性をそのまま使う。
 /// 枠の外も、画像が見えるよう暗くして残し、枠の外から触れても動かせるようにする。
 /// ヘッダー画像は、下の切り替えで3:2と3:1を選べる。既定は、Sciaが勧める3:2。
+/// 共有で投稿欄に入れるときも閉じない。閉じると、選びかけの範囲を失うため。
 @MainActor
-final class ProfileImageCropViewController: UIViewController {
+final class ProfileImageCropViewController: UIViewController, StaysForSharedContent {
     /// 切り抜いた画像。送るファイルと、編集画面で見せる画像を渡す。
     var onDone: (MediaUpload, UIImage) -> Void = { _, _ in }
     var onCancel: () -> Void = {}

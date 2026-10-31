@@ -562,6 +562,35 @@ final class InlineComposeControllerTests {
         #expect(composer.stateDump().contains("editing: false"), "閉じたシートを出したままの扱いです\n\(composer.stateDump())")
     }
 
+    /// 共有で投稿欄に入るときに、メディアを選ぶシートと絵文字のパレットをまとめて閉じても、閉じたことになり、バーをシートの上端から外して書き終える。
+    /// 閉じた扱いにならないと、バーがシートのあった高さに留まったままになり、ボタンで閉じ直すこともできない。
+    @Test(arguments: [ComposeToolItem.media, .customEmoji])
+    func bottomSheetClosedByPresenterReleasesBar(item: ComposeToolItem) async throws {
+        defer {
+            window.rootViewController?.dismiss(animated: false)
+            window.isHidden = true
+        }
+        settings.composeToolLayout = MenuLayout(elements: [.more, .item(item, isVisible: true)])
+        composer.model.apply(configuration: InstanceConfiguration(streamingURL: try #require(URL(string: "wss://example.social")), maxCharacters: 500, charactersReservedPerURL: 23, maxMediaAttachments: 4, mediaDescriptionLimit: 1500, supportedMediaTypes: nil, mediaLimits: .unknown), defaultVisibility: .public, defaultSensitive: nil)
+        composer.beginEditing()
+        try await waitUntilSettled()
+        window.layoutIfNeeded()
+        let tool = try #require(buttons(in: window).first { $0.accessibilityLabel == item.title })
+        tool.sendActions(for: .primaryActionTriggered)
+        let host = try #require(window.rootViewController)
+        try await clock.advance { host.presentedViewController != nil && host.presentedViewController?.isBeingPresented == false }
+        #expect(composer.isBarHeld, "シートを開いても、バーを留めていません\n\(composer.stateDump())")
+
+        var closed = false
+        host.closeScreensForSharedContent { closed = true }
+        try await clock.advance { closed }
+        try await waitUntilSettled()
+
+        #expect(!composer.isBarHeld, "閉じたシートの上端にバーを留めたままです\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("mediaPicker: nil"), "閉じたシートを出したままの扱いです\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("editing: false"), "閉じたシートを出したままの扱いです\n\(composer.stateDump())")
+    }
+
     /// 予約の日時を「決定」で閉じると、日時を知らせてから閉じたことを知らせる。投稿欄が日時を反映してからキーボードを戻すため。
     @Test func scheduleSheetConfirmsBeforeClosing() async throws {
         defer { window.isHidden = true }

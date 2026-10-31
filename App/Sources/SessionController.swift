@@ -2947,8 +2947,8 @@ final class SessionController {
     }
 
     /// 共有拡張が受け取ったメディアを、投稿欄に添付して書き始める。書きかけの下書きがあれば、足すか、捨てて新しく書くかを聞く。
-    /// 一覧の上に重ねたビューアとメニューは、呼ぶ前に閉じて、投稿欄を見せる（`closeScreensForSharedContent(completion:)`）。
-    /// 設定などのそれ以外の画面は閉じずにその上で聞き、投稿欄は重ねた画面の下で開く。閉じると、その画面で書いていたものや見ていた位置を、使う人が選ばずに失うため。
+    /// 一覧の上に重ねた画面は、呼ぶ前に閉じて、投稿欄を見せる（`closeScreensForSharedContent(completion:)`）。
+    /// 閉じると失うものがある画面（`StaysForSharedContent`や、書きかけのある画面）は閉じずにその上で聞き、投稿欄は重ねた画面の下で開く。
     /// - Parameter unreadableCount: 共有拡張が受け取れなかった件数。1件も受け取れなかったときは、受け渡しのフォルダーを作らずに開かれる。
     private func receiveSharedMedia(id: UUID, unreadableCount: Int) {
         guard let inbox = SharedMediaInbox.app else {

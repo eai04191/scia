@@ -7,7 +7,8 @@ import UIKit
 /// 写真アプリと同じく、画面に置いた枠の下で画像を動かし、枠の中に画像の端が入らないようにする。スクロールビューの`contentInset`を
 /// 枠の外の幅にし、縮められる倍率を枠を覆う倍率にすれば、UIKitのスクロールとズームのまま、画像の端が枠に入る手前で止まる。
 /// 枠のハンドルを離すと、少し待ってから、枠を画面の中央いっぱいへ広げ、同じ範囲が枠に収まるよう画像を拡大する。
-final class ImageCropViewController: UIViewController {
+/// 共有で投稿欄に入れるときも閉じない。閉じると、選びかけの範囲を失うため。
+final class ImageCropViewController: UIViewController, StaysForSharedContent {
     /// 縦横比の選び方。
     enum Aspect: Equatable {
         case free

@@ -4,7 +4,7 @@ import Testing
 import UIKit
 @testable import Scia
 
-/// 共有で投稿欄に入れるときに、一覧の上に重ねた画面のうち、ビューアとメニューだけを閉じる。
+/// 共有で投稿欄に入れるときに、一覧の上に重ねた画面を閉じる。閉じると失うものがあると示した画面だけを残す。
 @MainActor
 @Suite(.scratch, .serialized)
 struct ComposerRevealTests {
@@ -15,6 +15,13 @@ struct ComposerRevealTests {
     private func makeViewer() -> MediaViewerController {
         let attachment = MediaAttachment(id: "1", type: .image, url: URL(string: "https://x.example/1.png"), previewUrl: nil)
         return MediaViewerController(attachments: [attachment], startIndex: 0, store: .offline, dragToDismiss: drag, timing: timing, sourceTile: { _ in nil })
+    }
+
+    /// 書きかけがあり、下へのスワイプで閉じさせない画面。
+    private func makeScreenWithUnsavedInput() -> UIViewController {
+        let screen = UIViewController()
+        screen.isModalInPresentation = true
+        return screen
     }
 
     /// ビューアを閉じ、画面の重なりから外れてから続きを呼ぶ。続きで出すアラートが、閉じる途中のビューアに捨てられないようにするため。
@@ -31,25 +38,96 @@ struct ComposerRevealTests {
         #expect(presentedWhenContinued == .some(nil))
     }
 
-    /// 設定のように閉じない画面は残し、その上のビューアだけを閉じる。
-    @Test func keepsOtherScreensAndClosesViewerAboveThem() async throws {
+    /// 設定のように、残すと示していない画面は、種類を問わず閉じる。あとから足した画面でも、投稿欄が隠れたままにならないようにするため。
+    @Test func closesScreensThatDoNotAskToStay() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
         let root = harness.viewController
-        let settings = UIViewController()
+        let settings = UINavigationController(rootViewController: UIViewController())
         try await root.presentForTesting(settings)
-        defer { settings.dismiss(animated: false) }
         try await settings.presentForTesting(makeViewer())
 
         var continued = false
         root.closeScreensForSharedContent { continued = true }
 
         try await waitUntil { continued }
-        #expect(root.presentedViewController === settings)
-        #expect(settings.presentedViewController == nil)
+        #expect(root.presentedViewController == nil)
     }
 
-    /// 確認のアラートのように閉じない画面がいちばん手前にあれば、その奥のビューアも閉じない。
+    /// ほかの画面の上に重ねたビューアも、ビューアの閉じ方で閉じる。下の画面からまとめて閉じると、閉じる動きを通らず、閉じ終えた知らせが届かない。
+    /// 投稿欄は、メディアを選ぶシートの上に開いたビューアの閉じ終わりで、ビューアを出している扱いを解く。
+    @Test func closesViewerAboveAnotherScreenItsOwnWay() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let sheet = UIViewController()
+        try await root.presentForTesting(sheet)
+        let viewer = makeViewer()
+        var finishedClosing = false
+        viewer.onCloseFinish = { finishedClosing = true }
+        try await sheet.presentForTesting(viewer)
+
+        var continued = false
+        root.closeScreensForSharedContent { continued = true }
+
+        try await waitUntil { continued && finishedClosing }
+        #expect(root.presentedViewController == nil)
+    }
+
+    /// 書きかけがあって閉じさせない画面は残し、その上のビューアだけを閉じる。
+    @Test func keepsScreenWithUnsavedInputAndClosesViewerAboveIt() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let editor = makeScreenWithUnsavedInput()
+        try await root.presentForTesting(editor)
+        defer { editor.dismiss(animated: false) }
+        try await editor.presentForTesting(makeViewer())
+
+        var continued = false
+        root.closeScreensForSharedContent { continued = true }
+
+        try await waitUntil { continued }
+        #expect(root.presentedViewController === editor)
+        #expect(editor.presentedViewController == nil)
+    }
+
+    /// プロフィールの編集のように、ナビゲーションに載せた中の画面が閉じさせないなら、ナビゲーションごと残す。
+    @Test func keepsNavigationWhoseScreenHasUnsavedInput() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let navigation = UINavigationController(rootViewController: makeScreenWithUnsavedInput())
+        try await root.presentForTesting(navigation)
+        defer { navigation.dismiss(animated: false) }
+
+        var continued = false
+        root.closeScreensForSharedContent { continued = true }
+
+        #expect(continued)
+        #expect(root.presentedViewController === navigation)
+    }
+
+    /// 通報のシートは、コメントを書くとSwiftUIで下へのスワイプを止め、その印で残る。
+    @Test func keepsReportSheetWithComment() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let draft = ReportDraft(accountID: "2", acct: "bob", statusID: nil, api: ReportDraft.API(rules: { [] }, submit: { _ in }))
+        draft.comment = "spam"
+        let sheet = ReportView.sheet(draft: draft) {}
+        try await root.presentForTesting(sheet)
+        defer { sheet.dismiss(animated: false) }
+        try await waitUntil { sheet.isModalInPresentation }
+
+        var continued = false
+        root.closeScreensForSharedContent { continued = true }
+
+        #expect(continued)
+        #expect(root.presentedViewController === sheet)
+    }
+
+    /// 確認のアラートのように残す画面がいちばん手前にあれば、その奥のビューアも閉じない。
     @Test func keepsViewerBelowScreenThatStays() async throws {
         let harness = try TimelineHarness(notices: notices)
         defer { harness.tearDown() }
@@ -57,7 +135,8 @@ struct ComposerRevealTests {
         let viewer = makeViewer()
         try await root.presentForTesting(viewer)
         defer { viewer.dismiss(animated: false) }
-        let confirmation = UIViewController()
+        let confirmation = UIAlertController(title: "下書きを捨てますか？", message: nil, preferredStyle: .alert)
+        confirmation.addAction(UIAlertAction(title: "キャンセル", style: .cancel))
         try await viewer.presentForTesting(confirmation)
         defer { confirmation.dismiss(animated: false) }
 
