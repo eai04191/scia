@@ -60,6 +60,8 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     }
 
     private var rows: [Row]
+    /// 並べ替えで線の出方が変わったが、画面の外にあってまだ引き直していない行。
+    private var rowsWithStaleSeparators: Set<UUID> = []
     private var dataSource: UICollectionViewDiffableDataSource<Section, Cell>?
     private lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: makeLayout())
 
@@ -262,16 +264,19 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     }
 
     /// 横並びの知らせと行どうしの線は、ほかの行の並びや表示で変わるため、並びが変わるたびに描き直す。
-    /// 線は、出方が変わった行だけレイアウトを無効にして引き直す。レイアウト全体を無効にすると、画面の外の行の測った高さが見積もりの高さに戻って一覧の高さが縮み、
-    /// 下のほうまでスクロールしているとスクロール位置が押し戻されて、指を離した直後に行が跳ねるため。
+    /// 線は、出方が変わった行に大きさを測り直させて引き直す。レイアウトを無効にすると、無効にする行を絞っても画面の外の行の測った高さが見積もりの高さに戻って一覧の高さが縮み、
+    /// 下のほうまでスクロールしていると、指を離した直後に持ち上げていた行が離れた位置に描かれ、そこから跳ねて戻るため。
+    /// 画面の外の行はセルがなく測り直させられないので、画面に入るときに測り直させる。
     private func refreshDependentRows(previousRows: [Row]) {
         refreshRowSeparatorNotes()
         let previous = Dictionary(uniqueKeysWithValues: previousRows.indices.map { (previousRows[$0].id, Self.hiddenSeparators(at: $0, in: previousRows)) })
-        let changed = rows.indices.filter { previous[rows[$0].id] != Self.hiddenSeparators(at: $0, in: rows) }
-        guard !changed.isEmpty else { return }
-        let context = UICollectionViewLayoutInvalidationContext()
-        context.invalidateItems(at: changed.map { IndexPath(item: $0, section: 0) })
-        collectionView.collectionViewLayout.invalidateLayout(with: context)
+        for index in rows.indices where previous[rows[index].id] != Self.hiddenSeparators(at: index, in: rows) {
+            if let cell = collectionView.cellForItem(at: IndexPath(item: index, section: 0)) {
+                cell.invalidateIntrinsicContentSize()
+            } else {
+                rowsWithStaleSeparators.insert(rows[index].id)
+            }
+        }
     }
 
     /// 行の上と下に、行どうしの線を引かないか。区切り線の行は自分が線なので、その行と上下の行には引かない。
@@ -358,6 +363,12 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
 
     private func save() {
         onChange(MenuLayout(elements: rows.map(\.element)))
+    }
+
+    func collectionView(_ collectionView: UICollectionView, willDisplay cell: UICollectionViewCell, forItemAt indexPath: IndexPath) {
+        guard indexPath.section == 0, rows.indices.contains(indexPath.item),
+              rowsWithStaleSeparators.remove(rows[indexPath.item].id) != nil else { return }
+        cell.invalidateIntrinsicContentSize()
     }
 
     func collectionView(_ collectionView: UICollectionView, shouldSelectItemAt indexPath: IndexPath) -> Bool {
