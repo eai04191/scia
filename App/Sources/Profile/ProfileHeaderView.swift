@@ -54,6 +54,8 @@ final class ProfileHeaderView: UIView {
     private var imageMenuInteractions: [ProfileImage: MediaMenuInteraction] = [:]
     /// 表示名、自己紹介、補足情報の行を長押ししたときの、文章のメニュー。nilを返せばメニューを出さない。
     var menuForText: ((ProfileTextPart) -> UIMenu?)?
+    /// ハンドルを押したときの、コピーのメニュー。nilを返せばメニューを出さない。
+    var menuForHandle: (() -> UIMenu?)?
     /// 文章のメニューを出したときと閉じたとき。
     var textMenuLifecycle = MenuLifecycle()
     /// 表示名と自己紹介の、文章のメニューの長押し。決まりはdocs/menus.mdの「プロフィールの文章のメニュー」にある。
@@ -168,7 +170,8 @@ final class ProfileHeaderView: UIView {
     /// 文言はどちらも日本語で、字はベースラインより下へはみ出さないので、ベースラインが見えている字の下端になる。
     private var relationshipFailureBaseline: NSLayoutConstraint?
     private let nameLabel = EmojiLabel()
-    private let acctLabel = UILabel()
+    /// ハンドル。押すと、ハンドルのコピーのメニューを出す。決まりはdocs/profile.mdの「ハンドル」にある。
+    private let acctButton = UIButton(configuration: .plain())
     /// ヘッダー画像の右下に重ねる「フォローされています」。関係が届いてから出るため、縦に並ぶ情報の中に置くと、出たときに下が動く。
     /// ヘッダー画像の上なら場所を取らない。添付ファイルのALTのバッジと同じ見た目にする。
     private let followedByBadge = PaddedLabel()
@@ -336,7 +339,15 @@ final class ProfileHeaderView: UIView {
         followArea.alignment = .center
 
         nameLabel.numberOfLines = 0
-        acctLabel.numberOfLines = 0
+        acctButton.configuration?.contentInsets = .zero
+        acctButton.configuration?.titleAlignment = .leading
+        acctButton.configuration?.baseForegroundColor = .secondaryLabel
+        acctButton.contentHorizontalAlignment = .leading
+        acctButton.showsMenuAsPrimaryAction = true
+        // 開くたびに組み直す。開いている間に編集でハンドルやURLが変わっても、次に開いたときに合わせるため。
+        acctButton.menu = UIMenu(children: [UIDeferredMenuElement.uncached { [weak self] completion in
+            completion(self?.menuForHandle?()?.children ?? [])
+        }])
         followedByBadge.textColor = .white
         followedByBadge.backgroundColor = MediaBadgeView.backgroundColor
         followedByBadge.layer.cornerRadius = MediaBadgeView.cornerRadius
@@ -413,7 +424,19 @@ final class ProfileHeaderView: UIView {
             stack.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 0, leading: margin, bottom: 0, trailing: margin)
             return stack
         }
-        let identity = inset([nameLabel, acctLabel], spacing: 2)
+        // ハンドルのボタンは文字の幅に縮め、メニューをハンドルのそばに出す。`@_`のような短いハンドルでも押せるよう、幅は44pt以上にする。
+        // 高さは1行のまま広げない。上下に広げると、上の名前の長押しのメニューと押す範囲が重なるため。
+        let acctRow = UIView()
+        acctButton.translatesAutoresizingMaskIntoConstraints = false
+        acctRow.addSubview(acctButton)
+        NSLayoutConstraint.activate([
+            acctButton.topAnchor.constraint(equalTo: acctRow.topAnchor),
+            acctButton.bottomAnchor.constraint(equalTo: acctRow.bottomAnchor),
+            acctButton.leadingAnchor.constraint(equalTo: acctRow.leadingAnchor),
+            acctButton.trailingAnchor.constraint(lessThanOrEqualTo: acctRow.trailingAnchor),
+            acctButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 44),
+        ])
+        let identity = inset([nameLabel, acctRow], spacing: 2)
 
         // 自己紹介はカードにせず、名前の下にそのまま置く。
         let note = inset([noteView])
@@ -685,7 +708,7 @@ final class ProfileHeaderView: UIView {
         nameLabel.emojiImages = animatedEmojis
         nameLabel.attributedText = RichTextRenderer(font: boldTitle, textColor: .label, emojiImages: emojiImages, language: content.glyphLanguage)
             .render(.plain(account.displayNameOrUsername, emojis: account.emojis))
-        acctLabel.attributedText = acctText(of: account)
+        acctButton.configuration?.attributedTitle = AttributedString(acctText(of: account))
 
         let body = UIFont.preferredFont(forTextStyle: .body)
         let note = RichTextRenderer(font: body, textColor: .label, paragraphSpacing: 6, emojiImages: emojiImages, language: content.glyphLanguage).render(.html(account.note, emojis: account.emojis))

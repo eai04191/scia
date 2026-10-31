@@ -36,6 +36,24 @@ extension TimelineViewController {
         return UIMenu(children: [UIMenu(options: .displayInline, children: [editAction])] + textElements)
     }
 
+    /// プロフィールのハンドルを押したときの、コピーのメニュー。決まりはdocs/profile.mdの「ハンドル」にある。
+    /// 見出しは置かず、項目のサブテキストにコピーする文字を出す。
+    func handleMenu(for items: [HandleCopyItem]) -> UIMenu {
+        UIMenu(children: items.map { item in
+            let (title, symbol, notice): (String, String, Notice) = switch item.kind {
+            case .handle: ("ハンドルをコピー", "at", .handleCopied)
+            case .username: ("ユーザー名をコピー", "person", .usernameCopied)
+            case .server: ("サーバーをコピー", "server.rack", .serverCopied)
+            case .link: ("リンクをコピー", "link", .linkCopied)
+            }
+            return UIAction(title: title, subtitle: item.value, image: UIImage(systemName: symbol)) { [weak self] _ in
+                UIPasteboard.general.string = item.value
+                guard let self else { return }
+                showNotice(notice, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+            }
+        })
+    }
+
     private func copyAction(_ item: ProfileTextMenuItem, copying plain: String?) -> [UIMenuElement] {
         guard let plain else { return [] }
         return [UIAction(title: item.title, image: item.image) { [weak self] _ in

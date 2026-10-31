@@ -135,6 +135,12 @@ final class ProfileController {
             guard let self, let text = store.account.profileText(part) else { return nil }
             return self.viewController?.profileTextMenu(for: text)
         }
+        let localServer = client.credential.server
+        header.menuForHandle = { [weak self] in
+            guard let self else { return nil }
+            let items = HandleCopyItem.items(acct: store.account.acct, url: store.account.url, localServer: localServer)
+            return self.viewController?.handleMenu(for: items)
+        }
         header.menuForPrivateNote = { [weak self] in
             guard let self, let note = store.relationship?.note, !note.isEmpty else { return nil }
             return self.viewController?.privateNoteMenu(for: note) { [weak self] in self?.editPrivateNote() }
