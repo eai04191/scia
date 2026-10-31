@@ -15,6 +15,8 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
     case account(Account)
     /// 保留中の通知の一覧に並ぶ、1人分のまとまり。
     case notificationRequest(NotificationRequest)
+    /// 検索の結果に並ぶ、投稿と人のほかの行。
+    case search(SearchRow)
 
     public enum ID: Hashable, Sendable {
         case status(Status.ID)
@@ -24,6 +26,7 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
         case unreadable(String)
         case account(String)
         case notificationRequest(String)
+        case search(String)
     }
 
     public var id: ID {
@@ -35,6 +38,7 @@ public enum TimelineEntry: Hashable, Sendable, Identifiable {
         case .unreadable(let item): .unreadable(item.id)
         case .account(let account): .account(account.id)
         case .notificationRequest(let request): .notificationRequest(request.id)
+        case .search(let row): .search(row.id)
         }
     }
 

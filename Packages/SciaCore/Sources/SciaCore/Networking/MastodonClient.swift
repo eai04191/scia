@@ -842,6 +842,26 @@ public struct MastodonClient: Sendable {
         return try await get(Results.self, path: "api/v2/search", query: items, retries: false).0.hashtags.elements
     }
 
+    /// 検索の画面で探す。決まりはdocs/search.mdにある。
+    /// - Parameter category: 探す種類。nilなら3つをまとめて探す。まとめて探すと、サーバーは`offset`を無視する。
+    /// - Parameter resolve: 自分のサーバーが知らないユーザーや、URLの投稿とプロフィールを、相手のサーバーに問い合わせて探す。
+    /// - Parameter offset: 先頭から飛ばす件数。サーバーはミュートやブロックした人の投稿を除く前の件数で数えるため、読めた件数ではなく、頼んだ件数を足して進める。
+    /// https://docs.joinmastodon.org/methods/search/#v2
+    public func search(_ query: String, category: SearchCategory?, resolve: Bool, limit: Int, offset: Int = 0) async throws -> SearchResults {
+        var items = [
+            URLQueryItem(name: "q", value: query),
+            URLQueryItem(name: "resolve", value: resolve ? "true" : "false"),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+        ]
+        if let category {
+            items.append(URLQueryItem(name: "type", value: category.rawValue))
+            if offset > 0 {
+                items.append(URLQueryItem(name: "offset", value: "\(offset)"))
+            }
+        }
+        return try await get(SearchResults.self, path: "api/v2/search", query: items).0
+    }
+
     /// プロフィールに載せているハッシュタグ。補完で、自分のタグとして先に出す。
     /// https://docs.joinmastodon.org/methods/featured_tags/#get
     public func featuredTags() async throws -> [FeaturedTag] {
@@ -1243,6 +1263,62 @@ public enum AccountListKind: Hashable, Sendable {
     case followers(accountID: String)
     /// アカウントがフォローしている人。
     case following(accountID: String)
+}
+
+/// 検索で探す種類。`rawValue`は`api/v2/search`の`type`に渡す値。
+public enum SearchCategory: String, CaseIterable, Hashable, Sendable {
+    case accounts
+    case hashtags
+    case statuses
+
+    /// 結果の見出しと、その種類だけの一覧の題。
+    public var title: String {
+        switch self {
+        case .accounts: "ユーザー"
+        case .hashtags: "ハッシュタグ"
+        case .statuses: "投稿"
+        }
+    }
+}
+
+/// 検索の結果。種類を絞って探したときも、サーバーは3つの種類を返し、絞った種類のほかは空にする。
+/// https://docs.joinmastodon.org/entities/Search/
+public struct SearchResults: Decodable, Sendable {
+    public let accounts: [Account]
+    /// サーバーが返す順。新しい順。
+    public let statuses: [Status]
+    /// 読めなかった投稿。読めた投稿と同じく並べ、ブラウザで開けるようにする。
+    public let unreadableStatuses: [UnreadableItem]
+    public let hashtags: [Hashtag]
+
+    public init(accounts: [Account] = [], statuses: [Status] = [], unreadableStatuses: [UnreadableItem] = [], hashtags: [Hashtag] = []) {
+        self.accounts = accounts
+        self.statuses = statuses
+        self.unreadableStatuses = unreadableStatuses
+        self.hashtags = hashtags
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case accounts, statuses, hashtags
+    }
+
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        accounts = try container.decodeIfPresent(ElementList<Account>.self, forKey: .accounts)?.elements ?? []
+        let statuses = try container.decodeIfPresent(ElementList<Status>.self, forKey: .statuses)
+        self.statuses = statuses?.elements ?? []
+        unreadableStatuses = statuses?.unreadable ?? []
+        hashtags = try container.decodeIfPresent(ElementList<Hashtag>.self, forKey: .hashtags)?.elements ?? []
+    }
+
+    /// 結果の件数。読めなかった投稿も数える。
+    public func count(of category: SearchCategory) -> Int {
+        switch category {
+        case .accounts: accounts.count
+        case .hashtags: hashtags.count
+        case .statuses: statuses.count + unreadableStatuses.count
+        }
+    }
 }
 
 /// 人の一覧の1ページ分。

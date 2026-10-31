@@ -30,6 +30,10 @@ struct AppDestinationTests {
             ("scia://accounts/favourited", nil),
             ("scia://hashtag?name=scia", .hashtag(name: "scia")),
             ("scia://account-hashtag?acct=bob&name=scia", .accountHashtag(acct: "bob", name: "scia")),
+            ("scia://search", .search(query: nil)),
+            ("scia://search?q=%E7%8C%AB%20%26%20%E7%8A%AC", .search(query: "猫 & 犬")),
+            ("scia://search?q=", .search(query: nil)),
+            ("scia://tab/search", .tab(.search)),
             ("scia://scheduled", .scheduled),
             ("scia://operation-status", .operationStatus),
             ("scia://notification-requests", .notificationRequests),
@@ -68,7 +72,7 @@ struct AppDestinationTests {
         + [.thread(statusID: "123"), .editHistory(statusID: "123")]
         + [.accounts(.followers(accountID: nil)), .accounts(.followers(accountID: "9")), .accounts(.following(accountID: nil)), .accounts(.following(accountID: "9"))]
         + [.accounts(.favourited(statusID: "123")), .accounts(.reblogged(statusID: "123"))]
-        + [.hashtag(name: "日本語 & tag"), .accountHashtag(acct: "bob@example.com", name: "scia"), .scheduled, .operationStatus]
+        + [.hashtag(name: "日本語 & tag"), .accountHashtag(acct: "bob@example.com", name: "scia"), .search(query: nil), .search(query: "https://example.com/@bob/1"), .scheduled, .operationStatus]
         + [.notificationRequests, .notificationRequest(id: "7"), .notificationPolicy]
         + [.note(acct: "bob@example.com"), .report(acct: "bob+1@example.com")]
         + [.compose(.tools), .compose(.language), .compose(.schedule), .compose(.emoji), .compose(.mediaPicker)]
@@ -90,6 +94,7 @@ struct AppDestinationTests {
     @Test(arguments: [
         AppDestination.hashtag(name: ""),
         .thread(statusID: ""),
+        .search(query: ""),
         .profile(acct: ""),
         .accounts(.followers(accountID: "")),
         .compose(.crop(index: -1)),
@@ -101,7 +106,7 @@ struct AppDestinationTests {
 
     enum Kind: CaseIterable {
         case tab, userTabList, userTabHashtag, userTabProfile, userTabAccountHashtag, settings, profile, myProfile, profileEdit
-        case thread, editHistory, followers, following, favourited, reblogged, hashtag, accountHashtag, scheduled, operationStatus
+        case thread, editHistory, followers, following, favourited, reblogged, hashtag, accountHashtag, search, scheduled, operationStatus
         case notificationRequests, notificationRequest, notificationPolicy
         case note, report, composeTools, composeLanguage, composeSchedule, composeEmoji, composeMediaPicker, composeAttachment, composeAltText, composeCrop
     }
@@ -125,6 +130,7 @@ struct AppDestinationTests {
         case .accounts(.reblogged): .reblogged
         case .hashtag: .hashtag
         case .accountHashtag: .accountHashtag
+        case .search: .search
         case .scheduled: .scheduled
         case .operationStatus: .operationStatus
         case .notificationRequests: .notificationRequests

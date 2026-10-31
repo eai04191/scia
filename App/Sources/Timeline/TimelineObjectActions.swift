@@ -32,7 +32,7 @@ extension TimelineViewController {
                 buildMenu: { [weak self] in self?.contextMenu(for: entry, id: id) },
                 lifecycle: rowMenuLifecycle
             )
-        case .gap, .unreadable:
+        case .gap, .unreadable, .search:
             return nil
         }
     }

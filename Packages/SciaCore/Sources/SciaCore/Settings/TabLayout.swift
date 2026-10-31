@@ -5,6 +5,8 @@ public enum TabItem: MenuItemKind {
     case local
     case federated
     case notifications
+    /// 検索。決まりはdocs/search.mdにある。
+    case search
     case bookmarks
     case favourites
     /// 予約した投稿の一覧。決まりはdocs/tabs.mdの「予約投稿」にある。
@@ -36,7 +38,7 @@ public enum TabItem: MenuItemKind {
     private static let profilePrefix = "profile:"
 
     /// 決まった項目。リストとハッシュタグは使う人ごとに違うため含まない。既定の並びと、保存した並びに足りない項目を差し込むのに使う。
-    public static let allCases: [TabItem] = [.home, .local, .federated, .notifications, .bookmarks, .favourites, .scheduled]
+    public static let allCases: [TabItem] = [.home, .local, .federated, .notifications, .search, .bookmarks, .favourites, .scheduled]
 
     public init?(rawValue: String) {
         if rawValue.hasPrefix(Self.accountHashtagPrefix) {
@@ -73,6 +75,7 @@ public enum TabItem: MenuItemKind {
         case .local: "local"
         case .federated: "federated"
         case .notifications: "notifications"
+        case .search: "search"
         case .bookmarks: "bookmarks"
         case .favourites: "favourites"
         case .scheduled: "scheduled"
@@ -164,13 +167,14 @@ public enum TabItem: MenuItemKind {
         }
     }
 
-    /// 既定は、切り替えタブを使わず4つを直接並べる。ブックマーク、お気に入り、予約投稿は無効にして、切り替えタブの側に置く。
-    /// 有効にすると切り替えタブに入る。たまに見る一覧なので、ふだん並べる4つを押しのけないため。
+    /// 既定は、切り替えタブを使わず5つを直接並べる。ブックマーク、お気に入り、予約投稿は無効にして、切り替えタブの側に置く。
+    /// 有効にすると切り替えタブに入る。たまに見る一覧なので、ふだん並べる5つを押しのけないため。
     public static let defaultLayout = MenuLayout<TabItem>(defaultElements: [
         .item(.home, isVisible: true),
         .item(.local, isVisible: true),
         .item(.federated, isVisible: true),
         .item(.notifications, isVisible: true),
+        .item(.search, isVisible: true),
         .more,
         .item(.bookmarks, isVisible: false),
         .item(.favourites, isVisible: false),

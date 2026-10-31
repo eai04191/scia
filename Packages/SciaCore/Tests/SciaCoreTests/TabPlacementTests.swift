@@ -5,17 +5,18 @@ import SciaTesting
 
 @Suite(.scratch)
 struct TabPlacementTests {
-    /// 既定は、切り替えタブを使わず、今までどおり4つを直接並べる。
+    /// 既定は、切り替えタブを使わず、5つを直接並べる。
     @Test func defaultPlacesEveryTimelineDirectly() {
         let placement = TabPlacement(layout: TabItem.defaultLayout, tabBarCapacity: TabPlacement.compactTabBarCapacity)
-        #expect(placement.tabs == [.home, .local, .federated, .notifications])
+        #expect(placement.tabs == [.home, .local, .federated, .notifications, .search])
         #expect(placement.switchable.isEmpty)
     }
 
     /// ブックマーク、お気に入り、予約投稿は既定で無効にし、有効にすると切り替えタブに入る。保存済みの並びにも同じ位置で差し込む。
+    /// 検索は既定で有効なので、保存済みの並びでも通知の後ろに有効で差し込む。
     @Test func savedListsStartDisabledBelowBoundary() {
         let saved = MenuLayout<TabItem>(tokens: ["item:home", "item:notifications", "more", "item:local", "item:federated"])
-        #expect(saved.tokens == ["item:home", "item:notifications", "more", "hidden:bookmarks", "hidden:favourites", "hidden:scheduled", "item:local", "item:federated"])
+        #expect(saved.tokens == ["item:home", "item:notifications", "item:search", "more", "hidden:bookmarks", "hidden:favourites", "hidden:scheduled", "item:local", "item:federated"])
         #expect(TabPlacement(layout: saved, tabBarCapacity: TabPlacement.compactTabBarCapacity).location(of: .bookmarks) == .disabled)
         #expect(TabPlacement(layout: saved, tabBarCapacity: TabPlacement.compactTabBarCapacity).location(of: .scheduled) == .disabled)
 
@@ -30,6 +31,7 @@ struct TabPlacementTests {
             .more,
             .item(.federated, isVisible: true),
             .item(.local, isVisible: true),
+            .item(.search, isVisible: false),
         ])
         let placement = TabPlacement(layout: layout, tabBarCapacity: TabPlacement.compactTabBarCapacity)
         #expect(placement.tabs == [.home, .notifications])
@@ -50,6 +52,7 @@ struct TabPlacementTests {
             .item(.favourites, isVisible: true),
             .more,
             .item(.list(id: "1", title: "見る"), isVisible: true),
+            .item(.search, isVisible: false),
         ])
         let placement = TabPlacement(layout: layout, tabBarCapacity: TabPlacement.compactTabBarCapacity)
         #expect(placement.tabs == [.home, .notifications, .local, .federated])
@@ -66,6 +69,7 @@ struct TabPlacementTests {
             .item(.federated, isVisible: true),
             .item(.bookmarks, isVisible: true),
             .more,
+            .item(.search, isVisible: false),
         ])
         let placement = TabPlacement(layout: layout, tabBarCapacity: TabPlacement.compactTabBarCapacity)
         #expect(placement.tabs == [.home, .notifications, .local, .federated, .bookmarks])
@@ -82,6 +86,7 @@ struct TabPlacementTests {
             .item(.bookmarks, isVisible: true),
             .more,
             .item(.favourites, isVisible: true),
+            .item(.search, isVisible: false),
         ])
         let placement = TabPlacement(layout: layout, tabBarCapacity: TabPlacement.compactTabBarCapacity)
         #expect(placement.tabs == [.home, .notifications, .local, .federated])
@@ -98,6 +103,7 @@ struct TabPlacementTests {
             .item(.bookmarks, isVisible: true),
             .item(.favourites, isVisible: true),
             .more,
+            .item(.search, isVisible: false),
         ])
         let placement = TabPlacement(layout: layout, tabBarCapacity: nil)
         #expect(placement.tabs == [.home, .notifications, .local, .federated, .bookmarks, .favourites])
@@ -111,6 +117,7 @@ struct TabPlacementTests {
             .more,
             .item(.local, isVisible: true),
             .item(.federated, isVisible: false),
+            .item(.search, isVisible: false),
         ])
         let placement = TabPlacement(layout: layout, tabBarCapacity: TabPlacement.compactTabBarCapacity)
         #expect(placement.tabs == [.home])
@@ -134,6 +141,7 @@ struct TabPlacementTests {
             .item(.local, isVisible: true),
             .item(.federated, isVisible: true),
             .item(.notifications, isVisible: true),
+            .item(.search, isVisible: false),
         ]), tabBarCapacity: TabPlacement.compactTabBarCapacity)
         #expect(placement.switchSelection(previous: nil) == .local)
         #expect(placement.switchSelection(previous: .federated) == .federated)
@@ -192,7 +200,7 @@ struct TabLayoutSettingsTests {
 
     /// 保存した並びのリストは、名前とともに読み戻せる。
     @Test func listItemSurvivesSavedTokens() {
-        let layout = MenuLayout<TabItem>(tokens: ["item:home", "more", "item:list:5:友だち"])
+        let layout = MenuLayout<TabItem>(tokens: ["item:home", "hidden:search", "more", "item:list:5:友だち"])
         #expect(layout.tokens.contains("item:list:5:友だち"))
         #expect(TabPlacement(layout: layout, tabBarCapacity: TabPlacement.compactTabBarCapacity).switchable == [.list(id: "5", title: "友だち")])
     }
@@ -274,12 +282,14 @@ struct TabLayoutSettingsTests {
     }
 
     /// 使う人が足したユーザーのハッシュタグは、有効にして切り替えタブの末尾に入り、外せる。同じ項目は2つ足さない。
+    /// 既定の並びは5つでタブバーが埋まっているため、足すと切り替えタブの分を空け、5つ目の検索も切り替えタブに入る。
     @Test func addingAccountHashtagPutsItInSwitchTabAndRemovingDropsIt() {
         let item = TabItem.accountHashtag(accountID: "109", acct: "bob", name: "scia")
         let added = TabItem.defaultLayout.adding(item)
 
         #expect(TabPlacement(layout: added, tabBarCapacity: TabPlacement.compactTabBarCapacity).location(of: item) == .switchTab)
-        #expect(TabPlacement(layout: added, tabBarCapacity: TabPlacement.compactTabBarCapacity).tabs == TabPlacement(layout: TabItem.defaultLayout, tabBarCapacity: TabPlacement.compactTabBarCapacity).tabs)
+        #expect(TabPlacement(layout: added, tabBarCapacity: TabPlacement.compactTabBarCapacity).tabs == [.home, .local, .federated, .notifications])
+        #expect(TabPlacement(layout: added, tabBarCapacity: TabPlacement.compactTabBarCapacity).switchable == [.search, item])
         #expect(added.adding(item).tokens == added.tokens)
         #expect(added.removing(item).tokens == TabItem.defaultLayout.tokens)
         #expect(!added.removing(item).contains(item))

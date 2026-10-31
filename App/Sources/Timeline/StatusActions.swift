@@ -19,7 +19,7 @@ extension TimelineViewController {
         switch entry {
         case .status(let status), .pinned(let status): status
         case .notification(let notification): notification.status
-        case .gap, .unreadable, .account, .notificationRequest: nil
+        case .gap, .unreadable, .account, .notificationRequest, .search: nil
         }
     }
 

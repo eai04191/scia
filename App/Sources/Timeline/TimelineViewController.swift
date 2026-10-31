@@ -82,6 +82,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onOpenAccountHashtag: ((String, Account) -> Void)?
     /// 投稿のメニューの「ハッシュタグ」の「すべての投稿」で、ハッシュタグのタイムラインを開く。`#`を除いた名前を渡す。
     var onOpenHashtag: ((String) -> Void)?
+    /// 検索の結果のうち、投稿と人のほかの行（ハッシュタグ、「すべて見る」、失敗の行）が押されたときに呼ぶ。
+    var onSearchRowSelect: ((SearchRow) -> Void)?
     /// ナビゲーションから外された。積んで開いた一覧が、読み込みと購読をやめるのに使う。
     var onRemovedFromParent: (() -> Void)?
     /// 画面に出始めたとき（true）と、見えなくなったとき（false）。前に出ている間だけ新着を読む一覧が使う。
@@ -486,7 +488,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             case .notification(let notification): !Self.emojiURLs(of: notification, quoteSources: quoteSourceChanges).isDisjoint(with: urls)
             case .account(let account): !Set(account.emojis.map(\.staticUrl)).isDisjoint(with: urls)
             case .notificationRequest(let request): !Set(request.account.emojis.map(\.staticUrl)).isDisjoint(with: urls)
-            case .gap, .unreadable, nil: false
+            case .gap, .unreadable, .search, nil: false
             }
         }
         reconfigureShiftingRowsBelow(Set(ids), duration: tuning.value(of: TuningCatalog.customEmojiArrivalDuration))
@@ -1087,6 +1089,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         case .unreadable(let id): "unreadable-\(id)"
         case .account(let id): "account-\(id)"
         case .notificationRequest(let id): "notificationRequest-\(id)"
+        case .search(let id): "search-\(id)"
         }
     }
 
@@ -1136,7 +1139,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             let statuses: [Status] = switch entry {
             case .status(let status), .pinned(let status): [status, status.reblog].compactMap(\.self)
             case .notification(let notification): [notification.status, notification.status?.reblog].compactMap(\.self)
-            case .account, .notificationRequest, .gap, .unreadable: []
+            case .account, .notificationRequest, .gap, .unreadable, .search: []
             }
             for status in statuses {
                 if let mention = status.mentions.first(where: { $0.url == url }) {
@@ -1155,7 +1158,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             case .notification(let notification): notification.sampleAccounts + [notification.status?.account, notification.status?.reblog?.account].compactMap(\.self)
             case .account(let account): [account]
             case .notificationRequest(let request): [request.account]
-            case .gap, .unreadable: []
+            case .gap, .unreadable, .search: []
             }
             if let account = accounts.first(where: { $0.id == id }) {
                 return account
@@ -1201,14 +1204,14 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             // 固定投稿は、同じ投稿が下の一覧にも並ぶことがあり、IDでは見分けられない。上にある固定投稿の方へ移る。
             case .status(let status), .pinned(let status): status.id == statusID
             case .notification(let notification): notification.status?.id == statusID
-            case .gap, .unreadable, .account, .notificationRequest, nil: false
+            case .gap, .unreadable, .account, .notificationRequest, .search, nil: false
             }
         }
         let found = chosen ?? ids.first { id in
             switch entries[id] {
             case .status(let status), .pinned(let status): status.displayed.id == displayedID
             case .notification(let notification): notification.status?.displayed.id == displayedID
-            case .gap, .unreadable, .account, .notificationRequest, nil: false
+            case .gap, .unreadable, .account, .notificationRequest, .search, nil: false
             }
         }
         guard let found, let indexPath = dataSource.indexPath(for: found) else { return false }
@@ -1515,6 +1518,19 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 separator.topSeparatorInsets = insets
                 separator.bottomSeparatorInsets = insets
             }
+            // 検索の結果の見出しは、連絡先アプリの見出しと同じく、上に線を引かず、下に左右の余白を空けた線を引く。
+            // 見出しの上は空きで区切るため、直前の行の下の線も消す。
+            let headingInsets = NSDirectionalEdgeInsets(top: 0, leading: self.settings.rowMargins.leading, bottom: 0, trailing: self.settings.rowMargins.trailing)
+            if self.isSearchHeading(id) {
+                separator.topSeparatorVisibility = .hidden
+                separator.bottomSeparatorInsets = headingInsets
+            }
+            if indexPath.item > 0, let previous = self.dataSource.itemIdentifier(for: IndexPath(item: indexPath.item - 1, section: indexPath.section)), self.isSearchHeading(previous) {
+                separator.topSeparatorInsets = headingInsets
+            }
+            if let next = self.dataSource.itemIdentifier(for: IndexPath(item: indexPath.item + 1, section: indexPath.section)), self.isSearchHeading(next) {
+                separator.bottomSeparatorVisibility = .hidden
+            }
             return separator
         }
         // 保留中の通知の行は、右へスワイプで受け入れ、左へスワイプで無視する。決まりはdocs/notification-filter.mdにある。
@@ -1559,6 +1575,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return UISwipeActionsConfiguration(actions: [action])
     }
 
+    /// 検索の結果の見出しの行か。
+    private func isSearchHeading(_ id: ItemID) -> Bool {
+        if case .search(.heading) = entries[id] { true } else { false }
+    }
+
     /// 区切り線を引き始める、行の左端からの長さ。行の本文の左端にする。
     func separatorLeadingInset(for entry: TimelineEntry) -> CGFloat {
         let margin = settings.rowMargins.leading
@@ -1570,6 +1591,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             // メンションなどは投稿の行として描くので、投稿と同じ。ほかの通知の行は、アイコンの列の右に文字を置く。
             return notification.layout == .post && notification.status != nil && settings.appearance.wrapsBelowAvatar ? margin : textColumn
         case .account, .notificationRequest:
+            return textColumn
+        case .search:
+            // システムのリストの部品で組む行。投稿や人の行と揃えるため、文字の列から引く。
             return textColumn
         case .gap, .unreadable:
             // システムのリストの部品で組む行。任せると、すき間の行は行の余白から、読めなかった投稿の行は記号の右の文字から引き、右端も手前で止まって投稿の行の線と揃わないため、文字の列から引く。
@@ -1597,6 +1621,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             cell.contentConfiguration = accountConfiguration(for: account, base: cell.defaultContentConfiguration())
         case .notificationRequest(let request):
             cell.contentConfiguration = notificationRequestConfiguration(for: request, base: cell.defaultContentConfiguration())
+        case .search(let row):
+            cell.contentConfiguration = searchRowConfiguration(for: row, base: cell.defaultContentConfiguration())
         }
     }
 
@@ -1657,6 +1683,30 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             ? "サーバーから届いた内容を読めませんでした。"
             : "サーバーから届いた内容を読めませんでした。タップするとブラウザで開きます。"
         content.secondaryTextProperties.color = .secondaryLabel
+        return content
+    }
+
+    /// 検索の結果の、投稿と人のほかの行。決まりはdocs/search.mdにある。
+    func searchRowConfiguration(for row: SearchRow, base: UIListContentConfiguration) -> UIListContentConfiguration {
+        var content = base
+        switch row {
+        case .heading(let category):
+            content = UIListContentConfiguration.header()
+            content.text = category.title
+        case .hashtag(let hashtag):
+            content.image = UIImage(systemName: "number")
+            content.imageProperties.tintColor = .secondaryLabel
+            content.text = "#\(hashtag.name)"
+            content.textProperties.numberOfLines = 1
+        case .showAll:
+            content.text = "すべて見る"
+            content.textProperties.color = .tintColor
+        case .failed(_, let failure):
+            // 押すと読み込み直すため、押せることを色で示す。理由は下に小さく添える。
+            content.text = "読み込めませんでした。タップして再試行"
+            content.textProperties.color = .tintColor
+            content.secondaryAttributedText = failure.attributedText(textStyle: .footnote)
+        }
         return content
     }
 
@@ -1971,6 +2021,8 @@ extension TimelineViewController: UICollectionViewDelegate {
         return switch (id, entries[id]) {
         case (.gap, _): true
         case (_, .unreadable(let item)): item.url != nil
+        case (_, .search(.heading)): false
+        case (_, .search): true
         // 投稿、通知、人の一覧の行は、タップに選んだ操作を行う。既定の操作が行えない行（スレッドの中心の投稿、投稿のない通知）は、今どおり押せないままにする。
         case (_, .status), (_, .pinned), (_, .notification), (_, .account), (_, .notificationRequest): rowTarget(at: indexPath)?.acceptsTap ?? false
         default: false
@@ -2024,6 +2076,11 @@ extension TimelineViewController: UICollectionViewDelegate {
             let touched = touchRecorder.lastLocation.flatMap { collectionView.indexPathForItem(at: $0) == indexPath ? $0 : nil }
             let center = collectionView.layoutAttributesForItem(at: indexPath).map { CGPoint(x: $0.frame.midX, y: $0.frame.midY) } ?? .zero
             target.perform(.tap, in: collectionView, at: touched ?? center)
+            return
+        }
+        if let id = dataSource.itemIdentifier(for: indexPath), case .search(let row) = entries[id] {
+            collectionView.deselectItem(at: indexPath, animated: true)
+            onSearchRowSelect?(row)
             return
         }
         if let id = dataSource.itemIdentifier(for: indexPath), case .unreadable(let item) = entries[id], let url = item.url {

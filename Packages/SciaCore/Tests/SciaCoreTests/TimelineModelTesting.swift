@@ -11,6 +11,7 @@ final class RecordingTimelineDisplay: TimelineDisplay, StreamingStatusDisplay {
         let entries: [TimelineEntry]
         let anchorID: TimelineEntry.ID?
         let topID: TimelineEntry.ID?
+        let keepsOffset: Bool
         let animatesRemoval: Bool
         let base: [TimelineEntry]?
     }
@@ -32,7 +33,7 @@ final class RecordingTimelineDisplay: TimelineDisplay, StreamingStatusDisplay {
 
     func setEntries(_ entries: [TimelineEntry], keeping anchorID: TimelineEntry.ID?, placingAtTop topID: TimelineEntry.ID?, keepsOffset: Bool, animatesRemoval: Bool, keepingRowContentsOf base: [TimelineEntry]?) {
         commandCount += 1
-        entriesCalls.append(EntriesCall(entries: entries, anchorID: anchorID, topID: topID, animatesRemoval: animatesRemoval, base: base))
+        entriesCalls.append(EntriesCall(entries: entries, anchorID: anchorID, topID: topID, keepsOffset: keepsOffset, animatesRemoval: animatesRemoval, base: base))
     }
 
     func setContentState(_ state: TimelineContentState) {

@@ -127,6 +127,10 @@ final class SessionController {
     private let profiles: ProfileRegistry
     /// 開いているスレッドの画面。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
     private let threads: ThreadRegistry
+    /// 開いている検索の結果。投稿への操作の結果を反映するために持つ。閉じたものは自然に消える。
+    private let searches: SearchRegistry
+    /// 検索のタブの一番下の画面。
+    private let searchRoot = SearchViewController()
     private var cachedMyAccount: Account?
     /// セッションで読んだアカウント。メニューと投稿欄の補完に、メンションされたユーザーのアイコンを出すのに使う。
     /// 補完の口は`init`の中で`self`より先に作るので、それより前に作る。
@@ -219,7 +223,7 @@ final class SessionController {
                 FeedTimelineController(feed: .hashtag(name: name), texts: .hashtag(name: name), client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
             case .accountHashtag(let accountID, let acct, let name, _):
                 FeedTimelineController(feed: .accountHashtag(accountID: accountID, name: name), texts: .accountHashtag(name: name, acct: acct), client: client, streamingHub: streamingHub, tasks: tasks.child()) { forward() }
-            case .home, .local, .federated, .notifications, .bookmarks, .favourites, .scheduled, .profile:
+            case .home, .local, .federated, .notifications, .search, .bookmarks, .favourites, .scheduled, .profile:
                 nil
             }
         }
@@ -267,6 +271,8 @@ final class SessionController {
         self.profiles = profiles
         let threads = ThreadRegistry()
         self.threads = threads
+        let searches = SearchRegistry()
+        self.searches = searches
         // 同じ投稿がいくつものタブと開いているプロフィールやスレッドにあることがあるため、どれにも反映する。
         interactions = StatusInteractions(operations: .init(client: client)) { id, transform in
             home.updateStatus(id, transform)
@@ -279,6 +285,7 @@ final class SessionController {
             pushedFeeds.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
             threads.updateStatus(id, transform)
+            searches.updateStatus(id, transform)
         }
         // 付けた投稿は、サーバーが受け付けたところでブックマークやお気に入りの一覧の先頭に入れる。外したときは行を残す。
         interactions.onSettle = { action, status in
@@ -296,9 +303,10 @@ final class SessionController {
             pushedFeeds.updateStatus(id, transform)
             profiles.updateStatus(id, transform)
             threads.updateStatus(id, transform)
+            searches.updateStatus(id, transform)
         }
         let linkCards = LinkCardRefresher(client: client) { refetched in
-            for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, pushedFeeds.updateStatus, profiles.updateStatus, threads.updateStatus] {
+            for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, pushedFeeds.updateStatus, profiles.updateStatus, threads.updateStatus, searches.updateStatus] {
                 update(refetched.id) { $0.adoptingCard(of: refetched) }
             }
         }
@@ -313,6 +321,7 @@ final class SessionController {
         let bookmarksNavigation = ContentNavigationController(rootViewController: bookmarks.viewController)
         let favouritesNavigation = ContentNavigationController(rootViewController: favourites.viewController)
         let scheduledNavigation = ContentNavigationController(rootViewController: scheduled.viewController)
+        let searchNavigation = ContentNavigationController(rootViewController: searchRoot)
         let tabs = TabArrangement(
             navigation: { item in
                 switch item {
@@ -323,6 +332,7 @@ final class SessionController {
                 case .bookmarks: bookmarksNavigation
                 case .favourites: favouritesNavigation
                 case .scheduled: scheduledNavigation
+                case .search: searchNavigation
                 case .list, .hashtag, .accountHashtag: serverFeeds.navigation(for: item)
                 case .profile: profileTabs.navigation(for: item)
                 }
@@ -341,14 +351,14 @@ final class SessionController {
             tabs?.setNotificationsBadge(count == 0 ? nil : isLowerBound ? "\(count)+" : "\(count)")
         }
         let scrollToTop = { (navigation: UINavigationController) -> Void in
-            (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
+            TimelineViewController.shown(in: navigation.viewControllers.first)?.scrollToNewest()
         }
         tabBarDelegate = TabReselectionDelegate(scrollToTop: scrollToTop, navigation: { [weak tabs] in tabs?.navigation(for: $0) }) { tabBarController in
             // タブの切り替えには画面の移り変わりの動きがないため、チップだけを短く動かす。
             tabBarController.noticeOverlay?.follow(nil)
         }
         tabBarController.delegate = tabBarDelegate
-        for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation, bookmarksNavigation, favouritesNavigation, scheduledNavigation] {
+        for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation, bookmarksNavigation, favouritesNavigation, scheduledNavigation, searchNavigation] {
             Self.configure(navigation, delegate: navigationDelegate, scrollToTop: scrollToTop)
         }
         // トークンの失効は、どのAPIで分かっても同じくログインし直しを促す。
@@ -472,7 +482,7 @@ final class SessionController {
                     if let editing = draft.editing {
                         // ストリーミングの編集の知らせを待たずに、どの一覧にも編集したあとの投稿を出す。切れている間も直るようにするため。
                         let edited = try await client.editStatus(editing, to: draft)
-                        for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, pushedFeeds.updateStatus, profiles.updateStatus, threads.updateStatus] {
+                        for update in [home.updateStatus, local.updateStatus, federated.updateStatus, notifications.updateStatus, bookmarks.updateStatus, favourites.updateStatus, serverFeeds.updateStatus, pushedFeeds.updateStatus, profiles.updateStatus, threads.updateStatus, searches.updateStatus] {
                             update(edited.id) { _ in edited }
                         }
                         editedStatuses.session?.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
@@ -496,6 +506,7 @@ final class SessionController {
         )
         rootViewController = tabBarController
         forward = { [weak self] in self?.reportUnauthorized() }
+        prepare(searchRoot)
         tabBarController.view.addInteraction(UIDropInteraction(delegate: mediaDrop))
         // ペーストと同じく、書きかけの下書きがあっても聞かずに後ろに足す。
         mediaDrop.onDrop = { [weak self] drop in self?.receiveDroppedMedia(drop) }
@@ -537,7 +548,7 @@ final class SessionController {
         composer.onShowReplyTarget = { [weak tabs] status in
             // 今見えている一覧（ホーム、通知、開いているプロフィール）に返信先があれば、そこへ戻る。なければ動かさない。
             let navigation = tabs?.selectedNavigation
-            (navigation?.topViewController as? TimelineViewController)?.scrollToStatus(status.id, displayedID: status.displayed.id)
+            TimelineViewController.shown(in: navigation?.topViewController)?.scrollToStatus(status.id, displayedID: status.displayed.id)
         }
         composer.onObscuredHeightChange = { [weak self] height in
             guard let self else { return }
@@ -568,6 +579,7 @@ final class SessionController {
         scheduled.onRewrite = { [weak self] status in self?.confirmRewriting(status) }
         installAccountButton(on: scheduled.viewController)
         installNotificationRequests()
+        installAccountButton(on: searchRoot)
         streamingHub.onEvent = { [weak self] event in
             switch event {
             case .statusUpdate(let edited): self?.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
@@ -1372,6 +1384,84 @@ final class SessionController {
         (presenter ?? topViewController).present(NotificationPolicyView.makeSheet(model: notificationPolicy), animated: true)
     }
 
+    // MARK: - 検索
+
+    /// 検索の画面に、確定した語の結果の一覧を作らせる。
+    private func prepare(_ search: SearchViewController) {
+        search.makeResults = { [weak self] input in
+            self?.makeSearchResults(input, scope: .all) ?? TimelineViewController(texts: .search(.all, query: input.query)) {}
+        }
+    }
+
+    /// 検索のタブを開く。語があれば確定する。検索を無効にしていれば、選んでいるタブに検索の画面を積んで開く。
+    private func showSearch(query: String?) {
+        if tabs.placement.location(of: .search) != .disabled {
+            tabs.show(.search)
+            if let query {
+                searchRoot.navigationController?.popToRootViewController(animated: false)
+                searchRoot.submit(query)
+            }
+            return
+        }
+        guard let navigation = tabs.selectedNavigation else { return }
+        let search = SearchViewController()
+        prepare(search)
+        if let query {
+            search.submit(query)
+        }
+        navigation.pushViewController(search, animated: true)
+    }
+
+    /// 確定した語の結果の一覧を作り、探し始める。決まりはdocs/search.mdにある。
+    private func makeSearchResults(_ input: SearchInput, scope: SearchModel.Scope) -> TimelineViewController {
+        weak var owner: SearchModel?
+        let viewController = TimelineViewController(texts: .search(scope, query: input.query)) { await owner?.refresh() }
+        let model = SearchModel(input: input, scope: scope, client: client, tasks: tasks.child()) { [weak self] in
+            self?.reportUnauthorized()
+        }
+        owner = model
+        model.display = viewController
+        viewController.lifetimeOwner = model
+        // 画面を外したら、読み込みをやめる。走っている読み込みがモデルを持ち続け、通信が終わるまで残るため。
+        // 別の語を確定して結果を差し替えたときと、「すべて見る」の一覧から戻ったときに外れる。
+        viewController.onRemovedFromParent = { [weak model] in model?.stop() }
+        viewController.onApproachingEnd = { [weak model] in model?.approachEnd() }
+        viewController.onRetry = { [weak model] in model?.retry() }
+        viewController.onSearchRowSelect = { [weak self, weak viewController, weak model] row in
+            guard let self, let viewController else { return }
+            switch row {
+            case .hashtag(let hashtag):
+                openFeed(.hashtag(name: hashtag.name), from: viewController)
+            case .showAll(let category):
+                let list = makeSearchResults(input, scope: .only(category))
+                viewController.navigationController?.pushViewController(list, animated: true)
+            case .failed(let category, _):
+                model?.retry(category)
+            case .heading:
+                break
+            }
+        }
+        // URLやハンドルが1つに決まったら、結果の一覧の上に開く。待つ間にタブを移ったり、ほかの画面を開いたりしていたら開かない。
+        model.onFound = { [weak self, weak viewController] found in
+            // 添付ファイルのビューアのように元の画面をウインドウに残したまま重ねる画面は、ナビゲーションの外にあるため、重ねている画面で見る。検索欄（`UISearchController`）は除く。
+            guard let self, let viewController, viewController.view.window != nil,
+                  viewController.navigationController?.topViewController === (viewController.parent ?? viewController) else { return }
+            let presented = viewController.navigationController?.presentedViewController
+            guard presented == nil || presented is UISearchController else { return }
+            switch found {
+            case .status(let status):
+                // 押した行がないため、一覧の安全領域の上端に置いて開く。
+                openThread(of: status, rowFrame: viewController.view.convert(viewController.view.safeAreaLayoutGuide.layoutFrame, to: nil), from: viewController)
+            case .account(let account):
+                openProfile(account, from: viewController)
+            }
+        }
+        configure(viewController)
+        searches.add(model)
+        model.start()
+        return viewController
+    }
+
     // MARK: - スレッド
 
     /// 押した投稿のスレッドを開く。ブーストを押したときは、ブーストされた投稿のスレッドにする。
@@ -1496,7 +1586,7 @@ final class SessionController {
 
     /// 投稿の詳細の画面はまだないため、今見えている一覧（ホーム、通知、開いているプロフィール）にあればそこへ動かし、なければ投稿のページを開く。
     private func open(_ subject: OperationStatus.Subject) {
-        if let timeline = tabs.selectedNavigation?.topViewController as? TimelineViewController,
+        if let timeline = TimelineViewController.shown(in: tabs.selectedNavigation?.topViewController),
            timeline.scrollToStatus(subject.statusID, displayedID: subject.displayedID, at: .centeredVertically) {
             return
         }
@@ -1897,6 +1987,9 @@ final class SessionController {
         for list in savedLists {
             list.setAccount(relationship.id, excluded: relationship.blocking || relationship.muting)
         }
+        if relationship.blocking || relationship.muting {
+            searches.excludeAccount(relationship.id)
+        }
     }
 
     /// 期間を決めたミュートは、期限が来たら関係を読み直し、ミュートが明けていれば、一覧から除くのをやめる。
@@ -2139,6 +2232,7 @@ final class SessionController {
                 }
                 profiles.removeStatus(target.id)
                 threads.removeStatus(target.id)
+                searches.removeStatus(target.id)
                 changeQuoteSources(.status(target.id)) { $0.delete(target.id) }
                 if composer.model.editedStatus?.id == target.id {
                     composer.cancelStatusEdit()
@@ -2800,6 +2894,8 @@ final class SessionController {
             push("account hashtag", resolvingAccount(acct)) { [weak self] account, source in
                 self?.openAccountHashtag(name, of: account, from: source)
             }
+        case .search(let query):
+            showSearch(query: query)
         case .scheduled:
             showScheduledStatuses()
         case .operationStatus:
@@ -3347,6 +3443,44 @@ private final class PushedFeedRegistry {
 }
 
 /// 開いているスレッドの画面を弱く持つ。
+/// 開いている検索の結果。投稿への操作の結果を、開いているものすべてに反映する。閉じたものは自然に消える。
+@MainActor
+private final class SearchRegistry {
+    private struct Entry {
+        weak var model: SearchModel?
+    }
+
+    private var entries: [Entry] = []
+
+    func add(_ model: SearchModel) {
+        entries.removeAll { $0.model == nil }
+        entries.append(Entry(model: model))
+    }
+
+    private var models: [SearchModel] {
+        entries.removeAll { $0.model == nil }
+        return entries.compactMap(\.model)
+    }
+
+    func updateStatus(_ id: Status.ID, _ transform: (Status) -> Status) {
+        for model in models {
+            model.updateStatus(id, transform)
+        }
+    }
+
+    func removeStatus(_ id: Status.ID) {
+        for model in models {
+            model.removeStatus(id)
+        }
+    }
+
+    func excludeAccount(_ id: String) {
+        for model in models {
+            model.excludeAccount(id)
+        }
+    }
+}
+
 @MainActor
 private final class ThreadRegistry {
     private struct Entry {

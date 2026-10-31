@@ -74,8 +74,10 @@ struct TabArrangementTests {
     }
 
     /// 並びに書かなかった項目は、`MenuLayout`が既定の位置に表示する状態で差し込む。
+    /// 検索は既定で表示するため、書かなければ無効にして末尾に置き、確かめるタブの並びに入らないようにする。
     private static func layout(tabs: [TabItem], switchable: [TabItem], disabled: Set<TabItem> = []) -> MenuLayout<TabItem> {
-        MenuLayout(elements: tabs.map { .item($0, isVisible: !disabled.contains($0)) } + [.more] + switchable.map { .item($0, isVisible: !disabled.contains($0)) })
+        let search: [MenuLayout<TabItem>.Element] = (tabs + switchable).contains(.search) ? [] : [.item(.search, isVisible: false)]
+        return MenuLayout(elements: tabs.map { .item($0, isVisible: !disabled.contains($0)) } + [.more] + switchable.map { .item($0, isVisible: !disabled.contains($0)) } + search)
     }
 
     @Test func switchTabShowsFirstItemAndFollowsSelection() throws {

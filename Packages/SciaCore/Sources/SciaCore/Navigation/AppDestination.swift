@@ -3,7 +3,7 @@ public import Foundation
 /// アプリの外から直接開ける画面。`scia://<host>/<path>?<query>`のURLで表し、アプリのURLと、これから足すショートカットは、この型を通して画面を開く。
 /// 画面を足したら、ここにも足して、外から開けるようにする（AGENTS.mdの「シミュレーター」）。
 public enum AppDestination: Equatable, Sendable {
-    /// `tab/<home|local|federated|notifications|bookmarks|favourites|scheduled>`。最初からあるタブを選ぶ。
+    /// `tab/<home|local|federated|notifications|search|bookmarks|favourites|scheduled>`。最初からあるタブを選ぶ。
     case tab(TabItem)
     /// `tab/list?id=<リストのID>`、`tab/hashtag?name=<名前>`、`tab/profile?acct=<ハンドル>`、`tab/account-hashtag?acct=<ハンドル>&name=<名前>`。足したタブを選ぶ。
     case userTab(UserTab)
@@ -26,6 +26,8 @@ public enum AppDestination: Equatable, Sendable {
     case hashtag(name: String)
     /// `account-hashtag?acct=<ハンドル>&name=<名前>`。選んでいるタブに、その人のそのハッシュタグの投稿の一覧を開く。
     case accountHashtag(acct: String, name: String)
+    /// `search?q=<語>`。検索のタブに語を入れて確定する。`q`がなければ、検索のタブを開くだけにする。検索を無効にしていれば、選んでいるタブに検索の画面を開く。
+    case search(query: String?)
     /// `scheduled`。予約した投稿の一覧を開く。タブに並べていればそのタブを、無効にしていれば手前に重ねて開く。
     case scheduled
     /// `operation-status`。「操作の状況」の一覧を開く。
@@ -109,6 +111,7 @@ public enum AppDestination: Equatable, Sendable {
         case .accounts: "accounts"
         case .hashtag: "hashtag"
         case .accountHashtag: "account hashtag"
+        case .search: "search"
         case .scheduled: "scheduled"
         case .operationStatus: "operation status"
         case .notificationRequests: "notification requests"
@@ -153,6 +156,7 @@ public enum AppDestination: Equatable, Sendable {
         case ("accounts", "reblogged"): query("id").map { .accounts(.reblogged(statusID: $0)) }
         case ("hashtag", ""): query("name").map { .hashtag(name: $0) }
         case ("account-hashtag", ""): query("acct").flatMap { acct in query("name").map { .accountHashtag(acct: acct, name: $0) } }
+        case ("search", ""): .search(query: query("q"))
         case ("scheduled", ""): .scheduled
         case ("operation-status", ""): .operationStatus
         case ("notification-requests", ""): .notificationRequests
@@ -195,6 +199,7 @@ public enum AppDestination: Equatable, Sendable {
         case .accounts(.reblogged(let statusID)): ("accounts", "reblogged", [("id", statusID)])
         case .hashtag(let name): ("hashtag", nil, [("name", name)])
         case .accountHashtag(let acct, let name): ("account-hashtag", nil, [("acct", acct), ("name", name)])
+        case .search(let query): ("search", nil, query.map { [("q", $0)] } ?? [])
         case .scheduled: ("scheduled", nil, [])
         case .operationStatus: ("operation-status", nil, [])
         case .notificationRequests: ("notification-requests", nil, [])
@@ -221,7 +226,7 @@ public enum AppDestination: Equatable, Sendable {
     }
 
     /// 最初からあるタブ。足したタブは`userTab`で選ぶ。
-    private static let fixedTabs: [TabItem] = [.home, .local, .federated, .notifications, .bookmarks, .favourites, .scheduled]
+    private static let fixedTabs: [TabItem] = [.home, .local, .federated, .notifications, .search, .bookmarks, .favourites, .scheduled]
 }
 
 /// 設定の一覧から重ねて開く画面。`rawValue`は、`scia://settings/<rawValue>`でその画面を直接開くときの名前。

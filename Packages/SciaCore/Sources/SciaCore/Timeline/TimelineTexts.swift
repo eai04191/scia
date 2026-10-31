@@ -41,6 +41,16 @@ public struct TimelineTexts: Sendable {
     public static func accountNotifications(name: String) -> TimelineTexts {
         TimelineTexts(dumpName: "accountNotifications", title: "\(name)からの通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
     }
+    /// 検索の結果。1つの種類だけの一覧では、題に種類を、題の下に探した語を出す。
+    public static func search(_ scope: SearchModel.Scope, query: String) -> TimelineTexts {
+        switch scope {
+        case .all:
+            // 0件の種類は見出しごと出さないため、投稿が0件のときに、全文検索のないサーバーでは投稿を探せないことをここで伝える。
+            TimelineTexts(dumpName: "search", title: "検索", empty: "見つかりませんでした。投稿は、全文検索に対応したサーバーでだけ探せます", reachedEnd: "", unreadable: "表示できない投稿")
+        case .only(let category):
+            TimelineTexts(dumpName: "search", title: category.title, subtitle: query, empty: "見つかりませんでした", reachedEnd: "", unreadable: "表示できない投稿")
+        }
+    }
     public static let notifications = TimelineTexts(dumpName: "notifications", title: "通知", empty: "通知はありません", reachedEnd: "これより前の通知はありません", unreadable: "表示できない通知")
     public static let profile = TimelineTexts(dumpName: "profile", title: "", empty: "投稿がありません", reachedEnd: "これより前の投稿はありません", unreadable: "表示できない投稿")
     public static let thread = TimelineTexts(dumpName: "thread", title: "スレッド", empty: "投稿がありません", reachedEnd: "", unreadable: "表示できない投稿")

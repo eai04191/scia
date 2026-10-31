@@ -19,7 +19,7 @@ extension TimelineViewController {
                 keys.formUnion(rowAvatarKeys(of: account))
             case .notificationRequest(let request):
                 keys.formUnion(rowAvatarKeys(of: request.account))
-            case .gap, .unreadable:
+            case .gap, .unreadable, .search:
                 break
             }
         }

@@ -4,7 +4,7 @@ import Foundation
 ///
 /// HTMLのエラーページの本文や`DecodingError`の文は、使う人には意味がないため出さない。
 /// アプリが自分で作った`LocalizedError`（「見つかりませんでした」など）は、その文言をそのまま出す。
-public struct ErrorPresentation: Equatable, Sendable {
+public struct ErrorPresentation: Hashable, Sendable {
     public let message: String
     /// 小さく添える補足。「HTTP 503」「URLError -1009」など。
     public let code: String?
