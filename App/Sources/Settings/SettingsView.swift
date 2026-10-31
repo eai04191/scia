@@ -20,7 +20,7 @@ struct SettingsView: View {
     @State private var copiedBuildInfo = false
     @State private var appIconError: String?
     /// 一覧から重ねて開いた画面。
-    @State private var path: [SettingsPage] = []
+    @State private var path: [SettingsPage]
 
     init(
         settings: AppSettings,
@@ -28,6 +28,7 @@ struct SettingsView: View {
         account: String,
         diagnostics: ConnectionDiagnostics,
         tabIcons: ProfileTabIcons,
+        opening page: SettingsPage? = nil,
         now: () -> Date = AppDependencies.now,
         clock: any Clock<Duration> = AppDependencies.clock
     ) {
@@ -37,6 +38,7 @@ struct SettingsView: View {
         self.diagnostics = diagnostics
         self.tabIcons = tabIcons
         _previewDate = State(initialValue: now().addingTimeInterval(-180))
+        _path = State(initialValue: page?.path ?? [])
         self.clock = clock
     }
 
@@ -319,7 +321,7 @@ struct SettingsView: View {
     }
 }
 
-/// 設定の一覧から重ねて開く画面。
+/// 設定の一覧から重ねて開く画面。`rawValue`は、`scia-debug://settings/<rawValue>`でその画面を直接開くときの名前。
 enum SettingsPage: String, CaseIterable, Hashable {
     case appearance
     case notificationAppearance = "notification-appearance"
@@ -346,6 +348,15 @@ enum SettingsPage: String, CaseIterable, Hashable {
     /// ストレージの、メディアのキャッシュの先読みの段。
     case prefetchedMediaCache = "storage-prefetched"
     case licenses
+
+    /// 設定の一覧からこの画面までに重ねる画面。
+    var path: [SettingsPage] {
+        switch self {
+        case .viewedMediaCache, .prefetchedMediaCache: [.storage, self]
+        default: [self]
+        }
+    }
+}
 
 /// ステータスバーの通知の設定。使えない機種では、切り替えをオフにして灰色にし、理由を添える。
 struct StatusBarTickerSettingsSection: View {
@@ -396,8 +407,9 @@ extension UIViewController {
     ///   - instance: ログイン中のアカウントのサーバー。
     ///   - diagnostics: 「接続の状態」画面に出す、ログイン中のアカウントの接続の状態。
     ///   - tabIcons: タブの並びで、タブに置いたプロフィールに出すその人のアイコン。
-    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons) {
-        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons)
+    ///   - page: 一覧から重ねて開いておく画面。
+    func presentSettings(instance: URL, account: String, diagnostics: ConnectionDiagnostics, tabIcons: ProfileTabIcons, opening page: SettingsPage? = nil) {
+        let view = SettingsView(settings: AppDependencies.settings, instance: instance, account: account, diagnostics: diagnostics, tabIcons: tabIcons, opening: page)
         present(UIHostingController(rootView: view), animated: true)
     }
 }

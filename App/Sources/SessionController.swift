@@ -2638,6 +2638,11 @@ final class SessionController {
     }
 
     func handle(_ url: DebugURL) {
+        // `scia-debug://reset`の直後に送ったURLは、閉じている途中の画面を手前にあるものとして扱い、重ねたり積んだりできずに何もしないことがある。閉じ終えてから行う。
+        if let dismissing = rootViewController.presentedViewController, dismissing.isBeingDismissed, let coordinator = dismissing.transitionCoordinator {
+            coordinator.animate(alongsideTransition: nil) { [weak self] _ in self?.handle(url) }
+            return
+        }
         switch url {
         case .dummy(let post):
             home.streamDummy(post)
@@ -2705,14 +2710,72 @@ final class SessionController {
                 navigation.popToRootViewController(animated: false)
             }
             tabs.tabBarController.selectedIndex = 0
-        case .settings:
+        case .settings(let page):
             // 直前のresetで閉じている途中の画面には重ねられないため、閉じる途中の画面を飛ばして重ねる。
             rootViewController.frontmostPresented.presentSettings(
                 instance: credential.instance,
                 account: credential.handle,
                 diagnostics: diagnostics,
-                tabIcons: profileTabIcons
+                tabIcons: profileTabIcons,
+                opening: page
             )
+        case .myProfile:
+            if let source = tabs.selectedNavigation?.topViewController {
+                openMyProfile(from: source)
+            }
+        case .thread(let statusID):
+            guard let source = tabs.selectedNavigation?.topViewController else { return }
+            // 押した行の代わりに、画面の安全領域の上端に置いて開く。
+            openThread(statusID: statusID, rowFrame: source.view.convert(source.view.safeAreaLayoutGuide.layoutFrame, to: nil), from: source)
+        case .editHistory(let statusID):
+            guard let source = tabs.selectedNavigation?.topViewController else { return }
+            // 読む間にタブを移ったり別の画面を開いたりしたら、開かない。スレッドを開く操作と同じ。
+            let anchor = PushAnchor(source)
+            let client = client
+            withDebugLookup("edit history", { try await client.status(statusID) }) { [weak self, weak source] status in
+                guard anchor.isStillShowing, let source else { return }
+                self?.openEditHistory(of: status, filterTitles: [], from: source)
+            }
+        case .accounts(let list):
+            guard let source = tabs.selectedNavigation?.topViewController else { return }
+            switch list {
+            case .followers(let accountID):
+                openAccountList(.followers(accountID: accountID ?? credential.accountID), ownerAcct: accountID == nil ? credential.username : nil, from: source)
+            case .following(let accountID):
+                openAccountList(.following(accountID: accountID ?? credential.accountID), ownerAcct: accountID == nil ? credential.username : nil, from: source)
+            case .favourited(let statusID):
+                openAccountList(.favouritedBy(statusID), from: source)
+            case .reblogged(let statusID):
+                openAccountList(.rebloggedBy(statusID), from: source)
+            }
+        case .scheduled:
+            showScheduledStatuses()
+        case .operationStatus:
+            showOperationStatus()
+        case .discomfortReport:
+            if let window = rootViewController.view.window {
+                DiscomfortReportPresenter.present(in: window)
+            }
+        case .note(let acct):
+            let client = client
+            withDebugLookup("note", { [accounts] in
+                guard let account = try await accounts.resolve(.acct(acct), search: { try await client.resolveAccount(acct) }),
+                      let relationship = try await client.relationship(with: account.id)
+                else { throw ProfileNotFound(acct: acct) }
+                return UserRelation(accountID: account.id, acct: account.acct, relationship: relationship)
+            }) { [weak self] relation in
+                self?.presentNoteEditor(for: relation)
+            }
+        case .report(let acct):
+            let client = client
+            withDebugLookup("report", { [accounts] in
+                guard let account = try await accounts.resolve(.acct(acct), search: { try await client.resolveAccount(acct) }) else { throw ProfileNotFound(acct: acct) }
+                return account
+            }) { [weak self] account in
+                self?.presentReport(accountID: account.id, acct: account.acct, statusID: nil)
+            }
+        case .composeSheet(let sheet):
+            composer.presentSheetForDebug(sheet)
         case .tuning:
             rootViewController.frontmostPresented.presentTuningPanel()
         case .profileEdit(let note, let field):
@@ -2724,6 +2787,12 @@ final class SessionController {
             if let item = TabItem(rawValue: tab.rawValue) {
                 tabs.show(item)
             }
+        case .userTab(let tab):
+            for case .item(let item, _) in AppDependencies.settings.tabLayout(for: credential.handle).elements where tab.matches(item, credential: credential) {
+                tabs.show(item)
+                return
+            }
+            logger.error("debug tab: no matching tab in layout")
         case .viewer(let index):
             openTopmostMedia(at: index)
         case .autoScroll(let distance, let speed):
@@ -2762,6 +2831,19 @@ final class SessionController {
                     feed.releaseHeldArrivals()
                 }
                 notifications.releaseHeldArrivals()
+            }
+        }
+    }
+
+    /// デバッグURLで開く画面に要るものを読んでから、`open`で開く。読めなければ、ふだんの失敗と同じく知らせる。
+    private func withDebugLookup<Value: Sendable>(_ operation: String, _ load: @escaping @Sendable () async throws -> Value, open: @escaping @MainActor (Value) -> Void) {
+        tasks.run(.action) { [weak self] in
+            do {
+                let value = try await load()
+                open(value)
+            } catch {
+                self?.logger.error("debug \(operation, privacy: .public) failed: \(SciaLog.describe(error), privacy: .public)")
+                self?.handle(error, title: "開けませんでした")
             }
         }
     }

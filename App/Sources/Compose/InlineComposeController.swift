@@ -410,6 +410,28 @@ final class InlineComposeController: NSObject {
     }
 
     #if DEBUG
+    /// 書き始めて、投稿欄のボタンから開く画面を開く。`scia-debug://compose/<画面>`で、ボタンをたどらずに開くため。
+    func presentSheetForDebug(_ sheet: DebugURL.ComposeSheet) {
+        beginEditing()
+        switch sheet {
+        case .tools: presentToolLayoutSettings()
+        case .language: presentLanguagePicker()
+        case .schedule:
+            if model.scheduledAt == nil {
+                toggleSchedule()
+            }
+            presentScheduleDatePicker()
+        case .emoji: presentEmojiPalette()
+        case .mediaPicker: presentMediaPicker()
+        case .attachment(let index):
+            guard model.attachments.indices.contains(index) else {
+                logger.error("debug compose attachment: no attachment at index=\(index, privacy: .public)")
+                return
+            }
+            openAttachment(model.attachments[index].id)
+        }
+    }
+
     /// 本文を`text`に置き換える。打ったときと同じ経路を通し、末尾の語の補完を出す。
     /// シミュレーターの日本語のキーボードでは半角の`#`や`@`を打ちにくいため、`scia-debug://compose?text=`で補完を出すところまで用意する。
     func replaceTextForDebug(_ text: String) {
