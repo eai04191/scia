@@ -27,10 +27,12 @@ enum PostRowCatalog {
         ///   - expandsSpoiler: 注意書きを開く。フィルターの警告で折りたたんでいれば、警告を開く。
         ///   - isMine: カタログのアカウントを自分として組む。
         ///   - connection: 隣の行と線でつながっている形にする。
-        func post(_ title: String, _ status: Status, isPinned: Bool = false, expandsSpoiler: Bool = false, isMine: Bool = false, connection: ReplyConnection = ReplyConnection()) -> CatalogState {
+        ///   - expandsBody: 切った本文を「続きを読む」で広げる。
+        func post(_ title: String, _ status: Status, isPinned: Bool = false, expandsSpoiler: Bool = false, isMine: Bool = false, connection: ReplyConnection = ReplyConnection(), expandsBody: Bool = false) -> CatalogState {
             CatalogState(title: title) {
                 let timeline = isMine ? mine : home
                 if expandsSpoiler { timeline.toggleSpoiler(of: status) }
+                if expandsBody { timeline.longBodyExpansion.expand(.status(status.displayed.id)) }
                 var configuration = timeline.contentConfiguration(for: status, isPinned: isPinned, base: .cell())
                 configuration.replyConnection = connection
                 return CatalogFrame.bordered(PostContentView(configuration: configuration))
@@ -38,10 +40,25 @@ enum PostRowCatalog {
         }
         let longHandleAccount = Fixtures.account(displayName: "長いハンドルの人", acct: "a-very-long-account-name-for-replies@subdomain.example.com")
         let longSpoiler = String(repeating: "注意書きが長く、何行にもわたるときの折り返しを確かめる。", count: 4)
+        /// `count`個の段落を並べた本文。1段落は1行に収まる。既定の「投稿の見た目」では、32行を超えたら15行に切る。
+        func lines(_ count: Int, last: String = "") -> String {
+            (1...count).map { "<p>\($0)行目\($0 == count ? last : "")</p>" }.joined()
+        }
+        let wrappedLong = "<p>" + String(repeating: "長い本文を、段落を分けずに書いたときの切れ方を確かめるための文。", count: 40) + "</p>"
         return [
             post("短い本文", status(content: "<p>短い本文。</p>")),
             post("本文が短く、アイコンの方が下まで届く", status(content: "<p>あ</p>")),
             post("長い本文", status(content: "<p>" + String(repeating: "長い本文が何行にもわたるときの折り返しと、行の高さを確かめるための文。", count: 5) + "</p>")),
+            post("本文がちょうど切り始める行数（切らない）", status(content: lines(32))),
+            post("本文が切り始める行数を超える（続きを読む）", status(content: lines(40))),
+            post("切った本文の最後の行が長い（薄くしてつなぐ）", status(content: wrappedLong)),
+            post("切った本文の最後の行に絵文字", status(content: (1...14).map { "<p>\($0)行目</p>" }.joined() + "<p>" + String(repeating: "🎉", count: 30) + "</p>" + lines(20))),
+            post("切った本文と画像", status(content: lines(40), media: [
+                Fixtures.attachment("a", width: 1_600, height: 900, color: .systemTeal),
+            ])),
+            post("切った本文をブーストした投稿", status(content: lines(40), rebloggedBy: booster)),
+            post("切った本文を広げた", status(content: lines(40)), expandsBody: true),
+            post("注意書きを開いた長い本文（切らない）", status(content: lines(40), spoilerText: "ネタバレ"), expandsSpoiler: true),
             post("ブーストされた投稿", status(content: "<p>ブーストされた投稿。</p>", rebloggedBy: booster)),
             post("固定された投稿", status(content: "<p>プロフィールの上に固定された投稿。</p>"), isPinned: true),
             post("ほかの人への返信", status(content: "<p>返信の本文。</p>", account: booster, replyingTo: author)),
@@ -428,12 +445,15 @@ enum PostRowCatalog {
         }
         let image = Fixtures.attachment("a", width: 1_600, height: 900, color: .systemTeal)
         let longNamed = Fixtures.account(displayName: String(repeating: "とても長い名前", count: 4), acct: "a-very-long-account-name@subdomain.example.com")
-        let longBody = "<p>" + String(repeating: "引用元の本文が長いときも、行数で切らずに全文を出すことを確かめる文。", count: 4) + "</p>"
+        let longBody = "<p>" + String(repeating: "引用元の本文が長くても、切り始める行数に届かなければ全文を出すことを確かめる文。", count: 4) + "</p>"
+        let veryLongBody = (1...40).map { "<p>引用元の\($0)行目</p>" }.joined()
         return [
             post("引用元の本文だけ", accepted(quoted())),
             post("引用元に画像", accepted(quoted(media: [image]))),
             post("引用元の本文がなく画像だけ", accepted(quoted(content: "", media: [image]))),
-            post("引用元の本文が長い（切らない）", accepted(quoted(content: longBody))),
+            post("引用元の本文が長い（切り始める行数に届かず切らない）", accepted(quoted(content: longBody))),
+            post("引用元の本文が切り始める行数を超える（続きを読む）", accepted(quoted(content: veryLongBody, media: [image]))),
+            post("引用した投稿と引用元の本文の両方が長い（別々に切る）", accepted(quoted(content: veryLongBody)), content: (1...40).map { "<p>引用した投稿の\($0)行目</p>" }.joined()),
             post("引用元の名前とハンドルが長い", accepted(quoted(account: longNamed))),
             post("引用元に投票（1行にする）", accepted(quoted(poll: PollCatalog.endedPoll))),
             post("引用元が閲覧注意の画像", accepted(quoted(media: [image], sensitive: true))),
