@@ -67,6 +67,62 @@ public struct MastodonClient: Sendable {
         return try await get(GroupedNotificationsResults.self, path: "api/v2/notifications", query: query.queryItems + grouping).0.page
     }
 
+    /// その人からの通知を、保留している通知も含めて、まとめずに新しい順に返す。
+    /// v2はdocsに`account_id`があるが、Mastodonのサーバーは読まずにほかの人の通知も返すため、Mastodonのwebと同じくv1で読む。
+    /// v1は`account_id`を渡すと、`include_filtered`がなくても保留した通知を含める（`Notification.browserable`）。
+    /// まとめないので、どの通知もそれだけを消せるよう、まとまりのキーを`ungrouped-<通知のID>`にする。
+    /// https://docs.joinmastodon.org/methods/notifications/#get
+    public func notifications(_ query: TimelineQuery, from accountID: String) async throws -> NotificationPage {
+        let filter = [URLQueryItem(name: "account_id", value: accountID)]
+        let list = try await get(ElementList<MastodonNotification>.self, path: "api/v1/notifications", query: query.queryItems + filter).0
+        let notifications = list.elements.map { MastodonNotification(id: $0.id, type: $0.type, createdAt: $0.createdAt, account: $0.account, status: $0.status) }
+        return NotificationPage(notifications: notifications, unreadable: list.unreadable)
+    }
+
+    /// 通知のフィルタリングの設定と、保留中の通知の数。
+    /// https://docs.joinmastodon.org/methods/notifications/#get-policy
+    public func notificationPolicy() async throws -> NotificationPolicy {
+        try await get(NotificationPolicy.self, path: "api/v2/notifications/policy", query: []).0
+    }
+
+    /// 通知のフィルタリングの設定のうち、渡した項目だけを変える。変えたあとの設定を返す。
+    /// https://docs.joinmastodon.org/methods/notifications/#update-the-filtering-policy-for-notifications
+    public func updateNotificationPolicy(_ changes: [NotificationPolicy.Item: NotificationPolicy.Value]) async throws -> NotificationPolicy {
+        let form = NotificationPolicy.Item.allCases.compactMap { item in
+            changes[item]?.rawValue.map { URLQueryItem(name: item.rawValue, value: $0) }
+        }
+        return try await send(formRequest(method: "PATCH", path: "api/v2/notifications/policy", form: form), decoding: NotificationPolicy.self).0
+    }
+
+    /// 保留中の通知を、人ごとのまとまりでサーバーが返す順に返す。1回に読める件数の上限は80件。
+    /// - Parameter maxID: 前のページの`NotificationRequestPage.nextMaxID`。nilなら最初のページ。
+    /// https://docs.joinmastodon.org/methods/notifications/#get-requests
+    public func notificationRequests(maxID: String?, limit: Int) async throws -> NotificationRequestPage {
+        let query = [URLQueryItem(name: "limit", value: String(limit))] + (maxID.map { [URLQueryItem(name: "max_id", value: $0)] } ?? [])
+        let (requests, response) = try await get(ElementList<NotificationRequest>.self, path: "api/v1/notifications/requests", query: query)
+        let link = response.value(forHTTPHeaderField: "Link").map(LinkHeader.init)
+        return NotificationRequestPage(requests: requests.elements, nextMaxID: link?.queryValue("max_id", of: "next"))
+    }
+
+    /// 保留中の通知に答える。受け入れると、サーバーはあとで保留していた通知を通知の一覧に戻し、終えたらストリーミングの`notifications_merged`で知らせる。
+    /// 応答の中身は使わない。
+    /// https://docs.joinmastodon.org/methods/notifications/#accept-request
+    /// https://docs.joinmastodon.org/methods/notifications/#dismiss-request
+    public func answerNotificationRequest(_ id: String, _ decision: NotificationRequestDecision) async throws {
+        let action = switch decision {
+        case .accept: "accept"
+        case .dismiss: "dismiss"
+        }
+        let key = id.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed.subtracting(CharacterSet(charactersIn: "/"))) ?? id
+        _ = try await send(formRequest(method: "POST", path: "api/v1/notifications/requests/\(key)/\(action)", form: []))
+    }
+
+    /// 受け入れた保留中の通知を、サーバーが通知の一覧に戻し終えたか。
+    /// https://docs.joinmastodon.org/methods/notifications/#requests-merged
+    public func notificationRequestsMerged() async throws -> Bool {
+        try await get(MergedState.self, path: "api/v1/notifications/requests/merged", query: []).0.merged
+    }
+
     /// 既読位置。まだ保存されていなければnil。
     /// https://docs.joinmastodon.org/methods/markers/#get
     public func marker(for timeline: MarkerTimeline) async throws -> String? {
@@ -1103,6 +1159,11 @@ public enum MediaProcessingState: Sendable, Equatable {
 public enum MarkerTimeline: String, Sendable {
     case home
     case notifications
+}
+
+/// https://docs.joinmastodon.org/methods/notifications/#requests-merged
+private struct MergedState: Decodable {
+    let merged: Bool
 }
 
 /// https://docs.joinmastodon.org/entities/Marker/

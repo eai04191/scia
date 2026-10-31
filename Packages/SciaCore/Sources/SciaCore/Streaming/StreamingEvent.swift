@@ -13,6 +13,8 @@ public enum StreamingEvent: Sendable, Equatable {
     case notification(MastodonNotification)
     /// キーワードフィルターが変わった。
     case filtersChanged
+    /// 受け入れた保留中の通知を、サーバーが通知の一覧に戻し終えた。
+    case notificationsMerged
     /// まだ扱っていない種類のイベント（お知らせなど）。
     case unhandled(name: String)
 }
@@ -79,6 +81,8 @@ public enum StreamingMessageDecoder {
             return .notification(try decoder.decode(MastodonNotification.self, from: Data(try payload(of: envelope).utf8)))
         case "filters_changed":
             return .filtersChanged
+        case "notifications_merged":
+            return .notificationsMerged
         default:
             return .unhandled(name: event)
         }

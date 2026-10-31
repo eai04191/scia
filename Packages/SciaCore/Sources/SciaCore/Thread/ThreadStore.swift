@@ -74,7 +74,7 @@ public final class ThreadStore {
             return replace(edited)
         case .delete(let id):
             return removeStatus(id)
-        case .filtersChanged, .unhandled:
+        case .filtersChanged, .notificationsMerged, .unhandled:
             return false
         }
     }
