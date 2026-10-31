@@ -15,7 +15,13 @@ public enum StreamingEvent: Sendable, Equatable {
     case filtersChanged
     /// 受け入れた保留中の通知を、サーバーが通知の一覧に戻し終えた。
     case notificationsMerged
-    /// まだ扱っていない種類のイベント（お知らせなど）。
+    /// サーバーのお知らせが出た、または編集された。中身には、自分が既読にしたかと、自分がどのリアクションをしたかが入っていない。
+    case announcement(Announcement)
+    /// お知らせのリアクションの数が変わった。
+    case announcementReaction(AnnouncementReactionUpdate)
+    /// お知らせが取り下げられた。
+    case announcementDelete(announcementID: Announcement.ID)
+    /// まだ扱っていない種類のイベント。
     case unhandled(name: String)
 }
 
@@ -83,6 +89,12 @@ public enum StreamingMessageDecoder {
             return .filtersChanged
         case "notifications_merged":
             return .notificationsMerged
+        case "announcement":
+            return .announcement(try decoder.decode(Announcement.self, from: Data(try payload(of: envelope).utf8)))
+        case "announcement.reaction":
+            return .announcementReaction(try decoder.decode(AnnouncementReactionUpdate.self, from: Data(try payload(of: envelope).utf8)))
+        case "announcement.delete":
+            return .announcementDelete(announcementID: try payload(of: envelope))
         default:
             return .unhandled(name: event)
         }

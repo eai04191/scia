@@ -442,7 +442,7 @@ public final class TimelineStore {
             return replace(edited) ? .entriesChanged : .none
         case .delete(let id):
             return removeStatus(id) ? .entriesChanged : .none
-        case .notification, .filtersChanged, .notificationsMerged, .unhandled:
+        case .notification, .filtersChanged, .notificationsMerged, .announcement, .announcementReaction, .announcementDelete, .unhandled:
             return .none
         }
     }

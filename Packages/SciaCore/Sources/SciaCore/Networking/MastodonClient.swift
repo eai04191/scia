@@ -881,6 +881,41 @@ public struct MastodonClient: Sendable {
         try await get(ElementList<ServerEmoji>.self, path: "api/v1/custom_emojis", query: []).0.elements
     }
 
+    // MARK: - お知らせ
+
+    /// サーバーが出しているお知らせを、既読にしたものも含めてすべて返す。ページに分けずに返る。
+    /// https://docs.joinmastodon.org/methods/announcements/#get
+    public func announcements() async throws -> AnnouncementList {
+        let list = try await get(ElementList<Announcement>.self, path: "api/v1/announcements", query: []).0
+        return AnnouncementList(announcements: list.elements, unreadable: list.unreadable)
+    }
+
+    /// お知らせを既読にする。応答の中身は使わない。
+    /// https://docs.joinmastodon.org/methods/announcements/#dismiss
+    public func dismissAnnouncement(_ id: Announcement.ID) async throws {
+        _ = try await send(formRequest(method: "POST", path: "api/v1/announcements/\(id)/dismiss", form: []))
+    }
+
+    /// お知らせにリアクションする。`name`はUnicodeの絵文字か、カスタム絵文字のショートコード。
+    /// 同じリアクションをもう一度送ると、サーバーは重複として断る。
+    /// https://docs.joinmastodon.org/methods/announcements/#put-reactions
+    public func addAnnouncementReaction(_ id: Announcement.ID, name: String) async throws {
+        _ = try await send(formRequest(method: "PUT", url: announcementReactionURL(id, name: name), form: []))
+    }
+
+    /// お知らせにした自分のリアクションを外す。
+    /// https://docs.joinmastodon.org/methods/announcements/#delete-reactions
+    public func removeAnnouncementReaction(_ id: Announcement.ID, name: String) async throws {
+        var request = URLRequest(url: announcementReactionURL(id, name: name))
+        request.httpMethod = "DELETE"
+        _ = try await send(request)
+    }
+
+    /// 絵文字は1つのパスの要素としてエンコードする。キーキャップの`#️⃣`のように、URLで意味を持つ文字を含む絵文字があるため。
+    private func announcementReactionURL(_ id: Announcement.ID, name: String) -> URL {
+        credential.instance.appending(path: "api/v1/announcements/\(id)/reactions").appending(component: name)
+    }
+
     /// 鍵のかかったアカウントには、フォローのリクエストを送る。
     /// フォローしている相手にもう一度送ると、ブーストを流すかと投稿の通知の設定だけを変えられる。nilの設定は送らず、サーバーの既定（新しいフォローなら流す・通知しない、フォロー済みなら今のまま）に任せる。
     /// https://docs.joinmastodon.org/methods/accounts/#follow
@@ -1391,4 +1426,15 @@ public struct NotificationPage: Sendable, Equatable {
 extension MastodonAPIError {
     /// 401。トークンが無効なことが多いが、一部のAPIだけを断るサーバーもあるため、ログインし直しが要るかは`AuthorizationCheck`で確かめる。
     public var isUnauthorized: Bool { statusCode == 401 }
+}
+
+/// お知らせの一覧。読めなかったお知らせは、IDが読めれば`unreadable`に入る。
+public struct AnnouncementList: Sendable, Equatable {
+    public let announcements: [Announcement]
+    public let unreadable: [UnreadableItem]
+
+    public init(announcements: [Announcement], unreadable: [UnreadableItem] = []) {
+        self.announcements = announcements
+        self.unreadable = unreadable
+    }
 }

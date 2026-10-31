@@ -57,9 +57,9 @@ struct StreamingMessageDecoderTests {
     }
 
     @Test func keepsNameOfUnhandledEvent() throws {
-        let event = try StreamingMessageDecoder.decode(#"{"stream":["user"],"event":"announcement","payload":"{}"}"#).event
+        let event = try StreamingMessageDecoder.decode(#"{"stream":["user"],"event":"conversation","payload":"{}"}"#).event
 
-        #expect(event == .unhandled(name: "announcement"))
+        #expect(event == .unhandled(name: "conversation"))
     }
 
     @Test func throwsServerError() {

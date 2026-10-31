@@ -590,7 +590,7 @@ final class SessionController {
             switch event {
             case .statusUpdate(let edited): self?.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
             case .delete(let id): self?.changeQuoteSources(.status(id)) { $0.delete(id) }
-            case .update, .notification, .filtersChanged, .notificationsMerged, .unhandled: break
+            case .update, .notification, .filtersChanged, .notificationsMerged, .announcement, .announcementReaction, .announcementDelete, .unhandled: break
             }
         }
         xPosts.onLoad = { [weak self] id in
