@@ -60,7 +60,7 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     }
 
     private var rows: [Row]
-    /// 並べ替えで線の出方が変わったが、画面の外にあってまだ引き直していない行。
+    /// 並べ替えたあと、画面の外にあってまだ線を引き直していない行。
     private var rowsWithStaleSeparators: Set<UUID> = []
     private var dataSource: UICollectionViewDiffableDataSource<Section, Cell>?
     private lazy var collectionView = UICollectionView(frame: .zero, collectionViewLayout: makeLayout())
@@ -197,13 +197,12 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
         }
         dataSource.reorderingHandlers.didReorder = { [weak self] transaction in
             guard let self else { return }
-            let previousRows = rows
             let rowsByID = Dictionary(uniqueKeysWithValues: rows.map { ($0.id, $0) })
             rows = transaction.finalSnapshot.itemIdentifiers(inSection: .rows).compactMap { cell in
                 if case .row(let id) = cell { rowsByID[id] } else { nil }
             }
             save()
-            refreshDependentRows(previousRows: previousRows)
+            refreshDependentRows()
         }
         return dataSource
     }
@@ -264,13 +263,14 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     }
 
     /// 横並びの知らせと行どうしの線は、ほかの行の並びや表示で変わるため、並びが変わるたびに描き直す。
-    /// 線は、出方が変わった行に大きさを測り直させて引き直す。レイアウトを無効にすると、無効にする行を絞っても画面の外の行の測った高さが見積もりの高さに戻って一覧の高さが縮み、
-    /// 下のほうまでスクロールしていると、指を離した直後に持ち上げていた行が離れた位置に描かれ、そこから跳ねて戻るため。
+    /// 線は、すべての行に大きさを測り直させて引き直す。並べ替えている間、一覧は途中の並びの位置で線の出方を聞くが、`rows`は指を離すまで元の並びなので、ほかの行の出方で引いてしまう。
+    /// 区切り線の行が動くと、その行は前後とも上下に線を引かないままなのに、下の行の出方で線を引いて残るため、出方が変わった行に絞らない。
+    /// レイアウトを無効にすると、無効にする行を絞っても画面の外の行の測った高さが見積もりの高さに戻って一覧の高さが縮み、
+    /// 下のほうまでスクロールしていると、指を離した直後に持ち上げていた行が離れた位置に描かれ、そこから跳ねて戻るため、行に測り直させる。
     /// 画面の外の行はセルがなく測り直させられないので、画面に入るときに測り直させる。
-    private func refreshDependentRows(previousRows: [Row]) {
+    private func refreshDependentRows() {
         refreshRowSeparatorNotes()
-        let previous = Dictionary(uniqueKeysWithValues: previousRows.indices.map { (previousRows[$0].id, Self.hiddenSeparators(at: $0, in: previousRows)) })
-        for index in rows.indices where previous[rows[index].id] != Self.hiddenSeparators(at: index, in: rows) {
+        for index in rows.indices {
             if let cell = collectionView.cellForItem(at: IndexPath(item: index, section: 0)) {
                 cell.invalidateIntrinsicContentSize()
             } else {
