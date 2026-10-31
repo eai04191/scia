@@ -1790,7 +1790,7 @@ final class SessionController {
         }
     }
 
-    /// ユーザーのメニューのメンション、ハンドルをコピー、関係の項目。メンションは、編集の途中でも編集中の本文に入れる。
+    /// ユーザーのメニューのメンション、ハンドルとその一部のコピー、関係の項目。メンションは、編集の途中でも編集中の本文に入れる。
     private var userMenuActions: UserMenuActions {
         UserMenuActions(
             mention: { [weak self] target in
@@ -1799,13 +1799,19 @@ final class SessionController {
                     self?.composer.mention(acct)
                 }
             },
-            copyHandle: { [weak self] target, notify in
-                self?.resolveIdentity(of: target, failureTitle: "ハンドルをコピーできませんでした") { _, acct in
+            copy: { [weak self] target, part, notify in
+                let failureTitle = switch part {
+                case .handle: "ハンドルをコピーできませんでした"
+                case .username: "ユーザー名をコピーできませんでした"
+                case .server: "サーバーをコピーできませんでした"
+                }
+                self?.resolveIdentity(of: target, failureTitle: failureTitle) { _, acct in
                     guard let self else { return }
-                    UIPasteboard.general.string = self.credential.handle(ofAcct: acct)
+                    UIPasteboard.general.string = UserHandle(acct: acct, localServer: self.credential.server).text(of: part)
                     notify()
                 }
             },
+            localServer: credential.server,
             resolveTarget: { [weak self] target in
                 guard let self else { throw CancellationError() }
                 let found = try await self.identity(of: target)

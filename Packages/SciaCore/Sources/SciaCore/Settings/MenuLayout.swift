@@ -282,6 +282,10 @@ public enum UserMenuItem: String, MenuItemKind {
     case mention
     /// サーバー名を付けた`@username@domain`の形でコピーする。
     case copyHandle
+    /// `@`を付けない`username`をコピーする。
+    case copyUsername
+    /// `domain`をコピーする。同じサーバーのユーザーでは、ログインしているサーバーの名前にする。
+    case copyServer
     /// プロフィールのページのURLをコピーする。
     case copyLink
     /// プロフィールのページのURLを共有する。
@@ -319,6 +323,8 @@ public enum UserMenuItem: String, MenuItemKind {
         .item(.follow, isVisible: true),
         .separator,
         .item(.copyHandle, isVisible: true),
+        .item(.copyUsername, isVisible: true),
+        .item(.copyServer, isVisible: true),
         .item(.copyLink, isVisible: true),
         .item(.share, isVisible: true),
         .item(.openInBrowser, isVisible: true),
@@ -335,11 +341,24 @@ public enum UserMenuItem: String, MenuItemKind {
         .item(.customize, isVisible: true),
     ])
 
+    /// コピーの項目。プロフィールのハンドルを押したときのメニューも、この順に並べる。
+    public static let copyItems: [UserMenuItem] = [.copyHandle, .copyUsername, .copyServer, .copyLink]
+
+    /// コピーの項目のうち、ハンドルの一部をコピーするもの。ほかの項目はnil。
+    public var handlePart: UserHandlePart? {
+        switch self {
+        case .copyHandle: .handle
+        case .copyUsername: .username
+        case .copyServer: .server
+        default: nil
+        }
+    }
+
     /// 相手との関係で中身が変わる項目。通報は関係で変わらず、自分に出さないかはIDで決まるため含めない。
     public var dependsOnRelationship: Bool {
         switch self {
         case .follow, .showReblogs, .notify, .note, .mute, .block: true
-        case .profile, .mention, .copyHandle, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .report, .customize: false
+        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .report, .customize: false
         }
     }
 }

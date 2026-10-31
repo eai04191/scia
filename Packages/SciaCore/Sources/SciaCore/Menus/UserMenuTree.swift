@@ -6,8 +6,8 @@ public enum UserMenuCommand: Sendable {
     case openProfile
     /// 投稿欄で、カーソルの位置に`@acct`を入れる。
     case mention
-    /// サーバー名を付けた`@username@domain`の形でコピーする。
-    case copyHandle
+    /// ハンドルかその一部をコピーする。
+    case copy(UserHandlePart)
     /// 関係の項目で選んだ変更を送る。
     case changeRelation(UserRelationChange, UserRelation)
     /// 相手のプロフィールに書く、自分にしか見えないメモのシートを開く。
@@ -18,7 +18,7 @@ public enum UserMenuCommand: Sendable {
     case customize
 }
 
-/// ユーザーのメニューの、メンション、ハンドルをコピー、関係の項目で使う相手。
+/// ユーザーのメニューの、メンション、ハンドルとその一部のコピー、関係の項目で使う相手。
 public enum UserMenuTarget: Sendable {
     /// APIの`Account`や`mentions`から取ったIDと`acct`。そのまま使える。
     case account(id: String, acct: String)
@@ -56,13 +56,15 @@ public struct UserMenuSubject: Sendable {
     }
 }
 
-/// ユーザーのメニューの、投稿欄とログイン中のサーバーに頼る項目（メンション、ハンドルをコピー、関係の項目）の動き。項目は`UserMenuTree`が組む。
+/// ユーザーのメニューの、投稿欄とログイン中のサーバーに頼る項目（メンション、ハンドルとその一部のコピー、関係の項目）の動き。項目は`UserMenuTree`が組む。
 /// セッションが作り、画面を組み立てる側が渡す。渡されていない画面では、これらの項目を出さない。
 public struct UserMenuActions {
     /// 投稿欄で、カーソルの位置に`@acct`を入れる。
     public let mention: @MainActor (UserMenuTarget) -> Void
-    /// サーバー名を付けた`@username@domain`の形でコピーし、コピーできたら`notify`を呼ぶ。
-    public let copyHandle: @MainActor (UserMenuTarget, _ notify: @escaping @MainActor () -> Void) -> Void
+    /// ハンドルかその一部をコピーし、コピーできたら`notify`を呼ぶ。
+    public let copy: @MainActor (UserMenuTarget, UserHandlePart, _ notify: @escaping @MainActor () -> Void) -> Void
+    /// ログインしているサーバーの名前。同じサーバーのユーザーの`acct`にはサーバー名がないので、コピーの項目のサブテキストで補う。
+    public let localServer: String
     /// 相手のIDと`acct`を決める。リンクのメンションは、プロフィールのURLから探す。見つからなければ投げる。
     public let resolveTarget: @MainActor (UserMenuTarget) async throws -> UserIdentity
     /// `resolveTarget`で決めた相手と自分の関係を読む。相手が自分でも読む。覚えている関係を読み直している途中なら、それを待つ。
@@ -82,7 +84,8 @@ public struct UserMenuActions {
 
     public init(
         mention: @escaping @MainActor (UserMenuTarget) -> Void,
-        copyHandle: @escaping @MainActor (UserMenuTarget, _ notify: @escaping @MainActor () -> Void) -> Void,
+        copy: @escaping @MainActor (UserMenuTarget, UserHandlePart, _ notify: @escaping @MainActor () -> Void) -> Void,
+        localServer: String,
         resolveTarget: @escaping @MainActor (UserMenuTarget) async throws -> UserIdentity,
         loadRelation: @escaping @MainActor (UserMenuTarget, UserIdentity) async throws -> UserRelation?,
         knownRelation: @escaping @MainActor (UserMenuTarget) -> KnownRelation?,
@@ -93,7 +96,8 @@ public struct UserMenuActions {
         accounts: AccountCache
     ) {
         self.mention = mention
-        self.copyHandle = copyHandle
+        self.copy = copy
+        self.localServer = localServer
         self.resolveTarget = resolveTarget
         self.loadRelation = loadRelation
         self.knownRelation = knownRelation
@@ -159,6 +163,14 @@ public struct UserMenuTree {
         return children.isEmpty ? nil : .submenu("", children)
     }
 
+    /// プロフィールのハンドルを押したときのメニュー。コピーの項目を、並びの設定によらず決まった順に出す。
+    /// 見出しは置かない。押したハンドルのそばに出て、項目のサブテキストで中身が分かるため。出す項目がなければnil。
+    public func handleMenu() -> MenuNode<UserMenuCommand>? {
+        let groups = MenuLayout<UserMenuItem>.Groups(main: [.init(UserMenuItem.copyItems)], more: [])
+        let children = nodes(groups: groups, offersProfile: false, profileAvatar: nil)
+        return children.isEmpty ? nil : .submenu("", children)
+    }
+
     /// 単独で出すメニューとプロフィール画面のメニューで、開くたびに関係を読み直す相手のID。
     /// 関係で中身が変わる項目を出していなければ読み直さないのでnil。リンクのメンションは、相手を探すまでIDが分からないため、
     /// ここではなく、相手を探したあとに関係を読むところ（`UserMenuActions.loadRelation`）で読み直す。
@@ -200,7 +212,12 @@ public struct UserMenuTree {
         func nodes(for item: UserMenuItem) -> [MenuNode<UserMenuCommand>] {
             let subject = tree.subject
             if let action = item.urlAction {
-                return [action.node(title: inSubmenu ? nil : UserMenuTree.inlineTitle(of: action, acct: subject.acct), url: subject.url, linkBrowser: tree.linkBrowser).map(UserMenuCommand.url)]
+                var node = action.node(title: inSubmenu ? nil : UserMenuTree.inlineTitle(of: action, acct: subject.acct), url: subject.url, linkBrowser: tree.linkBrowser).map(UserMenuCommand.url)
+                // コピーされる文字を、選ぶ前に見えるようにする。
+                if action == .copyLink {
+                    node.subtitle = subject.url?.absoluteString
+                }
+                return [node]
             }
             switch item {
             case .profile:
@@ -210,9 +227,14 @@ public struct UserMenuTree {
             case .mention:
                 guard tree.actions != nil else { return [] }
                 return [.action(inSubmenu ? item.title : "@\(subject.acct)にメンション", icon: .symbol(item.symbolName), .mention)]
-            case .copyHandle:
-                guard tree.actions != nil else { return [] }
-                return [.action(inSubmenu ? item.title : "@\(subject.acct)のハンドルをコピー", icon: .symbol(item.symbolName), .copyHandle)]
+            case .copyHandle, .copyUsername, .copyServer:
+                guard let actions = tree.actions, let part = item.handlePart else { return [] }
+                // コピーされる文字を、選ぶ前に見えるようにする。メンションのリンクは、選ぶまで相手を探さないので出せない。
+                var subtitle: String?
+                if case .account(_, let acct) = subject.target {
+                    subtitle = UserHandle(acct: acct, localServer: actions.localServer).text(of: part)
+                }
+                return [.action(inSubmenu ? item.title : "@\(subject.acct)の\(item.title)", subtitle: subtitle, icon: .symbol(item.symbolName), .copy(part))]
             case .follow, .showReblogs, .notify, .note, .mute, .block, .report:
                 guard let actions = tree.actions, let load else { return [] }
                 return tree.relationNodes(item, actions: actions, load: load, failureSlots: failureSlots)
@@ -357,7 +379,7 @@ extension UserMenuTree {
             return [node(item.title, "hand.raised", isDestructive: true, .block)]
         case .report:
             return [.action(item.title, icon: .symbol(item.symbolName), .report(accountID: relation.accountID, acct: relation.acct, statusID: reportableStatusID))]
-        case .profile, .mention, .copyHandle, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .customize:
+        case .profile, .mention, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser, .openInDefaultBrowser, .openInAppSafari, .customize:
             return []
         }
     }

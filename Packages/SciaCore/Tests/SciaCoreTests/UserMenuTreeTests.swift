@@ -14,7 +14,7 @@ struct UserMenuTreeTests {
     /// - Parameter known: 手元で分かっている相手との関係。渡さなければ、どの相手の関係も覚えていない。
     private func actions(known: @escaping @MainActor (UserMenuTarget) -> KnownRelation? = { _ in nil }) -> UserMenuActions {
         UserMenuActions(
-            mention: { _ in }, copyHandle: { _, _ in },
+            mention: { _ in }, copy: { _, _, _ in }, localServer: "example.social",
             resolveTarget: { _ in throw CancellationError() }, loadRelation: { _, _ in nil }, knownRelation: known, reloadRelations: { _ in },
             changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, accounts: AccountCache { _ in [] }
         )
@@ -143,7 +143,7 @@ struct UserMenuTreeTests {
     /// 既定のユーザーのメニューは、開く・書く操作（メモを含む）、フォロー、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
     /// 関係を覚えていない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() {
-        #expect(submenu(actions: actions()) == "@alice[プロフィール,メンション,…,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報,カスタマイズ]]")
+        #expect(submenu(actions: actions()) == "@alice[プロフィール,メンション,…,…,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報,カスタマイズ]]")
     }
 
     /// メンション、ハンドルをコピー、関係の項目を組むものを渡されていない画面では、これらを出さない。
@@ -189,15 +189,15 @@ struct UserMenuTreeTests {
     /// 自分には、関係の項目のうちメモだけを出し、通報も出さない。自分との関係を覚えていれば、メモの項目をその場で組む。
     @Test func myselfHasOnlyNoteItem() {
         let me = UserRelation(accountID: "2", acct: "alice", relationship: Relationship(id: "2", note: "TODO"))
-        #expect(submenu(actions: actions { _ in .myself(me) }) == "@alice[プロフィール,メンション,メモを編集,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
-        #expect(submenu(actions: actions { _ in .myself(nil) }) == "@alice[プロフィール,メンション,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
+        #expect(submenu(actions: actions { _ in .myself(me) }) == "@alice[プロフィール,メンション,メモを編集,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
+        #expect(submenu(actions: actions { _ in .myself(nil) }) == "@alice[プロフィール,メンション,…,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
     }
 
     /// 自分との関係を覚えていなければ、読んでからメモの項目を組む。読めなければ、メモの場所に知らせる。自分にはほかに関係の項目を出さないため。
     @Test func myselfNoteWaitsForRelation() async throws {
         func loaded(_ loadRelation: @escaping @MainActor (UserMenuTarget, UserIdentity) async throws -> UserRelation?) async throws -> [String] {
             let actions = UserMenuActions(
-                mention: { _ in }, copyHandle: { _, _ in },
+                mention: { _ in }, copy: { _, _, _ in }, localServer: "example.social",
                 resolveTarget: { _ in UserIdentity(id: "2", acct: "alice") }, loadRelation: loadRelation, knownRelation: { _ in .myself(nil) }, reloadRelations: { _ in },
                 changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, accounts: AccountCache { _ in [] }
             )
@@ -218,7 +218,7 @@ struct UserMenuTreeTests {
     /// リンクのメンションから選んだ相手が自分だったら、探して関係を読んだあとも、メモのほかの関係の項目は出さない。
     @Test func mentionLinkToMyselfShowsOnlyNote() async throws {
         let actions = UserMenuActions(
-            mention: { _ in }, copyHandle: { _, _ in },
+            mention: { _ in }, copy: { _, _, _ in }, localServer: "example.social",
             resolveTarget: { _ in UserIdentity(id: "2", acct: "alice") },
             loadRelation: { _, identity in UserRelation(accountID: identity.id, acct: identity.acct, relationship: Relationship(id: identity.id)) },
             knownRelation: { target in
@@ -242,6 +242,57 @@ struct UserMenuTreeTests {
     @Test func submenuWhenProfileIsInMoreAndNothingWhenEmpty() {
         #expect(submenu(MenuLayout(elements: [.more, .item(.profile, isVisible: true)]).groups) == "@alice[その他[カスタマイズ,プロフィール,リンクをコピー,共有,ブラウザで開く]]")
         #expect(submenu(layout(visible: [])) == nil)
+    }
+
+    // MARK: - コピーの項目
+
+    /// コピーの項目には、選んだらコピーされる文字をサブテキストに出す。同じサーバーの人には、ログインしているサーバーの名前を補う。
+    @Test func copyItemsShowCopiedText() throws {
+        let bob = Account(id: "3", username: "bob", acct: "bob", displayName: "Bob", avatar: nil, url: URL(string: "https://example.social/@bob"))
+        func copies(_ account: Account) throws -> [String] {
+            let tree = UserMenuTree(subject: UserMenuSubject(.account(account)), actions: actions(), linkBrowser: .inApp)
+            let menu = try #require(tree.profileScreenMenu(groups: layout(visible: Set(UserMenuItem.copyItems))))
+            return menu.flattenedChildren.map { "\($0.title)(\($0.subtitle ?? ""))" }
+        }
+
+        #expect(try copies(alice) == [
+            "ハンドルをコピー(@alice@remote.example)", "ユーザー名をコピー(alice)", "サーバーをコピー(remote.example)", "リンクをコピー(https://remote.example/@alice)",
+        ])
+        #expect(try copies(bob) == [
+            "ハンドルをコピー(@bob@example.social)", "ユーザー名をコピー(bob)", "サーバーをコピー(example.social)", "リンクをコピー(https://example.social/@bob)",
+        ])
+    }
+
+    /// メンションのリンクから開いたメニューは、選ぶまで相手を探さないので、ハンドルとその一部のサブテキストを出さない。リンクはURLが分かるので出す。
+    @Test func mentionLinkCopyItemsOmitHandleSubtitles() throws {
+        let tree = UserMenuTree(subject: UserMenuSubject(mentionLink: try #require(alice.url), acct: "alice"), actions: actions(), linkBrowser: .inApp)
+        let menu = try #require(tree.profileScreenMenu(groups: layout(visible: Set(UserMenuItem.copyItems))))
+        #expect(menu.flattenedChildren.map(\.subtitle) == [nil, nil, nil, "https://remote.example/@alice"])
+    }
+
+    /// 投稿のメニューに直接並べるときは、名前に相手を入れる。
+    @Test func inlineCopyItemsNameTheUser() throws {
+        for item in UserMenuItem.copyItems {
+            let tree = UserMenuTree(subject: UserMenuSubject(.account(alice)), actions: actions(), linkBrowser: .inApp)
+            let node = try #require(tree.submenu(groups: layout(visible: [item]), avatar: .user(.account(alice))))
+            #expect(node.title == "@alice@remote.exampleの\(item.title)")
+        }
+    }
+
+    /// プロフィールのハンドルのメニューは、並びの設定によらず、コピーの4つを決まった順に出す。見出しは置かない。
+    @Test func handleMenuListsCopyItemsInOrder() throws {
+        let tree = UserMenuTree(subject: UserMenuSubject(.account(alice)), actions: actions(), linkBrowser: .inApp)
+        let menu = try #require(tree.handleMenu())
+        #expect(menu.title.isEmpty)
+        #expect(menu.flattenedChildren.map(\.title) == ["ハンドルをコピー", "ユーザー名をコピー", "サーバーをコピー", "リンクをコピー"])
+        let commands = menu.flattenedChildren.compactMap(\.command).map { command -> String in
+            switch command {
+            case .copy(let part): "\(part)"
+            case .url(.copy(let url)): url.absoluteString
+            default: "ほかの操作"
+            }
+        }
+        #expect(commands == ["handle", "username", "server", "https://remote.example/@alice"])
     }
 
     // MARK: - 単独で出すメニュー

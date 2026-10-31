@@ -376,7 +376,20 @@ extension TimelineViewController {
     /// プロフィール画面のナビゲーションバーに出す、そのユーザーのユーザーのメニュー。出す項目がなければnil。
     /// - Parameter barButtonItem: 共有のシートを出す起点。
     func profileUserMenu(for account: Account, from barButtonItem: UIBarButtonItem) -> UIMenu? {
-        let handlers = URLMenuHandlers(
+        let menu = UserMenu(subject: UserMenuSubject(.account(account)), actions: userMenuActions, handlers: profileURLHandlers(shareFrom: barButtonItem), host: self)
+        return menu.profileScreenMenu(groups: settings.userMenuLayout.groups)
+    }
+
+    /// プロフィールのハンドルを押したときの、コピーのメニュー。決まりはdocs/profile.mdの「ハンドル」にある。
+    func profileHandleMenu(for account: Account) -> UIMenu? {
+        // コピーの項目だけを出すので、共有のシートは出さない。
+        let menu = UserMenu(subject: UserMenuSubject(.account(account)), actions: userMenuActions, handlers: profileURLHandlers(shareFrom: nil), host: self)
+        return menu.handleMenu()
+    }
+
+    /// プロフィール画面のユーザーのメニューの、URLの項目の動き。共有のシートは`barButtonItem`から出す。
+    private func profileURLHandlers(shareFrom barButtonItem: UIBarButtonItem?) -> URLMenuHandlers {
+        URLMenuHandlers(
             linkBrowser: settings.linkBrowser,
             copy: { [weak self] url in URLSharing.copy(url, notifying: self) },
             share: { [weak self, weak barButtonItem] url in
@@ -386,8 +399,6 @@ extension TimelineViewController {
             open: { [weak self] url, browser in self?.openURL(url, in: browser) },
             openSettings: { [weak self] page in self?.openMenuSettings(page) }
         )
-        let menu = UserMenu(subject: UserMenuSubject(.account(account)), actions: userMenuActions, handlers: handlers, host: self)
-        return menu.profileScreenMenu(groups: settings.userMenuLayout.groups)
     }
 
     /// 共有のシートは、メニューを出した行から出す。

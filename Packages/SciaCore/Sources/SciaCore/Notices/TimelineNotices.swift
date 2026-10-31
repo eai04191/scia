@@ -12,14 +12,14 @@ extension Notice {
     /// 投稿のリンクをコピーした。コピーは画面の変化で見えないため知らせる。
     public static let linkCopied = Notice(id: "timeline.linkCopied", kind: .success, title: "リンクをコピーしました")
 
-    /// ユーザーのメニューで、サーバー名を付けたハンドルをコピーした。
-    public static let handleCopied = Notice(id: "timeline.handleCopied", kind: .success, title: "ハンドルをコピーしました")
-
-    /// プロフィールのハンドルのメニューで、`@`を付けないユーザー名をコピーした。
-    public static let usernameCopied = Notice(id: "timeline.usernameCopied", kind: .success, title: "ユーザー名をコピーしました")
-
-    /// プロフィールのハンドルのメニューで、サーバーの名前をコピーした。
-    public static let serverCopied = Notice(id: "timeline.serverCopied", kind: .success, title: "サーバーをコピーしました")
+    /// ユーザーのメニューで、ハンドルかその一部をコピーした。
+    public static func handleCopied(_ part: UserHandlePart) -> Notice {
+        switch part {
+        case .handle: Notice(id: "timeline.handleCopied", kind: .success, title: "ハンドルをコピーしました")
+        case .username: Notice(id: "timeline.usernameCopied", kind: .success, title: "ユーザー名をコピーしました")
+        case .server: Notice(id: "timeline.serverCopied", kind: .success, title: "サーバーをコピーしました")
+        }
+    }
 
     /// 投稿の本文をコピーした。
     public static let textCopied = Notice(id: "timeline.textCopied", kind: .success, title: "テキストをコピーしました")

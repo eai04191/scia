@@ -149,8 +149,8 @@ protocol LinkMenuHost: AnyObject {
     func showLinkCopiedNotice()
     /// タップや長押しに選んだ項目が使えないことなどを、数秒で消えるチップで知らせる。
     func showNotice(_ notice: Notice)
-    /// ユーザーのメニューの「ハンドルをコピー」を選んだ。
-    func showHandleCopiedNotice()
+    /// ユーザーのメニューの「ハンドルをコピー」「ユーザー名をコピー」「サーバーをコピー」を選んだ。
+    func showHandleCopiedNotice(_ part: UserHandlePart)
     /// ユーザーのメニューのメンションとハンドルをコピーを組むもの。nilなら2つの項目を出さない。
     var userMenuActions: UserMenuActions? { get }
     /// ハッシュタグのメニューのミュートを組むもの。nilなら項目を出さない。

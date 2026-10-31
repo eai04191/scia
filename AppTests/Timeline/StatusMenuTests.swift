@@ -48,7 +48,7 @@ struct StatusMenuTests {
         accounts: AccountCache = AccountCache { _ in [] }
     ) -> UserMenuActions {
         UserMenuActions(
-            mention: { _ in }, copyHandle: { _, _ in },
+            mention: { _ in }, copy: { _, _, _ in }, localServer: "example.social",
             resolveTarget: { _ in throw CancellationError() }, loadRelation: { _, _ in nil }, knownRelation: known, reloadRelations: reload,
             changeRelation: { _, _ in }, editNote: { _ in }, report: { _, _, _ in }, accounts: accounts
         )
@@ -85,7 +85,7 @@ struct StatusMenuTests {
 
         let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
 
-        #expect(outline.dropLast().last == ["@alice[プロフィール,メンション,…,…,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報,カスタマイズ]]"])
+        #expect(outline.dropLast().last == ["@alice[プロフィール,メンション,…,…,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,通報,カスタマイズ]]"])
     }
 
     /// メニューを開いたら、メニューに出る人全員の関係を1回でまとめて読み直す。

@@ -7,11 +7,11 @@ import UIKit
 @MainActor
 struct UserMenu {
     let subject: UserMenuSubject
-    /// セッションの、メンション、ハンドルをコピー、関係の項目を組むもの。nilなら、これらの項目を出さない。
+    /// セッションの、メンション、ハンドルとその一部のコピー、関係の項目を組むもの。nilなら、これらの項目を出さない。
     let actions: UserMenuActions?
     /// URLの項目の動き。
     let handlers: URLMenuHandlers
-    /// ハンドルをコピーしたことを知らせる画面。
+    /// ハンドルやその一部をコピーしたことを知らせる画面。
     weak var host: (any LinkMenuHost)?
     /// 通報に添えられる投稿。Mastodonは通報する相手の投稿しか添えられないため、長押しした投稿を相手が書いたときだけ渡す。
     var reportableStatusID: String?
@@ -45,6 +45,11 @@ struct UserMenu {
         return root.map { renderer(openProfile: nil) { _ in nil }.menu($0) }
     }
 
+    /// プロフィールのハンドルを押したときのメニュー。コピーの項目を決まった順に出す。出す項目がなければnil。
+    func handleMenu() -> UIMenu? {
+        tree.handleMenu().map { renderer(openProfile: nil) { _ in nil }.menu($0) }
+    }
+
     /// 関係で中身が変わる項目を出していれば、その人の関係を読み直す。組んだメニューは覚えていた関係のまま出し、読み直した関係は次に開いたときから使う。
     private func reloadRelation(groups: MenuLayout<UserMenuItem>.Groups) {
         guard let id = tree.relationReloadID(groups: groups) else { return }
@@ -71,8 +76,8 @@ struct UserMenu {
             openProfile?()
         case .mention:
             actions?.mention(subject.target)
-        case .copyHandle:
-            actions?.copyHandle(subject.target) { [weak host] in host?.showHandleCopiedNotice() }
+        case .copy(let part):
+            actions?.copy(subject.target, part) { [weak host] in host?.showHandleCopiedNotice(part) }
         case .changeRelation(let change, let relation):
             actions?.changeRelation(change, relation)
         case .editNote(let relation):

@@ -1864,8 +1864,8 @@ extension TimelineViewController: LinkMenuHost {
         showNotice(.linkCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
 
-    func showHandleCopiedNotice() {
-        showNotice(.handleCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
+    func showHandleCopiedNotice(_ part: UserHandlePart) {
+        showNotice(.handleCopied(part), duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
 
     func openURL(_ url: URL, in browser: LinkBrowser) {

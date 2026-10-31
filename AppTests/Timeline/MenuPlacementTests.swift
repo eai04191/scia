@@ -14,7 +14,7 @@ struct MenuPlacementTests {
     private func makeSettings() -> AppSettings {
         let settings = AppSettings(defaults: TestScratch.defaults("MenuPlacementTests"))
         let items = UserMenuItem.allCases.map { MenuLayout<UserMenuItem>.Element.item($0, isVisible: true) }
-        settings.userMenuLayout = MenuLayout(elements: Array(items.prefix(3)) + [.separator] + Array(items.dropFirst(3).prefix(4)) + [.more] + Array(items.dropFirst(7)))
+        settings.userMenuLayout = MenuLayout(elements: Array(items.prefix(5)) + [.separator] + Array(items.dropFirst(5).prefix(4)) + [.more] + Array(items.dropFirst(9)))
         return settings
     }
 
@@ -22,7 +22,7 @@ struct MenuPlacementTests {
     private func makeViewController(settings: AppSettings) -> TimelineViewController {
         let viewController = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
         viewController.userMenuActions = UserMenuActions(
-            mention: { _ in }, copyHandle: { _, _ in },
+            mention: { _ in }, copy: { _, _, _ in }, localServer: "example.social",
             resolveTarget: { _ in throw CancellationError() }, loadRelation: { _, _ in nil },
             knownRelation: { _ in .relation(UserRelation(accountID: "2", acct: "alice@remote.example", relationship: Relationship(id: "2", following: true))) },
             reloadRelations: { _ in },
@@ -59,11 +59,11 @@ struct MenuPlacementTests {
         let mention = try #require(try bodyLinkMenu(for: .mention(acct: alice.acct, url: profileURL), in: viewController, settings: settings))
         let profile = try #require(viewController.profileUserMenu(for: alice, from: UIBarButtonItem()))
 
-        let expected = "プロフィール,メンション,ハンドルをコピー|リンクをコピー,共有,ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,フォローを外す,ブーストを表示,投稿を通知,メモを追加,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック,通報,カスタマイズ]"
+        let expected = "プロフィール,メンション,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー|リンクをコピー,共有,ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,フォローを外す,ブーストを表示,投稿を通知,メモを追加,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック,通報,カスタマイズ]"
         #expect(describe(submenu.children) == expected)
         #expect(describe(avatar.children) == expected)
         #expect(describe(mention.children) == expected)
-        #expect(describe(profile.children) == "メンション,ハンドルをコピー|リンクをコピー,共有,ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,フォローを外す,ブーストを表示,投稿を通知,メモを追加,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック,通報,カスタマイズ]")
+        #expect(describe(profile.children) == "メンション,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー|リンクをコピー,共有,ブラウザで開く,既定のブラウザで開く|その他[アプリ内のSafariで開く,フォローを外す,ブーストを表示,投稿を通知,メモを追加,ミュート[無期限,5分,30分,1時間,6時間,1日,3日,7日],ブロック,通報,カスタマイズ]")
         // 見出しは、サブメニューでは名前とサブタイトル、単独で出すメニューでは2行に置く。
         #expect(submenu.title == "@alice")
         #expect(submenu.subtitle == "remote.example")

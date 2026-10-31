@@ -117,7 +117,9 @@ extension UserMenuItem: MenuItemContentProviding {
         switch self {
         case .profile: .own(title: "プロフィール", symbolName: "person.crop.circle", note: "プロフィール画面では出ません")
         case .mention: .own(title: "メンション", symbolName: "square.and.pencil", note: "投稿欄のカーソルの位置に入れます")
-        case .copyHandle: .own(title: "ハンドルをコピー", symbolName: "at", note: "サーバー名を付けた形でコピーします")
+        case .copyHandle: .own(title: "ハンドルをコピー", symbolName: "at")
+        case .copyUsername: .own(title: "ユーザー名をコピー", symbolName: "person", note: "@を付けずにコピーします")
+        case .copyServer: .own(title: "サーバーをコピー", symbolName: "server.rack")
         case .copyLink: .url(.copyLink)
         case .share: .url(.share)
         case .openInBrowser: .url(.openInBrowser)

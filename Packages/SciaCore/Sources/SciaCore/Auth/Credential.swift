@@ -24,7 +24,7 @@ public struct Credential: Codable, Sendable, Equatable, Identifiable {
     /// サーバー名は`handle`と同じくログインしたアドレスから取る。ユーザーのIDにアドレスと別のドメイン（`LOCAL_DOMAIN`）を使うサーバーでは、IDとは違う形になる。
     /// 正しく出すには`api/v2/instance`の`domain`を持ち回る必要があり、アカウントの一覧の`handle`も同じ形で出しているため、そろえて読まない。
     public func handle(ofAcct acct: String) -> String {
-        acct.contains("@") ? "@\(acct)" : "@\(acct)@\(server)"
+        UserHandle(acct: acct, localServer: server).handle
     }
 
     public init(instance: URL, accessToken: String, clientID: String, clientSecret: String, accountID: String, username: String) {
