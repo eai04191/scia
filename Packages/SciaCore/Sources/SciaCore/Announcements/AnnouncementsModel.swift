@@ -71,14 +71,25 @@ public final class AnnouncementsModel {
         let name: String
     }
 
+    /// 結果を待っているリアクションの操作。
+    struct PendingReaction {
+        /// 付けるか外すか。
+        let isOn: Bool
+        /// カスタム絵文字の画像。読み直しの応答にまだないリアクションを足し直すときと、外したリアクションを失敗して戻すときに使う。
+        let customEmoji: CustomEmoji?
+        /// 今の数に、押した結果を手元で足し引きした分が入っているか。サーバーから届いた数に置き換わったら、押した結果を含まないので偽にする。
+        /// 失敗したときは、入っていれば足し引きを戻し、入っていなければ数は変えずに自分がしたかだけを戻す。
+        var countIncludesChange = true
+    }
+
     /// 結果を伝える一覧の画面。開いている間だけ付く。
     public weak var display: (any AnnouncementsDisplay)? {
         didSet { showItems() }
     }
     /// 未読の数が変わったときに呼ぶ。アカウントのボタンの点と、メニューの項目の件数に使う。
     public var onUnreadCountChange: (Int) -> Void = { _ in }
-    /// リアクションの付け外しに失敗して戻したときに呼ぶ。知らせ方は作る側が決める。
-    public var onReactionFailure: (ErrorPresentation) -> Void = { _ in }
+    /// リアクションの付け外しに失敗して戻したときに呼ぶ。知らせ方と、出す理由は作る側が決める。
+    public var onReactionFailure: (any Error) -> Void = { _ in }
     /// 新しい順に並べたお知らせ。
     public private(set) var announcements: [Announcement] = []
     /// 読めなかったお知らせ。
@@ -104,8 +115,8 @@ public final class AnnouncementsModel {
     private var changeCount = 0
     /// 既読を送っていて、結果を待っているお知らせ。読み直しで未読に戻さない。
     private var dismissing: Set<Announcement.ID> = []
-    /// 結果を待っているリアクションと、付けるか外すか。読み直しで押す前に戻さない。
-    private var pendingReactions: [ReactionKey: Bool] = [:]
+    /// 結果を待っているリアクション。読み直しで押す前に戻さない。
+    private var pendingReactions: [ReactionKey: PendingReaction] = [:]
     /// シートを開いている間に未読だったお知らせ。既読にしても、閉じるまで点を残す。開いていなければnil。
     private var markedUnread: Set<Announcement.ID>?
     /// 走り終えていない処理の数。止めたあとに何も起きないことを、テストが確かめるのに使う。
@@ -149,16 +160,29 @@ public final class AnnouncementsModel {
         switch activity {
         case .connected:
             // 切れていた間の追加、削除、リアクションを取りこぼさないよう、つながるたびに読み直す。
+            // つながる前に始めた読み込みの応答は、読んだあとからつながるまでの変化を含まないので、使わずに読み直させる。
+            changeCount += 1
             reload(purpose: .display)
-        case .event(.announcement(let announcement)):
+        case .event(let event):
+            apply(event)
+        case .poll, .outage:
+            break
+        }
+    }
+
+    /// ストリーミングで届いたお知らせのイベントを反映する。デバッグで流すお知らせと、部品カタログも、ここから入れる。
+    public func apply(_ event: StreamingEvent) {
+        switch event {
+        case .announcement(let announcement):
             receive(announcement)
-        case .event(.announcementReaction(let update)):
+        case .announcementReaction(let update):
             receive(update)
-        case .event(.announcementDelete(let id)):
+        case .announcementDelete(let id):
             logger.info("announcement deleted")
             changeCount += 1
+            unreadable.removeAll { $0.id == id }
             setAnnouncements(announcements.filter { $0.id != id })
-        case .event, .poll, .outage:
+        case .update, .statusUpdate, .delete, .notification, .filtersChanged, .notificationsMerged, .unhandled:
             break
         }
     }
@@ -194,6 +218,8 @@ public final class AnnouncementsModel {
             do {
                 try await operations.dismiss(id)
                 self?.logger.info("announcement dismiss done")
+                // 既読にする前に送った読み込みの応答は、未読のままなので使わせない。
+                self?.changeCount += 1
             } catch let error as MastodonAPIError where error.statusCode == 404 {
                 // 取り下げられたあと。既読にするものがないので、送り直さない。
                 self?.logger.info("announcement dismiss found nothing")
@@ -261,11 +287,15 @@ public final class AnnouncementsModel {
         if dismissing.contains(announcement.id) {
             announcement.read = true
         }
-        for (key, isOn) in pendingReactions where key.announcementID == announcement.id {
+        for (key, pending) in pendingReactions where key.announcementID == announcement.id {
             let isMine = announcement.reactions.first { $0.name == key.name }?.me == true
-            if isMine != isOn {
-                announcement.reactions = Self.setting(key.name, isOn, in: announcement.reactions, customEmoji: nil)
+            // 届いた数は、押した結果をまだ含まない数か、もう含む数のどちらか。含んでいなければ重ね、重ねたかを覚える。
+            // ストリーミングのお知らせは自分がしたかを持たず、手元の値を残すので、ここでは重ねない。
+            let reapplies = isMine != pending.isOn
+            if reapplies {
+                announcement.reactions = Self.setting(key.name, pending.isOn, in: announcement.reactions, customEmoji: pending.customEmoji)
             }
+            pendingReactions[key]?.countIncludesChange = reapplies
         }
         return announcement
     }
@@ -285,6 +315,8 @@ public final class AnnouncementsModel {
                 return reaction
             }
         }
+        // 一覧で読めなかったお知らせが、読める形で届いたら差し替える。
+        unreadable.removeAll { $0.id == incoming.id }
         setAnnouncements(announcements.filter { $0.id != incoming.id } + [applyingLocalChanges(announcement)])
     }
 
@@ -293,6 +325,7 @@ public final class AnnouncementsModel {
         changeCount += 1
         update(reactionUpdate.announcementID) { announcement in
             var reactions = announcement.reactions
+            pendingReactions[ReactionKey(announcementID: reactionUpdate.announcementID, name: reactionUpdate.name)]?.countIncludesChange = false
             if let index = reactions.firstIndex(where: { $0.name == reactionUpdate.name }) {
                 reactions[index].count = reactionUpdate.count
                 // 自分がしているなら、届いた数が自分を含まない値でも残す。
@@ -327,7 +360,9 @@ public final class AnnouncementsModel {
     private func send(_ name: String, _ isOn: Bool, on id: Announcement.ID, customEmoji: CustomEmoji?) {
         let key = ReactionKey(announcementID: id, name: name)
         guard pendingReactions[key] == nil else { return }
-        pendingReactions[key] = isOn
+        // 外すときは、数が0になって消したボタンを失敗して戻すときに、画像も戻せるよう持っておく。
+        let customEmoji = customEmoji ?? announcements.first { $0.id == id }?.reactions.first { $0.name == name }?.customEmoji
+        pendingReactions[key] = PendingReaction(isOn: isOn, customEmoji: customEmoji)
         // 取り消せる操作なので、サーバーの結果を待たずに表示へ反映する。
         update(id) { $0.reactions = Self.setting(name, isOn, in: $0.reactions, customEmoji: customEmoji) }
         logger.info("announcement reaction start on=\(isOn, privacy: .public)")
@@ -340,15 +375,37 @@ public final class AnnouncementsModel {
                 }
                 self?.logger.info("announcement reaction done")
                 self?.pendingReactions[key] = nil
+                // 押す前に送った読み込みの応答は、押した結果を含まないので使わせない。
+                self?.changeCount += 1
             } catch {
                 guard let self, !tasks.isClosed, !(error is CancellationError) else { return }
                 logger.error("announcement reaction failed: \(SciaLog.describe(error), privacy: .public)")
                 reportIfUnauthorized(error)
+                let countIncludesChange = pendingReactions[key]?.countIncludesChange ?? true
                 pendingReactions[key] = nil
-                update(id) { $0.reactions = Self.setting(name, !isOn, in: $0.reactions, customEmoji: customEmoji) }
-                onReactionFailure(ErrorPresentation(error))
+                update(id) { $0.reactions = Self.reverting(name, isOn, in: $0.reactions, customEmoji: customEmoji, countIncludesChange: countIncludesChange) }
+                onReactionFailure(error)
             }
         }
+    }
+
+    /// 付け外しに失敗した操作を戻した並び。今の数がサーバーから届いた数なら、押した結果を含まないので、数は変えずに自分がしたかだけを戻す。
+    static func reverting(_ name: String, _ isOn: Bool, in reactions: [AnnouncementReaction], customEmoji: CustomEmoji?, countIncludesChange: Bool) -> [AnnouncementReaction] {
+        guard !countIncludesChange else { return setting(name, !isOn, in: reactions, customEmoji: customEmoji) }
+        var reactions = reactions
+        guard let index = reactions.firstIndex(where: { $0.name == name }) else {
+            // 外すのに失敗したが、待っている間に届いた0件でボタンが消えていたら、自分のリアクションとして戻す。数は届いた0のままで、1と出る。
+            if !isOn {
+                reactions.append(AnnouncementReaction(name: name, count: 0, me: true, url: customEmoji?.url, staticUrl: customEmoji?.staticUrl))
+            }
+            return reactions
+        }
+        reactions[index].me = !isOn
+        // 付けるのに失敗して、自分のリアクションもなく数も0なら、ボタンを消す。
+        if reactions[index].count == 0, isOn {
+            reactions.remove(at: index)
+        }
+        return reactions
     }
 
     /// 自分のリアクションを付けた、または外したリアクションの並び。付けるときは数を1増やし、なければ末尾に足す。外すときは数を1減らし、0になったら消す。

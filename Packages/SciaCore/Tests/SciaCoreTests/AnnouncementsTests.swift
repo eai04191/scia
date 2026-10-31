@@ -96,6 +96,8 @@ struct AnnouncementsModelTests {
         let calls = Mutex<[String]>([])
         let hold = Gate()
         let held: Set<String>
+        /// 次の一覧の読み込みだけを`hold`で止める。
+        private let holdsNextList = Mutex(false)
         let failing: Set<String>
 
         init(lists: [AnnouncementList], held: Set<String> = [], failing: Set<String> = []) {
@@ -105,6 +107,10 @@ struct AnnouncementsModelTests {
         }
 
         var recorded: [String] { calls.withLock { $0 } }
+
+        func holdNextList() {
+            holdsNextList.withLock { $0 = true }
+        }
 
         private func call(_ name: String) async throws {
             calls.withLock { $0.append(name) }
@@ -120,6 +126,9 @@ struct AnnouncementsModelTests {
             AnnouncementsModel.Operations(
                 list: {
                     try await self.call("list")
+                    if self.holdsNextList.withLock({ holds in defer { holds = false }; return holds }) {
+                        try await self.hold.wait()
+                    }
                     return self.lists.withLock { $0.count > 1 ? $0.removeFirst() : $0[0] }
                 },
                 dismiss: { try await self.call("dismiss \($0)") },
@@ -230,7 +239,7 @@ struct AnnouncementsModelTests {
         let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1", reactions: [AnnouncementReaction(name: "a", count: 1, me: false)])])], held: ["add"], failing: ["add 1 a"])
         let (model, _) = try await loaded(server)
         var failures: [ErrorPresentation] = []
-        model.onReactionFailure = { failures.append($0) }
+        model.onReactionFailure = { failures.append(ErrorPresentation($0)) }
 
         model.toggleReaction("a", on: "1")
         model.toggleReaction("a", on: "1")
@@ -289,6 +298,139 @@ struct AnnouncementsModelTests {
         #expect(model.announcements.map(\.id) == ["1"])
     }
 
+    /// 読んでいる間に既読が済んだら、既読にする前の応答を使わずに読み直す。
+    @Test func reloadsWhenOperationSettlesWhileLoading() async throws {
+        let before = Self.announcement("1")
+        let after = Self.announcement("1", read: true)
+        let server = Server(lists: [AnnouncementList(announcements: [before]), AnnouncementList(announcements: [before]), AnnouncementList(announcements: [after])])
+        let (model, _) = try await loaded(server)
+
+        server.holdNextList()
+        let reload = model.refresh()
+        try await waitUntil { server.recorded.count == 2 }
+        model.didShow("1")
+        try await waitUntil { server.recorded.contains("dismiss 1") && model.runningTaskCount == 1 }
+        server.hold.open()
+        await reload?.value
+
+        #expect(server.recorded.filter { $0 == "list" }.count == 3)
+        #expect(model.announcements[0].read == true)
+    }
+
+    /// 待っている間に数が届いてから失敗したら、届いた数のまま、自分がしたかだけを戻す。
+    @Test func keepsReceivedCountWhenReactionFails() async throws {
+        let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1", reactions: [AnnouncementReaction(name: "a", count: 3, me: false)])])], held: ["add"], failing: ["add 1 a"])
+        let (model, _) = try await loaded(server)
+        var failed = false
+        model.onReactionFailure = { _ in failed = true }
+
+        model.toggleReaction("a", on: "1")
+        model.streamingDidChange(.event(.announcementReaction(AnnouncementReactionUpdate(announcementID: "1", name: "a", count: 3))))
+        server.hold.open()
+        try await waitUntil { failed }
+
+        #expect(model.announcements[0].reactions == [AnnouncementReaction(name: "a", count: 3, me: false)])
+    }
+
+    /// 待っている間にお知らせ全体が届いてから失敗したら、届いた数のまま、自分がしたかだけを戻す。届いた数は押した結果を含まないため。
+    @Test func keepsSnapshotCountWhenReactionFails() async throws {
+        let original = AnnouncementReaction(name: "a", count: 3, me: false)
+        let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1", reactions: [original])])], held: ["add"], failing: ["add 1 a"])
+        let (model, _) = try await loaded(server)
+
+        model.toggleReaction("a", on: "1")
+        model.apply(.announcement(Self.announcement("1", read: nil, reactions: [AnnouncementReaction(name: "a", count: 3, me: nil)])))
+        server.hold.open()
+        try await waitUntil { model.runningTaskCount == 0 }
+
+        #expect(model.announcements[0].reactions == [original])
+    }
+
+    /// 数が届いたあとに読み直すと、押した結果を重ねた数になる。そのあと失敗したら、重ねた分を戻す。
+    @Test func revertsReappliedCountAfterReload() async throws {
+        let original = AnnouncementReaction(name: "a", count: 3, me: false)
+        let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1", reactions: [original])])], held: ["add"], failing: ["add 1 a"])
+        let (model, _) = try await loaded(server)
+
+        model.toggleReaction("a", on: "1")
+        model.apply(.announcementReaction(AnnouncementReactionUpdate(announcementID: "1", name: "a", count: 3)))
+        await model.refresh()?.value
+        server.hold.open()
+        try await waitUntil { model.runningTaskCount == 0 }
+
+        #expect(model.announcements[0].reactions == [original])
+    }
+
+    /// 自分だけが付けていたカスタム絵文字を外すのに失敗したら、画像ごと戻す。
+    @Test func restoresCustomEmojiWhenRemovalFails() async throws {
+        let url = try #require(URL(string: "https://example.social/blob.png"))
+        let original = AnnouncementReaction(name: "blob", count: 1, me: true, url: url, staticUrl: url)
+        let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1", reactions: [original])])], held: ["remove"], failing: ["remove 1 blob"])
+        let (model, _) = try await loaded(server)
+
+        model.toggleReaction("blob", on: "1")
+        #expect(model.announcements[0].reactions.isEmpty)
+        server.hold.open()
+        try await waitUntil { model.runningTaskCount == 0 }
+
+        #expect(model.announcements[0].reactions == [original])
+    }
+
+    /// 自分だけのリアクションを外している間に0件が届き、そのあと外すのに失敗したら、自分のリアクションとして戻す。
+    @Test func restoresRemovedReactionAfterZeroCount() async throws {
+        let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1", reactions: [AnnouncementReaction(name: "a", count: 1, me: true)])])], held: ["remove"], failing: ["remove 1 a"])
+        let (model, _) = try await loaded(server)
+
+        model.toggleReaction("a", on: "1")
+        model.apply(.announcementReaction(AnnouncementReactionUpdate(announcementID: "1", name: "a", count: 0)))
+        server.hold.open()
+        try await waitUntil { model.runningTaskCount == 0 }
+
+        #expect(model.announcements[0].reactions.map(\.me) == [true])
+        #expect(model.announcements[0].reactions.map(\.displayedCount) == [1])
+    }
+
+    /// 読めなかったお知らせも、取り下げられたら消し、読める形で届いたら差し替える。
+    @Test func replacesUnreadableByStreaming() async throws {
+        let server = Server(lists: [AnnouncementList(announcements: [], unreadable: [UnreadableItem(id: "1", url: nil), UnreadableItem(id: "2", url: nil)])])
+        let (model, _) = try await loaded(server)
+
+        model.apply(.announcementDelete(announcementID: "1"))
+        model.apply(.announcement(Self.announcement("2", read: nil)))
+
+        #expect(model.unreadable.isEmpty)
+        #expect(model.announcements.map(\.id) == ["2"])
+    }
+
+    /// 新しいカスタム絵文字を送っている間に読み直しても、画像を失わない。
+    @Test func keepsPendingCustomEmojiAcrossReload() async throws {
+        let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1")])], held: ["add"])
+        let (model, _) = try await loaded(server)
+        let emoji = CustomEmoji(shortcode: "blob", url: try #require(URL(string: "https://example.social/blob.png")), staticUrl: try #require(URL(string: "https://example.social/blob_static.png")))
+
+        model.addReaction("blob", customEmoji: emoji, to: "1")
+        await model.refresh()?.value
+
+        #expect(model.announcements[0].reactions.first?.customEmoji == emoji)
+        server.hold.open()
+        try await waitUntil { model.runningTaskCount == 0 }
+    }
+
+    /// つながる前に始めた読み込みの応答は、つながるまでの変化を含まないので、読み直す。
+    @Test func reloadsAfterConnectingWhileLoading() async throws {
+        let server = Server(lists: [AnnouncementList(announcements: []), AnnouncementList(announcements: [Self.announcement("1")])], held: ["list"])
+        let (model, _) = makeModel(server)
+
+        model.start()
+        try await waitUntil { server.recorded.count == 1 }
+        model.streamingDidChange(.connected)
+        server.hold.open()
+        try await waitUntil { model.contentState == .loaded }
+
+        #expect(server.recorded == ["list", "list"])
+        #expect(model.announcements.map(\.id) == ["1"])
+    }
+
     /// シートで開いたときの失敗はシートに出し、自動の読み込みの失敗は出さない。読めていた行は消さない。
     @Test func showsOnlyVisibleLoadFailure() async throws {
         let server = Server(lists: [AnnouncementList(announcements: [Self.announcement("1")])], failing: ["list"])
@@ -304,5 +446,37 @@ struct AnnouncementsModelTests {
             Issue.record("失敗をシートに出していません: \(model.contentState)")
             return
         }
+    }
+}
+
+struct AnnouncementDateTextTests {
+    private static let calendar: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Tokyo") ?? .gmt
+        return calendar
+    }()
+
+    private static func date(_ string: String) throws -> Date {
+        try Date(string, strategy: .iso8601)
+    }
+
+    private static func text(start: String?, end: String?, allDay: Bool = false, published: String = "2026-11-01T01:00:00Z") throws -> String {
+        let announcement = Announcement(id: "1", content: "", startsAt: try start.map(date), endsAt: try end.map(date), allDay: allDay, publishedAt: try date(published))
+        return AnnouncementDateText.text(for: announcement, now: try date("2026-11-01T03:00:00Z"), calendar: calendar)
+    }
+
+    @Test func writesPublishedDateWithoutRange() throws {
+        #expect(try Self.text(start: nil, end: nil) == "11月1日 10:00")
+        #expect(try Self.text(start: nil, end: nil, published: "2025-12-31T14:05:00Z") == "2025年12月31日 23:05")
+    }
+
+    @Test func omitsEndDateOnSameDay() throws {
+        #expect(try Self.text(start: "2026-11-03T02:00:00Z", end: "2026-11-03T04:30:00Z") == "11月3日 11:00〜13:30")
+        #expect(try Self.text(start: "2026-11-03T02:00:00Z", end: "2026-11-04T04:00:00Z") == "11月3日 11:00〜11月4日 13:00")
+    }
+
+    @Test func writesOnlyDatesForAllDay() throws {
+        #expect(try Self.text(start: "2026-11-02T15:00:00Z", end: "2026-11-02T15:00:00Z", allDay: true) == "11月3日")
+        #expect(try Self.text(start: "2026-12-30T15:00:00Z", end: "2027-01-02T15:00:00Z", allDay: true) == "12月31日〜2027年1月3日")
     }
 }

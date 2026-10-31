@@ -38,6 +38,8 @@ public enum AppDestination: Equatable, Sendable {
     case notificationRequest(id: String)
     /// `notification-policy`。通知のフィルタリングの設定を開く。
     case notificationPolicy
+    /// `announcements`。サーバーのお知らせの一覧を開く。
+    case announcements
     /// `note?acct=<ハンドル>`。その人のプロフィールに書く、自分にしか見えないメモの画面を開く。
     case note(acct: String)
     /// `report?acct=<ハンドル>`。その人を通報する画面を開く。送らない限りサーバーに届かない。
@@ -117,6 +119,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationRequests: "notification requests"
         case .notificationRequest: "notification request"
         case .notificationPolicy: "notification policy"
+        case .announcements: "announcements"
         case .note: "note"
         case .report: "report"
         case .compose: "compose screen"
@@ -162,6 +165,7 @@ public enum AppDestination: Equatable, Sendable {
         case ("notification-requests", ""): .notificationRequests
         case ("notification-request", ""): query("id").map { .notificationRequest(id: $0) }
         case ("notification-policy", ""): .notificationPolicy
+        case ("announcements", ""): .announcements
         case ("note", ""): query("acct").map { .note(acct: $0) }
         case ("report", ""): query("acct").map { .report(acct: $0) }
         case ("compose", "tools"): .compose(.tools)
@@ -205,6 +209,7 @@ public enum AppDestination: Equatable, Sendable {
         case .notificationRequests: ("notification-requests", nil, [])
         case .notificationRequest(let id): ("notification-request", nil, [("id", id)])
         case .notificationPolicy: ("notification-policy", nil, [])
+        case .announcements: ("announcements", nil, [])
         case .note(let acct): ("note", nil, [("acct", acct)])
         case .report(let acct): ("report", nil, [("acct", acct)])
         case .compose(.tools): ("compose", "tools", [])

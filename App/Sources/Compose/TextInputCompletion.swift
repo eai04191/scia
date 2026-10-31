@@ -207,6 +207,11 @@ final class TextInputCompletion {
         recentEmojis?.record(emoji.recentKey)
     }
 
+    /// 入力欄に入れずに選んだ絵文字（お知らせのリアクション）を、最近使った絵文字として覚える。
+    func recordRecent(_ emoji: PaletteEmoji) {
+        recentEmojis?.record(emoji.recentKey)
+    }
+
     /// パレットの削除のボタン。カーソルの直前が絵文字なら、絵文字をまとめて消す。範囲を選んでいればそれを、それ以外は1文字消す。
     func deleteBackward(in input: any UITextInput) {
         guard !isLocked() else { return }

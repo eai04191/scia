@@ -15,6 +15,12 @@ final class SessionController {
     private let notifications: NotificationsController
     /// 通知のフィルタリングの設定と、保留中の通知の人数。通知のタブのボタンと設定の画面が同じものを見る。
     private let notificationPolicy: NotificationPolicyModel
+    /// サーバーのお知らせ。アカウントのボタンの点と、メニューから開くシートが同じものを見る。
+    private let announcements: AnnouncementsModel
+    /// タブの画面ごとに置いたアカウントのボタン。お知らせの未読の点を、どれにも付ける。
+    private let accountButtons = NSHashTable<UIBarButtonItem>.weakObjects()
+    /// 開いているお知らせのシート。
+    private weak var presentedAnnouncements: UIViewController?
     private let bookmarks: SavedStatusesController
     private let favourites: SavedStatusesController
     /// 予約した投稿の一覧のタブ。
@@ -253,6 +259,7 @@ final class SessionController {
         notifications.viewController.onAppearing = { [weak notifications] in notifications?.startIfNeeded() }
         self.notifications = notifications
         notificationPolicy = NotificationPolicyModel(client: client, tasks: tasks.child()) { forward() }
+        announcements = AnnouncementsModel(operations: AnnouncementsModel.Operations(client: client), streamingHub: streamingHub, tasks: tasks.child()) { forward() }
         let mediaFormats = UnprocessableMediaFormats(defaults: .standard, instance: credential.instance)
         let diagnostics = ConnectionDiagnostics(rateLimit: rateLimit, features: features, requestLog: requestLog, mediaFormats: mediaFormats)
         self.diagnostics = diagnostics
@@ -586,6 +593,8 @@ final class SessionController {
         installAccountButton(on: scheduled.viewController)
         installNotificationRequests()
         installAccountButton(on: searchRoot)
+        announcements.onUnreadCountChange = { [weak self] _ in self?.updateAccountBadges() }
+        announcements.onReactionFailure = { [weak self] error in self?.reportAnnouncementReactionFailure(error) }
         streamingHub.onEvent = { [weak self] event in
             switch event {
             case .statusUpdate(let edited): self?.changeQuoteSources(.status(edited.id)) { $0.edit(edited) }
@@ -791,8 +800,30 @@ final class SessionController {
             let policy = UIAction(title: "通知のフィルタリング", image: UIImage(systemName: "line.3.horizontal.decrease.circle")) { _ in
                 self?.showNotificationPolicy()
             }
-            return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile, recent, policy])] + accountMenu().children)
+            // お知らせもサーバーに属するものなので、通知のフィルタリングと同じ並びに置く。
+            let unread = self?.announcements.unreadCount ?? 0
+            let announcements = UIAction(title: "お知らせ", subtitle: unread > 0 ? "未読\(unread)件" : nil, image: UIImage(systemName: "megaphone")) { _ in
+                self?.showAnnouncements()
+            }
+            return UIMenu(children: [UIMenu(options: .displayInline, children: [myProfile, recent, policy, announcements])] + accountMenu().children)
         }
+        if let item = viewController.navigationItem.leftBarButtonItem {
+            accountButtons.add(item)
+            applyAccountBadge(to: item)
+        }
+    }
+
+    /// 未読のお知らせがあれば、アカウントのボタンに点を付ける。
+    private func updateAccountBadges() {
+        for item in accountButtons.allObjects {
+            applyAccountBadge(to: item)
+        }
+    }
+
+    private func applyAccountBadge(to item: UIBarButtonItem) {
+        let unread = announcements.unreadCount
+        item.badge = unread > 0 ? .indicator() : nil
+        item.accessibilityHint = unread > 0 ? "未読のお知らせが\(unread)件あります。" : nil
     }
 
     /// タブのナビゲーションで、チップの列を画面の移り変わりに合わせ、Macでバーの空いたところを押したら一覧を最上部へ動かす。
@@ -1403,6 +1434,74 @@ final class SessionController {
         configure(viewController)
         source.navigationController?.pushViewController(viewController, animated: true)
         controller.model.start(purpose: .action)
+    }
+
+    /// サーバーのお知らせの一覧をシートで開く。リンクを押したら、シートを閉じてから、選んでいるタブの画面に開く。「操作の状況」と同じ。
+    func showAnnouncements(from presenter: UIViewController? = nil) {
+        // シートは1つのモデルを画面として受け持つので、開いているときに重ねて開かない。重ねると、閉じて戻ったシートに変化が届かなくなる。
+        if let presentedAnnouncements, presentedAnnouncements.presentingViewController != nil, !presentedAnnouncements.isBeingDismissed { return }
+        let completion = TextInputCompletion(
+            completion: ComposeCompletion(sources: completionSources, settings: TuningCatalog.completionSettings(in: AppDependencies.tuning), emojis: customEmojis.emojis),
+            recentEmojis: RecentEmojis(defaults: .standard, instance: credential.instance)
+        )
+        let controller = AnnouncementsViewController(model: announcements, completion: completion)
+        controller.notices = notices
+        controller.userMenuActions = userMenuActions
+        controller.hashtagMuteActions = hashtagMuteActions
+        controller.onOpenLink = { [weak self, weak controller] destination, announcement in
+            controller?.dismiss(animated: true) {
+                self?.open(destination, inAnnouncement: announcement)
+            }
+        }
+        controller.onOpenURL = { [weak self, weak controller] url, browser in
+            controller?.dismiss(animated: true) {
+                self?.open(url, in: browser)
+            }
+        }
+        controller.onOpenProfileURL = { [weak self, weak controller] url in
+            controller?.dismiss(animated: true) { [weak self] in
+                guard let self, let source = tabs.selectedNavigation?.topViewController else { return }
+                openProfile(resolvingLink: url, from: source)
+            }
+        }
+        let navigation = AnnouncementsNavigationController(rootViewController: controller)
+        presentedAnnouncements = navigation
+        (presenter ?? topViewController).present(navigation, animated: true)
+    }
+
+    /// お知らせの本文のリンクを開く。メンションはお知らせのメンションの一覧にあるIDで、投稿へのリンクはお知らせがリンクした投稿のIDで開く。
+    private func open(_ destination: RichText.LinkDestination, inAnnouncement announcement: Announcement) {
+        guard let source = tabs.selectedNavigation?.topViewController else { return }
+        switch destination {
+        case .url(let url):
+            if let linked = announcement.statuses.first(where: { $0.url == url }) {
+                openThread(statusID: linked.id, rowFrame: .zero, from: source)
+            } else {
+                open(url, in: AppDependencies.settings.linkBrowser.browser(for: url))
+            }
+        case .mention(let acct, let url):
+            if let mention = announcement.mentions.first(where: { $0.url == url || $0.acct == acct }) {
+                openProfile(accountID: mention.id, from: source)
+            } else {
+                openProfile(resolving: url, acct: acct, from: source)
+            }
+        case .hashtag(let name, _):
+            openFeed(.hashtag(name: name), from: source)
+        }
+    }
+
+    /// お知らせのリアクションの失敗。投稿への操作と同じく、数秒で消えるチップで知らせ、押すと理由を出す。
+    private func reportAnnouncementReactionFailure(_ error: any Error) {
+        let title = "リアクションを変更できませんでした"
+        // 401なら、トークンが無効かを確かめてから理由を決めるので、通信することがある。
+        tasks.run(.action) { [weak self] in
+            guard let self else { return }
+            let reason = await failureReason(for: error)
+            operationStatus.recordFailure(title: title, reason: reason)
+            showFailureNotice(.interactionFailure(title: title) { [weak self] in
+                self?.presentAlert(title: title, message: reason.text)
+            })
+        }
     }
 
     /// 通知のフィルタリングの設定をシートで開く。
@@ -2574,6 +2673,7 @@ final class SessionController {
         observeRecoveries()
         loadServerVersion()
         loadTabSources()
+        announcements.start()
         tasks.run(.display) { [weak self] in await self?.loadPreferences() }
     }
 
@@ -2956,6 +3056,8 @@ final class SessionController {
             }
         case .notificationPolicy:
             showNotificationPolicy()
+        case .announcements:
+            showAnnouncements()
         case .note(let acct):
             let client = client
             let resolve = resolvingAccount(acct)
@@ -3293,6 +3395,7 @@ final class SessionController {
         }
         scheduled.enterForeground()
         presentedScheduled?.enterForeground()
+        announcements.enterForeground()
         threads.enterForeground()
         profileTabs.enterForeground()
         // ほかの端末で作ったり消したりしたリストや、フォローしたハッシュタグを、戻ったときに並びへ反映する。
@@ -3307,6 +3410,7 @@ final class SessionController {
             feed.enterBackground()
         }
         notifications.enterBackground()
+        announcements.enterBackground()
         threads.enterBackground()
         profileTabs.enterBackground()
     }

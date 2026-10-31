@@ -23,6 +23,10 @@ final class EmojiPaletteView: UIView, UIInputViewAudioFeedback {
 
     var onSelect: (PaletteEmoji) -> Void = { _ in }
     var onDelete: () -> Void = {}
+    /// 削除のボタンを出すか。入力欄に入れずに絵文字を選ぶだけのとき（お知らせのリアクション）は出さない。
+    var showsDeleteButton = true {
+        didSet { deleteButton.isHidden = !showsDeleteButton }
+    }
     var onRetry: () -> Void = {}
     /// 検索語が変わった。
     var onQueryChange: () -> Void = {}
