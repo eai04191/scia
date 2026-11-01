@@ -9,7 +9,9 @@ import UIKit
 @MainActor
 struct PrivateNoteMenuTests {
     private func makeViewController() -> TimelineViewController {
-        TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: AppSettings(defaults: TestScratch.defaults("PrivateNoteMenuTests")))
+        let settings = AppSettings(defaults: TestScratch.defaults("PrivateNoteMenuTests"))
+        settings.useMenuFixtures()
+        return TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, avatarImages: .offline, settings: settings)
     }
 
     /// まとまりごとの項目の名前。

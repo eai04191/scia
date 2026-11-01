@@ -158,33 +158,6 @@ struct MenuLayoutTests {
         #expect(layout.elements.first == .item(.a, isVisible: true))
     }
 
-    /// 既定のメニューはよく押す項目だけにし、何のための操作かでまとまりを分ける。返信・お気に入り・ブーストは横に並べる。
-    /// たまにしか使わない項目と取り消せない操作は「その他」に入れ、ほかの設定で代わりがきく公開範囲を選んでブーストは隠す。
-    @Test func statusMenuDefaultGroupsItemsByPurpose() {
-        let groups = StatusMenuItem.defaultLayout.groups
-
-        #expect(groups.main.map(\.isRow) == [true, false, false, false, false])
-        #expect(groups.main.map(\.items) == [
-            [.reply, .favourite, .reblog],
-            [.edit, .bookmark, .quote],
-            [.copyLink, .copyText, .selectText, .share, .select, .openInBrowser],
-            [.systemTranslate],
-            [.notifyingUser, .author, .booster, .hashtags],
-        ])
-        #expect(groups.more.map(\.items) == [[.editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .customEmojis], [.muteConversation, .pin], [.dismissNotification, .redraft, .delete], [.customize]])
-        #expect(StatusMenuItem.defaultLayout.elements.contains(.item(.reblogWithVisibility, isVisible: false)))
-    }
-
-    /// ユーザーのメニューは、開く・書く操作、フォローとリストに追加、持ち出す操作でまとまりを分ける。開く場所を選んで開く2つは隠しておく。
-    /// メモは書く操作に入れる。たまにしか使わないフォローの設定と、プロフィールで紹介、ミュート、ブロック、通報は「その他」に入れる。
-    @Test func userMenuDefaultGroupsItemsByPurpose() {
-        let layout = UserMenuItem.defaultLayout
-
-        #expect(layout.groups.main.map(\.items) == [[.profile, .mention, .note], [.follow, .addToList], [.copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser]])
-        #expect(layout.groups.more.map(\.items) == [[.showReblogs, .notify, .endorse], [.mute, .block, .report], [.customize]])
-        #expect([UserMenuItem.openInDefaultBrowser, .openInAppSafari].allSatisfy { layout.elements.contains(.item($0, isVisible: false)) })
-    }
-
     /// 関係で中身が変わる項目を1つでも出していれば、メニューを開いたときに関係を読む。「その他」の中にあっても読む。
     /// 通報だけなら、自分かどうかはIDで決まるので読まない。
     @Test func userMenuNeedsRelationshipOnlyWithRelationDependentItems() {
@@ -195,134 +168,9 @@ struct MenuLayoutTests {
             }).groups
         }
 
-        #expect(UserMenuItem.defaultLayout.groups.needsRelationship)
+        #expect(MenuFixture.user.groups.needsRelationship)
         #expect(layout(["item:profile", "more", "item:mute"]).needsRelationship)
         #expect(!layout(["item:profile", "item:copyLink", "more", "item:report"]).needsRelationship)
-    }
-
-    /// メンション、メモ、フォロー、ハンドルをコピーを足す前に保存したユーザーのメニューでも、4つはプロフィールの後ろに出る。
-    /// 既定で「その他」の先頭にあるフォローの設定、ミュート、ブロック、通報は、「その他」に入る。
-    @Test func savedUserMenuGainsNewItemsAfterProfile() {
-        let saved = MenuLayout<UserMenuItem>(tokens: ["item:profile", "item:copyLink", "item:share", "more"])
-
-        #expect(saved.groups.main.map(\.items) == [[.profile, .mention, .note, .follow, .addToList, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser]])
-        #expect(saved.groups.more.map(\.items) == [[.showReblogs, .notify, .endorse, .mute, .block, .report, .customize]])
-    }
-
-    /// メモを足す前に保存したユーザーのメニューでも、メモはメンションのすぐ後ろに、表示されて入る。
-    @Test func savedUserMenuGainsNoteAfterMention() {
-        let saved = MenuLayout<UserMenuItem>(tokens: UserMenuItem.defaultLayout.tokens.filter { !$0.hasSuffix(":note") })
-
-        #expect(saved == UserMenuItem.defaultLayout)
-    }
-
-    /// リストに追加を足す前に保存したユーザーのメニューでも、リストに追加はフォローのすぐ後ろに、表示されて入る。
-    @Test func savedUserMenuGainsAddToListAfterFollow() {
-        let saved = MenuLayout<UserMenuItem>(tokens: UserMenuItem.defaultLayout.tokens.filter { !$0.hasSuffix(":addToList") })
-
-        #expect(saved == UserMenuItem.defaultLayout)
-    }
-
-    /// 開く場所を選んで開く2つを足す前に保存した投稿のメニューでも、2つはブラウザで開くのすぐ後ろに、隠れて入る。
-    @Test func savedStatusMenuGainsHiddenBrowserChoicesAfterOpenInBrowser() {
-        let saved = MenuLayout<StatusMenuItem>(tokens: StatusMenuItem.defaultLayout.tokens.filter { !$0.hasSuffix(":openInDefaultBrowser") && !$0.hasSuffix(":openInAppSafari") })
-        let index = saved.elements.firstIndex(of: .item(.openInBrowser, isVisible: true))
-
-        #expect(index.map { Array(saved.elements[($0 + 1)...($0 + 2)]) } == [.item(.openInDefaultBrowser, isVisible: false), .item(.openInAppSafari, isVisible: false)])
-        #expect(saved.groups == StatusMenuItem.defaultLayout.groups)
-    }
-
-    /// どのメニューでも、カスタマイズは既定で「その他」のいちばん下に、ほかの項目と区切って出す。
-    @Test func customizeIsLastGroupInMoreByDefault() {
-        func lastMoreGroup<Item: MenuItemKind>(_: Item.Type) -> [Item]? {
-            Item.defaultLayout.groups.more.last?.items
-        }
-        #expect(lastMoreGroup(StatusMenuItem.self) == [.customize])
-        #expect(lastMoreGroup(UserMenuItem.self) == [.customize])
-        #expect(lastMoreGroup(LinkMenuItem.self) == [.customize])
-        #expect(lastMoreGroup(ExternalPostMenuItem.self) == [.customize])
-        #expect(lastMoreGroup(ProfileTextMenuItem.self) == [.customize])
-        #expect(lastMoreGroup(HashtagMenuItem.self) == [.customize])
-        #expect(lastMoreGroup(MediaMenuItem.self) == [.customize])
-    }
-
-    /// 本文のリンクのメニューは、設定を足す前の決め打ちのメニューと同じ並びにする。ハッシュタグのメニューは、その前にアプリで開く2つとミュートを置く。開く場所を選んで開く2つは隠しておく。
-    /// リンクのメニューには、あとから足した「プロフィールとして開く」が「ブラウザで開く」の下に入る。
-    /// ハッシュタグのメニューの「プロフィールで紹介」は、投稿のメニューの「固定」と同じく、自分のプロフィールの操作として「その他」の先頭に置く。
-    @Test func linkAndHashtagMenuDefaultsMatchMenuBeforeCustomization() {
-        #expect(LinkMenuItem.defaultLayout.groups.main.map(\.items) == [[.openInBrowser, .openAsProfile, .copyLink, .share]])
-        #expect(LinkMenuItem.defaultLayout.groups.more.map(\.items) == [[.customize]])
-        #expect(HashtagMenuItem.defaultLayout.groups.main.map(\.items) == [[.timeline, .accountStatuses], [.mute], [.openInBrowser, .copyLink, .share]])
-        #expect(HashtagMenuItem.defaultLayout.groups.more.map(\.items) == [[.feature], [.customize]])
-    }
-
-    /// ほかのサービスの投稿のメニューは、持ち出す操作と翻訳のまとまりに分ける。開く場所を選んで開く2つは隠しておく。
-    @Test func externalPostMenuDefaults() {
-        #expect(ExternalPostMenuItem.defaultLayout.groups.main.map(\.items) == [[.openInBrowser, .copyLink, .copyText, .share], [.systemTranslate]])
-        #expect(ExternalPostMenuItem.defaultLayout.groups.more.map(\.items) == [[.customize]])
-    }
-
-    /// プロフィールの文章のメニューは、3つの項目を区切り線で分けて並べ、どれも隠さず「その他」にはカスタマイズだけを置く。
-    @Test func profileTextMenuDefaults() {
-        #expect(ProfileTextMenuItem.defaultLayout.groups.main.map(\.items) == [[.copyLabel, .copyText], [.systemTranslate], [.customEmojis]])
-        #expect(ProfileTextMenuItem.defaultLayout.groups.more.map(\.items) == [[.customize]])
-    }
-
-    /// 「プロフィールとして開く」を足す前に保存したリンクのメニューでも、「ブラウザで開く」の下に出る。
-    @Test func savedLinkMenuGainsOpenAsProfileAfterOpenInBrowser() {
-        let saved = MenuLayout<LinkMenuItem>(tokens: [
-            "item:openInBrowser", "hidden:openInDefaultBrowser", "hidden:openInAppSafari", "item:copyLink", "item:share", "more",
-        ])
-
-        #expect(saved.groups.main.map(\.items) == [[.openInBrowser, .openAsProfile, .copyLink, .share]])
-    }
-
-    /// タイムラインを開く2つを足す前に保存したハッシュタグのメニューでも、2つは先頭に出る。
-    @Test func savedHashtagMenuGainsTimelineItemsAtTop() {
-        let saved = MenuLayout<HashtagMenuItem>(tokens: ["item:openInBrowser", "hidden:openInDefaultBrowser", "hidden:openInAppSafari", "item:copyLink", "item:share", "more"])
-        #expect(saved.groups.main.flatMap(\.items).prefix(2) == [.timeline, .accountStatuses])
-    }
-
-    /// リンクをコピーと共有を足す前に保存したユーザーのメニューでも、2つはプロフィールの後ろに出る。
-    @Test func savedUserMenuGainsCopyLinkAndShareAfterProfile() {
-        let saved = MenuLayout<UserMenuItem>(tokens: ["more", "item:profile"])
-
-        #expect(saved.groups.main.map(\.items).isEmpty)
-        #expect(saved.groups.more.map(\.items) == [[.showReblogs, .notify, .endorse, .mute, .block, .report, .customize, .profile, .mention, .note, .follow, .addToList, .copyHandle, .copyUsername, .copyServer, .copyLink, .share, .openInBrowser]])
-    }
-
-    /// ブックマークを足す前に保存した投稿のメニューでも、ブックマークは編集の後ろに、表示されて入る。
-    @Test func savedStatusMenuGainsVisibleBookmarkAfterEdit() {
-        let saved = MenuLayout<StatusMenuItem>(tokens: StatusMenuItem.defaultLayout.tokens.filter { !$0.hasSuffix(":bookmark") })
-        let index = saved.elements.firstIndex(of: .item(.edit, isVisible: true))
-
-        #expect(index.map { saved.elements[$0 + 1] } == .item(.bookmark, isVisible: true))
-    }
-
-    /// 引用を足す前に保存した投稿のメニューでも、引用はブックマークの後ろに、表示されて入る。
-    @Test func savedStatusMenuGainsVisibleQuoteAfterBookmark() {
-        let saved = MenuLayout<StatusMenuItem>(tokens: StatusMenuItem.defaultLayout.tokens.filter { !$0.hasSuffix(":quote") })
-        let index = saved.elements.firstIndex(of: .item(.bookmark, isVisible: true))
-
-        #expect(index.map { saved.elements[$0 + 1] } == .item(.quote, isVisible: true))
-    }
-
-    /// 編集と削除を足す前に保存した並びでも、編集はブーストの後ろに、削除は「その他」に入る。
-    @Test func savedStatusMenuGainsEditAndDelete() {
-        let saved = MenuLayout<StatusMenuItem>(tokens: ["item:reblog", "item:reply", "item:favourite", "separator", "item:copyLink", "more", "hidden:share"])
-
-        #expect(saved.groups.main.map(\.items).first == [.reblog, .edit, .bookmark, .quote, .reply, .favourite])
-        // 編集履歴は既定で「その他」の先頭にあるため、保存した並びでも「その他」の先頭に入り、削除までの項目がその後ろに続く。
-        // 共有を「その他」に入れた並びなので、共有の後ろに来るブラウザで開くなども、その後ろに続く。
-        #expect(saved.groups.more.map(\.items).first.map { Array($0.prefix(10)) } == [.editHistory, .favouritedBy, .rebloggedBy, .hideMedia, .customEmojis, .muteConversation, .pin, .dismissNotification, .redraft, .delete])
-    }
-
-    /// 削除して書き直すを足す前に保存した投稿のメニューでも、削除して書き直すは削除の前に、表示されて入る。
-    @Test func savedStatusMenuGainsVisibleRedraftBeforeDelete() {
-        let saved = MenuLayout<StatusMenuItem>(tokens: StatusMenuItem.defaultLayout.tokens.filter { !$0.hasSuffix(":redraft") })
-        let index = saved.elements.firstIndex(of: .item(.delete, isVisible: true))
-
-        #expect(index.map { saved.elements[$0 - 1] } == .item(.redraft, isVisible: true))
     }
 
     @Test func appSettingsPersistsMenuLayouts() throws {
@@ -334,20 +182,6 @@ struct MenuLayoutTests {
 
         let restored = AppSettings(defaults: defaults).statusMenuLayout
         #expect(restored == changed)
-        #expect(restored.groups.main.map(\.items).first?.first == .share)
-    }
-
-    /// メディアのメニューは、開く・共有・保存、読む、持ち出す、投稿の順にまとまりを分け、メディアの情報は「その他」に入れる。
-    @Test func mediaMenuDefaultGroupsItemsByPurpose() {
-        let groups = MediaMenuItem.defaultLayout.groups
-
-        #expect(groups.main.map(\.items) == [
-            [.open, .share, .saveToPhotos],
-            [.altText, .translateText],
-            [.copyLink, .openInBrowser],
-            [.status],
-        ])
-        #expect(groups.more.map(\.items) == [[.info], [.customize]])
     }
 
     @Test func appSettingsPersistsMediaMenuLayout() throws {

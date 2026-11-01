@@ -64,11 +64,4 @@ struct ObjectActionTests {
         #expect(ObjectActions<StatusMenuItem>(tap: .menu, longPress: .item(.openThread)).opensMenu)
         #expect(!ObjectActions<StatusMenuItem>(tap: .item(.openThread), longPress: .item(.favourite)).opensMenu)
     }
-
-    /// 「スレッドを開く」は、既定ではタップで開けるため、メニューでは隠す。
-    @Test func openThreadIsHiddenInMenuByDefault() {
-        let element = StatusMenuItem.defaultLayout.elements.first { if case .item(.openThread, _) = $0 { true } else { false } }
-        #expect(element == .item(.openThread, isVisible: false))
-        #expect(!StatusMenuItem.defaultLayout.groups.main.flatMap(\.items).contains(.openThread))
-    }
 }

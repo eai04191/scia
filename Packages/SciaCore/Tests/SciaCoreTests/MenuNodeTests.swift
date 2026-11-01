@@ -22,11 +22,11 @@ struct MenuNodeTests {
         let layout = MenuLayout<LinkMenuItem>(elements: [
             .rowSeparator, .item(.openInBrowser, isVisible: true), .item(.share, isVisible: true),
             .separator, .item(.copyLink, isVisible: true),
-            .more, .item(.openAsProfile, isVisible: true), .item(.openInDefaultBrowser, isVisible: true), .item(.openInAppSafari, isVisible: true),
+            .more, .item(.openAsProfile, isVisible: true), .item(.openInDefaultBrowser, isVisible: true), .item(.openInAppSafari, isVisible: true), .item(.customize, isVisible: true),
         ])
         let nodes = layout.groups.nodes { item -> [MenuNode<Int>] in item == .copyLink ? [] : [.action(item.title, 1)] }
 
-        #expect(Self.describe(nodes) == "=ブラウザで開く,共有|その他[カスタマイズ,プロフィールとして開く,既定のブラウザで開く,アプリ内のSafariで開く]")
+        #expect(Self.describe(nodes) == "=ブラウザで開く,共有|その他[プロフィールとして開く,既定のブラウザで開く,アプリ内のSafariで開く,カスタマイズ]")
 
         let mainOnly = layout.groups.nodes { item -> [MenuNode<Int>] in [.openInBrowser].contains(item) ? [.action(item.title, 1)] : [] }
         #expect(Self.describe(mainOnly) == "=ブラウザで開く")
@@ -35,7 +35,7 @@ struct MenuNodeTests {
     /// 並びにカスタマイズのほかの項目があるのに、どれも出ないときは、カスタマイズだけのメニューにせず何も出さない。
     /// 並びがカスタマイズだけなら、それを出す。タップや長押しにカスタマイズを割り当てたときも、この形で組む。
     @Test func customizeAloneIsShownOnlyWhenNothingElseIsListed() {
-        let othersBuildNothing = LinkMenuItem.defaultLayout.groups.nodes { item -> [MenuNode<Int>] in item == .customize ? [.action(item.title, 1)] : [] }
+        let othersBuildNothing = MenuFixture.link.groups.nodes { item -> [MenuNode<Int>] in item == .customize ? [.action(item.title, 1)] : [] }
         #expect(othersBuildNothing.isEmpty)
 
         let single = MenuLayout<LinkMenuItem>.Groups.single(.customize).nodes { item -> [MenuNode<Int>] in [.action(item.title, 1)] }

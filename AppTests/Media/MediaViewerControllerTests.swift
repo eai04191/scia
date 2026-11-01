@@ -21,6 +21,7 @@ struct MediaViewerControllerTests {
     init() throws {
         let defaults = TestScratch.defaults("MediaViewerControllerTests")
         settings = AppSettings(defaults: defaults)
+        settings.useMenuFixtures()
     }
 
     private func makeViewer(attachments: [MediaAttachment]) -> MediaViewerController {

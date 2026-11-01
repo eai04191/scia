@@ -19,14 +19,16 @@ struct StatusMenuTreeTests {
         var tree = StatusMenuTree(status: status, notification: notification, now: Date(timeIntervalSince1970: 0), linkBrowser: .inApp)
         tree.myAccountID = myAccountID
         tree.userActions = actions
+        tree.userMenu = MenuFixture.user.groups
+        tree.hashtagMenu = MenuFixture.hashtag.groups
         return tree
     }
 
-    private func outline(_ tree: StatusMenuTree, layout: MenuLayout<StatusMenuItem> = StatusMenuItem.defaultLayout) -> String {
+    private func outline(_ tree: StatusMenuTree, layout: MenuLayout<StatusMenuItem> = MenuFixture.status) -> String {
         MenuNodeTests.describe(tree.menu(groups: layout.groups, includesFollowRequest: true).root?.children ?? [])
     }
 
-    private func titles(_ tree: StatusMenuTree, layout: MenuLayout<StatusMenuItem> = StatusMenuItem.defaultLayout) -> [String] {
+    private func titles(_ tree: StatusMenuTree, layout: MenuLayout<StatusMenuItem> = MenuFixture.status) -> [String] {
         func flatten(_ node: MenuNode<StatusMenuCommand>) -> [MenuNode<StatusMenuCommand>] {
             if case .action = node.content { return [node] }
             // ユーザーの`@acct`のサブメニューの中は含めない。
@@ -37,23 +39,24 @@ struct StatusMenuTreeTests {
     }
 
     private func showing(_ item: StatusMenuItem) -> MenuLayout<StatusMenuItem> {
-        MenuLayout(elements: StatusMenuItem.defaultLayout.elements.map { element in
+        MenuLayout(elements: MenuFixture.status.elements.map { element in
             element == .item(item, isVisible: false) ? .item(item, isVisible: true) : element
         })
     }
 
-    /// 既定の並びは、何のための操作かでまとまりを分ける。横並びの区切り線の下の返信・お気に入り・ブーストは横に並べる。
+    /// 既定の並びは、何のための操作かでまとまりを分ける。横並びの区切り線の下の返信・ブースト・お気に入りは横に並べる。
     /// 自分のアカウントが分からない一覧では、会話のミュート、固定、公開範囲を選んでブーストは出ない。
     @Test func defaultMenuGroupsItemsByPurpose() {
-        #expect(outline(tree(status(url: URL(string: "https://example.social/@alice/100")))) == "=返信,お気に入り,ブースト(押せない)|ブックマーク|リンクをコピー,テキストをコピー,共有,ブラウザで開く|翻訳|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[カスタマイズ]")
+        #expect(outline(tree(status(url: URL(string: "https://example.social/@alice/100")))) == "=返信,ブースト(押せない),お気に入り|ブックマーク|共有,リンクをコピー,テキストをコピー,ブラウザで開く|翻訳|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[カスタマイズ]")
     }
 
-    /// 投稿を選べる一覧の行でだけ「選択」を出し、既定では共有のすぐ後ろに置く。投稿のない通知では出さない。
+    /// 投稿を選べる一覧の行でだけ「選択」を出し、既定では「その他」の先頭に置く。投稿のない通知では出さない。
     @Test func selectItemAppearsOnlyWhereRowsCanBeSelected() {
         var selectable = tree(status())
         selectable.canSelectPosts = true
         let shown = titles(selectable)
-        #expect(shown.firstIndex(of: "選択") == shown.firstIndex(of: "共有").map { $0 + 1 })
+        #expect(shown.contains("選択"))
+        #expect(outline(selectable).contains("|その他[選択,"))
         #expect(!titles(tree(status())).contains("選択"))
 
         var withoutStatus = tree(nil)
@@ -72,7 +75,7 @@ struct StatusMenuTreeTests {
     /// ユーザーは元の投稿を書いた人、ブーストした人の順に並ぶ。
     @Test func reblogUsesOriginalStatusURLAndListsBothUsers() throws {
         let original = status(url: URL(string: "https://remote.example/@bob/1"), account: account("2", "bob@remote.example"))
-        let built = tree(status(reblog: original)).menu(groups: StatusMenuItem.defaultLayout.groups, includesFollowRequest: true)
+        let built = tree(status(reblog: original)).menu(groups: MenuFixture.status.groups, includesFollowRequest: true)
         let root = try #require(built.root)
         let links = root.flattenedChildren.filter { ["リンクをコピー", "共有", "ブラウザで開く"].contains($0.title) }
 
@@ -83,13 +86,13 @@ struct StatusMenuTreeTests {
         #expect(users.children.first?.subtitle == "remote.example")
         #expect(built.shownUserIDs == ["2", "1"])
 
-        let withoutURL = try #require(tree(status()).menu(groups: StatusMenuItem.defaultLayout.groups, includesFollowRequest: true).root)
+        let withoutURL = try #require(tree(status()).menu(groups: MenuFixture.status.groups, includesFollowRequest: true).root)
         #expect(withoutURL.flattenedChildren.filter { ["リンクをコピー", "共有", "ブラウザで開く"].contains($0.title) }.allSatisfy { !$0.isEnabled })
     }
 
     /// 自分の投稿を自分でブーストしたときのように、同じユーザーが2つの項目に当たるときは1度だけ出す。
     @Test func sameUserIsListedOnce() {
-        let built = tree(status(reblog: status())).menu(groups: StatusMenuItem.defaultLayout.groups, includesFollowRequest: true)
+        let built = tree(status(reblog: status())).menu(groups: MenuFixture.status.groups, includesFollowRequest: true)
         #expect(MenuNodeTests.describe(Array(built.root?.children.dropLast().suffix(1) ?? [])) == "@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
         #expect(built.shownUserIDs == ["1"])
     }
@@ -97,10 +100,10 @@ struct StatusMenuTreeTests {
     /// 投稿のない通知では、通知したユーザーと、投稿を必要としない通知の削除だけを出す。通知したユーザーは、対象の投稿を書いた人より先に出る。
     @Test func notificationsListNotifyingUserFirst() {
         let follow = MastodonNotification(id: "1", type: .follow, createdAt: Date(timeIntervalSince1970: 0), account: account("2", "bob"))
-        #expect(outline(tree(nil, notification: follow)) == "@bob[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[通知を削除,カスタマイズ]")
+        #expect(outline(tree(nil, notification: follow)) == "@bob[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|通知を削除|その他[カスタマイズ]")
 
         let favourite = MastodonNotification(id: "1", type: .favourite, createdAt: Date(timeIntervalSince1970: 0), account: account("2", "bob"), status: status())
-        #expect(outline(tree(status(), notification: favourite)).hasSuffix("|@bob[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[通知を削除,カスタマイズ]"))
+        #expect(outline(tree(status(), notification: favourite)).hasSuffix("|@bob[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|通知を削除|その他[カスタマイズ]"))
     }
 
     /// フォローリクエストの通知では、設定の並びの前に、承認と却下を置く。1項目だけ組むときは置かない。
@@ -129,10 +132,9 @@ struct StatusMenuTreeTests {
             .item(.copyLink, isVisible: true),
             .separator,
             .item(.reblog, isVisible: true),
-        ])
+        ] + StatusMenuItem.allCases.filter { ![.reply, .favourite, .share, .copyLink, .reblog].contains($0) }.map { .item($0, isVisible: false) })
 
-        // 並びに書かなかった項目は、既定で直前にある項目の後ろに差し込まれる。
-        #expect(outline(tree(status()), layout: layout) == "返信|共有(押せない),ブラウザで開く(押せない),翻訳,@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]|その他[カスタマイズ,リンクをコピー(押せない),テキストをコピー,ブースト(押せない),ブックマーク]")
+        #expect(outline(tree(status()), layout: layout) == "返信|共有(押せない)|その他[リンクをコピー(押せない),ブースト(押せない)]")
     }
 
     /// メンションされたユーザーは既定で隠す。出すと、メンションされた人ごとに並ぶ。
@@ -152,7 +154,7 @@ struct StatusMenuTreeTests {
         withEmoji.customEmoji = { (emoji: CustomEmoji) in
             var media = MediaMenuTree(kind: .image, attachment: emoji.attachment)
             media.open = true
-            return media.customEmojiSubmenu(emoji, groups: MediaMenuItem.defaultLayout.groups)
+            return media.customEmojiSubmenu(emoji, groups: MenuFixture.media.groups)
         }
 
         #expect(outline(withEmoji).hasSuffix("|その他[:blobcat:[開く,その他[メディアの情報[PNG],カスタマイズ]],カスタマイズ]"))
@@ -164,7 +166,7 @@ struct StatusMenuTreeTests {
         let tagURL = try #require(URL(string: "https://example.social/tags/cat"))
         let post = status(tags: [SciaCore.Tag(name: "cat", url: tagURL), SciaCore.Tag(name: "Cat", url: tagURL), SciaCore.Tag(name: "dog", url: nil)])
 
-        #expect(outline(tree(post)).hasSuffix("|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],#cat[すべての投稿,@aliceの投稿,ブラウザで開く,リンクをコピー,共有,その他[カスタマイズ]],#dog[すべての投稿,@aliceの投稿,ブラウザで開く(押せない),リンクをコピー(押せない),共有(押せない),その他[カスタマイズ]]|その他[カスタマイズ]"))
+        #expect(outline(tree(post)).hasSuffix("|@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],#cat[すべての投稿,@aliceの投稿,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]],#dog[すべての投稿,@aliceの投稿,リンクをコピー(押せない),共有(押せない),ブラウザで開く(押せない),その他[カスタマイズ]]|その他[カスタマイズ]"))
         #expect(!outline(tree(status())).contains("#"))
     }
 

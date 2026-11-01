@@ -218,8 +218,9 @@ struct LinkLabelTests {
     }
 
     private func settings() throws -> AppSettings {
-        let defaults = TestScratch.defaults("LinkLabelTests")
-        return AppSettings(defaults: defaults)
+        let settings = AppSettings(defaults: TestScratch.defaults("LinkLabelTests"))
+        settings.useMenuFixtures()
+        return settings
     }
 
     /// 本文のリンクの長押しのメニューの、見出しと項目の名前。区切り線のまとまりは`|`で、サブメニューは`名前[中身]`で表す。
@@ -244,8 +245,8 @@ struct LinkLabelTests {
         let profile = try #require(URL(string: "https://example.social/@bob"))
         let settings = try settings()
 
-        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: ブラウザで開く,プロフィールとして開く,リンクをコピー,共有|その他[カスタマイズ]")
-        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: すべての投稿|ブラウザで開く,リンクをコピー,共有|その他[カスタマイズ]")
+        #expect(try menuOutline(of: .url(url), settings: settings) == "https://example.com/a: ブラウザで開く,プロフィールとして開く|リンクをコピー,共有|その他[カスタマイズ]")
+        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings) == "#cat: すべての投稿|リンクをコピー,共有,ブラウザで開く|その他[カスタマイズ]")
         #expect(try menuOutline(of: .mention(acct: "bob@example.social", url: profile), settings: settings) == "@bob\nexample.social: プロフィール|リンクをコピー,共有,ブラウザで開く|その他[カスタマイズ]")
     }
 
@@ -256,7 +257,7 @@ struct LinkLabelTests {
         let local = Account(id: "2", username: "bob", acct: "bob", displayName: "Bob", avatar: nil)
         let remote = Account(id: "3", username: "carol", acct: "carol@remote.example", displayName: "Carol", avatar: nil)
 
-        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings, hashtagAccount: local) == "#cat: すべての投稿,@bobの投稿|ブラウザで開く,リンクをコピー,共有|その他[カスタマイズ]")
+        #expect(try menuOutline(of: .hashtag(name: "cat", url: tag), settings: settings, hashtagAccount: local) == "#cat: すべての投稿,@bobの投稿|リンクをコピー,共有,ブラウザで開く|その他[カスタマイズ]")
         let label = label(for: RichText(blocks: [.init(inlines: [.link("x", .hashtag(name: "cat", url: tag), [])])]))
         label.settings = settings
         label.hashtagAccount = remote

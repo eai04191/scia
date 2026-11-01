@@ -13,6 +13,7 @@ struct MenuPlacementTests {
     /// すべての項目を出し、区切り線と「その他」も使う並び。
     private func makeSettings() -> AppSettings {
         let settings = AppSettings(defaults: TestScratch.defaults("MenuPlacementTests"))
+        settings.useMenuFixtures()
         let items = UserMenuItem.allCases.map { MenuLayout<UserMenuItem>.Element.item($0, isVisible: true) }
         settings.userMenuLayout = MenuLayout(elements: Array(items.prefix(5)) + [.separator] + Array(items.dropFirst(5).prefix(4)) + [.more] + Array(items.dropFirst(9)))
         return settings

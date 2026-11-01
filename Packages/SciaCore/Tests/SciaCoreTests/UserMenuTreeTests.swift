@@ -24,7 +24,7 @@ struct UserMenuTreeTests {
         MenuLayout(elements: UserMenuItem.allCases.map { .item($0, isVisible: visible.contains($0)) } + [.more]).groups
     }
 
-    private func submenu(_ groups: MenuLayout<UserMenuItem>.Groups = UserMenuItem.defaultLayout.groups, actions: UserMenuActions? = nil) -> String? {
+    private func submenu(_ groups: MenuLayout<UserMenuItem>.Groups = MenuFixture.user.groups, actions: UserMenuActions? = nil) -> String? {
         UserMenuTree(subject: UserMenuSubject(.account(alice)), actions: actions, linkBrowser: .inApp)
             .submenu(groups: groups, avatar: .user(.account(alice)))
             .map { MenuNodeTests.describe([$0]) }
@@ -134,8 +134,8 @@ struct UserMenuTreeTests {
         let reportOnly = layout(visible: [.profile, .report])
         let reportFirst = MenuLayout<UserMenuItem>(elements: [.item(.report, isVisible: true)] + UserMenuItem.allCases.filter { $0 != .report }.map { .item($0, isVisible: true) } + [.more]).groups
 
-        // 既定の並びでは、メモがフォローより先に出る。
-        #expect(UserMenuItem.defaultLayout.groups.relationFailureSlots(waitsForReport: false) == RelationFailureSlots(relation: .note, resolve: .note))
+        // この並びでは、関係の項目のうちフォローが最初に出る。
+        #expect(MenuFixture.user.groups.relationFailureSlots(waitsForReport: false) == RelationFailureSlots(relation: .follow, resolve: .follow))
         #expect(reportOnly.relationFailureSlots(waitsForReport: false) == RelationFailureSlots(relation: nil, resolve: nil))
         #expect(reportOnly.relationFailureSlots(waitsForReport: true) == RelationFailureSlots(relation: nil, resolve: .report))
         #expect(reportFirst.relationFailureSlots(waitsForReport: true) == RelationFailureSlots(relation: .follow, resolve: .report))
@@ -156,10 +156,10 @@ struct UserMenuTreeTests {
 
     // MARK: - 投稿のメニューのサブメニュー
 
-    /// 既定のユーザーのメニューは、開く・書く操作（メモを含む）、フォローとリストに追加、持ち出す操作でまとまりを分け、フォローの設定、プロフィールで紹介、ミュート、ブロックは「その他」に入れる。
+    /// 既定のユーザーのメニューは、開く・書く操作、フォローとリストに追加、持ち出す操作、ミュート・ブロック・通報でまとまりを分け、ユーザー名とサーバーのコピー、メモ、フォローの設定、プロフィールで紹介は「その他」に入れる。
     /// 関係を覚えていない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() {
-        #expect(submenu(actions: actions()) == "@alice[プロフィール,メンション,…,…,リストに追加,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,…,通報,カスタマイズ]]")
+        #expect(submenu(actions: actions()) == "@alice[プロフィール,メンション,…,リストに追加,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,…,…,通報,その他[ユーザー名をコピー,サーバーをコピー,…,…,…,…,カスタマイズ]]")
     }
 
     /// メンション、ハンドルをコピー、関係の項目を組むものを渡されていない画面では、これらを出さない。
@@ -198,15 +198,15 @@ struct UserMenuTreeTests {
         }
         let user = try #require(submenu(actions: known))
 
-        #expect(user.hasPrefix("@alice[プロフィール,メンション,メモを追加,フォローを外す,"))
+        #expect(user.hasPrefix("@alice[プロフィール,メンション,フォローを外す,"))
         #expect(!user.contains("…"))
     }
 
     /// 自分には、関係の項目のうちメモだけを出し、通報も出さない。自分との関係を覚えていれば、メモの項目をその場で組む。
     @Test func myselfHasOnlyNoteItem() {
         let me = UserRelation(accountID: "2", acct: "alice", relationship: Relationship(id: "2", note: "TODO"))
-        #expect(submenu(actions: actions { _ in .myself(me) }) == "@alice[プロフィール,メンション,メモを編集,リストに追加,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
-        #expect(submenu(actions: actions { _ in .myself(nil) }) == "@alice[プロフィール,メンション,…,リストに追加,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]")
+        #expect(submenu(actions: actions { _ in .myself(me) }) == "@alice[プロフィール,メンション,リストに追加,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[ユーザー名をコピー,サーバーをコピー,メモを編集,カスタマイズ]]")
+        #expect(submenu(actions: actions { _ in .myself(nil) }) == "@alice[プロフィール,メンション,リストに追加,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,その他[ユーザー名をコピー,サーバーをコピー,…,カスタマイズ]]")
     }
 
     /// 自分との関係を覚えていなければ、読んでからメモの項目を組む。読めなければ、メモの場所に知らせる。自分にはほかに関係の項目を出さないため。
@@ -256,7 +256,7 @@ struct UserMenuTreeTests {
 
     /// 「その他」に何かあれば、1項目でもサブメニューにする。出す項目がなければ何も出さない。
     @Test func submenuWhenProfileIsInMoreAndNothingWhenEmpty() {
-        #expect(submenu(MenuLayout(elements: [.more, .item(.profile, isVisible: true)]).groups) == "@alice[その他[カスタマイズ,プロフィール,リンクをコピー,共有,ブラウザで開く]]")
+        #expect(submenu(MenuLayout(elements: [.more, .item(.profile, isVisible: true)] + UserMenuItem.allCases.filter { $0 != .profile }.map { .item($0, isVisible: false) }).groups) == "@alice[その他[プロフィール]]")
         #expect(submenu(layout(visible: [])) == nil)
     }
 
@@ -317,16 +317,16 @@ struct UserMenuTreeTests {
     /// 関係を読み直すのは、関係で中身が変わる項目を出しているときだけ。
     @Test func standaloneAndProfileScreenMenus() throws {
         let tree = UserMenuTree(subject: UserMenuSubject(.account(alice)), actions: nil, linkBrowser: .inApp)
-        let standalone = try #require(tree.menu(groups: UserMenuItem.defaultLayout.groups, avatar: .user(.account(alice))))
-        let profile = try #require(tree.profileScreenMenu(groups: UserMenuItem.defaultLayout.groups))
+        let standalone = try #require(tree.menu(groups: MenuFixture.user.groups, avatar: .user(.account(alice))))
+        let profile = try #require(tree.profileScreenMenu(groups: MenuFixture.user.groups))
 
         #expect(standalone.title == "@alice\nremote.example")
         #expect(standalone.flattenedChildren.first?.title == "プロフィール")
         #expect(profile.title.isEmpty)
         #expect(!profile.flattenedChildren.map(\.title).contains("プロフィール"))
-        #expect(tree.relationReloadID(groups: UserMenuItem.defaultLayout.groups) == "2")
+        #expect(tree.relationReloadID(groups: MenuFixture.user.groups) == "2")
         #expect(tree.relationReloadID(groups: layout(visible: [.profile, .report])) == nil)
         let link = UserMenuTree(subject: UserMenuSubject(mentionLink: try #require(alice.url), acct: "alice"), actions: nil, linkBrowser: .inApp)
-        #expect(link.relationReloadID(groups: UserMenuItem.defaultLayout.groups) == nil)
+        #expect(link.relationReloadID(groups: MenuFixture.user.groups) == nil)
     }
 }

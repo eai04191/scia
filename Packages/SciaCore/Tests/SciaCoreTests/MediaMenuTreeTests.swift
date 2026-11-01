@@ -31,14 +31,14 @@ struct MediaMenuTreeTests {
 
     /// 既定の並びは、開く・共有・保存、読む、持ち出す、投稿の順にまとまりを分け、メディアの情報は「その他」に入れる。
     @Test func defaultMenuGroupsItemsByPurpose() {
-        let nodes = timelineMenu(for: attachment(.image, description: "夕焼け")).nodes(groups: MediaMenuItem.defaultLayout.groups)
+        let nodes = timelineMenu(for: attachment(.image, description: "夕焼け")).nodes(groups: MenuFixture.media.groups)
 
         #expect(MenuNodeTests.describe(nodes) == "開く,共有,写真に保存|代替テキスト|リンクをコピー,ブラウザで開く|投稿[返信]|その他[メディアの情報[640×480,PNG],カスタマイズ]")
     }
 
     /// 写真に入らない音声では保存を、代替テキストのないメディアでは代替テキストを出さない。
     @Test func omitsItemsThatDoNotApply() {
-        let described = MenuNodeTests.describe(timelineMenu(for: attachment(.audio)).nodes(groups: MediaMenuItem.defaultLayout.groups))
+        let described = MenuNodeTests.describe(timelineMenu(for: attachment(.audio)).nodes(groups: MenuFixture.media.groups))
 
         #expect(!described.contains("写真に保存"))
         #expect(!described.contains("代替テキスト"))
@@ -52,14 +52,14 @@ struct MediaMenuTreeTests {
         menu.saveToPhotos = false
         menu.fileURL = attachment(.image).url
 
-        #expect(MenuNodeTests.describe(menu.nodes(groups: MediaMenuItem.defaultLayout.groups)) == "共有(押せない),写真に保存(押せない)|その他[メディアの情報[640×480,PNG],カスタマイズ]")
+        #expect(MenuNodeTests.describe(menu.nodes(groups: MenuFixture.media.groups)) == "共有(押せない),写真に保存(押せない)|その他[メディアの情報[640×480,PNG],カスタマイズ]")
     }
 
     /// 開く先のないビューア（Macの別のウィンドウや編集履歴から開いたとき）では、開く項目を出さず、リンクのコピーは残す。
     @Test func keepsCopyLinkWithoutOpeningURLs() {
         var menu = timelineMenu(for: attachment(.image))
         menu.opensURLs = false
-        let described = MenuNodeTests.describe(menu.nodes(groups: MediaMenuItem.defaultLayout.groups))
+        let described = MenuNodeTests.describe(menu.nodes(groups: MenuFixture.media.groups))
 
         #expect(described.contains("リンクをコピー"))
         #expect(!described.contains("ブラウザで開く"))
@@ -67,7 +67,7 @@ struct MediaMenuTreeTests {
 
     /// 設定で隠した項目と、「その他」へ動かした項目は、その通りに出す。
     @Test func followsCustomizedLayout() {
-        var elements = MediaMenuItem.defaultLayout.elements.compactMap { element -> MenuLayout<MediaMenuItem>.Element? in
+        var elements = MenuFixture.media.elements.compactMap { element -> MenuLayout<MediaMenuItem>.Element? in
             switch element {
             case .item(.open, _): .item(.open, isVisible: false)
             case .item(.share, _): nil
@@ -84,7 +84,7 @@ struct MediaMenuTreeTests {
 
     /// メディアの情報の行は、値を名前に、何の値かをサブタイトルに置き、押すと値をコピーする。
     @Test func infoRowCopiesItsValue() throws {
-        let nodes = timelineMenu(for: attachment(.image)).nodes(groups: MediaMenuItem.defaultLayout.groups)
+        let nodes = timelineMenu(for: attachment(.image)).nodes(groups: MenuFixture.media.groups)
         let info = try #require(nodes.last?.flattenedChildren.first)
         let resolution = try #require(info.children.first)
 
@@ -104,7 +104,7 @@ struct MediaMenuTreeTests {
         var menu = MediaMenuTree(kind: .image, attachment: emoji.attachment)
         menu.open = true
 
-        let node = try #require(menu.customEmojiSubmenu(emoji, groups: MediaMenuItem.defaultLayout.groups))
+        let node = try #require(menu.customEmojiSubmenu(emoji, groups: MenuFixture.media.groups))
         #expect(MenuNodeTests.describe([node]) == ":blobcat:[開く,その他[メディアの情報[PNG],カスタマイズ]]")
         #expect(node.icon?.symbolName == "face.smiling")
     }

@@ -31,6 +31,34 @@ struct MenuDefaultsTests {
         check(MediaMenuItem.self)
     }
 
+    /// あとから足した項目は、保存した並びを読むときに、既定の並びで直前にある項目（区切り線は数えない）のすぐ後ろへ、既定の表示で入る。
+    /// どの既定の並びでも成り立つよう、項目を1つずつ抜いた既定の並びを読み直して確かめる。
+    @Test("足した項目は、既定で直前にある項目の後ろに、既定の表示で入る")
+    func missingItemsReturnAfterTheirDefaultPredecessor() {
+        checkInsertion(StatusMenuItem.self)
+        checkInsertion(UserMenuItem.self)
+        checkInsertion(LinkMenuItem.self)
+        checkInsertion(ExternalPostMenuItem.self)
+        checkInsertion(ProfileTextMenuItem.self)
+        checkInsertion(HashtagMenuItem.self)
+        checkInsertion(MediaMenuItem.self)
+    }
+
+    private func checkInsertion<Item: BundledMenuDefaults>(_: Item.Type) {
+        let elements = Item.defaultLayout.elements
+        for (index, element) in elements.enumerated() {
+            guard case .item(let item, _) = element else { continue }
+            let predecessor = elements[..<index].last { $0 != .separator && $0 != .rowSeparator }
+            let saved = MenuLayout<Item>(tokens: Item.defaultLayout.tokens.filter { $0.split(separator: ":").last.map(String.init) != item.rawValue })
+            guard let restored = saved.elements.firstIndex(of: element) else {
+                Issue.record("\(Item.defaultsKey)の\(item.rawValue)が戻らない")
+                continue
+            }
+            #expect(saved.elements.filter { $0 == element }.count == 1, "\(Item.defaultsKey)の\(item.rawValue)")
+            #expect(restored == 0 ? predecessor == nil : saved.elements[restored - 1] == predecessor, "\(Item.defaultsKey)の\(item.rawValue)の位置")
+        }
+    }
+
     private func check<Item: BundledMenuDefaults>(_: Item.Type) {
         let tokens = MenuDefaultsFile.tokens[Item.defaultsKey] ?? []
         let elements = tokens.compactMap(MenuLayout<Item>.element(from:))

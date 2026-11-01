@@ -8,8 +8,9 @@ import UIKit
 @MainActor
 struct StatusMenuTests {
     private func makeSettings() throws -> AppSettings {
-        let defaults = TestScratch.defaults("StatusMenuTests")
-        return AppSettings(defaults: defaults)
+        let settings = AppSettings(defaults: TestScratch.defaults("StatusMenuTests"))
+        settings.useMenuFixtures()
+        return settings
     }
 
     /// - Parameter myAccountID: 自分のアカウントのID。自分の投稿でだけ出る項目を試すときに渡す。
@@ -63,29 +64,29 @@ struct StatusMenuTests {
         return "\(menu.title)\(subtitle)[\(children.map(describe).joined(separator: ","))]"
     }
 
-    /// 既定の並びは、何のための操作かでまとまりを分ける。
+    /// 並びの区切り線で分けたまとまりを、そのまとまりごとに出す。
     /// 自分のアカウントが分からない一覧では、会話のミュート、固定、公開範囲を選んでブーストは出ない。
     @Test func defaultMenuGroupsItemsByPurpose() throws {
         let post = try status(url: URL(string: "https://example.social/@alice/100"))
 
         #expect(try outline(menu(for: .status(post))) == [
-            ["返信", "お気に入り", "ブースト"],
+            ["返信", "ブースト", "お気に入り"],
             ["ブックマーク"],
-            ["リンクをコピー", "テキストをコピー", "共有", "ブラウザで開く"],
+            ["共有", "リンクをコピー", "テキストをコピー", "ブラウザで開く"],
             ["翻訳"],
             ["@alice[プロフィール,リンクをコピー,共有,ブラウザで開く,その他[カスタマイズ]]"],
             ["その他[カスタマイズ]"],
         ])
     }
 
-    /// 既定のユーザーのメニューは、開く・書く操作（メモを含む）、フォロー、持ち出す操作でまとまりを分け、フォローの設定、ミュート、ブロックは「その他」に入れる。
+    /// ユーザーのメニューは、投稿のメニューの中でも、並びのまとまりと「その他」のとおりに出す。
     /// 関係を覚えていない相手の関係の項目は、読んでから中身を決める。通報は関係で変わらないため、読まずに出す。開く場所を選んで開く2つは隠れている。
     @Test func defaultUserMenuHasMentionAndCopyUsername() throws {
         let actions = userMenuActions()
 
         let outline = try outline(menu(for: .status(status(url: nil)), userMenuActions: actions))
 
-        #expect(outline.dropLast().last == ["@alice[プロフィール,メンション,…,…,リストに追加,ハンドルをコピー,ユーザー名をコピー,サーバーをコピー,リンクをコピー,共有,ブラウザで開く,その他[…,…,…,…,…,通報,カスタマイズ]]"])
+        #expect(outline.dropLast().last == ["@alice[プロフィール,メンション,…,リストに追加,ハンドルをコピー,リンクをコピー,共有,ブラウザで開く,…,…,通報,その他[ユーザー名をコピー,サーバーをコピー,…,…,…,…,カスタマイズ]]"])
     }
 
     /// 人の一覧の行の長押しでは、その人のサブメニュー1つだけのメニューにせず、項目を直接並べる。
@@ -189,7 +190,7 @@ struct StatusMenuTests {
     @Test func knownAccountIconsDoNotWaitForAccountBatch() async throws {
         let recorder = Recorder()
         let settings = try makeSettings()
-        settings.statusMenuLayout = MenuLayout(elements: StatusMenuItem.defaultLayout.elements.map { element in
+        settings.statusMenuLayout = MenuLayout(elements: MenuFixture.status.elements.map { element in
             element == .item(.mentionedUsers, isVisible: false) ? .item(.mentionedUsers, isVisible: true) : element
         })
         let viewController = TimelineViewController(
@@ -275,7 +276,7 @@ struct StatusMenuTests {
         #expect(groups.dropFirst().allSatisfy { $0.preferredElementSize != .medium })
 
         let settings = try makeSettings()
-        settings.statusMenuLayout = MenuLayout(elements: StatusMenuItem.defaultLayout.elements.filter { $0 != .rowSeparator })
+        settings.statusMenuLayout = MenuLayout(elements: MenuFixture.status.elements.filter { $0 != .rowSeparator })
         let withoutRow = try menu(for: .status(post), settings: settings)?.children.compactMap { $0 as? UIMenu } ?? []
 
         #expect(withoutRow.allSatisfy { $0.preferredElementSize != .medium })
