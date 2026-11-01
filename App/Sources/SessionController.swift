@@ -1586,10 +1586,7 @@ final class SessionController {
             return list
         }
         search.onOpenHashtag = { [weak self] name, source in self?.openFeed(.hashtag(name: name), from: source) }
-        search.onShowAll = { [weak self] input, category, source in
-            guard let self else { return }
-            source.navigationController?.pushViewController(makeSearchResults(input, scope: .only(category)), animated: true)
-        }
+        search.onResultRowSelect = { [weak self] row, model, source in self?.selectSearchResultRow(row, of: model, from: source) }
         search.suggestions = SearchSuggestions(
             client: client,
             recents: RecentSearches(defaults: .standard, account: credential.handle),
@@ -1632,22 +1629,28 @@ final class SessionController {
         viewController.onRetry = { [weak model] in model?.retry() }
         viewController.onSearchRowSelect = { [weak self, weak viewController, weak model] row in
             guard let self, let viewController else { return }
-            switch row {
-            case .hashtag(let hashtag):
-                openFeed(.hashtag(name: hashtag.name), from: viewController)
-            case .showAll(let category):
-                let list = makeSearchResults(input, scope: .only(category))
-                viewController.navigationController?.pushViewController(list, animated: true)
-            case .failed(let category, _):
-                model?.retry(category)
-            case .heading, .action, .recentsHeading, .recent:
-                // 打っている途中の候補にだけ出る行は、この一覧には並ばない。
-                break
-            }
+            selectSearchResultRow(row, of: model, from: viewController)
         }
         configure(viewController)
         model.start()
         return viewController
+    }
+
+    /// 検索の結果のハッシュタグ、「すべて見る」、失敗の行を押したときの扱い。検索の画面と「すべて見る」で積む一覧で共有する。
+    /// - Parameter model: 行を並べた結果。打っている途中の候補のハッシュタグを押したときはnil。
+    private func selectSearchResultRow(_ row: SearchRow, of model: SearchModel?, from source: UIViewController) {
+        switch row {
+        case .hashtag(let hashtag):
+            openFeed(.hashtag(name: hashtag.name), from: source)
+        case .showAll(let category):
+            guard let model else { return }
+            source.navigationController?.pushViewController(makeSearchResults(model.input, scope: .only(category)), animated: true)
+        case .failed(let category, _):
+            model?.retry(category)
+        case .heading, .action, .recentsHeading, .recent:
+            // 打っている途中の候補にだけ出る行は、検索の画面が扱う。
+            break
+        }
     }
 
     /// 確定した語の結果を読むモデルを作る。結果を伝える一覧と読み始めは、呼び出し側が決める。

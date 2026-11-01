@@ -14,8 +14,8 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
     var makeList: (() -> TimelineViewController)?
     /// 候補のハッシュタグと「#名前を開く」を押したときに呼ぶ。
     var onOpenHashtag: ((String, UIViewController) -> Void)?
-    /// 結果の「すべて見る」を押したときに、確定した語とその種類を渡して呼ぶ。
-    var onShowAll: ((SearchInput, SearchCategory, UIViewController) -> Void)?
+    /// ハッシュタグ、「すべて見る」、失敗の行を押したときに、確定した語の結果（まだなければnil）を添えて呼ぶ。「すべて見る」で積む一覧と同じ扱いにする。
+    var onResultRowSelect: ((SearchRow, SearchModel?, UIViewController) -> Void)?
     /// 打っている途中の候補と最近の検索。セッションが入れる。
     var suggestions: SearchSuggestions? {
         didSet {
@@ -145,15 +145,10 @@ final class SearchViewController: UIViewController, UISearchBarDelegate, UISearc
         case .action(.openHashtag(let name)):
             suggestions?.submit("#\(name)")
             onOpenHashtag?(name, self)
-        case .hashtag(let hashtag):
-            onOpenHashtag?(hashtag.name, self)
         case .recent(let query):
             submit(query)
-        case .showAll(let category):
-            guard let results else { return }
-            onShowAll?(results.input, category, self)
-        case .failed(let category, _):
-            results?.retry(category)
+        case .hashtag, .showAll, .failed:
+            onResultRowSelect?(row, results, self)
         case .heading, .recentsHeading:
             break
         }
