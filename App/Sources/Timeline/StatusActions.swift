@@ -417,26 +417,22 @@ extension TimelineViewController {
 
     /// プロフィール画面のユーザーのメニューの、URLの項目の動き。共有のシートは`barButtonItem`から出す。
     private func profileURLHandlers(shareFrom barButtonItem: UIBarButtonItem?) -> URLMenuHandlers {
-        URLMenuHandlers(
-            linkBrowser: settings.linkBrowser,
-            copy: { [weak self] url in URLSharing.copy(url, notifying: self) },
-            share: { [weak self, weak barButtonItem] url in
-                guard let self else { return }
-                URLSharing.presentShareSheet(for: url, from: self) { $0.sourceItem = barButtonItem }
-            },
-            open: { [weak self] url, browser in self?.openURL(url, in: browser) },
-            openSettings: { [weak self] page in self?.openMenuSettings(page) }
-        )
+        profileURLHandlers { [weak barButtonItem] in $0.sourceItem = barButtonItem }
     }
 
     /// プロフィールのヘッダーの部品から出すメニューの、URLの項目の動き。共有のシートは押した部品から出す。
     private func profileURLHandlers(shareFrom view: UIView) -> URLMenuHandlers {
+        profileURLHandlers { [weak view] in $0.sourceView = view }
+    }
+
+    /// - Parameter anchor: 共有のシートを出す起点を決める。
+    private func profileURLHandlers(anchor: @escaping (UIPopoverPresentationController) -> Void) -> URLMenuHandlers {
         URLMenuHandlers(
             linkBrowser: settings.linkBrowser,
             copy: { [weak self] url in URLSharing.copy(url, notifying: self) },
-            share: { [weak self, weak view] url in
+            share: { [weak self] url in
                 guard let self else { return }
-                URLSharing.presentShareSheet(for: url, from: self) { $0.sourceView = view }
+                URLSharing.presentShareSheet(for: url, from: self, anchor: anchor)
             },
             open: { [weak self] url, browser in self?.openURL(url, in: browser) },
             openSettings: { [weak self] page in self?.openMenuSettings(page) }
