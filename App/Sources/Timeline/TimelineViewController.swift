@@ -1168,7 +1168,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         case .unreadable(let id): "unreadable-\(id)"
         case .account(let id): "account-\(id)"
         case .notificationRequest(let id): "notificationRequest-\(id)"
-        case .search(let id): "search-\(id)"
+        case .search(let id): "search-\(SearchRow.dumpLabel(ofID: id))"
         }
     }
 

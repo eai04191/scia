@@ -47,3 +47,17 @@ struct SearchInputTests {
         #expect(try #require(SearchInput("alice")).names(local, on: credential) == false)
     }
 }
+
+struct SearchRowTests {
+    /// 違和感レポートの状態ダンプには、行の種類だけを書き、打った語、最近の検索の語、ハッシュタグの名前は書かない。docs/logging.mdで公開扱いにしない情報のため。
+    @Test func dumpLabelHidesQueriesAndNames() throws {
+        let url = try #require(URL(string: "https://remote.example/@secret/1"))
+        let hashtag = try MastodonDecoder.make().decode(Hashtag.self, from: Data(#"{"name":"secrettag","url":"https://example.social/tags/x","history":[]}"#.utf8))
+        let rows: [SearchRow] = [.action(.search("secret")), .action(.openURL(url)), .action(.openHandle(acct: "secret@remote.example")), .action(.openHashtag(name: "secret")), .recent("secret"), .hashtag(hashtag)]
+        for row in rows {
+            #expect(!SearchRow.dumpLabel(ofID: row.id).contains("secret"), "\(row)")
+        }
+        #expect(SearchRow.dumpLabel(ofID: SearchRow.heading(.accounts).id) == "heading-accounts")
+        #expect(SearchRow.dumpLabel(ofID: SearchRow.recent("secret").id) == "recent")
+    }
+}

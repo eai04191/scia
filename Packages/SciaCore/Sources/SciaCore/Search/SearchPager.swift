@@ -26,6 +26,13 @@ public enum SearchRow: Hashable, Sendable {
         }
     }
 
+    /// 違和感レポートの状態ダンプに書く、行の名前。打った語、最近の検索の語、ハッシュタグの名前は、docs/logging.mdで公開扱いにしない情報なので書かない。
+    /// IDが決まった語だけでできている行（見出し、「すべて見る」、失敗の行）はそのまま書き、ほかは種類だけにする。語を含む行を足したときに、ここに足し忘れても漏れないようにするため。
+    public static func dumpLabel(ofID id: String) -> String {
+        let kind = String(id.prefix { $0 != "-" })
+        return ["heading", "showAll", "failed", "recentsHeading"].contains(kind) ? id : kind
+    }
+
     /// 見出しの行か。見出しは押せず、区切り線の引き方も違う。
     public var isHeading: Bool {
         switch self {
