@@ -1867,9 +1867,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     }
 
     private func configure(_ footer: TimelineFooterView) {
-        // ヘッダーのある一覧では、投稿がないことも全面の表示ではなくフッターで示す。
+        // ヘッダーのある一覧では、投稿がないことも全面の表示ではなくフッターで示す。ヘッダーのない一覧では全面の表示が示すので、フッターには出さない。
         // データソースを作る途中でも呼ばれるため、データソースではなく表示中の要素から数える。
-        footer.apply(footerState, reachedEndText: entries.isEmpty ? texts.empty : texts.reachedEnd)
+        let reachedEndText = entries.isEmpty ? (headerView == nil ? "" : texts.empty) : texts.reachedEnd
+        footer.apply(footerState, reachedEndText: reachedEndText)
     }
 
     /// 読めなかった投稿や通知の行。読めなかったことを隠さず、開けるならブラウザで開けることを示す。

@@ -240,4 +240,24 @@ struct TimelineContentTests {
             #expect(abs(footer.frame.maxY - collectionView.contentSize.height) < 0.5, "フッターが一覧の途中に出ています: \(footer.frame)")
         }
     }
+
+    /// ヘッダーのない一覧では、投稿がないことを全面の表示で示すので、末尾まで読んでもフッターに同じ文言を重ねない。
+    @Test func emptyListWithoutHeaderShowsEmptyTextOnlyInFullScreen() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        harness.setStatuses([])
+        harness.viewController.setFooterState(.reachedEnd)
+        harness.window.layoutIfNeeded()
+
+        let empty = TimelineTexts.home.empty
+        let fullScreen = try #require(harness.viewController.contentUnavailableConfiguration as? UIContentUnavailableConfiguration)
+        #expect(fullScreen.text == empty)
+        let footerTexts = harness.collectionView.visibleSupplementaryViews(ofKind: UICollectionView.elementKindSectionFooter)
+            .flatMap(Self.labelTexts)
+        #expect(!footerTexts.contains(empty), "フッターにも「\(empty)」が出ています")
+    }
+
+    private static func labelTexts(in view: UIView) -> [String] {
+        ((view as? UILabel)?.text.map { [$0] } ?? []) + view.subviews.flatMap(labelTexts)
+    }
 }
