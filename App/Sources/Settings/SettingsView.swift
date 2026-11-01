@@ -314,9 +314,16 @@ struct SettingsView: View {
                     isOn: $settings.showsTabMenuCustomize
                 )],
                 actions: [MenuLayoutAction(title: "リストを作成", symbolName: "plus", handler: lists.create)],
-                itemDeletion: MenuLayoutItemDeletion(canDelete: \.isList, footer: "リストは左へスワイプすると削除できます。") { item in
+                itemDeletion: MenuLayoutItemDeletion(
+                    canDelete: { $0.isList || $0.isUserAdded },
+                    footer: "リストと、プロフィールなどの画面から追加したタブは、左へスワイプすると削除できます。"
+                ) { item in
                     if case .list(let id, let title) = item {
                         lists.delete(id, title)
+                    } else if item.isUserAdded {
+                        // サーバーには何も残っていないので、確かめずに並びから外す。プロフィールなどの右上のメニューの「タブから外す」と同じ。
+                        // 並びの画面の書き込み（`tabLayoutBinding`）は、最初の並びに戻したときのために、使う人が足した項目を残すので通さない。
+                        settings.setTabLayout(settings.tabLayout(for: account).removing(item), for: account)
                     }
                 }
             )

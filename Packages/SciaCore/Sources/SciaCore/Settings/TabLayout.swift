@@ -230,8 +230,8 @@ extension MenuLayout where Item == TabItem {
     }
 
     /// `previous`にあった、使う人が足した項目（ユーザーのハッシュタグとプロフィール）のうち、この並びにないものを、無効にして末尾に足す。
-    /// 設定の並びの画面では項目を消せず、使う人が足した項目が並びから消えるのは最初の並びに戻したときだけなので、そのときに残すのに使う。
-    /// サーバーから取得して足し直せないため。
+    /// 設定の並びの画面が並びを書くときに、最初の並びに戻して消えた項目を残すのに使う。サーバーから取得して足し直せないため。
+    /// 設定の並びで項目を削除するときは、この書き込みを通さずに外す。
     public func keepingUserAddedItems(of previous: MenuLayout<TabItem>) -> MenuLayout<TabItem> {
         addingMissing(previous.elements.compactMap { element in
             if case .item(let item, _) = element, item.isUserAdded { item } else { nil }

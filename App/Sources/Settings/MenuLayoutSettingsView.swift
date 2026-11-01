@@ -113,6 +113,9 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     private let options: [MenuLayoutOption]
     private let actions: [MenuLayoutAction]
     private let itemDeletion: MenuLayoutItemDeletion<Item>?
+    /// スワイプで削除を頼んだ項目。並びから外れて届いたら、残る行はそのままにして、行を動きで閉じる。使う人の操作で消えるため。
+    /// 確かめる画面で取りやめても残るが、その項目がほかの経路で外れて届いたときに、行が動いて閉じるだけで済む。
+    private var deletionRequests: Set<Item> = []
 
     init(
         layout: MenuLayout<Item>,
@@ -153,9 +156,31 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
     func update(_ layout: MenuLayout<Item>) {
         // 項目どうしの比べ方は、リストのように名前を含めないことがあるため、名前まで含む保存の形で比べる。
         guard layout.tokens != MenuLayout(defaultElements: rows.map(\.element)).tokens else { return }
+        let remaining = rows.filter { row in
+            if case .item(let item, _) = row.element { !deletionRequests.contains(item) } else { true }
+        }
+        if remaining.count < rows.count, layout.tokens == MenuLayout(defaultElements: remaining.map(\.element)).tokens {
+            let kept = Set(remaining.map(\.id))
+            deletionRequests.subtract(rows.compactMap { row in
+                if case .item(let item, _) = row.element, !kept.contains(row.id) { item } else { nil }
+            })
+            rows = remaining
+            applySnapshot(animated: !UIAccessibility.isReduceMotionEnabled)
+            return
+        }
         rows = layout.elements.map { Row(element: $0) }
         applySnapshot(animated: false)
     }
+
+    /// 項目の削除を頼む。並びから外すのは、画面を作る側が行う。
+    func requestDeletion(of item: Item) {
+        guard let itemDeletion else { return }
+        deletionRequests.insert(item)
+        itemDeletion.delete(item)
+    }
+
+    /// 並んでいる行のID。テストで、行を作り直さずに残したかを見るのに使う。
+    var rowIDs: [UUID] { rows.map(\.id) }
 
     /// `image`の返す画像が変わったら、項目の行を描き直す。
     func setImageRevision(_ revision: Int) {
@@ -189,9 +214,9 @@ final class MenuLayoutViewController<Item: MenuItemKind & MenuItemPresentable>: 
             guard let self, indexPath.section == 0, rows.indices.contains(indexPath.item) else { return nil }
             let element = rows[indexPath.item].element
             if case .item(let item, _) = element, let itemDeletion, itemDeletion.canDelete(item) {
-                // 消すのは確かめてサーバーが受け付けてからなので、スワイプした行はいったん戻す。
-                let delete = UIContextualAction(style: .destructive, title: "削除") { _, _, completion in
-                    itemDeletion.delete(item)
+                // 消すのは確かめてサーバーが受け付けてからなので、スワイプした行はいったん戻す。外れた並びが届いたら、行を動きで閉じる。
+                let delete = UIContextualAction(style: .destructive, title: "削除") { [weak self] _, _, completion in
+                    self?.requestDeletion(of: item)
                     completion(false)
                 }
                 return UISwipeActionsConfiguration(actions: [delete])
