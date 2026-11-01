@@ -218,6 +218,8 @@ final class ProfileHeaderView: UIView {
     private let openOriginalButton = UIButton(configuration: .plain())
     private let tabControl = UISegmentedControl(items: ["投稿", "メディア"])
     private let filterButton = UIButton(configuration: .plain())
+    /// 絞り込みのボタンが今出しているアイコンの状態。まだ出していなければnil。
+    private var shownFilterIconIsFiltered: Bool?
     /// 固定された投稿の棚。カードを画面の端まで流すため、左右の余白の外まで広げる。
     private let pinnedShelf: ProfilePinnedShelfView
     /// 注目のハッシュタグと紹介しているユーザーの棚。固定された投稿の棚と同じく、左右の余白の外まで広げる。
@@ -991,7 +993,11 @@ final class ProfileHeaderView: UIView {
 
     private func applyFilterButton(_ filter: ProfilePostsFilter) {
         let isFiltered = filter != .standard
-        filterButton.configuration?.image = UIImage(systemName: isFiltered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+        // ヘッダーの内容が届くたびに呼ばれるので、アイコンは絞り込んでいるかが変わったときだけ替え、切り替えを動かし直さない。
+        if shownFilterIconIsFiltered != isFiltered {
+            shownFilterIconIsFiltered = isFiltered
+            filterButton.replaceSymbol(with: UIImage(systemName: isFiltered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle"))
+        }
         let shown = [filter.showsReplies ? "返信を表示" : nil, filter.showsBoosts ? "ブーストを表示" : nil].compactMap { $0 }
         filterButton.accessibilityValue = shown.isEmpty ? "返信とブーストを表示しない" : shown.joined(separator: "、")
         filterButton.menu = filterMenu(filter)
