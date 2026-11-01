@@ -1,7 +1,7 @@
 /// 長押しのメニューの項目の種類。対象（投稿、ユーザー）ごとに1つ作る。
 /// `rawValue`は設定に保存するため、一度使った値は変えない。
 public protocol MenuItemKind: RawRepresentable<String>, CaseIterable, Hashable, Sendable {
-    /// 既定の並び。項目を足すときは、ここにも足す。足した項目を保存済みの並びのどこに入れるかも、この並びで決まる。
+    /// 既定の並び。項目を足すときは、ここにも足す（`BundledMenuDefaults`ならmenu-defaults.jsonに足す）。足した項目を保存済みの並びのどこに入れるかも、この並びで決まる。
     static var defaultLayout: MenuLayout<Self> { get }
     /// このメニューの並びの設定の画面を開く項目。ほかに出す項目がないときは、この項目も出さない。決まりはdocs/menus.mdの「並びの設定」にある。
     static var customizeItem: Self? { get }
@@ -109,7 +109,7 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
         self.init(elements: tokens.compactMap(Self.element(from:)))
     }
 
-    private static func element(from token: String) -> Element? {
+    static func element(from token: String) -> Element? {
         switch token {
         case "separator": return .separator
         case "row": return .rowSeparator
@@ -162,7 +162,7 @@ public struct MenuLayout<Item: MenuItemKind>: Equatable, Sendable {
 }
 
 /// 投稿のメニューの項目。通知のメニューも、対象の投稿のこのメニューで組む。
-public enum StatusMenuItem: String, MenuItemKind {
+public enum StatusMenuItem: String, BundledMenuDefaults {
     /// 投稿のスレッドを開く。投稿と通知のタップの既定。スレッドの中心の投稿と、投稿のない通知では出ない。
     case openThread
     case reply
@@ -236,56 +236,13 @@ public enum StatusMenuItem: String, MenuItemKind {
     /// - 読む: 翻訳。スレッドを開くは、既定ではタップで開けて代わりがきくため隠し、出したときに読む操作の先頭に来るようここに置く
     /// - 関係するユーザーとハッシュタグ: メンションされたユーザーは、何人もいるとメニューが長くなるため隠す。ハッシュタグは、ある投稿でしか出ないので、「その他」に入れずに出す
     /// - 「その他」: たまにしか使わない編集履歴、お気に入りした人、ブーストした人、メディアを隠す、カスタム絵文字、会話のミュート、固定と、取り消せない通知の削除、削除して書き直す、投稿の削除。いちばん下に、並びの設定を開くカスタマイズ
-    public static let defaultLayout = MenuLayout<StatusMenuItem>(defaultElements: [
-        .rowSeparator,
-        .item(.reply, isVisible: true),
-        .item(.favourite, isVisible: true),
-        .item(.reblog, isVisible: true),
-        .separator,
-        .item(.edit, isVisible: true),
-        .item(.bookmark, isVisible: true),
-        .item(.quote, isVisible: true),
-        .item(.reblogWithVisibility, isVisible: false),
-        .separator,
-        .item(.copyLink, isVisible: true),
-        .item(.copyText, isVisible: true),
-        .item(.selectText, isVisible: true),
-        .item(.share, isVisible: true),
-        .item(.select, isVisible: true),
-        .item(.openInBrowser, isVisible: true),
-        .item(.openInDefaultBrowser, isVisible: false),
-        .item(.openInAppSafari, isVisible: false),
-        .separator,
-        .item(.openThread, isVisible: false),
-        .item(.systemTranslate, isVisible: true),
-        .separator,
-        .item(.notifyingUser, isVisible: true),
-        .item(.author, isVisible: true),
-        .item(.booster, isVisible: true),
-        .item(.mentionedUsers, isVisible: false),
-        .item(.hashtags, isVisible: true),
-        .more,
-        .item(.editHistory, isVisible: true),
-        .item(.favouritedBy, isVisible: true),
-        .item(.rebloggedBy, isVisible: true),
-        .item(.hideMedia, isVisible: true),
-        .item(.customEmojis, isVisible: true),
-        .item(.apiResponse, isVisible: false),
-        .separator,
-        .item(.muteConversation, isVisible: true),
-        .item(.pin, isVisible: true),
-        .separator,
-        .item(.dismissNotification, isVisible: true),
-        .item(.redraft, isVisible: true),
-        .item(.delete, isVisible: true),
-        .separator,
-        .item(.customize, isVisible: true),
-    ])
+    public static let defaultsKey = "status"
+    public static let defaultLayout = MenuLayout<StatusMenuItem>.bundledDefault()
 }
 
 /// ユーザーのメニューの項目。投稿のメニューの中で、ユーザーごとのサブメニューとして出る。本文のメンションを長押ししたときと、プロフィール画面でも、このメニューを出す。
 /// 開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
-public enum UserMenuItem: String, MenuItemKind {
+public enum UserMenuItem: String, BundledMenuDefaults {
     case profile
     /// 投稿欄で、カーソルの位置に`@acct`を入れる。
     case mention
@@ -328,33 +285,8 @@ public enum UserMenuItem: String, MenuItemKind {
     case customize
     public static var customizeItem: Self? { .customize }
 
-    public static let defaultLayout = MenuLayout<UserMenuItem>(defaultElements: [
-        .item(.profile, isVisible: true),
-        .item(.mention, isVisible: true),
-        .item(.note, isVisible: true),
-        .separator,
-        .item(.follow, isVisible: true),
-        .item(.addToList, isVisible: true),
-        .separator,
-        .item(.copyHandle, isVisible: true),
-        .item(.copyUsername, isVisible: true),
-        .item(.copyServer, isVisible: true),
-        .item(.copyLink, isVisible: true),
-        .item(.share, isVisible: true),
-        .item(.openInBrowser, isVisible: true),
-        .item(.openInDefaultBrowser, isVisible: false),
-        .item(.openInAppSafari, isVisible: false),
-        .more,
-        .item(.showReblogs, isVisible: true),
-        .item(.notify, isVisible: true),
-        .item(.endorse, isVisible: true),
-        .separator,
-        .item(.mute, isVisible: true),
-        .item(.block, isVisible: true),
-        .item(.report, isVisible: true),
-        .separator,
-        .item(.customize, isVisible: true),
-    ])
+    public static let defaultsKey = "user"
+    public static let defaultLayout = MenuLayout<UserMenuItem>.bundledDefault()
 
     /// コピーの項目。プロフィールのハンドルを押したときのメニューも、この順に並べる。
     public static let copyItems: [UserMenuItem] = [.copyHandle, .copyUsername, .copyServer, .copyLink]
@@ -386,7 +318,7 @@ extension MenuLayout<UserMenuItem>.Groups {
 }
 
 /// 本文のURLのリンクを長押ししたときのメニューの項目。開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
-public enum LinkMenuItem: String, MenuItemKind {
+public enum LinkMenuItem: String, BundledMenuDefaults {
     /// タップしたときと同じく、開く場所の設定に従って開く。
     case openInBrowser
     /// 開く場所の設定にかかわらず、既定のブラウザで開く。
@@ -404,21 +336,13 @@ public enum LinkMenuItem: String, MenuItemKind {
     case customize
     public static var customizeItem: Self? { .customize }
 
-    public static let defaultLayout = MenuLayout<LinkMenuItem>(defaultElements: [
-        .item(.openInBrowser, isVisible: true),
-        .item(.openAsProfile, isVisible: true),
-        .item(.openInDefaultBrowser, isVisible: false),
-        .item(.openInAppSafari, isVisible: false),
-        .item(.copyLink, isVisible: true),
-        .item(.share, isVisible: true),
-        .more,
-        .item(.customize, isVisible: true),
-    ])
+    public static let defaultsKey = "link"
+    public static let defaultLayout = MenuLayout<LinkMenuItem>.bundledDefault()
 }
 
 /// ほかのサービスの投稿（Xの投稿の囲みなど）を長押ししたときのメニューの項目。決まりはdocs/menus.mdの「メニューの単位」にある。
 /// 開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
-public enum ExternalPostMenuItem: String, MenuItemKind {
+public enum ExternalPostMenuItem: String, BundledMenuDefaults {
     /// 元の投稿を、開く場所の設定に従って開く。
     case openInBrowser
     /// 開く場所の設定にかかわらず、既定のブラウザで開く。
@@ -438,22 +362,12 @@ public enum ExternalPostMenuItem: String, MenuItemKind {
 
     /// - 持ち出す: ブラウザで開く、リンクとテキストのコピー、共有
     /// - 読む: 翻訳
-    public static let defaultLayout = MenuLayout<ExternalPostMenuItem>(defaultElements: [
-        .item(.openInBrowser, isVisible: true),
-        .item(.openInDefaultBrowser, isVisible: false),
-        .item(.openInAppSafari, isVisible: false),
-        .item(.copyLink, isVisible: true),
-        .item(.copyText, isVisible: true),
-        .item(.share, isVisible: true),
-        .separator,
-        .item(.systemTranslate, isVisible: true),
-        .more,
-        .item(.customize, isVisible: true),
-    ])
+    public static let defaultsKey = "externalPost"
+    public static let defaultLayout = MenuLayout<ExternalPostMenuItem>.bundledDefault()
 }
 
 /// プロフィールの表示名、自己紹介、補足情報の行を長押ししたときのメニューの項目。決まりはdocs/menus.mdの「プロフィールの文章のメニュー」にある。
-public enum ProfileTextMenuItem: String, MenuItemKind {
+public enum ProfileTextMenuItem: String, BundledMenuDefaults {
     /// 文章をプレーンテキストにしてコピーする。文字のある文章でだけ出る。
     case copyText
     /// 補足情報のラベルをプレーンテキストにしてコピーする。文字のあるラベルの補足情報の行でだけ出る。
@@ -467,21 +381,12 @@ public enum ProfileTextMenuItem: String, MenuItemKind {
     case customize
     public static var customizeItem: Self? { .customize }
 
-    public static let defaultLayout = MenuLayout<ProfileTextMenuItem>(defaultElements: [
-        // 補足情報の行では、ラベルが内容の上にあるので、コピーも同じ順に並べる。
-        .item(.copyLabel, isVisible: true),
-        .item(.copyText, isVisible: true),
-        .separator,
-        .item(.systemTranslate, isVisible: true),
-        .separator,
-        .item(.customEmojis, isVisible: true),
-        .more,
-        .item(.customize, isVisible: true),
-    ])
+    public static let defaultsKey = "profileText"
+    public static let defaultLayout = MenuLayout<ProfileTextMenuItem>.bundledDefault()
 }
 
 /// 本文のハッシュタグを長押ししたときのメニューの項目。
-public enum HashtagMenuItem: String, MenuItemKind {
+public enum HashtagMenuItem: String, BundledMenuDefaults {
     /// ハッシュタグのタイムラインを開く。ハッシュタグをタップしたときと同じ。
     case timeline
     /// 投稿の本文なら投稿した人、プロフィールならその人の、このハッシュタグの付いた投稿を開く。
@@ -503,27 +408,12 @@ public enum HashtagMenuItem: String, MenuItemKind {
     case customize
     public static var customizeItem: Self? { .customize }
 
-    public static let defaultLayout = MenuLayout<HashtagMenuItem>(defaultElements: [
-        .item(.timeline, isVisible: true),
-        .item(.accountStatuses, isVisible: true),
-        .separator,
-        .item(.mute, isVisible: true),
-        .separator,
-        .item(.openInBrowser, isVisible: true),
-        .item(.openInDefaultBrowser, isVisible: false),
-        .item(.openInAppSafari, isVisible: false),
-        .item(.copyLink, isVisible: true),
-        .item(.share, isVisible: true),
-        .more,
-        // 投稿のメニューの「固定」と同じく、自分のプロフィールの操作で、たまにしか使わない。
-        .item(.feature, isVisible: true),
-        .separator,
-        .item(.customize, isVisible: true),
-    ])
+    public static let defaultsKey = "hashtag"
+    public static let defaultLayout = MenuLayout<HashtagMenuItem>.bundledDefault()
 }
 
 /// 一覧のサムネイル、リンクカードの画像、プロフィールの画像を長押ししたときと、ビューアのメニューの項目。決まりはdocs/menus.mdの「メディアのメニュー」にある。
-public enum MediaMenuItem: String, MenuItemKind {
+public enum MediaMenuItem: String, BundledMenuDefaults {
     /// ビューアで開く。ビューアでは出ない。
     case open
     /// ファイルを共有する。
@@ -556,23 +446,6 @@ public enum MediaMenuItem: String, MenuItemKind {
     /// - 持ち出す: リンクのコピー、ブラウザで開く。開く場所を選んで開く2つは、ほかのメニューと同じく隠す
     /// - 投稿
     /// - 「その他」: メディアの情報と、並びの設定を開くカスタマイズ
-    public static let defaultLayout = MenuLayout<MediaMenuItem>(defaultElements: [
-        .item(.open, isVisible: true),
-        .item(.share, isVisible: true),
-        .item(.saveToPhotos, isVisible: true),
-        .separator,
-        .item(.altText, isVisible: true),
-        .item(.translateText, isVisible: true),
-        .separator,
-        .item(.copyLink, isVisible: true),
-        .item(.openInBrowser, isVisible: true),
-        .item(.openInDefaultBrowser, isVisible: false),
-        .item(.openInAppSafari, isVisible: false),
-        .separator,
-        .item(.status, isVisible: true),
-        .more,
-        .item(.info, isVisible: true),
-        .separator,
-        .item(.customize, isVisible: true),
-    ])
+    public static let defaultsKey = "media"
+    public static let defaultLayout = MenuLayout<MediaMenuItem>.bundledDefault()
 }

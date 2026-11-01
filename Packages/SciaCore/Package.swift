@@ -20,7 +20,7 @@ let package = Package(
     targets: [
         .target(
             name: "SciaCore",
-            resources: [.copy("Auth/Resources/known-servers.txt"), .copy("Compose/Resources/standard-emoji.json")],
+            resources: [.copy("Auth/Resources/known-servers.txt"), .copy("Compose/Resources/standard-emoji.json"), .copy("Settings/Resources/menu-defaults.json")],
             swiftSettings: swiftSettings
         ),
         .target(
