@@ -245,6 +245,13 @@ public final class AppSettings {
         didSet { defaults.set(hidesEmptyComposeBar, forKey: Keys.hidesEmptyComposeBar) }
     }
 
+    /// 書いていないときも投稿欄を細いカプセルに畳まず、書いているときの形で出しておく。
+    /// 畳むのは一覧を広く使うためで、画面の広いMacやiPadでは、押した投稿欄が広がって、押した位置にボタンが来てしまうのを避けたいため。
+    /// 既定は初期化子で渡す。Macでは、書き始めても欄がその場で広がるので、既定で畳まない。
+    public var keepsComposeBarOpen: Bool {
+        didSet { defaults.set(keepsComposeBarOpen, forKey: Keys.keepsComposeBarOpen) }
+    }
+
     /// 送る前に画像を縮める大きさ。選んだ大きさに収まる画像は元のまま送る。
     public var imageUploadSize: ImageUploadSize {
         didSet { defaults.set(imageUploadSize.rawValue, forKey: Keys.imageUploadSize) }
@@ -295,6 +302,7 @@ public final class AppSettings {
         static let switchTabItem = "switchTabItem"
         static let shownTabItem = "shownTabItem"
         static let hidesEmptyComposeBar = "settings.hidesEmptyComposeBar"
+        static let keepsComposeBarOpen = "settings.keepsComposeBarOpen"
         static let showsTabMenuCustomize = "settings.showsTabMenuCustomize"
         static let imageUploadSize = "settings.imageUploadSize"
         static let videoUploadSize = "settings.videoUploadSize"
@@ -306,7 +314,8 @@ public final class AppSettings {
         }
     }
 
-    public init(defaults: UserDefaults) {
+    /// - Parameter keepsComposeBarOpenByDefault: 使う人が選んでいないときの`keepsComposeBarOpen`。端末で決まるので、アプリが渡す。
+    public init(defaults: UserDefaults, keepsComposeBarOpenByDefault: Bool = false) {
         self.defaults = defaults
         usesOriginalThumbnailsOnExpensiveNetwork = defaults.object(forKey: Keys.usesOriginalThumbnailsOnExpensiveNetwork) as? Bool ?? true
         ignoresUselessAltText = defaults.object(forKey: Keys.ignoresUselessAltText) as? Bool ?? true
@@ -334,6 +343,7 @@ public final class AppSettings {
         switchTabItems = AccountScopedDefaults.accountValues(named: Keys.switchTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
         shownTabItems = AccountScopedDefaults.accountValues(named: Keys.shownTabItem, in: defaults).compactMapValues { ($0 as? String).flatMap(TabItem.init(rawValue:)) }
         hidesEmptyComposeBar = defaults.object(forKey: Keys.hidesEmptyComposeBar) as? Bool ?? false
+        keepsComposeBarOpen = defaults.object(forKey: Keys.keepsComposeBarOpen) as? Bool ?? keepsComposeBarOpenByDefault
         showsTabMenuCustomize = defaults.object(forKey: Keys.showsTabMenuCustomize) as? Bool ?? true
         // iPhoneの標準の写真（4032×3024）と動画（1080p）はそのまま送られ、それより大きな写真と4Kの動画だけが縮む。
         imageUploadSize = defaults.string(forKey: Keys.imageUploadSize).flatMap(ImageUploadSize.init(rawValue:)) ?? .long4096

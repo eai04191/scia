@@ -187,11 +187,12 @@ struct SettingsView: View {
                 }
                 Section {
                     Toggle("書いていないときは隠す", isOn: $settings.hidesEmptyComposeBar)
+                    Toggle("書いていないときも畳まない", isOn: $settings.keepsComposeBarOpen)
                     NavigationLink("投稿欄のボタン", value: SettingsPage.composeTools)
                 } header: {
                     Text("投稿欄")
                 } footer: {
-                    Text("隠すと、一覧を広く使えます。書くときは、右上のボタンで投稿欄を出します。書きかけの下書きや返信先があるときは、隠さずに表示します。\n投稿欄のボタンでは、公開範囲、添付、注意書きのような項目を、投稿欄のボタンの行に常に出すか、＋の中に入れるかと、その並びを選びます。")
+                    Text("隠すと、一覧を広く使えます。書くときは、右上のボタンで投稿欄を出します。書きかけの下書きや返信先があるときは、隠さずに表示します。\n畳まないと、書いていないときも投稿欄のボタンの行を出しておきます。押した投稿欄が広がって、ボタンの位置が動くことがなくなります。\n投稿欄のボタンでは、公開範囲、添付、注意書きのような項目を、投稿欄のボタンの行に常に出すか、＋の中に入れるかと、その並びを選びます。")
                 }
                 Section {
                     Picker("画像", selection: $settings.imageUploadSize) {

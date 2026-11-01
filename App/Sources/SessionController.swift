@@ -593,6 +593,7 @@ final class SessionController {
             self?.browser.lowerForCompose()
         }
         composer.onEndEditing = { [weak self] in self?.browser.restoreAfterCompose() }
+        composer.onOpenWithoutEditing = { [weak self] in self?.applyComposeDefaults() }
         composer.presenterAboveInlineCompose = { [weak tabBarController] in
             // 投稿欄より手前にあるのは、アプリ内のSafariのシートだけのとき。ほかの画面を出していれば、その上には重ねない。
             guard let tabBarController else { return nil }

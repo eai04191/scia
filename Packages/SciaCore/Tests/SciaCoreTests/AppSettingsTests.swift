@@ -105,6 +105,26 @@ struct AppSettingsTests {
         #expect(AppSettings(defaults: defaults).hidesEmptyComposeBar)
     }
 
+    /// 畳んでも一覧を広く使えるので、既定では畳む。
+    @Test func foldsComposeBarByDefault() throws {
+        let settings = AppSettings(defaults: try makeDefaults())
+        #expect(!settings.keepsComposeBarOpen)
+    }
+
+    /// Macのように既定で畳まない端末でも、使う人がオフにしたらオフのままにする。
+    @Test func keepsComposeBarOpenFollowsDeviceDefaultUntilChosen() throws {
+        let defaults = try makeDefaults()
+        #expect(AppSettings(defaults: defaults, keepsComposeBarOpenByDefault: true).keepsComposeBarOpen)
+        AppSettings(defaults: defaults, keepsComposeBarOpenByDefault: true).keepsComposeBarOpen = false
+        #expect(!AppSettings(defaults: defaults, keepsComposeBarOpenByDefault: true).keepsComposeBarOpen)
+    }
+
+    @Test func persistsKeepsComposeBarOpen() throws {
+        let defaults = try makeDefaults()
+        AppSettings(defaults: defaults).keepsComposeBarOpen = true
+        #expect(AppSettings(defaults: defaults).keepsComposeBarOpen)
+    }
+
     @Test func statusDisplayDefaults() throws {
         let settings = AppSettings(defaults: try makeDefaults())
         #expect(settings.appearance.statusNameStyle == .nameAndAcct)

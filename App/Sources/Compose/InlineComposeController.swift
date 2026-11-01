@@ -24,6 +24,9 @@ final class InlineComposeController: NSObject {
     var completion: ComposeCompletion { textCompletion.completion }
     /// 編集を始めるときに呼ぶ。既定の公開範囲などをまだ読めていなければ読む。
     var onBeginEditing: () -> Void = {}
+    /// 畳まない設定で、書き始める前から入力欄とボタンを出すときに呼ぶ。既定の公開範囲やメディアの上限などをまだ読めていなければ読む。
+    /// 読めるまでは、書いていないときに押せるボタン（メディアの添付など）が使えないため。
+    var onOpenWithoutEditing: () -> Void = {}
     /// 書き終えてバーを細いカプセルに戻したときに呼ぶ。メディアを選ぶシートやビューアのためにキーボードを閉じたときは、書いている途中なので呼ばない。
     var onEndEditing: () -> Void = {}
     /// 失敗の知らせや、メディアを選ぶシートを重ねる画面を返す。アプリ内のSafariのシートを出している間は、その上に重ねる必要がある。
@@ -187,8 +190,14 @@ final class InlineComposeController: NSObject {
     private var obscuredHeight: CGFloat = 0
     /// 書いていないときの、中身の上下の余白。
     private let restInset: CGFloat = 4
-    /// 書いている。バーを広げて、入力欄とボタンを出している。
+    /// 書いている。入力欄にフォーカスがあるか、書いている途中に開いたシートなどを出している。
     private var isEditing = false
+    /// バーを広げて、入力欄とボタンを出す。書いているときと、設定で書いていないときも畳まないとき。
+    private var isOpen: Bool {
+        isEditing || settings.keepsComposeBarOpen
+    }
+    /// 最後に並べたバーの形が、入力欄とボタンを出した形か。
+    private var isLayoutOpen = false
     /// 設定で空の投稿欄を隠していて、今は隠している。画面の下の外に出し、触れず、一覧の下の余白にも数えない。
     private(set) var isBarHidden = false
     /// バーの下端をタブバーの上で止める制約。隠すときと、隠す設定でキーボードに付いて下まで動かすときは外す。
@@ -399,6 +408,10 @@ final class InlineComposeController: NSObject {
         observeBarVisibility()
         observeModel()
         observeTuning()
+        observeKeepsOpen()
+        if isOpen {
+            onOpenWithoutEditing()
+        }
         observeToolLayout()
         observeCompletion()
     }
@@ -526,7 +539,7 @@ final class InlineComposeController: NSObject {
     /// 違和感レポートに残す状態。行が重なっていれば、どの行かも書く。
     func stateDump() -> String {
         """
-        editing: \(isEditing) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : pollEditor.fields.firstIndex(where: \.isFirstResponder).map { "poll\($0 + 1)" } ?? "none") spoiler: \(model.showsSpoiler) poll: \(model.poll.map { "options=\($0.options.count) multiple=\($0.multiple) hidesTotals=\($0.hidesTotals) expiresIn=\($0.expiresIn) folded=\(pollEditor.isFolded)" } ?? "nil") sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") quoteTarget: \(model.quoteTarget?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil") scheduledAt: \(model.scheduledAt.map { "\($0)" } ?? "nil") rewritingSchedule: \(model.rewritingSchedule?.id ?? "nil") scheduleDatePicker: \(isShowingScheduleDatePicker) language: \(model.language ?? "nil") defaultLanguage: \(model.defaultLanguage ?? "nil") languagePicker: \(isShowingLanguagePicker)
+        editing: \(isEditing) open: \(isLayoutOpen) barHidden: \(isBarHidden) expanded: \(isExpanded) firstResponder: \(textView.isFirstResponder ? "text" : spoilerField.isFirstResponder ? "spoiler" : pollEditor.fields.firstIndex(where: \.isFirstResponder).map { "poll\($0 + 1)" } ?? "none") spoiler: \(model.showsSpoiler) poll: \(model.poll.map { "options=\($0.options.count) multiple=\($0.multiple) hidesTotals=\($0.hidesTotals) expiresIn=\($0.expiresIn) folded=\(pollEditor.isFolded)" } ?? "nil") sensitive: \(model.isSensitive) replyTo: \(model.replyTo?.id ?? "nil") quoteTarget: \(model.quoteTarget?.id ?? "nil") editedStatus: \(model.editedStatus?.id ?? "nil") scheduledAt: \(model.scheduledAt.map { "\($0)" } ?? "nil") rewritingSchedule: \(model.rewritingSchedule?.id ?? "nil") scheduleDatePicker: \(isShowingScheduleDatePicker) language: \(model.language ?? "nil") defaultLanguage: \(model.defaultLanguage ?? "nil") languagePicker: \(isShowingLanguagePicker)
         mediaPicker: \(mediaPicker.map { $0.isClosing ? "closing" : "shown" } ?? "nil") mediaViewer: \(mediaViewer != nil ? "shown" : isShowingMediaViewer ? "closing" : "nil") holdAboveKeyboard: \(holdAboveKeyboard?.isActive ?? false) lastKeyboardHeight: \(lastKeyboardHeight.map { "\($0)" } ?? "nil")
         attachments: \(model.attachments.map { "\($0.state)" }.joined(separator: ", "))
         tools: row=\(toolPlacement.map { "\($0.row.map(\.rawValue))" } ?? "nil") menu=\(toolPlacement.map { "\($0.menu.map { $0.map(\.rawValue) })" } ?? "nil")
@@ -1653,10 +1666,15 @@ final class InlineComposeController: NSObject {
 
     /// キーボードと同じ高さのシートを出し、バーをその上端に留めたまま、書いている状態を保つ。
     private func presentMediaPicker() {
-        guard let host, isEditing, model.canAttachMedia else { return }
+        guard let host, isOpen, model.canAttachMedia else { return }
+        // Macのファイルの選択画面は、バーを留めず、入力欄のフォーカスにも触れないので、書いている状態を変えずに出す。
         if ProcessInfo.processInfo.isiOSAppOnMac {
             presentMediaFilePicker(from: host)
             return
+        }
+        // 畳まない設定では、書いていないときもボタンを押せる。絵文字のパレットと同じく、書いている状態にしてから出す。
+        if !isEditing {
+            expandForEditing()
         }
         let height = bottomSheetHeight
         setHoldAboveKeyboard(height: height)
@@ -1872,7 +1890,8 @@ final class InlineComposeController: NSObject {
         guard isEditing != editing else { return }
         isEditing = editing
         updateCompletionList()
-        if !editing {
+        // 畳まない設定では、書き終えても形を変えないので、カプセルの写真も散らばらせない。
+        if !editing, !isOpen {
             // バーを勢いよく下げて閉じたときだけ、カプセルの写真を散らばらせる。キーボードが下がりきるまで待つので、離してから少し間がある。
             // ほかの閉じ方（タップや投稿）では、正解の形に戻す。
             let fling = barFling.flatMap { mediaTime() - $0.time < 1.5 ? $0.velocity : nil } ?? 0
@@ -1880,6 +1899,11 @@ final class InlineComposeController: NSObject {
             logger.info("compose: end editing fling=\(Int(fling), privacy: .public)")
             restContent.thumbnails.scatter(velocity: Double(fling))
         }
+        applyOpenState()
+    }
+
+    /// バーの形を、書いているか（`isOpen`）に合わせる。書き始めと書き終わりのほか、畳まない設定を切り替えたときにも呼ぶ。
+    private func applyOpenState() {
         // 隠すときは、カプセルに変えずに書いていたときの形のまま下げ、画面の外に出てから形を戻す。
         if hidesBar {
             applyBarVisibility()
@@ -1895,6 +1919,8 @@ final class InlineComposeController: NSObject {
             logOverlappingRows(after: "begin editing")
             return
         }
+        let editing = isOpen
+        guard editing != isLayoutOpen else { return }
         let collapses = !editing && isExpanded
         var generation: Int?
         if collapses {
@@ -2012,30 +2038,31 @@ final class InlineComposeController: NSObject {
     }
 
     private func applyEditingLayout() {
-        setRowHidden(restRow, isEditing)
-        restRow.alpha = isEditing ? 0 : 1
+        isLayoutOpen = isOpen
+        setRowHidden(restRow, isOpen)
+        restRow.alpha = isOpen ? 0 : 1
         for view in [textView, tools] {
-            setRowHidden(view, !isEditing)
-            view.alpha = isEditing ? 1 : 0
+            setRowHidden(view, !isOpen)
+            view.alpha = isOpen ? 1 : 0
         }
-        let showsReply = isEditing && chip != nil
+        let showsReply = isOpen && chip != nil
         setRowHidden(replyRow, !showsReply)
         replyRow.alpha = showsReply ? 1 : 0
-        let showsSchedule = isEditing && model.scheduledAt != nil
+        let showsSchedule = isOpen && model.scheduledAt != nil
         setRowHidden(scheduleRow, !showsSchedule)
         scheduleRow.alpha = showsSchedule ? 1 : 0
-        let showsSpoiler = isEditing && model.showsSpoiler
+        let showsSpoiler = isOpen && model.showsSpoiler
         setRowHidden(spoilerRow, !showsSpoiler)
         spoilerRow.alpha = showsSpoiler ? 1 : 0
-        let showsAttachments = isEditing && !model.attachments.isEmpty
+        let showsAttachments = isOpen && !model.attachments.isEmpty
         setRowHidden(attachmentStrip, !showsAttachments)
         attachmentStrip.alpha = showsAttachments ? 1 : 0
-        let showsPoll = isEditing && model.poll != nil
+        let showsPoll = isOpen && model.poll != nil
         setRowHidden(pollEditor, !showsPoll)
         pollEditor.alpha = showsPoll ? 1 : 0
         applyPollTopLimit()
-        stackTop.constant = isEditing ? 10 : restInset
-        stackBottom.constant = isEditing ? -10 : -restInset
+        stackTop.constant = isOpen ? 10 : restInset
+        stackBottom.constant = isOpen ? -10 : -restInset
     }
 
     /// スタックビューの行は、値が変わるときだけ隠したり出したりする。同じ値を、特にアニメーションの途中に代入し直すと、
@@ -2135,7 +2162,7 @@ final class InlineComposeController: NSObject {
     /// 投票の欄を出して書いている。欄の分だけ投稿欄が高くなり、iPhone SEのような小さい画面では、本文が5行まで伸びると上にはみ出したため、
     /// 広げているときと同じく上端を安全領域で止め、足りない分は本文を縮めて中でスクロールさせる。
     private var limitsBarTopForPoll: Bool {
-        isEditing && model.poll != nil && !isExpanded
+        isOpen && model.poll != nil && !isExpanded
     }
 
     /// 最後に当てた`limitsBarTopForPoll`。変わったときだけ、上端の制約と本文の高さを当て直す。
@@ -2192,6 +2219,33 @@ final class InlineComposeController: NSObject {
         }
     }
 
+    /// 畳まない設定を切り替えたら、書いていないときのバーの形を合わせる。
+    private func observeKeepsOpen() {
+        withObservationTracking {
+            _ = settings.keepsComposeBarOpen
+        } onChange: { [weak self] in
+            Task(.withoutRequests) { @MainActor in
+                self?.keepsOpenDidChange()
+                self?.observeKeepsOpen()
+            }
+        }
+    }
+
+    private func keepsOpenDidChange() {
+        if isOpen, !isEditing {
+            onOpenWithoutEditing()
+        }
+        // 隠している間は、出すときに形を変えないので、画面の外で今の設定の形にしておく。
+        if isBarHidden {
+            UIView.performWithoutAnimation {
+                applyEditingLayout()
+                host?.view.layoutIfNeeded()
+            }
+            return
+        }
+        applyOpenState()
+    }
+
     // MARK: - モデルの反映
 
     private func observeModel() {
@@ -2228,7 +2282,7 @@ final class InlineComposeController: NSObject {
                 lastFocusedInput = textView
             }
         }
-        setRowShown(spoilerRow, isEditing && model.showsSpoiler)
+        setRowShown(spoilerRow, isOpen && model.showsSpoiler)
         // 添付があると、空の注意書きでも閲覧注意になる。空のまま出している意味が分かるよう、案内を変える。
         spoilerField.placeholder = model.attachments.isEmpty ? "注意書き" : "注意書き（空なら閲覧注意だけ）"
         spoilerClearButton.accessibilityLabel = model.isSensitive ? "注意書きと閲覧注意を外す" : "注意書きを外す"
@@ -2246,7 +2300,7 @@ final class InlineComposeController: NSObject {
                 crossfadeReplyLabel(from: previous)
             }
         }
-        setRowShown(replyRow, isEditing && chip != nil)
+        setRowShown(replyRow, isOpen && chip != nil)
 
         // 行を消すときは、薄くなる間も日時が残るよう、前の日時のままにする。
         if let scheduledAt = model.scheduledAt {
@@ -2257,7 +2311,7 @@ final class InlineComposeController: NSObject {
             scheduleDateButton.accessibilityLabel = "予約の日時"
             scheduleDateButton.accessibilityValue = ScheduleDateText.spokenTitle(for: scheduledAt, now: model.now(), calendar: model.calendar)
         }
-        setRowShown(scheduleRow, isEditing && model.scheduledAt != nil)
+        setRowShown(scheduleRow, isOpen && model.scheduledAt != nil)
 
         let attachmentItems = model.attachments.map { attachment in
             ComposeAttachmentStrip.Item(
@@ -2270,7 +2324,7 @@ final class InlineComposeController: NSObject {
         }
         attachmentStrip.update(attachmentItems, isLocked: model.isPosting)
         mediaViewer?.update(items: viewerItems())
-        setRowShown(attachmentStrip, isEditing && !model.attachments.isEmpty)
+        setRowShown(attachmentStrip, isOpen && !model.attachments.isEmpty)
 
         applyPollEditorContent()
         // 投票の欄を外したときや、選択肢を消したときは、隠れた入力欄にキーボードを残さず本文へ移す。
@@ -2281,7 +2335,7 @@ final class InlineComposeController: NSObject {
             }
             lastFocusedInput = textView
         }
-        setRowShown(pollEditor, isEditing && model.poll != nil)
+        setRowShown(pollEditor, isOpen && model.poll != nil)
         applyPollTopLimit()
         updatePollFolding()
 
@@ -2324,7 +2378,7 @@ final class InlineComposeController: NSObject {
     /// 書いていないときは、バーの形を変える動きの中で行を出し入れするので、ここでは動かさない。
     private func setRowShown(_ row: UIView, _ shown: Bool) {
         guard row.isHidden == shown else { return }
-        guard isEditing, bar.window != nil else {
+        guard isOpen, bar.window != nil else {
             setRowHidden(row, !shown)
             row.alpha = shown ? 1 : 0
             return
@@ -2341,7 +2395,7 @@ final class InlineComposeController: NSObject {
 
     /// 出ているラベルの中身が替わるなら、替わる前のラベルの像。替わらないか、ラベルが見えていなければnil。
     private func replyLabelSwitchSnapshot(to chip: Chip) -> UIView? {
-        guard isEditing, bar.window != nil, !replyRow.isHidden, replyRow.alpha > 0, !UIAccessibility.isReduceMotionEnabled,
+        guard isOpen, bar.window != nil, !replyRow.isHidden, replyRow.alpha > 0, !UIAccessibility.isReduceMotionEnabled,
               replyButton.configuration?.title != chip.title || replyButton.configuration?.image != UIImage(systemName: chip.symbolName)
         else { return nil }
         return replyButton.snapshotView(afterScreenUpdates: false)
@@ -2494,7 +2548,7 @@ final class InlineComposeController: NSObject {
     /// 開く前に自分でキーボードを閉じ、バーをキーボードの高さに留め、開いている間は書いている状態を解かない。
     /// 入力欄を最初の応答者のまま開くと、閉じた時点でUIKitが入力欄にキーボードを戻し、閉じ始めの画像が止まって見えたため、キーボードは閉じる動きが終わってから戻す。
     private func openAttachment(_ id: DraftAttachment.ID) {
-        guard let host, isEditing, let index = model.attachments.firstIndex(where: { $0.id == id }) else { return }
+        guard let host, isOpen, let index = model.attachments.firstIndex(where: { $0.id == id }) else { return }
         guard mediaViewer == nil else {
             logger.info("open attachment viewer ignored: viewer is still shown")
             return

@@ -94,11 +94,13 @@ enum AppDependencies {
 
     static let network = NetworkConditionsMonitor()
 
+    /// Macでは、ソフトウェアキーボードがなく、書き始めても投稿欄がその場で広がって押した位置にボタンが来るので、既定で畳まない。
     static let settings: AppSettings = {
+        let keepsComposeBarOpen = ProcessInfo.processInfo.isiOSAppOnMac
         #if DEBUG
-        AppSettings(defaults: ScenarioMode.defaults ?? .standard)
+        return AppSettings(defaults: ScenarioMode.defaults ?? .standard, keepsComposeBarOpenByDefault: keepsComposeBarOpen)
         #else
-        AppSettings(defaults: .standard)
+        return AppSettings(defaults: .standard, keepsComposeBarOpenByDefault: keepsComposeBarOpen)
         #endif
     }()
 

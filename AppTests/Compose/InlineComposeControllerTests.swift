@@ -1012,6 +1012,66 @@ final class InlineComposeControllerTests {
         #expect(!composer.isBarHidden, "設定を戻しても、投稿欄が隠れたままです\n\(composer.stateDump())")
     }
 
+    /// 畳まない設定では、書いていないときも入力欄とボタンの行を出しておき、書き始めても書き終えても、ボタンの位置を動かさない。
+    /// 押した投稿欄が広がると、押した位置にボタンが来て、続けて押したときにボタンを押してしまうため。
+    @Test func keepsBarOpenWhileNotEditing() async throws {
+        defer { window.isHidden = true }
+        settings.keepsComposeBarOpen = true
+        try await waitUntilSettled()
+        window.layoutIfNeeded()
+        let textView = try #require(textViews(in: window).first)
+        #expect(!textView.isHidden, "畳まない設定なのに、書いていないときに入力欄が隠れています\n\(composer.stateDump())")
+        #expect(composer.stateDump().contains("editing: false open: true"), "畳まない設定なのに、カプセルに畳んでいます\n\(composer.stateDump())")
+        let bar = try composerBar()
+        let resting = bar.frame
+
+        composer.beginEditing()
+        try await waitUntilSettled()
+        window.layoutIfNeeded()
+        #expect(bar.frame == resting, "書き始めると、投稿欄の形が変わりました: \(resting) → \(bar.frame)")
+
+        composer.endEditing()
+        try await waitUntilSettled()
+        window.layoutIfNeeded()
+        #expect(composer.stateDump().contains("editing: false open: true"), "書き終えると、カプセルに畳みました\n\(composer.stateDump())")
+        #expect(bar.frame == resting, "書き終えると、投稿欄の形が変わりました: \(resting) → \(bar.frame)")
+        #expect(composer.overlappingRows.isEmpty, "行が重なりました\n\(composer.stateDump())")
+
+        settings.keepsComposeBarOpen = false
+        try await waitUntilSettled()
+        window.layoutIfNeeded()
+        #expect(composer.stateDump().contains("open: false"), "設定を戻しても、カプセルに畳みません\n\(composer.stateDump())")
+        #expect(bar.frame.height < resting.height, "設定を戻しても、投稿欄が細くなりません: \(bar.frame)")
+    }
+
+    /// 畳まない設定をオンにしたら、書き始める前から押せるボタン（メディアの添付など）のために、既定の値を読ませる。
+    @Test func loadsDefaultsWhenOpeningWithoutEditing() async throws {
+        defer { window.isHidden = true }
+        var loads = 0
+        composer.onOpenWithoutEditing = { loads += 1 }
+        settings.keepsComposeBarOpen = true
+        try await waitUntilSettled()
+        #expect(loads == 1, "畳まない設定にしても、既定の値を読ませていません")
+    }
+
+    /// 空の投稿欄を隠している間に畳まない設定をオンにしても、隠すのをやめて出したときは、カプセルではなく書いているときの形で出す。
+    @Test func showsOpenBarAfterKeepingOpenWhileHidden() async throws {
+        defer { window.isHidden = true }
+        settings.hidesEmptyComposeBar = true
+        try await waitUntilSettled()
+        #expect(composer.isBarHidden)
+
+        settings.keepsComposeBarOpen = true
+        try await waitUntilSettled()
+        settings.hidesEmptyComposeBar = false
+        try await waitUntilSettled()
+        window.layoutIfNeeded()
+        #expect(!composer.isBarHidden)
+        #expect(composer.stateDump().contains("editing: false open: true"), "隠している間に畳まない設定にしたのに、カプセルで出しました\n\(composer.stateDump())")
+        let textView = try #require(textViews(in: window).first)
+        #expect(!textView.isHidden, "隠している間に畳まない設定にしたのに、入力欄を出していません")
+    }
+
     /// 書きかけの本文や返信先があるときは、閉じても隠さない。残っていることに気づけるようにする。
     @Test func keepsBarShownWhileDraftRemains() async throws {
         defer { window.isHidden = true }
