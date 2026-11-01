@@ -122,20 +122,19 @@ final class EmojiArrivalTransition {
                 layer.add(fade, forKey: "fadeIn")
             }
             if piece.offset != .zero {
-                let move = CABasicAnimation(keyPath: "position")
+                // 下の行を動かす一覧の動き（`TimelineViewController.reconfigureShiftingRowsBelow`）と同じスプリングにし、行と文字の動きをそろえる。
+                let move = TimelineViewController.rowSpring(keyPath: "position", duration: duration)
                 move.fromValue = CGPoint(x: layer.position.x - piece.offset.x, y: layer.position.y - piece.offset.y)
                 move.toValue = layer.position
-                move.duration = duration
-                move.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                 layer.add(move, forKey: "move")
             }
         }
-        // どのまとまりも同じ時間で動くので、時間を測るためだけの動きを足し、その終わりで外す。
+        // どのまとまりも同じ時間で動くので、時間を測るためだけの動きを足し、その終わりで外す。スプリングが止まるまで待つ。
         // 外側の描き直しの中で始めるため、CATransactionの完了は動きの終わりを待たずに呼ばれる（シミュレーターで確かめた）。
         let timer = CABasicAnimation(keyPath: "opacity")
         timer.fromValue = 1
         timer.toValue = 1
-        timer.duration = duration
+        timer.duration = TimelineViewController.rowSpring(keyPath: "position", duration: duration).settlingDuration
         timer.delegate = Completion { [weak self, weak overlay] finished in
             guard let self, let overlay, self.overlay === overlay else { return }
             self.finish()

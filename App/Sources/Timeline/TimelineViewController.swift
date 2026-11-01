@@ -561,22 +561,29 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 足し合わせる行の動きに付ける名前を、重ねても取り替えないよう分ける。
     private var rowShiftCount = 0
 
+    /// 行を動かすスプリング。SwiftUIの`.smooth(duration:)`と同じく、バウンスなしで`duration`を体感の長さにする。
+    /// 止まるまでは`duration`より長くかかるので、動きの長さ（`duration`）は止まるまでの時間にする。
+    static func rowSpring(keyPath: String, duration: TimeInterval) -> CASpringAnimation {
+        let spring = CASpringAnimation(perceptualDuration: duration, bounce: 0)
+        spring.keyPath = keyPath
+        spring.duration = spring.settlingDuration
+        return spring
+    }
+
     /// 層を、`shift`だけ前の位置から今の位置へ動かす。前の動きの途中なら、その動きは足し合わせたまま続く。動かしたらtrueを返す。
     @discardableResult
     private func shiftRow(_ layer: CALayer, by shift: CGFloat, duration: TimeInterval) -> Bool {
         guard abs(shift) > 0.5 else { return false }
-        let move = CABasicAnimation(keyPath: "position")
+        let move = Self.rowSpring(keyPath: "position", duration: duration)
         move.isAdditive = true
         move.fromValue = CGPoint(x: 0, y: -shift)
         move.toValue = CGPoint.zero
-        move.duration = duration
-        move.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         rowShiftCount += 1
         layer.add(move, forKey: "rowShift\(rowShiftCount)")
         return true
     }
 
-    /// 伸びた行のセルを、下の行の動きと同じ時間と曲線で、前の高さから新しい高さまで切り抜いて見せる。
+    /// 伸びた行のセルを、下の行の動きと同じスプリングで、前の高さから新しい高さまで切り抜いて見せる。
     /// 伸びた行の中身は一度に新しい高さで並ぶため、切り抜かないと、不透明なセルの背景と中身が、下がってくる途中の下の行と、押し出される行の像を覆う。
     /// 像は一覧に足すが、一覧が並べ直すときにセルを手前へ戻すので、重なり順では避けられない。
     /// 伸びている途中にまた伸びたら（広げている途中に絵文字が届いて折り返しが増えたなど）、同じ切り抜きを、今見えている高さから新しい高さへ動かし直す。
@@ -593,11 +600,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         mask.anchorPoint = .zero
         mask.frame = cell.layer.bounds
         CATransaction.commit()
-        let grow = CABasicAnimation(keyPath: "bounds.size.height")
+        let grow = Self.rowSpring(keyPath: "bounds.size.height", duration: duration)
         grow.fromValue = from
         grow.toValue = newHeight
-        grow.duration = duration
-        grow.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         grow.delegate = RowShiftCompletion { [weak cell, weak mask] in
             // 動かし直した動きが続いていれば外さない。動きの途中で使い回されて、ほかの切り抜きに替わっていたら、そちらも外さない。
             guard let cell, let mask, cell.layer.mask === mask, mask.animation(forKey: Self.growthMaskName) == nil else { return }
@@ -617,10 +622,11 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let origin = collectionView.convert(CGPoint(x: 0, y: newMinY), from: nil)
         snapshot.frame.origin.y = origin.y
         shiftRow(snapshot.layer, by: newMinY - oldMinY, duration: duration)
+        // 像を動かすスプリングが止まるまで残す。
         let remove = CABasicAnimation(keyPath: "opacity")
         remove.fromValue = 1
         remove.toValue = 1
-        remove.duration = duration
+        remove.duration = Self.rowSpring(keyPath: "position", duration: duration).settlingDuration
         remove.delegate = RowShiftCompletion { snapshot.removeFromSuperview() }
         snapshot.layer.add(remove, forKey: "rowShiftEnd")
     }
