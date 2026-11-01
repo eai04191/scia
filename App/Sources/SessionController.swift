@@ -3558,7 +3558,7 @@ final class SessionController {
         case .browser(let url):
             browser.open(url, from: rootViewController.frontmostPresented)
         case .reset:
-            rootViewController.dismiss(animated: false)
+            rootViewController.dismissPresentedScreens(animated: false)
             for navigation in tabs.allNavigations {
                 navigation.popToRootViewController(animated: false)
             }

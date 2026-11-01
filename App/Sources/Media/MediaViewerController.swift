@@ -354,11 +354,7 @@ final class MediaViewerController: UIViewController {
         }
         dismissedHandlers.append(dismissed)
         // 上に重ねたメニューやシートを先に閉じる。重ねたまま閉じると、閉じる動きの上にそれらが残る。
-        if presentedViewController != nil {
-            dismiss(animated: false) { [weak self] in self?.beginClosing() }
-        } else {
-            beginClosing()
-        }
+        dismissPresentedScreens(animated: false) { [weak self] in self?.beginClosing() }
     }
 
     override func viewDidLoad() {

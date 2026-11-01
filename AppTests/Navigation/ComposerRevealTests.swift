@@ -74,6 +74,27 @@ struct ComposerRevealTests {
         #expect(root.presentedViewController == nil)
     }
 
+    /// ビューアの上に重ねた投稿欄のシートも、閉じたことを知らせてから閉じる。知らせないと、投稿欄はシートを出している扱いのまま残る。
+    @Test func viewerNotifiesSheetAboveItWhenClosing() async throws {
+        let harness = try TimelineHarness(notices: notices)
+        defer { harness.tearDown() }
+        let root = harness.viewController
+        let viewer = makeViewer()
+        try await root.presentForTesting(viewer)
+        var closed = 0
+        let sheet = ScheduleDateSheet(title: "予約の日時", date: Date(timeIntervalSince1970: 1_800_000_000), minimumDate: Date(timeIntervalSince1970: 1_700_000_000), confirmTitle: "決定") { _ in } onClose: {
+            closed += 1
+        }
+        try await viewer.presentForTesting(sheet)
+
+        var continued = false
+        root.closeScreensForSharedContent { continued = true }
+
+        try await waitUntil { continued }
+        #expect(root.presentedViewController == nil)
+        #expect(closed == 1)
+    }
+
     /// 書きかけがあって閉じさせない画面は残し、その上のビューアだけを閉じる。
     @Test func keepsScreenWithUnsavedInputAndClosesViewerAboveIt() async throws {
         let harness = try TimelineHarness(notices: notices)

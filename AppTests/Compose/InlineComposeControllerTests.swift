@@ -531,8 +531,8 @@ final class InlineComposeControllerTests {
         #expect(textView.isFirstResponder, "閉じてもキーボードが戻りません\n\(composer.stateDump())")
     }
 
-    /// 予約の日時、言語、ボタンの並びのシートを、出した側の画面からまとめて閉じても（共有で投稿欄に入るときやデバッグのリセットなど）、閉じたことになり、キーボードを閉じれば書き終える。
-    /// シート自身の`dismiss`も下へのスワイプの知らせも通らない閉じ方なので、閉じた扱いにならないと、以後キーボードを閉じても欄がカプセルに戻らない。
+    /// 予約の日時、言語、ボタンの並びのシートを、出した側の画面から`dismissPresentedScreens`でまとめて閉じても（デバッグのリセットなど）、閉じたことになり、キーボードを閉じれば書き終える。
+    /// シート自身の`dismiss`を通らない閉じ方なので、閉じた扱いにならないと、以後キーボードを閉じても欄がカプセルに戻らない。
     @Test(arguments: [ComposeToolItem.schedule, .language, .customize])
     func sheetClosedByPresenterEndsShowing(item: ComposeToolItem) async throws {
         defer { window.isHidden = true }
@@ -553,7 +553,7 @@ final class InlineComposeControllerTests {
         let sheet = try #require(host.presentedViewController)
         #expect(sheet is ScheduleDateSheet || sheet is PostingLanguageSheet || sheet is ComposeToolLayoutSheet)
 
-        host.dismiss(animated: true)
+        host.dismissPresentedScreens(animated: true)
         try await clock.advance { host.presentedViewController == nil }
         try await waitUntilSettled()
         composer.endEditing()

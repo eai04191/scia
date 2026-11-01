@@ -138,12 +138,10 @@ final class PostingLanguageCache {
     }
 }
 
-/// 投稿欄の項目「言語」から重ねる、言語を選ぶシート。選んでも、キャンセルしても、下へスワイプしても、出した側から閉じられても、閉じたら`onClose`を1回呼ぶ。
+/// 投稿欄の項目「言語」から重ねる、言語を選ぶシート。選んでも、キャンセルしても、下へスワイプしても、出した側から`dismissPresentedScreens`で閉じられても、閉じたら`onClose`を1回呼ぶ。
 final class PostingLanguageSheet: UIHostingController<PostingLanguageView> {
     private let onClose: () -> Void
     private var hasClosed = false
-    /// 自分の`dismiss`で閉じている。`viewDidDisappear`は`dismiss`の完了より先に呼ばれるので、そこで知らせると、決めたことより先に閉じたことを知らせてしまう。
-    private var isDismissingItself = false
 
     init(picker: PostingLanguagePicker, onSelect: @escaping @MainActor (PostingLanguageRow) -> Void, onClose: @escaping () -> Void) {
         self.onClose = onClose
@@ -167,18 +165,9 @@ final class PostingLanguageSheet: UIHostingController<PostingLanguageView> {
 
     /// 選んだとき、キャンセルしたとき、コードから閉じたとき。閉じ終わってから知らせる。
     override func dismiss(animated flag: Bool, completion: (() -> Void)? = nil) {
-        isDismissingItself = true
         super.dismiss(animated: flag) {
             completion?()
             self.notifyClosed()
-        }
-    }
-
-    /// 出した側の画面からまとめて閉じられたとき（デバッグのリセットなど）。自分の`dismiss`も下へのスワイプの知らせも通らないので、消えたところで知らせる。
-    override func viewDidDisappear(_ animated: Bool) {
-        super.viewDidDisappear(animated)
-        if !isDismissingItself, isBeingDismissed || presentingViewController == nil {
-            notifyClosed()
         }
     }
 
@@ -190,7 +179,7 @@ final class PostingLanguageSheet: UIHostingController<PostingLanguageView> {
 }
 
 extension PostingLanguageSheet: UIAdaptivePresentationControllerDelegate {
-    /// 下へスワイプして閉じたとき。
+    /// 下へスワイプして閉じたときと、出した側から`dismissPresentedScreens`でまとめて閉じたとき。
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
         notifyClosed()
     }

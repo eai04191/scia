@@ -98,7 +98,7 @@ extension EmojiPaletteSheet: UISheetPresentationControllerDelegate {
         }
     }
 
-    /// スワイプして閉じたときだけ呼ばれる。
+    /// 下へスワイプして閉じたときと、出した側から`dismissPresentedScreens`でまとめて閉じたとき。
     func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
         isClosing = true
         onDidClose()
