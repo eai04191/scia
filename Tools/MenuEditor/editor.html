@@ -1,0 +1,532 @@
+<title>Sciaメニューの既定値</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 左に並べ替えの一覧、右にメニューのプレビュー。狭い画面では縦に積む */
+:root {
+  --bg: #f4f5f8;
+  --surface: #ffffff;
+  --fg: #1b1d24;
+  --muted: #646a7a;
+  --line: #d9dce5;
+  --accent: #3b5bdb;
+  --accent-soft: #e5eafc;
+  --hidden: #a2a7b4;
+  --menu-bg: #eceef3;
+  --menu-sep: #c9cdd8;
+  --changed: #c2410c;
+  --danger: #c92a2a;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --sans: -apple-system, "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14161c; --surface: #1d2028; --fg: #e8eaf0; --muted: #9aa0b0; --line: #2e323d;
+    --accent: #7b93f5; --accent-soft: #252c48; --hidden: #5d6272; --menu-bg: #262a33; --menu-sep: #3a3f4b;
+    --changed: #fb923c; --danger: #ff6b6b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14161c; --surface: #1d2028; --fg: #e8eaf0; --muted: #9aa0b0; --line: #2e323d;
+  --accent: #7b93f5; --accent-soft: #252c48; --hidden: #5d6272; --menu-bg: #262a33; --menu-sep: #3a3f4b;
+  --changed: #fb923c; --danger: #ff6b6b; color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--sans);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 16px 48px;
+}
+h1 { font-size: 1.25rem; margin: 0 0 4px; }
+h2 { font-size: 0.95rem; margin: 0 0 8px; }
+p.lead { margin: 0 0 16px; color: var(--muted); max-width: 70ch; line-height: 1.6; }
+button {
+  font: inherit; font-size: 0.85rem; color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.4; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.tabs button[aria-selected="true"] { background: var(--accent-soft); border-color: var(--accent); font-weight: 600; }
+.tabs .dot { color: var(--changed); margin-left: 4px; }
+
+.layout { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+@media (max-width: 760px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-width: 0; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+
+ol.rows { list-style: none; margin: 0; padding: 0; }
+.row {
+  display: grid; grid-template-columns: 18px 22px minmax(0, 1fr) auto; gap: 8px; align-items: center;
+  padding: 6px 4px; border-bottom: 1px solid var(--line); background: var(--surface);
+}
+.row.dragging { opacity: 0.4; }
+.row.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+.row.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+.handle { cursor: grab; color: var(--muted); user-select: none; text-align: center; }
+.row .label { min-width: 0; }
+.row .title { font-size: 0.9rem; }
+.row .meta { font-size: 0.72rem; color: var(--muted); overflow-wrap: anywhere; }
+.row .meta code { font-family: var(--mono); }
+.row.off .title { color: var(--hidden); text-decoration: line-through; }
+.row.sep .title, .row.rowsep .title { color: var(--muted); font-size: 0.8rem; }
+.row.more { background: var(--accent-soft); }
+.row.more .title { font-weight: 600; }
+.row .moves { display: flex; gap: 2px; }
+.row .moves button { padding: 0 6px; }
+.row .remove { color: var(--danger); }
+
+/* プレビュー: UIMenuの見た目をおおまかにまねる */
+.preview-wrap { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.menu { background: var(--menu-bg); border-radius: 14px; width: 250px; max-width: 100%; overflow: hidden; }
+.menu .caption { font-size: 0.72rem; color: var(--muted); padding: 8px 14px 0; }
+.menu .group + .group { border-top: 8px solid var(--menu-sep); }
+.menu .entry { display: flex; justify-content: space-between; gap: 8px; padding: 10px 14px; font-size: 0.9rem; }
+.menu .entry + .entry { border-top: 1px solid var(--menu-sep); }
+.menu .entry .sym { font-family: var(--mono); font-size: 0.65rem; color: var(--muted); align-self: center; text-align: right; overflow-wrap: anywhere; min-width: 0; }
+.menu .tiles { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+.menu .tile { padding: 10px 4px; text-align: center; font-size: 0.72rem; display: flex; flex-direction: column; gap: 4px; }
+.menu .tile + .tile { border-left: 1px solid var(--menu-sep); }
+.menu .tile .sym { font-family: var(--mono); font-size: 0.6rem; color: var(--muted); overflow-wrap: anywhere; }
+.menu .submenu { font-weight: 600; }
+.menu .empty { padding: 14px; color: var(--muted); font-size: 0.85rem; }
+.note { font-size: 0.75rem; color: var(--muted); margin: 10px 0 0; line-height: 1.5; }
+
+.io { margin-top: 24px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; }
+@media (max-width: 760px) { .io { grid-template-columns: minmax(0, 1fr); } }
+textarea { width: 100%; box-sizing: border-box; min-height: 220px; font-family: var(--mono); font-size: 0.75rem; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 8px; }
+.status { font-size: 0.8rem; color: var(--muted); min-height: 1.2em; margin: 6px 0 0; }
+.status.error { color: var(--danger); }
+.changed-list { color: var(--changed); }
+</style>
+
+<h1>Sciaメニューの既定値</h1>
+<p class="lead">長押しのメニューの既定の並びと表示を決めます。行をドラッグするか▲▼で並べ替え、チェックで表示を切り替えます。「その他」の境目より下の項目は「その他」のサブメニューに入ります。決めたら下の「menu-defaults.json」をコピーして渡してください。</p>
+
+<div class="tabs" id="tabs" role="tablist"></div>
+
+<div class="layout">
+  <section class="panel">
+    <div class="toolbar">
+      <button id="add-separator" type="button">区切り線を足す</button>
+      <button id="add-row" type="button">横並びの区切り線を足す</button>
+      <button id="reset-menu" type="button">このメニューを既定に戻す</button>
+    </div>
+    <ol class="rows" id="rows"></ol>
+  </section>
+  <section class="panel">
+    <h2>プレビュー</h2>
+    <div class="preview-wrap" id="preview"></div>
+    <p class="note">条件つきの項目（自分の投稿でだけ出る「編集」など）も、すべて出ている状態で描いています。名前は設定の画面のものです。</p>
+  </section>
+</div>
+
+<div class="io">
+  <section class="panel">
+    <h2>menu-defaults.json</h2>
+    <textarea id="output" readonly></textarea>
+    <div class="toolbar" style="margin-top:8px">
+      <button id="copy" class="primary" type="button">コピー</button>
+      <button id="reset-all" type="button">すべて既定に戻す</button>
+    </div>
+    <p class="status" id="output-status"></p>
+  </section>
+  <section class="panel">
+    <h2>JSONを読み込む</h2>
+    <textarea id="input" placeholder="前に書き出したmenu-defaults.jsonを貼り付けると、続きから編集できます"></textarea>
+    <div class="toolbar" style="margin-top:8px">
+      <button id="load" type="button">読み込む</button>
+    </div>
+    <p class="status" id="input-status"></p>
+  </section>
+</div>
+
+<script type="application/json" id="catalog">__MENU_CATALOG__</script>
+<script>
+const catalog = JSON.parse(document.getElementById("catalog").textContent);
+const STORAGE_KEY = "scia-menu-editor-draft";
+const menus = catalog.menus;
+const byKey = Object.fromEntries(menus.map((m) => [m.key, m]));
+
+// 項目は`item:<id>`か`hidden:<id>`、区切り線は`separator`、横並びの区切り線は`row`、「その他」の境目は`more`。SciaCoreのMenuLayout.tokensと同じ形。
+function validate(menu, tokens) {
+  if (!Array.isArray(tokens)) return `${menu.key}が配列ではありません`;
+  const ids = new Set(menu.items.map((i) => i.id));
+  const seen = new Set();
+  let more = 0;
+  for (const token of tokens) {
+    if (typeof token !== "string") return `${menu.key}に文字列でない項目があります: ${JSON.stringify(token)}`;
+    if (token === "more") { more++; continue; }
+    if (token === "separator") { if (!menu.supportsSeparators) return `${menu.key}は区切り線を使えません`; continue; }
+    if (token === "row") { if (!menu.supportsRowSeparators) return `${menu.key}は横並びの区切り線を使えません`; continue; }
+    const m = /^(item|hidden):(.+)$/.exec(token);
+    if (!m || !ids.has(m[2])) return `${menu.key}に知らない項目があります: ${token}`;
+    if (seen.has(m[2])) return `${menu.key}に同じ項目が2つあります: ${m[2]}`;
+    seen.add(m[2]);
+  }
+  if (more !== 1) return `${menu.key}の「その他」の境目が${more}個あります（1個にしてください）`;
+  const missing = [...ids].filter((id) => !seen.has(id));
+  if (missing.length) return `${menu.key}に足りない項目があります: ${missing.join(", ")}`;
+  return null;
+}
+
+function parseLayouts(text) {
+  const data = JSON.parse(text);
+  if (typeof data !== "object" || data === null || Array.isArray(data)) throw new Error("メニューのキーを持つオブジェクトではありません");
+  const unknown = Object.keys(data).filter((k) => !byKey[k]);
+  if (unknown.length) throw new Error(`知らないメニューがあります: ${unknown.join(", ")}`);
+  const result = {};
+  for (const menu of menus) {
+    if (!(menu.key in data)) throw new Error(`${menu.key}がありません`);
+    const error = validate(menu, data[menu.key]);
+    if (error) throw new Error(error);
+    result[menu.key] = [...data[menu.key]];
+  }
+  return result;
+}
+
+function defaults() {
+  return Object.fromEntries(menus.map((m) => [m.key, [...m.defaults]]));
+}
+
+let state = defaults();
+let selected = menus[0].key;
+try {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) state = parseLayouts(saved);
+} catch { state = defaults(); }
+
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, serialize()); } catch { /* 保存できない環境では毎回既定から始める */ }
+}
+
+function serialize() {
+  return JSON.stringify(Object.fromEntries(menus.map((m) => [m.key, state[m.key]])), null, 2) + "\n";
+}
+
+function isChanged(key) {
+  return JSON.stringify(state[key]) !== JSON.stringify(byKey[key].defaults);
+}
+
+function itemOf(menu, id) { return menu.items.find((i) => i.id === id); }
+
+function update(tokens) {
+  state[selected] = tokens;
+  save();
+  render();
+}
+
+// ---- 一覧 ----
+let dragIndex = null;
+
+function renderRows() {
+  const menu = byKey[selected];
+  const tokens = state[selected];
+  const list = document.getElementById("rows");
+  list.replaceChildren();
+  tokens.forEach((token, index) => {
+    const li = document.createElement("li");
+    li.className = "row";
+    li.draggable = true;
+    li.dataset.index = index;
+
+    const handle = document.createElement("span");
+    handle.className = "handle";
+    handle.textContent = "⋮⋮";
+    handle.setAttribute("aria-hidden", "true");
+    li.append(handle);
+
+    const toggleCell = document.createElement("span");
+    const label = document.createElement("div");
+    label.className = "label";
+    const title = document.createElement("div");
+    title.className = "title";
+    label.append(title);
+    let removable = false;
+
+    if (token === "more") {
+      li.classList.add("more");
+      title.textContent = `── ${menu.moreTitle}の境目 ──`;
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.textContent = "これより下の項目は「その他」のサブメニューに入ります";
+      label.append(meta);
+    } else if (token === "separator" || token === "row") {
+      li.classList.add(token === "row" ? "rowsep" : "sep");
+      title.textContent = token === "row" ? "── 横並びの区切り線（下のまとまりを横に並べる） ──" : "── 区切り線 ──";
+      removable = true;
+    } else {
+      const [kind, id] = token.split(":");
+      const item = itemOf(menu, id);
+      const visible = kind === "item";
+      if (!visible) li.classList.add("off");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = visible;
+      checkbox.id = `toggle-${selected}-${id}`;
+      checkbox.setAttribute("aria-label", `${item.title}を表示する`);
+      checkbox.addEventListener("change", () => {
+        const next = [...tokens];
+        next[index] = `${checkbox.checked ? "item" : "hidden"}:${id}`;
+        update(next);
+      });
+      toggleCell.append(checkbox);
+      title.textContent = item.title;
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      const code = document.createElement("code");
+      code.textContent = id;
+      meta.append(code);
+      if (item.note) meta.append(` · ${item.note}`);
+      label.append(meta);
+    }
+    li.append(toggleCell, label);
+
+    const moves = document.createElement("div");
+    moves.className = "moves";
+    const up = button("▲", `上へ`, index === 0, () => move(index, index - 1, "up"));
+    const down = button("▼", `下へ`, index === tokens.length - 1, () => move(index, index + 1, "down"));
+    up.dataset.move = "up";
+    down.dataset.move = "down";
+    moves.append(up, down);
+    if (removable) {
+      const remove = button("×", "消す", false, () => update(tokens.filter((_, i) => i !== index)));
+      remove.classList.add("remove");
+      moves.append(remove);
+    }
+    li.append(moves);
+
+    li.addEventListener("dragstart", (e) => {
+      dragIndex = index;
+      li.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", String(index));
+    });
+    li.addEventListener("dragend", () => { dragIndex = null; render(); });
+    // offsetYは指している子要素が基準になるので、行の枠から測る。
+    const isLowerHalf = (e) => {
+      const rect = li.getBoundingClientRect();
+      return e.clientY - rect.top > rect.height / 2;
+    };
+    li.addEventListener("dragover", (e) => {
+      if (dragIndex === null) return;
+      e.preventDefault();
+      const after = isLowerHalf(e);
+      li.classList.toggle("drop-before", !after);
+      li.classList.toggle("drop-after", after);
+    });
+    li.addEventListener("dragleave", () => li.classList.remove("drop-before", "drop-after"));
+    li.addEventListener("drop", (e) => {
+      e.preventDefault();
+      if (dragIndex === null) return;
+      const after = isLowerHalf(e);
+      let target = index + (after ? 1 : 0);
+      if (dragIndex < target) target -= 1;
+      move(dragIndex, target);
+    });
+    list.append(li);
+  });
+
+  document.getElementById("add-separator").disabled = !menu.supportsSeparators;
+  document.getElementById("add-row").disabled = !menu.supportsRowSeparators;
+  document.getElementById("reset-menu").disabled = !isChanged(selected);
+}
+
+function button(text, label, disabled, action) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = text;
+  b.setAttribute("aria-label", label);
+  b.disabled = disabled;
+  b.addEventListener("click", action);
+  return b;
+}
+
+// ▲▼で動かしたときは、描き直したあとも動かした行の同じボタンにフォーカスを戻し、続けて押せるようにする。端に着いて押せなくなったら、逆向きのボタンに移す。
+function move(from, to, focusButton) {
+  if (from === to) return;
+  const next = [...state[selected]];
+  const [token] = next.splice(from, 1);
+  next.splice(to, 0, token);
+  update(next);
+  if (!focusButton) return;
+  const row = document.querySelector(`#rows .row[data-index="${to}"]`);
+  const buttons = [`[data-move="${focusButton}"]`, `[data-move="${focusButton === "up" ? "down" : "up"}"]`].map((s) => row.querySelector(s));
+  buttons.find((b) => !b.disabled)?.focus();
+}
+
+// ---- プレビュー ----
+// SciaCoreのMenuLayout.groupsと同じく、区切り線でまとまりを分け、空のまとまりは捨てる。
+function groupsOf(tokens) {
+  const groups = { main: [], more: [] };
+  let current = [];
+  let isRow = false;
+  let inMore = false;
+  const close = (startingRow) => {
+    if (current.length) (inMore ? groups.more : groups.main).push({ items: current, isRow });
+    current = [];
+    isRow = startingRow;
+  };
+  for (const token of tokens) {
+    if (token === "separator") close(false);
+    else if (token === "row") close(true);
+    else if (token === "more") { close(false); inMore = true; }
+    else if (token.startsWith("item:")) current.push(token.slice(5));
+  }
+  close(false);
+  return groups;
+}
+
+function renderGroup(menu, group) {
+  const div = document.createElement("div");
+  div.className = "group";
+  if (group.isRow) {
+    const tiles = document.createElement("div");
+    tiles.className = "tiles";
+    for (const id of group.items) {
+      const item = itemOf(menu, id);
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      const sym = document.createElement("span");
+      sym.className = "sym";
+      sym.textContent = item.symbol;
+      const name = document.createElement("span");
+      name.textContent = item.title;
+      tile.append(sym, name);
+      tiles.append(tile);
+    }
+    div.append(tiles);
+  } else {
+    for (const id of group.items) {
+      const item = itemOf(menu, id);
+      div.append(entry(item.title, item.symbol));
+    }
+  }
+  return div;
+}
+
+function entry(title, symbol, className) {
+  const e = document.createElement("div");
+  e.className = "entry" + (className ? ` ${className}` : "");
+  const name = document.createElement("span");
+  name.textContent = title;
+  const sym = document.createElement("span");
+  sym.className = "sym";
+  sym.textContent = symbol;
+  e.append(name, sym);
+  return e;
+}
+
+function renderMenu(caption, menu, groups, trailing) {
+  const box = document.createElement("div");
+  box.className = "menu";
+  const cap = document.createElement("div");
+  cap.className = "caption";
+  cap.textContent = caption;
+  box.append(cap);
+  for (const group of groups) box.append(renderGroup(menu, group));
+  if (trailing) {
+    const div = document.createElement("div");
+    div.className = "group";
+    div.append(trailing);
+    box.append(div);
+  }
+  if (!groups.length && !trailing) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "出す項目がありません";
+    box.append(empty);
+  }
+  return box;
+}
+
+function renderPreview() {
+  const menu = byKey[selected];
+  const groups = groupsOf(state[selected]);
+  const wrap = document.getElementById("preview");
+  wrap.replaceChildren();
+  const moreEntry = groups.more.length ? entry("その他 ›", "ellipsis.circle", "submenu") : null;
+  wrap.append(renderMenu(menu.title, menu, groups.main, moreEntry));
+  if (groups.more.length) wrap.append(renderMenu("「その他」を開いたところ", menu, groups.more, null));
+}
+
+// ---- タブと書き出し ----
+function renderTabs() {
+  const tabs = document.getElementById("tabs");
+  tabs.replaceChildren();
+  for (const menu of menus) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", String(menu.key === selected));
+    b.textContent = menu.title;
+    if (isChanged(menu.key)) {
+      const dot = document.createElement("span");
+      dot.className = "dot";
+      dot.textContent = "●";
+      dot.setAttribute("aria-label", "変更あり");
+      b.append(dot);
+    }
+    b.addEventListener("click", () => { selected = menu.key; render(); });
+    tabs.append(b);
+  }
+}
+
+function renderOutput() {
+  document.getElementById("output").value = serialize();
+  const changed = menus.filter((m) => isChanged(m.key)).map((m) => m.title);
+  const status = document.getElementById("output-status");
+  status.replaceChildren();
+  if (changed.length) {
+    status.append("既定から変えたメニュー: ");
+    const span = document.createElement("span");
+    span.className = "changed-list";
+    span.textContent = changed.join("、");
+    status.append(span);
+  } else {
+    status.textContent = "今の既定と同じです";
+  }
+}
+
+function render() {
+  renderTabs();
+  renderRows();
+  renderPreview();
+  renderOutput();
+}
+
+document.getElementById("add-separator").addEventListener("click", () => update(["separator", ...state[selected]]));
+document.getElementById("add-row").addEventListener("click", () => update(["row", ...state[selected]]));
+document.getElementById("reset-menu").addEventListener("click", () => update([...byKey[selected].defaults]));
+document.getElementById("reset-all").addEventListener("click", () => { state = defaults(); save(); render(); });
+document.getElementById("copy").addEventListener("click", () => {
+  const text = serialize();
+  const status = document.getElementById("output-status");
+  navigator.clipboard.writeText(text).then(
+    () => { status.textContent = "コピーしました"; },
+    () => {
+      const area = document.getElementById("output");
+      area.focus();
+      area.select();
+      status.textContent = "コピーできなかったので選択しました。⌘Cでコピーしてください";
+    },
+  );
+});
+document.getElementById("load").addEventListener("click", () => {
+  const status = document.getElementById("input-status");
+  try {
+    state = parseLayouts(document.getElementById("input").value);
+    save();
+    render();
+    status.className = "status";
+    status.textContent = "読み込みました";
+  } catch (error) {
+    status.className = "status error";
+    status.textContent = `読み込めませんでした: ${error.message}`;
+  }
+});
+
+render();
+</script>

@@ -5,7 +5,7 @@ SIM_DESTINATION ?= generic/platform=iOS Simulator
 # 端末を決めないビルドは、既定ではシミュレーターの全アーキテクチャ（arm64とx86_64）を作る。このMacで動く分だけにして、コンパイルを半分にする
 SIM_ARCH ?= $(shell uname -m)
 
-.PHONY: generate lint test-lint test-core build warnings test sim-keyboard promo readme-screenshots readme-icons update-known-servers check check-steps hooks clean
+.PHONY: generate lint test-lint test-core build warnings test sim-keyboard promo readme-screenshots readme-icons update-known-servers check check-steps hooks menu-editor clean
 
 ## project.ymlからXcodeプロジェクトを生成する
 generate:
@@ -107,5 +107,9 @@ check-steps: lint
 hooks:
 	ln -sfn ../../Tools/git-hooks/reference-transaction "$$(git rev-parse --git-common-dir)/hooks/reference-transaction"
 
+## 長押しのメニューの既定の並びを編集するページを、今の項目の名前と既定の並びを入れてDerivedData/menu-editor.htmlに書き出す。書き出したJSONはPackages/SciaCore/Sources/SciaCore/Settings/Resources/menu-defaults.jsonに置く
+menu-editor:
+	swift run --package-path Tools/MenuEditor --quiet menu-editor Tools/MenuEditor/editor.html $(DERIVED_DATA)/menu-editor.html
+
 clean:
-	rm -rf $(DERIVED_DATA) $(PROJECT) Packages/SciaCore/.build Tools/SciaLint/.build
+	rm -rf $(DERIVED_DATA) $(PROJECT) Packages/SciaCore/.build Tools/SciaLint/.build Tools/MenuEditor/.build

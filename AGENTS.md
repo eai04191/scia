@@ -27,6 +27,7 @@ SciaはストリーミングAPIでタイムラインが流れる、手触りの�
 - `make test SIM='<使う端末>'`: シミュレーターでテストする。先に端末のハードウェアキーボードをつなぐ。端末のiOSの版で初めて走らせたときは、UIKitの公開されていない作りに頼る部分のUIテスト（`SciaSystemUITests`）も走らせる。通ると、確かめた作業ツリーの中身を覚える
 - `make test SIM='<使う端末>' ONLY='SciaTests/LinkLabelTests'`: 一部のテストだけを走らせる。識別子は空白で区切って複数渡せる。通っても中身は覚えない。`xcodebuild ... test`を直接走らせるときは、`-collect-test-diagnostics never`を付ける。付けないと、テストが失敗したときにシミュレーターの診断を集め、応答を待って10分止まる
 - `make check`: 変更を報告する前に必ず通す。通ると、確かめた作業ツリーの中身（commitしていない変更も含む）を覚える
+- `make menu-editor`: 長押しのメニューの既定の並びを並べ替えるページを、今の項目の名前と既定の並びを入れて`DerivedData/menu-editor.html`に書き出す
 - `make hooks`: ローカルのmainを、`make check`と`make test`の両方が通った中身のcommitにしか動かさないhookを入れる。checkoutごとに1回で、worktreeにも効く。通った中身との違いがMarkdown（`*.md`）とログイン画面の補完に使うサーバーの一覧（`known-servers.txt`）だけなら、走らせ直さずに通ったものとして扱う
 
 ## シミュレーター
