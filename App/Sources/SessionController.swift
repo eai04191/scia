@@ -164,8 +164,10 @@ final class SessionController {
     private var composeDefaultsTask: Task<Void, Never>?
     /// 画面のどこにドロップした画像や動画でも、投稿欄に添付する受け口。
     private let mediaDrop = MediaDropTarget()
-    /// 投稿欄が覆っている高さを伝える一覧。ホームと通知に加え、開いているプロフィールの一覧も入る。閉じたものは自然に消える。
+    /// 状態や設定をそろえる一覧。ホームと通知に加え、開いているプロフィールの一覧も入る。閉じたものは自然に消える。
     private let timelines = NSHashTable<TimelineViewController>.weakObjects()
+    /// タブごとの画面を積むナビゲーション。投稿欄のカプセルなどが覆う高さを配る。
+    private let contentNavigations = NSHashTable<ContentNavigationController>.weakObjects()
     /// 開いている編集履歴。添付ファイルを開いた・隠した選択を一覧とそろえるために持つ。閉じたものは自然に消える。
     private let editHistories = NSHashTable<EditHistoryViewController>.weakObjects()
     /// 添付ファイルを覆うか。ホームと通知とプロフィールでそろえ、閉じて開き直したプロフィールにも引き継ぐ。
@@ -179,11 +181,11 @@ final class SessionController {
     private lazy var mediaPrefetcher = MediaPrefetcher(scope: tasks, store: AppDependencies.mediaImages, network: AppDependencies.network, settings: AppDependencies.settings)
     private let xPosts = XPostStore(client: XPostClient(client: AppDependencies.http), retryPolicy: { TuningCatalog.imageRetry(in: AppDependencies.tuning) })
     private var composerObscuredHeight: CGFloat = 0
-    /// 本文のリンクを開くアプリ内のSafari。シートが覆っている高さも、投稿欄と同じく一覧の下の余白にする。
+    /// 本文のリンクを開くアプリ内のSafari。シートが覆っている高さも、投稿欄と同じく積んだ画面の下の余白にする。
     private let browser = InAppBrowser()
     private var browserObscuredHeight: CGFloat = 0
     private var browserCoversTimelines = false
-    /// 一覧の下を覆っている高さ。投稿欄とアプリ内のSafariのシートのうち、高いほう。
+    /// 積んだ画面の下を覆っている高さ。投稿欄とアプリ内のSafariのシートのうち、高いほう。
     private var obscuredBottomHeight: CGFloat { max(composerObscuredHeight, browserObscuredHeight) }
     /// 投稿欄で使う、インスタンスの上限。一度読めたら使い回す。
     private var instanceConfiguration: InstanceConfiguration?
@@ -382,9 +384,6 @@ final class SessionController {
             tabBarController.noticeOverlay?.follow(nil)
         }
         tabBarController.delegate = tabBarDelegate
-        for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation, bookmarksNavigation, favouritesNavigation, scheduledNavigation, searchNavigation] {
-            Self.configure(navigation, delegate: navigationDelegate, scrollToTop: scrollToTop)
-        }
         // トークンの失効は、どのAPIで分かっても同じくログインし直しを促す。
         let reportIfUnauthorized = { (error: any Error) in
             if let error = error as? MastodonAPIError, error.isUnauthorized {
@@ -642,6 +641,9 @@ final class SessionController {
             }
         }
         configureStatusBarTicker(tabBarController: tabBarController)
+        for navigation in [homeNavigation, localNavigation, federatedNavigation, notificationsNavigation, bookmarksNavigation, favouritesNavigation, scheduledNavigation, searchNavigation] {
+            configure(navigation, scrollToTop: scrollToTop)
+        }
         tabs.onPlacementChange = { [weak self] in self?.applyEnabledItems($0) }
         applyEnabledItems(tabs.placement)
         observeTabLayout()
@@ -805,8 +807,8 @@ final class SessionController {
     }
 
     private func applyObscuredBottomHeight() {
-        for timeline in timelines.allObjects {
-            timeline.setObscuredBottomHeight(obscuredBottomHeight)
+        for navigation in contentNavigations.allObjects {
+            navigation.coveredBottomHeight = obscuredBottomHeight
         }
     }
 
@@ -861,8 +863,11 @@ final class SessionController {
     }
 
     /// タブのナビゲーションで、チップの列を画面の移り変わりに合わせ、Macでバーの空いたところを押したら一覧を最上部へ動かす。
-    private static func configure(_ navigation: ContentNavigationController, delegate: NoticeNavigationDelegate, scrollToTop: @escaping (UINavigationController) -> Void) {
-        navigation.delegate = delegate
+    /// 積んだどの画面でも、投稿欄のカプセルなどが覆う下端を空ける。
+    private func configure(_ navigation: ContentNavigationController, scrollToTop: @escaping (UINavigationController) -> Void) {
+        navigation.delegate = navigationDelegate
+        contentNavigations.add(navigation)
+        navigation.coveredBottomHeight = obscuredBottomHeight
         // 奥の画面を開いているときは、その画面の上のバーなので、一覧は動かさない。
         navigation.onEmptyBarClickOnMac = { [weak navigation] in
             guard let navigation, navigation.viewControllers.count == 1 else { return }
@@ -876,7 +881,7 @@ final class SessionController {
         if item.isAccountHashtag {
             controller.viewController.screenBarItems = [tabToggleItem(for: item)]
         }
-        Self.configure(navigation, delegate: navigationDelegate) { navigation in
+        configure(navigation) { navigation in
             (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
         }
         controller.viewController.onAppearing = { [weak controller] in controller?.startIfNeeded() }
@@ -888,7 +893,7 @@ final class SessionController {
     private func configureProfileTab(_ loading: ProfileTabLoadingViewController, for item: TabItem, in navigation: ContentNavigationController) {
         installAccountButton(on: loading)
         loading.describe = { [weak self] error in await self?.failureReason(for: error) ?? ErrorPresentation(error) }
-        Self.configure(navigation, delegate: navigationDelegate) { navigation in
+        configure(navigation) { navigation in
             (navigation.viewControllers.first as? TimelineViewController)?.scrollToNewest()
         }
         loading.onAccount = { [weak self] account in
@@ -1004,7 +1009,6 @@ final class SessionController {
         if authorization.state == .invalid {
             showReauthenticationPrompt(on: viewController)
         }
-        viewController.setObscuredBottomHeight(obscuredBottomHeight)
         viewController.setCoveredByInAppBrowser(browserCoversTimelines)
         viewController.onFocusInlineCompose = { [weak self] in self?.composer.beginEditing() }
         viewController.setShowsFocusInlineCompose(showsFocusInlineCompose)

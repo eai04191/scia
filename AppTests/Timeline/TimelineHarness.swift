@@ -18,6 +18,8 @@ final class TimelineHarness {
     /// 数秒で消えるチップの時計。実際の時間では進まないので、負荷で確かめる前にチップが消えることはない。消えるところを確かめるテストが進める。
     let noticeClock = TestClock()
     let window: UIWindow
+    /// アプリのタブと同じく、一覧を積んだナビゲーション。投稿欄のカプセルなどが覆う下端を、ここから一覧に渡す。
+    let navigation: ContentNavigationController
     /// 最上部へスプリングで動かすときのコマ。実際の時間では進まず、テストが送った分だけ進む。
     let frames = ManualFrameSource()
 
@@ -45,7 +47,8 @@ final class TimelineHarness {
         prepare?(viewController)
         window = UIWindow(windowScene: scene)
         window.frame = CGRect(origin: .zero, size: size)
-        window.rootViewController = UINavigationController(rootViewController: viewController)
+        navigation = ContentNavigationController(rootViewController: viewController)
+        window.rootViewController = navigation
         window.makeKeyAndVisible()
         overlay = NoticeOverlay.install(in: window, center: notices, tuning: tuning)
         overlay.column.stack.clock = noticeClock
@@ -58,6 +61,12 @@ final class TimelineHarness {
     }
 
     var collectionView: UICollectionView { viewController.collectionView }
+
+    /// 投稿欄のカプセルやキーボードで、画面の下端から`height`だけ覆う。
+    func coverBottom(_ height: CGFloat) {
+        navigation.coveredBottomHeight = height
+        window.layoutIfNeeded()
+    }
 
     func setStatuses(_ statuses: [Status]) {
         viewController.setEntries(statuses.map(TimelineEntry.status))

@@ -52,7 +52,6 @@ extension TimelineViewController {
         navigationController?.setToolbarHidden(false, animated: true)
         onPostSelectionChange?(true)
         updatePostSelectionDisplay()
-        updateObscuredBottomInsetForPostSelection()
     }
 
     /// 選ぶのをやめ、ナビゲーションバーとツールバーを戻す。溜めていた新着を入れる。
@@ -73,7 +72,6 @@ extension TimelineViewController {
         toolbarItems = nil
         onPostSelectionChange?(false)
         refreshSelectionMarks()
-        updateObscuredBottomInsetForPostSelection()
         reportInteractionSettled()
     }
 
@@ -115,11 +113,6 @@ extension TimelineViewController {
             guard let cell = cell as? TimelineCell, let id = cell.itemID else { continue }
             cell.setSelectionMark(selectionMark(for: id))
         }
-    }
-
-    private func updateObscuredBottomInsetForPostSelection() {
-        // 投稿欄のカプセルの分の余白を、選んでいる間は外し、選び終えたら戻す。
-        updateObscuredBottomInset()
     }
 
     /// ツールバーで押せるかを選んだ数で切り替えるボタンの目印。

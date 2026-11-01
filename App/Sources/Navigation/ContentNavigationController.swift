@@ -8,6 +8,15 @@ final class ContentNavigationController: UINavigationController, UIGestureRecogn
     /// iPhoneでは、UIKitがそこへのタップをステータスバーのタップと同じく扱い、一覧を最上部へ戻すが、MacのDesigned for iPadではしないため。
     var onEmptyBarClickOnMac: (() -> Void)?
 
+    /// 画面の下端から、投稿欄のカプセルとキーボード、アプリ内のSafariのシートが覆っている高さ。
+    /// 積んだどの画面でも末尾が裏に隠れないよう、タブバーなどでsafe areaに入っている分を超えて覆っている分を、積んだ画面のsafe areaに足す。
+    /// ナビゲーション自身のsafe areaには足さない。足すとタブバーがナビゲーションに渡す余白を測り直し、safe areaの変化の知らせが止まらなくなるため。
+    /// 下側のsafe areaを広げるだけなので、スクロールする画面の上端を基準にした読んでいる位置は動かない。ただし末尾までスクロールしていると、
+    /// 下端を覆うものがなくなったときに末尾が下端に合わせて下がる。末尾は古い投稿を読み込む途中で留まる場所ではなく、そこで書き始めることはまれなため、補正しない。
+    var coveredBottomHeight: CGFloat = 0 {
+        didSet { applyCoveredBottom(to: viewControllers) }
+    }
+
     override init(rootViewController: UIViewController) {
         super.init(navigationBarClass: ContentNavigationBar.self, toolbarClass: nil)
         viewControllers = [rootViewController]
@@ -19,6 +28,30 @@ final class ContentNavigationController: UINavigationController, UIGestureRecogn
     }
 
     override var childForStatusBarStyle: UIViewController? { topViewController }
+
+    override func pushViewController(_ viewController: UIViewController, animated: Bool) {
+        applyCoveredBottom(to: [viewController])
+        super.pushViewController(viewController, animated: animated)
+    }
+
+    override func setViewControllers(_ viewControllers: [UIViewController], animated: Bool) {
+        applyCoveredBottom(to: viewControllers)
+        super.setViewControllers(viewControllers, animated: animated)
+    }
+
+    override func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        applyCoveredBottom(to: viewControllers)
+    }
+
+    /// 画面を読み込む前は値だけを覚え、読み込んだあとのsafe areaの変化で反映する。
+    private func applyCoveredBottom(to viewControllers: [UIViewController]) {
+        guard isViewLoaded else { return }
+        let extra = max(0, coveredBottomHeight - view.safeAreaInsets.bottom)
+        for viewController in viewControllers where viewController.additionalSafeAreaInsets.bottom != extra {
+            viewController.additionalSafeAreaInsets.bottom = extra
+        }
+    }
 
     override func viewDidLoad() {
         super.viewDidLoad()

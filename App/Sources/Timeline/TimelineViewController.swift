@@ -849,7 +849,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             logger.info("setEntries count=\(newEntries.count, privacy: .public) anchor=\(anchor.map { Self.label($0.id) } ?? "nil", privacy: .public)")
         }
         if threadFocusID != nil {
-            updateObscuredBottomInset()
+            updateBottomInset()
         }
         setNeedsUpdateContentUnavailableConfiguration()
         if revealsFromLoading {
@@ -1303,9 +1303,6 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return true
     }
 
-    /// 画面の下端から、投稿欄のキーボードと入力バー、アプリ内のSafariのシートが覆っている高さ。
-    private var obscuredBottomHeight: CGFloat = 0
-
     /// アプリ内のSafariを全画面に広げて、一覧を覆っている。
     private var isCoveredByInAppBrowser = false
 
@@ -1321,40 +1318,31 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         }
     }
 
-    /// 下端の覆われた部分を一覧の表示領域から外し、そこに隠れた要素を表示中として報告しないようにする。
-    /// 下側の余白を変えるだけなので、上端を基準にした読んでいる位置は動かない。ただし一覧の末尾までスクロールしていると、
-    /// 下端を覆うものがなくなったときに末尾が下端に合わせて下がる。末尾は古い投稿を読み込む途中で留まる場所ではなく、そこで書き始めることはまれなため、補正しない。
-    func setObscuredBottomHeight(_ height: CGFloat) {
-        obscuredBottomHeight = height
-        updateObscuredBottomInset()
-    }
+    /// 表示中の要素を報告し直すかを決めるために最後に見た、一覧の下端の余白。投稿欄のカプセルなどが覆う分も入る。
+    private var reportedBottomInset: CGFloat = 0
 
-    /// タブバーや投稿欄のアクセサリーの分はsafe areaに入っているため、それを超えて覆っている分だけ足す。
-    /// 画面を読み込む前は値だけを覚え、読み込んだあとのsafe areaの変化で反映する。ここで読み込むと、画面を組み立てる前に置くボタンなどの設定より先に読み込まれてしまう。
-    /// スレッドでは、押した投稿を表示領域の上端まで上げられるだけの余白も、一覧の下に足す。
-    func updateObscuredBottomInset() {
+    /// スレッドでは、押した投稿を表示領域の上端まで上げられるだけの余白を、一覧の下に足す。
+    /// 投稿欄のカプセルなどが下端を覆う分は、ナビゲーションがsafe areaに入れるので、ここでは足さない。
+    /// 投稿を選んでいる間は、投稿欄がカプセルを隠して覆う高さを0と知らせるので、ここで分けない。
+    private func updateBottomInset() {
         guard isViewLoaded else { return }
-        // 投稿を選んでいる間は、投稿欄のカプセルを隠し、ツールバーの分はsafe areaに入る。
-        let inset = isSelectingPosts ? 0 : max(0, obscuredBottomHeight - view.safeAreaInsets.bottom)
-        let total = inset + threadFocusBottomFill(obscuredInset: inset)
-        guard collectionView.contentInset.bottom != total || collectionView.verticalScrollIndicatorInsets.bottom != inset else { return }
-        collectionView.contentInset.bottom = total
-        collectionView.verticalScrollIndicatorInsets.bottom = inset
-        reportVisibleItems()
+        let fill = threadFocusBottomFill()
+        guard collectionView.contentInset.bottom != fill else { return }
+        collectionView.contentInset.bottom = fill
     }
 
     /// 押した投稿から下の行が表示領域の高さに足りない分。足りないと、押した投稿を押した位置に置いたままにできず、一覧が端まで戻ってしまうため。
-    private func threadFocusBottomFill(obscuredInset: CGFloat) -> CGFloat {
+    private func threadFocusBottomFill() -> CGFloat {
         guard let threadFocusID, let indexPath = dataSource.indexPath(for: .status(threadFocusID)) else { return 0 }
         collectionView.layoutIfNeeded()
         guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return 0 }
-        let visibleHeight = collectionView.bounds.height - collectionView.adjustedContentInset.top - view.safeAreaInsets.bottom - obscuredInset
+        let visibleHeight = collectionView.bounds.height - collectionView.adjustedContentInset.top - view.safeAreaInsets.bottom
         return max(visibleHeight - (collectionView.contentSize.height - frame.minY), 0)
     }
 
     override func viewSafeAreaInsetsDidChange() {
         super.viewSafeAreaInsetsDidChange()
-        updateObscuredBottomInset()
+        updateBottomInset()
     }
 
     /// 新着ボタン、タブの選び直し、ステータスバーのタップで、最上部へ戻る。
@@ -2005,6 +1993,14 @@ extension TimelineViewController: UICollectionViewDelegate {
         FrameWork.measure("scrollViewDidScroll") { handleScroll(scrollView) }
     }
 
+    /// 下端の覆われた部分はsafe areaから外れ、表示領域が変わるので、そこに隠れた要素を表示中として報告しないよう、報告し直す。
+    /// safe areaが変わった知らせの時点では、一覧の余白はまだ変わっていないため、ここで報告する。
+    func scrollViewDidChangeAdjustedContentInset(_ scrollView: UIScrollView) {
+        guard scrollView.adjustedContentInset.bottom != reportedBottomInset else { return }
+        reportedBottomInset = scrollView.adjustedContentInset.bottom
+        reportVisibleItems()
+    }
+
     private func handleScroll(_ scrollView: UIScrollView) {
         if scrollView.isTracking {
             // 指が下へ動いていれば、内容は上の新しい投稿の方へ動く。
@@ -2396,7 +2392,7 @@ extension TimelineViewController {
         defer { isRestoringAnchor = false }
         openingInset = extra
         collectionView.contentInset.top += extra
-        updateObscuredBottomInset()
+        updateBottomInset()
         // 余白を足すと、最上部にいる一覧はUIKitが位置を合わせ直すため、ずらす量ではなく位置そのものを置く。
         collectionView.contentOffset.y = frame.minY - targetInView
     }
@@ -2409,7 +2405,7 @@ extension TimelineViewController {
         // 余白を変えると、UIKitが位置を合わせ直すことがあるため、変える前の位置に置き直す。
         collectionView.contentInset.top -= openingInset
         openingInset = 0
-        updateObscuredBottomInset()
+        updateBottomInset()
         collectionView.contentOffset.y = offset
         isRestoringAnchor = false
         if offset < topOffset {

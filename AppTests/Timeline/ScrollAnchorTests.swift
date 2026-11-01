@@ -264,9 +264,9 @@ struct ScrollAnchorTests {
         let anchor = try #require(harness.viewController.currentAnchor())
         let before = try #require(harness.windowMinY(of: anchor.id))
 
-        harness.viewController.setObscuredBottomHeight(400)
+        harness.coverBottom(400)
         let covered = try #require(harness.windowMinY(of: anchor.id))
-        harness.viewController.setObscuredBottomHeight(0)
+        harness.coverBottom(0)
         let uncovered = try #require(harness.windowMinY(of: anchor.id))
 
         #expect(abs(covered - before) <= tolerance, "覆ったときに基準の投稿が\(covered - before)pt動きました")
@@ -277,9 +277,11 @@ struct ScrollAnchorTests {
     /// 渡した高さは、画面を読み込んだあとに反映する。
     @Test func coveringBeforeViewLoadsDoesNotLoadView() throws {
         let viewController = TimelineViewController(refresh: {}, tuning: TuningStore(defaults: nil), emojiImages: .offline, mediaImages: .offline, settings: .isolated())
+        let navigation = ContentNavigationController(rootViewController: viewController)
 
-        viewController.setObscuredBottomHeight(400)
+        navigation.coveredBottomHeight = 400
 
+        #expect(!navigation.isViewLoaded)
         #expect(!viewController.isViewLoaded)
     }
 
@@ -294,7 +296,7 @@ struct ScrollAnchorTests {
         harness.viewController.reportVisibleItems()
         let uncovered = reported
 
-        harness.viewController.setObscuredBottomHeight(500)
+        harness.coverBottom(500)
 
         #expect(!reported.isEmpty)
         #expect(reported.count < uncovered.count, "覆われた投稿も表示中として報告しました")
@@ -307,7 +309,7 @@ struct ScrollAnchorTests {
         let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
         harness.setStatuses(statuses)
         harness.scroll(toFraction: 0)
-        harness.viewController.setObscuredBottomHeight(400)
+        harness.coverBottom(400)
         let target = statuses[30]
 
         #expect(harness.viewController.scrollToStatus(target.id, animated: false))
@@ -345,7 +347,7 @@ struct ScrollAnchorTests {
         let statuses = StatusFactory.make(count: 60, startingAt: 1_000)
         harness.setStatuses(statuses)
         harness.scroll(toFraction: 0)
-        harness.viewController.setObscuredBottomHeight(400)
+        harness.coverBottom(400)
         let target = statuses[30]
 
         #expect(harness.viewController.scrollToStatus(target.id, at: position))
@@ -373,7 +375,7 @@ struct ScrollAnchorTests {
         statuses.insert(boost, at: 10)
         harness.setStatuses(statuses)
         harness.scroll(toFraction: 0)
-        harness.viewController.setObscuredBottomHeight(400)
+        harness.coverBottom(400)
         let chosen = choosesBoost ? boost : original
 
         #expect(harness.viewController.scrollToStatus(chosen.id, animated: false))
