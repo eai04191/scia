@@ -221,27 +221,18 @@ public enum StatusMenuItem: String, BundledMenuDefaults {
     case customEmojis
     /// 投稿のハッシュタグごとの、ハッシュタグのメニュー。ハッシュタグのある投稿でだけ出る。
     case hashtags
-    /// 投稿をサーバーから読み直し、APIの応答のJSONを出す。サーバーが付けた値（言語など）を確かめるためのもので、既定では隠す。
+    /// 投稿をサーバーから読み直し、APIの応答のJSONを出す。サーバーが付けた値（言語など）を確かめるためのもの。
     case apiResponse
 
     /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
     case customize
     public static var customizeItem: Self? { .customize }
 
-    /// 既定は、よく押す項目だけをメニューに並べ、上ほどよく押すものを置いて、何のための操作かでまとまりを分ける。
-    /// どの項目も設定を開かずに選べるよう、たまにしか使わない項目は隠さずに「その他」へ入れる。隠すのは、ほかの設定で代わりがきく項目と、メニューを長くしやすい項目だけにする。
-    /// - 返信・お気に入り・ブースト: いちばんよく使い、アイコンだけでも見分けられるので、横に並べる
-    /// - 反応のつづき: 編集（自分の投稿でだけ出る。自分の投稿では返信などより先に使う）、ブックマーク、引用。公開範囲を選んでブーストは、ブーストの公開範囲の設定で代わりがきくため隠し、出したときにブーストの近くに来るようここに置く
-    /// - 持ち出す: リンクとテキストのコピー、テキストを選択、共有、まとめて行う操作のための選択、ブラウザで開く。開く場所を選んで開く2つは、開く場所の設定と重なるため隠す
-    /// - 読む: 翻訳。スレッドを開くは、既定ではタップで開けて代わりがきくため隠し、出したときに読む操作の先頭に来るようここに置く
-    /// - 関係するユーザーとハッシュタグ: メンションされたユーザーは、何人もいるとメニューが長くなるため隠す。ハッシュタグは、ある投稿でしか出ないので、「その他」に入れずに出す
-    /// - 「その他」: たまにしか使わない編集履歴、お気に入りした人、ブーストした人、メディアを隠す、カスタム絵文字、会話のミュート、固定と、取り消せない通知の削除、削除して書き直す、投稿の削除。いちばん下に、並びの設定を開くカスタマイズ
     public static let defaultsKey = "status"
     public static let defaultLayout = MenuLayout<StatusMenuItem>.bundledDefault()
 }
 
 /// ユーザーのメニューの項目。投稿のメニューの中で、ユーザーごとのサブメニューとして出る。本文のメンションを長押ししたときと、プロフィール画面でも、このメニューを出す。
-/// 開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
 public enum UserMenuItem: String, BundledMenuDefaults {
     case profile
     /// 投稿欄で、カーソルの位置に`@acct`を入れる。
@@ -317,7 +308,7 @@ extension MenuLayout<UserMenuItem>.Groups {
     }
 }
 
-/// 本文のURLのリンクを長押ししたときのメニューの項目。開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
+/// 本文のURLのリンクを長押ししたときのメニューの項目。
 public enum LinkMenuItem: String, BundledMenuDefaults {
     /// タップしたときと同じく、開く場所の設定に従って開く。
     case openInBrowser
@@ -341,7 +332,6 @@ public enum LinkMenuItem: String, BundledMenuDefaults {
 }
 
 /// ほかのサービスの投稿（Xの投稿の囲みなど）を長押ししたときのメニューの項目。決まりはdocs/menus.mdの「メニューの単位」にある。
-/// 開く場所を選んで開く2つは、開く場所の設定と重なるため隠しておく。
 public enum ExternalPostMenuItem: String, BundledMenuDefaults {
     /// 元の投稿を、開く場所の設定に従って開く。
     case openInBrowser
@@ -360,8 +350,6 @@ public enum ExternalPostMenuItem: String, BundledMenuDefaults {
     case customize
     public static var customizeItem: Self? { .customize }
 
-    /// - 持ち出す: ブラウザで開く、リンクとテキストのコピー、共有
-    /// - 読む: 翻訳
     public static let defaultsKey = "externalPost"
     public static let defaultLayout = MenuLayout<ExternalPostMenuItem>.bundledDefault()
 }
@@ -441,11 +429,6 @@ public enum MediaMenuItem: String, BundledMenuDefaults {
     case customize
     public static var customizeItem: Self? { .customize }
 
-    /// - 開く・共有・写真に保存
-    /// - 読む: 代替テキスト、画像の文字を翻訳
-    /// - 持ち出す: リンクのコピー、ブラウザで開く。開く場所を選んで開く2つは、ほかのメニューと同じく隠す
-    /// - 投稿
-    /// - 「その他」: メディアの情報と、並びの設定を開くカスタマイズ
     public static let defaultsKey = "media"
     public static let defaultLayout = MenuLayout<MediaMenuItem>.bundledDefault()
 }
