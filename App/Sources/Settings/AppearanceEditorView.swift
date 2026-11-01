@@ -225,7 +225,9 @@ struct AppearanceEditorView: View {
             TitledToggleRow(title: "サイト名を出す", isOn: $settings.appearance.showsLinkCardSite) { toggleFocus(.choice(.showsLinkCardSite)) }
         case "reactionGlow":
             // HDRのメディアの明るさの設定はメディアに対するものなので、光はそれに従わせず、ここで別に選ぶ。
-            TitledToggleRow(title: "HDRに対応した画面では白より明るく光らせる", isOn: $settings.appearance.drawsReactionGlowInHDR) { toggleFocus(.choice(.drawsReactionGlowInHDR)) }
+            if ReactionGlowView.mayDrawInHDR {
+                TitledToggleRow(title: "HDRに対応した画面では白より明るく光らせる", isOn: $settings.appearance.drawsReactionGlowInHDR) { toggleFocus(.choice(.drawsReactionGlowInHDR)) }
+            }
             PopUpChoiceRow(title: "アイコン", selection: $settings.appearance.reactionGlowIcons, options: [(.none, "出さない"), (.atBottom, "下の端に1つずつ"), (.scattered, "散らす")], onOpen: { focus(.reactionGlowIcons) }, onTapTitle: { toggleFocus(.choice(.reactionGlowIcons)) })
             TitledToggleRow(title: "片方だけのときは全幅を光らせる", isOn: $settings.appearance.reactionGlowFillsWidthWhenAlone) { toggleFocus(.choice(.reactionGlowFillsWidthWhenAlone)) }
             PopUpChoiceRow(title: "ライトモードのお気に入りの色", selection: $settings.appearance.reactionGlowLightFavouriteColor, options: [(.orange, "橙"), (.yellow, "黄色")], onOpen: { focus(.reactionGlowLightFavouriteColor) }, onTapTitle: { toggleFocus(.choice(.reactionGlowLightFavouriteColor)) })

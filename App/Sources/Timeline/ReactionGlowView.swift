@@ -502,9 +502,19 @@ final class ReactionGlowView: UIView {
         return !isDark && !drawsLightInHDR ? style.lightSDRHeight : style.height
     }
 
+    /// 光をHDRで描くことがあるか。falseなら、画面にかかわらずSDRで描き、設定にもHDRで光らせるかの項目を出さない。
+    ///
+    /// iPadのアプリをそのまま動かすMac版では、SDRに固定する。Macでは画面の余地が、使える最大（`potentialEDRHeadroom`）は2倍でも、
+    /// 明るさなどによって今使える余地（`currentEDRHeadroom`）が1倍になる。そのときにHDRで描くと、白より明るい光が白に丸められ、
+    /// ライトでは白い背景に溶けて見えなくなる（スクリーンショットには丸める前の色が写るので、撮ったときだけ見える）。
+    /// 今使える余地で描き分けるには、余地が変わったときに描き直す必要があるが、UIKitには余地が変わったことを知らせる仕組みがない。
+    /// これはUIKitで動かすことによる制約で、Macで光をSDRにすると決めたものではない。AppKitでは、余地が変わると
+    /// `NSApplicationDidChangeScreenParametersNotification`が届くので、AppKitで作るMac版では、今使える余地で描き分けることを考え直す。
+    static let mayDrawInHDR = !ProcessInfo.processInfo.isiOSAppOnMac
+
     /// 置かれた画面が、SDRの白より明るく描けるか。画面に置かれる前は分からないので、描けないものとして扱い、置かれたら描き直す。
     private var canDrawHDR: Bool {
-        (window?.windowScene?.screen.potentialEDRHeadroom ?? 1) > 1
+        Self.mayDrawInHDR && (window?.windowScene?.screen.potentialEDRHeadroom ?? 1) > 1
     }
 
     override func didMoveToWindow() {

@@ -88,7 +88,7 @@ private final class EDRHeadroomOverlayView: UIView {
         let isDark = window.traitCollection.userInterfaceStyle == .dark
         let requestsHDR = tuning.value(of: TuningCatalog.reactionGlowHDRExposure) > 1
             || (isDark && tuning.value(of: TuningCatalog.reactionGlowDarkGlowHDRExposure) > 1)
-        let glow = potential > 1 && requestsHDR && AppDependencies.settings.appearance.drawsReactionGlowInHDR ? "HDR" : "SDR"
+        let glow = ReactionGlowView.mayDrawInHDR && potential > 1 && requestsHDR && AppDependencies.settings.appearance.drawsReactionGlowInHDR ? "HDR" : "SDR"
         label.text = String(format: "EDRの余地 今 %.2f / 最大 %.2f\n光 %@", current, potential, glow)
     }
 }
