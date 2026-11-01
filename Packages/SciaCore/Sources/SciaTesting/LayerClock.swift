@@ -81,9 +81,14 @@ public final class LayerClock {
         deliverEndedAnimations()
         // 終わりの処理と、メインスレッドに積まれた処理（キーボードの知らせ、レイアウトのあとの処理など）を流す。少なくとも1回はRunLoopを回す。
         // 時間を置いて流れるのを待つと、1コマごとに実際の時間がかかるので、RunLoopが積まれた処理を流し終えるところまで回す。
+        // 外させても、RunLoopを流し終えた時点で外れていない動きは、もう一度外させる。
+        // 多くはあとから少し遅れて外れるが、ときどき外れないまま残り、やり直さないと固まったとみなす上限まで待って落ちた（投稿欄で写真のピッカーを出す途中の0.2秒で、0.18秒に終わった動きが残った）。
+        // アプリのテストでは、1回で外れない動きが投稿欄のスイートだけで十数回あり、どれもやり直すと外れた。
         try await waitUntil {
             await waitUntilMainRunLoopIsIdle()
-            return Self.endedAnimations(in: layer, at: now).isEmpty
+            guard !Self.endedAnimations(in: layer, at: now).isEmpty else { return true }
+            deliverEndedAnimations()
+            return false
         }
         // 待つのを打ち切ったときは、どの動きが外れなかったかを残す。たまに起きる止まり方の原因を、次に起きたときに追えるようにする。
         let stuck = Self.endedAnimations(in: layer, at: now)
