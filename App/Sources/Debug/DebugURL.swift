@@ -88,6 +88,8 @@ enum DebugURL: Equatable {
     case compose(text: String?, mediaCount: Int, pollOptions: [String]? = nil)
     /// `scia-debug://compose/close`。キーボードを閉じて、投稿欄を書いていないときのカプセルに戻す。下書きは残す。
     case composeClose
+    /// `scia-debug://compose/open`。下書きを変えずに、カプセルを押したときと同じく書き始める。開閉の動きを確かめるため。
+    case composeOpen
     /// `scia-debug://profile-edit?note=<自己紹介>&field=<補足情報の内容>&crop=<avatar|header>`。自分のプロフィールの編集を開く。`note`を渡すと、読み込んだあとに自己紹介をその文に置き換えて、
     /// 末尾にキーボードを出す。`field`を渡すと、その内容の補足情報を足して、内容の欄の末尾にキーボードを出す。どちらも、打ったときと同じく末尾の語の補完を出す。
     /// シミュレーターの日本語のキーボードでは半角の`:`や`@`を打てないため、補完を確かめるときに語の頭を用意する。
@@ -142,6 +144,7 @@ enum DebugURL: Equatable {
         "storage-probe": .storageProbe,
         "reset": .reset,
         "compose/close": .composeClose,
+        "compose/open": .composeOpen,
         "discomfort-report": .discomfortReport,
         "tuning": .tuning,
         "sheet-keyboard": .sheetKeyboard,

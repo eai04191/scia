@@ -3526,6 +3526,8 @@ final class SessionController {
             }
         case .composeClose:
             composer.endEditing()
+        case .composeOpen:
+            composer.beginEditing()
         case .holdArrivals(let isOn):
             DebugFaults.setHoldingArrivals(isOn)
             if !isOn {
