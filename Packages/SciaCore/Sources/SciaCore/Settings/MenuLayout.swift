@@ -221,6 +221,8 @@ public enum StatusMenuItem: String, MenuItemKind {
     case customEmojis
     /// 投稿のハッシュタグごとの、ハッシュタグのメニュー。ハッシュタグのある投稿でだけ出る。
     case hashtags
+    /// 投稿をサーバーから読み直し、APIの応答のJSONを出す。サーバーが付けた値（言語など）を確かめるためのもので、既定では隠す。
+    case apiResponse
 
     /// このメニューの並びの設定の画面を開く。決まりはdocs/menus.mdの「並びの設定」にある。
     case customize
@@ -268,6 +270,7 @@ public enum StatusMenuItem: String, MenuItemKind {
         .item(.rebloggedBy, isVisible: true),
         .item(.hideMedia, isVisible: true),
         .item(.customEmojis, isVisible: true),
+        .item(.apiResponse, isVisible: false),
         .separator,
         .item(.muteConversation, isVisible: true),
         .item(.pin, isVisible: true),

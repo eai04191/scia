@@ -218,6 +218,12 @@ struct StatusMenuTreeTests {
     }
 
     /// 画面の状態で決まる項目は、置く側が渡した状態に従う。
+    /// 「APIの応答」は既定では隠し、出すと「その他」の中に並ぶ。
+    @Test func apiResponseIsHiddenByDefaultAndListedInMoreWhenShown() {
+        #expect(!titles(tree(status())).contains("APIの応答"))
+        #expect(outline(tree(status()), layout: showing(.apiResponse)).hasSuffix("|その他[APIの応答,カスタマイズ]"))
+    }
+
     @Test func screenStateItems() {
         var open = tree(status())
         #expect(!titles(open, layout: showing(.openThread)).contains("スレッドを開く"))

@@ -19,6 +19,8 @@ public enum AppDestination: Equatable, Sendable {
     case thread(statusID: String)
     /// `edit-history?id=<投稿のID>`。その投稿の編集履歴を開く。
     case editHistory(statusID: String)
+    /// `api-response?id=<投稿のID>`。その投稿をサーバーから読み直し、APIの応答のJSONを開く。
+    case apiResponse(statusID: String)
     /// `accounts/<followers|following>`で自分の、`?id=<アカウントのID>`でその人のフォロワーかフォローの一覧を開く。
     /// `accounts/<favourited|reblogged>?id=<投稿のID>`で、その投稿をお気に入りした人、ブーストした人の一覧を開く。
     case accounts(AccountList)
@@ -110,6 +112,7 @@ public enum AppDestination: Equatable, Sendable {
         case .profileEdit: "profile edit"
         case .thread: "thread"
         case .editHistory: "edit history"
+        case .apiResponse: "api response"
         case .accounts: "accounts"
         case .hashtag: "hashtag"
         case .accountHashtag: "account hashtag"
@@ -153,6 +156,7 @@ public enum AppDestination: Equatable, Sendable {
         case ("profile-edit", ""): .profileEdit
         case ("thread", ""): query("id").map { .thread(statusID: $0) }
         case ("edit-history", ""): query("id").map { .editHistory(statusID: $0) }
+        case ("api-response", ""): query("id").map { .apiResponse(statusID: $0) }
         case ("accounts", "followers"): .accounts(.followers(accountID: query("id")))
         case ("accounts", "following"): .accounts(.following(accountID: query("id")))
         case ("accounts", "favourited"): query("id").map { .accounts(.favourited(statusID: $0)) }
@@ -197,6 +201,7 @@ public enum AppDestination: Equatable, Sendable {
         case .profileEdit: ("profile-edit", nil, [])
         case .thread(let statusID): ("thread", nil, [("id", statusID)])
         case .editHistory(let statusID): ("edit-history", nil, [("id", statusID)])
+        case .apiResponse(let statusID): ("api-response", nil, [("id", statusID)])
         case .accounts(.followers(let accountID)): ("accounts", "followers", accountID.map { [("id", $0)] } ?? [])
         case .accounts(.following(let accountID)): ("accounts", "following", accountID.map { [("id", $0)] } ?? [])
         case .accounts(.favourited(let statusID)): ("accounts", "favourited", [("id", statusID)])

@@ -480,6 +480,12 @@ public struct MastodonClient: Sendable {
         try await get(Status.self, path: "api/v1/statuses/\(statusID)", query: []).0
     }
 
+    /// 投稿を1件読み、応答の本文を読まずにそのまま返す。投稿のメニューの「APIの応答」で、サーバーが付けた値を確かめるのに使う。
+    /// https://docs.joinmastodon.org/methods/statuses/#get
+    public func statusResponse(_ statusID: Status.ID) async throws -> Data {
+        try await send(URLRequest(url: credential.instance.appending(path: "api/v1/statuses/\(statusID)"))).0
+    }
+
     /// 投稿の前後の会話。スレッドの画面に使う。
     /// https://docs.joinmastodon.org/methods/statuses/#context
     public func statusContext(_ statusID: Status.ID) async throws -> StatusContext {

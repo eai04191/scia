@@ -108,6 +108,7 @@ extension StatusMenuItem: MenuItemContentProviding {
         case .booster: .own(title: "ブーストしたユーザー", symbolName: "person.crop.circle.badge.plus", note: "ブーストでだけ出ます")
         case .mentionedUsers: .own(title: "メンションされたユーザー", symbolName: "at")
         case .customEmojis: .own(title: "カスタム絵文字", symbolName: "face.smiling", note: "行にカスタム絵文字があるときだけ出ます。絵文字ごとに、画像のメディアのメニューを出します")
+        case .apiResponse: .own(title: "APIの応答", symbolName: "curlybraces", note: "投稿をサーバーから読み直し、応答のJSONを出します")
         case .hashtags: .own(title: "ハッシュタグ", symbolName: "number", note: "ハッシュタグのある投稿でだけ出ます。ハッシュタグごとに、ハッシュタグのメニューを出します")
         case .customize: .own(title: "カスタマイズ", symbolName: "slider.horizontal.3", note: "このメニューの並びを変える画面を開きます。隠しても、設定から変えられます")
         }

@@ -1828,7 +1828,22 @@ final class SessionController {
         case .redraft:
             UserAction.redraftStatus.record()
             startRedrafting(status)
+        case .viewAPIResponse:
+            // ブーストなら、ブーストの応答に元の投稿が入っているので、ブーストのIDで読む。
+            openAPIResponse(statusID: status.id, from: timeline)
         }
+    }
+
+    /// 投稿をサーバーから読み直したAPIの応答を、操作した画面に積んで開く。
+    private func openAPIResponse(statusID: Status.ID, from source: UIViewController?) {
+        let client = client
+        let viewController = APIResponseViewController {
+            try await client.statusResponse(statusID)
+        } describe: { [weak self] error in
+            await self?.failureReason(for: error) ?? ErrorPresentation(error)
+        }
+        viewController.notices = notices
+        source?.navigationController?.pushViewController(viewController, animated: true)
     }
 
     /// 編集履歴を、操作した一覧の上に重ねて開く。履歴は開いた画面が読む。
@@ -3101,6 +3116,8 @@ final class SessionController {
             push("edit history", { try await client.status(statusID) }) { [weak self] status, source in
                 self?.openEditHistory(of: status, filterTitles: [], from: source)
             }
+        case .apiResponse(let statusID):
+            openAPIResponse(statusID: statusID, from: tabs.selectedNavigation?.topViewController)
         case .accounts(let list):
             guard let source = tabs.selectedNavigation?.topViewController else { return }
             switch list {
