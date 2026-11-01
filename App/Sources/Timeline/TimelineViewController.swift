@@ -86,6 +86,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onOpenHashtag: ((String) -> Void)?
     /// 検索の結果のうち、投稿と人のほかの行（ハッシュタグ、「すべて見る」、失敗の行）が押されたときに呼ぶ。
     var onSearchRowSelect: ((SearchRow) -> Void)?
+    /// 最近の検索の見出しの「すべて消す」を押したときに呼ぶ。
+    var onRemoveAllRecentSearches: (() -> Void)?
+    /// 最近の検索の行を左へスワイプして消したときに呼ぶ。
+    var onRemoveRecentSearch: ((String) -> Void)?
     /// ナビゲーションから外された。積んで開いた一覧が、読み込みと購読をやめるのに使う。
     var onRemovedFromParent: (() -> Void)?
     /// 画面に出始めたとき（true）と、見えなくなったとき（false）。前に出ている間だけ新着を読む一覧が使う。
@@ -1602,7 +1606,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             self?.notificationRequestSwipe(at: indexPath, .accept)
         }
         configuration.trailingSwipeActionsConfigurationProvider = { [weak self] indexPath in
-            self?.notificationRequestSwipe(at: indexPath, .dismiss) ?? self?.accountRemovalSwipe(at: indexPath)
+            self?.notificationRequestSwipe(at: indexPath, .dismiss) ?? self?.accountRemovalSwipe(at: indexPath) ?? self?.recentSearchSwipe(at: indexPath)
         }
         return UICollectionViewCompositionalLayout { _, environment in
             let section = NSCollectionLayoutSection.list(using: configuration, layoutEnvironment: environment)
@@ -1650,9 +1654,19 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         return UISwipeActionsConfiguration(actions: [action])
     }
 
-    /// 検索の結果の見出しの行か。
+    /// 検索の結果と候補の見出しの行か。
     private func isSearchHeading(_ id: ItemID) -> Bool {
-        if case .search(.heading) = entries[id] { true } else { false }
+        if case .search(let row) = entries[id] { row.isHeading } else { false }
+    }
+
+    /// 最近の検索の行のスワイプ。ほかの行ではnil。
+    private func recentSearchSwipe(at indexPath: IndexPath) -> UISwipeActionsConfiguration? {
+        guard let id = dataSource.itemIdentifier(for: indexPath), case .search(.recent(let query)) = entries[id], let onRemove = onRemoveRecentSearch else { return nil }
+        let action = UIContextualAction(style: .destructive, title: "消す") { _, _, completion in
+            onRemove(query)
+            completion(true)
+        }
+        return UISwipeActionsConfiguration(actions: [action])
     }
 
     /// 区切り線を引き始める、行の左端からの長さ。行の本文の左端にする。
@@ -1698,6 +1712,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             cell.contentConfiguration = notificationRequestConfiguration(for: request, base: cell.defaultContentConfiguration())
         case .search(let row):
             cell.contentConfiguration = searchRowConfiguration(for: row, base: cell.defaultContentConfiguration())
+            if row == .recentsHeading {
+                cell.accessories = [.customView(configuration: .init(customView: removeAllRecentSearchesButton(), placement: .trailing()))]
+            }
         }
     }
 
@@ -1710,6 +1727,10 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             let startsNewRow = cell.itemID != id
             cell.itemID = id
             cell.workName = entry.workName
+            // 付属のボタンを置くのは最近の検索の見出しだけなので、ほかの行に使い回したセルに残さない。ふだんの行では触らない。
+            if !cell.accessories.isEmpty {
+                cell.accessories = []
+            }
             FrameWork.measure("\(entry.workName).configure") { self.configure(cell, for: entry, id: id) }
             cell.setSelectionMark(self.selectionMark(for: id))
             if startsNewRow {
@@ -1782,8 +1803,39 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             content.text = "読み込めませんでした。タップして再試行"
             content.textProperties.color = .tintColor
             content.secondaryAttributedText = failure.attributedText(textStyle: .footnote)
+        case .action(let action):
+            let (symbol, text): (String, String) = switch action {
+            case .search(let query): ("magnifyingglass", "“\(query)”を検索")
+            case .openURL: ("link", "このURLを開く")
+            case .openHandle(let acct): ("person.crop.circle", "@\(acct)を開く")
+            case .openHashtag(let name): ("number", "#\(name)を開く")
+            }
+            content.image = UIImage(systemName: symbol)
+            content.text = text
+            content.textProperties.numberOfLines = 1
+        case .recentsHeading:
+            content = UIListContentConfiguration.header()
+            content.text = "最近の検索"
+        case .recent(let query):
+            content.image = UIImage(systemName: "clock.arrow.circlepath")
+            content.imageProperties.tintColor = .secondaryLabel
+            content.text = query
+            content.textProperties.numberOfLines = 1
         }
         return content
+    }
+
+    /// 最近の検索の見出しに添える「すべて消す」。
+    private func removeAllRecentSearchesButton() -> UIButton {
+        var configuration = UIButton.Configuration.plain()
+        configuration.title = "すべて消す"
+        configuration.contentInsets = .zero
+        configuration.titleTextAttributesTransformer = UIConfigurationTextAttributesTransformer { attributes in
+            var attributes = attributes
+            attributes.font = UIFont.preferredFont(forTextStyle: .subheadline)
+            return attributes
+        }
+        return UIButton(configuration: configuration, primaryAction: UIAction { [weak self] _ in self?.onRemoveAllRecentSearches?() })
     }
 
     /// - Parameter failure: 直近の読み込みに失敗した理由。読み込み中なら、読み込み中の表示を優先する。
@@ -2153,8 +2205,7 @@ extension TimelineViewController: UICollectionViewDelegate {
         return switch (id, entries[id]) {
         case (.gap, _): true
         case (_, .unreadable(let item)): item.url != nil
-        case (_, .search(.heading)): false
-        case (_, .search): true
+        case (_, .search(let row)): !row.isHeading
         // 投稿、通知、人の一覧の行は、タップに選んだ操作を行う。既定の操作が行えない行（スレッドの中心の投稿、投稿のない通知）は、今どおり押せないままにする。
         case (_, .status), (_, .pinned), (_, .notification), (_, .account), (_, .notificationRequest): rowTarget(at: indexPath)?.acceptsTap ?? false
         default: false

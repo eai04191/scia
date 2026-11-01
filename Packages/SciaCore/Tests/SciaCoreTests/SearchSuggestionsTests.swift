@@ -93,6 +93,21 @@ struct SearchSuggestionsTests {
         #expect(recents.queries.isEmpty)
     }
 
+    /// 打った語に応じた行、ユーザー、ハッシュタグ、最近の検索の順に並べ、空の種類は見出しごと出さない。同じハッシュタグの見出しと行は、確定した結果と同じものを使う。
+    @Test func entriesOrderSectionsWithHeadings() throws {
+        let url = try #require(Bundle.module.url(forResource: "account", withExtension: "json", subdirectory: "Fixtures"))
+        let account = try MastodonDecoder.make().decode(Account.self, from: Data(contentsOf: url))
+        let hashtag = try MastodonDecoder.make().decode(Hashtag.self, from: Data(#"{"name":"neko","url":"https://example.social/tags/neko","history":[]}"#.utf8))
+        let content = SearchSuggestions.Content(actions: [.search("ne")], accounts: [account], hashtags: [hashtag], recents: ["猫"])
+
+        #expect(content.entries.map(\.id) == [
+            .search("action-search(\"ne\")"), .search("heading-accounts"), .account(account.id),
+            .search("heading-hashtags"), .search("hashtag-neko"), .search("recentsHeading"), .search("recent-猫"),
+        ])
+        #expect(SearchSuggestions.Content(recents: ["猫"]).entries.map(\.id) == [.search("recentsHeading"), .search("recent-猫")])
+        #expect(SearchSuggestions.Content().entries.isEmpty)
+    }
+
     /// 覚えておくのは20件まで。
     @Test func recentsAreCapped() {
         let (_, recents) = make()

@@ -7,6 +7,12 @@ public enum SearchRow: Hashable, Sendable {
     case showAll(SearchCategory)
     /// その種類を読めなかった。押すと読み直す。
     case failed(SearchCategory, ErrorPresentation)
+    /// 打っている途中に、語の形に応じて候補の上に出す行。押すと確定と同じことをする。
+    case action(SearchSuggestions.Action)
+    /// 最近の検索の見出し。「すべて消す」を添える。
+    case recentsHeading
+    /// 最近の検索の1つ。押すとその語で確定する。
+    case recent(String)
 
     public var id: String {
         switch self {
@@ -14,6 +20,17 @@ public enum SearchRow: Hashable, Sendable {
         case .hashtag(let hashtag): "hashtag-\(Hashtag.normalizedName(hashtag.name))"
         case .showAll(let category): "showAll-\(category.rawValue)"
         case .failed(let category, _): "failed-\(category.rawValue)"
+        case .action(let action): "action-\(action)"
+        case .recentsHeading: "recentsHeading"
+        case .recent(let query): "recent-\(query)"
+        }
+    }
+
+    /// 見出しの行か。見出しは押せず、区切り線の引き方も違う。
+    public var isHeading: Bool {
+        switch self {
+        case .heading, .recentsHeading: true
+        case .hashtag, .showAll, .failed, .action, .recent: false
         }
     }
 }

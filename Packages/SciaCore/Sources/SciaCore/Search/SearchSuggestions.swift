@@ -65,6 +65,22 @@ public final class SearchSuggestions {
             self.hashtags = hashtags
             self.recents = recents
         }
+
+        /// 一覧に並べる行。打った語に応じた行、ユーザー、ハッシュタグ、最近の検索の順にし、ユーザーとハッシュタグと最近の検索には見出しを付ける。
+        /// ユーザーとハッシュタグは、確定した結果と同じ行で描くため、結果と同じ見出しと行を使う。
+        public var entries: [TimelineEntry] {
+            var entries = actions.map { TimelineEntry.search(.action($0)) }
+            if !accounts.isEmpty {
+                entries += [.search(.heading(.accounts))] + accounts.map(TimelineEntry.account)
+            }
+            if !hashtags.isEmpty {
+                entries += [.search(.heading(.hashtags))] + hashtags.map { .search(.hashtag($0)) }
+            }
+            if !recents.isEmpty {
+                entries += [.search(.recentsHeading)] + recents.map { .search(.recent($0)) }
+            }
+            return entries
+        }
     }
 
     /// 中身が変わったときに呼ぶ。

@@ -1580,7 +1580,12 @@ final class SessionController {
         search.makeResults = { [weak self] input in
             self?.makeSearchResults(input, scope: .all) ?? TimelineViewController(texts: .search(.all, query: input.query)) {}
         }
-        search.onOpenProfile = { [weak self] account, source in self?.openProfile(account, from: source) }
+        search.makeSuggestionsList = { [weak self] in
+            // 候補のユーザーとハッシュタグを、確定した結果と同じ行で描き、押したときと長押ししたときも同じにする。
+            let list = TimelineViewController(texts: .searchSuggestions) {}
+            self?.configure(list)
+            return list
+        }
         search.onOpenHashtag = { [weak self] name, source in self?.openFeed(.hashtag(name: name), from: source) }
         search.suggestions = SearchSuggestions(
             client: client,
@@ -1634,7 +1639,8 @@ final class SessionController {
                 viewController.navigationController?.pushViewController(list, animated: true)
             case .failed(let category, _):
                 model?.retry(category)
-            case .heading:
+            case .heading, .action, .recentsHeading, .recent:
+                // 候補の一覧にだけ出る行は、結果の一覧には並ばない。
                 break
             }
         }
