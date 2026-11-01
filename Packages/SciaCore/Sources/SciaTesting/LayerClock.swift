@@ -50,7 +50,7 @@ public final class LayerClock {
         while quietFrames < 2 {
             guard now < limit else {
                 Issue.record("動きが止まらないまま、固まったとみなす上限を過ぎました: \(Self.finiteAnimations(in: layer))", sourceLocation: sourceLocation)
-                return
+                throw WaitHang()
             }
             try await step(by: Self.frame)
             quietFrames = Self.finiteAnimations(in: layer).isEmpty ? quietFrames + 1 : 0
@@ -63,7 +63,7 @@ public final class LayerClock {
         while !condition() {
             guard now < limit else {
                 Issue.record("条件を満たさないまま、固まったとみなす上限を過ぎました", sourceLocation: sourceLocation)
-                return
+                throw WaitHang()
             }
             try await step(by: Self.frame)
         }
@@ -84,16 +84,20 @@ public final class LayerClock {
         // 外させても、RunLoopを流し終えた時点で外れていない動きは、もう一度外させる。
         // 多くはあとから少し遅れて外れるが、ときどき外れないまま残り、やり直さないと固まったとみなす上限まで待って落ちた（投稿欄で写真のピッカーを出す途中の0.2秒で、0.18秒に終わった動きが残った）。
         // アプリのテストでは、1回で外れない動きが投稿欄のスイートだけで十数回あり、どれもやり直すと外れた。
-        try await waitUntil {
-            await waitUntilMainRunLoopIsIdle()
-            guard !Self.endedAnimations(in: layer, at: now).isEmpty else { return true }
-            deliverEndedAnimations()
-            return false
-        }
-        // 待つのを打ち切ったときは、どの動きが外れなかったかを残す。たまに起きる止まり方の原因を、次に起きたときに追えるようにする。
-        let stuck = Self.endedAnimations(in: layer, at: now)
-        if !stuck.isEmpty {
-            Issue.record("終わったはずなのに外れない動きがあります（今の時間\(now)）: \(stuck)")
+        do {
+            try await waitUntil {
+                try await waitUntilMainRunLoopIsIdle()
+                guard !Self.endedAnimations(in: layer, at: now).isEmpty else { return true }
+                deliverEndedAnimations()
+                return false
+            }
+        } catch let hang as WaitHang {
+            // 待つのを打ち切ったときは、どの動きが外れなかったかを残す。たまに起きる止まり方の原因を、次に起きたときに追えるようにする。
+            let stuck = Self.endedAnimations(in: layer, at: now)
+            if !stuck.isEmpty {
+                Issue.record("終わったはずなのに外れない動きがあります（今の時間\(now)）: \(stuck)")
+            }
+            throw hang
         }
     }
 

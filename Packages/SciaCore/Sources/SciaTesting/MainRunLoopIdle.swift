@@ -11,14 +11,21 @@ import Testing
 /// `quietLength`より遅れて、ほかのスレッドやプロセスから届く処理は待たない。そうした処理を待つには、届いたことを条件にして`waitUntil`で待つ。
 /// 待つ長さを延ばせば拾える処理は増えるが、1コマごとにその長さだけ実際の時間がかかり、時間を止めて手で進める利点がなくなる。
 ///
-/// RunLoopが休まず回り続けて待機に入らないときは、`hangLimit`を過ぎたら失敗を残して戻る。
+/// RunLoopが休まず回り続けて待機に入らないときは、`limit`（既定は`hangLimit`）を過ぎたら失敗を残し、`WaitHang`を投げる。
+/// 失敗を残して戻ると、層の時計がコマごとに上限まで待ち続けるため。
 @MainActor
-func waitUntilMainRunLoopIsIdle(sourceLocation: SourceLocation = #_sourceLocation) async {
-    let waiter = MainRunLoopIdleWaiter(sourceLocation: sourceLocation)
-    await withTaskCancellationHandler {
-        await withCheckedContinuation { waiter.start($0) }
-    } onCancel: {
-        Task { @MainActor in waiter.finish() }
+func waitUntilMainRunLoopIsIdle(limit: Duration = hangLimit, sourceLocation: SourceLocation = #_sourceLocation) async throws {
+    let waiter = MainRunLoopIdleWaiter(limit: limit)
+    do {
+        try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { waiter.start($0) }
+        } onCancel: {
+            Task { @MainActor in waiter.finish() }
+        }
+    } catch let hang as WaitHang {
+        // 失敗は、上限のタイマーの中ではなくここで残す。タイマーはテストのタスクの外で呼ばれるので、そこで残すと`withKnownIssue`などのテストの範囲に入らない。
+        Issue.record("メインのRunLoopが手すきにならないまま、固まったとみなす上限を過ぎました", sourceLocation: sourceLocation)
+        throw hang
     }
 }
 
@@ -29,19 +36,19 @@ private final class MainRunLoopIdleWaiter {
     /// 起こすタイマーを掛けていないときの、次に鳴る時刻と鳴る間隔。1回鳴ると止まるタイマーは掛け直せないので、繰り返し鳴るタイマーを遠い先に置いておく。
     private static let farFuture: CFTimeInterval = 60 * 60 * 24 * 365
 
-    private let sourceLocation: SourceLocation
-    private var continuation: CheckedContinuation<Void, Never>?
+    private let limit: Duration
+    private var continuation: CheckedContinuation<Void, any Error>?
     private var observer: CFRunLoopObserver?
     private var wakeTimer: CFRunLoopTimer?
     private var hangTimer: CFRunLoopTimer?
     private var sleptAt: CFAbsoluteTime?
     private var quietTimes = 0
 
-    init(sourceLocation: SourceLocation) {
-        self.sourceLocation = sourceLocation
+    init(limit: Duration) {
+        self.limit = limit
     }
 
-    func start(_ continuation: CheckedContinuation<Void, Never>) {
+    func start(_ continuation: CheckedContinuation<Void, any Error>) {
         self.continuation = continuation
         let runLoop = CFRunLoopGetMain()
         let now = CFAbsoluteTimeGetCurrent()
@@ -51,7 +58,7 @@ private final class MainRunLoopIdleWaiter {
             MainActor.assumeIsolated { self.handle(activity) }
         }
         let wakeTimer = CFRunLoopTimerCreateWithHandler(nil, now + Self.farFuture, Self.farFuture, 0, 0) { _ in }
-        let hangTimer = CFRunLoopTimerCreateWithHandler(nil, now + Double(hangLimit.components.seconds), 0, 0, 0) { _ in
+        let hangTimer = CFRunLoopTimerCreateWithHandler(nil, now + Double(limit.components.seconds), 0, 0, 0) { _ in
             MainActor.assumeIsolated { self.hang() }
         }
         self.observer = observer
@@ -62,14 +69,18 @@ private final class MainRunLoopIdleWaiter {
         CFRunLoopAddTimer(runLoop, hangTimer, .commonModes)
     }
 
-    func finish() {
+    func finish(throwing error: (any Error)? = nil) {
         observer.map(CFRunLoopObserverInvalidate)
         wakeTimer.map(CFRunLoopTimerInvalidate)
         hangTimer.map(CFRunLoopTimerInvalidate)
         observer = nil
         wakeTimer = nil
         hangTimer = nil
-        continuation?.resume()
+        if let error {
+            continuation?.resume(throwing: error)
+        } else {
+            continuation?.resume()
+        }
         continuation = nil
     }
 
@@ -90,7 +101,6 @@ private final class MainRunLoopIdleWaiter {
     }
 
     private func hang() {
-        Issue.record("メインのRunLoopが手すきにならないまま、固まったとみなす上限を過ぎました", sourceLocation: sourceLocation)
-        finish()
+        finish(throwing: WaitHang())
     }
 }
