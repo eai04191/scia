@@ -9,7 +9,7 @@ final class APIResponseViewController: UIViewController {
     private enum State {
         case loading
         case failed(ErrorPresentation)
-        case loaded(String)
+        case loaded(APIResponseText)
     }
 
     /// アプリ全体のアプリ内通知。コピーしたことを知らせる。
@@ -46,7 +46,6 @@ final class APIResponseViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
         textView.isEditable = false
-        textView.font = UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .monospacedSystemFont(ofSize: 13, weight: .regular))
         textView.adjustsFontForContentSizeCategory = true
         textView.textContainerInset = UIEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
         textView.alwaysBounceVertical = true
@@ -81,28 +80,47 @@ final class APIResponseViewController: UIViewController {
         }
     }
 
-    private var loadedText: String? {
-        guard case .loaded(let text) = state else { return nil }
-        return text
+    private var loaded: APIResponseText? {
+        guard case .loaded(let response) = state else { return nil }
+        return response
     }
 
     private func render() {
         guard isViewLoaded else { return }
-        textView.text = loadedText
-        textView.isHidden = loadedText == nil
-        navigationItem.rightBarButtonItems?.forEach { $0.isEnabled = loadedText != nil }
+        textView.attributedText = loaded.map(Self.highlighted)
+        textView.isHidden = loaded == nil
+        navigationItem.rightBarButtonItems?.forEach { $0.isEnabled = loaded != nil }
         setNeedsUpdateContentUnavailableConfiguration()
     }
 
+    /// 字句の種類ごとに色を塗る。色は明るさの設定に合わせて変わるシステムの色にする。
+    private static func highlighted(_ response: APIResponseText) -> NSAttributedString {
+        let font = UIFontMetrics(forTextStyle: .footnote).scaledFont(for: .monospacedSystemFont(ofSize: 13, weight: .regular))
+        let text = NSMutableAttributedString(string: response.text, attributes: [.font: font, .foregroundColor: UIColor.label])
+        for token in response.tokens {
+            text.addAttribute(.foregroundColor, value: color(of: token.kind), range: NSRange(location: token.range.lowerBound, length: token.range.count))
+        }
+        return text
+    }
+
+    private static func color(of kind: APIResponseText.Kind) -> UIColor {
+        switch kind {
+        case .key: .systemBlue
+        case .string: .systemRed
+        case .number: .systemPurple
+        case .bool, .null: .systemPink
+        }
+    }
+
     private func copyText() {
-        guard let loadedText else { return }
-        UIPasteboard.general.string = loadedText
+        guard let loaded else { return }
+        UIPasteboard.general.string = loaded.text
         notices?.showTransient(.textCopied, duration: tuning.value(of: TuningCatalog.mediaSavedChipDuration))
     }
 
     @objc private func shareText(_ sender: UIBarButtonItem) {
-        guard let loadedText else { return }
-        let activity = UIActivityViewController(activityItems: [loadedText], applicationActivities: nil)
+        guard let loaded else { return }
+        let activity = UIActivityViewController(activityItems: [loaded.text], applicationActivities: nil)
         activity.popoverPresentationController?.sourceItem = sender
         present(activity, animated: true)
     }
