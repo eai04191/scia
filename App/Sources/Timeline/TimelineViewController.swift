@@ -153,6 +153,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// メニューを出している間に求められた描き直し。
     private var heldReconfigureIDs: Set<ItemID> = []
     private var contentSizeObserver: (any NSObjectProtocol)?
+    private var windowActivationObservers: [any NSObjectProtocol] = []
     /// 端末の文字の大きさが変わったときに、組み直す前に覚えた読んでいる位置。
     private var contentSizeAnchor: ScrollAnchor?
     /// 表示中のギャップのID。スクロールのたびに全要素を調べないよう、別に持つ。
@@ -205,7 +206,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     var onBatchShare: (([Status]) -> Void)?
     private lazy var newArrivalsButton = makeNewArrivalsButton()
     /// 新着ボタンを出す向きか。消える動きの途中は、`isHidden`がまだ偽でも偽になる。
-    private var newArrivalsButtonShown = false
+    private(set) var newArrivalsButtonShown = false
+    /// 新着ボタンに「↑」を出しているか。スクロールのたびに比べるため、ボタンの設定を読まずに済むよう覚えておく。
+    private(set) var newArrivalsButtonShowsArrow = true
     /// 新着ボタンの出し入れを始めた回数。途中で向きを変えると、前の動きの完了がその場で呼ばれるため、最後の動きの完了でだけ隠す。
     private var newArrivalsButtonGeneration = 0
     /// 一覧の最上部から引っぱって、浮かべた新着のボタンを下げている量。
@@ -372,10 +375,42 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
             self?.contentSizeDidChange()
         }
         translation.install(in: self)
+        observeWindowActivation()
     }
 
     isolated deinit {
         contentSizeObserver.map(NotificationCenter.default.removeObserver)
+        windowActivationObservers.forEach(NotificationCenter.default.removeObserver)
+    }
+
+    /// 一覧を置いたウィンドウが前面を離れたり戻ったりしたら、覆われたときと同じく、見たと報告するかを切り替える。
+    /// Macでは、ほかのアプリが手前にあってもシーンは`foregroundActive`のままなので、Sciaが手前のアプリかの知らせも受ける。
+    private func observeWindowActivation() {
+        // シーンの`willDeactivate`は状態が変わる前に届くため、シーンの知らせでは、知らせの種類から前面かを決める。
+        let sceneChanges: [(Notification.Name, Bool)] = [(UIScene.willDeactivateNotification, false), (UIScene.didActivateNotification, true)]
+        let sceneObservers = sceneChanges.map { name, isActive in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] notification in
+                let scene = notification.object as? UIScene
+                MainActor.assumeIsolated {
+                    guard let self, let scene, scene === self.viewIfLoaded?.window?.windowScene else { return }
+                    self.updateWindowInactive(isSceneActive: isActive)
+                }
+            }
+        }
+        let applicationObservers = [MacApplication.didResignActiveNotification, MacApplication.didBecomeActiveNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.updateWindowInactive() }
+            }
+        }
+        windowActivationObservers = sceneObservers + applicationObservers
+    }
+
+    /// シーンが前面で動いていて、Macでは加えてSciaが手前のアプリなら、ウィンドウが前面にある。
+    /// - Parameter isSceneActive: シーンが前面で動いているか。nilなら、今の状態を読む。
+    private func updateWindowInactive(isSceneActive: Bool? = nil) {
+        guard let windowScene = viewIfLoaded?.window?.windowScene else { return }
+        let isSceneActive = isSceneActive ?? (windowScene.activationState == .foregroundActive)
+        setWindowInactive(!isSceneActive || MacApplication.isActive == false)
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { statusBarStyle }
@@ -390,6 +425,8 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 他のタブにいる間に表示が変わっても既読にしないため、画面に出たときに改めて報告する。
     override func viewIsAppearing(_ animated: Bool) {
         super.viewIsAppearing(animated)
+        // 前面にないウィンドウで開いた画面は、前面に戻る知らせが届くまで報告しない。
+        updateWindowInactive()
         onAppearing?()
         onVisibilityChange?(true)
         applyPendingOpening()
@@ -802,6 +839,7 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         let keepsRowContents = base.map { Self.sharesStorage($0, appliedEntries) } ?? false
         appliedEntries = newEntries
         // 添付ファイルのビューアや全画面のアプリ内のSafariで覆っている間は、新着を見たと報告しないので、追従もせずに読んでいた行の位置を保つ。
+        // ウィンドウが前面にない間は、画面に出ていて流れを眺めていることがあるため追従する。見たとは報告しないので、追従した新着は未読に残る。
         let isCovered = isCoveredByMediaViewer || isCoveredByInAppBrowser
         let followsTop = anchorID == nil && topID == nil && isAtTop && !isCovered && tuning.value(of: TuningCatalog.followsNewArrivalsAtTop)
         let newIDs = newEntries.map(\.id)
@@ -1033,8 +1071,9 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
         // 通知のタブのバッジと同じく、読み込んでいない分があるときは「+」を付ける。
         let title = isLowerBound ? "\(count)+" : "\(count)"
         newArrivalsButton.accessibilityLabel = isLowerBound ? "\(count)件以上の新着" : "\(count)件の新着"
-        if newArrivalsButton.configuration?.title != title {
+        if newArrivalsButton.configuration?.title != title || newArrivalsButtonShowsArrow != !isAtTop {
             // 桁が変わると幅が変わるため、出ている間は前後のカプセルをクロスフェードする。幅を伸ばすと、伸びる途中で件数の文字が切れるため。
+            // 「↑」の有無も同じく幅を変えるので、同じクロスフェードで入れ替える。続けて2回入れ替えると、幅が2段に変わって見えるため。
             if newArrivalsButtonShown, view.window != nil {
                 // 待っている並べ直しは、クロスフェードの前に済ませる。中で済ませると、ボタンと関係のない行やメディアまで動きに乗るため。
                 view.layoutIfNeeded()
@@ -1042,13 +1081,37 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
                 guard update == unreadCountUpdates else { return }
                 UIView.transition(with: newArrivalsButton, duration: newArrivalsButtonDuration, options: [.transitionCrossDissolve, .allowUserInteraction]) {
                     self.newArrivalsButton.configuration?.title = title
+                    self.setNewArrivalsButtonShowsArrow(!self.isAtTop)
                     self.view.layoutIfNeeded()
                 }
             } else {
                 newArrivalsButton.configuration?.title = title
+                updateNewArrivalsButtonArrow()
             }
         }
         updateNewArrivalsButtonVisibility()
+    }
+
+    /// 最上部にいる間は「↑」を外し、件数だけを出す。ウィンドウが前面にない間に追従した新着は、未読のまま画面に並び、上には何もないため。
+    /// 件数は既読位置より新しい投稿の数のままにする。ほかの端末と同期する未読の数と揃えるため。
+    /// 矢印の有無で幅が変わるため、件数の桁が変わるときと同じく、出ている間は前後のカプセルをクロスフェードする。
+    /// 消えていく途中は変えず、次に出すときに合わせる。消えきる前に幅が詰まるのが見えるため。
+    private func updateNewArrivalsButtonArrow() {
+        let showsArrow = !isAtTop
+        guard newArrivalsButtonShowsArrow != showsArrow else { return }
+        if newArrivalsButtonShown, view.window != nil {
+            UIView.transition(with: newArrivalsButton, duration: newArrivalsButtonDuration, options: [.transitionCrossDissolve, .allowUserInteraction]) {
+                self.setNewArrivalsButtonShowsArrow(showsArrow)
+                self.view.layoutIfNeeded()
+            }
+        } else if newArrivalsButton.isHidden || view.window == nil {
+            setNewArrivalsButtonShowsArrow(showsArrow)
+        }
+    }
+
+    private func setNewArrivalsButtonShowsArrow(_ showsArrow: Bool) {
+        newArrivalsButtonShowsArrow = showsArrow
+        newArrivalsButton.configuration?.image = showsArrow ? UIImage(systemName: "arrow.up") : nil
     }
 
     private var newArrivalsButtonDuration: TimeInterval {
@@ -1060,9 +1123,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     private func updateNewArrivalsButtonVisibility() {
         let isShown = unreadCount > 0 && !isScrollingToTop
         guard newArrivalsButtonShown != isShown else { return }
+        // 消えていく途中に見送った「↑」の入れ替えを、出す前に済ませる。
+        if isShown, newArrivalsButton.isHidden {
+            setNewArrivalsButtonShowsArrow(!isAtTop)
+        }
         newArrivalsButtonShown = isShown
         let button = newArrivalsButton
         button.isUserInteractionEnabled = isShown
+        if isShown {
+            updateNewArrivalsButtonArrow()
+        }
         guard view.window != nil else {
             button.alpha = isShown ? 1 : 0
             button.isHidden = !isShown
@@ -1342,6 +1412,23 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// 表示中の要素を報告し直すかを決めるために最後に見た、一覧の下端の余白。投稿欄のカプセルなどが覆う分も入る。
     private var reportedBottomInset: CGFloat = 0
 
+    /// 一覧を置いたウィンドウが前面にない。Macでほかのアプリを使っている間や、iPhoneでコントロールセンターを開いている間など。
+    private(set) var isWindowInactive = false
+
+    /// ウィンドウが前面にない間は、一覧が画面に出ていても見ているとは限らないため、使う人がスクロールしたときのほかは、投稿を見たと報告しない。
+    /// 既読位置はほかの端末と同期するため、前面にないMacで見たことにすると、iPhoneで開いたときに読んでいない新着まで既読になる。
+    /// Macでは前面にないウィンドウもスクロールでき、スクロールしたなら見ているので報告する。前面に戻ったら、そこで見えている投稿を報告し直す。
+    func setWindowInactive(_ inactive: Bool) {
+        guard isWindowInactive != inactive else { return }
+        isWindowInactive = inactive
+        logger.info("window inactive=\(inactive, privacy: .public)")
+        if inactive {
+            onVisibleLinkOnlyCardsChange?([])
+        } else {
+            reportVisibleItems()
+        }
+    }
+
     /// スレッドでは、押した投稿を表示領域の上端まで上げられるだけの余白を、一覧の下に足す。
     /// 投稿欄のカプセルなどが下端を覆う分は、ナビゲーションがsafe areaに入れるので、ここでは足さない。
     /// 投稿を選んでいる間は、投稿欄がカプセルを隠して覆う高さを0と知らせるので、ここで分けない。
@@ -1519,15 +1606,16 @@ final class TimelineViewController: UIViewController, NavigationBarTapPassing {
     /// スクロールが止まったときに、レイアウトを確定させてから表示中の要素を報告し直す。
     /// スクロールの通知の時点では表示中のセルの一覧が前のフレームのままで、遠くから一気に動くと、
     /// 最後の通知に止まった位置の要素が入らないため。
-    private func reportVisibleItemsAfterLayout() {
+    private func reportVisibleItemsAfterLayout(byUser: Bool = false) {
         collectionView.layoutIfNeeded()
-        reportVisibleItems()
+        reportVisibleItems(byUser: byUser)
     }
 
     /// 表示領域に半分以上入っている投稿と通知を、表示中として報告する。ナビゲーションバーの下に隠れている部分は数えない。
-    /// 他のタブにいる間や、添付ファイルのビューアや全画面のアプリ内のSafariで覆っている間など、画面に出ていなければ報告しない。
-    func reportVisibleItems() {
-        guard !isRestoringAnchor, viewIfLoaded?.window != nil, !isCoveredByMediaViewer, !isCoveredByInAppBrowser else { return }
+    /// 他のタブにいる間や、添付ファイルのビューアや全画面のアプリ内のSafariで覆っている間など、見ていなければ報告しない。
+    /// ウィンドウが前面にない間は、使う人がスクロールしたとき（`byUser`）だけ報告する。
+    func reportVisibleItems(byUser: Bool = false) {
+        guard !isRestoringAnchor, viewIfLoaded?.window != nil, !isCoveredByMediaViewer, !isCoveredByInAppBrowser, !isWindowInactive || byUser else { return }
         let visibleRect = collectionView.bounds.inset(by: collectionView.adjustedContentInset)
         let ids = collectionView.indexPathsForVisibleItems.compactMap { indexPath -> ItemID? in
             guard let frame = collectionView.layoutAttributesForItem(at: indexPath)?.frame else { return nil }
@@ -2089,7 +2177,8 @@ extension TimelineViewController: UICollectionViewDelegate {
                 lastScrollDirection = velocity > 0 ? .towardNewer : .towardOlder
             }
         }
-        reportVisibleItems()
+        reportVisibleItems(byUser: isUserScrolling)
+        updateNewArrivalsButtonArrow()
         reportApproachingGaps()
         onScroll?(scrollView)
         // 最上部からさらに引っぱっている間は、浮かぶ新着のボタンも一覧と一緒に下げる。上に現れるストリーミングの状態を覆わないようにする。
@@ -2104,14 +2193,14 @@ extension TimelineViewController: UICollectionViewDelegate {
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
         if !decelerate {
             recordScroll()
-            reportVisibleItemsAfterLayout()
+            reportVisibleItemsAfterLayout(byUser: true)
             reportInteractionSettled()
         }
     }
 
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         recordScroll()
-        reportVisibleItemsAfterLayout()
+        reportVisibleItemsAfterLayout(byUser: true)
         reportInteractionSettled()
     }
 

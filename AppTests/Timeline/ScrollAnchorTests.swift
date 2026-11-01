@@ -64,6 +64,34 @@ struct ScrollAnchorTests {
         #expect(harness.viewController.currentAnchor()?.id == .status(newest.id))
     }
 
+    /// ウィンドウが前面にない間も、最上部では新着に追従する。画面に出ていて流れを眺めていることがあるため。
+    /// 見たとは報告しないので、追従した新着は未読に残る。
+    @Test func prependAtTopWhileWindowInactiveFollowsWithoutReporting() async throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let existing = StatusFactory.make(count: 60, startingAt: 1_000)
+        harness.setStatuses(existing)
+        harness.scroll(toFraction: 0)
+        harness.viewController.setWindowInactive(true)
+        var reported: [Status.ID] = []
+        harness.viewController.onVisibleStatusesChange = { reported += $0 }
+        let inserted = StatusFactory.make(count: 3, startingAt: 1_003)
+
+        harness.setStatuses(inserted + existing)
+        try await harness.waitUntilScrollingToTopEnds()
+
+        let newest = try #require(inserted.first)
+        #expect(harness.viewController.currentAnchor()?.id == .status(newest.id), "前面にない間に新着へ追従しませんでした")
+        #expect(!reported.contains(newest.id), "前面にない間に、追従した新着を見たと報告しました")
+
+        // 追従した新着は未読に残るので件数は出すが、画面に並んでいて上には何もないので、最上部にいる間は「↑」を出さない。
+        harness.viewController.setUnreadCount(inserted.count)
+        #expect(harness.viewController.newArrivalsButtonShown, "未読があるのに新着のボタンを出しませんでした")
+        #expect(!harness.viewController.newArrivalsButtonShowsArrow, "最上部にいるのに「↑」を出しました")
+        harness.scroll(toFraction: 0.5)
+        #expect(harness.viewController.newArrivalsButtonShowsArrow, "最上部を離れたのに「↑」を出しませんでした")
+    }
+
     /// 最上部で新着に追従するとき、アニメーションで挿入しても、終わった時点で最上部に新着が並んでいる。
     @Test(arguments: [true, false])
     func prependAtTopWithAnimationEndsAtTop(animates: Bool) async throws {

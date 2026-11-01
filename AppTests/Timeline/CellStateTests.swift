@@ -43,6 +43,28 @@ struct CellStateTests {
         #expect(reported.contains(statuses[0].id), "覆われなくなったのに報告しませんでした")
     }
 
+    /// ウィンドウが前面にない間は見ているとは限らないため、流れ込んだ新着を見たと報告しない。スクロールしたときと、前面に戻ったときは報告する。
+    /// 既読位置はほかの端末と同期するため、前面にないMacで報告すると、iPhoneで読んでいない新着まで既読になる。
+    @Test func reportsVisibleStatusesOnlyWhileWindowIsActive() throws {
+        let harness = try TimelineHarness()
+        defer { harness.tearDown() }
+        let statuses = StatusFactory.make(count: 5, startingAt: 1_000)
+        harness.setStatuses(statuses)
+        var reported: [Status.ID] = []
+        harness.viewController.onVisibleStatusesChange = { reported = $0 }
+
+        harness.viewController.setWindowInactive(true)
+        harness.viewController.reportVisibleItems()
+        #expect(reported.isEmpty, "ウィンドウが前面にない間に報告しました: \(reported.prefix(3))")
+
+        harness.viewController.reportVisibleItems(byUser: true)
+        #expect(reported.contains(statuses[0].id), "ウィンドウが前面にない間にスクロールしたのに報告しませんでした")
+
+        reported = []
+        harness.viewController.setWindowInactive(false)
+        #expect(reported.contains(statuses[0].id), "前面に戻ったのに報告しませんでした")
+    }
+
     /// 投稿にはまだ開く画面がないため、タップしても選んだ状態にしない。
     @Test func statusCellsAreNotSelectable() throws {
         let harness = try TimelineHarness()
