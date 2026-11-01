@@ -1078,6 +1078,26 @@ public enum TuningCatalog {
         defaultValue: 0.35
     )
 
+    /// 投稿欄の開閉で、片方にしかない本文の文字を入れ替えるとき、出ていく文字を消し切る時点。形を変える時間に対する割合。
+    /// 同じ場所に出入りする文字（宛先だけの返信の「いまどうしてる？」と宛先など）を、同時に見せないため。
+    public static let composeTextSwapOutEnd = NumberTuning(
+        id: "compose.textSwapOutEnd",
+        title: "本文の入れ替えで消し切る時点（割合）",
+        range: 0.05...0.9,
+        step: 0.05,
+        defaultValue: 0.2
+    )
+
+    /// 投稿欄の開閉で、片方にしかない本文の文字を入れ替えるとき、入ってくる文字が浮かび上がり終える時点。形を変える時間に対する割合。
+    /// 浮かび上がり始めるのは、消し切る時点から。
+    public static let composeTextSwapInEnd = NumberTuning(
+        id: "compose.textSwapInEnd",
+        title: "本文の入れ替えで浮かび上がり終える時点（割合）",
+        range: 0.1...1,
+        step: 0.05,
+        defaultValue: 0.5
+    )
+
     /// 書いていない投稿欄のカプセルに重ねた写真のうち、手前の1枚目を回す角度（度）。正の値で右回り。
     public static let composeStackFrontRotation = NumberTuning(
         id: "compose.stackFrontRotation",
@@ -1704,6 +1724,8 @@ public enum TuningCatalog {
         TuningSection(id: "compose", title: "投稿欄", items: [
             .number(composeRestingHeight),
             .number(composeMorphDuration),
+            .number(composeTextSwapOutEnd),
+            .number(composeTextSwapInEnd),
             .number(composeStackStagger),
             .number(composeStackFrontRotation),
             .number(composeStackBackRotation),

@@ -67,6 +67,17 @@ final class InlineComposeController: NSObject {
     private var barFling: (velocity: CGFloat, time: CFTimeInterval)?
     /// 開閉で、カプセルのラベルのアイコンとサムネイルを、書いているときの同じものの位置へ動かす。
     private lazy var morphFlights = ComposeMorphFlights(container: bar.contentView)
+    /// 開閉で、本文の文字を、カプセルの1行と入力欄の同じ文字の位置のあいだで動かす。
+    private lazy var textMorph: ComposeTextMorph = {
+        let morph = ComposeTextMorph(container: bar.contentView)
+        // 本文の上に並ぶ、文字のある行。ラベルのアイコンは写真と同じく別に動かすので、行ごと隠しても構わない。
+        morph.rowsAboveText = { [unowned self] in [replyRow, scheduleRow, spoilerRow] }
+        return morph
+    }()
+    /// 本文を動かし始めたときの入力欄の本文。動いている途中に打ったとき、末尾に打ち足しただけかを見分ける。
+    private var textMorphBaseText = ""
+    /// カプセルの1行に出している本文の頭が、本文の何文字目（UTF-16）か。「いまどうしてる？」を出していればnil。
+    private var restTextStart: Int?
     /// 書き始めて行を隠すと、スタックビューが高さ0の制約を付ける。それと競合しないよう、必須より1つ下げる。
     private lazy var restRowHeight: NSLayoutConstraint = {
         let constraint = restRow.heightAnchor.constraint(equalToConstant: 0)
@@ -146,7 +157,8 @@ final class InlineComposeController: NSObject {
     private weak var lastFocusedInput: UIView?
     /// 本文と注意書きの間でフォーカスを移している最中。移す前の入力欄の編集が終わっても、書き終えたとして扱わない。
     private var isMovingFocus = false
-    private let placeholderLabel = UILabel()
+    /// 入力欄の「いまどうしてる？」。開閉でカプセルの同じ文字と行き来するので、入力欄と同じ描き方のビューにする。
+    private let placeholderLabel = TextLineView()
     /// 書き終えて入力欄を隠すと、スタックビューが高さ0の制約を付ける。それと競合しないよう、必須より1つ下げる。
     private lazy var textHeightLimit: NSLayoutConstraint = {
         let constraint = textView.heightAnchor.constraint(equalToConstant: maxTextHeight)
@@ -1935,7 +1947,11 @@ final class InlineComposeController: NSObject {
             // 開くときはカプセルの写真のスタックの影から、閉じるときは影のない列の写真から動き始める。
             let stackShadow = editing ? ComposeRestThumbnails.stackShadowOpacity(in: tuning) : 0
             morphFlights.takeOff(from: morphEnds(editing: !editing), stackingOrder: order, stackShadowOpacity: stackShadow)
+            if let side = textMorphSide(editing: !editing) {
+                textMorph.takeOff(from: side, at: editing ? .a : .b)
+            }
         }
+        var textGeneration: Int?
         var flightGeneration: Int?
         let morphDuration = tuning.value(of: TuningCatalog.composeMorphDuration)
         let morphEnd = mediaTime() + morphDuration
@@ -1945,8 +1961,21 @@ final class InlineComposeController: NSObject {
                 self.applyExpandedLayout()
             }
             self.applyEditingLayout()
+            if animatesFlights {
+                // 本文の文字は動かすかたまりが描くので、入力欄は薄くせず、動いている途中に打った文字とカーソルをすぐ見せる。
+                UIView.performWithoutAnimation {
+                    self.textView.alpha = 1
+                }
+            }
             self.host?.view.layoutIfNeeded()
             if animatesFlights {
+                if let side = self.textMorphSide(editing: editing) {
+                    self.textMorphBaseText = self.textView.text
+                    textGeneration = self.textMorph.land(on: side, duration: morphDuration, swap: .init(
+                        outEnd: self.tuning.value(of: TuningCatalog.composeTextSwapOutEnd),
+                        inEnd: self.tuning.value(of: TuningCatalog.composeTextSwapInEnd)
+                    ))
+                }
                 // 3枚目より後ろは重ねた写真の下のほうにあるので、1枚ごとに遅らせて動かし、手前の写真とひと塊に見えないようにする。
                 let stagger = self.tuning.value(of: TuningCatalog.composeStackStagger)
                 let delays = Dictionary(uniqueKeysWithValues: self.model.attachments.enumerated().dropFirst(2).map { index, attachment in
@@ -1962,6 +1991,9 @@ final class InlineComposeController: NSObject {
             if let generation {
                 self.endCollapse(generation: generation)
             }
+            if let textGeneration {
+                self.textMorph.finish(generation: textGeneration)
+            }
             if let flightGeneration {
                 // 写真同士の影は、動いている間の複製が落とさないので、カプセルに着いてから浮かび上がらせる。
                 if self.morphFlights.finish(generation: flightGeneration), !editing {
@@ -1976,6 +2008,11 @@ final class InlineComposeController: NSObject {
                 guard let self else { return }
                 morphFlights.retarget(on: morphEnds(editing: editing), generation: flightGeneration) { delay, animations in
                     UIView.animate(springDuration: max(morphEnd - mediaTime() - delay, 0.05), bounce: 0, delay: delay, options: [.allowUserInteraction, .beginFromCurrentState], animations: animations)
+                }
+                if let textGeneration, let side = textMorphSide(editing: editing) {
+                    textMorph.retarget(on: side, generation: textGeneration) { animations in
+                        UIView.animate(springDuration: max(morphEnd - mediaTime(), 0.05), bounce: 0, options: [.allowUserInteraction, .beginFromCurrentState], animations: animations)
+                    }
                 }
             }
         }
@@ -2035,6 +2072,154 @@ final class InlineComposeController: NSObject {
             }
         }
         return ends
+    }
+
+    /// 開閉で本文の文字を動かす、カプセルの1行（`editing`がfalse）か入力欄（true）の配置。行を出していなければnil。
+    /// 座標はバーの中のもの。
+    private func textMorphSide(editing: Bool) -> ComposeTextMorph.Side? {
+        editing ? fieldTextSide() : restTextSide()
+    }
+
+    private func restTextSide() -> ComposeTextMorph.Side? {
+        guard !restRow.isHidden else { return nil }
+        // 書き終えて出し直した行は、中身がまだ前の高さで並んでいることがあるので、行から並べる。
+        restRow.layoutIfNeeded()
+        restContent.layoutIfNeeded()
+        let label = restContent.label
+        let container = bar.contentView
+        let content: TextMorphContent = restTextStart == nil ? .placeholder : .body
+        let start = restTextStart ?? 0
+        let text = label.attributedText
+        let origin = label.convert(label.baselineOrigin, to: container)
+        let frame = label.convert(label.bounds, to: container)
+        let line = TextMorphScene.Line(content: content, range: start ..< start + text.length, origin: origin, boundaries: label.boundaries, ascent: label.ascent, descent: label.descent)
+        // 行末をぼかしているときは、カプセルと同じ幅でぼかす。入りきっているときは、文字の後ろで薄くし、文字にはかけない。
+        let fadeWidth = TextLineView.fadeWidth
+        let right = label.isTruncated ? frame.maxX : origin.x + label.textWidth + fadeWidth
+        let left = frame.minX - Self.morphSideFade
+        let vertical = Self.morphSideFade
+        let window = CGRect(x: left, y: origin.y - label.ascent - vertical, width: right - left, height: label.ascent + label.descent + vertical * 2)
+        return ComposeTextMorph.Side(
+            scene: TextMorphScene(lines: [line], window: window, fade: TextMorphFade(top: vertical, left: Self.morphSideFade, bottom: vertical, right: fadeWidth)),
+            field: textView.superview?.convert(textView.frame, to: container) ?? .zero,
+            text: { key in
+                guard key.content == content else { return nil }
+                return text.attributedSubstring(from: NSRange(location: key.range.lowerBound - start, length: key.range.count))
+            },
+            conceal: { keys in
+                label.concealedRanges = keys.filter { $0.content == content }.map { $0.range.lowerBound - start ..< $0.range.upperBound - start }
+            }
+        )
+    }
+
+    /// 開閉で動かす文字を、カプセルの行や入力欄の端で薄くする幅。
+    private static let morphSideFade: CGFloat = 8
+
+    private func fieldTextSide() -> ComposeTextMorph.Side? {
+        guard !textView.isHidden, let layoutManager = textView.textLayoutManager, let contentManager = layoutManager.textContentManager else { return nil }
+        let container = bar.contentView
+        textView.layoutIfNeeded()
+        let inset = textView.textContainerInset
+        let padding = textView.textContainer.lineFragmentPadding
+        let documentStart = layoutManager.documentRange.location
+        // 開き始めは、入力欄がまだ幅の決まる前の高さ（0）で並んでいて、次の並べ直しで本来の高さになる。その高さで見る。
+        let height = expectedTextHeight()
+        let offset = textView.contentOffset.y
+        var lines: [TextMorphScene.Line] = []
+        layoutManager.enumerateTextLayoutFragments(from: documentStart, options: [.ensuresLayout]) { fragment in
+            let paragraphStart = contentManager.offset(from: documentStart, to: fragment.rangeInElement.location)
+            let frame = fragment.layoutFragmentFrame
+            for line in fragment.textLineFragments {
+                let local = line.characterRange
+                guard local.length > 0 else { continue }
+                let point = CGPoint(
+                    x: inset.left + padding + frame.minX + line.typographicBounds.minX + line.locationForCharacter(at: local.location).x,
+                    y: inset.top + frame.minY + line.typographicBounds.minY + line.glyphOrigin.y
+                )
+                lines.append(TextMorphScene.Line(
+                    content: .body,
+                    range: paragraphStart + local.location ..< paragraphStart + NSMaxRange(local),
+                    origin: textView.convert(point, to: container),
+                    boundaries: TextLineView.boundaries(of: line, in: local.location ..< NSMaxRange(local)),
+                    ascent: line.glyphOrigin.y,
+                    descent: line.typographicBounds.height - line.glyphOrigin.y
+                ))
+            }
+            return true
+        }
+        if !placeholderLabel.isHidden {
+            placeholderLabel.layoutIfNeeded()
+            lines.append(TextMorphScene.Line(
+                content: .placeholder,
+                range: 0 ..< placeholderLabel.attributedText.length,
+                origin: placeholderLabel.convert(placeholderLabel.baselineOrigin, to: container),
+                boundaries: placeholderLabel.boundaries,
+                ascent: placeholderLabel.ascent,
+                descent: placeholderLabel.descent
+            ))
+        }
+        // 入力欄は、スクロールして文字が枠の外へ続くときだけ枠で切る。切っている辺は、着いたときに本物と同じになるよう薄くしない。
+        var frame = textView.convert(textView.bounds, to: container)
+        frame.size.height = height
+        let clipsTop = textView.clipsToBounds && textView.isScrollEnabled && offset > 0.5
+        let clipsBottom = textView.clipsToBounds && textView.isScrollEnabled && textView.contentSize.height - offset - height > 0.5
+        let side = Self.morphSideFade
+        let window = CGRect(x: frame.minX - side, y: frame.minY, width: frame.width + side + 10, height: frame.height)
+        let fade = TextMorphFade(top: clipsTop ? 0 : inset.top, left: side, bottom: clipsBottom ? 0 : inset.bottom, right: 10)
+        let storage = textView.textStorage
+        let placeholder = placeholderLabel.attributedText
+        let textView = textView
+        // 穴は、測った時点の入力欄の中の座標で決めておく。隠すのは行を入れ替えたあとで、入力欄の枠が変わっているため。
+        // 横の範囲は、境目のいちばん左と右で決める。右から左へ書く文字では、頭の文字の境目が右端になるため。
+        let holes = lines.map { line in
+            let left = line.boundaries.min() ?? 0
+            let right = line.boundaries.max() ?? 0
+            let rect = CGRect(x: line.origin.x + left - 1, y: line.origin.y - line.ascent - 2, width: right - left + 1.5, height: line.ascent + line.descent + 4)
+            return textView.convert(rect, from: container)
+        }
+        return ComposeTextMorph.Side(
+            scene: TextMorphScene(lines: lines, window: window, fade: fade),
+            field: frame,
+            text: { key in
+                switch key.content {
+                case .placeholder:
+                    return placeholder
+                case .body:
+                    guard key.range.upperBound <= storage.length else { return nil }
+                    return Self.drawableText(storage.attributedSubstring(from: NSRange(location: key.range.lowerBound, length: key.range.count)))
+                }
+            },
+            conceal: { keys in
+                // 今ある文字の行を、マスクの穴で隠す。打ち足した文字は穴の外に出るので、すぐ見える。
+                guard !keys.isEmpty else {
+                    textView.layer.mask = nil
+                    return
+                }
+                let mask = CAShapeLayer()
+                let area = textView.bounds.insetBy(dx: -2000, dy: -2000)
+                mask.frame = area
+                // 隣り合う行の穴は上下に広げた分が重なるので、まとめてから抜く。偶奇の規則で別々に抜くと、重なったところが描き戻されるため。
+                var hidden = holes.reduce(CGPath(rect: .zero, transform: nil)) { $0.union(CGPath(rect: $1, transform: nil)) }
+                // カーソルは隠さない。行末のカーソルは、最後の文字の穴にかかるため。
+                if let selection = textView.selectedTextRange, selection.isEmpty {
+                    hidden = hidden.subtracting(CGPath(rect: textView.caretRect(for: selection.start).insetBy(dx: -1, dy: -1), transform: nil))
+                }
+                var toMask = CGAffineTransform(translationX: -area.minX, y: -area.minY)
+                mask.path = CGPath(rect: area, transform: &toMask).subtracting(hidden.copy(using: &toMask) ?? hidden)
+                textView.layer.mask = mask
+            }
+        )
+    }
+
+    /// 並べ終えたときの入力欄の高さ。スクロールしないときは文字に合わせた高さ、スクロールするときは高さの制約の値。
+    private func expectedTextHeight() -> CGFloat {
+        guard textView.bounds.height < 1 else { return textView.bounds.height }
+        let fitting = textView.sizeThatFits(CGSize(width: textView.bounds.width, height: .greatestFiniteMagnitude)).height
+        guard textView.isScrollEnabled else { return fitting }
+        if textHeightLimit.isActive {
+            return min(fitting, textHeightLimit.constant)
+        }
+        return expandedTextHeight.isActive ? expandedTextHeight.constant : min(fitting, maxTextHeight)
     }
 
     private func applyEditingLayout() {
@@ -2461,13 +2646,41 @@ final class InlineComposeController: NSObject {
     }
 
     /// 書いていないときの1行に、ラベルのアイコンとサムネイルに続けて出す、自分で書いた本文。何も書いていなければ書き出しを促す。
+    /// 改行は空白にし、前後の空白は外す。開閉で入力欄の同じ文字と行き来するので、文字の属性は入力欄の文字のものを使う。
+    /// 頭が本文の何文字目かを`restTextStart`に残す。
     private func restText() -> NSAttributedString {
-        let font = UIFont.preferredFont(forTextStyle: .body)
-        let body = model.typedText.replacingOccurrences(of: "\n", with: " ").trimmingCharacters(in: .whitespaces)
-        if body.isEmpty {
-            return NSAttributedString(string: "いまどうしてる？", attributes: [.font: font, .foregroundColor: UIColor.placeholderText])
+        let typed = model.typedText
+        // 自分で書いた本文は、返信の宛先などの後ろにある、本文の終わりの部分。
+        let typedStart = (model.text as NSString).length - (typed as NSString).length
+        let collapsed = typed.replacingOccurrences(of: "\n", with: " ")
+        let leading = collapsed.prefix { $0.isWhitespace && !$0.isNewline }
+        let body = collapsed.trimmingCharacters(in: .whitespaces)
+        let storage = textView.textStorage
+        let range = NSRange(location: typedStart + (String(leading) as NSString).length, length: (body as NSString).length)
+        guard !body.isEmpty, storage.string == model.text, NSMaxRange(range) <= storage.length else {
+            restTextStart = nil
+            return Self.placeholderText()
         }
-        return NSAttributedString(string: body, attributes: [.font: font, .foregroundColor: UIColor.label, .languageIdentifier: settings.glyphLanguageIdentifier()])
+        restTextStart = range.location
+        let text = NSMutableAttributedString(attributedString: Self.drawableText(storage.attributedSubstring(from: range)))
+        (text.string as NSString).enumerateSubstrings(in: NSRange(location: 0, length: text.length), options: .byComposedCharacterSequences) { substring, range, _, _ in
+            if substring == "\n" {
+                text.replaceCharacters(in: range, with: " ")
+            }
+        }
+        return text
+    }
+
+    private static func placeholderText() -> NSAttributedString {
+        NSAttributedString(string: "いまどうしてる？", attributes: [.font: UIFont.preferredFont(forTextStyle: .body), .foregroundColor: UIColor.placeholderText])
+    }
+
+    /// 入力欄の文字を、入力欄の外で同じ見え方に描ける形にする。色は文字の色に揃える。入力欄の文字には、リンクにタイトルを付ける動きの間だけ
+    /// 透明の色が付いていて、そのまま写すと、カプセルの本文が次に下書きが変わるまで見えなくなるため。
+    private static func drawableText(_ text: NSAttributedString) -> NSAttributedString {
+        let drawable = NSMutableAttributedString(attributedString: text)
+        drawable.addAttribute(.foregroundColor, value: UIColor.label, range: NSRange(location: 0, length: drawable.length))
+        return drawable
     }
 
     /// 書いていないときの1行の読み上げ。ラベルとサムネイルは文字を出さないので、書いているときのラベルと同じ文と、添付の数を読む。
@@ -3097,9 +3310,10 @@ final class InlineComposeController: NSObject {
         // 書いている文字は自分の文で言語が分からないため、設定の字形で描く。
         textView.followGlyphLanguage(of: settings)
 
-        placeholderLabel.text = "いまどうしてる？"
-        placeholderLabel.font = .preferredFont(forTextStyle: .body)
-        placeholderLabel.textColor = .placeholderText
+        placeholderLabel.attributedText = Self.placeholderText()
+        placeholderLabel.registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) { (label: TextLineView, _) in
+            label.attributedText = Self.placeholderText()
+        }
         placeholderLabel.translatesAutoresizingMaskIntoConstraints = false
         textView.addSubview(placeholderLabel)
         NSLayoutConstraint.activate([
@@ -3228,6 +3442,20 @@ extension InlineComposeController: UITextViewDelegate {
         textDidChange()
         animateTextHeightChange()
         textCompletion.textDidChange(in: textView)
+        followTextMorph()
+    }
+
+    /// 開く途中に打ったら、本文を動かすかたまりで本物を描き続けられるかを確かめる。測った行のまま末尾に打ち足しただけなら、そのまま動かし、
+    /// 打ち足した文字とカーソルを見せる。行の途中に打ったり折り返しが変わったりしたら、かたまりを外して本物を見せる。
+    /// 外すと、かたまりがあった位置から本物の位置へ文字が1コマで移るが、打った文字を隠したまま、打つ前の文字を動かし続けるよりよいため。
+    private func followTextMorph() {
+        guard isEditing, textMorph.isMorphing else { return }
+        textView.layoutIfNeeded()
+        if textView.text.hasPrefix(textMorphBaseText), let side = fieldTextSide(), textMorph.keepsLines(of: side) {
+            textMorph.refreshConcealment()
+        } else {
+            textMorph.finishNow()
+        }
     }
 
     /// 改行や折り返しで本文の行が増減したら、欄の高さを動きの中で変える。入力欄が自分の高さを決め直すのを次の並べ直しに任せると、
@@ -3259,6 +3487,8 @@ extension InlineComposeController: UITextViewDelegate {
             linkTitleEffects.endSelecting(reason: "selection")
         }
         textCompletion.selectionDidChange(in: textView)
+        // 本文を動かしている途中は、本物を隠す範囲からカーソルを外し直す。
+        textMorph.refreshConcealment()
     }
 
     /// 送っている間は、送っている下書きと食い違わないよう打った文字を受け付けない。

@@ -1182,6 +1182,219 @@ final class InlineComposeControllerTests {
         #expect(bar.bounds.height < expandedHeight, "画面の外に出ても、広げる前の形に戻していません\n\(composer.stateDump())")
     }
 
+    /// 開閉で本文の文字を動かすかたまりは、動き始めと着地で、本物の文字と同じ画素に同じ字形と色で描く。
+    /// 動き始めは本物を隠したコマ、着地は本物に替えたコマなので、ずれると文字が1コマで跳んだり、太さや色が1コマで替わったりする。
+    /// 返信では、入力欄の同じ行に宛先が並び、本文は行の途中（画素の境目から端数のずれた位置）から始まる。
+    @Test(arguments: [true, false], [false, true])
+    func textMorphMatchesRealTextAtBothEnds(opening: Bool, replying: Bool) async throws {
+        defer { window.isHidden = true }
+        let body = "きょうはいい天気"
+        if replying {
+            composer.reply(to: try status(id: "10"))
+        } else {
+            composer.beginEditing()
+        }
+        try await waitUntilSettled()
+        let textView = try #require(textViews(in: window).first)
+        textView.becomeFirstResponder()
+        textView.insertText(body)
+        try await waitUntilSettled()
+        let typedStart = (textView.text as NSString).length - (body as NSString).length
+        if opening {
+            composer.endEditing()
+            try await waitUntilSettled()
+        }
+        useDefaultAnimationDurations()
+        let label = try #require(restContents(in: window).first?.label)
+        // 位置はバーの中の座標で比べる。開閉ではバーごと動き、かたまりも本物もバーと一緒に動くため。
+        let bar = try composerBar()
+        // 本物とかたまりは、それぞれを描いた頭の文字のインクの重心で比べる。描いた画素で比べないと、画素の境目に揃えて描くことによるずれが分からないため。
+        let capsule = { try self.ink(of: label, glyphs: self.firstGlyph(of: label), in: bar) }
+        let field = {
+            let start = try #require(textView.position(from: textView.beginningOfDocument, offset: typedStart))
+            let range = try #require(textView.textRange(from: start, to: textView.position(from: start, offset: 1) ?? start))
+            return try self.ink(of: textView, glyphs: textView.firstRect(for: range).insetBy(dx: 0, dy: -8), in: bar)
+        }
+        // 本物は、動かす前と動き終えたあとに描く。動いている途中は、行を入れ替えて並べ直しているため。
+        let source = try opening ? capsule() : field()
+        let chunks = { self.textLines(in: self.window).filter { $0.overhang > 0 && $0.attributedText.string == body } }
+        // 見えているかたまり。動かすかたまりは、両方の端に合わせて描いた2つの行を重ねて運び、途中で入れ替える。
+        let shown = { chunks().max { ($0.layer.presentation()?.opacity ?? 0) < ($1.layer.presentation()?.opacity ?? 0) } }
+
+        if opening {
+            composer.beginEditing()
+        } else {
+            composer.endEditing()
+        }
+        try await clock.advance(by: 0)
+        let first = try #require(shown(), "本文を動かすかたまりがありません\n\(composer.stateDump())")
+        #expect(first.layer.presentation()?.opacity == 1)
+        #expect(chunks().filter { $0 !== first }.allSatisfy { ($0.layer.presentation()?.opacity ?? 0) == 0 }, "動き始めのコマで、行き先の端に合わせた行も見えています")
+        expectSameLook(first.attributedText, label.attributedText)
+        expectSameLook(first.attributedText, textView.textStorage)
+        expectClose(try glyphInk(of: first, in: bar), source, "動き始めのかたまりが、本物の文字と同じ画素にありません")
+
+        // かたまりを外す直前のコマの、見えている行の位置。
+        var landing: (line: TextLineView, ink: CGPoint)?
+        while let line = shown() {
+            #expect(clock.now < 5, "動き終えても、かたまりが残っています")
+            guard clock.now < 5 else { break }
+            landing = (line, try glyphInk(of: line, in: bar))
+            try await clock.advance(by: LayerClock.frame)
+        }
+        try await waitUntilSettled()
+        let last = try #require(landing)
+        #expect(last.line.layer.presentation()?.opacity ?? last.line.layer.opacity == 1)
+        expectClose(last.ink, try opening ? field() : capsule(), "着地のコマのかたまりが、本物の文字と同じ画素にありません")
+        #expect(label.concealedRanges.isEmpty, "動き終えても、カプセルの文字を隠しています")
+        #expect(textView.layer.mask == nil, "動き終えても、入力欄の文字を隠しています")
+    }
+
+    /// 開く途中に末尾へ打ち足したら、本文は動かし続け、打ち足した文字とカーソルを隠さない。行の途中に打ったら、かたまりを外して本物を見せる。
+    /// 本物は動き始めに測った行の位置で隠すので、行の途中に打つと、打った文字が隠れ、かたまりは打つ前の文字のまま残っていた。
+    @Test func typingWhileOpeningShowsTypedText() async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        try await waitUntilSettled()
+        let textView = try #require(textViews(in: window).first)
+        textView.becomeFirstResponder()
+        textView.insertText("きょうはいい天気")
+        try await waitUntilSettled()
+        composer.endEditing()
+        try await waitUntilSettled()
+        useDefaultAnimationDurations()
+        let isMorphing = { self.textLines(in: self.window).contains { $0.overhang > 0 } }
+
+        composer.beginEditing()
+        try await clock.advance(by: 0.05)
+        #expect(isMorphing())
+        let caret = { textView.caretRect(for: textView.selectedTextRange?.start ?? textView.endOfDocument) }
+        #expect(isCaretShown(caret(), in: textView), "開く途中に、カーソルを隠しています")
+
+        textView.insertText("だ")
+        let lastStart = try #require(textView.position(from: textView.endOfDocument, offset: -1))
+        let typed = try #require(textView.textRange(from: lastStart, to: textView.endOfDocument))
+        let typedRect = textView.firstRect(for: typed)
+        #expect(isMorphing(), "末尾に打ち足しただけで、本文を動かすのをやめました")
+        #expect(isShown(CGPoint(x: typedRect.midX, y: typedRect.midY), in: textView), "打ち足した文字を隠しています")
+        #expect(isCaretShown(caret(), in: textView), "打ち足したあとのカーソルを隠しています")
+
+        textView.selectedRange = NSRange(location: 2, length: 0)
+        textView.insertText("う")
+        #expect(!isMorphing(), "行の途中に打っても、かたまりで打つ前の文字を描き続けています")
+        #expect(textView.layer.mask == nil, "行の途中に打っても、入力欄の文字を隠しています")
+        try await waitUntilSettled()
+    }
+
+    /// 本物の文字を隠す穴は、隣り合う行のあいだも隠す。穴は上下に広げてあり、隣の行の穴と重なるので、重なったところを描き戻すと、
+    /// 動いている間、行の境目に本物の文字の端が見えた。
+    @Test func concealsBetweenAdjacentLines() async throws {
+        defer { window.isHidden = true }
+        composer.beginEditing()
+        try await waitUntilSettled()
+        let textView = try #require(textViews(in: window).first)
+        textView.becomeFirstResponder()
+        textView.insertText(String(repeating: "あいうえおかきくけこ", count: 4))
+        try await waitUntilSettled()
+        composer.endEditing()
+        try await waitUntilSettled()
+        useDefaultAnimationDurations()
+
+        composer.beginEditing()
+        try await clock.advance(by: 0.05)
+        let lines = try #require(textView.textLayoutManager).textLayoutFragments(in: textView)
+        #expect(lines.count >= 2, "本文が2行に折り返していません")
+        // 2行目の頭の文字の上端の、すぐ上とすぐ下。
+        let start = try #require(textView.position(from: textView.beginningOfDocument, offset: lines[1]))
+        let rect = textView.firstRect(for: try #require(textView.textRange(from: start, to: textView.position(from: start, offset: 1) ?? start)))
+        #expect(!isShown(CGPoint(x: rect.midX, y: rect.minY - 1), in: textView), "行の境目の上を隠していません")
+        #expect(!isShown(CGPoint(x: rect.midX, y: rect.minY + 1), in: textView), "行の境目の下を隠していません")
+        try await waitUntilSettled()
+    }
+
+    /// カーソルの左端から右端まで、隠れていないか。行末のカーソルは、最後の文字の穴に半分かかることがある。
+    private func isCaretShown(_ caret: CGRect, in textView: UITextView) -> Bool {
+        [caret.minX + 0.25, caret.midX, caret.maxX - 0.25].allSatisfy { isShown(CGPoint(x: $0, y: caret.midY), in: textView) }
+    }
+
+    /// 入力欄の`point`（入力欄の中の座標）が、本物を隠すマスクで隠れていないか。
+    private func isShown(_ point: CGPoint, in textView: UITextView) -> Bool {
+        guard let mask = textView.layer.mask as? CAShapeLayer, let path = mask.path else { return true }
+        return path.contains(CGPoint(x: point.x - mask.frame.minX, y: point.y - mask.frame.minY))
+    }
+
+    private func restContents(in view: UIView) -> [ComposeRestContent] {
+        (view as? ComposeRestContent).map { [$0] } ?? view.subviews.flatMap(restContents(in:))
+    }
+
+    private func textLines(in view: UIView) -> [TextLineView] {
+        ((view as? TextLineView).map { [$0] } ?? []) + view.subviews.flatMap(textLines(in:))
+    }
+
+    /// かたまりの頭の文字のインクの重心。かたまりと入れ物が動いている途中の、見えている位置で、`view`の中の座標。
+    private func glyphInk(of chunk: TextLineView, in view: UIView) throws -> CGPoint {
+        let local = try ink(of: chunk, glyphs: firstGlyph(of: chunk), in: chunk)
+        guard let layer = chunk.layer.presentation(), let target = view.layer.presentation() else {
+            return chunk.convert(local, to: view)
+        }
+        return layer.convert(local, to: target)
+    }
+
+    /// `view`の頭の文字の範囲。`view`の中の座標。
+    private func firstGlyph(of view: TextLineView) -> CGRect {
+        let boundaries = view.boundaries
+        return CGRect(x: view.baselineOrigin.x, y: view.bounds.minY, width: boundaries.count > 1 ? boundaries[1] : view.bounds.width, height: view.bounds.height)
+    }
+
+    /// `view`を画面と同じ倍率で描き、`glyphs`（`view`の中の座標）の中のインクの重心を、`target`の中の座標で返す。
+    private func ink(of view: UIView, glyphs: CGRect, in target: UIView, sourceLocation: SourceLocation = #_sourceLocation) throws -> CGPoint {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = window.screen.scale
+        format.opaque = false
+        // かたまりは、濃さを変えている途中でもモデルの濃さ（行き先の値）で描かれないよう、中身を直接描く。
+        let image = UIGraphicsImageRenderer(bounds: view.bounds, format: format).image { context in
+            if let line = view as? TextLineView {
+                line.draw(line.bounds)
+            } else {
+                view.layer.render(in: context.cgContext)
+            }
+        }
+        let cgImage = try #require(image.cgImage, sourceLocation: sourceLocation)
+        let width = cgImage.width
+        let height = cgImage.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        pixels.withUnsafeMutableBytes { buffer in
+            CGContext(data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)?
+                .draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        let scale = format.scale
+        let area = glyphs.offsetBy(dx: -view.bounds.minX, dy: -view.bounds.minY)
+        var sum = (x: 0.0, y: 0.0, weight: 0.0)
+        for y in max(Int(area.minY * scale), 0) ..< min(Int(area.maxY * scale), height) {
+            for x in max(Int(area.minX * scale), 0) ..< min(Int(area.maxX * scale), width) {
+                let alpha = Double(pixels[(y * width + x) * 4 + 3])
+                sum = (sum.x + (Double(x) + 0.5) * alpha, sum.y + (Double(y) + 0.5) * alpha, sum.weight + alpha)
+            }
+        }
+        #expect(sum.weight > 0, "文字のインクが見つかりません", sourceLocation: sourceLocation)
+        let point = CGPoint(x: sum.x / max(sum.weight, 1) / scale + view.bounds.minX, y: sum.y / max(sum.weight, 1) / scale + view.bounds.minY)
+        return view.convert(point, to: target)
+    }
+
+    /// 画素の大きさ（1/3pt）より十分小さい違いだけを許す。
+    private func expectClose(_ actual: CGPoint, _ expected: CGPoint, _ message: String, sourceLocation: SourceLocation = #_sourceLocation) {
+        let tolerance: CGFloat = 0.05
+        #expect(abs(actual.x - expected.x) <= tolerance && abs(actual.y - expected.y) <= tolerance, "\(message): \(actual) / \(expected)", sourceLocation: sourceLocation)
+    }
+
+    /// 頭の文字の字形と色が同じか。
+    private func expectSameLook(_ actual: NSAttributedString, _ expected: NSAttributedString, sourceLocation: SourceLocation = #_sourceLocation) {
+        let font = { (text: NSAttributedString) in text.attribute(.font, at: 0, effectiveRange: nil) as? UIFont }
+        let color = { (text: NSAttributedString) in (text.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor)?.resolvedColor(with: self.window.traitCollection) }
+        #expect(font(actual) == font(expected), "字形が違います: \(String(describing: font(actual))) / \(String(describing: font(expected)))", sourceLocation: sourceLocation)
+        #expect(color(actual) == color(expected), "色が違います: \(String(describing: color(actual))) / \(String(describing: color(expected)))", sourceLocation: sourceLocation)
+    }
+
     /// 形を変える動きと広げる動きを、アプリの既定の長さに戻す。
     private func useDefaultAnimationDurations() {
         tuning.reset(.number(TuningCatalog.composeMorphDuration))
@@ -1217,5 +1430,20 @@ private final class PostGate {
         isOpen = true
         continuations.forEach { $0.resume() }
         continuations = []
+    }
+}
+
+private extension NSTextLayoutManager {
+    /// 入力欄の行の頭の文字の位置（UTF-16）。
+    @MainActor
+    func textLayoutFragments(in textView: UITextView) -> [Int] {
+        guard let content = textContentManager else { return [] }
+        var starts: [Int] = []
+        enumerateTextLayoutFragments(from: documentRange.location, options: [.ensuresLayout]) { fragment in
+            let paragraph = content.offset(from: self.documentRange.location, to: fragment.rangeInElement.location)
+            starts += fragment.textLineFragments.map { paragraph + $0.characterRange.location }
+            return true
+        }
+        return starts
     }
 }

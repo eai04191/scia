@@ -11,7 +11,8 @@ final class ComposeRestContent: UIView {
     /// 予約しているときの時計。
     let scheduleIcon = UIImageView(image: UIImage(systemName: "clock"))
     let thumbnails = ComposeRestThumbnails()
-    let label = UILabel()
+    /// 自分で書いた本文。入りきらなければ、「…」で切らず行末をぼかす。開閉で入力欄の同じ文字と行き来するので、入力欄と同じ描き方で描く。
+    let label = TextLineView()
     private let postingIndicator = UIActivityIndicatorView(style: .medium)
     private let stack = UIStackView()
 
@@ -29,7 +30,7 @@ final class ComposeRestContent: UIView {
         scheduleIcon.isHidden = true
         thumbnails.setContentHuggingPriority(.required, for: .horizontal)
         thumbnails.setContentCompressionResistancePriority(.required, for: .horizontal)
-        label.lineBreakMode = .byTruncatingTail
+        label.fadesTrailingEdge = true
         label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         postingIndicator.setContentHuggingPriority(.required, for: .horizontal)
         postingIndicator.setContentCompressionResistancePriority(.required, for: .horizontal)
